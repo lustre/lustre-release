@@ -5,9 +5,9 @@
  fs/ext3/inode.c        |   55 +++++++++++++++++++++++++++++++++++++++++++++++++
  2 files changed, 58 insertions(+)
 
---- linux-2.4.20-l18/fs/ext3/inode.c~ext3-map_inode_page	Tue Jul  8 20:07:23 2003
-+++ linux-2.4.20-l18-phil/fs/ext3/inode.c	Wed Jul  9 03:56:41 2003
-@@ -2867,3 +2867,58 @@ int ext3_prep_san_write(struct inode *in
+--- linux-2.4.20-l18/fs/ext3/inode.c~ext3-map_inode_page	Fri Jul 25 14:36:14 2003
++++ linux-2.4.20-l18-phil/fs/ext3/inode.c	Fri Jul 25 14:36:14 2003
+@@ -2979,3 +2979,58 @@ int ext3_prep_san_write(struct inode *in
  		ret = ret2;
  	return ret;
  }
@@ -66,8 +66,8 @@
 +	unlock_kernel();
 +        return rc;
 +}
---- linux-2.4.20-l18/fs/ext3/ext3-exports.c~ext3-map_inode_page	Tue Jul  8 20:07:10 2003
-+++ linux-2.4.20-l18-phil/fs/ext3/ext3-exports.c	Tue Jul  8 20:09:02 2003
+--- linux-2.4.20-l18/fs/ext3/ext3-exports.c~ext3-map_inode_page	Fri Jul 25 14:36:14 2003
++++ linux-2.4.20-l18-phil/fs/ext3/ext3-exports.c	Fri Jul 25 14:36:14 2003
 @@ -9,6 +9,8 @@
  
  int ext3_prep_san_write(struct inode *inode, long *blocks,
