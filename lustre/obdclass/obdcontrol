@@ -172,7 +172,8 @@ sub execute_line {
 
 sub Setup {
     my $err = 0;
-    my $packed = pack("L", $::st->rdev());
+    
+    my $packed = pack("La24", $::st->rdev(), "sim_obd");
     my $rc = ioctl(DEV_OBD, &OBD_IOC_SETUP_SUPER, $packed);
 
     if (!defined $rc) {
