@@ -71,6 +71,7 @@
 #define DEBUG_SUBSYSTEM S_QSWNAL
 
 #include <linux/kp30.h>
+#include <linux/kpr.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 
@@ -222,6 +223,7 @@ typedef struct
         struct list_head   kqn_delayedtxds;     /* delayed transmits */
 
         spinlock_t         kqn_statelock;       /* cb_cli/cb_sti */
+        wait_queue_head_t  kqn_yield_waitq;     /* where yield waits */
         nal_cb_t          *kqn_cb;              /* -> kqswnal_lib */
 #if MULTIRAIL_EKC
         EP_SYS            *kqn_ep;              /* elan system */

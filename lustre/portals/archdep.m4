@@ -4,6 +4,16 @@ AC_ARG_ENABLE(inkernel, [  --enable-inkernel set up 2.5 kernel makefiles])
 AM_CONDITIONAL(INKERNEL, test x$enable_inkernel = xyes)
 echo "Makefile for in kernel build: $INKERNEL"
 
+# -------- are we building against an external portals? -------
+# haha, I wonder how one is really supposed to do this
+# automake seems to have a DEFS variable which looks good
+AC_ARG_WITH(cray-portals, [  --with-cray-portals=[path] path to cray portals],
+	CRAY_PORTALS_INCLUDE="-I$with_cray_portals"
+	CC="$CC -DCRAY_PORTALS=1"
+	)
+AC_SUBST(CRAY_PORTALS_INCLUDE)
+AM_CONDITIONAL(CRAY_PORTALS, test ! "x$with_cray_portals" = x)
+
 # -------- liblustre compilation --------------
 AC_ARG_WITH(lib, [  --with-lib compile lustre library], host_cpu="lib")
 
@@ -156,10 +166,11 @@ fi
 
 # ------------ include paths ------------------
 
+KINCFLAGS="$CRAY_PORTALS_INCLUDE $CRAY_PORTALS_COMMANDLINE \
+	-I\$(top_srcdir)/include \
+	-I\$(top_srcdir)/portals/include -I$LINUX/include"
 if test $host_cpu != "lib" ; then 
-    KINCFLAGS="-I\$(top_srcdir)/include -I\$(top_srcdir)/portals/include -I$LINUX/include"
-else
-    KINCFLAGS='-I$(top_srcdir)/include -I$(top_srcdir)/portals/include'
+    KINCFLAGS="$KINCFLAGS -I$LINUX/include"
 fi
 CPPFLAGS="$KINCFLAGS $ARCHCPPFLAGS"
 
