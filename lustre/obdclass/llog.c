@@ -72,7 +72,7 @@ void llog_free_handle(struct llog_handle *loghandle)
 }
 EXPORT_SYMBOL(llog_free_handle);
 
-
+/* returns negative on error; 0 if success; 1 if success & log destroyed */ 
 int llog_cancel_rec(struct llog_handle *loghandle, int index)
 {
         struct llog_log_hdr *llh = loghandle->lgh_hdr;
@@ -102,7 +102,7 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
                         CERROR("failure destroying log after last cancel: %d\n",
                                rc);
                 LASSERT(rc == 0);
-                RETURN(rc);
+                RETURN(1);
         }
 
         rc = llog_write_rec(loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
@@ -135,7 +135,7 @@ int llog_init_handle(struct llog_handle *handle, int flags,
                 GOTO(out, rc);
         }
         rc = 0;
-
+        
         handle->lgh_last_idx = 0; /* header is record with index 0 */
         llh->llh_count = cpu_to_le32(1);         /* for the header record */
         llh->llh_hdr.lrh_type = cpu_to_le32(LLOG_HDR_MAGIC);

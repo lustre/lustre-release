@@ -98,6 +98,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                 GOTO(out_destroy, rc);
         }
 
+        loghandle->lgh_hdr->llh_cat_idx = cpu_to_le16(index);
         cathandle->u.chd.chd_current_log = loghandle;
         LASSERT(list_empty(&loghandle->u.phd.phd_entry));
         list_add_tail(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
@@ -151,8 +152,12 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                         cathandle->u.chd.chd_current_log = loghandle;
                 }
         }
-        if (!rc) 
+        if (!rc) {
                 loghandle->u.phd.phd_cat_handle = cathandle;
+                loghandle->u.phd.phd_cookie.lgc_lgl = cathandle->lgh_id;
+                loghandle->u.phd.phd_cookie.lgc_index = 
+                        le16_to_cpu(loghandle->lgh_hdr->llh_cat_idx);
+        }
 
 out:
         *res = loghandle;
@@ -243,13 +248,12 @@ EXPORT_SYMBOL(llog_cat_add_rec);
 int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                         struct llog_cookie *cookies)
 {
-        int i, ret, rc = 0;
+        int i, index, rc = 0;
         ENTRY;
 
         down(&cathandle->lgh_lock);
         for (i = 0; i < count; i++, cookies++) {
                 struct llog_handle *loghandle;
-                struct llog_log_hdr *llh;
                 struct llog_logid *lgl = &cookies->lgc_lgl;
 
                 rc = llog_cat_id2handle(cathandle, &loghandle, lgl);
@@ -259,32 +263,18 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                 }
 
                 down(&loghandle->lgh_lock);
-                llh = loghandle->lgh_hdr;
-                CDEBUG(D_HA, "cancelling "LPX64" index %u: %u\n",
-                       lgl->lgl_oid, cookies->lgc_index,
-                       ext2_test_bit(cookies->lgc_index, llh->llh_bitmap));
-                if (!ext2_clear_bit(cookies->lgc_index, llh->llh_bitmap)) {
-                        CERROR("log index %u in "LPX64":%x already clear?\n",
-                               cookies->lgc_index, lgl->lgl_oid, lgl->lgl_ogen);
-                } else {
-                        llh->llh_count = 
-                                cpu_to_le32(le32_to_cpu(llh->llh_count) - 1);
-                        ret = llog_write_rec(loghandle, &llh->llh_hdr, 
-                                            NULL, 0, NULL, 0);
-                        if (ret != 0) {
-                                CERROR("error cancelling index %u: rc %d\n",
-                                       cookies->lgc_index, ret);
-                                /* XXX mark handle bad? */
-                                if (!rc)
-                                        rc = ret;
-                        }
-                }
-                
-                if (le32_to_cpu(llh->llh_count) == 1 && 
-                    loghandle != llog_cat_current_log(cathandle, 0))
-                        rc = llog_close(loghandle);
-
+                rc = llog_cancel_rec(loghandle, cookies->lgc_index);
                 up(&loghandle->lgh_lock);
+                
+                if (rc == 1) {          /* log has been destroyed */
+                        index = loghandle->u.phd.phd_cookie.lgc_index;
+                        if (cathandle->u.chd.chd_current_log == loghandle)
+                                cathandle->u.chd.chd_current_log = NULL;
+                        llog_free_handle(loghandle);
+                        
+                        LASSERT(index);
+                        rc = llog_cancel_rec(cathandle, index);
+                }
         }
         up(&cathandle->lgh_lock);
 

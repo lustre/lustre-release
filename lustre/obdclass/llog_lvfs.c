@@ -206,8 +206,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                         LBUG();
                 }
 
-                if (llh->llh_size &&
-                    llh->llh_size != rec->lrh_len)
+                if (idx && llh->llh_size && llh->llh_size != reclen)
                         RETURN(-EINVAL);
 
                 rc = llog_lvfs_write_blob(file, &llh->llh_hdr, NULL, 0);
