@@ -22,14 +22,16 @@ for NAME in $CONFIGS; do
 		sh runtests
 	fi
 
-	mount | grep $MNT || sh llmount.sh
 	[ "$SANITY" != "no" ] && sh sanity.sh
+
 	if [ "$DBENCH" != "no" ]; then
+		mount | grep $MNT || sh llmount.sh
 		$DEBUG_OFF
 		sh rundbench 1
 		sh llmountcleanup.sh
 		sh llrmount.sh
 		if [ $THREADS -gt 1 ]; then
+			$DEBUG_OFF
 			sh rundbench $THREADS
 			sh llmountcleanup.sh
 			sh llrmount.sh
@@ -38,6 +40,7 @@ for NAME in $CONFIGS; do
 	fi
 	chown $UID $MNT && chmod 700 $MNT
 	if [ "$BONNIE" != "no" ]; then
+		mount | grep $MNT || sh llmount.sh
 		$DEBUG_OFF
 		bonnie++ -s 0 -n 10 -u $UID -d $MNT
 		sh llmountcleanup.sh
@@ -46,12 +49,14 @@ for NAME in $CONFIGS; do
 	IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r $RSIZE -s $SIZE"
 	IOZONE_FILE="-f $MNT/iozone"
 	if [ "$IOZONE" != "no" ]; then
+		mount | grep $MNT || sh llmount.sh
 		$DEBUG_OFF
 		iozone $IOZONE_OPTS $IOZONE_FILE
 		sh llmountcleanup.sh
 		sh llrmount.sh
 	fi
 	if [ "$IOZONE_DIR" != "no" ]; then
+		mount | grep $MNT || sh llmount.sh
 		$DEBUG_OFF
 		iozone -I $IOZONE_OPTS $IOZONE_FILE.odir
 		IOZVER=`iozone -v | awk '/Revision:/ { print $3 }' | tr -d '.'`
@@ -75,8 +80,9 @@ for NAME in $CONFIGS; do
 		fi
 	fi
 	if [ "$FSX" != "no" ]; then
+		mount | grep $MNT || sh llmount.sh
 		$DEBUG_OFF
-		./fsx -c 50 -p 1000 -P $TMP -l 1024000 -N $(($COUNT * 100)) $MNT/fsxfile
+		./fsx -W -c 50 -p 1000 -P $TMP -l 1024000 -N $(($COUNT * 100)) $MNT/fsxfile
 		sh llmountcleanup.sh
 		#sh llrmount.sh
 	fi	
