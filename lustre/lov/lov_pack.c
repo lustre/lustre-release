@@ -573,10 +573,14 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
         LASSERT(sizeof(lum.lmm_objects[0]) == sizeof(lmmk->lmm_objects[0]));
 
         /* User wasn't expecting this many OST entries */
-        if (lum.lmm_stripe_count < lmmk->lmm_stripe_count)
+        if (lum.lmm_stripe_count == 0) {
+                if (copy_to_user(lump, lmmk, sizeof(lum)))
+                        rc = -EFAULT;
+        } else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count) {
                 rc = -EOVERFLOW;
-        else if (copy_to_user(lump, lmmk, lmm_size))
+        } else if (copy_to_user(lump, lmmk, lmm_size)) {
                 rc = -EFAULT;
+        }
 
         obd_free_diskmd(exp, &lmmk);
 
