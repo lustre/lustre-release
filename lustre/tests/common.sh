@@ -45,14 +45,18 @@ new_fs () {
 	MKFS="mkfs.$1"
 	MKFSOPT="-b 4096"
 
-	[ $# -ne 3 ] && echo "usage: $0 <fstype> <file> <size>" 1>&2 && exit -1
-
 	[ "$1" = "ext3" ] && MKFS="mkfs.ext2 -j"
 
 	if [ -b "$2" ]; then
-		$MKFS $MKFSOPT $2 || exit -1
+		[ $# -lt 2 -o $# -gt 3 ] && \
+			echo "usage: $0 <fstype> <file> [size]" 1>&2 && exit -1
+
+		$MKFS $MKFSOPT $2 $3 || exit -1
 		LOOPDEV=$2	# Not really a loop device
 	else
+		[ $# -ne 3 ] && \
+			echo "usage: $0 <fstype> <file> <size>" 1>&2 && exit -1
+
 		if [ -f "$EFILE" ]; then
 			echo "using existing filesystem $EFILE for $2"
 			zcat "$EFILE" > $2 || exit -1
