@@ -54,7 +54,7 @@
 #define LDLM_CLI_REPLY_PORTAL   18
 
 /* default rpc ring length */
-#define RPC_RING_LENGTH    2
+#define RPC_RING_LENGTH    10
 
 #define SVC_KILLED 1
 #define SVC_EVENT  2
