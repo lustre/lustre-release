@@ -73,8 +73,8 @@ static void lmv_activate_target(struct lmv_obd *lmv,
 static int lmv_set_mdc_active(struct lmv_obd *lmv, struct obd_uuid *uuid,
                               int activate)
 {
-        struct obd_device *obd;
         struct lmv_tgt_desc *tgt;
+        struct obd_device *obd;
         int i, rc = 0;
         ENTRY;
 
@@ -126,14 +126,15 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv, struct obd_uuid *uuid,
 static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
                       int active, void *data)
 {
-        int rc;
         struct obd_uuid *uuid;
+        int rc;
+        ENTRY;
 
         if (strcmp(watched->obd_type->typ_name, LUSTRE_MDC_NAME)) {
                 CERROR("unexpected notification of %s %s!\n",
                        watched->obd_type->typ_name,
                        watched->obd_name);
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         uuid = &watched->u.cli.cl_import->imp_target_uuid;
 
@@ -281,14 +282,15 @@ int lmv_check_connect(struct obd_device *obd)
         struct obd_uuid *cluuid;
         struct obd_export *exp;
         int rc, rc2, i;
+        ENTRY;
 
         if (lmv->connected)
-                return 0;
+                RETURN(0);
         
         down(&lmv->init_sem);
         if (lmv->connected) {
                 up(&lmv->init_sem);
-                return 0;
+                RETURN(0);
         }
 
         cluuid = &lmv->cluuid;
@@ -298,9 +300,9 @@ int lmv_check_connect(struct obd_device *obd)
                cluuid->uuid, obd->obd_name);
 
         for (i = 0, tgts = lmv->tgts; i < lmv->desc.ld_tgt_count; i++, tgts++) {
-                struct obd_device *tgt_obd;
-                struct lustre_handle conn = {0, };
                 struct obd_uuid lmv_mdc_uuid = { "LMV_MDC_UUID" };
+                struct lustre_handle conn = {0, };
+                struct obd_device *tgt_obd;
 
                 LASSERT(tgts != NULL);
 
@@ -388,7 +390,7 @@ int lmv_check_connect(struct obd_device *obd)
         class_export_put(exp);
         lmv->connected = 1;
         up(&lmv->init_sem);
-        return 0;
+        RETURN(0);
 
  out_disc:
         while (i-- > 0) {
@@ -405,7 +407,7 @@ int lmv_check_connect(struct obd_device *obd)
         }
         class_disconnect(exp, 0);
         up(&lmv->init_sem);
-        RETURN (rc);
+        return rc;
 }
 
 static int lmv_disconnect(struct obd_export *exp, unsigned long flags)
@@ -615,13 +617,17 @@ static int lmv_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                       unsigned long max_age)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct obd_statfs temp;
+        struct obd_statfs *temp;
         int rc = 0, i;
         ENTRY;
         
         rc = lmv_check_connect(obd);
         if (rc)
                 RETURN(rc);
+
+        OBD_ALLOC(temp, sizeof(*temp));
+        if (temp == NULL)
+                RETURN(-ENOMEM);
                 
         for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
                 if (lmv->tgts[i].ltd_exp == NULL) {
@@ -629,23 +635,27 @@ static int lmv_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                         continue;
                 }
 
-                rc = obd_statfs(lmv->tgts[i].ltd_exp->exp_obd, &temp, max_age);
+                rc = obd_statfs(lmv->tgts[i].ltd_exp->exp_obd, temp, max_age);
                 if (rc) {
                         CERROR("can't stat MDS #%d (%s), error %d\n", i,
                                lmv->tgts[i].ltd_exp->exp_obd->obd_name,
                                rc);
-                        RETURN(rc);
+                        GOTO(out_free_temp, rc);
                 }
                 if (i == 0) {
-                        memcpy(osfs, &temp, sizeof(temp));
+                        memcpy(osfs, temp, sizeof(*temp));
                 } else {
-                        osfs->os_bavail += temp.os_bavail;
-                        osfs->os_blocks += temp.os_blocks;
-                        osfs->os_ffree += temp.os_ffree;
-                        osfs->os_files += temp.os_files;
+                        osfs->os_bavail += temp->os_bavail;
+                        osfs->os_blocks += temp->os_blocks;
+                        osfs->os_ffree += temp->os_ffree;
+                        osfs->os_files += temp->os_files;
                 }
         }
-        RETURN(rc);
+
+        EXIT;
+out_free_temp:
+        OBD_FREE(temp, sizeof(*temp));
+        return rc;
 }
 
 static int lmv_getstatus(struct obd_export *exp, struct lustre_id *id)
@@ -840,8 +850,9 @@ int lmv_get_mea_and_update_object(struct obd_export *exp,
         struct ptlrpc_request *req = NULL;
         struct lmv_obj *obj;
         struct lustre_md md;
-        __u64 valid;
         int mealen, rc;
+        __u64 valid;
+        ENTRY;
 
         md.mea = NULL;
         mealen = MEA_SIZE_LMV(lmv);
@@ -872,10 +883,11 @@ int lmv_get_mea_and_update_object(struct obd_export *exp,
         lmv_put_obj(obj);
         obd_free_memmd(exp, (struct lov_stripe_md **)&md.mea);
 
+        EXIT;
 cleanup:
         if (req)
                 ptlrpc_req_finished(req);
-        RETURN(rc);
+        return rc;
 }
 
 int lmv_create(struct obd_export *exp, struct mdc_op_data *op_data,
@@ -941,6 +953,7 @@ int lmv_done_writing(struct obd_export *exp, struct obdo *obdo)
         struct lmv_obd *lmv = &obd->u.lmv;
         int rc;
         ENTRY;
+        
         rc = lmv_check_connect(obd);
         if (rc)
                 RETURN(rc);
@@ -960,21 +973,25 @@ int lmv_enqueue_slaves(struct obd_export *exp, int locktype,
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mea *mea = data->mea1;
-        struct mdc_op_data data2;
+        struct mdc_op_data *data2;
         int i, rc, mds;
         ENTRY;
 
+        OBD_ALLOC(data2, sizeof(*data2));
+        if (data2 == NULL)
+                RETURN(-ENOMEM);
+        
         LASSERT(mea != NULL);
         for (i = 0; i < mea->mea_count; i++) {
-                memset(&data2, 0, sizeof(data2));
-                data2.id1 = mea->mea_ids[i];
-                mds = id_group(&data2.id1);
+                memset(data2, 0, sizeof(*data2));
+                data2->id1 = mea->mea_ids[i];
+                mds = id_group(&data2->id1);
                 
                 if (lmv->tgts[mds].ltd_exp == NULL)
                         continue;
 
                 rc = md_enqueue(lmv->tgts[mds].ltd_exp, locktype, it, 
-                                lockmode, &data2, lockh + i, lmm, lmmsize, 
+                                lockmode, data2, lockh + i, lmm, lmmsize, 
                                 cb_compl, cb_blocking, cb_data);
                 
                 CDEBUG(D_OTHER, "take lock on slave "DLID4" -> %d/%d\n",
@@ -983,23 +1000,26 @@ int lmv_enqueue_slaves(struct obd_export *exp, int locktype,
                         GOTO(cleanup, rc);
                 if (it->d.lustre.it_data) {
                         struct ptlrpc_request *req;
-                        req = (struct ptlrpc_request *) it->d.lustre.it_data;
+                        req = (struct ptlrpc_request *)it->d.lustre.it_data;
                         ptlrpc_req_finished(req);
                 }
                 
                 if (it->d.lustre.it_status)
                         GOTO(cleanup, rc = it->d.lustre.it_status);
         }
-        RETURN(0);
         
+        OBD_FREE(data2, sizeof(*data2));
+        RETURN(0);
 cleanup:
+        OBD_FREE(data2, sizeof(*data2));
+        
         /* drop all taken locks */
         while (--i >= 0) {
                 if (lockh[i].cookie)
                         ldlm_lock_decref(lockh + i, lockmode);
                 lockh[i].cookie = 0;
         }
-        RETURN(rc);
+        return rc;
 }
 
 int lmv_enqueue(struct obd_export *exp, int lock_type,
@@ -1179,7 +1199,8 @@ int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
         ENTRY;
 
         CDEBUG(D_OTHER, "rename %*s in "DLID4" to %*s in "DLID4"\n",
-               oldlen, old, OLID4(&data->id1), newlen, new, OLID4(&data->id2));
+               oldlen, old, OLID4(&data->id1), newlen, new,
+               OLID4(&data->id2));
 
         rc = lmv_check_connect(obd);
 	if (rc)
@@ -1369,10 +1390,10 @@ int lmv_dirobj_blocking_ast(struct ldlm_lock *lock,
 
 void lmv_remove_dots(struct page *page)
 {
-        char *kaddr = page_address(page);
         unsigned limit = PAGE_CACHE_SIZE;
-        unsigned offs, rec_len;
+        char *kaddr = page_address(page);
         struct ext2_dir_entry_2 *p;
+        unsigned offs, rec_len;
 
         for (offs = 0; offs <= limit - EXT2_DIR_REC_LEN(1); offs += rec_len) {
                 p = (struct ext2_dir_entry_2 *)(kaddr + offs);
@@ -1440,21 +1461,25 @@ int lmv_unlink_slaves(struct obd_export *exp, struct mdc_op_data *data,
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mea *mea = data->mea1;
-        struct mdc_op_data data2;
+        struct mdc_op_data *data2;
         int i, rc = 0;
         ENTRY;
 
+        OBD_ALLOC(data2, sizeof(*data2));
+        if (data2 == NULL)
+                RETURN(-ENOMEM);
+        
         LASSERT(mea != NULL);
         for (i = 0; i < mea->mea_count; i++) {
-                memset(&data2, 0, sizeof(data2));
-                data2.id1 = mea->mea_ids[i];
-                data2.create_mode = MDS_MODE_DONT_LOCK | S_IFDIR;
+                memset(data2, 0, sizeof(*data2));
+                data2->id1 = mea->mea_ids[i];
+                data2->create_mode = MDS_MODE_DONT_LOCK | S_IFDIR;
                 
-                if (lmv->tgts[id_group(&data2.id1)].ltd_exp == NULL)
+                if (lmv->tgts[id_group(&data2->id1)].ltd_exp == NULL)
                         continue;
 
-                rc = md_unlink(lmv->tgts[id_group(&data2.id1)].ltd_exp,
-                               &data2, req);
+                rc = md_unlink(lmv->tgts[id_group(&data2->id1)].ltd_exp,
+                               data2, req);
                 
                 CDEBUG(D_OTHER, "unlink slave "DLID4" -> %d\n",
                        OLID4(&mea->mea_ids[i]), rc);
@@ -1466,14 +1491,15 @@ int lmv_unlink_slaves(struct obd_export *exp, struct mdc_op_data *data,
                 if (rc)
                         RETURN(rc);
         }
+        OBD_FREE(data2, sizeof(*data2));
         RETURN(rc);
 }
 
 int lmv_delete_inode(struct obd_export *exp, struct lustre_id *id)
 {
-        LASSERT(exp && id);
-        
         ENTRY;
+
+        LASSERT(exp && id);
         if (lmv_delete_obj(exp, id)) {
                 CDEBUG(D_OTHER, "lmv object "DLID4" is destroyed.\n",
                        OLID4(id));
