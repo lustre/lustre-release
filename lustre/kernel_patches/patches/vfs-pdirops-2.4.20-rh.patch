@@ -3,15 +3,15 @@
  include/linux/fs.h |   11 ++++----
  3 files changed, 54 insertions(+), 24 deletions(-)
 
-Index: lum/fs/namei.c
+Index: linux-2.4.24/fs/namei.c
 ===================================================================
---- lum.orig/fs/namei.c	2004-06-07 17:19:45.000000000 -0400
-+++ lum/fs/namei.c	2004-06-07 17:22:39.000000000 -0400
-@@ -103,6 +103,36 @@
+--- linux-2.4.24.orig/fs/namei.c	2004-06-24 09:08:27.000000000 +0400
++++ linux-2.4.24/fs/namei.c	2004-06-27 21:32:00.000000000 +0400
+@@ -103,6 +103,38 @@
  }
  EXPORT_SYMBOL(intent_release);
  
-+static void *lock_dir(struct inode *dir, struct qstr *name)
++void *lock_dir(struct inode *dir, struct qstr *name)
 +{
 +	unsigned long hash;
 +	
@@ -31,8 +31,9 @@ Index: lum/fs/namei.c
 +	/* lock this hash */
 +	return dynlock_lock(&dir->i_dcache_lock, hash, 1, GFP_ATOMIC);
 +}
++EXPORT_SYMBOL(lock_dir);
 +
-+static void unlock_dir(struct inode *dir, void *lock)
++void unlock_dir(struct inode *dir, void *lock)
 +{
 +	if (!IS_PDIROPS(dir)) {
 +		up(&dir->i_sem);
@@ -40,11 +41,12 @@ Index: lum/fs/namei.c
 +	}
 +	dynlock_unlock(&dir->i_dcache_lock, lock);
 +}
++EXPORT_SYMBOL(unlock_dir);
 +
  /* In order to reduce some races, while at the same time doing additional
   * checking and hopefully speeding things up, we copy filenames to the
   * kernel data space before using them..
-@@ -307,10 +337,11 @@
+@@ -307,10 +339,11 @@
  	struct dentry * result;
  	struct inode *dir = parent->d_inode;
  	int counter = 0;
@@ -57,7 +59,7 @@ Index: lum/fs/namei.c
  	/*
  	 * First re-do the cached lookup just in case it was created
  	 * while we waited for the directory semaphore..
-@@ -334,7 +365,7 @@
+@@ -334,7 +367,7 @@
  			else
  				result = dentry;
  		}
@@ -66,7 +68,7 @@ Index: lum/fs/namei.c
  		return result;
  	}
  
-@@ -342,7 +373,7 @@
+@@ -342,7 +375,7 @@
  	 * Uhhuh! Nasty case: the cache was re-populated while
  	 * we waited on the semaphore. Need to revalidate.
  	 */
@@ -75,7 +77,7 @@ Index: lum/fs/namei.c
  	if (result->d_op && result->d_op->d_revalidate) {
  		if (!result->d_op->d_revalidate(result, flags) && !d_invalidate(result)) {
  			dput(result);
-@@ -1169,13 +1200,13 @@
+@@ -1174,13 +1207,13 @@
  		goto exit;
  
  	dir = nd->dentry;
@@ -91,7 +93,7 @@ Index: lum/fs/namei.c
  		goto exit;
  	}
  
-@@ -1184,7 +1215,7 @@
+@@ -1189,7 +1222,7 @@
  	if (!dentry->d_inode) {
  		error = vfs_create_it(dir->d_inode, dentry,
  				   mode & ~current->fs->umask, it);
@@ -100,7 +102,7 @@ Index: lum/fs/namei.c
  		dput(nd->dentry);
  		nd->dentry = dentry;
  		if (error)
-@@ -1198,7 +1229,7 @@
+@@ -1203,7 +1236,7 @@
  	/*
  	 * It already exists.
  	 */
@@ -109,7 +111,7 @@ Index: lum/fs/namei.c
  
  	error = -EEXIST;
  	if (flag & O_EXCL)
-@@ -1345,7 +1376,7 @@
+@@ -1350,7 +1383,7 @@
  		goto exit;
  	}
  	dir = nd->dentry;
@@ -118,7 +120,7 @@ Index: lum/fs/namei.c
  	dentry = lookup_hash_it(&nd->last, nd->dentry, nd, it);
  	putname(nd->last.name);
  	goto do_last;
-@@ -1363,7 +1394,7 @@
+@@ -1368,7 +1401,7 @@
  {
  	struct dentry *dentry;
  
@@ -127,7 +129,7 @@ Index: lum/fs/namei.c
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
-@@ -1456,7 +1487,7 @@
+@@ -1461,7 +1494,7 @@
  		}
  		dput(dentry);
  	}
@@ -136,7 +138,7 @@ Index: lum/fs/namei.c
  out2:
  	path_release(&nd);
  out:
-@@ -1523,7 +1554,7 @@
+@@ -1528,7 +1561,7 @@
  					  mode & ~current->fs->umask);
  			dput(dentry);
  		}
@@ -145,7 +147,7 @@ Index: lum/fs/namei.c
  out2:
  		path_release(&nd);
  out:
-@@ -1633,14 +1664,14 @@
+@@ -1638,14 +1671,14 @@
  		if (error != -EOPNOTSUPP)
  			goto exit1;
  	}
@@ -162,7 +164,7 @@ Index: lum/fs/namei.c
  exit1:
  	path_release(&nd);
  exit:
-@@ -1699,7 +1730,7 @@
+@@ -1704,7 +1737,7 @@
  		if (error != -EOPNOTSUPP)
  			goto exit1;
  	}
@@ -171,7 +173,7 @@ Index: lum/fs/namei.c
  	dentry = lookup_hash_it(&nd.last, nd.dentry, &nd, NULL);
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
-@@ -1710,7 +1741,7 @@
+@@ -1715,7 +1748,7 @@
  	exit2:
  		dput(dentry);
  	}
@@ -180,7 +182,7 @@ Index: lum/fs/namei.c
  exit1:
  	path_release(&nd);
  exit:
-@@ -1784,7 +1815,7 @@
+@@ -1789,7 +1822,7 @@
  			error = vfs_symlink(nd.dentry->d_inode, dentry, from);
  			dput(dentry);
  		}
@@ -189,7 +191,7 @@ Index: lum/fs/namei.c
  	out2:
  		path_release(&nd);
  	out:
-@@ -1880,7 +1911,7 @@
+@@ -1885,7 +1918,7 @@
  			error = vfs_link(old_nd.dentry, nd.dentry->d_inode, new_dentry);
  			dput(new_dentry);
  		}
@@ -198,10 +200,10 @@ Index: lum/fs/namei.c
  out_release:
  		path_release(&nd);
  out:
-Index: lum/fs/inode.c
+Index: linux-2.4.24/fs/inode.c
 ===================================================================
---- lum.orig/fs/inode.c	2004-06-07 17:19:45.000000000 -0400
-+++ lum/fs/inode.c	2004-06-07 17:21:10.000000000 -0400
+--- linux-2.4.24.orig/fs/inode.c	2004-06-24 09:08:27.000000000 +0400
++++ linux-2.4.24/fs/inode.c	2004-06-24 09:08:29.000000000 +0400
 @@ -119,6 +119,7 @@
  		mapping->host = inode;
  		mapping->gfp_mask = GFP_HIGHUSER;
@@ -210,10 +212,10 @@ Index: lum/fs/inode.c
  	}
  	return inode;
  }
-Index: lum/include/linux/fs.h
+Index: linux-2.4.24/include/linux/fs.h
 ===================================================================
---- lum.orig/include/linux/fs.h	2004-06-07 17:19:45.000000000 -0400
-+++ lum/include/linux/fs.h	2004-06-07 17:21:10.000000000 -0400
+--- linux-2.4.24.orig/include/linux/fs.h	2004-06-24 09:08:29.000000000 +0400
++++ linux-2.4.24/include/linux/fs.h	2004-06-24 09:08:29.000000000 +0400
 @@ -21,6 +21,7 @@
  #include <linux/cache.h>
  #include <linux/stddef.h>
@@ -254,7 +256,7 @@ Index: lum/include/linux/fs.h
  };
  
  /*
-@@ -1631,12 +1636,6 @@
+@@ -1629,12 +1634,6 @@
  	return dget(dentry->d_parent);
  }
  

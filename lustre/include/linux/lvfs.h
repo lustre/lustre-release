@@ -73,6 +73,11 @@ static inline void l_dput(struct dentry *de)
         dput(de);
 }
 
+#ifdef S_PDIROPS
+void *lock_dir(struct inode *dir, struct qstr *name);
+void unlock_dir(struct inode *dir, void *lock);
+#endif
+
 /* We need to hold the inode semaphore over the dcache lookup itself, or we
  * run the risk of entering the filesystem lookup path concurrently on SMP
  * systems, and instantiating two inodes for the same entry.  We still
@@ -83,11 +88,23 @@ static inline struct dentry *ll_lookup_one_len(const char *fid_name,
                                                int fid_namelen)
 {
         struct dentry *dchild;
-
+#ifdef S_PDIROPS
+	struct qstr qstr;
+	void *lock;
+	qstr.name = fid_name;
+	qstr.len = fid_namelen;
+	lock = lock_dir(dparent->d_inode, &qstr);
+#else
         down(&dparent->d_inode->i_sem);
-        dchild = lookup_one_len(fid_name, dparent, fid_namelen);
-        up(&dparent->d_inode->i_sem);
+#endif
 
+        dchild = lookup_one_len(fid_name, dparent, fid_namelen);
+
+#ifdef S_PDIROPS
+	unlock_dir(dparent->d_inode, lock);
+#else
+        up(&dparent->d_inode->i_sem);
+#endif
         return dchild;
 }
 
