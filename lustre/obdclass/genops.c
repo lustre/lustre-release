@@ -174,10 +174,8 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars* vars, char *nm
         memcpy(type->typ_ops, ops, sizeof(*type->typ_ops));
         strcpy(type->typ_name, nm);
         rc = lprocfs_reg_class(type, (struct lprocfs_vars*)vars, (void*)type);
-        if(rc)
-                RETURN(rc);
-        
-        RETURN(0);
+
+        RETURN(rc);
 }
 
 int class_unregister_type(char *nm)
