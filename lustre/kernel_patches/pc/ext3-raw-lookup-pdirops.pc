@@ -1,2 +1,0 @@
-include/linux/fs.h
-fs/ext3/namei.c
