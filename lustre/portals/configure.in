@@ -1,0 +1,36 @@
+# This version is here to make autoconf happy; the name is a file which is
+# "unique" to this directory so that configure knows where it should run.
+AC_INIT(knals/Makefile.am, 3.0)
+AC_CANONICAL_SYSTEM
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+# Automake variables.  Steal the version number from packaging/intersync.spec
+AM_INIT_AUTOMAKE(portals, builtin([esyscmd], [sed -ne '/.*define IVERSION /{ s/.*IVERSION //; p; }' libcfs/module.c]))
+# AM_MAINTAINER_MODE
+
+sinclude(archdep.m4)
+sinclude(build.m4)
+sinclude<portalsconf.m4)
+
+if test x$enable_inkernel = xyes ; then
+cp Kernelenv.mk Kernelenv.in
+cp Makefile.mk Makefile.in
+cp libcfs/Makefile.mk libcfs/Makefile.in
+cp portals/Makefile.mk portals/Makefile.in
+cp knals/Makefile.mk knals/Makefile.in
+cp knals/socknal/Makefile.mk knals/socknal/Makefile.in
+cp router/Makefile.mk router/Makefile.in
+fi
+
+AM_CONFIG_HEADER(include/config.h)
+
+AC_OUTPUT([Makefile Kernelenv libcfs/Makefile portals/Makefile \
+          unals/Makefile knals/Makefile router/Makefile \
+	  knals/socknal/Makefile knals/gmnal/Makefile knals/qswnal/Makefile \
+	  knals/scimacnal/Makefile knals/toenal/Makefile \
+          utils/Makefile tests/Makefile doc/Makefile \
+          packaging/Makefile packaging/portals.spec ])
+
