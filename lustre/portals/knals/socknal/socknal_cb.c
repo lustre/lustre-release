@@ -682,7 +682,7 @@ ksocknal_process_transmit (ksock_sched_t *sched, unsigned long *irq_flags)
 }
 
 void
-ksocknal_launch_autoconnect (ksock_route_t *route)
+ksocknal_launch_autoconnect_locked (ksock_route_t *route)
 {
         unsigned long     flags;
 
@@ -887,7 +887,7 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid)
 
         /* I may launch autoconnects, now we're write locked... */
         while ((route = ksocknal_find_connectable_route_locked (peer)) != NULL)
-                ksocknal_launch_autoconnect (route);
+                ksocknal_launch_autoconnect_locked (route);
 
         conn = ksocknal_find_conn_locked (tx, peer);
         if (conn != NULL) {
