@@ -228,9 +228,9 @@ def is_block(path):
 # fixme: dangerous
 def mkfs(fstype, dev):
     if(fstype == 'ext3'):
-        mkfs = 'mkfs.ext2 -j'
+        mkfs = 'mkfs.ext2 -j -b 4096'
     elif (fstype == 'extN'):
-        mkfs = 'mkfs.ext2 -j'
+        mkfs = 'mkfs.ext2 -j -b 4096'
     else:
         print 'unsupported fs type: ', fstype
     if not is_block(dev):
@@ -323,7 +323,7 @@ def prepare_lov(node):
 
 def prepare_network(node):
     (name, uuid, type, nid, port) = getNetworkInfo(node)
-    print 'NETWORK:', type, nid, port
+    print 'NETWORK:', name, uuid, type, nid, port
     if type == 'tcp':
         run(TCP_ACCEPTOR, port)
     lctl.network(type, nid)
@@ -334,7 +334,7 @@ def prepare_network(node):
 # FIXME: check if device is already formatted.
 def prepare_obd(obd):
     (name, uuid, obdtype, dev, size, fstype, format) = getOBDInfo(obd)
-    print "OBD: ", name, obdtype, dev, size, fstype, format
+    print 'OBD:', name, uuid, obdtype, dev, size, fstype, format
     dev = block_dev(dev, size, fstype, format)
     lctl.newdev(attach="%s %s %s" % (obdtype, name, uuid),
                 setup ="%s %s" %(dev, fstype))
@@ -342,30 +342,33 @@ def prepare_obd(obd):
 
 def prepare_ost(ost):
     name, uuid, obd = getOSTInfo(ost)
-    print "OST: ", name, uuid, obd
+    print 'OST:', name, uuid, obd
     lctl.newdev(attach="ost %s %s" % (name, uuid),
                 setup ="$%s" % (obd))
 
 def prepare_mds(node):
     (name, uuid, dev, size, fstype, format) = getMDSInfo(node)
-    print "MDS: ", name, dev, size, fstype
+    print 'MDS:', name, uuid, dev, size, fstype
     # setup network for mds, too
     dev = block_dev(dev, size, fstype, format)
     lctl.newdev(attach="mds %s %s" % (name, uuid),
                 setup ="%s %s" %(dev, fstype))
 
 def prepare_osc(node):
-    (name, uuid, obduuid, srvuuid) = getOSCInfo(node)
-    print 'OSC:', name, uuid, obduuid, srvuuid
-    net = lookup(node.parentNode, srvuuid)
+    (name, uuid, obduuid, ostuuid) = getOSCInfo(node)
+    print 'OSC:', name, uuid, obduuid, ostuuid
+    net = lookup(node.parentNode, ostuuid)
     srvname, srvuuid, net, server, port = getNetworkInfo(net)
-    lctl.connect(net, server, port, srvuuid)
+    lctl.connect(net, server, port, ostuuid)
     lctl.newdev(attach="osc %s %s" % (name, uuid),
-                setup ="%s %s" %(obduuid, srvuuid))
+                setup ="%s %s" %(obduuid, ostuuid))
 
 def prepare_mdc(node):
     (name, uuid, mdsuuid, netuuid) = getMDCInfo(node)
     print 'MDC:', name, uuid, mdsuuid, netuuid
+    net = lookup(node.parentNode, netuuid)
+    srvname, srvuuid, net, server, port = getNetworkInfo(net)
+    lctl.connect(net, server, port, netuuid)
     lctl.newdev(attach="mdc %s %s" % (name, uuid),
                 setup ="%s %s" %(mdsuuid, netuuid))
 
@@ -397,7 +400,7 @@ def cleanup_lov(node):
 
 def cleanup_network(node):
     (name, uuid, type, nid, port) = getNetworkInfo(node)
-    print 'NETWORK:', type, nid, port
+    print 'NETWORK:', name, uuid, type, nid, port
     #lctl.network(type, nid)
 
 # need to check /proc/mounts and /etc/mtab before
@@ -433,19 +436,22 @@ def cleanup_mds(node):
 def cleanup_mdc(node):
     (name, uuid, mdsuuid, netuuid) = getMDCInfo(node)
     print 'MDC:', name, uuid, mdsuuid, netuuid
+    net = lookup(node.parentNode, netuuid)
+    srvname, srvuuid, net, server, port = getNetworkInfo(net)
     try:
+        lctl.disconnect(net, server, port, netuuid)
         lctl.cleanup(name, uuid)
     except CommandError:
         print "cleanup failed: ", name
 
 
 def cleanup_osc(node):
-    (name, uuid, obduuid, srvuuid) = getOSCInfo(node)
-    print 'OSC:', name, uuid, obduuid, srvuuid
-    net = lookup(node.parentNode, srvuuid)
-    netname, netuuid, net, server, port = getNetworkInfo(net)
+    (name, uuid, obduuid, ostuuid) = getOSCInfo(node)
+    print 'OSC:', name, uuid, obduuid, ostuuid
+    net = lookup(node.parentNode, ostuuid)
+    srvname, srvuuid, net, server, port = getNetworkInfo(net)
     try:
-        lctl.disconnect(net, server, port, srvuuid)
+        lctl.disconnect(net, server, port, ostuuid)
         lctl.cleanup(name, uuid)
     except CommandError:
         print "cleanup failed: ", name
@@ -555,7 +561,7 @@ def getMTPTInfo(node):
     path = getText(node, 'path')
     ref = node.getElementsByTagName('mdc_ref')[0]
     mdcuuid = ref.getAttribute('uuidref')
-    ref = node.getElementsByTagName('lov_ref')[0]
+    ref = node.getElementsByTagName('osc_ref')[0]
     lovuuid = ref.getAttribute('uuidref')
     return (name, uuid, lovuuid, mdcuuid, path)
 
@@ -603,7 +609,7 @@ def getServiceType(node):
 # determine what "level" a particular node is at.
 # the order of iniitailization is based on level.  objects
 # are assigned a level based on type:
-#  net,devices:1, obd, mdd:2  mds,ost:3 osc,mdc:4 mounts:5
+#  net,devices,ldlm:1, obd, mdd:2  mds,ost:3 osc,mdc:4 mounts:5
 def getServiceLevel(node):
     type = getServiceType(node)
     if type in ('network', 'device', 'ldlm'):
