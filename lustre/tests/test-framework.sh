@@ -62,14 +62,18 @@ start() {
     facet=$1
     shift
     active=`facet_active $facet`
-    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet --node ${active}_facet  --ptldebug $PTLDEBUG $@ $XMLCONFIG
+    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
+        --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
+        $@ $XMLCONFIG
 }
 
 stop() {
     facet=$1
     active=`facet_active $facet`
     shift
-    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet --node ${active}_facet  --ptldebug $PTLDEBUG $@ --cleanup $XMLCONFIG
+    do_facet $facet $LCONF --select ${facet}_svc=${active}_facet \
+        --node ${active}_facet  --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM \
+        $@ --cleanup $XMLCONFIG
 }
 
 zconf_mount() {
@@ -274,7 +278,8 @@ add_mds() {
     facet=$1
     shift
     rm -f ${facet}active
-    add_facet $facet  --lustre_upcall $UPCALL
+    add_facet $facet  --lustre_upcall $UPCALL --ptldebug $PTLDEBUG \
+        --subsystem $SUBSYSTEM
     do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc $*
 }
 

@@ -212,5 +212,48 @@ test_8() {
 }
 run_test 8 "double mount setup"
 
+test_9() {
+        # backup the old values of PTLDEBUG and SUBSYSTEM
+        OLDPTLDEBUG=$PTLDEBUG
+        OLDSUBSYSTEM=$SUBSYSTEM
+        
+        # generate new configuration file with lmc --ptldebug and --subsystem
+        PTLDEBUG="trace"
+        SUBSYSTEM="mdc"
+        gen_config
+
+        # check the result of lmc --ptldebug/subsystem
+        start_ost
+        start_mds
+        mount_client $MOUNT
+        [ "`cat /proc/sys/portals/debug`" = "1" ] && \
+           echo "lmc --debug success" || return 1
+        [ "`cat /proc/sys/portals/subsystem_debug`" = "16777216" ] && \
+           echo "lmc --subsystem success" || return 1
+        check_mount || return 41
+        cleanup
+
+        # the new PTLDEBUG/SUBSYSTEM used for lconf --ptldebug/subsystem
+        PTLDEBUG="inode"
+        SUBSYSTEM="mds"
+
+        # check lconf --ptldebug/subsystem overriding lmc --ptldebug/subsystem
+        start_ost
+        start_mds
+        mount_client $MOUNT
+        [ "`cat /proc/sys/portals/debug`" = "2" ] && \
+           echo "lconf --debug overriding success" || return 1
+        [ "`cat /proc/sys/portals/subsystem_debug`" = "33554432" ] && \
+           echo "lconf --subsystem overriding success" || return 1
+        check_mount || return 41
+        cleanup
+
+        # resume the old configuration
+        PTLDEBUG=$OLDPTLDEBUG
+        SUBSYSTEM=$OLDSUBSYSTEM
+        gen_config
+}
+run_test 9 "test --ptldebug and --subsystem for lmc"
+
 
 equals_msg "Done"

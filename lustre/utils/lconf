@@ -2171,6 +2171,8 @@ def doHost(lustreDB, hosts):
     lustre_upcall = node_db.get_val('lustreUpcall', '')
     portals_upcall = node_db.get_val('portalsUpcall', '')
     timeout = node_db.get_val_int('timeout', 0)
+    ptldebug = node_db.get_val('ptldebug', '')
+    subsystem = node_db.get_val('subsystem', '')
     
     find_local_clusters(node_db)
     if not is_router:
@@ -2202,8 +2204,8 @@ def doHost(lustreDB, hosts):
             return
 
         sys_set_timeout(timeout)
-        sys_set_ptldebug()
-        sys_set_subsystem()
+        sys_set_ptldebug(ptldebug)
+        sys_set_subsystem(subsystem)
         sys_set_lustre_upcall(lustre_upcall)
         sys_set_portals_upcall(portals_upcall)
 
@@ -2225,8 +2227,8 @@ def doHost(lustreDB, hosts):
         for_each_profile(node_db, prof_list, doModules)
 
         sys_set_debug_path()
-        sys_set_ptldebug()
-        sys_set_subsystem()
+        sys_set_ptldebug(ptldebug)
+        sys_set_subsystem(subsystem)
         script = config.gdb_script
         run(lctl.lctl, ' modules >', script)
         if config.gdb:
@@ -2335,20 +2337,24 @@ def sys_tweak_socknal ():
 def sys_optimize_elan ():
         run ("echo 0 > /proc/elan/config/eventint_punt_loops")
 
-def sys_set_ptldebug():
-    if config.ptldebug != None:
+def sys_set_ptldebug(ptldebug):
+    if config.ptldebug:
+        ptldebug = config.ptldebug
+    if ptldebug:
         try:
-            val = eval(config.ptldebug, ptldebug_names)
-            val = "0x%x" % (val,)
+            val = eval(ptldebug, ptldebug_names)
+            val = "0x%x" % (val)
             sysctl('portals/debug', val)
         except NameError, e:
             panic(str(e))
 
-def sys_set_subsystem():
-    if config.subsystem != None:
+def sys_set_subsystem(subsystem):
+    if config.subsystem:
+        subsystem = config.subsystem
+    if subsystem:
         try:
-            val = eval(config.subsystem, subsystem_names)
-            val = "0x%x" % (val,)
+            val = eval(subsystem, subsystem_names)
+            val = "0x%x" % (val)
             sysctl('portals/subsystem_debug', val)
         except NameError, e:
             panic(str(e))

@@ -16,6 +16,7 @@ MOUNT2=${MOUNT2:-"/mnt/lustre2"}
 DIR=${DIR:-$MOUNT}
 DIR2=${DIR2:-$MOUNT1}
 PTLDEBUG=${PTLDEBUG:-0x3f0400}
+SUBSYSTEM=${SUBSYSTEM:-0}
 PDSH=${PDSH:-no_dsh}
 
 MDSDEV=${MDSDEV:-$ROOT/tmp/mds-`hostname`}

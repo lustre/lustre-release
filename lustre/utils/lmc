@@ -55,6 +55,8 @@ Object creation command summary:
   --upcall path
   --lustre_upcall path
   --portals_upcall path
+  --ptldebug debug_level
+  --subsystem subsystem_name
 
 --add net
   --node node_name
@@ -134,6 +136,8 @@ lmc_options = [
     ('upcall', "Set both lustre and portals upcall scripts.", PARAM),
     ('lustre_upcall', "Set location of lustre upcall script.", PARAM),
     ('portals_upcall', "Set location of portals upcall script.", PARAM),
+    ('ptldebug', "Set the portals debug level",  PARAM),
+    ('subsystem', "Specify which Lustre subsystems have debug output recorded in the log",  PARAM),
 
     # network 
     ('nettype', "Specify the network type. This can be tcp/elan/gm/scimac.", PARAM),
@@ -560,6 +564,10 @@ def set_node_options(gen, node, options):
             gen.addElement(node, 'portalsUpcall', options.portals_upcall)
         else:
             gen.addElement(node, 'portalsUpcall', default_upcall)
+    if options.ptldebug:
+        gen.addElement(node, "ptldebug", get_option(options, 'ptldebug'))
+    if options.subsystem:
+        gen.addElement(node, "subsystem", get_option(options, 'subsystem'))
     return node
 
 def do_add_node(gen, lustre,  options, node_name):
