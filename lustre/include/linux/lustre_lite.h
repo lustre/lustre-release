@@ -167,6 +167,8 @@ int ll_save_intent(struct dentry * de, struct lookup_intent * it);
 struct lookup_intent * ll_get_intent(struct dentry * de);
 ****/
 
+#define IT_RELEASED_MAGIC 0xDEADCAFE
+
 #define LL_SAVE_INTENT(de, it)                                                 \
 do {                                                                           \
         LASSERT(ll_d2d(de) != NULL);                                           \
@@ -183,10 +185,12 @@ do {                                                                           \
         it = de->d_it;                                                         \
                                                                                \
         LASSERT(ll_d2d(de) != NULL);                                           \
+        LASSERT(it->it_op != IT_RELEASED_MAGIC);                               \
                                                                                \
         CDEBUG(D_DENTRY, "D_IT UP dentry %p fsdata %p intent: %s\n",           \
                de, ll_d2d(de), ldlm_it2str(de->d_it->it_op));                  \
         de->d_it = NULL;                                                       \
+        it->it_op = IT_RELEASED_MAGIC;                                         \
         up(&ll_d2d(de)->lld_it_sem);                                           \
 } while(0)
 

@@ -2,7 +2,7 @@
 <!DOCTYPE lustre>
 <lustre>
   <ldlm name='ldlm' uuid='ldlm_UUID'/>
-  <node uuid='localhost_UUID' name='localhost'>
+  <node name='localhost' uuid='localhost_UUID'>
     <profile>
       <ldlm_ref uuidref='ldlm_UUID'/>
       <network_ref uuidref='NET_localhost_tcp_UUID'/>
@@ -14,7 +14,7 @@
       <ost_ref uuidref='OST_localhost_2_UUID'/>
       <mountpoint_ref uuidref='MNT_localhost_UUID'/>
     </profile>
-    <network type='tcp' uuid='NET_localhost_tcp_UUID' name='NET_localhost_tcp'>
+    <network name='NET_localhost_tcp' uuid='NET_localhost_tcp_UUID' type='tcp'>
       <server>localhost</server>
       <port>988</port>
     </network>
@@ -26,17 +26,17 @@
     <network_ref uuidref='NET_localhost_tcp_UUID'/>
     <node_ref uuidref='localhost_UUID'/>
   </mds>
-  <lov uuid='lov1_UUID' name='lov1'>
+  <lov name='lov1' uuid='lov1_UUID'>
     <mds_ref uuidref='mds1_UUID'/>
-    <devices pattern='0' stripesize='65536' stripecount='0'>
+    <devices stripecount='0' stripesize='65536' pattern='0'>
       <osc_ref uuidref='OSC_localhost_UUID'/>
       <osc_ref uuidref='OSC_localhost_2_UUID'/>
     </devices>
   </lov>
-  <lovconfig uuid='LVCFG_lov1_UUID' name='LVCFG_lov1'>
+  <lovconfig name='LVCFG_lov1' uuid='LVCFG_lov1_UUID'>
     <lov_ref uuidref='lov1_UUID'/>
   </lovconfig>
-  <obd type='obdfilter' uuid='OBD_localhost_UUID' name='OBD_localhost'>
+  <obd uuid='OBD_localhost_UUID' name='OBD_localhost' type='obdfilter'>
     <fstype>extN</fstype>
     <device size='100000'>/tmp/ost1</device>
     <autoformat>no</autoformat>
@@ -49,16 +49,16 @@
     <network_ref uuidref='NET_localhost_tcp_UUID'/>
     <obd_ref uuidref='OBD_localhost_UUID'/>
   </ost>
-  <obd type='obdfilter' uuid='OBD_localhost_2_UUID' name='OBD_localhost_2'>
+  <obd name='OBD_localhost_2' uuid='OBD_localhost_2_UUID' type='obdfilter'>
     <fstype>extN</fstype>
     <device size='100000'>/tmp/ost2</device>
     <autoformat>no</autoformat>
   </obd>
-  <osc uuid='OSC_localhost_2_UUID' name='OSC_localhost_2'>
+  <osc name='OSC_localhost_2' uuid='OSC_localhost_2_UUID'>
     <ost_ref uuidref='OST_localhost_2_UUID'/>
     <obd_ref uuidref='OBD_localhost_2_UUID'/>
   </osc>
-  <ost uuid='OST_localhost_2_UUID' name='OST_localhost_2'>
+  <ost name='OST_localhost_2' uuid='OST_localhost_2_UUID'>
     <network_ref uuidref='NET_localhost_tcp_UUID'/>
     <obd_ref uuidref='OBD_localhost_2_UUID'/>
   </ost>

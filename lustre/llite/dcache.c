@@ -63,12 +63,37 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
                 } else
                         ldlm_lock_decref(handle, it->it_lock_mode);
         }
-        //up(&ll_d2d(de)->lld_it_sem);
+
+        if (it->it_op != IT_RELEASED_MAGIC) {
+                up(&ll_d2d(de)->lld_it_sem);
+                it->it_op = IT_RELEASED_MAGIC;
+        }
         EXIT;
 }
 
 int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
 {
+        int ll_intent_lock(struct inode *parent, struct dentry *dentry,
+                           struct lookup_intent *it, void *);
+        int rc;
+        ENTRY;
+
+        rc = ll_intent_lock(de->d_parent->d_inode, de, it, NULL);
+        if (rc < 0) {
+                /* Something bad happened; overwrite it_status? */
+        }
+
+        if (it != NULL && it->it_status == 0) {
+                LL_SAVE_INTENT(de, it);
+        } else if (it != NULL) {
+                de->d_it = NULL;
+                CDEBUG(D_DENTRY,
+                       "D_IT dentry %p fsdata %p intent: %s status %d\n",
+                       de, ll_d2d(de), ldlm_it2str(it->it_op), it->it_status);
+        }
+
+        RETURN(1);
+#if 0
         struct ll_sb_info *sbi = ll_s2sbi(de->d_sb);
         struct lustre_handle lockh;
         __u64 res_id[RES_NAME_SIZE] = {0};
@@ -125,6 +150,7 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
         de->d_it = it;
 
         RETURN(rc);
+#endif
 }
 
 int ll_set_dd(struct dentry *de)

@@ -71,7 +71,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         struct ptlrpc_request *request;
         struct lustre_handle lockh;
         struct mds_body *body;
-        struct lookup_intent it = {IT_READDIR};
+        struct lookup_intent it = { .it_op = IT_READDIR };
 
         ENTRY;
 
@@ -81,9 +81,11 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 GOTO(readpage_out, rc);
         }
 
-        rc = ll_lock(inode, NULL, &it, &lockh);
+        rc = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT, &it, LCK_PR,
+                         inode, NULL, &lockh, NULL, 0, inode, sizeof(*inode));
         request = (struct ptlrpc_request *)it.it_data;
-        ptlrpc_req_finished(request);
+        if (request)
+                ptlrpc_req_finished(request);
         if (rc != ELDLM_OK) {
                 CERROR("lock enqueue: err: %d\n", rc);
                 unlock_page(page);
