@@ -2117,6 +2117,14 @@ def for_each_profile(db, prof_list, operation):
         services = getServices(prof_db)
         operation(services)
         
+def doWriteconf(services):
+    if config.nosetup:
+        return
+    for s in services:
+        if s[1].get_class() == 'mdsdev':
+            n = newService(s[1])
+            n.write_conf()
+
 def doSetup(services):
     if config.nosetup:
         return
@@ -2179,9 +2187,7 @@ def doHost(lustreDB, hosts):
     if config.write_conf:
         for_each_profile(node_db, prof_list, doModules)
         sys_make_devices()
-        for node_db in lustreDB.lookup_class('mdsdev'):
-            mds = MDSDEV(node_db)
-            mds.write_conf()
+        for_each_profile(node_db, prof_list, doWriteconf)
         for_each_profile(node_db, prof_list, doUnloadModules)
 
     elif config.recover:
