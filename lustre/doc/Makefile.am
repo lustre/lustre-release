@@ -83,6 +83,17 @@ syncweb: lustre.pdf
 # Build a changebar document from the files in doc.old and this directory.
 chbar: lustre-chbar.pdf
 
+# FIXME: Temporary rules until pdftex displays changebars correctly.
+lustre-chbar.pdf: lustre-chbar-nopdf.ps
+	$(PS2PDF) $< $@
+lustre-chbar-nopdf.ps: lustre-chbar-nopdf.dvi
+	$(DVIPS) $< -o $@
+lustre-chbar-nopdf.dvi: lustre-chbar-nopdf.tex
+	$(LATEX) $<
+	$(LATEX) $<
+lustre-chbar-nopdf.tex: lustre-chbar.tex
+	sed -e 's/^\(.*usepackage.*pdftex\)/%\1/' $< > $@
+
 %-chbar.tex: chbar.sh postbar doc.old/%-full.tex %-full.tex
 	$(SHELL) $(srcdir)/chbar.sh doc.old/$*-full.tex $*-full.tex | $(srcdir)/postbar > $@
 
