@@ -905,7 +905,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy, &lockh,
                                     ast_flags);
                 down(&inode->i_sem);
-                if (rc != ELDLM_OK)
+                if (rc != 0)
                         RETURN(rc);
 
                 rc = vmtruncate(inode, attr->ia_size);

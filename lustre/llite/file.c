@@ -691,7 +691,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct lustre_handle lockh = { 0 };
         ldlm_policy_data_t policy;
-        ldlm_error_t err;
+        int rc;
         ssize_t retval;
         __u64 kms;
         ENTRY;
@@ -712,9 +712,9 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         policy.l_extent.start = *ppos;
         policy.l_extent.end = *ppos + count - 1;
 
-        err = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh, 0);
-        if (err != ELDLM_OK)
-                RETURN(err);
+        rc = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh, 0);
+        if (rc != 0)
+                RETURN(rc);
 
         kms = lov_merge_size(lsm, 1);
         if (*ppos + count - 1 > kms) {
@@ -757,7 +757,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         struct lustre_handle lockh = { 0 };
         ldlm_policy_data_t policy;
         loff_t maxbytes = ll_file_maxbytes(inode);
-        ldlm_error_t err;
+        int rc;
         ssize_t retval;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
@@ -784,9 +784,9 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
                 policy.l_extent.end = *ppos + count - 1;
         }
 
-        err = ll_extent_lock(fd, inode, lsm, LCK_PW, &policy, &lockh, 0);
-        if (err != ELDLM_OK)
-                RETURN(err);
+        rc = ll_extent_lock(fd, inode, lsm, LCK_PW, &policy, &lockh, 0);
+        if (rc != 0)
+                RETURN(0);
 
         /* this is ok, g_f_w will overwrite this under i_sem if it races
          * with a local truncate, it just makes our maxbyte checking easier */
@@ -1067,11 +1067,12 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);
         if (origin == 2) { /* SEEK_END */
-                ldlm_error_t err;
                 ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF }};
-                err = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,0);
-                if (err != ELDLM_OK)
-                        RETURN(err);
+                int rc;
+
+                rc = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,0);
+                if (rc != 0)
+                        RETURN(rc);
 
                 offset += inode->i_size;
         } else if (origin == 1) { /* SEEK_CUR */
