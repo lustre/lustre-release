@@ -20,22 +20,6 @@ static void d_unalloc(struct dentry *dentry)
 		dput(dentry); 	
 	}
 }
-static struct inode *sm_create_inode(struct super_block *sb,
-				     struct inode *cache_inode) 
-{
-	struct inode *inode;
-
-	inode = new_inode(sb);
-	if (inode) {
-		/*FIXME there are still some 
-		 * other attributes need to
-		 * duplicated*/
-		inode->i_ino = cache_inode->i_ino;	 		
-		inode->i_mode = cache_inode->i_mode;	 		
-	}	
-	I2CI(inode) = cache_inode;	
-	return inode;
-}
                                                                                                                                                                                                      
 static void prepare_parent_dentry(struct dentry *dentry, struct inode *inode)
 {
@@ -81,7 +65,6 @@ static int smfs_create(struct inode *dir,
  
 	cache_inode = cache_dentry->d_inode;
 	
-//	inode = sm_create_inode(dir->i_sb, cache_inode);	
 	inode = iget(dir->i_sb, cache_inode->i_ino);	
 
 	if (!inode) 
@@ -197,11 +180,10 @@ static int smfs_unlink(struct inode * dir,
 	if (!cache_dir || !cache_inode)
 		RETURN(-ENOENT);
 	
-	igrab(cache_dentry->d_inode);
-	
 	prepare_parent_dentry(&tmp, cache_dir);
 	cache_dentry = d_alloc(&tmp, &dentry->d_name); 
 	d_add(cache_dentry, cache_inode);
+	igrab(cache_inode);	
 	
 	if (cache_dir->i_op->unlink)
 		rc = cache_dir->i_op->unlink(cache_dir, cache_dentry);
