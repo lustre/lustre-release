@@ -1,0 +1,45 @@
+#!/bin/sh
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "pcpatch: recreate the pc file from patches/{patchname}.patch"
+	exit 1
+}
+
+doit()
+{
+	echo $* 1>&2
+	$* || {
+		echo oops
+		exit 1 
+	}
+}
+
+if [ $# != 1 -o "$1" = "help" ]
+then
+	usage
+fi
+PATCH=$1
+PATCH_NAME=$(stripit $PATCH)
+PC=$P/pc/$PATCH_NAME.pc
+
+if [ ! -e $P/patches/$PATCH_NAME.patch ] 
+then
+	echo "$P/patches/$PATCH_NAME.patch does not exist"
+	exit 1
+fi
+
+if is_applied "$PATCH"
+then
+	echo $PATCH is applied!
+	exit 1
+fi
+
+touched-by-patch $P/patches/$PATCH_NAME.patch > $PC
+echo Recreated $PC

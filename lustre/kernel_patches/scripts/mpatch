@@ -1,0 +1,101 @@
+#!/bin/sh
+
+. patchfns >/dev/null || . /usr/lib/patch-scripts/patchfns >/dev/null || { \
+	echo "Impossible to find my library 'patchfns'."
+	echo "Check your install, or go to the right directory"
+	exit 1
+}
+
+usage()
+{
+	echo "Usage: mpatch patchname [output_dir]"
+	exit 1
+}
+
+doit()
+{
+	echo $* 1>&2
+	$* || {
+		echo oops
+		exit 1 
+	}
+}
+
+epoch()
+{
+#	doit touch -t 7001011000.00 $1
+	doit touch -t 7001010000.00 $1
+}
+
+dirfor()
+{
+	dir=$(dirname $1)
+	if [ ! -d $dir ]
+	then
+		doit mkdir -p $dir
+		RMDIRS="$RMDIRS $dir"
+	fi
+}
+
+if [ $# == 0 ]
+then
+	usage
+fi
+
+PATCH_NAME=$(stripit $1)
+OUTPUT_DIR=$2
+
+FILES=$(cat $P/pc/$PATCH_NAME.pc)
+OUT=$P/patches/$PATCH_NAME.patch
+TMPOUT=$(mktemp /tmp/patch-$PATCH_NAME-XXXXXX)
+TXT=$P/txt/$PATCH_NAME.txt
+OLDDIR=$(basename $(/bin/pwd))
+NEWDIR=$OLDDIR-$LOGNAME
+
+if is_applied_last $PATCH_NAME
+then
+	true
+else
+	echo $PATCH_NAME is not the last-applied patch
+	exit 1
+fi
+
+doit rm -f $OUT
+echo "Placing patch in " $OUT
+
+if [ -e $TXT -a -s $TXT ]
+then
+	echo >> $OUT
+	body $TXT >> $OUT
+	echo >> $OUT
+	echo >> $OUT
+else
+	echo "**** No patch description for $PATCH_NAME ****"
+fi
+
+rm -f $TMPOUT
+
+for file in $FILES
+do
+	OLD_FILE="$file"~"$PATCH_NAME"
+	if [ ! -e $OLD_FILE ]
+	then
+		OLD_FILE=/dev/null
+	fi
+	NEW_FILE=$file
+	XDIFF_OPTS=""
+	if [ ! -e $NEW_FILE ]
+	then
+		NEW_FILE=/dev/null
+		XDIFF_OPTS="-L $file"
+	fi
+
+	echo diff -puN $XDIFF_OPTS $DIFF_OPTS $OLD_FILE $NEW_FILE
+	diff -puN $XDIFF_OPTS $DIFF_OPTS $OLD_FILE $NEW_FILE | p0-2-p1 $OLDDIR $NEWDIR >> $TMPOUT
+done
+diffstat -p1 $TMPOUT >> $OUT 2>/dev/null
+echo >> $OUT
+cat $TMPOUT >> $OUT
+echo >> $OUT
+echo "_" >> $OUT
+rm -f $TMPOUT

@@ -1,0 +1,104 @@
+
+Lustre requires changes to the core kernel before it can be compiled against
+hte core kernel source tree.  We use Andrew Morton's 'patch-scripts' utilties
+to keep the complexity of managing changes across multiple kernel targets down.
+They handle the ordering metadata, application, refreshing, and removal of
+patches  for us.  Please read scripts/docco.txt for a more thorough explanation
+of what 'patch-scripts' do.
+
+We create a thin wrapper around patchscripts with our ./prepare_tree.sh.  It
+exports two environment variables.  PATCHSCRIPTS is a relative path from the
+kernel source tree to the checked-out patchscripts repository.  It is requires
+for patchscripts to operate on data outside the kernel source tree.  It also
+puts the absolute path to the scripts/ directory at the front of PATH.
+Finally, it creates a 'series' link from the kernel tree back to the proper
+series file for that kernel tree.  More on that below.
+
+prepare_tree.sh and the patch-scripts commands are the only interface we should
+use on a daily basis.  We should never have to manage the patches by hand.
+This will save us heart-ache once we're good with the tools.  I promise.
+
+Data to be aware of:
+
+patches/
+	contains all the patch files themselves.  We should have a patch per 
+	functional change.  
+
+series/
+	the text files that patch-utils use to define the ordering of patches
+	that are applied to a tree.  We have a series file for each kernel
+	tree variant that requires wildly different patches.  (architecture
+	differences, stock vs. redhat, etc) 
+
+pc/
+	control files for patch-utils.  These are per tree and should never
+	be in cvs.
+
+txt/
+	text descriptions of the patches.  Nice, but not functionally required.
+
+First, before anything happens, you need to prep a tree for use with
+patch-utils.  This means putting a series link in the file and setting the
+environment variable:
+
+	$ eval `./prepare_tree.sh -t /tmp/kernels/linux-2.4.18 -r stock-2.4`
+
+prepare-tree.sh is careful to output variable assignments to stdout and
+everything else to stderr so the eval won't go awry.  It also is clever about
+resolving the series name, so tab-completed relative paths to the series files
+can be used with -r.  (it assumes that series/ is under where prepare_tree.sh
+was executed from).  The series link that is created from the tree back into
+the cvs repository is created by force.  Don't re-run the command with a
+different role.  (this should probably be fixed)
+
+With this in place, the shell that did the eval is ready to wield patch-utils.
+
+] To apply all the patches to a given tree:
+
+	$ eval `./prepare_tree.sh -t /tmp/kernels/linux-2.4.18 -r stock-2.4`
+	$ cd /tmp/kernels/linux-2.4.18
+	$ pushpatch 100000
+		( the huge number just serves to iterate through the patches )
+
+] To refresh the patches against a newer kernel that the series applies to.
+
+Say the series file 'rh-8.0-dev' corresponds to a CFS policy of tracking the
+most recent red hat 8.0 distro kernel.   It used to be 2.4.18-14, say, and RH
+has now released RH 2.4.18-17.8.0 and CFS has decided to move to it.  We
+want to update the patches in cvs HEAD to be against 2.4.18-17.8.0
+
+	$ eval `./prepare_tree.sh -t /tmp/linux-2.4.18-17.8.0 -r rh-8.0-dev`
+	$ cd /tmp/linux-2.4.18-17.8.0
+	$ for a in $NUM_PATCHES_HAVE ; do
+		pushpatch;
+		refpatch;
+	  done
+
+] To add a new series 
+
+Simply add a new empty file to the series/ directory, choosing a descriptive
+name for the series.
+
+] To add a patch into a series
+
+Ideally a patch can be added to the end of the series.  This is most easily
+done with patch-utils import_patch.  After the patch is imported it still needs
+to be applied and refreshed with 'pushpatch' and 'refpatch'.  ___remember to
+cvs add the patch with -ko___ so that tags in the context of the diff aren't
+change by CVS, rendering the patch unusable.
+
+It is considered valuable to have a common HEAD which can be checked out to
+patch a kernel and build lustre across lots of targets.  This creates some
+friction in the desire to keep a single canonical set of patches in CVS.  We
+solve this with the patch-utils scripts by having well-named patches that are
+bound to the different series.  Say alpha and ia64 kernel trees both need a
+common lustre patch.  Ideally they'd both have our-funcionality.patch in their
+series, but perhaps the code path we want to alter is different in the trees
+and not in the architecture-dependant part of the kernel.  For this we'd want
+our-functionality-ia64.patch in the ia64 series file, and
+our-functionality-alpha.patch in the alpha.  This split becomes irritating to
+manage as shared changes want to be pushed to all the patches.  This will be a
+pain as long as the kernel's we're receiving don't share revision control
+somehow.  At least the patch utils make it relatively painless to 'pushpatch'
+the source patch, clean up rejects, test, and 'refpatch' to generate the new
+patch for that series.

@@ -1,0 +1,10 @@
+#!/bin/sh
+#
+# Usage: p0-2-p1 olddir newdir
+#
+OLDDIR=$1
+NEWDIR=$2
+
+sed -e "s/^--- \([^\/].*\)/--- $OLDDIR\/\1/" |
+sed -e "s/^+++ \([^\/].*\)/+++ $NEWDIR\/\1/"
+

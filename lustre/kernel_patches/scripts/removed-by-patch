@@ -1,0 +1,14 @@
+#!/bin/sh
+# Extract names of new files from a patch, print them out
+
+PATCHFILE=$1
+case "$PATCHFILE" in
+*.gz) CMD="gzip -d < $PATCHFILE";;
+*)    CMD="cat $PATCHFILE";;
+esac
+
+TMP=$(mktemp /tmp/rbp-XXXXXX)
+
+eval $CMD | egrep '^\+\+\+.*1970|\+\+\+.*1969' > $TMP
+sed -e 's@[^/]*/\([^ 	]*\).*@\1@' < $TMP | sed -e 's@^linux/@@' | sort
+rm -f $TMP
