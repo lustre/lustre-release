@@ -12,7 +12,7 @@ DIST_SUBDIRS = $(SUBDIRS)
 EXTRA_DIST = BUGS FDL Rules include patches archdep.m4
 
 # We get the version from the spec file.
-configure: scripts/lustre.spec.in
+CONFIGURE_DEPENDENCIES = scripts/lustre.spec.in
 
 dist-hook:
 	find $(distdir) -name .deps | xargs rm -rf
