@@ -724,7 +724,8 @@ static int common_attr_done(struct lov_request_set *set)
         tmp_oa->o_id = set->set_oa->o_id;
         memcpy(set->set_oa, tmp_oa, sizeof(*set->set_oa));
 out:
-        obdo_free(tmp_oa);
+        if (tmp_oa)
+                obdo_free(tmp_oa);
         RETURN(rc);
 
 }

@@ -40,12 +40,12 @@ void qos_shrink_lsm(struct lov_request_set *set)
         struct lov_stripe_md *lsm_new;
         /* XXX LOV STACKING call into osc for sizes */
         unsigned oldsize, newsize;
-        
+
         if (set->set_oti && set->set_cookies && set->set_cookie_sent) {
                 struct llog_cookie *cookies;
                 oldsize = lsm->lsm_stripe_count * sizeof(*cookies);
                 newsize = set->set_count * sizeof(*cookies);
-                
+
                 cookies = set->set_cookies;
                 oti_alloc_cookies(set->set_oti, set->set_count);
                 if (set->set_oti->oti_logcookies) {
@@ -56,10 +56,10 @@ void qos_shrink_lsm(struct lov_request_set *set)
                         CWARN("'leaking' %d bytes\n", oldsize - newsize);
                 }
         }
-        
+
         CWARN("using fewer stripes for object "LPX64": old %u new %u\n",
               lsm->lsm_object_id, lsm->lsm_stripe_count, set->set_count);
-        
+
         oldsize = lov_stripe_md_size(lsm->lsm_stripe_count);
         newsize = lov_stripe_md_size(set->set_count);
         OBD_ALLOC(lsm_new, newsize);
