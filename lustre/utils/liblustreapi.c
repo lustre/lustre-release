@@ -490,8 +490,7 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
                                 printf("%s/%s has no stripe info\n", dname, "");
                         rc = 0;
                 } else {
-                        err_msg("IOC_MDC_GETSTRIPE ioctl failed");
-                        return errno;
+                        err_msg("GETSTRIPE failed for %s", dname);
                 }
         } else {
                llapi_lov_dump_user_lmm(param, dname, "");
@@ -513,7 +512,6 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
                          * type and continue on here, but we don't since we
                          * know d_type should be valid for lustre and this
                          * tool only makes sense for lustre filesystems. */
-                        return EINVAL;
                         break;
                 case DT_DIR:
                         if (!param->recursive)
@@ -528,13 +526,9 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
                         }
                         rc = process_dir(subdir, path, param);
                         closedir(subdir);
-                        if (rc)
-                                return rc;
                         break;
                 case DT_REG:
-                        rc = param->process_file(dir, dname, dirp->d_name, param);
-                        if (rc)
-                                return rc;
+                        rc = param->process_file(dir,dname,dirp->d_name,param);
                         break;
                 default:
                         break;
