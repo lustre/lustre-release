@@ -474,7 +474,7 @@ class LCTLInterface:
     
     def connect(self, srv):
         self.add_uuid(srv.net_type, srv.nid_uuid, srv.nid)
-        if srv.net_type  in ('tcp','openib','iib',) and not config.lctl_dump:
+        if srv.net_type  in ('tcp','openib','iib','ra') and not config.lctl_dump:
             if srv.hostaddr[0]:
                 hostaddr = string.split(srv.hostaddr[0], '/')[0]
             self.add_peer(srv.net_type, srv.nid, hostaddr, srv.port)
@@ -1445,7 +1445,7 @@ class RouteTable(Module):
                          lo, hi):
         # only setup connections for tcp, openib, and iib NALs
         srvdb = None
-        if not net_type in ('tcp','openib','iib',):
+        if not net_type in ('tcp','openib','iib','ra'):
             return None
 
         # connect to target if route is to single node and this node is the gw
