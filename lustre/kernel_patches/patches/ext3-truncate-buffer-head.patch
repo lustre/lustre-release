@@ -4,7 +4,7 @@
  		if (ext3_should_order_data(inode))
  			err = ext3_journal_dirty_data(handle, bh, 0);
  		__mark_buffer_dirty(bh);
-+                buffer_insert_inode_data_queue(bh, inode);
++		buffer_insert_inode_data_queue(bh, inode);
  	}
  
  unlock:

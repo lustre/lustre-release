@@ -7,6 +7,14 @@ fi
 
 . .mergeinfo
 
+if [ -f $CONFLICTS ] ; then
+    echo "$CONFLICTS exists - clean up first"
+    cat $CONFLICTS
+    exit 
+fi
+
+cvs update $dir 2>&1 | grep "^M" && echo "uncommitted changes" && exit 1
+
 echo -n "Tagging ${PARENT}_${CHILD}_UPDATE_PARENT_$date as ${CHILD}_BASE_$date ..."
 cvs rtag -r ${PARENT}_${CHILD}_UPDATE_PARENT_$date ${CHILD}_BASE_$date $module
 echo  "done"
