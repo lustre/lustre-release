@@ -197,13 +197,13 @@ lsm_string (struct lov_stripe_md *lsm)
 
         *p = 0;
         space--;
-        
+
         nob = snprintf(p, space, LPX64, lsm->lsm_object_id);
         p += nob;
         space -= nob;
-        
+
         if (lsm->lsm_stripe_count != 0) {
-                nob = snprintf (p, space, "=%u#%u@%d", 
+                nob = snprintf (p, space, "=%u#%u@%d",
                                 lsm->lsm_stripe_size,
                                 lsm->lsm_stripe_count,
                                 lsm->lsm_stripe_offset);
@@ -222,52 +222,51 @@ lsm_string (struct lov_stripe_md *lsm)
                 fprintf (stderr, "lsm_string() overflowed buffer\n");
                 abort ();
         }
-        
+
         return (buffer);
 }
 
 static void
-reset_lsmb (union lsm_buffer *lsmb) 
+reset_lsmb (union lsm_buffer *lsmb)
 {
         memset (lsmb->space, 0, sizeof (lsmb->space));
         lsmb->lsm.lsm_magic = LOV_MAGIC;
-        
 }
 
-static int 
+static int
 parse_lsm (union lsm_buffer *lsmb, char *string)
 {
         struct lov_stripe_md *lsm = &lsmb->lsm;
         char                 *end;
         int                   i;
-        
+
         /*
-         * object_id[=size#count[@offset][:id]*] 
+         * object_id[=size#count[@offset][:id]*]
          */
 
         reset_lsmb (lsmb);
-        
+
         lsm->lsm_object_id = strtoull (string, &end, 0);
         if (end == string)
                 return (-1);
         string = end;
-        
+
         if (*string == 0)
                 return (0);
 
         if (*string != '=')
                 return (-1);
         string++;
-        
+
         lsm->lsm_stripe_size = strtoul (string, &end, 0);
         if (end == string)
                 return (-1);
         string = end;
-        
+
         if (*string != '#')
                 return (-1);
         string++;
-        
+
         lsm->lsm_stripe_count = strtoul (string, &end, 0);
         if (end == string)
                 return (-1);
@@ -280,10 +279,10 @@ parse_lsm (union lsm_buffer *lsmb, char *string)
                         return (-1);
                 string = end;
         }
-        
-        if (*string == 0)                       /* don't have to specify obj ids */
+
+        if (*string == 0)               /* don't have to specify obj ids */
                 return (0);
-        
+
         for (i = 0; i < lsm->lsm_stripe_count; i++) {
                 if (*string != ':')
                         return (-1);
@@ -294,7 +293,7 @@ parse_lsm (union lsm_buffer *lsmb, char *string)
 
         if (*string != 0)
                 return (-1);
-        
+
         return (0);
 }
 
@@ -389,7 +388,7 @@ int do_disconnect(char *func, int verbose)
         IOC_PACK(func, data);
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_DISCONNECT, buf);
         if (rc < 0) {
-                fprintf(stderr, "error: %s: OPD_IOC_DISCONNECT %s\n", 
+                fprintf(stderr, "error: %s: OPD_IOC_DISCONNECT %s\n",
                         cmdname(func),strerror(errno));
         } else {
                 if (verbose)
@@ -485,10 +484,10 @@ static void shmem_snap(int n)
         prev_time = this_time;
 }
 
-#define SHMEM_SETUP()	shmem_setup()
-#define SHMEM_RESET()	shmem_reset()
-#define SHMEM_BUMP()	shmem_bump()
-#define SHMEM_SNAP(n)	shmem_snap(n)
+#define SHMEM_SETUP()   shmem_setup()
+#define SHMEM_RESET()   shmem_reset()
+#define SHMEM_BUMP()    shmem_bump()
+#define SHMEM_SNAP(n)   shmem_snap(n)
 #else
 #define SHMEM_SETUP()
 #define SHMEM_RESET()
@@ -783,6 +782,7 @@ int jt_obd_newdev(int argc, char **argv)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc = errno));
         else {
+                IOC_UNPACK(argv[0], data);
                 printf("Current device set to %d\n", data.ioc_dev);
         }
 
@@ -812,8 +812,8 @@ int jt_get_version(int argc, char **argv)
         else {
                 printf("Lustre version: %s\n", data->ioc_bulk);
         }
-        
-        printf("lctl   version: %s\n",BUILD_VERSION);
+
+        printf("lctl   version: %s\n", BUILD_VERSION);
         return rc;
 }
 
@@ -869,7 +869,7 @@ int jt_obd_attach(int argc, char **argv)
         IOC_PACK(argv[0], data);
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_ATTACH, buf);
         if (rc < 0)
-                fprintf(stderr, "error: %s: OBD_IOC_ATTACH %s\n", 
+                fprintf(stderr, "error: %s: OBD_IOC_ATTACH %s\n",
                         cmdname(argv[0]), strerror(rc = errno));
         else if (argc == 3) {
                 char name[1024];
@@ -948,7 +948,7 @@ int jt_obd_get_stripe (int argc, char **argv)
         __u64 id;
         int   rc;
         char *end;
-        
+
         if (argc != 2)
                 return (CMD_HELP);
 
@@ -960,7 +960,7 @@ int jt_obd_get_stripe (int argc, char **argv)
         }
 
         memset (&lsm_buffer, 0, sizeof (lsm_buffer));
-        
+
         IOC_INIT (data);
         data.ioc_obdo1.o_id = id;
         data.ioc_obdo1.o_mode = S_IFREG | 0644;
@@ -973,13 +973,13 @@ int jt_obd_get_stripe (int argc, char **argv)
         IOC_UNPACK(argv[0], data);
 
         if (rc != 0) {
-                fprintf (stderr, "Error: %s: rc %d(%s)\n", 
+                fprintf (stderr, "Error: %s: rc %d(%s)\n",
                          cmdname (argv[0]), rc, strerror (errno));
                 return (rc);
         }
-        
+
         printf ("%s\n", lsm_string (&lsm_buffer.lsm));
-        
+
         return (rc);
 }
 
@@ -1013,26 +1013,25 @@ int jt_obd_set_stripe (int argc, char **argv)
                 }
         }
 
-        for (i = 0; i < count; i++) 
-        {
+        for (i = 0; i < count; i++) {
                 IOC_INIT (data);
                 data.ioc_obdo1.o_id = lsm_buffer.lsm.lsm_object_id + i;
                 data.ioc_obdo1.o_mode = S_IFREG | 0644;
                 data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
                 data.ioc_pbuf1 = (char *)&lsm_buffer;
                 data.ioc_plen1 = sizeof (lsm_buffer);
-                
+
                 IOC_PACK (argv[0], data);
                 rc = l_ioctl (OBD_DEV_ID, ECHO_IOC_SET_STRIPE, buf);
                 IOC_UNPACK (argv[0], data);
-                
+
                 if (rc != 0) {
-                        fprintf (stderr, "Error: %s: rc %d(%s)\n", 
+                        fprintf (stderr, "Error: %s: rc %d(%s)\n",
                                  cmdname (argv[0]), rc, strerror (errno));
                         return (rc);
                 }
         }
-        
+
         return (0);
 }
 
@@ -1047,25 +1046,25 @@ int jt_obd_unset_stripe (int argc, char **argv)
 
         if (argc != 2)
                 return CMD_HELP;
-        
+
         id = strtoll (argv[1], &end, 0);
         if (*end == 0) {
                 fprintf (stderr, "error: %s: invalid object id '%s'\n",
                          cmdname (argv[0]), argv[1]);
                 return CMD_HELP;
         }
-                
+
         IOC_INIT (data);
         data.ioc_obdo1.o_id = lsm_buffer.lsm.lsm_object_id;
         data.ioc_obdo1.o_mode = S_IFREG | 0644;
         data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
-        
+
         IOC_PACK (argv[0], data);
         rc = l_ioctl (OBD_DEV_ID, ECHO_IOC_SET_STRIPE, buf);
         IOC_UNPACK (argv[0], data);
-        
+
         if (rc != 0)
-                fprintf (stderr, "Error: %s: rc %d(%s)\n", 
+                fprintf (stderr, "Error: %s: rc %d(%s)\n",
                          cmdname (argv[0]), rc, strerror (errno));
 
         return (0);
@@ -1125,7 +1124,7 @@ int jt_obd_create(int argc, char **argv)
                 }
                 base_id = lsm_buffer.lsm.lsm_object_id;
         }
-                
+
         printf("%s: "LPD64" objects\n", cmdname(argv[0]), count);
         gettimeofday(&next_time, NULL);
         next_time.tv_sec -= verbose;
@@ -1159,7 +1158,7 @@ int jt_obd_create(int argc, char **argv)
 
                 if (be_verbose(verbose, &next_time, i, &next_count, count))
                         printf("%s: #%d is object id "LPX64"\n",
-                               cmdname(argv[0]), i, data.ioc_obdo1.o_id);
+                                cmdname(argv[0]), i, data.ioc_obdo1.o_id);
         }
         return rc;
 }
@@ -1855,7 +1854,7 @@ int jt_obd_failconn(int argc, char **argv)
         if (rc < 0)
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc = errno));
-        
+
         return rc;
 }
 
