@@ -57,7 +57,7 @@
 #include <asm/segment.h>
 #include <asm/div64.h>
 
-#define DEBUG_SUBSYSTEM S_SOCKNAL
+#define DEBUG_SUBSYSTEM S_NAL
 
 #include <linux/kp30.h>
 #include <linux/portals_compat25.h>

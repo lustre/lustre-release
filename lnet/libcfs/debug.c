@@ -59,8 +59,7 @@
 #include <linux/kallsyms.h>
 #endif
 
-unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
-                                            S_GMNAL | S_IBNAL);
+unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
 EXPORT_SYMBOL(portal_subsystem_debug);
 
 unsigned int portal_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
@@ -267,12 +266,14 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
                 /* userspace NAL */
         case IIBNAL:
         case OPENIBNAL:
+        case RANAL:
         case SOCKNAL:
                 snprintf(str, PTL_NALFMT_SIZE, "%u:%u.%u.%u.%u",
                          (__u32)(nid >> 32), HIPQUAD(nid));
                 break;
         case QSWNAL:
         case GMNAL:
+        case LONAL:
                 snprintf(str, PTL_NALFMT_SIZE, "%u:%u",
                          (__u32)(nid >> 32), (__u32)nid);
                 break;

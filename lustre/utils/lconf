@@ -104,24 +104,20 @@ subsystem_names = {
     "rpc" :          (1 << 8),
     "mgmt" :         (1 << 9),
     "portals" :      (1 << 10),
-    "socknal" :      (1 << 11),
-    "qswnal" :       (1 << 12),
-    "pinger" :       (1 << 13),
-    "filter" :       (1 << 14),
-    "ptlbd" :        (1 << 15),
-    "echo" :         (1 << 16),
-    "ldlm" :         (1 << 17),
-    "lov" :          (1 << 18),
-    "gmnal" :        (1 << 19),
-    "ptlrouter" :    (1 << 20),
-    "cobd" :         (1 << 21),
-    "ibnal" :        (1 << 22),
-    "sm" :           (1 << 23),
-    "asobd" :        (1 << 24),
-    "confobd" :      (1 << 25),
-    "lmv" :          (1 << 26),
-    "cmobd" :        (1 << 27),
-    "lonal" :        (1 << 28),
+    "nal" :          (1 << 11),
+    "pinger" :       (1 << 12),
+    "filter" :       (1 << 13),
+    "ptlbd" :        (1 << 14),
+    "echo" :         (1 << 15),
+    "ldlm" :         (1 << 16),
+    "lov" :          (1 << 17),
+    "ptlrouter" :    (1 << 18),
+    "cobd" :         (1 << 19),
+    "sm" :           (1 << 20),
+    "asobd" :        (1 << 21),
+    "confobd" :      (1 << 22),
+    "lmv" :          (1 << 23),
+    "cmobd" :        (1 << 24),
     }
 
 
@@ -1049,7 +1045,7 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
 def sys_get_local_address(net_type, wildcard, cluster_id):
     """Return the local address for the network type."""
     local = ""
-    if net_type in ('tcp','openib','iib',):
+    if net_type in ('tcp','openib','iib','ra'):
         if  ':' in wildcard:
             iface, star = string.split(wildcard, ':')
             local = if2addr(iface)
@@ -1370,6 +1366,8 @@ class Network(Module):
             manager.add_portals_module("knals/iibnal", 'kiibnal')
         if self.net_type == 'lo':
             manager.add_portals_module("knals/lonal", 'klonal')
+        if self.net_type == 'ra':
+            manager.add_portals_module("knals/ranal", 'kranal')
 
     def nid_to_uuid(self, nid):
         return "NID_%s_UUID" %(nid,)

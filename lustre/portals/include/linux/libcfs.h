@@ -94,24 +94,20 @@ struct ptldebug_header {
 #define S_RPC         0x00000100
 #define S_MGMT        0x00000200
 #define S_PORTALS     0x00000400
-#define S_SOCKNAL     0x00000800
-#define S_QSWNAL      0x00001000
-#define S_PINGER      0x00002000
-#define S_FILTER      0x00004000
-#define S_PTLBD       0x00008000
-#define S_ECHO        0x00010000
-#define S_LDLM        0x00020000
-#define S_LOV         0x00040000
-#define S_GMNAL       0x00080000
-#define S_PTLROUTER   0x00100000
-#define S_COBD        0x00200000
-#define S_IBNAL       0x00400000 /* All IB NALs */
-#define S_SM          0x00800000
-#define S_ASOBD       0x01000000
-#define S_CONFOBD     0x02000000
-#define S_LMV         0x04000000
-#define S_CMOBD       0x08000000
-#define S_LONAL       0x10000000
+#define S_NAL         0x00000800 /* ALL NALs */
+#define S_PINGER      0x00001000
+#define S_FILTER      0x00002000
+#define S_PTLBD       0x00004000
+#define S_ECHO        0x00008000
+#define S_LDLM        0x00010000
+#define S_LOV         0x00020000
+#define S_PTLROUTER   0x00040000
+#define S_COBD        0x00080000
+#define S_SM          0x00100000
+#define S_ASOBD       0x00200000
+#define S_CONFOBD     0x00400000
+#define S_LMV         0x00800000
+#define S_CMOBD       0x01000000
 /* If you change these values, please keep these files up to date...
  *    portals/utils/debug.c
  *    utils/lconf

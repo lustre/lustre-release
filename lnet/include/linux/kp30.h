@@ -652,6 +652,7 @@ enum {
         OPENIBNAL = 7,
         IIBNAL    = 8,
         LONAL     = 9,
+        RANAL     = 10,
         NAL_ENUM_END_MARKER
 };
 

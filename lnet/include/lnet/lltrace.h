@@ -96,9 +96,7 @@ static inline int ltrace_start()
         rc = register_ioc_dev(PORTALS_DEV_ID, PORTALS_DEV_PATH);
 #endif
         ltrace_filter("class");
-        ltrace_filter("socknal");
-        ltrace_filter("qswnal");
-        ltrace_filter("gmnal");
+        ltrace_filter("nal");
         ltrace_filter("portals");
 
         ltrace_show("all_types");

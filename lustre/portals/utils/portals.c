@@ -79,6 +79,7 @@ static name2num_t nalnames[] = {
         {"openib",      OPENIBNAL},
         {"iib",         IIBNAL},
         {"lo",          LONAL},
+        {"ra",          RANAL},
 #else
         {"cray_kern_nal", CRAY_KERN_NAL},
         {"cray_user_nal", CRAY_USER_NAL},
