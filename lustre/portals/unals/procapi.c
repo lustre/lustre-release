@@ -48,6 +48,11 @@
  * forwards a packaged api call from the 'api' side to the 'library'
  *   side, and collects the result
  */
+/* XXX CFS workaround:
+ * when multiple threads call forward at the same time, data in the
+ * pipe will be trampled. add a mutex to serialize the access, as
+ * a temporary solution.
+ */
 #define forward_failure(operand,fd,buffer,length)\
        if(syscall(SYS_##operand,fd,buffer,length)!=length){\
           lib_fini(b->nal_cb);\
@@ -59,7 +64,11 @@ static int procbridge_forward(nal_t *n, int id, void *args, ptl_size_t args_len,
     bridge b=(bridge)n->nal_data;
     procbridge p=(procbridge)b->local;
     int lib=p->to_lib[1];
+    static pthread_mutex_t mut = PTHREAD_MUTEX_INITIALIZER;
     int k;
+
+    /* protect the whole access to pipe */
+    pthread_mutex_lock(&mut);
 
     forward_failure(write,lib, &id, sizeof(id));
     forward_failure(write,lib,&args_len, sizeof(args_len));
@@ -69,6 +78,8 @@ static int procbridge_forward(nal_t *n, int id, void *args, ptl_size_t args_len,
     do {
         k=syscall(SYS_read, p->from_lib[0], ret, ret_len);
     } while ((k!=ret_len) && (errno += EINTR));
+
+    pthread_mutex_unlock(&mut);
 
     if(k!=ret_len){
         perror("nal: read return block");
