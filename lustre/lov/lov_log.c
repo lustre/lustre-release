@@ -191,7 +191,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
 int lov_llog_finish(struct obd_device *obd, int count)
 {
         struct llog_ctxt *ctxt;
-        int rc = 0;
+        int rc = 0, rc2 = 0;
         ENTRY;
 
         /* cleanup our llogs only if the ctxts have been setup
@@ -199,12 +199,12 @@ int lov_llog_finish(struct obd_device *obd, int count)
         ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
         if (ctxt)
                 rc = llog_cleanup(ctxt);
-        if (rc)
-                RETURN(rc);
 
         ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
         if (ctxt)
-                rc = llog_cleanup(ctxt);
+                rc2 = llog_cleanup(ctxt);
+        if (!rc)
+                rc = rc2;
 
         RETURN(rc);
 }
