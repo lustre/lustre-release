@@ -119,8 +119,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-        /* First the MDS since an LOV requires an the MDC connection
-           to find its descriptor */
 #if 0
         err = connmgr_connect(ptlrpc_connmgr, sbi->ll_mds_conn);
         if (err) {
@@ -136,14 +134,11 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
         sbi2mdc(sbi)->mdc_conn->c_level = LUSTRE_CONN_FULL;
 
-        /* now the OST, which could be an LOV */
         obd = class_uuid2obd(ost);
         if (!obd) {
                 CERROR("OST %s: not setup or attached\n", ost);
                 GOTO(out_mdc, sb = NULL);
         }
-        /* hack: pass in the MDC connection information to LOV via osc_conn */
-        memcpy(&sbi->ll_osc_conn, &sbi->ll_mdc_conn, sizeof(sbi->ll_mdc_conn));
         err = obd_connect(&sbi->ll_osc_conn, obd);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", ost, err);

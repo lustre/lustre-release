@@ -227,7 +227,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
 static struct inode *ll_create_node(struct inode *dir, const char *name,
                                     int namelen, const char *tgt, int tgtlen,
                                     int mode, __u64 extra,
-                                    struct lookup_intent *it, 
+                                    struct lookup_intent *it,
                                     struct lov_stripe_md *smd)
 {
         struct inode *inode;
@@ -372,7 +372,6 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
                         RETURN(rc);
         }
 
-        mode = mode | S_IFREG;
         CDEBUG(D_DENTRY, "name %s mode %o o_id %lld\n",
                dentry->d_name.name, mode, (unsigned long long)oa.o_id);
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
@@ -414,7 +413,7 @@ static int ll_mknod(struct inode *dir, struct dentry *dentry, int mode,
 {
         struct inode * inode = ll_create_node(dir, dentry->d_name.name,
                                               dentry->d_name.len, NULL, 0,
-                                              mode, rdev, NULL, NULL);
+                                              mode, rdev, dentry->d_it, NULL);
         int err = PTR_ERR(inode);
         if (!IS_ERR(inode))
                 err = ext2_add_nondir(dentry, inode);

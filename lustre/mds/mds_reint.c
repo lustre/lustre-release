@@ -342,7 +342,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 break;
         }
         default:
-                CERROR("bad file type %d for create of %s\n",type,rec->ur_name);
+                CERROR("bad file type %o for create of %s\n",type,rec->ur_name);
                 GOTO(out_create_dchild, rc = -EINVAL);
         }
 

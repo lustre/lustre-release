@@ -26,73 +26,36 @@ extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
 /* obd methods */
 
-static int lov_getinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
-                       struct lov_desc *desc, uuid_t **uuids,
-                       struct ptlrpc_request **request)
-{
-        struct ptlrpc_request *req;
-        struct mds_status_req *streq;
-        struct lov_obd *lov = &obd->u.lov;
-        struct mdc_obd *mdc = &lov->mdcobd->u.mdc;
-        int rc, size[2] = {sizeof(*streq)};
-        ENTRY;
-
-        req = ptlrpc_prep_req2(mdc->mdc_client, mdc->mdc_conn, mdc_connh,
-                               MDS_LOVINFO, 1, size, NULL);
-        if (!req)
-                GOTO(out, rc = -ENOMEM);
-
-        *request = req;
-        streq = lustre_msg_buf(req->rq_reqmsg, 0);
-        streq->flags = HTON__u32(MDS_STATUS_LOV);
-        streq->repbuf = HTON__u32(8000);
-
-        /* prepare for reply */
-        req->rq_level = LUSTRE_CONN_CON;
-        size[0] = sizeof(*desc);
-        size[1] = 8000;
-        req->rq_replen = lustre_msg_size(2, size);
-
-        rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
-
-        if (!rc) {
-                memcpy(desc, lustre_msg_buf(req->rq_repmsg, 0), sizeof(*desc));
-                *uuids = lustre_msg_buf(req->rq_repmsg, 1);
-                lov_unpackdesc(desc);
-        }
-        mdc->mdc_max_mdsize = sizeof(*desc) +
-                desc->ld_tgt_count * sizeof(uuid_t);
-
-        EXIT;
- out:
-        return rc;
-}
-
 static int lov_connect(struct lustre_handle *conn, struct obd_device *obd)
 {
         struct ptlrpc_request *req;
-        struct lustre_handle mdc_conn;
         struct lov_obd *lov = &obd->u.lov;
+        struct lustre_handle mdc_conn;
         uuid_t *uuidarray;
         int rc;
         int i;
 
         MOD_INC_USE_COUNT;
-        memcpy(&mdc_conn, conn, sizeof(mdc_conn));
-        conn->addr = -1;
-        conn->cookie = 0;
         rc = class_connect(conn, obd);
         if (rc) {
                 MOD_DEC_USE_COUNT;
                 RETURN(rc);
         }
 
-        rc = lov_getinfo(obd, &mdc_conn, &lov->desc, &uuidarray, &req);
+        rc = obd_connect(&mdc_conn, lov->mdcobd);
+        if (rc) {
+                CERROR("cannot connect to mdc: rc = %d\n", rc);
+                GOTO(out, rc = -EINVAL);
+        }
+
+        rc = mdc_getlovinfo(obd, &mdc_conn, &uuidarray, &req);
+        obd_disconnect(&mdc_conn);
+
         if (rc) {
                 CERROR("cannot get lov info %d\n", rc);
                 GOTO(out, rc);
         }
+
 
         if (lov->desc.ld_tgt_count > 1000) {
                 CERROR("configuration error: target count > 1000 (%d)\n",
