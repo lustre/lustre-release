@@ -199,25 +199,6 @@ int gen_cleanup(struct obd_device * obddev)
         return 0;
 } /* sim_cleanup_device */
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
-void ___wait_on_page(struct page *page)
-{
-        struct task_struct *tsk = current;
-        DECLARE_WAITQUEUE(wait, tsk);
-
-        add_wait_queue(&page->wait, &wait);
-        do {
-                run_task_queue(&tq_disk);
-                set_task_state(tsk, TASK_UNINTERRUPTIBLE);
-                if (!PageLocked(page))
-                        break;
-                schedule();
-        } while (PageLocked(page));
-        tsk->state = TASK_RUNNING;
-        remove_wait_queue(&page->wait, &wait);
-}
-#endif
-
 void lck_page(struct page *page)
 {
         while (TryLockPage(page))
