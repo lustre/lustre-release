@@ -123,8 +123,6 @@ int it_open_error(int phase, struct lookup_intent *it)
 }
 EXPORT_SYMBOL(it_open_error);
 
-
-
 /* this must be called on a lockh that is known to have a referenced lock */
 void mdc_set_lock_data(__u64 *l, void *data)
 {
