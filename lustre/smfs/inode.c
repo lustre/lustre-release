@@ -64,10 +64,11 @@ static void smfs_init_inode_info (struct inode *inode, void *opaque)
 static void smfs_clear_inode_info(struct inode *inode)
 {
         struct inode *cache_inode = I2CI(inode);
-       
+ 
         LASSERTF(atomic_read(&cache_inode->i_count) == 1, 
-                 "cache inode %lu i_count %d not 0\n", cache_inode->i_ino,
+                 "inode %lu i_count %d != 1\n", cache_inode->i_ino, 
                  atomic_read(&cache_inode->i_count));
+      
         iput(cache_inode);
         OBD_FREE(I2SMI(inode), sizeof(struct smfs_inode_info));
 }
@@ -268,8 +269,8 @@ static void smfs_put_inode(struct inode *inode)
         
         CDEBUG(D_INFO, "cache_inode i_count ino %lu i_count %d\n",
                inode->i_ino, atomic_read(&inode->i_count));
-        if (atomic_read(&cache_inode->i_count) > 1 && 
-            cache_inode != cache_inode->i_sb->s_root->d_inode) {
+        if (atomic_read(&cache_inode->i_count) > 1 /*&& 
+            cache_inode != cache_inode->i_sb->s_root->d_inode*/) {
                 CDEBUG(D_INFO, "cache_inode i_count ino %lu i_count %d\n",
                        cache_inode->i_ino, 
                        atomic_read(&cache_inode->i_count) - 1);
@@ -306,8 +307,8 @@ static void smfs_clear_inode(struct inode *inode)
         
         cache_inode = I2CI(inode);
 
-        if (cache_inode != cache_inode->i_sb->s_root->d_inode) 
-                smfs_clear_inode_info(inode);
+        smfs_clear_inode_info(inode);
+        
         EXIT;
         return;
 }

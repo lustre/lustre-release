@@ -131,6 +131,8 @@ struct smfs_hook_ops *smfs_unregister_hook_ops(struct smfs_super_info *smb,
 /*smfs_lib.c*/
 void smfs_put_super(struct super_block *sb);
 int smfs_fill_super(struct super_block *sb, void *data, int silent);
+
+void smfs_cleanup_hooks(struct smfs_super_info *smb);
 /*sysctl.c*/
 extern int sm_debug_level;
 extern int sm_inodes;

@@ -163,8 +163,6 @@ err_out:
 
 static int smfs_umount_cache(struct smfs_super_info *smb)
 {
-        iput(smb->smsi_sb->s_root->d_inode);
-        dput(smb->smsi_sb->s_root);
         mntput(smb->smsi_mnt);
         smfs_cleanup_sm_ops(smb);
         smfs_cleanup_fsfilt_ops(smb);
@@ -216,7 +214,7 @@ static void smfs_cleanup_smb(struct super_block *sb)
         EXIT;
         return;
 }
-static void smfs_cleanup_hooks(struct smfs_super_info *smb)
+void smfs_cleanup_hooks(struct smfs_super_info *smb)
 {
         
         if (SMFS_CACHE_HOOK(smb))
@@ -227,15 +225,16 @@ static void smfs_cleanup_hooks(struct smfs_super_info *smb)
         if (SMFS_DO_COW(smb))
                 smfs_cow_cleanup(smb);
 #endif  
+        smfs_cleanup_hook_ops(smb);
 }
 
 void smfs_put_super(struct super_block *sb)
 {
         struct smfs_super_info *smfs_info = S2SMI(sb);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         smfs_cleanup_hooks(smfs_info);
-        
-        smfs_cleanup_hook_ops(smfs_info);
+#endif
         if (sb)
                 smfs_umount_cache(smfs_info);
         smfs_cleanup_smb(sb); 

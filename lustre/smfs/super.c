@@ -69,12 +69,16 @@ struct super_block *smfs_get_sb(struct file_system_type *fs_type, int flags,
 {
         return get_sb_nodev(fs_type, flags, data, smfs_fill_super);
 }
-
+void smfs_kill_super(struct super_block *sb)
+{
+        smfs_cleanup_hooks(S2SMI(sb));
+        kill_anon_super(sb);
+}
 static struct file_system_type smfs_type = {
         .owner       = THIS_MODULE,
         .name        = "smfs",
         .get_sb      = smfs_get_sb,
-        .kill_sb     = kill_anon_super,
+        .kill_sb     = smfs_kill_super,
 };
 #endif
 
