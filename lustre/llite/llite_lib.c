@@ -372,8 +372,9 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
                         struct obdo oa;
                         int err2;
 
-                        CDEBUG(D_INODE, "set mtime on OST inode %lu to %Lu\n",
-                               inode->i_ino, ll_ts2u64(&attr->ia_mtime));
+                        CDEBUG(D_INODE, "set mtime on OST inode %lu to "
+                               LPU64"\n", inode->i_ino, 
+                               ll_ts2u64(&attr->ia_mtime));
                         oa.o_id = lsm->lsm_object_id;
                         oa.o_mode = S_IFREG;
                         oa.o_valid = OBD_MD_FLID |OBD_MD_FLTYPE |OBD_MD_FLMTIME;
@@ -462,7 +463,7 @@ skip_extent_lock:
                 struct obdo oa;
                 int err2;
 
-                CDEBUG(D_INODE, "set mtime on OST inode %lu to %Lu\n",
+                CDEBUG(D_INODE, "set mtime on OST inode %lu to "LPU64"\n",
                        inode->i_ino, ll_ts2u64(&attr->ia_mtime));
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_mode = S_IFREG;

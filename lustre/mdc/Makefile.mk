@@ -6,4 +6,4 @@
 include $(src)/../portals/Kernelenv
 
 obj-y += mdc.o
-mdc-objs := mdc_request.o mdc_reint.o lproc_mdc.o
+mdc-objs := mdc_request.o mdc_reint.o lproc_mdc.o mdc_lib.o
