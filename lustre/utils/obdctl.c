@@ -146,21 +146,27 @@ static int be_verbose(int verbose, struct timeval *next_time,
         if (!verbose)
                 return 0;
 
+        if (next_time != NULL)
+                gettimeofday(&now, NULL);
+
         /* A positive verbosity means to print every X iterations */
         if (verbose > 0 &&
             (next_num == NULL || num >= *next_num || num >= num_total)) {
                 *next_num += verbose;
+                if (next_time) {
+                        next_time->tv_sec = now.tv_sec - verbose;
+                        next_time->tv_usec = now.tv_usec;
+                }
                 return 1;
         }
 
-        if (verbose < 0 && next_time != NULL) {
-                /* A negative verbosity means to print at most each X seconds */
-                gettimeofday(&now, NULL);
-                if (difftime(&now, next_time) >= 0) {
-                        next_time->tv_sec = now.tv_sec - verbose;
-                        next_time->tv_usec = now.tv_usec;
-                        return 1;
-                }
+        /* A negative verbosity means to print at most each X seconds */
+        if (verbose < 0 && next_time != NULL && difftime(&now, next_time) >= 0){
+                next_time->tv_sec = now.tv_sec - verbose;
+                next_time->tv_usec = now.tv_usec;
+                if (next_num)
+                        *next_num = num;
+                return 1;
         }
 
         return 0;
@@ -358,13 +364,22 @@ static int jt__threads(int argc, char **argv)
                         if (ret < 0) {
                                 fprintf(stderr, "error: %s: wait - %s\n",
                                         argv[0], strerror(errno));
-                                if (rc == 0)
+                                if (!rc)
                                         rc = errno;
-                        } else if (WIFEXITED(status) == 0) {
-                                fprintf(stderr, "%s: PID %d had rc=%d\n",
-                                        argv[0], ret, WEXITSTATUS(status));
-                                if (rc == 0)
-                                        rc = WEXITSTATUS(status);
+                        } else {
+                                /*
+                                 * This is a hack.  We _should_ be able to use
+                                 * WIFEXITED(status) to see if there was an
+                                 * error, but it appears to be broken and it
+                                 * always returns 1 (OK).  See wait(2).
+                                 */
+                                int err = WEXITSTATUS(status);
+                                if (err)
+                                        fprintf(stderr,
+                                                "%s: PID %d had rc=%d\n",
+                                                argv[0], ret, err);
+                                if (!rc)
+                                        rc = err;
                         }
                 }
         }
@@ -646,7 +661,7 @@ static int jt_test_getattr(int argc, char **argv)
 
         for (i = 1, next_count = verbose; i <= count; i++) {
                 rc = ioctl(fd, OBD_IOC_GETATTR , &data);
-                if (rc) {
+                if (rc < 0) {
                         fprintf(stderr, "error: %s: #%d - %s\n",
                                 cmdname(argv[0]), i, strerror(rc = errno));
                         break;
