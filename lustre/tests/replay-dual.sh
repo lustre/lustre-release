@@ -8,6 +8,14 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env
 
 # XXX I wish all this stuff was in some default-config.sh somewhere
+mds_HOST=${mds_HOST:-`hostname`}
+mdsfailover_HOST=${mdsfailover_HOST}
+ost_HOST=${ost_HOST:-`hostname`}
+client_HOST=${client_HOST:-`hostname`}
+
+NETWORKTYPE=tcp
+
+PDSH=${PDSH:-no_dsh}
 MOUNT=${MOUNT:-/mnt/lustre}
 MDSDEV=${MDSDEV:-/tmp/mds-`hostname`}
 MDSSIZE=${MDSSIZE:-100000}
@@ -39,9 +47,17 @@ build_test_filter
 
 cleanup() {
     [ "$DAEMONFILE" ] && lctl debug_daemon stop
-    umount $MOUNT2
-    umount $MOUNT1
-    rmmod llite
+    # make sure we are using the primary MDS, so the config log will
+    # be able to clean up properly.
+    activemds=`facet_active mds`
+    if [ $activemds != "mds" ]; then
+        fail mds
+    fi
+
+    lconf  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
+       --local_nid $client_HOST --profile client_facet --mount $MOUNT
+    lconf  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
+       --local_nid $client_HOST --profile client_facet --mount $MOUNT2
     stop mds ${FORCE} --dump cleanup-dual.log
     stop ost ${FORCE}
 }
@@ -53,8 +69,9 @@ if [ "$ONLY" == "cleanup" ]; then
 fi
 
 gen_config
+start mds --write_conf --reformat
 start ost --reformat
-start mds --reformat --write_conf
+start mds
 PINGER=`cat /proc/fs/lustre/pinger`
 
 if [ "$PINGER" != "on" ]; then
@@ -63,12 +80,14 @@ if [ "$PINGER" != "on" ]; then
     exit 1
 fi
 
-insmod ../llite/llite.o || true
-[ -d $MOUNT1 ] || mkdir $MOUNT1
-[ -d $MOUNT2 ] || mkdir $MOUNT2
+# 0-conf client
+lconf --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETWORKTYPE $mds_HOST` \
+    --local_nid `h2$NETWORKTYPE $client_HOST` --profile client_facet --mount $MOUNT
+lconf --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETWORKTYPE $mds_HOST` \
+    --local_nid `h2$NETWORKTYPE $client_HOST` --profile client_facet --mount $MOUNT2
 
-mount -t lustre_lite -o mds_uuid=mds1_UUID,profile=client_facet replay-single $MOUNT1
-mount -t lustre_lite -o mds_uuid=mds1_UUID,profile=client_facet replay-single $MOUNT2
+echo $TIMEOUT > /proc/sys/lustre/timeout
+echo $UPCALL > /proc/sys/lustre/upcall
 
 [ "$DAEMONFILE" ] && lctl debug_daemon start $DAEMONFILE $DAEMONSIZE
 
