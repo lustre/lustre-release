@@ -4,6 +4,7 @@
 %define linuxdir @LINUX@
 %define enable_doc @ENABLE_DOC@
 %define enable_init_scripts @ENABLE_INIT_SCRIPTS@
+%define enable_gm @ENABLE_GM@
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -135,7 +136,9 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/sbin/wiretest
 %attr(-, root, root) /usr/sbin/lactive
 %attr(-, root, root) /usr/sbin/llanalyze
+%if %{enable_gm}
 %attr(-, root, root) /usr/sbin/gmnalnid
+%endif
 %attr(-, root, root) /usr/sbin/llstat.pl
 %attr(-, root, root) /usr/sbin/llobdstat.pl
 %attr(-, root, root) /usr/sbin/load_ldap.sh

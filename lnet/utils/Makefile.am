@@ -25,6 +25,9 @@ if UTILS
 if !CRAY_PORTALS
 sbin_PROGRAMS += acceptor ptlctl routerstat wirecheck 
 endif
+if BUILD_GMNAL
+sbin_PROGRAMS += gmnalnid
+endif
 endif
 
 acceptor_SOURCES = acceptor.c
@@ -33,6 +36,9 @@ acceptor_LDADD = $(LIBWRAP)
 wirecheck_SOURCES = wirecheck.c
 
 gmnalnid_SOURCES = gmnalnid.c
+gmnalnid_CFLAGS = $(GMCPPFLAGS)
+gmnalnid_LDFLAGS = -static
+gmnalnid_LDADD = $(GMLIBS) -lgm
 
 ptlctl_SOURCES = ptlctl.c
 ptlctl_LDADD =  -L. -lptlctl $(LIBREADLINE) $(LIBEFENCE)
@@ -43,4 +49,3 @@ routerstat_SOURCES = routerstat.c
 debugctl_SOURCES = debugctl.c
 debugctl_LDADD = -L. -lptlctl $(LIBREADLINE) $(LIBEFENCE)
 debugctl_DEPENDENCIES = libptlctl.a
-

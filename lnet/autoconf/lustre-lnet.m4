@@ -114,35 +114,27 @@ AC_SUBST(QSWNAL)
 # check if GM support is available
 #
 AC_DEFUN([LP_CONFIG_GM],
-[AC_MSG_CHECKING([if gm support was requested])
-AC_ARG_WITH([gm],
-	AC_HELP_STRING([--with-gm=path],
-		       [build gmnal against path]),
-	[
-		case $with_gm in 
-			yes)
-				AC_MSG_RESULT([yes])
-				GMCPPFLAGS="-I/usr/local/gm/include"
-				GMNAL="gmnal"
-				;;
-			no)
-				AC_MSG_RESULT([no])
-				GMCPPFLAGS=""
-				GMNAL=""
-				;;
-			*)
-				AC_MSG_RESULT([yes])
-				GMCPPFLAGS="-I$with_gm/include -I$with_gm/drivers -I$with_gm/drivers/linux/gm"
-				GMNAL="gmnal"
-				;;
-		esac
-	],[
-		AC_MSG_RESULT([no])
-		GMCPPFLAGS=""
-		GMNAL=""
-	])
+[LB_ARG_LIBS_INCLUDES([Myrinet],[gm])
+if test x$gm_includes != x ; then
+	GMCPPFLAGS="-I$gm_includes"
+	if test -d "$gm/drivers" ; then
+		GMCPPFLAGS="$GMCPPFLAGS -I$gm/drivers -I$gm/drivers/linux/gm"
+	fi
+fi
 AC_SUBST(GMCPPFLAGS)
+
+if test x$gm_libs != x ; then
+	GMLIBS="-L$gm_libs"
+fi
+AC_SUBST(GMLIBS)
+
+ENABLE_GM=0
+if test x$gm != x ; then
+	GMNAL="gmnal"
+	ENABLE_GM=1
+fi
 AC_SUBST(GMNAL)
+AC_SUBST(ENABLE_GM)
 ])
 
 #

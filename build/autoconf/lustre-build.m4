@@ -58,6 +58,59 @@ $2],
                  [$3])])])
 
 #
+# LB_ARG_LIBS_INCLUDES
+#
+# support for --with-foo, --with-foo-includes, and --with-foo-libs in
+# a single magical macro
+#
+AC_DEFUN([LB_ARG_LIBS_INCLUDES],
+[lb_pathvar="m4_bpatsubst([$2], -, _)"
+AC_MSG_CHECKING([for $1])
+AC_ARG_WITH([$2],
+	AC_HELP_STRING([--with-$2=path],
+		[path to $1]),
+	[],[withval=$4])
+
+if test x$withval = xyes ; then
+	eval "$lb_pathvar='$3'"
+else
+	eval "$lb_pathvar='$withval'"
+fi
+AC_MSG_RESULT([${!lb_pathvar:-no}])
+
+if test x${!lb_pathvar} != x -a x${!lb_pathvar} != xno ; then
+	AC_MSG_CHECKING([for $1 includes])
+	AC_ARG_WITH([$2-includes],
+		AC_HELP_STRING([--with-$2-includes=path],
+			[path to $1 includes]),
+		[],[withval='yes'])
+
+	lb_includevar="${lb_pathvar}_includes"
+	if test x$withval = xyes ; then
+		eval "${lb_includevar}='${!lb_pathvar}/include'"
+	else
+		eval "${lb_includevar}='$withval'"
+	fi
+	AC_MSG_RESULT([${!lb_includevar}])
+
+	AC_MSG_CHECKING([for $1 libs])
+	AC_ARG_WITH([$2-libs],
+		AC_HELP_STRING([--with-$2-libs=path],
+			[path to $1 libs]),
+		[],[withval='yes'])
+
+	lb_libvar="${lb_pathvar}_libs"
+	if test x$withval = xyes ; then
+		eval "${lb_libvar}='${!lb_pathvar}/lib'"
+	else
+		eval "${lb_libvar}='$withval'"
+	fi
+	AC_MSG_RESULT([${!lb_libvar}])
+fi
+])
+])
+
+#
 # LB_PATH_LIBSYSIO
 #
 # Handle internal/external libsysio
@@ -111,65 +164,30 @@ AC_CONFIG_SUBDIRS(libsysio)
 # Support for external Cray portals
 #
 AC_DEFUN([LB_PATH_CRAY_PORTALS],
-[AC_MSG_CHECKING([for Cray portals])
-AC_ARG_WITH([cray-portals],
-	AC_HELP_STRING([--with-cray-portals=path],
-		       [path to cray portals]),
-	[
-	        if test "$with_cray_portals" != no; then
-			CRAY_PORTALS_PATH=$with_cray_portals
-			CRAY_PORTALS_INCLUDES="$with_cray_portals/include"
-			CRAY_PORTALS_LIBS="$with_cray_portals"
-                fi
-	],[with_cray_portals=no])
-AC_SUBST(CRAY_PORTALS_PATH)
-AC_MSG_RESULT([$CRAY_PORTALS_PATH])
+[LB_ARG_LIBS_INCLUDES([Cray Portals],[cray-portals])
 
-AC_MSG_CHECKING([for Cray portals includes])
-AC_ARG_WITH([cray-portals-includes],
-	AC_HELP_STRING([--with-cray-portals-includes=path],
-		       [path to cray portals includes]),
-	[
-	        if test "$with_cray_portals_includes" != no; then
-			CRAY_PORTALS_INCLUDES="$with_cray_portals_includes"
-                fi
-	])
-AC_SUBST(CRAY_PORTALS_INCLUDES)
-AC_MSG_RESULT([$CRAY_PORTALS_INCLUDES])
-
-AC_MSG_CHECKING([for Cray portals libs])
-AC_ARG_WITH([cray-portals-libs],
-	AC_HELP_STRING([--with-cray-portals-libs=path],
-		       [path to cray portals libs]),
-	[
-	        if test "$with_cray_portals_libs" != no; then
-			CRAY_PORTALS_LIBS="$with_cray_portals_libs"
-                fi
-	])
-AC_SUBST(CRAY_PORTALS_LIBS)
-AC_MSG_RESULT([$CRAY_PORTALS_LIBS])
-
-if test x$CRAY_PORTALS_INCLUDES != x ; then
-	if test ! -r $CRAY_PORTALS_INCLUDES/portals/api.h ; then
-		AC_MSG_ERROR([Cray portals headers were not found in $CRAY_PORTALS_INCLUDES.  Please check the paths passed to --with-cray-portals or --with-cray-portals-includes.])
+if test x$cray_portals_includes != x ; then
+	if test ! -r $cray_portals_includes/portals/api.h ; then
+		AC_MSG_ERROR([Cray portals headers were not found in $cray_portals_includes.  Please check the paths passed to --with-cray-portals or --with-cray-portals-includes.])
 	fi
 fi
-if test x$CRAY_PORTALS_LIBS != x ; then
-	if test ! -r $CRAY_PORTALS_LIBS/libportals.a ; then
-		AC_MSG_ERROR([Cray portals libraries were not found in $CRAY_PORTALS_LIBS.  Please check the paths passed to --with-cray-portals or --with-cray-portals-libs.])
+if test x$cray_portals_libs != x ; then
+	if test ! -r $cray_portals_libs/libportals.a ; then
+		AC_MSG_ERROR([Cray portals libraries were not found in $cray_portals_libs.  Please check the paths passed to --with-cray-portals or --with-cray-portals-libs.])
 	fi
 fi
 
-AC_MSG_CHECKING([whether to use Cray portals])
-if test x$CRAY_PORTALS_INCLUDES != x -a x$CRAY_PORTALS_LIBS != x ; then
-	with_cray_portals=yes
+if test x$cray_portals_includes != x -a x$cray_portals_libs != x ; then
+	cray_portals=yes
 	AC_DEFINE(CRAY_PORTALS, 1, [Building with Cray Portals])
-	CPPFLAGS="-I$CRAY_PORTALS_INCLUDES $CPPFLAGS"
-	EXTRA_KCFLAGS="-I$CRAY_PORTALS_INCLUDES $EXTRA_KCFLAGS"
+	CPPFLAGS="-I$cray_portals_includes $CPPFLAGS"
+	EXTRA_KCFLAGS="-I$cray_portals_includes $EXTRA_KCFLAGS"
+	# for liblustre + b_cray
+	CRAY_PORTALS_LIBS="$cray_portals_libs"
+	AC_SUBST(CRAY_PORTALS_LIBS)
 else
-	with_cray_portals=no
+	cray_portals=no
 fi
-AC_MSG_RESULT([$with_cray_portals])
 ])
 
 #
@@ -218,7 +236,7 @@ AC_ARG_ENABLE([utils],
 	AC_HELP_STRING([--disable-utils],
 			[disable building of Lustre utility programs]),
 	[],[enable_utils='yes'])
-if test x$with_cray_portals = xyes ; then
+if test x$cray_portals = xyes ; then
 	enable_utils='no'
 fi
 AC_MSG_RESULT([$enable_utils])
@@ -238,7 +256,7 @@ AC_ARG_ENABLE([tests],
 	AC_HELP_STRING([--disable-tests],
 			[disable building of Lustre tests]),
 	[],[enable_tests='yes'])
-if test x$with_cray_portals = xyes ; then
+if test x$cray_portals = xyes ; then
 	enable_tests='no'
 fi
 AC_MSG_RESULT([$enable_tests])
@@ -408,7 +426,7 @@ AC_DEFUN([LB_CONDITIONALS],
 AM_CONDITIONAL(UTILS, test x$enable_utils = xyes)
 AM_CONDITIONAL(TESTS, test x$enable_tests = xyes)
 AM_CONDITIONAL(DOC, test x$ENABLE_DOC = x1)
-AM_CONDITIONAL(CRAY_PORTALS, test x$with_cray_portals != xno)
+AM_CONDITIONAL(CRAY_PORTALS, test x$cray_portals != xno)
 AM_CONDITIONAL(INIT_SCRIPTS, test x$ENABLE_INIT_SCRIPTS = "x1")
 AM_CONDITIONAL(LINUX, test x$lb_target_os = "xlinux")
 AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")

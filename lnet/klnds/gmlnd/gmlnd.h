@@ -28,6 +28,13 @@
 #ifndef __INCLUDE_GMNAL_H__
 #define __INCLUDE_GMNAL_H__
 
+/* XXX Lustre as of V1.2.2 drop defines VERSION, which causes problems
+ * when including <GM>/include/gm_lanai.h which defines a structure field
+ * with the name VERSION XXX */
+#ifdef VERSION
+# undef VERSION
+#endif
+
 #ifndef EXPORT_SYMTAB
 # define EXPORT_SYMTAB
 #endif
