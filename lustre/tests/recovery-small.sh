@@ -85,31 +85,28 @@ unmount_client() {
 
 setup() {
     make_config
-    start_mds --reformat
-    start_ost --reformat
+    start_mds ${REFORMAT:---reformat}
+    start_ost ${REFORMAT:---reformat}
     # XXX we should write our own upcall, when we move this somewhere better.
-    mount_client --timeout=10 \
+    mount_client --timeout=${TIMEOUT:-5} \
         --recovery_upcall=$PWD/../../ltest/functional/llite/09/client-upcall.sh
 }
 
 cleanup() {
-    unmount_client || true
-    shutdown_mds || true
-    shutdown_ost || true
+    do_mds "echo 0 > /proc/sys/lustre/fail_loc"
+    unmount_client $@ || true
+    shutdown_mds $@ || true
+    shutdown_ost $@ || true
 }
 
 replay() {
-    if [ $# -gt 1 ]; then
-        do_client "$1"
-        shift
-    fi
     do_mds "sync"
     do_mds 'echo -e "device \$mds1\\nprobe\\nnotransno\\nreadonly" | lctl'
     do_client "$1" &
     shutdown_mds -f
     start_mds
     wait
-    do_client "df -h $MOUNPT" # trigger failover, if we haven't already
+    do_client "df -h $MOUNTPT" # trigger failover, if we haven't already
 }
 
 if [ ! -z "$ONLY" ]; then
@@ -130,6 +127,11 @@ drop_request "statone /mnt/lustre/2"
 drop_reply "statone /mnt/lustre/2"
 # replay "statone /mnt/lustre/2"
 
-drop_request "opendelay /mnt/lustre/2"
-drop_reply "opendelay /mnt/lustre/2"
+do_client "cp /etc/resolv.conf /mnt/lustre/resolv.conf"
+drop_request "cat /mnt/lustre/resolv.conf > /dev/null"
+drop_reply "cat /mnt/lustre/resolv.conf > /dev/null"
+
+drop_request "mv /mnt/lustre/resolv.conf /mnt/lustre/renamed"
+drop_reply "mv /mnt/lustre/renamed /mnt/lustre/renamed-again"
+
 cleanup
