@@ -20,10 +20,15 @@ declare -a cleanup_pids
 declare -a cleanup_mounts
 # global for completing the table.  XXX this is a wart that could go
 cur_y="0"
+# a global which funcs use to get at the blocks[] array
+last_block=-1
 
 # defaults for some options:
 min_threads=1
 max_threads=4
+possible_tests="sgp_dd ext2_iozone echo_filter"
+run_tests="$possible_tests"
+echo_module=""
 
 # optional output directory
 output_dir=""
@@ -43,13 +48,17 @@ save_output() {
 	[ ! -z "$output_dir" ] && mv -f $1 $output_dir/$2
 }
 cleanup() {
-	for pid in ${cleanup_pids[*]}; do
-		kill $pid
-	done
-	cleanup_echo_filter
-	for a in ${cleanup_mounts[*]}; do
-		umount -f $a
-	done
+	# only cleanup test runs if we have block devices
+	if [ $last_block != -1 ]; then
+		for pid in ${cleanup_pids[*]}; do
+			kill $pid
+		done
+		cleanup_echo_filter
+		for a in ${cleanup_mounts[*]}; do
+			umount -f $a
+		done
+	fi
+
         [ ${#tmpdir} == 18 ] && [ -d $tmpdir ] && rm -rf $tmpdir
 }
 trap cleanup EXIT
@@ -66,8 +75,13 @@ pid_has_stopped() {
 commas() {
 	echo $* | sed -e 's/ /,/g'
 }
+do_bc_scale() {
+	local scale=$1
+	shift
+        echo "scale=$scale; $*" | bc
+}
 do_bc() {
-        echo "scale=2; $*" | bc
+	do_bc_scale 10 $*
 }
 mean_stddev() {
 	local points=$*
@@ -89,7 +103,8 @@ mean_stddev() {
 	        local dev=`do_bc \($p - $avg\) \^ 2`
 	        tmp=`do_bc $tmp + $dev`
 	done
-	tmp=`do_bc sqrt \( $tmp / \($num - 1\) \)`
+	tmp=`do_bc_scale 1 sqrt \( $tmp / \($num - 1\) \)`
+	avg=`do_bc_scale 1 $avg / 1`
 	echo "$avg:$tmp"
 }
 
@@ -100,6 +115,7 @@ usage() {
         echo "       -l <max io len>"
         echo "       -t <minimum number of threads per device>"
         echo "       -T <maximum number of threads per device>"
+        echo "       -r <tests to run>"
         exit;
 }
 
@@ -252,6 +268,10 @@ ext2_iozone_prepare() {
 		echo "iozone binary not found in PATH"
 		return 1
 	fi
+	if ! iozone -i 0 -w -+o -s 1k -r 1k -f /dev/null > /dev/null; then
+		echo "iozone doesn't support -+o"
+		return 1
+	fi
 	if ! which mke2fs; then
 		echo "mke2fs binary not found in PATH"
 		return 1
@@ -296,29 +316,35 @@ ext2_iozone_start() {
 
 	case "$wor" in
 		w) args="-i 0 -w" ;;
-		r) args="-i 1 -w" ;;
+		r) args="-i 1" ;;
 		*) die "asked to do io with $wor?"
 	esac
 
-	echo iozone "$args -r ${iosize}k -s ${io_len}k -I -f $f"
+	echo iozone "$args -r ${iosize}k -s $(($io_len / $threads))k \
+			-t $threads -+o -x -I -f $f"
 }
 ext2_iozone_result() {
 	local output=$1
-
-	kps=`awk '($2 == "reclen"){results=NR+1}(results == NR){print $3}' \
-		< $output`
-	do_bc "$kps / 1024"
-}
-ext2_iozone_cleanup() {
-	local id=$1
 	local wor=$2
-	local f="$tmpdir/mount_$id/iozone"
+	local string
+	local field
 
 	case "$wor" in
-		w) ;;
-		r) rm -f $f ;;
+		w) string="writers" 
+		   field=7 
+			;;
+		r) string="readers" 
+		   field=6
+			;;
 		*) die "asked to do io with $wor?"
 	esac
+
+	do_bc_scale 1 `awk '($1 == "Parent" && $'$field' == "'$string'") \
+			{print $'$(($field + 2))'}' $output` / 1024
+}
+ext2_iozone_cleanup() {
+	# the final read w/o -w removed the file
+	local nothing=0
 }
 ext2_iozone_finish() {
 	local index=$1
@@ -336,8 +362,9 @@ ext2_iozone_teardown() {
 
 # the echo_client setup is nutty enough to warrant its own clenaup
 running_config=""
-running_modules=""
+running_module=""
 declare -a running_names
+declare -a running_oids
 
 cleanup_echo_filter() {
 	local i
@@ -347,7 +374,7 @@ cleanup_echo_filter() {
 		lctl --device "\$"echo_$i destroy ${running_oids[$i]} \
 			$running_threads
 	done
-	running_oids=""
+	unset running_oids
 
 	for n in ${running_names[*]}; do
 # I can't believe leading whitespace matters here.
@@ -358,12 +385,12 @@ detach
 quit
 EOF
 	done
-	running_names=""
+	unset running_names
 
-	for m in $running_modules; do
+	for m in $running_module; do
 		rmmod $m
 	done
-	running_modules=""
+	running_module=""
 
 	[ ! -z "$running_config" ] && lconf --cleanup $running_config
 	running_config=""
@@ -421,11 +448,23 @@ echo_filter_prepare() {
 		fi
 		running_config="$config"
 		if ! grep -q '^obdecho\>' /proc/modules; then
+			local m
 			if ! modprobe obdecho; then
-				echo "error running modprobe obdecho"
-				return 1;
+				if [ ! -z "$echo_module" ]; then
+					if ! insmod $echo_module; then
+						echo "err: insmod $echo_module"
+						return 1;
+					else
+						m="$echo_module"
+					fi
+				else
+					echo "err: modprobe $obdecho"
+					return 1;
+				fi
+			else
+				m=obdecho
 			fi
-			running_modules="obdecho"
+			running_module=`basename $m | cut -d'.' -f 1`
 		fi
 	fi
 
@@ -456,7 +495,7 @@ echo_filter_setup() {
 
 	running_threads=$threads
 	oid=`lctl --device "\$"$name create $threads | \
-		awk '/1 is object id/ { print $6 }'`
+		awk '/ #1 is object id/ { print $6 }'`
 	# XXX need to deal with errors
 	running_oids[$id]=$oid
 }
@@ -465,17 +504,19 @@ echo_filter_start() {
 	local iosize=$2
 	local wor=$3
 	local id=$4
+
 	local name="echo_$id"
-	local pages=$(($io_len / 4))
+	local len_pages=$(($io_len / $(($page_size / 1024)) / $threads ))
+	local size_pages=$(($iosize / $(($page_size / 1024)) ))
 
 	case "$wor" in
-		w) args="-i 0 -w" ;;
-		r) args="-i 1 -w" ;;
+		w) ;;
+		r) ;;
 		*) die "asked to do io with $wor?"
 	esac
 
 	echo lctl --threads $threads v "\$"$name \
-		test_brw 1 w v $pages ${running_oids[$i]} p$iosize
+		test_brw 1 $wor v $len_pages t${running_oids[$id]} p$size_pages
 }
 echo_filter_result() {
 	local output=$1
@@ -485,7 +526,7 @@ echo_filter_result() {
 	for mbs in `awk '($8=="MB/s):"){print substr($7,2)}' < $output`; do
 		total=$(do_bc $total + $mbs)
 	done
-	echo $total
+	do_bc_scale 2 $total / 1
 }
 echo_filter_cleanup() {
 	local id=$1
@@ -499,8 +540,8 @@ echo_filter_cleanup() {
 		*) die "asked to do io with $wor?"
 	esac
 
-	lctl --device "\$"$name destroy ${running_oids[$i]} $threads
-	unset running_oids[$i]
+	lctl --device "\$"$name destroy ${running_oids[$id]} $threads
+	unset running_oids[$id]
 }
 echo_filter_finish() {
 	local index=$1
@@ -516,13 +557,20 @@ echo_filter_teardown() {
 test_one() {
 	local test=$1
 	local my_x=$2
-	local my_y=$3
-	local threads=$4
-	local iosize=$5
-	local wor=$6
+	local threads=$3
+	local iosize=$4
+	local wor=$5
 	local vmstat_pid
 	local vmstat_log="$tmpdir/vmstat.log"
 	local opref="$test-$threads-$iosize-$wor"
+	local -a iostat_pids
+	# sigh.  but this makes it easier to dump into the tables
+	local -a read_req_s
+	local -a mb_s
+	local -a write_req_s
+	local -a sects_req
+	local -a queued_reqs
+	local -a service_ms
 
 	for i in `seq 0 $last_block`; do
 		${test}_setup $i $wor $threads
@@ -530,17 +578,30 @@ test_one() {
 
 	echo $test with $threads threads
 
+	$oprofile opcontrol --start
+
 	# start up vmstat and record its pid
-	echo starting `date`
         nice -19 vmstat 1 > $vmstat_log 2>&1 &
 	[ $? = 0 ] || die "vmstat failed"
 	vmstat_pid=$!
 	pid_now_running $vmstat_pid
 
+	# start up each block device's iostat
+	for i in `seq 0 $last_block`; do
+		nice -19 iostat -x ${blocks[$i]} 1 | awk \
+			'($1 == "'${blocks[$i]}'"){print $0; fflush()}' \
+			> $tmpdir/iostat.$i &
+		local pid=$!
+		pid_now_running $pid
+		iostat_pids[$i]=$pid
+	done
+
+	$oprofile opcontrol --reset
+
 	# start all the tests.  each returns a pid to wait on
 	pids=""
 	for i in `seq 0 $last_block`; do
-		cmd=`${test}_start $threads $iosize $wor $i`
+		local cmd=`${test}_start $threads $iosize $wor $i`
 		$cmd > $tmpdir/$i 2>&1 &
 		local pid=$!
 		pids="$pids $pid"
@@ -553,29 +614,56 @@ test_one() {
 		echo -n .
 		pid_has_stopped $p
 	done
-	echo
 
-	# stop vmstat and get cpu use from it
+	# stop vmstat and all the iostats
 	kill $vmstat_pid
-	echo stopping `date`
 	pid_has_stopped $vmstat_pid
+	for i in `seq 0 $last_block`; do
+		local pid=${iostat_pids[$i]}
+		[ -z "$pid" ] && continue
+
+		kill $pid
+		unset iostat_pids[$i]
+		pid_has_stopped $pid
+	done
+
+	$oprofile opcontrol --shutdown
+	$oprofile opreport > $tmpdir/oprofile
+	echo >> $tmpdir/oprofile
+	$oprofile opreport -c -l | head -20 >> $tmpdir/oprofile
+	save_output $tmpdir/oprofile $opref.oprofile
+
+	# collect the results of vmstat and iostat
 	cpu=$(mean_stddev $(awk \
 	      '(NR > 3 && NF == 16 && $16 != "id" )	\
 		{print 100 - $16}' < $vmstat_log) )
 	save_output $vmstat_log $opref.vmstat
 
+	for i in `seq 0 $last_block`; do
+		read_req_s[$i]=$(mean_stddev $(awk \
+		      '(NR > 1)	{print $4}' < $tmpdir/iostat.$i) )
+		write_req_s[$i]=$(mean_stddev $(awk \
+		      '(NR > 1)	{print $5}' < $tmpdir/iostat.$i) )
+		sects_req[$i]=$(mean_stddev $(awk \
+		      '(NR > 1)	{print $10}' < $tmpdir/iostat.$i) )
+		queued_reqs[$i]=$(mean_stddev $(awk \
+		      '(NR > 1)	{print $11}' < $tmpdir/iostat.$i) )
+		service_ms[$i]=$(mean_stddev $(awk \
+		      '(NR > 1)	{print $13}' < $tmpdir/iostat.$i) )
+
+		save_output $tmpdir/iostat.$i $opref.iostat.$i
+	done
+
 	# record each index's test results and sum them
 	thru=0
-	line=""
 	for i in `seq 0 $last_block`; do
-		local t=`${test}_result $tmpdir/$i`
+		local t=`${test}_result $tmpdir/$i $wor`
 		save_output $tmpdir/$i $opref.$i
 		echo test returned "$t"
-		line="$line $t"
-		# some tests return mean:stddev per thread, filter out stddev
+		mb_s[$i]="$t"
+		# some tests return mean:stddev per device, filter out stddev
 		thru=$(do_bc $thru + $(echo $t | sed -e 's/:.*$//g'))
 	done
-	line="("`commas $line`")"
 
 	for i in `seq 0 $last_block`; do
 		${test}_cleanup $i $wor $threads
@@ -583,9 +671,20 @@ test_one() {
 
 	# tabulate the results
 	echo $test did $thru mb/s with $cpu
-	table_set $test $my_x $my_y $thru
-	table_set $test $(($my_x + 1)) $my_y $cpu
-	table_set $test $(($my_x + 2)) $my_y $line
+	table_set $test $my_x $cur_y `do_bc_scale 2 $thru / 1`
+	table_set $test $(($my_x + 1)) $cur_y $cpu
+
+	for i in `seq 0 $last_block`; do
+		cur_y=$(($cur_y + 1))
+		table_set $test $(($my_x)) $cur_y ${mb_s[$i]}
+		table_set $test $(($my_x + 1)) $cur_y ${read_req_s[$i]}
+		table_set $test $(($my_x + 2)) $cur_y ${write_req_s[$i]}
+		table_set $test $(($my_x + 3)) $cur_y ${sects_req[$i]}
+		table_set $test $(($my_x + 4)) $cur_y ${queued_reqs[$i]}
+		table_set $test $(($my_x + 5)) $cur_y ${service_ms[$i]}
+	done
+
+	cur_y=$(($cur_y + 1))
 }
 
 test_iterator() {
@@ -618,15 +717,13 @@ test_iterator() {
 	done
 
 	while [ -z "$cleanup" -a $thr -lt $(($max_threads + 1)) ]; do
-		for iosize in 64 128; do
+		for iosize in 128 512; do
 			table_set $test 0 $cur_y $thr
 			table_set $test 1 $cur_y $iosize
-			table_set $test 2 $cur_y "|"
 
 			for wor in w r; do
-				table_set $test 3 $cur_y $wor
-				test_one $test 4 $cur_y $thr $iosize $wor
-				cur_y=$(($cur_y + 1))
+				table_set $test 2 $cur_y $wor
+				test_one $test 3 $thr $iosize $wor
 			done
 		done
 		thr=$(($thr + $thr))
@@ -645,16 +742,23 @@ test_iterator() {
 	return $rc;
 }
 
-while getopts ":d:b:l:t:T:" opt; do
+while getopts ":d:b:l:t:T:r:e:" opt; do
         case $opt in
+                e) echo_module=$OPTARG                 ;;
                 b) block=$OPTARG                 ;;
                 d) output_dir=$OPTARG                 ;;
                 l) io_len=$OPTARG			;;
+                r) run_tests=$OPTARG			;;
                 t) min_threads=$OPTARG			;;
                 T) max_threads=$OPTARG			;;
                 \?) usage
         esac
 done
+
+page_size=`getconf PAGE_SIZE` || die '"getconf PAGE_SIZE" failed'
+
+[ ! -z "$echo_module" -a ! -f "$echo_module" ] && \
+	die "obdecho module $echo_module is not a file"
 
 if [ -z "$io_len" ]; then
 	io_len=`awk '($1 == "MemTotal:"){print $2}' < /proc/meminfo`
@@ -662,19 +766,38 @@ if [ -z "$io_len" ]; then
 fi
 
 if [ ! -z "$output_dir" ]; then
-	[ ! -e "$output_dir" ] && "output dir $output_dir doesn't exist"
-	[ ! -d "$output_dir" ] && "output dir $output_dir isn't a directory"
+	[ ! -e "$output_dir" ] && mkdir -p "$output_dir" || die \
+		"error creating $output_dir"
+	[ ! -d "$output_dir" ] && die "$output_dir isn't a directory"
 fi
 
 block=`echo $block | sed -e 's/,/ /g'`
 [ -z "$block" ] && usage "need block devices"
 
+run_tests=`echo $run_tests | sed -e 's/,/ /g'`
+[ -z "$run_tests" ] && usage "need to specify tests to run with -r"
+for t in $run_tests; do
+	if ! echo $possible_tests | grep -q $t ; then
+		die "$t isn't one of the possible tests: $possible_tests"
+	fi
+done
+
+if which opcontrol; then
+        echo generating oprofile results
+        oprofile=""
+else
+        echo not using oprofile
+        oprofile=": "
+fi
+
 [ $min_threads -gt $max_threads ] && \
 	die "min threads $min_threads must be <= min_threads $min_threads"
 
-last_block=-1
 for b in $block; do
 	[ ! -e $b ] && die "block device file $b doesn't exist"
+	[ ! -b $b ] && die "$b isn't a block device"
+	dd if=$b of=/dev/null bs=8192 count=1 || \
+		die "couldn't read 8k from $b, is it alive?"
 	[ ! -b $b ] && die "$b isn't a block device"
 	last_block=$(($last_block + 1))
 	blocks[$last_block]=$b
@@ -684,18 +807,22 @@ tmpdir=`mktemp -d /tmp/.surveyXXXXXX` || die "couldn't create tmp dir"
 
 echo each test will operate on $io_len"k"
 
-tests="sgp_dd ext2_iozone echo_filter"
 test_results=""
 
-for t in $tests; do
+for t in $run_tests; do
 
 	table_set $t 0 0 "T"
 	table_set $t 1 0 "L"
-	table_set $t 2 0 "|"
-	table_set $t 3 0 "W"
-	table_set $t 5 0 "C:S"
-	table_set $t 6 0 "B"
-	cur_y=1;
+	table_set $t 2 0 "m"
+	table_set $t 3 0 "A"
+	table_set $t 4 0 "C"
+	table_set $t 3 1 "MB"
+	table_set $t 4 1 "rR"
+	table_set $t 5 1 "wR"
+	table_set $t 6 1 "SR"
+	table_set $t 7 1 "Q"
+	table_set $t 8 1 "ms"
+	cur_y=2;
 
 	if ! test_iterator $t; then
 		continue;
@@ -707,11 +834,17 @@ done
 	echo
 	echo "T = number of concurrent threads per device"
 	echo "L = base io operation length, in KB"
-	echo "W/O/R = write/overwrite/read throughput, in MB/s"
+	echo "m = IO method: read, write, or over-write"
+	echo "A = aggregate throughput from all devices"
 	echo "C = percentage CPU used, both user and system"
-	echo "S = standard deviation in cpu use"
-	echo "B = per-block results: ("`echo ${blocks[*]} | sed -e 's/ /,/g'`")"
+	echo "MB/s = per-device throughput"
+	echo "rR = read requests issued to the device per second"
+	echo "wR = write requests issued to the device per second"
+	echo "SR = sectors per request; sectors tend to be 512 bytes"
+	echo "Q = the average number of requests queued on the device"
+	echo "ms = the average ms taken by the device to service a req"
 	echo
+	echo "foo:bar represents a mean of foo with a stddev of bar"
 )
 
 for t in $test_results; do
