@@ -74,9 +74,16 @@ port: <value-of select="port"/>
 dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
 objectClass: MDS
 lustreName: <value-of select="@name"/>
-uuid: <value-of select="@uuid"/><apply-templates/>
+uuid: <value-of select="@uuid"/>
+activeRef: <value-of select="active_ref/@uuidref"/>
+<if test="lovconfig_ref">
+lovconfigRef: <value-of select="lovconfig_ref/@uuidref"/>
+</if>
 <if test="@failover">
 failover: <value-of select="@failover"/>
+</if>
+<if test="group">
+group: <value-of select="group"/>
 </if>
 <text>
 </text>
@@ -161,9 +168,13 @@ journalsize: <value-of select="journalsize"/>
 dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
 objectClass: OST
 lustreName: <value-of select="@name"/>
-uuid: <value-of select="@uuid"/><apply-templates/>
+uuid: <value-of select="@uuid"/>
+activeRef: <value-of select="active_ref/@uuidref"/>
 <if test="@failover">
 failover: <value-of select="@failover"/>
+</if>
+<if test="group">
+group: <value-of select="group"/>
 </if>
 <text>
 </text>
@@ -249,18 +260,8 @@ echoclientRef: <value-of select="@uuidref"/>
 lovRef: <value-of select="@uuidref"/>
 </template>
 
-<template match="lovconfig_ref">
-lovconfigRef: <value-of select="@uuidref"/>
-</template>
-
 <template match="path">
 path: <value-of select="."/>
 </template>
 
-<template match="active_ref">
-activeRef: <value-of select="@uuidref"/>
-</template>
-
 </stylesheet>
-
-
