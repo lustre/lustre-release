@@ -270,7 +270,8 @@ add_facet() {
     local facet=$1
     shift
     echo "add facet $facet: `facet_host $facet`"
-    do_lmc --add node --node ${facet}_facet $@ --timeout $TIMEOUT
+    do_lmc --add node --node ${facet}_facet $@ --timeout $TIMEOUT \
+        --lustre_upcall $UPCALL --ptldebug $PTLDEBUG --subsystem $SUBSYSTEM
     do_lmc --add net --node ${facet}_facet --nid `facet_nid $facet` \
 	--nettype $NETTYPE
 }
@@ -279,8 +280,7 @@ add_mds() {
     facet=$1
     shift
     rm -f ${facet}active
-    add_facet $facet  --lustre_upcall $UPCALL --ptldebug $PTLDEBUG \
-        --subsystem $SUBSYSTEM
+    add_facet $facet
     do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc $*
 }
 

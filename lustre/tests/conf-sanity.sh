@@ -226,25 +226,45 @@ test_9() {
         start_ost
         start_mds
         mount_client $MOUNT
-        [ "`cat /proc/sys/portals/debug`" = "1" ] && \
-           echo "lmc --debug success" || return 1
-        [ "`cat /proc/sys/portals/subsystem_debug`" = "16777216" ] && \
-           echo "lmc --subsystem success" || return 1
+        CHECK_PTLDEBUG="`cat /proc/sys/portals/debug`"
+        if [ $CHECK_PTLDEBUG = "1" ]; then
+           echo "lmc --debug success"
+        else
+           echo "lmc --debug: want 1, have $CHECK_PTLDEBUG"
+           return 1
+        fi
+        CHECK_SUBSYSTEM="`cat /proc/sys/portals/subsystem_debug`"
+        if [ $CHECK_SUBSYSTEM = "2" ]; then
+           echo "lmc --subsystem success"
+        else
+           echo "lmc --subsystem: want 2, have $CHECK_SUBSYSTEM"
+           return 1
+        fi
         check_mount || return 41
         cleanup
 
         # the new PTLDEBUG/SUBSYSTEM used for lconf --ptldebug/subsystem
-        PTLDEBUG="inode"
-        SUBSYSTEM="mds"
+        PTLDEBUG="inode+trace"
+        SUBSYSTEM="mds+ost"
 
         # check lconf --ptldebug/subsystem overriding lmc --ptldebug/subsystem
         start_ost
         start_mds
+        CHECK_PTLDEBUG="`do_facet mds cat /proc/sys/portals/debug`"
+        if [ $CHECK_PTLDEBUG = "3" ]; then
+           echo "lconf --debug success"
+        else
+           echo "lconf --debug: want 3, have $CHECK_PTLDEBUG"
+           return 1
+        fi
+        CHECK_SUBSYSTEM="`do_facet mds cat /proc/sys/portals/subsystem_debug`"
+        if [ $CHECK_SUBSYSTEM = "20" ]; then
+           echo "lconf --subsystem success"
+        else
+           echo "lconf --subsystem: want 20, have $CHECK_SUBSYSTEM"
+           return 1
+        fi
         mount_client $MOUNT
-        [ "`cat /proc/sys/portals/debug`" = "2" ] && \
-           echo "lconf --debug overriding success" || return 1
-        [ "`cat /proc/sys/portals/subsystem_debug`" = "33554432" ] && \
-           echo "lconf --subsystem overriding success" || return 1
         check_mount || return 41
         cleanup
 
@@ -253,7 +273,8 @@ test_9() {
         SUBSYSTEM=$OLDSUBSYSTEM
         gen_config
 }
-run_test 9 "test --ptldebug and --subsystem for lmc"
+
+run_test 9 "test --ptldebug and --subsystem for lmc and lconf"
 
 test_10() {
         OLDXMLCONFIG=$XMLCONFIG
