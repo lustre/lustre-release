@@ -72,13 +72,19 @@ int obd_self_statfs(struct obd_device *obd, struct statfs *sfs)
         int rc;
         ENTRY;
 
+        LASSERT( obd != NULL );
+
+        spin_lock(&obd->obd_dev_lock);
         if (list_empty(&obd->obd_exports)) {
+                spin_unlock(&obd->obd_dev_lock);
                 export = my_export = class_new_export(obd);
                 if (export == NULL)
                         RETURN(-ENOMEM);
         } else {
                 export = list_entry(obd->obd_exports.next, typeof(*export),
                                     exp_obd_chain);
+                export = class_export_get(export);
+                spin_unlock(&obd->obd_dev_lock);
         }
         conn.cookie = export->exp_handle.h_cookie;
 
@@ -88,6 +94,8 @@ int obd_self_statfs(struct obd_device *obd, struct statfs *sfs)
 
         if (my_export)
                 class_unlink_export(my_export);
+
+        class_export_put(export);
         RETURN(rc);
 }
 
