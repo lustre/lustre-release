@@ -283,7 +283,7 @@ int jt_lcfg_add_uuid(int argc, char **argv)
 
         nal = ptl_name2nal(argv[3]);
 
-        if (nal == 0) {
+        if (nal <= 0) {
                 fprintf (stderr, "Can't parse NAL %s\n", argv[3]);
                 return -1;
         }
