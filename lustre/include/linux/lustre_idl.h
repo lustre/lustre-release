@@ -446,6 +446,8 @@ struct ldlm_intent {
         __u64 opc;
 };
 
+/* Note this unaligned structure; as long as it's only used in ldlm_request
+ * below, we're probably fine. */
 struct ldlm_resource_desc {
         __u32 lr_type;
         __u64 lr_name[RES_NAME_SIZE];
@@ -469,8 +471,8 @@ struct ldlm_request {
 
 struct ldlm_reply {
         __u32 lock_flags;
-        __u64 lock_resource_name[RES_NAME_SIZE];
         __u32 lock_mode;
+        __u64 lock_resource_name[RES_NAME_SIZE];
         struct lustre_handle lock_handle;
         struct ldlm_extent lock_extent;   /* XXX make this policy 1 &2 */
         __u64  lock_policy_res1;

@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001  Cluster File Systems, Inc.
+ * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
@@ -10,7 +10,6 @@
  * infrastructure for managing object devices
  *
  * Object Devices Class Driver
- *              Copyright (C) 2002 Cluster File Systems, Inc.
  */
 
 #define EXPORT_SYMTAB
