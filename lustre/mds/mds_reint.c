@@ -626,7 +626,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                 /* dir got splitted */
                                 GOTO(cleanup, rc = -ERESTART);
                         } else {
-                                /* error happened during spitting */
+                                /* error happened during spitting. */
                                 GOTO(cleanup, rc);
                         }
                 }
@@ -656,13 +656,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 
                 /* as Peter asked, mkdir() should distribute new directories
                  * over the whole cluster in order to distribute namespace
-                 * processing load. first, we calculate which MDS to use to
-                 * put new directory's inode in */
+                 * processing load. first, we calculate which MDS to use to put
+                 * new directory's inode in. */
                 i = mds_choose_mdsnum(obd, rec->ur_name, rec->ur_namelen - 1, 
                                       rec->ur_flags);
                 if (i == mds->mds_num) {
                         /* inode will be created locally */
-
                         handle = fsfilt_start(obd, dir, FSFILT_OP_MKDIR, NULL);
                         if (IS_ERR(handle))
                                 GOTO(cleanup, rc = PTR_ERR(handle));
@@ -673,9 +672,17 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                 nstripes = *(u16 *)rec->ur_eadata;
 
                         if (rc == 0 && nstripes) {
-                                /* FIXME: error handling here */
-                                mds_try_to_split_dir(obd, dchild,
-                                                        NULL, nstripes);
+                                if ((rc = mds_try_to_split_dir(obd, dchild,
+                                                               NULL, nstripes))) {
+                                        if (rc > 0) {
+                                                /* dir got splitted */
+                                                rc = 0;
+                                        } else {
+                                                /* an error occured during
+                                                 * splitting. */
+                                                GOTO(cleanup, rc);
+                                        }
+                                }
                         }
                 } else if (!DENTRY_VALID(dchild)) {
                         /* inode will be created on another MDS */
@@ -834,11 +841,10 @@ cleanup:
         err = mds_finish_transno(mds, dir, handle, req, rc, 0);
 
         if (rc && created) {
-                /* Destroy the file we just created.  This should not need
-                 * extra journal credits, as we have already modified all of
-                 * the blocks needed in order to create the file in the first
-                 * place.
-                 */
+                /* Destroy the file we just created. This should not need extra
+                 * journal credits, as we have already modified all of the
+                 * blocks needed in order to create the file in the first
+                 * place. */
                 switch (type) {
                 case S_IFDIR:
                         err = vfs_rmdir(dir, dchild);
@@ -2630,8 +2636,7 @@ cleanup:
 }
 
 static int mds_reint_rename(struct mds_update_record *rec, int offset,
-                            struct ptlrpc_request *req,
-                            struct lustre_handle *lockh)
+                            struct ptlrpc_request *req, struct lustre_handle *lockh)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct dentry *de_srcdir = NULL;
@@ -2682,7 +2687,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         if (de_old->d_inode->i_ino == de_srcdir->d_inode->i_ino ||
             de_old->d_inode->i_ino == de_tgtdir->d_inode->i_ino)
                 GOTO(cleanup, rc = -EINVAL);
-
+        
         /* sanity check for dest inode */
         if (de_new->d_inode &&
             (de_new->d_inode->i_ino == de_srcdir->d_inode->i_ino ||

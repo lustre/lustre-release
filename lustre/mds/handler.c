@@ -815,7 +815,7 @@ int mds_check_mds_num(struct obd_device *obd, struct inode* inode,
         if (rc)
                 RETURN(rc);
         if (mea != NULL) {
-                /* dir is already splitted, check is requested filename
+                /* dir is already splitted, check if requested filename
                  * should live at this MDS or at another one */
                 int i;
                 i = mea_name2idx(mea, name, namelen - 1);

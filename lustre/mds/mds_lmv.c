@@ -47,9 +47,8 @@
 int mds_lmv_connect(struct obd_device *obd, char * lmv_name)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct lustre_handle conn = {0,};
-        int valsize, mdsize;
-        int rc;
+        struct lustre_handle conn = {0};
+        int rc, valsize, value;
         ENTRY;
 
         if (IS_ERR(mds->mds_lmv_obd))
@@ -79,37 +78,38 @@ int mds_lmv_connect(struct obd_device *obd, char * lmv_name)
 
         rc = obd_register_observer(mds->mds_lmv_obd, obd);
         if (rc) {
-                CERROR("MDS cannot register as observer of LMV %s (%d)\n",
-                       lmv_name, rc);
+                CERROR("MDS cannot register as observer of LMV %s, "
+                       "rc = %d\n", lmv_name, rc);
                 GOTO(err_discon, rc);
         }
 
         /* retrieve size of EA */
         rc = obd_get_info(mds->mds_lmv_exp, strlen("mdsize"), "mdsize", 
-                          &valsize, &mdsize);
+                          &valsize, &value);
         if (rc) 
                 GOTO(err_reg, rc);
-        if (mdsize > mds->mds_max_mdsize)
-                mds->mds_max_mdsize = mdsize;
+
+        if (value > mds->mds_max_mdsize)
+                mds->mds_max_mdsize = value;
 
         /* find our number in LMV cluster */
         rc = obd_get_info(mds->mds_lmv_exp, strlen("mdsnum"), "mdsnum", 
-                          &valsize, &mdsize);
+                          &valsize, &value);
         if (rc) 
                 GOTO(err_reg, rc);
-        mds->mds_num = mdsize;
+        
+        mds->mds_num = value;
 
         rc = obd_set_info(mds->mds_lmv_exp, strlen("inter_mds"),
-                                "inter_mds", 0, NULL);
+                          "inter_mds", 0, NULL);
         if (rc)
                 GOTO(err_reg, rc);
+        
 	RETURN(0);
 
 err_reg:
-        RETURN(rc);
-
+        obd_register_observer(mds->mds_lmv_obd, NULL);
 err_discon:
-        /* FIXME: cleanups here! */
         obd_disconnect(mds->mds_lmv_exp, 0);
         mds->mds_lmv_exp = NULL;
         mds->mds_lmv_obd = ERR_PTR(rc);
@@ -119,11 +119,14 @@ err_discon:
 int mds_lmv_postsetup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
+        int rc = 0;
         ENTRY;
+
         if (mds->mds_lmv_exp)
-                obd_init_ea_size(mds->mds_lmv_exp, mds->mds_max_mdsize,
-                                 mds->mds_max_cookiesize);
-        RETURN(0);
+                rc = obd_init_ea_size(mds->mds_lmv_exp, mds->mds_max_mdsize,
+                                      mds->mds_max_cookiesize);
+        
+        RETURN(rc);
 }
 
 int mds_lmv_disconnect(struct obd_device *obd, int flags)
@@ -133,15 +136,15 @@ int mds_lmv_disconnect(struct obd_device *obd, int flags)
         ENTRY;
 
         if (!IS_ERR(mds->mds_lmv_obd) && mds->mds_lmv_exp != NULL) {
-
                 obd_register_observer(mds->mds_lmv_obd, NULL);
 
+                /* if obd_disconnect fails (probably because the export was
+                 * disconnected by class_disconnect_exports) then we just need
+                 * to drop our ref. */
                 rc = obd_disconnect(mds->mds_lmv_exp, flags);
-                /* if obd_disconnect fails (probably because the
-                 * export was disconnected by class_disconnect_exports)
-                 * then we just need to drop our ref. */
-                if (rc != 0)
+                if (rc)
                         class_export_put(mds->mds_lmv_exp);
+                
                 mds->mds_lmv_exp = NULL;
                 mds->mds_lmv_obd = NULL;
         }
@@ -149,9 +152,8 @@ int mds_lmv_disconnect(struct obd_device *obd, int flags)
         RETURN(rc);
 }
 
-
 int mds_get_lmv_attr(struct obd_device *obd, struct inode *inode,
-			struct mea **mea, int *mea_size)
+                     struct mea **mea, int *mea_size)
 {
         struct mds_obd *mds = &obd->u.mds;
 	int rc;
@@ -163,18 +165,17 @@ int mds_get_lmv_attr(struct obd_device *obd, struct inode *inode,
 	/* first calculate mea size */
         *mea_size = obd_alloc_diskmd(mds->mds_lmv_exp,
                                      (struct lov_mds_md **)mea);
-	/* FIXME: error handling here */
-	LASSERT(*mea != NULL);
+        if (*mea_size < 0 || *mea == NULL)
+                return *mea_size < 0 ? *mea_size : -EINVAL;
 
 	down(&inode->i_sem);
 	rc = fsfilt_get_md(obd, inode, *mea, *mea_size);
 	up(&inode->i_sem);
-	/* FIXME: error handling here */
+
 	if (rc <= 0) {
 		OBD_FREE(*mea, *mea_size);
 		*mea = NULL;
-	}
-        if (rc > 0)
+	} else
                 rc = 0;
                         
 	RETURN(rc);
@@ -518,10 +519,10 @@ int mds_splitting_expected(struct obd_device *obd, struct dentry *dentry)
 }
 
 /*
- * must not be called on already splitted directories
+ * must not be called on already splitted directories.
  */
-int mds_try_to_split_dir(struct obd_device *obd,
-                         struct dentry *dentry, struct mea **mea, int nstripes)
+int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
+                         struct mea **mea, int nstripes)
 {
         struct inode *dir = dentry->d_inode;
         struct mds_obd *mds = &obd->u.mds;
@@ -533,7 +534,8 @@ int mds_try_to_split_dir(struct obd_device *obd,
 
         /* TODO: optimization possible - we already may have mea here */
         if (mds_splitting_expected(obd, dentry) != MDS_EXPECT_SPLIT)
-                return 0;
+                RETURN(0);
+        
         LASSERT(mea == NULL || *mea == NULL);
 
         CDEBUG(D_OTHER, "%s: split directory %u/%lu/%lu\n",
@@ -548,52 +550,87 @@ int mds_try_to_split_dir(struct obd_device *obd,
          * necessary amount of stripes, but on the other hand with this
          * approach of allocating maximal possible amount of MDS slots,
          * it would be easier to split the dir over more MDSes */
-        rc = obd_alloc_diskmd(mds->mds_lmv_exp, (void *) mea);
-        if (!(*mea))
-                RETURN(-ENOMEM);
+        rc = obd_alloc_diskmd(mds->mds_lmv_exp, (void *)mea);
+        if (rc < 0) {
+                CERROR("obd_alloc_diskmd() failed, error %d.\n", rc);
+                RETURN(rc);
+        }
+        if (*mea == NULL)
+                RETURN(-EINVAL);
+
         (*mea)->mea_count = nstripes;
        
 	/* 1) create directory objects on slave MDS'es */
 	/* FIXME: should this be OBD method? */
         oa = obdo_alloc();
-        /* FIXME: error handling here */
-        LASSERT(oa != NULL);
+        if (!oa)
+                RETURN(-ENOMEM);
+
 	oa->o_id = dir->i_ino;
 	oa->o_generation = dir->i_generation;
-	obdo_from_inode(oa, dir, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+
+        obdo_from_inode(oa, dir, OBD_MD_FLTYPE | OBD_MD_FLATIME |
 			OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                         OBD_MD_FLUID | OBD_MD_FLGID);
+
         oa->o_gr = FILTER_GROUP_FIRST_MDS + mds->mds_num;
         oa->o_valid |= OBD_MD_FLID | OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
         oa->o_mode = dir->i_mode;
+
         CDEBUG(D_OTHER, "%s: create subdirs with mode %o, uid %u, gid %u\n",
                         obd->obd_name, dir->i_mode, dir->i_uid, dir->i_gid);
                         
         rc = obd_create(mds->mds_lmv_exp, oa,
-                        (struct lov_stripe_md **) mea, NULL);
-        /* FIXME: error handling here */
-	LASSERT(rc == 0);
-        CDEBUG(D_OTHER, "%d dirobjects created\n",
-               (int) (*mea)->mea_count);
+                        (struct lov_stripe_md **)mea, NULL);
+        if (rc)
+                GOTO(err_oa, rc);
+
+        CDEBUG(D_OTHER, "%d dirobjects created\n", (int)(*mea)->mea_count);
 
 	/* 2) update dir attribute */
         down(&dir->i_sem);
+        
         handle = fsfilt_start(obd, dir, FSFILT_OP_SETATTR, NULL);
-        LASSERT(!IS_ERR(handle));
+        if (IS_ERR(handle)) {
+                up(&dir->i_sem);
+                CERROR("fsfilt_start() failed, error %d.\n",
+                       PTR_ERR(handle));
+                GOTO(err_oa, rc = PTR_ERR(handle));
+        }
+        
 	rc = fsfilt_set_md(obd, dir, handle, *mea, mea_size);
-        LASSERT(rc == 0);
-        fsfilt_commit(obd, mds->mds_sb, dir, handle, 0);
-        LASSERT(rc == 0);
+        if (rc) {
+                up(&dir->i_sem);
+                CERROR("fsfilt_set_md() failed, error %d.\n", rc);
+                GOTO(err_oa, rc);
+        }
+        
+        rc = fsfilt_commit(obd, mds->mds_sb, dir, handle, 0);
+        if (rc) {
+                up(&dir->i_sem);
+                CERROR("fsfilt_commit() failed, error %d.\n", rc);
+                GOTO(err_oa, rc);
+        }
+        
 	up(&dir->i_sem);
 	obdo_free(oa);
 
 	/* 3) read through the dir and distribute it over objects */
-        scan_and_distribute(obd, dentry, *mea);
+        rc = scan_and_distribute(obd, dentry, *mea);
+        if (rc) {
+                CERROR("scan_and_distribute() failed, error %d.\n",
+                       rc);
+                RETURN(rc);
+        }
 
 	if (mea == &tmea)
                 obd_free_diskmd(mds->mds_lmv_exp,
-                                (struct lov_mds_md **) mea);
+                                (struct lov_mds_md **)mea);
 	RETURN(1);
+
+err_oa:
+	obdo_free(oa);
+        RETURN(rc);
 }
 
 static int filter_start_page_write(struct inode *inode,

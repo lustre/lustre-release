@@ -314,7 +314,7 @@ int lmv_check_connect(struct obd_device *obd) {
                 rc2 = obd_disconnect(tgts->ltd_exp, 0);
                 if (rc2)
                         CERROR("error: LMV target %s disconnect on MDT idx %d: "
-                               "rc = %d\n", uuid.uuid, i, rc2);
+                               "error %d\n", uuid.uuid, i, rc2);
         }
         class_disconnect(exp, 0);
         RETURN (rc);
@@ -372,7 +372,7 @@ static int lmv_disconnect(struct obd_export *exp, int flags)
         }
 
 out_local:
-        /* This is the case when no real connection is established by
+        /* this is the case when no real connection is established by
          * lmv_check_connect(). */
         if (!lmv->connected)
                 class_export_put(exp);
@@ -617,10 +617,8 @@ static int lmv_valid_attrs(struct obd_export *exp, struct ll_fid *fid)
         rc = lmv_check_connect(obd);
         if (rc)
                 RETURN(rc);
-        CDEBUG(D_OTHER, "validate %lu/%lu/%lu\n",
-               (unsigned long) fid->mds,
-               (unsigned long) fid->id,
-               (unsigned long) fid->generation);
+        CDEBUG(D_OTHER, "validate %lu/%lu/%lu\n", (unsigned long) fid->mds,
+               (unsigned long) fid->id, (unsigned long) fid->generation);
         LASSERT(fid->mds < lmv->desc.ld_tgt_count);
         rc = md_valid_attrs(lmv->tgts[fid->mds].ltd_exp, fid);
         RETURN(rc);
@@ -662,13 +660,13 @@ int lmv_get_mea_and_update_object(struct obd_export *exp, struct ll_fid *fid)
         rc = md_getattr(lmv->tgts[fid->mds].ltd_exp, fid,
                         valid, mealen, &req);
         if (rc) {
-                CERROR("md_getattr() failed, rc = %d\n", rc);
+                CERROR("md_getattr() failed, error %d\n", rc);
                 GOTO(cleanup, rc);
         }
 
         rc = mdc_req2lustre_md(exp, req, 0, NULL, &md);
         if (rc) {
-                CERROR("mdc_req2lustre_md() failed, rc = %d\n", rc);
+                CERROR("mdc_req2lustre_md() failed, error %d\n", rc);
                 GOTO(cleanup, rc);
         }
 
@@ -935,7 +933,7 @@ int lmv_link(struct obd_export *exp, struct mdc_op_data *data,
                 obj = lmv_grab_obj(obd, &data->fid1, 0);
                 if (obj) {
                         rc = raw_name2idx(obj->objcount, data->name,
-                                         data->namelen);
+                                          data->namelen);
                         data->fid1 = obj->objs[rc].fid;
                         lmv_put_obj(obj);
                 }
@@ -1249,6 +1247,7 @@ int lmv_unlink(struct obd_export *exp, struct mdc_op_data *data,
         struct lmv_obd *lmv = &obd->u.lmv;
         int rc, i = 0;
         ENTRY;
+        
 	rc = lmv_check_connect(obd);
 	if (rc)
 		RETURN(rc);
@@ -1318,9 +1317,14 @@ int lmv_init_ea_size(struct obd_export *exp, int easize, int cookiesize)
         if (lmv->connected == 0)
                 RETURN(0);
 
-        /* FIXME: error handling? */
-        for (i = 0; i < lmv->desc.ld_tgt_count; i++)
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
                 rc = obd_init_ea_size(lmv->tgts[i].ltd_exp, easize, cookiesize);
+                if (rc) {
+                        CERROR("obd_init_ea_size() failed on MDT target %d, "
+                               "error %d.\n", i, rc);
+                        break;
+                }
+        }
         RETURN(rc);
 }
 
@@ -1342,7 +1346,6 @@ int lmv_obd_create_single(struct obd_export *exp, struct obdo *oa,
         LASSERT(oa->o_mds < lmv->desc.ld_tgt_count);
 
         rc = obd_create(lmv->tgts[oa->o_mds].ltd_exp, oa, &obj_mdp, oti);
-        LASSERT(rc == 0);
 
         RETURN(rc);
 }
@@ -1373,19 +1376,26 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
 
         if (*ea == NULL) {
                 rc = obd_alloc_diskmd(exp, (struct lov_mds_md **)ea);
-                LASSERT(*ea != NULL);
+                if (rc < 0) {
+                        CERROR("obd_alloc_diskmd() failed, error %d\n",
+                               rc);
+                        RETURN(rc);
+                }
+                
+                if (*ea == NULL)
+                        RETURN(-EINVAL);
         }
 
-        mea = (struct mea *)*ea;
+        rc = 0;
         mfid.id = oa->o_id;
         mfid.generation = oa->o_generation;
-        rc = 0;
+        
+        mea = (struct mea *)*ea;
         if (!mea->mea_count || mea->mea_count > lmv->desc.ld_tgt_count)
                 mea->mea_count = lmv->desc.ld_tgt_count;
 
         mea->mea_master = -1;
         
-        /* FIXME: error handling? */
         for (i = 0, c = 0; c < mea->mea_count && 
                 i < lmv->desc.ld_tgt_count; i++) {
                 struct lov_stripe_md obj_md;
@@ -1401,17 +1411,20 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
                         continue;
                 }
 
-                /* "Master" MDS should always be part of stripped dir, so
-                   scan for it */
+                /* "master" MDS should always be part of stripped dir, so scan
+                   for it. */
                 if (mea->mea_master == -1 && c == mea->mea_count - 1)
                         continue;
 
                 oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLTYPE | OBD_MD_FLMODE
-                                | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLID;
+                        | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLID;
 
                 rc = obd_create(lmv->tgts[c].ltd_exp, oa, &obj_mdp, oti);
-                /* FIXME: error handling here */
-                LASSERT(rc == 0);
+                if (rc) {
+                        CERROR("obd_create() failed on MDT target %d, "
+                               "error %d\n", c, rc);
+                        RETURN(rc);
+                }
 
                 mea->mea_fids[c].id = oa->o_id;
                 mea->mea_fids[c].generation = oa->o_generation;
@@ -1525,9 +1538,9 @@ int lmv_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                 RETURN(0);
         }
 
-        if (!*lmmp) {
+        if (*lmmp == NULL) {
                 OBD_ALLOC(*lmmp, mea_size);
-                if (!*lmmp)
+                if (*lmmp == NULL)
                         RETURN(-ENOMEM);
         }
 
@@ -1562,8 +1575,8 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **mem_tgt,
         LASSERT(mea_size == mdsize);
 
         OBD_ALLOC(*tmea, mea_size);
-        /* FIXME: error handling here */
-        LASSERT(*tmea != NULL);
+        if (*tmea == NULL)
+                RETURN(-ENOMEM);
 
         if (!disk_src)
                 RETURN(mea_size);

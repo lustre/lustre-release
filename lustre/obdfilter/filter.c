@@ -2046,13 +2046,14 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
 static int filter_precreate_rec(struct obd_device *obd, struct dentry *dentry, 
                                 int *number, struct obdo *oa)
 {
-        int    rc = 0;
+        int rc;
         ENTRY;       
          
         rc = fsfilt_precreate_rec(obd, dentry, number, oa);
   
         RETURN(rc);
 }
+
 /* We rely on the fact that only one thread will be creating files in a given
  * group at a time, which is why we don't need an atomic filter_get_new_id.
  * Even if we had that atomic function, the following race would exist:
@@ -2183,9 +2184,13 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 if (rc)
                         break;
         }
+
         *num = i;
 
-        rc = filter_precreate_rec(obd, dparent, num, oa);
+        /* check if we have an error after ll_vfs_create(). It is possible that
+         * there will be say -ENOSPC and we will leak it. */
+        if (rc == 0)
+                rc = filter_precreate_rec(obd, dparent, num, oa);
         
         up(&filter->fo_create_lock);
         
@@ -2194,6 +2199,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 
         CDEBUG(D_HA, "%s: filter_precreate() created %d objects\n",
                obd->obd_name, i);
+        
         RETURN(rc);
 }
 
