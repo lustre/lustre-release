@@ -44,6 +44,7 @@
 #include <linux/modversions.h>
 #endif
 
+#define DEBUG_SUBSYSTEM S_GMNAL
 
 #include "portals/nal.h"
 #include "portals/api.h"
