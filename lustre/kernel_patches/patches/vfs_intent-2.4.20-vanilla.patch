@@ -15,7 +15,7 @@
 Index: lum/fs/exec.c
 ===================================================================
 --- lum.orig/fs/exec.c	2003-11-28 13:26:21.000000000 -0500
-+++ lum/fs/exec.c	2004-01-20 19:31:29.000000000 -0500
++++ lum/fs/exec.c	2004-02-27 01:28:31.000000000 -0500
 @@ -112,8 +112,10 @@
  	struct file * file;
  	struct nameidata nd;
@@ -80,7 +80,7 @@ Index: lum/fs/exec.c
 Index: lum/fs/dcache.c
 ===================================================================
 --- lum.orig/fs/dcache.c	2003-06-13 10:51:37.000000000 -0400
-+++ lum/fs/dcache.c	2004-01-20 19:31:29.000000000 -0500
++++ lum/fs/dcache.c	2004-02-27 01:28:31.000000000 -0500
 @@ -181,6 +181,13 @@
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -121,8 +121,16 @@ Index: lum/fs/dcache.c
 Index: lum/fs/namespace.c
 ===================================================================
 --- lum.orig/fs/namespace.c	2003-11-28 13:26:21.000000000 -0500
-+++ lum/fs/namespace.c	2004-01-20 19:31:29.000000000 -0500
-@@ -98,6 +98,7 @@
++++ lum/fs/namespace.c	2004-02-27 01:48:19.000000000 -0500
+@@ -48,6 +48,7 @@
+ 		INIT_LIST_HEAD(&mnt->mnt_child);
+ 		INIT_LIST_HEAD(&mnt->mnt_mounts);
+ 		INIT_LIST_HEAD(&mnt->mnt_list);
++                INIT_LIST_HEAD(&mnt->mnt_lustre_list);
+ 		if (name) {
+ 			int size = strlen(name)+1;
+ 			char * newname = kmalloc(size, GFP_KERNEL);
+@@ -98,6 +99,7 @@
  {
  	old_nd->dentry = mnt->mnt_mountpoint;
  	old_nd->mnt = mnt->mnt_parent;
@@ -130,7 +138,7 @@ Index: lum/fs/namespace.c
  	mnt->mnt_parent = mnt;
  	mnt->mnt_mountpoint = mnt->mnt_root;
  	list_del_init(&mnt->mnt_child);
-@@ -109,6 +110,7 @@
+@@ -109,6 +111,7 @@
  {
  	mnt->mnt_parent = mntget(nd->mnt);
  	mnt->mnt_mountpoint = dget(nd->dentry);
@@ -138,7 +146,36 @@ Index: lum/fs/namespace.c
  	list_add(&mnt->mnt_hash, mount_hashtable+hash(nd->mnt, nd->dentry));
  	list_add_tail(&mnt->mnt_child, &nd->mnt->mnt_mounts);
  	nd->dentry->d_mounted++;
-@@ -488,14 +490,17 @@
+@@ -151,6 +154,9 @@
+ {
+ 	struct super_block *sb = mnt->mnt_sb;
+ 	dput(mnt->mnt_root);
++        spin_lock(&dcache_lock);
++        list_del(&mnt->mnt_lustre_list);
++        spin_unlock(&dcache_lock);
+ 	free_vfsmnt(mnt);
+ 	kill_super(sb);
+ }
+@@ -286,7 +292,7 @@
+ 	}
+ }
+ 
+-static int do_umount(struct vfsmount *mnt, int flags)
++int do_umount(struct vfsmount *mnt, int flags)
+ {
+ 	struct super_block * sb = mnt->mnt_sb;
+ 	int retval = 0;
+@@ -302,6 +308,9 @@
+ 	 */
+ 
+ 	lock_kernel();
++	if (sb->s_op->umount_lustre)
++                sb->s_op->umount_lustre(sb);
++
+ 	if( (flags&MNT_FORCE) && sb->s_op->umount_begin)
+ 		sb->s_op->umount_begin(sb);
+ 	unlock_kernel();
+@@ -488,14 +497,17 @@
  {
  	struct nameidata old_nd;
  	struct vfsmount *mnt = NULL;
@@ -158,7 +195,7 @@ Index: lum/fs/namespace.c
  
  	down_write(&current->namespace->sem);
  	err = -EINVAL;
-@@ -518,6 +523,7 @@
+@@ -518,6 +530,7 @@
  	}
  
  	up_write(&current->namespace->sem);
@@ -166,7 +203,7 @@ Index: lum/fs/namespace.c
  	path_release(&old_nd);
  	return err;
  }
-@@ -701,6 +707,7 @@
+@@ -701,6 +714,7 @@
  		  unsigned long flags, void *data_page)
  {
  	struct nameidata nd;
@@ -174,7 +211,7 @@ Index: lum/fs/namespace.c
  	int retval = 0;
  	int mnt_flags = 0;
  
-@@ -725,10 +732,11 @@
+@@ -725,10 +739,11 @@
  	flags &= ~(MS_NOSUID|MS_NOEXEC|MS_NODEV);
  
  	/* ... and get the mountpoint */
@@ -189,7 +226,7 @@ Index: lum/fs/namespace.c
  	if (flags & MS_REMOUNT)
  		retval = do_remount(&nd, flags & ~MS_REMOUNT, mnt_flags,
  				    data_page);
-@@ -739,6 +747,8 @@
+@@ -739,6 +754,8 @@
  	else
  		retval = do_add_mount(&nd, type_page, flags, mnt_flags,
  				      dev_name, data_page);
@@ -198,7 +235,7 @@ Index: lum/fs/namespace.c
  	path_release(&nd);
  	return retval;
  }
-@@ -904,6 +914,8 @@
+@@ -904,6 +921,8 @@
  {
  	struct vfsmount *tmp;
  	struct nameidata new_nd, old_nd, parent_nd, root_parent, user_nd;
@@ -207,7 +244,7 @@ Index: lum/fs/namespace.c
  	int error;
  
  	if (!capable(CAP_SYS_ADMIN))
-@@ -911,14 +923,14 @@
+@@ -911,14 +930,14 @@
  
  	lock_kernel();
  
@@ -224,7 +261,7 @@ Index: lum/fs/namespace.c
  	if (error)
  		goto out1;
  
-@@ -973,8 +985,10 @@
+@@ -973,8 +992,10 @@
  	up(&old_nd.dentry->d_inode->i_zombie);
  	up_write(&current->namespace->sem);
  	path_release(&user_nd);
@@ -238,7 +275,7 @@ Index: lum/fs/namespace.c
 Index: lum/fs/namei.c
 ===================================================================
 --- lum.orig/fs/namei.c	2003-08-25 07:44:43.000000000 -0400
-+++ lum/fs/namei.c	2004-02-22 23:44:39.000000000 -0500
++++ lum/fs/namei.c	2004-02-27 01:28:31.000000000 -0500
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -973,7 +1010,7 @@ Index: lum/fs/namei.c
 Index: lum/fs/open.c
 ===================================================================
 --- lum.orig/fs/open.c	2003-08-25 07:44:43.000000000 -0400
-+++ lum/fs/open.c	2004-02-26 15:01:44.000000000 -0500
++++ lum/fs/open.c	2004-02-27 01:28:31.000000000 -0500
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1375,7 +1412,7 @@ Index: lum/fs/open.c
 Index: lum/fs/stat.c
 ===================================================================
 --- lum.orig/fs/stat.c	2003-08-25 07:44:43.000000000 -0400
-+++ lum/fs/stat.c	2004-01-20 19:31:29.000000000 -0500
++++ lum/fs/stat.c	2004-02-27 01:28:31.000000000 -0500
 @@ -17,10 +17,14 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
@@ -1538,7 +1575,7 @@ Index: lum/fs/stat.c
 Index: lum/include/linux/dcache.h
 ===================================================================
 --- lum.orig/include/linux/dcache.h	2002-11-28 18:53:15.000000000 -0500
-+++ lum/include/linux/dcache.h	2004-02-26 15:01:54.000000000 -0500
++++ lum/include/linux/dcache.h	2004-02-27 01:32:08.000000000 -0500
 @@ -6,6 +6,52 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -1636,7 +1673,7 @@ Index: lum/include/linux/dcache.h
 Index: lum/include/linux/fs.h
 ===================================================================
 --- lum.orig/include/linux/fs.h	2004-01-20 19:31:29.000000000 -0500
-+++ lum/include/linux/fs.h	2004-02-22 23:44:38.000000000 -0500
++++ lum/include/linux/fs.h	2004-02-27 01:32:08.000000000 -0500
 @@ -73,6 +73,7 @@
  
  #define FMODE_READ 1
@@ -1722,7 +1759,15 @@ Index: lum/include/linux/fs.h
  	int (*getattr) (struct dentry *, struct iattr *);
  	int (*setxattr) (struct dentry *, const char *, void *, size_t, int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
-@@ -1094,10 +1113,14 @@
+@@ -938,6 +957,7 @@
+ 	int (*remount_fs) (struct super_block *, int *, char *);
+ 	void (*clear_inode) (struct inode *);
+ 	void (*umount_begin) (struct super_block *);
++	void (*umount_lustre) (struct super_block *);
+ 
+ 	/* Following are for knfsd to interact with "interesting" filesystems
+ 	 * Currently just reiserfs, but possibly FAT and others later
+@@ -1094,10 +1114,14 @@
  
  asmlinkage long sys_open(const char *, int, int);
  asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
@@ -1738,7 +1783,7 @@ Index: lum/include/linux/fs.h
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char *);
  
-@@ -1386,6 +1409,7 @@
+@@ -1386,6 +1410,7 @@
  extern loff_t default_llseek(struct file *file, loff_t offset, int origin);
  
  extern int FASTCALL(__user_walk(const char *, unsigned, struct nameidata *));
@@ -1746,7 +1791,7 @@ Index: lum/include/linux/fs.h
  extern int FASTCALL(path_init(const char *, unsigned, struct nameidata *));
  extern int FASTCALL(path_walk(const char *, struct nameidata *));
  extern int FASTCALL(path_lookup(const char *, unsigned, struct nameidata *));
-@@ -1394,9 +1418,11 @@
+@@ -1394,9 +1419,11 @@
  extern int follow_down(struct vfsmount **, struct dentry **);
  extern int follow_up(struct vfsmount **, struct dentry **);
  extern struct dentry * lookup_one_len(const char *, struct dentry *, int);
@@ -1759,7 +1804,7 @@ Index: lum/include/linux/fs.h
  
  extern void inode_init_once(struct inode *);
  extern void iput(struct inode *);
-@@ -1500,6 +1526,8 @@
+@@ -1500,6 +1527,8 @@
  
  extern int vfs_readlink(struct dentry *, char *, int, const char *);
  extern int vfs_follow_link(struct nameidata *, const char *);
@@ -1771,7 +1816,7 @@ Index: lum/include/linux/fs.h
 Index: lum/include/linux/fs_struct.h
 ===================================================================
 --- lum.orig/include/linux/fs_struct.h	2001-07-13 18:10:44.000000000 -0400
-+++ lum/include/linux/fs_struct.h	2004-01-20 19:31:29.000000000 -0500
++++ lum/include/linux/fs_struct.h	2004-02-27 01:28:31.000000000 -0500
 @@ -34,10 +34,12 @@
  	write_lock(&fs->lock);
  	old_root = fs->root;
@@ -1798,10 +1843,30 @@ Index: lum/include/linux/fs_struct.h
  		dput(old_pwd);
  		mntput(old_pwdmnt);
  	}
+Index: lum/include/linux/mount.h
+===================================================================
+--- lum.orig/include/linux/mount.h	2004-02-27 01:29:07.000000000 -0500
++++ lum/include/linux/mount.h	2004-02-27 01:47:39.000000000 -0500
+@@ -29,6 +29,7 @@
+ 	int mnt_flags;
+ 	char *mnt_devname;		/* Name of device e.g. /dev/dsk/hda1 */
+ 	struct list_head mnt_list;
++        struct list_head mnt_lustre_list; /* GNS mount list */
+ };
+ 
+ static inline struct vfsmount *mntget(struct vfsmount *mnt)
+@@ -39,6 +40,7 @@
+ }
+ 
+ extern void __mntput(struct vfsmount *mnt);
++extern int do_umount(struct vfsmount *mnt, int flags);
+ 
+ static inline void mntput(struct vfsmount *mnt)
+ {
 Index: lum/kernel/ksyms.c
 ===================================================================
 --- lum.orig/kernel/ksyms.c	2004-01-20 19:31:29.000000000 -0500
-+++ lum/kernel/ksyms.c	2004-01-20 19:31:29.000000000 -0500
++++ lum/kernel/ksyms.c	2004-02-27 01:28:31.000000000 -0500
 @@ -275,6 +275,7 @@
  EXPORT_SYMBOL(mark_page_accessed);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1810,10 +1875,18 @@ Index: lum/kernel/ksyms.c
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
+@@ -290,6 +291,7 @@
+ EXPORT_SYMBOL(dcache_dir_fsync);
+ EXPORT_SYMBOL(dcache_readdir);
+ EXPORT_SYMBOL(dcache_dir_ops);
++EXPORT_SYMBOL(do_umount);
+ 
+ /* lustre */
+ EXPORT_SYMBOL(pagecache_lock_cacheline);
 Index: lum/kernel/fork.c
 ===================================================================
 --- lum.orig/kernel/fork.c	2003-11-28 13:26:21.000000000 -0500
-+++ lum/kernel/fork.c	2004-01-20 19:31:29.000000000 -0500
++++ lum/kernel/fork.c	2004-02-27 01:28:31.000000000 -0500
 @@ -386,10 +386,13 @@
  		fs->umask = old->umask;
  		read_lock(&old->lock);
@@ -1831,7 +1904,7 @@ Index: lum/kernel/fork.c
 Index: lum/kernel/exit.c
 ===================================================================
 --- lum.orig/kernel/exit.c	2002-11-28 18:53:15.000000000 -0500
-+++ lum/kernel/exit.c	2004-01-20 19:31:29.000000000 -0500
++++ lum/kernel/exit.c	2004-02-27 01:28:31.000000000 -0500
 @@ -238,11 +238,14 @@
  {
  	/* No need to hold fs->lock if we are killing it */
@@ -1850,7 +1923,7 @@ Index: lum/kernel/exit.c
 Index: lum/net/unix/af_unix.c
 ===================================================================
 --- lum.orig/net/unix/af_unix.c	2004-02-22 23:54:55.000000000 -0500
-+++ lum/net/unix/af_unix.c	2004-02-22 23:55:05.000000000 -0500
++++ lum/net/unix/af_unix.c	2004-02-27 01:28:31.000000000 -0500
 @@ -703,7 +703,7 @@
  		/*
  		 * Do the final lookup.
