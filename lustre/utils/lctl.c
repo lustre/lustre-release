@@ -155,10 +155,8 @@ command_t cmdlist[] = {
          "stop lock manager stress test (no args)\n"},
         {"dump_ldlm", jt_obd_dump_ldlm, 0,
          "dump all lock manager state (no args)"},
+        {"newconn", jt_obd_newconn, 0, "newconn <olduuid> [newuuid]"},
 
-#if 0
-        {"newconn", jt_newconn, 0, "newconn [newuuid]"},
-#endif
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},
         {"debug_kernel", jt_dbg_debug_kernel, 0,
