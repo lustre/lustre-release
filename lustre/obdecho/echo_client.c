@@ -38,6 +38,7 @@ static int echo_iocontrol(long cmd, struct lustre_handle *obdconn, int len,
         struct echo_client_obd *ec = &obd->u.echo_client;
         struct obd_ioctl_data *data = karg;
         int rw = OBD_BRW_READ, rc = 0;
+        struct lov_stripe_md *lsm = NULL;
         ENTRY;
 
         if (obd == NULL) {
@@ -45,55 +46,71 @@ static int echo_iocontrol(long cmd, struct lustre_handle *obdconn, int len,
                 GOTO(out, rc = -EINVAL);
         }
 
+        if (data->ioc_inllen1 == sizeof(*lsm)) {
+                lsm = (struct lov_stripe_md *)data->ioc_inlbuf1;
+        } else if (data->ioc_inllen1 != 0) {
+                CERROR("nonzero ioc_inllen1 != sizeof(struct lov_stripe_md)\n");
+                GOTO(out, rc = -EINVAL);
+        }
+
         switch (cmd) {
         case OBD_IOC_CREATE: {
-                struct lov_stripe_md *lsm = NULL;
-#warning FIXME: save lsm into file handle for other ops, release on close
-                rc = obd_create(&ec->conn, &data->ioc_obdo1, &lsm);
+                struct lov_stripe_md *tmp_lsm = NULL;
+                rc = obd_create(&ec->conn, &data->ioc_obdo1, &tmp_lsm);
+                if (lsm)
+                        memcpy(lsm, tmp_lsm, sizeof(*tmp_lsm));
+
                 GOTO(out, rc);
         }
 
         case OBD_IOC_GETATTR:
-                rc = obd_getattr(&ec->conn, &data->ioc_obdo1, NULL);
+                rc = obd_getattr(&ec->conn, &data->ioc_obdo1, lsm);
                 GOTO(out, rc);
 
         case OBD_IOC_SETATTR:
-                rc = obd_setattr(&ec->conn, &data->ioc_obdo1, NULL);
+                rc = obd_setattr(&ec->conn, &data->ioc_obdo1, lsm);
                 GOTO(out, rc);
 
-        case OBD_IOC_DESTROY: {
-                //void *ea;
-                rc = obd_destroy(&ec->conn, &data->ioc_obdo1, NULL);
+        case OBD_IOC_DESTROY:
+                rc = obd_destroy(&ec->conn, &data->ioc_obdo1, lsm);
                 GOTO(out, rc);
-        }
 
-        case OBD_IOC_OPEN: {
-                struct lov_stripe_md *lsm = NULL; // XXX fill in from create
-
+        case OBD_IOC_OPEN:
                 rc = obd_open(&ec->conn, &data->ioc_obdo1, lsm);
                 GOTO(out, rc);
-        }
 
-        case OBD_IOC_CLOSE: {
-                struct lov_stripe_md *lsm = NULL; // XXX fill in from create
-
+        case OBD_IOC_CLOSE:
                 rc = obd_close(&ec->conn, &data->ioc_obdo1, lsm);
                 GOTO(out, rc);
-        }
 
         case OBD_IOC_BRW_WRITE:
                 rw = OBD_BRW_WRITE;
         case OBD_IOC_BRW_READ: {
-                struct lov_stripe_md tmp_lsm; // XXX fill in from create
-                struct lov_stripe_md *lsm = &tmp_lsm; // XXX fill in from create
+                struct lov_stripe_md tmp_lsm;
                 struct obd_brw_set *set;
                 obd_count pages = 0;
                 struct brw_page *pga, *pgp;
-                __u64 id = data->ioc_obdo1.o_id;
+                __u64 off, id = data->ioc_obdo1.o_id;
                 int gfp_mask = (id & 1) ? GFP_HIGHUSER : GFP_KERNEL;
-                int verify = (id != 0);
-                __u64 off;
-                int j;
+                int j, verify = (id != 0);
+
+                if (lsm && lsm->lsm_object_id != id) {
+                        CERROR("LSM object ID ("LPU64") != id ("LPU64")\n",
+                               lsm->lsm_object_id, id);
+                        GOTO(out, rc = -EINVAL);
+                }
+
+                if (!lsm) {
+                        memset(&tmp_lsm, 0, sizeof(tmp_lsm));
+                        lsm = &tmp_lsm;
+                        lsm->lsm_object_id = id;
+                }
+
+                if (data->ioc_count < 0) {
+                        CERROR("invalid buffer size: "LPD64"\n",
+                               data->ioc_count);
+                        GOTO(out, rc = -EINVAL);
+                }
 
                 set = obd_brw_set_new();
                 if (set == NULL)
@@ -109,9 +126,6 @@ static int echo_iocontrol(long cmd, struct lustre_handle *obdconn, int len,
                         CERROR("no memory for %d BRW per-page data\n", pages);
                         GOTO(brw_free, rc = -ENOMEM);
                 }
-
-                memset(lsm, 0, sizeof(*lsm)); // XXX don't do this later
-                lsm->lsm_object_id = id; // ensure id == lsm->lsm_object_id
 
                 for (j = 0, pgp = pga; j < pages; j++, off += PAGE_SIZE, pgp++){
                         pgp->pg = alloc_pages(gfp_mask, 0);
