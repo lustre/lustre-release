@@ -1,123 +1,122 @@
 #!/bin/bash -x
 
-OST=`../utils/obdctl name2dev OSCDEV`
-MDS=`../utils/obdctl name2dev MDCDEV`
+MTPT=/mnt/lustre
 
 remount() {
-    umount /mnt/lustre || exit -1
+    umount $MTPT || exit -1
     debugctl clear
-    mount -t lustre_lite -o ost=$OST,mds=$MDS none /mnt/lustre || exit -1
+    mount -t lustre_lite -o ost=OSCDEV-UUID,mds=MDCDEV-UUID none $MTPT
 }
 
 # Test mkdir
-mkdir /mnt/lustre/dir
-mkdir /mnt/lustre/dir2
+mkdir $MTPT/dir
+mkdir $MTPT/dir2
 
 # Test mkdir on existing directory
-mkdir /mnt/lustre/dir
+mkdir $MTPT/dir
 
 remount
 
 # Test mkdir on existing directory with no locks already held
-mkdir /mnt/lustre/dir
+mkdir $MTPT/dir
 
 remount
 
 # Use mknod to create a file
-./mcreate /mnt/lustre/file
+./mcreate $MTPT/file
 # ...on an existing file.
-./mcreate /mnt/lustre/file
+./mcreate $MTPT/file
 
 remount
 
 # Use mknod to create a file with no locks already held
-./mcreate /mnt/lustre/file
+./mcreate $MTPT/file
 
 remount
 
-ls -l /mnt/lustre/file
+ls -l $MTPT/file
 
 remount
 
-cat /mnt/lustre/file
-./mcreate /mnt/lustre/file2
-cat /mnt/lustre/file2
-./mcreate /mnt/lustre/file3
+cat $MTPT/file
+./mcreate $MTPT/file2
+cat $MTPT/file2
+./mcreate $MTPT/file3
 
 remount
 
-./tchmod 777 /mnt/lustre/file3
+./tchmod 777 $MTPT/file3
 
 remount
 
-./mcreate /mnt/lustre/file4
-./tchmod 777 /mnt/lustre/file4
+./mcreate $MTPT/file4
+./tchmod 777 $MTPT/file4
 
 remount
 
-ls -l /mnt/lustre/file4
-./tchmod 777 /mnt/lustre/file4
+ls -l $MTPT/file4
+./tchmod 777 $MTPT/file4
 
 remount
 
-cat /mnt/lustre/file4
-./tchmod 777 /mnt/lustre/file4
+cat $MTPT/file4
+./tchmod 777 $MTPT/file4
 
 remount
 
-touch /mnt/lustre/file5
-touch /mnt/lustre/file6
-touch /mnt/lustre/file5
+touch $MTPT/file5
+touch $MTPT/file6
+touch $MTPT/file5
 
 remount
 
-touch /mnt/lustre/file5
+touch $MTPT/file5
 
 remount
 
-echo foo >> /mnt/lustre/file
-cat /mnt/lustre/file
+echo foo >> $MTPT/file
+cat $MTPT/file
 
 remount
 
-cat /mnt/lustre/file
+cat $MTPT/file
 
-echo foo >> /mnt/lustre/iotest
-echo bar >> /mnt/lustre/iotest
-cat /mnt/lustre/iotest
-
-remount
-
-cat /mnt/lustre/iotest
-echo baz >> /mnt/lustre/iotest
+echo foo >> $MTPT/iotest
+echo bar >> $MTPT/iotest
+cat $MTPT/iotest
 
 remount
 
-ls /mnt/lustre
+cat $MTPT/iotest
+echo baz >> $MTPT/iotest
 
 remount
 
-mkdir /mnt/lustre/new
-ls /mnt/lustre
+ls $MTPT
 
 remount
 
-ls /mnt/lustre
-mkdir /mnt/lustre/newer
-ls /mnt/lustre
+mkdir $MTPT/new
+ls $MTPT
 
 remount
 
-cat /mnt/lustre/iotest
+ls $MTPT
+mkdir $MTPT/newer
+ls $MTPT
+
+remount
+
+cat $MTPT/iotest
 echo "Testing truncation..."
-echo foo > /mnt/lustre/iotest
-echo bar >> /mnt/lustre/iotest
-cat  /mnt/lustre/iotest
+echo foo > $MTPT/iotest
+echo bar >> $MTPT/iotest
+cat  $MTPT/iotest
 echo "trucating to 4 bytes now..."
-./truncate /mnt/lustre/iotest 4
-cat  /mnt/lustre/iotest
+./truncate $MTPT/iotest 4
+cat  $MTPT/iotest
 
 remount
 
-ls /mnt/lustre
-rmdir /mnt/lustre/foo
+ls $MTPT
+rmdir $MTPT/foo

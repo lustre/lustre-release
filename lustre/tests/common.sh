@@ -156,7 +156,7 @@ start_acceptor() {
 # the command-line, or it can be found in the home directory, or it
 # can even be sourced into the current shell environment.
 setup_opts() {
-	DEF=$HOME/.lustretestrc
+	DEF=/etc/lustre/lustre.cfg
 	[ -r $DEF ] && . $DEF && SETUP=y
 
 	for CFG in "$@" ; do
@@ -249,7 +249,6 @@ setup_lustre() {
 	fi 
 
         echo "$R/tmp/lustre-log" > /proc/sys/portals/debug_path
-	list_mods
 
 	if $OBDCTL name2dev RPCDEV > /dev/null 2>&1; then
 		echo "$0: RPCDEV is already configured, skipping"
@@ -262,6 +261,7 @@ setup_lustre() {
 	setup
 	quit
 	EOF
+        list_mods
 
 	[ -d /mnt/lustre ] || mkdir /mnt/lustre
 }
@@ -277,7 +277,7 @@ setup_ldlm() {
 	setup
 	quit
 	EOF
-
+        list_mods
 }
 
 find_devno() {
@@ -317,6 +317,7 @@ setup_mds() {
 	setup ${MDS} ${MDSFS}
 	quit
 	EOF
+        list_mods
 }
 
 setup_mds_lov() { 
@@ -335,6 +336,8 @@ setup_mds_lov() {
         disconnect
 	quit
 	EOF
+
+        list_mods
 }
 
 
@@ -389,12 +392,15 @@ setup_ost() {
 	setup ${OBD} ${OBDARG}
 	quit
 	EOF
+        list_mods
+
 	$OBDCTL <<- EOF || return $?
 	newdev
 	attach ost OSTDEV OSTUUID
 	setup \$OBDDEV
 	quit
 	EOF
+        list_mods
 }
 
 setup_server() {
@@ -421,6 +427,7 @@ setup_osc() {
 	quit
 	EOF
         done
+        list_mods
 }
 
 setup_mdc() {
@@ -442,6 +449,7 @@ setup_mdc() {
 	quit
 	EOF
         done
+        list_mods
 }
 
 setup_lov () { 
@@ -458,6 +466,7 @@ setup_lov () {
 	setup  MDCDEV-UUID
 	quit
 	EOF
+        list_mods
 }        
 
 
@@ -479,7 +488,7 @@ setup_mount() {
 
 		[ ! -d $MTPT ] && mkdir $MTPT
 		echo mount -t lustre_lite -o ost=${THEOSC}-UUID,mds=${THEMDC}-UUID none $MTPT
-		mount -t lustre_lite -o ost=${THEOSC}-UUID,mds=${THEMDC}-UUID none $MTPT
+                mount -t lustre_lite -o ost=${THEOSC}-UUID,mds=${THEMDC}-UUID none $MTPT
 	    done
 	done
 }
@@ -529,6 +538,7 @@ cleanup_portals() {
 	do_rmmod ptlrpc
 	do_rmmod obdclass
 
+	do_rmmod kptlrouter
 	do_rmmod kqswnal
 	do_rmmod ksocknal
 	do_rmmod portals
