@@ -784,11 +784,12 @@ extern void lustre_swab_ldlm_request (struct ldlm_request *rq);
 
 struct ldlm_reply {
         __u32 lock_flags;
+        __u32 lock_padding;
         struct ldlm_lock_desc lock_desc;
         struct lustre_handle lock_handle;
         __u64  lock_policy_res1;
         __u64  lock_policy_res2;
-};
+} __attribute__((packed));
 
 extern void lustre_swab_ldlm_reply (struct ldlm_reply *r);
 

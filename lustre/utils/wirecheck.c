@@ -22,12 +22,16 @@ do {                                                            \
 
 #define CHECK_DEFINE(a)                                         \
 do {                                                            \
-        printf("        LASSERT("#a" == "STRINGIFY(a)");\n");   \
+        printf("        LASSERTF("#a" == "STRINGIFY(a)          \
+               ",\" found %%lld\\n\",\n                 "       \
+               "(long long)"#a");\n");   \
 } while(0)
 
 #define CHECK_VALUE(a)                                          \
 do {                                                            \
-        printf("        LASSERT("#a" == %d);\n", a);            \
+        printf("        LASSERTF("#a                            \
+               " == %d, \" found %%lld\\n\",\n                 "\
+               "(long long)"#a");\n",a);\
 } while(0)
 
 #define CHECK_MEMBER_OFFSET(s,m)                                \
