@@ -159,7 +159,9 @@ start_acceptor() {
 # can even be sourced into the current shell environment.
 setup_opts() {
 	DEF=/etc/lustre/lustre.cfg
-	[ -r $DEF ] && . $DEF && SETUP=y
+        if [ "$#" = 0 -a -r $DEF ]; then
+             . $DEF && SETUP=y
+        fi
 
 	for CFG in "$@" ; do
 		case $CFG  in
