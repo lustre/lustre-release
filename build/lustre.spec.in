@@ -22,6 +22,7 @@ servers and utilities.
 %package -n lustre-modules
 Summary: Kernel Lustre drivers for Linux %{kversion}
 Requires: modutils >= 2.4.10
+Requires: /boot/System.map-%{kversion}
 Group: Development/Kernel
 
 %description -n lustre-modules
@@ -235,10 +236,10 @@ fi
 if [ ! -e /dev/portals ]; then
    mknod /dev/portals c 10 240
 fi
-depmod -ae || exit 0
+depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
 
 %postun -n lustre-modules
-depmod -ae || exit 0
+depmod -ae -F /boot/System.map-%{kversion} %{kversion} || exit 0
 
 %clean
 #rm -rf $RPM_BUILD_ROOT
