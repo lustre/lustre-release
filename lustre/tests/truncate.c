@@ -17,7 +17,8 @@ int main(int argc, char **argv)
 	off = strtoull(argv[2], NULL, 0);
 	err = truncate64(argv[1], off);
 	if ( err )
-		printf("Error truncating %s: %s\n", argv[1], strerror(errno));
+		printf("Error truncating %s to %Ld: %s\n", argv[1], off,
+		       strerror(errno));
 
 	return err;
 }
