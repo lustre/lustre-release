@@ -36,10 +36,9 @@ static int ll_file_open(struct inode *inode, struct file *file)
         int rc;
         struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
-        struct obdo *oa;
+        struct obdo *oa = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
-        __u64 id = 0;
         ENTRY;
 
         if (file->private_data)
@@ -60,19 +59,13 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 lli->lli_flags &= ~OBD_FL_CREATEONOPEN;
         }
 
-        oa = lli->lli_obdo;
-        if (oa == NULL) {
-                LBUG();
-                GOTO(out_mdc, rc = -EINVAL);
-        }
-
         fd = kmem_cache_alloc(ll_file_data_slab, SLAB_KERNEL);
         if (!fd)
                 GOTO(out, rc = -ENOMEM);
         memset(fd, 0, sizeof(*fd));
 
         rc = mdc_open(&sbi->ll_mdc_conn, inode->i_ino, S_IFREG, file->f_flags,
-                      id, (__u64)(unsigned long)file, &fd->fd_mdshandle, &req);
+                      oa, (__u64)(unsigned long)file, &fd->fd_mdshandle, &req);
         fd->fd_req = req;
         ptlrpc_req_finished(req);
         if (rc)
@@ -83,6 +76,12 @@ static int ll_file_open(struct inode *inode, struct file *file)
         }
         if (!fd->fd_mdshandle)
                 CERROR("mdc_open didn't assign fd_mdshandle\n");
+
+        oa = lli->lli_obdo;
+        if (oa == NULL) {
+                LBUG();
+                GOTO(out_mdc, rc = -EINVAL);
+        }
 
         rc = obd_open(ll_i2obdconn(inode), oa);
         if (rc)
@@ -214,6 +213,7 @@ static int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
         if (inode == NULL)
                 LBUG();
         down(&inode->i_sem);
+        CDEBUG(D_INODE, "invalidating obdo/inode %ld\n", inode->i_ino);
         invalidate_inode_pages(inode);
         up(&inode->i_sem);
 
@@ -285,6 +285,8 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         ENTRY;
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+                /* FIXME: this should check whether O_APPEND is set and adjust
+                 * extent.start accordingly */
                 extent.start = *ppos;
                 extent.end = *ppos + count;
                 CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",

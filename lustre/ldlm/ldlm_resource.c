@@ -169,7 +169,7 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
         struct ldlm_resource *res;
         ENTRY;
 
-        if (type < 0 || type > LDLM_MAX_TYPE) {
+        if (type < LDLM_MIN_TYPE || type > LDLM_MAX_TYPE) {
                 LBUG();
                 RETURN(NULL);
         }

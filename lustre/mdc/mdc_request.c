@@ -145,7 +145,10 @@ static int mdc_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
         /* FIXME: do something better than throwing away everything */
         if (inode == NULL)
                 LBUG();
-        invalidate_inode_pages(inode);
+        if (S_ISDIR(inode->i_mode)) {
+                CDEBUG(D_INODE, "invalidating inode %ld\n", inode->i_ino);
+                invalidate_inode_pages(inode);
+        }
 
         rc = ldlm_cli_cancel(lock->l_client, lock);
         if (rc < 0) {
@@ -201,7 +204,7 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
 
                 /* pack the intended request */
                 mds_create_pack(req, 2, dir, it->it_mode, id, current->fsuid,
-                                current->fsgid, CURRENT_TIME,  de->d_name.name,
+                                current->fsgid, CURRENT_TIME, de->d_name.name,
                                 de->d_name.len, tgt, tgtlen);
 
                 size[0] = sizeof(struct ldlm_reply);
@@ -285,7 +288,7 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
         } else {
                 LBUG();
         }
-
+#warning FIXME: the data here needs to be different if a lock was granted for a different inode
         rc = ldlm_cli_enqueue(mdc->mdc_ldlm_client, mdc->mdc_conn, req,
                               obddev->obd_namespace, NULL, res_id, lock_type,
                               NULL, 0, lock_mode, &flags,
@@ -305,16 +308,22 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
         RETURN(0);
 }
 
-int mdc_open(struct obd_conn *conn, ino_t ino, int type, int flags, __u64 objid,
+int mdc_open(struct obd_conn *conn, ino_t ino, int type, int flags,
+             struct obdo *obdo,
              __u64 cookie, __u64 *fh, struct ptlrpc_request **request)
 {
         struct mdc_obd *mdc = mdc_conn2mdc(conn);
         struct mds_body *body;
-        int rc, size = sizeof(*body);
+        int rc, size[2] = {sizeof(*body)}, bufcount = 1;
         struct ptlrpc_request *req;
 
+        if (obdo != NULL) {
+                bufcount = 2;
+                size[1] = sizeof(*obdo);
+        }
+
         req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, 
-                              MDS_OPEN, 1, &size, NULL);
+                              MDS_OPEN, bufcount, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -326,7 +335,10 @@ int mdc_open(struct obd_conn *conn, ino_t ino, int type, int flags, __u64 objid,
         body->flags = HTON__u32(flags);
         body->extra = cookie;
 
-        req->rq_replen = lustre_msg_size(1, &size);
+        if (obdo != NULL)
+                memcpy(lustre_msg_buf(req->rq_reqmsg, 1), obdo, sizeof(*obdo));
+
+        req->rq_replen = lustre_msg_size(1, size);
 
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);

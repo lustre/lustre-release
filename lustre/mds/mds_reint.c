@@ -251,7 +251,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 body = lustre_msg_buf(req->rq_repmsg, offset);
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
-                if (S_ISREG(inode->i_mode)) {
+#warning FIXME: This ext3/N-specific code does not belong here
+                /* If i_file_acl is set, this inode has an EA */
+                if (S_ISREG(inode->i_mode) && inode->u.ext3_i.i_file_acl) {
                         obdo = lustre_msg_buf(req->rq_repmsg, offset + 1);
                         mds_fs_get_obdo(mds, inode, obdo);
                 }
@@ -313,7 +315,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 struct mds_body *body;
 
                 CDEBUG(D_INODE, "created ino %ld\n", dchild->d_inode->i_ino);
-                if (type == S_IFREG) {
+                if (!offset && type == S_IFREG) {
                         struct obdo *obdo;
                         obdo = lustre_msg_buf(req->rq_reqmsg, 2);
                         rc = mds_fs_set_obdo(mds, inode, handle, obdo);

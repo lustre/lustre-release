@@ -394,7 +394,7 @@ static void inline ll_to_inode(struct inode *dst, struct ll_inode_md *md)
                 dst->i_generation = body->generation;
 
         /* this will become more elaborate for striping etc */ 
-        if (md->obdo != NULL) {
+        if (md->obdo != NULL && md->obdo->o_valid != 0) {
                 ii->lli_obdo = obdo_alloc();
                 memcpy(ii->lli_obdo, md->obdo, sizeof(*md->obdo));
         }

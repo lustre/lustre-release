@@ -171,8 +171,12 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 }
                 offset = 0;
         } else {
+                struct mds_body *body;
+
                 offset = 1;
                 request = (struct ptlrpc_request *)it->it_data;
+                body = lustre_msg_buf(request->rq_repmsg, 1);
+                type = body->mode;
         }
 
         if (S_ISREG(type)) {

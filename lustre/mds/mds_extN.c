@@ -151,6 +151,8 @@ static int mds_extN_get_obdo(struct inode *inode, struct obdo *obdo)
                 /* This field is byteswapped because it appears in the
                  * catalogue.  All others are opaque to the MDS */
                 obdo->o_id = le64_to_cpu(data->mo_lov_md.lmd_object_id);
+                obdo->o_mode = S_IFREG;
+                obdo->o_valid |= OBD_MD_FLID | OBD_MD_FLINLINE | OBD_MD_FLMODE;
         }
 
 #warning FIXME: pass this buffer to caller for transmission when size exceeds OBD_INLINESZ

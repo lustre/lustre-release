@@ -139,11 +139,12 @@ typedef int (*ldlm_res_compat)(struct ldlm_lock *child, struct ldlm_lock *new);
 typedef int (*ldlm_res_policy)(struct ldlm_lock *lock, void *req_cookie,
                                ldlm_mode_t mode, void *data);
 
-#define LDLM_PLAIN       0
-#define LDLM_EXTENT      1
-#define LDLM_MDSINTENT   2
+#define LDLM_PLAIN       10
+#define LDLM_EXTENT      11
+#define LDLM_MDSINTENT   12
 
-#define LDLM_MAX_TYPE 2
+#define LDLM_MIN_TYPE 10
+#define LDLM_MAX_TYPE 12
 
 extern ldlm_res_compat ldlm_res_compat_table []; 
 extern ldlm_res_policy ldlm_res_policy_table []; 

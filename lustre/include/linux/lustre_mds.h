@@ -156,7 +156,7 @@ int mdc_getattr(struct obd_conn *conn,
 int mdc_setattr(struct obd_conn *conn,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
 int mdc_open(struct obd_conn *conn,
-             ino_t ino, int type, int flags, __u64 objid, __u64 cookie, 
+             ino_t ino, int type, int flags, struct obdo *obdo, __u64 cookie, 
              __u64 *fh, struct ptlrpc_request **request);
 int mdc_close(struct obd_conn *conn,
               ino_t ino, int type, __u64 fh,  struct ptlrpc_request **req);

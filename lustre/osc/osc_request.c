@@ -694,7 +694,7 @@ static int osc_enqueue(struct obd_conn *oconn,
                 if (mode == LCK_PR)
                         return 0;
 
-                rc = ldlm_cli_convert(cl, lockh, type, &flags);
+                rc = ldlm_cli_convert(cl, lockh, mode, &flags);
                 if (rc)
                         LBUG();
 

@@ -462,14 +462,12 @@ static int mds_open(struct ptlrpc_request *req)
         int rc, size = sizeof(*body);
         ENTRY;
 
-
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
                 RETURN(0);
         }
-
 
         mci = mds_uuid_to_mci(mds, ptlrpc_req_to_uuid(req));
         if (!mci) {
