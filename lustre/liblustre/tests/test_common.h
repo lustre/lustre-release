@@ -30,4 +30,6 @@ void t_grep(const char *path, char *str);
 void t_grep_v(const char *path, char *str);
 void t_ls(int fd, char *buf, int size);
 
+char *safe_strncpy(char *dst, char *src, int max_size);
+
 #endif

@@ -39,6 +39,8 @@
 
 #include "test_common.h"
 
+#define MAX_STRING_SIZE 2048
+
 static struct {
         const char   *name;
         unsigned long code;
@@ -52,6 +54,7 @@ static struct {
 static int drop_index = 0;
 
 static char mds_server[1024] = {0, };
+static char ssh_cmd[MAX_STRING_SIZE] = {0,};
 
 int do_stat(const char *name, struct stat *buf)
 {
@@ -121,14 +124,14 @@ void cleanup_dir(const char *path)
 
 #define FAIL()                                                             \
     do {                                                                   \
-        char cmd[1024];                                                    \
+        char cmd[MAX_STRING_SIZE];                                         \
         int rc;                                                            \
                                                                            \
         if (drop_arr[drop_index].name) {                                   \
             printf("server drops next %s\n", drop_arr[drop_index].name);   \
             sprintf(cmd,                                                   \
-                    "ssh %s \"echo %lu > /proc/sys/lustre/fail_loc\"",     \
-                    mds_server, drop_arr[drop_index].code);                \
+                    "%s %s \"echo %lu > /proc/sys/lustre/fail_loc\"",      \
+                    ssh_cmd, mds_server, drop_arr[drop_index].code);       \
             if (system(cmd)) {                                             \
                 printf("error excuting remote command: %d\n", rc);         \
                 exit(rc);                                                  \
@@ -141,8 +144,8 @@ void cleanup_dir(const char *path)
         char cmd[1024];                                                    \
                                                                            \
         if (drop_arr[drop_index].name) {                                   \
-            sprintf(cmd, "ssh %s \"echo 0 > /proc/sys/lustre/fail_loc\"",  \
-                    mds_server);                                           \
+            sprintf(cmd, "%s %s \"echo 0 > /proc/sys/lustre/fail_loc\"",   \
+                    ssh_cmd, mds_server);                                  \
             system(cmd);                                                   \
         }                                                                  \
     } while (0)
@@ -313,6 +316,7 @@ int main(int argc, char * argv[])
         static struct option long_opts[] = {
                 {"target", 1, 0, 0},
                 {"dumpfile", 1, 0, 0},
+                {"ssh", 1, 0, 0},
                 {0, 0, 0, 0}
         };
 
@@ -329,12 +333,14 @@ int main(int argc, char * argv[])
                                 setenv(ENV_LUSTRE_MNTTGT, optarg, 1);
                         } else if (!strcmp(long_opts[opt_index].name, "dumpfile")) {
                                 setenv(ENV_LUSTRE_DUMPFILE, optarg, 1);
+                        } else if (!strcmp(long_opts[opt_index].name, "ssh")) {
+                                safe_strncpy(ssh_cmd, optarg, MAX_STRING_SIZE);
                         } else
                                 usage(argv[0]);
                         break;
                 }
                 case 's':
-                        strcpy(mds_server, optarg);
+                        safe_strncpy(mds_server, optarg, MAX_STRING_SIZE);
                         break;
                 default:
                         usage(argv[0]);
@@ -347,9 +353,14 @@ int main(int argc, char * argv[])
         if (strlen(mds_server) == 0)
                 usage(argv[0]);
 
-        sprintf(cmd, "ssh %s cat /dev/null", mds_server);
+        /* default to using ssh */
+        if (!strlen(ssh_cmd)) {
+                safe_strncpy(ssh_cmd, "ssh", MAX_STRING_SIZE);
+        }
+
+        sprintf(cmd, "%s %s cat /dev/null", ssh_cmd, mds_server);
         if (system(cmd)) {
-                printf("can't access server node: %s\n", mds_server);
+                printf("Can't access server node: %s using method: %s\n", mds_server, ssh_cmd);
                 exit(-1);
         }
 
