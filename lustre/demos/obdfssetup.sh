@@ -23,10 +23,10 @@ fi
 plog log "ATTACHING device 0 SETUP $BASEDEV"
 $OBDDIR/utils/obdctl << EOF
 device 0
-attach obdfilter
-setup $BASEDEV reiserfs
-# attach obdext2
-# setup $BASEDEV
+# attach obdfilter
+# setup $BASEDEV reiserfs
+attach obdext2
+setup $BASEDEV
 quit
 EOF
 

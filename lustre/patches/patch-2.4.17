@@ -1,12 +1,12 @@
 --- linux/kernel/ksyms.c.lustre-orig	Sun Jan 20 17:47:43 2002
-+++ linux/kernel/ksyms.c	Sun Jan 20 17:34:49 2002
++++ linux/kernel/ksyms.c	Sun Jan 20 18:21:30 2002
 @@ -280,6 +280,13 @@
  EXPORT_SYMBOL(lock_page);
  EXPORT_SYMBOL(unlock_page);
  
 +/* Lustre symbols */
++EXPORT_SYMBOL(pagecache_lock);
 +EXPORT_SYMBOL(do_kern_mount);
-+EXPORT_SYMBOL(do_umount);
 +EXPORT_SYMBOL(sys_mkdir);
 +EXPORT_SYMBOL(sys_rmdir);
 +EXPORT_SYMBOL(sys_unlink);
@@ -15,7 +15,7 @@
  EXPORT_SYMBOL(register_chrdev);
  EXPORT_SYMBOL(unregister_chrdev);
 --- linux/include/linux/fs.h.lustre-orig	Sun Jan 20 17:32:26 2002
-+++ linux/include/linux/fs.h	Sun Jan 20 17:45:27 2002
++++ linux/include/linux/fs.h	Sun Jan 20 18:23:42 2002
 @@ -984,6 +984,8 @@
  extern int may_umount(struct vfsmount *);
  extern long do_mount(char *, char *, char *, unsigned long, void *);
