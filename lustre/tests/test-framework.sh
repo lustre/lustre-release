@@ -266,14 +266,14 @@ add_mds() {
     facet=$1
     shift
     rm -f ${facet}active
-    add_facet $facet 
+    add_facet $facet  --lustre_upcall $UPCALL
     do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc $*
 }
 
 add_mdsfailover() {
     facet=$1
     shift
-    add_facet ${facet}failover
+    add_facet ${facet}failover  --lustre_upcall $UPCALL
     do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc $*
 }
 
