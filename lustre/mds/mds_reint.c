@@ -38,7 +38,32 @@
 
 int mds_update_last_rcvd(struct mds_obd *mds, struct ptlrpc_request *req)
 {
-        return 0;
+        /* get from req->rq_connection-> or req->rq_client */
+        struct mds_client_info mci_data, *mci = &mci_data;
+        struct mds_client_data mcd_data, *mcd = &mcd_data;
+        loff_t off;
+        int rc;
+
+        /* Just a placeholder until more gets committed */
+        memset(mcd, 0, sizeof(*mcd));
+        mci->mci_mcd = mcd;
+        mci->mci_off = off = MDS_LR_CLIENT;
+
+        ++mds->mds_last_rcvd;   /* lock this, or make it an LDLM function? */
+        mci->mci_mcd->mcd_last_rcvd = cpu_to_le64(mds->mds_last_rcvd);
+        mci->mci_mcd->mcd_mount_count = cpu_to_le64(mds->mds_mount_count);
+        rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mci->mci_mcd,
+                           sizeof(*mci->mci_mcd), &off);
+        CDEBUG(D_INODE, "wrote trans #%Ld for client '%s' at %Ld: rc = %d\n",
+               mds->mds_last_rcvd, mci->mci_mcd->mcd_uuid, mci->mci_off, rc);
+        // store new value and last committed value in req struct
+
+        if (rc == sizeof(mci->mci_mcd))
+                rc = 0;
+        else if (rc >= 0)
+                rc = -EIO;
+
+        return rc;
 }
 
 static int mds_reint_setattr(struct mds_update_record *rec,
