@@ -125,7 +125,7 @@ static int log_commit_thread(void *arg)
         lcd->lcd_lcm = lcm;
 
         lock_kernel();
-	daemonize(); /* thread never needs to do IO */
+        daemonize(); /* thread never needs to do IO */
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
@@ -133,7 +133,7 @@ static int log_commit_thread(void *arg)
         SIGNAL_MASK_UNLOCK(current, flags);
 
         spin_lock(&lcm->lcm_thread_lock);
-	THREAD_NAME(current->comm, "ll_log_commit_%d", lcm->lcm_thread_total++);
+        THREAD_NAME(current->comm, "ll_log_commit_%d", lcm->lcm_thread_total++);
         spin_unlock(&lcm->lcm_thread_lock);
         unlock_kernel();
 
@@ -224,7 +224,7 @@ static int log_commit_thread(void *arg)
                         list_del(&llcd->llcd_list);
 
                         request = ptlrpc_prep_req(class_conn2cliimp(&conn),
-                                                  OST_LOG_CANCEL, 1,
+                                                  OBD_LOG_CANCEL, 1,
                                                   &llcd->llcd_cookiebytes,
                                                   bufs);
                         if (request == NULL) {
@@ -298,7 +298,7 @@ int llog_start_commit_thread(void)
         int rc;
         ENTRY;
 
-	rc = kernel_thread(log_commit_thread, lcm, CLONE_VM | CLONE_FILES);
+        rc = kernel_thread(log_commit_thread, lcm, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
                 CERROR("error starting thread #%d: %d\n", lcm->lcm_thread_total,
                        rc);

@@ -104,10 +104,10 @@ struct llog_handle *llog_new_log(struct llog_handle *cathandle,
         /* This should basically always find the first entry free */
         for (i = 0, index = llh->llh_count; i < bitmap_size; i++, index++) {
                 index %= bitmap_size;
-                if (ext2_set_bit(index, llh->llh_bitmap))
+                if (ext2_set_bit(index, llh->llh_bitmap)) {
                         /* XXX This should trigger log clean up or similar */
                         CERROR("catalog index %d is still in use\n", index);
-                else {
+                } else {
                         llh->llh_count = (index + 1) % bitmap_size;
                         break;
                 }
