@@ -2,6 +2,7 @@ fs/dcache.c
 fs/namei.c
 fs/nfsd/vfs.c
 fs/open.c
+fs/proc/base.c
 fs/stat.c
 fs/exec.c
 include/linux/dcache.h
