@@ -21,6 +21,7 @@ GetOptions("silent!"=> \$silent,
 
 my $mtpt = shift || usage();
 my $i = shift || usage();
+my $total = $i;
 my $files = 6;
 my $dirs = 3;
 my $mcreate = 0; # should we use mcreate or open?
@@ -41,7 +42,6 @@ while ($k--) {
     $j = $files;
     while ($j--) {
         `./mcreate $path/$j`;
-        print "mcreate $path/$j failed\n" if $?;
     }
 }
 
@@ -53,8 +53,11 @@ while ($i--) {
     $d = int(rand() * $dirs);
     $f1 = int(rand() * $files);
     $f2 = int(rand() * $files);
-    print "[$$] $mtpt$which/$d/$f1 $mtpt$which/$d/$f2 ...\n";
+    print "[$$] $mtpt$which/$d/$f1 $mtpt$which/$d/$f2 ...\n" if !$silent;
     my $rc = rename "$mtpt$which/$d/$f1", "$mtpt$which/$d/$f2";
     print "[$$] done: $rc\n" if !$silent;
+    if (($total - $i) % 100 == 0) {
+        print STDERR "[" . $$ . "]" . ($total - $i) . " operations\n";
+    }
 }
 print "Done.\n";
