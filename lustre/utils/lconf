@@ -55,11 +55,11 @@ config.xml          Lustre configuration in xml format.
                     config file is doing what it should be doing. (Implies -v)
 --nomod             Skip load/unload module step.
 --nosetup           Skip device setup/cleanup step.
+--reformat	    Reformat all devices (without question)
 """
     TODO = """
 --ldap server	    LDAP server with lustre config database
 --makeldiff         Translate xml source to LDIFF 
---reformat	    Reformat all devices (will confirm)
 This are perhaps not needed:
 --lustre="src dir"  Base directory of lustre sources. Used to search
                     for modules.
@@ -740,14 +740,17 @@ class LDLM(Module):
 class LOV(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'LOV', dom_node)
-        self.stripe_sz = get_attr_int(dom_node, 'stripesize', 65536)
-        self.stripe_off = get_attr_int(dom_node, 'stripeoffset', 0)
-        self.pattern = get_attr_int(dom_node, 'pattern', 0)
         self.mdsuuid = get_first_ref(dom_node, 'mds')
         mds= lookup(dom_node.parentNode, self.mdsuuid)
         self.mdsname = getName(mds)
-        self.devlist = get_all_refs(dom_node, 'osc')
-        self.stripe_cnt = len(self.devlist)
+        devs = dom_node.getElementsByTagName('devices')
+        if len(devs) > 0:
+            dev_node = devs[0]
+            self.stripe_sz = get_attr_int(dev_node, 'stripesize', 65536)
+            self.stripe_off = get_attr_int(dev_node, 'stripeoffset', 0)
+            self.pattern = get_attr_int(dev_node, 'pattern', 0)
+            self.devlist = get_all_refs(dev_node, 'osc')
+            self.stripe_cnt = len(self.devlist)
 
     def prepare(self):
         self.info(self.mdsuuid, self.stripe_cnt, self.stripe_sz, self.stripe_off, self.pattern,
