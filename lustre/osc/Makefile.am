@@ -9,13 +9,11 @@ MODULE = osc
 modulefs_DATA = osc.o
 EXTRA_PROGRAMS = osc
 
-LINX= obd_pack.c ll_pack.c client.c
+LINX= obd_pack.c client.c
 osc_SOURCES = osc_request.c lproc_osc.c $(LINX)
 
 obd_pack.c: 
 	test -e obd_pack.c || ln -sf $(top_srcdir)/lib/obd_pack.c
-ll_pack.c: 
-	test -e ll_pack.c || ln -sf $(top_srcdir)/lib/ll_pack.c
 client.c: 
 	test -e client.c || ln -sf $(top_srcdir)/lib/client.c
 
