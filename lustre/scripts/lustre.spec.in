@@ -104,7 +104,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/sbin/wiretest
 %attr(-, root, root) /usr/sbin/lactive
 %attr(-, root, root) /usr/sbin/llanalyze
-%attr(-, root, root) /usr/sbin/lfs
+%attr(-, root, root) /usr/bin/lfs
 %attr(-, root, root) /usr/sbin/gmnalnid
 %attr(-, root, root) /usr/bin/lfind
 %attr(-, root, root) /usr/bin/lstripe
