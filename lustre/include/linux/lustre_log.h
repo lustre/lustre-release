@@ -55,7 +55,7 @@ struct cat_handle_data {
 
 /* In-memory descriptor for a log object or log catalog */
 struct llog_handle {
-        struct semaphore        lgh_lock;
+        struct rw_semaphore     lgh_lock;
         struct llog_logid       lgh_id;              /* id of this log */
         struct llog_log_hdr    *lgh_hdr;
         struct file            *lgh_file;

@@ -188,6 +188,8 @@ EXPORT_SYMBOL(llog_cat_put);
  * otherwise we get a lock on this log so nobody can steal our space.
  *
  * Assumes caller has already pushed us into the kernel context and is locking.
+ *
+ * NOTE: loghandle is write-locked upon successful return
  */
 static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle, 
                                                 int create)
@@ -195,16 +197,42 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
         struct llog_handle *loghandle = NULL;
         ENTRY;
 
+        down_read(&cathandle->lgh_lock);
         loghandle = cathandle->u.chd.chd_current_log;
         if (loghandle) {
                 struct llog_log_hdr *llh = loghandle->lgh_hdr;
-                if (loghandle->lgh_last_idx < (sizeof(llh->llh_bitmap) * 8) - 1)
+                if (loghandle->lgh_last_idx < (sizeof(llh->llh_bitmap) * 8) - 1) {
+                        down_write(&loghandle->lgh_lock);
+                        up_read(&cathandle->lgh_lock);
                         RETURN(loghandle);
+                }
+        }
+        if (!create) {
+                if (loghandle)
+                        down_write(&loghandle->lgh_lock);
+                up_read(&cathandle->lgh_lock);
+                RETURN(loghandle);
+        }
+
+        /* time to create new log */
+
+        /* first, we have to make sure the state hasn't change */
+        down_write(&cathandle->lgh_lock);
+        loghandle = cathandle->u.chd.chd_current_log;
+        if (loghandle) {
+                struct llog_log_hdr *llh = loghandle->lgh_hdr;
+                if (loghandle->lgh_last_idx < (sizeof(llh->llh_bitmap) * 8) - 1) {
+                        down_write(&loghandle->lgh_lock);
+                        up_write(&cathandle->lgh_lock);
+                        RETURN(loghandle);
+                }
         }
 
         CDEBUG(D_INODE, "creating new log\n");
-        if (create)
-                loghandle = llog_cat_new_log(cathandle);
+        loghandle = llog_cat_new_log(cathandle);
+        if (loghandle)
+                down_write(&loghandle->lgh_lock);
+        up_write(&cathandle->lgh_lock);
         RETURN(loghandle);
 }
 
@@ -221,17 +249,12 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
         ENTRY;
 
         LASSERT(le32_to_cpu(rec->lrh_len) <= LLOG_CHUNK_SIZE);
-        down(&cathandle->lgh_lock);
         loghandle = llog_cat_current_log(cathandle, 1);
-        if (IS_ERR(loghandle)) {
-                up(&cathandle->lgh_lock);
+        if (IS_ERR(loghandle))
                 RETURN(PTR_ERR(loghandle));
-        }
-        down(&loghandle->lgh_lock);
-        up(&cathandle->lgh_lock);
+        /* loghandle is already locked by llog_cat_current_log() for us */
         rc = llog_write_rec(loghandle, rec, reccookie, 1, buf, -1);
-
-        up(&loghandle->lgh_lock);
+        up_write(&loghandle->lgh_lock);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cat_add_rec);
@@ -251,7 +274,7 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
         int i, index, rc = 0;
         ENTRY;
 
-        down(&cathandle->lgh_lock);
+        down_write(&cathandle->lgh_lock);
         for (i = 0; i < count; i++, cookies++) {
                 struct llog_handle *loghandle;
                 struct llog_logid *lgl = &cookies->lgc_lgl;
@@ -262,9 +285,9 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                         break;
                 }
 
-                down(&loghandle->lgh_lock);
+                down_write(&loghandle->lgh_lock);
                 rc = llog_cancel_rec(loghandle, cookies->lgc_index);
-                up(&loghandle->lgh_lock);
+                up_write(&loghandle->lgh_lock);
                 
                 if (rc == 1) {          /* log has been destroyed */
                         index = loghandle->u.phd.phd_cookie.lgc_index;
@@ -276,7 +299,7 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                         rc = llog_cancel_rec(cathandle, index);
                 }
         }
-        up(&cathandle->lgh_lock);
+        up_write(&cathandle->lgh_lock);
 
         RETURN(rc);
 }

@@ -47,7 +47,7 @@ struct llog_handle *llog_alloc_handle(void)
         if (loghandle == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
 
-        sema_init(&loghandle->lgh_lock, 1);
+        init_rwsem(&loghandle->lgh_lock);
 
         RETURN(loghandle);
 }
