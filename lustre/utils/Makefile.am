@@ -9,7 +9,9 @@ lctl_LDADD := $(LIBREADLINE) -lptlctl
 lfs_LDADD := $(LIBREADLINE) parser.o liblustreapi.a
 lload_LDADD := -lptlctl
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck lfs llmount
-sbin_SCRIPTS = lconf lmc llanalyze llstat.pl llobdstat.pl lactive load_ldap.sh
+sbin_SCRIPTS = \
+	lconf lmc llanalyze llstat.pl llobdstat.pl lactive load_ldap.sh \
+	lwizard
 bin_PROGRAMS = lfind lstripe
 lib_LIBRARIES = liblustreapi.a
 liblustreapi_a_SOURCES = liblustreapi.c
