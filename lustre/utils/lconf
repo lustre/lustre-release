@@ -467,12 +467,15 @@ class LCTLInterface:
 
     # disconnect one connection
     def disconnect(self, srv):
-        cmds =  """
-  ignore_errors
+        cmds =  "   ignore_errors\n  del_uuid %s" % (srv.uuid)
+        if srv.net_type  in ('tcp', 'toe') and not config.lctl_dump:
+                cmds =  """%s
   network %s
-  del_autoconn %s %s s
-  del_uuid %s
-  quit""" % (srv.net_type, srv.nid, srv.hostaddr, srv.uuid)
+  del_autoconn %s %s s""" % (cmds,
+                                     srv.net_type,
+                                     srv.nid, srv.hostaddr)
+        cmds = cmds + "\n  quit"
+
         self.run(cmds)
 
     def del_uuid(self, servuuid):
