@@ -21,142 +21,52 @@
  */
 #define DEBUG_SUBSYSTEM S_OST
 
-#include <linux/lustre_lite.h>
+#include <linux/obd_class.h>
 #include <linux/lprocfs_status.h>
 
+#ifndef LPROCFS
+struct lprocfs_vars status_var_nm_1[]  = { {0} };
+struct lprocfs_vars status_class_var[] = { {0} };
+#else 
 
-int rd_uuid(char* page, char **start, off_t off, int count, int *eof, 
-            void *data)
+int lprocfs_ost_statfs(void *data, struct statfs *sfs)
 {
-         
-        struct obd_device* temp = (struct obd_device*)data;
-        int len = 0;
-        len += snprintf(page, count, "%s\n", temp->obd_uuid); 
-        return len;
-        
-
-}
-int rd_blksize(char* page, char **start, off_t off, int count, int *eof, 
-               void *data)
-{
-        
-        struct obd_device* temp = (struct obd_device*)data;
-        struct ost_obd *ost = &temp->u.ost;
+        struct obd_device* dev = (struct obd_device*) data;
+        struct ost_obd *ost = &dev->u.ost;
         struct lustre_handle *conn = &ost->ost_conn;
-        struct obd_statfs mystats;
-        int len = 0;
+        struct obd_statfs osfs;
+        int err;
         
-        obd_statfs(conn, &mystats);
-        len += snprintf(page, count, "%d\n", mystats.os_bsize); 
-        return len;
+        memset(&osfs, 0, sizeof(osfs));
         
-}
-int rd_kbtotal(char* page, char **start, off_t off, int count, int *eof, 
-               void *data)
-{
-        struct obd_device* temp = (struct obd_device*)data;
-        struct ost_obd *ost = &temp->u.ost;
-        struct lustre_handle *conn = &ost->ost_conn;
-        struct obd_statfs mystats;
-        int len = 0;
-        __u32 blk_size;
-        __u64 result;
+        err = obd_statfs(conn, &osfs);
+        if (err==0)
+                statfs_unpack(sfs, &osfs);
                 
-        obd_statfs(conn, &mystats);
-        blk_size = mystats.os_bsize;
-        blk_size >>= 10;
-        result = mystats.os_blocks;
-        while(blk_size >>= 1){
-                result <<= 1;
-        }
-        len += snprintf(page, count, LPU64"\n", result);
-        return len;
-                
+        return err;
 }
 
-
-int rd_kbfree(char* page, char **start, off_t off, int count, int *eof, 
-              void *data)
-{
-        
-        struct obd_device* temp = (struct obd_device*)data;
-        struct ost_obd *ost = &temp->u.ost;
-        struct lustre_handle *conn = &ost->ost_conn;
-        struct obd_statfs mystats;
-        int len = 0;
-        __u32 blk_size;
-        __u64 result;
-
-        obd_statfs(conn, &mystats);
-        blk_size = mystats.os_bsize;
-        blk_size >>= 10;
-        result = mystats.os_bfree;
-        while(blk_size >>= 1){
-                result <<= 1;
-        }
-        len += snprintf(page, count, LPU64"\n", result);
-        return len;  
-}
-
-int rd_filestotal(char* page, char **start, off_t off, int count, int *eof, 
-                  void *data)
-{
-        struct obd_device* temp = (struct obd_device*)data;
-        struct ost_obd *ost = &temp->u.ost;
-        struct lustre_handle *conn = &ost->ost_conn;
-        struct obd_statfs mystats;
-        int len = 0;
-        
-        obd_statfs(conn, &mystats);
-        len += snprintf(page, count, LPU64"\n",mystats.os_files); 
-        return len;
-        
-}
-
-int rd_filesfree(char* page, char **start, off_t off, int count, int *eof, 
-                 void *data)
-{
-        
-        struct obd_device* temp = (struct obd_device*)data;
-        struct ost_obd *ost = &temp->u.ost;
-        struct lustre_handle *conn = &ost->ost_conn;
-        struct obd_statfs mystats;
-        int len = 0;
-        
-        obd_statfs(conn, &mystats);
-        len += snprintf(page, count, LPU64"\n", mystats.os_ffree); 
-        return len;
-        
-}
-
-int rd_filegroups(char* page, char **start, off_t off, int count, int *eof, 
-                  void *data)
-{
-        return 0;
-}
+DEFINE_LPROCFS_STATFS_FCT(rd_blksize,     lprocfs_ost_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_kbytestotal, lprocfs_ost_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_kbytesfree,  lprocfs_ost_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_filestotal,  lprocfs_ost_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_filesfree,   lprocfs_ost_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_filegroups,  lprocfs_ost_statfs);
 
 struct lprocfs_vars status_var_nm_1[] = {
-        {"status/uuid", rd_uuid, 0, 0},
-        {"status/blocksize",rd_blksize, 0, 0},
-        {"status/kbytesfree", rd_kbfree, 0, 0},
-        {"status/kbytestotal", rd_kbtotal, 0, 0},
-        {"status/filestotal", rd_filestotal, 0, 0},
-        {"status/filesfree", rd_filesfree, 0, 0},
-        {"status/filegroups", rd_filegroups, 0, 0},
+        {"uuid", lprocfs_rd_uuid, 0, 0},
+        {"blocksize",rd_blksize, 0, 0},
+        {"kbytesfree", rd_kbytesfree, 0, 0},
+        {"kbytestotal", rd_kbytestotal, 0, 0},
+        {"filestotal", rd_filestotal, 0, 0},
+        {"filesfree", rd_filesfree, 0, 0},
+        {"filegroups", rd_filegroups, 0, 0},
         {0}
 };
 
-int rd_numrefs(char* page, char **start, off_t off, int count, int *eof, 
-               void *data)
-{
-        struct obd_type* class = (struct obd_type*)data;
-        int len = 0;
-        len += snprintf(page, count, "%d\n", class->typ_refcnt);
-        return len;
-}
-
 struct lprocfs_vars status_class_var[] = {
-        {"status/num_refs", rd_numrefs, 0, 0},
+        {"num_refs", lprocfs_rd_numrefs, 0, 0},
         {0}
 };
  
+#endif /* LPROCFS */ 
