@@ -26,8 +26,6 @@
 
 #define LAST_RCVD "last_rcvd"
 #define FILTER_INIT_OBJID 2
-/* max creates/sec * journal->j_commit_interval */
-#define FILTER_SKIP_OBJID (10000 * 5)
 
 #define FILTER_LR_SERVER_SIZE    512
 
@@ -119,7 +117,7 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
 __u64 filter_next_id(struct filter_obd *);
 int filter_update_server_data(struct obd_device *, struct file *,
-                              struct filter_server_data *);
+                              struct filter_server_data *, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         char *option);
 

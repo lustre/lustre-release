@@ -1,20 +1,7 @@
- fs/dcache.c               |   19 ++
- fs/exec.c                 |   15 +-
- fs/namei.c                |  321 ++++++++++++++++++++++++++++++++++++++--------
- fs/namespace.c            |   28 +++-
- fs/open.c                 |  123 +++++++++++++++--
- fs/proc/base.c            |    3 
- fs/stat.c                 |   50 ++++---
- include/linux/dcache.h    |   54 +++++++
- include/linux/fs.h        |   30 ++++
- include/linux/fs_struct.h |    4 
- kernel/exit.c             |    3 
- kernel/fork.c             |    3 
- kernel/ksyms.c            |    1 
- 13 files changed, 552 insertions(+), 102 deletions(-)
+ 0 files changed
 
---- linux/fs/exec.c~vfs_intent-2.4.20-hp	Sat Jul 12 14:04:49 2003
-+++ linux-mmonroe/fs/exec.c	Sat Jul 12 14:05:24 2003
+--- linux/fs/exec.c~vfs_intent-2.4.20-hp	2003-06-09 23:07:04.000000000 +0800
++++ linux-root/fs/exec.c	2003-07-30 18:10:09.000000000 +0800
 @@ -116,8 +116,9 @@ asmlinkage long sys_uselib(const char * 
  	struct file * file;
  	struct nameidata nd;
@@ -74,8 +61,8 @@
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
---- linux/fs/dcache.c~vfs_intent-2.4.20-hp	Thu Nov 28 15:53:15 2002
-+++ linux-mmonroe/fs/dcache.c	Sat Jul 12 14:05:24 2003
+--- linux/fs/dcache.c~vfs_intent-2.4.20-hp	2003-06-09 23:07:04.000000000 +0800
++++ linux-root/fs/dcache.c	2003-07-30 18:10:09.000000000 +0800
 @@ -181,6 +181,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -113,8 +100,8 @@
  }
  
  #define do_switch(x,y) do { \
---- linux/fs/namespace.c~vfs_intent-2.4.20-hp	Thu Nov 28 15:53:15 2002
-+++ linux-mmonroe/fs/namespace.c	Sat Jul 12 14:05:24 2003
+--- linux/fs/namespace.c~vfs_intent-2.4.20-hp	2002-11-29 07:53:15.000000000 +0800
++++ linux-root/fs/namespace.c	2003-07-30 18:10:09.000000000 +0800
 @@ -99,6 +99,7 @@ static void detach_mnt(struct vfsmount *
  {
  	old_nd->dentry = mnt->mnt_mountpoint;
@@ -228,8 +215,8 @@
  	path_release(&new_nd);
  out0:
  	unlock_kernel();
---- linux/fs/namei.c~vfs_intent-2.4.20-hp	Sat Jul 12 14:04:48 2003
-+++ linux-mmonroe/fs/namei.c	Sat Jul 12 14:08:01 2003
+--- linux/fs/namei.c~vfs_intent-2.4.20-hp	2003-06-09 23:07:04.000000000 +0800
++++ linux-root/fs/namei.c	2003-07-30 18:14:35.000000000 +0800
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -318,9 +305,9 @@
  	current->link_count++;
  	current->total_link_count++;
  	UPDATE_ATIME(dentry->d_inode);
-+	nd->it = it;
++	nd->intent = it;
  	err = dentry->d_inode->i_op->follow_link(dentry, nd);
-+	if (!err && it != NULL && !(it->it_int_flags & IT_FL_FOLLOWED)) {
++	if (!err && it != NULL && !(it->d.lustre.it_int_flags & IT_FL_FOLLOWED)) {
 +		/* vfs_follow_link was never called */
 +		intent_release(it);
 +		path_release(nd);
@@ -351,12 +338,12 @@
  		spin_unlock(&dcache_lock);
 +		if (it) {
 +			opc = it->it_op;
-+			mode = it->it_mode;
++			mode = it->it_create_mode;
 +		}
 +		intent_release(it);
 +		if (it) {
 +			it->it_op = opc;
-+			it->it_mode = mode;
++			it->it_create_mode = mode;
 +		}
  		dput(*dentry);
  		mntput(mounted->mnt_parent);
@@ -536,7 +523,7 @@
  {
  	nd->last_type = LAST_ROOT; /* if there are only slashes... */
  	nd->flags = flags;
-+	nd->it = NULL;
++	nd->intent = NULL;
  	if (*name=='/')
  		return walk_init_root(name,nd);
  	read_lock(&current->fs->lock);
@@ -678,7 +665,7 @@
  	 * Create - we need to know the parent.
  	 */
 + 	if (it) {
-+ 		it->it_mode = mode;
++ 		it->it_create_mode = mode;
 + 		it->it_op |= IT_CREAT;
 + 	}
  	error = path_lookup(pathname, LOOKUP_PARENT, nd);
@@ -697,7 +684,7 @@
  		goto exit;
  	}
  
-+	it->it_mode = mode;
++	it->it_create_mode = mode;
  	/* Negative dentry, just create the file */
  	if (!dentry->d_inode) {
  		if (!IS_POSIXACL(dir->d_inode))
@@ -740,11 +727,11 @@
  	 * are done. Procfs-like symlinks just set LAST_BIND.
  	 */
  	UPDATE_ATIME(dentry->d_inode);
-+	nd->it = it;
++	nd->intent = it;
  	error = dentry->d_inode->i_op->follow_link(dentry, nd);
 +	if (error) {
 +		intent_release(it);
-+	} else if (it != NULL && !(it->it_int_flags & IT_FL_FOLLOWED)) {
++	} else if (it != NULL && !(it->d.lustre.it_int_flags & IT_FL_FOLLOWED)) {
 +		/* vfs_follow_link was never called */
 +		intent_release(it);
 +		path_release(nd);
@@ -983,11 +970,11 @@
  		goto fail;
  
 +	if (it == NULL)
-+		it = nd->it;
-+	else if (it != nd->it)
-+		printk("it != nd->it: tell phil@clusterfs.com\n");
++		it = nd->intent;
++	else if (it != nd->intent)
++		printk("it != nd->intent: tell phil@clusterfs.com\n");
 +	if (it != NULL)
-+		it->it_int_flags |= IT_FL_FOLLOWED;
++		it->d.lustre.it_int_flags |= IT_FL_FOLLOWED;
 +
  	if (*link == '/') {
  		path_release(nd);
@@ -1024,8 +1011,8 @@
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
---- linux/fs/open.c~vfs_intent-2.4.20-hp	Thu Nov 28 15:53:15 2002
-+++ linux-mmonroe/fs/open.c	Sat Jul 12 14:05:24 2003
+--- linux/fs/open.c~vfs_intent-2.4.20-hp	2003-06-09 23:07:04.000000000 +0800
++++ linux-root/fs/open.c	2003-07-30 18:10:09.000000000 +0800
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1353,8 +1340,8 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- linux/fs/stat.c~vfs_intent-2.4.20-hp	Thu Sep 13 16:04:43 2001
-+++ linux-mmonroe/fs/stat.c	Sat Jul 12 14:05:24 2003
+--- linux/fs/stat.c~vfs_intent-2.4.20-hp	2003-06-09 23:07:04.000000000 +0800
++++ linux-root/fs/stat.c	2003-07-30 18:10:09.000000000 +0800
 @@ -17,10 +17,12 @@
   * Revalidate the inode. This is required for proper NFS attribute caching.
   */
@@ -1512,21 +1499,21 @@
  		if (!err)
  			err = cp_new_stat64(dentry->d_inode, statbuf);
  		fput(f);
---- linux/fs/proc/base.c~vfs_intent-2.4.20-hp	Sat Jul 12 14:04:46 2003
-+++ linux-mmonroe/fs/proc/base.c	Sat Jul 12 14:05:24 2003
-@@ -481,6 +481,9 @@ static int proc_pid_follow_link(struct d
+--- linux/fs/proc/base.c~vfs_intent-2.4.20-hp	2003-06-09 23:04:21.000000000 +0800
++++ linux-root/fs/proc/base.c	2003-07-30 18:10:09.000000000 +0800
+@@ -464,6 +464,9 @@ static int proc_pid_follow_link(struct d
  
  	error = inode->u.proc_i.op.proc_get_link(inode, &nd->dentry, &nd->mnt);
  	nd->last_type = LAST_BIND;
 +
-+	if (nd->it != NULL)
-+		nd->it->it_int_flags |= IT_FL_FOLLOWED;
++	if (nd->intent != NULL)
++		nd->intent->d.lustre.it_int_flags |= IT_FL_FOLLOWED;
  out:
  	return error;
  }
---- linux/include/linux/dcache.h~vfs_intent-2.4.20-hp	Thu Nov 28 15:53:15 2002
-+++ linux-mmonroe/include/linux/dcache.h	Sat Jul 12 14:06:04 2003
-@@ -5,8 +5,47 @@
+--- linux/include/linux/dcache.h~vfs_intent-2.4.20-hp	2002-11-29 07:53:15.000000000 +0800
++++ linux-root/include/linux/dcache.h	2003-07-30 18:13:51.000000000 +0800
+@@ -5,8 +5,53 @@
  
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -1548,19 +1535,25 @@
 +
 +#define INTENT_MAGIC 0x19620323
 +
-+struct lookup_intent {
-+	int it_op;
-+	void (*it_op_release)(struct lookup_intent *);
-+	int it_magic;
-+	int it_mode;
-+	int it_flags;
-+	int it_disposition;
-+	int it_status;
-+	int it_int_flags;
-+	__u64 it_lock_handle[2];
-+	int it_lock_mode;
-+	void *it_data;
++struct lustre_intent_data {
++        int       it_disposition;
++        int       it_status;
++        __u64     it_lock_handle;
++        void     *it_data;
++        int       it_lock_mode;
++        int it_int_flags;
 +};
++struct lookup_intent {
++        int     it_magic;
++        void    (*it_op_release)(struct lookup_intent *);
++        int     it_op;
++        int     it_flags;
++        int     it_create_mode;
++        union {
++                struct lustre_intent_data lustre;
++        } d;
++};
++
 +
 +static inline void intent_init(struct lookup_intent *it, int op, int flags)
 +{
@@ -1574,7 +1567,7 @@
  /*
   * linux/include/linux/dcache.h
   *
-@@ -91,8 +130,22 @@ struct dentry_operations {
+@@ -91,8 +136,22 @@ struct dentry_operations {
  	int (*d_delete)(struct dentry *);
  	void (*d_release)(struct dentry *);
  	void (*d_iput)(struct dentry *, struct inode *);
@@ -1597,7 +1590,7 @@
  /* the dentry parameter passed to d_hash and d_compare is the parent
   * directory of the entries to be compared. It is used in case these
   * functions need any directory specific information for determining
-@@ -124,6 +177,7 @@ d_iput:		no		no		yes
+@@ -124,6 +183,7 @@ d_iput:		no		no		yes
  					 * s_nfsd_free_path semaphore will be down
  					 */
  #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
@@ -1605,8 +1598,8 @@
  
  extern spinlock_t dcache_lock;
  
---- linux/include/linux/fs.h~vfs_intent-2.4.20-hp	Sat Jul 12 14:05:20 2003
-+++ linux-mmonroe/include/linux/fs.h	Sat Jul 12 14:05:24 2003
+--- linux/include/linux/fs.h~vfs_intent-2.4.20-hp	2003-07-30 18:10:03.000000000 +0800
++++ linux-root/include/linux/fs.h	2003-07-30 18:14:17.000000000 +0800
 @@ -340,6 +340,9 @@ extern void set_bh_page(struct buffer_he
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
@@ -1629,7 +1622,7 @@
  	struct qstr last;
  	unsigned int flags;
  	int last_type;
-+	struct lookup_intent *it;
++	struct lookup_intent *intent;
  };
  
  /*
@@ -1718,8 +1711,8 @@
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
---- linux/include/linux/fs_struct.h~vfs_intent-2.4.20-hp	Fri Jul 13 15:10:44 2001
-+++ linux-mmonroe/include/linux/fs_struct.h	Sat Jul 12 14:05:24 2003
+--- linux/include/linux/fs_struct.h~vfs_intent-2.4.20-hp	2001-07-14 06:10:44.000000000 +0800
++++ linux-root/include/linux/fs_struct.h	2003-07-30 18:10:09.000000000 +0800
 @@ -34,10 +34,12 @@ static inline void set_fs_root(struct fs
  	write_lock(&fs->lock);
  	old_root = fs->root;
@@ -1746,8 +1739,8 @@
  		dput(old_pwd);
  		mntput(old_pwdmnt);
  	}
---- linux/kernel/ksyms.c~vfs_intent-2.4.20-hp	Sat Jul 12 14:05:21 2003
-+++ linux-mmonroe/kernel/ksyms.c	Sat Jul 12 14:05:24 2003
+--- linux/kernel/ksyms.c~vfs_intent-2.4.20-hp	2003-07-30 18:10:05.000000000 +0800
++++ linux-root/kernel/ksyms.c	2003-07-30 18:10:09.000000000 +0800
 @@ -296,6 +296,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1756,8 +1749,8 @@
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
---- linux/kernel/fork.c~vfs_intent-2.4.20-hp	Sat Jul 12 14:04:49 2003
-+++ linux-mmonroe/kernel/fork.c	Sat Jul 12 14:05:24 2003
+--- linux/kernel/fork.c~vfs_intent-2.4.20-hp	2003-05-29 03:14:31.000000000 +0800
++++ linux-root/kernel/fork.c	2003-07-30 18:10:09.000000000 +0800
 @@ -388,10 +388,13 @@ static inline struct fs_struct *__copy_f
  		fs->umask = old->umask;
  		read_lock(&old->lock);
@@ -1772,8 +1765,8 @@
  			fs->altrootmnt = mntget(old->altrootmnt);
  			fs->altroot = dget(old->altroot);
  		} else {
---- linux/kernel/exit.c~vfs_intent-2.4.20-hp	Sat Jul 12 14:04:49 2003
-+++ linux-mmonroe/kernel/exit.c	Sat Jul 12 14:05:24 2003
+--- linux/kernel/exit.c~vfs_intent-2.4.20-hp	2003-05-29 03:14:31.000000000 +0800
++++ linux-root/kernel/exit.c	2003-07-30 18:10:09.000000000 +0800
 @@ -239,11 +239,14 @@ static inline void __put_fs_struct(struc
  {
  	/* No need to hold fs->lock if we are killing it */
