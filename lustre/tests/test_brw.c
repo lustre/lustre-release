@@ -94,7 +94,12 @@ int main(int argc, char **argv)
         count = strtoul(argv[3], 0, 0);
 	len = pg_vec * BLOCKSIZE;
 	end = (long long)count * len;
-        printf("directio on %s for %ldx%ld pages \n", argv[1], count, pg_vec);
+
+	if (argc == 5)
+		objid = strtoul(argv[4], 0, 0);
+
+        printf("directio on %s(%ld) for %ldx%ld pages \n",
+	       argv[1], objid, count, pg_vec);
 
         buf = mmap(0, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, 0, 0);
         if (!buf) {
