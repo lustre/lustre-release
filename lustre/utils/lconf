@@ -2228,8 +2228,7 @@ def doHost(lustreDB, hosts):
         if node_db:
             break
     if not node_db:
-        print 'No host entry found.'
-        return
+        panic('No host entry found.')
 
     local_node_name = node_db.get_val('name', 0)
     is_router = node_db.get_val_int('router', 0)
