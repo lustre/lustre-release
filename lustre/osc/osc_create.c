@@ -1,6 +1,4 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
- *
+/*
  *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
  *   Author Peter Braam <braam@clusterfs.com>
  *
@@ -73,54 +71,57 @@ struct osc_created {
         wait_queue_head_t osccd_ctl_waitq;   /* insmod rmmod sleep on this */
         spinlock_t osccd_lock;
         int osccd_flags;
-	struct task_struct *osccd_thread;
-	struct list_head osccd_list_head;
+        struct task_struct *osccd_thread;
+        struct list_head osccd_list_head;
 };
 
 
-#define OSCCD_STOPPING  	0x1
-#define OSCCD_STOPPED   	0x2
-#define OSCCD_RUNNING   	0x4
-#define OSCCD_KICKED    	0x8
-#define OSCCD_PRECREATED 	0x10
+#define OSCCD_STOPPING          0x1
+#define OSCCD_STOPPED           0x2
+#define OSCCD_RUNNING           0x4
+#define OSCCD_KICKED            0x8
+#define OSCCD_PRECREATED         0x10
 
 
 static struct osc_created osc_created;
 
 static int osc_precreate(struct osc_creator *oscc, struct osc_created *osccd, int wait)
 {
-	int rc = 0;
+        int rc = 0;
         struct l_wait_info lwi = { 0 };
 
-	if (oscc->oscc_last_id  - oscc->oscc_next_id >=
-	    oscc->oscc_kick_barrier)
-		RETURN(0);
+        if (oscc->oscc_last_id  - oscc->oscc_next_id >=
+            oscc->oscc_kick_barrier)
+                RETURN(0);
 
-	spin_lock(&osccd->osccd_lock);
-	if (!(osccd->osccd_flags & OSCCD_KICKED)) {
-		osccd->osccd_flags |= OSCCD_KICKED;
-		list_add(&oscc->oscc_list, &osccd->osccd_list_head);
-		wake_up(&osccd->osccd_waitq);
-	}
-	spin_unlock(&osccd->osccd_lock);
-	
-	/* an MDS using this call may time out on this. This is a
-	 *  recovery style wait.
-	 */
-	if (wait)
-		rc =l_wait_event(oscc->oscc_waitq, 1, &lwi);
-	RETURN(rc);
+        spin_lock(&osccd->osccd_lock);
+        if (!(osccd->osccd_flags & OSCCD_KICKED)) {
+                osccd->osccd_flags |= OSCCD_KICKED;
+                list_add(&oscc->oscc_list, &osccd->osccd_list_head);
+                wake_up(&osccd->osccd_waitq);
+        }
+        spin_unlock(&osccd->osccd_lock);
+        
+        /* an MDS using this call may time out on this. This is a
+         *  recovery style wait.
+         */
+        if (wait)
+                rc =l_wait_event(oscc->oscc_waitq, 
+                                 oscc->oscc_last_id - oscc->oscc_next_id > 0,
+                                 &lwi);
+                
+        RETURN(rc);
 }
 
 int osc_create(struct lustre_handle *exph, struct obdo *oa,
-	       struct lov_stripe_md **ea, struct obd_trans_info *oti)
+               struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct lov_stripe_md *lsm;
-	struct obd_export *export = class_conn2export(exph);
-	struct osc_creator *oscc = &export->u.eu_osc_data.oed_oscc;
-	struct osc_created *osccd = oscc->oscc_osccd;
+        struct obd_export *export = class_conn2export(exph);
+        struct osc_creator *oscc = &export->u.eu_osc_data.oed_oscc;
+        struct osc_created *osccd = oscc->oscc_osccd;
         int rc;
-	int try_again = 1;
+        int try_again = 1;
         ENTRY;
 
         LASSERT(oa);
@@ -133,20 +134,19 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
                         RETURN(rc);
         }
 
-	while (try_again) {
-		spin_lock(&oscc->oscc_lock);
-		if (oscc->oscc_last_id > oscc->oscc_next_id) {
-			oa->o_id = oscc->oscc_next_id;
-			memcpy(oa, &oscc->oscc_oa, sizeof(*oa));
-			lsm->lsm_object_id = oscc->oscc_next_id;
-			*ea = lsm;
-
-			oscc->oscc_next_id++;
-			try_again = 0;
-		} 
-		spin_unlock(&oscc->oscc_lock);
-		rc = osc_precreate(oscc, osccd, try_again);
-	}
+        while (try_again) {
+                spin_lock(&oscc->oscc_lock);
+                if (oscc->oscc_last_id > oscc->oscc_next_id) {
+                        oa->o_id = oscc->oscc_next_id;
+                        memcpy(oa, &oscc->oscc_oa, sizeof(*oa));
+                        lsm->lsm_object_id = oscc->oscc_next_id;
+                        *ea = lsm;
+                        oscc->oscc_next_id++;
+                        try_again = 0;
+                } 
+                spin_unlock(&oscc->oscc_lock);
+                rc = osc_precreate(oscc, osccd, try_again);
+        }
 
         if (rc && !*ea)
                 obd_free_memmd(exph, &lsm);
@@ -155,23 +155,25 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
 
 void osccd_do_create(struct osc_created *osccd)
 {
-	struct list_head *tmp;
+        struct list_head *tmp;
 
  next:
-	spin_lock(&osccd->osccd_lock);
+        spin_lock(&osccd->osccd_lock);
         list_for_each (tmp, &osccd->osccd_list_head) {
-		struct osc_creator *oscc = list_entry(tmp, struct osc_creator, 
-						      oscc_list);
-		list_del(&oscc->oscc_list);
-		spin_unlock(&osccd->osccd_lock);
-		
-		oscc->oscc_status = osc_real_create(oscc->oscc_exph, 
-						    &oscc->oscc_oa,
-						    &oscc->oscc_ea,
-						    NULL);
-		wake_up(&oscc->oscc_waitq);
-		goto next;
-	}
+                struct osc_creator *oscc = list_entry(tmp, struct osc_creator, 
+                                                      oscc_list);
+                list_del(&oscc->oscc_list);
+                spin_unlock(&osccd->osccd_lock);
+                
+                oscc->oscc_status = osc_real_create(oscc->oscc_exph, 
+                                                    &oscc->oscc_oa,
+                                                    &oscc->oscc_ea,
+                                                    NULL);
+                oscc->oscc_last_id = oscc->oscc_oa.o_id;
+		osccd->osccd_flags &= ~OSCCD_KICKED;
+                wake_up(&oscc->oscc_waitq);
+                goto next;
+        }
 }
 
 
@@ -200,7 +202,7 @@ static int osccd_main(void *arg)
                 struct l_wait_info lwi = { 0 };
                 l_wait_event(osccd->osccd_waitq,
                              osccd->osccd_flags & (OSCCD_STOPPING|OSCCD_KICKED),
-			     &lwi);
+                             &lwi);
 
                 spin_lock(&osccd->osccd_lock);
                 if (osccd->osccd_flags & OSCCD_STOPPING) {
@@ -209,10 +211,10 @@ static int osccd_main(void *arg)
                         break;
                 }
 
-		if (osccd->osccd_flags & OSCCD_KICKED) {
+                if (osccd->osccd_flags & OSCCD_KICKED) {
                         spin_unlock(&osccd->osccd_lock);
-			osccd_do_create(osccd);
-		}
+                        osccd_do_create(osccd);
+                }
                 CERROR("create daemon woken up - FIXME\n");
                 spin_unlock(&osccd->osccd_created_lock);
         }
@@ -226,24 +228,26 @@ static int osccd_main(void *arg)
 
 void oscc_init(struct lustre_handle *exph)
 {
-	struct obd_export *exp = class_conn2export(exph);
-	struct osc_export_data *oed = &exp->exp_osc_data;
+        struct obd_export *exp = class_conn2export(exph);
+        struct osc_export_data *oed = &exp->exp_osc_data;
 
-	memset(oed, 0, sizeof(*oed));
-	init_waitqueue_head(&oed->oed_oscc.oscc_waitq);
-	oed->oed_oscc.oscc_exph = exph;
+        memset(oed, 0, sizeof(*oed));
+        init_waitqueue_head(&oed->oed_oscc.oscc_waitq);
+        oed->oed_oscc.oscc_exph = exph;
+        oed->oed_oscc.oscc_osccd = &osc_created;
+        oed->oed_oscc.oscc_kick_barrier = 1;
 }
 
 int osccd_setup(void)
 {
-	struct osc_created *osccd = &osc_created;
+        struct osc_created *osccd = &osc_created;
         int rc;
         struct l_wait_info lwi = { 0 };
         ENTRY;
 
-	INIT_LIST_HEAD(&osccd->osccd_list_head);
-	init_waitqueue_head(&osccd->osccd_ctl_waitq);
-	init_waitqueue_head(&osccd->osccd_waitq);
+        INIT_LIST_HEAD(&osccd->osccd_list_head);
+        init_waitqueue_head(&osccd->osccd_ctl_waitq);
+        init_waitqueue_head(&osccd->osccd_waitq);
         rc = kernel_thread(osccd_main, osccd,
                            CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0) {
@@ -256,7 +260,7 @@ int osccd_setup(void)
 
 int osccd_cleanup(void)
 {
-	struct osc_created *osccd = &osc_created;
+        struct osc_created *osccd = &osc_created;
         struct l_wait_info lwi = { 0 };
         spin_lock(&osccd->osccd_lock);
         osccd->osccd_flags = OSCCD_STOPPING;
