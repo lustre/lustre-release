@@ -23,21 +23,23 @@ fi
 
 need_file_there applied-patches
 CURRENT=$(mktemp /tmp/cmbd-XXXXXXXX)
+APPLY_FILE=$(mktemp /tmp/cmbd-XXXXXXXX)
 for FILE in `cat applied-patches`
 do
-	NEXT=$(mktemp /tmp/cmbd-XXXXXXXX)
-	if [ -f $P/patches/$FILE ] 
+	if [ -f $P/pc/$FILE.pc ]
 	then
-		combinediff $CURRENT $P/patches/$FILE > $NEXT
-	elif [ -f $P/patches/$FILE.patch ]
+		cat $P/pc/$FILE.pc >> $CURRENT	
+	elif [ -f $P/pc/$FILE ]
 	then
-		combinediff $CURRENT $P/patches/$FILE.patch > $NEXT
-	elif [ -f $FILE ]
-	then
-		combinediff $CURRENT $FILE > $NEXT
-	fi
-	rm $CURRENT
-	CURRENT=$NEXT
+		cat $P/pc/$FILE >> $CURRENT	
+	fi	
 done
+cat $CURRENT | sort -u > $APPLY_FILE
+echo > $1
+for FILE in `cat $APPLY_FILE`
+do
+	diff -uNp $FILE~orig $FILE >> $1 
+done
+rm -rf $APPLY_FILE 
+rm -rf $CURRENT
 
-mv $NEXT "$1"
