@@ -22,6 +22,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't dereference NULL reply buffer if mdc_close was never sent (2410)
 	- print nal/nid for unknown nid (3258)
 	- additional checks for oscc recovery before doing precreate (3284)
+	- zero i_rdev for non-device files (3147)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
 	- increase maximum number of MDS request buffers for large systems

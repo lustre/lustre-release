@@ -1131,6 +1131,7 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         LTIME_S(inode->i_mtime) = 0;
         LTIME_S(inode->i_atime) = 0;
         LTIME_S(inode->i_ctime) = 0;
+        inode->i_rdev = 0;
         ll_update_inode(inode, md->body, md->lsm);
 
         /* OIDEBUG(inode); */
