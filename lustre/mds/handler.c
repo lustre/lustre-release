@@ -1093,16 +1093,20 @@ err_dec:
         return rc;
 }
 
-static int mds_cleanup(struct obd_device * obddev)
+static int mds_cleanup(struct obd_device *obddev)
 {
         struct super_block *sb;
         struct mds_obd *mds = &obddev->u.mds;
 
         ENTRY;
 
-        if ( !list_empty(&obddev->obd_exports) ) {
-                CERROR("still has exports!\n");
-                RETURN(-EBUSY);
+        if (!list_empty(&obddev->obd_exports)) {
+                CERROR("still has exports; forcing cleanup\n");
+                class_disconnect_all(obddev);
+                if (!list_empty(&obddev->obd_exports)) {
+                        CERROR("still has exports after forced cleanup?\n");
+                        RETURN(-EBUSY);
+                }
         }
 
         ptlrpc_stop_all_threads(mds->mds_service);

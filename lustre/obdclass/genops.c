@@ -341,6 +341,21 @@ int class_disconnect(struct lustre_handle *conn)
         RETURN(0);
 }
 
+void class_disconnect_all(struct obd_device *obddev)
+{
+        struct list_head *tmp, *next;
+
+        list_for_each_safe(tmp, next, &obddev->obd_exports) {
+                struct obd_export *export;
+                struct lustre_handle conn;
+
+                export = list_entry(tmp, struct obd_export, exp_chain);
+                conn.addr = (__u64) (unsigned long)export;
+                conn.cookie = export->exp_cookie;
+                obd_disconnect(&conn);
+        }
+}
+
 #if 0
 
 /* FIXME: Data is a space- or comma-separated list of device IDs.  This will

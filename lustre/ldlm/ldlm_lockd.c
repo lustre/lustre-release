@@ -18,6 +18,7 @@
 
 extern kmem_cache_t *ldlm_resource_slab;
 extern kmem_cache_t *ldlm_lock_slab;
+extern struct list_head ldlm_namespace_list;
 extern int (*mds_reint_p)(int offset, struct ptlrpc_request *req);
 extern int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req);
 
@@ -477,6 +478,11 @@ static int ldlm_cleanup(struct obd_device *obddev)
 {
         struct ldlm_obd *ldlm = &obddev->u.ldlm;
         ENTRY;
+
+        if (!list_empty(&ldlm_namespace_list)) {
+                CERROR("ldlm still has namespaces; clean these up first.\n");
+                RETURN(-EBUSY);
+        }
 
         ptlrpc_stop_all_threads(ldlm->ldlm_service);
         ptlrpc_unregister_service(ldlm->ldlm_service);
