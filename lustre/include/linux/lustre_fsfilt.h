@@ -79,8 +79,10 @@ extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 static inline void *fsfilt_start(struct obd_device *obd,
                                  struct inode *inode, int op)
 {
-        ENTRY;
-        return obd->obd_fsops->fs_start(inode, op);
+        void *handle;
+        handle = obd->obd_fsops->fs_start(inode, op);
+        CDEBUG(D_HA, "starting handle %p\n", handle);
+        return handle;
 }
 
 static inline void *fsfilt_brw_start(struct obd_device *obd, int objcount,
@@ -93,8 +95,8 @@ static inline void *fsfilt_brw_start(struct obd_device *obd, int objcount,
 static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
                                 void *handle)
 {
+        CDEBUG(D_HA, "committing handle %p\n", handle);
         return obd->obd_fsops->fs_commit(inode, handle);
-        EXIT;
 }
 
 static inline int fsfilt_setattr(struct obd_device *obd, struct dentry *dentry,
