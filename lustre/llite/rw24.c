@@ -73,6 +73,9 @@ void ll_complete_writepage_24(struct obd_client_page *ocp, int rc)
 static int ll_writepage_24(struct page *page)
 {
         struct obd_client_page *ocp;
+        struct obd_export *exp;
+        struct inode *inode = page->mapping->host;
+        int rc;
         ENTRY;
 
         LASSERT(!PageDirty(page));
@@ -86,7 +89,37 @@ static int ll_writepage_24(struct page *page)
         /* sadly, not all callers who writepage eventually call sync_page
          * (ahem, kswapd) so we need to raise this page's priority 
          * immediately */
-        RETURN(ll_sync_page(page));
+        rc = ll_sync_page(page);
+
+        if (rc != -EAGAIN)
+                goto out;
+
+        exp = ll_i2obdexp(inode);
+        if (exp == NULL) {
+                rc = -EINVAL;
+                goto out;
+        }
+
+        /* mmap writepage() gets here without coming through commit_write().
+         * so we just tried to raise the priority of an io that wasn't in
+         * flight.  try again.. */
+        ocp->ocp_io_completion = ll_complete_writeback;
+        ocp->ocp_set_io_ready = ll_ocp_set_io_ready;
+        ocp->ocp_update_io_args = ll_ocp_update_io_args;
+        ocp->ocp_update_obdo = ll_ocp_update_obdo;
+        ocp->ocp_brw_flag = OBD_BRW_CREATE;
+        ocp->ocp_flags = OCP_IO_READY|OCP_IO_URGENT;
+
+        rc = obd_queue_async_io(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, 
+                                NULL, ocp, NULL);
+        /* XXX fallback to sync?  probably, when the api is more robust */
+out:
+        if (rc != 0) {
+                SetPageError(page);
+                unlock_page(page);
+                RETURN(rc);
+        }
+        RETURN(0);
 }
 
 static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
