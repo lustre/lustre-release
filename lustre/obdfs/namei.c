@@ -577,7 +577,6 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 
 
 	child->i_op = &obdfs_inode_ops;
-	child->i_size = PAGE_SIZE;
 	child->i_blocks = 0;	
 	child_page = obdfs_getpage(child, 0, 1, LOCKED);
 	if (!child_page) {
@@ -586,7 +585,6 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 		iput (child);
 		return err;
 	}
-	child->i_blocks = PAGE_SIZE/child->i_sb->s_blocksize;
 
 	/* create . and .. */
 	de = (struct ext2_dir_entry_2 *) page_address(child_page);
@@ -604,6 +602,8 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	ext2_set_de_type(dir->i_sb, de, S_IFDIR);
 	
 	iops(dir)->o_brw(WRITE, iid(dir), child, child_page, 1);
+	child->i_blocks = PAGE_SIZE/child->i_sb->s_blocksize;
+	child->i_size = PAGE_SIZE;
 	UnlockPage(child_page);
 	page_cache_release(child_page);
 

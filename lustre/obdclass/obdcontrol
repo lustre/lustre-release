@@ -66,6 +66,8 @@ eval 'sub OBD_SNAP_SETTABLE () { &_IOC(3, ord(\'f\'), 40, 4);}' unless
 eval 'sub OBD_SNAP_PRINTTABLE () { &_IOC(3, ord(\'f\'), 41, 4);}' unless
   defined(&OBD_SNAP_PRINTTABLE);
 
+eval 'sub OBD_SNAP_RUNIT () { &_IOC(3, ord(\'f\'), 42, 4);}' unless
+  defined(&OBD_SNAP_RUNIT);
 eval 'sub OBD_EXT2_RUNIT () { &_IOC(3, ord(\'f\'), 61, 4);}' unless
   defined(&OBD_EXT2_RUNIT);
 
@@ -106,7 +108,8 @@ my %commands =
      'snapset' => {func => "SnapSetTable", doc => "snapset tableno file" },
      'snapprint' => {func => "SnapPrint", doc => "snapprint tableno"},
 
-     'testiterator' => {func => "TestIterator", doc => ""},
+     'testext2iterator' => {func => "TestExt2Iterator", doc => ""},
+     'testsnapiterator' => {func => "TestSnapIterator", doc => ""},
 
      'snaptable' => {func => "SnapShotTable", doc => "snaptable: build a snapshot table (interactive)"},
      'copy' => {func => "Copy", doc => "copy srcid tgtid"},
@@ -300,12 +303,11 @@ sub Detach {
 }
 
 
-
-sub TestIterator { 
+sub TestExt2Iterator { 
     my $err = 0;
     my $type = "ext2_obd";
  
-    $data = pack("i", 4711);
+    $data = pack("i", 4711); # bogus data
     $datalen = 4;
 
     my $len = length($type);
@@ -324,6 +326,32 @@ sub TestIterator {
 	print "ioctl returned error code $rc.\n";
     }
 }
+
+
+sub TestSnapIterator { 
+    my $err = 0;
+    my $type = "snap_obd";
+ 
+    $data = pack("i", 4711); # bogus data
+    $datalen = 4;
+
+    my $len = length($type);
+    my $cl = length($data);
+    my $add = pack("p", $data);
+    print "type $type (len $len), datalen $datalen ($cl)\n";
+    my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
+
+    my $rc = ioctl(DEV_OBD, &OBD_SNAP_RUNIT, $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	print "Finished (success)\n";
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
 
 sub SnapPrint { 
     my $err = 0;
@@ -408,11 +436,6 @@ sub SnapAttach {
     my $data;
     my $datalen = 0;
 
-#    if ( ! -f $file ) {
-#	print "No such file $file\n";
-#    }
-
-#    $table = ReadSnapShotTable($file);
     $data = pack("iii", $snapdev, $snapno, $tableno);
     $datalen = 3 * 4;
 

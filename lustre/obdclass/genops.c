@@ -200,7 +200,7 @@ void lck_page(struct page *page)
 }
 
 /* XXX this should return errors correctly, so should migrate!!! */
-int gen_copy_data(struct obd_conn *conn, obdattr *tgt, obdattr *src)
+int gen_copy_data(struct obd_conn *conn, obdattr *dst, obdattr *src)
 {
 	struct page *page;
 	unsigned long index = 0;
@@ -208,7 +208,7 @@ int gen_copy_data(struct obd_conn *conn, obdattr *tgt, obdattr *src)
 	ENTRY;
 
 	CDEBUG(D_INODE, "src: ino %ld blocks %ld, size %Ld, dst: ino %ld\n", 
-	       src->i_ino, src->i_blocks, src->i_size, tgt->i_ino);
+	       src->i_ino, src->i_blocks, src->i_size, dst->i_ino);
 	page = alloc_page(GFP_USER);
 	if ( !page ) {
 		EXIT;
@@ -224,17 +224,18 @@ int gen_copy_data(struct obd_conn *conn, obdattr *tgt, obdattr *src)
 
 		if ( rc != PAGE_SIZE ) 
 			break;
+		CDEBUG(D_INODE, "Read page %ld ...\n", page->index);
 
-		rc = OBP(conn->oc_dev,brw)(WRITE, conn, tgt, page, 1);
+		rc = OBP(conn->oc_dev, brw)(WRITE, conn, dst, page, 1);
 		if ( rc != PAGE_SIZE)
 			break;
 
-		CDEBUG(D_INODE, "Copied page %d ...\n", index);
+		CDEBUG(D_INODE, "Wrote page %ld ...\n", page->index);
 		
 		index ++;
 	}
-	tgt->i_size = src->i_size;
-	tgt->i_blocks = src->i_blocks;
+	dst->i_size = src->i_size;
+	dst->i_blocks = src->i_blocks;
 	UnlockPage(page);
 	__free_page(page);
 

@@ -13,9 +13,10 @@
 #define SNAP_MAX  8 
 
 
-/* ioctls for manipulating snapshots 40 - 50 */
-#define OBD_SNAP_SETTABLE           _IOWR('f', 40, long)
-#define OBD_SNAP_PRINTTABLE           _IOWR('f', 41, long)
+/* ioctls for manipulating snapshots 40 - 60 */
+#define OBD_SNAP_SETTABLE	_IOWR('f', 40, long)
+#define OBD_SNAP_PRINTTABLE	_IOWR('f', 41, long)
+#define OBD_SNAP_RUNIT		_IOWR('f', 42, long)
 
 
 
