@@ -364,33 +364,33 @@ void ll_put_super(struct super_block *sb)
         EXIT;
 } /* ll_put_super */
 
-void ll_clear_inode(struct inode *inode)
+
+void ll_unhash_inode(struct inode *inode)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
-        int rc;
+        struct ll_fid fid;
+        ENTRY;
+        
+        ll_inode2fid(&fid, inode);
+        mdc_change_cbdata(&sbi->ll_mdc_conn, &fid, NULL);
+
+        if (lli->lli_smd)
+                obd_change_cbdata(&sbi->ll_osc_conn, lli->lli_smd, NULL);
+        EXIT;
+}
+
+
+void ll_clear_inode(struct inode *inode)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
-        rc = ll_mdc_cancel_unused(&sbi->ll_mdc_conn, inode,
-                                  LDLM_FL_WARN | LDLM_FL_NO_CALLBACK, inode);
-        if (rc < 0) {
-                CERROR("ll_mdc_cancel_unused: %d\n", rc);
-                /* XXX FIXME do something dramatic */
-        }
-
-        if (atomic_read(&inode->i_count) != 0)
-                CERROR("clearing in-use inode %lu: count = %d\n",
-                       inode->i_ino, atomic_read(&inode->i_count));
 
         if (lli->lli_smd) {
-                rc = obd_cancel_unused(&sbi->ll_osc_conn, lli->lli_smd,
-                                       LDLM_FL_WARN, inode);
-                if (rc < 0) {
-                        CERROR("obd_cancel_unused: %d\n", rc);
-                        /* XXX FIXME do something dramatic */
-                }
                 obd_free_memmd(&sbi->ll_osc_conn, &lli->lli_smd);
                 lli->lli_smd = NULL;
         }
@@ -558,7 +558,6 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
-        struct timespec now = CURRENT_TIME;
         int ia_valid = attr->ia_valid;
         int rc = 0;
         ENTRY;
@@ -577,21 +576,21 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
         /* We mark all of the fields "set" so the MDS does not re-set them */
         if (ia_valid & ATTR_CTIME) {
-                attr->ia_ctime = now;
+                attr->ia_ctime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_CTIME_SET;
         }
         if (!(ia_valid & ATTR_ATIME_SET) && (ia_valid & ATTR_ATIME)) {
-                attr->ia_atime = now;
+                attr->ia_atime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_ATIME_SET;
         }
         if (!(ia_valid & ATTR_MTIME_SET) && (ia_valid & ATTR_MTIME)) {
-                attr->ia_mtime = now;
+                attr->ia_mtime = CURRENT_TIME;
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
 
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu, now = %lu\n",
-                       LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime), LTIME_S(now));
+                       LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime), LTIME_S(CURRENT_TIME));
         if (lsm)
                 attr->ia_valid &= ~ATTR_SIZE;
 
