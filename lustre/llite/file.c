@@ -264,7 +264,7 @@ int ll_lsm_getattr(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (rc)
                 RETURN(rc);
 
-        oa->o_valid &= (OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME | 
+        oa->o_valid &= (OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
                         OBD_MD_FLCTIME | OBD_MD_FLSIZE);
         RETURN(0);
 }
@@ -396,8 +396,8 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 page = find_get_page(inode->i_mapping, i);
                 if (page == NULL)
                         continue;
-                LL_CDEBUG_PAGE(D_PAGE, page, "lock page idx %lu ext "LPU64"\n",
-                               i, tmpex.l_extent.start);
+                LL_CDEBUG_PAGE(D_PAGE, page, "lock page off %llu ext "LPU64"\n",
+                               (long long)i << PAGE_SHIFT,tmpex.l_extent.start);
                 lock_page(page);
 
                 /* page->mapping to check with racing against teardown */
@@ -728,7 +728,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 RETURN(err);
 
         kms = lov_merge_size(lsm, 1);
-        if (policy.l_extent.end > kms) {
+        if (*ppos + count - 1 > kms) {
                 /* A glimpse is necessary to determine whether we return a short
                  * read or some zeroes at the end of the buffer */
                 struct ost_lvb lvb;
@@ -740,8 +740,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 inode->i_size = kms;
         }
 
-        CDEBUG(D_INFO, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
-               inode->i_ino, count, *ppos, inode->i_size);
+        CDEBUG(D_PAGE,"ino %lu count %lu offset %llu i_size %llu kms "LPU64"\n",
+               inode->i_ino, (long)count, *ppos, inode->i_size, kms);
 
         /* turn off the kernel's read-ahead */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -813,7 +813,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         if (*ppos + count > maxbytes)
                 count = maxbytes - *ppos;
 
-        CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
+        CDEBUG(D_PAGE, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
                inode->i_ino, count, *ppos);
 
         /* generic_file_write handles O_APPEND after getting i_sem */
@@ -842,7 +842,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         if (!capable (CAP_SYS_ADMIN))
                 RETURN(-EPERM);
 
-        rc = copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg, 
+        rc = copy_from_user(&ucreatp, (struct ll_recreate_obj *)arg,
                             sizeof(struct ll_recreate_obj));
         if (rc) {
                 RETURN(-EFAULT);
@@ -869,7 +869,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
                 RETURN(-ENOMEM);
         }
 
-        oa->o_id = ucreatp.lrc_id; 
+        oa->o_id = ucreatp.lrc_id;
         oa->o_nlink = ucreatp.lrc_ost_idx;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
         oa->o_flags |= OBD_FL_RECREATE_OBJS;
