@@ -7,7 +7,7 @@ AC_CANONICAL_SYSTEM
 # See the file COPYING in this distribution
 
 # Automake variables.  Steal the version number from lustre.spec.in.
-AM_INIT_AUTOMAKE(obd, builtin([esyscmd], [sed -ne '/^%define version /{ s/.*version //; p; q; }' scripts/lustre.spec.in]))
+AM_INIT_AUTOMAKE(lustre, builtin([esyscmd], [sed -ne '/^%define version /{ s/.*version //; p; q; }' scripts/lustre.spec.in]))
 #AM_MAINTAINER_MODE
 AC_PROG_CC
 AC_PROG_RANLIB

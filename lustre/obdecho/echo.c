@@ -11,6 +11,9 @@
  * by Peter Braam <braam@clusterfs.com>
  */
 
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.17 2002/07/05 20:05:27 rread Exp $";
+#define OBDECHO_VERSION "$Revision: 1.17 $"
+
 #define EXPORT_SYMTAB
 
 #include <linux/version.h>
@@ -184,8 +187,6 @@ struct obd_ops echo_obd_ops = {
         o_preprw:      echo_preprw,
         o_commitrw:    echo_commitrw,
 };
-
-#define OBDECHO_VERSION "$Revision: 1.16 $"
 
 static int __init obdecho_init(void)
 {

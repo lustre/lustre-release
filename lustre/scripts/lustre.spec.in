@@ -1,4 +1,4 @@
-# obd.spec
+# lustre.spec
 %define version 0.3.2.1
 %define kversion @RELEASE@
 %define linuxdir @LINUX@
@@ -12,7 +12,7 @@ Copyright: GPL
 Group: Utilities/System
 Requires: lustre-modules, libxml2
 BuildRoot: /var/tmp/obd-%{version}-root
-Source: ftp://ftp.lustre.com/pub/lustre/obd-%{version}.tar.gz
+Source: ftp://ftp.lustre.com/pub/lustre/lustre-%{version}.tar.gz
 
 %description
 The Lustre Lite Cluster File System: kernel drivers for file system,
@@ -34,7 +34,7 @@ Group: Development/Kernel
 Lustre Lite Source for further development
 
 %prep
-%setup -n obd-%{version}
+%setup -n lustre-%{version}
 
 %build
 rm -rf $RPM_BUILD_ROOT
@@ -55,7 +55,7 @@ find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/obd-%{version}
 
 %files
 %attr(-, root, root) %doc COPYING FDL
-%attr(-, root, root) %doc doc/master.pdf doc/lustre-HOWTO.txt
+%attr(-, root, root) %doc doc/lustre.pdf doc/lustre-HOWTO.txt
 %attr(-, root, root) /usr/sbin/obdctl
 %attr(-, root, root) /usr/sbin/lctl
 %attr(-, root, root) /usr/sbin/llsetup.sh
