@@ -47,13 +47,29 @@ int lustre_fread(struct file *file, char *str, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off);
 int lustre_fsync(struct file *file);
 
+#define ASSERT_MAX_SIZE_MB 50000ULL
+#define ASSERT_PAGE_INDEX(index, OP)                                    \
+do { if (index > ASSERT_MAX_SIZE_MB << (20 - PAGE_SHIFT)) {             \
+        CERROR("bad page index %lu > %Lu\n", index,                     \
+               ASSERT_MAX_SIZE_MB << (20 - PAGE_SHIFT));                \
+        portal_debug = ~0UL;                                            \
+        OP;                                                             \
+}} while(0)
+
+#define ASSERT_FILE_OFFSET(offset, OP)                                  \
+do { if (offset > ASSERT_MAX_SIZE_MB << 20) {                           \
+        CERROR("bad file offset %Lu > %Lu\n", offset,                   \
+               ASSERT_MAX_SIZE_MB << 20);                               \
+        portal_debug = ~0UL;                                            \
+        OP;                                                             \
+}} while(0)
+
 static inline void ll_sleep(int t)
 {
         set_current_state(TASK_INTERRUPTIBLE);
         schedule_timeout(t * HZ);
         set_current_state(TASK_RUNNING);
 }
-
 #endif
 
 #include <linux/portals_lib.h>
