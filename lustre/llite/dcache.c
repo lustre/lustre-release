@@ -194,8 +194,7 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
         it->it_op_release = ll_intent_release;
 }
 
-int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
-                     struct lookup_intent *it)
+int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
 {
         int rc;
         struct ll_fid pfid, cfid;
