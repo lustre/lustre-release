@@ -1,7 +1,7 @@
 Index: linux-2.4.20-rh/drivers/net/netconsole.c
 ===================================================================
 --- linux-2.4.20-rh.orig/drivers/net/netconsole.c	2003-07-22 16:02:23.000000000 +0800
-+++ linux-2.4.20-rh/drivers/net/netconsole.c	2003-10-30 06:52:41.000000000 +0800
++++ linux-2.4.20-rh/drivers/net/netconsole.c	2003-10-30 11:47:46.000000000 +0800
 @@ -12,6 +12,8 @@
   *
   * 2001-09-17    started by Ingo Molnar.
@@ -27,19 +27,20 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  
  #define MAX_UDP_CHUNK 1460
  #define MAX_PRINT_CHUNK (MAX_UDP_CHUNK-HEADER_LEN)
-@@ -426,13 +428,38 @@
- static spinlock_t sequence_lock = SPIN_LOCK_UNLOCKED;
- static unsigned int log_offset;
+@@ -188,6 +190,46 @@
+ 	}
+ }
  
-+/*for sysrq mode */
++static int thread_stopped = 0;
++/*Interrupt function for netdump */
++void (*irqfunc)(int, void *, struct pt_regs *);
 +static int sysrq_mode = 0;
 +static int stop_sysrq_thread = 0;
 +#define Set_Sysrq_mode()       (sysrq_mode = 1)
 +#define Clear_Sysrq_mode()     (sysrq_mode = 0)
-+static char send_cache[MAX_PRINT_CHUNK];
-+static unsigned int send_cache_pos = 0;
 +wait_queue_head_t sysrq_thread_queue;
 +wait_queue_head_t sysrq_thread_waiter_queue;
++
 +void netconsole_do_sysrq(req_t *req)
 +{
 +        struct pt_regs regs;
@@ -56,6 +57,46 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
 +	}
 +	Clear_Sysrq_mode();
 +}
++static void netdump_poll(struct net_device *dev)
++{
++	int budget = 1;
++
++	disable_irq(dev->irq);
++	
++	irqfunc(dev->irq, dev, 0);
++	
++	if(dev->poll && test_bit(__LINK_STATE_RX_SCHED, &dev->state))
++	        dev->poll(dev, &budget);
++
++	enable_irq(dev->irq);
++
++}
+ static struct sk_buff * alloc_netconsole_skb(struct net_device *dev, int len, int reserve)
+ {
+ 	int once = 1;
+@@ -209,7 +251,7 @@
+ 				once = 0;
+ 			}
+ 			Dprintk("alloc skb: polling controller ...\n");
+-			dev->poll_controller(dev);
++			netdump_poll(dev);
+ 			goto repeat;
+ 		}
+ 	}
+@@ -231,7 +273,7 @@
+ 		spin_unlock(&dev->xmit_lock);
+ 
+ 		Dprintk("xmit skb: polling controller ...\n");
+-		dev->poll_controller(dev);
++		netdump_poll(dev);
+ 		zap_completion_queue();
+ 		goto repeat_poll;
+ 	}
+@@ -426,18 +468,19 @@
+ static spinlock_t sequence_lock = SPIN_LOCK_UNLOCKED;
+ static unsigned int log_offset;
+ 
++
  static void write_netconsole_msg(struct console *con, const char *msg0, unsigned int msg_len)
  {
  	int len, left, i;
@@ -67,7 +108,13 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  	dev = netconsole_dev;
  	if (!dev || netdump_mode)
  		return;
-@@ -567,8 +594,6 @@
+ 
+-	if (dev->poll_controller && netif_running(dev)) {
++	if (netif_running(dev)) {
+ 		unsigned long flags;
+ 
+ 		__save_flags(flags);
+@@ -567,8 +610,6 @@
  	req_t *req;
  	struct net_device *dev;
  
@@ -76,7 +123,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  #if DEBUG
  	{
  		static int packet_count;
-@@ -722,8 +747,16 @@
+@@ -722,8 +763,16 @@
  	Dprintk("... netdump from:    %08x.\n", req->from);
  	Dprintk("... netdump to:      %08x.\n", req->to);
  
@@ -94,11 +141,36 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  	return NET_RX_DROP;
  }
  
-@@ -1009,6 +1042,33 @@
+@@ -763,6 +812,7 @@
+ 	kunmap_atomic(kaddr, KM_NETDUMP);
+ }
+ 
++
+ /*
+  * This function waits for the client to acknowledge the receipt
+  * of the netdump startup reply, with the possibility of packets
+@@ -792,7 +842,7 @@
+ 		// wait 1 sec.
+ 		udelay(100);
+ 		Dprintk("handshake: polling controller ...\n");
+-		dev->poll_controller(dev);
++		netdump_poll(dev);		
+ 		zap_completion_queue();
+ 		req = get_new_req();
+ 		if (req)
+@@ -904,7 +954,7 @@
+ 	while (netdump_mode) {
+ 		__cli();
+ 		Dprintk("main netdump loop: polling controller ...\n");
+-		dev->poll_controller(dev);
++		netdump_poll(dev);
+ 		zap_completion_queue();
+ #if !CLI
+ 		__sti();
+@@ -1009,6 +1059,32 @@
  	printk("NETDUMP END!\n");
  	__restore_flags(flags);
  }
-+static thread_stopped = 0;
 +static int netconsole_sysrq_schedule(void *arg) 
 +{
 +	struct task_struct *tsk = current;
@@ -128,7 +200,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  
  static char *dev;
  static int netdump_target_eth_byte0 = 255;
-@@ -1087,11 +1147,11 @@
+@@ -1087,11 +1163,12 @@
  
  static struct console netconsole =
  	 { flags: CON_ENABLED, write: write_netconsole_msg };
@@ -137,23 +209,43 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  {
  	struct net_device *ndev = NULL;
  	struct in_device *in_dev;
++ 	struct irqaction *action;
 +	int rc = 0;
  
  	printk(KERN_INFO "netlog: using network device <%s>\n", dev);
  	// this will be valid once the device goes up.
-@@ -1214,12 +1274,20 @@
+@@ -1101,10 +1178,12 @@
+ 		printk(KERN_ERR "netlog: network device %s does not exist, aborting.\n", dev);
+ 		return -1;
+ 	}
++#if 0
+ 	if (!ndev->poll_controller) {
+ 		printk(KERN_ERR "netlog: %s's network driver does not implement netlogging yet, aborting.\n", dev);
+ 		return -1;
+ 	}
++#endif
+ 	in_dev = in_dev_get(ndev);
+ 	if (!in_dev) {
+ 		printk(KERN_ERR "netlog: network device %s is not an IP protocol device, aborting.\n", dev);
+@@ -1214,12 +1293,27 @@
  
  	mhz_cycles = (unsigned long long)mhz * 1000000ULL;
  	jiffy_cycles = (unsigned long long)mhz * (1000000/HZ);
 -
 -	INIT_LIST_HEAD(&request_list);
 -
--	ndev->rx_hook = netconsole_rx_hook;
 +	
-+	ndev->rx_hook = netconsole_rx_hook;
+ 	ndev->rx_hook = netconsole_rx_hook;
  	netdump_func = netconsole_netdump;
  	netconsole_dev = ndev;
-+	
++	/* find irq function of the ndev*/
++	action=find_irq_action(ndev->irq, ndev);
++        if (!action) {
++		printk(KERN_ERR "couldn't find irq handler for <%s>", dev);
++		return -1;
++	}
++	irqfunc = action->handler;
++
 +	stop_sysrq_thread = 0;
 +	INIT_LIST_HEAD(&request_list);
 +	init_waitqueue_head(&sysrq_thread_queue);
@@ -166,7 +258,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.c
  #define STARTUP_MSG "[...network console startup...]\n"
  	write_netconsole_msg(NULL, STARTUP_MSG, strlen(STARTUP_MSG));
  
-@@ -1230,7 +1298,11 @@
+@@ -1230,7 +1324,11 @@
  
  static void cleanup_netconsole(void)
  {
@@ -197,7 +289,7 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.h
  	COMM_GET_REGS = 8,
  	COMM_SHOW_STATE = 9,
 +  	COMM_START_WRITE_NETDUMP_ACK = 10,
-+       COMM_SYSRQ = 11,
++        COMM_SYSRQ = 11,
  };
  
  #define NETDUMP_REQ_SIZE (8+4*4)
@@ -233,6 +325,31 @@ Index: linux-2.4.20-rh/drivers/net/netconsole.h
 +       regs->eip = (unsigned long)current_text_addr();
 +}
 +		
+Index: linux-2.4.20-rh/arch/i386/kernel/irq.c
+===================================================================
+--- linux-2.4.20-rh.orig/arch/i386/kernel/irq.c	2003-10-30 08:29:38.000000000 +0800
++++ linux-2.4.20-rh/arch/i386/kernel/irq.c	2003-10-30 08:30:13.000000000 +0800
+@@ -1043,7 +1043,20 @@
+ 	register_irq_proc(irq);
+ 	return 0;
+ }
++struct irqaction *find_irq_action(unsigned int irq, void *dev_id)
++{
++	struct irqaction *a, *r=0;
+ 
++	spin_lock_irq(&irq_desc[irq].lock);
++	for(a=irq_desc[irq].action; a; a=a->next) {
++		if(a->dev_id == dev_id) {
++			r=a;
++			break;
++		}
++	}
++	spin_unlock_irq(&irq_desc[irq].lock);
++	return r;
++}
+ 
+ static struct proc_dir_entry * root_irq_dir;
+ static struct proc_dir_entry * irq_dir [NR_IRQS];
 Index: linux-2.4.20-rh/net/core/dev.c
 ===================================================================
 --- linux-2.4.20-rh.orig/net/core/dev.c	2003-10-29 01:40:26.000000000 +0800
@@ -254,3 +371,36 @@ Index: linux-2.4.20-rh/net/core/dev.c
  	netdev_rx_stat[smp_processor_id()].total++;
  
  #ifdef CONFIG_NET_FASTROUTE
+Index: linux-2.4.20-rh/include/asm-i386/irq.h
+===================================================================
+--- linux-2.4.20-rh.orig/include/asm-i386/irq.h	2003-10-28 16:18:18.000000000 +0800
++++ linux-2.4.20-rh/include/asm-i386/irq.h	2003-10-30 10:24:49.000000000 +0800
+@@ -38,7 +38,7 @@
+ extern void disable_irq_nosync(unsigned int);
+ extern void enable_irq(unsigned int);
+ extern void release_x86_irqs(struct task_struct *);
+-
++extern struct irqaction *find_irq_action(unsigned int irq, void *dev_id);
+ #ifdef CONFIG_X86_LOCAL_APIC
+ #define ARCH_HAS_NMI_WATCHDOG		/* See include/linux/nmi.h */
+ #endif
+Index: linux-2.4.20-rh/arch/i386/kernel/i386_ksyms.c
+===================================================================
+--- linux-2.4.20-rh.orig/arch/i386/kernel/i386_ksyms.c	2003-10-28 19:44:57.000000000 +0800
++++ linux-2.4.20-rh/arch/i386/kernel/i386_ksyms.c	2003-10-30 11:14:55.000000000 +0800
+@@ -68,6 +68,7 @@
+ EXPORT_SYMBOL(iounmap);
+ EXPORT_SYMBOL(enable_irq);
+ EXPORT_SYMBOL(disable_irq);
++EXPORT_SYMBOL(find_irq_action);
+ EXPORT_SYMBOL(disable_irq_nosync);
+ EXPORT_SYMBOL(probe_irq_mask);
+ EXPORT_SYMBOL(kernel_thread);
+@@ -199,7 +200,6 @@
+ EXPORT_SYMBOL(edd);
+ EXPORT_SYMBOL(eddnr);
+ #endif
+-
+ EXPORT_SYMBOL_GPL(show_mem);
+ EXPORT_SYMBOL_GPL(show_state);
+ EXPORT_SYMBOL_GPL(show_regs);
