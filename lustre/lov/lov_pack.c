@@ -59,8 +59,14 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
         int i;
         ENTRY;
 
-        if (lsm)
+        if (lsm) {
+                if (lsm->lsm_magic != LOV_MAGIC) {
+                        CERROR("bad mem LOV MAGIC: %#08x != %#08x\n",
+                               lsm->lsm_magic, LOV_MAGIC);
+                        RETURN(-EINVAL);
+                }
                 stripe_count = lsm->lsm_stripe_count;
+        }
 
         /* XXX LOV STACKING call into osc for sizes */
         lmm_size = lov_mds_md_size(ost_count);
@@ -90,6 +96,7 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
         /* XXX endianness */
         lmm->lmm_magic = (lsm->lsm_magic);
         lmm->lmm_object_id = (lsm->lsm_object_id);
+        LASSERT(lsm->lsm_object_id);
         lmm->lmm_stripe_size = (lsm->lsm_stripe_size);
         lmm->lmm_stripe_pattern = (lsm->lsm_stripe_pattern);
         lmm->lmm_stripe_offset = (lsm->lsm_stripe_offset);
@@ -97,9 +104,11 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
 
         /* Only fill in the object ids which we are actually using.
          * Assumes lmm_objects is otherwise zero-filled. */
-        for (i = 0, loi = lsm->lsm_oinfo; i < stripe_count; i++, loi++)
+        for (i = 0, loi = lsm->lsm_oinfo; i < stripe_count; i++, loi++) {
                 /* XXX call down to osc_packmd() to do the packing */
+                LASSERT(loi->loi_id);
                 lmm->lmm_objects[loi->loi_ost_idx].l_object_id = (loi->loi_id);
+        }
 
         RETURN(lmm_size);
 }
@@ -118,9 +127,15 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         int i;
         ENTRY;
 
-        if (lmm)
+        if (lmm) {
                 /* endianness */
+                if (lmm->lmm_magic != LOV_MAGIC) {
+                        CERROR("bad wire LOV MAGIC: %#08x != %#08x\n",
+                               lmm->lmm_magic, LOV_MAGIC);
+                        RETURN(-EINVAL);
+                }
                 stripe_count = (lmm->lmm_stripe_count);
+        }
 
         if (!stripe_count)
                 stripe_count = lov->desc.ld_default_stripe_count;
@@ -156,6 +171,7 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         ost_offset = lsm->lsm_stripe_offset = (lmm->lmm_stripe_offset);
         lsm->lsm_magic = (lmm->lmm_magic);
         lsm->lsm_object_id = (lmm->lmm_object_id);
+        LASSERT(lsm->lsm_object_id);
         lsm->lsm_stripe_size = (lmm->lmm_stripe_size);
         lsm->lsm_stripe_pattern = (lmm->lmm_stripe_pattern);
 
@@ -171,6 +187,7 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
                 loi->loi_ost_idx = ost_offset;
                 loi++;
         }
+        LASSERT(loi - lsm->lsm_oinfo == stripe_count);
 
         RETURN(lsm_size);
 }
