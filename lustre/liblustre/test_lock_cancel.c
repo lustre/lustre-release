@@ -79,6 +79,8 @@ int main(int argc, char *argv[])
 	int fd;
         long time1, time2;
 
+        __liblustre_setup_();
+
 	MPI_CHECK(MPI_Init(&argc, &argv), "MPI_Init()");
 	MPI_CHECK(MPI_Comm_size(MPI_COMM_WORLD, &numTasks), "MPI_Comm_size");
 	MPI_CHECK(MPI_Comm_rank(MPI_COMM_WORLD, &rank), "MPI_Comm_rank");
@@ -87,8 +89,6 @@ int main(int argc, char *argv[])
                 printf("this demo can't run on single node!\n");
                 goto cleanup;
         }
-
-        __liblustre_setup_();
 
 #if 1
 	portal_debug = 0;
