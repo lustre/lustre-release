@@ -351,13 +351,14 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         CERROR("OBD device %d still set up\n", obd->obd_minor);
                         GOTO(out, err=-EBUSY);
                 }
-                if (! (obd->obd_flags & OBD_ATTACHED) ) {
+                if (!(obd->obd_flags & OBD_ATTACHED) ) {
                         CERROR("OBD device %d not attached\n", obd->obd_minor);
                         GOTO(out, err=-ENODEV);
                 }
-                if ( !list_empty(&obd->obd_exports) ) {
-                        CERROR("OBD device %d has exports\n",
-                               obd->obd_minor);
+#warning FIXME: Mike, we probably need some sort of "force detach" here
+                if (!list_empty(&obd->obd_exports) ) {
+                        CERROR("OBD device %d (%p) has exports\n",
+                               obd->obd_minor, obd);
                         GOTO(out, err=-EBUSY);
                 }
 

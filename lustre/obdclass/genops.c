@@ -285,7 +285,7 @@ struct obd_export *class_new_export(struct obd_device *obddev)
         /* XXX should these be in MDS and LDLM init functions? */
         INIT_LIST_HEAD(&export->exp_mds_data.med_open_head);
         INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
-        list_add(&(export->exp_chain), &export->exp_obd->obd_exports);
+        list_add(&export->exp_chain, &export->exp_obd->obd_exports);
         return export;
 }
 
@@ -294,11 +294,9 @@ void class_destroy_export(struct obd_export *exp)
         int rc;
         ENTRY;
 
-        if (exp->exp_connection) {
-                spin_lock(&exp->exp_connection->c_lock);
-                list_del(&exp->exp_chain);
-                spin_unlock(&exp->exp_connection->c_lock);
-        }
+        //spin_lock(&exp->exp_connection->c_lock);
+        list_del(&exp->exp_chain);
+        //spin_unlock(&exp->exp_connection->c_lock);
 
         /* XXXshaver these bits want to be hung off the export, instead of
          * XXXshaver hard-coded here.
