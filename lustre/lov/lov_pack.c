@@ -234,8 +234,11 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
 
                 LMM_ASSERT(loi - lsm->lsm_oinfo < stripe_count);
                 /* XXX LOV STACKING call down to osc_unpackmd() */
-                loi->loi_id = le64_to_cpu (lmm->lmm_objects[ost_offset].l_object_id);
+                loi->loi_id =
+                        le64_to_cpu (lmm->lmm_objects[ost_offset].l_object_id);
                 loi->loi_ost_idx = ost_offset;
+                loi->loi_dirty_ot = &loi->loi_dirty_ot_inline;
+                ot_init(loi->loi_dirty_ot);
                 loi++;
         }
         LMM_ASSERT(loi - lsm->lsm_oinfo > 0);
