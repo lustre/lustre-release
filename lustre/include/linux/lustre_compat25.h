@@ -33,6 +33,13 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 
+/*
+ * OBD need working random driver, thus all our
+ * initialization routines must be called after device
+ * driver initialization
+ */
+#define module_init(a)     late_initcall(a)
+
 /* XXX our code should be using the 2.6 calls, not the other way around */
 #define TryLockPage(page)                TestSetPageLocked(page)
 #define filemap_fdatasync(mapping)       filemap_fdatawrite(mapping)
@@ -57,6 +64,14 @@
 #define ILOOKUP(sb, ino, test, data)    ilookup5(sb, ino, test, data);
 
 #include <linux/writeback.h>
+
+static inline void lustre_daemonize_helper(void)
+{
+        LASSERT(current->signal != NULL);
+        current->signal->session = 1;
+        current->signal->pgrp = 1;
+        current->signal->tty = NULL;
+}
 
 #else /* 2.4.. */
 
@@ -109,6 +124,13 @@ static inline void __d_drop(struct dentry *dentry)
 {
 	list_del(&dentry->d_hash);
 	INIT_LIST_HEAD(&dentry->d_hash);
+}
+
+static inline void lustre_daemonize_helper(void)
+{
+        current->session = 1;
+        current->pgrp = 1;
+        current->tty = NULL;
 }
 
 #endif /* end of 2.4 compat macros */
