@@ -29,6 +29,7 @@ char usage[] =
 "        s  stat\n"
 "        S  fstat\n"
 "        t  fchmod\n"
+"        T  ftruncate to zero\n"
 "        w  write\n"
 "        z  seek to zero\n";
 
@@ -115,9 +116,15 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
-                case 't': 
+                case 't':
                         if (fchmod(fd, 0) == -1) {
                                 perror("fchmod");
+                                exit(1);
+                        }
+                        break;
+                case 'T':
+                        if (ftruncate(fd, 0) == -1) {
+                                perror("ftruncate");
                                 exit(1);
                         }
                         break;
@@ -151,6 +158,6 @@ int main(int argc, char **argv)
                         exit(1);
                 }
         }
-        
+
         return 0;
 }
