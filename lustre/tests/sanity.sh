@@ -728,6 +728,14 @@ test_27g() {
 }
 run_test 27g "test lfind ======================================="
 
+test_27j() {
+        if [ ! -d $DIR/d27 ]; then
+                mkdir $DIR/d27
+        fi
+        $LSTRIPE $DIR/d27/f27j 8192 $STRIPECOUNT 1 && error || true
+}
+run_test 27j "lstripe with bad stripe offset (should return error)"
+
 test_28() {
 	mkdir $DIR/d28
 	$CREATETEST $DIR/d28/ct || error

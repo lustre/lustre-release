@@ -474,6 +474,13 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
                        lum.lmm_stripe_size, PAGE_SIZE);
                 RETURN(-EINVAL);
         }
+
+        if ((lum.lmm_stripe_offset >= lov->desc.ld_active_tgt_count) &&
+            (lum.lmm_stripe_offset != (typeof(lum.lmm_stripe_offset))(-1))) {
+                CDEBUG(D_IOCTL, "stripe offset %u > number of active OSTs %u\n",
+                       lum.lmm_stripe_offset, lov->desc.ld_active_tgt_count);
+                RETURN(-EINVAL);
+        }
         stripe_count = lov_get_stripecnt(lov, lum.lmm_stripe_count);
 
         if ((__u64)lum.lmm_stripe_size * stripe_count > ~0UL) {
