@@ -140,8 +140,9 @@ static int llwp_consume_page(struct ll_writeback_pages *llwp,
          */
         LASSERT(pg->count >= 0);
 
-        CDEBUG(D_CACHE, "brw_page %p: off "LPU64" cnt %d, page %p: ind %ld\n",
-                        pg, pg->off, pg->count, page, page->index);
+        CDEBUG(D_CACHE, "brw_page %p: off "LPU64" cnt %d, page %p: ind %ld"
+                        " i_size: "LPU64"\n", pg, pg->off, pg->count, page, 
+                        page->index, inode->i_size);
 
         if ( llwp->num_frags == 3 || llwp->num_pages == LLWP_MAX_PAGES )
                 return -1;
