@@ -436,11 +436,11 @@ Index: linux-2.4.19.SuSE/fs/namei.c
 +						  &dentry->d_name, 0, NULL);
 +				d_invalidate(dentry);
 +				dput(dentry);
-+                                if (IS_ERR(new)) { 
-+                                        err = PTR_ERR(new);
-+                                        break;
-+                                }
-+                                nd->dentry = new;
++				if (IS_ERR(new)) { 
++					err = PTR_ERR(new);
++					break;
++				}
++				nd->dentry = new;
 +			}
 +		} else
  		if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
@@ -1386,8 +1386,8 @@ Index: linux-2.4.19.SuSE/fs/stat.c
  {
  	struct inode * inode = dentry->d_inode;
 -	if (inode->i_op && inode->i_op->revalidate)
-+        if (!inode)
-+                return -ENOENT;
++	if (!inode)
++		return -ENOENT;
 +	if (inode->i_op && inode->i_op->revalidate_it)
 +		return inode->i_op->revalidate_it(dentry, it);
 +	else if (inode->i_op && inode->i_op->revalidate)
