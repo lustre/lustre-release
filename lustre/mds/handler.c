@@ -1349,7 +1349,6 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         struct dentry *new = NULL;
         struct dentry_params dp;
         int mealen, flags = 0, rc, size = sizeof(*repbody), cleanup_phase = 0;
-        unsigned int tmpname;
         struct lvfs_ucred uc;
         struct mea *mea;
         void *handle = NULL;
@@ -1413,8 +1412,7 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         cleanup_phase = 1; /* transaction */
 
 repeat:
-        tmpname = ll_insecure_random_int();
-        rc = sprintf(fidname, "%u", tmpname);
+        rc = sprintf(fidname, "%u.%u", ll_insecure_random_int(), current->pid);
         new = lookup_one_len(fidname, mds->mds_objects_dir, rc);
         if (IS_ERR(new)) {
                 CERROR("%s: can't lookup new inode (%s) for mkdir: %d\n",
