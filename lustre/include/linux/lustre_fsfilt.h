@@ -61,7 +61,8 @@ struct fsfilt_operations {
         int     (* fs_sync)(struct super_block *sb);
         int     (* fs_prep_san_write)(struct inode *inode, long *blocks,
                                       int nblocks, loff_t newsize);
-        int     (* fs_write_record)(struct file *, void *, int size, loff_t *);
+        int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
+                                    int force_sync);
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
 };
 
@@ -212,9 +213,10 @@ static inline int fsfilt_read_record(struct obd_device *obd, struct file *file,
 }
 
 static inline int fsfilt_write_record(struct obd_device *obd, struct file *file,
-                                      void *buf, loff_t size, loff_t *offs)
+                                      void *buf, loff_t size, loff_t *offs,
+                                      int force_sync)
 {
-        return obd->obd_fsops->fs_write_record(file, buf, size, offs);
+        return obd->obd_fsops->fs_write_record(file, buf, size,offs,force_sync);
 }
 
 #endif /* __KERNEL__ */
