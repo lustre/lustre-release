@@ -977,7 +977,7 @@ fi
 %defattr(-, root, root)
 /etc/openldap/slapd-lustre.conf
 /etc/openldap/schema/lustre.schema
-/usr/lib/lustre/lustre2ldif.xsl
-/usr/lib/lustre/top.ldif
+/usr/share/lustre/lustre2ldif.xsl
+/usr/share/lustre/top.ldif
 
 %endif # %{buildbase}
