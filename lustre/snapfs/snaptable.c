@@ -306,7 +306,7 @@ static int delete_inode(struct inode *primary, void *param)
 		my_table[slot - delete_slot] = table->snap_items[slot].index;
 	}
 	next_ind = snap_get_indirect 
-		(primary, my_table, table->tbl_count - delete_slot );
+		   (primary, my_table, table->tbl_count - delete_slot );
 	if (next_ind && (next_ind->i_ino == primary->i_ino)) {
 		iput(next_ind);
 		next_ind = NULL;
@@ -719,8 +719,7 @@ int snap_get_index_from_name(int tableno, char *name)
 	table = &snap_tables[tableno];
 
 	for ( slot = 0 ; slot < SNAP_MAX ; slot++ ) {
-		if(strncmp (&table->snap_items[slot].name[0], name, 
-			SNAP_MAX_NAMELEN) == 0 ) {
+		if (!strcmp(&table->snap_items[slot].name[0], name)) {
 			return table->snap_items[slot].index;
 		}
 	}
@@ -754,7 +753,7 @@ int snap_iterate_func( struct ioc_snap_tbl_data *data, unsigned int cmd)
 	sb = cache->cache_sb;
 	table = &snap_tables[tableno];
 	
-	index = get_index_of_item(table, data->snaps[0].name);
+	index = snap_get_index_from_name(tableno, data->snaps[0].name);
 	if (index < 0)
 		RETURN(-EINVAL);
 	
