@@ -28,7 +28,7 @@
 extern int request_in_callback(ptl_event_t *ev, void *data);
 extern int ptl_handled_rpc(struct ptlrpc_service *service, void *start);
 
-static int ptlrpc_check_event(struct ptlrpc_service *svc)
+static int ptlrpc_check_event(struct ptlrpc_service *svc, ptl_event_t *event)
 {
         int rc = 0;
         ENTRY;
@@ -46,7 +46,7 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
 
         if (ptl_is_valid_handle(&svc->srv_eq_h)) {
                 int err;
-                err = PtlEQGet(svc->srv_eq_h, &svc->srv_ev);
+                err = PtlEQGet(svc->srv_eq_h, event);
 
                 if (err == PTL_OK) {
                         svc->srv_flags |= SVC_EVENT;
@@ -139,7 +139,8 @@ err_free:
 }
 
 static int handle_incoming_request(struct obd_device *obddev,
-                                   struct ptlrpc_service *svc)
+                                   struct ptlrpc_service *svc,
+                                   ptl_event_t *event)
 {
         struct ptlrpc_request request;
         struct lustre_peer peer;
@@ -148,19 +149,18 @@ static int handle_incoming_request(struct obd_device *obddev,
 
         /* FIXME: If we move to an event-driven model, we should put the request
          * on the stack of mds_handle instead. */
-        start = svc->srv_ev.mem_desc.start;
+        start = event->mem_desc.start;
         memset(&request, 0, sizeof(request));
         request.rq_obd = obddev;
-        request.rq_reqmsg = (svc->srv_ev.mem_desc.start +
-                             svc->srv_ev.offset);
-        request.rq_reqlen = svc->srv_ev.mem_desc.length;
+        request.rq_reqmsg = event->mem_desc.start + event->offset;
+        request.rq_reqlen = event->mem_desc.length;
 
-        if (request.rq_reqmsg->xid != svc->srv_ev.match_bits)
+        if (request.rq_reqmsg->xid != event->match_bits)
                 LBUG();
 
         CDEBUG(D_NET, "got req %d\n", request.rq_reqmsg->xid);
 
-        peer.peer_nid = svc->srv_ev.initiator.nid;
+        peer.peer_nid = event->initiator.nid;
         /* FIXME: this NI should be the incoming NI.
          * We don't know how to find that from here. */
         peer.peer_ni = svc->srv_self.peer_ni;
@@ -227,7 +227,9 @@ static int ptlrpc_main(void *arg)
 
         /* And now, loop forever on requests */
         while (1) {
-                wait_event(svc->srv_waitq, ptlrpc_check_event(svc));
+                ptl_event_t event;
+
+                wait_event(svc->srv_waitq, ptlrpc_check_event(svc, &event));
 
                 spin_lock(&svc->srv_lock);
                 if (svc->srv_flags & SVC_SIGNAL) {
@@ -246,7 +248,7 @@ static int ptlrpc_main(void *arg)
                 
                 if (svc->srv_flags & SVC_EVENT) { 
                         svc->srv_flags &= ~SVC_EVENT;
-                        rc = handle_incoming_request(obddev, svc);
+                        rc = handle_incoming_request(obddev, svc, &event);
                         continue;
                 }
 

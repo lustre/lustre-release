@@ -219,7 +219,6 @@ struct ptlrpc_service {
 
         spinlock_t srv_lock;
         struct list_head srv_reqs;
-        ptl_event_t  srv_ev;
         int (*srv_handler)(struct obd_device *obddev, 
                            struct ptlrpc_service *svc,
                            struct ptlrpc_request *req);

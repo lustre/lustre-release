@@ -10,6 +10,7 @@ PORT=1234
 
 setup_portals
 setup_lustre
+read
 
 $OBDCTL <<EOF
 device 0
