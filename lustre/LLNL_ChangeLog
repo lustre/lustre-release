@@ -1,4 +1,8 @@
 2003-08-05  Brian Behlendorf  <behlendorf1@llnl.gov>
+       * version llnl_2devel
+       * landed b_multinet on b_llnl_devel and tagged as llnl_2devel
+
+2003-08-05  Brian Behlendorf  <behlendorf1@llnl.gov>
        * version llnl_1devel
        * initial b_llnl_devel branch creation from HEAD on 2003-8-1
        * bug fixes
