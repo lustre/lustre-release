@@ -46,6 +46,7 @@ void recovd_cli_fail(struct ptlrpc_client *cli)
         EXIT;
 }
 
+/* this function must be called with cli->cli_lock held */
 void recovd_cli_fixed(struct ptlrpc_client *cli)
 {
         ENTRY;
@@ -107,7 +108,6 @@ static int recovd_check_event(struct recovd_obd *recovd)
 static int recovd_handle_event(struct recovd_obd *recovd)
 {
         ENTRY;
-        spin_lock(&recovd->recovd_lock);
 
         if (!(recovd->recovd_flags & RECOVD_UPCALL_WAIT) &&
             recovd->recovd_flags & RECOVD_FAIL) { 
@@ -127,26 +127,26 @@ static int recovd_handle_event(struct recovd_obd *recovd)
         }
 
         if (recovd->recovd_flags & RECOVD_UPCALL_ANSWER) { 
-                struct list_head *tmp, *pos;
                 CERROR("UPCALL_WAITING: upcall answer\n");
                 CERROR("** fill me in with recovery\n");
 
-                list_for_each_safe(tmp, pos, &recovd->recovd_troubled_lh) { 
-                        struct ptlrpc_client *cli = list_entry
-                                (tmp, struct ptlrpc_client, cli_ha_item);
+                while (!list_empty(&recovd->recovd_troubled_lh)) {
+                        struct ptlrpc_client *cli =
+                                list_entry(recovd->recovd_troubled_lh.next,
+                                           struct ptlrpc_client, cli_ha_item);
 
                         list_del(&cli->cli_ha_item); 
-                        spin_unlock(&recovd->recovd_lock);
-                        if (cli->cli_recover)
+                        if (cli->cli_recover) {
+                                spin_unlock(&recovd->recovd_lock);
                                 cli->cli_recover(cli); 
-                        spin_lock(&recovd->recovd_lock);
+                                spin_lock(&recovd->recovd_lock);
+                        }
                 }
 
                 recovd->recovd_timeout = 0;
                 recovd->recovd_flags = RECOVD_IDLE; 
         }
 
-        spin_unlock(&recovd->recovd_lock);
         RETURN(0);
 }
 
