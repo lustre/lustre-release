@@ -154,42 +154,49 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         if (dentry->d_name.len > EXT2_NAME_LEN)
                 RETURN(ERR_PTR(-ENAMETOOLONG));
 
+        if (it->it_op == IT_RENAME2)
+                /* Set below to be the old dentry from the IT_RENAME intent */
+                inode = ((struct dentry *)(it->it_data))->d_inode;
+
         err = ll_lock(dir, dentry, it, &lockh);
         if (err < 0)
                 RETURN(ERR_PTR(err));
         memcpy(it->it_lock_handle, &lockh, sizeof(lockh));
 
+        request = (struct ptlrpc_request *)it->it_data;
         if (it->it_disposition) {
                 offset = 1;
                 if (it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) {
                         /* For create ops, we want the lookup to be negative */
-                        request = (struct ptlrpc_request *)it->it_data;
                         if (!it->it_status)
                                 GOTO(negative, NULL);
-                        //else
-                        //        GOTO(err, it->it_status);
-                } else if (it->it_op & (IT_RENAME | IT_GETATTR | IT_UNLINK |
+                } else if (it->it_op & (IT_GETATTR | IT_UNLINK |
                                         IT_RMDIR | IT_SETATTR | IT_LOOKUP)) {
                         /* For remove/check, we want the lookup to succeed */
-                        request = (struct ptlrpc_request *)it->it_data;
+                        it->it_data = NULL;
                         if (it->it_status)
                                 GOTO(neg_req, NULL);
-                        //else
-                        //        GOTO(err, it->it_status);
+                } else if (it->it_op & IT_RENAME) {
+                        if (it->it_status) {
+                                it->it_data = NULL;
+                                GOTO(neg_req, NULL);
+                        }
+                        it->it_data = dentry;
                 } else if (it->it_op == IT_OPEN) {
-                        request = (struct ptlrpc_request *)it->it_data;
+                        it->it_data = NULL;
                         if (it->it_status && it->it_status != -EEXIST)
                                 GOTO(neg_req, NULL);
                 } else if (it->it_op == IT_RENAME2) {
-                        /* Set below to be a dentry from the IT_RENAME op */
-                        inode = ((struct dentry *)(it->it_data))->d_inode;
+                        /* FIXME: make old_de negative, and drop
+                         *        new_de->d_inode if needed.
+                         */
+                        it->it_data = NULL;
                         GOTO(out_req, NULL);
                 }
         } else {
                 struct ll_inode_info *lli = ll_i2info(dir);
                 int type;
 
-                request = (struct ptlrpc_request *)it->it_data;
                 memcpy(&lli->lli_intent_lock_handle, &lockh, sizeof(lockh));
                 offset = 0;
 
@@ -215,20 +222,16 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
 
         /* No rpc's happen during iget4, -ENOMEM's are possible */
         inode = iget4(dir->i_sb, ino, ll_find_inode, &md);
-        if (it->it_op & IT_RENAME)
-                it->it_data = dentry;
 
  out_req:
         if (!inode || IS_ERR(inode)) {
                 ptlrpc_free_req(request);
-                request = it->it_data = NULL;
                 ll_intent_release(dentry);
                 RETURN(inode ? (struct dentry *)inode : ERR_PTR(-ENOMEM));
         }
         EXIT;
  neg_req:
         ptlrpc_free_req(request);
-        request = it->it_data = NULL;
  negative:
         dentry->d_op = &ll_d_ops;
         d_add(dentry, inode);
@@ -414,7 +417,6 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         RETURN(rc);
 
 out_destroy:
-#warning FIXME: what about ii???
         oa.o_easize = ii->lli_smd->lmd_easize;
         err = obd_destroy(ll_i2obdconn(dir), &oa, ii->lli_smd);
         if (err)

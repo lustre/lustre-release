@@ -48,6 +48,7 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
 {
         ENTRY;
 
+        /* for debugging purposes, we currently always force client re-get */
         RETURN(0);
 }
 
