@@ -154,6 +154,7 @@ int ll_extent_unlock(struct ll_file_data *, struct inode *,
                      struct lov_stripe_md *, int mode, struct lustre_handle *);
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
+int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_extent_lock_no_validate(struct ll_file_data *, struct inode *,
                                struct lov_stripe_md *, int mode,
                                struct ldlm_extent *, struct lustre_handle *,
