@@ -1157,10 +1157,12 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                                  parent_lock, type, &sub_ext, sizeof(sub_ext),
                                  mode, flags, cb, data, datalen, &(lockhs[i]));
                 // XXX add a lock debug statement here
-                if (rc)
+                if (rc) {
                         CERROR("Error enqueue objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
                                loi->loi_id, loi->loi_ost_idx, rc);
+                        memset(&(lockhs[i]), 0, sizeof(lockhs[i]));
+                }
         }
         RETURN(rc);
 }

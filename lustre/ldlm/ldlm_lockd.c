@@ -606,8 +606,10 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
                                 LDLM_CB_REPLY_PORTAL, "self",
                                 ldlm_callback_handler, "ldlm_cbd");
 
-        if (!ldlm->ldlm_cb_service)
+        if (!ldlm->ldlm_cb_service) {
+                CERROR("failed to start service\n");
                 GOTO(out_proc, rc = -ENOMEM);
+        }
 
         ldlm->ldlm_cancel_service =
                 ptlrpc_init_svc(LDLM_NEVENTS, LDLM_NBUFS, LDLM_BUFSIZE,
@@ -615,8 +617,10 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
                                 LDLM_CANCEL_REPLY_PORTAL, "self",
                                 ldlm_cancel_handler, "ldlm_canceld");
 
-        if (!ldlm->ldlm_cancel_service)
+        if (!ldlm->ldlm_cancel_service) {
+                CERROR("failed to start service\n");
                 GOTO(out_proc, rc = -ENOMEM);
+        }
 
         for (i = 0; i < LDLM_NUM_THREADS; i++) {
                 char name[32];

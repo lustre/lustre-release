@@ -298,8 +298,7 @@ static void ll_clear_inode(struct inode *inode)
         }
 
         if (lli->lli_smd) {
-                rc = obd_cancel_unused(&sbi->ll_osc_conn, lli->lli_smd,
-                                       LDLM_FL_NO_CALLBACK);
+                rc = obd_cancel_unused(&sbi->ll_osc_conn, lli->lli_smd, 0);
                 if (rc < 0) {
                         CERROR("obd_cancel_unused: %d\n", rc);
                         /* XXX FIXME do something dramatic */

@@ -15,6 +15,7 @@ TBD
 	  - data locks weren't cancelled at clear_inode time (290, 311)
 	  - intent locks could lead to unbounded lock growth (205)
 	  - added a maximum lock count, an LRU list, and a flusher
+	  - fix multiple rename (365)
 	* protocol change
           - Add capability to MDS protocol
 	  - LDLM cancellations and callbacks on different portals
