@@ -1,7 +1,9 @@
 #!/bin/sh
 # suggested boilerplate for test script
 
-LCONF=${LCONF:-../utils/lconf}
+export PATH=`dirname $0`/../utils:$PATH
+
+LCONF=${LCONF:-lconf}
 NAME=${NAME:-local}
 
 config=$NAME.xml
@@ -28,7 +30,5 @@ if [ "$1" = "-v" ]; then
   verbose="-v"
 fi
 
-[ -x $LCONF ] || chmod a+rx $LCONF
-
-${LCONF} $portals_opt $lustre_opt $node_opt --reformat --gdb \
+${LCONF} $portals_opt $lustre_opt $node_opt ${REFORMAT:---reformat} --gdb \
     $verbose $conf_opt  || exit 2

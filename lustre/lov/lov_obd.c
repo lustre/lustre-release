@@ -30,6 +30,7 @@
 #include <linux/init.h>
 #include <linux/random.h>
 #include <linux/slab.h>
+#include <linux/pagemap.h>
 #include <asm/div64.h>
 #else
 #include <liblustre.h>
@@ -503,23 +504,16 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct obd_ioctl_data *data = buf;
         struct lov_obd *lov = &obd->u.lov;
-        struct obd_uuid uuid;
         int rc = 0;
         ENTRY;
 
         if (data->ioc_inllen1 < 1) {
-                CERROR("LOV setup requires an MDC UUID\n");
-                RETURN(-EINVAL);
-        }
-
-        if (data->ioc_inllen1 > 37) {
-                CERROR("mdc UUID must be 36 characters or less\n");
+                CERROR("LOV setup requires an MDC name\n");
                 RETURN(-EINVAL);
         }
 
         spin_lock_init(&lov->lov_lock);
-        obd_str2uuid(&uuid, data->ioc_inlbuf1);
-        lov->mdcobd = class_uuid2obd(&uuid);
+        lov->mdcobd = class_name2obd(data->ioc_inlbuf1);
         if (!lov->mdcobd) {
                 CERROR("LOV %s cannot locate MDC %s\n", obd->obd_uuid.uuid,
                        data->ioc_inlbuf1);
@@ -669,9 +663,11 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                 CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64" at idx %d\n",
                        lsm->lsm_object_id, loi->loi_id, ost_idx);
 
-                if (!set)
+                if (set == 0)
                         lsm->lsm_stripe_offset = ost_idx;
                 lov_merge_attrs(oa, tmp, OBD_MD_FLBLKSZ, lsm, obj_alloc, &set);
+                ot_init(&loi->loi_dirty_ot_inline);
+                loi->loi_dirty_ot = &loi->loi_dirty_ot_inline;
 
                 ++obj_alloc;
                 ++loi;
@@ -736,6 +732,21 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         goto out_tmp;
 }
 
+#define lsm_bad_magic(LSMP)                                     \
+({                                                              \
+        struct lov_stripe_md *_lsm__ = (LSMP);                  \
+        int _ret__ = 0;                                         \
+        if (!_lsm__) {                                          \
+                CERROR("LOV requires striping ea\n");           \
+                _ret__ = 1;                                     \
+        } else if (_lsm__->lsm_magic != LOV_MAGIC) {            \
+                CERROR("LOV striping magic bad %#x != %#x\n",   \
+                       _lsm__->lsm_magic, LOV_MAGIC);           \
+                _ret__ = 1;                                     \
+        }                                                       \
+        _ret__;                                                 \
+})
+
 static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
                        struct lov_stripe_md *lsm, struct obd_trans_info *oti)
 {
@@ -747,16 +758,8 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
         int rc = 0, i;
         ENTRY;
 
-        if (!lsm) {
-                CERROR("LOV requires striping ea for destruction\n");
+        if (lsm_bad_magic(lsm))
                 GOTO(out, rc = -EINVAL);
-        }
-
-        if (lsm->lsm_magic != LOV_MAGIC) {
-                CERROR("LOV striping magic bad %#x != %#x\n",
-                       lsm->lsm_magic, LOV_MAGIC);
-                GOTO(out, rc = -EINVAL);
-        }
 
         if (!export || !export->exp_obd)
                 GOTO(out, rc = -ENODEV);
@@ -809,16 +812,8 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
         int i, rc = 0, set = 0;
         ENTRY;
 
-        if (!lsm) {
-                CERROR("LOV requires striping ea\n");
+        if (lsm_bad_magic(lsm))
                 GOTO(out, rc = -EINVAL);
-        }
-
-        if (lsm->lsm_magic != LOV_MAGIC) {
-                CERROR("LOV striping magic bad %#x != %#x\n",
-                       lsm->lsm_magic, LOV_MAGIC);
-                GOTO(out, rc = -EINVAL);
-        }
 
         if (!export || !export->exp_obd)
                 GOTO(out, rc = -ENODEV);
@@ -1008,16 +1003,8 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
         int rc = 0, i, set = 0;
         ENTRY;
 
-        if (!lsm) {
-                CERROR("LOV requires striping ea\n");
+        if (lsm_bad_magic(lsm))
                 GOTO(out, rc = -EINVAL);
-        }
-
-        if (lsm->lsm_magic != LOV_MAGIC) {
-                CERROR("LOV striping magic bad %#x != %#x\n",
-                       lsm->lsm_magic, LOV_MAGIC);
-                GOTO(out, rc = -EINVAL);
-        }
 
         if (!export || !export->exp_obd)
                 GOTO(out, rc = -ENODEV);
@@ -1092,16 +1079,8 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
         ENTRY;
         LASSERT(och != NULL);
 
-        if (!lsm) {
-                CERROR("LOV requires striping ea for opening\n");
+        if (lsm_bad_magic(lsm))
                 GOTO(out_exp, rc = -EINVAL);
-        }
-
-        if (lsm->lsm_magic != LOV_MAGIC) {
-                CERROR("LOV striping magic bad %#x != %#x\n",
-                       lsm->lsm_magic, LOV_MAGIC);
-                GOTO(out_exp, rc = -EINVAL);
-        }
 
         if (!export || !export->exp_obd)
                 GOTO(out_exp, rc = -ENODEV);
@@ -1202,16 +1181,8 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
         int rc = 0, i;
         ENTRY;
 
-        if (!lsm) {
-                CERROR("LOV requires striping ea\n");
+        if (lsm_bad_magic(lsm))
                 GOTO(out, rc = -EINVAL);
-        }
-
-        if (lsm->lsm_magic != LOV_MAGIC) {
-                CERROR("LOV striping magic bad %#x != %#x\n",
-                       lsm->lsm_magic, LOV_MAGIC);
-                GOTO(out, rc = -EINVAL);
-        }
 
         if (!export || !export->exp_obd)
                 GOTO(out, rc = -ENODEV);
@@ -1407,16 +1378,8 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
         int rc = 0, i;
         ENTRY;
 
-        if (!lsm) {
-                CERROR("LOV requires striping ea\n");
+        if (lsm_bad_magic(lsm))
                 GOTO(out, rc = -EINVAL);
-        }
-
-        if (lsm->lsm_magic != LOV_MAGIC) {
-                CERROR("LOV striping magic bad %#x != %#x\n",
-                       lsm->lsm_magic, LOV_MAGIC);
-                GOTO(out, rc = -EINVAL);
-        }
 
         if (!export || !export->exp_obd)
                 GOTO(out, rc = -ENODEV);
@@ -1510,16 +1473,8 @@ static int lov_brw(int cmd, struct lustre_handle *conn,
         int rc = 0, i, *where, stripe_count = lsm->lsm_stripe_count;
         ENTRY;
 
-        if (!lsm) {
-                CERROR("LOV requires striping ea\n");
+        if (lsm_bad_magic(lsm))
                 GOTO(out_exp, rc = -EINVAL);
-        }
-
-        if (lsm->lsm_magic != LOV_MAGIC) {
-                CERROR("LOV striping magic bad %#x != %#x\n",
-                       lsm->lsm_magic, LOV_MAGIC);
-                GOTO(out_exp, rc = -EINVAL);
-        }
 
         lov = &export->exp_obd->u.lov;
 
@@ -1624,16 +1579,8 @@ static int lov_brw_async(int cmd, struct lustre_handle *conn,
         int rc = 0, i, *where, stripe_count = lsm->lsm_stripe_count;
         ENTRY;
 
-        if (!lsm) {
-                CERROR("LOV requires striping ea\n");
+        if (lsm_bad_magic(lsm))
                 GOTO(out_exp, rc = -EINVAL);
-        }
-
-        if (lsm->lsm_magic != LOV_MAGIC) {
-                CERROR("LOV striping magic bad %#x != %#x\n",
-                       lsm->lsm_magic, LOV_MAGIC);
-                GOTO(out_exp, rc = -EINVAL);
-        }
 
         lov = &export->exp_obd->u.lov;
 
@@ -1731,16 +1678,8 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         int i;
         ENTRY;
 
-        if (!lsm) {
-                CERROR("LOV requires striping ea\n");
+        if (lsm_bad_magic(lsm))
                 GOTO(out_exp, rc = -EINVAL);
-        }
-
-        if (lsm->lsm_magic != LOV_MAGIC) {
-                CERROR("LOV striping magic bad %#x != %#x\n",
-                       lsm->lsm_magic, LOV_MAGIC);
-                GOTO(out_exp, rc = -EINVAL);
-        }
 
         /* we should never be asked to replay a lock this way. */
         LASSERT((*flags & LDLM_FL_REPLAY) == 0);
@@ -1843,16 +1782,8 @@ static int lov_match(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         int i;
         ENTRY;
 
-        if (!lsm) {
-                CERROR("LOV requires striping ea\n");
+        if (lsm_bad_magic(lsm))
                 GOTO(out_exp, rc = -EINVAL);
-        }
-
-        if (lsm->lsm_magic != LOV_MAGIC) {
-                CERROR("LOV striping magic bad %#x != %#x\n",
-                       lsm->lsm_magic, LOV_MAGIC);
-                GOTO(out_exp, rc = -EINVAL);
-        }
 
         if (!export || !export->exp_obd)
                 GOTO(out_exp, rc = -ENODEV);
@@ -1941,16 +1872,8 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         int rc = 0, i;
         ENTRY;
 
-        if (!lsm) {
-                CERROR("LOV requires striping ea\n");
+        if (lsm_bad_magic(lsm))
                 GOTO(out, rc = -EINVAL);
-        }
-
-        if (lsm->lsm_magic != LOV_MAGIC) {
-                CERROR("LOV striping magic bad %#x != %#x\n",
-                       lsm->lsm_magic, LOV_MAGIC);
-                GOTO(out, rc = -EINVAL);
-        }
 
         if (!export || !export->exp_obd)
                 GOTO(out, rc = -ENODEV);
@@ -2016,10 +1939,8 @@ static int lov_cancel_unused(struct lustre_handle *conn,
         int rc = 0, i;
         ENTRY;
 
-        if (!lsm) {
-                CERROR("LOV requires striping ea for lock cancellation\n");
+        if (lsm_bad_magic(lsm))
                 GOTO(out, rc = -EINVAL);
-        }
 
         if (!export || !export->exp_obd)
                 GOTO(out, rc = -ENODEV);
@@ -2059,9 +1980,9 @@ static int lov_cancel_unused(struct lustre_handle *conn,
                         (tot) += (add);                                 \
         } while(0)
 
-static int lov_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
+static int lov_statfs(struct obd_export *export, struct obd_statfs *osfs)
 {
-        struct obd_export *export = class_conn2export(conn);
+        struct obd_export *tgt_export;
         struct lov_obd *lov;
         struct obd_statfs lov_sfs;
         int set = 0;
@@ -2070,7 +1991,7 @@ static int lov_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
         ENTRY;
 
         if (!export || !export->exp_obd)
-                GOTO(out, rc = -ENODEV);
+                RETURN(-ENODEV);
 
         lov = &export->exp_obd->u.lov;
 
@@ -2083,7 +2004,14 @@ static int lov_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
                         continue;
                 }
 
-                err = obd_statfs(&lov->tgts[i].conn, &lov_sfs);
+                tgt_export = class_conn2export(&lov->tgts[i].conn);
+                if (!tgt_export) {
+                        CDEBUG(D_HA, "lov idx %d NULL export\n", i);
+                        continue;
+                }
+
+                err = obd_statfs(tgt_export, &lov_sfs);
+                class_export_put(tgt_export);
                 if (err) {
                         if (lov->tgts[i].active) {
                                 CERROR("error: statfs OSC %s on OST idx %d: "
@@ -2127,10 +2055,7 @@ static int lov_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
                         do_div(osfs->os_ffree, expected_stripes);
         } else if (!rc)
                 rc = -EIO;
-        GOTO(out, rc);
- out:
-        class_export_put(export);
-        return rc;
+        RETURN(rc);
 }
 
 static int lov_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
@@ -2266,6 +2191,153 @@ static int lov_get_info(struct lustre_handle *conn, __u32 keylen,
         RETURN(-EINVAL);
 }
 
+static int lov_mark_page_dirty(struct lustre_handle *conn, 
+                               struct lov_stripe_md *lsm, unsigned long offset)
+{
+        struct lov_obd *lov = &class_conn2obd(conn)->u.lov;
+        struct lov_oinfo *loi;
+        struct lov_stripe_md *submd;
+        int stripe, rc;
+        obd_off off;
+        ENTRY;
+
+        if (lsm_bad_magic(lsm))
+                RETURN(-EINVAL);
+
+        OBD_ALLOC(submd, lov_stripe_md_size(1));
+        if (submd == NULL)
+                RETURN(-ENOMEM);
+
+        stripe = lov_stripe_number(lsm, (obd_off)offset << PAGE_CACHE_SHIFT);
+        lov_stripe_offset(lsm, (obd_off)offset << PAGE_CACHE_SHIFT, stripe, 
+                          &off);
+        off >>= PAGE_CACHE_SHIFT;
+
+        loi = &lsm->lsm_oinfo[stripe];
+        CDEBUG(D_INODE, "off %lu => off %lu on stripe %d\n", offset, 
+               (unsigned long)off, stripe);
+        submd->lsm_oinfo[0].loi_dirty_ot = &loi->loi_dirty_ot_inline;
+
+        rc = obd_mark_page_dirty(&lov->tgts[loi->loi_ost_idx].conn, submd, off);
+        OBD_FREE(submd, lov_stripe_md_size(1));
+        RETURN(rc);
+}
+
+static int lov_clear_dirty_pages(struct lustre_handle *conn, 
+                                 struct lov_stripe_md *lsm, unsigned long start,
+                                 unsigned long end, unsigned long *cleared)
+
+{
+        struct obd_export *export = class_conn2export(conn);
+        __u64 start_off = (__u64)start << PAGE_CACHE_SHIFT;
+        __u64 end_off = (__u64)end << PAGE_CACHE_SHIFT;
+        __u64 obd_start, obd_end;
+        struct lov_stripe_md *submd = NULL;
+        struct lov_obd *lov;
+        struct lov_oinfo *loi;
+        int i, rc;
+        unsigned long osc_cleared;
+        ENTRY;
+
+        *cleared = 0;
+
+        if (lsm_bad_magic(lsm))
+                GOTO(out_exp, rc = -EINVAL);
+
+        if (!export || !export->exp_obd)
+                GOTO(out_exp, rc = -ENODEV);
+
+        OBD_ALLOC(submd, lov_stripe_md_size(1));
+        if (submd == NULL)
+                GOTO(out_exp, rc = -ENOMEM);
+
+        lov = &export->exp_obd->u.lov;
+        rc = 0;
+        for (i = 0, loi = lsm->lsm_oinfo;
+             i < lsm->lsm_stripe_count;
+             i++, loi++) {
+                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
+                        continue;
+                }
+
+                if(!lov_stripe_intersects(lsm, i, start_off, end_off,
+                                          &obd_start, &obd_end))
+                        continue;
+                obd_start >>= PAGE_CACHE_SHIFT;
+                obd_end >>= PAGE_CACHE_SHIFT;
+
+                CDEBUG(D_INODE, "offs [%lu,%lu] => offs [%lu,%lu] stripe %d\n", 
+                       start, end, (unsigned long)obd_start, 
+                       (unsigned long)obd_end, loi->loi_ost_idx);
+                submd->lsm_oinfo[0].loi_dirty_ot = &loi->loi_dirty_ot_inline;
+                rc = obd_clear_dirty_pages(&lov->tgts[loi->loi_ost_idx].conn, 
+                                           submd, obd_start, obd_end,
+                                           &osc_cleared);
+                if (rc)
+                        break;
+                *cleared += osc_cleared;
+        }
+out_exp:
+        if (submd)
+                OBD_FREE(submd, lov_stripe_md_size(1));
+        class_export_put(export);
+        RETURN(rc);
+}
+
+static int lov_last_dirty_offset(struct lustre_handle *conn,
+                                 struct lov_stripe_md *lsm,
+                                 unsigned long *offset)
+{
+        struct obd_export *export = class_conn2export(conn);
+        struct lov_stripe_md *submd = NULL;
+        struct lov_obd *lov;
+        struct lov_oinfo *loi;
+        unsigned long tmp, count, skip;
+        int err, i, rc;
+        ENTRY;
+
+        if (lsm_bad_magic(lsm))
+                GOTO(out_exp, rc = -EINVAL);
+
+        if (!export || !export->exp_obd)
+                GOTO(out_exp, rc = -ENODEV);
+
+        OBD_ALLOC(submd, lov_stripe_md_size(1));
+        if (submd == NULL)
+                GOTO(out_exp, rc = -ENOMEM);
+
+        *offset = 0;
+        lov = &export->exp_obd->u.lov;
+        rc = -ENOENT;
+        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; 
+                                          i++, loi++) {
+
+                count = lsm->lsm_stripe_size >> PAGE_CACHE_SHIFT;
+                skip = (lsm->lsm_stripe_count - 1) * count;
+
+                submd->lsm_oinfo[0].loi_dirty_ot = &loi->loi_dirty_ot_inline;
+
+                err = obd_last_dirty_offset(&lov->tgts[loi->loi_ost_idx].conn, 
+                                            submd, &tmp);
+                if (err == -ENOENT)
+                        continue;
+                if (err)
+                        GOTO(out_exp, rc = err);
+
+                rc = 0;
+                if (tmp != ~0) 
+                        tmp += (tmp/count * skip) + (i * count);
+                if (tmp > *offset)
+                        *offset = tmp;
+        }
+out_exp:
+        if (submd)
+                OBD_FREE(submd, lov_stripe_md_size(1));
+        class_export_put(export);
+        RETURN(rc);
+}
+
 struct obd_ops lov_obd_ops = {
         o_owner:       THIS_MODULE,
         o_attach:      lov_attach,
@@ -2291,7 +2363,10 @@ struct obd_ops lov_obd_ops = {
         o_cancel:      lov_cancel,
         o_cancel_unused: lov_cancel_unused,
         o_iocontrol:   lov_iocontrol,
-        o_get_info:    lov_get_info
+        o_get_info:    lov_get_info,
+        .o_mark_page_dirty =    lov_mark_page_dirty,
+        .o_clear_dirty_pages =    lov_clear_dirty_pages,
+        .o_last_dirty_offset =    lov_last_dirty_offset,
 };
 
 int __init lov_init(void)

@@ -489,11 +489,39 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
         LASSERT (request != NULL);
 
         if (intent_finish != NULL) {
+                struct lustre_handle old_lock;
+                struct ldlm_lock *lock;
+
                 rc = intent_finish(flag, request, parent, de, it, offset, ino);
                 dentry = *de; /* intent_finish may change *de */
                 inode = dentry->d_inode;
                 if (rc != 0)
                         GOTO(drop_lock, rc);
+
+                /* The intent processing may well have given us a lock different
+                 * from the one we requested.  If we already have a matching
+                 * lock, then cancel the new one.  (We have to do this here,
+                 * instead of in mdc_enqueue, because we need to use the child's
+                 * inode as the l_data to match, and that's not available until
+                 * intent_finish has performed the iget().) */
+                lock = ldlm_handle2lock(&lockh);
+                if (lock) {
+                        LDLM_DEBUG(lock, "matching against this");
+                        LDLM_LOCK_PUT(lock);
+                        memcpy(&old_lock, &lockh, sizeof(lockh));
+                        if (ldlm_lock_match(NULL,
+                                            LDLM_FL_BLOCK_GRANTED |
+                                            LDLM_FL_MATCH_DATA,
+                                            NULL, LDLM_PLAIN, NULL, 0, LCK_NL,
+                                            inode, &old_lock)) {
+                                ldlm_lock_decref_and_cancel(&lockh,
+                                                            it->it_lock_mode);
+                                memcpy(&lockh, &old_lock, sizeof(old_lock));
+                                memcpy(it->it_lock_handle, &lockh,
+                                       sizeof(lockh));
+                        }
+                }
+
         }
         ptlrpc_req_finished(request);
 
@@ -912,6 +940,13 @@ static int ll_create(struct inode *dir, struct dentry *dentry, int mode)
         RETURN(rc);
 }
 
+static int ll_mknod(struct inode *dir, struct dentry *dentry, int mode,
+                    int rdev)
+{
+        LBUG();
+        return -ENOSYS;
+}
+
 static int ll_mknod2(struct inode *dir, const char *name, int len, int mode,
                      int rdev)
 {
@@ -950,34 +985,11 @@ static int ll_mknod2(struct inode *dir, const char *name, int len, int mode,
         RETURN(err);
 }
 
-static int ll_mknod(struct inode *dir, struct dentry *dentry, int mode,
-                    int rdev)
+static int ll_symlink(struct inode *dir, struct dentry *dentry,
+                      const char *symname)
 {
-        struct lookup_intent *it;
-        struct inode *inode;
-        int rc = 0;
-
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
-               dentry->d_name.name, dir->i_ino, dir->i_generation, dir,
-               LL_IT2STR(dentry->d_it));
-
-        LL_GET_INTENT(dentry, it);
-
-        if ((mode & S_IFMT) == 0)
-                mode |= S_IFREG;
-        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
-                               NULL, 0, mode, rdev, it);
-
-        if (IS_ERR(inode))
-                RETURN(PTR_ERR(inode));
-
-        /* no directory data updates when intents rule */
-        if (it && it->it_disposition)
-                d_instantiate(dentry, inode);
-        else
-                rc = ext2_add_nondir(dentry, inode);
-
-        return rc;
+        LBUG();
+        return -ENOSYS;
 }
 
 static int ll_symlink2(struct inode *dir, const char *name, int len,
@@ -1004,46 +1016,11 @@ static int ll_symlink2(struct inode *dir, const char *name, int len,
         RETURN(err);
 }
 
-static int ll_symlink(struct inode *dir, struct dentry *dentry,
-                      const char *symname)
+static int ll_link(struct dentry *old_dentry, struct inode * dir,
+                   struct dentry *dentry)
 {
-        struct lookup_intent *it;
-        unsigned l = strlen(symname) + 1;
-        struct inode *inode;
-        struct ll_inode_info *lli;
-        int err = 0;
-        ENTRY;
-
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
-               dentry->d_name.name, dir->i_ino, dir->i_generation, dir,
-               LL_IT2STR(dentry->d_it));
-
-        LL_GET_INTENT(dentry, it);
-
-        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
-                               symname, l, S_IFLNK | S_IRWXUGO, 0, it);
-        if (IS_ERR(inode))
-                RETURN(PTR_ERR(inode));
-
-        lli = ll_i2info(inode);
-
-        OBD_ALLOC(lli->lli_symlink_name, l);
-        /* this _could_ be a non-fatal error, since the symlink is already
-         * stored on the MDS by this point, and we can re-get it in readlink.
-         */
-        if (!lli->lli_symlink_name)
-                RETURN(-ENOMEM);
-
-        memcpy(lli->lli_symlink_name, symname, l);
-        inode->i_size = l - 1;
-
-        /* no directory data updates when intents rule */
-        if (it && it->it_disposition)
-                d_instantiate(dentry, inode);
-        else
-                err = ext2_add_nondir(dentry, inode);
-
-        RETURN(err);
+        LBUG();
+        return -ENOSYS;
 }
 
 static int ll_link2(struct inode *src, struct inode *dir,
@@ -1066,47 +1043,10 @@ static int ll_link2(struct inode *src, struct inode *dir,
         RETURN(err);
 }
 
-static int ll_link(struct dentry *old_dentry, struct inode * dir,
-                   struct dentry *dentry)
+static int ll_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 {
-        struct lookup_intent *it;
-        struct inode *inode = old_dentry->d_inode;
-        int rc;
-        CDEBUG(D_VFSTRACE,
-               "VFS Op:inode=%lu/%u(%p),dir=%lu/%u(%p),target=%s,intent=%s\n",
-               inode->i_ino, inode->i_generation, inode, dir->i_ino,
-               dir->i_generation, dir, dentry->d_name.name,
-               LL_IT2STR(dentry->d_it));
-
-        LL_GET_INTENT(dentry, it);
-
-        if (it && it->it_disposition) {
-                if (it->it_status)
-                        RETURN(it->it_status);
-                LTIME_S(inode->i_ctime) = LTIME_S(CURRENT_TIME);
-                ext2_inc_count(inode);
-                atomic_inc(&inode->i_count);
-                d_instantiate(dentry, inode);
-                ll_invalidate_inode_pages(dir);
-                RETURN(0);
-        }
-
-        if (S_ISDIR(inode->i_mode))
-                return -EPERM;
-
-        if (inode->i_nlink >= EXT2_LINK_MAX)
-                return -EMLINK;
-
-        rc = ll_link2(old_dentry->d_inode, dir,
-                      dentry->d_name.name, dentry->d_name.len);
-        if (rc)
-                RETURN(rc);
-
-        LTIME_S(inode->i_ctime) = LTIME_S(CURRENT_TIME);
-        ext2_inc_count(inode);
-        atomic_inc(&inode->i_count);
-
-        return ext2_add_nondir(dentry, inode);
+        LBUG();
+        return -ENOSYS;
 }
 
 static int ll_mkdir2(struct inode *dir, const char *name, int len, int mode)
@@ -1132,58 +1072,6 @@ static int ll_mkdir2(struct inode *dir, const char *name, int len, int mode)
         RETURN(err);
 }
 
-
-static int ll_mkdir(struct inode *dir, struct dentry *dentry, int mode)
-{
-        struct lookup_intent *it;
-        struct inode * inode;
-        int err = -EMLINK;
-        ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
-               dentry->d_name.name, dir->i_ino, dir->i_generation, dir,
-               LL_IT2STR(dentry->d_it));
-
-        LL_GET_INTENT(dentry, it);
-
-        if (dir->i_nlink >= EXT2_LINK_MAX)
-                goto out;
-
-        ext2_inc_count(dir);
-        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
-                               NULL, 0, S_IFDIR | mode, 0, it);
-        err = PTR_ERR(inode);
-        if (IS_ERR(inode))
-                goto out_dir;
-
-        err = ext2_make_empty(inode, dir);
-        if (err)
-                goto out_fail;
-
-        /* no directory data updates when intents rule */
-        if (!it || !it->it_disposition) {
-                /* XXX FIXME This code needs re-checked for non-intents */
-                ext2_inc_count(inode);
-                err = ll_add_link(dentry, inode);
-                if (err)
-                        goto out_fail;
-        }
-
-        d_instantiate(dentry, inode);
-out:
-        EXIT;
-        return err;
-
-out_fail:
-        ext2_dec_count(inode);
-        ext2_dec_count(inode);
-        iput(inode);
-        EXIT;
-out_dir:
-        ext2_dec_count(dir);
-        EXIT;
-        goto out;
-}
-
 static int ll_rmdir2(struct inode *dir, const char *name, int len)
 {
         int rc;
@@ -1206,84 +1094,23 @@ static int ll_unlink2(struct inode *dir, const char *name, int len)
         RETURN(rc);
 }
 
-static int ll_common_unlink(struct inode *dir, struct dentry *dentry,
-                            struct lookup_intent *it, __u32 mode)
-{
-        struct inode *inode = dentry->d_inode;
-        struct ext2_dir_entry_2 * de;
-        struct page * page;
-        int rc = 0;
-        ENTRY;
-
-        if (it && it->it_disposition) {
-                rc = it->it_status;
-                ll_invalidate_inode_pages(dir);
-                if (rc)
-                        GOTO(out, rc);
-                GOTO(out_dec, 0);
-        }
-
-        de = ext2_find_entry(dir, dentry, &page);
-        if (!de)
-                GOTO(out, rc = -ENOENT);
-        rc = ll_mdc_unlink(dir, dentry->d_inode, mode,
-                           dentry->d_name.name, dentry->d_name.len);
-        if (rc)
-                GOTO(out, rc);
-
-        rc = ext2_delete_entry(de, page);
-        if (rc)
-                GOTO(out, rc);
-
-        /* AED: not sure if needed - directory lock revocation should do it
-         * in the case where the client has cached it for non-intent ops.
-         */
-        ll_invalidate_inode_pages(dir);
-
-        inode->i_ctime = dir->i_ctime;
-        EXIT;
-out_dec:
-        ext2_dec_count(inode);
-out:
-        return rc;
-}
-
 static int ll_unlink(struct inode *dir, struct dentry *dentry)
 {
-        struct lookup_intent * it;
-        ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
-               dentry->d_name.name, dir->i_ino, dir->i_generation, dir,
-               LL_IT2STR(dentry->d_it));
-
-        LL_GET_INTENT(dentry, it);
-
-        RETURN(ll_common_unlink(dir, dentry, it, S_IFREG));
+        LBUG();
+        return -ENOSYS;
 }
 
 static int ll_rmdir(struct inode *dir, struct dentry *dentry)
 {
-        struct inode * inode = dentry->d_inode;
-        struct lookup_intent *it;
-        int rc;
-        ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
-               dentry->d_name.name, dir->i_ino, dir->i_generation, dir,
-               LL_IT2STR(dentry->d_it));
+        LBUG();
+        return -ENOSYS;
+}
 
-        LL_GET_INTENT(dentry, it);
-
-        if ((!it || !it->it_disposition) && !ext2_empty_dir(inode))
-                RETURN(-ENOTEMPTY);
-
-        rc = ll_common_unlink(dir, dentry, it, S_IFDIR);
-        if (!rc) {
-                inode->i_size = 0;
-                ext2_dec_count(inode);
-                ext2_dec_count(dir);
-        }
-
-        RETURN(rc);
+static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
+                     struct inode * new_dir, struct dentry * new_dentry)
+{
+        LBUG();
+        return -ENOSYS;
 }
 
 static int ll_rename2(struct inode *src, struct inode *tgt,
@@ -1307,126 +1134,23 @@ static int ll_rename2(struct inode *src, struct inode *tgt,
         RETURN(err);
 }
 
-
-
-static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
-                     struct inode * new_dir, struct dentry * new_dentry)
-{
-        struct lookup_intent *it;
-        struct inode * old_inode = old_dentry->d_inode;
-        struct inode * tgt_inode = new_dentry->d_inode;
-        struct page * dir_page = NULL;
-        struct ext2_dir_entry_2 * dir_de = NULL;
-        struct ext2_dir_entry_2 * old_de;
-        struct page * old_page;
-        int err;
-        CDEBUG(D_VFSTRACE, "VFS Op:oldname=%s,src_dir=%lu/%u(%p),newname=%s,"
-               "tgt_dir=%lu/%u(%p),intent=%s\n",
-               old_dentry->d_name.name, old_dir->i_ino, old_dir->i_generation,
-               old_dir, new_dentry->d_name.name, new_dir->i_ino,
-               new_dir->i_generation, new_dir, LL_IT2STR(new_dentry->d_it));
-
-        LL_GET_INTENT(new_dentry, it);
-
-        if (it && it->it_disposition) {
-                if (tgt_inode) {
-                        tgt_inode->i_ctime = CURRENT_TIME;
-                        tgt_inode->i_nlink--;
-                }
-                ll_invalidate_inode_pages(old_dir);
-                ll_invalidate_inode_pages(new_dir);
-                GOTO(out, err = it->it_status);
-        }
-
-        err = ll_rename2(old_dir, new_dir,
-                         old_dentry->d_name.name, old_dentry->d_name.len,
-                         new_dentry->d_name.name, new_dentry->d_name.len);
-        if (err)
-                goto out;
-
-        old_de = ext2_find_entry (old_dir, old_dentry, &old_page);
-        if (!old_de)
-                goto out;
-
-        if (S_ISDIR(old_inode->i_mode)) {
-                err = -EIO;
-                dir_de = ext2_dotdot(old_inode, &dir_page);
-                if (!dir_de)
-                        goto out_old;
-        }
-
-        if (tgt_inode) {
-                struct page *new_page;
-                struct ext2_dir_entry_2 *new_de;
-
-                err = -ENOTEMPTY;
-                if (dir_de && !ext2_empty_dir (tgt_inode))
-                        goto out_dir;
-
-                err = -ENOENT;
-                new_de = ext2_find_entry (new_dir, new_dentry, &new_page);
-                if (!new_de)
-                        goto out_dir;
-                ext2_inc_count(old_inode);
-                ext2_set_link(new_dir, new_de, new_page, old_inode);
-                tgt_inode->i_ctime = CURRENT_TIME;
-                if (dir_de)
-                        tgt_inode->i_nlink--;
-                ext2_dec_count(tgt_inode);
-        } else {
-                if (dir_de) {
-                        err = -EMLINK;
-                        if (new_dir->i_nlink >= EXT2_LINK_MAX)
-                                goto out_dir;
-                }
-                ext2_inc_count(old_inode);
-                err = ll_add_link(new_dentry, old_inode);
-                if (err) {
-                        ext2_dec_count(old_inode);
-                        goto out_dir;
-                }
-                if (dir_de)
-                        ext2_inc_count(new_dir);
-        }
-
-        ext2_delete_entry (old_de, old_page);
-        ext2_dec_count(old_inode);
-
-        if (dir_de) {
-                ext2_set_link(old_inode, dir_de, dir_page, new_dir);
-                ext2_dec_count(old_dir);
-        }
-        return 0;
-
-out_dir:
-        if (dir_de) {
-                kunmap(dir_page);
-                page_cache_release(dir_page);
-        }
-out_old:
-        kunmap(old_page);
-        page_cache_release(old_page);
-out:
-        return err;
-}
-
 extern int ll_inode_revalidate(struct dentry *dentry);
 struct inode_operations ll_dir_inode_operations = {
         create:          ll_create,
         lookup2:         ll_lookup2,
-        link:            ll_link,
+        link:            ll_link,          /* LBUG() */
         link2:           ll_link2,
-        unlink:          ll_unlink,
+        unlink:          ll_unlink,        /* LBUG() */
         unlink2:         ll_unlink2,
-        symlink:         ll_symlink,
+        symlink:         ll_symlink,       /* LBUG() */
         symlink2:        ll_symlink2,
-        mkdir:           ll_mkdir,
+        mkdir:           ll_mkdir,         /* LBUG() */
         mkdir2:          ll_mkdir2,
-        rmdir:           ll_rmdir,
+        rmdir:           ll_rmdir,         /* LBUG() */
         rmdir2:          ll_rmdir2,
-        mknod:           ll_mknod,
+        mknod:           ll_mknod,         /* LBUG() */
         mknod2:          ll_mknod2,
-        rename:          ll_rename,
+        rename:          ll_rename,        /* LBUG() */
         rename2:         ll_rename2,
         setattr:         ll_setattr,
         setattr_raw:     ll_setattr_raw,

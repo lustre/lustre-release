@@ -1582,7 +1582,8 @@ static int mds_cleanup(struct obd_device *obddev, int force, int failover)
         RETURN(0);
 }
 
-inline void fixup_handle_for_resent_req(struct ptlrpc_request *req,
+static void fixup_handle_for_resent_req(struct ptlrpc_request *req,
+                                        struct ldlm_lock *new_lock,
                                         struct lustre_handle *lockh)
 {
         struct obd_export *exp = req->rq_export;
@@ -1599,6 +1600,8 @@ inline void fixup_handle_for_resent_req(struct ptlrpc_request *req,
         list_for_each(iter, &exp->exp_ldlm_data.led_held_locks) {
                 struct ldlm_lock *lock;
                 lock = list_entry(iter, struct ldlm_lock, l_export_chain);
+                if (lock == new_lock)
+                        continue;
                 if (lock->l_remote_handle.cookie == remote_hdl.cookie) {
                         lockh->cookie = lock->l_handle.h_cookie;
                         DEBUG_REQ(D_HA, req, "restoring lock cookie "LPX64,
@@ -1658,7 +1661,7 @@ static int ldlm_intent_policy(struct ldlm_namespace *ns,
                 rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));
                 rep->lock_policy_res1 = IT_INTENT_EXEC;
 
-                fixup_handle_for_resent_req(req, &lockh);
+                fixup_handle_for_resent_req(req, lock, &lockh);
 
                 /* execute policy */
                 switch ((long)it->opc) {

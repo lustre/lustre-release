@@ -969,27 +969,21 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
         struct obd_ioctl_data* data = buf;
         struct echo_client_obd *ec = &obddev->u.echo_client;
         struct obd_device *tgt;
-        struct obd_uuid uuid;
         struct lov_stripe_md *lsm = NULL;
         struct obd_uuid echo_uuid = { "ECHO_UUID" };
         int rc;
         ENTRY;
 
         if (data->ioc_inllen1 < 1) {
-                CERROR("requires a TARGET OBD UUID\n");
-                RETURN(-EINVAL);
-        }
-        if (data->ioc_inllen1 > 37) {
-                CERROR("OBD UUID must be less than 38 characters\n");
+                CERROR("requires a TARGET OBD name\n");
                 RETURN(-EINVAL);
         }
 
-        obd_str2uuid(&uuid, data->ioc_inlbuf1);
-        tgt = class_uuid2obd(&uuid);
+        tgt = class_name2obd(data->ioc_inlbuf1);
         if (!tgt || !tgt->obd_attached || !tgt->obd_set_up) {
-                CERROR("device not attached or not set up (%d)\n",
-                       data->ioc_dev);
-                RETURN(rc = -EINVAL);
+                CERROR("device not attached or not set up (%d/%s)\n",
+                       data->ioc_dev, data->ioc_inlbuf1);
+                RETURN(-EINVAL);
         }
 
         spin_lock_init (&ec->ec_lock);

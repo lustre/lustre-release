@@ -152,25 +152,6 @@ static int do_name2dev(char *func, char *name)
         return data.ioc_dev + N2D_OFF;
 }
 
-static int do_uuid2dev(char *func, char *uuid)
-{
-        struct obd_ioctl_data data;
-        int rc;
-
-        IOC_INIT(data);
-
-        data.ioc_inllen1 = strlen(uuid) + 1;
-        data.ioc_inlbuf1 = uuid;
-
-        IOC_PACK(func, data);
-        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_UUID2DEV, buf);
-        if (rc < 0)
-                return errno;
-        IOC_UNPACK(func, data);
-
-        return data.ioc_dev + N2D_OFF;
-}
-
 /*
  * resolve a device name to a device number.
  * supports a number, $name or %uuid.
@@ -182,7 +163,7 @@ static int parse_devname(char *func, char *name)
 
         if (!name)
                 return ret;
-        if (name[0] == '$') {
+        if (name[0] == '$' || name[0] == '%') {
                 name++;
                 rc = do_name2dev(func, name);
                 if (rc >= N2D_OFF) {
@@ -190,16 +171,6 @@ static int parse_devname(char *func, char *name)
                         printf("Name %s is device %d\n", name, ret);
                 } else {
                         printf("No device found for name %s: %s\n",
-                               name, strerror(rc));
-                }
-        } else if (name[0] == '%') {
-                name++;
-                rc = do_uuid2dev(func, name);
-                if (rc >= N2D_OFF) {
-                        ret = rc - N2D_OFF;
-                        printf("UUID %s is device %d\n", name, ret);
-                } else {
-                        printf("No device found for UUID %s: %s\n",
                                name, strerror(rc));
                 }
         } else {

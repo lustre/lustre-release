@@ -124,7 +124,7 @@ extern struct obd_uuid lctl_fake_uuid;
 #define LUSTRE_CONN_NEW          1
 #define LUSTRE_CONN_CON          2
 #define LUSTRE_CONN_NOTCONN      3
-#define LUSTRE_CONN_RECOVD       4
+#define LUSTRE_CONN_RECOVER      4
 #define LUSTRE_CONN_FULL         5
 
 /* packet types */
@@ -269,14 +269,14 @@ struct obdo {
         obd_time                o_mtime;
         obd_time                o_ctime;
         obd_size                o_size;
-        obd_blocks              o_blocks;
-        obd_rdev                o_rdev;
+        obd_blocks              o_blocks; /* brw: clients sent cached bytes */
+        obd_rdev                o_rdev; /* brw: clients/servers sent grant */
         obd_blksize             o_blksize;      /* optimal IO blocksize */
         obd_mode                o_mode;
         obd_uid                 o_uid;
         obd_gid                 o_gid;
         obd_flag                o_flags;
-        obd_count               o_nlink;
+        obd_count               o_nlink; /* brw: checksum */
         obd_count               o_generation;
         obd_flag                o_valid;        /* hot fields in this obdo */
         obd_flag                o_obdflags;
@@ -345,12 +345,13 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 
 /* ost_body.data values for OST_BRW */
 
-#define OBD_BRW_READ    0x01
-#define OBD_BRW_WRITE   0x02
-#define OBD_BRW_RWMASK  (OBD_BRW_READ | OBD_BRW_WRITE)
-#define OBD_BRW_CREATE  0x04
-#define OBD_BRW_SYNC    0x08
-#define OBD_BRW_CHECK   0x10
+#define OBD_BRW_READ       0x01
+#define OBD_BRW_WRITE      0x02
+#define OBD_BRW_RWMASK     (OBD_BRW_READ | OBD_BRW_WRITE)
+#define OBD_BRW_CREATE     0x04
+#define OBD_BRW_SYNC       0x08
+#define OBD_BRW_CHECK      0x10
+#define OBD_BRW_FROM_GRANT 0x20
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 

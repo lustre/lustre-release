@@ -278,19 +278,20 @@ struct ptlrpc_request {
 /* Spare the preprocessor, spoil the bugs. */
 #define FLAG(field, str) (field ? str : "")
 
-#define DEBUG_REQ_FLAGS(req)                                                    \
-        ((req->rq_phase == RQ_PHASE_NEW) ? "New" :                              \
-         (req->rq_phase == RQ_PHASE_RPC) ? "Rpc" :                              \
-         (req->rq_phase == RQ_PHASE_INTERPRET) ? "Interpret" :                  \
-         (req->rq_phase == RQ_PHASE_COMPLETE) ? "Complete" : "?phase?"),        \
-        FLAG(req->rq_intr, "I"), FLAG(req->rq_replied, "R"),                    \
-        FLAG(req->rq_want_ack, "A"), FLAG(req->rq_err, "E"),                    \
-        FLAG(req->rq_timedout, "X") /* eXpired */, FLAG(req->rq_resend, "S"),   \
-        FLAG(req->rq_restart, "T"), FLAG(req->rq_replay, "P"),                  \
-        FLAG(req->rq_no_resend, "N"), FLAG(req->rq_resent, "s"),                \
+#define DEBUG_REQ_FLAGS(req)                                                   \
+        ((req->rq_phase == RQ_PHASE_NEW) ? "New" :                             \
+         (req->rq_phase == RQ_PHASE_RPC) ? "RPC" :                             \
+         (req->rq_phase == RQ_PHASE_INTERPRET) ? "Interpret" :                 \
+         (req->rq_phase == RQ_PHASE_COMPLETE) ? "Complete" :                   \
+         (req->rq_phase == RQ_PHASE_BULK) ? "Bulk" : "?phase?"),               \
+        FLAG(req->rq_intr, "I"), FLAG(req->rq_replied, "R"),                   \
+        FLAG(req->rq_want_ack, "A"), FLAG(req->rq_err, "E"),                   \
+        FLAG(req->rq_timedout, "X") /* eXpired */, FLAG(req->rq_resend, "S"),  \
+        FLAG(req->rq_restart, "T"), FLAG(req->rq_replay, "P"),                 \
+        FLAG(req->rq_no_resend, "N"), FLAG(req->rq_resent, "s"),               \
         FLAG(req->rq_no_recov, "n"), FLAG(req->rq_waiting, "W")
 
-#define REQ_FLAGS_FMT "%s%s%s%s%s%s%s%s%s%s%s%s%s"
+#define REQ_FLAGS_FMT "%s:%s%s%s%s%s%s%s%s%s%s%s%s"
 
 #define DEBUG_REQ(level, req, fmt, args...)                                    \
 do {                                                                           \
@@ -532,5 +533,9 @@ void *lustre_swab_repbuf (struct ptlrpc_request *req, int n, int minlen,
 int client_import_connect(struct lustre_handle *conn, struct obd_device *obd,
                           struct obd_uuid *cluuid);
 int client_import_disconnect(struct lustre_handle *conn, int failover);
+
+/* ptlrpc/pinger.c */
+int ptlrpc_pinger_add_import(struct obd_import *imp);
+int ptlrpc_pinger_del_import(struct obd_import *imp);
 
 #endif

@@ -227,6 +227,11 @@ EXPORT_SYMBOL(ptlrpc_recover_import);
 EXPORT_SYMBOL(client_obd_setup);
 EXPORT_SYMBOL(client_obd_cleanup);
 
+/* pinger.c */
+EXPORT_SYMBOL(ptlrpc_pinger_add_import);
+EXPORT_SYMBOL(ptlrpc_pinger_del_import);
+EXPORT_SYMBOL(ptlrpc_pinger_sending_on_import);
+
 #ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Request Processor");

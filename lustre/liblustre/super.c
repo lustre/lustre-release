@@ -674,8 +674,7 @@ llu_fsswop_mount(const char *source,
                 goto out_free;
         }
 
-        strncpy(param_uuid.uuid, mdc, sizeof(param_uuid.uuid));
-        obd = class_uuid2obd(&param_uuid);
+        obd = class_name2obd(mdc);
         if (!obd) {
                 CERROR("MDC %s: not setup or attached\n", mdc);
                 err = -EINVAL;
@@ -693,8 +692,7 @@ llu_fsswop_mount(const char *source,
         mdc_conn = sbi2mdc(sbi)->cl_import->imp_connection;
 
         /* setup osc */
-        strncpy(param_uuid.uuid, osc, sizeof(param_uuid.uuid));
-        obd = class_uuid2obd(&param_uuid);
+        obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
                 err = -EINVAL;

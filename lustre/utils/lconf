@@ -409,11 +409,11 @@ class LCTLInterface:
         self.run(cmds)
 
     # Recover a device
-    def recover(self, dev_uuid, new_conn):
+    def recover(self, dev_name, new_conn):
         cmds = """
-    device %%%s
+    device $%s
     probe
-    recover %s""" %(dev_uuid, new_conn)
+    recover %s""" %(dev_name, new_conn)
         self.run(cmds)
                 
     # add a route to a range
@@ -797,24 +797,8 @@ def get_local_address(net_type, wildcard):
     return local
         
 
-def is_prepared(uuid):
-    """Return true if a device exists for the uuid"""
-    if config.lctl_dump:
-        return 0
-    if config.noexec and config.cleanup:
-        return 1
-    try:
-        # expect this format:
-        # 1 UP ldlm ldlm ldlm_UUID 2
-        out = lctl.device_list()
-        for s in out:
-            if uuid == string.split(s)[4]:
-                return 1
-    except CommandError, e:
-        e.dump()
-    return 0
-
-def is_prepared_name(name):
+# XXX: instead of device_list, ask for $name and see what we get
+def is_prepared(name):
     """Return true if a device exists for the name"""
     if config.lctl_dump:
         return 0
@@ -834,7 +818,7 @@ def is_prepared_name(name):
 def is_network_prepared():
     """If the LDLM device exists, then assume that all networking
        has been configured"""
-    return is_prepared('ldlm_UUID')
+    return is_prepared('ldlm')
     
 def fs_is_mounted(path):
     """Return true if path is a mounted lustre filesystem"""
@@ -1111,21 +1095,21 @@ class LDLM(Module):
         self.add_lustre_module('ldlm', 'ldlm') 
 
     def prepare(self):
-        if is_prepared(self.uuid):
+        if is_prepared(self.name):
             return
         self.info()
-        lctl.newdev(attach="ldlm %s %s" % (self.name, self.uuid))
+        lctl.newdev(attach="ldlm %s %s" % ('ldlm', 'ldlm_UUID'))
 
     def safe_to_clean(self):
         out = lctl.device_list()
         return len(out) <= 1
 
     def cleanup(self):
-        if is_prepared(self.uuid):
+        if is_prepared(self.name):
             Module.cleanup(self)
 
 class LOV(Module):
-    def __init__(self,db):
+    def __init__(self, db, uuid):
         Module.__init__(self, 'LOV', db)
         self.add_lustre_module('mdc', 'mdc')
         self.add_lustre_module('lov', 'lov')
@@ -1138,17 +1122,19 @@ class LOV(Module):
         self.devlist = self.db.get_refs('obd')
         self.stripe_cnt = self.db.get_val_int('stripecount', len(self.devlist))
         self.osclist = []
-        self.mdc_uuid = ''
+        self.client_uuid = generate_client_uuid(self.name)
+        self.mdc_name = ''
+        self.mdc = get_mdc(db, self.client_uuid, self.name, self.mds_uuid)
         for obd_uuid in self.devlist:
             obd = self.db.lookup(obd_uuid)
-            osc = get_osc(obd, self.name)
+            osc = get_osc(obd, self.client_uuid, self.name)
             if osc:
                 self.osclist.append(osc)
             else:
                 panic('osc not found:', obd_uuid)
             
     def prepare(self):
-        if is_prepared(self.uuid):
+        if is_prepared(self.name):
             return
         for osc in self.osclist:
             try:
@@ -1158,18 +1144,20 @@ class LOV(Module):
             except CommandError, e:
                 print "Error preparing OSC %s (inactive)\n" % osc.uuid
                 raise e
-        self.mdc_uuid = prepare_mdc(self.db, self.name, self.mds_uuid)
+        self.mdc.prepare()
+        self.mdc_name = self.mdc.name
         self.info(self.mds_uuid, self.stripe_cnt, self.stripe_sz,
                   self.stripe_off, self.pattern, self.devlist, self.mds_name)
         lctl.newdev(attach="lov %s %s" % (self.name, self.uuid),
-                    setup ="%s" % (self.mdc_uuid))
+                    setup ="%s" % (self.mdc_name))
 
     def cleanup(self):
-        if is_prepared(self.uuid):
+        if is_prepared(self.name):
             Module.cleanup(self)
         for osc in self.osclist:
             osc.cleanup()
-        cleanup_mdc(self.db, self.name, self.mds_uuid)
+        mdc = get_mdc(self.db, self.client_uuid, self.name, self.mds_uuid)
+        mdc.cleanup()
 
     def load_module(self):
         for osc in self.osclist:
@@ -1189,7 +1177,7 @@ class LOVConfig(Module):
 
         self.lov_uuid = self.db.get_first_ref('lov')
         l = self.db.lookup(self.lov_uuid)
-        self.lov = LOV(l)
+        self.lov = LOV(l, "YOU_SHOULD_NEVER_SEE_THIS_UUID")
         
     def prepare(self):
         lov = self.lov
@@ -1245,7 +1233,7 @@ class MDSDEV(Module):
             Module.load_module(self)
             
     def prepare(self):
-        if is_prepared(self.uuid):
+        if is_prepared(self.name):
             return
         if not self.active:
             debug(self.uuid, "not active")
@@ -1254,7 +1242,7 @@ class MDSDEV(Module):
         run_acceptors()
         blkdev = block_dev(self.devpath, self.size, self.fstype, self.format,
                            self.journal_size)
-        if not is_prepared('MDT_UUID'):
+        if not is_prepared('MDT'):
             lctl.newdev(attach="mdt %s %s" % ('MDT', 'MDT_UUID'),
                         setup ="")
         if self.nspath:
@@ -1270,7 +1258,8 @@ class MDSDEV(Module):
                 log("open clients for filesystem:", uuid)
                 fs = self.db.lookup(uuid)
                 obd_uuid = fs.get_first_ref('obd')
-                client = VOSC(self.db.lookup(obd_uuid), self.name)
+                client_uuid = generate_client_uuid(self.name)
+                client = VOSC(client_uuid, self.db.lookup(obd_uuid), self.name)
                 client.prepare()
                 
             
@@ -1290,7 +1279,7 @@ class MDSDEV(Module):
         if not self.active:
             debug(self.uuid, "not active")
             return
-        if is_prepared(self.uuid):
+        if is_prepared(self.name):
             self.info()
             try:
                 lctl.cleanup(self.name, self.uuid, config.force,
@@ -1308,7 +1297,7 @@ class MDSDEV(Module):
                 obd_uuid = fs.get_first_ref('obd')
                 client = VOSC(self.db.lookup(obd_uuid), self.name)
                 client.cleanup()
-        if not self.msd_remaining() and is_prepared('MDT_UUID'):
+        if not self.msd_remaining() and is_prepared('MDT'):
             try:
                 lctl.cleanup("MDT", "MDT_UUID", config.force,
                              config.failover)
@@ -1363,7 +1352,7 @@ class OSD(Module):
     # formatting anything.
     # FIXME: check if device is already formatted.
     def prepare(self):
-        if is_prepared(self.uuid):
+        if is_prepared(self.name):
             return
         if not self.active:
             debug(self.uuid, "not active")
@@ -1381,7 +1370,7 @@ class OSD(Module):
         lctl.newdev(attach="%s %s %s" % (self.osdtype, self.name, self.uuid),
                     setup ="%s %s %s %s" %(blkdev, self.fstype,
                                            self.failover_ost, self.nspath))
-        if not is_prepared('OSS_UUID'):
+        if not is_prepared('OSS'):
             lctl.newdev(attach="ost %s %s" % ('OSS', 'OSS_UUID'),
                         setup ="")
 
@@ -1401,7 +1390,7 @@ class OSD(Module):
         if not self.active:
             debug(self.uuid, "not active")
             return
-        if is_prepared(self.uuid):
+        if is_prepared(self.name):
             self.info()
             try:
                 lctl.cleanup(self.name, self.uuid, config.force,
@@ -1410,7 +1399,7 @@ class OSD(Module):
                 log(self.module_name, "cleanup failed: ", self.name)
                 e.dump()
                 cleanup_error(e.rc)
-        if not self.osd_remaining() and is_prepared('OSS_UUID'):
+        if not self.osd_remaining() and is_prepared('OSS'):
             try:
                 lctl.cleanup("OSS", "OSS_UUID", config.force,
                              config.failover)
@@ -1423,7 +1412,7 @@ class OSD(Module):
 
 # Generic client module, used by OSC and MDC
 class Client(Module):
-    def __init__(self, tgtdb, module, owner):
+    def __init__(self, tgtdb, uuid, module, owner):
         self.target_name = tgtdb.getName()
         self.target_uuid = tgtdb.getUUID()
         self.db = tgtdb
@@ -1440,11 +1429,7 @@ class Client(Module):
         self.module_name = string.upper(module)
         self.name = '%s_%s_%s_%s' % (self.module_name, socket.gethostname(),
                                      self.target_name, owner)
-        self.uuid = '%05x_%.19s_%05x%05x' % (int(random.random() * 1048576),
-                                              self.name,
-                                              int(random.random() * 1048576),
-                                              int(random.random() * 1048576))
-        self.uuid = self.uuid[0:36]
+        self.uuid = uuid
         self.lookup_server(self.tgt_dev_uuid)
         self.add_lustre_module(module, module)
 
@@ -1459,7 +1444,7 @@ class Client(Module):
 
     def prepare(self, ignore_connect_failure = 0):
         self.info(self.target_uuid)
-        if is_prepared_name(self.name):
+        if is_prepared(self.name):
             self.cleanup()
         try:
             srv = choose_local_server(self.get_servers())
@@ -1479,7 +1464,7 @@ class Client(Module):
                         setup ="%s %s" %(self.target_uuid, srv.uuid))
 
     def cleanup(self):
-        if is_prepared_name(self.name):
+        if is_prepared(self.name):
             Module.cleanup(self)
             try:
                 srv = choose_local_server(self.get_servers())
@@ -1496,12 +1481,12 @@ class Client(Module):
 
 
 class MDC(Client):
-    def __init__(self, db, owner):
-         Client.__init__(self, db, 'mdc', owner)
+    def __init__(self, db, uuid, owner):
+         Client.__init__(self, db, uuid, 'mdc', owner)
 
 class OSC(Client):
-    def __init__(self, db, owner):
-         Client.__init__(self, db, 'osc', owner)
+    def __init__(self, db, uuid, owner):
+         Client.__init__(self, db, uuid, 'osc', owner)
 
             
 class COBD(Module):
@@ -1515,7 +1500,7 @@ class COBD(Module):
     # formatting anything.
     # FIXME: check if device is already formatted.
     def prepare(self):
-        if is_prepared(self.uuid):
+        if is_prepared(self.name):
             return
         self.info(self.real_uuid, self.cache_uuid)
         lctl.newdev(attach="cobd %s %s" % (self.name, self.uuid),
@@ -1524,14 +1509,16 @@ class COBD(Module):
 
 # virtual interface for  OSC and LOV
 class VOSC(Module):
-    def __init__(self,db, owner):
+    def __init__(self, db, uuid, owner):
         Module.__init__(self, 'VOSC', db)
         if db.get_class() == 'lov':
-            self.osc = LOV(db)
+            self.osc = LOV(db, uuid)
         else:
-            self.osc = get_osc(db, owner)
+            self.osc = get_osc(db, uuid, owner)
     def get_uuid(self):
         return self.osc.uuid
+    def get_name(self):
+        return self.osc.name
     def prepare(self):
         self.osc.prepare()
     def cleanup(self):
@@ -1542,9 +1529,9 @@ class VOSC(Module):
         self.osc.cleanup_module()
     def need_mdc(self):
         return self.db.get_class() != 'lov'
-    def get_mdc_uuid(self):
+    def get_mdc_name(self):
         if self.db.get_class() == 'lov':
-            return self.osc.mdc_uuid
+            return self.osc.mdc_name
         return ''
 
 
@@ -1554,19 +1541,19 @@ class ECHO_CLIENT(Module):
         self.add_lustre_module('obdecho', 'obdecho')
         self.obd_uuid = self.db.get_first_ref('obd')
         obd = self.db.lookup(self.obd_uuid)
-        self.osc = VOSC(obd, self.name)
+        self.osc = VOSC(obd, self.uuid, self.name)
 
     def prepare(self):
-        if is_prepared(self.uuid):
+        if is_prepared(self.name):
             return
         self.osc.prepare() # XXX This is so cheating. -p
         self.info(self.obd_uuid)
 
         lctl.newdev(attach="echo_client %s %s" % (self.name, self.uuid),
-                    setup = self.osc.get_uuid())
+                    setup = self.osc.get_name())
 
     def cleanup(self):
-        if is_prepared(self.uuid):
+        if is_prepared(self.name):
             Module.cleanup(self)
         self.osc.cleanup()
 
@@ -1577,6 +1564,12 @@ class ECHO_CLIENT(Module):
         Module.cleanup_module(self)
         self.osc.cleanup_module()
 
+def generate_client_uuid(name):
+        client_uuid = '%05x_%.19s_%05x%05x' % (int(random.random() * 1048576),
+                                               name,
+                                               int(random.random() * 1048576),
+                                               int(random.random() * 1048576))
+        return client_uuid[:36]
 
 class Mountpoint(Module):
     def __init__(self,db):
@@ -1587,9 +1580,11 @@ class Mountpoint(Module):
         self.mds_uuid = fs.get_first_ref('mds')
         self.obd_uuid = fs.get_first_ref('obd')
         obd = self.db.lookup(self.obd_uuid)
-        self.vosc = VOSC(obd, self.name)
+        client_uuid = generate_client_uuid(self.name)
+        self.vosc = VOSC(obd, client_uuid, self.name)
         if self.vosc.need_mdc():
             self.add_lustre_module('mdc', 'mdc')
+            self.mdc = get_mdc(db, client_uuid, self.name, self.mds_uuid)
         self.add_lustre_module('llite', 'llite')
 
 
@@ -1599,25 +1594,26 @@ class Mountpoint(Module):
             return
         self.vosc.prepare()
         if self.vosc.need_mdc():
-            mdc_uuid = prepare_mdc(self.db, self.name,  self.mds_uuid)
+            self.mdc.prepare()
+            mdc_name = self.mdc.name
         else:
-            mdc_uuid = self.vosc.get_mdc_uuid()
-        if not mdc_uuid:
+            mdc_name = self.vosc.get_mdc_name()
+        if not mdc_name:
             self.vosc.cleanup()
-            panic("Unable to determine MDC UUID. Probably need to cleanup before re-mounting.")
+            panic("Unable to determine MDC name. Probably need to cleanup before re-mounting.")
         self.info(self.path, self.mds_uuid, self.obd_uuid)
         if config.lctl_dump:
-            cmd = "osc=%s,mdc=%s" % (self.vosc.get_uuid(), mdc_uuid)
+            cmd = "osc=%s,mdc=%s" % (self.vosc.get_name(), mdc_name)
             lctl.mount_option(cmd)
             return
-        cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
-              (self.vosc.get_uuid(), mdc_uuid, self.path)
+        cmd = "mount -t lustre_lite -o osc=%s,mdc=%s %s %s" % \
+              (self.vosc.get_name(), mdc_name, config.config, self.path)
         run("mkdir", self.path)
         ret, val = run(cmd)
         if ret:
             self.vosc.cleanup()
             if self.vosc.need_mdc():
-                cleanup_mdc(self.db, self.name, self.mds_uuid)
+                self.mdc.cleanup()
             panic("mount failed:", self.path, ":", string.join(val))
 
     def cleanup(self):
@@ -1635,7 +1631,7 @@ class Mountpoint(Module):
 
         self.vosc.cleanup()
         if self.vosc.need_mdc():
-            cleanup_mdc(self.db, self.name, self.mds_uuid)
+            self.mdc.cleanup()
 
     def load_module(self):
         self.vosc.load_module()
@@ -1711,26 +1707,16 @@ def getServices(self):
 #
 # OSC is no longer in the xml, so we have to fake it.
 # this is getting ugly and begging for another refactoring
-def get_osc(ost_db, owner):
-    osc = OSC(ost_db, owner)
+def get_osc(ost_db, uuid, owner):
+    osc = OSC(ost_db, uuid, owner)
     return osc
 
-def get_mdc(db, owner, mds_uuid):
+def get_mdc(db, uuid, owner, mds_uuid):
     mds_db = db.lookup(mds_uuid);
     if not mds_db:
         panic("no mds:", mds_uuid)
-    mdc = MDC(mds_db, owner)
+    mdc = MDC(mds_db, uuid, owner)
     return mdc
-
-def prepare_mdc(db, owner, mds_uuid):
-    mdc = get_mdc(db, owner, mds_uuid)
-    mdc.prepare()
-    return mdc.uuid
-
-def cleanup_mdc(db, owner, mds_uuid):
-    mdc = get_mdc(db, owner, mds_uuid)
-    mdc.cleanup()
-        
 
 ############################################################
 # routing ("rooting")
@@ -1841,7 +1827,7 @@ def newService(db):
     if type == 'ldlm':
         n = LDLM(db)
     elif type == 'lov':
-        n = LOV(db)
+        n = LOV(db, "YOU_SHOULD_NEVER_SEE_THIS_UUID")
     elif type == 'network':
         n = Network(db)
     elif type == 'routetbl':
@@ -2245,6 +2231,10 @@ def main():
             panic("%s does not appear to be a config file." % (args[0]))
             sys.exit(1) # make sure to die here, even in debug mode.
         db = Lustre.LustreDB_XML(dom.documentElement, dom.documentElement)
+        if not config.config:
+            config.config = os.path.basename(args[0])# use full path?
+            if config.config[-4:] == '.xml':
+                config.config = config.config[:-4]
     elif config.ldapurl:
         if not config.config:
             panic("--ldapurl requires --config name")

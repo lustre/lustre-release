@@ -425,8 +425,12 @@ int ll_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm,
         /* getattr can race with writeback.  we don't want to trust a getattr
          * that doesn't include the writeback of our farthest cached pages
          * that it raced with. */
+        /* Now that the OSC knows the cached-page status, it can and should be
+         * adjusting its getattr results to include the maximum cached offset
+         * for its stripe(s). */
         do {
-                bef = ll_farthest_dirty(&lli->lli_dirty, &before);
+                bef = obd_last_dirty_offset(ll_i2obdconn(inode), lli->lli_smd,
+                                            &before);
 #if 0
                 rc = obd_getattr(&sbi->ll_osc_conn, &oa, lsm);
 #else
@@ -444,7 +448,8 @@ int ll_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm,
                 if (rc)
                         RETURN(rc);
 
-                aft = ll_farthest_dirty(&lli->lli_dirty, &after);
+                aft = obd_last_dirty_offset(ll_i2obdconn(inode), lli->lli_smd,
+                                            &after);
                 CDEBUG(D_INODE, " %d,%lu -> %d,%lu\n", bef, before, aft, after);
         } while (bef == 0 &&
                  (aft != 0 || after < before) &&
@@ -985,7 +990,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),cmd=%u\n", inode->i_ino,
                inode->i_generation, inode, cmd);
 
-        if ((cmd & 0xffffff00) == ((int)'T') << 8) /* tty ioctls */
+        if (_IOC_TYPE(cmd) == 'T') /* tty ioctls */
                 return -ENOTTY;
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_IOCTL);

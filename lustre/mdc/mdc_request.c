@@ -352,10 +352,9 @@ int mdc_enqueue(struct lustre_handle *conn,
                 lit->opc = (__u64)it->it_op;
 
                 /* pack the intended request */
-                mds_open_pack(req, 2, data, it->it_mode, 0,
-                              current->fsuid, current->fsgid,
-                              LTIME_S(CURRENT_TIME), it->it_flags,
-                              tgt, tgtlen);
+                mds_open_pack(req, 2, data, it->it_mode, 0, current->fsuid,
+                              current->fsgid, LTIME_S(CURRENT_TIME),
+                              it->it_flags, tgt, tgtlen);
                 /* get ready for the reply */
                 reply_buffers = 3;
                 req->rq_replen = lustre_msg_size(3, repsize);
@@ -434,7 +433,6 @@ int mdc_enqueue(struct lustre_handle *conn,
                 RETURN(rc);
         } else { /* rc = 0 */
                 struct ldlm_lock *lock = ldlm_handle2lock(lockh);
-                struct lustre_handle lockh2;
                 LASSERT(lock);
 
                 /* If the server gave us back a different lock mode, we should
@@ -445,20 +443,6 @@ int mdc_enqueue(struct lustre_handle *conn,
                         lock_mode = lock->l_req_mode;
                 }
 
-                /* The server almost certainly gave us a lock other than the
-                 * one that we asked for.  If we already have a matching lock,
-                 * then cancel this one--we don't need two. */
-                LDLM_DEBUG(lock, "matching against this");
-
-                memcpy(&lockh2, lockh, sizeof(lockh2));
-                if (ldlm_lock_match(NULL,
-                                    LDLM_FL_BLOCK_GRANTED | LDLM_FL_MATCH_DATA,
-                                    NULL, LDLM_PLAIN, NULL, 0, LCK_NL, cb_data,
-                                    &lockh2)) {
-                        /* We already have a lock; cancel the new one */
-                        ldlm_lock_decref_and_cancel(lockh, lock_mode);
-                        memcpy(lockh, &lockh2, sizeof(lockh2));
-                }
                 LDLM_LOCK_PUT(lock);
         }
 
@@ -650,15 +634,15 @@ static int mdc_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
         }
 }
 
-static int mdc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
+static int mdc_statfs(struct obd_export *exp, struct obd_statfs *osfs)
 {
         struct ptlrpc_request *req;
         struct obd_statfs *msfs;
         int rc, size = sizeof(*msfs);
         ENTRY;
 
-        req = ptlrpc_prep_req(class_conn2cliimp(conn), MDS_STATFS, 0, NULL,
-                              NULL);
+        req = ptlrpc_prep_req(exp->exp_obd->u.cli.cl_import, MDS_STATFS, 0, 
+                              NULL, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 

@@ -1,5 +1,3 @@
-#define _XOPEN_SOURCE 500
-
 #include <stdio.h>
 #include <getopt.h>
 #include <stdlib.h>
@@ -21,7 +19,7 @@
 
 /* XXX Max obds per lov currently hardcoded to 1000 in lov/lov_obd.c */
 #define MAX_LOV_UUID_COUNT	1000
-#define OBD_NOT_FOUND		((__u32)-1)
+#define OBD_NOT_FOUND		(-1)
 
 char *		cmd;
 struct option	longOpts[] = {
@@ -38,13 +36,11 @@ char *		usageMsg = "[ --obd <obd uuid> | --query ] <dir|file> ...";
 
 int		max_ost_count = MAX_LOV_UUID_COUNT;
 struct obd_uuid *	obduuid;
-__u32		obdcount;
-__u32		obdindex;
 char *		buf;
 int		buflen;
+struct obd_uuid *	uuids;
 struct obd_ioctl_data data;
 struct lov_desc desc;
-struct obd_uuid *	uuids;
 int		uuidslen;
 int		cfglen;
 struct lov_mds_md *lmm;
@@ -53,14 +49,7 @@ int		lmmlen;
 void	init();
 void	usage(FILE *stream);
 void	errMsg(char *fmt, ...);
-void	processPath(char *path);
-int	processFile(
-		const char *path,
-		const struct stat *sp,
-		int flag,
-		struct FTW *ftwp
-	);
-__u32	getobdindex(const char *path);
+void	processPath(const char *path);
 
 int
 main (int argc, char **argv) {
@@ -180,102 +169,26 @@ errMsg(char *fmt, ...)
 }
 
 void
-processPath(char *path)
-{
-	obdindex = OBD_NOT_FOUND;
-	nftw((const char *)path, processFile, 128, FTW_PHYS|FTW_MOUNT);
-}
-
-int
-processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
+processPath(const char *path)
 {
 	int fd;
-	int count;
 	int rc;
 	int i;
+	int obdindex;
+	int obdcount;
+	struct obd_uuid *uuidp;
 
-	if (flag != FTW_F)
-		return 0;
-
-	if (getobdindex(path) == OBD_NOT_FOUND && obdcount == 0) {
-		/* terminate nftw walking this tree */
-		return(1);
+	if (query || verbose && !obduuid) {
+		printf("%s\n", path);
 	}
 
 	if ((fd = open(path, O_RDONLY | O_LOV_DELAY_CREATE)) < 0) {
 		errMsg("open \"%.20s\" failed.", path);
 		perror("open");
-		exit(1);
+		return;
 	}
 
-	memset((void *)buf, 0, buflen);
-	lmm->lmm_magic = LOV_MAGIC;
-        lmm->lmm_ost_count = max_ost_count;
-
-	if ((rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, (void *)lmm)) < 0) {
-		errMsg("LL_IOC_LOV_GETSTRIPE ioctl failed.");
-		perror("ioctl");
-		return 0;
-	}
-
-	close(fd);
-
-	if (query || verbose ||
-	    (obdindex != OBD_NOT_FOUND &&
-	     lmm->lmm_objects[obdindex].l_object_id))
-		printf("%s\n", path);
-
-	if (verbose) {
-		printf("lmm_magic:          0x%x\n", lmm->lmm_magic);
-		printf("lmm_object_id:      "LPX64"\n", lmm->lmm_object_id);
-		printf("lmm_stripe_offset:  %u\n", (int)lmm->lmm_stripe_offset);
-		printf("lmm_stripe_count:   %u\n", (int)lmm->lmm_stripe_count);
-		printf("lmm_stripe_size:    %u\n", (int)lmm->lmm_stripe_size);
-		printf("lmm_ost_count:      %u\n", lmm->lmm_ost_count);
-		printf("lmm_stripe_pattern: %d\n", lmm->lmm_magic & 0xf);
-	}
-
-	count = lmm->lmm_ost_count;
-
-	if (query || verbose) {
-		long long oid;
-		int ost = lmm->lmm_stripe_offset;
-		int header = 1;
-
-		for (i = 0; i < count; i++, ost++) {
-			ost %= lmm->lmm_ost_count;
-			if ((oid = lmm->lmm_objects[ost].l_object_id)) {
-				if (header) {
-					printf("\tobdidx\t   objid\n");
-					header = 0;
-				}
-				printf("\t%6u\t%8llu%s\n",
-				       ost, oid, obdindex == ost ? " *" : "");
-			}
-		}
-
-		if (query)
-			return(0);
-	}
-
-	return(0);
-}
-
-__u32
-getobdindex(const char *path)
-{
-	struct obd_uuid *uuidp;
-	int fd;
-	int rc;
-	int i;
-
-	if ((fd = open(path, O_RDONLY)) < 0) {
-		errMsg("open \"%.20s\" failed.", path);
-		perror("open");
-		exit(1);
-	}
-
-	memset(&data, 0, sizeof data);
+	memset(&data, 0, sizeof(data));
         data.ioc_inllen1 = sizeof(desc);
         data.ioc_inlbuf1 = (char *)&desc;
         data.ioc_inllen2 = uuidslen;
@@ -291,9 +204,15 @@ getobdindex(const char *path)
 
         rc = ioctl(fd, OBD_IOC_LOV_GET_CONFIG, buf);
         if (rc) {
+		if (errno == ENOTTY) {
+			if (!obduuid) {
+				printf("Not a regular file or not Lustre file.\n\n");
+			}
+			return;
+		}
 		errMsg("OBD_IOC_LOV_GET_CONFIG ioctl failed: %d.", errno);
 		perror("ioctl");
-                exit(1);
+		exit(1);
         }
 
 	if (obd_ioctl_unpack(&data, buf, buflen)) {
@@ -301,31 +220,77 @@ getobdindex(const char *path)
                 exit(1);
 	}
 
-	close(fd);
-
         obdcount = desc.ld_tgt_count;
+	if (obdcount == 0)
+		return;
 
-	if (query || verbose) {
+	obdindex = OBD_NOT_FOUND;
+
+	if (obduuid) {
+		for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++) {
+			if (strncmp((const char *)obduuid, (const char *)uuidp,
+				    sizeof(*uuidp)) == 0) {
+				obdindex = i;
+			}
+		}
+
+		if (obdindex == OBD_NOT_FOUND)
+			return;
+	} else 	if (query || verbose) {
 		printf("OBDS:\n");
 		for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++)
 			printf("%4d: %s\n", i, (char *)uuidp);
-
-		return(0);
 	}
 
-        for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++) {
-		rc = strncmp((const char *)obduuid, (const char *)uuidp,
-				sizeof(*uuidp));
-		if (rc == 0) {
-			obdindex = i;
-			break;
+	memset((void *)buf, 0, buflen);
+	lmm->lmm_magic = LOV_MAGIC;
+        lmm->lmm_ost_count = max_ost_count;
+
+	rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, (void *)lmm);
+	if (rc) {
+		if (errno == ENODATA) {
+			if(!obduuid) {
+				printf("Has no stripe information.\n\n");
+			}
 		}
+		else {
+			errMsg("LL_IOC_LOV_GETSTRIPE ioctl failed. %d", errno);
+			perror("ioctl");
+		}
+		return;
 	}
 
-	if (obdindex == OBD_NOT_FOUND) {
-		errMsg("obd UUID '%s' not found.", obduuid);
-		return(OBD_NOT_FOUND);
+	close(fd);
+
+	if (obduuid && lmm->lmm_objects[obdindex].l_object_id)
+		printf("%s\n", path);
+
+	if (verbose) {
+		printf("lmm_magic:          0x%x\n", lmm->lmm_magic);
+		printf("lmm_object_id:      "LPX64"\n", lmm->lmm_object_id);
+		printf("lmm_stripe_offset:  %u\n", (int)lmm->lmm_stripe_offset);
+		printf("lmm_stripe_count:   %u\n", (int)lmm->lmm_stripe_count);
+		printf("lmm_stripe_size:    %u\n", (int)lmm->lmm_stripe_size);
+		printf("lmm_ost_count:      %u\n", lmm->lmm_ost_count);
+		printf("lmm_stripe_pattern: %d\n", lmm->lmm_magic & 0xf);
 	}
 
-	return(0);
+	if (query || verbose) {
+		long long oid;
+		int ost = lmm->lmm_stripe_offset;
+		int header = 1;
+
+		for (i = 0; i < lmm->lmm_ost_count; i++, ost++) {
+			ost %= lmm->lmm_ost_count;
+			if ((oid = lmm->lmm_objects[ost].l_object_id)) {
+				if (header) {
+					printf("\tobdidx\t   objid\n");
+					header = 0;
+				}
+				printf("\t%6u\t%8llu%s\n",
+				       ost, oid, obdindex == ost ? " *" : "");
+			}
+		}
+		printf("\n");
+	}
 }

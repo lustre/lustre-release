@@ -134,7 +134,6 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct ptlrpc_connection *mdc_conn;
         struct ll_read_inode2_cookie lic;
         class_uuid_t uuid;
-        struct obd_uuid param_uuid;
 
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:\n");
@@ -162,8 +161,7 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_free, sb = NULL);
         }
 
-        strncpy(param_uuid.uuid, mdc, sizeof(param_uuid.uuid));
-        obd = class_uuid2obd(&param_uuid);
+        obd = class_name2obd(mdc);
         if (!obd) {
                 CERROR("MDC %s: not setup or attached\n", mdc);
                 GOTO(out_free, sb = NULL);
@@ -176,9 +174,8 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
         }
 
         mdc_conn = sbi2mdc(sbi)->cl_import->imp_connection;
-        strncpy(param_uuid.uuid, osc, sizeof(param_uuid.uuid));
 
-        obd = class_uuid2obd(&param_uuid);
+        obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
                 GOTO(out_mdc, sb = NULL);

@@ -116,6 +116,8 @@ void reconstruct_open(struct mds_update_record *rec, int offset,
         struct ldlm_reply *rep;
         struct mds_body *body;
         int disp, rc;
+        struct list_head *t;
+        int put_child = 1;
         ENTRY;
 
         LASSERT(offset == 2);                  /* only called via intent */
@@ -183,44 +185,43 @@ void reconstruct_open(struct mds_update_record *rec, int offset,
         /* If we didn't get as far as trying to open, then some locking thing
          * probably went wrong, and we'll just bail here.
          */
-        if ((disp & IT_OPEN_OPEN) == 0) {
+        if ((disp & IT_OPEN_OPEN) == 0)
                 GOTO(out_dput, 0);
-        }
 
         /* If we failed, then we must have failed opening, so don't look for
          * file descriptor or anything, just give the client the bad news.
          */
-        if (req->rq_status) {
+        if (req->rq_status)
                 GOTO(out_dput, 0);
+
+        mfd = NULL;
+        list_for_each(t, &med->med_open_head) {
+                mfd = list_entry(t, struct mds_file_data, mfd_list);
+                if (mfd->mfd_xid == req->rq_xid) 
+                        break;
+                mfd = NULL;
         }
 
         if (req->rq_export->exp_outstanding_reply) {
-                struct list_head *t;
-                mfd = NULL;
-                /* XXX can we just look in the old reply to find the handle in
-                 * XXX O(1) here? */
-                list_for_each(t, &med->med_open_head) {
-                        mfd = list_entry(t, struct mds_file_data, mfd_list);
-                        if (mfd->mfd_xid == req->rq_xid)
-                                break;
-                        mfd = NULL;
-                }
                 /* if we're not recovering, it had better be found */
                 LASSERT(mfd);
-        } else {
+        } else if (mfd == NULL) {
                 mntget(mds->mds_vfsmnt);
+                CERROR("Re-opened file \n");
                 mfd = mds_dentry_open(child, mds->mds_vfsmnt,
                                    rec->ur_flags & ~(O_DIRECT | O_TRUNC), req);
                 if (!mfd) {
                         CERROR("mds: out of memory\n");
                         GOTO(out_dput, req->rq_status = -ENOMEM);
                 }
+                put_child = 0;
         }
 
         body->handle.cookie = mfd->mfd_handle.h_cookie;
 
  out_dput:
-        l_dput(child);
+        if (put_child)
+                l_dput(child);
         l_dput(parent);
         EXIT;
 }
@@ -375,6 +376,9 @@ int mds_open(struct mds_update_record *rec, int offset,
         /* if we are following a symlink, don't open */
         if (S_ISLNK(dchild->d_inode->i_mode))
                 GOTO(cleanup, rc = 0);
+
+        if ((rec->ur_flags & O_DIRECTORY) && !S_ISDIR(dchild->d_inode->i_mode))
+                GOTO(cleanup, rc = -ENOTDIR);
 
         /* Step 5: mds_open it */
         rep->lock_policy_res1 |= IT_OPEN_OPEN;

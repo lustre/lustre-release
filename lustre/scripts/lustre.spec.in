@@ -2,7 +2,7 @@
 %define version b_devel
 %define kversion @RELEASE@
 %define linuxdir @LINUX@
-Release: 0305281701chaos
+Release: 0306170928kernel
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -50,16 +50,16 @@ Requires: openldap-servers, openldap-clients, python-ldap, 4Suite
 Configures openldap server for LDAP Lustre config database
 
 
-%package -n liblustre
-Summary: Lustre Lib
-Group: Development/Kernel
+#%package -n liblustre
+#Summary: Lustre Lib
+#Group: Development/Kernel
 
-%description -n liblustre
-Lustre lib binary package.
+#%description -n liblustre
+#Lustre lib binary package.
 
 %prep
 %setup -qn lustre-%{version}
-%setup -c -n lustre-%{version}-lib
+#%setup -c -n lustre-%{version}-lib
 
 %build
 rm -rf $RPM_BUILD_ROOT
@@ -69,20 +69,20 @@ cd $RPM_BUILD_DIR/lustre-%{version}
 ./configure --with-linux='%{linuxdir}' 
 make
 
-%ifarch i386
-cd $RPM_BUILD_DIR/lustre-%{version}-lib/lustre-%{version}
-./configure --with-lib 
-make
-%endif
+#%ifarch i386
+#cd $RPM_BUILD_DIR/lustre-%{version}-lib/lustre-%{version}
+#./configure --with-lib 
+#make
+#%endif
 
 %install
 cd $RPM_BUILD_DIR/lustre-%{version}
 make install prefix=$RPM_BUILD_ROOT
 
-%ifarch i386
-cd $RPM_BUILD_DIR/lustre-%{version}-lib/lustre-%{version}
-make install prefix=$RPM_BUILD_ROOT
-%endif
+#%ifarch i386
+#cd $RPM_BUILD_DIR/lustre-%{version}-lib/lustre-%{version}
+#make install prefix=$RPM_BUILD_ROOT
+#%endif
 
 %ifarch alpha
 # this hurts me
@@ -110,11 +110,15 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/sbin/lmc
 %attr(-, root, root) /usr/sbin/lctl
 %attr(-, root, root) /usr/sbin/lconf
+%attr(-, root, root) /usr/sbin/lactive
 %attr(-, root, root) /usr/sbin/llanalyze
 %attr(-, root, root) /usr/sbin/lfind
 %attr(-, root, root) /usr/sbin/lstripe
 %attr(-, root, root) /usr/sbin/mcreate
 %attr(-, root, root) /usr/sbin/mkdirmany
+%attr(-, root, root) /usr/sbin/llstat.pl
+%attr(-, root, root) /usr/sbin/llobdstat.pl
+%attr(-, root, root) /usr/sbin/load_ldap.sh
 %attr(-, root, root) /usr/lib/lustre/python/*
 %attr(-, root, root) /usr/lib/lustre/examples/llmount.sh
 %attr(-, root, root) /usr/lib/lustre/examples/llmountcleanup.sh
@@ -122,6 +126,9 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/lib/lustre/examples/local.sh
 %attr(-, root, root) /usr/lib/lustre/examples/uml.sh
 %attr(-, root, root) /usr/lib/lustre/examples/lov.sh
+%attr(-, root, root) /usr/lib/lustre/examples/echo.sh
+%attr(-, root, root) /usr/lib/lustre/examples/llechocleanup.sh
+
 %attr(-, root, root) /etc/init.d/lustre
 %attr(-, root, root) /usr/sbin/acceptor
 %attr(-, root, root) /usr/sbin/ptlctl
@@ -130,20 +137,26 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /lib/libptlctl.a
 %attr(-, root, root) /lib/libtcpnal.a
 %attr(-, root, root) /usr/include/lustre/*.h
+%attr(-, root, root) /usr/sbin/lload
+%attr(-, root, root) /usr/sbin/obdbarrier
+%attr(-, root, root) /usr/sbin/obdio
+%attr(-, root, root) /usr/sbin/routerstat
+%attr(-, root, root) /usr/sbin/wirecheck
+
 %ifarch alpha
 %attr(-, root, root) /usr/sbin/mcpload
 %endif
 
 %files -n lustre-doc
-#%attr(-, root, root) %doc COPYING FDL
+%attr(-, root, root) %doc COPYING FDL
 %attr(-, root, root) %doc doc/lustre.pdf doc/lustre-HOWTO.txt
-%attr(-, root, root) %doc tests/client-echo.cfg tests/client-mount.cfg
-%attr(-, root, root) %doc tests/client-mount2.cfg
-%attr(-, root, root) %doc tests/elan-client.cfg tests/elan-server.cfg
-%attr(-, root, root) %doc tests/ldlm.cfg tests/lustre.cfg
-%attr(-, root, root) %doc tests/mds.cfg tests/net-client.cfg
-%attr(-, root, root) %doc tests/net-local.cfg tests/net-server.cfg
-%attr(-, root, root) %doc tests/obdecho.cfg tests/obdfilter.cfg
+#%attr(-, root, root) %doc tests/client-echo.cfg tests/client-mount.cfg
+#%attr(-, root, root) %doc tests/client-mount2.cfg
+#%attr(-, root, root) %doc tests/elan-client.cfg tests/elan-server.cfg
+#%attr(-, root, root) %doc tests/ldlm.cfg tests/lustre.cfg
+#%attr(-, root, root) %doc tests/mds.cfg tests/net-client.cfg
+#%attr(-, root, root) %doc tests/net-local.cfg tests/net-server.cfg
+#%attr(-, root, root) %doc tests/obdecho.cfg tests/obdfilter.cfg
 
 %files -n lustre-modules
 %attr(-, root, root) %doc COPYING
@@ -152,6 +165,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/mdc.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/mds.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/fsfilt_ext3.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/fsfilt_reiserfs.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdclass.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdecho.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdfilter.o
@@ -159,6 +173,8 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/osc.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ost.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ptlrpc.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ptlbd.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/cobd.o
 #portals modules
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/kptlrouter.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/*nal.o
@@ -171,26 +187,26 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %files -n lustre-source
 %attr(-, root, root) /usr/src/lustre-%{version}
 
-%ifarch i386
-%files -n liblustre
-%attr(-, root, root) /lib/lustre
-%attr(-, root, root) /lib/lustre/liblov.a
-%attr(-, root, root) /lib/lustre/liblustreclass.a
-%attr(-, root, root) /lib/lustre/libptlrpc.a
-%attr(-, root, root) /lib/lustre/libobdecho.a
-%attr(-, root, root) /lib/lustre/libldlm.a
-%attr(-, root, root) /lib/lustre/libosc.a
-%attr(-, root, root) /usr/sbin/lctl
-%attr(-, root, root) /usr/sbin/lfind
-%attr(-, root, root) /usr/sbin/lstripe
-%attr(-, root, root) /usr/sbin/obdio
-%attr(-, root, root) /usr/sbin/obdbarrier
-%attr(-, root, root) /usr/sbin/obdstat
-%attr(-, root, root) /usr/sbin/lload
-%attr(-, root, root) /usr/sbin/lconf
-%attr(-, root, root) /usr/sbin/lmc
-%attr(-, root, root) /usr/sbin/llanalyze
-%endif
+#%ifarch i386
+#%files -n liblustre
+#%attr(-, root, root) /lib/lustre
+#%attr(-, root, root) /lib/lustre/liblov.a
+#%attr(-, root, root) /lib/lustre/liblustreclass.a
+#%attr(-, root, root) /lib/lustre/libptlrpc.a
+#%attr(-, root, root) /lib/lustre/libobdecho.a
+#%attr(-, root, root) /lib/lustre/libldlm.a
+#%attr(-, root, root) /lib/lustre/libosc.a
+#%attr(-, root, root) /usr/sbin/lctl
+#%attr(-, root, root) /usr/sbin/lfind
+#%attr(-, root, root) /usr/sbin/lstripe
+#%attr(-, root, root) /usr/sbin/obdio
+#%attr(-, root, root) /usr/sbin/obdbarrier
+#%attr(-, root, root) /usr/sbin/obdstat
+#%attr(-, root, root) /usr/sbin/lload
+#%attr(-, root, root) /usr/sbin/lconf
+#%attr(-, root, root) /usr/sbin/lmc
+#%attr(-, root, root) /usr/sbin/llanalyze
+#%endif
 
 
 %files -n lustre-ldap
@@ -198,7 +214,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /etc/openldap/schema/lustre.schema
 %attr(-, root, root) /usr/lib/lustre/lustre2ldif.xsl
 %attr(-, root, root) /usr/lib/lustre/top.ldif
-%dir /var/lib/ldap/lustre
+#%dir /var/lib/ldap/lustre
 %attr(700, ldap, ldap) /var/lib/ldap/lustre
 
 %post

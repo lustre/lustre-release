@@ -1,8 +1,10 @@
 #!/bin/bash
 
+export PATH=`dirname $0`/../utils:$PATH
+
 config=${1:-lov.xml}
 
-LMC=${LMC:-../utils/lmc}
+LMC=${LMC:-lmc}
 TMP=${TMP:-/tmp}
 
 MDSDEV=${MDSDEV:-$TMP/mds1}

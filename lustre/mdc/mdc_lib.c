@@ -98,8 +98,7 @@ void mds_create_pack(struct ptlrpc_request *req, int offset,
 void mds_open_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *op_data,
                    __u32 mode, __u64 rdev, __u32 uid, __u32 gid, __u64 time,
-                   __u32 flags,
-                   const void *data, int datalen)
+                   __u32 flags, const void *data, int datalen)
 {
         struct mds_rec_create *rec;
         char *tmp;

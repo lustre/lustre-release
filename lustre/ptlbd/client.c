@@ -169,7 +169,7 @@ int ptlbd_cl_disconnect(struct lustre_handle *conn, int failover)
                 GOTO(out_req, rc = -ENOMEM);
 
         request->rq_replen = lustre_msg_size(0, NULL);
-        request->rq_level = LUSTRE_CONN_RECOVD;
+        request->rq_level = LUSTRE_CONN_RECOVER;
 
         rc = ptlrpc_queue_wait(request);
 

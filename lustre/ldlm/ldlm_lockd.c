@@ -311,7 +311,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         ldlm_add_waiting_lock(lock);
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
-        req->rq_level = LUSTRE_CONN_RECOVD;
+        req->rq_level = LUSTRE_CONN_RECOVER;
         req->rq_timeout = 2; /* 2 second timeout for initial AST reply */
         rc = ptlrpc_queue_wait(req);
         if (rc == -ETIMEDOUT || rc == -EINTR) {
@@ -373,7 +373,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         LDLM_DEBUG(lock, "server preparing completion AST");
         req->rq_replen = lustre_msg_size(0, NULL);
 
-        req->rq_level = LUSTRE_CONN_RECOVD;
+        req->rq_level = LUSTRE_CONN_RECOVER;
         req->rq_timeout = 2; /* 2 second timeout for initial AST reply */
         rc = ptlrpc_queue_wait(req);
         if (rc == -ETIMEDOUT || rc == -EINTR) {

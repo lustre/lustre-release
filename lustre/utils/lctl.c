@@ -108,8 +108,8 @@ command_t cmdlist[] = {
         {"newdev", jt_obd_newdev, 0, "create a new device\n"
          "usage: newdev"},
         {"device", jt_obd_device, 0,
-         "set current device to <%uuid|$name|devno>\n"
-         "usage: device <%uuid|$name|devno>"},
+         "set current device to <%name|$name|devno>\n"
+         "usage: device <%name|$name|devno>"},
         {"device_list", jt_obd_list, 0, "show all devices\n"
          "usage: device_list"},
         {"lustre_build_version", jt_get_version, 0,

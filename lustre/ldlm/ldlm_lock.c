@@ -652,8 +652,11 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                     !(lock->l_flags & LDLM_FL_LOCAL))
                         continue;
 
-                if ((flags & LDLM_FL_MATCH_DATA) && lock->l_data != data)
+                if ((flags & LDLM_FL_MATCH_DATA) && lock->l_data != data) {
+                        LDLM_DEBUG(lock, "data mismatch: have %p, want %p",
+                                   lock->l_data, data);
                         continue;
+                }
 
                 ldlm_lock_addref_internal(lock, mode);
                 return lock;

@@ -32,7 +32,7 @@
 #include <linux/version.h>
 #include <asm/system.h>
 #include <asm/uaccess.h>
-
+#include "llite_internal.h"
 
 #include <linux/fs.h>
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
@@ -323,10 +323,10 @@ void ll_truncate(struct inode *inode)
                 return;
         }
 
-        /* vmtruncate just threw away our dirty pages, make sure
+        /* vmtruncate will just throw away our dirty pages, make sure
          * we don't think they're still dirty, being careful to round
          * i_size to the first whole page that was tossed */
-        ll_remove_dirty(inode,
+        err = ll_clear_dirty_pages(ll_i2obdconn(inode), lsm,
                         (inode->i_size + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT,
                         ~0);
 
@@ -417,6 +417,130 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
  * yet.
  */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static unsigned long ll_local_cache_dirty_pages;
+static unsigned long ll_max_dirty_pages = 20 * 1024 * 1024 / PAGE_SIZE;
+
+static spinlock_t ll_local_cache_page_count_lock = SPIN_LOCK_UNLOCKED;
+
+int ll_rd_dirty_pages(char *page, char **start, off_t off, int count, int *eof,
+                      void *data)
+{
+        unsigned long dirty_count;
+        spin_lock(&ll_local_cache_page_count_lock);
+        dirty_count = ll_local_cache_dirty_pages;
+        spin_unlock(&ll_local_cache_page_count_lock);
+        return snprintf(page, count, "%lu\n", dirty_count);
+}
+
+int ll_rd_max_dirty_pages(char *page, char **start, off_t off, int count,
+                          int *eof, void *data)
+{
+        unsigned long max_dirty;
+        spin_lock(&ll_local_cache_page_count_lock);
+        max_dirty = ll_max_dirty_pages;
+        spin_unlock(&ll_local_cache_page_count_lock);
+        return snprintf(page, count, "%lu\n", max_dirty);
+}
+
+int ll_wr_max_dirty_pages(struct file *file, const char *buffer,
+                          unsigned long count, void *data)
+{
+        unsigned long max_dirty;
+        signed long max_dirty_signed;
+        char kernbuf[20], *end;
+        
+        if (count > (sizeof(kernbuf) - 1))
+                return -EINVAL;
+
+        if (copy_from_user(kernbuf, buffer, count))
+                return -EFAULT;
+
+        kernbuf[count] = '\0';
+
+        max_dirty_signed = simple_strtol(kernbuf, &end, 0);
+        if (kernbuf == end)
+                return -EINVAL;
+        max_dirty = (unsigned long)max_dirty_signed;
+
+#if 0
+        if (max_dirty < ll_local_cache_dirty_pages)
+                flush_to_new_max_dirty();
+#endif
+
+        spin_lock(&ll_local_cache_page_count_lock);
+        CDEBUG(D_CACHE, "changing max_dirty from %lu to %lu\n",
+               ll_max_dirty_pages, max_dirty);
+        ll_max_dirty_pages = max_dirty;
+        spin_unlock(&ll_local_cache_page_count_lock);
+        return count;
+}
+
+static int ll_local_cache_full(void)
+{
+        int full = 0;
+        spin_lock(&ll_local_cache_page_count_lock);
+        if (ll_max_dirty_pages &&
+            ll_local_cache_dirty_pages >= ll_max_dirty_pages) {
+                full = 1;
+        }
+        spin_unlock(&ll_local_cache_page_count_lock);
+        /* XXX instrument? */
+        /* XXX trigger async writeback when full, or 75% of full? */
+        return full;
+}
+
+static void ll_local_cache_flushed_pages(unsigned long pgcount)
+{
+        unsigned long dirty_count;
+        spin_lock(&ll_local_cache_page_count_lock);
+        dirty_count = ll_local_cache_dirty_pages;
+        ll_local_cache_dirty_pages -= pgcount;
+        CDEBUG(D_CACHE, "dirty pages: %lu->%lu)\n",
+               dirty_count, ll_local_cache_dirty_pages);
+        spin_unlock(&ll_local_cache_page_count_lock);
+        LASSERT(dirty_count >= pgcount);
+}
+
+static void ll_local_cache_dirtied_pages(unsigned long pgcount)
+{
+        unsigned long dirty_count;
+        spin_lock(&ll_local_cache_page_count_lock);
+        dirty_count = ll_local_cache_dirty_pages;
+        ll_local_cache_dirty_pages += pgcount;
+        CDEBUG(D_CACHE, "dirty pages: %lu->%lu\n",
+               dirty_count, ll_local_cache_dirty_pages);
+        spin_unlock(&ll_local_cache_page_count_lock);
+        /* XXX track maximum cached, report to lprocfs */
+}
+
+int ll_clear_dirty_pages(struct lustre_handle *conn, struct lov_stripe_md *lsm,
+                         unsigned long start, unsigned long end)
+{
+        unsigned long cleared;
+        int rc;
+
+        ENTRY;
+        rc = obd_clear_dirty_pages(conn, lsm, start, end, &cleared);
+        if (!rc)
+                ll_local_cache_flushed_pages(cleared);
+        RETURN(rc);
+}
+
+int ll_mark_dirty_page(struct lustre_handle *conn, struct lov_stripe_md *lsm,
+                       unsigned long index)
+{
+        int rc;
+
+        ENTRY;
+        if (ll_local_cache_full())
+                RETURN(-EDQUOT);
+
+        rc = obd_mark_page_dirty(conn, lsm, index);
+        if (!rc)
+                ll_local_cache_dirtied_pages(1);
+        RETURN(rc);
+}
+
 static int ll_writepage(struct page *page)
 {
         struct inode *inode = page->mapping->host;
@@ -440,6 +564,7 @@ static int ll_commit_write(struct file *file, struct page *page,
 {
         struct inode *inode = page->mapping->host;
         loff_t size;
+        int rc = 0;
         ENTRY;
 
         LASSERT(inode == file->f_dentry->d_inode);
@@ -447,34 +572,33 @@ static int ll_commit_write(struct file *file, struct page *page,
 
         CDEBUG(D_INODE, "inode %p is writing page %p from %d to %d at %lu\n",
                inode, page, from, to, page->index);
-        /* to match full page case in prepare_write */
-        SetPageUptodate(page);
-        /* mark the page dirty, put it on mapping->dirty,
-         * mark the inode PAGES_DIRTY, put it on sb->dirty */
-        if (!PageDirty(page))
+        if (!PageDirty(page)) {
                 lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
                                      LPROC_LL_DIRTY_MISSES);
-        else
+                rc = ll_mark_dirty_page(ll_i2obdconn(inode),
+                                        ll_i2info(inode)->lli_smd,
+                                        page->index);
+                if (rc < 0 && rc != -EDQUOT)
+                        RETURN(rc); /* XXX lproc counter here? */
+        } else {
                 lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
                                      LPROC_LL_DIRTY_HITS);
+        }
 
         size = (((obd_off)page->index) << PAGE_SHIFT) + to;
         if (size > inode->i_size)
                 inode->i_size = size;
 
-        /* XXX temporary, bug 1286 */
-        {
-                struct ll_dirty_offsets *lldo = &ll_i2info(inode)->lli_dirty;
-                int rc;
-                if ((lldo->do_num_dirty * PAGE_CACHE_SIZE) > 10 * 1024 * 1024) {
-                        rc = ll_batch_writepage(inode, page);
-                        lock_page(page); /* caller expects to unlock */
-                        RETURN(rc);
-                }
-        }
-
+        SetPageUptodate(page);
         set_page_dirty(page);
-        ll_record_dirty(inode, page->index);
+
+        /* This means that we've hit either the local cache limit or the limit
+         * of the OST's grant. */
+        if (rc == -EDQUOT) {
+                int rc = ll_batch_writepage(inode, page);
+                lock_page(page); /* caller expects to unlock */
+                RETURN(rc);
+        }
 
         RETURN(0);
 } /* ll_commit_write */

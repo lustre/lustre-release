@@ -156,44 +156,37 @@ int filter_finish_transno(struct obd_export *export, void *handle,
                 RETURN(rc);
 
         /* we don't allocate new transnos for replayed requests */
-#if 0
-        /* perhaps if transno already set? or should level be in oti? */
-        if (req->rq_level == LUSTRE_CONN_RECOVD)
-                GOTO(out, rc = 0);
-#endif
-
-        off = fed->fed_lr_off;
-
-        spin_lock(&filter->fo_translock);
-        last_rcvd = le64_to_cpu(filter->fo_fsd->fsd_last_rcvd);
-        filter->fo_fsd->fsd_last_rcvd = cpu_to_le64(last_rcvd + 1);
-        spin_unlock(&filter->fo_translock);
-        if (oti)
+        if (oti && oti->oti_transno == 0) {
+                spin_lock(&filter->fo_translock);
+                last_rcvd = le64_to_cpu(filter->fo_fsd->fsd_last_rcvd) + 1;
+                filter->fo_fsd->fsd_last_rcvd = cpu_to_le64(last_rcvd);
+                spin_unlock(&filter->fo_translock);
                 oti->oti_transno = last_rcvd;
-        fcd->fcd_last_rcvd = cpu_to_le64(last_rcvd);
-        fcd->fcd_mount_count = filter->fo_fsd->fsd_mount_count;
+                fcd->fcd_last_rcvd = cpu_to_le64(last_rcvd);
+                fcd->fcd_mount_count = filter->fo_fsd->fsd_mount_count;
 
-        /* get this from oti */
-#if 0
-        if (oti)
-                fcd->fcd_last_xid = cpu_to_le64(oti->oti_xid);
-        else
-#else
-        fcd->fcd_last_xid = 0;
-#endif
-        fsfilt_set_last_rcvd(obd, last_rcvd, handle, filter_commit_cb);
-        written = lustre_fwrite(filter->fo_rcvd_filp, (char *)fcd, sizeof(*fcd),
-                                &off);
-        CDEBUG(D_INODE, "wrote trans #"LPD64" for client %s at #%d: written = "
-               LPSZ"\n", last_rcvd, fcd->fcd_uuid, fed->fed_lr_idx, written);
+                /* could get xid from oti, if it's ever needed */
+                fcd->fcd_last_xid = 0;
 
-        if (written == sizeof(*fcd))
-                RETURN(0);
-        CERROR("error writing to last_rcvd file: rc = %d\n", (int)written);
-        if (written >= 0)
-                RETURN(-EIO);
+                off = fed->fed_lr_off;
+                fsfilt_set_last_rcvd(obd, last_rcvd, handle, filter_commit_cb);
+                written = lustre_fwrite(filter->fo_rcvd_filp, (char *)fcd, 
+                                        sizeof(*fcd), &off);
+                CDEBUG(D_HA, "wrote trans #"LPD64" for client %s at #%d: "
+                       "written = "LPSZ"\n", last_rcvd, fcd->fcd_uuid, 
+                       fed->fed_lr_idx, written);
 
-        RETURN(written);
+                if (written == sizeof(*fcd))
+                        RETURN(0);
+                CERROR("error writing to last_rcvd file: rc = %d\n", 
+                       (int)written);
+                if (written >= 0)
+                        RETURN(-EIO);
+
+                RETURN(written);
+        }                 
+
+        RETURN(0);
 }
 
 static inline void f_dput(struct dentry *dentry)
@@ -237,7 +230,7 @@ int filter_client_add(struct obd_device *obd, struct filter_obd *filter,
 
         LASSERT(bitmap != NULL);
 
-        /* XXX if mcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
+        /* XXX if fcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
         if (!strcmp(fed->fed_fcd->fcd_uuid, "OBD_CLASS_UUID"))
                 RETURN(0);
 
@@ -319,14 +312,17 @@ int filter_client_free(struct obd_export *exp, int failover)
         struct obd_run_ctxt saved;
         int written;
         loff_t off;
+        ENTRY;
 
         if (!fed->fed_fcd)
                 RETURN(0);
 
-        if (failover != 0) {
-                OBD_FREE(fed->fed_fcd, sizeof(*fed->fed_fcd));
-                RETURN(0);
-        }
+        if (failover != 0)
+                GOTO(free, 0);
+
+        /* XXX if fcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
+        if (!strcmp(fed->fed_fcd->fcd_uuid, "OBD_CLASS_UUID"))
+                GOTO(free, 0);
 
         LASSERT(filter->fo_last_rcvd_slots != NULL);
 
@@ -362,9 +358,10 @@ int filter_client_free(struct obd_export *exp, int failover)
                        fed->fed_fcd->fcd_uuid, fed->fed_lr_idx,fed->fed_lr_off);
         }
 
+free:
         OBD_FREE(fed->fed_fcd, sizeof(*fed->fed_fcd));
 
-        return 0;
+        RETURN(0);
 }
 
 static int filter_free_server_data(struct filter_obd *filter)
@@ -1126,7 +1123,7 @@ static int filter_close_internal(struct obd_export *exp,
         struct filter_dentry_data *fdd = dchild->d_fsdata;
         struct lustre_handle parent_lockh;
         int rc, rc2, cleanup_phase = 0;
-        struct dentry *dparent;
+        struct dentry *dparent = NULL;
         struct obd_run_ctxt saved;
         ENTRY;
 
@@ -2174,7 +2171,7 @@ static int filter_commit_write(struct niobuf_local *lnb, int err)
         return lustre_commit_write(lnb);
 }
 
-static int filter_preprw(int cmd, struct obd_export *exp,
+static int filter_preprw(int cmd, struct obd_export *exp, struct obdo *obdo,
                          int objcount, struct obd_ioobj *obj,
                          int niocount, struct niobuf_remote *nb,
                          struct niobuf_local *res, void **desc_private,
@@ -2561,7 +2558,7 @@ static int filter_brw(int cmd, struct lustre_handle *conn,
         ioo.ioo_type = S_IFREG;
         ioo.ioo_bufcnt = oa_bufs;
 
-        ret = filter_preprw(cmd, export, 1, &ioo, oa_bufs, rnb, lnb,
+        ret = filter_preprw(cmd, export, NULL, 1, &ioo, oa_bufs, rnb, lnb,
                             &desc_private, oti);
         if (ret != 0)
                 GOTO(out, ret);
@@ -2664,12 +2661,10 @@ out:
         RETURN(rc);
 }
 
-static int filter_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
+static int filter_statfs(struct obd_export *exp, struct obd_statfs *osfs)
 {
-        struct obd_device *obd;
+        struct obd_device *obd = exp->exp_obd;
         ENTRY;
-
-        obd = class_conn2obd(conn);
 
         RETURN(fsfilt_statfs(obd, obd->u.filter.fo_sb, osfs));
 }

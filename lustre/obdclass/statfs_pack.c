@@ -66,7 +66,6 @@ void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs)
 
 int obd_self_statfs(struct obd_device *obd, struct statfs *sfs)
 {
-        struct lustre_handle conn;
         struct obd_export *export, *my_export = NULL;
         struct obd_statfs osfs = { 0 };
         int rc;
@@ -86,9 +85,8 @@ int obd_self_statfs(struct obd_device *obd, struct statfs *sfs)
                 export = class_export_get(export);
                 spin_unlock(&obd->obd_dev_lock);
         }
-        conn.cookie = export->exp_handle.h_cookie;
 
-        rc = obd_statfs(&conn, &osfs);
+        rc = obd_statfs(export, &osfs);
         if (!rc)
                 statfs_unpack(sfs, &osfs);
 

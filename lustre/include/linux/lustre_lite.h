@@ -52,19 +52,6 @@ struct ll_dentry_data {
 
 #define ll_d2d(dentry) ((struct ll_dentry_data*) dentry->d_fsdata)
 
-struct ll_dirty_offsets {
-        rb_root_t       do_root;
-        spinlock_t      do_lock;
-        unsigned long   do_num_dirty;
-};
-
-void ll_lldo_init(struct ll_dirty_offsets *lldo);
-void ll_record_dirty(struct inode *inode, unsigned long offset);
-void ll_remove_dirty(struct inode *inode, unsigned long start,
-                     unsigned long end);
-int ll_find_dirty(struct ll_dirty_offsets *lldo, unsigned long *start,
-                  unsigned long *end);
-int ll_farthest_dirty(struct ll_dirty_offsets *lldo, unsigned long *farthest);
 extern struct file_operations ll_pgcache_seq_fops;
 
 struct ll_inode_info {
@@ -74,7 +61,6 @@ struct ll_inode_info {
         struct list_head        lli_read_extents;
         loff_t                  lli_maxbytes;
         spinlock_t              lli_read_extent_lock;
-        struct ll_dirty_offsets lli_dirty;
         unsigned long           lli_flags;
 #define LLI_F_HAVE_SIZE_LOCK    0
 
@@ -258,8 +244,9 @@ do {                                                                           \
         down(&ll_d2d(de)->lld_it_sem);                                         \
         LASSERT(de->d_it == NULL);                                             \
         de->d_it = it;                                                         \
-        CDEBUG(D_DENTRY, "D_IT DOWN dentry %p fsdata %p intent: %s sem %d\n",  \
-               de, ll_d2d(de), ldlm_it2str(de->d_it->it_op),                   \
+        CDEBUG(D_DENTRY,                                                       \
+               "D_IT DOWN dentry %p fsdata %p intent: %p %s sem %d\n",         \
+               de, ll_d2d(de), de->d_it, ldlm_it2str(de->d_it->it_op),         \
                atomic_read(&(ll_d2d(de)->lld_it_sem.count)));                  \
 } while(0)
 
@@ -271,8 +258,8 @@ do {                                                                           \
         LASSERT(it);                                                           \
         LASSERT(it->it_op != IT_RELEASED_MAGIC);                               \
                                                                                \
-        CDEBUG(D_DENTRY, "D_IT UP dentry %p fsdata %p intent: %s\n",           \
-               de, ll_d2d(de), ldlm_it2str(de->d_it->it_op));                  \
+        CDEBUG(D_DENTRY, "D_IT UP dentry %p fsdata %p intent: %p %s\n",        \
+               de, ll_d2d(de), de->d_it, ldlm_it2str(de->d_it->it_op));        \
         de->d_it = NULL;                                                       \
         it->it_op = IT_RELEASED_MAGIC;                                         \
         up(&ll_d2d(de)->lld_it_sem);                                           \
@@ -281,8 +268,7 @@ do {                                                                           \
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 
 enum {
-         LPROC_LL_DIRTY_PAGES       = 0,
-         LPROC_LL_DIRTY_HITS,
+         LPROC_LL_DIRTY_HITS = 0,
          LPROC_LL_DIRTY_MISSES,
          LPROC_LL_WB_WRITEPAGE,
          LPROC_LL_WB_PRESSURE,

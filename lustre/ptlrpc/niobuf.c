@@ -29,6 +29,7 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_lib.h>
 #include <linux/obd.h>
+#include "ptlrpc_internal.h"
 
 static int ptl_send_buf(struct ptlrpc_request *request,
                         struct ptlrpc_connection *conn, int portal)
@@ -672,6 +673,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         spin_unlock_irqrestore (&request->rq_lock, flags);
 
         request->rq_sent = LTIME_S(CURRENT_TIME);
+        ptlrpc_pinger_sending_on_import(request->rq_import);
         rc = ptl_send_buf(request, request->rq_connection,
                           request->rq_request_portal);
         if (rc == 0)

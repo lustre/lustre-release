@@ -41,6 +41,20 @@
 #include <linux/init.h>
 #include <linux/lprocfs_status.h>
 
+inline void oti_init(struct obd_trans_info *oti,
+                           struct ptlrpc_request *req)
+{
+        if(oti == NULL)
+                return;
+        memset(oti, 0, sizeof *oti);
+
+        
+        if (req->rq_repmsg && req->rq_reqmsg != 0)
+                oti->oti_transno = req->rq_repmsg->transno;
+
+        EXIT;
+}
+
 inline void oti_to_request(struct obd_trans_info *oti,
                            struct ptlrpc_request *req)
 {
@@ -108,7 +122,6 @@ static int ost_getattr(struct ptlrpc_request *req)
 
 static int ost_statfs(struct ptlrpc_request *req)
 {
-        struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct obd_statfs *osfs;
         int rc, size = sizeof(*osfs);
         ENTRY;
@@ -120,7 +133,7 @@ static int ost_statfs(struct ptlrpc_request *req)
         osfs = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*osfs));
         memset(osfs, 0, size);
 
-        req->rq_status = obd_statfs(conn, osfs);
+        req->rq_status = obd_statfs(req->rq_export, osfs);
         if (req->rq_status != 0)
                 CERROR("ost: statfs failed: rc %d\n", req->rq_status);
 
@@ -453,7 +466,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
         if (desc == NULL)
                 GOTO(out_local, rc = -ENOMEM);
 
-        rc = obd_preprw(OBD_BRW_READ, req->rq_export, 1, ioo, npages,
+        rc = obd_preprw(OBD_BRW_READ, req->rq_export, NULL, 1, ioo, npages,
                         pp_rnb, local_nb, &desc_priv, NULL);
         if (rc != 0)
                 GOTO(out_bulk, rc);
@@ -627,7 +640,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (desc == NULL)
                 GOTO(out_local, rc = -ENOMEM);
 
-        rc = obd_preprw(OBD_BRW_WRITE, req->rq_export, objcount, ioo,
+        rc = obd_preprw(OBD_BRW_WRITE, req->rq_export, NULL, objcount, ioo,
                         npages, pp_rnb, local_nb, &desc_priv, oti);
         if (rc != 0)
                 GOTO (out_bulk, rc);
@@ -857,7 +870,8 @@ static int filter_recovery_request(struct ptlrpc_request *req,
 
 static int ost_handle(struct ptlrpc_request *req)
 {
-        struct obd_trans_info trans_info = { 0, }, *oti = &trans_info;
+        struct obd_trans_info trans_info = { 0, };
+        struct obd_trans_info *oti = &trans_info;
         int should_process, fail = OBD_FAIL_OST_ALL_REPLY_NET, rc = 0;
         ENTRY;
 
@@ -891,6 +905,8 @@ static int ost_handle(struct ptlrpc_request *req)
 
         if (strcmp(req->rq_obd->obd_type->typ_name, "ost") != 0)
                 GOTO(out, rc = -EINVAL);
+
+        oti_init(oti, req);
 
         switch (req->rq_reqmsg->opc) {
         case OST_CONNECT:

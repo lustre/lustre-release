@@ -95,8 +95,12 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                         if (next)
                                 cur_root = (proc ? proc :
                                                    proc_mkdir(cur, cur_root));
-                        else if (!proc)
-                                proc = create_proc_entry(cur, 0444, cur_root);
+                        else if (!proc) {
+                                mode_t mode = 0444;
+                                if (list->write_fptr)
+                                        mode = 0644;
+                                proc = create_proc_entry(cur, mode, cur_root);
+                        }
                 }
 
                 OBD_FREE(pathcopy, pathsize);

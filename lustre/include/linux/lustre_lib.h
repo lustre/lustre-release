@@ -538,10 +538,10 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define CHECKSUM_BULK 0
 
 #if CHECKSUM_BULK
-static inline void ost_checksum(__u64 *cksum, void *addr, int len)
+static inline void ost_checksum(obd_count *cksum, void *addr, int len)
 {
         unsigned char *ptr = (unsigned char *)addr;
-        __u64          sum = 0;
+        obd_count          sum = 0;
 
         /* very stupid, but means I don't have to think about byte order */
         while (len-- > 0)

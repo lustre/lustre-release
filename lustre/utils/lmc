@@ -103,66 +103,66 @@ Object creation command summary:
 PARAM = Lustre.Options.PARAM
 lmc_options = [
     # lmc input/output options
-    ('reference', "Print short reference for commands"), 
-    ('verbose,v', "Print system commands as they are run"),
-    ('merge,m', "", PARAM),
-    ('output,o', "", PARAM),
+    ('reference', "Print short reference for commands."), 
+    ('verbose,v', "Print system commands as they are run."),
+    ('merge,m', "Append to the specified config file.", PARAM),
+    ('output,o', "Write XML configuration into given output file. Overwrite existing content.", PARAM),
     ('input,i', "", PARAM),
-    ('batch', "", PARAM),
+    ('batch', "Used to execute lmc commands in batch mode.", PARAM),
 
     # commands
     ('add', "", PARAM),
     
     # node options
-    ('node', "", PARAM),
-    ('timeout', "", PARAM),
+    ('node', "Add a new node in the cluster configuration.", PARAM),
+    ('timeout', "Set timeout to initiate recovery.", PARAM),
     ('upcall', "Set both lustre and portals upcall scripts.", PARAM),
     ('lustre_upcall', "Set location of lustre upcall script.", PARAM),
     ('portals_upcall', "Set location of portals upcall script.", PARAM),
 
     # network 
-    ('nettype', "", PARAM),
-    ('nid', "", PARAM),
-    ('tcpbuf', "", PARAM, 0),
-    ('port', "", PARAM, DEFAULT_PORT),
-    ('nid_exchange', "", PARAM, 0),
-    ('irq_affinity', "", PARAM, 0),
-    ('hostaddr', "", PARAM, ""),
-    ('cluster_id', "", PARAM, "0"),
+    ('nettype', "Specify the network type. This can be tcp/elan/gm/scimac.", PARAM),
+    ('nid', "Give the network ID, e.g ElanID/IP Address as used by portals.", PARAM),
+    ('tcpbuf', "Optional arguement to specify the TCP buffer size.", PARAM, "0"),
+    ('port', "Optional arguement to specify the TCP port number.", PARAM, DEFAULT_PORT),
+    ('nid_exchange', "Optional arguement to indicate if nid exchange should be done.", PARAM, 0),
+    ('irq_affinity', "Optional arguement.", PARAM, 0),
+    ('hostaddr', "", PARAM,""),
+    ('cluster_id', "Specify the cluster ID", PARAM, "0"),
 
     # routes
-    ('route', "", PARAM),
-    ('router', ""),
-    ('gw', "", PARAM),
+    ('route', "Add a new route for the cluster.", PARAM),
+    ('router', "Optional flag to mark a node as router."),
+    ('gw', "Specify the nid of the gateway for a route.", PARAM),
     ('gw_cluster_id', "", PARAM, "0"),
     ('target_cluster_id', "", PARAM, "0"),
-    ('lo', "", PARAM),
-    ('hi', "", PARAM, ""),
+    ('lo', "For a range route, this is the low value nid.", PARAM),
+    ('hi', "For a range route, this is a hi value nid.", PARAM,""),
 
     # servers: mds and ost
-    ('mds', "", PARAM),
-    ('ost', "", PARAM, ""),
-    ('osdtype', "", PARAM, "obdfilter"),
+    ('mds', "Specify MDS name.", PARAM),
+    ('ost', "Specify the OST name.", PARAM,""),
+    ('osdtype', "This could obdfilter or obdecho.", PARAM, "obdfilter"),
     ('failover', ""),
     ('group', "", PARAM),
-    ('dev', "", PARAM, ""),
-    ('size', "", PARAM, 0),
-    ('journal_size', "", PARAM, 0),
-    ('fstype', "", PARAM, "ext3"),
-    ('ostuuid', "", PARAM, ""),
-    ('nspath', "Local mount point of server namespace.", PARAM, ""),
+    ('dev', "Path of the device on local system.", PARAM,""),
+    ('size', "Specify the size of the device if needed.", PARAM,"0"),
+    ('journal_size', "Specify new journal size for underlying ext3 file system.", PARAM,"0"),
+    ('fstype', "Optional arguement to specify the filesystem type.", PARAM, "ext3"),
+    ('ostuuid', "", PARAM,""),
+    ('nspath', "Local mount point of server namespace.", PARAM,""),
     ('format', ""),
 
     # clients: mountpoint and echo
     ('echo_client', "", PARAM),
-    ('path', "", PARAM),
-    ('filesystem', "Lustre filesystem name", PARAM, ''),
+    ('path', "Specify the mountpoint for Lustre.", PARAM),
+    ('filesystem', "Lustre filesystem name", PARAM,""),
 
     # lov
-    ('lov', "", PARAM, ''),
-    ('stripe_sz', "", PARAM),
-    ('stripe_cnt', "", PARAM, 0),
-    ('stripe_pattern', "", PARAM, 0),
+    ('lov', "Specify LOV name.", PARAM,""),
+    ('stripe_sz', "Specify the stripe size in bytes.", PARAM),
+    ('stripe_cnt', "Specify the number of OSTs each file should be striped on.", PARAM, 0),
+    ('stripe_pattern', "Specify the stripe pattern. RAID 0 is the only one currently supported.", PARAM, 0),
 
     # cobd
     ('real_obd', "", PARAM),

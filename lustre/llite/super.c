@@ -121,6 +121,7 @@ static struct super_block *ll_read_super(struct super_block *sb,
         struct inode *root = 0;
         struct obd_device *obd;
         struct ll_sb_info *sbi;
+        struct obd_export *mdc_export;
         char *osc = NULL;
         char *mdc = NULL;
         int err;
@@ -130,7 +131,6 @@ static struct super_block *ll_read_super(struct super_block *sb,
         struct ptlrpc_connection *mdc_conn;
         struct ll_read_inode2_cookie lic;
         class_uuid_t uuid;
-        struct obd_uuid param_uuid;
 
         ENTRY;
 
@@ -158,8 +158,7 @@ static struct super_block *ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-        strncpy(param_uuid.uuid, mdc, sizeof(param_uuid.uuid));
-        obd = class_uuid2obd(&param_uuid);
+        obd = class_name2obd(mdc);
         if (!obd) {
                 CERROR("MDC %s: not setup or attached\n", mdc);
                 GOTO(out_free, sb = NULL);
@@ -173,8 +172,7 @@ static struct super_block *ll_read_super(struct super_block *sb,
 
         mdc_conn = sbi2mdc(sbi)->cl_import->imp_connection;
 
-        strncpy(param_uuid.uuid, osc, sizeof(param_uuid.uuid));
-        obd = class_uuid2obd(&param_uuid);
+        obd = class_name2obd(osc);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
                 GOTO(out_mdc, sb = NULL);
@@ -195,7 +193,13 @@ static struct super_block *ll_read_super(struct super_block *sb,
         sbi->ll_rootino = rootfid.id;
 
         memset(&osfs, 0, sizeof(osfs));
-        err = obd_statfs(&sbi->ll_mdc_conn, &osfs);
+        mdc_export = class_conn2export(&sbi->ll_mdc_conn);
+        if (mdc_export == NULL) {
+                CERROR("null mdc_export\n");
+                GOTO(out_osc, sb = NULL);
+        }
+        err = obd_statfs(mdc_export, &osfs);
+        class_export_put(mdc_export);
         sb->s_blocksize = osfs.os_bsize;
         sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
@@ -595,14 +599,19 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
 static int ll_statfs(struct super_block *sb, struct statfs *sfs)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
+        struct obd_export *mdc_exp = class_conn2export(&sbi->ll_mdc_conn);
+        struct obd_export *osc_exp;
         struct obd_statfs osfs;
         int rc;
         ENTRY;
 
+        if (mdc_exp == NULL)
+                RETURN(-EINVAL);
+
         CDEBUG(D_VFSTRACE, "VFS Op:\n");
         lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_STAFS);
         memset(sfs, 0, sizeof(*sfs));
-        rc = obd_statfs(&sbi->ll_mdc_conn, &osfs);
+        rc = obd_statfs(mdc_exp, &osfs);
         statfs_unpack(sfs, &osfs);
         if (rc)
                 CERROR("mdc_statfs fails: rc = %d\n", rc);
@@ -614,7 +623,11 @@ static int ll_statfs(struct super_block *sb, struct statfs *sfs)
 
         /* temporary until mds_statfs returns statfs info for all OSTs */
         if (!rc) {
-                rc = obd_statfs(&sbi->ll_osc_conn, &osfs);
+                osc_exp = class_conn2export(&sbi->ll_osc_conn);
+                if (osc_exp == NULL)
+                        GOTO(out, rc = -EINVAL);
+                rc = obd_statfs(osc_exp, &osfs);
+                class_export_put(osc_exp);
                 if (rc) {
                         CERROR("obd_statfs fails: rc = %d\n", rc);
                         GOTO(out, rc);
@@ -648,6 +661,7 @@ static int ll_statfs(struct super_block *sb, struct statfs *sfs)
         }
 
 out:
+        class_export_put(mdc_exp);
         RETURN(rc);
 }
 
@@ -727,7 +741,6 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         sema_init(&lli->lli_open_sem, 1);
         spin_lock_init(&lli->lli_read_extent_lock);
         INIT_LIST_HEAD(&lli->lli_read_extents);
-        ll_lldo_init(&lli->lli_dirty);
         lli->lli_flags = 0;
         /* We default to 2T-4k until the LSM is created/read, at which point
          * it'll be updated. */

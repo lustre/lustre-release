@@ -232,10 +232,10 @@ static int echo_setattr(struct lustre_handle *conn, struct obdo *oa,
 /* This allows us to verify that desc_private is passed unmolested */
 #define DESC_PRIV 0x10293847
 
-int echo_preprw(int cmd, struct obd_export *export, int objcount,
-                struct obd_ioobj *obj, int niocount, struct niobuf_remote *nb,
-                struct niobuf_local *res, void **desc_private,
-                struct obd_trans_info *oti)
+int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
+                int objcount, struct obd_ioobj *obj, int niocount,
+                struct niobuf_remote *nb, struct niobuf_local *res,
+                void **desc_private, struct obd_trans_info *oti)
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;

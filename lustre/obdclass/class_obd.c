@@ -465,6 +465,7 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
                 obd->obd_minor = minor;
                 obd->obd_type = type;
                 INIT_LIST_HEAD(&obd->obd_exports);
+                obd->obd_num_exports = 0;
                 INIT_LIST_HEAD(&obd->obd_imports);
                 spin_lock_init(&obd->obd_dev_lock);
                 init_waitqueue_head(&obd->obd_refcount_waitq);
@@ -788,6 +789,7 @@ EXPORT_SYMBOL(class_unregister_type);
 EXPORT_SYMBOL(class_get_type);
 EXPORT_SYMBOL(class_put_type);
 EXPORT_SYMBOL(class_name2dev);
+EXPORT_SYMBOL(class_name2obd);
 EXPORT_SYMBOL(class_uuid2dev);
 EXPORT_SYMBOL(class_uuid2obd);
 EXPORT_SYMBOL(class_export_get);

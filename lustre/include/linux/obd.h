@@ -10,10 +10,15 @@
 #ifndef __OBD_H
 #define __OBD_H
 
+#include <linux/lustre_otree.h>
+
 struct lov_oinfo { /* per-child structure */
         __u64 loi_id;              /* object ID on the target OST */
         struct lustre_handle *loi_handle; /* open file handle for obj on OST */
         int loi_ost_idx;           /* OST stripe index in lmd_objects array */
+        /* tracking offsets per file, per stripe.. */
+        struct otree *loi_dirty_ot; /* lets lov stack on osc */
+        struct otree loi_dirty_ot_inline;
 };
 
 struct lov_stripe_md {
@@ -91,9 +96,13 @@ struct filter_obd {
         struct file_operations *fo_fop;
         struct inode_operations *fo_iop;
         struct address_space_operations *fo_aops;
+
         struct list_head     fo_export_list;
         spinlock_t           fo_fddlock; /* protect setting dentry->d_fsdata */
         int                  fo_subdir_count;
+        spinlock_t           fo_grant_lock;       /* protects tot_granted */
+        obd_size             fo_tot_granted;
+        obd_size             fo_tot_cached;
 };
 
 struct mds_server_data;
@@ -107,6 +116,13 @@ struct client_obd {
         int                  cl_max_mds_easize;
         struct obd_device   *cl_containing_lov;
         kdev_t               cl_sandev;
+        struct semaphore     cl_dirty_sem;
+        obd_size             cl_dirty;  /* both in bytes */
+        obd_size             cl_dirty_granted;
+        /* this is just to keep existing infinitely caching behaviour between 
+         * clients and OSTs that don't have the grant code in yet.. it can 
+         * be yanked once everything speaks grants */
+        char                 cl_ost_can_grant;
 };
 
 struct mds_obd {
@@ -255,6 +271,7 @@ struct obd_device {
         wait_queue_head_t obd_refcount_waitq;
         struct proc_dir_entry *obd_proc_entry;
         struct list_head       obd_exports;
+        int                    obd_num_exports;
         struct list_head       obd_imports;
         struct ldlm_namespace *obd_namespace;
         struct ptlrpc_client   obd_ldlm_client; /* XXX OST/MDS only */
@@ -309,7 +326,7 @@ struct obd_ops {
                          struct obd_uuid *cluuid);
         int (*o_disconnect)(struct lustre_handle *conn, int failover);
 
-        int (*o_statfs)(struct lustre_handle *conn, struct obd_statfs *osfs);
+        int (*o_statfs)(struct obd_export *exp, struct obd_statfs *osfs);
         int (*o_syncfs)(struct obd_export *);
         int (*o_packmd)(struct lustre_handle *, struct lov_mds_md **disk_tgt,
                         struct lov_stripe_md *mem_src);
@@ -354,7 +371,7 @@ struct obd_ops {
         int (*o_iterate)(struct lustre_handle *conn,
                          int (*)(obd_id, obd_gr, void *),
                          obd_id *startid, obd_gr group, void *data);
-        int (*o_preprw)(int cmd, struct obd_export *,
+        int (*o_preprw)(int cmd, struct obd_export *, struct obdo *obdo,
                         int objcount, struct obd_ioobj *obj,
                         int niocount, struct niobuf_remote *remote,
                         struct niobuf_local *local, void **desc_private, 
@@ -378,6 +395,17 @@ struct obd_ops {
         int (*o_san_preprw)(int cmd, struct lustre_handle *conn,
                             int objcount, struct obd_ioobj *obj,
                             int niocount, struct niobuf_remote *remote);
+        int (*o_mark_page_dirty)(struct lustre_handle *conn,
+                                 struct lov_stripe_md *ea,
+                                 unsigned long offset);
+        int (*o_clear_dirty_pages)(struct lustre_handle *conn,
+                                   struct lov_stripe_md *ea,
+                                   unsigned long start,
+                                   unsigned long end,
+                                   unsigned long *cleared);
+        int (*o_last_dirty_offset)(struct lustre_handle *conn,
+                                   struct lov_stripe_md *ea,
+                                   unsigned long *offset);
         void (*o_destroy_export)(struct obd_export *export);
 };
 

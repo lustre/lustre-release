@@ -10,6 +10,7 @@
 #include <time.h>
 #include <string.h>
 #include <utime.h>
+#include <errno.h>
 
 void usage(char *prog)
 {
@@ -21,6 +22,8 @@ int main(int argc, char *argv[])
 {
 	long before_mknod, after_mknod;
 	long before_utime, after_utime;
+	const char *prog = argv[0];
+	const char *filename = argv[1];
 	struct stat st;
 	int rc;
 
@@ -28,56 +31,57 @@ int main(int argc, char *argv[])
 		usage(argv[0]);
 
 	before_mknod = time(0);
-	rc = mknod(argv[1], 0700, S_IFREG);
+	rc = mknod(filename, 0700, S_IFREG);
 	after_mknod = time(0);
-	if (rc) {
+	if (rc && errno != EEXIST) {
 		fprintf(stderr, "%s: mknod(%s) failed: rc %d: %s\n",
-			argv[0], argv[1], rc, strerror(rc));
+			prog, filename, errno, strerror(errno));
 		return 2;
+	} else if (!rc) {
+		rc = stat(filename, &st);
+		if (rc) {
+			fprintf(stderr, "%s: stat(%s) failed: rc %d: %s\n",
+				prog, filename, errno, strerror(errno));
+			return 3;
+		}
+
+		if (st.st_mtime < before_mknod || st.st_mtime > after_mknod) {
+			fprintf(stderr,
+				"%s: bad mknod times %lu <= %lu <= %lu false\n",
+				prog, before_mknod, st.st_mtime, after_mknod);
+			return 4;
+		}
+
+		printf("%s: good mknod times %lu <= %lu <= %lu\n",
+		       prog, before_mknod, st.st_mtime, after_mknod);
+
+		sleep(5);
 	}
-
-	rc = stat(argv[1], &st);
-	if (rc) {
-		fprintf(stderr, "%s: stat(%s) failed: rc %d: %s\n",
-			argv[0], argv[1], rc, strerror(rc));
-		return 3;
-	}
-
-	if (st.st_mtime < before_mknod || st.st_mtime > after_mknod) {
-		fprintf(stderr, "%s: bad mknod times %lu <= %lu <= %lu false\n",
-			argv[0], before_mknod, st.st_mtime, after_mknod);
-		return 4;
-	}
-
-	printf("%s: good mknod times %lu <= %lu <= %lu\n",
-	       argv[0], before_mknod, st.st_mtime, after_mknod);
-
-	sleep(5);
 
 	before_utime = time(0);
-	rc = utime(argv[0], NULL);
+	rc = utime(filename, NULL);
 	after_utime = time(0);
 	if (rc) {
-		fprintf(stderr, "%s: stat(%s) failed: rc %d: %s\n",
-			argv[0], argv[1], rc, strerror(rc));
+		fprintf(stderr, "%s: utime(%s) failed: rc %d: %s\n",
+			prog, filename, errno, strerror(errno));
 		return 5;
 	}
 
-	rc = stat(argv[1], &st);
+	rc = stat(filename, &st);
 	if (rc) {
 		fprintf(stderr, "%s: second stat(%s) failed: rc %d: %s\n",
-			argv[0], argv[1], rc, strerror(rc));
+			prog, filename, errno, strerror(errno));
 		return 6;
 	}
 
 	if (st.st_mtime < before_utime || st.st_mtime > after_utime) {
 		fprintf(stderr, "%s: bad utime times %lu <= %lu <= %lu false\n",
-			argv[0], before_utime, st.st_mtime, after_utime);
+			prog, before_utime, st.st_mtime, after_utime);
 		return 7;
 	}
 
 	printf("%s: good utime times %lu <= %lu <= %lu\n",
-	       argv[0], before_mknod, st.st_mtime, after_mknod);
+	       prog, before_utime, st.st_mtime, after_utime);
 
 	return 0;
 }

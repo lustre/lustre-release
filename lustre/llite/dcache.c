@@ -73,6 +73,9 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
 
         if (it->it_lock_mode) {
                 handle = (struct lustre_handle *)it->it_lock_handle;
+                CDEBUG(D_DLMTRACE, "releasing lock with cookie "LPX64
+                       " from it %p\n",
+                       handle->cookie, it);
                 ldlm_lock_decref(handle, it->it_lock_mode);
 
                 /* intent_release may be called multiple times, from
@@ -259,16 +262,18 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
 
         rc = ll_intent_lock(de->d_parent->d_inode, &de, it, revalidate2_finish);
         if (rc < 0) {
-                CERROR("ll_intent_lock: rc %d : it->it_status %d\n", rc,
-                       it->it_status);
+                if (rc != -ESTALE) {
+                        CERROR("ll_intent_lock: rc %d : it->it_status %d\n", rc,
+                               it->it_status);
+                }
                 RETURN(0);
         }
         /* unfortunately ll_intent_lock may cause a callback and revoke our
            dentry */
         spin_lock(&dcache_lock);
         list_del_init(&de->d_hash);
+        __d_rehash(de, 0);
         spin_unlock(&dcache_lock);
-        d_rehash(de);
 
         RETURN(1);
 }

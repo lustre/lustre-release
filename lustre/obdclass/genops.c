@@ -190,6 +190,14 @@ int class_name2dev(char *name)
         return -1;
 }
 
+struct obd_device *class_name2obd(char *name)
+{
+        int dev = class_name2dev(name);
+        if (dev < 0)
+                return NULL;
+        return &obd_dev[dev];
+}
+
 int class_uuid2dev(struct obd_uuid *uuid)
 {
         int i;
@@ -205,15 +213,10 @@ int class_uuid2dev(struct obd_uuid *uuid)
 
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
 {
-        int i;
-
-        for (i = 0; i < MAX_OBD_DEVICES; i++) {
-                struct obd_device *obd = &obd_dev[i];
-                if (obd_uuid_equals(uuid, &obd->obd_uuid))
-                        return obd;
-        }
-
-        return NULL;
+        int dev = class_uuid2dev(uuid);
+        if (dev < 0)
+                return NULL;
+        return &obd_dev[dev];
 }
 
 void obd_cleanup_caches(void)
@@ -327,6 +330,7 @@ void class_export_put(struct obd_export *exp)
 {
         ENTRY;
 
+        LASSERT(exp);
         CDEBUG(D_INFO, "PUTting export %p : new refcount %d\n", exp,
                atomic_read(&exp->exp_refcount) - 1);
         LASSERT(atomic_read(&exp->exp_refcount) > 0);
@@ -376,6 +380,7 @@ struct obd_export *class_new_export(struct obd_device *obddev)
         LASSERT(!obddev->obd_stopping); /* shouldn't happen, but might race */
         atomic_inc(&obddev->obd_refcount);
         list_add(&export->exp_obd_chain, &export->exp_obd->obd_exports);
+        export->exp_obd->obd_num_exports++;
         spin_unlock(&obddev->obd_dev_lock);
         return export;
 }
@@ -386,6 +391,7 @@ void class_unlink_export(struct obd_export *exp)
 
         spin_lock(&exp->exp_obd->obd_dev_lock);
         list_del_init(&exp->exp_obd_chain);
+        exp->exp_obd->obd_num_exports--;
         spin_unlock(&exp->exp_obd->obd_dev_lock);
 
         class_export_put(exp);
@@ -458,6 +464,9 @@ void class_destroy_import(struct obd_import *import)
 
         /* Abort any inflight DLM requests and NULL out their (about to be
          * freed) import. */
+        /* Invalidate all requests on import, would be better to call
+           ptlrpc_set_import_active(imp, 0); */
+        import->imp_generation++;
         ptlrpc_abort_inflight_superhack(import);
 
         class_import_put(import);

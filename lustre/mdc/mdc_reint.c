@@ -140,7 +140,7 @@ int mdc_create(struct lustre_handle *conn,
         rc = mdc_reint(req, level);
         /* Resend if we were told to. */
         if (rc == -ERESTARTSYS) {
-                level = LUSTRE_CONN_RECOVD;
+                level = LUSTRE_CONN_RECOVER;
                 goto resend;
         }
 

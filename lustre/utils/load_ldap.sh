@@ -13,6 +13,15 @@ LDAP_PW=${LDAP_PW:-secret}
 LDAP_AUTH="-x -D $LDAP_ROOTDN -w $LDAP_PW"
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 
+if [ -f $LUSTRE/Makefile.am ]; then
+  CONFDIR=$LUSTRE/conf
+else
+  CONFDIR=/usr/lib/lustre
+fi
+
+TOP=$CONFDIR/top.ldif
+XSL=$CONFDIR/lustre2ldif.xsl
+
 [ ! -z $LDAPURL ] && LDAP_AUTH="$LDAP_AUTH -H $LDAPURL"
 
 XML=${XML:-$1}
@@ -27,13 +36,13 @@ LDIF=/tmp/$NAME.ldif
 
 # add the top level record, if needed
 ldapsearch $LDAP_AUTH -b $LDAP_BASE > /dev/null 2>&1 ||
-    ldapadd $LDAP_AUTH -f $LUSTRE/conf/top.ldif
+    ldapadd $LDAP_AUTH -f $TOP 
 
 # If this config already exists, then delete it
 ldapsearch $LDAP_AUTH -b config=$NAME,$LDAP_BASE > /dev/null 2>&1 && 
     ldapdelete $LDAP_AUTH -r config=$NAME,$LDAP_BASE
 
-4xslt -D config=$NAME $XML $LUSTRE/conf/lustre2ldif.xsl  > $LDIF
+4xslt -D config=$NAME $XML $XSL   > $LDIF
 
 echo "Loading config to 'config=$NAME,$LDAP_BASE' ..."
 ldapadd $LDAP_AUTH -f $LDIF

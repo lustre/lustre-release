@@ -61,6 +61,7 @@ int main(int argc, char **argv)
                 default:
                         //fprintf(stderr, "Bad parameters.\n");
                         //Usage_and_abort ();
+                        break;
                 }
         }
 

@@ -57,6 +57,7 @@ struct obd_export *class_conn2export(struct lustre_handle *);
 int class_register_type(struct obd_ops *ops, struct lprocfs_vars *, char *nm);
 int class_unregister_type(char *nm);
 int class_name2dev(char *name);
+struct obd_device *class_name2obd(char *name);
 int class_uuid2dev(struct obd_uuid *uuid);
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
 
@@ -540,18 +541,15 @@ static inline void obd_destroy_export(struct obd_export *exp)
         EXIT;
 }
 
-static inline int obd_statfs(struct lustre_handle *conn,struct obd_statfs *osfs)
+static inline int obd_statfs(struct obd_export *exp, struct obd_statfs *osfs)
 {
-        struct obd_export *exp;
         int rc;
         ENTRY;
 
-        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, statfs);
         OBD_COUNTER_INCREMENT(exp->exp_obd, statfs);
 
-        rc = OBP(exp->exp_obd, statfs)(conn, osfs);
-        class_export_put(exp);
+        rc = OBP(exp->exp_obd, statfs)(exp, osfs);
         RETURN(rc);
 }
 
@@ -631,7 +629,7 @@ static inline int obd_brw_async(int cmd, struct lustre_handle *conn,
         RETURN(rc);
 }
 
-static inline int obd_preprw(int cmd, struct obd_export *exp,
+static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *obdo,
                              int objcount, struct obd_ioobj *obj,
                              int niocount, struct niobuf_remote *remote,
                              struct niobuf_local *local, void **desc_private,
@@ -643,7 +641,7 @@ static inline int obd_preprw(int cmd, struct obd_export *exp,
         OBD_CHECK_OP(exp->exp_obd, preprw);
         OBD_COUNTER_INCREMENT(exp->exp_obd, preprw);
 
-        rc = OBP(exp->exp_obd, preprw)(cmd, exp, objcount, obj, niocount,
+        rc = OBP(exp->exp_obd, preprw)(cmd, exp, obdo, objcount, obj, niocount,
                                        remote, local, desc_private, oti);
         RETURN(rc);
 }
@@ -773,6 +771,53 @@ static inline int obd_san_preprw(int cmd, struct lustre_handle *conn,
         RETURN(rc);
 }
 
+static inline int obd_mark_page_dirty(struct lustre_handle *conn,
+                                      struct lov_stripe_md *lsm,  
+                                      unsigned long offset)
+{
+        struct obd_export *exp;
+        int rc;
+
+        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_OP(exp->exp_obd, mark_page_dirty);
+
+        rc = OBP(exp->exp_obd, mark_page_dirty)(conn, lsm, offset);
+        class_export_put(exp);
+        RETURN(rc);
+}
+
+static inline int obd_clear_dirty_pages(struct lustre_handle *conn,
+                                        struct lov_stripe_md *lsm,  
+                                        unsigned long start,
+                                        unsigned long end,
+                                        unsigned long *cleared)
+{
+        struct obd_export *exp;
+        int rc;
+
+        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_OP(exp->exp_obd, clear_dirty_pages);
+
+        rc = OBP(exp->exp_obd, clear_dirty_pages)(conn, lsm, start, end,
+                                                  cleared);
+        class_export_put(exp);
+        RETURN(rc);
+}
+
+static inline int obd_last_dirty_offset(struct lustre_handle *conn,
+                                      struct lov_stripe_md *lsm,
+                                      unsigned long *offset)
+{
+        struct obd_export *exp;
+        int rc;
+
+        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_OP(exp->exp_obd, last_dirty_offset);
+
+        rc = OBP(exp->exp_obd, last_dirty_offset)(conn, lsm, offset);
+        class_export_put(exp);
+        RETURN(rc);
+}
 
 /* OBD Metadata Support */
 

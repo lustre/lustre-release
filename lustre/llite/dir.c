@@ -74,7 +74,10 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         struct mds_body *body;
         struct lookup_intent it = { .it_op = IT_READDIR };
         struct mdc_op_data data;
-
+        struct obd_device *obddev = class_conn2obd(&sbi->ll_mdc_conn);
+        struct ldlm_res_id res_id =
+                { .name = {inode->i_ino, (__u64)inode->i_generation} };
+        int flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_MATCH_DATA;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
@@ -90,18 +93,24 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 GOTO(readpage_out, rc);
         }
 
-        ll_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
-
-        rc = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_PLAIN, &it, LCK_PR,
-                         &data, &lockh, NULL, 0,
-                         ldlm_completion_ast, ll_mdc_blocking_ast, inode);
-        request = (struct ptlrpc_request *)it.it_data;
-        if (request)
-                ptlrpc_req_finished(request);
-        if (rc < 0) {
-                CERROR("lock enqueue: err: %d\n", rc);
-                unlock_page(page);
-                RETURN(rc);
+        rc = ldlm_lock_match(obddev->obd_namespace, flags, &res_id,
+                             LDLM_PLAIN, NULL, 0, LCK_PR, inode,
+                             &lockh);
+        if (!rc) {
+                ll_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
+                
+                rc = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_PLAIN, &it, LCK_PR,
+                                 &data, &lockh, NULL, 0,
+                                 ldlm_completion_ast, ll_mdc_blocking_ast,
+                                 inode);
+                request = (struct ptlrpc_request *)it.it_data;
+                if (request)
+                        ptlrpc_req_finished(request);
+                if (rc < 0) {
+                        CERROR("lock enqueue: err: %d\n", rc);
+                        unlock_page(page);
+                        RETURN(rc);
+                }
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
@@ -770,7 +779,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),cmd=%u\n", inode->i_ino,
                inode->i_generation, inode, cmd);
 
-        if ((cmd & 0xffffff00) == ((int)'T') << 8) /* tty ioctls */
+        if (_IOC_TYPE(cmd) == 'T') /* tty ioctls */
                 return -ENOTTY;
 
         switch(cmd) {

@@ -16,6 +16,7 @@ CHECKSTAT=${CHECKSTAT:-"./checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
 LFIND=${LFIND:-lfind}
 LSTRIPE=${LSTRIPE:-lstripe}
+LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 TOEXCL=${TOEXCL:-toexcl}
 TRUNCATE=${TRUNCATE:-truncate}
@@ -556,11 +557,14 @@ run_test 28 "create/mknod/mkdir with bad file types ============"
 test_29() {
 	mkdir $DIR/d29
 	touch $DIR/d29/foo
+	log 'first d29'
 	ls -l $DIR/d29
 	MDCDIR=${MDCDIR:-/proc/fs/lustre/ldlm/ldlm/MDC_*}
 	LOCKCOUNTORIG=`cat $MDCDIR/lock_count`
 	LOCKUNUSEDCOUNTORIG=`cat $MDCDIR/lock_unused_count`
+	log 'second d29'
 	ls -l $DIR/d29
+	log 'done'
 	LOCKCOUNTCURRENT=`cat $MDCDIR/lock_count`
 	LOCKUNUSEDCOUNTCURRENT=`cat $MDCDIR/lock_unused_count`
 	if [ $LOCKCOUNTCURRENT -gt $LOCKCOUNTORIG ]; then
@@ -805,8 +809,21 @@ test_36a() {
 run_test 36a "cvs init ========================================="
 
 test_36b() {
+	# on the LLNL clusters, runas will still pick up root's $TMP settings,
+        # which will not be writable for the runas user, and then you get a CVS
+	# error message with a corrupt path string (CVS bug) and panic.
+	# We're not using much space, so just stick it in /tmp, which is
+	# safe.
+	OLDTMPDIR=$TMPDIR
+	OLDTMP=$TMP
+	TMPDIR=/tmp
+	TMP=/tmp
+
 	cd /etc/init.d
 	$RUNAS cvs -d $DIR/cvsroot import -m "nomesg"  reposname vtag rtag
+
+	TMPDIR=$OLDTMPDIR
+	TMP=$OLDTMP
 }
 run_test 36b "cvs import ======================================="
 
@@ -837,6 +854,23 @@ test_36f() {
 	$RUNAS cvs commit -m 'nomsg' foo36
 }
 run_test 36f "cvs commit ======================================="
+
+test_37() {
+	mkdir -p $DIR/dextra
+	echo f > $DIR/dextra/fbugfile
+	mount -t ext2 -o loop /$EXT2_DEV $DIR/dextra
+	ls $DIR/dextra |grep "\<fbugfile\>" && error
+	umount /$EXT2_DEV
+	rm -f DIR/dextra/fbugfile
+}
+run_test 37 "ls a mounted file system to check the old contents ====="
+
+# open(file, O_DIRECTORY) will leak a request and not cleanup (bug 1501)
+test_38() {
+        o_directory $DIR/test38
+}
+run_test 38 "open a regular file with O_DIRECTORY =============="
+        
 
 log "cleanup: ======================================================"
 rm -r $DIR/[Rdfs][1-9]*

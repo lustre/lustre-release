@@ -429,6 +429,7 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                         return (-EINVAL);
 
                 err = PtlFailNid (*nip, data->ioc_nid, data->ioc_count);
+                kportal_put_ni (data->ioc_nal);
                 break;
         }
 

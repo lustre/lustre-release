@@ -104,8 +104,8 @@ unmount_client() {
 }
 
 setup() {
-    start_mds ${REFORMAT}
-    start_ost --timeout=$(($TIMEOUT*2)) ${REFORMAT}
+    start_mds --timeout=$TIMEOUT ${REFORMAT}
+    start_ost --timeout=$TIMEOUT ${REFORMAT}
     # XXX we should write our own upcall, when we move this somewhere better.
     mount_client --timeout=${TIMEOUT} \
         --lustre_upcall=$UPCALL
@@ -162,5 +162,8 @@ drop_reply "mlink /mnt/lustre/renamed-again /mnt/lustre/link2"
 
 drop_request "munlink /mnt/lustre/link1"
 drop_reply "munlink /mnt/lustre/link2"
+
+#bug 1423
+drop_reply "touch /mnt/lustre/renamed"
 
 $CLEANUP

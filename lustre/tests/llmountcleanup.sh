@@ -1,6 +1,8 @@
 #!/bin/sh
 
-LCONF=${LCONF:-../utils/lconf}
+export PATH=`dirname $0`/../utils:$PATH
+
+LCONF=${LCONF:-lconf}
 NAME=${NAME:-local}
 TMP=${TMP:-/tmp}
 

@@ -25,7 +25,7 @@ EXTRA_PROGRAMS = obdclass $(FSMOD) fsfilt_reiserfs
 
 obdclass_SOURCES = class_obd.c debug.c genops.c sysctl.c uuid.c simple.c
 obdclass_SOURCES += lprocfs_status.c lustre_handles.c lustre_peer.c
-obdclass_SOURCES += fsfilt.c statfs_pack.c
+obdclass_SOURCES += fsfilt.c statfs_pack.c otree.c
 endif
 
 include $(top_srcdir)/Rules
