@@ -293,15 +293,21 @@ cleanup Cleanup a previously setup device
 detach Remove driver (and name and uuid) from the current device
 \layout Description
 
-lovconfig\SpecialChar ~
+lov_setconfig\SpecialChar ~
 lov-uuid\SpecialChar ~
-stripe-count\SpecialChar ~
-stripe-size\SpecialChar ~
+default-stripe-count\SpecialChar ~
+default-stripe-size\SpecialChar ~
 offset\SpecialChar ~
 pattern\SpecialChar ~
 UUID1\SpecialChar ~
-[UUID2...] Write
- LOV configuration to an MDS device
+[U
+UID2...] Write LOV configuration to an MDS device
+\layout Description
+
+lov_getconfig\SpecialChar ~
+lov-uuid Read LOV configuration from an MDS device.
+ Returns default-stripe-count, default-stripe-size, offset, pattern, and
+ a list of OST UUIDs.
 \end_deeper 
 \layout Description
 
