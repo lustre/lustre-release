@@ -108,6 +108,8 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
         struct obd_device *obd = exp->exp_obd;
         ENTRY;
 
+        LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
+
         if ((oa->o_valid & (OBD_MD_FLBLOCKS|OBD_MD_FLGRANT)) !=
                                         (OBD_MD_FLBLOCKS|OBD_MD_FLGRANT)) {
                 oa->o_valid &= ~OBD_MD_FLGRANT;
@@ -122,8 +124,8 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
          * leave this here in case there is a large error in accounting. */
         CDEBUG(oa->o_grant > fed->fed_grant + FILTER_GRANT_CHUNK ?
                D_ERROR : D_CACHE,
-               "%s: cli %s reports granted: "LPU64" dropped: %u, local: %lu\n",
-               obd->obd_name, exp->exp_client_uuid.uuid, oa->o_grant,
+               "%s: cli %s/%p reports grant: "LPU64" dropped: %u, local: %lu\n",
+               obd->obd_name, exp->exp_client_uuid.uuid, exp, oa->o_grant,
                oa->o_dropped, fed->fed_grant);
 
         /* Update our accounting now so that statfs takes it into account.
@@ -132,14 +134,14 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
          * on fed_dirty however. */
         obd->u.filter.fo_tot_dirty += oa->o_dirty - fed->fed_dirty;
         if (fed->fed_grant < oa->o_dropped) {
-                CERROR("%s: cli %s reports %u dropped > fed_grant %lu\n",
-                       obd->obd_name, exp->exp_client_uuid.uuid,
+                CERROR("%s: cli %s/%p reports %u dropped > fed_grant %lu\n",
+                       obd->obd_name, exp->exp_client_uuid.uuid, exp,
                        oa->o_dropped, fed->fed_grant);
                 oa->o_dropped = 0;
         }
         if (obd->u.filter.fo_tot_granted < oa->o_dropped) {
-                CERROR("%s: cli %s reports %u dropped > tot_granted "LPU64"\n",
-                       obd->obd_name, exp->exp_client_uuid.uuid,
+                CERROR("%s: cli %s/%p reports %u dropped > tot_grant "LPU64"\n",
+                       obd->obd_name, exp->exp_client_uuid.uuid, exp,
                        oa->o_dropped, obd->u.filter.fo_tot_granted);
                 oa->o_dropped = 0;
         }
@@ -162,6 +164,8 @@ obd_size filter_grant_space_left(struct obd_export *exp)
         int blockbits = obd->u.filter.fo_sb->s_blocksize_bits;
         obd_size tot_granted = obd->u.filter.fo_tot_granted, avail, left = 0;
         int rc, statfs_done = 0;
+
+        LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
 
         if (time_before(obd->obd_osfs_age, jiffies - HZ)) {
 restat:
@@ -191,10 +195,10 @@ restat:
                 if (left < tot_granted - obd->u.filter.fo_tot_pending &&
                     time_after(jiffies, next)) {
                         spin_unlock(&obd->obd_osfs_lock);
-                        CERROR("%s: cli %s granted "LPU64" more than available "
+                        CERROR("%s: cli %s/%p grant "LPU64" > available "
                                LPU64" and pending "LPU64"\n", obd->obd_name,
-                               exp->exp_client_uuid.uuid, tot_granted, left,
-                               obd->u.filter.fo_tot_pending);
+                               exp->exp_client_uuid.uuid, exp, tot_granted,
+                               left, obd->u.filter.fo_tot_pending);
                         if (next == 0)
                                 portals_debug_dumplog();
                         next = jiffies + 20 * HZ;
@@ -203,11 +207,11 @@ restat:
                 left = 0;
         }
 
-        CDEBUG(D_CACHE, "%s: cli %s free: "LPU64" avail: "LPU64" grant "LPU64
+        CDEBUG(D_CACHE, "%s: cli %s/%p free: "LPU64" avail: "LPU64" grant "LPU64
                " left: "LPU64" pending: "LPU64"\n", obd->obd_name,
-               exp->exp_client_uuid.uuid, obd->obd_osfs.os_bfree << blockbits,
-               avail << blockbits, tot_granted, left,
-               obd->u.filter.fo_tot_pending);
+               exp->exp_client_uuid.uuid, exp,
+               obd->obd_osfs.os_bfree << blockbits, avail << blockbits,
+               tot_granted, left, obd->u.filter.fo_tot_pending);
 
         return left;
 }
@@ -223,6 +227,8 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
         struct filter_export_data *fed = &exp->exp_filter_data;
         int blockbits = obd->u.filter.fo_sb->s_blocksize_bits;
         __u64 grant = 0;
+
+        LASSERT_SPIN_LOCKED(&obd->obd_osfs_lock);
 
         /* Grant some fraction of the client's requested grant space so that
          * they are not always waiting for write credits (not all of it to
@@ -246,12 +252,12 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                 }
         }
 
-        CDEBUG(D_CACHE,"%s: cli %s wants: "LPU64" granting: "LPU64"\n",
-               obd->obd_name, exp->exp_client_uuid.uuid, want, grant);
+        CDEBUG(D_CACHE,"%s: cli %s/%p wants: "LPU64" granting: "LPU64"\n",
+               obd->obd_name, exp->exp_client_uuid.uuid, exp, want, grant);
         CDEBUG(D_CACHE,
-               "%s: cli %s tot cached:"LPU64" granted:"LPU64
+               "%s: cli %s/%p tot cached:"LPU64" granted:"LPU64
                " num_exports: %d\n", obd->obd_name, exp->exp_client_uuid.uuid,
-               obd->u.filter.fo_tot_dirty,
+               exp, obd->u.filter.fo_tot_dirty,
                obd->u.filter.fo_tot_granted, obd->obd_num_exports);
 
         return grant;
@@ -426,6 +432,8 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
         unsigned long used = 0, ungranted = 0, using;
         int i, rc = -ENOSPC, obj, n = 0, mask = D_CACHE;
 
+        LASSERT_SPIN_LOCKED(&exp->exp_obd->obd_osfs_lock);
+
         for (obj = 0; obj < objcount; obj++) {
                 for (i = 0; i < fso[obj].fso_bufcnt; i++, n++) {
                         int tmp, bytes;
@@ -440,10 +448,10 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                         if (rnb[n].flags & OBD_BRW_FROM_GRANT) {
                                 if (fed->fed_grant < used + bytes) {
                                         CDEBUG(D_CACHE,
-                                               "%s: cli %s claims %ld+%d GRANT,"
-                                               " no such grant %lu, idx %d\n",
+                                               "%s: cli %s/%p claims %ld+%d "
+                                               "GRANT, real grant %lu idx %d\n",
                                                exp->exp_obd->obd_name,
-                                               exp->exp_client_uuid.uuid,
+                                               exp->exp_client_uuid.uuid, exp,
                                                used, bytes, fed->fed_grant, n);
                                         mask = D_ERROR;
                                 } else {
@@ -472,9 +480,9 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                          * ignore this error. */
                         lnb[n].rc = -ENOSPC;
                         rnb[n].flags &= OBD_BRW_GRANTED;
-                        CDEBUG(D_CACHE, "%s: cli %s idx %d no space for %d\n",
+                        CDEBUG(D_CACHE,"%s: cli %s/%p idx %d no space for %d\n",
                                exp->exp_obd->obd_name,
-                               exp->exp_client_uuid.uuid, n, bytes);
+                               exp->exp_client_uuid.uuid, exp, n, bytes);
                 }
         }
 
@@ -488,8 +496,8 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
         exp->exp_obd->u.filter.fo_tot_pending += used;
 
         CDEBUG(mask,
-               "%s: cli %s used: %lu ungranted: %lu grant: %lu dirty: %lu\n",
-               exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, used,
+               "%s: cli %s/%p used: %lu ungranted: %lu grant: %lu dirty: %lu\n",
+               exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp, used,
                ungranted, fed->fed_grant, fed->fed_dirty);
 
         /* Rough calc in case we don't refresh cached statfs data */
@@ -501,8 +509,8 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
                 exp->exp_obd->obd_osfs.os_bavail = 0;
 
         if (fed->fed_dirty < used) {
-                CERROR("%s: cli %s claims used %lu > fed_dirty %lu\n",
-                       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
+                CERROR("%s: cli %s/%p claims used %lu > fed_dirty %lu\n",
+                       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
                        used, fed->fed_dirty);
                 used = fed->fed_dirty;
         }
@@ -668,7 +676,7 @@ int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
 static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                                 int objcount, struct obd_ioobj *obj,
                                 int niocount, struct niobuf_local *res,
-                                struct obd_trans_info *oti)
+                                struct obd_trans_info *oti, int rc)
 {
         struct obd_ioobj *o;
         struct niobuf_local *lnb;
@@ -692,9 +700,10 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                         page_cache_release(lnb->page);
                 }
         }
+
         if (res->dentry != NULL)
                 f_dput(res->dentry);
-        RETURN(0);
+        RETURN(rc);
 }
 
 void flip_into_page_cache(struct inode *inode, struct page *new_page)
@@ -769,14 +778,14 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
 
 int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                     int objcount, struct obd_ioobj *obj, int niocount,
-                    struct niobuf_local *res, struct obd_trans_info *oti)
+                    struct niobuf_local *res, struct obd_trans_info *oti,int rc)
 {
         if (cmd == OBD_BRW_WRITE)
                 return filter_commitrw_write(exp, oa, objcount, obj, niocount,
-                                             res, oti);
+                                             res, oti, rc);
         if (cmd == OBD_BRW_READ)
                 return filter_commitrw_read(exp, oa, objcount, obj, niocount,
-                                            res, oti);
+                                            res, oti, rc);
         LBUG();
         return -EPROTO;
 }
@@ -826,7 +835,7 @@ int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 kunmap(pga[i].pg);
         }
 
-        ret = filter_commitrw(cmd, exp, oa, 1, &ioo, oa_bufs, lnb, oti);
+        ret = filter_commitrw(cmd, exp, oa, 1, &ioo, oa_bufs, lnb, oti, ret);
 
 out:
         if (lnb)
