@@ -328,6 +328,16 @@ check_ldlm_extent (void)
 }
 
 void
+check_ldlm_flock (void)
+{
+	BLANK_LINE ();
+	CHECK_STRUCT (ldlm_flock);
+	CHECK_MEMBER (ldlm_flock, start);
+	CHECK_MEMBER (ldlm_flock, end);
+	CHECK_MEMBER (ldlm_flock, pid);
+}
+
+void
 check_ldlm_intent (void)
 {
 	BLANK_LINE ();
@@ -353,7 +363,7 @@ check_ldlm_lock_desc (void)
 	CHECK_MEMBER (ldlm_lock_desc, l_resource);
 	CHECK_MEMBER (ldlm_lock_desc, l_req_mode);
 	CHECK_MEMBER (ldlm_lock_desc, l_granted_mode);
-	CHECK_MEMBER (ldlm_lock_desc, l_extent);
+	CHECK_MEMBER (ldlm_lock_desc, l_policy_data);
 	CHECK_MEMBER (ldlm_lock_desc, l_version[RES_VERSION_SIZE]);
 }
 
@@ -377,7 +387,7 @@ check_ldlm_reply (void)
 	CHECK_MEMBER (ldlm_reply, lock_mode);
 	CHECK_MEMBER (ldlm_reply, lock_resource_name);
 	CHECK_MEMBER (ldlm_reply, lock_handle);
-	CHECK_MEMBER (ldlm_reply, lock_extent);
+	CHECK_MEMBER (ldlm_reply, lock_data);
 	CHECK_MEMBER (ldlm_reply, lock_policy_res1);
 	CHECK_MEMBER (ldlm_reply, lock_policy_res2);
 }
@@ -571,6 +581,7 @@ main (int argc, char **argv)
 	check_lov_desc ();
 	check_ldlm_res_id ();
 	check_ldlm_extent ();
+	check_ldlm_flock ();
 	check_ldlm_intent ();
 	check_ldlm_resource_desc ();
 	check_ldlm_lock_desc ();
