@@ -73,7 +73,7 @@
 + 		if (bitmap_nr < 0)
 + 			goto fail;
 + 
-+ 		bh = sbi->s_inode_bitmap[bitmap_nr];
++ 		bh = EXT3_SB(sb)->s_inode_bitmap[bitmap_nr];
 + 
 + 		BUFFER_TRACE(bh, "get_write_access");
 + 		err = ext3_journal_get_write_access(handle, bh);
