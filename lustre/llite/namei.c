@@ -155,8 +155,10 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
 
         ENTRY;
 
-        CHECK_MOUNT_EPOCH(dir);
-        
+        /* CHECK_MOUNT_EPOCH(dir); */
+        if (ll_i2info(dir)->lli_mount_epoch != ll_i2sbi(dir)->ll_mount_epoch)
+                RETURN(ERR_PTR(-EIO));
+
         if (it == NULL) {
                 it = &lookup_it;
                 dentry->d_it = it;

@@ -260,7 +260,7 @@ static void ll_put_super(struct super_block *sb)
 
 static void ll_clear_inode(struct inode *inode)
 {
-        /* XXX EPOCH */
+        ENTRY;
 
         if (atomic_read(&inode->i_count) == 0) {
                 struct ll_inode_info *lli = ll_i2info(inode);
@@ -276,10 +276,12 @@ static void ll_clear_inode(struct inode *inode)
                         lli->lli_symlink_name = NULL;
                 }
         }
+        EXIT;
 }
 
 static void ll_delete_inode(struct inode *inode)
 {
+        ENTRY;
         if (S_ISREG(inode->i_mode)) {
                 int err;
                 struct obdo *oa;
@@ -310,6 +312,7 @@ static void ll_delete_inode(struct inode *inode)
         }
 out:
         clear_inode(inode);
+        EXIT;
 }
 
 /* like inode_setattr, but doesn't mark the inode dirty */

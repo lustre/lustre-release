@@ -419,7 +419,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         struct dentry *dchild = NULL;
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct mds_body *body;
+        struct mds_body *body = NULL;
         char *name;
         struct inode *dir, *inode;
         struct lustre_handle lockh, child_lockh;
