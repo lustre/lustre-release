@@ -21,10 +21,10 @@ BEGIN { require "asm/ioctl.ph" };
 # p2ph generated invalid macros for ioctl stuff, so I override some of it here
 eval 'sub OBD_IOC_CREATE () { &_IOC(2, ord(\'f\'), 3, 4);}' unless
   defined(&OBD_IOC_CREATE);
-eval 'sub OBD_IOC_SETUP_SUPER () { &_IOC(1, ord(\'f\'), 4, 4);}' unless
-  defined(&OBD_IOC_SETUP_SUPER);
-eval 'sub OBD_IOC_CLEANUP_SUPER () { &_IOC(0, ord(\'f\'), 5, 0);}' unless
-  defined(&OBD_IOC_CLEANUP_SUPER);
+eval 'sub OBD_IOC_SETUP_OBDDEV () { &_IOC(1, ord(\'f\'), 4, 4);}' unless
+  defined(&OBD_IOC_SETUP_OBDDEV);
+eval 'sub OBD_IOC_CLEANUP_OBDDEV () { &_IOC(0, ord(\'f\'), 5, 0);}' unless
+  defined(&OBD_IOC_CLEANUP_OBDDEV);
 eval 'sub OBD_IOC_DESTROY () { &_IOC(1, ord(\'f\'), 6, 4);}' unless
   defined(&OBD_IOC_DESTROY);
 eval 'sub OBD_IOC_PREALLOCATE () { &_IOC(3, ord(\'f\'), 7, 4);}' unless
@@ -37,6 +37,8 @@ eval 'sub OBD_IOC_GETATTR () { &_IOC(2, ord(\'f\'), 10, 4);}' unless
   defined(&OBD_IOC_GETATTR);
 eval 'sub OBD_IOC_READ () { &_IOC(3, ord(\'f\'), 11, 4);}' unless
   defined(&OBD_IOC_READ);
+eval 'sub OBD_IOC_READ2 () { &_IOC(3, ord(\'f\'), 17, 4);}' unless
+  defined(&OBD_IOC_READ2);
 eval 'sub OBD_IOC_WRITE () { &_IOC(3, ord(\'f\'), 12, 4);}' unless
   defined(&OBD_IOC_WRITE);
 eval 'sub OBD_IOC_CONNECT () { &_IOC(2, ord(\'f\'), 13, 4);}' unless
@@ -91,9 +93,10 @@ my %commands =
      'disconnect' => {func => "Disconnect", doc => "disconnect [id]: frees client resources"},
      'sync' => {func => "Sync", doc => "sync: flushes buffers to disk"},
      'destroy' => {func => "Destroy", doc => "setup: destroys an inode"},
-     'cleanup' => {func => "Cleanup", doc => "detach the superblock from this minor obd dev"},
+     'cleanup' => {func => "Cleanup", doc => "cleanup the minor obd device"},
      'dec_use_count' => {func => "Decusecount", doc => "decreases the module use count so that the module can be removed following an oops"},
      'read' => {func => "Read", doc => "read <inode> <count> [offset]"},
+     'fsread' => {func => "Read2", doc => "read <inode> <count> [offset]"},
      'write' => {func => "Write", doc => "write <inode> <offset> <text>"},
      'setattr' => {func => "Setattr", doc => "setattr <inode> [mode [uid [gid [size [atime [mtime [ctime]]]]]]]"},
      'getattr' => {func => "Getattr", doc => "getattr <inode>: displays inode object attributes"},
@@ -174,7 +177,7 @@ sub Setup {
     my $err = 0;
     
     my $packed = pack("La24", $::st->rdev(), "sim_obd");
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_SETUP_SUPER, $packed);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_SETUP_OBDDEV, $packed);
 
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
@@ -187,7 +190,7 @@ sub Setup {
 
 sub Cleanup {
     my $err = "0";
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_CLEANUP_SUPER, $err);
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_CLEANUP_OBDDEV, $err);
 
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
@@ -476,6 +479,55 @@ sub Read {
     my $packed = pack("ILpLLL", $::client_id, $inode, $buf, $count, $offset, 0);
 
     my $rc = ioctl(DEV_OBD, &OBD_IOC_READ, $packed);
+
+    $retval = unpack("l", $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	if ($retval >= 0) {
+		print substr($buf, 0, $retval);
+		print "\nRead $retval of an attempted $count bytes.\n";
+		print "Finished (success)\n";
+	} else {
+		print "Finished (error $retval)\n";
+	}
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Read2 {
+    if (!defined($::client_id)) {
+	print "You must first ``connect''.\n";
+	return;
+    }
+
+    my $inode = shift;
+    my $count = shift;
+    my $offset = shift;
+  
+    if (!defined($inode) || scalar($inode) < 1 || !defined($count) ||
+	$count < 1 || (defined($offset) && $offset < 0)) {
+	print "invalid arguments; type \"help read\" for a synopsis\n";
+	return;
+    }
+
+    if (!defined($offset)) {
+	$offset = 0;
+    }
+
+    print("Reading $count bytes starting at byte $offset from object " .
+	  "$inode...\n");
+
+    # "allocate" a large enough buffer
+    my $buf = sprintf("%${count}s", " ");
+    die "suck" if (length($buf) != $count);
+
+    # the perl we're using doesn't support pack type Q, and offset is 64 bits
+    my $packed = pack("ILpLLL", $::client_id, $inode, $buf, $count, $offset, 0);
+
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_READ2, $packed);
 
     $retval = unpack("l", $packed);
 

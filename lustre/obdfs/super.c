@@ -2,6 +2,9 @@
  * OBDFS Super operations
  *
  * Copryright (C) 1996 Peter J. Braam <braam@stelias.com>
+ * Copryright (C) 1999 Stelias Computing Inc. <braam@stelias.com>
+ * Copryright (C) 1999 Seagate Technology Inc.
+ *
  */
 
 #define EXPORT_SYMTAB
@@ -25,7 +28,9 @@
 #include <linux/vmalloc.h>
 #include <asm/segment.h>
 
-#include <../obd/linux/sim_obd.h>
+#include <linux/obd_support.h>
+#include <linux/obd_class.h>
+#include <linux/obd_sim.h>  /* XXX for development/debugging only */
 #include <obdfs.h>
 
 /* VFS super_block ops */
@@ -74,11 +79,15 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 		return NULL;
 	}
 
-        error  = obd_connect(obd_minor, &sbi->osi_conn_info);
+	sbi->osi_obd = &obd_dev[obd_minor];
+	sbi->osi_ops = sbi->osi_obd->obd_type->typ_ops;
+	
+        error  = sbi->osi_ops->o_connect(obd_minor, &sbi->osi_conn_info);
 	if ( error ) {
 		printk("OBDFS: cannot connect to 0x%x.\n", obd_minor);
 		goto error;
 	}
+
 	sbi->osi_super = sb;
 
         lock_super(sb);
@@ -130,7 +139,7 @@ static void obdfs_put_super(struct super_block *sb)
 	/* XXX flush stuff */
 	sbi = sb->u.generic_sbp;
 	sb->u.generic_sbp = NULL;
-	obd_disconnect(sbi->osi_conn_info.conn_id);
+	sbi->osi_ops->o_disconnect(sbi->osi_conn_info.conn_id);
 	sbi->osi_super = NULL;
 
 	
@@ -141,6 +150,8 @@ static void obdfs_put_super(struct super_block *sb)
 	EXIT;
 }
 
+extern struct inode_operations obdfs_inode_ops;
+
 /* all filling in of inodes postponed until lookup */
 static void obdfs_read_inode(struct inode *inode)
 {
@@ -149,14 +160,15 @@ static void obdfs_read_inode(struct inode *inode)
 	struct obdfs_sb_info *sbi = inode->i_sb->u.generic_sbp;
 	ENTRY;
 
-	error = obd_getattr(sbi->osi_conn_info.conn_id, inode->i_ino, &attr);
+	error = sbi->osi_ops->o_getattr(sbi->osi_conn_info.conn_id, 
+					inode->i_ino, &attr);
 	if (error) {
 		printk("obdfs_read_inode: ibd_getattr fails (%d)\n", error);
 		return;
 	}
 
 	inode_setattr(inode, &attr);
-	inode->i_op = NULL;
+	inode->i_op = &obdfs_inode_ops;
 	return;
 }
 
@@ -179,11 +191,11 @@ static void obdfs_write_inode(struct inode *inode)
         struct obdfs_sb_info *sbi;
 	struct iattr attr;
 	int error;
-	ENTRY;
 	
 	inode_to_iattr(inode, &attr);
 	sbi = inode->i_sb->u.generic_sbp;
-	error = obd_setattr(sbi->osi_conn_info.conn_id, inode->i_ino, &attr);
+	error = sbi->osi_ops->o_setattr(sbi->osi_conn_info.conn_id, 
+					inode->i_ino, &attr);
 	if (error) {
 		printk("obdfs_write_inode: ibd_setattr fails (%d)\n", error);
 		return;
@@ -199,7 +211,8 @@ static void obdfs_delete_inode(struct inode *inode)
         ENTRY;
 
 	sbi = inode->i_sb->u.generic_sbp;
-	error = obd_destroy(sbi->osi_conn_info.conn_id , inode->i_ino);
+	error = sbi->osi_ops->o_destroy(sbi->osi_conn_info.conn_id, 
+					inode->i_ino);
 	if (error) {
 		printk("obdfs_delete_node: ibd_destroy fails (%d)\n", error);
 		return;
@@ -217,7 +230,8 @@ static int  obdfs_notify_change(struct dentry *de, struct iattr *iattr)
 	ENTRY;
 
 	sbi = inode->i_sb->u.generic_sbp;
-        error = obd_setattr(sbi->osi_conn_info.conn_id, inode->i_ino, iattr);
+        error = sbi->osi_ops->o_setattr(sbi->osi_conn_info.conn_id, 
+					inode->i_ino, iattr);
 	if ( error ) {
 		printk("obdfs_notify_change: obd_setattr fails (%d)\n", error);
 		return error;
@@ -239,7 +253,7 @@ static int obdfs_statfs(struct super_block *sb, struct statfs *buf,
 	ENTRY;
 
 	sbi = sb->u.generic_sbp;
-	error = obd_statfs(sbi->osi_conn_info.conn_id, &tmp);
+	error = sbi->osi_ops->o_statfs(sbi->osi_conn_info.conn_id, &tmp);
 	if ( error ) { 
 		printk("obdfs_notify_change: obd_statfs fails (%d)\n", error);
 		return error;
@@ -260,6 +274,10 @@ int init_obdfs(void)
 	printk(KERN_INFO "OBDFS v0.1, braam@stelias.com\n");
 
 	obdfs_sysctl_init();
+
+	obd_sbi = &obdfs_super_info;
+	obd_fso = &obdfs_file_operations;
+
 	return register_filesystem(&obdfs_fs_type);
 }
 

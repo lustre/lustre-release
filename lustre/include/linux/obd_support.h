@@ -50,6 +50,17 @@ extern int obd_print_entry;
 
 #endif /* SIM_OBD_DEBUG */
 
+#define PDEBUG(page,cmd)	{\
+		char *command = ( cmd == READ ) ? "read" : "write";\
+		char *uptodate = (Page_Uptodate(page)) ? "yes" : "no";\
+		char *locked = (PageLocked(page)) ? "yes" : "no";\
+		int count = page->count.counter;\
+		long ino = (page->inode) ? page->inode->i_ino : -1;\
+		\
+		CDEBUG(D_IOCTL, " ** %s, cmd: %s, ino: %ld, uptodate: %s, "\
+		       "locked: %s, cnt %d ** \n", __FUNCTION__,\
+		       command, ino, uptodate, locked, count);\
+	}
 
 
 #define OBD_ALLOC(ptr, cast, size)					\

@@ -11,10 +11,6 @@
 #include <asm/uaccess.h>
 #include <linux/utsname.h>
 
-#include <linux/sim_obd.h>
-#include <linux/presto.h>
-#include <linux/obd_psdev.h>
-#include <linux/presto_upcall.h>
 
 struct ctl_table_header *obdfs_table_header = NULL;
 

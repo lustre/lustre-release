@@ -8,7 +8,7 @@ MODDIR = $(PREFIX)/lib/modules/$(UTS_RELEASE)
 
 ifndef CFLAGS
 # Don't remove "-O2" or bad things will happen!
-KFLAGS = -O2 -Wall -Wstrict-prototypes -Winline -pipe -I../obd
+KFLAGS = -O2 -Wall -Wstrict-prototypes  -pipe -I../obd
 endif
 
 CPPFLAGS = $(PCDEBUG) -D__KERNEL__ -DMODULE -I../include \
@@ -17,7 +17,7 @@ COFLAGS = -kv
 
 CFLAGS= $(KFLAGS) $(MFLAG)
 
-SRCS=sysctl.c super.c
+SRCS=file.c dir.c sysctl.c super.c rw.c namei.c
 OBJS=$(SRCS:%.c=%.o)
 
 MODULES = obdfs.o

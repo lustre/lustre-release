@@ -61,6 +61,7 @@ int           obd_debug_level = 4095;
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
 
+/* called when opening /dev/obdNNN */
 static int obd_class_open(struct inode * inode, struct file * file)
 {
 	int dev;
@@ -71,14 +72,15 @@ static int obd_class_open(struct inode * inode, struct file * file)
 	dev = MINOR(inode->i_rdev);
 	if (dev >= MAX_OBD_DEVICES)
 		return -ENODEV;
-	obd_dev[dev].refcnt++;
-	CDEBUG(D_PSDEV, "Refcount now %d\n", obd_dev[dev].refcnt++);
+	obd_dev[dev].obd_refcnt++;
+	CDEBUG(D_PSDEV, "Refcount now %d\n", obd_dev[dev].obd_refcnt++);
 
         MOD_INC_USE_COUNT;
         EXIT;
         return 0;
 }
 
+/* called when closing /dev/obdNNN */
 static int obd_class_release(struct inode * inode, struct file * file)
 {
 	int dev;
@@ -90,12 +92,12 @@ static int obd_class_release(struct inode * inode, struct file * file)
 	if (dev >= MAX_OBD_DEVICES)
 		return -ENODEV;
 	fsync_dev(inode->i_rdev);
-	if (obd_dev[dev].refcnt <= 0)
+	if (obd_dev[dev].obd_refcnt <= 0)
 		printk(KERN_ALERT "presto_psdev_release: refcount(%d) <= 0\n",
-		       obd_dev[dev].refcnt);
-	obd_dev[dev].refcnt--;
+		       obd_dev[dev].obd_refcnt);
+	obd_dev[dev].obd_refcnt--;
 
-	CDEBUG(D_PSDEV, "Refcount now %d\n", obd_dev[dev].refcnt++);
+	CDEBUG(D_PSDEV, "Refcount now %d\n", obd_dev[dev].obd_refcnt++);
 
         MOD_DEC_USE_COUNT;
 
@@ -103,6 +105,7 @@ static int obd_class_release(struct inode * inode, struct file * file)
         return 0;
 }
 
+/* support function */
 static struct obd_type *obd_nm_to_type(char *nm) 
 {
 	struct list_head *tmp;
@@ -119,8 +122,9 @@ static struct obd_type *obd_nm_to_type(char *nm)
 	return NULL;
 }
 
+/* to control /dev/obdNNN */
 static int obd_class_ioctl (struct inode * inode, struct file * filp, 
-		     unsigned int cmd, unsigned long arg)
+			    unsigned int cmd, unsigned long arg)
 {
 	int err, i_ino, dev;
 	struct obd_device *obddev;
@@ -137,11 +141,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	obddev = &obd_dev[dev];
 
 	/* has this minor been registered? */
-	if (cmd != OBD_IOC_SETUP_SUPER && !obd_dev[dev].obd_type)
+	if (cmd != OBD_IOC_SETUP_OBDDEV && !obd_dev[dev].obd_type)
 		return -ENODEV;
 
 	switch (cmd) {
-	case OBD_IOC_SETUP_SUPER: {
+	case OBD_IOC_SETUP_OBDDEV: {
 		struct obd_type *type;
 
 		struct setup {
@@ -156,43 +160,49 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		}
 
 		/* get data structures */
-		if ( (err= copy_from_user(&input, (void *) arg, sizeof(struct setup))) )
+		err= copy_from_user(&input, (void *) arg, sizeof(input));
+		if (err)
 			return err;
 
 		type = obd_nm_to_type(input.setup_type);
 		if ( !type ) {
-			CDEBUG(D_IOCTL, "Trying to register non existent type %s\n",
+			printk("Trying to register non existent type %s\n",
 			       input.setup_type);
 			return -1;
 		}
 		obddev->obd_type = type;
 
-		CDEBUG(D_IOCTL, "Registering %d, type %s\n",
-		       dev, input.setup_type);
+		CDEBUG(D_IOCTL, "Setup %d, type %s\n", dev, input.setup_type);
 		if ( obddev->obd_type->typ_ops->o_setup(obddev, 
 							&input.setup_data)){
 			obddev->obd_type = NULL;
 			return -1;
 		} else {
-			type->typ_refcount++;
+			type->typ_refcnt++;
+			MOD_INC_USE_COUNT;
 			return 0;
 		}
-
-
 	}
-	case OBD_IOC_CLEANUP_SUPER:
+	case OBD_IOC_CLEANUP_OBDDEV: {
+		int rc;
 
-		/* cleanup has no argument */
-		if ( obddev->obd_type->typ_refcount ) 
-			obddev->obd_type->typ_refcount--;
-		else 
+		if ( !obddev->obd_type->typ_refcnt ) 
 			printk("OBD_CLEANUP: refcount wrap!\n");
 
-		if ( obddev->obd_type->typ_ops->o_cleanup ) 
-			return obddev->obd_type->typ_ops->o_cleanup(obddev);
-		else 
-			return 0;
+		if ( !obddev->obd_type->typ_ops->o_cleanup )
+			goto out;
 
+		/* cleanup has no argument */
+		rc = obddev->obd_type->typ_ops->o_cleanup(obddev);
+		if ( rc )
+			return rc;
+
+		out: 
+		obddev->obd_type->typ_refcnt--;
+		obddev->obd_type = NULL;
+		MOD_DEC_USE_COUNT;
+		return 0;
+	}
 	case OBD_IOC_CONNECT:
 	{
 		struct obd_conn_info conninfo;
@@ -214,11 +224,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		/* sync doesn't need a connection ID, because it knows
 		 * what device it was called on, and can thus get the
 		 * superblock that it needs. */
-		if (!obddev->sb || !obddev->sb->s_dev) {
+		if (!obddev->u.sim.sim_sb || !obddev->u.sim.sim_sb->s_dev) {
 			CDEBUG(D_IOCTL, "fatal: device not initialized.\n");
 			err = -EINVAL;
 		} else {
-			if ((err = fsync_dev(obddev->sb->s_dev)))
+			if ((err = fsync_dev(obddev->u.sim.sim_sb->s_dev)))
 				CDEBUG(D_IOCTL, "sync: fsync_dev failure\n");
 			else
 				CDEBUG(D_IOCTL, "sync: success\n");
@@ -228,7 +238,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	case OBD_IOC_CREATE:
 		/* similarly, create doesn't need a connection ID for
 		 * the same reasons. */
-		if (!obddev->sb) {
+		if (!obddev->u.sim.sim_sb) {
 			CDEBUG(D_IOCTL, "fatal: device not initialized.\n");
 			return put_user(-EINVAL, (int *) arg);
 		}
@@ -296,6 +306,33 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		return err;
 	}
 
+	case OBD_IOC_READ2:
+	{
+		int err;
+
+		err = copy_from_user(&rw_s, (int *)arg, sizeof(struct oic_rw_s));
+		if ( err ) 
+			return err;
+
+		if ( !obddev->obd_type->typ_ops || 
+		     !obddev->obd_type->typ_ops->o_read ) 
+			return -EINVAL;
+
+		rw_s.count = obddev->obd_type->typ_ops->o_read2(rw_s.conn_id, 
+				       rw_s.inode, 
+				       rw_s.buf,
+				       rw_s.count, 
+				       rw_s.offset, 
+				       &err);
+		if ( err ) 
+			return err;
+
+		err = copy_to_user((int*)arg, &rw_s.count, 
+				   sizeof(unsigned long));
+		return err;
+	}
+
+
 	case OBD_IOC_READ:
 	{
 		int err;
@@ -348,7 +385,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		copy_from_user(&prealloc, (int *)arg,
 			       sizeof(struct oic_prealloc_s));
 
-		if (!obddev->sb || !obddev->sb->s_dev) {
+		if (!obddev->u.sim.sim_sb || !obddev->u.sim.sim_sb->s_dev) {
 			CDEBUG(D_IOCTL, "fatal: device not initialized.\n");
 			return -EINVAL;
 		}
@@ -368,14 +405,21 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	{
 		struct statfs *tmp;
 		unsigned int conn_id;
-		
+		struct statfs buf;
+		int rc;
+
 		tmp = (void *)arg + sizeof(unsigned int);
 		get_user(conn_id, (int *) arg);
 		if ( !obddev->obd_type ||
 		     !obddev->obd_type->typ_ops->o_statfs)
 			return -EINVAL;
 
-		return obddev->obd_type->typ_ops->o_statfs(conn_id, tmp);
+		rc = obddev->obd_type->typ_ops->o_statfs(conn_id, &buf);
+		if ( rc ) 
+			return rc;
+		rc = copy_to_user(tmp, &buf, sizeof(buf));
+		return rc;
+		
 	}
 	default:
 		printk("invalid ioctl: cmd = %u, arg = %lu\n", cmd, arg);
@@ -413,7 +457,7 @@ int obd_unregister_type(char *nm)
 	if ( !type ) 
 		return -1;
 
-	if ( type->typ_refcount ) 
+	if ( type->typ_refcnt ) 
 		return -1;
 
 	list_del(&type->typ_chain);
@@ -459,11 +503,8 @@ int init_obd(void)
 	}
 
 	for (i = 0; i < MAX_OBD_DEVICES; i++) {
-		obd_dev[i].obd_type = 0;
-		obd_dev[i].refcnt = 0;
-		obd_dev[i].sb = NULL;
-		obd_dev[i].last_id = 0;
-		INIT_LIST_HEAD(&obd_dev[i].clients);
+		memset(&(obd_dev[i]), 0, sizeof(obd_dev[i]));
+		INIT_LIST_HEAD(&obd_dev[i].u.sim.sim_clients);
 	}
 
 	obd_sysctl_init();

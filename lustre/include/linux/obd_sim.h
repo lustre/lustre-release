@@ -1,6 +1,18 @@
 #ifndef _OBD_SIM
 #define _OBD_SIM
 
+struct sim_obd {
+	struct super_block * sim_sb;
+	unsigned int sim_last_id;
+	unsigned long sim_prealloc_quota;
+	struct list_head sim_clients;
+};
+
+
+/* development definitions */
+extern struct obdfs_sb_info *obd_sbi;
+extern struct file_operations *obd_fso;
+
 /* obd_sim.c */
 extern struct obd_ops sim_obd_ops;
 inline long ext2_block_map (struct inode * inode, long block);
@@ -42,31 +54,6 @@ struct buffer_head * obd_bread (struct inode * inode, int block,
                                 int create, int *err);
 struct buffer_head * obd_getblk (struct inode * inode, long block,
                                  int create, int * err);
-
-/* interface.c */
-void obd_cleanup_device(int dev);
-extern int obd_create (struct obd_device *, int inode_hint, int * err);
-extern void obd_unlink (struct inode * inode);
-extern struct obd_client * obd_client(int cli_id);
-extern void obd_cleanup_client (struct obd_device * obddev,
-				struct obd_client * cli);
-void obd_cleanup_device(int dev);
-int obd_cleanup_super(struct obd_device * obddev);
-int obd_setup_super(struct obd_device * obddev, void *data);
-long obd_preallocate_inodes(unsigned int conn_id,
-			    int req, long inodes[32], int * err);
-long obd_preallocate_quota(struct super_block * sb, struct obd_client * cli,
-			   unsigned long req, int * err);
-int obd_connect (int minor, struct obd_conn_info * conninfo);
-int obd_disconnect (unsigned int conn_id);
-int obd_setattr(unsigned int conn_id, unsigned long ino, struct iattr * iattr);
-int obd_getattr(unsigned int conn_id, unsigned long ino, struct iattr * iattr);
-int obd_destroy(unsigned int conn_id, unsigned long ino);
-int obd_statfs(unsigned int conn_id, struct statfs * statfs);
-unsigned long obd_read(unsigned int conn_id, unsigned long ino, char * buf,
-		       unsigned long count, loff_t offset, int * err);
-unsigned long obd_write (unsigned int conn_id, unsigned long ino, char * buf,
-			 unsigned long count, loff_t offset, int * err);
 
 
 /* super.c */
