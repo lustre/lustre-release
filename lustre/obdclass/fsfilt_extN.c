@@ -273,8 +273,11 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
         }
         if (inode->i_op->setattr)
                 rc = inode->i_op->setattr(dentry, iattr);
-        else
-                rc = inode_setattr(inode, iattr);
+        else{
+                rc = inode_change_ok(inode, iattr);
+                if (!rc)
+                        rc = inode_setattr(inode, iattr);
+        }
 
         unlock_kernel();
 
