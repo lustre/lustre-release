@@ -11,8 +11,8 @@
  * by Peter Braam <braam@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.26 2002/08/22 13:34:20 eeb Exp $";
-#define OBDECHO_VERSION "$Revision: 1.26 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.27 2002/08/29 00:51:53 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.27 $"
 
 #define EXPORT_SYMTAB
 
@@ -150,12 +150,12 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
         *desc_private = (void *)DESC_PRIV;
 
         for (i = 0; i < objcount; i++, obj++) {
-                int highmem = (obj->ioo_id & 1) != 0;
-                int verify  = obj->ioo_id != 0;
+                int gfp_mask = (obj->ioo_id & 1) ? GFP_HIGHUSER : GFP_KERNEL;
+                int verify = obj->ioo_id != 0;
                 int j;
 
                 for (j = 0 ; j < obj->ioo_bufcnt ; j++, nb++, r++) {
-                        r->page = alloc_pages(highmem ? GFP_HIGHUSER : GFP_KERNEL, 0);
+                        r->page = alloc_pages(gfp_mask, 0);
                         if (!r->page) {
                                 CERROR("can't get page %d/%d for id "LPU64"\n",
                                        j, obj->ioo_bufcnt, obj->ioo_id);
@@ -170,9 +170,11 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                         CDEBUG(D_PAGE, "$$$$ get page %p, addr %p@"LPU64"\n",
                                r->page, r->addr, r->offset);
 
-                        if (verify && (cmd & OBD_BRW_READ) != 0)
+                        if (verify && cmd == OBD_BRW_READ)
                                 page_debug_setup(r->addr, r->len, r->offset,
                                                  obj->ioo_id);
+                        else if (verify)
+                                memset(r->addr, 0xec, r->len);
                 }
         }
         CDEBUG(D_PAGE, "%ld pages allocated after prep\n", echo_pages);
@@ -236,7 +238,7 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
                         CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
                                r->page, addr, r->offset);
 
-                        if (verify && (cmd & OBD_BRW_WRITE))
+                        if (verify)
                                 page_debug_check("echo", addr, r->len,
                                                  r->offset, obj->ioo_id);
 

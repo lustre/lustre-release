@@ -494,11 +494,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 struct io_cb_data *cbd = ll_init_cb();
                 obd_count       pages = 0;
                 struct brw_page *pga, *pgp;
-                int             j;
+                __u64 id = data->ioc_obdo1.o_id;
+                int gfp_mask = (id & 1) ? GFP_HIGHUSER : GFP_KERNEL;
+                int verify = (id != 0);
                 unsigned long off;
-                int   highmem;
-                int   verify;
-                __u64 id;
+                int j;
 
                 if (!cbd)
                         GOTO(out, err = -ENOMEM);
@@ -516,14 +516,12 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 }
 
                 memset(&smd, 0, sizeof(smd));
-                id = smd.lmd_object_id = data->ioc_obdo1.o_id;
-                highmem = (id & 1) != 0;
-                verify = (id != 0);
-                
+                smd.lmd_object_id = id;
+
                 off = data->ioc_offset;
 
                 for (j = 0, pgp = pga; j < pages; j++, off += PAGE_SIZE, pgp++){
-                        pgp->pg = alloc_pages(highmem ? GFP_HIGHUSER : GFP_KERNEL, 0);
+                        pgp->pg = alloc_pages(gfp_mask, 0);
                         if (!pgp->pg) {
                                 CERROR("no memory for brw pages\n");
                                 GOTO(brw_cleanup, err = -ENOMEM);
@@ -532,9 +530,14 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         pgp->off = off;
                         pgp->flag = 0;
 
-                        if (verify && (rw == OBD_BRW_WRITE)) {
-                                page_debug_setup(kmap(pgp->pg), pgp->count,
-                                                 pgp->off, id);
+                        if (verify) {
+                                void *addr = kmap(pgp->pg);
+
+                                if (rw == OBD_BRW_WRITE)
+                                        page_debug_setup(addr, pgp->count,
+                                                         pgp->off, id);
+                                else
+                                        memset(addr, 0xba, PAGE_SIZE);
                                 kunmap(pgp->pg);
                         }
                 }
@@ -544,16 +547,18 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         brw_cleanup:
                 for (j = 0, pgp = pga; j < pages; j++, pgp++) {
                         if (pgp->pg != NULL) {
-                                if (verify) 
-                                {
+                                if (verify) {
                                         void *addr = kmap(pgp->pg);
-                                        int err2 = page_debug_check("test_brw", addr,
-                                                                    PAGE_SIZE, pgp->off,id);
-                                        
+                                        int err2;
+
+                                        err2 = page_debug_check("test_brw",
+                                                                addr,
+                                                                PAGE_SIZE,
+                                                                pgp->off,id);
                                         if (!err)
                                                 err = err2;
+                                        kunmap(pgp->pg);
                                 }
-                                kunmap(pgp->pg);
                                 __free_pages(pgp->pg, 0);
                         }
                 }
