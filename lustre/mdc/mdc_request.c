@@ -497,6 +497,7 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
         rc = l_wait_event(req->rq_reply_waitq, mdc_close_check_reply(req),
                           &lwi);
         if (rc == 0) {
+                LASSERTF(req->rq_repmsg != NULL, "req = %p", req);
                 rc = req->rq_repmsg->status;
                 if (req->rq_repmsg->type == PTL_RPC_MSG_ERR) {
                         DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err "
@@ -614,9 +615,15 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
-        
-        MOD_INC_USE_COUNT;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        MOD_INC_USE_COUNT;
+#else
+	if (!try_module_get(THIS_MODULE)) {
+		CERROR("Can't get module. Is it alive?");
+		return -EINVAL;
+	}
+#endif
         switch (cmd) {
         case OBD_IOC_CLIENT_RECOVER:
                 rc = ptlrpc_recover_import(imp, data->ioc_inlbuf1);
@@ -641,11 +648,16 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 #endif
         default:
-                CERROR("osc_ioctl(): unrecognised ioctl %#x\n", cmd);
+                CERROR("mdc_ioctl(): unrecognised ioctl %#x\n", cmd);
                 GOTO(out, rc = -ENOTTY);
         }
 out:
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         MOD_DEC_USE_COUNT;
+#else
+	module_put(THIS_MODULE);
+#endif
+
         return rc;
 }
 
@@ -819,19 +831,6 @@ int mdc_sync(struct obd_export *exp, struct ll_fid *fid,
         RETURN(rc);
 }
 
-static int mdc_attach(struct obd_device *dev, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-
-        lprocfs_init_vars(mdc, &lvars);
-        return lprocfs_obd_attach(dev, lvars.obd_vars);
-}
-
-static int mdc_detach(struct obd_device *dev)
-{
-        return lprocfs_obd_detach(dev);
-}
-
 static int mdc_import_event(struct obd_device *obd,
                             struct obd_import *imp, 
                             enum obd_import_event event)
@@ -851,7 +850,7 @@ static int mdc_import_event(struct obd_device *obd,
         }
         case IMP_EVENT_INVALIDATE: {
                 struct ldlm_namespace *ns = obd->obd_namespace;
-                
+
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
 
                 break;
@@ -871,6 +870,7 @@ static int mdc_import_event(struct obd_device *obd,
 static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct client_obd *cli = &obd->u.cli;
+        struct lprocfs_static_vars lvars;
         int rc;
         ENTRY;
 
@@ -883,15 +883,14 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
 
         OBD_ALLOC(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
         if (!cli->cl_setattr_lock)
-                GOTO(out_free_rpc, rc = -ENOMEM);
+                GOTO(err_rpc_lock, rc = -ENOMEM);
         mdc_init_rpc_lock(cli->cl_setattr_lock);
 
         rc = client_obd_setup(obd, len, buf);
-        if (rc) {
-                OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
- out_free_rpc:
-                OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
-        }
+        if (rc)
+                GOTO(err_setattr_lock, rc);
+        lprocfs_init_vars(mdc, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
 
         rc = obd_llog_init(obd, obd, 0, NULL);
         if (rc) {
@@ -899,6 +898,13 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
                 CERROR("failed to setup llogging subsystems\n");
         }
 
+        RETURN(rc);
+
+err_setattr_lock:
+        OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
+err_rpc_lock:
+        OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
+        ptlrpcd_decref();
         RETURN(rc);
 }
 
@@ -940,7 +946,7 @@ int mdc_init_ea_size(struct obd_device *obd, char *lov_name)
 static int mdc_precleanup(struct obd_device *obd, int flags)
 {
         int rc = 0;
-        
+
         rc = obd_llog_finish(obd, 0);
         if (rc != 0)
                 CERROR("failed to cleanup llogging subsystems\n");
@@ -951,10 +957,11 @@ static int mdc_precleanup(struct obd_device *obd, int flags)
 static int mdc_cleanup(struct obd_device *obd, int flags)
 {
         struct client_obd *cli = &obd->u.cli;
- 
+
         OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
         OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
 
+        lprocfs_obd_cleanup(obd);
         ptlrpcd_decref();
 
         return client_obd_cleanup(obd, flags);
@@ -989,8 +996,6 @@ static int mdc_llog_finish(struct obd_device *obd, int count)
 
 struct obd_ops mdc_obd_ops = {
         o_owner:       THIS_MODULE,
-        o_attach:      mdc_attach,
-        o_detach:      mdc_detach,
         o_setup:       mdc_setup,
         o_precleanup:  mdc_precleanup,
         o_cleanup:     mdc_cleanup,
@@ -1014,12 +1019,12 @@ int __init mdc_init(void)
                                    LUSTRE_MDC_NAME);
 }
 
+#ifdef __KERNEL__
 static void /*__exit*/ mdc_exit(void)
 {
         class_unregister_type(LUSTRE_MDC_NAME);
 }
 
-#ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Metadata Client");
 MODULE_LICENSE("GPL");

@@ -50,15 +50,15 @@ static int ldlm_proc_dump_ns(struct file *file, const char *buffer,
 int ldlm_proc_setup(void)
 {
         int rc;
-        struct lprocfs_vars list[] = { 
+        struct lprocfs_vars list[] = {
                 { "dump_namespaces", NULL, ldlm_proc_dump_ns, NULL },
                 { NULL }};
         ENTRY;
         LASSERT(ldlm_ns_proc_dir == NULL);
 
         ldlm_type_proc_dir = lprocfs_register(OBD_LDLM_DEVICENAME,
-                                               proc_lustre_root,
-                                               NULL, NULL);
+                                              proc_lustre_root,
+                                              NULL, NULL);
         if (IS_ERR(ldlm_type_proc_dir)) {
                 CERROR("LProcFS failed in ldlm-init\n");
                 rc = PTR_ERR(ldlm_type_proc_dir);
@@ -87,9 +87,9 @@ int ldlm_proc_setup(void)
 
         RETURN(0);
 
-err_ns:        
+err_ns:
         lprocfs_remove(ldlm_ns_proc_dir);
-err_type:        
+err_type:
         lprocfs_remove(ldlm_type_proc_dir);
 err:
         ldlm_type_proc_dir = NULL;

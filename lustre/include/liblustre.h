@@ -24,8 +24,8 @@
 #ifndef LIBLUSTRE_H__
 #define LIBLUSTRE_H__
 
-#include <asm/byteorder.h>
 #include <sys/mman.h>
+#include <asm/byteorder.h>
 #ifndef  __CYGWIN__
 #include <stdint.h>
 #include <asm/page.h>
@@ -240,8 +240,18 @@ static inline int request_module(char *name)
 #define __MOD_DEC_USE_COUNT(m)  do {} while (0)
 #define MOD_INC_USE_COUNT       do {} while (0)
 #define MOD_DEC_USE_COUNT       do {} while (0)
-#define try_module_get          __MOD_INC_USE_COUNT
-#define module_put              __MOD_DEC_USE_COUNT
+static inline void __module_get(struct module *module)
+{
+}
+
+static inline int try_module_get(struct module *module)
+{
+        return 1;
+}
+
+static inline void module_put(struct module *module)
+{
+}
 
 /* module initialization */
 extern int init_obdclass(void);
@@ -255,7 +265,6 @@ extern int echo_client_init(void);
 
 
 /* general stuff */
-#define jiffies 0
 
 #define EXPORT_SYMBOL(S)
 
@@ -527,14 +536,15 @@ struct semaphore {
         int count;
 };
 
-#define down(a) do {} while (0)
-#define up(a) do {} while (0)
-#define down_read(a) do {} while (0)
-#define up_read(a) do {} while (0)
-#define down_write(a) do {} while (0)
-#define up_write(a) do {} while (0)
-#define sema_init(a,b) do {} while (0)
-#define init_rwsem(a) do {} while (0)
+/* use the macro's argument to avoid unused warnings */
+#define down(a) do { (void)a; } while (0)
+#define up(a) do { (void)a; } while (0)
+#define down_read(a) do { (void)a; } while (0)
+#define up_read(a) do { (void)a; } while (0)
+#define down_write(a) do { (void)a; } while (0)
+#define up_write(a) do { (void)a; } while (0)
+#define sema_init(a,b) do { (void)a; } while (0)
+#define init_rwsem(a) do { (void)a; } while (0)
 #define DECLARE_MUTEX(name)     \
         struct semaphore name = { 1 }
 static inline void init_MUTEX (struct semaphore *sem)
@@ -622,6 +632,20 @@ static inline int schedule_timeout(signed long t)
 #define SIGNAL_MASK_ASSERT()
 #define KERN_INFO
 
+#include <sys/time.h>
+#if HZ != 1
+#error "liblustre's jiffies currently expects HZ to be 1"
+#endif
+#define jiffies                                 \
+({                                              \
+        unsigned long _ret = 0;                 \
+        struct timeval tv;                      \
+        if (gettimeofday(&tv, NULL) == 0)       \
+                _ret = tv.tv_sec;               \
+        _ret;                                   \
+})
+#define time_after(a, b) ((long)(b) - (long)(a) > 0)
+#define time_before(a, b) time_after(b,a)
 
 struct timer_list {
         struct list_head tl_list;
@@ -653,11 +677,6 @@ static inline void del_timer(struct timer_list *l)
 {
         free(l);
 }
-
-#define time_after(a, b)                                        \
-({                                                              \
-        1;                                                      \
-})
 
 typedef struct { volatile int counter; } atomic_t;
 

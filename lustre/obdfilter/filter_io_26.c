@@ -109,7 +109,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         int i, k, cleanup_phase = 0, err;
         unsigned long now = jiffies; /* DEBUGGING OST TIMEOUTS */
         int blocks_per_page;
-        struct dio_request *dreq;
+        struct dio_request *dreq = NULL;
         struct bio *bio = NULL;
         ENTRY;
         LASSERT(oti != NULL);

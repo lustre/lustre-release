@@ -163,10 +163,10 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "filestotal",   lprocfs_rd_filestotal,  0, 0 },
         { "filesfree",    lprocfs_rd_filesfree,   0, 0 },
         { "filesopen",    lprocfs_mds_rd_filesopen,   0, 0 },
-        //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
         { "mntdev",       lprocfs_mds_rd_mntdev,  0, 0 },
         { "recovery_status", lprocfs_mds_rd_recovery_status, 0, 0 },
         { "evict_client", 0, lprocfs_mds_wr_evict_client, 0 },
+        { "num_exports",  lprocfs_rd_num_exports, 0, 0 },
         { 0 }
 };
 
@@ -186,11 +186,5 @@ struct lprocfs_vars lprocfs_mdt_module_vars[] = {
 };
 
 #endif
-struct lprocfs_static_vars lprocfs_array_vars[] = { {lprocfs_mds_module_vars,
-                                                     lprocfs_mds_obd_vars},
-                                                    {lprocfs_mdt_module_vars,
-                                                     lprocfs_mdt_obd_vars}};
-
-LPROCFS_INIT_MULTI_VARS(lprocfs_array_vars,
-                        (sizeof(lprocfs_array_vars) /
-                         sizeof(struct lprocfs_static_vars)))
+LPROCFS_INIT_VARS(mds, lprocfs_mds_module_vars, lprocfs_mds_obd_vars);
+LPROCFS_INIT_VARS(mdt, lprocfs_mdt_module_vars, lprocfs_mdt_obd_vars);

@@ -75,13 +75,13 @@ unset REFORMAT
 
 test_1() {
     drop_request "mcreate $MOUNT/1"  || return 1
-    drop_reply "mcreate $MOUNT/2"    || return 2
+    drop_reint_reply "mcreate $MOUNT/2"    || return 2
 }
 run_test 1 "mcreate: drop req, drop rep"
 
 test_2() {
     drop_request "tchmod 111 $MOUNT/2"  || return 1
-    drop_reply "tchmod 666 $MOUNT/2"    || return 2
+    drop_reint_reply "tchmod 666 $MOUNT/2"    || return 2
 }
 run_test 2 "chmod: drop req, drop rep"
 
@@ -100,26 +100,26 @@ run_test 4 "open: drop req, drop rep"
 
 test_5() {
     drop_request "mv $MOUNT/resolv.conf $MOUNT/renamed" || return 1
-    drop_reply "mv $MOUNT/renamed $MOUNT/renamed-again" || return 2
+    drop_reint_reply "mv $MOUNT/renamed $MOUNT/renamed-again" || return 2
     do_facet client "checkstat -v $MOUNT/renamed-again"  || return 3
 }
 run_test 5 "rename: drop req, drop rep"
 
 test_6() {
     drop_request "mlink $MOUNT/renamed-again $MOUNT/link1" || return 1
-    drop_reply "mlink $MOUNT/renamed-again $MOUNT/link2"   || return 2
+    drop_reint_reply "mlink $MOUNT/renamed-again $MOUNT/link2"   || return 2
 }
 run_test 6 "link: drop req, drop rep"
 
 test_7() {
     drop_request "munlink $MOUNT/link1"   || return 1
-    drop_reply "munlink $MOUNT/link2"     || return 2
+    drop_reint_reply "munlink $MOUNT/link2"     || return 2
 }
 run_test 7 "unlink: drop req, drop rep"
 
 #bug 1423
 test_8() {
-    drop_reply "touch $MOUNT/renamed"    || return 1
+    drop_reint_reply "touch $MOUNT/renamed"    || return 1
 }
 run_test 8 "touch: drop rep (bug 1423)"
 

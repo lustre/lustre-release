@@ -79,7 +79,7 @@ static char *debug_buf = NULL;
 static unsigned long debug_size = 0;
 static atomic_t debug_off_a = ATOMIC_INIT(0);
 static int debug_wrapped;
-wait_queue_head_t debug_ctlwq;
+static DECLARE_WAIT_QUEUE_HEAD(debug_ctlwq);
 #define DAEMON_SND_SIZE      (64 << 10)
 
 /*
@@ -266,7 +266,7 @@ int portals_do_debug_dumplog(void *arg)
                        PTR_ERR(file));
                 GOTO(out, PTR_ERR(file));
         } else {
-                printk(KERN_ALERT "LustreError: dumping log to %s ... writing ...\n",
+                printk(KERN_ALERT "LustreError: dumping log to %s ...\n",
                        debug_file_name);
         }
 
@@ -439,18 +439,26 @@ void portals_debug_print(void)
 void portals_debug_dumplog(void)
 {
         int rc;
+        DECLARE_WAITQUEUE(wait, current);
         ENTRY;
 
-        init_waitqueue_head(&debug_ctlwq);
+        /* we're being careful to ensure that the kernel thread is
+         * able to set our state to running as it exits before we
+         * get to schedule() */
+        set_current_state(TASK_INTERRUPTIBLE);
+        add_wait_queue(&debug_ctlwq, &wait);
 
         rc = kernel_thread(portals_do_debug_dumplog,
                            NULL, CLONE_VM | CLONE_FS | CLONE_FILES);
-        if (rc < 0) {
+        if (rc < 0)
                 printk(KERN_ERR "LustreError: cannot start log dump thread: "
                        "%d\n", rc);
-                return;
-        }
-        sleep_on(&debug_ctlwq);
+        else
+                schedule();
+
+        /* be sure to teardown if kernel_thread() failed */
+        remove_wait_queue(&debug_ctlwq, &wait);
+        set_current_state(TASK_RUNNING);
 }
 
 int portals_debug_daemon_start(char *file, unsigned int size)

@@ -440,69 +440,56 @@ commitrw_cleanup:
         return rc;
 }
 
-static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
+static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
 {
+        struct lprocfs_static_vars lvars;
         ENTRY;
 
-        spin_lock_init(&obddev->u.echo.eo_lock);
-        obddev->u.echo.eo_lastino = ECHO_INIT_OBJID;
+        spin_lock_init(&obd->u.echo.eo_lock);
+        obd->u.echo.eo_lastino = ECHO_INIT_OBJID;
 
-        obddev->obd_namespace =
-                ldlm_namespace_new("echo-tgt", LDLM_NAMESPACE_SERVER);
-        if (obddev->obd_namespace == NULL) {
+        obd->obd_namespace = ldlm_namespace_new("echo-tgt",
+                                                LDLM_NAMESPACE_SERVER);
+        if (obd->obd_namespace == NULL) {
                 LBUG();
                 RETURN(-ENOMEM);
         }
 
+        lprocfs_init_vars(echo, &lvars);
+        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
+            lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST) == 0) {
+                lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "read_bytes", "bytes");
+                lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_WRITE_BYTES,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "write_bytes", "bytes");
+        }
+
         ptlrpc_init_client (LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
-                            "echo_ldlm_cb_client", &obddev->obd_ldlm_client);
+                            "echo_ldlm_cb_client", &obd->obd_ldlm_client);
         RETURN(0);
 }
 
-static int echo_cleanup(struct obd_device *obddev, int flags)
+static int echo_cleanup(struct obd_device *obd, int flags)
 {
-        int     leaked;
+        int leaked;
         ENTRY;
 
-        ldlm_namespace_free(obddev->obd_namespace, flags & OBD_OPT_FORCE);
+        lprocfs_free_obd_stats(obd);
+        lprocfs_obd_cleanup(obd);
 
-        leaked = atomic_read(&obddev->u.echo.eo_prep);
+        ldlm_namespace_free(obd->obd_namespace, flags & OBD_OPT_FORCE);
+
+        leaked = atomic_read(&obd->u.echo.eo_prep);
         if (leaked != 0)
                 CERROR("%d prep/commitrw pages leaked\n", leaked);
 
         RETURN(0);
 }
 
-int echo_attach(struct obd_device *obd, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-        int rc;
-
-        lprocfs_init_vars(echo, &lvars);
-        rc = lprocfs_obd_attach(obd, lvars.obd_vars);
-        if (rc != 0)
-                return rc;
-        rc = lprocfs_alloc_obd_stats(obd, LPROC_ECHO_LAST);
-        if (rc != 0)
-                return rc;
-
-        lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_READ_BYTES,
-                             LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
-        lprocfs_counter_init(obd->obd_stats, LPROC_ECHO_WRITE_BYTES,
-                             LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
-        return rc;
-}
-
-int echo_detach(struct obd_device *dev)
-{
-        lprocfs_free_obd_stats(dev);
-        return lprocfs_obd_detach(dev);
-}
-
 static struct obd_ops echo_obd_ops = {
         o_owner:           THIS_MODULE,
-        o_attach:          echo_attach,
-        o_detach:          echo_detach,
         o_connect:         echo_connect,
         o_disconnect:      echo_disconnect,
         o_destroy_export:  echo_destroy_export,

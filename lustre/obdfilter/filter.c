@@ -520,48 +520,51 @@ err_fsd:
 static int filter_cleanup_groups(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
+        struct file *filp;
+        struct dentry *dentry;
         int i;
         ENTRY;
 
-        if (filter->fo_dentry_O_groups != NULL &&
-            filter->fo_last_objids != NULL &&
-            filter->fo_last_objid_files != NULL) {
+        if (filter->fo_dentry_O_groups != NULL) {
                 for (i = 0; i < FILTER_GROUPS; i++) {
-                        struct dentry *dentry = filter->fo_dentry_O_groups[i];
-                        struct file *filp = filter->fo_last_objid_files[i];
-                        if (dentry != NULL) {
+                        dentry = filter->fo_dentry_O_groups[i];
+                        if (dentry != NULL)
                                 f_dput(dentry);
-                                filter->fo_dentry_O_groups[i] = NULL;
-                        }
-                        if (filp != NULL) {
-                                filp_close(filp, 0);
-                                filter->fo_last_objid_files[i] = NULL;
-                        }
                 }
+                OBD_FREE(filter->fo_dentry_O_groups,
+                         FILTER_GROUPS * sizeof(*filter->fo_dentry_O_groups));
+                filter->fo_dentry_O_groups = NULL;
         }
-        if (filter->fo_dentry_O_sub != NULL && filter->fo_subdir_count) {
+        if (filter->fo_last_objid_files != NULL) {
+                for (i = 0; i < FILTER_GROUPS; i++) {
+                        filp = filter->fo_last_objid_files[i];
+                        if (filp != NULL)
+                                filp_close(filp, 0);
+                }
+                OBD_FREE(filter->fo_last_objid_files,
+                         FILTER_GROUPS * sizeof(*filter->fo_last_objid_files));
+                filter->fo_last_objid_files = NULL;
+        }
+        if (filter->fo_dentry_O_sub != NULL) {
                 for (i = 0; i < filter->fo_subdir_count; i++) {
-                        struct dentry *dentry = filter->fo_dentry_O_sub[i];
-                        if (dentry != NULL) {
+                        dentry = filter->fo_dentry_O_sub[i];
+                        if (dentry != NULL)
                                 f_dput(dentry);
-                                filter->fo_dentry_O_sub[i] = NULL;
-                        }
                 }
                 OBD_FREE(filter->fo_dentry_O_sub,
                          filter->fo_subdir_count *
                          sizeof(*filter->fo_dentry_O_sub));
+                filter->fo_dentry_O_sub = NULL;
         }
-        if (filter->fo_dentry_O_groups != NULL)
-                OBD_FREE(filter->fo_dentry_O_groups,
-                         FILTER_GROUPS * sizeof(struct dentry *));
-        if (filter->fo_last_objids != NULL)
+        if (filter->fo_last_objids != NULL) {
                 OBD_FREE(filter->fo_last_objids,
-                         FILTER_GROUPS * sizeof(__u64));
-        if (filter->fo_last_objid_files != NULL)
-                OBD_FREE(filter->fo_last_objid_files,
-                         FILTER_GROUPS * sizeof(struct file *));
-        if (filter->fo_dentry_O != NULL)
+                         FILTER_GROUPS * sizeof(*filter->fo_last_objids));
+                filter->fo_last_objids = NULL;
+        }
+        if (filter->fo_dentry_O != NULL) {
                 f_dput(filter->fo_dentry_O);
+                filter->fo_dentry_O = NULL;
+        }
         RETURN(0);
 }
 
@@ -623,13 +626,13 @@ static int filter_prep_groups(struct obd_device *obd)
                 GOTO(cleanup_O0, rc);
 
         cleanup_O0:
-                dput(O0_dentry);
+                f_dput(O0_dentry);
         cleanup_R:
-                dput(dentry);
+                f_dput(dentry);
                 if (rc)
                         GOTO(cleanup, rc);
         } else {
-                dput(dentry);
+                f_dput(dentry);
         }
 
         OBD_ALLOC(filter->fo_last_objids, FILTER_GROUPS * sizeof(__u64));
@@ -1246,6 +1249,7 @@ err_ops:
 
 static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
 {
+        struct lprocfs_static_vars lvars;
         struct lustre_cfg* lcfg = buf;
         const char *str = NULL;
         char *option = NULL;
@@ -1272,6 +1276,21 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = filter_common_setup(obd, len, buf, option);
         if (option)
                 OBD_FREE(option, n);
+
+        lprocfs_init_vars(filter, &lvars);
+        if (rc == 0 && lprocfs_obd_setup(obd, lvars.obd_vars) == 0 &&
+            lprocfs_alloc_obd_stats(obd, LPROC_FILTER_LAST) == 0) {
+                /* Init obdfilter private stats here */
+                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_READ_BYTES,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "read_bytes", "bytes");
+                lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
+                                     LPROCFS_CNTR_AVGMINMAX,
+                                     "write_bytes", "bytes");
+
+                lproc_filter_attach_seqstat(obd);
+        }
+
         return rc;
 }
 
@@ -1298,6 +1317,9 @@ static int filter_cleanup(struct obd_device *obd, int flags)
         if (filter->fo_sb == NULL)
                 RETURN(0);
 
+        lprocfs_free_obd_stats(obd);
+        lprocfs_obd_cleanup(obd);
+
         filter_post(obd);
 
         shrink_dcache_parent(filter->fo_sb->s_root);
@@ -1318,35 +1340,6 @@ static int filter_cleanup(struct obd_device *obd, int flags)
         dev_clear_rdonly(2);
 
         RETURN(0);
-}
-
-static int filter_attach(struct obd_device *obd, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-        int rc;
-
-        lprocfs_init_vars(filter, &lvars);
-        rc = lprocfs_obd_attach(obd, lvars.obd_vars);
-        if (rc != 0)
-                return rc;
-
-        rc = lprocfs_alloc_obd_stats(obd, LPROC_FILTER_LAST);
-        if (rc != 0)
-                return rc;
-
-        /* Init obdfilter private stats here */
-        lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_READ_BYTES,
-                             LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
-        lprocfs_counter_init(obd->obd_stats, LPROC_FILTER_WRITE_BYTES,
-                             LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
-
-        return lproc_filter_attach_seqstat(obd);
-}
-
-static int filter_detach(struct obd_device *dev)
-{
-        lprocfs_free_obd_stats(dev);
-        return lprocfs_obd_detach(dev);
 }
 
 /* nearly identical to mds_connect */
@@ -1413,7 +1406,7 @@ static int filter_precleanup(struct obd_device *obd, int flags)
 /* Do extra sanity checks for grant accounting.  We do this at connect,
  * disconnect, and statfs RPC time, so it shouldn't be too bad.  We can
  * always get rid of it or turn it off when we know accounting is good. */
-static void filter_grant_sanity_check(struct obd_device *obd, char *func)
+static void filter_grant_sanity_check(struct obd_device *obd, const char *func)
 {
         struct filter_export_data *fed;
         struct obd_export *exp;
@@ -2385,8 +2378,6 @@ static struct lvfs_callback_ops filter_lvfs_ops = {
 
 static struct obd_ops filter_obd_ops = {
         o_owner:          THIS_MODULE,
-        o_attach:         filter_attach,
-        o_detach:         filter_detach,
         o_get_info:       filter_get_info,
         o_set_info:       filter_set_info,
         o_setup:          filter_setup,
@@ -2413,8 +2404,6 @@ static struct obd_ops filter_obd_ops = {
 
 static struct obd_ops filter_sanobd_ops = {
         o_owner:          THIS_MODULE,
-        o_attach:         filter_attach,
-        o_detach:         filter_detach,
         o_get_info:       filter_get_info,
         o_set_info:       filter_set_info,
         o_setup:          filter_san_setup,

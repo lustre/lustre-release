@@ -1,3 +1,6 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ */
 #define _GNU_SOURCE /* pull in O_DIRECTORY in bits/fcntl.h */
 #include <stdio.h>
 #include <fcntl.h>
@@ -47,22 +50,22 @@ void null_handler(int unused) { }
 static const char *
 pop_arg(int argc, char *argv[])
 {
-	static int cur_arg = 3;
+        static int cur_arg = 3;
 
-	if (cur_arg >= argc)
-		return NULL;
+        if (cur_arg >= argc)
+                return NULL;
 
-	return argv[cur_arg++];
+        return argv[cur_arg++];
 }
 #define POP_ARG() (pop_arg(argc, argv))
 
 int main(int argc, char **argv)
 {
         char *fname, *commands;
-	const char *newfile;
+        const char *newfile;
         struct stat st;
-	size_t mmap_len = 0, i;
-	unsigned char *mmap_ptr = NULL, junk = 0;
+        size_t mmap_len = 0, i;
+        unsigned char *mmap_ptr = NULL, junk = 0;
         int fd = -1;
 
         if (argc < 3) {
@@ -84,7 +87,7 @@ int main(int argc, char **argv)
                                 perror("close");
                                 exit(1);
                         }
-			fd = -1;
+                        fd = -1;
                         break;
                 case 'd':
                         if (mkdir(fname, 0755) == -1) {
@@ -92,54 +95,54 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
-		case 'D':
-			if (open(fname, O_DIRECTORY) == -1) {
-				perror("open(O_DIRECTORY)");
-				exit(1);
-			}
-			break;
-		case 'l':
-			newfile = POP_ARG();
-			if (!newfile)
-				newfile = fname;
-			if (symlink(fname, newfile)) {
-				perror("symlink()");
-				exit(1);
-			}
-			break;
-		case 'L':
-			newfile = POP_ARG();
-			if (!newfile)
-				newfile = fname;
-			if (link(fname, newfile)) {
-				perror("symlink()");
-				exit(1);
-			}
-			break;
+                case 'D':
+                        if (open(fname, O_DIRECTORY) == -1) {
+                                perror("open(O_DIRECTORY)");
+                                exit(1);
+                        }
+                        break;
+                case 'l':
+                        newfile = POP_ARG();
+                        if (!newfile)
+                                newfile = fname;
+                        if (symlink(fname, newfile)) {
+                                perror("symlink()");
+                                exit(1);
+                        }
+                        break;
+                case 'L':
+                        newfile = POP_ARG();
+                        if (!newfile)
+                                newfile = fname;
+                        if (link(fname, newfile)) {
+                                perror("symlink()");
+                                exit(1);
+                        }
+                        break;
                 case 'm':
                         if (mknod(fname, S_IFREG | 0644, 0) == -1) {
                                 perror("mknod(S_IFREG|0644, 0)");
                                 exit(1);
                         }
                         break;
-		case 'M':
-			mmap_len = st.st_size;
-			mmap_ptr = mmap(NULL, mmap_len, PROT_WRITE | PROT_READ,
-					MAP_SHARED, fd, 0);
-			if (mmap_ptr == MAP_FAILED) {
-				perror("mmap");
-				exit(1);
-			}
-			break;
-		case 'N':
-			newfile = POP_ARG();
-			if (!newfile)
-				newfile = fname;
-			if (rename (fname, newfile)) {
-				perror("rename()");
-				exit(1);
-			}
-			break;
+                case 'M':
+                        mmap_len = st.st_size;
+                        mmap_ptr = mmap(NULL, mmap_len, PROT_WRITE | PROT_READ,
+                                        MAP_SHARED, fd, 0);
+                        if (mmap_ptr == MAP_FAILED) {
+                                perror("mmap");
+                                exit(1);
+                        }
+                        break;
+                case 'N':
+                        newfile = POP_ARG();
+                        if (!newfile)
+                                newfile = fname;
+                        if (rename (fname, newfile)) {
+                                perror("rename()");
+                                exit(1);
+                        }
+                        break;
                 case 'O':
                         fd = open(fname, O_CREAT|O_RDWR, 0644);
                         if (fd == -1) {
@@ -154,23 +157,23 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
-		case 'r': {
-			char buf;
-			if (read(fd, &buf, 1) == -1) {
-				perror("read");
-				exit(1);
-			}
-		}
+                case 'r': {
+                        char buf;
+                        if (read(fd, &buf, 1) == -1) {
+                                perror("read");
+                                exit(1);
+                        }
+                        }
                 case 'S':
                         if (fstat(fd, &st) == -1) {
                                 perror("fstat");
                                 exit(1);
                         }
                         break;
-		case 'R':
-			for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
-				junk += mmap_ptr[i];
-			break;
+                case 'R':
+                        for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
+                                junk += mmap_ptr[i];
+                        break;
                 case 's':
                         if (stat(fname, &st) == -1) {
                                 perror("stat");
@@ -195,39 +198,39 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
-		case 'U':
-			if (munmap(mmap_ptr, mmap_len)) {
-				perror("munmap");
-				exit(1);
-			}
-			break;
-		case 'w':
-			if (write(fd, "w", 1) == -1) {
-				perror("write");
-				exit(1);
-			}
-			break;
-		case 'W':
-			for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
-				mmap_ptr[i] += junk++;
-			break;
-		case 'y':
-			if (fsync(fd) == -1) {
-				perror("fsync");
-				exit(1);
-			}
-			break;
-		case 'Y':
-			if (fdatasync(fd) == -1) {
-				perror("fdatasync");
-				exit(1);
-			}
-		case 'z':
-			if (lseek(fd, 0, SEEK_SET) == -1) {
-				perror("lseek");
-				exit(1);
-			}
-			break;
+                case 'U':
+                        if (munmap(mmap_ptr, mmap_len)) {
+                                perror("munmap");
+                                exit(1);
+                        }
+                        break;
+                case 'w':
+                        if (write(fd, "w", 1) == -1) {
+                                perror("write");
+                                exit(1);
+                        }
+                        break;
+                case 'W':
+                        for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
+                                mmap_ptr[i] += junk++;
+                        break;
+                case 'y':
+                        if (fsync(fd) == -1) {
+                                perror("fsync");
+                                exit(1);
+                        }
+                        break;
+                case 'Y':
+                        if (fdatasync(fd) == -1) {
+                                perror("fdatasync");
+                                exit(1);
+                        }
+                case 'z':
+                        if (lseek(fd, 0, SEEK_SET) == -1) {
+                                perror("lseek");
+                                exit(1);
+                        }
+                        break;
                 default:
                         fprintf(stderr, "unknown command \"%c\"\n", *commands);
                         fprintf(stderr, usage, argv[0]);

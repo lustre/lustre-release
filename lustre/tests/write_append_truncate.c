@@ -60,7 +60,6 @@ void rprintf(int rank, int loop, const char *fmt, ...)
         vprintf(fmt, ap);
 
         MPI_Abort(MPI_COMM_WORLD, 1);
-        exit(1); /* shouldn't be needed, but some MPI_Abort()s are broken */
 }
 
 int main(int argc, char *argv[])

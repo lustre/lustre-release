@@ -158,7 +158,7 @@ void request_in_callback(ptl_event_t *ev)
         struct ptlrpc_srv_ni              *srv_ni = rqbd->rqbd_srv_ni;
         struct ptlrpc_service             *service = srv_ni->sni_service;
         struct ptlrpc_request             *req;
-        long                               flags;
+        unsigned long                     flags;
         ENTRY;
 
         LASSERT (ev->type == PTL_EVENT_PUT_END ||
@@ -558,7 +558,7 @@ static void cray_portals_callback(ptl_event_t *ev)
 {
         /* We get a callback from the client Cray portals implementation
          * whenever anyone calls PtlEQPoll(), and an event queue with a
-         * callback handler has outstanding events.  
+         * callback handler has outstanding events.
          *
          * If it's not liblustre calling PtlEQPoll(), this lets us know we
          * have outstanding events which we handle with

@@ -322,6 +322,12 @@ test_15() {	# bug 974 - ENOSPC
 }
 run_test 15 "test out-of-space with multiple writers ==========="
 
+test_16() {
+	./fsx -R -W -c 50 -p 100 -N 2500 \
+		$MOUNT1/fsxfile $MOUNT2/fsxfile
+}
+run_test 16 "2500 iterations of dual-mount fsx ================="
+
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
 

@@ -184,7 +184,7 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                inode->i_ino);
 
-                        ll_invalidate_inode_pages(inode);
+                        truncate_inode_pages(inode->i_mapping, 0);
                 }
 
                 if (inode->i_sb->s_root &&

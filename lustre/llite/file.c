@@ -272,7 +272,7 @@ int ll_lsm_getattr(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (rc)
                 RETURN(rc);
 
-        oa->o_valid &= (OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME | 
+        oa->o_valid &= (OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
                         OBD_MD_FLCTIME | OBD_MD_FLSIZE);
         RETURN(0);
 }
@@ -609,7 +609,7 @@ int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
-        struct lustre_handle lockh = { .cookie = 0 };
+        struct lustre_handle lockh = { 0 };
         int rc, flags = LDLM_FL_HAS_INTENT;
         ENTRY;
 
@@ -726,7 +726,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 RETURN(err);
 
         kms = lov_merge_size(lsm, 1);
-        if (policy.l_extent.end > kms) {
+        if (*ppos + count - 1 > kms) {
                 /* A glimpse is necessary to determine whether we return a short
                  * read or some zeroes at the end of the buffer */
                 struct ost_lvb lvb;

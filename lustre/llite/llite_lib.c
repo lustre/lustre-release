@@ -38,7 +38,6 @@ kmem_cache_t *ll_file_data_slab;
 
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
-extern struct super_operations ll_super_operations;
 
 #ifndef log2
 #define log2(n) ffz(~(n))
@@ -193,12 +192,14 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_root, err);
         }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
-#warning "Please fix this"
-#else
+	/* making vm readahead 0 for 2.4.x. In the case of 2.6.x, 
+	   backing dev info assigned to inode mapping is used for
+	   determining maximal readahead. */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
         /* bug 2805 - set VM readahead to zero */
         vm_max_readahead = vm_min_readahead = 0;
 #endif
+
         sb->s_root = d_alloc_root(root);
         RETURN(err);
 
@@ -361,19 +362,6 @@ out:
 
         RETURN(err);
 } /* ll_read_super */
-
-void ll_put_super(struct super_block *sb)
-{
-        ENTRY;
-
-        CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
-
-        lustre_common_put_super(sb);
-
-        lustre_free_sbi(sb);
-
-        EXIT;
-} /* ll_put_super */
 
 int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                        struct config_llog_instance *cfg, int allow_recov)
@@ -883,10 +871,10 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                                     (rc=ll_permission(inode,MAY_WRITE,NULL))!=0)
                                         RETURN(rc);
                         } else {
-				/* from inode_change_ok() */
-				if (current->fsuid != inode->i_uid &&
-				    !capable(CAP_FOWNER))
-					RETURN(-EPERM);
+                                /* from inode_change_ok() */
+                                if (current->fsuid != inode->i_uid &&
+                                    !capable(CAP_FOWNER))
+                                        RETURN(-EPERM);
                         }
                 }
 
@@ -1116,6 +1104,13 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                 set_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+static struct backing_dev_info ll_backing_dev_info = {
+	.ra_pages	= 0,	/* No readahead */
+	.memory_backed	= 0,	/* Does contribute to dirty memory */
+};
+#endif
+
 void ll_read_inode2(struct inode *inode, void *opaque)
 {
         struct lustre_md *md = opaque;
@@ -1155,15 +1150,19 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                 EXIT;
         } else {
                 inode->i_op = &ll_special_inode_operations;
+
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-#warning "need to fix this for 2.6 also"
                 init_special_inode(inode, inode->i_mode,
                                    kdev_t_to_nr(inode->i_rdev));
+		
+		/* initializing backing dev info. */
+		inode->i_mapping->backing_dev_info = &ll_backing_dev_info;
 #else
                 init_special_inode(inode, inode->i_mode, inode->i_rdev);
-
+#endif
                 lli->ll_save_ifop = inode->i_fop;
-                if (S_ISCHR(inode->i_mode))
+                
+		if (S_ISCHR(inode->i_mode))
                         inode->i_fop = &ll_special_chr_inode_fops;
                 else if (S_ISBLK(inode->i_mode))
                         inode->i_fop = &ll_special_blk_inode_fops;
@@ -1171,12 +1170,14 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                         inode->i_fop = &ll_special_fifo_inode_fops;
                 else if (S_ISSOCK(inode->i_mode))
                         inode->i_fop = &ll_special_sock_inode_fops;
-                CWARN("saved %p, replaced with %p\n", lli->ll_save_ifop,
+        
+	        CWARN("saved %p, replaced with %p\n", lli->ll_save_ifop,
                       inode->i_fop);
-                if (lli->ll_save_ifop->owner)
+		      
+                if (lli->ll_save_ifop->owner) {
                         CWARN("%p has owner %p\n", lli->ll_save_ifop,
                               lli->ll_save_ifop->owner);
-#endif
+		}
                 EXIT;
         }
 }

@@ -60,19 +60,6 @@ static struct super_block *lustre_read_super(struct super_block *sb,
         RETURN(sb);
 }
 
-/* exported operations */
-struct super_operations ll_super_operations =
-{
-        read_inode2: ll_read_inode2,
-        clear_inode: ll_clear_inode,
-        //        delete_inode: ll_delete_inode,
-        put_super: ll_put_super,
-        statfs: ll_statfs,
-        umount_begin: ll_umount_begin,
-        fh_to_dentry: ll_fh_to_dentry,
-        dentry_to_fh: ll_dentry_to_fh
-};
-
 static struct file_system_type lustre_lite_fs_type = {
         name:           "lustre_lite",
         fs_flags:       FS_NFSEXP_FSID,

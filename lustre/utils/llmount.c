@@ -194,7 +194,7 @@ set_local(struct lustre_mount_data *lmd)
                 if (rc != 0) {
                         fprintf(stderr, "%s: can't read Elan ID from /proc\n",
                                 progname);
-                                
+
                         return -1;
                 }
         }

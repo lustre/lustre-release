@@ -30,33 +30,19 @@
 #include <linux/obd_class.h>
 #include <linux/obd_cache.h>
 
-static int cobd_attach(struct obd_device *dev, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-
-        lprocfs_init_vars(cobd, &lvars);
-        return lprocfs_obd_attach(dev, lvars.obd_vars);
-}
-
-static int cobd_detach(struct obd_device *dev)
-{
-        return lprocfs_obd_detach(dev);
-}
-
-static int
-cobd_setup (struct obd_device *dev, obd_count len, void *buf)
+static int cobd_setup (struct obd_device *obd, obd_count len, void *buf)
 {
         struct lustre_cfg *lcfg = (struct lustre_cfg *)buf;
-        struct cache_obd  *cobd = &dev->u.cobd;
+        struct cache_obd  *cobd = &obd->u.cobd;
         struct obd_device *target;
         struct obd_device *cache;
         struct obd_uuid target_uuid;
         struct obd_uuid cache_uuid;
         struct lustre_handle target_conn = {0,}, cache_conn = {0,};
+        struct lprocfs_static_vars lvars;
         int                rc;
 
-        if (lcfg->lcfg_inlbuf1 == NULL ||
-            lcfg->lcfg_inlbuf2 == NULL)
+        if (lcfg->lcfg_inlbuf1 == NULL || lcfg->lcfg_inlbuf2 == NULL)
                 return (-EINVAL);
 
         obd_str2uuid(&target_uuid, lcfg->lcfg_inlbuf1);
@@ -82,24 +68,29 @@ cobd_setup (struct obd_device *dev, obd_count len, void *buf)
         }
         cobd->cobd_cache_exp = class_conn2export(&cache_conn);
 
-        return rc;
+        lprocfs_init_vars(cobd, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
+
+        return 0;
 }
 
-static int cobd_cleanup(struct obd_device *dev, int flags)
+static int cobd_cleanup(struct obd_device *obd, int flags)
 {
-        struct cache_obd  *cobd = &dev->u.cobd;
+        struct cache_obd  *cobd = &obd->u.cobd;
         int                rc;
 
-        if (!list_empty(&dev->obd_exports))
+        if (!list_empty(&obd->obd_exports))
                 return (-EBUSY);
+
+        lprocfs_obd_cleanup(obd);
 
         rc = obd_disconnect(cobd->cobd_cache_exp, flags);
         if (rc != 0)
-                CERROR ("error %d disconnecting cache\n", rc);
+                CERROR("error %d disconnecting cache\n", rc);
 
         rc = obd_disconnect(cobd->cobd_target_exp, flags);
         if (rc != 0)
-                CERROR ("error %d disconnecting target\n", rc);
+                CERROR("error %d disconnecting target\n", rc);
 
         return (0);
 }
@@ -244,8 +235,6 @@ static int cobd_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 
 static struct obd_ops cobd_ops = {
         o_owner:                THIS_MODULE,
-        o_attach:               cobd_attach,
-        o_detach:               cobd_detach,
 
         o_setup:                cobd_setup,
         o_cleanup:              cobd_cleanup,

@@ -1560,5 +1560,3 @@ static struct inode_ops llu_inode_ops = {
 #endif
         inop_gone:      llu_iop_gone,
 };
-
-#warning "time_after() defined in liblustre.h need to be rewrite in userspace"

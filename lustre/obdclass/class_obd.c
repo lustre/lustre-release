@@ -362,16 +362,17 @@ static int obd_class_ioctl(struct inode *inode, struct file *filp,
 
 /* declare character device */
 static struct file_operations obd_psdev_fops = {
-        ioctl:   obd_class_ioctl,       /* ioctl */
-        open:    obd_class_open,        /* open */
-        release: obd_class_release,     /* release */
+        .owner   = THIS_MODULE,
+        .ioctl   = obd_class_ioctl,     /* ioctl */
+        .open    = obd_class_open,      /* open */
+        .release = obd_class_release,   /* release */
 };
 
 /* modules setup */
 static struct miscdevice obd_psdev = {
-        OBD_MINOR,
-        "obd_psdev",
-        &obd_psdev_fops
+        .minor = OBD_MINOR,
+        .name  = "obd_psdev",
+        .fops  = &obd_psdev_fops,
 };
 #else
 void *obd_psdev = NULL;
@@ -533,9 +534,10 @@ static int obd_device_list_open(struct inode *inode, struct file *file)
 }
 
 struct file_operations obd_device_list_fops = {
-        .open = obd_device_list_open,
-        .read = seq_read,
-        .llseek = seq_lseek,
+        .owner   = THIS_MODULE,
+        .open    = obd_device_list_open,
+        .read    = seq_read,
+        .llseek  = seq_lseek,
         .release = seq_release,
 };
 #endif
@@ -602,12 +604,14 @@ int init_obdclass(void)
         return 0;
 }
 
+/* liblustre doesn't call cleanup_obdclass, apparently.  we carry on in this
+ * ifdef to the end of the file to cover module and versioning goo.*/
+#ifdef __KERNEL__
+
 static void cleanup_obdclass(void)
 {
         int i;
-#ifndef __KERNEL__
         int leaked;
-#endif
         ENTRY;
 
         misc_deregister(&obd_psdev);
@@ -621,9 +625,7 @@ static void cleanup_obdclass(void)
         }
 
         obd_cleanup_caches();
-#ifdef __KERNEL__
         obd_sysctl_clean();
-#endif
 #ifdef LPROCFS
         if (proc_lustre_root) {
                 lprocfs_remove(proc_lustre_root);
@@ -634,18 +636,15 @@ static void cleanup_obdclass(void)
         class_handle_cleanup();
         class_exit_uuidlist();
 
-#ifndef __KERNEL__
         leaked = atomic_read(&obd_memory);
         CDEBUG(leaked ? D_ERROR : D_INFO,
                "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
-#endif
 
         EXIT;
 }
 
 /* Check that we're building against the appropriate version of the Lustre
  * kernel patch */
-#ifdef __KERNEL__
 #include <linux/lustre_version.h>
 #define LUSTRE_MIN_VERSION 28
 #define LUSTRE_MAX_VERSION 34
@@ -654,11 +653,7 @@ static void cleanup_obdclass(void)
 #elif (LUSTRE_KERNEL_VERSION > LUSTRE_MAX_VERSION)
 # error Cannot continue: Your Lustre sources are older than the kernel patch
 #endif
- #else
-# warning "Lib Lustre - no versioning information"
-#endif
 
-#ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Class Driver Build Version: " BUILD_VERSION);
 MODULE_LICENSE("GPL");

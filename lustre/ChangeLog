@@ -1,8 +1,10 @@
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.x
        * bug fixes
- 	- clear page cache after eviction (2766)
+	- clear page cache after eviction (2766)
 	- zero nameidata in detach_mnt (3118)
+	- verify d_inode after revalidate_special is valid (3116)
+	- use lustre_put_super() to handle zconf unmounts in 2.6 (3064)
 
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.2
@@ -17,6 +19,9 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- initialize lock handle to avoid ASSERT on error cleanup (3057)
 	- don't use cancelling-locks' kms values (2947)
 	- use highest lock extent for kms, not last one (2925)
+	- don't dereference ERR_PTR() dentry in error handling path (3107)
+	- fix thread race in portals_debug_dumplog() (3122)
+	- create lprocfs device entries at setup instead of at attach (1519)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
 

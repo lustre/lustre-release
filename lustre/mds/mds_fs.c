@@ -95,7 +95,8 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
                cl_idx, med->med_mcd->mcd_uuid);
 
         med->med_idx = cl_idx;
-        med->med_off = MDS_LR_CLIENT_START + (cl_idx * MDS_LR_CLIENT_SIZE);
+        med->med_off = le32_to_cpu(mds->mds_server_data->msd_client_start) +
+                (cl_idx * le16_to_cpu(mds->mds_server_data->msd_client_size));
 
         if (new_client) {
                 struct obd_run_ctxt saved;
@@ -193,10 +194,10 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
         ENTRY;
 
         /* ensure padding in the struct is the correct size */
-        LASSERT (offsetof(struct mds_server_data, msd_padding) +
-                 sizeof(msd->msd_padding) == MDS_LR_SERVER_SIZE);
-        LASSERT (offsetof(struct mds_client_data, mcd_padding) +
-                 sizeof(mcd->mcd_padding) == MDS_LR_CLIENT_SIZE);
+        LASSERT(offsetof(struct mds_server_data, msd_padding) +
+                sizeof(msd->msd_padding) == MDS_LR_SERVER_SIZE);
+        LASSERT(offsetof(struct mds_client_data, mcd_padding) +
+                sizeof(mcd->mcd_padding) == MDS_LR_CLIENT_SIZE);
 
         OBD_ALLOC_WAIT(msd, sizeof(*msd));
         if (!msd)
@@ -216,7 +217,7 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
 
                 memcpy(msd->msd_uuid, obd->obd_uuid.uuid,sizeof(msd->msd_uuid));
                 msd->msd_last_transno = 0;
-                mount_count = msd->msd_mount_count = 0; 
+                mount_count = msd->msd_mount_count = 0;
                 msd->msd_server_size = cpu_to_le32(MDS_LR_SERVER_SIZE);
                 msd->msd_client_start = cpu_to_le32(MDS_LR_CLIENT_START);
                 msd->msd_client_size = cpu_to_le16(MDS_LR_CLIENT_SIZE);
@@ -265,8 +266,9 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
         CDEBUG(D_INODE, "%s: last_rcvd size: %lu\n",
                obd->obd_name, last_rcvd_size);
         CDEBUG(D_INODE, "%s: last_rcvd clients: %lu\n", obd->obd_name,
-               last_rcvd_size <= MDS_LR_CLIENT_START ? 0 :
-               (last_rcvd_size - MDS_LR_CLIENT_START) / MDS_LR_CLIENT_SIZE);
+               last_rcvd_size <= le32_to_cpu(msd->msd_client_start) ? 0 :
+               (last_rcvd_size - le32_to_cpu(msd->msd_client_start)) /
+                le16_to_cpu(msd->msd_client_size));
 
         /* When we do a clean MDS shutdown, we save the last_transno into
          * the header.  If we find clients with higher last_transno values

@@ -404,6 +404,15 @@ drop_reply() {
     return $RC
 }
 
+drop_reint_reply() {
+# OBD_FAIL_MDS_REINT_NET_REP
+    RC=0
+    do_facet mds "echo 0x119 > /proc/sys/lustre/fail_loc"
+    do_facet client "$@" || RC=$?
+    do_facet mds "echo 0 > /proc/sys/lustre/fail_loc"
+    return $RC
+}
+
 pause_bulk() {
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
     RC=0

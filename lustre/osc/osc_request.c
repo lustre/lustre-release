@@ -64,35 +64,6 @@
 #include <linux/lustre_log.h>
 #include "osc_internal.h"
 
-
-static int osc_attach(struct obd_device *dev, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-        int rc;
-        ENTRY;
-
-        lprocfs_init_vars(osc,&lvars);
-        rc = lprocfs_obd_attach(dev, lvars.obd_vars);
-        if (rc < 0)
-                RETURN(rc);
-
-        rc = lproc_osc_attach_seqstat(dev);
-        if (rc < 0) {
-                lprocfs_obd_detach(dev);
-                RETURN(rc);
-        }
-
-        ptlrpc_lprocfs_register_obd(dev);
-        RETURN(0);
-}
-
-static int osc_detach(struct obd_device *dev)
-{
-        ptlrpc_lprocfs_unregister_obd(dev);
-        return lprocfs_obd_detach(dev);
-}
-
-
 /* Pack OSC object metadata for disk storage (LE byte order). */
 static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                       struct lov_stripe_md *lsm)
@@ -2630,9 +2601,15 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct obd_ioctl_data *data = karg;
         int err = 0;
         ENTRY;
-        
-        MOD_INC_USE_COUNT;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        MOD_INC_USE_COUNT;
+#else
+	if (!try_module_get(THIS_MODULE)) {
+		CERROR("Can't get module. Is it alive?");
+		return -EINVAL;
+	}
+#endif
         switch (cmd) {
         case OBD_IOC_LOV_GET_CONFIG: {
                 char *buf;
@@ -2696,7 +2673,11 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 GOTO(out, err = -ENOTTY);
         }
 out:
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         MOD_DEC_USE_COUNT;
+#else
+	module_put(THIS_MODULE);
+#endif
         return err;
 }
 
@@ -2951,10 +2932,19 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
                 return rc;
 
         rc = client_obd_setup(obd, len, buf);
-        if (rc)
+        if (rc) {
                 ptlrpcd_decref();
-        else
+        } else {
+                struct lprocfs_static_vars lvars;
+
+                lprocfs_init_vars(osc, &lvars);
+                if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
+                        lproc_osc_attach_seqstat(obd);
+                        ptlrpc_lprocfs_register_obd(obd);
+                }
+
                 oscc_init(obd);
+        }
 
         RETURN(rc);
 }
@@ -2962,6 +2952,9 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
 int osc_cleanup(struct obd_device *obd, int flags)
 {
         int rc;
+
+        ptlrpc_lprocfs_unregister_obd(obd);
+        lprocfs_obd_cleanup(obd);
 
         rc = client_obd_cleanup(obd, flags);
         ptlrpcd_decref();
@@ -2971,8 +2964,6 @@ int osc_cleanup(struct obd_device *obd, int flags)
 
 struct obd_ops osc_obd_ops = {
         o_owner:        THIS_MODULE,
-        o_attach:       osc_attach,
-        o_detach:       osc_detach,
         o_setup:        osc_setup,
         o_cleanup:      osc_cleanup,
         o_connect:      osc_connect,
@@ -3011,8 +3002,6 @@ struct obd_ops osc_obd_ops = {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 struct obd_ops sanosc_obd_ops = {
         o_owner:        THIS_MODULE,
-        o_attach:       osc_attach,
-        o_detach:       osc_detach,
         o_cleanup:      client_obd_cleanup,
         o_connect:      osc_connect,
         o_disconnect:   client_disconnect_export,
@@ -3069,6 +3058,7 @@ int __init osc_init(void)
         RETURN(rc);
 }
 
+#ifdef __KERNEL__
 static void /*__exit*/ osc_exit(void)
 {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -3077,7 +3067,6 @@ static void /*__exit*/ osc_exit(void)
         class_unregister_type(LUSTRE_OSC_NAME);
 }
 
-#ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Object Storage Client (OSC)");
 MODULE_LICENSE("GPL");

@@ -18,7 +18,8 @@
 #define IOC_MDC_TYPE         'i'
 #define IOC_MDC_MIN_NR       20
 #define IOC_MDC_LOOKUP       _IOWR(IOC_MDC_TYPE, 20, struct obd_device *)
-#define IOC_MDC_GETSTRIPE    _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
+/* Moved to lustre_user.h
+#define IOC_MDC_GETSTRIPE    _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *) */
 #define IOC_MDC_MAX_NR       50
 
 #ifdef __KERNEL__
@@ -466,9 +467,9 @@ struct obd_device {
         struct obd_uuid obd_uuid;
 
         int obd_minor;
-        int obd_attached:1, obd_set_up:1, obd_recovering:1,
-            obd_abort_recovery:1, obd_replayable:1, obd_no_transno:1,
-            obd_no_recov:1, obd_stopping:1;
+        unsigned int obd_attached:1, obd_set_up:1, obd_recovering:1,
+                obd_abort_recovery:1, obd_replayable:1, obd_no_transno:1,
+                obd_no_recov:1, obd_stopping:1;
         atomic_t obd_refcount;
         wait_queue_head_t obd_refcount_waitq;
         struct proc_dir_entry *obd_proc_entry;

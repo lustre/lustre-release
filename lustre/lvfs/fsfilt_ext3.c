@@ -35,16 +35,8 @@
 #include <linux/ext3_fs.h>
 #include <linux/ext3_jbd.h>
 #include <linux/version.h>
-/* XXX ugh */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
- #include <linux/ext3_xattr.h>
-#else
-/* 
- * our build flags set -I$LINUX/fs and -I$LUSTRE so that ext3 and
- * ldiskfs work correctly
- */
- #include <ext3/xattr.h>
-#endif
+#include <linux/ext3_xattr.h>
+
 #include <linux/kp30.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>
@@ -312,8 +304,11 @@ static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
 static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
                                         void **wait_handle)
 {
+        unsigned long tid;
         transaction_t *transaction;
-        unsigned long tid, rtid;
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
+        unsigned long rtid;
+#endif
         handle_t *handle = h;
         journal_t *journal;
         int rc;

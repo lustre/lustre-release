@@ -34,7 +34,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <stdarg.h>
-#include <asm/byteorder.h>
+#include <endian.h>
 
 #ifdef __CYGWIN__
 

@@ -24,6 +24,9 @@
  */
 
 #include "socknal.h"
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+# include <linux/syscalls.h>
+#endif
 
 /*
  *  LIB functions follow

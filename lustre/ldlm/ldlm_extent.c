@@ -164,6 +164,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
         __u64 req_start = req->l_req_extent.start;
         __u64 req_end = req->l_req_extent.end;
         int compat = 1;
+        int scan = 0;
         ENTRY;
 
         lockmode_verify(req_mode);
@@ -173,6 +174,32 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
                 if (req == lock)
                         RETURN(compat);
+
+                if (scan) {
+                        /* We only get here if we are queuing GROUP lock
+                           and met some incompatible one. The main idea of this
+                           code is to insert GROUP lock past compatible GROUP
+                           lock in the waiting queue or if there is not any,
+                           then in front of first non-GROUP lock */
+                        if (lock->l_req_mode != LCK_GROUP) {
+                        /* Ok, we hit non-GROUP lock, there should be no
+                           more GROUP locks later on, queue in front of
+                           first non-GROUP lock */
+
+                                ldlm_resource_insert_lock_after(lock, req);
+                                list_del_init(&lock->l_res_link);
+                                ldlm_resource_insert_lock_after(req, lock);
+                                RETURN(0);
+                        }
+                        if (req->l_policy_data.l_extent.gid ==
+                             lock->l_policy_data.l_extent.gid) {
+                                /* found it */
+                                ldlm_resource_insert_lock_after(lock,
+                                                                req);
+                                RETURN(0);
+                        }
+                        continue;
+                }
 
                 /* locks are compatible, overlap doesn't matter */
                 if (lockmode_compat(lock->l_req_mode, req_mode)) {
@@ -207,6 +234,29 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
                                  * list. */
                                 RETURN(0);
                         }
+                }
+
+                if (req_mode == LCK_GROUP &&
+                    (lock->l_req_mode != lock->l_granted_mode)) {
+                        scan = 1;
+                        compat = 0;
+                        if (lock->l_req_mode != LCK_GROUP) {
+                        /* Ok, we hit non-GROUP lock, there should be no
+                           more GROUP locks later on, queue in front of
+                           first non-GROUP lock */
+
+                                ldlm_resource_insert_lock_after(lock, req);
+                                list_del_init(&lock->l_res_link);
+                                ldlm_resource_insert_lock_after(req, lock);
+                                RETURN(0);
+                        }
+                        if (req->l_policy_data.l_extent.gid ==
+                             lock->l_policy_data.l_extent.gid) {
+                                /* found it */
+                                ldlm_resource_insert_lock_after(lock, req);
+                                RETURN(0);
+                        }
+                        continue;
                 }
 
                 if (lock->l_req_mode == LCK_GROUP) {
@@ -290,13 +340,15 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         res->lr_tmp = &rpc_list;
         rc = ldlm_extent_compat_queue(&res->lr_granted, lock, 1, flags, err);
         if (rc < 0)
-                RETURN(rc); /* lock was destroyed */
-        if (rc == 2)
+                GOTO(out, rc); /* lock was destroyed */
+        if (rc == 2) {
+                res->lr_tmp = NULL;
                 goto grant;
+        }
 
         rc2 = ldlm_extent_compat_queue(&res->lr_waiting, lock, 1, flags, err);
         if (rc2 < 0)
-                RETURN(rc2); /* lock was destroyed */
+                GOTO(out, rc = rc2); /* lock was destroyed */
         res->lr_tmp = NULL;
 
         if (rc + rc2 == 2) {
@@ -320,7 +372,10 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                         GOTO(restart, -ERESTART);
                 *flags |= LDLM_FL_BLOCK_GRANTED;
         }
-        RETURN(0);
+        rc = 0;
+out:
+        res->lr_tmp = NULL;
+        RETURN(rc);
 }
 
 /* When a lock is cancelled by a client, the KMS may undergo change if this

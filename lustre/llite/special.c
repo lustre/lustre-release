@@ -193,7 +193,7 @@ static int ll_special_ioctl(struct inode *inode, struct file *filp,
 
         if (pfop && *pfop && (*pfop)->ioctl) {
                 struct file_operations *sfops = filp->f_op;
-
+			
                 rc = (*pfop)->ioctl(inode, filp, cmd, arg);
                 /* sometimes, file_operations will be changed in ioctl */
                 save_fops(filp, inode, sfops);

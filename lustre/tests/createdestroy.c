@@ -1,3 +1,6 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ */
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -95,44 +98,44 @@ static int get_verbose(char *func, const char *arg)
 int main(int argc, char *argv[])
 {
         char filename[1024];
-	int verbose = 0;
+        int verbose = 0;
         unsigned long count, i;
-	int threads = 0;
-	char *end;
-	int rc = 0;
+        int threads = 0;
+        char *end;
+        int rc = 0;
 
         if (argc < 3 || argc > 5) {
                 fprintf(stderr,
-			"usage: %s <filename> <count> [verbose [threads]]\n",
-			argv[0]);
+                        "usage: %s <filename> <count> [verbose [threads]]\n",
+                        argv[0]);
                 exit(1);
         }
 
         count = strtoul(argv[2], &end, 0);
-	if (*end) {
+        if (*end) {
                 fprintf(stderr, "%s: error: bad iteration count '%s'\n",
                         argv[0], argv[1]);
-		exit(2);
-	}
-	if (argc == 4) {
-		verbose = get_verbose(argv[0], argv[3]);
-		if (verbose == BAD_VERBOSE)
-			exit(2);
-	}
-	if (argc == 5) {
-		threads = strtoul(argv[4], &end, 0);
-		if (*end) {
-			fprintf(stderr, "%s: error: bad thread count '%s'\n",
-				argv[0], argv[1]);
-			exit(2);
-		}
-	}
+                exit(2);
+        }
+        if (argc == 4) {
+                verbose = get_verbose(argv[0], argv[3]);
+                if (verbose == BAD_VERBOSE)
+                        exit(2);
+        }
+        if (argc == 5) {
+                threads = strtoul(argv[4], &end, 0);
+                if (*end) {
+                        fprintf(stderr, "%s: error: bad thread count '%s'\n",
+                                argv[0], argv[1]);
+                        exit(2);
+                }
+        }
 
         for (i = 1; i <= threads; i++) {
                 rc = fork();
                 if (rc < 0) {
                         fprintf(stderr, "%s: error: #%ld - %s\n",
-				cmdname(argv[0]), i, strerror(rc = errno));
+                                cmdname(argv[0]), i, strerror(rc = errno));
                         break;
                 } else if (rc == 0) {
                         thread = i;
@@ -143,7 +146,7 @@ int main(int argc, char *argv[])
                 rc = 0;
         }
 
-        if (threads && thread == 0) {	/* parent process */
+        if (threads && thread == 0) {   /* parent process */
                 int live_threads = threads;
 
                 while (live_threads > 0) {
@@ -178,47 +181,47 @@ int main(int argc, char *argv[])
                                 live_threads--;
                         }
                 }
-	} else {
+        } else {
                 struct timeval start, end, next_time;
-		unsigned long next_count;
-		double diff;
+                unsigned long next_count;
+                double diff;
 
-		gettimeofday(&start, NULL);
-		next_time.tv_sec = start.tv_sec - verbose;
-		next_time.tv_usec = start.tv_usec;
+                gettimeofday(&start, NULL);
+                next_time.tv_sec = start.tv_sec - verbose;
+                next_time.tv_usec = start.tv_usec;
 
-		for (i = 0, next_count = verbose; i < count; i++) {
-			if (threads)
-				sprintf(filename, "%s-%d-%ld",
-					argv[1], thread, i);
-			else
-				sprintf(filename, "%s-%ld", argv[1], i);
+                for (i = 0, next_count = verbose; i < count; i++) {
+                        if (threads)
+                                sprintf(filename, "%s-%d-%ld",
+                                        argv[1], thread, i);
+                        else
+                                sprintf(filename, "%s-%ld", argv[1], i);
 
-			rc = mknod(filename, S_IFREG, 0);
-			if (rc < 0) {
-				fprintf(stderr, "%s: error: mknod(%s): %s\n",
-					cmdname(argv[0]), filename,
-					strerror(errno));
-				rc = errno;
-				break;
-			}
-			if (unlink(filename) < 0) {
-				fprintf(stderr, "%s: error: unlink(%s): %s\n",
-					cmdname(argv[0]), filename,
-					strerror(errno));
-				rc = errno;
-				break;
-			}
-			if (be_verbose(verbose, &next_time,i,&next_count,count))
-				printf("%s: number %ld\n", cmdname(argv[0]), i);
-		}
+                        rc = mknod(filename, S_IFREG, 0);
+                        if (rc < 0) {
+                                fprintf(stderr, "%s: error: mknod(%s): %s\n",
+                                        cmdname(argv[0]), filename,
+                                        strerror(errno));
+                                rc = errno;
+                                break;
+                        }
+                        if (unlink(filename) < 0) {
+                                fprintf(stderr, "%s: error: unlink(%s): %s\n",
+                                        cmdname(argv[0]), filename,
+                                        strerror(errno));
+                                rc = errno;
+                                break;
+                        }
+                        if (be_verbose(verbose, &next_time,i,&next_count,count))
+                                printf("%s: number %ld\n", cmdname(argv[0]), i);
+                }
 
-		gettimeofday(&end, NULL);
+                gettimeofday(&end, NULL);
                 diff = difftime(&end, &start);
 
-		printf("%s: %ldx2 files in %.4gs (%.4g ops/s): rc = %d: %s",
-		       cmdname(argv[0]), i, diff, (double)i * 2 / diff,
-		       rc, ctime(&end.tv_sec));
-	}
+                printf("%s: %ldx2 files in %.4gs (%.4g ops/s): rc = %d: %s",
+                       cmdname(argv[0]), i, diff, (double)i * 2 / diff,
+                       rc, ctime(&end.tv_sec));
+        }
         return rc;
 }

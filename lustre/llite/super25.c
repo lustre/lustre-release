@@ -100,12 +100,12 @@ void ll_destroy_inodecache(void)
 /* exported operations */
 struct super_operations lustre_super_operations =
 {
-        alloc_inode: ll_alloc_inode,
-        destroy_inode: ll_destroy_inode,
-        clear_inode: ll_clear_inode,
-        put_super: ll_put_super,
-        statfs: ll_statfs,
-        umount_begin: ll_umount_begin
+        .alloc_inode = ll_alloc_inode,
+        .destroy_inode = ll_destroy_inode,
+        .clear_inode = ll_clear_inode,
+        .put_super = lustre_put_super,
+        .statfs = ll_statfs,
+        .umount_begin = ll_umount_begin
 };
 
 

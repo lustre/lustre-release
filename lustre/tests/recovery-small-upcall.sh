@@ -1,3 +1,4 @@
 #!/bin/sh
 LUSTRE=`dirname $0`/..
-$LUSTRE/utils/lctl --device %$3 recover || logger -p kern.info recovery failed: $@
+PATH=$LUSTRE/utils:$PATH
+lctl --device %$3 recover || logger -p kern.info recovery failed: $@

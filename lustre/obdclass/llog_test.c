@@ -610,11 +610,14 @@ static int llog_test_cleanup(struct obd_device *obd, int flags)
         if (rc)
                 CERROR("failed to llog_test_llog_finish: %d\n", rc);
 
+        lprocfs_obd_cleanup(obd);
+
         return rc;
 }
 
 static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
 {
+        struct lprocfs_static_vars lvars;
         struct lustre_cfg *lcfg = buf;
         struct obd_device *tgt;
         int rc;
@@ -641,30 +644,15 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = llog_run_tests(obd);
         if (rc)
                 llog_test_cleanup(obd, 0);
+
+        lprocfs_init_vars(llog_test, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
+
         RETURN(rc);
-}
-
-static struct lprocfs_vars lprocfs_ost_obd_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_ost_module_vars[] = { {0} };
-LPROCFS_INIT_VARS(ost, lprocfs_ost_module_vars, lprocfs_ost_obd_vars)
-
-static int llog_test_attach(struct obd_device *dev, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-
-        lprocfs_init_vars(ost, &lvars);
-        return lprocfs_obd_attach(dev, lvars.obd_vars);
-}
-
-static int llog_test_detach(struct obd_device *dev)
-{
-        return lprocfs_obd_detach(dev);
 }
 
 static struct obd_ops llog_obd_ops = {
         o_owner:       THIS_MODULE,
-        o_attach:      llog_test_attach,
-        o_detach:      llog_test_detach,
         o_setup:       llog_test_setup,
         o_cleanup:     llog_test_cleanup,
         o_llog_init:   llog_test_llog_init,

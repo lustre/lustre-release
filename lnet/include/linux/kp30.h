@@ -318,6 +318,7 @@ extern void kportal_blockallsigs (void);
 # define printk(format, args...) printf (format, ## args)
 # define PORTAL_ALLOC(ptr, size) do { (ptr) = malloc(size); } while (0);
 # define PORTAL_FREE(a, b) do { free(a); } while (0);
+void portals_debug_dumplog(void);
 # define portals_debug_msg(subsys, mask, file, fn, line, stack, format, a...) \
     printf("%02x:%06x (@%lu %s:%s,l. %d %d %lu): " format,                    \
            (subsys), (mask), (long)time(0), file, fn, line,                   \

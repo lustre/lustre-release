@@ -1365,6 +1365,7 @@ int mds_update_server_data(struct obd_device *obd, int force_sync)
 /* mount the file system (secretly) */
 static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 {
+        struct lprocfs_static_vars lvars;
         struct lustre_cfg* lcfg = buf;
         struct mds_obd *mds = &obd->u.mds;
         struct vfsmount *mnt;
@@ -1422,7 +1423,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = llog_start_commit_thread();
         if (rc < 0)
                 GOTO(err_fs, rc);
-        
 
         if (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3) {
                 class_uuid_t uuid;
@@ -1431,13 +1431,13 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 class_uuid_unparse(uuid, &mds->mds_lov_uuid);
 
                 OBD_ALLOC(mds->mds_profile, lcfg->lcfg_inllen3);
-                if (mds->mds_profile == NULL) 
+                if (mds->mds_profile == NULL)
                         GOTO(err_fs, rc = -ENOMEM);
 
                 memcpy(mds->mds_profile, lcfg->lcfg_inlbuf3,
                        lcfg->lcfg_inllen3);
 
-        } 
+        }
 
         ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                            "mds_ldlm_client", &obd->obd_ldlm_client);
@@ -1446,6 +1446,10 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = mds_postsetup(obd);
         if (rc)
                 GOTO(err_fs, rc);
+
+        lprocfs_init_vars(mds, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
+
         RETURN(0);
 
 err_fs:
@@ -1579,6 +1583,8 @@ static int mds_cleanup(struct obd_device *obd, int flags)
         if (mds->mds_sb == NULL)
                 RETURN(0);
 
+        lprocfs_obd_cleanup(obd);
+
         mds_update_server_data(obd, 1);
         if (mds->mds_lov_objids != NULL) {
                 OBD_FREE(mds->mds_lov_objids,
@@ -1649,7 +1655,7 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req,
          * be handled like any normal request now. */
 
         lustre_msg_clear_flags(req->rq_reqmsg, MSG_RESENT);
-        
+
         DEBUG_REQ(D_HA, req, "no existing lock with rhandle "LPX64,
                   remote_hdl.cookie);
 }
@@ -1814,50 +1820,28 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         RETURN(ELDLM_LOCK_REPLACED);
 }
 
-int mds_attach(struct obd_device *dev, obd_count len, void *data)
+static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
 {
+        struct mds_obd *mds = &obd->u.mds;
         struct lprocfs_static_vars lvars;
-
-        lprocfs_init_multi_vars(0, &lvars);
-        return lprocfs_obd_attach(dev, lvars.obd_vars);
-}
-
-int mds_detach(struct obd_device *dev)
-{
-        return lprocfs_obd_detach(dev);
-}
-
-int mdt_attach(struct obd_device *dev, obd_count len, void *data)
-{
-        struct lprocfs_static_vars lvars;
-
-        lprocfs_init_multi_vars(1, &lvars);
-        return lprocfs_obd_attach(dev, lvars.obd_vars);
-}
-
-int mdt_detach(struct obd_device *dev)
-{
-        return lprocfs_obd_detach(dev);
-}
-
-static int mdt_setup(struct obd_device *obddev, obd_count len, void *buf)
-{
-        struct mds_obd *mds = &obddev->u.mds;
         int rc = 0;
         ENTRY;
 
-        mds->mds_service = 
+        lprocfs_init_vars(mdt, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
+
+        mds->mds_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                                 mds_handle, "mds",
-                                obddev->obd_proc_entry);
+                                obd->obd_proc_entry);
 
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
-                RETURN(rc = -ENOMEM);
+                GOTO(err_lprocfs, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_n_threads(obddev, mds->mds_service, MDT_NUM_THREADS,
+        rc = ptlrpc_start_n_threads(obd, mds->mds_service, MDT_NUM_THREADS,
                                     "ll_mdt");
         if (rc)
                 GOTO(err_thread, rc);
@@ -1865,32 +1849,32 @@ static int mdt_setup(struct obd_device *obddev, obd_count len, void *buf)
         mds->mds_setattr_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_SETATTR_PORTAL, MDC_REPLY_PORTAL,
-                                mds_handle, "mds_setattr", 
-                                obddev->obd_proc_entry);
+                                mds_handle, "mds_setattr",
+                                obd->obd_proc_entry);
         if (!mds->mds_setattr_service) {
                 CERROR("failed to start getattr service\n");
                 GOTO(err_thread, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_n_threads(obddev, mds->mds_setattr_service,
+        rc = ptlrpc_start_n_threads(obd, mds->mds_setattr_service,
                                  MDT_NUM_THREADS, "ll_mdt_attr");
         if (rc)
                 GOTO(err_thread2, rc);
-                        
+
         mds->mds_readpage_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_READPAGE_PORTAL, MDC_REPLY_PORTAL,
-                                mds_handle, "mds_readpage", 
-                                obddev->obd_proc_entry);
+                                mds_handle, "mds_readpage",
+                                obd->obd_proc_entry);
         if (!mds->mds_readpage_service) {
                 CERROR("failed to start readpage service\n");
                 GOTO(err_thread2, rc = -ENOMEM);
         }
 
-        rc = ptlrpc_start_n_threads(obddev, mds->mds_readpage_service,
+        rc = ptlrpc_start_n_threads(obd, mds->mds_readpage_service,
                                     MDT_NUM_THREADS, "ll_mdt_rdpg");
 
-        if (rc) 
+        if (rc)
                 GOTO(err_thread3, rc);
 
         RETURN(0);
@@ -1901,13 +1885,14 @@ err_thread2:
         ptlrpc_unregister_service(mds->mds_setattr_service);
 err_thread:
         ptlrpc_unregister_service(mds->mds_service);
+err_lprocfs:
+        lprocfs_obd_cleanup(obd);
         return rc;
 }
 
-
-static int mdt_cleanup(struct obd_device *obddev, int flags)
+static int mdt_cleanup(struct obd_device *obd, int flags)
 {
-        struct mds_obd *mds = &obddev->u.mds;
+        struct mds_obd *mds = &obd->u.mds;
         ENTRY;
 
         ptlrpc_stop_all_threads(mds->mds_readpage_service);
@@ -1919,10 +1904,13 @@ static int mdt_cleanup(struct obd_device *obddev, int flags)
         ptlrpc_stop_all_threads(mds->mds_service);
         ptlrpc_unregister_service(mds->mds_service);
 
+        lprocfs_obd_cleanup(obd);
+
         RETURN(0);
 }
 
-static struct dentry *mds_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr, void *data)
+static struct dentry *mds_lvfs_fid2dentry(__u64 id, __u32 gen, __u64 gr,
+                                          void *data)
 {
         struct obd_device *obd = data;
         struct ll_fid fid;
@@ -1938,8 +1926,6 @@ struct lvfs_callback_ops mds_lvfs_ops = {
 /* use obd ops to offer management infrastructure */
 static struct obd_ops mds_obd_ops = {
         o_owner:       THIS_MODULE,
-        o_attach:      mds_attach,
-        o_detach:      mds_detach,
         o_connect:     mds_connect,
         o_init_export:  mds_init_export,
         o_destroy_export:  mds_destroy_export,
@@ -1959,8 +1945,6 @@ static struct obd_ops mds_obd_ops = {
 
 static struct obd_ops mdt_obd_ops = {
         o_owner:       THIS_MODULE,
-        o_attach:      mdt_attach,
-        o_detach:      mdt_detach,
         o_setup:       mdt_setup,
         o_cleanup:     mdt_cleanup,
 };
@@ -1969,9 +1953,9 @@ static int __init mds_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_multi_vars(0, &lvars);
+        lprocfs_init_vars(mds, &lvars);
         class_register_type(&mds_obd_ops, lvars.module_vars, LUSTRE_MDS_NAME);
-        lprocfs_init_multi_vars(1, &lvars);
+        lprocfs_init_vars(mdt, &lvars);
         class_register_type(&mdt_obd_ops, lvars.module_vars, LUSTRE_MDT_NAME);
 
         return 0;

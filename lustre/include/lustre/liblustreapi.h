@@ -26,14 +26,16 @@
 #ifndef _LIBLUSTREAPI_H_
 #define _LIBLUSTREAPI_H_
 
+#include <lustre/lustre_user.h>
+
 /* liblustreapi.c */
-int op_create_file(char *name, long stripe_size, int stripe_offset,
-         int stripe_count);
-int op_find(char *path, struct obd_uuid *obduuid, int recursive,
-         int verbose, int quiet);
-int op_check(int type_num, char **obd_type_p, char *dir);
-int op_catinfo(char *dir, char *keyword, char *node_name);
-
-
+extern int op_create_file(char *name, long stripe_size, int stripe_offset,
+                          int stripe_count);
+extern int op_find(char *path, struct obd_uuid *obduuid, int recursive,
+                   int verbose, int quiet);
+extern int op_check(int type_num, char **obd_type_p, char *dir);
+extern int op_catinfo(char *dir, char *keyword, char *node_name);
+extern int get_file_stripe(char *path, struct lov_user_md *lum);
+extern int llapi_is_lustre_mnttype(char *type);
 
 #endif

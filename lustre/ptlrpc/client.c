@@ -497,8 +497,11 @@ static int after_reply(struct ptlrpc_request *req)
                 spin_lock_irqsave(&imp->imp_lock, flags);
                 if (req->rq_replay || req->rq_transno != 0)
                         ptlrpc_retain_replayable_request(req, imp);
-                else if (req->rq_commit_cb != NULL)
+                else if (req->rq_commit_cb != NULL) {
+            		spin_unlock_irqrestore(&imp->imp_lock, flags);
                         req->rq_commit_cb(req);
+            		spin_lock_irqsave(&imp->imp_lock, flags);
+		}
 
                 if (req->rq_transno > imp->imp_max_transno)
                         imp->imp_max_transno = req->rq_transno;

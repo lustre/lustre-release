@@ -673,7 +673,7 @@ static int ptlrpc_main(void *arg)
         spin_lock_irqsave(&svc->srv_lock, flags);
         svc->srv_nthreads++;
         spin_unlock_irqrestore(&svc->srv_lock, flags);
-        
+
         /* XXX maintain a list of all managed devices: insert here */
 
         while ((thread->t_flags & SVC_STOPPING) == 0 ||
@@ -681,7 +681,7 @@ static int ptlrpc_main(void *arg)
                 /* Don't exit while there are replies to be handled */
                 struct l_wait_info lwi = LWI_TIMEOUT(svc->srv_rqbd_timeout,
                                                      ptlrpc_retry_rqbds, svc);
-                                  
+
                 l_wait_event_exclusive (svc->srv_waitq,
                               ((thread->t_flags & SVC_STOPPING) != 0 &&
                                svc->srv_n_difficult_replies == 0) ||
@@ -690,7 +690,7 @@ static int ptlrpc_main(void *arg)
                               !list_empty (&svc->srv_reply_queue) ||
                               (!list_empty (&svc->srv_request_queue) &&
                                (svc->srv_n_difficult_replies == 0 ||
-                                svc->srv_n_active_reqs < 
+                                svc->srv_n_active_reqs <
                                 (svc->srv_nthreads - 1))),
                               &lwi);
 
@@ -838,6 +838,8 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         list_del_init (&service->srv_list);
         spin_unlock (&ptlrpc_all_services_lock);
 
+        ptlrpc_lprocfs_unregister_service(service);
+
         for (i = 0; i < ptlrpc_ninterfaces; i++) {
                 srv_ni = &service->srv_interfaces[i];
                 CDEBUG(D_NET, "%s: tearing down interface %s\n",
@@ -938,8 +940,6 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                 }
                 CWARN("Unexpectedly long timeout %p\n", service);
         }
-
-        ptlrpc_lprocfs_unregister_service(service);
 
         OBD_FREE(service,
                  offsetof(struct ptlrpc_service,

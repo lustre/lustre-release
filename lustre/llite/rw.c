@@ -848,15 +848,10 @@ int ll_readpage(struct file *filp, struct page *page)
                        inode->i_ino, page->index,
                        (long long)page->index << PAGE_CACHE_SHIFT);
                 if (time_after(jiffies, next_print)) {
-                        CERROR("ino %lu page %lu (%llu) not covered by "
+                        CWARN("ino %lu page %lu (%llu) not covered by "
                                "a lock (mmap?).  check debug logs.\n",
                                inode->i_ino, page->index,
                                (long long)page->index << PAGE_CACHE_SHIFT);
-                        ldlm_dump_all_namespaces();
-                        if (next_print == 0) {
-                                CERROR("%s\n", portals_debug_dumpstack());
-                                portals_debug_dumplog();
-                        }
                         next_print = jiffies + 30 * HZ;
                 }
         }

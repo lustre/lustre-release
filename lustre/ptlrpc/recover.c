@@ -286,7 +286,7 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
  * This should only be called by the ioctl interface, currently
  * with the lctl deactivate and activate commands.
  */
-int  ptlrpc_set_import_active(struct obd_import *imp, int active)
+int ptlrpc_set_import_active(struct obd_import *imp, int active)
 {
         struct obd_device *obd = imp->imp_obd;
         int rc = 0;

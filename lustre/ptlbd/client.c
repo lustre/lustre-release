@@ -35,6 +35,7 @@
 static int ptlbd_cl_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct ptlbd_obd *ptlbd = &obd->u.ptlbd;
+        struct lprocfs_static_vars lvars;
         struct obd_import *imp;
         struct lustre_cfg* lcfg = buf;
         ENTRY;
@@ -66,13 +67,16 @@ static int ptlbd_cl_setup(struct obd_device *obd, obd_count len, void *buf)
         }
         imp->imp_state = LUSTRE_IMP_FULL;
 
-        ptlrpc_init_client(PTLBD_REQUEST_PORTAL, PTLBD_REPLY_PORTAL, 
+        ptlrpc_init_client(PTLBD_REQUEST_PORTAL, PTLBD_REPLY_PORTAL,
                         "ptlbd", &ptlbd->bd_client);
         imp->imp_client = &ptlbd->bd_client;
         imp->imp_obd = obd;
-        memcpy(imp->imp_target_uuid.uuid, lcfg->lcfg_inlbuf1, 
+        memcpy(imp->imp_target_uuid.uuid, lcfg->lcfg_inlbuf1,
                lcfg->lcfg_inllen1);
         ptlbd_blk_register(ptlbd);
+
+        lprocfs_init_vars(ptlbd_cl, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
 
         RETURN(0);
 }
@@ -88,6 +92,8 @@ static int ptlbd_cl_cleanup(struct obd_device *obd, int flags)
 
         if (!imp->imp_connection)
                 RETURN(-ENOENT);
+
+        lprocfs_obd_cleanup(obd);
 
         ptlrpc_cleanup_client(imp);
         ptlrpc_put_connection(imp->imp_connection);
@@ -110,7 +116,7 @@ int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
         int     rc, size[] = {sizeof(imp->imp_target_uuid),
                               sizeof(obd->obd_uuid),
                               sizeof(*conn)};
-        char *tmp[] = {imp->imp_target_uuid.uuid, 
+        char *tmp[] = {imp->imp_target_uuid.uuid,
                        obd->obd_uuid.uuid,
                        (char*)conn};
         ENTRY;
@@ -140,7 +146,7 @@ int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         imp->imp_state = LUSTRE_IMP_FULL;
         imp->imp_remote_handle = request->rq_repmsg->handle;
-        
+
 out_req:
         ptlrpc_req_finished(request);
 out_disco:

@@ -300,12 +300,12 @@ void mds_steal_ack_locks(struct ptlrpc_request *req)
 
                 CWARN("Stealing %d locks from rs %p x"LPD64".t"LPD64
                       " o%d NID"LPX64"\n",
-                      oldrep->rs_nlocks, oldrep, 
+                      oldrep->rs_nlocks, oldrep,
                       oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_msg.opc,
                       exp->exp_connection->c_peer.peer_nid);
 
                 for (i = 0; i < oldrep->rs_nlocks; i++)
-                        ptlrpc_save_lock(req, 
+                        ptlrpc_save_lock(req,
                                          &oldrep->rs_locks[i],
                                          oldrep->rs_modes[i]);
                 oldrep->rs_nlocks = 0;
@@ -407,7 +407,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
 
         inode = de->d_inode;
         LASSERT(inode);
-        if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) && 
+        if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
             rec->ur_eadata != NULL)
                 down(&inode->i_sem);
 
@@ -490,7 +490,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         err = mds_finish_transno(mds, inode, handle, req, rc, 0);
         switch (cleanup_phase) {
         case 1:
-                if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) && 
+                if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
                     rec->ur_eadata != NULL)
                         up(&inode->i_sem);
                 l_dput(de);
@@ -1061,9 +1061,11 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
 
         /* Step 1: Lookup parent */
         *dparentp = mds_fid2dentry(mds, fid, NULL);
-        if (IS_ERR(*dparentp))
-                RETURN(rc = PTR_ERR(*dparentp));
-        LASSERT((*dparentp)->d_inode);
+        if (IS_ERR(*dparentp)) {
+                rc = PTR_ERR(*dparentp);
+                *dparentp = NULL;
+                RETURN(rc);
+        }
 
         CDEBUG(D_INODE, "parent ino %lu, name %s\n",
                (*dparentp)->d_inode->i_ino, name);
@@ -1387,8 +1389,11 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         cleanup_phase = 1; /* source dentry */
 
         de_tgt_dir = mds_fid2dentry(mds, rec->ur_fid2, NULL);
-        if (IS_ERR(de_tgt_dir))
-                GOTO(cleanup, rc = PTR_ERR(de_tgt_dir));
+        if (IS_ERR(de_tgt_dir)) {
+                rc = PTR_ERR(de_tgt_dir);
+                de_tgt_dir = NULL;
+                GOTO(cleanup, rc);
+        }
 
         cleanup_phase = 2; /* target directory dentry */
 
@@ -1589,8 +1594,11 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
                 *de_tgtdirp = dget(*de_srcdirp);
         } else {
                 *de_tgtdirp = mds_fid2dentry(mds, p2_fid, NULL);
-                if (IS_ERR(*de_tgtdirp))
-                        GOTO(cleanup, rc = PTR_ERR(*de_tgtdirp));
+                if (IS_ERR(*de_tgtdirp)) {
+                        rc = PTR_ERR(*de_tgtdirp);
+                        *de_tgtdirp = NULL;
+                        GOTO(cleanup, rc);
+                }
         }
 
         cleanup_phase = 2; /* target directory dentry */

@@ -96,7 +96,6 @@ char	*temp_buf;			/* a pointer to the current data */
 char	*fname;				/* name of our test file */
 char	logfile[1024];			/* name of our log file */
 char	goodfile[1024];			/* name of our test file */
-int	fd;				/* fd for our test file */
 
 off_t		file_size = 0;
 off_t		biggest = 0;
@@ -384,12 +383,125 @@ check_buffers(unsigned offset, unsigned size)
 	}
 }
 
+struct test_file {
+	char *path;
+	int fd;
+} *test_files = NULL;
+
+int num_test_files = 0;
+enum fd_iteration_policy {
+	FD_SINGLE,
+	FD_ROTATE,
+	FD_RANDOM,
+};
+int fd_policy = FD_RANDOM;
+int fd_last = 0;
+
+struct test_file * 
+get_tf(void)
+{
+	unsigned index = 0;
+
+	switch (fd_policy) {
+		case FD_ROTATE:
+			index = fd_last++;
+			break;
+		case FD_RANDOM:
+			index = random();
+			break;
+		case FD_SINGLE:
+			index = 0;
+			break;
+		default:
+			prt("unknown policy");
+			exit(1);
+			break;
+	}
+	return &test_files[ index % num_test_files ];
+}
+
+void
+assign_fd_policy(char *policy)
+{
+	if (!strcmp(policy, "random"))
+		fd_policy = FD_RANDOM;
+	else if (!strcmp(policy, "rotate"))
+		fd_policy = FD_ROTATE;
+	else {
+		prt("unknown -I policy: '%s'\n", policy);
+		exit(1);
+	}
+}
+
+int 
+get_fd(void)
+{
+	struct test_file *tf = get_tf();
+	return tf->fd;
+}
+
+static const char *basename(const char *path)
+{
+	char *c = strrchr(path, '/');
+
+	return c ? c++ : path;
+}
+
+void 
+open_test_files(char **argv, int argc)
+{
+	struct test_file *tf;
+	int i;
+
+	num_test_files = argc;
+	if (num_test_files == 1)
+		fd_policy = FD_SINGLE;
+
+	test_files = calloc(num_test_files, sizeof(*test_files));
+	if (test_files == NULL) {
+		prterr("reallocating space for test files");
+		exit(1);
+	}
+
+	for (i = 0, tf = test_files; i < num_test_files; i++, tf++) {
+
+		tf->path = argv[i];
+		tf->fd = open(tf->path, O_RDWR|(lite ? 0 : O_CREAT|O_TRUNC), 
+				0666);
+		if (tf->fd < 0) {
+			prterr(tf->path);
+			exit(91);
+		}
+	}
+
+	if (quiet || fd_policy == FD_SINGLE)
+		return;
+
+	for (i = 0, tf = test_files; i < num_test_files; i++, tf++)
+		prt("fd %d: %s\n", i, tf->path);
+}
+
+void
+close_test_files(void)
+{
+	int i;
+	struct test_file *tf;
+
+	for (i = 0, tf = test_files; i < num_test_files; i++, tf++) {
+		if (close(tf->fd)) {
+			prterr("close");
+			report_failure(99);
+		}
+	}
+}
+
 
 void
 check_size(void)
 {
 	struct stat	statbuf;
 	off_t	size_by_seek;
+	int fd = get_fd();
 
 	if (fstat(fd, &statbuf)) {
 		prterr("check_size: fstat");
@@ -410,6 +522,7 @@ void
 check_trunc_hack(void)
 {
 	struct stat statbuf;
+	int fd = get_fd();
 
 	ftruncate(fd, (off_t)0);
 	ftruncate(fd, (off_t)100000);
@@ -421,6 +534,71 @@ check_trunc_hack(void)
 	ftruncate(fd, 0);
 }
 
+static char *tf_buf = NULL;
+static int max_tf_len = 0;
+
+void
+alloc_tf_buf(void)
+{
+	char dummy = '\0';
+	int highest = num_test_files - 1;
+	int len;
+
+	len = snprintf(&dummy, 0, "%u ", highest);
+	if (len < 0) {
+		prterr("finding max tf_buf");
+		exit(1);
+	}
+	tf_buf = malloc(len + 1);
+	if (tf_buf == NULL) {
+		prterr("allocating tf_buf");
+		exit(1);
+	}
+	max_tf_len = sprintf(tf_buf, "%u ", highest);
+}
+
+char * 
+fill_tf_buf(struct test_file *tf)
+{
+	if (tf_buf == NULL)
+		alloc_tf_buf();
+
+	sprintf(tf_buf,"%u ", tf - test_files);
+	return tf_buf;
+}
+
+void
+output_line(struct test_file *tf, int op, unsigned long offset, 
+		unsigned long size, struct timeval *tv)
+{
+	char *tf_num = "";
+
+	char *ops[] = {
+		[OP_READ] = "read",
+		[OP_WRITE] = "write",
+		[OP_TRUNCATE] = "trunc from",
+		[OP_MAPREAD] = "mapread",
+		[OP_MAPWRITE] = "mapwrite",
+	};
+
+	if (fd_policy != FD_SINGLE)
+		tf_num = fill_tf_buf(tf);
+
+	/* W. */
+	if (!(!quiet && ((progressinterval &&
+			testcalls % progressinterval == 0) ||
+		       (debug &&
+		        (monitorstart == -1 ||
+			 (offset + size > monitorstart &&
+			  (monitorend == -1 || offset <= monitorend)))))))
+		return;
+
+	prt("%06lu %lu.%06lu %*s%-10s %#08x %s %#08x\t(0x%x bytes)\n",
+		testcalls, tv->tv_sec, tv->tv_usec, max_tf_len,
+		tf_num, ops[op], 
+		offset, op == OP_TRUNCATE ? " to " : "thru",
+		offset + size - 1, size);
+}
 
 void
 doread(unsigned offset, unsigned size)
@@ -428,6 +606,8 @@ doread(unsigned offset, unsigned size)
 	struct timeval t;
 	off_t ret;
 	unsigned iret;
+	struct test_file *tf = get_tf();
+	int fd = tf->fd;
 
 	offset -= offset % readbdy;
 	gettimeofday(&t, NULL);
@@ -449,15 +629,8 @@ doread(unsigned offset, unsigned size)
 	if (testcalls <= simulatedopcount)
 		return;
 
-	if (!quiet && ((progressinterval &&
-			testcalls % progressinterval == 0) ||
-		       (debug &&
-		        (monitorstart == -1 ||
-			 (offset + size > monitorstart &&
-			  (monitorend == -1 || offset <= monitorend))))))
-		prt("%06lu %lu.%06lu read       %#08x thru %#08x\t(0x%x bytes)\n",
-		    testcalls, t.tv_sec, t.tv_usec, offset, offset + size - 1,
-		    size);
+	output_line(tf, OP_READ, offset, size, &t);
+
 	ret = lseek(fd, (off_t)offset, SEEK_SET);
 	if (ret == (off_t)-1) {
 		prterr("doread: lseek");
@@ -490,6 +663,8 @@ domapread(unsigned offset, unsigned size)
 	unsigned pg_offset;
 	unsigned map_size;
 	char    *p;
+	struct test_file *tf = get_tf();
+	int fd = tf->fd;
 
 	offset -= offset % readbdy;
 	gettimeofday(&t, NULL);
@@ -511,15 +686,7 @@ domapread(unsigned offset, unsigned size)
 	if (testcalls <= simulatedopcount)
 		return;
 
-	if (!quiet && ((progressinterval &&
-			testcalls % progressinterval == 0) ||
-		       (debug &&
-		        (monitorstart == -1 ||
-			 (offset + size > monitorstart &&
-			  (monitorend == -1 || offset <= monitorend))))))
-		prt("%06lu %lu.%06lu mapread    %#08x thru %#08x\t(0x%x bytes)\n",
-		    testcalls, t.tv_sec, t.tv_usec, offset, offset + size - 1,
-		    size);
+	output_line(tf, OP_MAPREAD, offset, size, &t);
 
 	pg_offset = offset & page_mask;
 	map_size  = pg_offset + size;
@@ -578,6 +745,8 @@ dowrite(unsigned offset, unsigned size)
 	struct timeval t;
 	off_t ret;
 	unsigned iret;
+	struct test_file *tf = get_tf();
+	int fd = tf->fd;
 
 	offset -= offset % writebdy;
 	gettimeofday(&t, NULL);
@@ -604,15 +773,8 @@ dowrite(unsigned offset, unsigned size)
 	if (testcalls <= simulatedopcount)
 		return;
 
-	if (!quiet && ((progressinterval &&
-			testcalls % progressinterval == 0) ||
-		       (debug &&
-		        (monitorstart == -1 ||
-			 (offset + size > monitorstart &&
-			  (monitorend == -1 || offset <= monitorend))))))
-		prt("%06lu %lu.%06lu write      %#08x thru %#08x\t(0x%x bytes)\n",
-		    testcalls, t.tv_sec, t.tv_usec, offset, offset + size - 1,
-		    size);
+	output_line(tf, OP_WRITE, offset, size, &t);
+
 	ret = lseek(fd, (off_t)offset, SEEK_SET);
 	if (ret == (off_t)-1) {
 		prterr("dowrite: lseek");
@@ -645,6 +807,8 @@ domapwrite(unsigned offset, unsigned size)
 	unsigned map_size;
 	off_t    cur_filesize;
 	char    *p;
+	struct test_file *tf = get_tf();
+	int fd = tf->fd;
 
 	offset -= offset % writebdy;
 	gettimeofday(&t, NULL);
@@ -672,15 +836,7 @@ domapwrite(unsigned offset, unsigned size)
 	if (testcalls <= simulatedopcount)
 		return;
 
-	if (!quiet && ((progressinterval &&
-			testcalls % progressinterval == 0) ||
-		       (debug &&
-		        (monitorstart == -1 ||
-			 (offset + size > monitorstart &&
-			  (monitorend == -1 || offset <= monitorend))))))
-		prt("%06lu %lu.%06lu mapwrite   %#08x thru %#08x\t(0x%x bytes)\n",
-		    testcalls, t.tv_sec, t.tv_usec, offset, offset + size - 1,
-		    size);
+	output_line(tf, OP_MAPWRITE, offset, size, &t);
 
 	if (file_size > cur_filesize) {
 	        if (ftruncate(fd, file_size) == -1) {
@@ -748,6 +904,8 @@ dotruncate(unsigned size)
 {
 	struct timeval t;
 	int oldsize = file_size;
+	struct test_file *tf = get_tf();
+	int fd = tf->fd;
 
 	size -= size % truncbdy;
 	gettimeofday(&t, NULL);
@@ -766,11 +924,8 @@ dotruncate(unsigned size)
 	if (testcalls <= simulatedopcount)
 		return;
 
-	if ((progressinterval && testcalls % progressinterval == 0) ||
-	    (debug && (monitorstart == -1 || monitorend == -1 ||
-		       size <= monitorend)))
-		prt("%06lu %lu.%06lu trunc from %#08x  to  %#08x\n",
-		    testcalls, t.tv_sec, t.tv_usec, oldsize, size);
+	output_line(tf, OP_TRUNCATE, oldsize, size, &t);
+
 	if (ftruncate(fd, (off_t)size) == -1) {
 	        prt("ftruncate1: %x\n", size);
 		prterr("dotruncate: ftruncate");
@@ -787,6 +942,7 @@ void
 writefileimage()
 {
 	ssize_t iret;
+	int fd = get_fd();
 
 	if (lseek(fd, (off_t)0, SEEK_SET) == (off_t)-1) {
 		prterr("writefileimage: lseek");
@@ -813,6 +969,7 @@ void
 docloseopen(void)
 {
 	struct timeval t;
+	struct test_file *tf = get_tf();
 
 	if (testcalls <= simulatedopcount)
 		return;
@@ -823,7 +980,7 @@ docloseopen(void)
 	if (debug)
 		prt("%06lu %lu.%06lu close/open\n", testcalls, t.tv_sec,
 		    t.tv_usec);
-	if (close(fd)) {
+	if (close(tf->fd)) {
 		prterr("docloseopen: close");
 		report_failure(180);
 	}
@@ -831,8 +988,8 @@ docloseopen(void)
 		gettimeofday(&t, NULL);
 		prt("       %lu.%06lu close done\n", t.tv_sec, t.tv_usec);
 	}
-	fd = open(fname, O_RDWR, 0);
-	if (fd < 0) {
+	tf->fd = open(tf->path, O_RDWR, 0);
+	if (tf->fd < 0) {
 		prterr("docloseopen: open");
 		report_failure(181);
 	}
@@ -930,7 +1087,7 @@ usage(void)
 		"fsx [-dnqLOW] [-b opnum] [-c Prob] [-l flen] [-m "
 "start:end] [-o oplen] [-p progressinterval] [-r readbdy] [-s style] [-t "
 "truncbdy] [-w writebdy] [-D startingop] [-N numops] [-P dirpath] [-S seed] "
-"fname\n"
+"[ -I random|rotate ] fname [additional paths to fname..]\n"
 "	-b opnum: beginning operation number (default 1)\n"
 "	-c P: 1 in P chance of file close+open at each op (default infinity)\n"
 "	-d: debug output for all operations [-d -d = more debugging]\n"
@@ -953,6 +1110,9 @@ usage(void)
 "	-S seed: for random # generator (default 1) 0 gets timestamp\n"
 "	-W: mapped write operations DISabled\n"
 "        -R: read() system calls only (mapped reads disabled)\n"
+"	-I: When multiple paths to the file are given each operation uses"
+"           a different path.  Iterate through them in order with 'rotate'"
+"           or chose then at 'random'.  (defaults to random)\n"
 "	fname: this filename is REQUIRED (no default)\n");
 	exit(90);
 }
@@ -991,14 +1151,6 @@ getnum(char *s, char **e)
 	return (ret);
 }
 
-
-static const char *basename(const char *path)
-{
-	char *c = strrchr(path, '/');
-
-	return c ? c++ : path;
-}
-
 int
 main(int argc, char **argv)
 {
@@ -1014,7 +1166,8 @@ main(int argc, char **argv)
 
 	setvbuf(stdout, (char *)0, _IOLBF, 0); /* line buffered stdout */
 
-	while ((ch = getopt(argc, argv, "b:c:dl:m:no:p:qr:s:t:w:D:LN:OP:RS:W"))
+	while ((ch = getopt(argc, argv, 
+				"b:c:dl:m:no:p:qr:s:t:w:D:I:LN:OP:RS:W"))
 	       != EOF)
 		switch (ch) {
 		case 'b':
@@ -1097,6 +1250,9 @@ main(int argc, char **argv)
 			if (debugstart < 1)
 				usage();
 			break;
+		case 'I':
+			assign_fd_policy(optarg);
+			break;
 		case 'L':
 		        lite = 1;
 			break;
@@ -1139,7 +1295,7 @@ main(int argc, char **argv)
 		}
 	argc -= optind;
 	argv += optind;
-	if (argc != 1)
+	if (argc < 1)
 		usage();
 	fname = argv[0];
 
@@ -1156,11 +1312,9 @@ main(int argc, char **argv)
 
 	initstate(seed, state, 256);
 	setstate(state);
-	fd = open(fname, O_RDWR|(lite ? 0 : O_CREAT|O_TRUNC), 0666);
-	if (fd < 0) {
-		prterr(fname);
-		exit(91);
-	}
+
+	open_test_files(argv, argc);
+
 	strncat(goodfile, dirpath ? basename(fname) : fname, 256);
 	strcat (goodfile, ".fsxgood");
 	fsxgoodfd = open(goodfile, O_RDWR|O_CREAT|O_TRUNC, 0666);
@@ -1177,6 +1331,7 @@ main(int argc, char **argv)
 	}
 	if (lite) {
 		off_t ret;
+		int fd = get_fd();
 		file_size = maxfilelen = lseek(fd, (off_t)0, SEEK_END);
 		if (file_size == (off_t)-1) {
 			prterr(fname);
@@ -1199,6 +1354,7 @@ main(int argc, char **argv)
 	memset(temp_buf, '\0', maxoplen);
 	if (lite) {	/* zero entire existing file */
 		ssize_t written;
+		int fd = get_fd();
 
 		written = write(fd, good_buf, (size_t)maxfilelen);
 		if (written != maxfilelen) {
@@ -1217,10 +1373,7 @@ main(int argc, char **argv)
 	while (numops == -1 || numops--)
 		test();
 
-	if (close(fd)) {
-		prterr("close");
-		report_failure(99);
-	}
+	close_test_files();
 	prt("All operations completed A-OK!\n");
 
 	exit(0);

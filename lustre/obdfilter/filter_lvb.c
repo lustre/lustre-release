@@ -70,18 +70,19 @@ static int filter_lvbo_init(struct ldlm_resource *res)
                 GOTO(out, rc = PTR_ERR(dentry));
 
         if (dentry->d_inode == NULL)
-                GOTO(out, rc = -ENOENT);
+                GOTO(out_dentry, rc = -ENOENT);
 
         lvb->lvb_size = dentry->d_inode->i_size;
         lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
         lvb->lvb_blocks = dentry->d_inode->i_blocks;
-        f_dput(dentry);
 
         CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", "
                "mtime: "LPU64", blocks: "LPU64"\n",
                res->lr_name.name[0], lvb->lvb_size,
                lvb->lvb_mtime, lvb->lvb_blocks);
 
+ out_dentry:
+        f_dput(dentry);
  out:
         /* Don't free lvb data on lookup error */
         up(&res->lr_lvb_sem);
@@ -157,6 +158,9 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
         if (IS_ERR(dentry))
                 GOTO(out, rc = PTR_ERR(dentry));
 
+        if (dentry->d_inode == NULL)
+                GOTO(out_dentry, rc = -ENOENT);
+
         if (dentry->d_inode->i_size > lvb->lvb_size || !increase) {
                 CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size from disk: "
                        LPU64" -> %llu\n", res->lr_name.name[0],
@@ -175,14 +179,13 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                lvb->lvb_blocks, dentry->d_inode->i_blocks);
         lvb->lvb_blocks = dentry->d_inode->i_blocks;
 
+out_dentry:
         f_dput(dentry);
 
- out:
+out:
         up(&res->lr_lvb_sem);
         return rc;
 }
-
-
 
 struct ldlm_valblock_ops filter_lvbo = {
         lvbo_init: filter_lvbo_init,

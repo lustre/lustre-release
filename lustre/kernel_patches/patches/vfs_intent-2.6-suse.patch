@@ -134,19 +134,27 @@ Index: linux-2.6.4-51.0/fs/namei.c
  			dput(next.dentry);
  			mntput(next.mnt);
  			if (err)
-@@ -702,6 +746,11 @@
+@@ -702,14 +746,29 @@
  				inode = nd->dentry->d_inode;
  				/* fallthrough */
  			case 1:
 + 				nd->flags |= LOOKUP_LAST;
 + 				err = revalidate_special(nd);
 + 				nd->flags &= ~LOOKUP_LAST;
-+ 				if (err)
++				if (err)
 + 					break;
  				goto return_reval;
  		}
++		
++		if (err) {
++			if (!nd->dentry->d_inode)
++				err = -ENOENT;
++			
++			goto return_err;			
++		}
++		
  		if (nd->dentry->d_op && nd->dentry->d_op->d_hash) {
-@@ -709,7 +758,9 @@
+ 			err = nd->dentry->d_op->d_hash(nd->dentry, &this);
  			if (err < 0)
  				break;
  		}
@@ -156,7 +164,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  		if (err)
  			break;
  		follow_mount(&next.mnt, &next.dentry);
-@@ -935,7 +986,7 @@
+@@ -935,7 +994,7 @@
  }
  
  /* SMP-safe */
@@ -165,7 +173,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  {
  	unsigned long hash;
  	struct qstr this;
-@@ -955,11 +1006,16 @@
+@@ -955,11 +1014,16 @@
  	}
  	this.hash = end_name_hash(hash);
  
@@ -183,7 +191,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  /*
   *	namei()
   *
-@@ -971,7 +1027,7 @@
+@@ -971,7 +1035,7 @@
   * that namei follows links, while lnamei does not.
   * SMP-safe
   */
@@ -192,7 +200,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  {
  	char *tmp = getname(name);
  	int err = PTR_ERR(tmp);
-@@ -983,6 +1039,12 @@
+@@ -983,6 +1047,12 @@
  	return err;
  }
  
@@ -205,7 +213,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  /*
   * It's inline, so penalty for filesystems that don't use sticky bit is
   * minimal.
-@@ -1255,8 +1317,8 @@
+@@ -1255,8 +1325,8 @@
  		acc_mode |= MAY_APPEND;
  
  	/* Fill in the open() intent data */
@@ -216,7 +224,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  
  	/*
  	 * The simplest case - just a plain lookup.
-@@ -1271,6 +1333,7 @@
+@@ -1271,6 +1341,7 @@
  	/*
  	 * Create - we need to know the parent.
  	 */
@@ -224,7 +232,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  	error = path_lookup(pathname, LOOKUP_PARENT|LOOKUP_OPEN|LOOKUP_CREATE, nd);
  	if (error)
  		return error;
-@@ -1287,7 +1350,9 @@
+@@ -1287,7 +1358,9 @@
  	dir = nd->dentry;
  	nd->flags &= ~LOOKUP_PARENT;
  	down(&dir->d_inode->i_sem);
@@ -234,7 +242,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1392,7 +1457,9 @@
+@@ -1392,7 +1465,9 @@
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -244,7 +252,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  	putname(nd->last.name);
  	goto do_last;
  }
-@@ -2154,7 +2221,9 @@
+@@ -2154,7 +2229,9 @@
  __vfs_follow_link(struct nameidata *nd, const char *link)
  {
  	int res = 0;
@@ -254,7 +262,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  	if (IS_ERR(link))
  		goto fail;
  
-@@ -2164,6 +2233,10 @@
+@@ -2164,6 +2241,10 @@
  			/* weird __emul_prefix() stuff did it */
  			goto out;
  	}

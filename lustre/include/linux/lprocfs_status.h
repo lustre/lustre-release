@@ -182,17 +182,6 @@ extern void lprocfs_free_obd_stats(struct obd_device *obddev);
 extern int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
                                   struct lprocfs_stats *stats);
 
-#define LPROCFS_INIT_MULTI_VARS(array, size)                              \
-void lprocfs_init_multi_vars(unsigned int idx,                            \
-                             struct lprocfs_static_vars *x)               \
-{                                                                         \
-   struct lprocfs_static_vars *glob = (struct lprocfs_static_vars*)array; \
-   LASSERT(glob != 0);                                                    \
-   LASSERT(idx < (unsigned int)(size));                                   \
-   x->module_vars = glob[idx].module_vars;                                \
-   x->obd_vars = glob[idx].obd_vars;                                      \
-}                                                                         \
-
 #define LPROCFS_INIT_VARS(name, vclass, vinstance)           \
 void lprocfs_##name##_init_vars(struct lprocfs_static_vars *x)  \
 {                                                      \
@@ -205,8 +194,6 @@ do {      \
         extern void lprocfs_##NAME##_init_vars(struct lprocfs_static_vars *);  \
         lprocfs_##NAME##_init_vars(VAR);                                       \
 } while (0)
-extern void lprocfs_init_multi_vars(unsigned int idx,
-                                    struct lprocfs_static_vars *var);
 /* lprocfs_status.c */
 extern int lprocfs_add_vars(struct proc_dir_entry *root,
                             struct lprocfs_vars *var,
@@ -222,8 +209,8 @@ extern void lprocfs_remove(struct proc_dir_entry *root);
 extern struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *root,
                                            const char *name);
 
-extern int lprocfs_obd_attach(struct obd_device *dev, struct lprocfs_vars *list);
-extern int lprocfs_obd_detach(struct obd_device *dev);
+extern int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list);
+extern int lprocfs_obd_cleanup(struct obd_device *obd);
 
 /* Generic callbacks */
 
@@ -239,6 +226,8 @@ extern int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
                                   int count, int *eof, void *data);
 extern int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
+extern int lprocfs_rd_num_exports(char *page, char **start, off_t off,
+                                  int count, int *eof, void *data);
 extern int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                               int count, int *eof, void *data);
 
@@ -304,9 +293,6 @@ static inline void lprocfs_free_obd_stats(struct obd_device *obddev)
 static inline struct proc_dir_entry *
 lprocfs_register(const char *name, struct proc_dir_entry *parent,
                  struct lprocfs_vars *list, void *data) { return NULL; }
-#define LPROCFS_INIT_MULTI_VARS(array, size) do {} while (0)
-static inline void lprocfs_init_multi_vars(unsigned int idx,
-                                           struct lprocfs_static_vars *x) { return; }
 #define LPROCFS_INIT_VARS(name, vclass, vinstance) do {} while (0)
 #define lprocfs_init_vars(...) do {} while (0)
 static inline int lprocfs_add_vars(struct proc_dir_entry *root,
@@ -315,9 +301,9 @@ static inline int lprocfs_add_vars(struct proc_dir_entry *root,
 static inline void lprocfs_remove(struct proc_dir_entry *root) {};
 static inline struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
                                     const char *name) {return 0;}
-static inline int lprocfs_obd_attach(struct obd_device *dev,
-                                     struct lprocfs_vars *list) { return 0; }
-static inline int lprocfs_obd_detach(struct obd_device *dev)  { return 0; }
+static inline int lprocfs_obd_setup(struct obd_device *dev,
+                                    struct lprocfs_vars *list) { return 0; }
+static inline int lprocfs_obd_cleanup(struct obd_device *dev)  { return 0; }
 static inline int lprocfs_rd_u64(char *page, char **start, off_t off,
                                  int count, int *eof, void *data) { return 0; }
 static inline int lprocfs_rd_uuid(char *page, char **start, off_t off,
@@ -325,9 +311,14 @@ static inline int lprocfs_rd_uuid(char *page, char **start, off_t off,
 static inline int lprocfs_rd_name(char *page, char **start, off_t off,
                                   int count, int *eof, void *data) { return 0; }
 static inline int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
-                                         int count, int *eof, void *data) { return 0; }
+                                         int count, int *eof, void *data)
+{ return 0; }
 static inline int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
-                                       int count, int *eof, void *data) { return 0; }
+                                       int count, int *eof, void *data)
+{ return 0; }
+static inline int lprocfs_rd_num_exports(char *page, char **start, off_t off,
+                                         int count, int *eof, void *data)
+{ return 0; }
 static inline int lprocfs_rd_numrefs(char *page, char **start, off_t off,
                                      int count, int *eof, void *data) { return 0; }
 
