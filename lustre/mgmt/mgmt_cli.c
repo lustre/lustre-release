@@ -101,20 +101,22 @@ static int mgmtcli_connect_to_svc(struct obd_device *obd)
         struct ptlrpc_svc_data svc_data;
         struct ptlrpc_thread *thread;
         struct l_wait_info lwi = { 0 };
+        struct lustre_handle conn = {0, };
         ENTRY;
 
         /* Connect to ourselves, and thusly to the mgmt service. */
-        rc = client_connect_import(&mc->mc_ping_handle, obd, &obd->obd_uuid);
+        rc = client_connect_import(&conn, obd, &obd->obd_uuid);
         if (rc) {
                 CERROR("failed to connect to mgmt svc: %d\n", rc);
                 (void)client_obd_cleanup(obd, 0);
                 RETURN(rc);
         }
+        mc->mc_ping_exp = class_conn2export(&conn);
         
         LASSERT(mc->mc_ping_thread == NULL);
         OBD_ALLOC(thread, sizeof (*thread));
         if (thread == NULL)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
         mc->mc_ping_thread = thread;
         init_waitqueue_head(&thread->t_ctl_waitq);
 
@@ -122,11 +124,12 @@ static int mgmtcli_connect_to_svc(struct obd_device *obd)
         svc_data.thread = thread;
 
         rc = kernel_thread(mgmtcli_pinger_main, &svc_data, CLONE_VM | CLONE_FILES);
+out:
         if (rc < 0) {
                 CERROR("can't start thread to ping mgmt svc %s: %d\n",
                        mc->mc_import->imp_target_uuid.uuid, rc);
                 OBD_FREE(mc->mc_ping_thread, sizeof (*mc->mc_ping_thread));
-                (void)client_disconnect_import(&mc->mc_ping_handle, 0);
+                (void)client_disconnect_import(mc->mc_ping_exp, 0);
                 RETURN(rc);
         }
         l_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING, &lwi);
@@ -143,7 +146,7 @@ static int mgmtcli_disconnect_from_svc(struct obd_device *obd)
         int rc;
 
         ENTRY;
-        rc = client_disconnect_import(&mc->mc_ping_handle, 0);
+        rc = client_disconnect_import(mc->mc_ping_exp, 0);
         if (rc) {
                 CERROR("can't disconnect from %s: %d (%s)\n",
                        imp->imp_target_uuid.uuid, rc,

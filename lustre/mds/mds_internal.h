@@ -1,3 +1,7 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ */
+
 #ifndef _MDS_INTERNAL_H
 #define _MDS_INTERNAL_H
 static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
@@ -5,13 +9,14 @@ static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
         return &req->rq_export->exp_obd->u.mds;
 }
 
+
 /* mds/mds_fs.c */
 struct llog_handle *mds_log_create(struct obd_device *obd);
 int mds_log_close(struct llog_handle *cathandle, struct llog_handle *loghandle);
 struct llog_handle *mds_log_open(struct obd_device *obd,
                                  struct llog_cookie *logcookie);
 struct llog_handle *mds_get_catalog(struct obd_device *obd);
-void mds_put_catalog(struct llog_handle *cathandle);
+void mds_put_catalog(struct obd_device *obd, struct llog_handle *cathandle);
 
 
 /* mds/mds_reint.c */
@@ -26,22 +31,34 @@ int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
 
 /* mds/mds_lov.c */
+int mds_lov_connect(struct obd_device *obd);
 int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,
                     struct obd_uuid *uuidarray);
+int mds_lov_write_objids(struct obd_device *obd);
+void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
+int mds_lov_set_growth(struct mds_obd *mds, int count);
+int mds_lov_set_nextid(struct obd_device *obd);
 
 /* mds/mds_open.c */
+int mds_query_write_access(struct inode *inode);
 int mds_open(struct mds_update_record *rec, int offset,
              struct ptlrpc_request *req, struct lustre_handle *);
 int mds_pin(struct ptlrpc_request *req);
 int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
-		  struct mds_file_data *mfd, int unlink_orphan);
+                  struct mds_file_data *mfd, int unlink_orphan);
 int mds_close(struct ptlrpc_request *req);
 
 
 /* mds/mds_fs.c */
 int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
-		   struct mds_export_data *med, int cl_off);
+                   struct mds_export_data *med, int cl_off);
 int mds_client_free(struct obd_export *exp, int clear_client);
+int mds_object_create(struct obd_export *exp, struct obdo *oa,
+                      struct lov_stripe_md **ea, struct obd_trans_info *oti);
+
+/* mds/handler.c */
+extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
+                         int len, void *karg, void *uarg);
 
 #ifdef __KERNEL__
 void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);

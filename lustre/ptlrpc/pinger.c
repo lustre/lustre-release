@@ -306,6 +306,7 @@ int ptlrpc_stop_pinger(void)
                      (pinger_thread->t_flags & SVC_STOPPED), &lwi);
 
         OBD_FREE(pinger_thread, sizeof(*pinger_thread));
+        pinger_thread = NULL;
 
  out:
         up(&pinger_sem);

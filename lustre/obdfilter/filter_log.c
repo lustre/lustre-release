@@ -57,7 +57,7 @@ static int filter_log_close(struct llog_handle *cathandle,
         if (llh->llh_hdr.lth_type != LLOG_CATALOG_MAGIC && llh->llh_count == 0){
                 CDEBUG(D_INODE, "deleting log file "LPX64":%x\n",
                        lgl->lgl_oid, lgl->lgl_ogen);
-                dparent = filter_parent_lock(loghandle->lgh_obd, S_IFREG,
+                dparent = filter_parent_lock(loghandle->lgh_obd, 1,
                                              lgl->lgl_oid,LCK_PW,&parent_lockh);
                 if (IS_ERR(dparent)) {
                         rc = PTR_ERR(dparent);
@@ -107,7 +107,7 @@ static struct llog_handle *filter_log_open(struct obd_device *obd,
         if (!loghandle)
                 RETURN(ERR_PTR(-ENOMEM));
 
-        dchild = filter_fid2dentry(obd, NULL, S_IFREG, lgl->lgl_oid);
+        dchild = filter_fid2dentry(obd, NULL, 1, lgl->lgl_oid);
         if (IS_ERR(dchild))
                 GOTO(out_handle, rc = PTR_ERR(dchild));
 
@@ -157,6 +157,7 @@ static struct llog_handle *filter_log_create(struct obd_device *obd)
         struct dentry *dparent, *dchild;
         struct llog_handle *loghandle;
         struct file *file;
+        struct obdo obdo;
         int err, rc;
         obd_id id;
         ENTRY;
@@ -165,14 +166,17 @@ static struct llog_handle *filter_log_create(struct obd_device *obd)
         if (!loghandle)
                 RETURN(ERR_PTR(-ENOMEM));
 
+        memset(&obdo, 0, sizeof(obdo));
+        obdo.o_valid = OBD_MD_FLGROUP;
+        obdo.o_gr = 1; /* FIXME: object groups */
  retry:
-        id = filter_next_id(filter);
+        id = filter_next_id(filter, &obdo);
 
-        dparent = filter_parent_lock(obd, S_IFREG, id, LCK_PW, &parent_lockh);
+        dparent = filter_parent_lock(obd, obdo.o_gr, id, LCK_PW, &parent_lockh);
         if (IS_ERR(dparent))
                 GOTO(out_ctxt, rc = PTR_ERR(dparent));
 
-        dchild = filter_fid2dentry(obd, dparent, S_IFREG, id);
+        dchild = filter_fid2dentry(obd, dparent, obdo.o_gr, id);
         if (IS_ERR(dchild))
                 GOTO(out_lock, rc = PTR_ERR(dchild));
 
@@ -192,8 +196,7 @@ static struct llog_handle *filter_log_create(struct obd_device *obd)
                 GOTO(out_child, rc);
         }
 
-        rc = filter_update_server_data(obd, filter->fo_rcvd_filp,
-                                       filter->fo_fsd, 0);
+        rc = filter_update_last_objid(obd, obdo.o_gr, 0);
         if (rc) {
                 CERROR("can't write lastobjid but log created: rc %d\n",rc);
                 GOTO(out_destroy, rc);
@@ -309,11 +312,11 @@ void filter_put_catalog(struct llog_handle *cathandle)
         EXIT;
 }
 
-int filter_log_cancel(struct lustre_handle *conn, struct lov_stripe_md *lsm,
+int filter_log_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
                       int num_cookies, struct llog_cookie *logcookies,
                       int flags)
 {
-        struct obd_device *obd = class_conn2obd(conn);
+        struct obd_device *obd = exp->exp_obd;
         struct obd_run_ctxt saved;
         int rc;
         ENTRY;
