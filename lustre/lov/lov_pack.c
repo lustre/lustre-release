@@ -34,6 +34,8 @@
 #include <linux/obd_class.h>
 #include <linux/obd_support.h>
 
+#include "lov_internal.h"
+
 void lov_dump_lmm(int level, struct lov_mds_md *lmm)
 {
         struct lov_object_id *loi;
@@ -136,7 +138,7 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
         RETURN(lmm_size);
 }
 
-static int lov_get_stripecnt(struct lov_obd *lov, int stripe_count)
+int lov_get_stripecnt(struct lov_obd *lov, int stripe_count)
 {
         if (!stripe_count)
                 stripe_count = lov->desc.ld_default_stripe_count;
@@ -144,6 +146,90 @@ static int lov_get_stripecnt(struct lov_obd *lov, int stripe_count)
                 stripe_count = lov->desc.ld_active_tgt_count;
 
         return stripe_count;
+}
+
+static int lov_verify_lmm(struct lov_mds_md *lmm, int lmm_bytes,
+                          int *ost_count, int *stripe_count, int *ost_offset)
+{
+        if (lmm_bytes < sizeof(*lmm)) {
+                CERROR("lov_mds_md too small: %d, need at least %d\n",
+                       lmm_bytes, (int)sizeof(*lmm));
+                return -EINVAL;
+        }
+
+        if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC) {
+                CERROR("bad disk LOV MAGIC: %#08x != %#08x\n",
+                       le32_to_cpu(lmm->lmm_magic), LOV_MAGIC);
+                lov_dump_lmm(D_WARNING, lmm);
+                return -EINVAL;
+        }
+
+        *ost_count = le16_to_cpu(lmm->lmm_ost_count);
+        *stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
+        *ost_offset = le32_to_cpu(lmm->lmm_stripe_offset);
+
+        if (*ost_count == 0 || *stripe_count == 0) {
+                CERROR("zero OST count %d or stripe count %d\n",
+                       *ost_count, *stripe_count);
+                lov_dump_lmm(D_WARNING, lmm);
+                return -EINVAL;
+        }
+
+        if (lmm_bytes < lov_mds_md_size(*ost_count)) {
+                CERROR("lov_mds_md too small: %d, need %d\n",
+                       lmm_bytes, lov_mds_md_size(*ost_count));
+                lov_dump_lmm(D_WARNING, lmm);
+                return -EINVAL;
+        }
+
+        if (*ost_offset > *ost_count) {
+                CERROR("starting OST offset %d > number of OSTs %d\n",
+                       *ost_offset, *ost_count);
+                lov_dump_lmm(D_WARNING, lmm);
+                return -EINVAL;
+        }
+
+        if (*stripe_count > *ost_count) {
+                CERROR("stripe count %d > number of OSTs %d\n",
+                       *stripe_count, *ost_count);
+                lov_dump_lmm(D_WARNING, lmm);
+                return -EINVAL;
+        }
+
+        if (lmm->lmm_object_id == 0) {
+                CERROR("zero object id\n");
+                lov_dump_lmm(D_WARNING, lmm);
+                return -EINVAL;
+        }
+
+        return 0;
+}
+
+int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count)
+{
+        int lsm_size = lov_stripe_md_size(stripe_count);
+        struct lov_oinfo *loi;
+        int i;
+
+        OBD_ALLOC(*lsmp, lsm_size);
+        if (!*lsmp)
+                return -ENOMEM;
+
+        (*lsmp)->lsm_magic = LOV_MAGIC;
+        (*lsmp)->lsm_stripe_count = stripe_count;
+        (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
+
+        for (i = 0, loi = (*lsmp)->lsm_oinfo; i < stripe_count; i++, loi++){
+                loi->loi_dirty_ot = &loi->loi_dirty_ot_inline;
+                ot_init(loi->loi_dirty_ot);
+        }
+        return lsm_size;
+}
+
+void lov_free_memmd(struct lov_stripe_md **lsmp)
+{
+        OBD_FREE(*lsmp, lov_stripe_md_size((*lsmp)->lsm_stripe_count));
+        *lsmp = NULL;
 }
 
 /* Unpack LOV object metadata from disk storage.  It is packed in LE byte
@@ -156,75 +242,48 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         struct lov_obd *lov = &obd->u.lov;
         struct lov_stripe_md *lsm;
         struct lov_oinfo *loi;
-        int ost_count = 0;
-        int ost_offset = 0;
+        int ost_count;
+        int ost_offset;
         int stripe_count;
         int lsm_size;
         int i;
         ENTRY;
 
+        /* If passed an MDS struct use values from there, otherwise defaults */
         if (lmm) {
-                if (lmm_bytes < sizeof(*lmm)) {
-                        CERROR("lov_mds_md too small: %d, need at least %d\n",
-                               lmm_bytes, (int)sizeof(*lmm));
-                        RETURN(-EINVAL);
-                }
-                if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC) {
-                        CERROR("bad disk LOV MAGIC: %#08x != %#08x\n",
-                               le32_to_cpu(lmm->lmm_magic), LOV_MAGIC);
-                        RETURN(-EINVAL);
-                }
-
-                ost_count = le16_to_cpu(lmm->lmm_ost_count);
-                stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
-
-                if (ost_count == 0 || stripe_count == 0) {
-                        CERROR("zero ost %d or stripe %d count\n",
-                               ost_count, stripe_count);
-                        RETURN(-EINVAL);
-                }
-
-                if (lmm_bytes < lov_mds_md_size (ost_count)) {
-                        CERROR("lov_mds_md too small: %d, need %d\n",
-                               lmm_bytes, lov_mds_md_size (ost_count));
-                        RETURN(-EINVAL);
-                }
-        } else
+                i = lov_verify_lmm(lmm, lmm_bytes, &ost_count, &stripe_count,
+                                   &ost_offset);
+                if (i)
+                        RETURN(i);
+        } else {
+                ost_count = 0;
                 stripe_count = lov_get_stripecnt(lov, 0);
+                ost_offset = 0;
+        }
 
-        /* XXX LOV STACKING call into osc for sizes */
-        lsm_size = lov_stripe_md_size(stripe_count);
-
+        /* If we aren't passed an lsmp struct, we just want the size */
         if (!lsmp)
-                RETURN(lsm_size);
+                /* XXX LOV STACKING call into osc for sizes */
+                RETURN(lov_stripe_md_size(stripe_count));
 
+        /* If we are passed an allocated struct but nothing to unpack, free */
         if (*lsmp && !lmm) {
-                stripe_count = (*lsmp)->lsm_stripe_count;
-                OBD_FREE(*lsmp, lov_stripe_md_size(stripe_count));
-                *lsmp = NULL;
+                lov_free_memmd(lsmp);
                 RETURN(0);
         }
 
-        if (!*lsmp) {
-                OBD_ALLOC(*lsmp, lsm_size);
-                if (!*lsmp)
-                        RETURN(-ENOMEM);
-        }
+        lsm_size = lov_alloc_memmd(lsmp, stripe_count);
+        if (lsm_size < 0)
+                RETURN(lsm_size);
 
-        lsm = *lsmp;
-        lsm->lsm_magic = LOV_MAGIC;
-        lsm->lsm_stripe_count = stripe_count;
-        lsm->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
-
+        /* If we are passed a pointer but nothing to unpack, we only alloc */
         if (!lmm)
                 RETURN(lsm_size);
 
+        lsm = *lsmp;
         lsm->lsm_object_id = le64_to_cpu(lmm->lmm_object_id);
         lsm->lsm_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
-        ost_offset =lsm->lsm_stripe_offset =le32_to_cpu(lmm->lmm_stripe_offset);
-
-        LMM_ASSERT(lsm->lsm_object_id);
-        LMM_ASSERT(ost_count);
+        lsm->lsm_stripe_offset = ost_offset;
 
         for (i = 0, loi = lsm->lsm_oinfo; i < ost_count; i++, ost_offset++) {
                 ost_offset %= ost_count;
@@ -232,17 +291,20 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
                 if (!lmm->lmm_objects[ost_offset].l_object_id)
                         continue;
 
-                LMM_ASSERT(loi - lsm->lsm_oinfo < stripe_count);
                 /* XXX LOV STACKING call down to osc_unpackmd() */
                 loi->loi_id =
-                        le64_to_cpu (lmm->lmm_objects[ost_offset].l_object_id);
+                        le64_to_cpu(lmm->lmm_objects[ost_offset].l_object_id);
                 loi->loi_ost_idx = ost_offset;
-                loi->loi_dirty_ot = &loi->loi_dirty_ot_inline;
-                ot_init(loi->loi_dirty_ot);
                 loi++;
         }
-        LMM_ASSERT(loi - lsm->lsm_oinfo > 0);
-        LMM_ASSERT(loi - lsm->lsm_oinfo == stripe_count);
+
+        if (loi - lsm->lsm_oinfo != stripe_count) {
+                CERROR("missing objects in lmm struct\n");
+                lov_dump_lmm(D_WARNING, lmm);
+                lov_free_memmd(lsmp);
+                RETURN(-EINVAL);
+        }
+
 
         RETURN(lsm_size);
 }
@@ -260,7 +322,6 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         struct obd_device *obd = class_conn2obd(conn);
         struct lov_obd *lov = &obd->u.lov;
         struct lov_mds_md lmm;
-        struct lov_stripe_md *lsm;
         int stripe_count;
         int rc;
         ENTRY;
@@ -303,20 +364,15 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
                 RETURN(-EINVAL);
         }
 
-        /* XXX LOV STACKING call into osc for sizes */
-        OBD_ALLOC(lsm, lov_stripe_md_size(stripe_count));
-        if (!lsm)
-                RETURN(-ENOMEM);
+        rc = lov_alloc_memmd(lsmp, stripe_count);
 
-        lsm->lsm_magic = LOV_MAGIC;
-        lsm->lsm_stripe_count = stripe_count;
-        lsm->lsm_stripe_offset = lmm.lmm_stripe_offset;
-        lsm->lsm_stripe_size = lmm.lmm_stripe_size;
-        lsm->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
+        if (rc < 0)
+                RETURN(rc);
 
-        *lsmp = lsm;
+        (*lsmp)->lsm_stripe_offset = lmm.lmm_stripe_offset;
+        (*lsmp)->lsm_stripe_size = lmm.lmm_stripe_size;
 
-        RETURN(rc);
+        RETURN(0);
 }
 
 /* Retrieve object striping information.
