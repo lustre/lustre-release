@@ -115,8 +115,9 @@ static int bulk_source_callback(ptl_event_t *ev, void *data)
         ENTRY;
 
         if (ev->type == PTL_EVENT_SENT) {
-                ;
+                CDEBUG(D_NET, "got SENT event\n");
         } else if (ev->type == PTL_EVENT_ACK) {
+                CDEBUG(D_NET, "got ACK event\n");
                 wake_up_interruptible(&rpc->rq_wait_for_bulk);
         } else {
                 CERROR("Unexpected event type!\n");
@@ -187,7 +188,8 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
                             request->rq_xid, 0, 0);
         }
         if (rc != PTL_OK) {
-                CERROR("PtlPut failed: %d\n", rc);
+                CERROR("PtlPut(%d, %d, %d) failed: %d\n", remote_id.nid,
+                       portal, request->rq_xid, rc);
                 /* FIXME: tear down md */
         }
 
@@ -221,9 +223,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         rc = PtlMEAttach(peer->peer_ni, request->rq_reply_portal, local_id,
                          request->rq_xid, 0, PTL_UNLINK, &me_h);
         if (rc != PTL_OK) {
+                CERROR("PtlMEAttach failed: %d\n", rc);
                 EXIT;
-                /* FIXME: tear down EQ, free reqbuf */
-                return rc;
+                goto cleanup;
         }
 
         request->rq_reply_md.start = request->rq_repbuf;
@@ -236,8 +238,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         rc = PtlMDAttach(me_h, request->rq_reply_md, PTL_UNLINK,
                          &request->rq_reply_md_h);
         if (rc != PTL_OK) {
+                CERROR("PtlMDAttach failed: %d\n", rc);
                 EXIT;
-                return rc;
+                goto cleanup2;
         }
 
         if (request->rq_bulklen != 0) {
@@ -245,8 +248,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
                                  local_id, request->rq_xid, 0, PTL_UNLINK,
                                  &bulk_me_h);
                 if (rc != PTL_OK) {
+                        CERROR("PtlMEAttach failed: %d\n", rc);
                         EXIT;
-                        return rc;
+                        goto cleanup3;
                 }
 
                 request->rq_bulk_md.start = request->rq_bulkbuf;
@@ -259,12 +263,24 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
                 rc = PtlMDAttach(bulk_me_h, request->rq_bulk_md, PTL_UNLINK,
                                  &request->rq_bulk_md_h);
                 if (rc != PTL_OK) {
+                        CERROR("PtlMDAttach failed: %d\n", rc);
                         EXIT;
-                        return rc;
+                        goto cleanup4;
                 }
         }
 
         return ptl_send_buf(request, peer, request->rq_req_portal, 1);
+
+ cleanup4:
+        PtlMEUnlink(bulk_me_h);
+ cleanup3:
+        PtlMDUnlink(request->rq_reply_md_h);
+ cleanup2:
+        PtlMEUnlink(me_h);
+ cleanup:
+        OBD_FREE(request->rq_repbuf, request->rq_replen);
+
+        return rc;
 }
 
 /* ptl_received_rpc() should be called by the sleeping process once
@@ -276,7 +292,7 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
 
         index = service->srv_md_active;
         CDEBUG(D_INFO, "MD index=%d Ref Count=%d\n", index,
-                service->srv_ref_count[index]);
+               service->srv_ref_count[index]);
         service->srv_ref_count[index]--;
 
         if ((service->srv_ref_count[index] <= 0) &&
@@ -284,8 +300,8 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
 
                 /* Replace the unlinked ME and MD */
                 rc = PtlMEInsert(service->srv_me_h[service->srv_me_tail],
-                        service->srv_id, 0, ~0, PTL_RETAIN,
-                        PTL_INS_AFTER, &(service->srv_me_h[index]));
+                                 service->srv_id, 0, ~0, PTL_RETAIN,
+                                 PTL_INS_AFTER, &(service->srv_me_h[index]));
                 CDEBUG(D_INFO, "Inserting new ME and MD in ring, rc %d\n", rc);
                 service->srv_me_tail = index;
                 service->srv_ref_count[index] = 0;
@@ -302,8 +318,9 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
                 service->srv_md[index].user_ptr     = service;
                 service->srv_md[index].eventq       = service->srv_eq_h;
 
-                rc = PtlMDAttach(service->srv_me_h[index], service->srv_md[index],
-                        PTL_RETAIN, &(service->srv_md_h[index]));
+                rc = PtlMDAttach(service->srv_me_h[index],
+                                 service->srv_md[index],
+                                 PTL_RETAIN, &(service->srv_md_h[index]));
 
                 CDEBUG(D_INFO, "Attach MD in ring, rc %d\n", rc);
                 if (rc != PTL_OK) {
@@ -312,8 +329,8 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
                         return rc;
                 }
 
-                service->srv_md_active = NEXT_INDEX(index,
-                        service->srv_ring_length);
+                service->srv_md_active =
+                        NEXT_INDEX(index, service->srv_ring_length);
         } 
         
         return 0;
