@@ -242,22 +242,20 @@ static int should_writeback(void)
         return 0;
 }
 
-static int ll_alloc_brw(struct lustre_handle *conn, 
+static int ll_alloc_brw(struct lustre_handle *conn,
                         struct ll_writeback_pages *llwp)
 {
         static char key[] = "brw_size";
-        unsigned long brw_size;
-        obd_count unused = sizeof(brw_size);
-        void *val;
+        __u32 brw_size;
+        __u32 vallen = sizeof(brw_size);
         int rc;
         ENTRY;
 
         memset(llwp, 0, sizeof(struct ll_writeback_pages));
 
-        rc = obd_get_info(conn, sizeof(key) - 1, key, &unused, &val);
-        if ( rc != 0 ) 
+        rc = obd_get_info(conn, sizeof(key) - 1, key, &vallen, &brw_size);
+        if (rc != 0)
                 RETURN(rc);
-        brw_size = (unsigned long)val;
         LASSERT(brw_size >= PAGE_SIZE);
 
         llwp->max = brw_size >> PAGE_SHIFT;
