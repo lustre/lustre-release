@@ -15,7 +15,7 @@ MODULE = mds
 modulefs_DATA = mds.o $(FSMOD).o
 EXTRA_PROGRAMS = mds $(FSMOD)
 
-LINX= mds_updates.c simple.c ll_pack.c lov_pack.c target.c
+LINX= mds_updates.c simple.c ll_pack.c target.c
 
 ll_pack.c: 
 	test -e ll_pack.c || ln -sf $(top_srcdir)/lib/ll_pack.c
@@ -23,8 +23,6 @@ mds_updates.c:
 	test -e mds_updates.c || ln -sf $(top_srcdir)/lib/mds_updates.c
 simple.c: 
 	test -e simple.c || ln -sf $(top_srcdir)/lib/simple.c
-lov_pack.c: 
-	test -e lov_pack.c || ln -sf $(top_srcdir)/lib/lov_pack.c
 target.c: 
 	test -e target.c || ln -sf $(top_srcdir)/lib/target.c
 
