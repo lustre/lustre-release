@@ -420,7 +420,10 @@ static int jt_modules(int argc, char **argv)
         char *modules[] = {"portals", "ksocknal", "obdclass", "ptlrpc",
                            "obdext2", "ost", "osc", "mds", "mdc", "llight",
                            NULL};
-        char *path = "../obd";
+        char *paths[] = {"portals/linux/oslib", "portals/linux/socknal",
+                         "obd/class", "obd/rpc", "obd/ext2obd", "obd/ost",
+                         "obd/osc", "obd/mds", "obd/mdc", "obd/llight", NULL};
+        char *path = "..";
         int i;
 
         if (argc == 2)
@@ -432,23 +435,22 @@ static int jt_modules(int argc, char **argv)
 
         for (i = 0; modules[i] != NULL; i++) {
                 struct module_info info;
-                char *mod;
                 int rc;
                 size_t crap;
                 int query_module(const char *name, int which, void *buf,
                                  size_t bufsize, size_t *ret);
 
-                mod = modules[i];
-                rc = query_module(mod, QM_INFO, &info, sizeof(info), &crap);
+                rc = query_module(modules[i], QM_INFO, &info, sizeof(info),
+                                  &crap);
                 if (rc < 0) {
                         if (errno != ENOENT)
-                                printf("query_module(%s) failed: %s\n", mod,
-                                       strerror(errno));
+                                printf("query_module(%s) failed: %s\n",
+                                       modules[i], strerror(errno));
                 } else {
                         printf("add-symbol-file %s/%s/%s.o 0x%0lx\n", path,
-                               mod, mod, info.addr + sizeof(struct module));
+                               paths[i], modules[i],
+                               info.addr + sizeof(struct module));
                 }
-                mod++;
         }
 
         return 0;
