@@ -52,4 +52,4 @@ char *Parser_strarg(char *inp, const char *prompt, const char *deft,
 int Parser_arg2int(const char *inp, long *result, int base);
 
 
-#endif _PARSER_H_
+#endif

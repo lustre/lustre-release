@@ -42,7 +42,6 @@ static int ost_queue_req(struct obd_device *obddev, struct ost_request *req)
 	struct ost_request *srv_req; 
 	struct ost_obd *ost = &obddev->u.ost;
 	
-	printk("---> OST at %d %p\n", __LINE__, ost);
 	if (!ost) { 
 		EXIT;
 		return -1;
@@ -53,11 +52,17 @@ static int ost_queue_req(struct obd_device *obddev, struct ost_request *req)
 		EXIT;
 		return -ENOMEM;
 	}
-	memcpy(srv_req, req, sizeof(*req)); 
-	srv_req->rq_reply_handle = req;
-	srv_req->rq_obd = ost;
-	list_add(&srv_req->rq_list, &ost->ost_reqs); 
 
+	printk("---> OST at %d %p, incoming req %p, srv_req %p\n", 
+	       __LINE__, ost, req, srv_req);
+
+	memset(srv_req, 0, sizeof(*req)); 
+	srv_req->rq_reqbuf = req->rq_reqbuf;
+	srv_req->rq_reqlen    = req->rq_reqlen;
+	srv_req->rq_obd = ost;
+	srv_req->rq_reply_handle = req;
+
+	list_add(&srv_req->rq_list, &ost->ost_reqs); 
 	wake_up(&ost->ost_waitq);
 	return 0;
 }
@@ -69,6 +74,7 @@ int ost_reply(struct obd_device *obddev, struct ost_request *req)
 	struct ost_request *clnt_req = req->rq_reply_handle;
 
 	ENTRY;
+	printk("ost_reply: req %p clnt_req at %p\n", req, clnt_req); 
 
 	/* free the request buffer */
 	kfree(req->rq_reqbuf);
@@ -77,6 +83,11 @@ int ost_reply(struct obd_device *obddev, struct ost_request *req)
 	/* move the reply to the client */ 
 	clnt_req->rq_replen = req->rq_replen;
 	clnt_req->rq_repbuf = req->rq_repbuf;
+
+	printk("---> client req %p repbuf %p len %d status %d\n", 
+	       clnt_req, clnt_req->rq_repbuf, clnt_req->rq_replen, 
+	       req->rq_rephdr->status); 
+
 	req->rq_repbuf = NULL;
 	req->rq_replen = 0;
 	
@@ -140,6 +151,7 @@ static int ost_getattr(struct ost_obd *ost, struct ost_request *req)
 	int rc;
 
 	ENTRY;
+	printk("ost getattr entered\n"); 
 	
 	conn.oc_id = req->rq_req->connid;
 	conn.oc_dev = ost->ost_tgt;
@@ -151,6 +163,7 @@ static int ost_getattr(struct ost_obd *ost, struct ost_request *req)
 		return rc;
 	}
 	req->rq_rep->oa.o_id = req->rq_req->oa.o_id;
+	req->rq_rep->oa.o_valid = req->rq_req->oa.o_valid;
 
 	req->rq_rep->result =ost->ost_tgt->obd_type->typ_ops->o_getattr
 		(&conn, &req->rq_rep->oa); 
@@ -229,8 +242,10 @@ static int ost_connect(struct ost_obd *ost, struct ost_request *req)
 	}
 
 	req->rq_rep->result =ost->ost_tgt->obd_type->typ_ops->o_connect(&conn);
-	req->rq_rep->connid = conn.oc_id;
 
+	printk("ost_connect: rep buffer %p, id %d\n", req->rq_repbuf, 
+	       conn.oc_id);
+	req->rq_rep->connid = conn.oc_id;
 	EXIT;
 	return 0;
 }
@@ -296,9 +311,9 @@ int ost_handle(struct obd_device *obddev, struct ost_request *req)
 	struct ost_req_hdr *hdr;
 
 	ENTRY;
+	printk("ost_handle: req at %p\n", req); 
 
 	hdr = (struct ost_req_hdr *)req->rq_reqbuf;
-
 	if (NTOH__u32(hdr->type) != OST_TYPE_REQ) {
 		printk("lustre_ost: wrong packet type sent %d\n",
 		       NTOH__u32(hdr->type));
@@ -318,6 +333,7 @@ int ost_handle(struct obd_device *obddev, struct ost_request *req)
 
 	case OST_CONNECT:
 		CDEBUG(D_INODE, "connect\n");
+		printk("----> connect \n"); 
 		rc = ost_connect(ost, req);
 		break;
 	case OST_DISCONNECT:
@@ -350,6 +366,7 @@ int ost_handle(struct obd_device *obddev, struct ost_request *req)
 	}
 
 out:
+	req->rq_rephdr->status = rc;
 	if (rc) { 
 		printk("ost: processing error %d\n", rc);
 		ost_error(obddev, req);
@@ -475,7 +492,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
 	}
 
         tgt = &obd_dev[data->ioc_dev];
-	
+	ost->ost_tgt = tgt;
         if ( ! (tgt->obd_flags & OBD_ATTACHED) || 
              ! (tgt->obd_flags & OBD_SET_UP) ){
                 printk("device not attached or not set up (%d)\n", 
@@ -492,17 +509,13 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
 		return -EINVAL;
 	}
 
-	printk("---> OST at %d %p\n", __LINE__, ost);
 	INIT_LIST_HEAD(&ost->ost_reqs);
 	ost->ost_thread = NULL;
 	ost->ost_flags = 0;
 
-	printk("---> %d\n", __LINE__);
 	spin_lock_init(&obddev->u.ost.fo_lock);
 
-	printk("---> %d\n", __LINE__);
 	ost_start_srv_thread(obddev);
-	printk("---> %d\n", __LINE__);
 
         MOD_INC_USE_COUNT;
         EXIT; 

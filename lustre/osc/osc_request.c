@@ -30,21 +30,18 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 
-extern int ost_queue_req(struct obd_device *obddev, struct ost_request *);
+extern int ost_queue_req(struct obd_device *, struct ost_request *);
 
-
-
-int osc_getattr(struct obd_conn *conn, struct obdo *oa)
+struct ost_request *osc_prep_req(int size, int opcode)
 {
-	struct obd_device *obddev = conn->oc_dev;
 	struct ost_request *request;
-	int rc; 
+	int rc;
+	ENTRY; 
 
-	request = (struct ost_request *)kmalloc(sizeof(*request), 
-						GFP_KERNEL); 
+	request = (struct ost_request *)kmalloc(sizeof(*request), GFP_KERNEL); 
 	if (!request) { 
 		printk("osc_getattr: request allocation out of memory\n");
-		return -ENOMEM;
+		return NULL;
 	}
 
 	rc = ost_pack_req(NULL, 0, NULL, 0, 
@@ -52,25 +49,112 @@ int osc_getattr(struct obd_conn *conn, struct obdo *oa)
 			  &request->rq_reqlen, &request->rq_reqbuf);
 	if (rc) { 
 		printk("llight request: cannot pack request %d\n", rc); 
-		return rc;
+		return NULL;
+	}
+	request->rq_reqhdr->opc = opcode;
+
+	EXIT;
+	return request;
+}
+
+extern int osc_queue_wait(struct obd_conn *conn, struct ost_request *req)
+{
+	struct obd_device *client = conn->oc_dev;
+	struct obd_device *target = client->u.osc.osc_tgt;
+	int rc;
+
+	ENTRY;
+	/* set the connection id */
+	req->rq_req->connid = conn->oc_id;
+
+	CDEBUG(D_INODE, "tgt at %p, conn id %d, opcode %d request at: %p\n", 
+	       &conn->oc_dev->u.osc.osc_tgt->u.ost, 
+	       conn->oc_id, req->rq_reqhdr->opc, req);
+
+	/* XXX fix the race here (wait_for_event?)*/
+	/* hand the packet over to the server */
+	rc =  ost_queue_req(target, req); 
+	if (rc) { 
+		printk("osc_queue_wait: error %d, opcode %d\n", rc, 
+		       req->rq_reqhdr->opc); 
+		return -rc;
+	}
+
+	/* wait for the reply */
+	init_waitqueue_head(&req->rq_wait_for_rep);
+	interruptible_sleep_on(&req->rq_wait_for_rep);
+
+	ost_unpack_rep(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, 
+		       &req->rq_rep); 
+	printk("-->osc_queue_wait: buf %p len %d status %d\n", 
+	       req->rq_repbuf, req->rq_replen, req->rq_rephdr->status); 
+
+	EXIT;
+	return req->rq_rephdr->status;
+}
+
+void osc_free_req(struct ost_request *request)
+{
+	if (request->rq_repbuf)
+		kfree(request->rq_repbuf);
+	kfree(request);
+}
+
+
+int osc_connect(struct obd_conn *conn)
+{
+	struct ost_request *request;
+	int rc; 
+	ENTRY;
+	
+	request = osc_prep_req(sizeof(*request), OST_CONNECT);
+	if (!request) { 
+		printk("osc_connect: cannot pack req!\n"); 
+		return -ENOMEM;
+	}
+
+	rc = osc_queue_wait(conn, request);
+	if (rc) { 
+		EXIT;
+		goto out;
+	}
+      
+	CDEBUG(D_INODE, "received connid %d\n", request->rq_rep->connid); 
+
+	conn->oc_id = request->rq_rep->connid;
+ out:
+	osc_free_req(request);
+	EXIT;
+	return rc;
+}
+
+int osc_getattr(struct obd_conn *conn, struct obdo *oa)
+{
+	struct ost_request *request;
+	int rc; 
+
+	request = osc_prep_req(sizeof(*request), OST_GETATTR);
+	if (!request) { 
+		printk("osc_connect: cannot pack req!\n"); 
+		return -ENOMEM;
 	}
 	
 	memcpy(&request->rq_req->oa, oa, sizeof(*oa));
-	request->rq_reqhdr->opc = OST_GETATTR;
+	request->rq_req->oa.o_valid = ~0;
 	
-	printk("osc_getattr ost tgt at %p\n", &obddev->u.osc.osc_tgt->u.ost);
-	rc = ost_queue_req(obddev->u.osc.osc_tgt, request);
+	rc = osc_queue_wait(conn, request);
 	if (rc) { 
-		printk("ost_gettatr: error in handling %d\n", rc); 
-		return rc;
+		EXIT;
+		goto out;
 	}
 
-	printk("mode: %o\n", request->rq_rep->oa.o_mode); 
+	CDEBUG(D_INODE, "mode: %o\n", request->rq_rep->oa.o_mode); 
 	if (oa) { 
 		memcpy(oa, &request->rq_rep->oa, sizeof(*oa));
 	}
-	kfree(request->rq_repbuf);
-	kfree(request);
+
+ out:
+	osc_free_req(request);
 	return 0;
 }
 
@@ -104,6 +188,7 @@ static int osc_setup(struct obd_device *obddev, obd_count len,
         return 0;
 } 
 
+
 static int osc_cleanup(struct obd_device * obddev)
 {
         ENTRY;
@@ -122,7 +207,8 @@ static int osc_cleanup(struct obd_device * obddev)
 struct obd_ops osc_obd_ops = { 
 	o_setup:   osc_setup,
 	o_cleanup: osc_cleanup, 
-	o_getattr: osc_getattr
+	o_getattr: osc_getattr,
+	o_connect: osc_connect
 };
 
 static int __init osc_init(void)

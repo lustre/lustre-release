@@ -89,15 +89,15 @@ static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
 #ifdef OPS
 #warning "*** WARNING redefining OPS"
 #else
-#define OPS(sb,op) ((struct obdfs_sb_info *)(& ## sb ## ->u.generic_sbp))->osi_ops->o_ ## op
-#define IOPS(inode,op) ((struct obdfs_sb_info *)(& ## inode->i_sb ## ->u.generic_sbp))->osi_ops->o_ ## op
+#define OPS(sb,op) ((struct obdfs_sb_info *)(& (sb)->u.generic_sbp))->osi_ops->o_ ## op
+#define IOPS(inode,op) ((struct obdfs_sb_info *)(&(inode)->i_sb->u.generic_sbp))->osi_ops->o_ ## op
 #endif
 
 #ifdef ID
 #warning "*** WARNING redefining ID"
 #else
-#define ID(sb) (&((struct obdfs_sb_info *)( & ## sb ## ->u.generic_sbp))->osi_conn)
-#define IID(inode) (&((struct obdfs_sb_info *)( & ## inode->i_sb ## ->u.generic_sbp))->osi_conn)
+#define ID(sb) (&((struct obdfs_sb_info *)( &(sb)->u.generic_sbp))->osi_conn)
+#define IID(inode) (&((struct obdfs_sb_info *)( &(inode)->i_sb->u.generic_sbp))->osi_conn)
 #endif
 
 #define OBDFS_SUPER_MAGIC 0x4711
