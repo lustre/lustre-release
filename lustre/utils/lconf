@@ -1028,7 +1028,7 @@ def parse_cmdline(argv):
     args = []
     try:
         opts, args = getopt.getopt(argv, short_opts, long_opts)
-    except getopt.GetoptError:
+    except getopt.error:
         print "invalid opt"
         usage()
 
