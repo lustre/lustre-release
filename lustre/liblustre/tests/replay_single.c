@@ -92,9 +92,11 @@ static void mds_failover()
 
 void t0()
 {
+        char *path="/mnt/lustre/f0";
         ENTRY("empty replay");
         replay_barrier();
         mds_failover();
+        t_check_stat_fail("/mnt/lustre/f0");
         LEAVE();
 }
 
