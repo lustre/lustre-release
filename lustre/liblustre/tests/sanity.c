@@ -36,6 +36,7 @@
 #include <errno.h>
 #include <dirent.h>
 #include <sys/uio.h>
+#include <sys/time.h>
 
 #include "test_common.h"
 
@@ -376,7 +377,6 @@ void t15()
 void t16()
 {
         char file[MAX_PATH_LENGTH] = "";
-        int fd;
         ENTRY("small-write-read");
         snprintf(file, MAX_PATH_LENGTH, "%s/test_t16_file", lustre_path);
 
@@ -426,7 +426,7 @@ void t18()
                         printf("Error stat\n");
                         exit(1);
                 }
-                printf("mtime %ld, ctime %d\n",
+                printf("mtime %lu, ctime %lu\n",
                         statbuf[i].st_atime, statbuf[i].st_mtime);
                 sleep(2);
         }
@@ -732,8 +732,8 @@ static void pages_io(int xfer, loff_t pos)
 
 void t50()
 {
-        char text[256];
-        loff_t off_array[] = {1, 17, 255, 258, 4095, 4097, 8191, 1024*1024*1024*1024ULL};
+        loff_t off_array[] = {1, 17, 255, 258, 4095, 4097, 8191,
+                              1024*1024*1024*1024ULL};
         int np = 1, i;
         loff_t offset = 0;
 
