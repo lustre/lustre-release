@@ -80,8 +80,6 @@ static struct ctl_table portals_table[] = {
          sizeof(int), 0644, NULL, &proc_dointvec},
         {PSDEV_PRINTK, "printk", &portal_printk, sizeof(int), 0644, NULL,
          &proc_dointvec},
-        {PSDEV_CONSOLE, "console", &portal_cerror, sizeof(int), 0644, NULL,
-         &proc_dointvec},
         {PSDEV_DEBUG_PATH, "debug_path", debug_file_path,
          sizeof(debug_file_path), 0644, NULL, &proc_dostring, &sysctl_string},
         {PSDEV_PORTALS_UPCALL, "upcall", portals_upcall,
