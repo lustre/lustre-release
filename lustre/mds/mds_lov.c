@@ -95,7 +95,8 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
         rc = 0;
         push_ctxt(&saved, &mds->mds_ctxt, NULL);
 
-#warning FIXME: if there is an existing LOVDESC, verify new tgt_count > old
+        /* Bug 1186: FIXME: if there is an existing LOVDESC, verify new
+         * tgt_count > old */
         f = filp_open("LOVDESC", O_CREAT|O_RDWR, 0644);
         if (IS_ERR(f)) {
                 CERROR("Cannot open/create LOVDESC file\n");
@@ -112,7 +113,8 @@ int mds_set_lovdesc(struct obd_device *obd, struct lov_desc *desc,
                 GOTO(out, rc);
         }
 
-#warning FIXME: if there is an existing LOVTGTS, verify existing UUIDs same
+        /* Bug 1186: FIXME: if there is an existing LOVTGTS, verify
+         * existing UUIDs same */
         f = filp_open("LOVTGTS", O_CREAT|O_RDWR, 0644);
         if (IS_ERR(f)) {
                 CERROR("Cannot open/create LOVTGTS file\n");
