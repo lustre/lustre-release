@@ -1586,9 +1586,8 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
         /* delete orphans request */
         if ((oa->o_valid & OBD_MD_FLFLAGS) && 
             (oa->o_flags & OBD_FL_DELORPHAN)) {
-                LASSERT(diff <= 0);
-                if (diff == 0)
-                        RETURN(0);
+                if (diff >= 0)
+                        RETURN(diff);
                 filter_destroy_precreated(exp, oa, filter);
                 rc = filter_update_last_objid(obd, group, 0);
                 if (rc)
