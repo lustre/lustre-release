@@ -9,7 +9,7 @@ MODULE = osc
 modulefs_DATA = osc.o
 EXTRA_PROGRAMS = osc
 
-LINX= obd_pack.c ll_pack.c
+LINX= obd_pack.c ll_pack.c l_net.c
 osc_SOURCES = osc_request.c $(LINX)
 
 obd_pack.c: 
@@ -17,6 +17,9 @@ obd_pack.c:
 
 ll_pack.c: 
 	test -e ll_pack.c || ln -sf $(top_srcdir)/lib/ll_pack.c
+
+l_net.c: 
+	test -e l_net.c || ln -sf $(top_srcdir)/lib/l_net.c .
 
 dist-hook:
 	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done
