@@ -292,9 +292,11 @@ void ptlrpc_free_committed(struct ptlrpc_client *cli)
                         CDEBUG(D_INFO, "Marking request %p as committed ("
                                "transno=%Lu, last_committed=%Lu\n", req,
                                req->rq_transno, cli->cli_last_committed);
-                        if (atomic_dec_and_test(&req->rq_refcount))
+                        if (atomic_dec_and_test(&req->rq_refcount)) {
+                                /* we do this to prevent free_req deadlock */
+                                req->rq_client = NULL;
                                 ptlrpc_free_req(req);
-                        else
+                        } else
                                 list_add(&req->rq_list, &cli->cli_dying_head);
                 }
         }

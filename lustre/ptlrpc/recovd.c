@@ -46,6 +46,7 @@ void recovd_cli_fail(struct ptlrpc_client *cli)
         EXIT;
 }
 
+/* this function must be called with cli->cli_lock held */
 void recovd_cli_fixed(struct ptlrpc_client *cli)
 {
         ENTRY;
