@@ -13,4 +13,11 @@ ext-2.4-patch-2.patch
 ext-2.4-patch-3.patch
 ext-2.4-patch-4.patch
 linux-2.4.20-xattr-0.8.54.patch
+ext3-2.4.20-fixes.patch
+ext3-2.4-ino_t.patch
+ext3-largefile.patch
+ext3-truncate_blocks.patch
+ext3-unmount_sync.patch
+ext3-use_after_free.patch
+extN-wantedi.patch
 extN-san.patch
