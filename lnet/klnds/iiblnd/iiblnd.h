@@ -48,7 +48,7 @@
 #include <linux/kmod.h>
 #include <linux/sysctl.h>
 
-#define DEBUG_SUBSYSTEM S_IBNAL
+#define DEBUG_SUBSYSTEM S_NAL
 
 #include <linux/kp30.h>
 #include <portals/p30.h>
