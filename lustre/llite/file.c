@@ -181,6 +181,8 @@ int ll_file_open(struct inode *inode, struct file *file)
         struct lookup_intent *it;
         struct lov_stripe_md *lsm;
         struct ptlrpc_request *req;
+        struct lookup_intent oit = { .it_op = IT_OPEN,
+                                     .it_flags = file->f_flags };
         int rc = 0;
         ENTRY;
 
@@ -193,9 +195,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         it = file->f_it;
 
-        if (!it->d.lustre.it_disposition) {
-                struct lookup_intent oit = { .it_op = IT_OPEN,
-                                             .it_flags = file->f_flags };
+        if (!it || !it->d.lustre.it_disposition) {
                 it = &oit;
                 rc = ll_intent_file_open(file, NULL, 0, it);
                 if (rc)

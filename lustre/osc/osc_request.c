@@ -2466,7 +2466,8 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type,
                              policy, mode, lockh);
         if (rc) {
-                osc_set_data_with_check(lockh, data);
+                if (!(*flags & LDLM_FL_TEST_LOCK))
+                        osc_set_data_with_check(lockh, data);
                 RETURN(rc);
         }
         /* If we're trying to read, we also search for an existing PW lock.  The

@@ -885,9 +885,6 @@ test_45() {
     pid=$!
     sleep 1
 
-    # allow the open to complete
-    usleep 500
-
     # This will cause the CLOSE to fail before even 
     # allocating a reply buffer
     $LCTL --device $mdcdev deactivate

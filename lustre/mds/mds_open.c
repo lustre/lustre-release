@@ -854,7 +854,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                                         rec->ur_namelen - 1);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
-                CERROR("parent lookup error %d\n", rc);
+                if (rc != -ENOENT)
+                        CERROR("parent lookup error %d\n", rc);
                 GOTO(cleanup, rc);
         }
         LASSERT(dparent->d_inode != NULL);
@@ -947,7 +948,9 @@ int mds_open(struct mds_update_record *rec, int offset,
                 acc_mode = 0;           /* Don't check for permissions */
         }
 
-        LASSERT(!mds_inode_is_orphan(dchild->d_inode));
+        LASSERTF(!mds_inode_is_orphan(dchild->d_inode),
+                 "dchild %*s (%p) inode %p\n", dchild->d_name.len,
+                 dchild->d_name.name, dchild, dchild->d_inode);
 
         mds_pack_inode2fid(&body->fid1, dchild->d_inode);
         mds_pack_inode2body(body, dchild->d_inode);

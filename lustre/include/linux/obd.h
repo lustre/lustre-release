@@ -53,10 +53,10 @@ struct lov_oinfo {                 /* per-stripe data structure */
         /* used by the osc to keep track of what objects to build into rpcs */
         struct loi_oap_pages loi_read_lop;
         struct loi_oap_pages loi_write_lop;
-        struct list_head loi_read_item;
         /* _cli_ is poorly named, it should be _ready_ */
         struct list_head loi_cli_item;
         struct list_head loi_write_item;
+        struct list_head loi_read_item;
 
         int loi_kms_valid:1;
         __u64 loi_kms;             /* known minimum size */

@@ -366,7 +366,7 @@ void mdc_clear_open_replay_data(struct obd_client_handle *och)
          * we're sure we won't need to fix up the close request in the future),
          * but make sure that replay doesn't poke at the och, which is about to
          * be freed. */
-        LASSERT(mod != (void *)0x5a5a5a5a);
+        LASSERT(mod != LP_POISON);
         if (mod != NULL)
                 mod->mod_och = NULL;
         och->och_mod = NULL;
@@ -388,7 +388,8 @@ static void mdc_commit_close(struct ptlrpc_request *req)
 
         open_req = mod->mod_open_req;
         LASSERT(open_req != NULL);
-        LASSERT(open_req != (void *)0x5a5a5a5a);
+        LASSERT(open_req != LP_POISON);
+        LASSERT(open_req->rq_type != LI_POISON);
 
         DEBUG_REQ(D_HA, open_req, "open req balanced");
         LASSERT(open_req->rq_transno != 0);
@@ -464,8 +465,8 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         mod = och->och_mod;
         if (likely(mod != NULL)) {
                 mod->mod_close_req = req;
-                DEBUG_REQ(D_HA, mod->mod_open_req, "matched open req %p",
-                          mod->mod_open_req);
+                LASSERT(mod->mod_open_req->rq_type != LI_POISON);
+                DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
         } else {
                 CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
         }
@@ -514,7 +515,7 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         if (req->rq_async_args.pointer_arg[0] != NULL) {
                 CERROR("returned without dropping rpc_lock: rc %d\n", rc);
                 mdc_close_interpret(req, &req->rq_async_args, rc);
-                portals_debug_dumplog();
+                //portals_debug_dumplog();
         }
 
         EXIT;

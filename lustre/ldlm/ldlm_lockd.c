@@ -44,8 +44,6 @@ extern kmem_cache_t *ldlm_resource_slab;
 extern kmem_cache_t *ldlm_lock_slab;
 extern struct lustre_lock ldlm_handle_lock;
 extern struct list_head ldlm_namespace_list;
-extern int (*mds_reint_p)(int offset, struct ptlrpc_request *req);
-extern int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req);
 
 static DECLARE_MUTEX(ldlm_ref_sem);
 static int ldlm_refcount = 0;
@@ -894,8 +892,13 @@ static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
         if (lock->l_granted_mode == LCK_PW &&
             !lock->l_readers && !lock->l_writers &&
             time_after(jiffies, lock->l_last_used + 10 * HZ)) {
+#ifdef __KERNEL__
+                ldlm_bl_to_thread(ns, NULL, lock);
+                l_unlock(&ns->ns_lock);
+#else
                 l_unlock(&ns->ns_lock);
                 ldlm_handle_bl_callback(ns, NULL, lock);
+#endif
                 EXIT;
                 return;
         }

@@ -35,6 +35,9 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- serialize filter_precreate and filter_destroy_precreated (3329)
 	- clear page cache after eviction (2766)
 	- resynchronize MDS->OST in background (2824)
+	- loop device shouldn't call sync_dev() for nul device (3092)
+	- push lock cancellation to blocking thread for glimpse ASTs (3409)
+	- don't call osc_set_data_with_check() for TEST_LOCK matches (3159)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
 	- fix compilation for qswnal for 2.6 kernels (3125)

@@ -565,7 +565,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                         rec->ur_name, rec->ur_namelen - 1);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
-                CERROR("parent lookup error %d\n", rc);
+                if (rc != -ENOENT)
+                        CERROR("parent lookup error %d\n", rc);
                 GOTO(cleanup, rc);
         }
         cleanup_phase = 1; /* locked parent dentry */
@@ -1445,8 +1446,10 @@ static int mds_add_link_orphan(struct mds_update_record *rec,
         fidlen = ll_fid2str(fidname, dentry->d_inode->i_ino,
                             dentry->d_inode->i_generation);
 
-        CDEBUG(D_ERROR, "pending destroy of %dx open file %s = %s\n",
+        CDEBUG(D_ERROR, "pending destroy of %dx open %s %s = %s\n",
                mds_open_orphan_count(dentry->d_inode),
+               S_ISDIR(dentry->d_inode->i_mode) ? "dir" :
+               S_ISREG(dentry->d_inode->i_mode) ? "file" : "other",
                rec->ur_name, fidname);
 
         pending_child = lookup_one_len(fidname, mds->mds_pending_dir, fidlen);

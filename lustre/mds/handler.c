@@ -607,23 +607,25 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
 
         if ((S_ISREG(inode->i_mode) && (body->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(inode->i_mode) && (body->valid & OBD_MD_FLDIREA))) {
-                int rc;
+                int ret;
                 down(&inode->i_sem);
-                rc = fsfilt_get_md(req->rq_export->exp_obd, inode, NULL, 0);
+                ret = fsfilt_get_md(req->rq_export->exp_obd, inode, NULL, 0);
                 up(&inode->i_sem);
                 CDEBUG(D_INODE, "got %d bytes MD data for inode %lu\n",
                        rc, inode->i_ino);
-                if (rc < 0) {
-                        if (rc != -ENODATA)
+                if (ret < 0) {
+                        if (ret != -ENODATA) {
                                 CERROR("error getting inode %lu MD: rc = %d\n",
-                                       inode->i_ino, rc);
+                                       inode->i_ino, ret);
+                                /* should we return ret in req->rq_status? */
+                        }
                         size[bufcount] = 0;
-                } else if (rc > mds->mds_max_mdsize) {
+                } else if (ret > mds->mds_max_mdsize) {
                         size[bufcount] = 0;
                         CERROR("MD size %d larger than maximum possible %u\n",
-                               rc, mds->mds_max_mdsize);
+                               ret, mds->mds_max_mdsize);
                 } else {
-                        size[bufcount] = rc;
+                        size[bufcount] = ret;
                 }
                 bufcount++;
         } else if (S_ISLNK(inode->i_mode) && (body->valid & OBD_MD_LINKNAME)) {
@@ -644,7 +646,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
 
         rc = lustre_pack_reply(req, bufcount, size, NULL);
         if (rc) {
-                CERROR("out of memory\n");
+                CERROR("lustre_pack_reply failed: rc %d\n", rc);
                 GOTO(out, req->rq_status = rc);
         }
 
