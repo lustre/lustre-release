@@ -40,6 +40,7 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
+#include <linux/lustre_dlm.h>
 #endif
 
 
@@ -76,8 +77,8 @@ struct obd_export {
         struct obd_device        *exp_obd;
         struct ptlrpc_connection *exp_connection;
         struct mds_export_data    exp_mds_data;
-#if NOTYET && 0
         struct ldlm_export_data   exp_ldlm_data;
+#if NOTYET && 0
         struct ost_export_data    exp_ost_data;
 #endif
         void                     *exp_data; /* device specific data */

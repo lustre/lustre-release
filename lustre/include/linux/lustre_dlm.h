@@ -8,8 +8,11 @@
 #ifdef __KERNEL__
 
 #include <linux/proc_fs.h>
-#include <linux/obd_class.h>
 #include <linux/lustre_net.h>
+
+struct obd_ops;
+struct obd_export;
+struct obd_device;
 
 #define OBD_LDLM_DEVICENAME  "ldlm"
 
@@ -193,6 +196,11 @@ struct ldlm_ast_work {
         void *w_data;
         int w_datalen;
 };
+
+/* Per-export ldlm state. */
+struct ldlm_export_data {
+        struct list_head led_held_locks;
+};
         
 static inline struct ldlm_extent *ldlm_res2extent(struct ldlm_resource *res)
 {
@@ -200,7 +208,6 @@ static inline struct ldlm_extent *ldlm_res2extent(struct ldlm_resource *res)
 }
 
 extern struct obd_ops ldlm_obd_ops;
-
 
 extern char *ldlm_lockname[];
 extern char *ldlm_typename[];

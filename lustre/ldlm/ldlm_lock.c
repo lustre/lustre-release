@@ -28,6 +28,7 @@
 #include <linux/random.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_mds.h>
+#include <linux/obd_class.h>
 
 /* lock types */
 char *ldlm_lockname[] = {
@@ -189,7 +190,10 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
                 return;
         }
 
+        list_del(&lock->l_export_chain);
+        lock->l_export = NULL;
         lock->l_flags = LDLM_FL_DESTROYED;
+
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_PUT(lock);
         EXIT;
@@ -316,9 +320,6 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return retval;
 }
-
-
-
 
 static int ldlm_plain_compat(struct ldlm_lock *a, struct ldlm_lock *b)
 {

@@ -28,6 +28,7 @@
 #include <linux/slab.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
+#include <linux/obd_class.h>
 
 extern kmem_cache_t *ldlm_resource_slab;
 extern kmem_cache_t *ldlm_lock_slab;
@@ -74,7 +75,7 @@ int ldlm_add_waiting_lock(struct ldlm_lock *lock)
                        waiting_locks_timer.expires);
                 mod_timer(&waiting_locks_timer, timeout_rounded);
         }
-        list_add(&lock->l_pending_chain, waiting_locks_list.prev); /* FIFO */
+        list_add_tail(&lock->l_pending_chain, &waiting_locks_list); /* FIFO */
         spin_unlock_bh(&waiting_locks_spinlock);
         RETURN(1);
 }
@@ -254,6 +255,13 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
         }
 
         lock->l_export = req->rq_export;
+        if (lock->l_export) {
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
+                list_add(&lock->l_export_chain,
+                         &lock->l_export->exp_ldlm_data.led_held_locks);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        }
+
         ptlrpc_connection_addref(req->rq_connection);
         EXIT;
  out:

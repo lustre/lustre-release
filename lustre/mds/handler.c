@@ -32,6 +32,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
+#include <linux/obd_class.h>
 
 extern int mds_get_lovtgts(struct obd_device *obd, int tgt_count,
                            uuid_t *uuidarray);
