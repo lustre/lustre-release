@@ -1,4 +1,9 @@
-#ifndef _LINUX_LIST_H
+#ifndef _LUSTRE_LIST_H
+#define _LUSTRE_LIST_H
+
+#ifdef __KERNEL__
+#include <linux/list.h>
+#else
 /*
  * Simple doubly linked list implementation.
  *
@@ -100,9 +105,7 @@ static inline void list_del_init(struct list_head *entry)
 	__list_del(entry->prev, entry->next);
 	INIT_LIST_HEAD(entry);
 }
-#endif
 
-#ifndef list_for_each_entry
 /**
  * list_move - delete from one list and add as another's head
  * @list: the entry to move
@@ -125,10 +128,7 @@ static inline void list_move_tail(struct list_head *list,
 	__list_del(list->prev, list->next);
 	list_add_tail(list, head);
 }
-#endif
 
-#ifndef _LINUX_LIST_H
-#define _LINUX_LIST_H
 /**
  * list_empty - tests whether a list is empty
  * @head: the list to test.
@@ -216,9 +216,6 @@ static inline void list_splice_init(struct list_head *list,
 	for (pos = (head)->next, n = pos->next; pos != (head); \
 		pos = n, n = pos->next)
 
-#endif
-
-#ifndef list_for_each_entry
 /**
  * list_for_each_entry  -       iterate over list of given type
  * @pos:        the type * to use as a loop counter.
@@ -231,9 +228,7 @@ static inline void list_splice_init(struct list_head *list,
 	     &pos->member != (head);					\
 	     pos = list_entry(pos->member.next, typeof(*pos), member),	\
 	     prefetch(pos->member.next))
-#endif
 
-#ifndef list_for_each_entry_safe
 /**
  * list_for_each_entry_safe  -       iterate over list of given type safe against removal of list entry
  * @pos:        the type * to use as a loop counter.
@@ -246,4 +241,6 @@ static inline void list_splice_init(struct list_head *list,
 		n = list_entry(pos->member.next, typeof(*pos), member);	\
 	     &pos->member != (head);					\
 	     pos = n, n = list_entry(n->member.next, typeof(*n), member))
-#endif
+
+#endif /* if !__KERNEL__*/
+#endif /* if !_LUSTRE_LIST_H */

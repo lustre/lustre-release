@@ -3,7 +3,7 @@
  */
 #ifndef _LIBCFS_H
 
-#include <linux/list.h>
+#include <linux/lustre_list.h>
 
 #define PORTAL_DEBUG
 
