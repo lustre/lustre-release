@@ -99,7 +99,7 @@ static inline void *fsfilt_start(struct obd_device *obd, struct inode *inode,
         unsigned long now = jiffies;
         void *parent_handle = oti ? oti->oti_handle : NULL;
         void *handle = obd->obd_fsops->fs_start(inode, op, parent_handle);
-        CDEBUG(D_HA, "started handle %p (%p)\n", handle, parent_handle);
+        CDEBUG(D_INFO, "started handle %p (%p)\n", handle, parent_handle);
 
         if (oti != NULL) {
                 if (parent_handle == NULL) {
@@ -147,7 +147,7 @@ static inline int fsfilt_commit(struct obd_device *obd, struct inode *inode,
 {
         unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit(inode, handle, force_sync);
-        CDEBUG(D_HA, "committing handle %p\n", handle);
+        CDEBUG(D_INFO, "committing handle %p\n", handle);
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
         return rc;
