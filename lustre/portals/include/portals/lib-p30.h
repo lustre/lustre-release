@@ -362,7 +362,8 @@ extern char *dispatch_name(int index);
  */
 extern void lib_enq_event_locked (nal_cb_t *nal, void *private,
                                   lib_eq_t *eq, ptl_event_t *ev);
-extern void lib_finalize (nal_cb_t *nal, void *private, lib_msg_t *msg, int status);
+extern void lib_finalize (nal_cb_t *nal, void *private, lib_msg_t *msg, 
+                          ptl_err_t status);
 extern void lib_parse (nal_cb_t *nal, ptl_hdr_t *hdr, void *private);
 extern lib_msg_t *lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid, 
                                       lib_md_t *getmd);

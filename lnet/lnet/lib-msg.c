@@ -81,7 +81,7 @@ lib_enq_event_locked (nal_cb_t *nal, void *private,
 }
 
 void 
-lib_finalize(nal_cb_t *nal, void *private, lib_msg_t *msg, int status)
+lib_finalize(nal_cb_t *nal, void *private, lib_msg_t *msg, ptl_err_t status)
 {
         lib_md_t     *md;
         int           unlink;
