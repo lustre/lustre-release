@@ -58,8 +58,8 @@ struct obdfs_super_info {
 /* list of all OBDFS super blocks  */
 struct list_head obdfs_super_list;
 struct obdfs_super_entry {
-	struct list_head sl_chain;
-	struct obdfs_super_info *sl_sbi;
+	struct list_head	 sl_chain;
+	struct obdfs_super_info	*sl_sbi;
 };
 
 struct obdfs_pgrq {
@@ -70,25 +70,25 @@ struct obdfs_pgrq {
 };
 
 struct obdfs_sb_info {
-	struct obd_conn osi_conn;
-	struct super_block *osi_super;
-	struct obd_device *osi_obd;
-	struct obd_ops *osi_ops;     
-	ino_t           osi_rootino; /* which root inode */
-	int             osi_minor;   /* minor of /dev/obdX */
-	struct list_head osi_list;  /* linked list of inodes to write */
+	struct obd_conn		 osi_conn;
+	struct super_block	*osi_super;
+	struct obd_device	*osi_obd;
+	struct obd_ops		*osi_ops;     
+	ino_t			 osi_rootino; /* which root inode */
+	int			 osi_minor;   /* minor of /dev/obdX */
+	struct list_head	 osi_list;  /* linked list of inodes to write */
 };
 
 struct obdfs_inode_info {
 	int		 oi_flags;
 	struct list_head oi_pages;
-	char 		*oi_inline;
+	char 		 oi_inline[OBD_INLINESZ];
 };
 
 
-#define OBD_LIST(inode)	(((struct obdfs_inode_info *)(&(inode)->u.generic_ip))->oi_pages)
-#define WREQ(entry)	(list_entry(entry, struct obdfs_pgrq, rq_list))
-#define OBD_INFO(inode) ((struct obdfs_inode_info *)(&(inode)->u.generic_ip))
+#define OBDFS_LIST(inode) (((struct obdfs_inode_info *)(&(inode)->u.generic_ip))->oi_pages)
+#define WREQ(entry)       (list_entry(entry, struct obdfs_pgrq, rq_list))
+#define OBDFS_INFO(inode) ((struct obdfs_inode_info *)(&(inode)->u.generic_ip))
 
 void obdfs_sysctl_init(void);
 void obdfs_sysctl_clean(void);
@@ -98,16 +98,9 @@ extern struct inode_operations obdfs_file_inode_operations;
 extern struct inode_operations obdfs_dir_inode_operations;
 extern struct inode_operations obdfs_symlink_inode_operations;
 
-static inline struct obd_ops *iops(struct inode *i)
+static inline int obdfs_has_inline(struct inode *inode)
 {
-	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *) &i->i_sb->u.generic_sbp;
-	return sbi->osi_ops;
-}
-
-static inline struct obd_conn *iid(struct inode *i)
-{
-	struct obdfs_sb_info *sbi = (struct obdfs_sb_info *) &i->i_sb->u.generic_sbp;
-	return &sbi->osi_conn;
+	return (OBDFS_INFO(inode)->oi_flags & OBD_FL_INLINEDATA);
 }
 
 #define NOLOCK 0

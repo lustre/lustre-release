@@ -485,7 +485,9 @@ struct inode *obdfs_new_inode(struct inode *dir)
 		return ERR_PTR(-EIO);
 	}
 
+	INIT_LIST_HEAD(&OBDFS_LIST(inode));
 	obdo_free(oa);
+
 	EXIT;
 	return inode;
 } /* obdfs_new_inode */
@@ -622,12 +624,12 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	strcpy (de->name, "..");
 	ext2_set_de_type(dir->i_sb, de, S_IFDIR);
 	
+	/* XXX handle err */
 	err = obdfs_do_writepage(inode, inode_page, IS_SYNC(inode));
 	inode->i_blocks = PAGE_SIZE/inode->i_sb->s_blocksize;
 	inode->i_size = PAGE_SIZE;
 	UnlockPage(inode_page);
 	page_cache_release(inode_page);
-	/* XXX handle err */
 
 	inode->i_nlink = 2;
 	inode->i_mode = S_IFDIR | mode;
@@ -649,12 +651,12 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	dir->u.ext2_i.i_flags &= ~EXT2_BTREE_FL;
 	mark_inode_dirty(dir);
 	err = obdfs_do_writepage(dir, page, IS_SYNC(dir));
+	/* XXX handle err? */
 
 	UnlockPage(page);
 
 	page_cache_release(page);
 	d_instantiate(dentry, inode);
-	err = 0;
 out:
 	EXIT;
 	return err;
@@ -766,6 +768,7 @@ int obdfs_rmdir (struct inode * dir, struct dentry *dentry)
 	if (retval)
 		goto end_rmdir;
 	err = obdfs_do_writepage(dir, page, IS_SYNC(dir));
+	/* XXX handle err? */
 	UnlockPage(page);
 
 	if (inode->i_nlink != 2)
@@ -822,6 +825,7 @@ int obdfs_unlink(struct inode * dir, struct dentry *dentry)
 		goto end_unlink;
 	dir->i_version = ++event;
 	err = obdfs_do_writepage(dir, page, IS_SYNC(dir));
+	/* XXX handle err? */
 	UnlockPage(page);
 
 	dir->i_ctime = dir->i_mtime = CURRENT_TIME;
@@ -840,7 +844,8 @@ end_unlink:
 	return retval;
 } /* obdfs_unlink */
 
-int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symname)
+int obdfs_symlink (struct inode * dir, struct dentry *dentry,
+		   const char * symname)
 {
 	struct ext2_dir_entry_2 * de;
 	struct inode * inode;
@@ -852,7 +857,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 
         ENTRY;
 	inode = obdfs_new_inode(dir);
-	oinfo = OBD_INFO(inode);
+	oinfo = OBDFS_INFO(inode);
 	if ( IS_ERR(inode) ) {
 		EXIT;
 		return PTR_ERR(inode);
@@ -860,11 +865,10 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 
 	inode->i_mode = S_IFLNK | S_IRWXUGO;
 	inode->i_op = &obdfs_symlink_inode_operations;
-	for (l = 0; l < inode->i_sb->s_blocksize - 1 &&
-	     symname [l]; l++)
+	for (l = 0; l < inode->i_sb->s_blocksize - 1 && symname [l]; l++)
 		;
 
-	if (l >= sizeof (oinfo->oi_inline)) {
+	if (l >= sizeof(OBDFS_INFO(inode)->oi_inline)) {
 		CDEBUG(D_INODE, "l=%d, normal symlink\n", l);
 
 		name_page = obdfs_getpage(inode, 0, 1, LOCKED);
@@ -888,7 +892,8 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 		link[i++] = c;
 	link[i] = 0;
 	if (name_page) {
-		obdfs_do_writepage(inode, name_page, IS_SYNC(inode));
+		err = obdfs_do_writepage(inode, name_page, IS_SYNC(inode));
+		/* XXX handle err */
 		PDEBUG(name_page, "symlink");
 		UnlockPage(name_page);
 		page_cache_release(name_page);

@@ -1,7 +1,7 @@
 /*
  * OBDFS Super operations - also used for Lustre file system
  *
-  *
+ *
  *  Copyright (C) 1991, 1992  Linus Torvalds
  * Copryright (C) 1999 Stelias Computing Inc. <braam@stelias.com>
  * Copryright (C) 1999 Seagate Technology Inc.
@@ -82,7 +82,7 @@ static void obdfs_flush_dirty_pages(int check_time)
 	while ( (sl = sl->next) != &obdfs_super_list ) {
 		struct obdfs_super_entry *entry = 
 			list_entry(sl, struct obdfs_super_entry, sl_chain);
-		struct obdfs_super_info *sbi = entry->sl_sbi;
+		sbi = entry->sl_sbi;
 
 		/* walk write requests here */
 		obdfs_flush_reqs(sbi, jiffies);
@@ -96,6 +96,7 @@ static void obdfs_flush_dirty_pages(int check_time)
 		sbi = entry->sl_sbi;
 
 		/* walk write requests here */
+		/* XXX should jiffies be 0 here? */
 		obdfs_flush_reqs(sbi, jiffies);
 	}
 }
@@ -107,15 +108,17 @@ static int pupdate(void *unused)
 	struct task_struct * tsk = current;
 	int interval;
 	
-	pupdated = current;
 	tsk->session = 1;
 	tsk->pgrp = 1;
 	strcpy(tsk->comm, "pupdate");
+	pupdated = current;
+
+	printk("pupdate() activated...\n");
 
 	/* sigstop and sigcont will stop and wakeup kupdate */
 	spin_lock_irq(&tsk->sigmask_lock);
 	sigfillset(&tsk->blocked);
-	siginitsetinv(&current->blocked, sigmask(SIGCONT) | sigmask(SIGSTOP));
+	siginitsetinv(&tsk->blocked, sigmask(SIGCONT) | sigmask(SIGSTOP));
 	recalc_sigpending(tsk);
 	spin_unlock_irq(&tsk->sigmask_lock);
 
@@ -130,6 +133,7 @@ static int pupdate(void *unused)
 		else
 		{
 		stop_pupdate:
+			printk("pupdate() stopped...\n");
 			tsk->state = TASK_STOPPED;
 			MOD_DEC_USE_COUNT;
 			schedule(); /* wait for SIGCONT */
@@ -149,7 +153,6 @@ static int pupdate(void *unused)
 			if (stopped)
 				goto stop_pupdate;
 		}
-		printk("pupdate() activated...\n");
 		/* flush_inodes(); */
 		obdfs_flush_dirty_pages(1);
 	}

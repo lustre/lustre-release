@@ -216,6 +216,7 @@ static __inline__ struct obdo *obdo_fromid(struct obd_conn *conn, obd_id id)
 	}
 	memset(res, 0, sizeof(*res));
 	res->o_id = id;
+	res->o_valid = ~OBD_MD_FLOBDMD;
 	if (OBP(conn->oc_dev, getattr)(conn, res)) {
 		OBD_FREE(res, sizeof(*res));
 		EXIT;
@@ -363,29 +364,41 @@ static __inline__ void obdo_to_inode(struct inode *dst, struct obdo *src)
 		dst->i_generation = src->o_generation;
 }
 
-static __inline__ int obdo_cmp_md(struct obdo *dst, struct obdo *src)
+static __inline__ int obdo_cmp_md(struct obdo *dst, struct obdo *src,
+				  obd_flag compare)
 {
-	int res = 1;
+	int res = 0;
 
-	if ( src->o_valid & OBD_MD_FLMODE )
-		res = (res && (dst->o_mode == src->o_mode));
-	if ( src->o_valid & OBD_MD_FLUID )
-		res = (res && (dst->o_uid == src->o_uid));
-	if ( src->o_valid & OBD_MD_FLGID )
-		res = (res && (dst->o_gid == src->o_gid));
-	if ( src->o_valid & OBD_MD_FLSIZE )
-		res = (res && (dst->o_size == src->o_size));
-	if ( src->o_valid & OBD_MD_FLATIME )
-		res = (res && (dst->o_atime == src->o_atime));
-	if ( src->o_valid & OBD_MD_FLMTIME )
-		res = (res && (dst->o_mtime == src->o_mtime));
-	if ( src->o_valid & OBD_MD_FLCTIME )
-		res = (res && (dst->o_ctime == src->o_ctime));
-	if ( src->o_valid & OBD_MD_FLFLAGS )
-		res = (res && (dst->o_flags == src->o_flags));
-	/* allocation of space */
-	if ( src->o_valid & OBD_MD_FLBLOCKS )
-		res = (res && (dst->o_blocks == src->o_blocks));
+	if ( compare & OBD_MD_FLATIME )
+		res = (res || (dst->o_atime != src->o_atime));
+	if ( compare & OBD_MD_FLMTIME )
+		res = (res || (dst->o_mtime != src->o_mtime));
+	if ( compare & OBD_MD_FLCTIME )
+		res = (res || (dst->o_ctime != src->o_ctime));
+	if ( compare & OBD_MD_FLSIZE )
+		res = (res || (dst->o_size != src->o_size));
+	if ( compare & OBD_MD_FLBLOCKS ) /* allocation of space */
+		res = (res || (dst->o_blocks != src->o_blocks));
+	if ( compare & OBD_MD_FLBLKSZ )
+		res = (res || (dst->o_blksize != src->o_blksize));
+	if ( compare & OBD_MD_FLMODE )
+		res = (res || (dst->o_mode != src->o_mode));
+	if ( compare & OBD_MD_FLUID )
+		res = (res || (dst->o_uid != src->o_uid));
+	if ( compare & OBD_MD_FLGID )
+		res = (res || (dst->o_gid != src->o_gid));
+	if ( compare & OBD_MD_FLFLAGS ) 
+		res = (res || (dst->o_flags != src->o_flags));
+	if ( compare & OBD_MD_FLNLINK )
+		res = (res || (dst->o_nlink != src->o_nlink));
+	if ( compare & OBD_MD_FLGENER )
+		res = (res || (dst->o_generation != src->o_generation));
+	/* XXX Don't know if thses should be included here
+	if ( compare & OBD_MD_FLINLINE )
+		res = (res || memcmp(dst->o_inline, src->o_inline));
+	if ( compare & OBD_MD_FLOBDMD )
+		res = (res || memcmp(dst->o_obdmd, src->o_obdmd));
+	*/
 	return res;
 }
 

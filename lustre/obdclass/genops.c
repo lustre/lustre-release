@@ -38,6 +38,7 @@ int obd_init_obdo_cache(void)
 {
 	ENTRY;
 	if (obdo_cachep == NULL) {
+		CDEBUG(D_INODE, "allocating obdo_cache\n");
 		obdo_cachep = kmem_cache_create("obdo_cache",
 						sizeof(struct obdo),
 						0, SLAB_HWCACHE_ALIGN,
@@ -45,7 +46,11 @@ int obd_init_obdo_cache(void)
 		if (obdo_cachep == NULL) {
 			EXIT;
 			return -ENOMEM;
+		} else {
+			CDEBUG(D_INODE, "allocated cache at %p\n", obdo_cachep);
 		}
+	} else {
+		CDEBUG(D_INODE, "using existing cache at %p\n", obdo_cachep);
 	}
 	EXIT;
 	return 0;
@@ -55,8 +60,11 @@ void obd_cleanup_obdo_cache(void)
 {
 	ENTRY;
 	if (obdo_cachep != NULL) {
+		/*
+		CDEBUG(D_INODE, "shrinking obdo_cache at %p\n", obdo_cachep);
 		if (kmem_cache_shrink(obdo_cachep))
 			printk(KERN_INFO "obd_cleanup_obdo_cache: unable to free all of cache\n");
+		*/
 	} else
 		printk(KERN_INFO "obd_cleanup_obdo_cache: called with NULL cache pointer\n");
 
@@ -239,16 +247,15 @@ void lck_page(struct page *page)
                 ___wait_on_page(page);
 }
 
-/* XXX this should return errors correctly, so should migrate!!! */
 int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 		  struct obd_conn *src_conn, struct obdo *src,
 		  obd_size count, obd_off offset)
 {
 	struct page *page;
 	unsigned long index = 0;
-	int rc;
-	ENTRY;
+	int err = 0;
 
+	ENTRY;
 	CDEBUG(D_INODE, "src: ino %Ld blocks %Ld, size %Ld, dst: ino %Ld\n", 
 	       src->o_id, src->o_blocks, src->o_size, dst->o_id);
 	page = alloc_page(GFP_USER);
@@ -260,26 +267,34 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 	lck_page(page);
 	
 	while (index < ((src->o_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
-		obd_size count = PAGE_SIZE;
+		obd_size brw_count;
 		
-		page->index = index;
-		rc = OBP(src_conn->oc_dev, brw)
-			(READ, src_conn, src, (char *)page_address(page), 
-			 &count, (page->index) << PAGE_SHIFT, 0);
+		brw_count = PAGE_SIZE;
 
-		if ( rc != 0  ) 
+		page->index = index;
+		err = OBP(src_conn->oc_dev, brw)
+			(READ, src_conn, src, (char *)page_address(page), 
+			 &brw_count, (page->index) << PAGE_SHIFT, 0);
+
+		if ( err ) {
+			EXIT;
 			break;
+		}
 		CDEBUG(D_INODE, "Read page %ld ...\n", page->index);
 
-		rc = OBP(dst_conn->oc_dev, brw)
+		err = OBP(dst_conn->oc_dev, brw)
 			(WRITE, dst_conn, dst, (char *)page_address(page), 
-			 &count, (page->index) << PAGE_SHIFT, 1);
-		if ( rc != 0)
+			 &brw_count, (page->index) << PAGE_SHIFT, 1);
+
+		/* XXX should handle dst->o_size, dst->o_blocks here */
+		if ( err ) {
+			EXIT;
 			break;
+		}
 
 		CDEBUG(D_INODE, "Wrote page %ld ...\n", page->index);
 		
-		index ++;
+		index++;
 	}
 	dst->o_size = src->o_size;
 	dst->o_blocks = src->o_blocks;
@@ -288,5 +303,5 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 	__free_page(page);
 
 	EXIT;
-	return 0;
+	return err;
 }

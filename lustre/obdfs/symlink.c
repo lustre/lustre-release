@@ -30,38 +30,8 @@
 #include <linux/obd_support.h> /* for ENTRY and EXIT only */
 #include <linux/obdfs.h>
 
-/*
-static int obdfs_readlink (struct dentry *, char *, int);
-static struct dentry *obdfs_follow_link(struct dentry *, struct dentry *, unsigned int);
-*/
-
-/*
- * symlinks can't do much...
- */
-struct inode_operations obdfs_symlink_inode_operations = {
-	NULL,			/* no file-operations */
-	NULL,			/* create */
-	NULL,			/* lookup */
-	NULL,			/* link */
-	NULL,			/* unlink */
-	NULL,			/* symlink */
-	NULL,			/* mkdir */
-	NULL,			/* rmdir */
-	NULL,			/* mknod */
-	NULL,			/* rename */
-	obdfs_readlink,		/* readlink */
-	obdfs_follow_link,	/* follow_link */
-	NULL,			/* get_block */
-	NULL,			/* readpage */
-	NULL,			/* writepage */
-	NULL,			/* truncate */
-	NULL,			/* permission */
-	NULL			/* revalidate */
-};
-
 /* static */
-struct dentry * obdfs_follow_link(struct dentry * dentry,
-					 struct dentry *base,
+struct dentry * obdfs_follow_link(struct dentry * dentry, struct dentry *base,
 					 unsigned int follow)
 {
 	struct inode *inode = dentry->d_inode;
@@ -69,8 +39,8 @@ struct dentry * obdfs_follow_link(struct dentry * dentry,
 	char * link;
 
 	ENTRY;
-	link = (char *) inode->u.ext2_i.i_data;
-	if (inode->i_blocks) {
+	link = OBDFS_INFO(inode)->oi_inline;
+	if (!obdfs_has_inline(inode)) {
 		OIDEBUG(inode);
 		page = obdfs_getpage(inode, 0, 0, 0);
 		PDEBUG(page, "follow_link");
@@ -102,8 +72,8 @@ int obdfs_readlink (struct dentry * dentry, char * buffer, int buflen)
 	if (buflen > inode->i_sb->s_blocksize - 1)
 		buflen = inode->i_sb->s_blocksize - 1;
 
-	link = (char *) inode->u.ext2_i.i_data;
-	if (inode->i_blocks) {
+	link = OBDFS_INFO(inode)->oi_inline;
+	if (!obdfs_has_inline(inode)) {
 		OIDEBUG(inode);
 		page = obdfs_getpage(inode, 0, 0, 0);
 		PDEBUG(page, "readlink");
@@ -125,3 +95,28 @@ int obdfs_readlink (struct dentry * dentry, char * buffer, int buflen)
 	EXIT;
 	return i;
 } /* obdfs_readlink */
+
+/*
+ * symlinks can't do much...
+ */
+struct inode_operations obdfs_symlink_inode_operations = {
+	NULL,			/* no file-operations */
+	NULL,			/* create */
+	NULL,			/* lookup */
+	NULL,			/* link */
+	NULL,			/* unlink */
+	NULL,			/* symlink */
+	NULL,			/* mkdir */
+	NULL,			/* rmdir */
+	NULL,			/* mknod */
+	NULL,			/* rename */
+	obdfs_readlink,		/* readlink */
+	obdfs_follow_link,	/* follow_link */
+	NULL,			/* get_block */
+	NULL,			/* readpage */
+	NULL,			/* writepage */
+	NULL,			/* truncate */
+	NULL,			/* permission */
+	NULL			/* revalidate */
+};
+

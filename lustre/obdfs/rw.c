@@ -54,7 +54,9 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 	err = IOPS(inode, brw)(rw, IID(inode), obdo, (char *)page_address(page),
 			       &count, (page->index) >> PAGE_SHIFT, create);
 
-	obdo_to_inode(inode, obdo); /* copy o_blocks to i_blocks */
+	if ( !err )
+		obdo_to_inode(inode, obdo); /* copy o_blocks to i_blocks */
+
 	obdo_free(obdo);
 	
 	EXIT;
@@ -79,29 +81,45 @@ int obdfs_readpage(struct dentry *dentry, struct page *page)
 	return rc;
 } /* obdfs_readpage */
 
-static kmem_cache_t *obdfs_pgrq_cachep;
+static kmem_cache_t *obdfs_pgrq_cachep = NULL;
 
 int obdfs_init_pgrqcache(void)
 {
 	ENTRY;
-	obdfs_pgrq_cachep = kmem_cache_create("obdfs_pgrq",
-					      sizeof(struct obdfs_pgrq),
-					      0, SLAB_HWCACHE_ALIGN,
-					      NULL, NULL);
 	if (obdfs_pgrq_cachep == NULL) {
-		EXIT;
-		return -ENOMEM;
+		CDEBUG(D_INODE, "allocating obdfs_pgrq_cache\n");
+		obdfs_pgrq_cachep = kmem_cache_create("obdfs_pgrq",
+						      sizeof(struct obdfs_pgrq),
+						      0, SLAB_HWCACHE_ALIGN,
+						      NULL, NULL);
+		if (obdfs_pgrq_cachep == NULL) {
+			EXIT;
+			return -ENOMEM;
+		} else {
+			CDEBUG(D_INODE, "allocated cache at %p\n",
+			       obdfs_pgrq_cachep);
+		}
+	} else {
+		CDEBUG(D_INODE, "using existing cache at %p\n",
+		       obdfs_pgrq_cachep);
 	}
-
 	EXIT;
 	return 0;
 } /* obdfs_init_wreqcache */
 
 void obdfs_cleanup_pgrqcache(void)
 {
-	if (obdfs_pgrq_cachep != NULL)
-		kmem_cache_destroy(obdfs_pgrq_cachep);
-	obdfs_pgrq_cachep = NULL;
+	ENTRY;
+	if (obdfs_pgrq_cachep != NULL) {
+		/*
+		CDEBUG(D_INODE, "shrinking obdfs_pgrqcache at %p\n",
+		       obdfs_pgrq_cachep);
+		if (kmem_cache_shrink(obdfs_pgrq_cachep))
+			printk(KERN_INFO "obd_cleanup_pgrqcache: unable to free all of cache\n");
+		*/
+	} else
+		printk(KERN_INFO "obd_cleanup_pgrqcache: called with NULL cache pointer\n");
+
 	EXIT;
 } /* obdfs_cleanup_wreqcache */
 
@@ -113,7 +131,7 @@ void obdfs_cleanup_pgrqcache(void)
 static struct obdfs_pgrq *
 obdfs_find_in_page_cache(struct inode *inode, struct page *page)
 {
-	struct list_head *page_list = &OBD_LIST(inode);
+	struct list_head *page_list = &OBDFS_LIST(inode);
 	struct list_head *tmp;
 	struct obdfs_pgrq *pgrq;
 
@@ -148,25 +166,29 @@ obdfs_remove_from_page_cache(struct obdfs_pgrq *pgrq)
 {
 	struct inode *inode = pgrq->rq_inode;
 	struct page *page = pgrq->rq_page;
-	int rc;
+	int err;
 
 	ENTRY;
 	CDEBUG(D_INODE, "removing inode %ld page %p, pgrq: %p\n",
 	       inode->i_ino, page, pgrq);
-	rc = obdfs_brw(WRITE, inode, page, 1);
+	OIDEBUG(inode);
+	PDEBUG(page, "REM_CACHE");
+	err = obdfs_brw(WRITE, inode, page, 1);
 	/* XXX probably should handle error here somehow.  I think that
 	 *     ext2 also does the same thing - discard write even if error?
 	 */
 	put_page(page);
         list_del(&pgrq->rq_list);
 	kmem_cache_free(obdfs_pgrq_cachep, pgrq);
+	OIDEBUG(inode);
 
 	EXIT;
-	return rc;
+	return err;
 } /* obdfs_remove_from_page_cache */
 
 /*
  * Add a page to the write request cache list for later writing
+ * ASYNCHRONOUS write method.
  */
 static int obdfs_add_to_page_cache(struct inode *inode, struct page *page)
 {
@@ -186,7 +208,7 @@ static int obdfs_add_to_page_cache(struct inode *inode, struct page *page)
 	pgrq->rq_inode = inode;
 
 	get_page(pgrq->rq_page);
-	list_add(&pgrq->rq_list, &OBD_LIST(inode));
+	list_add(&pgrq->rq_list, &OBDFS_LIST(inode));
 
 	/* For testing purposes, we write out the page here.
 	 * In the future, a flush daemon will write out the page.
@@ -203,6 +225,7 @@ static int obdfs_add_to_page_cache(struct inode *inode, struct page *page)
 } /* obdfs_add_to_page_cache */
 
 
+/* select between SYNC and ASYNC I/O methods */
 int obdfs_do_writepage(struct inode *inode, struct page *page, int sync)
 {
 	int err;
@@ -234,10 +257,12 @@ int obdfs_writepage(struct dentry *dentry, struct page *page)
  *
  * If the writer ends up delaying the write, the writer needs to
  * increment the page use counts until he is done with the page.
+ *
+ * Return value is the number of bytes written.
  */
 int obdfs_write_one_page(struct file *file, struct page *page,
-			 unsigned long offset, unsigned long bytes,
-			 const char * buf)
+			  unsigned long offset, unsigned long bytes,
+			  const char * buf)
 {
 	struct inode *inode = file->f_dentry->d_inode;
 	int err;
@@ -250,16 +275,15 @@ int obdfs_write_one_page(struct file *file, struct page *page,
 		else
 			return err;
 	}
-	bytes -= copy_from_user((u8*)page_address(page) + offset, buf, bytes);
-	err = -EFAULT;
 
-	if (bytes) {
-		lock_kernel();
-		err = obdfs_writepage(file->f_dentry, page);
-		unlock_kernel();
-	}
+	if (copy_from_user((u8*)page_address(page) + offset, buf, bytes))
+		return -EFAULT;
 
-	return err;
+	lock_kernel();
+	err = obdfs_writepage(file->f_dentry, page);
+	unlock_kernel();
+
+	return (err < 0 ? err : bytes);
 } /* obdfs_write_one_page */
 
 /* 

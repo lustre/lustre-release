@@ -292,18 +292,11 @@ static void obdfs_put_super(struct super_block *sb)
 	EXIT;
 }
 
-inline int obdfs_has_inline(struct inode *inode)
-{
-	struct obdfs_inode_info *oinfo = OBD_INFO(inode);
-	
-	return (oinfo->oi_flags & OBD_FL_INLINEDATA);
-}
-
 void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
 {
 	obdo_from_inode(oa, inode);
 	if (obdfs_has_inline(inode)) {
-		struct obdfs_inode_info *oinfo = OBD_INFO(inode);
+		struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
 
 		memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
 		oa->o_flags |= OBD_FL_INLINEDATA;
@@ -314,7 +307,7 @@ void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
 {
 	obdo_to_inode(inode, oa);
 	if (obdo_has_inline(oa)) {
-		struct obdfs_inode_info *oinfo = OBD_INFO(inode);
+		struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
 
 		memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
 		oinfo->oi_flags |= OBD_FL_INLINEDATA;
@@ -351,7 +344,7 @@ void obdfs_read_inode(struct inode *inode)
 
 	ODEBUG(oa);
 	obdfs_to_inode(inode, oa);
-	INIT_LIST_HEAD(&OBD_LIST(inode));
+	INIT_LIST_HEAD(&OBDFS_LIST(inode));
 
 	obdo_free(oa);
 	OIDEBUG(inode);

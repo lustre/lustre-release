@@ -27,7 +27,6 @@ fi
 rmmod loop > /dev/null 2>&1
 
 if [ "$TMPFILE" -a -f "$TMPFILE" ]; then
-    echo -n "Remove $TMPFILE [N/y]? "
     rm -i $TMPFILE
 fi
 
