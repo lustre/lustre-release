@@ -1,4 +1,3 @@
-fs/exec.c
 fs/dcache.c
 fs/namei.c
 fs/nfsd/vfs.c
@@ -7,3 +6,4 @@ fs/stat.c
 include/linux/dcache.h
 include/linux/fs.h
 kernel/ksyms.c
+fs/exec.c
