@@ -57,9 +57,9 @@ build_obj_list ../obdclass liblustreclass.a
 build_obj_list ../lvfs liblvfs.a
 
 # portals components libs
-build_obj_list ../portals/utils libuptlctl.a
-build_obj_list ../portals/unals libtcpnal.a
-build_obj_list ../portals/portals libportals.a
+build_obj_list ../../portals/utils libuptlctl.a
+build_obj_list ../../portals/unals libtcpnal.a
+build_obj_list ../../portals/portals libportals.a
 
 # create static lib lsupport
 rm -f $CWD/liblsupport.a

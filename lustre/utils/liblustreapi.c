@@ -42,13 +42,13 @@
 #include <linux/types.h>
 #include <linux/unistd.h>
 
+#include <portals/ptlctl.h>
+
 #include <liblustre.h>
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
 #include <lustre/lustre_user.h>
 #include <linux/obd_lov.h>
-
-#include <portals/ptlctl.h>
 
 static void err_msg(char *fmt, ...)
 {

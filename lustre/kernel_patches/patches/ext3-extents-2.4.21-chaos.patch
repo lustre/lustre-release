@@ -2223,7 +2223,7 @@ Index: linux-2.4.21-20.EL/fs/ext3/extents.c
 +}
 +
 +int ext3_ext_ioctl(struct inode *inode, struct file *filp, unsigned int cmd,
-+		unsigned long arg)
++		   unsigned long arg)
 +{
 +	int err = 0;
 +
@@ -2523,7 +2523,7 @@ Index: linux-2.4.21-20.EL/include/linux/ext3_fs.h
  extern int ext3_forget(handle_t *, int, struct inode *, struct buffer_head *, int);
  extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
  extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
-@@ -770,6 +780,14 @@
+@@ -770,6 +780,16 @@
  extern struct inode_operations ext3_symlink_inode_operations;
  extern struct inode_operations ext3_fast_symlink_inode_operations;
  
@@ -2535,6 +2535,8 @@ Index: linux-2.4.21-20.EL/include/linux/ext3_fs.h
 +extern void ext3_ext_init(struct super_block *);
 +extern void ext3_ext_release(struct super_block *);
 +extern void ext3_extents_initialize_blockmap(handle_t *, struct inode *);
++extern int ext3_ext_ioctl(struct inode *inode, struct file *filp,
++			  unsigned int cmd, unsigned long arg);
  
  #endif	/* __KERNEL__ */
  

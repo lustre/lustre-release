@@ -97,6 +97,14 @@ int dump_obdo(struct obdo *oa)
         return -EINVAL;
 }
 
+void dump_lsm(int level, struct lov_stripe_md *lsm)
+{
+        CDEBUG(level, "objid "LPX64", maxbytes "LPX64", magic 0x%08X, "
+               "stripe_size %u, stripe_count %u\n",
+               lsm->lsm_object_id, lsm->lsm_maxbytes, lsm->lsm_magic,
+               lsm->lsm_stripe_size, lsm->lsm_stripe_count);
+}
+
 /* XXX assumes only a single page in request */
 /*
 int dump_req(struct ptlrpc_request *req)
@@ -171,5 +179,6 @@ EXPORT_SYMBOL(dump_rniobuf);
 EXPORT_SYMBOL(dump_ioo);
 //EXPORT_SYMBOL(dump_req);
 EXPORT_SYMBOL(dump_obdo);
+EXPORT_SYMBOL(dump_lsm);
 EXPORT_SYMBOL(block_debug_setup);
 EXPORT_SYMBOL(block_debug_check);

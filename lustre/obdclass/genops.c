@@ -176,19 +176,31 @@ int class_unregister_type(char *name)
         RETURN(0);
 } /* class_unregister_type */
 
-struct obd_device *class_newdev(struct obd_type *type)
+struct obd_device *class_newdev(struct obd_type *type, char *name)
 {
         struct obd_device *result = NULL;
         int i;
 
         spin_lock(&obd_dev_lock);
-        for (i = 0 ; i < MAX_OBD_DEVICES && result == NULL; i++) {
+        for (i = 0 ; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if (!obd->obd_type) {
+                if (obd->obd_name && (strcmp(name, obd->obd_name) == 0)) {
+                        CERROR("Device %s already exists, won't add\n", name);
+                        if (result) {
+                                result->obd_type = NULL;
+                                result->obd_name = NULL;
+                                result = NULL;
+                        }
+                        break;
+                }
+                if (!result && !obd->obd_type) {
                         LASSERT(obd->obd_minor == i);
                         memset(obd, 0, sizeof(*obd));
                         obd->obd_minor = i;
                         obd->obd_type = type;
+                        obd->obd_name = name;
+                        CDEBUG(D_IOCTL, "Adding new device %s\n",
+                               obd->obd_name);
                         result = obd;
                 }
         }
@@ -218,8 +230,13 @@ int class_name2dev(char *name)
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if (obd->obd_name && strcmp(name, obd->obd_name) == 0) {
-                        spin_unlock(&obd_dev_lock);
-                        return i;
+                        /* Make sure we finished attaching before we give
+                           out any references */
+                        if (obd->obd_attached) { 
+                                spin_unlock(&obd_dev_lock);
+                                return i;
+                        }
+                        break;
                 }
         }
         spin_unlock(&obd_dev_lock);

@@ -155,7 +155,6 @@ static int __init init_lustre_lite(void)
                 ll_unregister_cache(&ll_cache_definition);
         }
 
-
         return rc;
 }
 

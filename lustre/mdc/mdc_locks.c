@@ -483,6 +483,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         }
         request = *reqp = it->d.lustre.it_data;
         LASSERT(request != NULL);
+        LASSERT(request != LP_POISON);
 
         /* If we're doing an IT_OPEN which did not result in an actual
          * successful open, then we need to remove the bit which saves

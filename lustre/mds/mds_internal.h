@@ -125,6 +125,8 @@ int mds_post_mds_lovconf(struct obd_device *obd);
 int mds_notify(struct obd_device *obd, struct obd_device *watched, int active);
 int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                        struct lov_mds_md *lmm, int lmm_size);
+void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
+                         struct lov_desc *desc);
 
 /* mds/mds_open.c */
 int mds_query_write_access(struct inode *inode);
@@ -142,7 +144,7 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
                    struct mds_export_data *med, int cl_off);
 int mds_client_free(struct obd_export *exp, int clear_client);
 int mds_obd_create(struct obd_export *exp, struct obdo *oa,
-                      struct lov_stripe_md **ea, struct obd_trans_info *oti);
+                   struct lov_stripe_md **ea, struct obd_trans_info *oti);
 int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md *ea, struct obd_trans_info *oti);
 
@@ -153,7 +155,7 @@ extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg);
 int mds_postrecov(struct obd_device *obd);
 #ifdef __KERNEL__
-int mds_get_md(struct obd_device *, struct inode *, void *md, int *size, 
+int mds_get_md(struct obd_device *, struct inode *, void *md, int *size,
                int lock);
 int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
                 struct mds_body *, struct inode *, int lock);

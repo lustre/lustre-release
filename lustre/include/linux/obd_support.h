@@ -111,6 +111,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
 #define OBD_FAIL_OST_ENOSPC              0x215
 #define OBD_FAIL_OST_EROFS               0x216
+#define OBD_FAIL_OST_ENOENT              0x217
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -165,7 +166,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_CHECK_ONCE(id)                                              \
 ({      int _ret_ = 0;                                                       \
         if (OBD_FAIL_CHECK(id)) {                                            \
-                CERROR("obd_fail_loc=%x\n", id);                             \
+                CERROR("*** obd_fail_loc=%x ***\n", id);                     \
                 obd_fail_loc |= OBD_FAILED;                                  \
                 if ((id) & OBD_FAIL_ONCE)                                    \
                         obd_fail_loc |= OBD_FAIL_ONCE;                       \

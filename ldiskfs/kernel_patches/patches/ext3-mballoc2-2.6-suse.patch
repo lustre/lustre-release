@@ -2,7 +2,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 ===================================================================
 --- linux-2.6.5-sles9.orig/fs/ext3/mballoc.c	2003-01-30 13:24:37.000000000 +0300
 +++ linux-2.6.5-sles9/fs/ext3/mballoc.c	2004-11-09 02:34:25.181340632 +0300
-@@ -0,0 +1,1428 @@
+@@ -0,0 +1,1441 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -120,17 +120,16 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +void ext3_free_blocks_old(handle_t *, struct inode *, unsigned long, unsigned long);
 +int ext3_new_block_old(handle_t *, struct inode *, unsigned long, int *);
 +int ext3_mb_reserve_blocks(struct super_block *, int);
-+void ext3_mb_release_blocks(struct super_block *, int);
 +void ext3_mb_poll_new_transaction(struct super_block *, handle_t *);
 +void ext3_mb_free_committed_blocks(struct super_block *);
 +
 +#define mb_correct_addr_and_bit(bit,addr)	\
 +{						\
-+	if ((unsigned) addr & 1) {		\
++	if ((unsigned long)addr & 1) {		\
 +		bit += 8;			\
 +		addr--;				\
 +	}					\
-+	if ((unsigned) addr & 2) {		\
++	if ((unsigned long)addr & 2) {		\
 +		bit += 16;			\
 +		addr--;				\
 +		addr--;				\
@@ -186,11 +185,11 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +{
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
 +
-+	J_ASSERT(sbi->s_buddy_blocks[group].bb_bitmap);
-+	J_ASSERT(sbi->s_buddy_blocks[group].bb_buddy);
++	J_ASSERT(sbi->s_buddy_blocks[group]->bb_bitmap);
++	J_ASSERT(sbi->s_buddy_blocks[group]->bb_buddy);
 +
 +	/* load bitmap */
-+	e3b->bd_bh = sb_getblk(sb, sbi->s_buddy_blocks[group].bb_bitmap);
++	e3b->bd_bh = sb_getblk(sb, sbi->s_buddy_blocks[group]->bb_bitmap);
 +	if (e3b->bd_bh == NULL) {
 +		ext3_error(sb, "ext3_mb_load_desc",
 +				"can't get block for buddy bitmap\n");
@@ -203,7 +202,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	J_ASSERT(buffer_uptodate(e3b->bd_bh));
 +
 +	/* load buddy */
-+	e3b->bd_bh2 = sb_getblk(sb, sbi->s_buddy_blocks[group].bb_buddy);
++	e3b->bd_bh2 = sb_getblk(sb, sbi->s_buddy_blocks[group]->bb_buddy);
 +	if (e3b->bd_bh2 == NULL) {
 +		ext3_error(sb, "ext3_mb_load_desc",
 +				"can't get block for buddy bitmap\n");
@@ -218,7 +217,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	e3b->bd_bitmap = e3b->bd_bh->b_data;
 +	e3b->bd_buddy = e3b->bd_bh2->b_data;
 +	e3b->bd_blkbits = sb->s_blocksize_bits;
-+	e3b->bd_bd = sbi->s_buddy_blocks + group;
++	e3b->bd_bd = sbi->s_buddy_blocks[group];
 +	e3b->bd_sb = sb;
 +
 +	return 0;
@@ -306,13 +305,13 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +static inline void
 +ext3_lock_group(struct super_block *sb, int group)
 +{
-+	spin_lock(&EXT3_SB(sb)->s_buddy_blocks[group].bb_lock);
++	spin_lock(&EXT3_SB(sb)->s_buddy_blocks[group]->bb_lock);
 +}
 +
 +static inline void
 +ext3_unlock_group(struct super_block *sb, int group)
 +{
-+	spin_unlock(&EXT3_SB(sb)->s_buddy_blocks[group].bb_lock);
++	spin_unlock(&EXT3_SB(sb)->s_buddy_blocks[group]->bb_lock);
 +}
 +
 +static int mb_find_order_for_block(struct ext3_buddy *e3b, int block)
@@ -722,7 +721,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +}
 +
 +int ext3_mb_new_blocks(handle_t *handle, struct inode *inode,
-+			unsigned long goal, int *len, int flags, int *errp)
++		       unsigned long goal, int *len, int flags, int *errp)
 +{
 +	struct buffer_head *bitmap_bh = NULL;
 +	struct ext3_allocation_context ac;
@@ -959,7 +958,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +		goto out2;
 +	}
 +
-+	/* loop over the blocks, nad create buddies for free ones */
++	/* loop over the blocks, and create buddies for free ones */
 +	for (i = 0; i < sb->s_blocksize * 8; i++) {
 +		if (!mb_test_bit(i, (void *) bh->b_data)) {
 +			mb_free_blocks(&e3b, i, 1);
@@ -980,7 +979,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +
 +#define MB_CREDITS	\
 +	(EXT3_DATA_TRANS_BLOCKS + 3 + EXT3_INDEX_EXTRA_TRANS_BLOCKS +	\
-+		+ 2 * EXT3_SINGLEDATA_TRANS_BLOCKS)
++		2 * EXT3_SINGLEDATA_TRANS_BLOCKS)
 +
 +int ext3_mb_init_backend(struct super_block *sb)
 +{
@@ -990,14 +989,14 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	tid_t target;
 +	int err, i;
 +
-+	sbi->s_buddy_blocks = kmalloc(sizeof(struct ext3_buddy_group_blocks) *
++	sbi->s_buddy_blocks = kmalloc(sizeof(struct ext3_buddy_group_blocks *) *
 +					sbi->s_groups_count, GFP_KERNEL);
 +	if (sbi->s_buddy_blocks == NULL) {
-+		printk("can't allocate mem for buddy maps\n");
++		printk("EXT3-fs: can't allocate mem for buddy maps\n");
 +		return -ENOMEM;
 +	}
 +	memset(sbi->s_buddy_blocks, 0,
-+		sizeof(struct ext3_buddy_group_blocks) * sbi->s_groups_count);
++		sizeof(struct ext3_buddy_group_blocks *) * sbi->s_groups_count);
 +	sbi->s_buddy = NULL;
 +
 +	down(&root->i_sem);
@@ -1005,7 +1004,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +				strlen(EXT3_BUDDY_FILE));
 +	if (IS_ERR(db)) {
 +		err = PTR_ERR(db);
-+		printk("can't lookup buddy file: %d\n", err);
++		printk("EXT3-fs: can't lookup buddy file: %d\n", err);
 +		goto out;
 +	}
 +
@@ -1026,6 +1025,15 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +		struct buffer_head *bh = NULL;
 +		handle_t *handle;
 +
++		sbi->s_buddy_blocks[i] =
++			kmalloc(sizeof(struct ext3_buddy_group_blocks),
++					GFP_KERNEL);
++		if (sbi->s_buddy_blocks[i] == NULL) {
++			printk("EXT3-fs: can't allocate mem for buddy\n");
++			err = -ENOMEM;
++			goto out2;
++		}
++
 +		handle = ext3_journal_start(sbi->s_buddy, MB_CREDITS);
 +		if (IS_ERR(handle)) {
 +			err = PTR_ERR(handle);
@@ -1038,7 +1046,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +			printk("can't get block for buddy bitmap: %d\n", err);
 +			goto out2;
 +		}
-+		sbi->s_buddy_blocks[i].bb_bitmap = bh->b_blocknr;
++		sbi->s_buddy_blocks[i]->bb_bitmap = bh->b_blocknr;
 +		brelse(bh);
 +
 +		/* allocate block for buddy */
@@ -1047,12 +1055,12 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +			printk("can't get block for buddy: %d\n", err);
 +			goto out2;
 +		}
-+		sbi->s_buddy_blocks[i].bb_buddy = bh->b_blocknr;
++		sbi->s_buddy_blocks[i]->bb_buddy = bh->b_blocknr;
 +		brelse(bh);
 +		ext3_journal_stop(handle);
-+		spin_lock_init(&sbi->s_buddy_blocks[i].bb_lock);
-+		sbi->s_buddy_blocks[i].bb_md_cur = NULL;
-+		sbi->s_buddy_blocks[i].bb_tid = 0;
++		spin_lock_init(&sbi->s_buddy_blocks[i]->bb_lock);
++		sbi->s_buddy_blocks[i]->bb_md_cur = NULL;
++		sbi->s_buddy_blocks[i]->bb_tid = 0;
 +	}
 +
 +	if (journal_start_commit(sbi->s_journal, &target))
@@ -1068,6 +1076,7 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +int ext3_mb_release(struct super_block *sb)
 +{
 +	struct ext3_sb_info *sbi = EXT3_SB(sb);
++	int i;
 +	
 +	if (!test_opt(sb, MBALLOC))
 +		return 0;
@@ -1081,8 +1090,12 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +	spin_unlock(&sbi->s_md_lock);
 +	ext3_mb_free_committed_blocks(sb);
 +
-+	if (sbi->s_buddy_blocks)
++	if (sbi->s_buddy_blocks) {
++		for (i = 0; i < sbi->s_groups_count; i++)
++			if (sbi->s_buddy_blocks[i])
++				kfree(sbi->s_buddy_blocks[i]);
 +		kfree(sbi->s_buddy_blocks);
++	}
 +	if (sbi->s_buddy)
 +		iput(sbi->s_buddy);
 +	if (sbi->s_blocks_reserved)
@@ -1101,7 +1114,8 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +
 +	/* init file for buddy data */
 +	clear_opt(EXT3_SB(sb)->s_mount_opt, MBALLOC);
-+	ext3_mb_init_backend(sb);
++	if (ext3_mb_init_backend(sb))
++		return 0;
 +
 +	es = EXT3_SB(sb)->s_es;
 +	for (i = 0; i < EXT3_SB(sb)->s_groups_count; i++)
@@ -1430,7 +1444,6 @@ Index: linux-2.6.5-sles9/fs/ext3/mballoc.c
 +		ext3_mb_free_blocks(handle, inode, block, count, metadata);
 +	return;
 +}
-+
 Index: linux-2.6.5-sles9/fs/ext3/super.c
 ===================================================================
 --- linux-2.6.5-sles9.orig/fs/ext3/super.c	2004-11-09 02:23:21.597220752 +0300
@@ -1683,6 +1696,20 @@ Index: linux-2.6.5-sles9/include/linux/ext3_fs.h
  extern unsigned long ext3_count_free_blocks (struct super_block *);
  extern void ext3_check_blocks_bitmap (struct super_block *);
  extern struct ext3_group_desc * ext3_get_group_desc(struct super_block * sb,
+@@ -743,6 +746,13 @@
+ extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
+ 		       unsigned long);
+ 
++/* mballoc.c */
++extern int ext3_mb_init(struct super_block *sb);
++extern int ext3_mb_new_blocks(handle_t *handle, struct inode *inode,
++			      unsigned long goal,int *len, int flags,int *errp);
++extern int ext3_mb_release(struct super_block *sb);
++extern void ext3_mb_release_blocks(struct super_block *, int);
++
+ /* namei.c */
+ extern int ext3_orphan_add(handle_t *, struct inode *);
+ extern int ext3_orphan_del(handle_t *, struct inode *);
 Index: linux-2.6.5-sles9/include/linux/ext3_fs_sb.h
 ===================================================================
 --- linux-2.6.5-sles9.orig/include/linux/ext3_fs_sb.h	2004-11-09 02:20:51.598024096 +0300
@@ -1724,7 +1751,7 @@ Index: linux-2.6.5-sles9/include/linux/ext3_fs_sb.h
  #endif
 +
 +	/* for buddy allocator */
-+	struct ext3_buddy_group_blocks *s_buddy_blocks;
++	struct ext3_buddy_group_blocks **s_buddy_blocks;
 +	struct inode *s_buddy;
 +	long s_blocks_reserved;
 +	spinlock_t s_reserve_lock;

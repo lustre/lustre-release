@@ -47,7 +47,7 @@ int class_attach(struct lustre_cfg *lcfg)
 {
         struct obd_type *type;
         struct obd_device *obd;
-        char *typename, *name, *uuid;
+        char *typename, *name, *namecopy, *uuid;
         int rc, len, cleanup_phase = 0;
 
         if (!lcfg->lcfg_inllen1 || !lcfg->lcfg_inlbuf1) {
@@ -88,20 +88,24 @@ int class_attach(struct lustre_cfg *lcfg)
         type = class_get_type(typename);
         if (!type) {
                 CERROR("OBD: unknown type: %s\n", typename);
-                RETURN(-EINVAL);
+                RETURN(-ENODEV);
         }
         cleanup_phase = 1;  /* class_put_type */
 
-        obd = class_name2obd(name);
-        if (obd != NULL) {
-                CERROR("obd %s already attached\n", name);
+        len = strlen(name) + 1;
+        OBD_ALLOC(namecopy, len);
+        if (!namecopy) 
+                GOTO(out, rc = -ENOMEM);
+        memcpy(namecopy, name, len);
+        cleanup_phase = 2; /* free obd_name */
+
+        obd = class_newdev(type, namecopy);
+        if (obd == NULL) {
+                /* Already exists or out of obds */
+                CERROR("Can't create device %s\n", name);
                 GOTO(out, rc = -EEXIST);
         }
-
-        obd = class_newdev(type);
-        if (obd == NULL)
-                GOTO(out, rc = -EINVAL);
-        cleanup_phase = 2;  /* class_release_dev */
+        cleanup_phase = 3;  /* class_release_dev */
 
         INIT_LIST_HEAD(&obd->obd_exports);
         obd->obd_num_exports = 0;
@@ -120,13 +124,6 @@ int class_attach(struct lustre_cfg *lcfg)
 
         spin_lock_init(&obd->obd_uncommitted_replies_lock);
         INIT_LIST_HEAD(&obd->obd_uncommitted_replies);
-
-        len = strlen(name) + 1;
-        OBD_ALLOC(obd->obd_name, len);
-        if (!obd->obd_name)
-                GOTO(out, rc = -ENOMEM);
-        memcpy(obd->obd_name, name, len);
-        cleanup_phase = 3; /* free obd_name */
 
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {
@@ -151,9 +148,9 @@ int class_attach(struct lustre_cfg *lcfg)
  out:
         switch (cleanup_phase) {
         case 3:
-                OBD_FREE(obd->obd_name, strlen(obd->obd_name) + 1);
-        case 2:
                 class_release_dev(obd);
+        case 2:
+                OBD_FREE(namecopy, strlen(namecopy) + 1);
         case 1:
                 class_put_type(type);
         }
@@ -173,13 +170,25 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("Device %d not attached\n", obd->obd_minor);
                 RETURN(-ENODEV);
         }
-
-        /* has this been done already? */
+        
         if (obd->obd_set_up) {
                 CERROR("Device %d already setup (type %s)\n",
                        obd->obd_minor, obd->obd_type->typ_name);
-                RETURN(-EBUSY);
+                RETURN(-EEXIST);
         }
+
+        /* is someone else setting us up right now? (attach inits spinlock) */
+        spin_lock(&obd->obd_dev_lock);
+        if (obd->obd_starting) {
+                spin_unlock(&obd->obd_dev_lock);
+                CERROR("Device %d setup in progress (type %s)\n",
+                       obd->obd_minor, obd->obd_type->typ_name);
+                RETURN(-EEXIST);
+        }
+        /* just leave this on forever.  I can't use obd_set_up here because
+           other fns check that status, and we're not actually set up yet. */
+        obd->obd_starting = 1;  
+        spin_unlock(&obd->obd_dev_lock);
 
         atomic_set(&obd->obd_refcount, 0);
 
@@ -198,7 +207,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_type->typ_refcnt++;
         obd->obd_set_up = 1;
 
-        RETURN(err);
+        RETURN(0);
 
 err_exp:
         class_unlink_export(obd->obd_self_export);
@@ -215,10 +224,16 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("OBD device %d still set up\n", obd->obd_minor);
                 RETURN(-EBUSY);
         }
+
+        spin_lock(&obd->obd_dev_lock);
         if (!obd->obd_attached) {
+                spin_unlock(&obd->obd_dev_lock);
                 CERROR("OBD device %d not attached\n", obd->obd_minor);
                 RETURN(-ENODEV);
         }
+        obd->obd_attached = 0;
+        spin_unlock(&obd->obd_dev_lock);
+        
         if (OBP(obd, detach))
                 err = OBP(obd,detach)(obd);
 
@@ -229,7 +244,7 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
                 CERROR("device %d: no name at detach\n", obd->obd_minor);
         }
 
-        obd->obd_attached = 0;
+        LASSERT(OBT(obd));
         obd->obd_type->typ_refcnt--;
         class_put_type(obd->obd_type);
         class_release_dev(obd);
@@ -272,6 +287,16 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-ENODEV);
         }
 
+        spin_lock(&obd->obd_dev_lock);
+        if (obd->obd_stopping) {
+                spin_unlock(&obd->obd_dev_lock);
+                CERROR("OBD %d already stopping\n", obd->obd_minor);
+                RETURN(-ENODEV);
+        }
+        /* Leave this on forever */
+        obd->obd_stopping = 1;
+        spin_unlock(&obd->obd_dev_lock);
+
         if (lcfg->lcfg_inlbuf1) {
                 for (flag = lcfg->lcfg_inlbuf1; *flag != 0; flag++)
                         switch (*flag) {
@@ -289,13 +314,6 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         /* The one reference that should be remaining is the
          * obd_self_export */
-        if (atomic_read(&obd->obd_refcount) <= 1 ||
-            flags & OBD_OPT_FORCE) {
-                /* this will stop new connections, and need to
-                   do it before class_disconnect_exports() */
-                obd->obd_stopping = 1;
-        }
-
         if (atomic_read(&obd->obd_refcount) > 1) {
                 struct l_wait_info lwi = LWI_TIMEOUT_INTR(1 * HZ, NULL,
                                                           NULL, NULL);
@@ -338,13 +356,17 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
         err = obd_cleanup(obd, flags);
 out:
         if (!err) {
-                obd->obd_set_up = obd->obd_stopping = 0;
+                obd->obd_set_up = 0;
                 obd->obd_type->typ_refcnt--;
                 /* XXX this should be an LASSERT */
                 if (atomic_read(&obd->obd_refcount) > 0)
                         CERROR("%s still has refcount %d after "
                                "cleanup.\n", obd->obd_name,
                                atomic_read(&obd->obd_refcount));
+        } else {
+                /* Allow a failed cleanup to try again.  Note this may be
+                   unsafe, since we don't know where this one died. */
+                obd->obd_stopping = 0;
         }
 
         RETURN(err);

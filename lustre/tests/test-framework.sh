@@ -479,7 +479,7 @@ cancel_lru_locks() {
     for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
 	if [ -f $d/lru_size ]; then
 	    echo clear > $d/lru_size
-	    grep [0-9] $d/lock_unused_count
+	    grep "[0-9]" $d/lock_unused_count
 	fi
     done
     $LCTL mark "cancel_lru_locks stop"
@@ -506,11 +506,12 @@ error() {
 }
 
 build_test_filter() {
-        [ "$ONLY" ] && log "only running test $ONLY"
+        [ "$ONLY" ] && log "only running test `echo $ONLY`"
         for O in $ONLY; do
             eval ONLY_${O}=true
         done
-        [ "$EXCEPT$ALWAYS_EXCEPT" ] && log "skipping $EXCEPT $ALWAYS_EXCEPT"
+        [ "$EXCEPT$ALWAYS_EXCEPT" ] && \
+		log "skipping `echo $EXCEPT $ALWAYS_EXCEPT`"
         for E in $EXCEPT $ALWAYS_EXCEPT; do
             eval EXCEPT_${E}=true
         done

@@ -34,11 +34,8 @@
 #define _LUSTRE_IDL_H_
 
 #ifdef __KERNEL__
-# include <linux/ioctl.h>
 # include <asm/types.h>
 # include <linux/types.h>
-# include <linux/list.h>
-# include <linux/string.h> /* for strncpy, below */
 # include <linux/fs.h> /* to check for FMODE_EXEC, lest we redefine */
 #else
 #ifdef __CYGWIN__
@@ -47,8 +44,6 @@
 # include <asm/types.h>
 # include <stdint.h>
 #endif
-# include <portals/list.h>
-# include <string.h>
 #endif
 
 /* Defn's shared with user-space. */
@@ -239,11 +234,7 @@ typedef uint32_t        obd_gid;
 typedef uint32_t        obd_flag;
 typedef uint32_t        obd_count;
 
-#define OBD_FL_INLINEDATA   (0x00000001)
-#define OBD_FL_OBDMDEXISTS  (0x00000002)
 #define OBD_FL_DELORPHAN    (0x00000004) /* if set in o_flags delete orphans */
-#define OBD_FL_NORPC        (0x00000008) // if set in o_flags set in OSC not OST
-#define OBD_FL_IDONLY       (0x00000010) // if set in o_flags only adjust obj id
 #define OBD_FL_RECREATE_OBJS (0x00000020) // recreate missing obj
 #define OBD_FL_DEBUG_CHECK  (0x00000040) /* echo client/server debug check */
 
@@ -304,22 +295,6 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
         __u32 lmm_stripe_count;   /* num stripes in use for this object */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
-
-#define LOV_MAGIC_V0      0x0BD00BD0
-
-struct lov_ost_data_v0 {          /* per-stripe data structure (little-endian)*/
-        __u64 l_object_id;        /* OST object ID */
-};
-
-struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
-        __u32 lmm_magic;          /* magic number = LOV_MAGIC_V0 */
-        __u64 lmm_object_id;      /* LOV object ID */
-        __u32 lmm_stripe_size;    /* size of the stripe in bytes (not RAID1) */
-        __u32 lmm_stripe_offset;  /* starting stripe offset in lmm_objects */
-        __u16 lmm_stripe_count;   /* number of stipes in use for this object */
-        __u16 lmm_ost_count;      /* how many OST idx are in this LOV md */
-        struct lov_ost_data_v0 lmm_objects[0];
-} __attribute__((packed));
 
 #define OBD_MD_FLALL    (0xffffffff)
 #define OBD_MD_FLID     (0x00000001)    /* object ID */

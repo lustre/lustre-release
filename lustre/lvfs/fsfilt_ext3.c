@@ -87,7 +87,7 @@ struct fsfilt_cb_data {
 static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                                int logs)
 {
-        /* For updates to the last recieved file */
+        /* For updates to the last received file */
         int nblocks = EXT3_SINGLEDATA_TRANS_BLOCKS;
         journal_t *journal;
         void *handle;

@@ -50,7 +50,61 @@ struct dio_request {
         struct page     **dr_pages;
         unsigned long    *dr_blocks;
         spinlock_t        dr_lock;
+        unsigned long     dr_start_time; /* jiffies */
+        struct filter_obd *dr_filter;
 };
+
+static void record_start_io(struct dio_request *dreq, int rw, int size)
+{
+        struct filter_obd *filter = dreq->dr_filter;
+        unsigned long flags;
+
+        atomic_inc(&dreq->dr_numreqs);
+
+        if (rw == OBD_BRW_READ) {
+                lprocfs_oh_tally(&filter->fo_read_rpc_hist,
+                                 filter->fo_r_in_flight);
+                lprocfs_oh_tally_log2(&filter->fo_r_disk_iosize, size);
+        } else {
+                lprocfs_oh_tally(&filter->fo_write_rpc_hist,
+                                 filter->fo_w_in_flight);
+                lprocfs_oh_tally_log2(&filter->fo_w_disk_iosize, size);
+        }
+        spin_lock_irqsave(&filter->fo_objidlock, flags);
+        if (rw == OBD_BRW_READ)
+                filter->fo_r_in_flight++;
+        else
+                filter->fo_w_in_flight++;
+        spin_unlock_irqrestore(&filter->fo_objidlock, flags);
+        dreq->dr_start_time = jiffies;
+}
+
+static void record_finish_io(struct dio_request *dreq, int rw, int rc)
+{
+        struct filter_obd *filter = dreq->dr_filter;
+        unsigned long flags, stop_time = jiffies;
+
+        spin_lock_irqsave(&filter->fo_objidlock, flags);
+        if (rw == OBD_BRW_READ)
+                filter->fo_r_in_flight--;
+        else
+                filter->fo_w_in_flight--;
+        spin_unlock_irqrestore(&filter->fo_objidlock, flags);
+
+        if (atomic_dec_and_test(&dreq->dr_numreqs))
+                wake_up(&dreq->dr_wait);
+
+        if (rc != 0)
+                return;
+
+        if (rw == OBD_BRW_READ) {
+                lprocfs_oh_tally_log2(&filter->fo_r_io_time,
+                                      stop_time - dreq->dr_start_time);
+        } else {
+                lprocfs_oh_tally_log2(&filter->fo_w_io_time,
+                                      stop_time - dreq->dr_start_time);
+        }
+}
 
 static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
 {
@@ -64,8 +118,8 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
                 dreq->dr_error = error;
         spin_unlock_irqrestore(&dreq->dr_lock, flags);
 
-        if (atomic_dec_and_test(&dreq->dr_numreqs))
-                wake_up(&dreq->dr_wait);
+        record_finish_io(dreq, test_bit(BIO_RW, &bio->bi_rw) ?
+                         OBD_BRW_WRITE : OBD_BRW_READ, error);
 
         return 0;
 }
@@ -81,7 +135,8 @@ static int can_be_merged(struct bio *bio, sector_t sector)
         return bio->bi_sector + size == sector ? 1 : 0;
 }
 
-int filter_alloc_iobuf(int rw, int num_pages, void **ret)
+int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
+                       void **ret)
 {
         struct dio_request *dreq;
 
@@ -100,6 +155,7 @@ int filter_alloc_iobuf(int rw, int num_pages, void **ret)
         if (dreq->dr_blocks == NULL)
                 goto failed_2;
 
+        dreq->dr_filter = filter;
         dreq->dr_bios = NULL;
         init_waitqueue_head(&dreq->dr_wait);
         atomic_set(&dreq->dr_numreqs, 0);
@@ -148,7 +204,7 @@ int filter_iobuf_add_page(struct obd_device *obd, void *iobuf,
 
         return 0;
 }
-                 
+
 int filter_do_bio(struct obd_device *obd, struct inode *inode,
                   struct dio_request *dreq, int rw)
 {
@@ -208,7 +264,8 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
                                 continue;       /* added this frag OK */
 
                         if (bio != NULL) {
-                                request_queue_t *q = bdev_get_queue(bio->bi_bdev);
+                                request_queue_t *q =
+                                        bdev_get_queue(bio->bi_bdev);
 
                                 /* Dang! I have to fragment this I/O */
                                 CDEBUG(D_INODE, "bio++ sz %d vcnt %d(%d) "
@@ -221,17 +278,13 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
                                        bio_hw_segments(q, bio), 
                                        q->max_hw_segments);
 
-                                atomic_inc(&dreq->dr_numreqs);
+                                record_start_io(dreq, rw, bio->bi_size);
                                 rc = fsfilt_send_bio(rw, obd, inode, bio);
                                 if (rc < 0) {
                                         CERROR("Can't send bio: %d\n", rc);
-                                        /* OK do dec; we do the waiting */
-                                        atomic_dec(&dreq->dr_numreqs);
+                                        record_finish_io(dreq, rw, rc);
                                         goto out;
                                 }
-                                rc = 0;
-                                        
-                                bio = NULL;
                         }
 
                         /* allocate new bio */
@@ -255,14 +308,13 @@ int filter_do_bio(struct obd_device *obd, struct inode *inode,
         }
 
         if (bio != NULL) {
-                atomic_inc(&dreq->dr_numreqs);
+                record_start_io(dreq, rw, bio->bi_size);
                 rc = fsfilt_send_bio(rw, obd, inode, bio);
                 if (rc >= 0) {
                         rc = 0;
                 } else {
                         CERROR("Can't send bio: %d\n", rc);
-                        /* OK do dec; we do the waiting */
-                        atomic_dec(&dreq->dr_numreqs);
+                        record_finish_io(dreq, rw, rc);
                 }
         }
                         
@@ -303,17 +355,16 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
         struct obd_device *obd = exp->exp_obd;
         struct dio_request *dreq = iobuf;
         struct inode *inode = dchild->d_inode;
-        int rc;
-        int rc2;
+        int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
+        int rc, rc2;
         ENTRY;
 
         LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
         LASSERTF(dreq->dr_npages <= dreq->dr_max_pages, "%d,%d\n",
                  dreq->dr_npages, dreq->dr_max_pages);
-
-        /* XXX FIXME these assertions should be handled properly here or
-         * checked elsewhere */
         LASSERT(dreq->dr_npages <= OBDFILTER_CREATED_SCRATCHPAD_ENTRIES);
+        LASSERT(dreq->dr_npages > 0 || rw != OBD_BRW_WRITE);
+
         if (dreq->dr_npages == 0)
                 RETURN(0);
 
@@ -325,13 +376,11 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
 
         if (rw == OBD_BRW_WRITE) {
                 if (rc == 0) {
-#if 0
                         filter_tally_write(&obd->u.filter,
                                            dreq->dr_pages,
-                                           dreq->dr_page_idx,
+                                           dreq->dr_npages,
                                            dreq->dr_blocks,
                                            blocks_per_page);
-#endif
                         if (attr->ia_size > inode->i_size)
                                 attr->ia_valid |= ATTR_SIZE;
                         rc = fsfilt_setattr(obd, dchild,
@@ -417,7 +466,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (rc != 0)
                 GOTO(cleanup, rc);
         
-        rc = filter_alloc_iobuf(OBD_BRW_WRITE, obj->ioo_bufcnt, (void **)&dreq);
+        rc = filter_alloc_iobuf(&obd->u.filter, OBD_BRW_WRITE, obj->ioo_bufcnt,
+                                (void **)&dreq);
         if (rc)
                 GOTO(cleanup, rc);
         cleanup_phase = 1;
@@ -450,12 +500,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 if (this_size > iattr.ia_size)
                         iattr.ia_size = this_size;
         }
-#if 0
-        /* I use this when I'm checking our lovely 1M I/Os reach the disk -eeb */
-        if (total_size != (1<<20))
-                CWARN("total size %d (%d pages)\n", 
-                      total_size, total_size/PAGE_SIZE);
-#endif
+
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
         cleanup_phase = 2;
 

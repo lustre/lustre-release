@@ -242,8 +242,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                        ~MDS_INCOMPAT_SUPP);
                 GOTO(err_msd, rc = -EINVAL);
         }
-        /* XXX updating existing b_devel fs only, can be removed in future */
-        msd->msd_feature_rocompat = cpu_to_le32(MDS_ROCOMPAT_LOVOBJID);
+
         if (msd->msd_feature_rocompat & ~cpu_to_le32(MDS_ROCOMPAT_SUPP)) {
                 CERROR("unsupported read-only feature %x\n",
                        le32_to_cpu(msd->msd_feature_rocompat) &

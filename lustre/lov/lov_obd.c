@@ -44,6 +44,7 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_mds.h>
+#include <linux/lustre_debug.h>
 #include <linux/obd_class.h>
 #include <linux/obd_lov.h>
 #include <linux/obd_ost.h>
@@ -1576,6 +1577,8 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                                 RETURN(0);
                         }
                 }
+                LDLM_ERROR(data->lock, "lock on inode without such object\n");
+                dump_lsm(D_ERROR, data->lsm);
                 RETURN(-ENXIO);
         } else if (keylen >= strlen("size_to_stripe") &&
                    strcmp(key, "size_to_stripe") == 0) {

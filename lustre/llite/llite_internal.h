@@ -297,7 +297,8 @@ int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 #define LL_MAX_BLKSIZE          (4UL * 1024 * 1024)
 
 #if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#define    ll_s2sbi(sb)     ((struct ll_sb_info *)((sb)->s_fs_info))
+#define    ll_s2sbi(sb)        ((struct ll_sb_info *)((sb)->s_fs_info))
+#define    ll_s2sbi_nocast(sb) ((sb)->s_fs_info)
 void __d_rehash(struct dentry * entry, int lock);
 static inline __u64 ll_ts2u64(struct timespec *time)
 {
@@ -306,6 +307,7 @@ static inline __u64 ll_ts2u64(struct timespec *time)
 }
 #else  /* 2.4 here */
 #define    ll_s2sbi(sb)     ((struct ll_sb_info *)((sb)->u.generic_sbp))
+#define    ll_s2sbi_nocast(sb) ((sb)->u.generic_sbp)
 static inline __u64 ll_ts2u64(time_t *time)
 {
         return *time;

@@ -37,28 +37,6 @@
 
 #include "lov_internal.h"
 
-void lov_dump_lmm_v0(int level, struct lov_mds_md_v0 *lmm)
-{
-        int i, num_ost, stripe, idx;
-
-        num_ost = le32_to_cpu(lmm->lmm_ost_count);
-        idx = le32_to_cpu(lmm->lmm_stripe_offset);
-        CDEBUG(level, "objid "LPX64", magic 0x%08X, ost_count %u\n",
-               le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
-               num_ost);
-        CDEBUG(level,"stripe_size %u, stripe_count %u, stripe_offset %u\n",
-               le32_to_cpu(lmm->lmm_stripe_size),
-               le32_to_cpu(lmm->lmm_stripe_count), idx);
-        for (i = stripe = 0; i < le32_to_cpu(lmm->lmm_ost_count); i++, idx++) {
-                idx %= num_ost;
-                if (lmm->lmm_objects[idx].l_object_id == 0)
-                        continue;
-                CDEBUG(level, "stripe %u idx %u subobj "LPX64"\n", stripe, idx,
-                       le64_to_cpu(lmm->lmm_objects[idx].l_object_id));
-                stripe++;
-        }
-}
-
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm)
 {
         struct lov_ost_data_v1 *lod;
@@ -166,55 +144,6 @@ int lov_get_stripecnt(struct lov_obd *lov, int stripe_count)
         return stripe_count;
 }
 
-static int lov_verify_lmm_v0(struct lov_mds_md_v0 *lmm, int lmm_bytes,
-                             int *stripe_count)
-{
-        if (lmm_bytes < sizeof(*lmm)) {
-                CERROR("lov_mds_md too small: %d, need at least %d\n",
-                       lmm_bytes, (int)sizeof(*lmm));
-                return -EINVAL;
-        }
-
-        *stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
-
-        if (*stripe_count == 0 ||
-            *stripe_count > le32_to_cpu(lmm->lmm_ost_count)) {
-                CERROR("bad stripe count %d\n", *stripe_count);
-                lov_dump_lmm_v0(D_WARNING, lmm);
-                return -EINVAL;
-        }
-
-        if (lmm_bytes < lov_mds_md_v0_size(*stripe_count)) {
-                CERROR("LOV EA too small: %d, need %d\n",
-                       lmm_bytes, lov_mds_md_v0_size(*stripe_count));
-                lov_dump_lmm_v0(D_WARNING, lmm);
-                return -EINVAL;
-        }
-
-        if (lmm->lmm_object_id == 0) {
-                CERROR("zero object id\n");
-                lov_dump_lmm_v0(D_WARNING, lmm);
-                return -EINVAL;
-        }
-
-        if (le32_to_cpu(lmm->lmm_stripe_offset) >
-            le32_to_cpu(lmm->lmm_ost_count)) {
-                CERROR("stripe offset %d more than number of OSTs %d\n",
-                       le32_to_cpu(lmm->lmm_stripe_offset),
-                       le32_to_cpu(lmm->lmm_ost_count));
-                lov_dump_lmm_v0(D_WARNING, lmm);
-                return -EINVAL;
-        }
-
-        if (lmm->lmm_stripe_size == 0) {
-                CERROR("zero stripe size\n");
-                lov_dump_lmm_v0(D_WARNING, lmm);
-                return -EINVAL;
-        }
-
-        return 0;
-}
-
 static int lov_verify_lmm_v1(struct lov_mds_md_v1 *lmm, int lmm_bytes,
                              int *stripe_count)
 {
@@ -273,8 +202,6 @@ static int lov_verify_lmm(void *lmm, int lmm_bytes, int *stripe_count)
         switch (le32_to_cpu(*(__u32 *)lmm)) {
         case LOV_MAGIC_V1:
                 return lov_verify_lmm_v1(lmm, lmm_bytes, stripe_count);
-        case LOV_MAGIC_V0:
-                return lov_verify_lmm_v0(lmm, lmm_bytes, stripe_count);
         default:
                 CERROR("bad disk LOV MAGIC: 0x%08X\n",
                        le32_to_cpu(*(__u32 *)lmm));
@@ -309,43 +236,6 @@ void lov_free_memmd(struct lov_stripe_md **lsmp)
 {
         OBD_FREE(*lsmp, lov_stripe_md_size((*lsmp)->lsm_stripe_count));
         *lsmp = NULL;
-}
-
-int lov_unpackmd_v0(struct lov_obd *lov, struct lov_stripe_md *lsm,
-                    struct lov_mds_md_v0 *lmm)
-{
-        struct lov_oinfo *loi;
-        int i, ost_offset, ost_count;
-
-        lsm->lsm_object_id = le64_to_cpu(lmm->lmm_object_id);
-        /* lsm->lsm_object_gr = 0; implicit */
-        lsm->lsm_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
-        lsm->lsm_xfersize = lsm->lsm_stripe_size * lsm->lsm_stripe_count;
-        lsm->lsm_pattern = LOV_PATTERN_RAID0;
-        ost_offset = le32_to_cpu(lmm->lmm_stripe_offset);
-        ost_count = le16_to_cpu(lmm->lmm_ost_count);
-
-        for (i = 0, loi = lsm->lsm_oinfo; i < ost_count; i++, ost_offset++) {
-                ost_offset %= ost_count;
-
-                if (!lmm->lmm_objects[ost_offset].l_object_id)
-                        continue;
-
-                loi->loi_id =
-                        le64_to_cpu(lmm->lmm_objects[ost_offset].l_object_id);
-                /* loi->loi_gr = 0; implicit */
-                loi->loi_ost_idx = ost_offset;
-                /* loi->loi_ost_gen = 0; implicit */
-                loi++;
-        }
-
-        if (loi - lsm->lsm_oinfo != lsm->lsm_stripe_count) {
-                CERROR("missing objects in lmm struct\n");
-                lov_dump_lmm_v0(D_WARNING, lmm);
-                return -EINVAL;
-        }
-
-        return 0;
 }
 
 int lov_unpackmd_v1(struct lov_obd *lov, struct lov_stripe_md *lsm,
@@ -420,9 +310,6 @@ int lov_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
         switch (le32_to_cpu(lmm->lmm_magic)) {
         case LOV_MAGIC_V1:
                 rc = lov_unpackmd_v1(lov, *lsmp, lmm);
-                break;
-        case LOV_MAGIC_V0:
-                rc = lov_unpackmd_v0(lov, *lsmp, (void *)lmm);
                 break;
         }
 

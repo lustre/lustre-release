@@ -325,6 +325,28 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
                         break;
         }
 
+        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
+        seq_printf(seq, "offset                rpcs   %% cum %% |");
+        seq_printf(seq, "       rpcs   %% cum %%\n");
+
+        read_tot = lprocfs_oh_sum(&cli->cl_read_offset_hist);
+        write_tot = lprocfs_oh_sum(&cli->cl_write_offset_hist);
+
+        read_cum = 0;
+        write_cum = 0;
+        for (i = 0; i < OBD_HIST_MAX; i++) {
+                unsigned long r = cli->cl_read_offset_hist.oh_buckets[i];
+                unsigned long w = cli->cl_write_offset_hist.oh_buckets[i];
+                read_cum += r;
+                write_cum += w;
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                           (i == 0) ? 0 : 1 << (i - 1),
+                           r, pct(r, read_tot), pct(read_cum, read_tot), 
+                           w, pct(w, write_tot), pct(write_cum, write_tot));
+                if (read_cum == read_tot && write_cum == write_tot)
+                        break;
+        }
+
         spin_unlock_irqrestore(&cli->cl_loi_list_lock, flags);
 
         return 0;
@@ -377,6 +399,8 @@ static ssize_t osc_rpc_stats_seq_write(struct file *file, const char *buf,
         lprocfs_oh_clear(&cli->cl_write_rpc_hist);
         lprocfs_oh_clear(&cli->cl_read_page_hist);
         lprocfs_oh_clear(&cli->cl_write_page_hist);
+        lprocfs_oh_clear(&cli->cl_read_offset_hist);
+        lprocfs_oh_clear(&cli->cl_write_offset_hist);
 
         return len;
 }

@@ -63,7 +63,6 @@ setup() {
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     start mds $MDSLCONFARGS --reformat
     grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
-    #echo 0x3f0410 > /proc/sys/portals/debug
 }
 
 $SETUP

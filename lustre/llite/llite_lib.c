@@ -68,7 +68,7 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
-        ll_s2sbi(sb) = sbi;
+        ll_s2sbi_nocast(sb) = sbi;
 
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
@@ -90,7 +90,7 @@ void lustre_free_sbi(struct super_block *sb)
                 spin_unlock(&ll_sb_lock);
                 OBD_FREE(sbi, sizeof(*sbi));
         }
-        ll_s2sbi(sb) = NULL;
+        ll_s2sbi_nocast(sb) = NULL;
         EXIT;
 }
 

@@ -1037,16 +1037,8 @@ void lustre_assert_wire_constants(void)
                  (long long)OBD_MD_FLCOOKIE);
         LASSERTF(OBD_MD_FLGROUP == 16777216, " found %lld\n",
                  (long long)OBD_MD_FLGROUP);
-        LASSERTF(OBD_FL_INLINEDATA == 1, " found %lld\n",
-                 (long long)OBD_FL_INLINEDATA);
-        LASSERTF(OBD_FL_OBDMDEXISTS == 2, " found %lld\n",
-                 (long long)OBD_FL_OBDMDEXISTS);
         LASSERTF(OBD_FL_DELORPHAN == 4, " found %lld\n",
                  (long long)OBD_FL_DELORPHAN);
-        LASSERTF(OBD_FL_NORPC == 8, " found %lld\n",
-                 (long long)OBD_FL_NORPC);
-        LASSERTF(OBD_FL_IDONLY == 16, " found %lld\n",
-                 (long long)OBD_FL_IDONLY);
         LASSERTF(OBD_FL_RECREATE_OBJS == 32, " found %lld\n",
                  (long long)OBD_FL_RECREATE_OBJS);
 
@@ -1101,8 +1093,6 @@ void lustre_assert_wire_constants(void)
                  (long long)offsetof(struct lov_ost_data_v1, l_ost_idx));
         LASSERTF((int)sizeof(((struct lov_ost_data_v1 *)0)->l_ost_idx) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct lov_ost_data_v1 *)0)->l_ost_idx));
-        LASSERTF(LOV_MAGIC_V0 == 198183888, " found %lld\n",
-                 (long long)LOV_MAGIC_V0);
         LASSERTF(LOV_MAGIC_V1 == 198249424, " found %lld\n",
                  (long long)LOV_MAGIC_V1);
         LASSERTF(LOV_PATTERN_RAID0 == 1, " found %lld\n",

@@ -16,9 +16,9 @@ sub get_tag()
     my $line;
 
     my $tagfile = new IO::File;
-    if (!$tagfile->open("CVS/Tag")) {
+    if (!$tagfile->open("lustre/CVS/Tag")) {
         my $verfile = new IO::File;
-        if (!$verfile->open("include/config.h")) {
+        if (!$verfile->open("config.h")) {
           return "UNKNOWN";
         }
         while(defined($line = <$verfile>)) {

@@ -607,8 +607,9 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
         if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC)
                 RETURN(0);
 
-        CDEBUG(D_INODE, "converting LOV EA on %lu/%u from V0 to V1\n",
-               inode->i_ino, inode->i_generation);
+        CDEBUG(D_INODE, "converting LOV EA on %lu/%u from %#08x to %#08x\n",
+               inode->i_ino, inode->i_generation, le32_to_cpu(lmm->lmm_magic),
+               LOV_MAGIC);
         rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0)
                 GOTO(conv_end, rc);
@@ -635,3 +636,14 @@ conv_free:
 conv_end:
         return rc;
 }
+
+void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
+                         struct lov_desc *desc)
+{
+        int i;
+        for (i = 0; i < le32_to_cpu(lmm->lmm_stripe_count); i++) {
+                ids[le32_to_cpu(lmm->lmm_objects[i].l_ost_idx)] =
+                        le64_to_cpu(lmm->lmm_objects[i].l_object_id);
+        }
+}
+

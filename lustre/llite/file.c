@@ -470,7 +470,7 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                 struct inode *inode;
                 struct ll_inode_info *lli;
                 struct lov_stripe_md *lsm;
-                __u32 stripe;
+                int stripe;
                 __u64 kms;
 
                 /* This lock wasn't granted, don't try to evict pages */
@@ -496,17 +496,18 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                  * lock hold times should be very short as ast processing
                  * requires them and has a short timeout.  so, i_sem before ns
                  * lock.*/
-                down(&inode->i_sem);
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
+                spin_lock(&lli->lli_lock);
+
                 kms = ldlm_extent_shift_kms(lock,
                                             lsm->lsm_oinfo[stripe].loi_kms);
-
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
+
+                spin_unlock(&lli->lli_lock);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-                up(&inode->i_sem);
                 //ll_try_done_writing(inode);
         iput:
                 iput(inode);
@@ -527,7 +528,7 @@ int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lustre_handle lockh = { 0 };
         struct ost_lvb *lvb;
-        __u32 stripe;
+        int stripe;
         ENTRY;
 
         if (flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
@@ -553,14 +554,16 @@ int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 lsm->lsm_oinfo[stripe].loi_rss = lvb->lvb_size;
 
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
-                down(&inode->i_sem);
+                spin_lock(&lli->lli_lock);
+
                 kms = MAX(lsm->lsm_oinfo[stripe].loi_kms, lvb->lvb_size);
                 kms = ldlm_extent_shift_kms(NULL, kms);
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
-                up(&inode->i_sem);
+
+                spin_unlock(&lli->lli_lock);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         }
 

@@ -963,6 +963,11 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
         int len;
         ENTRY;
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT)) {
+                CERROR("test case OBD_FAIL_OST_ENOENT\n");
+                RETURN(ERR_PTR(-ENOENT));
+        }
+
         if (id == 0) {
                 CERROR("fatal: invalid object id 0\n");
                 RETURN(ERR_PTR(-ESTALE));
@@ -1239,10 +1244,16 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         sema_init(&filter->fo_alloc_lock, 1);
         spin_lock_init(&filter->fo_r_pages.oh_lock);
         spin_lock_init(&filter->fo_w_pages.oh_lock);
+        spin_lock_init(&filter->fo_read_rpc_hist.oh_lock);
+        spin_lock_init(&filter->fo_write_rpc_hist.oh_lock);
+        spin_lock_init(&filter->fo_r_io_time.oh_lock);
+        spin_lock_init(&filter->fo_w_io_time.oh_lock);
         spin_lock_init(&filter->fo_r_discont_pages.oh_lock);
         spin_lock_init(&filter->fo_w_discont_pages.oh_lock);
         spin_lock_init(&filter->fo_r_discont_blocks.oh_lock);
         spin_lock_init(&filter->fo_w_discont_blocks.oh_lock);
+        spin_lock_init(&filter->fo_r_disk_iosize.oh_lock);
+        spin_lock_init(&filter->fo_w_disk_iosize.oh_lock);
         filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
 
         sprintf(ns_name, "filter-%s", obd->obd_uuid.uuid);

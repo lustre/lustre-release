@@ -137,7 +137,8 @@ int main(int argc, char **argv)
 
         // The command to be run
         execvp(my_argv[0], my_argv);
-        fprintf(stderr, "execvp fails running %s\n", my_argv[0]);
+        fprintf(stderr, "execvp fails running %s (%d): %s\n", my_argv[0],
+                errno, strerror(errno));
         exit(-1);
 }
 

@@ -291,16 +291,6 @@ cleanup_dentry:
         return ERR_PTR(error);
 }
 
-static void mds_objids_from_lmm(obd_id *ids, struct lov_mds_md *lmm,
-                                struct lov_desc *desc)
-{
-        int i;
-        for (i = 0; i < le32_to_cpu(lmm->lmm_stripe_count); i++) {
-                ids[le32_to_cpu(lmm->lmm_objects[i].l_ost_idx)] =
-                        le64_to_cpu(lmm->lmm_objects[i].l_object_id);
-        }
-}
-
 /* Must be called with i_sem held */
 static int mds_create_objects(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *rec,
@@ -984,10 +974,6 @@ int mds_open(struct mds_update_record *rec, int offset,
         if (S_ISLNK(dchild->d_inode->i_mode))
                 GOTO(cleanup_no_trans, rc = 0);
 
-        if ((rec->ur_flags & MDS_OPEN_DIRECTORY) &&
-            !S_ISDIR(dchild->d_inode->i_mode))
-                GOTO(cleanup, rc = -ENOTDIR);
-
         if (S_ISDIR(dchild->d_inode->i_mode)) {
                 if (rec->ur_flags & MDS_OPEN_CREAT ||
                     rec->ur_flags & FMODE_WRITE) {
@@ -998,6 +984,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                         intent_set_disposition(rep, DISP_OPEN_OPEN);
                         GOTO(cleanup, rc = -EACCES);
                 }
+        } else if (rec->ur_flags & MDS_OPEN_DIRECTORY) {
+                GOTO(cleanup, rc = -ENOTDIR);
         }
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_CREATE)) {

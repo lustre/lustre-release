@@ -1379,6 +1379,7 @@ int jt_obd_test_brw(int argc, char **argv)
         struct timeval start, next_time;
         __u64 count, next_count, len, stride, thr_offset = 0, objid = 3;
         int write = 0, verbose = 1, cmd, i, rc = 0, pages = 1;
+        int offset_pages = 0;
         long n;
         int repeat_offset = 0;
         unsigned long long ull;
@@ -1431,8 +1432,13 @@ int jt_obd_test_brw(int argc, char **argv)
 
         if (argc >= 5) {
                 pages = strtoul(argv[4], &end, 0);
-                if (*end) {
-                        fprintf(stderr, "error: %s: bad page count '%s'\n",
+
+                if (*end == '+')
+                        offset_pages = strtoul(end + 1, &end, 0);
+
+                if (*end != 0 ||
+                    offset_pages < 0 || offset_pages >= pages) {
+                        fprintf(stderr, "error: %s: bad npages[+offset] parameter '%s'\n",
                                 jt_cmdname(argv[0]), argv[4]);
                         return CMD_HELP;
                 }
@@ -1497,8 +1503,9 @@ int jt_obd_test_brw(int argc, char **argv)
         }
 
         len = pages * PAGE_SIZE;
+        thr_offset = offset_pages * PAGE_SIZE;
         stride = len;
-
+        
         if (thread) {
                 pthread_mutex_lock (&shared_data->mutex);
                 if (nthr_per_obj != 0) {
@@ -1506,12 +1513,12 @@ int jt_obd_test_brw(int argc, char **argv)
                         obj_idx = (thread - 1)/nthr_per_obj;
                         objid += obj_idx;
                         stride *= nthr_per_obj;
-                        thr_offset = ((thread - 1) % nthr_per_obj) * len;
-                        if (thr_offset == 0)
-                                shared_data->offsets[obj_idx] = stride;
+                        if (thread == 1)
+                                shared_data->offsets[obj_idx] = stride + thr_offset;
+                        thr_offset += ((thread - 1) % nthr_per_obj) * len;
                 } else {
                         /* threads disjoint */
-                        thr_offset = (thread - 1) * len;
+                        thr_offset += (thread - 1) * len;
                 }
 
                 shared_data->barrier--;
@@ -1551,12 +1558,15 @@ int jt_obd_test_brw(int argc, char **argv)
                                 jt_cmdname(argv[0]), i, strerror(rc = errno),
                                 write ? "write" : "read");
                         break;
-                } else if (be_verbose(verbose, &next_time,i, &next_count,count))
+                } else if (be_verbose(verbose, &next_time,i, &next_count,count)) {
+                        pthread_mutex_lock (&shared_data->mutex);
                         printf("%s: %s number %d @ "LPD64":"LPU64" for %d\n",
                                jt_cmdname(argv[0]), write ? "write" : "read", i,
                                data.ioc_obdo1.o_id, data.ioc_offset,
                                (int)(pages * PAGE_SIZE));
-
+                        pthread_mutex_unlock (&shared_data->mutex);
+                }
+                
                 if (!repeat_offset) {
                         if (stride == len) {
                                 data.ioc_offset += stride;

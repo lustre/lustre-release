@@ -617,9 +617,9 @@ Index: linux-2.6.0/fs/ext3/xattr.c
 +		memset(last->e_name, 0, esize);
 +		memcpy(last->e_name, name, last->e_name_len);
 +		if (start + offs + value_len > end)
-+			printk("ALERT at %s:%d: 0x%p + %d + %d > 0x%p\n",
-+					__FILE__, __LINE__, start, offs,
-+					value_len, end);
++			printk("ALERT at %s:%d: 0x%p + %d + %zd > 0x%p\n",
++			       __FILE__, __LINE__, start, offs,
++			       value_len, end);
 +		memcpy(start + offs, value, value_len);
 +		last = EXT3_XATTR_NEXT(last);
 +		*((__u32 *) last) = 0;

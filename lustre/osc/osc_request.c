@@ -1384,6 +1384,8 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         struct osc_brw_async_args *aa;
         struct obd_async_page_ops *ops;
         LIST_HEAD(rpc_list);
+        unsigned int ending_offset;
+        unsigned  starting_offset = 0;
         ENTRY;
 
         /* first we find the pages we're allowed to work with */
@@ -1442,6 +1444,10 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 lop_update_pending(cli, lop, cmd, -1);
                 list_del_init(&oap->oap_urgent_item);
 
+                if (page_count == 0)
+                        starting_offset = (oap->oap_obj_off + oap->oap_page_off) &
+                                          (PTLRPC_MAX_BRW_SIZE - 1);
+
                 /* ask the caller for the size of the io as the rpc leaves. */
                 if (!(oap->oap_async_flags & ASYNC_COUNT_STABLE))
                         oap->oap_count =
@@ -1456,6 +1462,15 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 /* now put the page back in our accounting */
                 list_add_tail(&oap->oap_rpc_item, &rpc_list);
                 if (++page_count >= cli->cl_max_pages_per_rpc)
+                        break;
+
+                /* End on a PTLRPC_MAX_BRW_SIZE boundary.  We want full-sized
+                 * RPCs aligned on PTLRPC_MAX_BRW_SIZE boundaries to help reads
+                 * have the same alignment as the initial writes that allocated
+                 * extents on the server. */
+                ending_offset = (oap->oap_obj_off + oap->oap_page_off + 
+                                 oap->oap_count) & (PTLRPC_MAX_BRW_SIZE - 1);
+                if (ending_offset == 0)
                         break;
         }
 
@@ -1509,10 +1524,14 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
+                lprocfs_oh_tally_log2(&cli->cl_read_offset_hist,
+                                      starting_offset/PAGE_SIZE + 1);
         } else {
                 lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_write_rpc_hist,
                                  cli->cl_w_in_flight);
+                lprocfs_oh_tally_log2(&cli->cl_write_offset_hist,
+                                      starting_offset/PAGE_SIZE + 1);
         }
 #endif
 

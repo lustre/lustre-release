@@ -151,7 +151,7 @@ struct oig_callback_context {
          * callees of this method are encouraged to abort their state 
          * in the oig.  This may be called multiple times. */
         void (*occ_interrupted)(struct oig_callback_context *occ);
-        unsigned interrupted:1;
+        unsigned int interrupted:1;
 };
 
 /* if we find more consumers this could be generalized */
@@ -206,12 +206,21 @@ struct filter_obd {
 
         struct semaphore     fo_alloc_lock;
 
+        int fo_r_in_flight; /* protected by fo_objidlock */
+        int fo_w_in_flight; /* protected by fo_objidlock */
+
         struct obd_histogram     fo_r_pages;
         struct obd_histogram     fo_w_pages;
+        struct obd_histogram     fo_read_rpc_hist;
+        struct obd_histogram     fo_write_rpc_hist;
+        struct obd_histogram     fo_r_io_time;
+        struct obd_histogram     fo_w_io_time;
         struct obd_histogram     fo_r_discont_pages;
         struct obd_histogram     fo_w_discont_pages;
         struct obd_histogram     fo_r_discont_blocks;
         struct obd_histogram     fo_w_discont_blocks;
+        struct obd_histogram     fo_r_disk_iosize;
+        struct obd_histogram     fo_w_disk_iosize;
 };
 
 struct mds_server_data;
@@ -262,6 +271,8 @@ struct client_obd {
         struct obd_histogram     cl_write_rpc_hist;
         struct obd_histogram     cl_read_page_hist;
         struct obd_histogram     cl_write_page_hist;
+        struct obd_histogram     cl_read_offset_hist;
+        struct obd_histogram     cl_write_offset_hist;
 
         struct mdc_rpc_lock     *cl_rpc_lock;
         struct mdc_rpc_lock     *cl_setattr_lock;
@@ -473,7 +484,7 @@ struct obd_device {
         int obd_minor;
         unsigned int obd_attached:1, obd_set_up:1, obd_recovering:1,
                 obd_abort_recovery:1, obd_replayable:1, obd_no_transno:1,
-                obd_no_recov:1, obd_stopping:1;
+                obd_no_recov:1, obd_stopping:1, obd_starting:1;
         atomic_t obd_refcount;
         wait_queue_head_t obd_refcount_waitq;
         struct proc_dir_entry *obd_proc_entry;

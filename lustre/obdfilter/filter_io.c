@@ -299,7 +299,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
 
-        rc = filter_alloc_iobuf(OBD_BRW_READ, obj->ioo_bufcnt, &iobuf);
+        rc = filter_alloc_iobuf(&obd->u.filter, OBD_BRW_READ, obj->ioo_bufcnt,
+                                &iobuf);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -525,7 +526,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         memset(res, 0, niocount * sizeof(*res));
 
-        rc = filter_alloc_iobuf(OBD_BRW_READ, obj->ioo_bufcnt, &iobuf);
+        rc = filter_alloc_iobuf(&exp->exp_obd->u.filter, OBD_BRW_READ,
+                                obj->ioo_bufcnt, &iobuf);
         if (rc)
                 GOTO(cleanup, rc);
         cleanup_phase = 1;

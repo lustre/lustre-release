@@ -175,7 +175,6 @@ int lov_update_enqueue_set(struct lov_request_set *set,
 
 static int enqueue_done(struct lov_request_set *set, __u32 mode)
 {
-        struct list_head *pos;
         struct lov_request *req;
         struct lustre_handle *lov_lockhp = NULL;
         struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
@@ -188,9 +187,7 @@ static int enqueue_done(struct lov_request_set *set, __u32 mode)
                 RETURN(0);
 
         /* cancel enqueued/matched locks */
-        list_for_each (pos, &set->set_list) {
-                req = list_entry(pos, struct lov_request, rq_link);
-
+        list_for_each_entry(req, &set->set_list, rq_link) {
                 if (!req->rq_complete || req->rq_rc)
                         continue;
 
@@ -215,9 +212,9 @@ int lov_fini_enqueue_set(struct lov_request_set *set, __u32 mode)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes)
                 rc = enqueue_done(set, mode);
         else
@@ -318,9 +315,9 @@ int lov_fini_match_set(struct lov_request_set *set, __u32 mode, int flags)
         int rc = 0;
         ENTRY;
 
-        LASSERT(set->set_exp);
         if (set == NULL)
                 RETURN(0);
+        LASSERT(set->set_exp);
         if (set->set_completes) {
                 if (set->set_count == set->set_success &&
                     flags & LDLM_FL_TEST_LOCK)
@@ -359,8 +356,7 @@ int lov_prep_match_set(struct obd_export *exp, struct lov_stripe_md *lsm,
                 GOTO(out_set, rc = -ENOMEM);
         lockh->cookie = set->set_lockh->llh_handle.h_cookie;
 
-        loi = lsm->lsm_oinfo;
-        for (i = 0; i < lsm->lsm_stripe_count; i++, loi++) {
+        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++, loi++){
                 struct lov_request *req;
                 obd_off start, end;
 
@@ -445,8 +441,7 @@ int lov_prep_cancel_set(struct obd_export *exp, struct lov_stripe_md *lsm,
         }
         lockh->cookie = set->set_lockh->llh_handle.h_cookie;
 
-        loi = lsm->lsm_oinfo;
-        for (i = 0; i < lsm->lsm_stripe_count; i++, loi++) {
+        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++, loi++){
                 struct lov_request *req;
                 struct lustre_handle *lov_lockhp;
 
@@ -485,12 +480,11 @@ out_set:
 }
 
 static int create_done(struct obd_export *exp, struct lov_request_set *set,
-                       struct lov_stripe_md **ea)
+                       struct lov_stripe_md **lsmp)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         struct obd_trans_info *oti = set->set_oti;
         struct obdo *src_oa = set->set_oa;
-        struct list_head *pos;
         struct lov_request *req;
         struct obdo *ret_oa = NULL;
         int attrset = 0, rc = 0;
@@ -500,7 +494,7 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
 
         if (!set->set_success)
                 GOTO(cleanup, rc = -EIO);
-        if (*ea == NULL && set->set_count != set->set_success) {
+        if (*lsmp == NULL && set->set_count != set->set_success) {
                 set->set_count = set->set_success;
                 qos_shrink_lsm(set);
         }
@@ -509,8 +503,7 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
         if (ret_oa == NULL)
                 GOTO(cleanup, rc = -ENOMEM);
 
-        list_for_each (pos, &set->set_list) {
-                req = list_entry(pos, struct lov_request, rq_link);
+        list_for_each_entry(req, &set->set_list, rq_link) {
                 if (!req->rq_complete || req->rq_rc)
                         continue;
                 lov_merge_attrs(ret_oa, req->rq_oa, req->rq_oa->o_valid,
@@ -526,14 +519,13 @@ static int create_done(struct obd_export *exp, struct lov_request_set *set,
         memcpy(src_oa, ret_oa, sizeof(*src_oa));
         obdo_free(ret_oa);
 
-        *ea = set->set_md;
+        *lsmp = set->set_md;
         GOTO(done, rc = 0);
 
 cleanup:
-        list_for_each (pos, &set->set_list) {
+        list_for_each_entry(req, &set->set_list, rq_link) {
                 struct obd_export *sub_exp;
                 int err = 0;
-                req = list_entry(pos, struct lov_request, rq_link);
 
                 if (!req->rq_complete || req->rq_rc)
                         continue;
@@ -546,7 +538,7 @@ cleanup:
                                set->set_oa->o_id, req->rq_oa->o_id,
                                req->rq_idx, rc);
         }
-        if (*ea == NULL)
+        if (*lsmp == NULL)
                 obd_free_memmd(exp, &set->set_md);
 done:
         if (oti && set->set_cookies) {
@@ -561,7 +553,7 @@ done:
         RETURN(rc);
 }
 
-int lov_fini_create_set(struct lov_request_set *set, struct lov_stripe_md **ea)
+int lov_fini_create_set(struct lov_request_set *set,struct lov_stripe_md **lsmp)
 {
         int rc = 0;
         ENTRY;
@@ -570,7 +562,7 @@ int lov_fini_create_set(struct lov_request_set *set, struct lov_stripe_md **ea)
         if (set == NULL)
                 RETURN(0);
         if (set->set_completes) {
-                rc = create_done(set->set_exp, set, ea);
+                rc = create_done(set->set_exp, set, lsmp);
                 /* FIXME update qos data here */
         }
 
@@ -623,7 +615,7 @@ int lov_update_create_set(struct lov_request_set *set,
         RETURN(0);
 }
 
-int lov_prep_create_set(struct obd_export *exp, struct lov_stripe_md **ea,
+int lov_prep_create_set(struct obd_export *exp, struct lov_stripe_md **lsmp,
                         struct obdo *src_oa, struct obd_trans_info *oti,
                         struct lov_request_set **reqset)
 {
@@ -638,7 +630,7 @@ int lov_prep_create_set(struct obd_export *exp, struct lov_stripe_md **ea,
         lov_init_set(set);
 
         set->set_exp = exp;
-        set->set_md = *ea;
+        set->set_md = *lsmp;
         set->set_oa = src_oa;
         set->set_oti = oti;
 
@@ -682,10 +674,10 @@ int lov_prep_create_set(struct obd_export *exp, struct lov_stripe_md **ea,
         RETURN(rc);
 
 out_lsm:
-        if (*ea == NULL)
+        if (*lsmp == NULL)
                 obd_free_memmd(exp, &set->set_md);
 out_set:
-        lov_fini_create_set(set, ea);
+        lov_fini_create_set(set, lsmp);
         RETURN(rc);
 }
 
@@ -737,19 +729,19 @@ static int brw_done(struct lov_request_set *set)
         struct list_head *pos;
         struct lov_request *req;
         ENTRY;
-                                                                                                                             
+
         list_for_each (pos, &set->set_list) {
                 req = list_entry(pos, struct lov_request, rq_link);
-                                                                                                                             
+
                 if (!req->rq_complete || req->rq_rc)
                         continue;
-                                                                                                                             
+
                 loi = &lsm->lsm_oinfo[req->rq_stripe];
-                                                                                                                             
+
                 if (req->rq_oa->o_valid & OBD_MD_FLBLOCKS)
                         loi->loi_blocks = req->rq_oa->o_blocks;
         }
-                                                                                                                             
+
         RETURN(0);
 }
 
@@ -812,9 +804,8 @@ int lov_prep_brw_set(struct obd_export *exp, struct obdo *src_oa,
         }
 
         /* alloc and initialize lov request */
-        loi = lsm->lsm_oinfo;
         shift = 0;
-        for (i = 0; i < lsm->lsm_stripe_count; i++, loi++) {
+        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++, loi++){
                 struct lov_request *req;
 
                 if (info[i].count == 0)

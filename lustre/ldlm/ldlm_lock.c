@@ -794,12 +794,11 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                         }
                         *flags |= LDLM_FL_LOCK_CHANGED;
                         RETURN(0);
-                } else if (rc == ELDLM_LOCK_ABORTED ||
-                           (rc == 0 && (*flags & LDLM_FL_INTENT_ONLY))) {
+                } else if (rc != ELDLM_OK ||
+                           (rc == ELDLM_OK && (*flags & LDLM_FL_INTENT_ONLY))) {
                         ldlm_lock_destroy(lock);
                         RETURN(rc);
                 }
-                LASSERT(rc == ELDLM_OK);
         }
 
         l_lock(&ns->ns_lock);

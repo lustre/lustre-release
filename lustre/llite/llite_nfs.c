@@ -179,10 +179,10 @@ int ll_dentry_to_fh(struct dentry *dentry, __u32 *datap, int *lenp,
                 *lenp = 3;
                 return 1;
         }
-        if (dentry->d_parent) { 
+        if (dentry->d_parent) {
                 *datap++ = dentry->d_parent->d_inode->i_ino;
                 *datap++ = (__u32)(S_IFMT & dentry->d_parent->d_inode->i_mode);
-         
+
                 *lenp = 5;
                 return 2;
         }

@@ -101,7 +101,7 @@
  * considered full when less than ?_MAXREQSIZE is left in them.
  */
 
-#define LDLM_NUM_THREADS        min(smp_num_cpus * smp_num_cpus * 8, 64)
+#define LDLM_NUM_THREADS        min((int)(smp_num_cpus * smp_num_cpus * 8), 64)
 #define LDLM_NBUFS       64
 #define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE (5 * 1024)
@@ -221,7 +221,7 @@ struct ptlrpc_request_set {
         wait_queue_head_t *set_wakeup_ptr;
         struct list_head  set_requests;
         set_interpreter_func    set_interpret; /* completion callback */
-        void             *set_arg; /* completion context */
+        void              *set_arg; /* completion context */
         /* locked so that any old caller can communicate requests to
          * the set holder who can then fold them into the lock-free set */
         spinlock_t        set_new_req_lock;

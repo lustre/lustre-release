@@ -405,6 +405,22 @@ test_19() { # bug3811
 }
 #run_test 19 "test concurrent uncached read races ==============="
 
+test_20() {
+	mkdir $DIR1/d20
+	cancel_lru_locks OSC
+	CNT=$((`cat /proc/fs/lustre/llite/fs0/dump_page_cache | wc -l`))
+	multiop $DIR1/f20 Ow8190c
+	multiop $DIR2/f20 Oz8194w8190c
+	multiop $DIR1/f20 Oz0r8190c
+	cancel_lru_locks OSC
+	CNTD=$((`cat /proc/fs/lustre/llite/fs0/dump_page_cache | wc -l` - $CNT))
+	[ $CNTD -gt 0 ] && \
+	    error $CNTD" page left in cache after lock cancel" || true
+}
+
+run_test 20 "test extra readahead page left in cache ===="
+
+
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
 

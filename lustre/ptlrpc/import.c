@@ -387,7 +387,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
                 } else if (MSG_CONNECT_RECOVERING & msg_flags) {
                         CDEBUG(D_HA, "%s: reconnected to %s during replay\n",
-                               imp->imp_obd->obd_name, 
+                               imp->imp_obd->obd_name,
                                imp->imp_target_uuid.uuid);
                         imp->imp_resend_replay = 1;
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
@@ -463,7 +463,7 @@ static int completed_replay_interpret(struct ptlrpc_request *req,
 }
 
 static int signal_completed_replay(struct obd_import *imp)
- {
+{
         struct ptlrpc_request *req;
         ENTRY;
 

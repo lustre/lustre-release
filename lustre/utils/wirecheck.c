@@ -143,11 +143,7 @@ check_obdo(void)
         CHECK_VALUE(OBD_MD_FLCOOKIE);
         CHECK_VALUE(OBD_MD_FLGROUP);
 
-        CHECK_VALUE(OBD_FL_INLINEDATA);
-        CHECK_VALUE(OBD_FL_OBDMDEXISTS);
         CHECK_VALUE(OBD_FL_DELORPHAN);
-        CHECK_VALUE(OBD_FL_NORPC);
-        CHECK_VALUE(OBD_FL_IDONLY);
         CHECK_VALUE(OBD_FL_RECREATE_OBJS);
 }
 
@@ -171,7 +167,6 @@ check_lov_mds_md_v1(void)
         CHECK_MEMBER(lov_ost_data_v1, l_ost_gen);
         CHECK_MEMBER(lov_ost_data_v1, l_ost_idx);
 
-        CHECK_VALUE(LOV_MAGIC_V0);
         CHECK_VALUE(LOV_MAGIC_V1);
 
         CHECK_VALUE(LOV_PATTERN_RAID0);

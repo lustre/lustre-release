@@ -359,8 +359,9 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
                          * which reference these resources. -phil */
                         if (!ldlm_resource_putref(res) &&
                             !(flags & LDLM_FL_LOCAL_ONLY)) {
-                                CERROR("Resource refcount nonzero (%d) after "
-                                       "lock cleanup; forcing cleanup.\n",
+                                CERROR("Namespace %s resource refcount %d "
+                                       "after lock cleanup; forcing cleanup.\n",
+                                       ns->ns_name,
                                        atomic_read(&res->lr_refcount));
                                 ldlm_resource_dump(D_ERROR, res);
                                 atomic_set(&res->lr_refcount, 1);

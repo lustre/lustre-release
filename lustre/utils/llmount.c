@@ -226,7 +226,7 @@ static int parse_route(char *opteq, char *opttgts)
 static int ignored_option(const char *check)
 {
         char *ignore[] = { "noatime", "async", "rw", "suid", "dev",
-                           "exec", "nouser", NULL };
+                           "exec", "nouser", "auto", "noauto", NULL };
         char **which = ignore;
 
         while (*which != NULL) {
@@ -619,7 +619,7 @@ int main(int argc, char *const argv[])
         progname = strrchr(argv[0], '/');
         progname = progname ? progname + 1 : argv[0];
 
-        while ((opt = getopt_long(argc, argv, "fhno:v" ,long_opt,NULL)) != EOF){
+        while ((opt = getopt_long(argc, argv, "fhno:v", long_opt,NULL)) != EOF){
                 switch (opt) {
                 case 1:
                         ++force;

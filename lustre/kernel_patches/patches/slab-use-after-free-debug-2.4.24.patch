@@ -53,14 +53,14 @@ Index: linux-2.4.24/mm/slab.c
 -		if (xchg((unsigned long *)objp, RED_MAGIC1) != RED_MAGIC2)
 +		if (xchg((unsigned long *)objp, RED_MAGIC1) != RED_MAGIC2) {
  			/* Either write before start, or a double free. */
-+			printk("inconsistency in %s\n", cachep->name);
++			printk("inconsistency at start of %s\n", cachep->name);
  			BUG();
 +		}
  		if (xchg((unsigned long *)(objp+cachep->objsize -
 -				BYTES_PER_WORD), RED_MAGIC1) != RED_MAGIC2)
 +				BYTES_PER_WORD), RED_MAGIC1) != RED_MAGIC2) {
  			/* Either write past end, or a double free. */
-+			printk("inconsistency in %s\n", cachep->name);
++			printk("inconsistency at end of %s\n", cachep->name);
  			BUG();
 +		}
  	}

@@ -20,17 +20,27 @@ noinst_PROGRAMS = openunlink testreq truncate directio openme writeme open_delay
 noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
 noinst_PROGRAMS += stat createmany statmany multifstat createtest mlink utime
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
-noinst_PROGRAMS += wantedi statone runas openfile getdents mkdirdeep o_directory
+noinst_PROGRAMS += wantedi statone runas openfile getdents o_directory
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany rmdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
 noinst_PROGRAMS += mmap_sanity
-# noinst_PROGRAMS += ldaptest copy_attr
+if MPITESTS
+noinst_PROGRAMS += write_append_truncate createmany_mpi
+endif
+# noinst_PROGRAMS += ldaptest copy_attr mkdirdeep 
 bin_PROGRAMS = mcreate munlink
 endif # TESTS
 
 stat_SOURCES = stat.c stat_fs.h
 mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl $(LIBREADLINE)
-#write_append_truncate_CC=mpicc
-#createmany_mpi_CC=mpicc
+
+if MPITESTS
+LAM_LD_FLAGS=-L/opt/lam/lib -lmpi -llam -lpthread
+write_append_truncate_SOURCES=write_append_truncate.c
+write_append_truncate_LDADD=$(LAM_LD_FLAGS)
+createmany_mpi_SOURCES=createmany-mpi.c
+createmany_mpi_LDADD=$(LAM_LD_FLAGS)
+endif
+
 #copy_attr_LDADD= -lattr

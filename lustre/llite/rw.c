@@ -642,7 +642,9 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
 out:
         size = (((obd_off)page->index) << PAGE_SHIFT) + to;
         if (rc == 0) {
+                spin_lock(&lli->lli_lock);
                 obd_increase_kms(exp, lsm, size);
+                spin_unlock(&lli->lli_lock);
                 if (size > inode->i_size)
                         inode->i_size = size;
                 SetPageUptodate(page);
@@ -902,7 +904,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
         if (ras->ras_window_len) {
                 start = ras->ras_next_readahead;
                 end = ras->ras_window_start + ras->ras_window_len - 1;
-                end = min(end, (unsigned long)(kms >> PAGE_CACHE_SHIFT));
+                end = min(end, (unsigned long)((kms - 1) >> PAGE_CACHE_SHIFT));
                 ras->ras_next_readahead = max(end, end + 1);
 
                 RAS_CDEBUG(ras);

@@ -293,7 +293,8 @@ static void clear_kiobuf(struct kiobuf *iobuf)
         iobuf->length = 0;
 }
 
-int filter_alloc_iobuf(int rw, int num_pages, void **ret)
+int filter_alloc_iobuf(struct filter_obd *filter, int rw, int num_pages,
+                       void **ret)
 {
         int rc;
         struct kiobuf *iobuf;
@@ -361,7 +362,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (rc != 0)
                 GOTO(cleanup, rc);
 
-        rc = filter_alloc_iobuf(OBD_BRW_WRITE, obj->ioo_bufcnt, &iobuf);
+        rc = filter_alloc_iobuf(&obd->u.filter, OBD_BRW_WRITE,
+                                obj->ioo_bufcnt, &iobuf);
         if (rc)
                 GOTO(cleanup, rc);
         cleanup_phase = 1;

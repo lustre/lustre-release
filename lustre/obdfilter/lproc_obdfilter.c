@@ -301,6 +301,83 @@ static int filter_brw_stats_seq_show(struct seq_file *seq, void *v)
                         break;
         }
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
+        seq_printf(seq, "disk ios in flight     ios   %% cum %% |");
+        seq_printf(seq, "       rpcs   %% cum %%\n");
+
+        read_tot = lprocfs_oh_sum(&filter->fo_read_rpc_hist);
+        write_tot = lprocfs_oh_sum(&filter->fo_write_rpc_hist);
+
+        read_cum = 0;
+        write_cum = 0;
+        for (i = 0; i < OBD_HIST_MAX; i++) {
+                unsigned long r = filter->fo_read_rpc_hist.oh_buckets[i];
+                unsigned long w = filter->fo_write_rpc_hist.oh_buckets[i];
+                read_cum += r;
+                write_cum += w;
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                                 i, r, pct(r, read_tot),
+                                 pct(read_cum, read_tot), w,
+                                 pct(w, write_tot),
+                                 pct(write_cum, write_tot));
+                if (read_cum == read_tot && write_cum == write_tot)
+                        break;
+        }
+
+        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
+        seq_printf(seq, "io time (jiffies)     rpcs   %% cum %% |");
+        seq_printf(seq, "       rpcs   %% cum %%\n");
+
+        read_tot = lprocfs_oh_sum(&filter->fo_r_io_time);
+        write_tot = lprocfs_oh_sum(&filter->fo_w_io_time);
+
+        read_cum = 0;
+        write_cum = 0;
+        for (i = 0; i < OBD_HIST_MAX; i++) {
+                unsigned long r = filter->fo_r_io_time.oh_buckets[i];
+                unsigned long w = filter->fo_w_io_time.oh_buckets[i];
+                read_cum += r;
+                write_cum += w;
+                seq_printf(seq, "%d:\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                                 1 << i, r, pct(r, read_tot),
+                                 pct(read_cum, read_tot), w,
+                                 pct(w, write_tot),
+                                 pct(write_cum, write_tot));
+                if (read_cum == read_tot && write_cum == write_tot)
+                        break;
+        }
+
+        seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
+        seq_printf(seq, "disk I/O size         count  %% cum %% |");
+        seq_printf(seq, "       count  %% cum %%\n");
+
+        read_tot = lprocfs_oh_sum(&filter->fo_r_disk_iosize);
+        write_tot = lprocfs_oh_sum(&filter->fo_w_disk_iosize);
+
+        read_cum = 0;
+        write_cum = 0;
+        for (i = 0; i < OBD_HIST_MAX; i++) {
+                unsigned long r = filter->fo_r_disk_iosize.oh_buckets[i];
+                unsigned long w = filter->fo_w_disk_iosize.oh_buckets[i];
+
+                read_cum += r;
+                write_cum += w;
+                if (i < 10)
+                        seq_printf(seq, "%d", 1<<i);
+                else if (i < 20)
+                        seq_printf(seq, "%dK", 1<<(i-10));
+                else
+                        seq_printf(seq, "%dM", 1<<(i-20));
+
+                seq_printf(seq, ":\t\t%10lu %3lu %3lu   | %10lu %3lu %3lu\n",
+                           r, pct(r, read_tot), pct(read_cum, read_tot), 
+                           w, pct(w, write_tot), pct(write_cum, write_tot));
+                if (read_cum == read_tot && write_cum == write_tot)
+                        break;
+        }
+#endif
+
         return 0;
 }
 #undef pct
@@ -349,10 +426,16 @@ static ssize_t filter_brw_stats_seq_write(struct file *file, const char *buf,
 
         lprocfs_oh_clear(&filter->fo_r_pages);
         lprocfs_oh_clear(&filter->fo_w_pages);
+        lprocfs_oh_clear(&filter->fo_read_rpc_hist);
+        lprocfs_oh_clear(&filter->fo_write_rpc_hist);
+        lprocfs_oh_clear(&filter->fo_r_io_time);
+        lprocfs_oh_clear(&filter->fo_w_io_time);
         lprocfs_oh_clear(&filter->fo_r_discont_pages);
         lprocfs_oh_clear(&filter->fo_w_discont_pages);
         lprocfs_oh_clear(&filter->fo_r_discont_blocks);
         lprocfs_oh_clear(&filter->fo_w_discont_blocks);
+        lprocfs_oh_clear(&filter->fo_r_disk_iosize);
+        lprocfs_oh_clear(&filter->fo_w_disk_iosize);
 
         return len;
 }

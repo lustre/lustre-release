@@ -11,7 +11,8 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-[ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
+[ "$ALWAYS_EXCEPT$EXCEPT" ] && \
+	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT`"
 
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH:/sbin
@@ -37,6 +38,7 @@ SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
 IOPENTEST1=${IOPENTEST1:-iopentest1}
 IOPENTEST2=${IOPENTEST2:-iopentest2}
 MEMHOG=${MEMHOG:-memhog}
+DIRECTIO=${DIRECTIO:-directio}
 
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
@@ -67,7 +69,7 @@ START=${START:-:}
 
 log() {
 	echo "$*"
-	lctl mark "$*" 2> /dev/null || true
+	$LCTL mark "$*" 2> /dev/null || true
 }
 
 trace() {
@@ -2120,15 +2122,24 @@ run_test 63 "Verify oig_wait interruption does not crash ======="
 # bug 2248 - async write errors didn't return to application on sync
 # bug 3677 - async write errors left page locked
 test_63b() {
+	DBG_SAVE=`cat /proc/sys/portals/debug`
+	sysctl -w portals.debug=-1
+
 	# ensure we have a grant to do async writes
 	dd if=/dev/zero of=/mnt/lustre/f63b bs=4k count=1
 	rm /mnt/lustre/f63b
 
 	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
 	sysctl -w lustre.fail_loc=0x80000406
-	multiop /mnt/lustre/f63b Owy && error "sync didn't return ENOMEM"
+	multiop /mnt/lustre/f63b Owy && \
+		$LCTL dk /tmp/test63b.debug && \
+		sysctl -w portals.debug=$DBG_SAVE && \
+		error "sync didn't return ENOMEM"
 	grep -q locked /proc/fs/lustre/llite/fs*/dump_page_cache && \
+		$LCTL dk /tmp/test63b.debug && \
+		sysctl -w portls.debug=$DBG_SAVE && \
 		error "locked page left in cache after async error" || true
+	sysctl -w portals.debug=$DBG_SAVE
 }
 run_test 63b "async write errors should be returned to fsync ==="
 
@@ -2259,6 +2270,33 @@ test_68() {
 	[ $SWAPUSED -eq 0 ] && echo "no swap used???" || true
 }
 run_test 68 "support swapping to Lustre ========================"
+
+# bug5265, obdfilter oa2dentry return -ENOENT
+# #define OBD_FAIL_OST_ENOENT 0x217
+test_69() {
+	[ -z "`lsmod|grep obdfilter`" ] &&
+		echo "skipping test 69 (remote OST)" && return
+
+        f="$DIR/f69"
+	touch $f
+
+	echo 0x217 > /proc/sys/lustre/fail_loc
+	truncate $f 1 # vmtruncate() will ignore truncate() error.
+	$DIRECTIO write $f 0 2 && error "write succeeded, expect -ENOENT"
+
+	echo 0 > /proc/sys/lustre/fail_loc
+	$DIRECTIO write $f 0 2 || error "write error"
+
+	cancel_lru_locks OSC
+	$DIRECTIO read $f 0 1 || error "read error"
+
+	echo 0x217 > /proc/sys/lustre/fail_loc
+	$DIRECTIO read $f 1 1 && error "read succeeded, expect -ENOENT"
+
+	echo 0 > /proc/sys/lustre/fail_loc
+	rm -f $f
+}
+run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS

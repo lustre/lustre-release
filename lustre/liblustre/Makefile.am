@@ -7,13 +7,13 @@ AM_CFLAGS = $(LLCFLAGS)
 LIBS = $(LIBEFENCE)
 
 LUSTRE_LIBS = libllite.a \
-              $(top_builddir)/lov/liblov.a \
-              $(top_builddir)/obdecho/libobdecho.a \
-              $(top_builddir)/osc/libosc.a \
-              $(top_builddir)/mdc/libmdc.a \
-              $(top_builddir)/ptlrpc/libptlrpc.a \
-              $(top_builddir)/obdclass/liblustreclass.a \
-              $(top_builddir)/lvfs/liblvfs.a
+              $(top_builddir)/lustre/lov/liblov.a \
+              $(top_builddir)/lustre/obdecho/libobdecho.a \
+              $(top_builddir)/lustre/osc/libosc.a \
+              $(top_builddir)/lustre/mdc/libmdc.a \
+              $(top_builddir)/lustre/ptlrpc/libptlrpc.a \
+              $(top_builddir)/lustre/obdclass/liblustreclass.a \
+              $(top_builddir)/lustre/lvfs/liblvfs.a
 
 PTL_LIBS =    $(top_builddir)/portals/utils/libuptlctl.a \
               $(top_builddir)/portals/unals/libtcpnal.a \

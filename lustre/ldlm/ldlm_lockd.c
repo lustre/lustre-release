@@ -143,9 +143,9 @@ static int expired_lock_main(void *arg)
                         }
                         list_del_init(&lock->l_pending_chain);
                         if ((void *)lock->l_export < LP_POISON + PAGE_SIZE &&
-                            (void *)lock->l_export >= LP_POISON + PAGE_SIZE) {
+                            (void *)lock->l_export >= LP_POISON) {
                                 CERROR("lock with free export on elt list %p\n",
-                                       export);
+                                       lock->l_export);
                                 lock->l_export = NULL;
                                 LDLM_ERROR(lock, "free export");
                                 continue;

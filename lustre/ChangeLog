@@ -11,13 +11,23 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't try to complete elan receive that already failed (4012)
 	- free RPC server reply state on error (5406)
 	- clean up thread from ptlrpc_start_thread() on error (5160)
+	- readahead could read extra page into cache that wasn't ejected (5388)
+	- prevent races in class_attach/setup/cleanup/detach (5260)
+	- don't dereference de->d_inode after l_dput of de (5458)
+	- use "int" for stripe value returned from lock_to_stripe (5544)
+	- mballoc allocation and error-checking fixes in 2.6 (5504)
+	- block device patches to fix I/O request sizes in 2.6 (5482)
+	- protect KMS changes with its own lock, not i_sem (5492, 5624, 3453)
+	- look up hostnames for IB nals (5602)
        * miscellania
 	- service request history (4965)
 	- put {ll,lov,osc}_async_page structs in a single slab (4699)
 	- create an "evict_client" /proc entry on OSTs, like the MDS has
-	- fix mount usage message, return errors per mount(8)
+	- fix mount usage message, return errors per mount(8) (5168)
 	- change grep [] to grep "[]" in tests so they work in more UMLs
 	- fix ppc64/x86_64 spec to use %{_libdir} instead of /usr/lib (5389)
+	- remove ancient LOV_MAGIC_V0 EA support (5047)
+	- add "disk I/Os in flight" and "I/O req time" stats in obdfilter
 
 2004-11-23  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0
@@ -39,6 +49,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.9
+       * bug fixes
 	- send OST transaction number in read/write reply to free req (4966)
 	- don't ASSERT in ptl_send_rpc() if we run out of memory (5119)
 	- lock /proc/sys/portals/routes internal state, avoiding oops (4827)

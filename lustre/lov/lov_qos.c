@@ -36,8 +36,7 @@
 
 void qos_shrink_lsm(struct lov_request_set *set)
 {
-        struct lov_stripe_md *lsm = set->set_md;
-        struct lov_stripe_md *lsm_new;
+        struct lov_stripe_md *lsm = set->set_md, *lsm_new;
         /* XXX LOV STACKING call into osc for sizes */
         unsigned oldsize, newsize;
 
@@ -85,7 +84,7 @@ int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
         ENTRY;
 
         LASSERT(src_oa->o_valid & OBD_MD_FLID);
-        
+
         lsm->lsm_object_id = src_oa->o_id;
         if (!lsm->lsm_stripe_size)
                 lsm->lsm_stripe_size = lov->desc.ld_default_stripe_size;
@@ -114,7 +113,7 @@ int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
 
         for (i = 0; i < ost_count; i++, ost_idx = (ost_idx + 1) % ost_count) {
                 struct lov_request *req;
-                
+
                 ++ost_start_idx;
                 if (lov->tgts[ost_idx].active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", ost_idx);
@@ -124,16 +123,16 @@ int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
                 OBD_ALLOC(req, sizeof(*req));
                 if (req == NULL)
                         GOTO(out, rc = -ENOMEM);
-                
+
                 req->rq_buflen = sizeof(*req->rq_md);
                 OBD_ALLOC(req->rq_md, req->rq_buflen);
                 if (req->rq_md == NULL)
                         GOTO(out, rc = -ENOMEM);
-                
+
                 req->rq_oa = obdo_alloc();
                 if (req->rq_oa == NULL)
                         GOTO(out, rc = -ENOMEM);
-                
+
                 req->rq_idx = ost_idx;
                 req->rq_stripe = i;
                 /* create data objects with "parent" OA */
@@ -159,10 +158,10 @@ int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
                 if (set->set_count == lsm->lsm_stripe_count)
                         GOTO(out, rc = 0);
         }
-        
+
         if (set->set_count == 0)
                 GOTO(out, rc = -EIO);
-        
+
         /* If we were passed specific striping params, then a failure to
          * meet those requirements is an error, since we can't reallocate
          * that memory (it might be part of a larger array or something).
@@ -171,7 +170,7 @@ int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
          */
         if (!newea) {
                 CERROR("can't lstripe objid "LPX64": have %u want %u, rc %d\n",
-                       lsm->lsm_object_id, set->set_count, 
+                       lsm->lsm_object_id, set->set_count,
                        lsm->lsm_stripe_count, rc);
                 rc = rc ? rc : -EFBIG;
         } else {
@@ -181,6 +180,3 @@ int qos_prep_create(struct lov_obd *lov, struct lov_request_set *set, int newea)
 out:
         RETURN(rc);
 }
-
-
-

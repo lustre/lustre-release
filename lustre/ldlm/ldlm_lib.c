@@ -113,6 +113,8 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         spin_lock_init(&cli->cl_write_rpc_hist.oh_lock);
         spin_lock_init(&cli->cl_read_page_hist.oh_lock);
         spin_lock_init(&cli->cl_write_page_hist.oh_lock);
+        spin_lock_init(&cli->cl_read_offset_hist.oh_lock);
+        spin_lock_init(&cli->cl_write_offset_hist.oh_lock);
         if (num_physpages >> (20 - PAGE_SHIFT) <= 128) { /* <= 128 MB */
                 cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 4;
                 cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 4;
@@ -756,9 +758,9 @@ static void reset_recovery_timer(struct obd_device *obd)
         if (!obd->obd_recovering) {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return;
-        }                
-        CDEBUG(D_HA, "timer will expire in %u seconds\n",
-               OBD_RECOVERY_TIMEOUT / HZ);
+        }
+        CDEBUG(D_HA, "%s: timer will expire in %u seconds\n", obd->obd_name,
+               (int)(OBD_RECOVERY_TIMEOUT / HZ));
         mod_timer(&obd->obd_recovery_timer, jiffies + OBD_RECOVERY_TIMEOUT);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 }
@@ -773,7 +775,7 @@ void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler)
                 return;
         }
         CWARN("%s: starting recovery timer (%us)\n", obd->obd_name,
-               OBD_RECOVERY_TIMEOUT / HZ);
+              (int)(OBD_RECOVERY_TIMEOUT / HZ));
         obd->obd_recovery_handler = handler;
         obd->obd_recovery_timer.function = target_recovery_expired;
         obd->obd_recovery_timer.data = (unsigned long)obd;
@@ -1171,7 +1173,7 @@ void target_committed_to_req(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
 
-        if (!obd->obd_no_transno)
+        if (!obd->obd_no_transno && req->rq_repmsg != NULL)
                 req->rq_repmsg->last_committed = obd->obd_last_committed;
         else
                 DEBUG_REQ(D_IOCTL, req,

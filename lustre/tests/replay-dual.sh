@@ -379,7 +379,6 @@ test_18() {	# bug 3822 - evicting client with enqueued lock
 	wait $OPENPID
 	dmesg | grep "entering recovery in server" && \
 		error "client not evicted" || true
-	set +vx
 }
 run_test 18 "ldlm_handle_enqueue succeeds on evicted export (3822)"
 
