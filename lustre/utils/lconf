@@ -281,6 +281,16 @@ class LCTLInterface:
             raise CommandError(self.lctl, err, rc)
         return rc, out
 
+    def runcmd(self, *args):
+        """
+        run lctl using the command line
+        """
+        cmd = string.join(map(str,args))
+        rc, out = run(self.lctl, cmd)
+        if rc:
+            raise CommandError(self.lctl, out, rc)
+        return rc, out
+
             
     def network(self, net, nid):
         """ initialized network and add "self" """
@@ -412,10 +422,7 @@ class LCTLInterface:
 
     # get list of devices
     def device_list(self):
-        cmds = """
-  device_list
-  quit"""
-        rc, out = self.run(cmds)
+        rc, out = self.runcmd('device_list')
         return out
 
 # ============================================================
@@ -509,7 +516,8 @@ def mkfs(fstype, dev):
     (ret, out) = run (mkfs, force, dev)
     if ret:
         panic("Unable to build fs:", dev)
-    # enable hash tree indexing on fs
+    # enable hash tree indexing on fsswe
+    # FIXME: this check can probably go away on 2.5
     if fstype == 'extN':
         htree = 'echo "feature FEATURE_C5" | debugfs -w'
         (ret, out) = run (htree, dev)
@@ -939,6 +947,7 @@ class MDS(Module):
         Module.__init__(self, 'MDS', dom_node)
         self.devname, self.size = get_device(dom_node)
         self.fstype = get_text(dom_node, 'fstype')
+        # FIXME: if fstype not set, then determine based on kernel version
         self.format = get_text(dom_node, 'autoformat', "no")
         if self.fstype == 'extN':
             self.add_module('lustre/extN', 'extN') 
@@ -995,6 +1004,7 @@ class OBD(Module):
         self.obdtype = get_attr(dom_node, 'type')
         self.devname, self.size = get_device(dom_node)
         self.fstype = get_text(dom_node, 'fstype')
+        # FIXME: if fstype not set, then determine based on kernel version
         self.format = get_text(dom_node, 'autoformat', 'yes')
         if self.fstype == 'extN':
             self.add_module('lustre/extN', 'extN') 
