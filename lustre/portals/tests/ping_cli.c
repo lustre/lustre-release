@@ -87,8 +87,8 @@ pingcli_shutdown(ptl_handle_ni_t nih, int err)
 static void pingcli_callback(ptl_event_t *ev)
 {
         int i, magic;
-        i = *(int *)(ev->mem_desc.start + ev->offset + sizeof(unsigned));
-        magic = *(int *)(ev->mem_desc.start + ev->offset);
+        i = *(int *)(ev->md.start + ev->offset + sizeof(unsigned));
+        magic = *(int *)(ev->md.start + ev->offset);
 
         if(magic != 0xcafebabe) {
                 printk ("LustreError: Unexpected response \n");
@@ -188,7 +188,7 @@ pingcli_start(struct portal_ioctl_data *args)
         client->md_in_head.threshold = PTL_MD_THRESH_INF;
         client->md_in_head.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
         client->md_in_head.user_ptr  = NULL;
-        client->md_in_head.eventq    = client->eq;
+        client->md_in_head.eq_handle = client->eq;
         memset (client->inbuf, 0, (args->ioc_size + STDSIZE) * count);
 
         /* Attach the incoming buffer */
@@ -204,7 +204,7 @@ pingcli_start(struct portal_ioctl_data *args)
         client->md_out_head.threshold = args->ioc_count;
         client->md_out_head.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
         client->md_out_head.user_ptr  = NULL;
-        client->md_out_head.eventq    = PTL_EQ_NONE;
+        client->md_out_head.eq_handle = PTL_EQ_NONE;
 
         memcpy (client->outbuf, &ping_head_magic, sizeof(ping_bulk_magic));
 
