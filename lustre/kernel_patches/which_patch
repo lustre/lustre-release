@@ -1,11 +1,13 @@
-series/chaos
-   chaos                    ** up to date for current chaos kernel
-series/rh-2.4.18-18
-   redhat 2.4.18-18
-series/hp-pnnl              ** Note: functionally equivalent to 2.4.19 
-   linux-2.4.18-hp2_pnnl2
-series/vanilla-2.4.19       ** Not supported - ask Niklas Edmundsson
-                               <nikke@ing.umu.se>
-   linux-2.4.19
-series/vanilla-2.5.63       ** Development may not work
-   linux-2.5.63
+SERIES               MEMNONIC                  COMMENT
+
+hp-pnnl-2.4.20       linux-2.4.19-hp4_pnnl1    same as vanilla except uml
+vanilla-2.4.20       linux-2.4.20              patch includes uml
+chaos-2.4.20         linux-chaos-2.4.20        same as rh-2.4.20-8
+rh-2.4.20            linux-rh-2.4.20-8         same as chaos-2.4.20
+rh-2.4.18-18         linux-rh-2.4.18-18        same as chaos except uml
+chaos                linux-chaos-2.4.18        same as rh-2.4.18-18 except uml
+
+REVIEW:
+
+vanilla-2.5          linux-2.5.63
+hp-pnnl              linux-2.4.19-hp2_pnnl6
