@@ -50,9 +50,9 @@ typedef unsigned long long cycles_t;
 #   define cpu_to_le64(x) bswap_64(x)
 #  else
 #   error "Unknown byte order"
-#  endif
-# endif
-#endif
+#  endif /* __BIG_ENDIAN */
+# endif /* __LITTLE_ENDIAN */
+#endif /* ! __KERNEL__ */
 
 /*
  *  Debugging
@@ -154,7 +154,7 @@ struct ptldebug_header {
 #  define CDEBUG_STACK (THREAD_SIZE -                                      \
                         ((unsigned long)__builtin_frame_address(0) &       \
                          (THREAD_SIZE - 1)))
-# endif
+# endif /* __ia64__ */
 
 #define CHECK_STACK(stack)                                                    \
         do {                                                                  \
@@ -166,7 +166,7 @@ struct ptldebug_header {
                       /*panic("LBUG");*/                                      \
                 }                                                             \
         } while (0)
-#else /* __KERNEL__ */
+#else /* !__KERNEL__ */
 #define CHECK_STACK(stack) do { } while(0)
 #define CDEBUG_STACK (0L)
 #define portal_cerror 1
