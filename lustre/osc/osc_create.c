@@ -156,7 +156,7 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
 	/* this is the special case where create removes orphans */
 	if (oa->o_valid == (OBD_MD_FLID | OBD_MD_FLFLAGS) &&
 	    oa->o_flags == OBD_FL_DELORPHAN) {
-		oa->o_id = oscc->oscc_next_id;
+		oa->o_id = oscc->oscc_next_id - 1;
                 rc = osc_real_create(oscc->oscc_exph, oa, ea, NULL);
 		RETURN(rc);
 	}
