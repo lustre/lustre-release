@@ -12,10 +12,13 @@ use POSIX ":sys_wait_h";
 
 use vars qw(
             $MAX_THREADS
+	    $SCRIPT_NAME
             );
  
 # Don't try to run more than this many threads concurrently.
 $MAX_THREADS = 16;
+
+$SCRIPT_NAME = "rename.pl";
 
 # Initialize variables
 my $silent = 0;
@@ -104,7 +107,7 @@ if ($create_files) {
 		unlink("$filepath") if (-e $filepath);
 	    }
 	    my $rc = rmdir $path;
-	    print "rmdir $path failed: $!\n" if !$rc;	    
+	    print "$SCRIPT_NAME - rmdir $path failed: $!\n" if !$rc;	    
 	}
     }
 }
@@ -137,6 +140,11 @@ sub usage () {
 sub create_file ($) {
     my ($path) = @_;;
     
+    if (-e $path) {
+	warn "$path already exists!\n";
+	return 1;
+    }
+
     if ($use_mcreate) {
         my $tmp = `./mcreate $path`;
 	if ($tmp =~ /.*error: (.*)\n/) {
@@ -174,18 +182,18 @@ sub fork_and_rename ($) {
 		  my $path_f1 = "${mountpt}${which}/${thread_num}.${d}/${f1}";
 		  my $path_f2 = "${mountpt}${which}/${thread_num}.${d}/${f2}";
 		  
-		  print "Thread $thread_num: [$$] $path_f1 $path_f2 ...\n" if !$silent;
+		  print "$SCRIPT_NAME - Thread $thread_num: [$$] $path_f1 $path_f2 ...\n" if !$silent;
 		  my $rc = rename $path_f1, $path_f2;
-		  print "Thread $thread_num: [$$] done: $rc\n" if !$silent;
+		  print "$SCRIPT_NAME - Thread $thread_num: [$$] done: $rc\n" if !$silent;
 	      }
 	      if (($current_iteration) % 100 == 0) {
-		  print STDERR "Thread $thread_num: " . $current_iteration . " operations [" . $$ . "]\n";
+		  print "$SCRIPT_NAME - Thread $thread_num: " . $current_iteration . " operations [" . $$ . "]\n";
 		  
 	      }
 	      $current_iteration++;
 	  }
 
-	  print "Thread $thread_num: Done.\n";
+	  print "$SCRIPT_NAME - Thread $thread_num: Done.\n";
 
 	  exit 0;
 
