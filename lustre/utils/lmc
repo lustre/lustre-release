@@ -78,13 +78,9 @@ Commands:
    Create a MDS using the device
    Requires --node 
 
---lov lov_name [mdc_name stripe_sz stripe_off pattern]
+--lov lov_name [mds_name stripe_sz stripe_off pattern]
    Creates a logical volume
    When used with other commands, it specifics the lov to modify
-
---mdc mdc_name
-   Configures a MDC for a node.
-   Requires --node 
 
 --ost device [size]
    Creates an OBD/OST/OSC configuration triplet for a new device.
@@ -267,6 +263,11 @@ class GenConfig:
         devs.setAttribute("pattern", pattern)
         return lov
 
+    def lovconfig(self, name, uuid, lov_uuid):
+        lovconfig = self.newService("lovconfig", name, uuid)
+        lovconfig.appendChild(self.ref("lov", lov_uuid))
+        return lovconfig
+
     def mds(self, name, uuid, fs, devname, format, net_uuid, node_uuid,
             failover_uuid = "", dev_size=0 ):
         mds = self.newService("mds", name, uuid)
@@ -281,14 +282,9 @@ class GenConfig:
             mds.appendChild(self.ref("failover", failover_uuid))
         return mds
 
-    def mdc(self, name, uuid, mds_uuid):
-        mdc = self.newService("mdc", name, uuid)
-        mdc.appendChild(self.ref("mds", mds_uuid))
-        return mdc
-
-    def mountpoint(self, name, uuid, mdc_uuid, osc_uuid, path):
+    def mountpoint(self, name, uuid, mds_uuid, osc_uuid, path):
         mtpt = self.newService("mountpoint", name, uuid)
-        mtpt.appendChild(self.ref("mdc", mdc_uuid))
+        mtpt.appendChild(self.ref("mds", mds_uuid))
         mtpt.appendChild(self.ref("osc", osc_uuid))
         self.addElement(mtpt, "path", path)
         return mtpt
@@ -490,9 +486,7 @@ def add_mds(gen, lustre, options, args):
     else:
         size = 0
 
-    mdc_name = 'MDC_' + mds_name
     mds_uuid = new_uuid(mds_name)
-    mdc_uuid = new_uuid(mdc_name)
 
     node_uuid = name2uuid(lustre, node_name)
 
@@ -505,29 +499,8 @@ def add_mds(gen, lustre, options, args):
 
     mds = gen.mds(mds_name, mds_uuid, "extN", devname, get_format_flag(options),
                   net_uuid, node_uuid, dev_size=size)
-    mdc = gen.mdc(mdc_name, mdc_uuid, mds_uuid)
     lustre.appendChild(mds)
-    lustre.appendChild(mdc)
                    
-
-def add_mdc(gen, lustre, options, args):
-    """ create mtpt on a node """
-    if len(args) < 1:
-        usage()
-
-    if options.has_key('node'):
-        node_name = options['node']
-    else:
-        error("--mdc requires a --node argument")
-
-    mdc_name = args[0]
-    mdc_uuid = name2uuid(lustre, mdc_name)
-
-    node = findByName(lustre, node_name, "node")
-    if not node:
-            error('node:',  node_name, "not found.")
-    node_add_profile(gen, node, "mdc", mdc_uuid)
-
 
 def add_ost(gen, lustre, options, args):
     lovname = ''
@@ -618,11 +591,17 @@ def add_lov(gen, lustre, options, args):
         error("LOV: ", name, " already exists.")
 
     mds_uuid = name2uuid(lustre, mds_name)
-
-    node = mds2node(lustre, mds_name)
-    node_add_profile(gen, node, "lov", uuid)
     lov = gen.lov(name, uuid, mds_uuid, stripe_sz, stripe_off, pattern)
     lustre.appendChild(lov)
+    
+    # add an lovconfig entry to the mds profile
+    lovconfig_name = new_name('LVCFG_' + name)
+    lovconfig_uuid = new_uuid(lovconfig_name)
+    node = mds2node(lustre, mds_name)
+    node_add_profile(gen, node, "lovconfig", lovconfig_uuid)
+    lovconfig = gen.lovconfig(lovconfig_name, lovconfig_uuid, uuid)
+    lustre.appendChild(lovconfig)
+
 
 
 def add_mtpt(gen, lustre, options, args):
@@ -638,7 +617,6 @@ def add_mtpt(gen, lustre, options, args):
     path = args[0]
     mds_name = args[1]
     lov_name = args[2]
-    mdc_name = 'MDC_' + mds_name
 
     name = new_name('MNT_'+ node_name)
 
@@ -646,18 +624,17 @@ def add_mtpt(gen, lustre, options, args):
     if ret:
         error("MOUNTPOINT: ", name, " already exists.")
 
-    mdc_uuid = name2uuid(lustre, mdc_name)
+    mds_uuid = name2uuid(lustre, mds_name)
     lov_uuid = name2uuid(lustre, lov_name, tag='lov', fatal=0)
     if not lov_uuid:
         lov_uuid = name2uuid(lustre, lov_name, tag='osc', fatal=1)
 
     uuid = new_uuid(name)
-    mtpt = gen.mountpoint(name, uuid, mdc_uuid, lov_uuid, path)
+    mtpt = gen.mountpoint(name, uuid, mds_uuid, lov_uuid, path)
     node = findByName(lustre, node_name, "node")
     if not node:
             error('node:',  node_name, "not found.")
     node_add_profile(gen, node, "mountpoint", uuid)
-    node_add_profile(gen, node, "mdc", mdc_uuid)
     lustre.appendChild(mtpt)
 
 
@@ -667,7 +644,7 @@ def add_mtpt(gen, lustre, options, args):
 def parse_cmdline(argv):
     short_opts = "ho:i:m:"
     long_opts = ["ost", "osc", "mtpt", "lov=", "node=", "mds=", "net", "tcpbuf=",
-                 "mdc", "route", "router", "merge=", "format", "reformat", "output=",
+                 "route", "router", "merge=", "format", "reformat", "output=",
                  "obdtype=", "in=", "help"]
     opts = []
     args = []
@@ -689,8 +666,6 @@ def parse_cmdline(argv):
             options['osc'] = 1
         if o == "--mds":
             options['mds'] = a
-        if o == "--mdc":
-            options['mdc'] = 1
         if o == "--net":
             options['net'] = 1
         if o == "--mtpt":
@@ -774,8 +749,6 @@ def main():
         add_mtpt(gen, lustre, options, args)
     elif options.has_key('mds'):
         add_mds(gen, lustre, options, args)
-    elif options.has_key('mdc'):
-        add_mdc(gen, lustre, options, args)
     elif options.has_key('net'):
         add_net(gen, lustre, options, args)
     elif options.has_key('lov'):

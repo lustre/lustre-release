@@ -33,6 +33,7 @@ import xml.dom.minidom
 # Global parameters
 TCP_ACCEPTOR = ''
 MAXTCPBUF = 1048576
+DEFAULT_TCPBUF = 1048576
 #
 # Maximum number of devices to search for.
 # (the /dev/loop* nodes need to be created beforehand)
@@ -662,8 +663,8 @@ class Network(Module):
         self.net_type = get_attr(dom_node,'type')
         self.nid = get_text(dom_node, 'server', '*')
         self.port = get_text_int(dom_node, 'port', 0)
-        self.send_mem = get_text_int(dom_node, 'send_mem', 65536)
-        self.recv_mem = get_text_int(dom_node, 'recv_mem', 65536)
+        self.send_mem = get_text_int(dom_node, 'send_mem', DEFAULT_TCPBUF)
+        self.recv_mem = get_text_int(dom_node, 'recv_mem', DEFAULT_TCPBUF)
         if self.nid == '*':
             self.nid = get_local_address(self.net_type)
             if not self.nid:
@@ -755,9 +756,9 @@ class LDLM(Module):
 class LOV(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'LOV', dom_node)
-        self.mdsuuid = get_first_ref(dom_node, 'mds')
-        mds= lookup(dom_node.parentNode, self.mdsuuid)
-        self.mdsname = getName(mds)
+        self.mds_uuid = get_first_ref(dom_node, 'mds')
+        mds= lookup(dom_node.parentNode, self.mds_uuid)
+        self.mds_name = getName(mds)
         devs = dom_node.getElementsByTagName('devices')
         if len(devs) > 0:
             dev_node = devs[0]
@@ -766,13 +767,72 @@ class LOV(Module):
             self.pattern = get_attr_int(dev_node, 'pattern', 0)
             self.devlist = get_all_refs(dev_node, 'osc')
             self.stripe_cnt = len(self.devlist)
+        self.add_module('lustre/mdc', 'mdc')
+        self.add_module('lustre/lov', 'lov')
 
     def prepare(self):
-        self.info(self.mdsuuid, self.stripe_cnt, self.stripe_sz, self.stripe_off, self.pattern,
-        self.devlist, self.mdsname)
-        lctl.lovconfig(self.uuid, self.mdsname, self.stripe_cnt,
-                       self.stripe_sz, self.stripe_off, self.pattern,
-                       string.join(self.devlist))
+        for osc_uuid in self.devlist:
+            osc = lookup(self.dom_node.parentNode, osc_uuid)
+            if osc:
+                n = OSC(osc)
+                n.prepare()
+            else:
+                panic('osc not found:', osc_uuid)
+        mdc_uuid = prepare_mdc(self.dom_node.parentNode, self.mds_uuid)
+        self.info(self.mds_uuid, self.stripe_cnt, self.stripe_sz, self.stripe_off, self.pattern,
+        self.devlist, self.mds_name)
+        lctl.newdev(attach="lov %s %s" % (self.name, self.uuid),
+                    setup ="%s" % (mdc_uuid))
+
+    def cleanup(self):
+        for osc_uuid in self.devlist:
+            osc = lookup(self.dom_node.parentNode, osc_uuid)
+            if osc:
+                n = OSC(osc)
+                n.cleanup()
+            else:
+                panic('osc not found:', osc_uuid)
+        Module.cleanup(self)
+        cleanup_mdc(self.dom_node.parentNode, self.mds_uuid)
+    def load_module(self):
+        for osc_uuid in self.devlist:
+            osc = lookup(self.dom_node.parentNode, osc_uuid)
+            if osc:
+                n = OSC(osc)
+                n.load_module()
+                break
+            else:
+                panic('osc not found:', osc_uuid)
+        Module.load_module(self)
+    def cleanup_module(self):
+        Module.cleanup_module(self)
+        for osc_uuid in self.devlist:
+            osc = lookup(self.dom_node.parentNode, osc_uuid)
+            if osc:
+                n = OSC(osc)
+                n.cleanup_module()
+                break
+            else:
+                panic('osc not found:', osc_uuid)
+
+class LOVConfig(Module):
+    def __init__(self,dom_node):
+        Module.__init__(self, 'LOVConfig', dom_node)
+        self.lov_uuid = get_first_ref(dom_node, 'lov')
+        l = lookup(dom_node.parentNode, self.lov_uuid)
+        self.lov = LOV(l)
+        
+    def prepare(self):
+        lov = self.lov
+        self.info(lov.mds_uuid, lov.stripe_cnt, lov.stripe_sz, lov.stripe_off, lov.pattern,
+        lov.devlist, lov.mds_name)
+        lctl.lovconfig(lov.uuid, lov.mds_name, lov.stripe_cnt,
+                       lov.stripe_sz, lov.stripe_off, lov.pattern,
+                       string.join(lov.devlist))
+
+    def cleanup(self):
+        #nothing to do here
+        pass
 
 
 class MDS(Module):
@@ -795,19 +855,30 @@ class MDS(Module):
         Module.cleanup(self)
         clean_loop(self.devname)
 
+# Very unusual case, as there is no MDC element in the XML anymore
+# Builds itself from an MDS node
 class MDC(Module):
     def __init__(self,dom_node):
-        Module.__init__(self, 'MDC', dom_node)
-        self.mds_uuid = get_first_ref(dom_node, 'mds')
-        self.lookup_server(self.mds_uuid)
+        self.mds = MDS(dom_node)
+        self.dom_node = dom_node
+        self.module_name = 'MDC'
+        self.kmodule_list = []
+        self._server = None
+        self._connected = 0
+
+        host = socket.gethostname()
+        self.name = 'MDC_'+host
+        self.uuid = self.name+'_UUID'
+
+        self.lookup_server(self.mds.uuid)
         self.add_module('lustre/mdc', 'mdc')
 
     def prepare(self):
-        self.info(self.mds_uuid)
+        self.info(self.mds.uuid)
         srv = self.get_server()
         lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
         lctl.newdev(attach="mdc %s %s" % (self.name, self.uuid),
-                        setup ="%s %s" %(self.mds_uuid, srv.uuid))
+                        setup ="%s %s" %(self.mds.uuid, srv.uuid))
             
 class OBD(Module):
     def __init__(self, dom_node):
@@ -847,6 +918,25 @@ class OST(Module):
         lctl.newdev(attach="ost %s %s" % (self.name, self.uuid),
                     setup ="%s" % (self.obd_uuid))
 
+
+# virtual interface for  OSC and LOV
+class VOSC(Module):
+    def __init__(self,dom_node):
+        Module.__init__(self, 'VOSC', dom_node)
+        if dom_node.nodeName == 'lov':
+            self.osc = LOV(dom_node)
+        else:
+            self.osc = OSC(dom_node)
+    def prepare(self):
+        self.osc.prepare()
+    def cleanup(self):
+        self.osc.cleanup()
+    def load_module(self):
+        self.osc.load_module()
+    def cleanup_module(self):
+        self.osc.cleanup_module()
+        
+
 class OSC(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'OSC', dom_node)
@@ -875,57 +965,41 @@ class Mountpoint(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'MTPT', dom_node)
         self.path = get_text(dom_node, 'path')
-        self.mdc_uuid = get_first_ref(dom_node, 'mdc')
+        self.mds_uuid = get_first_ref(dom_node, 'mds')
         self.lov_uuid = get_first_ref(dom_node, 'osc')
-        self.add_module('lustre/osc', 'osc')
-	# should add lov only if needed
-        self.add_module('lustre/lov', 'lov')
+        self.add_module('lustre/mdc', 'mdc')
         self.add_module('lustre/llite', 'llite')
+        l = lookup(self.dom_node.parentNode, self.lov_uuid)
+        self.osc = VOSC(l)
 
     def prepare(self):
-        l = lookup(self.dom_node.parentNode, self.lov_uuid)
-        if l.nodeName == 'lov':
-            lov = LOV(l)
-            for osc_uuid in lov.devlist:
-                osc = lookup(self.dom_node.parentNode, osc_uuid)
-                if osc:
-                    n = OSC(osc)
-                    n.prepare()
-                else:
-                    panic('osc not found:', osc_uuid)
-            lctl.newdev(attach="lov %s %s" % (lov.name, lov.uuid),
-                        setup ="%s" % (self.mdc_uuid))
-        else:
-            osc = OSC(l)
-            osc.prepare()
-            
-        self.info(self.path, self.mdc_uuid,self.lov_uuid)
+        self.osc.prepare()
+        mdc_uuid = prepare_mdc(self.dom_node.parentNode, self.mds_uuid)
+
+        self.info(self.path, self.mds_uuid,self.lov_uuid)
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
-              (self.lov_uuid, self.mdc_uuid, self.path)
+              (self.lov_uuid, mdc_uuid, self.path)
         run("mkdir", self.path)
         ret, val = run(cmd)
         if ret:
             panic("mount failed:", self.path)
+
     def cleanup(self):
-        self.info(self.path, self.mdc_uuid,self.lov_uuid)
+        self.info(self.path, self.mds_uuid,self.lov_uuid)
         (rc, out) = run("umount", self.path)
         if rc:
             log("umount failed, cleanup will most likely not work.")
         l = lookup(self.dom_node.parentNode, self.lov_uuid)
-        if l.nodeName == 'lov':
-            lov = LOV(l)
-            for osc_uuid in lov.devlist:
-                osc = lookup(self.dom_node.parentNode, osc_uuid)
-                if osc:
-                    n = OSC(osc)
-                    n.cleanup()
-                else:
-                    panic('osc not found:', osc_uuid)
-            lov.cleanup()
-        else:
-            osc = OSC(l)
-            osc.cleanup()
-            
+        self.osc.cleanup()
+        cleanup_mdc(self.dom_node.parentNode, self.mds_uuid)
+
+    def load_module(self):
+        self.osc.load_module()
+        Module.load_module(self)
+    def cleanup_module(self):
+        Module.cleanup_module(self)
+        self.osc.cleanup_module()
+
 
 # ============================================================
 # XML processing and query
@@ -1060,7 +1134,7 @@ def getServiceLevel(dom_node):
         return 40
     elif type in ('mdc','osc'):
         return 50
-    elif type in ('lov',):
+    elif type in ('lov', 'lovconfig'):
         return 60
     elif type in ('mountpoint',):
         return 70
@@ -1090,7 +1164,35 @@ def getByName(lustreNode, name, tag):
     return None
     
 
+############################################################
+# MDC UUID hack - 
+# FIXME: clean this mess up!
+#
+mdc_uuid = None
+def prepare_mdc(dom_node, mds_uuid):
+    global mdc_uuid
+    mds_node = lookup(dom_node, mds_uuid);
+    if not mds_node:
+        panic("no mds:", mds_uuid)
+    if mdc_uuid:
+        return mdc_uuid
+    mdc = MDC(mds_node)
+    mdc.prepare()
+    mdc_uuid = mdc.uuid
+    return mdc_uuid
 
+mdc_cleaned = None
+def cleanup_mdc(dom_node, mds_uuid):
+    global mdc_cleaned
+    mds_node = lookup(dom_node, mds_uuid);
+    if not mds_node:
+        panic("no mds:", mds_uuid)
+    if not mdc_cleaned:
+        mdc = MDC(mds_node)
+        mdc.cleanup()
+        mdc_uuid = None
+        mdc_cleaned = 'yes'
+        
 
 ############################################################
 # routing ("rooting")
@@ -1181,6 +1283,8 @@ def startService(dom_node, module_flag):
         n = LDLM(dom_node)
     elif type == 'lov':
         n = LOV(dom_node)
+    elif type == 'lovconfig':
+        n = LOVConfig(dom_node)
     elif type == 'network':
         n = Network(dom_node)
     elif type == 'obd':
@@ -1190,7 +1294,7 @@ def startService(dom_node, module_flag):
     elif type == 'mds':
         n = MDS(dom_node)
     elif type == 'osc':
-        n = OSC(dom_node)
+        n = VOSC(dom_node)
     elif type == 'mdc':
         n = MDC(dom_node)
     elif type == 'mountpoint':
