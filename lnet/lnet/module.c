@@ -47,6 +47,7 @@
 #include <portals/lib-p30.h>
 #include <portals/p30.h>
 #include <linux/kp30.h>
+#include <linux/kpr.h>
 #include <linux/portals_compat25.h>
 
 extern void (kping_client)(struct portal_ioctl_data *);
