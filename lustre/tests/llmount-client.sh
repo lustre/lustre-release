@@ -19,5 +19,4 @@ setup -1
 quit
 EOF
 
-mkdir /mnt/lustre
 mount -t lustre_lite -o device=0 none /mnt/lustre
