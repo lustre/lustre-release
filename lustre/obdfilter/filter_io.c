@@ -301,7 +301,6 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                                 /* If there's no more data, abort early.
                                  * lnb->page == NULL and lnb->rc == 0, so it's
                                  * easy to detect later. */
-                                lnb->dentry = NULL;
                                 break;
                         } else {
                                 rc = filter_start_page_read(inode, lnb);
@@ -352,7 +351,11 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                         if (lnb->page)
                                 page_cache_release(lnb->page);
                 }
-                f_dput(res->dentry);
+                if (res->dentry != NULL)
+                        f_dput(res->dentry);
+                else
+                        CERROR("NULL dentry in cleanup -- tell CFS\n");
+                res->dentry = NULL;
         case 0:
                 OBD_FREE(fso, objcount * sizeof(*fso));
                 pop_ctxt(&saved, &exp->exp_obd->u.filter.fo_ctxt, NULL);
@@ -613,7 +616,8 @@ static int filter_commitrw_read(struct obd_export *exp, int objcount,
                                 page_cache_release(lnb->page);
                 }
         }
-        f_dput(res->dentry);
+        if (res->dentry != NULL)
+                f_dput(res->dentry);
         RETURN(0);
 }
 
