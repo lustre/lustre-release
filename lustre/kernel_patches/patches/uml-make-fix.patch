@@ -1,19 +1,10 @@
- Makefile    |    4 +++-
+ Makefile    |    2 ++
  fs/Makefile |    1 +
  init/main.c |    2 +-
- 3 files changed, 5 insertions(+), 2 deletions(-)
+ 3 files changed, 4 insertions(+), 1 deletion(-)
 
---- uml-2.5/Makefile~uml-make-fix	2003-05-25 21:25:55.000000000 -0600
-+++ uml-2.5-braam/Makefile	2003-05-29 01:54:28.000000000 -0600
-@@ -182,7 +182,7 @@ AFLAGS_KERNEL	=
- NOSTDINC_FLAGS  = -nostdinc -iwithprefix include
- 
- CPPFLAGS	:= -D__KERNEL__ -Iinclude
--CFLAGS 		:= $(CPPFLAGS) -Wall -Wstrict-prototypes -Wno-trigraphs -O2 \
-+CFLAGS 		:= $(CPPFLAGS) -Wall -Wstrict-prototypes -Wno-trigraphs \
- 	  	   -fno-strict-aliasing -fno-common
- AFLAGS		:= -D__ASSEMBLY__ $(CPPFLAGS)
- 
+--- uml-2.5/Makefile~uml-make-fix	2003-05-30 03:31:57.000000000 -0600
++++ uml-2.5-braam/Makefile	2003-05-30 04:01:11.000000000 -0600
 @@ -404,6 +404,8 @@ $(SUBDIRS): prepare
  
  .PHONY: prepare
@@ -23,8 +14,8 @@
  ifdef KBUILD_MODULES
  ifeq ($(origin SUBDIRS),file)
  	$(Q)rm -rf $(MODVERDIR)
---- uml-2.5/init/main.c~uml-make-fix	2003-05-25 21:43:27.000000000 -0600
-+++ uml-2.5-braam/init/main.c	2003-05-29 01:54:09.000000000 -0600
+--- uml-2.5/init/main.c~uml-make-fix	2003-05-30 03:33:49.000000000 -0600
++++ uml-2.5-braam/init/main.c	2003-05-30 03:37:54.000000000 -0600
 @@ -47,7 +47,7 @@
   */
  #if __GNUC__ == 2 && __GNUC_MINOR__ == 96
@@ -34,8 +25,8 @@
  #endif
  #endif
  
---- uml-2.5/fs/Makefile~uml-make-fix	2003-05-25 21:48:05.000000000 -0600
-+++ uml-2.5-braam/fs/Makefile	2003-05-29 01:54:09.000000000 -0600
+--- uml-2.5/fs/Makefile~uml-make-fix	2003-05-30 03:33:15.000000000 -0600
++++ uml-2.5-braam/fs/Makefile	2003-05-30 03:37:54.000000000 -0600
 @@ -50,6 +50,7 @@ obj-$(CONFIG_PROFILING)		+= dcookies.o
  obj-$(CONFIG_EXT3_FS)		+= ext3/ # Before ext2 so root fs can be ext3
  obj-$(CONFIG_JBD)		+= jbd/
