@@ -1029,7 +1029,6 @@ static int ost_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_INODE, req, "ping");
                 rc = target_handle_ping(req);
                 break;
-#ifdef ENABLE_ORPHANS
         /* FIXME - just reply status */
         case LLOG_ORIGIN_CONNECT:
                 DEBUG_REQ(D_INODE, req, "log connect\n");
@@ -1039,7 +1038,6 @@ static int ost_handle(struct ptlrpc_request *req)
                 if (rc)
                         RETURN(rc);
                 RETURN(ptlrpc_reply(req));
-                //break;
         case OBD_LOG_CANCEL:
                 CDEBUG(D_INODE, "log cancel\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOG_CANCEL_NET, 0);
@@ -1049,8 +1047,6 @@ static int ost_handle(struct ptlrpc_request *req)
                 if (rc)
                         RETURN(rc);
                 RETURN(ptlrpc_reply(req));
-                //break;
-#endif
         case LDLM_ENQUEUE:
                 CDEBUG(D_INODE, "enqueue\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);

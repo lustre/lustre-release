@@ -56,6 +56,11 @@ struct lustre_md {
         struct lov_stripe_md *lsm;
 };
 
+struct ll_uctxt {
+        __u32 gid1;
+        __u32 gid2;
+};
+
 struct mdc_op_data {
         struct ll_fid fid1;
         struct ll_fid fid2;

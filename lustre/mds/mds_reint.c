@@ -62,9 +62,7 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
 {
         struct mds_logcancel_data *mlcd = cb_data;
         struct lov_stripe_md *lsm = NULL;
-#ifdef ENABLE_ORPHANS
         struct llog_ctxt *ctxt;
-#endif
         int rc;
 
         obd_transno_commit_cb(obd, transno, error);
@@ -79,7 +77,6 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                        (int)(mlcd->mlcd_cookielen/sizeof(*mlcd->mlcd_cookies)),
                        rc);
         } else {
-#ifdef ENABLE_ORPHANS
                 ///* XXX 0 normally, SENDNOW for debug */);
                 ctxt = llog_get_context(obd, mlcd->mlcd_cookies[0].lgc_subsys + 1);
                 rc = llog_cancel(ctxt, lsm,
@@ -90,7 +87,6 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                         CERROR("error cancelling %d log cookies: rc %d\n",
                                (int)(mlcd->mlcd_cookielen /
                                      sizeof(*mlcd->mlcd_cookies)), rc);
-#endif
         }
 
         OBD_FREE(mlcd, mlcd->mlcd_size);
@@ -1184,13 +1180,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 cleanup_phase = 4; /* transaction */
                 rc = vfs_unlink(dparent->d_inode, dchild);
 
-#ifdef ENABLE_ORPHANS
-
                 if (!rc && log_unlink)
                         if (mds_log_op_unlink(obd, child_inode, req->rq_repmsg,
                                               offset + 1) > 0)
                                 body->valid |= OBD_MD_FLCOOKIE;
-#endif
                 break;
         }
         case S_IFLNK:

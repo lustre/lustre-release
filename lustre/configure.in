@@ -33,12 +33,6 @@ if test x$enable_pinger != xno ; then
   AC_DEFINE(ENABLE_PINGER, 1, Use the Pinger)
 fi
 
-# very experimental orphan support
-AC_ARG_ENABLE(orphans, [  --enable-orphans very experimental orphan recovery support])
-if test x$enable_orphans = xyes ; then
-  AC_DEFINE(ENABLE_ORPHANS, 1, Compile with orphan support)
-fi
-
 AC_ARG_WITH(obd-buffer-size, [  --with-obd-buffer-size=[size] set lctl ioctl maximum bytes (default=8192)],OBD_BUFFER_SIZE=$with_obd_buffer_size,OBD_BUFFER_SIZE=8192)
 AC_DEFINE_UNQUOTED(OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE, [IOCTL Buffer Size])
 

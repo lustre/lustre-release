@@ -993,7 +993,7 @@ static char *reint_names[] = {
 
 int mds_handle(struct ptlrpc_request *req)
 {
-        int should_process;
+        int should_process, fail = OBD_FAIL_MDS_ALL_REPLY_NET;
         int rc = 0;
         struct mds_obd *mds = NULL; /* quell gcc overwarning */
         struct obd_device *obd = NULL;
@@ -1130,7 +1130,7 @@ int mds_handle(struct ptlrpc_request *req)
                         break;
 
                 rc = mds_reint(req, 0, NULL);
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_REINT_NET_REP, 0);
+                fail = OBD_FAIL_MDS_REINT_NET_REP;
                 break;
         }
 
@@ -1253,7 +1253,7 @@ int mds_handle(struct ptlrpc_request *req)
                 rc = req->rq_status = -ENOTCONN;
         }
 
-        target_send_reply(req, rc, OBD_FAIL_MDS_ALL_REPLY_NET);
+        target_send_reply(req, rc, fail);
         return 0;
 }
 
@@ -1438,13 +1438,12 @@ static int mds_postrecov(struct obd_device *obd)
 
         LASSERT(!obd->obd_recovering);
 
-#ifdef ENABLE_ORPHANS
         rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
                           obd->u.mds.mds_lov_desc.ld_tgt_count, NULL, NULL);
         if (rc != 0) {
                 CERROR("faild at llog_origin_connect: %d\n", rc);
         }
-#endif
+
         rc = mds_cleanup_orphans(obd);
 
         rc2 = mds_lov_set_nextid(obd);

@@ -1181,11 +1181,9 @@ static int filter_postsetup(struct obd_device *obd)
         ENTRY;
 
         // XXX add a storage location for the logid for size changes
-#ifdef ENABLE_ORPHANS
         rc = llog_cat_initialize(obd, 1);
         if (rc)
                 CERROR("failed to setup llogging subsystems\n");
-#endif
         RETURN(rc);
 }
 
@@ -1317,11 +1315,9 @@ static int filter_precleanup(struct obd_device *obd, int flags)
         int rc = 0;
         ENTRY;
 
-#ifdef ENABLE_ORPHANS
         rc = obd_llog_finish(obd, 0);
         if (rc)
                 CERROR("failed to cleanup llogging subsystem\n");
-#endif
 
         RETURN(rc);
 }
@@ -1806,9 +1802,15 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
 cleanup:
         switch(cleanup_phase) {
         case 3:
-                if (fcc != NULL)
-                        fsfilt_add_journal_cb(obd, 0, oti->oti_handle,
-                                              filter_cancel_cookies_cb, fcc);
+                if (fcc != NULL) {
+                        if (oti != NULL) {
+                                fsfilt_add_journal_cb(obd, 0, oti->oti_handle,
+                                                      filter_cancel_cookies_cb, fcc);
+                        } else {
+                                fsfilt_add_journal_cb(obd, 0, handle,
+                                                      filter_cancel_cookies_cb, fcc);
+                        }
+                }
                 rc = filter_finish_transno(exp, oti, rc);
                 rc2 = fsfilt_commit(obd, dparent->d_inode, handle, 0);
                 if (rc2) {
@@ -1863,6 +1865,7 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         struct obd_run_ctxt saved;
         struct filter_obd *filter;
         struct dentry *dentry;
+        struct llog_ctxt *ctxt;
         int rc, rc2;
         ENTRY;
 
@@ -1871,6 +1874,9 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         /* an objid of zero is taken to mean "sync whole filesystem" */
         if (!oa || !(oa->o_valid & OBD_MD_FLID)) {
                 rc = fsfilt_sync(exp->exp_obd, filter->fo_sb);
+                /* flush any remaining cancel messages out to the target */
+                ctxt = llog_get_context(exp->exp_obd, LLOG_UNLINK_REPL_CTXT);
+                llog_sync(ctxt, exp);
                 RETURN(rc);
         }
 
@@ -1955,9 +1961,7 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
 {
         struct obd_device *obd;
         struct lustre_handle conn;
-#ifdef ENABLE_ORPHANS
         struct llog_ctxt *ctxt;
-#endif
         int rc = 0;
         ENTRY;
 
@@ -1976,10 +1980,8 @@ static int filter_set_info(struct obd_export *exp, __u32 keylen,
 
         CWARN("Received MDS connection ("LPX64")\n", conn.cookie);
         memcpy(&obd->u.filter.fo_mdc_conn, &conn, sizeof(conn));
-#ifdef ENABLE_ORPHANS
         ctxt = llog_get_context(obd, LLOG_UNLINK_REPL_CTXT);
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
-#endif
         RETURN(rc);
 }
 

@@ -387,7 +387,7 @@ static inline struct llog_cookie *obdo_logcookie(struct obdo *oa)
         return (struct llog_cookie *)(oa->o_inline +
                                       sizeof(struct lustre_handle));
 }
-/* don't forget obdo_fid which is way down at the bottom so it can 
+/* don't forget obdo_fid which is way down at the bottom so it can
  * come after the definition of llog_cookie */
 
 struct obd_statfs {
@@ -490,12 +490,6 @@ typedef enum {
 #define DISP_OPEN_CREATE  (1 << 4)
 #define DISP_OPEN_OPEN    (1 << 5)
 #define DISP_ENQ_COMPLETE (1<<6)
-
-
-struct ll_uctxt {
-        __u32 gid1;
-        __u32 gid2;
-};
 
 struct ll_fid {
         __u64 id;
@@ -824,17 +818,23 @@ extern void lustre_swab_ptlbd_rsp (struct ptlbd_rsp *r);
 /*
  * Opcodes for management/monitoring node.
  */
-#define MGMT_CONNECT    250
-#define MGMT_DISCONNECT 251
-#define MGMT_EXCEPTION  252 /* node died, etc. */
+typedef enum {
+        MGMT_CONNECT = 250,
+        MGMT_DISCONNECT,
+        MGMT_EXCEPTION,         /* node died, etc. */
+        MGMT_LAST_OPC
+} mgmt_cmd_t;
+#define MGMT_FIRST_OPC MGMT_CONNECT
 
 /*
  * Opcodes for multiple servers.
  */
 
-#define OBD_PING       400
-#define OBD_LOG_CANCEL 401
-#define OBD_LAST_OPC  (OBD_LOG_CANCEL + 1)
+typedef enum {
+        OBD_PING = 400,
+        OBD_LOG_CANCEL,
+        OBD_LAST_OPC
+} obd_cmd_t;
 #define OBD_FIRST_OPC OBD_PING
 
 /* catalog of log objects */
@@ -855,6 +855,7 @@ typedef enum {
         MDS_UNLINK_REC   = 0x10610000 | (MDS_REINT << 8) | REINT_UNLINK,
         OBD_CFG_REC      = 0x10620000,
         PTL_CFG_REC      = 0x10630000,
+        LLOG_GEN_REC     = 0x10640000,
         LLOG_HDR_MAGIC   = 0x10645539,
         LLOG_LOGID_MAGIC = 0x1064553a,
 } llog_op_type;
@@ -915,6 +916,16 @@ struct llog_size_change_rec {
         struct llog_rec_tail    lsc_tail;
 } __attribute__((packed));
 
+struct llog_gen {
+        __u64 mnt_cnt;
+        __u64 conn_cnt;
+} __attribute__((packed));
+
+struct llog_gen_rec {
+        struct llog_rec_hdr     lgr_hdr;
+        struct llog_gen         lgr_gen;
+        struct llog_rec_tail    lgr_tail;
+};
 /* On-disk header structure of each log object, stored in little endian order */
 #define LLOG_CHUNK_SIZE         4096
 #define LLOG_HEADER_SIZE        (96)
@@ -935,6 +946,7 @@ struct llog_log_hdr {
         __u32                   llh_size;
         __u32                   llh_flags;
         __u32                   llh_cat_idx;
+        /* for a catlog the first plain slot is next to it */
         struct obd_uuid         llh_tgtuuid;
         __u32                   llh_reserved[LLOG_HEADER_SIZE/sizeof(__u32) - 23];
         __u32                   llh_bitmap[LLOG_BITMAP_BYTES/sizeof(__u32)];
@@ -970,13 +982,8 @@ struct llogd_body {
         __u64 lgd_cur_offset;
 } __attribute__((packed));
 
-struct llog_ctxt_gen {
-        __u64 mnt_cnt;
-        __u64 conn_cnt;
-};
-
 struct llogd_conn_body {
-        struct llog_ctxt_gen    lgdc_gen;
+        struct llog_gen         lgdc_gen;
         struct llog_logid       lgdc_logid;
         __u32                   lgdc_ctxt_idx;
 } __attribute__((packed));

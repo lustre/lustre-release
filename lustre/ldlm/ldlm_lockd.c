@@ -855,41 +855,36 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         LASSERT(req->rq_export != NULL);
         LASSERT(req->rq_export->exp_obd != NULL);
 
-#ifdef ENABLE_ORPHANS
         /* FIXME - how to send reply */
         if (req->rq_reqmsg->opc == OBD_LOG_CANCEL) {
                 int rc = llog_origin_handle_cancel(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
         }
-
         if (req->rq_reqmsg->opc == LLOG_ORIGIN_HANDLE_CREATE) {
                 int rc = llog_origin_handle_create(req);
                 req->rq_status = rc;
                 ptlrpc_reply(req);
                 RETURN(0);
         }
-
         if (req->rq_reqmsg->opc == LLOG_ORIGIN_HANDLE_NEXT_BLOCK) {
                 int rc = llog_origin_handle_next_block(req);
                 req->rq_status = rc;
                 ptlrpc_reply(req);
                 RETURN(0);
         }
-
         if (req->rq_reqmsg->opc == LLOG_ORIGIN_HANDLE_READ_HEADER) {
                 int rc = llog_origin_handle_read_header(req);
                 req->rq_status = rc;
                 ptlrpc_reply(req);
                 RETURN(0);
         }
-
         if (req->rq_reqmsg->opc == LLOG_ORIGIN_HANDLE_CLOSE) {
                 int rc = llog_origin_handle_close(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
         }
-#endif
+
         ns = req->rq_export->exp_obd->obd_namespace;
         LASSERT(ns != NULL);
 

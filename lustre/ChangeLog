@@ -1,6 +1,7 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0
        * bug fixes
+       - orphan handling to avoid losing space on client/server crashes
 
 2004-01-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.3
@@ -89,7 +90,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- ENOMEM detection and retry on socknal sends (2230)
 	- use GFP_NOFS throughout Lustre, to combat ENOMEM (2230)
 	- move osc_rpcd into ptlrpc, for use in MDC and others (2329)
-	- protect MDS inode fsdata with stronger locking (2313)
+	- protect MDS inode fsdata with stronger locking; fixes assertion (2313)
 	- better error messages when a client is rejected during recovery (1505)
 	- avoid cancelling locks which were never granted, after failure (2330)
 	- fix i_sem/journal inversion in mds_client_add (2333)

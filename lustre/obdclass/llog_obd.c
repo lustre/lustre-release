@@ -26,7 +26,7 @@
 
 /* helper functions for calling the llog obd methods */
 
-int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd, 
+int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
                int count, struct llog_logid *logid, struct llog_operations *op)
 {
         int rc = 0;
@@ -49,7 +49,7 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
 
         if (op->lop_setup)
                 rc = op->lop_setup(obd, index, disk_obd, count, logid);
-        if (ctxt && rc) 
+        if (ctxt && rc)
                 OBD_FREE(ctxt, sizeof(*ctxt));
 
         RETURN(rc);
@@ -61,7 +61,6 @@ int llog_cleanup(struct llog_ctxt *ctxt)
         int rc = 0;
         ENTRY;
 
-        down(&ctxt->loc_sem);
         LASSERT(ctxt);
 
         if (CTXTP(ctxt, cleanup))
@@ -70,7 +69,6 @@ int llog_cleanup(struct llog_ctxt *ctxt)
         ctxt->loc_obd->obd_llog_ctxt[ctxt->loc_idx] = NULL;
         class_export_put(ctxt->loc_exp);
         ctxt->loc_exp = NULL;
-        up(&ctxt->loc_sem);
         OBD_FREE(ctxt, sizeof(*ctxt));
 
         RETURN(rc);
@@ -84,29 +82,25 @@ int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
 
         if (!ctxt)
                 RETURN(0);
-        down(&ctxt->loc_sem);
-        if (ctxt->loc_llcd && CTXTP(ctxt, sync))
+
+        if (CTXTP(ctxt, sync))
                 rc = CTXTP(ctxt, sync)(ctxt, exp);
-        else
-                up(&ctxt->loc_sem);
 
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_sync);
 
-int llog_add(struct llog_ctxt *ctxt,
-                 struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                 struct llog_cookie *logcookies, int numcookies)
+int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
+                struct lov_stripe_md *lsm, struct llog_cookie *logcookies,
+                int numcookies)
 {
         int rc;
         ENTRY;
 
         LASSERT(ctxt);
-        down(&ctxt->loc_sem);
         CTXT_CHECK_OP(ctxt, add, -EOPNOTSUPP);
 
         rc = CTXTP(ctxt, add)(ctxt, rec, lsm, logcookies, numcookies);
-        up(&ctxt->loc_sem);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_add);
@@ -125,7 +119,7 @@ int llog_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
 EXPORT_SYMBOL(llog_cancel);
 
 /* callback func for llog_process in llog_obd_origin_setup */
-static int cat_cancel_cb(struct llog_handle *cathandle, 
+static int cat_cancel_cb(struct llog_handle *cathandle,
                           struct llog_rec_hdr *rec, void *data)
 {
         struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
@@ -138,35 +132,36 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
                 CERROR("invalid record in catalog\n");
                 RETURN(-EINVAL);
         }
-        CWARN("processing log "LPX64":%x at index %u of catalog "LPX64"\n", 
+        CWARN("processing log "LPX64":%x at index %u of catalog "LPX64"\n",
                lir->lid_id.lgl_oid, lir->lid_id.lgl_ogen,
                le32_to_cpu(rec->lrh_index), cathandle->lgh_id.lgl_oid);
 
         rc = llog_cat_id2handle(cathandle, &loghandle, &lir->lid_id);
         if (rc) {
-                CERROR("Cannot find handle for log "LPX64"\n", lir->lid_id.lgl_oid);
+                CERROR("Cannot find handle for log "LPX64"\n",
+                       lir->lid_id.lgl_oid);
                 RETURN(rc);
-        }        
-        
+        }
+
         llh = loghandle->lgh_hdr;
         if ((le32_to_cpu(llh->llh_flags) & LLOG_F_ZAP_WHEN_EMPTY) &&
             (le32_to_cpu(llh->llh_count) == 1)) {
                 rc = llog_destroy(loghandle);
                 if (rc)
-                        CERROR("failure destroying log during postsetup: %d\n", rc);
+                        CERROR("failure destroying log in postsetup: %d\n", rc);
                 LASSERT(rc == 0);
 
                 index = loghandle->u.phd.phd_cookie.lgc_index;
-                if (cathandle->u.chd.chd_current_log == loghandle)
-                        cathandle->u.chd.chd_current_log = NULL;
                 llog_free_handle(loghandle);
-                                                                                                                
+
                 LASSERT(index);
+                llog_cat_set_first_idx(cathandle, index);
                 rc = llog_cancel_rec(cathandle, index);
                 if (rc == 0)
-                        CWARN("cancel log "LPX64":%x at index %u of catalog "LPX64"\n", 
-                               lir->lid_id.lgl_oid, lir->lid_id.lgl_ogen,
-                               le32_to_cpu(rec->lrh_index), cathandle->lgh_id.lgl_oid);
+                        CWARN("cancel log "LPX64":%x at index %u of catalog "
+                              LPX64"\n", lir->lid_id.lgl_oid,
+                              lir->lid_id.lgl_ogen, le32_to_cpu(rec->lrh_index),
+                              cathandle->lgh_id.lgl_oid);
         }
 
         RETURN(rc);
@@ -174,8 +169,9 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
 
 /* lop_setup method for filter/osc */
 // XXX how to set exports
-int llog_obd_origin_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
-                          int count, struct llog_logid *logid)
+int llog_obd_origin_setup(struct obd_device *obd, int index,
+                          struct obd_device *disk_obd, int count,
+                          struct llog_logid *logid)
 {
         struct llog_ctxt *ctxt;
         struct llog_handle *handle;
@@ -187,20 +183,19 @@ int llog_obd_origin_setup(struct obd_device *obd, int index, struct obd_device *
                 RETURN(0);
 
         LASSERT(count == 1);
-        
+
         ctxt = llog_get_context(obd, index);
         LASSERT(ctxt);
-        log_gen_init(ctxt);
+        llog_gen_init(ctxt);
 
-        down(&ctxt->loc_sem);
         if (logid->lgl_oid)
                 rc = llog_create(ctxt, &handle, logid, NULL);
         else {
                 rc = llog_create(ctxt, &handle, NULL, NULL);
-                if (!rc) 
+                if (!rc)
                         *logid = handle->lgh_id;
         }
-        if (rc) 
+        if (rc)
                 GOTO(out, rc);
 
         ctxt->loc_handle = handle;
@@ -210,11 +205,10 @@ int llog_obd_origin_setup(struct obd_device *obd, int index, struct obd_device *
         if (rc)
                 GOTO(out, rc);
 
-        rc = llog_process(handle, (llog_cb_t)cat_cancel_cb, NULL);
-        if (rc) 
+        rc = llog_process(handle, (llog_cb_t)cat_cancel_cb, NULL, NULL);
+        if (rc)
                 CERROR("llog_process with cat_cancel_cb failed: %d\n", rc);
  out:
-        up(&ctxt->loc_sem);
         if (ctxt && rc) {
                 obd->obd_llog_ctxt[index] = NULL;
                 OBD_FREE(ctxt, sizeof(*ctxt));
@@ -229,32 +223,34 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
         struct llog_log_hdr *llh;
         int rc, index;
         ENTRY;
-        
+
         if (!ctxt)
                 return 0;
 
         cathandle = ctxt->loc_handle;
         if (cathandle) {
-                list_for_each_entry_safe(loghandle, n, &cathandle->u.chd.chd_head, 
-                                 u.phd.phd_entry) {
+                list_for_each_entry_safe(loghandle, n,
+                                         &cathandle->u.chd.chd_head,
+                                         u.phd.phd_entry) {
                         llh = loghandle->lgh_hdr;
-                        if ((le32_to_cpu(llh->llh_flags) & LLOG_F_ZAP_WHEN_EMPTY) &&
+                        if ((le32_to_cpu(llh->llh_flags) &
+                                LLOG_F_ZAP_WHEN_EMPTY) &&
                             (le32_to_cpu(llh->llh_count) == 1)) {
                                 rc = llog_destroy(loghandle);
                                 if (rc)
-                                        CERROR("failure destroying log during cleanup: %d\n",
-                                               rc);
+                                        CERROR("failure destroying log during "
+                                               "cleanup: %d\n", rc);
                                 LASSERT(rc == 0);
 
                                 index = loghandle->u.phd.phd_cookie.lgc_index;
-                                if (cathandle->u.chd.chd_current_log == loghandle)
-                                        cathandle->u.chd.chd_current_log = NULL;
                                 llog_free_handle(loghandle);
-                                                                                                                             
+
                                 LASSERT(index);
+                                llog_cat_set_first_idx(cathandle, index);
                                 rc = llog_cancel_rec(cathandle, index);
                                 if (rc == 0)
-                                        CWARN("cancel plain log at index %u of catalog "LPX64"\n", 
+                                        CWARN("cancel plain log at index %u "
+                                              "of catalog "LPX64"\n",
                                               index, cathandle->lgh_id.lgl_oid);
                         }
                 }
@@ -314,7 +310,7 @@ int llog_cat_initialize(struct obd_device *obd, int count)
                 CERROR("rc: %d\n", rc);
                 GOTO(out, rc);
         }
-                        
+
  out:
         OBD_FREE(idarray, size);
         RETURN(rc);

@@ -54,7 +54,7 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt,
 
 static int mds_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                                    struct llog_logid *logid,
-                                   struct llog_ctxt_gen *gen) 
+                                   struct llog_gen *gen)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
@@ -86,9 +86,7 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
-#ifdef ENABLE_ORPHANS
         struct llog_ctxt *ctxt;
-#endif
         int rc;
         ENTRY;
 
@@ -101,11 +99,9 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
         if (rc < 0)
                 RETURN(rc);
 
-#ifdef ENABLE_ORPHANS
         ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
         rc = llog_add(ctxt, NULL, lsm, lustre_msg_buf(repmsg, offset + 1, 0),
                       repmsg->buflens[offset + 1] / sizeof(struct llog_cookie));
-#endif
 
         obd_free_memmd(mds->mds_osc_exp, &lsm);
 

@@ -70,7 +70,7 @@ static int llog_lvfs_pad(struct obd_device *obd, struct l_file *file,
         }
 
         file->f_pos += len - sizeof(rec) - sizeof(tail);
-        rc = fsfilt_write_record(obd, file, &tail, sizeof(tail), &file->f_pos, 0);
+        rc = fsfilt_write_record(obd, file, &tail, sizeof(tail),&file->f_pos,0);
         if (rc) {
                 CERROR("error writing padding record: rc %d\n", rc);
                 goto out;
@@ -92,7 +92,7 @@ static int llog_lvfs_write_blob(struct obd_device *obd, struct l_file *file,
         file->f_pos = off;
 
         if (!buf) {
-                rc = fsfilt_write_record(obd, file, rec, buflen, &file->f_pos, 0);
+                rc = fsfilt_write_record(obd, file, rec, buflen,&file->f_pos,0);
                 if (rc) {
                         CERROR("error writing log record: rc %d\n", rc);
                         goto out;
@@ -147,13 +147,12 @@ static int llog_lvfs_read_blob(struct obd_device *obd, struct l_file *file,
 
 static int llog_lvfs_read_header(struct llog_handle *handle)
 {
-        struct llog_rec_tail tail;
         struct obd_device *obd;
         int rc;
         ENTRY;
 
         LASSERT(sizeof(*handle->lgh_hdr) == LLOG_CHUNK_SIZE);
-        
+
         obd = handle->lgh_ctxt->loc_exp->exp_obd;
 
         if (handle->lgh_file->f_dentry->d_inode->i_size == 0) {
@@ -166,13 +165,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
         if (rc)
                 CERROR("error reading log header\n");
 
-        rc = llog_lvfs_read_blob(obd, handle->lgh_file, &tail, sizeof(tail),
-                                 handle->lgh_file->f_dentry->d_inode->i_size -
-                                 sizeof(tail));
-        if (rc)
-                CERROR("error reading log tail\n");
-
-        handle->lgh_last_idx = le32_to_cpu(tail.lrt_index);
+        handle->lgh_last_idx = le32_to_cpu(handle->lgh_hdr->llh_tail.lrt_index);
         handle->lgh_file->f_pos = handle->lgh_file->f_dentry->d_inode->i_size;
 
         RETURN(rc);
@@ -207,7 +200,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         if (rc)
                 RETURN(rc);
 
-        if (idx != -1) { 
+        if (idx != -1) {
                 loff_t saved_offset;
 
                 /* no header: only allowed to insert record 1 */
@@ -224,13 +217,13 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 if (rc || idx == 0)
                         RETURN(rc);
 
-                saved_offset = sizeof(*llh) + (idx-1) * le32_to_cpu(rec->lrh_len);
+                saved_offset = sizeof(*llh) + (idx-1)*le32_to_cpu(rec->lrh_len);
                 rc = llog_lvfs_write_blob(obd, file, rec, buf, saved_offset);
                 if (rc == 0 && reccookie) {
                         reccookie->lgc_lgl = loghandle->lgh_id;
                         reccookie->lgc_index = idx;
                         rc = 1;
-                }       
+                }
                 RETURN(rc);
         }
 
@@ -242,12 +235,12 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
          * big enough to hold reclen, so all we care about is padding here.
          */
         left = LLOG_CHUNK_SIZE - (file->f_pos & (LLOG_CHUNK_SIZE - 1));
-        if (buf) 
-                reclen = sizeof(*rec) + le32_to_cpu(rec->lrh_len) + 
+        if (buf)
+                reclen = sizeof(*rec) + le32_to_cpu(rec->lrh_len) +
                         sizeof(struct llog_rec_tail);
 
         /* NOTE: padding is a record, but no bit is set */
-        if (left != 0 && left != reclen && 
+        if (left != 0 && left != reclen &&
             left < (reclen + LLOG_MIN_REC_SIZE)) {
                 loghandle->lgh_last_idx++;
                 rc = llog_lvfs_pad(obd, file, left, loghandle->lgh_last_idx);
@@ -268,6 +261,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 LBUG(); /* should never happen */
         }
         llh->llh_count = cpu_to_le32(le32_to_cpu(llh->llh_count) + 1);
+        llh->llh_tail.lrt_index = cpu_to_le32(index);
 
         offset = 0;
         rc = llog_lvfs_write_blob(obd, file, &llh->llh_hdr, NULL, 0);
@@ -289,10 +283,13 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                         reccookie->lgc_subsys = LLOG_SIZE_ORIG_CTXT;
                 else if (le32_to_cpu(rec->lrh_type) == OST_RAID1_REC)
                         reccookie->lgc_subsys = LLOG_RD1_ORIG_CTXT;
-                else 
+                else
                         reccookie->lgc_subsys = -1;
                 rc = 1;
         }
+        if (rc == 0 && le32_to_cpu(rec->lrh_type) == LLOG_GEN_REC)
+                rc = 1;
+
         RETURN(rc);
 }
 
@@ -306,7 +303,7 @@ static void llog_skip_over(__u64 *off, int curr, int goal)
 {
         if (goal <= curr)
                 return;
-        *off = (*off + (goal-curr-1) * LLOG_MIN_REC_SIZE) & 
+        *off = (*off + (goal-curr-1) * LLOG_MIN_REC_SIZE) &
                 ~(LLOG_CHUNK_SIZE - 1);
 }
 
@@ -345,7 +342,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                         CERROR("Cant read llog block at log id "LPU64
                                "/%u offset "LPU64"\n",
                                loghandle->lgh_id.lgl_oid,
-                               loghandle->lgh_id.lgl_ogen, 
+                               loghandle->lgh_id.lgl_ogen,
                                *cur_offset);
                          RETURN(rc);
                 }
@@ -405,11 +402,11 @@ static struct file *llog_filp_open(char *name, int flags, int mode)
         } else {
                 filp = l_filp_open(logname, flags, mode);
                 if (IS_ERR(filp))
-                        CERROR("logfile creation %s: %ld\n", logname, 
+                        CERROR("logfile creation %s: %ld\n", logname,
                                PTR_ERR(filp));
         }
 
-        OBD_FREE(logname, PATH_MAX); 
+        OBD_FREE(logname, PATH_MAX);
         return filp;
 }
 
@@ -441,7 +438,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
 
                 if (IS_ERR(dchild)) {
                         rc = PTR_ERR(dchild);
-                        CERROR("error looking up log file "LPX64":0x%x: rc %d\n",
+                        CERROR("error looking up logfile "LPX64":0x%x: rc %d\n",
                                logid->lgl_oid, logid->lgl_ogen, rc);
                         GOTO(cleanup, rc);
                 }
@@ -656,14 +653,16 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
         LBUG();
         return 0;
 }
+
 static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                                struct llog_rec_hdr *rec,
-                               struct llog_cookie *reccookie, int cookiecount, 
+                               struct llog_cookie *reccookie, int cookiecount,
                                void *buf, int idx)
 {
         LBUG();
         return 0;
 }
+
 static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                                 int next_idx, __u64 *cur_offset, void *buf,
                                 int len)
@@ -671,31 +670,34 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
         LBUG();
         return 0;
 }
-static int llog_lvfs_create(struct llog_obd_ctxt *ctxt, struct llog_handle **res,
+
+static int llog_lvfs_create(struct llog_obd_ctxt *ctxt,struct llog_handle **res,
                             struct llog_logid *logid, char *name)
 {
         LBUG();
         return 0;
 }
+
 static int llog_lvfs_close(struct llog_handle *handle)
 {
         LBUG();
         return 0;
 }
+
 static int llog_lvfs_destroy(struct llog_handle *handle)
 {
         LBUG();
         return 0;
 }
 
-int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd, 
+int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int count, struct llog_logid *idarray)
 {
         LBUG();
         return 0;
 }
 
-int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd, 
+int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int count, struct llog_logid *idarray)
 {
         LBUG();
