@@ -1685,6 +1685,7 @@ def doHost(lustreDB, hosts):
         for_each_profile(node_db, prof_list, doModules)
 
         sys_set_debug_path()
+        sys_set_ptldebug()
         script = config.gdb_script
         run(lctl.lctl, ' modules >', script)
         if config.gdb:
@@ -1724,6 +1725,7 @@ def setupModulePath(cmd, portals_dir = PORTALS_DIR):
         config.portals = os.path.join(config.lustre, config.portals)
 
 def sysctl(path, val):
+    debug("+ sysctl", path, val)
     if config.noexec:
         return
     try:
@@ -1735,7 +1737,6 @@ def sysctl(path, val):
 
 
 def sys_set_debug_path():
-    debug("debug path: ", config.debug_path)
     sysctl('portals/debug_path', config.debug_path)
 
 def sys_set_recovery_upcall(upcall):
@@ -1743,7 +1744,6 @@ def sys_set_recovery_upcall(upcall):
     if config.recovery_upcall:
         upcall = config.recovery_upcall
     if upcall:
-        debug("setting recovery_upcall:", upcall)
         sysctl('lustre/recovery_upcall', upcall)
 
 def sys_set_timeout(timeout):
@@ -1751,11 +1751,11 @@ def sys_set_timeout(timeout):
     if config.timeout > 0:
         timeout = config.timeout
     if timeout > 0:
-        debug("setting timeout:", timeout)
         sysctl('lustre/timeout', timeout)
 
 def sys_set_ptldebug():
     # the command overrides the value in the node config
+    debug("ptldebug: ", config.ptldebug)
     if config.ptldebug != None:
         ptldebug = config.ptldebug
         sysctl('portals/debug', ptldebug)
