@@ -20,6 +20,7 @@ EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES)
 
 all: $(DOCS)
 
+# update date and version in document
 .lyx.pdf:
 	@$(LYX2PDF) $< || printf "\n*** Warning: not creating PDF docs; install lyx to rectify this\n"
 
@@ -31,6 +32,12 @@ all: $(DOCS)
 
 .fig.eps:
 	-fig2dev -L eps $< > $@
+
+lustre.lyx: master.lyx $(IMAGES)
+	(ver=`awk -F/ -v key=$<  '$$2 == key {print $$3}' CVS/Entries`;\
+	echo "version for $< is $$ver";\
+	sed "s/version .*/version $$ver/" < $< > lustre.lyx;\
+	)
 
 master.pdf: master.lyx $(IMAGES)
 
