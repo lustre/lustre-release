@@ -1,5 +1,6 @@
 #ifndef _OBD_SUPPORT
 #define _OBD_SUPPORT
+#include <linux/autoconf.h>
 #include <linux/malloc.h>
 #include <linux/vmalloc.h>
 
@@ -42,8 +43,9 @@ extern long obd_memory;
 #define D_INFO    0x200 /* general information, especially from interface.c */
 #define D_IOCTL   0x400 /* ioctl related information */
 #define D_BLOCKS  0x800 /* ext2 block allocation */
-#define D_RPC    0x1000 /* rpc communications */
+#define D_NET    0x1000 /* network communications */
 #define D_PUNCH  0x2000
+#define D_BUFFS  0x4000 /* print network buffers */
  
 #define CDEBUG(mask, format, a...)                                      \
         do {                                                            \
@@ -191,3 +193,4 @@ do {                                                    \
 
 
 #endif
+

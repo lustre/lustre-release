@@ -79,6 +79,9 @@ static int obd_class_open(struct inode * inode, struct file * file)
         CDEBUG(D_PSDEV, "Dev %d refcount now %d\n", dev,
                obd_dev[dev].obd_refcnt);
 
+	obd_dev[dev].obd_proc_entry = 
+		proc_lustre_register_obd_device(&obd_dev[dev]);
+
         MOD_INC_USE_COUNT;
         EXIT;
         return 0;
@@ -100,6 +103,9 @@ static int obd_class_release(struct inode * inode, struct file * file)
                 printk(KERN_ALERT __FUNCTION__ ": refcount(%d) <= 0\n",
                        obd_dev[dev].obd_refcnt);
         obd_dev[dev].obd_refcnt--;
+
+	if (obd_dev[dev].obd_proc_entry && (obd_dev[dev].obd_refcnt==0))
+		proc_lustre_release_obd_device(&obd_dev[dev]);
 
         CDEBUG(D_PSDEV, "Dev %d refcount now %d\n", dev,
                obd_dev[dev].obd_refcnt);
@@ -152,6 +158,21 @@ static int getdata(int len, void **data)
         *data = tmp;
 
         return 0;
+}
+
+
+static int obd_devicename_from_path(obd_devicename* whoami, 
+				    char* user_string) 
+{
+  struct nameidata nd;
+  int err;
+
+  err = user_path_walk(user_string, &nd);
+  if (!err) { 
+    whoami->dentry = nd.dentry;
+    path_release(&nd);
+  }
+  return err;
 }
 
 /* to control /dev/obdNNN */
@@ -311,9 +332,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         case OBD_IOC_SETUP: {
                 struct ioc_setup {
                         int setup_datalen;
-                        void *setup_data;
+                        char *setup_data;
                 } *setup;
+
                 setup = tmp_buf;
+
 
                 ENTRY;
                 /* have we attached a type to this device */
@@ -331,19 +354,23 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         return -EBUSY;
                 }
 
-                /* get main structure */
-                err = copy_from_user(setup, (void *) arg, sizeof(*setup));
-                if (err) {
-                        EXIT;
-                        return err;
-                }
 
-                err = getdata(setup->setup_datalen, &setup->setup_data);
-                if (err) {
-                        EXIT;
-                        return err;
-                }
 
+		/* get main structure */
+		err = copy_from_user(setup, (void *) arg, sizeof(*setup));
+		if (err) {
+		  EXIT;
+		  return err;
+		}
+		
+		err = obd_devicename_from_path(&(obddev->obd_fsname),
+						(char*) setup->setup_data);
+		if (err) {
+		  memset(&(obddev->obd_fsname), 0, sizeof(obd_devicename));
+		  EXIT;
+		  return err;
+		}
+		
                 /* do the setup */
                 CDEBUG(D_PSDEV, "Setup %d, type %s\n", dev, 
                        obddev->obd_type->typ_name);
@@ -359,9 +386,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         return 0;
                 }
 
-                err = OBP(obddev, setup)(obddev, setup->setup_datalen,
-                                         setup->setup_data);
-
+                err = OBP(obddev, setup)(obddev, 0, NULL);
+                          
                 if ( err )  {
                         obddev->obd_flags &= ~OBD_SET_UP;
                         EXIT;
@@ -372,8 +398,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         obddev->obd_flags |= OBD_SET_UP;
                         EXIT;
                 }
-                if (setup->setup_data)
-                        OBD_FREE(setup->setup_data, setup->setup_datalen);
+
                 return err;
         }
         case OBD_IOC_CLEANUP: {

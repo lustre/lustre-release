@@ -1,3 +1,4 @@
+#include <linux/module.h>
 #include <linux/autoconf.h>
 #include <linux/sysctl.h>
 #include <linux/sched.h>
@@ -25,8 +26,6 @@ static int obd_sctl_vars( ctl_table * table, int write, struct file *
 static int obd_sctl_reset( ctl_table * table, int write, struct file
                            * filp, void * buffer, size_t * lenp );
 
-
-
 #define OBD_SYSCTL 300
 
 #define OBD_DEBUG           1       /* control debugging */
@@ -45,7 +44,7 @@ static ctl_table obd_table[] = {
         {OBD_VARS, "vars", &vars[0], sizeof(int), 0644, NULL, &proc_dointvec},
         {OBD_INDEX, "index", &index, sizeof(int), 0644, NULL, &obd_sctl_vars},
         {OBD_RESET, "reset", NULL, 0, 0644, NULL, &obd_sctl_reset},
-        { 0 }
+	{ 0 }
 };
 
 static ctl_table parent_table[] = {
@@ -104,3 +103,7 @@ int obd_sctl_vars (ctl_table * table, int write,
 
         return rc; 
 }
+
+
+
+

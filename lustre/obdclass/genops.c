@@ -59,7 +59,7 @@ void obd_cleanup_obdo_cache(void)
 
 
 /* map connection to client */
-struct obd_client *gen_client(struct obd_conn *conn)
+struct obd_client *gen_client(const struct obd_conn *conn)
 {
         struct obd_device * obddev = conn->oc_dev;
         struct list_head * lh, * next;

@@ -209,8 +209,18 @@ my $line;
 my $command;
 my $arg;
 
+my @procsysobd_objects = ('debug', 'index', 'reset', 'trace', 'vars');
+
 my %commands =
-    ('device' => {func => "Device", doc => "device <dev>: open another OBD device"},
+    ('status' => {func => "Status", doc => "status: show obd device status"},
+     'procsys' => {func => "Procsys", doc => "procsys <file> <value> (set /proc/sys/obd configuration)"},
+     'shell' => {func => "Shell", doc => "shell <shell-command>: execute shell-commands"},
+     'script' => {func => "Script", doc => "script <filename>: read and execute commands from a file"},
+     'insmod' => {func => "Insmod", doc => "insmod <module>: insert kernel module"},
+     'rmmod' => {func => "Rmmod", doc => "rmmod <module>: insert kernel module"},
+     'lsmod' => {func => "Lsmod", doc => "lsmod <module>: list kernel modules"},
+     'device' => {func => "Device", doc => "device <dev>: open another OBD device"},
+     'close' => {func => "Close", doc => "close <dev>: close OBD device"},
      'create' => {func => "Create", doc => "create [<num> [<mode> [quiet]]]: create new object(s) (files, unless mode is given)"},
      'attach' => {func => "Attach", doc => "attach { obdext2 | obdsnap snapdev snapidx tableno | obdscsi adapter bus tid lun }: attach this minor device to the specified driver" },
      'detach' => {func => "Detach", doc => "detach this minor device"},
@@ -254,7 +264,7 @@ my $term, $attribs;
 
 # Get going....
 
-Device($::device);
+#Device($::device);
 
 sub readl {
     if ( $file ) {
@@ -271,7 +281,8 @@ sub readl {
 if ( $file ) {
     while ( <STDIN> ) {
         print $_;
-        execute_line($_);
+        my $rc = execute_line($_);
+	if ($rc != 0) { last; }
     }
     exit 0;
 } else {
@@ -292,9 +303,17 @@ if ( $file ) {
 sub completeme {
     my ($text, $line, $start, $end) = @_;
     if (substr($line, 0, $start) =~ /^\s*$/) {
-        $attribs->{completion_word} = \@jcm_cmd_list;
-        return $term->completion_matches($text,
-                                         $attribs->{'list_completion_function'});
+	if ($] < 5.6) { # PErl version is less than 5.6.0
+	    return (exists $commands{$text}) ? $text : 0;
+#Above line doesn't perform command completion, but
+#perl5.005 Term-ReadLine lacks support for completion matching
+#and perl5.6.0 requires glibc2.2.2 that won't run under Redhat6.2......sigh.
+	}
+	else {
+	    $attribs->{completion_word} = \@jcm_cmd_list;
+	    return $term->completion_matches($text,
+		       $attribs->{'list_completion_function'});
+	}
     }
 }
 
@@ -342,24 +361,173 @@ sub execute_line {
     return (&{$commands{$cmd}->{func}}(@cmdline));
 }
 
+my %opendevfds = ();
 
 # select the OBD device we talk to
 sub Device {
     my $device = shift;
 
-    if ($::client_id) {
-        print "Disconnecting active session ($::client_id)...";
-        Disconnect($::client_id);
+    if ( ! $device && ! $::device ) { # first time ever
+	$device = '/dev/obd0';
     }
-    if (! $device ) {
-        $device = "/dev/obd0";
+
+    if (($device) && ($::device ne $device)) {
+	local *NEW_OBD;
+	my $newfd;
+
+	if ($::client_id) {
+	    print "Disconnecting active session ($::client_id)...";
+	    Disconnect($::client_id);
+	}
+
+	if ($opendevfds{$device}) {
+	    $::dev_obd = $opendevfds{$device};
+        }
+	else {
+	    # Open the device, as we need an FD for the ioctl
+	    if (!sysopen(NEW_OBD, $device, 0)) {
+		print "Cannot open $device. Did you insert the obdclass module ?\n";
+		return -1;
+	    }
+	    print "Openend device $device\n";
+	    $opendevfds{$device} = *NEW_OBD;
+	    $::dev_obd = *NEW_OBD;
+	}
+	$::device = $device;	
     }
-    $::device = $device;
-    # Open the device, as we need an FD for the ioctl
-    sysopen(DEV_OBD, $device, 0) || die "Cannot open $device";
-    print "Device now $device\n";
+    print "Current device is $::device\n";
+    return 0;
 }
 
+sub Close {
+    my $device = shift;
+    my $fd2close;
+
+    if ( ! $device && ! $::device ) { # first time ever
+	print "Nothing to close\n";
+	return -1;
+    }
+
+    if ( ! $device ) {
+	$device = $::device;
+    }
+
+    if ($::device eq $device) {
+	if ($::client_id) {
+	    print "Disconnecting active session ($::client_id)...";
+	    Disconnect($::client_id);
+	}
+    }
+
+    $fd2close = $opendevfds{$device};
+    if ($fd2close) { # XXXX something wrong in this if statement
+	close ($fd2close);
+	$opendevfds{$device} = undef;
+	print "Closed device $device\n";
+    }
+    else {
+	print "Device $device was not open\n";
+	return -1;
+    }
+    
+    if ($::device eq $device) {
+	$::dev_obd = undef;
+	$::device = undef;
+    }
+    print "No current device. You just closed the current device ($device).\n";
+    return 0; 
+}   
+ 
+sub Script {
+    my $cmdfilename = shift;
+    my $rc = 0;
+    if ( ! $cmdfilename )  {
+	print "please specify a command file name\n";
+	return -1;
+    }
+    if (! open(CMDF, $cmdfilename)) {
+	print "Cannot open $cmdfilename: $!\n";
+	return -1;
+    }
+    while (<CMDF>) {
+	if (/^#/) {
+	    next;
+	}
+        print "execute> $_";
+	$rc = execute_line($_);
+	if ($rc != 0) {
+	    print "Something went wrong .......command exit status: $rc\n";
+	    last;
+	}
+    }
+    close(CMDF);
+    return $rc;
+}
+
+sub Shell {
+    my $user_shell=$ENV{'SHELL'};
+    print "% $user_shell -c '@_'\n";
+    if ( ! @_ ) {
+	print "please specify a shell command\n";
+	return;
+    }
+    system("$user_shell -c '@_'");
+    return ($? >> 8);
+}
+  
+sub Status {
+    my $oldfh = select(STDOUT);
+    $| = 1;
+
+    system('cat /proc/lustre/obd/*/status');
+    my $rc = ($? >> 8);
+
+    select($oldfh);
+    $| = 0;
+
+    return $rc;
+}
+
+sub Procsys {
+    my $set_sysobd = shift;
+    my $value = shift;
+
+    foreach $i (0 .. $#procsysobd_objects) {
+	my $sysobd = $procsysobd_objects[$i];
+
+	if (defined $set_sysobd) {
+	    if ($sysobd ne $set_sysobd) { next; }
+
+	    if (defined $value) { # set this one
+		system("echo \"$value\" > /proc/sys/obd/$sysobd");
+	    }
+	    system("echo \"/proc/sys/obd/$sysobd:\"; cat /proc/sys/obd/$sysobd");
+	    last;
+	}
+	else {
+	    system("echo \"/proc/sys/obd/$sysobd:\"; cat /proc/sys/obd/$sysobd");
+	}
+    }
+    return ($? >> 8);
+}
+
+sub Insmod {
+    my $module = shift;
+    system("insmod $module");
+    return ($? >> 8);
+}
+
+sub Rmmod {
+    my $module = shift;
+    system("rmmod $module");
+    return ($? >> 8);
+}
+
+sub Lsmod {
+    my $module = shift;
+    system("lsmod $module");
+    return ($? >> 8);
+}
 
 sub Attach {
     my $err = 0;
@@ -370,8 +538,8 @@ sub Attach {
     if ( ! $type ) {
         print "error: missing type\n";
 usage:
-        print "usage: attach {obdext2 | obdsnap | obdscsi}\n";
-        return;
+        print "usage: attach {obdext2 | obdsnap | obdscsi | obdtrace }\n";
+        return -1;
     }
 
     if ($type eq "obdscsi" ) {
@@ -391,7 +559,10 @@ usage:
         $datalen = 3 * 4;
     } elsif ($type eq "obdext2") {
         $data = pack("i", 4711);   # bogus data
-        $datalen = 0;
+        $datalen = 4;
+    } elsif ($type eq "obdtrace") {
+        $data = pack("i", 4711);   # bogus data
+        $datalen = 4;
     } else {
         print "error: unknown attach type $type\n";
         goto usage;
@@ -403,14 +574,21 @@ usage:
     print "type $type (len $len), datalen $datalen ($cl)\n";
     my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
 
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_ATTACH, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_ATTACH, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -418,14 +596,23 @@ usage:
 sub Detach {
     my $err = 0;
     my $data = "";
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_DETACH, $data);
+
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+
+    my $rc = ioctl($::dev_obd, &OBD_IOC_DETACH, $data);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -446,15 +633,22 @@ sub TestExt2Iterator {
     my $cl = length($data);
     print "type $type (len $len), datalen $datalen ($cl)\n";
     my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
 
-    my $rc = ioctl(DEV_OBD, &OBD_EXT2_RUNIT, $packed);
+    my $rc = ioctl($::dev_obd, &OBD_EXT2_RUNIT, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -462,7 +656,7 @@ sub TestExt2Iterator {
 sub SnapDelete { 
     if (!defined($::client_id)) {
         print "You must first ``connect''.\n";
-        return;
+        return -1;
     }
 
     my $err = 0;
@@ -478,14 +672,23 @@ sub SnapDelete {
 
     # XXX We need to fix this up so that after the objects in this snapshot
     #     are deleted, the snapshot itself is also removed from the table.
-    my $rc = ioctl(DEV_OBD, &OBD_SNAP_DELETE, $packed);
+
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+
+    my $rc = ioctl($::dev_obd, &OBD_SNAP_DELETE, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -500,17 +703,17 @@ sub SnapRestore {
     # don't do anything until connected
     if (!defined($::client_id)) {
         print "You must first ``connect''.\n";
-        return;
+        return -1;
     }
 
     if ( ! $snaptable || ! defined $restoreto ) {
         print "Usage: snaprestore \"restore to slot\" \"snaptable\" \"tableno\"\n";
-        return;
+        return -1;
     }
 
     if ( ! -f $snaptable ) {
         print "Table $snaptable doesn't exist\n";
-        return;
+        return -1;
     }
    
     my $table = ReadSnapShotTable($snaptable);
@@ -518,13 +721,13 @@ sub SnapRestore {
     if ( ! defined $table->{0} || ! defined $restoretime ) {
         PrintSnapShotTable($table);
         print "No current or $restoreto slot in this table\n";
-        return;
+        return -1;
     }
 
     my $currentindex = $table->{0};
     if (  $table->{$restoretime} == $currentindex ) {
         print "You should not restore to the current snapshot\n";
-        return;
+        return -1;
     }
     
     # swap the entries for 0 and $restoreto
@@ -548,11 +751,16 @@ sub SnapRestore {
     my $len = length($type);
     my $cl = length($data);
     my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
 
-    my $rc = ioctl(DEV_OBD, &OBD_SNAP_RESTORE, $packed);
+    my $rc = ioctl($::dev_obd, &OBD_SNAP_RESTORE, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Snaprestore finished (success)\n";
         delete $table->{$restoretime} if defined $restoretime;
@@ -562,9 +770,10 @@ sub SnapRestore {
         # set it in the kernel
         SnapSetTable($tableno, $snaptable);
         # PrintSnapShotTable($table);
-
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -594,15 +803,22 @@ sub SnapPrint {
     my $cl = length($data);
     print "type $type (len $len), datalen $datalen ($cl)\n";
     my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
 
-    my $rc = ioctl(DEV_OBD, &OBD_SNAP_PRINTTABLE, $packed);
+    my $rc = ioctl($::dev_obd, &OBD_SNAP_PRINTTABLE, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -618,6 +834,7 @@ sub SnapSetTable {
 
     if ( ! -f $file ) {
         print "No such file $file\n";
+	return -1;
     }
 
     $table = ReadSnapShotTable($file);
@@ -627,7 +844,7 @@ sub SnapSetTable {
 
     if ( ! defined $table->{0} ) {
         print "No current snapshot in table! First make one\n";
-        return ;
+        return -1;
     }
     $data = pack("ii", $snaptableno, $snapcount);
     $datalen = 2 * 4;
@@ -641,15 +858,22 @@ sub SnapSetTable {
     my $cl = length($data);
     print "type $type (len $len), datalen $datalen ($cl)\n";
     my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
 
-    my $rc = ioctl(DEV_OBD, &OBD_SNAP_SETTABLE, $packed);
+    my $rc = ioctl($::dev_obd, &OBD_SNAP_SETTABLE, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -698,6 +922,7 @@ sub SnapShotTable  {
     unless ( $ok eq "n" )  {
         WriteSnapShotTable($file, $table);
     }
+    return 0;
 }
 
 sub SnapFindTimeFromIdx {
@@ -766,15 +991,22 @@ sub Copy {
 
     # XXX need to fix copy so we can have 2 client IDs here
     my $packed = pack("L", $::client_id) . obdo_pack($dst_obdo) . pack("L", $::client_id) . obdo_pack($src_obdo);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
 
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_COPY, $packed);
+    my $rc = ioctl($::dev_obd, &OBD_IOC_COPY, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -789,15 +1021,22 @@ sub Migrate {
 
     # We pack a dummy connection ID here
     my $packed = pack("L", $::client_id) . obdo_pack($dst_obdo) . pack("L", $::client_id) . obdo_pack($src_obdo);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
 
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_MIGR, $packed);
+    my $rc = ioctl($::dev_obd, &OBD_IOC_MIGR, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -809,14 +1048,21 @@ sub Format {
     my $datalen = 4;
 
     my $packed = pack("ip", $datalen, $data);
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_FORMATOBD, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_FORMATOBD, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -828,14 +1074,21 @@ sub Partition {
     my $datalen = 2 * 4;
 
     my $packed = pack("ip", $datalen, $data);
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_PARTITION, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_PARTITION, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -849,39 +1102,52 @@ sub Setup {
     # by type here
 
     if ($arg && !defined($::st = stat($arg))) {
-            print "$dev is not a valid device\n";
-            return;
+            print "$arg is not a valid device\n";
+            return -1;
     }
     
     if ( $arg ) {
-        $dev = $::st->rdev() unless $dev;
-        $data = pack("i", $dev);
-        $datalen = 4;
+        $data = $arg;
+        $datalen = length($arg)+1; # need null character also
     }
 
     my $packed = pack("ip", $datalen, $data);
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_SETUP, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_SETUP, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
 sub Cleanup {
     my $err = "0";
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_CLEANUP, $err);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_CLEANUP, $err);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
         $::client_id = 0;
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -890,17 +1156,24 @@ sub Connect {
     my $rc;
 
     my $packed = "";
-    $rc = ioctl(DEV_OBD, &OBD_IOC_CONNECT, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    $rc = ioctl($::dev_obd, &OBD_IOC_CONNECT, $packed);
     $id = unpack("I", $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         $::client_id = $id;
         print "Client ID     : $id\n";
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -915,26 +1188,33 @@ sub Disconnect {
         print "syntax: disconnect [client ID]\n";
         print "When client ID is not given, the last valid client ID to be returned by a\n";
         print "connect command this session is used; there is no such ID.\n";
-        return;
+        return -1;
     }
 
     my $packed = pack("L", $id);
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_DISCONNECT, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_DISCONNECT, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         $::client_id = undef;
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
 sub Create {
     if (!defined($::client_id)) {
         print "You must first ``connect''.\n";
-        return;
+        return -1;
     }
 
     my $num = shift;
@@ -953,7 +1233,7 @@ sub Create {
 
     if (scalar($num) < 1 || defined($quiet) && $quiet ne "quiet") {
         print "usage: create [<number of objects> [<mode> [quiet]]]\n";
-        return;
+        return -1;
     }
 
     my $i;
@@ -972,7 +1252,11 @@ sub Create {
         $obdo->{valid} = &OBD_MD_FLMODE;
 
         my $packed = pack("I", $::client_id) . obdo_pack($obdo);
-        $rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $packed);
+	if (! defined $::dev_obd) {
+	    print "No current device.\n";
+	    return -1;
+	}
+        $rc = ioctl($::dev_obd, &OBD_IOC_CREATE, $packed);
         if ($rc ne "0 but true") {
             last;
         } elsif (!defined($quiet)) {
@@ -983,63 +1267,80 @@ sub Create {
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
 sub Sync {
     my $err = "0";
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_SYNC, $err);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_SYNC, $err);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
 sub Destroy {
     if (!defined($::client_id)) {
         print "You must first ``connect''.\n";
-        return;
+        return -1;
     }
 
     my $id = shift;
 
     if (!defined($id) || scalar($id) < 1) {
         print "usage: destroy <object number>\n";
-        return;
+        return -1;
     }
 
     print "Destroying object $id...\n";
     my $packed = pack("IL", $::client_id, $id);
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_DESTROY, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_DESTROY, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
 sub Getattr {
     if (!defined($::client_id)) {
         print "You must first ``connect''.\n";
-        return;
+        return -1;
     }
 
     my $id = shift;
 
     if (!defined($id) || scalar($id) < 1) {
         print "invalid arguments; type \"help getattr\" for a synopsis\n";
-        return;
+        return -1;
     }
 
     # see Setattr
@@ -1047,29 +1348,36 @@ sub Getattr {
     $obdo->{id} = $id;
     $obdo->{valid} = &OBD_MD_FLALL;
     my $packed = pack("L", $::client_id) . obdo_pack($obdo);
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_GETATTR, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_GETATTR, $packed);
     
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         $obdo = obdo_unpack($packed,  4); 
         obdo_print($obdo);
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
 sub Setattr {
     if (!defined($::client_id)) {
         print "You must first ``connect''.\n";
-        return;
+        return -1;
     }
 
     my $id = shift;
 
     if (!defined($id) || scalar($id) < 1) {
         print "invalid arguments; type \"help setattr\" for a synopsis\n";
-        return;
+        return -1;
     }
 
     # XXX we do not currently set all of the fields in the obdo
@@ -1108,21 +1416,28 @@ sub Setattr {
 
     printf "valid is %x, mode is %o\n", $obdo->{valid}, $obdo->{mode};
     my $packed = pack("L", $::client_id) . obdo_pack($obdo);
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_SETATTR, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_SETATTR, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
 sub Read {
     if (!defined($::client_id)) {
         print "You must first ``connect''.\n";
-        return;
+        return -1;
     }
 
     my $id = shift;
@@ -1132,7 +1447,7 @@ sub Read {
     if (!defined($id) || scalar($id) < 1 || !defined($count) ||
         $count < 1 || (defined($offset) && $offset < 0)) {
         print "invalid arguments; type \"help read\" for a synopsis\n";
-        return;
+        return -1;
     }
 
     if (!defined($offset)) {
@@ -1153,29 +1468,37 @@ sub Read {
     my $packed = pack("L", $::client_id) . obdo_pack($obdo) .
                  pack("p LL LL", $buf, $count, $offset);
 
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_READ, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_READ, $packed);
 
     $retval = unpack("l", $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         if ($retval >= 0) {
                 print substr($buf, 0, $retval);
                 print "\nRead $retval of an attempted $count bytes.\n";
                 print "Finished (success)\n";
+		return 0;
         } else {
                 print "Finished (error $retval)\n";
+		return $retval;
         }
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
 sub Read2 {
     if (!defined($::client_id)) {
         print "You must first ``connect''.\n";
-        return;
+        return -1;
     }
 
     my $id = shift;
@@ -1185,7 +1508,7 @@ sub Read2 {
     if (!defined($id) || scalar($id) < 1 || !defined($count) ||
         $count < 1 || (defined($offset) && $offset < 0)) {
         print "invalid arguments; type \"help read\" for a synopsis\n";
-        return;
+        return -1;
     }
 
     if (!defined($offset)) {
@@ -1206,29 +1529,37 @@ sub Read2 {
     my $packed = pack("L", $::client_id) . obdo_pack($obdo) .
                  pack("p LL LL", $buf, $count, $offset);
 
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_READ2, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_READ2, $packed);
 
     $retval = unpack("l", $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         if ($retval >= 0) {
                 print substr($buf, 0, $retval);
                 print "\nRead $retval of an attempted $count bytes.\n";
                 print "Finished (success)\n";
-        } else {
+		return 0;
+	 } else {
                 print "Finished (error $retval)\n";
+		return $retval;
         }
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
 sub Write {
     if (!defined($::client_id)) {
         print "You must first ``connect''.\n";
-        return;
+        return -1;
     }
 
     my $id = shift;
@@ -1239,7 +1570,7 @@ sub Write {
     if (!defined($id) || scalar($id) < 1 || !defined($offset) ||
         scalar($offset) < 0) {
         print "invalid arguments; type \"help write\" for a synopsis\n";
-        return;
+        return -1;
     }
 
     if (!defined($text)) {
@@ -1256,28 +1587,36 @@ sub Write {
     my $packed = pack("L", $::client_id) . obdo_pack($obdo) .
                  pack("p LL LL", $text, $count, $offset);
 
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_WRITE, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_WRITE, $packed);
 
     $retval = unpack("l", $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         if ($retval >= 0) {
                 print "\nWrote $retval of an attempted $count bytes.\n";
                 print "Finished (success)\n";
+		return 0;
         } else {
                 print "Finished (error $retval)\n";
+		return $retval;
         }
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
 sub Punch {
     if (!defined($::client_id)) {
         print "You must first ``connect''.\n";
-        return;
+        return -1;
     }
 
     my $id = shift;
@@ -1287,7 +1626,7 @@ sub Punch {
     if (!defined($id) || scalar($id) < 1 || !defined($start) ||
         scalar($start) < 0 || !defined($count) || scalar($count) < 0) {
         print "invalid arguments; type \"help punch\" for a synopsis\n";
-        return;
+        return -1;
     }
 
     print("Punching $count bytes starting at byte $start from object $id...\n");
@@ -1299,7 +1638,11 @@ sub Punch {
     my $packed = pack("L", $::client_id) . obdo_pack($obdo) .
                  pack("p LL LL", $buf, $start, $count);
 
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_PUNCH, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_PUNCH, $packed);
 
     $retval = unpack("l", $packed);
 
@@ -1309,11 +1652,14 @@ sub Punch {
         if ($retval >= 0) {
                 print "\nPunched $retval of an attempted $count bytes.\n";
                 print "Finished (success)\n";
+		return 0;
         } else {
                 print "Finished (error $retval)\n";
+		return $retval;
         }
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -1322,7 +1668,7 @@ sub Preallocate {
 
     if (!defined($::client_id)) {
         print "You must first ``connect''.\n";
-        return;
+        return -1;
     }
 
     if (!defined($num) || scalar($num) < 1 || scalar($num) > 32) {
@@ -1333,10 +1679,15 @@ sub Preallocate {
     # client id, alloc, id[32]
     my $packed = pack("LLx128", $::client_id, $num);
 
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_PREALLOCATE, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_PREALLOCATE, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         my $alloc = unpack("x4L", $packed);
         my @ids = unpack("x8L32", $packed);
@@ -1347,27 +1698,36 @@ sub Preallocate {
             print $i . " ";
         }
         print "\nFinished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
 sub Decusecount {
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_DEC_USE_COUNT, 0);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_DEC_USE_COUNT, 0);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
 sub Statfs {
     if (!defined($::client_id)) {
         print "You must first ``connect''.\n";
-        return;
+        return -1;
     }
 
     # struct statfs {
@@ -1386,10 +1746,15 @@ sub Statfs {
     my $packed = pack("LLLLLLLIILL6", $::client_id, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                       0, 0, 0, 0, 0, 0);
 
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_STATFS, $packed);
+    if (! defined $::dev_obd) {
+	print "No current device.\n";
+	return -1;
+    }
+    my $rc = ioctl($::dev_obd, &OBD_IOC_STATFS, $packed);
 
     if (!defined $rc) {
         print STDERR "ioctl failed: $!\n";
+	return -1;
     } elsif ($rc eq "0 but true") {
         # skip both the conn_id and the fs_type in the buffer
         my ($bsize, $blocks, $bfree, $bavail, $files, $ffree) =
@@ -1398,8 +1763,10 @@ sub Statfs {
               "$bfree free ($bavail available).\n");
         print "$files files, " . ($files - $ffree) . " used, $ffree free.\n";
         print "Finished (success)\n";
+	return 0;
     } else {
         print "ioctl returned error code $rc.\n";
+	return -1;
     }
 }
 
@@ -1411,6 +1778,7 @@ sub Help {
     } else {
         print "Usage: " .  $commands{$cmd}->{doc} . "\n";
     }
+    return 0;
 }
 
 sub Quit {

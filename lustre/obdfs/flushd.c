@@ -310,7 +310,7 @@ int obdfs_flush_dirty_pages(unsigned long check_time)
         struct list_head *sl;
         int max = 0;
 
-        ENTRY;
+	/*        ENTRY; */
         sl = &obdfs_super_list;
         while ( (sl = sl->prev) != &obdfs_super_list ) {
                 struct obdfs_sb_info *sbi = 
@@ -323,7 +323,7 @@ int obdfs_flush_dirty_pages(unsigned long check_time)
 
                 max = ret > max ? ret : max;
         }
-        EXIT;
+        if (max) { EXIT; }
         return max;
 } /* obdfs_flush_dirty_pages */
 
@@ -387,21 +387,24 @@ static int pupdate(void *unused)
                         interval = 0;
                         if ( wrote < pupd_prm.ndirty )
                                 age >>= 1;
-                        CDEBUG(D_CACHE, "wrote %d, age %ld, interval %d\n",
+                        if (wrote) 
+			  CDEBUG(D_CACHE, "wrote %d, age %ld, interval %d\n",
                                 wrote, age, interval);
                 } else {
                         if ( wrote < pupd_prm.ndirty >> 1 &&
                              obdfs_cache_count < dirty_limit / 2) {
                                 interval = pupd_prm.interval;
                                 age = pupd_prm.age_buffer;
-                                CDEBUG(D_INFO,
+                                if (wrote) 
+				  CDEBUG(D_INFO,
                                        "wrote %d, age %ld, interval %d\n",
                                        wrote, age, interval);
                         } else if (obdfs_cache_count > dirty_limit / 2) {
                                 interval >>= 1;
                                 if ( wrote < pupd_prm.ndirty )
                                         age >>= 1;
-                                CDEBUG(D_CACHE,
+                                if (wrote) 
+				  CDEBUG(D_CACHE,
                                        "wrote %d, age %ld, interval %d\n",
                                        wrote, age, interval);
                         }

@@ -7,6 +7,7 @@
 
 #include <linux/obd_ext2.h>
 #include <linux/obd_snap.h>
+#include <linux/obd_trace.h>
 /* #include <linux/obd_fc.h> */
 #include <linux/obd_raid1.h>
 #include <linux/obd_rpc.h>
@@ -98,12 +99,19 @@ struct obd_conn {
         uint32_t oc_id;
 };
 
+typedef union {
+        struct dentry *dentry;   /* file system obd device names */
+        __u8           _uuid[16]; /* uuid obd device names */
+} obd_devicename;
+
 /* corresponds to one of the obdx */
 struct obd_device {
         struct obd_type *obd_type;
         int obd_minor;
         int obd_flags;
         int obd_refcnt; 
+        obd_devicename obd_fsname; 
+	struct proc_dir_entry *obd_proc_entry;
         int obd_multi_count;
         struct obd_conn obd_multi_conn[MAX_MULTI];
         unsigned int obd_gen_last_id;
@@ -113,10 +121,15 @@ struct obd_device {
                 struct ext2_obd ext2;
                 struct raid1_obd raid1;
                 struct snap_obd snap;
-                struct rpc_obd rpc;
+	        struct trace_obd trace;
                 /* struct fc_obd fc; */
         } u;
 };
+
+extern struct proc_dir_entry *proc_lustre_register_obd_device(struct obd_device *obd);
+extern void proc_lustre_release_obd_device(struct obd_device *obd);
+extern void proc_lustre_remove_obd_entry(const char* name, struct obd_device *obd);
+
 
 /*
  *  ======== OBD Operations Declarations ===========
@@ -449,7 +462,7 @@ int gen_multi_attach(struct obd_device *obddev, uint32_t len, void *data);
 int gen_multi_detach(struct obd_device *obddev);
 int gen_connect (struct obd_conn *conn);
 int gen_disconnect(struct obd_conn *conn);
-struct obd_client *gen_client(struct obd_conn *);
+struct obd_client *gen_client(const struct obd_conn *);
 int gen_cleanup(struct obd_device *obddev);
 int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
                   struct obd_conn *src_conn, struct obdo *src,
