@@ -39,7 +39,7 @@ int nomtab = 0;
 
 static void
 update_mtab_entry(char *spec, char *node, char *type, char *opts,
-		  int flags, int freq, int pass) 
+		  int flags, int freq, int pass)
 {
         FILE *fp;
         struct mntent mnt;
@@ -50,15 +50,15 @@ update_mtab_entry(char *spec, char *node, char *type, char *opts,
         mnt.mnt_opts = opts;
         mnt.mnt_freq = freq;
         mnt.mnt_passno = pass;
-      
+
         if (!nomtab) {
                 fp = setmntent(MOUNTED, "a+");
                 if (fp == NULL) {
-                        fprintf(stderr, "setmntent(%s): %s:", MOUNTED, 
+                        fprintf(stderr, "setmntent(%s): %s:", MOUNTED,
                                 strerror (errno));
                 } else {
                         if ((addmntent (fp, &mnt)) == 1) {
-                                fprintf(stderr, "addmntent: %s:", 
+                                fprintf(stderr, "addmntent: %s:",
                                         strerror (errno));
                         }
                         endmntent(fp);
@@ -74,18 +74,18 @@ parse_options(char * options, struct lustre_mount_data *lmd)
         int val;
         char *opt;
         char * opteq;
-        
+
         /* parsing ideas here taken from util-linux/mount/nfsmount.c */
-	for (opt = strtok(options, ","); opt; opt = strtok(NULL, ",")) {
-		if ((opteq = strchr(opt, '='))) {
-			val = atoi(opteq + 1);	
+        for (opt = strtok(options, ","); opt; opt = strtok(NULL, ",")) {
+                if ((opteq = strchr(opt, '='))) {
+                        val = atoi(opteq + 1);
                         *opteq = '\0';
                         if (!strcmp(opt, "nettype")) {
                                 lmd->lmd_nal = ptl_name2nal(opteq+1);
                         } else if(!strcmp(opt, "local_nid")) {
                                 if (ptl_parse_nid(&nid, opteq+1) != 0) {
                                         fprintf (stderr, "mount: "
-                                                 "can't parse NID %s\n", 
+                                                 "can't parse NID %s\n",
                                                  opteq+1);
                                         return (-1);
                                 }
@@ -93,15 +93,14 @@ parse_options(char * options, struct lustre_mount_data *lmd)
                         } else if(!strcmp(opt, "server_nid")) {
                                 if (ptl_parse_nid(&nid, opteq+1) != 0) {
                                         fprintf (stderr, "mount: "
-                                                 "can't parse NID %s\n", 
+                                                 "can't parse NID %s\n",
                                                  opteq+1);
                                         return (-1);
                                 }
                                 lmd->lmd_server_nid = nid;
                         } else if (!strcmp(opt, "port")) {
                                 lmd->lmd_port = val;
-                        } 
-                         
+                        }
                 } else {
                         val = 1;
                         if (!strncmp(opt, "no", 2)) {
@@ -120,33 +119,33 @@ int
 set_peer(char *hostname, struct lustre_mount_data *lmd)
 {
         ptl_nid_t nid = 0;
- 
+
         if (lmd->lmd_server_nid == 0) {
                 if (ptl_parse_nid (&nid, hostname) != 0) {
-                        fprintf (stderr, "mount: can't parse NID %s\n", 
+                        fprintf (stderr, "mount: can't parse NID %s\n",
                                  hostname);
                         return (-1);
                 }
                 lmd->lmd_server_nid = nid;
         }
 
-        if (!lmd->lmd_nal) 
+        if (!lmd->lmd_nal)
                 lmd->lmd_nal = ptl_name2nal("tcp");
 
         if (lmd->lmd_nal == SOCKNAL) {
-                if (!lmd->lmd_port) 
+                if (!lmd->lmd_port)
                         lmd->lmd_port = 988;
                 if (ptl_parse_ipaddr(&lmd->lmd_server_ipaddr, hostname) != 0) {
-                        fprintf (stderr, "mount: can't parse host %s\n", 
+                        fprintf (stderr, "mount: can't parse host %s\n",
                                  hostname);
                         return (-1);
                 }
         }
 
         if (verbose) {
-                printf("nal %d\n", lmd->lmd_nal);
-                printf("server_nid: %d\n", lmd->lmd_server_nid); 
-        }        
+                printf("nal %u\n", lmd->lmd_nal);
+                printf("server_nid: %llu\n", (long long)lmd->lmd_server_nid);
+        }
 
         return 0;
 }
@@ -171,7 +170,7 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
                 hostname = target;
                 *s = '\0';
 
-                while (*++s == '/') 
+                while (*++s == '/')
                         ;
                 mds = s;
                 if ((s = strchr(mds, '/'))) {
@@ -189,13 +188,13 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
                 return(-1);
         }
         if (verbose)
-                printf("host: %s\nmds: %s\nprofile: %s\n", hostname, mds, 
+                printf("host: %s\nmds: %s\nprofile: %s\n", hostname, mds,
                        profile);
-        
+
         rc = parse_options(options, lmd);
         if (rc)
                 return rc;
-        
+
         rc = set_peer(hostname, lmd);
         if (rc)
                 return rc;
@@ -210,7 +209,7 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
                 return(-1);
         }
         strcpy(lmd->lmd_profile, profile);
-        
+
         return 0;
 }
 
@@ -223,28 +222,26 @@ main(int argc, char * const argv[])
         int opt;
         int i;
         struct lustre_mount_data lmd;
-        
-        int rc;
-        
-	while ((opt = getopt(argc, argv, "vno:")) != EOF) {
 
-		switch (opt) {
-		case 'v':
+        int rc;
+
+        while ((opt = getopt(argc, argv, "vno:")) != EOF) {
+                switch (opt) {
+                case 'v':
                         verbose = 1;
                         printf("verbose: %d\n", verbose);
                         break;
-		case 'n':
+                case 'n':
                         nomtab = 1;
                         printf("nomtab: %d\n", nomtab);
-			break;
-			
-		case 'o':
+                        break;
+                case 'o':
                         options = optarg;
-			break;
+                        break;
                 default:
                         break;
-		}
-	}
+                }
+        }
 
         if (verbose)
                 for (i = 0; i < argc; i++) {
@@ -252,7 +249,7 @@ main(int argc, char * const argv[])
                 }
 
         memset(&lmd, 0, sizeof(lmd));
-        
+
         rc = build_data(source, options, &lmd);
         if (rc) {
                 exit(1);
@@ -267,8 +264,7 @@ main(int argc, char * const argv[])
         if (rc) {
                 perror(argv[0]);
         } else {
-                update_mtab_entry(source, target, "lustre", options, 
-                                  0, 0, 0);
+                update_mtab_entry(source, target, "lustre", options, 0, 0, 0);
         }
-	return rc;
+        return rc;
 }
