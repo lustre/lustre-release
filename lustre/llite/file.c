@@ -53,9 +53,9 @@ static int ll_file_open(struct inode *inode, struct file *file)
         /* XXX temporary until LDLM is working */
         fd->fd_flags |= LL_FILE_IGNORE_LOCK;
 
-        rc = mdc_open(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
-                      S_IFREG, file->f_flags, (__u64)(unsigned long)file, 
-                      &fd->fd_mdshandle, &req); 
+        rc = mdc_open(&sbi->ll_mds_client, sbi->ll_mds_conn,
+                      (obd_id)inode->i_ino, S_IFREG, file->f_flags,
+                      (__u64)(unsigned long)file, &fd->fd_mdshandle, &req);
         fd->fd_req = req;
         ptlrpc_req_finished(req);
         if (rc)
@@ -81,7 +81,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
 
         return 0;
 out_mdc:
-        mdc_close(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
+        mdc_close(&sbi->ll_mds_client, sbi->ll_mds_conn, (obd_id)inode->i_ino,
                   S_IFREG, fd->fd_mdshandle, &req);
 out_req:
         ptlrpc_free_req(req);
