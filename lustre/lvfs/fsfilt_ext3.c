@@ -191,7 +191,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso)
         /* last_rcvd update */
         needed += EXT3_DATA_TRANS_BLOCKS;
 
-#ifdef CONFIG_QUOTA
+#if defined(CONFIG_QUOTA) && !defined(__x86_64__) /* XXX */
         /* We assume that there will be 1 bit set in s_dquot.flags for each
          * quota file that is active.  This is at least true for now.
          */
