@@ -13,7 +13,7 @@ MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
 MDSSIZE=${MDSSIZE:-100000}
 FSTYPE=${FSTYPE:-ext3}
 
-OSTCOUNT=${OSTCOUNT:-3}
+OSTCOUNT=${OSTCOUNT:-5}
 # OSTDEVN will still override the device for OST N
 
 OSTSIZE=${OSTSIZE:-100000}
