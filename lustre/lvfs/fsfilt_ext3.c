@@ -671,6 +671,7 @@ struct bpointers {
         unsigned long start;
         int num;
         int init_num;
+        int create;
 };
 
 static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
@@ -693,6 +694,25 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         if (exist) {
                 err = EXT_CONTINUE;
                 goto map;
+        }
+
+        if (bp->create == 0) {
+                i = 0;
+                if (newex->e_block < bp->start)
+                        i = bp->start - newex->e_block;
+                if (i >= newex->e_num)
+                        CERROR("nothing to do?! i = %d, e_num = %u\n",
+                                        i, newex->e_num);
+                for (; i < newex->e_num && bp->num; i++) {
+                        *(bp->created) = 0;
+                        bp->created++;
+                        *(bp->blocks) = 0;
+                        bp->blocks++;
+                        bp->num--;
+                        bp->start++;
+                }
+
+                return EXT_CONTINUE;
         }
 
         tgen = EXT_GENERATION(tree);
@@ -784,6 +804,7 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
         bp.created = created;
         bp.start = block;
         bp.init_num = bp.num = num;
+        bp.create = create;
 
         down_write(&EXT3_I(inode)->truncate_sem);
         err = ext3_ext_walk_space(&tree, block, num, ext3_ext_new_extent_cb);
