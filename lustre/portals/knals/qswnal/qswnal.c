@@ -501,7 +501,7 @@ kqswnal_initialise (void)
 		LASSERT (krx->krx_npages > 0);
 		for (j = 0; j < krx->krx_npages; j++)
 		{
-			krx->krx_pages[j] = alloc_page (GFP_KERNEL);
+			krx->krx_pages[j] = alloc_page(GFP_KERNEL);
 			if (krx->krx_pages[j] == NULL)
 			{
 				kqswnal_finalise ();

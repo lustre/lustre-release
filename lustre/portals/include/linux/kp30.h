@@ -267,7 +267,7 @@ do {                                                                      \
         if (s > PORTAL_VMALLOC_SIZE)                                      \
                 (ptr) = vmalloc(s);                                       \
         else                                                              \
-                (ptr) = kmalloc(s, GFP_KERNEL);                           \
+                (ptr) = kmalloc(s, GFP_NOFS);                             \
         if ((ptr) == NULL)                                                \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
                        " '" #ptr "' = %ld)\n", __FILE__, __LINE__, s);    \

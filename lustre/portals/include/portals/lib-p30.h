@@ -183,28 +183,28 @@ static inline lib_eq_t *
 lib_eq_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
-        lib_eq_t *eq = kmem_cache_alloc(ptl_eq_slab, GFP_KERNEL);
-        
+        lib_eq_t *eq = kmem_cache_alloc(ptl_eq_slab, GFP_NOFS);
+
         if (eq == NULL)
                 return (NULL);
-        
+
         atomic_inc (&eq_in_use_count);
         return (eq);
 }
 
-static inline void 
+static inline void
 lib_eq_free (nal_cb_t *nal, lib_eq_t *eq)
 {
         /* ALWAYS called with statelock held */
         atomic_dec (&eq_in_use_count);
-        kmem_cache_free(ptl_eq_slab, eq); 
+        kmem_cache_free(ptl_eq_slab, eq);
 }
 
 static inline lib_md_t *
 lib_md_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
-        lib_md_t *md = kmem_cache_alloc(ptl_md_slab, GFP_KERNEL); 
+        lib_md_t *md = kmem_cache_alloc(ptl_md_slab, GFP_NOFS);
 
         if (md == NULL)
                 return (NULL);
@@ -225,11 +225,11 @@ static inline lib_me_t *
 lib_me_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
-        lib_me_t *me = kmem_cache_alloc(ptl_me_slab, GFP_KERNEL);
+        lib_me_t *me = kmem_cache_alloc(ptl_me_slab, GFP_NOFS);
 
         if (me == NULL)
                 return (NULL);
-        
+
         atomic_inc (&me_in_use_count);
         return (me);
 }

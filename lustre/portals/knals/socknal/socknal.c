@@ -187,7 +187,7 @@ ksocknal_add_sock (ptl_nid_t nid, int fd, int bind_irq)
         if (!conn)
                 GOTO(error, ret);
 
-        memset (conn, 0, sizeof (conn));        /* zero for consistency */
+        sock->sk->allocation = GFP_NOFS;    /* don't call info fs for alloc */
 
         conn->ksnc_file = file;
         conn->ksnc_sock = sock;
@@ -815,7 +815,7 @@ ksocknal_module_init (void)
 
                         LASSERT (fmb->fmb_npages > 0);
                         for (j = 0; j < fmb->fmb_npages; j++) {
-                                fmb->fmb_pages[j] = alloc_page (GFP_KERNEL);
+                                fmb->fmb_pages[j] = alloc_page(GFP_KERNEL);
 
                                 if (fmb->fmb_pages[j] == NULL) {
                                         ksocknal_module_fini ();
