@@ -201,9 +201,13 @@ int ptlrpc_import_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct obd_import *imp = cli->cl_import;
         struct obd_export *exp;
         struct ptlrpc_request *request;
+        /* XXX maybe this is a good time to create a connect struct? */
         int rc, size[] = {sizeof(imp->imp_target_uuid),
-                          sizeof(obd->obd_uuid) };
-        char *tmp[] = {imp->imp_target_uuid.uuid, obd->obd_uuid.uuid};
+                          sizeof(obd->obd_uuid),
+                          sizeof(*conn)};
+        char *tmp[] = {imp->imp_target_uuid.uuid,
+                       obd->obd_uuid.uuid,
+                       (char *)conn};
         int rq_opc = (obd->obd_type->typ_ops->o_brw) ? OST_CONNECT :MDS_CONNECT;
         int msg_flags;
 
@@ -224,13 +228,12 @@ int ptlrpc_import_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (obd->obd_namespace == NULL)
                 GOTO(out_disco, rc = -ENOMEM);
 
-        request = ptlrpc_prep_req(imp, rq_opc, 2, size, tmp);
+        request = ptlrpc_prep_req(imp, rq_opc, 3, size, tmp);
         if (!request)
                 GOTO(out_ldlm, rc = -ENOMEM);
 
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
-        request->rq_reqmsg->handle = *conn;
 
         imp->imp_export = exp = class_conn2export(conn);
         exp->exp_connection = ptlrpc_connection_addref(request->rq_connection);
