@@ -126,12 +126,54 @@ out:
         return rc;
 }
 
+int ll_size_lock(struct inode *inode, struct lov_stripe_md *md, __u64 start,
+                 int mode, struct lustre_handle **lockhs_p)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ldlm_extent extent;
+        struct lustre_handle *lockhs = NULL;
+        int rc, flags = 0;
+
+        OBD_ALLOC(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+        if (lockhs == NULL)
+                RETURN(-ENOMEM);
+
+        extent.start = start;
+        extent.end = ~0;
+
+        rc = obd_enqueue(&sbi->ll_osc_conn, md, NULL, LDLM_EXTENT, &extent,
+                         sizeof(extent), mode, &flags, ll_lock_callback,
+                         inode, sizeof(*inode), lockhs);
+        if (rc != ELDLM_OK) {
+                CERROR("lock enqueue: %d\n", rc);
+                OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+        } else
+                *lockhs_p = lockhs;
+        RETURN(rc);
+}
+
+int ll_size_unlock(struct inode *inode, struct lov_stripe_md *md, int mode,
+                   struct lustre_handle *lockhs)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        int rc;
+
+        rc = obd_cancel(&sbi->ll_osc_conn, md, mode, lockhs);
+        if (rc != ELDLM_OK) {
+                CERROR("lock cancel: %d\n", rc);
+                LBUG();
+        }
+
+        OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
+        RETURN(rc);
+}
+
 static int ll_file_release(struct inode *inode, struct file *file)
 {
         int rc;
         struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
-        struct obdo *oa;
+        struct obdo oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
         //struct obd_device *obddev = class_conn2obd(&sbi->ll_osc_conn);
@@ -145,33 +187,48 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 GOTO(out, rc = -EINVAL);
         }
 
-        oa = obdo_alloc();
-        if (oa == NULL) {
-                LBUG();
-                GOTO(out_fd, rc = -ENOENT);
-        }
-        oa->o_id = lli->lli_smd->lmd_object_id;
-        oa->o_mode = S_IFREG;
-        oa->o_valid = (OBD_MD_FLMODE | OBD_MD_FLID);
-        rc = obd_close(ll_i2obdconn(inode), oa, lli->lli_smd);
-        obdo_free(oa);
+        memset(&oa, 0, sizeof(oa));
+        oa.o_id = lli->lli_smd->lmd_object_id;
+        oa.o_mode = S_IFREG;
+        oa.o_valid = (OBD_MD_FLMODE | OBD_MD_FLID);
+        rc = obd_close(ll_i2obdconn(inode), &oa, lli->lli_smd);
         if (rc)
                 GOTO(out_fd, abs(rc));
 
+        /* If this fails and we goto out_fd, the file size on the MDS is out of
+         * date.  Is that a big deal? */
         if (file->f_mode & FMODE_WRITE) {
                 struct iattr attr;
-                attr.ia_valid = (ATTR_MTIME | ATTR_CTIME | ATTR_ATIME |
-                                 ATTR_SIZE);
-                attr.ia_mtime = inode->i_mtime;
-                attr.ia_ctime = inode->i_ctime;
-                attr.ia_atime = inode->i_atime;
-                attr.ia_size = inode->i_size;
+                struct lustre_handle *lockhs;
 
-                /* XXX: this introduces a small race that we should evaluate */
-                rc = ll_inode_setattr(inode, &attr, 0);
+                rc = ll_size_lock(inode, lli->lli_smd, 0, LCK_PR, &lockhs);
+                if (rc)
+                        GOTO(out_fd, abs(rc));
+
+                oa.o_id = lli->lli_smd->lmd_object_id;
+                oa.o_mode = S_IFREG;
+                oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE;
+                rc = obd_getattr(&sbi->ll_osc_conn, &oa, lli->lli_smd);
+                if (!rc) {
+                        attr.ia_valid = (ATTR_MTIME | ATTR_CTIME | ATTR_ATIME |
+                                         ATTR_SIZE);
+                        attr.ia_mtime = inode->i_mtime;
+                        attr.ia_ctime = inode->i_ctime;
+                        attr.ia_atime = inode->i_atime;
+                        attr.ia_size = oa.o_size;
+
+                        /* XXX: this introduces a small race that we should
+                         * evaluate */
+                        rc = ll_inode_setattr(inode, &attr, 0);
+                        if (rc) {
+                                CERROR("failed - %d.\n", rc);
+                                rc = -EIO; /* XXX - GOTO(out)? -phil */
+                        }
+                }
+                rc = ll_size_unlock(inode, lli->lli_smd, LCK_PR, lockhs);
                 if (rc) {
-                        CERROR("failed - %d.\n", rc);
-                        rc = -EIO; /* XXX - GOTO(out)? -phil */
+                        CERROR("lock cancel: %d\n", rc);
+                        LBUG();
                 }
         }
 
