@@ -7,7 +7,7 @@ export LC_COLLATE=C
 
 case "$lustretag" in
     '')
-        warn "a lustretag is required."
+	warn "a lustretag is required."
 	usage >&2
 	exit 1
 	;;
@@ -18,11 +18,6 @@ case "$lustretag" in
 
     # this is the branch table
     # keep this list sorted alphabetically!
-    b_ptl_smallfix)
-        portalstag="b_ptl_smallfix"
-	lustretag="b1_4"
-	;;
-
     b1_2)
 	portalstag="b1_2"
 	;;
@@ -35,12 +30,12 @@ case "$lustretag" in
 	libsysiotag="LIBSYSIO_HEAD_20041101"
 	;;
 
-    b_hd_sec)
+    b_hd_remote_uid)
 	portalstag="b_hd_sec"
 	;;
 
-    b_release_*)
-	portalstag=$lustretag
+    b_hd_sec)
+	portalstag="b_hd_sec"
 	;;
 
     b_port_ahead)
@@ -51,9 +46,6 @@ case "$lustretag" in
 	portalstag="b_port_netid"
 	;;
 
-    b_hd_remote_uid)
-	portalstag="b_hd_sec"
-	;;
     # b_port_step is only for portals
     b_port_step)
 	portalstag="b_port_step"
@@ -62,6 +54,15 @@ case "$lustretag" in
 
     b_port_test)
 	portalstag="b_port_test"
+	;;
+
+    b_ptl_smallfix)
+	portalstag="b_ptl_smallfix"
+	lustretag="b1_4"
+	;;
+
+    b_release_*)
+	portalstag=$lustretag
 	;;
 
     v1_[0-3]*|v1_4_0*|[A-Z]*)
