@@ -387,7 +387,11 @@ main(int argc, char * const argv[])
 
         rc = mount(source, target, "lustre", 0, (void *)&lmd);
         if (rc) {
+                rc = errno;
                 perror(argv[0]);
+                if (rc == ENODEV)
+                        fprintf(stderr, "Are the lustre modules loaded?\n"
+                             "Check /etc/modules.conf and /proc/filesystems\n");
         } else {
                 update_mtab_entry(source, target, "lustre", options, 0, 0, 0);
         }
