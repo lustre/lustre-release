@@ -61,7 +61,8 @@
 @@ -360,6 +361,38 @@ struct inode * ext3_new_inode (handle_t 
  
  	lock_super (sb);
- 	es = sbi->s_es;
+-	es = sb->u.ext3_sb.s_es;
++	es = EXT3_SB(sb)->s_es;
 + 
 + 	if (goal) {
 + 		i = (goal - 1) / EXT3_INODES_PER_GROUP(sb);
@@ -102,8 +103,8 @@
  		goto repeat;
  	}
 + have_bit_and_group:
- 	j += i * sbi->s_inodes_per_group + 1;
- 	if (j < sbi->s_first_ino || j > le32_to_cpu(es->s_inodes_count)) {
+	j += i * EXT3_INODES_PER_GROUP(sb) + 1;
+	if (j < EXT3_FIRST_INO(sb) || j > le32_to_cpu(es->s_inodes_count)) {
  		ext3_error (sb, "ext3_new_inode",
 --- linux-2.4.18-18/fs/ext3/ioctl.c~extN-wantedi	Sat Apr  5 02:51:31 2003
 +++ linux-2.4.18-18-braam/fs/ext3/ioctl.c	Sat Apr  5 02:51:31 2003

@@ -422,7 +422,7 @@
  	struct ext3_group_desc * gdp;
  	struct ext3_group_desc * tmp;
  	struct ext3_super_block * es;
-@@ -318,19 +320,21 @@ struct inode * ext3_new_inode (handle_t 
+@@ -318,7 +320,9 @@ struct inode * ext3_new_inode (handle_t 
  	inode = new_inode(sb);
  	if (!inode)
  		return ERR_PTR(-ENOMEM);
@@ -432,11 +432,8 @@
 +	init_rwsem(&ei->truncate_sem);
  
  	lock_super (sb);
--	es = sb->u.ext3_sb.s_es;
-+	es = sbi->s_es;
- repeat:
- 	gdp = NULL;
- 	i = 0;
+ 	es = sb->u.ext3_sb.s_es;
+@@ -328,9 +332,9 @@ struct inode * ext3_new_inode (handle_t 
  
  	if (S_ISDIR(mode)) {
  		avefreei = le32_to_cpu(es->s_free_inodes_count) /
@@ -499,17 +496,6 @@
  		BUFFER_TRACE(bh, "get_write_access");
  		err = ext3_journal_get_write_access(handle, bh);
  		if (err) goto fail;
-@@ -436,8 +440,8 @@ repeat:
- 		}
- 		goto repeat;
- 	}
--	j += i * EXT3_INODES_PER_GROUP(sb) + 1;
--	if (j < EXT3_FIRST_INO(sb) || j > le32_to_cpu(es->s_inodes_count)) {
-+	j += i * sbi->s_inodes_per_group + 1;
-+	if (j < sbi->s_first_ino || j > le32_to_cpu(es->s_inodes_count)) {
- 		ext3_error (sb, "ext3_new_inode",
- 			    "reserved inode or inode > inodes count - "
- 			    "block_group = %d,inode=%d", i, j);
 @@ -457,13 +461,13 @@ repeat:
  	err = ext3_journal_dirty_metadata(handle, bh2);
  	if (err) goto fail;
