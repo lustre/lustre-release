@@ -11,9 +11,20 @@ diff -rupN --exclude='ide*' linux-2.4.20.orig/fs/Config.in linux-2.4.20/fs/Confi
  define_bool CONFIG_RAMFS y
  
  tristate 'ISO 9660 CDROM file system support' CONFIG_ISO9660_FS
+diff -rupN --exclude='ide*' linux-2.4.20.orig/include/linux/mm.h linux-2.4.20/include/linux/mm.h
+--- linux-2.4.20.orig/include/linux/mm.h	2002-08-03 03:39:45.000000000 +0300
++++ linux-2.4.20/include/linux/mm.h	2004-02-10 11:43:10.000000000 +0200
+@@ -468,6 +468,7 @@ extern void clear_page_tables(struct mm_
+ extern int fail_writepage(struct page *);
+ struct page * shmem_nopage(struct vm_area_struct * vma, unsigned long address, int unused);
+ struct file *shmem_file_setup(char * name, loff_t size);
++int shmem_getpage(struct inode * inode, unsigned long idx, struct page **ptr);
+ extern void shmem_lock(struct file * file, int lock);
+ extern int shmem_zero_setup(struct vm_area_struct *);
+ 
 diff -rupN --exclude='ide*' linux-2.4.20.orig/include/linux/shmem_fs.h linux-2.4.20/include/linux/shmem_fs.h
 --- linux-2.4.20.orig/include/linux/shmem_fs.h	2001-12-21 19:42:03.000000000 +0200
-+++ linux-2.4.20/include/linux/shmem_fs.h	2004-02-08 21:40:34.000000000 +0200
++++ linux-2.4.20/include/linux/shmem_fs.h	2004-02-10 18:39:17.000000000 +0200
 @@ -3,6 +3,8 @@
  
  /* inode in-kernel data */
@@ -34,7 +45,7 @@ diff -rupN --exclude='ide*' linux-2.4.20.orig/include/linux/shmem_fs.h linux-2.4
  	struct inode	       *inode;
  };
  
-@@ -39,6 +45,15 @@ struct shmem_sb_info {
+@@ -39,6 +45,32 @@ struct shmem_sb_info {
  	spinlock_t    stat_lock;
  };
  
@@ -45,6 +56,23 @@ diff -rupN --exclude='ide*' linux-2.4.20.orig/include/linux/shmem_fs.h linux-2.4
 +	void *entity;
 +	struct list_head list;
 +};
++
++extern struct shmem_xattr *
++shmem_xattr_find(struct inode *inode, const char *name);
++
++extern ssize_t
++shmem_xattr_set(struct inode *inode, const char *name,
++		const void *value, u16 valuelen, int flags);
++		
++extern ssize_t
++shmem_xattr_get(struct inode *inode, const char *name,
++		void *value, size_t valuelen);
++		
++extern int
++shmem_xattr_delete(struct inode *inode, struct shmem_xattr *xattr);
++
++extern int
++shmem_xattr_remove(struct inode *inode, const char *name);
 +#endif
 +
  #define SHMEM_I(inode)  (&inode->u.shmem_i)
@@ -52,7 +80,7 @@ diff -rupN --exclude='ide*' linux-2.4.20.orig/include/linux/shmem_fs.h linux-2.4
  #endif
 diff -rupN --exclude='ide*' linux-2.4.20.orig/mm/shmem.c linux-2.4.20/mm/shmem.c
 --- linux-2.4.20.orig/mm/shmem.c	2002-11-29 01:53:15.000000000 +0200
-+++ linux-2.4.20/mm/shmem.c	2004-02-09 11:41:45.000000000 +0200
++++ linux-2.4.20/mm/shmem.c	2004-02-10 18:44:05.000000000 +0200
 @@ -27,6 +27,8 @@
  #include <linux/string.h>
  #include <linux/locks.h>
@@ -131,7 +159,7 @@ diff -rupN --exclude='ide*' linux-2.4.20.orig/mm/shmem.c linux-2.4.20/mm/shmem.c
 +/* assigns @name and @value to passed @xattr. */
 +static int
 +shmem_xattr_assign(struct shmem_xattr *xattr,
-+		   const char *name, void *value)
++		   const char *name, const void *value)
 +{
 +	if (name) {
 +		if (xattr->namelen != strlen(name))
@@ -183,9 +211,9 @@ diff -rupN --exclude='ide*' linux-2.4.20.orig/mm/shmem.c linux-2.4.20/mm/shmem.c
 +}
 +
 +/* allocates new xattr and fills it with passed value, name, etc. */
-+static ssize_t
++ssize_t
 +shmem_xattr_set(struct inode *inode, const char *name,
-+		void *value, u16 valuelen, int flags)
++		const void *value, u16 valuelen, int flags)
 +{
 +	ssize_t error;
 +        struct shmem_xattr *xattr;
@@ -222,7 +250,7 @@ diff -rupN --exclude='ide*' linux-2.4.20.orig/mm/shmem.c linux-2.4.20/mm/shmem.c
 +}
 +
 +/* fills passed @value by attribute value found by @name. */
-+static ssize_t
++ssize_t
 +shmem_xattr_get(struct inode *inode, const char *name,
 +		void *value, size_t valuelen)
 +{
@@ -245,7 +273,7 @@ diff -rupN --exclude='ide*' linux-2.4.20.orig/mm/shmem.c linux-2.4.20/mm/shmem.c
 +}
 +
 +/* deletes passed @xattr from inode xattr list and frees it. */
-+static int
++int
 +shmem_xattr_delete(struct inode *inode, struct shmem_xattr *xattr)
 +{
 +	struct shmem_inode_info *info;
@@ -262,7 +290,7 @@ diff -rupN --exclude='ide*' linux-2.4.20.orig/mm/shmem.c linux-2.4.20/mm/shmem.c
 +}
 +
 +/* removes attribute found by passed @name. */
-+static int
++int
 +shmem_xattr_remove(struct inode *inode, const char *name)
 +{
 +        struct shmem_xattr *xattr;
@@ -432,6 +460,15 @@ diff -rupN --exclude='ide*' linux-2.4.20.orig/mm/shmem.c linux-2.4.20/mm/shmem.c
  	clear_inode(inode);
  }
  
+@@ -634,7 +985,7 @@ wait_retry:
+ 	goto repeat;
+ }
+ 
+-static int shmem_getpage(struct inode * inode, unsigned long idx, struct page **ptr)
++int shmem_getpage(struct inode * inode, unsigned long idx, struct page **ptr)
+ {
+ 	struct shmem_inode_info *info = SHMEM_I(inode);
+ 	int error;
 @@ -727,6 +1078,11 @@ struct inode *shmem_get_inode(struct sup
  		info->inode = inode;
  		spin_lock_init (&info->lock);
@@ -494,3 +531,13 @@ diff -rupN --exclude='ide*' linux-2.4.20.orig/mm/shmem.c linux-2.4.20/mm/shmem.c
  #endif
  };
  
+@@ -1557,3 +1927,9 @@ int shmem_zero_setup(struct vm_area_stru
+ }
+ 
+ EXPORT_SYMBOL(shmem_file_setup);
++EXPORT_SYMBOL(shmem_getpage);
++EXPORT_SYMBOL(shmem_xattr_find);
++EXPORT_SYMBOL(shmem_xattr_set);
++EXPORT_SYMBOL(shmem_xattr_get);
++EXPORT_SYMBOL(shmem_xattr_delete);
++EXPORT_SYMBOL(shmem_xattr_remove);
