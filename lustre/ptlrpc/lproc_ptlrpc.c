@@ -116,16 +116,17 @@ void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
                 return;
         }
  
-        LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_REQWAIT_CNTR], 
-                             svc_counter_config, NULL, 
+        LPROCFS_COUNTER_INIT(svc_cntrs, PTLRPC_REQWAIT_CNTR, 
+                             svc_counter_config, 
                              "req_waittime", "cycles");
-        LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_SVCEQDEPTH_CNTR], 
-                             svc_counter_config, NULL, 
+        LPROCFS_COUNTER_INIT(svc_cntrs, PTLRPC_SVCEQDEPTH_CNTR, 
+                             svc_counter_config,
                              "svc_eqdepth", "reqs");
         for (i=0; i < LUSTRE_MAX_OPCODES; i++) {
                 __u32 opcode = ll_rpc_opcode_table[i].opcode;
-                LPROCFS_COUNTER_INIT(&svc_cntrs->cntr[PTLRPC_LAST_CNTR+i], 
-                                     svc_counter_config, NULL,
+                LPROCFS_COUNTER_INIT(svc_cntrs, 
+                                PTLRPC_LAST_CNTR+i, 
+                                svc_counter_config,
                                      ll_opcode2str(opcode), "cycles");
         }
         rc = lprocfs_register_counters(svc_procroot, "service_stats", 
@@ -162,16 +163,17 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
         LASSERT (svc->srv_counters != NULL);
         
         /* req_waittime */
-        LPROCFS_COUNTER_INCR(&svc->srv_counters->cntr[PTLRPC_REQWAIT_CNTR],
+        LPROCFS_COUNTER_INCR(svc->srv_counters, PTLRPC_REQWAIT_CNTR,
                              (work_start - req->rq_arrival_time));
 
         /* svc_eqdepth */
-        LPROCFS_COUNTER_INCR(&svc->srv_counters->cntr[PTLRPC_SVCEQDEPTH_CNTR],
+        LPROCFS_COUNTER_INCR(svc->srv_counters, PTLRPC_SVCEQDEPTH_CNTR,
                              svc->srv_n_queued_reqs);
 
         if (opc_offset >= 0) {
                 LASSERT(opc_offset < LUSTRE_MAX_OPCODES);
-                LPROCFS_COUNTER_INCR(&svc->srv_counters->cntr[PTLRPC_LAST_CNTR+opc_offset], 
+                LPROCFS_COUNTER_INCR(svc->srv_counters, 
+                                     PTLRPC_LAST_CNTR+opc_offset, 
                                      work_end - work_start);
         }
 }
