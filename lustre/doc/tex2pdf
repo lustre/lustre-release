@@ -1418,7 +1418,11 @@ sub check_commands {
    &checkCommand("epstopdf","See pdftex homepage for details: http://tug.org/applications/pdftex");
    $exec_epstopdf = `which epstopdf`;
    chomp $exec_epstopdf;
-   if (&grep_file($exec_epstopdf, "-dCompatibilityLevel=1\\.1", $TRUE) > 0) {
+   my $compat = "-dCompatibilityLevel=1\\.1";
+   if (defined($ENV{'GS_OPTIONS'}) && $ENV{'GS_OPTIONS'} =~ /$compat/o) {
+      &report(9, "Good: ghostscript option '-dCompatibilityLevel=1.1' detected "
+         ."in\n'\$GS_OPTIONS'.");
+   } elsif (&grep_file($exec_epstopdf, $compat, $TRUE) > 0) {
       &report(9, "Good: ghostscript option '-dCompatibilityLevel=1.1' detected "
          ."in\n'$exec_epstopdf'.");
    } else {
