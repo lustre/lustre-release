@@ -245,10 +245,13 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         spin_lock_init(&cli->cl_write_rpc_hist.oh_lock);
         spin_lock_init(&cli->cl_read_page_hist.oh_lock);
         spin_lock_init(&cli->cl_write_page_hist.oh_lock);
-        
-        if (num_physpages <= 32768) { /* <= 128 MB */
-                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 3;
-                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 3;
+
+        if (num_physpages >> (20 - PAGE_SHIFT) <= 128) { /* <= 128 MB */
+                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 4;
+                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 4;
+        } else if (num_physpages >> (20 - PAGE_SHIFT) <= 512) { /* <= 512 MB */
+                cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES / 2;
+                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT / 2;
         } else {
                 cli->cl_max_pages_per_rpc = PTLRPC_MAX_BRW_PAGES;
                 cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
