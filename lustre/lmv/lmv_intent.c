@@ -569,7 +569,7 @@ int lmv_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 rc = lmv_intent_open(exp, uctxt, pfid, name, len, lmm,
                                      lmmsize, cfid, it, flags, reqp,
                                      cb_blocking);
-        else if (it->it_op == IT_GETATTR)
+        else if (it->it_op == IT_GETATTR || it->it_op == IT_CHDIR)
                 rc = lmv_intent_getattr(exp, uctxt, pfid, name, len, lmm,
                                         lmmsize, cfid, it, flags, reqp,
                                         cb_blocking);
