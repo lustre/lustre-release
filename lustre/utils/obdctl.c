@@ -147,14 +147,15 @@ int getfd(char *func)
         return 0;
 }
 
-/*
+#if 1
 #define difftime(a, b)                                          \
         ((double)(a)->tv_sec - (b)->tv_sec +                    \
          ((double)((a)->tv_usec - (b)->tv_usec) / 1000000))
-*/
+#else
 
 #define difftime(a, b)  (((a)->tv_sec - (b)->tv_sec) + \
                         (((a)->tv_usec - (b)->tv_usec) / 1000000))
+#endif
 
 static int be_verbose(int verbose, struct timeval *next_time,
                       int num, int *next_num, int num_total)
