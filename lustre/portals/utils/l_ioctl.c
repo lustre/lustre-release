@@ -121,7 +121,7 @@ dump(int dev_id, int opc, void *buf)
 {
 	FILE *fp;
 	struct dump_hdr dump_hdr;
-	struct portal_ioctl_hdr * ioc_hdr = (struct  portal_ioctl_hdr *) buf;
+        struct portal_ioctl_hdr * ioc_hdr = (struct  portal_ioctl_hdr *) buf;
 	int rc;
 	
 	printf("dumping opc %x to %s\n", opc, dump_filename);
@@ -138,17 +138,17 @@ dump(int dev_id, int opc, void *buf)
 		return -EINVAL;
 	}
 	
-	rc = fwrite(&dump_hdr, sizeof(dump_hdr), 1, fp);
-	if (rc == 1)
-		rc = fwrite(buf, ioc_hdr->ioc_len, 1, fp);
-	fclose(fp);
-	if (rc != 1) {
-		fprintf(stderr, "%s: %s\n", dump_filename, 
-			strerror(errno));
-		return -EINVAL;
-	}
-	
-	return 0;
+        rc = fwrite(&dump_hdr, sizeof(dump_hdr), 1, fp);
+        if (rc == 1)
+                rc = fwrite(buf, ioc_hdr->ioc_len, 1, fp);
+        fclose(fp);
+        if (rc != 1) {
+                fprintf(stderr, "%s: %s\n", dump_filename,
+                        strerror(errno));
+                return -EINVAL;
+        }
+                                                                                                                        
+        return 0;
 }
 
 /* register a device to send ioctls to.  */
@@ -269,36 +269,36 @@ parse_dump(char * dump_file, int (*ioc_func)(int dev_id, int opc, void *))
 #endif /* __CYGWIN__ */
 
 	while (buf < end) {
-		struct dump_hdr *dump_hdr = (struct dump_hdr *) buf;
-		struct portal_ioctl_hdr * data;
-		char tmp[8096];
-		int rc;
-		
-		line++;
+                struct dump_hdr *dump_hdr = (struct dump_hdr *) buf;
+                struct portal_ioctl_hdr * data;
+                char tmp[8096];
+                int rc;
 
-		data = (struct portal_ioctl_hdr *) (buf + sizeof(*dump_hdr));
-		if (buf + data->ioc_len > end ) {
-			fprintf(stderr, "dump file overflow, %p + %d > %p\n", buf,
-				data->ioc_len, end);
-			return -1;
-		}
+                line++;
+
+                data = (struct portal_ioctl_hdr *) (buf + sizeof(*dump_hdr));
+                if (buf + data->ioc_len > end ) {
+                        fprintf(stderr, "dump file overflow, %p + %d > %p\n", buf,
+                                data->ioc_len, end);
+                        return -1;
+                }
 #if 0
-		printf ("dump_hdr: %lx data: %lx\n",
-			(unsigned long)dump_hdr - (unsigned long)buf, (unsigned long)data - (unsigned long)buf);
-		
-		printf("%d: opcode %x len: %d  ver: %x ", line, dump_hdr->opc,
-		       data->ioc_len, data->ioc_version);
+                printf ("dump_hdr: %lx data: %lx\n",
+                        (unsigned long)dump_hdr - (unsigned long)buf, (unsigned long)data - (unsigned long)buf);
+
+                printf("%d: opcode %x len: %d  ver: %x ", line, dump_hdr->opc,
+                       data->ioc_len, data->ioc_version);
 #endif
 
-		memcpy(tmp, data, data->ioc_len);
+                memcpy(tmp, data, data->ioc_len);
 
-		rc = ioc_func(dump_hdr->dev_id, dump_hdr->opc, tmp);
-		if (rc) {
-			printf("failed: %d\n", rc);
-			exit(1);
-		}
+                rc = ioc_func(dump_hdr->dev_id, dump_hdr->opc, tmp);
+                if (rc) {
+                        printf("failed: %d\n", rc);
+                        exit(1);
+                }
 
-		buf += data->ioc_len + sizeof(*dump_hdr);
+                buf += data->ioc_len + sizeof(*dump_hdr);
 	}
 
 #ifndef __CYGWIN__

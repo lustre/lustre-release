@@ -107,6 +107,9 @@ pcfg_ioctl(struct portals_cfg *pcfg)
                 PORTAL_IOC_INIT (data);
                 data.ioc_pbuf1   = (char*)pcfg;
                 data.ioc_plen1   = sizeof(*pcfg);
+                /* XXX liblustre hack XXX */
+                data.ioc_nal_cmd = pcfg->pcfg_command;
+                data.ioc_nid = pcfg->pcfg_nid;
 
                 rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
         }
