@@ -47,7 +47,7 @@ update_mtab_entry(char *spec, char *node, char *type, char *opts,
         mnt.mnt_fsname = spec;
         mnt.mnt_dir = node;
         mnt.mnt_type = type;
-        mnt.mnt_opts = opts;
+        mnt.mnt_opts = opts ? opts : "";
         mnt.mnt_freq = freq;
         mnt.mnt_passno = pass;
 
