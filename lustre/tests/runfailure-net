@@ -13,13 +13,13 @@ test_fail() {
 	kill -9 $!
 
         echo 0 > /proc/sys/lustre/fail_loc
-        umount /mnt/lustre || exit 1
-        mount -t lustre_lite -o device=`$OBDCTL name2dev OSCDEV` none /mnt/lustre || exit 1
+        umount /mnt/lustre || fail "cannot unmount /mnt/lustre"
+        mount -t lustre_lite -o device=`$OBDCTL name2dev OSCDEV` none /mnt/lustre || fail "cannot remount device '`$OBDCTL name2dev OSCDEV`' on /mnt/lustre"
 }
 
 [ -c /dev/request ] || mknod /dev/request c 10 244
 
-echo | sh llmount.sh || exit -1
+[ "`mount | grep /mnt/lustre`" ] || echo | sh llmount.sh || exit -1
 
 # GETATTR_NET - ls will hang on the getattr
 test_fail 0x102 ls -l /mnt/lustre

@@ -17,80 +17,43 @@
 
 kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
-LIST_HEAD(ldlm_namespaces);
-spinlock_t ldlm_spinlock;
-
-struct ldlm_namespace *ldlm_namespace_find(__u32 id)
+struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obddev)
 {
-        struct list_head *tmp;
-        struct ldlm_namespace *res;
-
-        res = NULL;
-        list_for_each(tmp, &ldlm_namespaces) { 
-                struct ldlm_namespace *chk;
-                chk = list_entry(tmp, struct ldlm_namespace, ns_link);
-                
-                if ( chk->ns_id == id ) {
-                        res = chk;
-                        break;
-                }
-        }
-
-        return res;
-}
-
-/* this must be called with ldlm_lock() held */
-static void res_hash_init(struct ldlm_namespace *ns)
-{
-        struct list_head *res_hash;
+        struct ldlm_namespace *ns;
         struct list_head *bucket;
 
-        if (ns->ns_hash != NULL)
-                return;
-
-        /* FIXME: this memory appears to be leaked */
-        OBD_ALLOC(res_hash, sizeof(*res_hash) * RES_HASH_SIZE);
-        if (!res_hash)
+        OBD_ALLOC(ns, sizeof(*ns));
+        if (!ns) {
                 LBUG();
+                RETURN(NULL);
+        }
+        OBD_ALLOC(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
+        if (!ns->ns_hash) {
+                OBD_FREE(ns, sizeof(*ns));
+                LBUG();
+                RETURN(NULL);
+        }
 
-        for (bucket = res_hash + RES_HASH_SIZE - 1; bucket >= res_hash;
+        ns->ns_obddev = obddev;
+        INIT_LIST_HEAD(&ns->ns_root_list);
+        ns->ns_lock = SPIN_LOCK_UNLOCKED;
+        ns->ns_refcount = 0;
+
+        for (bucket = ns->ns_hash + RES_HASH_SIZE - 1; bucket >= ns->ns_hash;
              bucket--)
                 INIT_LIST_HEAD(bucket);
 
-        ns->ns_hash = res_hash;
-}
-
-ldlm_error_t ldlm_namespace_new(struct obd_device *obddev, __u32 id,
-                                struct ldlm_namespace **ns_out)
-{
-        struct ldlm_namespace *ns;
-
-        if (ldlm_namespace_find(id))
-                return -ELDLM_NAMESPACE_EXISTS;
-
-        OBD_ALLOC(ns, sizeof(*ns));
-        if (!ns)
-                LBUG();
-
-        ns->ns_id = id;
-        ns->ns_obddev = obddev;
-        INIT_LIST_HEAD(&ns->ns_root_list);
-
-        list_add(&ns->ns_link, &ldlm_namespaces);
-
-        res_hash_init(ns); 
-        atomic_set(&ns->ns_refcount, 0);
-
-        *ns_out = ns;
-        return ELDLM_OK;
+        return ns;
 }
 
 int ldlm_namespace_free(struct ldlm_namespace *ns)
 {
-        if (atomic_read(&ns->ns_refcount))
+        spin_lock(&ns->ns_lock);
+        if (ns->ns_refcount) {
+                spin_unlock(&ns->ns_lock);
                 return -EBUSY;
+        }
 
-        list_del(&ns->ns_link);
         OBD_FREE(ns->ns_hash, sizeof(struct list_head) * RES_HASH_SIZE);
         OBD_FREE(ns, sizeof(*ns));
 
@@ -126,21 +89,19 @@ static struct ldlm_resource *ldlm_resource_new(void)
         INIT_LIST_HEAD(&res->lr_waiting);
 
         res->lr_lock = SPIN_LOCK_UNLOCKED;
-
-        atomic_set(&res->lr_refcount, 1);
+        res->lr_refcount = 1;
 
         return res;
 }
 
-/* ldlm_lock() must be taken before calling resource_add */
+/* Args: locked namespace
+ * Returns: newly-allocated, referenced, unlocked resource */
 static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
                                                struct ldlm_resource *parent,
                                                __u64 *name, __u32 type)
 {
         struct list_head *bucket;
         struct ldlm_resource *res;
-
-        bucket = ns->ns_hash + ldlm_hash_fn(parent, name);
 
         res = ldlm_resource_new();
         if (!res)
@@ -153,8 +114,10 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
 
         res->lr_type = type; 
         res->lr_most_restr = LCK_NL;
+
+        bucket = ns->ns_hash + ldlm_hash_fn(parent, name);
         list_add(&res->lr_hash, bucket);
-        atomic_inc(&ns->ns_refcount);
+
         if (parent == NULL) {
                 res->lr_parent = res;
                 list_add(&res->lr_rootlink, &ns->ns_root_list);
@@ -166,46 +129,67 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
         return res;
 }
 
+/* Args: unlocked namespace
+ * Locks: takes and releases ns->ns_lock and res->lr_lock
+ * Returns: referenced, unlocked ldlm_resource or NULL */
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
                                         __u64 *name, __u32 type, int create)
 {
         struct list_head *bucket;
         struct list_head *tmp = bucket;
-        struct ldlm_resource *res;
+        struct ldlm_resource *res = NULL;
 
         ENTRY;
 
         if (ns->ns_hash == NULL)
                 RETURN(NULL);
+
+        spin_lock(&ns->ns_lock);
         bucket = ns->ns_hash + ldlm_hash_fn(parent, name);
 
-        res = NULL;
         list_for_each(tmp, bucket) {
                 struct ldlm_resource *chk;
                 chk = list_entry(tmp, struct ldlm_resource, lr_hash);
 
                 if (memcmp(chk->lr_name, name, sizeof(chk->lr_name)) == 0) {
                         res = chk;
-                        atomic_inc(&res->lr_refcount);
+                        spin_lock(&res->lr_lock);
+                        res->lr_refcount++;
+                        spin_unlock(&res->lr_lock);
                         break;
                 }
         }
 
         if (res == NULL && create)
                 res = ldlm_resource_add(ns, parent, name, type);
+        spin_unlock(&ns->ns_lock);
 
         RETURN(res);
 }
 
+/* Args: unlocked resource
+ * Locks: takes and releases res->lr_lock
+ *        takes and releases ns->ns_lock iff res->lr_refcount falls to 0
+ */
 int ldlm_resource_put(struct ldlm_resource *res)
 {
         int rc = 0; 
 
-        if (atomic_read(&res->lr_refcount) <= 0)
+        spin_lock(&res->lr_lock);
+        res->lr_refcount--;
+        if (res->lr_refcount < 0)
                 LBUG();
+        spin_unlock(&res->lr_lock);
 
-        if (atomic_dec_and_test(&res->lr_refcount)) {
+        if (res->lr_refcount == 0) {
+                struct ldlm_namespace *ns = res->lr_namespace;
+
+                spin_lock(&ns->ns_lock);
+                spin_lock(&res->lr_lock);
+                if (res->lr_refcount != 0)
+                        goto out;
+
                 if (!list_empty(&res->lr_granted))
                         LBUG();
 
@@ -215,29 +199,37 @@ int ldlm_resource_put(struct ldlm_resource *res)
                 if (!list_empty(&res->lr_waiting))
                         LBUG();
 
-                atomic_dec(&res->lr_namespace->ns_refcount);
+                if (!list_empty(&res->lr_children))
+                        LBUG();
+
+                ns->ns_refcount--;
                 list_del(&res->lr_hash);
                 list_del(&res->lr_rootlink);
                 list_del(&res->lr_childof);
 
                 kmem_cache_free(ldlm_resource_slab, res);
                 rc = 1;
+        out:
+                spin_unlock(&res->lr_lock);
+                spin_unlock(&ns->ns_lock);
         }
 
         return rc; 
 }
 
+/* Must be called with resource->lr_lock taken */
 void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock)
 {
         list_add(&lock->l_res_link, head);
-        atomic_inc(&res->lr_refcount);
+        res->lr_refcount++;
 }
 
+/* Must be called with resource->lr_lock taken */
 void ldlm_resource_del_lock(struct ldlm_lock *lock)
 {
         list_del(&lock->l_res_link);
-        atomic_dec(&lock->l_resource->lr_refcount);
+        lock->l_resource->lr_refcount--;
 }
 
 int ldlm_get_resource_handle(struct ldlm_resource *res, struct ldlm_handle *h)
@@ -248,7 +240,6 @@ int ldlm_get_resource_handle(struct ldlm_resource *res, struct ldlm_handle *h)
 
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
 {
-        desc->lr_ns_id = res->lr_namespace->ns_id;
         desc->lr_type = res->lr_type;
         memcpy(desc->lr_name, res->lr_name, sizeof(desc->lr_name));
         memcpy(desc->lr_version, res->lr_version, sizeof(desc->lr_version));
@@ -268,8 +259,7 @@ void ldlm_resource_dump(struct ldlm_resource *res)
                  (unsigned long long)res->lr_name[2]);
 
         CDEBUG(D_OTHER, "--- Resource: %p (%s)\n", res, name);
-        CDEBUG(D_OTHER, "Namespace: %p (%u)\n", res->lr_namespace,
-               res->lr_namespace->ns_id);
+        CDEBUG(D_OTHER, "Namespace: %p\n", res->lr_namespace);
         CDEBUG(D_OTHER, "Parent: %p, root: %p\n", res->lr_parent, res->lr_root);
 
         CDEBUG(D_OTHER, "Granted locks:\n");
@@ -293,4 +283,3 @@ void ldlm_resource_dump(struct ldlm_resource *res)
                 ldlm_lock_dump(lock);
         }
 }
-
