@@ -151,6 +151,13 @@ build_test_filter
 
 gen_config
 start mds --reformat
+PINGER=`cat /proc/fs/lustre/pinger`
+
+if [ "$PINGER" != "on" ]; then
+    echo "ERROR: Lustre must be built with --enable-pinger for replay-dual"
+    stop mds
+fi
+
 start ost --reformat
 start client1
 start client2
