@@ -495,7 +495,6 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 {
         struct list_head *bucket, *tmp;
         struct ldlm_resource *res = NULL;
-        int rc;
         ENTRY;
 
         LASSERT(ns != NULL);
@@ -523,12 +522,10 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
         l_unlock(&ns->ns_lock);
 
         if (create && ns->ns_lvbo && ns->ns_lvbo->lvbo_init) {
-                rc = ns->ns_lvbo->lvbo_init(res);
-                if (rc) {
-                        CERROR("lvbo_init failure %d\n", rc);
-                        LASSERT(ldlm_resource_putref(res) == 1);
-                        res = NULL;
-                }
+                int rc = ns->ns_lvbo->lvbo_init(res);
+                if (rc)
+                        CERROR("lvbo_init failed for resource "LPU64": rc %d\n",
+                               name.name[0], rc);
         }
 
         RETURN(res);

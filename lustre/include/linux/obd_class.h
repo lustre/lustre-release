@@ -828,16 +828,15 @@ static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
 static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                                int objcount, struct obd_ioobj *obj,
                                int niocount, struct niobuf_local *local,
-                               struct obd_trans_info *oti)
+                               struct obd_trans_info *oti, int rc)
 {
-        int rc;
         ENTRY;
 
         OBD_CHECK_OP(exp->exp_obd, commitrw, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, commitrw);
 
         rc = OBP(exp->exp_obd, commitrw)(cmd, exp, oa, objcount, obj, niocount,
-                                         local, oti);
+                                         local, oti, rc);
         RETURN(rc);
 }
 

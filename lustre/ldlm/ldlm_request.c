@@ -374,7 +374,9 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 LDLM_DEBUG(lock, "enqueue reply includes blocking AST");
         }
 
-        if (lvb_len) {
+        /* If the lock has already been granted by a completion AST, don't
+         * clobber the LVB with an older one. */
+        if (lvb_len && (lock->l_req_mode != lock->l_granted_mode)) {
                 void *tmplvb;
                 tmplvb = lustre_swab_repbuf(req, 1, lvb_len, lvb_swabber);
                 if (tmplvb == NULL)

@@ -48,7 +48,7 @@ start_mds() {
 }
 stop_mds() {
 	echo "stop mds service on `facet_active_host mds`"
-	stop mds $@  || return 97 
+	stop mds $@  || return 97
 }
 
 start_ost() {
@@ -58,7 +58,7 @@ start_ost() {
 
 stop_ost() {
 	echo "stop ost service on `facet_active_host ost`"
-	stop ost $@  || return 98 
+	stop ost $@  || return 98
 }
 
 mount_client() {
@@ -81,7 +81,7 @@ manual_umount_client(){
 setup() {
 	start_ost
 	start_mds
-	mount_client $MOUNT 
+	mount_client $MOUNT
 }
 
 cleanup() {
@@ -89,7 +89,7 @@ cleanup() {
 	stop_mds  || return 201
 	stop_ost || return 202
 	# catch case where these return just fine, but modules are still not unloaded
-	/sbin/lsmod | grep -q portals 
+	/sbin/lsmod | grep -q portals
 	if [ 1 -ne $? ]; then
 		echo "modules still loaded..."
 		return 203
@@ -120,7 +120,7 @@ gen_config
 test_0() {
 	start_ost
 	start_mds	
-	mount_client $MOUNT  
+	mount_client $MOUNT
 	check_mount || return 41
 	cleanup || return $?
 }
@@ -129,7 +129,7 @@ run_test 0 "single mount setup"
 test_1() {
 	start_ost
 	echo "start ost second time..."
-	start ost --reformat $OSTLCONFARGS 
+	start ost --reformat $OSTLCONFARGS
 	start_mds	
 	mount_client $MOUNT
 	check_mount || return 42
@@ -141,16 +141,16 @@ test_2() {
 	start_ost
 	start_mds	
 	echo "start mds second time.."
-	start mds --reformat $MDSLCONFARGS 
+	start mds --reformat $MDSLCONFARGS
 	
-	mount_client $MOUNT  
+	mount_client $MOUNT
 	check_mount || return 43
 	cleanup || return $?
 }
 run_test 2 "start up mds twice"
 
 test_3() {
-        setup
+	setup
 	mount_client $MOUNT
 
 	check_mount || return 44
@@ -164,7 +164,7 @@ test_4() {
 	setup
 	touch $DIR/$tfile || return 85
 	stop_ost --force
-	cleanup 
+	cleanup
 	eno=$?
 	# ok for ost to fail shutdown
 	if [ 202 -ne $eno ]; then
@@ -179,8 +179,8 @@ test_5() {
 	touch $DIR/$tfile || return 1
 	stop_mds --force || return 2
 
-	# cleanup may return an error from the failed 
-	# disconnects; for now I'll consider this successful 
+	# cleanup may return an error from the failed
+	# disconnects; for now I'll consider this successful
 	# if all the modules have unloaded.
  	umount $MOUNT &
 	UMOUNT_PID=$!
@@ -188,10 +188,10 @@ test_5() {
 	echo "killing umount"
 	kill -TERM $UMOUNT_PID
 	echo "waiting for umount to finish"
-	wait $UMOUNT_PID 
+	wait $UMOUNT_PID
 
 	# cleanup client modules
-	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
 	
 	# stop_mds is a no-op here, and should not fail
 	stop_mds  || return 4
@@ -208,11 +208,11 @@ test_5b() {
 	stop_mds
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
-	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
 	llmount $mds_HOST://mds_svc/client_facet $MOUNT  && exit 1
 
 	# cleanup client modules
-	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
 	
 	# stop_mds is a no-op here, and should not fail
 	stop_mds || return 2
@@ -229,11 +229,11 @@ test_5c() {
 	start_mds
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
-	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
 	llmount $mds_HOST://wrong_mds_svc/client_facet $MOUNT  && exit 1
 
 	# cleanup client modules
-	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
 	
 	stop_mds || return 2
 	stop_ost || return 3
@@ -264,12 +264,12 @@ test_8() {
 	start_ost
 	start_mds
 
-	mount_client $MOUNT  
-	mount_client $MOUNT2 
+	mount_client $MOUNT
+	mount_client $MOUNT2
 
 	check_mount2 || return 45
 	umount $MOUNT
-	umount_client $MOUNT2  
+	umount_client $MOUNT2
 	
 	stop_mds
 	stop_ost
@@ -280,7 +280,7 @@ test_9() {
         # backup the old values of PTLDEBUG and SUBSYSTEM
         OLDPTLDEBUG=$PTLDEBUG
         OLDSUBSYSTEM=$SUBSYSTEM
-        
+
         # generate new configuration file with lmc --ptldebug and --subsystem
         PTLDEBUG="trace"
         SUBSYSTEM="mdc"
@@ -365,7 +365,7 @@ test_11() {
         add_ost ost --dev $OSTDEV --size $OSTSIZE
         add_client client mds --path $MOUNT --ost ost_svc || return $?
         echo "Default lov config success!"
-        
+
         [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
         add_mds mds --dev $MDSDEV --size $MDSSIZE
         add_ost ost --dev $OSTDEV --size $OSTSIZE
@@ -395,7 +395,7 @@ test_12() {
         else
                 echo "matched double quote fail"
                 return 1
-        fi 
+        fi
         rm -f $XMLCONFIG
         rm -f $BATCHFILE
         echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
@@ -508,11 +508,11 @@ test_14() {
         add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
             --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
         add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE \
-            --mkfsoptions "-Llabel_conf_15"
+            --mkfsoptions "-Llabel_conf_14"
         add_client client mds --lov lov1 --path $MOUNT
 
         FOUNDSTRING=`awk -F"<" '/<mkfsoptions>/{print $2}' $XMLCONFIG`
-        EXPECTEDSTRING="mkfsoptions>-Llabel_conf_15"
+        EXPECTEDSTRING="mkfsoptions>-Llabel_conf_14"
         if [ $EXPECTEDSTRING != $FOUNDSTRING ]; then
                 echo "Error: expected: $EXPECTEDSTRING; found: $FOUNDSTRING"
                 return 1
@@ -524,7 +524,7 @@ test_14() {
         start_ost
         start_mds
         mount_client $MOUNT || return $?
-        if [ -z "`dumpe2fs -h $OSTDEV | grep label_conf_15`" ]; then
+        if [ -z "`dumpe2fs -h $OSTDEV | grep label_conf_14`" ]; then
                 echo "Error: the mkoptions not applied to mke2fs of ost."
                 return 1
         fi
@@ -535,31 +535,44 @@ test_14() {
 }
 run_test 14 "test mkfsoptions of ost for lmc and lconf"
 
-test_15() {
-        start_ost
-        start_mds
-        echo "mount lustre on ${MOUNT} with $MOUNTLUSTRE....."
-        [ -f "$MOUNTLUSTRE" ] && rm -f $MOUNTLUSTRE
-        [ ! `cp $LUSTRE/utils/llmount $MOUNTLUSTRE` ] || return $?
-        do_node `hostname` mkdir $MOUNT 2> /dev/null || :
-        do_node `hostname` mount -t lustre -o nettype=$NETTYPE `facet_active_host mds`:/mds_svc/client_facet $MOUNT || return $?
-        echo "mount lustre on ${MOUNT} with $MOUNTLUSTRE: success"
-        [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
-        check_mount || return 41
-        cleanup || return $?
-
-        start_ost
-        start_mds
-        [ -f "$MOUNTLUSTRE" ] && rm -f $MOUNTLUSTRE
-        echo "mount lustre on ${MOUNT} without $MOUNTLUSTRE....."
-        do_node `hostname` mkdir $MOUNT 2> /dev/null || :
-        do_node `hostname` mount -t lustre -o nettype=$NETTYPE `facet_active_host mds`:/mds_svc/client_facet $MOUNT && return $?
-        echo "mount lustre on ${MOUNT} without $MOUNTLUSTRE should return error: success"
-        [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
-        check_mount || return 41
-        cleanup || return $?
-
+cleanup_15() {
+	trap 0
+	[ -f $MOUNTLUSTRE ] && echo "remove $MOUNTLUSTRE" && rm -f $MOUNTLUSTRE
+	if [ -f $MOUNTLUSTRE.sav ]; then
+		echo "return original $MOUNTLUSTRE.sav to $MOUNTLUSTRE"
+		mv $MOUNTLUSTRE.sav $MOUNTLUSTRE
+	fi
 }
-run_test 15 "zconf-mount without /sbin/mount.lustre, should return error"
+
+test_15() {
+	start_ost
+	start_mds
+	echo "mount lustre on ${MOUNT} with $MOUNTLUSTRE....."
+	if [ -f "$MOUNTLUSTRE" ]; then
+		echo "save $MOUNTLUSTRE to $MOUNTLUSTRE.sav"
+		mv $MOUNTLUSTRE $MOUNTLUSTRE.sav
+	fi
+	[ -f "$MOUNTLUSTRE" ] && echo "can't move $MOUNTLUSTRE" && return 40
+	trap cleanup_15 EXIT INT
+	[ ! `cp $LUSTRE/utils/llmount $MOUNTLUSTRE` ] || return $?
+	do_node `hostname` mkdir -p $MOUNT 2> /dev/null
+	# load llite module on the client if it isn't in /lib/modules
+	do_node `hostname` lconf --nosetup --node client_facet $XMLCONFIG
+	do_node `hostname` mount -t lustre -o nettype=$NETTYPE \
+		`facet_active_host mds`:/mds_svc/client_facet $MOUNT ||return $?
+	echo "mount lustre on $MOUNT with $MOUNTLUSTRE: success"
+	[ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
+	check_mount || return 41
+	do_node `hostname` umount $MOUNT
+
+	[ -f "$MOUNTLUSTRE" ] && rm -f $MOUNTLUSTRE
+	echo "mount lustre on ${MOUNT} without $MOUNTLUSTRE....."
+	do_node `hostname` mount -t lustre -o nettype=$NETTYPE \
+		`facet_active_host mds`:/mds_svc/client_facet $MOUNT &&return $?
+	echo "mount lustre on $MOUNT without $MOUNTLUSTRE failed as expected"
+	cleanup || return $?
+	cleanup_15
+}
+run_test 15 "zconf-mount without /sbin/mount.lustre (should return error)"
 
 equals_msg "Done"

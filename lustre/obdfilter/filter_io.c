@@ -676,7 +676,7 @@ int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
 static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                                 int objcount, struct obd_ioobj *obj,
                                 int niocount, struct niobuf_local *res,
-                                struct obd_trans_info *oti)
+                                struct obd_trans_info *oti, int rc)
 {
         struct obd_ioobj *o;
         struct niobuf_local *lnb;
@@ -700,9 +700,10 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                         page_cache_release(lnb->page);
                 }
         }
+
         if (res->dentry != NULL)
                 f_dput(res->dentry);
-        RETURN(0);
+        RETURN(rc);
 }
 
 void flip_into_page_cache(struct inode *inode, struct page *new_page)
@@ -777,14 +778,14 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
 
 int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                     int objcount, struct obd_ioobj *obj, int niocount,
-                    struct niobuf_local *res, struct obd_trans_info *oti)
+                    struct niobuf_local *res, struct obd_trans_info *oti,int rc)
 {
         if (cmd == OBD_BRW_WRITE)
                 return filter_commitrw_write(exp, oa, objcount, obj, niocount,
-                                             res, oti);
+                                             res, oti, rc);
         if (cmd == OBD_BRW_READ)
                 return filter_commitrw_read(exp, oa, objcount, obj, niocount,
-                                            res, oti);
+                                            res, oti, rc);
         LBUG();
         return -EPROTO;
 }
@@ -834,7 +835,7 @@ int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 kunmap(pga[i].pg);
         }
 
-        ret = filter_commitrw(cmd, exp, oa, 1, &ioo, oa_bufs, lnb, oti);
+        ret = filter_commitrw(cmd, exp, oa, 1, &ioo, oa_bufs, lnb, oti, ret);
 
 out:
         if (lnb)

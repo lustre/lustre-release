@@ -498,9 +498,12 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         if (rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) {
                 ldlm_del_waiting_lock(lock);
                 ldlm_failed_ast(lock, rc, "completion");
+        } else if (rc == -EINVAL) {
+                LDLM_DEBUG(lock, "lost the race -- client no longer has this "
+                           "lock");
         } else if (rc) {
                 LDLM_ERROR(lock, "client sent rc %d rq_status %d from "
-                           "completion AST\n", rc, req->rq_status);
+                           "completion AST", rc, req->rq_status);
                 ldlm_lock_cancel(lock);
                 /* Server-side AST functions are called from ldlm_reprocess_all,
                  * which needs to be told to please restart its reprocessing. */
@@ -541,10 +544,12 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
         if (rc == -ETIMEDOUT || rc == -EINTR || rc == -ENOTCONN) {
                 ldlm_del_waiting_lock(lock);
                 ldlm_failed_ast(lock, rc, "glimpse");
+        } else if (rc == -EINVAL) {
+                LDLM_DEBUG(lock, "lost the race -- client no longer has this "
+                           "lock");
         } else if (rc) {
                 LDLM_ERROR(lock, "client sent rc %d rq_status %d from "
-                           "completion AST\n", rc, req->rq_status);
-                ldlm_lock_cancel(lock);
+                           "glimpse AST", rc, req->rq_status);
         } else {
                 rc = res->lr_namespace->ns_lvbo->lvbo_update(res,
                                                              req->rq_repmsg, 0);
@@ -561,9 +566,9 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         struct obd_device *obddev = req->rq_export->exp_obd;
         struct ldlm_reply *dlm_rep;
         struct ldlm_request *dlm_req;
-        int rc, size[2] = {sizeof(*dlm_rep)};
+        int rc = 0, size[2] = {sizeof(*dlm_rep)};
         __u32 flags;
-        ldlm_error_t err;
+        ldlm_error_t err = ELDLM_OK;
         struct ldlm_lock *lock = NULL;
         void *cookie = NULL;
         ENTRY;
@@ -574,7 +579,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                                       lustre_swab_ldlm_request);
         if (dlm_req == NULL) {
                 CERROR ("Can't unpack dlm_req\n");
-                RETURN (-EFAULT);
+                GOTO(out, rc = -EFAULT);
         }
 
         flags = dlm_req->lock_flags;
@@ -587,7 +592,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                                 blocking_callback, completion_callback,
                                 glimpse_callback, NULL, 0);
         if (!lock)
-                GOTO(out, err = -ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         do_gettimeofday(&lock->l_enqueued_time);
         memcpy(&lock->l_remote_handle, &dlm_req->lock_handle1,
@@ -614,7 +619,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 
                 rc = lustre_pack_reply(req, buffers, size, NULL);
                 if (rc)
-                        RETURN(rc);
+                        GOTO(out, rc);
         }
 
         if (dlm_req->lock_desc.l_resource.lr_type != LDLM_PLAIN)
@@ -644,12 +649,17 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         EXIT;
  out:
         req->rq_status = err;
+        if (req->rq_reply_state == NULL) {
+                err = lustre_pack_reply(req, 0, NULL, NULL);
+                if (rc == 0)
+                        rc = err;
+        }
 
         /* The LOCK_CHANGED code in ldlm_lock_enqueue depends on this
          * ldlm_reprocess_all.  If this moves, revisit that code. -phil */
         if (lock) {
                 LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
-                           "(err=%d)", err);
+                           "(err=%d, rc=%d)", err, rc);
 
                 if (lock->l_resource->lr_lvb_len > 0) {
                         void *lvb = lustre_msg_buf(req->rq_repmsg, 1,
@@ -662,9 +672,10 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                         ldlm_reprocess_all(lock->l_resource);
                 LDLM_LOCK_PUT(lock);
         }
-        LDLM_DEBUG_NOLOCK("server-side enqueue handler END (lock %p)", lock);
+        LDLM_DEBUG_NOLOCK("server-side enqueue handler END (lock %p, rc %d)",
+                          lock, rc);
 
-        return 0;
+        return rc;
 }
 
 int ldlm_handle_convert(struct ptlrpc_request *req)

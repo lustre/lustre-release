@@ -570,7 +570,7 @@ static int filter_prep_groups(struct obd_device *obd)
         int i, rc = 0, cleanup_phase = 0;
         ENTRY;
 
-        O_dentry = simple_mkdir(current->fs->pwd, "O", 0700);
+        O_dentry = simple_mkdir(current->fs->pwd, "O", 0700, 1);
         CDEBUG(D_INODE, "got/created O: %p\n", O_dentry);
         if (IS_ERR(O_dentry)) {
                 rc = PTR_ERR(O_dentry);
@@ -645,7 +645,7 @@ static int filter_prep_groups(struct obd_device *obd)
                 loff_t off = 0;
 
                 sprintf(name, "%d", i);
-                dentry = simple_mkdir(O_dentry, name, 0700);
+                dentry = simple_mkdir(O_dentry, name, 0700, 1);
                 CDEBUG(D_INODE, "got/created O/%s: %p\n", name, dentry);
                 if (IS_ERR(dentry)) {
                         rc = PTR_ERR(dentry);
@@ -704,7 +704,7 @@ static int filter_prep_groups(struct obd_device *obd)
                         char dir[20];
                         snprintf(dir, sizeof(dir), "d%u", i);
 
-                        dentry = simple_mkdir(O_dentry, dir, 0700);
+                        dentry = simple_mkdir(O_dentry, dir, 0700, 1);
                         CDEBUG(D_INODE, "got/created O/0/%s: %p\n", dir,dentry);
                         if (IS_ERR(dentry)) {
                                 rc = PTR_ERR(dentry);
@@ -1422,6 +1422,9 @@ static void filter_grant_sanity_check(struct obd_device *obd, char *func)
         obd_size tot_dirty = 0, tot_pending = 0, tot_granted = 0;
         obd_size fo_tot_dirty, fo_tot_pending, fo_tot_granted;
 
+        if (list_empty(&obd->obd_exports))
+                return;
+
         spin_lock(&obd->obd_osfs_lock);
         spin_lock(&obd->obd_dev_lock);
         list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
@@ -1469,8 +1472,6 @@ static void filter_grant_discard(struct obd_export *exp)
         struct obd_device *obd = exp->exp_obd;
         struct filter_obd *filter = &obd->u.filter;
         struct filter_export_data *fed = &exp->exp_filter_data;
-
-        filter_grant_sanity_check(obd, __FUNCTION__);
 
         spin_lock(&obd->obd_osfs_lock);
         CDEBUG(D_CACHE, "%s: cli %s/%p dirty %lu pend %lu grant %lu\n",
@@ -1532,6 +1533,8 @@ static int filter_disconnect(struct obd_export *exp, int flags)
         exp->exp_flags = flags;
         spin_unlock_irqrestore(&exp->exp_lock, irqflags);
 
+        if (!(flags & OBD_OPT_FORCE))
+                filter_grant_sanity_check(obd, __FUNCTION__);
         filter_grant_discard(exp);
 
         /* Disconnect early so that clients can't keep using export */
@@ -1539,6 +1542,8 @@ static int filter_disconnect(struct obd_export *exp, int flags)
 
         /* Do this twice in case a BRW arrived between the first call and
          * the class_export_unlink() call (bug 2663) */
+        if (!(flags & OBD_OPT_FORCE))
+                filter_grant_sanity_check(obd, __FUNCTION__);
         filter_grant_discard(exp);
 
         ldlm_cancel_locks_for_export(exp);

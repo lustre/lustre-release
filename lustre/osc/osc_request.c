@@ -1995,9 +1995,6 @@ static int osc_trigger_group_io(struct obd_export *exp,
         struct client_obd *cli = &exp->exp_obd->u.cli;
         ENTRY;
 
-        if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
-                RETURN(-EIO);
-
         if (loi == NULL)
                 loi = &lsm->lsm_oinfo[0];
 
@@ -2432,8 +2429,10 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                               policy, mode, flags, bl_cb, cp_cb, gl_cb, data,
                               &lvb, sizeof(lvb), lustre_swab_ost_lvb, lockh);
 
-        if ((*flags & LDLM_FL_HAS_INTENT && rc == ELDLM_LOCK_ABORTED) || !rc)
+        if ((*flags & LDLM_FL_HAS_INTENT && rc == ELDLM_LOCK_ABORTED) || !rc) {
+                CDEBUG(D_INODE, "received kms == "LPU64"\n", lvb.lvb_size);
                 lsm->lsm_oinfo->loi_rss = lvb.lvb_size;
+        }
 
         RETURN(rc);
 }

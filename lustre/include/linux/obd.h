@@ -617,7 +617,7 @@ struct obd_ops {
         int (*o_commitrw)(int cmd, struct obd_export *exp, struct obdo *oa,
                           int objcount, struct obd_ioobj *obj,
                           int niocount, struct niobuf_local *local,
-                          struct obd_trans_info *oti);
+                          struct obd_trans_info *oti, int rc);
         int (*o_enqueue)(struct obd_export *, struct lov_stripe_md *,
                          __u32 type, ldlm_policy_data_t *, __u32 mode,
                          int *flags, void *bl_cb, void *cp_cb, void *gl_cb,

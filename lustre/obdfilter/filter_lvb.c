@@ -83,6 +83,8 @@ static int filter_lvbo_init(struct ldlm_resource *res)
 
         lvb->lvb_size = dentry->d_inode->i_size;
         lvb->lvb_time = LTIME_S(dentry->d_inode->i_mtime);
+        CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", time: "
+               LPU64"\n", res->lr_name.name[0], lvb->lvb_size, lvb->lvb_time);
 
  out:
         if (oa)
@@ -170,7 +172,7 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
 
         lvb->lvb_size = dentry->d_inode->i_size;
         lvb->lvb_time = LTIME_S(dentry->d_inode->i_mtime);
-        CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", time: "
+        CDEBUG(D_DLMTRACE, "res: "LPU64" disk lvb size: "LPU64", time: "
                LPU64"\n", res->lr_name.name[0], lvb->lvb_size, lvb->lvb_time);
         f_dput(dentry);
 

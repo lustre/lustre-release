@@ -121,10 +121,11 @@ static int ptlrpc_pinger_main(void *arg)
                                                 (obd_timeout * HZ);
                                         ptlrpc_initiate_recovery(imp);
                                 } 
-                                else if (level != LUSTRE_IMP_FULL) {
+                                else if (level != LUSTRE_IMP_FULL ||
+                                         imp->imp_obd->obd_no_recov) {
                                         CDEBUG(D_HA, 
-                                               "not pinging %s " 
-                                               "(in recovery: %s)\n",
+                                               "not pinging %s (in recovery "
+                                               " or recovery disabled: %s)\n",
                                                imp->imp_target_uuid.uuid,
                                                ptlrpc_import_state_name(level));
                                 } 

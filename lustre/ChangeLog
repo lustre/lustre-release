@@ -41,6 +41,12 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't call usermode_helper from ptlrpcd, DEFAULT upcall (2773)
 	- put magic in mount.lustre data, check for bad/NULL mount data (2529)
 	- MDS recovery shouldn't delete objects that it has given out (2730)
+	- if enqueue arrives after completion, don't clobber LVB (2819)
+	- don't unlock pages twice when trigger_group_io returns error (2814)
+	- don't deref NULL rq_repmsg if ldlm_handle_enqueue failed (2822)
+	- don't write pages to disk if there was an error (1450)
+	- don't ping imports that have recovery disabled (2676)
+	- take buffered bytes into account when balancing socknal conn (2817)
        * miscellania
 	- return LL_SUPER_MAGIC from statfs for the filesystem type (1972)
 

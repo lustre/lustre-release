@@ -121,7 +121,7 @@ int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
                   struct niobuf_local *, struct obd_trans_info *);
 int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, int niocount, struct niobuf_local *,
-                    struct obd_trans_info *);
+                    struct obd_trans_info *, int rc);
 int filter_brw(int cmd, struct obd_export *, struct obdo *,
 	       struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
 	       struct obd_trans_info *);
@@ -130,7 +130,8 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page);
 /* filter_io_*.c */
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           struct obd_ioobj *obj, int niocount,
-                          struct niobuf_local *res, struct obd_trans_info *oti);
+                          struct niobuf_local *res, struct obd_trans_info *oti,
+                          int rc);
 obd_size filter_grant_space_left(struct obd_export *exp);
 long filter_grant(struct obd_export *exp, obd_size current_grant,
                   obd_size want, obd_size fs_space_left);

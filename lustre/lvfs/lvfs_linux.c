@@ -179,7 +179,7 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
 EXPORT_SYMBOL(pop_ctxt);
 
 /* utility to make a file */
-struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
+struct dentry *simple_mknod(struct dentry *dir, char *name, int mode, int fix)
 {
         struct dentry *dchild;
         int err = 0;
@@ -198,7 +198,7 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
                         GOTO(out_err, err = -EEXIST);
 
                 /* Fixup file permissions if necessary */
-                if ((old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
+                if (fix && (old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
                         CWARN("fixing permissions on %s from %o to %o\n",
                               name, old_mode, mode);
                         dchild->d_inode->i_mode = (mode & S_IALLUGO) |
@@ -224,7 +224,7 @@ out_up:
 EXPORT_SYMBOL(simple_mknod);
 
 /* utility to make a directory */
-struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
+struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix)
 {
         struct dentry *dchild;
         int err = 0;
@@ -242,7 +242,7 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
                         GOTO(out_err, err = -ENOTDIR);
 
                 /* Fixup directory permissions if necessary */
-                if ((old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
+                if (fix && (old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
                         CWARN("fixing permissions on %s from %o to %o\n",
                               name, old_mode, mode);
                         dchild->d_inode->i_mode = (mode & S_IALLUGO) |
