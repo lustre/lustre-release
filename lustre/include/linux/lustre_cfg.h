@@ -119,8 +119,6 @@ static inline int lustre_cfg_pack(struct lustre_cfg *data, char **pbuf,
                 LOGL(data->lcfg_inlbuf3, data->lcfg_inllen3, ptr);
         if (data->lcfg_inlbuf4)
                 LOGL(data->lcfg_inlbuf4, data->lcfg_inllen4, ptr);
-//        if (lustre_cfg_is_invalid(overlay))
-//                return 1;
 
 	*plen = len;
 
@@ -205,12 +203,6 @@ static inline int lustre_cfg_getdata(char **buf, int len, void *arg, int kernel)
                 return -EINVAL;
         }
 
-#if 0
-        if (lustre_cfg_is_invalid(data)) {
-                CERROR("ioctl not correctly formatted\n");
-                return -EINVAL;
-        }
-#endif
 
         if (lcfg->lcfg_dev_name) {
                 lcfg->lcfg_dev_name = &lcfg->lcfg_bulk[0];
