@@ -105,7 +105,7 @@ struct ptldebug_header {
 #define S_GMNAL       0x00080000
 #define S_PTLROUTER   0x00100000
 #define S_COBD        0x00200000
-#define S_OPENIBNAL   0x00400000
+#define S_IBNAL       0x00400000 /* All IB NALs */
 #define S_SM          0x00800000
 #define S_ASOBD       0x01000000
 #define S_CONFOBD     0x02000000
