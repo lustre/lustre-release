@@ -16,6 +16,7 @@ char buf[128];
 char usage[] = 
 "Usage: %s filename command-sequence\n"
 "    command-sequence items:\n"
+"        d  mkdir\n"
 "        o  open(O_RDONLY)\n"
 "        O  open(O_CREAT|O_RDWR)\n"
 "        u  unlink\n"
@@ -63,6 +64,12 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
 			fd = -1;
+                        break;
+                case 'd':
+                        if (mkdir(fname, 0755) == -1) {
+                                perror("mkdir(0755)");
+                                exit(1);
+                        }
                         break;
                 case 'm':
                         if (mknod(fname, S_IFREG | 0644, 0) == -1) {
