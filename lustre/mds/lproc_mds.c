@@ -116,7 +116,6 @@ static int lprocfs_rd_group(char *page, char **start, off_t off,
 {
         struct obd_device *obd = (struct obd_device *)data;
         struct mds_obd *mds = &obd->u.mds;
-        __u64 last_fid;
 
         *eof = 1;
         return snprintf(page, count, LPD64"\n", mds->mds_num);

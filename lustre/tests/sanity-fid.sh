@@ -203,13 +203,41 @@ test_1a() {
 	
 	diff=$(($new_last_fid-$old_last_fid))
 	[ $diff -ne 5000 ] && {
-	    echo "invalid fid management: \
+	    echo "invalid fid management on $MDS: \
 		old $old_last_fid, new $new_last_fid"
 	    error
 	}
         rm -fr $DIR/1a0 || error
 }
 run_test 1a " fid managing correctness ============="
+
+test_1b() {
+        rm -fr $DIR/1b0 > /dev/null
+	MDS=`find /proc/fs/lustre/mds/* -type d | head -n1 | sed 's/.*\///'`
+	[ -z "$MDS" ] && {
+	    echo "no MDS available, skipping test"
+	    return 0
+	}
+	count=`find /proc/fs/lustre/mds/* -type d | wc -l`
+	[ $count -gt 1 ] && {
+	    echo "more than 1 MDS is found, skipping test"
+	    return 0
+	}
+
+	mkdir $DIR/1b0 || error
+	createmany -o $DIR/1b0/f 5000
+	old_last_fid=`cat /proc/fs/lustre/mds/$MDS/last_fid`
+	rm -fr $DIR/1b0/f
+	new_last_fid=`cat /proc/fs/lustre/mds/$MDS/last_fid`
+	
+	[ $new_last_fid -ne $old_last_fid ] && {
+	    echo "invalid fid management on $MDS: \
+		old $old_last_fid, new $new_last_fid"
+	    error
+	}
+        rm -fr $DIR/1b0 || error
+}
+run_test 1b " fid managing correctness ============="
 
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
