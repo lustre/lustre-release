@@ -352,8 +352,6 @@ EXPORT_SYMBOL(l_readdir);
 EXPORT_SYMBOL(obd_memory);
 EXPORT_SYMBOL(obd_memmax);
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-
 static int __init lvfs_linux_init(void)
 {
         RETURN(0);
@@ -377,10 +375,3 @@ MODULE_LICENSE("GPL");
 
 module_init(lvfs_linux_init);
 module_exit(lvfs_linux_exit);
-
-#else
-
-#warning "lvfs_linux_init() and fsfilt_ext3_exit() aren't called on 2.6. MUST be fixed"
-
-
-#endif
