@@ -100,7 +100,7 @@ ptlrpc_alloc_rqbd (struct ptlrpc_srv_ni *srv_ni)
 }
 
 void
-ptlrpc_free_rqbd (struct ptlrpc_request_buffer_desc *rqbd) 
+ptlrpc_free_rqbd(struct ptlrpc_request_buffer_desc *rqbd) 
 {
         struct ptlrpc_srv_ni  *sni = rqbd->rqbd_srv_ni;
         struct ptlrpc_service *svc = sni->sni_service;
@@ -118,8 +118,7 @@ ptlrpc_free_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
 }
 
 void
-ptlrpc_save_llog_lock (struct ptlrpc_request *req,
-                       struct llog_create_locks *lcl)
+ptlrpc_save_llog_lock(struct ptlrpc_request *req, struct llog_create_locks *lcl)
 {
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
         LASSERT (rs != NULL);
@@ -538,7 +537,6 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
         struct llog_create_locks  *lcl;
         int                        nlocks;
         int                        been_handled;
-        char                       str[PTL_NALFMT_SIZE];
         ENTRY;
 
         spin_lock_irqsave (&svc->srv_lock, flags);
@@ -586,6 +584,7 @@ ptlrpc_server_handle_reply (struct ptlrpc_service *svc)
                 /* If we see this, we should already have seen the warning
                  * in mds_steal_ack_locks()  */
 #if 0   
+                char str[PTL_NALFMT_SIZE];
                 /* CMD may ask to save request with no DLM locks -bzzz */
                 CWARN("All locks stolen from rs %p x"LPD64".t"LPD64
                       " o%d NID %s\n",

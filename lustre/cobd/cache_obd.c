@@ -770,15 +770,14 @@ static int cobd_llog_finish(struct obd_device *obd, struct obd_llogs *llogs,
         return obd_llog_finish(cobd_obd, &cobd_obd->obd_llogs, count);
 }
 
-static int cobd_notify(struct obd_device *obd,
-                       struct obd_device *watched,
-                       int active)
+static int cobd_notify(struct obd_device *obd, struct obd_device *watched,
+                       int active, void *data)
 {
         struct obd_export *cobd_exp;
 
         cobd_exp = cobd_get_exp(obd);
 
-        return obd_notify(class_exp2obd(cobd_exp), watched, active);
+        return obd_notify(class_exp2obd(cobd_exp), watched, active, data);
 }
 
 static int cobd_pin(struct obd_export *exp, obd_id ino, __u32 gen,

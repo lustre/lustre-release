@@ -329,9 +329,11 @@ static int ll_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock)
 check:
         if (lsm->lsm_oinfo[stripe].loi_id != lock->l_resource->lr_name.name[0]||
             lsm->lsm_oinfo[stripe].loi_gr != lock->l_resource->lr_name.name[2]){
-                LDLM_ERROR(lock, "resource doesn't match object "LPU64"/"LPU64,
+                LDLM_ERROR(lock, "resource doesn't match object "LPU64"/"LPU64
+                           " inode=%lu/%u (%p)\n",
                            lsm->lsm_oinfo[stripe].loi_id,
-                           lsm->lsm_oinfo[stripe].loi_gr);
+                           lsm->lsm_oinfo[stripe].loi_gr,
+                           inode->i_ino, inode->i_generation, inode);
                 RETURN(-ELDLM_NO_LOCK_DATA);
         }
 

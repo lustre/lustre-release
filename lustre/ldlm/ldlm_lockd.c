@@ -1092,7 +1092,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 
 static int ldlm_cancel_handler(struct ptlrpc_request *req)
 {
-        int rc;
+        int rc = 0;
         ENTRY;
 
         /* Requests arrive in sender's byte order.  The ptlrpc service
@@ -1111,7 +1111,8 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
                                              lustre_swab_ldlm_request);
                 if (dlm_req != NULL)
                         ldlm_lock_dump_handle(D_ERROR, &dlm_req->lock_handle1);
-                RETURN(-ENOTCONN);
+                ldlm_callback_reply(req, -ENOTCONN);
+                RETURN(0);
         }
 
         switch (req->rq_reqmsg->opc) {
@@ -1121,16 +1122,13 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "cancel\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
                 rc = ldlm_handle_cancel(req);
-                if (rc)
-                        break;
-                RETURN(0);
-
+                break;
         default:
                 CERROR("invalid opcode %d\n", req->rq_reqmsg->opc);
-                RETURN(-EINVAL);
+                ldlm_callback_reply(req, -EINVAL);
         }
 
-        RETURN(0);
+        RETURN(rc);
 }
 
 #ifdef __KERNEL__

@@ -2908,7 +2908,7 @@ static int osc_import_event(struct obd_device *obd,
         }
         case IMP_EVENT_INACTIVE: {
                 if (obd->obd_observer)
-                        rc = obd_notify(obd->obd_observer, obd, 0);
+                        rc = obd_notify(obd->obd_observer, obd, 0, 0);
                 break;
         }
         case IMP_EVENT_INVALIDATE: {
@@ -2929,7 +2929,7 @@ static int osc_import_event(struct obd_device *obd,
         }
         case IMP_EVENT_ACTIVE: {
                 if (obd->obd_observer)
-                        rc = obd_notify(obd->obd_observer, obd, 1);
+                        rc = obd_notify(obd->obd_observer, obd, 1, 0);
                 break;
         }
         default:

@@ -2679,8 +2679,7 @@ static int mds_get_info(struct obd_export *exp, __u32 keylen,
         }
 
         mds = &obd->u.mds;
-        keylen == strlen("mdsize");
-        if (keylen && memcmp(key, "mdsize", keylen) == 0) {
+        if (keylen >= strlen("mdsize") && memcmp(key, "mdsize", keylen) == 0) {
                 __u32 *mdsize = val;
                 *vallen = sizeof(*mdsize);
                 *mdsize = mds->mds_max_mdsize;

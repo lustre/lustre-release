@@ -227,6 +227,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 RETURN(0);
         }
 
+        /* connect_flags is the MDS number, save for use in lov_add_obd */
+        lov->lov_connect_flags = connect_flags;
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
                 if (obd_uuid_empty(&tgt->uuid))
                         continue;
@@ -393,10 +395,11 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
 }
 
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
-                      int active)
+                      int active, void *data)
 {
         int rc;
         struct obd_uuid *uuid;
+        ENTRY;
 
         if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
                 CERROR("unexpected notification of %s %s!\n",
@@ -418,7 +421,7 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
 
         if (obd->obd_observer)
                 /* Pass the notification up the chain. */
-                rc = obd_notify(obd->obd_observer, watched, active);
+                rc = obd_notify(obd->obd_observer, watched, active, data);
 
         RETURN(rc);
 }
@@ -484,20 +487,17 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        if (desc->ld_tgt_count) {
-                lov->bufsize = desc->ld_tgt_count * sizeof(struct lov_tgt_desc);
-                OBD_ALLOC(lov->tgts, lov->bufsize);
-                if (lov->tgts == NULL) {
-                        lov->bufsize = 0;
-                        CERROR("couldn't allocate %d bytes for target table.\n",
-                               lov->bufsize);
-                        RETURN(-EINVAL);
-                }
-                desc->ld_tgt_count = 0;
+        lov->bufsize = LOV_MAX_TGT_COUNT * sizeof(struct lov_tgt_desc);
+        OBD_ALLOC(lov->tgts, lov->bufsize);
+        if (lov->tgts == NULL) {
+                lov->bufsize = 0;
+                CERROR("couldn't allocate %d bytes for target table.\n",
+                       lov->bufsize);
+                RETURN(-EINVAL);
         }
 
+        desc->ld_tgt_count = 0;
         desc->ld_active_tgt_count = 0;
-        CDEBUG(D_CONFIG, "tgts: %p bufsize: 0x%x\n", lov->tgts, lov->bufsize);
         lov->desc = *desc;
         spin_lock_init(&lov->lov_lock);
         sema_init(&lov->lov_llog_sem, 1);
@@ -518,18 +518,13 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
 {
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
-        struct obd_export *exp_observer;
-        __u32 bufsize;
-        __u32 size = 2;
-        obd_id params[2];
-        char name[32] = "CATLIST";
-        int rc, old_count;
+        int rc;
         ENTRY;
 
         CDEBUG(D_CONFIG, "uuid: %s idx: %d gen: %d\n",
                uuidp->uuid, index, gen);
 
-        if (index < 0) {
+        if ((index < 0) || (index >= LOV_MAX_TGT_COUNT)) {
                 CERROR("request to add OBD %s at invalid index: %d\n",
                        uuidp->uuid, index);
                 RETURN(-EINVAL);
@@ -539,27 +534,6 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
                 CERROR("request to add OBD %s with invalid generation: %d\n",
                        uuidp->uuid, gen);
                 RETURN(-EINVAL);
-        }
-
-        bufsize = sizeof(struct lov_tgt_desc) * (index + 1);
-        if (bufsize > lov->bufsize) {
-                OBD_ALLOC(tgt, bufsize);
-                if (tgt == NULL) {
-                        CERROR("couldn't allocate %d bytes for new table.\n",
-                               bufsize);
-                        RETURN(-ENOMEM);
-                }
-
-                memset(tgt, 0, bufsize);
-                if (lov->tgts) {
-                        memcpy(tgt, lov->tgts, lov->bufsize);
-                        OBD_FREE(lov->tgts, lov->bufsize);
-                }
-
-                lov->tgts = tgt;
-                lov->bufsize = bufsize;
-                CDEBUG(D_CONFIG, "tgts: %p bufsize: %d\n",
-                       lov->tgts, lov->bufsize);
         }
 
         tgt = lov->tgts + index;
@@ -573,7 +547,6 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
         /* XXX - add a sanity check on the generation number. */
         tgt->ltd_gen = gen;
 
-        old_count = lov->desc.ld_tgt_count;
         if (index >= lov->desc.ld_tgt_count)
                 lov->desc.ld_tgt_count = index + 1;
 
@@ -591,29 +564,16 @@ lov_add_obd(struct obd_device *obd, struct obd_uuid *uuidp, int index, int gen)
                         osc_obd->obd_no_recov = 0;
         }
 
-        rc = lov_connect_obd(obd, tgt, 1, 0);
-        if (rc || !obd->obd_observer)
-                RETURN(rc);
-
-        /* tell the mds_lov about the new target */
-        obd_llog_finish(obd->obd_observer, &obd->obd_observer->obd_llogs,
-                        old_count);
-        obd_llog_cat_initialize(obd->obd_observer,
-                                &obd->obd_observer->obd_llogs,
-                                lov->desc.ld_tgt_count, name);
-
-        params[0] = index;
-        rc = obd_get_info(tgt->ltd_exp, strlen("last_id"), "last_id", &size,
-                          &params[1]);
+        rc = lov_connect_obd(obd, tgt, 1, lov->lov_connect_flags);
         if (rc)
                 GOTO(out, rc);
 
-        exp_observer = obd->obd_observer->obd_self_export;
-        rc = obd_set_info(exp_observer, strlen("next_id"),"next_id", 2, params);
-        if (rc)
-                GOTO(out, rc);
+        if (obd->obd_observer) {
+                /* tell the mds_lov about the new target */
+                rc = obd_notify(obd->obd_observer, tgt->ltd_exp->exp_obd, 1,
+                                (void *)index);
+        }
 
-        rc = lov_notify(obd, tgt->ltd_exp->exp_obd, 1);
         GOTO(out, rc);
  out:
         if (rc && tgt->ltd_exp != NULL)
@@ -1146,7 +1106,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
 
 static int lov_revalidate_policy(struct lov_obd *lov, struct lov_stripe_md *lsm)
 {
-        static int last_idx = 0;
+        static int next_idx = 0;
         struct lov_tgt_desc *tgt;
         int i, count;
 
@@ -1157,13 +1117,19 @@ static int lov_revalidate_policy(struct lov_obd *lov, struct lov_stripe_md *lsm)
          * ld_tgt_count currently cannot shrink. */
         count = lov->desc.ld_tgt_count;
 
-        for (i = last_idx, tgt = lov->tgts + i; i < count; i++, tgt++)
-                if (tgt->active)
-                        RETURN(last_idx = i);
+        for (i = next_idx, tgt = lov->tgts + i; i < count; i++, tgt++) {
+                if (tgt->active) {
+                        next_idx = (i + 1) % count;
+                        RETURN(i);
+                }
+        }
 
-        for (i = 0, tgt = lov->tgts; i < last_idx; i++, tgt++)
-                if (tgt->active)
-                        RETURN(last_idx = i);
+        for (i = 0, tgt = lov->tgts; i < next_idx; i++, tgt++) {
+                if (tgt->active) {
+                        next_idx = (i + 1) % count;
+                        RETURN(i);
+                }
+        }
 
         RETURN(-EIO);
 }
@@ -2908,17 +2874,17 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 data = (struct obd_ioctl_data *)buf;
 
                 if (sizeof(*desc) > data->ioc_inllen1) {
-                        OBD_FREE(buf, len);
+                        obd_ioctl_freedata(buf, len);
                         RETURN(-EINVAL);
                 }
 
                 if (sizeof(uuidp->uuid) * count > data->ioc_inllen2) {
-                        OBD_FREE(buf, len);
+                        obd_ioctl_freedata(buf, len);
                         RETURN(-EINVAL);
                 }
 
                 if (sizeof(__u32) * count > data->ioc_inllen3) {
-                        OBD_FREE(buf, len);
+                        obd_ioctl_freedata(buf, len);
                         RETURN(-EINVAL);
                 }
 
@@ -3001,6 +2967,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                         struct lov_stripe_md *lsm;
                 } *data = key;
                 struct lov_oinfo *loi;
+                struct ldlm_res_id *res_id = &data->lock->l_resource->lr_name;
                 __u32 *stripe = val;
 
                 if (*vallen < sizeof(*stripe))
@@ -3017,11 +2984,15 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                      i < data->lsm->lsm_stripe_count;
                      i++, loi++) {
                         if (lov->tgts[loi->loi_ost_idx].ltd_exp ==
-                            data->lock->l_conn_export) {
+                                        data->lock->l_conn_export &&
+                            loi->loi_id == res_id->name[0] &&
+                            loi->loi_gr == res_id->name[2]) {
                                 *stripe = i;
                                 RETURN(0);
                         }
                 }
+                LDLM_ERROR(data->lock, "lock on inode without such object\n");
+                dump_lsm(D_ERROR, data->lsm);
                 RETURN(-ENXIO);
         } else if (keylen >= strlen("size_to_stripe") &&
                    strcmp(key, "size_to_stripe") == 0) {
@@ -3296,13 +3267,13 @@ struct obd_ops lov_obd_ops = {
         .o_detach              = lov_detach,
         .o_setup               = lov_setup,
         .o_cleanup             = lov_cleanup,
-        o_process_config: lov_process_config,
+        .o_process_config      = lov_process_config,
         .o_connect             = lov_connect,
         .o_disconnect          = lov_disconnect,
         .o_statfs              = lov_statfs,
         .o_packmd              = lov_packmd,
         .o_unpackmd            = lov_unpackmd,
-        o_revalidate_md: lov_revalidate_md,
+        .o_revalidate_md       = lov_revalidate_md,
         .o_create              = lov_create,
         .o_destroy             = lov_destroy,
         .o_getattr             = lov_getattr,

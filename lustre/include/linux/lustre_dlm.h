@@ -324,9 +324,9 @@ do {                                                                          \
         if (lock->l_resource->lr_type == LDLM_EXTENT) {                       \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
-                       "res: "LPU64"/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64\
-                       "] (req "LPU64"->"LPU64") flags: %x remote: "LPX64     \
-                       " expref: %d\n" , ## a,                                \
+                       "res: "LPU64"/"LPU64"/"LPU64" rrc: %d type: %s ["LPU64 \
+                       "->"LPU64"] (req "LPU64"->"LPU64") flags: %x remote: " \
+                       LPX64" expref: %d\n" , ## a,                           \
                        lock->l_resource->lr_namespace->ns_name, lock,         \
                        lock->l_handle.h_cookie, atomic_read(&lock->l_refc),   \
                        lock->l_readers, lock->l_writers,                      \
@@ -334,6 +334,7 @@ do {                                                                          \
                        ldlm_lockname[lock->l_req_mode],                       \
                        lock->l_resource->lr_name.name[0],                     \
                        lock->l_resource->lr_name.name[1],                     \
+                       lock->l_resource->lr_name.name[2],                     \
                        atomic_read(&lock->l_resource->lr_refcount),           \
                        ldlm_typename[lock->l_resource->lr_type],              \
                        lock->l_policy_data.l_extent.start,                    \
@@ -347,8 +348,8 @@ do {                                                                          \
         if (lock->l_resource->lr_type == LDLM_FLOCK) {                        \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
-                       "res: "LPU64"/"LPU64" rrc: %d type: %s pid: "LPU64" "  \
-                       "["LPU64"->"LPU64"] flags: %x remote: "LPX64           \
+                       "res: "LPU64"/"LPU64"/"LPU64" rrc: %d type: %s pid: "  \
+                       LPU64" ["LPU64"->"LPU64"] flags: %x remote: "LPX64     \
                        " expref: %d\n" , ## a,                                \
                        lock->l_resource->lr_namespace->ns_name, lock,         \
                        lock->l_handle.h_cookie, atomic_read(&lock->l_refc),   \
@@ -357,6 +358,7 @@ do {                                                                          \
                        ldlm_lockname[lock->l_req_mode],                       \
                        lock->l_resource->lr_name.name[0],                     \
                        lock->l_resource->lr_name.name[1],                     \
+                       lock->l_resource->lr_name.name[2],                     \
                        atomic_read(&lock->l_resource->lr_refcount),           \
                        ldlm_typename[lock->l_resource->lr_type],              \
                        lock->l_policy_data.l_flock.pid,                       \
@@ -370,8 +372,8 @@ do {                                                                          \
         if (lock->l_resource->lr_type == LDLM_IBITS) {                        \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
-                       "res: "LPU64"/"LPU64" bits "LPX64" rrc: %d type: %s "   \
-                       "flags: %x remote: "LPX64" expref: %d\n" , ## a,       \
+                       "res: "LPU64"/"LPU64"/"LPU64" bits "LPX64" rrc: %d "   \
+                       "type: %s flags: %x remote: "LPX64" expref: %d\n" , ## a,\
                        lock->l_resource->lr_namespace->ns_name,               \
                        lock, lock->l_handle.h_cookie,                         \
                        atomic_read (&lock->l_refc),                           \
@@ -380,6 +382,7 @@ do {                                                                          \
                        ldlm_lockname[lock->l_req_mode],                       \
                        lock->l_resource->lr_name.name[0],                     \
                        lock->l_resource->lr_name.name[1],                     \
+                       lock->l_resource->lr_name.name[2],                     \
                        lock->l_policy_data.l_inodebits.bits,                  \
                        atomic_read(&lock->l_resource->lr_refcount),           \
                        ldlm_typename[lock->l_resource->lr_type],              \

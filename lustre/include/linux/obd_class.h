@@ -1116,9 +1116,8 @@ static inline int obd_llog_connect(struct obd_export *exp,
         return OBP(exp->exp_obd, llog_connect)(exp, body);
 }
 
-static inline int obd_notify(struct obd_device *obd,
-                             struct obd_device *watched,
-                             int active)
+static inline int obd_notify(struct obd_device *obd, struct obd_device *watched,
+                             int active, void *data)
 {
         if (!obd->obd_set_up) {
                 CERROR("obd %s not set up\n", obd->obd_name);
@@ -1131,7 +1130,7 @@ static inline int obd_notify(struct obd_device *obd,
         }
 
         OBD_COUNTER_INCREMENT(obd, notify);
-        return OBP(obd, notify)(obd, watched, active);
+        return OBP(obd, notify)(obd, watched, active, data);
 }
 
 static inline int obd_register_observer(struct obd_device *obd,
@@ -1464,11 +1463,7 @@ static inline struct obdo *obdo_alloc(void)
 {
         struct obdo *oa;
 
-        oa = kmem_cache_alloc(obdo_cachep, SLAB_KERNEL);
-        if (oa == NULL)
-                LBUG();
-        CDEBUG(D_MALLOC, "kmem_cache_alloced oa at %p\n", oa);
-        memset(oa, 0, sizeof (*oa));
+        OBD_SLAB_ALLOC(oa, obdo_cachep, GFP_KERNEL, sizeof(*oa));
 
         return oa;
 }
@@ -1477,8 +1472,7 @@ static inline void obdo_free(struct obdo *oa)
 {
         if (!oa)
                 return;
-        CDEBUG(D_MALLOC, "kmem_cache_freed oa at %p\n", oa);
-        kmem_cache_free(obdo_cachep, oa);
+        OBD_SLAB_FREE(oa, obdo_cachep, sizeof(*oa));
 }
 
 #if !defined(__KERNEL__) || (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

@@ -3445,7 +3445,7 @@ def main():
 
     lctl.end_record()
 
-    process_updates(db, config.record_device, config.record_log)
+    process_updates(lustreDB, config.record_device, config.record_log)
 
 if __name__ == "__main__":
     try:

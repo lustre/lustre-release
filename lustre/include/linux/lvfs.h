@@ -36,6 +36,7 @@ struct lvfs_run_ctxt {
         int              ngroups;
         struct lvfs_callback_ops cb_ops;
 #ifdef OBD_CTXT_DEBUG
+	int 		 pid;
         __u32            magic;
 #endif
 };

@@ -79,7 +79,9 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
 {
         //ASSERT_NOT_KERNEL_CTXT("already in kernel context!\n");
         ASSERT_CTXT_MAGIC(new_ctx->magic);
+        LASSERT(save->magic != OBD_RUN_CTXT_MAGIC || save->pid != current->pid);
         OBD_SET_CTXT_MAGIC(save);
+        save->pid = current->pid;
 
         /*
         CDEBUG(D_INFO,
@@ -142,6 +144,9 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
 {
         //printk("pc0");
         ASSERT_CTXT_MAGIC(saved->magic);
+        LASSERT(saved->pid == current->pid);
+        saved->magic = 0;
+        saved->pid = 0;
         //printk("pc1");
         ASSERT_KERNEL_CTXT("popping non-kernel context!\n");
 

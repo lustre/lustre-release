@@ -110,7 +110,7 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv, struct obd_uuid *uuid,
 }
 
 static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
-                      int active)
+                      int active, void *data)
 {
         int rc;
         struct obd_uuid *uuid;
@@ -135,7 +135,7 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
 
         if (obd->obd_observer)
                 /* Pass the notification up the chain. */
-                rc = obd_notify(obd->obd_observer, watched, active);
+                rc = obd_notify(obd->obd_observer, watched, active, data);
 
         RETURN(rc);
 }
@@ -436,6 +436,7 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lmv_desc *desc;
         struct obd_uuid *uuids;
         struct lmv_tgt_desc *tgts;
+        struct obd_device *tgt_obd;
         struct lustre_cfg *lcfg = buf;
         struct lmv_obd *lmv = &obd->u.lmv;
         ENTRY;
@@ -487,6 +488,18 @@ static int lmv_setup(struct obd_device *obd, obd_count len, void *buf)
                 CERROR("Can't setup LMV object manager, "
                        "error %d.\n", rc);
                 OBD_FREE(lmv->tgts, lmv->bufsize);
+        }
+
+        tgt_obd = class_find_client_obd(&lmv->tgts->uuid, LUSTRE_MDC_NAME, 
+                                        &obd->obd_uuid);
+        if (!tgt_obd) {
+                CERROR("Target %s not attached\n", lmv->tgts->uuid.uuid);
+                RETURN(-EINVAL);
+        }
+
+        rc = obd_llog_init(obd, &obd->obd_llogs, tgt_obd, 0, NULL);
+        if (rc) {
+                CERROR("failed to setup llogging subsystems\n");
         }
 
         RETURN(rc);
@@ -1555,6 +1568,34 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
+static int lmv_llog_init(struct obd_device *obd, struct obd_llogs *llogs, 
+                         struct obd_device *tgt, int count,
+                         struct llog_catid *logid)
+{
+        struct llog_ctxt *ctxt;
+        int rc;
+        ENTRY;
+
+        rc = obd_llog_setup(obd, llogs, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
+                            &llog_client_ops);
+        if (rc == 0) {
+                ctxt = llog_get_context(llogs, LLOG_CONFIG_REPL_CTXT);
+                ctxt->loc_imp = tgt->u.cli.cl_import;
+        }
+
+        RETURN(rc);
+}
+
+static int lmv_llog_finish(struct obd_device *obd,
+                           struct obd_llogs *llogs, int count)
+{
+        int rc;
+        ENTRY;
+
+        rc = obd_llog_cleanup(llog_get_context(llogs, LLOG_CONFIG_REPL_CTXT));
+        RETURN(rc);
+}
+
 static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                         void *key, __u32 *vallen, void *val)
 {
@@ -1718,6 +1759,8 @@ struct obd_ops lmv_obd_ops = {
         .o_connect              = lmv_connect,
         .o_disconnect           = lmv_disconnect,
         .o_statfs               = lmv_statfs,
+        .o_llog_init            = lmv_llog_init,
+        .o_llog_finish          = lmv_llog_finish,
         .o_get_info             = lmv_get_info,
         .o_set_info             = lmv_set_info,
         .o_create               = lmv_obd_create,

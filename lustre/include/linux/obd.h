@@ -95,6 +95,20 @@ struct lov_stripe_md {
         struct lov_oinfo lsm_oinfo[0];
 };
 
+static inline void dump_lsm(int level, struct lov_stripe_md *lsm)
+{
+        int i;
+        CDEBUG(level, "objid "LPX64"/"LPU64", maxbytes "LPX64", magic 0x%08X, "
+               "stripe_size %u, stripe_count %u\n",
+               lsm->lsm_object_id, lsm->lsm_object_gr, lsm->lsm_maxbytes,
+               lsm->lsm_magic, lsm->lsm_stripe_size, lsm->lsm_stripe_count);
+        for (i = 0; i < lsm->lsm_stripe_count; i++)
+                CDEBUG(level, "idx %u ostidx %u/%u object "LPU64"/"LPU64"\n",
+                       i, lsm->lsm_oinfo[i].loi_ost_idx,
+                       lsm->lsm_oinfo[i].loi_ost_gen,
+                       lsm->lsm_oinfo[i].loi_id, lsm->lsm_oinfo[i].loi_gr);
+}
+
 struct obd_type {
         struct list_head typ_chain;
         struct obd_ops *typ_ops;
@@ -427,6 +441,7 @@ struct lov_obd {
         int bufsize;
         int refcount;
         int lo_catalog_loaded:1;
+        unsigned long lov_connect_flags;
         struct lov_tgt_desc *tgts;
 };
 
@@ -768,7 +783,7 @@ struct obd_ops {
                               enum obd_import_event);
 
         int (*o_notify)(struct obd_device *obd, struct obd_device *watched,
-                        int active);
+                        int active, void *data);
         int (*o_init_ea_size)(struct obd_export *, int, int);
 
         /* 

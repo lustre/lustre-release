@@ -127,6 +127,7 @@ Object creation command summary:
 --delete ost
   --node node_name
   --ost ost_name
+  --migrate
 --deactivate ost
   --node node_name
   --ost ost_name
@@ -232,6 +233,7 @@ lmc_options = [
     ('ostuuid', "", PARAM,""),
     ('nspath', "Local mount point of server namespace.", PARAM,""),
     ('format', ""),
+    ('migrate', "used for offline migrate of an ost in conjunctio with add/delete"),
 
     # clients: mountpoint and echo
     ('echo_client', "", PARAM),
@@ -702,6 +704,18 @@ def get_net_uuid(lustre, node_name):
         return getUUID(net[0])
     return None
 
+def lov_mod_obd(gen, lustre, lov, tgt, osc_uuid, options):
+    tgt.setAttribute('uuidref', osc_uuid)
+    if options.migrate:
+        gener = int(tgt.getAttribute('generation'))
+    else:
+        gener = int(tgt.getAttribute('generation')) + 1
+    tgt.setAttribute('generation', str(gener))
+    lov_index = int(tgt.getAttribute('index'))
+    addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid, str(lov_index),
+              str(gener)))
+    return
+
 def lov_add_obd(gen, lustre, lov, osc_uuid, options):
     lov_name = getName(lov)
     if options.index:
@@ -712,28 +726,23 @@ def lov_add_obd(gen, lustre, lov, osc_uuid, options):
                 if uuidref != '':
                     raise OptionError("%s --index %d is still in use: %s" %
                                       (lov_name, lov_index, uuidref))
-                tgt.setAttribute('uuidref', osc_uuid)
-                gener = int(tgt.getAttribute('generation')) + 1
-                tgt.setAttribute('generation', str(gener))
-                addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid,
-                                               str(lov_index), str(gener)))
+                lov_mod_obd(gen, lustre, lov, tgt, osc_uuid, options)
                 return
-        gener = 1
-	lov.appendChild(gen.lov_tgt(osc_uuid, str(lov_index), '1'))
-        addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid, str(lov_index),
-                                       str(gener)))
-        return
+    else:
+         lov_index = 0
+         for tgt in lustre.getElementsByTagName('lov_tgt'):
+             uuidref = tgt.getAttribute('uuidref')
+             tmp = int(tgt.getAttribute('index'))
+             if tmp != lov_index:
+                 error('malformed xml: LOV targets are not ordered; found index '+str(tmp)+', expected '+str(lov_index)+'.')
+             uuidref = tgt.getAttribute('uuidref')
+             if uuidref == '':
+                 lov_mod_obd(gen, lustre, lov, tgt, osc_uuid, options)
+                 return
+             lov_index = lov_index + 1
 
-    index = -1
-    for tgt in lov.getElementsByTagName('lov_tgt'):
-        uuidref = tgt.getAttribute('uuidref')
-        tmp = int(tgt.getAttribute('index'))
-        if tmp != index + 1:
-            error('malformed xml: LOV targets are not ordered; found index '+str(tmp)+', expected '+str(index + 1)+'.')
-	index = tmp
-
-    lov.appendChild(gen.lov_tgt(osc_uuid, str(index + 1), '1'))
-    addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid, str(index + 1), '1'))
+    lov.appendChild(gen.lov_tgt(osc_uuid, str(lov_index), '1'))
+    addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid, str(lov_index), '1'))
 
 def lov_del_obd(gen, lustre, lov, osc_uuid, options):
     lov_name = getName(lov)
@@ -748,10 +757,14 @@ def lov_del_obd(gen, lustre, lov, osc_uuid, options):
                                       (lov_name, lov_index, osc_uuid, uuidref))
                 if options.delete:
                     tgt.setAttribute('uuidref', '')
-                else:
-                    tgt.setAttribute('active', '0')
+
                 # bump the generation just in case...
-                gen = int(tgt.getAttribute('generation')) + 1
+                if options.migrate:
+                    gen = int(tgt.getAttribute('generation'))
+                else:
+                    gen = int(tgt.getAttribute('generation')) + 1
+
+                tgt.setAttribute('active', '0')
                 tgt.setAttribute('generation', str(gen))
                 return
         raise OptionError("%s --index %d not in use by %s." %
@@ -768,9 +781,9 @@ def lov_del_obd(gen, lustre, lov, osc_uuid, options):
 
             if options.delete:
                 tgt.setAttribute('uuidref', '')
-            else:
-                tgt.setAttribute('active', '0')
-            genera = genera + 1
+            if not options.migrate:
+                genera = genera + 1
+            tgt.setAttribute('active', '0')
             tgt.setAttribute('generation', str(genera))
 
 def lmv_add_obd(gen, lmv, mdc_uuid):
@@ -1081,14 +1094,14 @@ def add_ost(gen, lustre, options):
 
         ost = gen.ost(ostname, ost_uuid, osd_uuid, options.group)
         lustre.appendChild(ost)
-
-        if lovname:
-            lov = findByName(lustre, lovname, "lov")
-            if not lov:
-                error('add_ost:', '"'+lovname+'"', "lov element not found.")
-            lov_add_obd(gen, lustre, lov, ost_uuid, options)
     else:
         ost = lookup(lustre, ost_uuid)
+
+    if lovname:
+        lov = findByName(lustre, lovname, "lov")
+        if not lov:
+            error('add_ost:', '"'+lovname+'"', "lov element not found.")
+        lov_add_obd(gen, lustre, lov, ost_uuid, options)
 
     if options.failover:
         ost.setAttribute('failover', "1")
@@ -1132,7 +1145,8 @@ def del_ost(gen, lustre, options):
     # remove OSD references from all LOVs
     for n in lustre.getElementsByTagName('lov'):
         lov_del_obd(gen, lustre, n, ost_uuid, options)
-    return
+    if not options.migrate:
+        return
     # delete the OSDs
     for osd in lustre.getElementsByTagName('osd'):
         if ref_exists(osd, ost_uuid):

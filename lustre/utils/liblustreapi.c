@@ -163,6 +163,7 @@ struct find_param {
         struct  lov_user_md     *lum;
         int     got_uuids;
         int     obdindex;
+        __u32   *obdgens;
 };
 
 /* XXX Max obds per lov currently hardcoded to 1000 in lov/lov_obd.c */
@@ -192,25 +193,19 @@ static void cleanup_find(struct find_param *param)
                 free(param->lum);
 }
 
-int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
+int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, __u32 *obdgens,
+                        int *ost_count)
 {
         struct obd_ioctl_data data = { 0, };
         struct lov_desc desc = { 0, };
         char *buf = NULL;
         int max_ost_count, rc;
-        __u32 *obdgens;
 
         max_ost_count = (OBD_MAX_IOCTL_BUFFER - size_round(sizeof(data)) -
                          size_round(sizeof(desc))) / 
                         (sizeof(*uuidp) + sizeof(*obdgens));
         if (max_ost_count > *ost_count)
                 max_ost_count = *ost_count;
-
-        obdgens = malloc(size_round(max_ost_count * sizeof(*obdgens)));
-        if (!obdgens) {
-                err_msg("no memory for %d generation #'s", max_ost_count);
-                return(-ENOMEM);
-        }
 
         data.ioc_inllen1 = sizeof(desc);
         data.ioc_inlbuf1 = (char *)&desc;
@@ -243,7 +238,6 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
         *ost_count = desc.ld_tgt_count;
 out:
         free(buf);
-        free(obdgens);
 
         return 0;
 }
@@ -251,12 +245,14 @@ out:
 static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
 {
         struct obd_uuid uuids[1024], *uuidp;
+        __u32 obdgens[1024], *genp;
+        
         int obdcount = 1024;
         int rc, i;
 
         param->got_uuids = 1;
 
-        rc = llapi_lov_get_uuids(dirfd(dir), uuids, &obdcount);
+        rc = llapi_lov_get_uuids(dirfd(dir), uuids, obdgens, &obdcount);
         if (rc != 0)
                 return (param->obduuid ? rc : 0);
 
@@ -276,11 +272,16 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
                         return EINVAL;
                 }
         } else if (!param->quiet) {
-                printf("OBDS:\n");
-                for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++)
-                        printf("%4d: %s\n", i, uuidp->uuid);
-        }
 
+                printf("OBDS:\tobdidx\t\tobdgen\t\t obduuid\n");
+                uuidp = uuids;
+                genp = obdgens;
+                for (i = 0; i < obdcount; i++, uuidp++, genp++) {
+                        if (obd_uuid_empty(uuidp))
+                                continue;
+                        printf("\t%6u\t%14u\t\t %s\n", i, *genp, uuidp->uuid);
+                }    
+        }
         return 0;
 }
 
@@ -323,16 +324,17 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
 
         if (body) {
                 if ((!quiet) && (obdstripe == 1))
-                        printf("\tobdidx\t\t objid\t\tobjid\t\t group\n");
+                        printf("\tobdidx\t\t obdgen\t\t objid\t\tobjid\t\t group\n");
 
                 for (i = 0; i < lum->lmm_stripe_count; i++) {
                         int idx = lum->lmm_objects[i].l_ost_idx;
                         long long oid = lum->lmm_objects[i].l_object_id;
+                        int gen = lum->lmm_objects[i].l_ost_gen;
                         long long gr = lum->lmm_objects[i].l_object_gr;
                         if ((obdindex == OBD_NOT_FOUND) || (obdindex == idx))
-                                printf("\t%6u\t%14llu\t%#13llx\t%14llu%s\n",
-                                       idx, oid, oid, gr,
-                                       obdindex == idx ? " *" : "");
+                                printf("\t%6u\t%14u\t%14llu\t%#13llx\t%14lld%s\n",
+                                        idx, gen, oid, oid, gr,
+                                        obdindex == idx ? " *" : "");
                 }
                 printf("\n");
         }

@@ -221,6 +221,7 @@ static int ll_wr_config_update(struct file *file, const char *buffer,
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         ENTRY;
 
+        CWARN("Starting a LOV/OST update !\n");
         RETURN(ll_process_config_update(sbi, 0));
 }
 

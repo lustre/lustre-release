@@ -14,6 +14,8 @@
 
 #define LAP_MAGIC 8200
 
+#define LOV_MAX_TGT_COUNT 1024
+
 static inline int lov_tgt_changed(struct lov_obd *lov, struct lov_oinfo *loi)
 {
         return lov->tgts[loi->loi_ost_idx].ltd_gen != loi->loi_ost_gen;
