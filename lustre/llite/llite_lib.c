@@ -37,10 +37,10 @@
 
 /* whole file is conditional, but we need KERNEL_VERSION and friends */
 kmem_cache_t *ll_file_data_slab;
-struct super_operations ll_super_operations;
+extern struct super_operations ll_super_operations;
 
 /* /proc/lustre/llite root that tracks llite mount points */
-struct proc_dir_entry *proc_lustre_fs_root = NULL;
+struct proc_dir_entry *proc_lustre_fs_root;
 
 
 char *ll_read_opt(const char *opt, char *data)
@@ -80,7 +80,7 @@ int ll_set_opt(const char *opt, char *data, int fl)
 
 void ll_options(char *options, char **ost, char **mds, int *flags)
 {
-        char *this_char, *opt_ptr;
+        char *this_char, *opt_ptr = options;
         ENTRY;
 
         if (!options) {
@@ -106,8 +106,8 @@ void ll_options(char *options, char **ost, char **mds, int *flags)
         EXIT;
 }
 
-struct super_block *ll_fill_super(struct super_block *sb,
-                                  void *data, int silent)
+
+int ll_fill_super(struct super_block *sb, void *data, int silent)
 {
         struct inode *root = 0;
         struct obd_device *obd;
@@ -128,7 +128,7 @@ struct super_block *ll_fill_super(struct super_block *sb,
         CDEBUG(D_VFSTRACE, "VFS Op:\n");
         OBD_ALLOC(sbi, sizeof(*sbi));
         if (!sbi)
-                RETURN(NULL);
+                RETURN(-ENOMEM);
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
@@ -142,25 +142,25 @@ struct super_block *ll_fill_super(struct super_block *sb,
 
         if (!osc) {
                 CERROR("no osc\n");
-                GOTO(out_free, sb = NULL);
+                GOTO(out_free, err = -EINVAL);
         }
 
         if (!mdc) {
                 CERROR("no mdc\n");
-                GOTO(out_free, sb = NULL);
+                GOTO(out_free, err = -EINVAL);
         }
 
         strncpy(param_uuid.uuid, mdc, sizeof(param_uuid.uuid));
         obd = class_uuid2obd(&param_uuid);
         if (!obd) {
                 CERROR("MDC %s: not setup or attached\n", mdc);
-                GOTO(out_free, sb = NULL);
+                GOTO(out_free, err = -EINVAL);
         }
 
         err = obd_connect(&sbi->ll_mdc_conn, obd, &sbi->ll_sb_uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
-                GOTO(out_free, sb = NULL);
+                GOTO(out_free, err);
         }
 
         mdc_conn = sbi2mdc(sbi)->cl_import->imp_connection;
@@ -169,19 +169,19 @@ struct super_block *ll_fill_super(struct super_block *sb,
         obd = class_uuid2obd(&param_uuid);
         if (!obd) {
                 CERROR("OSC %s: not setup or attached\n", osc);
-                GOTO(out_mdc, sb = NULL);
+                GOTO(out_mdc, err);
         }
 
         err = obd_connect(&sbi->ll_osc_conn, obd, &sbi->ll_sb_uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
-                GOTO(out_mdc, sb = NULL);
+                GOTO(out_mdc, err);
         }
 
         err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
-                GOTO(out_osc, sb = NULL);
+                GOTO(out_osc, err);
         }
         CDEBUG(D_SUPER, "rootfid "LPU64"\n", rootfid.id);
         sbi->ll_rootino = rootfid.id;
@@ -201,7 +201,7 @@ struct super_block *ll_fill_super(struct super_block *sb,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
-                GOTO(out_osc, sb = NULL);
+                GOTO(out_osc, err);
         }
 
         /* initialize committed transaction callback daemon */
@@ -213,7 +213,7 @@ struct super_block *ll_fill_super(struct super_block *sb,
         if (err) {
                 CERROR("failed to start commit callback daemon: rc = %d\n",err);
                 ptlrpc_req_finished (request);
-                GOTO(out_osc, sb = NULL);
+                GOTO(out_osc, err);
         }
 
         lic.lic_body = lustre_msg_buf(request->rq_repmsg, 0,
@@ -231,7 +231,7 @@ struct super_block *ll_fill_super(struct super_block *sb,
         if (root == NULL || is_bad_inode(root)) {
                 /* XXX might need iput() for bad inode */
                 CERROR("lustre_lite: bad iget4 for root\n");
-                GOTO(out_cbd, sb = NULL);
+                GOTO(out_cbd, err = -EBADF);
         }
 
         sb->s_root = d_alloc_root(root);
@@ -249,7 +249,7 @@ out_dev:
         if (osc)
                 OBD_FREE(osc, strlen(osc) + 1);
 
-        RETURN(sb);
+        RETURN(err);
 
 out_cbd:
         ll_commitcbd_cleanup(sbi);
@@ -311,6 +311,46 @@ int ll_statfs(struct super_block *sb, struct statfs *sfs)
 out:
         RETURN(rc);
 }
+
+void ll_clear_inode(struct inode *inode)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_inode_info *lli = ll_i2info(inode);
+        int rc;
+        ENTRY;
+
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
+        rc = ll_mdc_cancel_unused(&sbi->ll_mdc_conn, inode,
+                                  LDLM_FL_NO_CALLBACK);
+        if (rc < 0) {
+                CERROR("ll_mdc_cancel_unused: %d\n", rc);
+                /* XXX FIXME do something dramatic */
+        }
+
+        if (atomic_read(&inode->i_count) != 0)
+                CERROR("clearing in-use inode %lu: count = %d\n",
+                       inode->i_ino, atomic_read(&inode->i_count));
+
+        if (lli->lli_smd) {
+                rc = obd_cancel_unused(&sbi->ll_osc_conn, lli->lli_smd, 0);
+                if (rc < 0) {
+                        CERROR("obd_cancel_unused: %d\n", rc);
+                        /* XXX FIXME do something dramatic */
+                }
+                obd_free_memmd(&sbi->ll_osc_conn, &lli->lli_smd);
+                lli->lli_smd = NULL;
+        }
+
+        if (lli->lli_symlink_name) {
+                OBD_FREE(lli->lli_symlink_name,
+                         strlen(lli->lli_symlink_name) + 1);
+                lli->lli_symlink_name = NULL;
+        }
+
+        EXIT;
+}
+
+
 /* like inode_setattr, but doesn't mark the inode dirty */
 static int ll_attr2inode(struct inode *inode, struct iattr *attr, int trunc)
 {
