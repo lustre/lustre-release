@@ -175,7 +175,6 @@ test_6() {
 }
 run_test 6 "open1, open2, unlink |X| close1 [fail mds] close2"
 
-
 if [ "$ONLY" != "setup" ]; then
 	equals_msg test complete, cleaning up
 	cleanup

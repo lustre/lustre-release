@@ -66,9 +66,9 @@ void llog_free_handle(struct llog_handle *loghandle)
 
         if (!loghandle->lgh_hdr)
                 goto out;
-        if (le32_to_cpu(loghandle->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)
+        if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)
                 list_del_init(&loghandle->u.phd.phd_entry);
-        if (le32_to_cpu(loghandle->lgh_hdr->llh_flags) & LLOG_F_IS_CAT)
+        if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
                 LASSERT(list_empty(&loghandle->u.chd.chd_head));
         OBD_FREE(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
 
@@ -97,10 +97,10 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
                 RETURN(-EINVAL);
         }
 
-        llh->llh_count = cpu_to_le32(le32_to_cpu(llh->llh_count) - 1);
+        llh->llh_count--;
 
-        if ((le32_to_cpu(llh->llh_flags) & LLOG_F_ZAP_WHEN_EMPTY) &&
-            (le32_to_cpu(llh->llh_count) == 1) &&
+        if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
+            (llh->llh_count == 1) &&
             (loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1)) {
                 rc = llog_destroy(loghandle);
                 if (rc)
@@ -131,10 +131,10 @@ int llog_init_handle(struct llog_handle *handle, int flags,
                 RETURN(-ENOMEM);
         handle->lgh_hdr = llh;
         /* first assign flags to use llog_client_ops */
-        llh->llh_flags = cpu_to_le32(flags);
+        llh->llh_flags = flags;
         rc = llog_read_header(handle);
         if (rc == 0) {
-                flags = le32_to_cpu(llh->llh_flags);
+                flags = llh->llh_flags;
                 if (uuid)
                         LASSERT(obd_uuid_equals(uuid, &llh->llh_tgtuuid));
                 GOTO(out, rc);
@@ -146,21 +146,20 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         rc = 0;
 
         handle->lgh_last_idx = 0; /* header is record with index 0 */
-        llh->llh_count = cpu_to_le32(1);         /* for the header record */
-        llh->llh_hdr.lrh_type = cpu_to_le32(LLOG_HDR_MAGIC);
-        llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len =
-                cpu_to_le32(LLOG_CHUNK_SIZE);
+        llh->llh_count = 1;         /* for the header record */
+        llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
+        llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = LLOG_CHUNK_SIZE;
         llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
-        llh->llh_timestamp = cpu_to_le64(LTIME_S(CURRENT_TIME));
+        llh->llh_timestamp = LTIME_S(CURRENT_TIME);
         if (uuid)
                 memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
-        llh->llh_bitmap_offset = cpu_to_le32(offsetof(typeof(*llh),llh_bitmap));
+        llh->llh_bitmap_offset = offsetof(typeof(*llh),llh_bitmap);
         ext2_set_bit(0, llh->llh_bitmap);
 
 out:
         if (flags & LLOG_F_IS_CAT) {
                 INIT_LIST_HEAD(&handle->u.chd.chd_head);
-                llh->llh_size = cpu_to_le32(sizeof(struct llog_logid_rec));
+                llh->llh_size = sizeof(struct llog_logid_rec);
         }
         else if (flags & LLOG_F_IS_PLAIN)
                 INIT_LIST_HEAD(&handle->u.phd.phd_entry);
@@ -235,11 +234,12 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                         GOTO(out, rc);
 
                 rec = buf;
-                idx = le32_to_cpu(rec->lrh_index);
+                idx = rec->lrh_index;
                 if (idx < index)
                         CDEBUG(D_HA, "index %u : idx %u\n", index, idx);
                 while (idx < index) {
-                        rec = ((void *)rec + le32_to_cpu(rec->lrh_len));
+                        rec = (struct llog_rec_hdr *)
+                                ((char *)rec + rec->lrh_len);
                         idx ++;
                 }
 
@@ -266,7 +266,8 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                         ++index;
                         if (index > last_index)
                                 GOTO(out, rc = 0);
-                        rec = ((void *)rec + le32_to_cpu(rec->lrh_len));
+                        rec = (struct llog_rec_hdr *)
+                                ((char *)rec + rec->lrh_len);
                 }
         }
 

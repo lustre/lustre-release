@@ -10,7 +10,7 @@
 #ifndef LOV_INTERNAL_H
 #define LOV_INTERNAL_H
 
-#include <linux/lustre_user.h>
+#include <lustre/lustre_user.h>
 
 #define LAP_MAGIC 8200
 
@@ -31,7 +31,7 @@ void lov_free_memmd(struct lov_stripe_md **lsmp);
 
 /* lov_log.c */
 int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                  int count, struct llog_logid *logid);
+                  int count, struct llog_catid *logid);
 int lov_llog_finish(struct obd_device *obd, int count);
 
 /* lov_pack.c */
@@ -41,7 +41,7 @@ int lov_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                  struct lov_mds_md *lmm, int lmm_bytes);
 int lov_setstripe(struct obd_export *exp,
                   struct lov_stripe_md **lsmp, struct lov_user_md *lump);
-int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp, 
+int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
               struct lov_user_md *lump);
 int lov_getstripe(struct obd_export *exp,
                   struct lov_stripe_md *lsm, struct lov_user_md *lump);
