@@ -138,3 +138,9 @@ for i in `seq 1 8`; do
   perl rename.pl --silent $MNT 2000 &
 done
 wait
+sh rundbench 1
+sh rundbench 2
+sh rundbench 4
+sh rundbench 8
+sh rundbench 16
+sh rundbench 32
