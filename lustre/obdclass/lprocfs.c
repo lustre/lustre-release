@@ -222,42 +222,42 @@ struct namespace_index prof_mdc_index[] = {
         LPROCFS_CNTR_INDEX(mdc, num_ops),
 };
 
-struct namespace_index prof_mds_index[]= {
+struct namespace_index prof_mds_index[] = {
         LPROCFS_CNTR_INDEX(mds, min_time),
         LPROCFS_CNTR_INDEX(mds, max_time),
         LPROCFS_CNTR_INDEX(mds, sum_time),
         LPROCFS_CNTR_INDEX(mds, num_ops),
 };
 
-struct namespace_index prof_mdt_index[]= {
+struct namespace_index prof_mdt_index[] = {
         LPROCFS_CNTR_INDEX(mds, min_time),
         LPROCFS_CNTR_INDEX(mds, max_time),
         LPROCFS_CNTR_INDEX(mds, sum_time),
         LPROCFS_CNTR_INDEX(mds, num_ops),
 };
 
-struct namespace_index prof_osc_index[]= {
+struct namespace_index prof_osc_index[] = {
         LPROCFS_CNTR_INDEX(osc, min_time),
         LPROCFS_CNTR_INDEX(osc, max_time),
         LPROCFS_CNTR_INDEX(osc, sum_time),
         LPROCFS_CNTR_INDEX(osc, num_ops),
 };
 
-struct namespace_index prof_ost_index[]= {
+struct namespace_index prof_ost_index[] = {
         LPROCFS_CNTR_INDEX(ost, min_time),
         LPROCFS_CNTR_INDEX(ost, max_time),
         LPROCFS_CNTR_INDEX(ost, sum_time),
         LPROCFS_CNTR_INDEX(ost, num_ops),
 };
 
-struct namespace_index prof_lov_index[]= {
+struct namespace_index prof_lov_index[] = {
         LPROCFS_CNTR_INDEX(lov, min_time),
         LPROCFS_CNTR_INDEX(lov, max_time),
         LPROCFS_CNTR_INDEX(lov, sum_time),
         LPROCFS_CNTR_INDEX(lov, num_ops),
 };
 
-struct namespace_index prof_obdfilter_index[]= {
+struct namespace_index prof_obdfilter_index[] = {
         LPROCFS_CNTR_INDEX(obdfilter, min_time),
         LPROCFS_CNTR_INDEX(obdfilter, max_time),
         LPROCFS_CNTR_INDEX(obdfilter, sum_time),
@@ -317,7 +317,7 @@ int lprocfs_reg_dev(struct obd_device* device, lprocfs_group_t* namespace,
         unsigned int num_directories = 0;
         int class_array_index = 0;
         int retval = 0;
-        struct proc_dir_entry* this_dev_root=0;
+        struct proc_dir_entry* this_dev_root;
         unsigned int i = 0, j = 0;
 
         /* Obtain this device root */
@@ -358,14 +358,15 @@ int lprocfs_reg_dev(struct obd_device* device, lprocfs_group_t* namespace,
          * entries. Create the proc-counters from namespace, link them into
          * dev counters
          */
-        retval=lprocfs_link_dir_counters(device, this_dev_root, namespace,
-                                         cnt_struct_size, class_array_index);
+        retval = lprocfs_link_dir_counters(device, this_dev_root, namespace,
+                                           cnt_struct_size, class_array_index);
 
         if (retval == LPROCFS_FAILURE) {
                 CERROR("!! Could not link proc counters to device !!");
                 return LPROCFS_FAILURE;
         }
 
+#ifdef LPROC_TEST
         /*
          * Test code: This goes into individual modules. strcmp is
          * unnecessary, since device knows its class. To see the values
@@ -409,6 +410,7 @@ int lprocfs_reg_dev(struct obd_device* device, lprocfs_group_t* namespace,
                 }
                 DEV_PROF_END(ldlm, device, ldlm, mgmt_connect);
         }
+#endif
 
         return LPROCFS_SUCCESS;
 }
@@ -419,21 +421,20 @@ int lprocfs_link_dir_counters(struct obd_device* device,
                               unsigned int sz,
                               unsigned int cl_idx)
 {
-        struct proc_dir_entry* dir_root=0;
-        lprocfs_group_t* temp;
-        lprocfs_vars_t* fn_ctr;
-        struct namespace_index* cntr_names;
+        struct proc_dir_entry *dir_root;
+        lprocfs_group_t *temp;
+        lprocfs_vars_t *fn_ctr;
+        struct namespace_index *cntr_names;
         unsigned int i = 0;
         unsigned int j = 0;
         unsigned int k = 0;
         unsigned int escape = 0;
-        int dir_idx = -1;
-        int cnt_idx = -1;
+        int dir_idx;
+        int cnt_idx;
 
         while(1) {
                 temp = &namespace[i];
-                dir_idx = -1;
-                if (temp->count_func_namespace == 0)
+                if (temp->count_func_namespace == NULL)
                         break;
 
                 while ((temp->dir_namespace)[j] != 0) {
@@ -448,7 +449,6 @@ int lprocfs_link_dir_counters(struct obd_device* device,
                         dir_idx = lprocfs_get_idx(class_index[cl_idx].directory,
                                                   (temp->dir_namespace)[j]);
                         while(1) {
-                                cnt_idx = -1;
                                 fn_ctr = &((temp->count_func_namespace)[k]);
                                 if (fn_ctr->read_fptr == 0)
                                         break;
@@ -470,8 +470,8 @@ int lprocfs_link_dir_counters(struct obd_device* device,
 
                         k=0;
                         j++;
-
                 }
+
                 k=0;
                 j=0;
                 i++;

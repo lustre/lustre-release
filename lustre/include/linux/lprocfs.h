@@ -36,8 +36,8 @@ typedef enum lprofilers {
 } lprofilers_e;
 
 typedef struct lprocfs_group {
-        char** dir_namespace;
-        struct lprocfs_vars* count_func_namespace;
+        char **dir_namespace;
+        struct lprocfs_vars *count_func_namespace;
         lprofilers_e prof_type;
 } lprocfs_group_t;
 
