@@ -1,0 +1,3 @@
+fs/namei.c
+include/linux/fs.h
+fs/inode.c
