@@ -345,7 +345,7 @@ typedef struct ksock_route
         __u32               ksnr_myipaddr;      /* my IP */
         __u32               ksnr_ipaddr;        /* IP address to connect to */
         int                 ksnr_port;          /* port to connect to */
-        unsigned int        ksnr_connecting:4;  /* autoconnects in progress by type */
+        unsigned int        ksnr_connecting:1;  /* autoconnect in progress */
         unsigned int        ksnr_connected:4;   /* connections established by type */
         unsigned int        ksnr_deleted:1;     /* been removed from peer? */
         unsigned int        ksnr_share_count;   /* created explicitly? */
@@ -428,8 +428,6 @@ extern int ksocknal_new_packet (ksock_conn_t *conn, int skip);
 extern int ksocknal_scheduler (void *arg);
 extern int ksocknal_autoconnectd (void *arg);
 extern int ksocknal_reaper (void *arg);
-extern int ksocknal_get_conn_tunables (ksock_conn_t *conn, int *txmem, 
-                                       int *rxmem, int *nagle);
 extern int ksocknal_setup_sock (struct socket *sock);
 extern int ksocknal_send_hello (ksock_conn_t *conn, __u32 *ipaddrs, int nipaddrs);
 extern int ksocknal_recv_hello (ksock_conn_t *conn,

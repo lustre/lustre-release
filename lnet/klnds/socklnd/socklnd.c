@@ -342,7 +342,6 @@ ksocknal_associate_route_conn_locked(ksock_route_t *route, ksock_conn_t *conn)
         }
 
         route->ksnr_connected |= (1<<type);
-        route->ksnr_connecting &= ~(1<<type);
         route->ksnr_conn_count++;
 
         /* Successful connection => further attempts can
@@ -360,7 +359,7 @@ ksocknal_add_route_locked (ksock_peer_t *peer, ksock_route_t *route)
         ksock_route_t     *route2;
 
         LASSERT (route->ksnr_peer == NULL);
-        LASSERT (route->ksnr_connecting == 0);
+        LASSERT (!route->ksnr_connecting);
         LASSERT (route->ksnr_connected == 0);
 
         /* LASSERT(unique) */
@@ -1196,7 +1195,6 @@ ksocknal_close_conn_locked (ksock_conn_t *conn, int error)
         if (route != NULL) {
                 /* dissociate conn from route... */
                 LASSERT (!route->ksnr_deleted);
-                LASSERT ((route->ksnr_connecting & (1 << conn->ksnc_type)) == 0);
                 LASSERT ((route->ksnr_connected & (1 << conn->ksnc_type)) != 0);
 
                 conn2 = NULL;
@@ -1795,7 +1793,7 @@ ksocknal_cmd(struct portals_cfg *pcfg, void * private)
                         int   rxmem;
                         int   nagle;
 
-                        ksocknal_get_conn_tunables(conn, &txmem, &rxmem, &nagle);
+                        ksocknal_lib_get_conn_tunables(conn, &txmem, &rxmem, &nagle);
 
                         rc = 0;
                         pcfg->pcfg_nid    = conn->ksnc_peer->ksnp_nid;

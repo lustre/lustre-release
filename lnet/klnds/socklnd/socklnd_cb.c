@@ -513,19 +513,10 @@ ksocknal_launch_autoconnect_locked (ksock_route_t *route)
         unsigned long     flags;
 
         /* called holding write lock on ksnd_global_lock */
-
-        LASSERT (!route->ksnr_deleted);
-        LASSERT ((route->ksnr_connected & (1 << SOCKNAL_CONN_ANY)) == 0);
-        LASSERT ((route->ksnr_connected & KSNR_TYPED_ROUTES) != KSNR_TYPED_ROUTES);
-        LASSERT (route->ksnr_connecting == 0);
+        LASSERT (!route->ksnr_connecting);
         
-        if (ksocknal_tunables.ksnd_typed_conns)
-                route->ksnr_connecting = 
-                        KSNR_TYPED_ROUTES & ~route->ksnr_connected;
-        else
-                route->ksnr_connecting = (1 << SOCKNAL_CONN_ANY);
-
-        atomic_inc (&route->ksnr_refcount);     /* extra ref for asynchd */
+        route->ksnr_connecting = 1;             /* scheduling conn for autoconnectd */
+        atomic_inc (&route->ksnr_refcount);     /* extra ref for autoconnectd */
         
         spin_lock_irqsave (&ksocknal_data.ksnd_autoconnectd_lock, flags);
         
@@ -698,16 +689,18 @@ ksocknal_find_connectable_route_locked (ksock_peer_t *peer)
                 route = list_entry (tmp, ksock_route_t, ksnr_list);
                 bits  = route->ksnr_connected;
 
-                /* All typed connections established? */
-                if ((bits & KSNR_TYPED_ROUTES) == KSNR_TYPED_ROUTES)
-                        continue;
-
-                /* Untyped connection established? */
-                if ((bits & (1 << SOCKNAL_CONN_ANY)) != 0)
-                        continue;
-
+                if (ksocknal_tunables.ksnd_typed_conns) {
+                        /* All typed connections established? */
+                        if ((bits & KSNR_TYPED_ROUTES) == KSNR_TYPED_ROUTES)
+                                continue;
+                } else {
+                        /* Untyped connection established? */
+                        if ((bits & (1 << SOCKNAL_CONN_ANY)) != 0)
+                                continue;
+                }
+                
                 /* connection being established? */
-                if (route->ksnr_connecting != 0)
+                if (route->ksnr_connecting)
                         continue;
 
                 /* too soon to retry this guy? */
@@ -729,7 +722,7 @@ ksocknal_find_connecting_route_locked (ksock_peer_t *peer)
         list_for_each (tmp, &peer->ksnp_routes) {
                 route = list_entry (tmp, ksock_route_t, ksnr_list);
                 
-                if (route->ksnr_connecting != 0)
+                if (route->ksnr_connecting)
                         return (route);
         }
         
@@ -1946,12 +1939,6 @@ ksocknal_recv_hello (ksock_conn_t *conn, ptl_nid_t *nid,
 }
 
 int
-ksocknal_get_conn_tunables (ksock_conn_t *conn, int *txmem, int *rxmem, int *nagle)
-{
-        return ksocknal_lib_get_conn_tunables(conn, txmem, rxmem, nagle);
-}
-
-int
 ksocknal_connect_peer (ksock_route_t *route, int type)
 {
         struct socket      *sock;
@@ -1989,37 +1976,51 @@ ksocknal_autoconnect (ksock_route_t *route)
         ksock_tx_t       *tx;
         ksock_peer_t     *peer;
         unsigned long     flags;
-        int               rc;
         int               type;
-        char *err_msg = NULL;
-        
+        int               mask;
+        int               rc = 0;
+
+        write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
+
         for (;;) {
-                for (type = 0; type < SOCKNAL_CONN_NTYPES; type++)
-                        if ((route->ksnr_connecting & (1 << type)) != 0)
-                                break;
-                LASSERT (type < SOCKNAL_CONN_NTYPES);
+                if (!ksocknal_tunables.ksnd_typed_conns) {
+                        if ((route->ksnr_connected & (1<<SOCKNAL_CONN_ANY)) == 0)
+                                type = SOCKNAL_CONN_ANY;
+                        else
+                                break;         /* got connected while route queued */
+                } else {
+                        if ((route->ksnr_connected & (1<<SOCKNAL_CONN_CONTROL)) == 0)
+                                type = SOCKNAL_CONN_CONTROL;
+                        else if ((route->ksnr_connected & (1<<SOCKNAL_CONN_BULK_IN)) == 0)
+                                type = SOCKNAL_CONN_BULK_IN;
+                        else if ((route->ksnr_connected & (1<<SOCKNAL_CONN_BULK_OUT)) == 0)
+                                type = SOCKNAL_CONN_BULK_OUT;
+                        else
+                                break;         /* got connected while route queued */
+                }
+
+                write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
 
                 rc = ksocknal_connect_peer (route, type);
                 if (rc != 0)
-                        break;
-                
-                /* successfully autoconnected: create_conn did the
-                 * route/conn binding and scheduled any blocked packets */
+                        goto failed;
 
-                if (route->ksnr_connecting == 0) {
-                        /* No more connections required */
-                        return;
-                }
+                write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
         }
 
+        LASSERT (route->ksnr_connecting);
+        route->ksnr_connecting = 0;
+        write_unlock_irqrestore (&ksocknal_data.ksnd_global_lock, flags);
+        return;
+        
+ failed:
         switch (rc) {
         /* "normal" errors */
         case -ECONNREFUSED:
                 LCONSOLE_ERROR("Connection was refused by host %u.%u.%u.%u on "
                                "port %d; check that Lustre is running on that "
                                "node.\n",
-                               HIPQUAD(route->ksnr_ipaddr),
-                               route->ksnr_port);
+                               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
                 break;
         case -EHOSTUNREACH:
         case -ENETUNREACH:
@@ -2032,37 +2033,31 @@ ksocknal_autoconnect (ksock_route_t *route)
                 LCONSOLE_ERROR("Connecting to host %u.%u.%u.%u on port %d took "
                                "too long; that node may be hung or "
                                "experiencing high load.\n",
-                               HIPQUAD(route->ksnr_ipaddr),
-                               route->ksnr_port);
+                               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
                 break;
         /* errors that should be rare */
         case -EPROTO:
-                err_msg = "Portals could not negotiate a connection";
+                LCONSOLE_ERROR("Protocol error connecting to host %u.%u.%u.%u "
+                               "on port %d: Is it running a compatible version"
+                               " of Lustre?\n", 
+                               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
                 break;
-        case -EAGAIN:
         case -EADDRINUSE:
-                /* -EAGAIN is out of ports, but we specify the ports
-                 * manually.  we really should never get this */
-                err_msg = "no privileged ports were available";
+                LCONSOLE_ERROR("No privileged ports available to connect to "
+                               "host %u.%u.%u.%u on port %d\n",
+                               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
                 break;
         default:
-                err_msg = "unknown error";
+                LCONSOLE_ERROR("Unexpected error %d connecting to "
+                               "host %u.%u.%u.%u on port %d\n", rc,
+                               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
                 break;
         }
-
-        if (err_msg) {
-                LCONSOLE_ERROR("There was an unexpected error connecting to host "
-                               "%u.%u.%u.%u on port %d: %s (error code %d).\n",
-                               HIPQUAD(route->ksnr_ipaddr),
-                               route->ksnr_port,
-                               err_msg, -rc);
-        }
-
-        /* Connection attempt failed */
 
         write_lock_irqsave (&ksocknal_data.ksnd_global_lock, flags);
 
         peer = route->ksnr_peer;
+        LASSERT (route->ksnr_connecting);
         route->ksnr_connecting = 0;
 
         /* This is a retry rather than a new connection */
