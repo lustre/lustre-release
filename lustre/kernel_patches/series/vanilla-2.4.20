@@ -29,3 +29,12 @@ ext3-map_inode_page.patch
 ext3-error-export.patch
 iopen-2.4.20.patch
 tcp-zero-copy.patch
+jbd-dont-account-blocks-twice.patch
+jbd-commit-tricks.patch
+ext3-no-write-super.patch
+add_page_private.patch
+socket-exports-vanilla.patch
+removepage-2.4.20.patch
+jbd-ctx_switch.patch
+jbd-flushtime.patch
+jbd-get_write_access.patch

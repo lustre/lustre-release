@@ -58,7 +58,7 @@
  {
  	struct super_block * sb;
  	struct buffer_head * bh;
-@@ -323,7 +324,39 @@ struct inode * ext3_new_inode (handle_t 
+@@ -323,7 +324,41 @@ struct inode * ext3_new_inode (handle_t 
  	init_rwsem(&inode->u.ext3_i.truncate_sem);
  
  	lock_super (sb);
@@ -71,8 +71,10 @@
 +		gdp = ext3_get_group_desc(sb, i, &bh2);
 +
 +		bitmap_nr = load_inode_bitmap (sb, i);
-+		if (bitmap_nr < 0)
++		if (bitmap_nr < 0) {
++			err = bitmap_nr;
 +			goto fail;
++		}
 +
 +		bh = EXT3_SB(sb)->s_inode_bitmap[bitmap_nr];
 +
