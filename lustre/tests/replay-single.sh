@@ -70,8 +70,10 @@ cleanup() {
         fail mds
     fi
 
-    $LCONF  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
-       --local_nid $client_HOST --profile client_facet --mount $MOUNT
+    umount  $MOUNT || :
+    rmmod llite || :
+#    $LCONF  --cleanup --zeroconf --mds_uuid mds1_UUID --mds_nid $mds_HOST \
+#       --local_nid $client_HOST --profile client_facet --mount $MOUNT
     stop mds ${FORCE} $MDSLCONFARGS
     stop ost ${FORCE} --dump cleanup.log
 }
@@ -90,8 +92,14 @@ start ost --reformat $OSTLCONFARGS
 start mds $MDSLCONFARGS --reformat
 
 # 0-conf client
-$LCONF --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
-    --local_nid `h2$NETTYPE $client_HOST` --profile client_facet --mount $MOUNT
+[ -d $MOUNT ] || mkdir /mnt/lustre
+insmod ../llite/llite.o || :
+../utils/lctl modules > /r/tmp/ogdb-`hostname`
+cp ../utils/llmount /sbin/mount.lustre
+mount -t lustre $mds_HOST:/mds1/client_facet $MOUNT
+
+#$LCONF --zeroconf --mds_uuid mds1_UUID --mds_nid `h2$NETTYPE $mds_HOST` \
+#    --local_nid `h2$NETTYPE $client_HOST` --profile client_facet --mount $MOUNT
 
 echo $TIMEOUT > /proc/sys/lustre/timeout
 echo $UPCALL > /proc/sys/lustre/upcall

@@ -148,13 +148,15 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
 /* llite/llite_lib.c */
 
 extern struct super_operations ll_super_operations;
+extern struct super_operations lustre_super_operations;
 
 char *ll_read_opt(const char *opt, char *data);
 int ll_set_opt(const char *opt, char *data, int fl);
-void ll_options(char *options, char **ost, char **mds, char **zconf, 
-                char **mds_uuid, char **mds_peer, int *flags);
+void ll_options(char *options, char **ost, char **mds, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb, void *data, int silent);
+int lustre_fill_super(struct super_block *sb, void *data, int silent);
+void lustre_put_super(struct super_block *sb);
 void ll_put_super(struct super_block *sb);
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
 void ll_clear_inode(struct inode *inode);

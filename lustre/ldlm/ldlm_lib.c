@@ -396,6 +396,10 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         obd_str2uuid (&tgtuuid, str);
         target = class_uuid2obd(&tgtuuid);
+        if (!target) {
+                target = class_name2obd(str);
+        }
+
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 CERROR("UUID '%s' is not available for connect\n", str);
                 GOTO(out, rc = -ENODEV);

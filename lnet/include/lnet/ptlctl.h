@@ -29,6 +29,7 @@
 #define OBD_DEV_PATH "/dev/obd"
 
 int ptl_name2nal(char *str);
+int ptl_parse_ipaddr (__u32 *ipaddrp, char *str);
 int ptl_parse_nid (ptl_nid_t *nidp, char *str);
 char * ptl_nid2str (char *buffer, ptl_nid_t nid);
 
