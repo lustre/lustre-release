@@ -337,13 +337,14 @@ static struct inode* llu_new_inode(struct filesys *fs,
         return inode;
 }
 
-static int llu_have_md_lock(struct inode *inode)
+static int llu_have_md_lock(struct inode *inode, __u64 lockpart)
 {
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct llu_inode_info *lli = llu_i2info(inode);
         struct lustre_handle lockh;
         struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obddev;
+        ldlm_policy_data_t policy = { .l_inodebits = { lockpart } };
         int flags;
         ENTRY;
 
@@ -355,15 +356,16 @@ static int llu_have_md_lock(struct inode *inode)
 
         CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id.name[0]);
 
+        /* FIXME use LDLM_FL_TEST_LOCK instead */
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
-        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
-                            NULL, 0, LCK_PR, &lockh)) {
+        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
+                            &policy, LCK_PR, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PR);
                 RETURN(1);
         }
 
-        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
-                            NULL, 0, LCK_PW, &lockh)) {
+        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
+                            &policy, LCK_PW, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PW);
                 RETURN(1);
         }
@@ -381,7 +383,7 @@ static int llu_inode_revalidate(struct inode *inode)
                 RETURN(0);
         }
 
-        if (!llu_have_md_lock(inode)) {
+        if (!llu_have_md_lock(inode, MDS_INODELOCK_UPDATE)) {
                 struct lustre_md md;
                 struct ptlrpc_request *req = NULL;
                 struct llu_sb_info *sbi = llu_i2sbi(inode);
@@ -432,22 +434,14 @@ static int llu_inode_revalidate(struct inode *inode)
         if (!lsm)       /* object not yet allocated, don't validate size */
                 RETURN(0);
 
-        /*
-         * unfortunately stat comes in through revalidate and we don't
-         * differentiate this use from initial instantiation.  we're
-         * also being wildly conservative and flushing write caches
-         * so that stat really returns the proper size.
-         */
+        /* ll_glimpse_size will prefer locally cached writes if they extend
+         * the file */
         {
-                struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
-                struct lustre_handle lockh = {0};
+                struct ost_lvb lvb;
                 ldlm_error_t err;
 
-                err = llu_extent_lock(NULL, inode, lsm, LCK_PR, &extent, &lockh);
-                if (err != ELDLM_OK)
-                        RETURN(err);
-
-                llu_extent_unlock(NULL, inode, lsm, LCK_PR, &lockh);
+                err = llu_glimpse_size(inode, &lvb);
+                lli->lli_st_size = lvb.lvb_size;
         }
         RETURN(0);
 }
@@ -492,14 +486,7 @@ static int llu_iop_getattr(struct pnode *pno,
         rc = llu_inode_revalidate(ino);
         if (!rc) {
                 copy_stat_buf(ino, b);
-
-                if (llu_i2info(ino)->lli_it) {
-                        struct lookup_intent *it;
-
-                        LL_GET_INTENT(ino, it);
-                        it->it_op_release(it);
-                        OBD_FREE(it, sizeof(*it));
-                }
+                LASSERT(!llu_i2info(ino)->lli_it);
         }
 
         RETURN(rc);
@@ -701,29 +688,18 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         }
 
         if (ia_valid & ATTR_SIZE) {
-                struct ldlm_extent extent = { .start = attr->ia_size,
-                                              .end = OBD_OBJECT_EOF };
+                ldlm_policy_data_t policy = { .l_extent = {attr->ia_size,
+                                                           OBD_OBJECT_EOF} };
                 struct lustre_handle lockh = { 0 };
                 int err, ast_flags = 0;
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
                  * XXX here. */
-
-                /* Writeback uses inode->i_size to determine how far out
-                 * its cached pages go.  ll_truncate gets a PW lock, canceling
-                 * our lock, _after_ it has updated i_size.  this can confuse
-                 *
-                 * We really need to get our PW lock before we change
-                 * inode->i_size.  If we don't we can race with other
-                 * i_size updaters on our node, like ll_file_read.  We
-                 * can also race with i_size propogation to other
-                 * nodes through dirtying and writeback of final cached
-                 * pages.  This last one is especially bad for racing
-                 * o_append users on other nodes. */
-                if (extent.start == 0)
+                if (attr->ia_size == 0)
                         ast_flags = LDLM_AST_DISCARD_DATA;
-                rc = llu_extent_lock_no_validate(NULL, inode, lsm, LCK_PW,
-                                                 &extent, &lockh, ast_flags);
+
+                rc = llu_extent_lock(NULL, inode, lsm, LCK_PW, &policy,
+                                     &lockh, ast_flags);
                 if (rc != ELDLM_OK) {
                         if (rc > 0)
                                 RETURN(-ENOLCK);
@@ -1212,10 +1188,79 @@ static int llu_iop_fcntl(struct inode *ino, int cmd, va_list ap)
         return -ENOSYS;
 }
 
+static int llu_get_grouplock(struct inode *inode, unsigned long arg)
+{
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct ll_file_data *fd = lli->lli_file_data;
+        ldlm_policy_data_t policy = { .l_extent = { .start = 0,
+                                                    .end = OBD_OBJECT_EOF}};
+        struct lustre_handle lockh = { 0 };
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        ldlm_error_t err;
+        int flags = 0;
+        ENTRY;
+
+        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
+                RETURN(-EINVAL);
+        }
+
+        policy.l_extent.gid = arg;
+        if (lli->lli_open_flags & O_NONBLOCK)
+                flags = LDLM_FL_BLOCK_NOWAIT;
+
+        err = llu_extent_lock(fd, inode, lsm, LCK_GROUP, &policy, &lockh,
+                              flags);
+        if (err)
+                RETURN(err);
+
+        fd->fd_flags |= LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK;
+        fd->fd_gid = arg;
+        memcpy(&fd->fd_cwlockh, &lockh, sizeof(lockh));
+
+        RETURN(0);
+}
+
+static int llu_put_grouplock(struct inode *inode, unsigned long arg)
+{
+        struct llu_inode_info *lli = llu_i2info(inode);
+        struct ll_file_data *fd = lli->lli_file_data;
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        ldlm_error_t err;
+        ENTRY;
+
+        if (!(fd->fd_flags & LL_FILE_GROUP_LOCKED))
+                RETURN(-EINVAL);
+
+        if (fd->fd_gid != arg)
+                RETURN(-EINVAL);
+
+        fd->fd_flags &= ~(LL_FILE_GROUP_LOCKED|LL_FILE_IGNORE_LOCK);
+
+        err = llu_extent_unlock(fd, inode, lsm, LCK_GROUP, &fd->fd_cwlockh);
+        if (err)
+                RETURN(err);
+
+        fd->fd_gid = 0;
+        memset(&fd->fd_cwlockh, 0, sizeof(fd->fd_cwlockh));
+
+        RETURN(0);
+}       
+
 static int llu_iop_ioctl(struct inode *ino, unsigned long int request,
                          va_list ap)
 {
-        CERROR("liblustre did not support ioctl\n");
+        unsigned long arg;
+
+        switch (request) {
+        case LL_IOC_GROUP_LOCK:
+                arg = va_arg(ap, unsigned long);
+                return llu_get_grouplock(ino, arg);
+        case LL_IOC_GROUP_UNLOCK:
+                arg = va_arg(ap, unsigned long);
+                return llu_put_grouplock(ino, arg);
+        }
+
+        CERROR("did not support ioctl cmd %lx\n", request);
         return -ENOSYS;
 }
 
@@ -1255,12 +1300,15 @@ struct inode *llu_iget(struct filesys *fs, struct lustre_md *md)
 
         inode = _sysio_i_find(fs, &fileid);
         if (inode) {
-                if (llu_i2info(inode)->lli_st_generation ==
-                    md->body->generation) {
+                struct llu_inode_info *lli = llu_i2info(inode);
+
+                if (lli->lli_stale_flag ||
+                    lli->lli_st_generation != md->body->generation)
+                        I_RELE(inode);
+                else {
                         llu_update_inode(inode, md->body, md->lsm);
                         return inode;
-                } else
-                        I_RELE(inode);
+                }
         }
 
         inode = llu_new_inode(fs, &fid);
@@ -1512,4 +1560,3 @@ static struct inode_ops llu_inode_ops = {
 #endif
         inop_gone:      llu_iop_gone,
 };
-
