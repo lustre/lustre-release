@@ -28,5 +28,5 @@ modulefs_DATA = ptlrpc$(KMODEXT)
 endif # MODULES
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c ldlm_*.c l_lock.c
-DIST_SOURCES = $(filter-out @top_srcdir@/ldlm/%,$(ptlrpc-objs:%.o=%.c)) ptlrpc_internal.h
 
+DIST_SOURCES = $(ptlrpc_objs:.o=.c) ptlrpc_internal.h

@@ -37,7 +37,7 @@ $subsys->{LOV} = 1 << 18;
 $subsys->{GMNAL} = 1 << 19;
 $subsys->{PTLROUTER} = 1 << 20;
 $subsys->{COBD} = 1 << 21;
-$subsys->{IBNAL} = 1 << 22;
+$subsys->{OPENIBNAL} = 1 << 22;
 $subsys->{SM} = 1 << 23;
 $subsys->{ASOBD} = 1 << 24;
 $subsys->{LMV} = 1 << 25;
@@ -339,7 +339,7 @@ while (<LOG>) {
                     $linesubsys == $subsys->{PORTALS} ||
                     $linesubsys == $subsys->{SOCKNAL} ||
                     $linesubsys == $subsys->{QSWNAL} ||
-                    $linesubsys == $subsys->{IBNAL} ||
+		    $linesubsys == $subsys->{OPENIBNAL} ||
                     $linesubsys == $subsys->{GMNAL}));
 	if(!$entering_rpc) {entering_rpc($_);}
 	if(!$leaving_rpc) {leaving_rpc($_);}

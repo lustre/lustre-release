@@ -31,13 +31,14 @@ SRC=/etc
 while [ "$1" ]; do
 	case $1 in
 	*.xml) export NAME=`echo $1 | sed "s/.xml//"` ;;
+	*) OPTS="$OPTS $1" ;;
 	esac
 	shift
 done
 
 MOUNT="`mount | awk '/ lustre_lite / { print $3 }' | tail -n 1`"
 if [ -z "$MOUNT" ]; then
-	sh llmount.sh
+	sh llmount.sh $OPTS
 	MOUNT="`mount | awk '/ lustre_lite / { print $3 }' | tail -n 1`"
 	[ -z "$MOUNT" ] && fail "no lustre filesystem mounted" 1
 	I_MOUNTED="yes"
@@ -90,7 +91,7 @@ done
 [ "$ERROR" ] && fail "old and new files are different" $ERROR
 
 sh llmountcleanup.sh || exit 19
-sh llrmount.sh || exit 20
+sh llrmount.sh $OPTS || exit 20
 
 log "comparing previously copied files"
 for f in $FILES; do

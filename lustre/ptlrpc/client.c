@@ -502,6 +502,7 @@ static int after_reply(struct ptlrpc_request *req)
         /* Store transno in reqmsg for replay. */
         req->rq_reqmsg->transno = req->rq_transno = req->rq_repmsg->transno;
 
+
         if (req->rq_import->imp_replayable) {
                 spin_lock_irqsave(&imp->imp_lock, flags);
                 if (req->rq_replay || req->rq_transno != 0)
@@ -825,7 +826,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req)
         if (replied)
                 RETURN(0);
 
-        DEBUG_REQ(D_ERROR, req, "timeout");
+        DEBUG_REQ(D_ERROR, req, "timeout (sent at %lu)", (long)req->rq_sent); 
 
         ptlrpc_unregister_reply (req);
 
@@ -987,7 +988,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                  * EINTR.
                  * I don't really care if we go once more round the loop in
                  * the error cases -eeb. */
-        } while (rc != 0);
+        } while (rc != 0 || set->set_remaining != 0);
 
         LASSERT(set->set_remaining == 0);
 
@@ -1126,7 +1127,7 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
         /* We have to l_wait_event() whatever the result, to give liblustre
          * a chance to run reply_in_callback() */
 
-        if (request->rq_set == NULL)
+        if (request->rq_set != NULL)
                 wq = &request->rq_set->set_waitq;
         else
                 wq = &request->rq_reply_waitq;
@@ -1276,15 +1277,13 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
 
         /* clear this  for new requests that were resent as well
            as resent replayed requests. */
-        lustre_msg_clear_flags(req->rq_reqmsg,
-                             MSG_RESENT);
+        lustre_msg_clear_flags(req->rq_reqmsg, MSG_RESENT);
 
         /* don't re-add requests that have been replayed */
         if (!list_empty(&req->rq_replay_list))
                 return;
 
-        lustre_msg_add_flags(req->rq_reqmsg,
-                             MSG_REPLAY);
+        lustre_msg_add_flags(req->rq_reqmsg, MSG_REPLAY);
 
         LASSERT(imp->imp_replayable);
         /* Balanced in ptlrpc_free_committed, usually. */
@@ -1413,7 +1412,7 @@ restart:
                 timeout = 1;
         } else {
                 timeout = MAX(req->rq_timeout * HZ, 1);
-                DEBUG_REQ(D_NET, req, "-- sleeping");
+                DEBUG_REQ(D_NET, req, "-- sleeping for %d jiffies", timeout);
         }
         lwi = LWI_TIMEOUT_INTR(timeout, expired_request, interrupted_request,
                                req);

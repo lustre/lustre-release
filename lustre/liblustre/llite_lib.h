@@ -3,7 +3,7 @@
  *
  * Lustre Light Super operations
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -78,8 +78,6 @@ struct llu_inode_info {
 
         struct lookup_intent   *lli_it;
 
-        /* XXX workaround for libsysio unlink */
-        int                     lli_stale_flag;
         /* XXX workaround for libsysio readdir */
         loff_t                  lli_dir_pos;
 
@@ -101,38 +99,14 @@ struct llu_inode_info {
         dev_t                   lli_st_rdev;
         loff_t                  lli_st_size;
         unsigned int            lli_st_blksize;
-        unsigned int            lli_st_blocks;
+        unsigned long           lli_st_blocks;
         time_t                  lli_st_atime;
         time_t                  lli_st_mtime;
         time_t                  lli_st_ctime;
 
         /* not for stat, change it later */
-        int			lli_st_flags;
-        unsigned long 		lli_st_generation;
-};
-
-#define LLU_SYSIO_COOKIE_SIZE(x) \
-        (sizeof(struct llu_sysio_cookie) + \
-         sizeof(struct ll_async_page) * (x) + \
-         sizeof(struct page) * (x))
-
-struct llu_sysio_cookie {
-        struct obd_io_group    *lsc_oig;
-        struct inode           *lsc_inode;
-        int                     lsc_maxpages;
-        int                     lsc_npages;
-        struct ll_async_page   *lsc_llap;
-        struct page            *lsc_pages;
-        __u64                   lsc_rwcount;
-};
-
-/* XXX why uio.h haven't the definition? */
-#define MAX_IOVEC 32
-
-struct llu_sysio_callback_args
-{
-        int ncookies;
-        struct llu_sysio_cookie *cookies[MAX_IOVEC];
+        int                     lli_st_flags;
+        unsigned long           lli_st_generation;
 };
 
 static inline struct llu_sb_info *llu_fs2sbi(struct filesys *fs)
@@ -203,42 +177,11 @@ struct it_cb_data {
         obd_id hash;
 };
 
-static inline void ll_i2uctxt(struct ll_uctxt *ctxt, struct inode *i1,
-                              struct inode *i2)
-{
-        struct llu_inode_info *lli1 = llu_i2info(i1);
-        struct llu_inode_info *lli2;
-
-        LASSERT(i1);
-        LASSERT(ctxt);
-
-        if (in_group_p(lli1->lli_st_gid))
-                ctxt->gid1 = lli1->lli_st_gid;
-        else
-                ctxt->gid1 = -1;
-
-        if (i2) {
-        	lli2 = llu_i2info(i2);
-                if (in_group_p(lli2->lli_st_gid))
-                        ctxt->gid2 = lli2->lli_st_gid;
-                else
-                        ctxt->gid2 = -1;
-        } else 
-                ctxt->gid2 = 0;
-}
-
-
 typedef int (*intent_finish_cb)(struct ptlrpc_request *,
                                 struct inode *parent, struct pnode *pnode, 
                                 struct lookup_intent *, int offset, obd_id ino);
 int llu_intent_lock(struct inode *parent, struct pnode *pnode,
                     struct lookup_intent *, int flags, intent_finish_cb);
-
-/* FIXME */
-static inline int ll_permission(struct inode *inode, int flag, void * unused)
-{
-        return 0;
-}
 
 static inline __u64 ll_file_maxbytes(struct inode *inode)
 {
@@ -251,13 +194,15 @@ struct mount_option_s
         char *osc_uuid;
 };
 
+#define IS_BAD_PTR(ptr)         \
+        ((unsigned long)(ptr) == 0 || (unsigned long)(ptr) > -1000UL)
+
 /* llite_lib.c */
 void generate_random_uuid(unsigned char uuid_out[16]);
 int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov);
 int ll_parse_mount_target(const char *target, char **mdsnid,
                           char **mdsname, char **profile);
 
-extern int     g_zconf;
 extern char   *g_zconf_mdsnid;
 extern char   *g_zconf_mdsname;
 extern char   *g_zconf_profile;
@@ -271,6 +216,7 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
 int ll_it_open_error(int phase, struct lookup_intent *it);
 struct inode *llu_iget(struct filesys *fs, struct lustre_md *md);
 int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm);
+int llu_setattr_raw(struct inode *inode, struct iattr *attr);
 
 extern struct fssw_ops llu_fssw_ops;
 
@@ -285,21 +231,16 @@ int llu_create(struct inode *dir, struct pnode_base *pnode, int mode);
 int llu_iop_open(struct pnode *pnode, int flags, mode_t mode);
 int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode);
 int llu_iop_close(struct inode *inode);
-int llu_iop_ipreadv(struct inode *ino, struct ioctx *ioctxp);
-int llu_iop_ipwritev(struct inode *ino, struct ioctx *ioctxp);
+_SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off);
 int llu_vmtruncate(struct inode * inode, loff_t offset);
 void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid);
 int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
 
 /* rw.c */
-int llu_iop_iodone(struct ioctx *ioctxp __IS_UNUSED);
-struct llu_sysio_callback_args*
-llu_file_write(struct inode *inode, const struct iovec *iovec,
-        	       size_t iovlen, loff_t pos);
-struct llu_sysio_callback_args*
-llu_file_read(struct inode *inode, const struct iovec *iovec,
-              size_t iovlen, loff_t pos);
-int llu_glimpse_size(struct inode *inode, struct ost_lvb *lvb);
+int llu_iop_read(struct inode *ino, struct ioctx *ioctxp);
+int llu_iop_write(struct inode *ino, struct ioctx *ioctxp);
+int llu_iop_iodone(struct ioctx *ioctxp);
+int llu_glimpse_size(struct inode *inode);
 int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
                     struct lov_stripe_md *lsm, int mode,
                     ldlm_policy_data_t *policy, struct lustre_handle *lockh,

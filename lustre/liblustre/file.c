@@ -3,7 +3,7 @@
  *
  * Lustre Light file operations
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -29,7 +29,9 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/queue.h>
+#include <fcntl.h>
 
+#include <xtio.h>
 #include <sysio.h>
 #include <fs.h>
 #include <mount.h>
@@ -133,6 +135,8 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         int rc = 0;
         ENTRY;
 
+        liblustre_wait_event(0);
+
         /* don't do anything for '/' */
         if (llu_is_root_inode(inode))
                 RETURN(0);
@@ -166,7 +170,7 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         }
         fd->fd_flags &= ~O_LOV_DELAY_CREATE;
 
-        lli->lli_open_flags = flags;
+        lli->lli_open_flags = flags & ~(O_CREAT | O_EXCL | O_TRUNC);
 
  out_release:
         request = it->d.lustre.it_data;
@@ -174,6 +178,22 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
 
         it->it_op_release(it);
         OBD_FREE(it, sizeof(*it));
+
+        /* libsysio haven't doing anything for O_TRUNC. here we
+         * simply simulate it as open(...); truncate(...);
+         */
+        if (rc == 0 && (flags & O_TRUNC) &&
+            S_ISREG(lli->lli_st_mode)) {
+                struct iattr attr;
+
+                memset(&attr, 0, sizeof(attr));
+                attr.ia_size = 0;
+                attr.ia_valid |= ATTR_SIZE | ATTR_RAW;
+                rc  = llu_setattr_raw(inode, &attr);
+                if (rc) {
+                        CERROR("error %d truncate in open()\n", rc);
+                }
+        }
 
         RETURN(rc);
 }
@@ -332,54 +352,34 @@ int llu_file_release(struct inode *inode)
         RETURN(rc);
 }
 
+/*
+ * libsysio require us return 0
+ */
 int llu_iop_close(struct inode *inode)
 {
         int rc;
 
+        liblustre_wait_event(0);
+
         rc = llu_file_release(inode);
+        if (rc) {
+                CERROR("file close error %d\n", rc);
+        }
         /* if open count == 0 && stale_flag is set, should we
          * remove the inode immediately? */
-        return rc;
+        return 0;
 }
 
-int llu_iop_ipreadv(struct inode *ino,
-                    struct ioctx *ioctx)
+_SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off)
 {
         ENTRY;
 
-        if (!ioctx->ioctx_iovlen)
-                RETURN(0);
-        if (ioctx->ioctx_iovlen < 0)
+        liblustre_wait_event(0);
+
+        if (off < 0 || off > ll_file_maxbytes(ino))
                 RETURN(-EINVAL);
 
-        ioctx->ioctx_private = llu_file_read(ino,
-                                        ioctx->ioctx_iovec,
-                                        ioctx->ioctx_iovlen,
-                                        ioctx->ioctx_offset);
-        if (IS_ERR(ioctx->ioctx_private))
-                return (PTR_ERR(ioctx->ioctx_private));
-
-        RETURN(0);
-}
-
-int llu_iop_ipwritev(struct inode *ino,
-                     struct ioctx *ioctx)
-{
-        ENTRY;
-
-        if (!ioctx->ioctx_iovlen)
-                RETURN(0);
-        if (ioctx->ioctx_iovlen < 0)
-                RETURN(-EINVAL);
-
-        ioctx->ioctx_private = llu_file_write(ino,
-                                         ioctx->ioctx_iovec,
-                                         ioctx->ioctx_iovlen,
-                                         ioctx->ioctx_offset);
-        if (IS_ERR(ioctx->ioctx_private))
-                return (PTR_ERR(ioctx->ioctx_private));
-
-        RETURN(0);
+        RETURN(off);
 }
 
 /* this isn't where truncate starts.   roughly:

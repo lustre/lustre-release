@@ -55,9 +55,15 @@ gmnal_cmd(struct portals_cfg *pcfg, void *private)
 		copy_from_user(name, pcfg->pcfg_pbuf1, pcfg->pcfg_plen1);
 	
 		GMNAL_GM_LOCK(nal_data);
-		nid = gm_host_name_to_node_id(nal_data->gm_port, name);
+		//nid = gm_host_name_to_node_id(nal_data->gm_port, name);
+                gm_status = gm_host_name_to_node_id_ex (nal_data->gm_port, 0, name, &nid);
 		GMNAL_GM_UNLOCK(nal_data);
-		CDEBUG(D_INFO, "Local node id is [%d]\n", nid);
+                if (gm_status != GM_SUCCESS) {
+                        CDEBUG(D_INFO, "gm_host_name_to_node_id_ex(...host %s) failed[%d]\n",
+                                name, gm_status);
+                        return (-1);
+                } else
+		        CDEBUG(D_INFO, "Local node %s id is [%d]\n", name, nid);
 		GMNAL_GM_LOCK(nal_data);
 		gm_status = gm_node_id_to_global_id(nal_data->gm_port, 
 						    nid, &gnid);
@@ -87,9 +93,8 @@ gmnal_load(void)
 	CDEBUG(D_TRACE, "This is the gmnal module initialisation routine\n");
 
 
-
 	CDEBUG(D_INFO, "Calling gmnal_init\n");
-        statud = gmnal_init();
+        status = gmnal_init();
 	if (status == PTL_OK) {
 		CDEBUG(D_INFO, "Portals GMNAL initialised ok\n");
 	} else {

@@ -253,6 +253,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
 
         loghandle->lgh_last_idx++;
         index = loghandle->lgh_last_idx;
+        LASSERT(index < LLOG_BITMAP_SIZE(llh));
         rec->lrh_index = cpu_to_le32(index);
         if (buf == NULL) {
                 lrt = (void *)rec + le32_to_cpu(rec->lrh_len) - sizeof(*lrt);
@@ -773,9 +774,14 @@ static int llog_add_link_object(struct llog_ctxt *ctxt, struct llog_logid logid,
         lock_kernel();
         rc = vfs_link(dentry, ctxt->loc_objects_dir->d_inode, new_child);
         unlock_kernel();
-        if (rc)
-                CERROR("error link new object "LPX64":%u: rc %d\n",
+        if (rc) {
+                CERROR("error link new object "LPX64":%08x: rc %d\n",
                        logid.lgl_oid, logid.lgl_ogen, rc);
+                /* it doesn't make much sense to get -EEXIST here */
+                LASSERTF(rc != -EEXIST, "bug 3490: dentry: %p "
+                         "dir->d_ionode %p new_child: %p  \n",
+                         dentry, ctxt->loc_objects_dir->d_inode, new_child);
+        }
         err = llog_fsfilt_commit(ctxt, ctxt->loc_objects_dir->d_inode, handle, 0);
 out_dput:
         l_dput(new_child);
@@ -963,7 +969,7 @@ out:
 
 /* reads the catalog list */
 int llog_get_cat_list(struct lvfs_run_ctxt *ctxt,
-                      struct fsfilt_operations *fsops, char *name,
+                      struct fsfilt_operations *fsops, const char *name,
                       int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
@@ -1008,7 +1014,7 @@ EXPORT_SYMBOL(llog_get_cat_list);
 
 /* writes the cat list */
 int llog_put_cat_list(struct lvfs_run_ctxt *ctxt,
-                      struct fsfilt_operations *fsops, char *name,
+                      struct fsfilt_operations *fsops, const char *name,
                       int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
@@ -1099,7 +1105,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 }
 
 int llog_get_cat_list(struct lvfs_run_ctxt *ctxt,
-                      struct fsfilt_operations *fsops, char *name,
+                      struct fsfilt_operations *fsops, const char *name,
                       int count, struct llog_catid *idarray)
 {
         LBUG();
@@ -1107,7 +1113,7 @@ int llog_get_cat_list(struct lvfs_run_ctxt *ctxt,
 }
 
 int llog_put_cat_list(struct lvfs_run_ctxt *ctxt,
-                      struct fsfilt_operations *fsops, char *name,
+                      struct fsfilt_operations *fsops, const char *name,
                       int count, struct llog_catid *idarray)
 {
         LBUG();

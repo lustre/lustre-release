@@ -96,7 +96,8 @@ int main(int argc, char **argv)
                         }
                         break;
                 case 'D':
-                        if (open(fname, O_DIRECTORY) == -1) {
+                        fd = open(fname, O_DIRECTORY);
+                        if (fd == -1) {
                                 perror("open(O_DIRECTORY)");
                                 exit(1);
                         }

@@ -133,7 +133,7 @@ static void ll_close_done_writing(struct inode *inode)
                 goto rpc;
 
         rc = ll_extent_lock(NULL, inode, lli->lli_smd, LCK_PW, &policy, &lockh,
-                            ast_flags);
+                            ast_flags, &ll_i2sbi(inode)->ll_done_stime);
         if (rc != 0) {
                 CERROR("lock acquisition failed (%d): unable to send "
                        "DONE_WRITING for inode %lu/%u\n", rc, inode->i_ino,

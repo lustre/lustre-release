@@ -12,6 +12,9 @@ init_test_env $@
 
 ALWAYS_EXCEPT="10"
 
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"cleanup"}
+
 build_test_filter
 
 assert_env MDSCOUNT mds1_HOST ost1_HOST ost2_HOST client_HOST LIVE_CLIENT 
@@ -110,14 +113,14 @@ reintegrate_clients() {
 gen_config() {
     rm -f $XMLCONFIG
     if [ "$MDSCOUNT" -gt 1 ]; then
-        add_lmv lmv1
+        add_lmv lmv1_svc
         for mds in `mds_list`; do
             MDSDEV=$TMP/${mds}-`hostname`
-            add_mds $mds --dev $MDSDEV --size $MDSSIZE --lmv lmv1
+            add_mds $mds --dev $MDSDEV --size $MDSSIZE --lmv lmv1_svc
         done
-	MDS=lmv1
-        add_lov_to_lmv lov1 lmv1 --stripe_sz $STRIPE_BYTES \
+        add_lov_to_lmv lov1 lmv1_svc --stripe_sz $STRIPE_BYTES \
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+	MDS=lmv1
     else
         add_mds mds1 --dev $MDSDEV --size $MDSSIZE
         if [ ! -z "$mds1failover_HOST" ]; then
@@ -125,7 +128,7 @@ gen_config() {
         fi
 	add_lov lov1 mds1 --stripe_sz $STRIPE_BYTES \
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
-	MDS=mds1_svc
+	MDS=mds1
     fi
 
     for i in `seq $NUMOST`; do
@@ -134,10 +137,12 @@ gen_config() {
 	    --journal-size $OSTJOURNALSIZE
     done
      
-    add_client client --mds $MDS --lov lov1 --path $MOUNT
+    add_client client $MDS --lov lov1 --path $MOUNT
 }
 
 setup() {
+    gen_config
+
     rm -rf logs/*
     for i in `seq $NUMOST`; do
 	wait_for ost$i
@@ -219,19 +224,16 @@ node_to_ost() {
 
 
 if [ "$ONLY" == "cleanup" ]; then
-    cleanup
+    $CLEANUP
     exit
-fi
-
-if [ -z "$NOSETUP" ]; then
-    gen_config
-    setup
 fi
 
 if [ ! -z "$EVAL" ]; then
     eval "$EVAL"
     exit $?
 fi
+
+$SETUP
 
 if [ "$ONLY" == "setup" ]; then
     exit 0
@@ -244,17 +246,17 @@ test_0() {
     echo "Failover MDS"
     facet_failover mds1
     echo "Waiting for df pid: $DFPID"
-    wait $DFPID || return 1
+    wait $DFPID || { echo "df returned $?" && return 1; }
 
     echo "Failing OST1"
     facet_failover ost1
     echo "Waiting for df pid: $DFPID"
-    wait $DFPID || return 2
-
+    wait $DFPID || { echo "df returned $?" && return 2; }
+    
     echo "Failing OST2"
     facet_failover ost2
     echo "Waiting for df pid: $DFPID"
-    wait $DFPID || return 3
+    wait $DFPID || { echo "df returned $?" && return 3; }
     return 0
 }
 run_test 0 "Fail all nodes, independently"
@@ -629,4 +631,4 @@ test_10() {
 run_test 10 "Running Availability for 6 hours..."
 
 equals_msg "Done, cleaning up"
-cleanup
+$CLEANUP

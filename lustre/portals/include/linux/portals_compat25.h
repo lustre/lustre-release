@@ -80,4 +80,12 @@ extern int is_kernel_text_address(unsigned long addr);
 #define PAGE_LIST(page) ((page)->lru)
 #endif
 
+#ifndef HAVE_CPU_ONLINE
+#define cpu_online(cpu) (test_bit(cpu_online_map, &(cpu)))
+#endif
+#ifndef HAVE_CPUMASK_T
+#define cpu_set(cpu, map) (set_bit(cpu, &(map)))
+typedef unsigned long cpumask_t;
+#endif
+
 #endif /* _PORTALS_COMPAT_H */

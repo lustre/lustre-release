@@ -62,11 +62,7 @@ struct fsfilt_operations {
         int     (* fs_get_md)(struct inode *inode, void *md, int size);
 
         /* this method is needed to make IO operation fsfilt nature depend. */
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        int     (* fs_send_bio)(struct inode *inode, struct bio *bio);
-#else
-        int     (* fs_send_bio)(struct inode *inode, struct kiobuf *bio);
-#endif
+        int     (* fs_send_bio)(int rw, struct inode *inode,struct kiobuf *bio);
 
         /* methods for getting page from backing fs and putting page there
          * during IO. Used on OST. */
@@ -75,8 +71,10 @@ struct fsfilt_operations {
 
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
-        int     (* fs_add_journal_cb)(struct obd_device *obd, struct super_block *sb,
-                                      __u64 last_rcvd, void *handle, fsfilt_cb_t cb_func,
+        int     (* fs_add_journal_cb)(struct obd_device *obd, 
+                                      struct super_block *sb,
+                                      __u64 last_rcvd, void *handle, 
+                                      fsfilt_cb_t cb_func,
                                       void *cb_data);
         int     (* fs_statfs)(struct super_block *sb, struct obd_statfs *osfs);
         int     (* fs_sync)(struct super_block *sb);
@@ -391,17 +389,15 @@ fsfilt_get_md(struct obd_device *obd, struct inode *inode,
         return obd->obd_fsops->fs_get_md(inode, md, size);
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-static inline int
-fsfilt_send_bio(struct obd_device *obd, struct inode *inode,
-                struct bio *bio)
-#else
-static inline int
-fsfilt_send_bio(struct obd_device *obd, struct inode *inode,
-                struct kiobuf *bio)
-#endif
+static inline int fsfilt_send_bio(int rw, struct obd_device *obd,
+                                  struct inode *inode, void *bio)
 {
-        return obd->obd_fsops->fs_send_bio(inode, bio);
+        LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
+
+        if (rw == OBD_BRW_READ)
+                return obd->obd_fsops->fs_send_bio(READ, inode, bio);
+        else
+                return obd->obd_fsops->fs_send_bio(WRITE, inode, bio);
 }
 
 static inline int

@@ -176,8 +176,8 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
                 if (lock->l_resource->lr_name.name[0] != inode->i_ino ||
                     lock->l_resource->lr_name.name[1] != inode->i_generation) {
-                        LDLM_ERROR(lock, "data mismatch with ino %lu/%u",
-                                   inode->i_ino, inode->i_generation);
+                            LDLM_ERROR(lock, "data mismatch with ino %lu/%u(%p)",
+                                   inode->i_ino, inode->i_generation, inode);
                 }
 
                 /* If lookup lock is cancelled, we just drop the dentry and
@@ -189,9 +189,8 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                    stat() and similar functions) to renew the data anyway */
                 if (S_ISDIR(inode->i_mode) &&
                     (bits & MDS_INODELOCK_UPDATE)) {
-                        CDEBUG(D_INODE, "invalidating inode %lu\n",
-                               inode->i_ino);
-
+                        CDEBUG(D_INODE, "invalidating inode %lu/%u(%p)\n",
+                               inode->i_ino, inode->i_generation, inode);
                         truncate_inode_pages(inode->i_mapping, 0);
                 }
 
@@ -296,7 +295,6 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 if (it->it_op == IT_GETATTR && S_ISREG(inode->i_mode) &&
                     ll_i2info(inode)->lli_smd != NULL) {
                         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-                        struct ost_lvb lvb;
                         ldlm_error_t rc;
 
                         LASSERT(lsm->lsm_object_id != 0);
@@ -304,12 +302,11 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         /* bug 2334: drop MDS lock before acquiring OST lock */
                         ll_intent_drop_lock(it);
 
-                        rc = ll_glimpse_size(inode, &lvb);
+                        rc = ll_glimpse_size(inode);
                         if (rc) {
                                 iput(inode);
                                 RETURN(rc);
                         }
-                        inode->i_size = lvb.lvb_size;
                 }
 
                 dentry = *de = ll_find_alias(inode, dentry);
@@ -502,6 +499,24 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry, int mode, stru
 }
 #endif
 
+static void ll_update_times(struct ptlrpc_request *request, int offset,
+                            struct inode *inode)
+{
+        struct mds_body *body = lustre_msg_buf(request->rq_repmsg, offset,
+                                               sizeof(*body));
+        LASSERT(body);
+
+        if (body->valid & OBD_MD_FLMTIME &&
+            body->mtime > LTIME_S(inode->i_mtime)) {
+                CDEBUG(D_INODE, "setting ino %lu mtime from %lu to %u\n",
+                       inode->i_ino, LTIME_S(inode->i_mtime), body->mtime);
+                LTIME_S(inode->i_mtime) = body->mtime;
+        }
+        if (body->valid & OBD_MD_FLCTIME &&
+            body->ctime > LTIME_S(inode->i_ctime))
+                LTIME_S(inode->i_ctime) = body->ctime;
+}
+
 static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
 {
         struct ptlrpc_request *request = NULL;
@@ -532,6 +547,8 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
                 ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
                 err = md_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                                 current->fsuid, current->fsgid, rdev, &request);
+                if (err == 0)
+                        ll_update_times(request, 0, dir);
                 ptlrpc_req_finished(request);
                 break;
         case S_IFDIR:
@@ -574,6 +591,11 @@ static int ll_mknod(struct inode *dir, struct dentry *child, int mode,
                 ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
                 err = md_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                                 current->fsuid, current->fsgid, rdev, &request);
+                if (err)
+                        GOTO(out_err, err);
+
+                ll_update_times(request, 0, dir);
+                
                 err = ll_prep_inode(sbi->ll_osc_exp, sbi->ll_mdc_exp,
                                     &inode, request, 0, child->d_sb);
                 if (err)
@@ -613,6 +635,9 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
         err = md_create(sbi->ll_mdc_exp, &op_data,
                         tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                         current->fsuid, current->fsgid, 0, &request);
+        if (err == 0)
+                ll_update_times(request, 0, dir);
+        
         ptlrpc_req_finished(request);
         RETURN(err);
 }
@@ -635,8 +660,9 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
 
         ll_prepare_mdc_op_data(&op_data, src, dir, name, len, 0);
         err = md_link(sbi->ll_mdc_exp, &op_data, &request);
+        if (err == 0)
+                ll_update_times(request, 0, dir);
         ptlrpc_req_finished(request);
-
         RETURN(err);
 }
 
@@ -658,6 +684,8 @@ static int ll_mkdir_raw(struct nameidata *nd, int mode)
         ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
         err = md_create(sbi->ll_mdc_exp, &op_data, NULL, 0, mode,
                         current->fsuid, current->fsgid, 0, &request);
+        if (err == 0)
+                ll_update_times(request, 0, dir);
         ptlrpc_req_finished(request);
         RETURN(err);
 }
@@ -676,6 +704,8 @@ static int ll_rmdir_raw(struct nameidata *nd)
 
         ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, S_IFDIR);
         rc = md_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
+        if (rc == 0)
+                ll_update_times(request, 0, dir);
         ptlrpc_req_finished(request);
         RETURN(rc);
 }
@@ -776,9 +806,10 @@ static int ll_unlink_raw(struct nameidata *nd)
         rc = md_unlink(ll_i2sbi(dir)->ll_mdc_exp, &op_data, &request);
         if (rc)
                 GOTO(out, rc);
-
+        ll_update_times(request, 0, dir);
+        
         rc = ll_objects_destroy(request, dir, 2);
- out:
+out:
         ptlrpc_req_finished(request);
         RETURN(rc);
 }
@@ -804,6 +835,8 @@ static int ll_rename_raw(struct nameidata *oldnd, struct nameidata *newnd)
         err = md_rename(sbi->ll_mdc_exp, &op_data,
                         oldname, oldlen, newname, newlen, &request);
         if (!err) {
+                ll_update_times(request, 0, src);
+                ll_update_times(request, 0, tgt);
                 err = ll_objects_destroy(request, src, 3);
         }
 

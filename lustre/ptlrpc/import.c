@@ -101,7 +101,7 @@ int ptlrpc_set_import_discon(struct obd_import *imp)
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
                 CERROR("%s: connection lost to %s@%s\n",
-                       imp->imp_obd->obd_name, 
+                       imp->imp_obd->obd_name,
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
                 IMPORT_SET_STATE_NOLOCK(imp, LUSTRE_IMP_DISCON);
@@ -226,6 +226,76 @@ void ptlrpc_fail_import(struct obd_import *imp, int generation)
         EXIT;
 }
 
+#define ATTEMPT_TOO_SOON(last)  \
+        ((last) && ((long)(jiffies - (last)) <= (long)(obd_timeout * 2 * HZ)))
+
+static int import_select_connection(struct obd_import *imp)
+{
+        struct obd_import_conn *imp_conn, *tmp;
+        struct obd_export *dlmexp;
+        int found = 0;
+        ENTRY;
+
+        spin_lock(&imp->imp_lock);
+
+        if (list_empty(&imp->imp_conn_list)) {
+                CERROR("no available connections on imp %p@%s\n",
+                        imp, imp->imp_obd->obd_name);
+                spin_unlock(&imp->imp_lock);
+                RETURN(-EINVAL);
+        }
+
+        list_for_each_entry(imp_conn, &imp->imp_conn_list, oic_item) {
+                if (!ATTEMPT_TOO_SOON(imp_conn->oic_last_attempt)) {
+                        found = 1;
+                        break;
+                }
+        }
+
+        /* if not found, simply choose the current one */
+        if (!found) {
+                CWARN("obd %s imp 0x%p: all connections have been "
+                      "tried recently\n", imp->imp_obd->obd_name, imp);
+                LASSERT(imp->imp_conn_current);
+                imp_conn = imp->imp_conn_current;
+        }
+        LASSERT(imp_conn->oic_conn);
+
+        imp_conn->oic_last_attempt = jiffies;
+
+        /* move the items ahead of the selected one to list tail */
+        while (1) {
+                tmp= list_entry(imp->imp_conn_list.next,
+                                struct obd_import_conn, oic_item);
+                if (tmp == imp_conn)
+                        break;
+                list_del(&tmp->oic_item);
+                list_add_tail(&tmp->oic_item, &imp->imp_conn_list);
+        }
+
+        /* switch connection, don't mind if it's same as the current one */
+        if (imp->imp_connection)
+                ptlrpc_put_connection(imp->imp_connection);
+        imp->imp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
+
+        dlmexp =  class_conn2export(&imp->imp_dlm_handle);
+        LASSERT(dlmexp != NULL);
+        if (dlmexp->exp_connection)
+                ptlrpc_put_connection(imp->imp_connection);
+        dlmexp->exp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
+        class_export_put(dlmexp);
+
+        imp->imp_conn_current = imp_conn;
+        CWARN("obd %s imp 0x%p: select conn %s\n",
+               imp->imp_obd->obd_name, imp,
+               imp_conn->oic_uuid.uuid);
+        spin_unlock(&imp->imp_lock);
+
+        RETURN(0);
+}
+
+
+
 int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 {
         struct obd_device *obd = imp->imp_obd;
@@ -274,39 +344,17 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
         if (new_uuid) {
-                struct ptlrpc_connection *conn;
                 struct obd_uuid uuid;
-                struct obd_export *dlmexp;
 
                 obd_str2uuid(&uuid, new_uuid);
 
-                conn = ptlrpc_uuid_to_connection(&uuid);
-                if (!conn)
-                        GOTO(out, rc = -ENOENT);
-
-                CDEBUG(D_HA, "switching import %s/%s from %s to %s\n",
-                       imp->imp_target_uuid.uuid, imp->imp_obd->obd_name,
-                       imp->imp_connection->c_remote_uuid.uuid,
-                       conn->c_remote_uuid.uuid);
-
-                /* Switch the import's connection and the DLM export's
-                 * connection (which are almost certainly the same, but we
-                 * keep distinct refs just to make things clearer. I think. */
-                if (imp->imp_connection)
-                        ptlrpc_put_connection(imp->imp_connection);
-                /* We hand off the ref from ptlrpc_get_connection. */
-                imp->imp_connection = conn;
-
-                dlmexp = class_conn2export(&imp->imp_dlm_handle);
-
-                LASSERT(dlmexp != NULL);
-
-                if (dlmexp->exp_connection)
-                        ptlrpc_put_connection(dlmexp->exp_connection);
-                dlmexp->exp_connection = ptlrpc_connection_addref(conn);
-                class_export_put(dlmexp);
-
+                rc = import_set_conn_priority(imp, &uuid);
+                if (rc)
+                        GOTO(out, rc);
         }
+        rc = import_select_connection(imp);
+        if (rc)
+                GOTO(out, rc);
 
         request = ptlrpc_prep_req(imp, LUSTRE_OBD_VERSION,
                                   imp->imp_connect_op, 4, size, tmp);
@@ -364,6 +412,8 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
 
         if (rc)
                 GOTO(out, rc);
+        LASSERT(imp->imp_conn_current);
+        imp->imp_conn_current->oic_last_attempt = 0;
 
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
 
@@ -463,17 +513,10 @@ finish:
  out:
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
-                if (aa->pcaa_initial_connect && !imp->imp_initial_recov) {
+                if (aa->pcaa_initial_connect && !imp->imp_initial_recov)
                         ptlrpc_deactivate_import(imp);
-                }
-                if (rc == -ETIMEDOUT && (jiffies - imp->imp_connect_start) > HZ) {
-                        CDEBUG(D_ERROR, "recovery of %s on %s failed (timeout)\n",
-                               imp->imp_target_uuid.uuid,
-                               (char *)imp->imp_connection->c_remote_uuid.uuid);
-                        ptlrpc_connect_import(imp, NULL);
-                        RETURN(0);
-                }
-                CDEBUG(D_ERROR, "recovery of %s on %s failed (%d)\n",
+
+                CDEBUG(D_HA, "recovery of %s on %s failed (%d)\n",
                        imp->imp_target_uuid.uuid,
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
         }

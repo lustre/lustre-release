@@ -55,7 +55,7 @@ Index: linux-2.4.24/lib/dynlocks.c
 ===================================================================
 --- linux-2.4.24.orig/lib/dynlocks.c	2003-01-30 13:24:37.000000000 +0300
 +++ linux-2.4.24/lib/dynlocks.c	2004-07-18 11:23:01.000000000 +0400
-@@ -0,0 +1,187 @@
+@@ -0,0 +1,188 @@
 +/*
 + * Dynamic Locks
 + *
@@ -69,6 +69,7 @@ Index: linux-2.4.24/lib/dynlocks.c
 +#include <linux/module.h>
 +#include <linux/slab.h>
 +#include <linux/sched.h>
++#include <linux/init.h>
 +
 +static kmem_cache_t * dynlock_cachep = NULL;
 +

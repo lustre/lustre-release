@@ -47,6 +47,7 @@
 /* OBD Device Declarations */
 #define MAX_OBD_DEVICES 256
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
+extern spinlock_t obd_dev_lock;
 
 /* OBD Operations Declarations */
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
@@ -58,7 +59,8 @@ int class_register_type(struct obd_ops *ops, struct md_ops *md_ops,
                         struct lprocfs_vars *, char *nm);
 int class_unregister_type(char *nm);
 
-struct obd_device *class_newdev(int *dev);
+struct obd_device *class_newdev(struct obd_type *type);
+void class_release_dev(struct obd_device *obd);
 
 int class_name2dev(char *name);
 struct obd_device *class_name2obd(char *name);
@@ -87,6 +89,8 @@ struct config_llog_instance {
         struct obd_uuid cfg_uuid;
         ptl_nid_t cfg_local_nid;
 };
+int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
+                            struct config_llog_instance *cfg);
 
 int class_config_process_llog(struct llog_ctxt *ctxt, char *name,
                               struct config_llog_instance *cfg);
@@ -152,6 +156,7 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   struct obd_uuid *cluuid);
 int class_disconnect(struct obd_export *exp, int failover);
 void class_disconnect_exports(struct obd_device *obddev, int failover);
+void class_disconnect_stale_exports(struct obd_device *obddev, int failover);
 /* generic operations shared by various OBD types */
 int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data);
 int class_multi_cleanup(struct obd_device *obddev);
@@ -623,6 +628,35 @@ static inline int obd_setattr(struct obd_export *exp, struct obdo *obdo,
         rc = OBP(exp->exp_obd, setattr)(exp, obdo, ea, oti);
         RETURN(rc);
 }
+static inline int obd_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
+                               int priority)
+{
+        struct obd_device *obd = imp->imp_obd;
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DEV_ACTIVE(obd);
+        OBD_CHECK_OP(obd, add_conn, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(obd, add_conn);
+
+        rc = OBP(obd, add_conn)(imp, uuid, priority);
+        RETURN(rc);
+}
+
+static inline int obd_del_conn(struct obd_import *imp, struct obd_uuid *uuid)
+{
+        struct obd_device *obd = imp->imp_obd;
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_DEV_ACTIVE(obd);
+        OBD_CHECK_OP(obd, del_conn, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(obd, del_conn);
+
+        rc = OBP(obd, del_conn)(imp, uuid);
+        RETURN(rc);
+}
+
 
 static inline int obd_connect(struct lustre_handle *conn,
                               struct obd_device *obd, struct obd_uuid *cluuid,

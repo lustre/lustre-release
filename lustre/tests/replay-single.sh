@@ -24,14 +24,14 @@ gen_config() {
     rm -f $XMLCONFIG
 
     if [ "$MDSCOUNT" -gt 1 ]; then
-        add_lmv lmv1
+        add_lmv lmv1_svc
         for mds in `mds_list`; do
             MDSDEV=$TMP/${mds}-`hostname`
-            add_mds $mds --dev $MDSDEV --size $MDSSIZE --lmv lmv1
+            add_mds $mds --dev $MDSDEV --size $MDSSIZE --lmv lmv1_svc
         done
-	MDS=lmv1
-        add_lov_to_lmv lov1 lmv1 --stripe_sz $STRIPE_BYTES \
+        add_lov_to_lmv lov1 lmv1_svc --stripe_sz $STRIPE_BYTES \
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+	MDS=lmv1
     else
         add_mds mds1 --dev $MDSDEV --size $MDSSIZE
         if [ ! -z "$mds1failover_HOST" ]; then
@@ -44,7 +44,7 @@ gen_config() {
     
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
     add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
-    add_client client --mds $MDS --lov lov1 --path $MOUNT
+    add_client client $MDS --lov lov1 --path $MOUNT
 
 }
 
@@ -679,7 +679,7 @@ test_32() {
     # give multiop a chance to open
     sleep 1
     mds_evict_client
-    df $MOUNT || df $MOUNT || return 1
+    df $MOUNT || sleep 1 && df $MOUNT || return 1
     kill -USR1 $pid1
     kill -USR1 $pid2
     sleep 1
@@ -979,13 +979,37 @@ run_test 48 "Don't lose transno when client is evicted (2525)"
 
 # b=3550 - replay of unlink
 test_49() {
-    replay_barrier mds
+    replay_barrier mds1
     createmany -o $DIR/$tfile-%d 400 || return 1
     unlinkmany $DIR/$tfile-%d 0 400 || return 2
-    fail mds
+    fail mds1
     $CHECKSTAT -t file $DIR/$tfile-* && return 3 || true
 }
 run_test 49 "re-write records to llog as written during fail"
+
+test_50() {
+    local osc_dev=`$LCTL device_list | \
+               awk '(/ost_svc_mds1_svc/){print $4}' `
+    $LCTL --device %$osc_dev recover &&  $LCTL --device %$osc_dev recover
+    # give the mds_lov_sync threads a chance to run
+    sleep 5
+}
+run_test 50 "Double OSC recovery, don't LASSERT (3812)"
+
+# b3764 timed out lock replay
+test_52() {
+    touch $DIR/$tfile
+    cancel_lru_locks MDC
+
+    multiop $DIR/$tfile s
+    replay_barrier mds1
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x8000030c"
+    fail mds1
+    do_facet mds1 "sysctl -w lustre.fail_loc=0x0"
+
+    $CHECKSTAT -t file $DIR/$tfile-* && return 3 || true
+}
+run_test 52 "time out lock replay (3764)"
 
 equals_msg test complete, cleaning up
 $CLEANUP

@@ -7,13 +7,11 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 2108
-RENAME_TESTS="24a 24b 24c 24d 24e 24f 24g 24h 24i 24j 24k 24l 24m 24n 24o 48a 48d"
+# bug number for skipped test: 2108 3637 3561 
+RENAME_TESTS="24a 24b 24c 24d 24e 24f 24g 24h 24i 24j 24k 24l 24m 24n 24o 42a 42c 45 48a 48b  48c 48d 51b 51c 65a 65b 65c 65d 65e 65f"
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$RENAME_TESTS 58"}
+
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-case `uname -r` in
-2.6.*) ALWAYS_EXCEPT="$ALWAYS_EXCEPT 54c 55" # bug 3117
-esac
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
@@ -40,6 +38,7 @@ SOCKETSERVER=${SOCKETSERVER:-socketserver}
 SOCKETCLIENT=${SOCKETCLIENT:-socketclient}
 IOPENTEST1=${IOPENTEST1:-iopentest1}
 IOPENTEST2=${IOPENTEST2:-iopentest2}
+MEMHOG=${MEMHOG:-memhog}
 
 if [ $UID -ne 0 ]; then
 	RUNAS_ID="$UID"
@@ -58,7 +57,7 @@ clean() {
 	sh llmountcleanup.sh > /dev/null || exit 20
 	I_MOUNTED=no
 }
-CLEAN=${CLEAN:-clean}
+CLEAN=${CLEAN:-:}
 
 start() {
 	echo -n "mnt.."
@@ -66,7 +65,7 @@ start() {
 	I_MOUNTED=yes
 	echo "done"
 }
-START=${START:-start}
+START=${START:-}
 
 log() {
 	echo "$*"
@@ -97,7 +96,7 @@ run_one() {
 		$START
 	fi
 	echo -1 >/proc/sys/portals/debug	
-	log "== test $1: $2"
+	log "== test $1: $2= `date +%H:%M:%S`"
 	export TESTNAME=test_$1
 	test_$1 || error "test_$1: exit with rc=$?"
 	unset TESTNAME
@@ -196,6 +195,8 @@ EXT2_DEV=${EXT2_DEV:-/tmp/SANITY.LOOP}
 touch $EXT2_DEV
 mke2fs -j -F $EXT2_DEV 8000 > /dev/null
 
+umask 077
+
 test_0() {
 	touch $DIR/f
 	$CHECKSTAT -t file $DIR/f || error
@@ -203,6 +204,13 @@ test_0() {
 	$CHECKSTAT -a $DIR/f || error
 }
 run_test 0 "touch .../f ; rm .../f ============================="
+
+test_0b() {
+       chmod 0755 $DIR || error
+       $CHECKSTAT -p 0755 $DIR || error
+}
+run_test 0b "chmod 0755 $DIR ============================="
+
 
 test_1a() {
 	mkdir $DIR/d1
@@ -566,7 +574,7 @@ run_test 24c "mkdir .../R3/f; rename .../R3/f .../R3/g ========="
 test_24d() {
 	mkdir $DIR/R4
 	mkdir $DIR/R4/{f,g}
-	perl -e "rename \"$DIR/R4/f\", \"$DIR/R4/g\";"
+	mrename $DIR/R4/f $DIR/R4/g
 	$CHECKSTAT -a $DIR/R4/f || error
 	$CHECKSTAT -t dir $DIR/R4/g || error
 }
@@ -598,23 +606,23 @@ test_24g() {
 	$CHECKSTAT -a $DIR/R7a/d || error
 	$CHECKSTAT -t dir $DIR/R7b/e || error
 }
-run_test 24g "mkdir .../R7a/d; rename .../R7a/d .../R5b/e ======"
+run_test 24g "mkdir .../R7{a,b}/d; mv .../R7a/d .../R5b/e ======"
 
 test_24h() {
 	mkdir $DIR/R8{a,b}
 	mkdir $DIR/R8a/d $DIR/R8b/e
-	perl -e "rename \"$DIR/R8a/d\", \"$DIR/R8b/e\";"
+	mrename $DIR/R8a/d $DIR/R8b/e
 	$CHECKSTAT -a $DIR/R8a/d || error
 	$CHECKSTAT -t dir $DIR/R8b/e || error
 }
-run_test 24h "mkdir .../R8{a,b} R8a/{d,e}; mv .../R8a/d .../R8b/e"
+run_test 24h "mkdir .../R8{a,b}/{d,e}; rename .../R8a/d .../R8b/e"
 
 test_24i() {
 	echo "-- rename error cases"
 	mkdir $DIR/R9
 	mkdir $DIR/R9/a
 	touch $DIR/R9/f
-	perl -e "rename \"$DIR/R9/f\", \"$DIR/R9/a\";"
+	mrename $DIR/R9/f $DIR/R9/a
 	$CHECKSTAT -t file $DIR/R9/f || error
 	$CHECKSTAT -t dir  $DIR/R9/a || error
 	$CHECKSTAT -a file $DIR/R9/a/f || error
@@ -623,7 +631,7 @@ run_test 24i "rename file to dir error: touch f ; mkdir a ; rename f a"
 
 test_24j() {
 	mkdir $DIR/R10
-	perl -e "rename \"$DIR/R10/f\", \"$DIR/R10/g\"" 
+	mrename $DIR/R10/f $DIR/R10/g
 	$CHECKSTAT -t dir $DIR/R10 || error
 	$CHECKSTAT -a $DIR/R10/f || error
 	$CHECKSTAT -a $DIR/R10/g || error
@@ -665,9 +673,59 @@ run_test 24n "Statting the old file after renameing (Posix rename 2)"
 
 test_24o() {
 	check_kernel_version 37 || return 0
-	rename_many -s 3287 -v -n 10 $DIR
+	rename_many -s random -v -n 10 $DIR
 }
 run_test 24o "rename of files during htree split ==============="
+
+test_24p() {
+       mkdir $DIR/R12{a,b}
+       DIRINO=`ls -lid $DIR/R12a | awk '{ print $1 }'`
+       mrename $DIR/R12a $DIR/R12b
+       $CHECKSTAT -a $DIR/R12a || error
+       $CHECKSTAT -t dir $DIR/R12b || error
+       DIRINO2=`ls -lid $DIR/R12b | awk '{ print $1 }'`
+       [ "$DIRINO" = "$DIRINO2" ] || error "R12a $DIRINO != R12b $DIRINO2"
+}
+run_test 24p "mkdir .../R12{a,b}; rename .../R12a .../R12b"
+
+test_24q() {
+       mkdir $DIR/R13{a,b}
+       DIRINO=`ls -lid $DIR/R13a | awk '{ print $1 }'`
+       multiop $DIR/R13b D_c &
+       MULTIPID=$!
+
+       mrename $DIR/R13a $DIR/R13b
+       $CHECKSTAT -a $DIR/R13a || error
+       $CHECKSTAT -t dir $DIR/R13b || error
+       DIRINO2=`ls -lid $DIR/R13b | awk '{ print $1 }'`
+       [ "$DIRINO" = "$DIRINO2" ] || error "R13a $DIRINO != R13b $DIRINO2"
+       kill -USR1 $MULTIPID
+       wait $MULTIPID || error "multiop close failed"
+}
+run_test 24q "mkdir .../R13{a,b}; open R13b rename R13a R13b ==="
+
+test_24r() { #bug 3789
+       mkdir $DIR/R14a $DIR/R14a/b
+       mrename $DIR/R14a $DIR/R14a/b && error "rename to subdir worked!"
+       $CHECKSTAT -t dir $DIR/R14a || error "$DIR/R14a missing"
+       $CHECKSTAT -t dir $DIR/R14a/b || error "$DIR/R14a/b missing"
+}
+run_test 24r "mkdir .../R14a/b; rename .../R14a .../R14a/b ====="
+
+test_24s() {
+       mkdir $DIR/R15a $DIR/R15a/b $DIR/R15a/b/c
+       mrename $DIR/R15a $DIR/R15a/b/c && error "rename to sub-subdir worked!"
+       $CHECKSTAT -t dir $DIR/R15a || error "$DIR/R15a missing"
+       $CHECKSTAT -t dir $DIR/R15a/b/c || error "$DIR/R15a/b/c missing"
+}
+run_test 24s "mkdir .../R15a/b/c; rename .../R15a .../R15a/b/c ="
+test_24t() {
+       mkdir $DIR/R16a $DIR/R16a/b $DIR/R16a/b/c
+       mrename $DIR/R16a/b/c $DIR/R16a && error "rename to sub-subdir worked!"
+       $CHECKSTAT -t dir $DIR/R16a || error "$DIR/R16a missing"
+       $CHECKSTAT -t dir $DIR/R16a/b/c || error "$DIR/R16a/b/c missing"
+}
+run_test 24t "mkdir .../R16a/b/c; rename .../R16a/b/c .../R16a ="
 
 test_25a() {
 	echo '== symlink sanity ============================================='
@@ -723,8 +781,8 @@ run_test 26e "unlink multiple component recursive symlink ======"
 test_27a() {
 	echo '== stripe sanity =============================================='
 	mkdir $DIR/d27
-	$LSTRIPE $DIR/d27/f0 65536 0 1 || error
-	$CHECKSTAT -t file $DIR/d27/f0 || error
+        $LSTRIPE $DIR/d27/f0 65536 0 1 || error "lstripe failed"
+        $CHECKSTAT -t file $DIR/d27/f0 || error "checkstat failed"
 	pass
 	log "== test_27b: write to one stripe file ========================="
 	cp /etc/hosts $DIR/d27/f0 || error
@@ -736,12 +794,12 @@ test_27c() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$LSTRIPE $DIR/d27/f01 65536 0 2 || error
+	$LSTRIPE $DIR/d27/f01 65536 0 2 || error "lstripe failed"
 	[ `$LFIND $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
 		error "two-stripe file doesn't have two stripes"
 	pass
 	log "== test_27d: write to two stripe file file f01 ================"
-	dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4 || error
+	dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4 || error "dd failed"
 }
 run_test 27c "create two stripe file f01 ======================="
 
@@ -749,8 +807,8 @@ test_27d() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$LSTRIPE $DIR/d27/fdef 0 -1 0 || error
-	$CHECKSTAT -t file $DIR/d27/fdef || error
+        $LSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
+        $CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
 	#dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
 }
 run_test 27d "create file with default settings ================"
@@ -759,9 +817,9 @@ test_27e() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$LSTRIPE $DIR/d27/f12 65536 0 2 || error
-	$LSTRIPE $DIR/d27/f12 65536 0 2 && error
-	$CHECKSTAT -t file $DIR/d27/f12 || error
+        $LSTRIPE $DIR/d27/f12 65536 0 2 || error "lstripe failed"
+        $LSTRIPE $DIR/d27/f12 65536 0 2 && error "lstripe succeeded twice"
+        $CHECKSTAT -t file $DIR/d27/f12 || error "checkstat failed"
 }
 run_test 27e "lstripe existing file (should return error) ======"
 
@@ -769,9 +827,10 @@ test_27f() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$LSTRIPE $DIR/d27/fbad 100 0 1 && error
-	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error
-	$LFIND $DIR/d27/fbad || error
+        $LSTRIPE $DIR/d27/fbad 100 0 1 && error "lstripe failed"
+        dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error "dd failed"
+        $LFIND $DIR/d27/fbad || error "lfind failed"
+
 }
 run_test 27f "lstripe with bad stripe size (should return error)"
 
@@ -779,14 +838,15 @@ test_27g() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$MCREATE $DIR/d27/fnone || error
+	$MCREATE $DIR/d27/fnone || error "mcreate failed"
 	pass
 	log "== test 27h: lfind with no objects ============================"
-	$LFIND $DIR/d27/fnone 2>&1 | grep "no stripe info" || error
+	$LFIND $DIR/d27/fnone 2>&1 | grep "no stripe info" || error "has object"
 	pass
 	log "== test 27i: lfind with some objects =========================="
-	touch $DIR/d27/fsome || error
-	$LFIND $DIR/d27/fsome | grep obdidx || error
+	touch $DIR/d27/fsome || error "touch failed"
+        $LFIND $DIR/d27/fsome | grep obdidx || error "missing objects"
+
 }
 run_test 27g "test lfind ======================================="
 
@@ -794,7 +854,7 @@ test_27j() {
         if [ ! -d $DIR/d27 ]; then
                 mkdir $DIR/d27
         fi
-        $LSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error || true
+	$LSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error "lstripe failed"||true
 }
 run_test 27j "lstripe with bad stripe offset (should return error)"
 
@@ -885,7 +945,7 @@ test_31c() {
 	multiop $DIR/f31c Ouc
 	usleep 500
 	kill -USR1 $MULTIPID
-	wait $MUTLIPID
+	wait $MULTIPID
 }
 run_test 31c "open-unlink file with multiple links ============="
 
@@ -895,7 +955,7 @@ test_31d() {
 }
 run_test 31d "remove of open directory ========================="
 
-test_31e() {
+test_31e() { # bug 2904
 	check_kernel_version 34 || return 0
 	openfilleddirunlink $DIR/d31e || error
 }
@@ -1384,7 +1444,7 @@ trunc_test() {
 test_42c() {
         trunc_test 42c 1024
         [ $BEFOREWRITES -eq $AFTERWRITES ] && \
-            error "$BEFOREWRITES < $AFTERWRITES on truncate"
+		error "beforewrites $BEFOREWRITES == afterwrites $AFTERWRITES on truncate"
         rm $file
 }
 run_test 42c "test partial truncate of file with cached dirty data"
@@ -1571,8 +1631,9 @@ test_48b() { # bug 2399
 	cd . && error "'cd .' worked after removing cwd"
 	mkdir . && error "'mkdir .' worked after removing cwd"
 	rmdir . && error "'rmdir .' worked after removing cwd"
-	ln -s . foo && error "'ln -s .' worked after removing cwd" || true
-	#cd .. || error "'cd ..' failed after removing cwd"
+        ln -s . foo && error "'ln -s .' worked after removing cwd"
+        cd .. || echo "'cd ..' failed after removing cwd `pwd`"  #bug 3517
+
 }
 run_test 48b "Access removed working dir (should return errors)="
 
@@ -1587,11 +1648,11 @@ test_48c() { # bug 2350
 	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
 	$TRACE ls . && error "'ls .' worked after removing cwd"
 	$TRACE ls .. || error "'ls ..' failed after removing cwd"
-	$TRACE cd . && error "'cd .' worked after recreate cwd"
+	$TRACE cd . && error "'cd .' worked after removing cwd"
 	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
 	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
-	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd" ||true
-	$TRACE cd .. || echo "'cd ..' failed after removing cwd (`pwd)`"
+        $TRACE ln -s . foo && error "'ln -s .' worked after removing cwd"
+        $TRACE cd .. || echo "'cd ..' failed after removing cwd `pwd`" #bug 3415
 }
 run_test 48c "Access removed working subdir (should return errors)"
 
@@ -1601,18 +1662,18 @@ test_48d() { # bug 2350
 	#set -vx
 	mkdir -p $DIR/d48d/dir
 	cd $DIR/d48d/dir
-	pwd
-	ls .
-	$TRACE rm -vr $DIR/d48d || error "remove cwd+parent $DIR/d48d failed"
-	$TRACE touch foo && error "'touch foo' worked after removing cwd"
-	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
-	$TRACE ls . && error "'ls .' worked after removing cwd"
-	$TRACE ls .. && echo "'ls ..' worked after removing cwd" # bug 3415
-	$TRACE cd . && error "'cd .' worked after recreate cwd"
-	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
-	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
-	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd" ||true
-	$TRACE cd .. && error "'cd ..' worked after removing cwd" || true
+        $TRACE rmdir $DIR/d48d/dir || error "remove cwd $DIR/d48d/dir failed"
+        $TRACE rmdir $DIR/d48d || error "remove parent $DIR/d48d failed"
+        $TRACE touch foo && error "'touch foo' worked after removing parent"
+        $TRACE mkdir foo && error "'mkdir foo' worked after removing parent"
+        $TRACE ls . && error "'ls .' worked after removing parent"
+        $TRACE ls .. && error "'ls ..' worked after removing parent"
+        $TRACE cd . && error "'cd .' worked after recreate parent"
+        $TRACE mkdir . && error "'mkdir .' worked after removing parent"
+        $TRACE rmdir . && error "'rmdir .' worked after removing parent"
+        $TRACE ln -s . foo && error "'ln -s .' worked after removing parent"
+        $TRACE cd .. && error "'cd ..' worked after removing parent" || true
+
 }
 run_test 48d "Access removed parent subdir (should return errors)"
 
@@ -1640,6 +1701,28 @@ test_51() {
 	ls -l $DIR/d49 > /dev/null || error
 }
 run_test 51 "special situations: split htree with empty entry =="
+
+test_51b() {
+       NUMTEST=70000
+       check_kernel_version 40 || NUMTEST=31000
+       NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
+       [ $NUMFREE -lt $NUMTEST ] && \
+               echo "skipping test 51b, not enough free inodes($NUMFREE)" && \
+               return
+       mkdir -p $DIR/d51b
+       (cd $DIR/d51b; mkdirmany t $NUMTEST)
+}
+run_test 51b "mkdir .../t-0 --- .../t-$NUMTEST ===================="
+
+test_51c() {
+       NUMTEST=70000
+       check_kernel_version 40 || NUMTEST=31000
+       NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
+       [ $NUMFREE -lt $NUMTEST ] && echo "skipping test 51c" && return
+       mkdir -p $DIR/d51b
+       (cd $DIR/d51b; rmdirmany t $NUMTEST)
+}
+run_test 51c "rmdir .../t-0 --- .../t-$NUMTEST ===================="
 
 test_52a() {
 	[ -f $DIR/d52a/foo ] && chattr -a $DIR/d52a/foo
@@ -1707,17 +1790,30 @@ test_54b() {
 }
 run_test 54b "char device works in lustre ======================"
 
+find_loop_dev() {
+       [ "$LOOPNUM" ] && return
+       [ -b /dev/loop/0 ] && LOOPBASE=/dev/loop/
+       [ -b /dev/loop0 ] && LOOPBASE=/dev/loop
+       [ -z "$LOOPBASE" ] && echo "/dev/loop/0 and /dev/loop0 gone?" && return
+
+       for i in `seq 3 7`; do
+               losetup $LOOPBASE$i > /dev/null 2>&1 && continue
+               LOOPDEV=$LOOPBASE$i
+               LOOPNUM=$i
+               break
+       done
+}
+
 test_54c() {
 	tfile="$DIR/f54c"
 	tdir="$DIR/d54c"
 	loopdev="$DIR/loop54c"
 	
-	for i in `seq 3 7`; do
-		rm -f $loopdev
-		mknod $loopdev b 7 $i
-		losetup $loopdev > /dev/null 2>&1 || break
-	done
-	echo "make a loop file system with $tfile on $loopdev ($i)..."	
+        find_loop_dev
+        [ -z "$LOOPNUM" ] && echo "couldn't find empty loop device" && return
+        mknod $loopdev b 7 $LOOPNUM
+        echo "make a loop file system with $tfile on $loopdev ($LOOPNUM)..."
+	
 	dd if=/dev/zero of=$tfile bs=`page_size` seek=1024 count=1 > /dev/null
 	losetup $loopdev $tfile || error "can't set up $loopdev for $tfile"
 	mkfs.ext2 $loopdev || error "mke2fs on $loopdev"
@@ -1740,16 +1836,26 @@ test_54d() {
 }
 run_test 54d "fifo device works in lustre ======================"
 
+check_fstype() {
+       grep -q $FSTYPE /proc/filesystems && return 0
+       modprobe $FSTYPE
+       grep -q $FSTYPE /proc/filesystems && return 0
+       insmod ../$FSTYPE/$FSTYPE.o
+       grep -q $FSTYPE /proc/filesystems && return 0
+       return 1
+}
+
 test_55() {
         rm -rf $DIR/d55
         mkdir $DIR/d55
-        mount -t $FSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error
-        touch $DIR/d55/foo
-        $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error
-        $IOPENTEST2 $DIR/d55 || error
-        echo "check for $EXT2_DEV. Please wait..."
+        check_fstype && echo "can't find fs $FSTYPE, skipping test 55" && return
+        mount -t $FSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error "mounting"
+	touch $DIR/d55/foo
+        $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error "running $IOPENTEST1"
+        $IOPENTEST2 $DIR/d55 || error "running $IOPENTEST2"
+	echo "check for $EXT2_DEV. Please wait..."
         rm -rf $DIR/d55/*
-        umount $DIR/d55 || error
+        umount $DIR/d55 || error "unmounting"
 }
 run_test 55 "check iopen_connect_dentry() ======================"
 
@@ -2000,9 +2106,54 @@ test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
 	mkdir $DIR/d67
 	chmod 771 $DIR/d67
 	chgrp $RUNAS_ID $DIR/d67
-	$RUNAS -g $((RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/d67 && error || true
+	$RUNAS -g $(($RUNAS_ID + 1)) -G1,2,$RUNAS_ID ls $DIR/d67 && error ||true
 }
 run_test 67 "supplementary group failure (should return error) ="
+
+cleanup_68() {
+       if [ "$LOOPDEV" ]; then
+               swapoff $LOOPDEV || error "swapoff failed"
+               losetup -d $LOOPDEV || error "losetup -d failed"
+               unset LOOPDEV LOOPNUM
+       fi
+       rm -f $DIR/f68
+}
+
+meminfo() {
+       awk '($1 == "'$1':") { print $2 }' /proc/meminfo
+}
+
+swap_used() {
+       swapon -s | awk '($1 == "'$1'") { print $4 }'
+}
+
+# excercise swapping to lustre by adding a high priority swapfile entry
+# and then consuming memory until it is used.
+test_68() {
+       [ "$UID" != 0 ] && echo "skipping test 68 (must run as root)" && return
+       [ "`lsmod|grep obdfilter`" ] && echo "skipping test 68 (local OST)" && \
+               return
+
+       find_loop_dev
+       dd if=/dev/zero of=$DIR/f68 bs=64k count=1024
+
+       trap cleanup_68 EXIT
+
+       losetup $LOOPDEV $DIR/f68 || error "losetup $LOOPDEV failed"
+       mkswap $LOOPDEV
+       swapon -p 32767 $LOOPDEV || error "swapon $LOOPDEV failed"
+
+       echo "before: `swapon -s | grep $LOOPDEV`"
+       KBFREE=`meminfo MemTotal`
+       $MEMHOG $KBFREE || error "error allocating $KBFREE kB"
+       echo "after: `swapon -s | grep $LOOPDEV`"
+       SWAPUSED=`swap_used $LOOPDEV`
+
+       cleanup_68
+
+       [ $SWAPUSED -eq 0 ] && echo "no swap used???" || true
+}
+run_test 68 "support swapping to Lustre ========================"
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS

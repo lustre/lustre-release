@@ -29,8 +29,21 @@
 #include <string.h>
 #endif
 
+/* for statfs() */
+#define LL_SUPER_MAGIC 0x0BD00BD0
+
+
 #define IOC_MDC_TYPE         'i'
 #define IOC_MDC_GETSTRIPE    _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
+
+#ifndef EXT3_IOC_GETFLAGS
+#define        EXT3_IOC_GETFLAGS               _IOR('f', 1, long)
+#define        EXT3_IOC_SETFLAGS               _IOW('f', 2, long)
+#define        EXT3_IOC_GETVERSION             _IOR('f', 3, long)
+#define        EXT3_IOC_SETVERSION             _IOW('f', 4, long)
+#define        EXT3_IOC_GETVERSION_OLD         _IOR('v', 1, long)
+#define        EXT3_IOC_SETVERSION_OLD         _IOW('v', 2, long)
+#endif
 
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
@@ -102,7 +115,7 @@ struct obd_uuid {
 
 static inline int obd_uuid_equals(struct obd_uuid *u1, struct obd_uuid *u2)
 {
-        return strcmp(u1->uuid, u2->uuid) == 0;
+         return strcmp((char *)u1->uuid, (char *)u2->uuid) == 0;
 }
 
 static inline int obd_uuid_empty(struct obd_uuid *uuid)
@@ -112,7 +125,7 @@ static inline int obd_uuid_empty(struct obd_uuid *uuid)
 
 static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
 {
-        strncpy(uuid->uuid, tmp, sizeof(*uuid));
+        strncpy((char *)uuid->uuid, tmp, sizeof(*uuid));
         uuid->uuid[sizeof(*uuid) - 1] = '\0';
 }
 

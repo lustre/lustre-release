@@ -11,7 +11,9 @@ mkdir -p $OST_MOUNTPT
 mkdir -p $MDS_MOUNTPT
 mkdir -p $TEST_DIR
 
-export PATH=$E2FSCK_PATH/e2fsck:$PATH
+export PATH=$LFSCK_PATH/e2fsck:`dirname $0`:`dirname $0`/../utils:$PATH
+
+sh llmount.sh || exit 1
 
 # Create some files on the filesystem
 for i in `seq 0 3`; do
@@ -67,13 +69,12 @@ for i in `seq 20 39`; do
 	MDS_FILES="$MDS_FILES ${TESTNAME}/${file_name}.$i"
 done
 
-$LCONF --cleanup ${CONFIGXML} || exit 1
-
+sh llmountcleanup.sh || exit 1
 # Remove objects associated with files
 echo "removing objects: $OST_TEST_FILE_OBJIDS"
 for i in $OST_TEST_FILE_OBJIDS; do
 	z=`expr $i % 32`
-	$DEBUGFS -w -R "rm O/0/d$z/$i" "$OSTDEV" || exit 1
+	debugfs -w -R "rm O/0/d$z/$i" "$OSTDEV" || exit 1
 done
 
 mount "-o" loop $MDSDEV $MDS_MOUNTPT
@@ -86,8 +87,8 @@ done
 #Create EAs on files so objects are referenced twice from different mds files
 for i in `seq 40 59`; do
 	touch $MDS_MOUNTPT/ROOT/${TESTNAME}/${TESTNAME}.bad.$i
-	${GPATH}/copy_attr $MDS_MOUNTPT/ROOT/${TESTNAME}/${TESTNAME}.$i $MDS_MOUNTPT/ROOT/${TESTNAME}/${TESTNAME}.bad.$i || (umount $MDS_MOUNTPT && exit 1) 
-	i=`expr $i + 1`
+	copy_attr $MDS_MOUNTPT/ROOT/${TESTNAME}/${TESTNAME}.$i $MDS_MOUNTPT/ROOT/${TESTNAME}/${TESTNAME}.bad.$i || (umount $MDS_MOUNTPT && exit 1)
+        i=`expr $i + 1`
 done
 	umount $MDS_MOUNTPT 
 	rmdir $MDS_MOUNTPT
@@ -113,11 +114,12 @@ while [ $i -lt $NUM_OSTS ]; do
 	i=`expr $i + 1`
 done
 
-#Mount filesystem
-${LCONF} ${CONFIGXML}  || exit 1
+#Remount filesystem
+sh llrmount.sh  || exit 1
 
 lfsck -l --mdsdb $GPATH/mdsdb --ostdb ${OSTDB_LIST} ${MOUNT} || exit 1  
 
 #Cleanup 
 rm $GPATH/mdsdb
 rm $GPATH/ostdb-*
+sh llmountcleanup.sh || exit 1

@@ -24,6 +24,7 @@ struct lvfs_ucred {
         __u32 luc_fsgid;
         __u32 luc_cap;
         __u32 luc_uid;
+	__u32 luc_umask;
 };
 
 struct lvfs_callback_ops {

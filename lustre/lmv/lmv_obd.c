@@ -406,7 +406,6 @@ static int lmv_disconnect(struct obd_export *exp, int flags)
                                        mdc_obd->obd_name);
                         }
                 }
-
                 if (obd->obd_no_recov) {
                         /* Pass it on to our clients.
                          * XXX This should be an argument to disconnect,
@@ -417,7 +416,6 @@ static int lmv_disconnect(struct obd_export *exp, int flags)
                         if (mdc_obd)
                                 mdc_obd->obd_no_recov = 1;
                 }
-
                 CDEBUG(D_OTHER, "disconnected from %s(%s) successfully\n",
                         lmv->tgts[i].ltd_exp->exp_obd->obd_name,
                         lmv->tgts[i].ltd_exp->exp_obd->obd_uuid.uuid);
@@ -1135,7 +1133,7 @@ int lmv_rename(struct obd_export *exp, struct mdc_op_data *data,
                (unsigned long) data->fid2.generation);
         
         if (!fid_equal(&data->fid1, &data->fid2))
-                CWARN("cross-node rename %lu/%lu/%lu:%*s to %lu/%lu/%lu:%*s\n",
+                CDEBUG(D_OTHER, "cross-node rename %lu/%lu/%lu:%*s to %lu/%lu/%lu:%*s\n",
                       (unsigned long)data->fid1.mds,
                       (unsigned long)data->fid1.id,
                       (unsigned long)data->fid1.generation, oldlen, old,

@@ -57,6 +57,22 @@ int PtlGetId(ptl_handle_ni_t ni_handle, ptl_process_id_t *id)
         return nal->nal_get_id(nal, id);
 }
 
+int PtlGetUid(ptl_handle_ni_t ni_handle, ptl_uid_t *uid)
+{
+        nal_t     *nal;
+
+        if (!ptl_init)
+                return PTL_NO_INIT;
+        
+        nal = ptl_hndl2nal(&ni_handle);
+        if (nal == NULL)
+                return PTL_NI_INVALID;
+
+        /* We don't support different uids yet */
+        *uid = 0;
+        return PTL_OK;
+}
+
 int PtlFailNid (ptl_handle_ni_t interface, ptl_nid_t nid, unsigned int threshold) 
 {
         nal_t     *nal;
@@ -165,8 +181,8 @@ int PtlMDAttach(ptl_handle_me_t me_in, ptl_md_t md_in,
         if (nal == NULL)
                 return PTL_ME_INVALID;
 
-        if (!PtlHandleIsEqual(md_in.eventq, PTL_EQ_NONE) &&
-            ptl_hndl2nal(&md_in.eventq) != nal)
+        if (!PtlHandleIsEqual(md_in.eq_handle, PTL_EQ_NONE) &&
+            ptl_hndl2nal(&md_in.eq_handle) != nal)
                 return PTL_MD_ILLEGAL;
 
         return (nal->nal_md_attach)(nal, &me_in, &md_in, 
@@ -185,8 +201,8 @@ int PtlMDBind(ptl_handle_ni_t ni_in, ptl_md_t md_in,
         if (nal == NULL)
                 return PTL_NI_INVALID;
 
-        if (!PtlHandleIsEqual(md_in.eventq, PTL_EQ_NONE) &&
-            ptl_hndl2nal(&md_in.eventq) != nal)
+        if (!PtlHandleIsEqual(md_in.eq_handle, PTL_EQ_NONE) &&
+            ptl_hndl2nal(&md_in.eq_handle) != nal)
                 return PTL_MD_ILLEGAL;
 
         return (nal->nal_md_bind)(nal, &md_in, unlink_in, handle_out);

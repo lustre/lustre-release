@@ -1,9 +1,10 @@
 #!/bin/sh
 set -evx
 
-MNT=${MNT:-/mnt/lustre}
-DIR=${DIR:-$MNT}
+MOUNT=${MOUNT:-/mnt/lustre}
+DIR=${DIR:-$MOUNT}
 SRC=${SRC:-`dirname $0`/../..}
+export CC=${CC:-gcc}
 while date; do
 	for i in lustre; do
 		TGT=$DIR/$i

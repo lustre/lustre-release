@@ -74,9 +74,9 @@
 atomic_t portal_kmemory = {0};
 #endif
 
-struct semaphore obd_conf_sem;   /* serialize configuration commands */
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
+spinlock_t obd_dev_lock;
 #ifndef __KERNEL__
 atomic_t obd_memory;
 int obd_memmax;
@@ -86,13 +86,22 @@ int proc_version;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_fail_loc;
+unsigned int obd_dump_on_timeout;
 unsigned int obd_timeout = 100;
+unsigned int ldlm_timeout = 6;
 char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
-unsigned int obd_sync_filter; /* = 0, don't sync by default */
+unsigned int obd_sync_filter = 1; /* = 1, sync by default */
 
 DECLARE_WAIT_QUEUE_HEAD(obd_race_waitq);
 
 #ifdef __KERNEL__
+
+unsigned int obd_print_fail_loc(void)
+{
+        CWARN("obd_fail_loc = %x\n", obd_fail_loc);
+        return obd_fail_loc;
+}
+
 /*  opening /dev/obd */
 static int obd_class_open(struct inode * inode, struct file * file)
 {
@@ -159,7 +168,7 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
         struct obd_ioctl_data *data;
         struct portals_debug_ioctl_data *debug_data;
         struct obd_device *obd = NULL;
-        int err = 0, len = 0, serialised = 0;
+        int err = 0, len = 0;
         ENTRY;
 
         if (current->fsuid != 0)
@@ -174,26 +183,6 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 portal_subsystem_debug = debug_data->subs;
                 portal_debug = debug_data->debug;
                 return 0;
-        }
-
-        switch (cmd) {
-        case OBD_IOC_BRW_WRITE:
-        case OBD_IOC_BRW_READ:
-        case OBD_IOC_GETATTR:
-        case ECHO_IOC_ENQUEUE:
-        case ECHO_IOC_CANCEL:
-        case OBD_IOC_CLIENT_RECOVER:
-        case OBD_IOC_CATLOGLIST:
-        case OBD_IOC_LLOG_INFO:
-        case OBD_IOC_LLOG_PRINT:
-        case OBD_IOC_LLOG_CANCEL:
-        case OBD_IOC_LLOG_CHECK:
-        case OBD_IOC_LLOG_REMOVE:
-                break;
-        default:
-                down(&obd_conf_sem);
-                serialised = 1;
-                break;
         }
 
         CDEBUG(D_IOCTL, "cmd = %x, obd = %p\n", cmd, obd);
@@ -344,8 +333,6 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
  out:
         if (buf)
                 obd_ioctl_freedata(buf, len);
-        if (serialised)
-                up(&obd_conf_sem);
         RETURN(err);
 } /* class_handle_ioctl */
 
@@ -381,7 +368,10 @@ void *obd_psdev = NULL;
 EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
 EXPORT_SYMBOL(obd_fail_loc);
+EXPORT_SYMBOL(obd_print_fail_loc);
 EXPORT_SYMBOL(obd_race_waitq);
+EXPORT_SYMBOL(obd_dump_on_timeout);
+EXPORT_SYMBOL(ldlm_timeout);
 EXPORT_SYMBOL(obd_timeout);
 EXPORT_SYMBOL(obd_lustre_upcall);
 EXPORT_SYMBOL(obd_sync_filter);
@@ -414,6 +404,7 @@ EXPORT_SYMBOL(class_exp2cliimp);
 EXPORT_SYMBOL(class_conn2cliimp);
 EXPORT_SYMBOL(class_disconnect);
 EXPORT_SYMBOL(class_disconnect_exports);
+EXPORT_SYMBOL(class_disconnect_stale_exports);
 
 EXPORT_SYMBOL(oig_init);
 EXPORT_SYMBOL(oig_release);
@@ -571,7 +562,7 @@ int init_obdclass(void)
         if (err)
                 return err;
 
-        sema_init(&obd_conf_sem, 1);
+        spin_lock_init(&obd_dev_lock);
         INIT_LIST_HEAD(&obd_types);
 
         err = misc_register(&obd_psdev);

@@ -59,14 +59,11 @@ extern void kportal_assertion_failed(char *expr, char *file, const char *func,
                                      const int line);
 #define LASSERT(e) ((e) ? 0 : kportal_assertion_failed( #e , __FILE__,  \
                                                         __FUNCTION__, __LINE__))
-/* it would be great to dump_stack() here, but some kernels
- * export it as show_stack() and I can't be bothered to
- * proprely engage in that dance right now */
 #define LASSERTF(cond, fmt...)                                                \
         do {                                                                  \
                 if (unlikely(!(cond))) {                                      \
-                        portals_debug_msg(0, D_EMERG,  __FILE__, __FUNCTION__,\
-                                          __LINE__,  CDEBUG_STACK,            \
+                        portals_debug_msg(DEBUG_SUBSYSTEM, D_EMERG,  __FILE__,\
+                                          __FUNCTION__,__LINE__, CDEBUG_STACK,\
                                           "ASSERTION(" #cond ") failed:" fmt);\
                         LBUG();                                               \
                 }                                                             \
@@ -95,6 +92,7 @@ do {                                                                    \
 #define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG\n");                                               \
+        CERROR("STACK: %s\n", portals_debug_dumpstack());               \
         portals_debug_dumplog();                                        \
         portals_run_lbug_upcall(file, func, line);                      \
         set_task_state(current, TASK_UNINTERRUPTIBLE);                  \
@@ -337,25 +335,27 @@ char *portals_id2str(int nal, ptl_process_id_t nid, char *str);
  * Support for temporary event tracing with minimal Heisenberg effect. */
 #define LWT_SUPPORT  0
 
-#define LWT_MEMORY   (64<<20)
-#define LWT_MAX_CPUS 4
+#define LWT_MEMORY   (16<<20)
 
+#if !KLWT_SUPPORT
+/* kernel hasn't defined this? */
 typedef struct {
-        cycles_t    lwte_when;
+        long long   lwte_when;
         char       *lwte_where;
         void       *lwte_task;
         long        lwte_p1;
         long        lwte_p2;
         long        lwte_p3;
         long        lwte_p4;
-#if BITS_PER_LONG > 32
+# if BITS_PER_LONG > 32
         long        lwte_pad;
-#endif
+# endif
 } lwt_event_t;
+#endif /* !KLWT_SUPPORT */
 
 #if LWT_SUPPORT
-#ifdef __KERNEL__
-#define LWT_EVENTS_PER_PAGE (PAGE_SIZE / sizeof (lwt_event_t))
+# ifdef __KERNEL__
+#  if !KLWT_SUPPORT
 
 typedef struct _lwt_page {
         struct list_head     lwtp_list;
@@ -371,20 +371,13 @@ typedef struct {
 extern int       lwt_enabled;
 extern lwt_cpu_t lwt_cpus[];
 
-extern int  lwt_init (void);
-extern void lwt_fini (void);
-extern int  lwt_lookup_string (int *size, char *knlptr,
-                               char *usrptr, int usrsize);
-extern int  lwt_control (int enable, int clear);
-extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
-                          void *user_ptr, int user_size);
-
 /* Note that we _don't_ define LWT_EVENT at all if LWT_SUPPORT isn't set.
  * This stuff is meant for finding specific problems; it never stays in
  * production code... */
 
 #define LWTSTR(n)       #n
 #define LWTWHERE(f,l)   f ":" LWTSTR(l)
+#define LWT_EVENTS_PER_PAGE (PAGE_SIZE / sizeof (lwt_event_t))
 
 #define LWT_EVENT(p1, p2, p3, p4)                                       \
 do {                                                                    \
@@ -393,9 +386,9 @@ do {                                                                    \
         lwt_page_t      *p;                                             \
         lwt_event_t     *e;                                             \
                                                                         \
-        local_irq_save (flags);                                         \
-                                                                        \
         if (lwt_enabled) {                                              \
+                local_irq_save (flags);                                 \
+                                                                        \
                 cpu = &lwt_cpus[smp_processor_id()];                    \
                 p = cpu->lwtc_current_page;                             \
                 e = &p->lwtp_events[cpu->lwtc_current_index++];         \
@@ -414,13 +407,23 @@ do {                                                                    \
                 e->lwte_p2    = (long)(p2);                             \
                 e->lwte_p3    = (long)(p3);                             \
                 e->lwte_p4    = (long)(p4);                             \
-        }                                                               \
                                                                         \
-        local_irq_restore (flags);                                      \
+                local_irq_restore (flags);                              \
+        }                                                               \
 } while (0)
-#else  /* __KERNEL__ */
-#define LWT_EVENT(p1,p2,p3,p4)     /* no userland implementation yet */
-#endif /* __KERNEL__ */
+
+#endif /* !KLWT_SUPPORT */
+
+extern int  lwt_init (void);
+extern void lwt_fini (void);
+extern int  lwt_lookup_string (int *size, char *knlptr,
+                               char *usrptr, int usrsize);
+extern int  lwt_control (int enable, int clear);
+extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
+                          void *user_ptr, int user_size);
+# else  /* __KERNEL__ */
+#  define LWT_EVENT(p1,p2,p3,p4)     /* no userland implementation yet */
+# endif /* __KERNEL__ */
 #endif /* LWT_SUPPORT */
 
 struct portals_device_userstate
@@ -620,14 +623,14 @@ static inline int portal_ioctl_getdata(char *buf, char *end, void *arg)
 #define IOC_PORTAL_MIN_NR                 30
 
 #define IOC_PORTAL_PING                    _IOWR('e', 30, long)
-#define IOC_PORTAL_GET_DEBUG               _IOWR('e', 31, long)
+
 #define IOC_PORTAL_CLEAR_DEBUG             _IOWR('e', 32, long)
 #define IOC_PORTAL_MARK_DEBUG              _IOWR('e', 33, long)
 #define IOC_PORTAL_PANIC                   _IOWR('e', 34, long)
 #define IOC_PORTAL_NAL_CMD                 _IOWR('e', 35, long)
 #define IOC_PORTAL_GET_NID                 _IOWR('e', 36, long)
 #define IOC_PORTAL_FAIL_NID                _IOWR('e', 37, long)
-#define IOC_PORTAL_SET_DAEMON              _IOWR('e', 38, long)
+
 #define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 39, long)
 #define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 40, long)
 #define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 41, long)
@@ -641,7 +644,7 @@ enum {
         /*          4 unused */
         TCPNAL    = 5,
         ROUTER    = 6,
-        IBNAL     = 7,
+        OPENIBNAL = 7,
         NAL_ENUM_END_MARKER
 };
 
@@ -654,14 +657,18 @@ enum {
 #define NAL_CMD_REGISTER_MYNID       102
 #define NAL_CMD_PUSH_CONNECTION      103
 #define NAL_CMD_GET_CONN             104
-#define NAL_CMD_DEL_AUTOCONN         105
-#define NAL_CMD_ADD_AUTOCONN         106
-#define NAL_CMD_GET_AUTOCONN         107
+#define NAL_CMD_DEL_PEER             105
+#define NAL_CMD_ADD_PEER             106
+#define NAL_CMD_GET_PEER             107
 #define NAL_CMD_GET_TXDESC           108
 #define NAL_CMD_ADD_ROUTE            109
 #define NAL_CMD_DEL_ROUTE            110
 #define NAL_CMD_GET_ROUTE            111
 #define NAL_CMD_NOTIFY_ROUTER        112
+#define NAL_CMD_ADD_INTERFACE        113
+#define NAL_CMD_DEL_INTERFACE        114
+#define NAL_CMD_GET_INTERFACE        115
+
 
 enum {
         DEBUG_DAEMON_START       =  1,

@@ -355,7 +355,12 @@ BuildKernel()
 	--kerneldir $RPM_SOURCE_DIR \
 	-j $RPM_BUILD_NCPUS \
 	--destdir $RPM_BUILD_ROOT \
-	-- @CONFIGURE_FLAGS@
+        -- --enable-modules \
+        --disable-doc --disable-tests \
+        --disable-utils --disable-liblustre \
+        --sysconfdir=%{_sysconfdir} \
+        --mandir=%{_mandir} \
+        @CONFIGURE_FLAGS@
 }
 
 BuildLustre()
@@ -371,7 +376,12 @@ BuildLustre()
 	--kerneldir $RPM_SOURCE_DIR \
 	-j $RPM_BUILD_NCPUS \
 	--destdir $RPM_BUILD_ROOT \
-	-- @CONFIGURE_FLAGS@
+        -- --enable-utils \
+        --disable-doc --disable-tests \
+        --disable-modules --disable-liblustre \
+        --sysconfdir=%{_sysconfdir} \
+        --mandir=%{_mandir} \
+        @CONFIGURE_FLAGS@
 }
 
 SaveHeaders()
@@ -401,14 +411,12 @@ BuildKernel jensen
 BuildKernel smp
 %endif
 
-# we want this one last, so that it is the one populating /usr/bin
-%if %{buildup} && %{buildbase}
+%if %{buildup}
 BuildKernel
-%elseif %{buildbase}
-BuildLustre
 %endif
 
 %if %{buildbase}
+BuildLustre
 SaveHeaders
 %endif
 
@@ -520,14 +528,14 @@ if [ -f ../../savedheaders/%{_target_cpu}/up/version.h ] ; then
     HEADER_FILE=../../savedheaders/%{_target_cpu}/up/version.h
 else
     # test build not including uniprocessor, must get info from somewhere
-    HEADER_FILE=$(ls ../../savedheaders/*/*/version.h | head -1)
+    HEADER_FILE=$(ls ../../savedheaders/*/*/version.h | head -n 1)
 fi
 grep -v UTS_RELEASE $HEADER_FILE >> version.h
 rm -rf ../../savedheaders
 } ; popd
 touch $RPM_BUILD_ROOT/boot/kernel.h-%{kversion}
 
-rm -f $RPM_BUILD_ROOT/usr/include/linux
+#rm -f $RPM_BUILD_ROOT/usr/include/linux
 
 rm -rf $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/savedheaders
 
@@ -606,6 +614,17 @@ if [ -x /sbin/new-kernel-pkg ] ; then
 fi
 
 %endif
+
+%post -n lustre-lite-utils
+if [ ! -e /dev/obd ]; then
+   mknod /dev/obd c 10 241
+fi
+if [ ! -e /dev/portals ]; then
+   mknod /dev/portals c 10 240
+fi
+/sbin/chkconfig --add lustre
+/sbin/chkconfig --add lustrefs
+
 
 # Allow clean removal of modules directory
 %preun 
@@ -686,6 +705,13 @@ if [ -L /usr/src/%{kslnk} ]; then
 fi
 exit 0
 
+%preun -n lustre-lite-utils
+if [ $1 = 0 ]; then
+  /sbin/chkconfig --del lustre
+  /sbin/chkconfig --del lustrefs
+fi
+
+
 ###
 ### file lists
 ###
@@ -752,62 +778,7 @@ exit 0
 %files source
 %defattr(-,root,root)
 %dir /usr/src/linux-%{KVERREL}
-/usr/src/linux-%{KVERREL}/COPYING*
-/usr/src/linux-%{KVERREL}/CREDITS
-/usr/src/linux-%{KVERREL}/Documentation
-/usr/src/linux-%{KVERREL}/MAINTAINERS
-/usr/src/linux-%{KVERREL}/Makefile
-/usr/src/linux-%{KVERREL}/README
-/usr/src/linux-%{KVERREL}/REPORTING-BUGS
-/usr/src/linux-%{KVERREL}/arch
-%ifarch sparc
-/usr/src/linux-%{KVERREL}/arch/sparc64
-%endif
-/usr/src/linux-%{KVERREL}/drivers
-%if %{rhbuild}
-/usr/src/linux-%{KVERREL}/crypto
-%endif
-/usr/src/linux-%{KVERREL}/fs
-/usr/src/linux-%{KVERREL}/init
-/usr/src/linux-%{KVERREL}/ipc
-/usr/src/linux-%{KVERREL}/kernel
-/usr/src/linux-%{KVERREL}/lib
-/usr/src/linux-%{KVERREL}/mm
-/usr/src/linux-%{KVERREL}/net
-/usr/src/linux-%{KVERREL}/scripts
-%ifarch %{all_x86}
-%{?ibcs_1:/usr/src/linux-%{KVERREL}/abi}
-%endif
-/usr/src/linux-%{KVERREL}/configs
-/usr/src/linux-%{KVERREL}/include
-/usr/src/linux-%{KVERREL}/include/asm
-%ifarch %{all_x86}
-%{?ibcs_1:/usr/src/linux-%{KVERREL}/include/abi}
-%endif
-/usr/src/linux-%{KVERREL}/include/linux
-%if %{rhbuild}
-/usr/src/linux-%{KVERREL}/include/rxrpc
-%endif
-/usr/src/linux-%{KVERREL}/include/net
-/usr/src/linux-%{KVERREL}/include/pcmcia
-/usr/src/linux-%{KVERREL}/include/scsi
-/usr/src/linux-%{KVERREL}/include/video
-%if %{rhbuild}
-/usr/src/linux-%{KVERREL}/tmp_include_depends
-%endif
-%dir /usr/src/linux-%{KVERREL}/include
-%dir /usr/src/linux-%{KVERREL}/arch
-%ifarch alpha sparc
-/usr/src/linux-%{KVERREL}/include/math-emu
-%endif
-%if %{linux26}
-%dir /usr/src/linux-%{KVERREL}/crypto
-%dir /usr/src/linux-%{KVERREL}/kdb
-%dir /usr/src/linux-%{KVERREL}/rpmify
-%dir /usr/src/linux-%{KVERREL}/security
-%else
-/usr/src/linux-%{KVERREL}/Rules.make
-%endif
+/usr/src/linux-%{KVERREL}/*
 %endif
 
 %files doc
@@ -820,10 +791,15 @@ exit 0
 /sbin/*
 /usr/sbin/*
 /usr/bin/*
-/usr/lib/lustre/python
+/usr/lib/lustre
+/usr/share/lustre
 /etc/init.d/lustre
-/usr/include/lustre
-/lib/lib*.a
+/etc/init.d/lustrefs
+/usr/include/lustre/*
+/usr/include/portals/*
+/usr/include/linux/*
+/usr/lib/lib*.a
+/usr/share/man/man?/*
 
 #%files -n lustre-doc
 #%defattr(-, root, root)
@@ -831,13 +807,13 @@ exit 0
 #/usr/share/doc/lustre/lustre.pdf
 #/usr/share/doc/lustre/COPYING
 
-/usr/lib/lustre/examples
-
+/usr/share/lustre/examples
 %files -n lustre-ldap
 %defattr(-, root, root)
 /etc/openldap/slapd-lustre.conf
 /etc/openldap/schema/lustre.schema
-/usr/lib/lustre/lustre2ldif.xsl
-/usr/lib/lustre/top.ldif
+/usr/share/lustre/lustre2ldif.xsl
+/usr/share/lustre/top.ldif
+
 
 %endif # %{buildbase}

@@ -55,7 +55,7 @@ static int ll_ddelete(struct dentry *de)
         ENTRY;
         LASSERT(de);
         CDEBUG(D_DENTRY, "%s dentry %*s (%p, parent %p, inode %p) %s%s\n",
-               (de->d_flags & DCACHE_LUSTRE_INVALID ? "keeping" : "deleting"),
+               (de->d_flags & DCACHE_LUSTRE_INVALID ? "deleting" : "keeping"),
                de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
                d_unhashed(de) ? "" : "hashed,",
                list_empty(&de->d_subdirs) ? "" : "subdirs");
@@ -155,9 +155,8 @@ restart:
 
 extern struct dentry *ll_find_alias(struct inode *, struct dentry *);
 
-static int revalidate_it_finish(struct ptlrpc_request *request, 
-                                int offset, struct lookup_intent *it,
-                                struct dentry *de)
+int revalidate_it_finish(struct ptlrpc_request *request, int offset, 
+                         struct lookup_intent *it, struct dentry *de)
 {
         struct ll_sb_info *sbi;
         int rc = 0;
@@ -189,7 +188,7 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
         }
 
         /* drop lookup or getattr locks immediately */
-        if (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR) {
+        if (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR || it->it_op == IT_CHDIR) {
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 /* on 2.6 there are situation when several lookups and
                  * revalidations may be requested during single operation.
@@ -205,12 +204,10 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 {
         struct lookup_intent *it = *itp;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        if (it && it->it_magic != INTENT_MAGIC) {
-                CERROR("WARNING: uninitialized intent\n");
-                LBUG();
+        if (it) {
+                LASSERTF(it->it_magic == INTENT_MAGIC, "bad intent magic: %x\n",
+                         it->it_magic);
         }
-        if (it && (it->it_op == IT_GETATTR || it->it_op == 0))
-                it->it_op = IT_LOOKUP;
 #endif
 
         if (!it || it->it_op == IT_GETXATTR)
@@ -451,7 +448,20 @@ static void ll_dentry_iput(struct dentry *dentry, struct inode *inode)
         iput(inode);
 }
 #else
-#error "implement ->d_iput() for 2.6"
+static void ll_dentry_iput(struct dentry *dentry, struct inode *inode)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_fid parent, child;
+
+        LASSERT(dentry->d_parent && dentry->d_parent->d_inode);
+        ll_inode2fid(&parent, dentry->d_parent->d_inode);
+        ll_inode2fid(&child, inode);
+        md_change_cbdata_name(sbi->ll_mdc_exp, &parent,
+                              (char *)dentry->d_name.name, 
+                              dentry->d_name.len, &child, 
+                              null_if_equal, inode);
+        iput(inode);
+}
 #endif
 
 struct dentry_operations ll_d_ops = {

@@ -45,7 +45,7 @@ int               ptlrpc_ninterfaces;
  */
 void request_out_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_cb_id   *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_cb_id   *cbid = ev->md.user_ptr;
         struct ptlrpc_request *req = cbid->cbid_arg;
         unsigned long          flags;
         ENTRY;
@@ -80,7 +80,7 @@ void request_out_callback(ptl_event_t *ev)
  */
 void reply_in_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_cb_id   *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_cb_id   *cbid = ev->md.user_ptr;
         struct ptlrpc_request *req = cbid->cbid_arg;
         unsigned long flags;
         ENTRY;
@@ -88,7 +88,7 @@ void reply_in_callback(ptl_event_t *ev)
         LASSERT (ev->type == PTL_EVENT_PUT_END ||
                  ev->type == PTL_EVENT_UNLINK);
         LASSERT (ev->unlinked);
-        LASSERT (ev->mem_desc.start == req->rq_repmsg);
+        LASSERT (ev->md.start == req->rq_repmsg);
         LASSERT (ev->offset == 0);
         LASSERT (ev->mlength <= req->rq_replen);
         
@@ -119,7 +119,7 @@ void reply_in_callback(ptl_event_t *ev)
  */
 void client_bulk_callback (ptl_event_t *ev)
 {
-        struct ptlrpc_cb_id     *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_cb_id     *cbid = ev->md.user_ptr;
         struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
         unsigned long            flags;
         ENTRY;
@@ -159,7 +159,7 @@ void client_bulk_callback (ptl_event_t *ev)
  */
 void request_in_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_cb_id               *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_cb_id               *cbid = ev->md.user_ptr;
         struct ptlrpc_request_buffer_desc *rqbd = cbid->cbid_arg;
         struct ptlrpc_srv_ni              *srv_ni = rqbd->rqbd_srv_ni;
         struct ptlrpc_service             *service = srv_ni->sni_service;
@@ -170,8 +170,8 @@ void request_in_callback(ptl_event_t *ev)
 
         LASSERT (ev->type == PTL_EVENT_PUT_END ||
                  ev->type == PTL_EVENT_UNLINK);
-        LASSERT ((char *)ev->mem_desc.start >= rqbd->rqbd_buffer);
-        LASSERT ((char *)ev->mem_desc.start + ev->offset + ev->mlength <=
+        LASSERT ((char *)ev->md.start >= rqbd->rqbd_buffer);
+        LASSERT ((char *)ev->md.start + ev->offset + ev->mlength <=
                  rqbd->rqbd_buffer + service->srv_buf_size);
 
         CDEBUG((ev->ni_fail_type == PTL_OK) ? D_NET : D_ERROR,
@@ -207,7 +207,7 @@ void request_in_callback(ptl_event_t *ev)
          * flags are reset and scalars are zero.  We only set the message
          * size to non-zero if this was a successful receive. */
         req->rq_xid = ev->match_bits;
-        req->rq_reqmsg = ev->mem_desc.start + ev->offset;
+        req->rq_reqmsg = ev->md.start + ev->offset;
         if (ev->type == PTL_EVENT_PUT_END &&
             ev->ni_fail_type == PTL_NI_OK)
                 req->rq_reqlen = ev->mlength;
@@ -252,7 +252,7 @@ void request_in_callback(ptl_event_t *ev)
  */
 void reply_out_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_cb_id       *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_cb_id       *cbid = ev->md.user_ptr;
         struct ptlrpc_reply_state *rs = cbid->cbid_arg;
         struct ptlrpc_srv_ni      *sni = rs->rs_srv_ni;
         struct ptlrpc_service     *svc = sni->sni_service;
@@ -290,7 +290,7 @@ void reply_out_callback(ptl_event_t *ev)
  */
 void server_bulk_callback (ptl_event_t *ev)
 {
-        struct ptlrpc_cb_id     *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_cb_id     *cbid = ev->md.user_ptr;
         struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
         unsigned long            flags;
         ENTRY;
@@ -330,7 +330,7 @@ void server_bulk_callback (ptl_event_t *ev)
 
 static void ptlrpc_master_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_cb_id *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_cb_id *cbid = ev->md.user_ptr;
         void (*callback)(ptl_event_t *ev) = cbid->cbid_fn;
 
         /* Honestly, it's best to find out early. */
@@ -619,7 +619,7 @@ int ptlrpc_init_portals(void)
                 {QSWNAL,  "qswnal"},
                 {SOCKNAL, "socknal"},
                 {GMNAL,   "gmnal"},
-                {IBNAL,   "ibnal"},
+                {OPENIBNAL,   "openibnal"},
                 {TCPNAL,  "tcpnal"},
 #else
                 {CRAY_KB_ERNAL, "cray_kb_ernal"},

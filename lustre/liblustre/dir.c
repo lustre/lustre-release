@@ -3,7 +3,7 @@
  *
  * Lustre Light directory handling
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -42,8 +42,8 @@
 #undef LIST_HEAD
 
 #include <linux/types.h>
-#include <linux/dirent.h>
 #include <linux/unistd.h>
+#include <dirent.h>
 
 #include "llite_lib.h"
 
@@ -64,16 +64,6 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
                 { .name = {lli->lli_st_ino, (__u64)lli->lli_st_generation} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         ENTRY;
-
-        if ((lli->lli_st_size + PAGE_CACHE_SIZE - 1) >> PAGE_SHIFT <= page->index) {
-                /* XXX why do we need this exactly, and why do we think that
-                 *     an all-zero directory page is useful?
-                 */
-                CERROR("memsetting dir page %lu to zero (size %lld)\n",
-                       page->index, lli->lli_st_size);
-                memset(page->addr, 0, PAGE_CACHE_SIZE);
-                GOTO(readpage_out, rc);
-        }
 
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
                              &res_id, LDLM_IBITS, &policy, LCK_PR, &lockh);
@@ -105,11 +95,12 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
                 LASSERT_REPSWABBED (request, 0); /* swabbed by mdc_readpage() */
 
                 lli->lli_st_size = body->size;
+        } else {
+                CERROR("read_dir_page(%ld) error %d\n", page->index, rc);
         }
         ptlrpc_req_finished(request);
         EXIT;
 
- readpage_out:
         ldlm_lock_decref(&lockh, LCK_PR);
         return rc;
 }
@@ -135,6 +126,29 @@ static struct page *llu_dir_read_page(struct inode *ino, int pgidx)
 
         return page;
 }
+
+enum {
+        EXT2_FT_UNKNOWN,
+        EXT2_FT_REG_FILE,
+        EXT2_FT_DIR,
+        EXT2_FT_CHRDEV,
+        EXT2_FT_BLKDEV,
+        EXT2_FT_FIFO,
+        EXT2_FT_SOCK,
+        EXT2_FT_SYMLINK,
+        EXT2_FT_MAX
+};
+
+static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
+        [EXT2_FT_UNKNOWN]       DT_UNKNOWN,
+        [EXT2_FT_REG_FILE]      DT_REG,
+        [EXT2_FT_DIR]           DT_DIR,
+        [EXT2_FT_CHRDEV]        DT_CHR,
+        [EXT2_FT_BLKDEV]        DT_BLK,
+        [EXT2_FT_FIFO]          DT_FIFO,
+        [EXT2_FT_SOCK]          DT_SOCK,
+        [EXT2_FT_SYMLINK]       DT_LNK,
+};
 
 #define NAME_OFFSET(de) ((int) ((de)->d_name - (char *) (de)))
 #define ROUND_UP64(x)   (((x)+sizeof(__u64)-1) & ~(sizeof(__u64)-1))
@@ -170,12 +184,19 @@ ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
         int maxpages, pgidx, filled = 0;
         ENTRY;
 
+        if (lli->lli_st_size == 0) {
+                CWARN("dir size is 0?\n");
+                RETURN(0);
+        }
+
+        liblustre_wait_event(0);
+
         if (pos == -1)
                 pos = lli->lli_dir_pos;
 
-        maxpages = lli->lli_st_size >> PAGE_CACHE_SHIFT;
-        pgidx = pos >> PAGE_CACHE_SHIFT;
-        offset = pos & ~PAGE_CACHE_MASK;
+        maxpages = (lli->lli_st_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+        pgidx = pos >> PAGE_SHIFT;
+        offset = pos & ~PAGE_MASK;
 
         for ( ; pgidx < maxpages ; pgidx++, offset = 0) {
                 struct page *page;
@@ -187,23 +208,24 @@ ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
                         continue;
 
                 /* size might have been updated by mdc_readpage */
-                maxpages = lli->lli_st_size >> PAGE_CACHE_SHIFT;
+                maxpages = (lli->lli_st_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
                 /* fill in buffer */
                 addr = page->addr;
-                limit = addr + PAGE_CACHE_SIZE - EXT2_DIR_REC_LEN(1);
+                limit = addr + PAGE_SIZE - EXT2_DIR_REC_LEN(1);
                 de = (struct ext2_dirent *) (addr + offset);
 
                 for ( ; (char*) de <= limit; de = ext2_next_entry(de)) {
                         if (de->inode) {
                                 int over;
-                                unsigned char d_type = 0;
+                                unsigned char d_type = DT_UNKNOWN;
 
-                                /* XXX handle type, etc here */
+                                if (de->file_type < EXT2_FT_MAX)
+                                        d_type = ext2_filetype_table[de->file_type];
 
                                 offset = (char*) de - addr;
                                 over =  filldir(buf, nbytes, de->name, de->name_len,
-                                                (pgidx << PAGE_CACHE_SHIFT) | offset,
+                                                (pgidx << PAGE_SHIFT) | offset,
                                                 le32_to_cpu(de->inode), d_type, &filled);
                                 if (over) {
                                         free_page(page);
@@ -215,7 +237,7 @@ ssize_t llu_iop_getdirentries(struct inode *ino, char *buf, size_t nbytes,
                 free_page(page);
         }
 done:
-        lli->lli_dir_pos = pgidx << PAGE_CACHE_SHIFT | offset;
+        lli->lli_dir_pos = pgidx << PAGE_SHIFT | offset;
         *basep = lli->lli_dir_pos;
         RETURN(filled);
 }

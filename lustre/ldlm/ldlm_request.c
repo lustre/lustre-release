@@ -405,8 +405,10 @@ int ldlm_cli_enqueue(struct obd_export *exp,
         if (lvb_len && (lock->l_req_mode != lock->l_granted_mode)) {
                 void *tmplvb;
                 tmplvb = lustre_swab_repbuf(req, 1, lvb_len, lvb_swabber);
-                if (tmplvb == NULL)
+                if (tmplvb == NULL) {
+                        cleanup_phase = 2;
                         GOTO(cleanup, rc = -EPROTO);
+                }
                 memcpy(lock->l_lvb_data, tmplvb, lvb_len);
         }
 
@@ -414,8 +416,10 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 rc = ldlm_lock_enqueue(ns, &lock, NULL, flags);
                 if (lock->l_completion_ast != NULL) {
                         int err = lock->l_completion_ast(lock, *flags, NULL);
-                        if (!rc)
+                        if (!rc) {
+                                cleanup_phase = 2;
                                 rc = err;
+                        }
                 }
         }
 
@@ -626,6 +630,10 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
         LIST_HEAD(cblist);
         ENTRY;
 
+#ifndef __KERNEL__
+        sync = LDLM_SYNC; /* force to be sync in user space */
+#endif
+
         l_lock(&ns->ns_lock);
         count = ns->ns_nr_unused - ns->ns_max_unused;
 
@@ -649,9 +657,7 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns, ldlm_sync_t sync)
 
                 LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 ldlm_lock_remove_from_lru(lock);
-                if (sync == LDLM_ASYNC)
-                        ldlm_bl_to_thread(ns, NULL, lock);
-                else
+                if (sync != LDLM_ASYNC || ldlm_bl_to_thread(ns, NULL, lock))                        
                         list_add(&lock->l_lru, &cblist);
 
                 if (--count == 0)
@@ -948,7 +954,10 @@ static int replay_lock_interpret(struct ptlrpc_request *req,
                sizeof(lock->l_remote_handle));
         LDLM_DEBUG(lock, "replayed lock:");
         ptlrpc_import_recovery_state_machine(req->rq_import);
- out:
+out:
+        if (rc != ELDLM_OK)
+                ptlrpc_connect_import(req->rq_import, NULL);
+
         RETURN(rc);
 }
 

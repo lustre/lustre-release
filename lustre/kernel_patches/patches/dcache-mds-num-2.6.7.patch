@@ -1,0 +1,22 @@
+Index: linux-2.6.7/include/linux/dcache.h
+===================================================================
+--- linux-2.6.7.orig/include/linux/dcache.h	2004-08-30 17:20:57.000000000 +0800
++++ linux-2.6.7/include/linux/dcache.h	2004-08-30 17:39:12.000000000 +0800
+@@ -94,6 +94,9 @@
+ 	spinlock_t d_lock;		/* per dentry lock */
+ 	struct inode *d_inode;		/* Where the name belongs to - NULL is
+ 					 * negative */
++        unsigned d_inum;                /* for cross-fs references (Lustre) */
++        unsigned d_mdsnum;              /* for cross-fs references (Lustre) */
++        unsigned d_generation;          /* for cross-fs references (Lustre) */
+ 	/*
+ 	 * The next three fields are touched by __d_lookup.  Place them here
+ 	 * so they all fit in a 16-byte range, with 16-byte alignment.
+@@ -166,6 +169,7 @@
+ #define DCACHE_UNHASHED		0x0010	
+ #define DCACHE_LUSTRE_INVALID     0x0020  /* Lustre invalidated */
+ 
++#define DCACHE_CROSS_REF       0x0040  /* entry points to inode on another MDS */
+ 
+ extern spinlock_t dcache_lock;
+ 

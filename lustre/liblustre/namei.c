@@ -3,7 +3,7 @@
  *
  * Lustre Light name resolution
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -70,6 +70,7 @@ static void ll_intent_release(struct lookup_intent *it)
         EXIT;
 }
 
+#if 0
 /*
  * remove the stale inode from pnode
  */
@@ -94,6 +95,7 @@ void unhook_stale_inode(struct pnode *pno)
         EXIT;
         return;
 }
+#endif
 
 void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
 {
@@ -230,17 +232,6 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 RETURN(0);
         }
 
-        /* check stale inode */
-        if (llu_i2info(pb->pb_ino)->lli_stale_flag)
-                unhook_stale_inode(pnode);
-
-        /* check again because unhook_stale_inode() might generate
-         * negative pnode */
-        if (pb->pb_ino == NULL) {
-                CDEBUG(D_INODE, "negative pb\n");
-                RETURN(0);
-        }
-
         /* This is due to bad interaction with libsysio. remove this when we
          * switched to libbsdio XXX
          */
@@ -303,7 +294,6 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 pb->pb_ino = NULL;
         } else {
                 llu_lookup_finish_locks(it, pnode);
-                llu_i2info(pb->pb_ino)->lli_stale_flag = 0;
         }
         RETURN(rc);
 }
@@ -318,15 +308,34 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         struct inode *inode = NULL;
         int rc;
 
+        /* libsysio require us generate inode right away if success.
+         * so if mds created new inode for us we need make sure it
+         * succeeded. thus for any error we can't delay to the
+         * llu_file_open() time. */
+        if (it_disposition(it, DISP_OPEN_CREATE) &&
+            it_open_error(DISP_OPEN_CREATE, it)) {
+                CDEBUG(D_INODE, "detect mds create error\n");
+                return it_open_error(DISP_OPEN_CREATE, it);
+        }
+        if (it_disposition(it, DISP_OPEN_OPEN) &&
+            it_open_error(DISP_OPEN_OPEN, it)) {
+                CDEBUG(D_INODE, "detect mds open error\n");
+                /* undo which did by mdc_intent_lock */
+                if (it_disposition(it, DISP_OPEN_CREATE) &&
+                    !it_open_error(DISP_OPEN_CREATE, it)) {
+                        LASSERT(request);
+                        LASSERT(atomic_read(&request->rq_refcount) > 1);
+                        CDEBUG(D_INODE, "dec a ref of req %p\n", request);
+                        ptlrpc_req_finished(request);
+                }
+                return it_open_error(DISP_OPEN_OPEN, it);
+        }
+
         /* NB 1 request reference will be taken away by ll_intent_lock()
          * when I return
          */
-        /* FIXME: for CREAT, libsysio require the inode must be generated here
-         * currently here we don't know the whether the create is successful
-         * or failed on mds. thus blinded return -EPERM in llu_iget(). need
-         * a fix later.
-         */
-        if ((it->it_op & IT_CREAT) || !it_disposition(it, DISP_LOOKUP_NEG)) {
+        if (!it_disposition(it, DISP_LOOKUP_NEG) ||
+            (it->it_op & IT_CREAT)) {
                 struct lustre_md md;
                 struct llu_inode_info *lli;
                 ENTRY;
@@ -353,7 +362,6 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 if (it->it_op == IT_GETATTR && S_ISREG(lli->lli_st_mode) &&
                     lli->lli_smd != NULL) {
                         struct lov_stripe_md *lsm = lli->lli_smd;
-                        struct ost_lvb lvb;
                         ldlm_error_t rc;
 
                         LASSERT(lsm->lsm_object_id != 0);
@@ -361,12 +369,11 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         /* bug 2334: drop MDS lock before acquiring OST lock */
                         ll_intent_drop_lock(it);
 
-                        rc = llu_glimpse_size(inode, &lvb);
+                        rc = llu_glimpse_size(inode);
                         if (rc) {
                                 I_RELE(inode);
                                 RETURN(rc);
                         }
-                        lli->lli_st_size = lvb.lvb_size;
                 }
         } else {
                 ENTRY;
@@ -530,6 +537,8 @@ int llu_iop_lookup(struct pnode *pnode,
         int rc;
         ENTRY;
 
+        liblustre_wait_event(0);
+
         *inop = NULL;
 
         /* the mount root inode have no name, so don't call
@@ -563,4 +572,3 @@ int llu_iop_lookup(struct pnode *pnode,
 
         RETURN(rc);
 }
-

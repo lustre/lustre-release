@@ -75,7 +75,9 @@ int llog_origin_handle_open(struct ptlrpc_request *req)
         }
 
         ctxt = llog_get_context(&obd->obd_llogs, body->lgd_ctxt_idx);
-        LASSERT(ctxt != NULL);
+        if (ctxt == NULL)
+                GOTO(out, rc = -EINVAL);
+
         push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
         rc = llog_open(ctxt, &loghandle, logid, name, body->lgd_llh_flags);
@@ -125,7 +127,8 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
                 GOTO(out, rc = -ENOMEM);
 
         ctxt = llog_get_context(&obd->obd_llogs, body->lgd_ctxt_idx);
-        LASSERT(ctxt != NULL);
+        if (ctxt == NULL)
+                GOTO(out, rc = -EINVAL);
         push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
         rc = llog_open(ctxt, &loghandle, &body->lgd_logid, NULL, 0);
@@ -193,7 +196,8 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
                 GOTO(out, rc = -ENOMEM);
 
         ctxt = llog_get_context(&obd->obd_llogs, body->lgd_ctxt_idx);
-        LASSERT(ctxt != NULL);
+        if (ctxt == NULL)
+                GOTO(out, rc = -EINVAL);
         push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
         rc = llog_open(ctxt, &loghandle, &body->lgd_logid, NULL, 0);
@@ -257,7 +261,8 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         }
 
         ctxt = llog_get_context(&obd->obd_llogs, body->lgd_ctxt_idx);
-        LASSERT(ctxt != NULL);
+        if (ctxt == NULL)
+                GOTO(out, rc = -EINVAL);
         push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
         rc = llog_open(ctxt, &loghandle, &body->lgd_logid, NULL, 0);

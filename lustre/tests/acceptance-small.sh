@@ -165,6 +165,10 @@ if [ "$REPLAY_OST_SINGLE" != "no" ]; then
         sh replay-ost-single.sh
 fi
 
+if [ "$REPLAY_DUAL" != "no" ]; then
+        sh replay-dual.sh
+fi
+
 if [ "$INSANITY" != "no" ]; then
         sh insanity.sh -r
 fi

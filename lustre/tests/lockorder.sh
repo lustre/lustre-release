@@ -46,7 +46,7 @@ while [ $MINRES -gt $MAXRES ]; do
 		MINFILE=$FILETMP
 		MINRES=$FILERES
 	else
-		rm $TMPFILE
+		rm $FILETMP
 	fi
 	NUM=$(($NUM + 1))
 done
@@ -60,7 +60,9 @@ $LCTL mark "start dir: $LOCKDIR=$MAXRES file: $LOCKFILE=$MINRES"
 $CREATEMANY -l$LOCKFILE $LOCKFILE -$COUNT &
 CR_PID=$!
 
-sleep 1
+while ! test -f ${LOCKFILE}1 ; do
+       sleep 1
+done
 
 # this will lock $DIR and ${LOCKFILE}0
 $STATMANY -s $DIR2/lockdir/lockfile 1 -$COUNT &

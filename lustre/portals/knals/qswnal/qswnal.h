@@ -187,10 +187,10 @@ typedef struct
 
         /* debug/info fields */
         pid_t             ktx_launcher;         /* pid of launching process */
-        ptl_hdr_t        *ktx_wire_hdr;         /* portals header (wire endian) */
 
         int               ktx_nfrag;            /* # message frags */
 #if MULTIRAIL_EKC
+        int               ktx_rail;             /* preferred rail */
         EP_NMD            ktx_ebuffer;          /* elan mapping of ktx_buffer */
         EP_NMD            ktx_frags[EP_MAXFRAG];/* elan mapping of msg frags */
 #else

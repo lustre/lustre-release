@@ -7,7 +7,7 @@ ALWAYS_EXCEPT="20b"
 
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
-UPCALL=${UPCALL:-$PWD/recovery-small-upcall.sh}
+
 . $LUSTRE/tests/test-framework.sh
 
 init_test_env $@
@@ -27,12 +27,12 @@ gen_config() {
     rm -f $XMLCONFIG
 
     if [ "$MDSCOUNT" -gt 1 ]; then
-        add_lmv lmv1
+        add_lmv lmv1_svc
         for mds in `mds_list`; do
             MDSDEV=$TMP/${mds}-`hostname`
-            add_mds $mds --dev $MDSDEV --size $MDSSIZE  --lmv lmv1
+            add_mds $mds --dev $MDSDEV --size $MDSSIZE  --lmv lmv1_svc
         done
-        add_lov_to_lmv lov1 lmv1 --stripe_sz $STRIPE_BYTES \
+        add_lov_to_lmv lov1 lmv1_svc --stripe_sz $STRIPE_BYTES \
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
 	MDS=lmv1
     else
@@ -45,7 +45,7 @@ gen_config() {
 
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
     add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
-    add_client client --mds ${MDS} --lov lov1 --path $MOUNT
+    add_client client ${MDS} --lov lov1 --path $MOUNT
 }
 
 setup() {
@@ -257,9 +257,10 @@ test_17() {
     # client will get evicted here
     sysctl -w lustre.fail_loc=0x80000503
     do_facet client cp /etc/termcap $DIR/$tfile
-    sysctl -w lustre.fail_loc=0
 
     sleep $TIMEOUT
+    sysctl -w lustre.fail_loc=0
+    do_facet client "df $DIR"
     # expect cmp to fail
     do_facet client "cmp /etc/termcap $DIR/$tfile"  && return 1
     do_facet client "rm $DIR/$tfile" || return 2
@@ -329,6 +330,8 @@ test_19a() {
     drop_ldlm_cancel "chmod 0777 $f"  || echo evicted
 
     do_facet client checkstat -v -p 0777 $f  || echo evicted
+    # let the client reconnect
+    sleep 5
     do_facet client "munlink $f"
 }
 run_test 19a "test expired_lock_main on mds (2867)"
@@ -351,7 +354,7 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	mkdir -p $DIR/$tdir
 	multiop $DIR/$tdir/${tfile} O_wc &
 	MULTI_PID=$!
-	usleep 500
+	sleep 1
 	cancel_lru_locks OSC
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 	do_facet ost sysctl -w lustre.fail_loc=0x80000308

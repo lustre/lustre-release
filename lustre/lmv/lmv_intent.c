@@ -246,59 +246,57 @@ int lmv_intent_getattr(struct obd_export *exp,
                 if (obj) {
                         /* in fact, we need not this with current intent_lock(),
                          * but it may change some day */
+                        if (!fid_equal(pfid, cfid)){
+                                rpfid = obj->objs[mds].fid;
+                                mds = rpfid.mds;
+                        }
+                        lmv_put_obj(obj);
+               }
+        } else {
+                CDEBUG(D_OTHER, "INTENT getattr for %*s on %lu/%lu/%lu\n",
+                       len, name, (unsigned long)pfid->mds, (unsigned long)pfid->id,
+                       (unsigned long)pfid->generation);
+                mds = pfid->mds;
+                obj = lmv_grab_obj(obd, pfid);
+                if (obj && len) {
+                        /* directory is already splitted. calculate mds */
+                        mds = raw_name2idx(obj->hashtype, obj->objcount, (char *) name, len);
                         rpfid = obj->objs[mds].fid;
                         mds = rpfid.mds;
                         lmv_put_obj(obj);
-                }
-                rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &rpfid, name,
-                                    len, lmm, lmmsize, cfid, it, flags, reqp,
-                                    cb_blocking);
-                if (obj && rc >= 0) {
-                        /* this is splitted dir. In order to optimize things a
-                         * bit, we consider obj valid updating missing parts.
 
-                         * FIXME: do we need to return any lock here? It would
-                         * be fine if we don't. this means that nobody should
-                         * use UPDATE lock to notify about object * removal */
-                        CDEBUG(D_OTHER,
-                               "revalidate slaves for %lu/%lu/%lu, rc %d\n",
-                               (unsigned long)cfid->mds, (unsigned long)cfid->id,
-                               (unsigned long)cfid->generation, rc);
-                        
-                        rc = lmv_revalidate_slaves(exp, reqp, cfid, it, rc,
-                                                   cb_blocking);
+                        CDEBUG(D_OTHER, "forward to MDS #%u (slave %lu/%lu/%lu)\n",
+                               mds, (unsigned long)rpfid.mds, (unsigned long)rpfid.id,
+                               (unsigned long)rpfid.generation);
                 }
+        } 
+        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &rpfid, name,
+                            len, lmm, lmmsize, cfid, it, flags, reqp,
+                            cb_blocking);
+        if (rc < 0)
+                RETURN(rc);
+       
+        if (obj && rc > 0) {
+                /* this is splitted dir. In order to optimize things a
+                 * bit, we consider obj valid updating missing parts.
 
+                 * FIXME: do we need to return any lock here? It would
+                 * be fine if we don't. this means that nobody should
+                 * use UPDATE lock to notify about object * removal */
+                CDEBUG(D_OTHER,
+                       "revalidate slaves for %lu/%lu/%lu, rc %d\n",
+                       (unsigned long)cfid->mds, (unsigned long)cfid->id,
+                       (unsigned long)cfid->generation, rc);
+                
+                LASSERT(cfid != 0);
+                rc = lmv_revalidate_slaves(exp, reqp, cfid, it, rc,
+                                           cb_blocking);
                 RETURN(rc);                
         }
 
-        CDEBUG(D_OTHER, "INTENT getattr for %*s on %lu/%lu/%lu\n",
-               len, name, (unsigned long)pfid->mds, (unsigned long)pfid->id,
-               (unsigned long)pfid->generation);
-
-        mds = pfid->mds;
-        obj = lmv_grab_obj(obd, pfid);
-        if (obj && len) {
-                /* directory is already splitted. calculate mds */
-                mds = raw_name2idx(obj->hashtype, obj->objcount, (char *) name, len);
-                rpfid = obj->objs[mds].fid;
-                mds = rpfid.mds;
-                lmv_put_obj(obj);
-                
-                CDEBUG(D_OTHER, "forward to MDS #%u (slave %lu/%lu/%lu)\n",
-                       mds, (unsigned long)rpfid.mds, (unsigned long)rpfid.id,
-                       (unsigned long)rpfid.generation);
-        }
-        
-        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &rpfid, name,
-                            len, lmm, lmmsize, NULL, it, flags, reqp,
-                            cb_blocking);
-        
-        if (rc < 0)
+        if (*reqp == NULL)
                 RETURN(rc);
-        
-        LASSERT(rc == 0);
-
+ 
         /* okay, MDS has returned success. probably name has been
          * resolved in remote inode */
         rc = lmv_handle_remote_inode(exp, lmm, lmmsize, it,
@@ -403,30 +401,12 @@ int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)
                                     lmv_dirobj_blocking_ast);
                 
                 lockh = (struct lustre_handle *)&it.d.lustre.it_lock_handle;
-                if (rc > 0) {
+                if (rc > 0 && req == NULL) {
                         /* nice, this slave is valid */
                         LASSERT(req == NULL);
                         CDEBUG(D_OTHER, "cached\n");
                         goto release_lock;
                 }
-
-                if (rc < 0)
-                        /* error during revalidation */
-                        GOTO(cleanup, rc);
-
-                /* rc == 0, this means we have no such a lock and can't think
-                 * obj is still valid. lookup it again */
-                LASSERT(req == NULL);
-                req = NULL;
-
-                memset(&it, 0, sizeof(it));
-                it.it_op = IT_GETATTR;
-                rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &fid,
-                                    NULL, 0, NULL, 0, NULL, &it, 0, &req,
-                                    lmv_dirobj_blocking_ast);
-
-                lockh = (struct lustre_handle *) &it.d.lustre.it_lock_handle;
-                LASSERT(rc <= 0);
 
                 if (rc < 0)
                         /* error during lookup */
@@ -488,7 +468,8 @@ int lmv_intent_lookup(struct obd_export *exp,
                 rpfid = *pfid;
                 obj = lmv_grab_obj(obd, pfid);
                 if (obj) {
-                        mds = raw_name2idx(obj->hashtype, obj->objcount, (char *) name, len);
+                        mds = raw_name2idx(obj->hashtype, obj->objcount, 
+                                           (char *) name, len);
                         rpfid = obj->objs[mds].fid;
                         lmv_put_obj(obj);
                 }
@@ -498,36 +479,37 @@ int lmv_intent_lookup(struct obd_export *exp,
                        (unsigned long)cfid->mds, (unsigned long)cfid->id,
                        (unsigned long)cfid->generation, mds);
 
-                rc = md_intent_lock(lmv->tgts[mds].ltd_exp, pfid, name,
-                                    len, lmm, lmmsize, cfid, it, flags,
-                                    reqp, cb_blocking);
+        } else {
+                mds = pfid->mds;
+repeat:
+                LASSERT(++loop <= 2);
+                /* this is lookup. during lookup we have to update all the 
+                 * attributes, because returned values will be put in struct 
+                 * inode */
+
+                obj = lmv_grab_obj(obd, pfid);
+                if (obj) {
+                        if (len) {
+                                /* directory is already splitted. calculate mds */
+                                mds = raw_name2idx(obj->hashtype, obj->objcount, 
+                                                   (char *)name, len);
+                                rpfid = obj->objs[mds].fid;
+                                mds = rpfid.mds;
+                        }
+                        lmv_put_obj(obj);
+                }
+        }
+        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, pfid, name,
+                            len, lmm, lmmsize, cfid, it, flags, reqp, 
+                            cb_blocking);
+        if (rc > 0) {
+                LASSERT(cfid != 0);
                 RETURN(rc);
         }
-
-        mds = pfid->mds;
-repeat:
-        LASSERT(++loop <= 2);
-        /* this is lookup. during lookup we have to update all the attributes,
-         * because returned values will be put in struct inode */
-
-        obj = lmv_grab_obj(obd, pfid);
-        if (obj) {
-                if (len) {
-                        /* directory is already splitted. calculate mds */
-                        mds = raw_name2idx(obj->hashtype, obj->objcount, (char *)name, len);
-                        rpfid = obj->objs[mds].fid;
-                        mds = rpfid.mds;
-                }
-                lmv_put_obj(obj);
-        }
-
-        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &rpfid, name,
-                            len, lmm, lmmsize, NULL, it, flags, reqp,
-                            cb_blocking);
         if (rc > 0) {
                 /* very interesting. it seems object is still valid but for some
                  * reason llite calls lookup, not revalidate */
-                CWARN("lookup for %lu/%lu/%lu and data should be uptodate\n",
+                CDEBUG(D_OTHER, "lookup for %lu/%lu/%lu and data should be uptodate\n",
                       (unsigned long)rpfid.mds, (unsigned long)rpfid.id,
                       (unsigned long)rpfid.generation);
                 LASSERT(*reqp == NULL);
@@ -536,9 +518,9 @@ repeat:
 
         if (rc == 0 && *reqp == NULL) {
                 /* once again, we're asked for lookup, not revalidate */
-                CWARN("lookup for %lu/%lu/%lu and data should be uptodate\n",
-                       (unsigned long)rpfid.mds, (unsigned long)rpfid.id,
-                       (unsigned long)rpfid.generation);
+                CDEBUG(D_OTHER, "lookup for %lu/%lu/%lu and data should be uptodate\n",
+                      (unsigned long)rpfid.mds, (unsigned long)rpfid.id,
+                      (unsigned long)rpfid.generation);
                 RETURN(rc);
         }
        
@@ -689,7 +671,7 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                 rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &fid,
                                     NULL, 0, NULL, 0, &fid, &it, 0, &req, cb);
                 lockh = (struct lustre_handle *) &it.d.lustre.it_lock_handle;
-                if (rc > 0) {
+                if (rc > 0 && req == NULL) {
                         /* nice, this slave is valid */
                         LASSERT(req == NULL);
                         CDEBUG(D_OTHER, "cached\n");
@@ -700,22 +682,6 @@ int lmv_revalidate_slaves(struct obd_export *exp, struct ptlrpc_request **reqp,
                         /* error during revalidation */
                         GOTO(cleanup, rc);
 
-                /* rc == 0, this means we have no such a lock and can't think
-                 * obj is still valid. lookup it again */
-                LASSERT(req == NULL);
-                req = NULL;
-                
-                memset(&it, 0, sizeof(it));
-                it.it_op = IT_GETATTR;
-                rc = md_intent_lock(lmv->tgts[fid.mds].ltd_exp, &fid,
-                                    NULL, 0, NULL, 0, NULL, &it, 0, &req, cb);
-                lockh = (struct lustre_handle *) &it.d.lustre.it_lock_handle;
-                LASSERT(rc <= 0);
-
-                if (rc < 0)
-                        /* error during lookup */
-                        GOTO(cleanup, rc);
-              
                 if (master) {
                         LASSERT(master_valid == 0);
                         /* save lock on master to be returned to the caller */

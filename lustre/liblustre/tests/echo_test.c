@@ -1,79 +1,36 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ * Lustre Light user test program
+ *
+ *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-#include <stdio.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <arpa/inet.h>
-
-#include <portals/ptlctl.h>	/* needed for parse_dump */
-
 
 #include <liblustre.h>
 #include <linux/obd.h>
 #include <linux/obd_class.h>
-#include <procbridge.h>
 
 #define LIBLUSTRE_TEST 1
 #include "../utils/lctl.c"
 
-struct ldlm_namespace;
-struct ldlm_res_id;
-struct obd_import;
+#include "../lutil.h"
 
-unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
-                                            S_GMNAL | S_IBNAL);
-
-void get_random_bytes(void *ptr, int size)
-{
-        char *p = ptr;
-
-        if (size < 1)
-                return;
-
-        while(size--)
-                *p++ = rand();
-}
-
-void *inter_module_get(char *arg)
-{
-        if (!strcmp(arg, "tcpnal_ni"))
-                return &tcpnal_ni;
-        else if (!strcmp(arg, "ldlm_cli_cancel_unused"))
-                return ldlm_cli_cancel_unused;
-        else if (!strcmp(arg, "ldlm_namespace_cleanup"))
-                return ldlm_namespace_cleanup;
-        else if (!strcmp(arg, "ldlm_replay_locks"))
-                return ldlm_replay_locks;
-        else
-                return NULL;
-}
-
-/* XXX move to proper place */
-char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
-{
-        switch(nal){
-        case TCPNAL:
-                /* userspace NAL */
-        case SOCKNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u",
-                         (__u32)(nid >> 32), HIPQUAD(nid));
-                break;
-        case QSWNAL:
-        case GMNAL:
-        case IBNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
-                         (__u32)(nid >> 32), (__u32)nid);
-                break;
-        default:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx",
-                         nal, (long long)nid);
-                break;
-        }
-        return str;
-}
-
-ptl_handle_ni_t         tcpnal_ni;
+extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
 
 struct pingcli_args {
         ptl_nid_t mynid;
@@ -106,46 +63,7 @@ char *portals_id2str(int nal, ptl_process_id_t id, char *str)
         return str;
 }
 
-struct task_struct *current;
-
-int
-libcfs_nal_cmd(struct portals_cfg *pcfg)
-{
-        CERROR("empty function!!!\n");
-        return 0;
-}
-
-int in_group_p(gid_t gid)
-{
-        return 0;
-}
-
-int init_current(int argc, char **argv)
-{ 
-        current = malloc(sizeof(*current));
-        strncpy(current->comm, argv[0], sizeof(current->comm));
-        current->pid = getpid();
-	return 0;
-}
-
-ptl_nid_t tcpnal_mynid;
-
-int init_lib_portals()
-{
-	int max_interfaces;
-        int rc;
-
-        rc = PtlInit(&max_interfaces);
-        if (rc != 0) {
-                CERROR("ksocknal: PtlNIInit failed: error %d\n", rc);
-                RETURN (rc);
-        }
-        return rc;
-}
-
-extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
-
-int liblustre_ioctl(int dev_id, unsigned int opc, void *ptr)
+static int liblustre_ioctl(int dev_id, unsigned int opc, void *ptr)
 {
 	int   rc = -EINVAL;
 	
@@ -161,15 +79,6 @@ int liblustre_ioctl(int dev_id, unsigned int opc, void *ptr)
 	}
 
 	return rc;
-}
-
-static void generate_random_uuid(unsigned char uuid_out[16])
-{
-        int *arr = (int*)uuid_out;
-        int i;
-
-        for (i = 0; i < sizeof(uuid_out)/sizeof(int); i++)
-                arr[i] = rand();
 }
 
 static char *echo_server_nid = NULL;
@@ -343,15 +252,13 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-        srand(time(NULL));
-
-	tcpnal_mynid = rand();
-#if 1
 	portal_debug = 0;
 	portal_subsystem_debug = 0;
-#endif
 
-        if (init_current(argc, argv) ||
+        liblustre_init_random();
+        liblustre_set_nal_nid();
+
+        if (liblustre_init_current(argv[0]) ||
 	    init_obdclass() || init_lib_portals() ||
 	    ptlrpc_init() ||
 	    mdc_init() ||

@@ -130,13 +130,14 @@ lib_match_md(lib_nal_t *nal, int index, int op_mask,
                 /* NB Caller sets ev.type and ev.hdr_data */
                 msg->ev.initiator.nid = src_nid;
                 msg->ev.initiator.pid = src_pid;
-                msg->ev.portal = index;
+                msg->ev.pt_index = index;
                 msg->ev.match_bits = match_bits;
                 msg->ev.rlength = rlength;
                 msg->ev.mlength = mlength;
                 msg->ev.offset = offset;
 
-                lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
+                lib_md_deconstruct(nal, md, &msg->ev.md);
+                ptl_md2handle(&msg->ev.md_handle, nal, md);
 
                 *offset_out = offset;
                 *mlength_out = mlength;
@@ -655,9 +656,9 @@ parse_put(lib_nal_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
         unsigned long    flags;
                 
         /* Convert put fields to host byte order */
-        hdr->msg.put.match_bits = NTOH__u64 (hdr->msg.put.match_bits);
-        hdr->msg.put.ptl_index = NTOH__u32 (hdr->msg.put.ptl_index);
-        hdr->msg.put.offset = NTOH__u32 (hdr->msg.put.offset);
+        hdr->msg.put.match_bits = le64_to_cpu(hdr->msg.put.match_bits);
+        hdr->msg.put.ptl_index = le32_to_cpu(hdr->msg.put.ptl_index);
+        hdr->msg.put.offset = le32_to_cpu(hdr->msg.put.offset);
 
         LIB_LOCK(nal, flags);
 
@@ -705,10 +706,10 @@ parse_get(lib_nal_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
         int              rc;
 
         /* Convert get fields to host byte order */
-        hdr->msg.get.match_bits = NTOH__u64 (hdr->msg.get.match_bits);
-        hdr->msg.get.ptl_index = NTOH__u32 (hdr->msg.get.ptl_index);
-        hdr->msg.get.sink_length = NTOH__u32 (hdr->msg.get.sink_length);
-        hdr->msg.get.src_offset = NTOH__u32 (hdr->msg.get.src_offset);
+        hdr->msg.get.match_bits = le64_to_cpu(hdr->msg.get.match_bits);
+        hdr->msg.get.ptl_index = le32_to_cpu(hdr->msg.get.ptl_index);
+        hdr->msg.get.sink_length = le32_to_cpu(hdr->msg.get.sink_length);
+        hdr->msg.get.src_offset = le32_to_cpu(hdr->msg.get.src_offset);
 
         LIB_LOCK(nal, flags);
 
@@ -731,12 +732,12 @@ parse_get(lib_nal_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
         LIB_UNLOCK(nal, flags);
 
         memset (&reply, 0, sizeof (reply));
-        reply.type     = HTON__u32 (PTL_MSG_REPLY);
-        reply.dest_nid = HTON__u64 (hdr->src_nid);
-        reply.dest_pid = HTON__u32 (hdr->src_pid);
-        reply.src_nid  = HTON__u64 (ni->ni_pid.nid);
-        reply.src_pid  = HTON__u32 (ni->ni_pid.pid);
-        reply.payload_length = HTON__u32 (mlength);
+        reply.type     = cpu_to_le32(PTL_MSG_REPLY);
+        reply.dest_nid = cpu_to_le64(hdr->src_nid);
+        reply.dest_pid = cpu_to_le32(hdr->src_pid);
+        reply.src_nid  = cpu_to_le64(ni->ni_pid.nid);
+        reply.src_pid  = cpu_to_le32(ni->ni_pid.pid);
+        reply.payload_length = cpu_to_le32(mlength);
 
         reply.msg.reply.dst_wmd = hdr->msg.get.return_wmd;
 
@@ -810,7 +811,8 @@ parse_reply(lib_nal_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
         msg->ev.mlength = length;
         msg->ev.offset = 0;
 
-        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
+        lib_md_deconstruct(nal, md, &msg->ev.md);
+        ptl_md2handle(&msg->ev.md_handle, nal, md);
 
         ni->ni_counters.recv_count++;
         ni->ni_counters.recv_length += length;
@@ -833,8 +835,8 @@ parse_ack(lib_nal_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
         unsigned long  flags;
 
         /* Convert ack fields to host byte order */
-        hdr->msg.ack.match_bits = NTOH__u64 (hdr->msg.ack.match_bits);
-        hdr->msg.ack.mlength = NTOH__u32 (hdr->msg.ack.mlength);
+        hdr->msg.ack.match_bits = le64_to_cpu(hdr->msg.ack.match_bits);
+        hdr->msg.ack.mlength = le32_to_cpu(hdr->msg.ack.mlength);
 
         LIB_LOCK(nal, flags);
 
@@ -863,7 +865,8 @@ parse_ack(lib_nal_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
         msg->ev.mlength = hdr->msg.ack.mlength;
         msg->ev.match_bits = hdr->msg.ack.match_bits;
 
-        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
+        lib_md_deconstruct(nal, md, &msg->ev.md);
+        ptl_md2handle(&msg->ev.md_handle, nal, md);
 
         ni->ni_counters.recv_count++;
 
@@ -964,20 +967,20 @@ lib_parse(lib_nal_t *nal, ptl_hdr_t *hdr, void *private)
          * message after that point is the responsibility of the NAL */
         
         /* convert common fields to host byte order */
-        hdr->type = NTOH__u32 (hdr->type);
-        hdr->src_nid = NTOH__u64 (hdr->src_nid);
-        hdr->src_pid = NTOH__u32 (hdr->src_pid);
-        hdr->dest_pid = NTOH__u32 (hdr->dest_pid);
-        hdr->payload_length = NTOH__u32(hdr->payload_length);
+        hdr->type = le32_to_cpu(hdr->type);
+        hdr->src_nid = le64_to_cpu(hdr->src_nid);
+        hdr->src_pid = le32_to_cpu(hdr->src_pid);
+        hdr->dest_pid = le32_to_cpu(hdr->dest_pid);
+        hdr->payload_length = le32_to_cpu(hdr->payload_length);
 
         switch (hdr->type) {
         case PTL_MSG_HELLO: {
                 /* dest_nid is really ptl_magicversion_t */
                 ptl_magicversion_t *mv = (ptl_magicversion_t *)&hdr->dest_nid;
 
-                mv->magic = NTOH__u32(mv->magic);
-                mv->version_major = NTOH__u16(mv->version_major);
-                mv->version_minor = NTOH__u16(mv->version_minor);
+                mv->magic = le32_to_cpu(mv->magic);
+                mv->version_major = le16_to_cpu(mv->version_major);
+                mv->version_minor = le16_to_cpu(mv->version_minor);
 
                 if (mv->magic == PORTALS_PROTO_MAGIC &&
                     mv->version_major == PORTALS_PROTO_VERSION_MAJOR &&
@@ -1006,7 +1009,7 @@ lib_parse(lib_nal_t *nal, ptl_hdr_t *hdr, void *private)
         case PTL_MSG_PUT:
         case PTL_MSG_GET:
         case PTL_MSG_REPLY:
-                hdr->dest_nid = NTOH__u64 (hdr->dest_nid);
+                hdr->dest_nid = le64_to_cpu(hdr->dest_nid);
                 if (hdr->dest_nid != nal->libnal_ni.ni_pid.nid) {
                         CERROR(LPU64": BAD dest NID in %s message from"
                                LPU64" to "LPU64" (not me)\n", 
@@ -1125,12 +1128,12 @@ lib_api_put(nal_t *apinal, ptl_handle_md_t *mdh,
         CDEBUG(D_NET, "PtlPut -> "LPX64"\n", id->nid);
 
         memset (&hdr, 0, sizeof (hdr));
-        hdr.type     = HTON__u32 (PTL_MSG_PUT);
-        hdr.dest_nid = HTON__u64 (id->nid);
-        hdr.dest_pid = HTON__u32 (id->pid);
-        hdr.src_nid  = HTON__u64 (ni->ni_pid.nid);
-        hdr.src_pid  = HTON__u32 (ni->ni_pid.pid);
-        hdr.payload_length = HTON__u32 (md->length);
+        hdr.type     = cpu_to_le32(PTL_MSG_PUT);
+        hdr.dest_nid = cpu_to_le64(id->nid);
+        hdr.dest_pid = cpu_to_le32(id->pid);
+        hdr.src_nid  = cpu_to_le64(ni->ni_pid.nid);
+        hdr.src_pid  = cpu_to_le32(ni->ni_pid.pid);
+        hdr.payload_length = cpu_to_le32(md->length);
 
         /* NB handles only looked up by creator (no flips) */
         if (ack == PTL_ACK_REQ) {
@@ -1140,9 +1143,9 @@ lib_api_put(nal_t *apinal, ptl_handle_md_t *mdh,
                 hdr.msg.put.ack_wmd = PTL_WIRE_HANDLE_NONE;
         }
 
-        hdr.msg.put.match_bits = HTON__u64 (match_bits);
-        hdr.msg.put.ptl_index = HTON__u32 (portal);
-        hdr.msg.put.offset = HTON__u32 (offset);
+        hdr.msg.put.match_bits = cpu_to_le64(match_bits);
+        hdr.msg.put.ptl_index = cpu_to_le32(portal);
+        hdr.msg.put.offset = cpu_to_le32(offset);
         hdr.msg.put.hdr_data = hdr_data;
 
         lib_commit_md(nal, md, msg);
@@ -1150,14 +1153,15 @@ lib_api_put(nal_t *apinal, ptl_handle_md_t *mdh,
         msg->ev.type = PTL_EVENT_SEND_END;
         msg->ev.initiator.nid = ni->ni_pid.nid;
         msg->ev.initiator.pid = ni->ni_pid.pid;
-        msg->ev.portal = portal;
+        msg->ev.pt_index = portal;
         msg->ev.match_bits = match_bits;
         msg->ev.rlength = md->length;
         msg->ev.mlength = md->length;
         msg->ev.offset = offset;
         msg->ev.hdr_data = hdr_data;
 
-        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
+        lib_md_deconstruct(nal, md, &msg->ev.md);
+        ptl_md2handle(&msg->ev.md_handle, nal, md);
 
         ni->ni_counters.send_count++;
         ni->ni_counters.send_length += md->length;
@@ -1219,7 +1223,8 @@ lib_create_reply_msg (lib_nal_t *nal, ptl_nid_t peer_nid, lib_msg_t *getmsg)
         msg->ev.rlength = msg->ev.mlength = getmd->length;
         msg->ev.offset = 0;
 
-        lib_md_deconstruct(nal, getmd, &msg->ev.mem_desc);
+        lib_md_deconstruct(nal, getmd, &msg->ev.md);
+        ptl_md2handle(&msg->ev.md_handle, nal, getmd);
 
         ni->ni_counters.recv_count++;
         ni->ni_counters.recv_length += getmd->length;
@@ -1281,34 +1286,35 @@ lib_api_get(nal_t *apinal, ptl_handle_md_t *mdh, ptl_process_id_t *id,
                (unsigned long)id->pid);
 
         memset (&hdr, 0, sizeof (hdr));
-        hdr.type     = HTON__u32 (PTL_MSG_GET);
-        hdr.dest_nid = HTON__u64 (id->nid);
-        hdr.dest_pid = HTON__u32 (id->pid);
-        hdr.src_nid  = HTON__u64 (ni->ni_pid.nid);
-        hdr.src_pid  = HTON__u32 (ni->ni_pid.pid);
+        hdr.type     = cpu_to_le32(PTL_MSG_GET);
+        hdr.dest_nid = cpu_to_le64(id->nid);
+        hdr.dest_pid = cpu_to_le32(id->pid);
+        hdr.src_nid  = cpu_to_le64(ni->ni_pid.nid);
+        hdr.src_pid  = cpu_to_le32(ni->ni_pid.pid);
         hdr.payload_length = 0;
 
         /* NB handles only looked up by creator (no flips) */
         hdr.msg.get.return_wmd.wh_interface_cookie = ni->ni_interface_cookie;
         hdr.msg.get.return_wmd.wh_object_cookie = md->md_lh.lh_cookie;
 
-        hdr.msg.get.match_bits = HTON__u64 (match_bits);
-        hdr.msg.get.ptl_index = HTON__u32 (portal);
-        hdr.msg.get.src_offset = HTON__u32 (offset);
-        hdr.msg.get.sink_length = HTON__u32 (md->length);
+        hdr.msg.get.match_bits = cpu_to_le64(match_bits);
+        hdr.msg.get.ptl_index = cpu_to_le32(portal);
+        hdr.msg.get.src_offset = cpu_to_le32(offset);
+        hdr.msg.get.sink_length = cpu_to_le32(md->length);
 
         lib_commit_md(nal, md, msg);
 
         msg->ev.type = PTL_EVENT_SEND_END;
         msg->ev.initiator = ni->ni_pid;
-        msg->ev.portal = portal;
+        msg->ev.pt_index = portal;
         msg->ev.match_bits = match_bits;
         msg->ev.rlength = md->length;
         msg->ev.mlength = md->length;
         msg->ev.offset = offset;
         msg->ev.hdr_data = 0;
 
-        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
+        lib_md_deconstruct(nal, md, &msg->ev.md);
+        ptl_md2handle(&msg->ev.md_handle, nal, md);
 
         ni->ni_counters.send_count++;
 
@@ -1329,14 +1335,14 @@ lib_api_get(nal_t *apinal, ptl_handle_md_t *mdh, ptl_process_id_t *id,
 void lib_assert_wire_constants (void)
 {
         /* Wire protocol assertions generated by 'wirecheck'
-         * running on Linux robert.bartonsoftware.com 2.4.20-18.9 #1 Thu May 29 06:54:41 EDT 2003 i68
-         * with gcc version 3.2.2 20030222 (Red Hat Linux 3.2.2-5) */
+         * running on Linux mdevi 2.4.21-p4smp-55chaos #1 SMP Tue Jun 8 14:38:44 PDT 2004 i686 i686 i
+         * with gcc version 3.2.3 20030502 (Red Hat Linux 3.2.3-34) */
 
 
         /* Constants... */
         LASSERT (PORTALS_PROTO_MAGIC == 0xeebc0ded);
-        LASSERT (PORTALS_PROTO_VERSION_MAJOR == 0);
-        LASSERT (PORTALS_PROTO_VERSION_MINOR == 3);
+        LASSERT (PORTALS_PROTO_VERSION_MAJOR == 1);
+        LASSERT (PORTALS_PROTO_VERSION_MINOR == 0);
         LASSERT (PTL_MSG_ACK == 0);
         LASSERT (PTL_MSG_PUT == 1);
         LASSERT (PTL_MSG_GET == 2);
@@ -1345,76 +1351,76 @@ void lib_assert_wire_constants (void)
 
         /* Checks for struct ptl_handle_wire_t */
         LASSERT ((int)sizeof(ptl_handle_wire_t) == 16);
-        LASSERT (offsetof(ptl_handle_wire_t, wh_interface_cookie) == 0);
+        LASSERT ((int)offsetof(ptl_handle_wire_t, wh_interface_cookie) == 0);
         LASSERT ((int)sizeof(((ptl_handle_wire_t *)0)->wh_interface_cookie) == 8);
-        LASSERT (offsetof(ptl_handle_wire_t, wh_object_cookie) == 8);
+        LASSERT ((int)offsetof(ptl_handle_wire_t, wh_object_cookie) == 8);
         LASSERT ((int)sizeof(((ptl_handle_wire_t *)0)->wh_object_cookie) == 8);
 
         /* Checks for struct ptl_magicversion_t */
         LASSERT ((int)sizeof(ptl_magicversion_t) == 8);
-        LASSERT (offsetof(ptl_magicversion_t, magic) == 0);
+        LASSERT ((int)offsetof(ptl_magicversion_t, magic) == 0);
         LASSERT ((int)sizeof(((ptl_magicversion_t *)0)->magic) == 4);
-        LASSERT (offsetof(ptl_magicversion_t, version_major) == 4);
+        LASSERT ((int)offsetof(ptl_magicversion_t, version_major) == 4);
         LASSERT ((int)sizeof(((ptl_magicversion_t *)0)->version_major) == 2);
-        LASSERT (offsetof(ptl_magicversion_t, version_minor) == 6);
+        LASSERT ((int)offsetof(ptl_magicversion_t, version_minor) == 6);
         LASSERT ((int)sizeof(((ptl_magicversion_t *)0)->version_minor) == 2);
 
         /* Checks for struct ptl_hdr_t */
         LASSERT ((int)sizeof(ptl_hdr_t) == 72);
-        LASSERT (offsetof(ptl_hdr_t, dest_nid) == 0);
+        LASSERT ((int)offsetof(ptl_hdr_t, dest_nid) == 0);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->dest_nid) == 8);
-        LASSERT (offsetof(ptl_hdr_t, src_nid) == 8);
+        LASSERT ((int)offsetof(ptl_hdr_t, src_nid) == 8);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->src_nid) == 8);
-        LASSERT (offsetof(ptl_hdr_t, dest_pid) == 16);
+        LASSERT ((int)offsetof(ptl_hdr_t, dest_pid) == 16);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->dest_pid) == 4);
-        LASSERT (offsetof(ptl_hdr_t, src_pid) == 20);
+        LASSERT ((int)offsetof(ptl_hdr_t, src_pid) == 20);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->src_pid) == 4);
-        LASSERT (offsetof(ptl_hdr_t, type) == 24);
+        LASSERT ((int)offsetof(ptl_hdr_t, type) == 24);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->type) == 4);
-        LASSERT (offsetof(ptl_hdr_t, payload_length) == 28);
+        LASSERT ((int)offsetof(ptl_hdr_t, payload_length) == 28);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->payload_length) == 4);
-        LASSERT (offsetof(ptl_hdr_t, msg) == 32);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg) == 32);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg) == 40);
 
         /* Ack */
-        LASSERT (offsetof(ptl_hdr_t, msg.ack.dst_wmd) == 32);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.ack.dst_wmd) == 32);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.ack.dst_wmd) == 16);
-        LASSERT (offsetof(ptl_hdr_t, msg.ack.match_bits) == 48);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.ack.match_bits) == 48);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.ack.match_bits) == 8);
-        LASSERT (offsetof(ptl_hdr_t, msg.ack.mlength) == 56);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.ack.mlength) == 56);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.ack.mlength) == 4);
 
         /* Put */
-        LASSERT (offsetof(ptl_hdr_t, msg.put.ack_wmd) == 32);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.put.ack_wmd) == 32);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.ack_wmd) == 16);
-        LASSERT (offsetof(ptl_hdr_t, msg.put.match_bits) == 48);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.put.match_bits) == 48);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.match_bits) == 8);
-        LASSERT (offsetof(ptl_hdr_t, msg.put.hdr_data) == 56);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.put.hdr_data) == 56);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.hdr_data) == 8);
-        LASSERT (offsetof(ptl_hdr_t, msg.put.ptl_index) == 64);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.put.ptl_index) == 64);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.ptl_index) == 4);
-        LASSERT (offsetof(ptl_hdr_t, msg.put.offset) == 68);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.put.offset) == 68);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.offset) == 4);
 
         /* Get */
-        LASSERT (offsetof(ptl_hdr_t, msg.get.return_wmd) == 32);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.get.return_wmd) == 32);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.return_wmd) == 16);
-        LASSERT (offsetof(ptl_hdr_t, msg.get.match_bits) == 48);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.get.match_bits) == 48);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.match_bits) == 8);
-        LASSERT (offsetof(ptl_hdr_t, msg.get.ptl_index) == 56);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.get.ptl_index) == 56);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.ptl_index) == 4);
-        LASSERT (offsetof(ptl_hdr_t, msg.get.src_offset) == 60);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.get.src_offset) == 60);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.src_offset) == 4);
-        LASSERT (offsetof(ptl_hdr_t, msg.get.sink_length) == 64);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.get.sink_length) == 64);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.sink_length) == 4);
 
         /* Reply */
-        LASSERT (offsetof(ptl_hdr_t, msg.reply.dst_wmd) == 32);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.reply.dst_wmd) == 32);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.reply.dst_wmd) == 16);
 
         /* Hello */
-        LASSERT (offsetof(ptl_hdr_t, msg.hello.incarnation) == 32);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.hello.incarnation) == 32);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.hello.incarnation) == 8);
-        LASSERT (offsetof(ptl_hdr_t, msg.hello.type) == 40);
+        LASSERT ((int)offsetof(ptl_hdr_t, msg.hello.type) == 40);
         LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.hello.type) == 4);
 }

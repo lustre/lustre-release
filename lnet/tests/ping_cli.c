@@ -87,17 +87,17 @@ pingcli_shutdown(ptl_handle_ni_t nih, int err)
 static void pingcli_callback(ptl_event_t *ev)
 {
         int i, magic;
-        i = *(int *)(ev->mem_desc.start + ev->offset + sizeof(unsigned));
-        magic = *(int *)(ev->mem_desc.start + ev->offset);
+        i = *(int *)(ev->md.start + ev->offset + sizeof(unsigned));
+        magic = *(int *)(ev->md.start + ev->offset);
 
         if(magic != 0xcafebabe) {
-                printk ("LustreError: Unexpected response \n");
+                CERROR("Unexpected response %x\n", magic);
         }
 
         if((i == count) || !count)
                 wake_up_process (client->tsk);
         else
-                printk ("LustreError: Received response after timeout for %d\n",i);
+                CERROR("Received response after timeout for %d\n",i);
 }
 
 
@@ -188,7 +188,7 @@ pingcli_start(struct portal_ioctl_data *args)
         client->md_in_head.threshold = PTL_MD_THRESH_INF;
         client->md_in_head.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
         client->md_in_head.user_ptr  = NULL;
-        client->md_in_head.eventq    = client->eq;
+        client->md_in_head.eq_handle = client->eq;
         memset (client->inbuf, 0, (args->ioc_size + STDSIZE) * count);
 
         /* Attach the incoming buffer */
@@ -204,7 +204,7 @@ pingcli_start(struct portal_ioctl_data *args)
         client->md_out_head.threshold = args->ioc_count;
         client->md_out_head.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
         client->md_out_head.user_ptr  = NULL;
-        client->md_out_head.eventq    = PTL_EQ_NONE;
+        client->md_out_head.eq_handle = PTL_EQ_NONE;
 
         memcpy (client->outbuf, &ping_head_magic, sizeof(ping_bulk_magic));
 
@@ -232,17 +232,17 @@ pingcli_start(struct portal_ioctl_data *args)
                          pingcli_shutdown (nih, 1);
                          return NULL;
                 }
-                printk ("Lustre: sent msg no %d", count);
+                CWARN ("Lustre: sent msg no %d", count);
 
                 set_current_state (TASK_INTERRUPTIBLE);
                 rc = schedule_timeout (20 * args->ioc_timeout);
                 if (rc == 0) {
-                        printk ("LustreError:   ::  timeout .....\n");
+                        CERROR ("timeout .....\n");
                 } else {
                         do_gettimeofday (&tv2);
-                        printk("Lustre:   ::  Reply in %u usec\n",
-                                (unsigned)((tv2.tv_sec - tv1.tv_sec)
-                                 * 1000000 +  (tv2.tv_usec - tv1.tv_usec)));
+                        CWARN("Reply in %u usec\n",
+                              (unsigned)((tv2.tv_sec - tv1.tv_sec)
+                                         * 1000000 +  (tv2.tv_usec - tv1.tv_usec)));
                 }
                 count++;
         }

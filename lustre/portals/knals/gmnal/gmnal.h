@@ -55,10 +55,13 @@
 #include "linux/kp30.h"
 #include "portals/p30.h"
 
-#include "portals/lib-nal.h"
+#include "portals/nal.h"
 #include "portals/lib-p30.h"
 
 #define GM_STRONG_TYPES 1
+#ifdef VERSION
+#undef VERSION
+#endif
 #include "gm.h"
 #include "gm_internal.h"
 
@@ -323,14 +326,9 @@ void gmnal_api_unlock(nal_t *, unsigned long *);
 
 
 #define GMNAL_INIT_NAL(a)	do { 	\
-                                a->startup = gmnal_api_startup; \
-				a->forward = gmnal_api_forward; \
-				a->shutdown = gmnal_api_shutdown; \
-				a->yield = gmnal_api_yield; \
-				a->lock = gmnal_api_lock; \
-				a->unlock = gmnal_api_unlock; \
-				a->timeout = NULL; \
-				a->nal_data = NULL; \
+                                (a)->nal_ni_init = gmnal_api_startup; \
+				(a)->nal_ni_fini = gmnal_api_shutdown; \
+				(a)->nal_data = NULL; \
 				} while (0)
 
 
@@ -338,17 +336,17 @@ void gmnal_api_unlock(nal_t *, unsigned long *);
  *	CB NAL
  */
 
-int gmnal_cb_send(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *,
-	int, ptl_nid_t, ptl_pid_t, unsigned int, struct iovec *, size_t);
+ptl_err_t gmnal_cb_send(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *,
+	int, ptl_nid_t, ptl_pid_t, unsigned int, struct iovec *, size_t, size_t);
 
-int gmnal_cb_send_pages(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *,
-	int, ptl_nid_t, ptl_pid_t, unsigned int, ptl_kiov_t *, size_t);
+ptl_err_t gmnal_cb_send_pages(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *,
+	int, ptl_nid_t, ptl_pid_t, unsigned int, ptl_kiov_t *, size_t, size_t);
 
-int gmnal_cb_recv(lib_nal_t *, void *, lib_msg_t *, 
-	unsigned int, struct iovec *, size_t, size_t);
+ptl_err_t gmnal_cb_recv(lib_nal_t *, void *, lib_msg_t *, 
+	unsigned int, struct iovec *, size_t, size_t, size_t);
 
-int gmnal_cb_recv_pages(lib_nal_t *, void *, lib_msg_t *, 
-	unsigned int, ptl_kiov_t *, size_t, size_t);
+ptl_err_t gmnal_cb_recv_pages(lib_nal_t *, void *, lib_msg_t *, 
+	unsigned int, ptl_kiov_t *, size_t, size_t, size_t);
 
 int gmnal_cb_dist(lib_nal_t *, ptl_nid_t, unsigned long *);
 
@@ -422,10 +420,10 @@ void		gmnal_remove_rxtwe(gmnal_data_t *);
  *	Small messages
  */
 int 		gmnal_small_rx(lib_nal_t *, void *, lib_msg_t *, unsigned int, 
-			        struct iovec *, size_t, size_t);
+			        struct iovec *, size_t, size_t, size_t);
 int 		gmnal_small_tx(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *, 
 				int, ptl_nid_t, ptl_pid_t, 
-				unsigned int, struct iovec*, int);
+				unsigned int, struct iovec*, size_t, int);
 void 		gmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
 
 
@@ -434,11 +432,11 @@ void 		gmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
  *	Large messages
  */
 int 		gmnal_large_rx(lib_nal_t *, void *, lib_msg_t *, unsigned int, 
-				struct iovec *, size_t, size_t);
+				struct iovec *, size_t, size_t, size_t);
 
 int 		gmnal_large_tx(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *, 
 				int, ptl_nid_t, ptl_pid_t, unsigned int, 
-				struct iovec*, int);
+				struct iovec*, size_t, int);
 
 void 		gmnal_large_tx_callback(gm_port_t *, void *, gm_status_t);
 

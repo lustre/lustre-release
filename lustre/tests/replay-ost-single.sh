@@ -18,12 +18,12 @@ ALWAYS_EXCEPT="5"
 gen_config() {
     rm -f $XMLCONFIG
     if [ "$MDSCOUNT" -gt 1 ]; then
-        add_lmv lmv1
+        add_lmv lmv1_svc
         for mds in `mds_list`; do
             MDSDEV=$TMP/${mds}-`hostname`
-            add_mds $mds --dev $MDSDEV --size $MDSSIZE  --lmv lmv1
+            add_mds $mds --dev $MDSDEV --size $MDSSIZE  --lmv lmv1_svc
         done
-        add_lov_to_lmv lov1 lmv1 --stripe_sz $STRIPE_BYTES \
+        add_lov_to_lmv lov1 lmv1_svc --stripe_sz $STRIPE_BYTES \
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
 	MDS=lmv1
     else
@@ -38,7 +38,7 @@ gen_config() {
     if [ ! -z "$ostfailover_HOST" ]; then
 	 add_ostfailover ost --dev $OSTDEV --size $OSTSIZE
     fi
-    add_client client --mds $MDS --lov lov1 --path $MOUNT
+    add_client client $MDS --lov lov1 --path $MOUNT
 }
 
 cleanup() {

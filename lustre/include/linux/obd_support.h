@@ -36,7 +36,9 @@
 extern atomic_t obd_memory;
 extern int obd_memmax;
 extern unsigned int obd_fail_loc;
+extern unsigned int obd_dump_on_timeout;
 extern unsigned int obd_timeout;
+extern unsigned int ldlm_timeout;
 extern char obd_lustre_upcall[128];
 extern unsigned int obd_sync_filter;
 extern wait_queue_head_t obd_race_waitq;
@@ -72,7 +74,7 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_MDS_GETSTATUS_PACK      0x11c
 #define OBD_FAIL_MDS_STATFS_PACK         0x11d
 #define OBD_FAIL_MDS_STATFS_NET          0x11e
-#define OBD_FAIL_MDS_GETATTR_NAME_NET    0x11f
+#define OBD_FAIL_MDS_GETATTR_LOCK_NET    0x11f
 #define OBD_FAIL_MDS_PIN_NET             0x120
 #define OBD_FAIL_MDS_UNPIN_NET           0x121
 #define OBD_FAIL_MDS_ALL_REPLY_NET       0x122
@@ -104,6 +106,9 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_OST_ALL_REQUESTS_NET    0x212
 #define OBD_FAIL_OST_LDLM_REPLY_NET      0x213
 #define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
+#define OBD_FAIL_OST_ENOSPC              0x215
+#define OBD_FAIL_OST_EROFS               0x216
+
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -115,6 +120,10 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_LDLM_GL_CALLBACK        0x307
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 #define OBD_FAIL_LDLM_ENQUEUE_INTENT_ERR 0x309
+#define OBD_FAIL_LDLM_CREATE_RESOURCE    0x30a
+#define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b
+#define OBD_FAIL_LDLM_REPLY              0x30c
+
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
@@ -171,8 +180,8 @@ do {                                                                         \
 #define OBD_FAIL_TIMEOUT(id, secs)                                           \
 do {                                                                         \
         if  (OBD_FAIL_CHECK_ONCE(id)) {                                      \
-                CERROR("obd_fail_timeout id %x sleeping for %d secs\n",     \
-                       (id), (secs));                                        \
+               CERROR("obd_fail_timeout id %x sleeping for %d secs\n",       \
+                        (id), (secs));                                       \
                 set_current_state(TASK_UNINTERRUPTIBLE);                     \
                 schedule_timeout((secs) * HZ);                               \
                 set_current_state(TASK_RUNNING);                             \

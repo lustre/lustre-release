@@ -52,7 +52,7 @@ struct ll_rpc_opcode {
         { OST_SYNC,         "ost_sync" },
         { OST_SET_INFO,     "ost_set_info" },
         { MDS_GETATTR,      "mds_getattr" },
-        { MDS_GETATTR_NAME, "mds_getattr_name" },
+        { MDS_GETATTR_LOCK, "mds_getattr_lock" },
         { MDS_CLOSE,        "mds_close" },
         { MDS_REINT,        "mds_reint" },
         { MDS_READPAGE,     "mds_readpage" },
@@ -134,6 +134,9 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                              svc_counter_config, "req_qdepth", "reqs");
         lprocfs_counter_init(svc_stats, PTLRPC_REQACTIVE_CNTR,
                              svc_counter_config, "req_active", "reqs");
+        lprocfs_counter_init(svc_stats, PTLRPC_REQBUF_AVAIL_CNTR,
+                             svc_counter_config, "reqbuf_avail", "bufs");
+
         for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
                 __u32 opcode = ll_rpc_opcode_table[i].opcode;
                 lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,

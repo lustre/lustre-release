@@ -9,15 +9,18 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/lmv.sh}
 
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"cleanup"}
+
 gen_config() {
     rm -f $XMLCONFIG
     if [ "$MDSCOUNT" -gt 1 ]; then
-        add_lmv lmv1
+        add_lmv lmv1_svc
         for mds in `mds_list`; do
             MDSDEV=$TMP/${mds}-`hostname`
-            add_mds $mds --dev $MDSDEV --size $MDSSIZE  --lmv lmv1
+            add_mds $mds --dev $MDSDEV --size $MDSSIZE  --lmv lmv1_svc
         done
-        add_lov_to_lmv lov1 lmv1 --stripe_sz $STRIPE_BYTES \
+        add_lov_to_lmv lov1 lmv1_svc --stripe_sz $STRIPE_BYTES \
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
 	MDS=lmv1
     else
@@ -28,9 +31,9 @@ gen_config() {
 
     fi
 
-    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
-    add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
-    add_client client --mds ${MDS} --lov lov1 --path $MOUNT
+    add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE --failover
+    add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE  --failover
+    add_client client  ${MDS} --lov lov1 --path $MOUNT
 }
 
 
@@ -217,26 +220,6 @@ test_6b() {
 }
 run_test 6b "open1, open2, unlink |X| close2 [fail mds] close1"
 
-test_7() {
-    replay_barrier mds1
-    createmany -o $MOUNT1/$tfile- 25
-    createmany -o $MOUNT2/$tfile-2- 1
-    createmany -o $MOUNT1/$tfile-3- 25
-    umount $MOUNT2
-
-    facet_failover mds1
-    # expect failover to fail
-    df $MOUNT && return 1
-
-#   3313 - current fix for 3313 prevents any reply here
-#    unlinkmany $MOUNT1/$tfile- 25 || return 2
-
-    zconf_mount `hostname` $MOUNT2
-    return 0
-}
-run_test 7 "timeouts waiting for lost client during replay"
-
-
 test_8() {
     replay_barrier mds1
     drop_reint_reply "mcreate $MOUNT1/$tfile"    || return 1
@@ -348,7 +331,86 @@ test_13() {
 }
 run_test 13 "close resend timeout"
 
-test_20 () {
+
+test_14() {
+    replay_barrier mds1
+    createmany -o $MOUNT1/$tfile- 25
+    createmany -o $MOUNT2/$tfile-2- 1
+    createmany -o $MOUNT1/$tfile-3- 25
+    umount $MOUNT2
+
+    facet_failover mds1
+    # expect failover to fail
+    df $MOUNT && return 1
+
+    # first 25 files shouuld have been
+    # replayed
+    sleep 2 
+    unlinkmany $MOUNT1/$tfile- 25 || return 2
+
+    zconf_mount `hostname` $MOUNT2
+    return 0
+}
+run_test 14 "timeouts waiting for lost client during replay"
+
+test_15() {
+    replay_barrier mds1
+    createmany -o $MOUNT1/$tfile- 25
+    createmany -o $MOUNT2/$tfile-2- 1
+    umount $MOUNT2
+
+    facet_failover mds1
+    df $MOUNT || return 1
+
+    unlinkmany $MOUNT1/$tfile- 25 || return 2
+
+    zconf_mount `hostname` $MOUNT2
+    return 0
+}
+run_test 15 "timeout waiting for lost client during replay, 1 client completes"
+test_16() {
+    replay_barrier mds1
+    createmany -o $MOUNT1/$tfile- 25
+    createmany -o $MOUNT2/$tfile-2- 1
+    umount $MOUNT2
+
+    facet_failover mds1
+    sleep $TIMEOUT
+    facet_failover mds1
+    df $MOUNT || return 1
+
+    unlinkmany $MOUNT1/$tfile- 25 || return 2
+
+    zconf_mount `hostname` $MOUNT2
+    return 0
+
+}
+#run_test 16 "fail MDS during recovery (3571)"
+
+test_17() {
+    createmany -o $MOUNT1/$tfile- 25
+    createmany -o $MOUNT2/$tfile-2- 1
+
+    # Make sure the disconnect is lost
+    replay_barrier ost
+    umount $MOUNT2
+
+    echo -1 > /proc/sys/portals/debug
+    facet_failover ost
+    sleep $TIMEOUT
+    facet_failover ost
+    df $MOUNT || return 1
+
+    unlinkmany $MOUNT1/$tfile- 25 || return 2
+
+    zconf_mount `hostname` $MOUNT2
+    return 0
+
+}
+#Still not support ost fail over
+#run_test 17 "fail OST during recovery (3571)"
+
+test_18 () {
     replay_barrier mds1
     multiop $MOUNT2/$tfile O_c &
     pid2=$!
@@ -364,9 +426,37 @@ test_20 () {
     df || df ||  return 1
     zconf_mount `hostname` $MOUNT2
 }
-run_test 20 "replay open, Abort recovery, don't assert (3892)"
+run_test 18 "replay open, Abort recovery, don't assert (3892)"
+
+
+# cleanup with blocked enqueue fails until timer elapses (MDS busy), wait for
+# itexport NOW=0
+
+test_20() {     # bug 3822 - evicting client with enqueued lock
+       mkdir -p $MOUNT1/$tdir
+       touch $MOUNT1/$tdir/f0
+#define OBD_FAIL_LDLM_ENQUEUE_BLOCKED    0x30b
+       statmany -s $MOUNT1/$tdir/f 500 &
+       OPENPID=$!
+       NOW=`date +%s`
+       do_facet mds1 sysctl -w lustre.fail_loc=0x8000030b  # hold enqueue
+       sleep 1
+#define OBD_FAIL_LDLM_BL_CALLBACK        0x305
+       do_facet client sysctl -w lustre.fail_loc=0x80000305  # drop cb, evict
+       cancel_lru_locks MDC
+       usleep 500 # wait to ensure first client is one that will be evicted
+       openfile -f O_RDONLY $MOUNT2/$tdir/f0
+       wait $OPENPID
+       dmesg | grep "entering recovery in server" && \
+               error "client not evicted" || true
+}
+run_test 20 "ldlm_handle_enqueue succeeds on evicted export (3822)"
 
 if [ "$ONLY" != "setup" ]; then
 	equals_msg test complete, cleaning up
+	if [ $NOW ]; then
+            SLEEP=$((`date +%s` - $NOW))
+            [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
+	fi
 	$CLEANUP
 fi

@@ -25,7 +25,6 @@
 #define LIBLUSTRE_H__
 
 #include <sys/mman.h>
-#include <asm/byteorder.h>
 #ifndef  __CYGWIN__
 #include <stdint.h>
 #include <asm/page.h>
@@ -126,13 +125,6 @@ typedef int (read_proc_t)(char *page, char **start, off_t off,
 struct file; /* forward ref */
 typedef int (write_proc_t)(struct file *file, const char *buffer,
                            unsigned long count, void *data);
-
-# define le16_to_cpu(x) __le16_to_cpu(x)
-# define cpu_to_le16(x) __cpu_to_le16(x)
-# define le32_to_cpu(x) __le32_to_cpu(x)
-# define cpu_to_le32(x) __cpu_to_le32(x)
-# define le64_to_cpu(x) __le64_to_cpu(x)
-# define cpu_to_le64(x) __cpu_to_le64(x)
 
 #define NIPQUAD(addr) \
         ((unsigned char *)&addr)[0], \
@@ -352,9 +344,9 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
 #define kmem_cache_alloc(cache, prio) malloc(cache->size)
 #define kmem_cache_free(cache, obj) free(obj)
 
-#define PAGE_CACHE_SIZE PAGE_SIZE
-#define PAGE_CACHE_SHIFT 12
-#define PAGE_CACHE_MASK PAGE_MASK
+#define PAGE_CACHE_SIZE  PAGE_SIZE
+#define PAGE_CACHE_SHIFT PAGE_SHIFT
+#define PAGE_CACHE_MASK  PAGE_MASK
 
 struct page {
         void   *addr;
@@ -638,7 +630,7 @@ static inline int schedule_timeout(signed long t)
                 _ret = tv.tv_sec;               \
         _ret;                                   \
 })
-#define time_after(a, b) ((long)(b) - (long)(a) > 0)
+#define time_after(a, b) ((long)(b) - (long)(a) < 0)
 #define time_before(a, b) time_after(b,a)
 
 struct timer_list {
@@ -707,9 +699,11 @@ typedef enum {
     CAP_SET=1
 } cap_flag_value_t;
 
-#define CAP_FOWNER      3
-#define CAP_FSETID      4
-#define CAP_SYS_ADMIN   21
+#define CAP_DAC_OVERRIDE        1
+#define CAP_DAC_READ_SEARCH     2
+#define CAP_FOWNER              3
+#define CAP_FSETID              4
+#define CAP_SYS_ADMIN          21
 
 cap_t   cap_get_proc(void);
 int     cap_get_flag(cap_t, cap_value_t, cap_flag_t, cap_flag_value_t *);

@@ -373,7 +373,7 @@ int llapi_file_get_stripe(char *path, struct lov_user_md *lum)
                 if (dname == NULL)
                         return ENOMEM;
                 strncpy(dname, path, fname - path);
-                dname[fname - path + 1] = '\0';
+                dname[fname - path] = '\0';
                 fname++;
         }
 

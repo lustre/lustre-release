@@ -48,7 +48,7 @@ static int class_attach(struct lustre_cfg *lcfg)
         struct obd_type *type;
         struct obd_device *obd;
         char *typename, *name, *uuid;
-        int minor, rc, len, dev, stage = 0;
+        int rc, len, cleanup_phase = 0;
 
         if (!lcfg->lcfg_inllen1 || !lcfg->lcfg_inlbuf1) {
                 CERROR("No type passed!\n");
@@ -90,7 +90,7 @@ static int class_attach(struct lustre_cfg *lcfg)
                 CERROR("OBD: unknown type: %s\n", typename);
                 RETURN(-EINVAL);
         }
-        stage = 1;
+        cleanup_phase = 1;  /* class_put_type */
 
         obd = class_name2obd(name);
         if (obd != NULL) {
@@ -98,27 +98,12 @@ static int class_attach(struct lustre_cfg *lcfg)
                 GOTO(out, rc = -EEXIST);
         }
 
-        obd = class_newdev(&dev);
+        obd = class_newdev(type);
         if (obd == NULL)
                 GOTO(out, rc = -EINVAL);
 
-        /* have we attached a type to this device */
-        if (obd->obd_attached) {
-                CERROR("OBD: Device %d already attached.\n", obd->obd_minor);
-                GOTO(out, rc = -EBUSY);
-        }
-        if (obd->obd_type != NULL) {
-                CERROR("OBD: Device %d already typed as %s.\n",
-                       obd->obd_minor, MKSTR(obd->obd_type->typ_name));
-                GOTO(out, rc = -EBUSY);
-        }
-
-        LASSERT(obd == (obd_dev + obd->obd_minor));
-
-        minor = obd->obd_minor;
-        memset(obd, 0, sizeof(*obd));
-        obd->obd_minor = minor;
-        obd->obd_type = type;
+        cleanup_phase = 2;  /* class_release_dev */
+        
         INIT_LIST_HEAD(&obd->obd_exports);
         obd->obd_num_exports = 0;
         spin_lock_init(&obd->obd_dev_lock);
@@ -142,7 +127,8 @@ static int class_attach(struct lustre_cfg *lcfg)
         if (!obd->obd_name)
                 GOTO(out, rc = -ENOMEM);
         memcpy(obd->obd_name, name, len);
-        stage = 2;
+        
+        cleanup_phase = 3; /* free obd_name */
 
         len = strlen(uuid);
         if (len >= sizeof(obd->obd_uuid)) {
@@ -165,9 +151,11 @@ static int class_attach(struct lustre_cfg *lcfg)
                obd->obd_minor, typename);
         RETURN(0);
  out:
-        switch (stage) {
-        case 2:
+        switch (cleanup_phase) {
+        case 3:
                 OBD_FREE(obd->obd_name, strlen(obd->obd_name) + 1);
+        case 2:
+                class_release_dev(obd);
         case 1:
                 class_put_type(type);
                 obd->obd_type = NULL;
@@ -223,7 +211,6 @@ err_exp:
 
 static int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-        int minor;
         int err = 0;
 
         ENTRY;
@@ -248,10 +235,7 @@ static int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_attached = 0;
         obd->obd_type->typ_refcnt--;
         class_put_type(obd->obd_type);
-        obd->obd_type = NULL;
-        minor = obd->obd_minor;
-        memset(obd, 0, sizeof(*obd));
-        obd->obd_minor = minor;
+        class_release_dev(obd);
         RETURN(err);
 }
 
@@ -369,7 +353,70 @@ out:
         }
 
         RETURN(err);
+}
 
+int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
+{
+        struct obd_import *imp;
+        struct obd_uuid uuid;
+        int priority, rc;
+        ENTRY;
+
+        if (lcfg->lcfg_inllen1 <= 0 ||
+            lcfg->lcfg_inllen1 > sizeof(struct obd_uuid)) {
+                CERROR("invalid conn_uuid\n");
+                RETURN(-EINVAL);
+        }
+        if (lcfg->lcfg_inllen2 != sizeof(int)) {
+                CERROR("invalid priority\n");
+                RETURN(-EINVAL);
+        }
+        if (strcmp(obd->obd_type->typ_name, "mdc") &&
+            strcmp(obd->obd_type->typ_name, "osc")) {
+                CERROR("can't add connection on non-client dev\n");
+                RETURN(-EINVAL);
+        }
+
+        imp = obd->u.cli.cl_import;
+        if (!imp) {
+                CERROR("try to add conn on immature client dev\n");
+                RETURN(-EINVAL);
+        }
+
+        obd_str2uuid(&uuid, lcfg->lcfg_inlbuf1);
+        priority = *((int*) lcfg->lcfg_inlbuf2);
+        rc = obd_add_conn(imp, &uuid, priority);
+
+        RETURN(rc);
+}
+int class_del_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
+{
+        struct obd_import *imp;
+        struct obd_uuid uuid;
+        int rc;
+        ENTRY;
+
+        if (lcfg->lcfg_inllen1 <= 0 ||
+            lcfg->lcfg_inllen1 > sizeof(struct obd_uuid)) {
+                CERROR("invalid conn_uuid\n");
+                RETURN(-EINVAL);
+        }
+        if (strcmp(obd->obd_type->typ_name, "mdc") &&
+            strcmp(obd->obd_type->typ_name, "osc")) {
+                CERROR("can't add connection on non-client dev\n");
+                RETURN(-EINVAL);
+        }
+
+        imp = obd->u.cli.cl_import;
+        if (!imp) {
+                CERROR("try to del conn on immature client dev\n");
+                RETURN(-EINVAL);
+        }
+
+        obd_str2uuid(&uuid, lcfg->lcfg_inlbuf1);
+        rc = obd_del_conn(imp, &uuid);
+
+        RETURN(rc);
 }
 
 LIST_HEAD(lustre_profile_list);
@@ -531,6 +578,14 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         case LCFG_CLEANUP: {
                 err = class_cleanup(obd, lcfg);
+                GOTO(out, err = 0);
+        }
+        case LCFG_ADD_CONN: {
+                err = class_add_conn(obd, lcfg);
+                GOTO(out, err = 0);
+        }
+        case LCFG_DEL_CONN: {
+                err = class_del_conn(obd, lcfg);
                 GOTO(out, err = 0);
         }
         default: {

@@ -186,7 +186,6 @@ EXPORT_SYMBOL(lustre_swab_ldlm_reply);
 EXPORT_SYMBOL(lustre_swab_ptlbd_op);
 EXPORT_SYMBOL(lustre_swab_ptlbd_niob);
 EXPORT_SYMBOL(lustre_swab_ptlbd_rsp);
-EXPORT_SYMBOL(lustre_swab_clonefs_info);
 EXPORT_SYMBOL(mdc_create_pack);
 EXPORT_SYMBOL(mdc_setattr_pack);
 EXPORT_SYMBOL(mdc_unlink_pack);

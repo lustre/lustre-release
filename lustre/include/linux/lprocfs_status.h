@@ -273,11 +273,22 @@ void lprocfs_oh_tally_log2(struct obd_histogram *oh, unsigned int value);
 void lprocfs_oh_clear(struct obd_histogram *oh);
 unsigned long lprocfs_oh_sum(struct obd_histogram *oh);
 
+struct obd_service_time;
+void lprocfs_stime_record(struct obd_service_time *stime,
+                          struct timeval *large, struct timeval *small);
+unsigned long lprocfs_stime_avg_ms(struct obd_service_time *stime);
+unsigned long lprocfs_stime_avg_us(struct obd_service_time *stime);
+
 /* lprocfs_status.c: counter read/write functions */
 extern int lprocfs_counter_read(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
 extern int lprocfs_counter_write(struct file *file, const char *buffer,
                                  unsigned long count, void *data);
+
+/* lprocfs_status.c: recovery status */
+int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data);
+
 #else
 /* LPROCFS is not defined */
 static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
@@ -288,6 +299,11 @@ static inline void lprocfs_counter_init(struct lprocfs_stats *stats,
                                         int index, unsigned conf,
                                         const char *name, const char *units)
 { return; }
+struct obd_service_time;
+static inline void lprocfs_stime_record(struct obd_service_time *stime,
+                          struct timeval *large, struct timeval *small)
+{ return; }
+
 
 static inline struct lprocfs_stats* lprocfs_alloc_stats(unsigned int num)
 { return NULL; }

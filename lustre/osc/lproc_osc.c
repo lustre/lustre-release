@@ -128,7 +128,8 @@ int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        if (val < 0 || val > OSC_MAX_DIRTY_MB_MAX)
+        if (val < 0 || val > OSC_MAX_DIRTY_MB_MAX ||
+            val > num_physpages >> (20 - PAGE_SHIFT - 2)) /* 1/4 of RAM */
                 return -ERANGE;
 
         spin_lock(&cli->cl_loi_list_lock);
@@ -289,6 +290,10 @@ static struct lprocfs_vars lprocfs_module_vars[] = {
 
 #define pct(a,b) (b ? a * 100 / b : 0)
 
+#define PRINTF_STIME(stime) (unsigned long)(stime)->st_num,     \
+        lprocfs_stime_avg_ms(stime), lprocfs_stime_avg_us(stime)
+
+
 static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 {
         struct timeval now;
@@ -296,21 +301,24 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
         struct client_obd *cli = &dev->u.cli;
         unsigned long flags;
         unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
-        int i, rpcs, r, w;
+        int i;
 
         do_gettimeofday(&now);
 
         spin_lock_irqsave(&cli->cl_loi_list_lock, flags);
 
-        rpcs = cli->cl_brw_in_flight;
-        r = cli->cl_pending_r_pages;
-        w = cli->cl_pending_w_pages;
-
         seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n",
                    now.tv_sec, now.tv_usec);
-        seq_printf(seq, "RPCs in flight:        %d\n", rpcs);
-        seq_printf(seq, "pending write pages:   %d\n", w);
-        seq_printf(seq, "pending read pages:   %d\n", r);
+
+        seq_printf(seq, "read RPCs in flight:  %d\n",
+                   cli->cl_r_in_flight);
+        seq_printf(seq, "write RPCs in flight: %d\n",
+                   cli->cl_w_in_flight);
+        seq_printf(seq, "pending write pages:  %d\n",
+                   cli->cl_pending_w_pages);
+        seq_printf(seq, "pending read pages:   %d\n",
+                   cli->cl_pending_r_pages);
+
 
         seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
         seq_printf(seq, "pages per rpc         rpcs   %% cum %% |");
@@ -357,6 +365,16 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
                 if (read_cum == read_tot && write_cum == write_tot)
                         break;
         }
+
+        seq_printf(seq, "\nrpc service time: (rpcs, average ms)\n");
+        seq_printf(seq, "\tread\t%lu\t%lu.%04lu\n",
+                        PRINTF_STIME(&cli->cl_read_stime));
+        seq_printf(seq, "\twrite\t%lu\t%lu.%04lu\n\n",
+                        PRINTF_STIME(&cli->cl_write_stime));
+
+        seq_printf(seq, "app waiting: (num, average ms)\n");
+        seq_printf(seq, "\tenter cache\t%lu\t%lu.%04lu\n",
+                        PRINTF_STIME(&cli->cl_enter_stime));
 
         spin_unlock_irqrestore(&cli->cl_loi_list_lock, flags);
 
@@ -410,6 +428,10 @@ static ssize_t osc_rpc_stats_seq_write(struct file *file, const char *buf,
         lprocfs_oh_clear(&cli->cl_write_rpc_hist);
         lprocfs_oh_clear(&cli->cl_read_page_hist);
         lprocfs_oh_clear(&cli->cl_write_page_hist);
+
+        memset(&cli->cl_read_stime, 0, sizeof(cli->cl_read_stime));
+        memset(&cli->cl_write_stime, 0, sizeof(cli->cl_write_stime));
+        memset(&cli->cl_enter_stime, 0, sizeof(cli->cl_enter_stime));
 
         return len;
 }

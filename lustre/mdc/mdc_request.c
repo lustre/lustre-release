@@ -77,7 +77,7 @@ void mdc_pack_secdesc(struct ptlrpc_request *req, int size)
         get_group_info(current->group_info);
         ginfo = current->group_info;
         task_unlock(current);
-        if (rsd->rsd_ngroups > ginfo->ngropus)
+        if (rsd->rsd_ngroups > ginfo->ngroups)
                 rsd->rsd_ngroups = ginfo->ngroups;
         memcpy(rsd->rsd_groups, ginfo->blocks[0],
                rsd->rsd_ngroups * sizeof(__u32));
@@ -242,7 +242,7 @@ int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
         size[0] = mdc_get_secdesc_size();
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), LUSTRE_MDS_VERSION,
-                              MDS_GETATTR_NAME, 3, size, NULL);
+                              MDS_GETATTR_LOCK, 3, size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -621,7 +621,6 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         if (req->rq_async_args.pointer_arg[0] != NULL) {
                 CERROR("returned without dropping rpc_lock: rc %d\n", rc);
                 mdc_close_interpret(req, &req->rq_async_args, rc);
-                portals_debug_dumplog();
         }
 
         EXIT;
@@ -1260,12 +1259,12 @@ int mdc_brw(int rw, struct obd_export *exp, struct obdo *oa,
                 struct brw_page *pg = &pgarr[i];
 
                 LASSERT(pg->count > 0);
-                LASSERT((pg->off & ~PAGE_MASK) + pg->count <= PAGE_SIZE);
+                LASSERT((pg->disk_offset & ~PAGE_MASK) + pg->count <= PAGE_SIZE);
 
-                ptlrpc_prep_bulk_page(desc, pg->pg, pg->off & ~PAGE_MASK,
+                ptlrpc_prep_bulk_page(desc, pg->pg, pg->disk_offset & ~PAGE_MASK,
                                       pg->count);
 
-                niobuf->offset = pg->off;
+                niobuf->offset = pg->disk_offset;
                 niobuf->len = pg->count;
                 niobuf->flags = pg->flag;
         }
@@ -1332,6 +1331,8 @@ struct obd_ops mdc_obd_ops = {
         .o_setup         = mdc_setup,
         .o_precleanup    = mdc_precleanup,
         .o_cleanup       = mdc_cleanup,
+        .o_add_conn      = client_import_add_conn,
+        .o_del_conn      = client_import_del_conn,
         .o_connect       = client_connect_import,
         .o_disconnect    = client_disconnect_export,
         .o_iocontrol     = mdc_iocontrol,

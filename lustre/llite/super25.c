@@ -93,8 +93,8 @@ int ll_init_inodecache(void)
 
 void ll_destroy_inodecache(void)
 {
-        if (kmem_cache_destroy(ll_inode_cachep))
-                CERROR("ll_inode_cache: not all structures were freed\n");
+        LASSERTF(kmem_cache_destroy(ll_inode_cachep) == 0,
+                 "ll_inode_cache: not all structures were freed\n");
 }
 
 /* exported operations */
@@ -127,7 +127,8 @@ struct file_system_type lustre_fs_type = {
 
 static int __init init_lustre_lite(void)
 {
-        int rc;
+        int rc, cleanup = 0;
+
         printk(KERN_INFO "Lustre: Lustre Lite Client File System; "
                "info@clusterfs.com\n");
         rc = ll_init_inodecache();
@@ -137,7 +138,7 @@ static int __init init_lustre_lite(void)
                                               sizeof(struct ll_file_data), 0,
                                               SLAB_HWCACHE_ALIGN, NULL, NULL);
         if (ll_file_data_slab == NULL) {
-                ll_destroy_inodecache();
+                GOTO(out, rc = ENOMEM);
                 return -ENOMEM;
         }
 
@@ -145,10 +146,28 @@ static int __init init_lustre_lite(void)
                               proc_mkdir("llite", proc_lustre_root) : NULL;
 
         rc = register_filesystem(&lustre_lite_fs_type);
-        if (!rc) {
-                rc = register_filesystem(&lustre_fs_type);
-                if (rc)
-                        unregister_filesystem(&lustre_fs_type);
+        if (rc)
+                GOTO(out, rc);
+        cleanup = 1;
+
+        rc = register_filesystem(&lustre_fs_type);
+        if (rc)
+                GOTO(out, rc);
+        cleanup = 2;
+
+        rc = ll_gns_start_thread();
+        if (rc)
+                GOTO(out, rc);
+        return 0;
+
+out:
+        switch (cleanup) {
+        case 2:
+                unregister_filesystem(&lustre_fs_type);
+        case 1:
+                unregister_filesystem(&lustre_lite_fs_type);
+        case 0:
+               ll_destroy_inodecache();
         }
         return rc;
 }
@@ -158,7 +177,9 @@ static void __exit exit_lustre_lite(void)
         unregister_filesystem(&lustre_fs_type);
         unregister_filesystem(&lustre_lite_fs_type);
         ll_destroy_inodecache();
-        kmem_cache_destroy(ll_file_data_slab);
+        
+        LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
+                 "couldn't destroy ll_file_data slab\n");
         if (proc_lustre_fs_root) {
                 lprocfs_remove(proc_lustre_fs_root);
                 proc_lustre_fs_root = NULL;

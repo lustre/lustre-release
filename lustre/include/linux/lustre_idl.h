@@ -265,6 +265,7 @@ typedef uint32_t        obd_count;
 #define OBD_FL_NORPC        (0x00000008) // if set in o_flags set in OSC not OST
 #define OBD_FL_IDONLY       (0x00000010) // if set in o_flags only adjust obj id
 #define OBD_FL_RECREATE_OBJS (0x00000020) // recreate missing obj
+#define OBD_FL_DEBUG_CHECK  (0x00000040) /* echo client/server debug check */
 
 #define OBD_INLINESZ    64
 
@@ -272,10 +273,10 @@ typedef uint32_t        obd_count;
 struct obdo {
         obd_id                  o_id;
         obd_gr                  o_gr;
-        obd_time                o_atime;
-        obd_time                o_mtime;
-        obd_time                o_ctime;
         obd_size                o_size;
+        obd_time                o_mtime;
+        obd_time                o_atime;
+        obd_time                o_ctime;
         obd_blocks              o_blocks;       /* brw: cli sent cached bytes */
         obd_size                o_grant;
         obd_blksize             o_blksize;      /* optimal IO blocksize */
@@ -286,7 +287,7 @@ struct obdo {
         obd_count               o_nlink;        /* brw: checksum */
         obd_count               o_generation;
         obd_flag                o_valid;        /* hot fields in this obdo */
-        obd_count               o_misc;
+        obd_count               o_misc;          /* brw: o_dropped */
         __u32                   o_easize;       /* epoch in ost writes */
         __u32                   o_mds;
         __u32                   o_padding;
@@ -501,7 +502,7 @@ struct mds_req_sec_desc *lustre_swab_mds_secdesc(struct ptlrpc_request *req,
 /* opcodes */
 typedef enum {
         MDS_GETATTR      = 33,
-        MDS_GETATTR_NAME = 34,
+        MDS_GETATTR_LOCK = 34,
         MDS_CLOSE        = 35,
         MDS_REINT        = 36,
         MDS_READPAGE     = 37,
@@ -533,13 +534,13 @@ typedef enum {
 #define REINT_MAX        8
 
 /* the disposition of the intent outlines what was executed */
-#define DISP_IT_EXECD   1
-#define DISP_LOOKUP_EXECD  (1 << 1)
-#define DISP_LOOKUP_NEG     (1 << 2)
-#define DISP_LOOKUP_POS     (1 << 3)
-#define DISP_OPEN_CREATE  (1 << 4)
-#define DISP_OPEN_OPEN    (1 << 5)
-#define DISP_ENQ_COMPLETE (1<<6)
+#define DISP_IT_EXECD     0x01
+#define DISP_LOOKUP_EXECD 0x02
+#define DISP_LOOKUP_NEG   0x04
+#define DISP_LOOKUP_POS   0x08
+#define DISP_OPEN_CREATE  0x10
+#define DISP_OPEN_OPEN    0x20
+#define DISP_ENQ_COMPLETE 0x40
 
 /* INODE LOCK PARTS */
 #define MDS_INODELOCK_LOOKUP 0x000001       /* dentry, mode, owner, group */
@@ -887,13 +888,6 @@ struct ptlbd_rsp {
 
 extern void lustre_swab_ptlbd_rsp (struct ptlbd_rsp *r);
 
-#define CLONE_INFO_MAGIC 0x0218
-struct clonefs_info {
-        int clone_magic;
-        int clone_index;
-        int clone_flags;
-};
-extern void lustre_swab_clonefs_info(struct clonefs_info *clone);
 /*
  * Opcodes for management/monitoring node.
  */

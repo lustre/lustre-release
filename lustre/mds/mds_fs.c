@@ -345,7 +345,8 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                 if (last_transno > mds->mds_last_transno)
                        mds->mds_last_transno = last_transno;
         }
-
+        if (mcd)
+                OBD_FREE(mcd, sizeof(*mcd));
         obd->obd_last_committed = mds->mds_last_transno;
         if (obd->obd_recoverable_clients) {
                 CWARN("RECOVERY: service %s, %d recoverable clients, "
@@ -353,18 +354,18 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
                       obd->obd_recoverable_clients, mds->mds_last_transno);
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 target_start_recovery_thread(obd, mds_handle);
+                obd->obd_recovery_start = LTIME_S(CURRENT_TIME);
         }
-
-        if (mcd)
-                OBD_FREE(mcd, sizeof(*mcd));
         
         mds->mds_mount_count = mount_count + 1;
         msd->msd_mount_count = cpu_to_le64(mds->mds_mount_count);
 
         /* save it, so mount count and last_transno is current */
         rc = mds_update_server_data(obd, 1);
+        if (rc)
+                GOTO(err_client, rc);
 
-        RETURN(rc);
+        RETURN(0);
 
 err_client:
         class_disconnect_exports(obd, 0);
@@ -569,6 +570,7 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
                        " be preserved.\n", obd->obd_name);
 
         class_disconnect_exports(obd, flags); /* cleans up client info too */
+        target_cleanup_recovery(obd);
         mds_server_free_data(mds);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -753,12 +755,12 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
 
         down(&parent_inode->i_sem);
         de = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
-        if (de == NULL || de->d_inode == NULL) {
-                CERROR("destroying non-existent object "LPU64" %s\n", 
-                       oa->o_id, fidname);
-                GOTO(out_dput, rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT);
+        if (IS_ERR(de) || de->d_inode == NULL) {
+                rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT;
+                CERROR("destroying non-existent object "LPU64" %s: rc %d\n",
+                       oa->o_id, fidname, rc);
+                GOTO(out_dput, rc);
         }
-
         /* Stripe count is 1 here since this is some MDS specific stuff
            that is unlinked, not spanned across multiple OSTs */
         handle = fsfilt_start_log(obd, mds->mds_objects_dir->d_inode,

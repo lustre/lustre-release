@@ -74,7 +74,7 @@ Object creation command summary:
   --node node_name
   --nid nid
   --cluster_id
-  --nettype tcp|elan|gm
+  --nettype tcp|elan|gm|openib
   --hostaddr addr
   --port port
   --tcpbuf size
@@ -93,6 +93,7 @@ Object creation command summary:
   --nspath
   --journal_size size
   --inode_size size
+  --mdsuuid uuid
   --lmv lmv_name
   --mkfsoptions options
   --mountfsoptions options
@@ -200,11 +201,9 @@ lmc_options = [
     ('subsystem', "Specify which Lustre subsystems have debug output recorded in the log",  PARAM),
 
     # network
-    ('nettype', "Specify the network type. This can be tcp/elan/gm.", PARAM),
+    ('nettype', "Specify the network type. This can be tcp/elan/gm/openib.", PARAM),
     ('nid', "Give the network ID, e.g ElanID/IP Address as used by portals.", PARAM),
-    ('tcpbuf', "Optional argument to specify the TCP buffer size.", PARAM, "0"),
     ('port', "Optional argument to specify the TCP port number.", PARAM, DEFAULT_PORT),
-    ('irq_affinity', "Optional argument.", PARAM, 0),
     ('hostaddr', "", PARAM,""),
     ('cluster_id', "Specify the cluster ID", PARAM, "0"),
 
@@ -232,9 +231,10 @@ lmc_options = [
     ('backfstype', "Optional argument to specify the backing filesystem type.", PARAM, "ext3"),
     ('mkfsoptions', "Optional argument to mkfs.", PARAM, ""),
     ('mountfsoptions', "Optional argument to mount fs.", PARAM, ""),
+    ('ostuuid', "Optional argument to specify OST UUID", PARAM,""),
+    ('mdsuuid', "Optional argument to specify MDS UUID", PARAM,""),
     ('root_squash', "MDS squash root to appointed uid.", PARAM, ""),
     ('no_root_squash', "Don't squash root for appointed nid.", PARAM, ""),
-    ('ostuuid', "", PARAM,""),
     ('nspath', "Local mount point of server namespace.", PARAM,""),
     ('format', ""),
     ('migrate', "used for offline migrate of an ost in conjunctio with add/delete"),
@@ -386,7 +386,7 @@ class GenConfig:
         return new
 
     def network(self, name, uuid, nid, cluster_id, net, hostaddr="",
-                port=0, tcpbuf=0, irq_aff=0):
+                port=0):
         """create <network> node"""
         network = self.newService("network", name, uuid)
         network.setAttribute("nettype", net);
@@ -396,13 +396,8 @@ class GenConfig:
             self.addElement(network, "hostaddr", hostaddr)
         if port:
             self.addElement(network, "port", "%d" %(port))
-        if tcpbuf:
-            self.addElement(network, "sendmem", "%d" %(tcpbuf))
-            self.addElement(network, "recvmem", "%d" %(tcpbuf))
-        if irq_aff:
-            self.addElement(network, "irqaffinity", "%d" %(irq_aff))
-
-        return network
+        
+	return network
 
     def routetbl(self, name, uuid):
         """create <routetbl> node"""
@@ -927,12 +922,8 @@ def add_net(gen, lustre, options):
 
     if net_type in ('tcp',):
         port = get_option_int(options, 'port')
-        tcpbuf = get_option_int(options, 'tcpbuf')
-        irq_aff = get_option_int(options, 'irq_affinity')
-    elif net_type in ('elan', 'gm'):
+    elif net_type in ('elan', 'gm', 'openib'):
         port = 0
-        tcpbuf = 0
-        irq_aff = 0
     else:
         print "Unknown net_type: ", net_type
         sys.exit(2)
@@ -947,7 +938,7 @@ def add_net(gen, lustre, options):
     net_name = new_name('NET_'+ node_name +'_'+ net_type)
     net_uuid = new_uuid(net_name)
     node.appendChild(gen.network(net_name, net_uuid, nid, cluster_id, net_type,
-                                 hostaddr, port, tcpbuf, irq_aff))
+                                 hostaddr, port))
     node_add_profile(gen, node, "network", net_uuid)
 
 
@@ -997,7 +988,12 @@ def add_mds(gen, lustre, options):
 
     mds_uuid = name2uuid(lustre, mds_name, 'mds', fatal=0)
     if not mds_uuid:
-        mds_uuid = new_uuid(mds_name)
+        mds_uuid = get_option(options, 'mdsuuid')
+        if mds_uuid:
+            if lookup(lustre, mds_uuid):
+                error("Duplicate MDS UUID:", mds_uuid)
+        else:
+            mds_uuid = new_uuid(mds_name)
         mds = gen.mds(mds_name, mds_uuid, mdd_uuid, options.group)
         lustre.appendChild(mds)
         if lmv_name:

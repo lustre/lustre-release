@@ -59,6 +59,8 @@ kqswnal_unmap_tx (kqswnal_tx_t *ktx)
 {
 #if MULTIRAIL_EKC
         int      i;
+
+        ktx->ktx_rail = -1;                     /* unset rail */
 #endif
 
         if (ktx->ktx_nmappedpages == 0)
@@ -97,10 +99,13 @@ kqswnal_map_tx_kiov (kqswnal_tx_t *ktx, int offset, int nob, int niov, ptl_kiov_
         char     *ptr;
 #if MULTIRAIL_EKC
         EP_RAILMASK railmask;
-        int         rail = ep_xmtr_prefrail(kqswnal_data.kqn_eptx,
-                                            EP_RAILMASK_ALL,
-                                            kqswnal_nid2elanid(ktx->ktx_nid));
-        
+        int         rail;
+
+        if (ktx->ktx_rail < 0)
+                ktx->ktx_rail = ep_xmtr_prefrail(kqswnal_data.kqn_eptx,
+                                                 EP_RAILMASK_ALL,
+                                                 kqswnal_nid2elanid(ktx->ktx_nid));
+        rail = ktx->ktx_rail;
         if (rail < 0) {
                 CERROR("No rails available for "LPX64"\n", ktx->ktx_nid);
                 return (-ENETDOWN);
@@ -215,10 +220,13 @@ kqswnal_map_tx_iov (kqswnal_tx_t *ktx, int offset, int nob,
         uint32_t  basepage  = ktx->ktx_basepage + nmapped;
 #if MULTIRAIL_EKC
         EP_RAILMASK railmask;
-        int         rail = ep_xmtr_prefrail(kqswnal_data.kqn_eptx,
-                                            EP_RAILMASK_ALL,
-                                            kqswnal_nid2elanid(ktx->ktx_nid));
+        int         rail;
         
+        if (ktx->ktx_rail < 0)
+                ktx->ktx_rail = ep_xmtr_prefrail(kqswnal_data.kqn_eptx,
+                                                 EP_RAILMASK_ALL,
+                                                 kqswnal_nid2elanid(ktx->ktx_nid));
+        rail = ktx->ktx_rail;
         if (rail < 0) {
                 CERROR("No rails available for "LPX64"\n", ktx->ktx_nid);
                 return (-ENETDOWN);
@@ -515,7 +523,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
         /* Don't block for transmit descriptor if we're in interrupt context */
         int   attr = in_interrupt() ? (EP_NO_SLEEP | EP_NO_ALLOC) : 0;
         int   dest = kqswnal_nid2elanid (ktx->ktx_nid);
-        long  flags;
+        unsigned long flags;
         int   rc;
 
         ktx->ktx_launchtime = jiffies;
@@ -524,6 +532,11 @@ kqswnal_launch (kqswnal_tx_t *ktx)
                 return (-ESHUTDOWN);
 
         LASSERT (dest >= 0);                    /* must be a peer */
+
+#if MULTIRAIL_EKC
+        if (ktx->ktx_nmappedpages != 0)
+                attr = EP_SET_PREFRAIL(attr, ktx->ktx_rail);
+#endif
 
         switch (ktx->ktx_state) {
         case KTX_GETTING:
@@ -601,42 +614,42 @@ kqswnal_cerror_hdr(ptl_hdr_t * hdr)
         char *type_str = hdr_type_string (hdr);
 
         CERROR("P3 Header at %p of type %s length %d\n", hdr, type_str,
-               NTOH__u32(hdr->payload_length));
-        CERROR("    From nid/pid "LPU64"/%u\n", NTOH__u64(hdr->src_nid),
-               NTOH__u32(hdr->src_pid));
-        CERROR("    To nid/pid "LPU64"/%u\n", NTOH__u64(hdr->dest_nid),
-               NTOH__u32(hdr->dest_pid));
+               le32_to_cpu(hdr->payload_length));
+        CERROR("    From nid/pid "LPU64"/%u\n", le64_to_cpu(hdr->src_nid),
+               le32_to_cpu(hdr->src_pid));
+        CERROR("    To nid/pid "LPU64"/%u\n", le64_to_cpu(hdr->dest_nid),
+               le32_to_cpu(hdr->dest_pid));
 
-        switch (NTOH__u32(hdr->type)) {
+        switch (le32_to_cpu(hdr->type)) {
         case PTL_MSG_PUT:
                 CERROR("    Ptl index %d, ack md "LPX64"."LPX64", "
                        "match bits "LPX64"\n",
-                       NTOH__u32 (hdr->msg.put.ptl_index),
+                       le32_to_cpu(hdr->msg.put.ptl_index),
                        hdr->msg.put.ack_wmd.wh_interface_cookie,
                        hdr->msg.put.ack_wmd.wh_object_cookie,
-                       NTOH__u64 (hdr->msg.put.match_bits));
+                       le64_to_cpu(hdr->msg.put.match_bits));
                 CERROR("    offset %d, hdr data "LPX64"\n",
-                       NTOH__u32(hdr->msg.put.offset),
+                       le32_to_cpu(hdr->msg.put.offset),
                        hdr->msg.put.hdr_data);
                 break;
 
         case PTL_MSG_GET:
                 CERROR("    Ptl index %d, return md "LPX64"."LPX64", "
                        "match bits "LPX64"\n",
-                       NTOH__u32 (hdr->msg.get.ptl_index),
+                       le32_to_cpu(hdr->msg.get.ptl_index),
                        hdr->msg.get.return_wmd.wh_interface_cookie,
                        hdr->msg.get.return_wmd.wh_object_cookie,
                        hdr->msg.get.match_bits);
                 CERROR("    Length %d, src offset %d\n",
-                       NTOH__u32 (hdr->msg.get.sink_length),
-                       NTOH__u32 (hdr->msg.get.src_offset));
+                       le32_to_cpu(hdr->msg.get.sink_length),
+                       le32_to_cpu(hdr->msg.get.src_offset));
                 break;
 
         case PTL_MSG_ACK:
                 CERROR("    dst md "LPX64"."LPX64", manipulated length %d\n",
                        hdr->msg.ack.dst_wmd.wh_interface_cookie,
                        hdr->msg.ack.dst_wmd.wh_object_cookie,
-                       NTOH__u32 (hdr->msg.ack.mlength));
+                       le32_to_cpu(hdr->msg.ack.mlength));
                 break;
 
         case PTL_MSG_REPLY:
@@ -889,6 +902,12 @@ kqswnal_rdma (kqswnal_rx_t *krx, lib_msg_t *libmsg, int type,
         ktx->ktx_args[0] = krx;
         ktx->ktx_args[1] = libmsg;
 
+#if MULTIRAIL_EKC
+        /* Map on the rail the RPC prefers */
+        ktx->ktx_rail = ep_rcvr_prefrail(krx->krx_eprx,
+                                         ep_rxd_railmask(krx->krx_rxd));
+#endif
+
         /* Start mapping at offset 0 (we're not mapping any headers) */
         ktx->ktx_nfrag = ktx->ktx_firsttmpfrag = 0;
         
@@ -1077,7 +1096,6 @@ kqswnal_sendmsg (lib_nal_t    *nal,
         ktx->ktx_args[2] = NULL;    /* set when a GET commits to REPLY */
 
         memcpy (ktx->ktx_buffer, hdr, sizeof (*hdr)); /* copy hdr from caller's stack */
-        ktx->ktx_wire_hdr = (ptl_hdr_t *)ktx->ktx_buffer;
 
 #if KQSW_CHECKSUM
         csum = kqsw_csum (0, (char *)hdr, sizeof (*hdr));
@@ -1124,7 +1142,7 @@ kqswnal_sendmsg (lib_nal_t    *nal,
         if (nid == targetnid &&                 /* not forwarding */
             ((type == PTL_MSG_GET &&            /* optimize GET? */
               kqswnal_tunables.kqn_optimized_gets != 0 &&
-              NTOH__u32(hdr->msg.get.sink_length) >= kqswnal_tunables.kqn_optimized_gets) ||
+              le32_to_cpu(hdr->msg.get.sink_length) >= kqswnal_tunables.kqn_optimized_gets) ||
              (type == PTL_MSG_PUT &&            /* optimize PUT? */
               kqswnal_tunables.kqn_optimized_puts != 0 &&
               payload_nob >= kqswnal_tunables.kqn_optimized_puts))) {
@@ -1325,7 +1343,6 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
 
         /* copy hdr into pre-mapped buffer */
         memcpy(ktx->ktx_buffer, fwd->kprfd_hdr, sizeof(ptl_hdr_t));
-        ktx->ktx_wire_hdr = (ptl_hdr_t *)ktx->ktx_buffer;
 
         ktx->ktx_port    = (nob <= KQSW_SMALLPAYLOAD) ?
                            EP_MSG_SVC_PORTALS_SMALL : EP_MSG_SVC_PORTALS_LARGE;
@@ -1387,7 +1404,7 @@ kqswnal_fwd_callback (void *arg, int error)
                 ptl_hdr_t *hdr = (ptl_hdr_t *)page_address (krx->krx_kiov[0].kiov_page);
 
                 CERROR("Failed to route packet from "LPX64" to "LPX64": %d\n",
-                       NTOH__u64(hdr->src_nid), NTOH__u64(hdr->dest_nid),error);
+                       le64_to_cpu(hdr->src_nid), le64_to_cpu(hdr->dest_nid),error);
         }
 
         LASSERT (atomic_read(&krx->krx_refcount) == 1);
@@ -1492,7 +1509,7 @@ void
 kqswnal_parse (kqswnal_rx_t *krx)
 {
         ptl_hdr_t      *hdr = (ptl_hdr_t *) page_address(krx->krx_kiov[0].kiov_page);
-        ptl_nid_t       dest_nid = NTOH__u64 (hdr->dest_nid);
+        ptl_nid_t       dest_nid = le64_to_cpu(hdr->dest_nid);
         int             payload_nob;
         int             nob;
         int             niov;
@@ -1516,7 +1533,7 @@ kqswnal_parse (kqswnal_rx_t *krx)
         if (kqswnal_nid2elanid (dest_nid) >= 0)  /* should have gone direct to peer */
         {
                 CERROR("dropping packet from "LPX64" for "LPX64
-                       ": target is peer\n", NTOH__u64(hdr->src_nid), dest_nid);
+                       ": target is peer\n", le64_to_cpu(hdr->src_nid), dest_nid);
 
                 kqswnal_rx_decref (krx);
                 return;
@@ -1551,7 +1568,7 @@ kqswnal_parse (kqswnal_rx_t *krx)
 void 
 kqswnal_rxhandler(EP_RXD *rxd)
 {
-        long          flags;
+        unsigned long flags;
         int           nob    = ep_rxd_len (rxd);
         int           status = ep_rxd_status (rxd);
         kqswnal_rx_t *krx    = (kqswnal_rx_t *)ep_rxd_arg (rxd);
@@ -1615,30 +1632,30 @@ kqswnal_csum_error (kqswnal_rx_t *krx, int ishdr)
         CERROR ("%s checksum mismatch %p: dnid "LPX64", snid "LPX64
                 ", dpid %d, spid %d, type %d\n",
                 ishdr ? "Header" : "Payload", krx,
-                NTOH__u64(hdr->dest_nid), NTOH__u64(hdr->src_nid)
-                NTOH__u32(hdr->dest_pid), NTOH__u32(hdr->src_pid),
-                NTOH__u32(hdr->type));
+                le64_to_cpu(hdr->dest_nid), le64_to_cpu(hdr->src_nid)
+                le32_to_cpu(hdr->dest_pid), le32_to_cpu(hdr->src_pid),
+                le32_to_cpu(hdr->type));
 
-        switch (NTOH__u32 (hdr->type))
+        switch (le32_to_cpu(hdr->type))
         {
         case PTL_MSG_ACK:
                 CERROR("ACK: mlen %d dmd "LPX64"."LPX64" match "LPX64
                        " len %u\n",
-                       NTOH__u32(hdr->msg.ack.mlength),
+                       le32_to_cpu(hdr->msg.ack.mlength),
                        hdr->msg.ack.dst_wmd.handle_cookie,
                        hdr->msg.ack.dst_wmd.handle_idx,
-                       NTOH__u64(hdr->msg.ack.match_bits),
-                       NTOH__u32(hdr->msg.ack.length));
+                       le64_to_cpu(hdr->msg.ack.match_bits),
+                       le32_to_cpu(hdr->msg.ack.length));
                 break;
         case PTL_MSG_PUT:
                 CERROR("PUT: ptl %d amd "LPX64"."LPX64" match "LPX64
                        " len %u off %u data "LPX64"\n",
-                       NTOH__u32(hdr->msg.put.ptl_index),
+                       le32_to_cpu(hdr->msg.put.ptl_index),
                        hdr->msg.put.ack_wmd.handle_cookie,
                        hdr->msg.put.ack_wmd.handle_idx,
-                       NTOH__u64(hdr->msg.put.match_bits),
-                       NTOH__u32(hdr->msg.put.length),
-                       NTOH__u32(hdr->msg.put.offset),
+                       le64_to_cpu(hdr->msg.put.match_bits),
+                       le32_to_cpu(hdr->msg.put.length),
+                       le32_to_cpu(hdr->msg.put.offset),
                        hdr->msg.put.hdr_data);
                 break;
         case PTL_MSG_GET:
@@ -1870,7 +1887,7 @@ kqswnal_scheduler (void *arg)
         kqswnal_rx_t    *krx;
         kqswnal_tx_t    *ktx;
         kpr_fwd_desc_t  *fwd;
-        long             flags;
+        unsigned long    flags;
         int              rc;
         int              counter = 0;
         int              did_something;

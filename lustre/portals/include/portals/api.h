@@ -18,6 +18,8 @@ int PtlNIFini(ptl_handle_ni_t interface_in);
 
 int PtlGetId(ptl_handle_ni_t ni_handle, ptl_process_id_t *id);
 
+int PtlGetUid(ptl_handle_ni_t ni_handle, ptl_uid_t *uid);
+
 
 /*
  * Network interfaces

@@ -238,7 +238,7 @@ static int dc_new_page_to_cache(struct dir_cache * dirc)
         page = alloc_page(GFP_KERNEL);
         if (page == NULL)
                 return -ENOMEM;
-        list_add_tail(&page->list, &dirc->list);
+        list_add_tail(&page->lru, &dirc->list);
         dirc->cur = page_address(page);
         dirc->free = PAGE_SIZE;
         return 0;
@@ -301,13 +301,13 @@ static int flush_buffer_onto_mds(struct dirsplit_control *dc, int mdsnum)
         list_for_each_safe(cur, tmp, &ca->list) {
                 struct page *page;
 
-                page = list_entry(cur, struct page, list);
+                page = list_entry(cur, struct page, lru);
                 LASSERT(page != NULL);
 
                 retrieve_generation_numbers(dc, page_address(page));
 
                 ca->brwc.pg = page;
-                ca->brwc.off = 0;
+                ca->brwc.disk_offset = ca->brwc.page_offset = 0;
                 ca->brwc.count = PAGE_SIZE;
                 ca->brwc.flag = 0;
                 ca->oa.o_mds = mdsnum;
@@ -334,7 +334,7 @@ static int remove_entries_from_orig_dir(struct dirsplit_control *dc, int mdsnum)
 
         ca = dc->cache + mdsnum;
         list_for_each_safe(cur, tmp, &ca->list) {
-                page = list_entry(cur, struct page, list);
+                page = list_entry(cur, struct page, lru);
                 buf = page_address(page);
                 end = buf + PAGE_SIZE;
 
@@ -478,8 +478,8 @@ cleanup:
                         continue;
                 list_for_each_safe(cur, tmp, &dc.cache[i].list) {
                         struct page *page;
-                        page = list_entry(cur, struct page, list);
-                        list_del(&page->list);
+                        page = list_entry(cur, struct page, lru);
+                        list_del(&page->lru);
                         __free_page(page);
                 }
         }

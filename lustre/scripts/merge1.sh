@@ -45,7 +45,7 @@ TEST_FILE=${TEST_FILE:-ChangeLog} # does this need to be smarter?
 check_tag() {
 	[ -z "$1" ] && echo "check_tag() missing arg" && exit3
 	[ "$1" = "HEAD" ] && return
-	$CVS log $TEST_FILE | grep -q "	$1: " && return
+	$CVS log $TEST_FILE 2> /dev/null | grep -q "	$1: " && return
 	echo "$0: tag $1 not found in $TEST_FILE"
 	exit 2
 }
@@ -61,7 +61,7 @@ CHILD=$CHILD
 date=$date
 module=$module
 CONFLICTS=$CONFLICTS
-OPERATION=Merge
+OPERATION=Update
 OPERWHERE=from
 EOF
 
@@ -80,7 +80,7 @@ $CVS update -j ${CHILD}_BASE -j ${PARENT}_${CHILD}_UPDATE_PARENT_$date -dP
 echo "done"
 
 echo -n "Recording conflicts in $CONFLICTS ..."
-if $CVS update | grep '^C' > $CONFLICTS; then
+if $CVS update | awk '/^C/ { print $2 }' > $CONFLICTS; then
     echo "Conflicts found, fix before committing."
     cat $CONFLICTS
 else 
@@ -89,4 +89,4 @@ else
 fi
 echo "done"
 
-echo "Test, commit and then run merge2.sh (no arguments)"
+echo "Build, test, commit and then run merge2.sh (no arguments)"

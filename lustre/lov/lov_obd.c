@@ -365,7 +365,6 @@ static int lov_disconnect(struct obd_export *exp, int flags)
 static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
                               int activate)
 {
-        struct obd_device *obd;
         struct lov_tgt_desc *tgt;
         int i, rc = 0;
         ENTRY;
@@ -384,24 +383,15 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
         if (i == lov->desc.ld_tgt_count)
                 GOTO(out, rc = -EINVAL);
 
-        obd = class_exp2obd(tgt->ltd_exp);
-        if (obd == NULL) {
-                /* This can happen if OST failure races with node shutdown */
-                GOTO(out, rc = -ENOTCONN);
-        }
-
-        CDEBUG(D_INFO, "Found OBD %s=%s device %d (%p) type %s at LOV idx %d\n",
-               obd->obd_name, obd->obd_uuid.uuid, obd->obd_minor, obd,
-               obd->obd_type->typ_name, i);
-        LASSERT(strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0);
 
         if (tgt->active == activate) {
-                CDEBUG(D_INFO, "OBD %p already %sactive!\n", obd,
-                       activate ? "" : "in");
+                CDEBUG(D_INFO, "OSC %s already %sactive!\n", uuid->uuid,                       
+                        activate ? "" : "in");
                 GOTO(out, rc);
         }
 
-        CDEBUG(D_INFO, "Marking OBD %p %sactive\n", obd, activate ? "" : "in");
+        CDEBUG(D_INFO, "Marking OSC %s %sactive\n", uuid->uuid,
+               activate ? "" : "in");
 
         tgt->active = activate;
         if (activate)
@@ -483,32 +473,35 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         struct lov_obd *lov = &obd->u.lov;
         int count;
         ENTRY;
-
+                                                                                                                                                                                                     
         if (lcfg->lcfg_inllen1 < 1) {
                 CERROR("LOV setup requires a descriptor\n");
                 RETURN(-EINVAL);
         }
-
+                                                                                                                                                                                                     
         desc = (struct lov_desc *)lcfg->lcfg_inlbuf1;
         if (sizeof(*desc) > lcfg->lcfg_inllen1) {
                 CERROR("descriptor size wrong: %d > %d\n",
                        (int)sizeof(*desc), lcfg->lcfg_inllen1);
                 RETURN(-EINVAL);
         }
-
+ 
         /* Because of 64-bit divide/mod operations only work with a 32-bit
          * divisor in a 32-bit kernel, we cannot support a stripe width
          * of 4GB or larger on 32-bit CPUs.
          */
-
+       
         count = desc->ld_default_stripe_count;
         if (count && (count * desc->ld_default_stripe_size) > ~0UL) {
                 CERROR("LOV: stripe width "LPU64"x%u > %lu on 32-bit system\n",
                        desc->ld_default_stripe_size, count, ~0UL);
                 RETURN(-EINVAL);
         }
-
-        lov->bufsize = LOV_MAX_TGT_COUNT * sizeof(struct lov_tgt_desc);
+        if (desc->ld_tgt_count > 0) {
+                lov->bufsize= sizeof(struct lov_tgt_desc) * desc->ld_tgt_count;
+        } else {
+                lov->bufsize = sizeof(struct lov_tgt_desc) * LOV_MAX_TGT_COUNT;  
+        }
         OBD_ALLOC(lov->tgts, lov->bufsize);
         if (lov->tgts == NULL) {
                 lov->bufsize = 0;
@@ -516,13 +509,13 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                        lov->bufsize);
                 RETURN(-EINVAL);
         }
-
+                                                                                                                                                                                                     
         desc->ld_tgt_count = 0;
         desc->ld_active_tgt_count = 0;
         lov->desc = *desc;
         spin_lock_init(&lov->lov_lock);
         sema_init(&lov->lov_llog_sem, 1);
-
+                                                                                                                                                                                                     
         RETURN(0);
 }
 
@@ -1825,12 +1818,12 @@ static int lov_brw_check(struct lov_obd *lov, struct obdo *oa,
         /* The caller just wants to know if there's a chance that this
          * I/O can succeed */
         for (i = 0; i < oa_bufs; i++) {
-                int stripe = lov_stripe_number(lsm, pga[i].off);
+                int stripe = lov_stripe_number(lsm, pga[i].disk_offset);
                 int ost = lsm->lsm_oinfo[stripe].loi_ost_idx;
                 obd_off start, end;
 
-                if (!lov_stripe_intersects(lsm, i, pga[i].off,
-                                           pga[i].off + pga[i].count,
+                if (!lov_stripe_intersects(lsm, i, pga[i].disk_offset,
+                                           pga[i].disk_offset + pga[i].count,
                                            &start, &end))
                         continue;
 
@@ -1897,7 +1890,7 @@ static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
         }
 
         for (i = 0; i < oa_bufs; i++) {
-                where[i] = lov_stripe_number(lsm, pga[i].off);
+                where[i] = lov_stripe_number(lsm, pga[i].disk_offset);
                 stripeinfo[where[i]].bufct++;
         }
 
@@ -1917,8 +1910,8 @@ static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
                 shift = stripeinfo[which].index + stripeinfo[which].subcount;
                 LASSERT(shift < oa_bufs);
                 ioarr[shift] = pga[i];
-                lov_stripe_offset(lsm, pga[i].off, which,
-                                  &ioarr[shift].off);
+                lov_stripe_offset(lsm, pga[i].disk_offset, which,
+                                  &ioarr[shift].disk_offset);
                 stripeinfo[which].subcount++;
         }
 
@@ -1940,7 +1933,7 @@ static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
                                      tmp_oa, &si->lsm, si->bufct,
                                      &ioarr[shift], oti);
                         if (rc)
-                                GOTO(out_ioarr, rc);
+                                GOTO(out_oa, rc);
 
                         lov_merge_attrs(ret_oa, tmp_oa, tmp_oa->o_valid, lsm,
                                         i, &set);
@@ -2051,7 +2044,7 @@ static int lov_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
                 GOTO(out_obdos, rc = -ENOMEM);
 
         for (i = 0; i < oa_bufs; i++) {
-                where[i] = lov_stripe_number(lsm, pga[i].off);
+                where[i] = lov_stripe_number(lsm, pga[i].disk_offset);
                 stripeinfo[where[i]].bufct++;
         }
 
@@ -2075,8 +2068,8 @@ static int lov_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
                 shift = stripeinfo[which].index + stripeinfo[which].subcount;
                 LASSERT(shift < oa_bufs);
                 ioarr[shift] = pga[i];
-                lov_stripe_offset(lsm, pga[i].off, which,
-                                  &ioarr[shift].off);
+                lov_stripe_offset(lsm, pga[i].disk_offset, which,
+                                  &ioarr[shift].disk_offset);
                 stripeinfo[which].subcount++;
         }
 
@@ -2953,8 +2946,9 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         if (err) {
                                 if (lov->tgts[i].active) {
                                         CERROR("error: iocontrol OSC %s on OST"
-                                               "idx %d: err = %d\n",
-                                               lov->tgts[i].uuid.uuid, i, err);
+                                               "idx %d: cmd %x err = %d\n",
+                                               lov->tgts[i].uuid.uuid, i,
+                                               cmd, err);
                                         if (!rc)
                                                 rc = err;
                                 }
@@ -3114,12 +3108,12 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
 
 }
 
-/* Merge rss if kms == 0
+/* Merge rss if @kms_only == 0
  *
  * Even when merging RSS, we will take the KMS value if it's larger.
  * This prevents getattr from stomping on dirty cached pages which
  * extend the file size. */
-__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms)
+__u64 lov_merge_size(struct lov_stripe_md *lsm, int kms_only)
 {
         struct lov_oinfo *loi;
         __u64 size = 0;
@@ -3130,7 +3124,7 @@ __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms)
                 obd_size lov_size, tmpsize;
 
                 tmpsize = loi->loi_kms;
-                if (kms == 0 && loi->loi_rss > tmpsize)
+                if (kms_only == 0 && loi->loi_rss > tmpsize)
                         tmpsize = loi->loi_rss;
 
                 lov_size = lov_stripe_size(lsm, tmpsize, i);

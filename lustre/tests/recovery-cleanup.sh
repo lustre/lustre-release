@@ -19,7 +19,7 @@ PDSH='pdsh -S -w'
 MDSNODE=${MDSNODE:-mdev6}
 OSTNODE=${OSTNODE:-mdev7}
 CLIENT=${CLIENT:-mdev8}
-NETWORKTYPE=${NETWORKTYPE:-tcp}
+NETTYPE=${NETTYPE:-tcp}
 MOUNTPT=${MOUNTPT:-/mnt/lustre}
 CONFIG=${CONFIG:-recovery-cleanup.xml}
 MDSDEV=${MDSDEV:-/tmp/mds1-`hostname`}
@@ -50,8 +50,8 @@ drop_request() {
 make_config() {
     rm -f $CONFIG
     for NODE in $CLIENT $MDSNODE $OSTNODE; do
-       lmc -m $CONFIG --add net --node $NODE --nid `h2$NETWORKTYPE $NODE` \
-           --nettype $NETWORKTYPE || exit 4
+       lmc -m $CONFIG --add net --node $NODE --nid `h2$NETTYPE $NODE` \
+           --nettype $NETTYPE || exit 4
     done
     lmc -m $CONFIG --add mds --node $MDSNODE --mds mds1 --fstype $FSTYPE \
     	--dev $MDSDEV --size $MDSSIZE || exit 5

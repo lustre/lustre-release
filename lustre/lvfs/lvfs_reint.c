@@ -139,7 +139,7 @@ static int lvfs_reint_create(struct super_block *sb, struct reint_record *r_rec)
                 handle = fsfilt->fs_start(dir, FSFILT_OP_SYMLINK, NULL, 0);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                rc = vfs_symlink(dir, dentry, new_path);
+                rc = ll_vfs_symlink(dir, dentry, new_path);
                 break;
         }
         case S_IFCHR:

@@ -234,7 +234,7 @@ static void lock_handle_addref(void *lock)
  * usage: pass in a resource on which you have done ldlm_resource_get
  *        pass in a parent lock on which you have done a ldlm_lock_get
  *        after return, ldlm_*_put the resource and parent
- * returns: lock with refcount 1
+ * returns: lock with refcount 2 - one for current caller and one for remote
  */
 static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
                                        struct ldlm_resource *resource)
@@ -483,13 +483,9 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
 
                 LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 ldlm_lock_remove_from_lru(lock);
-#ifdef __KERNEL__
-                ldlm_bl_to_thread(ns, NULL, lock);
                 l_unlock(&ns->ns_lock);
-#else
-                l_unlock(&ns->ns_lock);
-                ldlm_handle_bl_callback(ns, NULL, lock);
-#endif
+                if (ldlm_bl_to_thread(ns, NULL, lock) != 0)
+                        ldlm_handle_bl_callback(ns, NULL, lock);
         } else if (ns->ns_client == LDLM_NAMESPACE_CLIENT &&
                    !lock->l_readers && !lock->l_writers) {
                 /* If this is a client-side namespace and this was the last

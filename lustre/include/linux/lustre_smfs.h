@@ -302,6 +302,7 @@ static inline void duplicate_inode(struct inode *dst_inode,
         dst_inode->i_version = src_inode->i_version;
         dst_inode->i_state = src_inode->i_state;
         dst_inode->i_generation = src_inode->i_generation;
+        dst_inode->i_flags = src_inode->i_flags;
 
         /* This is to make creating special files working. */
         dst_inode->i_rdev = src_inode->i_rdev;

@@ -35,7 +35,6 @@ static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len,
                          struct ptlrpc_connection *conn, int portal, __u64 xid)
 {
         int              rc;
-        int              rc2;
         ptl_md_t         md;
         char str[PTL_NALFMT_SIZE];
         ENTRY;
@@ -51,7 +50,7 @@ static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len,
         md.threshold = (ack == PTL_ACK_REQ) ? 2 : 1;
         md.options   = PTLRPC_MD_OPTIONS;
         md.user_ptr  = cbid;
-        md.eventq    = conn->c_peer.peer_ni->pni_eq_h;
+        md.eq_handle    = conn->c_peer.peer_ni->pni_eq_h;
 
         if (ack == PTL_ACK_REQ &&
             OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_ACK | OBD_FAIL_ONCE)) {
@@ -73,6 +72,7 @@ static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len,
 
         rc = PtlPut (*mdh, ack, conn->c_peer.peer_id, portal, 0, xid, 0, 0);
         if (rc != PTL_OK) {
+                int rc2;   
                 /* We're going to get an UNLINK event when I unlink below,
                  * which will complete just like any other failed send, so
                  * I fall through and return success here! */
@@ -80,7 +80,7 @@ static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len,
                        ptlrpc_id2str(&conn->c_peer, str),
                        portal, xid, rc);
                 rc2 = PtlMDUnlink(*mdh);
-                LASSERT (rc2 == PTL_OK);
+                LASSERTF(rc2 == PTL_OK, "rc2 = %d\n", rc2);
         }
 
         RETURN (0);
@@ -107,7 +107,7 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         peer = &desc->bd_export->exp_connection->c_peer;
 
         md.user_ptr = &desc->bd_cbid;
-        md.eventq = peer->peer_ni->pni_eq_h;
+        md.eq_handle = peer->peer_ni->pni_eq_h;
         md.threshold = 2; /* SENT and ACK/REPLY */
         md.options = PTLRPC_MD_OPTIONS;
         ptlrpc_fill_bulk_md(&md, desc);
@@ -216,7 +216,7 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
         peer = &desc->bd_import->imp_connection->c_peer;
 
         md.user_ptr = &desc->bd_cbid;
-        md.eventq = peer->peer_ni->pni_eq_h;
+        md.eq_handle = peer->peer_ni->pni_eq_h;
         md.threshold = 1;                       /* PUT or GET */
         md.options = PTLRPC_MD_OPTIONS | 
                      ((desc->bd_type == BULK_GET_SOURCE) ? 
@@ -284,8 +284,8 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
          * a chance to run client_bulk_callback() */
 
         PtlMDUnlink (desc->bd_md_h);
-        
-        if (desc->bd_req->rq_set != NULL)
+       
+        if (req->rq_set != NULL) 
                 wq = &req->rq_set->set_waitq;
         else
                 wq = &req->rq_reply_waitq;
@@ -439,7 +439,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         reply_md.threshold = 1;
         reply_md.options   = PTLRPC_MD_OPTIONS | PTL_MD_OP_PUT;
         reply_md.user_ptr  = &request->rq_reply_cbid;
-        reply_md.eventq    = connection->c_peer.peer_ni->pni_eq_h;
+        reply_md.eq_handle    = connection->c_peer.peer_ni->pni_eq_h;
 
         rc = PtlMDAttach(reply_me_h, reply_md, PTL_UNLINK, 
                          &request->rq_reply_md_h);
@@ -523,7 +523,7 @@ int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
         md.threshold = PTL_MD_THRESH_INF;
         md.options   = PTLRPC_MD_OPTIONS | PTL_MD_OP_PUT | PTL_MD_MAX_SIZE;
         md.user_ptr  = &rqbd->rqbd_cbid;
-        md.eventq    = srv_ni->sni_ni->pni_eq_h;
+        md.eq_handle = srv_ni->sni_ni->pni_eq_h;
         
         rc = PtlMDAttach(me_h, md, PTL_UNLINK, &rqbd->rqbd_md_h);
         if (rc == PTL_OK)

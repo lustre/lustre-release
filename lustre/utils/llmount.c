@@ -25,12 +25,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <errno.h>
 #include <string.h>
 #include <sys/mount.h>
 #include <mntent.h>
 #define _GNU_SOURCE
 #include <getopt.h>
+#include <sys/utsname.h>
 
 #include "obdctl.h"
 #include <portals/ptlctl.h>
@@ -132,7 +134,7 @@ print_options(struct lustre_mount_data *lmd)
         printf("port:            %d\n", lmd->lmd_port);
 
         for (i = 0; i < route_index; i++)
-                printf("route:           0x%llx : 0x%llx - 0x%llx\n",
+                printf("route:           "LPX64" : "LPX64" - "LPX64"\n",
                        routes[i].gw, routes[i].lo, routes[i].hi);
 
         return 0;
@@ -246,9 +248,6 @@ int parse_options(char * options, struct lustre_mount_data *lmd)
                         } else if (!strcmp(opt, "port")) {
                                 lmd->lmd_port = val;
                         }
-                        else if (!strcmp(opt, "clone")) {
-                                lmd->lmd_clone_index = val;
-                        } 
                 } else {
                         val = 1;
                         if (!strncmp(opt, "no", 2)) {
@@ -294,13 +293,43 @@ set_local(struct lustre_mount_data *lmd)
 
         memset(buf, 0, sizeof(buf));
 
-        if (lmd->lmd_nal == SOCKNAL || lmd->lmd_nal == TCPNAL) {
+        if (lmd->lmd_nal == SOCKNAL || lmd->lmd_nal == TCPNAL ||
+            lmd->lmd_nal == OPENIBNAL) {
+                struct utsname uts;
+
                 rc = gethostname(buf, sizeof(buf) - 1);
                 if (rc) {
-                        fprintf (stderr, "%s: can't get local buf: %d\n",
-                                 progname, rc);
+                        fprintf(stderr, "%s: can't get hostname: %s\n",
+                                progname, strerror(rc));
                         return rc;
                 }
+                rc = uname(&uts);
+                /* for 2.6 kernels, reserve at least 8MB free, or we will
+                 * go OOM during heavy read load */
+                if (rc == 0 && strncmp(uts.release, "2.6", 3) == 0) {
+                        int f, minfree = 32768;
+                        char name[40], val[40];
+                        FILE *meminfo;
+
+                        meminfo = fopen("/proc/meminfo", "r");
+                        if (meminfo != NULL) {
+                                while (fscanf(meminfo, "%s %s %*s\n", name, val) != EOF) {
+                                        if (strcmp(name, "MemTotal:") == 0) {
+                                                f = strtol(val, NULL, 0);
+                                                if (f > 0 && f < 8 * minfree)
+                                                        minfree = f / 16;
+                                                break;
+                                        }
+                                }
+                                fclose(meminfo);
+                        }
+                        f = open("/proc/sys/vm/min_free_kbytes", O_WRONLY);
+                        if (f >= 0) {
+                                sprintf(val, "%d", minfree);
+                                write(f, val, strlen(val));
+                                close(f);
+                        }
+                 }
         } else if (lmd->lmd_nal == QSWNAL) {
                 char *pfiles[] = {"/proc/qsnet/elan3/device0/position",
                                   "/proc/qsnet/elan4/device0/position",
@@ -334,8 +363,9 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
 {
         ptl_nid_t nid = 0;
         int rc;
-
-        if (lmd->lmd_nal == SOCKNAL || lmd->lmd_nal == TCPNAL) {
+        
+        if (lmd->lmd_nal == SOCKNAL || lmd->lmd_nal == TCPNAL ||
+            lmd->lmd_nal == OPENIBNAL) {
                 if (lmd->lmd_server_nid == PTL_NID_ANY) {
                         if (ptl_parse_nid (&nid, hostname) != 0) {
                                 fprintf (stderr, "%s: can't parse NID %s\n",
@@ -378,12 +408,12 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
         int rc;
 
         if (lmd_bad_magic(lmd))
-                return -EINVAL;
+                return 4;
 
         if (strlen(source) > sizeof(buf) + 1) {
                 fprintf(stderr, "%s: host:/mds/profile argument too long\n",
                         progname);
-                return -EINVAL;
+                return 1;
         }
         strcpy(buf, source);
         if ((s = strchr(buf, ':'))) {
@@ -400,13 +430,13 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
                         fprintf(stderr, "%s: directory to mount not in "
                                 "host:/mds/profile format\n",
                                 progname);
-                        return(-1);
+                        return(1);
                 }
         } else {
                 fprintf(stderr, "%s: "
                         "directory to mount not in host:/mds/profile format\n",
                         progname);
-                return(-1);
+                return(1);
         }
 
         rc = parse_options(options, lmd);
@@ -422,13 +452,13 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
                 return rc;
         if (strlen(mds) > sizeof(lmd->lmd_mds) + 1) {
                 fprintf(stderr, "%s: mds name too long\n", progname);
-                return(-1);
+                return(1);
         }
         strcpy(lmd->lmd_mds, mds);
 
         if (strlen(profile) > sizeof(lmd->lmd_profile) + 1) {
                 fprintf(stderr, "%s: profile name too long\n", progname);
-                return(-1);
+                return(1);
         }
         strcpy(lmd->lmd_profile, profile);
 
@@ -490,9 +520,9 @@ static int set_routes(struct lustre_mount_data *lmd) {
               rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
               if (rc != 0) {
                       fprintf(stderr, "%s: Unable to add route "
-                              "0x%llx : 0x%llx - 0x%llx\n[%d] %s\n",
-                               progname, routes[i].gw, routes[i].lo,
-                               routes[i].hi, errno, strerror(errno));
+                              LPX64" : "LPX64" - "LPX64"\n[%d] %s\n",
+                              progname, routes[i].gw, routes[i].lo,
+                              routes[i].hi, errno, strerror(errno));
                       err = -1;
                       break;
               }
@@ -578,12 +608,12 @@ int main(int argc, char *const argv[])
         init_options(&lmd);
         rc = build_data(source, options, &lmd);
         if (rc) {
-                exit(1);
+                exit(rc);
         }
 
         rc = set_routes(&lmd);
         if (rc) {
-                exit(1);
+                exit(rc);
         }
 
         if (debug) {
@@ -598,8 +628,8 @@ int main(int argc, char *const argv[])
                 if (rc == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                              "Check /etc/modules.conf and /proc/filesystems\n");
-        } else {
-                update_mtab_entry(source, target, "lustre", options, 0, 0, 0);
+                return 2;
         }
-        return rc;
+        update_mtab_entry(source, target, "lustre", options, 0, 0, 0);
+        return 0;
 }

@@ -14,9 +14,29 @@
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
 #define SBI_DEFAULT_RA_MAX ((40 << 20) >> PAGE_CACHE_SHIFT)
 
+enum ra_stat {
+        RA_STAT_HIT = 0,
+        RA_STAT_MISS,
+        RA_STAT_DISTANT_READPAGE,
+        RA_STAT_MISS_IN_WINDOW,
+        RA_STAT_FAILED_MATCH,
+        RA_STAT_DISCARDED,
+        RA_STAT_ZERO_LEN,
+        RA_STAT_ZERO_WINDOW,
+        RA_STAT_EOF,
+        RA_STAT_MAX_IN_FLIGHT,
+        _NR_RA_STAT,
+};
+
+struct ll_ra_info {
+        unsigned long             ra_cur_pages;
+        unsigned long             ra_max_pages;
+        unsigned long             ra_stats[_NR_RA_STAT];
+};
+
 struct ll_sb_info {
-        /* this protects pglist and max_r_a_pages.  It isn't safe to
-         * grab from interrupt contexts */
+        /* this protects pglist and ra_info.  It isn't safe to 
+        * grab from interrupt contexts */
         spinlock_t                ll_lock;
         struct obd_uuid           ll_sb_uuid;
         struct obd_export        *ll_mdc_exp;
@@ -38,8 +58,17 @@ struct ll_sb_info {
         unsigned long             ll_pglist_gen;
         struct list_head          ll_pglist;
 
-        unsigned long             ll_read_ahead_pages;
-        unsigned long             ll_max_read_ahead_pages;
+        struct ll_ra_info         ll_ra_info;
+                                                                                                                                                                                                     
+        /* times spent waiting for locks in each call site.  These are
+         * all protected by the ll_lock */
+        struct obd_service_time   ll_read_stime;
+        struct obd_service_time   ll_write_stime;
+        struct obd_service_time   ll_grouplock_stime;
+        struct obd_service_time   ll_seek_stime;
+        struct obd_service_time   ll_setattr_stime;
+        struct obd_service_time   ll_brw_stime;
+//      struct obd_service_time   ll_done_stime;
 
         int                       ll_config_version; /* last-applied update */
 
@@ -111,8 +140,10 @@ struct ll_async_page {
         struct page     *llap_page;
         struct list_head llap_pending_write;
          /* only trust these if the page lock is providing exclusion */
-        int              llap_write_queued:1,
-                         llap_defer_uptodate:1;
+        unsigned         llap_write_queued:1,
+                         llap_defer_uptodate:1,
+                         llap_ra_used:1;
+
         struct list_head llap_proc_item;
 };
 
@@ -142,6 +173,7 @@ int ll_mdc_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
 /* llite/rw.c */
 int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
 int ll_commit_write(struct file *, struct page *, unsigned from, unsigned to);
+int ll_writepage(struct page *page);
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
 void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
 void ll_removepage(struct page *page);
@@ -151,6 +183,7 @@ struct ll_async_page *llap_from_page(struct page *page);
 struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
 
+void ll_ra_accounting(struct page *page, struct address_space *mapping);
 void ll_truncate(struct inode *inode);
 
 /* llite/file.c */
@@ -160,13 +193,14 @@ extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *);
 int ll_refresh_lsm(struct inode *inode, struct lov_stripe_md *lsm);
 int ll_extent_lock(struct ll_file_data *, struct inode *,
                    struct lov_stripe_md *, int mode, ldlm_policy_data_t *,
-                   struct lustre_handle *, int ast_flags);
+                   struct lustre_handle *, int ast_flags,
+                   struct obd_service_time *);
 int ll_extent_unlock(struct ll_file_data *, struct inode *,
                      struct lov_stripe_md *, int mode, struct lustre_handle *);
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
-int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb);
+int ll_glimpse_size(struct inode *inode);
 int ll_local_open(struct file *file, struct lookup_intent *it);
 int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                  struct file *file);
@@ -174,6 +208,8 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
 int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 #endif
+void ll_stime_record(struct ll_sb_info *sbi, struct timeval *start,
+                     struct obd_service_time *stime);
 
 /* llite/dcache.c */
 void ll_intent_drop_lock(struct lookup_intent *);
@@ -182,6 +218,9 @@ extern void ll_set_dd(struct dentry *de);
 void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
 void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry);
+int revalidate_it_finish(struct ptlrpc_request *request, int offset,
+                         struct lookup_intent *it, struct dentry *de);
+
 
 /* llite/llite_gns.c */
 int ll_finish_gns(struct ll_sb_info *sbi);
@@ -199,8 +238,7 @@ extern struct super_operations lustre_super_operations;
 
 char *ll_read_opt(const char *opt, char *data);
 int ll_set_opt(const char *opt, char *data, int fl);
-void ll_options(char *options, char **ost, char **mds, int *flags, 
-                char **clone_ops);
+void ll_options(char *options, char **ost, char **mds, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb, void *data, int silent);
 int lustre_fill_super(struct super_block *sb, void *data, int silent);
@@ -258,6 +296,33 @@ void ll_try_done_writing(struct inode *inode);
 void ll_queue_done_writing(struct inode *inode);
 void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
+
+
+/* llite/llite_mmap.c */
+#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+typedef struct rb_root  rb_root_t;
+typedef struct rb_node  rb_node_t;
+#endif
+
+struct ll_lock_tree_node;
+struct ll_lock_tree {
+        rb_root_t                       lt_root;
+        struct list_head                lt_locked_list;
+        struct ll_file_data             *lt_fd;
+};
+int ll_teardown_mmaps(struct address_space *mapping, __u64 first,
+                      __u64 last);
+int ll_file_mmap(struct file * file, struct vm_area_struct * vma);
+struct ll_lock_tree_node * ll_node_from_inode(struct inode *inode, __u64 start,
+                                              __u64 end, ldlm_mode_t mode);
+int ll_tree_lock(struct ll_lock_tree *tree,
+                 struct ll_lock_tree_node *first_node, struct inode *inode,
+                 const char *buf, size_t count, int ast_flags);
+int ll_tree_unlock(struct ll_lock_tree *tree, struct inode *inode);
+
+
+
+
 
 /* generic */
 #define LL_SBI_NOLCK           0x1

@@ -47,10 +47,7 @@
 
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
-#include <linux/lustre_mds.h>
-
-#include <linux/lustre_smfs.h>
-#include <linux/lustre_snap.h>
+#include "mds_internal.h"
 
 #include "mds_internal.h"
 

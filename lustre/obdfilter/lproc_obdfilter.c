@@ -153,6 +153,7 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "readcache_max_filesize",
                           lprocfs_filter_rd_readcache,
                           lprocfs_filter_wr_readcache, 0 },
+        { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
         { 0 }
 };
 

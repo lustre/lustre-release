@@ -56,7 +56,10 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         spin_lock_init(&sbi->ll_lock);
         INIT_LIST_HEAD(&sbi->ll_pglist);
         sbi->ll_pglist_gen = 0;
-        sbi->ll_max_read_ahead_pages = SBI_DEFAULT_RA_MAX;
+        if (num_physpages < SBI_DEFAULT_RA_MAX / 4)
+                sbi->ll_ra_info.ra_max_pages = num_physpages / 4;
+        else
+                sbi->ll_ra_info.ra_max_pages = SBI_DEFAULT_RA_MAX;
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
         INIT_LIST_HEAD(&sbi->ll_mnt_list);
@@ -323,8 +326,7 @@ int ll_set_opt(const char *opt, char *data, int fl)
                 RETURN(fl);
 }
 
-void ll_options(char *options, char **ost, char **mdc, int *flags, 
-                char **clone_opts)
+void ll_options(char *options, char **ost, char **mdc, int *flags)
 {
         char *this_char;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
@@ -349,9 +351,6 @@ void ll_options(char *options, char **ost, char **mdc, int *flags,
                         continue;
                 if (!*mdc && (*mdc = ll_read_opt("mdc", this_char)))
                         continue;
-                if (!*clone_opts && (*clone_opts = ll_read_opt("clone", 
-                                                                this_char))) 
-                        continue; 
                 if (!(*flags & LL_SBI_NOLCK) &&
                     ((*flags) = (*flags) |
                                 ll_set_opt("nolock", this_char,
@@ -377,7 +376,6 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct ll_sb_info *sbi;
         char *osc = NULL;
         char *mdc = NULL;
-        char *clone_opts = NULL;
         int err;
         ENTRY;
 
@@ -388,7 +386,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 RETURN(-ENOMEM);
 
         sbi->ll_flags |= LL_SBI_READAHEAD;
-        ll_options(data, &osc, &mdc, &sbi->ll_flags, &clone_opts);
+        ll_options(data, &osc, &mdc, &sbi->ll_flags);
 
         if (!osc) {
                 CERROR("no osc\n");
@@ -409,8 +407,6 @@ out:
                 OBD_FREE(mdc, strlen(mdc) + 1);
         if (osc)
                 OBD_FREE(osc, strlen(osc) + 1);
-        if (clone_opts)
-                OBD_FREE(clone_opts, strlen(clone_opts) + 1);
 
         RETURN(err);
 } /* ll_read_super */
@@ -447,8 +443,9 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
                         GOTO(out, err);
         }
 
-        if (lmd->lmd_nal == SOCKNAL) {
-                PCFG_INIT(pcfg, NAL_CMD_ADD_AUTOCONN);
+        if (lmd->lmd_nal == SOCKNAL ||
+              lmd->lmd_nal == OPENIBNAL) {
+                PCFG_INIT(pcfg, NAL_CMD_ADD_PEER);
                 pcfg.pcfg_nal     = lmd->lmd_nal;
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
                 pcfg.pcfg_id      = lmd->lmd_server_ipaddr;
@@ -532,12 +529,12 @@ out_del_uuid:
         err = class_process_config(&lcfg);
 
 out_del_conn:
-        if (lmd->lmd_nal == SOCKNAL) {
-                PCFG_INIT(pcfg, NAL_CMD_DEL_AUTOCONN);
+        if (lmd->lmd_nal == SOCKNAL ||
+            lmd->lmd_nal == OPENIBNAL) {
+                PCFG_INIT(pcfg, NAL_CMD_DEL_PEER);
                 pcfg.pcfg_nal     = lmd->lmd_nal;
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
-                pcfg.pcfg_id      = lmd->lmd_server_ipaddr;
-                pcfg.pcfg_flags   = 1; /*share*/
+                pcfg.pcfg_flags   = 1;          /* single_share */
                 err = libcfs_nal_cmd(&pcfg);
                 if (err <0)
                         GOTO(out, err);
@@ -1028,7 +1025,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 LASSERT(atomic_read(&inode->i_sem.count) <= 0);
                 up(&inode->i_sem);
                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy, &lockh,
-                                    ast_flags);
+                                    ast_flags, &ll_i2sbi(inode)->ll_seek_stime);
                 down(&inode->i_sem);
                 if (rc != 0)
                         RETURN(rc);
@@ -1121,7 +1118,7 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
         struct obd_statfs osfs;
         int rc;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:\n");
+        CDEBUG(D_VFSTRACE, "VFS Op: superblock %p\n", sb);
         lprocfs_counter_incr(ll_s2sbi(sb)->ll_stats, LPROC_LL_STAFS);
 
         /* For now we will always get up-to-date statfs values, but in the
@@ -1466,8 +1463,10 @@ void ll_umount_begin(struct super_block *sb)
         struct obd_device *obd;
         struct obd_ioctl_data ioc_data = { 0 };
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:\n");
-
+     
+        CDEBUG(D_VFSTRACE, "VFS Op: superblock %p count %d active %d\n", sb,
+               sb->s_count, atomic_read(&sb->s_active));
+        
         obd = class_exp2obd(sbi->ll_mdc_exp);
         if (obd == NULL) {
                 CERROR("Invalid MDC connection handle "LPX64"\n",

@@ -72,20 +72,22 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data,
 
         oscc = req->rq_async_args.pointer_arg[0];
         spin_lock(&oscc->oscc_lock);
+        oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
         if (body)
                 oscc->oscc_last_id = body->oa.o_id;
         if (rc == -ENOSPC) {
-                DEBUG_REQ(D_INODE, req, "OST out of space, flagging");
                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
+                spin_unlock(&oscc->oscc_lock);
+                DEBUG_REQ(D_INODE, req, "OST out of space, flagging");
         } else if (rc != 0 && rc != -EIO) {
-                DEBUG_REQ(D_ERROR, req,
-                          "unknown rc %d from async create: failing oscc",
-                          rc);
                 oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
+                spin_unlock(&oscc->oscc_lock);
+                DEBUG_REQ(D_ERROR, req,
+                          "unknown rc %d from async create: failing oscc", rc);
                 ptlrpc_fail_import(req->rq_import, req->rq_import_generation);
+        } else {
+                spin_unlock(&oscc->oscc_lock);
         }
-        oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
-        spin_unlock(&oscc->oscc_lock);
 
         CDEBUG(D_HA, "preallocated through id "LPU64" (last used "LPU64")\n",
                oscc->oscc_last_id, oscc->oscc_next_id);
@@ -134,9 +136,9 @@ static int oscc_internal_create(struct osc_creator *oscc)
         body->oa.o_gr = oscc->oscc_gr;
         LASSERT(body->oa.o_gr > 0);
         body->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGROUP;
+        spin_unlock(&oscc->oscc_lock);
         CDEBUG(D_INFO, "preallocating through id "LPU64" (last used "LPU64")\n",
                body->oa.o_id, oscc->oscc_next_id);
-        spin_unlock(&oscc->oscc_lock);
 
         request->rq_replen = lustre_msg_size(1, &size);
 
@@ -239,17 +241,21 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         if (oa->o_gr == FILTER_GROUP_LLOG || oa->o_gr == FILTER_GROUP_ECHO)
                 RETURN(osc_real_create(exp, oa, ea, oti));
 
-        lsm = *ea;
-        if (lsm == NULL) {
-                rc = obd_alloc_memmd(exp, &lsm);
-                if (rc < 0)
-                        RETURN(rc);
-        }
-
-	/* this is the special case where create removes orphans */
-	if ((oa->o_valid & OBD_MD_FLFLAGS) &&
-	    oa->o_flags == OBD_FL_DELORPHAN) {
-                CDEBUG(D_HA, "%s; oscc recovery started\n", 
+        /* this is the special case where create removes orphans */
+        if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+            oa->o_flags == OBD_FL_DELORPHAN) {
+                spin_lock(&oscc->oscc_lock);
+                if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
+                        spin_unlock(&oscc->oscc_lock);
+                        return -EBUSY;
+                }
+                if (!(oscc->oscc_flags & OSCC_FLAG_RECOVERING)) {
+                        spin_unlock(&oscc->oscc_lock);
+                        return 0;
+                }
+                oscc->oscc_flags |= OSCC_FLAG_SYNC_IN_PROGRESS;
+                spin_unlock(&oscc->oscc_lock);
+                CDEBUG(D_HA, "%s; oscc recovery started\n",
                        exp->exp_obd->obd_name);
                 LASSERT(oscc->oscc_flags & OSCC_FLAG_RECOVERING);
 
@@ -267,6 +273,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 }
 
                 spin_lock(&oscc->oscc_lock);
+                oscc->oscc_flags &= ~OSCC_FLAG_SYNC_IN_PROGRESS;
                 if (rc == 0 || rc == -ENOSPC) {
                         if (rc == -ENOSPC)
                                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
@@ -283,28 +290,35 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 }
                 spin_unlock(&oscc->oscc_lock);
 
-		RETURN(rc);
-	}
+                RETURN(rc);
+        }
+
+        lsm = *ea;
+        if (lsm == NULL) {
+                rc = obd_alloc_memmd(exp, &lsm);
+                if (rc < 0)
+                        RETURN(rc);
+        }
 
         while (try_again) {
                 /* If orphans are being recovered, then we must wait until 
                    it is finished before we can continue with create. */
                 if (oscc_recovering(oscc)) {
                         struct l_wait_info lwi;
-                        
-                        CDEBUG(D_HA,"%s: oscc sync in progress, waiting\n", 
-                               exp->exp_obd->obd_name);
-                        
-                        lwi = LWI_TIMEOUT(MAX(obd_timeout * HZ, 1), NULL, NULL);
-                        rc = l_wait_event(oscc->oscc_waitq, 
+                       
+                        CDEBUG(D_HA,"%p: oscc recovery in progress, waiting\n",
+                               oscc);
+                        lwi = LWI_TIMEOUT(MAX(obd_timeout*HZ/4, 1), NULL, NULL);
+                        rc = l_wait_event(oscc->oscc_waitq,
                                           !oscc_recovering(oscc), &lwi);
+                        
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         if (rc == -ETIMEDOUT) {
-                                CDEBUG(D_HA, "%s: timed out waiting for sync\n",
-                                       exp->exp_obd->obd_name);
+                                CDEBUG(D_HA,"%p: timeout waiting on recovery\n",
+                                       oscc);
                                 RETURN(rc);
                         }
-                        CDEBUG(D_HA, "%s: oscc sync over, waking up\n", 
+                        CDEBUG(D_HA, "%s: oscc recovery over, waking up\n",
                                exp->exp_obd->obd_name);
                 }
                 
@@ -330,8 +344,9 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         }
 
         if (rc == 0)
-                CDEBUG(D_INFO, "returning objid "LPU64"/"LPU64"\n",
-                                lsm->lsm_object_id, lsm->lsm_object_gr);
+                CDEBUG(D_HA, "%s: returning objid "LPU64"\n",
+                       oscc->oscc_obd->u.cli.cl_import->imp_target_uuid.uuid,
+                       lsm->lsm_object_id);
         else if (*ea == NULL)
                 obd_free_memmd(exp, &lsm);
         RETURN(rc);

@@ -182,7 +182,7 @@ pingcli_start(struct portal_ioctl_data *args)
         client->md_in_head.threshold = 1;
         client->md_in_head.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
         client->md_in_head.user_ptr  = NULL;
-        client->md_in_head.eventq    = client->eq;
+        client->md_in_head.eq_handle = client->eq;
         memset (client->inbuf, 0, STDSIZE);
 
         /* Attach the incoming buffer */
@@ -199,7 +199,7 @@ pingcli_start(struct portal_ioctl_data *args)
         client->md_out_head.threshold = 1;
         client->md_out_head.options   = PTL_MD_EVENT_START_DISABLE | PTL_MD_OP_PUT;
         client->md_out_head.user_ptr  = NULL;
-        client->md_out_head.eventq    = PTL_EQ_NONE;
+        client->md_out_head.eq_handle = PTL_EQ_NONE;
 
         memcpy (client->outbuf, &ping_head_magic, sizeof(ping_head_magic));
 
@@ -222,12 +222,12 @@ pingcli_start(struct portal_ioctl_data *args)
         set_current_state (TASK_INTERRUPTIBLE);
         rc = schedule_timeout (20 * args->ioc_timeout);
         if (rc == 0) {
-                printk ("LustreError: Time out on the server\n");
+                CERROR ("Time out on the server\n");
                 pingcli_shutdown (nih, 2);
                 return NULL;
-        } else
-                printk("Lustre: Received respose from the server \n");
-
+        } else {
+                CWARN("Received respose from the server \n");
+        }
 
         pingcli_shutdown (nih, 2);
 

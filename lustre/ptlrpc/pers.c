@@ -104,10 +104,14 @@ static int can_merge_iovs(ptl_md_iovec_t *existing, ptl_md_iovec_t *candidate)
 {
         if (existing->iov_base + existing->iov_len == candidate->iov_base) 
                 return 1;
-
+        /* XXX it's good to have an warning here, but user-level echo_client
+         * will hit this. reenable it when we fixed echo_client.
+         */
+#if 0
         CERROR("Can't merge iovs %p for %x, %p for %x\n",
                existing->iov_base, existing->iov_len,
                candidate->iov_base, candidate->iov_len);
+#endif        
         return 0;
 }
 

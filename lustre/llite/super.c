@@ -34,6 +34,7 @@
 #include <linux/fs.h>
 #include <linux/lprocfs_status.h>
 #include "llite_internal.h"
+#include <lustre/lustre_user.h>
 
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
@@ -146,7 +147,8 @@ static void __exit exit_lustre_lite(void)
 
         ll_gns_stop_thread();
 
-        kmem_cache_destroy(ll_file_data_slab);
+        LASSERTF(kmem_cache_destroy(ll_file_data_slab) == 0,
+                 "couldn't destroy ll_file_data slab\n");
 
         if (proc_lustre_fs_root) {
                 lprocfs_remove(proc_lustre_fs_root);

@@ -141,40 +141,33 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt, int count,
         ENTRY;
 
         LASSERT(ctxt);
-
+        down(&ctxt->loc_sem);
         if (ctxt->loc_imp == NULL) {
                 CWARN("no import for ctxt %p\n", ctxt);
-                RETURN(0);
+                GOTO(out, rc = 0);
         }
 
-        if (count == 0 || cookies == NULL) {
-                down(&ctxt->loc_sem);
-                if (ctxt->loc_llcd == NULL || !(flags & OBD_LLOG_FL_SENDNOW))
-                        GOTO(out, rc);
-
-                llcd = ctxt->loc_llcd;
-                GOTO(send_now, rc);
-        }
-
-        down(&ctxt->loc_sem);
         llcd = ctxt->loc_llcd;
-        if (llcd == NULL) {
-                llcd = llcd_grab();
-                if (llcd == NULL) {
-                        CERROR("couldn't get an llcd - dropped "LPX64":%x+%u\n",
-                               cookies->lgc_lgl.lgl_oid,
-                               cookies->lgc_lgl.lgl_ogen, cookies->lgc_index);
-                        GOTO(out, rc = -ENOMEM);
+        if (count > 0 && cookies != NULL) {
+                if (llcd == NULL) {      
+                        llcd = llcd_grab();
+                        if (llcd == NULL) {
+                                CERROR("couldn't get an llcd - dropped "LPX64":%x+%u\n",
+                                       cookies->lgc_lgl.lgl_oid,
+                                       cookies->lgc_lgl.lgl_ogen, cookies->lgc_index);
+                                GOTO(out, rc = -ENOMEM);
+                        }
+                        llcd->llcd_ctxt = ctxt;
+                        ctxt->loc_llcd = llcd;
                 }
-                llcd->llcd_ctxt = ctxt;
-                ctxt->loc_llcd = llcd;
+                memcpy((char *)llcd->llcd_cookies + llcd->llcd_cookiebytes,
+                       cookies, sizeof(*cookies));
+                llcd->llcd_cookiebytes += sizeof(*cookies);
+        } else {
+                if (llcd == NULL || !(flags & OBD_LLOG_FL_SENDNOW))
+                        GOTO(out, rc);
         }
 
-        memcpy((char *)llcd->llcd_cookies + llcd->llcd_cookiebytes, cookies,
-               sizeof(*cookies));
-        llcd->llcd_cookiebytes += sizeof(*cookies);
-
-send_now:
         if ((LLCD_SIZE - llcd->llcd_cookiebytes < sizeof(*cookies) ||
              flags & OBD_LLOG_FL_SENDNOW)) {
                 CDEBUG(D_HA, "send llcd %p:%p\n", llcd, llcd->llcd_ctxt);
@@ -195,12 +188,12 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
         if (exp && (ctxt->loc_imp == exp->exp_imp_reverse)) {
                 down(&ctxt->loc_sem);
                 if (ctxt->loc_llcd != NULL) {
-                        CWARN("import will be destroyed, put "
-                              "llcd %p:%p\n", ctxt->loc_llcd, ctxt);
                         llcd_put(ctxt->loc_llcd);
                         ctxt->loc_llcd = NULL;
-                        ctxt->loc_imp = NULL;
                 }
+                CWARN("reverse import disconnected, put "
+                      "llcd %p:%p\n", ctxt->loc_llcd, ctxt);
+                ctxt->loc_imp = NULL;
                 up(&ctxt->loc_sem);
         } else {
                 rc = llog_cancel(ctxt, 0, NULL, OBD_LLOG_FL_SENDNOW, NULL);
@@ -341,11 +334,11 @@ static int log_commit_thread(void *arg)
                                 continue;
                         }
 
+                        up(&llcd->llcd_ctxt->loc_sem);
                         request = ptlrpc_prep_req(import, LUSTRE_LOG_VERSION,
                                                   OBD_LOG_CANCEL, 1,
                                                   &llcd->llcd_cookiebytes,
                                                   bufs);
-                        up(&llcd->llcd_ctxt->loc_sem);
 
                         if (request == NULL) {
                                 rc = -ENOMEM;
@@ -509,6 +502,7 @@ static int log_process_thread(void *args)
         lock_kernel();
         ptlrpc_daemonize(); /* thread never needs to do IO */
 
+        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "llog_process");
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
         RECALC_SIGPENDING;

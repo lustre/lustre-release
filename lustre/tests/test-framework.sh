@@ -1,7 +1,6 @@
 #!/bin/sh
 
 set -e
-
 export REFORMAT=""
 export VERBOSE=false
 
@@ -94,7 +93,6 @@ zconf_mount() {
     else
        # this is so cheating
        do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG  > /dev/null || return 2
-       $LCONF --nosetup --node client_facet $XMLCONFIG
        do_node $client $LLMOUNT `facet_active_host mds1`:/mds1_svc/client_facet $mnt -o nettype=$NETTYPE|| return 4
     fi
 
@@ -189,6 +187,7 @@ fail_abort() {
     start $facet
     do_facet $facet lctl --device %${facet}_svc abort_recovery
     df $MOUNT || echo "first df failed: $?"
+    sleep 1
     df $MOUNT || error "post-failover df: $?"
 }
 
@@ -197,24 +196,32 @@ do_lmc() {
 }
 
 h2gm () {
-   if [ "$1" = "client" ]; then echo \'*\'; else
+   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
        $PDSH $1 $GMNALNID -l | cut -d\  -f2
    fi
 }
 
 h2tcp() {
-   if [ "$1" = "client" ]; then echo \'*\'; else
+   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
    echo $1 
    fi
 }
 declare -fx h2tcp
 
 h2elan() {
-   if [ "$1" = "client" ]; then echo \'*\'; else
+   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
    echo $1 | sed 's/[^0-9]*//g'
    fi
 }
 declare -fx h2elan
+
+h2openib() {
+   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
+   echo $1 | sed 's/[^0-9]*//g'
+   fi
+}
+declare -fx h2openib
+
 
 facet_host() {
    local facet=$1
@@ -235,6 +242,11 @@ facet_nid() {
 facet_active() {
     local facet=$1
     local activevar=${facet}active
+
+    if [ -f ./${facet}active ] ; then
+        source ./${facet}active
+    fi
+
     active=${!activevar}
     if [ -z "$active" ] ; then 
 	echo -n ${facet}
@@ -373,9 +385,10 @@ add_lmv() {
 
 add_client() {
     facet=$1
-    shift;
+    mds=$2
+    shift; shift
     add_facet $facet --lustre_upcall $UPCALL
-    do_lmc --add mtpt --node ${facet}_facet $*
+    do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $*
 }
 
 config_commit() {

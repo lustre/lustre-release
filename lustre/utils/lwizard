@@ -257,6 +257,21 @@ add_node()
 
     return 0 
 } 
+# save client node config into config file
+add_client_node()
+{
+    local node=$1
+    local nettype=$DEFAULT_NETTYPE
+
+    in_list "$node" "$NODE_LIST" && return 0
+    NODE_LIST="$NODE_LIST $node"
+
+    run_lmc --add node --node "$node"
+    run_lmc --add net --node "$node" --nid "*"  \
+        --nettype "$nettype"
+
+    return 0
+}
 
 # get hostname, device , device_id and device name 
 # from mds node 
@@ -285,7 +300,7 @@ create_config()
 	echo -n " $DEVICE_NAME"
 	case $DEVICE_NAME in
 	    mds*)
-		add_node "$HOST_NAME"
+		add_client_node "$DEVICE_NAME"
 		run_lmc --add mds \
 		    --node "$HOST_NAME" \
 		    --mds "$DEVICE_NAME" \

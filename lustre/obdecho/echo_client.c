@@ -479,8 +479,10 @@ echo_client_page_debug_check(struct lov_stripe_md *lsm,
                 rc2 = block_debug_check("test_brw", 
                                         addr + delta, OBD_ECHO_BLOCK_SIZE, 
                                         stripe_off, stripe_id);
-                if (rc2 != 0)
+                if (rc2 != 0) {
+                        CERROR ("Error in echo object "LPX64"\n", id);
                         rc = rc2;
+                }
         }
 
         kunmap(page);
@@ -501,10 +503,10 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
         int                     verify = 0;
         int                     gfp_mask;
 
-        /* oa_id == ECHO_PERSISTENT_OBJID => speed test (no verification).
-         * oa & 1                         => use HIGHMEM */
+        verify = ((oa->o_id) != ECHO_PERSISTENT_OBJID &&
+                  (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
+                  (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0);
 
-        verify = (oa->o_id) != ECHO_PERSISTENT_OBJID;
         gfp_mask = ((oa->o_id & 2) == 0) ? GFP_KERNEL : GFP_HIGHUSER;
 
         LASSERT(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ);
@@ -534,7 +536,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                         goto out;
 
                 pgp->count = PAGE_SIZE;
-                pgp->off = off;
+                pgp->disk_offset = pgp->page_offset = off;
                 pgp->flag = 0;
 
                 if (verify)
@@ -555,7 +557,8 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                 if (verify) {
                         int vrc;
                         vrc = echo_client_page_debug_check(lsm, pgp->pg, oa->o_id,
-                                                           pgp->off, pgp->count);
+                                                           pgp->page_offset, 
+                                                           pgp->count);
                         if (vrc != 0 && rc == 0)
                                 rc = vrc;
                 }
@@ -614,7 +617,7 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
         for (i = 0, off = offset, pgp = pga;
              i < npages;
              i++, off += PAGE_SIZE, pgp++) {
-                pgp->off = off;
+                pgp->disk_offset = pgp->page_offset = off;
                 pgp->pg = kiobuf->maplist[i];
                 pgp->count = PAGE_SIZE;
                 pgp->flag = 0;
@@ -721,7 +724,9 @@ static void ec_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
         eas = eap->eap_eas;
 
         if (cmd == OBD_BRW_READ &&
-            eas->eas_oa.o_id != ECHO_PERSISTENT_OBJID)
+            eas->eas_oa.o_id != ECHO_PERSISTENT_OBJID &&
+            (eas->eas_oa.o_valid & OBD_MD_FLFLAGS) != 0 &&
+            (eas->eas_oa.o_flags & OBD_FL_DEBUG_CHECK) != 0)
                 echo_client_page_debug_check(eas->eas_lsm, eap->eap_page, 
                                              eas->eas_oa.o_id, eap->eap_off,
                                              PAGE_SIZE);
@@ -846,7 +851,9 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                         break;
                 }
 
-                if (oa->o_id != ECHO_PERSISTENT_OBJID)
+                if (oa->o_id != ECHO_PERSISTENT_OBJID &&
+                    (oa->o_valid & OBD_MD_FLFLAGS) != 0 &&
+                    (oa->o_flags & OBD_FL_DEBUG_CHECK) != 0)
                         echo_client_page_debug_setup(lsm, eap->eap_page, rw, 
                                                      oa->o_id, 
                                                      eap->eap_off, PAGE_SIZE);
@@ -950,8 +957,11 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                         if (page == NULL && lnb[i].rc == 0)
                                 continue;
 
-                        if (oa->o_id == ECHO_PERSISTENT_OBJID)
+                        if (oa->o_id == ECHO_PERSISTENT_OBJID ||
+                            (oa->o_valid & OBD_MD_FLFLAGS) == 0 ||
+                            (oa->o_flags & OBD_FL_DEBUG_CHECK) == 0)
                                 continue;
+
 
                         if (rw == OBD_BRW_WRITE)
                                 echo_client_page_debug_setup(lsm, page, rw,

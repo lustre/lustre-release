@@ -67,12 +67,19 @@ command_t cmdlist[] = {
          "usage: --net <tcp/elan/myrinet> <command>"},
         {"network", jt_ptl_network, 0, "commands that follow apply to net\n"
          "usage: network <tcp/elan/myrinet>"},
-        {"autoconn_list", jt_ptl_print_autoconnects, 0, "print autoconnect entries\n"
-         "usage: print_autoconns"},
-        {"add_autoconn", jt_ptl_add_autoconnect, 0, "add an autoconnect entry\n"
-         "usage: add_autoconn <nid> <host> <port> [ise]"},
-        {"del_autoconn", jt_ptl_del_autoconnect, 0, "remove an autoconnect entry\n"
-         "usage: del_autoconn [<nid>] [<host>] [ks]"},
+        
+        {"interface_list", jt_ptl_print_interfaces, 0, "print interface entries\n"
+         "usage: interface_list"},
+        {"add_interface", jt_ptl_add_interface, 0, "add interface entry\n"
+         "usage: add_interface ip [netmask]"},
+        {"del_interface", jt_ptl_del_interface, 0, "del interface entry\n"
+         "usage: del_interface [ip]"},
+        {"peer_list", jt_ptl_print_peers, 0, "print peer entries\n"
+         "usage: peer_list"},
+        {"add_peer", jt_ptl_add_peer, 0, "add an peer entry\n"
+         "usage: add_peer <nid> <host> <port>"},
+        {"del_peer", jt_ptl_del_peer, 0, "remove an peer entry\n"
+         "usage: del_peer [<nid>] [<host>] [ks]"},
         {"conn_list", jt_ptl_print_connections, 0, "print all the connected remote nid\n"
          "usage: conn_list"},
         {"connect", jt_ptl_connect, 0, "connect to a remote nid\n"
@@ -104,15 +111,6 @@ command_t cmdlist[] = {
          "usage: set_route <gateway> <up/down> [<time>]"},
         {"route_list", jt_ptl_print_routes, 0, "print the portals routing table\n"
          "usage: route_list"},
-        {"recv_mem", jt_ptl_rxmem, 0, "set socket receive buffer size, "
-         "if size is omited the current size is reported.\n"
-         "usage: recv_mem [size]"},
-        {"send_mem", jt_ptl_txmem, 0, "set socket send buffer size, "
-         "if size is omited the current size is reported.\n"
-         "usage: send_mem [size]"},
-        {"nagle", jt_ptl_nagle, 0, "enable/disable nagle, omitting the "
-         "argument will cause the current nagle setting to be reported.\n"
-         "usage: nagle [on/off]"},
         {"fail", jt_ptl_fail_nid, 0, "fail/restore communications.\n"
          "Omitting the count means indefinitely, 0 means restore, "
          "otherwise fail 'count' messages.\n"
@@ -197,6 +195,9 @@ command_t cmdlist[] = {
         {"test_getattr", jt_obd_test_getattr, 0,
          "do <num> getattrs (on OST object <objid> (objid+1 on each thread))\n"
          "usage: test_getattr <num> [verbose [[t]objid]]"},
+        {"test_setattr", jt_obd_test_setattr, 0,
+         "do <num> setattrs (on OST object <objid> (objid+1 on each thread))\n"
+         "usage: test_setattr <num> [verbose [[t]objid]]"},
         {"test_brw", jt_obd_test_brw, 0,
          "do <num> bulk read/writes (<npages> per I/O, on OST object <objid>)\n"
          "usage: test_brw [t]<num> [write [verbose [npages [[t]objid]]]]"},
@@ -241,6 +242,10 @@ command_t cmdlist[] = {
          "usage: set_timeout <secs>\n"},
         {"set_lustre_upcall", jt_lcfg_set_lustre_upcall, 0,
          "usage: set_lustre_upcall </full/path/to/upcall> \n"},
+        {"add_conn ", jt_lcfg_add_conn, 0,
+         "usage: add_conn <conn_uuid> [priority]\n"},
+        {"del_conn ", jt_lcfg_del_conn, 0,
+         "usage: del_conn <conn_uuid> \n"},
         {"lsync", jt_obd_reint_sync, 0,
          "usage: lsync\n"},  
         {"cache_on", jt_obd_cache_on, 0,

@@ -124,8 +124,8 @@ typedef struct {
 
 #define PORTALS_PROTO_MAGIC                0xeebc0ded
 
-#define PORTALS_PROTO_VERSION_MAJOR        0
-#define PORTALS_PROTO_VERSION_MINOR        3
+#define PORTALS_PROTO_VERSION_MAJOR        1
+#define PORTALS_PROTO_VERSION_MINOR        0
 
 typedef struct {
         long recv_count, recv_length, send_count, send_length, drop_count,
@@ -133,8 +133,8 @@ typedef struct {
 } lib_counters_t;
 
 /* temporary expedient: limit number of entries in discontiguous MDs */
-#define PTL_MTU        (512<<10)
-#define PTL_MD_MAX_IOV 128
+#define PTL_MTU        (1<<20)
+#define PTL_MD_MAX_IOV 256
 
 struct lib_msg_t {
         struct list_head  msg_list;

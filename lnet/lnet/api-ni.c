@@ -33,7 +33,7 @@ int ptl_init;
 #define NI_HANDLE_MAGIC  0xebc0de00
 #define NI_HANDLE_MASK   0x000000ff
 
-static struct nal_t *ptl_nal_table[NAL_MAX_NR];
+static struct nal_t *ptl_nal_table[NAL_MAX_NR + 1];
 
 #ifdef __KERNEL__
 DECLARE_MUTEX(ptl_mutex);
@@ -73,7 +73,7 @@ nal_t *ptl_hndl2nal(ptl_handle_any_t *handle)
 
         idx &= NI_HANDLE_MASK;
         
-        if (idx >= NAL_MAX_NR ||
+        if (idx > NAL_MAX_NR ||
             ptl_nal_table[idx] == NULL ||
             ptl_nal_table[idx]->nal_refct == 0)
                 return NULL;
@@ -87,7 +87,7 @@ int ptl_register_nal (ptl_interface_t interface, nal_t *nal)
         
         ptl_mutex_enter();
         
-        if (interface < 0 || interface >= NAL_MAX_NR)
+        if (interface < 0 || interface > NAL_MAX_NR)
                 rc = PTL_IFACE_INVALID;
         else if (ptl_nal_table[interface] != NULL)
                 rc = PTL_IFACE_DUP;
@@ -103,7 +103,7 @@ int ptl_register_nal (ptl_interface_t interface, nal_t *nal)
 
 void ptl_unregister_nal (ptl_interface_t interface)
 {
-        LASSERT(interface >= 0 && interface < NAL_MAX_NR);
+        LASSERT(interface >= 0 && interface <= NAL_MAX_NR);
         LASSERT(ptl_nal_table[interface] != NULL);
         LASSERT(ptl_nal_table[interface]->nal_refct == 0);
         
@@ -120,10 +120,10 @@ int PtlInit(int *max_interfaces)
 
         /* If this assertion fails, we need more bits in NI_HANDLE_MASK and
          * to shift NI_HANDLE_MAGIC left appropriately */
-        LASSERT (NAL_MAX_NR <= (NI_HANDLE_MASK + 1));
+        LASSERT (NAL_MAX_NR < (NI_HANDLE_MASK + 1));
         
         if (max_interfaces != NULL)
-                *max_interfaces = NAL_MAX_NR;
+                *max_interfaces = NAL_MAX_NR + 1;
 
         ptl_mutex_enter();
 
@@ -158,7 +158,7 @@ void PtlFini(void)
         ptl_mutex_enter();
 
         if (ptl_init) {
-                for (i = 0; i < NAL_MAX_NR; i++) {
+                for (i = 0; i <= NAL_MAX_NR; i++) {
 
                         nal = ptl_nal_table[i];
                         if (nal == NULL)
@@ -193,7 +193,7 @@ int PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
         ptl_mutex_enter ();
 
         if (interface == PTL_IFACE_DEFAULT) {
-                for (i = 0; i < NAL_MAX_NR; i++)
+                for (i = 0; i <= NAL_MAX_NR; i++)
                         if (ptl_nal_table[i] != NULL) {
                                 interface = i;
                                 break;
@@ -203,7 +203,7 @@ int PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
         }
         
         if (interface < 0 || 
-            interface >= NAL_MAX_NR ||
+            interface > NAL_MAX_NR ||
             ptl_nal_table[interface] == NULL) {
                 GOTO(out, rc = PTL_IFACE_INVALID);
         }

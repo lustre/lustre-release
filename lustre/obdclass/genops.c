@@ -187,21 +187,34 @@ int class_unregister_type(char *name)
         RETURN(0);
 } /* class_unregister_type */
 
-struct obd_device *class_newdev(int *dev)
+struct obd_device *class_newdev(struct obd_type *type)
 {
         struct obd_device *result = NULL;
         int i;
 
-        for (i = 0 ; i < MAX_OBD_DEVICES ; i++) {
+        spin_lock(&obd_dev_lock);
+        for (i = 0 ; i < MAX_OBD_DEVICES && result == NULL; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if (!obd->obd_type) {
+                        LASSERT(obd->obd_minor == i);
+                        memset(obd, 0, sizeof(*obd));
+                        obd->obd_minor = i;
+                        obd->obd_type = type;
                         result = obd;
-                        if (dev)
-                                *dev = i;
-                        break;
                 }
         }
+        spin_unlock(&obd_dev_lock);
         return result;
+}
+
+void class_release_dev(struct obd_device *obd)
+{
+        int minor = obd->obd_minor;
+
+        spin_lock(&obd_dev_lock);
+        memset(obd, 0, sizeof(*obd));
+        obd->obd_minor = minor;
+        spin_unlock(&obd_dev_lock);
 }
 
 int class_name2dev(char *name)
@@ -211,12 +224,15 @@ int class_name2dev(char *name)
         if (!name)
                 return -1;
 
+        spin_lock(&obd_dev_lock);
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if (obd->obd_name && strcmp(name, obd->obd_name) == 0)
+                if (obd->obd_name && strcmp(name, obd->obd_name) == 0) {
+                        spin_unlock(&obd_dev_lock);
                         return i;
+                }
         }
-
+        spin_unlock(&obd_dev_lock);
         return -1;
 }
 
@@ -231,13 +247,15 @@ struct obd_device *class_name2obd(char *name)
 int class_uuid2dev(struct obd_uuid *uuid)
 {
         int i;
-
+        spin_lock(&obd_dev_lock);
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if (obd_uuid_equals(uuid, &obd->obd_uuid))
+                if (obd_uuid_equals(uuid, &obd->obd_uuid)) {
+                        spin_unlock(&obd_dev_lock);
                         return i;
+                }
         }
-
+        spin_unlock(&obd_dev_lock);
         return -1;
 }
 
@@ -259,6 +277,7 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
 {
         int i;
 
+        spin_lock(&obd_dev_lock);
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if (obd->obd_type == NULL)
@@ -276,11 +295,12 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                         if (obd_uuid_equals(tgt_uuid, &imp->imp_target_uuid) &&
                             ((grp_uuid)? obd_uuid_equals(grp_uuid,
                                                          &obd->obd_uuid) : 1)) {
+                                spin_unlock(&obd_dev_lock);
                                 return obd;
                         }
                 }
         }
-
+        spin_unlock(&obd_dev_lock);
         return NULL;
 }
 
@@ -291,13 +311,14 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
 struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
 {
         int i;
+
         if (next == NULL) 
                 i = 0;
         else if (*next >= 0 && *next < MAX_OBD_DEVICES)
                 i = *next;
         else 
                 return NULL;
-                
+        spin_lock(&obd_dev_lock);                
         for (; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
                 if (obd->obd_type == NULL)
@@ -305,28 +326,27 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
                 if (obd_uuid_equals(grp_uuid, &obd->obd_uuid)) {
                         if (next != NULL)
                                 *next = i+1;
+                        spin_unlock(&obd_dev_lock);
                         return obd;
                 }
         }
 
+        spin_unlock(&obd_dev_lock);
         return NULL;
 }
 
 
 void obd_cleanup_caches(void)
 {
-        int rc;
         ENTRY;
         if (obdo_cachep) {
-                rc = kmem_cache_destroy(obdo_cachep);
-                if (rc)
-                        CERROR("Cannot destory ll_obdo_cache\n");
+                LASSERTF(kmem_cache_destroy(obdo_cachep) == 0,
+                         "Cannot destory ll_obdo_cache\n");
                 obdo_cachep = NULL;
         }
         if (import_cachep) {
-                rc = kmem_cache_destroy(import_cachep);
-                if (rc)
-                        CERROR("Cannot destory ll_import_cache\n");
+                LASSERTF(kmem_cache_destroy(import_cachep) == 0,
+                         "Cannot destory ll_import_cache\n");
                 import_cachep = NULL;
         }
         EXIT;
@@ -526,6 +546,16 @@ void class_import_put(struct obd_import *import)
 
         ptlrpc_put_connection_superhack(import->imp_connection);
 
+        while (!list_empty(&import->imp_conn_list)) {
+                struct obd_import_conn *imp_conn;
+
+                imp_conn = list_entry(import->imp_conn_list.next,
+                                      struct obd_import_conn, oic_item);
+                list_del(&imp_conn->oic_item);
+                ptlrpc_put_connection_superhack(imp_conn->oic_conn);
+                OBD_FREE(imp_conn, sizeof(*imp_conn));
+        }
+
         LASSERT(list_empty(&import->imp_handle.h_link));
         OBD_FREE(import, sizeof(*import));
         EXIT;
@@ -552,6 +582,7 @@ struct obd_import *class_new_import(void)
         atomic_set(&imp->imp_refcount, 2);
         atomic_set(&imp->imp_inflight, 0);
         atomic_set(&imp->imp_replay_inflight, 0);
+        INIT_LIST_HEAD(&imp->imp_conn_list);
         INIT_LIST_HEAD(&imp->imp_handle.h_link);
         class_handle_hash(&imp->imp_handle, import_handle_addref);
 
@@ -634,24 +665,18 @@ int class_disconnect(struct obd_export *export, int flags)
         RETURN(0);
 }
 
-void class_disconnect_exports(struct obd_device *obd, int flags)
+static void  class_disconnect_export_list(struct list_head *list, int flags)
 {
         int rc;
-        struct list_head *tmp, *n, work_list;
         struct lustre_handle fake_conn;
         struct obd_export *fake_exp, *exp;
         ENTRY;
 
         /* Move all of the exports from obd_exports to a work list, en masse. */
-        spin_lock(&obd->obd_dev_lock);
-        list_add(&work_list, &obd->obd_exports);
-        list_del_init(&obd->obd_exports);
-        spin_unlock(&obd->obd_dev_lock);
-
-        CDEBUG(D_HA, "OBD device %d (%p) has exports, "
-               "disconnecting them\n", obd->obd_minor, obd);
-        list_for_each_safe(tmp, n, &work_list) {
-                exp = list_entry(tmp, struct obd_export, exp_obd_chain);
+        /* It's possible that an export may disconnect itself, but
+         * nothing else will be added to this list. */
+        while(!list_empty(list)) {
+                exp = list_entry(list->next, struct obd_export, exp_obd_chain);
                 class_export_get(exp);
 
                 if (obd_uuid_equals(&exp->exp_client_uuid,
@@ -684,6 +709,53 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
         EXIT;
 }
 
+void class_disconnect_exports(struct obd_device *obd, int flags)
+{
+        struct list_head work_list;
+        ENTRY;
+
+        /* Move all of the exports from obd_exports to a work list, en masse. */
+        spin_lock(&obd->obd_dev_lock);
+        list_add(&work_list, &obd->obd_exports);
+        list_del_init(&obd->obd_exports);
+        spin_unlock(&obd->obd_dev_lock);
+
+        CDEBUG(D_HA, "OBD device %d (%p) has exports, "
+               "disconnecting them\n", obd->obd_minor, obd);
+        class_disconnect_export_list(&work_list, flags);
+        EXIT;
+}
+
+/* Remove exports that have not completed recovery.
+ */
+void class_disconnect_stale_exports(struct obd_device *obd, int flags)
+{
+        struct list_head work_list;
+        struct list_head *pos, *n;
+        struct obd_export *exp;
+        int cnt = 0;
+        ENTRY;
+
+        INIT_LIST_HEAD(&work_list);
+        spin_lock(&obd->obd_dev_lock);
+        list_for_each_safe(pos, n, &obd->obd_exports) {
+                exp = list_entry(pos, struct obd_export, exp_obd_chain);
+                if (exp->exp_replay_needed) {
+                        list_del(&exp->exp_obd_chain);
+                        list_add(&exp->exp_obd_chain, &work_list);
+                        cnt++;
+                }
+        }
+        spin_unlock(&obd->obd_dev_lock);
+
+        CDEBUG(D_ERROR, "%s: disconnecting %d stale clients\n",
+               obd->obd_name, cnt);
+        class_disconnect_export_list(&work_list, flags);
+        EXIT;
+}
+
+
+
 int oig_init(struct obd_io_group **oig_out)
 {
         struct obd_io_group *oig;
@@ -714,8 +786,7 @@ void oig_release(struct obd_io_group *oig)
                 OBD_FREE(oig, sizeof(*oig));
 }
 
-void oig_add_one(struct obd_io_group *oig,
-                  struct oig_callback_context *occ)
+void oig_add_one(struct obd_io_group *oig, struct oig_callback_context *occ)
 {
         unsigned long flags;
         CDEBUG(D_CACHE, "oig %p ready to roll\n", oig);
@@ -770,15 +841,24 @@ static int oig_done(struct obd_io_group *oig)
 static void interrupted_oig(void *data)
 {
         struct obd_io_group *oig = data;
-        struct list_head *pos;
         struct oig_callback_context *occ;
         unsigned long flags;
 
         spin_lock_irqsave(&oig->oig_lock, flags);
-        list_for_each(pos, &oig->oig_occ_list) {
-                occ = list_entry(pos, struct oig_callback_context,
-                                 occ_oig_item);
+        /* We need to restart the processing each time we drop the lock, as
+         * it is possible other threads called oig_complete_one() to remove
+         * an entry elsewhere in the list while we dropped lock.  We need to
+         * drop the lock because osc_ap_completion() calls oig_complete_one()
+         * which re-gets this lock ;-) as well as a lock ordering issue. */
+restart:
+        list_for_each_entry(occ, &oig->oig_occ_list, occ_oig_item) {
+                if (occ->interrupted)
+                        continue;
+                occ->interrupted = 1;
+                spin_unlock_irqrestore(&oig->oig_lock, flags);
                 occ->occ_interrupted(occ);
+                spin_lock_irqsave(&oig->oig_lock, flags);
+                goto restart;
         }
         spin_unlock_irqrestore(&oig->oig_lock, flags);
 }

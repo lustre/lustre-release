@@ -87,32 +87,29 @@
  * buffers */
 #define SVC_BUF_VMALLOC_THRESHOLD (2*PAGE_SIZE)
 
-/* The following constants determine how much memory is devoted to
- * buffering in the lustre services.
+/* The following constants determine how memory is used to buffer incoming
+ * service requests.
  *
- * ?_NEVENTS            # event queue entries
- *
- * ?_NBUFS              # request buffers
+ * ?_NBUFS              # buffers to allocate when growing the pool
  * ?_BUFSIZE            # bytes in a single request buffer
- * total memory = ?_NBUFS * ?_BUFSIZE
- *
  * ?_MAXREQSIZE         # maximum request service will receive
- * messages larger than ?_MAXREQSIZE are dropped.
- * request buffers are auto-unlinked when less than ?_MAXREQSIZE
- * is left in them.
+ *
+ * When fewer than ?_NBUFS/2 buffers are posted for receive, another chunk
+ * of ?_NBUFS is added to the pool.
+ *
+ * Messages larger than ?_MAXREQSIZE are dropped.  Request buffers are
+ * considered full when less than ?_MAXREQSIZE is left in them.
  */
 
 #define LDLM_NUM_THREADS        min(smp_num_cpus * smp_num_cpus * 8, 64)
-#define LDLM_NBUF_MAX   512UL
+#define LDLM_NBUFS       64
 #define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE (5 * 1024)
-#define LDLM_MAXMEM      (num_physpages*(PAGE_SIZE/1024))
-#define LDLM_NBUFS       min(LDLM_MAXMEM/LDLM_BUFSIZE, LDLM_NBUF_MAX)
 
 #define MDT_MAX_THREADS 32UL
 #define MDT_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
                                   MDT_MAX_THREADS), 2UL)
-#define MDS_NBUF_MAX    4096UL
+#define MDS_NBUFS       (64 * smp_num_cpus) 
 #define MDS_BUFSIZE     (8 * 1024)
 /* Assume file name length = FNAME_MAX = 256 (true for extN).
  *        path name length = PATH_MAX = 4096
@@ -129,13 +126,11 @@
  * except in the open case where there are a large number of OSTs in a LOV.
  */
 #define MDS_MAXREQSIZE  (5 * 1024)
-#define MDS_MAXMEM      (num_physpages*(PAGE_SIZE/128))
-#define MDS_NBUFS       min(MDS_MAXMEM/MDS_BUFSIZE, MDS_NBUF_MAX)
 
 #define OST_MAX_THREADS 36UL
 #define OST_NUM_THREADS max(min_t(unsigned long, num_physpages / 8192, \
                                   OST_MAX_THREADS), 2UL)
-#define OST_NBUF_MAX    5000UL
+#define OST_NBUFS       (64 * smp_num_cpus) 
 #define OST_BUFSIZE     (8 * 1024)
 /* OST_MAXREQSIZE ~= 1640 bytes =
  * lustre_msg + obdo + 16 * obd_ioobj + 64 * niobuf_remote
@@ -144,11 +139,9 @@
  * - OST_MAXREQSIZE must be at least 1 page of cookies plus some spillover
  */
 #define OST_MAXREQSIZE  (5 * 1024)
-#define OST_MAXMEM      (num_physpages*(PAGE_SIZE/128))
-#define OST_NBUFS       min(OST_MAXMEM/OST_BUFSIZE, OST_NBUF_MAX)
 
 #define PTLBD_NUM_THREADS        4
-#define PTLBD_NBUFS      20
+#define PTLBD_NBUFS      64 
 #define PTLBD_BUFSIZE    (32 * 1024)
 #define PTLBD_MAXREQSIZE 1024
 
@@ -324,6 +317,9 @@ struct ptlrpc_request {
         ptl_handle_md_t      rq_req_md_h;
         struct ptlrpc_cb_id  rq_req_cbid;
 
+        /* client-side... */
+        struct timeval                     rq_rpcd_start;
+
         /* server-side... */
         struct timeval                     rq_arrival_time; /* request arrival time */
         struct ptlrpc_reply_state         *rq_reply_state; /* separated reply state */
@@ -344,6 +340,8 @@ struct ptlrpc_request {
 
         struct ptlrpc_bulk_desc *rq_bulk;       /* client side bulk */
         time_t rq_sent;                         /* when the request was sent */
+
+        struct ptlrpc_service   *rq_svc;
 
         /* Multi-rpc bits */
         struct list_head rq_set_chain;
@@ -481,6 +479,7 @@ struct ptlrpc_service {
         struct list_head srv_list;              /* chain thru all services */
         int              srv_max_req_size;      /* biggest request to receive */
         int              srv_buf_size;          /* size of individual buffers */
+        int              srv_nbuf_per_group;    /* # buffers to allocate in 1 group */
         int              srv_nbufs;             /* total # req buffer descs allocated */
         int              srv_nthreads;          /* # running threads */
         int              srv_n_difficult_replies; /* # 'difficult' replies */
@@ -725,6 +724,12 @@ int client_obd_cleanup(struct obd_device * obddev, int flags);
 int client_connect_import(struct lustre_handle *conn, struct obd_device *obd,
                           struct obd_uuid *cluuid, unsigned long);
 int client_disconnect_export(struct obd_export *exp, int failover);
+
+int client_import_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
+                           int priority);
+int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid);
+int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
+
 
 /* ptlrpc/pinger.c */
 int ptlrpc_pinger_add_import(struct obd_import *imp);

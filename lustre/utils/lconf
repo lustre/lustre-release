@@ -89,7 +89,8 @@ ptldebug_names = {
     "vfstrace" :  (1 << 21),
     "reada" :     (1 << 22),
     "config" :    (1 << 23),
-    }
+    "mmap" :      (1 << 24),    
+}
 
 subsystem_names = {
     "undefined" :    (1 << 0),
@@ -114,7 +115,7 @@ subsystem_names = {
     "gmnal" :        (1 << 19),
     "ptlrouter" :    (1 << 20),
     "cobd" :         (1 << 21),
-    "ibnal" :        (1 << 22),
+    "openibnal" :    (1 << 22),
     "cmobd" :        (1 << 23),
     }
 
@@ -252,21 +253,16 @@ class DaemonHandler:
             log(self.pidfile(), e)
 
 class AcceptorHandler(DaemonHandler):
-    def __init__(self, port, net_type, send_mem, recv_mem, irq_aff):
+    def __init__(self, port, net_type):
         DaemonHandler.__init__(self, "acceptor")
         self.port = port
         self.flags = ''
-        self.send_mem = send_mem
-        self.recv_mem = recv_mem
-
-        if irq_aff:
-            self.flags = self.flags + ' -i'
 
     def pidfile(self):
         return "/var/run/%s-%d.pid" % (self.command, self.port)
 
     def command_line(self):
-        return string.join(map(str,('-s', self.send_mem, '-r', self.recv_mem, self.flags, self.port)))
+	return string.join(map(str,(self.flags, self.port)))
 
 acceptors = {}
 
@@ -433,28 +429,26 @@ class LCTLInterface:
         cmds = "\n  add_uuid %s %s %s" %(uuid, nid, net_type)
         self.run(cmds)
 
-    def add_autoconn(self, net_type, send_mem, recv_mem, nid, hostaddr,
-                     port, flags):
-        if net_type  in ('tcp',) and not config.lctl_dump:
+    def add_peer(self, net_type, nid, hostaddr, port):     
+	if net_type  in ('tcp',) and not config.lctl_dump:
             cmds =  """
   network %s
-  send_mem %d
-  recv_mem %d
-  add_autoconn %s %s %d %s
+  add_peer %s %s %d
   quit""" % (net_type,
-             send_mem,
-             recv_mem,
-             nid, hostaddr, port, flags )
+             nid, hostaddr, port )
             self.run(cmds)
+        elif net_type in ('openib',) and not config.lctl_dump:
+            cmds =  """
+  network %s
+  add_peer %s
+  quit""" % (net_type,
+             nid)
+	    self.run(cmds)
 
     def connect(self, srv):
         self.add_uuid(srv.net_type, srv.nid_uuid, srv.nid)
-        if srv.net_type  in ('tcp',) and not config.lctl_dump:
-            flags = 's'
-            if srv.irq_affinity:
-                flags = flags + 'i'
-            self.add_autoconn(srv.net_type, srv.send_mem, srv.recv_mem,
-                 srv.nid, srv.hostaddr, srv.port, flags)
+        if srv.net_type  in ('tcp','openib',) and not config.lctl_dump:
+            self.add_peer(srv.net_type, srv.nid, srv.hostaddr, srv.port)
 
     # Recover a device
     def recover(self, dev_name, new_conn):
@@ -508,22 +502,29 @@ class LCTLInterface:
   quit  """ % (net, gw, tgt)
         self.run(cmds)
 
-
-    def del_autoconn(self, net_type, nid, hostaddr):
+    def del_peer(self, net_type, nid, hostaddr):
         if net_type  in ('tcp',) and not config.lctl_dump:
                 cmds =  """
   ignore_errors
   network %s
-  del_autoconn %s %s s
+  del_peer %s %s single_share
   quit""" % (net_type,
              nid, hostaddr)
+                self.run(cmds)
+        elif net_type  in ('openib',) and not config.lctl_dump:
+                cmds =  """
+  ignore_errors
+  network %s
+  del_peer %s single_share
+  quit""" % (net_type,
+             nid)
                 self.run(cmds)
 
     # disconnect one connection
     def disconnect(self, srv):
         self.del_uuid(srv.nid_uuid)
-        if srv.net_type  in ('tcp',) and not config.lctl_dump:
-            self.del_autoconn(srv.net_type, srv.nid, srv.hostaddr)
+        if srv.net_type  in ('tcp','openib',) and not config.lctl_dump:
+            self.del_peer(srv.net_type, srv.nid, srv.hostaddr)
 
     def del_uuid(self, uuid):
         cmds =  """
@@ -554,6 +555,13 @@ class LCTLInterface:
   quit""" % (name, setup)
         self.run(cmds)
 
+    def add_conn(self, name, conn_uuid):
+        cmds = """
+  cfg_device %s
+  add_conn %s
+  quit""" % (name, conn_uuid)
+        self.run(cmds)
+
 
     # create a new device with lctl
     def newdev(self, type, name, uuid, setup = ""):
@@ -579,11 +587,12 @@ class LCTLInterface:
 
     # create an lov
     def lov_setup(self, name, uuid, desc_uuid, stripe_cnt,
-                  stripe_sz, stripe_off, pattern):
+                  stripe_sz, stripe_off, pattern, devlist = None):
         cmds = """
   attach lov %s %s
-  lov_setup %s %d %d %d %s
-  quit""" % (name, uuid, desc_uuid, stripe_cnt, stripe_sz, stripe_off, pattern)
+  lov_setup %s %d %d %d %s %s
+  quit""" % (name, uuid, desc_uuid, stripe_cnt, stripe_sz, stripe_off, 
+	     pattern, devlist)
         self.run(cmds)
 
     # add an OBD to a LOV
@@ -747,6 +756,21 @@ def is_block(path):
     except OSError:
         return 0
     return stat.S_ISBLK(s[stat.ST_MODE])
+
+# find the journal device from mkfs options
+def jdev(opts):
+    if opts == None:
+        return ''
+    x=string.split(opts)
+    i=0
+    while i < len(x) - 1:
+        if x[i] == '-J' and x[i+1].startswith('device='):
+            str=x[i+1]
+            return str[7:]
+        i=i+1
+    return ''
+
+
     
 # build fs according to type
 # fixme: dangerous
@@ -763,14 +787,54 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
 
     if fstype in ('ext3', 'extN', 'ldiskfs'):
         # ext3 journal size is in megabytes
-        if jsize == 0:
-            if devsize == 0:
+        # but don't set jsize if mkfsoptions indicates a separate journal device
+        if jsize == 0 and jdev(mkfsoptions) == '':
+	    if devsize == 0:
                 if not is_block(dev):
                     ret, out = runcmd("ls -l %s" %dev)
                     devsize = int(string.split(out[0])[4]) / 1024
                 else:
+                    # sfdisk works for symlink, hardlink, and realdev
                     ret, out = runcmd("sfdisk -s %s" %dev)
-                    devsize = int(out[0])
+                    if not ret:
+                        devsize = int(out[0])
+                    else:
+                        # sfdisk -s will fail for too large block device,
+                        # then, read the size of partition from /proc/partitions
+                                                                                                               
+                        # get the realpath of the device
+                        # it may be the real device, such as /dev/hda7
+                        # or the hardlink created via mknod for a device
+                        if 'realpath' in dir(os.path):
+                            real_dev = os.path.realpath(dev)
+                        else:
+                            real_dev = dev
+                            link_count = 0
+                            while os.path.islink(real_dev) and (link_count < 20):
+                                link_count = link_count + 1
+                                dev_link = os.readlink(real_dev)
+                                if os.path.isabs(dev_link):
+                                    real_dev = dev_link
+                                else:
+                                    real_dev = os.path.join(os.path.dirname(real_dev), dev_link)
+                                if link_count > 19:
+                                    panic("Entountered too many symbolic links resolving block device:", dev)
+                                                                                                               
+                        # get the major and minor number of the realpath via ls
+                        # it seems python(os.stat) does not return
+                        # the st_rdev member of the stat structure
+                        ret, out = runcmd("ls -l %s" %real_dev)
+                        major = string.split(string.split(out[0])[4], ",")[0]
+                        minor = string.split(out[0])[5]
+                                                                                                               
+                        # get the devsize from /proc/partitions with the major and minor number
+                        ret, out = runcmd("cat /proc/partitions")
+                        for line in out:
+                            if len(line) > 1:
+                                if string.split(line)[0] == major and string.split(line)[1] == minor:
+                                    devsize = int(string.split(line)[2])
+                                    break
+
             if devsize > 1024 * 1024:
                 jsize = ((devsize / 102400) * 4)
             if jsize > 400:
@@ -780,6 +844,15 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
         mkfs = 'mkfs.ext2 -j -b 4096 '
         if not isblock or config.force:
             mkfs = mkfs + ' -F '
+        if jdev(mkfsoptions) != '':
+            jmkfs = 'mkfs.ext2 -b 4096 -O journal_dev '
+            if config.force:
+                jmkfs = jmkfs + '-F '
+            jmkfs = jmkfs + jdev(mkfsoptions)
+            (ret, out) = run (jmkfs)
+            if ret:
+                panic("Unable format journal device:", jdev(mkfsoptions), string.join(out))
+
     elif fstype == 'reiserfs':
         # reiserfs journal size is in blocks
         if jsize:  jopt = "--journal_size %d" %(jsize,)
@@ -942,7 +1015,7 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
 def sys_get_local_address(net_type, wildcard, cluster_id):
     """Return the local address for the network type."""
     local = ""
-    if net_type in ('tcp',):
+    if net_type in ('tcp','openib',):   
         if  ':' in wildcard:
             iface, star = string.split(wildcard, ':')
             local = if2addr(iface)
@@ -1154,9 +1227,6 @@ class Network(Module):
         self.nid = self.db.get_val('nid', '*')
         self.cluster_id = self.db.get_val('clusterid', "0")
         self.port = self.db.get_val_int('port', 0)
-        self.send_mem = self.db.get_val_int('sendmem', DEFAULT_TCPBUF)
-        self.recv_mem = self.db.get_val_int('recvmem', DEFAULT_TCPBUF)
-        self.irq_affinity = self.db.get_val_int('irqaffinity', 0)
 
         if '*' in self.nid:
             self.nid = sys_get_local_nid(self.net_type, self.nid, self.cluster_id)
@@ -1186,6 +1256,8 @@ class Network(Module):
             self.add_portals_module("knals/qswnal", 'kqswnal')
         if self.net_type == 'gm':
             self.add_portals_module("knals/gmnal", 'kgmnal')
+        if self.net_type == 'openib':
+            self.add_portals_module("knals/openibnal", 'kopenibnal')
 
     def nid_to_uuid(self, nid):
         return "NID_%s_UUID" %(nid,)
@@ -1250,9 +1322,10 @@ class RouteTable(Module):
 
     def server_for_route(self, net_type, gw, gw_cluster_id, tgt_cluster_id,
                          lo, hi):
-        # only setup connections for tcp NALs
-        srvdb = None
-        if not net_type in ('tcp',):
+        # only setup connections for tcp and openib NALs
+	srvdb = None
+        
+	if not net_type in ('tcp','openib'):
             return None
 
         # connect to target if route is to single node and this node is the gw
@@ -1307,30 +1380,6 @@ class RouteTable(Module):
                 e.dump()
                 cleanup_error(e.rc)
 
-class Management(Module):
-    def __init__(self, db):
-        Module.__init__(self, 'MGMT', db)
-        self.add_lustre_module('lvfs', 'lvfs')
-        self.add_lustre_module('obdclass', 'obdclass')
-        self.add_lustre_module('ptlrpc', 'ptlrpc')
-        self.add_lustre_module('mgmt', 'mgmt_svc')
-
-    def prepare(self):
-        if not config.record and is_prepared(self.name):
-            return
-        self.info()
-        lctl.newdev("mgmt", self.name, self.uuid)
-
-    def safe_to_clean(self):
-        return 1
-
-    def cleanup(self):
-        if is_prepared(self.name):
-            Module.cleanup(self)
-
-    def correct_level(self, level, op=None):
-        return level
-
 # This is only needed to load the modules; the LDLM device
 # is now created automatically.
 class LDLM(Module):
@@ -1363,6 +1412,7 @@ class LOV(Module):
         self.devlist = self.db.get_lov_tgts('lov_tgt')
         self.stripe_cnt = self.db.get_val_int('stripecount', len(self.devlist))
         self.osclist = []
+	self.obdlist = [] 
         self.desc_uuid = self.uuid
         self.uuid = generate_client_uuid(self.name)
         self.fs_name = fs_name
@@ -1375,7 +1425,8 @@ class LOV(Module):
         for (obd_uuid, index, gen, active) in self.devlist:
             if obd_uuid == '':
                 continue
-            obd = self.db.lookup(obd_uuid)
+	    self.obdlist.append(obd_uuid)
+	    obd = self.db.lookup(obd_uuid)
             osc = get_osc(obd, self.uuid, fs_name)
             if osc:
                 self.osclist.append((osc, index, gen, active))
@@ -1392,7 +1443,8 @@ class LOV(Module):
                   self.stripe_off, self.pattern, self.devlist,
                   self.mds_name)
         lctl.lov_setup(self.name, self.uuid, self.desc_uuid,  self.stripe_cnt,
-                       self.stripe_sz, self.stripe_off, self.pattern)
+                       self.stripe_sz, self.stripe_off, self.pattern,
+		       string.join(self.obdlist))
         for (osc, index, gen, active) in self.osclist:
             target_uuid = osc.target_uuid
             try:
@@ -1568,8 +1620,12 @@ class MDSDEV(Module):
             lov = LOV(self.db.lookup(lov_uuid), lov_uuid, 'FS_name', config_only = 1)
 
             # default stripe count controls default inode_size
-            stripe_count = lov.stripe_cnt
-            if stripe_count > 77:
+            if (lov.stripe_cnt > 0):
+                stripe_count = lov.stripe_cnt
+            else:
+                stripe_count = len(lov.devlist)
+
+	    if stripe_count > 77:
                 self.inode_size = 4096
             elif stripe_count > 35:
                 self.inode_size = 2048
@@ -2062,16 +2118,6 @@ class OSD(Module):
     def correct_level(self, level, op=None):
         return level
 
-def mgmt_uuid_for_fs(mtpt_name):
-    if not mtpt_name:
-        return ''
-    mtpt_db = toplustreDB.lookup_name(mtpt_name)
-    fs_uuid = mtpt_db.get_first_ref('filesystem')
-    fs = toplustreDB.lookup(fs_uuid)
-    if not fs:
-        return ''
-    return fs.get_first_ref('mgmt')
-
 # Generic client module, used by OSC and MDC
 class Client(Module):
     def __init__(self, tgtdb, uuid, module, fs_name, self_name=None,
@@ -2080,8 +2126,9 @@ class Client(Module):
         self.target_uuid = tgtdb.getUUID()
         self.db = tgtdb
         self.active = 1
-
-        self.tgt_dev_uuid = get_active_target(tgtdb)
+	self.backup_targets = []
+        
+	self.tgt_dev_uuid = get_active_target(tgtdb)
         if not self.tgt_dev_uuid:
             panic("No target device found for target(1):", self.target_name)
 
@@ -2098,11 +2145,8 @@ class Client(Module):
             self.name = self_name
         self.uuid = uuid
         self.lookup_server(self.tgt_dev_uuid)
-        mgmt_uuid = mgmt_uuid_for_fs(fs_name)
-        if mgmt_uuid:
-            self.mgmt_name = mgmtcli_name_for_uuid(mgmt_uuid)
-        else:
-            self.mgmt_name = ''
+	
+	self.lookup_backup_targets()
         self.fs_name = fs_name
         if not module_dir:
             module_dir = module
@@ -2117,6 +2161,19 @@ class Client(Module):
         return self.name
     def get_servers(self):
         return self._server_nets
+    def lookup_backup_targets(self):
+        """ Lookup alternative network information """
+        prof_list = toplustreDB.get_refs('profile')
+        for prof_uuid in prof_list:
+            prof_db = toplustreDB.lookup(prof_uuid)
+            if not prof_db:
+                panic("profile:", prof_uuid, "not found.")
+            for ref_class, ref_uuid in prof_db.get_all_refs():
+                if ref_class in ('osd', 'mdsdev'):
+                    devdb = toplustreDB.lookup(ref_uuid)
+                    uuid = devdb.get_first_ref('target')
+                    if self.target_uuid == uuid and self.tgt_dev_uuid != ref_uuid:
+                        self.backup_targets.append(ref_uuid)
 
     def prepare(self, ignore_connect_failure = 0):
         self.info(self.target_uuid)
@@ -2143,8 +2200,23 @@ class Client(Module):
                 debug("%s active" % self.target_uuid)
                 inactive_p = ""
             lctl.newdev(self.module, self.name, self.uuid,
-                        setup ="%s %s %s %s" % (self.target_uuid, srv.nid_uuid,
-                                                inactive_p, self.mgmt_name))
+                        setup ="%s %s %s" % (self.target_uuid, srv.nid_uuid,
+                                                inactive_p))
+        for tgt_dev_uuid in self.backup_targets:
+            this_nets = get_ost_net(toplustreDB, tgt_dev_uuid)
+            if len(this_nets) == 0:
+                panic ("Unable to find a server for:", tgt_dev_uuid)
+            srv = choose_local_server(this_nets)
+            if srv:
+                lctl.connect(srv)
+            else:
+                routes = find_route(this_nets);
+                if len(routes) == 0:
+                    panic("no route to", tgt_dev_uuid)
+                for (srv, r) in routes:
+                    lctl.add_route_host(r[0]. srv.nid_uuid, r[1], r[3])
+            if srv:
+                lctl.add_conn(self.name, srv.nid_uuid);
 
     def cleanup(self):
         if is_prepared(self.name):
@@ -2160,6 +2232,16 @@ class Client(Module):
                 log(self.module_name, "cleanup failed: ", self.name)
                 e.dump()
                 cleanup_error(e.rc)
+
+            for tgt_dev_uuid in self.backup_targets:
+                this_net = get_ost_net(toplustreDB, tgt_dev_uuid)
+                srv = choose_local_server(this_net)
+                if srv:
+                    lctl.disconnect(srv)
+                else:
+                    for (srv, r) in find_route(this_net):
+                        lctl.del_route_host(r[0]. srv.nid_uuid, r[1], r[3])
+
 
     def correct_level(self, level, op=None):
         return level
@@ -2186,14 +2268,6 @@ class OSC(Client):
     def permits_inactive(self):
         return 1
 
-def mgmtcli_name_for_uuid(uuid):
-    return 'MGMTCLI_%s' % uuid
-
-class ManagementClient(Client):
-    def __init__(self, db, uuid):
-        Client.__init__(self, db, uuid, 'mgmt_cli', '',
-                        self_name = mgmtcli_name_for_uuid(db.getUUID()),
-                        module_dir = 'mgmt')
 class VLOV(Module):
     def __init__(self, db, uuid, fs_name, name_override = None, config_only = None):
         Module.__init__(self, 'VLOV', db)
@@ -2457,6 +2531,24 @@ def generate_client_uuid(name):
                                                int(random.random() * 1048576))
         return client_uuid[:36]
 
+def my_rstrip(s, chars):
+    """my_rstrip(s, chars) -> strips any instances of the characters
+    found in chars from the right side of string s"""
+    # XXX required because python versions pre 2.2.3 don't allow
+    #string.rstrip() to take alternate char lists
+    import string
+    ns=s
+    try:
+        ns = string.rstrip(s, '/')
+    except TypeError, e:
+        for i in range(len(s) - 1, 0, -1):
+            if s[i] in chars:
+                continue
+            else:
+                ns = s[0:i+1]
+                break
+    return ns
+
 class Mountpoint(Module):
     def __init__(self,db):
         Module.__init__(self, 'MTPT', db)
@@ -2468,7 +2560,6 @@ class Mountpoint(Module):
 	if not self.mds_uuid:
 	    self.mds_uuid = fs.get_first_ref('mds')
         self.obd_uuid = fs.get_first_ref('obd')
-        self.mgmt_uuid = fs.get_first_ref('mgmt')
         client_uuid = generate_client_uuid(self.name)
 
         ost = self.db.lookup(self.obd_uuid)
@@ -2486,19 +2577,11 @@ class Mountpoint(Module):
         self.vosc = VOSC(ost, client_uuid, self.name)
 	self.vmdc = VMDC(mds, client_uuid, self.name)
         
-        if self.mgmt_uuid:
-            self.mgmtcli = ManagementClient(db.lookup(self.mgmt_uuid),
-                                            client_uuid)
-        else:
-            self.mgmtcli = None
-
     def prepare(self):
         if not config.record and fs_is_mounted(self.path):
             log(self.path, "already mounted.")
             return
         run_acceptors()
-        if self.mgmtcli:
-            self.mgmtcli.prepare()
         self.vosc.prepare()
         self.vmdc.prepare()
         vmdc_name = self.vmdc.get_name()
@@ -2550,20 +2633,14 @@ class Mountpoint(Module):
 
         self.vmdc.cleanup()
         self.vosc.cleanup()
-        if self.mgmtcli:
-            self.mgmtcli.cleanup()
 
     def load_module(self):
-        if self.mgmtcli:
-            self.mgmtcli.load_module()
         self.vosc.load_module()
         Module.load_module(self)
 
     def cleanup_module(self):
         Module.cleanup_module(self)
         self.vosc.cleanup_module()
-        if self.mgmtcli:
-            self.mgmtcli.cleanup_module()
 
     def correct_level(self, level, op=None):
         return level
@@ -2597,8 +2674,6 @@ def getServiceLevel(self):
         ret = 6
     elif type in ('ldlm',):
         ret = 20
-    elif type in ('mgmt',):
-        ret = 25
     elif type in ('osd', 'cobd'):
         ret = 30
     elif type in ('mdsdev',):
@@ -2666,9 +2741,7 @@ def find_local_clusters(node_db):
         if srv.port > 0:
             if acceptors.has_key(srv.port):
                 panic("duplicate port:", srv.port)
-            acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type,
-                                                  srv.send_mem, srv.recv_mem,
-                                                  srv.irq_affinity)
+	    acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type)
 
 # This node is a gateway.
 is_router = 0
@@ -2789,8 +2862,6 @@ def newService(db):
         n = Mountpoint(db)
     elif type == 'echoclient':
         n = ECHO_CLIENT(db)
-    elif type == 'mgmt':
-        n = Management(db)
     elif type == 'lmv':
         n = LMV(db)
     else:
@@ -2809,8 +2880,8 @@ def for_each_profile(db, prof_list, operation):
     for prof_uuid in prof_list:
         prof_db = db.lookup(prof_uuid)
         if not prof_db:
-            panic("profile:", profile, "not found.")
-        services = getServices(prof_db)
+            panic("profile:", prof_uuid, "not found.")
+	services = getServices(prof_db)
         operation(services)
 
 def magic_get_osc(db, rec, lov):
@@ -3034,11 +3105,11 @@ def doHost(lustreDB, hosts):
     prof_list = node_db.get_refs('profile')
 
     if config.write_conf:
-        lustreDB.close()
         for_each_profile(node_db, prof_list, doModules)
         sys_make_devices()
         for_each_profile(node_db, prof_list, doWriteconf)
         for_each_profile(node_db, prof_list, doUnloadModules)
+        lustreDB.close()
 
     elif config.recover:
         if not (config.tgt_uuid and config.client_uuid and config.conn_uuid):
@@ -3187,6 +3258,23 @@ def sys_set_timeout(timeout):
         lctl.set_timeout(timeout)
 
 def sys_tweak_socknal ():
+    # reserve at least 8MB, or we run out of RAM in skb_alloc under read
+    if sys_get_branch() == '2.6':
+        fp = open('/proc/meminfo')
+        lines = fp.readlines()
+        fp.close()
+        memtotal = 131072
+        for l in lines:
+            a = string.split(l)
+            if a[0] == 'MemTotal:':
+                memtotal = a[1]
+	        debug("memtotal" + memtotal)
+	if int(memtotal) < 262144:
+	    minfree = int(memtotal) / 16
+	else:
+	    minfree = 32768
+	debug("+ minfree ", minfree)
+        sysctl("vm/min_free_kbytes", minfree)
     if config.single_socket:
         sysctl("socknal/typed", 0)
 
@@ -3195,7 +3283,7 @@ def sys_optimize_elan ():
                  "/proc/qsnet/elan3/config/eventint_punt_loops",
                  "/proc/qsnet/elan4/config/elan4_mainint_punt_loops"]
     for p in procfiles:
-        if os.access(p, os.R_OK):
+        if os.access(p, os.W_OK):
             run ("echo 1 > " + p)
 
 def sys_set_ptldebug(ptldebug):

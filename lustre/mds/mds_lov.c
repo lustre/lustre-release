@@ -218,9 +218,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_handle conn = {0,};
-        char name[32] = "CATLIST";
-        int rc, i, valsize;
-        __u32 group;
+        int rc, i;
         ENTRY;
 
         if (IS_ERR(mds->mds_osc_obd))
@@ -232,8 +230,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         spin_lock_init(&mds->mds_lov_lock);
         mds->mds_osc_obd = class_name2obd(lov_name);
         if (!mds->mds_osc_obd) {
-                CERROR("MDS cannot locate LOV %s\n",
-                       lov_name);
+                CERROR("MDS cannot locate LOV %s\n", lov_name);
                 mds->mds_osc_obd = ERR_PTR(-ENOTCONN);
                 RETURN(-ENOTCONN);
         }
@@ -244,8 +241,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid,
                          mds->mds_num + FILTER_GROUP_FIRST_MDS);
         if (rc) {
-                CERROR("MDS cannot connect to LOV %s (%d)\n",
-                       lov_name, rc);
+                CERROR("MDS cannot connect to LOV %s (%d)\n", lov_name, rc);
                 mds->mds_osc_obd = ERR_PTR(rc);
                 RETURN(rc);
         }
@@ -269,19 +265,11 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         }
 
         rc = obd_llog_cat_initialize(obd, &obd->obd_llogs, 
-                                     mds->mds_lov_desc.ld_tgt_count, name);
+                                     mds->mds_lov_desc.ld_tgt_count, CATLIST);
         if (rc) {
                 CERROR("failed to initialize catalog %d\n", rc);
                 GOTO(err_reg, rc);
         }
-
-        /* FIXME before set info call is made, we must initialize logging */
-        group = FILTER_GROUP_FIRST_MDS + mds->mds_num;
-        valsize = sizeof(group);
-        rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"), "mds_conn",
-                          valsize, &group);
-        if (rc)
-                GOTO(err_reg, rc);
 
         /* If we're mounting this code for the first time on an existing FS,
          * we need to populate the objids array from the real OST values */
@@ -496,8 +484,8 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_LLOG_REMOVE: {
                 struct llog_ctxt *ctxt =
                         llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT);
-                char name[32] = "CATLIST";
-                int rc2;
+                int rc2, valsize;
+                __u32 group;
 
                 obd_llog_finish(obd, &obd->obd_llogs,
                                 mds->mds_lov_desc.ld_tgt_count);
@@ -506,9 +494,11 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 pop_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
                 obd_llog_cat_initialize(obd, &obd->obd_llogs, 
                                         mds->mds_lov_desc.ld_tgt_count,
-                                        name);
+                                        CATLIST);
+                group = FILTER_GROUP_FIRST_MDS + mds->mds_num;
+                valsize = sizeof(group);
                 rc2 = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"),
-                                   "mds_conn", 0, NULL);
+                                   "mds_conn", valsize, &group);
                 if (!rc)
                         rc = rc2;
                 RETURN(rc);
@@ -818,8 +808,8 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
         if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC)
                 RETURN(0);
 
-        CWARN("converting LOV EA on %lu/%u from V0 to V1\n",
-              inode->i_ino, inode->i_generation);
+        CDEBUG(D_INODE, "converting LOV EA on %lu/%u from V0 to V1\n",      
+                inode->i_ino, inode->i_generation);
         rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0)
                 GOTO(conv_end, rc);

@@ -168,11 +168,11 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
 int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
                struct ptlrpc_request **request)
 {
-        struct obd_device *obddev = class_exp2obd(exp);
+        struct obd_device *obd = class_exp2obd(exp);
         struct ptlrpc_request *req = *request;
         int rc, size[4] = {0, sizeof(struct mds_rec_unlink),
                            data->namelen + 1,
-                           obddev->u.cli.cl_max_mds_cookiesize};
+                           obd->u.cli.cl_max_mds_cookiesize};
         ENTRY;
         LASSERT(req == NULL);
 
@@ -187,13 +187,14 @@ int mdc_unlink(struct obd_export *exp, struct mdc_op_data *data,
         *request = req;
 
         size[0] = sizeof(struct mds_body);
-        size[1] = obddev->u.cli.cl_max_mds_easize;
-        size[2] = obddev->u.cli.cl_max_mds_cookiesize;
+        size[1] = obd->u.cli.cl_max_mds_easize;
+        size[2] = obd->u.cli.cl_max_mds_cookiesize;
+
         req->rq_replen = lustre_msg_size(3, size);
 
         mdc_unlink_pack(req->rq_reqmsg, 1, data);
 
-        rc = mdc_reint(req, obddev->u.cli.cl_rpc_lock, LUSTRE_IMP_FULL);
+        rc = mdc_reint(req, obd->u.cli.cl_rpc_lock, LUSTRE_IMP_FULL);
         if (rc == -ERESTARTSYS)
                 rc = 0;
         RETURN(rc);

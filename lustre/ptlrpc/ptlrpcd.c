@@ -35,18 +35,15 @@
 # else
 #  include <linux/locks.h>
 # endif
+# include <linux/ctype.h>
+# include <linux/init.h>
 #else /* __KERNEL__ */
 # include <liblustre.h>
+# include <ctype.h>
 #endif
 
 #include <linux/kp30.h>
 #include <linux/lustre_net.h>
-
-#ifndef  __CYGWIN__
-# include <linux/init.h>
-#else
-# include <ctype.h>
-#endif
 
 #include <linux/lustre_ha.h>
 #include <linux/obd_support.h> /* for OBD_FAIL_CHECK */
@@ -92,6 +89,7 @@ void ptlrpcd_add_req(struct ptlrpc_request *req)
         else 
                 pc = &ptlrpcd_recovery_pc;
 
+        do_gettimeofday(&req->rq_rpcd_start);
         ptlrpc_set_add_new_req(pc->pc_set, req);
         req->rq_ptlrpcd_data = pc;
                 
@@ -134,7 +132,12 @@ static int ptlrpcd_check(struct ptlrpcd_ctl *pc)
                         ptlrpc_req_finished (req);
                 }
         }
-
+        if (rc == 0) {
+                /* If new requests have been added, make sure to wake up */
+                spin_lock_irqsave(&pc->pc_set->set_new_req_lock, flags);
+                rc = !list_empty(&pc->pc_set->set_new_requests);
+                spin_unlock_irqrestore(&pc->pc_set->set_new_req_lock, flags);
+        }
         RETURN(rc);
 }
 
@@ -195,8 +198,11 @@ int ptlrpcd_check_async_rpcs(void *arg)
         /* single threaded!! */
         pc->pc_recurred++;
 
-        if (pc->pc_recurred == 1)
+        if (pc->pc_recurred == 1) {
                 rc = ptlrpcd_check(pc);
+                if (!rc)
+                        ptlrpc_expired_set(pc->pc_set);
+        }
 
         pc->pc_recurred--;
         return rc;

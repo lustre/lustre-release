@@ -8,14 +8,16 @@ LMC="${LMC:-lmc} -m $config"
 TMP=${TMP:-/tmp}
 
 MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
-MDSSIZE=${MDSSIZE:-100000}
+
+MDSSIZE=${MDSSIZE:-400000}
 FSTYPE=${FSTYPE:-ext3}
+
 MOUNT=${MOUNT:-/mnt/lustre}
 MOUNT2=${MOUNT2:-${MOUNT}2}
-NETWORKTYPE=${NETWORKTYPE:-tcp}
+NETTYPE=${NETTYPE:-tcp}
 
 OSTDEV=${OSTDEV:-$TMP/ost1-`hostname`}
-OSTSIZE=${OSTSIZE:-200000}
+OSTSIZE=${OSTSIZE:-400000}
 
 MDS_BACKFSTYPE=${MDS_BACKFSTYPE:-ext3}
 OST_BACKFSTYPE=${OST_BACKFSTYPE:-ext3}
@@ -36,8 +38,8 @@ rm -f $config
 
 # create nodes
 ${LMC} --add node --node localhost || exit 10
-${LMC} --add net --node localhost --nid `hostname` --nettype $NETWORKTYPE || exit 11
-${LMC} --add net --node client --nid '*' --nettype $NETWORKTYPE || exit 12
+${LMC} --add net --node  localhost --nid `hostname` --nettype $NETTYPE || exit 11
+${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
 
 
 [ "x$MDS_MOUNT_OPTS" != "x" ] &&

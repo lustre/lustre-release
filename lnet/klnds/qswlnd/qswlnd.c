@@ -64,6 +64,7 @@ kqswnal_get_tx_desc (struct portals_cfg *pcfg)
 	unsigned long      flags;
 	struct list_head  *tmp;
 	kqswnal_tx_t      *ktx;
+	ptl_hdr_t         *hdr;
 	int                index = pcfg->pcfg_count;
 	int                rc = -ENOENT;
 
@@ -74,11 +75,12 @@ kqswnal_get_tx_desc (struct portals_cfg *pcfg)
 			continue;
 
 		ktx = list_entry (tmp, kqswnal_tx_t, ktx_list);
+		hdr = (ptl_hdr_t *)ktx->ktx_buffer;
 
 		pcfg->pcfg_pbuf1 = (char *)ktx;
-		pcfg->pcfg_count = NTOH__u32(ktx->ktx_wire_hdr->type);
-		pcfg->pcfg_size  = NTOH__u32(ktx->ktx_wire_hdr->payload_length);
-		pcfg->pcfg_nid   = NTOH__u64(ktx->ktx_wire_hdr->dest_nid);
+		pcfg->pcfg_count = le32_to_cpu(hdr->type);
+		pcfg->pcfg_size  = le32_to_cpu(hdr->payload_length);
+		pcfg->pcfg_nid   = le64_to_cpu(hdr->dest_nid);
 		pcfg->pcfg_nid2  = ktx->ktx_nid;
 		pcfg->pcfg_misc  = ktx->ktx_launcher;
 		pcfg->pcfg_flags = (list_empty (&ktx->ktx_delayed_list) ? 0 : 1) |
@@ -374,7 +376,7 @@ kqswnal_shutdown(nal_t *nal)
                 atomic_read(&portal_kmemory));
 }
 
-static int __init
+static int
 kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 		 ptl_ni_limits_t *requested_limits, 
 		 ptl_ni_limits_t *actual_limits)
@@ -602,6 +604,9 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 		INIT_LIST_HEAD (&ktx->ktx_delayed_list);
 
 		ktx->ktx_state = KTX_IDLE;
+#if MULTIRAIL_EKC
+		ktx->ktx_rail = -1;		/* unset rail */
+#endif
 		ktx->ktx_isnblk = (i >= KQSW_NTXMSGS);
 		list_add_tail (&ktx->ktx_list, 
 			       ktx->ktx_isnblk ? &kqswnal_data.kqn_nblk_idletxds :

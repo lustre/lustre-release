@@ -15,29 +15,22 @@ if test $ac_cv_sizeof_unsigned_long_long != 8 ; then
 fi
 
 # directories for binaries
-ac_default_prefix=
-bindir='${exec_prefix}/usr/bin'
-sbindir='${exec_prefix}/usr/sbin'
-includedir='${prefix}/usr/include'
+ac_default_prefix=/usr
 
-rootsbindir='${exec_prefix}/sbin'
+# mount.lustre
+rootsbindir='/sbin'
 AC_SUBST(rootsbindir)
-
+sysconfdir='/etc'
+AC_SUBST(sysconfdir)
 # Directories for documentation and demos.
-docdir='${prefix}/usr/share/doc/$(PACKAGE)'
+docdir='${datadir}/doc/$(PACKAGE)'
 AC_SUBST(docdir)
 demodir='$(docdir)/demo'
 AC_SUBST(demodir)
-pkgexampledir='${prefix}/usr/lib/$(PACKAGE)/examples'
+pkgexampledir='${pkgdatadir}/examples'
 AC_SUBST(pkgexampledir)
-pymoddir='${prefix}/usr/lib/${PACKAGE}/python/Lustre'
+pymoddir='${pkglibdir}/python/Lustre'
 AC_SUBST(pymoddir)
-# for substitution in lconf
-PYMOD_DIR="/usr/lib/$PACKAGE/python"
-AC_SUBST(PYMOD_DIR)
-modulenetdir='$(moduledir)/net/$(PACKAGE)'
-AC_SUBST(modulenetdir)
-
 
 # ----------  BAD gcc? ------------
 AC_PROG_RANLIB
@@ -105,3 +98,21 @@ else
 	LIBEFENCE=""
 fi
 AC_SUBST(LIBEFENCE)
+
+# -------- enable acceptor libwrap (TCP wrappers) support? -------
+AC_MSG_CHECKING([if libwrap support is requested])
+AC_ARG_ENABLE([libwrap],
+	AC_HELP_STRING([--enable-libwrap], [use TCP wrappers]),
+	[case "${enableval}" in
+		yes) enable_libwrap=yes ;;
+		no) enable_libwrap=no ;;
+		*) AC_MSG_ERROR(bad value ${enableval} for --enable-libwrap) ;;
+	esac],[enable_libwrap=no])
+AC_MSG_RESULT([$enable_libwrap])
+if test x$enable_libwrap = xyes ; then
+	LIBWRAP="-lwrap"
+	AC_DEFINE(HAVE_LIBWRAP, 1, [libwrap support is requested])
+else
+	LIBWRAP=""
+fi
+AC_SUBST(LIBWRAP)

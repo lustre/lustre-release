@@ -121,15 +121,16 @@ int llog_cat_half_bottom(struct llog_cookie *, struct llog_handle *);
 
 /* llog_lvfs.c */
 int llog_get_cat_list(struct lvfs_run_ctxt *, struct fsfilt_operations *,
-                      char *name, int count, struct llog_catid *idarray);
-int llog_put_cat_list(struct lvfs_run_ctxt *, struct fsfilt_operations *, 
-                      char *name, int count, struct llog_catid *idarray);
+                      const char *name, int count, struct llog_catid *idarray);
+int llog_put_cat_list(struct lvfs_run_ctxt *, struct fsfilt_operations *,
+                      const char *name, int count, struct llog_catid *idarray);
+
 extern struct llog_operations llog_lvfs_ops;
 
 int llog_obd_origin_setup(struct obd_device *, struct obd_llogs *, int,
                           struct obd_device *, int, struct llog_logid *);
 
-int obd_llog_cat_initialize(struct obd_device *, struct obd_llogs *, int, char *);
+int obd_llog_cat_initialize(struct obd_device *, struct obd_llogs *, int, const char *);
 
 /* llog_obd.c - obd llog api */
 int obd_llog_setup(struct obd_device *obd, struct obd_llogs *, int index, 
@@ -213,7 +214,7 @@ struct llog_ctxt {
         struct obd_import       *loc_imp;   /* to use in RPC's: can be backward
                                                pointing import */
         struct llog_canceld_ctxt *loc_llcd;
-        struct semaphore         loc_sem;   /* protects loc_llcd */
+        struct semaphore         loc_sem;   /* protects loc_llcd and loc_imp */
         void                    *llog_proc_cb;
         struct obd_llogs        *loc_llogs;
 };

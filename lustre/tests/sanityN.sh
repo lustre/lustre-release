@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1768
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b"}
+# bug number for skipped test: 1768 3192
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b 14c"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -31,22 +31,22 @@ else
 	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
 fi
 
-export NAME=${NAME:-mount2}
-
 SAVE_PWD=$PWD
 
 clean() {
 	echo -n "cln.."
 	sh llmountcleanup.sh > /dev/null || exit 20
 }
-CLEAN=${CLEAN:-clean}
+
+CLEAN=${CLEAN:-}
 
 start() {
 	echo -n "mnt.."
 	sh llrmount.sh > /dev/null || exit 10
 	echo "done"
 }
-START=${START:-start}
+
+START=${START:-}
 
 log() {
 	echo "$*"
@@ -178,7 +178,7 @@ test_3() {
 run_test 3 "symlink on one mtpt, readlink on another ==========="
 
 test_4() {
-	./multifstat $DIR1/f4 $DIR2/f4
+	multifstat $DIR1/f4 $DIR2/f4
 }
 run_test 4 "fstat validation on multiple mount points =========="
 
@@ -191,17 +191,17 @@ test_5() {
 run_test 5 "create a file on one mount, truncate it on the other"
 
 test_6() {
-	./openunlink $DIR1/f6 $DIR2/f6 || error
+	openunlink $DIR1/f6 $DIR2/f6 || error
 }
 run_test 6 "remove of open file on other node =================="
 
 test_7() {
-	./opendirunlink $DIR1/d7 $DIR2/d7 || error
+	opendirunlink $DIR1/d7 $DIR2/d7 || error
 }
 run_test 7 "remove of open directory on other node ============="
 
 test_8() {
-	./opendevunlink $DIR1/dev8 $DIR2/dev8 || error
+	opendevunlink $DIR1/dev8 $DIR2/dev8 || error
 }
 run_test 8 "remove of open special file on other node =========="
 
@@ -290,11 +290,11 @@ test_14() {
 	$DIR2/d14/ls && error || true
 	exec 100<&-
 }
-run_test 14 "execution of file opened for write should return -ETXTBSY=="
+run_test 14 "execution of file open for write returns -ETXTBSY ="
 
 test_14a() {
         mkdir -p $DIR1/d14
-	cp -p `which multiop` $DIR1/d14/multiop
+	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
         $DIR1/d14/multiop $TMP/test14.junk O_c &
         MULTIPID=$!
         sleep 1
@@ -302,11 +302,11 @@ test_14a() {
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
 }
-run_test 14a "open(RDWR) of file being executed should return -ETXTBSY"
+run_test 14a "open(RDWR) of executing file returns -ETXTBSY ===="
 
-test_14b() {
+test_14b() { # bug 3192
         mkdir -p $DIR1/d14
-	cp -p `which multiop` $DIR1/d14/multiop
+	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
         $DIR1/d14/multiop $TMP/test14.junk O_c &
         MULTIPID=$!
         sleep 1
@@ -314,7 +314,20 @@ test_14b() {
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
 }
-run_test 14b "truncate of file being executed should return -ETXTBSY"
+run_test 14b "truncate of executing file returns -ETXTBSY ======"
+
+test_14c() { # bug 3430
+       mkdir -p $DIR1/d14
+       cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
+       $DIR1/d14/multiop $TMP/test14.junk O_c &
+       MULTIPID=$!
+       sleep 1
+       cp /etc/hosts $DIR2/d14/multiop && error "expected error, got success"
+       kill -USR1 $MULTIPID || return 2
+       wait $MULTIPID || return 3
+       #cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
+}
+run_test 14c "open(O_TRUNC) of executing file return -ETXTBSY =="
 
 test_15() {	# bug 974 - ENOSPC
 	echo $PATH
@@ -323,10 +336,36 @@ test_15() {	# bug 974 - ENOSPC
 run_test 15 "test out-of-space with multiple writers ==========="
 
 test_16() {
-	./fsx -R -W -c 50 -p 100 -N 2500 \
-		$MOUNT1/fsxfile $MOUNT2/fsxfile
+	fsx -c 50 -p 100 -N 2500 $MOUNT1/fsxfile $MOUNT2/fsxfile
 }
 run_test 16 "2500 iterations of dual-mount fsx ================="
+
+cancel_lru_locks() {
+       for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
+               echo clear > $d/lru_size
+       done
+       grep [0-9] /proc/fs/lustre/ldlm/namespaces/$1*/lock_unused_count /dev/null
+}
+
+test_17() { # bug 3513, 3667
+       [ ! -d /proc/fs/lustre/ost ] && echo "skipping OST-only test" && return
+
+       cp /etc/termcap $DIR1/f17
+       cancel_lru_locks OSC > /dev/null
+       #define OBD_FAIL_ONCE|OBD_FAIL_LDLM_CREATE_RESOURCE    0x30a
+       echo 0x8000030a > /proc/sys/lustre/fail_loc
+       ls -ls $DIR1/f17 | awk '{ print $1,$6 }' > $DIR1/f17-1 & \
+       ls -ls $DIR2/f17 | awk '{ print $1,$6 }' > $DIR2/f17-2
+       wait
+       diff -u $DIR1/f17-1 $DIR2/f17-2 || error "files are different"
+}
+run_test 17 "resource creation/LVB creation race ==============="
+
+test_18() {
+       ./mmap_sanity -d $MOUNT1 -m $MOUNT2
+}
+run_test 18 "mmap sanity check ================================="
+
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true

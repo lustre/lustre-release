@@ -9,6 +9,7 @@ fi
 parent=$1
 child=$2
 CHILD=`echo $child | sed -e "s/^b_//" | tr "[a-z]" "[A-Z]"`
+date=`date +%Y%m%d_%H%M`
 module=lustre
 
 case $parent in
@@ -29,11 +30,15 @@ fi
 
 echo parent: $parent CHILD: $CHILD child: $child date: $date
 
-echo -n "tagging $parent as '${CHILD}_BASE' ...."
-$CVS rtag -r $parent ${CHILD}_BASE $module
+echo -n "Tagging $parent as ${CHILD}_BASE_$date ..."
+cvs rtag -r $parent ${CHILD}_BASE_$date $module
+echo "done"
+echo -n "tagging ${CHILD}_BASE_$date as '${CHILD}_BASE' ...."
+$CVS rtag -r ${CHILD}_BASE_$date ${CHILD}_BASE $module
 echo "done"
 echo -n "branching $child at ${CHILD}_BASE' ...."
 $CVS rtag -b -r ${CHILD}_BASE $child $module
+echo "done"
 echo -n "updating to $child ...."
 $CVS update -r $child
 echo "done"

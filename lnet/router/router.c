@@ -27,6 +27,7 @@ LIST_HEAD(kpr_routes);
 LIST_HEAD(kpr_gateways);
 LIST_HEAD(kpr_nals);
 
+unsigned int       kpr_routes_generation;
 unsigned long long kpr_fwd_bytes;
 unsigned long      kpr_fwd_packets;
 unsigned long      kpr_fwd_errors;
@@ -594,7 +595,7 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid,
         list_for_each (e, &kpr_gateways) {
                 kpr_gateway_entry_t *ge2 = list_entry(e, kpr_gateway_entry_t,
                                                       kpge_list);
-                
+
                 if (ge2->kpge_nalid == gateway_nalid &&
                     ge2->kpge_nid == gateway_nid) {
                         PORTAL_FREE (ge, sizeof (*ge));
@@ -606,7 +607,6 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid,
 
         if (!dup) {
                 /* Adding a new gateway... */
- 
                 list_add (&ge->kpge_list, &kpr_gateways);
 
                 /* ...zero all gateway weights so this one doesn't have to
@@ -617,12 +617,12 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid,
                                                               kpge_list);
                         atomic_set (&ge2->kpge_weight, 0);
                 }
-                
         }
 
         re->kpre_gateway = ge;
         ge->kpge_refcount++;
         list_add (&re->kpre_list, &kpr_routes);
+        kpr_routes_generation++;
 
         write_unlock_irqrestore (&kpr_rwlock, flags);
         return (0);
@@ -640,12 +640,12 @@ kpr_del_route (int gw_nalid, ptl_nid_t gw_nid,
                ptl_nid_t lo, ptl_nid_t hi)
 {
         int                specific = (lo != PTL_NID_ANY);
-	unsigned long	   flags;
+        unsigned long      flags;
         int                rc = -ENOENT;
-	struct list_head  *e;
-	struct list_head  *n;
+        struct list_head  *e;
+        struct list_head  *n;
 
-        CDEBUG(D_NET, "Del route [%d] "LPX64" : "LPX64" - "LPX64"\n", 
+        CDEBUG(D_NET, "Del route [%d] "LPX64" : "LPX64" - "LPX64"\n",
                gw_nalid, gw_nid, lo, hi);
 
         LASSERT(!in_interrupt());
@@ -653,20 +653,19 @@ kpr_del_route (int gw_nalid, ptl_nid_t gw_nid,
         /* NB Caller may specify either all routes via the given gateway
          * (lo/hi == PTL_NID_ANY) or a specific route entry (lo/hi are
          * actual NIDs) */
-        
         if (specific ? (hi == PTL_NID_ANY || hi < lo) : (hi != PTL_NID_ANY))
                 return (-EINVAL);
 
-	write_lock_irqsave(&kpr_rwlock, flags);
+        write_lock_irqsave(&kpr_rwlock, flags);
 
         list_for_each_safe (e, n, &kpr_routes) {
                 kpr_route_entry_t   *re = list_entry(e, kpr_route_entry_t,
                                                    kpre_list);
                 kpr_gateway_entry_t *ge = re->kpre_gateway;
-                
+
                 if (ge->kpge_nalid != gw_nalid ||
                     ge->kpge_nid != gw_nid ||
-                    (specific && 
+                    (specific &&
                      (lo != re->kpre_lo_nid || hi != re->kpre_hi_nid)))
                         continue;
 
@@ -684,7 +683,9 @@ kpr_del_route (int gw_nalid, ptl_nid_t gw_nid,
                         break;
         }
 
+        kpr_routes_generation++;
         write_unlock_irqrestore(&kpr_rwlock, flags);
+
         return (rc);
 }
 
@@ -800,6 +801,7 @@ kpr_initialise (void)
         CDEBUG(D_MALLOC, "kpr_initialise: kmem %d\n",
                atomic_read(&portal_kmemory));
 
+        kpr_routes_generation = 0;
         kpr_proc_init();
 
         rc = libcfs_nal_cmd_register(ROUTER, kpr_nal_cmd, NULL);

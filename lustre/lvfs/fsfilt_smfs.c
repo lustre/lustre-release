@@ -231,11 +231,11 @@ static int fsfilt_smfs_iocontrol(struct inode *inode, struct file *file,
         } else {
                 rc = cache_fsfilt->fs_iocontrol(cache_inode, NULL, cmd, arg);
         }
-
+#if 0
         /* FIXME-UMKA: Should this be in duplicate_inode()? */
         if (rc == 0 && cmd == EXT3_IOC_SETFLAGS)
                 inode->i_flags = cache_inode->i_flags;
-
+#endif
         post_smfs_inode(inode, cache_inode);
 
         RETURN(rc);
@@ -301,11 +301,7 @@ static int fsfilt_smfs_get_md(struct inode *inode, void *lmm, int lmm_size)
         RETURN(rc);
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-static int fsfilt_smfs_send_bio(struct inode *inode, struct bio *bio)
-#else
-static int fsfilt_smfs_send_bio(struct inode *inode, struct kiobuf *bio)
-#endif
+static int fsfilt_smfs_send_bio(int rw, struct inode *inode, struct kiobuf *bio)
 {
         struct inode *cache_inode;
         struct fsfilt_operations *cache_fsfilt;
@@ -321,7 +317,7 @@ static int fsfilt_smfs_send_bio(struct inode *inode, struct kiobuf *bio)
         if (!cache_fsfilt->fs_send_bio)
                 RETURN(-ENOSYS);
 
-        return cache_fsfilt->fs_send_bio(cache_inode, bio);
+        return cache_fsfilt->fs_send_bio(rw, cache_inode, bio);
 }
 
 static struct page *

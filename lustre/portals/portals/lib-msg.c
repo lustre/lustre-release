@@ -37,9 +37,17 @@ lib_enq_event_locked (lib_nal_t *nal, void *private,
                       lib_eq_t *eq, ptl_event_t *ev)
 {
         ptl_event_t  *eq_slot;
-        
-        ev->sequence = eq->eq_enq_seq++; /* Allocate the next queue slot */
 
+        /* Allocate the next queue slot */
+        ev->link = ev->sequence = eq->eq_enq_seq++;
+        /* NB we don't support START events yet and we don't create a separate
+         * UNLINK event unless an explicit unlink succeeds, so the link
+         * sequence is pretty useless */
+
+        /* We don't support different uid/jids yet */
+        ev->uid = 0;
+        ev->jid = 0;
+        
         /* size must be a power of 2 to handle sequence # overflow */
         LASSERT (eq->eq_size != 0 &&
                  eq->eq_size == LOWEST_BIT_SET (eq->eq_size));
@@ -83,16 +91,16 @@ lib_finalize (lib_nal_t *nal, void *private, lib_msg_t *msg, ptl_err_t status)
                 LASSERT(msg->ev.type == PTL_EVENT_PUT_END);
 
                 memset (&ack, 0, sizeof (ack));
-                ack.type     = HTON__u32 (PTL_MSG_ACK);
-                ack.dest_nid = HTON__u64 (msg->ev.initiator.nid);
-                ack.dest_pid = HTON__u32 (msg->ev.initiator.pid);
-                ack.src_nid  = HTON__u64 (nal->libnal_ni.ni_pid.nid);
-                ack.src_pid  = HTON__u32 (nal->libnal_ni.ni_pid.pid);
+                ack.type     = cpu_to_le32(PTL_MSG_ACK);
+                ack.dest_nid = cpu_to_le64(msg->ev.initiator.nid);
+                ack.dest_pid = cpu_to_le32(msg->ev.initiator.pid);
+                ack.src_nid  = cpu_to_le64(nal->libnal_ni.ni_pid.nid);
+                ack.src_pid  = cpu_to_le32(nal->libnal_ni.ni_pid.pid);
                 ack.payload_length = 0;
 
                 ack.msg.ack.dst_wmd = msg->ack_wmd;
                 ack.msg.ack.match_bits = msg->ev.match_bits;
-                ack.msg.ack.mlength = HTON__u32 (msg->ev.mlength);
+                ack.msg.ack.mlength = cpu_to_le32(msg->ev.mlength);
 
                 rc = lib_send (nal, private, NULL, &ack, PTL_MSG_ACK,
                                msg->ev.initiator.nid, msg->ev.initiator.pid, 

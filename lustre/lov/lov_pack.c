@@ -581,7 +581,8 @@ int lov_getstripe(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         /* User wasn't expecting this many OST entries */
         if (lum.lmm_stripe_count == 0) {
-                if (copy_to_user(lump, lmmk, sizeof(lum)))
+                rc = copy_to_user(lump, lmmk, sizeof(lum));
+                if (rc)
                         rc = -EFAULT;
         } else if (lum.lmm_stripe_count < lmmk->lmm_stripe_count) {
                 rc = -EOVERFLOW;

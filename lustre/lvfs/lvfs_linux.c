@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  lustre/lib/fsfilt_ext3.c
+ *  lustre/lib/lvfs_linux.c
  *  Lustre filesystem abstraction routines
  *
  *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
@@ -32,7 +32,6 @@
 #include <linux/version.h>
 #include <linux/fs.h>
 #include <asm/unistd.h>
-#include <linux/jbd.h>
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
@@ -58,8 +57,10 @@ int obd_memmax;
 /* Debugging check only needed during development */
 #ifdef OBD_CTXT_DEBUG
 # define ASSERT_CTXT_MAGIC(magic) LASSERT((magic) == OBD_RUN_CTXT_MAGIC)
-# define ASSERT_NOT_KERNEL_CTXT(msg) LASSERT(!segment_eq(get_fs(), get_ds()))
-# define ASSERT_KERNEL_CTXT(msg) LASSERT(segment_eq(get_fs(), get_ds()))
+# define ASSERT_NOT_KERNEL_CTXT(msg) LASSERTF(!segment_eq(get_fs(), get_ds()),\
+                                              msg)
+# define ASSERT_KERNEL_CTXT(msg) LASSERTF(segment_eq(get_fs(), get_ds()), msg)
+
 #else
 # define ASSERT_CTXT_MAGIC(magic) do {} while(0)
 # define ASSERT_NOT_KERNEL_CTXT(msg) do {} while(0)
@@ -76,7 +77,7 @@ static void push_group_info(struct lvfs_run_ctxt *save,
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
                 task_lock(current);
                 save->group_info = current->group_info;
-                current->group_info = group_info;
+                current->group_info = ginfo;
                 task_unlock(current);
 #else
                 LASSERT(ginfo->ngroups <= NGROUPS);
@@ -140,6 +141,7 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
         save->ngroups = current_ngroups;
+        save->luc.luc_umask = current->fs->umask;
 
         LASSERT(save->pwd);
         LASSERT(save->pwdmnt);
@@ -157,6 +159,7 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
 
                 push_group_info(save, uc->luc_ginfo);
         }
+        current->fs->umask = 0; /* umask already applied on client */
         set_fs(new_ctx->fs);
         set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
 
@@ -203,6 +206,7 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
 
         dput(saved->pwd);
         mntput(saved->pwdmnt);
+        current->fs->umask = saved->luc.luc_umask;
         if (uc) {
                 current->fsuid = saved->luc.luc_fsuid;
                 current->fsgid = saved->luc.luc_fsgid;

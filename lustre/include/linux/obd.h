@@ -60,7 +60,7 @@ struct lov_oinfo {                 /* per-stripe data structure */
         struct list_head loi_write_item;
         struct list_head loi_read_item;
 
-        int loi_kms_valid:1;
+        unsigned loi_kms_valid:1;
         __u64 loi_kms;             /* known minimum size */
         __u64 loi_rss;             /* recently seen size */
         __u64 loi_mtime;           /* recently seen mtime */
@@ -119,7 +119,8 @@ struct obd_type {
 };
 
 struct brw_page {
-        obd_off  off;
+        obd_off disk_offset; /* modulo PAGE_SIZE */
+        obd_off page_offset; /* modulo PAGE_SIZE (obviously) */
         struct page *pg;
         int count;
         obd_flag flag;
@@ -165,6 +166,7 @@ struct oig_callback_context {
          * callees of this method are encouraged to abort their state 
          * in the oig.  This may be called multiple times. */
         void (*occ_interrupted)(struct oig_callback_context *occ);
+        int interrupted;
 };
 
 /* if we find more consumers this could be generalized */
@@ -173,6 +175,13 @@ struct obd_histogram {
         spinlock_t      oh_lock;
         unsigned long   oh_buckets[OBD_HIST_MAX];
 };
+
+/* reports average service time with the help of lprocfs_status.c */
+struct obd_service_time {
+        __u32           st_num;
+        __u64           st_total_us;
+};
+
 
 struct ost_server_data;
 
@@ -249,10 +258,11 @@ struct filter_obd {
 
 struct mds_server_data;
 
-#define OSC_MAX_RIF_DEFAULT       4
-#define OSC_MAX_RIF_MAX          32
-#define OSC_MAX_DIRTY_DEFAULT     4
-#define OSC_MAX_DIRTY_MB_MAX    256     /* totally arbitrary */
+#define OSC_MAX_RIF_DEFAULT       8
+#define OSC_MAX_RIF_MAX          64
+#define OSC_MAX_DIRTY_DEFAULT   (4*OSC_MAX_RIF_DEFAULT*PTLRPC_MAX_BRW_SIZE>>20)
+#define OSC_MAX_DIRTY_MB_MAX    512     /* totally arbitrary */
+
 
 struct mdc_rpc_lock;
 struct client_obd {
@@ -284,7 +294,8 @@ struct client_obd {
         struct list_head         cl_loi_ready_list;
         struct list_head         cl_loi_write_list;
         struct list_head         cl_loi_read_list;
-        int                      cl_brw_in_flight;
+        int                      cl_r_in_flight;
+        int                      cl_w_in_flight;
         /* just a sum of the loi/lop pending numbers to be exported by /proc */
         int                      cl_pending_w_pages;
         int                      cl_pending_r_pages;
@@ -294,11 +305,13 @@ struct client_obd {
         struct obd_histogram     cl_write_rpc_hist;
         struct obd_histogram     cl_read_page_hist;
         struct obd_histogram     cl_write_page_hist;
+        struct obd_service_time  cl_read_stime;
+        struct obd_service_time  cl_write_stime;
+        struct obd_service_time  cl_enter_stime;
 
         struct mdc_rpc_lock     *cl_rpc_lock;
         struct mdc_rpc_lock     *cl_setattr_lock;
         struct osc_creator       cl_oscc;
-        void                    *cl_clone_info;
 };
 
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we
@@ -370,16 +383,11 @@ struct mds_obd {
 };
 
 struct echo_obd {
-        struct obdo oa;
-        spinlock_t eo_lock;
-        __u64 eo_lastino;
-        atomic_t eo_getattr;
-        atomic_t eo_setattr;
-        atomic_t eo_create;
-        atomic_t eo_destroy;
-        atomic_t eo_prep;
-        atomic_t eo_read;
-        atomic_t eo_write;
+        struct obdo          eo_oa;
+        spinlock_t           eo_lock;
+        __u64                eo_lastino;
+        struct lustre_handle eo_nl_lock;
+        atomic_t             eo_prep;
 };
 
 /*
@@ -411,8 +419,10 @@ struct recovd_obd {
 };
 
 struct ost_obd {
+        spinlock_t              ost_lock;
         struct ptlrpc_service *ost_service;
         struct ptlrpc_service *ost_create_service;
+        struct obd_service_time ost_stimes[6];
 };
 
 struct echo_client_obd {
@@ -613,6 +623,9 @@ struct obd_device {
         struct timer_list                obd_recovery_timer;
         struct list_head                 obd_recovery_queue;
         struct list_head                 obd_delayed_reply_queue;
+        time_t                           obd_recovery_start;
+        time_t                           obd_recovery_end;
+
 
         union {
                 struct filter_obd filter;
@@ -662,6 +675,9 @@ struct obd_ops {
         int (*o_process_config)(struct obd_device *dev, obd_count len,
                                 void *data);
         int (*o_postrecov)(struct obd_device *dev);
+        int (*o_add_conn)(struct obd_import *imp, struct obd_uuid *uuid,
+                          int priority);
+        int (*o_del_conn)(struct obd_import *imp, struct obd_uuid *uuid);
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
                          struct obd_uuid *cluuid, unsigned long connect_flags);
         int (*o_connect_post)(struct obd_export *exp);

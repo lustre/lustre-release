@@ -70,7 +70,8 @@ struct filter_client_data {
         __u8  fcd_uuid[40];        /* client UUID */
         __u64 fcd_last_rcvd;       /* last completed transaction ID */
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
-        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 56];
+        __u32 fcd_group;           /* client group num*/
+        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 60];
 };
 
 #define FILTER_DENTRY_MAGIC 0x9efba101
@@ -87,7 +88,7 @@ enum {
         LPROC_FILTER_LAST,
 };
 
-#define FILTER_MAX_CACHE_SIZE OBD_OBJECT_EOF
+#define FILTER_MAX_CACHE_SIZE (32 * 1024 * 1024) /* was OBD_OBJECT_EOF */
 
 /* filter.c */
 void f_dput(struct dentry *);
@@ -126,10 +127,9 @@ int filter_brw(int cmd, struct obd_export *, struct obdo *,
 	       struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
 	       struct obd_trans_info *);
 void flip_into_page_cache(struct inode *inode, struct page *new_page);
-void filter_release_read_page(struct filter_obd *filter, struct inode *inode,
-                              struct page *page);
-void filter_release_write_page(struct filter_obd *filter, struct inode *inode,
-                               struct niobuf_local *lnb, int rc);
+
+void filter_free_dio_pages(int objcount, struct obd_ioobj *obj,
+                           int niocount, struct niobuf_local *res);
 
 /* filter_io_*.c */
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
@@ -141,6 +141,14 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
                   obd_size want, obd_size fs_space_left);
 void filter_grant_commit(struct obd_export *exp, int niocount,
                          struct niobuf_local *res);
+
+int filter_alloc_iobuf(int rw, int num_pages, void **ret);
+void filter_free_iobuf(void *iobuf);
+int filter_iobuf_add_page(struct obd_device *obd, void *iobuf,
+                          struct inode *inode, struct page *page);
+int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
+                     struct obd_export *exp, struct iattr *attr,
+                     struct obd_trans_info *oti, void **wait_handle);
 
 /* filter_log.c */
 struct ost_filterdata {

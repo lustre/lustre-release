@@ -4,6 +4,8 @@ OSTNODE=${OSTNODE:-`hostname`}
 CLIENT=${CLIENT:-client}
 
 MDSCOUNT=1
+mds_HOST=${mds_HOST:-$MDSNODE}
+mdsfailover_HOST=${mdsfailover_HOST}
 mds1_HOST=${mds1_HOST:-$MDSNODE}
 mds1failover_HOST=${mds1failover_HOST}
 ost_HOST=${ost_HOST:-$OSTNODE}
@@ -26,7 +28,7 @@ OSTDEV=${OSTDEV:-$ROOT/tmp/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-50000}
 FSTYPE=${FSTYPE:-ext3}
 TIMEOUT=${TIMEOUT:-20}
-UPCALL=${UPCALL:-$PWD/replay-single-upcall.sh}
+UPCALL=${UPCALL:-DEFAULT}
 
 STRIPE_BYTES=${STRIPE_BYTES:-524288}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}

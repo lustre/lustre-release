@@ -19,6 +19,7 @@ STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 OSDTYPE=${OSDTYPE:-obdfilter}
 OSTFAILOVER=${OSTFAILOVER:-}
 
+MOUNT=${MOUNT:-/mnt/lustre}
 FSTYPE=${FSTYPE:-ext3}
 
 NETTYPE=${NETTYPE:-tcp}
@@ -111,6 +112,6 @@ done
 echo; echo -n "adding CLIENT on:"
 for NODE in $CLIENTS; do
 	echo -n " $NODE"
-	${LMC} -m $config --add mtpt --node $NODE --path /mnt/lustre --mds mds1 --lov lov1 || exit 30
+	${LMC} -m $config --add mtpt --node $NODE --path $MOUNT --mds mds1 --lov lov1 || exit 30
 done
 echo

@@ -2,50 +2,57 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
 #ifndef _LIBCFS_H
+#define _LIBCFS_H
 
-
-#define PORTAL_DEBUG
-
-/* I think this beast is just trying to get cycles_t and get_cycles().
- * this should be in its own header. */
-#ifdef __linux__
-# include <asm/types.h>
-# if defined(__powerpc__) && !defined(__KERNEL__)
-#  define __KERNEL__
-#  include <asm/timex.h>
-#  undef __KERNEL__
-# else
-#  if defined(__KERNEL__)
-#   include <asm/timex.h>
-#  else
-#   include <sys/time.h>
-#   define cycles_t unsigned long
-static inline cycles_t get_cycles(void) 
-{
-        struct timeval tv;
-        gettimeofday(&tv, NULL);
-        return (tv.tv_sec * 100000) + tv.tv_usec;
-}
-#  endif
-# endif
-#else
-# include <sys/types.h>
-typedef u_int32_t __u32;
-typedef u_int64_t __u64;
-#endif
+#include <asm/types.h>
 
 #ifdef __KERNEL__
 # include <linux/time.h>
+# include <asm/timex.h>
 #else
 # include <sys/time.h>
 # define do_gettimeofday(tv) gettimeofday(tv, NULL);
+typedef unsigned long long cycles_t;
 #endif
+
+#define PORTAL_DEBUG
 
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
 #endif
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
+
+#ifndef __KERNEL__
+/* Userpace byte flipping */
+# include <endian.h>
+# include <byteswap.h>
+# define __swab16(x) bswap_16(x)
+# define __swab32(x) bswap_32(x)
+# define __swab64(x) bswap_64(x)
+# define __swab16s(x) do {*(x) = bswap_16(*(x));} while (0)
+# define __swab32s(x) do {*(x) = bswap_32(*(x));} while (0)
+# define __swab64s(x) do {*(x) = bswap_64(*(x));} while (0)
+# if __BYTE_ORDER == __LITTLE_ENDIAN
+#  define le16_to_cpu(x) (x)
+#  define cpu_to_le16(x) (x)
+#  define le32_to_cpu(x) (x)
+#  define cpu_to_le32(x) (x)
+#  define le64_to_cpu(x) (x)
+#  define cpu_to_le64(x) (x)
+# else
+#  if __BYTE_ORDER == __BIG_ENDIAN
+#   define le16_to_cpu(x) bswap_16(x)
+#   define cpu_to_le16(x) bswap_16(x)
+#   define le32_to_cpu(x) bswap_32(x)
+#   define cpu_to_le32(x) bswap_32(x)
+#   define le64_to_cpu(x) bswap_64(x)
+#   define cpu_to_le64(x) bswap_64(x)
+#  else
+#   error "Unknown byte order"
+#  endif /* __BIG_ENDIAN */
+# endif /* __LITTLE_ENDIAN */
+#endif /* ! __KERNEL__ */
 
 /*
  *  Debugging
@@ -54,7 +61,24 @@ extern unsigned int portal_subsystem_debug;
 extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
-extern unsigned int portal_cerror;
+
+#include <asm/types.h>
+struct ptldebug_header {
+        __u32 ph_len;
+        __u32 ph_flags;
+        __u32 ph_subsys;
+        __u32 ph_mask;
+        __u32 ph_cpu_id;
+        __u32 ph_sec;
+        __u64 ph_usec;
+        __u32 ph_stack;
+        __u32 ph_pid;
+        __u32 ph_extern_pid;
+        __u32 ph_line_num;
+} __attribute__((packed));
+
+#define PH_FLAG_FIRST_RECORD 1
+
 /* Debugging subsystems (32 bits, non-overlapping) */
 #define S_UNDEFINED   0x00000001
 #define S_MDC         0x00000002
@@ -78,7 +102,7 @@ extern unsigned int portal_cerror;
 #define S_GMNAL       0x00080000
 #define S_PTLROUTER   0x00100000
 #define S_COBD        0x00200000
-#define S_IBNAL       0x00400000
+#define S_OPENIBNAL   0x00400000
 #define S_SM          0x00800000
 #define S_ASOBD       0x01000000
 #define S_LMV         0x02000000
@@ -111,8 +135,8 @@ extern unsigned int portal_cerror;
 #define D_RPCTRACE    0x00100000 /* for distributed debugging */
 #define D_VFSTRACE    0x00200000
 #define D_READA       0x00400000 /* read-ahead */
-#define D_CONFIG      0x00800000
-
+#define D_MMAP        0x00800000
+#define D_CONFIG      0x01000000
 #ifdef __KERNEL__
 # include <linux/sched.h> /* THREAD_SIZE */
 #else
@@ -123,8 +147,7 @@ extern unsigned int portal_cerror;
 
 #define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
-//#ifdef __KERNEL__
-#if 0
+#ifdef __KERNEL__
 # ifdef  __ia64__
 #  define CDEBUG_STACK (THREAD_SIZE -                                      \
                         ((unsigned long)__builtin_dwarf_cfa() &            \
@@ -133,7 +156,7 @@ extern unsigned int portal_cerror;
 #  define CDEBUG_STACK (THREAD_SIZE -                                      \
                         ((unsigned long)__builtin_frame_address(0) &       \
                          (THREAD_SIZE - 1)))
-# endif
+# endif /* __ia64__ */
 
 #define CHECK_STACK(stack)                                                    \
         do {                                                                  \
@@ -145,7 +168,7 @@ extern unsigned int portal_cerror;
                       /*panic("LBUG");*/                                      \
                 }                                                             \
         } while (0)
-#else /* __KERNEL__ */
+#else /* !__KERNEL__ */
 #define CHECK_STACK(stack) do { } while(0)
 #define CDEBUG_STACK (0L)
 #endif /* __KERNEL__ */
@@ -153,8 +176,7 @@ extern unsigned int portal_cerror;
 #if 1
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
-        if (likely(portal_debug == 0))                                        \
-                break;                                                        \
+        CHECK_STACK(CDEBUG_STACK);                                            \
         if (((mask) & (D_ERROR | D_EMERG | D_WARNING)) ||                     \
             (portal_debug & (mask) &&                                         \
              portal_subsystem_debug & DEBUG_SUBSYSTEM))                       \
@@ -163,26 +185,9 @@ do {                                                                          \
                                   CDEBUG_STACK, format, ## a);                \
 } while (0)
 
-#define CWARN(format, a...) \
-do {                                                                          \
-                portals_debug_msg(DEBUG_SUBSYSTEM, D_WARNING,                 \
-                                  __FILE__, __FUNCTION__, __LINE__,           \
-                                  CDEBUG_STACK, format, ## a);                \
-} while (0)
-
-#define CERROR(format, a...)  \
-do {                                                                          \
-                portals_debug_msg(DEBUG_SUBSYSTEM, D_ERROR,                 \
-                                  __FILE__, __FUNCTION__, __LINE__,           \
-                                  CDEBUG_STACK, format, ## a);                \
-} while (0)
-
-#define CEMERG(format, a...) \
-do {                                                                          \
-                portals_debug_msg(DEBUG_SUBSYSTEM, D_EMERG,                 \
-                                  __FILE__, __FUNCTION__, __LINE__,           \
-                                  CDEBUG_STACK, format, ## a);                \
-} while (0)
+#define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
+#define CERROR(format, a...) CDEBUG(D_ERROR, format, ## a)
+#define CEMERG(format, a...) CDEBUG(D_EMERG, format, ## a)
 
 #define GOTO(label, rc)                                                 \
 do {                                                                    \
@@ -212,9 +217,9 @@ do {                                                                    \
 } while(0)
 #else
 #define CDEBUG(mask, format, a...)      do { } while (0)
-#define CWARN(format, a...)             printk("<4>" format, ## a)
-#define CERROR(format, a...)            printk("<3>" format, ## a)
-#define CEMERG(format, a...)            printk("<0>" format, ## a)
+#define CWARN(format, a...)             printk(KERN_WARNING format, ## a)
+#define CERROR(format, a...)            printk(KERN_ERR format, ## a)
+#define CEMERG(format, a...)            printk(KERN_EMERG format, ## a)
 #define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
 #define RETURN(rc)                      return (rc)
 #define ENTRY                           do { } while (0)

@@ -115,6 +115,9 @@ obdio_pread (struct obdio_conn *conn, uint64_t oid,
         conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
         conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
 
+        conn->oc_data.ioc_pbuf1 = (void *)1;
+        conn->oc_data.ioc_plen1 = 1;
+
         conn->oc_data.ioc_pbuf2 = buffer;
         conn->oc_data.ioc_plen2 = count;
         conn->oc_data.ioc_count = count;
@@ -132,6 +135,9 @@ obdio_pwrite (struct obdio_conn *conn, uint64_t oid,
         conn->oc_data.ioc_obdo1.o_id = oid;
         conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
         conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
+
+        conn->oc_data.ioc_pbuf1 = (void *)1;
+        conn->oc_data.ioc_plen1 = 1;
 
         conn->oc_data.ioc_pbuf2 = buffer;
         conn->oc_data.ioc_plen2 = count;

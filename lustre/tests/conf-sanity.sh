@@ -29,7 +29,7 @@ gen_config() {
 	add_lov lov1 mds1 --stripe_sz $STRIPE_BYTES\
 	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
 	add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
-	add_client client --mds mds1_svc --lov lov1 --path $MOUNT
+	add_client client mds1 --lov lov1 --path $MOUNT
 }
 
 gen_second_config() {
@@ -43,11 +43,11 @@ gen_second_config() {
 }
 
 start_mds() {
-	echo "start mds service on `facet_active_host mds`"
+	echo "start mds1 service on `facet_active_host mds1`"
 	start mds1 --reformat $MDSLCONFARGS  || return 94
 }
 stop_mds() {
-	echo "stop mds service on `facet_active_host mds`"
+	echo "stop mds1 service on `facet_active_host mds1`"
 	stop mds1 $@  || return 97
 }
 
@@ -209,7 +209,7 @@ test_5b() {
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount $mds1_HOST://mds1_svc/client_facet $MOUNT  && exit 1
+	llmount $mds_HOST://mds1_svc/client_facet $MOUNT  && exit 1
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
@@ -218,7 +218,7 @@ test_5b() {
 	stop_mds || return 2
 	stop_ost || return 3
 
-	lsmod | grep -q portals && return 3
+	lsmod | grep -q portals && return 4 
 	return 0
 
 }
@@ -230,7 +230,7 @@ test_5c() {
 
 	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
-	llmount $mds1_HOST://wrong_mds1_svc/client_facet $MOUNT  && exit 1
+        llmount $mds_HOST://wrong_mds1_svc/client_facet $MOUNT  && return 1
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
@@ -238,11 +238,32 @@ test_5c() {
 	stop_mds || return 2
 	stop_ost || return 3
 
-	lsmod | grep -q portals && return 3
+	lsmod | grep -q portals && return 4
 	return 0
 
 }
 run_test 5c "cleanup after failed mount (bug 2712)"
+
+test_5d() {
+       start_ost
+       start_mds
+       stop_ost --force
+
+       [ -d $MOUNT ] || mkdir -p $MOUNT
+       $LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null
+       llmount $mds_HOST://mds1_svc/client_facet $MOUNT  || return 1
+
+       umount $MOUNT || return 2
+       # cleanup client modules
+       $LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null
+
+       stop_mds || return 3
+
+       lsmod | grep -q portals && return 4
+       return 0
+
+}
+run_test 5d "ost down, don't crash during mount attempt"
 
 test_6() {
 	setup
@@ -379,13 +400,13 @@ test_11() {
         [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
         add_mds mds1 --dev $MDSDEV --size $MDSSIZE
         add_ost ost --dev $OSTDEV --size $OSTSIZE
-        add_client client --mds mds1_svc --path $MOUNT --ost ost_svc || return $?
+        add_client client mds1 --path $MOUNT --ost ost_svc || return $?
         echo "Default lov config success!"
 
         [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
         add_mds mds1 --dev $MDSDEV --size $MDSSIZE
         add_ost ost --dev $OSTDEV --size $OSTSIZE
-        add_client client --mds mds1_svc --path $MOUNT && return $?
+        add_client client mds1 --path $MOUNT && return $?
         echo "--add mtpt with neither --lov nor --ost will return error"
 
         echo ""
@@ -486,15 +507,14 @@ test_13() {
                        | sed "s/ /\n\r/g" | awk -F"'" '/uuid=/{print $2}'`
         FOUNDMDS2UUID=`awk -F"'" '/<mds .*uuid=/' $XMLCONFIG | sed -n '2p' \
                        | sed "s/ /\n\r/g" | awk -F"'" '/uuid=/{print $2}'`
-        if [ $EXPECTEDMDS1UUID != $FOUNDMDS1UUID ]; then
-                echo "Error:expected uuid for mds1: $EXPECTEDMDS1UUID; found: $FOUNDMDS1UUID"
+        if ([ $EXPECTEDMDS1UUID = $FOUNDMDS1UUID ] && [ $EXPECTEDMDS2UUID = $FOUNDMDS2UUID ]) || \
+           ([ $EXPECTEDMDS1UUID = $FOUNDMDS2UUID ] && [ $EXPECTEDMDS2UUID = $FOUNDMDS1UUID ]); then
+                echo "Success:long uuid truncated successfully and being unique."
+        else
+                echo "Error:expected uuid for mds1 and mds2: $EXPECTEDMDS1UUID; $EXPECTEDMDS2UUID"
+                echo "but:     found uuid for mds1 and mds2: $FOUNDMDS1UUID; $FOUNDMDS2UUID"
                 return 1
         fi
-        if [ $EXPECTEDMDS2UUID != $FOUNDMDS2UUID ]; then
-                echo "Error:expected uuid for mds2: $EXPECTEDMDS2UUID; found: $FOUNDMDS2UUID"
-                return 1
-        fi
-        echo "Success:long uuid truncated successfully and being unique."
 
         # check multiple invocations for lmc generate same XML configuration file
         rm -f $XMLCONFIG
@@ -527,7 +547,7 @@ test_14() {
             --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
         add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE \
             --mkfsoptions "-Llabel_conf_14"
-        add_client client --mds mds1_svc --lov lov1 --path $MOUNT
+        add_client client mds1 --lov lov1 --path $MOUNT
 
         FOUNDSTRING=`awk -F"<" '/<mkfsoptions>/{print $2}' $XMLCONFIG`
         EXPECTEDSTRING="mkfsoptions>-Llabel_conf_14"

@@ -151,7 +151,22 @@ static inline void lustre_daemonize_helper(void)
         current->signal->tty = NULL;
 }
 
+#define __set_page_ll_data(page, llap) \
+        do {       \
+                page_cache_get(page); \
+                SetPagePrivate(page); \
+                page->private = (unsigned long)llap; \
+        } while (0)
+#define __clear_page_ll_data(page) \
+        do {       \
+                ClearPagePrivate(page); \
+                page_cache_release(page); \
+                page->private = 0; \
+        } while(0)
+
 #define smp_num_cpus    NR_CPUS
+
+#define kiobuf bio
 
 #include <linux/proc_fs.h>
 
@@ -226,15 +241,31 @@ static inline void lustre_daemonize_helper(void)
 static inline void cond_resched(void)
 {
         if (unlikely(need_resched())) {
-                set_curret_state(TASK_RUNNING);
+                set_current_state(TASK_RUNNING);
                 schedule();
         }
 }
 #endif
 
+static inline int mapping_mapped(struct address_space *mapping)
+{
+        return mapping->i_mmap_shared ? 1 : 0;
+}
+
 /* to find proc_dir_entry from inode. 2.6 has native one -bzzz */
 #ifndef HAVE_PDE
 #define PDE(ii)         ((ii)->u.generic_ip)
+#endif
+
+#define __set_page_ll_data(page, llap) page->private = (unsigned long)llap
+#define __clear_page_ll_data(page) page->private = 0
+#define PageWriteback(page) 0
+#define end_page_writeback(page)
+
+#ifdef ZAP_PAGE_RANGE_VMA
+#define ll_zap_page_range(vma, addr, len)  zap_page_range(vma, addr, len)
+#else
+#define ll_zap_page_range(vma, addr, len)  zap_page_range(vma->vm_mm, addr, len)
 #endif
 
 #endif /* end of 2.4 compat macros */
@@ -274,6 +305,38 @@ static inline int mapping_has_pages(struct address_space *mapping)
 {
         return mapping->nrpages > 0;
 }
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,7))
+#define ll_set_dflags(dentry, flags) do { dentry->d_vfs_flags |= flags; } while(0)
+#define ll_vfs_symlink(dir, dentry, path, mode) vfs_symlink(dir, dentry, path)
+#else
+#define ll_set_dflags(dentry, flags) do { \
+                spin_lock(&dentry->d_lock); \
+                dentry->d_flags |= flags; \
+                spin_unlock(&dentry->d_lock); \
+        } while(0)
+#define ll_vfs_symlink(dir, dentry, path, mode) vfs_symlink(dir, dentry, path, mode)
+#endif
+
+#ifdef HAVE_I_ALLOC_SEM
+#define UP_WRITE_I_ALLOC_SEM(i) do { up_write(&(i)->i_alloc_sem); } while (0)
+#define DOWN_WRITE_I_ALLOC_SEM(i) do { down_write(&(i)->i_alloc_sem); } while(0)
+#define LASSERT_MDS_ORPHAN_WRITE_LOCKED(i) LASSERT(down_read_trylock(&(i)->i_alloc_sem) == 0)
+
+#define UP_READ_I_ALLOC_SEM(i) do { up_read(&(i)->i_alloc_sem); } while (0)
+#define DOWN_READ_I_ALLOC_SEM(i) do { down_read(&(i)->i_alloc_sem); } while (0)
+#define LASSERT_MDS_ORPHAN_READ_LOCKED(i) LASSERT(down_write_trylock(&(i)->i_alloc_sem) == 0)
+#define MDS_PACK_MD_LOCK 1
+#else
+#define UP_READ_I_ALLOC_SEM(i) do { up(&(i)->i_sem); } while (0)
+#define DOWN_READ_I_ALLOC_SEM(i) do { down(&(i)->i_sem); } while (0)
+#define LASSERT_MDS_ORPHAN_READ_LOCKED(i) LASSERT(down_trylock(&(i)->i_sem) != 0)
+
+#define UP_WRITE_I_ALLOC_SEM(i) do { up(&(i)->i_sem); } while (0)
+#define DOWN_WRITE_I_ALLOC_SEM(i) do { down(&(i)->i_sem); } while (0)
+#define LASSERT_MDS_ORPHAN_WRITE_LOCKED(i) LASSERT(down_trylock(&(i)->i_sem) != 0)
+#define MDS_PACK_MD_LOCK 0
 #endif
 
 #endif /* __KERNEL__ */

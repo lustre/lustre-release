@@ -8,6 +8,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- leave liblustre's partial write handling to filter (3274)
 	- chose better nal ids in liblustre (3292)
 	- initialize liblustre with uid/group membership (2862)
+        - let lconf resolve symlinked-to devices (4629)
        * miscellania
 	- drop scimac NAL (unmaintained)
 

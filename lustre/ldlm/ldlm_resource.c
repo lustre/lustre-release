@@ -136,7 +136,7 @@ static int lprocfs_write_lru_size(struct file *file, const char *buffer,
                                   unsigned long count, void *data)
 {
         struct ldlm_namespace *ns = data;
-        char dummy[MAX_STRING_SIZE + 1];
+        char dummy[MAX_STRING_SIZE + 1], *end;
         unsigned long tmp;
 
         dummy[MAX_STRING_SIZE] = '\0';
@@ -153,7 +153,12 @@ static int lprocfs_write_lru_size(struct file *file, const char *buffer,
                 return count;
         }
 
-        tmp = simple_strtoul(dummy, NULL, 0);
+        tmp = simple_strtoul(dummy, &end, 0);
+        if (tmp == 0 && *end) {
+                CERROR("invalid value written\n");
+                return -EINVAL;
+        }
+
         CDEBUG(D_DLMTRACE, "changing namespace %s max_unused from %u to %u\n",
                ns->ns_name, ns->ns_max_unused, (unsigned int)tmp);
         ns->ns_max_unused = (unsigned int)tmp;
@@ -451,10 +456,8 @@ ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
         struct ldlm_resource *res;
         ENTRY;
 
-        if (type < LDLM_MIN_TYPE || type > LDLM_MAX_TYPE) {
-                LBUG();
-                RETURN(NULL);
-        }
+        LASSERTF(type >= LDLM_MIN_TYPE && type <= LDLM_MAX_TYPE,
+                 "type: %d", type);
 
         res = ldlm_resource_new();
         if (!res) {
@@ -522,13 +525,24 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
         else
                 res = NULL;
 
-        l_unlock(&ns->ns_lock);
 
         if (create && ns->ns_lvbo && ns->ns_lvbo->lvbo_init) {
-                int rc = ns->ns_lvbo->lvbo_init(res);
+                int rc;
+
+                /* Although this is technically a lock inversion risk (lvb_sem
+                 * should be taken before DLM lock), this resource was just
+                 * created, so nobody else can take the lvb_sem yet. -p */
+                down(&res->lr_lvb_sem);
+                /* Drop the dlm lock, because lvbo_init can touch the disk */
+                l_unlock(&ns->ns_lock);
+                OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CREATE_RESOURCE, 2);
+                rc = ns->ns_lvbo->lvbo_init(res);
+                up(&res->lr_lvb_sem);
                 if (rc)
                         CERROR("lvbo_init failed for resource "LPU64": rc %d\n",
                                name.name[0], rc);
+        } else {
+                l_unlock(&ns->ns_lock);
         }
 
         RETURN(res);
