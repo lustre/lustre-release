@@ -296,21 +296,22 @@ void
 kqswnal_put_idle_tx (kqswnal_tx_t *ktx)
 {
         kpr_fwd_desc_t   *fwd = NULL;
-        struct list_head *idle = ktx->ktx_idle;
         unsigned long     flags;
 
-        kqswnal_unmap_tx (ktx);                /* release temporary mappings */
-        ktx->ktx_state = KTX_IDLE;
+        kqswnal_unmap_tx (ktx);                 /* release temporary mappings */
 
         spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
 
-        list_add (&ktx->ktx_list, idle);
+        list_del (&ktx->ktx_list);              /* take off active list */
 
-        /* reserved for non-blocking tx */
-        if (idle == &kqswnal_data.kqn_nblk_idletxds) {
+        if (ktx->ktx_isnblk) {
+                /* reserved for non-blocking tx */
+                list_add (&ktx->ktx_list, &kqswnal_data.kqn_nblk_idletxds);
                 spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
                 return;
         }
+
+        list_add (&ktx->ktx_list, &kqswnal_data.kqn_idletxds);
 
         /* anything blocking for a tx descriptor? */
         if (!list_empty(&kqswnal_data.kqn_idletxd_fwdq)) /* forwarded packet? */
@@ -357,7 +358,6 @@ kqswnal_get_idle_tx (kpr_fwd_desc_t *fwd, int may_block)
                 if (!list_empty (&kqswnal_data.kqn_idletxds)) {
                         ktx = list_entry (kqswnal_data.kqn_idletxds.next,
                                           kqswnal_tx_t, ktx_list);
-                        list_del (&ktx->ktx_list);
                         break;
                 }
 
@@ -379,7 +379,6 @@ kqswnal_get_idle_tx (kpr_fwd_desc_t *fwd, int may_block)
 
                         ktx = list_entry (kqswnal_data.kqn_nblk_idletxds.next,
                                           kqswnal_tx_t, ktx_list);
-                        list_del (&ktx->ktx_list);
                         break;
                 }
 
@@ -392,6 +391,12 @@ kqswnal_get_idle_tx (kpr_fwd_desc_t *fwd, int may_block)
                             !list_empty (&kqswnal_data.kqn_idletxds));
         }
 
+        if (ktx != NULL) {
+                list_del (&ktx->ktx_list);
+                list_add (&ktx->ktx_list, &kqswnal_data.kqn_activetxds);
+                ktx->ktx_launcher = current->pid;
+        }
+
         spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
 
         /* Idle descs can't have any mapped (as opposed to pre-mapped) pages */
@@ -402,20 +407,12 @@ kqswnal_get_idle_tx (kpr_fwd_desc_t *fwd, int may_block)
 void
 kqswnal_tx_done (kqswnal_tx_t *ktx, int error)
 {
-        switch (ktx->ktx_state) {
-        case KTX_FORWARDING:       /* router asked me to forward this packet */
+        if (ktx->ktx_forwarding)                /* router asked me to forward this packet */
                 kpr_fwd_done (&kqswnal_data.kqn_router,
                               (kpr_fwd_desc_t *)ktx->ktx_args[0], error);
-                break;
-
-        case KTX_SENDING:          /* packet sourced locally */
+        else                                    /* packet sourced locally */
                 lib_finalize (&kqswnal_lib, ktx->ktx_args[0],
                               (lib_msg_t *)ktx->ktx_args[1]);
-                break;
-
-        default:
-                LASSERT (0);
-        }
 
         kqswnal_put_idle_tx (ktx);
 }
@@ -467,7 +464,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
 
         spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
 
-        list_add_tail (&ktx->ktx_list, &kqswnal_data.kqn_delayedtxds);
+        list_add_tail (&ktx->ktx_delayed_list, &kqswnal_data.kqn_delayedtxds);
         if (waitqueue_active (&kqswnal_data.kqn_sched_waitq))
                 wake_up (&kqswnal_data.kqn_sched_waitq);
 
@@ -612,6 +609,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
         }
 
         memcpy (ktx->ktx_buffer, hdr, sizeof (*hdr)); /* copy hdr from caller's stack */
+        ktx->ktx_wire_hdr = (ptl_hdr_t *)ktx->ktx_buffer;
 
 #if KQSW_CHECKSUM
         csum = kqsw_csum (0, (char *)hdr, sizeof (*hdr));
@@ -666,12 +664,12 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                 } 
         }
 
-        ktx->ktx_port    = (payload_nob <= KQSW_SMALLPAYLOAD) ?
-                        EP_SVC_LARGE_PORTALS_SMALL : EP_SVC_LARGE_PORTALS_LARGE;
-        ktx->ktx_nid     = nid;
-        ktx->ktx_state   = KTX_SENDING;   /* => lib_finalize() on completion */
-        ktx->ktx_args[0] = private;
-        ktx->ktx_args[1] = cookie;
+        ktx->ktx_port       = (payload_nob <= KQSW_SMALLPAYLOAD) ?
+                              EP_SVC_LARGE_PORTALS_SMALL : EP_SVC_LARGE_PORTALS_LARGE;
+        ktx->ktx_nid        = nid;
+        ktx->ktx_forwarding = 0;   /* => lib_finalize() on completion */
+        ktx->ktx_args[0]    = private;
+        ktx->ktx_args[1]    = cookie;
 
         rc = kqswnal_launch (ktx);
         if (rc != 0) {                    /* failed? */
@@ -766,6 +764,8 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
                 ktx->ktx_iov[0].Base = ktx->ktx_ebuffer; /* already mapped */
                 ktx->ktx_iov[0].Len = nob;
                 ktx->ktx_niov = 1;
+
+                ktx->ktx_wire_hdr = (ptl_hdr_t *)ktx->ktx_buffer;
         }
         else
         {
@@ -774,13 +774,15 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
                 rc = kqswnal_map_tx_iov (ktx, nob, niov, iov);
                 if (rc != 0)
                         goto failed;
+
+                ktx->ktx_wire_hdr = (ptl_hdr_t *)iov[0].iov_base;
         }
 
-        ktx->ktx_port    = (nob <= (sizeof (ptl_hdr_t) + KQSW_SMALLPAYLOAD)) ?
-                        EP_SVC_LARGE_PORTALS_SMALL : EP_SVC_LARGE_PORTALS_LARGE;
-        ktx->ktx_nid     = nid;
-        ktx->ktx_state   = KTX_FORWARDING; /* kpr_put_packet() on completion */
-        ktx->ktx_args[0] = fwd;
+        ktx->ktx_port       = (nob <= (sizeof (ptl_hdr_t) + KQSW_SMALLPAYLOAD)) ?
+                              EP_SVC_LARGE_PORTALS_SMALL : EP_SVC_LARGE_PORTALS_LARGE;
+        ktx->ktx_nid        = nid;
+        ktx->ktx_forwarding = 1;
+        ktx->ktx_args[0]    = fwd;
 
         rc = kqswnal_launch (ktx);
         if (rc == 0)
@@ -1156,7 +1158,7 @@ kqswnal_scheduler (void *arg)
                 {
                         ktx = list_entry(kqswnal_data.kqn_delayedtxds.next,
                                          kqswnal_tx_t, ktx_list);
-                        list_del (&ktx->ktx_list);
+                        list_del_init (&ktx->ktx_delayed_list);
                         spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
                                                flags);
 

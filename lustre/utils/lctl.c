@@ -77,6 +77,8 @@ command_t cmdlist[] = {
          "usage: connect <host> <port> [ix]"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
          "usage: disconnect [<nid>]"},
+        {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits (no args)\n"
+         "usage: active_tx"},
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local nid. "
          "The nid defaults to hostname for tcp networks and is automatically "
          "setup for elan/myrinet/scimac networks.\n"

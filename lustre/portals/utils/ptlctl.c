@@ -37,6 +37,7 @@ command_t list[] = {
         {"connect", jt_ptl_connect, 0, "connect to a remote nid (args: host port [xi])"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid (args: [nid] [host]"},
         {"push", jt_ptl_push_connection, 0, "flush connection to a remote nid (args: [nid]"},
+        {"active_tx", jt_ptl_print_active_txs, 0, "print active transmits (no args)"},
         {"ping", jt_ptl_ping, 0, "do a ping test (args: nid [count] [size] [timeout])"},
         {"shownid", jt_ptl_shownid, 0, "print the local NID"},
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local NID (args: [hostname])"},
