@@ -1774,15 +1774,15 @@ test_48e() { # bug 4134
 	#sysctl -w portals.debug=-1
 	#set -vx
 	mkdir -p $DIR/d48e/dir
-	# On a buggy kernel addition of "; touch file" after cd .. will
-	# produce kernel oops in lookup_hash_it
-	( cd $DIR/d48e/dir ; sleep 2 ; cd -P ..; touch foo ) &
-	cdpid=$!
+	cd $DIR/d48e/dir
 	$TRACE rmdir $DIR/d48e/dir || error "remove cwd $DIR/d48e/dir failed"
 	$TRACE rmdir $DIR/d48e || error "remove parent $DIR/d48e failed"
 	$TRACE touch $DIR/d48e || error "'touch $DIR/d48e' failed"
 	$TRACE chmod +x $DIR/d48e || error "'chmod +x $DIR/d48e' failed"
-	$TRACE wait $cdpid && echo "'cd ..' worked after recreate parent"
+	# On a buggy kernel addition of "; touch file" after cd .. will
+	# produce kernel oops in lookup_hash_it
+	cd -P .. && error "'cd ..' worked after recreate parent"
+	cd $DIR
 	$TRACE rm $DIR/d48e || error "rm '$DIR/d48e' failed"
 }
 run_test 48e "Access to recreated parent subdir (should return errors)"
