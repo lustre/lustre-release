@@ -93,6 +93,7 @@ struct ll_async_page {
         void            *llap_cookie;
         int             llap_queued;
         struct page     *llap_page;
+        struct list_head llap_pending_write;
 };
 
 #define LL_CDEBUG_PAGE(page, STR)                                       \
@@ -122,10 +123,9 @@ void ll_prepare_mdc_op_data(struct mdc_op_data *,
                             const char *name, int namelen, int mode);
 
 /* llite/rw.c */
-int ll_prepare_write(struct file *file, struct page *page, unsigned from,
-                            unsigned to);
-int ll_commit_write(struct file *file, struct page *page, unsigned from,
-                    unsigned to);
+int ll_prepare_write(struct file *, struct page *, unsigned from, unsigned to);
+int ll_commit_write(struct file *, struct page *, unsigned from, unsigned to);
+void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define ll_ap_completion ll_ap_completion_24
 void ll_ap_completion_24(void *data, int cmd, int rc);
@@ -221,6 +221,23 @@ struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
 int ll_dentry_to_fh(struct dentry *, __u32 *datap, int *lenp, int need_parent);
 /* llite/symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;
+
+/* llite/llite_close.c */
+struct ll_close_queue {
+        spinlock_t              lcq_lock;
+        struct list_head        lcq_list;
+        wait_queue_head_t       lcq_waitq;
+        struct completion       lcq_comp;
+};
+
+void llap_write_pending(struct inode *inode, struct ll_async_page *llap);
+void llap_write_complete(struct inode *inode, struct ll_async_page *llap);
+void ll_open_complete(struct inode *inode);
+int ll_is_inode_dirty(struct inode *inode);
+void ll_try_done_writing(struct inode *inode);
+void ll_queue_done_writing(struct inode *inode);
+void ll_close_thread_shutdown(struct ll_close_queue *lcq);
+int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 
 /* generic */
 #define LL_SUPER_MAGIC 0x0BD00BD0

@@ -64,6 +64,7 @@ int mds_pin(struct ptlrpc_request *req);
 int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                   struct mds_file_data *mfd, int unlink_orphan);
 int mds_close(struct ptlrpc_request *req);
+int mds_done_writing(struct ptlrpc_request *req);
 
 
 /* mds/mds_fs.c */

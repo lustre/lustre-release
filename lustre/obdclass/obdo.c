@@ -35,6 +35,7 @@
 
 #ifdef __KERNEL__
 #include <linux/fs.h>
+#include <linux/pagemap.h> /* for PAGE_CACHE_SIZE */
 
 void obdo_from_iattr(struct obdo *oa, struct iattr *attr, unsigned int ia_valid)
 {
@@ -220,6 +221,8 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
         /* optimum IO size */
         if (valid & OBD_MD_FLBLKSZ && src->o_blksize > dst->i_blksize)
                 dst->i_blksize = src->o_blksize;
+        if (dst->i_blksize < PAGE_CACHE_SIZE)
+                dst->i_blksize = PAGE_CACHE_SIZE;
         /* allocation of space */
         if (valid & OBD_MD_FLBLOCKS && src->o_blocks > dst->i_blocks)
                 dst->i_blocks = src->o_blocks;
