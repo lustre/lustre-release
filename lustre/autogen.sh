@@ -22,6 +22,11 @@ error_msg() {
 	cat >&2 <<EOF
 $cmd is $1.  version $required is required to build Lustre.
 
+CFS provides RPMs which can be installed alongside your existing autoconf/make
+RPMs, if you are nervous about upgrading.  See
+
+ftp://ftp.lustre.org/pub/other/autolustre/README.autolustre
+
 You may be able to download a new version from:
 http://ftp.gnu.org/gnu/$cmd/$cmd-$required.tar.gz
 EOF
