@@ -325,11 +325,10 @@ void lmv_update_body_from_obj(struct mds_body *body, struct lmv_inode *obj)
 {
         /* update size */
         body->size += obj->size;
-
-        /* update atime */
-        /* update ctime */
-        /* update mtime */
-        /* update nlink */
+/*        body->atime = obj->atime;
+        body->ctime = obj->ctime;
+        body->mtime = obj->mtime;
+        body->nlink = obj->nlink;*/
 }
 
 int lmv_lookup_slaves(struct obd_export *exp, struct ptlrpc_request **reqp)

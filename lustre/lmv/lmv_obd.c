@@ -1130,10 +1130,8 @@ int lmv_setattr(struct obd_export *exp, struct mdc_op_data *data,
                                 ptlrpc_req_finished(req);
                         }
 
-                        if (rc) {
-                                lmv_put_obj(obj);
-                                RETURN(rc);
-                        }
+                        if (rc)
+                                break;
                 }
                 lmv_put_obj(obj);
         } else {

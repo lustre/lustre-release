@@ -26,6 +26,10 @@ struct lmv_obj {
         int                objcount;       /* number of slaves */
         struct lmv_inode   *objs;          /* array of dirobjs */
         struct obd_device  *obd;           /* pointer to LMV itself */
+	unsigned long      mtime;
+	unsigned long      ctime;
+	unsigned long      atime;
+	unsigned long      nlink;
 };
 
 static inline void

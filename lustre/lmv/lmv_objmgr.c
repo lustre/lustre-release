@@ -316,8 +316,6 @@ lmv_create_obj(struct obd_export *exp, struct ll_fid *fid, struct mea *mea)
                        (unsigned long)fid->generation);
                 GOTO(cleanup, obj = ERR_PTR(-ENOMEM));
         }
-        
-        lmv_put_obj(obj);
 cleanup:
         if (req)       
                 ptlrpc_req_finished(req);
