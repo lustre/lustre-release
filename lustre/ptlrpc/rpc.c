@@ -66,21 +66,77 @@ int connmgr_cleanup(struct obd_device *dev)
 
 /* should this be in llite? */
 
-int connmgr_iocontrol(long cmd, struct lustre_handle *conn, int len, void *karg,
+int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
                       void *uarg)
 {
-        struct obd_device *obd = class_conn2obd(conn);
+        struct ptlrpc_connection *conn = NULL;
+        struct obd_device *obd = class_conn2obd(hdl);
         struct recovd_obd *recovd = &obd->u.recovd;
+        struct obd_ioctl_data *data = karg;
+        struct list_head *tmp;
 
         ENTRY;
-        if (cmd == OBD_IOC_RECOVD_NEWCONN) { 
-                spin_lock(&recovd->recovd_lock);
-                /* XXX shaver flag upcall answer */
-                wake_up(&recovd->recovd_waitq);
-                spin_unlock(&recovd->recovd_lock);
-                EXIT;
+
+        if (cmd != OBD_IOC_RECOVD_NEWCONN)
+                RETURN(0);
+        
+        /* Find the connection that's been rebuilt. */
+        spin_lock(&recovd->recovd_lock);
+#if 0 && PARALLEL_RECOVERY
+        list_for_each(tmp, &recovd->recovd_troubled_items) {
+                conn = list_entry(tmp, struct ptlrpc_connection,
+                                  c_recovd_data.rd_managed_chain);
+
+                LASSERT(conn->c_recovd_data.rd_recovd == recovd); /* sanity */
+
+                if (!strcmp(conn->c_remote_uuid, data->ioc_inlbuf1))
+                        break;
+                conn = NULL;
         }
-        return 0;
+#endif
+        if (!recovd->recovd_current_rd) {
+                spin_unlock(&recovd->recovd_lock);
+                LBUG();
+        }
+
+        conn = class_rd2conn(recovd->recovd_current_rd);
+        spin_unlock(&recovd->recovd_lock);
+
+        spin_lock(&conn->c_lock);
+
+        if (strcmp(conn->c_remote_uuid, data->ioc_inlbuf1)) {
+                CERROR("NEWCONN for %s: currently recovering %s\n",
+                       data->ioc_inlbuf1, conn->c_remote_uuid);
+                spin_unlock(&conn->c_lock);
+                RETURN(-EINVAL);
+        }
+
+        if (data->ioc_inllen2) {
+                CERROR("conn %p UUID change %s -> %s\n",
+                       conn, conn->c_remote_uuid, data->ioc_inlbuf2);
+                strcpy(conn->c_remote_uuid, data->ioc_inlbuf2);
+        } else {
+                CERROR("conn %p UUID %s reconnected\n", conn,
+                       conn->c_remote_uuid);
+        }
+        ptlrpc_readdress_connection(conn, conn->c_remote_uuid);
+        
+        spin_lock(&recovd->recovd_lock);
+#if 0 && PARALLEL_RECOVERY
+        if (conn->c_recovd_data->rd_state != RECOVD_PREPARING)
+                LBUG();
+        conn->c_recovd_data->rd_state = RECOVD_PREPARED;
+#endif
+        if (recovd->recovd_phase != RECOVD_PREPARING ||
+            recovd->recovd_next_phase != RECOVD_PREPARED ||
+            recovd->recovd_current_rd != &conn->c_recovd_data) {
+                LBUG();
+        }
+        recovd->recovd_phase = RECOVD_PREPARED;
+        wake_up(&recovd->recovd_waitq);
+        spin_unlock(&recovd->recovd_lock);
+        spin_unlock(&conn->c_lock);
+        RETURN(0);
 }
 
 
@@ -89,6 +145,8 @@ static struct obd_ops recovd_obd_ops = {
         o_setup:       connmgr_setup,
         o_cleanup:     connmgr_cleanup,
         o_iocontrol:   connmgr_iocontrol,
+        o_connect:     class_connect,
+        o_disconnect:  class_disconnect
 };
 
 static int __init ptlrpc_init(void)
