@@ -648,7 +648,7 @@ def add_net(gen, lustre, options):
 
     if net_type in ('tcp',):
         port = get_option_int(options, 'port')
-    elif net_type in ('elan', 'gm', 'openib','iib'):
+    elif net_type in ('elan', 'gm', 'openib','iib','lo'):
         port = 0
     else:
         print "Unknown net_type: ", net_type
