@@ -26,7 +26,7 @@ noinst_PROGRAMS = openunlink testreq truncate directio openme writeme open_delay
 noinst_PROGRAMS += munlink tchmod toexcl fsx test_brw openclose createdestroy
 noinst_PROGRAMS += stat createmany statmany multifstat createtest mlink
 # noinst_PROGRAMS += ldaptest 
-noinst_PROGRAMS += checkstat wantedi statone
+noinst_PROGRAMS += checkstat wantedi statone runas
 sbin_PROGRAMS = mcreate mkdirmany
 
 # ldaptest_SOURCES = ldaptest.c
@@ -52,6 +52,7 @@ statone_SOURCES = statone.c
 mkdirmany_SOURCES = mkdirmany.c
 multifstat_SOURCES = multifstat.c
 checkstat_SOURCES = checkstat.c
+runas_SOURCES = runas.c
 wantedi_SOURCES = wantedi.c
 createtest_SOURCES = createtest.c
 open_delay_SOURCES = open_delay.c

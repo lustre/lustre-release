@@ -12,6 +12,9 @@ LSTRIPE=${LSTRIPE:-lstripe}
 MCREATE=${MCREATE:-mcreate}
 TOEXCL=${TOEXCL:-toexcl}
 
+RUNAS_ID=${RUNAS_ID:-500}
+RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
+
 MOUNT=${MOUNT:-/mnt/lustre}
 DIR=${DIR:-$MOUNT}
 export NAME=$NAME
@@ -298,14 +301,13 @@ $START
 
 log '== unpack tar archive as non-root user =========== test 22'
 mkdir $DIR/d22
-which sudo && chown 4711 $DIR/d22
-SUDO=`which sudo 2> /dev/null` && SUDO="$SUDO -u #4711" || SUDO=""
-echo '**** FIX THIS TEST ****'
-SUDO=""
-$SUDO tar cf - /etc/hosts /etc/sysconfig/network | $SUDO tar xfC - $DIR/d22
+[ $UID -ne 0 ] && RUNAS=""
+[ $UID -ne 0 ] && RUNAS_ID="$UID"
+chown $RUNAS_ID $DIR/d22
+$RUNAS tar cf - /etc/hosts /etc/sysconfig/network | $RUNAS tar xfC - $DIR/d22
 ls -lR $DIR/d22/etc
 $CHECKSTAT -t dir $DIR/d22/etc || error
-[ -z "$SUDO" ] || $CHECKSTAT -u \#4711 $DIR/d22/etc || error
+$CHECKSTAT -u \#$RUNAS_ID $DIR/d22/etc || error
 pass
 $CLEAN
 $START
