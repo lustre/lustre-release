@@ -12,13 +12,16 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- recovery timer race (2670)
 	- mdc_close recovey bug (2532)
 
-2004-02-06  Cluster File Systems, Inc. <info@clusterfs.com>
+2004-02-07  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.4
        * kernel patches
 	- fix truncated write corruption (2366)
 	- fix for failed assertion in iopen_connect_dentry (1792,2517)
        * bug fixes
 	- don't flag the ptlrpcd thread with PF_MEMALLOC (2636)
+	- ensure len(uuid) < 37 in lmc (1171)
+	- fix ia64 OOPS in llog_test (2255)
+	- zero end of page at obdfilter for partial page writes (2648)
 
 2004-01-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.3

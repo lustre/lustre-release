@@ -244,6 +244,10 @@ static int filter_start_page_write(struct inode *inode,
                 RETURN(lnb->rc = -ENOMEM);
         }
         POISON_PAGE(page, 0xf1);
+        if (lnb->len != PAGE_SIZE) {
+                memset(kmap(page) + lnb->len, 0, PAGE_SIZE - lnb->len);
+                kunmap(page);
+        }
         page->index = lnb->offset >> PAGE_SHIFT;
         lnb->page = page;
 
@@ -280,7 +284,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         memset(res, 0, niocount * sizeof(*res));
 
         push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
-        dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr, 
+        dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr,
                                    obj->ioo_id);
         if (IS_ERR(dentry))
                 GOTO(cleanup, rc = PTR_ERR(dentry));
@@ -394,7 +398,7 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page)
                 /* the dlm is protecting us from read/write concurrency, so we
                  * expect this find_lock_page to return quickly.  even if we
                  * race with another writer it won't be doing much work with
-                 * the page locked.  we do this 'cause t_c_p expects a 
+                 * the page locked.  we do this 'cause t_c_p expects a
                  * locked page, and it wants to grab the pagecache lock
                  * as well. */
                 old_page = find_lock_page(inode->i_mapping, new_page->index);
@@ -412,9 +416,9 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page)
                 /* racing o_directs (no locking ioctl) could race adding
                  * their pages, so we repeat the page invalidation unless
                  * we successfully added our new page */
-                rc = add_to_page_cache_unique(new_page, inode->i_mapping, 
+                rc = add_to_page_cache_unique(new_page, inode->i_mapping,
                                               new_page->index,
-                                              page_hash(inode->i_mapping, 
+                                              page_hash(inode->i_mapping,
                                                         new_page->index));
                 if (rc == 0) {
                         /* add_to_page_cache clears uptodate|dirty and locks
@@ -422,7 +426,7 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page)
                         SetPageUptodate(new_page);
                         unlock_page(new_page);
                 }
-#else   
+#else
                 rc = 0;
 #endif
         } while (rc != 0);
