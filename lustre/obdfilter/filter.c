@@ -24,6 +24,7 @@
 #include <linux/extN_jbd.h>
 #include <linux/quotaops.h>
 #include <linux/init.h>
+#include <linux/stringify.h>
 
 long filter_memory;
 
