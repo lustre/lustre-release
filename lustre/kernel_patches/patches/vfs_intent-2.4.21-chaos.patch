@@ -1875,6 +1875,15 @@ Index: linux-ia64/kernel/ksyms.c
 ===== include/linux/mount.h 1.7 vs edited =====
 --- linux-ia64.orig/include/linux/mount.h	Tue Feb  5 09:49:35 2002
 +++ linux-ia64/include/linux/mount.h	Tue May  4 19:23:48 2004
+@@ -29,6 +29,8 @@
+ 	int mnt_flags;
+ 	char *mnt_devname;		/* Name of device e.g. /dev/dsk/hda1 */
+ 	struct list_head mnt_list;
++	struct list_head mnt_lustre_list; /* GNS mount list */
++	unsigned long mnt_last_used;      /* for GNS auto-umount (jiffies) */
+ };
+ 
+ static inline struct vfsmount *mntget(struct vfsmount *mnt)
 @@ -39,6 +39,7 @@
  }
  
