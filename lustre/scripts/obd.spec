@@ -41,8 +41,17 @@ make
 make install PREFIX=$RPM_BUILD_ROOT
 
 %files
-/lib/modules/%{kuname}/fs/*
-/usr/bin/*
+/lib/modules/%{kuname}/fs/obd*.o
+/usr/bin/obdcontrol
+%doc COPYING FDL
+%doc doc/API.txt doc/OBD-HOWTO.sgml doc/obdspec.sgml
+%doc doc/OLVM.txt doc/figs doc/notes.txt doc/obdtrace_demo.txt
+
+%post
+depmod -ae || exit 0
+
+%postun
+depmod -ae || exit 0
 
 %clean
 #rm -rf $RPM_BUILD_ROOT
