@@ -14,6 +14,7 @@
 
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_mds.h>
 #include <linux/obd_filter.h>
 
 struct lov_export_data {
