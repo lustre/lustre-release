@@ -788,29 +788,27 @@ void ll_umount_begin(struct super_block *sb)
         EXIT;
 }
 
-int ll_prep_inode(struct obd_export *exp, struct inode **inode, 
-                struct ptlrpc_request *req, int offset, struct super_block *sb)
+int ll_prep_inode(struct obd_export *exp, struct inode **inode,
+                  struct ptlrpc_request *req, int offset,struct super_block *sb)
 {
         struct lustre_md md;
         int rc = 0;
-        
+
         rc = mdc_req2lustre_md(req, offset, exp, &md);
         if (rc)
                 RETURN(rc);
 
-        if (*inode)
+        if (*inode) {
                 ll_update_inode(*inode, md.body, md.lsm);
-        else {
+        } else {
                 LASSERT(sb);
                 *inode = ll_iget(sb, md.body->ino, &md);
-                if (!*inode || is_bad_inode(*inode)) {
+                if (!*inode) {
                         /* free the lsm if we allocated one above */
                         if (md.lsm != NULL)
                                 obd_free_memmd(exp, &md.lsm);
-                        /* XXX might need iput() for bad inode */
                         rc = -ENOMEM;
                         CERROR("new_inode -fatal: rc %d\n", rc);
-                        LBUG();
                 }
         }
 
