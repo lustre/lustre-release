@@ -37,6 +37,11 @@
 #include <inode.h>
 #include <file.h>
 
+/* both sys/queue.h (libsysio require it) and portals/lists.h have definition
+ * of 'LIST_HEAD'. undef it to suppress warnings
+ */
+#undef LIST_HEAD
+
 #include <portals/api-support.h> /* needed for ptpctl.h */
 #include <portals/ptlctl.h>	/* needed for parse_dump */
 #include <procbridge.h>
@@ -45,8 +50,7 @@
 
 
 ptl_handle_ni_t         tcpnal_ni;
-struct task_struct *current;
-struct obd_class_user_state ocus;
+struct task_struct     *current;
 
 /* portals interfaces */
 ptl_handle_ni_t *
@@ -141,7 +145,7 @@ int init_lib_portals()
         PtlInit();
         rc = PtlNIInit(procbridge_interface, 0, 0, 0, &tcpnal_ni);
         if (rc != 0) {
-                CERROR("ksocknal: PtlNIInit failed: error %d\n", rc);
+                CERROR("TCPNAL: PtlNIInit failed: error %d\n", rc);
                 PtlFini();
                 RETURN (rc);
         }
@@ -156,7 +160,7 @@ kportal_nal_cmd(struct portals_cfg *pcfg)
         return 0;
 }
 
-extern int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd, unsigned long arg);
+extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
 
 int lib_ioctl_nalcmd(int dev_id, int opc, void * ptr)
 {
@@ -190,7 +194,7 @@ int lib_ioctl(int dev_id, int opc, void * ptr)
                 ioc->ioc_pbuf1 = ioc->ioc_bulk;
                 //XXX
 
-                rc = class_handle_ioctl(&ocus, opc, (unsigned long)ptr);
+                rc = class_handle_ioctl(opc, (unsigned long)ptr);
 
                 printf ("proccssing ioctl cmd: %x, rc %d\n", opc,  rc);
 
@@ -202,8 +206,6 @@ int lib_ioctl(int dev_id, int opc, void * ptr)
 
 int lllib_init(char *dumpfile)
 {
-        INIT_LIST_HEAD(&ocus.ocus_conns);
-
         if (!g_zconf) {
                 /* this parse only get my nid from config file
                  * before initialize portals
@@ -213,7 +215,7 @@ int lllib_init(char *dumpfile)
         } else {
                 /* XXX need setup mynid before tcpnal initialize */
                 tcpnal_mynid = ((uint64_t)getpid() << 32) | time(0);
-                printf("set tcpnal mynid: %016llx\n", tcpnal_mynid);
+                printf("LibLustre: TCPNAL NID: %016llx\n", tcpnal_mynid);
         }
 
         init_current("dummy");
@@ -239,7 +241,7 @@ static void llu_check_request()
 }
 #endif
 
-int liblustre_process_log(struct config_llog_instance *cfg)
+int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
 {
         struct lustre_cfg lcfg;
         char  *peer = "MDS_PEER_UUID";
@@ -296,6 +298,11 @@ int liblustre_process_log(struct config_llog_instance *cfg)
         obd = class_name2obd(name);
         if (obd == NULL)
                 GOTO(out_cleanup, err = -EINVAL);
+
+        /* Disable initial recovery on this import */
+        err = obd_set_info(obd->obd_self_export,
+                           strlen("initial_recov"), "initial_recov",
+                           sizeof(allow_recov), &allow_recov);
 
         err = obd_connect(&mdc_conn, obd, &mdc_uuid);
         if (err) {
@@ -374,9 +381,12 @@ int ll_parse_mount_target(const char *target, char **mdsnid,
 /* env variables */
 #define ENV_LUSTRE_MNTPNT               "LIBLUSTRE_MOUNT_POINT"
 #define ENV_LUSTRE_MNTTGT               "LIBLUSTRE_MOUNT_TARGET"
+#define ENV_LUSTRE_TIMEOUT              "LIBLUSTRE_TIMEOUT"
 #define ENV_LUSTRE_DUMPFILE             "LIBLUSTRE_DUMPFILE"
 
 extern int _sysio_native_init();
+
+extern unsigned int obd_timeout;
 
 /* global variables */
 int     g_zconf = 0;            /* zeroconf or dumpfile */
@@ -389,6 +399,7 @@ void __liblustre_setup_(void)
 {
         char *lustre_path = NULL;
         char *target = NULL;
+        char *timeout = NULL;
         char *dumpfile = NULL;
         char *root_driver = "native";
         char *lustre_driver = "llite";
@@ -397,7 +408,10 @@ void __liblustre_setup_(void)
 
 	int err;
 
-        srand(time(NULL));
+        /* consider tha case of starting multiple liblustre instances
+         * at a same time on single node.
+         */
+        srand(time(NULL) + getpid());
 
         signal(SIGUSR1, sighandler_USR1);
 
@@ -427,6 +441,13 @@ void __liblustre_setup_(void)
                 g_zconf = 1;
                 printf("LibLustre: mount point %s, target %s\n",
                         lustre_path, target);
+        }
+
+        timeout = getenv(ENV_LUSTRE_TIMEOUT);
+        if (timeout) {
+                obd_timeout = (unsigned int) atoi(timeout);
+                printf("LibLustre: set obd timeout as %u seconds\n",
+                        obd_timeout);
         }
 
 	if (_sysio_init() != 0) {

@@ -10,80 +10,80 @@
 
 extern size_t strnlen(const char *, size_t);
 
-#define BLANK_LINE()				\
-do {						\
-	printf ("\n");				\
+#define BLANK_LINE()                            \
+do {                                            \
+        printf ("\n");                          \
 } while (0)
 
-#define COMMENT(c)				\
-do {						\
-	printf ("        /* "c" */\n");		\
+#define COMMENT(c)                              \
+do {                                            \
+        printf ("        /* "c" */\n");         \
 } while (0)
 
 #define STRINGIFY(a) #a
 
-#define CHECK_DEFINE(a)						\
-do {								\
-	printf ("        LASSERT ("#a" == "STRINGIFY(a)");\n");	\
+#define CHECK_DEFINE(a)                                         \
+do {                                                            \
+        printf ("        LASSERT ("#a" == "STRINGIFY(a)");\n"); \
 } while (0)
 
-#define CHECK_VALUE(a)					\
-do {							\
-	printf ("        LASSERT ("#a" == %d);\n", a);	\
+#define CHECK_VALUE(a)                                  \
+do {                                                    \
+        printf ("        LASSERT ("#a" == %d);\n", a);  \
 } while (0)
 
-#define CHECK_MEMBER_OFFSET(s,m)		\
-do {						\
-	CHECK_VALUE(offsetof(s, m));	        \
+#define CHECK_MEMBER_OFFSET(s,m)                \
+do {                                            \
+        CHECK_VALUE(offsetof(s, m));            \
 } while (0)
 
-#define CHECK_MEMBER_SIZEOF(s,m)		\
-do {						\
-	CHECK_VALUE((int)sizeof(((s *)0)->m));	\
+#define CHECK_MEMBER_SIZEOF(s,m)                \
+do {                                            \
+        CHECK_VALUE((int)sizeof(((s *)0)->m));  \
 } while (0)
 
-#define CHECK_MEMBER(s,m)			\
-do {						\
-	CHECK_MEMBER_OFFSET(s, m);		\
-	CHECK_MEMBER_SIZEOF(s, m);		\
+#define CHECK_MEMBER(s,m)                       \
+do {                                            \
+        CHECK_MEMBER_OFFSET(s, m);              \
+        CHECK_MEMBER_SIZEOF(s, m);              \
 } while (0)
 
 #define CHECK_STRUCT(s)                         \
 do {                                            \
         BLANK_LINE ();                          \
         COMMENT ("Checks for struct "#s);       \
-	CHECK_VALUE((int)sizeof(s));            \
+        CHECK_VALUE((int)sizeof(s));            \
 } while (0)
 
 void
 check_ptl_handle_wire (void)
 {
-	CHECK_STRUCT (ptl_handle_wire_t);
-	CHECK_MEMBER (ptl_handle_wire_t, wh_interface_cookie);
-	CHECK_MEMBER (ptl_handle_wire_t, wh_object_cookie);
+        CHECK_STRUCT (ptl_handle_wire_t);
+        CHECK_MEMBER (ptl_handle_wire_t, wh_interface_cookie);
+        CHECK_MEMBER (ptl_handle_wire_t, wh_object_cookie);
 }
 
 void
 check_ptl_magicversion (void)
 {
-	CHECK_STRUCT (ptl_magicversion_t);
-	CHECK_MEMBER (ptl_magicversion_t, magic);
-	CHECK_MEMBER (ptl_magicversion_t, version_major);
-	CHECK_MEMBER (ptl_magicversion_t, version_minor);
+        CHECK_STRUCT (ptl_magicversion_t);
+        CHECK_MEMBER (ptl_magicversion_t, magic);
+        CHECK_MEMBER (ptl_magicversion_t, version_major);
+        CHECK_MEMBER (ptl_magicversion_t, version_minor);
 }
 
 void
 check_ptl_hdr (void)
 {
-	CHECK_STRUCT (ptl_hdr_t);
-	CHECK_MEMBER (ptl_hdr_t, dest_nid);
-	CHECK_MEMBER (ptl_hdr_t, src_nid);
-	CHECK_MEMBER (ptl_hdr_t, dest_pid);
-	CHECK_MEMBER (ptl_hdr_t, src_pid);
-	CHECK_MEMBER (ptl_hdr_t, type);
-	CHECK_MEMBER (ptl_hdr_t, payload_length);
+        CHECK_STRUCT (ptl_hdr_t);
+        CHECK_MEMBER (ptl_hdr_t, dest_nid);
+        CHECK_MEMBER (ptl_hdr_t, src_nid);
+        CHECK_MEMBER (ptl_hdr_t, dest_pid);
+        CHECK_MEMBER (ptl_hdr_t, src_pid);
+        CHECK_MEMBER (ptl_hdr_t, type);
+        CHECK_MEMBER (ptl_hdr_t, payload_length);
         CHECK_MEMBER (ptl_hdr_t, msg);
-        
+
         BLANK_LINE ();
         COMMENT ("Ack");
         CHECK_MEMBER (ptl_hdr_t, msg.ack.dst_wmd);
@@ -92,28 +92,28 @@ check_ptl_hdr (void)
 
         BLANK_LINE ();
         COMMENT ("Put");
-	CHECK_MEMBER (ptl_hdr_t, msg.put.ack_wmd);
-	CHECK_MEMBER (ptl_hdr_t, msg.put.match_bits);
-	CHECK_MEMBER (ptl_hdr_t, msg.put.hdr_data);
-	CHECK_MEMBER (ptl_hdr_t, msg.put.ptl_index);
-	CHECK_MEMBER (ptl_hdr_t, msg.put.offset);
+        CHECK_MEMBER (ptl_hdr_t, msg.put.ack_wmd);
+        CHECK_MEMBER (ptl_hdr_t, msg.put.match_bits);
+        CHECK_MEMBER (ptl_hdr_t, msg.put.hdr_data);
+        CHECK_MEMBER (ptl_hdr_t, msg.put.ptl_index);
+        CHECK_MEMBER (ptl_hdr_t, msg.put.offset);
 
         BLANK_LINE ();
         COMMENT ("Get");
-	CHECK_MEMBER (ptl_hdr_t, msg.get.return_wmd);
-	CHECK_MEMBER (ptl_hdr_t, msg.get.match_bits);
-	CHECK_MEMBER (ptl_hdr_t, msg.get.ptl_index);
-	CHECK_MEMBER (ptl_hdr_t, msg.get.src_offset);
-	CHECK_MEMBER (ptl_hdr_t, msg.get.sink_length);
+        CHECK_MEMBER (ptl_hdr_t, msg.get.return_wmd);
+        CHECK_MEMBER (ptl_hdr_t, msg.get.match_bits);
+        CHECK_MEMBER (ptl_hdr_t, msg.get.ptl_index);
+        CHECK_MEMBER (ptl_hdr_t, msg.get.src_offset);
+        CHECK_MEMBER (ptl_hdr_t, msg.get.sink_length);
 
         BLANK_LINE ();
         COMMENT ("Reply");
-	CHECK_MEMBER (ptl_hdr_t, msg.reply.dst_wmd);
+        CHECK_MEMBER (ptl_hdr_t, msg.reply.dst_wmd);
 
         BLANK_LINE ();
         COMMENT ("Hello");
-	CHECK_MEMBER (ptl_hdr_t, msg.hello.incarnation);
-	CHECK_MEMBER (ptl_hdr_t, msg.hello.type);
+        CHECK_MEMBER (ptl_hdr_t, msg.hello.incarnation);
+        CHECK_MEMBER (ptl_hdr_t, msg.hello.type);
 }
 
 void
@@ -122,11 +122,11 @@ system_string (char *cmdline, char *str, int len)
         int   fds[2];
         int   rc;
         pid_t pid;
-        
+
         rc = pipe (fds);
         if (rc != 0)
                 abort ();
-        
+
         pid = fork ();
         if (pid == 0) {
                 /* child */
@@ -145,25 +145,25 @@ system_string (char *cmdline, char *str, int len)
 
                 if (f == NULL)
                         abort();
-                
+
                 close(fds[1]);
-                
+
                 if (fgets(str, len, f) == NULL)
                         abort();
-                
+
                 if (waitpid(pid, &rc, 0) != pid)
                         abort();
-                
+
                 if (!WIFEXITED(rc) ||
                     WEXITSTATUS(rc) != 0)
                         abort();
 
                 if (strnlen(str, len) == len)
                         str[len - 1] = 0;
-                
+
                 if (str[strlen(str) - 1] == '\n')
                         str[strlen(str) - 1] = 0;
-                
+
                 fclose(f);
         }
 }
@@ -173,35 +173,35 @@ main (int argc, char **argv)
 {
         char unameinfo[80];
         char gccinfo[80];
-        
+
         system_string("uname -a", unameinfo, sizeof(unameinfo));
         system_string("gcc -v 2>&1 | tail -1", gccinfo, sizeof(gccinfo));
-        
-	printf ("void lib_assert_wire_constants (void)\n"
-		"{\n"
+
+        printf ("void lib_assert_wire_constants (void)\n"
+                "{\n"
                 "        /* Wire protocol assertions generated by 'wirecheck'\n"
                 "         * running on %s\n"
                 "         * with %s */\n"
                 "\n", unameinfo, gccinfo);
-        
-	BLANK_LINE ();
-	
-	COMMENT ("Constants...");
-	CHECK_DEFINE (PORTALS_PROTO_MAGIC);
-	CHECK_DEFINE (PORTALS_PROTO_VERSION_MAJOR);
-	CHECK_DEFINE (PORTALS_PROTO_VERSION_MINOR);
 
-	CHECK_VALUE (PTL_MSG_ACK);
-	CHECK_VALUE (PTL_MSG_PUT);
-	CHECK_VALUE (PTL_MSG_GET);
-	CHECK_VALUE (PTL_MSG_REPLY);
-	CHECK_VALUE (PTL_MSG_HELLO);
+        BLANK_LINE ();
 
-	check_ptl_handle_wire ();
-	check_ptl_magicversion ();
-	check_ptl_hdr ();
-	
-	printf ("}\n\n");
-	
-	return (0);
+        COMMENT ("Constants...");
+        CHECK_DEFINE (PORTALS_PROTO_MAGIC);
+        CHECK_DEFINE (PORTALS_PROTO_VERSION_MAJOR);
+        CHECK_DEFINE (PORTALS_PROTO_VERSION_MINOR);
+
+        CHECK_VALUE (PTL_MSG_ACK);
+        CHECK_VALUE (PTL_MSG_PUT);
+        CHECK_VALUE (PTL_MSG_GET);
+        CHECK_VALUE (PTL_MSG_REPLY);
+        CHECK_VALUE (PTL_MSG_HELLO);
+
+        check_ptl_handle_wire ();
+        check_ptl_magicversion ();
+        check_ptl_hdr ();
+
+        printf ("}\n\n");
+
+        return (0);
 }
