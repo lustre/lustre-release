@@ -75,8 +75,8 @@ struct mds_client_data {
         __u8 uuid_padding[3];   /* unused */
         __u64 mcd_last_rcvd;    /* last completed transaction ID */
         __u64 mcd_mount_count;  /* MDS incarnation number */
-        __u32 mcd_last_xid;     /* client RPC xid for the last transaction */
-        __u8 padding[MDS_LR_SIZE - 60];
+        __u64 mcd_last_xid;     /* client RPC xid for the last transaction */
+        __u8 padding[MDS_LR_SIZE - 64];
 };
 
 /* In-memory access to client data from MDS struct */
