@@ -42,8 +42,10 @@ static inline void l_dput(struct dentry *de)
         if (parent)
                 dget(parent);
         dput(de); 
-        if (parent)
+        if (parent) { 
                 shrink_dcache_parent(parent); 
+                dput(parent);
+        }
 }
 
 #define LUSTRE_MDS_NAME "mds"
