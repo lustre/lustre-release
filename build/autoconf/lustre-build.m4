@@ -42,8 +42,10 @@ case x$with_sysio in
 		with_sysio="yes"
 		;;
 esac
-AC_SUBST(LIBSYSIO_SUBDIR)
-AC_SUBST(SYSIO)
+
+# We have to configure even if we don't build here for make dist to
+# work
+AC_CONFIG_SUBDIRS(libsysio)
 ])
 
 #
@@ -352,6 +354,17 @@ AM_CONDITIONAL(DOC, test x$ENABLE_DOC = x1)
 AM_CONDITIONAL(CRAY_PORTALS, test x$with_cray_portals != xno)
 AM_CONDITIONAL(INIT_SCRIPTS, test x$ENABLE_INIT_SCRIPTS = "x1")
 
+# this lets lustre cancel libsysio, per-branch or if liblustre is
+# disabled
+if test "x$LIBSYSIO_SUBDIR" = xlibsysio ; then
+	if test "x$with_sysio" != xyes ; then
+		SYSIO=""
+		LIBSYSIO_SUBDIR=""
+	fi
+fi
+AC_SUBST(LIBSYSIO_SUBDIR)
+AC_SUBST(SYSIO)
+
 LB_LINUX_CONDITIONALS
 LB_DARWIN_CONDITIONALS
 
@@ -381,16 +394,6 @@ LB_CONFIG_TESTS
 LB_CONFIG_MODULES
 
 LC_CONFIG_LIBLUSTRE
-
-# this lets lustre cancel libsysio, per-branch or if liblustre is
-# disabled
-if text x$LIBSYSIO_SUBDIR = xlibsysio ; then
-	if test x$with_sysio = xyes ; then
-		AC_CONFIG_SUBDIRS(libsysio)
-	else
-		LIBSYSIO_SUBDIR=
-	fi
-fi
 
 LP_CONFIGURE
 LC_CONFIGURE
