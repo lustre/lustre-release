@@ -926,7 +926,7 @@ int jt_obd_test_getattr(int argc, char **argv)
         struct timeval start, next_time;
         int i, count, next_count;
         int verbose = 1;
-        obd_id id = 3;
+        obd_id objid = 3;
         char *end;
         int rc = 0;
 
@@ -948,7 +948,10 @@ int jt_obd_test_getattr(int argc, char **argv)
         }
 
         if (argc >= 4) {
-                id = strtoull(argv[3], &end, 0);
+                if (argv[3][0] == 't')
+                        objid = strtoull(argv[3] + 1, &end, 0) + thread;
+                else
+                        objid = strtoull(argv[3], &end, 0);
                 if (*end) {
                         fprintf(stderr, "error: %s: invalid objid '%s'\n",
                                 cmdname(argv[0]), argv[3]);
@@ -964,7 +967,7 @@ int jt_obd_test_getattr(int argc, char **argv)
                        cmdname(argv[0]), count, ctime(&start.tv_sec));
 
         for (i = 1, next_count = verbose; i <= count; i++) {
-                data.ioc_obdo1.o_id = id;
+                data.ioc_obdo1.o_id = objid;
                 data.ioc_obdo1.o_valid = 0xffffffff;
                 rc = ioctl(fd, OBD_IOC_GETATTR, &data);
                 SHMEM_BUMP();
@@ -1069,9 +1072,9 @@ int jt_obd_test_brw(int argc, char **argv)
         next_time.tv_usec = start.tv_usec;
 
         if (verbose != 0)
-                printf("%s: %s %dx%d pages (testing only): %s",
+                printf("%s: %s %dx%d pages (objid 0x%Lx): %s",
                        cmdname(argv[0]), write ? "writing" : "reading",
-                       count, pages, ctime(&start.tv_sec));
+                       count, pages, (long long)objid, ctime(&start.tv_sec));
 
         rc = ioctl(fd, OBD_IOC_OPEN, &data);
         if (rc) {
