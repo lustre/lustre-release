@@ -379,8 +379,8 @@ test_17() {
 }
 run_test 17 "fail OST during recovery (3571)"
 
-# cleanup with blocked enqueue fails until timer elapses (MDS busy), wait for
-# itexport NOW=0
+# cleanup with blocked enqueue fails until timer elapses (MDS busy), wait for it
+export NOW=0
                                                                                 
 test_18() {     # bug 3822 - evicting client with enqueued lock
 	set -vx
