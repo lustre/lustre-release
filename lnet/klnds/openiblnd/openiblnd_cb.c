@@ -916,6 +916,24 @@ kibnal_queue_tx (kib_tx_t *tx, kib_conn_t *conn)
 }
 
 void
+kibnal_schedule_active_connect_locked (kib_peer_t *peer)
+{
+        /* Called with exclusive kib_global_lock */
+
+        peer->ibp_connecting++;
+        atomic_inc (&peer->ibp_refcount); /* extra ref for connd */
+        
+        spin_lock (&kibnal_data.kib_connd_lock);
+        
+        LASSERT (list_empty(&peer->ibp_connd_list));
+        list_add_tail (&peer->ibp_connd_list,
+                       &kibnal_data.kib_connd_peers);
+        wake_up (&kibnal_data.kib_connd_waitq);
+        
+        spin_unlock (&kibnal_data.kib_connd_lock);
+}
+
+void
 kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
 {
         unsigned long    flags;
@@ -984,16 +1002,7 @@ kibnal_launch_tx (kib_tx_t *tx, ptl_nid_t nid)
                         return;
                 }
         
-                peer->ibp_connecting = 1;
-                atomic_inc (&peer->ibp_refcount); /* extra ref for connd */
-        
-                spin_lock (&kibnal_data.kib_connd_lock);
-        
-                list_add_tail (&peer->ibp_connd_list,
-                               &kibnal_data.kib_connd_peers);
-                wake_up (&kibnal_data.kib_connd_waitq);
-        
-                spin_unlock (&kibnal_data.kib_connd_lock);
+                kibnal_schedule_active_connect_locked(peer);
         }
         
         /* A connection is being established; queue the message... */
@@ -1527,7 +1536,7 @@ kibnal_peer_connect_failed (kib_peer_t *peer, int active, int rc)
         peer->ibp_connecting--;
 
         if (peer->ibp_connecting != 0) {
-                /* another connection attempt under way (loopback?)... */
+                /* another connection attempt under way... */
                 write_unlock_irqrestore (&kibnal_data.kib_global_lock, flags);
                 return;
         }
@@ -1977,7 +1986,8 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
                               void *param,
                               void *arg)
 {
-        kib_conn_t *conn = arg;
+        kib_conn_t    *conn = arg;
+        unsigned long  flags;
 
         switch (event) {
         case TS_IB_CM_REP_RECEIVED: {
@@ -2036,7 +2046,13 @@ kibnal_active_conn_callback (tTS_IB_CM_EVENT event,
         case TS_IB_CM_IDLE:
                 CERROR("Connection %p -> "LPX64" IDLE\n",
                        conn, conn->ibc_peer->ibp_nid);
-                /* Back out state change: I'm disengaged from CM */
+                /* I assume this connection attempt was rejected because the
+                 * peer found a stale QP; I'll just try again */
+                write_lock_irqsave(&kibnal_data.kib_global_lock, flags);
+                kibnal_schedule_active_connect_locked(conn->ibc_peer);
+                write_unlock_irqrestore(&kibnal_data.kib_global_lock, flags);
+
+                /* Back out state change: this conn disengaged from CM */
                 conn->ibc_state = IBNAL_CONN_INIT_QP;
                 
                 kibnal_connreq_done (conn, 1, -ECONNABORTED);

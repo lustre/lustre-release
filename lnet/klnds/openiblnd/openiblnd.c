@@ -1001,6 +1001,7 @@ kibnal_create_peer (ptl_nid_t nid)
         INIT_LIST_HEAD (&peer->ibp_list);       /* not in the peer table yet */
         INIT_LIST_HEAD (&peer->ibp_conns);
         INIT_LIST_HEAD (&peer->ibp_tx_queue);
+        INIT_LIST_HEAD (&peer->ibp_connd_list); /* not queued for connecting */
 
         peer->ibp_reconnect_time = jiffies;
         peer->ibp_reconnect_interval = IBNAL_MIN_RECONNECT_INTERVAL;
@@ -1020,6 +1021,7 @@ kibnal_destroy_peer (kib_peer_t *peer)
         LASSERT (peer->ibp_persistence == 0);
         LASSERT (!kibnal_peer_active(peer));
         LASSERT (peer->ibp_connecting == 0);
+        LASSERT (list_empty (&peer->ibp_connd_list));
         LASSERT (list_empty (&peer->ibp_conns));
         LASSERT (list_empty (&peer->ibp_tx_queue));
 
@@ -1510,7 +1512,8 @@ kibnal_close_stale_conns_locked (kib_peer_t *peer, __u64 incarnation)
                 if (conn->ibc_incarnation == incarnation)
                         continue;
 
-                CDEBUG(D_NET, "Closing stale conn nid:"LPX64" incarnation:"LPX64"("LPX64")\n",
+                CDEBUG(D_NET, "Closing stale conn %p nid:"LPX64
+                       " incarnation:"LPX64"("LPX64")\n", conn,
                        peer->ibp_nid, conn->ibc_incarnation, incarnation);
                 
                 count++;
