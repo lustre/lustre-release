@@ -156,6 +156,94 @@ int osc_rd_cur_dirty_bytes(char *page, char **start, off_t off, int count,
         return rc;
 }
 
+int osc_rd_create_low_wm(char *page, char **start, off_t off, int count,
+                         int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct obd_export *exp;
+
+        if (obd == NULL || list_empty(&obd->obd_exports))
+                return 0;
+
+        spin_lock(&obd->obd_dev_lock);
+        exp = list_entry(obd->obd_exports.next, struct obd_export,
+                         exp_obd_chain);
+        spin_unlock(&obd->obd_dev_lock);
+
+        return snprintf(page, count, "%d\n",
+                        exp->exp_osc_data.oed_oscc.oscc_kick_barrier);
+}
+
+int osc_wr_create_low_wm(struct file *file, const char *buffer,
+                         unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct obd_export *exp;
+        int val, rc;
+
+        if (obd == NULL || list_empty(&obd->obd_exports))
+                return 0;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < 0)
+                return -ERANGE;
+
+        spin_lock(&obd->obd_dev_lock);
+        exp = list_entry(obd->obd_exports.next, struct obd_export,
+                         exp_obd_chain);
+        exp->exp_osc_data.oed_oscc.oscc_kick_barrier = val;
+        spin_unlock(&obd->obd_dev_lock);
+
+        return count;
+}
+
+int osc_rd_create_count(char *page, char **start, off_t off, int count,
+                        int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct obd_export *exp;
+
+        if (obd == NULL || list_empty(&obd->obd_exports))
+                return 0;
+
+        spin_lock(&obd->obd_dev_lock);
+        exp = list_entry(obd->obd_exports.next, struct obd_export,
+                         exp_obd_chain);
+        spin_unlock(&obd->obd_dev_lock);
+
+        return snprintf(page, count, "%d\n",
+                        exp->exp_osc_data.oed_oscc.oscc_grow_count);
+}
+
+int osc_wr_create_count(struct file *file, const char *buffer,
+                        unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct obd_export *exp;
+        int val, rc;
+
+        if (obd == NULL || list_empty(&obd->obd_exports))
+                return 0;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < 0)
+                return -ERANGE;
+
+        spin_lock(&obd->obd_dev_lock);
+        exp = list_entry(obd->obd_exports.next, struct obd_export,
+                         exp_obd_chain);
+        exp->exp_osc_data.oed_oscc.oscc_grow_count = val;
+        spin_unlock(&obd->obd_dev_lock);
+
+        return count;
+}
+
 static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "blocksize",       lprocfs_rd_blksize,     0, 0 },
@@ -172,6 +260,8 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
                                 osc_wr_max_rpcs_in_flight, 0 },
         { "max_dirty_mb", osc_rd_max_dirty_mb, osc_wr_max_dirty_mb, 0 },
         { "cur_dirty_bytes", osc_rd_cur_dirty_bytes, 0, 0 },
+        {"create_low_watermark", osc_rd_create_low_wm, osc_wr_create_low_wm, 0},
+        { "create_count", osc_rd_create_count, osc_wr_create_count, 0 },
         { 0 }
 };
 
