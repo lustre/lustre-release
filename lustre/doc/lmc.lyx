@@ -133,8 +133,9 @@ mds
 <mds_name> 
 \layout Description
 
---device\SpecialChar ~
-<pathname>
+--dev\SpecialChar ~
+<pathname> Path of device on local system.
+ If the is a file, then a loop device is created and used as the block device.
 \layout Description
 
 --size\SpecialChar ~
@@ -160,15 +161,15 @@ lov Creates an LOV with the specified parameters.
 --mds_<name>
 \layout Description
 
---stripesize\SpecialChar ~
+--stripe_sz\SpecialChar ~
 <size>
 \layout Description
 
---stripecount\SpecialChar ~
+--stripe_cnt\SpecialChar ~
 <count>
 \layout Description
 
---pattern\SpecialChar ~
+--stripe_pattern\SpecialChar ~
 <pattern> Pattern can be 0.
 \end_deeper 
 \layout Description
@@ -179,8 +180,8 @@ ost Creates an OBD, OST, and OSC.
 \begin_deeper 
 \layout Description
 
---ost\SpecialChar ~
-<name> [NOT IMPLEMENTED] Name to give to this OST target.
+--obd\SpecialChar ~
+<name> Assign a name to the OBD device.
 \layout Description
 
 --node\SpecialChar ~
@@ -188,8 +189,9 @@ ost Creates an OBD, OST, and OSC.
  node.
 \layout Description
 
---device\SpecialChar ~
-
+--dev\SpecialChar ~
+<pathname> Path of device on local system.
+ If the is a file, then a loop device is created and used as the block device.
 \layout Description
 
 --size\SpecialChar ~
@@ -226,7 +228,7 @@ node node or profile node that will use the mtpt
 mds_name 
 \layout Description
 
---mdc\SpecialChar ~
+--obd\SpecialChar ~
 lov_name|osc_name
 \end_deeper 
 \layout Description
