@@ -22,6 +22,7 @@
  *
  */
 
+
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
@@ -37,6 +38,9 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
 
+#include <libxml/xmlmemory.h>
+#include <libxml/parser.h>
+
 #include <unistd.h>
 #include <sys/un.h>
 #include <time.h>
@@ -51,6 +55,11 @@
 
 #include "parser.h"
 #include <stdio.h>
+
+static int jt_newdev(int argc, char **argv);
+static int jt_attach(int argc, char **argv);
+static int jt_setup(int argc, char **argv);
+
 
 int fd = -1;
 int connid = -1;
@@ -237,6 +246,286 @@ static int do_disconnect(char *func, int verbose)
 
 extern command_t cmdlist[];
 
+/* Given a XML document and the root of a mds branch do the setup */
+static int xml_mds(xmlDocPtr doc, xmlNodePtr root, 
+                   char *serv_id, char *serv_uuid) {
+        xmlNodePtr cur = root->xmlChildrenNode;
+        char *fstype = NULL, *device = NULL;
+        char *newdev[1] = { "newdev" };
+        char *attach[3] = { "attach", "mds", "MDSDEV" };
+        char *setup[3] = { "setup", NULL, NULL };
+        int rc;
+
+        while (cur != NULL) {
+                if (!xmlStrcmp(cur->name, "fstype"))
+                        fstype = cur->content;
+
+                if (!xmlStrcmp(cur->name, "device"))
+                        device = cur->content;
+        } 
+
+        if ((fstype == NULL) || (device == NULL))
+                return -1;
+
+        /* Invoke commands as if passed interactively */
+        rc = jt_newdev(1, newdev);
+        if (rc != 0)
+                return rc;
+        
+        rc = jt_attach(3, attach);
+        if (rc != 0)
+                return rc;
+
+        setup[1] = device;
+        setup[2] = fstype;
+        rc = jt_setup(3, setup);
+        if (rc != 0)
+                return rc;
+
+        return 0;
+}
+        
+/* Given a XML document and the root of a obd branch do the setup */
+static int xml_obd(xmlDocPtr doc, xmlNodePtr root, 
+                   char *serv_id, char *serv_uuid) {
+        /* FIXME: Fill in the guts... */
+        return 0;
+}
+
+/* Given a XML document and the root of a ost branch do the setup */
+static int xml_ost(xmlDocPtr doc, xmlNodePtr root, 
+                   char *serv_id, char *serv_uuid) {
+        /* FIXME: Fill in the guts... */
+        return 0;
+}
+
+/* Given a XML document and the root of a osc branch do the setup */
+static int xml_osc(xmlDocPtr doc, xmlNodePtr root, 
+                   char *serv_id, char *serv_uuid) {
+        xmlNodePtr cur = root->xmlChildrenNode;
+        char *type = NULL, *address = NULL;
+        char *newdev[1] = { "newdev" };
+        char *attach[3] = { "attach", "osc", "OSCDEV" };
+        char *setup[2] = { "setup", "-1" };
+        int rc;
+
+        while (cur != NULL) {
+                if (!xmlStrcmp(cur->name, "network")) {
+                        type = xmlGetProp(cur, "type");
+                        if (type == NULL)
+                                return -1;
+
+                        address = xmlGetProp(cur, "address");
+                        if (address == NULL)
+                                return -1;
+
+                        /* FIXME: Do the portals setup here as well? */
+                }
+                        
+                cur = cur->next;
+        } 
+
+        /* Invoke commands as if passed interactively */
+        rc = jt_newdev(1, newdev);
+        if (rc != 0)
+                return rc;
+        
+        rc = jt_attach(2, attach);
+        if (rc != 0)
+                return rc;
+        
+        rc = jt_setup(1, setup);
+        if (rc != 0)
+                return rc;
+
+        return 0;
+}
+
+/* Given a XML document and the root of a lov branch do the setup */
+static int xml_lov(xmlDocPtr doc, xmlNodePtr root, 
+                   char *serv_id, char *serv_uuid) {
+        /* FIXME: Fill in the guts... */
+        return 0;
+}
+
+/* Given a XML document and the root of a router branch do the setup */
+static int xml_router(xmlDocPtr doc, xmlNodePtr root, 
+                   char *serv_id, char *serv_uuid) {
+        /* FIXME: Fill in the guts... */
+        return 0;
+}
+
+/* Given a XML document and service id/uuid setup the service */
+static int xml_service(xmlDocPtr doc, xmlNodePtr root, 
+                       int serv_num, char *serv_id, char *serv_uuid) {
+        xmlNodePtr cur = root;
+        char *id, *uuid;
+
+        while (cur != NULL) {
+                id = xmlGetProp(cur, "id");
+                uuid = xmlGetProp(cur, "uuid");
+
+                if (xmlStrcmp(id, serv_id) ||
+                    xmlStrcmp(uuid, serv_uuid)) {
+                        cur = cur->next;
+                        continue;
+                }
+
+                if (!xmlStrcmp(cur->name, "mds"))
+                        rc = xml_mds(doc, cur, serv_id, serv_uuid);
+                else if (!xmlStrcmp(cur->name, "obd"))
+                        rc = xml_obd(doc, cur, serv_id, serv_uuid);
+                else if (!xmlStrcmp(cur->name, "ost"))
+                        rc = xml_ost(doc, cur, serv_id, serv_uuid);
+                else if (!xmlStrcmp(cur->name, "osc"))
+                        rc = xml_osc(doc, cur, serv_id, serv_uuid);
+                else if (!xmlStrcmp(cur->name, "lov"))
+                        rc = xml_lov(doc, cur, serv_id, serv_uuid);
+                else if (!xmlStrcmp(cur->name, "router"))
+                        rc = xml_router(doc, cur, serv_id, serv_uuid);
+                else
+                        return -1;        
+
+                cur = cur->next;
+        }
+
+        return rc; 
+}
+
+/* Given a XML document and profile id/uuid setup the profile */
+static int xml_profile(xmlDocPtr doc, xmlNodePtr root, 
+                       int prof_num, char *prof_id, char *prof_uuid) {
+        xmlNodePtr parent, cur = root;
+        char *id, *uuid;
+        int rc = 0, num;
+
+        while (cur != NULL) {
+                id = xmlGetProp(cur, "id");
+                uuid = xmlGetProp(cur, "uuid");
+
+                if (xmlStrcmp(cur->name, "profile") || 
+                    xmlStrcmp(id, prof_id)          ||
+                    xmlStrcmp(uuid, prof_uuid)) {
+                        cur = cur->next;
+                        continue;
+                }
+
+                /* FIXME: Doesn't understand mountpoints yet
+                 *        xml_mountpoint(doc, root, ...);
+                 */    
+
+                /* Setup each service in turn
+                 * FIXME: Should be sorted by "num" attr, we shouldn't
+                 *        assume they're in order in the XML document.
+                 */
+                parent = cur;
+                cur = cur->xmlChildrenNode;
+                while (cur != NULL) {
+                        if (!xmlStrcmp(cur->name, "service_id")) {
+                                num = atoi(xmlGetProp(cur, "num"));
+                                rc = xml_service(doc, root, num,
+                                                 xmlGetProp(cur, "id"),
+                                                 xmlGetProp(cur, "uuid"));
+                                if (rc != 0)
+                                        return rc;
+                        }
+
+                        cur = cur->next;
+                }
+
+                cur = parent->next;
+        }
+
+        return rc; 
+}
+
+static int xml_node(xmlDocPtr doc, xmlNodePtr root) {
+        xmlNodePtr parent, cur = root;
+        char *id, *uuid;
+        int rc = 0, num;
+        
+        /* Walk the node tags looking for ours */
+        while (cur != NULL) {
+                if (xmlStrcmp(cur->name, "node")) {
+                        cur = cur->next;
+                        continue;
+                }
+
+                id = xmlGetProp(cur, "id");
+                if (id == NULL)
+                        return -1;
+
+                uuid = xmlGetProp(cur, "uuid");
+                if (uuid == NULL)
+                        return -1;
+
+                /* FIXME: Verify our ID and UUID against /etc/lustre/id
+                 *        so we're sure we are who we think we are.
+                 */
+
+                /* Setup each profile in turn
+                 * FIXME: Should be sorted by "num" attr, we shouldn't
+                 *        assume they're in order in the XML document.
+                 */
+                parent = cur;
+                cur = cur->xmlChildrenNode;
+                while (cur != NULL) {
+                        if (!xmlStrcmp(cur->name, "profile_id")) {
+                                num = atoi(xmlGetProp(cur, "num"));
+                                rc = xml_profile(doc, root, num,
+                                                 xmlGetProp(cur, "id"),
+                                                 xmlGetProp(cur, "uuid"));
+                                if (rc != 0)
+                                        return rc;
+                        }
+
+                        cur = cur->next;
+                }
+
+                cur = parent->next;
+        }
+
+        return rc;
+}
+
+static int do_xml(char *func, char *file)
+{
+        xmlDocPtr doc;
+        xmlNodePtr cur;
+        int rc;
+
+        doc = xmlParseFile(file);
+        if (doc == NULL) {
+                fprintf(stderr, "error: Unable to parse XML\n");
+                return -1; 
+        }
+
+        cur = xmlDocGetRootElement(doc);
+        if (cur == NULL) {
+                fprintf(stderr, "error: Empty XML\n");
+                xmlFreeDoc(doc);
+                return -1;
+        }
+        
+        if (xmlStrcmp(cur->name, (const xmlChar *)"lustre")) {
+                fprintf(stderr, "error: Root node != <lustre>\n");
+                xmlFreeDoc(doc);
+                return -1;
+        }
+
+        /* FIXME: Validate the XML against the DTD here */
+    
+        /* FIXME: Merge all the text nodes under each branch and 
+         *        prune empty nodes.  Just to make the parsing more
+         *        tolerant. 
+         */
+        
+        rc = xml_node(doc, cur->xmlChildrenNode);
+        xmlFreeDoc(doc);
+
+        return rc;
+}
+
 static int do_device(char *func, int dev)
 {
         struct obd_ioctl_data data;
@@ -305,6 +594,17 @@ static int jt_disconnect(int argc, char **argv)
         }
 
         return do_disconnect(argv[0], 0);
+}
+
+static int jt__xml(int argc, char **argv)
+{
+        if (argc < 2) {
+                fprintf(stderr, "usage: %s <xml file> <command [args ...]>\n",
+                        cmdname(argv[0]));
+                return -1;
+        }
+
+        return do_xml("xml", argv[1]);
 }
 
 static int jt__device(int argc, char **argv)
@@ -943,6 +1243,7 @@ static int jt_quit(int argc, char **argv)
 
 command_t cmdlist[] = {
         /* Metacommands */
+        {"--xml", jt__xml, 0, "--xml <xml file> <command [args ...]>"},
         {"--device", jt__device, 0, "--device <devno> <command [args ...]>"},
         {"--threads", jt__threads, 0,
                 "--threads <threads> <devno> <command [args ...]>"},
