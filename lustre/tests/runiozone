@@ -1,0 +1,10 @@
+#!/bin/sh
+SIZE=5m
+COUNT=0
+rm -f endiozone
+while date; do
+	echo "Test #$COUNT"
+	iozone -f /mnt/obd/test.$$ -s $SIZE 2>&1 || exit $?
+	COUNT=`expr $COUNT + 1`
+	[ -f endiozone ] && rm endiozone && exit 0
+done | tee /tmp/iozone.log
