@@ -73,6 +73,8 @@ static int ptl_send_buf(struct ptlrpc_request *request,
         CDEBUG(D_NET, "Sending %d bytes to portal %d, xid %Ld\n",
                request->rq_req_md.length, portal, request->rq_xid);
 
+        if (!portal)
+                LBUG();
         rc = PtlPut(md_h, PTL_NOACK_REQ, remote_id, portal, 0, request->rq_xid,
                     0, 0);
         if (rc != PTL_OK) {

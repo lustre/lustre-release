@@ -403,6 +403,9 @@ static int filter_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (obddev->obd_namespace == NULL)
                 LBUG();
 
+        ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+                           "filter_ldlm_client", &obddev->obd_ldlm_client);
+
         RETURN(0);
 
 err_kfree:

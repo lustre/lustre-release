@@ -615,9 +615,6 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
                 }
         }
 
-        ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
-                           "ost_ldlm_client", &obddev->obd_ldlm_client);
-
         RETURN(0);
 
 error_disc:
