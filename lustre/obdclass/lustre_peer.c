@@ -74,7 +74,7 @@ int lustre_uuid_to_peer(char *uuid, struct lustre_peer *peer)
         struct list_head *tmp;
 
         spin_lock (&g_uuid_lock);
-
+ 
         list_for_each(tmp, &g_uuid_list) {
                 struct uuid_nid_data *data =
                         list_entry(tmp, struct uuid_nid_data, head);
