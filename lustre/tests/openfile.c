@@ -6,7 +6,6 @@
 #define DEBUG
 #endif
 
-
 #define _GNU_SOURCE
 
 #include <stdio.h>
@@ -21,7 +20,7 @@
 typedef struct flag_mapping {
        char string[20];
        int  flag;
-}FLAG_MAPPING;
+} FLAG_MAPPING;
 
 FLAG_MAPPING flag_table[] = {
        {"O_RDONLY", O_RDONLY},
@@ -41,17 +40,14 @@ FLAG_MAPPING flag_table[] = {
        {"", -1}
 };
 
-void
-Usage_and_abort()
+void Usage_and_abort(void)
 {
        fprintf(stderr, "Usage: openfile -f flags [ -m mode ] filename \n");
-       fprintf(stderr, "e.g. " \ 
-                 "openfile -f O_RDWR:O_CREAT -m 0755 /etc/passwd\n");
+       fprintf(stderr, "e.g. openfile -f O_RDWR:O_CREAT -m 0755 /etc/passwd\n");
        exit(-1);
-
 }
 
-main(int argc, char** argv)
+int main(int argc, char** argv)
 {
         int i;
         int    flags=0;
@@ -61,7 +57,7 @@ main(int argc, char** argv)
         int    flag_set=0;
         int    file_set=0;
         char   c;
-		char*  cloned_flags;
+        char*  cloned_flags;
 
         if(argc == 1) {
                 Usage_and_abort();
@@ -69,41 +65,38 @@ main(int argc, char** argv)
 
         while ((c = getopt (argc, argv, "f:m:")) != -1) {
                 switch (c) {
-                case 'f':
-                {
-                        char *tmp ;
+                case 'f': {
+                        char *tmp;
 
-						cloned_flags = (char*)malloc(strlen(optarg));
-						if (cloned_flags==NULL) {
-						       fprintf(stderr, "Insufficient memory.\n");
-							   exit(-1);
-						}
-						
-						strncpy(cloned_flags, optarg, strlen(optarg));
+                        cloned_flags = (char*)malloc(strlen(optarg));
+                        if (cloned_flags==NULL) {
+                                fprintf(stderr, "Insufficient memory.\n");
+                                exit(-1);
+                        }
+
+                        strncpy(cloned_flags, optarg, strlen(optarg));
                         tmp = strtok(optarg, ":");
-                        while (tmp)
-                        {
-                                int i=0;
+                        while (tmp) {
+                                int i = 0;
 #ifdef DEBUG
-printf("flags = %s\n",tmp);
+                                printf("flags = %s\n",tmp);
 #endif
                                 flag_set = 1;
-                                while (flag_table[i].flag != -1)
-                                {
-                                   int r;
-                                   r = strncasecmp (tmp, (flag_table[i].string), 
-                                              strlen((flag_table[i].string)) );
+                                while (flag_table[i].flag != -1) {
+                                        int r;
+                                        r = strncasecmp(tmp, (flag_table[i].string),
+                                                        strlen((flag_table[i].string)) );
 
-                                   if (r == 0)
-                                       break;
-                                   i++;
+                                        if (r == 0)
+                                                break;
+                                        i++;
                                 }
 
-                                if(flag_table[i].flag != -1)
+                                if (flag_table[i].flag != -1) {
                                         flags |= flag_table[i].flag;
-                                else {
+                                } else {
                                         fprintf(stderr, "No such flag: %s\n",
-                                                         tmp);
+                                                tmp);
                                         exit(-1);
                                 }
 
@@ -111,62 +104,59 @@ printf("flags = %s\n",tmp);
 
                         }
 #ifdef DEBUG
-printf("flags = %x\n", flags);
+                        printf("flags = %x\n", flags);
 #endif
+                        break;
                 }
-                break;
                 case 'm':
 #ifdef DEBUG
-printf("mode = %s\n", optarg);
+                        printf("mode = %s\n", optarg);
 #endif
                         mode = strtol (optarg, NULL, 8);
                         mode_set = 1;
 #ifdef DEBUG
-printf("mode = %o\n", mode);
+                        printf("mode = %o\n", mode);
 #endif
-                break;
+                        break;
                 default:
                         fprintf(stderr, "Bad parameters.\n");
                         Usage_and_abort();
                 }
         }
 
-        if(optind == argc) {
+        if (optind == argc) {
                 fprintf(stderr, "Bad parameters.\n");
                 Usage_and_abort();
         }
 
-		fname = argv[optind];
-		file_set = 1;
+        fname = argv[optind];
+        file_set = 1;
 
-        if( !flag_set || !file_set) {
-        
+        if (!flag_set || !file_set) {
                 fprintf(stderr, "Missing flag or file-name\n");
                 exit(-1);
         }
 
 
-		if ( mode_set )
+        if (mode_set)
                 i = open(fname, flags, mode);
         else
                 i = open(fname, flags);
 
+        if (i != -1) {
+                fprintf(stderr, "Succeed in opening file \"%s\"(flags=%s",
+                        fname, cloned_flags);
 
-        if (i!=-1) {
-                 fprintf(stderr, "Succeed in opening file \"%s\"(flags=%s", 
-				                       fname, cloned_flags );
-
-				 if (mode_set)
-				         fprintf(stderr, ", mode=%o", mode);
-				 fprintf(stderr, ")\n", mode);
-                 close (i);
-        }else {
-                 fprintf(stderr, "Error in opening file \"%s\"(flags=%s", 
-                                        fname, cloned_flags);
-				 if (mode_set)
-				         fprintf(stderr, ", mode=%o", mode);
-				 fprintf(stderr, ") %s\n", strerror(errno));
+                if (mode_set)
+                        fprintf(stderr, ", mode=%o", mode);
+                fprintf(stderr, ")\n");
+                close (i);
+        } else {
+                fprintf(stderr, "Error in opening file \"%s\"(flags=%s",
+                        fname, cloned_flags);
+                if (mode_set)
+                        fprintf(stderr, ", mode=%o", mode);
+                fprintf(stderr, ") %s\n", strerror(errno));
         }
         return(i);
 }
-
