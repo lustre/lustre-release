@@ -1585,8 +1585,8 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
                                 wake_up(&req->rq_set->set_waitq);
                         else
                                 wake_up(&req->rq_wait_for_rep);
-                        spin_unlock (&req->rq_lock);
                 }
+                spin_unlock (&req->rq_lock);
         }
 
         /* Last chance to free reqs left on the replay list, but we
