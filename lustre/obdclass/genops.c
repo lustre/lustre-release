@@ -301,7 +301,7 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
         dst->o_size = src->o_size;
         dst->o_blocks = src->o_blocks;
         dst->o_valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
-        UnlockPage(page);
+        obd_unlock_page(page);
         __free_page(page);
 
         EXIT;

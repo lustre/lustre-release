@@ -2,7 +2,6 @@
 #define __LINUX_CLASS_OBD_H
 
 #include <linux/fs.h>
-#include <linux/ext2_fs.h>
 #include <linux/time.h>
 #include <linux/obd.h>
 

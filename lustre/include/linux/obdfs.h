@@ -14,38 +14,59 @@
 #include <linux/obd_class.h>
 #include <linux/list.h>
 
+
+#define obd_unlock_page(page)   do {    if (PageLocked(page)) { \
+                        UnlockPage(page);\
+                } else {\
+                        printk("file %s, line %d: expecting locked page\n",\
+                               __FILE__, __LINE__); \
+                }                       \
+} while(0)
+
 struct obdfs_pgrq {
-	struct list_head	 rq_plist;	/* linked list of req's */
-	unsigned long            rq_jiffies;
-	struct page 		*rq_page;	/* page to be written */
+        struct list_head         rq_plist;      /* linked list of req's */
+        unsigned long            rq_jiffies;
+        struct page             *rq_page;       /* page to be written */
 };
 
-struct list_head obdfs_super_list;	 /* list of all OBDFS superblocks */
+struct list_head obdfs_super_list;       /* list of all OBDFS superblocks */
 
 struct obdfs_sb_info {
-	struct list_head	 osi_list;	/* list of supers */
-	struct obd_conn		 osi_conn;
-	struct super_block	*osi_super;
-	struct obd_device	*osi_obd;
-	struct obd_ops		*osi_ops;
-	ino_t			 osi_rootino;	/* number of root inode */
-	int			 osi_minor;	/* minor of /dev/obdX */
-	struct list_head	 osi_inodes;	/* list of dirty inodes */
-	unsigned long		 osi_cache_count;
-	struct semaphore         osi_list_mutex;
+        struct list_head         osi_list;      /* list of supers */
+        struct obd_conn          osi_conn;
+        struct super_block      *osi_super;
+        struct obd_device       *osi_obd;
+        struct obd_ops          *osi_ops;
+        ino_t                    osi_rootino;   /* number of root inode */
+        int                      osi_minor;     /* minor of /dev/obdX */
+        struct list_head         osi_inodes;    /* list of dirty inodes */
+        unsigned long            osi_cache_count;
+        struct semaphore         osi_list_mutex;
 };
 
 struct obdfs_inode_info {
-	int		 oi_flags;
-	struct list_head oi_inodes;
-	struct list_head oi_pages;
-	char 		 oi_inline[OBD_INLINESZ];
+        int              oi_flags;
+        struct list_head oi_inodes;
+        struct list_head oi_pages;
+        char             oi_inline[OBD_INLINESZ];
 };
 
 /* dir.c */
+#define EXT2_DIR_PAD                    4
+#define EXT2_DIR_ROUND                  (EXT2_DIR_PAD - 1)
+#define EXT2_DIR_REC_LEN(name_len)      (((name_len) + 8 + EXT2_DIR_ROUND) & \
+                                         ~EXT2_DIR_ROUND)
+#define EXT2_NAME_LEN 255
+struct ext2_dir_entry_2 {
+        __u32   inode;                  /* Inode number */
+        __u16   rec_len;                /* Directory entry length */
+        __u8    name_len;               /* Name length */
+        __u8    file_type;
+        char    name[EXT2_NAME_LEN];    /* File name */
+};
 int obdfs_check_dir_entry (const char * function, struct inode * dir,
-			  struct ext2_dir_entry_2 * de, struct page * page,
-			  unsigned long offset);
+                          struct ext2_dir_entry_2 * de, struct page * page,
+                          unsigned long offset);
 extern struct file_operations obdfs_dir_operations;
 extern struct inode_operations obdfs_dir_inode_operations;
 
@@ -61,6 +82,97 @@ int obdfs_flush_reqs(struct list_head *inode_list, unsigned long check_time);
 int obdfs_flush_dirty_pages(unsigned long check_time);
 
 /* namei.c */
+/*
+ * Structure of the super block
+ */
+struct ext2_super_block {
+        __u32   s_inodes_count;         /* Inodes count */
+        __u32   s_blocks_count;         /* Blocks count */
+        __u32   s_r_blocks_count;       /* Reserved blocks count */
+        __u32   s_free_blocks_count;    /* Free blocks count */
+        __u32   s_free_inodes_count;    /* Free inodes count */
+        __u32   s_first_data_block;     /* First Data Block */
+        __u32   s_log_block_size;       /* Block size */
+        __s32   s_log_frag_size;        /* Fragment size */
+        __u32   s_blocks_per_group;     /* # Blocks per group */
+        __u32   s_frags_per_group;      /* # Fragments per group */
+        __u32   s_inodes_per_group;     /* # Inodes per group */
+        __u32   s_mtime;                /* Mount time */
+        __u32   s_wtime;                /* Write time */
+        __u16   s_mnt_count;            /* Mount count */
+        __s16   s_max_mnt_count;        /* Maximal mount count */
+        __u16   s_magic;                /* Magic signature */
+        __u16   s_state;                /* File system state */
+        __u16   s_errors;               /* Behaviour when detecting errors */
+        __u16   s_minor_rev_level;      /* minor revision level */
+        __u32   s_lastcheck;            /* time of last check */
+        __u32   s_checkinterval;        /* max. time between checks */
+        __u32   s_creator_os;           /* OS */
+        __u32   s_rev_level;            /* Revision level */
+        __u16   s_def_resuid;           /* Default uid for reserved blocks */
+        __u16   s_def_resgid;           /* Default gid for reserved blocks */
+        /*
+         * These fields are for EXT2_DYNAMIC_REV superblocks only.
+         *
+         * Note: the difference between the compatible feature set and
+         * the incompatible feature set is that if there is a bit set
+         * in the incompatible feature set that the kernel doesn't
+         * know about, it should refuse to mount the filesystem.
+         * 
+         * e2fsck's requirements are more strict; if it doesn't know
+         * about a feature in either the compatible or incompatible
+         * feature set, it must abort and not try to meddle with
+         * things it doesn't understand...
+         */
+        __u32   s_first_ino;            /* First non-reserved inode */
+        __u16   s_inode_size;           /* size of inode structure */
+        __u16   s_block_group_nr;       /* block group # of this superblock */
+        __u32   s_feature_compat;       /* compatible feature set */
+        __u32   s_feature_incompat;     /* incompatible feature set */
+        __u32   s_feature_ro_compat;    /* readonly-compatible feature set */
+        __u8    s_uuid[16];             /* 128-bit uuid for volume */
+        char    s_volume_name[16];      /* volume name */
+        char    s_last_mounted[64];     /* directory where last mounted */
+        __u32   s_algorithm_usage_bitmap; /* For compression */
+        /*
+         * Performance hints.  Directory preallocation should only
+         * happen if the EXT2_COMPAT_PREALLOC flag is on.
+         */
+        __u8    s_prealloc_blocks;      /* Nr of blocks to try to preallocate*/
+        __u8    s_prealloc_dir_blocks;  /* Nr to preallocate for dirs */
+        __u16   s_padding1;
+        __u32   s_reserved[204];        /* Padding to the end of the block */
+};
+
+#define EXT2_SB(sb)     (&((sb)->u.ext2_sb))
+/*
+ * Maximal count of links to a file
+ */
+#define EXT2_LINK_MAX           32000
+/*
+ * Ext2 directory file types.  Only the low 3 bits are used.  The
+ * other bits are reserved for now.
+ */
+#define EXT2_FT_UNKNOWN         0
+#define EXT2_FT_REG_FILE        1
+#define EXT2_FT_DIR             2
+#define EXT2_FT_CHRDEV          3
+#define EXT2_FT_BLKDEV          4
+#define EXT2_FT_FIFO            5
+#define EXT2_FT_SOCK            6
+#define EXT2_FT_SYMLINK         7
+
+#define EXT2_FT_MAX             8
+
+#define EXT2_BTREE_FL                   0x00001000 /* btree format dir */
+#define EXT2_RESERVED_FL                0x80000000 /* reserved for ext2 lib */
+#define EXT2_FEATURE_INCOMPAT_FILETYPE          0x0002
+#define EXT2_HAS_COMPAT_FEATURE(sb,mask)                        \
+        ( EXT2_SB(sb)->s_es->s_feature_compat & cpu_to_le32(mask) )
+#define EXT2_HAS_INCOMPAT_FEATURE(sb,mask)                      \
+        ( EXT2_SB(sb)->s_es->s_feature_incompat & cpu_to_le32(mask) )
+
+
 struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry);
 int obdfs_create (struct inode * dir, struct dentry * dentry, int mode);
 int obdfs_mkdir(struct inode *dir, struct dentry *dentry, int mode);
@@ -68,28 +180,28 @@ int obdfs_rmdir(struct inode *dir, struct dentry *dentry);
 int obdfs_unlink(struct inode *dir, struct dentry *dentry);
 int obdfs_mknod(struct inode *dir, struct dentry *dentry, int mode, int rdev);
 int obdfs_symlink(struct inode *dir, struct dentry *dentry,
-		  const char *symname);
+                  const char *symname);
 int obdfs_link(struct dentry *old_dentry, struct inode *dir,
-	       struct dentry *dentry);
+               struct dentry *dentry);
 int obdfs_rename(struct inode *old_dir, struct dentry *old_dentry,
-		 struct inode *new_dir, struct dentry *new_dentry);
+                 struct inode *new_dir, struct dentry *new_dentry);
 
 /* rw.c */
-int obdfs_do_writepage(struct inode *, struct page *, int sync);
+int obdfs_do_writepage(struct page *, int sync);
 int obdfs_init_pgrqcache(void);
 void obdfs_cleanup_pgrqcache(void);
 inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq);
-int obdfs_readpage(struct dentry *dentry, struct page *page);
-int obdfs_writepage(struct dentry *dentry, struct page *page);
+int obdfs_readpage(struct file *file, struct page *page);
+int obdfs_writepage(struct page *page);
 struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
-			   int create, int locked);
+                           int create, int locked);
 int obdfs_write_one_page(struct file *file, struct page *page,
-			 unsigned long offset, unsigned long bytes,
-			 const char * buf);
+                         unsigned long offset, unsigned long bytes,
+                         const char * buf);
 int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io, obd_count num_oa,
-		    struct obdo **obdos, obd_count *oa_bufs,
-		    struct page **pages, char **bufs, obd_size *counts,
-		    obd_off *offsets, obd_flag *flags);
+                    struct obdo **obdos, obd_count *oa_bufs,
+                    struct page **pages, char **bufs, obd_size *counts,
+                    obd_off *offsets, obd_flag *flags);
 void obdfs_truncate(struct inode *inode);
 
 /* super.c */
@@ -107,50 +219,50 @@ void obdfs_sysctl_clean(void);
 
 static inline struct obdfs_inode_info *obdfs_i2info(struct inode *inode)
 {
-	return (struct obdfs_inode_info *)&(inode->u.generic_ip);
+        return (struct obdfs_inode_info *)&(inode->u.generic_ip);
 }
 
 static inline struct obdfs_sb_info *obdfs_i2sbi(struct inode *inode)
 {
-	return (struct obdfs_sb_info *) &(inode->i_sb->u.generic_sbp);
+        return (struct obdfs_sb_info *) &(inode->i_sb->u.generic_sbp);
 }
 
 static inline struct list_head *obdfs_iplist(struct inode *inode) 
 {
-	struct obdfs_inode_info *info = obdfs_i2info(inode);
+        struct obdfs_inode_info *info = obdfs_i2info(inode);
 
-	return &info->oi_pages;
+        return &info->oi_pages;
 }
 
 static inline struct list_head *obdfs_islist(struct inode *inode) 
 {
-	struct obdfs_inode_info *info = obdfs_i2info(inode);
+        struct obdfs_inode_info *info = obdfs_i2info(inode);
 
-	return &info->oi_inodes;
+        return &info->oi_inodes;
 }
 
 static inline struct list_head *obdfs_slist(struct inode *inode) 
 {
-	struct obdfs_sb_info *sbi = obdfs_i2sbi(inode);
+        struct obdfs_sb_info *sbi = obdfs_i2sbi(inode);
 
-	return &sbi->osi_inodes;
+        return &sbi->osi_inodes;
 }
 
-#define obd_down(mutex) {						\
-	/* CDEBUG(D_INFO, "get lock\n"); */				\
-	obdfs_mutex_start = jiffies;					\
-	down(mutex);							\
-	if (jiffies - obdfs_mutex_start)				\
-		CDEBUG(D_CACHE, "waited on mutex %ld jiffies\n",	\
-		       jiffies - obdfs_mutex_start);			\
+#define obd_down(mutex) {                                               \
+        /* CDEBUG(D_INFO, "get lock\n"); */                             \
+        obdfs_mutex_start = jiffies;                                    \
+        down(mutex);                                                    \
+        if (jiffies - obdfs_mutex_start)                                \
+                CDEBUG(D_CACHE, "waited on mutex %ld jiffies\n",        \
+                       jiffies - obdfs_mutex_start);                    \
 }
 
-#define obd_up(mutex) {							\
-	up(mutex);							\
-	if (jiffies - obdfs_mutex_start > 1)				\
-		CDEBUG(D_CACHE, "held mutex for %ld jiffies\n",		\
-		       jiffies - obdfs_mutex_start);			\
-	/* CDEBUG(D_INFO, "free lock\n"); */				\
+#define obd_up(mutex) {                                                 \
+        up(mutex);                                                      \
+        if (jiffies - obdfs_mutex_start > 1)                            \
+                CDEBUG(D_CACHE, "held mutex for %ld jiffies\n",         \
+                       jiffies - obdfs_mutex_start);                    \
+        /* CDEBUG(D_INFO, "free lock\n"); */                            \
 }
 
 /* We track if a page has been added to the OBD page cache by stting a
@@ -158,66 +270,66 @@ static inline struct list_head *obdfs_slist(struct inode *inode)
  * used for a while.
  */
 #define PG_obdcache 29
-#define OBDAddCachePage(page)	test_and_set_bit(PG_obdcache, &(page)->flags)
-#define OBDClearCachePage(page)	clear_bit(PG_obdcache, &(page)->flags)
+#define OBDAddCachePage(page)   test_and_set_bit(PG_obdcache, &(page)->flags)
+#define OBDClearCachePage(page) clear_bit(PG_obdcache, &(page)->flags)
 
 static inline void obdfs_print_plist(struct inode *inode) 
 {
-	struct list_head *page_list = obdfs_iplist(inode);
-	struct list_head *tmp;
+        struct list_head *page_list = obdfs_iplist(inode);
+        struct list_head *tmp;
 
-	CDEBUG(D_INFO, "inode %ld: page", inode->i_ino);
-	/* obd_down(&obdfs_i2sbi(inode)->osi_list_mutex); */
-	if (list_empty(page_list)) {
-		CDEBUG(D_INFO, " list empty\n");
-		obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
-		return;
-	}
+        CDEBUG(D_INFO, "inode %ld: page", inode->i_ino);
+        /* obd_down(&obdfs_i2sbi(inode)->osi_list_mutex); */
+        if (list_empty(page_list)) {
+                CDEBUG(D_INFO, " list empty\n");
+                obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
+                return;
+        }
 
-	tmp = page_list;
-	while ( (tmp = tmp->next) != page_list) {
-		struct obdfs_pgrq *pgrq;
-		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
-		CDEBUG(D_INFO, " %p", pgrq->rq_page);
-	}
-	CDEBUG(D_INFO, "\n");
-	/* obd_up(&obdfs_i2sbi(inode)->osi_list_mutex); */
+        tmp = page_list;
+        while ( (tmp = tmp->next) != page_list) {
+                struct obdfs_pgrq *pgrq;
+                pgrq = list_entry(tmp, struct obdfs_pgrq, rq_plist);
+                CDEBUG(D_INFO, " %p", pgrq->rq_page);
+        }
+        CDEBUG(D_INFO, "\n");
+        /* obd_up(&obdfs_i2sbi(inode)->osi_list_mutex); */
 }
 
 static inline int obdfs_has_inline(struct inode *inode)
 {
-	return (obdfs_i2info(inode)->oi_flags & OBD_FL_INLINEDATA);
+        return (obdfs_i2info(inode)->oi_flags & OBD_FL_INLINEDATA);
 }
 
 static void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
 {
-	struct obdfs_inode_info *oinfo = obdfs_i2info(inode);
+        struct obdfs_inode_info *oinfo = obdfs_i2info(inode);
 
-	CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08x\n",
-	       inode->i_ino, (long)oa->o_id, oa->o_valid);
-	obdo_from_inode(oa, inode);
-	if (obdfs_has_inline(inode)) {
-		CDEBUG(D_INODE, "copying inline data from inode to obdo\n");
-		memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
-		oa->o_obdflags |= OBD_FL_INLINEDATA;
-		oa->o_valid |= OBD_MD_FLINLINE;
-	}
+        CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08x\n",
+               inode->i_ino, (long)oa->o_id, oa->o_valid);
+        obdo_from_inode(oa, inode);
+        if (obdfs_has_inline(inode)) {
+                CDEBUG(D_INODE, "copying inline data from inode to obdo\n");
+                memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
+                oa->o_obdflags |= OBD_FL_INLINEDATA;
+                oa->o_valid |= OBD_MD_FLINLINE;
+        }
 } /* obdfs_from_inode */
 
 static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
 {
-	struct obdfs_inode_info *oinfo = obdfs_i2info(inode);
+        struct obdfs_inode_info *oinfo = obdfs_i2info(inode);
 
-	CDEBUG(D_INFO, "src obdo %ld valid 0x%08x, dst inode %ld\n",
-	       (long)oa->o_id, oa->o_valid, inode->i_ino);
+        CDEBUG(D_INFO, "src obdo %ld valid 0x%08x, dst inode %ld\n",
+               (long)oa->o_id, oa->o_valid, inode->i_ino);
 
-	obdo_to_inode(inode, oa);
+        obdo_to_inode(inode, oa);
 
-	if (obdo_has_inline(oa)) {
-		CDEBUG(D_INODE, "copying inline data from obdo to inode\n");
-		memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
-		oinfo->oi_flags |= OBD_FL_INLINEDATA;
-	}
+        if (obdo_has_inline(oa)) {
+                CDEBUG(D_INODE, "copying inline data from obdo to inode\n");
+                memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
+                oinfo->oi_flags |= OBD_FL_INLINEDATA;
+        }
 } /* obdfs_to_inode */
 
 #define NOLOCK 0

@@ -15,7 +15,7 @@
  *  ext2 fs regular file handling primitives
  *
  *  64-bit file support on 64-bit platforms by Jakub Jelinek
- * 	(jj@sunsite.ms.mff.cuni.cz)
+ *      (jj@sunsite.ms.mff.cuni.cz)
  */
 
 #include <asm/uaccess.h>
@@ -23,7 +23,6 @@
 
 #include <linux/errno.h>
 #include <linux/fs.h>
-#include <linux/ext2_fs.h>
 #include <linux/fcntl.h>
 #include <linux/sched.h>
 #include <linux/stat.h>
@@ -37,17 +36,17 @@
 
 static inline void remove_suid(struct inode *inode)
 {
-	unsigned int mode;
+        unsigned int mode;
 
-	/* set S_IGID if S_IXGRP is set, and always set S_ISUID */
-	mode = (inode->i_mode & S_IXGRP)*(S_ISGID/S_IXGRP) | S_ISUID;
+        /* set S_IGID if S_IXGRP is set, and always set S_ISUID */
+        mode = (inode->i_mode & S_IXGRP)*(S_ISGID/S_IXGRP) | S_ISUID;
 
-	/* was any of the uid bits set? */
-	mode &= inode->i_mode;
-	if (mode && !capable(CAP_FSETID)) {
-		inode->i_mode &= ~mode;
-		mark_inode_dirty(inode);
-	}
+        /* was any of the uid bits set? */
+        mode &= inode->i_mode;
+        if (mode && !capable(CAP_FSETID)) {
+                inode->i_mode &= ~mode;
+                mark_inode_dirty(inode);
+        }
 }
 
 /*
@@ -56,57 +55,40 @@ static inline void remove_suid(struct inode *inode)
 static ssize_t
 obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
-	ssize_t retval;
-	CDEBUG(D_INFO, "Writing inode %ld, %d bytes, offset %ld\n",
-	       file->f_dentry->d_inode->i_ino, count, (long)*ppos);
+        ssize_t retval;
+        CDEBUG(D_INFO, "Writing inode %ld, %d bytes, offset %ld\n",
+               file->f_dentry->d_inode->i_ino, count, (long)*ppos);
 
-	retval = generic_file_write(file, buf, count,
-				    ppos, obdfs_write_one_page);
-	CDEBUG(D_INFO, "Wrote %d\n", retval);
-	if (retval > 0) {
-		struct inode *inode = file->f_dentry->d_inode;
-		remove_suid(inode);
-		inode->i_ctime = inode->i_mtime = CURRENT_TIME;
-		mark_inode_dirty(inode);
-	}
-	EXIT;
-	return retval;
+        retval = generic_file_write(file, buf, count, ppos);
+        CDEBUG(D_INFO, "Wrote %d\n", retval);
+        if (retval > 0) {
+                struct inode *inode = file->f_dentry->d_inode;
+                remove_suid(inode);
+                inode->i_ctime = inode->i_mtime = CURRENT_TIME;
+                mark_inode_dirty(inode);
+        }
+        EXIT;
+        return retval;
 }
 
 struct file_operations obdfs_file_operations = {
-	NULL,			/* lseek - default */
-	generic_file_read,	/* read */
-	obdfs_file_write,       /* write  */
-	NULL,			/* readdir - bad */
-	NULL,			/* poll */
-	NULL,			/* ioctl */
-	generic_file_mmap,	/* mmap */
-	NULL,			/* open */
-	NULL,			/* flush */
-	NULL,			/* release */
-	NULL /* XXX add XXX */,	/* fsync */
-	NULL,			/* fasync */
-	NULL			/* lock */
+        read: generic_file_read,      /* read */
+        write: obdfs_file_write,       /* write  */
+        mmap: generic_file_mmap,      /* mmap */
 };
 
+extern int obdfs_notify_change(struct dentry *de, struct iattr *attr);
 struct inode_operations obdfs_file_inode_operations = {
-	&obdfs_file_operations,	/* default directory file-ops */
-	obdfs_create,		/* create */
-	obdfs_lookup,		/* lookup */
-	obdfs_link,		/* link */
-	obdfs_unlink,		/* unlink */
-	obdfs_symlink,		/* symlink */
-	obdfs_mkdir,		/* mkdir */
-	obdfs_rmdir,		/* rmdir */
-	obdfs_mknod,		/* mknod */
-	obdfs_rename,		/* rename */
-	NULL,			/* readlink */
-	NULL,			/* follow_link */
-	NULL,			/* get_block */
-	obdfs_readpage,		/* readpage */
-	obdfs_writepage,	/* writepage */
-	obdfs_truncate,		/* truncate */
-	NULL,			/* permission */
-	NULL			/* revalidate */
+        create: obdfs_create,
+        lookup: obdfs_lookup,
+        link: obdfs_link,
+        unlink: obdfs_unlink,
+        symlink: obdfs_symlink,
+        mkdir: obdfs_mkdir,
+        rmdir: obdfs_rmdir,
+        mknod: obdfs_mknod,
+        rename: obdfs_rename,
+        truncate: obdfs_truncate,
+        setattr: obdfs_notify_change
 };
 
