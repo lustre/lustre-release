@@ -1484,9 +1484,9 @@ kibnal_close_conn_locked (kib_conn_t *conn, int error)
                 atomic_inc (&conn->ibc_refcount);
         }
         
-        if (list_empty (&peer->ibp_conns) &&
-            peer->ibp_persistence == 0) {
-                /* Non-persistent peer with no more conns... */
+        if (list_empty (&peer->ibp_conns) &&    /* no more conns */
+            peer->ibp_persistence == 0 &&       /* non-persistent peer */
+            kibnal_peer_active(peer)) {         /* still in peer table */
                 kibnal_unlink_peer_locked (peer);
         }
 
