@@ -2637,7 +2637,7 @@
  };
 --- /dev/null	Fri Aug 30 17:31:37 2002
 +++ linux-2.4.20-braam/fs/ext3/xattr.c	Sat Apr  5 03:57:18 2003
-@@ -0,0 +1,1231 @@
+@@ -0,0 +1,1232 @@
 +/*
 + * linux/fs/ext3/xattr.c
 + *
@@ -2696,6 +2696,7 @@
 + * The BKL will no longer be held in the xattr inode operations.
 + */
 +
++#include <linux/module.h>
 +#include <linux/fs.h>
 +#include <linux/locks.h>
 +#include <linux/slab.h>
