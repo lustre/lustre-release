@@ -25,7 +25,9 @@
 #endif
 
 #define LAST_RCVD "last_rcvd"
-#define INIT_OBJID 2
+#define FILTER_INIT_OBJID 2
+/* max creates/sec * journal->j_commit_interval */
+#define FILTER_SKIP_OBJID (10000 * 5)
 
 #define FILTER_LR_SERVER_SIZE    512
 
