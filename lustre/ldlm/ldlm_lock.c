@@ -649,6 +649,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock * lock,
         lock->l_cookie = cookie;
         lock->l_cookie_len = cookie_len;
 
+        l_lock(&res->lr_namespace->ns_lock);
         if (local && lock->l_req_mode == lock->l_granted_mode) {
                 /* The server returned a blocked lock, but it was granted before
                  * we got a chance to actually enqueue it.  We don't need to do
@@ -695,6 +696,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock * lock,
         ldlm_grant_lock(lock);
         EXIT;
       out:
+        l_unlock(&res->lr_namespace->ns_lock);
         /* Don't set 'completion_ast' until here so that if the lock is granted
          * immediately we don't do an unnecessary completion call. */
         lock->l_completion_ast = completion;
@@ -830,7 +832,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         } else {
                 /* FIXME: We should try the conversion right away and possibly
                  * return success without the need for an extra AST */
-                list_add_tail(&lock->l_res_link, &res->lr_converting);
+                ldlm_resource_add_lock(res, res->lr_converting.prev, lock);
                 *flags |= LDLM_FL_BLOCK_CONV;
         }
 
