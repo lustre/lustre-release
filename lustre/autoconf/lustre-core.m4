@@ -263,10 +263,13 @@ AC_SUBST(BACKINGFS)
 case $BACKINGFS in
 	ext3)
 		# --- Check that ext3 and ext3 xattr are enabled in the kernel
+                # --- only warn for ext3 xattr because 2.4 kernels don't have
+                # --- this config flag.
 		LC_CONFIG_EXT3([],[
 			AC_MSG_ERROR([Lustre requires that ext3 is enabled in the kernel])
 		],[
-			AC_MSG_ERROR([Lustre requires that extended attributes for ext3 are enabled in the kernel])
+                        AC_MSG_WARN([Lustre requires that extended attributes for ext3 are enabled in the kernel])
+                        AC_MSG_WARN([This build may fail.])
 		])
 		;;
 	ldiskfs)
