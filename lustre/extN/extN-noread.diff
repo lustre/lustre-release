@@ -80,7 +80,7 @@ diff -ru lustre-head/fs/extN/ialloc.c lustre/fs/extN/ialloc.c
 diff -ru lustre-head/fs/extN/inode.c lustre/fs/extN/inode.c
 --- lustre-head/fs/extN/inode.c	Mon Dec 23 10:02:58 2002
 +++ lustre/fs/extN/inode.c	Mon Dec 23 09:50:25 2002
-@@ -2011,23 +1994,32 @@
+@@ -2011,23 +1994,28 @@
  	extN_journal_stop(handle, inode);
  }
  
@@ -88,11 +88,7 @@ diff -ru lustre-head/fs/extN/inode.c lustre/fs/extN/inode.c
 - * extN_get_inode_loc returns with an extra refcount against the
 - * inode's underlying buffer_head on success. 
 - */
-+extern int extN_itable_block_used(struct super_block *sb,
-+				  unsigned int block_group,
-+				  int offset);
-+
-+#define NUM_INODE_PREREAD 16
++#define NUM_INODE_PREREAD	16
  
 -int extN_get_inode_loc (struct inode *inode, struct extN_iloc *iloc)
 +/*
@@ -223,3 +219,15 @@ diff -ru lustre-head/fs/extN/inode.c lustre/fs/extN/inode.c
  void extN_read_inode(struct inode * inode)
  {
  	struct extN_iloc iloc;
+diff -ru include/linux/extN_fs.h.orig include/linux/extN_fs.h
+--- lustre/include/linux/extN_fs.h.orig	Sat Mar  8 01:23:09 2003
++++ lustre/include/linux/extN_fs.h	Sat Mar  8 01:24:31 2003
+@@ -642,6 +646,8 @@
+ extern struct buffer_head * extN_getblk (handle_t *, struct inode *, long, int, int *);
+ extern struct buffer_head * extN_bread (handle_t *, struct inode *, int, int, int *);
+ 
++extern int extN_itable_block_used(struct super_block *sb, unsigned int, int);
++extern int extN_get_inode_loc_new(struct inode *, struct extN_iloc *, int);
+ extern int  extN_get_inode_loc (struct inode *, struct extN_iloc *);
+ extern void extN_read_inode (struct inode *);
+ extern void extN_write_inode (struct inode *, int);
