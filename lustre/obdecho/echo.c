@@ -59,7 +59,7 @@ enum {
 };
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
-                        struct obd_uuid *cluuid)
+                        struct obd_uuid *cluuid, unsigned long connect_flags)
 {
         return class_connect(conn, obd, cluuid);
 }

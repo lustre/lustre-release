@@ -718,19 +718,6 @@ int mdc_set_info(struct obd_export *exp, obd_count keylen,
                        exp->exp_obd->obd_name,
                        imp->imp_initial_recov);
                 RETURN(0);
-        } else if (keylen >= strlen("client") && strcmp(key, "client") == 0) {
-                struct ptlrpc_request *req;
-                char *bufs[1] = {key};
-                int rc;
-                req = ptlrpc_prep_req(class_exp2cliimp(exp), OST_SET_INFO, 1,
-                                      &keylen, bufs);
-                if (req == NULL)
-                        RETURN(-ENOMEM);
-
-                req->rq_replen = lustre_msg_size(0, NULL);
-                rc = ptlrpc_queue_wait(req);
-                ptlrpc_req_finished(req);
-                RETURN(rc);
         } else if (keylen >= strlen("mds_num") && strcmp(key, "mds_num") == 0) {
                 struct ptlrpc_request *req;
                 int rc, size[2] = {keylen, vallen};

@@ -113,7 +113,7 @@ static int ptlbd_cl_cleanup(struct obd_device *obd, int flags)
 
 /* modelled after ptlrpc_import_connect() */
 int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
-                     struct obd_uuid *target_uuid)
+                     struct obd_uuid *target_uuid, unsigned long connect_flags)
 {
         struct ptlbd_obd *ptlbd = &obd->u.ptlbd;
         struct obd_import *imp = ptlbd->bd_import;
@@ -232,7 +232,7 @@ int ptlbd_do_connect(struct ptlbd_obd *ptlbd)
         ENTRY;
 
         memset(&conn, 0, sizeof(conn));
-        rc = obd_connect(&conn, obd, &ptlbd->bd_server_uuid);
+        rc = obd_connect(&conn, obd, &ptlbd->bd_server_uuid, 0);
         if (rc < 0)
                 RETURN(rc);
         ptlbd->bd_exp = class_conn2export(&conn);

@@ -443,6 +443,7 @@ struct lmv_obd {
         int                     max_easize;
         int                     max_cookiesize;
         int                     server_timeout;
+        int                     connect_flags;
 };
 
 struct niobuf_local {
@@ -612,6 +613,7 @@ struct obd_device {
 #define OBD_OPT_FORCE           0x0001
 #define OBD_OPT_FAILOVER        0x0002
 #define OBD_OPT_REAL_CLIENT     0x0004
+#define OBD_OPT_MDS_CONNECTION  0x0008
 
 #define OBD_LLOG_FL_SENDNOW     0x0001
 #define OBD_LLOG_FL_CREATE      0x0002
@@ -635,7 +637,7 @@ struct obd_ops {
                                 void *data);
         int (*o_postrecov)(struct obd_device *dev);
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
-                         struct obd_uuid *cluuid);
+                         struct obd_uuid *cluuid, unsigned long connect_flags);
         int (*o_disconnect)(struct obd_export *exp, int flags);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,

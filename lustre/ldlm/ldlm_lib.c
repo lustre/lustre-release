@@ -219,7 +219,8 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
 
 int client_connect_import(struct lustre_handle *dlm_handle,
                           struct obd_device *obd,
-                          struct obd_uuid *cluuid)
+                          struct obd_uuid *cluuid,
+                          unsigned long connect_flags)
 {
         struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp = cli->cl_import;
@@ -250,6 +251,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
                 GOTO(out_ldlm, rc);
 
         exp->exp_connection = ptlrpc_connection_addref(imp->imp_connection);
+        imp->imp_connect_flags = connect_flags;
         rc = ptlrpc_connect_import(imp, NULL);
         if (rc != 0) {
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
@@ -363,6 +365,7 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
 
 int target_handle_connect(struct ptlrpc_request *req)
 {
+        unsigned long connect_flags = 0, *cfp;
         struct obd_device *target;
         struct obd_export *export = NULL;
         struct obd_import *revimp;
@@ -429,6 +432,10 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         memcpy(&conn, tmp, sizeof conn);
 
+        cfp = lustre_msg_buf(req->rq_reqmsg, 3, sizeof(unsigned long));
+        LASSERT(cfp != NULL);
+        connect_flags = *cfp;
+
         rc = lustre_pack_reply(req, 0, NULL, NULL);
         if (rc)
                 GOTO(out, rc);
@@ -479,8 +486,8 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         /* Tell the client if we're in recovery. */
         /* If this is the first client, start the recovery timer */
-        CWARN("%s: connection from %s@%s %s\n", target->obd_name, cluuid.uuid,
-              ptlrpc_peernid2str(&req->rq_peer, peer_str),
+        CWARN("%s: connection from %s@%s/%lu %s\n", target->obd_name, cluuid.uuid,
+              ptlrpc_peernid2str(&req->rq_peer, peer_str), *cfp,
               target->obd_recovering ? "(recovering)" : "");
         if (target->obd_recovering) {
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECOVERING);
@@ -501,7 +508,7 @@ int target_handle_connect(struct ptlrpc_request *req)
                         rc = -EBUSY;
                 } else {
  dont_check_exports:
-                        rc = obd_connect(&conn, target, &cluuid);
+                        rc = obd_connect(&conn, target, &cluuid, connect_flags);
                 }
         }
         /* Tell the client if we support replayable requests */

@@ -2870,11 +2870,12 @@ static int osc_llog_finish(struct obd_device *obd,
 
 
 static int osc_connect(struct lustre_handle *exph,
-                       struct obd_device *obd, struct obd_uuid *cluuid)
+                       struct obd_device *obd, struct obd_uuid *cluuid,
+                       unsigned long connect_flags)
 {
         int rc;
 
-        rc = client_connect_import(exph, obd, cluuid);
+        rc = client_connect_import(exph, obd, cluuid, 0);
 
         return rc;
 }

@@ -86,6 +86,7 @@ struct obd_import {
                                   imp_initial_recov:1, imp_force_verify:1,
                                   imp_pingable:1, imp_resend_replay:1;
         __u32                     imp_connect_op;
+        __u32                     imp_connect_flags;
 };
 
 typedef void (*obd_import_callback)(struct obd_import *imp, void *closure,

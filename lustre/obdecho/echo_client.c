@@ -1341,7 +1341,7 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
         INIT_LIST_HEAD (&ec->ec_objects);
         ec->ec_unique = 0;
 
-        rc = obd_connect(&conn, tgt, &echo_uuid);
+        rc = obd_connect(&conn, tgt, &echo_uuid, 0);
         if (rc) {
                 CERROR("fail to connect to device %s\n", lcfg->lcfg_inlbuf1);
                 return (rc);
@@ -1383,7 +1383,8 @@ static int echo_client_cleanup(struct obd_device *obddev, int flags)
 }
 
 static int echo_client_connect(struct lustre_handle *conn,
-                               struct obd_device *src, struct obd_uuid *cluuid)
+                               struct obd_device *src, struct obd_uuid *cluuid,
+                               unsigned long connect_flags)
 {
         struct obd_export *exp;
         int                rc;

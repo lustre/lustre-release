@@ -94,7 +94,7 @@ static int cmobd_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         /* master lov connects to master ost here */
-        rc = obd_connect(&conn, cmobd->cm_master_obd, &obd->obd_uuid); 
+        rc = obd_connect(&conn, cmobd->cm_master_obd, &obd->obd_uuid, 0); 
         if (rc)
                 RETURN(rc);
         cmobd->cm_master_exp = class_conn2export(&conn);

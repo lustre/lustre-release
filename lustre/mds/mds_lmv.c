@@ -65,7 +65,7 @@ int mds_lmv_connect(struct obd_device *obd, char * lmv_name)
                 RETURN(-ENOTCONN);
         }
 
-        rc = obd_connect(&conn, mds->mds_lmv_obd, &obd->obd_uuid);
+        rc = obd_connect(&conn, mds->mds_lmv_obd, &obd->obd_uuid, OBD_OPT_MDS_CONNECTION);
         if (rc) {
                 CERROR("MDS cannot connect to LMV %s (%d)\n",
                        lmv_name, rc);
@@ -104,7 +104,7 @@ int mds_lmv_connect(struct obd_device *obd, char * lmv_name)
                           "inter_mds", 0, NULL);
         if (rc)
                 GOTO(err_reg, rc);
-        
+
 	RETURN(0);
 
 err_reg:

@@ -171,7 +171,7 @@ int lmv_detach(struct obd_device *dev)
  * say caller that everything is okay. Real connection will be performed
  * later. */
 static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid)
+                       struct obd_uuid *cluuid, unsigned long connect_flags)
 {
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_export *exp;
@@ -194,6 +194,7 @@ static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
         }
 
         lmv->cluuid = *cluuid;
+        lmv->connect_flags = connect_flags;
         lmv->connected = 0;
         lmv->exp = exp;
 
@@ -222,7 +223,8 @@ void lmv_set_timeouts(struct obd_device *obd)
 }
 
 /* Performs a check if passed obd is connected. If no - connect it. */
-int lmv_check_connect(struct obd_device *obd) {
+int lmv_check_connect(struct obd_device *obd)
+{
         struct lmv_obd *lmv = &obd->u.lmv;
         struct obd_uuid *cluuid;
         struct lmv_tgt_desc *tgts;
@@ -271,7 +273,7 @@ int lmv_check_connect(struct obd_device *obd) {
                         GOTO(out_disc, rc = -EINVAL);
                 }
                 
-                rc = obd_connect(&conn, tgt_obd, &lmv_osc_uuid);
+                rc = obd_connect(&conn, tgt_obd, &lmv_osc_uuid, lmv->connect_flags);
                 if (rc) {
                         CERROR("Target %s connect error %d\n",
                                 tgts->uuid.uuid, rc);
@@ -1600,22 +1602,7 @@ int lmv_set_info(struct obd_export *exp, obd_count keylen,
         }
         lmv = &obd->u.lmv;
 
-        if (keylen >= strlen("client") && strcmp(key, "client") == 0) {
-                struct lmv_tgt_desc *tgts;
-                int i, rc;
-
-                rc = lmv_check_connect(obd);
-                if (rc)
-                        RETURN(rc);
-
-                for (i = 0, tgts = lmv->tgts; 
-                        i < lmv->desc.ld_tgt_count; i++, tgts++) {
-                        rc = obd_set_info(tgts->ltd_exp, keylen, key, vallen, val);
-                        if (rc)
-                                RETURN(rc);
-                }
-                RETURN(0);
-        } else if (keylen >= strlen("inter_mds") && strcmp(key, "inter_mds") == 0) {
+        if (keylen >= strlen("inter_mds") && strcmp(key, "inter_mds") == 0) {
                 lmv->server_timeout = 1;
                 lmv_set_timeouts(obd);
                 RETURN(0);

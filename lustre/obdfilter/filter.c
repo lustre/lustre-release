@@ -1522,7 +1522,7 @@ static int filter_cleanup(struct obd_device *obd, int flags)
 
 /* nearly identical to mds_connect */
 static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
-                          struct obd_uuid *cluuid)
+                          struct obd_uuid *cluuid, unsigned long connect_flags)
 {
         struct obd_export *exp;
         struct filter_export_data *fed;

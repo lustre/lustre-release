@@ -99,17 +99,11 @@ int lustre_init_ea_size(struct ll_sb_info *sbi)
         valsize = sizeof(desc);
         rc = obd_get_info(sbi->ll_osc_exp, strlen("lovdesc") + 1, "lovdesc", 
                           &valsize, &desc);
-        if (rc == 0) {
-                obd_init_ea_size(sbi->ll_mdc_exp,
-                                 obd_size_diskmd(sbi->ll_osc_exp, NULL),
-                                 desc.ld_tgt_count*sizeof(struct llog_cookie));
+        if (rc)
+                RETURN(rc);
+        obd_init_ea_size(sbi->ll_mdc_exp, obd_size_diskmd(sbi->ll_osc_exp, NULL),
+                         desc.ld_tgt_count*sizeof(struct llog_cookie));
 
-                /* declare ourself as real client. not connection
-                 * from another MDS 
-                 * FIXME: remove fake valsize, mdsize --bzzz */
-                rc = obd_set_info(sbi->ll_mdc_exp, strlen("client"),
-                                  "client", valsize, &desc);
-        }
         RETURN(rc);
 }
 #if CONFIG_SNAPFS
@@ -208,7 +202,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                         CERROR("could not register mount in /proc/lustre");
         }
 
-        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid);
+        err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid, 0);
         if (err == -EBUSY) {
                 CERROR("An MDS (mdc %s) is performing recovery, of which this"
                        " client is not a part.  Please wait for recovery to "
@@ -241,7 +235,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_mdc, err);
         }
 
-        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid);
+        err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, 0);
         if (err == -EBUSY) {
                 CERROR("An OST (osc %s) is performing recovery, of which this"
                        " client is not a part.  Please wait for recovery to "
@@ -584,7 +578,7 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
         if (err)
                 GOTO(out_cleanup, err);
 
-        err = obd_connect(&mdc_conn, obd, &mdc_uuid);
+        err = obd_connect(&mdc_conn, obd, &mdc_uuid, 0);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, err);
                 GOTO(out_cleanup, err);

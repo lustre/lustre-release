@@ -340,7 +340,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
  * on the server, etc.
  */
 static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid)
+                       struct obd_uuid *cluuid, unsigned long connect_flags)
 {
         struct obd_export *exp;
         struct mds_export_data *med; /*  */
@@ -378,8 +378,22 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         med->med_mcd = mcd;
 
         rc = mds_client_add(obd, &obd->u.mds, med, -1);
-        if (rc == 0)
-                EXIT;
+        if (rc)
+                GOTO(out, rc);
+       
+        if (!(connect_flags & OBD_OPT_MDS_CONNECTION)) {
+                struct mds_obd *mds = &obd->u.mds;
+                if (!(exp->exp_flags & OBD_OPT_REAL_CLIENT)) {
+                        atomic_inc(&mds->mds_real_clients);
+                        CDEBUG(D_OTHER,"%s: peer from %s is real client (%d)\n",
+                               obd->obd_name, exp->exp_client_uuid.uuid,
+                               atomic_read(&mds->mds_real_clients));
+                        exp->exp_flags |= OBD_OPT_REAL_CLIENT;
+                }
+                if (mds->mds_lmv_name)
+                        rc = mds_lmv_connect(obd, mds->mds_lmv_name);
+        }
+        EXIT;
 out:
         if (rc) {
                 OBD_FREE(mcd, sizeof(*mcd));
@@ -1573,19 +1587,6 @@ static int mds_set_info(struct obd_export *exp, __u32 keylen,
                 rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"), "mds_conn",
                           valsize, &group);
                 RETURN(rc);
-        } else if (KEY_IS("client")) {
-                if (!(exp->exp_flags & OBD_OPT_REAL_CLIENT)) {
-                        atomic_inc(&mds->mds_real_clients);
-                        CDEBUG(D_OTHER,"%s: peer from %s is real client (%d)\n",
-                               obd->obd_name, exp->exp_client_uuid.uuid,
-                               atomic_read(&mds->mds_real_clients));
-                        exp->exp_flags |= OBD_OPT_REAL_CLIENT;
-                }
-                if (mds->mds_lmv_name) {
-                        rc = mds_lmv_connect(obd, mds->mds_lmv_name);
-                        LASSERT(rc == 0);
-                }
-                RETURN(0);
         }
         CDEBUG(D_IOCTL, "invalid key\n");
         RETURN(-EINVAL);

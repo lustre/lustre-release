@@ -58,7 +58,7 @@ static int connect_to_obd(char *name, struct lustre_handle *conn)
                        obd->obd_name, name);
                 RETURN(-EINVAL);
         }
-        rc = obd_connect(conn, obd, &obd_uuid);
+        rc = obd_connect(conn, obd, &obd_uuid, 0);
         RETURN(rc);
 }
 
@@ -187,7 +187,7 @@ struct obd_export *cobd_get_exp(struct obd_device *obd)
 
 static int
 cobd_connect(struct lustre_handle *conn, struct obd_device *obd,
-             struct obd_uuid *cluuid)
+             struct obd_uuid *cluuid, unsigned long connect_flags)
 {
         int rc;
         rc = class_connect(conn, obd, cluuid);

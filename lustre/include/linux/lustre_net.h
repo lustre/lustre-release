@@ -710,7 +710,7 @@ void *mdc_rename_pack(struct lustre_msg *msg, int offset,
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
 int client_obd_cleanup(struct obd_device * obddev, int flags);
 int client_connect_import(struct lustre_handle *conn, struct obd_device *obd,
-                          struct obd_uuid *cluuid);
+                          struct obd_uuid *cluuid, unsigned long);
 int client_disconnect_export(struct obd_export *exp, int failover);
 
 /* ptlrpc/pinger.c */

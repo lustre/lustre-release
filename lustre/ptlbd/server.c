@@ -100,13 +100,22 @@ static int ptlbd_sv_cleanup(struct obd_device *obd, int flags)
         RETURN(0);
 }
 
+static int ptlbd_connect(struct lustre_handle *conn, struct obd_device *obd,
+                struct obd_uuid *cluuid, unsigned long connect_flags)
+{
+        int rc;
+
+        rc = class_connect(conn, obd, cluuid);
+        RETURN(rc);
+}
+
 static struct obd_ops ptlbd_sv_obd_ops = {
         .o_owner        = THIS_MODULE,
         .o_attach       = ptlbd_sv_attach,
         .o_detach       = ptlbd_sv_detach,
         .o_setup        = ptlbd_sv_setup,
         .o_cleanup      = ptlbd_sv_cleanup,
-        .o_connect      = class_connect,
+        .o_connect      = ptlbd_connect,
         .o_disconnect   = class_disconnect,
 };
 

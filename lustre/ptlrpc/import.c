@@ -235,10 +235,12 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         struct ptlrpc_request *request;
         int size[] = {sizeof(imp->imp_target_uuid),
                                  sizeof(obd->obd_uuid),
-                                 sizeof(imp->imp_dlm_handle)};
+                                 sizeof(imp->imp_dlm_handle),
+                                 sizeof(unsigned long)};
         char *tmp[] = {imp->imp_target_uuid.uuid,
                        obd->obd_uuid.uuid,
-                       (char *)&imp->imp_dlm_handle};
+                       (char *)&imp->imp_dlm_handle,
+                       (char *)&imp->imp_connect_flags}; /* XXX: make this portable! */
         struct ptlrpc_connect_async_args *aa;
         unsigned long flags;
 
@@ -306,7 +308,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 
         }
 
-        request = ptlrpc_prep_req(imp, imp->imp_connect_op, 3, size, tmp);
+        request = ptlrpc_prep_req(imp, imp->imp_connect_op, 4, size, tmp);
         if (!request)
                 GOTO(out, rc = -ENOMEM);
 
