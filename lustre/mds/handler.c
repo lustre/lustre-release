@@ -298,6 +298,10 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         list_for_each(p, &obd->obd_exports) {
                 exp = list_entry(p, struct obd_export, exp_obd_chain);
                 mcd = exp->exp_mds_data.med_mcd;
+                if (!mcd) {
+                        CERROR("FYI: NULL mcd - simultaneous connects\n");
+                        continue;
+                }
                 if (!memcmp(cluuid, mcd->mcd_uuid, sizeof(mcd->mcd_uuid))) {
                         LASSERT(exp->exp_obd == obd);
 
@@ -322,6 +326,12 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         /* XXX There is a small race between checking the list and adding a
          * new connection for the same UUID, but the real threat (list
          * corruption when multiple different clients connect) is solved.
+         *
+         * There is a second race between adding the export to the list,
+         * and filling in the client data below.  Hence skipping the case
+         * of NULL mcd above.  We should already be controlling multiple
+         * connects at the client, and we can't hold the spinlock over
+         * memory allocations without risk of deadlocking.
          */
         rc = class_connect(conn, obd, cluuid);
         if (rc)
@@ -344,11 +354,11 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         rc = mds_client_add(med, -1);
         if (rc)
-                GOTO(out_mdc, rc);
+                GOTO(out_mcd, rc);
 
         RETURN(0);
 
-out_mdc:
+out_mcd:
         OBD_FREE(mcd, sizeof(*mcd));
 out_export:
         class_disconnect(conn);
