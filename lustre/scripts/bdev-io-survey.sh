@@ -22,6 +22,9 @@ declare -a cleanup_mounts
 cur_y="0"
 # a global which funcs use to get at the blocks[] array
 last_block=-1
+# prefix to run oprofile or readprofile
+oprofile=""
+readprofile=""
 
 # defaults for some options:
 min_threads=1
@@ -598,11 +601,13 @@ test_one() {
 	done
 
 	$oprofile opcontrol --reset
+	$readprofile -r
 
 	# start all the tests.  each returns a pid to wait on
 	pids=""
 	for i in `seq 0 $last_block`; do
 		local cmd=`${test}_start $threads $iosize $wor $i`
+		echo "$cmd" >> $tmpdir/commands
 		$cmd > $tmpdir/$i 2>&1 &
 		local pid=$!
 		pids="$pids $pid"
@@ -628,11 +633,15 @@ test_one() {
 		pid_has_stopped $pid
 	done
 
+	$readprofile | sort -rn > $tmpdir/readprofile
+
 	$oprofile opcontrol --shutdown
 	$oprofile opreport > $tmpdir/oprofile
 	echo >> $tmpdir/oprofile
 	$oprofile opreport -c -l | head -20 >> $tmpdir/oprofile
+
 	save_output $tmpdir/oprofile $opref.oprofile
+	save_output $tmpdir/readprofile $opref.readprofile
 
 	# collect the results of vmstat and iostat
 	cpu=$(mean_stddev $(awk \
@@ -792,6 +801,18 @@ else
         oprofile=": "
 fi
 
+if which readprofile; then
+	map="/boot/System.map-`uname -r`"
+	if [ -f /proc/profile -a -f "$map" ]; then
+		echo generating profiles with 'readprofile'
+		readprofile="readprofile -m $map"
+	fi
+fi
+if [ -z "$readprofile" ]; then
+	echo not using readprofile
+	readprofile=": "
+fi
+
 [ $min_threads -gt $max_threads ] && \
 	die "min threads $min_threads must be <= min_threads $min_threads"
 
@@ -831,6 +852,8 @@ for t in $run_tests; do
 	fi
 	test_results="$test_results $t"
 done
+
+save_output $tmpdir/commands commands
 
 [ ! -z "$test_results" ] && (
 	echo
