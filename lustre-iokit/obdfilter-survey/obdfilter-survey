@@ -41,7 +41,7 @@ restart_rsz=
 restart_thr=1
 restart_nobj=1
 
-# machine's page size
+# machine's page size (K)
 PAGE_SIZE=64
 
 # max buffer_mem (total_threads * buffer size)
@@ -58,16 +58,23 @@ custom_remote_shell () {
     # commands. One of the following will probably work.
     ssh $host "cd $here; $cmds"
     #rsh $host "cd $here; $cmds"
-    #pdsh -w $host "cd $here; $cmds"
+    # we have to remove the leading `uname -n`: from pdsh output lines
+    #pdsh -w $host "cd $here; $cmds" | sed 's/^[^:]*://'
 }
 
 #####################################################################
 # leave the rest of this alone unless you know what you're doing...
 
+lsmod="/sbin/lsmod"
+modprobe="/sbin/modprobe"
+insmod="/sbin/insmod"
+rmmod="/sbin/rmmod"
+
 snap=1
 verify=1
 
 rsltf="${rslt}.summary"
+cmdsf="${rslt}.script"
 workf="${rslt}.detail"
 echo -n > $rsltf
 echo -n > $workf
@@ -91,23 +98,23 @@ remote_shell () {
 
 check_obdecho() {
     local host=$1
-    remote_shell $host lsmod | grep obdecho > /dev/null 2>&1
+    remote_shell $host $lsmod | grep obdecho > /dev/null 2>&1
 }
 
 load_obdecho () {
     local host=$1
     if [ -z "$lustre_root" ]; then
-	remote_shell $host modprobe obdecho
+	remote_shell $host $modprobe obdecho
     elif [ -f ${lustre_root}/obdecho/obdecho.ko ]; then
-	remote_shell $host insmod ${lustre_root}/obdecho/obdecho.ko
+	remote_shell $host $insmod ${lustre_root}/obdecho/obdecho.ko
     else
-	remote_shell $host insmod ${lustre_root}/obdecho/obdecho.o
+	remote_shell $host $insmod ${lustre_root}/obdecho/obdecho.o
     fi
 }
 
 unload_obdecho () {
     local host=$1
-    remote_shell $host rmmod obdecho
+    remote_shell $host $rmmod obdecho
 }
 
 get_devno () {
@@ -294,7 +301,7 @@ for host in ${unique_hosts[@]}; do
     fi
     load_obdecho $host
     if check_obdecho $host; then
-	do_unload_obdecho[$host]=0
+	do_unload_obdecho[$host]=1
 	continue
     fi
     echo "Can't load obdecho on $host" 1>&2
@@ -366,29 +373,29 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 	    for test in write $tests; do
 		print_summary -n "$test "
 		for host in ${unique_hosts[@]}; do
-		    echo -n > ${workf}_${host}_script
+		    echo -n > ${cmdsf}_${host}
 		done
 		for ((idx=0; idx < ndevs; idx++)); do
 		    host=${host_names[$idx]}
 		    devno=${devnos[$idx]}
 		    tmpfi="${tmpf}_$idx"
 		    first_obj=${first_objs[$idx]}
-		    echo >> ${workf}_${host}_script \
+		    echo >> ${cmdsf}_${host} \
 		        "$lctl > $tmpfi 2>&1 \\
                          --threads $thr -$snap $devno \\
 			 test_brw $count `testname2type $test` q $pages ${thr}t${first_obj} &"
 		done
 		for host in ${unique_hosts[@]}; do
-		    echo "wait" >> ${workf}_${host}_script
+		    echo "wait" >> ${cmdsf}_${host}
 		done
 		t0=`date +%s.%N`
 		for host in ${unique_hosts[@]}; do
-		    remote_shell $host bash ${workf}_${host}_script&
+		    remote_shell $host bash ${cmdsf}_${host}&
 		done
 		wait
 		t1=`date +%s.%N`
 		for host in ${unique_hosts[@]}; do
-		    rm ${workf}_${host}_script
+		    rm ${cmdsf}_${host}
 		done
 		str=`awk "BEGIN {printf \"%7.2f \",\
 		         $total_size / (( $t1 - $t0 ) * 1024)}"`
@@ -408,9 +415,9 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		rm $tmpf
 		if ((stats[0] <= 0)); then
 		    if ((stats[0] < 0)); then
-			str=`printf "%15s " ERROR`
+			str=`printf "%17s " ERROR`
 		    else
-			str=`printf "%15s " SHORT`
+			str=`printf "%17s " SHORT`
 		    fi
 		else
 		    str=`awk "BEGIN {printf \"[%7.2f,%7.2f] \",\

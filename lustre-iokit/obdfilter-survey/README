@@ -64,7 +64,11 @@ leave 'ost_names' undefined.
 You can optionally prefix any name in 'ost_names' or 'client_names' with
 the hostname that it is running on (e.g. remote_node:ost4) if your
 obdfilters or echo_clients are running on more than one node.  In this
-case, you need to ensure 'custom_remote_shell()' works on your cluster.
+case, you need to ensure...
+
+(a) 'custom_remote_shell()' works on your cluster
+(b) all pathnames you specify in the script are mounted on the node you
+    start the survey from and all the remote nodes.
 
 Use 'lctl device_list' to verify the obdfilter/echo_client instance names
 e.g...
@@ -83,9 +87,10 @@ on node 'ns9' you could simply add 'ost3' to 'ost_names'.
 When the script runs, it creates a number of working files and a pair of
 result files.  All files start with the prefix given by ${rslt}.
 
-${rslt}_<date/time>.summary       same as stdout
-${rslt}_<date/time>.detail_tmp*   tmp files
-${rslt}_<date/time>.detail        collected tmp files for post-mortem
+${rslt}.summary           same as stdout
+${rslt}.script_*          per-host test script files
+${rslt}.detail_tmp*       per-ost result files
+${rslt}.detail            collected result files for post-mortem
 
 The script iterates over the given numbers of threads and objects
 performing all the specified tests and checking that all test processes

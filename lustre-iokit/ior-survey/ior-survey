@@ -1,91 +1,67 @@
 #!/bin/bash
 
-cluster=adev
-servers=(4 7)
-server_disks=([4]=sdd [7]=sdd)
-clients=(8-15 0-1)
+# cluster name (expect all node names to be this followed by a number)
+cluster=mdev
 
-min_clients=1
-max_clients=10
+# client node numbers (individual numbers or inclusive ranges)
+clients=(7-8)
 
-per_client_size=4G
-transfer_size=1M
-tasks_per_client=1
+# numbers of clients to survey
+clients_lo=1
+clients_hi=2
+clients_iterator="+=1"
+
+# numbers of tasks per client to survey
+tasks_per_client_lo=1
+tasks_per_client_hi=16
+tasks_per_client_iterator="*=4"
+
+# record sizes to survey
+rsize_lo=1M
+rsize_hi=1M
+rsize_iterator="*=2"
+
+## which tests to run (first must be write)
+# remount)   not really a test; just remount to uncache everything
+# *write*)   write
+# *)         read
+#tests=(write rewrite read reread rewrite_again)
+tests=(write rewrite remount read)
+
+# total # bytes written/read by any client node
+min_per_client_size=75M
+min_total_size=100M
+
+# should each task do I/O to its own file?
 file_per_task=1
 
+# the IOR binary
 IOR="/home/ericb/ior/src/C/IOR"
-script="/home/ericb/eeb_ior_script"
 
-testfile=/mnt/lustre/ior_survey_testfile
+# the pdsh binary
+pdsh=pdsh
 
+# the llmount binary
+llmount=/home/ericb/lustre/utils/llmount
 
-################################################################################
-cat > $script <<EOF
-IOR START
-#                                      -f <this file>
-#   blockSize=<set from cmdline>       -b 8G
-#   transferSize=<set from cmdline>    -t 1M
-#   filePerProc=<set from cmdline>     -F
-#   testFile=<set from cmdline>        -o /mnt/lustre/ior_testfile
-#   uniqueDir=<set from cmdline>       -u
-#   verbose=<set from cmdline>         -v
-#   reorderTasks=<set from cmdline>    -C
+# where lustre is mounted on the clients
+lustre=/mnt/lustre
 
-# unused options  
-#   collective=0 (MPI only)
-#   individualDataSets=0 [not working]
-#   noFill=0 (HDF5 only)    
-#   preallocate=0 (MPI only)
-#   useSharedFilePointer=0 [not working]
-#   useFileView=<MPI only>
-#   useStridedDataType=0(MPI only)
-#   showHints=0
-#   showHelp=0
+# basename of the test file(s)
+testfile=${lustre}/ior_survey_testfile
 
-# setup
-    api=POSIX
-    fsync=1
-    repetitions=1
-    useO_DIRECT=0
-    interTestDelay=10
-    intraTestBarriers=1
-    storeFileOffset=0
-    quitOnError=1
-    segmentCount=1
-    singleXferAttempt=0
+# how to unmount and remount the F/S on a client (to clear the cache)
+remount="umount $lustre && $llmount -o nettype=elan mdev6:/ll_mds/client $lustre"
 
-# write
-    readFile=0
-    writeFile=1
-    useExistingTestFile=0
-    keepFile=1
-    RUN
+# the result file prefix (date/time + hostname makes unique)
+#rslt=/home/ericb/ior_survey_`date +%F@%R`_`uname -n`
+rslt=/home/ericb/ior_survey
 
-# rewrite
-    useExistingTestFile=1
-    RUN
-
-# read
-    readFile=1
-    writeFile=0
-    useExistingTestFile=1
-    RUN
-
-# reread (bug in ior means it needs each run needs at least 1 directive)
-    readFile=1
-    RUN
-
-# write again
-    readFile=0
-    writeFile=1
-    useExistingTestFile=1
-    keepFile=0
-    RUN
-IOR STOP
-
-EOF
+#don't spin for MPI completions
+export LIBELAN_WAITTYPE=0
 
 ################################################################################
+# dont change stuff below here
 
 count_range() {
     echo $1 | awk '{ nvals=split($1, vals, "-");\
@@ -172,22 +148,143 @@ pp_number() {
     fi
 }
 
-nservers=`countnodes ${servers[@]}`
+if [ ${#tests[@]} -eq 0 -o "${tests[0]}" != "write" ]; then
+    echo "First test must be 'write'" 1>&2
+    exit 1
+fi
+
+rsltf="${rslt}.summary"
+iorcf="${rslt}.script"
+workf="${rslt}.detail"
+tmpf="${workf}_tmp"
+
+echo -n > $rsltf
+echo -n > $workf
+
+print_summary () {
+    if [ "$1" = "-n" ]; then
+	minusn=$1; shift
+    else
+	minusn=""
+    fi
+    echo $minusn "$*" >> $rsltf
+    echo $minusn "$*"
+}
+
+min_per_client_size=`parse_number $min_per_client_size`
+min_total_size=`parse_number $min_total_size`
+
+rsize_lo=`parse_number $rsize_lo`
+rsize_hi=`parse_number $rsize_hi`
+
 nclients=`countnodes ${clients[@]}`
 
-if ((max_clients > nclients)); then max_clients=$nclients; fi
-if ((file_per_task)); then minusFopt=-F; else minusFopt=""; fi
+if ((clients_hi > nclients)); then clients_hi=$nclients; fi
 
-for ((i=min_clients - 1;i<max_clients;i++)); do
-    tc=`printf "%3d tasks, %4d clients" $tasks_per_client $((i+1))`
-    echo "=================================== $tc ================================================"
+for ((rsize=rsize_lo; rsize<=rsize_hi; rsize$rsize_iterator)); do
+    pp_rsize=`pp_number $rsize`
 
-    clients="${cluster}`n2noderange $((i+1)) ${clients[@]}`"
-    per_task_size=$((`parse_number $per_client_size`/tasks_per_client))
-    per_task_size=`pp_number $per_task_size`
+    for ((nclnt=clients_lo; nclnt<=clients_hi; nclnt$clients_iterator)); do
+	test_clients="${cluster}`n2noderange $nclnt ${clients[@]}`"
 
-    pdsh -b -Rmqsh -w "$clients" -n $tasks_per_client \
-         $IOR -b${per_task_size} -t${transfer_size} $minusFopt -o $testfile -f $script
+	per_client_size=$((min_total_size/nclnt))
+	if ((per_client_size < min_per_client_size)); then
+	    per_client_size=$min_per_client_size
+	fi
+	total_size=`pp_number $((per_client_size * nclnt))`
 
+	for ((ntask=tasks_per_client_lo; ntask <= tasks_per_client_hi; ntask$tasks_per_client_iterator)); do
+	    per_task_size=$((per_client_size/ntask))
+	    
+	    hdrstr=`printf "Total: %5sB rsize: %4s clients: %4d tasks: %3d: " $total_size $rsize $nclnt $ntask`
+	    print_summary -n "$hdrstr"
+
+	    for ((test_idx=0; test_idx < ${#tests[@]}; test_idx++)); do
+	        test=${tests[$test_idx]}
+		
+		print_summary -n "$test "
+		echo "===========> ${hdrstr} on $test_clients doing $test" >> $workf
+		echo -n > $tmpf
+
+		if [ "$test" = "remount" ]; then
+		    echo "=> $remount" >> $tmpf
+		    $pdsh -S -b -w "$test_clients" >> $tmpf 2>&1 \
+			"$remount"
+		    status=$?
+		    echo "Completion Status: $status" >> $tmpf
+
+		    if ((status)); then
+			result="ERROR"
+		    else
+			result="OK"
+		    fi
+		else
+		    cmd="(mount -t lustre; mount -t lustre_lite) | grep $lustre"
+		    echo "=> $cmd" >> $tmpf
+		    $pdsh -S -b -w "$test_clients" >> $tmpf 2>&1 \
+			"$cmd"
+		    status=$?
+		    echo "Completion Status: $status" >> $tmpf
+
+		    if ((status)); then
+			cat $tmpf >> $workf
+			rm $tmpf
+			print_summary "Lustre NOT mounted on $lustre somewhere"
+			exit 1
+		    fi
+
+		    cmdline=(
+		    $IOR                     # the command
+		    -o${testfile}            # test file prefix
+		    -b${per_task_size}       # bytes per task
+		    -t${rsize}               # record size
+		    -e                       # fsync before close
+		    -q                       # quit on error
+		    )
+
+		    idx=${#cmdline[@]}
+
+                    # keep the test file(s) unless this is the last test
+		    ((test_idx < ${#tests[@]}-1)) && cmdline[$((idx++))]="-k"
+
+		    # use the existing test file(s) unless this is the first test
+		    ((test_idx > 0)) && cmdline[$((idx++))]="-E"
+
+		    # file-per-task
+		    ((file_per_task)) && cmdline[$((idx++))]="-F"
+
+		    case "$test" in
+		    *write*) cmdline[$((idx++))]="-w"
+			     awkstr="Max Write";;
+                    *)       cmdline[$((idx++))]="-r"
+		             awkstr="Max Read";;
+                    esac
+
+		    echo "=> ${cmdline[@]}" >> $tmpf
+	
+		    $pdsh -S -b -Rmqsh -w "$test_clients" -n $ntask >> $tmpf 2>&1 \
+			"${cmdline[@]}"
+		    status=$?
+
+		    echo "Completion Status: $status" >> $tmpf
+	       
+		    if ((status)); then
+			result="ERROR"
+		    else
+			result=`awk < $tmpf "/$awkstr/ {print $ 3; found=1; exit}\
+			                     END       {if (!found) print \"ERROR\"}"`
+		    fi
+		fi
+
+		cat $tmpf >> $workf
+		rm $tmpf
+
+	        str=`printf "%8s" "$result"`
+		print_summary -n "$str "
+	    done
+	    print_summary ""
+	done
+    done
 done
 
+# rm $iorcf
