@@ -82,7 +82,8 @@ static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
 }
 
 int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
-                      struct lustre_msg *repmsg, int offset)
+                      struct lov_mds_md *lmm, int lmm_size,
+                      struct llog_cookie *logcookies, int cookies_size)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
@@ -94,14 +95,13 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
                 RETURN(PTR_ERR(mds->mds_osc_obd));
 
         rc = obd_unpackmd(mds->mds_osc_exp, &lsm,
-                          lustre_msg_buf(repmsg, offset, 0),
-                          repmsg->buflens[offset]);
+                          lmm, lmm_size);
         if (rc < 0)
                 RETURN(rc);
 
         ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
-        rc = llog_add(ctxt, NULL, lsm, lustre_msg_buf(repmsg, offset + 1, 0),
-                      repmsg->buflens[offset + 1] / sizeof(struct llog_cookie));
+        rc = llog_add(ctxt, NULL, lsm, logcookies,
+                      cookies_size / sizeof(struct llog_cookie));
 
         obd_free_memmd(mds->mds_osc_exp, &lsm);
 
@@ -123,7 +123,7 @@ int mds_llog_init(struct obd_device *obd, struct obd_device *tgt,
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
         int rc;
         ENTRY;
-        
+
         rc = llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, 0, NULL,
                         &mds_unlink_orig_logops);
         if (rc)
@@ -134,9 +134,9 @@ int mds_llog_init(struct obd_device *obd, struct obd_device *tgt,
         if (rc)
                 RETURN(rc);
 
-        rc = obd_llog_init(lov_obd, tgt, count, logid);        
-        if (rc) 
-                CERROR("error lov_llog_init\n"); 
+        rc = obd_llog_init(lov_obd, tgt, count, logid);
+        if (rc)
+                CERROR("error lov_llog_init\n");
 
         RETURN(rc);
 }
@@ -146,7 +146,7 @@ int mds_llog_finish(struct obd_device *obd, int count)
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
         int rc;
         ENTRY;
-        
+
         rc = llog_cleanup(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT));
         if (rc)
                 RETURN(rc);
@@ -155,9 +155,9 @@ int mds_llog_finish(struct obd_device *obd, int count)
         if (rc)
                 RETURN(rc);
 
-        rc = obd_llog_finish(lov_obd, count);        
-        if (rc) 
-                CERROR("error lov_llog_finish\n"); 
+        rc = obd_llog_finish(lov_obd, count);
+        if (rc)
+                CERROR("error lov_llog_finish\n");
 
         RETURN(rc);
 }
