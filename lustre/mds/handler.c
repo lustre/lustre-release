@@ -1852,10 +1852,12 @@ static int ldlm_intent_policy(struct ldlm_namespace *ns,
                  * have one reader _or_ writer ref (which will be zeroed below
                  * before returning the lock to a client.
                  */
-                if (new_lock->l_export == req->rq_export)
+                if (new_lock->l_export == req->rq_export) {
                         LASSERT(new_lock->l_readers + new_lock->l_writers == 0);
-                else
+                } else {
+                        LASSERT(new_lock->l_export == NULL);
                         LASSERT(new_lock->l_readers + new_lock->l_writers == 1);
+                }
 
                 /* If we're running an intent only, we want to abort the new
                  * lock, and let the client abort the original lock. */
@@ -1888,7 +1890,7 @@ static int ldlm_intent_policy(struct ldlm_namespace *ns,
                 new_lock->l_readers = 0;
                 new_lock->l_writers = 0;
 
-                new_lock->l_export = req->rq_export;
+                new_lock->l_export = class_export_get(req->rq_export);
                 list_add(&new_lock->l_export_chain,
                          &new_lock->l_export->exp_ldlm_data.led_held_locks);
 
