@@ -93,7 +93,8 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
 
         pg.flag = create ? OBD_BRW_CREATE : 0;
 
-        err = obd_brw(cmd, ll_i2obdconn(inode),lsm, 1, &pg, ll_sync_brw_cb, brw_cbd);
+        err = obd_brw(cmd, ll_i2obdconn(inode),lsm, 1, &pg, ll_sync_brw_cb,
+                      brw_cbd);
 
         RETURN(err);
 } /* ll_brw */
