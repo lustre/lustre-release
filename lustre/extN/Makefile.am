@@ -12,12 +12,10 @@ EXTNP = htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
 EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c
-EXTN_EXTRA = ../include/linux/xattr.h ../include/linux/extN_xattr.h \
-	../fs/extN/xattr.c ../fs/extN/hash.c ../include/linux/extN_fs.h \
-	../include/linux/extN_fs_i.h ../include/linux/extN_fs_sb.h \
-	../include/linux/extN_jbd.h
-extN_SOURCES = $(EXTNC) xattr.c # punch.c
-extN_DEPENDENCIES = patch-stamp $(EXTN_EXTRA)
+EXTNI = extN_fs.h extN_fs_i.h extN_fs_sb.h extN_jbd.h
+EXTN_EXTRA = include/linux/xattr.h include/linux/extN_xattr.h fs/extN/xattr.c fs/extN/hash.c
+extN_SOURCES = $(EXTNC) $(EXTNI) xattr.c # punch.c
+extN_DEPENDENCIES = patch-stamp
 EXTRA_DIST = $(EXTNP) extN-2.4.18-ino_sb_fixup.diff extN-2.4.18-exports.diff
 DISTCLEANFILES = $(extN_SOURCES) patch-stamp *.orig *.rej
 SUB=-e "s/ext3/extN/g" -e "s/EXT3/EXTN/g"
@@ -40,7 +38,7 @@ patch-stamp: $(EXTNP)
 	$(RM) $@
 	test -e $(top_srcdir)/fs || ln -sf . $(top_srcdir)/fs
 	set -vx;\
-	list='$(EXTN_EXTRA)'; for f in $$list; do $(RM) $(srcdir)/$$f; done
+	list='$(EXTN_EXTRA)'; for f in $$list; do $(RM) $(top_srcdir)/$$f; done
 	set -vx;\
 	list='$(EXTNC)'; for f in $$list; do                                  \
 	sed $(SUB) $(LINUX)/fs/ext3/$$f > $(top_srcdir)/fs/extN/$$f;          \
@@ -70,4 +68,7 @@ $(extN_SOURCES) $(EXTN_EXTRA): patch-stamp
 dist-hook:
 	$(RM) $(top_srcdir)/fs
 	list='$(EXTNC)'; for f in $$list; do $(RM) $(distdir)/$$f; done
-	list='$(EXTN_EXTRA)'; for f in $$list; do $(RM) $(distdir)/$$f; done
+	list='$(EXTNI)'; for i in $$list; do                                  \
+		$(RM) $(distdir)/../include/linux/$$i;                        \
+	done
+	list='$(EXTN_EXTRA)'; for f in $$list; do $(RM) $(distdir)/../$$f; done
