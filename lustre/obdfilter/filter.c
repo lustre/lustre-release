@@ -1113,8 +1113,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
                 if (tmplock->l_granted_mode == LCK_PR)
                         continue;
 
-                if (tmplock->l_policy_data.l_extent.end <=
-                    reply_lvb->lvb_size)
+                if (tmplock->l_policy_data.l_extent.end <= reply_lvb->lvb_size)
                         continue;
 
                 if (l == NULL) {

@@ -964,7 +964,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
 {
         int flags = MDS_OPEN_HAS_OBJS | FMODE_WRITE;
         struct lov_user_md  *lump;
-        int lum_size = sizeof(struct lov_user_md) + 
+        int lum_size = sizeof(struct lov_user_md) +
                        sizeof(struct lov_user_ost_data);
         int rc;
         ENTRY;
@@ -976,8 +976,7 @@ static int ll_lov_setea(struct inode *inode, struct file *file,
         if (lump == NULL) {
                 RETURN(-ENOMEM);
         }
-        rc = copy_from_user(lump, (struct lov_user_md  *)arg, 
-                            lum_size);
+        rc = copy_from_user(lump, (struct lov_user_md  *)arg, lum_size);
         if (rc) {
                 OBD_FREE(lump, lum_size);
                 RETURN(-EFAULT);
@@ -1115,7 +1114,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         case LL_IOC_LOV_SETSTRIPE:
                 RETURN(ll_lov_setstripe(inode, file, arg));
         case LL_IOC_LOV_SETEA:
-                RETURN( ll_lov_setea(inode, file, arg) ); 
+                RETURN(ll_lov_setea(inode, file, arg));
         case LL_IOC_LOV_GETSTRIPE:
                 RETURN(ll_lov_getstripe(inode, arg));
         case LL_IOC_RECREATE_OBJ:

@@ -58,9 +58,9 @@ struct lov_oinfo {                 /* per-stripe data structure */
         struct list_head loi_read_item;
 
         int loi_kms_valid:1;
-        __u64 loi_kms; /* known minimum size */
-        __u64 loi_rss; /* recently seen size */
-        __u64 loi_mtime; /* recently seen mtime */
+        __u64 loi_kms;             /* known minimum size */
+        __u64 loi_rss;             /* recently seen size */
+        __u64 loi_mtime;           /* recently seen mtime */
 };
 
 static inline void loi_init(struct lov_oinfo *loi)

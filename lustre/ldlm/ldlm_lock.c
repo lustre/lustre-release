@@ -1040,8 +1040,7 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         /* Please do not, no matter how tempting, remove this LBUG without
          * talking to me first. -phik */
         if (lock->l_readers || lock->l_writers) {
-                LDLM_DEBUG(lock, "lock still has references");
-                ldlm_lock_dump(D_OTHER, lock, 0);
+                LDLM_ERROR(lock, "lock still has references");
                 LBUG();
         }
 
@@ -1176,8 +1175,9 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
         CDEBUG(level, "  Resource: %p ("LPU64"/"LPU64")\n", lock->l_resource,
                lock->l_resource->lr_name.name[0],
                lock->l_resource->lr_name.name[1]);
-        CDEBUG(level, "  Req mode: %d, grant mode: %d, rc: %u, read: %d, "
-               "write: %d\n", (int)lock->l_req_mode, (int)lock->l_granted_mode,
+        CDEBUG(level, "  Req mode: %s, grant mode: %s, rc: %u, read: %d, "
+               "write: %d\n", ldlm_lockname[lock->l_req_mode],
+               ldlm_lockname[lock->l_granted_mode],
                atomic_read(&lock->l_refc), lock->l_readers, lock->l_writers);
         if (lock->l_resource->lr_type == LDLM_EXTENT)
                 CDEBUG(level, "  Extent: "LPU64" -> "LPU64

@@ -300,7 +300,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         rc = ll_glimpse_size(inode, &lvb);
                         if (rc) {
                                 iput(inode);
-                                RETURN(-EIO);
+                                RETURN(rc);
                         }
                         inode->i_size = lvb.lvb_size;
                 }
