@@ -176,7 +176,7 @@ int mds_open(struct mds_update_record *rec, int offset, struct ptlrpc_request *r
  out_unlock: 
         l_dput(parent);
         ldlm_lock_decref(&lockh, lock_mode);
-        if (rc && mfd)
+        if (rc && rc != -EEXIST && mfd)
                 kmem_cache_free(mds_file_cache, mfd);
         if (rc)
                 RETURN(rc);
