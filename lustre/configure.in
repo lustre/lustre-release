@@ -24,7 +24,7 @@ XML2_LIBS=$($XML2_CONFIG --libs)
 AC_SUBST(XML2_CFLAGS)
 AC_SUBST(XML2_LIBS)
 
-AC_CHECK_LIB(readline, readline)
+AC_CHECK_LIB(readline, readline,,-lncurses)
 
 # Kernel build environment.
 ac_default_prefix=
