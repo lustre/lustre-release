@@ -43,7 +43,7 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
                            &ns->ns_rpc_client);
 
         INIT_LIST_HEAD(&ns->ns_root_list);
-        ns->ns_lock = SPIN_LOCK_UNLOCKED;
+        l_lock_init(&ns->ns_lock);
         ns->ns_refcount = 0;
         ns->ns_client = client;
 
@@ -52,12 +52,12 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
                 INIT_LIST_HEAD(bucket);
         RETURN(ns);
 
- out: 
+ out:
         if (ns && ns->ns_hash)
                 vfree(ns->ns_hash);
         if (ns && ns->ns_name)
                 OBD_FREE(ns->ns_name, strlen(name) + 1);
-        if (ns) 
+        if (ns)
                 OBD_FREE(ns, sizeof(*ns));
         return NULL;
 }
@@ -73,7 +73,6 @@ static int cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
                 if (client) {
-                        spin_unlock(&res->lr_lock);
                         rc = ldlm_cli_cancel(lock->l_client, lock);
                         if (rc < 0) {
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
@@ -81,12 +80,9 @@ static int cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                         }
                         if (rc == ELDLM_RESOURCE_FREED)
                                 rc = 1;
-                        else
-                                spin_lock(&res->lr_lock);
                 } else {
                         CERROR("Freeing a lock still held by a client node.\n");
 
-                        spin_lock(&lock->l_lock);
                         ldlm_resource_del_lock(lock);
                         ldlm_lock_free(lock);
 
@@ -104,14 +100,14 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
 
         if (!ns)
                 RETURN(ELDLM_OK);
-        /* We should probably take the ns_lock, but then ldlm_resource_put
-         * couldn't take it.  Hmm. */
+
+        l_lock(&ns->ns_lock);
+
         for (i = 0; i < RES_HASH_SIZE; i++) {
                 list_for_each_safe(tmp, pos, &(ns->ns_hash[i])) {
                         struct ldlm_resource *res;
                         res = list_entry(tmp, struct ldlm_resource, lr_hash);
 
-                        spin_lock(&res->lr_lock);
                         rc = cleanup_resource(res, &res->lr_granted);
                         if (!rc)
                                 rc = cleanup_resource(res, &res->lr_converting);
@@ -130,7 +126,7 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
         }
 
         vfree(ns->ns_hash /* , sizeof(struct list_head) * RES_HASH_SIZE */);
-        ptlrpc_cleanup_client(&ns->ns_rpc_client); 
+        ptlrpc_cleanup_client(&ns->ns_rpc_client);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
         OBD_FREE(ns, sizeof(*ns));
 
@@ -167,8 +163,7 @@ static struct ldlm_resource *ldlm_resource_new(void)
         INIT_LIST_HEAD(&res->lr_converting);
         INIT_LIST_HEAD(&res->lr_waiting);
 
-        res->lr_lock = SPIN_LOCK_UNLOCKED;
-        res->lr_refcount = 1;
+        atomic_set(&res->lr_refcount, 1);
 
         return res;
 }
@@ -198,7 +193,7 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
         res->lr_namespace = ns;
         ns->ns_refcount++;
 
-        res->lr_type = type; 
+        res->lr_type = type;
         res->lr_most_restr = LCK_NL;
 
         bucket = ns->ns_hash + ldlm_hash_fn(parent, name);
@@ -232,7 +227,7 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                 RETURN(NULL);
         }
 
-        spin_lock(&ns->ns_lock);
+        l_lock(&ns->ns_lock);
         bucket = ns->ns_hash + ldlm_hash_fn(parent, name);
 
         list_for_each(tmp, bucket) {
@@ -241,9 +236,7 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
 
                 if (memcmp(chk->lr_name, name, sizeof(chk->lr_name)) == 0) {
                         res = chk;
-                        spin_lock(&res->lr_lock);
-                        res->lr_refcount++;
-                        spin_unlock(&res->lr_lock);
+                        atomic_inc(&res->lr_refcount);
                         EXIT;
                         break;
                 }
@@ -251,29 +244,31 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
 
         if (res == NULL && create)
                 res = ldlm_resource_add(ns, parent, name, type);
-        spin_unlock(&ns->ns_lock);
+        l_unlock(&ns->ns_lock);
 
         RETURN(res);
 }
 
-/* Args: locked resource
- * Locks: takes and releases res->lr_lock
- *        takes and releases ns->ns_lock iff res->lr_refcount falls to 0
- */
+struct ldlm_resource *ldlm_resource_addref(struct ldlm_resource *res)
+{
+        atomic_inc(&res->lr_refcount);
+        return res;
+}
+
+/* Returns 1 if the resource was freed, 0 if it remains. */
 int ldlm_resource_put(struct ldlm_resource *res)
 {
         int rc = 0;
 
-        if (res->lr_refcount == 1) {
+        if (atomic_dec_and_test(&res->lr_refcount)) {
                 struct ldlm_namespace *ns = res->lr_namespace;
                 ENTRY;
 
-                spin_unlock(&res->lr_lock);
-                spin_lock(&ns->ns_lock);
-                spin_lock(&res->lr_lock);
+                l_lock(&ns->ns_lock);
 
-                if (res->lr_refcount != 1) {
-                        spin_unlock(&ns->ns_lock);
+                if (atomic_read(&res->lr_refcount) != 0) {
+                        /* We lost the race. */
+                        l_unlock(&ns->ns_lock);
                         goto out;
                 }
 
@@ -295,40 +290,38 @@ int ldlm_resource_put(struct ldlm_resource *res)
                 list_del(&res->lr_childof);
 
                 kmem_cache_free(ldlm_resource_slab, res);
-                spin_unlock(&ns->ns_lock);
+                l_unlock(&ns->ns_lock);
                 rc = 1;
         } else {
                 ENTRY;
         out:
-                res->lr_refcount--;
-                if (res->lr_refcount < 0)
+                if (atomic_read(&res->lr_refcount) < 0)
                         LBUG();
         }
 
-        RETURN(rc); 
+        RETURN(rc);
 }
 
-/* Must be called with resource->lr_lock taken */
 void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock)
 {
-        ldlm_resource_dump(res); 
-        ldlm_lock_dump(lock); 
+        l_lock(&res->lr_namespace->ns_lock);
+
+        ldlm_resource_dump(res);
+        ldlm_lock_dump(lock);
+
         if (!list_empty(&lock->l_res_link))
                 LBUG();
 
         list_add(&lock->l_res_link, head);
-        res->lr_refcount++;
+        l_unlock(&res->lr_namespace->ns_lock);
 }
 
-/* Must be called with resource->lr_lock taken */
-int ldlm_resource_del_lock(struct ldlm_lock *lock)
+void ldlm_resource_del_lock(struct ldlm_lock *lock)
 {
-        if (!list_empty(&lock->l_res_link)) {
-                list_del_init(&lock->l_res_link);
-                return ldlm_resource_put(lock->l_resource);
-        }
-        return 0;
+        l_lock(&res->lr_namespace->ns_lock);
+        list_del_init(&lock->l_res_link);
+        l_unlock(&res->lr_namespace->ns_lock);
 }
 
 int ldlm_get_resource_handle(struct ldlm_resource *res, struct lustre_handle *h)
