@@ -402,6 +402,37 @@ inline int ll_stripe_md_size(struct super_block *sb)
         return mdc->cl_max_mdsize;
 }
 
+static int ll_file_size(struct inode *inode, struct lov_stripe_md *md,
+                        __u64 *size)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct lustre_handle *lockhs;
+        struct obdo oa;
+        int err, rc;
+
+        rc = ll_size_lock(inode, md, 0, LCK_PR, &lockhs);
+        if (rc != ELDLM_OK) {
+                CERROR("lock enqueue: %d\n", rc);
+                RETURN(rc);
+        }
+
+        /* FIXME: I don't like this; why doesn't osc_getattr get o_id from md
+         * like lov_getattr? --phil */
+        oa.o_id = md->lmd_object_id;
+        oa.o_mode = S_IFREG;
+        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE;
+        rc = obd_getattr(&sbi->ll_osc_conn, &oa, md);
+        if (!rc)
+                *size = oa.o_size;
+
+        err = ll_size_unlock(inode, md, LCK_PR, lockhs);
+        if (err != ELDLM_OK) {
+                CERROR("lock cancel: %d\n", err);
+                LBUG();
+        }
+        RETURN(rc);
+}
+
 static void ll_read_inode2(struct inode *inode, void *opaque)
 {
         struct ll_inode_md *md = opaque;
@@ -421,8 +452,6 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                 inode->i_mtime = body->mtime;
         if (body->valid & OBD_MD_FLCTIME)
                 inode->i_ctime = body->ctime;
-        if (body->valid & OBD_MD_FLSIZE)
-                inode->i_size = body->size;
         if (body->valid & OBD_MD_FLMODE)
                 inode->i_mode = body->mode;
         if (body->valid & OBD_MD_FLUID)
@@ -437,6 +466,20 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                 inode->i_generation = body->generation;
         if (body->valid & OBD_MD_FLRDEV)
                 inode->i_rdev = body->extra;
+        //if (body->valid & OBD_MD_FLSIZE)
+        //        inode->i_size = body->size;
+
+        /* Get the authoritative file size */
+        if (md && md->md && inode->i_mode & S_IFREG) {
+                int rc;
+                rc = ll_file_size(inode, md->md, &inode->i_size);
+                if (rc) {
+                        CERROR("ll_file_size: %d\n", rc);
+                        /* FIXME: need to somehow prevent inode creation */
+                        LBUG();
+                }
+        }
+
         //if (body->valid & OBD_MD_FLEASIZE)
         if (md && md->md && md->md->lmd_stripe_count) { 
                 struct lov_stripe_md *smd = md->md;

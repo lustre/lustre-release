@@ -134,37 +134,6 @@ int ll_unlock(__u32 mode, struct lustre_handle *lockh)
         RETURN(0);
 }
 
-static int ll_file_size(struct inode *inode, struct lov_stripe_md *md,
-                        __u64 *size)
-{
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct lustre_handle *lockhs;
-        struct obdo oa;
-        int err, rc;
-
-        rc = ll_size_lock(inode, md, 0, LCK_PR, &lockhs);
-        if (rc != ELDLM_OK) {
-                CERROR("lock enqueue: %d\n", rc);
-                RETURN(rc);
-        }
-
-        /* FIXME: I don't like this; why doesn't osc_getattr get o_id from md
-         * like lov_getattr? --phil */
-        oa.o_id = md->lmd_object_id;
-        oa.o_mode = S_IFREG;
-        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE;
-        rc = obd_getattr(&sbi->ll_osc_conn, &oa, md);
-        if (!rc)
-                *size = oa.o_size;
-
-        err = ll_size_unlock(inode, md, LCK_PR, lockhs);
-        if (err != ELDLM_OK) {
-                CERROR("lock cancel: %d\n", err);
-                LBUG();
-        }
-        RETURN(rc);
-}
-
 static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                                  struct lookup_intent *it)
 {
@@ -284,17 +253,6 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                 ptlrpc_free_req(request);
                 ll_intent_release(dentry);
                 RETURN(ERR_PTR(-ENOMEM));
-        }
-
-        /* Get the authoritative file size */
-#warning FIXME: race condition exists between iget4 and this update!
-        if ((it->it_op & IT_GETATTR) && (inode->i_mode & S_IFREG)) {
-                err = ll_file_size(inode, md.md, &inode->i_size);
-                if (err) {
-                        CERROR("ll_file_size: %d\n", err);
-                        /* FIXME: need to destroy inode here */
-                        GOTO(neg_req, err);
-                }
         }
 
         EXIT;
