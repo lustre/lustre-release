@@ -12,8 +12,8 @@ $PTLCTL <<EOF
 mynid localhost
 setup tcp
 connect $SERVER $PORT
+add_uuid $SERVER
 add_uuid self
-add_uuid ost
 quit
 EOF
 

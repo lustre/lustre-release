@@ -75,7 +75,7 @@ static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
 */
 
 struct ldlm_namespace {
-        struct obd_device    *ns_obddev;
+        struct ptlrpc_client  ns_client;
         __u32                 ns_local;     /* is this a local lock tree? */
         struct list_head     *ns_hash;      /* hash table for ns */
         __u32                 ns_refcount;  /* count of resources in the hash */
@@ -223,7 +223,7 @@ void ldlm_lock_dump(struct ldlm_lock *lock);
 int ldlm_test(struct obd_device *device, struct ptlrpc_connection *conn);
 
 /* resource.c */
-struct ldlm_namespace *ldlm_namespace_new(struct obd_device *, __u32 local);
+struct ldlm_namespace *ldlm_namespace_new(__u32 local);
 int ldlm_namespace_free(struct ldlm_namespace *ns);
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,

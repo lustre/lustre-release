@@ -42,11 +42,12 @@ struct ll_inode_info {
 #define LL_COMMITCBD_RUNNING   0x4
 
 struct ll_sb_info {
-        struct obd_conn           ll_conn;
+        struct obd_conn           ll_mdc_conn;
+        struct obd_conn           ll_osc_conn;
         ino_t                     ll_rootino; /* number of root inode */
-        struct ptlrpc_client      ll_mds_client;
-        struct ptlrpc_connection *ll_mds_conn;
-        struct ldlm_namespace    *ll_namespace;
+
+        struct ldlm_namespace    *ll_mds_namespace;
+        struct ldlm_namespace    *ll_ost_namespace;
 
         wait_queue_head_t         ll_commitcbd_waitq;
         wait_queue_head_t         ll_commitcbd_ctl_waitq;
@@ -65,7 +66,13 @@ static inline struct ll_sb_info *ll_s2sbi(struct super_block *sb)
 
 static inline struct obd_conn *ll_s2obdconn(struct super_block *sb)
 {
-        return &(ll_s2sbi(sb))->ll_conn;
+        return &(ll_s2sbi(sb))->ll_osc_conn;
+}
+
+static inline struct mdc_obd *sbi2mdc(struct ll_sb_info *sbi)
+{
+        struct obd_device *obd = sbi->ll_mdc_conn.oc_dev;
+        return &obd->u.mdc;
 }
 
 static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
