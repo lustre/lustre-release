@@ -85,7 +85,7 @@ static int smfs_create(struct inode *dir,
 	if (!inode) 
 		GOTO(exit, rc);		
 	
-	sm_setup_inode_ops(cache_inode, inode);
+	sm_set_inode_ops(cache_inode, inode);
 exit:
 	d_unalloc(cache_dentry);	
 	RETURN(rc);

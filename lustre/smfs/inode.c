@@ -36,7 +36,7 @@ static void smfs_read_inode(struct inode *inode)
 	CDEBUG(D_INODE, "read_inode ino %lu icount %d \n", 
 	       inode->i_ino, atomic_read(&inode->i_count));
 
-	sm_setup_inode_ops(cache_inode, inode);
+	sm_set_inode_ops(cache_inode, inode);
 	
 	CDEBUG(D_INODE, "read_inode ino %lu icount %d \n", 
 	       inode->i_ino, atomic_read(&inode->i_count));
@@ -61,9 +61,11 @@ static void smfs_clear_inode(struct inode *inode)
 	clear_inode(cache_inode);
 	return;	
 }
-struct super_operations currentfs_super_ops = {
+
+struct super_operations smfs_super_ops = {
 	read_inode:	smfs_read_inode,
 	clear_inode:	smfs_clear_inode,
+	put_super:	smfs_put_super,
 };
 
 

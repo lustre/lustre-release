@@ -46,16 +46,21 @@ struct option {
 	char *value;
 	struct list_head list;
 };
+
+extern int init_smfs_proc_sys(void);
 /*options.c*/
 extern int get_opt(struct option **option, char **pos);
 extern void cleanup_option(void);
 extern int init_option(char *data);
 /*cache.c*/
-void sm_setup_inode_ops(struct inode *cache_inode, struct inode *inode);
+void sm_set_inode_ops(struct inode *cache_inode, struct inode *inode);
 void sm_set_sb_ops(struct super_block *cache_sb, struct super_block *sb);
 void init_smfs_cache(void);
 void cleanup_smfs_cache(void);
-
+/*super.c*/
+int init_smfs(void);
+int cleanup_smfs(void);
+void smfs_put_super(struct super_block *sb);
 /*sysctl.c*/
 extern int sm_debug_level;
 extern int sm_inodes;

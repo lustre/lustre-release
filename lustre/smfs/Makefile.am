@@ -10,7 +10,7 @@ MODULE = smfs
 modulefs_DATA = smfs.o
 EXTRA_PROGRAMS = smfs
 
-smfs_SOURCES = super.c options.c inode.c cache.c dir.c 
-
+smfs_SOURCES = super.c options.c inode.c cache.c dir.c  
+smfs_SOURCES += sysctl.c file.c symlink.c sm_fs.c
 
 include $(top_srcdir)/Rules

@@ -8,14 +8,18 @@
  *
  *  Author: Peter J. Braam <braam@mountainviewdata.com>
  */
-#define DEBUG_SUBSYSTEM S_SNAP
+#define DEBUG_SUBSYSTEM S_SM
 
+#include <linux/config.h>
 #include <linux/module.h>
 #include <linux/kmod.h>
 #include <linux/init.h>
 #include <linux/fs.h>
-#include <linux/slab.h>
 #include <linux/string.h>
+#include <linux/mm.h>
+#include <linux/utime.h>
+#include <linux/file.h>
+#include <linux/slab.h>
 #include <linux/loop.h>
 #include <linux/errno.h>
 #include "smfs_internal.h" 
@@ -56,6 +60,19 @@ static int get_fd(struct file *filp)
 	write_unlock(&files->file_lock);
 	RETURN(-1);
 }
+static int close_fd(int fd)
+{
+	struct files_struct *files = current->files;	
+        
+	write_lock(&files->file_lock);
+       
+	files->fd[fd] = NULL;
+        __put_unused_fd(files, fd); 
+	
+	write_unlock(&files->file_lock);
+	return 0;
+}
+
 #define MAX_LOOP_DEVICES	256
 static char *parse_path2dev(struct super_block *sb, char *dev_path)
 {
@@ -66,22 +83,48 @@ static char *parse_path2dev(struct super_block *sb, char *dev_path)
 	filp = filp_open(dev_path, 0, 0);
 	if (!filp) 
 		RETURN(NULL);
-
 	if (S_ISREG(filp->f_dentry->d_inode->i_mode)) {
 		/*here we must walk through all the snap cache to 
 		 *find the loop device */
+		
+		fd = get_unused_fd();
+		if (!fd) RETURN(NULL);
+
+		fd_install(fd, filp);		
+		SM_ALLOC(name, strlen("/dev/loop/") + 2);
+	
 		for (i = 0; i < MAX_LOOP_DEVICES; i++) {
 			fd = get_fd(filp);
-			error = sb->s_bdev->bd_op->ioctl(filp->f_dentry->d_inode, 
-						 filp, LOOP_SET_FD,
-                                                 (unsigned long)&fd);
-			if (!error) {
-				filp_close(filp, current->files); 
-				/*FIXME later, the loop file should 
+			if (fd > 0) {
+				struct block_device_operations *bd_ops;
+				struct dentry *dentry;
+				struct nameidata nd;
+                                /*FIXME later, the loop file should 
 			         *be different for different system*/
-				SM_ALLOC(name, strlen("/dev/loop/") + 2);
-				sprintf(name, "dev/loop/%d", i);
-				RETURN(name);	 				
+                                                                                                                                                             
+				sprintf(name, "/dev/loop/%d", i);
+        		
+				if (path_init(name, LOOKUP_FOLLOW, &nd)) {
+                			error = path_walk(name, &nd);
+                			if (error) {
+						path_release(&nd);
+                        			SM_FREE(name, sizeof(name) + 1); 
+						RETURN(NULL);
+					}
+        			} else {
+                        		SM_FREE(name, sizeof(name) + 1); 
+                			RETURN(NULL);
+                                }                                                                                                                                                                    
+				dentry = nd.dentry;
+				bd_ops = get_blkfops(LOOP_MAJOR); 
+				error = bd_ops->ioctl(dentry->d_inode, 
+						      filp, LOOP_SET_FD,
+                                                      (unsigned long)fd);
+				path_release(&nd);
+				if (!error) {
+					filp_close(filp, current->files); 
+					RETURN(name);	 				
+				}
 			}
 		}
 	}
@@ -128,6 +171,19 @@ err_out:
 		SM_FREE(dev_name, strlen(dev_name) + 2);
 		
 	return err;	
+}
+static int sm_umount_cache(struct super_block *sb)
+{
+	struct smfs_super_info *smb = S2SMI(sb);
+	
+	mntput(smb->smsi_mnt);
+	return 0;
+}
+void smfs_put_super(struct super_block *sb)
+{
+	if (sb)
+		sm_umount_cache(sb);
+	return; 
 }
 
 struct super_block *

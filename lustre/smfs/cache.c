@@ -18,6 +18,7 @@ extern struct file_operations  smfs_file_fops;
 extern struct address_space_operations smfs_file_aops;
 extern struct inode_operations smfs_sym_iops; 
 extern struct file_operations smfs_sym_fops;
+extern struct super_operations smfs_super_ops;
 
 inline struct super_operations *cache_sops(struct sm_ops *smfs_ops)
 {
@@ -70,7 +71,7 @@ void init_smfs_cache()
 }
 void cleanup_smfs_cache()
 {
-
+	return;
 }
 
 static void setup_sm_symlink_ops(struct inode *cache_inode, 
@@ -169,7 +170,7 @@ static void setup_sm_file_ops(struct inode *cache_inode,
 		if (cache_inode->i_op->getxattr)
 			iops->getxattr = cache_iops->getxattr;
 		if (cache_inode->i_op->listxattr)
-			iops->setxattr = cache_iops->setxattr;
+			iops->listxattr = cache_iops->listxattr;
 		if (cache_inode->i_op->removexattr)
 			iops->removexattr = cache_iops->removexattr;
 	}
@@ -181,14 +182,71 @@ static void setup_sm_file_ops(struct inode *cache_inode,
 	}
 	return;
 }
-void sm_setup_inode_ops(struct inode *cache_inode, struct inode *inode)
+
+static void setup_sm_sb_ops(struct super_block *cache_sb, 
+			    struct super_block *sb, 
+			    struct super_operations *smfs_sops)	
+{
+	struct smfs_super_info *smb;
+        struct super_operations *sops;
+
+	ENTRY;
+
+	smb = S2SMI(sb); 
+	
+	if (smb->ops_check & SB_OPS_CHECK) 
+		return; 
+	smb->ops_check |= SB_OPS_CHECK;
+	sops = cache_sops(&smfs_operations);
+	memset(sops, 0, sizeof (struct super_operations));	
+
+	if (cache_sb->s_op) {
+		if (cache_sb->s_op->read_inode) 
+			sops->read_inode = smfs_sops->read_inode;
+		if (cache_sb->s_op->read_inode2)
+			sops->read_inode2 = smfs_sops->read_inode2;
+		if (cache_sb->s_op->dirty_inode)
+			sops->dirty_inode = smfs_sops->dirty_inode;
+		if (cache_sb->s_op->write_inode)
+			sops->write_inode = smfs_sops->write_inode;
+		if (cache_sb->s_op->put_inode)
+			sops->put_inode = smfs_sops->put_inode;
+		if (cache_sb->s_op->delete_inode)
+			sops->delete_inode = smfs_sops->delete_inode;
+		if (cache_sb->s_op->put_super)
+			sops->put_super = smfs_sops->put_super;
+		if (cache_sb->s_op->write_super)
+			sops->write_super = smfs_sops->write_super;
+		if (cache_sb->s_op->write_super_lockfs)
+			sops->write_super_lockfs = smfs_sops->write_super_lockfs;
+		if (cache_sb->s_op->unlockfs)
+			sops->unlockfs = smfs_sops->unlockfs;
+		if (cache_sb->s_op->statfs)
+			sops->statfs = smfs_sops->statfs;
+		if (cache_sb->s_op->remount_fs)
+			sops->remount_fs = smfs_sops->remount_fs;
+		if (cache_sb->s_op->clear_inode)
+			sops->clear_inode = smfs_sops->clear_inode;
+		if (cache_sb->s_op->umount_begin)
+			sops->umount_begin = smfs_sops->umount_begin;
+		if (cache_sb->s_op->fh_to_dentry)
+			sops->fh_to_dentry = smfs_sops->fh_to_dentry;
+		if (cache_sb->s_op->dentry_to_fh)
+			sops->dentry_to_fh = smfs_sops->dentry_to_fh;
+		if (cache_sb->s_op->show_options)
+			sops->show_options = smfs_sops->show_options;
+	}
+						
+	return;
+}	
+void sm_set_inode_ops(struct inode *cache_inode, struct inode *inode)
 {
         /* XXX now set the correct snap_{file,dir,sym}_iops */
         if (S_ISDIR(inode->i_mode)) {
                 inode->i_op = cache_diops(&smfs_operations);
                 inode->i_fop = cache_dfops(&smfs_operations);
         } else if (S_ISREG(inode->i_mode)) {
-                if (!cache_fiops(&smfs_operations) ) {
+                if (!cache_fiops(&smfs_operations)) {
 		        setup_sm_file_ops(cache_inode, inode,
                                               &smfs_file_iops,
                                               &smfs_file_fops,
@@ -212,5 +270,21 @@ void sm_setup_inode_ops(struct inode *cache_inode, struct inode *inode)
                 CDEBUG(D_INODE, "inode %lu, i_op at %p\n",
                        inode->i_ino, inode->i_op);
         }
+}
+void sm_set_sb_ops (struct super_block *cache_sb,
+		      struct super_block *sb)
+{
+	struct smfs_super_info *smb;
+
+	smb = S2SMI(sb); 
+	
+	if (smb->ops_check & SB_OPS_CHECK) 
+		return; 
+	smb->ops_check |= SB_OPS_CHECK;
+	if (!cache_sops(&smfs_operations)) {
+		setup_sm_sb_ops(cache_sb, sb, &smfs_super_ops);	
+	}
+	sb->s_op = cache_sops(&smfs_operations);
+	return;	
 }
 
