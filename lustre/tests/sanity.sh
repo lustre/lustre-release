@@ -648,9 +648,7 @@ test_25a() {
 run_test 25a "create file in symlinked directory ==============="
 
 test_25b() {
-	if [ ! -d $DIR/d25 ]; then
-		run_one	25a
-	fi
+	[ ! -d $DIR/d25 ] && test_25a
 	$CHECKSTAT -t file $DIR/s25/foo || error
 }
 run_test 25b "lookup file in symlinked directory ==============="
@@ -687,9 +685,7 @@ test_26d() {
 run_test 26d "create multiple component recursive symlink ======"
 
 test_26e() {
-	if [ ! -h $DIR/d26-3 ]; then
-		run_one 26d
-	fi
+	[ ! -h $DIR/d26-3 ] && test_26d
 	rm $DIR/d26-3
 }
 run_test 26e "unlink multiple component recursive symlink ======"
@@ -1098,92 +1094,91 @@ run_test 33a "test open file(mode=0444) with O_RDWR (should return error)"
 
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
-	rm -f $DIR/test_34_file
-	$MCREATE $DIR/test_34_file || error
-	$LFIND $DIR/test_34_file 2>&1 | grep -q "no stripe info" || error
-	$TRUNCATE $DIR/test_34_file $TEST_34_SIZE || error
-	$LFIND $DIR/test_34_file 2>&1 | grep -q "no stripe info" || error
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
+	rm -f $DIR/f34
+	$MCREATE $DIR/f34 || error
+	$LFIND $DIR/f34 2>&1 | grep -q "no stripe info" || error
+	$TRUNCATE $DIR/f34 $TEST_34_SIZE || error
+	$LFIND $DIR/f34 2>&1 | grep -q "no stripe info" || error
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 }
 run_test 34a "truncate file that has not been opened ==========="
 
 test_34b() {
-	[ ! -f $DIR/test_34_file ] && run_one 34a
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
-	$OPENFILE -f O_RDONLY $DIR/test_34_file
-	$LFIND $DIR/test_34_file 2>&1 | grep -q "no stripe info" || error
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
+	[ ! -f $DIR/f34 ] && test_34a
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
+	$OPENFILE -f O_RDONLY $DIR/f34
+	$LFIND $DIR/f34 2>&1 | grep -q "no stripe info" || error
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 }
 run_test 34b "O_RDONLY opening file doesn't create objects ====="
 
 test_34c() {
-	[ ! -f $DIR/test_34_file ] && run_one 34a 
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
-	$OPENFILE -f O_RDWR $DIR/test_34_file
-	$LFIND $DIR/test_34_file 2>&1 | grep -q "no stripe info" && error
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
+	[ ! -f $DIR/f34 ] && test_34a 
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
+	$OPENFILE -f O_RDWR $DIR/f34
+	$LFIND $DIR/f34 2>&1 | grep -q "no stripe info" && error
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
 }
 run_test 34c "O_RDWR opening file-with-size works =============="
 
 test_34d() {
-	dd if=/dev/zero of=$DIR/test_34_file conv=notrunc bs=4k count=1 || error
-	$CHECKSTAT -s $TEST_34_SIZE $DIR/test_34_file || error
-	rm $DIR/test_34_file
+	dd if=/dev/zero of=$DIR/f34 conv=notrunc bs=4k count=1 || error
+	$CHECKSTAT -s $TEST_34_SIZE $DIR/f34 || error
+	rm $DIR/f34
 }
 run_test 34d "write to sparse file ============================="
 
 test_34e() {
-	rm -f $DIR/test_34_file
-	$MCREATE $DIR/test_34_file || error
-	$TRUNCATE $DIR/test_34_file 1000 || error
-	$CHECKSTAT -s 1000 $DIR/test_34_file || error
-	$OPENFILE -f O_RDWR $DIR/test_34_file
-	$CHECKSTAT -s 1000 $DIR/test_34_file || error
+	rm -f $DIR/f34e
+	$MCREATE $DIR/f34e || error
+	$TRUNCATE $DIR/f34e 1000 || error
+	$CHECKSTAT -s 1000 $DIR/f34e || error
+	$OPENFILE -f O_RDWR $DIR/f34e
+	$CHECKSTAT -s 1000 $DIR/f34e || error
 }
 run_test 34e "create objects, some with size and some without =="
 
 test_35a() {
-	cp /bin/sh $DIR/test_35a_file
-	chmod 444 $DIR/test_35a_file
-	chown $RUNAS_ID $DIR/test_35a_file
-	$RUNAS $DIR/test_35a_file && error || true
-	rm $DIR/test_35a_file
+	cp /bin/sh $DIR/f35a
+	chmod 444 $DIR/f35a
+	chown $RUNAS_ID $DIR/f35a
+	$RUNAS $DIR/f35a && error || true
+	rm $DIR/f35a
 }
 run_test 35a "exec file with mode 444 (should return and not leak) ====="
 
-
 test_36a() {
-	rm -f $DIR/test_36_file
-	utime $DIR/test_36_file || error
+	rm -f $DIR/f36
+	utime $DIR/f36 || error
 }
 run_test 36a "MDS utime check (mknod, utime) ==================="
 
 test_36b() {
-	echo "" > $DIR/test_36_file
-	utime $DIR/test_36_file || error
+	echo "" > $DIR/f36
+	utime $DIR/f36 || error
 }
 run_test 36b "OST utime check (open, utime) ===================="
 
 test_36c() {
-	rm -f $DIR/d36/test_36_file
+	rm -f $DIR/d36/f36
 	mkdir $DIR/d36
 	chown $RUNAS_ID $DIR/d36
-	$RUNAS utime $DIR/d36/test_36_file || error
+	$RUNAS utime $DIR/d36/f36 || error
 }
 run_test 36c "non-root MDS utime check (mknod, utime) =========="
 
 test_36d() {
-	[ ! -d $DIR/d36 ] && run_one 36c
-	echo "" > $DIR/d36/test_36_file
-	$RUNAS utime $DIR/d36/test_36_file || error
+	[ ! -d $DIR/d36 ] && test_36c
+	echo "" > $DIR/d36/f36
+	$RUNAS utime $DIR/d36/f36 || error
 }
 run_test 36d "non-root OST utime check (open, utime) ==========="
 
 test_36e() {
 	[ $RUNAS_ID -eq $UID ] && return
 	[ ! -d $DIR/d36 ] && mkdir $DIR/d36
-	touch $DIR/d36/test_36_file2
-	$RUNAS utime $DIR/d36/test_36_file2 && error || true
+	touch $DIR/d36/f36e
+	$RUNAS utime $DIR/d36/f36e && error "utime worked, want failure" || true
 }
 run_test 36e "utime on non-owned file (should return error) ===="
 
@@ -1247,6 +1242,7 @@ stop_kupdated() {
 # ensure that all stripes have some grant before we test client-side cache
 for i in `seq -f $DIR/f42-%g 1 $STRIPECOUNT`; do
 	dd if=/dev/zero of=$i bs=4k count=1
+	rm $i
 done
 
 # Tests 42* verify that our behaviour is correct WRT caching, file closure,
@@ -1256,6 +1252,7 @@ test_42a() {
 	stop_kupdated
 	sync; sleep 1; sync # just to be safe
 	BEFOREWRITES=`count_ost_writes`
+	grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/cur_grant_bytes
 	dd if=/dev/zero of=$DIR/f42a bs=1024 count=100
 	AFTERWRITES=`count_ost_writes`
 	[ $BEFOREWRITES -eq $AFTERWRITES ] || \
@@ -1781,14 +1778,14 @@ test_99a() {
 run_test 99a "cvs init ========================================="
 
 test_99b() {
-	[ ! -d $DIR/d99cvsroot ] && run_one 99a
+	[ ! -d $DIR/d99cvsroot ] && test_99a
 	cd /etc/init.d
 	$RUNAS cvs -d $DIR/d99cvsroot import -m "nomesg" d99reposname vtag rtag
 }
 run_test 99b "cvs import ======================================="
 
 test_99c() {
-	[ ! -d $DIR/d99cvsroot ] && run_one 99b
+	[ ! -d $DIR/d99cvsroot ] && test_99b
 	cd $DIR
 	mkdir -p $DIR/d99reposname
 	chown $RUNAS_ID $DIR/d99reposname
@@ -1797,7 +1794,7 @@ test_99c() {
 run_test 99c "cvs checkout ====================================="
 
 test_99d() {
-	[ ! -d $DIR/d99cvsroot ] && run_one 99c
+	[ ! -d $DIR/d99cvsroot ] && test_99c
 	cd $DIR/d99reposname
 	$RUNAS touch foo99
 	$RUNAS cvs add -m 'addmsg' foo99
@@ -1805,14 +1802,14 @@ test_99d() {
 run_test 99d "cvs add =========================================="
 
 test_99e() {
-	[ ! -d $DIR/d99cvsroot ] && run_one 99c
+	[ ! -d $DIR/d99cvsroot ] && test_99c
 	cd $DIR/d99reposname
 	$RUNAS cvs update
 }
 run_test 99e "cvs update ======================================="
 
 test_99f() {
-	[ ! -d $DIR/d99cvsroot ] && run_one 99d
+	[ ! -d $DIR/d99cvsroot ] && test_99d
 	cd $DIR/d99reposname
 	$RUNAS cvs commit -m 'nomsg' foo99
 }
