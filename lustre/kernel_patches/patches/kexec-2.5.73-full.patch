@@ -2,51 +2,50 @@
 # Project Name: Linux kernel tree
 # This patch format is intended for GNU patch command version 2.5 or higher.
 # This patch includes the following deltas:
-#	           ChangeSet	1.1230  -> 1.1234 
-#	arch/i386/kernel/apm.c	1.50    -> 1.51   
-#	arch/i386/kernel/smp.c	1.30    -> 1.31   
-#	        kernel/sys.c	1.43    -> 1.45   
-#	   arch/i386/Kconfig	1.56    -> 1.57   
-#	arch/i386/kernel/Makefile	1.39    -> 1.40   
-#	     kernel/Makefile	1.27    -> 1.28   
-#	arch/i386/kernel/entry.S	1.61    -> 1.62   
-#	arch/i386/kernel/reboot.c	1.7     -> 1.8    
-#	arch/i386/kernel/io_apic.c	1.64    -> 1.65   
-#	include/asm-i386/mach-default/mach_reboot.h	1.1     -> 1.2    
-#	arch/i386/kernel/dmi_scan.c	1.32    -> 1.33   
-#	         MAINTAINERS	1.136   -> 1.137  
-#	include/asm-i386/unistd.h	1.24    -> 1.25   
+#	           ChangeSet	1.1376  -> 1.1380 
+#	arch/i386/kernel/smp.c	1.32    -> 1.33   
+#	        kernel/sys.c	1.47    -> 1.48   
+#	   arch/i386/Kconfig	1.62    -> 1.63   
+#	arch/i386/kernel/Makefile	1.44    -> 1.45   
+#	     kernel/Makefile	1.28    -> 1.29   
+#	arch/i386/kernel/entry.S	1.64    -> 1.65   
+#	arch/i386/kernel/reboot.c	1.8     -> 1.9    
+#	arch/i386/kernel/io_apic.c	1.71    -> 1.72   
+#	arch/i386/kernel/dmi_scan.c	1.36    -> 1.37   
+#	            fs/aio.c	1.32    -> 1.33   
+#	include/asm-i386/apicdef.h	1.8     -> 1.9    
+#	         MAINTAINERS	1.149   -> 1.150  
+#	include/asm-i386/unistd.h	1.26    -> 1.27   
 #	 arch/i386/defconfig	1.96    -> 1.97   
-#	arch/i386/kernel/i8259.c	1.22    -> 1.23   
-#	      kernel/panic.c	1.10    -> 1.11   
-#	include/asm-i386/apic.h	1.11    -> 1.12   
-#	arch/i386/kernel/apic.c	1.37    -> 1.38   
-#	include/linux/reboot.h	1.3     -> 1.5    
-#	               (new)	        -> 1.1     arch/i386/kernel/machine_kexec.c
-#	               (new)	        -> 1.1     arch/i386/kernel/relocate_kernel.S
+#	arch/i386/kernel/i8259.c	1.25    -> 1.26   
+#	include/asm-i386/apic.h	1.13    -> 1.14   
+#	arch/i386/kernel/apic.c	1.42    -> 1.43   
+#	include/linux/reboot.h	1.4     -> 1.5    
 #	               (new)	        -> 1.1     include/linux/kexec.h
 #	               (new)	        -> 1.1     include/asm-i386/kexec.h
 #	               (new)	        -> 1.1     kernel/kexec.c 
+#	               (new)	        -> 1.1     arch/i386/kernel/relocate_kernel.S
+#	               (new)	        -> 1.1     arch/i386/kernel/machine_kexec.c
 #
 # The following is the BitKeeper ChangeSet Log
 # --------------------------------------------
-# 03/05/13	andyp@andyp.pdx.osdl.net	1.1231
-# linux-2.5.69.i8259_shutdown.diff
+# 03/06/23	andyp@andyp.pdx.osdl.net	1.1377
+# kexec2-2.5.73-common.patch
 # --------------------------------------------
-# 03/05/13	andyp@andyp.pdx.osdl.net	1.1232
-# linux-2.5.69.reboot_on_bsp.diff
+# 03/06/23	andyp@andyp.pdx.osdl.net	1.1378
+# kexec2-2.5.73-x86.patch
 # --------------------------------------------
-# 03/05/13	andyp@andyp.pdx.osdl.net	1.1233
-# linux-2.5.69.hwfixes-x86kexec.diff
+# 03/06/23	andyp@andyp.pdx.osdl.net	1.1379
+# kexec2-2.5.73-syscall.patch
 # --------------------------------------------
-# 03/05/13	andyp@andyp.pdx.osdl.net	1.1234
-# kexec2-2.5.69-defconfig.patch
+# 03/06/23	andyp@andyp.pdx.osdl.net	1.1380
+# kexec2-2.5.73-defconfig.patch
 # --------------------------------------------
 #
 diff -Nru a/MAINTAINERS b/MAINTAINERS
---- a/MAINTAINERS	Tue May 13 14:04:18 2003
-+++ b/MAINTAINERS	Tue May 13 14:04:18 2003
-@@ -1062,6 +1062,14 @@
+--- a/MAINTAINERS	Mon Jun 23 12:22:26 2003
++++ b/MAINTAINERS	Mon Jun 23 12:22:26 2003
+@@ -1067,6 +1067,17 @@
  W:	http://www.cse.unsw.edu.au/~neilb/patches/linux-devel/
  S:	Maintained
  
@@ -55,6 +54,9 @@ diff -Nru a/MAINTAINERS b/MAINTAINERS
 +M:	ebiederm@xmission.com
 +M:	ebiederman@lnxi.com
 +W:	http://www.xmission.com/~ebiederm/files/kexec/
++P:	Andy Pfiffer
++M:	andyp@osdl.org
++W:	http://www.osdl.org/archive/andyp/bloom/Code/Linux/Kexec/
 +L:	linux-kernel@vger.kernel.org
 +S:	Maintained
 +
@@ -62,10 +64,10 @@ diff -Nru a/MAINTAINERS b/MAINTAINERS
  P:	Andrew Stanley-Jones
  M:	asj@lanmedia.com
 diff -Nru a/arch/i386/Kconfig b/arch/i386/Kconfig
---- a/arch/i386/Kconfig	Tue May 13 14:04:18 2003
-+++ b/arch/i386/Kconfig	Tue May 13 14:04:18 2003
-@@ -767,6 +767,23 @@
- 	depends on (X86_SUMMIT && NUMA)
+--- a/arch/i386/Kconfig	Mon Jun 23 12:22:26 2003
++++ b/arch/i386/Kconfig	Mon Jun 23 12:22:26 2003
+@@ -794,6 +794,23 @@
+ 	depends on ((X86_SUMMIT || X86_GENERICARCH) && NUMA)
  	default y
  
 +config KEXEC
@@ -89,8 +91,8 @@ diff -Nru a/arch/i386/Kconfig b/arch/i386/Kconfig
  
  
 diff -Nru a/arch/i386/defconfig b/arch/i386/defconfig
---- a/arch/i386/defconfig	Tue May 13 14:04:18 2003
-+++ b/arch/i386/defconfig	Tue May 13 14:04:18 2003
+--- a/arch/i386/defconfig	Mon Jun 23 12:22:26 2003
++++ b/arch/i386/defconfig	Mon Jun 23 12:22:26 2003
 @@ -72,6 +72,7 @@
  CONFIG_X86_LOCAL_APIC=y
  CONFIG_X86_IO_APIC=y
@@ -100,125 +102,98 @@ diff -Nru a/arch/i386/defconfig b/arch/i386/defconfig
  # CONFIG_X86_MCE_NONFATAL is not set
  CONFIG_X86_MCE_P4THERMAL=y
 diff -Nru a/arch/i386/kernel/Makefile b/arch/i386/kernel/Makefile
---- a/arch/i386/kernel/Makefile	Tue May 13 14:04:18 2003
-+++ b/arch/i386/kernel/Makefile	Tue May 13 14:04:18 2003
-@@ -23,6 +23,7 @@
+--- a/arch/i386/kernel/Makefile	Mon Jun 23 12:22:26 2003
++++ b/arch/i386/kernel/Makefile	Mon Jun 23 12:22:26 2003
+@@ -24,6 +24,7 @@
  obj-$(CONFIG_X86_MPPARSE)	+= mpparse.o
  obj-$(CONFIG_X86_LOCAL_APIC)	+= apic.o nmi.o
  obj-$(CONFIG_X86_IO_APIC)	+= io_apic.o
 +obj-$(CONFIG_KEXEC)		+= machine_kexec.o relocate_kernel.o
  obj-$(CONFIG_SOFTWARE_SUSPEND)	+= suspend.o suspend_asm.o
  obj-$(CONFIG_X86_NUMAQ)		+= numaq.o
- obj-$(CONFIG_EDD)             	+= edd.o
+ obj-$(CONFIG_X86_SUMMIT)	+= summit.o
 diff -Nru a/arch/i386/kernel/apic.c b/arch/i386/kernel/apic.c
---- a/arch/i386/kernel/apic.c	Tue May 13 14:04:18 2003
-+++ b/arch/i386/kernel/apic.c	Tue May 13 14:04:18 2003
-@@ -25,6 +25,7 @@
- #include <linux/interrupt.h>
+--- a/arch/i386/kernel/apic.c	Mon Jun 23 12:22:26 2003
++++ b/arch/i386/kernel/apic.c	Mon Jun 23 12:22:26 2003
+@@ -26,6 +26,7 @@
  #include <linux/mc146818rtc.h>
  #include <linux/kernel_stat.h>
+ #include <linux/sysdev.h>
 +#include <linux/reboot.h>
  
  #include <asm/atomic.h>
  #include <asm/smp.h>
-@@ -37,6 +38,7 @@
- #include <mach_apic.h>
+@@ -175,6 +176,39 @@
+ 		outb(0x70, 0x22);
+ 		outb(0x00, 0x23);
+ 	}
++#ifdef 	CONFIG_KEXEC
++	else {
++		/* Go back to Virtual Wire compatibility mode */
++		unsigned long value;
++
++		/* For the spurious interrupt use vector F, and enable it */
++		value = apic_read(APIC_SPIV);
++		value &= ~APIC_VECTOR_MASK; 
++		value |= APIC_SPIV_APIC_ENABLED;
++		value |= 0xf;
++		apic_write_around(APIC_SPIV, value);
++
++		/* For LVT0 make it edge triggered, active high, external and enabled */
++		value = apic_read(APIC_LVT0);
++		value &= ~(APIC_MODE_MASK | APIC_SEND_PENDING | 
++			APIC_INPUT_POLARITY | APIC_LVT_REMOTE_IRR | 
++			APIC_LVT_LEVEL_TRIGGER | APIC_LVT_MASKED );
++		value |= APIC_LVT_REMOTE_IRR | APIC_SEND_PENDING;
++		value = SET_APIC_DELIVERY_MODE(value, APIC_MODE_EXINT);
++		apic_write_around(APIC_LVT0, value);
++		
++		/* For LVT1 make it edge triggered, active high, nmi and enabled */
++		value = apic_read(APIC_LVT1);
++		value &= ~(
++			APIC_MODE_MASK | APIC_SEND_PENDING | 
++			APIC_INPUT_POLARITY | APIC_LVT_REMOTE_IRR | 
++			APIC_LVT_LEVEL_TRIGGER | APIC_LVT_MASKED);
++		value |= APIC_LVT_REMOTE_IRR | APIC_SEND_PENDING;
++		value = SET_APIC_DELIVERY_MODE(value, APIC_MODE_NMI);
++		apic_write_around(APIC_LVT1, value);
++	}
++#endif	/* CONFIG_KEXEC */
++
+ }
  
- #include "io_ports.h"
-+#include "mach_reboot.h"
- 
- void __init apic_intr_init(void)
- {
-@@ -1144,6 +1146,64 @@
+ void disable_local_APIC(void)
+@@ -1113,6 +1147,26 @@
  	printk (KERN_INFO "APIC error on CPU%d: %02lx(%02lx)\n",
  	        smp_processor_id(), v , v1);
  	irq_exit();
 +}
 +
-+
-+struct stop_apics {
-+	NORET_TYPE void (*rest)(void *info) ATTRIB_NORET;
-+	void *info;
-+	int reboot_cpu_id;
-+};
-+
-+static void cpu_stop_apics(void *ptr)
++void stop_apics(void)
 +{
-+	struct stop_apics *arg = ptr;
-+	if (smp_processor_id() != arg->reboot_cpu_id) {
-+		local_irq_disable();
-+		disable_local_APIC();
-+		stop_this_cpu();
-+	}
-+	local_irq_disable();
++	/* By resetting the APIC's we disable the nmi watchdog */
++#if CONFIG_SMP
++	/*
++	 * Stop all CPUs and turn off local APICs and the IO-APIC, so
++	 * other OSs see a clean IRQ state.
++	 */
++	smp_send_stop();
++#else
 +	disable_local_APIC();
-+	local_irq_enable();
-+
++#endif
 +#if defined(CONFIG_X86_IO_APIC)
 +	if (smp_found_config) {
 +		disable_IO_APIC();
 +	}
 +#endif
 +	disconnect_bsp_APIC();
-+	arg->rest(arg->info);
-+}
-+
-+void stop_apics(NORET_TYPE void(*rest)(void *)ATTRIB_NORET, void *info)
-+{
-+	/* By resetting the APIC's we disable the nmi watchdog */
-+	extern int reboot_cpu;
-+	struct stop_apics arg;
-+	
-+ 	/* The boot cpu is always logical cpu 0 */
-+	arg.rest = rest;
-+	arg.info = info;
-+	arg.reboot_cpu_id = 0;
-+	
-+	/* See if there has been give a command line override .
-+	 */
-+	if ((reboot_cpu != -1) && cpu_possible(reboot_cpu)) {
-+		arg.reboot_cpu_id = reboot_cpu;
-+	}
-+
-+	/* Make certain the the cpu I'm rebooting on is online */
-+	if (!cpu_online(arg.reboot_cpu_id)) {
-+		arg.reboot_cpu_id = smp_processor_id();
-+	}
-+	/* If we aren't in interrupt context use the scheduler,
-+	 * so rest will not be called in an interrupt context either.
-+	 */
-+	if (!in_interrupt()) {
-+		set_cpus_allowed(current, 1 << arg.reboot_cpu_id);
-+	}
-+	on_each_cpu(cpu_stop_apics, &arg, 1, 0);
  }
  
  /*
-diff -Nru a/arch/i386/kernel/apm.c b/arch/i386/kernel/apm.c
---- a/arch/i386/kernel/apm.c	Tue May 13 14:04:18 2003
-+++ b/arch/i386/kernel/apm.c	Tue May 13 14:04:18 2003
-@@ -911,17 +911,8 @@
- 	/*
- 	 * This may be called on an SMP machine.
- 	 */
--#ifdef CONFIG_SMP
--	/* Some bioses don't like being called from CPU != 0 */
--	if (smp_processor_id() != 0) {
--		set_cpus_allowed(current, 1 << 0);
--		if (unlikely(smp_processor_id() != 0))
--			BUG();
--	}
--#endif
- 	if (apm_info.realmode_power_off)
- 	{
--		(void)apm_save_cpus();
- 		machine_real_restart(po_bios_call, sizeof(po_bios_call));
- 	}
- 	else
 diff -Nru a/arch/i386/kernel/dmi_scan.c b/arch/i386/kernel/dmi_scan.c
---- a/arch/i386/kernel/dmi_scan.c	Tue May 13 14:04:18 2003
-+++ b/arch/i386/kernel/dmi_scan.c	Tue May 13 14:04:18 2003
-@@ -220,31 +220,6 @@
+--- a/arch/i386/kernel/dmi_scan.c	Mon Jun 23 12:22:26 2003
++++ b/arch/i386/kernel/dmi_scan.c	Mon Jun 23 12:22:26 2003
+@@ -222,31 +222,6 @@
  	return 0;
  }
  
@@ -250,7 +225,7 @@ diff -Nru a/arch/i386/kernel/dmi_scan.c b/arch/i386/kernel/dmi_scan.c
  
  /*
   * Some bioses have a broken protected mode poweroff and need to use realmode
-@@ -554,7 +529,7 @@
+@@ -527,7 +502,7 @@
  			MATCH(DMI_BIOS_VERSION, "4.60 PGMA"),
  			MATCH(DMI_BIOS_DATE, "134526184"), NO_MATCH
  			} },
@@ -260,45 +235,44 @@ diff -Nru a/arch/i386/kernel/dmi_scan.c b/arch/i386/kernel/dmi_scan.c
  			MATCH(DMI_PRODUCT_NAME, "PowerEdge 1300/"),
  			NO_MATCH, NO_MATCH
 diff -Nru a/arch/i386/kernel/entry.S b/arch/i386/kernel/entry.S
---- a/arch/i386/kernel/entry.S	Tue May 13 14:04:18 2003
-+++ b/arch/i386/kernel/entry.S	Tue May 13 14:04:18 2003
-@@ -852,6 +852,7 @@
-  	.long sys_clock_gettime		/* 265 */
-  	.long sys_clock_getres
+--- a/arch/i386/kernel/entry.S	Mon Jun 23 12:22:26 2003
++++ b/arch/i386/kernel/entry.S	Mon Jun 23 12:22:26 2003
+@@ -876,5 +876,6 @@
   	.long sys_clock_nanosleep
-+	.long sys_kexec_load
-  
+ 	.long sys_statfs64
+ 	.long sys_fstatfs64	
++	.long sys_kexec_load		/* 270 */
   
  nr_syscalls=(.-sys_call_table)/4
 diff -Nru a/arch/i386/kernel/i8259.c b/arch/i386/kernel/i8259.c
---- a/arch/i386/kernel/i8259.c	Tue May 13 14:04:18 2003
-+++ b/arch/i386/kernel/i8259.c	Tue May 13 14:04:18 2003
-@@ -245,10 +245,21 @@
+--- a/arch/i386/kernel/i8259.c	Mon Jun 23 12:22:26 2003
++++ b/arch/i386/kernel/i8259.c	Mon Jun 23 12:22:26 2003
+@@ -244,9 +244,21 @@
  	return 0;
  }
  
-+static void i8259A_shutdown(struct device *dev)
-+{   
++static int i8259A_shutdown(struct sys_device *dev)
++{
 +	/* Put the i8259A into a quiescent state that
 +	 * the kernel initialization code can get it
 +	 * out of.
 +	 */
 +	outb(0xff, 0x21);	/* mask all of 8259A-1 */
 +	outb(0xff, 0xA1);	/* mask all of 8259A-1 */
++	return 0;
 +}
 +
- static struct device_driver i8259A_driver = {
- 	.name		= "pic",
- 	.bus		= &system_bus_type,
- 	.resume		= i8259A_resume,
-+	.shutdown	= i8259A_shutdown,
+ static struct sysdev_class i8259_sysdev_class = {
+ 	set_kset_name("i8259"),
+ 	.resume = i8259A_resume,
++	.shutdown = i8259A_shutdown,
  };
  
  static struct sys_device device_i8259A = {
 diff -Nru a/arch/i386/kernel/io_apic.c b/arch/i386/kernel/io_apic.c
---- a/arch/i386/kernel/io_apic.c	Tue May 13 14:04:18 2003
-+++ b/arch/i386/kernel/io_apic.c	Tue May 13 14:04:18 2003
-@@ -1545,8 +1545,6 @@
+--- a/arch/i386/kernel/io_apic.c	Mon Jun 23 12:22:26 2003
++++ b/arch/i386/kernel/io_apic.c	Mon Jun 23 12:22:26 2003
+@@ -1562,8 +1562,6 @@
  	 * Clear the IO-APIC before rebooting:
  	 */
  	clear_IO_APIC();
@@ -309,8 +283,8 @@ diff -Nru a/arch/i386/kernel/io_apic.c b/arch/i386/kernel/io_apic.c
  /*
 diff -Nru a/arch/i386/kernel/machine_kexec.c b/arch/i386/kernel/machine_kexec.c
 --- /dev/null	Wed Dec 31 16:00:00 1969
-+++ b/arch/i386/kernel/machine_kexec.c	Tue May 13 14:04:18 2003
-@@ -0,0 +1,129 @@
++++ b/arch/i386/kernel/machine_kexec.c	Mon Jun 23 12:22:26 2003
+@@ -0,0 +1,116 @@
 +#include <linux/config.h>
 +#include <linux/mm.h>
 +#include <linux/kexec.h>
@@ -384,25 +358,17 @@ diff -Nru a/arch/i386/kernel/machine_kexec.c b/arch/i386/kernel/machine_kexec.c
 +const extern unsigned char relocate_new_kernel[];
 +extern void relocate_new_kernel_end(void);
 +const extern unsigned int relocate_new_kernel_size;
++extern void use_mm(struct mm_struct *mm);
 +
-+void machine_kexec_1(void *ptr)
++void machine_kexec(struct kimage *image)
 +{
-+	struct kimage *image = ptr;
 +	unsigned long indirection_page;
 +	unsigned long reboot_code_buffer;
 +	relocate_new_kernel_t rnk;
-+	struct mm_struct *active_mm, *mm;
 +
 +	/* switch to an mm where the reboot_code_buffer is identity mapped */
-+	active_mm = current->active_mm;
-+	mm = &init_mm;
-+	atomic_inc(&mm->mm_count);
-+	current->mm = mm;
-+	if (mm != active_mm) {
-+		current->active_mm = mm;
-+		activate_mm(active_mm, mm);
-+	}
-+	mmdrop(active_mm);
++	use_mm(&init_mm);
++	stop_apics();
 +
 +	/* Interrupts aren't acceptable while we reboot */
 +	local_irq_disable();
@@ -435,14 +401,9 @@ diff -Nru a/arch/i386/kernel/machine_kexec.c b/arch/i386/kernel/machine_kexec.c
 +	rnk = (relocate_new_kernel_t) reboot_code_buffer;
 +	(*rnk)(indirection_page, reboot_code_buffer, image->start);
 +}
-+
-+void machine_kexec(struct kimage *image)
-+{
-+	stop_apics(machine_kexec_1, image);
-+}
 diff -Nru a/arch/i386/kernel/reboot.c b/arch/i386/kernel/reboot.c
---- a/arch/i386/kernel/reboot.c	Tue May 13 14:04:18 2003
-+++ b/arch/i386/kernel/reboot.c	Tue May 13 14:04:18 2003
+--- a/arch/i386/kernel/reboot.c	Mon Jun 23 12:22:26 2003
++++ b/arch/i386/kernel/reboot.c	Mon Jun 23 12:22:26 2003
 @@ -8,6 +8,7 @@
  #include <linux/interrupt.h>
  #include <linux/mc146818rtc.h>
@@ -451,18 +412,17 @@ diff -Nru a/arch/i386/kernel/reboot.c b/arch/i386/kernel/reboot.c
  #include "mach_reboot.h"
  
  /*
-@@ -19,9 +20,8 @@
- static int reboot_mode;
+@@ -20,8 +21,7 @@
  int reboot_thru_bios;
  
-+int reboot_cpu = -1;	  /* specifies the internal linux cpu id, not the apicid */
  #ifdef CONFIG_SMP
 -int reboot_smp = 0;
 -static int reboot_cpu = -1;
++int reboot_cpu = -1;	  /* specifies the internal linux cpu id, not the apicid */
  /* shamelessly grabbed from lib/vsprintf.c for readability */
  #define is_digit(c)	((c) >= '0' && (c) <= '9')
  #endif
-@@ -43,12 +43,14 @@
+@@ -43,7 +43,6 @@
  			break;
  #ifdef CONFIG_SMP
  		case 's': /* "smp" reboot by executing reset on BSP or other CPU*/
@@ -470,43 +430,11 @@ diff -Nru a/arch/i386/kernel/reboot.c b/arch/i386/kernel/reboot.c
  			if (is_digit(*(str+1))) {
  				reboot_cpu = (int) (*(str+1) - '0');
  				if (is_digit(*(str+2))) 
- 					reboot_cpu = reboot_cpu*10 + (int)(*(str+2) - '0');
- 			}
-+			if ((reboot_cpu < -1) || (reboot_cpu >= NR_CPUS)) {
-+				reboot_cpu = -1;
-+			}
- 				/* we will leave sorting out the final value 
- 				when we are ready to reboot, since we might not
-  				have set up boot_cpu_id or smp_num_cpu */
-@@ -65,6 +67,20 @@
+@@ -215,42 +214,7 @@
  
- __setup("reboot=", reboot_setup);
- 
-+
-+void stop_this_cpu(void)
-+{
-+	/*
-+	 * Remove this CPU:
-+	 */
-+#if CONFIG_SMP
-+	clear_bit(smp_processor_id(), &cpu_online_map);
-+#endif
-+	if (cpu_data[smp_processor_id()].hlt_works_ok)
-+		for(;;) __asm__("hlt");
-+	for (;;);
-+}
-+
- /* The following code and data reboots the machine by switching to real
-    mode and jumping to the BIOS reset entry point, as if the CPU has
-    really been reset.  The previous version asked the keyboard
-@@ -213,45 +229,8 @@
- 				: "i" ((void *) (0x1000 - sizeof (real_mode_switch) - 100)));
- }
- 
--void machine_restart(char * __unused)
-+static void machine_restart_1(void * __unused)
+ void machine_restart(char * __unused)
  {
--#if CONFIG_SMP
+-#ifdef CONFIG_SMP
 -	int cpuid;
 -	
 -	cpuid = GET_APIC_ID(apic_read(APIC_ID));
@@ -542,43 +470,26 @@ diff -Nru a/arch/i386/kernel/reboot.c b/arch/i386/kernel/reboot.c
 -	smp_send_stop();
 -	disable_IO_APIC();
 -#endif
--
++	stop_apics();
+ 
  	if(!reboot_thru_bios) {
  		/* rebooting needs to touch the page at absolute addr 0 */
- 		*((unsigned short *)__va(0x472)) = reboot_mode;
-@@ -265,14 +244,27 @@
+@@ -268,10 +232,12 @@
  
- 	machine_real_restart(jump_to_bios, sizeof(jump_to_bios));
- }
-+void machine_restart(char * __unused)
-+{
-+	stop_apics(machine_restart_1, 0);
-+}
- 
-+static void machine_halt_1(void * __unused)
-+{
-+	stop_this_cpu();
-+}
  void machine_halt(void)
  {
-+	stop_apics(machine_halt_1, 0);
++	stop_apics();
  }
  
--void machine_power_off(void)
-+static void machine_power_off_1(void * __unused)
+ void machine_power_off(void)
  {
++	stop_apics();
  	if (pm_power_off)
  		pm_power_off();
-+	stop_this_cpu();
-+}
-+void machine_power_off(void)
-+{
-+	stop_apics(machine_power_off_1, 0);
  }
--
 diff -Nru a/arch/i386/kernel/relocate_kernel.S b/arch/i386/kernel/relocate_kernel.S
 --- /dev/null	Wed Dec 31 16:00:00 1969
-+++ b/arch/i386/kernel/relocate_kernel.S	Tue May 13 14:04:18 2003
++++ b/arch/i386/kernel/relocate_kernel.S	Mon Jun 23 12:22:26 2003
 @@ -0,0 +1,107 @@
 +#include <linux/config.h>
 +#include <linux/linkage.h>
@@ -688,74 +599,78 @@ diff -Nru a/arch/i386/kernel/relocate_kernel.S b/arch/i386/kernel/relocate_kerne
 +relocate_new_kernel_size:	
 +	.long relocate_new_kernel_end - relocate_new_kernel
 diff -Nru a/arch/i386/kernel/smp.c b/arch/i386/kernel/smp.c
---- a/arch/i386/kernel/smp.c	Tue May 13 14:04:18 2003
-+++ b/arch/i386/kernel/smp.c	Tue May 13 14:04:18 2003
-@@ -539,32 +539,6 @@
- 	return 0;
+--- a/arch/i386/kernel/smp.c	Mon Jun 23 12:22:26 2003
++++ b/arch/i386/kernel/smp.c	Mon Jun 23 12:22:26 2003
+@@ -547,6 +547,30 @@
+ 
+ void smp_send_stop(void)
+ {
++ 	extern int reboot_cpu;
++	int reboot_cpu_id;
++
++ 	/* The boot cpu is always logical cpu 0 */
++	reboot_cpu_id = 0;
++
++	/* See if there has been give a command line override .
++	 */
++	if ((reboot_cpu != -1) && !(reboot_cpu >= NR_CPUS) && 
++		test_bit(reboot_cpu, &cpu_online_map)) {
++		reboot_cpu_id = reboot_cpu;
++	}
++	 
++	/* Make certain the the cpu I'm rebooting on is online */
++	if (!test_bit(reboot_cpu_id, &cpu_online_map)) {
++		reboot_cpu_id = smp_processor_id();
++	}
++
++	/* Make certain I only run on the appropriate processor */
++	set_cpus_allowed(current, 1 << reboot_cpu_id);
++
++	/* O.k. Now that I'm on the appropriate processor stop
++	 * all of the others.
++	 */
+ 	smp_call_function(stop_this_cpu, NULL, 1, 0);
+ 
+ 	local_irq_disable();
+diff -Nru a/fs/aio.c b/fs/aio.c
+--- a/fs/aio.c	Mon Jun 23 12:22:26 2003
++++ b/fs/aio.c	Mon Jun 23 12:22:26 2003
+@@ -536,7 +536,7 @@
+ 	return ioctx;
  }
  
--static void stop_this_cpu (void * dummy)
--{
--	/*
--	 * Remove this CPU:
--	 */
--	clear_bit(smp_processor_id(), &cpu_online_map);
--	local_irq_disable();
--	disable_local_APIC();
--	if (cpu_data[smp_processor_id()].hlt_works_ok)
--		for(;;) __asm__("hlt");
--	for (;;);
--}
--
--/*
-- * this function calls the 'stop' function on all other CPUs in the system.
-- */
--
--void smp_send_stop(void)
--{
--	smp_call_function(stop_this_cpu, NULL, 1, 0);
--
--	local_irq_disable();
--	disable_local_APIC();
--	local_irq_enable();
--}
--
- /*
-  * Reschedule call back. Nothing to do,
-  * all the work is done automatically when
+-static void use_mm(struct mm_struct *mm)
++void use_mm(struct mm_struct *mm)
+ {
+ 	struct mm_struct *active_mm = current->active_mm;
+ 	atomic_inc(&mm->mm_count);
 diff -Nru a/include/asm-i386/apic.h b/include/asm-i386/apic.h
---- a/include/asm-i386/apic.h	Tue May 13 14:04:18 2003
-+++ b/include/asm-i386/apic.h	Tue May 13 14:04:18 2003
-@@ -3,6 +3,7 @@
- 
- #include <linux/config.h>
- #include <linux/pm.h>
-+#include <linux/linkage.h>
- #include <asm/fixmap.h>
- #include <asm/apicdef.h>
- #include <asm/system.h>
-@@ -99,6 +100,18 @@
+--- a/include/asm-i386/apic.h	Mon Jun 23 12:22:26 2003
++++ b/include/asm-i386/apic.h	Mon Jun 23 12:22:26 2003
+@@ -97,6 +97,9 @@
  #define NMI_LOCAL_APIC	2
  #define NMI_INVALID	3
  
-+extern NORET_TYPE void 
-+stop_apics(NORET_TYPE void (*rest)(void *info) ATTRIB_NORET, void *info) 
-+ATTRIB_NORET;
++extern void stop_apics(void);
 +#else
-+static inline NORET_TYPE void 
-+stop_apics(NORET_TYPE void (*rest)(void *info) ATTRIB_NORET, void *info)
-+ATTRIB_NORET;
-+static inline void 
-+stop_apics(NORET_TYPE void (*rest)(void *info) ATTRIB_NORET, void *info)
-+{
-+	rest(info); 
-+}
++static inline void stop_apics(void) { }
  #endif /* CONFIG_X86_LOCAL_APIC */
  
  #endif /* __ASM_APIC_H */
+diff -Nru a/include/asm-i386/apicdef.h b/include/asm-i386/apicdef.h
+--- a/include/asm-i386/apicdef.h	Mon Jun 23 12:22:26 2003
++++ b/include/asm-i386/apicdef.h	Mon Jun 23 12:22:26 2003
+@@ -86,6 +86,7 @@
+ #define			APIC_LVT_REMOTE_IRR		(1<<14)
+ #define			APIC_INPUT_POLARITY		(1<<13)
+ #define			APIC_SEND_PENDING		(1<<12)
++#define			APIC_MODE_MASK			0x700
+ #define			GET_APIC_DELIVERY_MODE(x)	(((x)>>8)&0x7)
+ #define			SET_APIC_DELIVERY_MODE(x,y)	(((x)&~0x700)|((y)<<8))
+ #define				APIC_MODE_FIXED		0x0
 diff -Nru a/include/asm-i386/kexec.h b/include/asm-i386/kexec.h
 --- /dev/null	Wed Dec 31 16:00:00 1969
-+++ b/include/asm-i386/kexec.h	Tue May 13 14:04:18 2003
++++ b/include/asm-i386/kexec.h	Mon Jun 23 12:22:26 2003
 @@ -0,0 +1,23 @@
 +#ifndef _I386_KEXEC_H
 +#define _I386_KEXEC_H
@@ -780,33 +695,23 @@ diff -Nru a/include/asm-i386/kexec.h b/include/asm-i386/kexec.h
 +#define KEXEC_REBOOT_CODE_SIZE	4096
 +
 +#endif /* _I386_KEXEC_H */
-diff -Nru a/include/asm-i386/mach-default/mach_reboot.h b/include/asm-i386/mach-default/mach_reboot.h
---- a/include/asm-i386/mach-default/mach_reboot.h	Tue May 13 14:04:18 2003
-+++ b/include/asm-i386/mach-default/mach_reboot.h	Tue May 13 14:04:18 2003
-@@ -27,4 +27,6 @@
- 	}
- }
- 
-+void stop_this_cpu(void);
-+
- #endif /* !_MACH_REBOOT_H */
 diff -Nru a/include/asm-i386/unistd.h b/include/asm-i386/unistd.h
---- a/include/asm-i386/unistd.h	Tue May 13 14:04:18 2003
-+++ b/include/asm-i386/unistd.h	Tue May 13 14:04:18 2003
-@@ -273,8 +273,9 @@
- #define __NR_clock_gettime	(__NR_timer_create+6)
- #define __NR_clock_getres	(__NR_timer_create+7)
+--- a/include/asm-i386/unistd.h	Mon Jun 23 12:22:26 2003
++++ b/include/asm-i386/unistd.h	Mon Jun 23 12:22:26 2003
+@@ -275,8 +275,9 @@
  #define __NR_clock_nanosleep	(__NR_timer_create+8)
-+#define __NR_sys_kexec_load	268
+ #define __NR_statfs64		268
+ #define __NR_fstatfs64		269
++#define __NR_sys_kexec_load	270
  
--#define NR_syscalls 268
-+#define NR_syscalls 269
+-#define NR_syscalls 270
++#define NR_syscalls 271
  
  /* user-visible error numbers are in the range -1 - -124: see <asm-i386/errno.h> */
  
 diff -Nru a/include/linux/kexec.h b/include/linux/kexec.h
 --- /dev/null	Wed Dec 31 16:00:00 1969
-+++ b/include/linux/kexec.h	Tue May 13 14:04:18 2003
++++ b/include/linux/kexec.h	Mon Jun 23 12:22:26 2003
 @@ -0,0 +1,54 @@
 +#ifndef LINUX_KEXEC_H
 +#define LINUX_KEXEC_H
@@ -863,9 +768,9 @@ diff -Nru a/include/linux/kexec.h b/include/linux/kexec.h
 +#endif /* LINUX_KEXEC_H */
 +
 diff -Nru a/include/linux/reboot.h b/include/linux/reboot.h
---- a/include/linux/reboot.h	Tue May 13 14:04:18 2003
-+++ b/include/linux/reboot.h	Tue May 13 14:04:18 2003
-@@ -21,6 +21,7 @@
+--- a/include/linux/reboot.h	Mon Jun 23 12:22:26 2003
++++ b/include/linux/reboot.h	Mon Jun 23 12:22:26 2003
+@@ -22,6 +22,7 @@
   * POWER_OFF   Stop OS and remove all power from system, if possible.
   * RESTART2    Restart system using given command string.
   * SW_SUSPEND  Suspend system using Software Suspend if compiled in
@@ -873,7 +778,7 @@ diff -Nru a/include/linux/reboot.h b/include/linux/reboot.h
   */
  
  #define	LINUX_REBOOT_CMD_RESTART	0x01234567
-@@ -30,11 +31,13 @@
+@@ -31,6 +32,7 @@
  #define	LINUX_REBOOT_CMD_POWER_OFF	0x4321FEDC
  #define	LINUX_REBOOT_CMD_RESTART2	0xA1B2C3D4
  #define	LINUX_REBOOT_CMD_SW_SUSPEND	0xD000FCE2
@@ -881,29 +786,10 @@ diff -Nru a/include/linux/reboot.h b/include/linux/reboot.h
  
  
  #ifdef __KERNEL__
- 
- #include <linux/notifier.h>
-+#include <linux/linkage.h>
- 
- extern int register_reboot_notifier(struct notifier_block *);
- extern int unregister_reboot_notifier(struct notifier_block *);
-@@ -44,9 +47,9 @@
-  * Architecture-specific implementations of sys_reboot commands.
-  */
- 
--extern void machine_restart(char *cmd);
--extern void machine_halt(void);
--extern void machine_power_off(void);
-+NORET_TYPE void machine_restart(char *cmd) ATTRIB_NORET;
-+NORET_TYPE void machine_halt(void) ATTRIB_NORET;
-+NORET_TYPE void machine_power_off(void) ATTRIB_NORET;
- 
- #endif
- 
 diff -Nru a/kernel/Makefile b/kernel/Makefile
---- a/kernel/Makefile	Tue May 13 14:04:18 2003
-+++ b/kernel/Makefile	Tue May 13 14:04:18 2003
-@@ -17,6 +17,7 @@
+--- a/kernel/Makefile	Mon Jun 23 12:22:26 2003
++++ b/kernel/Makefile	Mon Jun 23 12:22:26 2003
+@@ -18,6 +18,7 @@
  obj-$(CONFIG_CPU_FREQ) += cpufreq.o
  obj-$(CONFIG_BSD_PROCESS_ACCT) += acct.o
  obj-$(CONFIG_SOFTWARE_SUSPEND) += suspend.o
@@ -913,7 +799,7 @@ diff -Nru a/kernel/Makefile b/kernel/Makefile
  ifneq ($(CONFIG_IA64),y)
 diff -Nru a/kernel/kexec.c b/kernel/kexec.c
 --- /dev/null	Wed Dec 31 16:00:00 1969
-+++ b/kernel/kexec.c	Tue May 13 14:04:18 2003
++++ b/kernel/kexec.c	Mon Jun 23 12:22:26 2003
 @@ -0,0 +1,629 @@
 +#include <linux/mm.h>
 +#include <linux/file.h>
@@ -1544,21 +1430,9 @@ diff -Nru a/kernel/kexec.c b/kernel/kexec.c
 +	kimage_free(image);
 +	return result;
 +}
-diff -Nru a/kernel/panic.c b/kernel/panic.c
---- a/kernel/panic.c	Tue May 13 14:04:18 2003
-+++ b/kernel/panic.c	Tue May 13 14:04:18 2003
-@@ -63,7 +63,7 @@
- 		sys_sync();
- 	bust_spinlocks(0);
- 
--#ifdef CONFIG_SMP
-+#if defined(CONFIG_SMP) && !defined(__i386__)
- 	smp_send_stop();
- #endif
- 
 diff -Nru a/kernel/sys.c b/kernel/sys.c
---- a/kernel/sys.c	Tue May 13 14:04:18 2003
-+++ b/kernel/sys.c	Tue May 13 14:04:18 2003
+--- a/kernel/sys.c	Mon Jun 23 12:22:26 2003
++++ b/kernel/sys.c	Mon Jun 23 12:22:26 2003
 @@ -16,6 +16,7 @@
  #include <linux/init.h>
  #include <linux/highuid.h>
@@ -1575,25 +1449,7 @@ diff -Nru a/kernel/sys.c b/kernel/sys.c
  cond_syscall(sys_init_module)
  cond_syscall(sys_delete_module)
  cond_syscall(sys_socketpair)
-@@ -415,8 +417,6 @@
- 		device_shutdown();
- 		printk(KERN_EMERG "System halted.\n");
- 		machine_halt();
--		unlock_kernel();
--		do_exit(0);
- 		break;
- 
- 	case LINUX_REBOOT_CMD_POWER_OFF:
-@@ -425,8 +425,6 @@
- 		device_shutdown();
- 		printk(KERN_EMERG "Power down.\n");
- 		machine_power_off();
--		unlock_kernel();
--		do_exit(0);
- 		break;
- 
- 	case LINUX_REBOOT_CMD_RESTART2:
-@@ -443,6 +441,27 @@
+@@ -450,6 +452,27 @@
  		machine_restart(buffer);
  		break;
  

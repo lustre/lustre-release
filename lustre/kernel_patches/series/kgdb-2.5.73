@@ -1,5 +1,6 @@
 lkcd-cvs-2.5.69.patch
 lkcd-kernel-changes-2.5.73.patch
+kexec-2.5.73-full.patch
 kgdb-ga-2.5.73.patch
 kgdb-use-ggdb-2.5.73.patch
 kgdb-ga-docco-fixes-2.5.73.patch
