@@ -253,11 +253,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         }
 
         LASSERT(sbi->ll_rootino != 0);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        root = iget4(sb, sbi->ll_rootino, NULL, &md);
-#else
         root = ll_iget(sb, sbi->ll_rootino, &md);
-#endif
 
         ptlrpc_req_finished(request);
 
@@ -309,12 +305,8 @@ out_free:
 void ll_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         struct obd_device *obd = class_conn2obd(&sbi->ll_mdc_conn);
-        struct list_head *tmp, *next;
-#else
         struct hlist_node *tmp, *next;
-#endif
         struct ll_fid rootfid;
         ENTRY;
 
@@ -332,9 +324,7 @@ void ll_put_super(struct super_block *sb)
          * XXX This should be an mdc_sync() call to sync the whole MDS fs,
          *     which we can call for other reasons as well.
          */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (!obd->obd_no_recov)
-#endif
                 mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
 
         lprocfs_unregister_mountpoint(sbi);
@@ -345,18 +335,12 @@ void ll_put_super(struct super_block *sb)
 
         obd_disconnect(&sbi->ll_mdc_conn, 0);
 
+#warning Why do we need this?
         spin_lock(&dcache_lock);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        list_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
-                struct dentry *dentry = list_entry(tmp, struct dentry, d_hash);
-                shrink_dcache_parent(dentry);
-        }
-#else
         hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
                 struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
                 shrink_dcache_parent(dentry);
         }
-#endif
         spin_unlock(&dcache_lock);
 
         OBD_FREE(sbi, sizeof(*sbi));
@@ -365,30 +349,47 @@ void ll_put_super(struct super_block *sb)
 } /* ll_put_super */
 
 
-void ll_unhash_inode(struct inode *inode)
+struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 {
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct ll_fid fid;
-        ENTRY;
-        
-        ll_inode2fid(&fid, inode);
-        mdc_change_cbdata(&sbi->ll_mdc_conn, &fid, NULL);
-
-        if (lli->lli_smd)
-                obd_change_cbdata(&sbi->ll_osc_conn, lli->lli_smd, NULL);
-        EXIT;
+        struct inode *inode;
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        spin_lock(&inode_lock);
+        inode = lock->l_data;
+        if (inode && inode->i_state & I_FREEING)
+                inode = NULL;
+        else if (inode)
+                __iget(inode);
+        spin_unlock(&inode_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        return inode;
 }
 
+static int null_if_equal(struct ldlm_lock *lock, void *data)
+{
+        if (data == lock->l_data)
+                lock->l_data = NULL;
+
+        if (lock->l_req_mode != lock->l_granted_mode)
+                return LDLM_ITER_STOP;
+
+        return 0;
+}
 
 void ll_clear_inode(struct inode *inode)
 {
+        struct ll_fid fid;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
+
+        ll_inode2fid(&fid, inode);
+        mdc_change_cbdata(&sbi->ll_mdc_conn, &fid, null_if_equal, inode);
+
+        if (lli->lli_smd)
+                obd_change_cbdata(&sbi->ll_osc_conn, lli->lli_smd, null_if_equal, inode);
 
         if (lli->lli_smd) {
                 obd_free_memmd(&sbi->ll_osc_conn, &lli->lli_smd);
@@ -403,47 +404,6 @@ void ll_clear_inode(struct inode *inode)
 
         EXIT;
 }
-
-#if 0
-static void ll_delete_inode(struct inode *inode)
-{
-        ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu(%p)\n", inode->i_ino, inode);
-        if (S_ISREG(inode->i_mode)) {
-                int err;
-                struct obdo *oa;
-                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-
-                /* mcreate with no open */
-                if (!lsm)
-                        GOTO(out, 0);
-
-                if (lsm->lsm_object_id == 0) {
-                        CERROR("This really happens\n");
-                        /* No obdo was ever created */
-                        GOTO(out, 0);
-                }
-
-                oa = obdo_alloc();
-                if (oa == NULL)
-                        GOTO(out, -ENOMEM);
-
-                oa->o_id = lsm->lsm_object_id;
-                oa->o_valid = OBD_MD_FLID;
-                obdo_from_inode(oa, inode, OBD_MD_FLTYPE);
-
-                err = obd_destroy(ll_i2obdconn(inode), oa, lsm, NULL);
-                obdo_free(oa);
-                if (err)
-                        CDEBUG(D_INODE,
-                               "inode %lu obd_destroy objid "LPX64" error %d\n",
-                               inode->i_ino, lsm->lsm_object_id, err);
-        }
-out:
-        clear_inode(inode);
-        EXIT;
-}
-#endif
 
 /* like inode_setattr, but doesn't mark the inode dirty */
 int ll_attr2inode(struct inode *inode, struct iattr *attr, int trunc)

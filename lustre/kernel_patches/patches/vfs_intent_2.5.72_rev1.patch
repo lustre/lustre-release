@@ -7,13 +7,13 @@
  include/linux/dcache.h |   36 +++++++++
  include/linux/fs.h     |   10 ++
  include/linux/namei.h  |   19 +++-
- kernel/ksyms.c         |    7 +
+ kernel/ksyms.c         |    8 ++
  net/sunrpc/rpc_pipe.c  |    6 -
  net/unix/af_unix.c     |    2 
- 12 files changed, 309 insertions(+), 71 deletions(-)
+ 12 files changed, 310 insertions(+), 71 deletions(-)
 
---- linux-2.5.72/fs/sysfs/inode.c~vfs_intent_2.5.72_rev1	2003-06-16 22:20:21.000000000 -0600
-+++ linux-2.5.72-braam/fs/sysfs/inode.c	2003-06-25 08:13:39.000000000 -0600
+--- linux-2.5.73/fs/sysfs/inode.c~vfs_intent_2.5.72_rev1	2003-06-22 12:33:11.000000000 -0600
++++ linux-2.5.73-braam/fs/sysfs/inode.c	2003-07-15 02:23:28.000000000 -0600
 @@ -81,7 +81,7 @@ struct dentry * sysfs_get_dentry(struct 
  	qstr.name = name;
  	qstr.len = strlen(name);
@@ -23,8 +23,8 @@
  }
  
  void sysfs_hash_and_remove(struct dentry * dir, const char * name)
---- linux-2.5.72/fs/exec.c~vfs_intent_2.5.72_rev1	2003-06-16 22:19:59.000000000 -0600
-+++ linux-2.5.72-braam/fs/exec.c	2003-06-25 22:03:23.000000000 -0600
+--- linux-2.5.73/fs/exec.c~vfs_intent_2.5.72_rev1	2003-06-22 12:32:41.000000000 -0600
++++ linux-2.5.73-braam/fs/exec.c	2003-07-15 02:23:28.000000000 -0600
 @@ -116,6 +116,9 @@ asmlinkage long sys_uselib(const char __
  	struct file * file;
  	struct nameidata nd;
@@ -68,8 +68,8 @@
  				if (!IS_ERR(file)) {
  					err = deny_write_access(file);
  					if (err) {
---- linux-2.5.72/fs/namei.c~vfs_intent_2.5.72_rev1	2003-06-16 22:19:57.000000000 -0600
-+++ linux-2.5.72-braam/fs/namei.c	2003-06-29 11:42:52.000000000 -0600
+--- linux-2.5.73/fs/namei.c~vfs_intent_2.5.72_rev1	2003-06-22 12:32:41.000000000 -0600
++++ linux-2.5.73-braam/fs/namei.c	2003-07-15 02:23:28.000000000 -0600
 @@ -263,8 +263,19 @@ int deny_write_access(struct file * file
  	return 0;
  }
@@ -389,7 +389,7 @@
  /*
   * It's inline, so penalty for filesystems that don't use sticky bit is
   * minimal.
-@@ -1093,6 +1188,32 @@ void unlock_rename(struct dentry *p1, st
+@@ -1097,6 +1192,32 @@ void unlock_rename(struct dentry *p1, st
  	}
  }
  
@@ -422,7 +422,7 @@
  int vfs_create(struct inode *dir, struct dentry *dentry, int mode)
  {
  	int error = may_create(dir, dentry);
-@@ -1232,6 +1353,9 @@ int open_namei(const char * pathname, in
+@@ -1236,6 +1357,9 @@ int open_namei(const char * pathname, in
  	/*
  	 * Create - we need to know the parent.
  	 */
@@ -432,7 +432,7 @@
  	error = path_lookup(pathname, LOOKUP_PARENT, nd);
  	if (error)
  		return error;
-@@ -1247,7 +1371,9 @@ int open_namei(const char * pathname, in
+@@ -1251,7 +1375,9 @@ int open_namei(const char * pathname, in
  
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -443,7 +443,7 @@
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1255,12 +1381,13 @@ do_last:
+@@ -1259,12 +1385,13 @@ do_last:
  		up(&dir->d_inode->i_sem);
  		goto exit;
  	}
@@ -459,7 +459,7 @@
  		up(&dir->d_inode->i_sem);
  		dput(nd->dentry);
  		nd->dentry = dentry;
-@@ -1285,7 +1412,7 @@ do_last:
+@@ -1289,7 +1416,7 @@ do_last:
  		error = -ELOOP;
  		if (flag & O_NOFOLLOW)
  			goto exit_dput;
@@ -468,7 +468,7 @@
  	}
  	error = -ENOENT;
  	if (!dentry->d_inode)
-@@ -1350,7 +1477,9 @@ do_link:
+@@ -1354,7 +1481,9 @@ do_link:
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -479,7 +479,7 @@
  	putname(nd->last.name);
  	goto do_last;
  }
-@@ -1364,7 +1493,7 @@ static struct dentry *lookup_create(stru
+@@ -1368,7 +1497,7 @@ static struct dentry *lookup_create(stru
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
@@ -488,7 +488,7 @@
  	if (IS_ERR(dentry))
  		goto fail;
  	if (!is_dir && nd->last.name[nd->last.len] && !dentry->d_inode)
-@@ -1596,7 +1725,7 @@ asmlinkage long sys_rmdir(const char __u
+@@ -1600,7 +1729,7 @@ asmlinkage long sys_rmdir(const char __u
  			goto exit1;
  	}
  	down(&nd.dentry->d_inode->i_sem);
@@ -497,7 +497,7 @@
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		error = vfs_rmdir(nd.dentry->d_inode, dentry);
-@@ -1665,7 +1794,7 @@ asmlinkage long sys_unlink(const char __
+@@ -1669,7 +1798,7 @@ asmlinkage long sys_unlink(const char __
  	if (nd.last_type != LAST_NORM)
  		goto exit1;
  	down(&nd.dentry->d_inode->i_sem);
@@ -506,7 +506,7 @@
  	error = PTR_ERR(dentry);
  	if (!IS_ERR(dentry)) {
  		/* Why not before? Because we want correct error value */
-@@ -2015,7 +2144,7 @@ static inline int do_rename(const char *
+@@ -2019,7 +2148,7 @@ static inline int do_rename(const char *
  
  	trap = lock_rename(new_dir, old_dir);
  
@@ -515,7 +515,7 @@
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -2035,7 +2164,7 @@ static inline int do_rename(const char *
+@@ -2039,7 +2168,7 @@ static inline int do_rename(const char *
  	error = -EINVAL;
  	if (old_dentry == trap)
  		goto exit4;
@@ -524,7 +524,7 @@
  	error = PTR_ERR(new_dentry);
  	if (IS_ERR(new_dentry))
  		goto exit4;
-@@ -2100,7 +2229,10 @@ static inline int
+@@ -2104,7 +2233,10 @@ static inline int
  __vfs_follow_link(struct nameidata *nd, const char *link)
  {
  	int res = 0;
@@ -535,7 +535,7 @@
  	if (IS_ERR(link))
  		goto fail;
  
-@@ -2110,6 +2242,9 @@ __vfs_follow_link(struct nameidata *nd, 
+@@ -2114,6 +2246,9 @@ __vfs_follow_link(struct nameidata *nd, 
  			/* weird __emul_prefix() stuff did it */
  			goto out;
  	}
@@ -545,8 +545,8 @@
  	res = link_path_walk(link, nd);
  out:
  	if (current->link_count || res || nd->last_type!=LAST_NORM)
---- linux-2.5.72/fs/namespace.c~vfs_intent_2.5.72_rev1	2003-06-16 22:20:06.000000000 -0600
-+++ linux-2.5.72-braam/fs/namespace.c	2003-06-29 01:51:10.000000000 -0600
+--- linux-2.5.73/fs/namespace.c~vfs_intent_2.5.72_rev1	2003-06-22 12:32:57.000000000 -0600
++++ linux-2.5.73-braam/fs/namespace.c	2003-07-15 02:23:28.000000000 -0600
 @@ -728,6 +728,7 @@ long do_mount(char * dev_name, char * di
  	int retval = 0;
  	int mnt_flags = 0;
@@ -563,9 +563,9 @@
  
  static void chroot_fs_refs(struct nameidata *old_nd, struct nameidata *new_nd)
  {
---- linux-2.5.72/fs/open.c~vfs_intent_2.5.72_rev1	2003-06-16 22:19:40.000000000 -0600
-+++ linux-2.5.72-braam/fs/open.c	2003-06-25 21:59:58.000000000 -0600
-@@ -97,7 +97,7 @@ static inline long do_sys_truncate(const
+--- linux-2.5.73/fs/open.c~vfs_intent_2.5.72_rev1	2003-06-22 12:32:31.000000000 -0600
++++ linux-2.5.73-braam/fs/open.c	2003-07-15 02:23:28.000000000 -0600
+@@ -200,7 +200,7 @@ static inline long do_sys_truncate(const
  	struct nameidata nd;
  	struct inode * inode;
  	int error;
@@ -574,7 +574,7 @@
  	error = -EINVAL;
  	if (length < 0)	/* sorry, but loff_t says... */
  		goto out;
-@@ -340,6 +340,7 @@ asmlinkage long sys_access(const char __
+@@ -443,6 +443,7 @@ asmlinkage long sys_access(const char __
  	int old_fsuid, old_fsgid;
  	kernel_cap_t old_cap;
  	int res;
@@ -582,7 +582,7 @@
  
  	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
  		return -EINVAL;
-@@ -371,6 +372,7 @@ asmlinkage long sys_access(const char __
+@@ -474,6 +475,7 @@ asmlinkage long sys_access(const char __
  		if(!res && (mode & S_IWOTH) && IS_RDONLY(nd.dentry->d_inode)
  		   && !special_file(nd.dentry->d_inode->i_mode))
  			res = -EROFS;
@@ -590,7 +590,7 @@
  		path_release(&nd);
  	}
  
-@@ -385,6 +387,7 @@ asmlinkage long sys_chdir(const char __u
+@@ -488,6 +490,7 @@ asmlinkage long sys_chdir(const char __u
  {
  	struct nameidata nd;
  	int error;
@@ -598,7 +598,7 @@
  
  	error = __user_walk(filename, LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &nd);
  	if (error)
-@@ -436,6 +439,7 @@ asmlinkage long sys_chroot(const char __
+@@ -539,6 +542,7 @@ asmlinkage long sys_chroot(const char __
  {
  	struct nameidata nd;
  	int error;
@@ -606,7 +606,7 @@
  
  	error = __user_walk(filename, LOOKUP_FOLLOW | LOOKUP_DIRECTORY | LOOKUP_NOALT, &nd);
  	if (error)
-@@ -508,7 +512,7 @@ asmlinkage long sys_chmod(const char __u
+@@ -611,7 +615,7 @@ asmlinkage long sys_chmod(const char __u
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto dput_and_out;
@@ -615,7 +615,7 @@
  	error = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto dput_and_out;
-@@ -616,25 +620,8 @@ asmlinkage long sys_fchown(unsigned int 
+@@ -719,25 +723,8 @@ asmlinkage long sys_fchown(unsigned int 
   * for the internal routines (ie open_namei()/follow_link() etc). 00 is
   * used by symlinks.
   */
@@ -643,7 +643,7 @@
  {
  	struct file * f;
  	struct inode *inode;
-@@ -646,6 +633,7 @@ struct file *dentry_open(struct dentry *
+@@ -749,6 +736,7 @@ struct file *dentry_open(struct dentry *
  		goto cleanup_dentry;
  	f->f_flags = flags;
  	f->f_mode = (flags+1) & O_ACCMODE;
@@ -651,7 +651,7 @@
  	inode = dentry->d_inode;
  	if (f->f_mode & FMODE_WRITE) {
  		error = get_write_access(inode);
-@@ -664,6 +652,7 @@ struct file *dentry_open(struct dentry *
+@@ -767,6 +755,7 @@ struct file *dentry_open(struct dentry *
  		error = f->f_op->open(inode,f);
  		if (error)
  			goto cleanup_all;
@@ -659,7 +659,7 @@
  	}
  	f->f_flags &= ~(O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC);
  
-@@ -675,7 +664,7 @@ struct file *dentry_open(struct dentry *
+@@ -778,7 +767,7 @@ struct file *dentry_open(struct dentry *
  				f = ERR_PTR(-EINVAL);
  		}
  	}
@@ -668,7 +668,7 @@
  	return f;
  
  cleanup_all:
-@@ -688,11 +677,42 @@ cleanup_all:
+@@ -791,11 +780,42 @@ cleanup_all:
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
@@ -711,8 +711,8 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- linux-2.5.72/fs/stat.c~vfs_intent_2.5.72_rev1	2003-06-16 22:19:42.000000000 -0600
-+++ linux-2.5.72-braam/fs/stat.c	2003-06-25 21:52:45.000000000 -0600
+--- linux-2.5.73/fs/stat.c~vfs_intent_2.5.72_rev1	2003-06-22 12:32:35.000000000 -0600
++++ linux-2.5.73-braam/fs/stat.c	2003-07-15 02:23:28.000000000 -0600
 @@ -33,7 +33,7 @@ void generic_fillattr(struct inode *inod
  	stat->blksize = inode->i_blksize;
  }
@@ -786,8 +786,8 @@
  		fput(f);
  	}
  	return error;
---- linux-2.5.72/include/linux/dcache.h~vfs_intent_2.5.72_rev1	2003-06-16 22:20:27.000000000 -0600
-+++ linux-2.5.72-braam/include/linux/dcache.h	2003-06-28 14:42:16.000000000 -0600
+--- linux-2.5.73/include/linux/dcache.h~vfs_intent_2.5.72_rev1	2003-06-22 12:33:35.000000000 -0600
++++ linux-2.5.73-braam/include/linux/dcache.h	2003-07-15 02:23:28.000000000 -0600
 @@ -4,6 +4,7 @@
  #ifdef __KERNEL__
  
@@ -852,8 +852,8 @@
  };
  
  /* the dentry parameter passed to d_hash and d_compare is the parent
---- linux-2.5.72/include/linux/fs.h~vfs_intent_2.5.72_rev1	2003-06-16 22:19:46.000000000 -0600
-+++ linux-2.5.72-braam/include/linux/fs.h	2003-06-29 00:48:28.000000000 -0600
+--- linux-2.5.73/include/linux/fs.h~vfs_intent_2.5.72_rev1	2003-06-22 12:32:38.000000000 -0600
++++ linux-2.5.73-braam/include/linux/fs.h	2003-07-15 02:23:28.000000000 -0600
 @@ -237,6 +237,8 @@ typedef int (get_blocks_t)(struct inode 
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
@@ -899,7 +899,7 @@
 +struct vfsmount *do_kern_mount(const char *type, int flags, const char *name, void *data);
  extern long do_mount(char *, char *, char *, unsigned long, void *);
  
- extern int vfs_statfs(struct super_block *, struct statfs *);
+ extern int vfs_statfs(struct super_block *, struct kstatfs *);
 @@ -1025,6 +1034,7 @@ extern int do_truncate(struct dentry *, 
  
  extern struct file *filp_open(const char *, int, int);
@@ -908,8 +908,8 @@
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char __user *);
  
---- linux-2.5.72/include/linux/namei.h~vfs_intent_2.5.72_rev1	2003-06-16 22:19:47.000000000 -0600
-+++ linux-2.5.72-braam/include/linux/namei.h	2003-06-28 17:47:25.000000000 -0600
+--- linux-2.5.73/include/linux/namei.h~vfs_intent_2.5.72_rev1	2003-06-22 12:32:40.000000000 -0600
++++ linux-2.5.73-braam/include/linux/namei.h	2003-07-15 02:23:28.000000000 -0600
 @@ -11,6 +11,7 @@ struct nameidata {
  	struct qstr	last;
  	unsigned int	flags;
@@ -956,9 +956,9 @@
  
  extern int follow_down(struct vfsmount **, struct dentry **);
  extern int follow_up(struct vfsmount **, struct dentry **);
---- linux-2.5.72/kernel/ksyms.c~vfs_intent_2.5.72_rev1	2003-06-16 22:19:39.000000000 -0600
-+++ linux-2.5.72-braam/kernel/ksyms.c	2003-06-25 08:13:39.000000000 -0600
-@@ -375,6 +375,7 @@ EXPORT_SYMBOL(unregister_filesystem);
+--- linux-2.5.73/kernel/ksyms.c~vfs_intent_2.5.72_rev1	2003-07-15 02:21:56.000000000 -0600
++++ linux-2.5.73-braam/kernel/ksyms.c	2003-07-16 16:36:31.000000000 -0600
+@@ -377,6 +377,7 @@ EXPORT_SYMBOL(unregister_filesystem);
  EXPORT_SYMBOL(kern_mount);
  EXPORT_SYMBOL(__mntput);
  EXPORT_SYMBOL(may_umount);
@@ -966,7 +966,7 @@
  
  /* executable format registration */
  EXPORT_SYMBOL(register_binfmt);
-@@ -404,6 +405,12 @@ EXPORT_SYMBOL(del_timer);
+@@ -406,6 +407,12 @@ EXPORT_SYMBOL(del_timer);
  EXPORT_SYMBOL(request_irq);
  EXPORT_SYMBOL(free_irq);
  
@@ -979,9 +979,17 @@
  /* waitqueue handling */
  EXPORT_SYMBOL(add_wait_queue);
  EXPORT_SYMBOL(add_wait_queue_exclusive);
---- linux-2.5.72/net/unix/af_unix.c~vfs_intent_2.5.72_rev1	2003-06-16 22:20:06.000000000 -0600
-+++ linux-2.5.72-braam/net/unix/af_unix.c	2003-06-25 08:13:39.000000000 -0600
-@@ -704,7 +704,7 @@ static int unix_bind(struct socket *sock
+@@ -551,6 +558,7 @@ EXPORT_SYMBOL(sys_tz);
+ EXPORT_SYMBOL(file_fsync);
+ EXPORT_SYMBOL(fsync_buffers_list);
+ EXPORT_SYMBOL(clear_inode);
++EXPORT_SYMBOL(__iget);
+ EXPORT_SYMBOL(init_special_inode);
+ EXPORT_SYMBOL(new_inode);
+ EXPORT_SYMBOL(__insert_inode_hash);
+--- linux-2.5.73/net/unix/af_unix.c~vfs_intent_2.5.72_rev1	2003-06-22 12:32:57.000000000 -0600
++++ linux-2.5.73-braam/net/unix/af_unix.c	2003-07-15 02:23:28.000000000 -0600
+@@ -702,7 +702,7 @@ static int unix_bind(struct socket *sock
  		/*
  		 * Do the final lookup.
  		 */
@@ -990,8 +998,8 @@
  		err = PTR_ERR(dentry);
  		if (IS_ERR(dentry))
  			goto out_mknod_unlock;
---- linux-2.5.72/net/sunrpc/rpc_pipe.c~vfs_intent_2.5.72_rev1	2003-06-16 22:19:47.000000000 -0600
-+++ linux-2.5.72-braam/net/sunrpc/rpc_pipe.c	2003-06-25 08:13:39.000000000 -0600
+--- linux-2.5.73/net/sunrpc/rpc_pipe.c~vfs_intent_2.5.72_rev1	2003-06-22 12:32:39.000000000 -0600
++++ linux-2.5.73-braam/net/sunrpc/rpc_pipe.c	2003-07-15 02:23:28.000000000 -0600
 @@ -598,7 +598,7 @@ rpc_lookup_negative(char *path, struct n
  		return ERR_PTR(error);
  	dir = nd->dentry->d_inode;
