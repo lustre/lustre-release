@@ -274,7 +274,7 @@ static void llog_skip_over(__u64 *off, int curr, int goal)
 
 
 /* sets:
- *  - cur_offset to the furthest point red in the log file
+ *  - cur_offset to the furthest point read in the log file
  *  - cur_idx to the log index preceeding cur_offset
  * returns -EIO/-EINVAL on error
  */

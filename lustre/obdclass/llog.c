@@ -124,7 +124,6 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         OBD_ALLOC(llh, sizeof(*llh));
         if (llh == NULL)
                 RETURN(-ENOMEM);
-
         handle->lgh_hdr = llh;
         rc = llog_read_header(handle);
         if (rc == 0) {
@@ -136,6 +135,11 @@ int llog_init_handle(struct llog_handle *handle, int flags,
                 GOTO(out, rc);
         }
         rc = 0;
+
+        if (uuid == NULL) {
+                CERROR("uuid is required for creating a new log.");
+                GOTO(out, rc = -EINVAL);
+        }
 
         handle->lgh_last_idx = 0; /* header is record with index 0 */
         llh->llh_count = 1;         /* for the header record */
