@@ -310,7 +310,7 @@ static inline int obd_statfs(struct lustre_handle *conn,struct obd_statfs *osfs)
 
 static inline int obd_punch(struct lustre_handle *conn, struct obdo *oa,
                             struct lov_stripe_md *ea,
-                            obd_size count, obd_off offset)
+                            obd_size start, obd_size end)
 {
         struct obd_export *exp;
         int rc;
@@ -318,7 +318,7 @@ static inline int obd_punch(struct lustre_handle *conn, struct obdo *oa,
         OBD_CHECK_SETUP(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, punch);
 
-        rc = OBP(exp->exp_obd, punch)(conn, oa, ea, count, offset);
+        rc = OBP(exp->exp_obd, punch)(conn, oa, ea, start, end);
         RETURN(rc);
 }
 
