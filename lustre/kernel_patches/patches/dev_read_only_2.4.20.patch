@@ -1,11 +1,8 @@
- drivers/block/blkpg.c  |   39 +++++++++++++++++++++++++++++++++++++++
- drivers/block/loop.c   |    3 +++
- drivers/ide/ide-disk.c |    4 ++++
- 3 files changed, 46 insertions(+)
-
---- linux-2.4.20/drivers/block/blkpg.c~dev_read_only_hp	2003-04-09 15:14:54.000000000 -0600
-+++ linux-2.4.20-braam/drivers/block/blkpg.c	2003-04-09 15:37:02.000000000 -0600
-@@ -296,3 +296,42 @@ int blk_ioctl(kdev_t dev, unsigned int c
+Index: linux-2.4.20-8/drivers/block/blkpg.c
+===================================================================
+--- linux-2.4.20-8.orig/drivers/block/blkpg.c	2002-08-03 08:39:43.000000000 +0800
++++ linux-2.4.20-8/drivers/block/blkpg.c	2003-12-08 15:50:20.000000000 +0800
+@@ -296,3 +296,42 @@
  }
  
  EXPORT_SYMBOL(blk_ioctl);
@@ -48,30 +45,18 @@
 +EXPORT_SYMBOL(dev_clear_rdonly);
 +
 +
---- linux-2.4.20/drivers/block/loop.c~dev_read_only_hp	2003-04-09 15:14:54.000000000 -0600
-+++ linux-2.4.20-braam/drivers/block/loop.c	2003-04-09 15:37:02.000000000 -0600
-@@ -474,6 +474,9 @@ static int loop_make_request(request_que
- 	spin_unlock_irq(&lo->lo_lock);
+Index: linux-2.4.20-8/drivers/block/ll_rw_blk.c
+===================================================================
+--- linux-2.4.20-8.orig/drivers/block/ll_rw_blk.c	2003-12-08 15:47:50.000000000 +0800
++++ linux-2.4.20-8/drivers/block/ll_rw_blk.c	2003-12-08 15:51:17.000000000 +0800
+@@ -1164,6 +1164,10 @@
+ 			buffer_IO_error(bh);
+ 			break;
+ 		}
++               if ((dev_check_rdonly(bh->b_rdev))&&(rw & WRITE)) {
++                        bh->b_end_io(bh, 0);
++                        break;
++                }
+ 	} while (q->make_request_fn(q, rw, bh));
+ }
  
- 	if (rw == WRITE) {
-+		if (dev_check_rdonly(rbh->b_rdev))
-+			goto err;
-+
- 		if (lo->lo_flags & LO_FLAGS_READ_ONLY)
- 			goto err;
- 	} else if (rw == READA) {
---- linux-2.4.20/drivers/ide/ide-disk.c~dev_read_only_hp	2003-04-09 15:14:54.000000000 -0600
-+++ linux-2.4.20-braam/drivers/ide/ide-disk.c	2003-04-09 15:37:02.000000000 -0600
-@@ -558,6 +558,10 @@ static ide_startstop_t lba_48_rw_disk (i
-  */
- static ide_startstop_t do_rw_disk (ide_drive_t *drive, struct request *rq, unsigned long block)
- {
-+	if (rq->cmd == WRITE && dev_check_rdonly(rq->rq_dev)) {
-+		ide_end_request(1, HWGROUP(drive));
-+		return ide_stopped;
-+	}
- 	if (IDE_CONTROL_REG)
- 		OUT_BYTE(drive->ctl,IDE_CONTROL_REG);
- 
-
-_
