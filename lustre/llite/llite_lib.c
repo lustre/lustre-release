@@ -125,72 +125,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
 }
 
-int ll_process_log_rec(struct llog_handle * handle,
-                       struct llog_rec_hdr *rec, void *data)
-{
-        struct ll_sb_info * sbi = data;
-        int cfg_len = rec->lrh_len;
-        char *cfg_buf = (char*) (rec + 1);
-        int rc = 0;
-
-        if (rec->lrh_type == OBD_CFG_REC) {
-                char *buf;
-                struct lustre_cfg *lcfg;
-                char *old_name = NULL;
-                int old_len = 0;
-                char *old_uuid = NULL;
-                int old_uuid_len = 0;
-                char *inst_name = NULL;
-                int inst_len = 0;
-
-                rc = lustre_cfg_getdata(&buf, cfg_len, cfg_buf, 1);
-                if (rc) 
-                        GOTO(out, rc);
-                lcfg = (struct lustre_cfg* ) buf;
-
-                if (sbi && lcfg->lcfg_dev_name) {
-                        inst_len = strlen(lcfg->lcfg_dev_name) + 
-                                strlen(sbi->ll_instance) + 2;
-                        OBD_ALLOC(inst_name, inst_len);
-                        sprintf(inst_name, "%s-%s", lcfg->lcfg_dev_name, 
-                                sbi->ll_instance);
-                        old_name = lcfg->lcfg_dev_name;
-                        old_len = lcfg->lcfg_dev_namelen;
-                        lcfg->lcfg_dev_name = inst_name;
-                        lcfg->lcfg_dev_namelen = strlen(inst_name) + 1;
-                }
-                
-                if (sbi && lcfg->lcfg_command == LCFG_ATTACH) {
-                        old_uuid = lcfg->lcfg_inlbuf2;
-                        old_uuid_len = lcfg->lcfg_inllen2;
-
-                        lcfg->lcfg_inlbuf2 = (char*)&sbi->ll_sb_uuid.uuid;
-                        lcfg->lcfg_inllen2 = sizeof(sbi->ll_sb_uuid);
-                }
-
-                rc = class_process_config(lcfg);
-
-                if (old_name) {
-                        lcfg->lcfg_dev_name = old_name;
-                        lcfg->lcfg_dev_namelen = old_len;
-                        OBD_FREE(inst_name, inst_len);
-                }
-              
-                if (old_uuid) {
-                        lcfg->lcfg_inlbuf2 = old_uuid;
-                        lcfg->lcfg_inllen2 = old_uuid_len;
-                }
-                
-                lustre_cfg_freedata(buf, cfg_len);
-        } else if (rec->lrh_type == PTL_CFG_REC) {
-                rc = kportal_nal_cmd((struct portals_cfg *)cfg_buf);
-        }
-out:
-        RETURN(rc);
-}
-
-
-int ll_process_log(char *mds, char *config, void  * instance)
+int ll_process_log(char *mds, char *config, struct config_llog_instance *cfg)
 {
         struct lustre_cfg lcfg;
         int dev;
@@ -238,7 +173,7 @@ int ll_process_log(char *mds, char *config, void  * instance)
         
         exp = class_conn2export(&mdc_conn);
         
-        rc = mdc_llog_process(exp, config, ll_process_log_rec, instance);
+        rc = class_config_parse_llog(exp, config, cfg);
         if (rc) {
                 CERROR("mdc_llog_process failed: rc = %d\n", err);
         }
@@ -305,6 +240,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
 
         if (profile) {
                 struct lustre_profile *lprof;
+                struct config_llog_instance cfg;
                 int len;
 
                 if (!mds_uuid) {
@@ -329,7 +265,9 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                         GOTO(out_free, err = -ENOMEM);
                 sprintf(sbi->ll_instance, "%p", sb);
 
-                err = ll_process_log(mds_uuid, profile, sbi);
+                cfg.cfg_instance = sbi->ll_instance;
+                cfg.cfg_uuid = sbi->ll_sb_uuid;
+                err = ll_process_log(mds_uuid, profile, &cfg);
                 if (err < 0) {
                         CERROR("Unable to process log: %s\n", profile);
 
@@ -476,11 +414,16 @@ out_free:
 
                 if (sbi->ll_instance != NULL) {
                         char * cln_prof;
+                        struct config_llog_instance cfg;
+
+                        cfg.cfg_instance = sbi->ll_instance;
+                        cfg.cfg_uuid = sbi->ll_sb_uuid;
+
                         OBD_ALLOC(cln_prof, len);
                         sprintf(cln_prof, "%s-clean", sbi->ll_profile);
 
                         err = ll_process_log(sbi->ll_mds_uuid.uuid, cln_prof, 
-                                             sbi);
+                                             &cfg);
                         if (err < 0) 
                                 CERROR("Unable to process log: %s\n", cln_prof);
                         OBD_FREE(cln_prof, len);
@@ -530,12 +473,16 @@ void ll_put_super(struct super_block *sb)
                 char * cln_prof;
                 int len = sizeof(sbi->ll_profile) + sizeof("-clean") + 1;
                 int err;
+                struct config_llog_instance cfg;
+
+                cfg.cfg_instance = sbi->ll_instance;
+                cfg.cfg_uuid = sbi->ll_sb_uuid;
 
                 OBD_ALLOC(cln_prof, len);
                 sprintf(cln_prof, "%s-clean", sbi->ll_profile);
 
                 err = ll_process_log(sbi->ll_mds_uuid.uuid, cln_prof, 
-                                     sbi);
+                                     &cfg);
                 if (err < 0)
                         CERROR("Unable to process log: %s\n", cln_prof);
 
