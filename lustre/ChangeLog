@@ -52,6 +52,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't hold the pinger_sem in ptlrpc_pinger_sending_on_import
 	- change obd_increase_kms to obd_adjust_kms (up or down) (5654)
 	- lconf, lmc search both /usr/lib and /usr/lib64 for Python libs (5800)
+	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
 
 2004-11-23  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0

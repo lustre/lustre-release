@@ -650,21 +650,21 @@ test_16() {
         EXPECTEDLOGSMODE=`debugfs -R "stat LOGS" $MDSDEV 2> /dev/null | awk '/Mode: /{print $6}'`
         EXPECTEDPENDINGMODE=`debugfs -R "stat PENDING" $MDSDEV 2> /dev/null | awk '/Mode: /{print $6}'`
 
-        if [ $EXPECTEDOBJECTSMODE = "0777" ]; then
+        if [ "$EXPECTEDOBJECTSMODE" = "0777" ]; then
                 echo "Success:Lustre change the mode of OBJECTS correctly"
         else
                 echo "Error: Lustre does not change the mode of OBJECTS properly"
                 return 1
         fi
                                                                                                                              
-        if [ $EXPECTEDLOGSMODE = "0777" ]; then
+        if [ "$EXPECTEDLOGSMODE" = "0777" ]; then
                 echo "Success:Lustre change the mode of LOGS correctly"
         else
                 echo "Error: Lustre does not change the mode of LOGS properly"
                 return 1
         fi
                                                                                                                              
-        if [ $EXPECTEDPENDINGMODE = "0777" ]; then
+        if [ "$EXPECTEDPENDINGMODE" = "0777" ]; then
                 echo "Success:Lustre change the mode of PENDING correctly"
         else
                 echo "Error: Lustre does not change the mode of PENDING properly"
@@ -712,7 +712,7 @@ test_18() {
                                                                                                                              
         echo "check journal size..."
         FOUNDJOURNALSIZE=`debugfs -R "stat <8>" $MDSDEV | awk '/Size: / { print $6; exit;}'`
-        if [ $FOUNDJOURNALSIZE = "79691776" ]; then
+        if [ "$FOUNDJOURNALSIZE" = "79691776" ]; then
                 echo "Success:lconf creates large journals"
         else
                 echo "Error:lconf not create large journals correctly"

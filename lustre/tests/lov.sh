@@ -48,7 +48,9 @@ for num in `seq $OSTCOUNT`; do
     OST=ost$num
     DEVPTR=OSTDEV$num
     eval $DEVPTR=${!DEVPTR:=$TMP/$OST-`hostname`}
-    ${LMC} --add ost --node localhost --lov lov1 --ost $OST --fstype $FSTYPE --dev ${!DEVPTR} --size $OSTSIZE $JARG || exit 30
+    # only specify "--mkfsoptions='-i 8192'" here because test fs is so small,
+    # on a real fs this is not needed unless all files tiny with many stripes
+    ${LMC} --add ost --node localhost --lov lov1 --ost $OST --fstype $FSTYPE --dev ${!DEVPTR} --size $OSTSIZE --mkfsoptions="-i 8192"  $JARG || exit 30
 done
 
 

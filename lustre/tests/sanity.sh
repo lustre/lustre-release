@@ -180,7 +180,7 @@ fi
 DIR=${DIR:-$MOUNT}
 [ -z "`echo $DIR | grep $MOUNT`" ] && echo "$DIR not in $MOUNT" && exit 99
 
-LOVNAME=`cat /proc/fs/lustre/llite/fs0/lov/common_name`
+LOVNAME=`cat /proc/fs/lustre/llite/*/lov/common_name | tail -n 1`
 OSTCOUNT=`cat /proc/fs/lustre/lov/$LOVNAME/numobd`
 STRIPECOUNT=`cat /proc/fs/lustre/lov/$LOVNAME/stripecount`
 STRIPESIZE=`cat /proc/fs/lustre/lov/$LOVNAME/stripesize`
