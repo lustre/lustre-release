@@ -73,8 +73,8 @@ command_t cmdlist[] = {
          "usage: add_autoconn <nid> <host> <port> [ise]"},
         {"del_autoconn", jt_ptl_del_autoconnect, 0, "remove an autoconnect entry\n"
          "usage: del_autoconn [<nid>] [<host>] [ks]"},
-        {"conn_list", jt_ptl_print_connections, 0, "connect to a remote nid\n"
-         "usage: print_conns"},
+        {"conn_list", jt_ptl_print_connections, 0, "print all the connected remote nid\n"
+         "usage: conn_list"},
         {"connect", jt_ptl_connect, 0, "connect to a remote nid\n"
          "usage: connect <host> <port> [iIOC]"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
