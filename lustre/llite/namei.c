@@ -177,6 +177,9 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                 obd_flag valid;
 
                 offset = 1;
+                lic.lic_body = lustre_msg_buf(request->rq_repmsg, offset);
+                ino = lic.lic_body->fid1.id;
+                mode = lic.lic_body->mode;
                 if (it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) {
                         /* For create ops, we want the lookup to be negative */
                         if (!it->it_status)
@@ -215,9 +218,6 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                 }
 
                 /* Do a getattr now that we have the lock */
-                lic.lic_body = lustre_msg_buf(request->rq_repmsg, offset);
-                ino = lic.lic_body->fid1.id;
-                mode = lic.lic_body->mode;
                 valid = OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE;
                 if (it->it_op == IT_READLINK) {
                         valid |= OBD_MD_LINKNAME;
@@ -264,7 +264,6 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
                 lic.lic_lmm = NULL;
 
         /* No rpc's happen during iget4, -ENOMEM's are possible */
-        ino = lic.lic_body->fid1.id;
         LASSERT(ino != 0);
         inode = iget4(dir->i_sb, ino, ll_find_inode, &lic);
 
