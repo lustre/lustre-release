@@ -1819,6 +1819,9 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
         ENTRY;
 
+        lprocfs_init_vars(mdt, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
+
         mds->mds_service =
                 ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
@@ -1827,7 +1830,7 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
 
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
-                RETURN(rc = -ENOMEM);
+                GOTO(err_lprocfs, rc = -ENOMEM);
         }
 
         rc = ptlrpc_start_n_threads(obd, mds->mds_service, MDT_NUM_THREADS,
@@ -1866,9 +1869,6 @@ static int mdt_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(err_thread3, rc);
 
-        lprocfs_init_vars(mdt, &lvars);
-        lprocfs_obd_setup(obd, lvars.obd_vars);
-
         RETURN(0);
 
 err_thread3:
@@ -1877,16 +1877,15 @@ err_thread2:
         ptlrpc_unregister_service(mds->mds_setattr_service);
 err_thread:
         ptlrpc_unregister_service(mds->mds_service);
+err_lprocfs:
+        lprocfs_obd_cleanup(obd);
         return rc;
 }
-
 
 static int mdt_cleanup(struct obd_device *obd, int flags)
 {
         struct mds_obd *mds = &obd->u.mds;
         ENTRY;
-
-        lprocfs_obd_cleanup(obd);
 
         ptlrpc_stop_all_threads(mds->mds_readpage_service);
         ptlrpc_unregister_service(mds->mds_readpage_service);
@@ -1896,6 +1895,8 @@ static int mdt_cleanup(struct obd_device *obd, int flags)
 
         ptlrpc_stop_all_threads(mds->mds_service);
         ptlrpc_unregister_service(mds->mds_service);
+
+        lprocfs_obd_cleanup(obd);
 
         RETURN(0);
 }

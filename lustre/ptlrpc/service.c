@@ -838,6 +838,8 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
         list_del_init (&service->srv_list);
         spin_unlock (&ptlrpc_all_services_lock);
 
+        ptlrpc_lprocfs_unregister_service(service);
+
         for (i = 0; i < ptlrpc_ninterfaces; i++) {
                 srv_ni = &service->srv_interfaces[i];
                 CDEBUG(D_NET, "%s: tearing down interface %s\n",
@@ -938,8 +940,6 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                 }
                 CWARN("Unexpectedly long timeout %p\n", service);
         }
-
-        ptlrpc_lprocfs_unregister_service(service);
 
         OBD_FREE(service,
                  offsetof(struct ptlrpc_service,

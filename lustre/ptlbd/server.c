@@ -49,6 +49,9 @@ static int ptlbd_sv_setup(struct obd_device *obd, obd_count len, void *buf)
         if ( IS_ERR(ptlbd->filp) )
                 RETURN(PTR_ERR(ptlbd->filp));
 
+        lprocfs_init_vars(ptlbd_sv, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
+
         ptlbd->ptlbd_service =
                 ptlrpc_init_svc(PTLBD_NBUFS, PTLBD_BUFSIZE, PTLBD_MAXREQSIZE,
                                 PTLBD_REQUEST_PORTAL, PTLBD_REPLY_PORTAL,
@@ -64,15 +67,13 @@ static int ptlbd_sv_setup(struct obd_device *obd, obd_count len, void *buf)
 
         ptlbd_sv_already_setup = 1;
 
-        lprocfs_init_vars(ptlbd_sv, &lvars);
-        lprocfs_obd_setup(obd, lvars.obd_vars);
-
         RETURN(0);
 
 out_thread:
         ptlrpc_unregister_service(ptlbd->ptlbd_service);
 out_filp:
         filp_close(ptlbd->filp, NULL);
+        lprocfs_obd_cleanup(obd);
 
         RETURN(rc);
 }
@@ -84,14 +85,15 @@ static int ptlbd_sv_cleanup(struct obd_device *obd, int flags)
 
         /* XXX check for state */
 
-        lprocfs_obd_cleanup(obd);
-
         ptlrpc_stop_all_threads(ptlbd->ptlbd_service);
         ptlrpc_unregister_service(ptlbd->ptlbd_service);
         if ( ! IS_ERR(ptlbd->filp) )
                 filp_close(ptlbd->filp, NULL);
 
         ptlbd_sv_already_setup = 0;
+
+        lprocfs_obd_cleanup(obd);
+
         RETURN(0);
 }
 

@@ -1133,6 +1133,9 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc < 0)
                 RETURN(rc);
 
+        lprocfs_init_vars(ost, &lvars);
+        lprocfs_obd_setup(obd, lvars.obd_vars);
+
         ost->ost_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
                                 OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
@@ -1140,13 +1143,13 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                                 obd->obd_proc_entry);
         if (ost->ost_service == NULL) {
                 CERROR("failed to start service\n");
-                RETURN(-ENOMEM);
+                GOTO(out_lprocfs, rc = -ENOMEM);
         }
 
         rc = ptlrpc_start_n_threads(obd, ost->ost_service, OST_NUM_THREADS,
                                     "ll_ost");
         if (rc)
-                GOTO(out, rc = -EINVAL);
+                GOTO(out_service, rc = -EINVAL);
 
         ost->ost_create_service =
                 ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
@@ -1155,7 +1158,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
                                 obd->obd_proc_entry);
         if (ost->ost_create_service == NULL) {
                 CERROR("failed to start OST create service\n");
-                GOTO(out, rc = -ENOMEM);
+                GOTO(out_service, rc = -ENOMEM);
         }
 
         rc = ptlrpc_start_n_threads(obd, ost->ost_create_service, 1,
@@ -1163,15 +1166,14 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         if (rc)
                 GOTO(out_create, rc = -EINVAL);
 
-        lprocfs_init_vars(ost, &lvars);
-        lprocfs_obd_setup(obd, lvars.obd_vars);
-
         RETURN(0);
 
 out_create:
         ptlrpc_unregister_service(ost->ost_create_service);
-out:
+out_service:
         ptlrpc_unregister_service(ost->ost_service);
+out_lprocfs:
+        lprocfs_obd_cleanup(obd);
         RETURN(rc);
 }
 
@@ -1180,8 +1182,6 @@ static int ost_cleanup(struct obd_device *obd, int flags)
         struct ost_obd *ost = &obd->u.ost;
         int err = 0;
         ENTRY;
-
-        lprocfs_obd_cleanup(obd);
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering) {
@@ -1195,6 +1195,8 @@ static int ost_cleanup(struct obd_device *obd, int flags)
 
         ptlrpc_stop_all_threads(ost->ost_create_service);
         ptlrpc_unregister_service(ost->ost_create_service);
+
+        lprocfs_obd_cleanup(obd);
 
         RETURN(err);
 }
