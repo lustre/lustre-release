@@ -225,7 +225,8 @@ static int filter_range_is_mapped(struct inode *inode, obd_size offset, int len)
 
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           struct obd_ioobj *obj, int niocount,
-                          struct niobuf_local *res, struct obd_trans_info *oti)
+                          struct niobuf_local *res, struct obd_trans_info *oti,
+                          int rc)
 {
         struct obd_device *obd = exp->exp_obd;
         struct obd_run_ctxt saved;
@@ -234,13 +235,16 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         struct iattr iattr = { 0 };
         struct kiobuf *iobuf;
         struct inode *inode = NULL;
-        int rc = 0, i, n, cleanup_phase = 0, err;
+        int i, n, cleanup_phase = 0, err;
         unsigned long now = jiffies; /* DEBUGGING OST TIMEOUTS */
         void *wait_handle;
         ENTRY;
         LASSERT(oti != NULL);
         LASSERT(objcount == 1);
         LASSERT(current->journal_info == NULL);
+
+        if (rc != 0)
+                GOTO(cleanup, rc);
 
         rc = alloc_kiovec(1, &iobuf);
         if (rc)
