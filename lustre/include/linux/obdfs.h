@@ -14,8 +14,8 @@
 #include <linux/obd_class.h>
 #include <linux/list.h>
 
-static __inline__ struct obdo *obdo_fromid(struct lustre_handle *conn, obd_id id,
-                                           obd_mode mode, obd_flag valid)
+static inline struct obdo *obdo_fromid(struct lustre_handle *conn, obd_id id,
+				       obd_mode mode, obd_flag valid)
 {
         struct obdo *oa;
         int err;

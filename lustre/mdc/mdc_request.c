@@ -81,7 +81,7 @@ int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
 
 
 int mdc_getattr(struct lustre_handle *conn,
-                ino_t ino, int type, unsigned long valid, size_t ea_size,
+                obd_id ino, int type, unsigned long valid, size_t ea_size,
                 struct ptlrpc_request **request)
 {
         struct mdc_obd *mdc = mdc_conn2mdc(conn);
@@ -355,7 +355,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type, struct lookup_intent 
         RETURN(0);
 }
 
-int mdc_open(struct lustre_handle *conn, ino_t ino, int type, int flags,
+int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
              struct obdo *obdo,
              __u64 cookie, __u64 *fh, struct ptlrpc_request **request)
 {
@@ -404,7 +404,7 @@ int mdc_open(struct lustre_handle *conn, ino_t ino, int type, int flags,
 }
 
 int mdc_close(struct lustre_handle *conn, 
-              ino_t ino, int type, __u64 fh, struct ptlrpc_request **request)
+              obd_id ino, int type, __u64 fh, struct ptlrpc_request **request)
 {
         struct mdc_obd *mdc = mdc_conn2mdc(conn);
         struct mds_body *body;
@@ -432,7 +432,7 @@ int mdc_close(struct lustre_handle *conn,
         return rc;
 }
 
-int mdc_readpage(struct lustre_handle *conn, ino_t ino, int type, __u64 offset,
+int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
                  char *addr, struct ptlrpc_request **request)
 {
         struct mdc_obd *mdc = mdc_conn2mdc(conn);
@@ -554,7 +554,7 @@ static int mdc_ioctl(long cmd, struct lustre_handle *conn, int len, void *karg,
         switch (cmd) {
         case IOC_REQUEST_GETATTR: {
                 CERROR("-- getting attr for ino %lu\n", arg);
-                err = mdc_getattr(&cl, connection, arg, S_IFDIR, ~0, 0,
+                err = mdc_getattr(&cl, connection, (obd_id)arg, S_IFDIR, ~0, 0,
                                   &request);
                 CERROR("-- done err %d\n", err);
 

@@ -55,9 +55,9 @@ struct ll_inode_info {
 #define LL_COMMITCBD_RUNNING   0x4
 
 struct ll_sb_info {
-        struct lustre_handle           ll_mdc_conn;
-        struct lustre_handle           ll_osc_conn;
-        ino_t                     ll_rootino; /* number of root inode */
+        struct lustre_handle      ll_mdc_conn;
+        struct lustre_handle      ll_osc_conn;
+        obd_id                    ll_rootino; /* number of root inode */
 
         wait_queue_head_t         ll_commitcbd_waitq;
         wait_queue_head_t         ll_commitcbd_ctl_waitq;
@@ -108,10 +108,10 @@ static inline struct lustre_handle *ll_i2obdconn(struct inode *inode)
         return ll_s2obdconn(inode->i_sb);
 }
 
-static inline void ll_ino2fid(struct ll_fid *fid, ino_t ino, __u32 generation,
+static inline void ll_ino2fid(struct ll_fid *fid, obd_id ino, __u32 generation,
                               int type)
 {
-        fid->id = (__u64)ino;
+        fid->id = ino;
         fid->generation = generation;
         fid->f_type = type;
 }

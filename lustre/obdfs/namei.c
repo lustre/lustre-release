@@ -43,7 +43,7 @@ extern int obdfs_setattr(struct dentry *de, struct iattr *attr);
 
 /* from dir.c */
 extern int ext2_add_link (struct dentry *dentry, struct inode *inode);
-ino_t obdfs_inode_by_name(struct inode * dir, struct dentry *dentry, int *typ);
+obd_id obdfs_inode_by_name(struct inode * dir, struct dentry *dentry, int *typ);
 int ext2_make_empty(struct inode *inode, struct inode *parent);
 struct ext2_dir_entry_2 * ext2_find_entry (struct inode * dir,
                    struct dentry *dentry, struct page ** res_page);
@@ -89,8 +89,8 @@ static struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry)
         struct obdo *oa;
         struct inode * inode = NULL;
         int type;
-        ino_t ino;
-        
+        obd_id ino;
+
         ENTRY;
         if (dentry->d_name.len > EXT2_NAME_LEN)
                 return ERR_PTR(-ENAMETOOLONG);
@@ -99,18 +99,18 @@ static struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry)
         if (!ino)
                 goto negative;
 
-        oa = obdo_fromid(IID(dir), ino, type, 
+        oa = obdo_fromid(IID(dir), ino, type,
                          (__u32)(OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS));
         if ( IS_ERR(oa) ) {
                 CERROR("obdo_fromid failed\n");
                 EXIT;
-                return ERR_PTR(-EACCES); 
+                return ERR_PTR(-EACCES);
         }
 
-        inode = iget4(dir->i_sb, ino, NULL, oa);
+        inode = iget4(dir->i_sb, (ino_t)ino, NULL, oa);
         obdo_free(oa);
 
-        if (!inode) 
+        if (!inode)
                 return ERR_PTR(-EACCES);
 
  negative:

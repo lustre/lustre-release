@@ -470,9 +470,9 @@ struct ext2_dir_entry_2 * ext2_dotdot (struct inode *dir, struct page **p)
         return de;
 }
 
-ino_t ll_inode_by_name(struct inode * dir, struct dentry *dentry, int *type)
+obd_id ll_inode_by_name(struct inode * dir, struct dentry *dentry, int *type)
 {
-        ino_t res = 0;
+        obd_id res = 0;
         struct ext2_dir_entry_2 * de;
         struct page *page;
 

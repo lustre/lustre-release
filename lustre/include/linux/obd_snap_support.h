@@ -12,7 +12,7 @@
  * available snapshot slots (14 in 56 bytes vs. 7 in 56 bytes until we
  * increase the size of OBD_OBDMDSZ).
  */
-typedef ino_t	snap_id;
+typedef obd_id	snap_id;
 
 /* maximum number of snapshot tables we maintain in the kernel */
 #define SNAP_MAX_TABLES 8

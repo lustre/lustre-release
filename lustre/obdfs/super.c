@@ -99,83 +99,82 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         int err;
         unsigned long blocksize;
         unsigned long blocksize_bits;
-        unsigned long root_ino;
+        obd_id root_ino;
         int scratch;
 	struct obdo *oa;
-        
 
         ENTRY;
-        MOD_INC_USE_COUNT; 
-        
+        MOD_INC_USE_COUNT;
+
         memset(sbi, 0, sizeof(*sbi));
-        
-        CDEBUG(D_INFO, "\n"); 
+
+        CDEBUG(D_INFO, "\n");
         obdfs_options(data, &device, &version);
-        if ( !device ) {
+        if (!device) {
                 CERROR("no device\n");
                 EXIT;
                 goto ERR;
         }
 
 	devno = simple_strtoul(device, NULL, 0);
-        CDEBUG(D_INFO, "\n"); 
-        if ( devno >= MAX_OBD_DEVICES ) {
+        CDEBUG(D_INFO, "\n");
+        if (devno >= MAX_OBD_DEVICES) {
                 CERROR("device of %s too high (%d)\n", device, devno);
                 EXIT;
                 goto ERR;
-        } 
+        }
 
-        CDEBUG(D_INFO, "\n"); 
+        CDEBUG(D_INFO, "\n");
 
         obddev = &obd_dev[devno];
         sbi->osi_obd = obddev;
 
         err = obd_connect(&sbi->osi_conn, obddev);
-        if ( err ) {
+        if (err) {
                 CERROR("OBDFS: cannot connect to %s\n", device);
                 EXIT;
                 goto ERR;
         }
 
 	connected = 1;
-        CDEBUG(D_INFO, "\n"); 
+        CDEBUG(D_INFO, "\n");
         /* list of dirty inodes, and a mutex to hold while modifying it */
         INIT_LIST_HEAD(&sbi->osi_inodes);
         init_MUTEX (&sbi->osi_list_mutex);
 
-        CDEBUG(D_INFO, "\n"); 
+        CDEBUG(D_INFO, "\n");
         sbi->osi_super = sb;
 
-        CDEBUG(D_INFO, "\n"); 
+        CDEBUG(D_INFO, "\n");
         err = obd_get_info(&sbi->osi_conn, strlen("blocksize"),
 			     "blocksize", &scratch,
 			     (void *)&blocksize);
-        if ( err ) {
+        if (err) {
                 CERROR("getinfo call to drive failed (blocksize)\n");
                 EXIT;
                 goto ERR;
         }
 
-        CDEBUG(D_INFO, "\n"); 
+        CDEBUG(D_INFO, "\n");
         err = obd_get_info(&sbi->osi_conn, strlen("blocksize_bits"),
 			   "blocksize_bits", &scratch,
 			   (void *)&blocksize_bits);
-        if ( err ) {
+        if (err) {
                 CERROR("getinfo call to drive failed (blocksize_bits)\n");
                 EXIT;
                 goto ERR;
         }
 
-        CDEBUG(D_INFO, "\n"); 
-        err = obd_get_info(&sbi->osi_conn, strlen("root_ino"), 
+        CDEBUG(D_INFO, "\n");
+        err = obd_get_info(&sbi->osi_conn, strlen("root_ino"),
 			   "root_ino", &scratch, (void *)&root_ino);
-        if ( err ) {
+        if (err) {
                 CERROR("getinfo call to drive failed (root_ino)\n");
                 EXIT;
                 goto ERR;
         }
-        
-        CDEBUG(D_INFO, "\n"); 
+
+        CDEBUG(D_INFO, "\n");
 	sb->s_maxbytes = 1LL << 36;
 	CERROR("Max bytes: %Lx\n", sb->s_maxbytes);
         sb->s_blocksize = PAGE_SIZE;
@@ -186,31 +185,31 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         /* XXX how to get "sb->s_flags |= MS_RDONLY" here for snapshots? */
 
         /* make root inode */
-        CDEBUG(D_INFO, "\n"); 
+        CDEBUG(D_INFO, "\n");
         oa = obdo_fromid(&sbi->osi_conn, root_ino, S_IFDIR,
                          (__u32)(OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS));
-        CDEBUG(D_INFO, "mode %o\n", oa->o_mode); 
-        if ( IS_ERR(oa) ) {
+        CDEBUG(D_INFO, "mode %o\n", oa->o_mode);
+        if (IS_ERR(oa)) {
                 CERROR("obdo_fromid failed\n");
-		iput(root); 
+		iput(root);
                 EXIT;
                 goto ERR;
         }
-        CDEBUG(D_INFO, "\n"); 
-        root = iget4(sb, root_ino, NULL, oa);
+        CDEBUG(D_INFO, "\n");
+        root = iget4(sb, (ino_t)root_ino, NULL, oa);
 	obdo_free(oa);
-        CDEBUG(D_INFO, "\n"); 
+        CDEBUG(D_INFO, "\n");
         if (!root) {
             CERROR("OBDFS: bad iget4 for root\n");
             sb->s_dev = 0;
             err = -ENOENT;
             EXIT;
             goto ERR;
-        } 
-        
-        CDEBUG(D_INFO, "sbdev %d, rootino: %ld, dev %s, "
-               "minor: %d, blocksize: %ld, blocksize bits %ld\n", 
-               sb->s_dev, root->i_ino, device, MINOR(devno), 
+        }
+
+        CDEBUG(D_INFO, "sbdev %d, rootino: %Ld, dev %s, "
+               "minor: %d, blocksize: %ld, blocksize bits %ld\n",
+               sb->s_dev, (long long)root_ino, device, MINOR(devno),
                blocksize, blocksize_bits);
         sb->s_root = d_alloc_root(root);
         list_add(&sbi->osi_list, &obdfs_super_list);
@@ -407,23 +406,19 @@ int obdfs_setattr(struct dentry *de, struct iattr *attr)
 
 
 
-static int obdfs_statfs(struct super_block *sb, struct statfs *buf)
+static int obdfs_statfs(struct super_block *sb, struct statfs *sfs)
 {
-        struct statfs tmp;
-        int err;
+        int rc;
 
         ENTRY;
 
-        err = obd_statfs(ID(sb), &tmp);
-        if ( err ) { 
-                CERROR("obd_statfs fails (%d)\n", err);
-                return err;
-        }
-	memcpy(buf, &tmp, sizeof(*buf));
-	CDEBUG(D_SUPER, "statfs returns avail %ld\n", tmp.f_bavail);
-        EXIT;
+        rc = obd_statfs(ID(sb), sfs);
+        if (rc)
+                CERROR("obd_statfs fails: rc = %d\n", rc);
+        else
+		CDEBUG(D_SUPER, "statfs returns avail %ld\n", sfs->f_bavail);
 
-        return err; 
+        RETURN(rc);
 }
 
 static inline void obdfs_read_inode2(struct inode *inode, void *opaque)

@@ -44,7 +44,7 @@ extern int ll_setattr(struct dentry *de, struct iattr *attr);
 
 /* from dir.c */
 extern int ll_add_link (struct dentry *dentry, struct inode *inode);
-ino_t ll_inode_by_name(struct inode * dir, struct dentry *dentry, int *typ);
+obd_id ll_inode_by_name(struct inode * dir, struct dentry *dentry, int *typ);
 int ext2_make_empty(struct inode *inode, struct inode *parent);
 struct ext2_dir_entry_2 * ext2_find_entry (struct inode * dir,
                    struct dentry *dentry, struct page ** res_page);
@@ -136,7 +136,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         struct ll_inode_md md;
         struct lustre_handle lockh;
         int err, type, offset;
-        ino_t ino;
+        obd_id ino;
 
         ENTRY;
 
@@ -172,7 +172,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 err = mdc_getattr(&sbi->ll_mdc_conn, ino, type,
                                   OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
                 if (err) {
-                        CERROR("failure %d inode %ld\n", err, (long)ino);
+                        CERROR("failure %d inode %Ld\n", err, (long long)ino);
                         ptlrpc_free_req(request);
                         RETURN(ERR_PTR(-abs(err)));
                 }

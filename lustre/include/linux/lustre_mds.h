@@ -142,29 +142,29 @@ static inline struct mdc_obd *mdc_conn2mdc(struct lustre_handle *conn)
         return &class_conn2obd(conn)->u.mdc;
 }
 
-int mdc_enqueue(struct lustre_handle *conn, int lock_type, struct lookup_intent *it, 
-                int lock_mode, struct inode *dir, struct dentry *de,
-                struct lustre_handle *h, __u64 id, char *tgt, int tgtlen,
-                void *data, int datalen);
+int mdc_enqueue(struct lustre_handle *conn, int lock_type,
+		struct lookup_intent *it, int lock_mode, struct inode *dir,
+		struct dentry *de, struct lustre_handle *h, __u64 id,
+		char *tgt, int tgtlen, void *data, int datalen);
 int mdc_getstatus(struct lustre_handle *conn,
                 struct ll_fid *rootfid, __u64 *last_committed, __u64 *last_rcvd,
                 __u32 *last_xid, struct ptlrpc_request **);
 int mdc_getattr(struct lustre_handle *conn,
-                ino_t ino, int type, unsigned long valid, size_t ea_size,
+                obd_id ino, int type, unsigned long valid, size_t ea_size,
                 struct ptlrpc_request **request);
 int mdc_statfs(struct lustre_handle *conn,
                struct statfs *sfs, struct ptlrpc_request **request);
 int mdc_setattr(struct lustre_handle *conn,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
 int mdc_open(struct lustre_handle *conn,
-             ino_t ino, int type, int flags, struct obdo *obdo, __u64 cookie, 
+             obd_id ino, int type, int flags, struct obdo *obdo, __u64 cookie,
              __u64 *fh, struct ptlrpc_request **request);
 int mdc_close(struct lustre_handle *conn,
-              ino_t ino, int type, __u64 fh,  struct ptlrpc_request **req);
-int mdc_readpage(struct lustre_handle *conn, ino_t ino,
+              obd_id ino, int type, __u64 fh,  struct ptlrpc_request **req);
+int mdc_readpage(struct lustre_handle *conn, obd_id ino,
                  int type, __u64 offset, char *addr, struct ptlrpc_request **);
 int mdc_create(struct lustre_handle *conn,
-               struct inode *dir, const char *name, int namelen, 
+               struct inode *dir, const char *name, int namelen,
                const char *tgt, int tgtlen, int mode, __u32 uid, __u32 gid,
                __u64 time, __u64 rdev, struct obdo *obdo,
                struct ptlrpc_request **);
