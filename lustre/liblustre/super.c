@@ -276,23 +276,6 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
         refresh_valid = OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ | OBD_MD_FLMTIME | 
                         OBD_MD_FLCTIME | OBD_MD_FLSIZE;
 
-        /* We set this flag in commit write as we extend the file size.  When
-         * the bit is set and the lock is canceled that covers the file size,
-         * we clear the bit.  This is enough to protect the window where our
-         * local size extension is needed for writeback.  However, it relies on
-         * behaviour that won't be true in the near future.  This assumes that
-         * all getattr callers get extent locks, which they currnetly do.  It
-         * also assumes that we only send discarding asts for {0,eof} truncates
-         * as is currently the case.  This will have to be replaced by the
-         * proper eoc communication between clients and the ost, which is on
-         * its way. */
-        if (test_bit(LLI_F_PREFER_EXTENDED_SIZE, &lli->lli_flags)) {
-                if (oa.o_size < lli->lli_st_size)
-                        refresh_valid &= ~OBD_MD_FLSIZE;
-                else 
-                        clear_bit(LLI_F_PREFER_EXTENDED_SIZE, &lli->lli_flags);
-        }
-
         obdo_refresh_inode(inode, &oa, refresh_valid);
 
         RETURN(0);

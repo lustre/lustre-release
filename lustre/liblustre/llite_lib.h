@@ -40,7 +40,6 @@ struct llu_sb_info
 
 #define LLI_F_HAVE_OST_SIZE_LOCK        0
 #define LLI_F_HAVE_MDS_SIZE_LOCK        1
-#define LLI_F_PREFER_EXTENDED_SIZE      2
 
 struct llu_inode_info {
         struct llu_sb_info     *lli_sbi;
