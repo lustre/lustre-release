@@ -59,7 +59,7 @@ void portals_debug_dumplog(void){};
 #endif
 
 unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
-                                            S_GMNAL | S_IBNAL);
+                                            S_GMNAL | S_OPENIBNAL);
 
 ptl_handle_ni_t         tcpnal_ni;
 struct task_struct     *current;
@@ -91,13 +91,13 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 #ifndef CRAY_PORTALS
         case TCPNAL:
                 /* userspace NAL */
+        case OPENIBNAL:
         case SOCKNAL:
                 snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u",
                          (__u32)(nid >> 32), HIPQUAD(nid));
                 break;
         case QSWNAL:
         case GMNAL:
-        case IBNAL:
                 snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
                          (__u32)(nid >> 32), (__u32)nid);
                 break;
