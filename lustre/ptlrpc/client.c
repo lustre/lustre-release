@@ -66,7 +66,8 @@ int ptlrpc_enqueue(struct ptlrpc_client *peer,
 	return 0;
 }
 
-int ptlrpc_connect_client(int dev, char *uuid, 
+int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal, 
+                          req_pack_t req_pack, rep_unpack_t rep_unpack,
 			      struct ptlrpc_client *cl)
 {
         int err; 
@@ -74,6 +75,10 @@ int ptlrpc_connect_client(int dev, char *uuid,
         memset(cl, 0, sizeof(*cl));
 	cl->cli_xid = 0;
 	cl->cli_obd = NULL; 
+	cl->cli_request_portal = req_portal;
+	cl->cli_reply_portal = rep_portal;
+	cl->cli_rep_unpack = rep_unpack;
+	cl->cli_req_pack = req_pack;
 
 	/* non networked client */
 	if (dev >= 0 && dev < MAX_OBD_DEVICES) {
@@ -84,6 +89,10 @@ int ptlrpc_connect_client(int dev, char *uuid,
 			CERROR("target device %d not att or setup\n", dev);
 			return -EINVAL;
 		}
+                if (strcmp(obd->obd_type->typ_name, "ost") && 
+                    strcmp(obd->obd_type->typ_name, "mds")) { 
+                        return -EINVAL;
+                }
 
 		cl->cli_obd = &obd_dev[dev];
 		return 0;
@@ -91,7 +100,7 @@ int ptlrpc_connect_client(int dev, char *uuid,
 
 	/* networked */
 	err = kportal_uuid_to_peer(uuid, &cl->cli_server);
-	if (err == 0) { 
+	if (err != 0) { 
 		CERROR("cannot find peer!"); 
 	}
 
@@ -134,12 +143,29 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
 	OBD_FREE(request, sizeof(*request));
 }
 
+static int ptlrpc_check_reply(struct ptlrpc_request *req)
+{
+        if (req->rq_repbuf != NULL) {
+                req->rq_flags = PTL_RPC_REPLY;
+                EXIT;
+                return 1;
+        }
+
+        if (sigismember(&(current->pending.signal), SIGKILL) ||
+            sigismember(&(current->pending.signal), SIGINT)) { 
+                req->rq_flags = PTL_RPC_INTR;
+                EXIT;
+                return 1;
+        }
+
+        CERROR("no event yet\n"); 
+        return 0;
+}
+
 int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
                              
 {
 	int rc;
-        DECLARE_WAITQUEUE(wait, current);
-
 	init_waitqueue_head(&req->rq_wait_for_rep);
 
 	if (cl->cli_obd) {
@@ -159,23 +185,17 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 	}
 
         CDEBUG(0, "-- sleeping\n");
-        add_wait_queue(&req->rq_wait_for_rep, &wait);
-        while (req->rq_repbuf == NULL) {
-                set_current_state(TASK_INTERRUPTIBLE);
-
-                /* if this process really wants to die, let it go */
-                if (sigismember(&(current->pending.signal), SIGKILL) ||
-                    sigismember(&(current->pending.signal), SIGINT))
-                        break;
-
-                schedule();
-        }
-        remove_wait_queue(&req->rq_wait_for_rep, &wait);
-        set_current_state(TASK_RUNNING);
+        wait_event_interruptible(req->rq_wait_for_rep, 
+                                 ptlrpc_check_reply(req));
         CDEBUG(0, "-- done\n");
+        
+        if (req->rq_flags == PTL_RPC_INTR) { 
+                EXIT;
+                return -EINTR;
+        }
 
-        if (req->rq_repbuf == NULL) {
-                /* We broke out because of a signal */
+        if (req->rq_flags != PTL_RPC_REPLY) { 
+                CERROR("Unknown reason for wakeup\n");
                 EXIT;
                 return -EINTR;
         }
@@ -186,6 +206,7 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 		return rc;
 	}
         CERROR("got rep %lld\n", req->rq_rephdr->seqno);
+
 	if ( req->rq_rephdr->status == 0 )
                 CDEBUG(0, "--> buf %p len %d status %d\n",
 		       req->rq_repbuf, req->rq_replen, 
