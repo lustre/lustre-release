@@ -322,7 +322,7 @@ int lov_unpackmd_v0(struct lov_obd *lov, struct lov_stripe_md *lsm,
         ost_offset = le32_to_cpu(lmm->lmm_stripe_offset);
         ost_count = le16_to_cpu(lmm->lmm_ost_count);
 
-        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++) {
+        for (i = 0, loi = lsm->lsm_oinfo; i < ost_count; i++, ost_offset++) {
                 ost_offset %= ost_count;
 
                 if (!lmm->lmm_objects[ost_offset].l_object_id)
@@ -330,7 +330,9 @@ int lov_unpackmd_v0(struct lov_obd *lov, struct lov_stripe_md *lsm,
 
                 loi->loi_id =
                         le64_to_cpu(lmm->lmm_objects[ost_offset].l_object_id);
+                /* loi->loi_gr = 0; implicit */
                 loi->loi_ost_idx = ost_offset;
+                /* loi->loi_ost_gen = 0; implicit */
                 loi++;
         }
 
