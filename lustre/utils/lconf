@@ -286,6 +286,7 @@ class LCTLInterface:
         run lctl using the command line
         """
         cmd = string.join(map(str,args))
+        debug("+", self.lctl, cmd)
         rc, out = run(self.lctl, cmd)
         if rc:
             raise CommandError(self.lctl, out, rc)
@@ -771,6 +772,8 @@ class Network(Module):
             self.add_module('portals/linux/router', 'kptlrouter')
         if self.net_type == 'tcp':
             self.add_module('portals/linux/socknal', 'ksocknal')
+        if self.net_type == 'toe':
+            self.add_module('portals/linux/toenal', 'ktoenal')
         if self.net_type == 'elan':
             self.add_module('portals/linux/rqswnal', 'kqswnal')
         if self.net_type == 'gm':
