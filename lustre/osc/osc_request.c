@@ -23,7 +23,10 @@
 #include <linux/mm.h>
 #include <linux/highmem.h>
 #include <linux/lustre_dlm.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <linux/workqueue.h>
+#endif
+#include <linux/kp30.h>
 #include <linux/lustre_mds.h> /* for mds_objid */
 #include <linux/obd_ost.h>
 #include <linux/obd_lov.h>
