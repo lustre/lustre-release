@@ -27,6 +27,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/lustre_dlm.h>
+#include <linux/init.h>
 
 extern kmem_cache_t *ldlm_resource_slab;
 extern kmem_cache_t *ldlm_lock_slab;
