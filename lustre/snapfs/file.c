@@ -41,22 +41,20 @@ static void currentfs_restore_snapfile(struct inode *cache_inode,
         cache_file->f_pos = clone_file->f_pos;
 }
 
-
 static ssize_t currentfs_write (struct file *filp, const char *buf, 
 				size_t count, loff_t *ppos)
 {
         struct snap_cache *cache;
 	struct inode *inode = filp->f_dentry->d_inode;
-        ssize_t rc;
         struct file_operations *fops;
-	loff_t pos;
-	long block[2]={-1,-1}, mask, i;
+	long block[2]={-1,-1};
 	struct snap_table *table;
-	int slot = 0;
-	int index = 0;
-	struct address_space_operations *aops;
 	struct inode *cache_inode = NULL;
 	struct snapshot_operations *snapops;
+	int slot = 0, index = 0, result = 0;
+	long mask, i;
+        ssize_t rc;
+	loff_t pos;
   
 	ENTRY;
 
@@ -96,36 +94,42 @@ static ssize_t currentfs_write (struct file *filp, const char *buf,
 	if( block[0] == block[1] )
 		block[1] = -1;
 	
-	aops = filter_c2cfaops(cache->cache_filter);
 	snapops = filter_c2csnapops(cache->cache_filter);
 
-	for( i=0; i<2; i++ ){
-		if(block[i]!=-1 && aops->bmap(inode->i_mapping, block[i])) {
-			table = &snap_tables[cache->cache_snap_tableno];
-        		for (slot = table->tbl_count - 1; slot >= 1; slot--) {
-				struct address_space_operations *c_aops = 
-					cache_inode->i_mapping->a_ops;
-				cache_inode = NULL;
-                		index = table->snap_items[slot].index;
-				cache_inode = snap_get_indirect(inode, NULL, index);
+	for (i = 0; i < 2; i++) {
+		if (block[i] == -1) 
+			continue;
+		table = &snap_tables[cache->cache_snap_tableno];
+		/*Find the nearest block in snaptable and copy back it*/
+		for (slot = table->tbl_count - 1; slot >= 1; slot--) {
+			cache_inode = NULL;
+               		index = table->snap_items[slot].index;
+			cache_inode = snap_get_indirect(inode, NULL, index);
 
-				if ( !cache_inode )  continue;
+			if (!cache_inode)  continue;
 
-	                	if (c_aops->bmap(cache_inode->i_mapping, block[i])) {
-					CDEBUG(D_SNAP, "find cache_ino %lu\n",
-						cache_inode->i_ino);
-					if( snapops && snapops->copy_block) {
-						snapops->copy_block(inode, 
-								cache_inode, block[i]);
-					}
+			CDEBUG(D_SNAP, "find cache_ino %lu\n", cache_inode->i_ino);
+		
+			if (snapops && snapops->copy_block) {
+				result = snapops->copy_block(inode, cache_inode, block[i]);
+				if (result == 1) {
+					CDEBUG(D_SNAP, "copy block %lu back from ind %lu to %lu\n", 
+					       block[i], cache_inode->i_ino, inode->i_ino);
+               				iput(cache_inode);
+					result = 0;
+					break;
+				}
+				if (result < 0) {
 					iput(cache_inode);
-                        		break;
-                		}
-                       		iput(cache_inode);
-        		}
-		}
+					rc = result;
+					goto exit;
+				}
+			}
+               		iput(cache_inode);
+        	}
 	}
         rc = fops->write(filp, buf, count, ppos);
+exit:
         RETURN(rc);
 }
 
@@ -179,10 +183,7 @@ static int currentfs_readpage(struct file *file, struct page *page)
 
 	table = &snap_tables[cache->cache_snap_tableno];
 
-        for (slot = table->tbl_count - 1; slot >= 1; slot--)
-        {
-		struct address_space_operations *c_aops = 
-					cache_inode->i_mapping->a_ops;
+        for (slot = table->tbl_count - 1; slot >= 1; slot--) {
 		cache_inode = NULL;
                 index = table->snap_items[slot].index;
 		cache_inode = snap_get_indirect(inode, NULL, index);

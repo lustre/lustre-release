@@ -278,6 +278,9 @@ int snap_migrate_data(struct inode *dst, struct inode *src);
 int snap_set_indirect(struct inode *pri, ino_t ind_ino, 
 			int index, ino_t parent_ino);
 
+/*super.c */
+void put_snap_current_mnt(struct super_block *sb);
+void get_snap_current_mnt(struct super_block *sb);
 /* inode.c */
 extern struct super_operations currentfs_super_ops;
 void cleanup_filter_info_cache(void);
@@ -403,7 +406,7 @@ static inline void snapfs_cpy_attrs(struct inode *dst, struct inode *src)
 	dst->i_gid = src->i_gid;
 	dst->i_mode = src->i_mode;
 }
-#ifdef SNAP_DEBUG
+#if 0
 extern unsigned int snap_debug_failcode;
 #ifdef CONFIG_LOOP_DISCARD
 #define BLKDEV_FAIL(dev,fail) loop_discard_io(dev,fail)

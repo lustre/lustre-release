@@ -29,8 +29,6 @@
 #include "snapfs_internal.h" 
 
 
-int snap_print_entry = 1;
-int snap_debug_level = 0;
 int snap_inodes = 0;
 long snap_kmemory = 0;
 int snap_stack = 0;
