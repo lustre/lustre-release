@@ -235,33 +235,35 @@ static void ll_put_super(struct super_block *sb)
 static void ll_clear_inode(struct inode *inode)
 {
         if (atomic_read(&inode->i_count) == 0) {
-                struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
+                struct ll_inode_info *lli = ll_i2info(inode);
+                struct lov_stripe_md *md = lli->lli_smd;
+
                 if (md) {
                         OBD_FREE(md, md->lmd_size); 
-                        ll_i2info(inode)->lli_smd = NULL;
+                        lli->lli_smd = NULL;
                 }
-                if (ll_i2info(inode)->lli_symlink_name) {
-                        OBD_FREE(ll_i2info(inode)->lli_symlink_name,
-                                 strlen(ll_i2info(inode)->lli_symlink_name)+ 1);
-                        ll_i2info(inode)->lli_symlink_name = NULL;
+                if (lli->lli_symlink_name) {
+                        OBD_FREE(lli->lli_symlink_name,
+                                 strlen(lli->lli_symlink_name) + 1);
+                        lli->lli_symlink_name = NULL;
                 }
         }
 }
 
 static void ll_delete_inode(struct inode *inode)
 {
-        if (S_ISREG(inode->i_mode)) { 
+        if (S_ISREG(inode->i_mode)) {
                 int err;
                 struct obdo oa;
                 struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
- 
+
                if (!md)
                         GOTO(out, -EINVAL);
 
                 oa.o_id = md->lmd_object_id;
                 oa.o_easize = md->lmd_size;
-                if (oa.o_id == 0) { 
-                        CERROR("This really happens\n"); 
+                if (oa.o_id == 0) {
+                        CERROR("This really happens\n");
                         /* No obdo was ever created */
                         GOTO(out, 0);
                 }
