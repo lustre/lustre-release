@@ -442,7 +442,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                  * impossible (by adding a dec_and_cancel() or similar), then
                  * we can put the LBUG back. */
                 //LBUG();
-                RETURN(-EINVAL);
+                RETURN(0);
         }
 
         if (lock->l_connh) {
@@ -492,6 +492,64 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         return rc;
 }
 
+int ldlm_cancel_lru(struct ldlm_namespace *ns)
+{
+        struct list_head *tmp, *next, list = LIST_HEAD_INIT(list);
+        int count, rc = 0;
+        struct ldlm_ast_work *w;
+        ENTRY;
+
+        l_lock(&ns->ns_lock);
+        count = ns->ns_nr_unused - ns->ns_max_unused;
+
+        if (count <= 0) {
+                l_unlock(&ns->ns_lock);
+                RETURN(0);
+        }
+
+        list_for_each_safe(tmp, next, &ns->ns_unused_list) {
+                struct ldlm_lock *lock;
+                lock = list_entry(tmp, struct ldlm_lock, l_lru);
+
+                LASSERT(!lock->l_readers && !lock->l_writers);
+
+                /* Setting the CBPENDING flag is a little misleading, but
+                 * prevents an important race; namely, once CBPENDING is set,
+                 * the lock can accumulate no more readers/writers.  Since
+                 * readers and writers are already zero here, ldlm_lock_decref
+                 * won't see this flag and call l_blocking_ast */
+                lock->l_flags |= LDLM_FL_CBPENDING;
+
+                OBD_ALLOC(w, sizeof(*w));
+                LASSERT(w);
+
+                w->w_lock = LDLM_LOCK_GET(lock);
+                list_add(&w->w_list, &list);
+                list_del_init(&lock->l_lru);
+
+                if (--count == 0)
+                        break;
+        }
+        l_unlock(&ns->ns_lock);
+
+        list_for_each_safe(tmp, next, &list) {
+                struct lustre_handle lockh;
+                int rc;
+                w = list_entry(tmp, struct ldlm_ast_work, w_list);
+
+                ldlm_lock2handle(w->w_lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc != ELDLM_OK)
+                        CDEBUG(D_INFO, "ldlm_cli_cancel: %d\n", rc);
+
+                list_del(&w->w_list);
+                LDLM_LOCK_PUT(w->w_lock);
+                OBD_FREE(w, sizeof(*w));
+        }
+
+        RETURN(rc);
+}
+
 int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                                     __u64 *res_id, int flags)
 {
@@ -519,14 +577,10 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                 if (lock->l_readers || lock->l_writers)
                         continue;
 
-                /* Setting the CBPENDING flag is a little misleading, but
-                 * prevents an important race; namely, once CBPENDING is set,
-                 * the lock can accumulate no more readers/writers.  Since
-                 * readers and writers are already zero here, ldlm_lock_decref
-                 * won't see this flag and call l_blocking_ast */
+                /* See CBPENDING comment in ldlm_cancel_lru */
                 lock->l_flags |= LDLM_FL_CBPENDING;
 
-                 OBD_ALLOC(w, sizeof(*w));
+                OBD_ALLOC(w, sizeof(*w));
                 LASSERT(w);
 
                 w->w_lock = LDLM_LOCK_GET(lock);
@@ -555,8 +609,8 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                         if (rc != ELDLM_OK)
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
                 }
-                LDLM_LOCK_PUT(w->w_lock);
                 list_del(&w->w_list);
+                LDLM_LOCK_PUT(w->w_lock);
                 OBD_FREE(w, sizeof(*w));
         }
 

@@ -350,7 +350,6 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
 
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
         if (!lock) {
-                CERROR("bad lock handle\n");
                 LDLM_DEBUG_NOLOCK("server-side cancel handler stale lock (lock "
                                   "%p)", (void *)(unsigned long)
                                   dlm_req->lock_handle1.addr);

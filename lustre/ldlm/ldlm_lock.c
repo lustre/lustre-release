@@ -210,6 +210,7 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         }
 
         if (lock->l_flags & LDLM_FL_DESTROYED) {
+                LASSERT(list_empty(&lock->l_lru));
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 EXIT;
                 return;
@@ -286,7 +287,7 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
 {
         struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
         struct ldlm_resource *oldres = lock->l_resource;
-        int type, i;
+        int i;
         ENTRY;
 
         l_lock(&ns->ns_lock);
@@ -297,10 +298,13 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
                 RETURN(0);
         }
 
-        type = lock->l_resource->lr_type;
-        if (new_resid[0] == 0)
-                LBUG();
-        lock->l_resource = ldlm_resource_get(ns, NULL, new_resid, type, 1);
+        LASSERT(new_resid[0] != 0);
+
+        /* This function assumes that the lock isn't on any lists */
+        LASSERT(list_empty(&lock->l_res_link));
+
+        lock->l_resource = ldlm_resource_get(ns, NULL, new_resid,
+                                             lock->l_resource->lr_type, 1);
         if (lock->l_resource == NULL) {
                 LBUG();
                 RETURN(-ENOMEM);
@@ -343,7 +347,7 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
         //spin_lock(&ldlm_handle_lock);
         lock = (struct ldlm_lock *)(unsigned long)(handle->addr);
         if (!kmem_cache_validate(ldlm_lock_slab, (void *)lock)) {
-                CERROR("bogus lock %p\n", lock);
+                //CERROR("bogus lock %p\n", lock);
                 GOTO(out2, retval);
         }
 
@@ -489,18 +493,13 @@ void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
                 /* FIXME: need a real 'desc' here */
                 lock->l_blocking_ast(lock, NULL, lock->l_data,
                                      lock->l_data_len, LDLM_CB_BLOCKING);
-        } else if (!lock->l_readers && !lock->l_writers) {
+        } else if (ns->ns_client && !lock->l_readers && !lock->l_writers) {
                 LASSERT(list_empty(&lock->l_lru));
                 LASSERT(ns->ns_nr_unused >= 0);
                 list_add_tail(&lock->l_lru, &ns->ns_unused_list);
                 ns->ns_nr_unused++;
-                if (ns->ns_client && ns->ns_nr_unused >= ns->ns_max_unused) {
-                        CDEBUG(D_DLMTRACE, "%d unused (max %d), cancelling "
-                               "LRU\n", ns->ns_nr_unused, ns->ns_max_unused);
-                        ldlm_cli_cancel_unused_resource
-                                (ns, lock->l_resource->lr_name, LDLM_FL_REDUCE);
-                }
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                ldlm_cancel_lru(ns);
         } else
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
@@ -602,8 +601,6 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                 if (lock->l_flags & (LDLM_FL_CBPENDING | LDLM_FL_DESTROYED))
                         continue;
 
-                /* lock_convert() takes the resource lock, so we're sure that
-                 * req_mode and lr_type won't change beneath us */
                 if (lock->l_req_mode != mode)
                         continue;
 
@@ -654,7 +651,6 @@ int ldlm_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
                 RETURN(0);
         }
 
-        ns = res->lr_namespace;
         l_lock(&ns->ns_lock);
 
         if ((lock = search_queue(&res->lr_granted, mode, cookie, old_lock)))
@@ -889,8 +885,12 @@ void ldlm_cancel_callback(struct ldlm_lock *lock)
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (!(lock->l_flags & LDLM_FL_CANCEL)) {
                 lock->l_flags |= LDLM_FL_CANCEL;
-                lock->l_blocking_ast(lock, NULL, lock->l_data,
-                                     lock->l_data_len, LDLM_CB_CANCELING);
+                if (lock->l_blocking_ast)
+                        lock->l_blocking_ast(lock, NULL, lock->l_data,
+                                             lock->l_data_len,
+                                             LDLM_CB_CANCELING);
+                else
+                        LDLM_DEBUG(lock, "no blocking ast");
         }
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 }
@@ -906,8 +906,7 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
 
         l_lock(&ns->ns_lock);
         if (lock->l_readers || lock->l_writers)
-                CDEBUG(D_INFO, "lock still has references (%d readers, %d "
-                       "writers)\n", lock->l_readers, lock->l_writers);
+                LDLM_DEBUG(lock, "lock still has references");
 
         ldlm_cancel_callback(lock);
 

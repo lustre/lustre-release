@@ -410,6 +410,7 @@ int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
 int ldlm_cli_convert(struct lustre_handle *, int new_mode, int *flags);
 int ldlm_cli_cancel(struct lustre_handle *lockh);
 int ldlm_cli_cancel_unused(struct ldlm_namespace *, __u64 *, int flags);
+int ldlm_cancel_lru(struct ldlm_namespace *ns);
 
 /* mds/handler.c */
 /* This has to be here because recurisve inclusion sucks. */
