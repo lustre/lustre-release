@@ -89,10 +89,13 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                mds->mds_last_rcvd, mci->mci_mcd->mcd_uuid, mci->mci_off, rc);
         // store new value and last committed value in req struct
 
-        if (rc == sizeof(mci->mci_mcd))
+        if (rc == sizeof(*mci->mci_mcd))
                 rc = 0;
-        else if (rc >= 0)
-                rc = -EIO;
+        else {
+                CERROR("error writing to last_rcvd file: rc = %d\n", rc);
+                if (rc >= 0)
+                        rc = -EIO;
+        }
 
         return rc;
 }
