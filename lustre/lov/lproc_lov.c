@@ -147,7 +147,7 @@ static int lov_tgt_seq_show(struct seq_file *p, void *v)
         struct obd_device *dev = p->private;
         struct lov_obd *lov = &dev->u.lov;
         int idx = tgt - &(lov->tgts[0]);
-        return seq_printf(p, "%d: %s %sACTIVE\n", idx+1, tgt->uuid.uuid,
+        return seq_printf(p, "%d: %s %sACTIVE\n", idx, tgt->uuid.uuid,
                           tgt->active ? "" : "IN");
 }
 
