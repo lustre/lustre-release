@@ -43,4 +43,6 @@ int main(int argc, char ** argv)
 	       perror("ioctl(EXTN_IOC_CREATE_INUM)");
 	       exit(2);
 	}
+
+        return 0;
 }
