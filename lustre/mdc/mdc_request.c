@@ -1267,6 +1267,8 @@ int mdc_obj_create(struct obd_export *exp, struct obdo *oa,
         body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof (*body));
         body->oa.o_id = oa->o_id;
         body->oa.o_generation = oa->o_generation;
+        body->oa.o_fid = oa->o_fid;
+        body->oa.o_mds = oa->o_mds;
 
         CDEBUG(D_HA, "transno: "LPD64"\n", request->rq_repmsg->transno);
         EXIT;
