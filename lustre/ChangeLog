@@ -1,6 +1,7 @@
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
-       * version 1.2.3
+       * version 1.2.4
        * bug fixes
+	- don't cleanup request in ll_file_open() on failed MDS open (3430)
        * miscellania
 
 2004-06-17  Cluster File Systems, Inc. <info@clusterfs.com>

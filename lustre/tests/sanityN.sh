@@ -31,22 +31,20 @@ else
 	RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
 fi
 
-export NAME=${NAME:-mount2}
-
 SAVE_PWD=$PWD
 
 clean() {
 	echo -n "cln.."
 	sh llmountcleanup.sh > /dev/null || exit 20
 }
-CLEAN=${CLEAN:-clean}
+CLEAN=${CLEAN:-}
 
 start() {
 	echo -n "mnt.."
 	sh llrmount.sh > /dev/null || exit 10
 	echo "done"
 }
-START=${START:-start}
+START=${START:-}
 
 log() {
 	echo "$*"
@@ -290,11 +288,11 @@ test_14() {
 	$DIR2/d14/ls && error || true
 	exec 100<&-
 }
-run_test 14 "execution of file opened for write should return -ETXTBSY=="
+run_test 14 "execution of file open for write returns -ETXTBSY ="
 
 test_14a() {
         mkdir -p $DIR1/d14
-	cp -p `which multiop` $DIR1/d14/multiop
+	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
         $DIR1/d14/multiop $TMP/test14.junk O_c &
         MULTIPID=$!
         sleep 1
@@ -302,11 +300,11 @@ test_14a() {
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
 }
-run_test 14a "open(RDWR) of file being executed should return -ETXTBSY"
+run_test 14a "open(RDWR) of executing file returns -ETXTBSY ===="
 
 test_14b() {
         mkdir -p $DIR1/d14
-	cp -p `which multiop` $DIR1/d14/multiop
+	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
         $DIR1/d14/multiop $TMP/test14.junk O_c &
         MULTIPID=$!
         sleep 1
@@ -314,7 +312,20 @@ test_14b() {
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
 }
-run_test 14b "truncate of file being executed should return -ETXTBSY"
+run_test 14b "truncate of executing file return -ETXTBSY ======"
+
+test_14c() { # bug 3430
+	mkdir -p $DIR1/d14
+	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
+	$DIR1/d14/multiop $TMP/test14.junk O_c &
+	MULTIPID=$!
+	sleep 1
+	cp /etc/hosts $DIR2/d14/multiop && error "expected error, got success"
+	kill -USR1 $MULTIPID || return 2
+	wait $MULTIPID || return 3
+	#cmp `which multiop` $DIR1/d14/multiop || error "binary changed"
+}
+run_test 14c "open(O_TRUNC) of executing file return -ETXTBSY =="
 
 test_15() {	# bug 974 - ENOSPC
 	echo $PATH

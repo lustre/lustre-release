@@ -186,8 +186,8 @@ int ll_file_open(struct inode *inode, struct file *file)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
-               inode->i_generation, inode);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), flags %o\n", inode->i_ino,
+               inode->i_generation, inode, file->f_flags);
 
         /* don't do anything for / */
         if (inode->i_sb->s_root == file->f_dentry)
@@ -204,12 +204,13 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_OPEN);
         rc = it_open_error(DISP_OPEN_OPEN, it);
+        /* mdc_intent_lock() didn't get a request ref if there was an open
+         * error, so don't do cleanup on the request here (bug 3430) */
         if (rc)
-                GOTO(out, rc);
+                RETURN(rc);
 
         rc = ll_local_open(file, it);
-        if (rc)
-                LBUG();
+        LASSERTF(rc == 0, "rc = %d\n", rc);
 
         if (!S_ISREG(inode->i_mode))
                 GOTO(out, rc);

@@ -424,8 +424,8 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         ENTRY;
         LASSERT(it);
 
-        CDEBUG(D_DLMTRACE, "name: %*s in inode %ld, intent: %s\n", len, name,
-               (unsigned long)pfid->id, ldlm_it2str(it->it_op));
+        CDEBUG(D_DLMTRACE, "name: %*s in inode "LPU64", intent: %s flags %#o\n",
+               len, name, pfid->id, ldlm_it2str(it->it_op), it->it_flags);
 
         if (cfid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
                 /* We could just return 1 immediately, but since we should only
@@ -521,13 +521,13 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
          */
         if (it_disposition(it, DISP_OPEN_CREATE) &&
             !it_open_error(DISP_OPEN_CREATE, it))
-                ptlrpc_request_addref(request);
+                ptlrpc_request_addref(request); /* balanced in ll_create_node */
         if (it_disposition(it, DISP_OPEN_OPEN) &&
             !it_open_error(DISP_OPEN_OPEN, it))
-                ptlrpc_request_addref(request);
+                ptlrpc_request_addref(request); /* balanced in ll_file_open */
 
         if (it->it_op & IT_CREAT) {
-                /* XXX this belongs in ll_create_iit */
+                /* XXX this belongs in ll_create_it */
         } else if (it->it_op == IT_OPEN) {
                 LASSERT(!it_disposition(it, DISP_OPEN_CREATE));
         } else {
