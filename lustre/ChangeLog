@@ -1,4 +1,9 @@
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
+	* version 1.2.x
+	* Bug fixes
+ 	- clear page cache after eviction  (2766)
+
+tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.1
        * bug fixes
 	- fixes for glimpse AST timeouts / incorrectly 0-sized files (2818)
@@ -15,7 +20,6 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- correct journal credits calculated for CANCEL_UNLINK_LOG (2931)
 	- don't close files for self_export to avoid uninitialized obd (2936)
         - let lustre could be mounted with the same name for node and mds (2939)
- 	- clear page cache after eviction  (2766)
 	
 2004-03-04  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0
