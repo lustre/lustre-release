@@ -306,7 +306,11 @@ if test -d $LINUX/drivers/net/qsnet ; then
 		QSWCPPFLAGS="-DMULTIRAIL_EKC=1"
 	else
 		AC_MSG_RESULT([not supported])
-		QSWCPPFLAGS="-I$LINUX/drivers/net/qsnet/include"
+		if test -d $LINUX/drivers/net/qsnet/include; then
+			QSWCPPFLAGS="-I$LINUX/drivers/net/qsnet/include"
+		else
+			QSWCPPFLAGS="-I$LINUX/include/linux"
+		fi
 	fi
 else
 	AC_MSG_RESULT([no])
