@@ -12,3 +12,5 @@ lctl
 lfind
 lstripe
 lconf
+obdstat
+obdio
