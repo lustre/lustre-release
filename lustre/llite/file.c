@@ -41,6 +41,7 @@
 #include <linux/obd_support.h>
 #include <linux/lustre_light.h>
 
+int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
 extern inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid);
 
@@ -104,6 +105,8 @@ static int ll_file_release(struct inode *inode, struct file *file)
         struct ll_file_data *fd;
         struct obdo *oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct iattr iattr;
+
         ENTRY;
 
         fd = (struct ll_file_data *)file->private_data;
@@ -123,6 +126,14 @@ static int ll_file_release(struct inode *inode, struct file *file)
                         rc = -rc;
                 EXIT;
                 goto out;
+        }
+
+        iattr.ia_valid = ATTR_SIZE;
+        iattr.ia_size = inode->i_size;
+        rc = ll_inode_setattr(inode, &iattr, 0);
+        if (rc) {
+                CERROR("failed - %d.\n", rc);
+                rc = -EIO;
         }
 
         rc = mdc_close(&sbi->ll_mds_client, inode->i_ino, S_IFREG, 

@@ -33,7 +33,6 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_light.h>
 
-int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,10))
 /*
@@ -325,11 +324,14 @@ static int ll_commit_write(struct file *file, struct page *page,
                 iattr.ia_valid = ATTR_SIZE;
                 iattr.ia_size = offset + to;
                 /* do NOT truncate */
+                inode->i_size = offset + to;
+#if 0
                 err = ll_inode_setattr(inode, &iattr, 0);
                 if (err) {
                         CERROR("failed - %d.\n", err);
                         err = -EIO;
                 }
+#endif
         }
 
         obdo_free(oa);

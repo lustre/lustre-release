@@ -33,7 +33,7 @@ static struct obdo OA;
 static obd_count GEN;
 static long echo_pages = 0;
 
-int echo_connect (struct obd_conn *conn)
+static int echo_connect(struct obd_conn *conn)
 {
         int rc;
 
@@ -46,7 +46,7 @@ int echo_connect (struct obd_conn *conn)
         return rc;
 }
 
-int echo_disconnect(struct obd_conn *conn)
+static int echo_disconnect(struct obd_conn *conn)
 {
         int rc;
 

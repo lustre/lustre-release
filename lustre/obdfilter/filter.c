@@ -32,7 +32,6 @@ long filter_memory;
 #define FILTER_ROOTINO 2
 
 #define S_SHIFT 12
-
 static char * obd_type_by_mode[S_IFMT >> S_SHIFT] = {
         [0]                     "",
         [S_IFREG >> S_SHIFT]    "R", 
@@ -44,22 +43,9 @@ static char * obd_type_by_mode[S_IFMT >> S_SHIFT] = {
         [S_IFLNK >> S_SHIFT]    "L"
 };
 
-static void filter_id(char *buf, obd_id id, obd_mode mode)
-{
-        sprintf(buf, "O/%s/%Ld", obd_type_by_mode[(mode & S_IFMT) >> S_SHIFT],
-                id);
-}
 
-static struct file *filter_parent(obd_id id, obd_mode mode)
-{
-        char path[64];
-        struct file *file;
-        sprintf(path, "O/%s", obd_type_by_mode[(mode & S_IFMT) >> S_SHIFT]);
 
-        file = filp_open(path, O_RDONLY, 0); 
-        return file;
-}
-
+/* push / pop to root of obd store */
 void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
 { 
         save->fs = get_fs();
@@ -79,6 +65,7 @@ void pop_ctxt(struct obd_run_ctxt *saved)
         mntput(saved->pwdmnt);
 }
 
+/* utility to make a directory */
 static int simple_mkdir(struct dentry *dir, char *name, int mode)
 {
         struct dentry *dchild; 
@@ -104,31 +91,14 @@ static int simple_mkdir(struct dentry *dir, char *name, int mode)
         return err;
 }
 
-static int simple_unlink(struct dentry *dir, char *name)
+/* write the pathname into the string */
+static void filter_id(char *buf, obd_id id, obd_mode mode)
 {
-        struct dentry *dchild; 
-        int err;
-        ENTRY;
-        
-        dchild = lookup_one_len(name, dir, strlen(name));
-        if (IS_ERR(dchild)) { 
-                EXIT;
-                return PTR_ERR(dchild); 
-        }
-
-        if (!dchild->d_inode) { 
-                dput(dchild);
-                EXIT;
-                return -ENOENT;
-        }
-
-        err = vfs_unlink(dir->d_inode, dchild);
-        dput(dchild);
-        
-        EXIT;
-        return err;
+        sprintf(buf, "O/%s/%Ld", obd_type_by_mode[(mode & S_IFMT) >> S_SHIFT],
+                id);
 }
 
+/* setup the object store with correct subdirectories */
 static void filter_prep(struct obd_device *obddev)
 {
         struct obd_run_ctxt saved;
@@ -200,6 +170,7 @@ static void filter_prep(struct obd_device *obddev)
         pop_ctxt(&saved);
 }
 
+/* cleanup the filter: write last used object id to status file */
 static void filter_post(struct obd_device *obddev)
 {
         struct obd_run_ctxt saved;
@@ -228,12 +199,108 @@ static void filter_post(struct obd_device *obddev)
 }
 
 
-/* release per client resources */
+static __u64 filter_next_id(struct obd_device *obddev) 
+{
+        __u64 id;
+        spin_lock(&obddev->u.filter.fo_lock);
+        obddev->u.filter.fo_lastino++;
+        id =    obddev->u.filter.fo_lastino;
+        spin_unlock(&obddev->u.filter.fo_lock);
+        return id;
+}
+
+/* how to get files, dentries, inodes from object id's */
+static struct file *filter_obj_open(struct obd_device *obddev, 
+                                   __u64 id, __u32 type)
+{
+        struct obd_run_ctxt saved;
+        char name[24];
+        struct super_block *sb;
+        struct file *file;
+        
+        sb = obddev->u.filter.fo_sb;
+        if (!sb || !sb->s_dev) {
+                CDEBUG(D_SUPER, "fatal: device not initialized.\n");
+                EXIT;
+                return NULL;
+        }
+
+        if ( !id ) {
+                CDEBUG(D_INODE, "fatal: invalid obdo %Lu\n", id);
+                EXIT;
+                return NULL;
+        }
+
+        if ( ! (type & S_IFMT) ) { 
+                CERROR("OBD filter_obj_open, no type (%Ld), mode %o!\n", 
+                       id, type);
+        }
+
+        filter_id(name, id, type); 
+        push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
+        file = filp_open(name, O_RDONLY | O_LARGEFILE, 0);
+        pop_ctxt(&saved);
+
+        CDEBUG(D_INODE, "opening obdo %s\n", name);
+
+        return file;
+}
+
+static struct file *filter_parent(obd_id id, obd_mode mode)
+{
+        char path[64];
+        struct file *file;
+
+        sprintf(path, "O/%s", obd_type_by_mode[(mode & S_IFMT) >> S_SHIFT]);
+
+        file = filp_open(path, O_RDONLY, 0); 
+        return file;
+}
+
+
+static struct inode *filter_inode_from_obj(struct obd_device *obddev, 
+                                     __u64 id, __u32 type)
+{
+        struct file *file;
+        struct inode *inode; 
+
+        file = filter_obj_open(obddev, id, type);
+        if ( !file ) { 
+                CERROR("filter_inode_from_obdo failed\n"); 
+                return NULL;
+        }
+
+        inode = iget(file->f_dentry->d_inode->i_sb, 
+                     file->f_dentry->d_inode->i_ino); 
+        filp_close(file, 0);
+        return inode;
+}
+
+/* obd methods */
+static int filter_connect(struct obd_conn *conn)
+{
+        int rc;
+
+        MOD_INC_USE_COUNT;
+        rc = gen_connect(conn);
+
+        if (rc)
+                MOD_DEC_USE_COUNT;
+
+        return rc;
+}
+
 static int filter_disconnect(struct obd_conn *conn)
 {
+        int rc;
+
+        rc = gen_disconnect(conn);
+        if (!rc)
+                MOD_DEC_USE_COUNT;
+
         /* XXX cleanup preallocated inodes */
-        return gen_disconnect(conn);
-} /* ext2obd_disconnect */
+        return rc;
+}
 
 /* mount the file system (secretly) */
 static int filter_setup(struct obd_device *obddev, obd_count len,
@@ -275,15 +342,6 @@ static int filter_setup(struct obd_device *obddev, obd_count len,
         return 0;
 } 
 
-static __u64 filter_next_id(struct obd_device *obddev) 
-{
-        __u64 id;
-        spin_lock(&obddev->u.filter.fo_lock);
-        obddev->u.filter.fo_lastino++;
-        id =    obddev->u.filter.fo_lastino;
-        spin_unlock(&obddev->u.filter.fo_lock);
-        return id;
-}
 
 static int filter_cleanup(struct obd_device * obddev)
 {
@@ -321,62 +379,6 @@ static int filter_cleanup(struct obd_device * obddev)
         return 0;
 }
 
-static struct file *filter_obj_open(struct obd_device *obddev, 
-                                     struct obdo *oa)
-{
-        struct file *file;
-        int error = 0;
-        char id[24];
-        struct obd_run_ctxt saved;
-        struct super_block *sb;
-
-        sb = obddev->u.filter.fo_sb;
-        if (!sb || !sb->s_dev) {
-                CDEBUG(D_SUPER, "fatal: device not initialized.\n");
-                EXIT;
-                return NULL;
-        }
-
-        if ( !oa->o_id ) {
-                CDEBUG(D_INODE, "fatal: invalid obdo %lu\n", (long)oa->o_id);
-                EXIT;
-                return NULL;
-        }
-
-        if ( ! (oa->o_mode & S_IFMT) ) { 
-                CERROR("OBD filter_obj_open, no type (%Ld), mode %o!\n", 
-                       oa->o_id, oa->o_mode);
-        }
-        filter_id(id, oa->o_id, oa->o_mode); 
-        push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
-        file = filp_open(id , O_RDONLY | O_LARGEFILE, 0);
-        pop_ctxt(&saved);
-
-        if (IS_ERR(file)) { 
-                error = PTR_ERR(file);
-                file = NULL;
-        }
-        CDEBUG(D_INODE, "opening obdo %s\n", id);
-
-        return file;
-}
-
-static struct inode *filter_inode_from_obdo(struct obd_device *obddev, 
-                                     struct obdo *oa)
-{
-        struct file *file;
-        struct inode *inode; 
-
-        file = filter_obj_open(obddev, oa);
-        if ( !file ) { 
-                CERROR("filter_inode_from_obdo failed\n"); 
-                return NULL;
-        }
-
-        inode = iget(file->f_dentry->d_inode->i_sb, file->f_dentry->d_inode->i_ino); 
-        filp_close(file, 0);
-        return inode;
-}
 
 static inline void filter_from_inode(struct obdo *oa, struct inode *inode)
 {
@@ -430,7 +432,8 @@ static int filter_getattr(struct obd_conn *conn, struct obdo *oa)
                 return -EINVAL;
         }
 
-        if ( !(inode = filter_inode_from_obdo(conn->oc_dev, oa)) ) { 
+        if ( !(inode = filter_inode_from_obj(conn->oc_dev, 
+                                              oa->o_id, oa->o_mode)) ) { 
                 EXIT;
                 return -ENOENT;
         }
@@ -455,7 +458,7 @@ static int filter_setattr(struct obd_conn *conn, struct obdo *oa)
                 return -EINVAL;
         }
 
-        inode = filter_inode_from_obdo(conn->oc_dev, oa); 
+        inode = filter_inode_from_obj(conn->oc_dev, oa->o_id, oa->o_mode); 
         if ( !inode ) { 
                 EXIT;
                 return -ENOENT;
@@ -487,10 +490,9 @@ static int filter_create (struct obd_conn* conn, struct obdo *oa)
         ENTRY;
 
         if (!gen_client(conn)) {
-                CDEBUG(D_IOCTL, "invalid client %u\n", conn->oc_id);
+                CERROR("invalid client %u\n", conn->oc_id);
                 return -EINVAL;
         }
-        CDEBUG(D_IOCTL, "\n");
 
         oa->o_id = filter_next_id(conn->oc_dev);
         if ( !(oa->o_mode && S_IFMT) ) { 
@@ -510,7 +512,6 @@ static int filter_create (struct obd_conn* conn, struct obdo *oa)
                 return -ENOENT;
         }
         filp_close(file, 0);
-        CDEBUG(D_IOCTL, "\n");
         
         /* Set flags for fields we have set in ext2_new_inode */
         oa->o_valid |= OBD_MD_FLID | OBD_MD_FLBLKSZ | OBD_MD_FLBLOCKS |
@@ -525,29 +526,27 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
         struct obd_client * cli;
         struct inode * inode;
         struct file *dir;
+        struct file *object;
         int rc;
         struct obd_run_ctxt saved;
-        char id[128];
 
         if (!(cli = gen_client(conn))) {
-                CDEBUG(D_IOCTL, "invalid client %u\n", conn->oc_id);
+                CERROR("invalid client %u\n", conn->oc_id);
                 EXIT;
                 return -EINVAL;
         }
 
         obddev = conn->oc_dev;
-        inode = filter_inode_from_obdo(obddev, oa);
-
-        if (!inode) { 
+        object = filter_obj_open(obddev, oa->o_id, oa->o_mode);
+        if (!object || IS_ERR(object)) { 
                 EXIT;
                 return -ENOENT;
         }
-
+        
+        inode = object->f_dentry->d_inode;
         inode->i_nlink = 1;
         inode->i_mode = 010000;
-        iput(inode);
 
-        filter_id(id, oa->o_id, oa->o_mode);
         push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
         dir = filter_parent(oa->o_id, oa->o_mode);
         if (IS_ERR(dir)) {
@@ -555,10 +554,12 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
                 EXIT;
                 goto out;
         }
-
-        rc = simple_unlink(dir->f_dentry, id);
+        dget(dir->f_dentry); 
+        dget(object->f_dentry);
+        rc = vfs_unlink(dir->f_dentry->d_inode, object->f_dentry);
 
         filp_close(dir, 0);
+        filp_close(object, 0);
 out:
         pop_ctxt(&saved);
         EXIT;
@@ -591,7 +592,7 @@ static int filter_read(struct obd_conn *conn, struct obdo *oa, char *buf,
                 return -EINVAL;
         }
 
-        file = filter_obj_open(conn->oc_dev, oa); 
+        file = filter_obj_open(conn->oc_dev, oa->o_id, oa->o_mode); 
         if (!file || IS_ERR(file)) { 
                 EXIT;
                 return -PTR_ERR(file);
@@ -610,7 +611,7 @@ static int filter_read(struct obd_conn *conn, struct obdo *oa, char *buf,
         }
 
         return err;
-} /* ext2obd_read */
+}
 
 
 /* buffer must lie in user memory here */
@@ -628,7 +629,7 @@ static int filter_write(struct obd_conn *conn, struct obdo *oa, char *buf,
                 return -EINVAL;
         }
 
-        file = filter_obj_open(conn->oc_dev, oa); 
+        file = filter_obj_open(conn->oc_dev, oa->o_id, oa->o_mode); 
         if (!file || IS_ERR(file)) { 
                 EXIT;
                 return -PTR_ERR(file);
@@ -684,7 +685,8 @@ static int filter_pgcache_brw(int rw, struct obd_conn *conn,
         for (onum = 0; onum < num_oa; onum++) {
                 int              pg;
 
-                file = filter_obj_open(conn->oc_dev, oa[onum]); 
+                file = filter_obj_open(conn->oc_dev, oa[onum]->o_id, 
+                                       oa[onum]->o_mode); 
                 if (!file || IS_ERR(file)) { 
                         EXIT;
                         error = -ENOENT;
@@ -737,6 +739,134 @@ static int filter_pgcache_brw(int rw, struct obd_conn *conn,
         set_fs(oldfs);
         error = (retval >= 0) ? 0 : retval;
         return error;
+}
+
+
+struct inode *ioobj_to_inode(struct obd_conn *conn, struct obd_ioobj *o)
+{
+        struct inode *inode = NULL;
+        struct super_block *sb = conn->oc_dev->u.ext2.e2_sb;
+
+        if (!sb || !sb->s_dev) {
+                CDEBUG(D_SUPER, "fatal: device not initialized.\n");
+                EXIT;
+                return NULL;
+        }
+
+        if ( !o->ioo_id ) {
+                CDEBUG(D_INODE, "fatal: invalid obdo %lu\n", (long)o->ioo_id);
+                EXIT;
+                return NULL;
+        }
+
+        inode = filter_inode_from_obj(conn->oc_dev, o->ioo_id, S_IFREG);
+        if (!inode || inode->i_nlink == 0 || is_bad_inode(inode)) {
+                CERROR("from obdo - fatal: invalid inode %ld (%s).\n",
+                       (long)o->ioo_id, inode ? inode->i_nlink ? "bad inode" :
+                       "no links" : "NULL");
+                if (inode)
+                        iput(inode);
+                EXIT;
+                return NULL;
+        }
+
+        return inode;
+}
+
+int filter_preprw(int cmd, struct obd_conn *conn, 
+                   int objcount, struct obd_ioobj *obj, 
+                   int niocount, struct niobuf *nb, 
+                   struct niobuf *res)
+{
+        int i, j; 
+        struct obd_ioobj *o;
+        struct niobuf *b;
+        struct niobuf *r;
+        struct inode *inode;
+        struct page *page;
+        int rc = 0;
+        ENTRY;
+
+        memset(res, 0, sizeof(*res) * niocount);
+
+        for (i=0; i < objcount; i++) { 
+                o = obj;
+                obj++; 
+                for (j = 0 ; j < o->ioo_bufcnt ; j++) { 
+                        b = nb;
+                        r = res;
+                        nb++;
+                        res++;
+                        
+                        inode = ioobj_to_inode(conn, o); 
+                        if (!inode) { 
+                                EXIT;
+                                /* FIXME: we need to iput all of previous inodes */
+                                return -EINVAL;
+                        }
+
+                        page = lustre_get_page(inode, b->offset >> PAGE_SHIFT);
+                        if (IS_ERR(page)) { 
+                                EXIT; 
+                                return PTR_ERR(page); 
+                        }
+                        if (cmd == OBD_BRW_WRITE) {
+                                rc = lustre_prepare_page(0, PAGE_SIZE, page);
+                        }
+                        if (rc) { 
+                                CERROR("i %d j %d objcount %d bufcnt %d , rc %d, offset %Ld\n", i, j, objcount, o->ioo_bufcnt, rc, b->offset);  
+                        }
+                        
+                        r->addr = (__u64)(unsigned long)page_address(page); 
+                        r->offset = b->offset;
+                        r->page = page;
+                        r->len = PAGE_SIZE;
+                        /* r->flags */
+                }
+        }
+        return 0;
+}
+
+int filter_commitrw(int cmd, struct obd_conn *conn, 
+                     int objcount, struct obd_ioobj *obj, 
+                     int niocount, struct niobuf *res)
+{
+        int i, j; 
+        int rc;
+        struct inode *inode;
+        struct obd_ioobj *o;
+        struct niobuf *r = NULL;
+        ENTRY;
+
+        for (i=0; i < objcount; i++) { 
+                o = obj;
+                obj++; 
+
+                for (j = 0 ; j < o->ioo_bufcnt ; j++) { 
+                        r = res;
+                        if (!r)
+                                LBUG();
+                        res++;
+
+                        if (!r) 
+                                LBUG();
+
+                        if (cmd == OBD_BRW_WRITE)
+                                rc = lustre_commit_page(r->page, 0, PAGE_SIZE);
+                        else { 
+                                lustre_put_page(r->page);
+                                rc = 0;
+                        }
+
+                        if (rc) { 
+                                EXIT; 
+                                return rc;
+                        }
+                        inode = ((struct page *)r->page)->mapping->host;
+                        iput(inode); 
+                }
+        }
+        return 0;
 }
 
 static int filter_statfs (struct obd_conn *conn, struct statfs * statfs)
@@ -808,7 +938,7 @@ struct obd_ops filter_obd_ops = {
         o_get_info:    filter_get_info,
         o_setup:       filter_setup,
         o_cleanup:     filter_cleanup,
-        o_connect:     gen_connect,
+        o_connect:     filter_connect,
         o_disconnect:  filter_disconnect,
         o_statfs:      filter_statfs,
         o_getattr:     filter_getattr,
@@ -819,6 +949,8 @@ struct obd_ops filter_obd_ops = {
         o_write:       filter_write,
         o_brw:         filter_pgcache_brw,
         o_punch:       filter_truncate,
+        o_preprw:      filter_preprw,
+        o_commitrw:    filter_commitrw
 #if 0
         o_preallocate: ext2obd_preallocate_inodes,
         o_migrate:     ext2obd_migrate,

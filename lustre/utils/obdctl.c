@@ -402,7 +402,7 @@ static int jt_setattr(int argc, char **argv)
         }
 
         data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
-        data.ioc_obdo1.o_mode = strtoul(argv[2], NULL, 0);
+        data.ioc_obdo1.o_mode = S_IFREG | strtoul(argv[2], NULL, 0);
         data.ioc_obdo1.o_valid = OBD_MD_FLMODE; 
 
         rc = ioctl(fd, OBD_IOC_SETATTR , &data);
@@ -423,6 +423,7 @@ static int jt_destroy(int argc, char **argv)
         }
 
         data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
+        data.ioc_obdo1.o_mode = S_IFREG|0644;
 
         rc = ioctl(fd, OBD_IOC_DESTROY , &data);
         if (rc < 0) {
@@ -439,6 +440,8 @@ static int jt_getattr(int argc, char **argv)
         IOCINIT(data);
         if (argc == 2) {
                 data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
+                /* to help obd filter */ 
+                data.ioc_obdo1.o_mode = 0100644;
                 data.ioc_obdo1.o_valid = 0xffffffff;
                 printf("getting attr for %Ld\n", data.ioc_obdo1.o_id);
         } else {
