@@ -192,7 +192,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
                 RETURN(rc);
         if (lop->lop_write_rec == NULL)
                 RETURN(-EOPNOTSUPP);
-        LASSERT((rec->lrh_len % LLOG_MIN_REC_SIZE) == 0);
+        LASSERT((le16_to_cpu(rec->lrh_len) % LLOG_MIN_REC_SIZE) == 0);
 
         rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
         RETURN(rc);
