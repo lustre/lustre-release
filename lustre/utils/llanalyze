@@ -1,6 +1,8 @@
 #!/usr/bin/perl
 
 use Getopt::Long;
+use Term::ANSIColor;
+
 GetOptions("pid=i" => \$pid, 
            "trace!" => \$trace, 
            "rpctrace!" => \$rpctrace, 
@@ -88,6 +90,24 @@ sub getmask
     return hex($mask);
 }
 
+sub setcolor
+{
+    my $linemask = shift;
+    if ($linemask == $masks->{TRACE}) {
+        print color("yellow on_black");
+    }
+    if ($linemask == $masks->{DLMTRACE}) {
+        print color("magenta on_black");
+    }
+    if ($linemask == $masks->{DLM}) {
+        print color("magenta on_black");
+    }
+    if ($linemask == $masks->{DENTRY}) {
+        print color("red on_black");
+    }
+}
+
+
 while (<STDIN>) {
     $linepid = extractpid($_);
     $linemask = getmask($_);
@@ -102,6 +122,8 @@ while (<STDIN>) {
     if ( !$pid || $linepid == $pid) {
         next if ($rpctrace && $linemask != $masks->{RPCTRACE});
         next if ($trace && $linemask != $masks->{TRACE});
+
+
         next if ($nodlm && 
                  (  $linesubsys == $subsys->{LDLM}));
         next if ($noclass && 
@@ -116,8 +138,9 @@ while (<STDIN>) {
                     $linesubsys == $subsys->{GMNAL}));
 
 #        printf "sub/mask: %s - %s\n", getsubsys($_), getmask($_);
-
+        setcolor($linemask);
         printf "%s%s", $prefix->{$linepid}, $_;
+        print color("reset");
 #        last if $count++ > 100;
     }
     if (entering($_)) {
