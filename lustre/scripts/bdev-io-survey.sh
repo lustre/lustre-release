@@ -24,6 +24,8 @@ cur_y="0"
 # defaults for some options:
 min_threads=1
 max_threads=4
+possible_tests="sgp_dd ext2_iozone echo_filter"
+run_tests="$possible_tests"
 
 # optional output directory
 output_dir=""
@@ -100,6 +102,7 @@ usage() {
         echo "       -l <max io len>"
         echo "       -t <minimum number of threads per device>"
         echo "       -T <maximum number of threads per device>"
+        echo "       -r <tests to run>"
         exit;
 }
 
@@ -645,11 +648,12 @@ test_iterator() {
 	return $rc;
 }
 
-while getopts ":d:b:l:t:T:" opt; do
+while getopts ":d:b:l:t:T:r:" opt; do
         case $opt in
                 b) block=$OPTARG                 ;;
                 d) output_dir=$OPTARG                 ;;
                 l) io_len=$OPTARG			;;
+                r) run_tests=$OPTARG			;;
                 t) min_threads=$OPTARG			;;
                 T) max_threads=$OPTARG			;;
                 \?) usage
@@ -669,6 +673,14 @@ fi
 block=`echo $block | sed -e 's/,/ /g'`
 [ -z "$block" ] && usage "need block devices"
 
+run_tests=`echo $run_tests | sed -e 's/,/ /g'`
+[ -z "$run_tests" ] && usage "need to specify tests to run with -r"
+for t in $run_tests; do
+	if ! echo $possible_tests | grep -q $t ; then
+		die "$t isn't one of the possible tests: $possible_tests"
+	fi
+done
+
 [ $min_threads -gt $max_threads ] && \
 	die "min threads $min_threads must be <= min_threads $min_threads"
 
@@ -684,10 +696,9 @@ tmpdir=`mktemp -d /tmp/.surveyXXXXXX` || die "couldn't create tmp dir"
 
 echo each test will operate on $io_len"k"
 
-tests="sgp_dd ext2_iozone echo_filter"
 test_results=""
 
-for t in $tests; do
+for t in $run_tests; do
 
 	table_set $t 0 0 "T"
 	table_set $t 1 0 "L"
