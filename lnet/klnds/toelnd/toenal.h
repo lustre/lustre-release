@@ -27,7 +27,9 @@
  */
 
 #define DEBUG_PORTAL_ALLOC
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #include <linux/config.h>
 #include <linux/module.h>

@@ -170,10 +170,10 @@ lib_msg_free (nal_cb_t *nal, lib_msg_t *msg)
 
 #else
 
-extern kmem_cache_t *ptl_md_slab; 
-extern kmem_cache_t *ptl_msg_slab; 
-extern kmem_cache_t *ptl_me_slab; 
-extern kmem_cache_t *ptl_eq_slab; 
+extern kmem_cache_t *ptl_md_slab;
+extern kmem_cache_t *ptl_msg_slab;
+extern kmem_cache_t *ptl_me_slab;
+extern kmem_cache_t *ptl_eq_slab;
 extern atomic_t      md_in_use_count;
 extern atomic_t      msg_in_use_count;
 extern atomic_t      me_in_use_count;
@@ -183,28 +183,28 @@ static inline lib_eq_t *
 lib_eq_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
-        lib_eq_t *eq = kmem_cache_alloc(ptl_eq_slab, GFP_KERNEL);
-        
+        lib_eq_t *eq = kmem_cache_alloc(ptl_eq_slab, GFP_NOFS);
+
         if (eq == NULL)
                 return (NULL);
-        
+
         atomic_inc (&eq_in_use_count);
         return (eq);
 }
 
-static inline void 
+static inline void
 lib_eq_free (nal_cb_t *nal, lib_eq_t *eq)
 {
         /* ALWAYS called with statelock held */
         atomic_dec (&eq_in_use_count);
-        kmem_cache_free(ptl_eq_slab, eq); 
+        kmem_cache_free(ptl_eq_slab, eq);
 }
 
 static inline lib_md_t *
 lib_md_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
-        lib_md_t *md = kmem_cache_alloc(ptl_md_slab, GFP_KERNEL); 
+        lib_md_t *md = kmem_cache_alloc(ptl_md_slab, GFP_NOFS);
 
         if (md == NULL)
                 return (NULL);
@@ -225,11 +225,11 @@ static inline lib_me_t *
 lib_me_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
-        lib_me_t *me = kmem_cache_alloc(ptl_me_slab, GFP_KERNEL);
+        lib_me_t *me = kmem_cache_alloc(ptl_me_slab, GFP_NOFS);
 
         if (me == NULL)
                 return (NULL);
-        
+
         atomic_inc (&me_in_use_count);
         return (me);
 }
@@ -246,7 +246,7 @@ static inline lib_msg_t *
 lib_msg_alloc(nal_cb_t *nal)
 {
         /* ALWAYS called with statelock held */
-        lib_msg_t *msg = kmem_cache_alloc(ptl_msg_slab, GFP_ATOMIC); 
+        lib_msg_t *msg = kmem_cache_alloc(ptl_msg_slab, GFP_ATOMIC);
 
         if (msg == NULL)
                 return (NULL);
@@ -264,8 +264,8 @@ lib_msg_free(nal_cb_t *nal, lib_msg_t *msg)
 }
 #endif
 
-extern lib_handle_t *lib_lookup_cookie (nal_cb_t *nal, __u64 cookie);
-extern void lib_initialise_handle (nal_cb_t *nal, lib_handle_t *lh);
+extern lib_handle_t *lib_lookup_cookie (nal_cb_t *nal, __u64 cookie, int type);
+extern void lib_initialise_handle (nal_cb_t *nal, lib_handle_t *lh, int type);
 extern void lib_invalidate_handle (nal_cb_t *nal, lib_handle_t *lh);
 
 static inline void
@@ -278,8 +278,8 @@ static inline lib_eq_t *
 ptl_handle2eq (ptl_handle_eq_t *handle, nal_cb_t *nal)
 {
         /* ALWAYS called with statelock held */
-        lib_handle_t *lh = lib_lookup_cookie (nal, handle->cookie);
-        
+        lib_handle_t *lh = lib_lookup_cookie (nal, handle->cookie, 
+                                              PTL_COOKIE_TYPE_EQ);
         if (lh == NULL)
                 return (NULL);
 
@@ -296,8 +296,8 @@ static inline lib_md_t *
 ptl_handle2md (ptl_handle_md_t *handle, nal_cb_t *nal)
 {
         /* ALWAYS called with statelock held */
-        lib_handle_t *lh = lib_lookup_cookie (nal, handle->cookie);
-        
+        lib_handle_t *lh = lib_lookup_cookie (nal, handle->cookie,
+                                              PTL_COOKIE_TYPE_MD);
         if (lh == NULL)
                 return (NULL);
 
@@ -313,7 +313,8 @@ ptl_wire_handle2md (ptl_handle_wire_t *wh, nal_cb_t *nal)
         if (wh->wh_interface_cookie != nal->ni.ni_interface_cookie)
                 return (NULL);
         
-        lh = lib_lookup_cookie (nal, wh->wh_object_cookie);
+        lh = lib_lookup_cookie (nal, wh->wh_object_cookie,
+                                PTL_COOKIE_TYPE_MD);
         if (lh == NULL)
                 return (NULL);
 
@@ -330,8 +331,8 @@ static inline lib_me_t *
 ptl_handle2me (ptl_handle_me_t *handle, nal_cb_t *nal)
 {
         /* ALWAYS called with statelock held */
-        lib_handle_t *lh = lib_lookup_cookie (nal, handle->cookie);
-        
+        lib_handle_t *lh = lib_lookup_cookie (nal, handle->cookie,
+                                              PTL_COOKIE_TYPE_ME);
         if (lh == NULL)
                 return (NULL);
 
@@ -360,6 +361,8 @@ extern char *dispatch_name(int index);
  */
 extern int lib_parse(nal_cb_t * nal, ptl_hdr_t * hdr, void *private);
 extern int lib_finalize(nal_cb_t * nal, void *private, lib_msg_t * msg);
+extern lib_msg_t *lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid, 
+                                      lib_md_t *getmd);
 extern void print_hdr(nal_cb_t * nal, ptl_hdr_t * hdr);
 
 extern ptl_size_t lib_iov_nob (int niov, struct iovec *iov);
@@ -369,6 +372,7 @@ extern void lib_copy_buf2iov (int niov, struct iovec *iov, char *dest, ptl_size_
 extern ptl_size_t lib_kiov_nob (int niov, ptl_kiov_t *iov);
 extern void lib_copy_kiov2buf (char *dest, int niov, ptl_kiov_t *iov, ptl_size_t len);
 extern void lib_copy_buf2kiov (int niov, ptl_kiov_t *iov, char *src, ptl_size_t len);
+extern void lib_assert_wire_constants (void);
 
 extern void lib_recv (nal_cb_t *nal, void *private, lib_msg_t *msg, lib_md_t *md,
                       ptl_size_t offset, ptl_size_t mlen, ptl_size_t rlen);

@@ -4,13 +4,15 @@
 # See the file COPYING in this distribution
 
 
-COMPILE = gcc -Wall -g -I$(srcdir)/../include 
-LINK = gcc -o $@
+COMPILE = $(CC) -Wall -g -I$(srcdir)/../include
+LINK = $(CC) -o $@
 
-sbin_PROGRAMS = acceptor ptlctl debugctl routerstat
+sbin_PROGRAMS = acceptor ptlctl debugctl routerstat wirecheck
 lib_LIBRARIES = libptlctl.a
 
 acceptor_SOURCES = acceptor.c # -lefence
+
+wirecheck_SOURCES = wirecheck.c
 
 libptlctl_a_SOURCES = portals.c debug.c l_ioctl.c parser.c parser.h
 

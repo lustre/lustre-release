@@ -20,7 +20,9 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #include <linux/config.h>
 #include <linux/module.h>
@@ -48,6 +50,7 @@
 # define DEBUG_SUBSYSTEM S_PORTALS
 
 #include <linux/kp30.h>
+#include <linux/portals_compat25.h>
 
 #define DEBUG_OVERFLOW 1024
 static char *debug_buf = NULL;
@@ -233,11 +236,12 @@ int portals_do_debug_dumplog(void *arg)
         reparent_to_init();
         journal_info = current->journal_info;
         current->journal_info = NULL;
-        sprintf(debug_file_name, "%s.%ld", debug_file_path, CURRENT_TIME);
+        sprintf(debug_file_name, "%s.%ld", debug_file_path, CURRENT_SECONDS);
         file = filp_open(debug_file_name, O_CREAT|O_TRUNC|O_RDWR, 0644);
 
         if (!file || IS_ERR(file)) {
-                CERROR("cannot open %s for dumping", debug_file_name);
+                CERROR("cannot open %s for dumping: %ld\n", debug_file_name,
+                       PTR_ERR(file));
                 GOTO(out, PTR_ERR(file));
         } else {
                 printk(KERN_ALERT "dumping log to %s ... writing ...\n",
@@ -274,7 +278,7 @@ int portals_debug_daemon(void *arg)
         void *journal_info;
         mm_segment_t oldfs;
         unsigned long force_flush = 0;
-        unsigned long size;
+        unsigned long size, off, flags;
         int rc;
 
         kportal_daemonize("ldebug_daemon");
@@ -295,7 +299,17 @@ int portals_debug_daemon(void *arg)
 
         debug_daemon_state.overlapped = 0;
         debug_daemon_state.stopped = 0;
+
+        spin_lock_irqsave(&portals_debug_lock, flags);
+        off = atomic_read(&debug_off_a) + 1;
+        if (debug_wrapped)
+                off = (off >= debug_size)? 0 : off;
+        else
+                off = 0;
+        atomic_set(&debug_daemon_next_write, off);
         atomic_set(&debug_daemon_state.paused, 0);
+        spin_unlock_irqrestore(&portals_debug_lock, flags);
+
         oldfs = get_fs();
         set_fs(KERNEL_DS);
         while (1) {
@@ -431,8 +445,6 @@ int portals_debug_daemon_start(char *file, unsigned int size)
         init_waitqueue_head(&debug_daemon_state.lctl);
         init_waitqueue_head(&debug_daemon_state.daemon);
 
-        atomic_set(&debug_daemon_next_write, atomic_read(&debug_off_a));
-
         daemon_file_size_limit = size << 20;
 
         debug_daemon_state.lctl_event = 0;
@@ -562,8 +574,8 @@ int portals_debug_init(unsigned long bufsize)
         memset(debug_buf, 0, debug_size);
         debug_wrapped = 0;
 
-        printk(KERN_INFO "Portals: allocated %lu byte debug buffer at %p.\n",
-               bufsize, debug_buf);
+        //printk(KERN_INFO "Portals: allocated %lu byte debug buffer at %p.\n",
+               //bufsize, debug_buf);
         atomic_set(&debug_off_a, debug_off);
         notifier_chain_register(&panic_notifier_list, &lustre_panic_notifier);
         debug_size = bufsize;
@@ -623,9 +635,9 @@ int portals_debug_mark_buffer(char *text)
         if (debug_buf == NULL)
                 return -EINVAL;
 
-        CDEBUG(0, "*******************************************************************************\n");
+        CDEBUG(0, "********************************************************\n");
         CDEBUG(0, "DEBUG MARKER: %s\n", text);
-        CDEBUG(0, "*******************************************************************************\n");
+        CDEBUG(0, "********************************************************\n");
 
         return 0;
 }
@@ -663,8 +675,8 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
 
 /* FIXME: I'm not very smart; someone smarter should make this better. */
 void
-portals_debug_msg (int subsys, int mask, char *file, char *fn, int line,
-                   unsigned long stack, const char *format, ...)
+portals_debug_msg(int subsys, int mask, char *file, const char *fn,
+                  const int line, unsigned long stack, const char *format, ...)
 {
         va_list       ap;
         unsigned long flags;
@@ -719,8 +731,8 @@ portals_debug_msg (int subsys, int mask, char *file, char *fn, int line,
         do_gettimeofday(&tv);
 
         prefix_nob = snprintf(debug_buf + debug_off, max_nob,
-                              "%02x:%06x:%d:%lu.%06lu ",
-                              subsys >> 24, mask, smp_processor_id(),
+                              "%06x:%06x:%d:%lu.%06lu ",
+                              subsys, mask, smp_processor_id(),
                               tv.tv_sec, tv.tv_usec);
         max_nob -= prefix_nob;
 
@@ -743,7 +755,7 @@ portals_debug_msg (int subsys, int mask, char *file, char *fn, int line,
 
         va_start(ap, format);
         msg_nob += vsnprintf(debug_buf + debug_off + prefix_nob + msg_nob,
-                            max_nob, format, ap);
+                             max_nob, format, ap);
         max_nob -= msg_nob;
         va_end(ap);
 
@@ -781,7 +793,7 @@ void portals_debug_set_level(unsigned int debug_level)
         portal_debug = debug_level;
 }
 
-void portals_run_lbug_upcall(char * file, char *fn, int line)
+void portals_run_lbug_upcall(char *file, const char *fn, const int line)
 {
         char *argv[6];
         char *envp[3];
@@ -794,7 +806,7 @@ void portals_run_lbug_upcall(char * file, char *fn, int line)
         argv[0] = portals_upcall;
         argv[1] = "LBUG";
         argv[2] = file;
-        argv[3] = fn;
+        argv[3] = (char *)fn;
         argv[4] = buf;
         argv[5] = NULL;
 
@@ -802,7 +814,7 @@ void portals_run_lbug_upcall(char * file, char *fn, int line)
         envp[1] = "PATH=/sbin:/bin:/usr/sbin:/usr/bin";
         envp[2] = NULL;
 
-        rc = call_usermodehelper(argv[0], argv, envp);
+        rc = USERMODEHELPER(argv[0], argv, envp);
         if (rc < 0) {
                 CERROR("Error invoking lbug upcall %s %s %s %s %s: %d; check "
                        "/proc/sys/portals/upcall\n",                

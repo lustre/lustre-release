@@ -2,14 +2,19 @@
 #define _P30_TYPES_H_
 
 #ifdef __linux__
-#include <asm/types.h>
-#include <asm/timex.h>
+# include <asm/types.h>
+# include <asm/timex.h>
 #else
-#include <sys/types.h>
+# include <sys/types.h>
 typedef u_int32_t __u32;
 typedef u_int64_t __u64;
-typedef unsigned long long cycles_t;
-static inline cycles_t get_cycles(void) { return 0; }
+#endif
+
+#ifdef __KERNEL__
+# include <linux/time.h>
+#else
+# include <sys/time.h>
+# define do_gettimeofday(tv) gettimeofday(tv, NULL)
 #endif
 
 typedef __u64 ptl_nid_t;
@@ -31,7 +36,7 @@ typedef ptl_handle_any_t ptl_handle_md_t;
 typedef ptl_handle_any_t ptl_handle_me_t;
 
 #define PTL_HANDLE_NONE \
-((const ptl_handle_any_t){.nal_idx = -1, .cookie = -1})
+    ((const ptl_handle_any_t){.nal_idx = -1, .cookie = -1})
 #define PTL_EQ_NONE PTL_HANDLE_NONE
 
 static inline int PtlHandleEqual (ptl_handle_any_t h1, ptl_handle_any_t h2)
@@ -108,16 +113,14 @@ typedef struct {
         ptl_handle_me_t unlinked_me;
         ptl_md_t mem_desc;
         ptl_hdr_data_t hdr_data;
-        cycles_t  arrival_time;
+        struct timeval arrival_time;
         volatile ptl_seq_t sequence;
 } ptl_event_t;
-
 
 typedef enum {
         PTL_ACK_REQ,
         PTL_NOACK_REQ
 } ptl_ack_req_t;
-
 
 typedef struct {
         volatile ptl_seq_t sequence;
@@ -129,7 +132,6 @@ typedef struct {
 typedef struct {
         ptl_eq_t *eq;
 } ptl_ni_t;
-
 
 typedef struct {
         int max_match_entries;    /* max number of match entries */

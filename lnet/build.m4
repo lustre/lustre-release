@@ -1,5 +1,4 @@
-
-# ----------  directories ---------
+# ----------  other tests and settings ---------
 
 
 # ---------  unsigned long long sane? -------
@@ -93,16 +92,4 @@ else
 fi
 AC_SUBST(LIBEFENCE)
 AC_SUBST(HAVE_LIBEFENCE)
-
-AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
-AC_MSG_CHECKING(if you are building lib lustre)
-if test "$host_cpu" = "lib"; then
-   AC_MSG_RESULT(yes)
-   libdir='${exec_prefix}/lib/lustre'
-else
-   AC_MSG_RESULT(no)
-fi
-
-# end -------- Kernel build environment. -----------------
-
 

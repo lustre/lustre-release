@@ -4,7 +4,6 @@
 #ifndef _KP30_INCLUDED
 #define _KP30_INCLUDED
 
-
 #define PORTAL_DEBUG
 
 #ifndef offsetof
@@ -13,10 +12,6 @@
 
 #define LOWEST_BIT_SET(x)	((x) & ~((x) - 1))
 
-#ifndef CONFIG_SMP
-# define smp_processor_id() 0
-#endif
-
 /*
  *  Debugging
  */
@@ -24,39 +19,34 @@ extern unsigned int portal_subsystem_debug;
 extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
-/* Debugging subsystems  (8 bit ID)
- *
- * If you add debug subsystem #32, you need to send email to phil, because
- * you're going to break kernel subsystem debug filtering. */
-#define S_UNDEFINED    (0 << 24)
-#define S_MDC          (1 << 24)
-#define S_MDS          (2 << 24)
-#define S_OSC          (3 << 24)
-#define S_OST          (4 << 24)
-#define S_CLASS        (5 << 24)
-#define S_OBDFS        (6 << 24) /* obsolete */
-#define S_LLITE        (7 << 24)
-#define S_RPC          (8 << 24)
-#define S_EXT2OBD      (9 << 24) /* obsolete */
-#define S_PORTALS     (10 << 24)
-#define S_SOCKNAL     (11 << 24)
-#define S_QSWNAL      (12 << 24)
-#define S_PINGER      (13 << 24)
-#define S_FILTER      (14 << 24)
-#define S_TRACE       (15 << 24) /* obsolete */
-#define S_ECHO        (16 << 24)
-#define S_LDLM        (17 << 24)
-#define S_LOV         (18 << 24)
-#define S_GMNAL       (19 << 24)
-#define S_PTLROUTER   (20 << 24)
-#define S_COBD        (21 << 24)
-#define S_PTLBD       (22 << 24)
-#define S_LOG         (23 << 24)
+/* Debugging subsystems (32 bits, non-overlapping) */
+#define S_UNDEFINED    (1 << 0)
+#define S_MDC          (1 << 1)
+#define S_MDS          (1 << 2)
+#define S_OSC          (1 << 3)
+#define S_OST          (1 << 4)
+#define S_CLASS        (1 << 5)
+#define S_LOG          (1 << 6)
+#define S_LLITE        (1 << 7)
+#define S_RPC          (1 << 8)
+#define S_MGMT         (1 << 9)
+#define S_PORTALS     (1 << 10)
+#define S_SOCKNAL     (1 << 11)
+#define S_QSWNAL      (1 << 12)
+#define S_PINGER      (1 << 13)
+#define S_FILTER      (1 << 14)
+#define S_PTLBD       (1 << 15)
+#define S_ECHO        (1 << 16)
+#define S_LDLM        (1 << 17)
+#define S_LOV         (1 << 18)
+#define S_GMNAL       (1 << 19)
+#define S_PTLROUTER   (1 << 20)
+#define S_COBD        (1 << 21)
 
-/* If you change these values, please keep portals/linux/utils/debug.c
+/* If you change these values, please keep portals/utils/debug.c
  * up to date! */
 
-/* Debugging masks (24 bits, non-overlapping) */
+/* Debugging masks (32 bits, non-overlapping) */
 #define D_TRACE     (1 << 0) /* ENTRY/EXIT markers */
 #define D_INODE     (1 << 1)
 #define D_SUPER     (1 << 2)
@@ -80,48 +70,49 @@ extern unsigned int portal_printk;
 #define D_RPCTRACE  (1 << 20) /* for distributed debugging */
 #define D_VFSTRACE  (1 << 21)
 
-#ifndef THREAD_SIZE
-#define THREAD_SIZE 8192
-#endif
-#ifdef  __arch_ia64__
-#define CDEBUG_STACK(var) (&var & (THREAD_SIZE - 1))
+#ifdef __KERNEL__
+# include <linux/sched.h> /* THREAD_SIZE */
 #else
-#define CDEBUG_STACK(var) (THREAD_SIZE -                                      \
-                           ((unsigned long)__builtin_frame_address(0)&        \
-                            (THREAD_SIZE - 1)))
+# define THREAD_SIZE 8192
 #endif
 
 #ifdef __KERNEL__
+# ifdef  __ia64__
+#  define CDEBUG_STACK (THREAD_SIZE -                                      \
+                        ((unsigned long)__builtin_dwarf_cfa() &            \
+                         (THREAD_SIZE - 1)))
+# else
+#  define CDEBUG_STACK (THREAD_SIZE -                                      \
+                        ((unsigned long)__builtin_frame_address(0) &       \
+                         (THREAD_SIZE - 1)))
+# endif
+
 #define CHECK_STACK(stack)                                                    \
         do {                                                                  \
-                if ((stack) > 3*THREAD_SIZE/4 && (stack) > portal_stack)      \
+                if ((stack) > 3*THREAD_SIZE/4 && (stack) > portal_stack) {    \
                         portals_debug_msg(DEBUG_SUBSYSTEM, D_ERROR,           \
                                           __FILE__, __FUNCTION__, __LINE__,   \
                                           (stack),                            \
                                           "maximum lustre stack %u\n",        \
                                           portal_stack = (stack));            \
+                      /*panic("LBUG");*/                                      \
+                }                                                             \
         } while (0)
-#else
-#define CHECK_STACK(stack) do{}while(0)
-#endif
+#else /* __KERNEL__ */
+#define CHECK_STACK(stack) do { } while(0)
+#define CDEBUG_STACK (0L)
+#endif /* __KERNEL__ */
 
+#if 1
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
-        unsigned long stack = CDEBUG_STACK(stack);                            \
-        int match = 0;                                                        \
-                                                                              \
-        CHECK_STACK(stack);                                                   \
-        if (!(mask))                                                          \
-                match = 1;                                                    \
-        else if ((mask) & (D_ERROR | D_EMERG))                                \
-                match = 1;                                                    \
-        else if (portal_debug & (mask) &&                                     \
-                 portal_subsystem_debug & (1 << (DEBUG_SUBSYSTEM >> 24)))     \
-                match = 1;                                                    \
-        if (match)                                                            \
+        CHECK_STACK(CDEBUG_STACK);                                            \
+        if (!(mask) || ((mask) & (D_ERROR | D_EMERG)) ||                      \
+            (portal_debug & (mask) &&                                         \
+             portal_subsystem_debug & DEBUG_SUBSYSTEM))                       \
                 portals_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
                                   __FILE__, __FUNCTION__, __LINE__,           \
-                                  stack, format , ## a);                      \
+                                  CDEBUG_STACK, format, ## a);                \
 } while (0)
 
 #define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
@@ -140,10 +131,8 @@ do {                                                                    \
 #define RETURN(rc)                                                      \
 do {                                                                    \
         typeof(rc) RETURN__ret = (rc);                                  \
-        long tmp = (long)RETURN__ret;                                   \
         CDEBUG(D_TRACE, "Process leaving (rc=%lu : %ld : %lx)\n",       \
-               (unsigned long)tmp, (signed long)tmp,                    \
-               (signed long)tmp);                                       \
+               (long)RETURN__ret, (long)RETURN__ret, (long)RETURN__ret);\
         return RETURN__ret;                                             \
 } while (0)
 
@@ -156,7 +145,16 @@ do {                                                                    \
 do {                                                                    \
         CDEBUG(D_TRACE, "Process leaving\n");                           \
 } while(0)
-
+#else
+#define CDEBUG(mask, format, a...)      do { } while (0)
+#define CWARN(format, a...)             do { } while (0)
+#define CERROR(format, a...)            printk("<3>" format, ## a)
+#define CEMERG(format, a...)            printk("<0>" format, ## a)
+#define GOTO(label, rc)                 do { (void)(rc); goto label; } while (0)
+#define RETURN(rc)                      return (rc)
+#define ENTRY                           do { } while (0)
+#define EXIT                            do { } while (0)
+#endif
 
 #ifdef __KERNEL__
 # include <linux/vmalloc.h>
@@ -205,7 +203,8 @@ static inline void our_cond_resched(void)
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0) */
 
 #ifdef PORTAL_DEBUG
-extern void kportal_assertion_failed(char *expr,char *file,char *func,int line);
+extern void kportal_assertion_failed(char *expr, char *file, const char *func,
+                                     const int line);
 #define LASSERT(e) ((e) ? 0 : kportal_assertion_failed( #e , __FILE__,  \
                                                         __FUNCTION__, __LINE__))
 #else
@@ -213,23 +212,25 @@ extern void kportal_assertion_failed(char *expr,char *file,char *func,int line);
 #endif
 
 #ifdef __arch_um__
-#define LBUG()                                                          \
+#define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG - trying to dump log to /tmp/lustre-log\n");       \
         portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(__FILE__, __FUNCTION__, __LINE__);      \
+        portals_run_lbug_upcall(file, func, line);                      \
         panic("LBUG");                                                  \
 } while (0)
 #else
-#define LBUG()                                                          \
+#define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG\n");                                               \
         portals_debug_dumplog();                                        \
-        portals_run_lbug_upcall(__FILE__, __FUNCTION__, __LINE__);      \
+        portals_run_lbug_upcall(file, func, line);                      \
         set_task_state(current, TASK_UNINTERRUPTIBLE);                  \
         schedule();                                                     \
 } while (0)
 #endif /* __arch_um__ */
+
+#define LBUG() LBUG_WITH_LOC(__FILE__, __FUNCTION__, __LINE__)
 
 /*
  * Memory
@@ -255,28 +256,27 @@ do {                                                                          \
 
 #define PORTAL_ALLOC(ptr, size)                                           \
 do {                                                                      \
-        long s = size;                                                    \
         LASSERT (!in_interrupt());                                        \
-        if (s > PORTAL_VMALLOC_SIZE)                                      \
-                (ptr) = vmalloc(s);                                       \
+        if ((size) > PORTAL_VMALLOC_SIZE)                                 \
+                (ptr) = vmalloc(size);                                    \
         else                                                              \
-                (ptr) = kmalloc(s, GFP_KERNEL);                           \
+                (ptr) = kmalloc((size), GFP_NOFS);                        \
         if ((ptr) == NULL)                                                \
-                CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
-                       " '" #ptr "' = %ld)\n", __FILE__, __LINE__, s);    \
+                CERROR("PORTALS: out of memory at %s:%d (tried to alloc '"\
+                       #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
         else {                                                            \
-                portal_kmem_inc((ptr), s);                                \
-                memset((ptr), 0, s);                                      \
+                portal_kmem_inc((ptr), (size));                           \
+                memset((ptr), 0, (size));                                 \
         }                                                                 \
-        CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %ld at %p (tot %d).\n",   \
-               s, (ptr), atomic_read (&portal_kmemory));                  \
+        CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
+               (int)(size), (ptr), atomic_read (&portal_kmemory));        \
 } while (0)
 
 #define PORTAL_FREE(ptr, size)                                          \
 do {                                                                    \
-        long s = (size);                                                \
+        int s = (size);                                                 \
         if ((ptr) == NULL) {                                            \
-                CERROR("PORTALS: free NULL '" #ptr "' (%ld bytes) at "  \
+                CERROR("PORTALS: free NULL '" #ptr "' (%d bytes) at "   \
                        "%s:%d\n", s, __FILE__, __LINE__);               \
                 break;                                                  \
         }                                                               \
@@ -285,39 +285,38 @@ do {                                                                    \
         else                                                            \
                 kfree(ptr);                                             \
         portal_kmem_dec((ptr), s);                                      \
-        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %ld at %p (tot %d).\n",    \
-               s, (ptr), atomic_read (&portal_kmemory));                \
+        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
+               s, (ptr), atomic_read(&portal_kmemory));                 \
 } while (0)
 
 #define PORTAL_SLAB_ALLOC(ptr, slab, size)                                \
 do {                                                                      \
-        long s = (size);                                                  \
-        LASSERT (!in_interrupt());                                        \
+        LASSERT(!in_interrupt());                                         \
         (ptr) = kmem_cache_alloc((slab), SLAB_KERNEL);                    \
         if ((ptr) == NULL) {                                              \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
                        " '" #ptr "' from slab '" #slab "')\n", __FILE__,  \
                        __LINE__);                                         \
         } else {                                                          \
-                portal_kmem_inc((ptr), s);                                \
-                memset((ptr), 0, s);                                      \
+                portal_kmem_inc((ptr), (size));                           \
+                memset((ptr), 0, (size));                                 \
         }                                                                 \
         CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %ld at %p (tot %d).\n",   \
-               s, (ptr), atomic_read (&portal_kmemory));                  \
+               (int)(size), (ptr), atomic_read(&portal_kmemory));         \
 } while (0)
 
 #define PORTAL_SLAB_FREE(ptr, slab, size)                               \
 do {                                                                    \
-        long s = (size);                                                \
+        int s = (size);                                                 \
         if ((ptr) == NULL) {                                            \
-                CERROR("PORTALS: free NULL '" #ptr "' (%ld bytes) at "  \
+                CERROR("PORTALS: free NULL '" #ptr "' (%d bytes) at "   \
                        "%s:%d\n", s, __FILE__, __LINE__);               \
                 break;                                                  \
         }                                                               \
         memset((ptr), 0x5a, s);                                         \
         kmem_cache_free((slab), ptr);                                   \
         portal_kmem_dec((ptr), s);                                      \
-        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %ld at %p (tot %d).\n",    \
+        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
                s, (ptr), atomic_read (&portal_kmemory));                \
 } while (0)
 
@@ -460,8 +459,8 @@ kpr_lookup (kpr_router_t *router, ptl_nid_t nid, ptl_nid_t *gateway_nid)
 }
 
 static inline void
-kpr_fwd_init (kpr_fwd_desc_t *fwd, ptl_nid_t nid, 
-              int nob, int niov, struct iovec *iov, 
+kpr_fwd_init (kpr_fwd_desc_t *fwd, ptl_nid_t nid,
+              int nob, int niov, struct iovec *iov,
               kpr_fwd_callback_t callback, void *callback_arg)
 {
         fwd->kprfd_target_nid   = nid;
@@ -555,14 +554,14 @@ extern struct prof_ent prof_ents[MAX_PROFS];
 #endif /* PORTALS_PROFILING */
 
 /* debug.c */
-void portals_run_lbug_upcall(char * file, char *fn, int line);
+void portals_run_lbug_upcall(char * file, const char *fn, const int line);
 void portals_debug_dumplog(void);
 int portals_debug_init(unsigned long bufsize);
 int portals_debug_cleanup(void);
 int portals_debug_clear_buffer(void);
 int portals_debug_mark_buffer(char *text);
 int portals_debug_set_daemon(unsigned int cmd, unsigned int length,
-                char *file, unsigned int size);
+                             char *file, unsigned int size);
 __s32 portals_debug_copy_to_user(char *buf, unsigned long len);
 #if (__GNUC__)
 /* Use the special GNU C __attribute__ hack to have the compiler check the
@@ -573,13 +572,14 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len);
 # warning printf has been defined as a macro...
 # undef printf
 #endif
-void portals_debug_msg (int subsys, int mask, char *file, char *fn, int line,
-                        unsigned long stack, const char *format, ...)
+void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
+                       const int line, unsigned long stack,
+                       const char *format, ...)
         __attribute__ ((format (printf, 7, 8)));
 #else
-void portals_debug_msg (int subsys, int mask, char *file, char *fn,
-                        int line, unsigned long stack,
-                        const char *format, ...);
+void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
+                       const int line, unsigned long stack,
+                       const char *format, ...);
 #endif /* __GNUC__ */
 void portals_debug_set_level(unsigned int debug_level);
 
@@ -605,7 +605,7 @@ extern void kportal_blockallsigs (void);
 # ifdef PORTAL_DEBUG
 #  undef NDEBUG
 #  include <assert.h>
-#  define LASSERT(e)	assert(e)
+#  define LASSERT(e)     assert(e)
 # else
 #  define LASSERT(e)
 # endif
@@ -613,9 +613,9 @@ extern void kportal_blockallsigs (void);
 # define PORTAL_ALLOC(ptr, size) do { (ptr) = malloc(size); } while (0);
 # define PORTAL_FREE(a, b) do { free(a); } while (0);
 # define portals_debug_msg(subsys, mask, file, fn, line, stack, format, a...) \
-    printf ("%02x:%06x (@%lu %s:%s,l. %d %d %lu): " format,                    \
-            (subsys) >> 24, (mask), (long)time(0), file, fn, line,            \
-            getpid() , stack, ## a);
+    printf("%02x:%06x (@%lu %s:%s,l. %d %d %lu): " format,                    \
+           (subsys), (mask), (long)time(0), file, fn, line,                   \
+           getpid() , stack, ## a);
 #endif
 
 #ifndef CURRENT_TIME
@@ -906,13 +906,13 @@ ptl_handle_ni_t *kportal_get_ni (int nal);
 void kportal_put_ni (int nal);
 
 #ifdef __CYGWIN__
-#ifndef BITS_PER_LONG
-#if (~0UL) == 0xffffffffUL
-#define BITS_PER_LONG 32
-#else 
-#define BITS_PER_LONG 64
-#endif
-#endif
+# ifndef BITS_PER_LONG
+#  if (~0UL) == 0xffffffffUL
+#   define BITS_PER_LONG 32
+#  else
+#   define BITS_PER_LONG 64
+#  endif
+# endif
 #endif
 
 #if (BITS_PER_LONG == 32 || __WORDSIZE == 32)

@@ -120,9 +120,10 @@ int read_connection(connection c,
     return(1);
 }
 
-static int connection_input(connection c)
+static int connection_input(void *d)
 {
-    return((*c->m->handler)(c->m->handler_arg,c));
+        connection c = d;
+        return((*c->m->handler)(c->m->handler_arg,c));
 }
 
 
@@ -280,7 +281,7 @@ void shutdown_connections(manager m)
  *          zero if the fixed port could not be bound
  */
 manager init_connections(unsigned short pid,
-                         int (*input)(),
+                         int (*input)(void *, void *),
                          void *a)
 {
     manager m=(manager)malloc(sizeof(struct manager));

@@ -19,7 +19,9 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 #define DEBUG_SUBSYSTEM S_PORTALS
 
 #include <linux/config.h>
@@ -45,6 +47,7 @@
 #include <portals/lib-p30.h>
 #include <portals/p30.h>
 #include <linux/kp30.h>
+#include <linux/portals_compat25.h>
 
 #define PORTAL_MINOR 240
 
@@ -59,13 +62,12 @@ static struct nal_cmd_handler nal_cmd[NAL_MAX_NR + 1];
 struct semaphore nal_cmd_sem;
 
 #ifdef PORTAL_DEBUG
-void
-kportal_assertion_failed (char *expr, char *file, char *func, int line)
+void kportal_assertion_failed(char *expr, char *file, const char *func,
+                              const int line)
 {
-        unsigned long stack = CDEBUG_STACK(stack);
-        portals_debug_msg(0, D_EMERG, file, func, line, stack,
+        portals_debug_msg(0, D_EMERG, file, func, line, CDEBUG_STACK,
                           "ASSERTION(%s) failed\n", expr);
-        LBUG();
+        LBUG_WITH_LOC(file, func, line);
 }
 #endif
 
@@ -85,10 +87,10 @@ kportal_blockallsigs ()
 {
         unsigned long  flags;
 
-        spin_lock_irqsave (&current->sigmask_lock, flags);
-        siginitsetinv (&current->blocked, 0);
-        recalc_sigpending (current);
-        spin_unlock_irqrestore (&current->sigmask_lock, flags);
+        SIGNAL_MASK_LOCK(current, flags);
+        sigfillset(&current->blocked);
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
 }
 
 /* called when opening /dev/device */
@@ -427,6 +429,7 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                         return (-EINVAL);
 
                 err = PtlFailNid (*nip, data->ioc_nid, data->ioc_count);
+                kportal_put_ni (data->ioc_nal);
                 break;
         }
 
@@ -556,6 +559,7 @@ EXPORT_SYMBOL(lib_copy_kiov2buf);
 EXPORT_SYMBOL(lib_copy_buf2kiov);
 EXPORT_SYMBOL(lib_finalize);
 EXPORT_SYMBOL(lib_parse);
+EXPORT_SYMBOL(lib_fake_reply_msg);
 EXPORT_SYMBOL(lib_init);
 EXPORT_SYMBOL(lib_fini);
 EXPORT_SYMBOL(portal_kmemory);

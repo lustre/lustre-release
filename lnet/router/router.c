@@ -23,8 +23,8 @@
 
 #include "router.h"
 
-struct list_head kpr_routes;
-struct list_head kpr_nals;
+LIST_HEAD(kpr_routes);
+LIST_HEAD(kpr_nals);
 
 unsigned long long kpr_fwd_bytes;
 unsigned long      kpr_fwd_packets;
@@ -35,7 +35,7 @@ atomic_t           kpr_queue_depth;
  *
  * Once in a blue moon we register/deregister NALs and add/remove routing
  * entries (thread context only)... */
-rwlock_t         kpr_rwlock;
+rwlock_t         kpr_rwlock = RW_LOCK_UNLOCKED;
 
 kpr_router_interface_t kpr_router_interface = {
 	kprri_register:		kpr_register_nal,
@@ -55,7 +55,7 @@ kpr_control_interface_t kpr_control_interface = {
 int
 kpr_register_nal (kpr_nal_interface_t *nalif, void **argp)
 {
-	long		   flags;
+	unsigned long      flags;
 	struct list_head  *e;
 	kpr_nal_entry_t   *ne;
 
@@ -98,7 +98,7 @@ kpr_register_nal (kpr_nal_interface_t *nalif, void **argp)
 void
 kpr_shutdown_nal (void *arg)
 {
-	long             flags;
+	unsigned long    flags;
 	kpr_nal_entry_t *ne = (kpr_nal_entry_t *)arg;
 
         CDEBUG (D_OTHER, "Shutting down NAL %d\n", ne->kpne_interface.kprni_nalid);
@@ -123,7 +123,7 @@ kpr_shutdown_nal (void *arg)
 void
 kpr_deregister_nal (void *arg)
 {
-	long              flags;
+	unsigned long     flags;
 	kpr_nal_entry_t  *ne = (kpr_nal_entry_t *)arg;
 
         CDEBUG (D_OTHER, "Deregister NAL %d\n", ne->kpne_interface.kprni_nalid);
@@ -202,15 +202,15 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
         LASSERT (nob == lib_iov_nob (fwd->kprfd_niov, fwd->kprfd_iov));
         
         atomic_inc (&kpr_queue_depth);
+	atomic_inc (&src_ne->kpne_refcount); /* source nal is busy until fwd completes */
 
         kpr_fwd_packets++;                   /* (loose) stats accounting */
         kpr_fwd_bytes += nob;
 
-	if (src_ne->kpne_shutdown)			/* caller is shutting down */
+	if (src_ne->kpne_shutdown)           /* caller is shutting down */
 		goto out;
 
-	fwd->kprfd_router_arg = src_ne;		/* stash caller's nal entry */
-	atomic_inc (&src_ne->kpne_refcount);	/* source nal is busy until fwd completes */
+	fwd->kprfd_router_arg = src_ne;      /* stash caller's nal entry */
 
 	read_lock (&kpr_rwlock);
 
@@ -296,7 +296,7 @@ int
 kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
                ptl_nid_t hi_nid)
 {
-	long	           flags;
+	unsigned long	   flags;
 	struct list_head  *e;
 	kpr_route_entry_t *re;
 
@@ -345,7 +345,7 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
 int
 kpr_del_route (ptl_nid_t nid)
 {
-	long	           flags;
+	unsigned long	   flags;
 	struct list_head  *e;
 
         CDEBUG(D_OTHER, "Del route "LPX64"\n", nid);
@@ -398,7 +398,7 @@ kpr_get_route(int idx, int *gateway_nalid, ptl_nid_t *gateway_nid,
         return (-ENOENT);
 }
 
-static void __exit
+static void /*__exit*/
 kpr_finalise (void)
 {
         LASSERT (list_empty (&kpr_nals));
@@ -426,10 +426,6 @@ kpr_initialise (void)
 {
         CDEBUG(D_MALLOC, "kpr_initialise: kmem %d\n",
                atomic_read(&portal_kmemory));
-
-	rwlock_init(&kpr_rwlock);
-	INIT_LIST_HEAD(&kpr_routes);
-	INIT_LIST_HEAD(&kpr_nals);
 
         kpr_proc_init();
 

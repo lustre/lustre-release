@@ -24,7 +24,9 @@
 
 #ifndef _QSWNAL_H
 #define _QSWNAL_H
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #ifdef PROPRIETARY_ELAN
 # include <qsw/kernel.h>
@@ -73,6 +75,8 @@
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 
+#define KQSW_OPTIMIZE_GETS 1
+
 #define KQSW_CHECKSUM	0
 #if KQSW_CHECKSUM
 typedef unsigned long kqsw_csum_t;
@@ -93,18 +97,13 @@ typedef unsigned long kqsw_csum_t;
  * Performance Tuning defines
  * NB no mention of PAGE_SIZE for interoperability
  */
-#if PTL_LARGE_MTU
-# define KQSW_MAXPAYLOAD		(256<<10) /* biggest message this NAL will cope with */
-#else
-# define KQSW_MAXPAYLOAD		(64<<10) /* biggest message this NAL will cope with */
-#endif
-
+#define KQSW_MAXPAYLOAD                 PTL_MTU
 #define KQSW_SMALLPAYLOAD		((4<<10) - KQSW_HDR_SIZE) /* small/large ep receiver breakpoint */
 
 #define KQSW_TX_MAXCONTIG           	(1<<10)	/* largest payload that gets made contiguous on transmit */
 
 #define KQSW_NTXMSGS		     	8       /* # normal transmit messages */
-#define KQSW_NNBLK_TXMSGS		128     /* # reserved transmit messages if can't block */
+#define KQSW_NNBLK_TXMSGS		256     /* # reserved transmit messages if can't block */
 
 #define KQSW_NRXMSGS_LARGE           	64      /* # large receive buffers */
 #define KQSW_EP_ENVELOPES_LARGE       	128	/* # large ep envelopes */
@@ -134,6 +133,12 @@ typedef unsigned long kqsw_csum_t;
 #define KQSW_NRXMSGBYTES_LARGE	(KQSW_NRXMSGPAGES_LARGE * PAGE_SIZE)
 /* biggest complete packet we can receive (or transmit) */
 
+/* Remote memory descriptor */
+typedef struct
+{
+        __u32            kqrmd_neiov;           /* # frags */
+        EP_IOVEC         kqrmd_eiov[0];         /* actual frags */
+} kqswnal_remotemd_t;
 
 typedef struct 
 {
@@ -143,6 +148,8 @@ typedef struct
         E3_Addr          krx_elanaddr;          /* Elan address of buffer (contiguous in elan vm) */
         int              krx_npages;            /* # pages in receive buffer */
         int              krx_nob;               /* Number Of Bytes received into buffer */
+        atomic_t         krx_refcount;          /* who's using me? */
+        int              krx_rpc_completed;     /* I completed peer's RPC */
         kpr_fwd_desc_t   krx_fwd;               /* embedded forwarding descriptor */
         struct page     *krx_pages[KQSW_NRXMSGPAGES_LARGE]; /* pages allocated */
         struct iovec     krx_iov[KQSW_NRXMSGPAGES_LARGE]; /* iovec for forwarding */
@@ -156,18 +163,22 @@ typedef struct
         uint32_t          ktx_basepage;         /* page offset in reserved elan tx vaddrs for mapping pages */
         int               ktx_npages;           /* pages reserved for mapping messages */
         int               ktx_nmappedpages;     /* # pages mapped for current message */
-        EP_IOVEC	  ktx_iov[EP_MAXFRAG];  /* msg frags (elan vaddrs) */
-        int               ktx_niov;             /* # message frags */
         int               ktx_port;             /* destination ep port */
         ptl_nid_t         ktx_nid;              /* destination node */
         void             *ktx_args[2];          /* completion passthru */
         E3_Addr		  ktx_ebuffer;          /* elan address of ktx_buffer */
         char             *ktx_buffer;           /* pre-allocated contiguous buffer for hdr + small payloads */
+        int               ktx_nfrag;            /* # message frags */
+        union {
+                EP_IOVEC   iov[EP_MAXFRAG];     /* msg frags (elan vaddrs) */
+                EP_DATAVEC datav[EP_MAXFRAG];   /* DMA frags (eolan vaddrs) */
+        }                 ktx_frags;
 } kqswnal_tx_t;
 
 #define KTX_IDLE	0                       /* MUST BE ZERO (so zeroed ktx is idle) */
 #define KTX_SENDING	1                       /* local send */
 #define KTX_FORWARDING	2                       /* routing a packet */
+#define KTX_GETTING     3                       /* local optimised get */
 
 typedef struct
 {
@@ -200,6 +211,10 @@ typedef struct
 	ELAN3_DMA_HANDLE  *kqn_eptxdmahandle;   /* elan reserved tx vaddrs */
 	ELAN3_DMA_HANDLE  *kqn_eprxdmahandle;   /* elan reserved rx vaddrs */
         kpr_router_t       kqn_router;          /* connection to Kernel Portals Router module */
+
+        ptl_nid_t          kqn_nid_offset;      /* this cluster's NID offset */
+        int                kqn_nnodes;          /* this cluster's size */
+        int                kqn_elanid;          /* this nodes's elan ID */
 }  kqswnal_data_t;
 
 /* kqn_init state */
@@ -216,12 +231,24 @@ extern int kqswnal_thread_start (int (*fn)(void *arg), void *arg);
 extern void kqswnal_rxhandler(EP_RXD *rxd);
 extern int kqswnal_scheduler (void *);
 extern void kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd);
+extern void kqswnal_reply_complete (EP_RXD *rxd);
+extern void kqswnal_requeue_rx (kqswnal_rx_t *krx);
 
-static inline void
-kqswnal_requeue_rx (kqswnal_rx_t *krx)
+static inline ptl_nid_t
+kqswnal_elanid2nid (int elanid) 
 {
-        ep_requeue_receive (krx->krx_rxd, kqswnal_rxhandler, krx,
-                            krx->krx_elanaddr, krx->krx_npages * PAGE_SIZE);
+        return (kqswnal_data.kqn_nid_offset + elanid);
+}
+
+static inline int
+kqswnal_nid2elanid (ptl_nid_t nid) 
+{
+        /* not in this cluster? */
+        if (nid < kqswnal_data.kqn_nid_offset ||
+            nid >= kqswnal_data.kqn_nid_offset + kqswnal_data.kqn_nnodes)
+                return (-1);
+        
+        return (nid - kqswnal_data.kqn_nid_offset);
 }
 
 static inline int

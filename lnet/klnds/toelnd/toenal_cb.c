@@ -423,11 +423,10 @@ ktoenal_send(nal_cb_t *nal, void *private, lib_msg_t *cookie,
          * packet as a side-effect of another packet, such as when an ACK has
          * been requested. -phil */
 
-        CDEBUG(D_NET, "sending "LPSZ" bytes from [%d](%p,%d)... to nid: "LPX64" pid %d\n",
-               payload_len, payload_niov,
+        CDEBUG(D_NET, "sending %d bytes from [%d](%p,%d)... to nid: "
+               LPX64" pid %d\n", (int)payload_len, payload_niov,
                payload_niov > 0 ? payload_iov[0].iov_base : NULL,
-               payload_niov > 0 ? payload_iov[0].iov_len  : 0,
-               nid, pid);
+               (int)(payload_niov > 0 ? payload_iov[0].iov_len : 0), nid, pid);
 
         if ((conn = ktoenal_get_conn (nid)) == NULL)
         {
@@ -894,6 +893,7 @@ ktoenal_process_receive (ksock_conn_t *conn, long *irq_flags)
                                 spin_lock_irqsave (&ktoenal_data.ksnd_sched_lock, *irq_flags);
                                 goto get_fmb;   /* => go get a fwd msg buffer */
                         default:
+                                break;
                         }
                         /* Not Reached */
                         LBUG ();
@@ -935,6 +935,7 @@ ktoenal_process_receive (ksock_conn_t *conn, long *irq_flags)
                 goto out;                       /* (later) */
 
         default:
+                break;
         }
 
         /* Not Reached */

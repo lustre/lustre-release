@@ -95,10 +95,8 @@ nal_t *
 ksocknal_init(int interface, ptl_pt_index_t ptl_size,
               ptl_ac_index_t ac_size, ptl_pid_t requested_pid)
 {
-        CDEBUG(D_NET, "calling lib_init with nid "LPX64"\n",
-               ksocknal_data.ksnd_mynid);
-        lib_init(&ksocknal_lib, ksocknal_data.ksnd_mynid, 0, 10, ptl_size,
-                 ac_size);
+        CDEBUG(D_NET, "calling lib_init with nid "LPX64"\n", (ptl_nid_t)0);
+        lib_init(&ksocknal_lib, (ptl_nid_t)0, 0, 10, ptl_size, ac_size);
         return (&ksocknal_api);
 }
 
@@ -129,7 +127,6 @@ ksocknal_set_mynid(ptl_nid_t nid)
         CDEBUG(D_IOCTL, "setting mynid to "LPX64" (old nid="LPX64")\n",
                nid, ni->nid);
 
-        ksocknal_data.ksnd_mynid = nid;
         ni->nid = nid;
         return (0);
 }
@@ -169,7 +166,7 @@ ksocknal_add_sock (ptl_nid_t nid, int fd, int bind_irq)
         struct socket     *sock = NULL;
         ksock_sched_t     *sched = NULL;
         unsigned int       irq = 0;
-        struct net_device *dev = NULL;
+        struct dst_entry  *dst;
         int                ret;
         int                idx;
         ENTRY;
@@ -190,12 +187,16 @@ ksocknal_add_sock (ptl_nid_t nid, int fd, int bind_irq)
         if (!conn)
                 GOTO(error, ret);
 
-        memset (conn, 0, sizeof (conn));        /* zero for consistency */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        sock->sk->allocation = GFP_NOFS;    /* don't call info fs for alloc */
+#else
+#warning Zach, Eric: fix me!!
+#endif
 
         conn->ksnc_file = file;
         conn->ksnc_sock = sock;
-        conn->ksnc_saved_data_ready = sock->sk->data_ready;
-        conn->ksnc_saved_write_space = sock->sk->write_space;
+        conn->ksnc_saved_data_ready = sock->sk->sk_data_ready;
+        conn->ksnc_saved_write_space = sock->sk->sk_write_space;
         conn->ksnc_peernid = nid;
         atomic_set (&conn->ksnc_refcount, 1);    /* 1 ref for socklist */
 
@@ -207,21 +208,17 @@ ksocknal_add_sock (ptl_nid_t nid, int fd, int bind_irq)
         conn->ksnc_tx_ready = 0;
         conn->ksnc_tx_scheduled = 0;
 
-#warning check it is OK to derefence sk->dst_cache->dev like this...
-        lock_sock (conn->ksnc_sock->sk);
-
-        if (conn->ksnc_sock->sk->dst_cache != NULL) {
-                dev = conn->ksnc_sock->sk->dst_cache->dev;
-                if (dev != NULL) {
-                        irq = dev->irq;
+        dst = sk_dst_get (conn->ksnc_sock->sk);
+        if (dst != NULL) {
+                if (dst->dev != NULL) {
+                        irq = dst->dev->irq;
                         if (irq >= NR_IRQS) {
                                 CERROR ("Unexpected IRQ %x\n", irq);
                                 irq = 0;
                         }
                 }
+                dst_release (dst);
         }
-
-        release_sock (conn->ksnc_sock->sk);
 
         write_lock_irqsave (&ksocknal_data.ksnd_socklist_lock, flags);
 
@@ -271,9 +268,9 @@ ksocknal_add_sock (ptl_nid_t nid, int fd, int bind_irq)
                 ksocknal_bind_irq (irq, sched - ksocknal_data.ksnd_schedulers);
 
         /* NOW it's safe to get called back when socket is ready... */
-        sock->sk->user_data = conn;
-        sock->sk->data_ready = ksocknal_data_ready;
-        sock->sk->write_space = ksocknal_write_space;
+        sock->sk->sk_user_data = conn;
+        sock->sk->sk_data_ready = ksocknal_data_ready;
+        sock->sk->sk_write_space = ksocknal_write_space;
 
         /* ...which I call right now to get things going */
         ksocknal_data_ready (sock->sk, 0);
@@ -295,7 +292,7 @@ error:
 int
 ksocknal_close_sock(ptl_nid_t nid)
 {
-        long               flags;
+        unsigned long      flags;
         ksock_conn_t      *conn;
         LIST_HEAD         (death_row);
         struct list_head  *tmp;
@@ -332,8 +329,8 @@ ksocknal_close_sock(ptl_nid_t nid)
                 /* NB I _have_ to restore the callback, rather than storing
                  * a noop, since the socket could survive past this module
                  * being unloaded!! */
-                conn->ksnc_sock->sk->data_ready = conn->ksnc_saved_data_ready;
-                conn->ksnc_sock->sk->write_space = conn->ksnc_saved_write_space;
+                conn->ksnc_sock->sk->sk_data_ready = conn->ksnc_saved_data_ready;
+                conn->ksnc_sock->sk->sk_write_space = conn->ksnc_saved_write_space;
 
                 /* OK; no more callbacks, but they could be in progress now,
                  * so wait for them to complete... */
@@ -342,7 +339,7 @@ ksocknal_close_sock(ptl_nid_t nid)
                 /* ...however if I get the lock before a callback gets it,
                  * this will make them noop
                  */
-                conn->ksnc_sock->sk->user_data = NULL;
+                conn->ksnc_sock->sk->sk_user_data = NULL;
 
                 /* And drop the scheduler's connection count while I've got
                  * the exclusive lock */
@@ -388,8 +385,8 @@ ksocknal_push_conn (ksock_conn_t *conn)
         oldmm = get_fs ();
         set_fs (KERNEL_DS);
 
-        rc = sk->prot->setsockopt (sk, SOL_TCP, TCP_NODELAY,
-                                   (char *)&val, sizeof (val));
+        rc = sk->sk_prot->setsockopt (sk, SOL_TCP, TCP_NODELAY,
+                                      (char *)&val, sizeof (val));
         LASSERT (rc == 0);
 
         set_fs (oldmm);
@@ -508,15 +505,10 @@ _ksocknal_put_conn (ksock_conn_t *conn)
          * "That's a summons, mate..." */
 
         LASSERT (atomic_read (&conn->ksnc_refcount) == 0);
-        LASSERT (conn->ksnc_sock->sk->data_ready != ksocknal_data_ready);
-        LASSERT (conn->ksnc_sock->sk->write_space != ksocknal_write_space);
-        LASSERT (conn->ksnc_sock->sk->user_data == NULL);
+        LASSERT (conn->ksnc_sock->sk->sk_data_ready != ksocknal_data_ready);
+        LASSERT (conn->ksnc_sock->sk->sk_write_space != ksocknal_write_space);
+        LASSERT (conn->ksnc_sock->sk->sk_user_data == NULL);
         LASSERT (!conn->ksnc_rx_scheduled);
-
-        if (!in_interrupt()) {
-                ksocknal_close_conn (conn);
-                return;
-        }
 
         spin_lock_irqsave (&ksocknal_data.ksnd_reaper_lock, flags);
 
@@ -818,7 +810,7 @@ ksocknal_module_init (void)
 
                         LASSERT (fmb->fmb_npages > 0);
                         for (j = 0; j < fmb->fmb_npages; j++) {
-                                fmb->fmb_pages[j] = alloc_page (GFP_KERNEL);
+                                fmb->fmb_pages[j] = alloc_page(GFP_KERNEL);
 
                                 if (fmb->fmb_pages[j] == NULL) {
                                         ksocknal_module_fini ();

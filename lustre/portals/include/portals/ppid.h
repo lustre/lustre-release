@@ -1,7 +1,3 @@
-/*
- * TITLE(ppid_h, "@(#) $Id: ppid.h,v 1.1.6.1 2003/05/19 17:55:55 freym Exp $");
- */
-
 #ifndef _INCppidh_
 #define _INCppidh_
 

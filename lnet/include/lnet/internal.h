@@ -1,6 +1,3 @@
-/*
-** $Id: internal.h,v 1.1.6.1 2003/05/19 17:55:55 freym Exp $
-*/
 #ifndef _P30_INTERNAL_H_
 #define _P30_INTERNAL_H_
 

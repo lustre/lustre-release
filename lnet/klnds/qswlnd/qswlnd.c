@@ -101,14 +101,34 @@ static nal_t *
 kqswnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size,
 	     ptl_pid_t requested_pid)
 {
-	ptl_nid_t mynid = ep_nodeid (kqswnal_data.kqn_epdev);
-	int       nnids = ep_numnodes (kqswnal_data.kqn_epdev);
+	ptl_nid_t mynid = kqswnal_elanid2nid (kqswnal_data.kqn_elanid);
+	int       nnids = kqswnal_data.kqn_nnodes;
 
-        CDEBUG(D_NET, "calling lib_init with nid "LPX64" of %d\n", mynid,nnids);
+        CDEBUG(D_NET, "calling lib_init with nid "LPX64" of %d\n", mynid, nnids);
 
 	lib_init(&kqswnal_lib, mynid, 0, nnids, ptl_size, ac_size);
 
 	return (&kqswnal_api);
+}
+
+int
+kqswnal_cmd (struct portal_ioctl_data *data, void *private)
+{
+	LASSERT (data != NULL);
+	
+	switch (data->ioc_nal_cmd) {
+	case NAL_CMD_REGISTER_MYNID:
+		CDEBUG (D_IOCTL, "setting NID offset to "LPX64" (was "LPX64")\n",
+			data->ioc_nid - kqswnal_data.kqn_elanid,
+			kqswnal_data.kqn_nid_offset);
+		kqswnal_data.kqn_nid_offset =
+			data->ioc_nid - kqswnal_data.kqn_elanid;
+		kqswnal_lib.ni.nid = data->ioc_nid;
+		return (0);
+		
+	default:
+		return (-EINVAL);
+	}
 }
 
 void __exit
@@ -324,6 +344,10 @@ kqswnal_initialise (void)
 		return (-ENOMEM);
 	}
 
+	kqswnal_data.kqn_nid_offset = 0;
+	kqswnal_data.kqn_nnodes     = ep_numnodes (kqswnal_data.kqn_epdev);
+	kqswnal_data.kqn_elanid     = ep_nodeid (kqswnal_data.kqn_epdev);
+	
 	/**********************************************************************/
 	/* Get the transmitter */
 
@@ -359,12 +383,14 @@ kqswnal_initialise (void)
 	}
 
 	/**********************************************************************/
-	/* Reserve Elan address space for transmit buffers */
+	/* Reserve Elan address space for transmit descriptors NB we may
+	 * either send the contents of associated buffers immediately, or
+	 * map them for the peer to suck/blow... */
 
         dmareq.Waitfn   = DDI_DMA_SLEEP;
         dmareq.ElanAddr = (E3_Addr) 0;
         dmareq.Attr     = PTE_LOAD_LITTLE_ENDIAN;
-        dmareq.Perm     = ELAN_PERM_REMOTEREAD;
+        dmareq.Perm     = ELAN_PERM_REMOTEWRITE;
 
 	rc = elan3_dma_reserve(kqswnal_data.kqn_epdev->DmaState,
 			      KQSW_NTXMSGPAGES*(KQSW_NTXMSGS+KQSW_NNBLK_TXMSGS),
@@ -477,7 +503,7 @@ kqswnal_initialise (void)
 		LASSERT (krx->krx_npages > 0);
 		for (j = 0; j < krx->krx_npages; j++)
 		{
-			krx->krx_pages[j] = alloc_page (GFP_KERNEL);
+			krx->krx_pages[j] = alloc_page(GFP_KERNEL);
 			if (krx->krx_pages[j] == NULL)
 			{
 				kqswnal_finalise ();
@@ -528,7 +554,7 @@ kqswnal_initialise (void)
 		rc = ep_queue_receive(krx->krx_eprx, kqswnal_rxhandler, krx,
 				      krx->krx_elanaddr,
 				      krx->krx_npages * PAGE_SIZE, 0);
-		if (rc != 0)
+		if (rc != ESUCCESS)
 		{
 			CERROR ("failed ep_queue_receive %d\n", rc);
 			kqswnal_finalise ();
@@ -554,13 +580,19 @@ kqswnal_initialise (void)
 	rc = kpr_register (&kqswnal_data.kqn_router, &kqswnal_router_interface);
 	CDEBUG(D_NET, "Can't initialise routing interface (rc = %d): not routing\n",rc);
 
+	rc = kportal_nal_register (QSWNAL, &kqswnal_cmd, NULL);
+	if (rc != 0) {
+		CERROR ("Can't initialise command interface (rc = %d)\n", rc);
+		kqswnal_finalise ();
+		return (rc);
+	}
+
 	PORTAL_SYMBOL_REGISTER(kqswnal_ni);
 	kqswnal_data.kqn_init = KQN_INIT_ALL;
 
 	printk(KERN_INFO "Routing QSW NAL loaded on node %d of %d "
 	       "(Routing %s, initial mem %d)\n", 
-	       ep_nodeid (kqswnal_data.kqn_epdev),
-	       ep_numnodes (kqswnal_data.kqn_epdev),
+	       kqswnal_data.kqn_elanid, kqswnal_data.kqn_nnodes,
 	       kpr_routing (&kqswnal_data.kqn_router) ? "enabled" : "disabled",
 	       pkmem);
 

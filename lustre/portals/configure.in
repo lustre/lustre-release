@@ -13,7 +13,6 @@ AM_INIT_AUTOMAKE(portals, builtin([esyscmd], [sed -ne '/.*define IVERSION /{ s/.
 
 sinclude(build.m4)
 sinclude(archdep.m4)
-sinclude<portalsconf.m4)
 
 if test x$enable_inkernel = xyes ; then
 cp Kernelenv.mk Kernelenv.in
@@ -31,6 +30,5 @@ AC_OUTPUT([Makefile Kernelenv libcfs/Makefile portals/Makefile \
           unals/Makefile knals/Makefile router/Makefile \
 	  knals/socknal/Makefile knals/gmnal/Makefile knals/qswnal/Makefile \
 	  knals/scimacnal/Makefile knals/toenal/Makefile \
-          utils/Makefile tests/Makefile doc/Makefile \
-          packaging/Makefile packaging/portals.spec ])
+          utils/Makefile tests/Makefile doc/Makefile ])
 

@@ -13,4 +13,5 @@ EXTRA_PROGRAMS = kqswnal
 #CFLAGS:= @KCFLAGS@ 
 #CPPFLAGS:=@KCPPFLAGS@
 DEFS =
+CPPFLAGS=@CPPFLAGS@ @with_quadrics@
 kqswnal_SOURCES = qswnal.c qswnal_cb.c qswnal.h
