@@ -44,8 +44,12 @@ struct obd_device *client_tgtuuid2obd(struct obd_uuid *tgtuuid)
 
         for (i = 0; i < MAX_OBD_DEVICES; i++) {
                 struct obd_device *obd = &obd_dev[i];
-                if ((strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0) ||
-                    (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0)) {
+                if (obd->obd_type == NULL)
+                        continue;
+                if ((strncmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME,
+                             sizeof LUSTRE_OSC_NAME) == 0) ||
+                    (strncmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME,
+                             sizeof LUSTRE_MDC_NAME) == 0)) {
                         struct client_obd *cli = &obd->u.cli;
                         struct obd_import *imp = cli->cl_import;
                         if (strncmp(tgtuuid->uuid, imp->imp_target_uuid.uuid,
