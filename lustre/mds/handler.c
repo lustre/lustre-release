@@ -296,16 +296,19 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         med->med_mcd = mcd;
 
         rc = mds_client_add(obd, &obd->u.mds, med, -1);
-        if (rc == 0)
-                EXIT;
+
 out:
         if (rc) {
-                OBD_FREE(mcd, sizeof(*mcd));
+                if (mcd) {
+                        OBD_FREE(mcd, sizeof(*mcd));
+                        med->med_mcd = NULL;
+                }
                 class_disconnect(exp);
+        } else {
+                class_export_put(exp);
         }
-        class_export_put(exp);
 
-        return rc;
+        RETURN(rc);
 }
 
 static int mds_init_export(struct obd_export *exp) 

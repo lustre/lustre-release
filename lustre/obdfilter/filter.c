@@ -1467,13 +1467,16 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
 
 cleanup:
         if (rc) {
-                if (fcd)
+                if (fcd) {
                         OBD_FREE(fcd, sizeof(*fcd));
+                        fed->fed_fcd = NULL;
+                }
                 class_disconnect(exp);
         } else {
                 class_export_put(exp);
         }
-        return rc;
+        
+        RETURN(rc);
 }
 
 /* Do extra sanity checks for grant accounting.  We do this at connect,
@@ -1621,7 +1624,6 @@ static int filter_disconnect(struct obd_export *exp)
 
         /* Disconnect early so that clients can't keep using export */
         rc = class_disconnect(exp);
-
         ldlm_cancel_locks_for_export(exp);
 
         fsfilt_sync(obd, obd->u.filter.fo_sb);
