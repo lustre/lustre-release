@@ -56,6 +56,7 @@
 void ll_complete_writepage_24(struct obd_client_page *ocp, int rc)
 {
         struct page *page = ocp->ocp_page;
+        struct inode *inode = page->mapping->host;
 
         LASSERT(page->private == (unsigned long)ocp);
         LASSERT(PageLocked(page));
@@ -65,9 +66,18 @@ void ll_complete_writepage_24(struct obd_client_page *ocp, int rc)
                        page->index, rc);
                 SetPageError(page);
         }
+
+        ll_ocp_clean(ll_i2info(inode), ocp);
+
         ocp->ocp_flags &= ~OCP_IO_READY;
         unlock_page(page);
         page_cache_release(page);
+
+        /* XXX we might have just finished writeback on our last dirty
+         * page and need to finish deferred mdc_close.. doing this in
+         * the osc's rpc context makes me nervous.  could have another
+         * thread or use keventd, or whatever. */ 
+        ll_check_inode_clean(inode, 0);
 }
 
 static int ll_writepage_24(struct page *page)

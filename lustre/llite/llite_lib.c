@@ -123,6 +123,9 @@ void ll_lli_init(struct ll_inode_info *lli)
         sema_init(&lli->lli_open_sem, 1);
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
+        INIT_LIST_HEAD(&lli->lli_dirty_ocps);
+        INIT_LIST_HEAD(&lli->lli_pending_close);
+        spin_lock_init(&lli->lli_lock);
 }
 
 int ll_fill_super(struct super_block *sb, void *data, int silent)
