@@ -551,6 +551,8 @@ int jt_dbg_modules(int argc, char **argv)
                 {"mds_ext3", "lustre/mds"},
                 {"mds_extN", "lustre/mds"},
                 {"ptlbd", "lustre/ptlbd"},
+                {"mgmt_svc", "lustre/mgmt"},
+                {"mgmt_cli", "lustre/mgmt"},
                 {NULL, NULL}
         };
         char *path = "..";
