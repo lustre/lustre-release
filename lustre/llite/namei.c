@@ -280,6 +280,9 @@ static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
 	struct obdo oa;
 	struct inode * inode;
 
+	memset(&oa, 0, sizeof(oa)); 
+	oa.o_valid = OBD_MD_FLMODE; 
+	oa.o_mode = S_IFREG | 0600;
 	err = obd_create(IID(dir), &oa);  
 	if (err) { 
 		EXIT; 
