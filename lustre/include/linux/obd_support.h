@@ -113,6 +113,8 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
 #define OBD_FAIL_LDLM_CP_CALLBACK        0x306
 #define OBD_FAIL_LDLM_GL_CALLBACK        0x307
+#define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
+#define OBD_FAIL_LDLM_ENQUEUE_INTENT_ERR 0x309
 
 #define OBD_FAIL_OSC                     0x400
 #define OBD_FAIL_OSC_BRW_READ_BULK       0x401
