@@ -29,12 +29,19 @@
 #define EXPORT_SYMTAB
 #endif
 
+#ifndef __KERNEL__
+#include <liblustre.h>
+#else
 #include <linux/fs.h>
+#endif
+
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <linux/lustre_net.h>
 #include <portals/list.h>
 #include <linux/lustre_fsfilt.h>
+
+#ifdef __KERNEL__
 
 int llog_origin_handle_create(struct ptlrpc_request *req)
 {
@@ -525,3 +532,31 @@ out_free:
         OBD_FREE(buf, buf_len);
         return rc;
 }
+
+#else /* !__KERNEL__ */
+int llog_origin_handle_create(struct ptlrpc_request *req)
+{
+        LBUG();
+        return 0;
+}
+int llog_origin_handle_next_block(struct ptlrpc_request *req)
+{
+        LBUG();
+        return 0;
+}
+int llog_origin_handle_read_header(struct ptlrpc_request *req)
+{
+        LBUG();
+        return 0;
+}
+int llog_origin_handle_close(struct ptlrpc_request *req)
+{
+        LBUG();
+        return 0;
+}
+int llog_origin_handle_cancel(struct ptlrpc_request *req)
+{
+        LBUG();
+        return 0;
+}
+#endif

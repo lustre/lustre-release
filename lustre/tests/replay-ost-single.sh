@@ -80,7 +80,7 @@ test_2() {
     done 
     fail ost
     for i in `seq 10`; do
-      grep -q "tag-$i" $DIR/$tfile-$i || error "f1c-$i"
+      grep -q "tag-$i" $DIR/$tfile-$i || error "f2-$i"
     done 
 }
 run_test 2 "|x| 10 open(O_CREAT)s"
