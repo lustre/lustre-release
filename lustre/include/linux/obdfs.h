@@ -10,7 +10,7 @@
 
 
 #ifndef _OBDFS_H
-#define OBDFS_H
+#define _OBDFS_H
 #include <linux/obd_class.h>
 #include <linux/obdo.h>
 #include <linux/list.h>

@@ -11,8 +11,7 @@
 #include <linux/slab.h>
 #include <linux/vmalloc.h>
 
-#define MIN(a,b) (((a)<(b)) ? (a): (b))
-#define MAX(a,b) (((a)>(b)) ? (a): (b))
+
 
 #define obd_unlock_page(page)   do {    if (PageLocked(page)) { \
                         UnlockPage(page);\
@@ -165,7 +164,7 @@ static inline void obd_iput(struct inode *inode)
 
 #define OBD_ALLOC(ptr, cast, size)                                      \
 do {                                                                    \
-        ptr = (cast)kmalloc((unsigned long) size, GFP_KERNEL);        \
+        ptr = kmalloc((unsigned long) size, GFP_KERNEL);        \
         obd_memory += size;                                             \
         CDEBUG(D_MALLOC, "kmalloced: %d at %x (tot %ld).\n",            \
                        (int) size, (int) ptr, obd_memory);             \

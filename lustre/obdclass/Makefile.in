@@ -1,6 +1,6 @@
-# Makefile.in generated automatically by automake 1.4 from Makefile.am
+# Makefile.in generated automatically by automake 1.4-p5 from Makefile.am
 
-# Copyright (C) 1994, 1995-8, 1999 Free Software Foundation, Inc.
+# Copyright (C) 1994, 1995-8, 1999, 2001 Free Software Foundation, Inc.
 # This Makefile.in is free software; the Free Software Foundation
 # gives unlimited permission to copy and/or distribute it,
 # with or without modifications, as long as this notice is preserved.
@@ -85,9 +85,6 @@ docdir = @docdir@
 moduledir = @moduledir@
 modulefsdir = @modulefsdir@
 
-bin_SCRIPTS = obdcontrol
-EXTRA_DIST = $(bin_SCRIPTS)
-
 MODULE = obdclass
 modulefs_DATA = obdclass.o
 EXTRA_PROGRAMS = obdclass
@@ -103,8 +100,6 @@ obdclass_OBJECTS =  genops.o proc_lustre.o class_obd.o sysctl.o
 obdclass_LDADD = $(LDADD)
 obdclass_DEPENDENCIES = 
 obdclass_LDFLAGS = 
-SCRIPTS =  $(bin_SCRIPTS)
-
 CFLAGS = @CFLAGS@
 COMPILE = $(CC) $(DEFS) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 CCLD = $(CC)
@@ -153,25 +148,6 @@ maintainer-clean-compile:
 obdclass: $(obdclass_OBJECTS) $(obdclass_DEPENDENCIES)
 	@rm -f obdclass
 	$(LINK) $(obdclass_LDFLAGS) $(obdclass_OBJECTS) $(obdclass_LDADD) $(LIBS)
-
-install-binSCRIPTS: $(bin_SCRIPTS)
-	@$(NORMAL_INSTALL)
-	$(mkinstalldirs) $(DESTDIR)$(bindir)
-	@list='$(bin_SCRIPTS)'; for p in $$list; do \
-	  if test -f $$p; then \
-	    echo " $(INSTALL_SCRIPT) $$p $(DESTDIR)$(bindir)/`echo $$p|sed '$(transform)'`"; \
-	    $(INSTALL_SCRIPT) $$p $(DESTDIR)$(bindir)/`echo $$p|sed '$(transform)'`; \
-	  else if test -f $(srcdir)/$$p; then \
-	    echo " $(INSTALL_SCRIPT) $(srcdir)/$$p $(DESTDIR)$(bindir)/`echo $$p|sed '$(transform)'`"; \
-	    $(INSTALL_SCRIPT) $(srcdir)/$$p $(DESTDIR)$(bindir)/`echo $$p|sed '$(transform)'`; \
-	  else :; fi; fi; \
-	done
-
-uninstall-binSCRIPTS:
-	@$(NORMAL_UNINSTALL)
-	list='$(bin_SCRIPTS)'; for p in $$list; do \
-	  rm -f $(DESTDIR)$(bindir)/`echo $$p|sed '$(transform)'`; \
-	done
 
 install-modulefsDATA: $(modulefs_DATA)
 	@$(NORMAL_INSTALL)
@@ -281,7 +257,7 @@ check-am: all-am
 check: check-am
 installcheck-am:
 installcheck: installcheck-am
-install-exec-am: install-binSCRIPTS
+install-exec-am:
 install-exec: install-exec-am
 
 install-data-am: install-modulefsDATA
@@ -290,14 +266,14 @@ install-data: install-data-am
 install-am: all-am
 	@$(MAKE) $(AM_MAKEFLAGS) install-exec-am install-data-am
 install: install-am
-uninstall-am: uninstall-binSCRIPTS uninstall-modulefsDATA
+uninstall-am: uninstall-modulefsDATA
 uninstall: uninstall-am
-all-am: Makefile $(SCRIPTS) $(DATA)
+all-am: Makefile $(DATA)
 all-redirect: all-am
 install-strip:
 	$(MAKE) $(AM_MAKEFLAGS) AM_INSTALL_PROGRAM_FLAGS=-s install
 installdirs:
-	$(mkinstalldirs)  $(DESTDIR)$(bindir) $(DESTDIR)$(modulefsdir)
+	$(mkinstalldirs)  $(DESTDIR)$(modulefsdir)
 
 
 mostlyclean-generic:
@@ -333,10 +309,9 @@ maintainer-clean-am:  maintainer-clean-compile maintainer-clean-tags \
 maintainer-clean: maintainer-clean-am
 
 .PHONY: mostlyclean-compile distclean-compile clean-compile \
-maintainer-clean-compile uninstall-binSCRIPTS install-binSCRIPTS \
-uninstall-modulefsDATA install-modulefsDATA tags mostlyclean-tags \
-distclean-tags clean-tags maintainer-clean-tags distdir \
-mostlyclean-depend distclean-depend clean-depend \
+maintainer-clean-compile uninstall-modulefsDATA install-modulefsDATA \
+tags mostlyclean-tags distclean-tags clean-tags maintainer-clean-tags \
+distdir mostlyclean-depend distclean-depend clean-depend \
 maintainer-clean-depend info-am info dvi-am dvi check check-am \
 installcheck-am installcheck install-exec-am install-exec \
 install-data-am install-data install-am install uninstall-am uninstall \

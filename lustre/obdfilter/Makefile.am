@@ -3,9 +3,12 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-MODULE = obdfs
-modulefs_DATA = obdfs.o
-EXTRA_PROGRAMS = obdfs
-obdfs_SOURCES =  rw.c file.c dir.c sysctl.c super.c namei.c symlink.c
+MODULE = obdfilter
+modulefs_DATA = obdfilter.o
+EXTRA_PROGRAMS = obdfilter
+
+EXT2C = filter.c
+obdfilter_SOURCES = filter.c
 
 include $(top_srcdir)/Rules
+

@@ -1,6 +1,3 @@
-bin_SCRIPTS = obdcontrol
-EXTRA_DIST = $(bin_SCRIPTS)
-
 MODULE = obdclass
 modulefs_DATA = obdclass.o
 EXTRA_PROGRAMS = obdclass
