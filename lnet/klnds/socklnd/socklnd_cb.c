@@ -370,13 +370,14 @@ ksocknal_send_kiov (ksock_conn_t *conn, ksock_tx_t *tx)
 int
 ksocknal_sendmsg (ksock_conn_t *conn, ksock_tx_t *tx)
 {
-        int    sent_some = 0;
         int    rc;
         ENTRY;
         
         LASSERT (!in_interrupt());
 
         for (;;) {
+                LASSERT (tx->tx_resid != 0);
+                
                 if (conn->ksnc_closing)
                         RETURN (-ESHUTDOWN);
 
@@ -385,14 +386,14 @@ ksocknal_sendmsg (ksock_conn_t *conn, ksock_tx_t *tx)
                 else
                         rc = ksocknal_send_kiov (conn, tx);
 
-                /* Interpret a zero rc the same as -EAGAIN (Adaptech TOE) */
-                if (rc <= 0)                    /* error or partial send */
-                        RETURN ((sent_some || rc == -EAGAIN) ? 0 : rc);
+                /* Return 0 on success, < 0 on error (caller checks
+                 * tx_resid) NB: Interpret a zero rc the same as -EAGAIN
+                 * (Adaptech TOE) */
+                if (rc <= 0)                    /* error or socket full? */
+                        RETURN ((rc == -EAGAIN) ? 0 : rc);
                 
                 if (tx->tx_resid == 0)          /* sent everything */
                         RETURN (0);
-
-                sent_some = 1;
         }
 }
 
@@ -438,7 +439,6 @@ ksocknal_recv_iov (ksock_conn_t *conn)
                 return (-EAGAIN);
         }
 
-        LASSERT (rc == fragsize);
         conn->ksnc_rx_iov++;
         conn->ksnc_rx_niov--;
         return (1);
@@ -490,7 +490,6 @@ ksocknal_recv_kiov (ksock_conn_t *conn)
                 return (-EAGAIN);
         }
 
-        LASSERT (rc == fragsize);
         conn->ksnc_rx_kiov++;
         conn->ksnc_rx_nkiov--;
         return (1);
@@ -500,7 +499,6 @@ int
 ksocknal_recvmsg (ksock_conn_t *conn) 
 {
         int    rc;
-        int    got_some = 0;
         ENTRY;
         
         LASSERT (!in_interrupt ());
@@ -516,16 +514,13 @@ ksocknal_recvmsg (ksock_conn_t *conn)
                 else
                         rc = ksocknal_recv_kiov (conn);
 
-                /* CAVEAT EMPTOR: we return...
-                 * <= 0 for error (0 == EOF) and > 0 for success (unlike sendmsg()) */
-
+                /* Return 1 on success, 0 on EOF, < 0 on error (caller
+                 * checks ksnc_rx_nob_wanted) */
                 if (rc <= 0)                    /* error/EOF or partial receive */
-                        RETURN ((got_some || rc == -EAGAIN) ? 1 : rc);
+                        RETURN ((rc == -EAGAIN) ? 1 : rc);
                 
                 if (conn->ksnc_rx_nob_wanted == 0)
                         RETURN (1);
-
-                got_some = 0;
         }
 }
 
