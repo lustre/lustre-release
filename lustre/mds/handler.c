@@ -2427,7 +2427,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 
         LDLM_DEBUG(lock, "intent policy, opc: %s", ldlm_it2str(it->opc));
 
-        rc = lustre_pack_reply(req, it->opc == IT_UNLINK ? 4 : 3, repsize, NULL);
+        rc = lustre_pack_reply(req, 3, repsize, NULL);
         if (rc)
                 RETURN(req->rq_status = rc);
 
