@@ -19,8 +19,6 @@
 #include <linux/lustre_ha.h>
 #include <linux/obdo.h>
 
-#define LUSTRE_LITE_NAME "llite"
-
 extern kmem_cache_t *ll_file_data_slab;
 struct ll_file_data { 
         __u64 fd_mdshandle; 
@@ -34,20 +32,27 @@ struct ll_inode_info {
 };
 
 #define LL_SUPER_MAGIC 0x0BD00BD0;
+
+#define LL_COMMITCBD_STOPPING  0x1
+#define LL_COMMITCBD_STOPPED   0x2
+#define LL_COMMITCBD_RUNNING   0x4
+
 struct ll_sb_info {
-        struct list_head         ll_list;      /* list of supers */
-        struct obd_conn          ll_conn;
-        struct super_block      *ll_super;
-        ino_t                    ll_rootino;   /* number of root inode */
-        int                      ll_minor;     /* minor of /dev/obdX */
-        struct list_head         ll_inodes;    /* list of dirty inodes */
-        unsigned long            ll_cache_count;
-        struct semaphore         ll_list_mutex;
-        struct ptlrpc_client     ll_mds_client;
+        struct obd_conn           ll_conn;
+        ino_t                     ll_rootino; /* number of root inode */
+        struct ptlrpc_client      ll_mds_client;
         struct ptlrpc_connection *ll_mds_conn;
-        struct ptlrpc_client     ll_ost_client;
-        struct lustre_ha_mgr    *ll_ha_mgr;
+        struct ptlrpc_client      ll_ost_client;
         struct ptlrpc_connection *ll_ost_conn;
+
+        struct list_head          ll_commitcbd_not_committed;
+        wait_queue_head_t         ll_commitcbd_waitq;
+        wait_queue_head_t         ll_commitcbd_ctl_waitq;
+        int                       ll_commitcbd_flags;
+        struct task_struct        *ll_commitcbd_thread;
+        time_t                    ll_commitcbd_waketime;
+        time_t                    ll_commitcbd_timeout;
+        spinlock_t                ll_commitcbd_lock;
 };
 
 
@@ -92,15 +97,6 @@ extern struct inode_operations ll_symlink_inode_operations;
 /* sysctl.c */
 void ll_sysctl_init(void);
 void ll_sysctl_clean(void);
-
-
-
-static inline struct list_head *ll_slist(struct inode *inode) 
-{
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-
-        return &sbi->ll_inodes;
-}
 
 #endif
 

@@ -9,27 +9,24 @@
 #define MGR_WORKING    32
 #define MGR_SIGNAL     64
 
-struct lustre_ha_mgr {
-        __u32               mgr_flags; 
-        struct task_struct *mgr_thread;
-        wait_queue_head_t   mgr_waitq;
-        wait_queue_head_t   mgr_ctl_waitq;
-        spinlock_t          mgr_lock;
-        time_t              mgr_waketime;
-        struct list_head    mgr_connections_lh;  /* connections managed by the mgr */
-        struct list_head    mgr_troubled_lh;  /* connections in trouble */
+#define LUSTRE_HA_NAME "ptlrpc"
+
+#define CONNMGR_CONNECT 1
+
+extern struct connmgr_obd *ptlrpc_connmgr;
+
+struct connmgr_thread { 
+        struct connmgr_obd *mgr;
+        char *name;
 };
 
-struct lustre_ha_thread { 
-        char                 *name;
-        struct lustre_ha_mgr *mgr; 
-        struct obd_device    *dev;
-}; 
 
-int llite_ha_cleanup(struct lustre_ha_mgr *mgr);
-struct lustre_ha_mgr *llite_ha_setup(void);
-void llite_ha_conn_fail(struct ptlrpc_client *cli);
-void llite_ha_conn_manage(struct lustre_ha_mgr *mgr, struct ptlrpc_client *cli);
+struct connmgr_body { 
+        __u32 generation;
+};
 
+int connmgr_connect(struct connmgr_obd *mgr, struct ptlrpc_connection *cn);
+void connmgr_cli_fail(struct ptlrpc_client *cli);
+void connmgr_cli_manage(struct connmgr_obd *mgr, struct ptlrpc_client *cli);
 
 #endif

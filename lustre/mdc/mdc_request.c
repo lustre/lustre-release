@@ -41,7 +41,7 @@ int mdc_connect(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         int rc, size = sizeof(*body);
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, conn, MDS_GETATTR, 1, &size, NULL);
+        req = ptlrpc_prep_req(cl, conn, MDS_CONNECT, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -242,7 +242,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
         }
 
         ptlrpc_init_client(NULL, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL, &cl);
-        conn = ptlrpc_connect_client("mds");
+        conn = ptlrpc_uuid_to_connection("mds");
         if (err) {
                 CERROR("cannot create client\n");
                 RETURN(-EINVAL);

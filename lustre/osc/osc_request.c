@@ -588,7 +588,7 @@ static int osc_setup(struct obd_device *obddev, obd_count len, void *buf)
         ptlrpc_init_client(NULL, OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
                            osc->osc_client);
 
-        osc->osc_conn = ptlrpc_connect_client("ost");
+        osc->osc_conn = ptlrpc_uuid_to_connection("ost");
         if (!osc->osc_conn)
                 RETURN(-EINVAL);
 

@@ -35,24 +35,24 @@
  * FOO_BULK_PORTAL    is for incoming bulk on the FOO
  */
 
-#define OSC_REQUEST_PORTAL 1
-#define OSC_REPLY_PORTAL   2
-#define OSC_BULK_PORTAL    3
-
-#define OST_REQUEST_PORTAL 4
-#define OST_REPLY_PORTAL   5
-#define OST_BULK_PORTAL    6
-
-#define MDC_REQUEST_PORTAL 7
-#define MDC_REPLY_PORTAL   8
-#define MDC_BULK_PORTAL    9
-
-#define MDS_REQUEST_PORTAL 10
-#define MDS_REPLY_PORTAL   11
-#define MDS_BULK_PORTAL    12
-
-#define LDLM_REQUEST_PORTAL     13
-#define LDLM_REPLY_PORTAL       14
+#define CONNMGR_REQUEST_PORTAL    1
+#define CONNMGR_REPLY_PORTAL      2
+#define OSC_REQUEST_PORTAL      3
+#define OSC_REPLY_PORTAL        4
+#define OSC_BULK_PORTAL         5
+#define OST_REQUEST_PORTAL      6
+#define OST_REPLY_PORTAL        7
+#define OST_BULK_PORTAL         8
+#define MDC_REQUEST_PORTAL      9
+#define MDC_REPLY_PORTAL        10
+#define MDC_BULK_PORTAL         11
+#define MDS_REQUEST_PORTAL      12
+#define MDS_REPLY_PORTAL        13
+#define MDS_BULK_PORTAL         14
+#define LDLM_REQUEST_PORTAL     15
+#define LDLM_REPLY_PORTAL       16
+#define LDLM_CLI_REQUEST_PORTAL 17
+#define LDLM_CLI_REPLY_PORTAL   18
 
 /* default rpc ring length */
 #define RPC_RING_LENGTH    2
@@ -61,9 +61,9 @@
 #define SVC_RUNNING  2
 #define SVC_STOPPED  4
 #define SVC_KILLED   8
-#define SVC_EVENT   16
-#define SVC_LIST    32
-#define SVC_SIGNAL  64
+#define SVC_EVENT    16
+#define SVC_HA_EVENT 32
+#define SVC_SIGNAL   64
 
 struct ptlrpc_connection {
         struct list_head c_link;
@@ -79,21 +79,20 @@ struct ptlrpc_connection {
 
         atomic_t c_refcount;
         __u64 c_token;
-
         __u64 c_remote_conn;
         __u64 c_remote_token;
 };
 
 struct ptlrpc_client {
         struct obd_device *cli_obd;
-        struct list_head cli_sending_head;
-        struct list_head cli_sent_head;
         __u32 cli_request_portal;
         __u32 cli_reply_portal;
 
         struct semaphore cli_rpc_sem;
+        struct list_head cli_sending_head;
+        struct list_head cli_sent_head;
         struct list_head cli_ha_item; 
-        struct lustre_ha_mgr *cli_ha_mgr;
+        struct connmgr_obd *cli_ha_mgr;
 };
 
 /* These do double-duty in rq_type and rq_flags */
@@ -125,7 +124,7 @@ struct ptlrpc_request {
         int rq_bulklen;
 
         time_t rq_time;
-        void * rq_reply_handle;
+        //        void * rq_reply_handle;
         wait_queue_head_t rq_wait_for_rep;
 
         /* incoming reply */
@@ -160,6 +159,9 @@ struct ptlrpc_bulk_desc {
 };
 
 struct ptlrpc_service {
+        time_t srv_time;
+        time_t srv_timeout;
+
         /* incoming request buffers */
         /* FIXME: perhaps a list of EQs, if multiple NIs are used? */
         char *srv_buf[RPC_RING_LENGTH];
@@ -215,9 +217,9 @@ int ptl_send_rpc(struct ptlrpc_request *request);
 void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 
 /* rpc/client.c */
-void ptlrpc_init_client(struct lustre_ha_mgr *, int req_portal, int rep_portal,
+void ptlrpc_init_client(struct connmgr_obd *, int req_portal, int rep_portal,
                         struct ptlrpc_client *);
-struct ptlrpc_connection *ptlrpc_connect_client(char *uuid);
+struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid);
 int ptlrpc_queue_wait(struct ptlrpc_request *req);
 struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
                                        struct ptlrpc_connection *u, int opcode,

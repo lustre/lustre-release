@@ -26,34 +26,14 @@
 
 #include <linux/lustre_net.h>
 
-void llite_ha_conn_manage(struct lustre_ha_mgr *mgr, struct ptlrpc_client *cli)
-{
-        ENTRY;
-        cli->cli_ha_mgr = mgr;
-        spin_lock(&mgr->mgr_lock);
-        list_add(&cli->cli_ha_item, &mgr->mgr_connections_lh); 
-        spin_unlock(&mgr->mgr_lock); 
-        EXIT;
-}
 
-void llite_ha_conn_fail(struct ptlrpc_client *cli)
-{
-        ENTRY;
-        spin_lock(&cli->cli_ha_mgr->mgr_lock);
-        list_del(&cli->cli_ha_item);
-        list_add(&cli->cli_ha_item, &cli->cli_ha_mgr->mgr_troubled_lh); 
-        spin_unlock(&cli->cli_ha_mgr->mgr_lock); 
-        wake_up(&cli->cli_ha_mgr->mgr_waitq);
-        EXIT;
-}
-
-void ptlrpc_init_client(struct lustre_ha_mgr *mgr, int req_portal,
+void ptlrpc_init_client(struct connmgr_obd *mgr, int req_portal,
                         int rep_portal, struct ptlrpc_client *cl)
 {
         memset(cl, 0, sizeof(*cl));
         cl->cli_ha_mgr = mgr;
         if (mgr)
-                llite_ha_conn_manage(mgr, cl);
+                connmgr_cli_manage(mgr, cl);
         cl->cli_obd = NULL;
         cl->cli_request_portal = req_portal;
         cl->cli_reply_portal = rep_portal;
@@ -62,7 +42,7 @@ void ptlrpc_init_client(struct lustre_ha_mgr *mgr, int req_portal,
         sema_init(&cl->cli_rpc_sem, 32);
 }
 
-struct ptlrpc_connection *ptlrpc_connect_client(char *uuid)
+struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid)
 {
         struct ptlrpc_connection *c;
         struct lustre_peer peer;
@@ -160,7 +140,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         if (CURRENT_TIME - req->rq_time >= 3) { 
                 CERROR("-- REQ TIMEOUT --\n"); 
                 if (req->rq_client && req->rq_client->cli_ha_mgr)
-                        llite_ha_conn_fail(req->rq_client); 
+                        connmgr_cli_fail(req->rq_client); 
                 return 0;
         }
 

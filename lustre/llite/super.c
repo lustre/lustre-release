@@ -40,8 +40,8 @@ kmem_cache_t *ll_file_data_slab;
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
-
-static struct lustre_ha_mgr *llite_ha_mgr;
+extern int ll_commitcbd_setup(struct ll_sb_info *);
+extern int ll_commitcbd_cleanup(struct ll_sb_info *);
 
 static char *ll_read_opt(const char *opt, char *data)
 {
@@ -135,18 +135,23 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-        /* the first parameter should become an mds device no */
-        ptlrpc_init_client(llite_ha_mgr, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
+        ptlrpc_init_client(ptlrpc_connmgr, 
+                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                            &sbi->ll_mds_client);
-        sbi->ll_mds_conn = ptlrpc_connect_client("mds");
-        if (err) {
+
+        sbi->ll_mds_conn = ptlrpc_uuid_to_connection("mds");
+        if (!sbi->ll_mds_conn) {
                 CERROR("cannot find MDS\n");
                 GOTO(out_disc, sb = NULL);
         }
 
-        sbi->ll_super = sb;
+        err = connmgr_connect(ptlrpc_connmgr, sbi->ll_mds_conn);
+        if (err) { 
+                CERROR("cannot connect to MDS\n"); 
+                GOTO(out_disc, sb = NULL);
+        }                
+
         sbi->ll_rootino = 2;
-        sbi->ll_ha_mgr = llite_ha_mgr;
 
         sb->s_maxbytes = 1LL << 36;
         sb->s_blocksize = PAGE_SIZE;
@@ -161,6 +166,18 @@ static struct super_block * ll_read_super(struct super_block *sb,
         if (err) {
                 CERROR("mdc_getattr failed for root %d\n", err);
                 GOTO(out_req, sb = NULL);
+        }
+
+        /* initialize committed transaction callback daemon */
+        INIT_LIST_HEAD(&sbi->ll_commitcbd_not_committed);
+        spin_lock_init(&sbi->ll_commitcbd_lock); 
+        init_waitqueue_head(&sbi->ll_commitcbd_waitq);
+        init_waitqueue_head(&sbi->ll_commitcbd_ctl_waitq);
+        sbi->ll_commitcbd_flags = 0;
+        err = ll_commitcbd_setup(sbi);
+        if (err) { 
+                CERROR("failed to start commit callback daemon\n");
+                GOTO(out_req, sb = NULL); 
         }
 
         root = iget4(sb, sbi->ll_rootino, NULL,
@@ -193,6 +210,7 @@ static void ll_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = sb->u.generic_sbp;
         ENTRY;
+        ll_commitcbd_cleanup(sbi);
         obd_disconnect(&sbi->ll_conn);
         ptlrpc_put_connection(sbi->ll_mds_conn);
         OBD_FREE(sb->u.generic_sbp, sizeof(*sbi));
@@ -394,44 +412,21 @@ struct file_system_type lustre_lite_fs_type = {
         "lustre_lite", 0, ll_read_super, NULL
 };
 
-static int llite_setup(struct obd_device *dev, obd_count len, void *buf)
-{
-        MOD_INC_USE_COUNT;
-        return 0;
-}
-
-static int llite_cleanup(struct obd_device *dev)
-{
-        MOD_DEC_USE_COUNT;
-        return 0;
-}
-
-/* use obd ops to offer management infrastructure */
-static struct obd_ops llite_obd_ops = {
-        o_setup:       llite_setup,
-        o_cleanup:     llite_cleanup,
-};
-
 static int __init init_lustre_lite(void)
 {
         printk(KERN_INFO "Lustre Lite 0.0.1, braam@clusterfs.com\n");
-        obd_register_type(&llite_obd_ops, LUSTRE_LITE_NAME);
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
                                                SLAB_HWCACHE_ALIGN, NULL, NULL);
         if (ll_file_data_slab == NULL)
                 return -ENOMEM;
-
-        llite_ha_mgr = llite_ha_setup();
         return register_filesystem(&lustre_lite_fs_type);
 }
 
 static void __exit exit_lustre_lite(void)
 {
         unregister_filesystem(&lustre_lite_fs_type);
-        llite_ha_cleanup(llite_ha_mgr);
         kmem_cache_destroy(ll_file_data_slab);
-        obd_unregister_type(LUSTRE_LITE_NAME);
 }
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");

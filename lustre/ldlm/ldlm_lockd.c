@@ -293,7 +293,7 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *data)
 
         ptlrpc_init_client(NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
                            ldlm->ldlm_client);
-        ldlm->ldlm_server_conn = ptlrpc_connect_client("ldlm");
+        ldlm->ldlm_server_conn = ptlrpc_uuid_to_connection("ldlm");
         if (!ldlm->ldlm_server_conn) {
                 CERROR("cannot create client\n");
                 LBUG();

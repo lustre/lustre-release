@@ -28,6 +28,7 @@
 
 extern int request_in_callback(ptl_event_t *ev, void *data);
 extern int ptl_handled_rpc(struct ptlrpc_service *service, void *start);
+extern int connmgr_handle_event(struct obd_device *dev, struct ptlrpc_service *);
 
 static int ptlrpc_check_event(struct ptlrpc_service *svc)
 {
@@ -44,9 +45,6 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
         if (svc->srv_flags & SVC_STOPPING)
                 GOTO(out, rc = 1);
 
-        if (svc->srv_flags & SVC_EVENT)
-                LBUG();
-
         if (ptl_is_valid_handle(&svc->srv_eq_h)) {
                 int err;
                 err = PtlEQGet(svc->srv_eq_h, &svc->srv_ev);
@@ -62,11 +60,6 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
                 }
 
                 GOTO(out, rc = 0);
-        }
-
-        if (!list_empty(&svc->srv_reqs)) {
-                svc->srv_flags |= SVC_LIST;
-                GOTO(out, rc = 1);
         }
 
         EXIT;
@@ -229,35 +222,25 @@ static int ptlrpc_main(void *arg)
 
                 spin_lock(&svc->srv_lock);
                 if (svc->srv_flags & SVC_SIGNAL) {
+                        svc->srv_flags &= ~SVC_SIGNAL;
                         spin_unlock(&svc->srv_lock);
                         EXIT;
                         break;
                 }
 
                 if (svc->srv_flags & SVC_STOPPING) {
+                        svc->srv_flags &= ~SVC_STOPPING;
                         spin_unlock(&svc->srv_lock);
                         EXIT;
                         break;
                 }
-
-                if (svc->srv_flags & SVC_EVENT) {
-                        svc->srv_flags = SVC_RUNNING;
+                
+                if (svc->srv_flags & SVC_EVENT) { 
+                        svc->srv_flags &= ~SVC_EVENT;
                         rc = handle_incoming_request(obddev, svc);
                         continue;
                 }
 
-                if (svc->srv_flags & SVC_LIST) {
-                        struct ptlrpc_request *request;
-                        svc->srv_flags = SVC_RUNNING;
-
-                        request = list_entry(svc->srv_reqs.next,
-                                             struct ptlrpc_request,
-                                             rq_list);
-                        list_del(&request->rq_list);
-                        spin_unlock(&svc->srv_lock);
-                        rc = svc->srv_handler(obddev, svc, request);
-                        continue;
-                }
                 CERROR("unknown break in service");
                 spin_unlock(&svc->srv_lock);
                 EXIT;

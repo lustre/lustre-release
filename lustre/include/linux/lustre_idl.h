@@ -164,6 +164,7 @@ struct obd_ioobj {
 #define MDS_CLOSE     3
 #define MDS_REINT     4
 #define MDS_READPAGE  5
+#define MDS_CONNECT   6
 
 #define REINT_SETATTR 1
 #define REINT_CREATE  2
