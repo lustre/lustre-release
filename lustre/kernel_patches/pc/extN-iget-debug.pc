@@ -1,2 +1,0 @@
-fs/ext3/namei.c
-fs/ext3/inode.c
