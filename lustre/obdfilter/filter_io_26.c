@@ -35,6 +35,8 @@
 #include <linux/lustre_fsfilt.h>
 #include "filter_internal.h"
 
+#warning "implement writeback mode -bzzz"
+
 int ext3_map_inode_page(struct inode *inode, struct page *page,
                         unsigned long *blocks, int *created, int create);
 
