@@ -41,7 +41,8 @@ make
 make install PREFIX=$RPM_BUILD_ROOT
 
 %files
-/lib/modules/%{kuname}
+/lib/modules/%{kuname}/fs/*
+/usr/bin/*
 
 %clean
 #rm -rf $RPM_BUILD_ROOT
