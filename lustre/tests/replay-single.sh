@@ -41,8 +41,9 @@ replay_barrier() {
 }
 
 fail() {
-    stop mds -f --failover --nomod
-    start mds --nomod
+    local facet=$1
+    stop $facet -f --failover --nomod
+    start $facet --nomod
     df $MOUNTPT
 }
 
@@ -143,7 +144,7 @@ start client --gdb $CLIENTLCONFARGS
 test_1() {
     replay_barrier mds
     mcreate $MOUNTPT/f1
-    fail
+    fail mds
     ls $MOUNTPT/f1
     rm $MOUNTPT/f1
 }
@@ -153,7 +154,7 @@ test_2() {
     replay_barrier mds
     mkdir $MOUNTPT/d2
     mcreate $MOUNTPT/d2/f2
-    fail
+    fail mds
     ls $MOUNTPT/d2/f2
     rm -fr $MOUNTPT/d2
 }
@@ -163,23 +164,35 @@ test_3() {
     mkdir $MOUNTPT/d3
     replay_barrier mds
     mcreate $MOUNTPT/d3/f3
-    fail
+    fail mds
     ls $MOUNTPT/d3/f3
     rm -fr $MOUNTPT/d3
 }
 run_test 3 "mkdir |X| contained create"
 
 test_4() {
+    replay_barrier mds
     multiop $MOUNTPT/f4 mo_c &
     MULTIPID=$!
     sleep 1
-    fail
+    fail mds
     ls $MOUNTPT/f4
     kill -USR1 $MULTIPID
     wait
     rm $MOUNTPT/f4
 }
 run_test 4 "open |X| close"
+
+test_5() {
+}
+run_test 5 "|X| create (same inum/gen)"
+
+test_6() {
+}
+run_test 6 "create |X| rename unlink"
+
+test_7() {
+run_test 7 "create open write rename |X| create-old-name read"
 
 stop client $CLIENTLCONFARGS
 stop ost
