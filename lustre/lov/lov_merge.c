@@ -70,10 +70,8 @@ __u64 lov_merge_blocks(struct lov_stripe_md *lsm)
         __u64 blocks = 0;
         int i;
 
-        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
-             i++, loi++) {
+        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++, loi++)
                 blocks += loi->loi_blocks;
-        }
         return blocks;
 }
 EXPORT_SYMBOL(lov_merge_blocks);
@@ -83,11 +81,9 @@ __u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time)
         struct lov_oinfo *loi;
         int i;
 
-        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
-             i++, loi++) {
+        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++, loi++)
                 if (loi->loi_mtime > current_time)
                         current_time = loi->loi_mtime;
-        }
         return current_time;
 }
 EXPORT_SYMBOL(lov_merge_mtime);
