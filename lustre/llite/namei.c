@@ -122,7 +122,7 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
         }
 
         err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT, it, lock_mode, dir,
-                          dentry, lockh, 0, tgt, tgtlen, dir, sizeof(*dir));
+                          dentry, lockh, tgt, tgtlen, dir, sizeof(*dir));
 
         RETURN(err);
 }
