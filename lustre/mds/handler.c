@@ -34,6 +34,9 @@
 #include <linux/init.h>
 #include <linux/obd_class.h>
 #include <linux/random.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#include <linux/buffer_head.h>
+#endif
 
 static kmem_cache_t *mds_file_cache;
 
@@ -196,6 +199,10 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
         RETURN(retval);
 }
 
+#ifndef DCACHE_DISCONNECTED
+#define DCACHE_DISCONNECTED DCACHE_NFSD_DISCONNECTED
+#endif
+
 /* Look up an entry by inode number. */
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt)
@@ -235,7 +242,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         spin_lock(&dcache_lock);
         list_for_each(lp, &inode->i_dentry) {
                 result = list_entry(lp, struct dentry, d_alias);
-                if (!(result->d_flags & DCACHE_NFSD_DISCONNECTED)) {
+                if (!(result->d_flags & DCACHE_DISCONNECTED)) {
                         dget_locked(result);
                         result->d_vfs_flags |= DCACHE_REFERENCED;
                         spin_unlock(&dcache_lock);
@@ -253,7 +260,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         }
         if (mnt)
                 mntget(*mnt);
-        result->d_flags |= DCACHE_NFSD_DISCONNECTED;
+        result->d_flags |= DCACHE_DISCONNECTED;
         return result;
 }
 
@@ -1120,7 +1127,11 @@ int mds_update_server_data(struct mds_obd *mds)
                         RETURN(-EIO);
                 RETURN(rc);
         }
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         rc = fsync_dev(filp->f_dentry->d_inode->i_rdev);
+#else
+        rc = file_fsync(filp,  filp->f_dentry, 1);
+#endif
         if (rc)
                 CERROR("error flushing MDS server data: rc = %d\n", rc);
 

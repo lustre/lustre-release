@@ -127,7 +127,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         inode = de->d_inode;
         CDEBUG(D_INODE, "ino %ld\n", inode->i_ino);
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE, inode->i_sb->s_dev);
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE, 
+                       to_kdev_t(inode->i_sb->s_dev));
 
         handle = mds_fs_start(mds, inode, MDS_FSOP_SETATTR);
         if (!handle)
@@ -280,7 +281,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 GOTO(out_create_dchild, rc = -EEXIST);
         }
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE, dir->i_sb->s_dev);
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE, 
+                       to_kdev_t(dir->i_sb->s_dev));
 
         if (dir->i_mode & S_ISGID) {
                 rec->ur_gid = dir->i_gid;
@@ -461,7 +463,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 mds_pack_inode2body(body, inode);
         }
 
-        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, dir->i_sb->s_dev);
+        OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_UNLINK_WRITE, 
+                       to_kdev_t(dir->i_sb->s_dev));
 
         switch (rec->ur_mode /* & S_IFMT ? */) {
         case S_IFDIR:
@@ -628,7 +631,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE,
-                       de_src->d_inode->i_sb->s_dev);
+                       to_kdev_t(de_src->d_inode->i_sb->s_dev));
 
         handle = mds_fs_start(mds, de_tgt_dir->d_inode, MDS_FSOP_LINK);
         if (!handle)
@@ -725,8 +728,9 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         } else
                 ldlm_lock_dump((void *)(unsigned long)tgtlockh.addr);
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         double_lock(de_tgtdir, de_srcdir);
-
+#endif
         de_old = lookup_one_len(rec->ur_name, de_srcdir, rec->ur_namelen - 1);
         if (IS_ERR(de_old)) {
                 CERROR("old child lookup error (%*s): %ld\n",
@@ -767,7 +771,7 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_RENAME_WRITE,
-                       de_srcdir->d_inode->i_sb->s_dev);
+                       to_kdev_t(de_srcdir->d_inode->i_sb->s_dev));
 
         handle = mds_fs_start(mds, de_tgtdir->d_inode, MDS_FSOP_RENAME);
         if (!handle)
@@ -817,7 +821,9 @@ out_rename_deold:
                                LPD64": %d\n", res_id[0], rc);
         }
 out_rename_tgtdir:
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         double_up(&de_srcdir->d_inode->i_sem, &de_tgtdir->d_inode->i_sem);
+#endif
         ldlm_lock_decref(&tgtlockh, lock_mode);
 out_rename_tgtput:
         l_dput(de_tgtdir);

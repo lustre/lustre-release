@@ -1,3 +1,13 @@
+AC_MSG_CHECKING(if you are running linux 2.5...)
+if test -e $LINUX/include/linux/namei.h ; then
+	linux25=yes
+	AC_MSG_RESULT(yes)
+else
+	linux25=no
+	AC_MSG_RESULT(no)
+fi
+AM_CONDITIONAL(LINUX25, test x$linux25 = xyes)
+
 AC_MSG_CHECKING(if you are running user mode linux for $host_alias..)
 if test -e $LINUX/include/asm-um ; then
 if test  X`ls -id $LINUX/include/asm | awk '{print $1}'` = X`ls -id $LINUX/include/asm-um | awk '{print $1}'` ; then

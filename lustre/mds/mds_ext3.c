@@ -4,7 +4,7 @@
  *  lustre/mds/mds_ext3.c
  *  Lustre Metadata Server (mds) journal abstraction routines
  *
- *  Copyright (C) 2002  Cluster File Systems, Inc.
+ *  Copyright (C) 2002 Cluster File Systems, Inc.
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
@@ -21,17 +21,22 @@
  *   You should have received a copy of the GNU General Public License
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
  */
 
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/fs.h>
 #include <linux/jbd.h>
+#include <linux/slab.h>
+#include <linux/init.h>
 #include <linux/ext3_fs.h>
 #include <linux/ext3_jbd.h>
+#include <../fs/ext3/xattr.h>
+#include <linux/kp30.h>
 #include <linux/lustre_mds.h>
+#include <linux/obd.h>
 #include <linux/module.h>
+#include <linux/obd_lov.h>
 
 static struct mds_fs_operations mds_ext3_fs_ops;
 static kmem_cache_t *mcb_cache;
@@ -42,6 +47,11 @@ struct mds_cb_data {
         struct mds_obd *cb_mds;
         __u64 cb_last_rcvd;
 };
+
+#define EXT3_XATTR_INDEX_LUSTRE         5
+#define XATTR_LUSTRE_MDS_OBJID          "system.lustre_mds_objid"
+
+#define XATTR_MDS_MO_MAGIC              0xEA0BD047
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -73,7 +83,7 @@ static void *mds_ext3_start(struct inode *inode, int op)
                 nblocks += 3;
         case MDS_FSOP_LINK:
                 /* Change parent directory */
-                nblocks += EXT3_DATA_TRANS_BLOCKS;
+                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS+EXT3_DATA_TRANS_BLOCKS;
                 break;
         case MDS_FSOP_SETATTR:
                 /* Setattr on inode */
@@ -108,33 +118,8 @@ static int mds_ext3_setattr(struct dentry *dentry, void *handle,
         int rc;
 
         lock_kernel();
-
-        /* a _really_ horrible hack to avoid removing the data stored
-           in the block pointers; this data is the object id
-           this will go into an extended attribute at some point.
-        */
-        if (iattr->ia_valid & ATTR_SIZE) {
-                /* ATTR_SIZE would invoke truncate: clear it */
-                iattr->ia_valid &= ~ATTR_SIZE;
-                inode->i_size = iattr->ia_size;
-
-                /* an _even_more_ horrible hack to make this hack work with
-                 * ext3.  This is because ext3 keeps a separate inode size
-                 * until the inode is committed to ensure consistency.  This
-                 * will also go away with the move to EAs.
-                 */
-                EXT3_I(inode)->i_disksize = inode->i_size;
-
-                /* make sure _something_ gets set - so new inode
-                   goes to disk (probably won't work over XFS */
-                if (!iattr->ia_valid & ATTR_MODE) {
-                        iattr->ia_valid |= ATTR_MODE;
-                        iattr->ia_mode = inode->i_mode;
-                }
-        }
-
         if (inode->i_op->setattr)
-                rc =  inode->i_op->setattr(dentry, iattr);
+                rc = inode->i_op->setattr(dentry, iattr);
         else
                 rc = inode_setattr(inode, iattr);
 
@@ -143,25 +128,55 @@ static int mds_ext3_setattr(struct dentry *dentry, void *handle,
         return rc;
 }
 
-/*
- * FIXME: nasty hack - store the object id in the first two
- *        direct block spots.  This should be done with EAs...
- *        Note also that this does not currently mark the inode
- *        dirty (it currently is used with other operations that
- *        subsequently also mark the inode dirty).
- */
 static int mds_ext3_set_md(struct inode *inode, void *handle,
-                           void *obd_md, int len)
+                           struct lov_mds_md *lmm)
 {
-        *((__u64 *)EXT3_I(inode)->i_data) = cpu_to_le64(id);
-        return 0;
+        int rc;
+
+        down(&inode->i_sem);
+        lock_kernel();
+        rc = ext3_xattr_set(handle, inode, EXT3_XATTR_INDEX_LUSTRE,
+                            XATTR_LUSTRE_MDS_OBJID, lmm,
+                            lmm ? lmm->lmm_easize : 0, 0);
+        unlock_kernel();
+        up(&inode->i_sem);
+
+        if (rc) {
+                CERROR("error adding objectid "LPX64" to inode %ld: %d\n",
+                       lmm->lmm_object_id, inode->i_ino, rc);
+                if (rc != -ENOSPC) LBUG();
+        }
+        return rc;
 }
 
-static int mds_ext3_get_objid(struct inode *inode, obd_id *id)
+static int mds_ext3_get_md(struct inode *inode, struct lov_mds_md *lmm)
 {
-        *id = le64_to_cpu(*((__u64 *)EXT3_I(inode)->i_data));
+        int rc;
+        int size = lmm->lmm_easize;
 
-        return 0;
+        down(&inode->i_sem);
+        lock_kernel();
+        rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_LUSTRE,
+                            XATTR_LUSTRE_MDS_OBJID, lmm, size);
+        unlock_kernel();
+        up(&inode->i_sem);
+
+        /* This gives us the MD size */
+        if (lmm == NULL)
+                return rc;
+
+        if (rc < 0) {
+                CDEBUG(D_INFO, "error getting EA %s from MDS inode %ld: "
+                       "rc = %d\n", XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
+                memset(lmm, 0, size);
+                return rc;
+        }
+
+        /* This field is byteswapped because it appears in the
+         * catalogue.  All others are opaque to the MDS */
+        lmm->lmm_object_id = le64_to_cpu(lmm->lmm_object_id);
+
+        return rc;
 }
 
 static ssize_t mds_ext3_readpage(struct file *file, char *buf, size_t count,
@@ -201,7 +216,7 @@ static void mds_ext3_delete_inode(struct inode *inode)
                         EXIT;
                         return;
                 }
-                if (mds_ext3_set_objid(inode, handle, 0))
+                if (mds_ext3_set_md(inode, handle, NULL))
                         CERROR("error clearing objid on %ld\n", inode->i_ino);
 
                 if (mds_ext3_fs_ops.cl_delete_inode)
@@ -255,7 +270,7 @@ static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
                 CERROR("no journal callback kernel patch, faking it...\n");
                 next = jiffies + 300 * HZ;
         }
-        }
+
         mds_ext3_callback_status((struct journal_callback *)mcb, 0);
 #endif
 
@@ -271,24 +286,43 @@ static int mds_ext3_journal_data(struct file *filp)
         return 0;
 }
 
+/*
+ * We need to hack the return value for the free inode counts because
+ * the current EA code requires one filesystem block per inode with EAs,
+ * so it is possible to run out of blocks before we run out of inodes.
+ *
+ * This can be removed when the ext3 EA code is fixed.
+ */
+static int mds_ext3_statfs(struct super_block *sb, struct statfs *sfs)
+{
+        int rc = vfs_statfs(sb, sfs);
+
+        if (!rc && sfs->f_bfree < sfs->f_ffree)
+                sfs->f_ffree = sfs->f_bfree;
+
+        return rc;
+}
+
 static struct mds_fs_operations mds_ext3_fs_ops = {
         fs_owner:               THIS_MODULE,
         fs_start:               mds_ext3_start,
         fs_commit:              mds_ext3_commit,
         fs_setattr:             mds_ext3_setattr,
-        fs_set_objid:           mds_ext3_set_objid,
-        fs_get_objid:           mds_ext3_get_objid,
+        fs_set_md:              mds_ext3_set_md,
+        fs_get_md:              mds_ext3_get_md,
         fs_readpage:            mds_ext3_readpage,
         fs_delete_inode:        mds_ext3_delete_inode,
         cl_delete_inode:        clear_inode,
         fs_journal_data:        mds_ext3_journal_data,
         fs_set_last_rcvd:       mds_ext3_set_last_rcvd,
+        fs_statfs:              mds_ext3_statfs,
 };
 
 static int __init mds_ext3_init(void)
 {
         int rc;
 
+        //rc = ext3_xattr_register();
         mcb_cache = kmem_cache_create("mds_ext3_mcb",
                                       sizeof(struct mds_cb_data), 0,
                                       0, NULL, NULL);
@@ -316,6 +350,8 @@ static void __exit mds_ext3_exit(void)
                 CERROR("can't free MDS callback cache: count %d, rc = %d\n",
                        mcb_cache_count, rc);
         }
+
+        //rc = ext3_xattr_unregister();
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");

@@ -5,9 +5,17 @@
 
 DEFS= 
 
+if LINUX25
+FSMOD = mds_ext3
+else
+FSMOD = mds_extN
+endif
+
+
+
 MODULE = mds
-modulefs_DATA = mds.o mds_extN.o # mds_ext2.o mds_ext3.o
-EXTRA_PROGRAMS = mds mds_extN # mds_ext2 mds_ext3
+modulefs_DATA = mds.o $(FSMOD).o
+EXTRA_PROGRAMS = mds $(FSMOD)
 
 LINX= mds_updates.c simple.c ll_pack.c lov_pack.c target.c
 

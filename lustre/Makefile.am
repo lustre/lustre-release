@@ -5,9 +5,15 @@
 
 AUTOMAKE_OPTIONS = foreign
 
+if LINUX25
+DIRS24 = mds
+else
+DIRS24 = extN mds
+endif
+
 # NOTE: keep extN before mds
-SUBDIRS = lov utils obdclass ldlm ptlrpc lib obdecho mdc osc ost llite obdfilter
-SUBDIRS+=  extN mds tests doc scripts 
+SUBDIRS = lov utils obdclass ldlm ptlrpc lib obdecho mdc osc ost llite 
+SUBDIRS+=   $(DIRS24) mds obdfilter tests doc scripts 
 
 DIST_SUBDIRS = $(SUBDIRS)
 EXTRA_DIST = BUGS FDL Rules include patches archdep.m4
