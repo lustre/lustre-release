@@ -32,8 +32,8 @@ import xml.dom.minidom
 
 # Global parameters
 TCP_ACCEPTOR = 'acceptor'
-LCTL = './lctl' # fix this...
 options = {}
+
 #
 # Maximum number of devices to search for.
 # (the /dev/loop* nodes need to be created beforehand)
@@ -96,6 +96,104 @@ class CommandError (exceptions.Exception):
         self.args = args
 
 # ============================================================
+# handle lctl interface
+class LCTLInterface:
+    """
+    Manage communication with lctl
+    """
+
+    def __init__(self, cmd):
+        """
+        Initialize close by finding the lctl binary.
+        """
+        syspath = string.split(os.environ['PATH'], ':')
+        syspath.insert(0, "../utils");
+        self.lctlcmd = None
+        for d in syspath:
+            lctl = os.path.join(d,cmd)
+            if os.access(lctl, os.X_OK):
+                self.lctl = lctl
+                break
+        if not self.lctl:
+            raise RuntimeError,  "unable to find lctl binary."
+            
+    def run(self, cmds):
+        """
+        run lctl
+        the cmds are written to stdin of lctl
+        lctl doesn't return errors when run in script mode, so
+        stderr is checked
+        should modify command line to accept multiple commands, or
+        create complex command line options
+        """
+        debug("+", self.lctl, cmds)
+        if isnotouch(): return ([], 0)
+        p = popen2.Popen3(self.lctl, 1)
+        p.tochild.write(cmds + "\n")
+        p.tochild.close()
+        out = p.fromchild.readlines()
+        ret = p.poll()
+        err = p.childerr.readlines()
+        if ret or len(err):
+            log (self.lctl, "error:", ret)
+            logall(err)
+            raise CommandError, err
+        return ret, out
+        
+        
+    # create a new device with lctl
+    def network(self, net, nid):
+        cmds =  """
+  network %s
+  mynid %s
+  quit""" % (net, nid)
+        self.run(cmds)
+
+    # create a new connection 
+    def connect(self, net, nid, port, servuuid):
+        cmds =  """
+  network %s
+  connect %s %d
+  add_uuid %s %s
+  quit""" % (net, nid, port,  servuuid, nid)
+        self.run(cmds)
+                
+    # create a new device with lctl
+    def disconnect(self, net, nid, port, servuuid):
+        cmds =  """
+  network %s
+  disconnect %s 
+  quit""" % (net, nid)
+        self.run(cmds)
+
+    # create a new device with lctl
+    def newdev(self, attach, setup):
+        cmds = """
+  newdev
+  attach %s
+  setup %s
+  quit""" % (attach, setup)
+        self.run(cmds)
+
+    # cleanup a device
+    def cleanup(self, name, uuid):
+        cmds = """
+  device $%s
+  cleanup
+  detach
+  quit""" % (name)
+        self.run(cmds)
+
+    # create an lov
+    def lovconfig(self, uuid, mdcuuid, stripe_cnt, stripe_sz, pattern, devlist):
+        cmds = """
+  device $%s
+  probe
+  lovconfig %s %d %d %s %s
+  quit""" % (mdcuuid, uuid, stripe_cnt, stripe_sz, pattern, devlist)
+        self.run(cmds)
+
+# ============================================================
 # Various system-level functions
 # (ideally moved to their own module)
 
@@ -114,27 +212,6 @@ def run(*args):
     else:
         ret = 0
     return (ret, out)
-
-# run lctl
-# the cmds are written to stdin of lctl
-# lctl doesn't return errors when run in script mode, so
-#  stderr is checked
-# should modify command line to accept multiple commands, or
-#  create complex command line options
-def run_lctl(cmds):
-    debug("+", LCTL, cmds)
-    if isnotouch(): return ([], 0)
-    p = popen2.Popen3(LCTL, 1)
-    p.tochild.write(cmds + "\n")
-    p.tochild.close()
-    out = p.fromchild.readlines()
-    ret = p.poll()
-    err = p.childerr.readlines()
-    if ret or len(err):
-        log (LCTL, "error:", ret)
-        logall(err)
-        raise CommandError, err
-    return ret, out
 
 
 # is the path a block device?
@@ -227,78 +304,26 @@ def block_dev(dev, size, fstype, format):
         mkfs(fstype, dev)
     return dev
 
-# create a new device with lctl
-def lctl_network(net, nid):
-    cmds =  """
-  network %s
-  mynid %s
-  quit""" % (net, nid)
-    run_lctl(cmds)
-
-# create a new connection 
-def lctl_connect(net, nid, port, servuuid):
-    cmds =  """
-  network %s
-  connect %s %d
-  add_uuid %s %s
-  quit""" % (net, nid, port,  servuuid, nid)
-    run_lctl(cmds)
-
-# create a new device with lctl
-def lctl_disconnect(net, nid, port, servuuid):
-    cmds =  """
-  network %s
-  disconnect %s 
-  quit""" % (net, nid)
-    run_lctl(cmds)
-
-# create a new device with lctl
-def lctl_newdev(attach, setup):
-    cmds = """
-  newdev
-  attach %s
-  setup %s
-  quit""" % (attach, setup)
-    run_lctl(cmds)
-
-# cleanup a device
-def lctl_cleanup(name, uuid):
-    cmds = """
-  device $%s
-  cleanup
-  detach
-  quit""" % (name)
-    run_lctl(cmds)
-
-# create an lov
-def lctl_lovconfig(uuid, mdcuuid, stripe_cnt, stripe_sz, pattern, devlist):
-    cmds = """
-  device $%s
-  probe
-  lovconfig %s %d %d %s %s
-  quit""" % (mdcuuid, uuid, stripe_cnt, stripe_sz, pattern, devlist)
-    run_lctl(cmds)
-
 # ============================================================
 # Functions to prepare the various objects
 
 def prepare_ldlm(node):
     (name, uuid) = getNodeAttr(node)
     print 'LDLM:', name, uuid
-    lctl_newdev(attach="ldlm %s %s" % (name, uuid),
+    lctl.newdev(attach="ldlm %s %s" % (name, uuid),
                 setup ="")
     
 def prepare_lov(node):
     (name, uuid, mdcuuid, stripe_cnt, strip_sz, pattern, devlist) = getLOVInfo(node)
     print 'LOV:', name, uuid
-    lctl_lovconfig(uuid, mdcuuid, stripe_cnt, strip_sz, pattern, devlist)
+    lctl.lovconfig(uuid, mdcuuid, stripe_cnt, strip_sz, pattern, devlist)
 
 def prepare_network(node):
     (name, uuid, type, nid, port) = getNetworkInfo(node)
     print 'NETWORK:', type, nid, port
     if type == 'tcp':
         run(TCP_ACCEPTOR, port)
-    lctl_network(type, nid)
+    lctl.network(type, nid)
 
 
 # need to check /proc/mounts and /etc/mtab before
@@ -308,14 +333,14 @@ def prepare_obd(obd):
     (name, uuid, obdtype, dev, size, fstype, format) = getOBDInfo(obd)
     print "OBD: ", name, obdtype, dev, size, fstype, format
     dev = block_dev(dev, size, fstype, format)
-    lctl_newdev(attach="%s %s %s" % (obdtype, name, uuid),
+    lctl.newdev(attach="%s %s %s" % (obdtype, name, uuid),
                 setup ="%s %s" %(dev, fstype))
     
 
 def prepare_ost(ost):
     name, uuid, obd = getOSTInfo(ost)
     print "OST: ", name, uuid, obd
-    lctl_newdev(attach="ost %s %s" % (name, uuid),
+    lctl.newdev(attach="ost %s %s" % (name, uuid),
                 setup ="$%s" % (obd))
 
 def prepare_mds(node):
@@ -323,7 +348,7 @@ def prepare_mds(node):
     print "MDS: ", name, dev, size, fstype
     # setup network for mds, too
     dev = block_dev(dev, size, fstype, format)
-    lctl_newdev(attach="mds %s %s" % (name, uuid),
+    lctl.newdev(attach="mds %s %s" % (name, uuid),
                 setup ="%s %s" %(dev, fstype))
 
 def prepare_osc(node):
@@ -331,14 +356,14 @@ def prepare_osc(node):
     print 'OSC:', name, uuid, obduuid, srvuuid
     net = lookup(node.parentNode, srvuuid)
     srvname, srvuuid, net, server, port = getNetworkInfo(net)
-    lctl_connect(net, server, port, srvuuid)
-    lctl_newdev(attach="osc %s %s" % (name, uuid),
+    lctl.connect(net, server, port, srvuuid)
+    lctl.newdev(attach="osc %s %s" % (name, uuid),
                 setup ="%s %s" %(obduuid, srvuuid))
 
 def prepare_mdc(node):
     (name, uuid, mdsuuid, netuuid) = getMDCInfo(node)
     print 'MDC:', name, uuid, mdsuuid, netuuid
-    lctl_newdev(attach="mdc %s %s" % (name, uuid),
+    lctl.newdev(attach="mdc %s %s" % (name, uuid),
                 setup ="%s %s" %(mdsuuid, netuuid))
 
 def prepare_mountpoint(node):
@@ -351,7 +376,7 @@ def cleanup_ldlm(node):
     (name, uuid) = getNodeAttr(node)
     print 'LDLM:', name, uuid
     try:
-        lctl_cleanup(name, uuid)
+        lctl.cleanup(name, uuid)
     except CommandError:
         print "cleanup failed: ", name
 
@@ -359,12 +384,12 @@ def cleanup_lov(node):
     (name, uuid) = getNodeAttr(node)
     print 'LOV:', name, uuid
 
-    #lctl_cleanup(name, uuid)
+    #lctl.cleanup(name, uuid)
 
 def cleanup_network(node):
     (name, uuid, type, nid, port) = getNetworkInfo(node)
     print 'NETWORK:', type, nid, port
-    #lctl_network(type, nid)
+    #lctl.network(type, nid)
 
 # need to check /proc/mounts and /etc/mtab before
 # formatting anything.
@@ -373,7 +398,7 @@ def cleanup_obd(obd):
     (name, uuid, obdtype, dev, size, fstype, format) = getOBDInfo(obd)
     print "OBD: ", name, obdtype, dev, size, fstype, format
     try:
-        lctl_cleanup(name, uuid)
+        lctl.cleanup(name, uuid)
     except CommandError:
         print "cleanup failed: ", name
     clean_loop(dev)
@@ -382,7 +407,7 @@ def cleanup_ost(ost):
     name, uuid, obd = getOSTInfo(ost)
     print "OST: ", name, uuid, obd
     try:
-        lctl_cleanup(name, uuid)
+        lctl.cleanup(name, uuid)
     except CommandError:
         print "cleanup failed: ", name
 
@@ -390,7 +415,7 @@ def cleanup_mds(node):
     (name, uuid, dev, size, fstype, format) = getMDSInfo(node)
     print "MDS: ", name, dev, size, fstype
     try:
-        lctl_cleanup(name, uuid)
+        lctl.cleanup(name, uuid)
     except CommandError:
         print "cleanup failed: ", name
     clean_loop(dev)
@@ -400,7 +425,7 @@ def cleanup_mdc(node):
     (name, uuid, mdsuuid, netuuid) = getMDCInfo(node)
     print 'MDC:', name, uuid, mdsuuid, netuuid
     try:
-        lctl_cleanup(name, uuid)
+        lctl.cleanup(name, uuid)
     except CommandError:
         print "cleanup failed: ", name
 
@@ -411,8 +436,8 @@ def cleanup_osc(node):
     net = lookup(node.parentNode, srvuuid)
     netname, netuuid, net, server, port = getNetworkInfo(net)
     try:
-        lctl_disconnect(net, server, port, srvuuid)
-        lctl_cleanup(name, uuid)
+        lctl.disconnect(net, server, port, srvuuid)
+        lctl.cleanup(name, uuid)
     except CommandError:
         print "cleanup failed: ", name
 
@@ -715,6 +740,7 @@ def parse_cmdline(argv):
 #   * configure devices with lctl
 # Shutdown does steps in reverse
 #
+lctl = LCTLInterface('lctl')
 def main():
     global options
     args = parse_cmdline(sys.argv[1:])
@@ -751,4 +777,3 @@ if __name__ == "__main__":
         main()
     except:
         my_traceback()
-        
