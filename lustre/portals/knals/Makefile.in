@@ -1,5 +1,6 @@
 @BUILD_GMNAL_TRUE@subdir-m += gmnal
 @BUILD_OPENIBNAL_TRUE@subdir-m += openibnal
+@BUILD_IIBNAL_TRUE@subdir-m += iibnal
 @BUILD_QSWNAL_TRUE@subdir-m += qswnal
 subdir-m += socknal
 
