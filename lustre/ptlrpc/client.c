@@ -33,7 +33,6 @@ void ptlrpc_init_client(struct recovd_obd *recovd,
                         int rep_portal, struct ptlrpc_client *cl)
 {
         memset(cl, 0, sizeof(*cl));
-        cl->cli_recovd = recovd;
         cl->cli_recover = recover;
         if (recovd)
                 recovd_cli_manage(recovd, cl);
@@ -486,21 +485,23 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 list_add_tail(&req->rq_list, &cli->cli_delayed_head);
                 spin_unlock(&cli->cli_lock);
 
-#warning shaver: what happens when we get interrupted during this wait?
-                lwi = LWI_INTR(SIGTERM | SIGKILL | SIGINT, NULL, NULL);
-                l_wait_event(req->rq_wait_for_rep,
-                             req->rq_level <= req->rq_connection->c_level,
-                             &lwi);
+                lwi = LWI_INTR(NULL, NULL);
+                rc = l_wait_event(req->rq_wait_for_rep,
+                                  req->rq_level <= req->rq_connection->c_level,
+                                  &lwi);
 
                 spin_lock(&cli->cli_lock);
                 list_del_init(&req->rq_list);
                 spin_unlock(&cli->cli_lock);
+                
+                if (rc)
+                        RETURN(rc);
 
                 CERROR("process %d resumed\n", current->pid);
         }
  resend:
         req->rq_time = CURRENT_TIME;
-        req->rq_timeout = 100;
+        req->rq_timeout = obd_timeout;
         rc = ptl_send_rpc(req);
         if (rc) {
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);
@@ -518,8 +519,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 
         CDEBUG(D_OTHER, "-- sleeping\n");
         lwi = LWI_TIMEOUT_INTR(req->rq_timeout * HZ, expired_request,
-                               SIGKILL | SIGTERM | SIGINT, interrupted_request,
-                               req);
+                               interrupted_request,req);
         l_wait_event(req->rq_wait_for_rep, ptlrpc_check_reply(req), &lwi);
         CDEBUG(D_OTHER, "-- done\n");
 
@@ -570,7 +570,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
 {
         int rc = 0;
         struct ptlrpc_client *cli = req->rq_client;
-        struct l_wait_info lwi = LWI_INTR(SIGKILL|SIGTERM|SIGINT, NULL, NULL);
+        struct l_wait_info lwi;
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
@@ -579,7 +579,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
                req->rq_connection->c_level);
 
         req->rq_time = CURRENT_TIME;
-        req->rq_timeout = 100;
+        req->rq_timeout = obd_timeout;
         rc = ptl_send_rpc(req);
         if (rc) {
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);
@@ -589,6 +589,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         }
 
         CDEBUG(D_OTHER, "-- sleeping\n");
+        lwi = LWI_INTR(NULL, NULL);
         l_wait_event(req->rq_wait_for_rep, ptlrpc_check_reply(req), &lwi);
         CDEBUG(D_OTHER, "-- done\n");
 

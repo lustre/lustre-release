@@ -57,7 +57,6 @@ static int ll_reconnect(struct ll_sb_info *sbi)
         return err;
 }
 
-
 int ll_recover(struct ptlrpc_client *cli)
 {
         struct ptlrpc_request *req;

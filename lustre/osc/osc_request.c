@@ -26,6 +26,7 @@
 #include <linux/obd_lov.h>
 #include <linux/init.h>
 #include <linux/lustre_ha.h>
+#include <linux/obd_support.h> /* for OBD_FAIL_CHECK */
 
 static int osc_getattr(struct lustre_handle *conn, struct obdo *oa, 
                        struct lov_stripe_md *md)
@@ -407,25 +408,30 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
          *
          * On error, we never do the brw_finish, so we handle all decrefs.
          */
-        rc = ptlrpc_register_bulk(desc);
-        if (rc)
-                GOTO(out_unmap, rc);
+        if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_READ_BULK)) {
+                CERROR("obd_fail_loc=%x, skipping register_bulk\n",
+                       OBD_FAIL_OSC_BRW_READ_BULK);
+        } else {
+                rc = ptlrpc_register_bulk(desc);
+                if (rc)
+                        GOTO(out_unmap, rc);
+        }
 
         request->rq_replen = lustre_msg_size(1, size);
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
 
-        /* XXX: Mike, this is the only place I'm not sure of.  If we have
-         *      an error here, will we have always called brw_finish?  If no,
-         *      then out_req will not clean up and we should go to out_desc.
-         *      If maybe, then we are screwed, and we need to set things up
-         *      so that bulk_sink_callback is called for each bulk page,
-         *      even on error so brw_finish is always called.  It would need
-         *      to be passed an error code as a parameter to know what to do.
-         *
-         *      That would also help with the partial completion case, so
-         *      we could say in brw_finish "these pages are done, don't
-         *      restart them" and osc_brw callers can know this.
+        /*
+         * XXX: If there is an error during the processing of the callback,
+         *      such as a timeout in a sleep that it performs, brw_finish
+         *      will never get called, and we'll leak the desc, fail to kunmap
+         *      things, cats will live with dogs.  One solution would be to
+         *      export brw_finish as osc_brw_finish, so that the timeout case and
+         *      its kin could call it for proper cleanup.  An alternative would
+         *      be for an error return from the callback to cause us to clean up,
+         *      but that doesn't help the truly async cases (like LOV), which
+         *      will immediately return from their PHASE_START callback, before
+         *      any such cleanup-requiring error condition can be detected.
          */
         if (rc)
                 GOTO(out_req, rc);
@@ -540,6 +546,9 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
 
         if (desc->b_page_count != page_count)
                 LBUG();
+
+        if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_WRITE_BULK))
+                GOTO(out_unmap, rc = 0);
 
         /* Our reference is released when brw_finish is complete. */
         rc = ptlrpc_send_bulk(desc);

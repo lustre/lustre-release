@@ -98,9 +98,11 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         /* XXX get recovery hooked in here again */
         //ptlrpc_init_client(ptlrpc_connmgr, ll_recover,...
 
-        ptlrpc_init_client(NULL, NULL, rq_portal, rp_portal, mdc->cl_client);
-        ptlrpc_init_client(NULL, NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
-                           mdc->cl_ldlm_client);
+        ptlrpc_init_client(ptlrpc_connmgr, NULL, rq_portal, rp_portal,
+                           mdc->cl_client);
+        /* XXXshaver Should the LDLM have its own recover function? Probably. */
+        ptlrpc_init_client(ptlrpc_connmgr, NULL, LDLM_REQUEST_PORTAL,
+                           LDLM_REPLY_PORTAL, mdc->cl_ldlm_client);
         mdc->cl_client->cli_name = "mdc";
         mdc->cl_ldlm_client->cli_name = "ldlm";
         mdc->cl_max_mdsize = sizeof(struct lov_stripe_md);
@@ -142,8 +144,7 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         ENTRY;
         down(&cli->cl_sem);
         MOD_INC_USE_COUNT;
-#warning shaver: we might need a real cluuid here
-        rc = class_connect(conn, obd, NULL);
+        rc = class_connect(conn, obd, cluuid);
         if (rc) {
                 MOD_DEC_USE_COUNT;
                 GOTO(out_sem, rc);

@@ -30,6 +30,8 @@
 /* global variables */
 extern unsigned long obd_memory;
 extern unsigned long obd_fail_loc;
+extern unsigned long obd_timeout;
+extern char obd_recovery_upcall[128];
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
@@ -80,13 +82,17 @@ extern unsigned long obd_fail_loc;
 #define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
 #define OBD_FAIL_OST_BRW_READ_BULK       0x20f
 
-#define OBB_FAIL_LDLM                    0x300
+#define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
 #define OBD_FAIL_LDLM_ENQUEUE            0x302
 #define OBD_FAIL_LDLM_CONVERT            0x303
 #define OBD_FAIL_LDLM_CANCEL             0x304
 #define OBD_FAIL_LDLM_BL_CALLBACK        0x305
 #define OBD_FAIL_LDLM_CP_CALLBACK        0x306
+
+#define OBD_FAIL_OSC                     0x400
+#define OBD_FAIL_OSC_BRW_READ_BULK       0x401
+#define OBD_FAIL_OSC_BRW_WRITE_BULK      0x402
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00

@@ -88,8 +88,8 @@ struct mds_export_data {
 
 /* file data for open files on MDS */
 struct mds_file_data {
-        struct list_head mfd_list;
-        struct file * mfd_file;
+        struct list_head  mfd_list;
+        struct file      *mfd_file;
         __u64             mfd_clientfd;
         __u32             mfd_clientcookie;
 };

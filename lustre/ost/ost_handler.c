@@ -196,6 +196,15 @@ static int ost_setattr(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+static int ost_bulk_timeout(void *data)
+{
+        struct ptlrpc_bulk_desc *desc = data;
+
+        ENTRY;
+        CERROR("(not yet) starting recovery of client %p\n", desc->b_client);
+        RETURN(1);
+}
+
 static int ost_brw_read(struct ptlrpc_request *req)
 {
         struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
@@ -205,6 +214,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
         struct niobuf_local *local_nb = NULL;
         struct obd_ioobj *ioo;
         struct ost_body *body;
+        struct l_wait_info lwi;
         int rc, cmd, i, j, objcount, niocount, size = sizeof(*body);
         ENTRY;
 
@@ -216,6 +226,9 @@ static int ost_brw_read(struct ptlrpc_request *req)
         niocount = req->rq_reqmsg->buflens[2] / sizeof(*remote_nb);
         cmd = OBD_BRW_READ;
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK))
+                GOTO(out, rc = 0);
+
         for (i = 0; i < objcount; i++) {
                 ost_unpack_ioo(&tmp1, &ioo);
                 if (tmp2 + ioo->ioo_bufcnt > end2) {
@@ -226,12 +239,9 @@ static int ost_brw_read(struct ptlrpc_request *req)
                         ost_unpack_niobuf(&tmp2, &remote_nb);
         }
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc)
-                RETURN(rc);
         OBD_ALLOC(local_nb, sizeof(*local_nb) * niocount);
         if (local_nb == NULL)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         /* The unpackers move tmp1 and tmp2, so reset them before using */
         tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
@@ -240,7 +250,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
                                     tmp1, niocount, tmp2, local_nb, NULL);
 
         if (req->rq_status)
-                GOTO(out_local, 0);
+                GOTO(out, 0);
 
         desc = ptlrpc_prep_bulk(req->rq_connection);
         if (desc == NULL)
@@ -262,16 +272,20 @@ static int ost_brw_read(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_bulk, rc);
 
-#warning OST must time out here.
-        wait_event(desc->b_waitq, ptlrpc_check_bulk_sent(desc));
-        if (desc->b_flags & PTL_RPC_FL_INTR)
-                rc = -EINTR;
+        lwi = LWI_TIMEOUT(obd_timeout * HZ, ost_bulk_timeout, desc);
+        rc = l_wait_event(desc->b_waitq, desc->b_flags & PTL_BULK_FL_SENT, &lwi);
+        if (rc) {
+                LASSERT(rc == -ETIMEDOUT);
+                GOTO(out_bulk, rc);
+        }
 
         /* The unpackers move tmp1 and tmp2, so reset them before using */
         tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
         tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
         req->rq_status = obd_commitrw(cmd, conn, objcount,
                                       tmp1, niocount, local_nb, NULL);
+
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
 
 out_bulk:
         ptlrpc_free_bulk(desc);
@@ -298,6 +312,7 @@ static int ost_brw_write(struct ptlrpc_request *req)
         void *desc_priv = NULL;
         int reply_sent = 0;
         struct ptlrpc_service *srv;
+        struct l_wait_info lwi;
         __u32 xid;
         ENTRY;
 
@@ -381,8 +396,13 @@ static int ost_brw_write(struct ptlrpc_request *req)
         reply_sent = 1;
         ptlrpc_reply(req->rq_svc, req);
 
-#warning OST must time out here.
-        wait_event(desc->b_waitq, desc->b_flags & PTL_BULK_FL_RCVD);
+        lwi = LWI_TIMEOUT(obd_timeout * HZ, ost_bulk_timeout, desc);
+        rc = l_wait_event(desc->b_waitq, desc->b_flags & PTL_BULK_FL_RCVD, &lwi);
+        if (rc) {
+                if (rc != -ETIMEDOUT)
+                        LBUG();
+                GOTO(fail_bulk, rc);
+        }
 
         rc = obd_commitrw(cmd, conn, objcount, tmp1, niocount, local_nb,
                           desc->b_desc_private);

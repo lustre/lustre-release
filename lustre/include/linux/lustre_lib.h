@@ -413,6 +413,42 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
 #define OBD_IOC_DEC_FS_USE_COUNT       _IO  ('f', 133      )
 
+/*
+ * l_wait_event is a flexible sleeping function, permitting simple caller
+ * configuration of interrupt and timeout sensitivity along with actions to
+ * be performed in the event of either exception.
+ *
+ * Common usage looks like this:
+ * 
+ * struct l_wait_info lwi = LWI_TIMEOUT_INTR(timeout, timeout_handler,
+ *                                           intr_handler, callback_data);
+ * rc = l_wait_event(waitq, condition, &lwi);
+ *
+ * (LWI_TIMEOUT and LWI_INTR macros are available for timeout- and
+ * interrupt-only variants, respectively.)
+ *
+ * If a timeout is specified, the timeout_handler will be invoked in the event
+ * that the timeout expires before the process is awakened.  (Note that any
+ * waking of the process will restart the timeout, even if the condition is
+ * not satisfied and the process immediately returns to sleep.  This might be
+ * considered a bug.)  If the timeout_handler returns non-zero, l_wait_event
+ * will return -ETIMEDOUT and the caller will continue.  If the handler returns
+ * zero instead, the process will go back to sleep until it is awakened by the
+ * waitq or some similar mechanism, or an interrupt occurs (if the caller has
+ * asked for interrupts to be detected).  The timeout will only fire once, so
+ * callers should take care that a timeout_handler which returns zero will take
+ * future steps to awaken the process.  N.B. that these steps must include making
+ * the provided condition become true.
+ *
+ * If the interrupt flag (lwi_signals) is non-zero, then the process will be
+ * interruptible, and will be awakened by any "killable" signal (SIGTERM,
+ * SIGKILL or SIGINT).  If a timeout is also specified, then the process will
+ * only become interruptible _after_ the timeout has expired, though it can be
+ * awakened by a signal that was delivered before the timeout and is still
+ * pending when the timeout expires.  If a timeout is not specified, the process
+ * will be interruptible at all times during l_wait_event.
+ */
+
 struct l_wait_info {
         long   lwi_timeout;
         int  (*lwi_on_timeout)(void *);
@@ -428,18 +464,18 @@ struct l_wait_info {
         lwi_cb_data:    data                                                    \
 })
 
-#define LWI_INTR(signals, cb, data)                                             \
+#define LWI_INTR(cb, data)                                                      \
 ((struct l_wait_info) {                                                         \
-        lwi_signals:   signals,                                                 \
+        lwi_signals:   1,                                                       \
         lwi_on_signal: cb,                                                      \
         lwi_cb_data:   data                                                     \
 })
 
-#define LWI_TIMEOUT_INTR(time, time_cb, signals, sig_cb, data)                  \
+#define LWI_TIMEOUT_INTR(time, time_cb, sig_cb, data)                           \
 ((struct l_wait_info) {                                                         \
         lwi_timeout:    time,                                                   \
         lwi_on_timeout: time_cb,                                                \
-        lwi_signals:    signals,                                                \
+        lwi_signals:    1,                                                      \
         lwi_on_signal:  sig_cb,                                                 \
         lwi_cb_data:    data                                                    \
 })
@@ -454,48 +490,44 @@ struct l_wait_info {
 do {                                                                            \
         wait_queue_t __wait;                                                    \
         long __state;                                                           \
+        int __timed_out = 0;                                                    \
         init_waitqueue_entry(&__wait, current);                                 \
                                                                                 \
         add_wait_queue(&wq, &__wait);                                           \
-        __state = TASK_UNINTERRUPTIBLE;                                         \
+        if (info->lwi_signals && !info->lwi_timeout)                            \
+            __state = TASK_INTERRUPTIBLE;                                       \
+        else                                                                    \
+            __state = TASK_UNINTERRUPTIBLE;                                     \
         for (;;) {                                                              \
             set_current_state(__state);                                         \
             if (condition)                                                      \
                     break;                                                      \
-            /* We only become INTERRUPTIBLE if a timeout has fired, and         \
-             * the caller has given us some signals to care about.              \
-             *                                                                  \
-             * XXXshaver we should check against info->wli_signals here,        \
-             * XXXshaver instead of just using l_killable_pending, perhaps.     \
-             */                                                                 \
-            if (__state == TASK_INTERRUPTIBLE &&                                \
-                l_killable_pending(current)) {                                  \
-                    CERROR("lwe: interrupt for %d\n", current->pid);            \
-                    if (info->lwi_on_signal)                                    \
-                            info->lwi_on_signal(info->lwi_cb_data);             \
-                    ret = -EINTR;                                               \
-                    break;                                                      \
+            if (__state == TASK_INTERRUPTIBLE && l_killable_pending(current)) { \
+                CERROR("lwe: interrupt\n");                                     \
+                if (info->lwi_on_signal)                                        \
+                        info->lwi_on_signal(info->lwi_cb_data);                 \
+                ret = -EINTR;                                                   \
+                break;                                                          \
             }                                                                   \
-            if (info->lwi_timeout) {                                            \
+            if (info->lwi_timeout && !__timed_out) {                            \
                 if (schedule_timeout(info->lwi_timeout) == 0) {                 \
-                    CERROR("lwe: timeout for %d\n", current->pid);              \
+                    CERROR("lwe: timeout\n");                                   \
+                    __timed_out = 1;                                            \
                     if (!info->lwi_on_timeout ||                                \
                         info->lwi_on_timeout(info->lwi_cb_data)) {              \
                         ret = -ETIMEDOUT;                                       \
                         break;                                                  \
                     }                                                           \
-                    /* We'll take signals only after a timeout. */              \
+                    /* We'll take signals after a timeout. */                   \
                     if (info->lwi_signals) {                                    \
                         __state = TASK_INTERRUPTIBLE;                           \
                         /* Check for a pending interrupt. */                    \
-                        if (info->lwi_signals &&                                \
-                            l_killable_pending(current)) {                      \
-                             CERROR("lwe: pending interrupt for %d\n",          \
-                                    current->pid);                              \
-                             if (info->lwi_on_signal)                           \
-                                 info->lwi_on_signal(info->lwi_cb_data);        \
-                             ret = -EINTR;                                      \
-                             break;                                             \
+                        if (info->lwi_signals && l_killable_pending(current)) { \
+                            CERROR("lwe: pending interrupt\n");                 \
+                            if (info->lwi_on_signal)                            \
+                                info->lwi_on_signal(info->lwi_cb_data);         \
+                            ret = -EINTR;                                       \
+                            break;                                              \
                         }                                                       \
                     }                                                           \
                 }                                                               \

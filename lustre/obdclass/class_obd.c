@@ -46,7 +46,11 @@ struct semaphore obd_conf_sem;   /* serialize configuration commands */
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
 unsigned long obd_memory = 0;
+
+/* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned long obd_fail_loc = 0;
+unsigned long obd_timeout = 100;
+char obd_recovery_upcall[128] = "/usr/lib/lustre/ha_assist";
 
 extern struct obd_type *class_nm_to_type(char *nm);
 
@@ -573,6 +577,8 @@ EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
 EXPORT_SYMBOL(obd_memory);
 EXPORT_SYMBOL(obd_fail_loc);
+EXPORT_SYMBOL(obd_timeout);
+EXPORT_SYMBOL(obd_recovery_upcall);
 
 EXPORT_SYMBOL(class_register_type);
 EXPORT_SYMBOL(class_unregister_type);

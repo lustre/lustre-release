@@ -45,6 +45,14 @@ inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
         return &req->rq_export->exp_obd->u.mds;
 }
 
+static int mds_bulk_timeout(void *data)
+{
+        struct ptlrpc_bulk_desc *desc = data;
+        
+        ENTRY;
+        CERROR("(not yet) starting recovery of client %p\n", desc->b_client);
+        RETURN(1);
+}
 
 /* Assumes caller has already pushed into the kernel filesystem context */
 static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
@@ -54,6 +62,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         struct mds_obd *mds = mds_req2mds(req);
         struct ptlrpc_bulk_desc *desc;
         struct ptlrpc_bulk_page *bulk;
+        struct l_wait_info lwi;
         char *buf;
         ENTRY;
 
@@ -90,9 +99,13 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 GOTO(cleanup_buf, rc);
         }
 
-        wait_event(desc->b_waitq, ptlrpc_check_bulk_sent(desc));
-        if (desc->b_flags & PTL_RPC_FL_INTR)
-                GOTO(cleanup_buf, rc = -EINTR);
+        lwi = LWI_TIMEOUT(obd_timeout * HZ, mds_bulk_timeout, desc);
+        rc = l_wait_event(desc->b_waitq, desc->b_flags & PTL_BULK_FL_SENT, &lwi);
+        if (rc) {
+                if (rc != -ETIMEDOUT)
+                        LBUG();
+                GOTO(cleanup_buf, rc);
+        }
 
         EXIT;
  cleanup_buf:
@@ -277,9 +290,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
                         RETURN(0);
                 }
         }
-
-#warning shaver: we might need a real cluuid here
-        rc = class_connect(conn, obd, NULL);
+        rc = class_connect(conn, obd, cluuid);
         if (rc)
                 GOTO(out_dec, rc);
         exp = class_conn2export(conn);

@@ -58,16 +58,20 @@ static int sync_io_timeout(void *data)
         ENTRY;
         desc->b_connection->c_level = LUSTRE_CONN_RECOVD;
         desc->b_flags |= PTL_RPC_FL_TIMEOUT;
-        if (desc->b_client && desc->b_client->cli_recovd) {
+        if (desc->b_client && desc->b_client->cli_recovd &&
+            class_signal_client_failure) {
                 /* XXXshaver Do we need a resend strategy, or do we just
                  * XXXshaver return -ERESTARTSYS and punt it?
                  */
                 CERROR("signalling failure of client %p\n", desc->b_client);
                 class_signal_client_failure(desc->b_client);
-        }
 
-        /* We go back to sleep, until we're resumed or interrupted. */
-        RETURN(0);
+                /* We go back to sleep, until we're resumed or interrupted. */
+                RETURN(0);
+        }
+        
+        /* If we can't be recovered, just abort the syscall with -ETIMEDOUT. */
+        RETURN(1);
 }
 
 static int sync_io_intr(void *data)
@@ -86,11 +90,9 @@ int ll_sync_io_cb(struct io_cb_data *data, int err, int phase)
         ENTRY; 
 
         if (phase == CB_PHASE_START) { 
-#warning shaver hardcoded timeout (/proc/sys/lustre/timeout)
                 struct l_wait_info lwi;
-                lwi = LWI_TIMEOUT_INTR(100 * HZ, sync_io_timeout,
-                                       SIGTERM | SIGKILL | SIGINT, sync_io_intr,
-                                       data);
+                lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ, sync_io_timeout,
+                                       sync_io_intr, data);
                 ret = l_wait_event(data->waitq, data->complete, &lwi);
                 if (atomic_dec_and_test(&data->refcount))
                         OBD_FREE(data, sizeof(*data));

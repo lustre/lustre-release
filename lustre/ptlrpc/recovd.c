@@ -19,6 +19,7 @@
 #include <linux/kmod.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
+#include <linux/obd_support.h>
 
 struct recovd_obd *ptlrpc_connmgr;
 
@@ -60,7 +61,7 @@ static int recovd_upcall(void)
         char *argv[2];
         char *envp[3];
 
-        argv[0] = "/usr/src/obd/utils/ha_assist.sh";
+        argv[0] = obd_recovery_upcall;
         argv[1] = NULL;
 
         envp [0] = "HOME=/";
