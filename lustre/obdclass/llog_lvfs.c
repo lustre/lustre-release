@@ -564,12 +564,13 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
                 dget(fdentry);
                 rc = llog_lvfs_close(handle);
-                if (rc)
-                        RETURN(rc);
 
-                down(&inode->i_sem);
-                rc = vfs_unlink(inode, fdentry);
-                up(&inode->i_sem);
+                if (rc == 0) {
+                        down(&inode->i_sem);
+                        rc = vfs_unlink(inode, fdentry);
+                        up(&inode->i_sem);
+                }
+
                 dput(fdentry);
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
                 RETURN(rc);
