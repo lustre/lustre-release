@@ -1,5 +1,6 @@
 DEFS:=
-CPPFLAGS := -g -I. -I$(PORTALS)/include -I$(top_srcdir)/include -Wall -D_LARGEFILE64_SOURCE
+CPPFLAGS := -I. -I$(PORTALS)/include -I$(top_srcdir)/include -D_LARGEFILE64_SOURCE
+CFLAGS := -g -Wall
 # LDADD = -lldap
 # LDADD := -lreadline -ltermcap # -lefence
 bin_PROGRAMS = openunlink testreq truncate #ldaptest 
