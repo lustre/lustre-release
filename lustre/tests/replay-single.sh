@@ -237,7 +237,7 @@ test_12() {
     multiop $DIR/$tfile o_tSc &
     pid=$!
     # give multiop a chance to open
-    sleep 1 
+    sleep 1
     rm -f $DIR/$tfile
     replay_barrier mds
     kill -USR1 $pid
@@ -308,12 +308,12 @@ run_test 15 "open(O_CREAT), unlink |X|  touch new, close"
 test_16() {
     replay_barrier mds
     mcreate $DIR/$tfile
-    unlink $DIR/$tfile
+    munlink $DIR/$tfile
     mcreate $DIR/$tfile-2
     fail mds
     [ -e $DIR/$tfile ] && return 1
     [ -e $DIR/$tfile-2 ] || return 2
-    unlink $DIR/$tfile-2 || return 3
+    munlink $DIR/$tfile-2 || return 3
 }
 run_test 16 "|X| open(O_CREAT), unlink, touch new,  unlink new"
 
@@ -347,8 +347,8 @@ test_18() {
     [ -e $DIR/$tfile-2 ] || return 4
     # this touch frequently fails
     touch $DIR/$tfile-3 || return 5
-    unlink $DIR/$tfile-2 || return 6
-    unlink $DIR/$tfile-3 || return 7
+    munlink $DIR/$tfile-2 || return 6
+    munlink $DIR/$tfile-3 || return 7
     return 0
 }
 run_test 18 "|X| open(O_CREAT), unlink, touch new, close, touch, unlink"

@@ -158,8 +158,11 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
 void ll_umount_begin(struct super_block *sb);
 int ll_prep_inode(struct obd_export *exp, struct inode **inode, 
-                  struct ptlrpc_request *req, int offset, struct super_block *sb);
-
+                  struct ptlrpc_request *req, int offset, struct super_block *);
+__u32 get_uuid2int(const char *name, int len);
+struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
+                               int fhtype, int parent);
+int ll_dentry_to_fh(struct dentry *, __u32 *datap, int *lenp, int need_parent);
 /* llite/symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;
 

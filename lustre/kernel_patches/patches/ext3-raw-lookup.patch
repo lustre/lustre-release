@@ -26,7 +26,7 @@
 +	struct dentry parent;
 +	struct dentry dentry;
 +
-+	if (len < EXT3_NAME_LEN)
++	if (len > EXT3_NAME_LEN)
 +		return -ENAMETOOLONG;
 +
 +	parent.d_inode = dir;

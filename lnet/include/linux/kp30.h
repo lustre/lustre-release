@@ -58,7 +58,7 @@ extern unsigned int portal_cerror;
 #define D_IOCTL     (1 << 7) /* ioctl related information */
 #define D_BLOCKS    (1 << 8) /* ext2 block allocation */
 #define D_NET       (1 << 9) /* network communications */
-#define D_WARNING   (1 << 10)
+#define D_WARNING   (1 << 10) /* CWARN(...) == CDEBUG (D_WARNING, ...) */
 #define D_BUFFS     (1 << 11)
 #define D_OTHER     (1 << 12)
 #define D_DENTRY    (1 << 13)

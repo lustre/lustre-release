@@ -29,9 +29,9 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmm,
 int lov_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsm,
                  struct lov_mds_md *lmm, int lmmsize);
 int lov_setstripe(struct obd_export *exp,
-                  struct lov_stripe_md **lsmp, struct lov_mds_md *lmmu);
+                  struct lov_stripe_md **lsmp, struct lov_mds_md *lump);
 int lov_getstripe(struct obd_export *exp,
-                  struct lov_stripe_md *lsm, struct lov_mds_md *lmmu);
+                  struct lov_stripe_md *lsm, struct lov_mds_md *lump);
 
 /* lproc_lov.c */
 extern struct file_operations lov_proc_target_fops;
