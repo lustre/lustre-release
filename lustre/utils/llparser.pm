@@ -89,7 +89,7 @@ $SENDING = "Sending";
 $COMPLETED = "Completed";
 $HANDLING = "Handling";
 $HANDLED = "Handled";
-$RPCREGEX = qr/($SENDING|$HANDLING|$HANDLED|$COMPLETED)\sRPC\spname:cluuid:pid:xid:ni:nid:opc\s([-\w]+):([-\w]+):(\d+):(?:0x)?(\w+):(?:\w+):(?:0x)?(\w+):(\d+)/;
+$RPCREGEX = qr/($SENDING|$HANDLING|$HANDLED|$COMPLETED)\sRPC\spname:cluuid:pid:xid:ni:nid:opc\s([-\w]+):([-\.\w]+):(\d+):(?:0x)?(\w+):(?:\w+):(?:0x)?(\w+):(\d+)/;
 
 
 #VFS REGEX BELOW
