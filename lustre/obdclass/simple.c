@@ -67,6 +67,7 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
         LASSERT(atomic_read(&new_ctx->pwd->d_count));
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
+        save->ngroups = current->ngroups;
 
         LASSERT(save->pwd);
         LASSERT(save->pwdmnt);
@@ -81,6 +82,10 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
                 current->fsuid = uc->ouc_fsuid;
                 current->fsgid = uc->ouc_fsgid;
                 current->cap_effective = uc->ouc_cap;
+
+                current->ngroups = 0;
+                save->supgid1 = current->groups[0];
+                save->supgid2 = current->groups[1];
                 if (uc->ouc_suppgid1 != -1)
                         current->groups[current->ngroups++] = uc->ouc_suppgid1;
                 if (uc->ouc_suppgid2 != -1)
@@ -133,11 +138,9 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
                 current->fsuid = saved->fsuid;
                 current->fsgid = saved->fsgid;
                 current->cap_effective = saved->cap;
-
-                if (uc->ouc_suppgid1 != -1)
-                        current->ngroups--;
-                if (uc->ouc_suppgid2 != -1)
-                        current->ngroups--;
+                current->ngroups = saved->ngroups;
+                current->groups[0] = saved->supgid1;
+                current->groups[1] = saved->supgid2;
         }
 
         /*
