@@ -162,7 +162,6 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) %{_libdir}/libptlctl.a
 %attr(-, root, root) %{_libdir}/liblustreapi.a
 %attr(-, root, root) /usr/include/lustre
-%attr(-, root, root) /usr/include/portals
 %attr(-, root, root) /usr/include/linux/lustre_idl.h
 
 %attr(-, root, root) /usr/share/man/man?/*
