@@ -409,7 +409,35 @@ EOF
 				;;
 		esac
 	done
+
+	cat > "kernel$flavor.files" <<EOF
+%%defattr(-, root, root)
+/boot/%{kernel_glob}${flavor}
+/boot/System.map-%{KVERREL}${flavor}
+/boot/config-%{KVERREL}${flavor}
+%%dir /lib/modules
+%%dir /dev/shm
+/lib/modules/%{KVERREL}${flavor}
+%ifarch ia64
+/boot/efi/redhat/%{kernel_glob}${flavor}
+%endif
+%if %{linux26}
+/boot/Kerntypes-%{KVERREL}${flavor}
+/boot/symvers-%{KVERREL}-%{_target_cpu}${flavor}.gz
+%endif
+EOF
+
 done
+
+cat > kernel-source.files <<EOF
+%%defattr(-,root,root)
+%%dir /usr/src/linux-%{KVERREL}
+/usr/src/linux-%{KVERREL}/*
+%if %{linux26}
+%%dir /usr/src/linux-%{KVERREL}-obj
+/usr/src/linux-%{KVERREL}-obj/*
+%endif
+EOF
 
 %build
 # if RPM_BUILD_NCPUS unset, set it
@@ -585,7 +613,7 @@ EOF
 ##
 ## do -source package cleanup/install
 ##
-%if %{buildbase}
+if [ "%{buildbase}" -ne 0 ] ; then
     pushd linux >/dev/null
     mkdir -p $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
     rm -f drivers/net/hamradio/soundmodem/gentbl scripts/mkdep
@@ -598,28 +626,28 @@ EOF
     rm -rf $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs
     mkdir -p $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs
     cp ../lustre/kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@*.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs
-    %if %{linux26}
+    if [ "%{linux26}" -ne 0 ] ; then
         # this only works because CFS only builds one kernel per target/arch per kernel-source rpm
 	objdir=$RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}-obj
 	mkdir -p $objdir
-        %if %{buildbigmem}
-	BuildObj bigmem
-        %endif
-        %if %{buildBOOT}
-	BuildObj BOOT
-        %endif
-        %if %{buildjensen}
-	BuildObj jensen
-        %endif
-        %if %{buildsmp}
-	BuildObj smp
-        %endif
-	%if %{buildbigsmp}
-	BuildObj bigsmp
-        %endif
-        %if %{buildup}
-	BuildObj up
-        %endif
+        if [ "%{buildbigmem}" -ne 0 ] ; then
+	    BuildObj bigmem
+        fi
+        if [ "%{buildBOOT}" -ne 0 ] ; then
+	    BuildObj BOOT
+        fi
+        if [ "%{buildjensen}" -ne 0 ] ; then
+	    BuildObj jensen
+        fi
+        if [ "%{buildsmp}" -ne 0 ] ; then
+	    BuildObj smp
+        fi
+	if [ "%{buildbigsmp}" -ne 0 ] ; then
+	    BuildObj bigsmp
+        fi
+        if [ "%{buildup}" -ne 0 ] ; then
+	    BuildObj up
+        fi
         perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
 	# Remove $RPM_BUILD_ROOT prefix from symlinks.
 	for link in $(find $objdir -type l); do
@@ -627,7 +655,7 @@ EOF
 	    rm -f $link
 	    ln -s ${target/$RPM_BUILD_ROOT/} $link
 	done
-    %else # 2.4 rh-style
+    else # 2.4 rh-style
         perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{kextraver}custom/" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile
         cp ../lustre/kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@-%{_target_cpu}%{dashtargetboard}.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/.config
         for oc in oldconfig_nonint silentoldconfig oldconfig ; do
@@ -709,13 +737,13 @@ EOF
         
         rm -rf $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/savedheaders
         
-        %if %{rhbuild}
+        if [ "%{rhbuild}" -ne 0 ] ; then
             # fix up the tmp_include_depends file wrt the buildroot
             perl -p -i -e "s|$RPM_BUILD_ROOT||g" $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/tmp_include_depends
-        %endif
-    %endif # linux26
+        fi
+    fi # linux26
     popd >/dev/null
-%endif # buildbase
+fi # buildbase
 
 popd >/dev/null
 
@@ -844,107 +872,28 @@ fi
 ###
 
 %if %{buildup}
-%files
-%defattr(-, root, root)
-/boot/%{kernel_glob}
-%ifarch ia64
-/boot/efi/redhat/%{kernel_glob}
-%endif
-/boot/System.map-%{KVERREL}
-/boot/config-%{KVERREL}
-%dir /lib/modules
-%dir /dev/shm
-/lib/modules/%{KVERREL}
-%if %{linux26}
-/boot/Kerntypes-%{KVERREL}
-/boot/symvers-%{KVERREL}-%{_target_cpu}.gz
-%endif # linux26
+%files -f kernel.files
 %endif
 
 %if %{buildsmp}
-%files smp
-%defattr(-, root, root)
-/boot/%{kernel_glob}smp
-%ifarch ia64
-/boot/efi/redhat/%{kernel_glob}smp
-%endif
-/boot/System.map-%{KVERREL}smp
-/boot/config-%{KVERREL}smp
-%dir /lib/modules
-%dir /dev/shm
-/lib/modules/%{KVERREL}smp
-%if %{linux26}
-/boot/Kerntypes-%{KVERREL}smp
-/boot/symvers-%{KVERREL}-%{_target_cpu}smp.gz
-%endif # linux26
+%files smp -f kernel.files
 %endif
 
 %if %{buildbigsmp}
-%files bigsmp
-%defattr(-, root, root)
-/boot/%{kernel_glob}bigsmp
-%ifarch ia64
-/boot/efi/redhat/%{kernel_glob}bigsmp
-%endif
-/boot/System.map-%{KVERREL}bigsmp
-/boot/config-%{KVERREL}bigsmp
-%dir /lib/modules
-%dir /dev/shm
-/lib/modules/%{KVERREL}bigsmp
-%if %{linux26}
-/boot/Kerntypes-%{KVERREL}bigsmp
-/boot/symvers-%{KVERREL}-%{_target_cpu}bigsmp.gz
-%endif # linux26
+%files bigsmp -f kernelbigsmp.files
 %endif
 
 %if %{buildbigmem}
-%files bigmem
-%defattr(-, root, root)
-/boot/%{kernel_glob}bigmem
-%ifarch ia64
-/boot/efi/redhat/%{kernel_glob}bigmem
-%endif
-/boot/System.map-%{KVERREL}bigmem
-/boot/config-%{KVERREL}bigmem
-%dir /lib/modules
-%dir /dev/shm
-/lib/modules/%{KVERREL}bigmem
-%if %{linux26}
-/boot/Kerntypes-%{KVERREL}bigmem
-/boot/symvers-%{KVERREL}-%{_target_cpu}bigmem.gz
-%endif # linux26
+%files bigmem -f kernelbigmem.files
 %endif
 
 %if %{buildBOOT}
-%files BOOT
-%defattr(-, root, root)
-/boot/%{kernel_glob}BOOT
-%ifarch ia64
-/boot/efi/redhat/%{kernel_glob}BOOT
-%endif
-/boot/System.map-%{KVERREL}BOOT
-/boot/config-%{KVERREL}BOOT
-%dir /lib/modules
-%dir /dev/shm
-/lib/modules/%{KVERREL}BOOT
-%if %{linux26}
-/boot/Kerntypes-%{KVERREL}BOOT
-/boot/symvers-%{KVERREL}-%{_target_cpu}BOOT.gz
-%endif # linux26
+%files BOOT -f kernelBOOT.files
 %endif
 
 %if %{buildbase}
 
-%if 1
-%files source
-%defattr(-,root,root)
-%dir /usr/src/linux-%{KVERREL}
-/usr/src/linux-%{KVERREL}/*
-%if %{linux26}
-%dir /usr/src/linux-%{KVERREL}-obj
-/usr/src/linux-%{KVERREL}-obj/*
-%endif # linux26
-%endif
+%files source -f kernel-source.files
 
 %files doc
 %defattr(-,root,root)

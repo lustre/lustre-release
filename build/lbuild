@@ -336,7 +336,8 @@ patch_linux()
     rm -f linux/configs/*
     copysuccess=0
     for patchesdir in "$EXTERNAL_PATCHES" "lustre/lustre/kernel_patches" ; do
-	cp -v $patchesdir/kernel_configs/kernel-${VERSION}-${TARGET}*.config linux/configs/ >/dev/null && copysuccess=1
+	[ "$patchesdir" ] && \
+	    cp -v $patchesdir/kernel_configs/kernel-${VERSION}-${TARGET}*.config linux/configs/ >/dev/null && copysuccess=1
     done
     [ "$copysuccess" = "1" ] || \
 	fatal 1 "Error copying in kernel configs."
