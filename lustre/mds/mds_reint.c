@@ -110,6 +110,7 @@ static int mds_reint_setattr(struct mds_update_record *rec,
         struct dentry *de;
         void *handle;
         int rc = 0;
+        int err;
 
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_SETATTR)) {
@@ -128,12 +129,14 @@ static int mds_reint_setattr(struct mds_update_record *rec,
 
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
-        /* FIXME: need to return last_rcvd, last_committed */
 
+        err = mds_fs_commit(mds, de->d_inode, handle);
+        if (err) {
+                CERROR("error on commit: err = %d\n", err);
+                if (!rc)
+                        rc = err;
+        }
         EXIT;
-
-        /* FIXME: keep rc intact */
-        rc = mds_fs_commit(mds, de->d_inode, handle);
 out_setattr_de:
         l_dput(de);
 out_setattr:
@@ -189,6 +192,7 @@ out_create_de:
         req->rq_status = rc;
         return 0;
 }
+
 static int mds_reint_create(struct mds_update_record *rec,
                             struct ptlrpc_request *req)
 {
@@ -198,6 +202,7 @@ static int mds_reint_create(struct mds_update_record *rec,
         struct inode *dir;
         void *handle;
         int rc = 0, type = rec->ur_mode & S_IFMT;
+        int err;
         ENTRY;
 
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
@@ -295,10 +300,16 @@ static int mds_reint_create(struct mds_update_record *rec,
                         ATTR_MTIME | ATTR_CTIME;
 
                 rc = mds_fs_setattr(mds, dchild, handle, &iattr);
-                /* XXX should we abort here in case of error? */
+                if (rc) {
+                        CERROR("error on setattr: rc = %d\n", rc);
+                        /* XXX should we abort here in case of error? */
+                }
 
-                //if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
+                if (rc) {
+                        CERROR("error on update_last_rcvd: rc = %d\n", rc);
+                        /* XXX should we abort here in case of error? */
+                }
 
                 body = lustre_msg_buf(req->rq_repmsg, 0);
                 body->ino = inode->i_ino;
@@ -306,8 +317,12 @@ static int mds_reint_create(struct mds_update_record *rec,
         }
 
 out_create_commit:
-        /* FIXME: keep rc intact */
-        rc = mds_fs_commit(mds, dir, handle);
+        err = mds_fs_commit(mds, dir, handle);
+        if (err) {
+                CERROR("error on commit: err = %d\n", err);
+                if (!rc)
+                        rc = err;
+        }
 out_create_dchild:
         l_dput(dchild);
         up(&dir->i_sem);
@@ -326,6 +341,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
         struct inode *dir, *inode;
         void *handle;
         int rc = 0;
+        int err;
         ENTRY;
 
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
@@ -384,9 +400,12 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
-        /* FIXME: need to return last_rcvd, last_committed */
-        /* FIXME: keep rc intact */
-        rc = mds_fs_commit(mds, dir, handle);
+        err = mds_fs_commit(mds, dir, handle);
+        if (err) {
+                CERROR("error on commit: err = %d\n", err);
+                if (!rc)
+                        rc = err;
+        }
 
         EXIT;
 out_unlink_dchild:
@@ -408,6 +427,7 @@ static int mds_reint_link(struct mds_update_record *rec,
         struct mds_obd *mds = &req->rq_obd->u.mds;
         void *handle;
         int rc = 0;
+        int err;
 
         ENTRY;
         de_src = mds_fid2dentry(mds, rec->ur_fid1, NULL);
@@ -445,9 +465,12 @@ static int mds_reint_link(struct mds_update_record *rec,
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
 
-        /* FIXME: need to return last_rcvd, last_committed */
-        /* FIXME: keep rc intact */
-        rc = mds_fs_commit(mds, de_tgt_dir->d_inode, handle);
+        err = mds_fs_commit(mds, de_tgt_dir->d_inode, handle);
+        if (err) {
+                CERROR("error on commit: err = %d\n", err);
+                if (!rc)
+                        rc = err;
+        }
         EXIT;
 
 out_link_dchild:
@@ -472,6 +495,7 @@ static int mds_reint_rename(struct mds_update_record *rec,
         struct mds_obd *mds = &req->rq_obd->u.mds;
         void *handle;
         int rc = 0;
+        int err;
         ENTRY;
 
         de_srcdir = mds_fid2dentry(mds, rec->ur_fid1, NULL);
@@ -507,9 +531,12 @@ static int mds_reint_rename(struct mds_update_record *rec,
         if (!rc)
                 rc = mds_update_last_rcvd(mds, handle, req);
 
-        /* FIXME: need to return last_rcvd, last_committed */
-        /* FIXME: keep rc intact */
-        rc = mds_fs_commit(mds, de_tgtdir->d_inode, handle);
+        err = mds_fs_commit(mds, de_tgtdir->d_inode, handle);
+        if (err) {
+                CERROR("error on commit: err = %d\n", err);
+                if (!rc)
+                        rc = err;
+        }
         EXIT;
 
 out_rename_denew:
