@@ -95,7 +95,8 @@ struct obd_ops {
 	int  (*o_set_info)(struct obd_conn *, int keylen, void *key, int vallen, void *val);
 	int (*o_migrate)(struct obd_conn *, obdattr *src, obdattr *dst);
 	int (*o_copy)(struct obd_conn *dev, obdattr *source, obdattr *target);
-	int (*o_iocontrol)(int cmd, int len, void *karg, void *uarg);
+	int (*o_iocontrol)(int cmd, struct obd_conn *, int len, void *karg, void *uarg);
+	int (*o_iterate)(struct obd_conn *, objid, int (*)(objid, void *), void *);
 
 };
 
@@ -135,6 +136,7 @@ int gen_copy_data(struct obd_conn *, obdattr *source, obdattr *target);
  * ioctl commands
  */
 struct oic_generic {
+	int  att_connid;
 	int  att_typelen;
 	void *att_type;
 	int  att_datalen;

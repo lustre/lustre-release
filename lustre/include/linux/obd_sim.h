@@ -1,6 +1,9 @@
 #ifndef _OBD_SIM
 #define _OBD_SIM
 
+#define OBD_EXT2_RUNIT           _IOWR('f', 61, long)
+
+
 struct ext2_obd {
 	struct super_block * ext2_sb;
 };

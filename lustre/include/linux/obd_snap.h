@@ -70,7 +70,6 @@ struct snap_object_data {
 
 #define	this_snapidx(obd) (obd->u.snap.snap_index)
 
-extern int snap_iocontrol(int cmd, int len, void *karg, void *uarg);
 void snap_use(int table_no, int snap_index) ;
 void snap_unuse(int table_no, int snap_index) ;
 int snap_is_used(int table_no, int snap_index) ;

@@ -168,6 +168,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	conn.oc_dev = obddev;
 
 	switch (cmd) {
+	case TCGETS:
+		return -EINVAL;
 	case OBD_IOC_ATTACH: {
 		struct obd_type *type;
 		struct oic_generic input;
@@ -791,19 +793,21 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			EXIT;
 			return -EINVAL;
 		}
-
+		conn.oc_id = input.att_connid;
 		
 		CDEBUG(D_IOCTL, "Calling ioctl %x for type %s, len %d\n",
 		       cmd, type->typ_name, input.att_datalen);
 
 		/* get the generic data */
+		karg = input.att_data;
 		if ( (err = getdata(input.att_datalen, &karg)) ) {
 			EXIT;
 			return err;
 		}
 
-		err = type->typ_ops->o_iocontrol(cmd, input.att_datalen, 
-						 karg, input.att_data);
+		err = type->typ_ops->o_iocontrol
+			(cmd, &conn, input.att_datalen, 
+			 karg, input.att_data);
 		OBD_FREE(karg, input.att_datalen);
 
 		EXIT;
