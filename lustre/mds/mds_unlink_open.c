@@ -234,87 +234,95 @@ int mds_cleanup_orphans(struct obd_device *obd)
         struct mds_obd *mds = &obd->u.mds;
         struct obd_run_ctxt saved;
         struct file *file;
-        struct dentry *dchild;
+        struct dentry *dchild, *dentry;
+        struct vfsmount *mnt;
         struct inode *child_inode, *pending_dir = mds->mds_pending_dir->d_inode;
-        struct l_linux_dirent *dirent, *ptr;
-        unsigned int count = pending_dir->i_size;
-        int rc = 0, rc2 = 0, item = 0;
+        struct l_linux_dirent *dirent, *n;
+        struct list_head dentry_list;
+        char d_name[LL_FID_NAMELEN];
+        __u64 i = 0;
+        int rc = 0, item = 0, namlen;
         ENTRY;
 
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
-        dget(mds->mds_pending_dir);
-        mntget(mds->mds_vfsmnt);
+        dentry = dget(mds->mds_pending_dir);
+        if (IS_ERR(dentry))
+                GOTO(err_pop, rc = PTR_ERR(dentry));
+        mnt = mntget(mds->mds_vfsmnt);
+        if (IS_ERR(mnt))
+                GOTO(err_mntget, rc = PTR_ERR(mnt));
+
         file = dentry_open(mds->mds_pending_dir, mds->mds_vfsmnt,
                            O_RDONLY | O_LARGEFILE);
         if (IS_ERR(file))
-                GOTO(err_open, rc2 = PTR_ERR(file));
+                GOTO(err_pop, rc = PTR_ERR(file));
 
-        OBD_ALLOC(dirent, count);
-        if (dirent == NULL)
-                GOTO(err_alloc_dirent, rc2 = -ENOMEM);
-
-        rc = l_readdir(file, dirent, count);
+        INIT_LIST_HEAD(&dentry_list);
+        rc = l_readdir(file, &dentry_list);
         filp_close(file, 0);
         if (rc < 0)
-                GOTO(err_out, rc2 = rc);
+                GOTO(err_out, rc);
 
-        for (ptr = dirent; (char *)ptr < (char *)dirent + rc;
-                        (char *)ptr += ptr->d_reclen) {
-                int namlen = strlen(ptr->d_name);
+        list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
+                i ++;
+                list_del(&dirent->lld_list);
 
-                if (((namlen == 1) && !strcmp(ptr->d_name, ".")) ||
-                    ((namlen == 2) && !strcmp(ptr->d_name, "..")))
+                namlen = strlen(dirent->lld_name);
+                LASSERT(sizeof(d_name) >= namlen + 1);
+                strcpy(d_name, dirent->lld_name);
+                OBD_FREE(dirent, sizeof(*dirent));
+
+                CDEBUG(D_INODE, "entry "LPU64" of PENDING DIR: %s\n",
+                       i, d_name);
+
+                if (((namlen == 1) && !strcmp(d_name, ".")) ||
+                    ((namlen == 2) && !strcmp(d_name, ".."))) {
                         continue;
+                }
 
                 down(&pending_dir->i_sem);
-                dchild = lookup_one_len(ptr->d_name, mds->mds_pending_dir,
-                                        namlen);
+                dchild = lookup_one_len(d_name, mds->mds_pending_dir, namlen);
                 if (IS_ERR(dchild)) {
                         up(&pending_dir->i_sem);
-                        GOTO(err_out, rc2 = PTR_ERR(dchild));
+                        GOTO(err_out, rc = PTR_ERR(dchild));
                 }
                 if (!dchild->d_inode) {
-                        CDEBUG(D_ERROR, "orphan %s has been removed\n",
-                               ptr->d_name);
-                        GOTO(next, rc2 = 0);
+                        CERROR("orphan %s has been removed\n", d_name);
+                        GOTO(next, rc = 0);
                 }
 
                 child_inode = dchild->d_inode;
                 if (mds_inode_is_orphan(child_inode) &&
                     mds_open_orphan_count(child_inode)) {
-                        CWARN("orphan %s was re-opened during recovery\n",
-                              ptr->d_name);
-                        GOTO(next, rc2 = 0);
+                        CWARN("orphan %s was re-opened during recovery\n", d_name);
+                        GOTO(next, rc = 0);
                 }
 
-                rc2 = mds_unlink_orphan(obd, dchild, child_inode, pending_dir);
-                if (rc2 == 0) {
+                rc = mds_unlink_orphan(obd, dchild, child_inode, pending_dir);
+                if (rc == 0) {
                         item ++;
-                        CWARN("removed orphan %s from MDS and OST\n",
-                               ptr->d_name);
+                        CWARN("removed orphan %s from MDS and OST\n", d_name);
                 } else {
-                        l_dput(dchild);
-                        up(&pending_dir->i_sem);
-                        GOTO(err_out, rc2);
+                        CERROR("removed orphan %s from MDS and OST failed,"
+                               " rc = %d\n", d_name, rc);
+                        rc = 0;
                 }
 next:
                 l_dput(dchild);
                 up(&pending_dir->i_sem);
         }
 err_out:
-        OBD_FREE(dirent, count);
+        list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
+                list_del(&dirent->lld_list);
+                OBD_FREE(dirent, sizeof(*dirent));
+        }
 err_pop:
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
-        if (rc2 == 0)
-                rc2 = item;
+        if (rc == 0)
+                rc = item;
+        RETURN(rc);
 
-        RETURN(rc2);
-
-err_open:
-        mntput(mds->mds_vfsmnt);
+err_mntget:
         l_dput(mds->mds_pending_dir);
-        goto err_pop;
-err_alloc_dirent:
-        filp_close(file, 0);
         goto err_pop;
 }
