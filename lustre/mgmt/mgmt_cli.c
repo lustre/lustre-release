@@ -23,7 +23,13 @@
  */
 
 #define EXPORT_SYMTAB
-#define DEBUG_SUBSYSTEM S_MGMT
+
+/*
+ *<phik> go back to your file and define S_MGMT to be S_FILTER
+ *<phik> and then thank me for saving you four hours
+ */
+
+#define DEBUG_SUBSYSTEM S_FILTER /* S_MGMT */
 #include <linux/module.h>
 #include <linux/init.h>
 
@@ -182,7 +188,7 @@ static int mgmtcli_register_for_events(struct obd_device *mgmt_obd,
 
         spin_lock(&mgmt_obd->obd_dev_lock);
         start_thread = list_empty(&mcobd->mc_registered);
-        list_add(&mcobd->mc_registered, &reg->chain);
+        list_add(&reg->chain, &mcobd->mc_registered);
         spin_unlock(&mgmt_obd->obd_dev_lock);
 
         if (start_thread)
@@ -213,13 +219,7 @@ static int mgmtcli_deregister_for_events(struct obd_device *mgmt_obd,
                         break;
                 }
         }
-        stop_thread = list_empty(&mc->mc_registered);
         spin_unlock(&mgmt_obd->obd_dev_lock);
-
-        if (stop_thread) {
-                LASSERT(found);
-                RETURN(mgmtcli_disconnect_from_svc(mgmt_obd));
-        }
 
         if (!found)
                 RETURN(-ENOENT);
@@ -235,6 +235,22 @@ static int mgmtcli_setup(struct obd_device *obd, obd_count len, void *buf)
         
         /* Initialize our nested client_obd structure. */
         RETURN(client_obd_setup(obd, len, buf));
+}
+
+static int mgmtcli_cleanup(struct obd_device *obd, int flags)
+{
+        struct mgmtcli_obd *mc = &obd->u.mgmtcli;
+        
+        if (!list_empty(&mc->mc_registered))
+                RETURN(-EBUSY);
+
+        if (mc->mc_ping_thread) {
+                rc = mgmtcli_disconnect_from_svc(obd);
+                if (rc)
+                        RETURN(rc);
+        }
+
+        RETURN(client_obd_cleanup(obd, flags);
 }
 
 static struct obd_ops mgmtcli_obd_ops = {
