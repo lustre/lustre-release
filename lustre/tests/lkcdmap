@@ -1,11 +1,13 @@
 #!/bin/sh
 TMP=${TMP:-/tmp}
+LCMD=$TMP/lkcd-cmds-`hostname`
+echo "Storing LKCD module info in $LCMD"
 cat /tmp/ogdb-`hostname` | while read JUNK M JUNK; do
 	MOD="../$M"
 	MAP=`echo $MOD | sed -e 's/\.o$/.map/'`
 	MODNAME=`basename $MOD | sed -e 's/\.o$//'`
 
 	nm $MOD > $MAP
-	echo namelist -a $PWD/$MOD 
-	echo symtab -a $PWD/$MAP $MODNAME
+	echo namelist -a $PWD/$MOD  | tee -a $LCMD
+	echo symtab -a $PWD/$MAP $MODNAME | tee -a $LCMD
 done
