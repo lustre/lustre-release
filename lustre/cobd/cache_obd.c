@@ -175,7 +175,7 @@ cobd_getattr(struct lustre_handle *conn, struct obdo *oa,
 
 static int
 cobd_open(struct lustre_handle *conn, struct obdo *oa,
-          struct lov_stripe_md *lsm)
+          struct lov_stripe_md *lsm, struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
@@ -186,12 +186,12 @@ cobd_open(struct lustre_handle *conn, struct obdo *oa,
         }
 
         cobd = &obd->u.cobd;
-        return (obd_open (&cobd->cobd_target, oa, lsm));
+        return (obd_open (&cobd->cobd_target, oa, lsm, oti));
 }
 
 static int
 cobd_close(struct lustre_handle *conn, struct obdo *oa,
-           struct lov_stripe_md *lsm)
+           struct lov_stripe_md *lsm, struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
@@ -202,14 +202,15 @@ cobd_close(struct lustre_handle *conn, struct obdo *oa,
         }
 
         cobd = &obd->u.cobd;
-        return (obd_close (&cobd->cobd_target, oa, lsm));
+        return (obd_close (&cobd->cobd_target, oa, lsm, oti));
 }
 
 static int
 cobd_preprw(int cmd, struct lustre_handle *conn,
             int objcount, struct obd_ioobj *obj,
             int niocount, struct niobuf_remote *nb,
-            struct niobuf_local *res, void **desc_private)
+            struct niobuf_local *res, void **desc_private, 
+            struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
@@ -226,14 +227,14 @@ cobd_preprw(int cmd, struct lustre_handle *conn,
         return (obd_preprw (cmd, &cobd->cobd_target,
                             objcount, obj,
                             niocount, nb,
-                            res, desc_private));
+                            res, desc_private, oti));
 }
 
 static int
 cobd_commitrw(int cmd, struct lustre_handle *conn,
               int objcount, struct obd_ioobj *obj,
               int niocount, struct niobuf_local *local,
-              void *desc_private)
+              void *desc_private, struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
@@ -250,13 +251,14 @@ cobd_commitrw(int cmd, struct lustre_handle *conn,
         return (obd_commitrw (cmd, &cobd->cobd_target,
                               objcount, obj,
                               niocount, local,
-                              desc_private));
+                              desc_private, oti));
 }
 
 static inline int
 cobd_brw(int cmd, struct lustre_handle *conn,
          struct lov_stripe_md *lsm, obd_count oa_bufs,
-         struct brw_page *pga, struct obd_brw_set *set)
+         struct brw_page *pga, struct obd_brw_set *set, 
+         struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
@@ -271,7 +273,7 @@ cobd_brw(int cmd, struct lustre_handle *conn,
 
         cobd = &obd->u.cobd;
         return (obd_brw (cmd, &cobd->cobd_target,
-                         lsm, oa_bufs, pga, set));
+                         lsm, oa_bufs, pga, set, oti));
 }
 
 static int
