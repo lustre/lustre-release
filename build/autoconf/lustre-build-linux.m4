@@ -129,12 +129,12 @@ AC_CHECK_FILE([/boot/kernel.h],
 
 AC_ARG_WITH([kernel-source-header],
 	AC_HELP_STRING([--with-kernel-source-header=path],
-			[Use a different kernel version header.  Consult README.kernel-source for details.]),
+			[Use a different kernel version header.  Consult build/README.kernel-source for details.]),
 	[KERNEL_SOURCE_HEADER=$with_kernel_source_header])
 
 # ------------ .config exists ----------------
 AC_CHECK_FILE([$LINUX_CONFIG],[],
-	[AC_MSG_ERROR([Kernel config could not be found.  If you are building from a kernel-source rpm consult README.kernel-source])])
+	[AC_MSG_ERROR([Kernel config could not be found.  If you are building from a kernel-source rpm consult build/README.kernel-source])])
 
 # ----------- make dep run? ------------------
 AC_CHECK_FILES([$LINUX_OBJ/include/linux/autoconf.h
@@ -157,9 +157,9 @@ if grep rhconfig $LINUX_OBJ/include/linux/version.h >/dev/null ; then
 		[if test $KERNEL_SOURCE_HEADER = '/boot/kernel.h' ; then
 			AC_MSG_WARN([Using /boot/kernel.h from RUNNING kernel.])
 			AC_MSG_WARN([If this is not what you want, use --with-kernel-source-header.])
-			AC_MSG_WARN([Consult README.kernel-source for details.])
+			AC_MSG_WARN([Consult build/README.kernel-source for details.])
 		fi],
-		[AC_MSG_ERROR([$KERNEL_SOURCE_HEADER not found.  Consult README.kernel-source for details.])])
+		[AC_MSG_ERROR([$KERNEL_SOURCE_HEADER not found.  Consult build/README.kernel-source for details.])])
 	EXTRA_KCFLAGS="-include $KERNEL_SOURCE_HEADER $EXTRA_KCFLAGS"
 fi
 
@@ -173,7 +173,7 @@ LB_LINUX_TRY_COMPILE([],[],[
 ],[
 	AC_MSG_RESULT([no])
 	AC_MSG_WARN([Consult config.log for details.])
-	AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult README.kernel-source])
+	AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult build/README.kernel-source])
 	AC_MSG_ERROR([Kernel modules could not be built.])
 ])
 
