@@ -51,190 +51,65 @@
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
-/* in 2.5 we hope that significant read traffic will come through
- * readpages and will be nicely batched by read-ahead, this is just
- * to pick up the rest.  */
-static int ll_readpage_26(struct file *file, struct page *page)
-{
-        ENTRY;
-
-        CDEBUG(D_CACHE, "page %p ind %lu inode %p\n", page, page->index,
-                        page->mapping->host);
-
-        LASSERT(PageLocked(page));
-        LASSERT(!PageUptodate(page));
-        LASSERT(page->private == 0);
-
-        /* put it in the list that lliod will use */
-        page_cache_get(page);
-        lliod_give_page(page->mapping->host, page, OBD_BRW_READ);
-        lliod_wakeup(page->mapping->host);
-
-        RETURN(0);
-}
-
+/* called as the osc engine completes an rpc that included our ocp.  
+ * the ocp itself holds a reference to the page and will drop it when
+ * the page is removed from the page cache.  our job is simply to
+ * transfer rc into the page and unlock it */
 void ll_complete_writepage_26(struct obd_client_page *ocp, int rc)
 {
         struct page *page = ocp->ocp_page;
-        struct inode *inode = page->mapping->host;
 
         LASSERT(page->private == (unsigned long)ocp);
         LASSERT(PageLocked(page));
 
-        ll_page_acct(0, -1); /* io before dirty, this is so lame. */
-        rc = ll_clear_dirty_pages(ll_i2obdexp(inode),
-                                  ll_i2info(inode)->lli_smd,
-                                  page->index, page->index);
-        LASSERT(rc == 0);
-        ocp_free(page);
+        if (rc != 0) {
+                CERROR("writeback error on page %p index %ld: %d\n", page,
+                       page->index, rc);
+                SetPageError(page);
+        }
+        ocp->ocp_flags &= ~OCP_IO_READY;
 
+        /* let everyone get at this page again.. I wonder if this ordering
+         * is corect */
         unlock_page(page);
+        end_page_writeback(page);
+
         page_cache_release(page);
 }
 
 static int ll_writepage_26(struct page *page, struct writeback_control *wbc)
 {
-        struct inode *inode = page->mapping->host;
-        struct obd_export *exp;
         struct obd_client_page *ocp;
-        int rc;
         ENTRY;
 
-        exp = ll_i2obdexp(inode);
-        if (exp == NULL)
-                RETURN(-EINVAL);
+        LASSERT(!PageDirty(page));
+        LASSERT(PageLocked(page));
+        LASSERT(page->private != 0);
 
-        ocp = ocp_alloc(page);
-        if (IS_ERR(ocp)) 
-                RETURN(PTR_ERR(ocp));
-
-        ocp->ocp_callback = ll_complete_writepage_26;
-        ocp->ocp_off = (obd_off)page->index << PAGE_CACHE_SHIFT;
-        ocp->ocp_count = ll_ocp_write_count(inode, page);
-        ocp->ocp_flag = OBD_BRW_CREATE|OBD_BRW_FROM_GRANT;
-
-        obd_brw_plug(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, NULL);
+        ocp = (struct obd_client_page *)page->private;
+        ocp->ocp_flags |= OCP_IO_READY;
 
         page_cache_get(page);
-        rc = ll_start_ocp_io(exp, page);
-        if (rc == 0) {
-                ll_page_acct(0, 1);
-                ll_start_io_from_dirty(exp, inode, ll_complete_writepage_26);
-        } else {
-                ocp_free(page);
-                page_cache_release(page);
-        }
 
-        obd_brw_unplug(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, NULL);
+        /* filemap_fdatawait() makes me think we need to set PageWriteback
+         * on pages that are in flight.  But our ocp mechanics doesn't
+         * really expect a page to be on both the osc lru and in flight.
+         * so for now, we don't unlock the page.. dirtiers whill wait
+         * for io to complete */
+        SetPageWriteback(page);
 
-        if (rc != 0)
-                unlock_page(page);
-        RETURN(rc);
+        /* sadly, not all callers who writepage eventually call sync_page
+         * (ahem, kswapd) so we need to raise this page's priority 
+         * immediately */
+        RETURN(ll_sync_page(page));
 }
-
-static int ll_writepages(struct address_space *mapping, 
-                         struct writeback_control *wbc)
-{
-        struct ll_inode_info *lli = ll_i2info(mapping->host);
-        int rc;
-        ENTRY;
-
-        atomic_inc(&lli->lli_in_writepages);
-
-        rc = mpage_writepages(mapping, wbc, NULL);
-
-        if (atomic_dec_and_test(&lli->lli_in_writepages)) 
-                lliod_wakeup(mapping->host);
-
-        RETURN(rc);
-}
-
-#if 0 /* XXX need to complete this */
-static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
-                        unsigned long blocknr, int blocksize)
-{
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        struct brw_page *pga;
-        struct ptlrpc_request_set *set;
-        struct obdo oa;
-        int length, i, flags, rc = 0;
-        loff_t offset;
-        ENTRY;
-
-        if (!lsm || !lsm->lsm_object_id)
-                RETURN(-EBADF);
-
-        if ((iobuf->offset & (blocksize - 1)) ||
-            (iobuf->length & (blocksize - 1)))
-                RETURN(-EINVAL);
-
-        set = ptlrpc_prep_set();
-        if (set == NULL)
-                RETURN(-ENOMEM);
-
-        OBD_ALLOC(pga, sizeof(*pga) * iobuf->nr_pages);
-        if (!pga) {
-                ptlrpc_set_destroy(set);
-                RETURN(-ENOMEM);
-        }
-
-        flags = (rw == WRITE ? OBD_BRW_CREATE : 0) /* | OBD_BRW_DIRECTIO */;
-        offset = ((obd_off)blocknr << inode->i_blkbits);
-        length = iobuf->length;
-
-        for (i = 0, length = iobuf->length; length > 0;
-             length -= pga[i].count, offset += pga[i].count, i++) { /*i last!*/
-                pga[i].pg = iobuf->maplist[i];
-                pga[i].off = offset;
-                /* To the end of the page, or the length, whatever is less */
-                pga[i].count = min_t(int, PAGE_SIZE - (offset & ~PAGE_MASK),
-                                     length);
-                pga[i].flag = flags;
-                if (rw == READ) {
-                        //POISON(kmap(iobuf->maplist[i]), 0xc5, PAGE_SIZE);
-                        //kunmap(iobuf->maplist[i]);
-                }
-        }
-
-        oa.o_id = lsm->lsm_object_id;
-        oa.o_valid = OBD_MD_FLID;
-        obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                    OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-
-        if (rw == WRITE)
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_WRITE, iobuf->length);
-        else
-                lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
-                                    LPROC_LL_DIRECT_READ, iobuf->length);
-        rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2obdconn(inode), &oa, lsm, iobuf->nr_pages, pga,
-                           set, NULL);
-        if (rc) {
-                CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
-                       "error from obd_brw_async: rc = %d\n", rc);
-        } else {
-                rc = ptlrpc_set_wait(set);
-                if (rc)
-                        CERROR("error from callback: rc = %d\n", rc);
-        }
-        ptlrpc_set_destroy(set);
-        if (rc == 0)
-                rc = iobuf->length;
-
-        OBD_FREE(pga, sizeof(*pga) * iobuf->nr_pages);
-        RETURN(rc);
-}
-#endif
 
 struct address_space_operations ll_aops = {
-        readpage: ll_readpage_26,
-#if 0
-        direct_IO: ll_direct_IO_26,
-#endif
+        readpage: ll_readpage,
+//        readpages: ll_readpages,
+//        direct_IO: ll_direct_IO_26,
         writepage: ll_writepage_26,
-        writepages: ll_writepages,
+        writepages: generic_writepages,
         set_page_dirty: __set_page_dirty_nobuffers,
         sync_page: block_sync_page,
         prepare_write: ll_prepare_write,
