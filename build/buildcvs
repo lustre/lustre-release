@@ -46,6 +46,10 @@ case "$lustretag" in
 	portalstag="b_hd_sec"
 	;;
 
+    b_hd_remote_rvk)
+	portalstag="b_hd_sec"
+	;;
+
     b_hd_sec)
 	portalstag="b_hd_sec"
 	;;
