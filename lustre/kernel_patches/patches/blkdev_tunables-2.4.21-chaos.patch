@@ -32,3 +32,14 @@
  
  /*
   * bh abuse :/
+--- ./mm/highmem.c.orig	2004-09-11 08:16:19.000000000 -0600
++++ ./mm/highmem.c	2004-10-06 11:52:34.000000000 -0600
+@@ -465,7 +465,7 @@ struct buffer_head * create_bounce(int r
+ /*
+  * FIXME: assuming PAGE_SIZE buffer_heads
+  */
+-#define SUPERBH_MAX_USERS	(POOL_SIZE * PAGE_SIZE / MAX_SUPERBH)
++#define SUPERBH_MAX_USERS	max(POOL_SIZE * PAGE_SIZE / MAX_SUPERBH, 1)
+ 
+ static int superbh_users;
+ static DECLARE_WAIT_QUEUE_HEAD(superbh_wait);
