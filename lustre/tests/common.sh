@@ -140,6 +140,19 @@ setup_opts() {
 	[ -z "$OSC_RSH" ] && OSC_RSH="eval"
 }
 
+setup_variables() {
+	[ -z "$OSTNODE" ] && OSTNODE=$SERVER
+	[ -z "$MDSNODE" ] && MDSNODE=$SERVER
+
+	if [ -z "$DLM" ]; then
+		if [ "$LOCALHOST" == "$SERVER" ]; then
+			DLM=localhost
+		else
+			DLM=$SERVER
+		fi
+	fi
+}
+
 setup_portals() {
 	if grep -q portals /proc/modules; then
 		echo "$0: portals already appears to be set up, skipping"
@@ -151,16 +164,7 @@ setup_portals() {
 		exit -1
 	fi
 
-	[ -z "$OSTNODE" ] && OSTNODE=$SERVER
-	[ -z "$MDSNODE" ] && MDSNODE=$SERVER
-
-	if [ -z "$DLM" ]; then
-		if [ "$LOCALHOST" == "$SERVER" ]; then
-			DLM=localhost
-		else
-			DLM=$SERVER
-		fi
-	fi
+        setup_variables
 
 	[ -c /dev/portals ] || mknod /dev/portals c 10 240
 
@@ -439,6 +443,9 @@ debug_client_on() {
 
 cleanup_portals() {
 	[ -z "$NETWORK" ] && NETWORK=tcp
+
+        setup_variables
+
 	$PTLCTL <<- EOF
 	setup $NETWORK
 	disconnect
