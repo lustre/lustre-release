@@ -27,18 +27,14 @@
 
 #include <linux/fs.h>
 #include <linux/jbd.h>
-#include <linux/slab.h>
 #include <linux/pagemap.h>
-#include <linux/quotaops.h>
-#include <linux/ext3_fs.h>
-#include <linux/ext3_jbd.h>
 #include <linux/version.h>
-#include <linux/kp30.h>
-#include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>
 #include <linux/obd_class.h>
 #include <linux/module.h>
 #include <linux/shmem_fs.h>
+#include <linux/lustre_dir.h>
+#include <linux/lustre_fsfilt.h>
 
 /* prefix is needed because tmpfs xattr patch deos not support namespaces
  * yet. */
@@ -46,7 +42,7 @@
 
 /* structure instance of to be returned as a transaction handle. This is not
  * needed for now, but probably we will need to save something during modifying
- * an inode and this is useful for us. */
+ * an inode and this will be useful. */
 struct tmpfs_trans {
         int op;
 };
@@ -54,23 +50,7 @@ struct tmpfs_trans {
 static kmem_cache_t *trans_cache;
 static atomic_t trans_count = ATOMIC_INIT(0);
 
-/* ext2 directory stuff. It is needed for fs_readpage(), which is used for
- * reading directoris on MDS. Probably this should be moved to somewhere more
- * convenient? */
-#define EXT2_NAME_LEN (255)
-
-struct ext2_dirent {
-        __u32   inode;
-        __u16   rec_len;
-        __u8    name_len;
-        __u8    file_type;
-        char    name[0];
-};
-
-typedef struct ext2_dirent ext2_dirent_t;
-
 struct fetch_hint {
-	int stop;
         int count;
 	__u16 chunk;
 	void *dirent;
@@ -79,10 +59,6 @@ struct fetch_hint {
 };
 
 typedef struct fetch_hint fetch_hint_t;
-
-#define EXT2_ENT_PAD       4
-#define EXT2_ENT_ROUND     (EXT2_ENT_PAD - 1)
-#define EXT2_ENT_LEN(len)  (((len) + 8 + EXT2_ENT_ROUND) & ~EXT2_ENT_ROUND)
 
 /* starts new transaction on tmpfs for metadata operations. That if for create
  * file, delete it, etc. That is everything except of read/write data. Returns
@@ -434,7 +410,7 @@ fillent(void *buf, const char *name, int namlen,
 	
 	rec_len = EXT2_ENT_LEN(namlen);
 
-        if ((hint->stop = (hint->chunk < rec_len)))
+        if ((hint->chunk < rec_len))
 		return -ENOENT;
 
 	entry->file_type = 0;
