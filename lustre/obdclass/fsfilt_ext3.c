@@ -32,7 +32,13 @@
 #include <linux/quotaops.h>
 #include <linux/ext3_fs.h>
 #include <linux/ext3_jbd.h>
-#include <linux/ext3_xattr.h>
+#include <linux/version.h>
+/* XXX ugh */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+ #include <linux/ext3_xattr.h>
+#else 
+ #include <linux/../../fs/ext3/xattr.h>
+#endif
 #include <linux/kp30.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>
@@ -319,8 +325,15 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
         } else {
                 down(&inode->i_sem);
                 lock_kernel();
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 rc = ext3_xattr_set(handle, inode, EXT3_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
+#else
+                rc = ext3_xattr_set_handle(handle, inode, 
+                                           EXT3_XATTR_INDEX_LUSTRE,
+                                           XATTR_LUSTRE_MDS_OBJID, lmm, 
+                                           lmm_size, 0);
+#endif
                 unlock_kernel();
                 up(&inode->i_sem);
         }
@@ -460,10 +473,11 @@ static int fsfilt_ext3_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
 
 static int fsfilt_ext3_journal_data(struct file *filp)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        /* bug 1576: enable data journaling on 2.5 when appropriate */
         struct inode *inode = filp->f_dentry->d_inode;
-
         EXT3_I(inode)->i_flags |= EXT3_JOURNAL_DATA_FL;
-
+#endif
         return 0;
 }
 
