@@ -23,7 +23,6 @@ ssize_t obdfs_file_write(struct file *file, const char *buf, size_t count, loff_
 
 /* rw.c */
 struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create, int locked);
-int obdfs_writepage(struct file *file, struct page *page);
 int obdfs_write_one_page(struct file *file, struct page *page, unsigned long offset, unsigned long bytes, const char * buf);
 
 /* namei.c */

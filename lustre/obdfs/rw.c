@@ -44,13 +44,12 @@ int obdfs_brw(struct inode *dir, int rw, struct page *page, int create)
 #endif
 
 /* returns the page unlocked, but with a reference */
-int obdfs_readpage(struct file *file, struct page *page)
+int obdfs_readpage(struct dentry *dentry, struct page *page)
 {
-	struct inode *inode = file->f_dentry->d_inode;
+	struct inode *inode = dentry->d_inode;
 	int rc;
 
         ENTRY;
-
 	/* XXX flush stuff */
 	PDEBUG(page, "READ");
 	rc =  iops(inode)->o_brw(READ, iid(inode),inode, page, 0);
@@ -63,6 +62,23 @@ int obdfs_readpage(struct file *file, struct page *page)
 		rc = 0;
 	return rc;
 
+}
+
+/* returns the page unlocked, but with a reference */
+static int obdfs_writepage(struct dentry *dentry, struct page *page)
+{
+        struct inode *inode = dentry->d_inode;
+	int rc;
+
+        ENTRY;
+	PDEBUG(page, "WRITEPAGE");
+	/* XXX flush stuff */
+
+	rc = iops(inode)->o_brw(WRITE, iid(inode), inode, page, 1);
+
+	SetPageUptodate(page);
+	PDEBUG(page,"WRITEPAGE");
+	return rc;
 }
 
 /*
@@ -94,7 +110,7 @@ int obdfs_write_one_page(struct file *file, struct page *page, unsigned long off
 	if (bytes) {
 
 		lock_kernel();
-		status = obdfs_writepage(file, page);
+		status = obdfs_writepage(file->f_dentry, page);
 		unlock_kernel();
 	}
 	EXIT;
@@ -106,23 +122,6 @@ int obdfs_write_one_page(struct file *file, struct page *page, unsigned long off
 
 
 
-
-/* returns the page unlocked, but with a reference */
-int obdfs_writepage(struct file *file, struct page *page)
-{
-        struct inode *inode = file->f_dentry->d_inode;
-	int rc;
-
-        ENTRY;
-	PDEBUG(page, "WRITEPAGE");
-	/* XXX flush stuff */
-
-	rc = iops(inode)->o_brw(WRITE, iid(inode), inode, page, 1);
-
-	SetPageUptodate(page);
-	PDEBUG(page,"WRITEPAGE");
-	return rc;
-}
 
 
 void report_inode(struct page * page) {

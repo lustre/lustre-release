@@ -212,7 +212,7 @@ int gen_copy_data(struct obd_conn *conn, obdattr *src, obdattr *tgt)
 	
 	lck_page(page);
 	
-	while (index < src->i_size / PAGE_SIZE) {
+	while (index < ((src->i_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
 		
 		page->index = index;
 		rc = OBP(conn->oc_dev, brw)(READ, conn, src, page, 0);
