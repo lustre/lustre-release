@@ -1,5 +1,8 @@
 #include <stdio.h>
 
+#include <portals/api-support.h> /* needed for ptpctl.h */
+#include <portals/ptlctl.h>	/* needed for parse_dump */
+
 #include <liblustre.h>
 #include <../user/procbridge/procbridge.h>
 
@@ -52,6 +55,22 @@ int init_lib_portals(struct pingcli_args *args)
         return rc;
 }
 
+int lib_ioctl(int dev_id, int opc, void * ptr)
+{
+	if (dev_id == OBD_DEV_ID) {
+		struct obd_ioctl_data *ioc = ptr;
+		/* call class_obd_ioctl function here */
+		/* class_obd_ioctl(inode, filp, opc, (unsigned long) ioc); */
+
+		/* you _may_ need to call obd_ioctl_unpack or some
+		   other verification function if you want to use ioc
+		   directly here */
+		printf ("processing ioctl cmd: %x buf len: %d\n", 
+			opc,  ioc->ioc_len);
+	}
+	return (0);
+}
+
 int main(int arc, char **argv) 
 {
         struct pingcli_args *args;
@@ -75,8 +94,7 @@ int main(int arc, char **argv)
         echo_client_init();
         /* XXX  lov and mdc are next */
 
-        /* XXX RR parse an lctl dump file here */
-        /* XXX RR parse dumpfile here with obdclass/class_obd.c ioct command */
+	parse_dump("DUMP_FILE", lib_ioctl);
 
         printf("Hello\n");
         return 0;
