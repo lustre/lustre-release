@@ -527,6 +527,7 @@ struct ptlrpc_svc_data {
 int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid);
 int ptlrpc_init_import(struct obd_import *imp);
 int ptlrpc_disconnect_import(struct obd_import *imp);
+int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 
 /* ptlrpc/pack_generic.c */
 int lustre_msg_swabbed(struct lustre_msg *msg);
