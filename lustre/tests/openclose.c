@@ -16,7 +16,7 @@
 #include <sys/wait.h>
 #include <sys/ioctl.h>
 
-#include <linux/lustre_lite.h>
+#include <linux/lustre_user.h>
 
 int main(int argc, char *argv[])
 {
