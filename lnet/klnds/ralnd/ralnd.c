@@ -2049,7 +2049,14 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                 rc = kranal_device_init(kranal_devids[i], dev);
                 if (rc == 0)
                         kranal_data.kra_ndevs++;
-
+        }
+        
+        if (kranal_data.kra_ndevs == 0) {
+                CERROR("Can't initialise any RapidArray devices\n");
+                goto failed;
+        }
+        
+        for (i = 0; i < kranal_data.kra_ndevs; i++) {
                 rc = kranal_thread_start(kranal_scheduler, dev);
                 if (rc != 0) {
                         CERROR("Can't spawn ranal scheduler[%d]: %d\n",
@@ -2057,9 +2064,6 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                         goto failed;
                 }
         }
-
-        if (kranal_data.kra_ndevs == 0)
-                goto failed;
 
         rc = libcfs_nal_cmd_register(RANAL, &kranal_cmd, NULL);
         if (rc != 0) {
