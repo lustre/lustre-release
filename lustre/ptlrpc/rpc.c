@@ -22,16 +22,11 @@
 
 #define EXPORT_SYMTAB
 
-#include <linux/config.h>
 #include <linux/module.h>
-#include <linux/kernel.h>
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
 #include <linux/lustre_net.h>
-
 
 extern int ptlrpc_init_portals(void);
 extern void ptlrpc_exit_portals(void);
@@ -39,14 +34,14 @@ extern void ptlrpc_exit_portals(void);
 
 static int __init ptlrpc_init(void)
 {
+        ptlrpc_init_connection();
         return ptlrpc_init_portals();
 }
 
 static void __exit ptlrpc_exit(void)
 {
         ptlrpc_exit_portals();
-
-        return;
+        ptlrpc_cleanup_connection();
 }
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");

@@ -44,10 +44,10 @@ struct ll_sb_info {
         unsigned long            ll_cache_count;
         struct semaphore         ll_list_mutex;
         struct ptlrpc_client     ll_mds_client;
-        struct lustre_peer       ll_mds_peer;
+        struct ptlrpc_connection *ll_mds_conn;
         struct ptlrpc_client     ll_ost_client;
         struct lustre_ha_mgr    *ll_ha_mgr;
-        struct lustre_peer       ll_ost_peer;
+        struct ptlrpc_connection *ll_ost_conn;
 };
 
 

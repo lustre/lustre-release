@@ -33,15 +33,15 @@
 
 extern int mds_queue_req(struct ptlrpc_request *);
 
-int mdc_connect(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
-                int type, int valid, struct ptlrpc_request **request)
+int mdc_connect(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+                ino_t ino, int type, int valid, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, peer, MDS_GETATTR, 1, &size, NULL);
+        req = ptlrpc_prep_req(cl, conn, MDS_GETATTR, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -51,7 +51,7 @@ int mdc_connect(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
 
         req->rq_replen = lustre_msg_size(1, &size);
 
-        rc = ptlrpc_queue_wait(cl, req);
+        rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
 
         if (!rc) {
@@ -67,15 +67,15 @@ int mdc_connect(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
 }
 
 
-int mdc_getattr(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
-                int type, int valid, struct ptlrpc_request **request)
+int mdc_getattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+                ino_t ino, int type, int valid, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_body *body;
         int rc, size = sizeof(*body);
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, peer, MDS_GETATTR, 1, &size, NULL);
+        req = ptlrpc_prep_req(cl, conn, MDS_GETATTR, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -85,7 +85,7 @@ int mdc_getattr(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
 
         req->rq_replen = lustre_msg_size(1, &size);
 
-        rc = ptlrpc_queue_wait(cl, req);
+        rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
 
         if (!rc) {
@@ -100,14 +100,15 @@ int mdc_getattr(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
         return rc;
 }
 
-int mdc_open(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
-             int type, int flags, __u64 *fh, struct ptlrpc_request **request)
+int mdc_open(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+             ino_t ino, int type, int flags, __u64 *fh,
+             struct ptlrpc_request **request)
 {
         struct mds_body *body;
         int rc, size = sizeof(*body);
         struct ptlrpc_request *req;
 
-        req = ptlrpc_prep_req(cl, peer, MDS_OPEN, 1, &size, NULL);
+        req = ptlrpc_prep_req(cl, conn, MDS_OPEN, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -117,7 +118,7 @@ int mdc_open(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
 
         req->rq_replen = lustre_msg_size(1, &size);
 
-        rc = ptlrpc_queue_wait(cl, req);
+        rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
 
         if (!rc) {
@@ -132,14 +133,14 @@ int mdc_open(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
         return rc;
 }
 
-int mdc_close(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
-              int type, __u64 fh, struct ptlrpc_request **request)
+int mdc_close(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+              ino_t ino, int type, __u64 fh, struct ptlrpc_request **request)
 {
         struct mds_body *body;
         int rc, size = sizeof(*body);
         struct ptlrpc_request *req;
 
-        req = ptlrpc_prep_req(cl, peer, MDS_CLOSE, 1, &size, NULL);
+        req = ptlrpc_prep_req(cl, conn, MDS_CLOSE, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
@@ -149,7 +150,7 @@ int mdc_close(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
 
         req->rq_replen = lustre_msg_size(1, &size);
 
-        rc = ptlrpc_queue_wait(cl, req);
+        rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
 
         EXIT;
@@ -158,8 +159,8 @@ int mdc_close(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
         return rc;
 }
 
-int mdc_readpage(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
-                 int type, __u64 offset, char *addr,
+int mdc_readpage(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
+                 ino_t ino, int type, __u64 offset, char *addr,
                  struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req = NULL;
@@ -173,21 +174,21 @@ int mdc_readpage(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
 
         CDEBUG(D_INODE, "inode: %ld\n", ino);
 
-        bulk = ptlrpc_prep_bulk(peer);
+        bulk = ptlrpc_prep_bulk(conn);
         if (bulk == NULL) {
                 CERROR("%s: cannot init bulk desc\n", __FUNCTION__);
                 rc = -ENOMEM;
                 goto out;
         }
 
-        req = ptlrpc_prep_req(cl, peer, MDS_READPAGE, 2, size, bufs);
+        req = ptlrpc_prep_req(cl, conn, MDS_READPAGE, 2, size, bufs);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
         bulk->b_buflen = PAGE_SIZE;
         bulk->b_buf = (void *)(long)niobuf.addr;
         bulk->b_portal = MDS_BULK_PORTAL;
-        bulk->b_xid = req->rq_xid;
+        bulk->b_xid = req->rq_reqmsg->xid;
 
         rc = ptlrpc_register_bulk(bulk);
         if (rc) {
@@ -202,7 +203,7 @@ int mdc_readpage(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
 
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = ptlrpc_queue_wait(cl, req);
+        rc = ptlrpc_queue_wait(req);
         if (rc) {
                 CERROR("error in handling %d\n", rc);
                 ptlrpc_abort_bulk(bulk);
@@ -224,7 +225,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 {
         int err;
         struct ptlrpc_client cl;
-        struct lustre_peer peer;
+        struct ptlrpc_connection *conn;
         struct ptlrpc_request *request;
 
         ENTRY;
@@ -241,7 +242,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
         }
 
         ptlrpc_init_client(NULL, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL, &cl);
-        err = ptlrpc_connect_client("mds", &cl, &peer);
+        conn = ptlrpc_connect_client("mds");
         if (err) {
                 CERROR("cannot create client\n");
                 RETURN(-EINVAL);
@@ -250,7 +251,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
         switch (cmd) {
         case IOC_REQUEST_GETATTR: {
                 CERROR("-- getting attr for ino %lu\n", arg);
-                err = mdc_getattr(&cl, &peer, arg, S_IFDIR, ~0, &request);
+                err = mdc_getattr(&cl, conn, arg, S_IFDIR, ~0, &request);
                 CERROR("-- done err %d\n", err);
 
                 GOTO(out, err);
@@ -264,7 +265,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
                         break;
                 }
                 CERROR("-- readpage 0 for ino %lu\n", arg);
-                err = mdc_readpage(&cl, &peer, arg, S_IFDIR, 0, buf, &request);
+                err = mdc_readpage(&cl, conn, arg, S_IFDIR, 0, buf, &request);
                 CERROR("-- done err %d\n", err);
                 OBD_FREE(buf, PAGE_SIZE);
 
@@ -281,7 +282,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 iattr.ia_atime = 0;
                 iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-                err = mdc_setattr(&cl, &peer, &inode, &iattr, &request);
+                err = mdc_setattr(&cl, conn, &inode, &iattr, &request);
                 CERROR("-- done err %d\n", err);
 
                 GOTO(out, err);
@@ -297,7 +298,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 iattr.ia_atime = 0;
                 iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-                err = mdc_create(&cl, &peer, &inode,
+                err = mdc_create(&cl, conn, &inode,
                                  "foofile", strlen("foofile"),
                                  NULL, 0, 0100707, 47114711,
                                  11, 47, 0, &request);
@@ -310,7 +311,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
                 __u64 fh, ino;
                 copy_from_user(&ino, (__u64 *)arg, sizeof(ino));
                 CERROR("-- opening ino %llu\n", ino);
-                err = mdc_open(&cl, &peer, ino, S_IFDIR, O_RDONLY, &fh,
+                err = mdc_open(&cl, conn, ino, S_IFDIR, O_RDONLY, &fh,
                                &request);
                 copy_to_user((__u64 *)arg, &fh, sizeof(fh));
                 CERROR("-- done err %d (fh=%Lu)\n", err, fh);
@@ -320,7 +321,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 
         case IOC_REQUEST_CLOSE: {
                 CERROR("-- closing ino 2, filehandle %lu\n", arg);
-                err = mdc_close(&cl, &peer, 2, S_IFDIR, arg, &request);
+                err = mdc_close(&cl, conn, 2, S_IFDIR, arg, &request);
                 CERROR("-- done err %d\n", err);
 
                 GOTO(out, err);
@@ -332,6 +333,7 @@ static int request_ioctl(struct inode *inode, struct file *file,
 
  out:
         ptlrpc_free_req(request);
+        ptlrpc_put_connection(conn);
 
         RETURN(err);
 }

@@ -346,8 +346,7 @@ int mds_reint_rec(struct mds_update_record *rec, struct ptlrpc_request *req)
                 RETURN(rc);
         }
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc) {
                 CERROR("mds: out of memory\n");
                 rc = req->rq_status = -ENOMEM;

@@ -48,7 +48,7 @@ extern inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid);
 static int ll_file_open(struct inode *inode, struct file *file)
 {
         int rc; 
-        struct ptlrpc_request *req;
+        struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
         struct obdo *oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -62,7 +62,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 GOTO(out, rc = -ENOMEM);
         memset(fd, 0, sizeof(*fd));
 
-        rc = mdc_open(&sbi->ll_mds_client, &sbi->ll_mds_peer, inode->i_ino,
+        rc = mdc_open(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
                       S_IFREG, file->f_flags, &fd->fd_mdshandle, &req); 
         if (!fd->fd_mdshandle)
                 CERROR("mdc_open didn't assign fd_mdshandle\n");
@@ -101,7 +101,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
 static int ll_file_release(struct inode *inode, struct file *file)
 {
         int rc;
-        struct ptlrpc_request *req;
+        struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
         struct obdo *oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -134,8 +134,8 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 rc = -EIO;
         }
 
-        rc = mdc_close(&sbi->ll_mds_client, &sbi->ll_mds_peer, inode->i_ino,
-                       S_IFREG, fd->fd_mdshandle, &req); 
+        rc = mdc_close(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
+                       S_IFREG, fd->fd_mdshandle, &req);
         ptlrpc_free_req(req);
         if (rc) { 
                 if (rc > 0) 

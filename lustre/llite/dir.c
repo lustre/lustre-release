@@ -60,7 +60,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         char *buf;
         __u64 offset;
         int rc = 0;
-        struct ptlrpc_request *request;
+        struct ptlrpc_request *request = NULL;
 
         ENTRY;
 
@@ -80,7 +80,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 
         offset = page->index << PAGE_SHIFT; 
         buf = kmap(page);
-        rc = mdc_readpage(&sbi->ll_mds_client, &sbi->ll_mds_peer, inode->i_ino,
+        rc = mdc_readpage(&sbi->ll_mds_client, sbi->ll_mds_conn, inode->i_ino,
                           S_IFDIR, offset, buf, &request);
         kunmap(page); 
         ptlrpc_free_req(request);

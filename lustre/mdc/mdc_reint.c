@@ -35,7 +35,7 @@ static int mdc_reint(struct ptlrpc_client *cl, struct ptlrpc_request *request)
 {
         int rc;
 
-        rc = ptlrpc_queue_wait(cl, request);
+        rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
         if (rc)
                 CERROR("error in handling %d\n", rc);
@@ -43,7 +43,7 @@ static int mdc_reint(struct ptlrpc_client *cl, struct ptlrpc_request *request)
         return rc;
 }
 
-int mdc_setattr(struct ptlrpc_client *cl, struct lustre_peer *peer,
+int mdc_setattr(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 struct inode *inode, struct iattr *iattr,
                 struct ptlrpc_request **request)
 {
@@ -52,7 +52,7 @@ int mdc_setattr(struct ptlrpc_client *cl, struct lustre_peer *peer,
         int rc, size = sizeof(*rec);
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, peer, MDS_REINT, 1, &size, NULL);
+        req = ptlrpc_prep_req(cl, conn, MDS_REINT, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -68,7 +68,7 @@ int mdc_setattr(struct ptlrpc_client *cl, struct lustre_peer *peer,
         RETURN(rc);
 }
 
-int mdc_create(struct ptlrpc_client *cl, struct lustre_peer *peer,
+int mdc_create(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                struct inode *dir, const char *name, int namelen,
                const char *tgt, int tgtlen, int mode, __u64 id, __u32 uid,
                __u32 gid, __u64 time, struct ptlrpc_request **request)
@@ -79,7 +79,7 @@ int mdc_create(struct ptlrpc_client *cl, struct lustre_peer *peer,
         char *tmp;
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, peer, MDS_REINT, 3, size, NULL);
+        req = ptlrpc_prep_req(cl, conn, MDS_REINT, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -103,7 +103,7 @@ int mdc_create(struct ptlrpc_client *cl, struct lustre_peer *peer,
         RETURN(rc);
 }
 
-int mdc_unlink(struct ptlrpc_client *cl, struct lustre_peer *peer,
+int mdc_unlink(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                struct inode *dir, struct inode *child, const char *name,
                int namelen, struct ptlrpc_request **request)
 {
@@ -113,7 +113,7 @@ int mdc_unlink(struct ptlrpc_client *cl, struct lustre_peer *peer,
         char *tmp;
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, peer, MDS_REINT, 2, size, NULL);
+        req = ptlrpc_prep_req(cl, conn, MDS_REINT, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -132,7 +132,7 @@ int mdc_unlink(struct ptlrpc_client *cl, struct lustre_peer *peer,
         RETURN(rc);
 }
 
-int mdc_link(struct ptlrpc_client *cl, struct lustre_peer *peer,
+int mdc_link(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
              struct dentry *src, struct inode *dir, const char *name,
              int namelen, struct ptlrpc_request **request)
 {
@@ -142,7 +142,7 @@ int mdc_link(struct ptlrpc_client *cl, struct lustre_peer *peer,
         char *tmp;
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, peer, MDS_REINT, 2, size, NULL);
+        req = ptlrpc_prep_req(cl, conn, MDS_REINT, 2, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
@@ -161,7 +161,7 @@ int mdc_link(struct ptlrpc_client *cl, struct lustre_peer *peer,
         RETURN(rc);
 }
 
-int mdc_rename(struct ptlrpc_client *cl, struct lustre_peer *peer,
+int mdc_rename(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                struct inode *src, struct inode *tgt, const char *old,
                int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request)
@@ -172,7 +172,7 @@ int mdc_rename(struct ptlrpc_client *cl, struct lustre_peer *peer,
         char *tmp;
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, peer, MDS_REINT, 3, size, NULL);
+        req = ptlrpc_prep_req(cl, conn, MDS_REINT, 3, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 

@@ -22,14 +22,8 @@
 
 #define EXPORT_SYMTAB
 
-#include <linux/config.h>
-#include <linux/module.h>
-#include <linux/kernel.h>
-
 #define DEBUG_SUBSYSTEM S_RPC
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 
 extern int request_in_callback(ptl_event_t *ev, void *data);
@@ -152,6 +146,55 @@ err_free:
         return NULL;
 }
 
+static int handle_incoming_request(struct obd_device *obddev,
+                                   struct ptlrpc_service *svc)
+{
+        struct ptlrpc_request request;
+        struct lustre_peer peer;
+        void *start;
+        int rc;
+
+        /* FIXME: If we move to an event-driven model, we should put the request
+         * on the stack of mds_handle instead. */
+        start = svc->srv_ev.mem_desc.start;
+        memset(&request, 0, sizeof(request));
+        request.rq_obd = obddev;
+        request.rq_reqmsg = (svc->srv_ev.mem_desc.start +
+                             svc->srv_ev.offset);
+        request.rq_reqlen = svc->srv_ev.mem_desc.length;
+
+        if (request.rq_reqmsg->xid != svc->srv_ev.match_bits)
+                LBUG();
+
+        CDEBUG(D_NET, "got req %d\n", request.rq_reqmsg->xid);
+
+        if (request.rq_reqmsg->conn) {
+                request.rq_connection =
+                        (void *)(unsigned long)request.rq_reqmsg->conn;
+                if (request.rq_reqmsg->token != request.rq_connection->c_token)
+                        LBUG();
+                ptlrpc_connection_addref(request.rq_connection);
+        } else {
+                request.rq_connection = ptlrpc_get_connection(&peer);
+                if (!request.rq_connection)
+                        LBUG();
+                CERROR("Did not find valid/conn token pair.\n");
+        }
+
+        peer.peer_nid = svc->srv_ev.initiator.nid;
+        /* FIXME: this NI should be the incoming NI.
+         * We don't know how to find that from here. */
+        peer.peer_ni = svc->srv_self.peer_ni;
+
+        svc->srv_flags &= ~SVC_EVENT;
+
+        spin_unlock(&svc->srv_lock);
+        rc = svc->srv_handler(obddev, svc, &request);
+        ptlrpc_put_connection(request.rq_connection);
+        ptl_handled_rpc(svc, start);
+        return rc;
+}
+
 static int ptlrpc_main(void *arg)
 {
         int rc;
@@ -195,31 +238,8 @@ static int ptlrpc_main(void *arg)
                 }
 
                 if (svc->srv_flags & SVC_EVENT) {
-                        struct ptlrpc_request request;
-                        void *start;
                         svc->srv_flags = SVC_RUNNING;
-
-                        /* FIXME: If we move to an event-driven model,
-                         * we should put the request on the stack of
-                         * mds_handle instead. */
-                        start = svc->srv_ev.mem_desc.start;
-                        memset(&request, 0, sizeof(request));
-                        request.rq_obd = obddev;
-                        request.rq_reqbuf = (svc->srv_ev.mem_desc.start +
-                                             svc->srv_ev.offset);
-                        request.rq_reqlen = svc->srv_ev.mem_desc.length;
-                        request.rq_xid = svc->srv_ev.match_bits;
-                        CDEBUG(D_NET, "got req %d\n", request.rq_xid);
-
-                        request.rq_peer.peer_nid = svc->srv_ev.initiator.nid;
-                        /* FIXME: this NI should be the incoming NI.
-                         * We don't know how to find that from here. */
-                        request.rq_peer.peer_ni = svc->srv_self.peer_ni;
-                        svc->srv_flags &= ~SVC_EVENT;
-
-                        spin_unlock(&svc->srv_lock);
-                        rc = svc->srv_handler(obddev, svc, &request);
-                        ptl_handled_rpc(svc, start);
+                        rc = handle_incoming_request(obddev, svc);
                         continue;
                 }
 

@@ -138,8 +138,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         /* the first parameter should become an mds device no */
         ptlrpc_init_client(llite_ha_mgr, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                            &sbi->ll_mds_client);
-        err = ptlrpc_connect_client("mds", &sbi->ll_mds_client,
-                                    &sbi->ll_mds_peer);
+        sbi->ll_mds_conn = ptlrpc_connect_client("mds");
         if (err) {
                 CERROR("cannot find MDS\n");
                 GOTO(out_disc, sb = NULL);
@@ -156,7 +155,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sb->s_op = &ll_super_operations;
 
         /* make root inode */
-        err = mdc_getattr(&sbi->ll_mds_client, &sbi->ll_mds_peer,
+        err = mdc_getattr(&sbi->ll_mds_client, sbi->ll_mds_conn,
                           sbi->ll_rootino, S_IFDIR,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
         if (err) {
@@ -195,6 +194,7 @@ static void ll_put_super(struct super_block *sb)
         struct ll_sb_info *sbi = sb->u.generic_sbp;
         ENTRY;
         obd_disconnect(&sbi->ll_conn);
+        ptlrpc_put_connection(sbi->ll_mds_conn);
         OBD_FREE(sb->u.generic_sbp, sizeof(*sbi));
         MOD_DEC_USE_COUNT;
         EXIT;
@@ -256,7 +256,7 @@ out:
 
 int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
 {
-        struct ptlrpc_request *request;
+        struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         int err;
 
@@ -265,7 +265,7 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
         /* change incore inode */
         ll_attr2inode(inode, attr, do_trunc);
 
-        err = mdc_setattr(&sbi->ll_mds_client, &sbi->ll_mds_peer, inode, attr,
+        err = mdc_setattr(&sbi->ll_mds_client, sbi->ll_mds_conn, inode, attr,
                           &request);
         if (err)
                 CERROR("mdc_setattr fails (%d)\n", err);

@@ -54,8 +54,7 @@ static int ldlm_intent_compat(struct ldlm_lock *a, struct ldlm_lock *b)
 }
 
 static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
-                                       struct ldlm_resource *resource,
-                                       ldlm_mode_t mode)
+                                       struct ldlm_resource *resource)
 {
         struct ldlm_lock *lock;
 
@@ -68,7 +67,6 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
 
         memset(lock, 0, sizeof(*lock));
         lock->l_resource = resource;
-        lock->l_req_mode = mode;
         INIT_LIST_HEAD(&lock->l_children);
 
         if (parent != NULL) {
@@ -132,94 +130,103 @@ static void ldlm_grant_lock(struct ldlm_resource *res, struct ldlm_lock *lock)
                                        lock->l_data, lock->l_data_len);
 }
 
-/* XXX: Revisit the error handling; we do not, for example, do
- * ldlm_resource_put()s in our error cases, and we probably leak any allocated
- * memory. */
-ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev,
-                                     __u32 ns_id,
-                                     struct ldlm_handle *parent_lock_handle,
-                                     __u64 *res_id,
-                                     __u32 type,
-                                     struct ldlm_extent *req_ex,
-                                     ldlm_mode_t mode,
-                                     int *flags,
-                                     ldlm_lock_callback completion,
-                                     ldlm_lock_callback blocking,
-                                     void *data,
-                                     __u32 data_len,
-                                     struct ldlm_handle *lockh)
+ldlm_error_t ldlm_local_lock_create(__u32 ns_id,
+                                    struct ldlm_handle *parent_lock_handle,
+                                    __u64 *res_id,
+                                    __u32 type,
+                                    struct ldlm_handle *lockh)
 {
         struct ldlm_namespace *ns;
-        struct ldlm_resource *res, *parent_res;
+        struct ldlm_resource *res, *parent_res = NULL;
         struct ldlm_lock *lock, *parent_lock;
-        struct ldlm_extent new_ex;
-        int incompat = 0, rc;
-        ldlm_res_policy policy;
 
-        ENTRY;
+        ns = ldlm_namespace_find(ns_id);
+        if (ns == NULL || ns->ns_hash == NULL) 
+                RETURN(-ELDLM_BAD_NAMESPACE);
 
         parent_lock = ldlm_handle2object(parent_lock_handle);
         if (parent_lock)
                 parent_res = parent_lock->l_resource;
-        else 
-                parent_res = NULL;
-
-        ns = ldlm_namespace_find(obddev, ns_id);
-        if (ns == NULL || ns->ns_hash == NULL) 
-                RETURN(-ELDLM_BAD_NAMESPACE);
 
         res = ldlm_resource_get(ns, parent_res, res_id, type, 1);
         if (res == NULL)
                 RETURN(-ENOMEM);
 
-        lock = ldlm_lock_new(parent_lock, res, mode);
+        lock = ldlm_lock_new(parent_lock, res);
         if (lock == NULL)
                 RETURN(-ENOMEM);
 
-        if ((policy = ldlm_res_policy_table[type])) {
-                rc = policy(res, req_ex, &new_ex, mode, NULL);
+        ldlm_object2handle(lock, lockh);
+
+        return ELDLM_OK;
+}
+
+/* XXX: Revisit the error handling; we do not, for example, do
+ * ldlm_resource_put()s in our error cases, and we probably leak any allocated
+ * memory. */
+ldlm_error_t ldlm_local_lock_enqueue(struct ldlm_handle *lockh,
+                                     ldlm_mode_t mode,
+                                     struct ldlm_extent *req_ex,
+                                     int *flags,
+                                     ldlm_lock_callback completion,
+                                     ldlm_lock_callback blocking,
+                                     void *data,
+                                     __u32 data_len)
+{
+        struct ldlm_lock *lock;
+        struct ldlm_extent new_ex;
+        int incompat = 0, rc;
+        ldlm_res_policy policy;
+        ENTRY;
+
+        lock = ldlm_handle2object(lockh);
+        if ((policy = ldlm_res_policy_table[lock->l_resource->lr_type])) {
+                rc = policy(lock->l_resource, req_ex, &new_ex, mode, NULL);
                 if (rc == ELDLM_LOCK_CHANGED) {
                         *flags |= LDLM_FL_LOCK_CHANGED;
                         memcpy(req_ex, &new_ex, sizeof(new_ex));
                 }
         }
 
-        if ((type == LDLM_EXTENT && !req_ex) ||
-            (type != LDLM_EXTENT && req_ex))
+        if ((lock->l_resource->lr_type == LDLM_EXTENT && !req_ex) ||
+            (lock->l_resource->lr_type != LDLM_EXTENT && req_ex))
                 LBUG();
         if (req_ex)
                 memcpy(&lock->l_extent, req_ex, sizeof(*req_ex));
+        lock->l_req_mode = mode;
         lock->l_data = data;
         lock->l_data_len = data_len;
         lock->l_completion_ast = completion;
         lock->l_blocking_ast = blocking;
-        ldlm_object2handle(lock, lockh);
-        spin_lock(&res->lr_lock);
+        spin_lock(&lock->l_resource->lr_lock);
 
         /* FIXME: We may want to optimize by checking lr_most_restr */
 
-        if (!list_empty(&res->lr_converting)) {
-                ldlm_resource_add_lock(res, res->lr_waiting.prev, lock);
+        if (!list_empty(&lock->l_resource->lr_converting)) {
+                ldlm_resource_add_lock(lock->l_resource,
+                                       lock->l_resource->lr_waiting.prev, lock);
                 *flags |= LDLM_FL_BLOCK_CONV;
                 GOTO(out, ELDLM_OK);
         }
-        if (!list_empty(&res->lr_waiting)) {
-                ldlm_resource_add_lock(res, res->lr_waiting.prev, lock);
+        if (!list_empty(&lock->l_resource->lr_waiting)) {
+                ldlm_resource_add_lock(lock->l_resource,
+                                       lock->l_resource->lr_waiting.prev, lock);
                 *flags |= LDLM_FL_BLOCK_WAIT;
                 GOTO(out, ELDLM_OK);
         }
 
         incompat = ldlm_lock_compat(lock);
         if (incompat) {
-                ldlm_resource_add_lock(res, res->lr_waiting.prev, lock);
+                ldlm_resource_add_lock(lock->l_resource,
+                                       lock->l_resource->lr_waiting.prev, lock);
                 *flags |= LDLM_FL_BLOCK_GRANTED;
                 GOTO(out, ELDLM_OK);
         }
 
-        ldlm_grant_lock(res, lock);
+        ldlm_grant_lock(lock->l_resource, lock);
         EXIT;
  out:
-        spin_unlock(&res->lr_lock);
+        spin_unlock(&lock->l_resource->lr_lock);
         return ELDLM_OK;
 }
 
@@ -251,8 +258,7 @@ static void ldlm_reprocess_all(struct ldlm_resource *res)
                 ldlm_reprocess_queue(res, &res->lr_waiting);
 }
 
-ldlm_error_t ldlm_local_lock_cancel(struct obd_device *obddev,
-                                    struct ldlm_handle *lockh)
+ldlm_error_t ldlm_local_lock_cancel(struct ldlm_handle *lockh)
 {
         struct ldlm_lock *lock;
         struct ldlm_resource *res;
@@ -271,8 +277,7 @@ ldlm_error_t ldlm_local_lock_cancel(struct obd_device *obddev,
         RETURN(ELDLM_OK);
 }
 
-ldlm_error_t ldlm_local_lock_convert(struct obd_device *obddev,
-                                     struct ldlm_handle *lockh,
+ldlm_error_t ldlm_local_lock_convert(struct ldlm_handle *lockh,
                                      int new_mode, int *flags)
 {
         struct ldlm_lock *lock;

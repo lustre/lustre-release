@@ -22,14 +22,10 @@
 
 #define EXPORT_SYMTAB
 
-#include <linux/config.h>
 #include <linux/module.h>
-#include <linux/kernel.h>
 
 #define DEBUG_SUBSYSTEM S_RPC
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 
 ptl_handle_eq_t request_out_eq, 
@@ -89,7 +85,7 @@ static int reply_in_callback(ptl_event_t *ev, void *data)
         ENTRY;
 
         if (ev->type == PTL_EVENT_PUT) {
-                rpc->rq_repbuf = ev->mem_desc.start + ev->offset;
+                rpc->rq_repmsg = ev->mem_desc.start + ev->offset;
                 barrier();
                 wake_up_interruptible(&rpc->rq_wait_for_rep);
         } else { 

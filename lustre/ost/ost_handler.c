@@ -57,8 +57,7 @@ static int ost_destroy(struct ost_obd *ost, struct ptlrpc_request *req)
         conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
@@ -77,8 +76,7 @@ static int ost_getattr(struct ost_obd *ost, struct ptlrpc_request *req)
         conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
@@ -99,8 +97,7 @@ static int ost_open(struct ost_obd *ost, struct ptlrpc_request *req)
         conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
@@ -121,8 +118,7 @@ static int ost_close(struct ost_obd *ost, struct ptlrpc_request *req)
         conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
@@ -143,8 +139,7 @@ static int ost_create(struct ost_obd *ost, struct ptlrpc_request *req)
         conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
@@ -165,8 +160,7 @@ static int ost_punch(struct ost_obd *ost, struct ptlrpc_request *req)
         conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
@@ -188,8 +182,7 @@ static int ost_setattr(struct ost_obd *ost, struct ptlrpc_request *req)
         conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
@@ -208,14 +201,13 @@ static int ost_connect(struct ost_obd *ost, struct ptlrpc_request *req)
 
         conn.oc_dev = ost->ost_tgt;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
         req->rq_status = obd_connect(&conn);
 
-        CDEBUG(D_IOCTL, "rep buffer %p, id %d\n", req->rq_repbuf, conn.oc_id);
+        CDEBUG(D_IOCTL, "rep buffer %p, id %d\n", req->rq_repmsg, conn.oc_id);
         body = lustre_msg_buf(req->rq_repmsg, 0);
         body->connid = conn.oc_id;
         RETURN(0);
@@ -232,8 +224,7 @@ static int ost_disconnect(struct ost_obd *ost, struct ptlrpc_request *req)
         conn.oc_id = body->connid;
         conn.oc_dev = ost->ost_tgt;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
@@ -261,8 +252,7 @@ static int ost_get_info(struct ost_obd *ost, struct ptlrpc_request *req)
         req->rq_status = obd_get_info(&conn, req->rq_reqmsg->buflens[1], ptr,
                                       &(size[1]), (void **)&(bufs[1]));
 
-        rc = lustre_pack_msg(2, size, bufs, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(2, size, bufs, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 CERROR("cannot pack reply\n");
 
@@ -302,8 +292,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                         ost_unpack_niobuf(&tmp2, &nb);
         }
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
         OBD_ALLOC(res, sizeof(*res) * niocount);
@@ -320,7 +309,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                 GOTO(out, 0);
 
         for (i = 0; i < niocount; i++) {
-                bulk = ptlrpc_prep_bulk(&req->rq_peer);
+                bulk = ptlrpc_prep_bulk(req->rq_connection);
                 if (bulk == NULL) {
                         CERROR("cannot alloc bulk desc\n");
                         GOTO(out, rc = -ENOMEM);
@@ -427,8 +416,7 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         }
 
         size[1] = niocount * sizeof(*nb);
-        rc = lustre_pack_msg(2, size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(2, size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 RETURN(rc);
 
@@ -447,7 +435,7 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                 struct ptlrpc_bulk_desc *bulk;
                 struct ptlrpc_service *srv = req->rq_obd->u.ost.ost_service;
 
-                bulk = ptlrpc_prep_bulk(&req->rq_peer);
+                bulk = ptlrpc_prep_bulk(req->rq_connection);
                 if (bulk == NULL)
                         GOTO(out, rc = -ENOMEM);
 
@@ -492,8 +480,7 @@ static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
         struct ost_obd *ost = &obddev->u.ost;
         ENTRY;
 
-        rc = lustre_unpack_msg(req->rq_reqbuf, req->rq_reqlen);
-        req->rq_reqmsg = (struct lustre_msg *)req->rq_reqbuf;
+        rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_HANDLE_UNPACK)) {
                 CERROR("lustre_mds: Invalid request\n");
                 GOTO(out, rc);

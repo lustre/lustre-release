@@ -38,74 +38,57 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 {
         int rc = 0;
         mm_segment_t oldfs = get_fs();
+        struct ptlrpc_bulk_desc *bulk;
+        char *buf;
 
-        if (req->rq_peer.peer_nid == 0) {
-                /* dst->addr is a user address, but in a different task! */
-                char *buf = (char *)(long)dst->addr;
-
-                set_fs(KERNEL_DS);
-                rc = mds_fs_readpage(&req->rq_obd->u.mds, file, buf, PAGE_SIZE,
-                                     &offset);
-                set_fs(oldfs);
-
-                if (rc != PAGE_SIZE) {
-                        rc = -EIO;
-                        GOTO(out, rc);
-                }
-                EXIT;
-        } else {
-                struct ptlrpc_bulk_desc *bulk;
-                char *buf;
-
-                bulk = ptlrpc_prep_bulk(&req->rq_peer);
-                if (bulk == NULL) {
-                        rc = -ENOMEM;
-                        GOTO(out, rc);
-                }
-
-                bulk->b_xid = req->rq_xid;
-
-                OBD_ALLOC(buf, PAGE_SIZE);
-                if (!buf) {
-                        rc = -ENOMEM;
-                        GOTO(cleanup_bulk, rc);
-                }
-
-                set_fs(KERNEL_DS);
-                rc = mds_fs_readpage(&req->rq_obd->u.mds, file, buf, PAGE_SIZE,
-                                     &offset);
-                set_fs(oldfs);
-
-                if (rc != PAGE_SIZE) {
-                        rc = -EIO;
-                        GOTO(cleanup_buf, rc);
-                }
-
-                bulk->b_buf = buf;
-                bulk->b_buflen = PAGE_SIZE;
-
-                rc = ptlrpc_send_bulk(bulk, MDS_BULK_PORTAL);
-                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE)) {
-                        CERROR("obd_fail_loc=%x, fail operation rc=%d\n",
-                               OBD_FAIL_MDS_SENDPAGE, rc);
-                        PtlMDUnlink(bulk->b_md_h);
-                        GOTO(cleanup_buf, rc);
-                }
-                wait_event_interruptible(bulk->b_waitq,
-                                         ptlrpc_check_bulk_sent(bulk));
-
-                if (bulk->b_flags == PTL_RPC_INTR) {
-                        rc = -EINTR;
-                        GOTO(cleanup_buf, rc);
-                }
-
-                EXIT;
-        cleanup_buf:
-                OBD_FREE(buf, PAGE_SIZE);
-        cleanup_bulk:
-                OBD_FREE(bulk, sizeof(*bulk));
+        bulk = ptlrpc_prep_bulk(req->rq_connection);
+        if (bulk == NULL) {
+                rc = -ENOMEM;
+                GOTO(out, rc);
         }
-out:
+
+        bulk->b_xid = req->rq_reqmsg->xid;
+
+        OBD_ALLOC(buf, PAGE_SIZE);
+        if (!buf) {
+                rc = -ENOMEM;
+                GOTO(cleanup_bulk, rc);
+        }
+
+        set_fs(KERNEL_DS);
+        rc = mds_fs_readpage(&req->rq_obd->u.mds, file, buf, PAGE_SIZE,
+                             &offset);
+        set_fs(oldfs);
+
+        if (rc != PAGE_SIZE) {
+                rc = -EIO;
+                GOTO(cleanup_buf, rc);
+        }
+
+        bulk->b_buf = buf;
+        bulk->b_buflen = PAGE_SIZE;
+
+        rc = ptlrpc_send_bulk(bulk, MDS_BULK_PORTAL);
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE)) {
+                CERROR("obd_fail_loc=%x, fail operation rc=%d\n",
+                       OBD_FAIL_MDS_SENDPAGE, rc);
+                PtlMDUnlink(bulk->b_md_h);
+                GOTO(cleanup_buf, rc);
+        }
+        wait_event_interruptible(bulk->b_waitq,
+                                 ptlrpc_check_bulk_sent(bulk));
+
+        if (bulk->b_flags == PTL_RPC_INTR) {
+                rc = -EINTR;
+                GOTO(cleanup_buf, rc);
+        }
+
+        EXIT;
+ cleanup_buf:
+        OBD_FREE(buf, PAGE_SIZE);
+ cleanup_bulk:
+        OBD_FREE(bulk, sizeof(*bulk));
+ out:
         return rc;
 }
 
@@ -181,8 +164,7 @@ int mds_getattr(struct ptlrpc_request *req)
         int rc, size = sizeof(*body);
         ENTRY;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
@@ -224,8 +206,7 @@ int mds_open(struct ptlrpc_request *req)
         int rc, size = sizeof(*body);
         ENTRY;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
@@ -259,8 +240,7 @@ int mds_close(struct ptlrpc_request *req)
         int rc;
         ENTRY;
 
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
@@ -292,8 +272,7 @@ int mds_readpage(struct ptlrpc_request *req)
         int rc, size = sizeof(*body);
         ENTRY;
 
-        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
-        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK)) {
                 CERROR("mds: out of memory\n");
                 req->rq_status = -ENOMEM;
@@ -355,8 +334,7 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
         int rc;
         ENTRY;
 
-        rc = lustre_unpack_msg(req->rq_reqbuf, req->rq_reqlen);
-        req->rq_reqmsg = (struct lustre_msg *)req->rq_reqbuf;
+        rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_HANDLE_UNPACK)) {
                 CERROR("lustre_mds: Invalid request\n");
                 GOTO(out, rc);

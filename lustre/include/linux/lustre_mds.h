@@ -79,30 +79,31 @@ void mds_rename_pack(struct mds_rec_rename *, struct inode *srcdir,
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);
 
 /* llight/request.c */
-int mdc_getattr(struct ptlrpc_client *, struct lustre_peer *, ino_t ino,
+int mdc_getattr(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
                 int type, int valid, struct ptlrpc_request **);
-int mdc_setattr(struct ptlrpc_client *, struct lustre_peer *, struct inode *,
-                struct iattr *iattr, struct ptlrpc_request **);
-int mdc_open(struct ptlrpc_client *, struct lustre_peer *, ino_t ino, int type,
-             int flags, __u64 *fh, struct ptlrpc_request **req);
-int mdc_close(struct ptlrpc_client *cl, struct lustre_peer *peer, ino_t ino,
-              int type, __u64 fh,  struct ptlrpc_request **req);
-int mdc_readpage(struct ptlrpc_client *, struct lustre_peer *, ino_t ino,
+int mdc_setattr(struct ptlrpc_client *, struct ptlrpc_connection *,
+                struct inode *, struct iattr *iattr, struct ptlrpc_request **);
+int mdc_open(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
+             int type, int flags, __u64 *fh, struct ptlrpc_request **req);
+int mdc_close(struct ptlrpc_client *cl, struct ptlrpc_connection *peer,
+              ino_t ino, int type, __u64 fh,  struct ptlrpc_request **req);
+int mdc_readpage(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
                  int type, __u64 offset, char *addr, struct ptlrpc_request **);
-int mdc_create(struct ptlrpc_client *, struct lustre_peer *,
+int mdc_create(struct ptlrpc_client *, struct ptlrpc_connection *,
                struct inode *dir, const char *name, int namelen, 
                const char *tgt, int tgtlen, 
                int mode, __u64 id, __u32 uid, __u32 gid, __u64 time, 
                struct ptlrpc_request **);
-int mdc_unlink(struct ptlrpc_client *, struct lustre_peer *, struct inode *dir,
-               struct inode *child, const char *name, int namelen, 
+int mdc_unlink(struct ptlrpc_client *, struct ptlrpc_connection *,
+               struct inode *dir, struct inode *child, const char *name,
+               int namelen, struct ptlrpc_request **);
+int mdc_link(struct ptlrpc_client *, struct ptlrpc_connection *,
+             struct dentry *src, struct inode *dir, const char *name,
+             int namelen, struct ptlrpc_request **);
+int mdc_rename(struct ptlrpc_client *, struct ptlrpc_connection *,
+               struct inode *src, struct inode *tgt, const char *old,
+               int oldlen, const char *new, int newlen,
                struct ptlrpc_request **);
-int mdc_link(struct ptlrpc_client *, struct lustre_peer *, struct dentry *src, 
-               struct inode *dir, const char *name, int namelen, 
-               struct ptlrpc_request **);
-int mdc_rename(struct ptlrpc_client *, struct lustre_peer *, struct inode *src, 
-               struct inode *tgt, const char *old, int oldlen, 
-               const char *new, int newlen, struct ptlrpc_request **);
 int mdc_create_client(char *uuid, struct ptlrpc_client *cl);
 
 struct mds_fs_operations {

@@ -26,10 +26,10 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 
-int lustre_pack_msg(int count, int *lens, char **bufs, int *len, char **buf)
+int lustre_pack_msg(int count, int *lens, char **bufs, int *len,
+                    struct lustre_msg **msg)
 {
         char *ptr;
         struct lustre_msg *m;
@@ -40,16 +40,16 @@ int lustre_pack_msg(int count, int *lens, char **bufs, int *len, char **buf)
 
         *len = sizeof(*m) + count * sizeof(__u32) + size;
 
-        OBD_ALLOC(*buf, *len);
-        if (!*buf)
+        OBD_ALLOC(*msg, *len);
+        if (!*msg)
                 RETURN(-ENOMEM);
 
-        m = (struct lustre_msg *)(*buf);
+        m = *msg;
         m->bufcount = HTON__u32(count);
         for (i = 0; i < count; i++)
                 m->buflens[i] = HTON__u32(lens[i]);
 
-        ptr = *buf + sizeof(*m) + sizeof(__u32) * count;
+        ptr = (char *)m + sizeof(*m) + sizeof(__u32) * count;
         for (i = 0; i < count; i++) {
                 char *tmp = NULL;
                 if (bufs)
@@ -74,9 +74,8 @@ int lustre_msg_size(int count, int *lengths)
         return size;
 }
 
-int lustre_unpack_msg(char *buf, int len)
+int lustre_unpack_msg(struct lustre_msg *m, int len)
 {
-        struct lustre_msg *m = (struct lustre_msg *)buf;
         int required_len, i;
 
         required_len = sizeof(*m);

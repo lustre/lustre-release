@@ -1,7 +1,9 @@
-/*
- * Lustre Light I/O Page Cache
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002, Cluster File Systems, Inc. 
+ * Lustre Lite I/O Page Cache
+ *
+ * Copyright (C) 2002 Cluster File Systems, Inc. 
  */
 
 #include <linux/config.h>
@@ -26,13 +28,8 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
-
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,10))
 /*
@@ -167,19 +164,17 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
         obd_off          offset = ((obd_off)page->index) << PAGE_SHIFT;
         obd_flag         flags = create ? OBD_BRW_CREATE : 0;
         int              err;
-
         ENTRY;
 
         oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
-        if (!oa) { 
-                return -ENOMEM;
-        }
+        if (!oa)
+                RETURN(-ENOMEM);
+
         err = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
-                               &page, &count, &offset, &flags);
+                      &page, &count, &offset, &flags);
 
         obdo_free(oa);
-        EXIT;
-        return err;
+        RETURN(err);
 } /* ll_brw */
 
 extern void set_page_clean(struct page *);
@@ -191,7 +186,6 @@ static int ll_readpage(struct file *file, struct page *page)
 {
         struct inode *inode = page->mapping->host;
         int rc = 0;
-
         ENTRY;
 
         if (!PageLocked(page))
@@ -201,14 +195,12 @@ static int ll_readpage(struct file *file, struct page *page)
              <= page->index) {
                 memset(kmap(page), 0, PAGE_CACHE_SIZE);
                 kunmap(page);
-                EXIT;
-                goto readpage_out;
+                GOTO(readpage_out, rc);
         }
 
         if (Page_Uptodate(page)) {
                 CERROR("Explain this please?\n");
-                EXIT;
-                goto readpage_out;
+                GOTO(readpage_out, rc);
         }
 
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
@@ -223,7 +215,7 @@ static int ll_readpage(struct file *file, struct page *page)
 
 
 static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
-                     unsigned to)
+                            unsigned to)
 {
         struct inode *inode = page->mapping->host;
         obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
@@ -235,15 +227,12 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         if (!PageLocked(page))
                 LBUG();
 
-        if (Page_Uptodate(page)) { 
-                EXIT;
-                goto prepare_done;
-        }
+        if (Page_Uptodate(page))
+                GOTO(prepare_done, rc);
 
         if (offset + from >= inode->i_size) {
                 memset(addr, 0, PAGE_SIZE);
-                EXIT;
-                goto prepare_done;
+                GOTO(prepare_done, rc);
         }
 
         /* We're completely overwriting an existing page, so _don't_ set it up
@@ -255,11 +244,11 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
 
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
 
+        EXIT;
  prepare_done:
-        if ( !rc )
+        if (!rc)
                 SetPageUptodate(page);
 
-        EXIT;
         return rc;
 }
 
@@ -283,8 +272,7 @@ static int ll_writepage(struct page *page)
                 CERROR("ll_brw failure %d\n", err);
         }
         UnlockPage(page); 
-        EXIT;
-        return err;
+        RETURN(err);
 }
 
 /* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated
@@ -335,8 +323,7 @@ static int ll_commit_write(struct file *file, struct page *page,
         }
 
         obdo_free(oa);
-        EXIT;
-        return err;
+        RETURN(err);
 } /* ll_commit_write */
 
 void ll_truncate(struct inode *inode)
@@ -360,7 +347,7 @@ void ll_truncate(struct inode *inode)
                 CERROR("obd_truncate fails (%d)\n", err);
         }
         EXIT;
-        return; 
+        return;
 } /* ll_truncate */
 
 struct address_space_operations ll_aops = {
@@ -371,4 +358,3 @@ struct address_space_operations ll_aops = {
         commit_write: ll_commit_write,
         bmap: NULL
 };
-

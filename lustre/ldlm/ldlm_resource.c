@@ -26,13 +26,16 @@
 kmem_cache_t *ldlm_resource_slab;
 kmem_cache_t *ldlm_lock_slab;
 
-struct ldlm_namespace *ldlm_namespace_find(struct obd_device *obddev, __u32 id)
+struct list_head ldlm_namespaces;
+spinlock_t ldlm_spinlock;
+
+struct ldlm_namespace *ldlm_namespace_find(__u32 id)
 {
         struct list_head *tmp;
         struct ldlm_namespace *res;
 
         res = NULL;
-        list_for_each(tmp, &obddev->u.ldlm.ldlm_namespaces) { 
+        list_for_each(tmp, &ldlm_namespaces) { 
                 struct ldlm_namespace *chk;
                 chk = list_entry(tmp, struct ldlm_namespace, ns_link);
                 
@@ -45,7 +48,7 @@ struct ldlm_namespace *ldlm_namespace_find(struct obd_device *obddev, __u32 id)
         return res;
 }
 
-/* this must be called with ldlm_lock(obddev) held */
+/* this must be called with ldlm_lock() held */
 static void res_hash_init(struct ldlm_namespace *ns)
 {
         struct list_head *res_hash;
@@ -71,7 +74,7 @@ ldlm_error_t ldlm_namespace_new(struct obd_device *obddev, __u32 id,
 {
         struct ldlm_namespace *ns;
 
-        if (ldlm_namespace_find(obddev, id))
+        if (ldlm_namespace_find(id))
                 return -ELDLM_NAMESPACE_EXISTS;
 
         OBD_ALLOC(ns, sizeof(*ns));
@@ -82,7 +85,7 @@ ldlm_error_t ldlm_namespace_new(struct obd_device *obddev, __u32 id,
         ns->ns_obddev = obddev;
         INIT_LIST_HEAD(&ns->ns_root_list);
 
-        list_add(&ns->ns_link, &obddev->u.ldlm.ldlm_namespaces);
+        list_add(&ns->ns_link, &ldlm_namespaces);
 
         res_hash_init(ns); 
         atomic_set(&ns->ns_refcount, 0);
@@ -138,7 +141,7 @@ static struct ldlm_resource *ldlm_resource_new(void)
         return res;
 }
 
-/* ldlm_lock(obddev) must be taken before calling resource_add */
+/* ldlm_lock() must be taken before calling resource_add */
 static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
                                                struct ldlm_resource *parent,
                                                __u64 *name, __u32 type)

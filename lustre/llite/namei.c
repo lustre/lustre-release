@@ -92,7 +92,7 @@ static int ll_find_inode(struct inode *inode, unsigned long ino, void *opaque)
 
 static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 {
-        struct ptlrpc_request *request;
+        struct ptlrpc_request *request = NULL;
         struct inode * inode = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         int err;
@@ -101,19 +101,18 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
         
         ENTRY;
         if (dentry->d_name.len > EXT2_NAME_LEN)
-                return ERR_PTR(-ENAMETOOLONG);
+                RETURN(ERR_PTR(-ENAMETOOLONG));
 
         ino = ll_inode_by_name(dir, dentry, &type);
         if (!ino)
-                goto negative;
+                GOTO(negative, NULL);
 
-        err = mdc_getattr(&sbi->ll_mds_client, &sbi->ll_mds_peer, ino, type,
+        err = mdc_getattr(&sbi->ll_mds_client, sbi->ll_mds_conn, ino, type,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
         if (err) {
                 CERROR("failure %d inode %ld\n", err, ino);
                 ptlrpc_free_req(request);
-                EXIT;
-                return ERR_PTR(-abs(err)); 
+                RETURN(ERR_PTR(-abs(err)));
         }
 
         inode = iget4(dir->i_sb, ino, ll_find_inode,
@@ -121,8 +120,9 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 
         ptlrpc_free_req(request);
         if (!inode) 
-                return ERR_PTR(-ENOMEM);
+                RETURN(ERR_PTR(-ENOMEM));
 
+        EXIT;
  negative:
         d_add(dentry, inode);
         return NULL;
@@ -133,7 +133,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                                     int mode, __u64 id)
 {
         struct inode *inode;
-        struct ptlrpc_request *request;
+        struct ptlrpc_request *request = NULL;
         struct mds_body *body;
         int err;
         time_t time = CURRENT_TIME;
@@ -141,7 +141,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 
         ENTRY;
 
-        err = mdc_create(&sbi->ll_mds_client, &sbi->ll_mds_peer, dir, name,
+        err = mdc_create(&sbi->ll_mds_client, sbi->ll_mds_conn, dir, name,
                          namelen, tgt, tgtlen, mode, id,  current->uid,
                          current->gid, time, &request);
         if (err) { 
@@ -185,13 +185,13 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 int ll_mdc_unlink(struct inode *dir, struct inode *child,
                   const char *name, int len)
 {
-        struct ptlrpc_request *request;
+        struct ptlrpc_request *request = NULL;
         int err;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
 
         ENTRY;
 
-        err = mdc_unlink(&sbi->ll_mds_client, &sbi->ll_mds_peer, dir, child,
+        err = mdc_unlink(&sbi->ll_mds_client, sbi->ll_mds_conn, dir, child,
                          name, len, &request);
         ptlrpc_free_req(request);
 
@@ -202,13 +202,13 @@ int ll_mdc_unlink(struct inode *dir, struct inode *child,
 int ll_mdc_link(struct dentry *src, struct inode *dir, 
                 const char *name, int len)
 {
-        struct ptlrpc_request *request;
+        struct ptlrpc_request *request = NULL;
         int err;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
 
         ENTRY;
 
-        err = mdc_link(&sbi->ll_mds_client, &sbi->ll_mds_peer, src, dir, name,
+        err = mdc_link(&sbi->ll_mds_client, sbi->ll_mds_conn, src, dir, name,
                        len, &request);
         ptlrpc_free_req(request);
 
@@ -219,13 +219,13 @@ int ll_mdc_link(struct dentry *src, struct inode *dir,
 int ll_mdc_rename(struct inode *src, struct inode *tgt, 
                   struct dentry *old, struct dentry *new)
 {
-        struct ptlrpc_request *request;
+        struct ptlrpc_request *request = NULL;
         int err;
         struct ll_sb_info *sbi = ll_i2sbi(src);
 
         ENTRY;
 
-        err = mdc_rename(&sbi->ll_mds_client, &sbi->ll_mds_peer, src, tgt, 
+        err = mdc_rename(&sbi->ll_mds_client, sbi->ll_mds_conn, src, tgt, 
                          old->d_name.name, old->d_name.len, 
                          new->d_name.name, new->d_name.len, &request);
         ptlrpc_free_req(request);

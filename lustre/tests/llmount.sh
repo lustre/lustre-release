@@ -10,6 +10,7 @@ PORT=1234
 
 setup_portals
 setup_lustre
+read
 
 new_fs ext2 /tmp/ost 10000
 OST=$LOOPDEV

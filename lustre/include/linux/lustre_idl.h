@@ -43,6 +43,9 @@
  */
 
 struct lustre_msg {
+        __u64 conn;
+        __u64 token;
+
         __u32 opc;
         __u32 xid;
         __u32 status;
@@ -327,6 +330,7 @@ struct ldlm_request {
 };
 
 struct ldlm_reply {
+        __u32 flags;
         struct ldlm_handle lock_handle;
         struct ldlm_extent lock_extent;
 };
