@@ -5,25 +5,18 @@ export PATH=/sbin:/usr/sbin:$PATH
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
-NETWORK=elan
-LOCALHOST=5
-SERVER=5
+NETWORK=tcp
+LOCALHOST=dev4
+SERVER=dev4
+PORT=1234
 
 setup
+setup_portals
 
-$PTLCTL <<EOF
-setup $NETWORK
-mynid $LOCALHOST
-connect $LOCALHOST
-add_uuid self
-add_uuid mds
-add_uuid ost
-EOF
-
-tmp_fs ext2 /tmp/ost 10000
+new_fs ext2 /tmp/ost 6000000
 OST=${LOOPDEV}
 MDSFS=ext2
-tmp_fs ${MDSFS} /tmp/mds 10000
+new_fs ${MDSFS} /tmp/mds 50000
 MDS=${LOOPDEV}
 
 $OBDCTL <<EOF
@@ -32,7 +25,7 @@ attach mds
 setup ${MDS} ${MDSFS}
 device 1
 attach obdext2
-setup ${OBD}
+setup ${OST}
 device 2
 attach ost
 setup 1
