@@ -9,6 +9,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- handle intent open/close of special files properly (1557)
 	- mount MDS with errors=remount-ro, like obdfilter (2009)
 	- initialize lock handle to avoid ASSERT on error cleanup (3057)
+	- don't use cancelling-locks' kms values (2947)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
 

@@ -262,12 +262,18 @@ __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
         __u64 kms = 0;
         ENTRY;
 
+        /* don't let another thread in ldlm_extent_shift_kms race in
+         * just after we finish and take our lock into account in its
+         * calculation of the kms */
+        lock->l_flags |= LDLM_FL_KMS_IGNORE;
+
         l_lock(&res->lr_namespace->ns_lock);
         list_for_each(tmp, &res->lr_granted) {
                 lck = list_entry(tmp, struct ldlm_lock, l_res_link);
 
-                if (lock == lck)
+                if (lck->l_flags & LDLM_FL_KMS_IGNORE)
                         continue;
+
                 if (lck->l_policy_data.l_extent.end >= old_kms)
                         GOTO(out, kms = old_kms);
                 kms = lck->l_policy_data.l_extent.end + 1;

@@ -87,6 +87,14 @@ typedef enum {
  * pretty high-risk, though, and would need a lot more testing. */
 #define LDLM_FL_CAN_MATCH      0x100000
 
+/* A lock contributes to the kms calculation until it has finished the part
+ * of it's cancelation that performs write back on its dirty pages.  It
+ * can remain on the granted list during this whole time.  Threads racing
+ * to update the kms after performing their writeback need to know to
+ * exclude each others locks from the calculation as they walk the granted
+ * list. */
+#define LDLM_FL_KMS_IGNORE     0x200000
+
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
 #define LDLM_CB_BLOCKING    1
