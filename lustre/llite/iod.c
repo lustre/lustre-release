@@ -52,56 +52,18 @@
 
 extern spinlock_t inode_lock;
 
-#define LLWP_MAX_PAGES (PTL_MD_MAX_IOV)
 struct ll_writeback_pages {
-        unsigned        has_whole_pages:1,
-                        num_frags:2,
-                        num_pages:29;
-        struct brw_page pgs[LLWP_MAX_PAGES];
+        obd_count npgs, max;
+        struct brw_page *pga;
 };
 
-
 /*
- * ugh, we want disk allocation on the target to happen in offset order.  we'll
- * follow sedgewicks advice and stick to the dead simple shellsort -- it'll do
- * fine for our small page arrays and doesn't require allocation.  its an
- * insertion sort that swaps elements that are strides apart, shrinking the
- * stride down until its '1' and the array is sorted.
+ * check to see if we're racing with truncate and put the page in
+ * the brw_page array.  returns 0 if there is more room and 1
+ * if the array is full.
  */
-void sort_brw_pages(struct brw_page *array, int num)
-{
-        int stride, i, j;
-        struct brw_page tmp;
-
-        if ( num == 1 )
-                return;
-
-        for( stride = 1; stride < num ; stride = (stride*3) +1  )
-                ;
-
-        do {
-                stride /= 3;
-                for ( i = stride ; i < num ; i++ ) {
-                        tmp = array[i];
-                        j = i;
-                        while ( j >= stride &&
-                                        array[j - stride].off > tmp.off ) {
-                                array[j] = array[j - stride];
-                                j -= stride;
-                        }
-                        array[j] = tmp;
-                }
-        } while ( stride > 1 );
-}
-
-/*
- * returns 0 if the page was inserted in the array because it was
- * within i_size.  if we raced with truncate and i_size was less
- * than the page we can unlock the page because truncate_inode_pages will
- * be waiting to cleanup the page
- */
-static int llwp_consume_page(struct ll_writeback_pages *llwp,
-                             struct inode *inode, struct page *page)
+static int llwp_consume_page(struct ll_writeback_pages *llwp, 
+                              struct inode *inode, struct page *page)
 {
         obd_off off = ((obd_off)page->index) << PAGE_SHIFT;
         struct brw_page *pg;
@@ -111,12 +73,13 @@ static int llwp_consume_page(struct ll_writeback_pages *llwp,
                 ll_remove_dirty(&ll_i2info(inode)->lli_dirty, page->index,
                                 page->index);
                 unlock_page(page);
-                goto out;
+                return 0;
         }
 
         page_cache_get(page);
-        pg = &llwp->pgs[llwp->num_pages];
-        llwp->num_pages++;
+        pg = &llwp->pga[llwp->npgs];
+        llwp->npgs++;
+        LASSERT(llwp->npgs <= llwp->max);
 
         pg->pg = page;
         pg->off = off;
@@ -126,15 +89,6 @@ static int llwp_consume_page(struct ll_writeback_pages *llwp,
         /* catch partial writes for files that end mid-page */
         if ( pg->off + pg->count > inode->i_size )
                 pg->count = inode->i_size & ~PAGE_MASK;
-
-        if ( pg->count == PAGE_SIZE ) {
-                if ( ! llwp->has_whole_pages ) {
-                        llwp->has_whole_pages = 1;
-                        llwp->num_frags++;
-                }
-        } else {
-                llwp->num_frags++;
-        }
 
         /*
          * matches ptlrpc_bulk_get assert that trickles down
@@ -147,11 +101,7 @@ static int llwp_consume_page(struct ll_writeback_pages *llwp,
                         " i_size: %llu\n", pg, pg->off, pg->count, page,
                         page->index, inode->i_size);
 
-        if ( llwp->num_frags == 3 || llwp->num_pages == LLWP_MAX_PAGES )
-                return -1;
-
-out:
-        return 0;
+        return llwp->npgs == llwp->max;
 }
 
 /*
@@ -193,14 +143,12 @@ static void ll_get_dirty_pages(struct inode *inode,
         EXIT;
 }
 
-static void ll_brw_pages_unlock( struct inode *inode,
+static void ll_writeback( struct inode *inode,
                                  struct ll_writeback_pages *llwp)
 {
         int rc, i;
         struct obd_brw_set *set;
         ENTRY;
-
-        sort_brw_pages(llwp->pgs, llwp->num_pages);
 
         set = obd_brw_set_new();
         if (set == NULL) {
@@ -210,8 +158,13 @@ static void ll_brw_pages_unlock( struct inode *inode,
         set->brw_callback = ll_brw_sync_wait;
 
         rc = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode),
-                     ll_i2info(inode)->lli_smd, llwp->num_pages, llwp->pgs,
+                     ll_i2info(inode)->lli_smd, llwp->npgs, llwp->pga,
                      set, NULL);
+        /*
+         * b=1038, we need to pass _brw errors up so that writeback
+         * doesn't get stuck in recovery leaving processes stuck in
+         * D waiting for pages
+         */
         if (rc) {
                 CERROR("error from obd_brw: rc = %d\n", rc);
         } else {
@@ -221,11 +174,8 @@ static void ll_brw_pages_unlock( struct inode *inode,
         }
         obd_brw_set_decref(set);
 
-        /* XXX this doesn't make sense to me */
-        rc = 0;
-
-        for ( i = 0 ; i < llwp->num_pages ; i++) {
-                struct page *page = llwp->pgs[i].pg;
+        for ( i = 0 ; i < llwp->npgs ; i++) {
+                struct page *page = llwp->pga[i].pg;
 
                 CDEBUG(D_CACHE, "cleaning page %p\n", page);
                 LASSERT(PageLocked(page));
@@ -285,11 +235,36 @@ static int should_writeback(void)
         return 0;
 }
 
+static int ll_alloc_brw(struct lustre_handle *conn, 
+                        struct ll_writeback_pages *llwp)
+{
+        static char key[] = "brw_size";
+        unsigned long brw_size;
+        obd_count unused = sizeof(brw_size);
+        void *val;
+        int rc;
+        ENTRY;
+
+        memset(llwp, 0, sizeof(struct ll_writeback_pages));
+
+        rc = obd_get_info(conn, sizeof(key) - 1, key, &unused, &val);
+        if ( rc != 0 ) 
+                RETURN(rc);
+        brw_size = (unsigned long)val;
+        LASSERT(brw_size >= PAGE_SIZE);
+
+        llwp->max = brw_size >> PAGE_SHIFT;
+        llwp->pga = kmalloc(llwp->max * sizeof(struct brw_page), GFP_ATOMIC);
+        if ( llwp->pga == NULL )
+                RETURN(-ENOMEM);
+        RETURN(0);
+}
+
 int ll_check_dirty( struct super_block *sb)
 {
         unsigned long old_flags; /* hack? */
         int making_progress;
-        struct ll_writeback_pages *llwp;
+        struct ll_writeback_pages llwp;
         struct inode *inode;
         int rc = 0;
         ENTRY;
@@ -299,10 +274,9 @@ int ll_check_dirty( struct super_block *sb)
 
         old_flags = current->flags;
         current->flags |= PF_MEMALLOC;
-        llwp = kmalloc(sizeof(struct ll_writeback_pages), GFP_ATOMIC);
-        if ( llwp == NULL )
-                GOTO(cleanup, rc = -ENOMEM);
-        memset(llwp, 0, offsetof(struct ll_writeback_pages, pgs));
+        rc = ll_alloc_brw(&ll_s2sbi(sb)->ll_osc_conn, &llwp);
+        if ( rc != 0)
+                GOTO(cleanup, rc);
 
         spin_lock(&inode_lock);
 
@@ -337,14 +311,14 @@ int ll_check_dirty( struct super_block *sb)
                 spin_unlock(&inode_lock);
 
                 do {
-                        memset(llwp, 0, sizeof(*llwp));
-                        ll_get_dirty_pages(inode, llwp);
-                        if (llwp->num_pages) {
-                                ll_brw_pages_unlock(inode, llwp);
-                                rc += llwp->num_pages;
+                        llwp.npgs = 0;
+                        ll_get_dirty_pages(inode, &llwp);
+                        if (llwp.npgs) {
+                                ll_writeback(inode, &llwp);
+                                rc += llwp.npgs;
                                 making_progress = 1;
                         }
-                } while (llwp->num_pages && should_writeback());
+                } while (llwp.npgs && should_writeback());
 
                 spin_lock(&inode_lock);
 
@@ -385,8 +359,8 @@ int ll_check_dirty( struct super_block *sb)
         spin_unlock(&inode_lock);
 
 cleanup:
-        if ( llwp != NULL )
-                kfree(llwp);
+        if ( llwp.pga != NULL )
+                kfree(llwp.pga);
         current->flags = old_flags;
 
         RETURN(rc);
@@ -395,26 +369,25 @@ cleanup:
 int ll_batch_writepage( struct inode *inode, struct page *page )
 {
         unsigned long old_flags; /* hack? */
-        struct ll_writeback_pages *llwp;
+        struct ll_writeback_pages llwp;
         int rc = 0;
         ENTRY;
 
         old_flags = current->flags;
         current->flags |= PF_MEMALLOC;
-        llwp = kmalloc(sizeof(struct ll_writeback_pages), GFP_ATOMIC);
-        if ( llwp == NULL )
-                GOTO(cleanup, rc = -ENOMEM);
-        memset(llwp, 0, offsetof(struct ll_writeback_pages, pgs));
+        rc = ll_alloc_brw(&ll_i2sbi(inode)->ll_osc_conn, &llwp);
+        if ( rc != 0)
+                GOTO(cleanup, rc);
 
-        llwp_consume_page(llwp, inode, page);
+        llwp_consume_page(&llwp, inode, page);
 
-        ll_get_dirty_pages(inode, llwp);
-        if ( llwp->num_pages )
-                ll_brw_pages_unlock(inode, llwp);
+        ll_get_dirty_pages(inode, &llwp);
+        if ( llwp.npgs )
+                ll_writeback(inode, &llwp);
 
 cleanup:
-        if ( llwp != NULL )
-                kfree(llwp);
+        if ( llwp.pga != NULL )
+                kfree(llwp.pga);
         current->flags = old_flags;
         RETURN(rc);
 }
