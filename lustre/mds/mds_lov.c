@@ -182,12 +182,12 @@ int mds_iocontrol(long cmd, struct lustre_handle *conn,
                         CERROR("UUID array size wrong\n");
                         RETURN(-EINVAL);
                 }
-                rc = mds_get_lovdesc(obd, desc);
+                rc = mds_get_lovdesc(&obd->u.mds, desc);
                 if (desc->ld_tgt_count > count) {
                         CERROR("UUID array size too small\n");
                         RETURN(-ENOSPC);
                 }
-                rc = mds_get_lovtgts(obd, desc->ld_tgt_count, uuidarray);
+                rc = mds_get_lovtgts(&obd->u.mds, desc->ld_tgt_count, uuidarray);
 
                 RETURN(rc);
         default:
