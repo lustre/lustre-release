@@ -40,18 +40,11 @@
 static int mgmt_initialized;
 static struct ptlrpc_service *mgmt_service;
 
-static int mgmt_connect(struct ptlrpc_request *req)
-{
-        int rc;
-        ENTRY;
-
-        rc = -EINVAL;
-        
-        RETURN(rc);
-}
-
 static int mgmt_ping(struct ptlrpc_request *req)
 {
+        /* handle_incoming_request will have already updated the export's
+         * last_request_time, so we don't need to do anything else.
+         */
         return lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
 }
 
@@ -67,7 +60,11 @@ static int mgmt_handler(struct ptlrpc_request *req)
                 break;
         case MGMT_CONNECT:
                 DEBUG_REQ(D_RPCTRACE, req, "connect");
-                rc = mgmt_connect(req);
+                rc = target_handle_connect(req, NULL /* no recovery handler */);
+                break;
+        case MGMT_DISCONNECT:
+                DEBUG_REQ(D_RPCTRACE, req, "disconnect");
+                rc = target_handle_disconnect(req);
                 break;
         default:
                 DEBUG_REQ(D_RPCTRACE, req, "UNKNOWN OP");
