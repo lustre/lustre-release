@@ -27,7 +27,15 @@ lmc - lustre configuration data manager
 
 import sys, os, getopt, string, exceptions, re
 import xml.dom.minidom
-from xml.dom.ext import PrettyPrint
+
+def printDoc(doc, stream=sys.stdout):
+    try:
+        from xml.dom.ext import PrettyPrint
+        PrettyPrint(doc, stream)
+    except ImportError:
+        stream.write(doc.toxml())
+        stream.write("\n")
+    
 
 PYMOD_DIR = "/usr/lib/lustre/python"
 
@@ -1160,9 +1168,9 @@ def main():
             panic("lmc", e)
 
     if outFile == '-':
-        PrettyPrint(doc)
+        printDoc(doc)
     else:
-        PrettyPrint(doc, open(outFile,"w"))
+        printDoc(doc, open(outFile,"w"))
 
 if __name__ == "__main__":
     main()

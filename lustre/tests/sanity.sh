@@ -14,7 +14,7 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
 SRCDIR=`dirname $0`
-PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
+export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
 TMP=${TMP:-/tmp}
 
@@ -1081,7 +1081,7 @@ test_33a() {
         $RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $DIR/d33/f33 || error
         $RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $DIR/d33/f33 && error || true
 }
-run_test 33a "test open file(mode=0444) with O_RDWR (should return error) ===="
+run_test 33a "test open file(mode=0444) with O_RDWR (should return error)"
 
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
@@ -1305,7 +1305,7 @@ test_42c() {
             error "$BEFOREWRITES < $AFTERWRITES on truncate"
         rm $file
 }
-run_test 42c "test partial truncate of file with cached dirty data ===="
+run_test 42c "test partial truncate of file with cached dirty data"
 
 test_42d() {
         trunc_test 42d 0
@@ -1313,7 +1313,7 @@ test_42d() {
             error "beforewrites $BEFOREWRITES != afterwrites $AFTERWRITES on truncate"
         rm $file
 }
-run_test 42d "test complete truncate of file with cached dirty data ===="
+run_test 42d "test complete truncate of file with cached dirty data"
 
 test_43() {
 	mkdir $DIR/d43
@@ -1322,7 +1322,7 @@ test_43() {
 	$DIR/d43/f && error || true
 	exec 100<&-
 }
-run_test 43 "execution of file opened for write should return -ETXTBSY=="
+run_test 43 "execution of file opened for write should return -ETXTBSY"
 
 test_43a() {
         mkdir -p $DIR/d43
@@ -1335,7 +1335,7 @@ test_43a() {
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
 }
-run_test 43a "open(RDWR) of file being executed should return -ETXTBSY=="
+run_test 43a "open(RDWR) of file being executed should return -ETXTBSY"
 
 test_43b() {
         mkdir -p $DIR/d43
@@ -1348,16 +1348,16 @@ test_43b() {
         kill -USR1 $MULTIPID || return 2
         wait $MULTIPID || return 3
 }
-run_test 43b "truncate of file being executed should return -ETXTBSY===="
+run_test 43b "truncate of file being executed should return -ETXTBSY"
 
 test_43c() {
 	local testdir="$DIR/d43c"
 	mkdir -p $testdir
 	cp $SHELL $testdir/
-	( cd $(dirname $SHELL) && md5sum $(basename $SHELL) ) |  \
+	( cd $(dirname $SHELL) && md5sum $(basename $SHELL) ) | \
 		( cd $testdir && md5sum -c)
 }
-run_test 43c "md5sum of copy into lustre================================"
+run_test 43c "md5sum of copy into lustre========================"
 
 test_44() {
 	[  "$STRIPECOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
@@ -1466,7 +1466,7 @@ test_48() {
         mkdir $DIR/d48 || error "recreate diectory failed"
         ls || error "can't list after recreate directory"
 }
-run_test 48 "Access renamed current working directory ========="
+run_test 48 "Access renamed current working directory =========="
 
 test_50() {
 	# bug 1485
@@ -1615,7 +1615,62 @@ test_56() {
                 error "lfs find --obd wrong: should not show file on other obd"
         echo "lfs find --obd passed."
 }
-run_test 56 "check lfs find====================================="
+run_test 56 "check lfs find ===================================="
+
+test_57a() {
+	# note test will not do anything if MDS is not local
+	for DEV in `cat /proc/fs/lustre/mds/*/mntdev`; do
+		dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
+		DEVISIZE=`awk '/Inode size:/ { print $3 }' $TMP/t57a.dump`
+		[ "$DEVISIZE" -gt 128 ] || error "inode size $DEVISIZE"
+		rm $TMP/t57a.dump
+	done
+}
+run_test 57a "verify MDS filesystem created with large inodes =="
+
+test_57b() {
+	FILECOUNT=100
+	FILE1=$DIR/d57b/f1
+	FILEN=$DIR/d57b/f$FILECOUNT
+	rm -rf $DIR/d57b || error "removing $DIR/d57b"
+	mkdir -p $DIR/d57b || error "creating $DIR/d57b"
+	echo "mcreating $FILECOUNT files"
+	createmany -m $DIR/d57b/f 1 $FILECOUNT || \
+		error "creating files in $DIR/d57b"
+
+	# verify that files do not have EAs yet
+	$LFIND $FILE1 2>&1 | grep -q "no stripe" || error "$FILE1 has an EA"
+	$LFIND $FILEN 2>&1 | grep -q "no stripe" || error "$FILEN has an EA"
+
+	MDSFREE="`cat /proc/fs/lustre/mds/*/kbytesfree`"
+	MDCFREE="`cat /proc/fs/lustre/mdc/*/kbytesfree`"
+	echo "opening files to create objects/EAs"
+	for FILE in `seq -f $DIR/d57b/f%g 1 $FILECOUNT`; do
+		$OPENFILE -f O_RDWR $FILE > /dev/null || error "opening $FILE"
+	done
+
+	# verify that files have EAs now
+	$LFIND $FILE1 | grep -q "obdidx" || error "$FILE1 missing EA"
+	$LFIND $FILEN | grep -q "obdidx" || error "$FILEN missing EA"
+
+	MDSFREE2="`cat /proc/fs/lustre/mds/*/kbytesfree`"
+	MDCFREE2="`cat /proc/fs/lustre/mdc/*/kbytesfree`"
+	if [ "$MDCFREE" != "$MDCFREE2" ]; then
+		if [ "$MDSFREE" != "$MDSFREE2" ]; then
+			error "MDC before $MDCFREE != after $MDCFREE2"
+		else
+			echo "MDC before $MDCFREE != after $MDCFREE2"
+			echo "unable to confirm if MDS has large inodes"
+		fi
+	fi
+	rm -rf $DIR/d57b
+}
+run_test 57b "default LOV EAs are stored inside large inodes ==="
+
+test_58() {
+	wiretest
+}
+run_test 58 "verify cross-platform wire constants =============="
 
 test_59() {
 	echo "touch 130 files"

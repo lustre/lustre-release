@@ -662,7 +662,7 @@ int lprocfs_write_helper(const char *buffer, unsigned long count,
                          int *val)
 {
         char kernbuf[20], *end;
-        
+
         if (count > (sizeof(kernbuf) - 1))
                 return -EINVAL;
 

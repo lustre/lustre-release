@@ -1059,7 +1059,6 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
 
 void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
 {
-        char ver[128];
         char str[PTL_NALFMT_SIZE];
         struct obd_device *obd = NULL;
 
@@ -1074,13 +1073,11 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                 return;
         }
 
-        snprintf(ver, sizeof(ver), "%x %x %x %x",
-                 lock->l_version[0], lock->l_version[1],
-                 lock->l_version[2], lock->l_version[3]);
-
-        CDEBUG(level, "  -- Lock dump: %p/"LPX64" (%s) (rc: %d) (pos: %d)\n",
-               lock, lock->l_handle.h_cookie, ver, atomic_read(&lock->l_refc),
-               pos);
+        CDEBUG(level,
+               "  -- Lock dump: %p/"LPX64" (%x %x %x %x) (rc: %d) (pos: %d)\n",
+               lock, lock->l_handle.h_cookie, lock->l_version[0],
+               lock->l_version[1], lock->l_version[2], lock->l_version[3],
+               atomic_read(&lock->l_refc), pos);
         if (lock->l_conn_export != NULL)
                 obd = lock->l_conn_export->exp_obd;
         if (lock->l_export && lock->l_export->exp_connection) {

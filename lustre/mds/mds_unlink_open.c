@@ -68,9 +68,8 @@ int mds_open_unlink_rename(struct mds_update_record *rec,
         fidlen = ll_fid2str(fidname, dchild->d_inode->i_ino,
                             dchild->d_inode->i_generation);
 
-        CWARN("pending destroy of %dx open file %s = %s\n",
-              mds_open_orphan_count(dchild->d_inode),
-              rec->ur_name, fidname);
+        CDEBUG(D_HA, "pending destroy of %dx open file %s = %s\n",
+               mds_open_orphan_count(dchild->d_inode), rec->ur_name, fidname);
 
         pending_child = lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
         if (IS_ERR(pending_child))
@@ -101,7 +100,7 @@ out_lock:
         RETURN(rc);
 }
 
-static int mds_osc_destroy_orphan(struct mds_obd *mds, 
+static int mds_osc_destroy_orphan(struct mds_obd *mds,
                                   struct ptlrpc_request *request)
 {
         struct mds_body *body;
@@ -117,7 +116,7 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
                 RETURN(0);
         if (body->eadatasize == 0) {
                 CERROR("OBD_MD_FLEASIZE set but eadatasize zero\n");
-                RETURN(rc = -EPROTO); 
+                RETURN(rc = -EPROTO);
         }
 
         lmm = lustre_msg_buf(request->rq_repmsg, 1, body->eadatasize);
@@ -141,7 +140,7 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
 
         if (body->valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
-                oti.oti_logcookies = 
+                oti.oti_logcookies =
                         lustre_msg_buf(request->rq_repmsg, 2,
                                        sizeof(struct llog_cookie) *
                                        lsm->lsm_stripe_count);
@@ -152,7 +151,7 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
 
         rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti);
         obdo_free(oa);
-        if (rc) 
+        if (rc)
                 CERROR("destroy orphan objid 0x"LPX64" on ost error "
                        "%d\n", lsm->lsm_object_id, rc);
 out_free_memmd:
@@ -203,7 +202,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         } else {
                 rc = vfs_unlink(pending_dir, dchild);
         }
-        if (rc) 
+        if (rc)
                 CERROR("error %d unlinking orphan %*s from PENDING directory\n",
                        rc, dchild->d_name.len, dchild->d_name.name);
 
@@ -275,7 +274,7 @@ int mds_cleanup_orphans(struct obd_device *obd)
 
                 CDEBUG(D_INODE, "entry "LPU64" of PENDING DIR: %s\n",
                        i, d_name);
-                
+
                 if (((namlen == 1) && !strcmp(d_name, ".")) ||
                     ((namlen == 2) && !strcmp(d_name, ".."))) {
                         continue;

@@ -361,8 +361,8 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         count = desc->ld_tgt_count;
         uuids = (struct obd_uuid *)lcfg->lcfg_inlbuf2;
         if (sizeof(*uuids) * count != lcfg->lcfg_inllen2) {
-                CERROR("UUID array size wrong: "LPSZ" * %u != %u\n",
-                       sizeof(*uuids), count, lcfg->lcfg_inllen2);
+                CERROR("UUID array size wrong: %u * %u != %u\n",
+                       (int)sizeof(*uuids), count, lcfg->lcfg_inllen2);
                 RETURN(-EINVAL);
         }
 
@@ -736,8 +736,8 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                         }
                 }
 
-                CERROR("reallocating LSM for objid "LPX64": old %u new %u\n",
-                       lsm->lsm_object_id, lsm->lsm_stripe_count, obj_alloc);
+                CWARN("using fewer stripes for object "LPX64": old %u new %u\n",
+                      lsm->lsm_object_id, lsm->lsm_stripe_count, obj_alloc);
                 oldsize = lov_stripe_md_size(lsm->lsm_stripe_count);
                 newsize = lov_stripe_md_size(obj_alloc);
                 OBD_ALLOC(lsm_new, newsize);

@@ -990,7 +990,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
 
         cleanup_phase = 1; /* parent dentry */
 
-        /* Step 2: Lookup child (without lock, to get resource name) */
+        /* Step 2: Lookup child (without DLM lock, to get resource name) */
         *dchildp = ll_lookup_one_len(name, *dparentp, namelen - 1);
         if (IS_ERR(*dchildp)) {
                 rc = PTR_ERR(*dchildp);
@@ -1746,8 +1746,8 @@ typedef int (*mds_reinter)(struct mds_update_record *, int offset,
 static mds_reinter reinters[REINT_MAX + 1] = {
         [REINT_SETATTR] mds_reint_setattr,
         [REINT_CREATE] mds_reint_create,
-        [REINT_UNLINK] mds_reint_unlink,
         [REINT_LINK] mds_reint_link,
+        [REINT_UNLINK] mds_reint_unlink,
         [REINT_RENAME] mds_reint_rename,
         [REINT_OPEN] mds_open
 };

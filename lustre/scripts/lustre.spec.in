@@ -112,8 +112,19 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/sbin/wiretest
 %attr(-, root, root) /usr/sbin/lactive
 %attr(-, root, root) /usr/sbin/llanalyze
-%attr(-, root, root) /usr/bin/lfs
 %attr(-, root, root) /usr/sbin/gmnalnid
+%attr(-, root, root) /usr/sbin/llstat.pl
+%attr(-, root, root) /usr/sbin/llobdstat.pl
+%attr(-, root, root) /usr/sbin/load_ldap.sh
+%attr(-, root, root) /usr/sbin/acceptor
+%attr(-, root, root) /usr/sbin/ptlctl
+%attr(-, root, root) /usr/sbin/debugctl
+%attr(-, root, root) /usr/sbin/lload
+%attr(-, root, root) /usr/sbin/obdbarrier
+%attr(-, root, root) /usr/sbin/obdio
+%attr(-, root, root) /usr/sbin/routerstat
+%attr(-, root, root) /usr/sbin/wirecheck
+%attr(-, root, root) /usr/bin/lfs
 %attr(-, root, root) /usr/bin/lfind
 %attr(-, root, root) /usr/bin/lstripe
 %attr(-, root, root) /usr/bin/mcreate
@@ -121,9 +132,6 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/bin/mkdirmany
 %attr(-, root, root) /usr/bin/iopentest1
 %attr(-, root, root) /usr/bin/iopentest2
-%attr(-, root, root) /usr/sbin/llstat.pl
-%attr(-, root, root) /usr/sbin/llobdstat.pl
-%attr(-, root, root) /usr/sbin/load_ldap.sh
 %attr(-, root, root) /usr/lib/lustre/python/*
 %attr(-, root, root) /usr/lib/lustre/examples/llmount.sh
 %attr(-, root, root) /usr/lib/lustre/examples/llmountcleanup.sh
@@ -135,19 +143,11 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/lib/lustre/examples/llechocleanup.sh
 
 %attr(-, root, root) /etc/init.d/lustre
-%attr(-, root, root) /usr/sbin/acceptor
-%attr(-, root, root) /usr/sbin/ptlctl
-%attr(-, root, root) /usr/sbin/debugctl
 %attr(-, root, root) /lib/libportals.a
 %attr(-, root, root) /lib/libptlctl.a
 %attr(-, root, root) /lib/libtcpnal.a
 %attr(-, root, root) /lib/liblustreapi.a
 %attr(-, root, root) /usr/include/lustre/*.h
-%attr(-, root, root) /usr/sbin/lload
-%attr(-, root, root) /usr/sbin/obdbarrier
-%attr(-, root, root) /usr/sbin/obdio
-%attr(-, root, root) /usr/sbin/routerstat
-%attr(-, root, root) /usr/sbin/wirecheck
 
 %ifarch alpha
 %attr(-, root, root) /usr/sbin/mcpload

@@ -25,8 +25,6 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_lite.h>
-#include <linux/obd_lov.h>      /* for lov_mds_md_size() in lov_setstripe() */
-#include <linux/random.h>
 #include <linux/pagemap.h>
 #include <linux/file.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

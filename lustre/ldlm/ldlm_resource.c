@@ -40,7 +40,8 @@ struct proc_dir_entry *ldlm_ns_proc_dir = NULL;
 struct proc_dir_entry *ldlm_svc_proc_dir = NULL;
 
 #ifdef __KERNEL__
-static int ldlm_proc_dump_ns(struct file *file, const char *buffer, unsigned long count, void *data)
+static int ldlm_proc_dump_ns(struct file *file, const char *buffer,
+                             unsigned long count, void *data)
 {
         ldlm_dump_all_namespaces();
         RETURN(count);
@@ -646,7 +647,9 @@ void ldlm_dump_all_namespaces(void)
 void ldlm_namespace_dump(struct ldlm_namespace *ns)
 {
         struct list_head *tmp;
+        unsigned int debug_save = portal_debug;
 
+        portal_debug |= D_OTHER;
         l_lock(&ns->ns_lock);
         CDEBUG(D_OTHER, "--- Namespace: %s (rc: %d, client: %d)\n", ns->ns_name,
                ns->ns_refcount, ns->ns_client);
@@ -660,6 +663,7 @@ void ldlm_namespace_dump(struct ldlm_namespace *ns)
                 ldlm_resource_dump(res);
         }
         l_unlock(&ns->ns_lock);
+        portal_debug = debug_save;
 }
 
 void ldlm_resource_dump(struct ldlm_resource *res)

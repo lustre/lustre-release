@@ -2281,12 +2281,12 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data)
         if (lock->l_ast_data && lock->l_ast_data != data) {
                 struct inode *new_inode = data;
                 struct inode *old_inode = lock->l_ast_data;
-                unsigned long state = old_inode->i_state & I_FREEING;
-                CERROR("Found existing inode %p/%lu/%u state %lu in lock: "
-                       "setting data to %p/%lu/%u\n", old_inode,
-                       old_inode->i_ino, old_inode->i_generation, state,
-                       new_inode, new_inode->i_ino, new_inode->i_generation);
-                LASSERT(state);
+                LASSERTF(old_inode->i_state & I_FREEING,
+                         "Found existing inode %p/%lu/%u state %lu in lock: "
+                         "setting data to %p/%lu/%u\n", old_inode,
+                         old_inode->i_ino, old_inode->i_generation,
+                         old_inode->i_state,
+                         new_inode, new_inode->i_ino, new_inode->i_generation);
         }
 #endif
         lock->l_ast_data = data;

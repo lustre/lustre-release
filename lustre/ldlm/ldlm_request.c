@@ -42,20 +42,18 @@ struct lock_wait_data {
 
 int ldlm_expired_completion_wait(void *data)
 {
-        static unsigned long next_dump = 0;
         struct lock_wait_data *lwd = data;
         struct ldlm_lock *lock = lwd->lwd_lock;
         struct obd_import *imp;
         struct obd_device *obd;
 
         if (lock->l_conn_export == NULL) {
+                static unsigned long next_dump = 0;
+
                 LDLM_ERROR(lock, "lock timed out; not entering recovery in "
                            "server code, just going back to sleep");
                 if (time_after(jiffies, next_dump)) {
-                        unsigned int debug = portal_debug;
-                        portal_debug |= D_OTHER;
                         ldlm_namespace_dump(lock->l_resource->lr_namespace);
-                        portal_debug = debug;
                         if (next_dump == 0)
                                 portals_debug_dumplog();
                         next_dump = jiffies + 300 * HZ;

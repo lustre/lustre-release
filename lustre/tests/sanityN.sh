@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1557 2366
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"8   10   "}
+# bug number for skipped test: 1557
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"8"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -218,7 +218,7 @@ test_9() {
 }
 run_test 9 "append of file with sub-page size on multiple mounts"
 
-test_10() {
+test_10a() {
 	MTPT=1
 	OFFSET=0
 	> $DIR2/f10
@@ -231,7 +231,22 @@ test_10() {
 	[ "`cat $DIR1/f10`" = "abcdefghijkl" ] || \
 		error "`od -a $DIR1/f10` != abcdefghijkl"
 }
-run_test 10 "write of file with sub-page size on multiple mounts "
+run_test 10a "write of file with sub-page size on multiple mounts "
+
+test_10b() {
+	set -vx
+	yes "R" | dd of=$DIR1/f10b bs=3k count=1 || error "dd $DIR1"
+
+	truncate $DIR1/f10b 4096 || error "truncate 4096"
+
+	dd if=$DIR2/f10b of=$TMP/f10b-lustre bs=4k count=1 || error "dd $DIR2"
+
+	# create a test file locally to compare
+	yes "R" | dd of=$TMP/f10b bs=3k count=1 || error "dd random"
+	truncate $TMP/f10b 4096 || error "truncate 4096"
+	cmp $TMP/f10b $TMP/f10b-lustre || error "file miscompare"
+}
+run_test 10b "write of file with sub-page size on multiple mounts "
 
 test_11() {
 	mkdir $DIR1/d11
