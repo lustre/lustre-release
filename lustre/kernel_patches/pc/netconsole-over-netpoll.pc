@@ -1,9 +1,0 @@
-arch/i386/kernel/i386_ksyms.c
-arch/i386/kernel/irq.c
-Documentation/networking/netconsole.txt
-drivers/net/Kconfig
-drivers/net/Makefile
-drivers/net/netconsole.c
-include/asm-i386/netconsole.h
-net/core/dev.c
-net/Kconfig

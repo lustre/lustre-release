@@ -1,9 +1,0 @@
-fs/file_table.c
-fs/inode.c
-fs/Makefile
-fs/namei.c
-fs/nfsd/export.c
-fs/nfsd/nfsfh.c
-fs/nfsd/vfs.c
-include/linux/fs.h
-kernel/ksyms.c

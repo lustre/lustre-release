@@ -1,3 +1,0 @@
-include/linux/socket.h
-net/netsyms.c
-net/socket.c

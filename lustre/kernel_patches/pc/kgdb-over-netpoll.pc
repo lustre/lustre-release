@@ -1,6 +1,0 @@
-arch/i386/kernel/kgdb_stub.c
-arch/i386/lib/kgdb_serial.c
-Documentation/i386/kgdb/kgdbeth.txt
-drivers/net/kgdb_eth.c
-drivers/net/Makefile
-include/asm-i386/kgdb.h

@@ -1,4 +1,0 @@
-fs/exec.c
-fs/namei.c
-fs/open.c
-include/linux/fs.h
