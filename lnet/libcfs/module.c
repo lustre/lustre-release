@@ -398,23 +398,6 @@ static int libcfs_ioctl(struct inode *inode, struct file *file,
         data = (struct portal_ioctl_data *)buf;
 
         switch (cmd) {
-        case IOC_PORTAL_SET_DAEMON: 
-                RETURN (portals_debug_set_daemon ( 
-                                        (unsigned int) data->ioc_count,
-                                        (unsigned int) data->ioc_inllen1,
-                                        (char *) data->ioc_inlbuf1,
-                                        (unsigned int) data->ioc_misc)); 
-        case IOC_PORTAL_GET_DEBUG: {
-                __s32 size = portals_debug_copy_to_user(data->ioc_pbuf1,
-                                                        data->ioc_plen1);
-
-                if (size < 0)
-                        RETURN(size);
-
-                data->ioc_size = size;
-                err = copy_to_user((char *)arg, data, sizeof(*data));
-                RETURN(err);
-        }
         case IOC_PORTAL_CLEAR_DEBUG:
                 portals_debug_clear_buffer();
                 RETURN(0);
@@ -592,7 +575,6 @@ static void exit_libcfs_module(void)
 
         CDEBUG(D_MALLOC, "before Portals cleanup: kmem %d\n",
                atomic_read(&portal_kmemory));
-
 
         rc = misc_deregister(&libcfs_dev);
         if (rc)
