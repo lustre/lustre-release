@@ -758,7 +758,19 @@ int trace_write_debug_size(struct file *file, const char *buffer,
                 goto out;
         }
 
-        max = simple_strtoul(string, NULL, 16);
+        max = simple_strtoul(string, NULL, 0);
+        if (max == 0) {
+                rc = -EINVAL;
+                goto out;
+        }
+        max /= smp_num_cpus;
+
+        if (max > num_physpages / 5 * 4) {
+                printk(KERN_ERR "Lustre: Refusing to set debug buffer size to "
+                       "%d pages, which is more than 80%% of physical pages "
+                       "(%lu).\n", max * smp_num_cpus, num_physpages / 5 * 4);
+                return count;
+        }
 
         for (i = 0; i < NR_CPUS; i++) {
                 struct trace_cpu_data *tcd;
