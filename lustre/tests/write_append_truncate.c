@@ -10,6 +10,11 @@
  * If the append happened first, we should have truncated the file down.
  *
  * We pick the CHUNK_SIZE_MAX and APPEND_SIZE_MAX so that we cross a stripe.
+ *
+ * compile: mpicc -g -Wall -o write_append_truncate write_append_truncate.c
+ * run:     mpirun -np 2 -machlist <hostlist file> write_append_truncate <file>
+ *  or:     pdsh -w <two hosts> write_append_truncate <file>
+ *  or:     prun -n 2 [-N 2] write_append_truncate <file>
  */
 #include <stdlib.h>
 #include <stdio.h>
@@ -130,8 +135,8 @@ int main(int argc, char *argv[])
                 trunc_offset = chunk_size + rand()%append_size;
                 if (rank == 0) {
                         if (n % 1000 == 0)
-                                printf("loop %5d: chunk %6d/%#06x, "
-                                       "append %6d/%#06x, trunc @ %6d/%#06x\n",
+                                printf("loop %5d: chunk %6d/%#07x, "
+                                       "append %6d/%#07x, trunc @ %6d/%#07x\n",
                                        n, chunk_size, chunk_size, append_size,
                                        append_size, trunc_offset, trunc_offset);
 
@@ -251,8 +256,8 @@ int main(int argc, char *argv[])
                         if (rank == 0) {
                                 char command[4096];
 
-                                printf("loop %5d: chunk %6d/%#06x, "
-                                       "append %6d/%#06x, trunc @ %6d/%#06x\n",
+                                printf("loop %5d: chunk %6d/%#07x, "
+                                       "append %6d/%#07x, trunc @ %6d/%#07x\n",
                                        n, chunk_size, chunk_size, append_size,
                                        append_size, trunc_offset, trunc_offset);
 
@@ -264,7 +269,7 @@ int main(int argc, char *argv[])
                 }
         }
 
-        printf("Finished after %d loops\n", n);
+        printf("rank %d, loop %d: finished\n", rank, n);
 
         MPI_Finalize();
         return 0;
