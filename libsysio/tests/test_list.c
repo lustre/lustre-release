@@ -41,24 +41,21 @@
  * lee@sandia.gov
  */
 
+#define _BSD_SOURCE
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#ifndef REDSTORM
-#include <getopt.h>
-#else
 #include <unistd.h>
-#endif
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <sys/queue.h>
 #include <dirent.h>
+#include <sys/uio.h>
+#include <sys/queue.h>
 
-#include "sysio.h"
-#include "mount.h"
-
+#include "xtio.h"
 #include "test.h"
 
 /*
@@ -138,7 +135,7 @@ main(int argc, char *const argv[])
 	/*
 	 * Clean up.
 	 */
-	_sysio_shutdown();
+	_test_sysio_shutdown();
 
 	return 0;
 }

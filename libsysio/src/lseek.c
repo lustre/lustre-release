@@ -60,9 +60,7 @@ _sysio_lseek(int fd, _SYSIO_OFF_T offset, int whence)
 	struct file *fil;
 	_SYSIO_OFF_T off, pos;
 	struct intnl_stat stbuf;
-	SYSIO_INTERFACE_DISPLAY_BLOCK;
 
-	SYSIO_INTERFACE_ENTER;
 	fil = _sysio_fd_find(fd);
 	if (!fil)
 		return -EBADF;
@@ -85,7 +83,7 @@ _sysio_lseek(int fd, _SYSIO_OFF_T offset, int whence)
 							      fil->f_ino,
 							      &stbuf);
 			if (err)
-				SYSIO_INTERFACE_RETURN((off_t )-1, (int )err);
+				return err;
 	
 		}
 		off = stbuf.st_size;
@@ -95,32 +93,48 @@ _sysio_lseek(int fd, _SYSIO_OFF_T offset, int whence)
 	}
 	pos = off + offset;
 	if ((offset < 0 && -offset > off) || (offset > 0 && pos <= off))
-		SYSIO_INTERFACE_RETURN((off_t )-1, -EINVAL);
+		return -EINVAL;
 
 #ifdef O_LARGEFILE
 	if (pos >= ((fil->f_flags & O_LARGEFILE) ? _SYSIO_OFF_T_MAX : LONG_MAX))
-		SYSIO_INTERFACE_RETURN((off_t )-1, -EOVERFLOW);
+		return -EOVERFLOW;
 #else
 	if (pos >= _SYSIO_OFF_T_MAX)
-		SYSIO_INTERFACE_RETURN((off_t )-1, -EOVERFLOW);
+		return -EOVERFLOW;
 #endif
 	pos = (fil->f_ino->i_ops.inop_pos)(fil->f_ino, pos);
 	if (pos < 0)
-		SYSIO_INTERFACE_RETURN((off_t )-1, (int )pos);
+		return pos;
 	fil->f_pos = pos;
-	SYSIO_INTERFACE_RETURN((off_t )pos, 0);
+	return pos;
 }
 
 #if _LARGEFILE64_SOURCE
 #undef lseek64
-sysio_sym_weak_alias(_sysio_lseek, SYSIO_INTERFACE_NAME(lseek64))
+
+extern off64_t
+SYSIO_INTERFACE_NAME(lseek64)(int fd, off64_t offset, int whence)
+{
+	_SYSIO_OFF_T off;
+	off_t	rtn;
+	SYSIO_INTERFACE_DISPLAY_BLOCK;
+
+	SYSIO_INTERFACE_ENTER;
+	off = _sysio_lseek(fd, offset, whence);
+	if (off < 0)
+		SYSIO_INTERFACE_RETURN((off_t )-1, (int )off);
+	rtn = (off64_t )off;
+	assert(rtn == off);
+	SYSIO_INTERFACE_RETURN(rtn, 0);
+}
 #ifdef __GLIBC__
 #undef __lseek64
-sysio_sym_weak_alias(_sysio_lseek, PREPEND(__, SYSIO_INTERFACE_NAME(lseek64)))
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(lseek64),
+		     PREPEND(__, SYSIO_INTERFACE_NAME(lseek64)))
 #endif
 #ifdef REDSTORM
 #undef __libc_lseek64
-sysio_sym_weak_alias(_sysio_lseek, 
+sysio_sym_weak_alias(SYSIO_INTERFACE_NAME(lseek64),
 		     PREPEND(__, SYSIO_INTERFACE_NAME(libc_lseek64)))
 #endif
 #endif

@@ -57,29 +57,12 @@
 #include <syscall.h>
 
 static int
-_sysio_fcntl(int fd, int cmd, va_list ap)
+_sysio_fcntl(int fd, int cmd, va_list ap, int *rtn)
 {
-	int	err;
-	long	arg;
+	long arg = va_arg(ap, long);
 
-	switch (cmd) {
-	case F_GETFD:
-	case F_GETFL:
-	case F_GETOWN:
-		return syscall(SYS_fcntl, fd, cmd);
-	case F_DUPFD:
-	case F_SETFD:
-	case F_SETFL:
-	case F_GETLK:
-	case F_SETLK:
-	case F_SETLKW:
-	case F_SETOWN:
-		arg = va_arg(ap, long);
-		return syscall(SYS_fcntl, fd, cmd, arg);
-	}
-
-	errno = ENOSYS;
-	return -1;
+	*rtn = syscall(SYS_fcntl, fd, cmd, arg);
+	return *rtn == -1 ? -errno : 0;
 }
 #endif
 
@@ -87,6 +70,7 @@ int
 SYSIO_INTERFACE_NAME(fcntl)(int fd, int cmd, ...)
 {
 	int	err;
+	int	rtn;
 	struct file *fil;
 	va_list	ap;
 	SYSIO_INTERFACE_DISPLAY_BLOCK;
@@ -97,12 +81,12 @@ SYSIO_INTERFACE_NAME(fcntl)(int fd, int cmd, ...)
 	if (!fil) {
 #ifdef HAVE_LUSTRE_HACK
 		va_start(ap, cmd);
-		err = _sysio_fcntl(fd, cmd, ap);
+		err = _sysio_fcntl(fd, cmd, ap, &rtn);
 		va_end(ap);
-		if (err == -1)
-			err = -errno;
 		goto out;
 #else
+
+		rtn = -1;
 		err = -EBADF;
 		goto out;
 #endif
@@ -118,21 +102,26 @@ SYSIO_INTERFACE_NAME(fcntl)(int fd, int cmd, ...)
 			newfd = va_arg(ap, long);
 			va_end(ap);
 			if (newfd != (int )newfd || newfd < 0) {
+				rtn = -1;
 				err = -EBADF;
 				goto out;
 			}
-			err = _sysio_fd_dup2(fd, (int )newfd);
+			rtn = _sysio_fd_dup(fd, (int )newfd, 0);
+			if (rtn < 0) {
+				err = rtn;
+				rtn = -1;
+			}
 		}
 		break;
 	    default:
 		va_start(ap, cmd);
-		err = fil->f_ino->i_ops.inop_fcntl(fil->f_ino, cmd, ap);
+		err = fil->f_ino->i_ops.inop_fcntl(fil->f_ino, cmd, ap, &rtn);
 		va_end(ap);
 		break;
 	}
 
 out:
-	SYSIO_INTERFACE_RETURN(err ? -1 : 0, err);
+	SYSIO_INTERFACE_RETURN(rtn, err);
 }
 
 #ifdef __GLIBC__

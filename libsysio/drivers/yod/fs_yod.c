@@ -65,8 +65,8 @@
 #endif
 #include <utime.h>
 #include <sys/queue.h>
-#include <sys/uio.h>
 
+#include "xtio.h"
 #include "sysio.h"
 #include "fs.h"
 #include "mount.h"
@@ -177,7 +177,7 @@ static _SYSIO_OFF_T yod_inop_pos (struct inode *ino, _SYSIO_OFF_T off);
 static int yod_inop_read(struct inode *ino, struct ioctx *ioctx);
 static int yod_inop_write(struct inode *ino, struct ioctx *ioctx);
 static int yod_inop_iodone(struct ioctx *ioctx);
-static int yod_inop_fcntl(struct inode *ino, int cmd, va_list ap);
+static int yod_inop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn);
 static int yod_inop_sync(struct inode *ino);
 static int yod_inop_datasync(struct inode *ino);
 static int yod_inop_ioctl(struct inode *ino,
@@ -1101,18 +1101,45 @@ yod_inop_iodone(struct ioctx *ioctxp __IS_UNUSED)
 }
 
 static int
-yod_inop_fcntl(struct inode *ino __IS_UNUSED, int cmd, va_list ap __IS_UNUSED)
+yod_inop_fcntl(struct inode *ino, int cmd, va_list ap, int *rtn)
 {
-	switch (cmd) 
-	{
-	case F_DUPFD: /* do something to the ino */
+	struct yod_inode *nino = I2NI(ino);
+	long	arg;
+	int	err;
+
+	if (nino->ni_fd < 0)
+		abort();
+
+	err = 0;
+	switch (cmd) {
+	case F_GETFD:
+	case F_GETFL:
+#ifdef F_GETOWN
+	case F_GETOWN:
+#endif
+		*rtn = syscall(SYS_fcntl, nino->ni_fd, cmd);
+		if (*rtn == -1)
+			err = -errno;
+		break;
+	case F_DUPFD:
+	case F_SETFD:
+	case F_SETFL:
+	case F_GETLK:
+	case F_SETLK:
+	case F_SETLKW:
+#ifdef F_SETOWN
+	case F_SETOWN:
+#endif
+		arg = va_arg(ap, long);
+		*rtn = syscall(SYS_fcntl, nino->ni_fd, cmd, arg);
+		if (*rtn == -1)
+			err = -errno;
 		break;
 	default:
-		errno = EINVAL; 
-		return -1;
+		*rtn = -1;
+		err = -EINVAL;
 	}
-	return 0;
-		
+	return err;
 }
 
 static int

@@ -11,9 +11,11 @@
 #include <sys/statvfs.h>
 #include <fcntl.h>
 #include <sys/queue.h>
+#include <unistd.h>
 #include <dirent.h>
+#include <sys/mount.h>
 
-#include "sysio.h"
+#include "xtio.h"
 #include "mount.h"
 #include "test.h"
 #include "test_driver.h"

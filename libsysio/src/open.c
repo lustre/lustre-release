@@ -62,8 +62,6 @@
 #include "mount.h"
 #include "sysio-symbols.h"
 
-#include "sysio-symbols.h"
-
 /*
  * Open file support.
  */
@@ -200,7 +198,7 @@ SYSIO_INTERFACE_NAME(open)(const char *path, int flags, ...)
 		rtn = -ENOMEM;
 		goto error;
 	}
-	rtn = _sysio_fd_set(fil, -1);
+	rtn = _sysio_fd_set(fil, -1, 0);
 	if (rtn < 0)
 		goto error;
 

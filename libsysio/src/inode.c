@@ -45,9 +45,9 @@
 #include <string.h>
 #include <errno.h>
 #include <assert.h>
-#include <sys/queue.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/queue.h>
 
 #include "sysio.h"
 #include "fs.h"
@@ -955,4 +955,15 @@ _sysio_do_enosys()
 {
 
 	return -ENOSYS;
+}
+
+
+/*
+ * Return -ENODEV
+ */
+int
+_sysio_do_enodev()
+{
+
+	return -ENODEV;
 }

@@ -48,18 +48,6 @@
 #include <limits.h>
 #include <stdarg.h>
 
-#ifndef _IOID_T_DEFINED
-#define _IOID_T_DEFINED
-/*
- * FIXME:
- *
- * This section about ioid_t and it's failure belong in <sys/types.h>
- */
-typedef void *ioid_t;
-
-#define IOID_FAIL			0
-#endif
-
 #if !defined(__IS_UNUSED) && defined(__GNUC__)
 #define __IS_UNUSED	__attribute__ ((unused))
 #else
@@ -259,71 +247,6 @@ extern int SYSIO_INTERFACE_NAME(rename)(const char *oldpath,
 extern int SYSIO_INTERFACE_NAME(fdatasync)(int fd);
 extern int SYSIO_INTERFACE_NAME(ioctl)(int fd, unsigned long request, ...);
 extern mode_t SYSIO_INTERFACE_NAME(umask)(mode_t mask);
-extern int SYSIO_INTERFACE_NAME(iodone)(ioid_t ioid);
-extern ssize_t SYSIO_INTERFACE_NAME(iowait)(ioid_t ioid);
-extern ioid_t SYSIO_INTERFACE_NAME(ipreadv)(int fd, const struct iovec *iov, 
-				   size_t count, off_t offset);
-#if _LARGEFILE64_SOURCE
-extern ioid_t SYSIO_INTERFACE_NAME(ipread64v)(int fd, const struct iovec *iov, 
-					      size_t count, off64_t offset);
-#endif
-extern ioid_t SYSIO_INTERFACE_NAME(ipread)(int fd, void *buf, size_t count, 
-					   off_t offset);
-#if _LARGEFILE64_SOURCE
-extern ioid_t SYSIO_INTERFACE_NAME(ipread64)(int fd, void *buf, size_t count, 
-					     off64_t offset);
-#endif
-extern ssize_t SYSIO_INTERFACE_NAME(preadv)(int fd, const struct iovec *iov, 
-					    size_t count, off_t offset);
-#if _LARGEFILE64_SOURCE
-extern ssize_t SYSIO_INTERFACE_NAME(pread64v)(int fd, const struct iovec *iov, 
-					      size_t count, off64_t offset);
-#endif
-extern ssize_t SYSIO_INTERFACE_NAME(pread)(int fd, void *buf, size_t count, 
-					   off_t offset);
-#if _LARGEFILE64_SOURCE
-extern ssize_t SYSIO_INTERFACE_NAME(pread64)(int fd, void *buf, size_t count, 
-					     off64_t offset);
-#endif
-extern ioid_t SYSIO_INTERFACE_NAME(ireadv)(int fd, const struct iovec *iov, 
-					   int count);
-extern ioid_t SYSIO_INTERFACE_NAME(iread)(int fd, void *buf, size_t count);
-extern ssize_t SYSIO_INTERFACE_NAME(readv)(int fd, const struct iovec *iov, 
-					   int count);
-extern ssize_t SYSIO_INTERFACE_NAME(read)(int fd, void *buf, size_t count);
-extern ioid_t SYSIO_INTERFACE_NAME(ipwritev)(int fd, const struct iovec *iov, 
-					     size_t count, off_t offset);
-#if _LARGEFILE64_SOURCE
-extern ioid_t SYSIO_INTERFACE_NAME(ipwrite64v)(int fd, const struct iovec *iov, 
-					       size_t count, off64_t offset);
-#endif
-extern ioid_t SYSIO_INTERFACE_NAME(ipwrite)(int fd, const void *buf, 
-					    size_t count, off_t offset);
-#if _LARGEFILE64_SOURCE
-extern ioid_t SYSIO_INTERFACE_NAME(ipwrite64)(int fd, const void *buf, 
-					      size_t count, off64_t offset);
-#endif
-extern ssize_t SYSIO_INTERFACE_NAME(pwritev)(int fd, const struct iovec *iov, 
-					     size_t count, off_t offset);
-#if _LARGEFILE64_SOURCE
-extern ssize_t SYSIO_INTERFACE_NAME(pwrite64v)(int fd, const struct iovec *iov, 
-					       size_t count, off64_t offset);
-#endif
-extern ssize_t SYSIO_INTERFACE_NAME(pwrite)(int fd, const void *buf, 
-					    size_t count, off_t offset);
-#if _LARGEFILE64_SOURCE
-extern ssize_t SYSIO_INTERFACE_NAME(pwrite64)(int fd, const void *buf, 
-					      size_t count, off64_t offset);
-#endif
-extern ioid_t SYSIO_INTERFACE_NAME(iwritev)(int fd, 
-					    const struct iovec *iov, 
-					    int count);
-extern ioid_t SYSIO_INTERFACE_NAME(iwrite)(int fd, const void *buf, 
-					   size_t count);
-extern ssize_t SYSIO_INTERFACE_NAME(writev)(int fd, const struct iovec *iov, 
-					    int count);
-extern ssize_t SYSIO_INTERFACE_NAME(write)(int fd, const void *buf, 
-					   size_t count);
 extern int SYSIO_INTERFACE_NAME(mknod)(const char *path, 
 				       mode_t mode, dev_t dev);
 extern int SYSIO_INTERFACE_NAME(utime)(const char *path, 
@@ -397,4 +320,19 @@ extern void _sysio_sysleave();
 #define SYSIO_ENTER
 #define SYSIO_LEAVE
 
+#endif
+
+/* accounting for IO stats read and write char count */
+#if defined(REDSTORM)
+#define _SYSIO_UPDACCT(w, cc) \
+	do { \
+		if ((cc) < 0) \
+			break; \
+		if (!w) \
+			_add_iostats(0, (size_t )(cc)); \
+		else \
+			_add_iostats((size_t )(cc), 0); \
+	} while(0)
+#else
+#define _SYSIO_UPDACCT(w, cc)
 #endif

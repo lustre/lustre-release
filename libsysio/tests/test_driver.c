@@ -1,5 +1,9 @@
+#ifndef _BSD_SOURCE
 #define _BSD_SOURCE
-#define _XOPEN_SOURCE 600
+#endif
+#ifndef _XOPEN_SOURCE
+#define _XOPEN_SOURCE 500
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,12 +15,13 @@
 #include <sys/uio.h>
 #include <sys/statvfs.h>
 #include <fcntl.h>
-#include <sys/queue.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <sys/uio.h>
+#include <sys/queue.h>
 
-#include "sysio.h"
+#include "xtio.h"
 #include "mount.h"
 #include "test.h"
 #include "test_driver.h"
@@ -968,11 +973,6 @@ int main(int argc, char *argv[])
    */
   err = _test_sysio_startup();
   
-	/* Temp. hack until I do the right thing to fix this...*/
-	open("/dev/stdin",O_RDONLY); 
-	open("/dev/stdout",O_WRONLY); 
-	open("/dev/stderr",O_WRONLY);
- 
   infp = stdin;
   outfp = stdout;
 

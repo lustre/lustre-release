@@ -77,7 +77,7 @@ SYSIO_INTERFACE_NAME(rename)(const char *oldpath, const char *newpath)
 	 */
 	INTENT_INIT(&intent, INT_UPDPARENT, NULL, NULL);
 	err = _sysio_namei(_sysio_cwd, newpath, ND_NEGOK, &intent, &new);
-	if (err && !new)
+	if (err)
 		goto error2;
 
 	if (old->p_mount->mnt_root == old || old->p_cover ||

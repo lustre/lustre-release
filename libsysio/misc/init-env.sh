@@ -29,8 +29,11 @@ export SYSIO_NAMESPACE="\
 	{creat,	ft=chr,nm=\"/dev/stderr\",pm=0200,mm=0+2} \
 	{creat,	ft=dir,nm=\"/dev/fd\",pm=0755,ow=0,gr=0} \
 	{creat,	ft=chr,nm=\"/dev/fd/0\",pm=0400,mm=0+0} \
+	{open,	nm=\"/dev/fd/0\",fd=0,m=0} \
 	{creat,	ft=chr,nm=\"/dev/fd/1\",pm=0200,mm=0+1} \
+	{open,	nm=\"/dev/fd/1\",fd=1,m=1} \
 	{creat,	ft=chr,nm=\"/dev/fd/2\",pm=0200,mm=0+2} \
+	{open,	nm=\"/dev/fd/2\",fd=2,m=1} \
 	{cd,	dir=\"$HOME\"} \
 	${_extras} \
 "

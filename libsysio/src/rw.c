@@ -50,10 +50,10 @@
 #include <sys/uio.h>
 #include <sys/queue.h>
 
+#include "xtio.h"
 #include "sysio.h"
 #include "file.h"
 #include "inode.h"
-#include "xtio.h"
 
 #include "sysio-symbols.h"
 
@@ -267,7 +267,7 @@ SYSIO_INTERFACE_NAME(ireadv)(int fd, const struct iovec *iov, int count)
 		free(xtv);
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, err);
 	}
-	SYSIO_INTERFACE_RETURN(ioctx->ioctx_id, 0);
+	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 
 ssize_t
@@ -351,7 +351,7 @@ SYSIO_INTERFACE_NAME(iread)(int fd, void *buf, size_t count)
 		free(iov);
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, err);
 	}
-	SYSIO_INTERFACE_RETURN(ioctx->ioctx_id, 0);
+	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 
 ssize_t
@@ -464,7 +464,7 @@ PREPEND(_, SYSIO_INTERFACE_NAME(ipreadv))(int fd,
 		free(xtv);
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, err);
 	}
-	SYSIO_INTERFACE_RETURN(ioctx->ioctx_id, 0);
+	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 
 #if _LARGEFILE64_SOURCE
@@ -578,7 +578,7 @@ error:
 			free(xtv);
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, err);
 	}
-	SYSIO_INTERFACE_RETURN(ioctx->ioctx_id, 0);
+	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 
 #if _LARGEFILE64_SOURCE
@@ -693,7 +693,7 @@ PREPEND(_, SYSIO_INTERFACE_NAME(ireadx))(int fd,
 			NULL,
 			&ioctx);
 
-	SYSIO_INTERFACE_RETURN(err ? IOID_FAIL : ioctx->ioctx_id, err);
+	SYSIO_INTERFACE_RETURN(err ? IOID_FAIL : ioctx, err);
 }
 
 #if _LARGEFILE64_SOURCE
@@ -743,7 +743,7 @@ SYSIO_INTERFACE_NAME(ireadx)(int fd,
 		free(ixtv);
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, err);
 	}
-	SYSIO_INTERFACE_RETURN(ioctx->ioctx_id, 0);
+	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 #else
 #undef ireadx
@@ -833,7 +833,7 @@ SYSIO_INTERFACE_NAME(iwritev)(int fd,
 		free(xtv);
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, err);
 	}
-	SYSIO_INTERFACE_RETURN(ioctx->ioctx_id, 0);
+	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 
 ssize_t
@@ -909,7 +909,7 @@ SYSIO_INTERFACE_NAME(iwrite)(int fd, const void *buf, size_t count)
 		free(iov);
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, err);
 	}
-	SYSIO_INTERFACE_RETURN(ioctx->ioctx_id, 0);
+	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 
 ssize_t
@@ -983,7 +983,7 @@ PREPEND(_, SYSIO_INTERFACE_NAME(ipwritev))(int fd,
 		free(xtv);
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, err);
 	}
-	SYSIO_INTERFACE_RETURN(ioctx->ioctx_id, 0);
+	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 
 #if _LARGEFILE64_SOURCE
@@ -1097,7 +1097,7 @@ error:
 			free(xtv);
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, err);
 	}
-	SYSIO_INTERFACE_RETURN(ioctx->ioctx_id, 0);
+	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 
 #if _LARGEFILE64_SOURCE
@@ -1212,7 +1212,7 @@ PREPEND(_, SYSIO_INTERFACE_NAME(iwritex))(int fd,
 			NULL,
 			&ioctx);
 
-	SYSIO_INTERFACE_RETURN(err ? IOID_FAIL : ioctx->ioctx_id, err);
+	SYSIO_INTERFACE_RETURN(err ? IOID_FAIL : ioctx, err);
 }
 
 #if _LARGEFILE64_SOURCE
@@ -1262,7 +1262,7 @@ SYSIO_INTERFACE_NAME(iwritex)(int fd,
 		free(ixtv);
 		SYSIO_INTERFACE_RETURN(IOID_FAIL, err);
 	}
-	SYSIO_INTERFACE_RETURN(ioctx->ioctx_id, 0);
+	SYSIO_INTERFACE_RETURN(ioctx, 0);
 }
 #else
 #undef iwritex

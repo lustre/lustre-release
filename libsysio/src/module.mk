@@ -26,6 +26,6 @@ SRCDIR_SRCS = src/access.c src/chdir.c src/chmod.c \
 	src/rmdir.c src/stat64.c src/stat.c \
 	src/symlink.c src/readlink.c \
 	src/truncate.c src/unlink.c src/utime.c \
-	$(FILE_SUPPORT) $(LUSTRE_SRCDIR_SOURCES)
+	$(FILE_SUPPORT) $(LUSTRE_SRCDIR_SRCS)
 
 SRCDIR_EXTRA = src/module.mk
