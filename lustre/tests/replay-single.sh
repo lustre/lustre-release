@@ -254,6 +254,26 @@ test_8() {
 }
 run_test 8 "open, unlink |X| close"
 
+# 1777 - replay open after committed chmod that would make
+#        a regular open a failure    
+test_9() {
+    mcreate $MOUNTPT/f9 
+    multiop $MOUNTPT/f9 O_wc &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+    chmod 0 $MOUNTPT/f9
+    checkstat -v -p 0 $MOUNTPT/f9
+    replay_barrier mds
+    fail mds
+    kill -USR1 $pid
+    wait $pid || return 1
+
+    checkstat -v -s 1 $MOUNTPT/f9
+    return 0
+}
+run_test 9 "open chmod 0 |x| write close"
+
 
 stop client $CLIENTLCONFARGS
 stop ost
