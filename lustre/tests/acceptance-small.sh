@@ -9,6 +9,7 @@ set -vxe
 [ "$RSIZE" ] || RSIZE=64
 [ "$UID" ] || UID=1000
 [ "$MNT" ] || MNT=/mnt/lustre
+[ "$TMP" ] || TMP=/tmp
 [ "$COUNT" ] || COUNT=1000
 [ "$DEBUG_OFF" ] || DEBUG_OFF="eval echo 0 > /proc/sys/portals/debug"
 
@@ -75,7 +76,7 @@ for NAME in $CONFIGS; do
 	fi
 	if [ "$FSX" != "no" ]; then
 		$DEBUG_OFF
-		./fsx -c 50 -p 1000 -l 1024000 -N $(($COUNT * 100)) $MNT/fsxfile
+		./fsx -c 50 -p 1000 -P $TMP -l 1024000 -N $(($COUNT * 100)) $MNT/fsxfile
 		sh llmountcleanup.sh
 		#sh llrmount.sh
 	fi	
