@@ -2,6 +2,8 @@
 #
 #  Copyright (C) 2002 Cluster File Systems, Inc.
 #   Author: Robert Read <rread@clusterfs.com>
+# 	  : Ravindranadh Chowdary Sahukara <s-ravindranadh_chowdary@hp.com>
+
 #   This file is part of Lustre, http://www.lustre.org.
 #
 #   Lustre is free software; you can redistribute it and/or
@@ -36,6 +38,7 @@ DEFAULT_TCPBUF = 1048576
 #
 # Maximum number of devices to search for.
 # (the /dev/loop* nodes need to be created beforehand)
+
 MAX_LOOP_DEVICES = 256
 
 first_cleanup_error = 0
@@ -44,14 +47,13 @@ def cleanup_error(rc):
     if not first_cleanup_error:
         first_cleanup_error = rc
 
-
 def usage():
     print """usage: lconf config.xml
 
 config.xml          Lustre configuration in xml format.
 --get <url>         URL to fetch a config file
 --node <nodename>   Load config for <nodename>
--d | --cleanup      Cleans up config. (Shutdown)
+-d | --cleanup	    Cleans up config. (Shutdown)
 -f | --force        Forced unmounting and/or obd detach during cleanup
 -v | --verbose      Print system commands as they are run
 -h | --help         Print this help 
@@ -62,8 +64,10 @@ config.xml          Lustre configuration in xml format.
                     config file is doing what it should be doing. (Implies -v)
 --nomod             Skip load/unload module step.
 --nosetup           Skip device setup/cleanup step.
---reformat          Reformat all devices (without question)
---dump <file>       Dump the kernel debug log before portals is unloaded
+--reformat	    Reformat all devices (without question)
+--dump <file>	    Dump the kernel debug log before portals is unloaded
+--start [client|MDS|OST] Start the client|MDS|OST services (bug is there need to fixit)
+--stop [client|MDS|OST] Stop the client|MDS|OST services (bug is there need to fix it)
 --startlevel <num>  Specify the level of services to start with (default 0)
 --endlevel <num>    Specify the level of services to end with (default 100)
                     Levels are aproximatly like:
@@ -76,7 +80,7 @@ config.xml          Lustre configuration in xml format.
                             70 - mountpoint
 """
     TODO = """
---ldap server       LDAP server with lustre config database
+--ldap server	    LDAP server with lustre config database
 --makeldiff         Translate xml source to LDIFF 
 This are perhaps not needed:
 --lustre="src dir"  Base directory of lustre sources. Used to search
@@ -97,6 +101,8 @@ class Config:
         self._gdb = 0
         self._nomod = 0
         self._nosetup = 0
+        self._start= ""
+        self._stop= 0
         self._force = 0
         # parameters
         self._modules = None
@@ -137,6 +143,14 @@ class Config:
         if flag: self._nosetup = flag
         return self._nosetup
 
+    def start(self, flag = None):
+        if flag: self._start= flag
+        return self._start
+
+    def stop(self, flag = None):
+        if flag: self._stop= flag
+        return self._stop
+
     def force(self, flag = None):
         if flag: self._force = flag
         return self._force
@@ -176,8 +190,6 @@ class Config:
     def endlevel(self, val = None):
         if val: self._end_level = int(val)
         return self._end_level
-
-
 
 config = Config()
 
@@ -255,7 +267,7 @@ class LCTLInterface:
                 self.lctl = 'lctl'
             else:
                 raise CommandError('lctl', "unable to find lctl binary.")
-
+            
     def run(self, cmds):
         """
         run lctl
@@ -328,7 +340,7 @@ class LCTLInterface:
         self.run(cmds)
 
                 
-    # add a route to a range
+    # delete a route 
     def del_route(self, net, gw, lo, hi):
         cmds =  """
   ignore_errors
@@ -595,6 +607,7 @@ def if2addr(iface):
     ip = string.split(addr, ':')[1]
     return ip
 
+
 def get_local_address(net_type, wildcard):
     """Return the local address for the network type."""
     local = ""
@@ -645,7 +658,6 @@ class Module:
     def info(self, *args):
         msg = string.join(map(str,args))
         print self.module_name + ":", self.name, self.uuid, msg
-
 
     def lookup_server(self, srv_uuid):
         """ Lookup a server's network information """
@@ -759,6 +771,7 @@ class Network(Module):
             ret, out = run(TCP_ACCEPTOR, '-s', self.send_mem, '-r', self.recv_mem, self.port)
             if ret:
                 raise CommandError(TCP_ACCEPTOR, out, ret)
+
         ret = self.dom_node.getElementsByTagName('route_tbl')
         for a in ret:
             for r in a.getElementsByTagName('route'):
@@ -778,6 +791,8 @@ class Network(Module):
         lctl.network(self.net_type, self.nid)
         lctl.newdev(attach = "ptlrpc RPCDEV")
 
+
+
     def cleanup(self):
         self.info(self.net_type, self.nid, self.port)
         ret = self.dom_node.getElementsByTagName('route_tbl')
@@ -790,6 +805,7 @@ class Network(Module):
                     if not srv:
                         panic("no server for nid", lo)
                     else:
+
                         try:
                             lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
                         except CommandError, e:
@@ -802,7 +818,6 @@ class Network(Module):
                     print "del_route failed: ", self.name
                     e.dump()
                     cleanup_error(e.rc)
-              
         try:
             lctl.cleanup("RPCDEV", "")
         except CommandError, e:
@@ -832,8 +847,12 @@ class LOV(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'LOV', dom_node)
         self.mds_uuid = get_first_ref(dom_node, 'mds')
+        self.mdc_uuid = get_first_ref(dom_node, 'mdc')
         mds= lookup(dom_node.parentNode, self.mds_uuid)
-        self.mds_name = getName(mds)
+        self.mdc = lookup(dom_node.parentNode, self.mdc_uuid)
+        if mds:
+           self.mds_name = getName(mds)
+
         devs = dom_node.getElementsByTagName('devices')
         if len(devs) > 0:
             dev_node = devs[0]
@@ -853,11 +872,9 @@ class LOV(Module):
                 n.prepare()
             else:
                 panic('osc not found:', osc_uuid)
-        mdc_uuid = prepare_mdc(self.dom_node.parentNode, self.mds_uuid)
-        self.info(self.mds_uuid, self.stripe_cnt, self.stripe_sz,
-                  self.stripe_off, self.pattern, self.devlist, self.mds_name)
-        lctl.newdev(attach="lov %s %s" % (self.name, self.uuid),
-                    setup ="%s" % (mdc_uuid))
+        mdc_uuid = get_first_ref(self.dom_node,'mdc') 
+        self.info(mdc_uuid, self.stripe_cnt, self.stripe_sz, self.stripe_off, self.pattern, self.devlist,self.mds_name)
+        lctl.newdev(attach="lov %s %s" % (self.name, self.uuid), setup ="%s" % (mdc_uuid))
 
     def cleanup(self):
         for osc_uuid in self.devlist:
@@ -868,7 +885,10 @@ class LOV(Module):
             else:
                 panic('osc not found:', osc_uuid)
         Module.cleanup(self)
-        cleanup_mdc(self.dom_node.parentNode, self.mds_uuid)
+        n = MDC(self.mdc)
+        global mdc_cleaned 
+        mdc_cleaned = None
+        n.cleanup() 
 
 
     def load_module(self):
@@ -881,7 +901,6 @@ class LOV(Module):
             else:
                 panic('osc not found:', osc_uuid)
         Module.load_module(self)
-
 
     def cleanup_module(self):
         Module.cleanup_module(self)
@@ -903,11 +922,12 @@ class LOVConfig(Module):
         
     def prepare(self):
         lov = self.lov
-        self.info(lov.mds_uuid, lov.stripe_cnt, lov.stripe_sz, lov.stripe_off,
-                  lov.pattern, lov.devlist, lov.mds_name)
-        lctl.lov_setconfig(lov.uuid, lov.mds_name, lov.stripe_cnt,
-			   lov.stripe_sz, lov.stripe_off, lov.pattern,
-			   string.join(lov.devlist))
+	oscUUIDs=""
+	for i in range(len(lov.devlist)):
+		oscUUIDs=oscUUIDs+" "+lov.devlist[i]
+        self.info(lov.mds_uuid, lov.stripe_cnt, lov.stripe_sz, lov.stripe_off, lov.pattern, oscUUIDs)
+
+        lctl.lov_setconfig(lov.uuid, lov.mds_name, lov.stripe_cnt, lov.stripe_sz, lov.stripe_off, lov.pattern, oscUUIDs)
 
     def cleanup(self):
         #nothing to do here
@@ -924,7 +944,7 @@ class MDS(Module):
             self.add_module('lustre/extN', 'extN') 
         self.add_module('lustre/mds', 'mds')
         self.add_module('lustre/mds', 'mds_%s' % (self.fstype))
-            
+     
     def prepare(self):
         self.info(self.devname, self.fstype, self.format)
         blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
@@ -934,31 +954,53 @@ class MDS(Module):
         Module.cleanup(self)
         clean_loop(self.devname)
 
+mdc_cleaned = None
 # Very unusual case, as there is no MDC element in the XML anymore
 # Builds itself from an MDS node
 class MDC(Module):
     def __init__(self,dom_node):
-        self.mds = MDS(dom_node)
+        Module.__init__(self, 'MDC', dom_node)
+        self.mds_uuid = get_first_ref(dom_node,'mds') 
         self.dom_node = dom_node
         self.module_name = 'MDC'
         self.kmodule_list = []
         self._server = None
         self._connected = 0
-
         host = socket.gethostname()
-        self.name = 'MDC_'+host
-        self.uuid = self.name+'_UUID'
 
-        self.lookup_server(self.mds.uuid)
-        self.add_module('lustre/mdc', 'mdc')
+        self.net_uuid = get_first_ref(dom_node, 'network')
+        net = get_osc_net(dom_node,self.net_uuid)
+        self._server = Network(net)
+        self.add_module('lustre/mdc','mdc')
+        self.mdcname = get_attr(dom_node, 'name')
+        self.mdcuuid = get_attr(dom_node, 'uuid')
 
     def prepare(self):
-        self.info(self.mds.uuid)
+        self.info(self.uuid)
         srv = self.get_server()
         lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
         lctl.newdev(attach="mdc %s %s" % (self.name, self.uuid),
-                        setup ="%s %s" %(self.mds.uuid, srv.uuid))
-            
+                        setup ="%s %s" %(self.mds_uuid, srv.uuid))
+           
+    def cleanup(self):
+        global mdc_cleaned
+        if not mdc_cleaned:
+              srv = self.get_server()
+              if local_net(srv):
+                 Module.cleanup(self)
+                 mdc_cleaned = 'yes'
+              else:
+                 self.info(self.uuid)
+                 r =  find_route(srv)
+                 if r:
+                    try:
+                        lctl.del_route_host(r[0], srv.uuid, r[1], r[2])
+                    except CommandError, e:
+                        print "del_route failed: ", self.name
+                        e.dump()
+                        cleanup_error(e.rc)
+                 Module.cleanup(self)
+ 
 class OBD(Module):
     def __init__(self, dom_node):
         Module.__init__(self, 'OBD', dom_node)
@@ -1020,12 +1062,14 @@ class OSC(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'OSC', dom_node)
         self.obd_uuid = get_first_ref(dom_node, 'obd')
-        self.ost_uuid = get_first_ref(dom_node, 'ost')
-        self.lookup_server(self.ost_uuid)
+
+        self.net_uuid = get_first_ref(dom_node,'network')
+        net = get_osc_net(dom_node,self.net_uuid)
+        self._server = Network(net)
         self.add_module('lustre/osc', 'osc')
 
     def prepare(self):
-        self.info(self.obd_uuid, self.ost_uuid)
+        self.info(self.obd_uuid,self.uuid)
         srv = self.get_server()
         if local_net(srv):
             lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
@@ -1054,33 +1098,36 @@ class OSC(Module):
                     e.dump()
                     cleanup_error(e.rc)
             Module.cleanup(self)
-            
+
+
 
 class Mountpoint(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'MTPT', dom_node)
+        self.dom_node = dom_node
         self.path = get_text(dom_node, 'path')
-        self.mds_uuid = get_first_ref(dom_node, 'mds')
+        self.mdc_uuid = get_first_ref(dom_node, 'mdc')
         self.lov_uuid = get_first_ref(dom_node, 'osc')
         self.add_module('lustre/mdc', 'mdc')
         self.add_module('lustre/llite', 'llite')
         l = lookup(self.dom_node.parentNode, self.lov_uuid)
         self.osc = VOSC(l)
+        m = lookup(self.dom_node.parentNode, self.mdc_uuid)
+        self.mdc = MDC(m)
 
     def prepare(self):
+        self.mdc.prepare()
         self.osc.prepare()
-        mdc_uuid = prepare_mdc(self.dom_node.parentNode, self.mds_uuid)
-
-        self.info(self.path, self.mds_uuid,self.lov_uuid)
+        self.info(self.path, self.mdc_uuid,self.lov_uuid)
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
-              (self.lov_uuid, mdc_uuid, self.path)
+              (self.lov_uuid, self.mdc_uuid, self.path)
         run("mkdir", self.path)
         ret, val = run(cmd)
         if ret:
             panic("mount failed:", self.path)
 
     def cleanup(self):
-        self.info(self.path, self.mds_uuid,self.lov_uuid)
+        self.info(self.path, self.mdc_uuid,self.lov_uuid)
         if config.force():
             (rc, out) = run("umount -f", self.path)
         else:
@@ -1089,7 +1136,7 @@ class Mountpoint(Module):
             log("umount failed, cleanup will most likely not work.")
         l = lookup(self.dom_node.parentNode, self.lov_uuid)
         self.osc.cleanup()
-        cleanup_mdc(self.dom_node.parentNode, self.mds_uuid)
+        self.mdc.cleanup() 
 
     def load_module(self):
         self.osc.load_module()
@@ -1184,6 +1231,12 @@ def get_ost_net(dom_node, uuid):
         return None
     return lookup(dom_node, uuid)
 
+def get_osc_net(dom_node, uuid):
+    uuid = get_first_ref(dom_node,'network')
+    if not uuid:
+         return None
+    return lookup(dom_node.parentNode,uuid)
+     
 def nid2server(dom_node, nid):
     netlist = dom_node.getElementsByTagName('network')
     for net_node in netlist:
@@ -1242,6 +1295,8 @@ def getServiceLevel(dom_node):
         ret = 0 
     return ret
 
+
+
 #
 # return list of services in a profile. list is a list of tuples
 # [(level, dom_node),]
@@ -1265,7 +1320,7 @@ def getByName(lustreNode, name, tag):
         if getName(nd) == name:
             return nd
     return None
-    
+
 
 ############################################################
 # MDC UUID hack - 
@@ -1284,18 +1339,7 @@ def prepare_mdc(dom_node, mds_uuid):
     mdc_uuid = mdc.uuid
     return mdc_uuid
 
-mdc_cleaned = None
-def cleanup_mdc(dom_node, mds_uuid):
-    global mdc_cleaned
-    mds_node = lookup(dom_node, mds_uuid);
-    if not mds_node:
-        panic("no mds:", mds_uuid)
-    if not mdc_cleaned:
-        mdc = MDC(mds_node)
-        mdc.cleanup()
-        mdc_uuid = None
-        mdc_cleaned = 'yes'
-        
+
 
 ############################################################
 # routing ("rooting")
@@ -1382,43 +1426,91 @@ def startService(dom_node, module_flag):
     debug('Service:', type, getName(dom_node), getUUID(dom_node))
     # there must be a more dynamic way of doing this...
     n = None
-    if type == 'ldlm':
-        n = LDLM(dom_node)
-    elif type == 'lov':
-        n = LOV(dom_node)
-    elif type == 'lovconfig':
-        n = LOVConfig(dom_node)
-    elif type == 'network':
-        n = Network(dom_node)
-    elif type == 'obd':
-        n = OBD(dom_node)
-    elif type == 'ost':
-        n = OST(dom_node)
-    elif type == 'mds':
-        n = MDS(dom_node)
-    elif type == 'osc':
-        n = VOSC(dom_node)
-    elif type == 'mdc':
-        n = MDC(dom_node)
-    elif type == 'mountpoint':
-        n = Mountpoint(dom_node)
+    if config._start or config._stop:
+	if config._start == "client" or config._stop == "client":
+		if type == 'ldlm':
+			n = LDLM(dom_node)
+		elif type == 'lov':
+			n = LOV(dom_node)
+		elif type == 'network':
+			n = Network(dom_node)
+		elif type == 'osc':
+			n = VOSC(dom_node)
+		elif type == 'mdc':
+			n = MDC(dom_node)
+		elif type == 'mountpoint':
+			n = Mountpoint(dom_node)
+		else:
+			return
+			#panic ("unknown service type:", type)
+
+	elif  config._start == "MDS" or config._stop == "MDS":
+	    if type == 'ldlm':
+		n = LDLM(dom_node)
+	    elif type == 'lovconfig':
+		n = LOVConfig(dom_node)
+	    elif type == 'network':
+		n = Network(dom_node)
+	    elif type == 'mds':
+		n = MDS(dom_node)
+	    else:
+		return 
+		#panic ("unknown service type:", type)
+
+	elif  config._start == "OST" or config._stop == "OST":
+	    if type == 'ldlm':
+		n = LDLM(dom_node)
+            elif type == 'network':
+                n = Network(dom_node)
+            elif type == 'obd':
+                n = OBD(dom_node)
+            elif type == 'ost':
+                n = OST(dom_node)
+            else:
+		return 
+                #panic ("unknown service type:", type)
     else:
-        panic ("unknown service type:", type)
+    	    if type == 'ldlm':
+	        n = LDLM(dom_node)
+	    elif type == 'lov':
+                n = LOV(dom_node)
+            elif type == 'lovconfig':
+                n = LOVConfig(dom_node)
+            elif type == 'network':
+                n = Network(dom_node)
+            elif type == 'obd':
+                n = OBD(dom_node)
+            elif type == 'ost':
+                n = OST(dom_node)
+            elif type == 'mds':
+                n = MDS(dom_node)
+            elif type == 'osc':
+                n = VOSC(dom_node)
+            elif type == 'mdc':
+                n = MDC(dom_node)
+            elif type == 'mountpoint':
+                n = Mountpoint(dom_node)
+            else:
+                panic ("unknown service type:", type)
 
     if module_flag:
         if config.nomod():
             return
         if config.cleanup():
-            n.cleanup_module()
+	    if n:
+               n.cleanup_module()
         else:
-            n.load_module()
+	    if n:
+               n.load_module()
     else:
         if config.nosetup():
             return
         if config.cleanup():
-            n.cleanup()
+	    if n:
+               n.cleanup()
         else:
-            n.prepare()
+	    if n:
+               n.prepare()
 
 #
 # Prepare the system to run lustre using a particular profile
@@ -1487,11 +1579,12 @@ def parse_cmdline(argv):
     long_opts = ["ldap", "reformat", "lustre=", "verbose", "gdb",
                  "portals=", "makeldiff", "cleanup", "noexec",
                  "help", "node=", "nomod", "nosetup",
-                 "dump=", "force", "startlevel=", "endlevel="]
+                 "dump=", "force", "start=", "stop=", "startlevel=", "endlevel="]
     opts = []
     args = []
     try:
         opts, args = getopt.getopt(argv, short_opts, long_opts)
+
     except getopt.error:
         print "invalid opt"
         usage()
@@ -1510,24 +1603,29 @@ def parse_cmdline(argv):
             config.portals = a
         if o == "--lustre":
             config.lustre = a
-        if o == "--reformat":
+        if o  == "--reformat":
             config.reformat(1)
-        if o == "--node":
+        if o  == "--node":
             config.node(a)
-        if o == "--gdb":
+        if o  == "--gdb":
             config.gdb(1)
-        if o == "--nomod":
+        if o  == "--nomod":
             config.nomod(1)
-        if o == "--nosetup":
+        if o  == "--nosetup":
             config.nosetup(1)
-        if o == "--dump":
+        if o  == "--dump":
             config.dump_file(a)
-        if o in ("-f", "--force"):
+        if o  in ("-f", "--force"):
             config.force(1)
 	if o in ("--startlevel",):
 		config.startlevel(a)
         if o in ("--endlevel",):
                 config.endlevel(a)
+        if o  == "--start":
+            config.start(a)
+        if o  == "--stop":
+            config.stop(a)
+            config.cleanup(1)
 
     return args
 
@@ -1594,6 +1692,8 @@ def sanitise_path():
     for dir in DEFAULT_PATH:
         add_to_path(dir)
 
+
+
 # Initialize or shutdown lustre according to a configuration file
 #   * prepare the system for lustre
 #   * configure devices with lctl
@@ -1606,7 +1706,12 @@ def main():
     sanitise_path()
 
     args = parse_cmdline(sys.argv[1:])
-    if len(args) > 0:
+    if config.start() or config.stop():
+        if not os.access("/etc/lustre/config.xml", os.R_OK ):
+            print 'File not found or readable:', "/etc/lustre/config.xml"
+            sys.exit(1)
+        dom = xml.dom.minidom.parse("/etc/lustre/config.xml")
+    elif len(args) > 0:
         if not os.access(args[0], os.R_OK):
             print 'File not found or readable:', args[0]
             sys.exit(1)
@@ -1653,7 +1758,7 @@ if __name__ == "__main__":
         print e
     except CommandError, e:
         e.dump()
-        sys.exit(e.rc)
+	sys.exit(e.rc)
 
     if first_cleanup_error:
         sys.exit(first_cleanup_error)
