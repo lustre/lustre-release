@@ -2363,7 +2363,7 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                 }
                 
                 if ((!list_empty (&conn->ksnc_tx_queue) ||
-                     conn->ksnc_sock->sk->wmem_queued != 0) &&
+                     conn->ksnc_sock->sk->sk_wmem_queued != 0) &&
                     time_after_eq (jiffies, conn->ksnc_tx_deadline)) {
                         /* Timed out messages queued for sending, or
                          * messages buffered in the socket's send buffer */
@@ -2371,7 +2371,7 @@ ksocknal_find_timed_out_conn (ksock_peer_t *peer)
                         CERROR ("Timed out TX to "LPX64" %s%d %p\n", 
                                 peer->ksnp_nid, 
                                 list_empty (&conn->ksnc_tx_queue) ? "" : "Q ",
-                                conn->ksnc_sock->sk->wmem_queued, conn);
+                                conn->ksnc_sock->sk->sk_wmem_queued, conn);
                         return (conn);
                 }
         }
