@@ -8,3 +8,9 @@ export-truncate.patch
 iod-stock-24-exports.patch
 uml_check_get_page.patch
 uml_no_panic.patch
+ext-2.4-patch-1.patch
+ext-2.4-patch-2.patch
+ext-2.4-patch-3.patch
+ext-2.4-patch-4.patch
+linux-2.4.20-xattr-0.8.54.patch
+extN-san.patch

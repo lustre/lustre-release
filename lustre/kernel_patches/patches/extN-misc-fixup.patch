@@ -1,0 +1,23 @@
+--- linux-2.4.17/fs/ext3/super.c.orig	Fri Dec 21 10:41:55 2001
++++ linux-2.4.17/fs/ext3/super.c	Fri Mar 22 11:00:41 2002
+@@ -1344,10 +1342,10 @@
+ 		printk(KERN_ERR "EXT3-fs: I/O error on journal device\n");
+ 		goto out_journal;
+ 	}
+-	if (ntohl(journal->j_superblock->s_nr_users) != 1) {
++	if (be32_to_cpu(journal->j_superblock->s_nr_users) != 1) {
+ 		printk(KERN_ERR "EXT3-fs: External journal has more than one "
+ 					"user (unsupported) - %d\n",
+-			ntohl(journal->j_superblock->s_nr_users));
++			be32_to_cpu(journal->j_superblock->s_nr_users));
+ 		goto out_journal;
+ 	}
+ 	EXT3_SB(sb)->journal_bdev = bdev;
+@@ -1560,6 +1560,7 @@
+ 	unlock_kernel();
+ 	return ret;
+ }
++EXPORT_SYMBOL(ext3_force_commit); /* here to avoid potential patch collisions */
+ 
+ /*
+  * Ext3 always journals updates to the superblock itself, so we don't
