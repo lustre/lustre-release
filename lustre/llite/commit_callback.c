@@ -83,7 +83,6 @@ static int ll_commitcbd_main(void *arg)
                 spin_lock(&sbi->ll_commitcbd_lock);
                 if (sbi->ll_commitcbd_flags & LL_COMMITCBD_STOPPING) {
                         spin_unlock(&sbi->ll_commitcbd_lock);
-                        CERROR("lustre_commitd quitting\n");
                         EXIT;
                         break;
                 }

@@ -1566,9 +1566,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         ENTRY;
 
 
-#ifdef CONFIG_DEV_RDONLY
         dev_clear_rdonly(2);
-#endif
         if (!data->ioc_inlbuf1 || !data->ioc_inlbuf2)
                 RETURN(rc = -EINVAL);
 
@@ -1696,9 +1694,7 @@ static int mds_cleanup(struct obd_device *obd, int flags)
         if (obd->obd_recovering)
                 target_cancel_recovery_timer(obd);
         lock_kernel();
-#ifdef CONFIG_DEV_RDONLY
         dev_clear_rdonly(2);
-#endif
         fsfilt_put_ops(obd->obd_fsops);
 
         RETURN(0);
@@ -1854,9 +1850,9 @@ static int ldlm_intent_policy(struct ldlm_namespace *ns,
                  * have one reader _or_ writer ref (which will be zeroed below
                  * before returning the lock to a client.
                  */
-                if (new_lock->l_export == req->rq_export) {
+                if (new_lock->l_export == req->rq_export)
                         LASSERT(new_lock->l_readers + new_lock->l_writers == 0);
-                } else {
+                else {
                         LASSERT(new_lock->l_export == NULL);
                         LASSERT(new_lock->l_readers + new_lock->l_writers == 1);
                 }

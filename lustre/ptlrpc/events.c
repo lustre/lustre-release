@@ -316,10 +316,10 @@ static int bulk_get_sink_callback(ptl_event_t *ev)
         unsigned long            flags;
         ENTRY;
 
-        CDEBUG(D_NET, "got %s event %d\n",
+        CDEBUG(D_NET, "got %s event %d desc %p\n",
                (ev->type == PTL_EVENT_SENT) ? "SENT" :
                (ev->type == PTL_EVENT_REPLY)  ? "REPLY"  : "UNEXPECTED",
-               ev->type);
+               ev->type, desc);
 
         LASSERT(ev->type == PTL_EVENT_SENT || ev->type == PTL_EVENT_REPLY);
 
