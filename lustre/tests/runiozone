@@ -4,7 +4,7 @@
 [ -z "$VERIFY" ] && VERIFY="-+d"
 [ -z "$ODIR" ] && ODIR="-I"
 [ -z "$REC" ] && REC=64
-[ -z "$FILE" ] && FILE=/mnt/lustre/test.$$
+[ -z "$FILE" ] && FILE=/mnt/lustre/iozone.$$
 [ $1 ] && SIZE=$1
 COUNT=0
 rm -f endiozone
