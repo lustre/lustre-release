@@ -15,4 +15,15 @@ int osc_rpcd_addref(void);
 int osc_rpcd_decref(void);
 void osc_rpcd_add_req(struct ptlrpc_request *req);
 
+int osc_read_tunable(char *page, char **start, off_t off, int count,
+                     int *eof, void *data, atomic_t *tunable);
+
+int osc_write_tunable(struct file *file, const char *buffer,
+                      unsigned long count, void *data, 
+                      atomic_t *tunable, unsigned int max);
+
+/* osc/lproc_osc.c */
+extern atomic_t osc_max_pages_per_rpc;
+extern atomic_t osc_max_rpcs_in_flight;
+
 #endif /* OSC_INTERNAL_H */
