@@ -1377,6 +1377,42 @@ static int lov_cancel_unused(struct obd_export *exp,
         RETURN(rc);
 }
 
+static int lov_join_lru(struct obd_export *exp,
+                        struct lov_stripe_md *lsm, int join)
+{
+        struct lov_obd *lov;
+        struct lov_oinfo *loi;
+        int i, count = 0;
+        ENTRY;
+
+        ASSERT_LSM_MAGIC(lsm);
+        if (!exp || !exp->exp_obd)
+                RETURN(-ENODEV);
+
+        lov = &exp->exp_obd->u.lov;
+        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
+                struct lov_stripe_md submd;
+                int rc = 0;
+
+                if (lov->tgts[loi->loi_ost_idx].active == 0)
+                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
+
+                submd.lsm_object_id = loi->loi_id;
+                submd.lsm_stripe_count = 0;
+                rc = obd_join_lru(lov->tgts[loi->loi_ost_idx].ltd_exp, 
+                                  &submd, join);
+                if (rc < 0) {
+                        CERROR("join lru failed. objid: "LPX64" subobj: "LPX64
+                               " ostidx: %d rc: %d\n", lsm->lsm_object_id,
+                               loi->loi_id, loi->loi_ost_idx, rc);
+                        return rc;
+                } else {
+                        count += rc;
+                }
+        }
+        RETURN(count);
+}
+
 #define LOV_U64_MAX ((__u64)~0ULL)
 #define LOV_SUM_MAX(tot, add)                                           \
         do {                                                            \
@@ -1803,6 +1839,7 @@ struct obd_ops lov_obd_ops = {
         .o_change_cbdata       = lov_change_cbdata,
         .o_cancel              = lov_cancel,
         .o_cancel_unused       = lov_cancel_unused,
+        .o_join_lru            = lov_join_lru,
         .o_iocontrol           = lov_iocontrol,
         .o_get_info            = lov_get_info,
         .o_set_info            = lov_set_info,

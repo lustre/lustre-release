@@ -95,6 +95,9 @@ typedef enum {
  * list. */
 #define LDLM_FL_KMS_IGNORE     0x200000
 
+/* Don't drop lock covering mmapped file in LRU */
+#define LDLM_FL_NO_LRU         0x400000
+
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
 #define LDLM_CB_BLOCKING    1
@@ -536,6 +539,8 @@ int ldlm_cli_convert(struct lustre_handle *, int new_mode, int *flags);
 int ldlm_cli_cancel(struct lustre_handle *lockh);
 int ldlm_cli_cancel_unused(struct ldlm_namespace *, struct ldlm_res_id *,
                            int flags, void *opaque);
+int ldlm_cli_join_lru(struct ldlm_namespace *, struct ldlm_res_id *,
+                      int join);
 
 /* mds/handler.c */
 /* This has to be here because recursive inclusion sucks. */

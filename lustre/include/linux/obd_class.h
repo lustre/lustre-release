@@ -866,6 +866,18 @@ static inline int obd_cancel_unused(struct obd_export *exp,
         RETURN(rc);
 }
 
+static inline int obd_join_lru(struct obd_export *exp,
+                               struct lov_stripe_md *ea, int join)
+{
+        int rc;
+        ENTRY;
+
+        EXP_CHECK_OP(exp, join_lru);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, join_lru);
+
+        rc = OBP(exp->exp_obd, join_lru)(exp, ea, join);
+        RETURN(rc);
+}
 
 static inline int obd_san_preprw(int cmd, struct obd_export *exp,
                                  struct obdo *oa,

@@ -658,6 +658,8 @@ struct obd_ops {
                         __u32 mode, struct lustre_handle *);
         int (*o_cancel_unused)(struct obd_export *, struct lov_stripe_md *,
                                int flags, void *opaque);
+        int (*o_join_lru)(struct obd_export *, struct lov_stripe_md *, 
+                         int join);
         int (*o_san_preprw)(int cmd, struct obd_export *exp,
                             struct obdo *oa, int objcount,
                             struct obd_ioobj *obj, int niocount,

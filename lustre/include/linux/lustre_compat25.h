@@ -215,7 +215,23 @@ static inline void cond_resched(void)
 #define __set_page_ll_data(page, llap) page->private = (unsigned long)llap
 #define __clear_page_ll_data(page) page->private = 0
 #define PageWriteback(page) 0
+#define set_page_writeback(page)
 #define end_page_writeback(page)
+
+static inline int mapping_mapped(struct address_space *mapping)
+{
+        if (mapping->i_mmap_shared)
+                return 1;
+        if (mapping->i_mmap)
+                return 1;
+        return 0;
+}
+
+#ifdef ZAP_PAGE_RANGE_VMA
+#define ll_zap_page_range(vma, addr, len)  zap_page_range(vma, addr, len)
+#else
+#define ll_zap_page_range(vma, addr, len)  zap_page_range(vma->vm_mm, addr, len)
+#endif
 
 #endif /* end of 2.4 compat macros */
 

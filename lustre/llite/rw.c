@@ -1078,6 +1078,49 @@ out_unlock:
         spin_unlock(&sbi->ll_lock);
         return;
 }
+int ll_writepage(struct page *page)
+{
+        struct inode *inode = page->mapping->host;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct obd_export *exp;
+        struct ll_async_page *llap;
+        int rc = 0;
+        ENTRY;
+        
+        LASSERT(!PageDirty(page));
+        LASSERT(PageLocked(page));
+        
+        exp = ll_i2obdexp(inode);
+        if (exp == NULL)
+                GOTO(out, rc = -EINVAL);
+        
+        llap = llap_from_page(page, LLAP_ORIGIN_WRITEPAGE);
+        if (IS_ERR(llap))
+                GOTO(out, rc = PTR_ERR(llap));
+        
+        page_cache_get(page);
+        if (llap->llap_write_queued) {
+                LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
+                rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL,
+                                         llap->llap_cookie,
+                                         ASYNC_READY | ASYNC_URGENT);
+        } else {
+                rc = queue_or_sync_write(exp, inode, llap,
+                                         PAGE_SIZE, ASYNC_READY | ASYNC_URGENT);
+        }
+        if (rc)
+                page_cache_release(page);
+out:
+        if (rc) {
+                if (!lli->lli_async_rc)
+                        lli->lli_async_rc = rc;
+                /* re-dirty page on error so it retries write */
+                SetPageDirty(page);
+                ClearPageLaunder(page); 
+                unlock_page(page);
+        }
+        RETURN(rc);
+}
 
 /*
  * for now we do our readpage the same on both 2.4 and 2.5.  The kernel's
@@ -1141,12 +1184,10 @@ int ll_readpage(struct file *filp, struct page *page)
         }
 
         if (rc == 0) {
-#if 0
                 CWARN("ino %lu page %lu (%llu) not covered by "
                       "a lock (mmap?).  check debug logs.\n",
                       inode->i_ino, page->index,
                       (long long)page->index << PAGE_CACHE_SHIFT);
-#endif
         }
 
         rc = ll_issue_page_read(exp, llap, oig, 0);

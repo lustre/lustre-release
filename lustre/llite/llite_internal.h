@@ -292,6 +292,29 @@ void ll_queue_done_writing(struct inode *inode);
 void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
 
+/* llite/llite_mmap.c */
+#if  (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+typedef struct rb_root  rb_root_t;
+typedef struct rb_node  rb_node_t;
+#endif
+
+struct ll_lock_tree_node;
+struct ll_lock_tree {
+        rb_root_t                       lt_root;
+        struct list_head                lt_locked_list;
+        struct ll_file_data             *lt_fd;
+};
+
+int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last);
+int ll_file_mmap(struct file * file, struct vm_area_struct * vma);
+struct ll_lock_tree_node * ll_node_from_inode(struct inode *inode, __u64 start,
+                                              __u64 end, ldlm_mode_t mode);
+int ll_tree_lock(struct ll_lock_tree *tree, 
+                 struct ll_lock_tree_node *first_node,
+                 const char *buf, size_t count, int ast_flags);
+int ll_tree_unlock(struct ll_lock_tree *tree);
+
+
 #define LL_SBI_NOLCK            0x1
 
 #define LL_MAX_BLKSIZE          (4UL * 1024 * 1024)

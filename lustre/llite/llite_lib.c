@@ -148,6 +148,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         devno = get_uuid2int(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid,
                              strlen(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid));
+        /* s_dev is also used in lt_compare() to compare two fs */
         sb->s_dev = devno;
 
         obd = class_name2obd(osc);

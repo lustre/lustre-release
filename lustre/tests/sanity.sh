@@ -2298,6 +2298,41 @@ test_69() {
 }
 run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 
+test_71() {
+	cp `which dbench` $DIR
+
+	[ ! -f $DIR/dbench ] && echo "dbench not installed, skip this test" && return 0
+
+	TGT=$DIR/client.txt
+	SRC=${SRC:-/usr/lib/dbench/client.txt}
+	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
+	SRC=/usr/lib/dbench/client_plain.txt
+	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
+
+	echo "copying necessary lib to $DIR"
+	if [ -d /lib64 ]; then
+		mkdir $DIR/lib64
+		cp /lib64/libc* $DIR/lib64
+		cp /lib64/ld-* $DIR/lib64
+	else 
+		mkdir $DIR/lib
+		cp /lib/libc* $DIR/lib
+		cp /lib/ld-* $DIR/lib
+	fi
+	
+	echo "chroot $DIR /dbench -c client.txt 2"
+	chroot $DIR /dbench -c client.txt 2
+	RC=$?
+
+	rm -f $DIR/dbench
+	rm -f $TGT
+	rm -fr $DIR/lib
+	rm -fr $DIR/lib64
+
+	return $RC
+}
+run_test 71 "Running dbench on lustre (don't segment fault) ===="
+
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
 # error message with a corrupt path string (CVS bug) and panic.

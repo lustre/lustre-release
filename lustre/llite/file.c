@@ -376,6 +376,21 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
         CDEBUG(D_INODE|D_PAGE, "walking page indices start: %lu j: %lu "
                "count: %lu skip: %lu end: %lu%s\n", start, start % count,
                count, skip, end, discard ? " (DISCARDING)" : "");
+        
+        /* walk through the vmas on the inode and tear down mmaped pages that
+         * intersect with the lock.  this stops immediately if there are no
+         * mmap()ed regions of the file.  This is not efficient at all and
+         * should be short lived. We'll associate mmap()ed pages with the lock
+         * and will be able to find them directly */
+        for (i = start; i <= end; i += (j + skip)) {
+                j = min(count - (i % count), end - i + 1);
+                LASSERT(j > 0);
+                LASSERT(inode->i_mapping);
+                if (ll_teardown_mmaps(inode->i_mapping, 
+                                      (__u64)i << PAGE_CACHE_SHIFT,
+                                      ((__u64)(i+j) << PAGE_CACHE_SHIFT) - 1) )
+                        break;
+        }
 
         /* this is the simplistic implementation of page eviction at
          * cancelation.  It is careful to get races with other page
@@ -680,6 +695,10 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
 
         LASSERT(lockh->cookie == 0);
 
+        /* don't drop the mmapped file to LRU */
+        if (mapping_mapped(inode->i_mapping))
+                ast_flags |= LDLM_FL_NO_LRU;
+        
         /* XXX phil: can we do this?  won't it screw the file size up? */
         if ((fd && (fd->fd_flags & LL_FILE_IGNORE_LOCK)) ||
             (sbi->ll_flags & LL_SBI_NOLCK))
@@ -737,12 +756,11 @@ int ll_extent_unlock(struct ll_file_data *fd, struct inode *inode,
 static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                             loff_t *ppos)
 {
-        struct ll_file_data *fd = filp->private_data;
         struct inode *inode = filp->f_dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
-        struct lustre_handle lockh = { 0 };
-        ldlm_policy_data_t policy;
+        struct ll_lock_tree tree;
+        struct ll_lock_tree_node *node;
         int rc;
         ssize_t retval;
         __u64 kms;
@@ -760,11 +778,12 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 
         if (!lsm)
                 RETURN(0);
-
-        policy.l_extent.start = *ppos;
-        policy.l_extent.end = *ppos + count - 1;
-
-        rc = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh, 0);
+        
+        node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1, 
+                                  LCK_PR);
+        tree.lt_fd = filp->private_data;
+        rc = ll_tree_lock(&tree, node, buf, count, 
+                          filp->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
         if (rc != 0)
                 RETURN(rc);
 
@@ -791,7 +810,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         retval = generic_file_read(filp, buf, count, ppos);
 
  out:
-        ll_extent_unlock(fd, inode, lsm, LCK_PR, &lockh);
+        ll_tree_unlock(&tree);
         RETURN(retval);
 }
 
@@ -801,11 +820,10 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
                              loff_t *ppos)
 {
-        struct ll_file_data *fd = file->private_data;
         struct inode *inode = file->f_dentry->d_inode;
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-        struct lustre_handle lockh = { 0 };
-        ldlm_policy_data_t policy;
+        struct ll_lock_tree tree;
+        struct ll_lock_tree_node *node;
         loff_t maxbytes = ll_file_maxbytes(inode);
         ssize_t retval;
         int rc;
@@ -825,16 +843,18 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
                 RETURN(-EBADF);
 
         LASSERT(lsm);
-
-        if (file->f_flags & O_APPEND) {
-                policy.l_extent.start = 0;
-                policy.l_extent.end = OBD_OBJECT_EOF;
-        } else  {
-                policy.l_extent.start = *ppos;
-                policy.l_extent.end = *ppos + count - 1;
-        }
-
-        rc = ll_extent_lock(fd, inode, lsm, LCK_PW, &policy, &lockh, 0);
+        
+        if (file->f_flags & O_APPEND)
+                node = ll_node_from_inode(inode, 0, OBD_OBJECT_EOF, LCK_PW);
+        else
+                node = ll_node_from_inode(inode, *ppos, *ppos  + count - 1, 
+                                          LCK_PW);
+        if (IS_ERR(node))
+                RETURN(PTR_ERR(node));
+        
+        tree.lt_fd = file->private_data;
+        rc = ll_tree_lock(&tree, node, buf, count, 
+                          file->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
         if (rc != 0)
                 RETURN(rc);
 
@@ -859,7 +879,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         retval = generic_file_write(file, buf, count, ppos);
 
 out:
-        ll_extent_unlock(fd, inode, lsm, LCK_PW, &lockh);
+        ll_tree_unlock(&tree);
         lprocfs_counter_add(ll_i2sbi(inode)->ll_stats, LPROC_LL_WRITE_BYTES,
                             retval > 0 ? retval : 0);
         RETURN(retval);
@@ -1410,7 +1430,7 @@ struct file_operations ll_file_operations = {
         .ioctl          = ll_file_ioctl,
         .open           = ll_file_open,
         .release        = ll_file_release,
-        .mmap           = generic_file_mmap,
+        .mmap           = ll_file_mmap,
         .llseek         = ll_file_seek,
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         .sendfile       = generic_file_sendfile,

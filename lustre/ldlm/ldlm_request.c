@@ -766,6 +766,55 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
         RETURN(ELDLM_OK);
 }
 
+/* join/split resource locks to/from lru list */
+int ldlm_cli_join_lru(struct ldlm_namespace *ns, 
+                      struct ldlm_res_id *res_id, int join)
+{
+        struct ldlm_resource *res;
+        struct ldlm_lock *lock, *n;
+        int count = 0;
+        ENTRY;
+
+        LASSERT(ns->ns_client == LDLM_NAMESPACE_CLIENT);
+
+        res = ldlm_resource_get(ns, NULL, *res_id, LDLM_EXTENT, 0);
+        if (res == NULL)
+                RETURN(count);
+        LASSERT(res->lr_type == LDLM_EXTENT);
+        
+        l_lock(&ns->ns_lock);
+        if (!join)
+                goto split;
+
+        list_for_each_entry_safe (lock, n, &res->lr_granted, l_res_link) {
+                if (list_empty(&lock->l_lru) && 
+                    !lock->l_readers && !lock->l_writers &&
+                    !(lock->l_flags & LDLM_FL_LOCAL) &&
+                    !(lock->l_flags & LDLM_FL_CBPENDING)) {
+                        LASSERT(ns->ns_nr_unused >= 0);
+                        list_add_tail(&lock->l_lru, &ns->ns_unused_list);
+                        ns->ns_nr_unused++;
+                        lock->l_flags &= ~LDLM_FL_NO_LRU;
+                        LDLM_DEBUG(lock, "join lock to lru");
+                        count++;
+                }
+        }
+        goto unlock;
+split:
+        list_for_each_entry_safe (lock, n, &ns->ns_unused_list, l_lru) {
+                if (lock->l_resource == res) {
+                        ldlm_lock_remove_from_lru(lock);
+                        lock->l_flags |= LDLM_FL_NO_LRU;
+                        LDLM_DEBUG(lock, "split lock from lru");
+                        count++;
+                }
+        }
+unlock:
+        l_unlock(&ns->ns_lock);
+        ldlm_resource_putref(res);
+        RETURN(count);
+}
+
 /* Lock iterators. */
 
 int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,

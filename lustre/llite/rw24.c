@@ -49,56 +49,6 @@
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
-static int ll_writepage_24(struct page *page)
-{
-        struct inode *inode = page->mapping->host;
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct obd_export *exp;
-        struct ll_async_page *llap;
-        int rc = 0;
-        ENTRY;
-
-        LASSERT(!PageDirty(page));
-        LASSERT(PageLocked(page));
-
-        exp = ll_i2obdexp(inode);
-        if (exp == NULL)
-                GOTO(out, rc = -EINVAL);
-
-        llap = llap_from_page(page, LLAP_ORIGIN_WRITEPAGE);
-        if (IS_ERR(llap))
-                GOTO(out, rc = PTR_ERR(llap));
-
-        page_cache_get(page);
-        if (llap->llap_write_queued) {
-                LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
-                rc = obd_set_async_flags(exp, lli->lli_smd, NULL,
-                                         llap->llap_cookie,
-                                         ASYNC_READY | ASYNC_URGENT);
-        } else {
-                llap->llap_write_queued = 1;
-                rc = obd_queue_async_io(exp, lli->lli_smd, NULL,
-                                        llap->llap_cookie, OBD_BRW_WRITE, 0, 0,
-                                        0, ASYNC_READY | ASYNC_URGENT);
-                if (rc == 0)
-                        LL_CDEBUG_PAGE(D_PAGE, page, "mmap write queued\n");
-                else
-                        llap->llap_write_queued = 0;
-        }
-        if (rc)
-                page_cache_release(page);
-out:
-        if (rc) {
-                if (!lli->lli_async_rc)
-                        lli->lli_async_rc = rc;
-                /* re-dirty page on error so it retries write */
-                SetPageDirty(page);
-                ClearPageLaunder(page);
-                unlock_page(page);
-        }
-        RETURN(rc);
-}
-
 static int ll_direct_IO_24(int rw,
 #ifdef HAVE_DIO_FILE
                            struct file *file,
@@ -194,7 +144,7 @@ static int ll_max_readahead(struct inode *inode)
 struct address_space_operations ll_aops = {
         .readpage       = ll_readpage,
         .direct_IO      = ll_direct_IO_24,
-        .writepage      = ll_writepage_24,
+        .writepage      = ll_writepage,
         .prepare_write  = ll_prepare_write,
         .commit_write   = ll_commit_write,
         .removepage     = ll_removepage,

@@ -2415,7 +2415,8 @@ static int sanosc_brw(int cmd, struct obd_export *exp, struct obdo *oa,
 #endif
 #endif
 
-static void osc_set_data_with_check(struct lustre_handle *lockh, void *data)
+static void osc_set_data_with_check(struct lustre_handle *lockh, void *data,
+                                    int flags)
 {
         struct ldlm_lock *lock = ldlm_handle2lock(lockh);
 
@@ -2439,6 +2440,7 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data)
         }
 #endif
         lock->l_ast_data = data;
+        lock->l_flags |= (flags & LDLM_FL_NO_LRU);
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_PUT(lock);
 }
@@ -2479,7 +2481,7 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type, policy, mode,
                              lockh);
         if (rc == 1) {
-                osc_set_data_with_check(lockh, data);
+                osc_set_data_with_check(lockh, data, *flags);
                 if (*flags & LDLM_FL_HAS_INTENT) {
                         /* I would like to be able to ASSERT here that rss <=
                          * kms, but I can't, for reasons which are explained in
@@ -2510,7 +2512,7 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                          * lock_match.  I want a second opinion. */
                         ldlm_lock_addref(lockh, LCK_PR);
                         ldlm_lock_decref(lockh, LCK_PW);
-                        osc_set_data_with_check(lockh, data);
+                        osc_set_data_with_check(lockh, data, *flags);
                         RETURN(ELDLM_OK);
                 }
         }
@@ -2576,7 +2578,7 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                              policy, mode, lockh);
         if (rc) {
                 //if (!(*flags & LDLM_FL_TEST_LOCK))
-                        osc_set_data_with_check(lockh, data);
+                        osc_set_data_with_check(lockh, data, *flags);
                 RETURN(rc);
         }
         /* If we're trying to read, we also search for an existing PW lock.  The
@@ -2589,7 +2591,7 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                         /* FIXME: This is not incredibly elegant, but it might
                          * be more elegant than adding another parameter to
                          * lock_match.  I want a second opinion. */
-                        osc_set_data_with_check(lockh, data);
+                        osc_set_data_with_check(lockh, data, *flags);
                         ldlm_lock_addref(lockh, LCK_PR);
                         ldlm_lock_decref(lockh, LCK_PW);
                 }
@@ -2615,6 +2617,15 @@ static int osc_cancel_unused(struct obd_export *exp,
 
         return ldlm_cli_cancel_unused(obd->obd_namespace, &res_id, flags,
                                       opaque);
+}
+
+static int osc_join_lru(struct obd_export *exp,
+                        struct lov_stripe_md *lsm, int join)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+        struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
+
+        return ldlm_cli_join_lru(obd->obd_namespace, &res_id, join);
 }
 
 static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
@@ -3117,6 +3128,7 @@ struct obd_ops osc_obd_ops = {
         .o_change_cbdata        = osc_change_cbdata,
         .o_cancel               = osc_cancel,
         .o_cancel_unused        = osc_cancel_unused,
+        .o_join_lru             = osc_join_lru,
         .o_iocontrol            = osc_iocontrol,
         .o_get_info             = osc_get_info,
         .o_set_info             = osc_set_info,
@@ -3148,6 +3160,7 @@ struct obd_ops sanosc_obd_ops = {
         .o_change_cbdata        = osc_change_cbdata,
         .o_cancel               = osc_cancel,
         .o_cancel_unused        = osc_cancel_unused,
+        .o_join_lru             = osc_join_lru,
         .o_iocontrol            = osc_iocontrol,
         .o_import_event         = osc_import_event,
         .o_llog_init            = osc_llog_init,
