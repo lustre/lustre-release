@@ -1432,7 +1432,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 if (oap->oap_count <= 0) {
                         CDEBUG(D_CACHE, "oap %p count %d, completing\n", oap,
                                oap->oap_count);
-                        osc_ap_completion(cli, aa->aa_oa, oap, 0, oap->oap_count);
+                        osc_ap_completion(cli, NULL, oap, 0, oap->oap_count);
                         continue;
                 }
 
@@ -1464,7 +1464,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                          * were between the pending list and the rpc */
                         if (oap->oap_interrupted) {
                                 CDEBUG(D_INODE, "oap %p interrupted\n", oap);
-                                osc_ap_completion(cli, aa->aa_oa, oap, 0, 
+                                osc_ap_completion(cli, NULL, oap, 0,
                                                   oap->oap_count);
                                 continue;
                         }
