@@ -499,6 +499,9 @@ ksocknal_del_peer_locked (ksock_peer_t *peer, __u32 ip, int single_share)
 
         LASSERT (!peer->ksnp_closing);
 
+        /* Extra ref prevents peer disappearing until I'm done with it */
+        atomic_inc(&peer->ksnp_refcount);
+
         list_for_each_safe (tmp, nxt, &peer->ksnp_routes) {
                 route = list_entry(tmp, ksock_route_t, ksnr_list);
 
@@ -548,6 +551,7 @@ ksocknal_del_peer_locked (ksock_peer_t *peer, __u32 ip, int single_share)
                 }
         }
 
+        ksocknal_put_peer(peer);
         /* NB peer unlinks itself when last conn/route is removed */
 }
 
