@@ -28,7 +28,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <unistd.h>
-#include <syscall.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -37,6 +36,11 @@
 #include <bridge.h>
 #include <ipmap.h>
 #include <connection.h>
+#ifndef __CYGWIN__
+#include <syscall.h>
+#else
+#include <pthread.h>
+#endif
 
 /* Function:  tcpnal_send
  * Arguments: nal:     pointer to my nal control block
@@ -65,6 +69,10 @@ int tcpnal_send(nal_cb_t *n,
     connection c;
     bridge b=(bridge)n->nal_data;
     struct iovec tiov[257];
+#ifdef __CYGWIN__
+    static pthread_mutex_t send_lock = PTHREAD_MUTEX_INITIALIZER;
+    int i;
+#endif
 
     if (!(c=force_tcp_connection((manager)b->lower,
                                  PNAL_IP(nid,b),
@@ -90,7 +98,14 @@ int tcpnal_send(nal_cb_t *n,
     if (niov > 0)
             memcpy(&tiov[1], iov, niov * sizeof(struct iovec));
 
+#ifndef __CYGWIN__
     syscall(SYS_writev, c->fd, tiov, niov+1);
+#else
+    pthread_mutex_lock(&send_lock);
+    for (i = 0; i <= niov; i++)
+        send(c->fd, tiov[i].iov_base, tiov[i].iov_len, 0);
+    pthread_mutex_unlock(&send_lock);
+#endif
 #endif
     lib_finalize(n, private, cookie);
         

@@ -34,13 +34,15 @@
 #include <stdarg.h>
 #include <string.h>
 #include <unistd.h>
-#include <syscall.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <connection.h>
 #include <pthread.h>
 #include <errno.h>
+#ifndef __CYGWIN__
+#include <syscall.h>
+#endif
 
 
 /* global variable: acceptor port */
@@ -113,22 +115,27 @@ int read_connection(connection c,
                     unsigned char *dest,
                     int len)
 {
-    int offset=0,rc;
+    int offset = 0,rc;
 
-    if (len){
+    if (len) {
         do {
-            if((rc=syscall(SYS_read, c->fd, dest+offset, len-offset))<=0){
-                if (errno==EINTR) {
-                    rc=0;
+#ifndef __CYGWIN__
+            rc = syscall(SYS_read, c->fd, dest+offset, len-offset);
+#else
+            rc = recv(c->fd, dest+offset, len-offset, 0);
+#endif
+            if (rc <= 0) {
+                if (errno == EINTR) {
+                    rc = 0;
                 } else {
                     remove_connection(c);
-                    return(0);
+                    return (0);
                 }
             }
-            offset+=rc;
-        } while (offset<len);
+            offset += rc;
+        } while (offset < len);
     }
-    return(1);
+    return (1);
 }
 
 static int connection_input(void *d)

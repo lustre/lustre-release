@@ -32,7 +32,6 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <unistd.h>
-#include <syscall.h>
 #include <procbridge.h>
 #include <sys/types.h>
 #include <sys/socket.h>

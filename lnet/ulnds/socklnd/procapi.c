@@ -32,7 +32,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <syscall.h>
 #include <procbridge.h>
 #include <pqtimer.h>
 #include <dispatch.h>
