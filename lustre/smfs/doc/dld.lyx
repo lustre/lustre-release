@@ -875,7 +875,7 @@ status Open
 \layout Standard
 
 \backslash 
-lst{../../include/linux/lustre_smfs.h}{Superblock info}{firstline=87,lastline=107}
+lst{../../include/linux/lustre_smfs.h}{Superblock info}{firstline=87,lastline=108}
 \end_inset 
 
 
@@ -919,7 +919,7 @@ status Open
 \layout Standard
 
 \backslash 
-lst{../../include/linux/lustre_smfs.h}{File info}{firstline=113,lastline=116}
+lst{../../include/linux/lustre_smfs.h}{File info}{firstline=113,lastline=117}
 \end_inset 
 
 
@@ -938,7 +938,7 @@ status Open
 \layout Standard
 
 \backslash 
-lst{../../lvfs/fsfilt_smfs.c}{Fsfilt redirection example}{firstline=361,lastline=378}
+lst{../../lvfs/fsfilt_smfs.c}{Fsfilt redirection example}{firstline=363,lastline=383}
 \end_inset 
 
 
@@ -1033,7 +1033,7 @@ status Open
 \layout Standard
 
 \backslash 
-lst{../../smfs/smfs_lib.c}{Mount/Umount}{firstline=163,lastline=215}
+lst{../../smfs/smfs_lib.c}{Mount/Umount}{firstline=96,lastline=149}
 \end_inset 
 
 
@@ -1497,7 +1497,7 @@ status Open
 \backslash 
 lst{../../include/linux/lustre_smfs.h}{Duplicate
 \backslash 
-_inode()}{firstline=297,lastline=316}
+_inode()}{firstline=298,lastline=317}
 \end_inset 
 
 
@@ -1515,7 +1515,7 @@ status Open
 \layout Standard
 
 \backslash 
-lst{../../smfs/dir.c}{Create()}{firstline=44,lastline=107}
+lst{../../smfs/dir.c}{Create()}{firstline=44,lastline=577}
 \end_inset 
 
 
@@ -1528,163 +1528,7 @@ status Open
 \layout Standard
 
 \backslash 
-lst{../../smfs/dir.c}{Lookup()}{firstline=109,lastline=172}
-\end_inset 
-
-
-\layout Standard
-
-
-\begin_inset ERT
-status Open
-
-\layout Standard
-
-\backslash 
-lst{../../smfs/dir.c}{Link()}{firstline=174,lastline=231}
-\end_inset 
-
-
-\layout Standard
-
-
-\begin_inset ERT
-status Open
-
-\layout Standard
-
-\backslash 
-lst{../../smfs/dir.c}{Unlink()}{firstline=233,lastline=276}
-\end_inset 
-
-
-\layout Standard
-
-
-\begin_inset ERT
-status Open
-
-\layout Standard
-
-\backslash 
-lst{../../smfs/dir.c}{Symlink()}{firstline=278,lastline=327}
-\end_inset 
-
-
-\layout Standard
-
-
-\begin_inset ERT
-status Open
-
-\layout Standard
-
-\backslash 
-lst{../../smfs/dir.c}{Mkdir()}{firstline=329,lastline=377}
-\end_inset 
-
-
-\layout Standard
-
-
-\begin_inset ERT
-status Open
-
-\layout Standard
-
-\backslash 
-lst{../../smfs/dir.c}{Rmdir()}{firstline=379,lastline=424}
-\end_inset 
-
-
-\layout Standard
-
-
-\begin_inset ERT
-status Open
-
-\layout Standard
-
-\backslash 
-lst{../../smfs/dir.c}{Mknod()}{firstline=426,lastline=485}
-\end_inset 
-
-
-\layout Standard
-
-
-\begin_inset ERT
-status Open
-
-\layout Standard
-
-\backslash 
-lst{../../smfs/dir.c}{Rename()}{firstline=487,lastline=557}
-\end_inset 
-
-
-\layout Standard
-
-
-\begin_inset ERT
-status Open
-
-\layout Standard
-
-\backslash 
-lst{../../smfs/file.c}{Setxattr()}{firstline=442,lastline=467}
-\end_inset 
-
-
-\layout Standard
-
-
-\begin_inset ERT
-status Open
-
-\layout Standard
-
-\backslash 
-lst{../../smfs/file.c}{Getxattr()}{firstline=469,lastline=494}
-\end_inset 
-
-
-\layout Standard
-
-
-\begin_inset ERT
-status Open
-
-\layout Standard
-
-\backslash 
-lst{../../smfs/file.c}{Listxattr()}{firstline=496,lastline=519}
-\end_inset 
-
-
-\layout Standard
-
-
-\begin_inset ERT
-status Open
-
-\layout Standard
-
-\backslash 
-lst{../../smfs/file.c}{Removexattr()}{firstline=521,lastline=544}
-\end_inset 
-
-
-\layout Standard
-
-
-\begin_inset ERT
-status Open
-
-\layout Standard
-
-\backslash 
-lst{../../smfs/file.c}{Truncate()}{firstline=385,lastline=404}
+lst{../../smfs/file.c}{Truncate()}{firstline=378,lastline=533}
 \end_inset 
 
 
@@ -1717,7 +1561,7 @@ status Open
 \backslash 
 lst{../../include/linux/lustre_smfs.h}{duplicate
 \backslash 
-_file()}{firstline=343,lastline=362}
+_file()}{firstline=343,lastline=361}
 \end_inset 
 
 
