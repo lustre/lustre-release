@@ -1589,7 +1589,7 @@ ksocknal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         }
 
         /* NB we have to wait to be told our true NID... */
-        process_id.pid = 0;
+        process_id.pid = requested_pid; //LUSTRE_SRV_PTL_PID; 
         process_id.nid = 0;
         
         rc = lib_init(&ksocknal_lib, nal, process_id,
@@ -1739,7 +1739,7 @@ ksocknal_module_init (void)
         }
 
         /* Pure gateways want the NAL started up at module load time... */
-        rc = PtlNIInit(SOCKNAL, 0, NULL, NULL, &ksocknal_ni);
+        rc = PtlNIInit(SOCKNAL, LUSTRE_SRV_PTL_PID, NULL, NULL, &ksocknal_ni);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
                 ptl_unregister_nal(SOCKNAL);
                 return (-ENODEV);

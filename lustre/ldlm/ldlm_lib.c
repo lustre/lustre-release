@@ -416,11 +416,11 @@ int target_handle_connect(struct ptlrpc_request *req)
                 /* NB the casts only avoid compiler warnings */
         case 8:
                 snprintf(remote_uuid.uuid, sizeof remote_uuid,
-                         "NET_"LPX64"_UUID", (__u64)req->rq_peer.peer_nid);
+                         "NET_"LPX64"_UUID", (__u64)req->rq_peer.peer_id.nid);
                 break;
         case 4:
                 snprintf(remote_uuid.uuid, sizeof remote_uuid,
-                         "NET_%x_UUID", (__u32)req->rq_peer.peer_nid);
+                         "NET_%x_UUID", (__u32)req->rq_peer.peer_id.nid);
                 break;
         default:
                 LBUG();

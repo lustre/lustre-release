@@ -205,7 +205,7 @@ static int kscimacnal_startup(nal_t *nal, ptl_pid_t requested_pid,
         }
         kscimacnal_data.ksci_nid = (ptl_nid_t)(ntohl(mac_physaddr));
 
-        process_id.pid = 0;
+        process_id.pid = requested_pid;
         process_id.nid = kscimacnal_data.ksci_nid;
 
         CDEBUG(D_NET, "calling lib_init with nid "LPX64"\n",

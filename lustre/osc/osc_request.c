@@ -870,12 +870,12 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                 if (server_cksum != cksum) {
                         CERROR("Bad checksum: server %x, client %x, server NID "
                                LPX64" (%s)\n", server_cksum, cksum,
-                               peer->peer_nid, str);
+                               peer->peer_id.nid, str);
                         cksum_counter = 0;
                         oa->o_cksum = cksum;
                 } else if ((cksum_counter & (-cksum_counter)) == cksum_counter){
                         CWARN("Checksum %u from "LPX64" (%s) OK: %x\n",
-                              cksum_counter, peer->peer_nid, str, cksum);
+                              cksum_counter, peer->peer_id.nid, str, cksum);
                 }
         } else {
                 static int cksum_missed;
@@ -884,7 +884,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                 if ((cksum_missed & (-cksum_missed)) == cksum_missed)
                         CERROR("Request checksum %u from "LPX64", no reply\n",
                                cksum_missed,
-                               req->rq_import->imp_connection->c_peer.peer_nid);
+                               req->rq_import->imp_connection->c_peer.peer_id.nid);
         }
 #endif
         RETURN(0);

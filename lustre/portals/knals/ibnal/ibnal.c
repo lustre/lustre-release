@@ -246,7 +246,7 @@ kibnal_init(int             interface, // no use here
 
   rc = lib_init(&kibnal_lib, 
                 kibnal_data.kib_nid, 
-                0, // process id is set as 0  
+                requested_pid , // process id is set as requested_pid  instead of 0  
                 ptl_size, 
                 ac_size);
 

@@ -326,6 +326,7 @@ void portals_debug_dumplog(void);
 
 /* support decl needed both by kernel and liblustre */
 char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
+char *portals_id2str(int nal, ptl_process_id_t nid, char *str);
 
 #ifndef CURRENT_TIME
 # define CURRENT_TIME time(0)
@@ -644,7 +645,7 @@ enum {
         NAL_ENUM_END_MARKER
 };
 
-#define PTL_NALFMT_SIZE               26 /* %u:%u.%u.%u.%u (10+4+4+4+3+1) */
+#define PTL_NALFMT_SIZE              30 /* %u:%u.%u.%u.%u,%u (10+4+4+4+3+4+1) */
 
 #define NAL_MAX_NR (NAL_ENUM_END_MARKER - 1)
 

@@ -252,7 +252,7 @@ int tcpnal_init(bridge b)
         return(PTL_NAL_FAILED);
     }
     /* XXX cfs hack */
-    b->lib_nal->libnal_ni.ni_pid.pid=0;
+//    b->lib_nal->libnal_ni.ni_pid.pid=0;
     b->lower=m;
     return(PTL_OK);
 }

@@ -153,7 +153,9 @@
 #define PTLBD_MAXREQSIZE 1024
 
 struct ptlrpc_peer {
-        ptl_nid_t         peer_nid;
+/*      bugfix #4615 
+ */
+        ptl_process_id_t  peer_id;      
         struct ptlrpc_ni *peer_ni;
 };
 
@@ -515,8 +517,16 @@ struct ptlrpc_service {
 static inline char *ptlrpc_peernid2str(struct ptlrpc_peer *p, char *str)
 {
         LASSERT(p->peer_ni != NULL);
-        return (portals_nid2str(p->peer_ni->pni_number, p->peer_nid, str));
+        return (portals_nid2str(p->peer_ni->pni_number, p->peer_id.nid, str));
 }
+
+/*      For bug #4615   */
+static inline char *ptlrpc_id2str(struct ptlrpc_peer *p, char *str)
+{
+        LASSERT(p->peer_ni != NULL);
+        return (portals_id2str(p->peer_ni->pni_number, p->peer_id, str));
+}
+
 
 /* ptlrpc/events.c */
 extern struct ptlrpc_ni ptlrpc_interfaces[];
@@ -539,6 +549,7 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c);
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *);
 void ptlrpc_init_connection(void);
 void ptlrpc_cleanup_connection(void);
+extern ptl_pid_t ptl_get_pid(void);
 
 /* ptlrpc/niobuf.c */
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc);

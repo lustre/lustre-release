@@ -318,7 +318,7 @@ gmnal_api_startup(nal_t *nal, ptl_pid_t requested_pid,
 /*
 	pid = gm_getpid();
 */
-        process_id.pid = 0;
+        process_id.pid = requested_pid;
         process_id.nid = global_nid;
         
 	CDEBUG(D_INFO, "portals_pid is [%u]\n", process_id.pid);

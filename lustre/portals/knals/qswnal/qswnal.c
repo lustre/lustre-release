@@ -696,7 +696,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 	/* Network interface ready to initialise */
 
 	my_process_id.nid = kqswnal_elanid2nid(kqswnal_data.kqn_elanid);
-	my_process_id.pid = 0;
+	my_process_id.pid = requested_pid;
 
 	rc = lib_init(&kqswnal_lib, nal, my_process_id,
 		      requested_limits, actual_limits);
@@ -802,7 +802,7 @@ kqswnal_initialise (void)
 	/* Pure gateways, and the workaround for 'EKC blocks forever until
 	 * the service is active' want the NAL started up at module load
 	 * time... */
-	rc = PtlNIInit(QSWNAL, 0, NULL, NULL, &kqswnal_ni);
+	rc = PtlNIInit(QSWNAL, LUSTRE_SRV_PTL_PID, NULL, NULL, &kqswnal_ni);
 	if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
 		ptl_unregister_nal(QSWNAL);
 		return (-ENODEV);

@@ -197,8 +197,8 @@ void request_in_callback(ptl_event_t *ev)
                         CERROR("Can't allocate incoming request descriptor: "
                                "Dropping %s RPC from %s\n",
                                service->srv_name, 
-                               portals_nid2str(srv_ni->sni_ni->pni_number,
-                                               ev->initiator.nid, str));
+                               portals_id2str(srv_ni->sni_ni->pni_number,
+                                               ev->initiator, str));
                         return;
                 }
         }
@@ -212,7 +212,7 @@ void request_in_callback(ptl_event_t *ev)
             ev->ni_fail_type == PTL_NI_OK)
                 req->rq_reqlen = ev->mlength;
         do_gettimeofday(&req->rq_arrival_time);
-        req->rq_peer.peer_nid = ev->initiator.nid;
+        req->rq_peer.peer_id = ev->initiator;
         req->rq_peer.peer_ni = rqbd->rqbd_srv_ni->sni_ni;
         req->rq_rqbd = rqbd;
 
@@ -361,7 +361,8 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
                 pni = &ptlrpc_interfaces[i];
 
                 if (pni->pni_number == peer_nal) {
-                        peer->peer_nid = peer_nid;
+                        peer->peer_id.nid = peer_nid;
+                        peer->peer_id.pid = LUSTRE_SRV_PTL_PID; //#4165:only client will call this func.
                         peer->peer_ni = pni;
                         return (0);
                 }
@@ -409,20 +410,37 @@ void ptlrpc_ni_fini(struct ptlrpc_ni *pni)
         /* notreached */
 }
 
+ptl_pid_t ptl_get_pid(void)
+{
+        ptl_pid_t        pid;
+
+#ifndef  __KERNEL__
+        pid = getpid();
+#else
+        pid = LUSTRE_SRV_PTL_PID;
+#endif
+        return pid;
+}
+        
 int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
 {
         int              rc;
         char             str[20];
         ptl_handle_ni_t  nih;
-
+        ptl_pid_t        pid;
+        
+        pid = ptl_get_pid();
+        
         /* We're not passing any limits yet... */
-        rc = PtlNIInit(number, 0, NULL, NULL, &nih);
+        rc = PtlNIInit(number, pid, NULL, NULL, &nih);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
                 CDEBUG (D_NET, "Can't init network interface %s: %d\n", 
                         name, rc);
                 return (-ENOENT);
         }
 
+        CDEBUG(D_NET, "My pid is: %x\n", ptl_get_pid());
+        
         PtlSnprintHandle(str, sizeof(str), nih);
         CDEBUG (D_NET, "init %d %s: %s\n", number, name, str);
 

@@ -66,6 +66,7 @@
 #include <portals/lib-p30.h>
 #include <portals/nal.h>
 #include <portals/socknal.h>
+#include <linux/lustre_idl.h>
 
 #if CONFIG_SMP
 # define SOCKNAL_N_SCHED       num_online_cpus() /* # socknal schedulers */

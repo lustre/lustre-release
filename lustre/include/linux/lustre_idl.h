@@ -133,6 +133,10 @@
 #define LUSTRE_OST_VERSION  (0x00040000|PTLRPC_MSG_VERSION)
 #define LUSTRE_DLM_VERSION  (0x00040000|PTLRPC_MSG_VERSION)
 
+/* initial pid  */
+#define LUSTRE_PTL_PID          999999
+#define LUSTRE_SRV_PTL_PID      LUSTRE_PTL_PID    
+
 struct lustre_handle {
         __u64 cookie;
 };

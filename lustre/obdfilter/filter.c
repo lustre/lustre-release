@@ -1626,9 +1626,9 @@ static int filter_connect_post(struct obd_export *exp)
 
         rc = llog_receptor_accept(ctxt, exp->exp_imp_reverse);
         portals_nid2str(exp->exp_connection->c_peer.peer_ni->pni_number,
-                        exp->exp_connection->c_peer.peer_nid, str);
+                        exp->exp_connection->c_peer.peer_id.nid, str);
         CDEBUG(D_OTHER, "%s: init llog ctxt for export "LPX64"/%s, group %d\n",
-               obd->obd_name, exp->exp_connection->c_peer.peer_nid,
+               obd->obd_name, exp->exp_connection->c_peer.peer_id.nid,
                str, fed->fed_group);
 
         RETURN(rc);
@@ -1685,11 +1685,11 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (fed->fed_group != 0 && fed->fed_group != group) {
                 char str[PTL_NALFMT_SIZE];
                 portals_nid2str(exp->exp_connection->c_peer.peer_ni->pni_number,
-                                exp->exp_connection->c_peer.peer_nid, str);
+                                exp->exp_connection->c_peer.peer_id.nid, str);
                 CERROR("!!! This export (nid "LPX64"/%s) used object group %d "
                        "earlier; now it's trying to use group %d!  This could "
                        "be a bug in the MDS.  Tell CFS.\n",
-                       exp->exp_connection->c_peer.peer_nid, str,
+                       exp->exp_connection->c_peer.peer_id.nid, str,
                        fed->fed_group, group);
                 GOTO(cleanup, rc = -EPROTO);
         }
@@ -2392,9 +2392,9 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
 
         if (!(oa->o_valid & OBD_MD_FLGROUP) || group == 0) {
                 portals_nid2str(exp->exp_connection->c_peer.peer_ni->pni_number,
-                                exp->exp_connection->c_peer.peer_nid, str);
+                                exp->exp_connection->c_peer.peer_id.nid, str);
                 CERROR("!!! nid "LPX64"/%s sent invalid object group %d\n",
-                       exp->exp_connection->c_peer.peer_nid, str, group);
+                       exp->exp_connection->c_peer.peer_id.nid, str, group);
                 RETURN(-EINVAL);
         }
 
@@ -2410,11 +2410,11 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
         if (fed->fed_group != group && !recreate_objs &&
             !(oa->o_valid & OBD_MD_REINT)) {
                 portals_nid2str(exp->exp_connection->c_peer.peer_ni->pni_number,
-                                exp->exp_connection->c_peer.peer_nid, str);
+                                exp->exp_connection->c_peer.peer_id.nid, str);
                 CERROR("!!! This export (nid "LPX64"/%s) used object group %d "
                        "earlier; now it's trying to use group %d!  This could "
                        "be a bug in the MDS.  Tell CFS.\n",
-                       exp->exp_connection->c_peer.peer_nid, str,
+                       exp->exp_connection->c_peer.peer_id.nid, str,
                        fed->fed_group, group);
                 RETURN(-ENOTUNIQ);
         }

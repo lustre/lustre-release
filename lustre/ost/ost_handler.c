@@ -669,7 +669,7 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 if (client_cksum != cksum) {
                         CERROR("Bad checksum: client %x, server %x, client NID "
                                LPX64" (%s)\n", client_cksum, cksum,
-                               req->rq_connection->c_peer.peer_nid, str);
+                               req->rq_connection->c_peer.peer_id.nid, str);
                         cksum_counter = 1;
                         repbody->oa.o_cksum = cksum;
                 } else {
@@ -677,7 +677,7 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                         if ((cksum_counter & (-cksum_counter)) == cksum_counter)
                                 CWARN("Checksum %u from "LPX64": %x OK\n",
                                       cksum_counter,
-                                      req->rq_connection->c_peer.peer_nid,
+                                      req->rq_connection->c_peer.peer_id.nid,
                                       cksum);
                 }
         }

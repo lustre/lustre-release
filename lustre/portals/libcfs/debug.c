@@ -985,6 +985,30 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         }
         return str;
 }
+/*      bug #4615       */
+char *portals_id2str(int nal, ptl_process_id_t id, char *str)
+{
+        switch(nal){
+        case TCPNAL:
+                /* userspace NAL */
+        case SOCKNAL:
+                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u,%u",
+                         (__u32)(id.nid >> 32), HIPQUAD((id.nid)) , id.pid);
+                break;
+        case QSWNAL:
+        case GMNAL:
+        case IBNAL:
+                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u,%u",
+                         (__u32)(id.nid >> 32), (__u32)id.nid, id.pid);
+                break;
+        default:
+                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx,%lx",
+                         nal, (long long)id.nid, (long)id.pid );
+                break;
+        }
+        return str;
+}
+
 
 #ifdef __KERNEL__
 char stack_backtrace[LUSTRE_TRACE_SIZE];
@@ -1077,3 +1101,4 @@ EXPORT_SYMBOL(portals_debug_set_level);
 EXPORT_SYMBOL(portals_run_upcall);
 EXPORT_SYMBOL(portals_run_lbug_upcall);
 EXPORT_SYMBOL(portals_nid2str);
+EXPORT_SYMBOL(portals_id2str);

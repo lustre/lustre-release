@@ -311,7 +311,7 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,const char *ast_type)
 
         LDLM_ERROR(lock, "%s AST failed (%d): evicting client %s@%s NID "LPX64
                    " (%s)", ast_type, rc, lock->l_export->exp_client_uuid.uuid,
-                   conn->c_remote_uuid.uuid, conn->c_peer.peer_nid,
+                   conn->c_remote_uuid.uuid, conn->c_peer.peer_id.nid,
                    ptlrpc_peernid2str(&conn->c_peer, str));
         ptlrpc_fail_export(lock->l_export);
 }
