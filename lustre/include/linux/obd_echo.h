@@ -19,4 +19,11 @@ struct ec_object
 	struct lov_stripe_md  *eco_lsm;
 };
 
+struct ec_open_object
+{
+	struct list_head       ecoo_exp_chain;
+	struct ec_object      *ecoo_object;
+	struct obdo            ecoo_oa;
+};
+
 #endif
