@@ -114,6 +114,7 @@ struct file_system_type lustre_lite_fs_type = {
         .name         = "lustre_lite",
         .get_sb       = ll_get_sb,
         .kill_sb      = kill_anon_super,
+        .fs_flags     = FS_BINARY_MOUNTDATA,
 };
 
 struct file_system_type lustre_fs_type = {
@@ -121,6 +122,7 @@ struct file_system_type lustre_fs_type = {
         .name         = "lustre",
         .get_sb       = lustre_get_sb,
         .kill_sb      = kill_anon_super,
+        .fs_flags     = FS_BINARY_MOUNTDATA,
 };
 
 static int __init init_lustre_lite(void)
