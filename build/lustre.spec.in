@@ -150,7 +150,6 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/sbin/obdio
 %attr(-, root, root) /usr/sbin/routerstat
 %attr(-, root, root) /usr/sbin/wirecheck
-%attr(-, root, root) /usr/sbin/l_getgroups
 %attr(-, root, root) /usr/bin/lfs
 %attr(-, root, root) /usr/bin/lfind
 %attr(-, root, root) /usr/bin/lstripe
