@@ -76,10 +76,10 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
 
         ENTRY;
 
-        if (cmd != OBD_IOC_RECOVD_NEWCONN)
-                RETURN(0);
+        if (cmd != OBD_IOC_RECOVD_NEWCONN && cmd != OBD_IOC_RECOVD_FAILCONN)
+                RETURN(-EINVAL); /* XXX ENOSYS? */
         
-        /* Find the connection that's been rebuilt. */
+        /* Find the connection that's been rebuilt or has failed. */
         spin_lock(&recovd->recovd_lock);
         list_for_each(tmp, &recovd->recovd_troubled_items) {
                 conn = list_entry(tmp, struct ptlrpc_connection,
@@ -92,9 +92,35 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *hdl, int len, void *karg,
                 conn = NULL;
         }
 
-        if (!conn)
-                GOTO(out, rc = -EINVAL);
+        if (!conn) {
+                if (cmd == OBD_IOC_RECOVD_NEWCONN)
+                        GOTO(out, rc = -EINVAL);
+                /* XXX macroize/inline and share with loop above */
+                list_for_each(tmp, &recovd->recovd_managed_items) {
+                        conn = list_entry(tmp, struct ptlrpc_connection,
+                                          c_recovd_data.rd_managed_chain);
+                        
+                        LASSERT(conn->c_recovd_data.rd_recovd == recovd);
+                        
+                        if (!strcmp(conn->c_remote_uuid, data->ioc_inlbuf1))
+                                break;
+                        conn = NULL;
+                }
+                if (!conn)
+                        GOTO(out, rc = -EINVAL);
+        }
 
+        if (cmd == OBD_IOC_RECOVD_FAILCONN) {
+                spin_unlock(&recovd->recovd_lock);
+                recovd_conn_fail(conn);
+                spin_lock(&recovd->recovd_lock);
+
+                /* Jump straight to the "failed" phase of recovery. */
+                conn->c_recovd_data.rd_phase = RD_FAILED;
+                goto out;
+        }
+
+        /* else (NEWCONN) */
         if (conn->c_recovd_data.rd_phase != RD_PREPARING)
                 GOTO(out, rc = -EALREADY);
 

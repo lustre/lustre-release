@@ -169,6 +169,7 @@ command_t cmdlist[] = {
         {"dump_ldlm", jt_obd_dump_ldlm, 0,
          "dump all lock manager state (no args)"},
         {"newconn", jt_obd_newconn, 0, "newconn <olduuid> [newuuid]"},
+        {"failconn", jt_obd_failconn, 0, "failconn <uuid>"},
 
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},

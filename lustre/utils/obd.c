@@ -1357,6 +1357,31 @@ int jt_obd_newconn(int argc, char **argv)
         return rc;
 }
 
+int jt_obd_failconn(int argc, char **argv)
+{
+        int rc;
+        struct obd_ioctl_data data;
+
+        IOCINIT(data);
+        if (argc < 2)
+                return CMD_HELP;
+
+        data.ioc_inllen1 = strlen(argv[1]) + 1;
+        data.ioc_inlbuf1 = argv[1];
+
+        if (obd_ioctl_pack(&data, &buf, max)) {
+                fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));
+                return -2;
+        }
+
+        rc = ioctl(fd, OBD_IOC_RECOVD_FAILCONN, buf);
+        if (rc < 0)
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc = errno));
+        
+        return rc;
+}
+
 static void signal_server(int sig)
 {
         if (sig == SIGINT) {

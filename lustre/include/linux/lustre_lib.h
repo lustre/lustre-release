@@ -436,6 +436,8 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 #define OBD_IOC_OPEN                   _IOWR('f', 134, long)
 #define OBD_IOC_CLOSE                  _IOWR('f', 135, long)
 
+#define OBD_IOC_RECOVD_FAILCONN        _IOWR('f', 136, long)
+
 /*
  * l_wait_event is a flexible sleeping function, permitting simple caller
  * configuration of interrupt and timeout sensitivity along with actions to
