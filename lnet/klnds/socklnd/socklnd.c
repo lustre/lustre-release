@@ -241,9 +241,8 @@ ksocknal_destroy_route (ksock_route_t *route)
 void
 ksocknal_put_route (ksock_route_t *route)
 {
-        CDEBUG (D_OTHER, "putting route[%p] -> "LPX64" (%d)\n",
-                route, route->ksnr_peer->ksnp_nid,
-                atomic_read (&route->ksnr_refcount));
+        CDEBUG (D_OTHER, "putting route[%p] (%d)\n",
+                route, atomic_read (&route->ksnr_refcount));
 
         LASSERT (atomic_read (&route->ksnr_refcount) > 0);
         if (!atomic_dec_and_test (&route->ksnr_refcount))
