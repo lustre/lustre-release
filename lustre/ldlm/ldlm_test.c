@@ -11,6 +11,9 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
+#include <linux/types.h>
+#include <linux/random.h>
+
 #include <linux/lustre_dlm.h>
 
 struct ldlm_test_thread {
@@ -23,11 +26,22 @@ struct ldlm_test_thread {
 static spinlock_t ctl_lock = SPIN_LOCK_UNLOCKED;
 static struct list_head ctl_threads;
 static int regression_running = 0;
+static struct ptlrpc_client ctl_client;
+static struct ptlrpc_connection *ctl_conn;
 
 static int ldlm_test_callback(struct lustre_handle *lockh,
                               struct ldlm_lock_desc *new,
                               void *data, __u32 data_len)
 {
+        struct ldlm_lock *lock;
+        ENTRY;
+
+        lock = ldlm_handle2lock(lockh);
+        if (lock == NULL) {
+                CERROR("invalid handle in callback\n");
+                RETURN(0);
+        }
+
         printk("ldlm_test_callback: lock=%Lu, new=%p\n", lockh->addr, new);
         return 0;
 }
@@ -68,7 +82,7 @@ int ldlm_test_basics(struct obd_device *obddev)
                 LBUG();
         ldlm_resource_dump(res);
 
-        res = ldlm_convert(lock1, LCK_NL, &flags);
+        res = ldlm_lock_convert(lock1, LCK_NL, &flags);
         if (res != NULL)
                 ldlm_reprocess_all(res);
 
@@ -127,7 +141,7 @@ int ldlm_test_extents(struct obd_device *obddev)
 
         /* Convert/cancel blocking locks */
         flags = 0;
-        res = ldlm_convert(lock1, LCK_NL, &flags);
+        res = ldlm_lock_convert(lock1, LCK_NL, &flags);
         if (res != NULL)
                 ldlm_reprocess_all(res);
 
@@ -167,7 +181,59 @@ static int ldlm_test_network(struct obd_device *obddev,
 
 static int ldlm_test_main(void *data)
 {
-        return 0;
+        struct ldlm_test_thread *thread = data;
+        struct ldlm_namespace *ns;
+        ENTRY;
+
+        lock_kernel();
+        daemonize();
+        spin_lock_irq(&current->sigmask_lock);
+        sigfillset(&current->blocked);
+        recalc_sigpending(current);
+        spin_unlock_irq(&current->sigmask_lock);
+
+        sprintf(current->comm, "ldlm_test");
+
+        ns = ldlm_namespace_new("ldlm_test", LDLM_NAMESPACE_CLIENT);
+        if (ns == NULL) {
+                LBUG();
+                GOTO(out, -ENOMEM);
+        }
+
+        /* Record that the thread is running */
+        thread->t_flags |= SVC_RUNNING;
+        wake_up(&thread->t_ctl_waitq);
+
+        while (1) {
+                struct lustre_handle lockh;
+                __u64 res_id[3] = {0};
+                __u32 lock_mode;
+                char random;
+                int flags = 0, rc;
+
+                /* Pick a random resource from 1 to 10 */
+                get_random_bytes(&random, sizeof(random));
+                res_id[0] = random % 10 + 1;
+
+                /* Pick a random lock mode */
+                get_random_bytes(&random, sizeof(random));
+                lock_mode = random % LCK_NL + 1;
+
+                rc = ldlm_cli_enqueue(&ctl_client, ctl_conn, NULL, ns, NULL,
+                                      res_id, LDLM_PLAIN, NULL, 0, lock_mode,
+                                      &flags, ldlm_test_callback, NULL, 0,
+                                      &lockh);
+                if (rc < 0) {
+                        CERROR("ldlm_cli_enqueue: %d\n", rc);
+                        LBUG();
+                }
+        }
+
+ out:
+        thread->t_flags |= SVC_STOPPED;
+        wake_up(&thread->t_ctl_waitq);
+
+        RETURN(0);
 }
 
 static int ldlm_start_thread(void)
@@ -198,34 +264,10 @@ static int ldlm_start_thread(void)
         RETURN(0);
 }
 
-static int ldlm_stop_all_threads(void)
-{
-        spin_lock(&ctl_lock);
-        while (!list_empty(&ctl_threads)) {
-                struct ldlm_test_thread *thread;
-                thread = list_entry(ctl_threads.next, struct ldlm_test_thread,
-                                    t_link);
-                spin_unlock(&ctl_lock);
-
-                thread->t_flags = SVC_STOPPING;
-
-                wake_up(&thread->t_ctl_waitq);
-                wait_event_interruptible(thread->t_ctl_waitq,
-                                         (thread->t_flags & SVC_STOPPED));
-
-                spin_lock(&ctl_lock);
-                list_del(&thread->t_link);
-                OBD_FREE(thread, sizeof(*thread));
-        }
-        spin_unlock(&ctl_lock);
-
-        return 0;
-}
-
 int ldlm_regression_start(struct obd_device *obddev,
                           struct ptlrpc_connection *conn, int count)
 {
-        int i, rc;
+        int i, rc = 0;
         ENTRY;
 
         spin_lock(&ctl_lock);
@@ -257,11 +299,24 @@ int ldlm_regression_stop(void)
                 spin_unlock(&ctl_lock);
                 RETURN(-EINVAL);
         }
-        spin_unlock(&ctl_lock);
 
-        /* Do stuff */
+        while (!list_empty(&ctl_threads)) {
+                struct ldlm_test_thread *thread;
+                thread = list_entry(ctl_threads.next, struct ldlm_test_thread,
+                                    t_link);
 
-        spin_lock(&ctl_lock);
+                thread->t_flags |= SVC_STOPPING;
+                spin_unlock(&ctl_lock);
+
+                wake_up(&thread->t_ctl_waitq);
+                wait_event_interruptible(thread->t_ctl_waitq,
+                                         thread->t_flags & SVC_STOPPED);
+
+                spin_lock(&ctl_lock);
+                list_del(&thread->t_link);
+                OBD_FREE(thread, sizeof(*thread));
+        }
+
         regression_running = 0;
         spin_unlock(&ctl_lock);
 

@@ -238,9 +238,10 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock, void *cookie,
                                int cookie_len, int *flags,
                                ldlm_lock_callback completion,
                                ldlm_lock_callback blocking);
-struct ldlm_resource *ldlm_convert(struct ldlm_lock *lock, int new_mode,
+struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
+void ldlm_run_ast_work(struct list_head *rpc_list);
 void ldlm_reprocess_all(struct ldlm_resource *res);
 void ldlm_lock_dump(struct ldlm_lock *lock);
 

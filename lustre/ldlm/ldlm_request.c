@@ -141,7 +141,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
 }
 
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
-                      void *data, __u32 data_len)
+                    void *data, __u32 data_len)
 {
         struct ldlm_lock *lock;
         struct ldlm_request *body;
@@ -172,7 +172,7 @@ int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
         }
 
         LDLM_DEBUG(lock, "server preparing %s AST",
-                   desc->l_req_mode == 0 ? "completion" : "blocked");
+                   desc == 0 ? "completion" : "blocked");
 
         req->rq_replen = lustre_msg_size(0, NULL);
 
@@ -225,7 +225,7 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
                 GOTO(out, rc);
 
         reply = lustre_msg_buf(req->rq_repmsg, 0);
-        res = ldlm_convert(lock, new_mode, &reply->lock_flags);
+        res = ldlm_lock_convert(lock, new_mode, &reply->lock_flags);
         if (res != NULL)
                 ldlm_reprocess_all(res);
         if (lock->l_req_mode != lock->l_granted_mode) {

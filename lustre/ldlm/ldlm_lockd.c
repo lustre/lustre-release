@@ -21,8 +21,9 @@ extern kmem_cache_t *ldlm_lock_slab;
 extern int (*mds_reint_p)(int offset, struct ptlrpc_request *req);
 extern int (*mds_getattr_name_p)(int offset, struct ptlrpc_request *req);
 
-static int ldlm_handle_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
-                         struct ptlrpc_request *req)
+static int ldlm_handle_enqueue(struct obd_device *obddev,
+                               struct ptlrpc_service *svc,
+                               struct ptlrpc_request *req)
 {
         struct ldlm_reply *dlm_rep;
         struct ldlm_request *dlm_req;
@@ -60,7 +61,7 @@ static int ldlm_handle_enqueue(struct obd_device *obddev, struct ptlrpc_service 
                                 dlm_req->lock_desc.l_resource.lr_type,
                                 dlm_req->lock_desc.l_req_mode, NULL, 0);
         if (!lock)
-                GOTO(out, -ENOMEM);
+                GOTO(out, err = -ENOMEM);
 
         memcpy(&lock->l_remote_handle, &dlm_req->lock_handle1,
                sizeof(lock->l_remote_handle));
@@ -104,7 +105,8 @@ static int ldlm_handle_enqueue(struct obd_device *obddev, struct ptlrpc_service 
         return 0;
 }
 
-static int ldlm_handle_convert(struct ptlrpc_service *svc, struct ptlrpc_request *req)
+static int ldlm_handle_convert(struct ptlrpc_service *svc,
+                               struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
         struct ldlm_reply *dlm_rep;
@@ -126,7 +128,7 @@ static int ldlm_handle_convert(struct ptlrpc_service *svc, struct ptlrpc_request
                 req->rq_status = EINVAL;
         } else {         
                 LDLM_DEBUG(lock, "server-side convert handler START");
-                ldlm_convert(lock, dlm_req->lock_desc.l_req_mode,
+                ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
                                   &dlm_rep->lock_flags);
                 req->rq_status = 0;
         }
@@ -140,7 +142,8 @@ static int ldlm_handle_convert(struct ptlrpc_service *svc, struct ptlrpc_request
         RETURN(0);
 }
 
-static int ldlm_handle_cancel(struct ptlrpc_service *svc, struct ptlrpc_request *req)
+static int ldlm_handle_cancel(struct ptlrpc_service *svc,
+                              struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
         struct ldlm_lock *lock;
@@ -174,12 +177,12 @@ static int ldlm_handle_cancel(struct ptlrpc_service *svc, struct ptlrpc_request 
 }
 
 static int ldlm_handle_callback(struct ptlrpc_service *svc,
-                          struct ptlrpc_request *req)
+                                struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
-        struct ldlm_lock_desc *descp; 
+        struct ldlm_lock_desc *descp = NULL; 
         struct ldlm_lock *lock;
-        __u64 is_blocking_ast;
+        __u64 is_blocking_ast = 0;
         int rc;
         ENTRY;
 
@@ -189,7 +192,6 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
                 RETURN(-ENOMEM);
         }
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
-        descp = &dlm_req->lock_desc;
 
         /* We must send the reply first, so that the thread is free to handle
          * any requests made in common_callback() */
@@ -198,14 +200,17 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
                 RETURN(rc);
         
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
-        /* check if this is a blocking AST */ 
-        if (!descp->l_req_mode)
-                descp = NULL;
-
         if (!lock) { 
                 CERROR("callback on lock %Lx - lock disappeared\n", 
                        dlm_req->lock_handle1.addr);
                 RETURN(0);
+        }
+
+        /* check if this is a blocking AST */ 
+        if (dlm_req->lock_desc.l_req_mode !=
+            dlm_req->lock_desc.l_granted_mode) {
+                descp = &dlm_req->lock_desc;
+                is_blocking_ast = 1;
         }
 
         LDLM_DEBUG(lock, "client %s callback handler START",
@@ -234,6 +239,9 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
                 }
                 ldlm_lock_put(lock); 
         } else {
+                struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
 
                 /* If we receive the completion AST before the actual enqueue
@@ -244,10 +252,16 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
                         ldlm_lock_change_resource(lock, dlm_req->lock_desc.l_resource.lr_name);
                         LDLM_DEBUG(lock, "completion AST, new resource");
                 }
+                lock->l_resource->lr_tmp = &rpc_list;
+                ldlm_resource_unlink_lock(lock);
                 ldlm_grant_lock(lock);
                 /*  FIXME: we want any completion function, not just wake_up */
                 wake_up(&lock->l_waitq);
                 ldlm_lock_put(lock);
+                lock->l_resource->lr_tmp = NULL;
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+
+                ldlm_run_ast_work(&rpc_list);
         }
 
         LDLM_DEBUG_NOLOCK("client %s callback handler END (lock: %p)",
@@ -256,7 +270,7 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
 }
 
 static int lustre_handle(struct obd_device *dev, struct ptlrpc_service *svc,
-                       struct ptlrpc_request *req)
+                         struct ptlrpc_request *req)
 {
         struct obd_device *req_dev;
         int id, rc;

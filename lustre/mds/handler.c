@@ -24,7 +24,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
 extern int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
-                         struct ptlrpc_request *req);
+                                struct ptlrpc_request *req);
 static int mds_cleanup(struct obd_device * obddev);
 
 /* Assumes caller has already pushed into the kernel filesystem context */
@@ -554,9 +554,12 @@ static int mds_open(struct ptlrpc_request *req)
                 /* XXX error handling */
                 rc = mds_fs_set_obdo(mds, inode, handle, obdo);
                 //                rc = mds_fs_setattr(mds, de, handle, &iattr);
-                if (!rc)
+                if (!rc) {
+                        struct obd_run_ctxt saved;
+                        push_ctxt(&saved, &mds->mds_ctxt);
                         rc = mds_update_last_rcvd(mds, handle, req);
-                else {
+                        pop_ctxt(&saved);
+                } else {
                         req->rq_status = rc;
                         RETURN(0);
                 }

@@ -22,7 +22,7 @@
 /* lock types */
 char *ldlm_lockname[] = {
         [0]      "--",
-        [LCK_EX] "EX", 
+        [LCK_EX] "EX",
         [LCK_PW] "PW",
         [LCK_PR] "PR",
         [LCK_CW] "CW",
@@ -33,7 +33,7 @@ char *ldlm_typename[] = {
         [LDLM_PLAIN]     "PLN",
         [LDLM_EXTENT]    "EXT",
         [LDLM_MDSINTENT] "INT"
-};        
+};
 
 extern kmem_cache_t *ldlm_lock_slab;
 int (*mds_reint_p)(int offset, struct ptlrpc_request *req) = NULL;
@@ -58,11 +58,11 @@ ldlm_res_policy ldlm_res_policy_table [] = {
 
 /*
  * REFCOUNTED LOCK OBJECTS
- */ 
+ */
 
 
-/*  
- * Lock refcounts, during creation: 
+/*
+ * Lock refcounts, during creation:
  *   - one special one for allocation, dec'd only once in destroy
  *   - one for being a lock that's in-use
  *   - one for the addref associated with a new lock
@@ -168,7 +168,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
                 l_unlock(&parent->l_resource->lr_namespace->ns_lock);
         }
         /* this is the extra refcount, to prevent the lock
-           evaporating */ 
+           evaporating */
         ldlm_lock_get(lock);
         RETURN(lock);
 }
@@ -189,7 +189,7 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
                 RETURN(-ENOMEM);
         }
 
-        /* move references over */ 
+        /* move references over */
         for (i = 0; i < lock->l_refc; i++) {
                 int rc;
                 ldlm_resource_getref(lock->l_resource);
@@ -204,9 +204,9 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
         RETURN(0);
 }
 
-/* 
+/*
  *  HANDLES
- */ 
+ */
 
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh)
 {
@@ -403,26 +403,30 @@ void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
         memcpy(desc->l_version, lock->l_version, sizeof(desc->l_version));
 }
 
-static void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new)
+static void ldlm_add_ast_work_item(struct ldlm_lock *lock,
+                                   struct ldlm_lock *new)
 {
         struct ldlm_ast_work *w;
         ENTRY;
-        
+
         OBD_ALLOC(w, sizeof(*w));
-        if (!w) { 
+        if (!w) {
                 LBUG();
                 return;
         }
- 
+
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        ldlm_lock_get(lock);
-        if (new) { 
+        if (new) {
+                if (lock->l_flags & LDLM_FL_AST_SENT)
+                        GOTO(out, 0);
+
+                lock->l_flags |= LDLM_FL_AST_SENT;
                 w->w_blocking = 1;
                 ldlm_lock2desc(new, &w->w_desc);
         }
-        w->w_lock = lock;
-        lock->l_flags |= LDLM_FL_AST_SENT;
+        w->w_lock = ldlm_lock_get(lock);
         list_add(&w->w_list, lock->l_resource->lr_tmp);
+ out:
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return;
 }
@@ -532,9 +536,10 @@ static int ldlm_lock_compat(struct ldlm_lock *lock, int send_cbs)
         ENTRY;
 
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        rc = ldlm_lock_compat_list(lock, send_cbs, &lock->l_resource->lr_granted);
+        rc = ldlm_lock_compat_list(lock, send_cbs,
+                                   &lock->l_resource->lr_granted);
         /* FIXME: should we be sending ASTs to converting? */
-        if (rc) 
+        if (rc)
                 rc = ldlm_lock_compat_list
                         (lock, send_cbs, &lock->l_resource->lr_converting);
 
@@ -542,8 +547,8 @@ static int ldlm_lock_compat(struct ldlm_lock *lock, int send_cbs)
         RETURN(rc);
 }
 
-/* NOTE: called by 
-   - ldlm_handle_enqueuque - resource 
+/* NOTE: called by
+   - ldlm_handle_enqueuque - resource
 */
 void ldlm_grant_lock(struct ldlm_lock *lock)
 {
@@ -625,13 +630,15 @@ int ldlm_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
         ldlm_resource_put(res);
         l_unlock(&ns->ns_lock);
 
-        if (lock)
+        if (lock) {
+                ldlm_lock2handle(lock, lockh);
                 wait_event_interruptible(lock->l_waitq, lock->l_req_mode ==
                                          lock->l_granted_mode);
-        if (rc) 
+        }
+        if (rc)
                 LDLM_DEBUG(lock, "matched");
         else
-                LDLM_DEBUG(lock, "not matched");
+                LDLM_DEBUG_NOLOCK("not matched");
         return rc;
 }
 
@@ -697,7 +704,6 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock,
                         *flags |= LDLM_FL_LOCK_CHANGED;
                 } else if (rc == ELDLM_LOCK_ABORTED) {
                         ldlm_lock_destroy(lock);
-                        ldlm_lock_put(lock);
                         RETURN(rc);
                 }
         }
@@ -775,26 +781,27 @@ static int ldlm_reprocess_queue(struct ldlm_resource *res,
         RETURN(0);
 }
 
-static void ldlm_run_ast_work(struct list_head *rpc_list)
+void ldlm_run_ast_work(struct list_head *rpc_list)
 {
         struct list_head *tmp, *pos;
         int rc;
         ENTRY;
 
         list_for_each_safe(tmp, pos, rpc_list) {
-                struct ldlm_ast_work *w =   
+                struct ldlm_ast_work *w =
                         list_entry(tmp, struct ldlm_ast_work, w_list);
                 struct lustre_handle lockh;
-                
-                ldlm_lock2handle(w->w_lock, &lockh); 
-                if (w->w_blocking) { 
-                        rc = w->w_lock->l_blocking_ast(&lockh, &w->w_desc, w->w_data, w->w_datalen); 
-                } else { 
-                        rc = w->w_lock->l_completion_ast(&lockh, NULL, w->w_data, w->w_datalen); 
-                }
-                if (rc) { 
-                        CERROR("Failed AST - should clean & disconnect client\n");
-                }
+
+                ldlm_lock2handle(w->w_lock, &lockh);
+                if (w->w_blocking)
+                        rc = w->w_lock->l_blocking_ast
+                                (&lockh, &w->w_desc, w->w_data, w->w_datalen);
+                else
+                        rc = w->w_lock->l_completion_ast
+                                (&lockh, NULL, w->w_data, w->w_datalen);
+                if (rc)
+                        CERROR("Failed AST - should clean & disconnect "
+                               "client\n");
                 ldlm_lock_put(w->w_lock);
                 list_del(&w->w_list);
                 OBD_FREE(w, sizeof(*w));
@@ -849,10 +856,13 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
 }
 
 /* Must be called with lock and lock->l_resource unlocked */
-struct ldlm_resource *ldlm_convert(struct ldlm_lock *lock, int new_mode, int *flags)
+struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
+                                        int *flags)
 {
+        struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
         struct ldlm_resource *res;
         struct ldlm_namespace *ns;
+        int granted = 0;
         ENTRY;
 
         res = lock->l_resource;
@@ -868,17 +878,21 @@ struct ldlm_resource *ldlm_convert(struct ldlm_lock *lock, int new_mode, int *fl
                 if (*flags & (LDLM_FL_BLOCK_CONV | LDLM_FL_BLOCK_GRANTED))
                         ldlm_resource_add_lock(res, res->lr_converting.prev,
                                                lock);
-                else { 
+                else {
+                        res->lr_tmp = &rpc_list;
                         ldlm_grant_lock(lock);
+                        res->lr_tmp = NULL;
+                        granted = 1;
                         /* FIXME: completion handling not with ns_lock held ! */
                         wake_up(&lock->l_waitq);
                 }
-        } else {
+        } else
                 list_add(&lock->l_res_link, res->lr_converting.prev);
-        }
 
         l_unlock(&ns->ns_lock);
 
+        if (granted)
+                ldlm_run_ast_work(&rpc_list);
         RETURN(res);
 }
 
