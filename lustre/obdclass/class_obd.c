@@ -529,13 +529,15 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         brw_cleanup:
                 for (j = 0, pgp = pga; j < pages; j++) {
                         if (pgp->pg != NULL) {
+                                int err2;
                                 void *addr = kmap(pgp->pg);
 
-                                page_debug_check("test_brw", addr, PAGE_SIZE,
-                                                 pgp->off, id);
+                                err2 = page_debug_check("test_brw", addr,
+                                                        PAGE_SIZE, pgp->off,id);
                                 kunmap(pgp->pg);
-
                                 __free_pages(pgp->pg, 0);
+                                if (!err)
+                                        err = err2;
                         }
                 }
         brw_free:
