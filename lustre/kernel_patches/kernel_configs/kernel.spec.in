@@ -1,0 +1,49 @@
+%define tag 0305252012
+%define kernel_version 2.4.18
+%define patch_version chaos52 
+%define lustre_version 18
+
+Name: kernel
+Summary: The Linux_lustre kernel
+Version: %{kernel_version}%{patch_version}_lustre%{lustre_version}
+Release: %{tag}
+License: GPL
+Group: System Environment/Kernel
+URL: http://www.lustre.org/pub/lustre/
+Source0: linux-%{kernel_version}-%{patch_version}.tar.gz
+Source1: kernel-config
+Patch0: one-big-patch
+BuildRoot: %{_tmppath}/%{kernel_version}-%{patch_version}-buildroot
+%define __spec_install_post /usr/lib/rpm/brp-compress || :
+
+%description
+A Linux kernel package for Lustre development.
+
+%prep
+%setup -q -n linux-%{kernel_version}-%{patch_version}
+sed -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{patch_version}-lustre%{lustre_version}/g" < Makefile > Makefile.new
+mv -f Makefile.new Makefile 
+%patch0 -p1
+
+%build
+make distclean
+cp -fv /usr/src/redhat/SOURCES/kernel-config .config
+make oldconfig dep bzImage modules
+
+%install
+mkdir -p $RPM_BUILD_ROOT/boot $RPM_BUILD_ROOT/lib $RPM_BUILD_ROOT/lib/modules
+INSTALL_MOD_PATH=$RPM_BUILD_ROOT make modules_install
+cp arch/i386/boot/bzImage $RPM_BUILD_ROOT/boot/vmlinuz-%{kernel_version}_lustre%{lustre_version}
+cp System.map $RPM_BUILD_ROOT/boot/System.map-%{kernel_version}_lustre%{lustre_version}
+cp vmlinux $RPM_BUILD_ROOT/boot/vmlinux-%{kernel_version}_lustre%{lustre_version}
+cp .config $RPM_BUILD_ROOT/boot/config-%{kernel_version}_lustre%{lustre_version}
+
+%clean
+rm -rf $RPM_BUILD_ROOT
+
+%files
+%defattr (-, root, root)
+%dir /lib/modules/%{kernel_version}-%{patch_version}-lustre%{lustre_version}
+/lib/modules/
+/boot/*
+
