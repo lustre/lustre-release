@@ -85,14 +85,9 @@ static char debug_file_name[1024];
 static int handled_panic; /* to avoid recursive calls to notifiers */
 char portals_upcall[1024] = "/usr/lib/lustre/portals_upcall";
 
-int portals_do_debug_dumplog(void *arg)
+void portals_debug_dumplog_internal(void *arg)
 {
-        void *journal_info;
-
-        kportal_daemonize("");
-
-        reparent_to_init();
-        journal_info = current->journal_info;
+        void *journal_info = current->journal_info;
         current->journal_info = NULL;
 
         snprintf(debug_file_name, sizeof(debug_file_path) - 1,
@@ -101,6 +96,13 @@ int portals_do_debug_dumplog(void *arg)
         tracefile_dump_all_pages(debug_file_name);
 
         current->journal_info = journal_info;
+}
+
+int portals_debug_dumplog_thread(void *arg)
+{
+        kportal_daemonize("");
+        reparent_to_init();
+        portals_debug_dumplog_internal(arg);
         wake_up(&debug_ctlwq);
         return 0;
 }
@@ -117,7 +119,8 @@ void portals_debug_dumplog(void)
         set_current_state(TASK_INTERRUPTIBLE);
         add_wait_queue(&debug_ctlwq, &wait);
 
-        rc = kernel_thread(portals_do_debug_dumplog, (void *)(long)current->pid,
+        rc = kernel_thread(portals_debug_dumplog_thread,
+                           (void *)(long)current->pid,
                            CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0)
                 printk(KERN_ERR "LustreError: cannot start log dump thread: "
@@ -288,98 +291,38 @@ char *portals_id2str(int nal, ptl_process_id_t id, char *str)
         
         portals_nid2str(nal, id.nid, str);
         len = strlen(str);
-        snprintf(str + len, PTL_NALFMT_SIZE - len, ",%u", id.pid);
+        snprintf(str + len, PTL_NALFMT_SIZE - len, "-%u", id.pid);
         return str;
 }
 
 #ifdef __KERNEL__
-char stack_backtrace[LUSTRE_TRACE_SIZE];
-spinlock_t stack_backtrace_lock = SPIN_LOCK_UNLOCKED;
 
+void portals_debug_dumpstack(struct task_struct *tsk)
+{
 #if defined(__arch_um__)
-
-char *portals_debug_dumpstack(void)
-{
+        if (tsk != NULL)
+                CWARN("stack dump for pid %d (%d) requested; wake up gdb.\n",
+                      tsk->pid, UML_PID(tsk));
         asm("int $3");
-        return "dump stack\n";
-}
+#elif defined(HAVE_SHOW_TASK)
+        /* this is exported by lustre kernel version 42 */
+        extern void show_task(struct task_struct *);
 
-#elif defined(__i386__)
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-extern int lookup_symbol(unsigned long address, char *buf, int buflen);
-const char *kallsyms_lookup(unsigned long addr,
-                            unsigned long *symbolsize,
-                            unsigned long *offset,
-                            char **modname, char *namebuf)
-{
-        int rc = lookup_symbol(addr, namebuf, 128);
-        if (rc == -ENOSYS)
-                return NULL;
-        return namebuf;
-}
+        if (tsk == NULL)
+                tsk = current;
+        CWARN("showing stack for process %d\n", tsk->pid);
+        show_task(tsk);
+#else
+        CWARN("can't show stack: kernel doesn't export show_task\n");
 #endif
-
-char *portals_debug_dumpstack(void)
-{
-        unsigned long esp = current->thread.esp, addr;
-        unsigned long *stack = (unsigned long *)&esp;
-        char *buf = stack_backtrace, *pbuf = buf;
-        int size;
-
-        /* User space on another CPU? */
-        if ((esp ^ (unsigned long)current) & (PAGE_MASK << 1)){
-                buf[0] = '\0';
-                goto out;
-        }
-
-        size = sprintf(pbuf, " Call Trace: ");
-        pbuf += size;
-        while (((long) stack & (THREAD_SIZE - 1)) != 0) {
-                addr = *stack++;
-                if (kernel_text_address(addr)) {
-                        const char *sym_name;
-                        char *modname, buffer[128];
-                        unsigned long junk, offset;
-
-                        sym_name = kallsyms_lookup(addr, &junk, &offset,
-                                                   &modname, buffer);
-                        if (sym_name == NULL) {
-                                if (buf + LUSTRE_TRACE_SIZE <= pbuf + 12)
-                                        break;
-                                size = sprintf(pbuf, "[<%08lx>] ", addr);
-                        } else {
-                                if (buf + LUSTRE_TRACE_SIZE
-                                            /* fix length + sizeof('\0') */
-                                    <= pbuf + strlen(buffer) + 28 + 1)
-                                        break;
-                                size = sprintf(pbuf, "([<%08lx>] %s (0x%p)) ",
-                                               addr, buffer, stack - 1);
-                        }
-                        pbuf += size;
-                }
-        }
-out:
-        return buf;
 }
 
-#else /* !__arch_um__ && !__i386__ */
-
-char *portals_debug_dumpstack(void)
-{
-        char *buf = stack_backtrace;
-        buf[0] = '\0';
-        return buf;
-}
-
-#endif /* __arch_um__ */
 struct task_struct *portals_current(void)
 {
         CWARN("current task struct is %p\n", current);
         return current;
 }
 
-EXPORT_SYMBOL(stack_backtrace_lock);
 EXPORT_SYMBOL(portals_debug_dumpstack);
 EXPORT_SYMBOL(portals_current);
 #endif /* __KERNEL__ */

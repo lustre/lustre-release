@@ -40,7 +40,7 @@
 #include <linux/portals_compat25.h>
 #include <linux/libcfs.h>
 
-#define TCD_MAX_PAGES 1280
+#define TCD_MAX_PAGES (5 << (20 - PAGE_SHIFT))
 
 /* XXX move things up to the top, comment */
 
@@ -72,8 +72,10 @@ struct tracefiled_ctl {
         atomic_t                 tctl_shutdown;
 };
 
+#define TRACEFILE_SIZE (500 << 20)
 static DECLARE_RWSEM(tracefile_sem);
 static char *tracefile = NULL;
+static long long tracefile_size = TRACEFILE_SIZE;
 static struct tracefiled_ctl trace_tctl;
 static DECLARE_MUTEX(trace_thread_sem);
 static int thread_running = 0;
@@ -123,7 +125,6 @@ static struct page *trace_get_page(struct trace_cpu_data *tcd,
                         /* the kernel should print a message for us.  fall back
                          * to using the last page in the ring buffer. */
                         goto ring_buffer;
-                        return NULL;
                 }
                 page->index = 0;
                 page->mapping = (void *)(long)smp_processor_id();
@@ -200,8 +201,8 @@ void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         struct trace_cpu_data *tcd;
         struct ptldebug_header header;
         struct page *page;
-        char *debug_buf;
-        int known_size, needed, max_nob;
+        char *debug_buf = format;
+        int known_size, needed = 85 /* average message length */, max_nob;
         va_list       ap;
         unsigned long flags;
         struct timeval tv;
@@ -235,24 +236,26 @@ void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
 
         known_size = sizeof(header) + strlen(file) + strlen(fn) + 2; // nulls
 
-        page = trace_get_page(tcd, known_size + 40); /* slop */
  retry:
-        if (page == NULL)
+        page = trace_get_page(tcd, needed + known_size);
+        if (page == NULL) {
+                debug_buf = format;
+                if (needed + known_size > PAGE_SIZE)
+                        mask |= D_ERROR;
+                needed = strlen(format);
                 goto out;
+        }
 
         debug_buf = page_address(page) + page->index + known_size;
 
-        va_start(ap, format);
         max_nob = PAGE_SIZE - page->index - known_size;
         LASSERT(max_nob > 0);
+        va_start(ap, format);
         needed = vsnprintf(debug_buf, max_nob, format, ap);
         va_end(ap);
 
-        if (needed > max_nob) {
-                /* overflow.  oh poop. */
-                page = trace_get_page(tcd, needed + known_size);
+        if (needed > max_nob) /* overflow.  oh poop. */
                 goto retry;
-        }
 
         header.ph_len = known_size + needed;
         debug_buf = page_address(page) + page->index;
@@ -274,10 +277,10 @@ void portals_debug_msg(int subsys, int mask, char *file, const char *fn,
                 printk(KERN_EMERG "page->index == %lu in portals_debug_msg\n",
                        page->index);
 
+ out:
         if ((mask & (D_EMERG | D_ERROR | D_WARNING)) || portal_printk)
                 print_to_console(&header, mask, debug_buf, needed, file, fn);
 
- out:
         trace_put_tcd(tcd, flags);
 }
 EXPORT_SYMBOL(portals_debug_msg);
@@ -450,7 +453,7 @@ int tracefile_dump_all_pages(char *filename)
 
         down_write(&tracefile_sem);
 
-        filp = filp_open(filename, O_CREAT|O_EXCL|O_WRONLY, 0600);
+        filp = filp_open(filename, O_CREAT|O_EXCL|O_WRONLY|O_LARGEFILE, 0600);
         if (IS_ERR(filp)) {
                 rc = PTR_ERR(filp);
                 printk(KERN_ERR "LustreError: can't open %s for dump: rc %d\n",
@@ -594,8 +597,8 @@ static int tracefiled(void *arg)
                 filp = NULL;
                 down_read(&tracefile_sem);
                 if (tracefile != NULL) {
-                        filp = filp_open(tracefile, O_CREAT|O_RDWR|O_APPEND|O_LARGEFILE,
-                                        0600);
+                        filp = filp_open(tracefile, O_CREAT|O_RDWR|O_LARGEFILE,
+                                         0600);
                         if (IS_ERR(filp)) {
                                 printk("couldn't open %s: %ld\n", tracefile,
                                        PTR_ERR(filp));
@@ -621,12 +624,18 @@ static int tracefiled(void *arg)
                 hdr->ph_flags |= PH_FLAG_FIRST_RECORD;
 
                 list_for_each_safe(pos, tmp, &pc.pc_pages) {
+                        static loff_t f_pos;
                         page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                         LASSERT(page->index <= PAGE_SIZE);
                         LASSERT(page_count(page) > 0);
 
+                        if (f_pos >= tracefile_size)
+                                f_pos = 0;
+                        else if (f_pos > filp->f_dentry->d_inode->i_size)
+                                f_pos = filp->f_dentry->d_inode->i_size;
+
                         rc = filp->f_op->write(filp, page_address(page),
-                                        page->index, &filp->f_pos);
+                                               page->index, &f_pos);
                         if (rc != page->index) {
                                 printk(KERN_WARNING "wanted to write %lu but "
                                        "wrote %d\n", page->index, rc);
@@ -709,6 +718,13 @@ int trace_write_daemon_file(struct file *file, const char *buffer,
                 tracefile = NULL;
                 trace_stop_thread();
                 goto out_sem;
+        } else if (strncmp(name, "size=", 5) == 0) {
+                tracefile_size = simple_strtoul(name + 5, NULL, 0);
+                if (tracefile_size < 10 || tracefile_size > 20480)
+                        tracefile_size = TRACEFILE_SIZE;
+                else
+                        tracefile_size <<= 20;
+                goto out_sem;
         }
 
         if (name[0] != '/') {
@@ -721,14 +737,17 @@ int trace_write_daemon_file(struct file *file, const char *buffer,
 
         tracefile = name;
         name = NULL;
+
+        printk(KERN_INFO "Lustre: debug daemon will attempt to start writing "
+               "to %s (%lukB max)\n", tracefile, (long)(tracefile_size >> 10));
+
         trace_start_thread();
 
  out_sem:
         up_write(&tracefile_sem);
 
  out:
-        if (name)
-                kfree(name);
+        kfree(name);
         return count;
 }
 
@@ -744,54 +763,53 @@ int trace_read_daemon_file(char *page, char **start, off_t off, int count,
         return rc;
 }
 
-int trace_write_debug_size(struct file *file, const char *buffer,
-                           unsigned long count, void *data)
+int trace_write_debug_mb(struct file *file, const char *buffer,
+                         unsigned long count, void *data)
 {
-        char *string;
-        int rc, i, max;
+        char string[32];
+        int i;
+        unsigned max;
 
-        string = kmalloc(count + 1, GFP_KERNEL);
-        if (string == NULL)
-                return -ENOMEM;
-
-        if (copy_from_user(string, buffer, count)) {
-                rc = -EFAULT;
-                goto out;
+        if (count >= sizeof(string)) {
+                printk(KERN_ERR "Lustre: value too large (length %lu bytes)\n",
+                       count);
+                return -EOVERFLOW;
         }
+
+        if (copy_from_user(string, buffer, count))
+                return -EFAULT;
 
         max = simple_strtoul(string, NULL, 0);
-        if (max == 0) {
-                rc = -EINVAL;
-                goto out;
-        }
+        if (max == 0)
+                return -EINVAL;
         max /= smp_num_cpus;
 
-        if (max > num_physpages / 5 * 4) {
+        if (max * smp_num_cpus > (num_physpages >> (20 - 2 - PAGE_SHIFT)) / 5) {
                 printk(KERN_ERR "Lustre: Refusing to set debug buffer size to "
-                       "%d pages, which is more than 80%% of physical pages "
-                       "(%lu).\n", max * smp_num_cpus, num_physpages / 5 * 4);
-                return count;
+                       "%d MB, which is more than 80%% of physical RAM "
+                       "(%lu).\n", max * smp_num_cpus,
+                       (num_physpages >> (20 - 2 - PAGE_SHIFT)) / 5);
+                return -EINVAL;
         }
 
         for (i = 0; i < NR_CPUS; i++) {
                 struct trace_cpu_data *tcd;
                 tcd = &trace_data[i].tcd;
-                tcd->tcd_max_pages = max;
+                tcd->tcd_max_pages = max << (20 - PAGE_SHIFT);
         }
- out:
-        kfree(string);
         return count;
 }
 
-int trace_read_debug_size(char *page, char **start, off_t off, int count,
-                          int *eof, void *data)
+int trace_read_debug_mb(char *page, char **start, off_t off, int count,
+                        int *eof, void *data)
 {
         struct trace_cpu_data *tcd;
         unsigned long flags;
         int rc;
 
         tcd = trace_get_tcd(flags);
-        rc = snprintf(page, count, "%lu", tcd->tcd_max_pages);
+        rc = snprintf(page, count, "%lu\n",
+                      (tcd->tcd_max_pages >> (20 - PAGE_SHIFT)) * smp_num_cpus);
         trace_put_tcd(tcd, flags);
 
         return rc;

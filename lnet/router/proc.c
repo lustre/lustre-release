@@ -31,6 +31,7 @@ struct proc_route_data {
         struct list_head *curr;
         unsigned int generation;
         off_t skip;
+        rwlock_t proc_route_rwlock;
 } kpr_read_routes_data;
 
 /* nal2name support re-used from utils/portals.c */
@@ -43,6 +44,8 @@ struct name2num {
         { "tcp",         SOCKNAL},
         { "gm",          GMNAL},
         { "ib",          OPENIBNAL},
+        { "iib",         IIBNAL},
+        { "lo",          LONAL},
         { NULL,          -1}
 };
 
@@ -96,19 +99,22 @@ static int kpr_proc_router_write(struct file *file, const char *ubuffer,
 static int kpr_proc_routes_read(char *page, char **start, off_t off,
                                 int count, int *eof, void *data)
 {
-        struct proc_route_data *prd = data;
-        kpr_route_entry_t     *re;
-        kpr_gateway_entry_t *ge;
-        int                 chunk_len = 0;
-        int                 line_len = 0;
-        int                 user_len = 0;
+        struct proc_route_data  *prd = data;
+        kpr_route_entry_t       *re;
+        kpr_gateway_entry_t     *ge;
+        int                     chunk_len = 0;
+        int                     line_len = 0;
+        int                     user_len = 0;
+        int                     rc = 0;
 
         *eof = 1;
         *start = page;
 
+        write_lock(&(prd->proc_route_rwlock));
+
         if (prd->curr == NULL) {
                 if (off != 0)
-                        return 0;
+                        goto routes_read_exit;
 
                 /* First pass, initialize our private data */
                 prd->curr = kpr_routes.next;
@@ -118,13 +124,14 @@ static int kpr_proc_routes_read(char *page, char **start, off_t off,
                 /* Abort route list generation change */
                 if (prd->generation != kpr_routes_generation) {
                         prd->curr = NULL;
-                        return sprintf(page, "\nError: Routes Changed\n");
+                        rc = sprintf(page, "\nError: Routes Changed\n");
+                        goto routes_read_exit;
                 }
 
                 /* All the routes have been walked */
                 if (prd->curr == &kpr_routes) {
                         prd->curr = NULL;
-                        return 0;
+                        goto routes_read_exit;
                 }
         }
 
@@ -148,7 +155,8 @@ static int kpr_proc_routes_read(char *page, char **start, off_t off,
                 if (prd->curr->next == NULL) {
                         prd->curr = NULL;
                         read_unlock(&kpr_rwlock);
-                        return sprintf(page, "\nError: Routes Changed\n");
+                        rc = sprintf(page, "\nError: Routes Changed\n");
+                        goto routes_read_exit;
                 }
 
                 prd->curr = prd->curr->next;
@@ -169,13 +177,18 @@ static int kpr_proc_routes_read(char *page, char **start, off_t off,
                 prd->curr = prd->curr->prev;
                 prd->skip = line_len - (user_len - count);
                 read_unlock(&kpr_rwlock);
-                return count;
+                rc = count;
+                goto routes_read_exit;
         }
 
         /* Not enough data to entirely satify callers request */
         prd->skip = 0;
         read_unlock(&kpr_rwlock);
-        return user_len;
+        rc = user_len;
+
+routes_read_exit:
+        write_unlock(&(prd->proc_route_rwlock));
+        return rc;
 }
 
 static int kpr_proc_routes_write(struct file *file, const char *ubuffer,
@@ -215,6 +228,7 @@ void kpr_proc_init(void)
         kpr_read_routes_data.curr = NULL;
         kpr_read_routes_data.generation = 0;
         kpr_read_routes_data.skip = 0;
+        kpr_read_routes_data.proc_route_rwlock = RW_LOCK_UNLOCKED;
 
         routes_entry->data = &kpr_read_routes_data;
         routes_entry->read_proc = kpr_proc_routes_read;

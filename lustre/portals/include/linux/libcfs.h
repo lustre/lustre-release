@@ -108,12 +108,14 @@ struct ptldebug_header {
 #define S_IBNAL       0x00400000 /* All IB NALs */
 #define S_SM          0x00800000
 #define S_ASOBD       0x01000000
-#define S_LMV         0x02000000
-#define S_CMOBD       0x04000000
-#define S_LONAL       0x08000000
-
-/* If you change these values, please keep portals/utils/debug.c
- * up to date! */
+#define S_CONFOBD     0x02000000
+#define S_LMV         0x04000000
+#define S_CMOBD       0x08000000
+#define S_LONAL       0x10000000
+/* If you change these values, please keep these files up to date...
+ *    portals/utils/debug.c
+ *    utils/lconf
+ */
 
 /* Debugging masks (32 bits, non-overlapping) */
 #define D_TRACE       0x00000001 /* ENTRY/EXIT markers */
@@ -141,6 +143,11 @@ struct ptldebug_header {
 #define D_READA       0x00400000 /* read-ahead */
 #define D_MMAP        0x00800000
 #define D_CONFIG      0x01000000
+/* If you change these values, please keep these files up to date...
+ *    portals/utils/debug.c
+ *    utils/lconf
+ */
+
 #ifdef __KERNEL__
 # include <linux/sched.h> /* THREAD_SIZE */
 #else
@@ -192,8 +199,8 @@ do {                                                                          \
 #define CDEBUG_MAX_LIMIT 600
 #define CDEBUG_LIMIT(cdebug_mask, cdebug_format, a...)                        \
 do {                                                                          \
-        static unsigned long cdebug_next;                                     \
-        static int cdebug_count, cdebug_delay = 1;                            \
+        static unsigned long cdebug_next = 0;                                 \
+        static int cdebug_count = 0, cdebug_delay = 1;                        \
                                                                               \
         CHECK_STACK(CDEBUG_STACK);                                            \
         if (time_after(jiffies, cdebug_next)) {                               \
@@ -203,7 +210,8 @@ do {                                                                          \
                 if (cdebug_count) {                                           \
                         portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,       \
                                           __FILE__, __FUNCTION__, __LINE__,   \
-                                          CDEBUG_STACK, cdebug_format, ## a); \
+                                          0, "skipped %d similar messages\n", \
+                                          cdebug_count);                      \
                         cdebug_count = 0;                                     \
                 }                                                             \
                 if (time_after(jiffies, cdebug_next+(CDEBUG_MAX_LIMIT+10)*HZ))\
@@ -373,6 +381,34 @@ int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand);
 
 #endif
 
-#define _LIBCFS_H
+#ifdef __KERNEL__
+/* libcfs watchdogs */
+struct lc_watchdog;
+
+/* Just use the default handler (dumplog)  */
+#define LC_WATCHDOG_DEFAULT_CB NULL
+
+/* Add a watchdog which fires after "time" milliseconds of delay.  You have to
+ * touch it once to enable it. */
+struct lc_watchdog *lc_watchdog_add(int time, 
+                                    void (*cb)(struct lc_watchdog *,
+                                               struct task_struct *,
+                                               void *),
+                                    void *data);
+
+/* Enables a watchdog and resets its timer. */
+void lc_watchdog_touch(struct lc_watchdog *lcw);
+
+/* Disable a watchdog; touch it to restart it. */
+void lc_watchdog_disable(struct lc_watchdog *lcw);
+
+/* Clean up the watchdog */
+void lc_watchdog_delete(struct lc_watchdog *lcw);
+
+/* Dump a debug log */
+void lc_watchdog_dumplog(struct lc_watchdog *lcw,
+                         struct task_struct *tsk,
+                         void *data);
+#endif /* !__KERNEL__ */
 
 #endif /* _LIBCFS_H */

@@ -92,7 +92,7 @@ do {                                                                    \
 #define LBUG_WITH_LOC(file, func, line)                                 \
 do {                                                                    \
         CEMERG("LBUG\n");                                               \
-        CERROR("STACK: %s\n", portals_debug_dumpstack());               \
+        portals_debug_dumpstack(NULL);                                  \
         portals_debug_dumplog();                                        \
         portals_run_lbug_upcall(file, func, line);                      \
         set_task_state(current, TASK_UNINTERRUPTIBLE);                  \
@@ -243,9 +243,7 @@ extern struct prof_ent prof_ents[MAX_PROFS];
 #endif /* PORTALS_PROFILING */
 
 /* debug.c */
-extern spinlock_t stack_backtrace_lock;
-
-char *portals_debug_dumpstack(void);
+void portals_debug_dumpstack(struct task_struct *tsk);
 void portals_run_upcall(char **argv);
 void portals_run_lbug_upcall(char * file, const char *fn, const int line);
 void portals_debug_dumplog(void);
@@ -747,4 +745,3 @@ typedef int (*cfg_record_cb_t)(enum cfg_record_type, int len, void *data);
     (unsigned long)(id)->li_stc.u.e3s.l3s_gen
                 
 #endif
-

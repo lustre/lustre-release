@@ -56,7 +56,7 @@ kpr_register_nal (kpr_nal_interface_t *nalif, void **argp)
 	struct list_head  *e;
 	kpr_nal_entry_t   *ne;
 
-        CDEBUG (D_NET, "Registering NAL %d\n", nalif->kprni_nalid);
+        CDEBUG (D_NET, "Registering NAL %x\n", nalif->kprni_nalid);
 
 	PORTAL_ALLOC (ne, sizeof (*ne));
 	if (ne == NULL)
@@ -76,7 +76,7 @@ kpr_register_nal (kpr_nal_interface_t *nalif, void **argp)
 		{
 			write_unlock_irqrestore (&kpr_rwlock, flags);
 
-			CERROR ("Attempt to register same NAL %d twice\n", ne->kpne_interface.kprni_nalid);
+			CERROR ("Attempt to register same NAL %x twice\n", ne->kpne_interface.kprni_nalid);
 
 			PORTAL_FREE (ne, sizeof (*ne));
 			return (-EEXIST);
@@ -126,7 +126,7 @@ kpr_upcall (int gw_nalid, ptl_nid_t gw_nid, int alive, time_t when)
         kpr_upcall_t  *u = kmalloc (sizeof (kpr_upcall_t), GFP_ATOMIC);
 
         if (u == NULL) {
-                CERROR ("Upcall out of memory: nal %d nid "LPX64" (%s) %s\n",
+                CERROR ("Upcall out of memory: nal %x nid "LPX64" (%s) %s\n",
                         gw_nalid, gw_nid,
                         portals_nid2str(gw_nalid, gw_nid, str),
                         alive ? "up" : "down");
@@ -155,14 +155,14 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
 	struct list_head    *n;
         char                 str[PTL_NALFMT_SIZE];
 
-        CDEBUG (D_NET, "%s notifying [%d] "LPX64": %s\n", 
+        CDEBUG (D_NET, "%s notifying [%x] "LPX64": %s\n", 
                 byNal ? "NAL" : "userspace", 
                 gateway_nalid, gateway_nid, alive ? "up" : "down");
 
         /* can't do predictions... */
         do_gettimeofday (&now);
         if (when > now.tv_sec) {
-                CWARN ("Ignoring prediction from %s of [%d] "LPX64" %s "
+                CWARN ("Ignoring prediction from %s of [%x] "LPX64" %s "
                        "%ld seconds in the future\n", 
                        byNal ? "NAL" : "userspace", 
                        gateway_nalid, gateway_nid, 
@@ -252,7 +252,7 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
         
         if (byNal) {
                 /* It wasn't userland that notified me... */
-                CWARN ("Upcall: NAL %d NID "LPX64" (%s) is %s\n",
+                CWARN ("Upcall: NAL %x NID "LPX64" (%s) is %s\n",
                        gateway_nalid, gateway_nid,
                        portals_nid2str(gateway_nalid, gateway_nid, str),
                        alive ? "alive" : "dead");
@@ -278,7 +278,7 @@ kpr_shutdown_nal (void *arg)
 	unsigned long    flags;
 	kpr_nal_entry_t *ne = (kpr_nal_entry_t *)arg;
 
-        CDEBUG (D_NET, "Shutting down NAL %d\n", ne->kpne_interface.kprni_nalid);
+        CDEBUG (D_NET, "Shutting down NAL %x\n", ne->kpne_interface.kprni_nalid);
 
 	LASSERT (!ne->kpne_shutdown);
 	LASSERT (!in_interrupt());
@@ -294,7 +294,7 @@ kpr_deregister_nal (void *arg)
 	unsigned long     flags;
 	kpr_nal_entry_t  *ne = (kpr_nal_entry_t *)arg;
 
-        CDEBUG (D_NET, "Deregister NAL %d\n", ne->kpne_interface.kprni_nalid);
+        CDEBUG (D_NET, "Deregister NAL %x\n", ne->kpne_interface.kprni_nalid);
 
 	LASSERT (ne->kpne_shutdown);		/* caller must have issued shutdown already */
 	LASSERT (!in_interrupt());
@@ -306,7 +306,7 @@ kpr_deregister_nal (void *arg)
         /* Wait until all outstanding messages/notifications have completed */
 	while (atomic_read (&ne->kpne_refcount) != 0)
 	{
-		CDEBUG (D_NET, "Waiting for refcount on NAL %d to reach zero (%d)\n",
+		CDEBUG (D_NET, "Waiting for refcount on NAL %x to reach zero (%d)\n",
 			ne->kpne_interface.kprni_nalid, atomic_read (&ne->kpne_refcount));
 
 		set_current_state (TASK_UNINTERRUPTIBLE);
@@ -367,7 +367,7 @@ kpr_lookup_target (void *arg, ptl_nid_t target_nid, int nob,
         /* Caller wants to know if 'target_nid' can be reached via a gateway
          * ON HER OWN NETWORK */
 
-        CDEBUG (D_NET, "lookup "LPX64" from NAL %d\n", target_nid, 
+        CDEBUG (D_NET, "lookup "LPX64" from NAL %x\n", target_nid, 
                 ne->kpne_interface.kprni_nalid);
         LASSERT (!in_interrupt());
 
@@ -411,7 +411,7 @@ kpr_lookup_target (void *arg, ptl_nid_t target_nid, int nob,
 
         /* NB can't deref 're' now; it might have been removed! */
 
-        CDEBUG (D_NET, "lookup "LPX64" from NAL %d: %d ("LPX64")\n",
+        CDEBUG (D_NET, "lookup "LPX64" from NAL %x: %d ("LPX64")\n",
                 target_nid, ne->kpne_interface.kprni_nalid, rc,
                 (rc == 0) ? *gateway_nidp : (ptl_nid_t)0);
 	return (rc);
@@ -449,7 +449,7 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
         kpr_nal_entry_t     *tmp_ne;
         int                  rc;
 
-        CDEBUG (D_NET, "forward [%p] "LPX64" from NAL %d\n", fwd,
+        CDEBUG (D_NET, "forward [%p] "LPX64" from NAL %x\n", fwd,
                 target_nid, src_ne->kpne_interface.kprni_nalid);
 
         LASSERT (nob == lib_kiov_nob (fwd->kprfd_niov, fwd->kprfd_kiov));
@@ -509,8 +509,8 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
 
                 read_unlock (&kpr_rwlock);
 
-                CDEBUG (D_NET, "forward [%p] "LPX64" from NAL %d: "
-                        "to "LPX64" on NAL %d\n", 
+                CDEBUG (D_NET, "forward [%p] "LPX64" from NAL %x: "
+                        "to "LPX64" on NAL %x\n", 
                         fwd, target_nid, src_ne->kpne_interface.kprni_nalid,
                         fwd->kprfd_gateway_nid, dst_ne->kpne_interface.kprni_nalid);
 
@@ -522,7 +522,7 @@ kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd)
  out:
         kpr_fwd_errors++;
 
-        CDEBUG (D_NET, "Failed to forward [%p] "LPX64" from NAL %d: %d\n", 
+        CDEBUG (D_NET, "Failed to forward [%p] "LPX64" from NAL %x: %d\n", 
                 fwd, target_nid, src_ne->kpne_interface.kprni_nalid, rc);
 
 	(fwd->kprfd_callback)(fwd->kprfd_callback_arg, rc);
@@ -536,14 +536,14 @@ kpr_complete_packet (void *arg, kpr_fwd_desc_t *fwd, int error)
 	kpr_nal_entry_t *dst_ne = (kpr_nal_entry_t *)arg;
 	kpr_nal_entry_t *src_ne = (kpr_nal_entry_t *)fwd->kprfd_router_arg;
 
-        CDEBUG (D_NET, "complete(1) [%p] from NAL %d to NAL %d: %d\n", fwd,
+        CDEBUG (D_NET, "complete(1) [%p] from NAL %x to NAL %x: %d\n", fwd,
                 src_ne->kpne_interface.kprni_nalid, dst_ne->kpne_interface.kprni_nalid, error);
 
 	atomic_dec (&dst_ne->kpne_refcount);    /* CAVEAT EMPTOR dst_ne can disappear now!!! */
 
 	(fwd->kprfd_callback)(fwd->kprfd_callback_arg, error);
 
-        CDEBUG (D_NET, "complete(2) [%p] from NAL %d: %d\n", fwd,
+        CDEBUG (D_NET, "complete(2) [%p] from NAL %x: %d\n", fwd,
                 src_ne->kpne_interface.kprni_nalid, error);
 
         atomic_dec (&kpr_queue_depth);
@@ -560,7 +560,7 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid,
         kpr_gateway_entry_t *ge;
         int                  dup = 0;
 
-        CDEBUG(D_NET, "Add route: %d "LPX64" : "LPX64" - "LPX64"\n",
+        CDEBUG(D_NET, "Add route: %x "LPX64" : "LPX64" - "LPX64"\n",
                gateway_nalid, gateway_nid, lo_nid, hi_nid);
 
         if (gateway_nalid == PTL_NID_ANY ||
@@ -645,7 +645,7 @@ kpr_del_route (int gw_nalid, ptl_nid_t gw_nid,
         struct list_head  *e;
         struct list_head  *n;
 
-        CDEBUG(D_NET, "Del route [%d] "LPX64" : "LPX64" - "LPX64"\n",
+        CDEBUG(D_NET, "Del route [%x] "LPX64" : "LPX64" - "LPX64"\n",
                gw_nalid, gw_nid, lo, hi);
 
         LASSERT(!in_interrupt());
@@ -731,7 +731,7 @@ kpr_nal_cmd(struct portals_cfg *pcfg, void * private)
                 break;
                 
         case NAL_CMD_ADD_ROUTE:
-                CDEBUG(D_IOCTL, "Adding route: [%d] "LPU64" : "LPU64" - "LPU64"\n",
+                CDEBUG(D_IOCTL, "Adding route: [%x] "LPU64" : "LPU64" - "LPU64"\n",
                        pcfg->pcfg_nal, pcfg->pcfg_nid, 
                        pcfg->pcfg_nid2, pcfg->pcfg_nid3);
                 err = kpr_add_route(pcfg->pcfg_gw_nal, pcfg->pcfg_nid,
@@ -739,7 +739,7 @@ kpr_nal_cmd(struct portals_cfg *pcfg, void * private)
                 break;
 
         case NAL_CMD_DEL_ROUTE:
-                CDEBUG (D_IOCTL, "Removing routes via [%d] "LPU64" : "LPU64" - "LPU64"\n",
+                CDEBUG (D_IOCTL, "Removing routes via [%x] "LPU64" : "LPU64" - "LPU64"\n",
                         pcfg->pcfg_gw_nal, pcfg->pcfg_nid, 
                         pcfg->pcfg_nid2, pcfg->pcfg_nid3);
                 err = kpr_del_route (pcfg->pcfg_gw_nal, pcfg->pcfg_nid,
@@ -747,7 +747,7 @@ kpr_nal_cmd(struct portals_cfg *pcfg, void * private)
                 break;
 
         case NAL_CMD_NOTIFY_ROUTER: {
-                CDEBUG (D_IOCTL, "Notifying peer [%d] "LPU64" %s @ %ld\n",
+                CDEBUG (D_IOCTL, "Notifying peer [%x] "LPU64" %s @ %ld\n",
                         pcfg->pcfg_gw_nal, pcfg->pcfg_nid,
                         pcfg->pcfg_flags ? "Enabling" : "Disabling",
                         (time_t)pcfg->pcfg_nid3);

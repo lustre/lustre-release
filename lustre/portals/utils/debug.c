@@ -75,15 +75,22 @@ static int debug_mask = ~0;
 #define MAX_MARK_SIZE 100
 
 static const char *portal_debug_subsystems[] =
-        {"undefined", "mdc", "mds", "osc", "ost", "class", "log", "llite",
-         "rpc", "mgmt", "portals", "libcfs", "socknal", "qswnal", "pinger",
-         "filter", "ptlbd", "echo", "ldlm", "lov", "gmnal", "router", "cobd",
-         "ibnal", "lmv", "cmobd", "smfs", NULL};
+        {"undefined", "mdc", "mds", "osc", 
+         "ost", "class", "log", "llite",
+         "rpc", "mgmt", "portals", "socknal", 
+         "qswnal", "pinger", "filter", "ptlbd", 
+         "echo", "ldlm", "lov", "gmnal",
+         "router", "cobd", "ibnal", "sm",
+         "asobd", "confobd", "lmv", "cmobd",
+         "lonal", NULL};
 static const char *portal_debug_masks[] =
-        {"trace", "inode", "super", "ext2", "malloc", "cache", "info", "ioctl",
-         "blocks", "net", "warning", "buffs", "other", "dentry", "portals",
-         "page", "dlmtrace", "error", "emerg", "ha", "rpctrace", "vfstrace",
-         "reada", "mmap", NULL};
+        {"trace", "inode", "super", "ext2", 
+         "malloc", "cache", "info", "ioctl",
+         "blocks", "net", "warning", "buffs", 
+         "other", "dentry", "portals", "page", 
+         "dlmtrace", "error", "emerg", "ha", 
+         "rpctrace", "vfstrace", "reada", "mmap",
+         "config", NULL};
 
 struct debug_daemon_cmd {
         char *cmd;
@@ -488,51 +495,96 @@ int jt_dbg_debug_file(int argc, char **argv)
         return parse_buffer(in, out);
 }
 
-const char debug_daemon_usage[]="usage: debug_daemon {start file [MB]|stop}\n";
+static int
+dbg_write_cmd(int fd, char *str)
+{
+        int    len = strlen(str);
+        int    rc  = write(fd, str, len);
+        
+        return (rc == len ? 0 : 1);
+}
+
+const char debug_daemon_usage[] = "usage: %s {start file [MB]|stop}\n";
+#define DAEMON_FILE "/proc/sys/portals/daemon_file"
 int jt_dbg_debug_daemon(int argc, char **argv)
 {
-        int rc, fd;
+        int  rc;
+        int  fd;
 
         if (argc <= 1) {
-                fprintf(stderr, debug_daemon_usage);
-                return 0;
+                fprintf(stderr, debug_daemon_usage, argv[0]);
+                return 1;
         }
 
-        fd = open("/proc/sys/portals/daemon_file", O_WRONLY);
+        fd = open(DAEMON_FILE, O_WRONLY);
         if (fd < 0) {
-                fprintf(stderr, "open(daemon_file) failed: %s\n",
+                fprintf(stderr, "open %s failed: %s\n", DAEMON_FILE,
                         strerror(errno));
-                return 1;
+                return -1;
         }
-
+        
+        rc = -1;
         if (strcasecmp(argv[1], "start") == 0) {
-                if (argc != 3) {
-                        fprintf(stderr, debug_daemon_usage);
-                        return 1;
+                if (argc < 3 || argc > 4 ||
+                    (argc == 4 && strlen(argv[3]) > 5)) {
+                        fprintf(stderr, debug_daemon_usage, argv[0]);
+                        goto out;
                 }
 
-                rc = write(fd, argv[2], strlen(argv[2]));
-                if (rc != strlen(argv[2])) {
-                        fprintf(stderr, "write(%s) failed: %s\n", argv[2],
-                                strerror(errno));
-                        close(fd);
-                        return 1;
+                if (argc == 4) {
+                        char       buf[12];
+                        const long min_size = 10;
+                        const long max_size = 20480;
+                        long       size;
+                        char      *end;
+
+                        size = strtoul(argv[3], &end, 0);
+                        if (size < min_size || 
+                            size > max_size ||
+                            *end != 0) {
+                                fprintf(stderr, "size %s invalid, must be in "
+                                        "the range %ld-%ld MB\n", argv[3],
+                                        min_size, max_size);
+                                goto out;
+                        }
+
+                        snprintf(buf, sizeof(buf), "size=%ld", size);
+                        rc = dbg_write_cmd(fd, buf);
+                        if (rc != 0) {
+                                fprintf(stderr, "set %s failed: %s\n",
+                                        buf, strerror(errno));
+                                goto out;
+                        }
                 }
-        } else if (strcasecmp(argv[1], "stop") == 0) {
-                rc = write(fd, "stop", 4);
-                if (rc != 4) {
-                        fprintf(stderr, "write(stop) failed: %s\n",
-                                strerror(errno));
-                        close(fd);
-                        return 1;
+
+                rc = dbg_write_cmd(fd, "start");
+                if (rc != 0) {
+                        fprintf(stderr, "start debug_daemon on %s failed: %s\n",
+                                argv[2], strerror(errno));
+                        goto out;
                 }
-        } else {
-                fprintf(stderr, debug_daemon_usage);
-                return 1;
+
+                rc = 0;
+                goto out;
+        }
+        
+        if (strcasecmp(argv[1], "stop") == 0) {
+                rc = dbg_write_cmd(fd, "stop");
+                if (rc != 0) {
+                        fprintf(stderr, "stopping debug_daemon failed: %s\n",
+                                strerror(errno));
+                        goto out;
+                }
+
+                rc = 0;
+                goto out;
         }
 
+        fprintf(stderr, debug_daemon_usage, argv[0]);
+        rc = -1;
+out:
         close(fd);
-        return 0;
+        return rc;
 }
 
 int jt_dbg_clear_debug_buf(int argc, char **argv)

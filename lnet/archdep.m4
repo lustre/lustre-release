@@ -141,12 +141,22 @@ if test x$enable_modules != xno ; then
 	        ln -s `pwd` $LINUX/fs/lustre
 	fi
 
+	# -------- linux objects (for 2.6) --
+	AC_MSG_CHECKING([for Linux objects dir])
+	AC_ARG_WITH([linux-obj],
+		AC_HELP_STRING([--with-linux-obj=path],
+				[set path to Linux objects dir (default=\$LINUX)]),
+		[LINUX_OBJ=$with_linux_obj],
+		[LINUX_OBJ=$LINUX])
+	AC_MSG_RESULT([$LINUX_OBJ])
+	AC_SUBST(LINUX_OBJ)
+
 	# -------- check for .confg --------
 	AC_ARG_WITH([linux-config],
 		[AC_HELP_STRING([--with-linux-config=path],
-				[set path to Linux .conf (default=\$LINUX/.config)])],
+				[set path to Linux .conf (default=\$LINUX_OBJ/.config)])],
 		[LINUX_CONFIG=$with_linux_config],
-		[LINUX_CONFIG=$LINUX/.config])
+		[LINUX_CONFIG=$LINUX_OBJ/.config])
 	AC_SUBST(LINUX_CONFIG)
 
 	AC_CHECK_FILE([/boot/kernel.h],
@@ -241,7 +251,7 @@ _ACEOF
 AC_DEFUN([LUSTRE_MODULE_COMPILE_IFELSE],
 [m4_ifvaln([$1], [LUSTRE_MODULE_CONFTEST([$1])])dnl
 rm -f kernel-tests/conftest.o kernel-tests/conftest.mod.c kernel-tests/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c kernel-tests && make [$2] -f $PWD/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM SUBDIRS=$PWD/kernel-tests) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c kernel-tests && make [$2] CC="$CC" -f $PWD/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/kernel-tests) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])dnl
@@ -266,8 +276,8 @@ if test x$enable_modules != xno ; then
 		[AC_MSG_ERROR([Kernel config could not be found.  If you are building from a kernel-source rpm consult README.kernel-source])])
 
 	# ----------- make dep run? ------------------
-	AC_CHECK_FILES([$LINUX/include/linux/autoconf.h
-			$LINUX/include/linux/version.h
+	AC_CHECK_FILES([$LINUX_OBJ/include/linux/autoconf.h
+			$LINUX_OBJ/include/linux/version.h
 			$LINUX/include/linux/config.h],[],
 		[AC_MSG_ERROR([Run make config in $LINUX.])])
 
@@ -278,7 +288,7 @@ if test x$enable_modules != xno ; then
 	# tarred up the tree and ran make dep etc. in it, then
 	# version.h gets overwritten with a standard linux one.
 
-	if grep rhconfig $LINUX/include/linux/version.h >/dev/null ; then
+	if grep rhconfig $LINUX_OBJ/include/linux/version.h >/dev/null ; then
 		# This is a clean kernel-source tree, we need to
 		# enable extensive workarounds to get this to build
 		# modules
@@ -292,22 +302,9 @@ if test x$enable_modules != xno ; then
 		EXTRA_KCFLAGS="-include $KERNEL_SOURCE_HEADER $EXTRA_KCFLAGS"
 	fi
 
-	# --- check that we can build modules at all
-	AC_MSG_CHECKING([that modules can be built])
-	LUSTRE_MODULE_TRY_COMPILE([],[],
-		[
-			AC_MSG_RESULT([yes])
-		],[
-			AC_MSG_RESULT([no])
-			AC_MSG_WARN([Consult config.log for details.])
-			AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult README.kernel-source])
-			AC_MSG_ERROR([Kernel modules could not be built.])
-		])
-
-	# ------------ LINUXRELEASE and moduledir ------------------
+	# ------------ external module support ---------------------
 	MODULE_TARGET="SUBDIRS"
 	if test $linux25 = 'yes' ; then
-		# ------------ external module support ---------------------
 		makerule="$PWD/kernel-tests"
 		AC_MSG_CHECKING([for external module build support])
 		rm -f kernel-tests/conftest.i
@@ -325,6 +322,20 @@ if test x$enable_modules != xno ; then
 		makerule="_dir_$PWD/kernel-tests"
 	fi
 	AC_SUBST(MODULE_TARGET)
+
+	# --- check that we can build modules at all
+	AC_MSG_CHECKING([that modules can be built])
+	LUSTRE_MODULE_TRY_COMPILE([],[],
+		[
+			AC_MSG_RESULT([yes])
+		],[
+			AC_MSG_RESULT([no])
+			AC_MSG_WARN([Consult config.log for details.])
+			AC_MSG_WARN([If you are trying to build with a kernel-source rpm, consult README.kernel-source])
+			AC_MSG_ERROR([Kernel modules could not be built.])
+		])
+
+	# ------------ LINUXRELEASE and moduledir ------------------
 	LINUXRELEASE=
 	rm -f kernel-tests/conftest.i
 	AC_MSG_CHECKING([for Linux release])
@@ -466,6 +477,7 @@ if test x$enable_modules != xno ; then
 	AC_SUBST(GMCPPFLAGS)
 	AC_SUBST(GMNAL)
 
+	if test $linux25 = 'no' ; then
 	#### OpenIB 
 	AC_MSG_CHECKING([if OpenIB kernel headers are present])
 	OPENIBCPPFLAGS="-I$LINUX/drivers/infiniband/include -DIN_TREE_BUILD"
@@ -488,6 +500,7 @@ if test x$enable_modules != xno ; then
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 	AC_SUBST(OPENIBCPPFLAGS)
 	AC_SUBST(OPENIBNAL)
+	fi
 
 	#### Infinicon IB
 	AC_MSG_CHECKING([if Infinicon IB kernel headers are present])
@@ -660,8 +673,8 @@ if test x$enable_modules != xno ; then
 			#include <linux/fs.h>
 			#include <linux/version.h>
 		],[
-			#if defined(CONFIG_X86_64) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,24))
-			#error "x86_64 down_read_trylock broken before 2.4.24"
+			#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,24))
+			#error "down_read_trylock broken before 2.4.24"
 			#endif
 			struct inode i;
 			return (char *)&i.i_alloc_sem - (char *)&i;
@@ -719,6 +732,41 @@ if test x$enable_modules != xno ; then
 		],[
 			AC_MSG_RESULT([no])
 		])
+
+	# ------------ kallsyms (so software watchdogs produce useful stacks)
+	AC_MSG_CHECKING([if kallsyms is enabled])
+	LUSTRE_MODULE_TRY_COMPILE(
+		[
+			#include <linux/config.h>
+		],[
+			#ifndef CONFIG_KALLSYMS
+			#error CONFIG_KALLSYMS is not #defined
+			#endif
+		],[
+			AC_MSG_RESULT([yes])
+		],[
+			AC_MSG_RESULT([no])
+			if test "x$ARCH_UM" = "x" ; then
+				AC_MSG_ERROR([Lustre requires that CONFIG_KALLSYMS is enabled in your kernel.])
+			fi
+		])
+
+	# ------------ check for our show_task patch
+	AC_MSG_CHECKING([if kernel exports show_task])
+	have_show_task=0
+	for file in ksyms sched ; do
+		if grep -q "EXPORT_SYMBOL(show_task)" \
+			 "$LINUX/kernel/$file.c" 2>/dev/null ; then
+			have_show_task=1
+			break
+		fi
+	done
+	if test x$have_show_task = x1 ; then
+		AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
+		AC_MSG_RESULT(yes)
+	else
+		AC_MSG_RESULT(no)
+	fi
 
 	case $BACKINGFS in
 		ext3)
@@ -808,3 +856,17 @@ echo "LLCPPFLAGS: $LLCPPFLAGS"
 echo "CFLAGS: $CFLAGS"
 echo "EXTRA_KCFLAGS: $EXTRA_KCFLAGS"
 echo "LLCFLAGS: $LLCFLAGS"
+
+ENABLE_INIT_SCRIPTS=0
+if test x$enable_utils = xyes ; then
+        AC_MSG_CHECKING([whether to install init scripts])
+        # our scripts only work on red hat systems
+        if test -f /etc/init.d/functions -a -f /etc/sysconfig/network ; then
+                ENABLE_INIT_SCRIPTS=1
+                AC_MSG_RESULT([yes])
+        else
+                AC_MSG_RESULT([no])
+        fi
+fi
+AM_CONDITIONAL(INIT_SCRIPTS, test x$ENABLE_INIT_SCRIPTS = "x1")
+AC_SUBST(ENABLE_INIT_SCRIPTS)

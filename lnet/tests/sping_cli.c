@@ -110,7 +110,7 @@ pingcli_start(struct portal_ioctl_data *args)
         client->args = args;
 
         CDEBUG (D_OTHER, "pingcli_setup args: nid "LPX64" (%s),  \
-                        nal %d, size %u, count: %u, timeout: %u\n",
+                        nal %x, size %u, count: %u, timeout: %u\n",
                         args->ioc_nid,
                         portals_nid2str(args->ioc_nid, args->ioc_nal, str),
                         args->ioc_nal, args->ioc_size,
@@ -138,7 +138,7 @@ pingcli_start(struct portal_ioctl_data *args)
         rc = PtlNIInit(args->ioc_nal, 0, NULL, NULL, &nih);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP)
         {
-                CERROR ("NAL %d not loaded.\n", args->ioc_nal);
+                CERROR ("NAL %x not loaded.\n", args->ioc_nal);
                 pingcli_shutdown (nih, 4);
                 return (NULL);
         }

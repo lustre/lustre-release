@@ -27,8 +27,10 @@
 # define USERMODEHELPER(path, argv, envp)                               \
   call_usermodehelper(path, argv, envp, 1)
 # define RECALC_SIGPENDING         recalc_sigpending()
+# define CLEAR_SIGPENDING          clear_tsk_thread_flag(current,       \
+                                                         TIF_SIGPENDING)
 # define CURRENT_SECONDS           get_seconds()
-# define smp_num_cpus              NR_CPUS
+# define smp_num_cpus              num_online_cpus()
 
 
 #elif defined(CONFIG_RH_2_4_20) /* RH 2.4.x */
@@ -40,10 +42,8 @@
 # define USERMODEHELPER(path, argv, envp)                               \
   call_usermodehelper(path, argv, envp)
 # define RECALC_SIGPENDING         recalc_sigpending()
+# define CLEAR_SIGPENDING          (current->sigpending = 0)
 # define CURRENT_SECONDS           CURRENT_TIME
-
-# define kernel_text_address(addr) is_kernel_text_address(addr)
-extern int is_kernel_text_address(unsigned long addr);
 
 #else /* 2.4.x */
 
@@ -54,19 +54,22 @@ extern int is_kernel_text_address(unsigned long addr);
 # define USERMODEHELPER(path, argv, envp)                               \
   call_usermodehelper(path, argv, envp)
 # define RECALC_SIGPENDING         recalc_sigpending(current)
+# define CLEAR_SIGPENDING          (current->sigpending = 0)
 # define CURRENT_SECONDS           CURRENT_TIME
-
-# define kernel_text_address(addr) is_kernel_text_address(addr)
-extern int is_kernel_text_address(unsigned long addr);
 
 #endif
 
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
-# define THREAD_NAME(comm, len, fmt, a...)                              \
-        snprintf(comm, len, fmt "|%d", ## a, current->thread.extern_pid)
+#define UML_PID(tsk) ((tsk)->thread.extern_pid)
 #elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#define UML_PID(tsk) ((tsk)->thread.mode.tt.extern_pid)
+#else
+#define UML_PID(tsk) ((tsk)->pid)
+#endif
+
+#if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 # define THREAD_NAME(comm, len, fmt, a...)                              \
-        snprintf(comm, len,fmt"|%d", ## a,current->thread.mode.tt.extern_pid)
+        snprintf(comm, len,fmt"|%d", ## a, UML_PID(current))
 #else
 # define THREAD_NAME(comm, len, fmt, a...)                              \
         snprintf(comm, len, fmt, ## a)
