@@ -31,7 +31,7 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_mds.h>
 
-int client_import_connect(struct lustre_handle *dlm_handle, 
+int client_import_connect(struct lustre_handle *dlm_handle,
                           struct obd_device *obd,
                           struct obd_uuid *cluuid)
 {
@@ -72,6 +72,8 @@ int client_import_connect(struct lustre_handle *dlm_handle,
 
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
+
+        lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_PEER);
 
         imp->imp_dlm_handle = *dlm_handle;
 
