@@ -296,7 +296,7 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, int pattern)
         (*lsmp)->lsm_stripe_count = stripe_count;
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
         (*lsmp)->lsm_pattern = pattern;
-        (*lsmp)->lsm_oinfo[0].loi_ost_idx = ~0UL;
+        (*lsmp)->lsm_oinfo[0].loi_ost_idx = ~0;
 
         for (i = 0, loi = (*lsmp)->lsm_oinfo; i < stripe_count; i++, loi++)
                 loi_init(loi);
