@@ -1,15 +1,15 @@
  Documentation/filesystems/ext2.txt |   16 ++
  fs/ext3/Makefile                   |    2 
  fs/ext3/inode.c                    |    4 
- fs/ext3/iopen.c                    |  236 +++++++++++++++++++++++++++++++++++++
+ fs/ext3/iopen.c                    |  240 +++++++++++++++++++++++++++++++++++++
  fs/ext3/iopen.h                    |   15 ++
- fs/ext3/namei.c                    |   11 +
+ fs/ext3/namei.c                    |   13 +-
  fs/ext3/super.c                    |   11 +
  include/linux/ext3_fs.h            |    2 
- 8 files changed, 295 insertions(+), 2 deletions(-)
+ 8 files changed, 301 insertions(+), 2 deletions(-)
 
 --- linux-2.4.20/Documentation/filesystems/ext2.txt~iopen	2001-07-11 16:44:45.000000000 -0600
-+++ linux-2.4.20-braam/Documentation/filesystems/ext2.txt	2003-05-11 11:06:22.000000000 -0600
++++ linux-2.4.20-braam/Documentation/filesystems/ext2.txt	2003-05-17 14:06:00.000000000 -0600
 @@ -35,6 +35,22 @@ resgid=n			The group ID which may use th
  
  sb=n				Use alternate superblock at this location.
@@ -33,8 +33,8 @@
  grpquota,noquota,quota,usrquota	Quota options are silently ignored by ext2.
  
  
---- linux-2.4.20/fs/ext3/Makefile~iopen	2003-05-11 11:05:55.000000000 -0600
-+++ linux-2.4.20-braam/fs/ext3/Makefile	2003-05-11 11:07:31.000000000 -0600
+--- linux-2.4.20/fs/ext3/Makefile~iopen	2003-05-17 14:05:57.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/Makefile	2003-05-17 14:06:00.000000000 -0600
 @@ -11,7 +11,7 @@ O_TARGET := ext3.o
  
  export-objs := ext3-exports.o
@@ -44,8 +44,8 @@
  		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o
  obj-m    := $(O_TARGET)
  
---- linux-2.4.20/fs/ext3/inode.c~iopen	2003-05-11 11:05:59.000000000 -0600
-+++ linux-2.4.20-braam/fs/ext3/inode.c	2003-05-11 11:06:22.000000000 -0600
+--- linux-2.4.20/fs/ext3/inode.c~iopen	2003-05-17 14:06:00.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/inode.c	2003-05-17 14:06:00.000000000 -0600
 @@ -31,6 +31,7 @@
  #include <linux/highuid.h>
  #include <linux/quotaops.h>
@@ -65,8 +65,10 @@
  		goto bad_inode;
  	bh = iloc.bh;
 --- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-braam/fs/ext3/iopen.c	2003-05-17 10:44:42.000000000 -0600
-@@ -0,0 +1,236 @@
++++ linux-2.4.20-braam/fs/ext3/iopen.c	2003-05-17 22:18:55.000000000 -0600
+@@ -0,0 +1,240 @@
++
++
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -136,13 +138,17 @@
 +        spin_lock(&dcache_lock);
 +        list_for_each(lp, &inode->i_dentry) {
 +                alternate = list_entry(lp, struct dentry, d_alias);
-+                if (!(alternate->d_flags & DCACHE_NFSD_DISCONNECTED)) {
-+                        dget_locked(alternate);
-+                        alternate->d_vfs_flags |= DCACHE_REFERENCED;
-+                        iput(inode);
-+                        spin_unlock(&dcache_lock);
-+                        return alternate;
-+                }
++                assert(!(alternate->d_flags & DCACHE_NFSD_DISCONNECTED));
++        }
++
++        if (!list_empty(&inode->i_dentry)) {
++                alternate = list_entry(inode->i_dentry.next, 
++                                       struct dentry, d_alias);
++                dget_locked(alternate);
++                alternate->d_vfs_flags |= DCACHE_REFERENCED;
++                iput(inode);
++                spin_unlock(&dcache_lock);
++                return alternate;
 +        }
 +        dentry->d_flags |= DCACHE_NFSD_DISCONNECTED;
 +        spin_unlock(&dcache_lock);
@@ -179,17 +185,22 @@
 +        /* preferrably return a connected dentry */
 +        spin_lock(&dcache_lock);
 +        /* verify this dentry is really new */
++        assert(!de->d_inode);
 +        assert(list_empty(&de->d_subdirs));
 +        assert(list_empty(&de->d_alias));
-+        //assert(list_empty(&inode->i_dentry));
++
++
 +        list_for_each(lp, &inode->i_dentry) {
 +                tmp = list_entry(lp, struct dentry, d_alias);
 +                if (tmp->d_flags & DCACHE_NFSD_DISCONNECTED) {
++                        assert(tmp->d_alias.next == &inode->i_dentry);
++                        assert(tmp->d_alias.prev == &inode->i_dentry);
 +                        goal = tmp;
 +                        dget_locked(goal);
 +                        break;
 +                }
 +        }
++
 +        if (!goal) { 
 +                spin_unlock(&dcache_lock);
 +                return NULL; 
@@ -212,13 +223,6 @@
 +	/* And add them back to the (new) parent lists */
 +	list_add(&goal->d_child, &goal->d_parent->d_subdirs);
 +	list_add(&de->d_child, &de->d_parent->d_subdirs);
-+
-+        list_for_each(lp, &inode->i_dentry) {
-+                goal = list_entry(lp, struct dentry, d_alias);
-+                if (goal->d_flags & DCACHE_NFSD_DISCONNECTED) {
-+                        assert(1==0);
-+                }
-+        }
 +
 +        spin_unlock(&dcache_lock);
 +        return goal;
@@ -304,7 +308,7 @@
 +	return 1;
 +}
 --- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-braam/fs/ext3/iopen.h	2003-05-11 11:06:22.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/iopen.h	2003-05-17 14:06:00.000000000 -0600
 @@ -0,0 +1,15 @@
 +/*
 + * iopen.h
@@ -321,8 +325,8 @@
 +extern int ext3_iopen_get_inode(struct inode * inode);
 +
 +
---- linux-2.4.20/fs/ext3/namei.c~iopen	2003-05-11 11:05:59.000000000 -0600
-+++ linux-2.4.20-braam/fs/ext3/namei.c	2003-05-11 19:41:17.000000000 -0600
+--- linux-2.4.20/fs/ext3/namei.c~iopen	2003-05-17 14:05:59.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/namei.c	2003-05-17 22:23:08.000000000 -0600
 @@ -35,7 +35,7 @@
  #include <linux/string.h>
  #include <linux/locks.h>
@@ -354,19 +358,21 @@
  	bh = ext3_find_entry(dentry, &de);
  	inode = NULL;
  	if (bh) {
-@@ -942,6 +947,10 @@ static struct dentry *ext3_lookup(struct
+@@ -942,6 +947,12 @@ static struct dentry *ext3_lookup(struct
  			return ERR_PTR(-EACCES);
  		}
  	}
 +                
-+        if (inode && (alternate = iopen_connect_dentry(dentry, inode))) 
++        if (inode && (alternate = iopen_connect_dentry(dentry, inode))) {
++                iput(inode);
 +                return alternate;
++        }
 +
  	d_add(dentry, inode);
  	return NULL;
  }
---- linux-2.4.20/fs/ext3/super.c~iopen	2003-05-11 11:05:58.000000000 -0600
-+++ linux-2.4.20-braam/fs/ext3/super.c	2003-05-11 11:06:22.000000000 -0600
+--- linux-2.4.20/fs/ext3/super.c~iopen	2003-05-17 14:05:59.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/super.c	2003-05-17 14:06:00.000000000 -0600
 @@ -820,6 +820,17 @@ static int parse_options (char * options
  		         || !strcmp (this_char, "quota")
  		         || !strcmp (this_char, "usrquota"))
@@ -385,8 +391,8 @@
  		else if (!strcmp (this_char, "journal")) {
  			/* @@@ FIXME */
  			/* Eventually we will want to be able to create
---- linux-2.4.20/include/linux/ext3_fs.h~iopen	2003-05-11 11:05:59.000000000 -0600
-+++ linux-2.4.20-braam/include/linux/ext3_fs.h	2003-05-15 13:37:54.000000000 -0600
+--- linux-2.4.20/include/linux/ext3_fs.h~iopen	2003-05-17 14:05:59.000000000 -0600
++++ linux-2.4.20-braam/include/linux/ext3_fs.h	2003-05-17 14:06:29.000000000 -0600
 @@ -322,6 +322,8 @@ struct ext3_inode {
  #define EXT3_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
  #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
