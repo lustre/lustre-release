@@ -30,14 +30,18 @@
 #include <linux/lustre_ha.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
-#include <linux/statfs.h>
 #include <linux/fs.h>
 #include <linux/lprocfs_status.h>
 #include "llite_internal.h"
+#include "llite_lib.h"
 
-kmem_cache_t *ll_file_data_slab;
+extern struct address_space_operations ll_aops;
+extern struct address_space_operations ll_dir_aops;
+extern struct super_operations ll_super_operations;
 
-
+#ifndef log2
+#define log2(n) ffz(~(n))
+#endif
 
 char *ll_read_opt(const char *opt, char *data)
 {
@@ -110,14 +114,16 @@ void ll_lli_init(struct ll_inode_info *lli)
         sema_init(&lli->lli_open_sem, 1);
         spin_lock_init(&lli->lli_read_extent_lock);
         INIT_LIST_HEAD(&lli->lli_read_extents);
-        ll_lldo_init(&lli->lli_dirty);
         lli->lli_flags = 0;
         lli->lli_maxbytes = LUSTRE_STRIPE_MAXBYTES;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        ll_lldo_init(&lli->lli_dirty);
         spin_lock_init(&lli->lli_pg_lock);
         INIT_LIST_HEAD(&lli->lli_lc_item);
         plist_init(&lli->lli_pl_read);
         plist_init(&lli->lli_pl_write);
         atomic_set(&lli->lli_in_writepages, 0);
+#endif
 }
 
 int ll_fill_super(struct super_block *sb, void *data, int silent)
@@ -138,18 +144,22 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
 
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:\n");
+        CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
         OBD_ALLOC(sbi, sizeof(*sbi));
         if (!sbi)
                 RETURN(-ENOMEM);
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);
+        sb->u.generic_sbp = sbi;
+#else
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
-        generate_random_uuid(uuid);
         spin_lock_init(&sbi->ll_iostats.fis_lock);
-        class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
-
         ll_s2sbi(sb) = sbi;
+#endif
+        generate_random_uuid(uuid);
+        class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
 
         ll_options(data, &osc, &mdc, &sbi->ll_flags);
 
@@ -241,7 +251,11 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         lic.lic_lsm = NULL;
 
         LASSERT(sbi->ll_rootino != 0);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        root = iget4(sb, sbi->ll_rootino, NULL, &lic);
+#else
         root = ll_iget(sb, sbi->ll_rootino, &lic);
+#endif
 
         ptlrpc_req_finished(request);
 
@@ -251,13 +265,14 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_cbd, err = -EBADF);
         }
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         /* initialize the pagecache writeback thread */
         err = lliod_start(sbi, root);
         if (err) {
                 CERROR("failed to start lliod: rc = %d\n",err);
                 GOTO(out_root, sb = NULL);
         }
-
+#endif
         sb->s_root = d_alloc_root(root);
 
         if (proc_lustre_fs_root) {
@@ -275,12 +290,16 @@ out_dev:
 
         RETURN(err);
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 out_root:
         iput(root);
+#endif
 out_cbd:
         ll_commitcbd_cleanup(sbi);
 out_lliod:
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         lliod_stop(sbi);
+#endif
 out_osc:
         obd_disconnect(&sbi->ll_osc_conn, 0);
 out_mdc:
@@ -292,74 +311,63 @@ out_free:
         goto out_dev;
 } /* ll_read_super */
 
-int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
+void ll_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct obd_export *mdc_exp = class_conn2export(&sbi->ll_mdc_conn);
-        struct obd_export *osc_exp;
-        struct obd_statfs osfs;
-        int rc;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        struct obd_device *obd = class_conn2obd(&sbi->ll_mdc_conn);
+        struct list_head *tmp, *next;
+#else
+        struct hlist_node *tmp, *next;
+#endif
+        struct ll_fid rootfid;
         ENTRY;
 
-        if (mdc_exp == NULL)
-                RETURN(-EINVAL);
+        CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
+        list_del(&sbi->ll_conn_chain);
+        ll_commitcbd_cleanup(sbi);
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+	lliod_stop(sbi);
+#endif
+        obd_disconnect(&sbi->ll_osc_conn, 0);
 
-        CDEBUG(D_VFSTRACE, "VFS Op:\n");
-        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_STAFS);
-        memset(sfs, 0, sizeof(*sfs));
-        rc = obd_statfs(mdc_exp, &osfs);
-        statfs_unpack(sfs, &osfs);
-        if (rc)
-                CERROR("mdc_statfs fails: rc = %d\n", rc);
-        else
-                CDEBUG(D_SUPER, "mdc_statfs shows blocks "LPU64"/"LPU64
-                       " objects "LPU64"/"LPU64"\n",
-                       osfs.os_bavail, osfs.os_blocks,
-                       osfs.os_ffree, osfs.os_files);
+        /* NULL request to force sync on the MDS, and get the last_committed
+         * value to flush remaining RPCs from the sending queue on client.
+         *
+         * XXX This should be an mdc_sync() call to sync the whole MDS fs,
+         *     which we can call for other reasons as well.
+         */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        if (!obd->obd_no_recov)
+#endif
+                mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
 
-        /* temporary until mds_statfs returns statfs info for all OSTs */
-        if (!rc) {
-                osc_exp = class_conn2export(&sbi->ll_osc_conn);
-                if (osc_exp == NULL)
-                        GOTO(out, rc = -EINVAL);
-                rc = obd_statfs(osc_exp, &osfs);
-                class_export_put(osc_exp);
-                if (rc) {
-                        CERROR("obd_statfs fails: rc = %d\n", rc);
-                        GOTO(out, rc);
-                }
-                CDEBUG(D_SUPER, "obd_statfs shows blocks "LPU64"/"LPU64
-                       " objects "LPU64"/"LPU64"\n",
-                       osfs.os_bavail, osfs.os_blocks,
-                       osfs.os_ffree, osfs.os_files);
-
-                while (osfs.os_blocks > ~0UL) {
-                        sfs->f_bsize <<= 1;
-
-                        osfs.os_blocks >>= 1;
-                        osfs.os_bfree >>= 1;
-                        osfs.os_bavail >>= 1;
-                }
-
-                sfs->f_blocks = osfs.os_blocks;
-                sfs->f_bfree = osfs.os_bfree;
-                sfs->f_bavail = osfs.os_bavail;
-
-                /* If we don't have as many objects free on the OST as inodes
-                 * on the MDS, we reduce the total number of inodes to
-                 * compensate, so that the "inodes in use" number is correct.
-                 */
-                if (osfs.os_ffree < (__u64)sfs->f_ffree) {
-                        sfs->f_files = (sfs->f_files - sfs->f_ffree) +
-                                       osfs.os_ffree;
-                        sfs->f_ffree = osfs.os_ffree;
-                }
+        lprocfs_unregister_mountpoint(sbi);
+        if (sbi->ll_proc_root) {
+                lprocfs_remove(sbi->ll_proc_root);
+                sbi->ll_proc_root = NULL;
         }
 
-out:
-        class_export_put(mdc_exp);
-        RETURN(rc);
-}
+        obd_disconnect(&sbi->ll_mdc_conn, 0);
+
+        spin_lock(&dcache_lock);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        list_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
+                struct dentry *dentry = list_entry(tmp, struct dentry, d_hash);
+                shrink_dcache_parent(dentry);
+        }
+#else
+        hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
+                struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
+                shrink_dcache_parent(dentry);
+        }
+#endif
+        spin_unlock(&dcache_lock);
+
+        OBD_FREE(sbi, sizeof(*sbi));
+
+        EXIT;
+} /* ll_put_super */
 
 void ll_clear_inode(struct inode *inode)
 {
@@ -442,9 +450,8 @@ out:
 }
 #endif
 
-
 /* like inode_setattr, but doesn't mark the inode dirty */
-static int ll_attr2inode(struct inode *inode, struct iattr *attr, int trunc)
+int ll_attr2inode(struct inode *inode, struct iattr *attr, int trunc)
 {
         unsigned int ia_valid = attr->ia_valid;
         int error = 0;
@@ -454,7 +461,7 @@ static int ll_attr2inode(struct inode *inode, struct iattr *attr, int trunc)
                         error = -EFBIG;
                         goto out;
                 }
-                 error = vmtruncate(inode, attr->ia_size);
+                error = vmtruncate(inode, attr->ia_size);
                 if (error)
                         goto out;
         } else if (ia_valid & ATTR_SIZE)
@@ -510,13 +517,19 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
                         struct obdo oa;
                         int err2;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                        CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
+                               inode->i_ino, attr->ia_mtime);
+                        oa.o_mtime = attr->ia_mtime;
+#else
                         CDEBUG(D_INODE, "set mtime on OST inode %lu to "
                                LPU64"\n", inode->i_ino, 
                                ll_ts2u64(&attr->ia_mtime));
+                        oa.o_mtime = ll_ts2u64(&attr->ia_mtime);
+#endif
                         oa.o_id = lsm->lsm_object_id;
                         oa.o_mode = S_IFREG;
                         oa.o_valid = OBD_MD_FLID |OBD_MD_FLTYPE |OBD_MD_FLMTIME;
-                        oa.o_mtime = ll_ts2u64(&attr->ia_mtime);
                         err2 = obd_setattr(&sbi->ll_osc_conn, &oa, lsm, NULL);
                         if (err2) {
                                 CERROR("obd_setattr fails: rc=%d\n", err);
@@ -538,11 +551,19 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         int rc = 0, err;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_SETATTR);
+#endif
 
         if ((attr->ia_valid & ATTR_SIZE)) {
                 struct ldlm_extent extent = {attr->ia_size, OBD_OBJECT_EOF};
                 struct lustre_handle lockh = { 0 };
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                if (attr->ia_size > ll_file_maxbytes(inode))
+                        RETURN(-EFBIG);
+#endif
 
                 /* If this file doesn't have stripes yet, it is already,
                    by definition, truncated. */
@@ -602,12 +623,18 @@ skip_extent_lock:
                 struct obdo oa;
                 int err2;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
+                       inode->i_ino, attr->ia_mtime);
+                oa.o_mtime = attr->ia_mtime;
+#else
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to "LPU64"\n",
                        inode->i_ino, ll_ts2u64(&attr->ia_mtime));
+                oa.o_mtime = ll_ts2u64(&attr->ia_mtime);
+#endif
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_mode = S_IFREG;
                 oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMTIME;
-                oa.o_mtime = ll_ts2u64(&attr->ia_mtime);
                 err2 = obd_setattr(&sbi->ll_osc_conn, &oa, lsm, NULL);
                 if (err2) {
                         CERROR("obd_setattr fails: rc=%d\n", err);
@@ -629,6 +656,74 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
         return ll_inode_setattr(de->d_inode, attr, 1);
 }
 
+int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
+{
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        struct obd_export *mdc_exp = class_conn2export(&sbi->ll_mdc_conn);
+        struct obd_export *osc_exp;
+        struct obd_statfs osfs;
+        int rc;
+        ENTRY;
+
+        if (mdc_exp == NULL)
+                RETURN(-EINVAL);
+
+        CDEBUG(D_VFSTRACE, "VFS Op:\n");
+        lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_STAFS);
+        memset(sfs, 0, sizeof(*sfs));
+        rc = obd_statfs(mdc_exp, &osfs);
+        statfs_unpack(sfs, &osfs);
+        if (rc)
+                CERROR("mdc_statfs fails: rc = %d\n", rc);
+        else
+                CDEBUG(D_SUPER, "mdc_statfs shows blocks "LPU64"/"LPU64
+                       " objects "LPU64"/"LPU64"\n",
+                       osfs.os_bavail, osfs.os_blocks,
+                       osfs.os_ffree, osfs.os_files);
+
+        /* temporary until mds_statfs returns statfs info for all OSTs */
+        if (!rc) {
+                osc_exp = class_conn2export(&sbi->ll_osc_conn);
+                if (osc_exp == NULL)
+                        GOTO(out, rc = -EINVAL);
+                rc = obd_statfs(osc_exp, &osfs);
+                class_export_put(osc_exp);
+                if (rc) {
+                        CERROR("obd_statfs fails: rc = %d\n", rc);
+                        GOTO(out, rc);
+                }
+                CDEBUG(D_SUPER, "obd_statfs shows blocks "LPU64"/"LPU64
+                       " objects "LPU64"/"LPU64"\n",
+                       osfs.os_bavail, osfs.os_blocks,
+                       osfs.os_ffree, osfs.os_files);
+
+                while (osfs.os_blocks > ~0UL) {
+                        sfs->f_bsize <<= 1;
+
+                        osfs.os_blocks >>= 1;
+                        osfs.os_bfree >>= 1;
+                        osfs.os_bavail >>= 1;
+                }
+
+                sfs->f_blocks = osfs.os_blocks;
+                sfs->f_bfree = osfs.os_bfree;
+                sfs->f_bavail = osfs.os_bavail;
+
+                /* If we don't have as many objects free on the OST as inodes
+                 * on the MDS, we reduce the total number of inodes to
+                 * compensate, so that the "inodes in use" number is correct.
+                 */
+                if (osfs.os_ffree < (__u64)sfs->f_ffree) {
+                        sfs->f_files = (sfs->f_files - sfs->f_ffree) +
+                                       osfs.os_ffree;
+                        sfs->f_ffree = osfs.os_ffree;
+                }
+        }
+
+out:
+        class_export_put(mdc_exp);
+        RETURN(rc);
+}
 
 void ll_update_inode(struct inode *inode, struct mds_body *body,
                      struct lov_stripe_md *lsm)
@@ -669,7 +764,11 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
         if (body->valid & OBD_MD_FLGENER)
                 inode->i_generation = body->generation;
         if (body->valid & OBD_MD_FLRDEV)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                inode->i_rdev = body->rdev;
+#else
                 inode->i_rdev = to_kdev_t(body->rdev);
+#endif
         if (body->valid & OBD_MD_FLSIZE)
                 inode->i_size = body->size;
         if (body->valid & OBD_MD_FLBLOCKS)
@@ -708,8 +807,42 @@ void ll_read_inode2(struct inode *inode, void *opaque)
                 EXIT;
         } else {
                 inode->i_op = &ll_special_inode_operations;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 init_special_inode(inode, inode->i_mode, 
                                    kdev_t_to_nr(inode->i_rdev));
+#else
+                init_special_inode(inode, inode->i_mode, inode->i_rdev);
+#endif
                 EXIT;
         }
 }
+
+void ll_umount_begin(struct super_block *sb)
+{
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        struct obd_device *obd;
+        struct obd_ioctl_data ioc_data = { 0 };
+
+        ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op:\n");
+
+        obd = class_conn2obd(&sbi->ll_mdc_conn);
+        obd->obd_no_recov = 1;
+        obd_iocontrol(IOC_OSC_SET_ACTIVE, &sbi->ll_mdc_conn, sizeof ioc_data,
+                      &ioc_data, NULL);
+
+        obd = class_conn2obd(&sbi->ll_osc_conn);
+        obd->obd_no_recov = 1;
+        obd_iocontrol(IOC_OSC_SET_ACTIVE, &sbi->ll_osc_conn, sizeof ioc_data,
+                      &ioc_data, NULL);
+        
+        /* Really, we'd like to wait until there are no requests outstanding,
+         * and then continue.  For now, we just invalidate the requests,
+         * schedule, and hope.
+         */
+        schedule();
+
+        EXIT;
+}
+
+
