@@ -260,7 +260,7 @@ koibnal_set_mynid(ptl_nid_t nid)
         /* Delete all existing peers and their connections after new
          * NID/incarnation set to ensure no old connections in our brave
          * new world. */
-        koibnal_del_matching_peers (PTL_NID_ANY, 0, 1, 1);
+        koibnal_del_peer (PTL_NID_ANY, 0);
 
         rc = 0;
         if (koibnal_data.koib_nid != PTL_NID_ANY) {
@@ -292,7 +292,7 @@ koibnal_set_mynid(ptl_nid_t nid)
                 koibnal_data.koib_nid = PTL_NID_ANY;
                 /* remove any peers that sprung up while I failed to
                  * advertise myself */
-                koibnal_del_matching_peers (PTL_NID_ANY, 0, 1, 1);
+                koibnal_del_peer (PTL_NID_ANY, 0);
         }
 
         up (&koibnal_data.koib_nid_mutex);
@@ -412,8 +412,8 @@ koibnal_unlink_peer_locked (koib_peer_t *peer)
         koibnal_put_peer (peer);
 }
 
-koib_peer_t *
-koibnal_get_persistent_peer_by_idx (int index)
+int
+koibnal_get_peer_info (int index, ptl_nid_t *nidp, int *persistencep)
 {
         koib_peer_t       *peer;
         struct list_head  *ptmp;
@@ -421,29 +421,28 @@ koibnal_get_persistent_peer_by_idx (int index)
 
         read_lock (&koibnal_data.koib_global_lock);
 
-       for (i = 0; i < koibnal_data.koib_peer_hash_size; i++) {
+        for (i = 0; i < koibnal_data.koib_peer_hash_size; i++) {
 
                 list_for_each (ptmp, &koibnal_data.koib_peers[i]) {
-
+                        
                         peer = list_entry (ptmp, koib_peer_t, ibp_list);
                         LASSERT (peer->ibp_persistence != 0 ||
                                  peer->ibp_connecting != 0 ||
                                  !list_empty (&peer->ibp_conns));
 
-                        if (peer->ibp_persistence == 0)
-                                continue;
-
                         if (index-- > 0)
                                 continue;
 
-                        atomic_inc (&peer->ibp_refcount);
+                        *nidp = peer->ibp_nid;
+                        *persistencep = peer->ibp_persistence;
+                        
                         read_unlock (&koibnal_data.koib_global_lock);
-                        return (peer);
+                        return (0);
                 }
         }
 
         read_unlock (&koibnal_data.koib_global_lock);
-        return (NULL);
+        return (-ENOENT);
 }
 
 int
@@ -479,13 +478,13 @@ koibnal_add_persistent_peer (ptl_nid_t nid)
 }
 
 void
-koibnal_del_peer_locked (koib_peer_t *peer, int all_refs, int del_conns)
+koibnal_del_peer_locked (koib_peer_t *peer, int single_share)
 {
         struct list_head *ctmp;
         struct list_head *cnxt;
         koib_conn_t      *conn;
 
-        if (all_refs)
+        if (!single_share)
                 peer->ibp_persistence = 0;
         else if (peer->ibp_persistence > 0)
                 peer->ibp_persistence--;
@@ -493,24 +492,17 @@ koibnal_del_peer_locked (koib_peer_t *peer, int all_refs, int del_conns)
         if (peer->ibp_persistence != 0)
                 return;
 
-        if (list_empty(&peer->ibp_conns)) {
-                koibnal_unlink_peer_locked (peer);
-                return;
-        }
-        
-        if (!del_conns)
-                return;
-
         list_for_each_safe (ctmp, cnxt, &peer->ibp_conns) {
                 conn = list_entry(ctmp, koib_conn_t, ibc_list);
 
                 koibnal_close_conn_locked (conn, 0);
         }
+
+        /* NB peer unlinks itself when last conn is closed */
 }
 
 int
-koibnal_del_matching_peers (ptl_nid_t nid, int only_persistent, 
-                            int all_refs, int del_conns)
+koibnal_del_peer (ptl_nid_t nid, int single_share)
 {
         unsigned long      flags;
         struct list_head  *ptmp;
@@ -537,17 +529,13 @@ koibnal_del_matching_peers (ptl_nid_t nid, int only_persistent,
                                  peer->ibp_connecting != 0 ||
                                  !list_empty (&peer->ibp_conns));
 
-                        /* only looking for persistent peers */
-                        if (only_persistent && peer->ibp_persistence == 0)
-                                continue;
-
                         if (!(nid == PTL_NID_ANY || peer->ibp_nid == nid))
                                 continue;
 
-                        koibnal_del_peer_locked (peer, all_refs, del_conns);
+                        koibnal_del_peer_locked (peer, single_share);
                         rc = 0;         /* matched something */
 
-                        if (!all_refs || nid != PTL_NID_ANY)
+                        if (single_share)
                                 goto out;
                 }
         }
@@ -884,36 +872,28 @@ koibnal_cmd(struct portals_cfg *pcfg, void * private)
         LASSERT (pcfg != NULL);
 
         switch(pcfg->pcfg_command) {
-        case NAL_CMD_GET_AUTOCONN: {
-                koib_peer_t *peer;
+        case NAL_CMD_GET_PEER: {
+                ptl_nid_t   nid = 0;
+                int         share_count = 0;
 
-                peer = koibnal_get_persistent_peer_by_idx(pcfg->pcfg_count);
-                if (peer == NULL) {
-                        rc = -ENOENT;
-                } else {
-                        rc = 0;
-                        pcfg->pcfg_nid   = peer->ibp_nid;
-                        pcfg->pcfg_id    = 0;
-                        pcfg->pcfg_misc  = 0;
-                        pcfg->pcfg_count = 0;
-                        pcfg->pcfg_size  = 0;
-                        pcfg->pcfg_wait  = peer->ibp_persistence;
-                        pcfg->pcfg_flags = 0;
-                        koibnal_put_peer (peer);
-                }
+                rc = koibnal_get_peer_info(pcfg->pcfg_count,
+                                           &nid, &share_count);
+                pcfg->pcfg_nid   = nid;
+                pcfg->pcfg_size  = 0;
+                pcfg->pcfg_id    = 0;
+                pcfg->pcfg_misc  = 0;
+                pcfg->pcfg_count = 0;
+                pcfg->pcfg_wait  = share_count;
                 break;
         }
-        case NAL_CMD_ADD_AUTOCONN: {
+        case NAL_CMD_ADD_PEER: {
                 rc = koibnal_add_persistent_peer (pcfg->pcfg_nid);
                 break;
         }
-        case NAL_CMD_DEL_AUTOCONN: {
-                rc = koibnal_del_matching_peers (pcfg->pcfg_nid, 
-                                                 1, /* only persistent */
-                                                 /* flags&1 == share */
-                                                 (pcfg->pcfg_flags & 1) == 0,
-                                                 /* flags&2 == keep conns */
-                                                 (pcfg->pcfg_flags & 2) == 0);
+        case NAL_CMD_DEL_PEER: {
+                rc = koibnal_del_peer (pcfg->pcfg_nid, 
+                                       /* flags == single_share */
+                                       pcfg->pcfg_flags != 0);
                 break;
         }
         case NAL_CMD_GET_CONN: {

@@ -469,8 +469,7 @@ koibnal_page2phys (struct page *p)
 
 extern koib_peer_t *koibnal_create_peer (ptl_nid_t nid);
 extern void koibnal_put_peer (koib_peer_t *peer);
-extern int koibnal_del_matching_peers (ptl_nid_t nid, int persistent_only, 
-                                       int all_refs, int del_conns);
+extern int koibnal_del_peer (ptl_nid_t nid, int single_share);
 extern koib_peer_t *koibnal_find_peer_locked (ptl_nid_t nid);
 extern void koibnal_unlink_peer_locked (koib_peer_t *peer);
 extern int  koibnal_close_stale_conns_locked (koib_peer_t *peer, 
