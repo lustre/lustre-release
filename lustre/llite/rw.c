@@ -110,9 +110,9 @@ void ll_truncate(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
-        /* object not yet allocated - this is handled in ll_setattr_raw */
         if (!lsm) {
-                CERROR("truncate on inode %lu with no objects\n", inode->i_ino);
+                CDEBUG(D_INODE, "truncate on inode %lu with no objects\n",
+                       inode->i_ino);
                 EXIT;
                 return;
         }

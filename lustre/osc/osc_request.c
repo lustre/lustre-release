@@ -1553,8 +1553,7 @@ static void osc_check_rpcs(struct client_obd *cli)
         ENTRY;
 
         while ((loi = osc_next_loi(cli)) != NULL) {
-
-                LOI_DEBUG(loi, "%d in flight", cli->cl_brw_in_flight);
+                LOI_DEBUG(loi, "%d in flight\n", cli->cl_brw_in_flight);
 
                 if (cli->cl_brw_in_flight >= cli->cl_max_rpcs_in_flight)
                         break;

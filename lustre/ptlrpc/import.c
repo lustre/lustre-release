@@ -441,7 +441,9 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                        imp->imp_connection->c_remote_uuid.uuid);
 
                 ptlrpc_set_import_active(imp, 1);
-                ptlrpc_resend(imp);
+                rc = ptlrpc_resend(imp);
+                if (rc)
+                        GOTO(out, rc);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
         } 
 

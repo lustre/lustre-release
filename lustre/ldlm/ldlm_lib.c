@@ -557,7 +557,8 @@ void target_destroy_export(struct obd_export *exp)
 
         /* We cancel locks at disconnect time, but this will catch any locks
          * granted in a race with recovery-induced disconnect. */
-        ldlm_cancel_locks_for_export(exp);
+        if (exp->exp_obd->obd_namespace != NULL)
+                ldlm_cancel_locks_for_export(exp);
 }
 
 /*

@@ -168,7 +168,7 @@ test_2d() {
 	chmod 755 $DIR1
 	$CHECKSTAT -t dir -p 0755 $DIR2 || error
 }
-run_test 2c "check cached attribute updates on 2 mtpt's root ==="
+run_test 2d "check cached attribute updates on 2 mtpt's root ==="
 
 test_3() {
 	( cd $DIR1 ; ln -s this/is/good lnk )

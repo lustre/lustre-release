@@ -11,6 +11,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- conf-sanity test_5, proper cleanup in umount log not availale (2640)
 	- recovery timer race (2670)
 	- mdc_close recovey bug (2532)
+	- don't try to handle a message that hasn't been replied to (2699)
+	- don't fail assertion if in recovery during cleanup (2701)
+	- fix lconf error (2694)
+       * miscellania
+	- return LL_SUPER_MAGIC from statfs for the filesystem type (1972)
 
 2004-02-07  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.4

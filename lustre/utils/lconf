@@ -1371,7 +1371,7 @@ class MDSDEV(Module):
             self.active = 1
         else:
             self.active = 0
-        if self.active and config.group and config.group != ost.get_val('group'):
+        if self.active and config.group and config.group != mds.get_val('group'):
             self.active = 0
 
         self.inode_size = self.db.get_val_int('inodesize', 0)

@@ -191,7 +191,10 @@ int ptlrpc_resend(struct obd_import *imp)
         /* Well... what if lctl recover is called twice at the same time?
          */
         spin_lock_irqsave(&imp->imp_lock, flags);
-        LASSERT(imp->imp_state == LUSTRE_IMP_RECOVER);
+        if (imp->imp_state != LUSTRE_IMP_RECOVER) {
+                spin_unlock_irqrestore(&imp->imp_lock, flags);
+                RETURN(-1);
+        }
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
         list_for_each_safe(tmp, pos, &imp->imp_sending_list) {

@@ -951,6 +951,8 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
                 RETURN(rc);
         }
 
+        osfs->os_type = sb->s_magic;
+
         CDEBUG(D_SUPER, "MDC blocks "LPU64"/"LPU64" objects "LPU64"/"LPU64"\n",
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
 
