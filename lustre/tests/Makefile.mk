@@ -50,4 +50,4 @@ fchdir_test-objs :=fchdir_test.o
 utime-objs :=utime.o
 o_directory-objs :=o_directory.o
 small_write-objs :=small_write.o
-multiop-objs :=multiops.o
+multiop-objs :=multiop.o
