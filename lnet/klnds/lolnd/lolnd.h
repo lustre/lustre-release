@@ -55,7 +55,6 @@ typedef struct
                 struct iovec  *iov;
                 ptl_kiov_t    *kiov;
         }                klod_iov;
-                
 } klo_desc_t;
 
 typedef struct
