@@ -6,12 +6,8 @@ drivers/block/loop.c
 drivers/ide/ide-disk.c
 fs/ext3/Makefile
 fs/ext3/super.c
-fs/jbd/commit.c
-fs/jbd/journal.c
-fs/jbd/transaction.c
 include/linux/blkdev.h
 include/linux/slab.h
-include/linux/jbd.h
 kernel/ksyms.c
 include/linux/dcache.h
 include/linux/fs.h
