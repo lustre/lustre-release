@@ -309,7 +309,7 @@ void usage(const char *cmd)
 int main(int argc, char * argv[])
 {
         int opt_index, c;
-        char cmd[1024];
+        char cmd[1024] = {0,};
         static struct option long_opts[] = {
                 {"target", 1, 0, 0},
                 {"dumpfile", 1, 0, 0},
@@ -342,6 +342,9 @@ int main(int argc, char * argv[])
         }
 
         if (optind != argc)
+                usage(argv[0]);
+
+        if (strlen(cmd) == 0)
                 usage(argv[0]);
 
         sprintf(cmd, "ssh %s cat /dev/null", mds_server);

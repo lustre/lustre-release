@@ -41,11 +41,11 @@
 
 
 
-static char mds_server[1024];
-static char barrier_script[1024];
-static char failover_script[1024];
-static char barrier_cmd[1024];
-static char failover_cmd[1024];
+static char mds_server[1024] = {0,};
+static char barrier_script[1024] = {0,};
+static char failover_script[1024] = {0,};
+static char barrier_cmd[1024] = {0,};
+static char failover_cmd[1024] = {0,};
 
 static void replay_barrier()
 {
@@ -173,7 +173,11 @@ extern void __liblustre_cleanup_(void);
 
 void usage(const char *cmd)
 {
-        printf("Usage: %s -s server_name -b \"barrier cmd\" -f \"failover cmd\" [-c config_file]\n", cmd);
+        printf("Usage: \t%s --target mdsnid:/mdsname/profile -s mds_hostname "
+                "-b \"barrier cmd\" -f \"failover cmd\"\n", cmd);
+        printf("       \t%s --dumpfile dumpfile -s mds_hostname -b \"barrier cmd\" "
+                "-f \"failover cmd\"\n", cmd);
+        exit(-1);
 }
 
 void test_ssh()
@@ -189,12 +193,30 @@ void test_ssh()
 
 int main(int argc, char * const argv[])
 {
-        int c;
+        int opt_index, c;
+        static struct option long_opts[] = {
+                {"target", 1, 0, 0},
+                {"dumpfile", 1, 0, 0},
+                {0, 0, 0, 0}
+        };
 
-        setenv("LIBLUSTRE_USE_ZCONF", "no", 1);
+        if (argc < 4)
+                usage(argv[0]);
 
-        while ((c = getopt(argc, argv, "s:b:f:c:")) != -1) {
+        while ((c = getopt_long(argc, argv, "s:b:f:", long_opts, &opt_index)) != -1) {
                 switch (c) {
+                case 0: {
+                        if (!optarg[0])
+                                usage(argv[0]);
+
+                        if (!strcmp(long_opts[opt_index].name, "target")) {
+                                setenv(ENV_LUSTRE_MNTTGT, optarg, 1);
+                        } else if (!strcmp(long_opts[opt_index].name, "dumpfile")) {
+                                setenv(ENV_LUSTRE_DUMPFILE, optarg, 1);
+                        } else
+                                usage(argv[0]);
+                        break;
+                }
                 case 's':
                         strcpy(mds_server, optarg);
                         break;
@@ -204,19 +226,16 @@ int main(int argc, char * const argv[])
                 case 'f':
                         strcpy(failover_script, optarg);
                         break;
-                case 'c':
-                        setenv("LIBLUSTRE_CONFIG_FILE", optarg, 1);
-                        break;
                 default:
                         usage(argv[0]);
-                        exit(-1);
                 }
         }
 
-        if (argc < 4 || optind != argc) {
+        if (optind != argc)
                 usage(argv[0]);
-                exit(-1);
-        }
+        if (!strlen(mds_server) || !strlen(barrier_script) ||
+            !strlen(failover_script))
+                usage(argv[0]);
 
         test_ssh();
 
