@@ -21,6 +21,10 @@
  */
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#include <asm/statfs.h>
+#endif
 #include <linux/lprocfs_status.h>
 #include <linux/obd_class.h>
 
@@ -40,8 +44,10 @@ int rd_stripesize(char *page, char **start, off_t off, int count, int *eof,
                   void *data)
 {
         struct obd_device *dev = (struct obd_device *)data;
-        struct lov_desc *desc = &dev->u.lov.desc;
+        struct lov_desc *desc;
 
+        LASSERT(dev != NULL);
+        desc = &dev->u.lov.desc;
         *eof = 1;
         return snprintf(page, count, LPU64"\n", desc->ld_default_stripe_size);
 }
@@ -50,8 +56,10 @@ int rd_stripeoffset(char *page, char **start, off_t off, int count, int *eof,
                     void *data)
 {
         struct obd_device *dev = (struct obd_device *)data;
-        struct lov_desc *desc = &dev->u.lov.desc;
+        struct lov_desc *desc;
 
+        LASSERT(dev != NULL);
+        desc = &dev->u.lov.desc;
         *eof = 1;
         return snprintf(page, count, LPU64"\n", desc->ld_default_stripe_offset);
 }
@@ -60,8 +68,10 @@ int rd_stripetype(char *page, char **start, off_t off, int count, int *eof,
                   void *data)
 {
         struct obd_device* dev = (struct obd_device*)data;
-        struct lov_desc *desc = &dev->u.lov.desc;
+        struct lov_desc *desc;
 
+        LASSERT(dev != NULL);
+        desc = &dev->u.lov.desc;
         *eof = 1;
         return snprintf(page, count, "%u\n", desc->ld_pattern);
 }
@@ -70,8 +80,10 @@ int rd_stripecount(char *page, char **start, off_t off, int count, int *eof,
                    void *data)
 {
         struct obd_device *dev = (struct obd_device *)data;
-        struct lov_desc *desc = &dev->u.lov.desc;
+        struct lov_desc *desc;
 
+        LASSERT(dev != NULL);
+        desc = &dev->u.lov.desc;
         *eof = 1;
         return snprintf(page, count, "%u\n", desc->ld_default_stripe_count);
 }
@@ -80,8 +92,10 @@ int rd_numobd(char *page, char **start, off_t off, int count, int *eof,
               void *data)
 {
         struct obd_device *dev = (struct obd_device*)data;
-        struct lov_desc *desc = &dev->u.lov.desc;
+        struct lov_desc *desc;
 
+        LASSERT(dev != NULL);
+        desc = &dev->u.lov.desc;
         *eof = 1;
         return snprintf(page, count, "%u\n", desc->ld_tgt_count);
 
@@ -91,8 +105,10 @@ int rd_activeobd(char *page, char **start, off_t off, int count, int *eof,
                  void *data)
 {
         struct obd_device* dev = (struct obd_device*)data;
-        struct lov_desc *desc = &dev->u.lov.desc;
+        struct lov_desc *desc;
 
+        LASSERT(dev != NULL);
+        desc = &dev->u.lov.desc;
         *eof = 1;
         return snprintf(page, count, "%u\n", desc->ld_active_tgt_count);
 }
@@ -102,8 +118,13 @@ int rd_target(char *page, char **start, off_t off, int count, int *eof,
 {
         struct obd_device *dev = (struct obd_device*) data;
         int len = 0, i;
-        struct lov_obd *lov = &dev->u.lov;
-        struct lov_tgt_desc *tgts = lov->tgts;
+        struct lov_obd *lov;
+        struct lov_tgt_desc *tgts;
+        
+        LASSERT(dev != NULL);
+        lov = &dev->u.lov;
+        tgts = lov->tgts;
+        LASSERT(tgts != NULL);
 
         for (i = 0; i < lov->desc.ld_tgt_count; i++, tgts++) {
                 int cur;
@@ -120,8 +141,10 @@ int rd_target(char *page, char **start, off_t off, int count, int *eof,
 int rd_mdc(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
         struct obd_device *dev = (struct obd_device*) data;
-        struct lov_obd *lov = &dev->u.lov;
+        struct lov_obd *lov;
 
+        LASSERT(dev != NULL);
+        lov = &dev->u.lov;
         *eof = 1;
         return snprintf(page, count, "%s\n", lov->mdcobd->obd_uuid.uuid);
 }

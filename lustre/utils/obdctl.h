@@ -26,6 +26,9 @@
 #ifndef _OBDCTL_H_
 #define _OBDCTL_H_
 
+#define OBD_DEV_ID 1
+#define OBD_DEV_PATH "/dev/obd"
+
 int do_disconnect(char *func, int verbose);
 int obd_initialize(int argc, char **argv);
 void obd_cleanup(int argc, char **argv);
