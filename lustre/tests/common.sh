@@ -7,7 +7,7 @@ PORTALS=$SRCDIR/../../portals
 LUSTRE=$SRCDIR/../../obd
 
 PTLCTL=$PORTALS/linux/utils/ptlctl
-DEBCTL=$PORTALS/linux/utils/debugctl
+DBGCTL=$PORTALS/linux/utils/debugctl
 ACCEPTOR=$PORTALS/linux/utils/acceptor
 
 OBDCTL=$LUSTRE/utils/obdctl
@@ -63,7 +63,7 @@ new_fs () {
 			echo "usage: $0 <fstype> <file> <size>" 1>&2 && exit -1
 
 		if [ -r "$EFILE" ]; then
-			echo "using existing filesystem $EFILE for $2"
+			echo "using prepared filesystem $EFILE for $2"
 			zcat "$EFILE" > $2 || exit -1
 			sync
 		else
@@ -91,7 +91,7 @@ old_fs () {
 }
 
 list_mods() {
-	$DEBCTL modules > $R/tmp/ogdb
+	$DBGCTL modules > $R/tmp/ogdb
 	echo "The GDB module script is in /tmp/ogdb"
 }
 
@@ -199,7 +199,14 @@ setup_ldlm() {
         read
 }
 
-DEVNO=0; export DEVNO
+find_devno() {
+	if [ -z "$1" ]; then
+		echo "usage: $0 <devname>" 1>&2
+		return -1
+	fi
+
+	$OBDCTL name2dev $1
+}
 
 setup_mds() {
 	[ "$SETUP_MDS" = "y" ] || return 0
@@ -215,13 +222,11 @@ setup_mds() {
 		return -1
 	fi
 
-	$1 ${MDSFS} ${MDSDEV} ${MDSSIZE}
+	$DO_FS ${MDSFS} ${MDSDEV} ${MDSSIZE}
 	MDS=${LOOPDEV}
 
-	MDS_DEVNO=$DEVNO; DEVNO=`expr $DEVNO + 1`
-	
 	$OBDCTL <<- EOF
-	device ${MDS_DEVNO}
+	newdev
 	attach mds MDSDEV
 	setup ${MDS} ${MDSFS}
 	quit
@@ -268,16 +273,13 @@ setup_ost() {
 		OBD=${LOOPDEV}
 	fi
 
-	OBD_DEVNO=$DEVNO; DEVNO=`expr $DEVNO + 1`
-	OST_DEVNO=$DEVNO; DEVNO=`expr $DEVNO + 1`
-
 	$OBDCTL <<- EOF
-	device ${OBD_DEVNO}
+	newdev
 	attach ${OSTTYPE} OBDDEV
 	setup ${OBD} ${OBDARG}
-	device ${OST_DEVNO}
+	newdev
 	attach ost OSTDEV
-	setup ${OBD_DEVNO}
+	setup \$OBDDEV
 	quit
 	EOF
 }
@@ -286,16 +288,20 @@ setup_server() {
 	setup_mds $1 && setup_ost $1
 }
 
+setup_rpc() {
+	$OBDCTL <<- EOF || return $rc
+	newdev
+	attach ptlrpc RPCDEV
+	setup
+	quit
+	EOF
+}
+
 setup_osc() {
 	[ "$SETUP_OSC" != "y" ] && return 0
 
-	RPC_DEVNO=$DEVNO; DEVNO=`expr $DEVNO + 1`
-	OSC_DEVNO=$DEVNO; DEVNO=`expr $DEVNO + 1`
 	$OBDCTL <<- EOF || return $rc
-	device ${RPC_DEVNO}
-	attach ptlrpc RPCDEV
-	setup
-	device ${OSC_DEVNO}
+	newdev
 	attach osc OSCDEV
 	setup -1
 	quit
@@ -311,11 +317,11 @@ setup_mount() {
 	fi
 
 	[ ! -d $OSCMT ] && mkdir $OSCMT
-	mount -t lustre_lite -o device=$OSC_DEVNO none $OSCMT
+	mount -t lustre_lite -o device=`find_devno OSCDEV` none $OSCMT
 }
 
 setup_client() {
-	setup_osc && setup_mount
+	setup_rpc && setup_osc && setup_mount
 }
 
 DEBUG_ON="echo 0xffffffff > /proc/sys/portals/debug"
@@ -380,58 +386,82 @@ cleanup_lustre() {
 cleanup_mds() {
 	[ "$SETUP" -a -z "$SETUP_MDS" ] && return 0
 
-	[ "$SETUP" ] || MDS_DEVNO=0
-
-	$OBDCTL <<- EOF
-	name2dev MDSDEV
-	cleanup
-	detach
-	quit
-	EOF
+	MDSDEVNO=`find_devno MDSDEV`
+	if [ "$MDSDEVNO" ]; then
+		$OBDCTL <<- EOF
+		device $MDSDEVNO
+		cleanup
+		detach
+		quit
+		EOF
+	fi
 }
 
 cleanup_ost() {
 	[ "$SETUP" -a -z "$SETUP_OST" ] && return 0
 
-	$OBDCTL <<- EOF
-	name2dev OSTDEV
-	cleanup
-	detach
-	name2dev OBDDEV
-	cleanup
-	detach
-	quit
-	EOF
+	OSTDEVNO=`find_devno OSTDEV`
+	if [ "$OSTDEVNO" ]; then
+		$OBDCTL <<- EOF
+		device $OSTDEVNO
+		cleanup
+		detach
+		quit
+		EOF
+	fi
+
+	OBDDEVNO=`find_devno OBDDEV`
+	if [ "$OBDDEVNO" ]; then
+		$OBDCTL <<- EOF
+		device $OBDDEVNO
+		cleanup
+		detach
+		quit
+		EOF
+	fi
 }
 
 cleanup_server() {
 	cleanup_ost && cleanup_mds
-	DEVNO=0
 }
 
 cleanup_mount() {
 	[ "$SETUP" -a -z "$SETUP_MOUNT" ] && return 0
 
 	[ "$OSCMT" ] || OSCMT=/mnt/lustre
-	umount $OSCMT || fail "unable to unmount $OSCMT"
+	if [ "`mount | grep $OSCMT`" ]; then
+		umount $OSCMT || fail "unable to unmount $OSCMT"
+	fi
 }
 
 cleanup_osc() {
 	[ "$SETUP" -a -z "$SETUP_OSC" ] && return 0
 
-	[ "$SETUP" ] || OSC_DEVNO=3
+	OSCDEVNO=`find_devno OSCDEV`
+	if [ "$OSCDEVNO" ]; then
+		$OBDCTL <<- EOF
+		device $OSCDEVNO
+		cleanup
+		detach
+		quit
+		EOF
+	fi
+}
 
-	$OBDCTL <<- EOF
-	name2dev OSCDEV
-	cleanup
-	detach
-	quit
-	EOF
+cleanup_rpc() {
+	RPCDEVNO=`find_devno RPCDEV`
+	if [ "$RPCDEVNO" ]; then
+		$OBDCTL <<- EOF
+		device $RPCDEVNO
+		cleanup
+		detach
+		quit
+		EOF
+	fi
 }
 
 cleanup_client() {
-	cleanup_mount && cleanup_osc
-	DEVNO=0
+	cleanup_mount && cleanup_osc && cleanup_rpc
 }
 
 fail() { 

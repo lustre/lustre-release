@@ -4,49 +4,51 @@
 # Probably a good idea to run this before doing any checkins.
 # In the future this can become more fancy, but it's OK for now.
 
-RUNDIR=`dirname $0`
+SRCDIR="`dirname $0`"
 
-PATH=$PATH:$RUNDIR
+export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
+
+. $SRCDIR/common.sh
 
 ERROR=
 
-[ "`mount | grep /mnt/lustre`" ] || echo | sh llmount.sh || exit 1
+[ "`mount | grep /mnt/lustre`" ] || echo | sh llsetup.sh $@ || exit 1
 
 # let's start slowly here...
-touch /mnt/lustre || exit 2
-cp /etc/hosts /mnt/lustre || exit 3
-diff -u /etc/hosts /mnt/lustre/hosts || exit 4
+touch /mnt/lustre || fail "can't touch /mnt/lustre" 2
+cp /etc/hosts /mnt/lustre || fail "can't cp /etc/hosts" 3
+diff -u /etc/hosts /mnt/lustre/hosts || fail "/etc/hosts copy different" 4
 
 # ok, that hopefully worked, so let's do a little more
 FILES=`find /etc -type f`
 echo "copying files from /etc to /mnt/lustre"
-tar cf - $FILES | tar xf - -C /mnt/lustre || exit 10
+tar cf - $FILES | tar xf - -C /mnt/lustre || fail "copying /etc" 10
 
 echo "comparing newly copied files"
 for f in $FILES; do
 	diff -q $f /mnt/lustre/$f || ERROR=11
 done
 
-[ "$ERROR" ] && exit $ERROR
+[ "$ERROR" ] && fail "old and new files are different" 11
 
-sh llmountcleanup.sh
+sh llcleanup.sh $@
 
-echo | sh llrmount.sh || exit 20
+echo | sh llrsetup.sh $@ || exit 20
 echo "comparing previously copied files"
-diff -u /etc/hosts /mnt/lustre/hosts || exit 21
+diff -u /etc/hosts /mnt/lustre/hosts || fail "/etc/hosts is now different" 21
 
 for f in $FILES; do
 	diff -q $f /mnt/lustre/$f || ERROR=22
 done
 
-[ "$ERROR" ] && exit $ERROR
+[ "$ERROR" ] && fail "old and new files are different on second diff" 23
 
-sh llmountcleanup.sh
-echo | sh llrmount.sh || exit 24
+sh llcleanup.sh $@
+echo | sh llrsetup.sh $@ || exit 24
 
 echo "removing files from /mnt/lustre/etc"
-rm /mnt/lustre/hosts || exit 25
+rm /mnt/lustre/hosts || fail "can't remove /mnt/lustre/hosts" 25
 
-rm -r /mnt/lustre/etc || exit 26
+rm -r /mnt/lustre/etc || fail "can't remove /mnt/lustre/etc" 26
 
-sh llmountcleanup.sh
+sh llcleanup.sh $@
