@@ -402,7 +402,8 @@ static inline int smfs_get_dentry_name_index(struct dentry *dentry,
 
 static inline void smfs_free_dentry_name(struct qstr *str)
 {
-        OBD_FREE(str->name, str->len + 1);
+        char *name = (char*)str->name;
+        OBD_FREE(name, str->len + 1);
 }
 
 static inline struct dentry *pre_smfs_dentry(struct dentry *parent_dentry,
