@@ -61,13 +61,14 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
 static int ll_readpage(struct file *file, struct page *page)
 {
         struct inode *inode = page->mapping->host;
+        obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
         int rc = 0;
         ENTRY;
 
         if (!PageLocked(page))
                 LBUG();
 
-        if (((inode->i_size + PAGE_SIZE - 1) >> PAGE_SHIFT) <= page->index) {
+        if (inode->i_size <= offset) {
                 memset(kmap(page), 0, PAGE_SIZE);
                 kunmap(page);
                 GOTO(readpage_out, rc);
@@ -93,7 +94,7 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
                             unsigned to)
 {
         struct inode *inode = page->mapping->host;
-        //obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
+        obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
         int rc = 0;
         char *addr;
         ENTRY;
@@ -105,12 +106,16 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         if (Page_Uptodate(page))
                 GOTO(prepare_done, rc);
 
-        memset(addr, 0, PAGE_SIZE);
-
         /* We're completely overwriting an existing page, so _don't_ set it up
          * to date until commit_write */
         if (from == 0 && to == PAGE_SIZE)
                 RETURN(0);
+
+        /* We are writing to a new page, no need to read old data */
+        if (inode->i_size <= offset) {
+                memset(addr, 0, PAGE_SIZE);
+                goto prepare_done;
+        }
 
         /* prepare write should not read what lies beyond the end of
            the file */
