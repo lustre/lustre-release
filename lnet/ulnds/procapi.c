@@ -71,7 +71,7 @@ void procbridge_wakeup_nal(procbridge p)
  *   side, and collects the result
  */
 static int procbridge_forward(nal_t *n, int id, void *args, size_t args_len,
-			      void *ret, ptl_size_t ret_len)
+			      void *ret, size_t ret_len)
 {
     bridge b = (bridge) n->nal_data;
 
