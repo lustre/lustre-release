@@ -2311,7 +2311,7 @@ static void osc_set_data_with_check(struct lustre_handle *lockh, void *data)
 {
         struct ldlm_lock *lock = ldlm_handle2lock(lockh);
 
-        LASSERTF(lock != NULL, "lockh %p, data %p\n");
+        LASSERTF(lock != NULL, "lockh %p, data %p\n", lockh, data);
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
 #ifdef __KERNEL__
         if (lock->l_ast_data && lock->l_ast_data != data) {
