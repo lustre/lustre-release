@@ -1,5 +1,5 @@
 2002-10-01  Phil Schwan  <phil@clusterfs.com>
-	* version 0_5_13
+	* version v0_5_13
 	* bug fixes:
 	  - locks would be cancelled without throwing away data pages,
 	    resulting in inconsistent data (605627)
@@ -17,6 +17,10 @@
 	* recovery: the server can remove locks from a client that dies, other
 	  clients can make progress
 	* more extN patch fixes
+	* compile-time configurable ptlrpc buffer allocations
+	* documentation
+	  - collaborative read cache document
+	  - Lustre Lite Performance CDR document-in-progress
 
 2002-09-20  Andreas Dilger  <adilger@clusterfs.com>
 	* version v0_5_12
