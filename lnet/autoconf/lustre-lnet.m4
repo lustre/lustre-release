@@ -228,31 +228,75 @@ AC_SUBST(OPENIBNAL)
 #
 # check for infinicon infiniband support
 #
-AC_DEFUN([LP_CONFIG_IIB],
-[AC_MSG_CHECKING([if Infinicon IB kernel headers are present])
-# for how the only infinicon ib build has headers in /usr/include/iba
-IIBCPPFLAGS="-I/usr/include -DIN_TREE_BUILD"
-EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS $IIBCPPFLAGS"
-LB_LINUX_TRY_COMPILE([
-	#include <linux/iba/ibt.h>
-],[
-        IBT_INTERFACE_UNION interfaces;
-        FSTATUS             rc;
-
-         rc = IbtGetInterfaceByVersion(IBT_INTERFACE_VERSION_2,
-				       &interfaces);
-
-	return rc == FSUCCESS ? 0 : 1;
-],[
-	AC_MSG_RESULT([yes])
-	IIBNAL="iibnal"
-],[
+#
+# LP_CONFIG_IIB
+#
+# check for infinicon infiniband support
+#
+AC_DEFUN([LP_CONFIG_IIB],[
+AC_MSG_CHECKING([whether to enable Infinicon support])
+# set default
+IIBPATH="/usr/include"
+AC_ARG_WITH([iib],
+	AC_HELP_STRING([--with-iib=path],
+	               [build iibnal against path]),
+	[
+		case $with_iib in
+		yes)    ENABLEIIB=2
+			;;
+		no)     ENABLEIIB=0
+			;;
+		*)      IIBPATH="${with_iib}/include"
+			ENABLEIIB=3
+			;;
+		esac
+	],[
+		ENABLEIIB=1
+	])
+if test $ENABLEIIB -eq 0; then
+	AC_MSG_RESULT([disabled])
+elif test ! \( -f ${IIBPATH}/linux/iba/ibt.h \); then
 	AC_MSG_RESULT([no])
-	IIBNAL=""
-	IIBCPPFLAGS=""
-])
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+	case $ENABLEIIB in
+	1) ;;
+	2) AC_MSG_ERROR([default Infinicon headers not present]);;
+	3) AC_MSG_ERROR([bad --with-iib path]);;
+	*) AC_MSG_ERROR([internal error]);;
+	esac
+else
+	IIBCPPFLAGS="-I$IIBPATH"
+	if test $IIBPATH != "/usr/include"; then
+		# we need /usr/include come what may
+		IIBCPPFLAGS="$IIBCPPFLAGS -I/usr/include"
+        fi
+	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $IIBCPPFLAGS"
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/iba/ibt.h>
+	],[
+	        IBT_INTERFACE_UNION interfaces;
+        	FSTATUS             rc;
+
+	         rc = IbtGetInterfaceByVersion(IBT_INTERFACE_VERSION_2,
+					       &interfaces);
+
+		return rc == FSUCCESS ? 0 : 1;
+	],[
+		AC_MSG_RESULT([yes])
+		IIBNAL="iibnal"
+	],[
+		AC_MSG_RESULT([no])
+		case $ENABLEIIB in
+		1) ;;
+		2) AC_MSG_ERROR([can't compile with default Infinicon headers]);;
+		3) AC_MSG_ERROR([can't compile with Infinicon headers under $IIBPATH]);;
+		*) AC_MSG_ERROR([internal error]);;
+		esac
+		IIBNAL=""
+		IIBCPPFLAGS=""
+	])
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+fi
 AC_SUBST(IIBCPPFLAGS)
 AC_SUBST(IIBNAL)
 ])
