@@ -119,8 +119,8 @@ static int ll_readpage(struct file *file, struct page *page)
         if (!PageLocked(page))
                 LBUG();
 
-        if (((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT) <= page->index) {
-                memset(kmap(page), 0, PAGE_CACHE_SIZE);
+        if (((inode->i_size + PAGE_SIZE - 1) >> PAGE_SHIFT) <= page->index) {
+                memset(kmap(page), 0, PAGE_SIZE);
                 kunmap(page);
                 GOTO(readpage_out, rc);
         }
@@ -145,7 +145,7 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
                             unsigned to)
 {
         struct inode *inode = page->mapping->host;
-        obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
+        //obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
         int rc = 0;
         char *addr;
         ENTRY; 
@@ -157,17 +157,12 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         if (Page_Uptodate(page))
                 GOTO(prepare_done, rc);
 
-        if (offset + from >= inode->i_size) {
-                memset(addr, 0, PAGE_SIZE);
-                GOTO(prepare_done, rc);
-        }
+        memset(addr, 0, PAGE_SIZE);
 
         /* We're completely overwriting an existing page, so _don't_ set it up
          * to date until commit_write */
-        if (from == 0 && to == PAGE_SIZE) {
-                memset(addr, 0, PAGE_SIZE);
+        if (from == 0 && to == PAGE_SIZE)
                 RETURN(0);
-        }
 
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
 
@@ -233,7 +228,8 @@ static int ll_commit_write(struct file *file, struct page *page,
                       &bufs_per_obdo, &page, &count, &offset, &flags);
         kunmap(page);
 
-        if ((iattr.ia_size = offset + to) > inode->i_size) {
+        iattr.ia_size = offset + to;
+        if (iattr.ia_size > inode->i_size) {
                 /* do NOT truncate when writing in the middle of a file */
                 inode->i_size = iattr.ia_size;
                 iattr.ia_valid = ATTR_SIZE;
@@ -272,8 +268,8 @@ void ll_truncate(struct inode *inode)
                 CERROR("obd_truncate fails (%d)\n", err);
         else
                 /* This is done for us at the OST and MDS, but the
-                 * updated values are not sent back to us.  Needed
-                 * for POSIX.
+                 * updated values are not sent back to us.
+                 * Needed for POSIX.
                  */
                 inode->i_mtime = inode->i_ctime = CURRENT_TIME;
 
@@ -295,8 +291,8 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
 
         ENTRY;
         if (blocksize != PAGE_SIZE) {
-                CERROR("direct_IO blocksize != PAGE_SIZE, what to do?\n");
-                LBUG();
+                CERROR("direct_IO blocksize != PAGE_SIZE\n");
+                RETURN(-EINVAL);
         }
 
         OBD_ALLOC(count, sizeof(obd_size) * bufs_per_obdo);
