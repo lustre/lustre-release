@@ -497,6 +497,7 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
         rc = l_wait_event(req->rq_reply_waitq, mdc_close_check_reply(req),
                           &lwi);
         if (rc == 0) {
+                LASSERTF(req->rq_repmsg != NULL, "req = %p", req);
                 rc = req->rq_repmsg->status;
                 if (req->rq_repmsg->type == PTL_RPC_MSG_ERR) {
                         DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err "
