@@ -48,7 +48,7 @@ static int cobd_detach(struct obd_device *dev)
 static int
 cobd_setup (struct obd_device *dev, obd_count len, void *buf)
 {
-        struct obd_ioctl_data *data = (struct obd_ioctl_data *)buf;
+        struct lustre_cfg *lcfg = (struct lustre_cfg *)buf;
         struct cache_obd  *cobd = &dev->u.cobd;
         struct obd_device *target;
         struct obd_device *cache;
@@ -57,14 +57,14 @@ cobd_setup (struct obd_device *dev, obd_count len, void *buf)
         struct lustre_handle target_conn = {0,}, cache_conn = {0,};
         int                rc;
 
-        if (data->ioc_inlbuf1 == NULL ||
-            data->ioc_inlbuf2 == NULL)
+        if (lcfg->lcfg_inlbuf1 == NULL ||
+            lcfg->lcfg_inlbuf2 == NULL)
                 return (-EINVAL);
 
-        obd_str2uuid(&target_uuid, data->ioc_inlbuf1);
+        obd_str2uuid(&target_uuid, lcfg->lcfg_inlbuf1);
         target = class_uuid2obd (&target_uuid);
 
-        obd_str2uuid(&cache_uuid, data->ioc_inlbuf2);
+        obd_str2uuid(&cache_uuid, lcfg->lcfg_inlbuf2);
         cache  = class_uuid2obd (&cache_uuid);
         if (target == NULL ||
             cache == NULL)
