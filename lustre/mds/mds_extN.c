@@ -62,6 +62,7 @@ static void *mds_extN_start(struct inode *inode, int op)
 {
         /* For updates to the last recieved file */
         int nblocks = EXTN_DATA_TRANS_BLOCKS;
+        void *handle;
 
         switch(op) {
         case MDS_FSOP_RMDIR:
@@ -91,12 +92,21 @@ static void *mds_extN_start(struct inode *inode, int op)
                  LBUG();
         }
 
-        return journal_start(EXTN_JOURNAL(inode), nblocks);
+        //lock_kernel();
+        handle = journal_start(EXTN_JOURNAL(inode), nblocks);
+        //if (IS_ERR(handle))
+        //        unlock_kernel();
+
+        return handle;
 }
 
 static int mds_extN_commit(struct inode *inode, void *handle)
 {
-        return journal_stop((handle_t *)handle);
+        int rc = journal_stop((handle_t *)handle);
+
+        //unlock_kernel();
+
+        return rc;
 }
 
 /* Assumes BKL is held */
@@ -118,19 +128,9 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
 
         down(&inode->i_sem);
         lock_kernel();
-        if (lmm == NULL)
-                rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
-                                    XATTR_LUSTRE_MDS_OBJID, NULL, 0, 0);
-        else {
-                rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
-                                    XATTR_LUSTRE_MDS_OBJID, lmm,
-                                    lmm->lmm_easize, XATTR_CREATE);
-                if (rc == -EEXIST)
-                        rc = extN_xattr_set(handle, inode,
-                                            EXTN_XATTR_INDEX_LUSTRE,
-                                            XATTR_LUSTRE_MDS_OBJID, lmm,
-                                            lmm->lmm_easize, 0);
-        }
+        rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
+                            XATTR_LUSTRE_MDS_OBJID, lmm,
+                            lmm ? lmm->lmm_easize : 0, 0);
         unlock_kernel();
         up(&inode->i_sem);
 
