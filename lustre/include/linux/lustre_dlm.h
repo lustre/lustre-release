@@ -100,7 +100,7 @@ struct ldlm_namespace {
 
 struct ldlm_lock;
 
-typedef int (*ldlm_lock_callback)(struct ldlm_lock *lock,
+typedef int (*ldlm_lock_callback)(struct lustre_handle *lockh,
                                   struct ldlm_lock_desc *new, void *data,
                                   __u32 data_len, struct ptlrpc_request **req);
 
@@ -268,7 +268,7 @@ int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
                       void *data, __u32 data_len, struct ptlrpc_request **reqp);
 int ldlm_cli_convert(struct ptlrpc_client *, struct lustre_handle *,
                      int new_mode, int *flags);
-int ldlm_cli_cancel(struct ptlrpc_client *, struct lustre_handle *);
+int ldlm_cli_cancel(struct lustre_handle *);
 
 #endif /* __KERNEL__ */
 

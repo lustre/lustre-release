@@ -196,12 +196,12 @@ static void ll_update_atime(struct inode *inode)
         ll_inode_setattr(inode, &attr, 0);
 }
 
-static int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
+static int ll_lock_callback(struct lustre_handle *lockh,
+                            struct ldlm_lock_desc *new,
                             void *data, __u32 data_len,
                             struct ptlrpc_request **reqp)
 {
-        struct inode *inode = lock->l_data;
-        struct lustre_handle lockh;
+        struct inode *inode = data;
         ENTRY;
 
         if (new == NULL) {
@@ -220,8 +220,7 @@ static int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
         invalidate_inode_pages(inode);
         up(&inode->i_sem);
 
-        ldlm_lock2handle(lock, &lockh);
-        if (ldlm_cli_cancel(lock->l_client, &lockh) < 0)
+        if (ldlm_cli_cancel(lockh) < 0)
                 LBUG();
         RETURN(0);
 }

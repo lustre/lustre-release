@@ -75,7 +75,7 @@ static int cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                 if (client) {
                         struct lustre_handle lockh;
                         ldlm_lock2handle(lock, &lockh);
-                        rc = ldlm_cli_cancel(lock->l_client, &lockh);
+                        rc = ldlm_cli_cancel(&lockh);
                         if (rc < 0) {
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
                                 LBUG();

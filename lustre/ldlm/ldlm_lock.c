@@ -357,6 +357,7 @@ void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
 
 static int ldlm_send_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock *new)
 {
+        struct lustre_handle lockh;
         struct ldlm_lock_desc desc;
         struct ptlrpc_request *req = NULL;
         ENTRY;
@@ -370,8 +371,10 @@ static int ldlm_send_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock *new)
 
         lock->l_flags |= LDLM_FL_AST_SENT;
         /* FIXME: this should merely add the lock to the lr_tmp list */
-        ldlm_lock2desc(lock, &desc);
-        lock->l_blocking_ast(lock, &desc, lock->l_data, lock->l_data_len, &req);
+        ldlm_lock2handle(lock, &lockh);
+        ldlm_lock2desc(new, &desc);
+        lock->l_blocking_ast(&lockh, &desc, lock->l_data, lock->l_data_len,
+                             &req);
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         if (req != NULL) {
@@ -411,6 +414,8 @@ void ldlm_lock_decref(struct ldlm_lock *lock, __u32 mode)
          * run the callback. */
         if (!lock->l_readers && !lock->l_writers &&
             (lock->l_flags & LDLM_FL_CBPENDING)) {
+                struct lustre_handle lockh;
+
                 if (!lock->l_resource->lr_namespace->ns_client) {
                         CERROR("LDLM_FL_CBPENDING set on non-local lock!\n");
                         LBUG();
@@ -420,7 +425,8 @@ void ldlm_lock_decref(struct ldlm_lock *lock, __u32 mode)
                        "calling callback.\n");
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
-                lock->l_blocking_ast(lock, NULL, lock->l_data,
+                ldlm_lock2handle(lock, &lockh);
+                lock->l_blocking_ast(&lockh, NULL, lock->l_data,
                                      lock->l_data_len, NULL);
         } else
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -505,8 +511,11 @@ void ldlm_grant_lock(struct ldlm_lock *lock)
                 res->lr_most_restr = lock->l_granted_mode;
 
         if (lock->l_completion_ast) {
+                struct lustre_handle *lockh;
+
                 /* FIXME: this should merely add lock to lr_tmp list */
-                lock->l_completion_ast(lock, NULL, lock->l_data,
+                ldlm_lock2handle(lock, &lockh);
+                lock->l_completion_ast(&lockh, NULL, lock->l_data,
                                        lock->l_data_len, &req);
                 if (req != NULL) {
                         struct list_head *list = res->lr_tmp;

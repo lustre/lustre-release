@@ -139,7 +139,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         return rc;
 }
 
-int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+int ldlm_cli_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
                       void *data, __u32 data_len, struct ptlrpc_request **reqp)
 {
         struct ldlm_request *body;
@@ -242,7 +242,7 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
         return rc;
 }
 
-int ldlm_cli_cancel(struct ptlrpc_client *cl, struct lustre_handle *lockh)
+int ldlm_cli_cancel(struct lustre_handle *lockh)
 {
         struct ptlrpc_request *req;
         struct ldlm_lock *lock;
@@ -256,8 +256,8 @@ int ldlm_cli_cancel(struct ptlrpc_client *cl, struct lustre_handle *lockh)
                 LBUG();
 
         LDLM_DEBUG(lock, "client-side cancel");
-        req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CANCEL, 1, &size,
-                              NULL);
+        req = ptlrpc_prep_req(lock->l_client, lock->l_connection, LDLM_CANCEL,
+                              1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
