@@ -1,0 +1,31 @@
+
+
+
+ 0 files changed
+
+--- linux-2.4.18-17.8.0/arch/um/kernel/mem.c~uml_check_get_page	2002-12-06 14:52:30.000000000 -0800
++++ linux-2.4.18-17.8.0-zab/arch/um/kernel/mem.c	2002-12-06 14:52:30.000000000 -0800
+@@ -529,6 +529,21 @@ struct page *pte_mem_map(pte_t pte)
+ 	return(phys_mem_map(pte_val(pte)));
+ }
+ 
++struct page *check_get_page(unsigned long kaddr)
++{
++	struct page *page;
++	struct mem_region *mr;
++	unsigned long phys = __pa(kaddr);
++	unsigned int n = phys_region_index(phys);
++
++	if (regions[n] == NULL)
++                return NULL;
++
++	mr = regions[n];
++	page = (struct page *) mr->mem_map;
++	return page + ((phys_addr(phys)) >> PAGE_SHIFT);
++}
++
+ struct mem_region *page_region(struct page *page, int *index_out)
+ {
+ 	int i;
+
+_
