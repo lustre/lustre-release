@@ -210,7 +210,7 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
         if (valid & OBD_MD_FLSIZE && src->o_size > dst->i_size)
                 dst->i_size = src->o_size;
         /* optimum IO size */
-        if (valid & OBD_MD_FLBLKSZ)
+        if (valid & OBD_MD_FLBLKSZ && src->o_blksize > dst->i_blksize)
                 dst->i_blksize = src->o_blksize;
         /* allocation of space */
         if (valid & OBD_MD_FLBLOCKS && src->o_blocks > dst->i_blocks)
