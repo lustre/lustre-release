@@ -94,7 +94,7 @@ run_test 2 "|x| 10 open(O_CREAT)s"
 
 test_3() {
     verify=$ROOT/tmp/verify-$$
-    dd if=/dev/urandom bs=1024 count=5120 | tee $verify > $DIR/$tfile &
+    dd if=/dev/urandom bs=4096 count=1280 | tee $verify > $DIR/$tfile &
     ddpid=$!
     sync &
     fail ost
@@ -106,7 +106,7 @@ run_test 3 "Fail OST during write, with verification"
 
 test_4() {
     verify=$ROOT/tmp/verify-$$
-    dd if=/dev/urandom bs=1024 count=5120 | tee $verify > $DIR/$tfile
+    dd if=/dev/urandom bs=4096 count=1280 | tee $verify > $DIR/$tfile
     # invalidate cache, so that we're reading over the wire
     for i in /proc/fs/lustre/ldlm/namespaces/OSC_*MNT*; do
         echo -n clear > $i/lru_size
@@ -140,7 +140,7 @@ test_6() {
     rm -f $f
     sync && sleep 2 && sync	# wait for delete thread
     before=`kbytesfree`
-    dd if=/dev/urandom bs=1024 count=5120 of=$f
+    dd if=/dev/urandom bs=4096 count=1280 of=$f
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119
     do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
     sync
@@ -163,11 +163,13 @@ run_test 6 "Fail OST before obd_destroy"
 test_7() {
     f=$DIR/$tfile
     before=`kbytesfree`
-    dd if=/dev/urandom bs=1024 count=5120 of=$f
+    rm -f $f
+    sync && sleep 2 && sync	# wait for delete thread
+    dd if=/dev/urandom bs=4096 count=1280 of=$f
     sync
     after_dd=`kbytesfree`
-    echo "before: $before after_dd: $after_dd"
-    (( before > after_dd )) || return 1
+    log "before: $before after_dd: $after_dd"
+    (( $before > $after_dd )) || return 1
     replay_barrier ost
     rm -f $f
     fail ost
@@ -176,8 +178,8 @@ test_7() {
     # let the delete happen
     sleep 2
     after=`kbytesfree`
-    echo "before: $before after: $after"
-    (( before == after )) || return 3
+    log "before: $before after: $after"
+    (( $before == $after )) || return 3
 }
 run_test 7 "Fail OST before obd_destroy"
 

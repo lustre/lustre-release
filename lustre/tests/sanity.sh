@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 2986
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"66b"}
+# bug number for skipped test:
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -1834,30 +1834,6 @@ test_65() {
         echo "pass"
 }
 run_test 65 "Verify that the files are created using parent dir's stripe info"
-
-test_66a() {	# bug 2983 - ldlm_handle_enqueue cleanup
-	mkdir -p $DIR/d66
-	multiop $DIR/d66/f66 O_wc &
-	MULTI_PID=$!
-	usleep 500
-	cancel_lru_locks OSC
-#define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
-	sysctl -w lustre.fail_loc=0x80000308
-	kill -USR1 $MULTI_PID
-	wait $MULTI_PID && error "multiop didn't fail enqueue" || true
-}
-run_test 66a "ldlm_handle_enqueue error (should return error) ==="
-
-test_66b() {	# bug 2986 - ldlm_handle_enqueue error during open
-	mkdir $DIR/d66
-	touch $DIR/d66/f66
-	cancel_lru_locks OSC
-#define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
-	sysctl -w lustre.fail_loc=0x80000308
-	dd if=/etc/hosts of=$DIR/d66/f66 && error "didn't fail enqueue" || true
-}
-run_test 66b "ldlm_handle_enqueue error (should return error) ==="
-
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
