@@ -784,9 +784,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 struct mds_body *body;
 
                 created = 1;
-                LTIME_S(iattr.ia_atime) = rec->ur_time;
-                LTIME_S(iattr.ia_ctime) = rec->ur_time;
-                LTIME_S(iattr.ia_mtime) = rec->ur_time;
+                LTIME_S(iattr.ia_atime) = LTIME_S(rec->ur_time);
+                LTIME_S(iattr.ia_ctime) = LTIME_S(rec->ur_time);
+                LTIME_S(iattr.ia_mtime) = LTIME_S(rec->ur_time);
                 iattr.ia_uid = rec->_ur_fsuid;
                 if (dir->i_mode & S_ISGID)
                         iattr.ia_gid = dir->i_gid;
@@ -871,7 +871,7 @@ cleanup:
                 if (rc) {
                         ldlm_lock_decref(lockh, LCK_PW);
                 } else {
-                        ptlrpc_save_lock (req, lockh, LCK_PW);
+                        ptlrpc_save_lock(req, lockh, LCK_PW);
                 }
                 l_dput(dparent);
         case 0:
