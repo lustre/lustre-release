@@ -101,14 +101,6 @@ Index: linux-2.4.19.SuSE/fs/jbd/commit.c
  	/* AKPM: buglet - add `i' to tmp! */
  	for (i = 0; i < jh2bh(descriptor)->b_size; i += 512) {
  		journal_header_t *tmp =
-@@ -600,6 +603,7 @@
- 	}
- 
- 	unlock_journal(journal);
-+	unlocked = 1;
- 	JBUFFER_TRACE(descriptor, "write commit block");
- 	{
- 		struct buffer_head *bh = jh2bh(descriptor);
 @@ -610,14 +614,32 @@
  		put_bh(bh);		/* One for getblk() */
  		journal_unlock_journal_head(descriptor);

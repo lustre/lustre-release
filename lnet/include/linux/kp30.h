@@ -279,6 +279,10 @@ do {                                                                          \
 
 #define PORTAL_VMALLOC_SIZE        16384
 
+#ifndef GFP_MEMALLOC
+#define GFP_MEMALLOC 0
+#endif
+
 #define PORTAL_ALLOC(ptr, size)                                           \
 do {                                                                      \
         LASSERT (!in_interrupt());                                        \
@@ -313,6 +317,10 @@ do {                                                                    \
         CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \
                s, (ptr), atomic_read(&portal_kmemory));                 \
 } while (0)
+
+#ifndef SLAB_MEMALLOC
+#define SLAB_MEMALLOC 0
+#endif
 
 #define PORTAL_SLAB_ALLOC(ptr, slab, size)                                \
 do {                                                                      \
