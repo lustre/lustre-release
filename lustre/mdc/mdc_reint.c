@@ -44,12 +44,8 @@ static int mdc_reint(struct ptlrpc_request *request, int level)
         if (!(*opcodeptr == REINT_SETATTR))
                 mdc_put_rpc_lock(&mdc_rpc_lock, NULL);
 
-        if (rc) {
+        if (rc)
                 CDEBUG(D_INFO, "error in handling %d\n", rc);
-        } else {
-                /* For future resend/replays. */
-                *opcodeptr |= REINT_REPLAYING;
-        }
         return rc;
 }
 
@@ -135,7 +131,6 @@ int mdc_create(struct lustre_handle *conn, struct inode *dir,
         /* Resend if we were told to. */
         if (rc == -ERESTARTSYS) {
                 level = LUSTRE_CONN_RECOVD;
-                req->rq_flags = 0;
                 goto resend;
         }
 
