@@ -293,6 +293,7 @@ static int ll_writepage_24(struct page *page)
                                            ll_i2info(inode)->lli_smd,
                                            ll_i2sbi(inode)->ll_lc.lc_set);
 out:
+        class_export_put(exp);
         RETURN(rc);
 }
 
