@@ -24,7 +24,7 @@ include $(top_srcdir)/Rules
 
 # Create a fresh ext2 patch.
 diff:
-	rm -f extN.patchT
+	$(RM) extN.patchT
 	for f in $(EXTNC); do diff -u $(top_srcdir)/fs/extN/$$f $$f >> extN.patchT ; done
 	mv -f ext2.patchT $(srcdir)/ext2.patch-$(RELEASE)
 .PHONY: diff
@@ -35,6 +35,7 @@ diff:
 # them.  To avoid this, we copy/patch in the source dir instead of the build
 # dir (if they are different).
 patch-stamp: $(EXTNP)
+	$(RM) $@
 	test -e $(top_srcdir)/fs || ln -sf . $(top_srcdir)/fs
 	set -vx;\
 	list='$(EXTN_EXTRA)'; for f in $$list; do $(RM) $(top_srcdir)/$$f; done
@@ -59,15 +60,15 @@ patch-stamp: $(EXTNP)
 		(cd $(top_srcdir); patch -N -p1) < $(srcdir)/extN-2.4.18-exports.diff; \
 		(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-ino_sb_fixup.diff; \
 	fi
-	echo timestamp > patch-stamp
+	echo timestamp > $@
 
-$(EXTNC) $(EXTNI) $(EXTN_EXTRA): patch-stamp
+$(EXTNC) $(EXTNI) $(EXTN_EXTRA) xattr.c: patch-stamp
 
 # Don't distribute any patched files.
 dist-hook:
-	rm -f $(top_srcdir)/fs
-	list='$(EXTNC)'; for f in $$list; do rm -f $(distdir)/$$f; done
+	$(RM) $(top_srcdir)/fs
+	list='$(EXTNC)'; for f in $$list; do $(RM) $(distdir)/$$f; done
 	list='$(EXTNI)'; for i in $$list; do                                  \
-		rm -f $(distdir)/../include/linux/$$i;                        \
+		$(RM) $(distdir)/../include/linux/$$i;                        \
 	done
-	list='$(EXTN_EXTRA)'; for f in $$list; do rm -f $(distdir)/../$$f; done
+	list='$(EXTN_EXTRA)'; for f in $$list; do $(RM) $(distdir)/../$$f; done
