@@ -27,10 +27,10 @@
 #define OBD_FILTER_DEVICENAME "obdfilter"
 #endif
 
-#define FILTER_LR_CLIENT  8192
-#define FILTER_LR_SIZE     128
+#define FILTER_LR_SERVER_SIZE    512
 
-#define FILTER_CLIENT_SLOTS 17
+#define FILTER_LR_CLIENT_START   8192
+#define FILTER_LR_CLIENT_SIZE    128
 
 #define FILTER_MOUNT_RECOV 2
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
@@ -42,7 +42,7 @@ struct filter_server_data {
         __u64 fsd_last_objid;      /* last completed transaction ID */
         __u64 fsd_last_rcvd;       /* last completed transaction ID */
         __u64 fsd_mount_count;     /* FILTER incarnation number */
-        __u8  fsd_padding[512 - 56]; /*  */
+        __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 64]; /*  */
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
@@ -52,7 +52,7 @@ struct filter_client_data {
         __u64 fcd_last_rcvd;       /* last completed transaction ID */
         __u64 fcd_mount_count;     /* FILTER incarnation number */
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
-        __u8  fcd_padding[MDS_LR_SIZE - 64]; 
+        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 64]; 
 };
 
 /* In-memory access to client data from OST struct */
