@@ -313,8 +313,7 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                                 flag = LL_LOOKUP_NEGATIVE;
                         else
                                 flag = LL_LOOKUP_POSITIVE;
-                } else if (it->it_op & (IT_GETATTR | IT_SETATTR | IT_LOOKUP |
-                                        IT_READLINK)) {
+                } else if (it->it_op & (IT_GETATTR | IT_SETATTR | IT_LOOKUP)) {
                         /* For check ops, we want the lookup to succeed */
                         it->it_data = NULL;
                         if (it->it_status)
