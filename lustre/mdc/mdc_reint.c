@@ -43,7 +43,7 @@ static int mdc_reint(struct ptlrpc_request *request,
         int rc;
         
 
-        request->rq_level = level;
+        request->rq_send_state = level;
 
         mdc_get_rpc_lock(rpc_lock, NULL);
         rc = ptlrpc_queue_wait(request);
@@ -102,7 +102,7 @@ int mdc_setattr(struct lustre_handle *conn, struct mdc_op_data *data,
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(req, rpc_lock, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, rpc_lock, LUSTRE_IMP_FULL);
         *request = req;
         if (rc == -ERESTARTSYS)
                 rc = 0;
@@ -136,12 +136,12 @@ int mdc_create(struct lustre_handle *conn, struct mdc_op_data *op_data,
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        level = LUSTRE_CONN_FULL;
+        level = LUSTRE_IMP_FULL;
  resend:
         rc = mdc_reint(req, &mdc_rpc_lock, level);
         /* Resend if we were told to. */
         if (rc == -ERESTARTSYS) {
-                level = LUSTRE_CONN_RECOVER;
+                level = LUSTRE_IMP_RECOVER;
                 goto resend;
         }
 
@@ -174,7 +174,7 @@ int mdc_unlink(struct lustre_handle *conn, struct mdc_op_data *data,
 
         mdc_unlink_pack(req, 0, data);
 
-        rc = mdc_reint(req, &mdc_rpc_lock, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, &mdc_rpc_lock, LUSTRE_IMP_FULL);
         if (rc == -ERESTARTSYS)
                 rc = 0;
         RETURN(rc);
@@ -197,7 +197,7 @@ int mdc_link(struct lustre_handle *conn, struct mdc_op_data *data,
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(req, &mdc_rpc_lock, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, &mdc_rpc_lock, LUSTRE_IMP_FULL);
         *request = req;
         if (rc == -ERESTARTSYS)
                 rc = 0;
@@ -224,7 +224,7 @@ int mdc_rename(struct lustre_handle *conn, struct mdc_op_data *data,
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
-        rc = mdc_reint(req, &mdc_rpc_lock, LUSTRE_CONN_FULL);
+        rc = mdc_reint(req, &mdc_rpc_lock, LUSTRE_IMP_FULL);
         *request = req;
         if (rc == -ERESTARTSYS)
                 rc = 0;
