@@ -15,7 +15,6 @@ struct sm_ops smfs_operations;
  
 extern struct inode_operations smfs_file_iops;
 extern struct file_operations  smfs_file_fops;
-extern struct address_space_operations smfs_file_aops;
 extern struct inode_operations smfs_sym_iops; 
 extern struct file_operations smfs_sym_fops;
 extern struct super_operations smfs_super_ops;
@@ -48,11 +47,6 @@ inline struct file_operations *cache_dfops(struct sm_ops *smfs_ops)
 inline struct file_operations *cache_ffops(struct sm_ops *smfs_ops)
 {
 	return &smfs_ops->sm_file_fops;
-}
-
-inline struct address_space_operations *cache_faops(struct sm_ops *smfs_ops) 
-{
-	return &smfs_ops->sm_file_aops;
 }
 
 inline struct file_operations *cache_sfops(struct sm_ops *smfs_ops)
@@ -187,47 +181,14 @@ static void setup_fops(struct inode *cache_inode,
 			fops->get_unmapped_area = cache_fops->get_unmapped_area;										 	
 	}
 }
-static void setup_aops(struct inode *cache_inode,
-		       struct address_space_operations *aops,
-		       struct address_space_operations *cache_aops)
-{
-	if (cache_inode && cache_inode->i_mapping && 
-	    aops && cache_aops) {
-		struct address_space_operations *caops = cache_inode->i_mapping->a_ops;
-
-		if (caops->writepage) 
-			aops->writepage = cache_aops->writepage;
-		if (caops->readpage)
-			aops->readpage = cache_aops->readpage;
-		if (caops->sync_page)
-			aops->sync_page = cache_aops->sync_page;
-		if (caops->prepare_write)
-			aops->prepare_write = cache_aops->prepare_write;
-		if (caops->commit_write)
-			aops->commit_write = cache_aops->commit_write;
-		if (caops->bmap)
-			aops->bmap = cache_aops->bmap;
-		if (caops->flushpage)
-			aops->flushpage = cache_aops->flushpage;
-		if (caops->releasepage)
-			aops->releasepage = cache_aops->releasepage;
-		if (caops->direct_IO)
-			aops->direct_IO = cache_aops->direct_IO;
-		if (caops->removepage)
-			aops->removepage = cache_aops->removepage;
-	}									
-};
-		
 static void setup_sm_file_ops(struct inode *cache_inode, 
 		       	      struct inode *inode,
 		       	      struct inode_operations *cache_iops,
-		              struct file_operations *cache_fops,
-		              struct address_space_operations *cache_aops)
+		              struct file_operations *cache_fops)
 {
 	struct smfs_super_info *smb;
 	struct inode_operations *iops;
 	struct file_operations *fops;
-        struct address_space_operations *aops;
 
 	smb = S2SMI(inode->i_sb); 
 	
@@ -237,15 +198,12 @@ static void setup_sm_file_ops(struct inode *cache_inode,
 
 	iops = cache_fiops(&smfs_operations);
 	fops = cache_ffops(&smfs_operations);
-	aops = cache_faops(&smfs_operations);
 
 	memset(iops , 0 , sizeof (struct inode_operations));	
 	memset(fops , 0 , sizeof (struct file_operations));	
-	memset(aops , 0 , sizeof (struct address_space_operations));	
 
 	setup_iops(cache_inode, iops, cache_iops); 	
 	setup_fops(cache_inode, fops, cache_fops);
-	setup_aops(cache_inode, aops, cache_aops);
 
 	return;
 }
@@ -372,14 +330,11 @@ void sm_set_inode_ops(struct inode *cache_inode, struct inode *inode)
         } else if (S_ISREG(inode->i_mode)) {
 	        setup_sm_file_ops(cache_inode, inode,
                                   &smfs_file_iops,
-                                  &smfs_file_fops,
-                                  &smfs_file_aops);
+                                  &smfs_file_fops);
                 CDEBUG(D_INODE, "inode %lu, i_op at %p\n",
                        inode->i_ino, inode->i_op);
                 inode->i_fop = cache_ffops(&smfs_operations);
                 inode->i_op = cache_fiops(&smfs_operations);
-                if (inode->i_mapping)
-                        inode->i_mapping->a_ops = cache_faops(&smfs_operations);
         
 	} else if (S_ISLNK(inode->i_mode)) {
                 setup_sm_symlink_ops(cache_inode, inode,
