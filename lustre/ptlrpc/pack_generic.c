@@ -62,7 +62,7 @@ int lustre_pack_msg(int count, int *lens, char **bufs, int *len,
  * with the given sub-buffer lengths. */
 int lustre_msg_size(int count, int *lengths)
 {
-        int size, i;
+        int size = 0, i;
 
         for (i = 0; i < count; i++)
                 size += size_round(lengths[i]);

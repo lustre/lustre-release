@@ -277,8 +277,10 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 OBD_FREE(request->rq_reply_md.start, request->rq_replen);
 
         OBD_ALLOC(repbuf, request->rq_replen);
-        if (!repbuf)
+        if (!repbuf) {
+                LBUG();
                 RETURN(ENOMEM);
+        }
 
         local_id.nid = PTL_ID_ANY;
         local_id.pid = PTL_ID_ANY;
