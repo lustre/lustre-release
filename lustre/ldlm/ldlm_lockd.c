@@ -126,17 +126,20 @@ static int _ldlm_convert(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         dlm_rep = lustre_msg_buf(req->rq_repmsg, 0);
         dlm_rep->lock_flags = dlm_req->lock_flags;
 
-        lock = lustre_handle2object(&dlm_req->lock_handle1);
-        LDLM_DEBUG(lock, "server-side convert handler START");
+        lock = ldlm_handle2lock(&dlm_req->lock_handle1);
+        if (!lock)
+                RETURN(0);
 
-        res = ldlm_local_lock_convert(&dlm_req->lock_handle1,
-                                      dlm_req->lock_desc.l_req_mode,
-                                      &dlm_rep->lock_flags);
+        LDLM_DEBUG(lock, "server-side convert handler START");
+        ldlm_local_lock_convert(&dlm_req->lock_handle1,
+                                dlm_req->lock_desc.l_req_mode,
+                                &dlm_rep->lock_flags);
         req->rq_status = 0;
         if (ptlrpc_reply(svc, req) != 0)
                 LBUG();
 
-        ldlm_reprocess_all(res);
+        ldlm_reprocess_all(lock->res);
+        ldlm_lock_put(lock); 
         LDLM_DEBUG(lock, "server-side convert handler END");
 
         RETURN(0);
@@ -157,15 +160,19 @@ static int _ldlm_cancel(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         }
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
 
-        lock = lustre_handle2object(&dlm_req->lock_handle1);
+        lock = ldlm_handle2lock(&dlm_req->lock_handle1);
+        if (!lock)
+                RETURN(0); 
+
         LDLM_DEBUG(lock, "server-side cancel handler START");
-        res = ldlm_local_lock_cancel(lock);
+        ldlm_local_lock_cancel(lock);
         req->rq_status = 0;
+
         if (ptlrpc_reply(svc, req) != 0)
                 LBUG();
 
-        if (res != NULL)
-                ldlm_reprocess_all(res);
+        ldlm_reprocess_all(lock->l_resource);
+        ldlm_lock_put(put);
         LDLM_DEBUG_NOLOCK("server-side cancel handler END");
 
         RETURN(0);
@@ -192,8 +199,13 @@ static int _ldlm_callback(struct ptlrpc_service *svc,
         if (rc != 0)
                 RETURN(rc);
 
-        lock = lustre_handle2object(&dlm_req->lock_handle1);
-        new = lustre_handle2object(&dlm_req->lock_handle2);
+        lock = ldlm_handle2lock(&dlm_req->lock_handle1);
+        new = ldlm_handle2lock(&dlm_req->lock_handle2);
+        if (!lock) { 
+                CERROR("callback on lock %Lx - lock disappeared\n", 
+                       dlm_req->lock_handle.addr);
+                RETURN(0);
+        }
 
         LDLM_DEBUG(lock, "client %s callback handler START",
                    new == NULL ? "completion" : "blocked");
@@ -208,38 +220,15 @@ static int _ldlm_callback(struct ptlrpc_service *svc,
                 if (memcmp(dlm_req->lock_desc.l_resource.lr_name,
                            lock->l_resource->lr_name,
                            sizeof(__u64) * RES_NAME_SIZE) != 0) {
-                        struct ldlm_namespace *ns =
-                                lock->l_resource->lr_namespace;
-                        int type = lock->l_resource->lr_type;
 
-                        if (!ldlm_resource_put(lock->l_resource))
-                                spin_unlock(&lock->l_resource->lr_lock);
-
-                        lock->l_resource = ldlm_resource_get(ns, NULL, dlm_req->lock_desc.l_resource.lr_name, type, 1);
-                        if (lock->l_resource == NULL) {
-                                LBUG();
-                                RETURN(-ENOMEM);
-                        }
-                        spin_lock(&lock->l_resource->lr_lock);
+                        ldlm_lock_change_resource(lock, dlm_req->lock_desc.l_resource.lr_name);
                         LDLM_DEBUG(lock, "completion AST, new resource");
                 }
-
-                /* FIXME: the API is flawed if I have to do these refcount
-                 * acrobatics (along with the _put() below). */
-                lock->l_resource->lr_refcount++;
-
-                /* _del_lock is safe for half-created locks that are not yet on
-                 * a list. */
-                ldlm_resource_del_lock(lock);
-                ldlm_grant_lock(lock->l_resource, lock);
-
-                ldlm_resource_put(lock->l_resource);
-
+                ldlm_grant_lock(lock);
                 wake_up(&lock->l_waitq);
-                spin_unlock(&lock->l_lock);
-                spin_unlock(&lock->l_resource->lr_lock);
+                ldlm_lock_put(lock);
         } else {
-                lock->l_flags |= LDLM_FL_DYING;
+                lock->l_flags |= LDLM_FL_CBPENDING;
                 spin_unlock(&lock->l_lock);
                 spin_unlock(&lock->l_resource->lr_lock);
                 if (!lock->l_readers && !lock->l_writers) {
