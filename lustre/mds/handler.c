@@ -216,9 +216,9 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         if (mnt)
                 *mnt = mds->mds_vfsmnt;
         spin_lock(&dcache_lock);
-        for (lp = inode->i_dentry.next; lp != &inode->i_dentry ; lp=lp->next) {
-                result = list_entry(lp,struct dentry, d_alias);
-                if (! (result->d_flags & DCACHE_NFSD_DISCONNECTED)) {
+        list_for_each(lp, &inode->i_dentry) {
+                result = list_entry(lp, struct dentry, d_alias);
+                if (!(result->d_flags & DCACHE_NFSD_DISCONNECTED)) {
                         dget_locked(result);
                         result->d_vfs_flags |= DCACHE_REFERENCED;
                         spin_unlock(&dcache_lock);
@@ -255,18 +255,19 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         int rc;
         ENTRY;
 
-        if (!cluuid)
+        if (!conn || !obd || !cluuid)
                 RETURN(-EINVAL);
 
         MOD_INC_USE_COUNT;
+
         list_for_each(p, &obd->obd_exports) {
                 exp = list_entry(p, struct obd_export, exp_chain);
                 mcd = exp->exp_mds_data.med_mcd;
-                if (mcd && !memcmp(cluuid, mcd->mcd_uuid,
-                                   sizeof(mcd->mcd_uuid))) {
+                if (!memcmp(cluuid, mcd->mcd_uuid, sizeof(mcd->mcd_uuid))) {
                         CDEBUG(D_INFO, "existing export for UUID '%s' at %p\n",
                                cluuid, exp);
                         LASSERT(exp->exp_obd == obd);
+
                         exp->exp_rconnh.addr = conn->addr;
                         exp->exp_rconnh.cookie = conn->cookie;
                         conn->addr = (__u64) (unsigned long)exp;
@@ -276,6 +277,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
                         RETURN(0);
                 }
         }
+
 #warning shaver: we might need a real cluuid here
         rc = class_connect(conn, obd, NULL);
         if (rc)
