@@ -44,7 +44,8 @@ struct mds_run_ctxt {
 	mm_segment_t     fs;
 };
 
-#define MDS_UNMOUNT 1
+#define MDS_STOPPING 1
+#define MDS_RUNNING 2
 #define LUSTRE_MDS_NAME "mds"
 
 struct mds_obd {

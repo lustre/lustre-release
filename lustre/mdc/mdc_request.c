@@ -92,6 +92,78 @@ int mdc_getattr(struct ptlrpc_client *peer, ino_t ino, int type, int valid,
 	return rc;
 }
 
+int mdc_open(struct ptlrpc_client *peer, ino_t ino, int type, int flags,
+                __u64 *fh, struct mds_rep  **rep, struct ptlrep_hdr **hdr)
+{
+	struct ptlrpc_request *request;
+	int rc; 
+
+	request = ptlrpc_prep_req(peer, MDS_OPEN, 0, NULL, 0, NULL); 
+	if (!request) { 
+		CERROR("llight request: cannot pack\n");
+		return -ENOMEM;
+	}
+
+	ll_ino2fid(&request->rq_req.mds->fid1, ino, 0, type);
+        request->rq_req.mds->flags = flags;
+	request->rq_replen = 
+		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
+
+	rc = ptlrpc_queue_wait(request, peer);
+	if (rc) { 
+		CERROR("llight request: error in handling %d\n", rc); 
+		goto out;
+	}
+
+	if (rep) { 
+		*rep = request->rq_rep.mds;
+	}
+	if (hdr) { 
+		*hdr = request->rq_rephdr;
+	}
+        *fh = request->rq_rep.mds->objid; 
+
+ out: 
+	ptlrpc_free_req(request);
+	return rc;
+}
+
+
+int mdc_close(struct ptlrpc_client *peer, ino_t ino, int type, __u64 fh, 
+		struct mds_rep  **rep, struct ptlrep_hdr **hdr)
+{
+	struct ptlrpc_request *request;
+	int rc; 
+
+	request = ptlrpc_prep_req(peer, MDS_CLOSE, 0, NULL, 0, NULL); 
+	if (!request) { 
+		CERROR("llight request: cannot pack\n");
+		return -ENOMEM;
+	}
+
+	ll_ino2fid(&request->rq_req.mds->fid1, ino, 0, type);
+        request->rq_req.mds->objid = fh; 
+	request->rq_replen = 
+		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
+
+	rc = ptlrpc_queue_wait(request, peer);
+	if (rc) { 
+		CERROR("llight request: error in handling %d\n", rc); 
+		goto out;
+	}
+
+	if (rep) { 
+		*rep = request->rq_rep.mds;
+	}
+	if (hdr) { 
+		*hdr = request->rq_rephdr;
+	}
+
+ out: 
+	ptlrpc_free_req(request);
+	return rc;
+}
+
 int mdc_readpage(struct ptlrpc_client *peer, ino_t ino, int type, __u64 offset,
 		 char *addr, struct mds_rep  **rep, struct ptlrep_hdr **hdr)
 {

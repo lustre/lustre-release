@@ -286,6 +286,48 @@ int mds_getattr(struct ptlrpc_request *req)
 	return 0;
 }
 
+int mds_open(struct ptlrpc_request *req)
+{
+	struct dentry *de;
+	struct inode *inode;
+	struct mds_rep *rep;
+	struct file *file;
+	struct vfsmount *mnt;
+	__u32 flags;
+	int rc;
+	
+	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep, 
+			  &req->rq_replen, &req->rq_repbuf);
+	if (rc) { 
+		EXIT;
+		CERROR("mds: out of memory\n");
+		req->rq_status = -ENOMEM;
+		return 0;
+	}
+
+	req->rq_rephdr->seqno = req->rq_reqhdr->seqno;
+	rep = req->rq_rep.mds;
+
+	de = mds_fid2dentry(req->rq_obd, &req->rq_req.mds->fid1, &mnt);
+	if (IS_ERR(de)) { 
+		EXIT;
+		req->rq_rephdr->status = -ENOENT;
+		return 0;
+	}
+	flags = req->rq_req.mds->flags;
+	file = dentry_open(de, mnt, flags);
+	if (!file || IS_ERR(file)) { 
+		req->rq_rephdr->status = -EINVAL;
+		return 0;
+	}		
+	
+	rep->objid = (__u64) (unsigned long)file; 
+	mds_get_objid(inode, &rep->objid);
+	dput(de); 
+	return 0;
+}
+
+
 int mds_readpage(struct ptlrpc_request *req)
 {
 	struct vfsmount *mnt;
@@ -449,6 +491,7 @@ int mds_main(void *arg)
 
 	/* Record that the  thread is running */
 	mds->mds_thread = current;
+        mds->mds_flags = MDS_RUNNING;
 	wake_up(&mds->mds_done_waitq); 
 
 	/* And now, wait forever for commit wakeup events. */
@@ -465,7 +508,6 @@ int mds_main(void *arg)
                         struct ptlrpc_request request;
                         struct ptlrpc_service *service;
 
-
                         CDEBUG(D_IOCTL, "-- sleeping\n");
                         signal = 0;
                         add_wait_queue(&mds->mds_waitq, &wait);
@@ -474,7 +516,8 @@ int mds_main(void *arg)
 				rc = PtlEQGet(mds->mds_service->srv_eq_h, &ev);
                                 if (rc == PTL_OK || rc == PTL_EQ_DROPPED)
                                         break;
-                                if (mds->mds_flags & MDS_UNMOUNT)
+                                CERROR("EQGet rc %d\n", rc); 
+                                if (mds->mds_flags & MDS_STOPPING)
                                         break;
 
 
@@ -499,7 +542,7 @@ int mds_main(void *arg)
                                 EXIT;
                                 break;
                         }
-                        if (mds->mds_flags & MDS_UNMOUNT) { 
+                        if (mds->mds_flags & MDS_STOPPING) { 
                                 break;
                         }
 
@@ -513,6 +556,7 @@ int mds_main(void *arg)
                         request.rq_reqlen = ev.mem_desc.length;
                         request.rq_obd = MDS;
                         request.rq_xid = ev.match_bits;
+                        CERROR("got req %d\n", request.rq_xid);
 
                         request.rq_peer.peer_nid = ev.initiator.nid;
                         /* FIXME: this NI should be the incoming NI.
@@ -577,7 +621,7 @@ int mds_main(void *arg)
 
 static void mds_stop_srv_thread(struct mds_obd *mds)
 {
-	mds->mds_flags |= MDS_UNMOUNT;
+	mds->mds_flags |= MDS_STOPPING;
 
 	while (mds->mds_thread) {
 		wake_up(&mds->mds_waitq);

@@ -178,8 +178,10 @@ struct obd_ioobj {
 #define MDS_TYPE_ERR 3
 
 #define MDS_GETATTR   1
-#define MDS_REINT     2
-#define MDS_READPAGE  3
+#define MDS_OPEN      2
+#define MDS_CLOSE     3
+#define MDS_REINT     4
+#define MDS_READPAGE  5
 
 #define REINT_SETATTR 0
 #define REINT_CREATE  1

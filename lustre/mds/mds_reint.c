@@ -118,7 +118,7 @@ static int mds_reint_create(struct mds_update_record *rec,
 		CERROR("child exists (dir %ld, name %s\n", 
 		       de->d_inode->i_ino, rec->ur_name);
 		dput(de); 
-		req->rq_rephdr->status = -ESTALE;
+		req->rq_rephdr->status = -EEXIST;
 		EXIT;
 		return 0;
 	}
