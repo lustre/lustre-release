@@ -8,9 +8,11 @@
  arch/um/link.ld.in                 |    1 -
  8 files changed, 21 insertions(+), 20 deletions(-)
 
---- linux-2.4.20/arch/um/link.ld.in~uml-2.4.20-fixes-1	2003-10-17 23:02:15.000000000 +0400
-+++ linux-2.4.20-alexey/arch/um/link.ld.in	2003-10-17 23:04:53.000000000 +0400
-@@ -6,7 +6,6 @@ SECTIONS
+Index: linux-2.4.20/arch/um/link.ld.in
+===================================================================
+--- linux-2.4.20.orig/arch/um/link.ld.in	2003-10-25 00:35:59.000000000 +0400
++++ linux-2.4.20/arch/um/link.ld.in	2003-10-25 00:36:02.000000000 +0400
+@@ -6,7 +6,6 @@
  {
    . = START() + SIZEOF_HEADERS;
  
@@ -18,9 +20,11 @@
    __binary_start = .;
  ifdef(`MODE_TT', `
    .thread_private : {
---- linux-2.4.20/arch/um/kernel/process.c~uml-2.4.20-fixes-1	2003-10-17 23:02:15.000000000 +0400
-+++ linux-2.4.20-alexey/arch/um/kernel/process.c	2003-10-17 23:04:53.000000000 +0400
-@@ -232,7 +232,7 @@ int run_kernel_thread(int (*fn)(void *),
+Index: linux-2.4.20/arch/um/kernel/process.c
+===================================================================
+--- linux-2.4.20.orig/arch/um/kernel/process.c	2003-10-25 00:35:59.000000000 +0400
++++ linux-2.4.20/arch/um/kernel/process.c	2003-10-25 00:36:02.000000000 +0400
+@@ -232,7 +232,7 @@
  	int n;
  
  	*jmp_ptr = &buf;
@@ -29,9 +33,11 @@
  	if(n != 0)
  		return(n);
  	(*fn)(arg);
---- linux-2.4.20/arch/um/kernel/skas/process.c~uml-2.4.20-fixes-1	2003-10-17 23:02:15.000000000 +0400
-+++ linux-2.4.20-alexey/arch/um/kernel/skas/process.c	2003-10-17 23:04:53.000000000 +0400
-@@ -59,11 +59,11 @@ static void handle_trap(int pid, union u
+Index: linux-2.4.20/arch/um/kernel/skas/process.c
+===================================================================
+--- linux-2.4.20.orig/arch/um/kernel/skas/process.c	2003-10-25 00:35:59.000000000 +0400
++++ linux-2.4.20/arch/um/kernel/skas/process.c	2003-10-25 00:36:02.000000000 +0400
+@@ -59,11 +59,11 @@
  	int err, syscall_nr, status;
  
  	syscall_nr = PT_SYSCALL_NR(regs->skas.regs);
@@ -44,7 +50,7 @@
  
  	err = ptrace(PTRACE_POKEUSER, pid, PT_SYSCALL_NR_OFFSET, __NR_getpid);
  	if(err < 0)
-@@ -189,7 +189,7 @@ void new_thread(void *stack, void **swit
+@@ -189,7 +189,7 @@
  	*switch_buf_ptr = &switch_buf;
  	*fork_buf_ptr = &fork_buf;
  
@@ -53,7 +59,7 @@
  		new_thread_proc(stack, handler);
  
  	remove_sigstack();
-@@ -201,8 +201,8 @@ void thread_wait(void *sw, void *fb)
+@@ -201,8 +201,8 @@
  
  	*switch_buf = &buf;
  	fork_buf = fb;
@@ -64,7 +70,7 @@
  }
  
  static int move_registers(int int_op, int fp_op, union uml_pt_regs *regs,
-@@ -260,8 +260,8 @@ void switch_threads(void *me, void *next
+@@ -260,8 +260,8 @@
  	jmp_buf my_buf, **me_ptr = me, *next_buf = next;
  	
  	*me_ptr = &my_buf;
@@ -75,7 +81,7 @@
  }
  
  static jmp_buf initial_jmpbuf;
-@@ -277,14 +277,14 @@ int start_idle_thread(void *stack, void 
+@@ -277,14 +277,14 @@
  	int n;
  
  	*fork_buf_ptr = &initial_jmpbuf;
@@ -92,7 +98,7 @@
  	}
  	else if(n == 3){
  		kmalloc_ok = 0;
-@@ -294,7 +294,7 @@ int start_idle_thread(void *stack, void 
+@@ -294,7 +294,7 @@
  		kmalloc_ok = 0;
  		return(1);
  	}
@@ -101,7 +107,7 @@
  }
  
  void remove_sigstack(void)
-@@ -316,8 +316,8 @@ void initial_thread_cb_skas(void (*proc)
+@@ -316,8 +316,8 @@
  	cb_back = &here;
  
  	block_signals();
@@ -112,7 +118,7 @@
  	unblock_signals();
  
  	cb_proc = NULL;
-@@ -328,13 +328,13 @@ void initial_thread_cb_skas(void (*proc)
+@@ -328,13 +328,13 @@
  void halt_skas(void)
  {
  	block_signals();
@@ -128,9 +134,11 @@
  }
  
  int new_mm(int from)
---- linux-2.4.20/arch/um/kernel/skas/syscall_kern.c~uml-2.4.20-fixes-1	2003-10-17 23:02:15.000000000 +0400
-+++ linux-2.4.20-alexey/arch/um/kernel/skas/syscall_kern.c	2003-10-17 23:04:53.000000000 +0400
-@@ -23,7 +23,8 @@ long execute_syscall_skas(void *r)
+Index: linux-2.4.20/arch/um/kernel/skas/syscall_kern.c
+===================================================================
+--- linux-2.4.20.orig/arch/um/kernel/skas/syscall_kern.c	2003-10-25 00:35:59.000000000 +0400
++++ linux-2.4.20/arch/um/kernel/skas/syscall_kern.c	2003-10-25 00:36:02.000000000 +0400
+@@ -23,7 +23,8 @@
  	nsyscalls++;
  	syscall = UPT_SYSCALL_NR(&regs->regs);
  
@@ -140,9 +148,11 @@
  		res = -ENOSYS;
  	else res = EXECUTE_SYSCALL(syscall, regs);
  
---- linux-2.4.20/arch/um/kernel/trap_user.c~uml-2.4.20-fixes-1	2003-10-17 23:02:15.000000000 +0400
-+++ linux-2.4.20-alexey/arch/um/kernel/trap_user.c	2003-10-17 23:04:53.000000000 +0400
-@@ -125,7 +125,7 @@ void do_longjmp(void *b, int val)
+Index: linux-2.4.20/arch/um/kernel/trap_user.c
+===================================================================
+--- linux-2.4.20.orig/arch/um/kernel/trap_user.c	2003-10-25 00:35:59.000000000 +0400
++++ linux-2.4.20/arch/um/kernel/trap_user.c	2003-10-25 00:36:02.000000000 +0400
+@@ -125,7 +125,7 @@
  {
  	jmp_buf *buf = b;
  
@@ -151,9 +161,11 @@
  }
  
  /*
---- linux-2.4.20/arch/um/kernel/tt/syscall_kern.c~uml-2.4.20-fixes-1	2003-10-17 23:02:15.000000000 +0400
-+++ linux-2.4.20-alexey/arch/um/kernel/tt/syscall_kern.c	2003-10-17 23:04:53.000000000 +0400
-@@ -113,7 +113,8 @@ long execute_syscall_tt(void *r)
+Index: linux-2.4.20/arch/um/kernel/tt/syscall_kern.c
+===================================================================
+--- linux-2.4.20.orig/arch/um/kernel/tt/syscall_kern.c	2003-10-25 00:35:59.000000000 +0400
++++ linux-2.4.20/arch/um/kernel/tt/syscall_kern.c	2003-10-25 00:36:02.000000000 +0400
+@@ -113,7 +113,8 @@
  	nsyscalls++;
  	syscall = UPT_SYSCALL_NR(&regs->regs);
  
@@ -163,9 +175,11 @@
  		res = -ENOSYS;
  	else if(honeypot && check_bogosity(regs))
  		res = -EFAULT;
---- linux-2.4.20/arch/um/kernel/tt/uaccess_user.c~uml-2.4.20-fixes-1	2003-10-17 23:02:15.000000000 +0400
-+++ linux-2.4.20-alexey/arch/um/kernel/tt/uaccess_user.c	2003-10-17 23:04:53.000000000 +0400
-@@ -75,7 +75,7 @@ int __do_strnlen_user(const char *str, u
+Index: linux-2.4.20/arch/um/kernel/tt/uaccess_user.c
+===================================================================
+--- linux-2.4.20.orig/arch/um/kernel/tt/uaccess_user.c	2003-10-25 00:35:59.000000000 +0400
++++ linux-2.4.20/arch/um/kernel/tt/uaccess_user.c	2003-10-25 00:36:02.000000000 +0400
+@@ -75,7 +75,7 @@
  	jmp_buf jbuf;
  
  	*fault_catcher = &jbuf;
@@ -174,9 +188,11 @@
  		ret = strlen(str) + 1;
  	} 
  	else {
---- linux-2.4.20/arch/um/kernel/uaccess_user.c~uml-2.4.20-fixes-1	2003-10-17 23:02:15.000000000 +0400
-+++ linux-2.4.20-alexey/arch/um/kernel/uaccess_user.c	2003-10-17 23:04:53.000000000 +0400
-@@ -20,7 +20,7 @@ unsigned long __do_user_copy(void *to, c
+Index: linux-2.4.20/arch/um/kernel/uaccess_user.c
+===================================================================
+--- linux-2.4.20.orig/arch/um/kernel/uaccess_user.c	2003-10-25 00:35:59.000000000 +0400
++++ linux-2.4.20/arch/um/kernel/uaccess_user.c	2003-10-25 00:36:02.000000000 +0400
+@@ -20,7 +20,7 @@
  
  	jmp_buf jbuf;
  	*fault_catcher = &jbuf;
@@ -185,5 +201,15 @@
  		(*op)(to, from, n);
  		ret = 0;
  		*faulted_out = 0;
-
-_
+Index: linux-2.4.20/arch/um/kernel/tt/ptproxy/sysdep.c
+===================================================================
+--- linux-2.4.20.orig/arch/um/kernel/tt/ptproxy/sysdep.c	2003-10-25 00:35:59.000000000 +0400
++++ linux-2.4.20/arch/um/kernel/tt/ptproxy/sysdep.c	2003-10-25 00:36:23.000000000 +0400
+@@ -9,6 +9,7 @@
+ #include <string.h>
+ #include <stdlib.h>
+ #include <signal.h>
++#include <errno.h>
+ #include <sys/types.h>
+ #include <sys/ptrace.h>
+ #include <asm/ptrace.h>
