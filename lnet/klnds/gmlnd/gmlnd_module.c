@@ -35,7 +35,7 @@ ptl_handle_ni_t	kgmnal_ni;
 
 
 int 
-gmnal_cmd(struct portal_ioctl_data *data, void *private)
+gmnal_cmd(struct portals_cfg *pcfg, void *private)
 {
 	gmnal_data_t	*nal_data = NULL;
 	char		*name = NULL;
@@ -45,16 +45,16 @@ gmnal_cmd(struct portal_ioctl_data *data, void *private)
 
 
 	CDEBUG(D_TRACE, "gmnal_cmd [%d] private [%p]\n", 
-	       data->ioc_nal_cmd, private);
+	       pcfg->pcfg_command, private);
 	nal_data = (gmnal_data_t*)private;
-	switch(data->ioc_nal_cmd) {
+	switch(pcfg->pcfg_command) {
 	/*
 	 * just reuse already defined GET_NID. Should define GMNAL version
 	 */
 	case(GMNAL_IOC_GET_GNID):
 
-		PORTAL_ALLOC(name, data->ioc_plen1);
-		copy_from_user(name, data->ioc_pbuf1, data->ioc_plen1);
+		PORTAL_ALLOC(name, pcfg->pcfg_plen1);
+		copy_from_user(name, pcfg->pcfg_pbuf1, pcfg->pcfg_plen1);
 	
 		GMNAL_GM_LOCK(nal_data);
 		nid = gm_host_name_to_node_id(nal_data->gm_port, name);
@@ -70,11 +70,11 @@ gmnal_cmd(struct portal_ioctl_data *data, void *private)
 			return(-1);
 		}
 		CDEBUG(D_INFO, "Global node is is [%u][%x]\n", gnid, gnid);
-		copy_to_user(data->ioc_pbuf2, &gnid, data->ioc_plen2);
+		copy_to_user(pcfg->pcfg_pbuf2, &gnid, pcfg->pcfg_plen2);
 	break;
 	default:
-		CDEBUG(D_INFO, "gmnal_cmd UNKNOWN[%d]\n", data->ioc_nal_cmd);
-		data->ioc_nid2 = -1;
+		CDEBUG(D_INFO, "gmnal_cmd UNKNOWN[%d]\n", pcfg->pcfg_command);
+		pcfg->pcfg_nid2 = -1;
 	}
 
 

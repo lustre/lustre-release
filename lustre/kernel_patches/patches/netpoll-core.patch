@@ -8,10 +8,11 @@
  l-mpm/net/core/netpoll.c        |  632 ++++++++++++++++++++++++++++++++++++++++
  8 files changed, 707 insertions(+), 26 deletions(-)
 
-diff -puN /dev/null net/core/netpoll.c
---- /dev/null	2003-09-12 12:14:37.000000000 -0500
-+++ l-mpm/net/core/netpoll.c	2003-09-22 13:15:31.000000000 -0500
-@@ -0,0 +1,632 @@
+Index: linux-2.6.0-test6/net/core/netpoll.c
+===================================================================
+--- linux-2.6.0-test6.orig/net/core/netpoll.c	2003-10-07 16:08:51.000000000 +0800
++++ linux-2.6.0-test6/net/core/netpoll.c	2003-10-09 20:40:07.769057232 +0800
+@@ -0,0 +1,633 @@
 +/*
 + * Common framework for low-level network console, dump, and debugger code
 + *
@@ -356,6 +357,7 @@ diff -puN /dev/null net/core/netpoll.c
 +	struct netpoll *np;
 +	struct list_head *p;
 +	unsigned long flags;
++	int rx_hook_called = 0;
 +
 +	if (skb->dev->type != ARPHRD_ETHER)
 +		goto out;
@@ -412,16 +414,16 @@ diff -puN /dev/null net/core/netpoll.c
 +		if (np->local_port && np->local_port != ntohs(uh->dest))
 +			continue;
 +
-+		spin_unlock_irqrestore(&rx_list_lock, flags);
-+
-+		if (np->rx_hook)
++		if (np->rx_hook){
 +			np->rx_hook(np, ntohs(uh->source),
 +				    (char *)(uh+1), ulen-sizeof(uh)-4);
-+
-+		return 1;
++			rx_hook_called = 1;
++		}
 +	}
 +	spin_unlock_irqrestore(&rx_list_lock, flags);
-+
++	
++	if (rx_hook_called)
++		return 1;
 +out:
 +	return trapped;
 +}
@@ -644,9 +646,10 @@ diff -puN /dev/null net/core/netpoll.c
 +{
 +	trapped = trap;
 +}
-diff -puN /dev/null include/linux/netpoll.h
---- /dev/null	2003-09-12 12:14:37.000000000 -0500
-+++ l-mpm/include/linux/netpoll.h	2003-09-22 13:15:31.000000000 -0500
+Index: linux-2.6.0-test6/include/linux/netpoll.h
+===================================================================
+--- linux-2.6.0-test6.orig/include/linux/netpoll.h	2003-10-07 16:08:51.000000000 +0800
++++ linux-2.6.0-test6/include/linux/netpoll.h	2003-10-07 16:08:51.000000000 +0800
 @@ -0,0 +1,37 @@
 +/*
 + * Common code for low-level network console, dump, and debugger code
@@ -685,29 +688,32 @@ diff -puN /dev/null include/linux/netpoll.h
 +
 +
 +#endif
-diff -puN net/core/Makefile~netpoll-core net/core/Makefile
---- l/net/core/Makefile~netpoll-core	2003-09-22 13:15:31.000000000 -0500
-+++ l-mpm/net/core/Makefile	2003-09-22 13:15:31.000000000 -0500
-@@ -13,3 +13,4 @@ obj-$(CONFIG_NETFILTER) += netfilter.o
+Index: linux-2.6.0-test6/net/core/Makefile
+===================================================================
+--- linux-2.6.0-test6.orig/net/core/Makefile	2003-09-28 08:51:03.000000000 +0800
++++ linux-2.6.0-test6/net/core/Makefile	2003-10-07 16:08:51.000000000 +0800
+@@ -13,3 +13,4 @@
  obj-$(CONFIG_NET_DIVERT) += dv.o
  obj-$(CONFIG_NET_PKTGEN) += pktgen.o
  obj-$(CONFIG_NET_RADIO) += wireless.o
 +obj-$(CONFIG_NETPOLL) += netpoll.o
-diff -puN net/Kconfig~netpoll-core net/Kconfig
---- l/net/Kconfig~netpoll-core	2003-09-22 13:15:31.000000000 -0500
-+++ l-mpm/net/Kconfig	2003-09-22 13:15:31.000000000 -0500
-@@ -689,4 +689,7 @@ endmenu
+Index: linux-2.6.0-test6/net/Kconfig
+===================================================================
+--- linux-2.6.0-test6.orig/net/Kconfig	2003-09-28 08:50:07.000000000 +0800
++++ linux-2.6.0-test6/net/Kconfig	2003-10-09 20:36:23.429162080 +0800
+@@ -670,4 +670,7 @@
  
- source "drivers/net/Kconfig"
+ source "net/bluetooth/Kconfig"
  
 +config NETPOLL
 +	def_bool KGDB
 +
  endmenu
-diff -puN include/linux/netdevice.h~netpoll-core include/linux/netdevice.h
---- l/include/linux/netdevice.h~netpoll-core	2003-09-22 13:15:31.000000000 -0500
-+++ l-mpm/include/linux/netdevice.h	2003-09-22 13:15:31.000000000 -0500
-@@ -452,13 +452,13 @@ struct net_device
+Index: linux-2.6.0-test6/include/linux/netdevice.h
+===================================================================
+--- linux-2.6.0-test6.orig/include/linux/netdevice.h	2003-10-07 16:08:42.000000000 +0800
++++ linux-2.6.0-test6/include/linux/netdevice.h	2003-10-07 16:08:51.000000000 +0800
+@@ -452,13 +452,13 @@
  						     unsigned char *haddr);
  	int			(*neigh_setup)(struct net_device *dev, struct neigh_parms *);
  	int			(*accept_fastpath)(struct net_device *, struct dst_entry*);
@@ -724,7 +730,7 @@ diff -puN include/linux/netdevice.h~netpoll-core include/linux/netdevice.h
  #ifdef CONFIG_NET_POLL_CONTROLLER
  	void			(*poll_controller)(struct net_device *);
  #endif
-@@ -536,10 +536,8 @@ extern int		dev_new_index(void);
+@@ -537,10 +537,8 @@
  extern struct net_device	*dev_get_by_index(int ifindex);
  extern struct net_device	*__dev_get_by_index(int ifindex);
  extern int		dev_restart(struct net_device *dev);
@@ -737,7 +743,7 @@ diff -puN include/linux/netdevice.h~netpoll-core include/linux/netdevice.h
  #endif
  
  typedef int gifconf_func_t(struct net_device * dev, char * bufptr, int len);
-@@ -599,10 +597,9 @@ static inline void netif_start_queue(str
+@@ -600,10 +598,9 @@
  
  static inline void netif_wake_queue(struct net_device *dev)
  {
@@ -750,7 +756,7 @@ diff -puN include/linux/netdevice.h~netpoll-core include/linux/netdevice.h
  #endif
  	if (test_and_clear_bit(__LINK_STATE_XOFF, &dev->state))
  		__netif_schedule(dev);
-@@ -610,10 +607,9 @@ static inline void netif_wake_queue(stru
+@@ -611,10 +608,9 @@
  
  static inline void netif_stop_queue(struct net_device *dev)
  {
@@ -763,20 +769,11 @@ diff -puN include/linux/netdevice.h~netpoll-core include/linux/netdevice.h
  #endif
  	set_bit(__LINK_STATE_XOFF, &dev->state);
  }
-diff -puN net/core/dev.c~netpoll-core net/core/dev.c
---- l/net/core/dev.c~netpoll-core	2003-09-22 13:15:31.000000000 -0500
-+++ l-mpm/net/core/dev.c	2003-09-22 13:16:34.000000000 -0500
-@@ -184,9 +184,6 @@ int netdev_fastroute_obstacles;
- extern int netdev_sysfs_init(void);
- extern int netdev_register_sysfs(struct net_device *);
- extern int netdev_unregister_sysfs(struct net_device *);
--#ifdef CONFIG_KGDB
--extern int kgdb_net_interrupt(struct sk_buff *skb);
--#endif
- 
- 
- /*******************************************************************************
-@@ -1353,16 +1350,8 @@ int netif_rx(struct sk_buff *skb)
+Index: linux-2.6.0-test6/net/core/dev.c
+===================================================================
+--- linux-2.6.0-test6.orig/net/core/dev.c	2003-10-07 16:08:42.000000000 +0800
++++ linux-2.6.0-test6/net/core/dev.c	2003-10-09 20:36:23.436161016 +0800
+@@ -1352,16 +1352,8 @@
  	struct softnet_data *queue;
  	unsigned long flags;
  
@@ -795,7 +792,7 @@ diff -puN net/core/dev.c~netpoll-core net/core/dev.c
  		kfree_skb(skb);
  		return NET_RX_DROP;
  	}
-@@ -1552,6 +1541,13 @@ int netif_receive_skb(struct sk_buff *sk
+@@ -1556,6 +1548,13 @@
  	int ret = NET_RX_DROP;
  	unsigned short type = skb->protocol;
  
@@ -809,10 +806,11 @@ diff -puN net/core/dev.c~netpoll-core net/core/dev.c
  	if (!skb->stamp.tv_sec)
  		do_gettimeofday(&skb->stamp);
  
-diff -puN include/asm-i386/irq.h~netpoll-core include/asm-i386/irq.h
---- l/include/asm-i386/irq.h~netpoll-core	2003-09-22 13:15:31.000000000 -0500
-+++ l-mpm/include/asm-i386/irq.h	2003-09-22 13:15:31.000000000 -0500
-@@ -24,6 +24,7 @@ extern void disable_irq(unsigned int);
+Index: linux-2.6.0-test6/include/asm-i386/irq.h
+===================================================================
+--- linux-2.6.0-test6.orig/include/asm-i386/irq.h	2003-09-28 08:50:36.000000000 +0800
++++ linux-2.6.0-test6/include/asm-i386/irq.h	2003-10-07 16:08:51.000000000 +0800
+@@ -24,6 +24,7 @@
  extern void disable_irq_nosync(unsigned int);
  extern void enable_irq(unsigned int);
  extern void release_x86_irqs(struct task_struct *);
@@ -820,10 +818,19 @@ diff -puN include/asm-i386/irq.h~netpoll-core include/asm-i386/irq.h
  
  #ifdef CONFIG_X86_LOCAL_APIC
  #define ARCH_HAS_NMI_WATCHDOG		/* See include/linux/nmi.h */
-diff -puN arch/i386/kernel/irq.c~netpoll-core arch/i386/kernel/irq.c
---- l/arch/i386/kernel/irq.c~netpoll-core	2003-09-22 13:15:31.000000000 -0500
-+++ l-mpm/arch/i386/kernel/irq.c	2003-09-22 13:15:31.000000000 -0500
-@@ -896,6 +896,21 @@ int setup_irq(unsigned int irq, struct i
+Index: linux-2.6.0-test6/arch/i386/kernel/irq.c
+===================================================================
+--- linux-2.6.0-test6.orig/arch/i386/kernel/irq.c	2003-10-07 16:08:34.000000000 +0800
++++ linux-2.6.0-test6/arch/i386/kernel/irq.c	2003-10-09 20:36:23.433161472 +0800
+@@ -396,7 +396,6 @@
+ 	}
+ 	spin_unlock_irqrestore(&desc->lock, flags);
+ }
+-
+ /*
+  * do_IRQ handles all normal device IRQ's (the special
+  * SMP cross-CPU interrupts have their own specific
+@@ -896,6 +895,21 @@
  	return 0;
  }
  

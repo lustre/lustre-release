@@ -8,13 +8,13 @@ LUSTRE=${LUSTRE:-`dirname $0`/..}
 init_test_env
 
 # XXX I wish all this stuff was in some default-config.sh somewhere
+MOUNT=${MOUNT:-/mnt/lustre}
 MDSDEV=${MDSDEV:-/tmp/mds-`hostname`}
 MDSSIZE=${MDSSIZE:-100000}
 OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
 OSTSIZE=${OSTSIZE:-100000}
 MOUNT1=${MOUNT1:-${MOUNT}1}
 MOUNT2=${MOUNT2:-${MOUNT}2}
-MOUNT=${MOUNT1}
 UPCALL=${UPCALL:-$PWD/replay-single-upcall.sh}
 FSTYPE=${FSTYPE:-ext3}
 TIMEOUT=${TIMEOUT:-5}
@@ -26,19 +26,35 @@ gen_config() {
     rm -f replay-dual.xml
     add_facet mds
     add_facet ost
-    add_facet client1 --lustre_upcall $UPCALL
-    add_facet client2 --lustre_upcall $UPCALL
+    add_facet client --lustre_upcall $UPCALL
     do_lmc --add mds --node mds_facet --mds mds1 --dev $MDSDEV --size $MDSSIZE
+    do_lmc --add lov --mds mds1 --lov lov1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
     do_lmc --add ost --lov lov1 --node ost_facet --ost ost1 --dev $OSTDEV --size $OSTSIZE
-    do_lmc --add mtpt --node client1_facet --path $MOUNT1 --mds mds1 --ost ost1
-    do_lmc --add mtpt --node client2_facet --path $MOUNT2 --mds mds1 --ost ost1
+    do_lmc --add ost --lov lov1 --node ost_facet --ost ost2 --dev ${OSTDEV}-2 --size $OSTSIZE
+    do_lmc --add mtpt --node client_facet --path $MOUNT --mds mds1 --ost lov1
 }
 
 
 build_test_filter
 
+cleanup() {
+    [ "$DAEMONFILE" ] && lctl debug_daemon stop
+    umount $MOUNT2
+    umount $MOUNT1
+    rmmod llite
+    stop mds ${FORCE} --dump cleanup-dual.log
+    stop ost ${FORCE}
+}
+
+if [ "$ONLY" == "cleanup" ]; then
+    sysctl -w portals.debug=0
+    cleanup
+    exit
+fi
+
 gen_config
-start mds --reformat
+start ost --reformat
+start mds --reformat --write_conf
 PINGER=`cat /proc/fs/lustre/pinger`
 
 if [ "$PINGER" != "on" ]; then
@@ -47,9 +63,14 @@ if [ "$PINGER" != "on" ]; then
     exit 1
 fi
 
-start ost --reformat
-start client1
-start client2
+insmod ../llite/llite.o || true
+[ -d $MOUNT1 ] || mkdir $MOUNT1
+[ -d $MOUNT2 ] || mkdir $MOUNT2
+
+mount -t lustre_lite -o mds_uuid=mds1_UUID,profile=client_facet replay-single $MOUNT1
+mount -t lustre_lite -o mds_uuid=mds1_UUID,profile=client_facet replay-single $MOUNT2
+
+[ "$DAEMONFILE" ] && lctl debug_daemon start $DAEMONFILE $DAEMONSIZE
 
 test_1() {
     touch $MOUNT1/a
@@ -158,7 +179,3 @@ run_test 6 "open1, open2, unlink |X| close1 [fail mds] close2"
 
 
 equals_msg test complete, cleaning up
-stop client2 ${FORCE:=--force} --nomod
-stop client1 ${FORCE}
-stop ost ${FORCE}
-stop mds ${FORCE} --dump cleanup-dual.log

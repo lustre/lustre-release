@@ -5,31 +5,34 @@ l-mpm/Documentation/networking/netconsole.txt |   57 +++++++++++
  l-mpm/net/Kconfig                             |    2 
  5 files changed, 195 insertions(+), 1 deletion(-)
 
-Index: linux-2.6.0-test5/drivers/net/Makefile
+Index: linux-2.6.0-test6/drivers/net/Makefile
 ===================================================================
---- linux-2.6.0-test5.orig/drivers/net/Makefile	2003-09-30 19:57:04.000000000 +0800
-+++ linux-2.6.0-test5/drivers/net/Makefile	2003-09-30 22:08:20.527853744 +0800
-@@ -197,3 +197,4 @@
- 
+--- linux-2.6.0-test6.orig/drivers/net/Makefile	2003-10-09 20:52:35.179433584 +0800
++++ linux-2.6.0-test6/drivers/net/Makefile	2003-10-09 20:53:06.776630080 +0800
+@@ -109,6 +109,7 @@
+ endif
  # Must come after all NICs it might use
  obj-$(CONFIG_KGDB) += kgdb_eth.o
 +obj-$(CONFIG_NETCONSOLE) += netconsole.o
-Index: linux-2.6.0-test5/net/Kconfig
+ 
+ obj-$(CONFIG_DUMMY) += dummy.o
+ obj-$(CONFIG_DE600) += de600.o
+Index: linux-2.6.0-test6/net/Kconfig
 ===================================================================
---- linux-2.6.0-test5.orig/net/Kconfig	2003-09-30 19:57:04.000000000 +0800
-+++ linux-2.6.0-test5/net/Kconfig	2003-09-30 22:08:20.535852528 +0800
-@@ -690,6 +690,6 @@
- source "drivers/net/Kconfig"
+--- linux-2.6.0-test6.orig/net/Kconfig	2003-10-09 20:52:27.745563704 +0800
++++ linux-2.6.0-test6/net/Kconfig	2003-10-09 20:53:06.777629928 +0800
+@@ -671,6 +671,6 @@
+ source "net/bluetooth/Kconfig"
  
  config NETPOLL
 -	def_bool KGDB
 +	def_bool KGDB || NETCONSOLE
  
  endmenu
-Index: linux-2.6.0-test5/Documentation/networking/netconsole.txt
+Index: linux-2.6.0-test6/Documentation/networking/netconsole.txt
 ===================================================================
---- linux-2.6.0-test5.orig/Documentation/networking/netconsole.txt	2003-09-30 22:08:20.495858608 +0800
-+++ linux-2.6.0-test5/Documentation/networking/netconsole.txt	2003-09-30 22:08:20.536852376 +0800
+--- linux-2.6.0-test6.orig/Documentation/networking/netconsole.txt	2003-10-09 20:53:06.756633120 +0800
++++ linux-2.6.0-test6/Documentation/networking/netconsole.txt	2003-10-09 20:53:06.777629928 +0800
 @@ -0,0 +1,57 @@
 +
 +started by Ingo Molnar <mingo@redhat.com>, 2001.09.17
@@ -88,11 +91,11 @@ Index: linux-2.6.0-test5/Documentation/networking/netconsole.txt
 +sending packets. Due to these unique needs, configuration can not
 +be more automatic, and some fundamental limitations will remain:
 +only IP networks, UDP packets and ethernet devices are supported.
-Index: linux-2.6.0-test5/drivers/net/Kconfig
+Index: linux-2.6.0-test6/drivers/net/Kconfig
 ===================================================================
---- linux-2.6.0-test5.orig/drivers/net/Kconfig	2003-09-30 19:57:04.000000000 +0800
-+++ linux-2.6.0-test5/drivers/net/Kconfig	2003-09-30 22:08:20.563848272 +0800
-@@ -2718,6 +2718,13 @@
+--- linux-2.6.0-test6.orig/drivers/net/Kconfig	2003-10-09 20:52:02.395417512 +0800
++++ linux-2.6.0-test6/drivers/net/Kconfig	2003-10-09 20:53:06.779629624 +0800
+@@ -2444,6 +2444,13 @@
  config NET_POLL_CONTROLLER
  	def_bool KGDB
  
@@ -106,11 +109,11 @@ Index: linux-2.6.0-test5/drivers/net/Kconfig
  source "drivers/net/wan/Kconfig"
  
  source "drivers/net/pcmcia/Kconfig"
-Index: linux-2.6.0-test5/drivers/net/netconsole.c
+Index: linux-2.6.0-test6/drivers/net/netconsole.c
 ===================================================================
---- linux-2.6.0-test5.orig/drivers/net/netconsole.c	2003-09-30 22:08:20.496858456 +0800
-+++ linux-2.6.0-test5/drivers/net/netconsole.c	2003-09-30 22:23:47.571921624 +0800
-@@ -0,0 +1,190 @@
+--- linux-2.6.0-test6.orig/drivers/net/netconsole.c	2003-10-09 20:53:06.756633120 +0800
++++ linux-2.6.0-test6/drivers/net/netconsole.c	2003-10-09 20:53:06.780629472 +0800
+@@ -0,0 +1,197 @@
 +/*
 + *  linux/drivers/net/netconsole.c
 + *
@@ -163,6 +166,7 @@ Index: linux-2.6.0-test5/drivers/net/netconsole.c
 +#include <linux/dump.h>
 +#include <linux/dump_netdev.h>
 +#include <asm/unaligned.h>
++#include <asm/netconsole.h>
 +
 +MODULE_AUTHOR("Maintainer: Matt Mackall <mpm@selenic.com>");
 +MODULE_DESCRIPTION("Console driver for network interfaces");
@@ -176,6 +180,10 @@ Index: linux-2.6.0-test5/drivers/net/netconsole.c
 +
 +static int sysrq_mode = 0;
 +
++static req_t req;
++unsigned int netconsole_sysrq_req = 0;
++unsigned int netif_in_poll = 0;
++static unsigned int handle_sysrq_progress = 0;
 +#define Set_Sysrq_mode() 	(sysrq_mode = 1)
 +#define Clear_Sysrq_mode() 	(sysrq_mode = 0)
 +
@@ -205,7 +213,7 @@ Index: linux-2.6.0-test5/drivers/net/netconsole.c
 +        put_unaligned(htonl(reply.nr), (u32 *) (send_buf + 1));
 +        put_unaligned(htonl(reply.code), (u32 *) (send_buf + 5));
 +        put_unaligned(htonl(reply.info), (u32 *) (send_buf+ 9));
-+
++		
 +	memcpy(send_buf + 1 + sizeof(reply_t), msg, len);
 +	netpoll_send_udp(np, send_buf, len + 1 + sizeof(reply_t));
 +	return;
@@ -215,7 +223,7 @@ Index: linux-2.6.0-test5/drivers/net/netconsole.c
 +{
 +	int frag, left;
 +	unsigned long flags;
-+	
++
 +	if (!sysrq_mode)
 +		return;
 +	if (!np.dev)
@@ -231,23 +239,28 @@ Index: linux-2.6.0-test5/drivers/net/netconsole.c
 +
 +	local_irq_restore(flags);
 +}
-+static void netconsole_do_sysrq(req_t *req)
++void netconsole_do_sysrq()
 +{
 +        struct pt_regs regs;
 +	char tmp[200];
 +	
++	handle_sysrq_progress = 1; 
++	Set_Sysrq_mode();
 +	get_current_regs(&regs);
-+	handle_sysrq((int)req->from, &regs, NULL);
++	handle_sysrq((int)req.from, &regs, NULL);
 +
-+	sprintf(tmp, "SYSRQ command %d \n", req->from);
++	sprintf(tmp, "SYSRQ command %d \n", req.from);
 +	write_msg(NULL, tmp, strlen(tmp));
++	handle_sysrq_progress = 0; 
++	Clear_Sysrq_mode();
 +}
 +static void rx_hook(struct netpoll *np, int port, char *msg, int len)
 +{
 +	/* add sysrq support */
 +	req_t *__req;
-+	req_t req;
-+	
++
++	if (handle_sysrq_progress)
++		goto out;	
 +	__req = (req_t *)(msg);
 +	if(len < (sizeof(req_t)))
 +		goto out;
@@ -261,9 +274,7 @@ Index: linux-2.6.0-test5/drivers/net/netconsole.c
 +	req.from = ntohl(__req->from);
 +	req.to = ntohl(__req->to);
 +	req.nr = ntohl(__req->nr);
-+	Set_Sysrq_mode();
-+	netconsole_do_sysrq(&req);
-+	Clear_Sysrq_mode();
++	netconsole_sysrq_req = 1;	
 +out:
 +	return ;
 +}
@@ -287,7 +298,6 @@ Index: linux-2.6.0-test5/drivers/net/netconsole.c
 +
 +	if(!np.remote_ip || netpoll_setup(&np))
 +		return 1;
-+
 +	register_console(&netconsole);
 +	printk(KERN_INFO "netconsole: network logging started\n");
 +	return 0;
@@ -301,3 +311,98 @@ Index: linux-2.6.0-test5/drivers/net/netconsole.c
 +
 +module_init(init_netconsole);
 +module_exit(cleanup_netconsole);
+Index: linux-2.6.0-test6/arch/i386/kernel/irq.c
+===================================================================
+--- linux-2.6.0-test6.orig/arch/i386/kernel/irq.c	2003-10-09 20:52:27.749563096 +0800
++++ linux-2.6.0-test6/arch/i386/kernel/irq.c	2003-10-09 20:53:06.781629320 +0800
+@@ -45,6 +45,7 @@
+ #include <asm/desc.h>
+ #include <asm/irq.h>
+ #include <asm/kgdb.h>
++#include <asm/netconsole.h>
+ 
+ /*
+  * Linux has a controller-independent x86 interrupt architecture.
+@@ -510,6 +511,17 @@
+ 		BREAKPOINT;
+ 	}
+ #endif
++#ifdef CONFIG_NETCONSOLE
++	/*
++	 * We need to do this after clearing out of all the interrupt
++	 * machinery because kgdb will reenter the NIC driver and the IRQ
++	 * system.  synchronize_irq() (at least) will deadlock.
++	 */
++	if (netconsole_sysrq_req && !netif_in_poll) {
++		netconsole_sysrq_req = 0;
++		HANDLE_NETCONSOLE;
++	}
++#endif
+ 	return 1;
+ }
+ 
+Index: linux-2.6.0-test6/arch/i386/kernel/i386_ksyms.c
+===================================================================
+--- linux-2.6.0-test6.orig/arch/i386/kernel/i386_ksyms.c	2003-10-09 20:52:02.013475576 +0800
++++ linux-2.6.0-test6/arch/i386/kernel/i386_ksyms.c	2003-10-09 20:56:19.104391816 +0800
+@@ -34,7 +34,7 @@
+ #include <asm/nmi.h>
+ #include <asm/edd.h>
+ #include <asm/ist.h>
+-
++#include <asm/netconsole.h>
+ extern void dump_thread(struct pt_regs *, struct user *);
+ extern spinlock_t rtc_lock;
+ 
+@@ -211,6 +211,12 @@
+ EXPORT_SYMBOL(eddnr);
+ #endif
+ 
++#ifdef CONFIG_NETCONSOLE
++EXPORT_SYMBOL(netconsole_sysrq_req);
++EXPORT_SYMBOL(netconsole_do_sysrq);
++EXPORT_SYMBOL(netif_in_poll);
++#endif
++
+ #if defined(CONFIG_X86_SPEEDSTEP_SMI) || defined(CONFIG_X86_SPEEDSTEP_SMI_MODULE)
+ EXPORT_SYMBOL(ist_info);
+ #endif
+Index: linux-2.6.0-test6/include/asm/netconsole.h
+===================================================================
+--- linux-2.6.0-test6.orig/include/asm/netconsole.h	2003-10-09 20:53:06.757632968 +0800
++++ linux-2.6.0-test6/include/asm/netconsole.h	2003-10-09 20:53:06.782629168 +0800
+@@ -0,0 +1,6 @@
++extern unsigned int netconsole_sysrq_req;
++extern void netconsole_do_sysrq();
++extern unsigned int netif_in_poll;
++#ifndef HANDLE_NETCONSOLE
++#define HANDLE_NETCONSOLE netconsole_do_sysrq()
++#endif
+Index: linux-2.6.0-test6/net/core/dev.c
+===================================================================
+--- linux-2.6.0-test6.orig/net/core/dev.c	2003-10-09 20:52:27.748563248 +0800
++++ linux-2.6.0-test6/net/core/dev.c	2003-10-09 20:53:06.783629016 +0800
+@@ -109,6 +109,7 @@
+ #include <linux/wireless.h>		/* Note : will define WIRELESS_EXT */
+ #include <net/iw_handler.h>
+ #endif	/* CONFIG_NET_RADIO */
++#include <asm/netconsole.h>
+ #include <asm/current.h>
+ 
+ #ifdef CONFIG_KGDB
+@@ -1687,6 +1688,7 @@
+ 	preempt_disable();
+ 	local_irq_disable();
+ 
++	netif_in_poll = 1;
+ 	while (!list_empty(&queue->poll_list)) {
+ 		struct net_device *dev;
+ 
+@@ -1711,6 +1713,7 @@
+ 			local_irq_disable();
+ 		}
+ 	}
++	netif_in_poll = 0;
+ out:
+ 	local_irq_enable();
+ 	preempt_enable();

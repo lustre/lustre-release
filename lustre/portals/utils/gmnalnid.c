@@ -50,6 +50,7 @@ int main(int argc, char **argv)
 {
         int rc, pfd;
         struct portal_ioctl_data data;
+        struct portals_cfg pcfg;
 	unsigned int	nid = 0, len;
 	char	*name = NULL;
 	int	c;
@@ -76,42 +77,42 @@ int main(int argc, char **argv)
 
 
 
-        PORTAL_IOC_INIT (data);
+
+        PCFG_INIT(pcfg, GMNAL_IOC_GET_GNID);
+        pcfg.pcfg_nal = GMNAL;
 
 	/*
 	 *	set up the inputs
 	 */
 	len = strlen(name) + 1;
-	data.ioc_pbuf1 = malloc(len);
-	strcpy(data.ioc_pbuf1, name);
-	data.ioc_plen1 = len;
+	pcfg.pcfg_pbuf1 = malloc(len);
+	strcpy(pcfg.pcfg_pbuf1, name);
+	pcfg.pcfg_plen1 = len;
 
 	/*
 	 *	set up the outputs
 	 */
-	data.ioc_pbuf2 = (void*)&nid;
-	data.ioc_plen2 = sizeof(unsigned int*);
+	pcfg.pcfg_pbuf2 = (void*)&nid;
+	pcfg.pcfg_plen2 = sizeof(unsigned int*);
 
         pfd = open("/dev/portals", O_RDWR);
         if ( pfd < 0 ) {
                 perror("opening portals device");
-		free(data.ioc_pbuf1);
+		free(pcfg.pcfg_pbuf1);
                 exit(-1);
         }
 
-        data.ioc_nal = GMNAL;
-	data.ioc_nal_cmd = GMNAL_IOC_GET_GNID;
-/*
-	data.ioc_len += data.ioc_inllen1;
-	data.ioc_len += data.ioc_plen1;
-*/
+        PORTAL_IOC_INIT(data);
+        data.ioc_pbuf1 = (char*)&pcfg;
+        data.ioc_plen1 = sizeof(pcfg);
+                
         rc = ioctl (pfd, IOC_PORTAL_NAL_CMD, &data);
         if (rc < 0)
         {
         	perror ("Can't get my NID");
         }
                         
-	free(data.ioc_pbuf1);
+	free(pcfg.pcfg_pbuf1);
 	close(pfd);
 	printf("%u\n", nid);
         exit(nid);

@@ -96,6 +96,8 @@ void ll_complete_writepage_26(struct obd_client_page *ocp, int rc);
 #endif
 int ll_sync_page(struct page *page);
 int ll_ocp_update_obdo(struct obd_client_page *ocp, int cmd, struct obdo *oa);
+int ll_ocp_set_io_ready(struct obd_client_page *ocp, int cmd);
+int ll_ocp_update_io_args(struct obd_client_page *ocp, int cmd);
 void ll_removepage(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 
@@ -135,7 +137,8 @@ extern struct super_operations ll_super_operations;
 
 char *ll_read_opt(const char *opt, char *data);
 int ll_set_opt(const char *opt, char *data, int fl);
-void ll_options(char *options, char **ost, char **mds, int *flags);
+void ll_options(char *options, char **ost, char **mds, char **zconf, 
+                char **mds_uuid, int *flags);
 void ll_lli_init(struct ll_inode_info *lli);
 int ll_fill_super(struct super_block *sb, void *data, int silent);
 void ll_put_super(struct super_block *sb);
@@ -156,8 +159,11 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                  unsigned int cmd, unsigned long arg);
 void ll_umount_begin(struct super_block *sb);
 int ll_prep_inode(struct obd_export *exp, struct inode **inode, 
-                  struct ptlrpc_request *req, int offset, struct super_block *sb);
-
+                  struct ptlrpc_request *req, int offset, struct super_block *);
+__u32 get_uuid2int(const char *name, int len);
+struct dentry *ll_fh_to_dentry(struct super_block *sb, __u32 *data, int len,
+                               int fhtype, int parent);
+int ll_dentry_to_fh(struct dentry *, __u32 *datap, int *lenp, int need_parent);
 /* llite/symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;
 
