@@ -115,7 +115,6 @@ static int log_commit_thread(void *arg)
         struct llog_commit_daemon *lcd;
         struct llog_commit_data *llcd, *n;
         long flags;
-        int rc;
 
         OBD_ALLOC(lcd, sizeof(*lcd));
         if (lcd == NULL)
@@ -133,9 +132,9 @@ static int log_commit_thread(void *arg)
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 
-        spin_lock(lcm->lcm_thread_lock);
+        spin_lock(&lcm->lcm_thread_lock);
 	THREAD_NAME(current->comm, "ll_log_commit_%d", lcm->lcm_thread_total++);
-        spin_unlock(lcm->lcm_thread_lock);
+        spin_unlock(&lcm->lcm_thread_lock);
         unlock_kernel();
 
         CDEBUG(D_HA, "%s started\n", current->comm);
@@ -143,6 +142,7 @@ static int log_commit_thread(void *arg)
                 struct ptlrpc_request *request;
                 struct lustre_handle conn;
                 struct list_head *sending_list;
+                int rc = 0;
 
                 /* If we do not have enough pages available, allocate some */
                 while (atomic_read(&lcm->lcm_llcd_numfree) <
@@ -151,10 +151,10 @@ static int log_commit_thread(void *arg)
                                 break;
                 }
 
-                spin_lock(lcm->lcm_thread_lock);
+                spin_lock(&lcm->lcm_thread_lock);
                 atomic_inc(&lcm->lcm_thread_numidle);
                 list_move(&lcd->lcd_lcm_list, &lcm->lcm_thread_idle);
-                spin_unlock(lcm->lcm_thread_lock);
+                spin_unlock(&lcm->lcm_thread_lock);
 
                 wait_event_interruptible(lcm->lcm_waitq,
                                          !list_empty(&lcm->lcm_llcd_pending) ||
@@ -163,10 +163,10 @@ static int log_commit_thread(void *arg)
                 /* If we are the last available thread, start a new one in case
                  * we get blocked on an RPC (nobody else will start a new one).
                  */
-                spin_lock(lcm->lcm_thread_lock);
+                spin_lock(&lcm->lcm_thread_lock);
                 atomic_dec(&lcm->lcm_thread_numidle);
                 list_move(&lcd->lcd_lcm_list, &lcm->lcm_thread_busy);
-                spin_unlock(lcm->lcm_thread_lock);
+                spin_unlock(&lcm->lcm_thread_lock);
 
                 sending_list = &lcm->lcm_llcd_pending;
         resend:
@@ -232,8 +232,9 @@ static int log_commit_thread(void *arg)
                                 CERROR("error preparing commit: rc %d\n", rc);
 
                                 spin_lock(&lcm->lcm_llcd_lock);
-                                list_splice_init(&lcd->lcd_llcd_list,
-                                                 &lcm->lcm_llcd_resend);
+                                list_splice(&lcd->lcd_llcd_list,
+                                            &lcm->lcm_llcd_resend);
+                                INIT_LIST_HEAD(&lcd->lcd_llcd_list);
                                 spin_unlock(&lcm->lcm_llcd_lock);
                                 break;
                         }
