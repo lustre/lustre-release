@@ -21,4 +21,4 @@ ${LMC} -m $config --format  --node localhost --mds mds1 $MDSDEV $MDSSIZE || exit
 ${LMC} -m $config --format --node localhost --ost $OSTDEV $OSTSIZE || exit 3
 
 # create client config
-${LMC} -m $config --node localhost --mtpt /mnt/lustre mds1 OSC_localhost || exit 4
+${LMC} -m $config --node localhost --mtpt /mnt/lustre mds1 OBD_localhost || exit 4
