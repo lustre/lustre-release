@@ -1263,7 +1263,7 @@ koibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         koibnal_data.koib_init = OPENIBNAL_INIT_DATA;
         /*****************************************************/
 
-        process_id.pid = 0;
+        process_id.pid = requested_pid;
         process_id.nid = koibnal_data.koib_nid;
         
         rc = lib_init(&koibnal_lib, nal, process_id,
@@ -1480,7 +1480,7 @@ koibnal_module_init (void)
         }
 
         /* Pure gateways want the NAL started up at module load time... */
-        rc = PtlNIInit(OPENIBNAL, 0, NULL, NULL, &koibnal_ni);
+        rc = PtlNIInit(OPENIBNAL, LUSTRE_SRV_PTL_PID, NULL, NULL, &koibnal_ni);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
                 ptl_unregister_nal(OPENIBNAL);
                 return (-ENODEV);
