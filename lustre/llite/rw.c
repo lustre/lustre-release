@@ -180,18 +180,15 @@ void ll_truncate(struct inode *inode)
         err = ll_size_lock(inode, lsm, inode->i_size, LCK_PW, &lockhs);
         if (err) {
                 CERROR("ll_size_lock failed: %d\n", err);
-                /* FIXME: What to do here?  It's too late to back out... */
-                LBUG();
+                return;
         }
 
         /* truncate == punch from new size to absolute end of file */
         err = obd_punch(ll_i2obdconn(inode), &oa, lsm, inode->i_size,
                         OBD_OBJECT_EOF);
-        if (err) { 
-                LBUG();
-                CERROR("obd_truncate fails (%d) ino %lu\n", err,
-                       inode->i_ino);
-        } else
+        if (err)
+                CERROR("obd_truncate fails (%d) ino %lu\n", err, inode->i_ino);
+        else
                 obdo_to_inode(inode, &oa, oa.o_valid);
 
         err = ll_size_unlock(inode, lsm, LCK_PW, lockhs);

@@ -965,6 +965,7 @@ static int osc_recover(struct obd_import *imp, int phase)
                 set_osc_active(imp, 0 /* inactive */);
                 RETURN(0);
             }
+
             case PTLRPC_RECOVD_PHASE_RECOVER:
                 imp->imp_flags &= ~IMP_INVALID;
                 rc = ptlrpc_reconnect_import(imp, OST_CONNECT);
@@ -972,8 +973,14 @@ static int osc_recover(struct obd_import *imp, int phase)
                         imp->imp_flags |= IMP_INVALID;
                         RETURN(rc);
                 }
+
+                spin_lock(&imp->imp_lock);
+                imp->imp_level = LUSTRE_CONN_FULL;
+                spin_unlock(&imp->imp_lock);
+
                 set_osc_active(imp, 1 /* active */);
                 RETURN(0);
+
             default:
                 RETURN(-EINVAL);
         }

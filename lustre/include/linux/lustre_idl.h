@@ -128,16 +128,22 @@ struct lustre_msg {
 /* Flags that apply to all requests are in the bottom 16 bits */
 #define MSG_GEN_FLAG_MASK  0x0000ffff
 #define MSG_LAST_REPLAY    1
+#define MSG_RESENT         2
 
 static inline int lustre_msg_get_flags(struct lustre_msg *msg)
 {
         return (msg->flags & MSG_GEN_FLAG_MASK);
 }
 
+static inline void lustre_msg_add_flags(struct lustre_msg *msg, int flags)
+{
+        msg->flags |= MSG_GEN_FLAG_MASK & flags;
+}
+
 static inline void lustre_msg_set_flags(struct lustre_msg *msg, int flags)
 {
         msg->flags &= ~MSG_GEN_FLAG_MASK;
-        msg->flags |= MSG_GEN_FLAG_MASK & flags;
+        lustre_msg_add_flags(msg, flags);
 }
 
 static inline int lustre_msg_get_op_flags(struct lustre_msg *msg)

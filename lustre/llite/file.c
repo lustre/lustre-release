@@ -158,7 +158,6 @@ out_mdc:
         mdc_close(&sbi->ll_mdc_conn, inode->i_ino,
                   S_IFREG, &fd->fd_mdshandle, &req);
 out_req:
-        ptlrpc_req_finished(req); /* once for reply */
         ptlrpc_req_finished(req); /* once for an early "commit" */
 //out_fd:
         fd->fd_mdshandle.cookie = DEAD_HANDLE_MAGIC;
@@ -249,6 +248,7 @@ int ll_file_size(struct inode *inode, struct lov_stripe_md *lsm)
                 RETURN(rc);
         }
 
+        memset(&oa, 0, sizeof oa);
         oa.o_id = lsm->lsm_object_id;
         oa.o_mode = S_IFREG;
         oa.o_valid = OBD_MD_FLID|OBD_MD_FLTYPE|OBD_MD_FLSIZE|OBD_MD_FLBLOCKS;
@@ -795,8 +795,6 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 {
         return 0;
 }
-
-
 
 static int ll_inode_revalidate(struct dentry *dentry)
 {

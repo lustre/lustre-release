@@ -1,5 +1,10 @@
 TBA
 	* bug fixes
+	 - Fully reactivate OST imports after reconnection (512, others)
+	 - Make sure client sees our -ENOTCONN from mds_handle (513 - partial)
+	 - More graceful error handling for truncating on dead OST (515)
+	 - Don't error out unless we're actually accessing dead stripes (474)
+	 - Fix garbage sizes when stripes are missing (410)
 	 - LRU counters were broken, causing constant lock purge (433, 432)
 	 - garbage on read from stripes with failed OSTs (441)
 	 - mark OSCs as active before reconnecting during recovery (438)

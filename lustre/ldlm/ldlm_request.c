@@ -44,8 +44,12 @@ static int expired_completion_wait(void *data)
                 CERROR("lock %p has NULL obd\n", lock);
         else if (!(conn = obd->u.cli.cl_import.imp_connection))
                 CERROR("lock %p has NULL connection\n", lock);
-        else
+        else {
+                LDLM_DEBUG(lock, "timed out waiting for completion");
+                CERROR("lock %p timed out from %s\n", lock,
+                       conn->c_remote_uuid);
                 class_signal_connection_failure(conn);
+        }
         RETURN(0);
 }
 

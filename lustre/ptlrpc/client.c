@@ -412,7 +412,7 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
 
         err = req->rq_repmsg->status;
         if (req->rq_repmsg->type == NTOH__u32(PTL_RPC_MSG_ERR)) {
-                DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR");
+                DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR (%d)\n", err);
                 RETURN(err ? err : -EINVAL);
         }
 
@@ -682,6 +682,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         if ((req->rq_flags & (PTL_RPC_FL_RESEND | PTL_RPC_FL_INTR)) ==
             PTL_RPC_FL_RESEND) {
                 req->rq_flags &= ~PTL_RPC_FL_RESEND;
+                lustre_msg_add_flags(req->rq_reqmsg, MSG_RESENT);
                 DEBUG_REQ(D_HA, req, "resending: ");
                 goto resend;
         }

@@ -6,6 +6,7 @@
  * Copyright (C) 2002 Cluster File Systems, Inc.
  * Author: Phil Schwan <phil@off.net>
  *         Peter Braam <braam@clusterfs.com>
+ *         Mike Shaver <shaver@off.net>
  *
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
@@ -700,13 +701,17 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
                         tmp.o_valid &= ~OBD_MD_FLHANDLE;
 
                 err = obd_getattr(&lov->tgts[loi->loi_ost_idx].conn, &tmp,NULL);
-                if (err && lov->tgts[loi->loi_ost_idx].active) {
-                        CERROR("Error getattr objid "LPX64" subobj "LPX64
-                               " on OST idx %d: rc = %d\n",
-                               oa->o_id, loi->loi_id, loi->loi_ost_idx, err);
-                        RETURN(err);
+                if (err) {
+                        if (lov->tgts[loi->loi_ost_idx].active) {
+                                CERROR("Error getattr objid "LPX64" subobj "
+                                       LPX64" on OST idx %d: rc = %d\n",
+                                       oa->o_id, loi->loi_id, loi->loi_ost_idx,
+                                       err);
+                                RETURN(err);
+                        }
+                } else {
+                        lov_merge_attrs(oa, &tmp, tmp.o_valid, lsm, i, &new);
                 }
-                lov_merge_attrs(oa, &tmp, tmp.o_valid, lsm, i, &new);
         }
 
         RETURN(0);
@@ -832,12 +837,15 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
                 tmp->o_id = loi->loi_id;
 
                 rc = obd_open(&lov->tgts[loi->loi_ost_idx].conn, tmp, NULL);
-                if (rc && lov->tgts[loi->loi_ost_idx].active) {
-                        CERROR("Error open objid "LPX64" subobj "LPX64
-                               " on OST idx %d: rc = %d\n",
-                               oa->o_id, lsm->lsm_oinfo[i].loi_id,
-                               loi->loi_ost_idx, rc);
-                        goto out_handles;
+                if (rc) {
+                        if (lov->tgts[loi->loi_ost_idx].active) {
+                                CERROR("Error open objid "LPX64" subobj "LPX64
+                                       " on OST idx %d: rc = %d\n",
+                                       oa->o_id, lsm->lsm_oinfo[i].loi_id,
+                                       loi->loi_ost_idx, rc);
+                                goto out_handles;
+                        }
+                        continue;
                 }
 
                 lov_merge_attrs(oa, tmp, tmp->o_valid, lsm, i, &new);
@@ -1112,8 +1120,6 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
 
         for (i = 0, loi = lsm->lsm_oinfo, si_last = si = stripeinfo;
              i < stripe_count; i++, loi++, si_last = si, si++) {
-                if (lov->tgts[loi->loi_ost_idx].active == 0)
-                        GOTO(out_ioarr, rc = -EIO);
                 if (i > 0)
                         si->index = si_last->index + si_last->bufct;
                 si->lsm.lsm_object_id = loi->loi_id;

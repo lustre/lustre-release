@@ -1262,8 +1262,10 @@ int mds_handle(struct ptlrpc_request *req)
         LASSERT(!strcmp(req->rq_obd->obd_type->typ_name, LUSTRE_MDT_NAME));
 
         if (req->rq_reqmsg->opc != MDS_CONNECT) {
-                if (req->rq_export == NULL)
+                if (req->rq_export == NULL) {
+                        req->rq_status = -ENOTCONN;
                         GOTO(out, rc = -ENOTCONN);
+                }
 
                 mds = mds_req2mds(req);
                 if (mds->mds_recoverable_clients != 0) {
