@@ -9,5 +9,5 @@ MODULE = lgmnal
 modulenet_DATA = lgmnal.o
 EXTRA_PROGRAMS = lgmnal
 
-DEFS =
+DEFS = -DGM_KERNEL
 lgmnal_SOURCES = lgmnal.h lgmnal_api.c lgmnal_cb.c lgmnal_comm.c lgmnal_utils.c lgmnal_module.c
