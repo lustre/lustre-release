@@ -209,7 +209,7 @@ static void ll_brw_pages_unlock( struct inode *inode,
                 if (rc)
                         CERROR("error from callback: rc = %d\n", rc);
         }
-        obd_brw_set_free(set);
+        obd_brw_set_decref(set);
 
         /* XXX this doesn't make sense to me */
         rc = 0;
