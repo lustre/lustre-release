@@ -62,6 +62,18 @@ struct lustre_cfg {
 
 };
 
+#define LCFG_INIT(l, cmd, name)                                 \
+do {                                                            \
+        memset(&(l), 0, sizeof(l));                             \
+        (l).lcfg_version = LUSTRE_CFG_VERSION;                  \
+        (l).lcfg_command = (cmd);                               \
+        if (name) {                                             \
+                (l).lcfg_dev_namelen = strlen(name) + 1;        \
+                (l).lcfg_dev_name = name;                       \
+        }                                                       \
+                                                                \
+} while (0)
+
 #ifndef __KERNEL__
 static inline int lustre_cfg_packlen(struct lustre_cfg *lcfg)
 {
