@@ -85,34 +85,33 @@ ptldebug_names = {
     "ha" :        (1 << 19),
     "rpctrace" :  (1 << 20),
     "vfstrace" :  (1 << 21),
+    "reada" :     (1 << 22),
     }
 
 subsystem_names = {
-    "undefined" :    (0 << 24),
-    "mdc" :          (1 << 24),
-    "mds" :          (2 << 24),
-    "osc" :          (3 << 24),
-    "ost" :          (4 << 24),
-    "class" :        (5 << 24),
-    "obdfs" :        (6 << 24),
-    "llite" :        (7 << 24),
-    "rpc" :          (8 << 24),
-    "ext2obd" :      (9 << 24),
-    "portals" :     (10 << 24),
-    "socknal" :     (11 << 24),
-    "qswnal" :      (12 << 24),
-    "pinger" :      (13 << 24),
-    "filter" :      (14 << 24),
-    "trace" :       (15 << 24),
-    "echo" :        (16 << 24),
-    "ldlm" :        (17 << 24),
-    "lov" :         (18 << 24),
-    "gmnal" :       (19 << 24),
-    "ptlrouter" :   (20 << 24),
-    "cobd" :        (21 << 24),
-    "ptlbd" :       (22 << 24),
-    "log" :         (23 << 24),
-    "mgmt" :        (24 << 24),
+    "undefined" :    (1 << 0),
+    "mdc" :          (1 << 1),
+    "mds" :          (1 << 2),
+    "osc" :          (1 << 3),
+    "ost" :          (1 << 4),
+    "class" :        (1 << 5),
+    "log" :          (1 << 6),
+    "llite" :        (1 << 7),
+    "rpc" :          (1 << 8),
+    "mgmt" :         (1 << 9),
+    "portals" :      (1 << 10),
+    "socknal" :      (1 << 11),
+    "qswnal" :       (1 << 12),
+    "pinger" :       (1 << 13),
+    "filter" :       (1 << 14),
+    "ptlbd" :        (1 << 15),
+    "echo" :         (1 << 16),
+    "ldlm" :         (1 << 17),
+    "lov" :          (1 << 18),
+    "gmnal" :        (1 << 19),
+    "ptlrouter" :    (1 << 20),
+    "cobd" :         (1 << 21),
+    "ibnal" :        (1 << 22),
     }
 
 
@@ -2547,6 +2546,10 @@ def main():
             panic("--ldapurl requires --config name")
         dn = "config=%s,fs=lustre" % (config.config)
         db = Lustre.LustreDB_LDAP('', {}, base=dn, url = config.ldapurl)
+    elif config.ptldebug or config.subsystem:
+        sys_set_ptldebug(None)
+        sys_set_subsystem(None)
+        sys.exit(0)
     else:
         print 'Missing config file or ldap URL.'
         print 'see lconf --help for command summary'
