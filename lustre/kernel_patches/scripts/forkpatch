@@ -22,7 +22,7 @@ then
 fi
 
 NEW=$1
-BASE=$(basename $NEW)
+BASE=`stripit $NEW`
 SERIES=series
 
 if [ ! -e $SERIES ]
@@ -63,7 +63,8 @@ fi
 basetodo=`stripit $todo`
 
 sed "s/$todo/$BASE.patch/" < $SERIES > $TMPSERIES
-mv -f $TMPSERIES $SERIES
+cat $TMPSERIES > $SERIES
+rm -f $TMPSERIES
 cp -f $P/patches/$todo $P/patches/$BASE.patch
 cp -f $P/pc/$basetodo.pc $P/pc/$BASE.pc
 if [ -f $P/txt/$basetodo.txt ]; then 
