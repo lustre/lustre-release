@@ -60,6 +60,7 @@ zconf_mount() {
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
+    return 0
 }
 
 zconf_umount() {
