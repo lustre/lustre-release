@@ -46,7 +46,7 @@ static int ll_readlink_internal(struct inode *inode,
         rc = mdc_getattr(&sbi->ll_mdc_conn, inode->i_ino, S_IFLNK,
                          OBD_MD_LINKNAME, symlen, request);
         if (rc) {
-                CERROR("inode "LPD64": rc = %d\n", inode->i_ino, rc);
+                CERROR("inode %lu: rc = %d\n", inode->i_ino, rc);
                 RETURN(rc);
         }
 
