@@ -1,4 +1,7 @@
 #include <stdio.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
 #include <portals/api-support.h> /* needed for ptpctl.h */
 #include <portals/ptlctl.h>	/* needed for parse_dump */
@@ -44,13 +47,15 @@ void init_current(int argc, char **argv)
 
 }
 
+extern ptl_nid_t tcpnal_mynid;
+
 int init_lib_portals(struct pingcli_args *args)
 {
         int rc;
 
         PtlInit();
-
-        rc = PtlNIInit(procbridge_interface, 0, 0, args->mynid, &tcpnal_ni);
+        tcpnal_mynid = args->mynid;
+        rc = PtlNIInit(procbridge_interface, 0, 0, 0, &tcpnal_ni);
         if (rc != 0) {
                 CERROR("ksocknal: PtlNIInit failed: error %d\n", rc);
                 PtlFini();
@@ -79,7 +84,7 @@ int lib_ioctl(int dev_id, int opc, void * ptr)
 	return (0);
 }
 
-int main(int arc, char **argv) 
+int main(int argc, char **argv) 
 {
         struct pingcli_args *args;
 	args= malloc(sizeof(*args));
@@ -88,12 +93,10 @@ int main(int arc, char **argv)
                 exit(1);
         }
 
-        args->mynid = atoi(argv[1]);
-        args->nid = atoi(argv[2]);
-	args->port = 9999;
-	args->count = atoi(argv[3]);
-	args->size = atoi(argv[4]);
+	args->mynid   = ntohl (inet_addr (argv[1]));
+        INIT_LIST_HEAD(&ocus.ocus_conns);
 
+        init_current(argc, argv);
         init_obdclass();
         init_lib_portals(args);
         ptlrpc_init();
