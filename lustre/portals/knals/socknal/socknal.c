@@ -56,7 +56,7 @@ static ctl_table ksocknal_ctl_table[] = {
          &ksocknal_data.ksnd_eager_ack, sizeof (int),
          0644, NULL, &proc_dointvec},
 #if SOCKNAL_ZC
-        {SOCKNAL_SYSCTL_EAGER_ACK, "zero_copy", 
+        {SOCKNAL_SYSCTL_ZERO_COPY, "zero_copy", 
          &ksocknal_data.ksnd_zc_min_frag, sizeof (int),
          0644, NULL, &proc_dointvec},
 #endif
