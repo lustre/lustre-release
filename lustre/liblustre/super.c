@@ -547,7 +547,7 @@ static int llu_mkdir2(struct inode *dir, const char *name, int len, int mode)
         RETURN(err);
 }
 
-static llu_iop_mkdir(struct pnode *pno, mode_t mode)
+static int llu_iop_mkdir(struct pnode *pno, mode_t mode)
 {
         struct inode *dir = pno->p_base->pb_parent->pb_ino;
         struct qstr *qstr = &pno->p_base->pb_name;
@@ -556,6 +556,49 @@ static llu_iop_mkdir(struct pnode *pno, mode_t mode)
         LASSERT(dir);
 
         rc = llu_mkdir2(dir, qstr->name, qstr->len, mode);
+
+        return rc;
+}
+
+#ifndef S_IRWXUGO
+#define S_IRWXUGO       (S_IRWXU|S_IRWXG|S_IRWXO)
+#endif
+
+static int llu_symlink2(struct inode *dir, const char *name, int len,
+                        const char *tgt)
+{
+        struct ptlrpc_request *request = NULL;
+        time_t curtime = CURRENT_TIME;
+        struct llu_sb_info *sbi = llu_i2sbi(dir);
+        struct llu_inode_info *lli = llu_i2info(dir);
+        struct mdc_op_data op_data;
+        int err = -EMLINK;
+        ENTRY;
+
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu,target=%s\n",
+               name, lli->lli_st_ino, tgt);
+
+#if 0
+        if (dir->i_nlink >= EXT2_LINK_MAX)
+                RETURN(err);
+#endif
+        llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+        err = mdc_create(&sbi->ll_mdc_conn, &op_data,
+                         tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
+                         current->fsuid, current->fsgid, curtime, 0, &request);
+        ptlrpc_req_finished(request);
+        RETURN(err);
+}
+
+static int llu_iop_symlink(struct pnode *pno, const char *data)
+{
+        struct inode *dir = pno->p_base->pb_parent->pb_ino;
+        struct qstr *qstr = &pno->p_base->pb_name;
+        int rc;
+        
+        LASSERT(dir);
+
+        rc = llu_symlink2(dir, qstr->name, qstr->len, data);
 
         return rc;
 }
@@ -573,7 +616,7 @@ static struct inode_ops llu_inode_ops = {
         inop_getdirentries:     NULL,
         inop_mkdir:     llu_iop_mkdir,
         inop_rmdir:     NULL,
-        inop_symlink:   NULL,
+        inop_symlink:   llu_iop_symlink,
         inop_readlink:  NULL,
         inop_open:      llu_iop_open,
         inop_close:     llu_iop_close,
