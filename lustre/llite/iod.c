@@ -38,7 +38,6 @@
 #include <linux/rbtree.h>
 #include <linux/seq_file.h>
 #include <linux/time.h>
-#include "llite_internal.h"
 
 /* PG_inactive_clean is shorthand for rmap, we want free_high/low here.. */
 #ifdef PG_inactive_clean
@@ -47,6 +46,7 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 #include <linux/lustre_lite.h>
+#include "llite_internal.h"
 
 #ifndef list_for_each_prev_safe
 #define list_for_each_prev_safe(pos, n, head) \
@@ -55,11 +55,6 @@
 #endif
 
 extern spinlock_t inode_lock;
-
-struct ll_writeback_pages {
-        obd_count npgs, max;
-        struct brw_page *pga;
-};
 
 /*
  * check to see if we're racing with truncate and put the page in
