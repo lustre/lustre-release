@@ -17,7 +17,7 @@ PDSH=${PDSH:-pdsh -S -w}
 
 MDSDEV=${MDSDEV:-/dev/sda1}
 MDSSIZE=${MDSSIZE:-50000}
-OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
+OSTDEV=${OSTDEV:-/tmp/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-20000}
 FSTYPE=${FSTYPE:-ext3}
 TIMEOUT=${TIMEOUT:-10}

@@ -30,6 +30,8 @@
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
 #define LL_IOC_LOV_SETSTRIPE            _IOW ('f', 154, long)
 #define LL_IOC_LOV_GETSTRIPE            _IOW ('f', 155, long)
+#define LL_IOC_LOV_SETEA                _IOW ('f', 156, long)
+#define LL_IOC_RECREATE_OBJ             _IOW ('f', 157, long)
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 
@@ -42,6 +44,7 @@
 #define LOV_PATTERN_RAID1 0x002
 #define LOV_PATTERN_FIRST 0x100
 
+#define lov_user_ost_data lov_user_ost_data_v1
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
         __u64 l_object_id;	  /* OST object ID */
         __u64 l_object_gr;        /* OST object group (creating MDS number) */

@@ -37,9 +37,6 @@
 
 #warning "implement writeback mode -bzzz"
 
-int ext3_map_inode_page(struct inode *inode, struct page *page,
-                        unsigned long *blocks, int *created, int create);
-
 /* 512byte block min */
 #define MAX_BLOCKS_PER_PAGE (PAGE_SIZE / 512)
 struct dio_request {
@@ -75,6 +72,27 @@ static int can_be_merged(struct bio *bio, sector_t sector)
 
         size = bio->bi_size >> 9;
         return bio->bi_sector + size == sector ? 1 : 0;
+}
+
+/* See if there are unallocated parts in given file region */
+static int filter_range_is_mapped(struct inode *inode, obd_size offset, int len)
+{
+        sector_t (*fs_bmap)(struct address_space *, sector_t) =
+                inode->i_mapping->a_ops->bmap;
+        int j;
+
+        /* We can't know if we are overwriting or not */
+        if (fs_bmap == NULL)
+                return 0;
+
+        offset >>= inode->i_blkbits;
+        len >>= inode->i_blkbits;
+
+        for (j = 0; j <= len; j++)
+                if (fs_bmap(inode->i_mapping, offset + j) == 0)
+                        return 0;
+
+        return 1;
 }
 
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
@@ -128,14 +146,23 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow brw_start %lus\n", (jiffies - now) / HZ);
 
+        iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
         for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
                 loff_t this_size;
                 sector_t sector;
                 int offs;
 
+                /* If overwriting an existing block, we don't need a grant */
+                if (!(lnb->flags & OBD_BRW_GRANTED) && lnb->rc == -ENOSPC &&
+                    filter_range_is_mapped(inode, lnb->offset, lnb->len))
+                        lnb->rc = 0;
+
+                if (lnb->rc) /* ENOSPC, network RPC error */
+                        continue;
+
                 /* get block number for next page */
-                rc = ext3_map_inode_page(inode, lnb->page, dreq->blocks,
-                                                dreq->created, 1);
+                rc = fsfilt_map_inode_page(obd, inode, lnb->page, dreq->blocks,
+                                           dreq->created, 1);
                 if (rc)
                         GOTO(cleanup, rc);
 
@@ -175,6 +202,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 submit_bio(WRITE, bio);
         }
 
+        filter_grant_commit(exp, niocount, res);
+
         /* time to wait for I/O completion */
         wait_event(dreq->wait, atomic_read(&dreq->numreqs) == 0);
 
@@ -187,7 +216,6 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
 
         if (rc == 0) {
                 down(&inode->i_sem);
-                inode_update_time(inode, 1);
                 if (iattr.ia_size > inode->i_size) {
                         CDEBUG(D_INFO, "setting i_size to "LPU64"\n",
                                iattr.ia_size);
