@@ -22,6 +22,7 @@
 #include <linux/module.h>
 #include <linux/lustre_dlm.h>
 #include <linux/obd_ost.h>
+#include <linux/lustre_debug.h>
 
 static void osc_con2cl(struct obd_conn *conn, struct ptlrpc_client **cl,
                        struct ptlrpc_connection **connection)
@@ -56,8 +57,11 @@ static int osc_connect(struct obd_conn *conn)
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
-        if (rc)
+        rc = ptlrpc_check_status(request, rc);
+        if (rc) {
+                CERROR("%s failed: rc = %d\n", __FUNCTION__, rc);
                 GOTO(out, rc);
+        }
 
         body = lustre_msg_buf(request->rq_repmsg, 0);
         CDEBUG(D_INODE, "received connid %d\n", body->connid);
@@ -117,8 +121,11 @@ static int osc_getattr(struct obd_conn *conn, struct obdo *oa)
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
-        if (rc)
+        rc = ptlrpc_check_status(request, rc);
+        if (rc) {
+                CERROR("%s failed: rc = %d\n", __FUNCTION__, rc);
                 GOTO(out, rc);
+        }
 
         body = lustre_msg_buf(request->rq_repmsg, 0);
         CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
@@ -154,6 +161,7 @@ static int osc_open(struct obd_conn *conn, struct obdo *oa)
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
+        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out, rc);
 
@@ -189,6 +197,7 @@ static int osc_close(struct obd_conn *conn, struct obdo *oa)
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
+        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out, rc);
 
@@ -224,6 +233,7 @@ static int osc_setattr(struct obd_conn *conn, struct obdo *oa)
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
+        rc = ptlrpc_check_status(request, rc);
         GOTO(out, rc);
 
  out:
@@ -257,6 +267,7 @@ static int osc_create(struct obd_conn *conn, struct obdo *oa)
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
+        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out, rc);
 
@@ -298,6 +309,7 @@ static int osc_punch(struct obd_conn *conn, struct obdo *oa, obd_size count,
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
+        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out, rc);
 
@@ -336,6 +348,7 @@ static int osc_destroy(struct obd_conn *conn, struct obdo *oa)
         request->rq_replen = lustre_msg_size(1, &size);
 
         rc = ptlrpc_queue_wait(request);
+        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out, rc);
 
@@ -354,6 +367,8 @@ static int osc_sendpage(struct ptlrpc_bulk_desc *desc,
         struct ptlrpc_bulk_page *page;
         ENTRY;
 
+        ASSERT_FILE_OFFSET(NTOH__u64(src->offset),
+                           RETURN(dump_rniobuf(dst) | dump_lniobuf(src)));
         page = ptlrpc_prep_bulk_page(desc);
         if (page == NULL)
                 RETURN(-ENOMEM);
@@ -425,6 +440,7 @@ static int osc_brw_read(struct obd_conn *conn, obd_count num_oa,
 
         request->rq_replen = lustre_msg_size(1, size);
         rc = ptlrpc_queue_wait(request);
+        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 ptlrpc_abort_bulk(desc);
         GOTO(out, rc);
@@ -476,7 +492,7 @@ static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,
         osc_con2cl(conn, &cl, &connection);
         request = ptlrpc_prep_req(cl, connection, OST_BRW, 3, size, NULL);
         if (!request)
-                GOTO(out3, rc = -ENOMEM);
+                GOTO(out, rc = -ENOMEM);
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         body->data = OBD_BRW_WRITE;
 
@@ -497,6 +513,7 @@ static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,
         request->rq_replen = lustre_msg_size(2, size);
 
         rc = ptlrpc_queue_wait(request);
+        rc = ptlrpc_check_status(request, rc);
         if (rc)
                 GOTO(out2, rc);
 
@@ -520,21 +537,21 @@ static int osc_brw_write(struct obd_conn *conn, obd_count num_oa,
                         ost_unpack_niobuf(&ptr2, &remote);
                         rc = osc_sendpage(desc, remote, &local[pages]);
                         if (rc)
-                                GOTO(out, rc);
+                                GOTO(out3, rc);
                 }
         }
 
         rc = ptlrpc_send_bulk(desc);
-        GOTO(out, rc);
+        GOTO(out3, rc);
 
- out:
+ out3:
         ptlrpc_free_bulk(desc);
  out2:
         ptlrpc_free_req(request);
         for (pages = 0, i = 0; i < num_oa; i++)
                 for (j = 0; j < oa_bufs[i]; j++, pages++)
                         kunmap(buf[pages]);
- out3:
+ out:
         OBD_FREE(local, pages * sizeof(*local));
 
         return rc;

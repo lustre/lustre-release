@@ -221,9 +221,10 @@ int mdc_readpage(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         req->rq_replen = lustre_msg_size(1, &size);
         req->rq_level = LUSTRE_CONN_FULL;
         rc = ptlrpc_queue_wait(req);
+        rc = ptlrpc_check_status(req, rc);
         if (rc) {
-                CERROR("error in handling %d\n", rc);
                 ptlrpc_abort_bulk(desc);
+                GOTO(out2, rc);
         } else
                 mds_unpack_rep_body(req);
 
