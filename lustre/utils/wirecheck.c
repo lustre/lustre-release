@@ -108,6 +108,60 @@ check_obdo (void)
 	CHECK_MEMBER (obdo, o_obdflags);
 	CHECK_MEMBER (obdo, o_easize);
 	CHECK_MEMBER (obdo, o_inline);
+
+	CHECK_VALUE (OBD_MD_FLALL);
+	CHECK_VALUE (OBD_MD_FLID);
+	CHECK_VALUE (OBD_MD_FLATIME);
+	CHECK_VALUE (OBD_MD_FLMTIME);
+	CHECK_VALUE (OBD_MD_FLCTIME);
+	CHECK_VALUE (OBD_MD_FLSIZE);
+	CHECK_VALUE (OBD_MD_FLBLOCKS);
+	CHECK_VALUE (OBD_MD_FLBLKSZ);
+	CHECK_VALUE (OBD_MD_FLMODE);
+	CHECK_VALUE (OBD_MD_FLTYPE);
+	CHECK_VALUE (OBD_MD_FLUID);
+	CHECK_VALUE (OBD_MD_FLGID);
+	CHECK_VALUE (OBD_MD_FLFLAGS);
+	CHECK_VALUE (OBD_MD_FLOBDFLG);
+	CHECK_VALUE (OBD_MD_FLNLINK);
+	CHECK_VALUE (OBD_MD_FLGENER);
+	CHECK_VALUE (OBD_MD_FLINLINE);
+	CHECK_VALUE (OBD_MD_FLRDEV);
+	CHECK_VALUE (OBD_MD_FLEASIZE);
+	CHECK_VALUE (OBD_MD_LINKNAME);
+	CHECK_VALUE (OBD_MD_FLHANDLE);
+	CHECK_VALUE (OBD_MD_FLCKSUM);
+	CHECK_VALUE (OBD_MD_FLQOS);
+	CHECK_VALUE (OBD_MD_FLOSCOPQ);
+	CHECK_VALUE (OBD_MD_FLCOOKIE);
+	CHECK_VALUE (OBD_MD_FLGROUP);
+}
+
+void
+check_lov_mds_md_v1 (void)
+{
+	BLANK_LINE ();
+	CHECK_STRUCT (lov_mds_md_v1);
+	CHECK_MEMBER (lov_mds_md_v1, lmm_magic);
+	CHECK_MEMBER (lov_mds_md_v1, lmm_pattern);
+	CHECK_MEMBER (lov_mds_md_v1, lmm_object_id);
+	CHECK_MEMBER (lov_mds_md_v1, lmm_object_gr);
+	CHECK_MEMBER (lov_mds_md_v1, lmm_stripe_size);
+	CHECK_MEMBER (lov_mds_md_v1, lmm_stripe_count);
+	CHECK_MEMBER (lov_mds_md_v1, lmm_objects);
+
+	BLANK_LINE ();
+	CHECK_STRUCT (lov_ost_data_v1);
+	CHECK_MEMBER (lov_ost_data_v1, l_object_id);
+	CHECK_MEMBER (lov_ost_data_v1, l_object_gr);
+	CHECK_MEMBER (lov_ost_data_v1, l_ost_gen);
+	CHECK_MEMBER (lov_ost_data_v1, l_ost_idx);
+
+	CHECK_VALUE (LOV_MAGIC_V0);
+	CHECK_VALUE (LOV_MAGIC_V1);
+
+	CHECK_VALUE (LOV_PATTERN_RAID0);
+	CHECK_VALUE (LOV_PATTERN_RAID1);
 }
 
 void
@@ -123,6 +177,7 @@ check_obd_statfs (void)
 	CHECK_MEMBER (obd_statfs, os_fsid);
 	CHECK_MEMBER (obd_statfs, os_bsize);
 	CHECK_MEMBER (obd_statfs, os_namelen);
+	CHECK_MEMBER (obd_statfs, os_spare);
 }
 
 void
@@ -144,6 +199,11 @@ check_niobuf_remote (void)
 	CHECK_MEMBER (niobuf_remote, offset);
 	CHECK_MEMBER (niobuf_remote, len);
 	CHECK_MEMBER (niobuf_remote, flags);
+
+	CHECK_VALUE (OBD_BRW_READ);
+	CHECK_VALUE (OBD_BRW_WRITE);
+	CHECK_VALUE (OBD_BRW_CREATE);
+	CHECK_VALUE (OBD_BRW_SYNC);
 }
 
 void
@@ -199,6 +259,7 @@ check_mds_body (void)
 	CHECK_MEMBER (mds_body, nlink);
 	CHECK_MEMBER (mds_body, generation);
 	CHECK_MEMBER (mds_body, suppgid);
+	CHECK_MEMBER (mds_body, eadatasize);
 }
 
 void
@@ -298,9 +359,9 @@ check_lov_desc (void)
 	CHECK_MEMBER (lov_desc, ld_tgt_count);
 	CHECK_MEMBER (lov_desc, ld_active_tgt_count);
 	CHECK_MEMBER (lov_desc, ld_default_stripe_count);
+	CHECK_MEMBER (lov_desc, ld_pattern);
 	CHECK_MEMBER (lov_desc, ld_default_stripe_size);
 	CHECK_MEMBER (lov_desc, ld_default_stripe_offset);
-	CHECK_MEMBER (lov_desc, ld_pattern);
 	CHECK_MEMBER (lov_desc, ld_uuid);
 }
 
@@ -329,6 +390,7 @@ check_ldlm_flock (void)
 	CHECK_MEMBER (ldlm_flock, start);
 	CHECK_MEMBER (ldlm_flock, end);
 	CHECK_MEMBER (ldlm_flock, pid);
+	CHECK_MEMBER (ldlm_flock, blocking_pid);
 }
 
 void
@@ -418,6 +480,35 @@ check_ptlbd_rsp (void)
 	CHECK_MEMBER (ptlbd_rsp, r_error_cnt);
 }
 
+void
+check_llog_logid (void)
+{
+	BLANK_LINE ();
+	CHECK_STRUCT (llog_logid);
+	CHECK_MEMBER (llog_logid, lgl_oid);
+	CHECK_MEMBER (llog_logid, lgl_ogr);
+	CHECK_MEMBER (llog_logid, lgl_ogen);
+}
+
+void
+check_llog_rec_hdr (void)
+{
+	BLANK_LINE ();
+	CHECK_STRUCT (llog_rec_hdr);
+	CHECK_MEMBER (llog_rec_hdr, lrh_len);
+	CHECK_MEMBER (llog_rec_hdr, lrh_index);
+	CHECK_MEMBER (llog_rec_hdr, lrh_type);
+}
+
+void
+check_llog_rec_tail (void)
+{
+	BLANK_LINE ();
+	CHECK_STRUCT (llog_rec_tail);
+	CHECK_MEMBER (llog_rec_tail, lrt_len);
+	CHECK_MEMBER (llog_rec_tail, lrt_index);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -465,36 +556,6 @@ main (int argc, char **argv)
 	CHECK_VALUE (OBD_FL_INLINEDATA);
 	CHECK_VALUE (OBD_FL_OBDMDEXISTS);
 
-	CHECK_VALUE (LOV_MAGIC);
-
-	CHECK_VALUE (OBD_MD_FLALL);
-	CHECK_VALUE (OBD_MD_FLID);
-	CHECK_VALUE (OBD_MD_FLATIME);
-	CHECK_VALUE (OBD_MD_FLMTIME);
-	CHECK_VALUE (OBD_MD_FLCTIME);
-	CHECK_VALUE (OBD_MD_FLSIZE);
-	CHECK_VALUE (OBD_MD_FLBLOCKS);
-	CHECK_VALUE (OBD_MD_FLBLKSZ);
-	CHECK_VALUE (OBD_MD_FLMODE);
-	CHECK_VALUE (OBD_MD_FLTYPE);
-	CHECK_VALUE (OBD_MD_FLUID);
-	CHECK_VALUE (OBD_MD_FLGID);
-	CHECK_VALUE (OBD_MD_FLFLAGS);
-	CHECK_VALUE (OBD_MD_FLOBDFLG);
-	CHECK_VALUE (OBD_MD_FLNLINK);
-	CHECK_VALUE (OBD_MD_FLGENER);
-	CHECK_VALUE (OBD_MD_FLINLINE);
-	CHECK_VALUE (OBD_MD_FLRDEV);
-	CHECK_VALUE (OBD_MD_FLEASIZE);
-	CHECK_VALUE (OBD_MD_LINKNAME);
-	CHECK_VALUE (OBD_MD_FLHANDLE);
-	CHECK_VALUE (OBD_MD_FLCKSUM);
-
-	CHECK_VALUE (OBD_BRW_READ);
-	CHECK_VALUE (OBD_BRW_WRITE);
-	CHECK_VALUE (OBD_BRW_CREATE);
-	CHECK_VALUE (OBD_BRW_SYNC);
-
 	CHECK_DEFINE (OBD_OBJECT_EOF);
 
 	CHECK_VALUE (OST_REQ_HAS_OA1);
@@ -532,9 +593,6 @@ main (int argc, char **argv)
 
 	CHECK_VALUE (MDS_OPEN_HAS_EA);
 
-	CHECK_VALUE (LOV_RAID0);
-	CHECK_VALUE (LOV_RAIDRR);
-
 	CHECK_VALUE (LDLM_ENQUEUE);
 	CHECK_VALUE (LDLM_CONVERT);
 	CHECK_VALUE (LDLM_CANCEL);
@@ -559,6 +617,7 @@ main (int argc, char **argv)
 	check_lustre_handle ();
 	check_lustre_msg ();
 	check_obdo ();
+	check_lov_mds_md_v1 ();
 	check_obd_statfs ();
 	check_obd_ioobj ();
 	check_niobuf_remote ();
@@ -585,6 +644,6 @@ main (int argc, char **argv)
 	check_ptlbd_rsp ();
 
 	printf ("}\n\n");
-	
+
 	return (0);
 }
