@@ -127,9 +127,9 @@ int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
                 memcpy(desc, lustre_msg_buf(req->rq_repmsg, 0), sizeof(*desc));
                 *uuids = lustre_msg_buf(req->rq_repmsg, 1);
                 lov_unpackdesc(desc);
+                mdc->cl_max_mdsize = sizeof(struct lov_stripe_md) +
+                        desc->ld_tgt_count * sizeof(struct lov_object_id);
         }
-        mdc->cl_max_mdsize = sizeof(*desc) +
-                desc->ld_tgt_count * sizeof(uuid_t);
 
         EXIT;
  out:

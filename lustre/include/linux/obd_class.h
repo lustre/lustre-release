@@ -725,4 +725,9 @@ extern void (*class_signal_client_failure)(struct ptlrpc_client *);
 extern void obd_sysctl_init (void);
 extern void obd_sysctl_clean (void);
 
+/* uuid.c  */
+/* XXX - should use uuid_t here, but already defined as char[37] */
+typedef unsigned char class_uuid_t[16];
+int class_uuid_parse(char *in, class_uuid_t out);
+void class_uuid_unparse(class_uuid_t in, char *out);
 #endif /* __LINUX_CLASS_OBD_H */

@@ -393,7 +393,8 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        mds->mds_max_mdsize = sizeof(desc) + tgt_count * sizeof(uuid_t);
+        mds->mds_max_mdsize = sizeof(struct lov_stripe_md) + 
+                tgt_count * sizeof(struct lov_object_id);
         rc = mds_get_lovtgts(req->rq_obd, tgt_count,
                              lustre_msg_buf(req->rq_repmsg, 1));
         if (rc) {

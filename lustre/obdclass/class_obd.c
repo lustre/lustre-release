@@ -399,9 +399,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_CONNECT: {
+                char * cluuid = "OBD_CLASS_UUID";
                 obd_data2conn(&conn, data);
 
-                err = obd_connect(&conn, obd, NULL);
+                err = obd_connect(&conn, obd, cluuid);
 
                 CDEBUG(D_IOCTL, "assigned export %Lx\n", conn.addr);
                 obd_conn2data(data, &conn);
@@ -585,6 +586,8 @@ EXPORT_SYMBOL(class_rconn2export);
 EXPORT_SYMBOL(class_conn2obd);
 EXPORT_SYMBOL(class_disconnect);
 EXPORT_SYMBOL(class_disconnect_all);
+EXPORT_SYMBOL(class_uuid_parse);
+EXPORT_SYMBOL(class_uuid_unparse);
 //EXPORT_SYMBOL(class_multi_setup);
 //EXPORT_SYMBOL(class_multi_cleanup);
 

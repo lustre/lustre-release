@@ -55,6 +55,7 @@ struct ll_inode_info {
 #define LL_COMMITCBD_RUNNING   0x4
 
 struct ll_sb_info {
+        unsigned char             ll_sb_uuid[37];
         struct lustre_handle      ll_mdc_conn;
         struct lustre_handle      ll_osc_conn;
         obd_id                    ll_rootino; /* number of root inode */

@@ -31,7 +31,7 @@ import re, exceptions
 import xml.dom.minidom
 
 # Global parameters
-TCP_ACCEPTOR = '../..//portals/linux/utils/acceptor'
+TCP_ACCEPTOR = ''
 options = {}
 
 #
@@ -108,14 +108,7 @@ class LCTLInterface:
         """
         Initialize close by finding the lctl binary.
         """
-        syspath = string.split(os.environ['PATH'], ':')
-        syspath.insert(0, "../utils");
-        self.lctlcmd = None
-        for d in syspath:
-            lctl = os.path.join(d,cmd)
-            if os.access(lctl, os.X_OK):
-                self.lctl = lctl
-                break
+        self.lctl = find_prog(cmd)
         if not self.lctl:
             raise RuntimeError,  "unable to find lctl binary."
             
@@ -247,6 +240,20 @@ def run_daemon(*args):
     return ret
 
 
+# Determine full path to use for an external command
+# searches dirname(argv[0]) first, then PATH
+def find_prog(cmd):
+    syspath = string.split(os.environ['PATH'], ':')
+    cmdpath = os.path.dirname(sys.argv[0])
+    syspath.insert(0, cmdpath);
+    syspath.insert(0, os.path.join(cmdpath, '../../portals/linux/utils/'))
+    for d in syspath:
+        prog = os.path.join(d,cmd)
+        if os.access(prog, os.X_OK):
+            return prog
+    return ''
+
+
 # is the path a block device?
 def is_block(path):
     s = ()
@@ -270,6 +277,12 @@ def mkfs(fstype, dev):
     (ret, out) = run (mkfs, force, dev)
     if ret:
         panic("Unable to build fs:", dev)
+    # enable hash tree indexing on fs
+    if fstype == 'extN':
+        htree = 'echo "feature FEATURE_C5" | debugfs -w'
+        (ret, out) = run (htree, dev)
+        if ret:
+            panic("Unable to enable htree:", dev)
 
 # some systems use /dev/loopN, some /dev/loop/N
 def loop_base():
@@ -415,9 +428,9 @@ class LOV(Module):
         for child in devs.childNodes:
             if child.nodeName == 'osc_ref':
                 devlist = devlist +  child.getAttribute('uuidref') + " "
-                strip_cnt = stripe_cnt + 1
+                stripe_cnt = stripe_cnt + 1
         self.devlist = devlist
-        self.stripe_cnt = strip_cnt
+        self.stripe_cnt = stripe_cnt
 
     def prepare(self):
         self.info(self.mdsuuid, self.stripe_cnt, self.stripe_sz, self.stripe_off, self.pattern,
@@ -425,6 +438,9 @@ class LOV(Module):
         lctl.lovconfig(self.uuid, self.mdsname, self.stripe_cnt,
                        self.stripe_sz, self.stripe_off, self.pattern,
                        self.devlist)
+
+    def cleanup(self):
+        pass
 
 class MDS(Module):
     def __init__(self,node):
@@ -791,7 +807,10 @@ def fetch(url):
 #
 lctl = LCTLInterface('lctl')
 def main():
-    global options
+    global options, TCP_ACCEPTOR
+    TCP_ACCEPTOR = find_prog('acceptor')
+    if not TCP_ACCEPTOR:
+        panic('acceptor not found')
     args = parse_cmdline(sys.argv[1:])
     if len(args) > 0:
         if not os.access(args[0], os.R_OK | os.W_OK):
@@ -814,4 +833,11 @@ def main():
     doHost(dom.documentElement, options['hostname'], options.has_key('cleanup') )
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except RuntimeError:
+        pass
+    except CommandError:
+        print '<insert exception data here>'
+        pass
+

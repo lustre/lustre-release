@@ -12,6 +12,7 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/module.h>
+#include <linux/random.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
 #include <linux/lustre_dlm.h>
@@ -90,6 +91,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         __u32 last_xid;
         struct ptlrpc_request *request = NULL;
         struct ll_inode_md md;
+        class_uuid_t uuid;
 
         ENTRY;
         MOD_INC_USE_COUNT;
@@ -99,6 +101,9 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 MOD_DEC_USE_COUNT;
                 RETURN(NULL);
         }
+
+        generate_random_uuid(uuid);
+        class_uuid_unparse(uuid, sbi->ll_sb_uuid);
 
         sb->u.generic_sbp = sbi;
 
@@ -128,8 +133,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 #endif 
 
-#warning shaver: might need a cluuid here
-        err = obd_connect(&sbi->ll_mdc_conn, obd, NULL);
+        err = obd_connect(&sbi->ll_mdc_conn, obd, sbi->ll_sb_uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
                 GOTO(out_free, sb = NULL);
@@ -141,8 +145,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 CERROR("OSC %s: not setup or attached\n", osc);
                 GOTO(out_mdc, sb = NULL);
         }
-#warning shaver: might need a cluuid here
-        err = obd_connect(&sbi->ll_osc_conn, obd, NULL);
+        err = obd_connect(&sbi->ll_osc_conn, obd, sbi->ll_sb_uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
                 GOTO(out_mdc, sb = NULL);

@@ -208,7 +208,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa, struct lov_st
 
         oa->o_easize =  lov_stripe_md_size(export->exp_obd);
         if (!*ea) {
-                OBD_ALLOC(*ea, oa->o_easize);
+                OBD_ALLOC(*ea, oa->o_easize); 
                 if (! *ea)
                         RETURN(-ENOMEM);
         }
@@ -357,7 +357,7 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
 static int lov_open(struct lustre_handle *conn, struct obdo *oa, 
                     struct lov_stripe_md *md)
 {
-        int rc = 0, i;
+        int rc = 0, rc2 = 0, i;
         struct obdo tmp;
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
@@ -379,11 +379,12 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
 
                 rc = obd_open(&lov->tgts[i].conn, &tmp, NULL);
                 if (rc) { 
+                        rc2 = rc;
                         CERROR("Error getattr object %Ld on %d\n",
                                oa->o_id, i); 
                 }
         }
-        RETURN(rc);
+        RETURN(rc2);
 }
 
 
