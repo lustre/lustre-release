@@ -58,8 +58,8 @@ while ($i--) {
     } else {
         print  "Unlink done [$$] $path: $!\n"if !$silent;
     }
-    if ($i % 100 == 0) {
-        print stderr ($count - $i) . " operations [" . $$ . "]\n";
+    if (($count - $i) % 100 == 0) {
+        print STDERR ($count - $i) . " operations [" . $$ . "]\n";
     }
 }
 print "Done.\n";
