@@ -1,8 +1,8 @@
 Index: linux-2.4.21-suse2/fs/ext3/extents.c
 ===================================================================
 --- linux-2.4.21-suse2.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.21-suse2/fs/ext3/extents.c	2004-01-28 20:15:12.000000000 +0300
-@@ -0,0 +1,2255 @@
++++ linux-2.4.21-suse2/fs/ext3/extents.c	2004-02-06 10:19:27.000000000 +0300
+@@ -0,0 +1,2348 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
 + *
@@ -88,13 +88,16 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +				struct ext3_extents_tree *tree,
 +				struct ext3_ext_path *path)
 +{
++	int err;
++
 +	if (path->p_bh) {
 +		/* path points to block */
-+		return ext3_journal_get_write_access(handle, path->p_bh);
++		err = ext3_journal_get_write_access(handle, path->p_bh);
++	} else {
++		/* path points to leaf/index in inode body */
++		err = ext3_ext_get_access_for_root(handle, tree);
 +	}
-+
-+	/* path points to leaf/index in inode body */
-+	return ext3_ext_get_access_for_root(handle, tree);
++	return err;
 +}
 +
 +/*
@@ -106,13 +109,15 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +static int ext3_ext_dirty(handle_t *handle, struct ext3_extents_tree *tree,
 +				struct ext3_ext_path *path)
 +{
++	int err;
 +	if (path->p_bh) {
 +		/* path points to block */
-+		return ext3_journal_dirty_metadata(handle, path->p_bh);
++		err =ext3_journal_dirty_metadata(handle, path->p_bh);
++	} else {
++		/* path points to leaf/index in inode body */
++		err = ext3_ext_mark_root_dirty(handle, tree);
 +	}
-+
-+	/* path points to leaf/index in inode body */
-+	return ext3_ext_mark_root_dirty(handle, tree);
++	return err;
 +}
 +
 +static int inline
@@ -146,6 +151,13 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +
 +	newblock = ext3_new_block(handle, inode, goal, 0, 0, err);
 +	return newblock;
++}
++
++static inline void ext3_ext_tree_changed(struct ext3_extents_tree *tree)
++{
++	struct ext3_extent_header *neh;
++	neh = EXT_ROOT_HDR(tree);
++	neh->e_generation++;
 +}
 +
 +static inline int ext3_ext_space_block(struct ext3_extents_tree *tree)
@@ -415,6 +427,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	EXT_ASSERT(tree->root);
 +
 +	eh = EXT_ROOT_HDR(tree);
++	EXT_ASSERT(eh);
 +	i = depth = EXT_DEPTH(tree);
 +	EXT_ASSERT(eh->e_max);
 +	EXT_ASSERT(eh->e_magic == EXT3_EXT_MAGIC);
@@ -614,10 +627,11 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	path[depth].p_ext++;
 +	while (path[depth].p_ext <=
 +			EXT_MAX_EXTENT(path[depth].p_hdr)) {
-+		ext_debug(tree, "move %d:%d:%d in new leaf\n",
++		ext_debug(tree, "move %d:%d:%d in new leaf %lu\n",
 +				path[depth].p_ext->e_block,
 +				path[depth].p_ext->e_start,
-+				path[depth].p_ext->e_num);
++				path[depth].p_ext->e_num,
++				newblock);
 +		memmove(ex++, path[depth].p_ext++,
 +				sizeof(struct ext3_extent));
 +		neh->e_num++;
@@ -633,10 +647,10 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +
 +	/* correct old leaf */
 +	if (m) {
-+		if ((err = ext3_ext_get_access(handle, tree, path)))
++		if ((err = ext3_ext_get_access(handle, tree, path + depth)))
 +			goto cleanup;
 +		path[depth].p_hdr->e_num -= m;
-+		if ((err = ext3_ext_dirty(handle, tree, path)))
++		if ((err = ext3_ext_dirty(handle, tree, path + depth)))
 +			goto cleanup;
 +		
 +	}
@@ -682,9 +696,9 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +		EXT_ASSERT(EXT_MAX_INDEX(path[i].p_hdr) ==
 +				EXT_LAST_INDEX(path[i].p_hdr));
 +		while (path[i].p_idx <= EXT_MAX_INDEX(path[i].p_hdr)) {
-+			ext_debug(tree, "%d: move %d:%d in new index\n",
++			ext_debug(tree, "%d: move %d:%d in new index %lu\n",
 +					i, path[i].p_idx->e_block,
-+					path[i].p_idx->e_leaf);
++					path[i].p_idx->e_leaf, newblock);
 +			memmove(++fidx, path[i].p_idx++,
 +					sizeof(struct ext3_extent_idx));
 +			neh->e_num++;
@@ -1031,6 +1045,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +
 +	depth = EXT_DEPTH(tree);
 +	ex = path[depth].p_ext;
++	EXT_ASSERT(path[depth].p_hdr);
 +
 +	/* try to insert block into found extent and return */
 +	if (ex && ext3_can_extents_be_merged(tree, ex, newext)) {
@@ -1040,8 +1055,9 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +		if ((err = ext3_ext_get_access(handle, tree, path + depth)))
 +			return err;
 +		ex->e_num += newext->e_num;
-+		err = ext3_ext_dirty(handle, tree, path + depth);
-+		return err;
++		eh = path[depth].p_hdr;
++		nearex = ex;
++		goto merge;
 +	}
 +
 +repeat:
@@ -1125,6 +1141,24 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	nearex->e_start = newext->e_start;
 +	nearex->e_num = newext->e_num;
 +
++merge:
++	/* try to merge extents to the right */
++	while (nearex < EXT_LAST_EXTENT(eh)) {
++		if (!ext3_can_extents_be_merged(tree, nearex, nearex + 1))
++			break;
++		/* merge with next extent! */
++		nearex->e_num += nearex[1].e_num;
++		if (nearex + 1 < EXT_LAST_EXTENT(eh)) {
++			len = (EXT_LAST_EXTENT(eh) - nearex - 1)
++					* sizeof(struct ext3_extent);
++			memmove(nearex + 1, nearex + 2, len);
++		}
++		eh->e_num--;
++		EXT_ASSERT(eh->e_num > 0);
++	}
++
++	/* try to merge extents to the left */
++
 +	/* time to correct all indexes above */
 +	err = ext3_ext_correct_indexes(handle, tree, path);
 +	if (err)
@@ -1137,7 +1171,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +		ext3_ext_drop_refs(npath);
 +		kfree(npath);
 +	}
-+		
++	ext3_ext_tree_changed(tree);
 +	return err;
 +}
 +
@@ -1147,6 +1181,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	struct ext3_ext_path *path = NULL;
 +	struct ext3_extent *ex, cbex;
 +	unsigned long next, start = 0, end = 0;
++	unsigned long last = block + num;
 +	int depth, exists, err = 0;
 +
 +	EXT_ASSERT(tree);
@@ -1154,15 +1189,18 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	EXT_ASSERT(tree->inode);
 +	EXT_ASSERT(tree->root);
 +
-+	while (num > 0 && block != 0xfffffffff) {
++	while (block < last && block != 0xfffffffff) {
++		num = last - block;
 +		/* find extent for this block */
 +		path = ext3_ext_find_extent(tree, block, path);
 +		if (IS_ERR(path)) {
 +			err = PTR_ERR(path);
++			path = NULL;
 +			break;
 +		}
 +
 +		depth = EXT_DEPTH(tree);
++		EXT_ASSERT(path[depth].p_hdr);
 +		ex = path[depth].p_ext;
 +		next = ext3_ext_next_allocated_block(path);
 +
@@ -1171,58 +1209,61 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +			/* there is no extent yet, so try to allocate
 +			 * all requested space */
 +			start = block;
-+			end = block + num - 1;
++			end = block + num;
 +		} else if (ex->e_block > block) {
 +			/* need to allocate space before found extent */
 +			start = block;
-+			end = ex->e_block - 1;
-+			if (block + num - 1 < end)
-+				end = block + num - 1;
++			end = ex->e_block;
++			if (block + num < end)
++				end = block + num;
 +		} else if (block >= ex->e_block + ex->e_num) {
 +			/* need to allocate space after found extent */
 +			start = block;
-+			end = block + num - 1;
++			end = block + num;
 +			if (end >= next)
-+				end = next - 1;
++				end = next;
 +		} else if (block >= ex->e_block) {
 +			/* 
 +			 * some part of requested space is covered
 +			 * by found extent
 +			 */
 +			start = block;
-+			end = ex->e_block + ex->e_num - 1;
-+			if (block + num - 1 < end)
-+				end = block + num - 1;
++			end = ex->e_block + ex->e_num;
++			if (block + num < end)
++				end = block + num;
 +			exists = 1;
 +		} else {
 +			BUG();
 +		}
++		EXT_ASSERT(end > start);
 +
 +		if (!exists) {
 +			cbex.e_block = start;
-+			cbex.e_num = end - start + 1;
++			cbex.e_num = end - start;
 +			cbex.e_start = 0;
 +		} else
 +			cbex = *ex;
 +
++		EXT_ASSERT(path[depth].p_hdr);
 +		err = func(tree, path, &cbex, exists);
++		ext3_ext_drop_refs(path);
++
 +		if (err < 0)
 +			break;
-+
-+		if (err == EXT_BREAK) {
++		if (err == EXT_REPEAT)
++			continue;
++		else if (err == EXT_BREAK) {
 +			err = 0;
 +			break;
 +		}
 +
 +		if (EXT_DEPTH(tree) != depth) {
 +			/* depth was changed. we have to realloc path */
-+			ext3_ext_drop_refs(path);
 +			kfree(path);
 +			path = NULL;
 +		}
 +
-+		block += cbex.e_num;
-+		num -= cbex.e_num;
++		block = cbex.e_block + cbex.e_num;
 +	}
 +
 +	if (path) {
@@ -1351,7 +1392,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	ext_debug(tree, "index is empty, remove it, free block %d\n",
 +			path->p_idx->e_leaf);
 +	bh = sb_get_hash_table(tree->inode->i_sb, path->p_idx->e_leaf);
-+	ext3_forget(handle, 0, tree->inode, bh, path->p_idx->e_leaf);
++	ext3_forget(handle, 1, tree->inode, bh, path->p_idx->e_leaf);
 +	ext3_free_blocks(handle, tree->inode, path->p_idx->e_leaf, 1);
 +	return err;
 +}
@@ -1724,6 +1765,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +			err = ext3_ext_dirty(handle, tree, path);
 +		}
 +	}
++	ext3_ext_tree_changed(tree);
 +
 +	kfree(path);
 +	ext3_journal_stop(handle, inode);
@@ -1772,8 +1814,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +static int ext3_mark_buffer_dirty(handle_t *handle, void *buffer)
 +{
 +	struct inode *inode = buffer;
-+	ext3_mark_inode_dirty(handle, inode);
-+	return 0;
++	return ext3_mark_inode_dirty(handle, inode);
 +}
 +
 +static int ext3_ext_mergable(struct ext3_extent *ex1,
@@ -1807,6 +1848,8 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +{
 +	int needed = ext3_remove_blocks_credits(tree, ex, from, to);
 +	handle_t *handle = ext3_journal_start(tree->inode, needed);
++	struct buffer_head *bh;
++	int i;
 +
 +	if (IS_ERR(handle))
 +		return PTR_ERR(handle);
@@ -1817,6 +1860,10 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +		start = ex->e_start + ex->e_num - num;
 +		ext_debug(tree, "free last %lu blocks starting %lu\n",
 +				num, start);
++		for (i = 0; i < num; i++) {
++			bh = sb_get_hash_table(tree->inode->i_sb, start + i);
++			ext3_forget(handle, 0, tree->inode, bh, start + i);
++		}
 +		ext3_free_blocks(handle, tree->inode, start, num);
 +	} else if (from == ex->e_block && to <= ex->e_block + ex->e_num - 1) {
 +		printk("strange request: removal %lu-%lu from %u:%u\n",
@@ -1829,8 +1876,8 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	return 0;
 +}
 +
-+static int ext3_ext_find_goal(struct inode *inode,
-+				struct ext3_ext_path *path)
++static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
++				unsigned long block)
 +{
 +	struct ext3_inode_info *ei = EXT3_I(inode);
 +	unsigned long bg_start;
@@ -1838,12 +1885,13 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	int depth;
 +	
 +	if (path) {
++		struct ext3_extent *ex;
 +		depth = path->p_depth;
-+		/* try to find previous block */
-+		if (path[depth].p_ext)
-+			return path[depth].p_ext->e_start +
-+				path[depth].p_ext->e_num;
 +		
++		/* try to predict block placement */
++		if ((ex = path[depth].p_ext))
++			return ex->e_start + (block - ex->e_block);
++
 +		/* it looks index is empty
 +		 * try to find starting from index itself */
 +		if (path[depth].p_bh)
@@ -1855,7 +1903,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +		le32_to_cpu(EXT3_SB(inode->i_sb)->s_es->s_first_data_block);
 +	colour = (current->pid % 16) *
 +			(EXT3_BLOCKS_PER_GROUP(inode->i_sb) / 16);
-+	return bg_start + colour;
++	return bg_start + colour + block;
 +}
 +
 +static int ext3_new_block_cb(handle_t *handle, struct ext3_extents_tree *tree,
@@ -1876,7 +1924,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	if (ex->e_num == 0) {
 +		ex->e_num = 1;
 +		/* allocate new block for the extent */
-+		goal = ext3_ext_find_goal(inode, path);
++		goal = ext3_ext_find_goal(inode, path, ex->e_block);
 +		ex->e_start = ext3_new_block(handle, inode, goal, 0, 0, err);
 +		if (ex->e_start == 0) {
 +			/* error occured: restore old extent */
@@ -1910,25 +1958,41 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +			struct ext3_extent *newex, int exist)
 +{
 +	struct inode *inode = tree->inode;
++	struct buffer_head *bh;
 +	int count, err, goal;
++	unsigned long pblock;
++	unsigned long tgen;
 +	loff_t new_i_size;
 +	handle_t *handle;
-+	unsigned long pblock;
++	int i;
 +
 +	if (exist)
 +		return EXT_CONTINUE;
 +
++	tgen = EXT_GENERATION(tree);
 +	count = ext3_ext_calc_credits_for_insert(tree, path);
-+	handle = ext3_journal_start(inode, count + EXT3_ALLOC_NEEDED + 1);
-+	if (IS_ERR(handle))
-+		return PTR_ERR(handle);
++	up_write(&EXT3_I(inode)->truncate_sem);
 +
-+	goal = ext3_ext_find_goal(inode, path);
++	handle = ext3_journal_start(inode, count + EXT3_ALLOC_NEEDED + 1);
++	if (IS_ERR(handle)) {
++		down_write(&EXT3_I(inode)->truncate_sem);
++		return PTR_ERR(handle);
++	}
++
++	if (tgen != EXT_GENERATION(tree)) {
++		/* the tree has changed. so path can be invalid at moment */
++		ext3_journal_stop(handle, inode);
++		down_write(&EXT3_I(inode)->truncate_sem);
++		return EXT_REPEAT;
++	}
++
++	down_write(&EXT3_I(inode)->truncate_sem);
++	goal = ext3_ext_find_goal(inode, path, newex->e_block);
 +	count = newex->e_num;
 +	pblock = ext3_new_blocks(handle, inode, &count, goal, &err);
++	if (!pblock)
++		goto out;
 +	EXT_ASSERT(count <= newex->e_num);
-+	/* FIXME: error handling here */
-+	EXT_ASSERT(err == 0);
 +
 +	/* insert new extent */
 +	newex->e_start = pblock;
@@ -1937,6 +2001,17 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	if (err)
 +		goto out;
 +
++	/* block have been allocated for data, so time to drop dirty
++	 * in correspondend buffer_heads to prevent corruptions */
++	for (i = 0; i < newex->e_num; i++) {
++		bh = sb_get_hash_table(inode->i_sb, newex->e_start + i);
++		if (bh) {
++			mark_buffer_clean(bh);
++			wait_on_buffer(bh);
++			clear_bit(BH_Req, &bh->b_state);
++			__brelse(bh);
++		}
++	}
 +
 +	/* correct on-disk inode size */
 +	if (newex->e_num > 0) {
@@ -2005,6 +2080,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	path = ext3_ext_find_extent(&tree, iblock, NULL);
 +	if (IS_ERR(path)) {
 +		err = PTR_ERR(path);
++		path = NULL;
 +		goto out2;
 +	}
 +
@@ -2040,7 +2116,7 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +	}
 +
 +	/* allocate new block */
-+	goal = ext3_ext_find_goal(inode, path);
++	goal = ext3_ext_find_goal(inode, path, iblock);
 +	newblock = ext3_new_block(handle, inode, goal, 0, 0, &err);
 +	if (!newblock)
 +		goto out2;
@@ -2221,6 +2297,9 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +{
 +	int err = 0;
 +
++	if (!(EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL))
++		return -EINVAL;
++
 +	if (cmd == EXT3_IOC_GET_EXTENTS) {
 +		struct ext3_extent_buf buf;
 +		struct ext3_extents_tree tree;
@@ -2232,8 +2311,10 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +		buf.cur = buf.buffer;
 +		buf.err = 0;
 +		tree.private = &buf;
++		down_write(&EXT3_I(inode)->truncate_sem);
 +		err = ext3_ext_walk_space(&tree, buf.start, 0xffffffff,
 +						ext3_ext_store_extent_cb);
++		up_write(&EXT3_I(inode)->truncate_sem);
 +		if (err == 0)
 +			err = buf.err;
 +	} else if (cmd == EXT3_IOC_GET_TREE_STATS) {
@@ -2241,27 +2322,39 @@ Index: linux-2.4.21-suse2/fs/ext3/extents.c
 +		struct ext3_extents_tree tree;
 +
 +		ext3_init_tree_desc(&tree, inode);
++		down_write(&EXT3_I(inode)->truncate_sem);
 +		buf.depth = EXT_DEPTH(&tree);
 +		buf.extents_num = 0;
 +		buf.leaf_num = 0;
 +		tree.private = &buf;
 +		err = ext3_ext_walk_space(&tree, 0, 0xffffffff,
 +						ext3_ext_collect_stats_cb);
++		up_write(&EXT3_I(inode)->truncate_sem);
 +		if (!err)
 +			err = copy_to_user((void *) arg, &buf, sizeof(buf));
 +	} else if (cmd == EXT3_IOC_GET_TREE_DEPTH) {
 +		struct ext3_extents_tree tree;
 +		ext3_init_tree_desc(&tree, inode);
++		down_write(&EXT3_I(inode)->truncate_sem);
 +		err = EXT_DEPTH(&tree);
++		up_write(&EXT3_I(inode)->truncate_sem);
 +	}
 +
 +	return err;
 +}
 +
++EXPORT_SYMBOL(ext3_init_tree_desc);
++EXPORT_SYMBOL(ext3_mark_inode_dirty);
++EXPORT_SYMBOL(ext3_ext_invalidate_cache);
++EXPORT_SYMBOL(ext3_ext_insert_extent);
++EXPORT_SYMBOL(ext3_ext_walk_space);
++EXPORT_SYMBOL(ext3_ext_find_goal);
++EXPORT_SYMBOL(ext3_ext_calc_credits_for_insert);
++
 Index: linux-2.4.21-suse2/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.4.21-suse2.orig/fs/ext3/ialloc.c	2004-01-23 19:04:17.000000000 +0300
-+++ linux-2.4.21-suse2/fs/ext3/ialloc.c	2004-01-24 20:10:25.000000000 +0300
+--- linux-2.4.21-suse2.orig/fs/ext3/ialloc.c	2004-02-05 20:42:40.000000000 +0300
++++ linux-2.4.21-suse2/fs/ext3/ialloc.c	2004-02-05 20:42:40.000000000 +0300
 @@ -592,6 +592,10 @@
   		iloc.bh = NULL;
   		goto fail;
@@ -2275,8 +2368,8 @@ Index: linux-2.4.21-suse2/fs/ext3/ialloc.c
   
 Index: linux-2.4.21-suse2/fs/ext3/inode.c
 ===================================================================
---- linux-2.4.21-suse2.orig/fs/ext3/inode.c	2004-01-23 19:04:17.000000000 +0300
-+++ linux-2.4.21-suse2/fs/ext3/inode.c	2004-01-24 20:10:25.000000000 +0300
+--- linux-2.4.21-suse2.orig/fs/ext3/inode.c	2004-02-05 20:42:40.000000000 +0300
++++ linux-2.4.21-suse2/fs/ext3/inode.c	2004-02-05 20:42:40.000000000 +0300
 @@ -853,6 +853,18 @@
  	goto reread;
  }
@@ -2372,22 +2465,23 @@ Index: linux-2.4.21-suse2/fs/ext3/inode.c
                                 "allocating block %ld\n", rc, iblock);
 Index: linux-2.4.21-suse2/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.21-suse2.orig/fs/ext3/Makefile	2004-01-13 17:45:20.000000000 +0300
-+++ linux-2.4.21-suse2/fs/ext3/Makefile	2004-01-24 20:10:25.000000000 +0300
-@@ -12,7 +12,8 @@
+--- linux-2.4.21-suse2.orig/fs/ext3/Makefile	2004-02-05 20:42:39.000000000 +0300
++++ linux-2.4.21-suse2/fs/ext3/Makefile	2004-02-05 20:43:47.000000000 +0300
+@@ -12,7 +12,9 @@
  export-objs := ext3-exports.o
  
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
 -		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o
 +		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o \
 +		extents.o
++export-objs += extents.o
  obj-m    := $(O_TARGET)
  
  export-objs += xattr.o
 Index: linux-2.4.21-suse2/fs/ext3/super.c
 ===================================================================
---- linux-2.4.21-suse2.orig/fs/ext3/super.c	2004-01-23 19:04:17.000000000 +0300
-+++ linux-2.4.21-suse2/fs/ext3/super.c	2004-01-24 20:10:25.000000000 +0300
+--- linux-2.4.21-suse2.orig/fs/ext3/super.c	2004-02-05 20:42:40.000000000 +0300
++++ linux-2.4.21-suse2/fs/ext3/super.c	2004-02-05 20:42:40.000000000 +0300
 @@ -624,6 +624,7 @@
  	int i;
  
@@ -2418,8 +2512,8 @@ Index: linux-2.4.21-suse2/fs/ext3/super.c
  failed_mount3:
 Index: linux-2.4.21-suse2/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.4.21-suse2.orig/fs/ext3/ioctl.c	2004-01-13 17:45:18.000000000 +0300
-+++ linux-2.4.21-suse2/fs/ext3/ioctl.c	2004-01-24 20:10:25.000000000 +0300
+--- linux-2.4.21-suse2.orig/fs/ext3/ioctl.c	2004-02-05 20:42:39.000000000 +0300
++++ linux-2.4.21-suse2/fs/ext3/ioctl.c	2004-02-05 20:42:40.000000000 +0300
 @@ -174,6 +174,10 @@
  			return ret;
  		}
@@ -2433,8 +2527,8 @@ Index: linux-2.4.21-suse2/fs/ext3/ioctl.c
  	}
 Index: linux-2.4.21-suse2/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.21-suse2.orig/include/linux/ext3_fs.h	2004-01-23 19:04:17.000000000 +0300
-+++ linux-2.4.21-suse2/include/linux/ext3_fs.h	2004-01-24 20:10:25.000000000 +0300
+--- linux-2.4.21-suse2.orig/include/linux/ext3_fs.h	2004-02-05 20:42:40.000000000 +0300
++++ linux-2.4.21-suse2/include/linux/ext3_fs.h	2004-02-05 20:42:40.000000000 +0300
 @@ -184,6 +184,7 @@
  #define EXT3_IMAGIC_FL			0x00002000 /* AFS directory */
  #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
@@ -2488,8 +2582,8 @@ Index: linux-2.4.21-suse2/include/linux/ext3_fs.h
 Index: linux-2.4.21-suse2/include/linux/ext3_extents.h
 ===================================================================
 --- linux-2.4.21-suse2.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.21-suse2/include/linux/ext3_extents.h	2004-01-24 20:10:25.000000000 +0300
-@@ -0,0 +1,212 @@
++++ linux-2.4.21-suse2/include/linux/ext3_extents.h	2004-02-05 20:42:40.000000000 +0300
+@@ -0,0 +1,216 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
 + *
@@ -2546,7 +2640,7 @@ Index: linux-2.4.21-suse2/include/linux/ext3_extents.h
 +#define EXT_STATS_
 +
 +
-+#define EXT3_ALLOC_NEEDED	2	/* block bitmap + group descriptor */
++#define EXT3_ALLOC_NEEDED	3	/* block bitmap + group desc. + sb */
 +
 +/*
 + * ext3_inode has i_block array (total 60 bytes)
@@ -2583,6 +2677,7 @@ Index: linux-2.4.21-suse2/include/linux/ext3_extents.h
 +	__u16	e_num;		/* number of valid entries */
 +	__u16	e_max;		/* capacity of store in entries */
 +	__u16	e_depth;	/* has tree real underlaying blocks? */
++	__u32	e_generation;	/* generation of the tree */
 +};
 +
 +#define EXT3_EXT_MAGIC		0xf301
@@ -2643,6 +2738,7 @@ Index: linux-2.4.21-suse2/include/linux/ext3_extents.h
 +
 +#define EXT_CONTINUE	0
 +#define EXT_BREAK	1
++#define EXT_REPEAT	2
 +
 +
 +#define EXT_FIRST_EXTENT(__hdr__) \
@@ -2668,6 +2764,8 @@ Index: linux-2.4.21-suse2/include/linux/ext3_extents.h
 +	((struct ext3_extent_header *) (bh)->b_data)
 +#define EXT_DEPTH(_t_)	\
 +	(((struct ext3_extent_header *)((_t_)->root))->e_depth)
++#define EXT_GENERATION(_t_)	\
++	(((struct ext3_extent_header *)((_t_)->root))->e_generation)
 +
 +
 +#define EXT_ASSERT(__x__) if (!(__x__)) BUG();
@@ -2704,8 +2802,8 @@ Index: linux-2.4.21-suse2/include/linux/ext3_extents.h
 +
 Index: linux-2.4.21-suse2/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.4.21-suse2.orig/include/linux/ext3_fs_i.h	2004-01-23 19:04:17.000000000 +0300
-+++ linux-2.4.21-suse2/include/linux/ext3_fs_i.h	2004-01-24 20:10:25.000000000 +0300
+--- linux-2.4.21-suse2.orig/include/linux/ext3_fs_i.h	2004-02-05 20:42:40.000000000 +0300
++++ linux-2.4.21-suse2/include/linux/ext3_fs_i.h	2004-02-05 20:47:04.000000000 +0300
 @@ -90,6 +90,8 @@
  	 * by other means, so we have truncate_sem.
  	 */
