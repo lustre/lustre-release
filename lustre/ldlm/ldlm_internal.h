@@ -46,6 +46,6 @@ struct ldlm_state {
         struct ldlm_bl_pool *ldlm_bl_pool;
 };
 
-int __init ldlm_init(void);
-void __exit ldlm_exit(void);
+int ldlm_init(void);
+void ldlm_exit(void);
 
