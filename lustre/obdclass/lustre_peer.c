@@ -117,6 +117,7 @@ int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
         if (data == NULL)
                 goto fail_1;
 
+        CDEBUG(D_INFO, "add uuid %s "LPU64" %u\n", uuid, nid, nal);
         memcpy(data->uuid, uuid, nob);
         data->nid = nid;
         data->nal = nal;
