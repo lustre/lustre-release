@@ -1838,7 +1838,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         mds_open_unlink_rename(rec, obd, dparent, dchild, NULL);
                 }
                 /* handle splitted dir */
-                mds_unlink_slave_objs(obd, dchild);
+                if (rc == 0) {
+                        /* master directory can be non-empty or something else ... */
+                        mds_unlink_slave_objs(obd, dchild);
+                }
                 rc = mds_finish_transno(mds, dparent->d_inode, handle, req,
                                         rc, 0);
                 if (!rc)
