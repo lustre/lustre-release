@@ -1515,8 +1515,8 @@ static inline struct obdo *obdo_alloc(void)
 {
         struct obdo *oa;
 
-        OBD_SLAB_ALLOC(oa, obdo_cachep, GFP_KERNEL, sizeof(*oa));
-
+        OBD_SLAB_ALLOC(oa, obdo_cachep, GFP_KERNEL,
+                       sizeof(*oa));
         return oa;
 }
 
@@ -1525,6 +1525,26 @@ static inline void obdo_free(struct obdo *oa)
         if (!oa)
                 return;
         OBD_SLAB_FREE(oa, obdo_cachep, sizeof(*oa));
+}
+
+static inline void obdo2id(struct lustre_id *id,
+                           struct obdo *oa)
+{
+        LASSERT(oa && id);
+        id_ino(id) = oa->o_id;
+        id_fid(id) = oa->o_fid;
+        id_group(id) = oa->o_mds;
+        id_gen(id) = oa->o_generation;
+}
+
+static inline void id2obdo(struct obdo *oa,
+                           struct lustre_id *id)
+{
+        LASSERT(oa && id);
+        oa->o_id = id_ino(id);
+        oa->o_fid = id_fid(id);
+        oa->o_mds = id_group(id);
+        oa->o_generation = id_gen(id);
 }
 
 #if !defined(__KERNEL__) || (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

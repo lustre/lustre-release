@@ -1591,7 +1591,8 @@ int lmv_getready(struct obd_export *exp)
 }
 
 /*
- * to be called from MDS only.
+ * to be called from MDS only. @oa should have correct store cookie and o_fid
+ * values for "master" object, as it will be used.
  */
 int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
                    struct lov_stripe_md **ea, struct obd_trans_info *oti)
@@ -1601,7 +1602,6 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
         struct lustre_id mid;
         int i, c, rc = 0;
         struct mea *mea;
-        int lcount;
         ENTRY;
 
         rc = lmv_check_connect(obd);
@@ -1623,44 +1623,46 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
                         CERROR("obd_alloc_diskmd() failed, error %d\n",
                                rc);
                         RETURN(rc);
-                }
+                } else
+                        rc = 0;
                 
                 if (*ea == NULL)
                         RETURN(-ENOMEM);
         }
 
-        rc = 0;
-
+        /* 
+         * here we should take care about splitted dir, so store cookie and fid
+         * for "master" object should already be allocated and passed in @oa.
+         */
         LASSERT(oa->o_id != 0);
-        id_ino(&mid) = oa->o_id;
-        id_fid(&mid) = oa->o_fid;
-        id_gen(&mid) = oa->o_generation;
+        LASSERT(oa->o_fid != 0);
+
+        /* save "master" object id */
+        obdo2id(&mid, oa);
 
         mea = (struct mea *)*ea;
-        if (!mea->mea_count || mea->mea_count > lmv->desc.ld_tgt_count)
-                mea->mea_count = lmv->desc.ld_tgt_count;
-        
         mea->mea_master = -1;
         mea->mea_magic = MEA_MAGIC_ALL_CHARS;
 
-        lcount = lmv->desc.ld_tgt_count;
-        for (i = 0, c = 0; c < mea->mea_count && i < lcount; i++) {
+        if (!mea->mea_count || mea->mea_count > lmv->desc.ld_tgt_count)
+                mea->mea_count = lmv->desc.ld_tgt_count;
+
+        for (i = 0, c = 0; c < mea->mea_count && i < lmv->desc.ld_tgt_count; i++) {
                 struct lov_stripe_md obj_md;
                 struct lov_stripe_md *obj_mdp = &obj_md;
                
                 if (lmv->tgts[i].ltd_exp == NULL) {
-                        /* this is master MDS */
+                        /* this is "master" MDS */
                         mea->mea_master = i;
-                        id_group(&mea->mea_ids[c]) = i;
-                        id_ino(&mea->mea_ids[c]) = id_ino(&mid);
-                        id_gen(&mea->mea_ids[c]) = id_gen(&mid);
-                        id_fid(&mea->mea_ids[c]) = id_fid(&mid);
+                        mea->mea_ids[c] = mid;
                         c++;
                         continue;
                 }
 
-                /* "master" MDS should always be part of stripped dir, so scan
-                 * for it. */
+                /*
+                 * "master" MDS should always be part of stripped dir,
+                 * so scan for it.
+                 */
                 if (mea->mea_master == -1 && c == mea->mea_count - 1)
                         continue;
 
@@ -1677,19 +1679,28 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
                 CDEBUG(D_OTHER, "dirobj at mds %d: "LPU64"/%u\n",
                        i, oa->o_id, oa->o_generation);
 
-                /* here after object is created on desired MDS we save its fid
-                 * to local mea_ids. */
+
+                /*
+                 * here, when object is created (or it is master and was passed
+                 * from caller) on desired MDS we save its fid to local mea_ids.
+                 */
                 LASSERT(oa->o_fid);
-                
-                id_group(&mea->mea_ids[c]) = i;
-                id_ino(&mea->mea_ids[c]) = oa->o_id;
-                id_fid(&mea->mea_ids[c]) = oa->o_fid;
-                id_gen(&mea->mea_ids[c]) = oa->o_generation;
+
+                /* 
+                 * store cookie should be defined here for both cases (master
+                 * object and not master), because master is already created.
+                 */
+                LASSERT(oa->o_id);
+
+                /* fill mea by store cookie and fid */
+                obdo2id(&mea->mea_ids[c], oa);
                 c++;
         }
         LASSERT(c == mea->mea_count);
-        CDEBUG(D_OTHER, "%d dirobjects created\n", (int) mea->mea_count);
 
+        CDEBUG(D_OTHER, "%d dirobjects created\n",
+               (int)mea->mea_count);
+        
         RETURN(rc);
 }
 

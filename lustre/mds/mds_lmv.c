@@ -673,6 +673,7 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
                 GOTO(err_oa, rc);
         }
         oa->o_fid = id_fid(&id);
+        oa->o_mds = mds->mds_num;
 
         CDEBUG(D_OTHER, "%s: create subdirs with mode %o, uid %u, gid %u\n",
                obd->obd_name, dir->i_mode, dir->i_uid, dir->i_gid);

@@ -837,10 +837,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         body->valid |= OBD_MD_FLID | OBD_MD_MDS |
                                 OBD_MD_FID;
 
-                        id_group(&body->id1) = i;
-                        id_ino(&body->id1) = oa->o_id;
-                        id_fid(&body->id1) = oa->o_fid;
-                        id_gen(&body->id1) = oa->o_generation;
+                        obdo2id(&body->id1, oa);
 	                obdo_free(oa);
                 } else {
                         /* requested name exists in the directory */

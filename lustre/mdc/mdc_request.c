@@ -66,7 +66,10 @@ void mdc_pack_secdesc(struct ptlrpc_request *req, int size)
 {
 #ifdef __KERNEL__
         struct mds_req_sec_desc *rsd;
+        
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,4)
         struct group_info *ginfo;
+#endif
 
         rsd = lustre_msg_buf(req->rq_reqmsg,
                              MDS_REQ_SECDESC_OFF, size);
