@@ -109,6 +109,7 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
         
         /* 2. walk the request list */
         spin_lock(&conn->c_lock);
+
         list_for_each_safe(tmp, pos, &conn->c_sending_head) { 
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 

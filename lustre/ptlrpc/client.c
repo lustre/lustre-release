@@ -238,7 +238,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
                 GOTO(out, rc = 1);
         }
 
-        if (req->rq_flags & PTL_RPC_FL_RECOVERY) { 
+        if (req->rq_flags & PTL_RPC_FL_RESEND) { 
                 CERROR("-- RESTART --\n");
                 GOTO(out, rc = 1);
         }
@@ -320,10 +320,16 @@ restart:
                         continue;
                 }
 
+                if (!(req->rq_flags & PTL_RPC_FL_REPLIED)) {
+                        CDEBUG(D_INFO, "Keeping in-flight req %p xid "LPD64
+                               " for replay\n", req, req->rq_xid);
+                        continue;
+                }
+
                 /* not yet committed */
                 if (req->rq_transno > conn->c_last_committed)
                         break;
-
+                
                 CDEBUG(D_INFO, "Marking request %p xid %Ld as committed "
                        "transno=%Lu, last_committed=%Lu\n", req,
                        (long long)req->rq_xid, (long long)req->rq_transno,
@@ -395,6 +401,8 @@ void ptlrpc_continue_req(struct ptlrpc_request *req)
         ENTRY;
         CDEBUG(D_INODE, "continue delayed request "LPD64" opc %d\n", 
                req->rq_xid, req->rq_reqmsg->opc); 
+        req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
+        req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;
         wake_up(&req->rq_wait_for_rep); 
         EXIT;
 }
@@ -504,15 +512,6 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 RETURN(-rc);
         }
 
-#if 0 && REPLAY_DEBUGGED
-        if (req->rq_flags & PTL_RPC_FL_REPLAY) {
-                /* keep a reference so it's around for replaying.
-                 * this is balanced in XXXXXX?
-                 */
-                atomic_inc(&req->rq_refcount);
-        }
-#endif
-
         spin_lock(&conn->c_lock);
         list_del(&req->rq_list);
         list_add_tail(&req->rq_list, &conn->c_sending_head);
@@ -528,6 +527,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         if ((req->rq_flags & (PTL_RPC_FL_RESEND | PTL_RPC_FL_INTR)) ==
             PTL_RPC_FL_RESEND) {
                 req->rq_flags &= ~PTL_RPC_FL_RESEND;
+                CDEBUG(D_OTHER, "resending req %p xid "LPD64"\n",
+                       req, req->rq_xid);
                 goto resend;
         }
 

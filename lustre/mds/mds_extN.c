@@ -126,6 +126,11 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, md,
                                     md->lmd_easize, XATTR_CREATE);
+                if (rc == -EEXIST)
+                        rc = extN_xattr_set(handle, inode,
+                                            EXTN_XATTR_INDEX_LUSTRE,
+                                            XATTR_LUSTRE_MDS_OBJID, md,
+                                            md->lmd_easize, 0);
         }
         unlock_kernel();
         up(&inode->i_sem);
