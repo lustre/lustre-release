@@ -1110,7 +1110,8 @@ class kmod:
 
     def cleanup_module(self):
         """Unload the modules in the list in reverse order."""
-        rev = self.kmodule_list
+
+        rev = self.kmodule_list[:] # make *copy* of list
         rev.reverse()
         for src_dir, dev_dir, mod in rev:
             if not mod_loaded(mod) and not config.noexec:
