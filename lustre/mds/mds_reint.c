@@ -131,7 +131,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
 
         transno = req->rq_reqmsg->transno;
         if (rc != 0) {
-                LASSERT(transno == 0);
+                LASSERTF(transno == 0, "BUG 3934, t"LPU64" rc %d,", transno, rc);
         } else if (transno == 0) {
                 spin_lock(&mds->mds_transno_lock);
                 transno = ++mds->mds_last_transno;
