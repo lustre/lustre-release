@@ -294,6 +294,10 @@ void ldlm_lock_dump(struct ldlm_lock *lock)
 
         CDEBUG(D_OTHER, "  -- Lock dump: %p (%s)\n", lock, ver);
         CDEBUG(D_OTHER, "  Parent: %p\n", lock->l_parent);
+        CDEBUG(D_OTHER, "  Resource: %p\n", lock->l_resource);
         CDEBUG(D_OTHER, "  Requested mode: %d, granted mode: %d\n",
                (int)lock->l_req_mode, (int)lock->l_granted_mode);
+        if (lock->l_resource->lr_type == LDLM_EXTENT)
+                CDEBUG(D_OTHER, "  Extent: %Lu -> %Lu\n",
+                       lock->l_extent.start, lock->l_extent.end);
 }

@@ -93,7 +93,7 @@ int ldlm_test_extents(struct obd_device *obddev)
                 LBUG();
 
         flags = 0;
-        err = ldlm_local_lock_enqueue(obddev, 1, NULL, res_id, LDLM_EXTENT,
+        err = ldlm_local_lock_enqueue(obddev, 2, NULL, res_id, LDLM_EXTENT,
                                       &ext1, LCK_PR, &flags, NULL, NULL, NULL,
                                       0, &ext1_h);
         if (err != ELDLM_OK)
@@ -102,7 +102,7 @@ int ldlm_test_extents(struct obd_device *obddev)
                 LBUG();
 
         flags = 0;
-        err = ldlm_local_lock_enqueue(obddev, 1, NULL, res_id, LDLM_EXTENT,
+        err = ldlm_local_lock_enqueue(obddev, 2, NULL, res_id, LDLM_EXTENT,
                                       &ext2, LCK_PR, &flags, NULL, NULL, NULL,
                                       0, &ext2_h);
         if (err != ELDLM_OK)
@@ -111,7 +111,7 @@ int ldlm_test_extents(struct obd_device *obddev)
                 LBUG();
 
         flags = 0;
-        err = ldlm_local_lock_enqueue(obddev, 1, NULL, res_id, LDLM_EXTENT,
+        err = ldlm_local_lock_enqueue(obddev, 2, NULL, res_id, LDLM_EXTENT,
                                       &ext3, LCK_EX, &flags, NULL, NULL, NULL,
                                       0, &ext3_h);
         if (err != -ELDLM_BLOCK_GRANTED)
@@ -126,7 +126,7 @@ int ldlm_test_extents(struct obd_device *obddev)
                 LBUG();
 
         flags = 0;
-        err = ldlm_local_lock_cancel(obddev, &ext1_h);
+        err = ldlm_local_lock_cancel(obddev, &ext2_h);
         if (err != ELDLM_OK)
                 LBUG();
 
