@@ -5,7 +5,7 @@ MTPT=/mnt/lustre
 remount() {
     umount $MTPT || exit -1
     debugctl clear
-    mount -t lustre_lite -o ost=OSCDEV-UUID,mds=MDCDEV-UUID none $MTPT
+    mount -t lustre_lite -o osc=OSCDEV-UUID,mdc=MDCDEV-UUID none $MTPT
 }
 
 # Test mkdir
