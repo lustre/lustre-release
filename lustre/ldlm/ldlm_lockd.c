@@ -502,21 +502,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 rc = ldlm_handle_cp_callback(req);
                 RETURN(rc);
 
-        /* XXX FIXME move these three back to mds/handler.c, bug 625069 */
-        case LDLM_ENQUEUE:
-                CDEBUG(D_INODE, "enqueue\n");
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
-                rc = ldlm_handle_enqueue(req);
-                if (rc)
-                        break;
-                RETURN(0);
-        case LDLM_CONVERT:
-                CDEBUG(D_INODE, "convert\n");
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CONVERT, 0);
-                rc = ldlm_handle_convert(req);
-                if (rc)
-                        break;
-                RETURN(0);
+        /* XXX FIXME move this back to mds/handler.c, bug 625069 */
         case LDLM_CANCEL:
                 CDEBUG(D_INODE, "cancel\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
@@ -524,7 +510,6 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 if (rc)
                         break;
                 RETURN(0);
-        /* XXX FIXME move these three back to mds/handler.c, bug 625069 */
 
         default:
                 CERROR("invalid opcode %d\n", req->rq_reqmsg->opc);

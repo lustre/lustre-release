@@ -1,3 +1,8 @@
+TBA
+	* version v0_5_16
+	* bug fixes:
+	  - limit Lustre IOVs to PTL_MD_MAX_IOV (611336)
+
 2002-10-23  Phil Schwan  <phil@clusterfs.com>
 	* version v0_5_15
 	* bug fixes:

@@ -197,9 +197,6 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
         } else if (req->rq_reqmsg->buflens[0] != sizeof(*body))
                 LBUG();
 
-        req->rq_request_portal = LDLM_REQUEST_PORTAL; /* XXX FIXME bug 625069 */
-        req->rq_reply_portal = LDLM_REPLY_PORTAL; /* XXX FIXME bug 625069 */
-
         /* Dump all of this data into the request buffer */
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         ldlm_lock2desc(lock, &body->lock_desc);
@@ -376,9 +373,6 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, int *flags)
                               NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
-
-        req->rq_request_portal = LDLM_REQUEST_PORTAL; /* XXX FIXME bug 625069 */
-        req->rq_reply_portal = LDLM_REPLY_PORTAL; /* XXX FIXME bug 625069 */
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         memcpy(&body->lock_handle1, &lock->l_remote_handle,
