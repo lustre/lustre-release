@@ -238,7 +238,7 @@ static int fsfilt_extN_commit(struct inode *inode, void *h, int force_sync)
 }
 
 static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
-                               struct iattr *iattr)
+                               struct iattr *iattr, int do_trunc)
 {
         struct inode *inode = dentry->d_inode;
         int rc;
@@ -251,11 +251,7 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
          * zero all the time (which doesn't invoke block truncate at unlink
          * time), so we assert we never change the MDS file size from zero.
          */
-        if (iattr->ia_valid & ATTR_SIZE) {
-                CERROR("hmm, setting %*s file size to %lld\n",
-                       dentry->d_name.len, dentry->d_name.name, iattr->ia_size);
-                LASSERT(iattr->ia_size == 0);
-#if 0
+        if (iattr->ia_valid & ATTR_SIZE && !do_trunc) {
                 /* ATTR_SIZE would invoke truncate: clear it */
                 iattr->ia_valid &= ~ATTR_SIZE;
                 inode->i_size = iattr->ia_size;
@@ -267,7 +263,6 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
                         iattr->ia_valid |= ATTR_MODE;
                         iattr->ia_mode = inode->i_mode;
                 }
-#endif
         }
         if (inode->i_op->setattr)
                 rc = inode->i_op->setattr(dentry, iattr);
