@@ -69,7 +69,7 @@ command_t cmdlist[] = {
         {"getattr", jt_obd_getattr, 0, "getattr <id>"},
         {"setattr", jt_obd_setattr, 0, "setattr <id> <mode>"},
         {"newconn", jt_obd_newconn, 0, "newconn [newuuid]"},
-        {"test_getattr", jt_obd_test_getattr, 0, "test_getattr <count> [verbose]"},
+        {"test_getattr", jt_obd_test_getattr, 0, "test_getattr <count> [verbose [objid]]"},
         {"test_brw", jt_obd_test_brw, 0, "test_brw <count> [write [verbose [pages [objid]]]]"},
         {"test_ldlm", jt_obd_test_ldlm, 0, "test lock manager (no args)"},
         {"dump_ldlm", jt_obd_dump_ldlm, 0, "dump all lock manager state (no args)"},

@@ -122,27 +122,35 @@ command_t cmdlist[] = {
          "build a connection handle to a device.  This command is used to "
          "suspend configuration until lctl has ensured that the mds and osc "
          "services are available.  This is to avoid mount failures in a "
-         "rebooting cluster.  k\n"
-         "usage: probe [<timeout]"},
-        {"close", jt_obd_disconnect, 0, "close the connection handle\n"
+         "rebooting cluster.\n"
+         "usage: probe [timeout]"},
+        {"close", jt_obd_disconnect, 0,
+         "close the connection handle\n"
          "usage: close"},
-        {"getattr", jt_obd_getattr, 0, "get attribute for OST object <objid>\n"
+        {"getattr", jt_obd_getattr, 0,
+         "get attribute for OST object <objid>\n"
          "usage: getattr <objid>"},
-        {"setattr", jt_obd_setattr, 0, "set attribute for OST object <objid>\n"
+        {"setattr", jt_obd_setattr, 0,
+         "set mode attribute for OST object <objid>\n"
          "usage: setattr <objid> <mode>"},
-        {"create", jt_obd_create, 0, "create <num> OST objects (with <mode>)\n"
-         "create [num [mode [verbose]]]"},
-        {"destroy", jt_obd_destroy, 0, "destroy OST object <objid>"},
-        {"test_getattr", jt_obd_test_getattr, 0, "perform <num> OST getattr's\n"
-         "usage: test_getattr <num> [verbose]"},
+        {"create", jt_obd_create, 0,
+         "create <num> OST objects (with <mode>)\n"
+         "usage: create [num [mode [verbose]]]"},
+        {"destroy", jt_obd_destroy, 0,
+         "destroy OST object <objid>\n"
+         "usage: destroy <objid>"},
+        {"test_getattr", jt_obd_test_getattr, 0,
+         "do <num> getattrs (on OST object <objid>)\n"
+         "usage: test_getattr <num> [verbose [objid]]"},
         {"test_brw", jt_obd_test_brw, 0,
          "do <num> bulk read/writes (<npages> per I/O, on OST object <objid>)\n"
          "usage: test_brw <num> [write [verbose [npages [objid]]]]"},
-        {"test_ldlm", jt_obd_test_ldlm, 0, "perform lock manager test\n"
+        {"test_ldlm", jt_obd_test_ldlm, 0,
+         "perform lock manager test\n"
          "usage: test_ldlm"},
         {"ldlm_regress_start", jt_obd_ldlm_regress_start, 0,
-         "start lock manager stress test (usage: %s [numthreads [refheld "
-         "[numres [numext]]]]\n"}, 
+         "start lock manager stress test\n"
+         "usage: %s [numthreads [refheld [numres [numext]]]]"},
         {"ldlm_regress_stop", jt_obd_ldlm_regress_stop, 0,
          "stop lock manager stress test (no args)\n"},
         {"dump_ldlm", jt_obd_dump_ldlm, 0,
