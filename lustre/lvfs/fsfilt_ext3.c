@@ -74,11 +74,11 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private)
 {
         /* For updates to the last recieved file */
         int nblocks = EXT3_DATA_TRANS_BLOCKS;
-        int blocksize, block_count = 0;
         void *handle;
 
         if (current->journal_info) {
-                CDEBUG(D_INODE, "increasing refcount on %p\n", current->journal_info);
+                CDEBUG(D_INODE, "increasing refcount on %p\n",
+                       current->journal_info);
                 goto journal_start;
         }
 
@@ -121,11 +121,8 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private)
                 nblocks += 1;
                 break;
         case FSFILT_OP_CANCEL_UNLINK_LOG:
-                blocksize = 1 << inode->i_blkbits;
-                block_count = (blocksize - 1) + LLOG_CHUNK_SIZE;
-                block_count = (block_count + blocksize - 1) >> inode->i_blkbits;
-                block_count = block_count * EXT3_DATA_TRANS_BLOCKS + 2;
-                nblocks = 2 * 2 * block_count;
+                nblocks = (LLOG_CHUNK_SIZE >> inode->i_blkbits) +
+                        EXT3_DELETE_TRANS_BLOCKS;
                 break;
         default: CERROR("unknown transaction start op %d\n", op);
                  LBUG();
