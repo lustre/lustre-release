@@ -73,11 +73,11 @@ void ll_ap_completion_26(void *data, int cmd, int rc)
                 } else {
                         llap->llap_write_queued = 0;
                 }
-        } else { 
+        } else {
                 SetPageError(page);
         }
 
-        LL_CDEBUG_PAGE(page, "io complete, unlocking\n");
+        LL_CDEBUG_PAGE(D_PAGE, page, "io complete, unlocking\n");
 
         unlock_page(page);
 
@@ -107,22 +107,21 @@ static int ll_writepage_26(struct page *page, struct writeback_control *wbc)
         llap = llap_from_page(page);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
-        page_cache_get(page);
 
+        page_cache_get(page);
         if (llap->llap_write_queued) {
-                LL_CDEBUG_PAGE(page, "marking urgent\n");
-                rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL, 
-                                         llap->llap_cookie, ASYNC_READY | 
-                                         ASYNC_URGENT);
+                LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
+                rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL,
+                                         llap->llap_cookie,
+                                         ASYNC_READY | ASYNC_URGENT);
         } else {
                 llap->llap_write_queued = 1;
-                rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL, 
-                                        llap->llap_cookie, OBD_BRW_WRITE, 0, 0, 
-                                        OBD_BRW_CREATE, ASYNC_READY | 
-                                        ASYNC_URGENT);
+                rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL,
+                                        llap->llap_cookie, OBD_BRW_WRITE, 0, 0,
+                                        0, ASYNC_READY | ASYNC_URGENT);
                 if (rc == 0)
-                        LL_CDEBUG_PAGE(page, "mmap write queued\n");
-                else 
+                        LL_CDEBUG_PAGE(D_PAGE, page, "mmap write queued\n");
+                else
                         llap->llap_write_queued = 0;
         }
         if (rc)
