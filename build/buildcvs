@@ -39,6 +39,10 @@ case "$lustretag" in
 	portalstag="b_hd_sec"
 	;;
 
+    b_release_*)
+	portalstag=$lustretag
+	;;
+
     b_port_ahead)
 	portalstag="b_port_ahead"
 	;;
