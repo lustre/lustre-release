@@ -1,9 +1,0 @@
-dev_read_only.patch
-exports.patch
-kmem_cache_validate.patch
-lustre_version.patch
-uml_check_get_page.patch
-uml_no_panic.patch
-vfs_intent.patch
-uml_compile_fixes.patch
-invalidate_show.patch
