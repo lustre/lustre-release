@@ -38,7 +38,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         lock = ldlm_lock_create(ns, parent_lock_handle, res_id, type, mode,
                                 data, data_len);
         if (lock == NULL)
-                GOTO(out, rc = -ENOMEM);
+                GOTO(out_nolock, rc = -ENOMEM);
         LDLM_DEBUG(lock, "client-side enqueue START");
         /* for the local lock, add the reference */
         ldlm_lock_addref_internal(lock, mode);
@@ -95,7 +95,6 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         if (rc != ELDLM_OK) {
                 LDLM_DEBUG(lock, "client-side enqueue END (%s)",
                            rc == ELDLM_LOCK_ABORTED ? "ABORTED" : "FAILED");
-                LDLM_LOCK_PUT(lock);
                 ldlm_lock_decref(lockh, mode);
                 /* FIXME: if we've already received a completion AST, this will
                  * LBUG! */
@@ -152,9 +151,10 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                 LDLM_DEBUG(lock, "client-side enqueue waking up: granted");
         }
         LDLM_DEBUG(lock, "client-side enqueue END");
-        LDLM_LOCK_PUT(lock);
         EXIT;
  out:
+        LDLM_LOCK_PUT(lock);
+ out_nolock:
         return rc;
 }
 
@@ -291,9 +291,9 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
                            lock->l_req_mode == lock->l_granted_mode);
                 CDEBUG(D_NET, "waking up, the lock must be granted.\n");
         }
-        LDLM_LOCK_PUT(lock);
         EXIT;
  out:
+        LDLM_LOCK_PUT(lock);
         ptlrpc_free_req(req);
         return rc;
 }
@@ -336,8 +336,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 GOTO(out, rc);
 
         ldlm_lock_cancel(lock);
-        LDLM_LOCK_PUT(lock); 
         EXIT;
  out:
+        LDLM_LOCK_PUT(lock);
         return rc;
 }
