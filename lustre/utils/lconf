@@ -29,6 +29,7 @@ import sys, getopt
 import string, os, stat, popen2, socket
 import re, exceptions
 import xml.dom.minidom
+from xml.xpath import Evaluate
 
 # Global parameters
 TCP_ACCEPTOR = '../..//portals/linux/utils/acceptor'
@@ -406,10 +407,10 @@ class LOV(Module):
         self.pattern = int(devs.getAttribute('pattern'))
         mdcref =  node.getElementsByTagName('mdc_ref')[0]
         self.mdcuuid = mdcref.getAttribute('uuidref')
-        mdc= lookup(node.parentNode, mdcuuid)
+        mdc= lookup(node.parentNode, self.mdcuuid)
         mdsref =  mdc.getElementsByTagName('mds_ref')[0]
         self.mdsuuid = mdsref.getAttribute('uuidref')
-        mds= lookup(node.parentNode, mdsuuid)
+        mds= lookup(node.parentNode, self.mdsuuid)
         self.mdsname = getName(mds)
         devlist = ""
         stripe_cnt = 0
@@ -418,13 +419,20 @@ class LOV(Module):
                 devlist = devlist +  child.getAttribute('uuidref') + " "
                 strip_cnt = stripe_cnt + 1
         self.devlist = devlist
+        self.stripe_cnt = strip_cnt
 
     def prepare(self):
-        self.info(self.mdcuuid)
-        self.stripe_cnt, self.strip_sz, self.stripe_off, self.pattern,
-        self.devlist, self.mdsname
+        for osc_uuid in string.split(self.devlist):
+            osc = lookup(self.dom_node.parentNode, osc_uuid)
+            if osc:
+                n = OSC(osc)
+                n.prepare()
+            else:
+                panic('osc not found:', osc_uuid)
+        self.info(self.mdcuuid, self.stripe_cnt, self.stripe_sz, self.stripe_off, self.pattern,
+        self.devlist, self.mdsname)
         lctl.lovconfig(self.uuid, self.mdsname, self.stripe_cnt,
-                       self.strip_sz, self.stripe_off, self.pattern,
+                       self.stripe_sz, self.stripe_off, self.pattern,
                        self.devlist)
         lctl.newdev(attach="lov %s %s" % (self.name, self.uuid),
                     setup ="%s" % (self.mdcuuid))
@@ -450,26 +458,24 @@ class MDC(Module):
         Module.__init__(self, 'MDC', node)
         ref = node.getElementsByTagName('mds_ref')[0]
         self.mds_uuid = ref.getAttribute('uuidref')
-        ref = node.getElementsByTagName('network_ref')[0]
-        self.net_uuid = ref.getAttribute('uuidref')
 
     def prepare(self):
-        self.info(self.mds_uuid, self.net_uuid)
+        self.info(self.mds_uuid)
         mds = lookup(self.dom_node.parentNode, self.mds_uuid)
         if mds == None:
             panic(self.mdsuuid, "not found.")
-        net = lookup(self.dom_node.parentNode, self.net_uuid)
+        net = get_ost_net(self.dom_node.parentNode, self.mds_uuid)
         srv = Network(net)
-        lctl.connect(srv.net_type, srv.nid, srv.port, self.net_uuid, srv.send_buf, srv.read_buf)
+        lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_buf, srv.read_buf)
         lctl.newdev(attach="mdc %s %s" % (self.name, self.uuid),
-                        setup ="%s %s" %(self.mds_uuid, self.net_uuid))
+                        setup ="%s %s" %(self.mds_uuid, srv.uuid))
             
     def cleanup(self):
-        self.info(self.mds_uuid, self.net_uuid)
-        net = lookup(self.dom_node.parentNode, self.net_uuid)
+        self.info(self.mds_uuid)
+        net = get_ost_net(self.dom_node.parentNode, self.mds_uuid)
         srv = Network(net)
         try:
-            lctl.disconnect(srv.net_type, srv.nid, srv.port, self.net_uuid)
+            lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
             lctl.cleanup(self.name, self.uuid)
         except CommandError:
             print "cleanup failed: ", self.name
@@ -510,23 +516,23 @@ class OSC(Module):
         Module.__init__(self, 'OSC', node)
         ref = node.getElementsByTagName('obd_ref')[0]
         self.obd_uuid = ref.getAttribute('uuidref')
-        ref = node.getElementsByTagName('network_ref')[0]
+        ref = node.getElementsByTagName('ost_ref')[0]
         self.ost_uuid = ref.getAttribute('uuidref')
 
     def prepare(self):
         self.info(self.obd_uuid, self.ost_uuid)
-        net = lookup(self.dom_node.parentNode, self.ost_uuid)
+        net = get_ost_net(self.dom_node.parentNode, self.ost_uuid)
         srv = Network(net)
-        lctl.connect(srv.net_type, srv.nid, srv.port, self.ost_uuid, srv.send_buf, srv.read_buf)
+        lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_buf, srv.read_buf)
         lctl.newdev(attach="osc %s %s" % (self.name, self.uuid),
                     setup ="%s %s" %(self.obd_uuid, self.ost_uuid))
 
     def cleanup(self):
         self.info(self.obd_uuid, self.ost_uuid)
-        net = lookup(self.dom_node.parentNode, self.ost_uuid)
+        net_uuid = get_ost_net(self.dom_node.parentNode, self.ost_uuid)
         srv = Network(net)
         try:
-            lctl.disconnect(srv.net_type, srv.nid, srv.port, self.ost_uuid)
+            lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
             lctl.cleanup(self.name, self.uuid)
         except CommandError:
             print "cleanup failed: ", self.name
@@ -575,16 +581,36 @@ def getText(node, tag, default=""):
     else:
         return default
 
+def get_ost_net(node, uuid):
+    path = '//*[@uuid="%s"]/network_ref' % (uuid)
+    ret = Evaluate(path, node)
+    if ret:
+        uuid = ret[0].getAttribute('uuidref')
+    else:
+        return None
+    net = lookup(node, uuid)
+    return net
+    
+
 # Recusively search from node for a uuid
 def lookup(node, uuid):
-    for n in node.childNodes:
-        if n.nodeType == n.ELEMENT_NODE:
-            if getUUID(n) == uuid:
-                return n
-            else:
-                n = lookup(n, uuid)
-                if n: return n
-    return None
+    path = '//*[@uuid="%s"]' % (uuid)
+    ret = Evaluate(path, node)
+    if ret:
+        return ret[0]
+    else:
+        return None
+    
+# would like to do performance test on these two lookups
+#def lookup(node, uuid):
+#    for n in node.childNodes:
+#        if n.nodeType == n.ELEMENT_NODE:
+#            if getUUID(n) == uuid:
+#                return n
+#            else:
+#                n = lookup(n, uuid)
+#                if n: return n
+#    return None
 
 # Get name attribute of node
 def getName(node):
@@ -652,7 +678,7 @@ def getByName(lustreNode, tag, name):
 # ============================================================
 # lconf level logic
 # Start a service.
-def startService(node, start=1):
+def startService(node, cleanFlag):
     type = getServiceType(node)
     debug('Starting service:', type, getName(node), getUUID(node))
     # there must be a more dynamic way of doing this...
@@ -678,10 +704,10 @@ def startService(node, start=1):
     else:
         panic ("unknown service type:", type)
 
-    if start:
-        n.prepare()
-    else:
+    if cleanFlag:
         n.cleanup()
+    else:
+        n.prepare()
 
 #
 # Prepare the system to run lustre using a particular profile
@@ -691,22 +717,14 @@ def startService(node, start=1):
 #  * make sure partitions are in place and prepared
 #  * initialize devices with lctl
 # Levels is important, and needs to be enforced.
-def startProfile(lustreNode, profileNode):
+def startProfile(lustreNode, profileNode, cleanFlag):
     if not profileNode:
         panic("profile:", profile, "not found.")
     services = getServices(lustreNode, profileNode)
+    if cleanFlag:
+        services.reverse()
     for s in services:
-        startService(s[1])
-
-
-# Shutdown services in reverse order than they were started
-def cleanupProfile(lustreNode, profileNode):
-    if not profileNode:
-        panic("profile:", profile, "not found.")
-    services = getServices(lustreNode, profileNode)
-    services.reverse()
-    for s in services:
-        startService(s[1], 0)
+        startService(s[1], cleanFlag)
 
 #
 # Load profile for 
@@ -721,12 +739,9 @@ def doHost(lustreNode, hosts, cleanFlag):
         print 'No host entry found.'
         return
 
-    reflist = node.getElementsByTagName('profile_ref')
-    for r in reflist:
-        if cleanFlag:
-            cleanupProfile(lustreNode, lookup(lustreNode, getRef(r)))
-        else:
-            startProfile(lustreNode,  lookup(lustreNode, getRef(r)))
+    reflist = node.getElementsByTagName('profile')
+    for profile in reflist:
+            startProfile(lustreNode,  profile, cleanFlag)
 
 # Command line processing
 #
