@@ -1,6 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -18,13 +19,12 @@
  *           1 failure */
 int main(int argc, char**argv)
 {
-        int  p_size,j;
+        int p_size;
         unsigned int offset;
         char *filename;
         int fd;
         char buf[] = "+++";
         char *end;
-        struct stat Fstat;
 
         if(argc != 3) {
                 fprintf(stderr, "Usage: %s <filename> <offset>(KB)\n", argv[0]);
@@ -55,4 +55,5 @@ int main(int argc, char**argv)
         }
                 
         close(fd);
+        return 0;
 }
