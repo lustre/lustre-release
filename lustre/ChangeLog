@@ -58,6 +58,7 @@
 	- disable VM readahead to avoid reading outside lock extents (2805)
        * miscellania
 	- return LL_SUPER_MAGIC from statfs for the filesystem type (1972)
+	- updated kernel patches for hp-2.4.20 kernel (2681)
 
 2004-02-07  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.4
