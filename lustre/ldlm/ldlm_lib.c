@@ -746,10 +746,9 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                 obd_postsetup(obd);
                 /* when recovering finished, cleanup orphans for mds       */
                 if (OBT(obd) && OBP(obd, postrecov)) {
-                        CERROR("cleanup orphans after all clients recovered\n");
                         rc2 = OBP(obd, postrecov)(obd);
-                        //LASSERT(rc2 == 0);
-                        CERROR("cleanup %d orphans\n", rc2);
+                        CERROR("%s: all clients recovered, %d MDS orphans "
+                               "deleted\n", obd->obd_name, rc2);
                 }
 
                 list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
