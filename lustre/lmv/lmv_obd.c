@@ -1179,7 +1179,6 @@ int lmv_sync(struct obd_export *exp, struct ll_fid *fid,
 	if (rc)
 		RETURN(rc);
 
-        CWARN("%s: ->m_sync() isn't implemented yet\n", obd->obd_name);
         rc = md_sync(lmv->tgts[fid->mds].ltd_exp, fid, request); 
         RETURN(rc);
 }
