@@ -16,6 +16,7 @@
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <linux/module.h>
+#include <linux/pagemap.h>
 #include <linux/lustre_dlm.h>
 #include <linux/obd_filter.h>
 #include <linux/ext3_jbd.h>
