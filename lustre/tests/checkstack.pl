@@ -1,21 +1,21 @@
 #!/usr/bin/perl
-
 #	Check the stack usage of functions
 #
 #	Copyright Joern Engel <joern@wh.fh-wedel.de>
 #	Inspired by Linus Torvalds
 #	Original idea maybe from Keith Owens
+#	s390 port and big speedup by Arnd Bergmann <arnd@bergmann-dalldorf.de>
+#	Modified to have simpler output format by Dan Kegel
 #
 #	Usage:
-#	objdump -d vmlinux | checkstack.pl <arch>
+#	objdump -d vmlinux | stackcheck.pl [arch]
 #
 #	find <moduledir> -name "*.o" | while read M; do
 #		objdump -d $M | perl ~/checkstack.pl <arch> | \
 #			sed "s/^/`basename $M`: /" ; done | \
 #	awk '/esp/ { print $5, $2, $4 }' | sort -nr
-#
+
 #	TODO :	Port to all architectures (one regex per arch)
-#		Speed this puppy up
 
 # check for arch
 # 
@@ -27,66 +27,57 @@
 # use anything else and feel the pain ;)
 {
 	my $arch = shift;
-	$x	= "[0-9a-f]";	# hex character
-	$xs	= "[0-9a-f ]";	# hex character or space
+	$x	= "[0-9a-f]{3,5}";		# hex number     >= 256
+	$d	= "([0-9]{2}|[2-9])[0-9]{2}";	# decimal number >= 200
+	if ($arch eq "") {
+		$arch = `uname -m`;
+	}
 	if ($arch =~ /^i[3456]86$/) {
 		#c0105234:       81 ec ac 05 00 00       sub    $0x5ac,%esp
-		$re = qr/^.*(sub/s\$(0x$x{3,5}),\%esp)$/o;
+		$re = qr/^.*(sub    \$(0x$x),\%esp)$/o;
+		$todec = sub { return hex($_[0]); };
 	} elsif ($arch =~ /^ia64$/) {
-		#                                        adds r12=-384,r12
-		$re = qr/.*(adds/sr12=-($x{3,5}),r12)/o;
+		#e0000000044011fc:       01 0f fc 8c     adds r12=-384,r12
+		$re = qr/.*(adds.*r12=-($d),r12)/o;
+		$todec = sub { return $_[0]; };
+	} elsif ($arch =~ /^mips64$/) {
+		#8800402c:       67bdfff0        daddiu  sp,sp,-16
+		$re = qr/.*(daddiu.*sp,sp,-($d))/o;
+		$todec = sub { return $_[0]; };
+	} elsif ($arch =~ /^mips$/) {
+		#88003254:       27bdffe0        addiu   sp,sp,-32
+		$re = qr/.*(addiu.*sp,sp,-($d))/o;
+		$todec = sub { return $_[0]; };
 	} elsif ($arch =~ /^ppc$/) {
 		#c00029f4:       94 21 ff 30     stwu    r1,-208(r1)
-		$re = qr/.*(stwu/sr1,-($x{3,5})\(r1\))/o;
+		$re = qr/.*(stwu.*r1,-($x)\(r1\))/o;
+		$todec = sub { return hex($_[0]); };
 	} elsif ($arch =~ /^s390x?$/) {
 		#   11160:       a7 fb ff 60             aghi   %r15,-160
-		$re = qr/.*(ag?hi.*\%r15,-(([0-9]{2}|[3-9])[0-9]{2}))/o;
+		$re = qr/.*(ag?hi.*\%r15,-($d))/o;
+		$todec = sub { return $_[0]; };
 	} else {
-		print("wrong or unknown architecture\n");
-		exit
+		print "Usage:  objdump -d vmlinux | checkstack.pl [arch]\n";
+		print "where arch is i386, ia64, mips, mips64, ppc, or s390\n";
+		print "Each output line gives a function's stack usage, name\n";
+		print "Lines are output in order of decreasing stack usage\n";
+		die("wrong or unknown architecture\n");
 	}
 }
 
-sub bysize($) {
-	($asize = $a) =~ s/$re/\2/;
-	($bsize = $b) =~ s/$re/\2/;
-	$bsize <=> $asize
-}
-
-#
-# main()
-#
-$funcre = qr/^$x* \<(.*)\>:$/;
+$funcre = qr/^[0-9a-f]* \<(.*)\>:$/;
 while ($line = <STDIN>) {
 	if ($line =~ m/$funcre/) {
 		($func = $line) =~ s/$funcre/\1/;
 		chomp($func);
 	}
-
 	if ($line =~ m/$re/) {
-		(my $addr = $line) =~ s/^($xs{8}).*/0x\1/o;
-		chomp($addr);
-
-		my $intro = "$addr $func:";
-		my $padlen = 56 - length($intro);
-		while ($padlen > 0) {
-			$intro .= '	';
-			$padlen -= 8;
-		}
-		(my $code = $line) =~ s/$re/\1/;
-
-		$stack[@stack] = "$intro $code";
+		push(@stack, &$todec($2)." ".$func);
+		# don't expect more than one stack allocation per function
+		$func .= " ** bug **";
 	}
 }
 
-@sortedstack = sort bysize @stack;
-
-foreach $i (@sortedstack) {
-	print("$i");
+foreach (sort { $b - $a } (@stack)) {
+	print $_."\n";
 }
---
-Andreas Dilger
-http://sourceforge.net/projects/ext2resize/
-http://www-mddsp.enel.ucalgary.ca/People/adilger/
-
-
