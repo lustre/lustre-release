@@ -14,7 +14,7 @@ ALWAYS_EXCEPT="10"
 
 build_test_filter
 
-assert_env mds_HOST ost1_HOST ost2_HOST client_HOST LIVE_CLIENT 
+assert_env MDSCOUNT mds1_HOST ost1_HOST ost2_HOST client_HOST LIVE_CLIENT 
 
 ####
 # Initialize all the ostN_HOST 
@@ -109,22 +109,32 @@ reintegrate_clients() {
 
 gen_config() {
     rm -f $XMLCONFIG
-    add_mds mds --dev $MDSDEV --size $MDSSIZE --journal-size $MDSJOURNALSIZE
-
-    if [ ! -z "$mdsfailover_HOST" ]; then
-	 add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
+    if [ "$MDSCOUNT" -gt 1 ]; then
+        add_lmv lmv1
+        for mds in `mds_list`; do
+            MDSDEV=$TMP/${mds}-`hostname`
+            add_mds $mds --dev $MDSDEV --size $MDSSIZE --lmv lmv1
+        done
+	MDS=lmv1
+        add_lov_to_lmv lov1 lmv1 --stripe_sz $STRIPE_BYTES \
+	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+    else
+        add_mds mds1 --dev $MDSDEV --size $MDSSIZE
+        if [ ! -z "$mds1failover_HOST" ]; then
+	     add_mdsfailover mds1 --dev $MDSDEV --size $MDSSIZE
+        fi
+	add_lov lov1 mds1 --stripe_sz $STRIPE_BYTES \
+	    --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+	MDS=mds1_svc
     fi
 
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
-	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
     for i in `seq $NUMOST`; do
 	dev=`printf $OSTDEV $i`
 	add_ost ost$i --lov lov1 --dev $dev --size $OSTSIZE \
 	    --journal-size $OSTJOURNALSIZE
     done
      
-
-    add_client client mds --lov lov1 --path $MOUNT
+    add_client client --mds $MDS --lov lov1 --path $MOUNT
 }
 
 setup() {
@@ -134,8 +144,10 @@ setup() {
 	start ost$i ${REFORMAT} $OSTLCONFARGS 
     done
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-    wait_for mds
-    start mds $MDSLCONFARGS ${REFORMAT}
+    for mds in `mds_list`; do
+	wait_for $mds
+	start $mds $MDSLCONFARGS ${REFORMAT}
+    done
     while ! do_node $CLIENTS "ls -d $LUSTRE" > /dev/null; do sleep 5; done
     grep " $MOUNT " /proc/mounts || zconf_mount $CLIENTS $MOUNT
 
@@ -144,7 +156,9 @@ setup() {
 cleanup() {
     zconf_umount $CLIENTS $MOUNT
 
-    stop mds ${FORCE} $MDSLCONFARGS || :
+    for mds in `mds_list`; do
+	stop $mds ${FORCE} $MDSLCONFARGS || :
+    done
     for i in `seq $NUMOST`; do
 	stop ost$i ${REFORMAT} ${FORCE} $OSTLCONFARGS  || :
     done
@@ -228,7 +242,7 @@ echo "Starting Test 17 at `date`"
 
 test_0() {
     echo "Failover MDS"
-    facet_failover mds
+    facet_failover mds1
     echo "Waiting for df pid: $DFPID"
     wait $DFPID || return 1
 
@@ -259,12 +273,12 @@ test_2() {
     client_df
 
     echo "Failing MDS"
-    shutdown_facet mds
-    reboot_facet mds
+    shutdown_facet mds1
+    reboot_facet mds1
 
     # prepare for MDS failover
-    change_active mds
-    reboot_facet mds
+    change_active mds1
+    reboot_facet mds1
 
     client_df &
     DFPID=$!
@@ -279,8 +293,8 @@ test_2() {
     start ost1
 
     echo "Failover MDS"
-    wait_for mds
-    start mds
+    wait_for mds1
+    start mds1
 
     #Check FS
     wait $DFPID
@@ -299,7 +313,7 @@ test_3() {
     echo "Verify Lustre filesystem is up and running"
     
     #MDS Portion
-    facet_failover mds
+    facet_failover mds1
     wait $DFPID || echo df failed: $?
     #Check FS
 
@@ -337,12 +351,12 @@ test_4() {
 
     #MDS Portion
     echo "Failing MDS"
-    shutdown_facet mds
-    reboot_facet mds
+    shutdown_facet mds1
+    reboot_facet mds1
 
     # prepare for MDS failover
-    change_active mds
-    reboot_facet mds
+    change_active mds1
+    reboot_facet mds1
 
     client_df &
     DFPID=$!
@@ -355,8 +369,8 @@ test_4() {
     start ost1
     
     echo "Failover MDS"
-    wait_for mds
-    start mds
+    wait_for mds1
+    start mds1
     #Check FS
     
     wait $DFPID
@@ -479,7 +493,7 @@ test_7() {
 
     #MDS Portion
     echo "Failing MDS"
-    facet_failover mds
+    facet_failover mds1
 
     #Check FS
     echo "Test Lustre stability after MDS failover"

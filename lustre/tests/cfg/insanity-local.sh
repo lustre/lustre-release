@@ -1,5 +1,6 @@
-mds_HOST=${mds_HOST:-`hostname`}
-mdsfailover_HOST=${mdsfailover_HOST:-""}
+MDSCOUNT=${MDSCOUNT:-1}
+mds1_HOST=${mds1_HOST:-`hostname`}
+mds1failover_HOST=${mds1failover_HOST:-""}
 ost1_HOST=${ost1_HOST:-"`hostname`"}
 ost2_HOST=${ost2_HOST:-"`hostname`"}
 EXTRA_OSTS=${EXTRA_OSTS:-"`hostname`"}
