@@ -31,139 +31,6 @@
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_mds.h>
 
-int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
-{
-        struct ptlrpc_connection *conn;
-        struct obd_ioctl_data* data = buf;
-        struct client_obd *cli = &obddev->u.cli;
-        struct obd_import *imp;
-        struct obd_uuid server_uuid;
-        int rq_portal, rp_portal, connect_op;
-        char *name;
-        ENTRY;
-
-        if (obddev->obd_type->typ_ops->o_brw) {
-                rq_portal = OST_REQUEST_PORTAL;
-                rp_portal = OSC_REPLY_PORTAL;
-                name = "osc";
-                connect_op = OST_CONNECT;
-        } else {
-                rq_portal = MDS_REQUEST_PORTAL;
-                rp_portal = MDC_REPLY_PORTAL;
-                name = "mdc";
-                connect_op = MDS_CONNECT;
-        }
-
-        if (data->ioc_inllen1 < 1) {
-                CERROR("requires a TARGET UUID\n");
-                RETURN(-EINVAL);
-        }
-
-        if (data->ioc_inllen1 > 37) {
-                CERROR("client UUID must be less than 38 characters\n");
-                RETURN(-EINVAL);
-        }
-
-        if (data->ioc_inllen2 < 1) {
-                CERROR("setup requires a SERVER UUID\n");
-                RETURN(-EINVAL);
-        }
-
-        if (data->ioc_inllen2 > 37) {
-                CERROR("target UUID must be less than 38 characters\n");
-                RETURN(-EINVAL);
-        }
-
-        sema_init(&cli->cl_sem, 1);
-        cli->cl_conn_count = 0;
-        memcpy(server_uuid.uuid, data->ioc_inlbuf2, MIN(data->ioc_inllen2,
-                                                        sizeof(server_uuid)));
-
-        conn = ptlrpc_uuid_to_connection(&server_uuid);
-        if (conn == NULL)
-                RETURN(-ENOENT);
-
-        ptlrpc_init_client(rq_portal, rp_portal, name,
-                           &obddev->obd_ldlm_client);
-
-        imp = class_new_import();
-        if (imp == NULL) {
-                ptlrpc_put_connection(conn);
-                RETURN(-ENOMEM);
-        }
-        imp->imp_connection = conn;
-        imp->imp_client = &obddev->obd_ldlm_client;
-        imp->imp_obd = obddev;
-        imp->imp_connect_op = connect_op;
-        imp->imp_generation = 0;
-        memcpy(imp->imp_target_uuid.uuid, data->ioc_inlbuf1, data->ioc_inllen1);
-        class_import_put(imp);
-
-        cli->cl_import = imp;
-        cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
-        cli->cl_sandev = to_kdev_t(0);
-
-        RETURN(0);
-}
-
-int client_obd_cleanup(struct obd_device *obddev, int force, int failover)
-{
-        struct client_obd *client = &obddev->u.cli;
-
-        if (!client->cl_import)
-                RETURN(-EINVAL);
-        class_destroy_import(client->cl_import);
-        client->cl_import = NULL;
-        RETURN(0);
-}
-
-#ifdef __KERNEL__
-/* convert a pathname into a kdev_t */
-static kdev_t path2dev(char *path)
-{
-        struct dentry *dentry;
-        struct nameidata nd;
-        kdev_t dev;
-        KDEVT_VAL(dev, 0);
-
-        if (!path_init(path, LOOKUP_FOLLOW, &nd))
-                return 0;
-
-        if (path_walk(path, &nd))
-                return 0;
-
-        dentry = nd.dentry;
-        if (dentry->d_inode && !is_bad_inode(dentry->d_inode) &&
-            S_ISBLK(dentry->d_inode->i_mode))
-                dev = dentry->d_inode->i_rdev;
-        path_release(&nd);
-
-        return dev;
-}
-
-int client_sanobd_setup(struct obd_device *obddev, obd_count len, void *buf)
-{
-        struct obd_ioctl_data* data = buf;
-        struct client_obd *cli = &obddev->u.cli;
-        ENTRY;
-
-        if (data->ioc_inllen3 < 1) {
-                CERROR("setup requires a SAN device pathname\n");
-                RETURN(-EINVAL);
-        }
-
-        client_obd_setup(obddev, len, buf);
-
-        cli->cl_sandev = path2dev(data->ioc_inlbuf3);
-        if (!kdev_t_to_nr(cli->cl_sandev)) {
-                CERROR("%s seems not a valid SAN device\n", data->ioc_inlbuf3);
-                RETURN(-EINVAL);
-        }
-
-        RETURN(0);
-}
-#endif
-
 int client_import_connect(struct lustre_handle *conn, struct obd_device *obd,
                           struct obd_uuid *cluuid)
 {
@@ -287,12 +154,12 @@ int client_import_disconnect(struct lustre_handle *conn, int failover)
                 request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
                 if (!request)
                         GOTO(out_req, rc = -ENOMEM);
-                
+
                 request->rq_replen = lustre_msg_size(0, NULL);
-                
+
                 /* Process disconnects even if we're waiting for recovery. */
                 request->rq_level = LUSTRE_CONN_RECOVD;
-                
+
                 rc = ptlrpc_queue_wait(request);
                 if (rc)
                         GOTO(out_req, rc);
@@ -309,240 +176,6 @@ int client_import_disconnect(struct lustre_handle *conn, int failover)
  out_sem:
         up(&cli->cl_sem);
         RETURN(rc);
-}
-
-/* Debugging check only needed during development */
-#ifdef OBD_CTXT_DEBUG
-# define ASSERT_CTXT_MAGIC(magic) LASSERT((magic) == OBD_RUN_CTXT_MAGIC)
-# define ASSERT_NOT_KERNEL_CTXT(msg) LASSERT(!segment_eq(get_fs(), get_ds()))
-# define ASSERT_KERNEL_CTXT(msg) LASSERT(segment_eq(get_fs(), get_ds()))
-#else
-# define ASSERT_CTXT_MAGIC(magic) do {} while(0)
-# define ASSERT_NOT_KERNEL_CTXT(msg) do {} while(0)
-# define ASSERT_KERNEL_CTXT(msg) do {} while(0)
-#endif
-
-/* push / pop to root of obd store */
-void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
-               struct obd_ucred *uc)
-{
-        //ASSERT_NOT_KERNEL_CTXT("already in kernel context!\n");
-        ASSERT_CTXT_MAGIC(new_ctx->magic);
-        OBD_SET_CTXT_MAGIC(save);
-
-        /*
-        CDEBUG(D_INFO,
-               "= push %p->%p = cur fs %p pwd %p:d%d:i%d (%*s), pwdmnt %p:%d\n",
-               save, current, current->fs, current->fs->pwd,
-               atomic_read(&current->fs->pwd->d_count),
-               atomic_read(&current->fs->pwd->d_inode->i_count),
-               current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
-               current->fs->pwdmnt,
-               atomic_read(&current->fs->pwdmnt->mnt_count));
-        */
-
-        save->fs = get_fs();
-        LASSERT(atomic_read(&current->fs->pwd->d_count));
-        LASSERT(atomic_read(&new_ctx->pwd->d_count));
-        save->pwd = dget(current->fs->pwd);
-        save->pwdmnt = mntget(current->fs->pwdmnt);
-
-        LASSERT(save->pwd);
-        LASSERT(save->pwdmnt);
-        LASSERT(new_ctx->pwd);
-        LASSERT(new_ctx->pwdmnt);
-
-        if (uc) {
-                save->fsuid = current->fsuid;
-                save->fsgid = current->fsgid;
-                save->cap = current->cap_effective;
-
-                current->fsuid = uc->ouc_fsuid;
-                current->fsgid = uc->ouc_fsgid;
-                current->cap_effective = uc->ouc_cap;
-                if (uc->ouc_suppgid1 != -1)
-                        current->groups[current->ngroups++] = uc->ouc_suppgid1;
-                if (uc->ouc_suppgid2 != -1)
-                        current->groups[current->ngroups++] = uc->ouc_suppgid2;
-        }
-        set_fs(new_ctx->fs);
-        set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
-
-        /*
-        CDEBUG(D_INFO,
-               "= push %p->%p = cur fs %p pwd %p:d%d:i%d (%*s), pwdmnt %p:%d\n",
-               new_ctx, current, current->fs, current->fs->pwd,
-               atomic_read(&current->fs->pwd->d_count),
-               atomic_read(&current->fs->pwd->d_inode->i_count),
-               current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
-               current->fs->pwdmnt,
-               atomic_read(&current->fs->pwdmnt->mnt_count));
-        */
-}
-
-void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
-              struct obd_ucred *uc)
-{
-        //printk("pc0");
-        ASSERT_CTXT_MAGIC(saved->magic);
-        //printk("pc1");
-        ASSERT_KERNEL_CTXT("popping non-kernel context!\n");
-
-        /*
-        CDEBUG(D_INFO,
-               " = pop  %p==%p = cur %p pwd %p:d%d:i%d (%*s), pwdmnt %p:%d\n",
-               new_ctx, current, current->fs, current->fs->pwd,
-               atomic_read(&current->fs->pwd->d_count),
-               atomic_read(&current->fs->pwd->d_inode->i_count),
-               current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
-               current->fs->pwdmnt,
-               atomic_read(&current->fs->pwdmnt->mnt_count));
-        */
-
-        LASSERT(current->fs->pwd == new_ctx->pwd);
-        LASSERT(current->fs->pwdmnt == new_ctx->pwdmnt);
-
-        set_fs(saved->fs);
-        set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
-
-        dput(saved->pwd);
-        mntput(saved->pwdmnt);
-        if (uc) {
-                current->fsuid = saved->fsuid;
-                current->fsgid = saved->fsgid;
-                current->cap_effective = saved->cap;
-
-                if (uc->ouc_suppgid1 != -1)
-                        current->ngroups--;
-                if (uc->ouc_suppgid2 != -1)
-                        current->ngroups--;
-        }
-
-        /*
-        CDEBUG(D_INFO,
-               "= pop  %p->%p = cur fs %p pwd %p:d%d:i%d (%*s), pwdmnt %p:%d\n",
-               saved, current, current->fs, current->fs->pwd,
-               atomic_read(&current->fs->pwd->d_count),
-               atomic_read(&current->fs->pwd->d_inode->i_count),
-               current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
-               current->fs->pwdmnt,
-               atomic_read(&current->fs->pwdmnt->mnt_count));
-        */
-}
-
-/* utility to make a file */
-struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
-{
-        struct dentry *dchild;
-        int err = 0;
-        ENTRY;
-
-        ASSERT_KERNEL_CTXT("kernel doing mknod outside kernel context\n");
-        CDEBUG(D_INODE, "creating file %*s\n", (int)strlen(name), name);
-
-        dchild = lookup_one_len(name, dir, strlen(name));
-        if (IS_ERR(dchild))
-                GOTO(out_up, dchild);
-
-        if (dchild->d_inode) {
-                if ((dchild->d_inode->i_mode & S_IFMT) != S_IFREG)
-                        GOTO(out_err, err = -EEXIST);
-
-                GOTO(out_up, dchild);
-        }
-
-        err = vfs_create(dir->d_inode, dchild, (mode & ~S_IFMT) | S_IFREG);
-        if (err)
-                GOTO(out_err, err);
-
-        RETURN(dchild);
-
-out_err:
-        dput(dchild);
-        dchild = ERR_PTR(err);
-out_up:
-        return dchild;
-}
-
-/* utility to make a directory */
-struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
-{
-        struct dentry *dchild;
-        int err = 0;
-        ENTRY;
-
-        ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
-        CDEBUG(D_INODE, "creating directory %*s\n", (int)strlen(name), name);
-        dchild = lookup_one_len(name, dir, strlen(name));
-        if (IS_ERR(dchild))
-                GOTO(out_up, dchild);
-
-        if (dchild->d_inode) {
-                if (!S_ISDIR(dchild->d_inode->i_mode))
-                        GOTO(out_err, err = -ENOTDIR);
-
-                GOTO(out_up, dchild);
-        }
-
-        err = vfs_mkdir(dir->d_inode, dchild, mode);
-        if (err)
-                GOTO(out_err, err);
-
-        RETURN(dchild);
-
-out_err:
-        dput(dchild);
-        dchild = ERR_PTR(err);
-out_up:
-        return dchild;
-}
-
-/*
- * Read a file from within kernel context.  Prior to calling this
- * function we should already have done a push_ctxt().
- */
-int lustre_fread(struct file *file, char *str, int len, loff_t *off)
-{
-        ASSERT_KERNEL_CTXT("kernel doing read outside kernel context\n");
-        if (!file || !file->f_op || !file->f_op->read || !off)
-                RETURN(-ENOSYS);
-
-        return file->f_op->read(file, str, len, off);
-}
-
-/*
- * Write a file from within kernel context.  Prior to calling this
- * function we should already have done a push_ctxt().
- */
-int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off)
-{
-        ENTRY;
-        ASSERT_KERNEL_CTXT("kernel doing write outside kernel context\n");
-        if (!file)
-                RETURN(-ENOENT);
-        if (!file->f_op)
-                RETURN(-ENOSYS);
-        if (!off)
-                RETURN(-EINVAL);
-
-        if (!file->f_op->write)
-                RETURN(-EROFS);
-
-        RETURN(file->f_op->write(file, str, len, off));
-}
-
-/*
- * Sync a file from within kernel context.  Prior to calling this
- * function we should already have done a push_ctxt().
- */
-int lustre_fsync(struct file *file)
-{
-        ENTRY;
-        ASSERT_KERNEL_CTXT("kernel doing sync outside kernel context\n");
-        if (!file || !file->f_op || !file->f_op->fsync)
-                RETURN(-ENOSYS);
-
-        RETURN(file->f_op->fsync(file, file->f_dentry, 0));
 }
 
 /* --------------------------------------------------------------------------
@@ -626,7 +259,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         }
 
         /* XXX extract a nettype and format accordingly */
-        snprintf(remote_uuid.uuid, sizeof remote_uuid, 
+        snprintf(remote_uuid.uuid, sizeof remote_uuid,
                  "NET_"LPX64"_UUID", req->rq_peer.peer_nid);
 
         spin_lock_bh(&target->obd_processing_task_lock);
@@ -764,7 +397,7 @@ int target_handle_disconnect(struct ptlrpc_request *req)
 }
 
 /*
- * Recovery functions 
+ * Recovery functions
  */
 
 void target_cancel_recovery_timer(struct obd_device *obd)
@@ -971,7 +604,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 
         /* If we're processing the queue, we want don't want to queue this
          * message.
-         * 
+         *
          * Also, if this request has a transno less than the one we're waiting
          * for, we should process it now.  It could (and currently always will)
          * be an open request for a descriptor that was opened some time ago.
@@ -1162,7 +795,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         wait_queue_t commit_wait;
         struct obd_device *obd =
                 req->rq_export ? req->rq_export->exp_obd : NULL;
-        struct obd_export *exp = 
+        struct obd_export *exp =
                 (req->rq_export && req->rq_ack_locks[0].mode) ?
                 req->rq_export : NULL;
 
