@@ -117,8 +117,6 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
                 goto prepare_done;
         }
 
-        /* prepare write should not read what lies beyond the end of
-           the file */
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
 
         EXIT;
@@ -146,7 +144,7 @@ static int ll_writepage(struct page *page)
         } else {
                 CERROR("ll_brw failure %d\n", err);
         }
-        UnlockPage(page);
+        unlock_page(page);
         RETURN(err);
 }
 
@@ -162,7 +160,7 @@ static int ll_commit_write(struct file *file, struct page *page,
         struct lov_stripe_md *md = lli->lli_smd;
         struct brw_page pg;
         int err;
-        struct iattr iattr;
+        loff_t size;
         struct io_cb_data *cbd = ll_init_cb();
 
         pg.pg = page;
@@ -186,19 +184,11 @@ static int ll_commit_write(struct file *file, struct page *page,
                       1, &pg, ll_sync_io_cb, cbd);
         kunmap(page);
 
-        iattr.ia_size = pg.off + pg.count;
-        if (iattr.ia_size > inode->i_size) {
-                /* do NOT truncate when writing in the middle of a file */
-                inode->i_size = iattr.ia_size;
-                iattr.ia_valid = ATTR_SIZE;
-#if 0
-                err = ll_inode_setattr(inode, &iattr, 0);
-                if (err) {
-                        CERROR("failed - %d.\n", err);
-                        err = -EIO;
-                }
-#endif
-        }
+        size = pg.off + pg.count;
+        /* do NOT truncate when writing in the middle of a file */
+        if (size > inode->i_size)
+                inode->i_size = size;
+
         RETURN(err);
 } /* ll_commit_write */
 
@@ -237,11 +227,7 @@ void ll_truncate(struct inode *inode)
         if (err)
                 CERROR("obd_truncate fails (%d)\n", err);
         else
-                /* This is done for us at the OST and MDS, but the
-                 * updated timestamps are not sent back to us.
-                 * Needed for POSIX.
-                 */
-                inode->i_mtime = inode->i_ctime = CURRENT_TIME;
+                obdo_to_inode(inode, &oa, oa.o_valid);
 
         err = ll_size_unlock(inode, md, LCK_PW, lockhs);
         if (err)
