@@ -45,7 +45,7 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
         ENTRY;
 
         err = obd_brw(rw, ll_i2obdconn(inode), md, 1,
-                      &page, &count, &offset, &flags, NULL);
+                      &page, &count, &offset, &flags, NULL, NULL);
         RETURN(err);
 } /* ll_brw */
 
@@ -161,11 +161,11 @@ static int ll_commit_write(struct file *file, struct page *page,
         if (!PageLocked(page))
                 LBUG();
 
-        CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
+        CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n",
                from, to, (unsigned long long)count);
 
-        err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), md, 
-                      1, &page, &count, &offset, &flags, NULL);
+        err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), md,
+                      1, &page, &count, &offset, &flags, NULL, NULL);
         kunmap(page);
 
         iattr.ia_size = offset + to;
@@ -257,7 +257,7 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
 
         rc = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
                      ll_i2obdconn(inode), md, bufs_per_obdo,
-                     iobuf->maplist, count, offset, flags, NULL);
+                     iobuf->maplist, count, offset, flags, NULL, NULL);
         if (rc == 0)
                 rc = bufs_per_obdo * PAGE_SIZE;
 
@@ -271,10 +271,7 @@ out:
 
 int ll_flush_inode_pages(struct inode * inode)
 {
-        //int i;
-        //        obd_count        num_obdo = 1;
         obd_count        bufs_per_obdo = 0;
-        struct obdo     *oa = NULL;
         obd_size         *count = NULL;
         obd_off          *offset = NULL;
         obd_flag         *flags = NULL;
@@ -294,23 +291,19 @@ int ll_flush_inode_pages(struct inode * inode)
                 GOTO(out, err=-ENOMEM);
 
 #if 0
-        for (i = 0 ; i < bufs_per_obdo ; i++) { 
+        for (i = 0 ; i < bufs_per_obdo ; i++) {
                 count[i] = PAGE_SIZE;
                 offset[i] = ((obd_off)(iobuf->maplist[i])->index) << PAGE_SHIFT;
                 flags[i] = OBD_BRW_CREATE;
         }
 
-        oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
-        if (!oa)
-                RETURN(-ENOMEM);
-
-        err = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
-                      iobuf->maplist, count, offset, flags);
-        if (err == 0) 
+        err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode),
+                      ll_i2info(inode)->lli_smd, bufs_per_obdo,
+                      iobuf->maplist, count, offset, flags, NULL, NULL);
+        if (err == 0)
                 err = bufs_per_obdo * 4096;
 #endif
  out:
-        obdo_free(oa);
         OBD_FREE(flags, sizeof(*flags) * bufs_per_obdo);
         OBD_FREE(count, sizeof(*count) * bufs_per_obdo);
         OBD_FREE(offset, sizeof(*offset) * bufs_per_obdo);
@@ -326,7 +319,7 @@ struct address_space_operations ll_aops = {
         direct_IO: ll_direct_IO,
 #endif
         sync_page: block_sync_page,
-        prepare_write: ll_prepare_write, 
+        prepare_write: ll_prepare_write,
         commit_write: ll_commit_write,
         bmap: NULL
 };

@@ -334,7 +334,7 @@ static inline int obd_brw(int cmd, struct lustre_handle *conn,
                           obd_size *count, 
                           obd_off *offset,
                           obd_flag *flags, 
-                          void *callback)
+                          brw_callback_t callback, void *data)
 {
         int rc;
         struct obd_export *export;
@@ -347,7 +347,7 @@ static inline int obd_brw(int cmd, struct lustre_handle *conn,
         }
 
         rc = OBP(export->exp_obd, brw)(cmd, conn, md, oa_bufs, buf,
-                                    count, offset, flags, callback);
+                                       count, offset, flags, callback, data);
         RETURN(rc);
 }
 

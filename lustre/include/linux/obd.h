@@ -209,14 +209,14 @@ struct obd_device {
         } u;
 };
 
+typedef void (*brw_callback_t)(void *);
+
 struct obd_ops {
-        int (*o_iocontrol)(long cmd, struct lustre_handle *, int len, void *karg,
-                           void *uarg);
-        int (*o_get_info)(struct lustre_handle *, 
-                          obd_count keylen, void *key,
+        int (*o_iocontrol)(long cmd, struct lustre_handle *, int len,
+                           void *karg, void *uarg);
+        int (*o_get_info)(struct lustre_handle *, obd_count keylen, void *key,
                           obd_count *vallen, void **val);
-        int (*o_set_info)(struct lustre_handle *, 
-                          obd_count keylen, void *key,
+        int (*o_set_info)(struct lustre_handle *, obd_count keylen, void *key,
                           obd_count vallen, void *val);
         int (*o_attach)(struct obd_device *dev, obd_count len, void *data);
         int (*o_detach)(struct obd_device *dev);
@@ -227,10 +227,11 @@ struct obd_ops {
 
 
         int (*o_statfs)(struct lustre_handle *conn, struct statfs *statfs);
-        int (*o_preallocate)(struct lustre_handle *, obd_count *req, obd_id *ids);
-        int (*o_create)(struct lustre_handle *conn,  struct obdo *oa, 
+        int (*o_preallocate)(struct lustre_handle *, obd_count *req,
+                             obd_id *ids);
+        int (*o_create)(struct lustre_handle *conn,  struct obdo *oa,
                         struct lov_stripe_md **ea);
-        int (*o_destroy)(struct lustre_handle *conn, struct obdo *oa, 
+        int (*o_destroy)(struct lustre_handle *conn, struct obdo *oa,
                          struct lov_stripe_md *ea);
         int (*o_setattr)(struct lustre_handle *conn, struct obdo *oa);
         int (*o_getattr)(struct lustre_handle *conn, struct obdo *oa);
@@ -238,23 +239,22 @@ struct obd_ops {
                       struct lov_stripe_md *);
         int (*o_close)(struct lustre_handle *conn, struct obdo *oa,
                        struct lov_stripe_md *);
-        int (*o_brw)(int rw, struct lustre_handle *conn, 
-                     struct lov_stripe_md *md, obd_count oa_bufs, 
-                     struct page **buf,
-                     obd_size *count, 
-                     obd_off *offset, 
-                     obd_flag *flags,
-                     void *);
-        int (*o_punch)(struct lustre_handle *conn, struct obdo *tgt, struct lov_stripe_md *md, obd_size count,
+        int (*o_brw)(int rw, struct lustre_handle *conn,
+                     struct lov_stripe_md *md, obd_count oa_bufs,
+                     struct page **buf, obd_size *count, obd_off *offset,
+                     obd_flag *flags, brw_callback_t callback, void * data);
+        int (*o_punch)(struct lustre_handle *conn, struct obdo *tgt,
+                       struct lov_stripe_md *md, obd_size count,
                        obd_off offset);
-        int (*o_sync)(struct lustre_handle *conn, struct obdo *tgt, obd_size count,
-                      obd_off offset);
+        int (*o_sync)(struct lustre_handle *conn, struct obdo *tgt,
+                      obd_size count, obd_off offset);
         int (*o_migrate)(struct lustre_handle *conn, struct obdo *dst,
                          struct obdo *src, obd_size count, obd_off offset);
         int (*o_copy)(struct lustre_handle *dstconn, struct obdo *dst,
                       struct lustre_handle *srconn, struct obdo *src,
                       obd_size count, obd_off offset);
-        int (*o_iterate)(struct lustre_handle *conn, int (*)(obd_id, obd_gr, void *),
+        int (*o_iterate)(struct lustre_handle *conn,
+                         int (*)(obd_id, obd_gr, void *),
                          obd_id *startid, obd_gr group, void *data);
         int (*o_preprw)(int cmd, struct lustre_handle *conn,
                         int objcount, struct obd_ioobj *obj,
@@ -269,7 +269,8 @@ struct obd_ops {
                          __u32 type, void *cookie, int cookielen, __u32 mode,
                          int *flags, void *cb, void *data, int datalen,
                          struct lustre_handle *lockh);
-        int (*o_cancel)(struct lustre_handle *, __u32 mode, struct lustre_handle *);
+        int (*o_cancel)(struct lustre_handle *, __u32 mode,
+                        struct lustre_handle *);
 };
 
 #endif

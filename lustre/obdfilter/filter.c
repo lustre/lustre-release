@@ -712,7 +712,8 @@ static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
 static int filter_pgcache_brw(int cmd, struct lustre_handle *conn, 
                                struct lov_stripe_md *md, obd_count oa_bufs,
                                struct page **pages, obd_size *count,
-                               obd_off *offset, obd_flag *flags, void *callback)
+                               obd_off *offset, obd_flag *flags,
+                               brw_callback_t callback, void *data)
 {
         struct obd_run_ctxt      saved;
         struct super_block      *sb;
@@ -737,7 +738,7 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
         file = filter_obj_open(obd, md->lmd_object_id, S_IFREG);
         if (IS_ERR(file))
                 GOTO(out, retval = PTR_ERR(file));
-        
+
         /* count doubles as retval */
         for (pg = 0; pg < oa_bufs; pg++) {
                 CDEBUG(D_INODE, "OP %d obdo no/pno: (%d,%d) (%ld,%ld) "
@@ -751,21 +752,23 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
                         char *buffer;
                         off = offset[pnum];
                         buffer = kmap(pages[pnum]);
-                        retval = file->f_op->write(file, buffer, count[pnum], &off);
+                        retval = file->f_op->write(file, buffer, count[pnum],
+                                                   &off);
                         kunmap(pages[pnum]);
                         CDEBUG(D_INODE, "retval %ld\n", retval);
                 } else {
                         loff_t off = offset[pnum];
                         char *buffer = kmap(pages[pnum]);
-                        
+
                         if (off >= file->f_dentry->d_inode->i_size) {
                                 memset(buffer, 0, count[pnum]);
                                 retval = count[pnum];
                         } else {
-                                retval = file->f_op->read(file, buffer, count[pnum], &off);
+                                retval = file->f_op->read(file, buffer,
+                                                          count[pnum], &off);
                         }
                         kunmap(pages[pnum]);
-                        
+
                         if (retval != count[pnum]) {
                                 filp_close(file, 0);
                                 GOTO(out, retval = -EIO);
@@ -778,6 +781,7 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
         /* ctimes/mtimes will follow with a setattr call */
         filp_close(file, 0);
 
+        /* XXX: do something with callback if it is set? */
 
         EXIT;
 out:
@@ -1359,8 +1363,8 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
                 obd_flag         flagw = OBD_BRW_CREATE;
 
                 page->index = index;
-                err = obd_brw(OBD_BRW_READ, src_conn, &srcmd, 1,
-			      &page, &brw_count, &brw_offset, &flagr, NULL);
+                err = obd_brw(OBD_BRW_READ, src_conn, &srcmd, 1, &page,
+                              &brw_count, &brw_offset, &flagr, NULL, NULL);
 
                 if ( err ) {
                         EXIT;
@@ -1368,8 +1372,8 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
                 }
                 CDEBUG(D_INFO, "Read page %ld ...\n", page->index);
 
-                err = obd_brw(OBD_BRW_WRITE, dst_conn, &dstmd, 1,
-			      &page, &brw_count, &brw_offset, &flagw, NULL);
+                err = obd_brw(OBD_BRW_WRITE, dst_conn, &dstmd, 1, &page,
+                              &brw_count, &brw_offset, &flagw, NULL, NULL);
 
                 /* XXX should handle dst->o_size, dst->o_blocks here */
                 if ( err ) {
