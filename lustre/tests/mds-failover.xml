@@ -5,7 +5,7 @@
   <node name="uml1" uuid="uml1-UUID">
     <network type='tcp' name='uml1' uuid="uml1-net-UUID" >
       <server>uml1</server>
-      <port>666</port>
+      <port>988</port>
     </network>
     <profile_ref uuidref="uml1-prof-UUID"/>
   </node>
@@ -19,7 +19,7 @@
   <node name="uml2" uuid="uml2-UUID">
     <network type='tcp' name='uml2' uuid="uml2-net-UUID" >
       <server>uml2</server>
-      <port>666</port>
+      <port>988</port>
     </network>
     <profile_ref uuidref="uml2-prof-UUID"/>
   </node>
