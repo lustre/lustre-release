@@ -3,6 +3,7 @@
 %define kversion @RELEASE@
 %define linuxdir @LINUX@
 %define portalsdir @PORTALS@
+%define portalslibdir @PORTALSLIB@
 Release: 0208282230chaos
 
 Summary: Lustre Lite File System
@@ -49,7 +50,7 @@ Documentation and sample configuration files for Lustre
 rm -rf $RPM_BUILD_ROOT
 
 # Set an explicit path to our Linux tree, if we can.
-./configure --enable-linuxdir='%{linuxdir}' --enable-portalsdir='%{portalsdir}'
+./configure --with-linux='%{linuxdir}' --with-portals='%{portalsdir}' --with-portalslib='%{portalslibdir}'
 make
 
 %install
@@ -65,11 +66,12 @@ make distdir distdir=lustre-source/lustre-%{version}
 %attr(-, root, root) /usr/sbin/lmc
 %attr(-, root, root) /usr/sbin/lctl
 %attr(-, root, root) /usr/sbin/lconf
-%attr(-, root, root) /usr/sbin/llsetup.sh
-%attr(-, root, root) /usr/sbin/llrsetup.sh
-%attr(-, root, root) /usr/sbin/llcleanup.sh
-%attr(-, root, root) /lib/lustre/common.sh
-%attr(-, root, root) /etc/lustre/lustre.cfg
+%attr(-, root, root) /usr/lib/lustre/examples/llmount.sh
+%attr(-, root, root) /usr/lib/lustre/examples/llmountcleanup.sh
+%attr(-, root, root) /usr/lib/lustre/examples/llecho.sh
+%attr(-, root, root) /usr/lib/lustre/examples/local.sh
+%attr(-, root, root) /usr/lib/lustre/examples/uml.sh
+%attr(-, root, root) /usr/lib/lustre/examples/lov.sh
 %attr(-, root, root) /etc/init.d/lustre
 
 %files -n lustre-doc
