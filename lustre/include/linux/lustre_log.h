@@ -59,7 +59,6 @@ struct llog_handle {
         int                     lgh_index;
 };
 
-/* exported api prototypes */
 extern int llog_add_record(struct llog_handle *cathandle,
                            struct llog_trans_hdr *rec,
                            struct llog_cookie *logcookies);
@@ -67,13 +66,10 @@ extern int llog_add_record(struct llog_handle *cathandle,
 extern int llog_cancel_records(struct llog_handle *cathandle, int count,
                                struct llog_cookie *cookies);
 
-/* internal api */
 extern struct llog_handle *llog_alloc_handle(void);
 extern void llog_free_handle(struct llog_handle *handle);
 extern int llog_init_catalog(struct llog_handle *cathandle,
                              struct obd_uuid *tgtuuid);
-extern struct llog_handle *llog_id2handle(struct llog_handle *cathandle,
-                                          struct llog_cookie *cookie);
 extern int llog_delete_log(struct llog_handle *cathandle,
                            struct llog_handle *loghandle);
 extern int llog_close_log(struct llog_handle *cathandle,
