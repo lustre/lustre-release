@@ -447,11 +447,6 @@ int mds_main(void *arg)
 	mds->mds_thread = current;
 	wake_up(&mds->mds_done_waitq); 
 
-	printk(KERN_INFO "lustre_mds starting.  Commit interval %d seconds\n",
-			mds->mds_interval / HZ);
-
-	/* XXX maintain a list of all managed devices: insert here */
-
 	/* And now, wait forever for commit wakeup events. */
 	while (1) {
 		int rc;

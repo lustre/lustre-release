@@ -268,7 +268,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
 
 /* ptl_received_rpc() should be called by the sleeping process once
  * it finishes processing an event.  This ensures the ref count is
- * decrimented and that the rpc ring buffer cycles properly.
+ * decremented and that the rpc ring buffer cycles properly.
  */ 
 int ptl_received_rpc(struct ptlrpc_service *service) {
 	int rc, index;
@@ -281,18 +281,20 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
 	if ((service->srv_ref_count[index] <= 0) &&
 	    (service->srv_me_h[index] == 0)) {
 
-		CDEBUG(D_INFO, "Removing MD at index %d\n", index);
 		rc = PtlMDUnlink(service->srv_md_h[index]);
+		CDEBUG(D_INFO, "Removing MD at index %d, rc %d\n", index, rc);
 
                 if (rc)
-                        printk(__FUNCTION__ ": PtlMDUnlink failed: %d\n", rc);
+                        printk(__FUNCTION__ 
+                               ": PtlMDUnlink failed: index %d rc %d\n", 
+                               index, rc);
 
                 /* Replace the unlinked ME and MD */
-		CDEBUG(D_INFO, "Inserting new ME and MD in ring\n");
 
                 rc = PtlMEInsert(service->srv_me_h[service->srv_me_tail],
                         service->srv_id, 0, ~0, PTL_RETAIN,
                         PTL_INS_AFTER, &(service->srv_me_h[index]));
+		CDEBUG(D_INFO, "Inserting new ME and MD in ring, rc %d\n", rc);
 		service->srv_me_tail = index;
                 service->srv_ref_count[index] = 0;
                 
@@ -311,6 +313,7 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
                 rc = PtlMDAttach(service->srv_me_h[index], service->srv_md[index],
                         PTL_RETAIN, &(service->srv_md_h[index]));
 
+		CDEBUG(D_INFO, "Attach MD in ring, rc %d\n", rc);
                 if (rc != PTL_OK) {
                         /* cleanup */
                         printk("PtlMDAttach failed: %d\n", rc);
