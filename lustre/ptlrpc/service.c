@@ -95,7 +95,8 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         err = kportal_uuid_to_peer(uuid, &service->srv_self);
         if (err) {
                 CERROR("cannot get peer for uuid '%s'", uuid);
-                GOTO(err_free, NULL);
+                OBD_FREE(service, sizeof(*service));
+                RETURN(NULL);
         }
 
         service->srv_ring_length = RPC_RING_LENGTH;
@@ -106,7 +107,8 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         if (rc != PTL_OK) {
                 CERROR("PtlEQAlloc failed: %d\n", rc);
                 LBUG();
-                GOTO(err_free, NULL);
+                OBD_FREE(service, sizeof(*service));
+                RETURN(NULL);
         }
 
         for (i = 0; i < service->srv_ring_length; i++) {
@@ -126,10 +128,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         RETURN(service);
 err_ring:
         service->srv_ring_length = i;
-        rpc_unregister_service(service); // XXX verify this is right
-        PtlEQFree(service->srv_eq_h);
-err_free:
-        OBD_FREE(service, sizeof(*service));
+        ptlrpc_unregister_service(service);
         return NULL;
 }
 
@@ -352,7 +351,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         RETURN(0);
 }
 
-int rpc_unregister_service(struct ptlrpc_service *service)
+int ptlrpc_unregister_service(struct ptlrpc_service *service)
 {
         int rc, i;
 
@@ -373,5 +372,11 @@ int rpc_unregister_service(struct ptlrpc_service *service)
         if (rc)
                 CERROR("PtlEQFree failed: %d\n", rc);
 
+        if (!list_empty(&service->srv_reqs)) {
+                // XXX reply with errors and clean up
+                CERROR("Request list not empty!\n");
+        }
+
+        OBD_FREE(service, sizeof(*service));
         return 0;
 }

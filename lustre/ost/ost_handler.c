@@ -480,10 +480,10 @@ static int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 {
         struct ost_body *body = lustre_msg_buf(req->rq_reqmsg, 0);
 
-        if (body->data == OBD_BRW_READ)
-                return ost_brw_read(obddev, req);
-        else
+        if (body->data & OBD_BRW_WRITE)
                 return ost_brw_write(obddev, req);
+        else
+                return ost_brw_read(obddev, req);
 }
 
 static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
@@ -635,9 +635,8 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (obddev->obd_namespace == NULL)
                 LBUG();
 
-        ost->ost_service = ptlrpc_init_svc(64 * 1024,
-                                           OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
-                                           "self", ost_handle);
+        ost->ost_service = ptlrpc_init_svc(64 * 1024, OST_REQUEST_PORTAL,
+                                           OSC_REPLY_PORTAL, "self",ost_handle);
         if (!ost->ost_service) {
                 CERROR("failed to start service\n");
                 GOTO(error_disc, err = -EINVAL);
@@ -684,13 +683,7 @@ static int ost_cleanup(struct obd_device * obddev)
         }
 
         ptlrpc_stop_all_threads(ost->ost_service);
-        rpc_unregister_service(ost->ost_service);
-
-        if (!list_empty(&ost->ost_service->srv_reqs)) {
-                // XXX reply with errors and clean up
-                CERROR("Request list not empty!\n");
-        }
-        OBD_FREE(ost->ost_service, sizeof(*ost->ost_service));
+        ptlrpc_unregister_service(ost->ost_service);
 
         err = obd_disconnect(&ost->ost_conn);
         if (err) {

@@ -398,8 +398,7 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
 
 out_thread:
         ptlrpc_stop_all_threads(ldlm->ldlm_service);
-        rpc_unregister_service(ldlm->ldlm_service);
-        OBD_FREE(ldlm->ldlm_service, sizeof(*ldlm->ldlm_service));
+        ptlrpc_unregister_service(ldlm->ldlm_service);
 out_dec:
         MOD_DEC_USE_COUNT;
         return rc;
@@ -411,14 +410,7 @@ static int ldlm_cleanup(struct obd_device *obddev)
         ENTRY;
 
         ptlrpc_stop_all_threads(ldlm->ldlm_service);
-        rpc_unregister_service(ldlm->ldlm_service);
-
-        if (!list_empty(&ldlm->ldlm_service->srv_reqs)) {
-                // XXX reply with errors and clean up
-                CERROR("Request list not empty!\n");
-        }
-
-        OBD_FREE(ldlm->ldlm_service, sizeof(*ldlm->ldlm_service));
+        ptlrpc_unregister_service(ldlm->ldlm_service);
 
         if (mds_reint_p != NULL)
                 inter_module_put("mds_reint");

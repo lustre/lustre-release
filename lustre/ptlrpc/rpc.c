@@ -70,7 +70,7 @@ int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
         RETURN(0);
 
 err_svc:
-        rpc_unregister_service(recovd->recovd_service);
+        ptlrpc_unregister_service(recovd->recovd_service);
 err_recovd:
         recovd_cleanup(recovd);
 err_free:
@@ -90,13 +90,7 @@ int connmgr_cleanup(struct obd_device *dev)
                 LBUG();
 
         ptlrpc_stop_all_threads(recovd->recovd_service);
-        rpc_unregister_service(recovd->recovd_service);
-        if (!list_empty(&recovd->recovd_service->srv_reqs)) {
-                // XXX reply with errors and clean up
-                CERROR("Request list not empty!\n");
-        }
-
-        OBD_FREE(recovd->recovd_service, sizeof(*recovd->recovd_service));
+        ptlrpc_unregister_service(recovd->recovd_service);
         ptlrpc_cleanup_client(recovd->recovd_client);
         OBD_FREE(recovd->recovd_client, sizeof(*recovd->recovd_client));
         MOD_DEC_USE_COUNT;
@@ -200,7 +194,7 @@ EXPORT_SYMBOL(ptlrpc_check_status);
 EXPORT_SYMBOL(ptlrpc_init_svc);
 EXPORT_SYMBOL(ptlrpc_stop_all_threads);
 EXPORT_SYMBOL(ptlrpc_start_thread);
-EXPORT_SYMBOL(rpc_unregister_service);
+EXPORT_SYMBOL(ptlrpc_unregister_service);
 
 /* pack_generic.c */
 EXPORT_SYMBOL(lustre_pack_msg);

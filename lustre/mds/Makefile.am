@@ -9,7 +9,10 @@ MODULE = mds
 modulefs_DATA = mds.o mds_extN.o # mds_ext2.o mds_ext3.o
 EXTRA_PROGRAMS = mds mds_extN # mds_ext2 mds_ext3
 
-LINX=mds_updates.c simple.c
+LINX=mds_updates.c simple.c ll_pack.c
+ll_pack.c: 
+	test -e ll_pack.c || ln -sf $(top_srcdir)/lib/ll_pack.c
+
 mds_updates.c: 
 	test -e mds_updates.c || ln -sf $(top_srcdir)/lib/mds_updates.c
 

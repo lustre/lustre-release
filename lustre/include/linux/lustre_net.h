@@ -305,7 +305,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name);
-int rpc_unregister_service(struct ptlrpc_service *service);
+int ptlrpc_unregister_service(struct ptlrpc_service *service);
 
 struct ptlrpc_svc_data { 
         char *name;

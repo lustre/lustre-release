@@ -27,11 +27,12 @@ extern int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                          struct ptlrpc_request *req);
 static int mds_cleanup(struct obd_device * obddev);
 
+/* Assumes caller has already pushed into the kernel filesystem context */
 static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                         __u64 offset)
 {
         int rc = 0;
-        mm_segment_t oldfs = get_fs();
+        struct mds_obd *mds = &req->rq_obd->u.mds;
         struct ptlrpc_bulk_desc *desc;
         struct ptlrpc_bulk_page *bulk;
         char *buf;
@@ -49,10 +50,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         if (buf == NULL)
                 GOTO(cleanup_bulk, rc = -ENOMEM);
 
-        set_fs(KERNEL_DS);
-        rc = mds_fs_readpage(&req->rq_obd->u.mds, file, buf, PAGE_SIZE,
-                             (loff_t *)&offset);
-        set_fs(oldfs);
+        rc = mds_fs_readpage(mds, file, buf, PAGE_SIZE, (loff_t *)&offset);
 
         if (rc != PAGE_SIZE)
                 GOTO(cleanup_buf, rc = -EIO);
@@ -277,6 +275,7 @@ int mds_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
 static int mds_getattr_name(int offset, struct ptlrpc_request *req)
 {
         struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct obd_run_ctxt saved;
         struct mds_body *body;
         struct dentry *de = NULL, *dchild = NULL;
         struct inode *dir;
@@ -302,6 +301,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         if (offset)
                 offset = 1;
 
+        push_ctxt(&saved, &mds->mds_ctxt);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
                 LBUG();
@@ -370,8 +370,9 @@ out_create_dchild:
         ldlm_lock_decref(lock, lock_mode);
 out_create_de:
         l_dput(de);
- out_pre_de:
+out_pre_de:
         req->rq_status = rc;
+        pop_ctxt(&saved);
         return 0;
 }
 
@@ -379,6 +380,7 @@ out_create_de:
 static int mds_getattr(int offset, struct ptlrpc_request *req)
 {
         struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct obd_run_ctxt saved;
         struct dentry *de;
         struct inode *inode;
         struct mds_body *body;
@@ -386,10 +388,10 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, offset);
+        push_ctxt(&saved, &mds->mds_ctxt);
         de = mds_fid2dentry(mds, &body->fid1, NULL);
         if (IS_ERR(de)) {
-                req->rq_status = -ENOENT;
-                RETURN(-ENOENT);
+                GOTO(out_pop, rc = -ENOENT);
         }
 
         inode = de->d_inode;
@@ -405,21 +407,15 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                              &req->rq_repmsg);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
                 CERROR("mds: out of memory\n");
-                req->rq_status = -ENOMEM;
-                GOTO(out, rc = -ENOMEM);
+                GOTO(out, rc);
         }
 
         if (body->valid & OBD_MD_LINKNAME) {
                 char *tmp = lustre_msg_buf(req->rq_repmsg, 1);
-                mm_segment_t oldfs;
 
-                oldfs = get_fs();
-                set_fs(KERNEL_DS);
                 rc = inode->i_op->readlink(de, tmp, size[1]);
-                set_fs(oldfs);
 
                 if (rc < 0) {
-                        req->rq_status = rc;
                         CERROR("readlink failed: %d\n", rc);
                         GOTO(out, rc);
                 }
@@ -442,14 +438,49 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                 rc = mds_fs_get_obdo(mds, inode,
                                      lustre_msg_buf(req->rq_repmsg, 1));
                 if (rc < 0) {
-                        req->rq_status = rc;
                         CERROR("mds_fs_get_obdo failed: %d\n", rc);
                         GOTO(out, rc);
                 }
         }
- out:
+out:
         l_dput(de);
-        RETURN(rc);
+out_pop:
+        pop_ctxt(&saved);
+        req->rq_status = rc;
+        RETURN(0);
+}
+
+static int mds_statfs(struct ptlrpc_request *req)
+{
+        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct obd_statfs *osfs;
+        struct statfs sfs;
+        int rc, size = sizeof(*osfs);
+        ENTRY;
+
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen,
+                             &req->rq_repmsg);
+        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_STATFS_PACK)) {
+                CERROR("mds: statfs lustre_pack_msg failed: rc = %d\n", rc);
+                GOTO(out, rc);
+        }
+
+        rc = vfs_statfs(mds->mds_sb, &sfs);
+        if (rc) {
+                CERROR("mds: statfs failed: rc %d\n", rc);
+                GOTO(out, rc);
+        }
+        osfs = lustre_msg_buf(req->rq_repmsg, 0);
+        memset(osfs, 0, size);
+        /* FIXME: hack until the MDS gets the OST data, next month */
+        sfs.f_blocks = -1;
+        sfs.f_bfree = -1;
+        sfs.f_bavail = -1;
+        obd_statfs_pack(osfs, &sfs);
+
+out:
+        req->rq_status = rc;
+        RETURN(0);
 }
 
 static int mds_open(struct ptlrpc_request *req)
@@ -483,6 +514,7 @@ static int mds_open(struct ptlrpc_request *req)
         body = lustre_msg_buf(req->rq_reqmsg, 0);
 
         /* was this animal open already? */
+        /* XXX we chould only check on re-open, or do a refcount... */
         list_for_each(tmp, &mci->mci_open_head) {
                 struct mds_file_data *fd;
                 fd = list_entry(tmp, struct mds_file_data, mfd_list);
@@ -607,31 +639,28 @@ static int mds_readpage(struct mds_obd *mds, struct ptlrpc_request *req)
         struct dentry *de;
         struct file *file;
         struct mds_body *body;
+        struct obd_run_ctxt saved;
         int rc, size = sizeof(*body);
         ENTRY;
 
         rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_READPAGE_PACK)) {
                 CERROR("mds: out of memory\n");
-                req->rq_status = -ENOMEM;
-                RETURN(0);
+                GOTO(out, rc = -ENOMEM);
         }
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
+        push_ctxt(&saved, &mds->mds_ctxt);
         de = mds_fid2dentry(mds, &body->fid1, &mnt);
-        if (IS_ERR(de)) {
-                req->rq_status = PTR_ERR(de);
-                RETURN(0);
-        }
+        if (IS_ERR(de))
+                GOTO(out_pop, rc = PTR_ERR(de));
 
         CDEBUG(D_INODE, "ino %ld\n", de->d_inode->i_ino);
 
         file = dentry_open(de, mnt, O_RDONLY | O_LARGEFILE);
         /* note: in case of an error, dentry_open puts dentry */
-        if (IS_ERR(file)) {
-                req->rq_status = PTR_ERR(file);
-                RETURN(0);
-        }
+        if (IS_ERR(file))
+                GOTO(out_pop, rc = PTR_ERR(file));
 
         /* to make this asynchronous make sure that the handling function
            doesn't send a reply when this function completes. Instead a
@@ -639,6 +668,9 @@ static int mds_readpage(struct mds_obd *mds, struct ptlrpc_request *req)
         rc = mds_sendpage(req, file, body->size);
 
         filp_close(file, 0);
+out_pop:
+        pop_ctxt(&saved);
+out:
         req->rq_status = rc;
         RETURN(0);
 }
@@ -713,6 +745,12 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                 CDEBUG(D_INODE, "getattr\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_GETATTR_NET, 0);
                 rc = mds_getattr(0, req);
+                break;
+
+        case MDS_STATFS:
+                CDEBUG(D_INODE, "statfs\n");
+                OBD_FAIL_RETURN(OBD_FAIL_MDS_STATFS_NET, 0);
+                rc = mds_statfs(req);
                 break;
 
         case MDS_READPAGE:
@@ -865,8 +903,8 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_put, rc);
         }
 
-        mds->mds_service = ptlrpc_init_svc(64 * 1024,
-                                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,                                           "self", mds_handle);
+        mds->mds_service = ptlrpc_init_svc(64 * 1024, MDS_REQUEST_PORTAL,
+                                           MDC_REPLY_PORTAL, "self",mds_handle);
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
                 GOTO(err_fs, rc = -EINVAL);
@@ -921,8 +959,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
 err_thread:
         ptlrpc_stop_all_threads(mds->mds_service);
 err_svc:
-        rpc_unregister_service(mds->mds_service);
-        OBD_FREE(mds->mds_service, sizeof(*mds->mds_service));
+        ptlrpc_unregister_service(mds->mds_service);
 err_fs:
         mds_fs_cleanup(mds);
 err_put:
@@ -950,12 +987,7 @@ static int mds_cleanup(struct obd_device * obddev)
         }
 
         ptlrpc_stop_all_threads(mds->mds_service);
-        rpc_unregister_service(mds->mds_service);
-        if (!list_empty(&mds->mds_service->srv_reqs)) {
-                // XXX reply with errors and clean up
-                CERROR("Request list not empty!\n");
-        }
-        OBD_FREE(mds->mds_service, sizeof(*mds->mds_service));
+        ptlrpc_unregister_service(mds->mds_service);
 
         sb = mds->mds_sb;
         if (!mds->mds_sb)

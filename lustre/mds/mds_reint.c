@@ -48,11 +48,11 @@ struct mds_client_info *mds_uuid_to_mci(struct mds_obd *mds, __u8 *uuid)
         return NULL;
 }
 
+/* Assumes caller has already pushed us into the kernel context. */
 int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                          struct ptlrpc_request *req)
 {
         /* get from req->rq_connection-> or req->rq_client */
-        struct obd_run_ctxt saved;
         struct mds_client_info *mci;
         loff_t off;
         int rc;
@@ -75,10 +75,8 @@ int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
         mci->mci_mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
 
         mds_fs_set_last_rcvd(mds, handle);
-        push_ctxt(&saved, &mds->mds_ctxt);
         rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mci->mci_mcd,
                            sizeof(*mci->mci_mcd), &off);
-        pop_ctxt(&saved);
         CDEBUG(D_INODE, "wrote trans #%Ld for client '%s' at #%d: rc = %d\n",
                mds->mds_last_rcvd, mci->mci_mcd->mcd_uuid, mci->mci_off, rc);
         // store new value and last committed value in req struct
@@ -267,6 +265,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE, dir->i_sb->s_dev);
 
+        if (dir->i_mode & S_ISGID) {
+                rec->ur_gid = dir->i_gid;
+                if (S_ISDIR(rec->ur_mode))
+                        rec->ur_mode |= S_ISGID;
+        }
+
         switch (type) {
         case S_IFREG: {
                 handle = mds_fs_start(mds, dir, MDS_FSOP_CREATE);
@@ -323,9 +327,11 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         struct obdo *obdo;
                         obdo = lustre_msg_buf(req->rq_reqmsg, 2);
                         rc = mds_fs_set_obdo(mds, inode, handle, obdo);
-                        if (rc)
-                                CERROR("error %d setting objid for %ld\n",
+                        if (rc) {
+                                CERROR("error %d setting obdo for %ld\n",
                                        rc, inode->i_ino);
+                                GOTO(out_create_unlink, rc);
+                        }
                 }
 
                 iattr.ia_atime = rec->ur_time;
@@ -369,6 +375,25 @@ out_create_de:
         l_dput(de);
         req->rq_status = rc;
         return 0;
+
+out_create_unlink:
+        /* Destroy the file we just created.  This should not need extra
+         * journal credits, as we have already modified all of the blocks
+         * needed in order to create the file in the first place.
+         */
+        switch(type) {
+        case S_IFDIR:
+                err = vfs_rmdir(dir, dchild);
+                if (err)
+                        CERROR("failed rmdir in error path: rc = %d\n", err);
+                break;
+        default:
+                err = vfs_unlink(dir, dchild);
+                if (err)
+                        CERROR("failed unlink in error path: rc = %d\n", err);
+        }
+
+        goto out_create_commit;
 }
 
 static int mds_reint_unlink(struct mds_update_record *rec, int offset,
@@ -676,6 +701,9 @@ static mds_reinter reinters[REINT_MAX+1] = {
 int mds_reint_rec(struct mds_update_record *rec, int offset,
                   struct ptlrpc_request *req)
 {
+        struct mds_obd *mds = &req->rq_obd->u.mds;
+        struct obd_run_ctxt saved;
+
         int rc;
 
         if (rec->ur_opcode < 1 || rec->ur_opcode > REINT_MAX) {
@@ -684,7 +712,9 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
                 RETURN(rc);
         }
 
+        push_ctxt(&saved, &mds->mds_ctxt);
         rc = reinters[rec->ur_opcode](rec, offset, req);
+        pop_ctxt(&saved);
 
         return rc;
 }
