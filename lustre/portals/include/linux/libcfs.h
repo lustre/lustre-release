@@ -61,7 +61,6 @@ extern unsigned int portal_subsystem_debug;
 extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
-extern unsigned int portal_cerror;
 
 #include <asm/types.h>
 struct ptldebug_header {
@@ -169,14 +168,11 @@ struct ptldebug_header {
 #else /* !__KERNEL__ */
 #define CHECK_STACK(stack) do { } while(0)
 #define CDEBUG_STACK (0L)
-#define portal_cerror 1
 #endif /* __KERNEL__ */
 
 #if 1
 #define CDEBUG(mask, format, a...)                                            \
 do {                                                                          \
-        if (portal_cerror == 0)                                               \
-                break;                                                        \
         CHECK_STACK(CDEBUG_STACK);                                            \
         if (((mask) & (D_ERROR | D_EMERG | D_WARNING)) ||                     \
             (portal_debug & (mask) &&                                         \
