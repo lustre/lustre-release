@@ -863,7 +863,7 @@ static int lov_brw_check(struct lov_obd *lov, struct obdo *oa,
                         CDEBUG(D_HA, "lov idx %d inactive\n", ost);
                         return -EIO;
                 }
-                rc = obd_brw(OBD_BRW_CHECK, lov->tgts[stripe].ltd_exp, oa,
+                rc = obd_brw(OBD_BRW_CHECK, lov->tgts[ost].ltd_exp, oa,
                              NULL, 1, &pga[i], NULL);
                 if (rc)
                         break;
