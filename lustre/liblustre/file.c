@@ -42,22 +42,17 @@
 
 #include "llite_lib.h"
 
-void llu_prepare_mdc_op_data(struct mdc_op_data *data,
-                             struct inode *i1,
-                             struct inode *i2,
-                             const char *name,
-                             int namelen,
-                             int mode)
+void llu_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
+                          struct inode *i2, const char *name,
+                          int namelen, int mode)
 {
         LASSERT(i1);
         
-        ll_i2uctxt(&data->ctxt, i1, i2);
-        ll_inode2fid(&data->fid1, i1);
+        ll_inode2id(&data->id1, i1);
+        if (i2)
+                ll_inode2id(&data->id2, i2);
 
-        if (i2) {
-                ll_inode2fid(&data->fid2, i2);
-        }
-
+	data->valid = 0;
         data->name = name;
         data->namelen = namelen;
         data->create_mode = mode;
@@ -345,7 +340,7 @@ int llu_file_release(struct inode *inode)
         if (!fd) /* no process opened the file after an mcreate */
                 RETURN(0);
 
-        rc2 = llu_mdc_close(sbi->ll_mdc_exp, inode);
+        rc2 = llu_mdc_close(sbi->ll_lmv_exp, inode);
         if (rc2 && !rc)
                 rc = rc2;
 

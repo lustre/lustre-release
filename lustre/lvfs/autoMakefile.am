@@ -18,7 +18,7 @@ if MODULES
 
 modulefs_DATA = lvfs$(KMODEXT) fsfilt_$(BACKINGFS)$(KMODEXT) fsfilt_smfs$(KMODEXT)
 
-sources: fsfilt_$(BACKINGFS).c fsfilt_smfs.c
+sources: fsfilt_$(BACKINGFS).c fsfilt_smfs.c fsfilt_snap_$(BACKINGFS).c
 	touch sources
 
 fsfilt_extN.c: fsfilt_ext3.c
@@ -34,6 +34,9 @@ ldiskfs_sed_flags = \
 	-e "s/EXT3/LDISKFS/g" -e "s/ext3/ldiskfs/g"
 
 fsfilt_ldiskfs.c: fsfilt_ext3.c
+	sed $(strip $(ldiskfs_sed_flags)) $< > $@
+
+fsfilt_snap_ldiskfs.c: fsfilt_snap_ext3.c
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
 
 endif # MODULES

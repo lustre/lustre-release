@@ -45,7 +45,6 @@ gen_config() {
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
     add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
     add_client client $MDS --lov lov1 --path $MOUNT
-
 }
 
 build_test_filter
@@ -280,8 +279,9 @@ test_10() {
     mv $DIR/$tfile $DIR/$tfile-2
     rm -f $DIR/$tfile
     fail mds1
+    
     $CHECKSTAT $DIR/$tfile && return 1
-    $CHECKSTAT $DIR/$tfile-2 ||return 2
+    $CHECKSTAT $DIR/$tfile-2 || return 2
     rm $DIR/$tfile-2
     return 0
 }

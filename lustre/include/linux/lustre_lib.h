@@ -64,6 +64,21 @@
 #endif
 #endif
 
+/* lustre_id output helper macros */
+#define DLID4   "%lu/%lu/%lu/%lu"
+
+#define OLID4(id)                                  \
+        (unsigned long)(id)->li_fid.lf_id,         \
+        (unsigned long)(id)->li_fid.lf_group,      \
+        (unsigned long)(id)->li_stc.u.e3s.l3s_ino, \
+        (unsigned long)(id)->li_stc.u.e3s.l3s_gen
+
+/*
+ * this flag is set in ->it->it_int_flags to show, that inode exists on client
+ * and no fid fetching flags needs to be set in server request.
+ */
+#define LL_IT_EXIST            (1 << 0)
+
 /* target.c */
 struct ptlrpc_request;
 struct recovd_data;

@@ -50,3 +50,4 @@ ext3-inode-reuse-2.4.24.patch
 export-zap-page-range-2.4.24.patch
 export_num_siblings-2.4.24.patch
 ext3-nlinks-2.4.24.patch
+ext3-dentry-fid-2.4.24.patch

@@ -30,11 +30,12 @@
 #include "llite_internal.h"
 
 static int ll_readlink_internal(struct inode *inode,
-                                struct ptlrpc_request **request, char **symname)
+                                struct ptlrpc_request **request,
+                                char **symname)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct ll_fid fid;
+        struct lustre_id id;
         struct mds_body *body;
         int rc, symlen = inode->i_size + 1;
         ENTRY;
@@ -47,8 +48,8 @@ static int ll_readlink_internal(struct inode *inode,
                 RETURN(0);
         }
 
-        ll_inode2fid(&fid, inode);
-        rc = md_getattr(sbi->ll_mdc_exp, &fid, OBD_MD_LINKNAME, symlen,
+        ll_inode2id(&id, inode);
+        rc = md_getattr(sbi->ll_lmv_exp, &id, OBD_MD_LINKNAME, symlen,
                         request);
         if (rc) {
                 if (rc != -ENOENT)

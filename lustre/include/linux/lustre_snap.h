@@ -112,30 +112,6 @@ struct snap_ea{
                 (v & 0xFF)
                                                                                                                                                                                                      
                                                                                                                                                                                                      
-#define EXT3_EA_TRANS_BLOCKS            EXT3_DATA_TRANS_BLOCKS
-#define EXT3_SETMETA_TRANS_BLOCKS       EXT3_DATA_TRANS_BLOCKS
-#define EXT3_NEWINODE_TRANS_BLOCKS      10
-#define SNAP_INSERTLIST_TRANS_BLOCKS    (2 * EXT3_EA_TRANS_BLOCKS + 1)
-#define SNAP_DELETELIST_TRANS_BLOCKS    (2 * EXT3_EA_TRANS_BLOCKS + 2)
-#define SNAP_COPYBLOCK_TRANS_BLOCKS     (EXT3_DATA_TRANS_BLOCKS)
-#define SNAP_MIGRATEDATA_TRANS_BLOCKS   2
-#define SNAP_SETIND_TRANS_BLOCKS        (SNAP_INSERTLIST_TRANS_BLOCKS + 1)
-#define SNAP_ADDORPHAN_TRANS_BLOCKS     2
-#define SNAP_REMOVEORPHAN_TRANS_BLOCKS  1
-#define SNAP_RESTOREORPHAN_TRANS_BLOCKS (EXT3_EA_TRANS_BLOCKS + \
-                                         SNAP_DELETELIST_TRANS_BLOCKS + \
-                                         EXT3_NEWINODE_TRANS_BLOCKS + \
-                                         2 * SNAP_MIGRATEDATA_TRANS_BLOCKS)
-#define SNAP_BIGCOPY_TRANS_BLOCKS       (2 * EXT3_DATA_TRANS_BLOCKS)
-#define SNAP_CREATEIND_TRANS_BLOCKS     (EXT3_NEWINODE_TRANS_BLOCKS + \
-                                         SNAP_MIGRATEDATA_TRANS_BLOCKS + \
-                                         SNAP_SETIND_TRANS_BLOCKS + \
-                                         SNAP_BIGCOPY_TRANS_BLOCKS + 3)
-#define SNAP_MIGRATEBLK_TRANS_BLOCKS    2
-#define SNAP_DESTROY_TRANS_BLOCKS       (SNAP_DELETELIST_TRANS_BLOCKS + \
-                                         EXT3_EA_TRANS_BLOCKS + 2)
-#define SNAP_RESTORE_TRANS_BLOCKS       (EXT3_NEWINODE_TRANS_BLOCKS + \
-                                         2 * SNAP_MIGRATEDATA_TRANS_BLOCKS + 1)
 /*Snap Table*/
 #define SNAP_MAX		32	
 #define SNAP_MAX_TABLES 	32	
@@ -188,6 +164,7 @@ struct snap_super_info {
         struct fsfilt_operations *snap_cache_fsfilt; 
         struct list_head          snap_list;
         int                       snap_table_size;
+        int                       snap_count;
 };
 
 extern int smfs_add_snap_item(struct super_block *sb, char *path_name, 

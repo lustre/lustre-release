@@ -155,15 +155,16 @@ int op_create_file(char *name, long stripe_size, int stripe_offset,
 }
 
 struct find_param {
-        int     recursive;
-        int     verbose;
-        int     quiet;
-        struct  obd_uuid        *obduuid;
-        int     lumlen;
-        struct  lov_user_md     *lum;
-        int     got_uuids;
-        int     obdindex;
-        __u32   *obdgens;
+        int                 recursive;
+        int                 verbose;
+        int                 quiet;
+        int                 showfid;
+        struct obd_uuid    *obduuid;
+        int                 datalen;
+        struct lov_user_md *data;
+        int                 got_uuids;
+        int                 obdindex;
+        __u32              *obdgens;
 };
 
 /* XXX Max obds per lov currently hardcoded to 1000 in lov/lov_obd.c */
@@ -172,16 +173,23 @@ struct find_param {
 
 static int prepare_find(struct find_param *param)
 {
-        param->lumlen = lov_mds_md_size(MAX_LOV_UUID_COUNT);
-        if ((param->lum = malloc(param->lumlen)) == NULL) {
-                err_msg("unable to allocate %d bytes of memory for ioctl",
-                        param->lumlen);
-                return ENOMEM;
+        if (param->showfid) {
+                param->datalen = PATH_MAX + 1;
+                if ((param->data = malloc(param->datalen)) == NULL) {
+                        err_msg("unable to allocate %d bytes of memory for ioctl",
+                                param->datalen);
+                        return ENOMEM;
+                }
+        } else {
+                param->datalen = lov_mds_md_size(MAX_LOV_UUID_COUNT);
+                if ((param->data = malloc(param->datalen)) == NULL) {
+                        err_msg("unable to allocate %d bytes of memory for ioctl",
+                                param->datalen);
+                        return ENOMEM;
+                }
         }
-
         param->got_uuids = 0;
         param->obdindex = OBD_NOT_FOUND;
-
         return 0;
 }
 
@@ -189,12 +197,12 @@ static void cleanup_find(struct find_param *param)
 {
         if (param->obduuid)
                 free(param->obduuid);
-        if (param->lum)
-                free(param->lum);
+        if (param->data)
+                free(param->data);
 }
 
-int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, __u32 *obdgens,
-                        int *ost_count)
+int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp,
+                        __u32 *obdgens, int *ost_count)
 {
         struct obd_ioctl_data data = { 0, };
         struct lov_desc desc = { 0, };
@@ -246,7 +254,6 @@ static int setup_obd_uuids(DIR *dir, char *dname, struct find_param *param)
 {
         struct obd_uuid uuids[1024], *uuidp;
         __u32 obdgens[1024], *genp;
-        
         int obdcount = 1024;
         int rc, i;
 
@@ -342,15 +349,34 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
 
 void llapi_lov_dump_user_lmm(struct find_param *param, char *dname, char *fname)
 {
-        switch(*(__u32 *)param->lum) { /* lum->lmm_magic */
+        switch(*(__u32 *)param->data) { /* lum->lmm_magic */
         case LOV_USER_MAGIC_V1:
-                lov_dump_user_lmm_v1(param->lum, dname, fname, param->obdindex,
+                lov_dump_user_lmm_v1(param->data, dname, fname, param->obdindex,
                                      param->quiet, param->verbose,
                                      (param->verbose || !param->obduuid));
                 break;
         default:
-                printf("unknown lmm_magic:  0x%08X\n", *(__u32 *)param->lum);
+                printf("unknown lmm_magic:  0x%08X\n", *(__u32 *)param->data);
                 return;
+        }
+}
+
+void llapi_dump_fid(struct find_param *param, char *dname, char *fname)
+{
+        if (!param->quiet) {
+                int n = 0;
+                char path[PATH_MAX + 1];
+
+                n = snprintf(path, PATH_MAX, "%s/%s",
+                             dname, fname);
+
+                if (n > 40)
+                        n = 1;
+                else
+                        n = 40 - n;
+                
+                printf("%s:%*s"DLID4"\n", path, n, "",
+                       OLID4((struct lustre_id *)param->data));
         }
 }
 
@@ -397,6 +423,50 @@ int llapi_file_get_stripe(char *path, struct lov_user_md *lum)
         return rc;
 }
 
+int llapi_file_get_fid(char *path, void *data)
+{
+        char *dname, *fname;
+        int fd, rc = 0;
+
+        fname = strrchr(path, '/');
+
+        if (fname == NULL) {
+                dname = (char *)malloc(2);
+                if (dname == NULL)
+                        return ENOMEM;
+                strcpy(dname, ".");
+                fname = path;
+        } else {
+                dname = (char *)malloc(fname - path + 1);
+                if (dname == NULL)
+                        return ENOMEM;
+                strncpy(dname, path, fname - path);
+                dname[fname - path] = '\0';
+                fname++;
+
+                if (!strlen(fname))
+                        fname = ".";
+        }
+
+        if ((fd = open(dname, O_RDONLY)) == -1) {
+                free(dname);
+                return errno;
+        }
+
+        strncpy((char *)data, fname, strlen(fname));
+        if (ioctl(fd, IOC_MDC_SHOWFID, (void *)data) == -1) {
+                close(fd);
+                free(dname);
+                return errno;
+        }
+
+        if (close(fd) == -1)
+                rc = errno;
+
+        free(dname);
+        return rc;
+}
+
 /* short term backwards compat only */
 int op_get_file_stripe(char *path, struct lov_user_md *lum)
 {
@@ -408,30 +478,39 @@ static int process_file(DIR *dir, char *dname, char *fname,
 {
         int rc;
 
-        strncpy((char *)param->lum, fname, param->lumlen);
+        if (param->showfid) {
+                char path[PATH_MAX + 1];
 
-        rc = ioctl(dirfd(dir), IOC_MDC_GETSTRIPE, (void *)param->lum);
-        if (rc) {
-                if (errno == ENODATA) {
-                        if (!param->obduuid && !param->quiet)
-                                fprintf(stderr,
-                                        "%s/%s has no stripe info\n",
-                                        dname, fname);
-                        rc = 0;
-                } else if (errno == EISDIR) {
-                        fprintf(stderr, "process_file on directory %s/%s!\n",
-                                dname, fname);
-                        /* add fname to directory list; */
-                        rc = errno;
-                } else {
-                        err_msg("IOC_MDC_GETSTRIPE ioctl failed");
-                        rc = errno;
+                snprintf(path, PATH_MAX, "%s/%s", dname, fname);
+                rc = llapi_file_get_fid(path, (void *)param->data);
+                if (rc) {
+                        err_msg("IOC_MDC_SHOWFID ioctl failed");
+                        return rc;
                 }
-                return rc;
+                llapi_dump_fid(param, dname, fname);
+        } else {
+                strncpy((char *)param->data, fname, param->datalen);
+                rc = ioctl(dirfd(dir), IOC_MDC_GETSTRIPE, (void *)param->data);
+                if (rc) {
+                        if (errno == ENODATA) {
+                                if (!param->obduuid && !param->quiet)
+                                        fprintf(stderr,
+                                                "%s/%s has no stripe info\n",
+                                                dname, fname);
+                                rc = 0;
+                        } else if (errno == EISDIR) {
+                                fprintf(stderr, "process_file on directory %s/%s!\n",
+                                        dname, fname);
+                                /* add fname to directory list; */
+                                rc = errno;
+                        } else {
+                                err_msg("IOC_MDC_GETSTRIPE ioctl failed");
+                                rc = errno;
+                        }
+                        return rc;
+                }
+                llapi_lov_dump_user_lmm(param, dname, fname);
         }
-
-        llapi_lov_dump_user_lmm(param, dname, fname);
-
         return 0;
 }
 
@@ -458,31 +537,40 @@ unsigned char handle_dt_unknown(char *parent, char *entry)
 
 static int process_dir(DIR *dir, char *dname, struct find_param *param)
 {
+        char path[PATH_MAX + 1];
         struct dirent64 *dirp;
         DIR *subdir;
-        char path[1024];
         int rc;
 
-        if (!param->got_uuids) {
-                rc = setup_obd_uuids(dir, dname, param);
-                if (rc)
-                        return rc;
-        }
-
         /* retrieve dir's stripe info */
-        strncpy((char *)param->lum, dname, param->lumlen);
-        rc = ioctl(dirfd(dir), LL_IOC_LOV_GETSTRIPE, (void *)param->lum);
-        if (rc) {
-                if (errno == ENODATA) {
-                        if (!param->obduuid && param->verbose)
-                                printf("%s/%s has no stripe info\n", dname, "");
-                        rc = 0;
-                } else {
-                        err_msg("IOC_MDC_GETSTRIPE ioctl failed");
-                        return errno;
+        if (param->showfid) {
+                rc = llapi_file_get_fid(dname, (void *)param->data);
+                if (rc) {
+                        err_msg("IOC_MDC_SHOWFID ioctl failed");
+                        return rc;
                 }
+                llapi_dump_fid(param, dname, "");
         } else {
-               llapi_lov_dump_user_lmm(param, dname, "");
+                if (!param->got_uuids) {
+                        rc = setup_obd_uuids(dir, dname, param);
+                        if (rc)
+                                return rc;
+                }
+
+                strncpy((char *)param->data, dname, param->datalen);
+                rc = ioctl(dirfd(dir), LL_IOC_LOV_GETSTRIPE, (void *)param->data);
+                if (rc) {
+                        if (errno == ENODATA) {
+                                if (!param->obduuid && param->verbose)
+                                        printf("%s/%s has no stripe info\n", dname, "");
+                                rc = 0;
+                        } else {
+                                err_msg("IOC_MDC_GETSTRIPE ioctl failed");
+                                return errno;
+                        }
+                } else {
+                        llapi_lov_dump_user_lmm(param, dname, "");
+                }
         }
 
         /* Handle the contents of the directory */
@@ -502,7 +590,6 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
                          * know d_type should be valid for lustre and this
                          * tool only makes sense for lustre filesystems. */
                         return EINVAL;
-                        break;
                 case DT_DIR:
                         if (!param->recursive)
                                 break;
@@ -569,8 +656,10 @@ static int process_path(char *path, struct find_param *param)
                         err_msg("\"%.40s\" opendir failed", dname);
                         rc = errno;
                 } else {
-                        if (!param->got_uuids)
-                                rc = setup_obd_uuids(dir, dname, param);
+                        if (!param->showfid) {
+                                if (!param->got_uuids)
+                                        rc = setup_obd_uuids(dir, dname, param);
+                        }
                         if (rc == 0)
                                 rc = process_file(dir, dname, fname, param);
                         closedir(dir);
@@ -581,13 +670,14 @@ static int process_path(char *path, struct find_param *param)
 }
 
 int llapi_find(char *path, struct obd_uuid *obduuid, int recursive,
-               int verbose, int quiet)
+               int verbose, int quiet, int showfid)
 {
         struct find_param param;
         int ret = 0;
 
         memset(&param, 0, sizeof(param));
         param.recursive = recursive;
+        param.showfid = showfid;
         param.verbose = verbose;
         param.quiet = quiet;
         if (obduuid) {

@@ -700,8 +700,8 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
         int rc, size = sizeof(*dlm_rep);
         ENTRY;
 
-        dlm_req = lustre_swab_reqbuf (req, 0, sizeof (*dlm_req),
-                                      lustre_swab_ldlm_request);
+        dlm_req = lustre_swab_reqbuf(req, 0, sizeof (*dlm_req),
+                                     lustre_swab_ldlm_request);
         if (dlm_req == NULL) {
                 CERROR ("Can't unpack dlm_req\n");
                 RETURN (-EFAULT);
@@ -719,12 +719,19 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
         if (!lock) {
                 req->rq_status = EINVAL;
         } else {
+                void *res = NULL;
+                
                 LDLM_DEBUG(lock, "server-side convert handler START");
-                ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
-                                  &dlm_rep->lock_flags);
-                if (ldlm_del_waiting_lock(lock))
-                        CDEBUG(D_DLMTRACE, "converted waiting lock %p\n", lock);
-                req->rq_status = 0;
+                res = ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
+                                        &dlm_rep->lock_flags);
+
+                if (res) {
+                        if (ldlm_del_waiting_lock(lock))
+                                CDEBUG(D_DLMTRACE, "converted waiting lock %p\n", lock);
+                        req->rq_status = 0;
+                } else {
+                        req->rq_status = EDEADLOCK;
+                }
         }
 
         if (lock) {

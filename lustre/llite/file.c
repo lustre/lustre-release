@@ -33,7 +33,7 @@
 #include "llite_internal.h"
 #include <linux/obd_lov.h>
 
-int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
+int ll_mdc_close(struct obd_export *lmv_exp, struct inode *inode,
                  struct file *file)
 {
         struct ll_file_data *fd = file->private_data;
@@ -53,16 +53,16 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
 
         obdo.o_id = inode->i_ino;
         obdo.o_valid = OBD_MD_FLID;
-        obdo_from_inode(&obdo, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                                      OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                                      OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                                      OBD_MD_FLCTIME);
+        obdo_from_inode(&obdo, inode, (OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                                       OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                                       OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                                       OBD_MD_FLCTIME));
         if (0 /* ll_is_inode_dirty(inode) */) {
                 obdo.o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
                 obdo.o_valid |= OBD_MD_FLFLAGS;
         }
-        obdo.o_mds = ll_i2info(inode)->lli_mds;
-        rc = md_close(mdc_exp, &obdo, och, &req);
+        obdo.o_mds = id_group(&ll_i2info(inode)->lli_id);
+        rc = md_close(lmv_exp, &obdo, och, &req);
 
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
@@ -80,7 +80,7 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                                inode->i_ino, rc);
         }
 
-        mdc_clear_open_replay_data(mdc_exp, och);
+        mdc_clear_open_replay_data(lmv_exp, och);
         ptlrpc_req_finished(req);
         och->och_fh.cookie = DEAD_HANDLE_MAGIC;
         file->private_data = NULL;
@@ -101,9 +101,8 @@ int ll_file_release(struct inode *inode, struct file *file)
         int rc;
 
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%u/%lu/%u(%p)\n",
-               ll_i2info(inode)->lli_mds, inode->i_ino,
-               inode->i_generation, inode);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode="DLID4"(%p)\n",
+               OLID4(&ll_i2info(inode)->lli_id), inode);
 
         /* don't do anything for / */
         if (inode->i_sb->s_root == file->f_dentry)
@@ -113,7 +112,7 @@ int ll_file_release(struct inode *inode, struct file *file)
         fd = (struct ll_file_data *)file->private_data;
         LASSERT(fd != NULL);
 
-        rc = ll_mdc_close(sbi->ll_mdc_exp, inode, file);
+        rc = ll_mdc_close(sbi->ll_lmv_exp, inode, file);
         RETURN(rc);
 }
 
@@ -121,19 +120,19 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                                int lmmsize, struct lookup_intent *itp)
 {
         struct ll_sb_info *sbi = ll_i2sbi(file->f_dentry->d_inode);
-        struct lustre_handle lockh;
-        struct mdc_op_data data;
         struct dentry *parent = file->f_dentry->d_parent;
         const char *name = file->f_dentry->d_name.name;
         const int len = file->f_dentry->d_name.len;
+        struct lustre_handle lockh;
+        struct mdc_op_data data;
         int rc;
 
         if (!parent)
                 RETURN(-ENOENT);
 
-        ll_prepare_mdc_op_data(&data, parent->d_inode, NULL, name, len, O_RDWR);
+        ll_prepare_mdc_data(&data, parent->d_inode, NULL, name, len, O_RDWR);
 
-        rc = md_enqueue(sbi->ll_mdc_exp, LDLM_IBITS, itp, LCK_PR, &data,
+        rc = md_enqueue(sbi->ll_lmv_exp, LDLM_IBITS, itp, LCK_PR, &data,
                         &lockh, lmm, lmmsize, ldlm_completion_ast,
                         ll_mdc_blocking_ast, NULL);
         if (rc == 0) {
@@ -151,7 +150,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it)
 {
         struct ptlrpc_request *req = it->d.lustre.it_data;
         struct ll_inode_info *lli = ll_i2info(file->f_dentry->d_inode);
-        struct obd_export *mdc_exp = ll_i2mdcexp(file->f_dentry->d_inode);
+        struct obd_export *lmv_exp = ll_i2lmvexp(file->f_dentry->d_inode);
         struct ll_file_data *fd;
         struct mds_body *body;
         ENTRY;
@@ -170,6 +169,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it)
 
 
         OBD_SLAB_ALLOC(fd, ll_file_data_slab, SLAB_KERNEL, sizeof *fd);
+        
         /* We can't handle this well without reorganizing ll_file_open and
          * ll_mdc_close, so don't even try right now. */
         LASSERT(fd != NULL);
@@ -181,7 +181,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it)
 
         lli->lli_io_epoch = body->io_epoch;
 
-        mdc_set_open_replay_data(mdc_exp, &fd->fd_mds_och, it->d.lustre.it_data);
+        mdc_set_open_replay_data(lmv_exp, &fd->fd_mds_och, it->d.lustre.it_data);
 
         RETURN(0);
 }
@@ -678,7 +678,7 @@ int ll_glimpse_size(struct inode *inode)
 
         CDEBUG(D_DLMTRACE, "Glimpsing inode %lu\n", inode->i_ino);
 
-        rc = obd_enqueue(sbi->ll_osc_exp, lli->lli_smd, LDLM_EXTENT, &policy,
+        rc = obd_enqueue(sbi->ll_lov_exp, lli->lli_smd, LDLM_EXTENT, &policy,
                          LCK_PR, &flags, ll_extent_lock_callback,
                          ldlm_completion_ast, ll_glimpse_callback, inode,
                          sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
@@ -694,10 +694,9 @@ int ll_glimpse_size(struct inode *inode)
         inode->i_blocks = lov_merge_blocks(lli->lli_smd);
         //inode->i_mtime = lov_merge_mtime(lli->lli_smd, inode->i_mtime);
 
-        CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %lu\n",
-               inode->i_size, inode->i_blocks);
-        obd_cancel(sbi->ll_osc_exp, lli->lli_smd, LCK_PR, &lockh);
-
+        CDEBUG(D_DLMTRACE, "glimpse: size: "LPU64", blocks: "LPU64"\n",
+               (__u64)inode->i_size, (__u64)inode->i_blocks);
+        obd_cancel(sbi->ll_lov_exp, lli->lli_smd, LCK_PR, &lockh);
         RETURN(rc);
 }
 
@@ -733,8 +732,7 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
                inode->i_ino, policy->l_extent.start, policy->l_extent.end);
 
         do_gettimeofday(&start);
-        
-        rc = obd_enqueue(sbi->ll_osc_exp, lsm, LDLM_EXTENT, policy, mode,
+        rc = obd_enqueue(sbi->ll_lov_exp, lsm, LDLM_EXTENT, policy, mode,
                          &ast_flags, ll_extent_lock_callback,
                          ldlm_completion_ast, ll_glimpse_callback, inode,
                          sizeof(struct ost_lvb), lustre_swab_ost_lvb, lockh);
@@ -775,7 +773,7 @@ int ll_extent_unlock(struct ll_file_data *fd, struct inode *inode,
             (sbi->ll_flags & LL_SBI_NOLCK))
                 RETURN(0);
 
-        rc = obd_cancel(sbi->ll_osc_exp, lsm, mode, lockh);
+        rc = obd_cancel(sbi->ll_lov_exp, lsm, mode, lockh);
 
         RETURN(rc);
 }
@@ -813,7 +811,6 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
 
         rc = ll_tree_lock(&tree, node, inode, buf, count,
                           file->f_flags & O_NONBLOCK ? LDLM_FL_BLOCK_NOWAIT :0);
-        
         if (rc != 0)
                 RETURN(rc);
 
@@ -844,8 +841,11 @@ static ssize_t ll_file_read(struct file *file, char *buf, size_t count,
         RETURN(retval);
 }
 
-static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
-                             loff_t *ppos)
+/*
+ * Write to a file (through the page cache).
+ */
+static ssize_t ll_file_write(struct file *file, const char *buf,
+                             size_t count, loff_t *ppos)
 {
         struct inode *inode = file->f_dentry->d_inode;
         loff_t maxbytes = ll_file_maxbytes(inode);
@@ -958,7 +958,7 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP | OBD_MD_FLFLAGS;
         oa->o_flags |= OBD_FL_RECREATE_OBJS;
         obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                   OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+                        OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
         oti.oti_objid = NULL;
         memcpy(lsm2, lsm, lsm_size);
@@ -1013,7 +1013,7 @@ static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         if (rc < 0)
                 GOTO(out, rc);
 
-        rc = mdc_req2lustre_md(ll_i2mdcexp(inode), req, 1, exp, &md);
+        rc = mdc_req2lustre_md(ll_i2lmvexp(inode), req, 1, exp, &md);
         if (rc)
                 GOTO(out, rc);
         ll_update_inode(f->f_dentry->d_inode, &md);
@@ -1163,6 +1163,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)
 {
         struct ll_file_data *fd = file->private_data;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
         int flags;
         ENTRY;
 
@@ -1195,6 +1196,31 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 RETURN(ll_lov_setstripe(inode, file, arg));
         case LL_IOC_LOV_SETEA:
                 RETURN(ll_lov_setea(inode, file, arg));
+        case IOC_MDC_SHOWFID: {
+                struct lustre_id *idp = (struct lustre_id *)arg;
+                struct lustre_id id;
+                char *filename;
+                int rc;
+
+                filename = getname((const char *)arg);
+                if (IS_ERR(filename))
+                        RETURN(PTR_ERR(filename));
+
+                ll_inode2id(&id, inode);
+
+                rc = ll_get_fid(sbi->ll_lmv_exp, &id, filename, &id);
+                if (rc < 0)
+                        GOTO(out_filename, rc);
+
+                rc = copy_to_user(idp, &id, sizeof(*idp));
+                if (rc)
+                        GOTO(out_filename, rc = -EFAULT);
+
+                EXIT;
+        out_filename:
+                putname(filename);
+                return rc;
+        }
         case LL_IOC_LOV_GETSTRIPE:
                 RETURN(ll_lov_getstripe(inode, arg));
         case LL_IOC_RECREATE_OBJ:
@@ -1276,7 +1302,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 {
         struct inode *inode = dentry->d_inode;
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-        struct ll_fid fid;
+        struct lustre_id id;
         struct ptlrpc_request *req;
         int rc, err;
         ENTRY;
@@ -1289,8 +1315,8 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
          * that IO to finish before calling the osc and mdc sync methods */
         rc = filemap_fdatawait(inode->i_mapping);
 
-        ll_inode2fid(&fid, inode);
-        err = md_sync(ll_i2sbi(inode)->ll_mdc_exp, &fid, &req);
+        ll_inode2id(&id, inode);
+        err = md_sync(ll_i2sbi(inode)->ll_lmv_exp, &id, &req);
         if (!rc)
                 rc = err;
         if (!err)
@@ -1305,11 +1331,11 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                 oa->o_id = lsm->lsm_object_id;
                 oa->o_gr = lsm->lsm_object_gr;
                 oa->o_valid = OBD_MD_FLID;
-                obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                           OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                           OBD_MD_FLGROUP);
+                obdo_from_inode(oa, inode, (OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                            OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                                            OBD_MD_FLGROUP));
 
-                err = obd_sync(ll_i2sbi(inode)->ll_osc_exp, oa, lsm,
+                err = obd_sync(ll_i2sbi(inode)->ll_lov_exp, oa, lsm,
                                0, OBD_OBJECT_EOF);
                 if (!rc)
                         rc = err;
@@ -1322,10 +1348,11 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 {
         struct inode *inode = file->f_dentry->d_inode;
+        struct ll_inode_info *li = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct obd_device *obddev;
         struct ldlm_res_id res_id =
-                    { .name = {inode->i_ino, inode->i_generation, LDLM_FLOCK} };
+                { .name = {id_fid(&li->lli_id), id_group(&li->lli_id), LDLM_FLOCK} };
         struct lustre_handle lockh = {0};
         ldlm_policy_data_t flock;
         ldlm_mode_t mode = 0;
@@ -1394,7 +1421,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                "start="LPU64", end="LPU64"\n", inode->i_ino, flock.l_flock.pid,
                flags, mode, flock.l_flock.start, flock.l_flock.end);
 
-        obddev = md_get_real_obd(sbi->ll_mdc_exp, NULL, 0);
+        obddev = md_get_real_obd(sbi->ll_lmv_exp, NULL, 0);
         rc = ldlm_cli_enqueue(obddev->obd_self_export, NULL,
                               obddev->obd_namespace,
                               res_id, LDLM_FLOCK, &flock, mode, &flags,
@@ -1405,13 +1432,13 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 
 int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 {
+        struct lookup_intent oit = { .it_op = IT_GETATTR };
         struct inode *inode = dentry->d_inode;
+        struct ptlrpc_request *req = NULL;
         struct ll_inode_info *lli;
         struct lov_stripe_md *lsm;
-        struct ptlrpc_request *req = NULL;
-        struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
-        struct lookup_intent oit = { .it_op = IT_GETATTR };
-        struct ll_fid  cfid;
+        struct ll_sb_info *sbi;
+        struct lustre_id id;
         int rc;
         
         ENTRY;
@@ -1420,18 +1447,23 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
                 CERROR("REPORT THIS LINE TO PETER\n");
                 RETURN(0);
         }
+        
+        sbi = ll_i2sbi(inode);
+        
+        ll_inode2id(&id, inode);
         lli = ll_i2info(inode);
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),name=%s,intent=%s\n",
+        LASSERT(id_fid(&id) != 0);
+
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), name=%s, intent=%s\n",
                inode->i_ino, inode->i_generation, inode, dentry->d_name.name,
                LL_IT2STR(it));
+
 #if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,5,0))
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_REVALIDATE);
 #endif
 
-        ll_inode2fid(&cfid, dentry->d_inode);
-        rc = md_intent_lock(sbi->ll_mdc_exp, &cfid,
-                            NULL, 0, NULL, 0, &cfid, &oit, 0, &req,
-                            ll_mdc_blocking_ast);
+        rc = md_intent_lock(sbi->ll_lmv_exp, &id, NULL, 0, NULL, 0, &id,
+                            &oit, 0, &req, ll_mdc_blocking_ast);
         if (rc < 0)
                 GOTO(out, rc);
 
@@ -1456,8 +1488,10 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         if (lsm == NULL) /* object not yet allocated, don't validate size */
                 GOTO(out, rc = 0);
 
-        /* ll_glimpse_size will prefer locally cached writes if they extend
-         * the file */
+        /*
+         * ll_glimpse_size() will prefer locally cached writes if they extend
+         * the file.
+         */
         rc = ll_glimpse_size(inode);
 out:
         if (req)
@@ -1478,19 +1512,19 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
         if (res)
                 return res;
 
-        stat->dev = ll_i2info(inode)->lli_mds;
         stat->ino = inode->i_ino;
         stat->mode = inode->i_mode;
         stat->nlink = inode->i_nlink;
         stat->uid = inode->i_uid;
         stat->gid = inode->i_gid;
-        stat->rdev = kdev_t_to_nr(inode->i_rdev);
         stat->atime = inode->i_atime;
         stat->mtime = inode->i_mtime;
         stat->ctime = inode->i_ctime;
         stat->size = inode->i_size;
         stat->blksize = inode->i_blksize;
         stat->blocks = inode->i_blocks;
+        stat->rdev = kdev_t_to_nr(inode->i_rdev);
+        stat->dev = id_group(&ll_i2info(inode)->lli_id);
         return 0;
 }
 #endif

@@ -48,7 +48,7 @@
 # include <liblustre.h>
 #endif
 
-# include <linux/lustre_dlm.h>
+#include <linux/lustre_dlm.h>
 #include <linux/kp30.h>
 #include <linux/lustre_net.h>
 #include <lustre/lustre_user.h>
@@ -2465,6 +2465,29 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                         RETURN(ELDLM_OK);
                 }
         }
+        if (mode == LCK_PW) {
+                rc = ldlm_lock_match(obd->obd_namespace, 0, &res_id, type,
+                                     policy, LCK_PR, lockh);
+                if (rc == 1) {
+                        rc = ldlm_cli_convert(lockh, mode, flags);
+                        if (!rc) {
+                                /* Update readers/writers accounting */
+                                ldlm_lock_addref(lockh, LCK_PW);
+                                ldlm_lock_decref(lockh, LCK_PR);
+                                osc_set_data_with_check(lockh, data);
+                                RETURN(ELDLM_OK);
+                        }
+                        /* If the conversion failed, we need to drop refcount
+                           on matched lock before we get new one */
+                        /* XXX Won't it save us some efforts if we cancel PR
+                           lock here? We are going to take PW lock anyway and it
+                           will invalidate PR lock */
+                        ldlm_lock_decref(lockh, LCK_PR);
+                        if (rc != EDEADLOCK) {
+                                RETURN(rc);
+                        }
+                }
+        }
 
  no_match:
         if (*flags & LDLM_FL_HAS_INTENT) {
@@ -2797,7 +2820,7 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
                 ptlrpc_req_finished(req);
                 RETURN(rc);
         }
-        RETURN(-EINVAL);
+        RETURN(-EPROTO);
 }
 
 static int osc_set_info(struct obd_export *exp, obd_count keylen,
@@ -2926,10 +2949,9 @@ static int osc_connect(struct lustre_handle *exph,
                        unsigned long connect_flags)
 {
         int rc;
-
+        ENTRY;
         rc = client_connect_import(exph, obd, cluuid, connect_flags);
-
-        return rc;
+        RETURN(rc);
 }
 
 static int osc_disconnect(struct obd_export *exp, int flags)
@@ -2937,6 +2959,7 @@ static int osc_disconnect(struct obd_export *exp, int flags)
         struct obd_device *obd = class_exp2obd(exp);
         struct llog_ctxt *ctxt;
         int rc;
+        ENTRY;
 
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_SIZE_REPL_CTXT);
         if (obd->u.cli.cl_conn_count == 1)
@@ -2944,7 +2967,7 @@ static int osc_disconnect(struct obd_export *exp, int flags)
                 llog_sync(ctxt, exp);
 
         rc = client_disconnect_export(exp, flags);
-        return rc;
+        RETURN(rc);
 }
 
 static int osc_import_event(struct obd_device *obd,

@@ -27,6 +27,13 @@ class LustreDB:
             return default
         return None
 
+    def get_hostaddr(self):
+	ret = []
+	list = self.dom_node.getElementsByTagName('hostaddr')
+	for node in list:
+	    ret.append(node.firstChild.data)
+	return ret
+		 
     def get_class(self):
         return self._get_class()
 

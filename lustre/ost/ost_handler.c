@@ -632,10 +632,12 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out, rc);
         rcs = lustre_msg_buf(req->rq_repmsg, 1, niocount * sizeof(*rcs));
 
+#if 0
         /* Do snap options here*/
         rc = obd_do_cow(req->rq_export, ioo, objcount, remote_nb);
         if (rc)
-                GOTO(out, rc); 
+                GOTO(out, rc);
+#endif
 
         /* FIXME all niobuf splitting should be done in obdfilter if needed */
         /* CAVEAT EMPTOR this sets ioo->ioo_bufcnt to # pages */

@@ -11,7 +11,7 @@ MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
 
 MDSSIZE=${MDSSIZE:-400000}
 FSTYPE=${FSTYPE:-ext3}
-
+OST_FSTYPE=${OST_FSTYPE:-$FSTYPE}
 MOUNT=${MOUNT:-/mnt/lustre}
 MOUNT2=${MOUNT2:-${MOUNT}2}
 NETTYPE=${NETTYPE:-tcp}
@@ -57,8 +57,8 @@ ${LMC} --add mds --nspath /mnt/mds_ns --node localhost --mds mds1 \
 ${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \
 --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0 || exit 20
 
-${LMC} --add ost --nspath /mnt/ost_ns --node localhost --lov lov1 \
---fstype $FSTYPE --backfstype $OST_BACKFSTYPE --dev $OSTDEV \
+${LMC} --add ost --ost ost1 --nspath /mnt/ost_ns --node localhost --lov lov1 \
+--fstype $OST_FSTYPE --backfstype $OST_BACKFSTYPE --dev $OSTDEV \
 --backdev $OST_BACKDEV $OST_MOUNT_OPTS --size $OSTSIZE $JARG || exit 30
 
 # create client config

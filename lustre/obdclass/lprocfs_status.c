@@ -45,7 +45,6 @@
 #include <linux/lustre_fsfilt.h>
 
 #if defined(LPROCFS) && defined(__KERNEL__)
-
 struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
                                     const char *name)
 {
@@ -65,7 +64,6 @@ struct proc_dir_entry *lprocfs_srch(struct proc_dir_entry *head,
 }
 
 /* lprocfs API calls */
-
 int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                      void *data)
 {
@@ -661,13 +659,13 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpin);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, import_event);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, notify);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, getready);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, init_ea_size);
 
         for (i = num_private_stats; i < num_stats; i++) {
-                /* If this LBUGs, it is likely that an obd
-                 * operation was added to struct obd_ops in
-                 * <linux/obd.h>, and that the corresponding line item
-                 * LPROCFS_OBD_OP_INIT(.., .., opname)
+                /* if this LBUGs, it is likely that an obd operation was added
+                 * to struct obd_ops in <linux/obd.h>, and that the
+                 * corresponding line item LPROCFS_OBD_OP_INIT(.., .., opname)
                  * is missing from the list above. */
                 if (stats->ls_percpu[0]->lp_cntr[i].lc_name == NULL) {
                         CERROR("Missing obd_stat initializer obd_op "

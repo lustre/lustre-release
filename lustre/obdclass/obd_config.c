@@ -433,8 +433,9 @@ struct lustre_profile *class_get_profile(char * prof)
         RETURN(NULL);
 }
 
-int class_add_profile(int proflen, char *prof, int osclen, char *osc,
-                      int mdclen, char *mdc)
+int class_add_profile(int proflen, char *prof,
+                      int lovlen, char *lov,
+                      int lmvlen, char *lmv)
 {
         struct lustre_profile *lprof;
         int err = 0;
@@ -450,18 +451,18 @@ int class_add_profile(int proflen, char *prof, int osclen, char *osc,
                 GOTO(out, err = -ENOMEM);
         memcpy(lprof->lp_profile, prof, proflen);
 
-        LASSERT(osclen == (strlen(osc) + 1));
-        OBD_ALLOC(lprof->lp_osc, osclen);
+        LASSERT(lovlen == (strlen(lov) + 1));
+        OBD_ALLOC(lprof->lp_lov, lovlen);
         if (lprof->lp_profile == NULL)
                 GOTO(out, err = -ENOMEM);
-        memcpy(lprof->lp_osc, osc, osclen);
+        memcpy(lprof->lp_lov, lov, lovlen);
 
-        if (mdclen > 0) {
-                LASSERT(mdclen == (strlen(mdc) + 1));
-                OBD_ALLOC(lprof->lp_mdc, mdclen);
-                if (lprof->lp_mdc == NULL)
+        if (lmvlen > 0) {
+                LASSERT(lmvlen == (strlen(lmv) + 1));
+                OBD_ALLOC(lprof->lp_lmv, lmvlen);
+                if (lprof->lp_lmv == NULL)
                         GOTO(out, err = -ENOMEM);
-                memcpy(lprof->lp_mdc, mdc, mdclen);
+                memcpy(lprof->lp_lmv, lmv, lmvlen);
         }
 
         list_add(&lprof->lp_list, &lustre_profile_list);
@@ -478,9 +479,9 @@ void class_del_profile(char *prof)
         if (lprof) {
                 list_del(&lprof->lp_list);
                 OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
-                OBD_FREE(lprof->lp_osc, strlen(lprof->lp_osc) + 1);
-                if (lprof->lp_mdc)
-                        OBD_FREE(lprof->lp_mdc, strlen(lprof->lp_mdc) + 1);
+                OBD_FREE(lprof->lp_lov, strlen(lprof->lp_lov) + 1);
+                if (lprof->lp_lmv)
+                        OBD_FREE(lprof->lp_lmv, strlen(lprof->lp_lmv) + 1);
                 OBD_FREE(lprof, sizeof *lprof);
         }
 }

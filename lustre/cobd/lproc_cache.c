@@ -41,7 +41,7 @@ static int cobd_rd_target(char *page, char **start, off_t off, int count,
                 rc = snprintf(page, count, "not set up\n");
         } else {
                 struct obd_device *tgt =
-                        class_exp2obd(cobd->u.cobd.cobd_real_exp);
+                        class_exp2obd(cobd->u.cobd.master_exp);
                 LASSERT(tgt != NULL);
                 rc = snprintf(page, count, "%s\n", tgt->obd_uuid.uuid);
         }
@@ -60,7 +60,7 @@ static int cobd_rd_cache(char *page, char **start, off_t off, int count,
                 rc = snprintf(page, count, "not set up\n");
         } else {
                 struct obd_device *cache =
-                        class_exp2obd(cobd->u.cobd.cobd_cache_exp);
+                        class_exp2obd(cobd->u.cobd.cache_exp);
                 LASSERT(cache != NULL);
                 rc = snprintf(page, count, "%s\n", cache->obd_uuid.uuid);
         }

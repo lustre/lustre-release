@@ -44,6 +44,7 @@ static int lfs_setstripe(int argc, char **argv);
 static int lfs_dirstripe(int argc, char **argv);
 static int lfs_find(int argc, char **argv);
 static int lfs_getstripe(int argc, char **argv);
+static int lfs_showfid(int argc, char **argv);
 static int lfs_osts(int argc, char **argv);
 static int lfs_check(int argc, char **argv);
 static int lfs_catinfo(int argc, char **argv);
@@ -68,7 +69,10 @@ command_t cmdlist[] = {
          "usage: find [--obd <uuid>] [--quiet | --verbose] [--recursive] <dir|file> ..."},
         {"getstripe", lfs_getstripe, 0,
          "To list the striping pattern for given filename.\n"
-         "usage:getstripe <filename>"},
+         "usage: getstripe <filename>"},
+        {"showfid", lfs_showfid, 0,
+         "To list the fid and store cookie for given filename.\n"
+         "usage: showfid [--quiet | --verbose] [--recursive] <dir|file> ..."},
         {"check", lfs_check, 0,
          "Display the status of MDS or OSTs (as specified in the command)\n"
          "or all the servers (MDS and OSTs).\n"
@@ -204,7 +208,7 @@ static int lfs_find(int argc, char **argv)
                 return CMD_HELP;
 
         do {
-                rc = llapi_find(argv[optind], obduuid, recursive,verbose,quiet);
+                rc = llapi_find(argv[optind], obduuid, recursive, verbose, quiet, 0);
         } while (++optind < argc && !rc);
 
         if (rc)
@@ -223,13 +227,63 @@ static int lfs_getstripe(int argc, char **argv)
         optind = 1;
 
         do {
-                rc = llapi_find(argv[optind], obduuid, 0, 0, 0);
+                rc = llapi_find(argv[optind], obduuid, 0, 0, 0, 0);
         } while (++optind < argc && !rc);
 
         if (rc)
                 fprintf(stderr, "error: %s: getstripe failed for %s\n",
                         argv[0], argv[1]);
 
+        return rc;
+}
+
+static int lfs_showfid(int argc, char **argv)
+{
+        struct option long_opts[] = {
+                {"quiet", 0, 0, 'q'},
+                {"recursive", 0, 0, 'r'},
+                {"verbose", 0, 0, 'v'},
+                {0, 0, 0, 0}
+        };
+        char short_opts[] = "hqrv";
+        int quiet, verbose, recursive, c, rc;
+
+        optind = 0;
+        quiet = verbose = recursive = 0;
+        while ((c = getopt_long(argc, argv, short_opts,
+                                long_opts, NULL)) != -1) {
+                switch (c) {
+                case 'q':
+                        quiet++;
+                        verbose = 0;
+                        break;
+                case 'r':
+                        recursive = 1;
+                        break;
+                case 'v':
+                        verbose++;
+                        quiet = 0;
+                        break;
+                case '?':
+                        return CMD_HELP;
+                        break;
+                default:
+                        fprintf(stderr, "error: %s: option '%s' unrecognized\n",
+                                argv[0], argv[optind - 1]);
+                        return CMD_HELP;
+                }
+        }
+
+        if (optind >= argc)
+                return CMD_HELP;
+
+        do {
+                rc = llapi_find(argv[optind], NULL, recursive, verbose, quiet, 1);
+        } while (++optind < argc && !rc);
+
+        if (rc)
+                fprintf(stderr, "error: %s: find failed\n", argv[0]);
+        
         return rc;
 }
 
@@ -252,7 +306,7 @@ static int lfs_osts(int argc, char **argv)
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) ==0) {
                         if (llapi_is_lustre_mnttype(mnt->mnt_type)) {
-                                rc = llapi_find(mnt->mnt_dir, obduuid, 0, 0, 0);
+                                rc = llapi_find(mnt->mnt_dir, obduuid, 0, 0, 0, 0);
                                 if (rc)
                                         fprintf(stderr,
                                                "error: lfs osts failed on %s\n",
@@ -292,8 +346,8 @@ static int lfs_check(int argc, char **argv)
                 strcpy(obd_types[1], "mdc");
         } else {
                 fprintf(stderr, "error: %s: option '%s' unrecognized\n",
-                                argv[0], argv[1]);
-                        return CMD_HELP;
+                        argv[0], argv[1]);
+                return CMD_HELP;
         }
 
         fp = setmntent(MOUNTED, "r");

@@ -35,6 +35,7 @@
 
 #define IOC_MDC_TYPE         'i'
 #define IOC_MDC_GETSTRIPE    _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
+#define IOC_MDC_SHOWFID      _IOWR(IOC_MDC_TYPE, 23, struct lustre_id *)
 
 #ifndef EXT3_IOC_GETFLAGS
 #define        EXT3_IOC_GETFLAGS               _IOR('f', 1, long)

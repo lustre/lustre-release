@@ -527,8 +527,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         cleanup_phase = 1;
 
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-        dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr,
-                                   obj->ioo_id);
+        dentry = filter_id2dentry(exp->exp_obd, NULL, obj->ioo_gr,
+                                  obj->ioo_id);
         if (IS_ERR(dentry))
                 GOTO(cleanup, rc = PTR_ERR(dentry));
         
@@ -781,8 +781,8 @@ int filter_do_cow(struct obd_export *exp, struct obd_ioobj *obj,
 
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         
-        dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr,
-                                   obj->ioo_id);
+        dentry = filter_id2dentry(exp->exp_obd, NULL, obj->ioo_gr,
+                                  obj->ioo_id);
         if (IS_ERR(dentry)) {
                 pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
                 RETURN (PTR_ERR(dentry));
@@ -841,9 +841,8 @@ int filter_write_extents(struct obd_export *exp, struct obd_ioobj *obj, int nobj
         LASSERT(nobj == 1);
 
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-
-        dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr,
-                                   obj->ioo_id);
+        dentry = filter_id2dentry(exp->exp_obd, NULL, obj->ioo_gr,
+                                  obj->ioo_id);
         if (IS_ERR(dentry)) {
                 pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
                 RETURN (PTR_ERR(dentry));

@@ -363,6 +363,7 @@ struct page {
 #define PAGE_LIST_ENTRY list
 #define PAGE_LIST(page) ((page)->list)
 
+#define page_address(page) ((page)->addr)
 #define kmap(page) (page)->addr
 #define kunmap(a) do {} while (0)
 

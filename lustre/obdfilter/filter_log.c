@@ -38,8 +38,7 @@
 #include "filter_internal.h"
 
 int filter_log_sz_change(struct llog_handle *cathandle, 
-                         struct ll_fid *mds_fid,
-                         __u32 io_epoch,
+                         struct lustre_id *id, __u32 io_epoch,
                          struct llog_cookie *logcookie, 
                          struct inode *inode)
 {
@@ -77,7 +76,7 @@ int filter_log_sz_change(struct llog_handle *cathandle,
                 RETURN(-ENOMEM);
         lsc->lsc_hdr.lrh_len = lsc->lsc_tail.lrt_len = sizeof(*lsc);
         lsc->lsc_hdr.lrh_type =  OST_SZ_REC;
-        lsc->lsc_fid = *mds_fid;
+        lsc->lsc_id = *id;
         lsc->lsc_io_epoch = io_epoch;
 
         rc = llog_cat_add_rec(cathandle, &lsc->lsc_hdr, logcookie,

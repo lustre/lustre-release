@@ -53,29 +53,29 @@ struct ll_file_data;
 #define LUSTRE_MDC_NAME "mdc"
 
 struct mds_update_record {
-        __u32 ur_opcode;
-        struct ll_fid *ur_fid1;
-        struct ll_fid *ur_fid2;
-        int ur_namelen;
-        char *ur_name;
-        int ur_tgtlen;
-        char *ur_tgt;
-        int ur_eadatalen;
-        void *ur_eadata;
-        int ur_cookielen;
+        __u32               ur_opcode;
+        struct lustre_id   *ur_id1;
+        struct lustre_id   *ur_id2;
+        int                 ur_namelen;
+        char               *ur_name;
+        int                 ur_tgtlen;
+        char               *ur_tgt;
+        int                 ur_eadatalen;
+        void               *ur_eadata;
+        int                 ur_cookielen;
         struct llog_cookie *ur_logcookies;
-        struct iattr ur_iattr;
-        struct lvfs_ucred ur_uc;
-        __u64 ur_rdev;
-        __u32 ur_mode;
-        __u64 ur_time;
-        __u32 ur_flags;
+        struct iattr        ur_iattr;
+        struct lvfs_ucred   ur_uc;
+        __u64               ur_rdev;
+        __u32               ur_mode;
+        __u64               ur_time;
+        __u32               ur_flags;
 };
 
-#define _ur_fsuid    ur_uc.luc_fsuid
-#define _ur_fsgid    ur_uc.luc_fsgid
-#define _ur_cap      ur_uc.luc_cap
-#define _ur_uid      ur_uc.luc_uid
+#define ur_fsuid    ur_uc.luc_fsuid
+#define ur_fsgid    ur_uc.luc_fsgid
+#define ur_cap      ur_uc.luc_cap
+#define ur_uid      ur_uc.luc_uid
 
 
 #define MDS_LR_SERVER_SIZE    512
@@ -93,12 +93,12 @@ struct mds_update_record {
 
 #define MDS_INCOMPAT_SUPP       (0)
 
-#define REAL_MDS_NUMBER       1 
-#define CACHE_MDS_NUMBER      0 
+#define MDS_MASTER_OBD           1
+#define MDS_CACHE_OBD            0
 
 /*flags for indicate the record are come from cmobd reint or 
   mdc create */
-#define REC_REINT_CREATE      0x0001
+#define REC_REINT_CREATE        0x0001
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
  * Try to keep this the same as fsd_server_data so we might one day merge. */
@@ -172,13 +172,18 @@ int mds_reint_rec(struct mds_update_record *r, int offset,
 
 /* mds/handler.c */
 #ifdef __KERNEL__
-struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
-                                     struct vfsmount **mnt, int lock_mode,
-                                     struct lustre_handle *lockh, int *pmode,
-                                     char *name, int namelen, __u64 lockpart);
-struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
-                              struct vfsmount **mnt);
+struct dentry *
+mds_id2dentry(struct obd_device *obd, struct lustre_id *id,
+              struct vfsmount **mnt);
+
+struct dentry *
+mds_id2locked_dentry(struct obd_device *obd, struct lustre_id *id,
+                     struct vfsmount **mnt, int lock_mode,
+                     struct lustre_handle *lockh, int *pmode,
+                     char *name, int namelen, __u64 lockpart);
 int mds_update_server_data(struct obd_device *, int force_sync);
+int mds_update_last_fid(struct obd_device *obd, void *handle, 
+			int force_sync);
 
 /* mds/mds_fs.c */
 int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt);
@@ -192,13 +197,12 @@ int it_disposition(struct lookup_intent *it, int flag);
 void it_set_disposition(struct lookup_intent *it, int flag);
 int it_open_error(int phase, struct lookup_intent *it);
 int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data);
-int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid, 
+int mdc_change_cbdata(struct obd_export *exp, struct lustre_id *id, 
                       ldlm_iterator_t it, void *data);
-int mdc_intent_lock(struct obd_export *exp, struct ll_fid *parent, 
-                    const char *name, int len, void *lmm, int lmmsize,
-                    struct ll_fid *child,
-                    struct lookup_intent *, int, 
-                    struct ptlrpc_request **reqp,
+int mdc_intent_lock(struct obd_export *exp, struct lustre_id *parent, 
+                    const char *name, int len, void *lmm, int lmmsize, 
+                    struct lustre_id *child, struct lookup_intent *, int, 
+                    struct ptlrpc_request **reqp, 
                     ldlm_blocking_callback cb_blocking);
 int mdc_enqueue(struct obd_export *exp,
                 int lock_type,
@@ -218,11 +222,11 @@ void mdc_pack_secdesc(struct ptlrpc_request *req, int size);
 int mdc_req2lustre_md(struct obd_export *exp_mdc, struct ptlrpc_request *req, 
                       unsigned int offset, struct obd_export *exp_osc, 
                       struct lustre_md *md);
-int mdc_getstatus(struct obd_export *exp, struct ll_fid *rootfid);
-int mdc_getattr(struct obd_export *exp, struct ll_fid *fid,
+int mdc_getstatus(struct obd_export *exp, struct lustre_id *rootid);
+int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
                 unsigned long valid, unsigned int ea_size,
                 struct ptlrpc_request **request);
-int mdc_getattr_name(struct obd_export *exp, struct ll_fid *fid,
+int mdc_getattr_name(struct obd_export *exp, struct lustre_id *id,
                      char *filename, int namelen, unsigned long valid,
                      unsigned int ea_size, struct ptlrpc_request **request);
 int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
@@ -231,7 +235,9 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
 int mdc_open(struct obd_export *exp, obd_id ino, int type, int flags,
              struct lov_mds_md *lmm, int lmm_size, struct lustre_handle *fh,
              struct ptlrpc_request **);
+
 struct obd_client_handle;
+
 int mdc_set_open_replay_data(struct obd_export *exp, 
                              struct obd_client_handle *och,
                              struct ptlrpc_request *open_req);
@@ -239,7 +245,7 @@ int mdc_clear_open_replay_data(struct obd_export *exp,
                                struct obd_client_handle *och);
 int mdc_close(struct obd_export *, struct obdo *, struct obd_client_handle *,
               struct ptlrpc_request **);
-int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid,
+int mdc_readpage(struct obd_export *exp, struct lustre_id *id,
                  __u64, struct page *, struct ptlrpc_request **);
 int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
@@ -251,28 +257,23 @@ int mdc_link(struct obd_export *exp, struct mdc_op_data *data,
 int mdc_rename(struct obd_export *exp, struct mdc_op_data *data,
                const char *old, int oldlen, const char *new, int newlen,
                struct ptlrpc_request **request);
-int mdc_sync(struct obd_export *exp, struct ll_fid *fid,
+int mdc_sync(struct obd_export *exp, struct lustre_id *id,
              struct ptlrpc_request **);
 int mdc_create_client(struct obd_uuid uuid, struct ptlrpc_client *cl);
 
-/* Store the generation of a newly-created inode in |req| for replay. */
-int mdc_store_inode_generation(struct obd_export *exp, struct ptlrpc_request *req, 
+/* store the generation of a newly-created inode in |req| for replay. */
+int mdc_store_inode_generation(struct obd_export *exp,
+                               struct ptlrpc_request *req, 
                                int reqoff, int repoff);
-int mdc_llog_process(struct obd_export *, char *logname, llog_cb_t, void *data);
-int mdc_done_writing(struct obd_export *exp, struct obdo *);
-int mdc_reint(struct ptlrpc_request *request, struct mdc_rpc_lock *rpc_lock, 
-              int level);
-static inline void mdc_pack_fid(struct ll_fid *fid, obd_id ino, __u32 gen,
-                                int type)
-{
-        fid->id = ino;
-        fid->generation = gen;
-        fid->f_type = type;
-}
+
+int mdc_llog_process(struct obd_export *, char *, llog_cb_t,
+                     void *);
+
+int mdc_done_writing(struct obd_export *, struct obdo *);
 
 /* ioctls for trying requests */
-#define IOC_REQUEST_TYPE                   'f'
-#define IOC_REQUEST_MIN_NR                 30
+#define IOC_REQUEST_TYPE                 'f'
+#define IOC_REQUEST_MIN_NR               30
 
 #define IOC_REQUEST_GETATTR             _IOWR('f', 30, long)
 #define IOC_REQUEST_READPAGE            _IOWR('f', 31, long)

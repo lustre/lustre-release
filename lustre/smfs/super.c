@@ -46,8 +46,8 @@
 #include "smfs_internal.h"
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-static struct super_block *smfs_read_super(struct super_block *sb, void *data, 
-                                           int silent)
+static struct super_block *smfs_read_super(struct super_block *sb, 
+                                           void *data, int silent)
 {
         int err;
 

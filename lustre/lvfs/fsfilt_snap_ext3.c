@@ -79,6 +79,32 @@
 #define SNAP_EA_INO_BLOCK_SIZE(size)   (((size)-sizeof(ino_t)*2)/2)
 #define SNAP_EA_PARENT_OFFSET(size)    (sizeof(ino_t)*2 + SNAP_EA_INO_BLOCK_SIZE((size)))
 
+#define EXT3_EA_TRANS_BLOCKS            EXT3_DATA_TRANS_BLOCKS
+#define EXT3_SETMETA_TRANS_BLOCKS       EXT3_DATA_TRANS_BLOCKS
+#define EXT3_NEWINODE_TRANS_BLOCKS      10
+
+#define SNAP_COPYBLOCK_TRANS_BLOCKS    (EXT3_DATA_TRANS_BLOCKS)
+#define SNAP_INSERTLIST_TRANS_BLOCKS    (2 * EXT3_EA_TRANS_BLOCKS + 1)
+#define SNAP_DELETELIST_TRANS_BLOCKS    (2 * EXT3_EA_TRANS_BLOCKS + 2)
+#define SNAP_MIGRATEDATA_TRANS_BLOCKS   2
+#define SNAP_SETIND_TRANS_BLOCKS        (SNAP_INSERTLIST_TRANS_BLOCKS + 1)
+#define SNAP_ADDORPHAN_TRANS_BLOCKS     2
+#define SNAP_REMOVEORPHAN_TRANS_BLOCKS  1
+#define SNAP_RESTOREORPHAN_TRANS_BLOCKS (EXT3_EA_TRANS_BLOCKS + \
+                                         SNAP_DELETELIST_TRANS_BLOCKS + \
+                                         EXT3_NEWINODE_TRANS_BLOCKS + \
+                                         2 * SNAP_MIGRATEDATA_TRANS_BLOCKS)
+#define SNAP_BIGCOPY_TRANS_BLOCKS       (2 * EXT3_DATA_TRANS_BLOCKS)
+#define SNAP_CREATEIND_TRANS_BLOCKS     (EXT3_NEWINODE_TRANS_BLOCKS + \
+                                         SNAP_MIGRATEDATA_TRANS_BLOCKS + \
+                                         SNAP_SETIND_TRANS_BLOCKS + \
+                                         SNAP_BIGCOPY_TRANS_BLOCKS + 3)
+#define SNAP_MIGRATEBLK_TRANS_BLOCKS    2
+#define SNAP_DESTROY_TRANS_BLOCKS       (SNAP_DELETELIST_TRANS_BLOCKS + \
+                                         EXT3_EA_TRANS_BLOCKS + 2)
+#define SNAP_RESTORE_TRANS_BLOCKS       (EXT3_NEWINODE_TRANS_BLOCKS + \
+                                         2 * SNAP_MIGRATEDATA_TRANS_BLOCKS + 1)
+
 #define EXT3_JOURNAL_START(sb, handle, blocks, rc)              \
 do {                                                            \
         journal_t *journal;                                     \
@@ -1687,8 +1713,6 @@ static int fsfilt_ext3_set_dir_ent(struct super_block *sb, char *name,
                 de1 = (struct ext3_dir_entry_2 *)(buf + buf_off); 
                 int rlen, nlen;
  
-                LASSERT(nlen == EXT3_DIR_REC_LEN_DE(de));
-                
                 rlen = le16_to_cpu(de->rec_len);
                 de->rec_len = cpu_to_le16(nlen);
                 
@@ -1696,6 +1720,7 @@ static int fsfilt_ext3_set_dir_ent(struct super_block *sb, char *name,
                 de1->name_len = strlen(name);
                 memcpy (de1->name, name, de->name_len);
                 nlen = EXT3_DIR_REC_LEN_DE(de1); 
+                LASSERT(nlen == EXT3_DIR_REC_LEN_DE(de));
                 RETURN(nlen);
         }        
 

@@ -31,6 +31,8 @@
 #define PORTALS_DEV_PATH "/dev/portals"
 #define OBD_DEV_ID 1
 #define OBD_DEV_PATH "/dev/obd"
+#define SMFS_DEV_ID  2
+#define SMFS_DEV_PATH "/dev/snapdev"
 
 int ptl_name2nal(char *str);
 int ptl_parse_ipaddr (__u32 *ipaddrp, char *str);

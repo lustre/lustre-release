@@ -26,7 +26,7 @@ ${LMC} --add ost --node localhost --obd obd1 --fstype $FSTYPE --obdtype obdecho 
 # configure ost
 ${LMC} --add ost --node localhost --obd obd2 --fstype $FSTYPE --obdtype obdecho || exit 30
 
-${LMC} --add cobd --node localhost --real_obd obd1 --cache_obd obd2
+${LMC} --add cobd --node localhost --master_obd obd1 --cache_obd obd2
 
 # create client config
 # ${LMC} -m $config --add mtpt --node localhost --path /mnt/lustre --mds mds1 --obd obd1 || exit 40

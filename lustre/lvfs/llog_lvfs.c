@@ -517,12 +517,15 @@ llog_object_create_alone(struct llog_ctxt *ctxt, struct llog_logid *lgh_id)
         LASSERT(lgh_id != NULL);
         if (lgh_id->lgl_oid) {
                 struct dentry *dchild;
-                char fidname[LL_FID_NAMELEN];
-                int fidlen = 0;
+                char id_name[LL_ID_NAMELEN];
+                int id_len = 0;
 
                 down(&ctxt->loc_objects_dir->d_inode->i_sem);
-                fidlen = ll_fid2str(fidname, lgh_id->lgl_oid, lgh_id->lgl_ogen);
-                dchild = lookup_one_len(fidname, ctxt->loc_objects_dir, fidlen);
+                id_len = ll_id2str(id_name, lgh_id->lgl_oid, 
+                                       lgh_id->lgl_ogen);
+                
+                dchild = lookup_one_len(id_name, ctxt->loc_objects_dir, 
+                                        id_len);
                 if (IS_ERR(dchild)) {
                         up(&ctxt->loc_objects_dir->d_inode->i_sem);
                         RETURN((struct file *)dchild);
@@ -561,8 +564,8 @@ llog_object_create_alone(struct llog_ctxt *ctxt, struct llog_logid *lgh_id)
                         RETURN(filp);
                 }
                 if (!S_ISREG(filp->f_dentry->d_inode->i_mode)) {
-                        CERROR("%s is not a regular file!: mode = %o\n", fidname,
-                               filp->f_dentry->d_inode->i_mode);
+                        CERROR("%s is not a regular file!: mode = %o\n", 
+                               id_name, filp->f_dentry->d_inode->i_mode);
                         filp_close(filp, 0);
                         up(&ctxt->loc_objects_dir->d_inode->i_sem);
                         RETURN(ERR_PTR(-ENOENT));
@@ -573,13 +576,13 @@ llog_object_create_alone(struct llog_ctxt *ctxt, struct llog_logid *lgh_id)
 
         } else {
                 unsigned int tmpname = ll_insecure_random_int();
-                char fidname[LL_FID_NAMELEN];
+                char id_name[LL_ID_NAMELEN];
                 struct dentry *new_child, *parent;
+                int err, id_len;
                 void *handle;
-                int err, namelen;
 
-                sprintf(fidname, "OBJECTS/%u", tmpname);
-                filp = filp_open(fidname, O_CREAT | O_EXCL, 0644);
+                sprintf(id_name, "OBJECTS/%u", tmpname);
+                filp = filp_open(id_name, O_CREAT | O_EXCL, 0644);
                 if (IS_ERR(filp)) {
                         rc = PTR_ERR(filp);
                         if (rc == -EEXIST) {
@@ -591,11 +594,11 @@ llog_object_create_alone(struct llog_ctxt *ctxt, struct llog_logid *lgh_id)
                         RETURN(filp);
                 }
 
-                namelen = ll_fid2str(fidname, filp->f_dentry->d_inode->i_ino,
-                                     filp->f_dentry->d_inode->i_generation);
+                id_len = ll_id2str(id_name, filp->f_dentry->d_inode->i_ino,
+                                       filp->f_dentry->d_inode->i_generation);
                 parent = filp->f_dentry->d_parent;
                 down(&parent->d_inode->i_sem);
-                new_child = lookup_one_len(fidname, parent, namelen);
+                new_child = lookup_one_len(id_name, parent, id_len);
                 if (IS_ERR(new_child)) {
                         CERROR("getting neg dentry for obj rename: %d\n", rc);
                         GOTO(out_close, rc = PTR_ERR(new_child));
@@ -657,8 +660,8 @@ llog_object_create_generic(struct llog_ctxt *ctxt, struct llog_logid *lgh_id)
         LASSERT(obd != NULL);
 
         if (lgh_id->lgl_oid) {
-                dchild = obd_lvfs_fid2dentry(ctxt->loc_exp, lgh_id->lgl_oid,
-                                             lgh_id->lgl_ogen, lgh_id->lgl_ogr);
+                dchild = obd_lvfs_id2dentry(ctxt->loc_exp, lgh_id->lgl_oid,
+                                            lgh_id->lgl_ogen, lgh_id->lgl_ogr);
                 if (IS_ERR(dchild) == -ENOENT) {
                         OBD_ALLOC(oa, sizeof(*oa));
                         if (!oa)
@@ -676,8 +679,8 @@ llog_object_create_generic(struct llog_ctxt *ctxt, struct llog_logid *lgh_id)
                         CDEBUG(D_HA, "re-create log object "LPX64":0x%x:"LPX64"\n",
                                lgh_id->lgl_oid, lgh_id->lgl_ogen, lgh_id->lgl_ogr);
 
-                        dchild = obd_lvfs_fid2dentry(ctxt->loc_exp, lgh_id->lgl_oid,
-                                                     lgh_id->lgl_ogen, lgh_id->lgl_ogr);
+                        dchild = obd_lvfs_id2dentry(ctxt->loc_exp, lgh_id->lgl_oid,
+                                                    lgh_id->lgl_ogen, lgh_id->lgl_ogr);
                 } else if (IS_ERR(dchild)) {
                         CERROR("error looking up logfile "LPX64":0x%x: rc %d\n",
                                lgh_id->lgl_oid, lgh_id->lgl_ogen, rc);
@@ -707,8 +710,8 @@ llog_object_create_generic(struct llog_ctxt *ctxt, struct llog_logid *lgh_id)
                 if (rc)
                         GOTO(out_free_oa, rc);
 
-                dchild = obd_lvfs_fid2dentry(ctxt->loc_exp, oa->o_id,
-                                             oa->o_generation, oa->o_gr);
+                dchild = obd_lvfs_id2dentry(ctxt->loc_exp, oa->o_id,
+                                            oa->o_generation, oa->o_gr);
                 if (IS_ERR(dchild))
                         GOTO(out_free_oa, rc = PTR_ERR(dchild));
 
@@ -747,14 +750,14 @@ static int llog_add_link_object(struct llog_ctxt *ctxt, struct llog_logid logid,
                                 struct dentry *dentry)
 {
         struct dentry *new_child;
-        char fidname[LL_FID_NAMELEN];
+        char id_name[LL_ID_NAMELEN];
         void *handle;
-        int namelen, rc = 0, err;
+        int id_len, rc = 0, err;
         ENTRY;
         
-        namelen = ll_fid2str(fidname, logid.lgl_oid, logid.lgl_ogen);
+        id_len = ll_id2str(id_name, logid.lgl_oid, logid.lgl_ogen);
         down(&ctxt->loc_objects_dir->d_inode->i_sem);
-        new_child = lookup_one_len(fidname, ctxt->loc_objects_dir, namelen);
+        new_child = lookup_one_len(id_name, ctxt->loc_objects_dir, id_len);
         if (IS_ERR(new_child)) {
                 CERROR("getting neg dentry for obj rename: %d\n", rc);
                 GOTO(out, rc = PTR_ERR(new_child));
@@ -873,9 +876,9 @@ static int llog_lvfs_destroy(struct llog_handle *loghandle)
         struct lvfs_run_ctxt saved;
         struct dentry *fdentry;
         struct inode *parent_inode;
-        char fidname[LL_FID_NAMELEN];
+        char id_name[LL_ID_NAMELEN];
         void *handle;
-        int rc = -EINVAL, err, namelen;
+        int rc = -EINVAL, err, id_len;
         ENTRY;
         
         if (ctxt->loc_lvfs_ctxt)
@@ -887,8 +890,8 @@ static int llog_lvfs_destroy(struct llog_handle *loghandle)
         if (!strcmp(fdentry->d_parent->d_name.name, "LOGS")) {
                 LASSERT(parent_inode == ctxt->loc_logs_dir->d_inode);
                 
-                namelen = ll_fid2str(fidname, fdentry->d_inode->i_ino,
-                                     fdentry->d_inode->i_generation);
+                id_len = ll_id2str(id_name, fdentry->d_inode->i_ino,
+                                   fdentry->d_inode->i_generation);
                 dget(fdentry);
                 rc = llog_lvfs_close(loghandle);
                 if (rc) {
@@ -910,10 +913,11 @@ static int llog_lvfs_destroy(struct llog_handle *loghandle)
                 
                 if (!rc) {
                         down(&ctxt->loc_objects_dir->d_inode->i_sem);
-                        fdentry = lookup_one_len(fidname, ctxt->loc_objects_dir,
-                                                 namelen);
+                        fdentry = lookup_one_len(id_name, ctxt->loc_objects_dir,
+                                                 id_len);
                         if (fdentry == NULL || fdentry->d_inode == NULL) {
-                                CERROR("destroy non_existent object %s\n", fidname);
+                                CERROR("destroy non_existent object %s\n", 
+                                       id_name);
                                 GOTO(out_err, rc = IS_ERR(fdentry) ?
                                      PTR_ERR(fdentry) : -ENOENT);
                         }

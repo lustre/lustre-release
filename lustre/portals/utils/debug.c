@@ -78,7 +78,7 @@ static const char *portal_debug_subsystems[] =
         {"undefined", "mdc", "mds", "osc", "ost", "class", "log", "llite",
          "rpc", "mgmt", "portals", "libcfs", "socknal", "qswnal", "pinger",
          "filter", "ptlbd", "echo", "ldlm", "lov", "gmnal", "router", "cobd",
-         "ibnal", NULL};
+         "ibnal", "lmv", "cmobd", "smfs", NULL};
 static const char *portal_debug_masks[] =
         {"trace", "inode", "super", "ext2", "malloc", "cache", "info", "ioctl",
          "blocks", "net", "warning", "buffs", "other", "dentry", "portals",
@@ -626,6 +626,7 @@ static struct mod_paths {
         {"obdfilter", "lustre/obdfilter"},
         {"extN", "lustre/extN"},
         {"lov", "lustre/lov"},
+        {"lmv", "lustre/lmv"},
         {"fsfilt_ext3", "lustre/lvfs"},
         {"fsfilt_extN", "lustre/lvfs"},
         {"fsfilt_reiserfs", "lustre/lvfs"},
@@ -637,6 +638,8 @@ static struct mod_paths {
         {"ptlbd", "lustre/ptlbd"},
         {"mgmt_svc", "lustre/mgmt"},
         {"mgmt_cli", "lustre/mgmt"},
+        {"cobd", "lustre/cobd"},
+        {"cmobd", "lustre/cmobd"},
         {"conf_obd", "lustre/obdclass"},
         {NULL, NULL}
 };

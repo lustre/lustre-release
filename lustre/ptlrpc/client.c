@@ -209,6 +209,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
                 request->rq_timeout = obd_timeout / 2;
         else
                 request->rq_timeout = obd_timeout;
+
         request->rq_send_state = LUSTRE_IMP_FULL;
         request->rq_type = PTL_RPC_MSG_REQUEST;
         request->rq_import = class_import_get(imp);
@@ -235,7 +236,6 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
 
         request->rq_reqmsg->opc = opcode;
         request->rq_reqmsg->flags = 0;
-
         RETURN(request);
 }
 
@@ -1328,6 +1328,12 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         LASSERT(req->rq_set == NULL);
         LASSERT(!req->rq_receiving_reply);
         atomic_inc(&imp->imp_inflight);
+
+        if (imp->imp_connection == NULL) {
+                CERROR("request on not connected import %s\n",
+                        imp->imp_obd->obd_name);
+                RETURN(-EINVAL);
+        }
 
         /* for distributed debugging */
         req->rq_reqmsg->status = current->pid;
