@@ -263,7 +263,9 @@ void ldlm_resource_dump(struct ldlm_resource *res)
                 LBUG();
 
         snprintf(name, sizeof(name), "%Lx %Lx %Lx",
-                 res->lr_name[0], res->lr_name[1], res->lr_name[2]);
+                 (unsigned long long)res->lr_name[0],
+                 (unsigned long long)res->lr_name[1],
+                 (unsigned long long)res->lr_name[2]);
 
         CDEBUG(D_OTHER, "--- Resource: %p (%s)\n", res, name);
         CDEBUG(D_OTHER, "Namespace: %p (%u)\n", res->lr_namespace,
