@@ -1,4 +1,0 @@
-MODULES := ost
-ost-objs := ost_handler.o lproc_ost.o
-
-@INCLUDE_RULES@

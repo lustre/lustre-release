@@ -1,4 +1,0 @@
-MODULES := obdecho
-obdecho-objs := echo.o echo_client.o lproc_echo.o
-
-@INCLUDE_RULES@
