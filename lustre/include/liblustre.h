@@ -222,9 +222,14 @@ typedef struct {
          int size;
 } kmem_cache_t;
 #define SLAB_HWCACHE_ALIGN 0
-static inline kmem_cache_t *kmem_cache_create(name,objsize,c,d,e,f)
+static inline kmem_cache_t *kmem_cache_create(name,objsize,cdum,d,e,f)
 {
-        return malloc(objsize);
+        kmem_cache_t *c;
+        c = malloc(sizeof(*c));
+        if (!c)
+                return NULL;
+        c->size = objsize;
+        return c;
 };
 
 static inline int kmem_cache_destroy(kmem_cache_t *a)
