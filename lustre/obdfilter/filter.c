@@ -2205,9 +2205,8 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
         struct lvfs_run_ctxt saved;
         struct lov_stripe_md *lsm = NULL;
         struct filter_export_data *fed;
-        int group = oa->o_gr;
         char str[PTL_NALFMT_SIZE];
-        int rc = 0, diff;
+        int group = oa->o_gr, rc = 0, diff, recreate_objs = 0;
         ENTRY;
 
         if (!(oa->o_valid & OBD_MD_FLGROUP) || group == 0) {
@@ -2218,11 +2217,17 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
+        if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+            (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
+                recreate_objs = 1;
+        }
+
         obd = exp->exp_obd;
         fed = &exp->exp_filter_data;
         filter = &obd->u.filter;
 
-        if (fed->fed_group != group && !(oa->o_valid & OBD_MD_REINT)) {
+        if (fed->fed_group != group && !recreate_objs &&
+            !(oa->o_valid & OBD_MD_REINT)) {
                 portals_nid2str(exp->exp_connection->c_peer.peer_ni->pni_number,
                                 exp->exp_connection->c_peer.peer_nid, str);
                 CERROR("!!! This export (nid "LPX64"/%s) used object group %d "
@@ -2250,8 +2255,7 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
         if (oa->o_valid & OBD_MD_REINT) {
                 int num = *((int*)oa->o_inline);  
                 rc = filter_precreate(obd, oa, oa->o_gr, &num);
-        } else if ((oa->o_valid & OBD_MD_FLFLAGS) &&
-                   (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
+        } else if (recreate_objs) {
                 if (oa->o_id > filter_last_id(&obd->u.filter, group)) {
                         CERROR("recreate objid "LPU64" > last id "LPU64"\n",
                                oa->o_id, filter_last_id(&obd->u.filter, group));

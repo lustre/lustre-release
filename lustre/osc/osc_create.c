@@ -217,16 +217,20 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
         LASSERT(oa->o_gr > 0);
 
+        if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+            oa->o_flags == OBD_FL_RECREATE_OBJS) {
+                /* Exceptional case where we are trying to repair missing
+                 * objects for various groups.  We have already validated that
+                 * this is a valid group for the file.  Don't set oscc->oscc_gr.
+                 */
+                RETURN(osc_real_create(exp, oa, ea, oti));
+        }
+
         LASSERT(oscc->oscc_gr == 0 || oscc->oscc_gr == oa->o_gr);
         oscc->oscc_gr = oa->o_gr;
 
         if (oa->o_gr == FILTER_GROUP_LLOG || oa->o_gr == FILTER_GROUP_ECHO)
                 RETURN(osc_real_create(exp, oa, ea, oti));
-
-        if ((oa->o_valid & OBD_MD_FLFLAGS) &&
-            oa->o_flags == OBD_FL_RECREATE_OBJS) { 
-                RETURN(osc_real_create(exp, oa, ea, oti));
-        }
 
         lsm = *ea;
         if (lsm == NULL) {

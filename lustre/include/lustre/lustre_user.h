@@ -92,6 +92,8 @@ extern int get_file_stripe(char *path, struct lov_user_md *lum);
 struct ll_recreate_obj {
         __u64 lrc_id;
         __u32 lrc_ost_idx;
+        __u32 lrc_padding;
+        __u64 lrc_group;
 };
 
 struct obd_uuid {

@@ -609,8 +609,8 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                 RETURN(-EIO);
 
         /* Recreate a specific object id at the given OST index */
-        if (src_oa->o_valid & OBD_MD_FLFLAGS && src_oa->o_flags &
-                                                OBD_FL_RECREATE_OBJS) {
+        if ((src_oa->o_valid & OBD_MD_FLFLAGS) &&
+            (src_oa->o_flags & OBD_FL_RECREATE_OBJS)) {
                  struct lov_stripe_md obj_md;
                  struct lov_stripe_md *obj_mdp = &obj_md;
 
@@ -622,8 +622,10 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
                          RETURN(-EINVAL);
                  for (i = 0; i < lsm->lsm_stripe_count; i++) {
                          if (lsm->lsm_oinfo[i].loi_ost_idx == ost_idx) {
-                                 if (lsm->lsm_oinfo[i].loi_id != src_oa->o_id)
+                                 if (lsm->lsm_oinfo[i].loi_id != src_oa->o_id ||
+                                     lsm->lsm_oinfo[i].loi_gr != src_oa->o_gr) {
                                          RETURN(-EINVAL);
+                                 }
                                  break;
                          }
                  }
