@@ -174,10 +174,10 @@ static void pingsrv_callback(ptl_event_t *ev)
         }
         server->evnt = *ev;
         
-        printk ("Lustre: received ping from nid "LPX64" "
-               "(off=%u rlen=%u mlen=%u head=%x)\n",
-               ev->initiator.nid, ev->offset, ev->rlength, ev->mlength,
-               *((int *)(ev->md.start + ev->offset)));
+        CWARN("Lustre: received ping from nid "LPX64" "
+              "(off=%u rlen=%u mlen=%u head=%x)\n",
+              ev->initiator.nid, ev->offset, ev->rlength, ev->mlength,
+              *((int *)(ev->md.start + ev->offset)));
         
         packets_valid++;
 
