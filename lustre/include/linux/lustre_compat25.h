@@ -110,7 +110,7 @@ static inline void clear_page_dirty(struct page *page)
 #define try_module_get                  __MOD_INC_USE_COUNT
 #define module_put                      __MOD_DEC_USE_COUNT
 #define LTIME_S(time)                   (time)
-#ifndef CONFIG_RH_2_4_20
+#if !defined(CONFIG_RH_2_4_20) && !defined(cpu_online)
 #define cpu_online(cpu)                 (cpu_online_map & (1<<cpu))
 #endif
 
