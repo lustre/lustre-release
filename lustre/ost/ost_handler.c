@@ -927,6 +927,7 @@ static int ost_handle(struct ptlrpc_request *req)
         int should_process, fail = OBD_FAIL_OST_ALL_REPLY_NET, rc = 0;
         ENTRY;
 
+        LASSERT(current->journal_info == NULL);
         /* XXX identical to MDS */
         if (req->rq_reqmsg->opc != OST_CONNECT) {
                 struct obd_device *obd;
@@ -1005,12 +1006,14 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "write\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
                 rc = ost_brw_write(req, oti);
+                LASSERT(current->journal_info == NULL);
                 /* ost_brw sends its own replies */
                 RETURN(rc);
         case OST_READ:
                 CDEBUG(D_INODE, "read\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
                 rc = ost_brw_read(req);
+                LASSERT(current->journal_info == NULL);
                 /* ost_brw sends its own replies */
                 RETURN(rc);
         case OST_SAN_READ:
@@ -1080,6 +1083,8 @@ static int ost_handle(struct ptlrpc_request *req)
                 rc = ptlrpc_error(req);
                 RETURN(rc);
         }
+
+        LASSERT(current->journal_info == NULL);
 
         EXIT;
         /* If we're DISCONNECTing, the export_data is already freed */

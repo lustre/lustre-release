@@ -1207,6 +1207,7 @@ static int filter_close_internal(struct obd_export *exp,
         int rc, rc2, cleanup_phase = 0;
         struct dentry *dparent = NULL;
         struct obd_run_ctxt saved;
+        int nested_trans = (current->journal_info != NULL);
         ENTRY;
 
         LASSERT(filp->private_data == ffd);
@@ -1257,6 +1258,11 @@ static int filter_close_internal(struct obd_export *exp,
                         CERROR("error on commit, err = %d\n", rc2);
                         if (!rc)
                                 rc = rc2;
+                }
+                if (nested_trans == 0) {
+                        LASSERT(current->journal_info == NULL);
+                        if (oti != NULL)
+                                oti->oti_handle = NULL;
                 }
         }
 

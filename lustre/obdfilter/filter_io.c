@@ -427,6 +427,11 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         ENTRY;
         LASSERT(objcount == 1);
 
+        /* We should never be called during a transaction */
+        LASSERT(oti != NULL);
+        LASSERT(oti->oti_handle == NULL);
+        LASSERT(current->journal_info == NULL);
+
         OBD_ALLOC(fso, objcount * sizeof(*fso));
         if (fso == NULL)
                 RETURN(-ENOMEM);
@@ -462,7 +467,6 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow prep setup %lus\n", (jiffies - now) / HZ);
 
-        LASSERT(oti != NULL);
         oti->oti_handle = fsfilt_brw_start(exp->exp_obd, objcount, fso,
                                            niocount, oti);
         if (IS_ERR(oti->oti_handle)) {
@@ -527,6 +531,8 @@ out_pages:
         fsfilt_commit(exp->exp_obd,
                       filter_parent(exp->exp_obd,S_IFREG,obj->ioo_id)->d_inode,
                       oti->oti_handle, 0);
+        LASSERT(current->journal_info == NULL);
+        oti->oti_handle = NULL;
         goto out; /* dropped the dentry refs already (one per page) */
 
 out_objinfo:
@@ -631,16 +637,15 @@ filter_commitrw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         struct niobuf_local *lnb;
         struct obd_device *obd = exp->exp_obd;
         int found_locked = 0, rc = 0, i;
-        int nested_trans = current->journal_info != NULL;
         unsigned long now = jiffies;  /* DEBUGGING OST TIMEOUTS */
         ENTRY;
 
         push_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
 
+        LASSERT(current->journal_info == NULL);
         if (cmd & OBD_BRW_WRITE) {
-                LASSERT(oti);
-                LASSERT(current->journal_info == NULL ||
-                        current->journal_info == oti->oti_handle);
+                LASSERT(oti != NULL);
+                LASSERT(oti->oti_handle != NULL);
                 current->journal_info = oti->oti_handle;
         }
 
@@ -748,6 +753,8 @@ filter_commitrw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 rc = filter_finish_transno(exp, oti, rc);
                 err = fsfilt_commit(obd, dparent->d_inode, oti->oti_handle,
                                     obd_sync_filter);
+                LASSERT(current->journal_info == NULL);
+                oti->oti_handle = NULL;
                 if (err)
                         rc = err;
                 if (obd_sync_filter)
@@ -756,7 +763,6 @@ filter_commitrw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                         CERROR("slow commitrw commit %lus\n", (jiffies-now)/HZ);
         }
 
-        LASSERT(nested_trans || current->journal_info == NULL);
         pop_ctxt(&saved, &obd->u.filter.fo_ctxt, NULL);
         RETURN(rc);
 }
