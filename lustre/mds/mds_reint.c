@@ -315,7 +315,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
 
         if (rc) {
                 CERROR("error during create: %d\n", rc);
-                if (rc != -ENOSPC) LBUG();
+                if (rc != -ENOSPC)
+                        LBUG();
                 GOTO(out_create_commit, rc);
         } else {
                 struct iattr iattr;

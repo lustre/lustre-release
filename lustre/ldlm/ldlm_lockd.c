@@ -199,7 +199,6 @@ static int _ldlm_callback(struct ptlrpc_service *svc,
         spin_lock(&lock->l_resource->lr_lock);
         spin_lock(&lock->l_lock);
         if (!new) {
-                CDEBUG(D_INFO, "Got local completion AST for lock %p.\n", lock);
                 lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
 
                 /* If we receive the completion AST before the actual enqueue
@@ -238,7 +237,6 @@ static int _ldlm_callback(struct ptlrpc_service *svc,
                 spin_unlock(&lock->l_lock);
                 spin_unlock(&lock->l_resource->lr_lock);
         } else {
-                CDEBUG(D_INFO, "Got local blocking AST for lock %p.\n", lock);
                 lock->l_flags |= LDLM_FL_DYING;
                 spin_unlock(&lock->l_lock);
                 spin_unlock(&lock->l_resource->lr_lock);

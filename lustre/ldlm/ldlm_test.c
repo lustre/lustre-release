@@ -13,6 +13,17 @@
 
 #include <linux/lustre_dlm.h>
 
+struct ldlm_test_thread {
+        struct ldlm_namespace *t_ns;
+        struct list_head t_link;
+        __u32 t_flags; 
+        wait_queue_head_t t_ctl_waitq;
+};
+
+static spinlock_t ctl_lock = SPIN_LOCK_UNLOCKED;
+static struct list_head ctl_threads;
+static int regression_running = 0;
+
 static int ldlm_test_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
                               void *data, __u32 data_len,
                               struct ptlrpc_request **reqp)
@@ -152,6 +163,109 @@ static int ldlm_test_network(struct obd_device *obddev,
         CERROR("ldlm_cli_enqueue: %d\n", err);
 
         RETURN(err);
+}
+
+static int ldlm_test_main(void *data)
+{
+        return 0;
+}
+
+static int ldlm_start_thread(void)
+{
+        struct ldlm_test_thread *test;
+        int rc;
+        ENTRY;
+
+        OBD_ALLOC(test, sizeof(*test));
+        if (test == NULL) {
+                LBUG();
+                RETURN(-ENOMEM);
+        }
+        init_waitqueue_head(&test->t_ctl_waitq);
+
+        spin_lock(&ctl_lock);
+        list_add(&test->t_link, &ctl_threads);
+        spin_unlock(&ctl_lock);
+
+        rc = kernel_thread(ldlm_test_main, (void *)test,
+                           CLONE_VM | CLONE_FS | CLONE_FILES);
+        if (rc < 0) {
+                CERROR("cannot start thread\n");
+                RETURN(-EINVAL);
+        }
+        wait_event(test->t_ctl_waitq, test->t_flags & SVC_RUNNING);
+
+        RETURN(0);
+}
+
+static int ldlm_stop_all_threads(void)
+{
+        spin_lock(&ctl_lock);
+        while (!list_empty(&ctl_threads)) {
+                struct ldlm_test_thread *thread;
+                thread = list_entry(ctl_threads.next, struct ldlm_test_thread,
+                                    t_link);
+                spin_unlock(&ctl_lock);
+
+                thread->t_flags = SVC_STOPPING;
+
+                wake_up(&thread->t_ctl_waitq);
+                wait_event_interruptible(thread->t_ctl_waitq,
+                                         (thread->t_flags & SVC_STOPPED));
+
+                spin_lock(&ctl_lock);
+                list_del(&thread->t_link);
+                OBD_FREE(thread, sizeof(*thread));
+        }
+        spin_unlock(&ctl_lock);
+
+        return 0;
+}
+
+int ldlm_regression_start(struct obd_device *obddev,
+                          struct ptlrpc_connection *conn, int count)
+{
+        int i, rc;
+        ENTRY;
+
+        spin_lock(&ctl_lock);
+        if (regression_running) {
+                CERROR("You can't start the ldlm regression twice.\n");
+                spin_unlock(&ctl_lock);
+                RETURN(-EINVAL);
+        }
+        regression_running = 1;
+        spin_unlock(&ctl_lock);
+
+        for (i = 0; i < count; i++) {
+                rc = ldlm_start_thread();
+                if (rc < 0)
+                        GOTO(cleanup, rc);
+        }
+
+ cleanup:
+        RETURN(rc);
+}
+
+int ldlm_regression_stop(void)
+{
+        ENTRY;
+
+        spin_lock(&ctl_lock);
+        if (!regression_running) {
+                CERROR("The ldlm regression isn't started.\n");
+                spin_unlock(&ctl_lock);
+                RETURN(-EINVAL);
+        }
+        spin_unlock(&ctl_lock);
+
+        /* Do stuff */
+
+        spin_lock(&ctl_lock);
+        regression_running = 0;
+        spin_unlock(&ctl_lock);
+
+        RETURN(0);
 }
 
 int ldlm_test(struct obd_device *obddev, struct ptlrpc_connection *conn)

@@ -81,7 +81,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                         break;
                 case IT_UNLINK:
                         bufcount = 2;
-                        size[1] = sizeof(struct obdo); 
+                        size[1] = sizeof(struct obdo);
                         break;
                 case IT_RMDIR:
                         bufcount = 1;
@@ -101,7 +101,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 rep->lock_policy_res1 = 1;
 
                 /* execute policy */
-                switch ( it->opc ) {
+                switch (it->opc) {
                 case IT_CREAT:
                 case IT_CREAT|IT_OPEN:
                 case IT_MKDIR:
@@ -275,9 +275,8 @@ int ldlm_send_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock *new)
         ENTRY;
 
         spin_lock(&lock->l_lock);
-        if (lock->l_flags & LDLM_FL_AST_SENT) {
+        if (lock->l_flags & LDLM_FL_AST_SENT)
                 RETURN(0);
-        }
 
         lock->l_flags |= LDLM_FL_AST_SENT;
 
@@ -350,9 +349,11 @@ static int _ldlm_lock_compat(struct ldlm_lock *lock, int send_cbs,
 
                 rc = 1;
 
-                CDEBUG(D_OTHER, "compat function failed and lock modes incompat\n");
+                CDEBUG(D_OTHER, "compat function failed and lock modes "
+                       "incompat\n");
                 if (send_cbs && child->l_blocking_ast != NULL) {
-                        CDEBUG(D_OTHER, "incompatible; sending blocking AST.\n");
+                        CDEBUG(D_OTHER, "incompatible; sending blocking "
+                               "AST.\n");
                         /* It's very difficult to actually send the AST from
                          * here, because we'd have to drop the lock before going
                          * to sleep to wait for the reply.  Instead we build the
@@ -381,6 +382,7 @@ static int ldlm_lock_compat(struct ldlm_lock *lock, int send_cbs)
 /* Args: locked lock, locked resource */
 void ldlm_grant_lock(struct ldlm_resource *res, struct ldlm_lock *lock)
 {
+        struct ptlrpc_request *req = NULL;
         ENTRY;
 
         ldlm_resource_add_lock(res, &res->lr_granted, lock);
@@ -389,9 +391,18 @@ void ldlm_grant_lock(struct ldlm_resource *res, struct ldlm_lock *lock)
         if (lock->l_granted_mode < res->lr_most_restr)
                 res->lr_most_restr = lock->l_granted_mode;
 
-        if (lock->l_completion_ast)
+        if (lock->l_completion_ast) {
                 lock->l_completion_ast(lock, NULL, lock->l_data,
-                                       lock->l_data_len, NULL);
+                                       lock->l_data_len, &req);
+                if (req != NULL) {
+                        struct list_head *list = res->lr_tmp;
+                        if (list == NULL) {
+                                LBUG();
+                                return;
+                        }
+                        list_add(&req->rq_multi, list);
+                }
+        }
         EXIT;
 }
 
@@ -627,28 +638,12 @@ static int ldlm_reprocess_queue(struct ldlm_resource *res,
         RETURN(0);
 }
 
-/* Must be called with resource->lr_lock not taken. */
-void ldlm_reprocess_all(struct ldlm_resource *res)
+static void ldlm_send_delayed_asts(struct list_head *rpc_list)
 {
-        struct list_head rpc_list, *tmp, *pos;
+        struct list_head *tmp, *pos;
+        ENTRY;
 
-        INIT_LIST_HEAD(&rpc_list);
-
-        /* Local lock trees don't get reprocessed. */
-        if (res->lr_namespace->ns_client)
-                return;
-
-        spin_lock(&res->lr_lock);
-        res->lr_tmp = &rpc_list;
-
-        ldlm_reprocess_queue(res, &res->lr_converting);
-        if (list_empty(&res->lr_converting))
-                ldlm_reprocess_queue(res, &res->lr_waiting);
-
-        res->lr_tmp = NULL;
-        spin_unlock(&res->lr_lock);
-
-        list_for_each_safe(tmp, pos, &rpc_list) {
+        list_for_each_safe(tmp, pos, rpc_list) {
                 int rc;
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_multi);
@@ -661,6 +656,33 @@ void ldlm_reprocess_all(struct ldlm_resource *res)
                 if (rc)
                         CERROR("Callback send failed: %d\n", rc);
         }
+        EXIT;
+}
+
+/* Must be called with resource->lr_lock not taken. */
+void ldlm_reprocess_all(struct ldlm_resource *res)
+{
+        struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
+        ENTRY;
+
+        /* Local lock trees don't get reprocessed. */
+        if (res->lr_namespace->ns_client) {
+                EXIT;
+                return;
+        }
+
+        spin_lock(&res->lr_lock);
+        res->lr_tmp = &rpc_list;
+
+        ldlm_reprocess_queue(res, &res->lr_converting);
+        if (list_empty(&res->lr_converting))
+                ldlm_reprocess_queue(res, &res->lr_waiting);
+
+        res->lr_tmp = NULL;
+        spin_unlock(&res->lr_lock);
+
+        ldlm_send_delayed_asts(&rpc_list);
+        EXIT;
 }
 
 /* Must be called with lock and lock->l_resource unlocked */

@@ -184,6 +184,7 @@ int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
         req->rq_replen = lustre_msg_size(0, NULL);
 
         if (reqp == NULL) {
+                LBUG();
                 rc = ptlrpc_queue_wait(req);
                 rc = ptlrpc_check_status(req, rc);
                 ptlrpc_free_req(req);
