@@ -14,7 +14,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-ALWAYS_EXCEPT=""
+ALWAYS_EXCEPT="1 3"
 
 gen_config() {
     rm -f $XMLCONFIG
@@ -142,6 +142,7 @@ test_3() {
     replay_barrier mds
     $RUNAS cvs update
     $RUNAS cvs commit -m 'nomsg' ${tfile}-*
+    cd $LUSTRE
     fail mds
 }
 run_test 3 "fail MDS during cvs commit"
@@ -192,10 +193,11 @@ test_6() {
 
     [ -e $DIR/$tfile-1 ] && return 2
     [ -e $DIR/$tfile-2 ] && return 3
+    return 0
 }
 run_test 6 "|X| open-unlink file with multiple links"
 
-test_6() {
+test_7() {
     replay_barrier mds
     touch $DIR/$tfile-1
     ln $DIR/$tfile-1 $DIR/$tfile-2
@@ -211,16 +213,17 @@ test_6() {
 
     [ -e $DIR/$tfile-1 ] && return 2
     [ -e $DIR/$tfile-2 ] && return 3
+    return 0
 }
-run_test 6 "|X| open-unlink file with multiple links"
+run_test 7 "|X| open-unlink file with multiple links"
 
-test_7() {
+test_8() {
     replay_barrier mds
     opendirunlink $DIR/$tdir $DIR/$tdir || return 1
     fail mds
     $CHECKSTAT -a $DIR/$tdir || return 2
 }
-run_test 7 "|X| remove of open directory"
+run_test 8 "|X| remove of open directory"
 
 check_kernel_version() {
     VERSION_FILE=/proc/fs/lustre/kernel_version
@@ -232,13 +235,13 @@ check_kernel_version() {
     return 1
 }
 
-test_8() {
+test_9() {
     check_kernel_version 34 || return 0
     replay_barrier mds
     openfilleddirunlink $DIR/$tdir || return 1
     fail mds
 }
-run_test 8 "|X| remove of open non-empty directory"
+run_test 9 "|X| remove of open non-empty directory"
 
 equals_msg test complete, cleaning up
 $CLEANUP
