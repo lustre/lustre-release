@@ -105,10 +105,13 @@ __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
 
 /* this isn't where truncate starts.   roughly:
  * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate
- * we grab the lock back in setattr_raw to avoid races. */
+ * we grab the lock back in setattr_raw to avoid races.
+ *
+ * must be called with lli_size_sem held */
 void ll_truncate(struct inode *inode)
 {
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+        struct ll_inode_info *lli = ll_i2info(inode);
         struct obdo oa;
         int rc;
         ENTRY;
@@ -118,37 +121,43 @@ void ll_truncate(struct inode *inode)
         if (!lsm) {
                 CDEBUG(D_INODE, "truncate on inode %lu with no objects\n",
                        inode->i_ino);
-                EXIT;
-                return;
+                GOTO(out_unlock, 0);
         }
 
         if (lov_merge_size(lsm, 0) == inode->i_size) {
                 CDEBUG(D_VFSTRACE, "skipping punch for "LPX64" (size = %llu)\n",
                        lsm->lsm_object_id, inode->i_size);
-        } else {
-                CDEBUG(D_INFO, "calling punch for "LPX64" (new size %llu)\n",
-                       lsm->lsm_object_id, inode->i_size);
-
-                oa.o_id = lsm->lsm_object_id;
-                oa.o_valid = OBD_MD_FLID;
-                obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
-                                OBD_MD_FLATIME |OBD_MD_FLMTIME |OBD_MD_FLCTIME);
-
-                /* truncate == punch from new size to absolute end of file */
-                /* NB: must call obd_punch with i_sem held!  It updates kms! */
-                rc = obd_punch(ll_i2obdexp(inode), &oa, lsm, inode->i_size,
-                               OBD_OBJECT_EOF, NULL);
-                if (rc)
-                        CERROR("obd_truncate fails (%d) ino %lu\n", rc,
-                               inode->i_ino);
-                else
-                        obdo_to_inode(inode, &oa, OBD_MD_FLSIZE|OBD_MD_FLBLOCKS|
-                                      OBD_MD_FLATIME | OBD_MD_FLMTIME |
-                                      OBD_MD_FLCTIME);
+                GOTO(out_unlock, 0);
         }
 
+        CDEBUG(D_INFO, "calling punch for "LPX64" (new size %llu)\n",
+               lsm->lsm_object_id, inode->i_size);
+
+        oa.o_id = lsm->lsm_object_id;
+        oa.o_valid = OBD_MD_FLID;
+        obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                        OBD_MD_FLATIME |OBD_MD_FLMTIME |OBD_MD_FLCTIME);
+
+        obd_adjust_kms(ll_i2obdexp(inode), lsm, inode->i_size, 1);
+
+        LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
+        up(&lli->lli_size_sem);
+
+        rc = obd_punch(ll_i2obdexp(inode), &oa, lsm, inode->i_size,
+                       OBD_OBJECT_EOF, NULL);
+        if (rc)
+                CERROR("obd_truncate fails (%d) ino %lu\n", rc,
+                       inode->i_ino);
+        else
+                obdo_to_inode(inode, &oa, OBD_MD_FLSIZE|OBD_MD_FLBLOCKS|
+                              OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                              OBD_MD_FLCTIME);
         EXIT;
         return;
+
+ out_unlock:
+        LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
+        up(&lli->lli_size_sem);
 } /* ll_truncate */
 
 __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms);
@@ -199,7 +208,9 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         /* If are writing to a new page, no need to read old data.  The extent
          * locking will have updated the KMS, and for our purposes here we can
          * treat it like i_size. */
+        down(&lli->lli_size_sem);
         kms = lov_merge_size(lsm, 1);
+        up(&lli->lli_size_sem);
         if (kms <= offset) {
                 LL_CDEBUG_PAGE(D_PAGE, page, "kms "LPU64" <= offset "LPU64"\n",
                                kms, offset);
@@ -641,6 +652,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
 
 out:
         size = (((obd_off)page->index) << PAGE_SHIFT) + to;
+        down(&lli->lli_size_sem);
         if (rc == 0) {
                 obd_adjust_kms(exp, lsm, size, 0);
                 if (size > inode->i_size)
@@ -652,6 +664,7 @@ out:
                  * teardown our book-keeping here. */
                 ll_removepage(page);
         }
+        up(&lli->lli_size_sem);
         RETURN(rc);
 }
 

@@ -397,6 +397,7 @@ void ll_options(char *options, char **ost, char **mdc, int *flags)
 void ll_lli_init(struct ll_inode_info *lli)
 {
         sema_init(&lli->lli_open_sem, 1);
+        sema_init(&lli->lli_size_sem, 1);
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
@@ -952,6 +953,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
          * inode ourselves so we can call obdo_from_inode() always. */
         if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
                 struct lustre_md md;
+                int save_valid;
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
                 rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
@@ -970,9 +972,16 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(rc);
                 }
 
-                /* Won't invoke vmtruncate as we already cleared ATTR_SIZE,
-                 * but needed to set timestamps backwards on utime. */
+                /* We call inode_setattr to adjust timestamps, but we first
+                 * clear ATTR_SIZE to avoid invoking vmtruncate.
+                 *
+                 * NB: ATTR_SIZE will only be set at this point if the size
+                 * resides on the MDS, ie, this file has no objects. */
+                save_valid = attr->ia_valid;
+                attr->ia_valid &= ~ATTR_SIZE;
                 inode_setattr(inode, attr);
+                attr->ia_valid = save_valid;
+
                 ll_update_inode(inode, md.body, md.lsm);
                 ptlrpc_req_finished(request);
 
@@ -1013,6 +1022,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 ldlm_policy_data_t policy = { .l_extent = {attr->ia_size,
                                                            OBD_OBJECT_EOF } };
                 struct lustre_handle lockh = { 0 };
+                struct ll_inode_info *lli = ll_i2info(inode);
                 int err, ast_flags = 0;
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
@@ -1020,38 +1030,20 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 if (attr->ia_size == 0)
                         ast_flags = LDLM_AST_DISCARD_DATA;
 
-                /* bug 1639: avoid write/truncate i_sem/DLM deadlock */
-                LASSERT(atomic_read(&inode->i_sem.count) <= 0);
-                up(&inode->i_sem);
-                UP_WRITE_I_ALLOC_SEM(inode);
                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy, &lockh,
                                     ast_flags);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                DOWN_WRITE_I_ALLOC_SEM(inode);
-                down(&inode->i_sem);
-#else
-                down(&inode->i_sem);
-                DOWN_WRITE_I_ALLOC_SEM(inode);
-#endif
                 if (rc != 0)
                         RETURN(rc);
 
+                down(&lli->lli_size_sem);
                 rc = vmtruncate(inode, attr->ia_size);
+                // if vmtruncate returned 0, then ll_truncate dropped _size_sem
+                if (rc != 0) {
+                        LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
+                        up(&lli->lli_size_sem);
+                }
 
-                /* We need to drop the semaphore here, because this unlock may
-                 * result in a cancellation, which will need the i_sem */
-                up(&inode->i_sem);
-                UP_WRITE_I_ALLOC_SEM(inode);
-                /* unlock now as we don't mind others file lockers racing with
-                 * the mds updates below? */
                 err = ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                DOWN_WRITE_I_ALLOC_SEM(inode);
-                down(&inode->i_sem);
-#else
-                down(&inode->i_sem);
-                DOWN_WRITE_I_ALLOC_SEM(inode);
-#endif
                 if (err) {
                         CERROR("ll_extent_unlock failed: %d\n", err);
                         if (!rc)

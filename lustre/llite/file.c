@@ -507,12 +507,8 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                         goto iput;
                 ll_pgcache_remove_extent(inode, lsm, lock, stripe);
 
-                /* grabbing the i_sem will wait for write() to complete.  ns
-                 * lock hold times should be very short as ast processing
-                 * requires them and has a short timeout.  so, i_sem before ns
-                 * lock.*/
-                down(&inode->i_sem);
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
+                down(&lli->lli_size_sem);
                 kms = ldlm_extent_shift_kms(lock,
                                             lsm->lsm_oinfo[stripe].loi_kms);
 
@@ -520,8 +516,8 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
+                up(&lli->lli_size_sem);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-                up(&inode->i_sem);
                 //ll_try_done_writing(inode);
         iput:
                 iput(inode);
@@ -671,8 +667,10 @@ int ll_glimpse_size(struct inode *inode)
                 RETURN(rc > 0 ? -EIO : rc);
         }
 
+        down(&lli->lli_size_sem);
         inode->i_size = lov_merge_size(lli->lli_smd, 0);
         inode->i_blocks = lov_merge_blocks(lli->lli_smd);
+        up(&lli->lli_size_sem);
         LTIME_S(inode->i_mtime) =
                 lov_merge_mtime(lli->lli_smd, LTIME_S(inode->i_mtime));
 
@@ -690,6 +688,7 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
                    int ast_flags)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_inode_info *lli = ll_i2info(inode);
         int rc;
         ENTRY;
 
@@ -724,9 +723,9 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
                  * when doing appending writes and effectively cancel the
                  * result of the truncate.  Getting the i_sem after the enqueue
                  * maintains the DLM -> i_sem acquiry order. */
-                down(&inode->i_sem);
+                down(&lli->lli_size_sem);
                 inode->i_size = lov_merge_size(lsm, 1);
-                up(&inode->i_sem);
+                up(&lli->lli_size_sem);
         }
 
         if (rc == 0)
@@ -787,15 +786,18 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         if (rc != 0)
                 RETURN(rc);
 
+        down(&lli->lli_size_sem);
         kms = lov_merge_size(lsm, 1);
         if (*ppos + count - 1 > kms) {
                 /* A glimpse is necessary to determine whether we return a short
                  * read or some zeroes at the end of the buffer */
+                up(&lli->lli_size_sem);
                 retval = ll_glimpse_size(inode);
                 if (retval)
                         goto out;
         } else {
                 inode->i_size = kms;
+                up(&lli->lli_size_sem);
         }
 
         CDEBUG(D_INFO, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
@@ -1136,13 +1138,16 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);
         if (origin == 2) { /* SEEK_END */
                 ldlm_policy_data_t policy = { .l_extent = {0, OBD_OBJECT_EOF }};
+                struct ll_inode_info *lli = ll_i2info(inode);
                 int rc;
 
                 rc = ll_extent_lock(fd, inode, lsm, LCK_PR, &policy, &lockh,0);
                 if (rc != 0)
                         RETURN(rc);
 
+                down(&lli->lli_size_sem);
                 offset += inode->i_size;
+                up(&lli->lli_size_sem);
         } else if (origin == 1) { /* SEEK_CUR */
                 offset += file->f_pos;
         }
@@ -1398,8 +1403,9 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
 int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat)
 {
-        int res = 0;
         struct inode *inode = de->d_inode;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        int res = 0;
 
         res = ll_inode_revalidate_it(de, it);
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_GETATTR);
@@ -1417,9 +1423,13 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
         stat->atime = inode->i_atime;
         stat->mtime = inode->i_mtime;
         stat->ctime = inode->i_ctime;
-        stat->size = inode->i_size;
         stat->blksize = inode->i_blksize;
+
+        down(&lli->lli_size_sem);
+        stat->size = inode->i_size;
         stat->blocks = inode->i_blocks;
+        up(&lli->lli_size_sem);
+
         return 0;
 }
 #endif

@@ -71,6 +71,7 @@ struct ll_inode_info {
         struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
         struct semaphore        lli_open_sem;
+        struct semaphore        lli_size_sem;
         __u64                   lli_maxbytes;
         __u64                   lli_io_epoch;
         unsigned long           lli_flags;

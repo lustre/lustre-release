@@ -814,6 +814,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                         }
                         DEBUG_REQ(D_ERROR, req, "fid2 not set on open replay");
                 }
+                /* this LASSERT needs to go; handle more gracefully. */
                 LASSERT(rec->ur_fid2->id);
 
                 rc = mds_open_by_fid(req, rec->ur_fid2, body, rec->ur_flags,

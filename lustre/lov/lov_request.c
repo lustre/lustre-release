@@ -1126,15 +1126,10 @@ int lov_update_setattr_set(struct lov_request_set *set,
 int lov_update_punch_set(struct lov_request_set *set, struct lov_request *req,
                          int rc)
 {
-        struct lov_stripe_md *lsm = set->set_md;
         struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
         ENTRY;
 
         lov_update_set(set, req, rc);
-        if (rc == 0) {
-                struct lov_oinfo *loi = &lsm->lsm_oinfo[req->rq_stripe];
-                loi->loi_kms = loi->loi_rss = req->rq_extent.start;
-        }
         if (rc && !lov->tgts[req->rq_idx].active)
                 rc = 0;
         /* FIXME in raid1 regime, should return 0 */
