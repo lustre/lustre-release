@@ -240,7 +240,8 @@ struct llite_file_opcode {
 
         { LPROC_LL_IOCTL,          LPROCFS_TYPE_REGS, "ioctl" },
         { LPROC_LL_OPEN,           LPROCFS_TYPE_REGS, "open" },
-        { LPROC_LL_RELEASE,        LPROCFS_TYPE_REGS, "close" },
+        { LPROC_LL_RELEASE,        LPROCFS_TYPE_REGS, "release" },
+        { LPROC_LL_MDC_CLOSE,      LPROCFS_TYPE_REGS, "close" },
         { LPROC_LL_MAP,            LPROCFS_TYPE_REGS, "mmap" },
         { LPROC_LL_LLSEEK,         LPROCFS_TYPE_REGS, "seek" },
         { LPROC_LL_FSYNC,          LPROCFS_TYPE_REGS, "fsync" },
