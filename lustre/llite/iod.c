@@ -174,10 +174,9 @@ static void ll_writeback(struct inode *inode, struct ll_writeback_pages *llwp)
          */
         if (rc) {
                 CERROR("error from obd_brw_async: rc = %d\n", rc);
-                INODE_IO_STAT_ADD(inode, wb_fail, llwp->npgs);
-        } else {
-                INODE_IO_STAT_ADD(inode, wb_ok, llwp->npgs);
-        }
+                LPROC_COUNTER_INODE_INCR(inode, LPROC_LL_WB_FAIL, (llwp->npgs));
+        } else 
+                LPROC_COUNTER_INODE_INCR(inode, LPROC_LL_WB_OK, (llwp->npgs));
 
         for (i = 0 ; i < llwp->npgs ; i++) {
                 struct page *page = llwp->pga[i].pg;
@@ -314,8 +313,8 @@ int ll_check_dirty(struct super_block *sb)
                         llwp.npgs = 0;
                         ll_get_dirty_pages(inode, &llwp);
                         if (llwp.npgs) {
-                                INODE_IO_STAT_ADD(inode, wb_from_pressure,
-                                                  llwp.npgs);
+                                LPROC_COUNTER_INODE_INCR(inode, 
+                                        LPROC_LL_WB_PRESSURE, (llwp.npgs));
                                 ll_writeback(inode, &llwp);
                                 rc += llwp.npgs;
                                 making_progress = 1;
@@ -384,7 +383,8 @@ int ll_batch_writepage(struct inode *inode, struct page *page)
                 ll_get_dirty_pages(inode, &llwp);
 
         if (llwp.npgs) {
-                INODE_IO_STAT_ADD(inode, wb_from_writepage, llwp.npgs);
+                LPROC_COUNTER_INODE_INCR(inode, LPROC_LL_WB_WRITEPAGE, 
+                                (llwp.npgs));
                 ll_writeback(inode, &llwp);
         }
 
@@ -461,7 +461,7 @@ static inline void lldo_dirty_add(struct inode *inode,
                                   long val)
 {
         lldo->do_num_dirty += val;
-        INODE_IO_STAT_ADD(inode, dirty_pages, val);
+        LPROC_COUNTER_INODE_INCR(inode, LPROC_LL_DIRTY_PAGES, ((long)val));
 }
 
 void ll_record_dirty(struct inode *inode, unsigned long offset)
@@ -624,76 +624,3 @@ void ll_lldo_init(struct ll_dirty_offsets *lldo)
         lldo->do_num_dirty = 0;
         lldo->do_root.rb_node = NULL;
 }
-
-/* seq file export of some page cache tracking stats */
-static int ll_pgcache_seq_show(struct seq_file *seq, void *v)
-{
-        struct timeval now;
-        struct ll_sb_info *sbi = seq->private;
-        do_gettimeofday(&now);
-
-        seq_printf(seq, "snapshot_time:            %lu:%lu (secs:usecs)\n",
-                   now.tv_sec, now.tv_usec);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        seq_printf(seq, "VM_under_pressure:        %s\n",
-                   should_writeback() ? "yes" : "no");
-#endif        
-        seq_printf(seq, "dirty_pages:              "LPU64"\n",
-                   sbi->ll_iostats.fis_dirty_pages);
-        seq_printf(seq, "dirty_page_hits:          "LPU64"\n",
-                   sbi->ll_iostats.fis_dirty_hits);
-        seq_printf(seq, "dirty_page_misses:        "LPU64"\n",
-                   sbi->ll_iostats.fis_dirty_misses);
-        seq_printf(seq, "writeback_from_writepage: "LPU64"\n",
-                   sbi->ll_iostats.fis_wb_from_writepage);
-        seq_printf(seq, "writeback_from_pressure:  "LPU64"\n",
-                   sbi->ll_iostats.fis_wb_from_pressure);
-        seq_printf(seq, "writeback_ok_pages:       "LPU64"\n",
-                   sbi->ll_iostats.fis_wb_ok);
-        seq_printf(seq, "writeback_failed_pages:   "LPU64"\n",
-                   sbi->ll_iostats.fis_wb_fail);
-        return 0;
-}
-
-static void *ll_pgcache_seq_start(struct seq_file *p, loff_t *pos)
-{
-        if (*pos == 0)
-                return (void *)1;
-        return NULL;
-}
-static void *ll_pgcache_seq_next(struct seq_file *p, void *v, loff_t *pos)
-{
-        ++*pos;
-        return NULL;
-}
-static void ll_pgcache_seq_stop(struct seq_file *p, void *v)
-{
-}
-
-struct seq_operations ll_pgcache_seq_sops = {
-        .start = ll_pgcache_seq_start,
-        .stop = ll_pgcache_seq_stop,
-        .next = ll_pgcache_seq_next,
-        .show = ll_pgcache_seq_show,
-};
-
-static int ll_pgcache_seq_open(struct inode *inode, struct file *file)
-{
-        struct proc_dir_entry *dp = inode->u.generic_ip;
-        struct seq_file *seq;
-        int rc;
-
-        rc = seq_open(file, &ll_pgcache_seq_sops);
-        if (rc)
-                return rc;
-        seq = file->private_data;
-        seq->private = dp->data;
-        return 0;
-}
-
-struct file_operations ll_pgcache_seq_fops = {
-        .open    = ll_pgcache_seq_open,
-        .read    = seq_read,
-        .llseek  = seq_lseek,
-        .release = seq_release,
-};
