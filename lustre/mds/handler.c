@@ -281,8 +281,9 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
                 if (!memcmp(cluuid, mcd->mcd_uuid, sizeof(mcd->mcd_uuid))) {
                         LASSERT(exp->exp_obd == obd);
 
-                        if (!list_empty(&exp->exp_conn_chain)) { 
+                        if (!list_empty(&exp->exp_conn_chain)) {
                                 CERROR("existing uuid/export, list not empty!\n");
+                                spin_unlock(&obd->obd_dev_lock);
                                 RETURN(-EALREADY);
                         }
                         conn->addr = (__u64) (unsigned long)exp;
