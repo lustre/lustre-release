@@ -1738,7 +1738,7 @@ Index: linux-2.4.20-rh-20.9/include/linux/ext3_fs_sb.h
 +	unsigned long	bb_bitmap;
 +	unsigned long	bb_buddy;
 +	spinlock_t	bb_lock;
-+	unsigned 	bb_counters[EXT3_BB_MAX_ORDER];
++	unsigned	bb_counters[EXT3_BB_MAX_ORDER];
 +	struct ext3_free_metadata *bb_md_cur;
 +	unsigned long bb_tid;
 +};

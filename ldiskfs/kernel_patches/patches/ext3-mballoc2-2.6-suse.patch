@@ -2192,11 +2192,11 @@ Index: linux-2.6.5-suse/include/linux/ext3_fs_sb.h
 +	__u32		bb_bitmap;
 +	__u32		bb_buddy;
 +	spinlock_t	bb_lock;
-+	unsigned long 	bb_tid;
++	unsigned long	bb_tid;
 +	struct ext3_free_metadata *bb_md_cur;
 +	unsigned short	bb_first_free;
 +	unsigned short	bb_free;
-+	unsigned 	bb_counters[];
++	unsigned	bb_counters[];
 +};
 +
  /*

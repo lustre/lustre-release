@@ -124,7 +124,7 @@ Index: linux/fs/ext3/namei.c
  		new_inode->i_ctime = CURRENT_TIME;
  	}
  	old_dir->i_ctime = old_dir->i_mtime = CURRENT_TIME;
-@@ -2264,11 +2269,11 @@
+@@ -2264,11 +2269,13 @@
  		PARENT_INO(dir_bh->b_data) = le32_to_cpu(new_dir->i_ino);
  		BUFFER_TRACE(dir_bh, "call ext3_journal_dirty_metadata");
  		ext3_journal_dirty_metadata(handle, dir_bh);
@@ -132,7 +132,9 @@ Index: linux/fs/ext3/namei.c
 +		ext3_dec_count(handle, old_dir);
  		if (new_inode) {
 -			new_inode->i_nlink--;
-+			ext3_dec_count(handle, new_inode);
++			/* checked empty_dir above, can't have another parent,
++			 * ext3_dec_count() won't work for many-linked dirs */
++			new_inode->i_nlink = 0;
  		} else {
 -			new_dir->i_nlink++;
 +			ext3_inc_count(handle, new_dir);
