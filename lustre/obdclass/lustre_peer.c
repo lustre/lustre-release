@@ -69,7 +69,7 @@ void class_exit_uuidlist(void)
         }
 }
 
-int class_uuid_to_peer(char *uuid, struct lustre_peer *peer)
+int lustre_uuid_to_peer(char *uuid, struct lustre_peer *peer)
 {
         struct list_head *tmp;
 
