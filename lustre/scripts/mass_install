@@ -1,6 +1,10 @@
 #! /bin/sh
 # mass_install - Install zero or more files in a directory
 # Gordon Matzigkeit <gord@fig.org>, 2001-09-26
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
 
 # Usage: mass_install DIR [FILES...] [OPTS...]
 FILES=

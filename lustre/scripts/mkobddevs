@@ -1,4 +1,9 @@
 #!/bin/sh -x
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
 mknod -m 0600 /dev/obd0 c 186 0
 mknod -m 0600 /dev/obd1 c 186 1
 mknod -m 0600 /dev/obd2 c 186 2

@@ -1,4 +1,7 @@
 /*
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ *
  * obdtrace (header file) - is useful for tracing and performance
  * debug of the Lustre obd protocol stack. obdtrace is a transparent
  * logical obd driver that prints commands their in- and outbound

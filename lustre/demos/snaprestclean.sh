@@ -1,5 +1,11 @@
 #! /bin/bash
 # Utility script for cleaning up a simple OBDFS mounted filesystem
+#
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
 OBDDIR="`dirname $0`/.."
 . $OBDDIR/demos/config.sh
 

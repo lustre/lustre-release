@@ -1,6 +1,12 @@
 #!/bin/sh
 # Utility script to perform minor modifications to the read-write mounted
 # snapshot in order to demonstrate the changes w.r.t. the read-only snapshot
+#
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
 OBDDIR="`dirname $0`/.."
 . $OBDDIR/demos/config.sh
 

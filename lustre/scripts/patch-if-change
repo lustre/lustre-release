@@ -2,6 +2,10 @@
 # patch-if-change - Copy FILES to the current directory, apply PATCH,
 # and restore timestamps on files that weren't changed.
 # Gordon Matzigkeit <gord@fig.org>, 2001-09-25
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
 
 # Usage: patch-if-change [PATCHFLAGS]... PATCH FILES...
 PATCHFLAGS=

@@ -1,5 +1,11 @@
 #ifndef __OBD_SNAP_SUPP_H
 #define __OBD_SNAP_SUPP_H
+/*
+ * Copyright (C) 2001  Cluster File Systems, Inc.
+ *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ */
 
 /* What we use to point to IDs in the obdmd data for snapshots.  If we use
  * obd_id (8 bytes) instead of ino_t (4 bytes), we halve the number of

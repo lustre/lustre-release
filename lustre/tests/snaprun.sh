@@ -1,6 +1,12 @@
 #!/bin/sh
 # Utility script to test several features of a snapshot filesystem
 # Assumes that snapshot has already been configured
+#
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
 OBDDIR="`dirname $0`/.."
 . $OBDDIR/demos/config.sh
 

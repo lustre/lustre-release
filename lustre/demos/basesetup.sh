@@ -1,5 +1,10 @@
 #! /bin/sh
 # Get the locations for the files from a single place to avoid confusion
+#
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
 OBDDIR="`dirname $0`/.."
 
 # source config info

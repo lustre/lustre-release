@@ -1,7 +1,7 @@
 /* object based disk file system
  * 
- * This software is licensed under the GPL.  See the file COPYING in the
- * top directory of this distribution for details.
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
  * 
  * Copyright (C), 1999, Stelias Computing Inc
  *

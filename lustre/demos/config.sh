@@ -2,6 +2,11 @@
 # File which holds configuation parameters in a single place to avoid any
 # mismatch between scripts (especially the cleanup scripts, which are
 # destructive).
+#
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
 #set -vx
 
 # Major number for OBD devices

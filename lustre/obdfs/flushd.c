@@ -2,6 +2,9 @@
  * OBDFS Super operations - also used for Lustre file system
  *
  *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ *
  *  Copyright (C) 1991, 1992  Linus Torvalds
  * Copryright (C) 1999 Stelias Computing Inc. <braam@stelias.com>
  * Copryright (C) 1999 Seagate Technology Inc.

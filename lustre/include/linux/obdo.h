@@ -1,5 +1,11 @@
 #ifndef OBD_H
 #define OBD_H
+/*
+ * Copyright (C) 2001  Cluster File Systems, Inc.
+ *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ */
 
 struct obdfs_inode_info {
         int              oi_flags;

@@ -1,6 +1,12 @@
 #!/bin/sh
 # Utility script to test deleting a snapshot that has been previously
 # created as the setup.sh script does.
+#
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
 OBDDIR="`dirname $0`/.."
 . $OBDDIR/demos/config.sh
 

@@ -1,5 +1,11 @@
 #ifndef _OBD_EXT2
 #define _OBD_EXT2
+/*
+ * Copyright (C) 2001  Cluster File Systems, Inc.
+ *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ */
 
 #define OBD_EXT2_RUNIT           _IOWR('f', 61, long)
 

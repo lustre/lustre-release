@@ -1,5 +1,11 @@
 #ifndef _OBD_SNAP
 #define _OBD_SNAP
+/*
+ * Copyright (C) 2001  Cluster File Systems, Inc.
+ *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ */
 
 #define OBD_SNAP_MAGIC 0xfffffff3   /* an unlikely block number */
 

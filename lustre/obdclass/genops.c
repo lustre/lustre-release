@@ -1,5 +1,9 @@
 /*
  *  linux/fs/ext2_obd/sim_obd.c
+ * Copyright (C) 2001  Cluster File Systems, Inc.
+ *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
  *
  * These are the only exported functions; they provide the simulated object-
  * oriented disk.

@@ -1,5 +1,10 @@
 /* proc_lustre.c manages /proc/lustre/obd. 
  *
+ * Copyright (c) 2001 Rumi Zahir <rumi.zahir@intel.com>
+ *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ *
  * OBD devices materialize in /proc as a directory:
  *              /proc/lustre/obd/<number>
  * when /dev/obd<number> is opened. When the device is closed, the 
@@ -29,8 +34,6 @@
  *     proc_lustre_remove_obd_entry() removes a
  *     /proc/lustre/obd/<obdid>/ entry by name. This is the only
  *     function that is exported to other modules. 
- *
- * Copyright (c) 2001 Rumi Zahir <rumi.zahir@intel.com>
  */
 
 #include <linux/config.h>

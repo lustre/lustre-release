@@ -1,6 +1,9 @@
 /*
  * OBDFS Super operations
  *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ *
  * Copryright (C) 1996 Peter J. Braam <braam@stelias.com>
  * Copryright (C) 1999 Stelias Computing Inc. <braam@stelias.com>
  * Copryright (C) 1999 Seagate Technology Inc.

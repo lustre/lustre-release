@@ -1,5 +1,11 @@
 #ifndef __OBD_RPC_H
 #define __OBD_RPC_H
+/*
+ * Copyright (C) 2001  Cluster File Systems, Inc.
+ *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ */
 
 #include <linux/sunrpc/svc.h>
 #define OBD_TGT_VERSION  001

@@ -1,6 +1,9 @@
 /*
  *  linux/fs/ext2/dir.c
  *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ *
  * Copyright (C) 1992, 1993, 1994, 1995
  * Remy Card (card@masi.ibp.fr)
  * Laboratoire MASI - Institut Blaise Pascal

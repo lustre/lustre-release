@@ -1,5 +1,11 @@
 #ifndef __LINUX_CLASS_OBD_H
 #define __LINUX_CLASS_OBD_H
+/*
+ * Copyright (C) 2001  Cluster File Systems, Inc.
+ *
+ * This code is issued under the GNU General Public License.
+ * See the file COPYING in this distribution
+ */
 
 #include <linux/fs.h>
 #include <linux/time.h>
