@@ -92,7 +92,7 @@ int main(int argc, char **argv)
                 case 'O':
                         fd = open(fname, O_CREAT|O_RDWR, 0644);
                         if (fd == -1) {
-                                perror("open(O_RDWR|O_CREAT");
+                                perror("open(O_RDWR|O_CREAT)");
                                 exit(1);
                         }
                         break;
