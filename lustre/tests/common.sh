@@ -41,11 +41,12 @@ do_insmod() {
 	MODULE=$1
 	BASE=`echo $MODULE | sed -e "s^.*/^^" -e "s/\.o$//"`
 
+	lsmod | grep -q "\<$BASE\>" && return 0
+	[ "$MODULE" ] || fail "usage: $0 <module>"
+
 	if [ "$USEDEV" = "yes" ]; then
-		[ "$MODULE" ] || fail "usage: $0 <module>"
 		[ -f $MODULE ] || echo "$0: module '$MODULE' not found" 1>&2
-		lsmod | grep -q "\<$BASE\>" && return 0
-		insmod  $MODULE
+		insmod $MODULE
         else
 		insmod $BASE
 	fi
@@ -537,7 +538,6 @@ cleanup_portals() {
 	do_rmmod kptlrouter
 	do_rmmod kqswnal
 	do_rmmod ksocknal
-        do_rmmod kptlrouter
 	do_rmmod portals
 }
 
