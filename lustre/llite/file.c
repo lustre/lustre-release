@@ -434,9 +434,9 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 unlock_page(page);
                 page_cache_release(page);
         }
-        LASSERTF(tmpex.l_extent.start <= lock->l_policy_data.l_extent.end,
+        LASSERTF(tmpex.l_extent.start <= lock->l_policy_data.l_extent.end + 1,
                  "loop too long "LPU64" != "LPU64" start %lu i %lu end %lu\n",
-                 tmpex.l_extent.start, lock->l_policy_data.l_extent.end,
+                 tmpex.l_extent.start, lock->l_policy_data.l_extent.end + 1,
                  start, i, end);
         EXIT;
 }
@@ -883,7 +883,8 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
 }
 
 static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
-                                    int flags, struct lov_user_md *lum, int lum_size)
+                                    int flags, struct lov_user_md *lum,
+                                    int lum_size)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct file *f;
