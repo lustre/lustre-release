@@ -38,6 +38,8 @@ int jt_obd_connect(int argc, char **argv);
 int jt_obd_disconnect(int argc, char **argv);
 int jt_obd_detach(int argc, char **argv);
 int jt_obd_cleanup(int argc, char **argv);
+int jt_obd_no_transno(int argc, char **argv);
+int jt_obd_set_readonly(int argc, char **argv);
 int jt_obd_newdev(int argc, char **argv);
 int jt_obd_list(int argc, char **argv);
 int jt_obd_attach(int argc, char **argv);
@@ -49,6 +51,9 @@ int jt_obd_destroy(int argc, char **argv);
 int jt_obd_getattr(int argc, char **argv);
 int jt_obd_test_getattr(int argc, char **argv);
 int jt_obd_test_brw(int argc, char **argv);
+int jt_obd_get_stripe(int argc, char **argv);
+int jt_obd_set_stripe(int argc, char **argv);
+int jt_obd_unset_stripe(int argc, char **argv);
 int jt_obd_lov_setconfig(int argc, char **argv);
 int jt_obd_lov_getconfig(int argc, char **argv);
 int jt_obd_test_ldlm(int argc, char **argv);
@@ -58,6 +63,7 @@ int jt_obd_dump_ldlm(int argc, char **argv);
 int jt_obd_lov_set_osc_active(int argc, char **argv);
 int jt_obd_newconn(int argc, char **argv);
 int jt_obd_failconn(int argc, char **argv);
+int jt_obd_mdc_lookup(int argc, char **argv);
 int jt_get_version(int argc, char **argv);
 
 #endif
