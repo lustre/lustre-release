@@ -22,7 +22,7 @@ case "$lustretag" in
 	portalstag="b1_2"
 	;;
 
-    b1_4_bgl)
+    b1_4)
 	portalstag="b1_4_bgl"
 	;;
 
