@@ -14,7 +14,8 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
 # Skip these tests
-ALWAYS_EXCEPT=""
+# bug number: 2766
+ALWAYS_EXCEPT="0b"
 
 gen_config() {
     rm -f $XMLCONFIG
