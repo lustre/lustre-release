@@ -25,7 +25,9 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #include <linux/module.h>
 #include <linux/obd_class.h>
@@ -125,7 +127,8 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
-                       valid, src->i_mtime, src->i_ctime);
+                       valid, LTIME_S(src->i_mtime), 
+                       LTIME_S(src->i_ctime));
 
         if (valid & OBD_MD_FLATIME) {
                 dst->o_atime = LTIME_S(src->i_atime);
@@ -194,7 +197,8 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE, "valid %x, cur time %lu/%lu, new %lu/%lu\n",
-                       src->o_valid, dst->i_mtime, dst->i_ctime,
+                       src->o_valid, LTIME_S(dst->i_mtime), 
+                       LTIME_S(dst->i_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);
 
         if (valid & OBD_MD_FLATIME && src->o_atime > LTIME_S(dst->i_atime))
@@ -220,7 +224,8 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE, "valid %x, cur time %lu/%lu, new %lu/%lu\n",
-                       src->o_valid, dst->i_mtime, dst->i_ctime,
+                       src->o_valid, 
+                       LTIME_S(dst->i_mtime), LTIME_S(dst->i_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);
 
         if (valid & OBD_MD_FLATIME)
