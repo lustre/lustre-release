@@ -819,7 +819,7 @@ out_pack:
         RETURN(0);
 
 out_free:
-        mfd->mfd_serverookie = DEAD_HANDLE_MAGIC;
+        mfd->mfd_servercookie = DEAD_HANDLE_MAGIC;
         kmem_cache_free(mds_file_cache, mfd);
         req->rq_status = rc;
         RETURN(0);
@@ -850,7 +850,7 @@ static int mds_close(struct ptlrpc_request *req)
         spin_lock(&med->med_open_lock);
         list_del(&mfd->mfd_list);
         spin_unlock(&med->med_open_lock);
-        mfd->mfd_serverookie = DEAD_HANDLE_MAGIC;
+        mfd->mfd_servercookie = DEAD_HANDLE_MAGIC;
         kmem_cache_free(mds_file_cache, mfd);
 
         req->rq_status = filp_close(file, 0);
