@@ -660,7 +660,8 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
         rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
                              sizeof(extent), mode, lockh);
         if (rc == 1)
-                RETURN(0); /* We already have a lock, and it's referenced */
+                /* We already have a lock, and it's referenced */
+                RETURN(ELDLM_OK);
 
         /* If we're trying to read, we also search for an existing PW lock.  The
          * VFS and page cache already protect us locally, so lots of readers/
@@ -684,7 +685,7 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
                         ldlm_lock_addref(lockh, LCK_PR);
                         ldlm_lock_decref(lockh, LCK_PW);
 
-                        RETURN(0);
+                        RETURN(ELDLM_OK);
                 }
         }
 
