@@ -422,9 +422,10 @@ int osc_sendpage(struct ptlrpc_request *req, struct niobuf *dst,
 
                 memcpy(buf, (char *)(unsigned long)src->addr, src->len);
 
+                req->rq_type = PTLRPC_BULK;
                 req->rq_bulkbuf = buf;
                 req->rq_bulklen = src->len;
-                rc = ptl_send_buf(req, &req->rq_peer, OST_BULK_PORTAL, 0);
+                rc = ptl_send_buf(req, &req->rq_peer, OST_BULK_PORTAL);
                 init_waitqueue_head(&req->rq_wait_for_bulk);
                 sleep_on(&req->rq_wait_for_bulk);
                 OBD_FREE(buf, src->len);

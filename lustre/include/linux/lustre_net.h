@@ -74,18 +74,18 @@ struct ptlrpc_service {
                         int *replen, char **repbuf); 
 };
 
-
 struct ptlrpc_request { 
+        int rq_type; /* one of PTLRPC_REQUEST, PTLRPC_REPLY, PTLRPC_BULK */
 	struct list_head rq_list;
 	struct mds_obd *rq_obd;
 	struct ost_obd *rq_ost;
 	int rq_status;
+        __u32 rq_xid;
 
 	char *rq_reqbuf;
 	int rq_reqlen;
 	struct ptlreq_hdr *rq_reqhdr;
 	union ptl_req rq_req;
-        __u32 rq_xid;
 
  	char *rq_repbuf;
 	int rq_replen;
@@ -96,15 +96,18 @@ struct ptlrpc_request {
         int rq_bulklen;
         int (*rq_bulk_cb)(struct ptlrpc_request *, void *);
 
-        void * rq_reply_handle;
+        void *rq_reply_handle;
 	wait_queue_head_t rq_wait_for_rep;
 	wait_queue_head_t rq_wait_for_bulk;
 
         ptl_md_t rq_reply_md;
         ptl_handle_md_t rq_reply_md_h;
+        ptl_handle_me_t rq_reply_me_h;
+
         ptl_md_t rq_req_md;
         ptl_md_t rq_bulk_md;
         ptl_handle_md_t rq_bulk_md_h;
+        ptl_handle_me_t rq_bulk_me_h;
         __u32 rq_reply_portal;
         __u32 rq_req_portal;
         __u32 rq_bulk_portal;
@@ -125,11 +128,13 @@ struct ptlrpc_client {
         int (*cli_enqueue)(struct ptlrpc_request *req);
 };
 
-
-
 /* rpc/rpc.c */
+#define PTLRPC_REQUEST 1
+#define PTLRPC_REPLY   2
+#define PTLRPC_BULK    3
+
 int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
-                 int portal, int is_request);
+                 int portal);
 int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer);
 int ptl_received_rpc(struct ptlrpc_service *service);
 int rpc_register_service(struct ptlrpc_service *service, char *uuid);

@@ -98,7 +98,8 @@ int ost_reply(struct obd_device *obddev, struct ptlrpc_request *req)
 		/* This is a request that came from the network via portals. */
 
 		/* FIXME: we need to increment the count of handled events */
-		ptl_send_buf(req, &req->rq_peer, OST_REPLY_PORTAL, 0);
+                req->rq_type = PTLRPC_REPLY;
+		ptl_send_buf(req, &req->rq_peer, OST_REPLY_PORTAL);
 	} else {
 		/* This is a local request that came from another thread. */
 

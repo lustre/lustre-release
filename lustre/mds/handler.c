@@ -92,6 +92,7 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 			return -EIO;
 	} else {
 		char *buf;
+                DECLARE_WAITQUEUE(wait, current);
 
 		OBD_ALLOC(buf, PAGE_SIZE);
 		if (!buf)
@@ -106,11 +107,33 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 			return -EIO;
                 }
 
+                req->rq_type = PTLRPC_BULK;
 		req->rq_bulkbuf = buf;
 		req->rq_bulklen = PAGE_SIZE;
+
 		init_waitqueue_head(&req->rq_wait_for_bulk);
-		rc = ptl_send_buf(req, &req->rq_peer, MDS_BULK_PORTAL, 0);
-		sleep_on(&req->rq_wait_for_bulk);
+		rc = ptl_send_buf(req, &req->rq_peer, MDS_BULK_PORTAL);
+                add_wait_queue(&req->rq_wait_for_bulk, &wait);
+                /* The bulk callback will set rq->bulkbuf to NULL when it's
+                 * been ACKed and it's finished using it. */
+                while (req->rq_bulkbuf != NULL) {
+                        set_current_state(TASK_INTERRUPTIBLE);
+
+                        /* if this process really wants to die, let it go */
+                        if (sigismember(&(current->pending.signal), SIGKILL) ||
+                            sigismember(&(current->pending.signal), SIGINT))
+                                break;
+
+                        schedule();
+                }
+                remove_wait_queue(&req->rq_wait_for_bulk, &wait);
+                set_current_state(TASK_RUNNING);
+
+                if (req->rq_bulkbuf != NULL) {
+                        EXIT;
+                        return -EINTR;
+                }
+
                 OBD_FREE(buf, PAGE_SIZE);
 		req->rq_bulklen = 0; /* FIXME: eek. */
 	}
@@ -128,7 +151,8 @@ int mds_reply(struct ptlrpc_request *req)
 		/* This is a request that came from the network via portals. */
 
 		/* FIXME: we need to increment the count of handled events */
-		ptl_send_buf(req, &req->rq_peer, MDS_REPLY_PORTAL, 0);
+                req->rq_type = PTLRPC_REPLY;
+		ptl_send_buf(req, &req->rq_peer, MDS_REPLY_PORTAL);
 	} else {
 		/* This is a local request that came from another thread. */
 

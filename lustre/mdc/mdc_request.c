@@ -176,7 +176,7 @@ int mdc_readpage(struct ptlrpc_client *peer, ino_t ino, int type, __u64 offset,
         CDEBUG(D_INODE, "inode: %ld\n", ino);
 
 	request = ptlrpc_prep_req(peer, MDS_READPAGE, 0, NULL,
-			       sizeof(struct niobuf), (char *)&niobuf);
+                                  sizeof(struct niobuf), (char *)&niobuf);
 	if (!request) { 
 		CERROR("mdc request: cannot pack\n");
 		return -ENOMEM;
@@ -187,8 +187,8 @@ int mdc_readpage(struct ptlrpc_client *peer, ino_t ino, int type, __u64 offset,
 	request->rq_req.mds->size = offset;
 	request->rq_req.mds->tgtlen = sizeof(niobuf); 
 
-        //request->rq_bulklen = PAGE_SIZE;
-        //request->rq_bulkbuf = (void *)(long)niobuf.addr;
+        request->rq_bulklen = PAGE_SIZE;
+        request->rq_bulkbuf = (void *)(long)niobuf.addr;
 	request->rq_bulk_portal = MDS_BULK_PORTAL;
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct mds_rep);
