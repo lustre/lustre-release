@@ -43,7 +43,7 @@ static int copy_back_page(struct inode *dst,
 	char *kaddr_src, *kaddr_dst;
         struct snap_cache *cache;
 	struct address_space_operations *c_aops;
-	struct page *src_page, *dst_page;
+	struct page *src_page = NULL, *dst_page = NULL;
 	unsigned long index, offset, bytes;
 	int    err = 0;
 	ENTRY;
@@ -96,6 +96,8 @@ static int copy_back_page(struct inode *dst,
 	flush_dcache_page(dst_page);
 
 	err = c_aops->commit_write(NULL, dst_page, offset, offset + bytes);
+	CDEBUG(D_SNAP, "copy back pages %p index %lu src %lu dst %lu \n",
+	       dst_page, dst_page->index, src->i_ino, dst->i_ino); 
 	if (err) 
 		goto unlock_dst_page; 
 	err = 1;
@@ -132,28 +134,36 @@ static ssize_t currentfs_write (struct file *filp, const char *buf,
         if ( !cache ) 
                 RETURN(-EINVAL);
 
+	down(&inode->i_sem);
+
         if ( snap_needs_cow(inode) != -1 ) {
                 CDEBUG(D_SNAP, "snap_needs_cow for ino %lu \n",inode->i_ino);
                 snap_do_cow(inode, filp->f_dentry->d_parent->d_inode->i_ino, 0);
 	}
 
         fops = filter_c2cffops(cache->cache_filter); 
-        if (!fops || !fops->write) 
-                RETURN(-EINVAL);
-
+        if (!fops || !fops->write) { 
+                up(&inode->i_sem); 
+		RETURN(-EINVAL);
+	}
         if (filp->f_flags & O_APPEND)
                 pos = inode->i_size;
         else {
                 pos = *ppos;
-                if (pos != *ppos)
+                if (pos != *ppos){
+                	up(&inode->i_sem); 
                         RETURN(-EINVAL);
+		}
         }
-	if (pos & PAGE_CACHE_MASK) {
+	
+	CDEBUG(D_SNAP, "write offset %lld count %u \n", pos, count);
+	
+	if (pos & (PAGE_CACHE_SIZE - 1)) {
 		start[0] = pos & PAGE_CACHE_MASK;
 		end[0] = pos;
 	}
 	pos += count - 1;
-	if ((pos+1) & PAGE_CACHE_MASK) {
+	if ((pos+1) & (PAGE_CACHE_SIZE - 1)) {
 		start[1] = pos;  
 		end[1] = PAGE_CACHE_ALIGN(pos);
 	}
@@ -161,7 +171,9 @@ static ssize_t currentfs_write (struct file *filp, const char *buf,
 	if (((start[0] >> PAGE_CACHE_SHIFT) == (start[1] >> PAGE_CACHE_SHIFT)) ||
 	    pos > inode->i_size) 
 		start[1] = -1;
-	
+
+	CDEBUG(D_SNAP, "copy back start[0] %ld end[0] %ld start[1] %ld end[1] %ld \n",
+	       start[0], end[0], start[1], end[1]);	
 	for (i = 0; i < 2; i++) {
 		if (start[i] == -1) 
 			continue;
@@ -189,11 +201,14 @@ static ssize_t currentfs_write (struct file *filp, const char *buf,
 			if (result < 0) {
 				iput(cache_inode);
 				rc = result;
+				up(&inode->i_sem);
 				goto exit;
 			}
                		iput(cache_inode);
         	}
 	}
+	
+        up(&inode->i_sem); 
 	rc = fops->write(filp, buf, count, ppos);
 exit:
         RETURN(rc);
@@ -246,7 +261,6 @@ static int currentfs_readpage(struct file *file, struct page *page)
 	table = &snap_tables[cache->cache_snap_tableno];
 
         for (slot = table->tbl_count - 1; slot >= 1; slot--) {
-		cache_inode = NULL;
                 index = table->snap_items[slot].index;
 		cache_inode = snap_get_indirect(inode, NULL, index);
 
@@ -259,12 +273,19 @@ static int currentfs_readpage(struct file *file, struct page *page)
                 if (!search_older && c_aops->bmap(cache_inode->i_mapping, block)) 
                         break;
                 iput(cache_inode);
+		cache_inode = NULL;
         }
 	if (pri_inode) iput(pri_inode);
 
-	if (!cache_inode )  
-		RETURN(-EINVAL);
-
+	if (!cache_inode) {
+		CDEBUG(D_SNAP, "block %lu is a hole of inode %lu \n", 
+		       block, inode->i_ino);
+		memset(kmap(page), 0, PAGE_CACHE_SIZE);
+		flush_dcache_page(page);
+		GOTO(exit, rc = 0);
+	}
+	CDEBUG(D_INODE, "readpage ino %lu icount %d \n", cache_inode->i_ino, 
+	       atomic_read(&cache_inode->i_count));
 	down(&cache_inode->i_sem);
 
 	/*Here we have changed a file to read,
@@ -284,13 +305,14 @@ static int currentfs_readpage(struct file *file, struct page *page)
 		GOTO(exit_release, rc = -EIO);
 
 	memcpy(kmap(page), kmap(cache_page), PAGE_CACHE_SIZE);
+	flush_dcache_page(page);
 
 	kunmap(cache_page);
 	page_cache_release(cache_page);
 
 	up(&cache_inode->i_sem);
 	iput(cache_inode);
-	
+exit:	
 	kunmap(page);
 	SetPageUptodate(page);
 	UnlockPage(page);
@@ -315,6 +337,8 @@ struct file_operations currentfs_file_fops = {
 };
                                                                                                                                                                                                      
 struct inode_operations currentfs_file_iops = {
-	revalidate:     NULL,
+	setattr:	currentfs_setattr,
+	setxattr:	currentfs_setxattr,
+	removexattr:	currentfs_removexattr,	
 };
 
