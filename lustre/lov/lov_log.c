@@ -51,26 +51,6 @@
 
 #include "lov_internal.h"
 
-#if 0
-static int lov_logop_cleanup(struct llog_ctxt *ctxt)
-{
-        struct lov_obd *lov = &ctxt->loc_obd->u.lov;
-        int i, rc = 0;
-
-        ENTRY;
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
-                struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
-                rc = llog_cleanup(cctxt);
-                if (rc) {
-                        CERROR("error lov_llog_open %d\n", i);
-                        break;
-                }
-        }
-        RETURN(rc);
-}
-#endif
-
 /* Add log records for each OSC that this object is striped over, and return
  * cookies for each one.  We _would_ have nice abstraction here, except that
  * we need to keep cookies in stripe order, even if some are NULL, so that
@@ -101,7 +81,8 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
 
                 lur->lur_oid = loi->loi_id;
                 lur->lur_ogen = loi->loi_gr;
-                rc += llog_add(cctxt, &lur->lur_hdr, NULL, logcookies + rc, numcookies - rc);
+                rc += llog_add(cctxt, &lur->lur_hdr, NULL, logcookies + rc,
+                                numcookies - rc);
 
         }
         OBD_FREE(lur, sizeof(*lur));
@@ -110,8 +91,8 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
 }
 
 static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
-                                   struct llog_logid *logid,
-                                   struct llog_ctxt_gen *gen)
+                                   struct llog_logid *logid, 
+                                   struct llog_gen *gen)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
