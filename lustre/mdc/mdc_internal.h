@@ -9,12 +9,10 @@ void mdc_setattr_pack(struct ptlrpc_request *req,
                       struct iattr *iattr, void *ea, int ealen,
 		      void *ea2, int ea2len);
 void mdc_create_pack(struct ptlrpc_request *req, int offset,
-                     struct mdc_op_data *op_data,
-                     __u32 mode, __u64 rdev, __u64 time,
+                     struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
                      const void *data, int datalen);
 void mdc_open_pack(struct ptlrpc_request *req, int offset,
-                   struct mdc_op_data *op_data,
-                   __u32 mode, __u64 rdev, __u64 time,
+                   struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
                    __u32 flags, const void *data, int datalen);
 void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
                      struct mdc_op_data *data);

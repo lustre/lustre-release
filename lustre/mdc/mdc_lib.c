@@ -61,8 +61,7 @@ void mdc_pack_req_body(struct ptlrpc_request *req)
 
 /* packing of MDS records */
 void mdc_create_pack(struct ptlrpc_request *req, int offset,
-                     struct mdc_op_data *op_data,
-                     __u32 mode, __u64 rdev, __u64 time,
+                     struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
                      const void *data, int datalen)
 {
         struct mds_rec_create *rec;
@@ -77,7 +76,7 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode = mode;
         rec->cr_rdev = rdev;
-        rec->cr_time = time;
+        rec->cr_time = op_data->mod_time;
         rec->cr_suppgid = op_data->ctxt.gid1;
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
@@ -91,8 +90,7 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
 
 /* packing of MDS records */
 void mdc_open_pack(struct ptlrpc_request *req, int offset,
-                   struct mdc_op_data *op_data,
-                   __u32 mode, __u64 rdev, __u64 time,
+                   struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
                    __u32 flags, const void *lmm, int lmmlen)
 {
         struct mds_rec_create *rec;
@@ -110,7 +108,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         rec->cr_mode = mode;
         rec->cr_flags = flags;
         rec->cr_rdev = rdev;
-        rec->cr_time = time;
+        rec->cr_time = op_data->mod_time;
         rec->cr_suppgid = op_data->ctxt.gid1;
 
         if (op_data->name) {
@@ -126,8 +124,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
         }
 }
 
-void mdc_setattr_pack(struct ptlrpc_request *req,
-                      struct mdc_op_data *data,
+void mdc_setattr_pack(struct ptlrpc_request *req, struct mdc_op_data *data,
                       struct iattr *iattr, void *ea, int ealen,
                       void *ea2, int ea2len)
 {
@@ -187,6 +184,7 @@ void mdc_unlink_pack(struct ptlrpc_request *req, int offset,
         rec->ul_suppgid = data->ctxt.gid1;
         rec->ul_fid1 = data->fid1;
         rec->ul_fid2 = data->fid2;
+        rec->ul_time = data->mod_time;
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, data->namelen + 1);
         LASSERT (tmp != NULL);
@@ -209,6 +207,7 @@ void mdc_link_pack(struct ptlrpc_request *req, int offset,
         rec->lk_suppgid2 = data->ctxt.gid2;
         rec->lk_fid1 = data->fid1;
         rec->lk_fid2 = data->fid2;
+        rec->lk_time = data->mod_time;
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, data->namelen + 1);
         LOGL0(data->name, data->namelen, tmp);
@@ -238,6 +237,7 @@ void mdc_rename_pack(struct ptlrpc_request *req, int offset,
                 rec->rn_suppgid2 = -1;
         rec->rn_fid1 = data->fid1;
         rec->rn_fid2 = data->fid2;
+        rec->rn_time = data->mod_time;
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, oldlen + 1);
         LOGL0(old, oldlen, tmp);
