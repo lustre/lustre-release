@@ -6,6 +6,9 @@ set -e
 # This test needs to be run on the client
 #
 
+LCONF=${LCONF:-"../utils/lconf"}
+LMC=${LMC:-"../utils/lmc"}
+LCTL=${LCTL:-"../utils/lctl"}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 

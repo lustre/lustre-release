@@ -2,6 +2,10 @@
 
 set -e
 
+LCONF=${LCONF:-"../utils/lconf"}
+LMC=${LMC:-"../utils/lmc"}
+LCTL=${LCTL:-"../utils/lctl"}
+
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 
