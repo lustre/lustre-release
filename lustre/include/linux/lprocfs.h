@@ -601,7 +601,33 @@ int rd_string(char* page, char **start, off_t off,
 int wr_string(struct file* file, const char *buffer,
               unsigned long count, void *data);
 
+int rd_fs_type(char* page, char **start, off_t off,
+              int count, int *eof, void *data);
 
+int rd_uuid(char* page, char **start, off_t off,
+             int count, int *eof, void *data);
+int wr_uuid(struct file* file, const char *buffer,
+             unsigned long count, void *data);
+
+int rd_uuid(char* page, char **start, off_t off,
+             int count, int *eof, void *data);
+
+int rd_blksize(char* page, char **start, off_t off,
+             int count, int *eof, void *data);
+int rd_blktotal(char* page, char **start, off_t off,
+             int count, int *eof, void *data);
+int rd_blkfree(char* page, char **start, off_t off,
+             int count, int *eof, void *data);
+int rd_kbfree(char* page, char **start, off_t off,
+             int count, int *eof, void *data);
+
+int rd_numobjects(char* page, char **start, off_t off,
+             int count, int *eof, void *data);
+int rd_objfree(char* page, char **start, off_t off,
+             int count, int *eof, void *data);
+
+int rd_objgroups(char* page, char **start, off_t off,
+             int count, int *eof, void *data);
 
 
 #else /* LProcFS not compiled */
