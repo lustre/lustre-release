@@ -101,13 +101,15 @@ int obd_llog_origin_add(struct obd_export *exp,
 int obd_llog_repl_cancel(struct obd_device *, struct lov_stripe_md *lsm,
                          int count, struct llog_cookie *cookies, int flags);
 
-int llog_obd_setup_logid(struct obd_device *obd, struct obd_device *disk_obd,
-                         int index, int count, struct llog_logid *logid);
+int llog_obd_setup(struct obd_device *obd, struct obd_device *disk_obd,
+                   int index, int count, struct llog_logid *logid);
 int llog_obd_cleanup(struct obd_device *obd);
 int llog_obd_origin_add(struct obd_export *exp,
                         int index,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                         struct llog_cookie *logcookies, int numcookies);
+int llog_initialize(struct obd_device *obd);
+int llog_disconnect(struct obd_device *obd);
 int llog_cat_initialize(struct obd_device *obd, int count);
 
 
@@ -183,7 +185,7 @@ static inline int llog_write_rec(struct llog_handle *handle,
                                  int numcookies, void *buf, int idx)
 {
         struct llog_operations *lop;
-        int rc;
+        int rc, buflen;
         ENTRY;
         
         rc = llog_handle2ops(handle, &lop);
@@ -191,7 +193,13 @@ static inline int llog_write_rec(struct llog_handle *handle,
                 RETURN(rc);
         if (lop->lop_write_rec == NULL)
                 RETURN(-EOPNOTSUPP);
-        LASSERT((rec->lrh_len % LLOG_MIN_REC_SIZE) == 0);
+
+        if (buf)
+                buflen = le32_to_cpu(rec->lrh_len) + sizeof(struct llog_rec_hdr)
+                                + sizeof(struct llog_rec_tail);
+        else
+                buflen = le32_to_cpu(rec->lrh_len);
+        LASSERT((buflen % LLOG_MIN_REC_SIZE) == 0);
 
         rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
         RETURN(rc);

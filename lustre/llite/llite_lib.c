@@ -128,43 +128,37 @@ void ll_lli_init(struct ll_inode_info *lli)
 int ll_process_log(char *mds, char *config, struct config_llog_instance *cfg)
 {
         struct lustre_cfg lcfg;
-        int dev;
         struct obd_device *obd;
         struct lustre_handle mdc_conn = {0, };
         struct obd_export *exp;
+        char * name = "mdc_dev";
         struct obd_uuid uuid = { "MDC_mount_UUID" };
         int rc = 0;
         int err;
         ENTRY;
 
-        lcfg.lcfg_command = LCFG_ATTACH;
-        lcfg.lcfg_dev_name = "mdc_dev";
-        lcfg.lcfg_dev_namelen = strlen(lcfg.lcfg_dev_name) + 1;
+        LCFG_INIT(lcfg, LCFG_ATTACH, name);
         lcfg.lcfg_inlbuf1 = "mdc";
         lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
         lcfg.lcfg_inlbuf2 = "mdc_dev_UUID";
         lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
-        dev = class_attach(&lcfg);
-        if (dev < 0)
-                GOTO(out, err = dev);
+        err = class_process_config(&lcfg);
+        if (err < 0)
+                GOTO(out, err);
 
-        obd = class_name2obd("mdc_dev");
-        if (obd == NULL)
-                GOTO(out, err = -EINVAL);
-        
-        memset(&lcfg, 0, sizeof(lcfg));
-
-        lcfg.lcfg_command = LCFG_SETUP;
-        lcfg.lcfg_dev_name = "mdc_dev";
-        lcfg.lcfg_dev_namelen = strlen(lcfg.lcfg_dev_name) + 1;
+        LCFG_INIT(lcfg, LCFG_SETUP, name);
         lcfg.lcfg_inlbuf1 = mds;
         lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
         lcfg.lcfg_inlbuf2 = "NET_mds_facet_tcp_UUID";
         lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
-        err = class_setup(obd, &lcfg);
+        err = class_process_config(&lcfg);
         if (err < 0)
                 GOTO(out, err);
         
+        obd = class_name2obd(name);
+        if (obd == NULL)
+                GOTO(out, err = -EINVAL);
+
         err = obd_connect(&mdc_conn, obd, &uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mds, err);
@@ -180,21 +174,15 @@ int ll_process_log(char *mds, char *config, struct config_llog_instance *cfg)
 
         err = obd_disconnect(exp, 0);
 
-        memset(&lcfg, 0, sizeof(lcfg));
-        lcfg.lcfg_command = LCFG_CLEANUP;
-        lcfg.lcfg_dev_name = "mdc_dev";
-        err = class_cleanup(obd, &lcfg);
+        LCFG_INIT(lcfg, LCFG_CLEANUP, name);
+        err = class_process_config(&lcfg);
         if (err < 0)
                 GOTO(out, err);
 
-        memset(&lcfg, 0, sizeof(lcfg));
-        lcfg.lcfg_command = LCFG_DETACH;
-        lcfg.lcfg_dev_name = "mdc_dev";
-        err = class_detach(obd, &lcfg);
+        LCFG_INIT(lcfg, LCFG_DETACH, name);
+        err = class_process_config(&lcfg);
         if (err < 0)
                 GOTO(out, err);
-        
-
 out:
         if (rc == 0)
                 rc = err;
@@ -448,11 +436,6 @@ void ll_put_super(struct super_block *sb)
         list_del(&sbi->ll_conn_chain);
         obd_disconnect(sbi->ll_osc_exp, 0);
 
-        /* Force sync on the MDS, and get the last_committed value to flush
-         * remaining RPCs from the sending queue on client. */
-        if (!class_exp2obd(sbi->ll_mdc_exp)->obd_no_recov)
-                mdc_sync(sbi->ll_mdc_exp, NULL, NULL);
-
         lprocfs_unregister_mountpoint(sbi);
         if (sbi->ll_proc_root) {
                 lprocfs_remove(sbi->ll_proc_root);
@@ -481,8 +464,7 @@ void ll_put_super(struct super_block *sb)
                 OBD_ALLOC(cln_prof, len);
                 sprintf(cln_prof, "%s-clean", sbi->ll_profile);
 
-                err = ll_process_log(sbi->ll_mds_uuid.uuid, cln_prof, 
-                                     &cfg);
+                err = ll_process_log(sbi->ll_mds_uuid.uuid, cln_prof, &cfg);
                 if (err < 0)
                         CERROR("Unable to process log: %s\n", cln_prof);
 
@@ -671,28 +653,23 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 inode_setattr(inode, attr);
         }
 
+        /* We really need to get our PW lock before we change inode->i_size.
+         * If we don't we can race with other i_size updaters on our node, like
+         * ll_file_read.  We can also race with i_size propogation to other
+         * nodes through dirtying and writeback of final cached pages.  This
+         * last one is especially bad for racing o_append users on other 
+         * nodes. */
         if (ia_valid & ATTR_SIZE) {
-                struct ldlm_extent extent = { .start = 0,
+                struct ldlm_extent extent = { .start = attr->ia_size,
                                               .end = OBD_OBJECT_EOF };
                 struct lustre_handle lockh = { 0 };
                 int err, ast_flags = 0;
                 /* XXX when we fix the AST intents to pass the discard-range
                  * XXX extent, make ast_flags always LDLM_AST_DISCARD_DATA
                  * XXX here. */
-
-                /* Writeback uses inode->i_size to determine how far out
-                 * its cached pages go.  ll_truncate gets a PW lock, canceling
-                 * our lock, _after_ it has updated i_size.  this can confuse
-                 *
-                 * We really need to get our PW lock before we change
-                 * inode->i_size.  If we don't we can race with other
-                 * i_size updaters on our node, like ll_file_read.  We
-                 * can also race with i_size propogation to other
-                 * nodes through dirtying and writeback of final cached
-                 * pages.  This last one is especially bad for racing
-                 * o_append users on other nodes. */
                 if (extent.start == 0)
                         ast_flags = LDLM_AST_DISCARD_DATA;
+
                 /* bug 1639: avoid write/truncate i_sem/DLM deadlock */
                 LASSERT(atomic_read(&inode->i_sem.count) <= 0);
                 up(&inode->i_sem);
@@ -820,11 +797,10 @@ int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
 
 void dump_lsm(int level, struct lov_stripe_md *lsm)
 {
-        CDEBUG(level, "objid "LPX64", maxbytes "LPX64", magic %#08x, "
-               "stripe_size %#08x, offset %u, stripe_count %u\n",
+        CDEBUG(level, "objid "LPX64", maxbytes "LPX64", magic 0x%08X, "
+               "stripe_size %u, stripe_count %u\n",
                lsm->lsm_object_id, lsm->lsm_maxbytes, lsm->lsm_magic,
-               lsm->lsm_stripe_size, lsm->lsm_stripe_offset,
-               lsm->lsm_stripe_count);
+               lsm->lsm_stripe_size, lsm->lsm_stripe_count);
 }
 
 void ll_update_inode(struct inode *inode, struct mds_body *body,
@@ -952,7 +928,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         struct ptlrpc_request *req = NULL;
         int rc, flags = 0;
         ENTRY;
-        
+
         switch(cmd) {
         case EXT3_IOC_GETFLAGS: {
                 struct ll_fid fid;
@@ -965,57 +941,62 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                         CERROR("failure %d inode %lu\n", rc, inode->i_ino);
                         RETURN(-abs(rc));
                 }
-                
+
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
-                
+
                 if (body->flags & S_APPEND)
                         flags |= EXT3_APPEND_FL;
                 if (body->flags & S_IMMUTABLE)
                         flags |= EXT3_IMMUTABLE_FL;
                 if (body->flags & S_NOATIME)
                         flags |= EXT3_NOATIME_FL;
-                
+
                 ptlrpc_req_finished (req);
-                
-                RETURN( put_user(flags, (int *)arg) );
+
+                RETURN(put_user(flags, (int *)arg));
         }
         case EXT3_IOC_SETFLAGS: {
                 struct mdc_op_data op_data;
                 struct iattr attr;
-                struct obdo oa;
+                struct obdo *oa;
                 struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
-        
-                if ( get_user( flags, (int *)arg ) )
-                        RETURN( -EFAULT );
-                
+
+                if (get_user(flags, (int *)arg))
+                        RETURN(-EFAULT);
+
+                oa = obdo_alloc();
+                if (!oa)
+                        RETURN(-ENOMEM);
+
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
-                
+
                 memset(&attr, 0x0, sizeof(attr));
                 attr.ia_attr_flags = flags;
                 attr.ia_valid |= ATTR_ATTR_FLAG;
-                
+
                 rc = mdc_setattr(sbi->ll_mdc_exp, &op_data,
                                  &attr, NULL, 0, NULL, 0, &req);
                 if (rc) {
                         ptlrpc_req_finished(req);
                         if (rc != -EPERM && rc != -EACCES)
                                 CERROR("mdc_setattr fails: rc = %d\n", rc);
+                        obdo_free(oa);
                         RETURN(rc);
                 }
                 ptlrpc_req_finished(req);
-                
-                memset(&oa, 0x0, sizeof(oa));
-                oa.o_id = lsm->lsm_object_id;
-                oa.o_flags = flags;
-                oa.o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
-                
-                rc = obd_setattr(sbi->ll_osc_exp, &oa, lsm, NULL);
+
+                oa->o_id = lsm->lsm_object_id;
+                oa->o_flags = flags;
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS;
+
+                rc = obd_setattr(sbi->ll_osc_exp, oa, lsm, NULL);
+                obdo_free(oa);
                 if (rc) {
                         if (rc != -EPERM && rc != -EACCES)
                                 CERROR("mdc_setattr fails: rc = %d\n", rc);
                         RETURN(rc);
                 }
-                
+
                 if (flags & EXT3_APPEND_FL)
                         inode->i_flags |= S_APPEND;
                 else
@@ -1028,13 +1009,13 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                         inode->i_flags |= S_NOATIME;
                 else
                         inode->i_flags &= ~S_NOATIME;
-                
+
                 RETURN(0);
         }
         default:
                 RETURN(-ENOSYS);
         }
-        
+
         RETURN(0);
 }
 
