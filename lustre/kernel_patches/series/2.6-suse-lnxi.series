@@ -5,3 +5,4 @@ mtd-2.6-suse-lnxi.patch
 perfctr-2.6-suse-lnxi.patch 
 kexec-2.6-suse-lnxi.patch
 brk-locked-2.6-suse-lnxi.patch
+grab_cache_page_nowait_gfp-2.6-suse.patch 

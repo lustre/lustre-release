@@ -244,6 +244,25 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
+#
+# check for our patched grab_cache_page_nowait_gfp() function
+#
+AC_DEFUN([LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP],
+[
+LB_LINUX_TRY_COMPILE([
+	#include <linux/pagemap.h>
+],[
+	grab_cache_page_nowait_gfp(NULL, 0, 0);
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP, 1,
+		[kernel has grab_cache_page_nowait_gfp()])
+],[
+	AC_MSG_RESULT([no])
+])])
+
+#
 # LC_CONFIG_BACKINGFS
 #
 # whether to use extN or ldiskfs instead of ext3
@@ -363,6 +382,7 @@ LC_FUNC_DIRECT_IO
 LC_HEADER_MM_INLINE
 LC_STRUCT_INODE
 LC_FUNC_REGISTER_CACHE
+LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
 ])
 
 #

@@ -294,5 +294,9 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #define MDS_PACK_MD_LOCK 0
 #endif
 
+#ifndef HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP
+#define grab_cache_page_nowait_gfp(x, y, z) (grab_cache_page_nowait((x), (y)))
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

@@ -891,6 +891,7 @@ static int ll_readahead(struct ll_readahead_state *ras,
         struct page *page;
         int rc, ret = 0, match_failed = 0;
         __u64 kms;
+        unsigned int gfp_mask;
         ENTRY;
 
         kms = lov_merge_size(ll_i2info(mapping->host)->lli_smd, 1);
@@ -920,9 +921,14 @@ static int ll_readahead(struct ll_readahead_state *ras,
         if (reserved < end - start + 1)
                 ll_ra_stats_inc(mapping, RA_STAT_MAX_IN_FLIGHT);
 
+        gfp_mask = GFP_HIGHUSER & ~__GFP_WAIT;
+#ifdef __GFP_NOWARN
+        gfp_mask |= __GFP_NOWARN;
+#endif
+
         for (i = start; reserved > 0 && !match_failed && i <= end; i++) {
                 /* skip locked pages from previous readpage calls */
-                page = grab_cache_page_nowait(mapping, i);
+                page = grab_cache_page_nowait_gfp(mapping, i, gfp_mask);
                 if (page == NULL) {
                         CDEBUG(D_READA, "g_c_p_n failed\n");
                         continue;
