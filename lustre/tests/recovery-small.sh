@@ -2,8 +2,8 @@
 
 set -e
 
-# 17 = bug 2732   2986
-ALWAYS_EXCEPT="17 20b"
+#         bug 2732 2986 2762 2766
+ALWAYS_EXCEPT="17   20b  16   18"
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 UPCALL=${UPCALL:-$PWD/recovery-small-upcall.sh}
@@ -61,6 +61,12 @@ replay() {
 if [ ! -z "$EVAL" ]; then
     eval "$EVAL"
     exit $?
+fi
+
+if [ "$ONLY" == "cleanup" ]; then
+    sysctl -w portals.debug=0 || true
+    cleanup
+    exit
 fi
 
 REFORMAT=--reformat $SETUP
