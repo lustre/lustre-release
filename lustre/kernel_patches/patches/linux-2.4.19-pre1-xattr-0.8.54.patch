@@ -156,7 +156,7 @@ Index: linux-2.4.19-pre1/arch/alpha/defconfig
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -195,7 +195,7 @@ Index: linux-2.4.19-pre1/arch/arm/defconfig
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -240,7 +240,7 @@ Index: linux-2.4.19-pre1/arch/i386/defconfig
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -293,7 +293,7 @@ Index: linux-2.4.19-pre1/arch/ia64/defconfig
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -346,7 +346,7 @@ Index: linux-2.4.19-pre1/arch/m68k/defconfig
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -364,7 +364,7 @@ Index: linux-2.4.19-pre1/arch/mips/defconfig
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -382,7 +382,7 @@ Index: linux-2.4.19-pre1/arch/mips64/defconfig
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -396,18 +396,11 @@ Index: linux-2.4.19-pre1/arch/ppc/defconfig
 ===================================================================
 --- linux-2.4.19-pre1.orig/arch/ppc/defconfig	2004-01-14 01:10:36.000000000 +0300
 +++ linux-2.4.19-pre1/arch/ppc/defconfig	2004-01-14 01:11:49.000000000 +0300
-@@ -1,6 +1,20 @@
+@@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
-+# CONFIG_EXT3_FS_XATTR_SHARING is not set
-+# CONFIG_EXT3_FS_XATTR_USER is not set
-+# CONFIG_EXT2_FS_XATTR is not set
-+# CONFIG_EXT2_FS_XATTR_SHARING is not set
-+# CONFIG_EXT2_FS_XATTR_USER is not set
-+# CONFIG_FS_MBCACHE is not set
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -425,7 +418,7 @@ Index: linux-2.4.19-pre1/arch/s390/defconfig
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -469,7 +462,7 @@ Index: linux-2.4.19-pre1/arch/s390x/defconfig
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -613,7 +606,7 @@ Index: linux-2.4.19-pre1/arch/sparc/defconfig
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -652,7 +645,7 @@ Index: linux-2.4.19-pre1/arch/sparc64/defconfig
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set

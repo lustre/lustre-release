@@ -64,7 +64,7 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -101,7 +101,7 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -150,7 +150,7 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -166,7 +166,7 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -182,7 +182,7 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -198,7 +198,7 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -214,7 +214,7 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -244,18 +244,11 @@
  	.llong .sys_perfmonctl   /* Put this here for now ... */
 --- linux-2.4.22-ac1/arch/ppc/defconfig~xattr-0.8.54-2.4.22-rh	2003-06-13 18:51:31.000000000 +0400
 +++ linux-2.4.22-ac1-alexey/arch/ppc/defconfig	2003-09-25 23:57:02.000000000 +0400
-@@ -1,6 +1,20 @@
+@@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
-+# CONFIG_EXT3_FS_XATTR_SHARING is not set
-+# CONFIG_EXT3_FS_XATTR_USER is not set
-+# CONFIG_EXT2_FS_XATTR is not set
-+# CONFIG_EXT2_FS_XATTR_SHARING is not set
-+# CONFIG_EXT2_FS_XATTR_USER is not set
-+# CONFIG_FS_MBCACHE is not set
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -271,7 +264,7 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -320,7 +313,7 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -468,7 +461,7 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
@@ -484,7 +477,7 @@
  #
  # Automatically generated make config: don't edit
  #
-+# CONFIG_EXT3_FS_XATTR is not set
++CONFIG_EXT3_FS_XATTR=y
 +# CONFIG_EXT3_FS_XATTR_SHARING is not set
 +# CONFIG_EXT3_FS_XATTR_USER is not set
 +# CONFIG_EXT2_FS_XATTR is not set
