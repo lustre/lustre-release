@@ -5,9 +5,11 @@
  net/netsyms.c          |    2 
  5 files changed, 311 insertions(+), 3 deletions(-)
 
---- linux-2.4.22-ac1/include/linux/skbuff.h~tcp-zero-copy-2.4.22-rh	2003-08-25 15:44:44.000000000 +0400
-+++ linux-2.4.22-ac1-alexey/include/linux/skbuff.h	2003-09-26 00:38:48.000000000 +0400
-@@ -116,6 +116,30 @@ struct skb_frag_struct
+Index: linux-2.4.22-vanilla/include/linux/skbuff.h
+===================================================================
+--- linux-2.4.22-vanilla.orig/include/linux/skbuff.h	2003-11-03 23:22:13.000000000 +0300
++++ linux-2.4.22-vanilla/include/linux/skbuff.h	2003-12-02 23:56:35.000000000 +0300
+@@ -116,6 +116,30 @@
  	__u16 size;
  };
  
@@ -38,7 +40,7 @@
  /* This data is invariant across clones and lives at
   * the end of the header data, ie. at skb->end.
   */
-@@ -123,6 +147,12 @@ struct skb_shared_info {
+@@ -123,6 +147,12 @@
  	atomic_t	dataref;
  	unsigned int	nr_frags;
  	struct sk_buff	*frag_list;
@@ -51,9 +53,11 @@
  	skb_frag_t	frags[MAX_SKB_FRAGS];
  };
  
---- linux-2.4.22-ac1/include/net/tcp.h~tcp-zero-copy-2.4.22-rh	2003-08-25 15:44:44.000000000 +0400
-+++ linux-2.4.22-ac1-alexey/include/net/tcp.h	2003-09-26 00:38:48.000000000 +0400
-@@ -643,6 +643,8 @@ extern int		    	tcp_v4_tw_remember_stam
+Index: linux-2.4.22-vanilla/include/net/tcp.h
+===================================================================
+--- linux-2.4.22-vanilla.orig/include/net/tcp.h	2003-11-03 23:22:13.000000000 +0300
++++ linux-2.4.22-vanilla/include/net/tcp.h	2003-12-02 23:58:10.000000000 +0300
+@@ -643,6 +643,8 @@
  
  extern int			tcp_sendmsg(struct sock *sk, struct msghdr *msg, int size);
  extern ssize_t			tcp_sendpage(struct socket *sock, struct page *page, int offset, size_t size, int flags);
@@ -62,7 +66,7 @@
  
  extern int			tcp_ioctl(struct sock *sk, 
  					  int cmd, 
-@@ -737,6 +739,9 @@ extern int			tcp_recvmsg(struct sock *sk
+@@ -737,6 +739,9 @@
  					    struct msghdr *msg,
  					    int len, int nonblock, 
  					    int flags, int *addr_len);
@@ -72,9 +76,11 @@
  
  extern int			tcp_listen_start(struct sock *sk);
  
---- linux-2.4.22-ac1/net/core/skbuff.c~tcp-zero-copy-2.4.22-rh	2003-08-25 15:44:44.000000000 +0400
-+++ linux-2.4.22-ac1-alexey/net/core/skbuff.c	2003-09-26 00:38:48.000000000 +0400
-@@ -208,6 +208,8 @@ struct sk_buff *alloc_skb(unsigned int s
+Index: linux-2.4.22-vanilla/net/core/skbuff.c
+===================================================================
+--- linux-2.4.22-vanilla.orig/net/core/skbuff.c	2003-11-03 23:22:13.000000000 +0300
++++ linux-2.4.22-vanilla/net/core/skbuff.c	2003-12-02 23:56:15.000000000 +0300
+@@ -208,6 +208,8 @@
  	atomic_set(&(skb_shinfo(skb)->dataref), 1);
  	skb_shinfo(skb)->nr_frags = 0;
  	skb_shinfo(skb)->frag_list = NULL;
@@ -83,7 +89,7 @@
  	return skb;
  
  nodata:
-@@ -277,6 +279,10 @@ static void skb_release_data(struct sk_b
+@@ -277,6 +279,10 @@
  {
  	if (!skb->cloned ||
  	    atomic_dec_and_test(&(skb_shinfo(skb)->dataref))) {
@@ -94,7 +100,7 @@
  		if (skb_shinfo(skb)->nr_frags) {
  			int i;
  			for (i = 0; i < skb_shinfo(skb)->nr_frags; i++)
-@@ -535,6 +541,8 @@ int skb_linearize(struct sk_buff *skb, i
+@@ -535,6 +541,8 @@
  	atomic_set(&(skb_shinfo(skb)->dataref), 1);
  	skb_shinfo(skb)->nr_frags = 0;
  	skb_shinfo(skb)->frag_list = NULL;
@@ -103,7 +109,7 @@
  
  	/* We are no longer a clone, even if we were. */
  	skb->cloned = 0;
-@@ -581,6 +589,14 @@ struct sk_buff *pskb_copy(struct sk_buff
+@@ -581,6 +589,14 @@
  	n->data_len = skb->data_len;
  	n->len = skb->len;
  
@@ -118,7 +124,7 @@
  	if (skb_shinfo(skb)->nr_frags) {
  		int i;
  
-@@ -623,6 +639,8 @@ int pskb_expand_head(struct sk_buff *skb
+@@ -623,6 +639,8 @@
  	u8 *data;
  	int size = nhead + (skb->end - skb->head) + ntail;
  	long off;
@@ -127,7 +133,7 @@
  
  	if (skb_shared(skb))
  		BUG();
-@@ -644,6 +662,11 @@ int pskb_expand_head(struct sk_buff *skb
+@@ -644,6 +662,11 @@
  	if (skb_shinfo(skb)->frag_list)
  		skb_clone_fraglist(skb);
  
@@ -139,7 +145,7 @@
  	skb_release_data(skb);
  
  	off = (data+nhead) - skb->head;
-@@ -658,6 +681,8 @@ int pskb_expand_head(struct sk_buff *skb
+@@ -658,6 +681,8 @@
  	skb->nh.raw += off;
  	skb->cloned = 0;
  	atomic_set(&skb_shinfo(skb)->dataref, 1);
@@ -148,9 +154,11 @@
  	return 0;
  
  nodata:
---- linux-2.4.22-ac1/net/ipv4/tcp.c~tcp-zero-copy-2.4.22-rh	2003-08-25 15:44:44.000000000 +0400
-+++ linux-2.4.22-ac1-alexey/net/ipv4/tcp.c	2003-09-26 00:38:48.000000000 +0400
-@@ -747,7 +747,7 @@ do_interrupted:
+Index: linux-2.4.22-vanilla/net/ipv4/tcp.c
+===================================================================
+--- linux-2.4.22-vanilla.orig/net/ipv4/tcp.c	2003-11-03 23:22:13.000000000 +0300
++++ linux-2.4.22-vanilla/net/ipv4/tcp.c	2003-12-02 23:56:15.000000000 +0300
+@@ -747,7 +747,7 @@
  	goto out;
  }
  
@@ -159,7 +167,7 @@
  
  static inline int
  can_coalesce(struct sk_buff *skb, int i, struct page *page, int off)
-@@ -826,7 +826,8 @@ static int tcp_error(struct sock *sk, in
+@@ -826,7 +826,8 @@
  	return err;
  }
  
@@ -169,7 +177,7 @@
  {
  	struct tcp_opt *tp = &(sk->tp_pinfo.af_tcp);
  	int mss_now;
-@@ -874,6 +875,17 @@ new_segment:
+@@ -874,6 +875,17 @@
  			copy = size;
  
  		i = skb_shinfo(skb)->nr_frags;
@@ -187,7 +195,7 @@
  		if (can_coalesce(skb, i, page, offset)) {
  			skb_shinfo(skb)->frags[i-1].size += copy;
  		} else if (i < MAX_SKB_FRAGS) {
-@@ -884,6 +896,20 @@ new_segment:
+@@ -884,6 +896,20 @@
  			goto new_segment;
  		}
  
@@ -208,7 +216,7 @@
  		skb->len += copy;
  		skb->data_len += copy;
  		skb->ip_summed = CHECKSUM_HW;
-@@ -947,7 +973,31 @@ ssize_t tcp_sendpage(struct socket *sock
+@@ -947,7 +973,31 @@
  
  	lock_sock(sk);
  	TCP_CHECK_TIMER(sk);
@@ -241,7 +249,7 @@
  	TCP_CHECK_TIMER(sk);
  	release_sock(sk);
  	return res;
-@@ -1771,6 +1821,202 @@ recv_urg:
+@@ -1771,6 +1821,202 @@
  	goto out;
  }
  
@@ -444,16 +452,16 @@
  /*
   *	State processing on a close. This implements the state shift for
   *	sending our FIN frame. Note that we only send a FIN for some
---- linux-2.4.22-ac1/net/netsyms.c~tcp-zero-copy-2.4.22-rh	2003-09-25 14:16:26.000000000 +0400
-+++ linux-2.4.22-ac1-alexey/net/netsyms.c	2003-09-26 00:39:16.000000000 +0400
-@@ -396,6 +396,8 @@ EXPORT_SYMBOL(sysctl_tcp_wmem);
- EXPORT_SYMBOL(sysctl_tcp_ecn);
- EXPORT_SYMBOL(tcp_cwnd_application_limited);
- EXPORT_SYMBOL(tcp_sendpage);
+Index: linux-2.4.22-vanilla/net/netsyms.c
+===================================================================
+--- linux-2.4.22-vanilla.orig/net/netsyms.c	2003-11-03 23:22:13.000000000 +0300
++++ linux-2.4.22-vanilla/net/netsyms.c	2003-12-04 20:42:50.000000000 +0300
+@@ -417,6 +417,8 @@
+ 
+ #endif
+ 
 +EXPORT_SYMBOL(tcp_sendpage_zccd);
 +EXPORT_SYMBOL(tcp_recvpackets);
- EXPORT_SYMBOL(sysctl_tcp_low_latency);
+ EXPORT_SYMBOL(tcp_read_sock);
  
- EXPORT_SYMBOL(tcp_write_xmit);
-
-_
+ EXPORT_SYMBOL(netlink_set_err);
