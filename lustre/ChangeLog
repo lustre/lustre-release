@@ -4,6 +4,11 @@ TBA
 	 - garbage on read from stripes with failed OSTs (441)
 	 - mark OSCs as active before reconnecting during recovery (438)
 	 - lov_enqueue and lov_cancel need to handle inactive OSTs (403)
+	 - lfind did not preserve OST order in output (443)
+	 - symlinks cause hung clients, incorrect data (439)
+	 - stop dereferencing request after dropping refcount (457)
+	 - don't LASSERT(spin_is_locked) on non-SMP (455)
+	 - fixes for many rename() bugs
 
 2002-12-02  Andreas Dilger  <adilger@clusterfs.com>
 	* version v0_5_18

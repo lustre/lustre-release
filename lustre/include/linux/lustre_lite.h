@@ -210,6 +210,8 @@ do {                                                                           \
         up(&ll_d2d(de)->lld_it_sem);                                           \
 } while(0)
 
+/* dcache.c */
+int ll_have_md_lock(struct dentry *de);
 
 /* dir.c */
 extern struct file_operations ll_dir_operations;

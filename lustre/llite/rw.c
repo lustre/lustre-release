@@ -189,7 +189,7 @@ void ll_truncate(struct inode *inode)
                         OBD_OBJECT_EOF);
         if (err) { 
                 LBUG();
-                CERROR("obd_truncate fails (%d) ino %ld\n", err,
+                CERROR("obd_truncate fails (%d) ino %lu\n", err,
                        inode->i_ino);
         } else
                 obdo_to_inode(inode, &oa, oa.o_valid);

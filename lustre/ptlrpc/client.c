@@ -349,13 +349,14 @@ static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked)
         if (request == NULL)
                 RETURN(1);
 
+        DEBUG_REQ(D_INFO, request, "refcount now %u",
+                  atomic_read(&request->rq_refcount) - 1);
+
         if (atomic_dec_and_test(&request->rq_refcount)) {
                 __ptlrpc_free_req(request, locked);
                 RETURN(1);
         }
 
-        DEBUG_REQ(D_INFO, request, "refcount now %u",
-                  atomic_read(&request->rq_refcount));
         RETURN(0);
 }
 
@@ -444,7 +445,7 @@ void ptlrpc_free_committed(struct obd_import *imp)
         struct ptlrpc_request *req;
         ENTRY;
 
-#ifndef __arch_um__
+#ifdef CONFIG_SMP
         LASSERT(spin_is_locked(&imp->imp_lock));
 #endif
 

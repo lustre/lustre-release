@@ -137,7 +137,7 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
         up(&inode->i_sem);
 
         if (rc) {
-                CERROR("error adding objectid "LPX64" to inode %ld: %d\n",
+                CERROR("error adding objectid "LPX64" to inode %lu: rc = %d\n",
                        lmm->lmm_object_id, inode->i_ino, rc);
                 if (rc != -ENOSPC) LBUG();
         }
@@ -160,7 +160,7 @@ static int mds_extN_get_md(struct inode *inode, struct lov_mds_md *lmm,int size)
                 return (rc == -ENODATA) ? 0 : rc;
 
         if (rc < 0) {
-                CDEBUG(D_INFO, "error getting EA %s from MDS inode %ld: "
+                CDEBUG(D_INFO, "error getting EA %s from MDS inode %lu: "
                        "rc = %d\n", XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
                 memset(lmm, 0, size);
                 return (rc == -ENODATA) ? 0 : rc;
@@ -211,13 +211,13 @@ static void mds_extN_delete_inode(struct inode *inode)
                         return;
                 }
                 if (mds_extN_set_md(inode, handle, NULL, 0))
-                        CERROR("error clearing objid on %ld\n", inode->i_ino);
+                        CERROR("error clearing objid on %lu\n", inode->i_ino);
 
                 if (mds_extN_fs_ops.cl_delete_inode)
                         mds_extN_fs_ops.cl_delete_inode(inode);
 
                 if (mds_extN_commit(inode, handle))
-                        CERROR("error closing handle on %ld\n", inode->i_ino);
+                        CERROR("error closing handle on %lu\n", inode->i_ino);
         } else
                 mds_extN_fs_ops.cl_delete_inode(inode);
 }

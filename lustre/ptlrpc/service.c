@@ -242,6 +242,7 @@ static void ptlrpc_daemonize(void)
         current->tty = NULL;
 
         exit_files(current);
+        reparent_to_init();
 }
 
 static int ptlrpc_main(void *arg)

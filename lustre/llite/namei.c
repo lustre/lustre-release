@@ -357,7 +357,8 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
          *  always needed...
          */
         if ( // it->it_status == 0 && 
-            it->it_op != IT_RENAME2 && 
+            it->it_op != IT_RENAME && 
+            it->it_op != IT_LINK && 
             it->it_op != IT_SETATTR &&
             it->it_op != IT_GETATTR &&
             it->it_op != IT_READDIR &&
@@ -892,7 +893,7 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
         struct page * old_page;
         int err;
 
-        LL_GET_INTENT(old_dentry, it);
+        LL_GET_INTENT(new_dentry, it);
 
         if (it && it->it_disposition) {
                 if (tgt_inode) {

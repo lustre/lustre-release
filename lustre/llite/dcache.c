@@ -47,14 +47,6 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
         struct lustre_handle *handle;
         ENTRY;
 
-        /* XXX the check for RENAME2 is a workaround for old kernels 
-           which call intent_release twice in rename 
-        */
-        if (it == NULL || it->it_op == IT_RENAME2) {
-                EXIT;
-                return;
-        }
-
         LASSERT(ll_d2d(de) != NULL);
 
         if (it->it_lock_mode) {
@@ -74,7 +66,7 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
         }
 
         if (!de->d_it || it->it_op == IT_RELEASED_MAGIC) {
-                EXIT; 
+                EXIT;
                 return;
         }
 
@@ -86,9 +78,9 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
 
 extern struct dentry *ll_find_alias(struct inode *, struct dentry *);
 
-static int revalidate2_finish(int flag, struct ptlrpc_request *request, 
+static int revalidate2_finish(int flag, struct ptlrpc_request *request,
                           struct dentry **de,
-                          struct lookup_intent *it, 
+                          struct lookup_intent *it,
                           int offset, obd_id ino)
 {
         ldlm_lock_set_data((struct lustre_handle *)it->it_lock_handle,
@@ -97,7 +89,7 @@ static int revalidate2_finish(int flag, struct ptlrpc_request *request,
         return 0;
 }
 
-static int ll_have_lock(struct dentry *de)
+int ll_have_md_lock(struct dentry *de)
 {
         struct ll_sb_info *sbi = ll_s2sbi(de->d_sb);
         struct lustre_handle lockh;
@@ -141,15 +133,12 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                 RETURN(0);
         }
 
-//        if (it == NULL && ll_have_lock(de))
-//                RETURN(1);
-
         rc = ll_intent_lock(de->d_parent->d_inode, &de, it, revalidate2_finish);
         if (rc < 0) {
                 /* Something bad happened; overwrite it_status? */
                 CERROR("ll_intent_lock: %d\n", rc);
         }
-        /* unfortunately ll_intent_lock may cause a callback and revoke our 
+        /* unfortunately ll_intent_lock may cause a callback and revoke our
            dentry */
         spin_lock(&dcache_lock);
         list_del_init(&de->d_hash);

@@ -419,7 +419,7 @@ int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
                         CERROR("ldlm_cli_cancel failed: %d\n", rc);
                 break;
         case LDLM_CB_CANCELING:
-                CDEBUG(D_INODE, "invalidating obdo/inode %ld\n", inode->i_ino);
+                CDEBUG(D_INODE, "invalidating obdo/inode %lu\n", inode->i_ino);
                 /* FIXME: do something better than throwing away everything */
                 //down(&inode->i_sem);
                 ll_invalidate_inode_pages(inode);
@@ -462,7 +462,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
 
                 extent.start = *ppos;
                 extent.end = *ppos + count;
-                CDEBUG(D_INFO, "Locking inode %ld, start "LPU64" end "LPU64"\n",
+                CDEBUG(D_INFO, "Locking inode %lu, start "LPU64" end "LPU64"\n",
                        inode->i_ino, extent.start, extent.end);
 
                 err = obd_enqueue(&sbi->ll_osc_conn, lsm, NULL, LDLM_EXTENT,
@@ -476,7 +476,7 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 }
         }
 
-        CDEBUG(D_INFO, "Reading inode %ld, %d bytes, offset %Ld\n",
+        CDEBUG(D_INFO, "Reading inode %lu, %d bytes, offset %Ld\n",
                inode->i_ino, count, *ppos);
         retval = generic_file_read(filp, buf, count, ppos);
 
@@ -550,7 +550,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                         GOTO(out_eof, retval = -ENOMEM);
                 extent.start = *ppos;
                 extent.end = *ppos + count;
-                CDEBUG(D_INFO, "Locking inode %ld, start "LPU64" end "LPU64"\n",
+                CDEBUG(D_INFO, "Locking inode %lu, start "LPU64" end "LPU64"\n",
                        inode->i_ino, extent.start, extent.end);
 
                 err = obd_enqueue(&sbi->ll_osc_conn, lsm, NULL, LDLM_EXTENT,
@@ -563,7 +563,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                 }
         }
 
-        CDEBUG(D_INFO, "Writing inode %ld, %ld bytes, offset "LPD64"\n",
+        CDEBUG(D_INFO, "Writing inode %lu, %ld bytes, offset "LPD64"\n",
                inode->i_ino, (long)count, *ppos);
 
         retval = generic_file_write(file, buf, count, ppos);
@@ -621,12 +621,12 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
 
         down(&lli->lli_open_sem);
         if (lli->lli_smd) {
-                CERROR("striping data already set for %d\n", inode->i_ino);
+                CERROR("striping data already set for %lu\n", inode->i_ino);
                 GOTO(out_lov_up, rc = -EPERM);
         }
         rc = obd_unpackmd(conn, &lli->lli_smd, lmm);
         if (rc < 0) {
-                CERROR("error setting LOV striping on %d: rc = %d\n",
+                CERROR("error setting LOV striping on %lu: rc = %d\n",
                        inode->i_ino, rc);
                 GOTO(out_lov_up, rc);
         }
@@ -804,8 +804,37 @@ static int ll_inode_revalidate(struct dentry *dentry)
         struct lov_stripe_md *lsm;
         ENTRY;
 
-        if (!inode)
+        if (!inode) { 
+                CERROR("REPORT THIS LINE TO PETER\n");
                 RETURN(0);
+        }
+        
+        if (! ll_have_md_lock(dentry)) { 
+                struct ptlrpc_request *req;
+                struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
+                struct mds_body *body; 
+                int rc, datalen, valid; 
+
+                if (S_ISREG(inode->i_mode)) {
+                        datalen = obd_size_wiremd(&sbi->ll_osc_conn, NULL);
+                        valid |= OBD_MD_FLEASIZE;
+                }
+                rc = mdc_getattr(&sbi->ll_mdc_conn, 
+                                 inode->i_ino, 
+                                 inode->i_mode, valid,
+                                 datalen, &req);
+                if (rc) {
+                        CERROR("failure %d inode "LPX64"\n", rc, inode->i_ino);
+                        ptlrpc_req_finished(req);
+                        RETURN(-abs(rc));
+                }
+
+                body = lustre_msg_buf(req->rq_repmsg, 0);
+                ll_update_inode(inode, body);
+                ptlrpc_req_finished(req);
+        } 
+                
+        
 
         lsm = ll_i2info(inode)->lli_smd;
         if (!lsm)       /* object not yet allocated, don't validate size */

@@ -513,10 +513,17 @@ def is_block(path):
 def mkfs(fstype, dev):
     if(fstype in ('ext3', 'extN')):
         mkfs = 'mkfs.ext2 -j -b 4096'
+    elif (fstype == 'reiserfs'):
+        mkfs = 'mkfs.reiserfs -f'
     else:
         print 'unsupported fs type: ', fstype
     if not is_block(dev):
-        force = '-F'
+        if(fstype in ('ext3', 'extN')):
+            force = '-F'
+        elif (fstype == 'reiserfs'):
+            force = ''
+        else:
+            print 'unsupported fs type: ', fstype
     else:
         force = ''
     (ret, out) = run (mkfs, force, dev)

@@ -138,7 +138,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 }
         }
         inode = de->d_inode;
-        CDEBUG(D_INODE, "ino %ld\n", inode->i_ino);
+        CDEBUG(D_INODE, "ino %lu\n", inode->i_ino);
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE,
                        to_kdev_t(inode->i_sb->s_dev));
@@ -208,7 +208,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 GOTO(out_create, rc);
         }
         dir = de->d_inode;
-        CDEBUG(D_INODE, "parent ino %ld name %s mode %o\n",
+        CDEBUG(D_INODE, "parent ino %lu name %s mode %o\n",
                dir->i_ino, rec->ur_name, rec->ur_mode);
 
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);
@@ -225,7 +225,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 struct mds_body *body;
                 struct inode *inode = dchild->d_inode;
 
-                CDEBUG(D_INODE, "child exists (dir %ld, name %s, ino %ld)\n",
+                CDEBUG(D_INODE, "child exists (dir %lu, name %s, ino %lu)\n",
                        dir->i_ino, rec->ur_name, dchild->d_inode->i_ino);
 
                 /* XXX check that mode is correct? */
@@ -283,7 +283,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 handle = mds_fs_start(mds, dir, MDS_FSOP_SYMLINK);
                 if (IS_ERR(handle))
                         GOTO(out_transno_dchild, rc = PTR_ERR(handle));
-                rc = vfs_symlink(dir, dchild, rec->ur_name);
+                rc = vfs_symlink(dir, dchild, rec->ur_tgt);
                 EXIT;
                 break;
         }
@@ -325,10 +325,10 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         LASSERT(rec->ur_opcode & REINT_REPLAYING);
                         inode->i_generation = rec->ur_fid2->generation;
                         /* Dirtied and committed by the upcoming setattr. */
-                        CDEBUG(D_INODE, "recreated ino %ld with gen %ld\n",
+                        CDEBUG(D_INODE, "recreated ino %lu with gen %lu\n",
                                inode->i_ino, inode->i_generation);
                 } else {
-                        CDEBUG(D_INODE, "created ino %ld\n", inode->i_ino);
+                        CDEBUG(D_INODE, "created ino %lu\n", inode->i_ino);
                 }
 
                 rc = mds_fs_setattr(mds, dchild, handle, &iattr);
@@ -433,17 +433,17 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         dir = de->d_inode;
         inode = dchild->d_inode;
-        CDEBUG(D_INODE, "parent ino %ld\n", dir->i_ino);
+        CDEBUG(D_INODE, "parent ino %lu\n", dir->i_ino);
 
         if (!inode) {
                 if (rec->ur_opcode & REINT_REPLAYING) {
                         CDEBUG(D_INODE,
-                               "child missing (%ld/%s); OK for REPLAYING\n",
+                               "child missing (%lu/%s); OK for REPLAYING\n",
                                dir->i_ino, rec->ur_name);
                         rc = 0;
                 } else {
                         CDEBUG(D_INODE,
-                               "child doesn't exist (dir %ld, name %s)\n",
+                               "child doesn't exist (dir %lu, name %s)\n",
                                dir->i_ino, rec->ur_name);
                         rc = -ENOENT;
                 }
@@ -612,11 +612,11 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                         /* XXX verify that the link is to the the right file? */
                         rc = 0;
                         CDEBUG(D_INODE,
-                               "child exists (dir %ld, name %s) (REPLAYING)\n",
+                               "child exists (dir %lu, name %s) (REPLAYING)\n",
                                de_tgt_dir->d_inode->i_ino, rec->ur_name);
                 } else {
                         rc = -EEXIST;
-                        CERROR("child exists (dir %ld, name %s)\n",
+                        CERROR("child exists (dir %lu, name %s)\n",
                                de_tgt_dir->d_inode->i_ino, rec->ur_name);
                 }
                 GOTO(out_link_dchild, rc);
@@ -799,7 +799,7 @@ out_rename_deold:
                                       mds_blocking_ast, NULL, 0, &oldhandle);
                 if (rc)
                         CERROR("failed to get child inode lock (child ino "
-                               LPD64" dir ino %ld)\n",
+                               LPD64" dir ino %lu)\n",
                                res_id[0], de_old->d_inode->i_ino);
         }
 

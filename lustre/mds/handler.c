@@ -576,7 +576,7 @@ int mds_pack_md(struct mds_obd *mds, struct ptlrpc_request *req,
         int rc;
 
         if (lmm_size == 0) {
-                CDEBUG(D_INFO, "no space reserved for inode %u MD\n", inode->i_ino);
+                CDEBUG(D_INFO, "no space reserved for inode %lu MD\n", inode->i_ino);
                 RETURN(0);
         }
 
@@ -587,7 +587,7 @@ int mds_pack_md(struct mds_obd *mds, struct ptlrpc_request *req,
          * to reserve for the MD, this shouldn't be fatal either...
          */
         if (lmm_size > mds->mds_max_mdsize) {
-                CERROR("Reading MD for inode %u of %d bytes > max %d\n",
+                CERROR("Reading MD for inode %lu of %d bytes > max %d\n",
                        inode->i_ino, lmm_size, mds->mds_max_mdsize);
                 // RETURN(-EINVAL);
         }
@@ -597,7 +597,7 @@ int mds_pack_md(struct mds_obd *mds, struct ptlrpc_request *req,
          * size itself from the ost count.
          */
         if ((rc = mds_fs_get_md(mds, inode, lmm, lmm_size)) < 0) {
-                CDEBUG(D_INFO, "No md for ino %u: rc = %d\n", inode->i_ino, rc);
+                CDEBUG(D_INFO, "No md for ino %lu: rc = %d\n", inode->i_ino, rc);
         } else if (rc > 0) {
                 body->valid |= OBD_MD_FLEASIZE;
                 rc = 0;
@@ -635,6 +635,7 @@ static int mds_getattr_internal(struct mds_obd *mds, struct dentry *dentry,
                 } else {
                         CDEBUG(D_INODE, "read symlink dest %s\n", symname);
                         body->valid |= OBD_MD_LINKNAME;
+                        rc = 0;
                 }
         }
         RETURN(rc);
@@ -679,7 +680,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         }
 
         dir = de->d_inode;
-        CDEBUG(D_INODE, "parent ino %ld, name %*s\n", dir->i_ino,namelen,name);
+        CDEBUG(D_INODE, "parent ino %lu, name %*s\n", dir->i_ino,namelen,name);
 
         lock_mode = LCK_PR;
         res_id[0] = dir->i_ino;
@@ -748,11 +749,11 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
         inode = de->d_inode;
         if (S_ISREG(body->fid1.f_type)) {
                 int rc = mds_fs_get_md(mds, inode, NULL, 0);
-                CDEBUG(D_INODE, "got %d bytes MD data for inode %u\n",
+                CDEBUG(D_INODE, "got %d bytes MD data for inode %lu\n",
                        rc, inode->i_ino);
                 if (rc < 0) {
                         if (rc != -ENODATA)
-                                CERROR("error getting inode %u MD: rc = %d\n",
+                                CERROR("error getting inode %lu MD: rc = %d\n",
                                        inode->i_ino, rc);
                         size[bufcount] = 0;
                 } else if (rc > mds->mds_max_mdsize) {
@@ -853,12 +854,12 @@ static int mds_store_md(struct mds_obd *mds, struct ptlrpc_request *req,
          * MD request.
          */
         if (lmm_size > mds->mds_max_mdsize) {
-                CERROR("Saving MD for inode %u of %d bytes > max %d\n",
+                CERROR("Saving MD for inode %lu of %d bytes > max %d\n",
                        inode->i_ino, lmm_size, mds->mds_max_mdsize);
                 //RETURN(-EINVAL);
         }
 
-        CDEBUG(D_INODE, "storing %d bytes MD for inode %u\n",
+        CDEBUG(D_INODE, "storing %d bytes MD for inode %lu\n",
                lmm_size, inode->i_ino);
         uc.ouc_fsuid = body->fsuid;
         uc.ouc_fsgid = body->fsgid;
@@ -1048,7 +1049,7 @@ static int mds_readpage(struct ptlrpc_request *req)
         if (IS_ERR(de))
                 GOTO(out_pop, rc = PTR_ERR(de));
 
-        CDEBUG(D_INODE, "ino %ld\n", de->d_inode->i_ino);
+        CDEBUG(D_INODE, "ino %lu\n", de->d_inode->i_ino);
 
         file = dentry_open(de, mnt, O_RDONLY | O_LARGEFILE);
         /* note: in case of an error, dentry_open puts dentry */

@@ -197,7 +197,7 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 LASSERT(data_len == sizeof(*inode));
 
                 if (S_ISDIR(inode->i_mode)) {
-                        CDEBUG(D_INODE, "invalidating inode %ld\n",
+                        CDEBUG(D_INODE, "invalidating inode %lu\n",
                                inode->i_ino);
 
                         ll_invalidate_inode_pages(inode);
@@ -248,7 +248,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         struct ldlm_request *lockreq;
         ENTRY;
 
-        LDLM_DEBUG_NOLOCK("mdsintent %s parent dir %ld",
+        LDLM_DEBUG_NOLOCK("mdsintent %s parent dir %lu",
                           ldlm_it2str(it->it_op), dir->i_ino);
 
         if (it->it_op & (IT_MKDIR | IT_CREAT | IT_SYMLINK | IT_MKNOD)) {

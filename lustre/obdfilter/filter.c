@@ -659,8 +659,8 @@ static void filter_from_inode(struct obdo *oa, struct inode *inode, int valid)
         int type = oa->o_mode & S_IFMT;
         ENTRY;
 
-        CDEBUG(D_INFO, "src inode %ld (%p), dst obdo %ld valid 0x%08x\n",
-               inode->i_ino, inode, (long)oa->o_id, valid);
+        CDEBUG(D_INFO, "src inode %lu (%p), dst obdo "LPX64" valid 0x%08x\n",
+               inode->i_ino, inode, oa->o_id, valid);
         /* Don't copy the inode number in place of the object ID */
         obdo_from_inode(oa, inode, valid);
         oa->o_mode &= ~S_IFMT;
@@ -998,9 +998,9 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
 
         /* count doubles as retval */
         for (pg = 0; pg < oa_bufs; pg++) {
-                CDEBUG(D_INODE, "OP %d obdo pgno: (%d) (%ld,"LPU64
+                CDEBUG(D_INODE, "OP %d inode %lu pgno: (%d) "LPU64
                        ") off count ("LPU64",%d)\n",
-                       cmd, pnum, file->f_dentry->d_inode->i_ino,
+                       cmd, file->f_dentry->d_inode->i_ino, pnum,
                        pga[pnum].off >> PAGE_CACHE_SHIFT, pga[pnum].off,
                        (int)pga[pnum].count);
                 if (cmd & OBD_BRW_WRITE) {
@@ -1354,7 +1354,7 @@ struct page *filter_get_page_write(struct inode *inode,
          */
         if (!page) {
                 unsigned long addr;
-                CDEBUG(D_PAGE, "ino %ld page %ld locked\n", inode->i_ino,index);
+                CDEBUG(D_PAGE, "ino %lu page %ld locked\n", inode->i_ino,index);
                 addr = __get_free_pages(GFP_KERNEL, 0); /* locked page */
                 if (!addr) {
                         CERROR("no memory for a temp page\n");
@@ -1418,8 +1418,8 @@ static int filter_commit_write(struct page *page, unsigned from, unsigned to,
                 void *addr = page_address(page);
 
                 /* debugging: just seeing if this ever happens */
-                CERROR("called filter_commit_write for obj %ld:%ld on err %d\n",
-                       page->index, page->mapping->host->i_ino, err);
+                CERROR("called filter_commit_write for ino %lu:%lu on err %d\n",
+                       page->mapping->host->i_ino, page->index, err);
 
                 /* Currently one buffer per page, but in the future... */
                 for (bh = head, block_start = 0; bh != head || !block_start;
@@ -1470,12 +1470,17 @@ static int filter_preprw(int cmd, struct lustre_handle *conn,
         obd_kmap_get(niocount, 1);
 
         for (i = 0; i < objcount; i++, o++) {
+                struct filter_dentry_data *fdd;
                 struct dentry *dentry;
                 struct inode *inode;
                 int j;
 
                 dentry = filter_fid2dentry(obd, filter_parent(obd, S_IFREG),
                                            o->ioo_id, S_IFREG, 0);
+
+                if (!(fdd = dentry->d_fsdata) || !atomic_read(&fdd->fdd_open_count))
+                        CERROR("I/O to unopened object "LPX64"\n", o->ioo_id);
+
                 if (IS_ERR(dentry))
                         GOTO(out_clean, rc = PTR_ERR(dentry));
                 inode = dentry->d_inode;

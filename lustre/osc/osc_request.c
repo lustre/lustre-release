@@ -67,6 +67,7 @@ static int osc_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
                       struct lov_stripe_md *lsm)
 {
         int lmm_size;
+        ENTRY;
 
         lmm_size = sizeof(**lmmp);
         if (!lmmp)
@@ -88,13 +89,14 @@ static int osc_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
                 (*lmmp)->lmm_object_id = (lsm->lsm_object_id);
         }
 
-        return lmm_size;
+        RETURN(lmm_size);
 }
 
 static int osc_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
                         struct lov_mds_md *lmm)
 {
         int lsm_size;
+        ENTRY;
 
         lsm_size = sizeof(**lsmp);
         if (!lsmp)
@@ -118,7 +120,7 @@ static int osc_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
                 LASSERT((*lsmp)->lsm_object_id);
         }
 
-        return lsm_size;
+        RETURN(lsm_size);
 }
 
 static int osc_getattr(struct lustre_handle *conn, struct obdo *oa,
