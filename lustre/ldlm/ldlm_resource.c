@@ -88,7 +88,7 @@ ldlm_error_t ldlm_namespace_new(struct obd_device *obddev, __u32 id,
 int ldlm_namespace_free(struct ldlm_namespace *ns)
 {
         if (atomic_read(&ns->ns_refcount))
-                return -EBUSY;
+                RETURN(-EBUSY);
 
         list_del(&ns->ns_link);
         OBD_FREE(ns->ns_hash, sizeof(struct list_head) * RES_HASH_SIZE);
