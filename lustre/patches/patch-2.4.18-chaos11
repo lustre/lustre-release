@@ -460,6 +460,16 @@
  
  extern void iput(struct inode *);
  extern void force_delete(struct inode *);
+--- linux-2.4.18-chaos5-pristine/fs/dcache.c	Mon Feb 25 12:38:08 2002
++++ linux-2.4.18-chaos5/fs/dcache.c	Wed Jul 31 11:44:36 2002
+@@ -617,6 +617,7 @@
+ 	dentry->d_op = NULL;
+ 	dentry->d_fsdata = NULL;
+ 	dentry->d_mounted = 0;
++	dentry->d_it = NULL;
+ 	INIT_LIST_HEAD(&dentry->d_hash);
+ 	INIT_LIST_HEAD(&dentry->d_lru);
+ 	INIT_LIST_HEAD(&dentry->d_subdirs);
 --- linux-2.4.18-chaos5-pristine/fs/nfsd/vfs.c	Sat Jun 29 23:07:56 2002
 +++ linux-2.4.18-chaos5/fs/nfsd/vfs.c	Sat Jun 29 23:09:04 2002
 @@ -1298,7 +1298,7 @@
