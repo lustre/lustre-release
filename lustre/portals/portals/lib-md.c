@@ -33,16 +33,29 @@
 #include <portals/lib-p30.h>
 #include <portals/arg-blocks.h>
 
-/*
- * must be called with state lock held
- */
+/* must be called with state lock held */
 void lib_md_unlink(nal_cb_t * nal, lib_md_t * md)
 {
-        lib_me_t *me = md->me;
+        if ((md->md_flags & PTL_MD_FLAG_ZOMBIE) == 0) {
+                /* first unlink attempt... */
+                lib_me_t *me = md->me;
+
+                md->md_flags |= PTL_MD_FLAG_ZOMBIE;
+
+                /* Disassociate from ME (if any), and unlink it if it was created
+                 * with PTL_UNLINK */
+                if (me != NULL) {
+                        me->md = NULL;
+                        if (me->unlink == PTL_UNLINK)
+                                lib_me_unlink(nal, me);
+                }
+
+                /* emsure all future handle lookups fail */
+                lib_invalidate_handle(nal, &md->md_lh);
+        }
 
         if (md->pending != 0) {
                 CDEBUG(D_NET, "Queueing unlink of md %p\n", md);
-                md->md_flags |= PTL_MD_FLAG_UNLINK;
                 return;
         }
 
@@ -52,23 +65,16 @@ void lib_md_unlink(nal_cb_t * nal, lib_md_t * md)
                 if (nal->cb_unmap_pages != NULL)
                         nal->cb_unmap_pages (nal, md->md_niov, md->md_iov.kiov, 
                                              &md->md_addrkey);
-        } else if (nal->cb_unmap != NULL)
+        } else if (nal->cb_unmap != NULL) {
                 nal->cb_unmap (nal, md->md_niov, md->md_iov.iov, 
                                &md->md_addrkey);
-
-        if (me) {
-                me->md = NULL;
-                if (me->unlink == PTL_UNLINK)
-                        lib_me_unlink(nal, me);
         }
 
-        if (md->eq != NULL)
-        {
+        if (md->eq != NULL) {
                 md->eq->eq_refcount--;
                 LASSERT (md->eq->eq_refcount >= 0);
         }
 
-        lib_invalidate_handle (nal, &md->md_lh);
         list_del (&md->md_list);
         lib_md_free(nal, md);
 }
@@ -77,8 +83,6 @@ void lib_md_unlink(nal_cb_t * nal, lib_md_t * md)
 static int lib_md_build(nal_cb_t *nal, lib_md_t *new, void *private,
                         ptl_md_t *md, ptl_handle_eq_t *eqh, int unlink)
 {
-        const int     max_size_opts = PTL_MD_AUTO_UNLINK |
-                                      PTL_MD_MAX_SIZE;
         lib_eq_t     *eq = NULL;
         int           rc;
         int           i;
@@ -99,7 +103,14 @@ static int lib_md_build(nal_cb_t *nal, lib_md_t *new, void *private,
         LASSERT((md->options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0 ||
                 md->niov <= PTL_MD_MAX_IOV);
 
-        if ((md->options & max_size_opts) != 0 && /* max size used */
+        /* This implementation doesn't know how to create START events or
+         * disable END events.  Best to LASSERT our caller is compliant so
+         * we find out quickly...  */
+        LASSERT (PtlHandleEqual (*eqh, PTL_EQ_NONE) ||
+                 ((md->options & PTL_MD_EVENT_START_DISABLE) != 0 &&
+                  (md->options & PTL_MD_EVENT_END_DISABLE) == 0));
+
+        if ((md->options & PTL_MD_MAX_SIZE) != 0 && /* max size used */
             (md->max_size < 0 || md->max_size > md->length)) // illegal max_size
                 return PTL_INV_MD;
 
@@ -108,13 +119,12 @@ static int lib_md_build(nal_cb_t *nal, lib_md_t *new, void *private,
         new->length = md->length;
         new->offset = 0;
         new->max_size = md->max_size;
-        new->unlink = unlink;
         new->options = md->options;
         new->user_ptr = md->user_ptr;
         new->eq = eq;
         new->threshold = md->threshold;
         new->pending = 0;
-        new->md_flags = 0;
+        new->md_flags = (unlink == PTL_UNLINK) ? PTL_MD_FLAG_AUTO_UNLINK : 0;
 
         if ((md->options & PTL_MD_IOV) != 0) {
                 int total_length = 0;
@@ -343,7 +353,7 @@ int do_PtlMDUnlink(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
                 memset(&ev, 0, sizeof(ev));
 
                 ev.type = PTL_EVENT_UNLINK;
-                ev.status = PTL_OK;
+                ev.ni_fail_type = PTL_OK;
                 ev.unlinked = 1;
                 lib_md_deconstruct(nal, md, &ev.mem_desc);
                 
@@ -430,10 +440,12 @@ int do_PtlMDUpdate_internal(nal_cb_t * nal, void *private, void *v_args,
         if (test_eq == NULL ||
             test_eq->sequence == args->sequence_in) {
                 lib_me_t *me = md->me;
+                int       unlink = (md->md_flags & PTL_MD_FLAG_AUTO_UNLINK) ?
+                                   PTL_UNLINK : PTL_RETAIN;
 
                 // #warning this does not track eq refcounts properly 
                 ret->rc = lib_md_build(nal, md, private,
-                                       new, &new->eventq, md->unlink);
+                                       new, &new->eventq, unlink);
 
                 md->me = me;
         } else {

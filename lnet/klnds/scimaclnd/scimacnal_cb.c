@@ -97,6 +97,18 @@ kscimacnal_sti(nal_cb_t *nal, unsigned long *flags)
 }
 
 
+static void 
+kscimacnal_callback(nal_cb_t *nal, void *private, lib_eq_t *eq, ptl_event_t *ev)
+{
+        /* holding ksci_dispatch_lock */
+
+        if (eq->event_callback != NULL)
+                eq->event_callback(ev);
+
+        /* We will wake theads sleeping in yield() here, AFTER the
+         * callback, when we implement blocking yield */
+}
+
 static int 
 kscimacnal_dist(nal_cb_t *nal, ptl_nid_t nid, unsigned long *dist)
 {
@@ -597,5 +609,6 @@ nal_cb_t kscimacnal_lib = {
         cb_printf:       kscimacnal_printf,
         cb_cli:          kscimacnal_cli,
         cb_sti:          kscimacnal_sti,
+        cb_callback:     kscimacnal_callback,
         cb_dist:         kscimacnal_dist
 };

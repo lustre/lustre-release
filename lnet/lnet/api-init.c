@@ -38,15 +38,6 @@ unsigned int portal_stack;
 atomic_t portal_kmemory = ATOMIC_INIT(0);
 #endif
 
-int __p30_initialized;
-int __p30_myr_initialized;
-int __p30_ip_initialized;
-ptl_handle_ni_t __myr_ni_handle;
-ptl_handle_ni_t __ip_ni_handle;
-
-int __p30_myr_timeout = 10;
-int __p30_ip_timeout;
-
 int PtlInit(void)
 {
 
@@ -57,7 +48,6 @@ int PtlInit(void)
         ptl_me_init();
         ptl_eq_init();
         ptl_init = 1;
-        __p30_initialized = 1;
 
         return PTL_OK;
 }
@@ -71,4 +61,10 @@ void PtlFini(void)
         ptl_me_fini();
         ptl_ni_fini();
         ptl_init = 0;
+}
+
+
+void PtlSnprintHandle(char *str, int len, ptl_handle_any_t h)
+{
+        snprintf(str, len, "0x%lx."LPX64, h.nal_idx, h.cookie);
 }
