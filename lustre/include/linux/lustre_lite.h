@@ -153,6 +153,12 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
             struct lookup_intent *it, struct lustre_handle *lockh);
 int ll_unlock(__u32 mode, struct lustre_handle *lockh);
 
+typedef int (*intent_finish_cb)(int flag, struct ptlrpc_request *,
+                                struct dentry **, struct lookup_intent *,
+                                int offset, obd_id ino);
+int ll_intent_lock(struct inode *parent, struct dentry **,
+                   struct lookup_intent *, intent_finish_cb);
+
 /* dcache.c */
 void ll_intent_release(struct dentry *, struct lookup_intent *);
 int ll_set_dd(struct dentry *de);

@@ -858,6 +858,22 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         EXIT;
 }
 
+int ldlm_lock_set_data(struct lustre_handle *lockh, void *data, int datalen)
+{
+        struct ldlm_lock *lock = ldlm_handle2lock(lockh);
+        ENTRY;
+
+        if (lock == NULL)
+                RETURN(-EINVAL);
+
+        lock->l_data = data;
+        lock->l_data_len = datalen;
+
+        LDLM_LOCK_PUT(lock);
+
+        RETURN(0);
+}
+
 void ldlm_cancel_locks_for_export(struct obd_export *exp)
 {
         struct list_head *iter, *n; /* MUST BE CALLED "n"! */

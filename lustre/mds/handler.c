@@ -1389,7 +1389,6 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                         }
                 }
 
-
                 if (flags & LDLM_FL_INTENT_ONLY) {
                         LDLM_DEBUG(lock, "INTENT_ONLY, aborting lock");
                         RETURN(ELDLM_LOCK_ABORTED);
@@ -1397,6 +1396,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 /* Give the client a lock on the child object, instead of the
                  * parent that it requested. */
                 new_resid[0] = NTOH__u32(mds_rep->ino);
+                new_resid[1] = NTOH__u32(mds_rep->generation);
                 if (new_resid[0] == 0)
                         LBUG();
                 old_res = lock->l_resource->lr_name[0];

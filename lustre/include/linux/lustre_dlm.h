@@ -41,6 +41,8 @@ typedef enum {
 #define LDLM_FL_CANCEL         (1 << 8)
 #define LDLM_FL_REPLAY         (1 << 9)
 #define LDLM_FL_INTENT_ONLY    (1 << 10) /* don't grant lock, just do intent */
+#define LDLM_FL_LOCAL_ONLY     (1 << 11) /* see ldlm_cli_cancel_unused */
+#define LDLM_FL_NO_CALLBACK    (1 << 12) /* see ldlm_cli_cancel_unused */
 
 #define LDLM_CB_BLOCKING    1
 #define LDLM_CB_CANCELING   2
@@ -234,14 +236,15 @@ do {                                                                          \
         }                                                                     \
         if (lock->l_resource->lr_type == LDLM_EXTENT) {                       \
                 CDEBUG(D_DLMTRACE, "### " format                              \
-                       " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res "        \
-                       LPU64" (rc=%d) type %s ["LPU64"->"LPU64"] remote "     \
+                       " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res "LPU64   \
+                       "/"LPU64" (rc=%d) type %s ["LPU64"->"LPU64"] remote "  \
                        LPX64")\n" , ## a,                                     \
                        lock->l_resource->lr_namespace->ns_name, lock,         \
                        lock->l_refc, lock->l_readers, lock->l_writers,        \
                        ldlm_lockname[lock->l_granted_mode],                   \
                        ldlm_lockname[lock->l_req_mode],                       \
                        lock->l_resource->lr_name[0],                          \
+                       lock->l_resource->lr_name[1],                          \
                        atomic_read(&lock->l_resource->lr_refcount),           \
                        ldlm_typename[lock->l_resource->lr_type],              \
                        lock->l_extent.start, lock->l_extent.end,              \
@@ -250,13 +253,14 @@ do {                                                                          \
         }                                                                     \
         {                                                                     \
                 CDEBUG(D_DLMTRACE, "### " format                              \
-                       " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res "        \
-                       LPU64" (rc=%d) type %s remote "LPX64")\n" , ## a,      \
+                       " (%s: lock %p(rc=%d/%d,%d) mode %s/%s on res "LPU64   \
+                       "/"LPU64" (rc=%d) type %s remote "LPX64")\n" , ## a,   \
                        lock->l_resource->lr_namespace->ns_name, lock,         \
                        lock->l_refc, lock->l_readers, lock->l_writers,        \
                        ldlm_lockname[lock->l_granted_mode],                   \
                        ldlm_lockname[lock->l_req_mode],                       \
                        lock->l_resource->lr_name[0],                          \
+                       lock->l_resource->lr_name[1],                          \
                        atomic_read(&lock->l_resource->lr_refcount),           \
                        ldlm_typename[lock->l_resource->lr_type],              \
                        lock->l_remote_handle.addr);                           \
@@ -284,7 +288,8 @@ void ldlm_unregister_intent(void);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
 struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int strict);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
-void ldlm_cancel_callback(struct ldlm_lock *lock);
+void ldlm_cancel_callback(struct ldlm_lock *);
+int ldlm_lock_set_data(struct lustre_handle *, void *data, int datalen);
 
 static inline struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *h)
 {
@@ -398,7 +403,7 @@ int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
 int ldlm_cli_convert(struct lustre_handle *, int new_mode, int *flags);
 int ldlm_cli_cancel(struct lustre_handle *lockh);
-int ldlm_cli_cancel_unused(struct ldlm_namespace *, __u64 *, int local_only);
+int ldlm_cli_cancel_unused(struct ldlm_namespace *, __u64 *, int flags);
 
 /* mds/handler.c */
 /* This has to be here because recurisve inclusion sucks. */

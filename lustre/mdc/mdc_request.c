@@ -155,20 +155,43 @@ int mdc_getattr(struct lustre_handle *conn,
         return rc;
 }
 
+static void d_delete_aliases(struct inode *inode)
+{
+        struct dentry *dentry;
+	struct list_head *tmp;
+        int dentry_count = 0;
+        ENTRY;
+
+	spin_lock(&dcache_lock);
+        list_for_each(tmp, &inode->i_dentry) {
+                dentry = list_entry(tmp, struct dentry, d_alias);
+                dentry_count++;
+        }
+
+        /* XXX FIXME tell phil/peter that you see this -- unless you're playing
+         * with hard links, in which case, stop. */
+        LASSERT(dentry_count <= 1);
+
+        if (dentry_count == 0) {
+                spin_unlock(&dcache_lock);
+                EXIT;
+                return;
+        }
+
+        CDEBUG(D_INODE, "d_deleting dentry %p\n", dentry);
+        dget_locked(dentry);
+        spin_unlock(&dcache_lock);
+        d_delete(dentry);
+        dput(dentry);
+        EXIT;
+}
+
 static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                             void *data, __u32 data_len, int flag)
 {
         int rc;
-        struct inode *inode = data;
         struct lustre_handle lockh;
         ENTRY;
-
-        if (data_len != sizeof(*inode)) {
-                CERROR("data_len should be %d, but is %d\n", sizeof(*inode),
-                       data_len);
-                LBUG();
-                RETURN(-EINVAL);
-        }
 
         switch (flag) {
         case LDLM_CB_BLOCKING:
@@ -179,16 +202,24 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         RETURN(rc);
                 }
                 break;
-        case LDLM_CB_CANCELING:
-                /* FIXME: do something better than throwing away everything */
-                if (inode == NULL)
-                        LBUG();
+        case LDLM_CB_CANCELING: {
+                /* Invalidate all dentries associated with this inode */
+                struct inode *inode = data;
+
+                LASSERT(inode != NULL);
+                LASSERT(data_len == sizeof(*inode));
+
                 if (S_ISDIR(inode->i_mode)) {
                         CDEBUG(D_INODE, "invalidating inode %ld\n",
                                inode->i_ino);
                         ll_invalidate_inode_pages(inode);
                 }
+
+                LASSERT(igrab(inode) == inode);
+                d_delete_aliases(inode);
+                iput(inode);
                 break;
+        }
         default:
                 LBUG();
         }
@@ -373,7 +404,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
 {
         struct ptlrpc_request *req;
         struct obd_device *obddev = class_conn2obd(conn);
-        __u64 res_id[RES_NAME_SIZE] = {dir->i_ino};
+        __u64 res_id[RES_NAME_SIZE] = {dir->i_ino, (__u64)dir->i_generation};
         int size[6] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
         int rc, flags = 0;
         int repsize[3] = {sizeof(struct ldlm_reply),
@@ -540,6 +571,15 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         it->it_data = req;
 
         RETURN(0);
+}
+
+int mdc_cancel_unused(struct lustre_handle *conn, struct inode *inode,
+                      int flags)
+{
+        __u64 res_id[RES_NAME_SIZE] = {inode->i_ino, inode->i_generation};
+        struct obd_device *obddev = class_conn2obd(conn);
+        ENTRY;
+        RETURN(ldlm_cli_cancel_unused(obddev->obd_namespace, res_id, flags));
 }
 
 struct replay_open_data {
@@ -760,6 +800,7 @@ MODULE_LICENSE("GPL");
 EXPORT_SYMBOL(mdc_getstatus);
 EXPORT_SYMBOL(mdc_getlovinfo);
 EXPORT_SYMBOL(mdc_enqueue);
+EXPORT_SYMBOL(mdc_cancel_unused);
 EXPORT_SYMBOL(mdc_getattr);
 EXPORT_SYMBOL(mdc_statfs);
 EXPORT_SYMBOL(mdc_create);

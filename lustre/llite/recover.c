@@ -112,7 +112,7 @@ static void prepare_osc(struct obd_import *imp)
 static void prepare_mdc(struct obd_import *imp)
 {
         struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
-        ldlm_cli_cancel_unused(ns, NULL, 1 /* local only */);
+        ldlm_cli_cancel_unused(ns, NULL, LDLM_FL_LOCAL_ONLY);
 }
 
 static int ll_prepare_recovery(struct ptlrpc_connection *conn)

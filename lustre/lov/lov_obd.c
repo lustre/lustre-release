@@ -1301,7 +1301,7 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *lsm,
 }
 
 static int lov_cancel_unused(struct lustre_handle *conn,
-                             struct lov_stripe_md *lsm, int local_only)
+                             struct lov_stripe_md *lsm, int flags)
 {
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
@@ -1325,7 +1325,7 @@ static int lov_cancel_unused(struct lustre_handle *conn,
                 submd.lsm_mds_easize = lov_mds_md_size(lsm->lsm_ost_count);
                 submd.lsm_stripe_count = 0;
                 rc = obd_cancel_unused(&lov->tgts[loi->loi_ost_idx].conn,
-                                       &submd, local_only);
+                                       &submd, flags);
                 if (rc)
                         CERROR("Error cancel unused objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,

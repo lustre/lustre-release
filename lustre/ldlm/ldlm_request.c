@@ -256,7 +256,7 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
                        body->lock_desc.l_extent.start,
                        body->lock_desc.l_extent.end,
                        reply->lock_extent.start, reply->lock_extent.end);
-                cookie = &reply->lock_extent; /* FIXME bug 629281 */
+                cookie = &reply->lock_extent; /* FIXME bug 267 */
                 cookielen = sizeof(reply->lock_extent);
         }
 
@@ -458,7 +458,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 if (!req)
                         GOTO(out, rc = -ENOMEM);
 
-                /* XXX FIXME bug 625069 */
+                /* XXX FIXME bug 249 */
                 req->rq_request_portal = LDLM_REQUEST_PORTAL;
                 req->rq_reply_portal = LDLM_REPLY_PORTAL;
 
@@ -493,7 +493,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 }
 
 static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
-                                           __u64 *res_id, int local_only)
+                                           __u64 *res_id, int flags)
 {
         struct ldlm_resource *res;
         struct list_head *tmp, *next, list = LIST_HEAD_INIT(list);
@@ -535,9 +535,14 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                 int rc;
                 w = list_entry(tmp, struct ldlm_ast_work, w_list);
 
-                if (local_only)
+                /* Prevent the cancel callback from being called by setting
+                 * LDLM_FL_CANCEL in the lock.  Very sneaky. -p */
+                if (flags & LDLM_FL_NO_CALLBACK)
+                        w->w_lock->l_flags |= LDLM_FL_CANCEL;
+
+                if (flags & LDLM_FL_LOCAL_ONLY) {
                         ldlm_lock_cancel(w->w_lock);
-                else {
+                } else {
                         ldlm_lock2handle(w->w_lock, &lockh);
                         rc = ldlm_cli_cancel(&lockh);
                         if (rc != ELDLM_OK)
@@ -559,12 +564,12 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
  * If 'local_only' is true, throw the locks away without trying to notify the
  * server. */
 int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
-                           int local_only)
+                           int flags)
 {
         int i;
 
         if (res_id)
-                RETURN(ldlm_cli_cancel_unused_resource(ns, res_id, local_only));
+                RETURN(ldlm_cli_cancel_unused_resource(ns, res_id, flags));
 
         l_lock(&ns->ns_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
@@ -576,7 +581,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
                         ldlm_resource_getref(res);
 
                         rc = ldlm_cli_cancel_unused_resource(ns, res->lr_name,
-                                                             local_only);
+                                                             flags);
 
                         if (rc)
                                 CERROR("cancel_unused_res ("LPU64"): %d\n",

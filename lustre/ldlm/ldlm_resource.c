@@ -133,6 +133,9 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
                 LDLM_LOCK_GET(lock);
 
+                /* At shutdown time, don't call the cancellation callback */
+                lock->l_flags |= LDLM_FL_CANCEL;
+
                 if (client) {
                         struct lustre_handle lockh;
                         ldlm_lock2handle(lock, &lockh);

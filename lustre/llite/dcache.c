@@ -73,14 +73,21 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
 
 int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
 {
-        int ll_intent_lock(struct inode *parent, struct dentry *dentry,
-                           struct lookup_intent *it, void *);
         int rc;
         ENTRY;
 
-        rc = ll_intent_lock(de->d_parent->d_inode, de, it, NULL);
+        /* We don't want to cache negative dentries, so return 0 immediately.
+         * We believe that this is safe, that negative dentries cannot be
+         * pinned by someone else */
+        if (de->d_inode == NULL) {
+                CDEBUG(D_INODE, "negative dentry: ret 0 to force lookup2\n");
+                RETURN(0);
+        }
+
+        rc = ll_intent_lock(de->d_parent->d_inode, &de, it, NULL);
         if (rc < 0) {
                 /* Something bad happened; overwrite it_status? */
+                CERROR("ll_intent_lock: %d\n", rc);
         }
 
         if (it != NULL && it->it_status == 0) {
@@ -131,8 +138,8 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
         /* If the dentry is busy, we won't get called in lookup2 if we
          * return 0, so return 1.
          *
-         * This is a temporary fix for bug 618962, but is one of the causes of
-         * 619078. */
+         * This is a temporary fix for bug 224, but is one of the causes of
+         * 225. */
         CDEBUG(D_INFO, "d_count: %d\n", atomic_read(&de->d_count));
         if (it && atomic_read(&de->d_count) > 1) {
                 CDEBUG(D_INFO, "returning 1 for %*s during %s because d_count "

@@ -154,6 +154,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 struct lookup_intent *it, int lock_mode, struct inode *dir,
                 struct dentry *de, struct lustre_handle *lockh, char *tgt,
                 int tgtlen, void *data, int datalen);
+int mdc_cancel_unused(struct lustre_handle *conn, struct inode *, int flags);
 int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
                    struct ptlrpc_request **request);
 int mdc_getstatus(struct lustre_handle *conn,

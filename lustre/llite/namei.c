@@ -166,14 +166,11 @@ static int ll_intent_to_lock_mode(struct lookup_intent *it)
 #define LL_LOOKUP_POSITIVE 1
 #define LL_LOOKUP_NEGATIVE 2
 
-typedef int (*intent_finish_cb)(int flag, struct ptlrpc_request *,
-                                struct dentry *, struct lookup_intent *,
-                                int offset, obd_id ino);
-
-int ll_intent_lock(struct inode *parent, struct dentry *dentry,
+int ll_intent_lock(struct inode *parent, struct dentry **de,
                    struct lookup_intent *it,
                    intent_finish_cb intent_finish)
 {
+        struct dentry *dentry = *de;
         struct ll_sb_info *sbi = ll_i2sbi(parent);
         struct lustre_handle lockh;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -248,12 +245,14 @@ int ll_intent_lock(struct inode *parent, struct dentry *dentry,
                                 atomic_inc(&request->rq_refcount);
                                 GOTO(out, flag = LL_LOOKUP_NEGATIVE);
                         }
+                        /* Fall through to update attibutes. */
                 } else if (it->it_op & (IT_GETATTR | IT_SETATTR | IT_LOOKUP |
                                         IT_READLINK)) {
                         /* For check ops, we want the lookup to succeed */
                         it->it_data = NULL;
                         if (it->it_status)
                                 GOTO(out, flag = LL_LOOKUP_NEGATIVE);
+                        /* Fall through to update attibutes. */
                 } else if (it->it_op & (IT_RENAME | IT_LINK)) {
                         /* For rename, we want the source lookup to succeed */
                         if (it->it_status) {
@@ -261,22 +260,27 @@ int ll_intent_lock(struct inode *parent, struct dentry *dentry,
                                 GOTO(drop_req, rc = it->it_status);
                         }
                         it->it_data = dentry;
+                        /* Fall through to update attibutes. */
                 } else if (it->it_op & (IT_UNLINK | IT_RMDIR)) {
                         /* For remove ops, we want the lookup to succeed unless
                          * the file truly doesn't exist */
                         it->it_data = NULL;
                         if (it->it_status == -ENOENT)
                                 GOTO(out, flag = LL_LOOKUP_NEGATIVE);
+                        /* No point in updating attributes that we're about to
+                         * unlink.  -phil */
                         GOTO(out, flag = LL_LOOKUP_POSITIVE);
                 } else if (it->it_op == IT_OPEN) {
                         it->it_data = NULL;
                         if (it->it_status && it->it_status != -EEXIST)
                                 GOTO(out, flag = LL_LOOKUP_NEGATIVE);
+                        /* Fall through to update attibutes. */
                 } else if (it->it_op & (IT_RENAME2 | IT_LINK2)) {
                         it->it_data = NULL;
                         /* This means the target lookup is negative */
                         if (mds_body->valid == 0)
                                 GOTO(out, flag = LL_LOOKUP_NEGATIVE);
+                        /* XXX bug 289: should we maybe fall through here? -p */
                         GOTO(out, flag = LL_LOOKUP_POSITIVE);
                 }
 
@@ -323,10 +327,12 @@ int ll_intent_lock(struct inode *parent, struct dentry *dentry,
 
         EXIT;
  out:
-        if (intent_finish != NULL)
-                rc = intent_finish(flag, request, dentry, it, offset, ino);
-        else
+        if (intent_finish != NULL) {
+                rc = intent_finish(flag, request, de, it, offset, ino);
+                dentry = *de; /* intent_finish may change *de */
+        } else {
                 ptlrpc_req_finished(request);
+        }
 
         if (it->it_op == IT_LOOKUP || rc < 0)
                 ll_intent_release(dentry, it);
@@ -340,10 +346,43 @@ int ll_intent_lock(struct inode *parent, struct dentry *dentry,
         return rc;
 }
 
-static int lookup2_finish(int flag, struct ptlrpc_request *request,
-                          struct dentry *dentry, struct lookup_intent *it,
-                          int offset, obd_id ino)
+/* Search "inode"'s alias list for a dentry that has the same name and parent as
+ * de.  If found, return it.  If not found, return de. */
+static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 {
+	struct list_head *tmp;
+
+	spin_lock(&dcache_lock);
+        list_for_each(tmp, &inode->i_dentry) {
+		struct dentry *dentry = list_entry(tmp, struct dentry, d_alias);
+
+                /* We are called here with 'de' already on the aliases list. */
+                if (dentry == de)
+                        continue;
+
+                if (dentry->d_parent != de->d_parent)
+                        continue;
+
+                if (dentry->d_name.len != de->d_name.len)
+                        continue;
+
+                if (memcmp(dentry->d_name.name, de->d_name.name,
+                           de->d_name.len) != 0)
+                        continue;
+
+                spin_unlock(&dcache_lock);
+                d_rehash(dentry);
+                return dget(dentry);
+	}
+	spin_unlock(&dcache_lock);
+        return de;
+}
+
+static int
+lookup2_finish(int flag, struct ptlrpc_request *request, struct dentry **de,
+               struct lookup_intent *it, int offset, obd_id ino)
+{
+        struct dentry *dentry = *de, *saved = *de;
         struct inode *inode = NULL;
         struct ll_read_inode2_cookie lic;
 
@@ -368,6 +407,15 @@ static int lookup2_finish(int flag, struct ptlrpc_request *request,
                          * I think it is, but double-check refcounts. -phil */
                         RETURN(-ENOMEM);
                 }
+
+                dentry = *de = ll_find_alias(inode, dentry);
+
+                /* We asked for a lock on the directory, and may have been
+                 * granted a lock on the inode.  Just in case, fixup the data
+                 * pointer. */
+                ldlm_lock_set_data((struct lustre_handle *)it->it_lock_handle,
+                                   inode, sizeof(*inode));
+
                 EXIT;
         } else {
                 ENTRY;
@@ -381,7 +429,8 @@ static int lookup2_finish(int flag, struct ptlrpc_request *request,
         } else
                 CERROR("NOT allocating fsdata - already set\n");
 
-        d_add(dentry, inode);
+        if (dentry == saved)
+                d_add(dentry, inode);
 
         if (it->it_status == 0) {
                 LL_SAVE_INTENT(dentry, it);
@@ -399,15 +448,19 @@ static int lookup2_finish(int flag, struct ptlrpc_request *request,
 static struct dentry *ll_lookup2(struct inode *parent, struct dentry *dentry,
                                  struct lookup_intent *it)
 {
+        struct dentry *save = dentry;
         int rc;
 
-        rc = ll_intent_lock(parent, dentry, it, lookup2_finish);
+        rc = ll_intent_lock(parent, &dentry, it, lookup2_finish);
         if (rc < 0) {
                 CERROR("ll_intent_lock: %d\n", rc);
                 return ERR_PTR(rc);
         }
 
-        return 0;
+        if (dentry == save)
+                return NULL;
+        else
+                return dentry;
 }
 
 static struct inode *ll_create_node(struct inode *dir, const char *name,
@@ -484,6 +537,14 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                 LBUG();
                 inode = ERR_PTR(-EIO);
                 GOTO(out, -EIO);
+        }
+
+        if (it && it->it_disposition) {
+                /* We asked for a lock on the directory, but were
+                 * granted a lock on the inode.  Since we finally have
+                 * an inode pointer, stuff it in the lock. */
+                ldlm_lock_set_data((struct lustre_handle *)it->it_lock_handle,
+                                   inode, sizeof(*inode));
         }
 
         EXIT;
