@@ -507,47 +507,66 @@ static int jt_test_brw(int argc, char **argv)
         struct obd_ioctl_data data;
         struct timeval start;
         char *bulk;
-        int pages = 4, count;
+        int pages = 1, obdos = 1, count;
         int silent = 0, write = 0, rw;
         int i;
         int rc;
 
-        if (argc >= 2 && argc <= 5) {
+        if (argc >= 2 && argc <= 6) {
                 int len;
 
                 count = strtoul(argv[1], NULL, 0);
 
-                if (argc >= 3)
-                        write = strtoul(argv[2], NULL, 0);
+                if (argc >= 3) {
+                        if (argv[2][0] == 'w')
+                                write = 1;
+                        else if (argv[2][0] == 'r')
+                                write = 0;
+                        else
+                                write = strtoul(argv[2], NULL, 0);
+                }
                 if (argc >= 4)
                         silent = strtoul(argv[3], NULL, 0);
                 if (argc >= 5)
                         pages = strtoul(argv[4], NULL, 0);
+                if (argc >= 6)
+                        obdos = strtoul(argv[5], NULL, 0);
+
+                if (obdos != 1 && obdos != 2) {
+                        fprintf(stderr, "%s: only 1 or 2 obdos supported\n",
+                                argv[0]);
+                        return 0;
+                }
 
                 len = pages * PAGE_SIZE;
 
-                bulk = malloc(2 * len);
+                bulk = malloc(obdos * len);
                 if (!bulk) {
                         fprintf(stderr,
-                                "%s: out of memory allocating 2x%d pages\n",
-                                argv[0], pages);
+                                "%s: out of memory allocating %dx%d pages\n",
+                                argv[0], obdos, pages);
                         return 0;
                 }
                 IOCINIT(data);
                 data.ioc_conn2 = connid;
-                data.ioc_obdo1.o_id = data.ioc_obdo2.o_id = 2;
+                data.ioc_obdo1.o_id = 2;
                 data.ioc_count = len;
                 data.ioc_offset = 0;
-                data.ioc_plen1 = data.ioc_plen2 = len;
+                data.ioc_plen1 = len;
                 data.ioc_pbuf1 = bulk;
-                data.ioc_pbuf2 = bulk + len;
+                if (obdos > 1) {
+                        data.ioc_obdo2.o_id = 2;
+                        data.ioc_plen2 = len;
+                        data.ioc_pbuf2 = bulk + len;
+                }
 
                 gettimeofday(&start, NULL);
-                printf("%s %d (2x%d pages) (testing only): %s",
-                       write ? "writing" : "reading", count, pages,
+                printf("%s %d (%dx%d pages) (testing only): %s",
+                       write ? "writing" : "reading", count, obdos, pages,
                        ctime(&start.tv_sec));
         } else {
-                printf("usage: %s count [write [silent [pages]]]\n", argv[0]);
+                printf("usage: %s count [write [silent [pages [obdos]]]]\n",
+                       argv[0]);
                 return 0;
         }
 
@@ -570,11 +589,12 @@ static int jt_test_brw(int argc, char **argv)
 
                 gettimeofday(&end, NULL);
 
-                printf("%s 2x%d pages successfully %d times (%g/sec): %s",
-                       write ? "wrote" : "read", pages, i,
-                       2.0 * i * pages / ((double)(end.tv_sec - start.tv_sec) +
-                                    (double)(end.tv_usec - start.tv_usec) /
-                                    1000000), ctime(&end.tv_sec));
+                printf("%s %dx%d pages successfully %d times (%g/sec): %s",
+                       write ? "wrote" : "read", obdos, pages, i,
+                       (double)obdos * i * pages /
+                                ((double)(end.tv_sec - start.tv_sec) +
+                                 (double)(end.tv_usec - start.tv_usec) /
+                                 1000000), ctime(&end.tv_sec));
         }
         return 0;
 }
