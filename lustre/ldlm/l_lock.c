@@ -45,6 +45,7 @@
 #include <liblustre.h>
 #endif
 
+#include <linux/lustre_dlm.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_lib.h>
 
