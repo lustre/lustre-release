@@ -17,5 +17,3 @@ obdecho_SOURCES = echo.c echo_client.c lproc_echo.c $(LINX)
 endif
 
 include $(top_srcdir)/Rules
-
-CFLAGS += -DOBD_MAX_IOCTL_BUFFER=@OBD_BUFFER_SIZE@
