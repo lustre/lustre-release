@@ -608,7 +608,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         struct obd_ucred uc;
         struct lustre_handle parent_lockh;
         int namesize;
-        int rc = 0, cleanup_phase = 0;
+        int rc = 0, cleanup_phase = 0, resent_req = 0;
         char *name;
         ENTRY;
 
@@ -670,12 +670,33 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         }
 #endif
 
-        rc = mds_get_parent_child_locked(obd, &obd->u.mds, &body->fid1,
-                                         &parent_lockh, &dparent, LCK_PR,
-                                         name, namesize, child_lockh,
-                                         &dchild, LCK_PR);
-        if (rc)
-                GOTO(cleanup, rc);
+        if (child_lockh->cookie != 0) {
+                LASSERT(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT);
+                resent_req = 1;
+        }
+
+        if (resent_req == 0) {
+                rc = mds_get_parent_child_locked(obd, &obd->u.mds, &body->fid1,
+                                                 &parent_lockh, &dparent,
+                                                 LCK_PR, name, namesize,
+                                                 child_lockh, &dchild, LCK_PR);
+                if (rc)
+                        GOTO(cleanup, rc);
+        } else {
+                struct ldlm_lock *granted_lock;
+                struct ll_fid child_fid;
+                struct ldlm_resource *res;
+                DEBUG_REQ(D_DLMTRACE, req, "resent, not enqueuing new locks");
+                granted_lock = ldlm_handle2lock(child_lockh);
+                LASSERT(granted_lock);
+
+                res = granted_lock->l_resource;
+                child_fid.id = res->lr_name.name[0];
+                child_fid.generation = res->lr_name.name[1];
+                dchild = mds_fid2dentry(&obd->u.mds, &child_fid, NULL);
+                LASSERT(dchild);
+                LDLM_LOCK_PUT(granted_lock);
+        }
 
         cleanup_phase = 2; /* dchild, dparent, locks */
 
@@ -702,11 +723,13 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
  cleanup:
         switch (cleanup_phase) {
         case 2:
-                if (rc && dchild->d_inode)
-                        ldlm_lock_decref(child_lockh, LCK_PR);
-                ldlm_lock_decref(&parent_lockh, LCK_PR);
+                if (resent_req == 0) {
+                        if (rc && dchild->d_inode)
+                                ldlm_lock_decref(child_lockh, LCK_PR);
+                        ldlm_lock_decref(&parent_lockh, LCK_PR);
+                        l_dput(dparent);
+                }
                 l_dput(dchild);
-                l_dput(dparent);
         case 1:
                 pop_ctxt(&saved, &obd->obd_ctxt, &uc);
         default: ;
