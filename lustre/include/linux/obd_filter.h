@@ -23,6 +23,11 @@
 #ifndef _OBD_FILTER_H
 #define _OBD_FILTER_H
 
+#ifdef __KERNEL__
+#include <linux/spinlock.h>
+#endif
+#include <linux/lustre_handles.h>
+
 #ifndef OBD_FILTER_DEVICENAME
 #define OBD_FILTER_DEVICENAME "obdfilter"
 #endif
