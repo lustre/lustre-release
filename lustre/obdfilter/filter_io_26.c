@@ -202,8 +202,6 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 submit_bio(WRITE, bio);
         }
 
-        filter_grant_commit(exp, niocount, res);
-
         /* time to wait for I/O completion */
         wait_event(dreq->wait, atomic_read(&dreq->numreqs) == 0);
 
@@ -238,6 +236,8 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 CERROR("slow commitrw commit %lus\n", (jiffies - now) / HZ);
 
 cleanup:
+        filter_grant_commit(exp, niocount, res);
+
         switch (cleanup_phase) {
         case 2:
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
