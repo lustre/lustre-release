@@ -21,8 +21,11 @@ char usage[] =
 "        m  mknod\n"
 "        c  close\n"
 "        _  wait for signal\n"
-"        s  stat\n"
-"        S  fstat\n";
+"        r  read\n"
+"        S  fstat\n"
+"        t  fchmod\n"
+"        w  write\n"
+"        z  seek to zero\n";
 
 void null_handler(int unused) { }
 
@@ -89,6 +92,12 @@ int main(int argc, char **argv)
                 case 's':
                         if (stat(fname, &st) == -1) {
                                 perror("stat");
+                                exit(1);
+                        }
+                        break;
+                case 't': 
+                        if (fchmod(fd, 0) == -1) {
+                                perror("fchmod");
                                 exit(1);
                         }
                         break;
