@@ -102,7 +102,8 @@ restart:
                         continue;
 
                 blocking_pid = lock->l_policy_data.l_flock.blocking_pid;
-                blocking_export = lock->l_policy_data.l_flock.blocking_export;
+                blocking_export = (struct obd_export *)(long)
+                        lock->l_policy_data.l_flock.blocking_export;
                 if (blocking_pid == req_pid && blocking_export == req_export)
                         return 1;
 
@@ -198,7 +199,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                         req->l_policy_data.l_flock.blocking_pid =
                                 lock->l_policy_data.l_flock.pid;
                         req->l_policy_data.l_flock.blocking_export =
-                                lock->l_export;
+                                (long)(void *)lock->l_export;
 
                         LASSERT(list_empty(&req->l_flock_waitq));
                         list_add_tail(&req->l_flock_waitq, &ldlm_flock_waitq);
