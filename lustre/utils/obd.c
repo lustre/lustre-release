@@ -1093,8 +1093,8 @@ int jt_obd_test_brw(int argc, char **argv)
                         break;
                 } else if (be_verbose
                            (verbose, &next_time, i, &next_count, count))
-                        printf("%s: %s number %d\n", cmdname(argv[0]),
-                               write ? "write" : "read", i);
+                        printf("%s: %s number %dx%d\n", cmdname(argv[0]),
+                               write ? "write" : "read", i, pages);
 
                 data.ioc_offset += len;
         }
@@ -1128,7 +1128,7 @@ int jt_obd_lov_config(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         struct lov_desc desc;
-        uuid_t *uuidarray;
+        obd_uuid_t *uuidarray;
         int rc, size, i;
         char *end;
 
