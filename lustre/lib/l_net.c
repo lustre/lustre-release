@@ -83,6 +83,8 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         req->rq_export = export;
         export->exp_connection = req->rq_connection;
+#warning Peter: is this the right place to upgrade the server connection level?
+        req->rq_connection->c_level = LUSTRE_CONN_FULL;
         RETURN(0);
 }
 
