@@ -1,18 +1,18 @@
 
 
 
- fs/dcache.c            |    3 
+ fs/dcache.c            |   10 +
  fs/namei.c             |  309 +++++++++++++++++++++++++++++++++++++++++--------
  fs/nfsd/vfs.c          |    2 
  fs/open.c              |   53 ++++++--
  fs/stat.c              |    9 +
- include/linux/dcache.h |   31 ++++
+ include/linux/dcache.h |   32 +++++
  include/linux/fs.h     |   22 +++
  kernel/ksyms.c         |    1 
- 8 files changed, 367 insertions(+), 63 deletions(-)
+ 8 files changed, 375 insertions(+), 63 deletions(-)
 
---- linux-2.4.18-p4smp-chaos39-l6/fs/dcache.c~vfs_intent	Fri Jan 17 22:51:30 2003
-+++ linux-2.4.18-p4smp-chaos39-l6-root/fs/dcache.c	Fri Jan 17 22:51:30 2003
+--- linux-2.4.18-p4smp-chaos39-l6/fs/dcache.c~vfs_intent	Mon Jan 20 12:34:45 2003
++++ linux-2.4.18-p4smp-chaos39-l6-root/fs/dcache.c	Mon Jan 20 12:35:53 2003
 @@ -150,6 +150,8 @@ repeat:
  unhash_it:
  	list_del_init(&dentry->d_hash);
@@ -22,7 +22,21 @@
  kill_it: {
  		struct dentry *parent;
  		list_del(&dentry->d_child);
-@@ -645,6 +647,7 @@ struct dentry * d_alloc(struct dentry * 
+@@ -186,6 +188,13 @@ int d_invalidate(struct dentry * dentry)
+ 		spin_unlock(&dcache_lock);
+ 		return 0;
+ 	}
++
++        /* network invalidation by Lustre */
++        if (dentry->d_flags & DCACHE_LUSTRE_INVALID) { 
++                spin_unlock(&dcache_lock);
++                return 0;
++        }
++
+ 	/*
+ 	 * Check whether to do a partial shrink_dcache
+ 	 * to get rid of unused child entries.
+@@ -645,6 +654,7 @@ struct dentry * d_alloc(struct dentry * 
  	dentry->d_fsdata = NULL;
  	dentry->d_extra_attributes = NULL;
  	dentry->d_mounted = 0;
@@ -30,8 +44,8 @@
  	INIT_LIST_HEAD(&dentry->d_hash);
  	INIT_LIST_HEAD(&dentry->d_lru);
  	INIT_LIST_HEAD(&dentry->d_subdirs);
---- linux-2.4.18-p4smp-chaos39-l6/fs/namei.c~vfs_intent	Fri Jan 17 22:51:30 2003
-+++ linux-2.4.18-p4smp-chaos39-l6-root/fs/namei.c	Sat Jan 18 17:20:55 2003
+--- linux-2.4.18-p4smp-chaos39-l6/fs/namei.c~vfs_intent	Mon Jan 20 12:34:45 2003
++++ linux-2.4.18-p4smp-chaos39-l6-root/fs/namei.c	Mon Jan 20 12:34:45 2003
 @@ -1,3 +1,6 @@
 +
 +
@@ -836,8 +850,8 @@
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
---- linux-2.4.18-p4smp-chaos39-l6/fs/nfsd/vfs.c~vfs_intent	Fri Jan 17 22:51:30 2003
-+++ linux-2.4.18-p4smp-chaos39-l6-root/fs/nfsd/vfs.c	Fri Jan 17 22:51:30 2003
+--- linux-2.4.18-p4smp-chaos39-l6/fs/nfsd/vfs.c~vfs_intent	Mon Jan 20 12:34:45 2003
++++ linux-2.4.18-p4smp-chaos39-l6-root/fs/nfsd/vfs.c	Mon Jan 20 12:34:45 2003
 @@ -1298,7 +1298,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  	} else
@@ -847,8 +861,8 @@
  	unlock_kernel();
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
---- linux-2.4.18-p4smp-chaos39-l6/fs/open.c~vfs_intent	Fri Jan 17 22:51:30 2003
-+++ linux-2.4.18-p4smp-chaos39-l6-root/fs/open.c	Fri Jan 17 22:51:30 2003
+--- linux-2.4.18-p4smp-chaos39-l6/fs/open.c~vfs_intent	Mon Jan 20 12:34:45 2003
++++ linux-2.4.18-p4smp-chaos39-l6-root/fs/open.c	Mon Jan 20 12:34:45 2003
 @@ -19,6 +19,9 @@
  #include <asm/uaccess.h>
  
@@ -1069,8 +1083,8 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- linux-2.4.18-p4smp-chaos39-l6/fs/stat.c~vfs_intent	Fri Jan 17 22:51:30 2003
-+++ linux-2.4.18-p4smp-chaos39-l6-root/fs/stat.c	Fri Jan 17 22:51:30 2003
+--- linux-2.4.18-p4smp-chaos39-l6/fs/stat.c~vfs_intent	Mon Jan 20 12:34:45 2003
++++ linux-2.4.18-p4smp-chaos39-l6-root/fs/stat.c	Mon Jan 20 12:34:45 2003
 @@ -13,6 +13,7 @@
  
  #include <asm/uaccess.h>
@@ -1107,8 +1121,8 @@
  		path_release(&nd);
  	}
  	return error;
---- linux-2.4.18-p4smp-chaos39-l6/include/linux/dcache.h~vfs_intent	Fri Jan 17 22:51:30 2003
-+++ linux-2.4.18-p4smp-chaos39-l6-root/include/linux/dcache.h	Fri Jan 17 22:51:30 2003
+--- linux-2.4.18-p4smp-chaos39-l6/include/linux/dcache.h~vfs_intent	Mon Jan 20 12:34:45 2003
++++ linux-2.4.18-p4smp-chaos39-l6-root/include/linux/dcache.h	Mon Jan 20 12:35:29 2003
 @@ -6,6 +6,34 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -1161,8 +1175,16 @@
  };
  
  /* the dentry parameter passed to d_hash and d_compare is the parent
---- linux-2.4.18-p4smp-chaos39-l6/include/linux/fs.h~vfs_intent	Fri Jan 17 22:51:30 2003
-+++ linux-2.4.18-p4smp-chaos39-l6-root/include/linux/fs.h	Sat Jan 18 17:02:31 2003
+@@ -124,6 +155,7 @@ d_iput:		no		no		yes
+ 					 * s_nfsd_free_path semaphore will be down
+ 					 */
+ #define DCACHE_REFERENCED	0x0008  /* Recently used, don't discard. */
++#define DCACHE_LUSTRE_INVALID	0x0010  /* Lustre invalidated */
+ 
+ extern spinlock_t dcache_lock;
+ 
+--- linux-2.4.18-p4smp-chaos39-l6/include/linux/fs.h~vfs_intent	Mon Jan 20 12:34:45 2003
++++ linux-2.4.18-p4smp-chaos39-l6-root/include/linux/fs.h	Mon Jan 20 12:34:45 2003
 @@ -576,6 +576,7 @@ struct file {
  
  	/* needed for tty driver, and maybe others */
@@ -1237,8 +1259,8 @@
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
---- linux-2.4.18-p4smp-chaos39-l6/kernel/ksyms.c~vfs_intent	Fri Jan 17 22:51:30 2003
-+++ linux-2.4.18-p4smp-chaos39-l6-root/kernel/ksyms.c	Fri Jan 17 22:51:30 2003
+--- linux-2.4.18-p4smp-chaos39-l6/kernel/ksyms.c~vfs_intent	Mon Jan 20 12:34:45 2003
++++ linux-2.4.18-p4smp-chaos39-l6-root/kernel/ksyms.c	Mon Jan 20 12:34:45 2003
 @@ -294,6 +294,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
