@@ -685,8 +685,13 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                                 continue;
                         /* drop from cache like truncate_list_pages() */
                         if (drop && !TryLockPage(lnb->page)) {
-                                if (lnb->page->mapping)
+                                if (lnb->page->mapping) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                                         truncate_complete_page(lnb->page);
+#else
+                                        truncate_complete_page(lnb->page->mapping, lnb->page);
+#endif
+                                }
                                 unlock_page(lnb->page);
                         }
                         page_cache_release(lnb->page);
