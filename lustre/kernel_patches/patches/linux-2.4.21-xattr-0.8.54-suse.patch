@@ -1068,7 +1068,7 @@
 +void
 +ext2_xattr_unregister(int name_index, struct ext2_xattr_handler *handler)
 +{
-+	if (name_index > 0 || name_index <= EXT2_XATTR_INDEX_MAX) {
++	if (name_index > 0 && name_index <= EXT2_XATTR_INDEX_MAX) {
 +		write_lock(&ext2_handler_lock);
 +		ext2_xattr_handlers[name_index-1] = NULL;
 +		write_unlock(&ext2_handler_lock);
