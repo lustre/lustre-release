@@ -67,7 +67,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data,
         if (req->rq_repmsg) {
                 body = lustre_swab_repbuf(req, 0, sizeof(*body),
                                           lustre_swab_ost_body);
-                if (body == NULL)
+                if (body == NULL && rc == 0)
                         rc = -EPROTO;
         }
 
@@ -80,7 +80,7 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data,
                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
         } else if (rc != 0 && rc != -EIO) {
                 DEBUG_REQ(D_ERROR, req,
-                          "unknown rc %d from async create: failing oscc\n",
+                          "unknown rc %d from async create: failing oscc",
                           rc);
                 ptlrpc_fail_import(req->rq_import, req->rq_import_generation);
         }
