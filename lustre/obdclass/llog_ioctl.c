@@ -34,7 +34,7 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
                 RETURN(-EINVAL);
 
         *end = '\0';
-        logid->lgl_oid = simple_strtoull(start, &endp, 16);
+        logid->lgl_oid = simple_strtoull(start, &endp, 0);
         if (endp != end)
                 RETURN(-EINVAL);
 
@@ -46,7 +46,7 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
                 RETURN(-EINVAL);
 
         *end = '\0';
-        logid->lgl_ogr = simple_strtoull(start, &endp, 16);
+        logid->lgl_ogr = simple_strtoull(start, &endp, 0);
         if (endp != end)
                 RETURN(-EINVAL);
 
@@ -69,7 +69,7 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
         char *endp;
         int cur_index, rc = 0;
 
-        cur_index = le32_to_cpu(rec->lrh_index);
+        cur_index = rec->lrh_index;
 
         if (ioc_data && (ioc_data->ioc_inllen1)) {
                 l = 0;
@@ -90,15 +90,15 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 if (to > 0 && cur_index > to)
                         RETURN(-LLOG_EEMPTY);
         }
-        if (handle->lgh_hdr->llh_flags & cpu_to_le32(LLOG_F_IS_CAT)) {
+        if (handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) {
                 struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
                 struct llog_handle *log_handle;
 
-                if (rec->lrh_type != cpu_to_le32(LLOG_LOGID_MAGIC)) {
+                if (rec->lrh_type != LLOG_LOGID_MAGIC) {
                         l = snprintf(out, remains, "[index]: %05d  [type]: "
                                      "%02x  [len]: %04d failed\n",
-                                     cur_index, le32_to_cpu(rec->lrh_type),
-                                     le32_to_cpu(rec->lrh_len));
+                                     cur_index, rec->lrh_type,
+                                     rec->lrh_len);
                 }
                 if (handle->lgh_ctxt == NULL)
                         RETURN(-EOPNOTSUPP);
@@ -106,7 +106,7 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 rc = llog_process(log_handle, llog_check_cb, NULL, NULL);
                 llog_close(log_handle);
         } else {
-                switch (le32_to_cpu(rec->lrh_type)) {
+                switch (rec->lrh_type) {
                 case OST_SZ_REC:
                 case OST_RAID1_REC:
                 case MDS_UNLINK_REC:
@@ -115,8 +115,8 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 case LLOG_HDR_MAGIC: {
                          l = snprintf(out, remains, "[index]: %05d  [type]: "
                                       "%02x  [len]: %04d ok\n",
-                                      cur_index, le32_to_cpu(rec->lrh_type),
-                                      le32_to_cpu(rec->lrh_len));
+                                      cur_index, rec->lrh_type,
+                                      rec->lrh_len);
                          out += l;
                          remains -= l;
                          if (remains <= 0) {
@@ -128,8 +128,8 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 default: {
                          l = snprintf(out, remains, "[index]: %05d  [type]: "
                                       "%02x  [len]: %04d failed\n",
-                                      cur_index, le32_to_cpu(rec->lrh_type),
-                                      le32_to_cpu(rec->lrh_len));
+                                      cur_index, rec->lrh_type,
+                                      rec->lrh_len);
                          out += l;
                          remains -= l;
                          if (remains <= 0) {
@@ -168,15 +168,15 @@ static int llog_print_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                 ioc_data->ioc_inllen1 = 0;
         }
 
-        cur_index = le32_to_cpu(rec->lrh_index);
+        cur_index = rec->lrh_index;
         if (cur_index < from)
                 RETURN(0);
         if (to > 0 && cur_index > to)
                 RETURN(-LLOG_EEMPTY);
 
-        if (handle->lgh_hdr->llh_flags & cpu_to_le32(LLOG_F_IS_CAT)) {
+        if (handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) {
                 struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
-                if (rec->lrh_type != cpu_to_le32(LLOG_LOGID_MAGIC)) {
+                if (rec->lrh_type != LLOG_LOGID_MAGIC) {
                         CERROR("invalid record in catalog\n");
                         RETURN(-EINVAL);
                 }
@@ -188,8 +188,8 @@ static int llog_print_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
         } else {
                 l = snprintf(out, remains,
                              "[index]: %05d  [type]: %02x  [len]: %04d\n",
-                             cur_index, le32_to_cpu(rec->lrh_type),
-                             le32_to_cpu(rec->lrh_len));
+                             cur_index, rec->lrh_type,
+                             rec->lrh_len);
         }
         out += l;
         remains -= l;
@@ -235,7 +235,7 @@ static int llog_delete_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
         struct  llog_logid_rec *lir = (struct llog_logid_rec*)rec;
         int     rc;
 
-        if (rec->lrh_type != cpu_to_le32(LLOG_LOGID_MAGIC))
+        if (rec->lrh_type != LLOG_LOGID_MAGIC)
               return (-EINVAL);
         rc = llog_remove_log(handle, &lir->lid_id);
 
@@ -283,10 +283,10 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                              "last index:       %d\n",
                              handle->lgh_id.lgl_oid, handle->lgh_id.lgl_ogr,
                              handle->lgh_id.lgl_ogen,
-                             le32_to_cpu(handle->lgh_hdr->llh_flags),
-                             le32_to_cpu(handle->lgh_hdr->llh_flags) &
+                             handle->lgh_hdr->llh_flags,
+                             handle->lgh_hdr->llh_flags &
                              LLOG_F_IS_CAT ? "cat" : "plain",
-                             le32_to_cpu(handle->lgh_hdr->llh_count),
+                             handle->lgh_hdr->llh_count,
                              handle->lgh_last_idx);
                 out += l;
                 remains -= l;
@@ -316,15 +316,23 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                 struct llog_logid plain;
                 char *endp;
 
-                if (!(handle->lgh_hdr->llh_flags & cpu_to_le32(LLOG_F_IS_CAT)))
+                cookie.lgc_index = simple_strtoul(data->ioc_inlbuf3, &endp, 0);
+                if (*endp != '\0')
                         GOTO(out_close, err = -EINVAL);
+
+                if (handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) {
+                        down_write(&handle->lgh_lock);
+                        err = llog_cancel_rec(handle, cookie.lgc_index);
+                        up_write(&handle->lgh_lock);
+                        GOTO(out_close, err);
+                }
 
                 err = str2logid(&plain, data->ioc_inlbuf2, data->ioc_inllen2);
                 if (err)
                         GOTO(out_close, err);
                 cookie.lgc_lgl = plain;
-                cookie.lgc_index = simple_strtoul(data->ioc_inlbuf3, &endp, 0);
-                if (*endp != '\0')
+
+                if (!(handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
                         GOTO(out_close, err = -EINVAL);
 
                 err = llog_cat_cancel_records(handle, 1, &cookie);
@@ -333,7 +341,14 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
         case OBD_IOC_LLOG_REMOVE: {
                 struct llog_logid plain;
 
-                if (!(handle->lgh_hdr->llh_flags & cpu_to_le32(LLOG_F_IS_CAT)))
+                if (handle->lgh_hdr->llh_flags & cpu_to_le32(LLOG_F_IS_PLAIN)) {
+                        err = llog_destroy(handle);
+                        if (!err)
+                                llog_free_handle(handle);
+                        GOTO(out, err);
+                }
+
+                if (!(handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
                         GOTO(out_close, err = -EINVAL);
 
                 if (data->ioc_inlbuf2) {
@@ -353,7 +368,7 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
 
 out_close:
         if (handle->lgh_hdr &&
-            handle->lgh_hdr->llh_flags & cpu_to_le32(LLOG_F_IS_CAT))
+            handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
                 llog_cat_put(handle);
         else
                 llog_close(handle);
@@ -366,8 +381,9 @@ int llog_catlog_list(struct obd_device *obd, int count,
                      struct obd_ioctl_data *data)
 {
         int size, i;
-        struct llog_logid *idarray, *id;
-        char name[32] = "CATLIST";
+        struct llog_catid *idarray;
+        struct llog_logid *id;
+        char name[32] = CATLIST;
         char *out;
         int l, remains, rc = 0;
 
@@ -386,12 +402,11 @@ int llog_catlog_list(struct obd_device *obd, int count,
 
         out = data->ioc_bulk;
         remains = data->ioc_inllen1;
-        id = idarray;
         for (i = 0; i < count; i++) {
+                id = &idarray[i].lci_logid;
                 l = snprintf(out, remains,
                              "catalog log: #"LPX64"#"LPX64"#%08x\n",
                              id->lgl_oid, id->lgl_ogr, id->lgl_ogen);
-                id++;
                 out += l;
                 remains -= l;
                 if (remains <= 0) {

@@ -43,6 +43,8 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
         int compat = 1;
         ENTRY;
 
+        lockmode_verify(req_mode);
+
         list_for_each(tmp, queue) {
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
