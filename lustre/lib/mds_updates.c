@@ -54,9 +54,9 @@
 
 void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
-        fid->id = HTON__u64(inode->i_ino);
-        fid->generation = HTON__u32(inode->i_generation);
-        fid->f_type = HTON__u32(S_IFMT & inode->i_mode);
+        fid->id = inode->i_ino;
+        fid->generation = inode->i_generation;
+        fid->f_type = (S_IFMT & inode->i_mode);
 }
 
 void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
@@ -71,55 +71,29 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
         if (S_ISREG(inode->i_mode))
                 b->valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
 
-        b->ino = HTON__u32(inode->i_ino);
-        b->atime = HTON__u32(LTIME_S(inode->i_atime));
-        b->mtime = HTON__u32(LTIME_S(inode->i_mtime));
-        b->ctime = HTON__u32(LTIME_S(inode->i_ctime));
-        b->mode = HTON__u32(inode->i_mode);
-        b->size = HTON__u64(inode->i_size);
-        b->blocks = HTON__u64(inode->i_blocks);
-        b->uid = HTON__u32(inode->i_uid);
-        b->gid = HTON__u32(inode->i_gid);
-        b->flags = HTON__u32(inode->i_flags);
-        b->rdev = HTON__u32(b->rdev);
-        b->nlink = HTON__u32(inode->i_nlink);
-        b->generation = HTON__u32(inode->i_generation);
-        b->suppgid = HTON__u32(-1);
-}
-
-
-void mds_pack_fid(struct ll_fid *fid)
-{
-        fid->id = HTON__u64(fid->id);
-        fid->generation = HTON__u32(fid->generation);
-        fid->f_type = HTON__u32(fid->f_type);
+        b->ino = inode->i_ino;
+        b->atime = LTIME_S(inode->i_atime);
+        b->mtime = LTIME_S(inode->i_mtime);
+        b->ctime = LTIME_S(inode->i_ctime);
+        b->mode = inode->i_mode;
+        b->size = inode->i_size;
+        b->blocks = inode->i_blocks;
+        b->uid = inode->i_uid;
+        b->gid = inode->i_gid;
+        b->flags = inode->i_flags;
+        b->rdev = b->rdev;
+        b->nlink = inode->i_nlink;
+        b->generation = inode->i_generation;
+        b->suppgid = -1;
 }
 
 static void mds_pack_body(struct mds_body *b)
 {
-        if (b == NULL)
-                LBUG();
+        LASSERT (b != NULL);
 
-        b->fsuid = HTON__u32(current->fsuid);
-        b->fsgid = HTON__u32(current->fsgid);
-        b->capability = HTON__u32(current->cap_effective);
-
-        mds_pack_fid(&b->fid1);
-        mds_pack_fid(&b->fid2);
-        b->size = HTON__u64(b->size);
-        b->ino = HTON__u32(b->ino);
-        b->valid = HTON__u32(b->valid);
-        b->mode = HTON__u32(b->mode);
-        b->uid = HTON__u32(b->uid);
-        b->gid = HTON__u32(b->gid);
-        b->mtime = HTON__u32(b->mtime);
-        b->ctime = HTON__u32(b->ctime);
-        b->atime = HTON__u32(b->atime);
-        b->flags = HTON__u32(b->flags);
-        b->rdev = HTON__u32(b->rdev);
-        b->nlink = HTON__u32(b->nlink);
-        b->generation = HTON__u32(b->generation);
-        b->suppgid = HTON__u32(b->suppgid);
+        b->fsuid = current->fsuid;
+        b->fsgid = current->fsgid;
+        b->capability = current->cap_effective;
 }
 
 void mds_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
@@ -127,22 +101,22 @@ void mds_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
                       struct inode *inode, const char *name, int namelen)
 {
         struct mds_body *b;
-        b = lustre_msg_buf(req->rq_reqmsg, offset);
+        b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*b));
 
-        b->fsuid = HTON__u32(current->fsuid);
-        b->fsgid = HTON__u32(current->fsgid);
-        b->capability = HTON__u32(current->cap_effective);
-        b->valid = HTON__u32(valid);
-        b->flags = HTON__u32(flags);
+        b->fsuid = current->fsuid;
+        b->fsgid = current->fsgid;
+        b->capability = current->cap_effective;
+        b->valid = valid;
+        b->flags = flags;
         if (in_group_p(inode->i_gid))
-                b->suppgid = HTON__u32(inode->i_gid);
+                b->suppgid = inode->i_gid;
         else
-                b->suppgid = HTON__u32(-1);
+                b->suppgid = -1;
 
         ll_inode2fid(&b->fid1, inode);
         if (name) {
                 char *tmp;
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, namelen + 1);
                 LOGL0(name, namelen, tmp);
         }
 }
@@ -152,27 +126,27 @@ void mds_readdir_pack(struct ptlrpc_request *req, __u64 offset,
 {
         struct mds_body *b;
 
-        b = lustre_msg_buf(req->rq_reqmsg, 0);
-        b->fsuid = HTON__u32(current->fsuid);
-        b->fsgid = HTON__u32(current->fsgid);
-        b->capability = HTON__u32(current->cap_effective);
-        b->fid1.id = HTON__u64(ino);
-        b->fid1.f_type = HTON__u32(type);
-        b->size = HTON__u64(offset);
-        b->suppgid = HTON__u32(-1);
-        b->blocks = HTON__u64(xid);
+        b = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*b));
+        b->fsuid = current->fsuid;
+        b->fsgid = current->fsgid;
+        b->capability = current->cap_effective;
+        b->fid1.id = ino;
+        b->fid1.f_type = type;
+        b->size = offset;
+        b->suppgid = -1;
+        b->blocks = xid;
 }
 
 
 void mds_pack_req_body(struct ptlrpc_request *req)
 {
-        struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, 0);
+        struct mds_body *b = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*b));
         mds_pack_body(b);
 }
 
 void mds_pack_rep_body(struct ptlrpc_request *req)
 {
-        struct mds_body *b = lustre_msg_buf(req->rq_repmsg, 0);
+        struct mds_body *b = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*b));
         mds_pack_body(b);
 }
 
@@ -180,35 +154,35 @@ void mds_pack_rep_body(struct ptlrpc_request *req)
 /* packing of MDS records */
 void mds_create_pack(struct ptlrpc_request *req, int offset, struct inode *dir,
                      __u32 mode, __u64 rdev, __u32 uid, __u32 gid, __u64 time,
-                     const char *name, int namelen,
+                     const char *name, int namelen, 
                      const void *data, int datalen)
 {
         struct mds_rec_create *rec;
         char *tmp;
-        rec = lustre_msg_buf(req->rq_reqmsg, offset);
+        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
-        rec->cr_opcode = HTON__u32(REINT_CREATE);
-        rec->cr_fsuid = HTON__u32(current->fsuid);
-        rec->cr_fsgid = HTON__u32(current->fsgid);
-        rec->cr_cap = HTON__u32(current->cap_effective);
+        rec->cr_opcode = REINT_CREATE;
+        rec->cr_fsuid = current->fsuid;
+        rec->cr_fsgid = current->fsgid;
+        rec->cr_cap = current->cap_effective;
         ll_inode2fid(&rec->cr_fid, dir);
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
-        rec->cr_mode = HTON__u32(mode);
-        rec->cr_rdev = HTON__u64(rdev);
-        rec->cr_uid = HTON__u32(uid);
-        rec->cr_gid = HTON__u32(gid);
-        rec->cr_time = HTON__u64(time);
+        rec->cr_mode = mode;
+        rec->cr_rdev = rdev;
+        rec->cr_uid = uid;
+        rec->cr_gid = gid;
+        rec->cr_time = time;
         if (in_group_p(dir->i_gid))
-                rec->cr_suppgid = HTON__u32(dir->i_gid);
+                rec->cr_suppgid = dir->i_gid;
         else
-                rec->cr_suppgid = HTON__u32(-1);
+                rec->cr_suppgid = -1;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, namelen + 1);
         LOGL0(name, namelen, tmp);
 
         if (data) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2);
-                LOGL0(data, datalen, tmp);
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, datalen);
+                memcpy (tmp, data, datalen);
         }
 }
 /* packing of MDS records */
@@ -220,32 +194,32 @@ void mds_open_pack(struct ptlrpc_request *req, int offset, struct inode *dir,
 {
         struct mds_rec_create *rec;
         char *tmp;
-        rec = lustre_msg_buf(req->rq_reqmsg, offset);
+        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
         /* XXX do something about time, uid, gid */
-        rec->cr_opcode = HTON__u32(REINT_OPEN);
-        rec->cr_fsuid = HTON__u32(current->fsuid);
-        rec->cr_fsgid = HTON__u32(current->fsgid);
-        rec->cr_cap = HTON__u32(current->cap_effective);
+        rec->cr_opcode = REINT_OPEN;
+        rec->cr_fsuid = current->fsuid;
+        rec->cr_fsgid = current->fsgid;
+        rec->cr_cap = current->cap_effective;
         ll_inode2fid(&rec->cr_fid, dir);
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
-        rec->cr_mode = HTON__u32(mode);
-        rec->cr_flags = HTON__u32(flags);
-        rec->cr_rdev = HTON__u64(rdev);
-        rec->cr_uid = HTON__u32(uid);
-        rec->cr_gid = HTON__u32(gid);
-        rec->cr_time = HTON__u64(time);
+        rec->cr_mode = mode;
+        rec->cr_flags = flags;
+        rec->cr_rdev = rdev;
+        rec->cr_uid = uid;
+        rec->cr_gid = gid;
+        rec->cr_time = time;
         if (in_group_p(dir->i_gid))
-                rec->cr_suppgid = HTON__u32(dir->i_gid);
+                rec->cr_suppgid = dir->i_gid;
         else
-                rec->cr_suppgid = HTON__u32(-1);
+                rec->cr_suppgid = -1;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, namelen + 1);
         LOGL0(name, namelen, tmp);
 
         if (data) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2);
-                LOGL0(data, datalen, tmp);
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, datalen);
+                memcpy (tmp, data, datalen);
         }
 }
 
@@ -253,36 +227,36 @@ void mds_setattr_pack(struct ptlrpc_request *req,
                       struct inode *inode, struct iattr *iattr,
                       void *ea, int ealen)
 {
-        struct mds_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, 0);
-
-        rec->sa_opcode = HTON__u32(REINT_SETATTR);
-        rec->sa_fsuid = HTON__u32(current->fsuid);
-        rec->sa_fsgid = HTON__u32(current->fsgid);
-        rec->sa_cap = HTON__u32(current->cap_effective);
+        struct mds_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, 0, 
+                                                     sizeof (*rec));
+        rec->sa_opcode = REINT_SETATTR;
+        rec->sa_fsuid = current->fsuid;
+        rec->sa_fsgid = current->fsgid;
+        rec->sa_cap = current->cap_effective;
         ll_inode2fid(&rec->sa_fid, inode);
 
         if (iattr) {
-                rec->sa_valid = HTON__u32(iattr->ia_valid);
-                rec->sa_mode = HTON__u32(iattr->ia_mode);
-                rec->sa_uid = HTON__u32(iattr->ia_uid);
-                rec->sa_gid = HTON__u32(iattr->ia_gid);
-                rec->sa_size = HTON__u64(iattr->ia_size);
-                rec->sa_atime = HTON__u64(LTIME_S(iattr->ia_atime));
-                rec->sa_mtime = HTON__u64(LTIME_S(iattr->ia_mtime));
-                rec->sa_ctime = HTON__u64(LTIME_S(iattr->ia_ctime));
-                rec->sa_attr_flags = HTON__u32(iattr->ia_attr_flags);
+                rec->sa_valid = iattr->ia_valid;
+                rec->sa_mode = iattr->ia_mode;
+                rec->sa_uid = iattr->ia_uid;
+                rec->sa_gid = iattr->ia_gid;
+                rec->sa_size = iattr->ia_size;
+                rec->sa_atime = LTIME_S(iattr->ia_atime);
+                rec->sa_mtime = LTIME_S(iattr->ia_mtime);
+                rec->sa_ctime = LTIME_S(iattr->ia_ctime);
+                rec->sa_attr_flags = iattr->ia_attr_flags;
 
                 if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
-                        rec->sa_suppgid = HTON__u32(iattr->ia_gid);
+                        rec->sa_suppgid = iattr->ia_gid;
                 else if ((iattr->ia_valid & ATTR_MODE) &&
                          in_group_p(inode->i_gid))
-                        rec->sa_suppgid = HTON__u32(inode->i_gid);
+                        rec->sa_suppgid = inode->i_gid;
                 else
-                        rec->sa_suppgid = HTON__u32(-1);
+                        rec->sa_suppgid = -1;
         }
 
-        if (ealen)
-                memcpy(lustre_msg_buf(req->rq_reqmsg, 1), ea, ealen);
+        if (ealen != 0)
+                memcpy(lustre_msg_buf(req->rq_reqmsg, 1, ealen), ea, ealen);
 }
 
 void mds_unlink_pack(struct ptlrpc_request *req, int offset,
@@ -292,22 +266,24 @@ void mds_unlink_pack(struct ptlrpc_request *req, int offset,
         struct mds_rec_unlink *rec;
         char *tmp;
 
-        rec = lustre_msg_buf(req->rq_reqmsg, offset);
-
-        rec->ul_opcode = HTON__u32(REINT_UNLINK);
-        rec->ul_fsuid = HTON__u32(current->fsuid);
-        rec->ul_fsgid = HTON__u32(current->fsgid);
-        rec->ul_cap = HTON__u32(current->cap_effective);
-        rec->ul_mode = HTON__u32(mode);
+        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
+        LASSERT (rec != NULL);
+        
+        rec->ul_opcode = REINT_UNLINK;
+        rec->ul_fsuid = current->fsuid;
+        rec->ul_fsgid = current->fsgid;
+        rec->ul_cap = current->cap_effective;
+        rec->ul_mode = mode;
         if (in_group_p(inode->i_gid))
-                rec->ul_suppgid = HTON__u32(inode->i_gid);
+                rec->ul_suppgid = inode->i_gid;
         else
-                rec->ul_suppgid = HTON__u32(-1);
+                rec->ul_suppgid = -1;
         ll_inode2fid(&rec->ul_fid1, inode);
         if (child)
                 ll_inode2fid(&rec->ul_fid2, child);
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, namelen + 1);
+        LASSERT (tmp != NULL);
         LOGL0(name, namelen, tmp);
 }
 
@@ -318,20 +294,20 @@ void mds_link_pack(struct ptlrpc_request *req, int offset,
         struct mds_rec_link *rec;
         char *tmp;
 
-        rec = lustre_msg_buf(req->rq_reqmsg, offset);
+        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
-        rec->lk_opcode = HTON__u32(REINT_LINK);
-        rec->lk_fsuid = HTON__u32(current->fsuid);
-        rec->lk_fsgid = HTON__u32(current->fsgid);
-        rec->lk_cap = HTON__u32(current->cap_effective);
+        rec->lk_opcode = REINT_LINK;
+        rec->lk_fsuid = current->fsuid;
+        rec->lk_fsgid = current->fsgid;
+        rec->lk_cap = current->cap_effective;
         if (in_group_p(dir->i_gid))
-                rec->lk_suppgid = HTON__u32(dir->i_gid);
+                rec->lk_suppgid = dir->i_gid;
         else
-                rec->lk_suppgid = HTON__u32(-1);
+                rec->lk_suppgid = -1;
         ll_inode2fid(&rec->lk_fid1, inode);
         ll_inode2fid(&rec->lk_fid2, dir);
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, namelen + 1);
         LOGL0(name, namelen, tmp);
 }
 
@@ -342,100 +318,72 @@ void mds_rename_pack(struct ptlrpc_request *req, int offset,
         struct mds_rec_rename *rec;
         char *tmp;
 
-        rec = lustre_msg_buf(req->rq_reqmsg, offset);
+        rec = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*rec));
 
         /* XXX do something about time, uid, gid */
-        rec->rn_opcode = HTON__u32(REINT_RENAME);
-        rec->rn_fsuid = HTON__u32(current->fsuid);
-        rec->rn_fsgid = HTON__u32(current->fsgid);
-        rec->rn_cap = HTON__u32(current->cap_effective);
+        rec->rn_opcode = REINT_RENAME;
+        rec->rn_fsuid = current->fsuid;
+        rec->rn_fsgid = current->fsgid;
+        rec->rn_cap = current->cap_effective;
         if (in_group_p(srcdir->i_gid))
-                rec->rn_suppgid1 = HTON__u32(srcdir->i_gid);
+                rec->rn_suppgid1 = srcdir->i_gid;
         else
-                rec->rn_suppgid1 = HTON__u32(-1);
+                rec->rn_suppgid1 = -1;
         if (in_group_p(tgtdir->i_gid))
-                rec->rn_suppgid2 = HTON__u32(tgtdir->i_gid);
+                rec->rn_suppgid2 = tgtdir->i_gid;
         else
-                rec->rn_suppgid2 = HTON__u32(-1);
+                rec->rn_suppgid2 = -1;
         ll_inode2fid(&rec->rn_fid1, srcdir);
         ll_inode2fid(&rec->rn_fid2, tgtdir);
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, oldlen + 1);
         LOGL0(old, oldlen, tmp);
 
         if (new) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2);
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, newlen + 1);
                 LOGL0(new, newlen, tmp);
         }
 }
 
 /* unpacking */
-void mds_unpack_fid(struct ll_fid *fid)
-{
-        fid->id = NTOH__u64(fid->id);
-        fid->generation = NTOH__u32(fid->generation);
-        fid->f_type = NTOH__u32(fid->f_type);
-}
-
-void mds_unpack_body(struct mds_body *b)
-{
-        if (b == NULL)
-                LBUG();
-
-        mds_unpack_fid(&b->fid1);
-        mds_unpack_fid(&b->fid2);
-        b->size = NTOH__u64(b->size);
-        b->blocks = NTOH__u64(b->blocks);
-        b->valid = NTOH__u32(b->valid);
-        b->fsuid = NTOH__u32(b->fsuid);
-        b->fsgid = NTOH__u32(b->fsgid);
-        b->capability = NTOH__u32(b->capability);
-        b->ino = NTOH__u32(b->ino);
-        b->mode = NTOH__u32(b->mode);
-        b->uid = NTOH__u32(b->uid);
-        b->gid = NTOH__u32(b->gid);
-        b->mtime = NTOH__u32(b->mtime);
-        b->ctime = NTOH__u32(b->ctime);
-        b->atime = NTOH__u32(b->atime);
-        b->flags = NTOH__u32(b->flags);
-        b->rdev = NTOH__u32(b->rdev);
-        b->nlink = NTOH__u32(b->nlink);
-        b->generation = NTOH__u32(b->generation);
-        b->suppgid = NTOH__u32(b->suppgid);
-}
-
 static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *r)
 {
         struct iattr *attr = &r->ur_iattr;
-        struct mds_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, offset);
+        struct mds_rec_setattr *rec;
         ENTRY;
 
-        if (req->rq_reqmsg->bufcount < offset + 1 ||
-            req->rq_reqmsg->buflens[offset] != sizeof(*rec))
-                RETURN(-EFAULT);
+        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
+                                  lustre_swab_mds_rec_setattr);
+        if (rec == NULL)
+                RETURN (-EFAULT);
 
-        r->ur_fsuid = NTOH__u32(rec->sa_fsuid);
-        r->ur_fsgid = NTOH__u32(rec->sa_fsgid);
-        r->ur_cap = NTOH__u32(rec->sa_cap);
-        r->ur_suppgid1 = NTOH__u32(rec->sa_suppgid);
-        r->ur_suppgid2 = NTOH__u32(-1);
+        r->ur_fsuid = rec->sa_fsuid;
+        r->ur_fsgid = rec->sa_fsgid;
+        r->ur_cap = rec->sa_cap;
+        r->ur_suppgid1 = rec->sa_suppgid;
+        r->ur_suppgid2 = -1;
         r->ur_fid1 = &rec->sa_fid;
-        attr->ia_valid = NTOH__u32(rec->sa_valid);
-        attr->ia_mode = NTOH__u32(rec->sa_mode);
-        attr->ia_uid = NTOH__u32(rec->sa_uid);
-        attr->ia_gid = NTOH__u32(rec->sa_gid);
-        attr->ia_size = NTOH__u64(rec->sa_size);
-        LTIME_S(attr->ia_atime) = NTOH__u64(rec->sa_atime);
-        LTIME_S(attr->ia_mtime) = NTOH__u64(rec->sa_mtime);
-        LTIME_S(attr->ia_ctime) = NTOH__u64(rec->sa_ctime);
-        attr->ia_attr_flags = NTOH__u32(rec->sa_attr_flags);
+        attr->ia_valid = rec->sa_valid;
+        attr->ia_mode = rec->sa_mode;
+        attr->ia_uid = rec->sa_uid;
+        attr->ia_gid = rec->sa_gid;
+        attr->ia_size = rec->sa_size;
+        LTIME_S(attr->ia_atime) = rec->sa_atime;
+        LTIME_S(attr->ia_mtime) = rec->sa_mtime;
+        LTIME_S(attr->ia_ctime) = rec->sa_ctime;
+        attr->ia_attr_flags = rec->sa_attr_flags;
 
-        if (req->rq_reqmsg->bufcount == offset + 2) {
-                r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
-                r->ur_name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+        LASSERT_REQSWAB (req, offset + 1);
+        if (req->rq_reqmsg->bufcount > offset + 1) {
+                r->ur_eadata = lustre_msg_buf (req->rq_reqmsg,
+                                               offset + 1, 0);
+                if (r->ur_eadata == NULL)
+                        RETURN (-EFAULT);
+                r->ur_eadatalen = req->rq_reqmsg->buflens[offset + 1];
         } else {
-                r->ur_namelen = 0;
+                r->ur_eadata = NULL;
+                r->ur_eadatalen = 0;
         }
 
         RETURN(0);
@@ -444,32 +392,46 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
 static int mds_create_unpack(struct ptlrpc_request *req, int offset,
                              struct mds_update_record *r)
 {
-        struct mds_rec_create *rec = lustre_msg_buf(req->rq_reqmsg, offset);
+        struct mds_rec_create *rec;
         ENTRY;
 
-        if (req->rq_reqmsg->bufcount < offset + 2 ||
-            req->rq_reqmsg->buflens[offset] != sizeof(*rec))
-                RETURN(-EFAULT);
+        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
+                                  lustre_swab_mds_rec_create);
+        if (rec == NULL)
+                RETURN (-EFAULT);
 
-        r->ur_fsuid = NTOH__u32(rec->cr_fsuid);
-        r->ur_fsgid = NTOH__u32(rec->cr_fsgid);
-        r->ur_cap = NTOH__u32(rec->cr_cap);
+        r->ur_fsuid = rec->cr_fsuid;
+        r->ur_fsgid = rec->cr_fsgid;
+        r->ur_cap = rec->cr_cap;
         r->ur_fid1 = &rec->cr_fid;
         r->ur_fid2 = &rec->cr_replayfid;
-        r->ur_mode = NTOH__u32(rec->cr_mode);
-        r->ur_rdev = NTOH__u64(rec->cr_rdev);
-        r->ur_uid = NTOH__u32(rec->cr_uid);
-        r->ur_gid = NTOH__u32(rec->cr_gid);
-        r->ur_time = NTOH__u64(rec->cr_time);
-        r->ur_flags = NTOH__u32(rec->cr_flags);
-        r->ur_suppgid1 = NTOH__u32(rec->cr_suppgid);
-        r->ur_suppgid2 = NTOH__u32(-1);
+        r->ur_mode = rec->cr_mode;
+        r->ur_rdev = rec->cr_rdev;
+        r->ur_uid = rec->cr_uid;
+        r->ur_gid = rec->cr_gid;
+        r->ur_time = rec->cr_time;
+        r->ur_flags = rec->cr_flags;
+        r->ur_suppgid1 = rec->cr_suppgid;
+        r->ur_suppgid2 = -1;
 
-        r->ur_name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+        LASSERT_REQSWAB (req, offset + 1);
+        r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
+        if (r->ur_name == NULL)
+                RETURN (-EFAULT);
         r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
 
-        if (req->rq_reqmsg->bufcount == offset + 3) {
-                r->ur_tgt = lustre_msg_buf(req->rq_reqmsg, offset + 2);
+        LASSERT_REQSWAB (req, offset + 2);
+        if (req->rq_reqmsg->bufcount > offset + 2) {
+                /* NB for now, we only seem to pass NULL terminated symlink
+                 * target strings here.  If this ever changes, we'll have
+                 * to stop checking for a buffer filled completely with a
+                 * NULL terminated string here, and make the callers check
+                 * depending on what they expect.  We should probably stash
+                 * it in r->ur_eadata in that case, so it's obvious... -eeb
+                 */
+                r->ur_tgt = lustre_msg_string(req->rq_reqmsg, offset + 2, 0);
+                if (r->ur_tgt == NULL)
+                        RETURN (-EFAULT);
                 r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
         } else {
                 r->ur_tgt = NULL;
@@ -481,22 +443,26 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
 static int mds_link_unpack(struct ptlrpc_request *req, int offset,
                            struct mds_update_record *r)
 {
-        struct mds_rec_link *rec = lustre_msg_buf(req->rq_reqmsg, offset);
+        struct mds_rec_link *rec;
         ENTRY;
 
-        if (req->rq_reqmsg->bufcount != offset + 2 ||
-            req->rq_reqmsg->buflens[offset] != sizeof(*rec))
-                RETURN(-EFAULT);
+        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
+                                  lustre_swab_mds_rec_link);
+        if (rec == NULL)
+                RETURN (-EFAULT);
 
-        r->ur_fsuid = NTOH__u32(rec->lk_fsuid);
-        r->ur_fsgid = NTOH__u32(rec->lk_fsgid);
-        r->ur_cap = NTOH__u32(rec->lk_cap);
-        r->ur_suppgid1 = NTOH__u32(rec->lk_suppgid);
-        r->ur_suppgid2 = NTOH__u32(-1);
+        r->ur_fsuid = rec->lk_fsuid;
+        r->ur_fsgid = rec->lk_fsgid;
+        r->ur_cap = rec->lk_cap;
+        r->ur_suppgid1 = rec->lk_suppgid;
+        r->ur_suppgid2 = -1;
         r->ur_fid1 = &rec->lk_fid1;
         r->ur_fid2 = &rec->lk_fid2;
 
-        r->ur_name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+        LASSERT_REQSWAB (req, offset + 1);
+        r->ur_name = lustre_msg_string (req->rq_reqmsg, offset + 1, 0);
+        if (r->ur_name == NULL)
+                RETURN (-EFAULT);
         r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
         RETURN(0);
 }
@@ -504,23 +470,27 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
 static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
                              struct mds_update_record *r)
 {
-        struct mds_rec_unlink *rec = lustre_msg_buf(req->rq_reqmsg, offset);
+        struct mds_rec_unlink *rec;
         ENTRY;
 
-        if (req->rq_reqmsg->bufcount != offset + 2 ||
-            req->rq_reqmsg->buflens[offset] != sizeof(*rec))
+        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
+                                  lustre_swab_mds_rec_unlink);
+        if (rec == NULL)
                 RETURN(-EFAULT);
-
-        r->ur_fsuid = NTOH__u32(rec->ul_fsuid);
-        r->ur_fsgid = NTOH__u32(rec->ul_fsgid);
-        r->ur_cap = NTOH__u32(rec->ul_cap);
-        r->ur_mode = NTOH__u32(rec->ul_mode);
-        r->ur_suppgid1 = NTOH__u32(rec->ul_suppgid);
-        r->ur_suppgid2 = NTOH__u32(-1);
+        
+        r->ur_fsuid = rec->ul_fsuid;
+        r->ur_fsgid = rec->ul_fsgid;
+        r->ur_cap = rec->ul_cap;
+        r->ur_mode = rec->ul_mode;
+        r->ur_suppgid1 = rec->ul_suppgid;
+        r->ur_suppgid2 = -1;
         r->ur_fid1 = &rec->ul_fid1;
         r->ur_fid2 = &rec->ul_fid2;
 
-        r->ur_name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+        LASSERT_REQSWAB (req, offset + 1);
+        r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
+        if (r->ur_name == NULL)
+                RETURN(-EFAULT);
         r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
         RETURN(0);
 }
@@ -528,25 +498,32 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
 static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
                              struct mds_update_record *r)
 {
-        struct mds_rec_rename *rec = lustre_msg_buf(req->rq_reqmsg, offset);
+        struct mds_rec_rename *rec;
         ENTRY;
 
-        if (req->rq_reqmsg->bufcount != offset + 3 ||
-            req->rq_reqmsg->buflens[offset] != sizeof(*rec))
+        rec = lustre_swab_reqbuf (req, offset, sizeof (*rec),
+                                  lustre_swab_mds_rec_unlink);
+        if (rec == NULL)
                 RETURN(-EFAULT);
 
-        r->ur_fsuid = NTOH__u32(rec->rn_fsuid);
-        r->ur_fsgid = NTOH__u32(rec->rn_fsgid);
-        r->ur_cap = NTOH__u32(rec->rn_cap);
-        r->ur_suppgid1 = NTOH__u32(rec->rn_suppgid1);
-        r->ur_suppgid2 = NTOH__u32(rec->rn_suppgid2);
+        r->ur_fsuid = rec->rn_fsuid;
+        r->ur_fsgid = rec->rn_fsgid;
+        r->ur_cap = rec->rn_cap;
+        r->ur_suppgid1 = rec->rn_suppgid1;
+        r->ur_suppgid2 = rec->rn_suppgid2;
         r->ur_fid1 = &rec->rn_fid1;
         r->ur_fid2 = &rec->rn_fid2;
 
-        r->ur_name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
+        LASSERT_REQSWAB (req, offset + 1);
+        r->ur_name = lustre_msg_string(req->rq_reqmsg, offset + 1, 0);
+        if (r->ur_name == NULL)
+                RETURN(-EFAULT);
         r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
 
-        r->ur_tgt = lustre_msg_buf(req->rq_reqmsg, offset + 2);
+        LASSERT_REQSWAB (req, offset + 2);
+        r->ur_tgt = lustre_msg_string(req->rq_reqmsg, offset + 2, 0);
+        if (r->ur_tgt == NULL)
+                RETURN(-EFAULT);
         r->ur_tgtlen = req->rq_reqmsg->buflens[offset + 2];
         RETURN(0);
 }
@@ -566,20 +543,29 @@ static update_unpacker mds_unpackers[REINT_MAX + 1] = {
 int mds_update_unpack(struct ptlrpc_request *req, int offset,
                       struct mds_update_record *rec)
 {
-        __u32 *opcode = lustre_msg_buf(req->rq_reqmsg, offset);
+        __u32 *opcodep;
+        __u32  opcode;
         int rc;
         ENTRY;
 
-        if (!opcode || req->rq_reqmsg->buflens[offset] < sizeof(*opcode))
+        /* NB don't lustre_swab_reqbuf() here.  We're just taking a peek
+         * and we want to leave it to the specific unpacker once we've
+         * identified the message type */
+        opcodep = lustre_msg_buf (req->rq_reqmsg, offset, sizeof (*opcodep));
+        if (opcodep == NULL)
                 RETURN(-EFAULT);
 
-        rec->ur_opcode = NTOH__u32(*opcode);
+        opcode = *opcodep;
+        if (lustre_msg_swabbed (req->rq_reqmsg))
+                __swab32s (&opcode);
 
-        if (*opcode < 0 || *opcode > REINT_MAX) {
-                LBUG();
+        if (opcode > REINT_MAX ||
+            mds_unpackers[opcode] == NULL) {
+                CERROR ("Unexpected opcode %d\n", opcode);
                 RETURN(-EFAULT);
         }
 
-        rc = mds_unpackers[*opcode](req, offset, rec);
+        rec->ur_opcode = opcode;
+        rc = mds_unpackers[opcode](req, offset, rec);
         RETURN(rc);
 }
