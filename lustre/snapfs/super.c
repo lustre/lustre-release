@@ -44,6 +44,42 @@ static void put_filesystem(struct file_system_type *fs)
 		__MOD_DEC_USE_COUNT(fs->owner);
 }
 
+static struct vfsmount* get_vfsmount(struct super_block *sb)
+{
+	struct vfsmount	*rootmnt, *mnt, *ret = NULL;
+	struct list_head *end, *list;
+
+	rootmnt = mntget(current->fs->rootmnt);
+	end = list = &rootmnt->mnt_list;
+	do {
+		mnt = list_entry(list, struct vfsmount, mnt_list);
+		if (mnt->mnt_sb == sb) {
+			ret = mnt;
+			break;
+		}
+		list = list->next;
+	} while (end != list);
+	mntput(current->fs->rootmnt);
+	return ret;
+}
+
+void get_snap_current_mnt(struct super_block *sb)
+{
+	struct vfsmount *mnt;
+
+	mnt = get_vfsmount(sb);
+	if (mnt) 
+		mntget(mnt);
+}
+void put_snap_current_mnt(struct super_block *sb)
+{
+	struct vfsmount *mnt;
+
+	mnt = get_vfsmount(sb);
+	if (mnt) 
+		mntput(mnt);
+}
+
 /* In get_opt we get options in opt, value in opt_value
  * we must remember to free opt and opt_value*/
 static char * snapfs_options(char *options, char **cache_type, 
@@ -423,6 +459,8 @@ clone_read_super(
 
 	CDEBUG(D_SUPER, "sb %lx, &sb->u.generic_sbp: %lx\n",
                 (ulong) sb, (ulong) &sb->u.generic_sbp);
+ 	
+	get_snap_current_mnt(snap_cache->cache_sb);
  out_err:
 	cleanup_option();
 	if (err)
