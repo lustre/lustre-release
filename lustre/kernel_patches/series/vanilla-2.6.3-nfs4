@@ -1,6 +1,5 @@
 uml-patch-2.6.3-rc2-1.patch
 uml-fix-2.6.3.patch
-lustre_build.patch
 lustre_version.patch
 vfs_intent-2.6.3.patch 
 vfs_nointent_2.6.0-uml1.patch
