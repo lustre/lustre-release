@@ -31,15 +31,15 @@ static int ll_reconnect(struct ll_sb_info *sbi)
         int err;
         struct ptlrpc_request *request; 
 
-        ptlrpc_readdress_connection(sbi2mdc(sbi)->mdc_conn, "mds");
+        ptlrpc_readdress_connection(sbi2mdc(sbi)->cl_conn, "mds");
 
-        err = connmgr_connect(ptlrpc_connmgr, sbi2mdc(sbi)->mdc_conn);
+        err = connmgr_connect(ptlrpc_connmgr, sbi2mdc(sbi)->cl_conn);
         if (err) {
                 CERROR("cannot connect to MDS: rc = %d\n", err);
-                ptlrpc_put_connection(sbi2mdc(sbi)->mdc_conn);
+                ptlrpc_put_connection(sbi2mdc(sbi)->cl_conn);
                 GOTO(out_disc, err = -ENOTCONN);
         }
-        sbi2mdc(sbi)->mdc_conn->c_level = LUSTRE_CONN_CON;
+        sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_CON;
 
         /* XXX: need to store the last_* values somewhere */
         err = mdc_getstatus(&sbi->ll_mdc_conn,
@@ -51,8 +51,8 @@ static int ll_reconnect(struct ll_sb_info *sbi)
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_disc, err = -ENOTCONN);
         }
-        sbi2mdc(sbi)->mdc_client->cli_last_rcvd = last_xid;
-        sbi2mdc(sbi)->mdc_conn->c_level = LUSTRE_CONN_RECOVD;
+        sbi2mdc(sbi)->cl_client->cli_last_rcvd = last_xid;
+        sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_RECOVD;
 
  out_disc:
         return err;
@@ -126,7 +126,7 @@ int ll_recover(struct ptlrpc_client *cli)
 
         }
 
-        sbi2mdc(sbi)->mdc_conn->c_level = LUSTRE_CONN_FULL;
+        sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_FULL;
         recovd_cli_fixed(cli);
 
         /* Finally, continue what we delayed since recovery started */
