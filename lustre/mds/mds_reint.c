@@ -160,55 +160,6 @@ out_setattr:
         return 0;
 }
 
-static int mds_reint_recreate(struct mds_update_record *rec, int offset,
-                              struct ptlrpc_request *req)
-{
-        struct dentry *de = NULL;
-        struct mds_obd *mds = mds_req2mds(req);
-        struct dentry *dchild = NULL;
-        struct inode *dir;
-        int rc = 0;
-        ENTRY;
-
-        de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
-        if (IS_ERR(de) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_CREATE)) {
-                LBUG();
-                GOTO(out_create_de, rc = -ESTALE);
-        }
-        dir = de->d_inode;
-        CDEBUG(D_INODE, "parent ino %ld\n", dir->i_ino);
-
-        down(&dir->i_sem);
-        dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
-        if (IS_ERR(dchild)) {
-                CERROR("child lookup error %ld\n", PTR_ERR(dchild));
-                up(&dir->i_sem);
-                LBUG();
-                GOTO(out_create_dchild, rc = -ESTALE);
-        }
-
-        if (dchild->d_inode) {
-                struct mds_body *body;
-                rc = 0;
-                body = lustre_msg_buf(req->rq_repmsg, 0);
-                mds_pack_inode2fid(&body->fid1, dchild->d_inode);
-                mds_pack_inode2body(body, dchild->d_inode);
-        } else {
-                CERROR("child doesn't exist (dir %ld, name %s)\n",
-                       dir->i_ino, rec->ur_name);
-                rc = -ENOENT;
-                LBUG();
-        }
-
-out_create_dchild:
-        l_dput(dchild);
-        up(&dir->i_sem);
-out_create_de:
-        l_dput(de);
-        req->rq_status = rc;
-        return 0;
-}
-
 static int mds_reint_create(struct mds_update_record *rec, int offset,
                             struct ptlrpc_request *req)
 {
@@ -261,6 +212,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 CDEBUG(D_INODE, "child exists (dir %ld, name %s, ino %ld)\n",
                        dir->i_ino, rec->ur_name, dchild->d_inode->i_ino);
 
+                /* XXX check that mode is correct? */
+
                 body = lustre_msg_buf(req->rq_repmsg, offset);
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
@@ -277,8 +230,15 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         } else
                                 body->valid |= OBD_MD_FLEASIZE;
                 }
-                /* now a normal case for intent locking */
-                GOTO(out_create_dchild, rc = -EEXIST);
+
+                /* This isn't an error for RECREATE. */
+                if (rec->ur_opcode & REINT_REPLAYING) {
+                        CDEBUG(D_INODE, "EEXIST suppressed for REPLAYING\n");
+                        rc = 0;
+                } else {
+                        rc = -EEXIST;
+                }
+                GOTO(out_create_dchild, rc);
         }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE,
@@ -625,9 +585,17 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
                                         body->valid |= OBD_MD_FLEASIZE;
                         }
                 }
-                CERROR("child exists (dir %ld, name %s\n",
-                       de_tgt_dir->d_inode->i_ino, rec->ur_name);
-                GOTO(out_link_dchild, rc = -EEXIST);
+                if (rec->ur_opcode & REINT_REPLAYING) {
+                        rc = 0;
+                        CDEBUG(D_INODE,
+                               "child exists (dir %ld, name %s) (REPLAYING)\n",
+                               de_tgt_dir->d_inode->i_ino, rec->ur_name);
+                } else {
+                        rc = -EEXIST;
+                        CERROR("child exists (dir %ld, name %s)\n",
+                               de_tgt_dir->d_inode->i_ino, rec->ur_name);
+                }
+                GOTO(out_link_dchild, rc);
         }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE,
@@ -845,7 +813,6 @@ static mds_reinter reinters[REINT_MAX + 1] = {
         [REINT_UNLINK] mds_reint_unlink,
         [REINT_LINK] mds_reint_link,
         [REINT_RENAME] mds_reint_rename,
-        [REINT_RECREATE] mds_reint_recreate,
 };
 
 int mds_reint_rec(struct mds_update_record *rec, int offset,
@@ -854,11 +821,12 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_run_ctxt saved;
         struct obd_ucred uc;
-
+        int realop = rec->ur_opcode & REINT_OPCODE_MASK;
         int rc;
 
-        if (rec->ur_opcode < 1 || rec->ur_opcode > REINT_MAX) {
-                CERROR("opcode %d not valid\n", rec->ur_opcode);
+        if (realop < 1 || realop > REINT_MAX) {
+                CERROR("opcode %d not valid (%sREPLAYING)\n", realop,
+                       rec->ur_opcode & REINT_REPLAYING ? "" : "not ");
                 rc = req->rq_status = -EINVAL;
                 RETURN(rc);
         }
@@ -867,7 +835,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         uc.ouc_fsgid = rec->ur_fsgid;
 
         push_ctxt(&saved, &mds->mds_ctxt, &uc);
-        rc = reinters[rec->ur_opcode] (rec, offset, req);
+        rc = reinters[realop] (rec, offset, req);
         pop_ctxt(&saved);
 
         return rc;

@@ -146,8 +146,10 @@ int ptlrpc_replay(struct ptlrpc_connection *conn)
                 /* server has seen req, we have reply: skip */
                 if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                     req->rq_xid <= conn->c_last_xid) { 
-                        CDEBUG(D_HA, "REPLIED SKIP: xid "LPD64" transno "LPD64" op %d @ %d\n",
-                               req->rq_xid, req->rq_repmsg->transno, req->rq_reqmsg->opc,
+                        CDEBUG(D_HA, "REPLIED SKIP: xid "LPD64" transno "
+                               LPD64" op %d @ %d\n",
+                               req->rq_xid, req->rq_repmsg->transno, 
+                               req->rq_reqmsg->opc,
                                req->rq_import->imp_client->cli_request_portal);
                         continue;
                 }
@@ -155,12 +157,14 @@ int ptlrpc_replay(struct ptlrpc_connection *conn)
                 /* server has lost req, we have reply: resend, ign reply */
                 if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                     req->rq_xid > conn->c_last_xid) { 
-                        CDEBUG(D_HA, "REPLIED RESEND: xid "LPD64" transno "LPD64" op %d @ %d\n",
-                               req->rq_xid, req->rq_repmsg->transno, req->rq_reqmsg->opc,
+                        CDEBUG(D_HA, "REPLIED RESEND: xid "LPD64" transno "
+                               LPD64" op %d @ %d\n",
+                               req->rq_xid, req->rq_repmsg->transno,
+                               req->rq_reqmsg->opc,
                                req->rq_import->imp_client->cli_request_portal);
                         rc = ptlrpc_replay_req(req); 
                         if (rc) {
-                                CERROR("request resend error %d for req %Ld\n", 
+                                CERROR("request resend error %d for req %Ld\n",
                                        rc, req->rq_xid); 
                                 GOTO(out, rc);
                         }

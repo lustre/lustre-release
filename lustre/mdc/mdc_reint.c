@@ -40,9 +40,13 @@ static int mdc_reint(struct ptlrpc_request *request, int level)
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
 
-        if (rc)
+        if (rc) {
                 CERROR("error in handling %d\n", rc);
-
+        } else {
+                /* For future resend/replays. */
+                u32 *opcodeptr = lustre_msg_buf(request->rq_reqmsg, 0);
+                *opcodeptr |= REINT_REPLAYING;
+        }
         return rc;
 }
 
@@ -105,13 +109,10 @@ int mdc_create(struct lustre_handle *conn,
         level = LUSTRE_CONN_FULL;
  resend:
         rc = mdc_reint(req, level);
+        /* Resend if we were told to. */
         if (rc == -ERESTARTSYS) {
-                struct mds_rec_create *rec = lustre_msg_buf(req->rq_reqmsg, 0);
-
                 level = LUSTRE_CONN_RECOVD;
-                CERROR("Lost reply: re-create rep.\n");
                 req->rq_flags = 0;
-                rec->cr_opcode = NTOH__u32(REINT_RECREATE);
                 goto resend;
         }
 

@@ -424,24 +424,24 @@ static update_unpacker mds_unpackers[REINT_MAX + 1] = {
         [REINT_LINK] mds_link_unpack,
         [REINT_UNLINK] mds_unlink_unpack,
         [REINT_RENAME] mds_rename_unpack,
-        [REINT_RECREATE] mds_create_unpack,
 };
 
 int mds_update_unpack(struct ptlrpc_request *req, int offset,
                       struct mds_update_record *rec)
 {
         __u32 *opcode = lustre_msg_buf(req->rq_reqmsg, offset);
-        int rc;
+        int rc, realop;
         ENTRY;
 
         if (!opcode || req->rq_reqmsg->buflens[offset] < sizeof(*opcode))
                 RETURN(-EFAULT);
 
-        rec->ur_opcode = NTOH__u32(*opcode);
+        realop = rec->ur_opcode = NTOH__u32(*opcode);
+        realop &= REINT_OPCODE_MASK;
 
-        if (rec->ur_opcode < 0 || rec->ur_opcode > REINT_MAX)
+        if (realop < 0 || realop > REINT_MAX)
                 RETURN(-EFAULT);
 
-        rc = mds_unpackers[rec->ur_opcode](req, offset, rec);
+        rc = mds_unpackers[realop](req, offset, rec);
         RETURN(rc);
 }

@@ -470,6 +470,28 @@ inline void obd_conn2data(struct obd_ioctl_data *data, struct lustre_handle *con
         data->ioc_cookie = conn->cookie;
 }
 
+static void forcibly_detach_exports(struct obd_device *obd)
+{
+        int rc;
+        struct list_head *tmp, *n;
+        struct lustre_handle fake_conn;
+
+        CDEBUG(D_IOCTL, "OBD device %d (%p) has exports, "
+               "disconnecting them", obd->obd_minor, obd);
+        list_for_each_safe(tmp, n, &obd->obd_exports) {
+                struct obd_export *exp = list_entry(tmp, struct obd_export,
+                                                    exp_obd_chain);
+                fake_conn.addr = (__u64)(unsigned long)exp;
+                fake_conn.cookie = exp->exp_cookie;
+                rc = obd_disconnect(&fake_conn);
+                if (rc) {
+                        CDEBUG(D_IOCTL, "disconnecting export %p failed: %d\n",
+                               exp, rc);
+                } else {
+                        CDEBUG(D_IOCTL, "export %p disconnected\n", exp);
+                }
+        }
+}
 
 /* to control /dev/obd */
 static int obd_class_ioctl (struct inode * inode, struct file * filp,
@@ -755,11 +777,13 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         CERROR("OBD device %d not attached\n", obd->obd_minor);
                         GOTO(out, err=-ENODEV);
                 }
-#warning FIXME: Mike, we probably need some sort of "force detach" here
                 if (!list_empty(&obd->obd_exports) ) {
-                        CERROR("OBD device %d (%p) has exports\n",
-                               obd->obd_minor, obd);
-                        GOTO(out, err=-EBUSY);
+                        if (data->ioc_inlbuf1[0] != 'F') {
+                                CERROR("OBD device %d (%p) has exports\n",
+                                       obd->obd_minor, obd);
+                                GOTO(out, err=-EBUSY);
+                        }
+                        forcibly_detach_exports(obd);
                 }
 
                 if (lprocfs_dereg_dev(obd) != LPROCFS_SUCCESS) {

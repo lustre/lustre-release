@@ -574,12 +574,18 @@ int jt_opt_threads(int argc, char **argv)
 int jt_obd_detach(int argc, char **argv)
 {
         struct obd_ioctl_data data;
+        char force = 'F';
         int rc;
 
         IOCINIT(data);
 
-        if (argc != 1)
+        if (argc != 1 && argc != 2)
                 return CMD_HELP;
+
+        if (argc == 2) {
+                data.ioc_inllen1 = 1;
+                data.ioc_inlbuf1 = &force;
+        }
 
         if (obd_ioctl_pack(&data, &buf, max)) {
                 fprintf(stderr, "error: %s: invalid ioctl\n", cmdname(argv[0]));

@@ -303,8 +303,10 @@ struct ost_body {
 #define REINT_LINK     3
 #define REINT_UNLINK   4
 #define REINT_RENAME   5
-#define REINT_RECREATE 6
-#define REINT_MAX      6
+#define REINT_MAX      5
+
+#define REINT_OPCODE_MASK 0xff /* opcodes must fit into this mask */
+#define REINT_REPLAYING 0x1000 /* masked into the opcode to indicate replay */
 
 struct ll_fid {
         __u64 id;

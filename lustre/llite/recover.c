@@ -24,9 +24,21 @@ static void abort_inflight_for_import(struct obd_import *imp)
 {
         struct list_head *tmp, *n;
 
+        /* Make sure that no new requests get processed for this import.
+         * ptlrpc_queue_wait must (and does) hold c_lock while testing this flags and
+         * then putting requests on sending_head or delayed_head.
+         */
+        spin_lock(&imp->imp_connection->c_lock);
+        imp->imp_flags |= IMP_INVALID;
+        spin_unlock(&imp->imp_connection->c_lock);
+
         list_for_each_safe(tmp, n, &imp->imp_connection->c_sending_head) {
                 struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
+
+                if (req->rq_import != imp)
+                        continue;
+
                 if (req->rq_flags & PTL_RPC_FL_REPLIED) {
                         /* no need to replay, just discard */
                         CERROR("uncommitted req xid "LPD64" op %d to OST %s\n",
@@ -89,13 +101,16 @@ static int ll_reconnect(struct ptlrpc_connection *conn)
                         reconnect_ost(imp);
                 } else {
                         int rc = ptlrpc_reconnect_import(imp, MDS_CONNECT);
-                        if (!rc)
+                        if (!rc) {
                                 need_replay = 1;
+                                /* XXX obd_cancel_unused */
+                        }
                         /* make sure we don't try to replay for dead imps?
                          *
                          * else imp->imp_connection = NULL;
                          *
                          */
+                        
                 }
         }
 

@@ -350,13 +350,42 @@ out_dec:
         return rc;
 }
 
+/* Call with med->med_open_lock held, please. */
+inline int mds_close_mfd(struct mds_file_data *mfd, struct mds_export_data *med)
+{
+        struct file *file = mfd->mfd_file;
+        LASSERT(file->private_data == mfd);
+
+        list_del(&mfd->mfd_list);
+        mfd->mfd_servercookie = DEAD_HANDLE_MAGIC;
+        kmem_cache_free(mds_file_cache, mfd);
+
+        return filp_close(file, 0);
+}
+
 static int mds_disconnect(struct lustre_handle *conn)
 {
         struct obd_export *export = class_conn2export(conn);
+        struct list_head *tmp, *n;
+        struct mds_export_data *med = &export->exp_mds_data;
         int rc;
         ENTRY;
 
-#warning "Mike: we need to close all files opened on med_open_head"
+        /*
+         * Close any open files.
+         */
+        spin_lock(&med->med_open_lock);
+        list_for_each_safe(tmp, n, &med->med_open_head) {
+                struct mds_file_data *mfd = 
+                        list_entry(tmp, struct mds_file_data, mfd_list);
+                rc = mds_close_mfd(mfd, med);
+                if (rc) {
+                        /* XXX better diagnostics, with file path and stuff */
+                        CDEBUG(D_INODE, "Error %d closing mfd %p\n", rc, mfd);
+                }
+        }
+        spin_unlock(&med->med_open_lock);
+                                                       
         ldlm_cancel_locks_for_export(export);
         mds_client_free(export);
 
@@ -838,7 +867,6 @@ static int mds_close(struct ptlrpc_request *req)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
         struct mds_body *body;
-        struct file *file;
         struct mds_file_data *mfd;
         int rc;
         ENTRY;
@@ -853,16 +881,9 @@ static int mds_close(struct ptlrpc_request *req)
                 RETURN(-ESTALE);
         }
 
-        file = mfd->mfd_file;
-        LASSERT(file->private_data == mfd);
-
         spin_lock(&med->med_open_lock);
-        list_del(&mfd->mfd_list);
+        req->rq_status = mds_close_mfd(mfd, med);
         spin_unlock(&med->med_open_lock);
-        mfd->mfd_servercookie = DEAD_HANDLE_MAGIC;
-        kmem_cache_free(mds_file_cache, mfd);
-
-        req->rq_status = filp_close(file, 0);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK)) {
                 CERROR("test case OBD_FAIL_MDS_CLOSE_PACK\n");

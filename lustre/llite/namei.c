@@ -194,12 +194,6 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
 
         ENTRY;
 
-        /* CHECK_MOUNT_EPOCH(dir); */
-        if (ll_i2info(dir)->lli_mount_epoch != ll_i2sbi(dir)->ll_mount_epoch) {
-                make_bad_inode(dir);
-                RETURN(ERR_PTR(-EIO));
-        }
-
         if (it == NULL)
                 it = &lookup_it;
 
@@ -503,8 +497,6 @@ static int ll_create(struct inode *dir, struct dentry *dentry, int mode)
         int rc = 0;
         ENTRY;
 
-        CHECK_MOUNT_EPOCH(dir);
-
         LL_GET_INTENT(dentry, it);
 
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
@@ -559,8 +551,6 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         struct ll_inode_info *lli;
         int err = 0;
         ENTRY;
-
-        CHECK_MOUNT_EPOCH(dir);
 
         LL_GET_INTENT(dentry, it);
 

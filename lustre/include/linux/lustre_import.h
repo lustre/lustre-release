@@ -12,6 +12,8 @@
 
 #ifdef __KERNEL__
 
+#define IMP_INVALID 1
+
 #include <linux/lustre_idl.h>
 struct obd_import {
         struct ptlrpc_connection *imp_connection;
@@ -19,8 +21,8 @@ struct obd_import {
         struct lustre_handle      imp_handle;
         struct list_head          imp_chain;
         struct obd_device        *imp_obd;
-        /* XXX need a UUID here, I think
-         */
+        int                       imp_flags;
+        /* XXX need a UUID here, I think */
 };
 
 extern struct obd_import *class_conn2cliimp(struct lustre_handle *);

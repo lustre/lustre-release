@@ -71,8 +71,6 @@ static int ll_file_open(struct inode *inode, struct file *file)
 
         LASSERT(!file->private_data);
 
-        CHECK_MOUNT_EPOCH(inode);
-
         lsm = lli->lli_smd;
 
         /*  delayed create of object (intent created inode) */
@@ -260,8 +258,6 @@ static int ll_file_release(struct inode *inode, struct file *file)
         int rc, rc2;
 
         ENTRY;
-
-        CHECK_MOUNT_EPOCH(inode);
 
         fd = (struct ll_file_data *)file->private_data;
         if (!fd) {
@@ -652,8 +648,6 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         struct inode *inode = file->f_dentry->d_inode;
         long long retval;
         ENTRY;
-
-        CHECK_MOUNT_EPOCH(inode);
 
         switch (origin) {
         case 2: {

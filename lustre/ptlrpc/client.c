@@ -507,6 +507,27 @@ static int interrupted_request(void *data)
         RETURN(1); /* ignored, as of this writing */
 }
 
+/* If we're being torn down by umount -f, or the import has been
+ * invalidated (such as by an OST failure), the request must fail with
+ * -EIO.
+ *
+ * Must be called with conn->c_lock held, will drop it if it returns -EIO.
+ *
+ * XXX this should just be testing the import, and umount_begin shouldn't touch
+ * XXX the connection.
+ */
+#define EIO_IF_INVALID(conn, req)                                             \
+if ((conn->c_flags & CONN_INVALID) ||                                         \
+    (req->rq_import->imp_flags & IMP_INVALID)) {                              \
+        CERROR("req xid "LPD64" op %d to %s:%d: %s_INVALID\n",                \
+               (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,          \
+               req->rq_connection->c_remote_uuid,                             \
+               req->rq_import->imp_client->cli_request_portal,                \
+               (conn->c_flags & CONN_INVALID) ? "CONN_" : "IMP_");            \
+        spin_unlock(&conn->c_lock);                                           \
+        RETURN(-EIO);                                                         \
+}        
+
 int ptlrpc_queue_wait(struct ptlrpc_request *req)
 {
         int rc = 0;
@@ -523,16 +544,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         /* XXX probably both an import and connection level are needed */
         if (req->rq_level > conn->c_level) { 
                 spin_lock(&conn->c_lock);
-                if (conn->c_flags & CONN_INVALID) {
-                        /* being torn down by "umount -f" */
-                        CERROR("req xid "LPD64" op %d to %s:%d: CONN_INVALID\n",
-                               (unsigned long long)req->rq_xid,
-                               req->rq_reqmsg->opc,
-                               req->rq_connection->c_remote_uuid,
-                               req->rq_import->imp_client->cli_request_portal);
-                        spin_unlock(&conn->c_lock);
-                        RETURN(-EIO);
-                }
+                EIO_IF_INVALID(conn, req);
                 list_del(&req->rq_list);
                 list_add_tail(&req->rq_list, &conn->c_delayed_head);
                 spin_unlock(&conn->c_lock);
@@ -564,14 +576,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
  resend:
         req->rq_timeout = obd_timeout;
         spin_lock(&conn->c_lock);
-        if (conn->c_flags & CONN_INVALID) {
-                CERROR("req xid "LPD64" op %d to %s:%d: CONN_INVALID\n",
-                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
-                       req->rq_connection->c_remote_uuid,
-                       req->rq_import->imp_client->cli_request_portal);
-                spin_unlock(&conn->c_lock); /* being torn down by "umount -f" */
-                RETURN(-EIO);
-        }
+        EIO_IF_INVALID(conn, req);
         
         list_del(&req->rq_list);
         list_add_tail(&req->rq_list, &conn->c_sending_head);
@@ -657,6 +662,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         return rc;
 }
 
+#undef EIO_IF_INVALID
+
 int ptlrpc_replay_req(struct ptlrpc_request *req)
 {
         int rc = 0, old_level;
@@ -705,12 +712,14 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         }
 
         CDEBUG(D_NET, "got rep "LPD64"\n", req->rq_xid);
+
+        /* let the callback do fixups, possibly including in the request */
+        if (req->rq_replay_cb)
+                req->rq_replay_cb(req, req->rq_replay_cb_data);
+
         if (req->rq_repmsg->status == 0) {
                 CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,
                        req->rq_replen, req->rq_repmsg->status);
-                if (req->rq_replay_cb)
-                        req->rq_replay_cb(req, req->rq_replay_cb_data);
-
         } else {
                 CERROR("recovery failed: "); 
                 CERROR("req "LPD64" opc %d level %d, conn level %d\n", 

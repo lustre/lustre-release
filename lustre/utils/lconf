@@ -52,7 +52,7 @@ config.xml          Lustre configuration in xml format.
 --get <url>         URL to fetch a config file
 --node <nodename>   Load config for <nodename>
 -d | --cleanup      Cleans up config. (Shutdown)
--f | --force        Unmount with \"umount -f\" during shutdown
+-f | --force        Forced unmounting and/or obd detach during cleanup
 -v | --verbose      Print system commands as they are run
 -h | --help         Print this help 
 --gdb               Prints message after creating gdb module script
@@ -391,8 +391,8 @@ class LCTLInterface:
   ignore_errors
   device $%s
   cleanup
-  detach
-  quit""" % (name)
+  detach %s
+  quit""" % (name, ('force', '')[config.force()])
         self.run(cmds)
 
     # create an lov

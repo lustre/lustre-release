@@ -121,7 +121,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
-        sbi->ll_mount_epoch = 0;
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, sbi->ll_sb_uuid);
 
@@ -470,7 +469,6 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         ENTRY;
         
         sema_init(&lli->lli_open_sem, 1);
-        lli->lli_mount_epoch = ll_i2sbi(inode)->ll_mount_epoch;
         
         /* core attributes first */
         ll_update_inode(inode, body);
@@ -556,6 +554,8 @@ void ll_umount_begin(struct super_block *sb)
                 conn = list_entry(ctmp, struct ptlrpc_connection, c_sb_chain);
 
                 spin_lock(&conn->c_lock);
+                /* XXX should just be dealing with imports, probably through
+                 * XXX iocontrol, need next-gen recovery! */
                 conn->c_flags |= CONN_INVALID;
                 invalidate_request_list(&conn->c_sending_head);
                 invalidate_request_list(&conn->c_delayed_head);
