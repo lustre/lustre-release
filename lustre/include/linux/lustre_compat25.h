@@ -194,5 +194,42 @@ static inline int cleanup_group_info(void)
 
 #endif /* end of 2.4 compat macros */
 
+#ifdef HAVE_PAGE_LIST
+static inline int mapping_has_pages(struct address_space *mapping)
+{
+        int rc = 1;
+
+        ll_pgcache_lock(mapping);
+        if (list_empty(&mapping->dirty_pages) &&
+            list_empty(&mapping->clean_pages) &&
+            list_empty(&mapping->locked_pages)) {
+                rc = 0;
+        }
+        ll_pgcache_unlock(mapping);
+
+        return rc;
+}
+
+static inline int clear_page_dirty_for_io(struct page *page)
+{
+        struct address_space *mapping = page->mapping;
+
+        if (page->mapping && PageDirty(page)) {
+                ClearPageDirty(page);
+                ll_pgcache_lock(mapping);
+                list_del(&page->list);
+                list_add(&page->list, &mapping->locked_pages);
+                ll_pgcache_unlock(mapping);
+                return 1;
+        }
+        return 0;
+}
+#else
+static inline int mapping_has_pages(struct address_space *mapping)
+{
+        return mapping->nrpages > 0;
+}
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

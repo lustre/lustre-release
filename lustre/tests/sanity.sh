@@ -10,6 +10,9 @@ ONLY=${ONLY:-"$*"}
 # bug number for skipped test:
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+case `uname -r` in
+2.6.*) ALWAYS_EXCEPT="$ALWAYS_EXCEPT 54c" # bug 3117
+esac
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
@@ -1241,14 +1244,31 @@ count_ost_writes() {
         cat /proc/fs/lustre/osc/*/stats |
             awk -vwrites=0 '/ost_write/ { writes += $2 } END { print writes; }'
 }
-start_kupdated() {
+
+# decent default
+WRITEBACK_SAVE=500
+
+start_writeback() {
 	# in 2.6, restore /proc/sys/vm/dirty_writeback_centisecs
-	kill -CONT `pidof kupdated`
+	if [ -f /proc/sys/vm/dirty_writeback_centisecs ]; then
+		echo $WRITEBACK_SAVE > /proc/sys/vm/dirty_writeback_centisecs
+	else
+		# if file not here, we are a 2.4 kernel
+		kill -CONT `pidof kupdated`
+	fi
 }
-stop_kupdated() {
+stop_writeback() {
+	# setup the trap first, so someone cannot exit the test at the
+	# exact wrong time and mess up a machine
+	trap start_writeback EXIT
 	# in 2.6, save and 0 /proc/sys/vm/dirty_writeback_centisecs
-	kill -STOP `pidof kupdated`
-	trap start_kupdated EXIT
+	if [ -f /proc/sys/vm/dirty_writeback_centisecs ]; then
+		WRITEBACK_SAVE=`cat /proc/sys/vm/dirty_writeback_centisecs`
+		echo 0 > /proc/sys/vm/dirty_writeback_centisecs
+	else
+		# if file not here, we are a 2.4 kernel
+		kill -STOP `pidof kupdated`
+	fi
 }
 
 # ensure that all stripes have some grant before we test client-side cache
@@ -1266,7 +1286,7 @@ setup_test42() {
 test_42a() {
 	setup_test42
 	cancel_lru_locks OSC
-	stop_kupdated
+	stop_writeback
 	sync; sleep 1; sync # just to be safe
 	BEFOREWRITES=`count_ost_writes`
 	grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/cur_grant_bytes
@@ -1274,14 +1294,14 @@ test_42a() {
 	AFTERWRITES=`count_ost_writes`
 	[ $BEFOREWRITES -eq $AFTERWRITES ] || \
 		error "$BEFOREWRITES < $AFTERWRITES"
-	start_kupdated
+	start_writeback
 }
 run_test 42a "ensure that we don't flush on close =============="
 
 test_42b() {
 	setup_test42
 	cancel_lru_locks OSC
-	stop_kupdated
+	stop_writeback
         sync
         dd if=/dev/zero of=$DIR/f42b bs=1024 count=100
         BEFOREWRITES=`count_ost_writes`
@@ -1295,7 +1315,7 @@ test_42b() {
         [ $BEFOREWRITES -eq $AFTERWRITES ] ||
             error "$BEFOREWRITES < $AFTERWRITES on sync"
         dmesg | grep 'error from obd_brw_async' && error 'error writing back'
-	start_kupdated
+	start_writeback
         return 0
 }
 run_test 42b "test destroy of file with cached dirty data ======"
@@ -1318,7 +1338,7 @@ trunc_test() {
         file=$DIR/$test
         offset=$2
 	cancel_lru_locks OSC
-	stop_kupdated
+	stop_writeback
 	# prime the file with 0,EOF PW to match
 	touch $file
         $TRUNCATE $file 0
@@ -1329,7 +1349,7 @@ trunc_test() {
         $TRUNCATE $file $offset
         cancel_lru_locks OSC
         AFTERWRITES=`count_ost_writes`
-	start_kupdated
+	start_writeback
 }
 
 test_42c() {
@@ -1447,7 +1467,7 @@ test_45() {
 	f="$DIR/f45"
 	# Obtain grants from OST if it supports it
 	echo blah > ${f}_grant
-	stop_kupdated
+	stop_writeback
 	sync
 	do_dirty_record "echo blah > $f"
 	[ $before -eq $after ] && error "write wasn't cached"
@@ -1461,7 +1481,7 @@ test_45() {
 	[ $before -eq $after ] && error "write wasn't cached"
 	do_dirty_record "cancel_lru_locks OSC"
 	[ $before -gt $after ] || error "lock cancellation didn't lower dirty count"
-	start_kupdated
+	start_writeback
 }
 run_test 45 "osc io page accounting ============================"
 
@@ -1475,14 +1495,14 @@ page_size() {
 # offset 31 and 31's raw 31 offset. it also found general redirtying bugs.
 test_46() {
 	f="$DIR/f46"
-	stop_kupdated
+	stop_writeback
 	sync
 	dd if=/dev/zero of=$f bs=`page_size` seek=31 count=1
 	sync
 	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=63 count=1
 	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=31 count=1
 	sync
-	start_kupdated
+	start_writeback
 }
 run_test 46 "dirtying a previously written page ================"
 
@@ -1600,8 +1620,7 @@ test_53() {
 run_test 53 "verify that MDS and OSTs agree on pre-creation ===="
 
 test_54a() {
-     	$SOCKETSERVER $DIR/socket &
-	sleep 1
+     	$SOCKETSERVER $DIR/socket
      	$SOCKETCLIENT $DIR/socket || error
       	$MUNLINK $DIR/socket
 }

@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Light Super operations
+ * Lustre Light name resolution
  *
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *

@@ -16,7 +16,6 @@ init_test_env $@
 # Skip these tests
 ALWAYS_EXCEPT=""
 
-
 gen_config() {
     rm -f $XMLCONFIG
     add_mds mds --dev $MDSDEV --size $MDSSIZE
@@ -63,6 +62,7 @@ setup() {
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     start mds $MDSLCONFARGS --reformat
     zconf_mount `hostname` $MOUNT
+    echo 0x3f0410 > /proc/sys/portals/debug
 }
 
 $SETUP
@@ -831,6 +831,7 @@ test_42() {
     facet_failover ost
     
     # osc is evicted, fs is smaller
+    set -vx
     blocks_after=`df $MOUNT | tail -1 | awk '{ print $1 }'`
     if [ "$blocks_after" = "Filesystem" ]; then
 	echo "df failed, assuming caused by OST failout"
@@ -841,6 +842,7 @@ test_42() {
     sleep $((TIMEOUT * 2))
     unlinkmany $DIR/$tfile-%d 400 400
     $CHECKSTAT -t file $DIR/$tfile-* && return 2 || true
+    set +vx
 }
 run_test 42 "recovery after ost failure"
 

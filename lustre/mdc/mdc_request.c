@@ -497,11 +497,10 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
         rc = l_wait_event(req->rq_reply_waitq, mdc_close_check_reply(req),
                           &lwi);
         if (req->rq_repmsg == NULL) {
-                CDEBUG(D_HA, "request failed to send: %p, %d\n", req, 
+                CDEBUG(D_HA, "request failed to send: %p, %d\n", req,
                        req->rq_status);
                 rc = req->rq_status;
         } else if (rc == 0) {
-                LASSERTF(req->rq_repmsg != NULL, "req = %p", req);
                 rc = req->rq_repmsg->status;
                 if (req->rq_repmsg->type == PTL_RPC_MSG_ERR) {
                         DEBUG_REQ(D_ERROR, req, "type == PTL_RPC_MSG_ERR, err "
@@ -619,9 +618,15 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
-        
-        MOD_INC_USE_COUNT;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        MOD_INC_USE_COUNT;
+#else
+	if (!try_module_get(THIS_MODULE)) {
+		CERROR("Can't get module. Is it alive?");
+		return -EINVAL;
+	}
+#endif
         switch (cmd) {
         case OBD_IOC_CLIENT_RECOVER:
                 rc = ptlrpc_recover_import(imp, data->ioc_inlbuf1);
@@ -646,11 +651,16 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 #endif
         default:
-                CERROR("osc_ioctl(): unrecognised ioctl %#x\n", cmd);
+                CERROR("mdc_ioctl(): unrecognised ioctl %#x\n", cmd);
                 GOTO(out, rc = -ENOTTY);
         }
 out:
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         MOD_DEC_USE_COUNT;
+#else
+	module_put(THIS_MODULE);
+#endif
+
         return rc;
 }
 
@@ -836,13 +846,16 @@ static int mdc_import_event(struct obd_device *obd,
         case IMP_EVENT_DISCON: {
                 break;
         }
+        case IMP_EVENT_INACTIVE: {
+                if (obd->obd_observer)
+                        rc = obd_notify(obd->obd_observer, obd, 0);
+                break;
+        }
         case IMP_EVENT_INVALIDATE: {
                 struct ldlm_namespace *ns = obd->obd_namespace;
 
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
 
-                if (obd->obd_observer)
-                        rc = obd_notify(obd->obd_observer, obd, 0);
                 break;
         }
         case IMP_EVENT_ACTIVE: {
@@ -985,20 +998,20 @@ static int mdc_llog_finish(struct obd_device *obd, int count)
 }
 
 struct obd_ops mdc_obd_ops = {
-        o_owner:       THIS_MODULE,
-        o_setup:       mdc_setup,
-        o_precleanup:  mdc_precleanup,
-        o_cleanup:     mdc_cleanup,
-        o_connect:     client_connect_import,
-        o_disconnect:  client_disconnect_export,
-        o_iocontrol:   mdc_iocontrol,
-        o_set_info:    mdc_set_info,
-        o_statfs:      mdc_statfs,
-        o_pin:         mdc_pin,
-        o_unpin:       mdc_unpin,
-        o_import_event: mdc_import_event,
-        o_llog_init:   mdc_llog_init,
-        o_llog_finish: mdc_llog_finish,
+        .o_owner        = THIS_MODULE,
+        .o_setup        = mdc_setup,
+        .o_precleanup   = mdc_precleanup,
+        .o_cleanup      = mdc_cleanup,
+        .o_connect      = client_connect_import,
+        .o_disconnect   = client_disconnect_export,
+        .o_iocontrol    = mdc_iocontrol,
+        .o_set_info     = mdc_set_info,
+        .o_statfs       = mdc_statfs,
+        .o_pin          = mdc_pin,
+        .o_unpin        = mdc_unpin,
+        .o_import_event = mdc_import_event,
+        .o_llog_init    = mdc_llog_init,
+        .o_llog_finish  = mdc_llog_finish,
 };
 
 int __init mdc_init(void)
@@ -1009,12 +1022,12 @@ int __init mdc_init(void)
                                    LUSTRE_MDC_NAME);
 }
 
+#ifdef __KERNEL__
 static void /*__exit*/ mdc_exit(void)
 {
         class_unregister_type(LUSTRE_MDC_NAME);
 }
 
-#ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Metadata Client");
 MODULE_LICENSE("GPL");

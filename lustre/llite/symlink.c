@@ -148,13 +148,13 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 }
 
 struct inode_operations ll_fast_symlink_inode_operations = {
-        readlink:       ll_readlink,
-        setattr:        ll_setattr,
-        setattr_raw:    ll_setattr_raw,
-        follow_link:    ll_follow_link,
+        .readlink       = ll_readlink,
+        .setattr        = ll_setattr,
+        .setattr_raw    = ll_setattr_raw,
+        .follow_link    = ll_follow_link,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        revalidate_it:  ll_inode_revalidate_it
+        .revalidate_it  = ll_inode_revalidate_it
 #else 
-        getattr_it:     ll_getattr
+        .getattr_it     = ll_getattr
 #endif
 };

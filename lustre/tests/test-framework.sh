@@ -39,6 +39,7 @@ init_test_env() {
     export LMC=${LMC:-"lmc"}
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     export CHECKSTAT="${CHECKSTAT:-checkstat} "
+    export FSYTPE=${FSTYPE:-"ext3"}
 
     # Paths on remote nodes, if different 
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
@@ -297,14 +298,14 @@ add_mds() {
     shift
     rm -f ${facet}active
     add_facet $facet
-    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc $*
+    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc --fstype $FSTYPE $*
 }
 
 add_mdsfailover() {
     facet=$1
     shift
     add_facet ${facet}failover  --lustre_upcall $UPCALL
-    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc $*
+    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc --fstype $FSTYPE $*
 }
 
 add_ost() {
@@ -312,14 +313,14 @@ add_ost() {
     shift
     rm -f ${facet}active
     add_facet $facet
-    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc $*
+    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc --fstype $FSTYPE $*
 }
 
 add_ostfailover() {
     facet=$1
     shift
     add_facet ${facet}failover
-    do_lmc --add ost --failover --node ${facet}failover_facet --ost ${facet}_svc $*
+    do_lmc --add ost --failover --node ${facet}failover_facet --ost ${facet}_svc --fstype $FSTYPE $*
 }
 
 add_lov() {
@@ -399,6 +400,15 @@ drop_reply() {
 # OBD_FAIL_MDS_ALL_REPLY_NET
     RC=0
     do_facet mds "echo 0x122 > /proc/sys/lustre/fail_loc"
+    do_facet client "$@" || RC=$?
+    do_facet mds "echo 0 > /proc/sys/lustre/fail_loc"
+    return $RC
+}
+
+drop_reint_reply() {
+# OBD_FAIL_MDS_REINT_NET_REP
+    RC=0
+    do_facet mds "echo 0x119 > /proc/sys/lustre/fail_loc"
     do_facet client "$@" || RC=$?
     do_facet mds "echo 0 > /proc/sys/lustre/fail_loc"
     return $RC

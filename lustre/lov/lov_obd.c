@@ -147,7 +147,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 
                 LASSERT( tgt_uuid != NULL);
 
-                tgt_obd = class_find_client_obd(tgt_uuid, LUSTRE_OSC_NAME, 
+                tgt_obd = class_find_client_obd(tgt_uuid, LUSTRE_OSC_NAME,
                                                 &obd->obd_uuid);
 
                 if (!tgt_obd) {
@@ -470,7 +470,6 @@ static obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
 
         /* do_div(a, b) returns a % b, and a = a / b */
         stripe_size = do_div(ost_size, ssize);
-
         if (stripe_size)
                 lov_size = ost_size * swidth + stripeno * ssize + stripe_size;
         else
@@ -544,7 +543,7 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
                 struct lov_stripe_md *obj_mdp = &obj_md;
                 int err;
 
-                /* if called for a specific target, we don't 
+                /* if called for a specific target, we don't
                    care if it is not active. */
                 if (lov->tgts[i].active == 0 && ost_uuid == NULL) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", i);
@@ -983,7 +982,7 @@ static int lov_getattr(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-static int lov_getattr_interpret(struct ptlrpc_request_set *rqset, void *data, 
+static int lov_getattr_interpret(struct ptlrpc_request_set *rqset, void *data,
                                  int rc)
 {
         struct lov_getattr_async_args *aa = data;
@@ -1571,8 +1570,8 @@ static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
                                 memcpy(tmp_oa, src_oa, sizeof(*tmp_oa));
 
                         tmp_oa->o_id = si->lsm.lsm_object_id;
-                        rc = obd_brw(cmd, lov->tgts[si->ost_idx].ltd_exp, 
-                                     tmp_oa, &si->lsm, si->bufct, 
+                        rc = obd_brw(cmd, lov->tgts[si->ost_idx].ltd_exp,
+                                     tmp_oa, &si->lsm, si->bufct,
                                      &ioarr[shift], oti);
                         if (rc)
                                 GOTO(out_ioarr, rc);
@@ -1781,7 +1780,7 @@ static int lov_ap_refresh_count(void *data, int cmd)
         if (IS_ERR(lap))
                 return -EINVAL;
 
-        return lap->lap_caller_ops->ap_refresh_count(lap->lap_caller_data, 
+        return lap->lap_caller_ops->ap_refresh_count(lap->lap_caller_data,
                                                      cmd);
 }
 static void lov_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
@@ -1817,7 +1816,7 @@ static struct obd_async_page_ops lov_async_page_ops = {
 
 int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
                            struct lov_oinfo *loi, struct page *page,
-                           obd_off offset, struct obd_async_page_ops *ops, 
+                           obd_off offset, struct obd_async_page_ops *ops,
                            void *data, void **res)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
@@ -1842,7 +1841,7 @@ int lov_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         lov_stripe_offset(lsm, offset, lap->lap_stripe, &lap->lap_sub_offset);
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
 
-        /* so the callback doesn't need the lsm */ 
+        /* so the callback doesn't need the lsm */
         lap->lap_loi_id = loi->loi_id;
 
         rc = obd_prep_async_page(lov->tgts[loi->loi_ost_idx].ltd_exp,
@@ -1954,7 +1953,7 @@ static int lov_trigger_group_io(struct obd_export *exp,
 
         for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
              i++, loi++) {
-                err = obd_trigger_group_io(lov->tgts[loi->loi_ost_idx].ltd_exp, 
+                err = obd_trigger_group_io(lov->tgts[loi->loi_ost_idx].ltd_exp,
                                            lsm, loi, oig);
                 if (rc == 0 && err != 0)
                         rc = err;
@@ -1980,10 +1979,10 @@ static int lov_teardown_async_page(struct obd_export *exp,
                 RETURN(PTR_ERR(lap));
 
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
-        rc = obd_teardown_async_page(lov->tgts[loi->loi_ost_idx].ltd_exp, 
+        rc = obd_teardown_async_page(lov->tgts[loi->loi_ost_idx].ltd_exp,
                                      lsm, loi, lap->lap_sub_cookie);
         if (rc) {
-                CERROR("unable to teardown sub cookie %p: %d\n", 
+                CERROR("unable to teardown sub cookie %p: %d\n",
                        lap->lap_sub_cookie, rc);
                 RETURN(rc);
         }
@@ -2556,7 +2555,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
                 for (i = 0, loi = data->lsm->lsm_oinfo;
                      i < data->lsm->lsm_stripe_count;
                      i++, loi++) {
-                        if (lov->tgts[loi->loi_ost_idx].ltd_exp == 
+                        if (lov->tgts[loi->loi_ost_idx].ltd_exp ==
                             data->lock->l_conn_export) {
                                 *stripe = i;
                                 RETURN(0);
@@ -2592,7 +2591,7 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
         } else if (keylen >= strlen("lovdesc") && strcmp(key, "lovdesc") == 0) {
                 struct lov_desc *desc_ret = val;
                 *desc_ret = lov->desc;
-                
+
                 RETURN(0);
         }
 
@@ -2639,7 +2638,7 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 int er;
 
-                if (val && !obd_uuid_equals(val, &lov->tgts[i].uuid)) 
+                if (val && !obd_uuid_equals(val, &lov->tgts[i].uuid))
                         continue;
 
                 if (!val && !lov->tgts[i].active)
@@ -2678,6 +2677,7 @@ __u64 lov_merge_size(struct lov_stripe_md *lsm, int kms)
                 if (lov_size > size)
                         size = lov_size;
         }
+
         return size;
 }
 EXPORT_SYMBOL(lov_merge_size);
@@ -2823,40 +2823,40 @@ void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
 EXPORT_SYMBOL(lov_increase_kms);
 
 struct obd_ops lov_obd_ops = {
-        o_owner:       THIS_MODULE,
-        o_setup:       lov_setup,
-        o_cleanup:     lov_cleanup,
-        o_connect:     lov_connect,
-        o_disconnect:  lov_disconnect,
-        o_statfs:      lov_statfs,
-        o_packmd:      lov_packmd,
-        o_unpackmd:    lov_unpackmd,
-        o_create:      lov_create,
-        o_destroy:     lov_destroy,
-        o_getattr:     lov_getattr,
-        o_getattr_async: lov_getattr_async,
-        o_setattr:     lov_setattr,
-        o_brw:         lov_brw,
-        o_brw_async:   lov_brw_async,
-        .o_prep_async_page =    lov_prep_async_page,
-        .o_queue_async_io =     lov_queue_async_io,
-        .o_set_async_flags =    lov_set_async_flags,
-        .o_queue_group_io =     lov_queue_group_io,
-        .o_trigger_group_io =   lov_trigger_group_io,
-        .o_teardown_async_page  lov_teardown_async_page,
-        o_punch:       lov_punch,
-        o_sync:        lov_sync,
-        o_enqueue:     lov_enqueue,
-        o_match:       lov_match,
-        o_change_cbdata: lov_change_cbdata,
-        o_cancel:      lov_cancel,
-        o_cancel_unused: lov_cancel_unused,
-        o_iocontrol:   lov_iocontrol,
-        o_get_info:    lov_get_info,
-        o_set_info:    lov_set_info,
-        o_llog_init:   lov_llog_init,
-        o_llog_finish: lov_llog_finish,
-        o_notify: lov_notify,
+        .o_owner               = THIS_MODULE,
+        .o_setup               = lov_setup,
+        .o_cleanup             = lov_cleanup,
+        .o_connect             = lov_connect,
+        .o_disconnect          = lov_disconnect,
+        .o_statfs              = lov_statfs,
+        .o_packmd              = lov_packmd,
+        .o_unpackmd            = lov_unpackmd,
+        .o_create              = lov_create,
+        .o_destroy             = lov_destroy,
+        .o_getattr             = lov_getattr,
+        .o_getattr_async       = lov_getattr_async,
+        .o_setattr             = lov_setattr,
+        .o_brw                 = lov_brw,
+        .o_brw_async           = lov_brw_async,
+        .o_prep_async_page     = lov_prep_async_page,
+        .o_queue_async_io      = lov_queue_async_io,
+        .o_set_async_flags     = lov_set_async_flags,
+        .o_queue_group_io      = lov_queue_group_io,
+        .o_trigger_group_io    = lov_trigger_group_io,
+        .o_teardown_async_page = lov_teardown_async_page,
+        .o_punch               = lov_punch,
+        .o_sync                = lov_sync,
+        .o_enqueue             = lov_enqueue,
+        .o_match               = lov_match,
+        .o_change_cbdata       = lov_change_cbdata,
+        .o_cancel              = lov_cancel,
+        .o_cancel_unused       = lov_cancel_unused,
+        .o_iocontrol           = lov_iocontrol,
+        .o_get_info            = lov_get_info,
+        .o_set_info            = lov_set_info,
+        .o_llog_init           = lov_llog_init,
+        .o_llog_finish         = lov_llog_finish,
+        .o_notify              = lov_notify,
 };
 
 int __init lov_init(void)

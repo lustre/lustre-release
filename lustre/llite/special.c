@@ -191,6 +191,7 @@ static int ll_special_ioctl(struct inode *inode, struct file *filp,
                 struct file_operations *sfops = filp->f_op;
 
                 rc = (*pfop)->ioctl(inode, filp, cmd, arg);
+
                 /* sometimes, file_operations will be changed in ioctl */
                 save_fops(filp, inode, sfops);
         }
@@ -319,61 +320,62 @@ static int ll_special_file_release(struct inode *inode, struct file *filp)
 }
 
 struct inode_operations ll_special_inode_operations = {
-        setattr_raw:    ll_setattr_raw,
-        setattr:        ll_setattr,
+        .setattr_raw    = ll_setattr_raw,
+        .setattr        = ll_setattr,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        getattr_it:     ll_getattr,
+        .getattr_it     = ll_getattr,
 #else
-        revalidate_it:  ll_inode_revalidate_it,
+        .revalidate_it  = ll_inode_revalidate_it,
 #endif
 };
 
 struct file_operations ll_special_chr_inode_fops = {
-        owner:          THIS_MODULE,
-        open:           ll_special_open,
+        .owner          = THIS_MODULE,
+        .open           = ll_special_open,
 };
 
 struct file_operations ll_special_blk_inode_fops = {
-        owner:          THIS_MODULE,
-        read:           ll_special_read,
-        write:          ll_special_write,
-        ioctl:          ll_special_ioctl,
-        open:           ll_special_open,
-        release:        ll_special_release,
-        mmap:           ll_special_mmap,
-        llseek:         ll_special_seek,
-        fsync:          ll_special_fsync,
+        .owner          = THIS_MODULE,
+        .read           = ll_special_read,
+        .write          = ll_special_write,
+        .ioctl          = ll_special_ioctl,
+        .open           = ll_special_open,
+        .release        = ll_special_release,
+        .mmap           = ll_special_mmap,
+        .llseek         = ll_special_seek,
+        .fsync          = ll_special_fsync,
 };
 
 struct file_operations ll_special_fifo_inode_fops = {
-        owner:          THIS_MODULE,
-        open:           ll_special_open,
+        .owner          = THIS_MODULE,
+        .open           = ll_special_open,
 };
 
 struct file_operations ll_special_sock_inode_fops = {
-        owner:          THIS_MODULE,
-        open:           ll_special_open
+        .owner          = THIS_MODULE,
+        .open           = ll_special_open
 };
 
 struct file_operations ll_special_chr_file_fops = {
-        owner:          THIS_MODULE,
-	llseek:		ll_special_file_seek,
-	read:		ll_special_file_read,
-	write:		ll_special_file_write,
-	poll:		ll_special_file_poll,
-	ioctl:		ll_special_file_ioctl,
-	open:		ll_special_file_open,
-	release:	ll_special_file_release,
-	fasync:		ll_special_file_fasync,
+        .owner          = THIS_MODULE,
+        .llseek         = ll_special_file_seek,
+        .read           = ll_special_file_read,
+        .write          = ll_special_file_write,
+        .poll           = ll_special_file_poll,
+        .ioctl          = ll_special_file_ioctl,
+        .open           = ll_special_file_open,
+        .release        = ll_special_file_release,
+        .fasync         = ll_special_file_fasync,
 };
 
 struct file_operations ll_special_fifo_file_fops = {
-        owner:          THIS_MODULE,
-	llseek:		ll_special_file_seek,
-	read:		ll_special_file_read,
-	write:		ll_special_file_write,
-	poll:		ll_special_file_poll,
-	ioctl:		ll_special_file_ioctl,
-	open:		ll_special_file_open,
-	release:	ll_special_file_release,
+        .owner          = THIS_MODULE,
+        .llseek         = ll_special_file_seek,
+        .read           = ll_special_file_read,
+        .write          = ll_special_file_write,
+        .poll           = ll_special_file_poll,
+        .ioctl          = ll_special_file_ioctl,
+        .open           = ll_special_file_open,
+        .release        = ll_special_file_release,
 };
+

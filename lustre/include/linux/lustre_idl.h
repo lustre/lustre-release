@@ -54,7 +54,6 @@
 # include <linux/types.h>
 # include <linux/list.h>
 # include <linux/string.h> /* for strncpy, below */
-# include <asm/byteorder.h>
 # include <linux/fs.h> /* to check for FMODE_EXEC, lest we redefine */
 #else
 #ifdef __CYGWIN__

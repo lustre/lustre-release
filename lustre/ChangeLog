@@ -15,9 +15,15 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix thread race in portals_debug_dumplog() (3122)
 	- create lprocfs device entries at setup instead of at attach (1519)
 	- common AST error handler, don't evict client on completion race (3145)
-	- check for NULL reply in mdc_close (2410)
-	* miscellania
+	- zero nameidata in detach_mnt in 2.6 (3118)
+	- verify d_inode after revalidate_special is valid in 2.6 (3116)
+	- use lustre_put_super() to handle zconf unmounts in 2.6 (3064)
+	- initialize RPC timeout timer earlier for 2.6 (3219)
+	- don't dereference NULL reply buffer if mdc_close was never sent (2410)
+	- print nal/nid for unknown nid (3258)
+       * miscellania
 	- allow default OST striping configuration per directory (1414)
+	- increase maximum number of MDS request buffers for large systems
 
 2004-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.1

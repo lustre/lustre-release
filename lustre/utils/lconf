@@ -39,11 +39,13 @@ PYMOD_DIR = "/usr/lib/lustre/python"
 
 def development_mode():
     base = os.path.dirname(sys.argv[0])
-    if os.access(base+"/Makefile.am", os.R_OK):
+    if os.access(base+"/Makefile", os.R_OK):
         return 1
     return 0
 
-if not development_mode():
+if development_mode():
+    sys.path.append('../utils')
+else:
     sys.path.append(PYMOD_DIR)
 
 import Lustre
@@ -699,13 +701,14 @@ def do_find_file(base, mod):
                 return module
 
 def find_module(src_dir, dev_dir, modname):
-    mod = '%s.o' % (modname)
-    module = src_dir +'/'+ dev_dir +'/'+ mod
-    try: 
-       if os.access(module, os.R_OK):
-            return module
-    except OSError:
-        pass
+    modbase = src_dir +'/'+ dev_dir +'/'+ modname
+    for modext in '.ko', '.o':
+        module = modbase + modext
+        try: 
+            if os.access(module, os.R_OK):
+                return module
+        except OSError:
+            pass
     return None
 
 # is the path a block device?
@@ -730,7 +733,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
         # devsize is in 1k, and fs block count is in 4k
         block_cnt = devsize/4
 
-    if fstype in ('ext3', 'extN'):
+    if fstype in ('ext3', 'extN', 'ldiskfs'):
         # ext3 journal size is in megabytes
         if jsize == 0:
             if devsize == 0:
@@ -764,7 +767,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
     if ret:
         panic("Unable to build fs:", dev, string.join(out))
     # enable hash tree indexing on fsswe
-    if fstype in ('ext3', 'extN'):
+    if fstype in ('ext3', 'extN', 'ldiskfs'):
         htree = 'echo "feature FEATURE_C5" | debugfs -w'
         (ret, out) = run (htree, dev)
         if ret:
@@ -1415,6 +1418,8 @@ class MDSDEV(Module):
         self.add_lustre_module('osc', 'osc')
         self.add_lustre_module('lov', 'lov')
         self.add_lustre_module('mds', 'mds')
+        if self.fstype == 'ldiskfs':
+            self.add_lustre_module('ldiskfs', 'ldiskfs')
         if self.fstype:
             self.add_lustre_module('lvfs', 'fsfilt_%s' % (self.fstype))
 
@@ -1600,6 +1605,8 @@ class OSD(Module):
         # modules
         self.add_lustre_module('ost', 'ost')
         # FIXME: should we default to ext3 here?
+        if self.fstype == 'ldiskfs':
+            self.add_lustre_module('ldiskfs', 'ldiskfs')
         if self.fstype:
             self.add_lustre_module('lvfs' , 'fsfilt_%s' % (self.fstype))
         self.add_lustre_module(self.osdtype, self.osdtype)
@@ -2351,6 +2358,7 @@ def setupModulePath(cmd, portals_dir = PORTALS_DIR):
     base = os.path.dirname(cmd)
     if development_mode():
         if not config.lustre:
+            debug('using objdir module paths')            
             config.lustre = (os.path.join(base, ".."))
         # normalize the portals dir, using command line arg if set
         if config.portals:

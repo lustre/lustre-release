@@ -70,7 +70,7 @@ update_mtab_entry(char *spec, char *node, char *type, char *opts,
 int
 init_options(struct lustre_mount_data *lmd)
 {
-        memset(lmd, 0, sizeof(lmd));
+        memset(lmd, 0, sizeof(*lmd));
         lmd->lmd_magic = LMD_MAGIC;
         lmd->lmd_server_nid = PTL_NID_ANY;
         lmd->lmd_local_nid = PTL_NID_ANY;
@@ -194,7 +194,7 @@ set_local(struct lustre_mount_data *lmd)
                 if (rc != 0) {
                         fprintf(stderr, "%s: can't read Elan ID from /proc\n",
                                 progname);
-                                
+
                         return -1;
                 }
         }

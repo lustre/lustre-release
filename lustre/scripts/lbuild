@@ -270,6 +270,7 @@ patch_linux()
     popd >/dev/null
     echo "Full patch has been saved in ${FULL_PATCH##*/}."
     echo "Replacing .config files..."
+    [ -d linux/configs ] || mkdir linux/configs
     rm -f linux/configs/*
     cp -v lustre/kernel_patches/kernel_configs/kernel-${VERSION}-${TARGET}*.config linux/configs/
 }

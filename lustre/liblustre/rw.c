@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Light Super operations
+ * Lustre Light block IO
  *
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
@@ -94,7 +94,7 @@ static int llu_extent_lock_callback(struct ldlm_lock *lock,
                 struct lov_stripe_md *lsm;
                 __u32 stripe;
                 __u64 kms;
-                
+
                 /* This lock wasn't granted, don't try to evict pages */
                 if (lock->l_req_mode != lock->l_granted_mode)
                         RETURN(0);
@@ -123,7 +123,7 @@ iput:
         default:
                 LBUG();
         }
-        
+
         RETURN(0);
 }
 

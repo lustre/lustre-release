@@ -1162,7 +1162,7 @@ static int ost_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         rc = ptlrpc_start_n_threads(obd, ost->ost_create_service, 1,
-                                    "ll_ost_create");
+                                    "ll_ost_creat");
         if (rc)
                 GOTO(out_create, rc = -EINVAL);
 
@@ -1203,9 +1203,9 @@ static int ost_cleanup(struct obd_device *obd, int flags)
 
 /* use obd ops to offer management infrastructure */
 static struct obd_ops ost_obd_ops = {
-        o_owner:        THIS_MODULE,
-        o_setup:        ost_setup,
-        o_cleanup:      ost_cleanup,
+        .o_owner        = THIS_MODULE,
+        .o_setup        = ost_setup,
+        .o_cleanup      = ost_cleanup,
 };
 
 static int __init ost_init(void)

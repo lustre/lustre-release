@@ -32,7 +32,10 @@ endif
 lvfs-sources:
 	$(MAKE) sources -C lvfs
 
-modules: lustre_build_version $(DEP) $(LDISKFS) lvfs-sources
+libcfs-sources:
+	$(MAKE) sources -C portals/libcfs
+
+modules: lustre_build_version $(DEP) $(LDISKFS) lvfs-sources libcfs-sources
 	$(MAKE) $(ARCH_UM) -C $(LINUX) -f $(PWD)/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) SUBDIRS=$(PWD) -o tmp_include_depends -o scripts -o include/config/MARKER $@
 
 lustre_build_version:

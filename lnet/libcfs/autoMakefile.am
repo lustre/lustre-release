@@ -4,8 +4,17 @@
 # See the file COPYING in this distribution
 
 if MODULES
-modulenet_DATA := libcfs$(KMODEXT)
+modulenet_DATA := portals$(KMODEXT)
 endif
 
+sources:
+	rm -f sources
+	@for i in $(api-sources) $(lib-sources) ; do \
+		echo ln -sf $$i . ; \
+		ln -sf $$i . || exit 1 ; \
+	done
+	touch sources
+
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-DIST_SOURCES = $(libcfs-objs:%.o=%.c)
+CLEANFILES = sources lib-*.c api-*.c
+DIST_SOURCES = $(portals-objs:%.o=%.c)

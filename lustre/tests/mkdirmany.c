@@ -10,7 +10,7 @@
 
 int main(int argc, char ** argv)
 {
-        int i, rc, count;
+        int i, rc = 0, count;
         char dirname[4096];
 
         if (argc < 3) {
@@ -25,7 +25,7 @@ int main(int argc, char ** argv)
 
         count = strtoul(argv[2], NULL, 0);
 
-        for (i=0 ; i < count ; i++) {
+        for (i = 0; i < count; i++) {
                 sprintf(dirname, "%s-%d", argv[1], i);
                 rc = mkdir(dirname, 0444);
                 if (rc) {

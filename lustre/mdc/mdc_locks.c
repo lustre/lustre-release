@@ -166,6 +166,7 @@ int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
 
         ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, &res_id, it, 
                            data);
+
         EXIT;
         return 0;
 }

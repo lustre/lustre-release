@@ -2569,9 +2569,15 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         struct obd_ioctl_data *data = karg;
         int err = 0;
         ENTRY;
-        
-        MOD_INC_USE_COUNT;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        MOD_INC_USE_COUNT;
+#else
+	if (!try_module_get(THIS_MODULE)) {
+		CERROR("Can't get module. Is it alive?");
+		return -EINVAL;
+	}
+#endif
         switch (cmd) {
         case OBD_IOC_LOV_GET_CONFIG: {
                 char *buf;
@@ -2635,7 +2641,11 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 GOTO(out, err = -ENOTTY);
         }
 out:
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         MOD_DEC_USE_COUNT;
+#else
+	module_put(THIS_MODULE);
+#endif
         return err;
 }
 
@@ -2921,80 +2931,85 @@ int osc_cleanup(struct obd_device *obd, int flags)
 
 
 struct obd_ops osc_obd_ops = {
-        o_owner:        THIS_MODULE,
-        o_setup:        osc_setup,
-        o_cleanup:      osc_cleanup,
-        o_connect:      osc_connect,
-        o_disconnect:   osc_disconnect,
-        o_statfs:       osc_statfs,
-        o_packmd:       osc_packmd,
-        o_unpackmd:     osc_unpackmd,
-        o_create:       osc_create,
-        o_destroy:      osc_destroy,
-        o_getattr:      osc_getattr,
-        o_getattr_async:osc_getattr_async,
-        o_setattr:      osc_setattr,
-        o_brw:          osc_brw,
-        o_brw_async:    osc_brw_async,
-        .o_prep_async_page =            osc_prep_async_page,
-        .o_queue_async_io =             osc_queue_async_io,
-        .o_set_async_flags =            osc_set_async_flags,
-        .o_queue_group_io =             osc_queue_group_io,
-        .o_trigger_group_io =           osc_trigger_group_io,
-        .o_teardown_async_page =        osc_teardown_async_page,
-        o_punch:        osc_punch,
-        o_sync:         osc_sync,
-        o_enqueue:      osc_enqueue,
-        o_match:        osc_match,
-        o_change_cbdata:osc_change_cbdata,
-        o_cancel:       osc_cancel,
-        o_cancel_unused:osc_cancel_unused,
-        o_iocontrol:    osc_iocontrol,
-        o_get_info:     osc_get_info,
-        o_set_info:     osc_set_info,
-        o_import_event: osc_import_event,
-        o_llog_init:    osc_llog_init,
-        o_llog_finish:  osc_llog_finish,
+        .o_owner                = THIS_MODULE,
+        .o_setup                = osc_setup,
+        .o_cleanup              = osc_cleanup,
+        .o_connect              = osc_connect,
+        .o_disconnect           = osc_disconnect,
+        .o_statfs               = osc_statfs,
+        .o_packmd               = osc_packmd,
+        .o_unpackmd             = osc_unpackmd,
+        .o_create               = osc_create,
+        .o_destroy              = osc_destroy,
+        .o_getattr              = osc_getattr,
+        .o_getattr_async        = osc_getattr_async,
+        .o_setattr              = osc_setattr,
+        .o_brw                  = osc_brw,
+        .o_brw_async            = osc_brw_async,
+        .o_prep_async_page      = osc_prep_async_page,
+        .o_queue_async_io       = osc_queue_async_io,
+        .o_set_async_flags      = osc_set_async_flags,
+        .o_queue_group_io       = osc_queue_group_io,
+        .o_trigger_group_io     = osc_trigger_group_io,
+        .o_teardown_async_page  = osc_teardown_async_page,
+        .o_punch                = osc_punch,
+        .o_sync                 = osc_sync,
+        .o_enqueue              = osc_enqueue,
+        .o_match                = osc_match,
+        .o_change_cbdata        = osc_change_cbdata,
+        .o_cancel               = osc_cancel,
+        .o_cancel_unused        = osc_cancel_unused,
+        .o_iocontrol            = osc_iocontrol,
+        .o_get_info             = osc_get_info,
+        .o_set_info             = osc_set_info,
+        .o_import_event         = osc_import_event,
+        .o_llog_init            = osc_llog_init,
+        .o_llog_finish          = osc_llog_finish,
 };
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 struct obd_ops sanosc_obd_ops = {
-        o_owner:        THIS_MODULE,
-        o_cleanup:      client_obd_cleanup,
-        o_connect:      osc_connect,
-        o_disconnect:   client_disconnect_export,
-        o_statfs:       osc_statfs,
-        o_packmd:       osc_packmd,
-        o_unpackmd:     osc_unpackmd,
-        o_create:       osc_real_create,
-        o_destroy:      osc_destroy,
-        o_getattr:      osc_getattr,
-        o_getattr_async:osc_getattr_async,
-        o_setattr:      osc_setattr,
-        o_setup:        client_sanobd_setup,
-        o_brw:          sanosc_brw,
-        o_punch:        osc_punch,
-        o_sync:         osc_sync,
-        o_enqueue:      osc_enqueue,
-        o_match:        osc_match,
-        o_change_cbdata:osc_change_cbdata,
-        o_cancel:       osc_cancel,
-        o_cancel_unused:osc_cancel_unused,
-        o_iocontrol:    osc_iocontrol,
-        o_import_event: osc_import_event,
-        o_llog_init:    osc_llog_init,
-        o_llog_finish:  osc_llog_finish,
+        .o_owner                = THIS_MODULE,
+        .o_cleanup              = client_obd_cleanup,
+        .o_connect              = osc_connect,
+        .o_disconnect           = client_disconnect_export,
+        .o_statfs               = osc_statfs,
+        .o_packmd               = osc_packmd,
+        .o_unpackmd             = osc_unpackmd,
+        .o_create               = osc_real_create,
+        .o_destroy              = osc_destroy,
+        .o_getattr              = osc_getattr,
+        .o_getattr_async        = osc_getattr_async,
+        .o_setattr              = osc_setattr,
+        .o_setup                = client_sanobd_setup,
+        .o_brw                  = sanosc_brw,
+        .o_punch                = osc_punch,
+        .o_sync                 = osc_sync,
+        .o_enqueue              = osc_enqueue,
+        .o_match                = osc_match,
+        .o_change_cbdata        = osc_change_cbdata,
+        .o_cancel               = osc_cancel,
+        .o_cancel_unused        = osc_cancel_unused,
+        .o_iocontrol            = osc_iocontrol,
+        .o_import_event         = osc_import_event,
+        .o_llog_init            = osc_llog_init,
+        .o_llog_finish          = osc_llog_finish,
 };
 #endif
 
 int __init osc_init(void)
 {
-        struct lprocfs_static_vars lvars, sanlvars;
+        struct lprocfs_static_vars lvars;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        struct lprocfs_static_vars sanlvars;
+#endif
         int rc;
         ENTRY;
 
         lprocfs_init_vars(osc, &lvars);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         lprocfs_init_vars(osc, &sanlvars);
+#endif
 
         rc = class_register_type(&osc_obd_ops, lvars.module_vars,
                                  LUSTRE_OSC_NAME);
@@ -3011,6 +3026,7 @@ int __init osc_init(void)
         RETURN(rc);
 }
 
+#ifdef __KERNEL__
 static void /*__exit*/ osc_exit(void)
 {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -3019,7 +3035,6 @@ static void /*__exit*/ osc_exit(void)
         class_unregister_type(LUSTRE_OSC_NAME);
 }
 
-#ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Object Storage Client (OSC)");
 MODULE_LICENSE("GPL");

@@ -542,11 +542,11 @@ static int lprocfs_stats_seq_open(struct inode *inode, struct file *file)
 }
 
 struct file_operations lprocfs_stats_seq_fops = {
-        owner:   THIS_MODULE,
-        open:    lprocfs_stats_seq_open,
-        read:    seq_read,
-        llseek:  seq_lseek,
-        release: seq_release,
+        .owner   = THIS_MODULE,
+        .open    = lprocfs_stats_seq_open,
+        .read    = seq_read,
+        .llseek  = seq_lseek,
+        .release = seq_release,
 };
 
 int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,

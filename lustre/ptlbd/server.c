@@ -98,11 +98,11 @@ static int ptlbd_sv_cleanup(struct obd_device *obd, int flags)
 }
 
 static struct obd_ops ptlbd_sv_obd_ops = {
-        o_owner:        THIS_MODULE,
-        o_setup:        ptlbd_sv_setup,
-        o_cleanup:      ptlbd_sv_cleanup,
-        o_connect:      class_connect,
-        o_disconnect:   class_disconnect,
+        .o_owner        = THIS_MODULE,
+        .o_setup        = ptlbd_sv_setup,
+        .o_cleanup      = ptlbd_sv_cleanup,
+        .o_connect      = class_connect,
+        .o_disconnect   = class_disconnect,
 };
 
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };

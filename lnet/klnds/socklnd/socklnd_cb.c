@@ -24,6 +24,9 @@
  */
 
 #include "socknal.h"
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+# include <linux/syscalls.h>
+#endif
 
 /*
  *  LIB functions follow
@@ -90,6 +93,8 @@ ksocknal_cli(nal_cb_t *nal, unsigned long *flags)
 {
         ksock_nal_data_t *data = nal->nal_data;
 
+        /* OK to ignore 'flags'; we're only ever serialise threads and
+         * never need to lock out interrupts */
         spin_lock(&data->ksnd_nal_cb_lock);
 }
 

@@ -381,34 +381,22 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                          tmpex.l_extent.start, lock->l_policy_data.l_extent.end,
                          start, i, end);
 
-                ll_pgcache_lock(inode->i_mapping);
-                if (list_empty(&inode->i_mapping->dirty_pages) &&
-                    list_empty(&inode->i_mapping->clean_pages) &&
-                    list_empty(&inode->i_mapping->locked_pages)) {
+                if (!mapping_has_pages(inode->i_mapping)) {
                         CDEBUG(D_INODE|D_PAGE, "nothing left\n");
-                        ll_pgcache_unlock(inode->i_mapping);
                         break;
                 }
-                ll_pgcache_unlock(inode->i_mapping);
 
                 conditional_schedule();
 
                 page = find_get_page(inode->i_mapping, i);
                 if (page == NULL)
                         continue;
-                LL_CDEBUG_PAGE(D_PAGE, page, "lock page off %llu ext "LPU64"\n",
-                               (long long)i << PAGE_SHIFT,tmpex.l_extent.start);
+                LL_CDEBUG_PAGE(D_PAGE, page, "lock page idx %lu ext "LPU64"\n",
+                               i, tmpex.l_extent.start);
                 lock_page(page);
 
                 /* page->mapping to check with racing against teardown */
-                if (page->mapping && PageDirty(page) && !discard) {
-                        ClearPageDirty(page);
-                        LL_CDEBUG_PAGE(D_PAGE, page, "found dirty\n");
-                        ll_pgcache_lock(inode->i_mapping);
-                        list_del(&page->list);
-                        list_add(&page->list, &inode->i_mapping->locked_pages);
-                        ll_pgcache_unlock(inode->i_mapping);
-
+                if (!discard && clear_page_dirty_for_io(page)) {
                         rc = ll_call_writepage(inode, page);
                         if (rc != 0)
                                 CERROR("writepage of page %p failed: %d\n",
@@ -489,6 +477,7 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                 down(&inode->i_sem);
                 kms = ldlm_extent_shift_kms(lock,
                                             lsm->lsm_oinfo[stripe].loi_kms);
+		
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
@@ -813,7 +802,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         if (*ppos + count > maxbytes)
                 count = maxbytes - *ppos;
 
-        CDEBUG(D_PAGE, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
+        CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
                inode->i_ino, count, *ppos);
 
         /* generic_file_write handles O_APPEND after getting i_sem */
@@ -1349,25 +1338,28 @@ int ll_getattr(struct vfsmount *mnt, struct dentry *de,
 #endif
 
 struct file_operations ll_file_operations = {
-        read:           ll_file_read,
-        write:          ll_file_write,
-        ioctl:          ll_file_ioctl,
-        open:           ll_file_open,
-        release:        ll_file_release,
-        mmap:           generic_file_mmap,
-        llseek:         ll_file_seek,
-        fsync:          ll_fsync,
-        //lock:           ll_file_flock
+        .read           = ll_file_read,
+        .write          = ll_file_write,
+        .ioctl          = ll_file_ioctl,
+        .open           = ll_file_open,
+        .release        = ll_file_release,
+        .mmap           = generic_file_mmap,
+        .llseek         = ll_file_seek,
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        .sendfile       = generic_file_sendfile,
+#endif
+        .fsync          = ll_fsync,
+        //.lock           ll_file_flock
 };
 
 struct inode_operations ll_file_inode_operations = {
-        setattr_raw:    ll_setattr_raw,
-        setattr:        ll_setattr,
-        truncate:       ll_truncate,
+        .setattr_raw    = ll_setattr_raw,
+        .setattr        = ll_setattr,
+        .truncate       = ll_truncate,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        getattr_it:     ll_getattr,
+        .getattr_it     = ll_getattr,
 #else
-        revalidate_it:  ll_inode_revalidate_it,
+        .revalidate_it  = ll_inode_revalidate_it,
 #endif
 };
 

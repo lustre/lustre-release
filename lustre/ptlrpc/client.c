@@ -409,9 +409,9 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         
         if (req->rq_net_err && !req->rq_timedout) {
                 spin_unlock_irqrestore (&req->rq_lock, flags);
-                ptlrpc_expire_one_request(req); 
+                rc = ptlrpc_expire_one_request(req); 
                 spin_lock_irqsave (&req->rq_lock, flags);
-                GOTO(out, rc = 0);
+                GOTO(out, rc);
         }
 
         if (req->rq_err) {
@@ -631,6 +631,9 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 if (req->rq_phase == RQ_PHASE_INTERPRET)
                         GOTO(interpret, req->rq_status);
 
+                if (req->rq_net_err && !req->rq_timedout)
+                        ptlrpc_expire_one_request(req); 
+
                 if (req->rq_err) {
                         ptlrpc_unregister_reply(req);
                         if (req->rq_status == 0)
@@ -663,10 +666,6 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 }
 
                 if (req->rq_phase == RQ_PHASE_RPC) {
-                        if (req->rq_net_err && !req->rq_timedout) {
-                                ptlrpc_expire_one_request(req); 
-                                continue;
-                        }
                         if (req->rq_waiting || req->rq_resend) {
                                 int status;
 

@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Lustre Light Super operations
+ * Lustre Light common routines
  *
  *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
  *
@@ -48,6 +48,8 @@
 
 #include "llite_lib.h"
 
+unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
+                                            S_GMNAL | S_IBNAL);
 
 ptl_handle_ni_t         tcpnal_ni;
 struct task_struct     *current;
@@ -96,17 +98,20 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case TCPNAL:
                 /* userspace NAL */
         case SOCKNAL:
-                sprintf(str, "%u:%d.%d.%d.%d", (__u32)(nid >> 32),
-                        HIPQUAD(nid));
+                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u",
+                         (__u32)(nid >> 32), HIPQUAD(nid));
                 break;
         case QSWNAL:
         case GMNAL:
         case IBNAL:
         case SCIMACNAL:
-                sprintf(str, "%u:%u", (__u32)(nid >> 32), (__u32)nid);
+                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
+                         (__u32)(nid >> 32), (__u32)nid);
                 break;
         default:
-                return NULL;
+                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx",
+                         nal, (long long)nid);
+                break;
         }
         return str;
 }
@@ -222,7 +227,6 @@ int lllib_init(char *dumpfile)
         if (init_obdclass() ||
             init_lib_portals() ||
             ptlrpc_init() ||
-            ldlm_init() ||
             mdc_init() ||
             lov_init() ||
             osc_init())
@@ -263,6 +267,7 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
                 CERROR("Can't parse NID %s\n", g_zconf_mdsnid);
                 RETURN(-EINVAL);
         }
+
         nal = ptl_name2nal("tcp");
         if (nal <= 0) {
                 CERROR("Can't parse NAL tcp\n");

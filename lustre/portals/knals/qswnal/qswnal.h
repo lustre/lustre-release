@@ -71,8 +71,10 @@
 #define DEBUG_SUBSYSTEM S_QSWNAL
 
 #include <linux/kp30.h>
+#include <linux/kpr.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
+#include <portals/nal.h>
 
 #define KQSW_CHECKSUM   0
 #if KQSW_CHECKSUM

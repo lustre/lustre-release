@@ -84,7 +84,8 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
 
         /* FIXME: this should be a slab once we can validate slab addresses
          * without OOPSing */
-        OBD_ALLOC(c, sizeof(*c));
+        OBD_ALLOC_GFP(c, sizeof(*c), GFP_ATOMIC);
+	
         if (c == NULL)
                 GOTO(out, c);
 

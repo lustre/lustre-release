@@ -192,16 +192,14 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
 
         mds->mds_osc_obd = class_name2obd(lov_name);
         if (!mds->mds_osc_obd) {
-                CERROR("MDS cannot locate LOV %s\n",
-                       lov_name);
+                CERROR("MDS cannot locate LOV %s\n", lov_name);
                 mds->mds_osc_obd = ERR_PTR(-ENOTCONN);
                 RETURN(-ENOTCONN);
         }
 
         rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid);
         if (rc) {
-                CERROR("MDS cannot connect to LOV %s (%d)\n",
-                       lov_name, rc);
+                CERROR("MDS cannot connect to LOV %s (%d)\n", lov_name, rc);
                 mds->mds_osc_obd = ERR_PTR(rc);
                 RETURN(rc);
         }
@@ -571,8 +569,8 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
         if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC)
                 RETURN(0);
 
-        CWARN("converting LOV EA on %lu/%u from V0 to V1\n",
-              inode->i_ino, inode->i_generation);
+        CDEBUG(D_INODE, "converting LOV EA on %lu/%u from V0 to V1\n",
+               inode->i_ino, inode->i_generation);
         rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0)
                 GOTO(conv_end, rc);

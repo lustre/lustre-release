@@ -85,6 +85,9 @@ kqswnal_printf (nal_cb_t * nal, const char *fmt, ...)
         CDEBUG (D_NET, "%s", msg);
 }
 
+#if (defined(CONFIG_SPARC32) || defined(CONFIG_SPARC64))
+# error "Can't save/restore irq contexts in different procedures"
+#endif
 
 static void
 kqswnal_cli(nal_cb_t *nal, unsigned long *flags)

@@ -29,6 +29,7 @@
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 #include <linux/kp30.h>
+#include <linux/kpr.h>
 
 // Infiniband VAPI/EVAPI header files  
 // Mellanox MT23108 VAPI

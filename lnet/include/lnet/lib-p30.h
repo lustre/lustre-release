@@ -245,10 +245,14 @@ lib_me_free(nal_cb_t *nal, lib_me_t *me)
 static inline lib_msg_t *
 lib_msg_alloc(nal_cb_t *nal)
 {
-        /* NEVER called with statelock held */
+        /* NEVER called with statelock held; may be in interrupt... */
         lib_msg_t *msg;
 
-        PORTAL_ALLOC(msg, sizeof(*msg));
+        if (in_interrupt())
+                PORTAL_ALLOC_ATOMIC(msg, sizeof(*msg));
+        else
+                PORTAL_ALLOC(msg, sizeof(*msg));
+
         if (msg != NULL) {
                 /* NULL pointers, clear flags etc */
                 memset (msg, 0, sizeof (*msg));

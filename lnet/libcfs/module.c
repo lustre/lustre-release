@@ -47,6 +47,7 @@
 #include <portals/lib-p30.h>
 #include <portals/p30.h>
 #include <linux/kp30.h>
+#include <linux/kpr.h>
 #include <linux/portals_compat25.h>
 
 #define PORTAL_MINOR 240
@@ -59,7 +60,7 @@ struct nal_cmd_handler {
 };
 
 static struct nal_cmd_handler nal_cmd[NAL_MAX_NR + 1];
-struct semaphore nal_cmd_sem;
+static DECLARE_MUTEX(nal_cmd_sem);
 
 #ifdef PORTAL_DEBUG
 void kportal_assertion_failed(char *expr, char *file, const char *func,
@@ -799,11 +800,6 @@ EXPORT_SYMBOL(PtlFini);
 EXPORT_SYMBOL(PtlPut);
 EXPORT_SYMBOL(PtlGet);
 EXPORT_SYMBOL(ptl_err_str);
-EXPORT_SYMBOL(portal_subsystem_debug);
-EXPORT_SYMBOL(portal_debug);
-EXPORT_SYMBOL(portal_stack);
-EXPORT_SYMBOL(portal_printk);
-EXPORT_SYMBOL(portal_cerror);
 EXPORT_SYMBOL(PtlEQWait);
 EXPORT_SYMBOL(PtlEQFree);
 EXPORT_SYMBOL(PtlEQGet);
@@ -822,13 +818,12 @@ EXPORT_SYMBOL(lib_parse);
 EXPORT_SYMBOL(lib_fake_reply_msg);
 EXPORT_SYMBOL(lib_init);
 EXPORT_SYMBOL(lib_fini);
-EXPORT_SYMBOL(portal_kmemory);
+EXPORT_SYMBOL(dispatch_name);
 EXPORT_SYMBOL(kportal_daemonize);
 EXPORT_SYMBOL(kportal_blockallsigs);
 EXPORT_SYMBOL(kportal_nal_register);
 EXPORT_SYMBOL(kportal_nal_unregister);
 EXPORT_SYMBOL(kportal_assertion_failed);
-EXPORT_SYMBOL(dispatch_name);
 EXPORT_SYMBOL(kportal_get_ni);
 EXPORT_SYMBOL(kportal_put_ni);
 EXPORT_SYMBOL(kportal_nal_cmd);

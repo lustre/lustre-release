@@ -118,7 +118,7 @@ int compare(struct lov_user_md *lum_dir, struct lov_user_md *lum_file1,
 int main(int argc, char **argv)
 {
         DIR * dir;
-        struct lov_user_md *lum_dir, *lum_file1, *lum_file2=NULL;
+        struct lov_user_md *lum_dir, *lum_file1 = NULL, *lum_file2 = NULL;
         int rc;
         int lum_size;
         char *fname;

@@ -19,6 +19,9 @@ struct ldlm_namespace;
 struct ldlm_res_id;
 struct obd_import;
 
+unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
+                                            S_GMNAL | S_IBNAL);
+
 void *inter_module_get(char *arg)
 {
         if (!strcmp(arg, "tcpnal_ni"))
@@ -40,17 +43,20 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case TCPNAL:
                 /* userspace NAL */
         case SOCKNAL:
-                sprintf(str, "%u:%d.%d.%d.%d", (__u32)(nid >> 32),
-                        HIPQUAD(nid));
+                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u",
+                         (__u32)(nid >> 32), HIPQUAD(nid));
                 break;
         case QSWNAL:
         case GMNAL:
         case IBNAL:
         case SCIMACNAL:
-                sprintf(str, "%u:%u", (__u32)(nid >> 32), (__u32)nid);
+                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
+                         (__u32)(nid >> 32), (__u32)nid);
                 break;
         default:
-                return NULL;
+                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx",
+                         nal, (long long)nid);
+                break;
         }
         return str;
 }

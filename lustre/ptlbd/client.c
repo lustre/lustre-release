@@ -191,11 +191,11 @@ out_req:
 
 
 static struct obd_ops ptlbd_cl_obd_ops = {
-        o_owner:        THIS_MODULE,
-        o_setup:        ptlbd_cl_setup,
-        o_cleanup:      ptlbd_cl_cleanup,
-        o_connect:      ptlbd_cl_connect,
-        o_disconnect:   ptlbd_cl_disconnect,
+        .o_owner        = THIS_MODULE,
+        .o_setup        = ptlbd_cl_setup,
+        .o_cleanup      = ptlbd_cl_cleanup,
+        .o_connect      = ptlbd_cl_connect,
+        .o_disconnect   = ptlbd_cl_disconnect,
 };
 
 static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };

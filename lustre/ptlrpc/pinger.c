@@ -38,9 +38,6 @@
 static DECLARE_MUTEX(pinger_sem);
 static struct list_head pinger_imports = LIST_HEAD_INIT(pinger_imports);
 
-#ifdef __KERNEL__
-static struct ptlrpc_thread *pinger_thread = NULL;
-
 int ptlrpc_ping(struct obd_import *imp) 
 {
         struct ptlrpc_request *req;
@@ -67,6 +64,7 @@ int ptlrpc_ping(struct obd_import *imp)
         RETURN(rc);
 }
 
+#ifdef __KERNEL__
 static int ptlrpc_pinger_main(void *arg)
 {
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
@@ -82,7 +80,9 @@ static int ptlrpc_pinger_main(void *arg)
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 
-        THREAD_NAME(current->comm, "%s", data->name);
+        LASSERTF(strlen(data->name) < sizeof(current->comm),
+                 "name %d > len %d\n",strlen(data->name),sizeof(current->comm));
+        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "%s", data->name);
         unlock_kernel();
 
         /* Record that the thread is running */
@@ -169,6 +169,8 @@ static int ptlrpc_pinger_main(void *arg)
         CDEBUG(D_NET, "pinger thread exiting, process %d\n", current->pid);
         return 0;
 }
+
+static struct ptlrpc_thread *pinger_thread = NULL;
 
 int ptlrpc_start_pinger(void)
 {
@@ -279,7 +281,8 @@ void ptlrpc_pinger_wake_up()
 #endif
 }
 
-#else
+#else /* !__KERNEL__ */
+
 /* XXX
  * the current implementation of pinger in liblustre is not optimized
  */

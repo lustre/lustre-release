@@ -6,28 +6,6 @@
 
 #define PORTAL_DEBUG
 
-#ifdef __linux__
-# include <asm/types.h>
-# if defined(__powerpc__) && !defined(__KERNEL__)
-#  define __KERNEL__
-#  include <asm/timex.h>
-#  undef __KERNEL__
-# else
-#  include <asm/timex.h>
-# endif
-#else
-# include <sys/types.h>
-typedef u_int32_t __u32;
-typedef u_int64_t __u64;
-#endif
-
-#ifdef __KERNEL__
-# include <linux/time.h>
-#else
-# include <sys/time.h>
-# define do_gettimeofday(tv) gettimeofday(tv, NULL);
-#endif
-
 #ifndef offsetof
 # define offsetof(typ,memb)     ((int)((char *)&(((typ *)0)->memb)))
 #endif
@@ -220,11 +198,6 @@ do {                                                    \
                                                         \
 } while (0)
 
-typedef int (nal_cmd_handler_fn)(struct portals_cfg *, void *);
-int libcfs_nal_cmd_register(int nal, nal_cmd_handler_fn *handler, void *arg);
-int libcfs_nal_cmd(struct portals_cfg *pcfg);
-void libcfs_nal_cmd_unregister(int nal);
-
 struct portal_ioctl_data {
         __u32 ioc_len;
         __u32 ioc_version;
@@ -256,7 +229,6 @@ struct portal_ioctl_data {
 
         char ioc_bulk[0];
 };
-
 
 #ifdef __KERNEL__
 

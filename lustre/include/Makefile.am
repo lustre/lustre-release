@@ -6,4 +6,4 @@
 
 SUBDIRS = linux lustre
 EXTRA_DIST = config.h.in ioctl.h liblustre.h 
-include $(top_srcdir)/Rules
+

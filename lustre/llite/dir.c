@@ -90,7 +90,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 }
 
 struct address_space_operations ll_dir_aops = {
-        readpage: ll_dir_readpage,
+        .readpage  = ll_dir_readpage,
 };
 
 /*
@@ -480,7 +480,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 lmmsize = body->eadatasize;
                 if (lmmsize == 0)
-                        GOTO(out_get, rc = -ENODATA);                        
+                        GOTO(out_get, rc = -ENODATA);
 
                 lmm = lustre_msg_buf(request->rq_repmsg, 1, lmmsize);
                 LASSERT(lmm != NULL);
@@ -551,17 +551,17 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 int rc, len=0;
                 struct client_obd *cli;
                 struct obd_device *obd;
-                                                                                                                             
+
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
                 if (rc)
                         RETURN(rc);
                 data = (void *)buf;
 
                 obd = class_name2obd(data->ioc_inlbuf1);
-                                                                                                                             
+
                 if (!obd )
                         GOTO(out_ping, rc = -ENODEV);
-                                                                                                                             
+
                 if (!obd->obd_attached) {
                         CERROR("Device %d not attached\n", obd->obd_minor);
                         GOTO(out_ping, rc = -ENODEV);
@@ -580,7 +580,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 rc = ptlrpc_queue_wait(req);
 
-                ptlrpc_req_finished(req);                                                                                                 
+                ptlrpc_req_finished(req);
         out_ping:
                 obd_ioctl_freedata(buf, len);
                 return rc;
@@ -591,7 +591,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 int rc, len = 0;
                 char *bufs[2], *str;
                 int lens[2], size;
-                
+
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
                 if (rc)
                         RETURN(rc);
@@ -601,7 +601,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         obd_ioctl_freedata(buf, len);
                         RETURN(-EINVAL);
                 }
-                
+
                 lens[0] = data->ioc_inllen1;
                 bufs[0] = data->ioc_inlbuf1;
                 if (data->ioc_inllen2) {
@@ -612,22 +612,22 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         bufs[1] = NULL;
                 }
                 size = data->ioc_plen1;
-                req = ptlrpc_prep_req(sbi2mdc(sbi)->cl_import, LLOG_CATINFO, 
+                req = ptlrpc_prep_req(sbi2mdc(sbi)->cl_import, LLOG_CATINFO,
                                       2, lens, bufs);
                 if (!req)
                         GOTO(out_catinfo, rc = -ENOMEM);
                 req->rq_replen = lustre_msg_size(1, &size);
-               
+
                 rc = ptlrpc_queue_wait(req);
                 str = lustre_msg_string(req->rq_repmsg, 0, data->ioc_plen1);
                 if (!rc)
-                        rc = copy_to_user(data->ioc_pbuf1, str, 
+                        rc = copy_to_user(data->ioc_pbuf1, str,
                                           data->ioc_plen1);
                 ptlrpc_req_finished(req);
         out_catinfo:
                 obd_ioctl_freedata(buf, len);
                 RETURN(rc);
-        }                  
+        }
         default:
                 return obd_iocontrol(cmd, sbi->ll_osc_exp,0,NULL,(void *)arg);
         }
@@ -644,10 +644,10 @@ int ll_dir_release(struct inode *inode, struct file *file)
 }
 
 struct file_operations ll_dir_operations = {
-        open: ll_dir_open,
-        release: ll_dir_release,
-        read: generic_read_dir,
-        readdir: ll_readdir,
-        ioctl: ll_dir_ioctl
+        .open     = ll_dir_open,
+        .release  = ll_dir_release,
+        .read     = generic_read_dir,
+        .readdir  = ll_readdir,
+        .ioctl    = ll_dir_ioctl
 };
 

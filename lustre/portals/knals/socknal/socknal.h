@@ -61,8 +61,10 @@
 
 #include <linux/kp30.h>
 #include <linux/portals_compat25.h>
+#include <linux/kpr.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
+#include <portals/nal.h>
 #include <portals/socknal.h>
 
 #if CONFIG_SMP
@@ -105,6 +107,9 @@
 # define sk_prot        prot
 # define sk_sndbuf      sndbuf
 # define sk_socket      socket
+#endif
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0))
 # define sk_wmem_queued wmem_queued
 #endif
 

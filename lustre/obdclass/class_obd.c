@@ -63,7 +63,9 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_debug.h>
 #include <linux/lprocfs_status.h>
+#ifdef __KERNEL__
 #include <linux/lustre_build_version.h>
+#endif
 #include <portals/list.h>
 #include "llog_internal.h"
 
@@ -601,17 +603,14 @@ int init_obdclass(void)
         return 0;
 }
 
+/* liblustre doesn't call cleanup_obdclass, apparently.  we carry on in this
+ * ifdef to the end of the file to cover module and versioning goo.*/
 #ifdef __KERNEL__
-static void /*__exit*/ cleanup_obdclass(void)
-#else
+
 static void cleanup_obdclass(void)
-#endif
 {
-#ifdef __KERNEL__
         int i;
-#else
-        int i, leaked;
-#endif
+        int leaked;
         ENTRY;
 
         misc_deregister(&obd_psdev);
@@ -625,9 +624,7 @@ static void cleanup_obdclass(void)
         }
 
         obd_cleanup_caches();
-#ifdef __KERNEL__
         obd_sysctl_clean();
-#endif
 #ifdef LPROCFS
         if (proc_lustre_root) {
                 lprocfs_remove(proc_lustre_root);
@@ -638,18 +635,15 @@ static void cleanup_obdclass(void)
         class_handle_cleanup();
         class_exit_uuidlist();
 
-#ifndef __KERNEL__
         leaked = atomic_read(&obd_memory);
         CDEBUG(leaked ? D_ERROR : D_INFO,
                "obd mem max: %d leaked: %d\n", obd_memmax, leaked);
-#endif
 
         EXIT;
 }
 
 /* Check that we're building against the appropriate version of the Lustre
  * kernel patch */
-#ifdef __KERNEL__
 #include <linux/lustre_version.h>
 #define LUSTRE_MIN_VERSION 28
 #define LUSTRE_MAX_VERSION 34
@@ -658,11 +652,7 @@ static void cleanup_obdclass(void)
 #elif (LUSTRE_KERNEL_VERSION > LUSTRE_MAX_VERSION)
 # error Cannot continue: Your Lustre sources are older than the kernel patch
 #endif
- #else
-# warning "Lib Lustre - no versioning information"
-#endif
 
-#ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Class Driver Build Version: " BUILD_VERSION);
 MODULE_LICENSE("GPL");

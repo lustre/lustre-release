@@ -5,8 +5,10 @@
 
 SUBDIRS = . utils
 
+if MODULES
 if SNAPFS
 modulefs_DATA = snapfs$(KMODEXT)
+endif
 endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c

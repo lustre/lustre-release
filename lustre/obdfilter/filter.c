@@ -626,13 +626,13 @@ static int filter_prep_groups(struct obd_device *obd)
                 GOTO(cleanup_O0, rc);
 
         cleanup_O0:
-                dput(O0_dentry);
+                f_dput(O0_dentry);
         cleanup_R:
-                dput(dentry);
+                f_dput(dentry);
                 if (rc)
                         GOTO(cleanup, rc);
         } else {
-                dput(dentry);
+                f_dput(dentry);
         }
 
         OBD_ALLOC(filter->fo_last_objids, FILTER_GROUPS * sizeof(__u64));
@@ -1259,7 +1259,8 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
                 RETURN(-EINVAL);
 
-        if (!strcmp(lcfg->lcfg_inlbuf2, "ext3")) {
+        if (!strcmp(lcfg->lcfg_inlbuf2, "ext3") ||
+            !strcmp(lcfg->lcfg_inlbuf2, "ldiskfs")) {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         /* bug 1577: implement async-delete for 2.5 */
                 str = "errors=remount-ro,asyncdel";
@@ -1406,7 +1407,7 @@ static int filter_precleanup(struct obd_device *obd, int flags)
 /* Do extra sanity checks for grant accounting.  We do this at connect,
  * disconnect, and statfs RPC time, so it shouldn't be too bad.  We can
  * always get rid of it or turn it off when we know accounting is good. */
-static void filter_grant_sanity_check(struct obd_device *obd, char *func)
+static void filter_grant_sanity_check(struct obd_device *obd, const char *func)
 {
         struct filter_export_data *fed;
         struct obd_export *exp;
@@ -1745,12 +1746,15 @@ static void filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
         LASSERT(oa);
 
         memset(&doa, 0, sizeof(doa));
-        if (oa->o_valid & OBD_MD_FLGROUP)
+        if (oa->o_valid & OBD_MD_FLGROUP) {
+                doa.o_valid |= OBD_MD_FLGROUP;
                 doa.o_gr = oa->o_gr;
-        else
+        } else {
                 doa.o_gr = 0;
+        }
         doa.o_mode = S_IFREG;
-        last = filter_last_id(filter, &doa); /* FIXME: object groups */
+
+        last = filter_last_id(filter, &doa);
         CWARN("deleting orphan objects from "LPU64" to "LPU64"\n",
                oa->o_id + 1, last);
         for (id = oa->o_id + 1; id <= last; id++) {
@@ -1758,14 +1762,14 @@ static void filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
                 filter_destroy(exp, &doa, NULL, NULL);
         }
         spin_lock(&filter->fo_objidlock);
-        filter->fo_last_objids[0] = oa->o_id; /* FIXME: object groups */
+        filter->fo_last_objids[doa.o_gr] = oa->o_id;
         spin_unlock(&filter->fo_objidlock);
         EXIT;
 }
 
 /* returns a negative error or a nonnegative number of files to create */
 static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
-                                   int group)
+                                   obd_gr group)
 {
         struct obd_device *obd = exp->exp_obd;
         struct filter_obd *filter = &obd->u.filter;
@@ -1838,7 +1842,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 if (recreate_obj) {
                         __u64 last_id;
                         next_id = oa->o_id;
-                        last_id = filter_last_id(filter, NULL);
+                        last_id = filter_last_id(filter, oa);
                         if (next_id > last_id) {
                                 CERROR("Error: Trying to recreate obj greater"
                                        "than last id "LPD64" > "LPD64"\n",
@@ -1846,7 +1850,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                                 RETURN(-EINVAL);
                         }
                 } else
-                        next_id = filter_last_id(filter, NULL) + 1;
+                        next_id = filter_last_id(filter, oa) + 1;
 
                 CDEBUG(D_INFO, "precreate objid "LPU64"\n", next_id);
 
@@ -1890,7 +1894,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 }
 
                 if (!recreate_obj) {
-                        filter_set_last_id(filter, NULL, next_id);
+                        filter_set_last_id(filter, oa, next_id);
                         err = filter_update_last_objid(obd, group, 0);
                         if (err)
                                 CERROR("unable to write lastobjid "
@@ -2377,56 +2381,56 @@ static struct lvfs_callback_ops filter_lvfs_ops = {
 };
 
 static struct obd_ops filter_obd_ops = {
-        o_owner:          THIS_MODULE,
-        o_get_info:       filter_get_info,
-        o_set_info:       filter_set_info,
-        o_setup:          filter_setup,
-        o_precleanup:     filter_precleanup,
-        o_cleanup:        filter_cleanup,
-        o_connect:        filter_connect,
-        o_disconnect:     filter_disconnect,
-        o_statfs:         filter_statfs,
-        o_getattr:        filter_getattr,
-        o_unpackmd:       filter_unpackmd,
-        o_create:         filter_create,
-        o_setattr:        filter_setattr,
-        o_destroy:        filter_destroy,
-        o_brw:            filter_brw,
-        o_punch:          filter_truncate,
-        o_sync:           filter_sync,
-        o_preprw:         filter_preprw,
-        o_commitrw:       filter_commitrw,
-        o_destroy_export: filter_destroy_export,
-        o_llog_init:      filter_llog_init,
-        o_llog_finish:    filter_llog_finish,
-        o_iocontrol:      filter_iocontrol,
+        .o_owner          = THIS_MODULE,
+        .o_get_info       = filter_get_info,
+        .o_set_info       = filter_set_info,
+        .o_setup          = filter_setup,
+        .o_precleanup     = filter_precleanup,
+        .o_cleanup        = filter_cleanup,
+        .o_connect        = filter_connect,
+        .o_disconnect     = filter_disconnect,
+        .o_statfs         = filter_statfs,
+        .o_getattr        = filter_getattr,
+        .o_unpackmd       = filter_unpackmd,
+        .o_create         = filter_create,
+        .o_setattr        = filter_setattr,
+        .o_destroy        = filter_destroy,
+        .o_brw            = filter_brw,
+        .o_punch          = filter_truncate,
+        .o_sync           = filter_sync,
+        .o_preprw         = filter_preprw,
+        .o_commitrw       = filter_commitrw,
+        .o_destroy_export = filter_destroy_export,
+        .o_llog_init      = filter_llog_init,
+        .o_llog_finish    = filter_llog_finish,
+        .o_iocontrol      = filter_iocontrol,
 };
 
 static struct obd_ops filter_sanobd_ops = {
-        o_owner:          THIS_MODULE,
-        o_get_info:       filter_get_info,
-        o_set_info:       filter_set_info,
-        o_setup:          filter_san_setup,
-        o_precleanup:     filter_precleanup,
-        o_cleanup:        filter_cleanup,
-        o_connect:        filter_connect,
-        o_disconnect:     filter_disconnect,
-        o_statfs:         filter_statfs,
-        o_getattr:        filter_getattr,
-        o_unpackmd:       filter_unpackmd,
-        o_create:         filter_create,
-        o_setattr:        filter_setattr,
-        o_destroy:        filter_destroy,
-        o_brw:            filter_brw,
-        o_punch:          filter_truncate,
-        o_sync:           filter_sync,
-        o_preprw:         filter_preprw,
-        o_commitrw:       filter_commitrw,
-        o_san_preprw:     filter_san_preprw,
-        o_destroy_export: filter_destroy_export,
-        o_llog_init:      filter_llog_init,
-        o_llog_finish:    filter_llog_finish,
-        o_iocontrol:      filter_iocontrol,
+        .o_owner          = THIS_MODULE,
+        .o_get_info       = filter_get_info,
+        .o_set_info       = filter_set_info,
+        .o_setup          = filter_san_setup,
+        .o_precleanup     = filter_precleanup,
+        .o_cleanup        = filter_cleanup,
+        .o_connect        = filter_connect,
+        .o_disconnect     = filter_disconnect,
+        .o_statfs         = filter_statfs,
+        .o_getattr        = filter_getattr,
+        .o_unpackmd       = filter_unpackmd,
+        .o_create         = filter_create,
+        .o_setattr        = filter_setattr,
+        .o_destroy        = filter_destroy,
+        .o_brw            = filter_brw,
+        .o_punch          = filter_truncate,
+        .o_sync           = filter_sync,
+        .o_preprw         = filter_preprw,
+        .o_commitrw       = filter_commitrw,
+        .o_san_preprw     = filter_san_preprw,
+        .o_destroy_export = filter_destroy_export,
+        .o_llog_init      = filter_llog_init,
+        .o_llog_finish    = filter_llog_finish,
+        .o_iocontrol      = filter_iocontrol,
 };
 
 static int __init obdfilter_init(void)

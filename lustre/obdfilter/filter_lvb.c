@@ -179,14 +179,13 @@ static int filter_lvbo_update(struct ldlm_resource *res, struct lustre_msg *m,
                lvb->lvb_blocks, dentry->d_inode->i_blocks);
         lvb->lvb_blocks = dentry->d_inode->i_blocks;
 
- out_dentry:
+out_dentry:
         f_dput(dentry);
- out:
+
+out:
         up(&res->lr_lvb_sem);
         return rc;
 }
-
-
 
 struct ldlm_valblock_ops filter_lvbo = {
         lvbo_init: filter_lvbo_init,

@@ -7,3 +7,4 @@ Makefile
 Makefile.in
 .deps
 TAGS
+version_tag.pl

@@ -1,11 +1,11 @@
 # Lustre test Makefile
-DEFS=
-CPPFLAGS = -I. -I$(top_srcdir)/portals/include/ -I$(top_srcdir)/include -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
-CFLAGS := -g -Wall
+AM_CPPFLAGS = $(LLCPPFLAGS) -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64
+AM_CFLAGS = $(LLCFLAGS)
 # LDADD = -lldap
 # LDADD := -lreadline -ltermcap # -lefence
 EXTRA_DIST = $(pkgexample_SCRIPTS) $(noinst_SCRIPTS) $(noinst_DATA) \
 	sanity.sh rundbench
+if TESTS
 pkgexample_SCRIPTS = llmount.sh llmountcleanup.sh llecho.sh llechocleanup.sh
 pkgexample_SCRIPTS += local.sh echo.sh uml.sh lov.sh
 noinst_DATA =
@@ -22,6 +22,7 @@ noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify
 # noinst_PROGRAMS += ldaptest
 bin_PROGRAMS = mcreate munlink mkdirmany iopentest1 iopentest2
+endif # TESTS
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c
@@ -62,8 +63,7 @@ o_directory_SOURCES = o_directory.c
 utime_SOURCES = utime.c
 cmknod_SOURCES = cmknod.c
 mkdirdeep_SOURCES = mkdirdeep.c
-mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl
-mkdirdeep_CPPFLAGS=-I$(top_srcdir)/portals/include
+mkdirdeep_LDADD=-L$(top_builddir)/portals/utils -lptlctl $(LIBREADLINE)
 small_write_SOURCES = small_write.c
 sleeptest_SOURCES = sleeptest.c
 #write_append_truncate_SOURCES=write_append_truncate.c
@@ -75,5 +75,3 @@ sleeptest_SOURCES = sleeptest.c
 ll_sparseness_verify_SOURCES = ll_sparseness_verify.c
 ll_sparseness_write_SOURCES = ll_sparseness_write.c
 ll_dirstripe_verify_SOURCE = ll_dirstripe_verify.c
-
-include $(top_srcdir)/Rules

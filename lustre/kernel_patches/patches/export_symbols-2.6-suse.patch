@@ -1,7 +1,7 @@
-Index: linux-2.6.0/fs/filesystems.c
+Index: linux-2.6.4-51.0/fs/filesystems.c
 ===================================================================
---- linux-2.6.0.orig/fs/filesystems.c	2003-12-30 08:32:44.000000000 +0300
-+++ linux-2.6.0/fs/filesystems.c	2003-12-31 01:10:16.000000000 +0300
+--- linux-2.6.4-51.0.orig/fs/filesystems.c	2004-04-05 12:41:59.000000000 -0400
++++ linux-2.6.4-51.0/fs/filesystems.c	2004-04-15 14:59:56.000000000 -0400
 @@ -27,7 +27,9 @@
   */
  
@@ -13,11 +13,11 @@ Index: linux-2.6.0/fs/filesystems.c
  
  /* WARNING: This can be used only if we _already_ own a reference */
  void get_filesystem(struct file_system_type *fs)
-Index: linux-2.6.0/include/linux/fs.h
+Index: linux-2.6.4-51.0/include/linux/fs.h
 ===================================================================
---- linux-2.6.0.orig/include/linux/fs.h	2003-12-31 00:33:41.000000000 +0300
-+++ linux-2.6.0/include/linux/fs.h	2003-12-31 01:09:26.000000000 +0300
-@@ -1390,6 +1390,7 @@
+--- linux-2.6.4-51.0.orig/include/linux/fs.h	2004-04-15 14:59:50.000000000 -0400
++++ linux-2.6.4-51.0/include/linux/fs.h	2004-04-15 14:59:56.000000000 -0400
+@@ -1432,6 +1432,7 @@
  
  extern struct file_operations generic_ro_fops;
  
@@ -25,10 +25,10 @@ Index: linux-2.6.0/include/linux/fs.h
  #define special_file(m) (S_ISCHR(m)||S_ISBLK(m)||S_ISFIFO(m)||S_ISSOCK(m))
  
  extern int vfs_readlink(struct dentry *, char __user *, int, const char *);
-Index: linux-2.6.0/include/linux/ext2_fs_sb.h
+Index: linux-2.6.4-51.0/include/linux/ext2_fs_sb.h
 ===================================================================
---- linux-2.6.0.orig/include/linux/ext2_fs_sb.h	2003-05-15 20:10:39.000000000 +0400
-+++ linux-2.6.0/include/linux/ext2_fs_sb.h	2003-12-31 01:09:26.000000000 +0300
+--- linux-2.6.4-51.0.orig/include/linux/ext2_fs_sb.h	2004-04-05 12:42:07.000000000 -0400
++++ linux-2.6.4-51.0/include/linux/ext2_fs_sb.h	2004-04-15 14:59:56.000000000 -0400
 @@ -16,9 +16,11 @@
  #ifndef _LINUX_EXT2_FS_SB
  #define _LINUX_EXT2_FS_SB
@@ -42,3 +42,12 @@ Index: linux-2.6.0/include/linux/ext2_fs_sb.h
  /*
   * second extended-fs super-block data in memory
   */
+Index: linux-2.6.4-51.0/kernel/kallsyms.c
+===================================================================
+--- linux-2.6.4-51.0.orig/kernel/kallsyms.c	2004-04-05 12:42:08.000000000 -0400
++++ linux-2.6.4-51.0/kernel/kallsyms.c	2004-04-15 15:00:56.000000000 -0400
+@@ -329,3 +329,4 @@
+ 
+ EXPORT_SYMBOL(kallsyms_lookup);
+ EXPORT_SYMBOL(__print_symbol);
++EXPORT_SYMBOL(kernel_text_address);

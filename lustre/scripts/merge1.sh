@@ -70,4 +70,4 @@ else
     echo "No conflicts found"
     rm -f $CONFLICTS
 fi
-echo "Test, commit and then run merge2.sh (no arguments)"
+echo "Build, test, commit and then run merge2.sh (no arguments)"

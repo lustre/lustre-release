@@ -33,8 +33,6 @@
 #include <linux/stat.h>
 #include <linux/sched.h>
 #include <linux/smp_lock.h>
-#include <linux/ext2_fs.h>
-#include <linux/quotaops.h>
 #include <linux/proc_fs.h>
 #include <linux/init.h>
 #include <asm/unistd.h>
@@ -491,18 +489,18 @@ static int echo_cleanup(struct obd_device *obd, int flags)
 }
 
 static struct obd_ops echo_obd_ops = {
-        o_owner:           THIS_MODULE,
-        o_connect:         echo_connect,
-        o_disconnect:      echo_disconnect,
-        o_destroy_export:  echo_destroy_export,
-        o_create:          echo_create,
-        o_destroy:         echo_destroy,
-        o_getattr:         echo_getattr,
-        o_setattr:         echo_setattr,
-        o_preprw:          echo_preprw,
-        o_commitrw:        echo_commitrw,
-        o_setup:           echo_setup,
-        o_cleanup:         echo_cleanup
+        .o_owner           = THIS_MODULE,
+        .o_connect         = echo_connect,
+        .o_disconnect      = echo_disconnect,
+        .o_destroy_export  = echo_destroy_export,
+        .o_create          = echo_create,
+        .o_destroy         = echo_destroy,
+        .o_getattr         = echo_getattr,
+        .o_setattr         = echo_setattr,
+        .o_preprw          = echo_preprw,
+        .o_commitrw        = echo_commitrw,
+        .o_setup           = echo_setup,
+        .o_cleanup         = echo_cleanup
 };
 
 extern int echo_client_init(void);

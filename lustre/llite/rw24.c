@@ -177,12 +177,12 @@ static int ll_direct_IO_24(int rw,
 }
 
 struct address_space_operations ll_aops = {
-        readpage: ll_readpage,
-        direct_IO: ll_direct_IO_24,
-        writepage: ll_writepage_24,
-        prepare_write: ll_prepare_write,
-        commit_write: ll_commit_write,
-        removepage: ll_removepage,
-        sync_page: NULL,
-        bmap: NULL
+        .readpage       = ll_readpage,
+        .direct_IO      = ll_direct_IO_24,
+        .writepage      = ll_writepage_24,
+        .prepare_write  = ll_prepare_write,
+        .commit_write   = ll_commit_write,
+        .removepage     = ll_removepage,
+        .sync_page      = NULL,
+        .bmap           = NULL
 };

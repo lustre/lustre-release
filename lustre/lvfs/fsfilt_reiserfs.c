@@ -213,19 +213,19 @@ static int fsfilt_reiserfs_get_op_len(int op, struct fsfilt_objinfo *fso,
         return 0;
 }
 static struct fsfilt_operations fsfilt_reiserfs_ops = {
-        fs_type:                "reiserfs",
-        fs_owner:               THIS_MODULE,
-        fs_start:               fsfilt_reiserfs_start,
-        fs_brw_start:           fsfilt_reiserfs_brw_start,
-        fs_commit:              fsfilt_reiserfs_commit,
-        fs_setattr:             fsfilt_reiserfs_setattr,
-        fs_set_md:              fsfilt_reiserfs_set_md,
-        fs_get_md:              fsfilt_reiserfs_get_md,
-        fs_readpage:            fsfilt_reiserfs_readpage,
-        fs_add_journal_cb:      fsfilt_reiserfs_add_journal_cb,
-        fs_statfs:              fsfilt_reiserfs_statfs,
-        fs_sync:                fsfilt_reiserfs_sync,
-        fs_get_op_len:          fsfilt_reiserfs_get_op_len,
+        .fs_type                = "reiserfs",
+        .fs_owner               = THIS_MODULE,
+        .fs_start               = fsfilt_reiserfs_start,
+        .fs_brw_start           = fsfilt_reiserfs_brw_start,
+        .fs_commit              = fsfilt_reiserfs_commit,
+        .fs_setattr             = fsfilt_reiserfs_setattr,
+        .fs_set_md              = fsfilt_reiserfs_set_md,
+        .fs_get_md              = fsfilt_reiserfs_get_md,
+        .fs_readpage            = fsfilt_reiserfs_readpage,
+        .fs_add_journal_cb      = fsfilt_reiserfs_add_journal_cb,
+        .fs_statfs              = fsfilt_reiserfs_statfs,
+        .fs_sync                = fsfilt_reiserfs_sync,
+        .fs_get_op_len          = fsfilt_reiserfs_get_op_len,
 };
 
 static int __init fsfilt_reiserfs_init(void)

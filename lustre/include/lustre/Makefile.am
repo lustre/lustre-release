@@ -5,3 +5,5 @@
 
 
 pkginclude_HEADERS = lustre_user.h liblustreapi.h
+
+EXTRA_DIST = $(pkginclude_HEADERS)
