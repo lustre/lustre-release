@@ -17,34 +17,34 @@ do {						\
 
 #define CHECK_DEFINE(a)						\
 do {								\
-	printf ("        LASSERT ("#a" == "STRINGIFY(a)");\n");	\
+	printf("        LASSERT ("#a" == "STRINGIFY(a)");\n");	\
 } while (0)
 
 #define CHECK_VALUE(a)					\
 do {							\
-	printf ("        LASSERT ("#a" == %d);\n", a);	\
+	printf("        LASSERT ("#a" == %d);\n", a);	\
 } while (0)
 
 #define CHECK_MEMBER_OFFSET(s,m)		\
 do {						\
-	CHECK_VALUE (offsetof (struct s, m));	\
+	CHECK_VALUE(offsetof (struct s, m));	\
 } while (0)
 
 #define CHECK_MEMBER_SIZEOF(s,m)			\
 do {							\
-	CHECK_VALUE (sizeof (((struct s *)0)->m));	\
+	CHECK_VALUE((int)sizeof(((struct s *)0)->m));	\
 } while (0)
 
 #define CHECK_MEMBER(s,m)			\
 do {						\
-	CHECK_MEMBER_OFFSET (s, m);		\
-	CHECK_MEMBER_SIZEOF (s, m);		\
+	CHECK_MEMBER_OFFSET(s, m);		\
+	CHECK_MEMBER_SIZEOF(s, m);		\
 } while (0)
 
 #define CHECK_STRUCT(s)				\
 do {						\
-        COMMENT ("Checks for struct "#s);	\
-	CHECK_VALUE (sizeof (struct s));	\
+        COMMENT("Checks for struct "#s);	\
+	CHECK_VALUE((int)sizeof(struct s));	\
 } while (0)
 
 

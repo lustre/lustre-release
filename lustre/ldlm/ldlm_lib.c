@@ -32,7 +32,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_net.h>
 
-int client_import_connect(struct lustre_handle *dlm_handle, 
+int client_import_connect(struct lustre_handle *dlm_handle,
                           struct obd_device *obd,
                           struct obd_uuid *cluuid)
 {
@@ -74,6 +74,8 @@ int client_import_connect(struct lustre_handle *dlm_handle,
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
 
+        lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_PEER);
+
         imp->imp_dlm_handle = *dlm_handle;
 
         imp->imp_level = LUSTRE_CONN_CON;
@@ -92,6 +94,7 @@ int client_import_connect(struct lustre_handle *dlm_handle,
                 imp->imp_replayable = 1;
                 CDEBUG(D_HA, "connected to replayable target: %s\n",
                        imp->imp_target_uuid.uuid);
+                ptlrpc_pinger_add_import(imp);
         }
         imp->imp_level = LUSTRE_CONN_FULL;
         imp->imp_remote_handle = request->rq_repmsg->handle;
@@ -144,14 +147,14 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
         if (obd->obd_namespace != NULL) {
                 /* obd_no_recov == local only */
                 ldlm_cli_cancel_unused(obd->obd_namespace, NULL,
-                                       obd->obd_no_recov);
+                                       obd->obd_no_recov, NULL);
                 ldlm_namespace_free(obd->obd_namespace);
                 obd->obd_namespace = NULL;
         }
 
         /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
         if (obd->obd_no_recov) {
-                ptlrpc_abort_inflight(imp);
+                ptlrpc_set_import_active(imp, 0);
         } else {
                 request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
                 if (!request)
@@ -159,13 +162,13 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
 
                 request->rq_replen = lustre_msg_size(0, NULL);
 
-                /* Process disconnects even if we're waiting for recovery. */
-                request->rq_level = LUSTRE_CONN_RECOVD;
-
                 rc = ptlrpc_queue_wait(request);
                 if (rc)
                         GOTO(out_req, rc);
         }
+        if (imp->imp_replayable)
+                ptlrpc_pinger_del_import(imp);
+
         EXIT;
  out_req:
         if (request)
@@ -228,36 +231,32 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         struct obd_uuid remote_uuid;
         struct list_head *p;
         char *str, *tmp;
-        int rc = 0, i, abort_recovery;
+        int rc = 0, abort_recovery;
+
         ENTRY;
 
         LASSERT_REQSWAB (req, 0);
-        str = lustre_msg_string (req->rq_reqmsg, 0, sizeof (tgtuuid.uuid) - 1);
+        str = lustre_msg_string(req->rq_reqmsg, 0, sizeof(tgtuuid) - 1);
         if (str == NULL) {
                 CERROR("bad target UUID for connect\n");
                 GOTO(out, rc = -EINVAL);
         }
+
         obd_str2uuid (&tgtuuid, str);
-
-        LASSERT_REQSWAB (req, 1);
-        str = lustre_msg_string (req->rq_reqmsg, 1, sizeof (cluuid.uuid) - 1);
-        if (str == NULL) {
-                CERROR("bad client UUID for connect\n");
-                GOTO(out, rc = -EINVAL);
-        }
-        obd_str2uuid (&cluuid, str);
-
-        i = class_uuid2dev(&tgtuuid);
-        if (i == -1) {
-                CERROR("UUID '%s' not found for connect\n", tgtuuid.uuid);
-                GOTO(out, rc = -ENODEV);
-        }
-
-        target = &obd_dev[i];
+        target = class_uuid2obd(&tgtuuid);
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 CERROR("UUID '%s' is not available for connect\n", str);
                 GOTO(out, rc = -ENODEV);
         }
+
+        LASSERT_REQSWAB (req, 1);
+        str = lustre_msg_string(req->rq_reqmsg, 1, sizeof(cluuid) - 1);
+        if (str == NULL) {
+                CERROR("bad client UUID for connect\n");
+                GOTO(out, rc = -EINVAL);
+        }
+
+        obd_str2uuid (&cluuid, str);
 
         /* XXX extract a nettype and format accordingly */
         snprintf(remote_uuid.uuid, sizeof remote_uuid,
@@ -468,6 +467,7 @@ void target_abort_recovery(void *data)
         class_disconnect_exports(obd, 0);
         abort_delayed_replies(obd);
         abort_recovery_queue(obd);
+        ptlrpc_run_recovery_over_upcall(obd);
 }
 
 static void target_recovery_expired(unsigned long castmeharder)
@@ -489,8 +489,7 @@ static void reset_recovery_timer(struct obd_device *obd)
 
         if (!recovering)
                 return;
-        CDEBUG(D_ERROR, "timer will expire in %ld seconds\n",
-               OBD_RECOVERY_TIMEOUT / HZ);
+        CERROR("timer will expire in %ld seconds\n", OBD_RECOVERY_TIMEOUT / HZ);
         mod_timer(&obd->obd_recovery_timer, jiffies + OBD_RECOVERY_TIMEOUT);
 }
 
@@ -713,8 +712,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         if (recovery_done) {
                 struct list_head *tmp, *n;
                 ldlm_reprocess_all_ns(req->rq_export->exp_obd->obd_namespace);
-                CDEBUG(D_ERROR,
-                       "%s: all clients recovered, sending delayed replies\n",
+                CERROR("%s: all clients recovered, sending delayed replies\n",
                        obd->obd_name);
                 obd->obd_recovering = 0;
                 list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
