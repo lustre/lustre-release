@@ -10,6 +10,7 @@ FAIL_CLIENTS=${FAIL_CLIENTS:-""}
 NETTYPE=${NETTYPE:-tcp}
 TIMEOUT=${TIMEOUT:-30}
 PTLDEBUG=${PTLDEBUG:-0}
+SUBSYSTEM=${SUBSYSTEM:-0}
 MOUNT=${MOUNT:-"/mnt/lustre"}
 #CLIENT_UPCALL=${CLIENT_UPCALL:-`pwd`/client-upcall-mdev.sh}
 UPCALL=${CLIENT_UPCALL:-`pwd`/replay-single-upcall.sh}
