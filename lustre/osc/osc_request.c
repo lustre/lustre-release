@@ -680,6 +680,15 @@ static int osc_cancel(struct lustre_handle *oconn, struct lov_stripe_md *md,
         RETURN(0);
 }
 
+static int osc_cancel_unused(struct lustre_handle *connh,
+                             struct lov_stripe_md *lsm)
+{
+        struct obd_device *obddev = class_conn2obd(connh);
+        __u64 res_id[RES_NAME_SIZE] = { lsm->lsm_object_id };
+
+        return ldlm_cli_cancel_unused(obddev->obd_namespace, res_id);
+}
+
 static int osc_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
 {
         struct ptlrpc_request *request;
@@ -794,6 +803,7 @@ struct obd_ops osc_obd_ops = {
         o_punch:        osc_punch,
         o_enqueue:      osc_enqueue,
         o_cancel:       osc_cancel,
+        o_cancel_unused: osc_cancel_unused,
         o_iocontrol:    osc_iocontrol
 };
 

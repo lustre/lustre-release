@@ -286,7 +286,9 @@ static int ll_file_release(struct inode *inode, struct file *file)
         }
         ptlrpc_req_finished(fd->fd_req);
 
-        //ldlm_cli_cancel_unused();
+        rc = obd_cancel_unused(ll_i2obdconn(inode), lli->lli_smd);
+        if (rc)
+                CERROR("obd_cancel_unused: %d\n", rc);
 
         EXIT;
 

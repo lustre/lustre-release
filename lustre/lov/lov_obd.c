@@ -806,6 +806,40 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         RETURN(rc);
 }
 
+static int lov_cancel_unused(struct lustre_handle *conn,
+                             struct lov_stripe_md *lsm)
+{
+        struct obd_export *export = class_conn2export(conn);
+        struct lov_obd *lov;
+        struct lov_oinfo *loi;
+        int rc = 0, i;
+        ENTRY;
+
+        if (!lsm) {
+                CERROR("LOV requires striping ea for lock cancellation\n");
+                RETURN(-EINVAL);
+        }
+
+        if (!export || !export->exp_obd)
+                RETURN(-ENODEV);
+
+        lov = &export->exp_obd->u.lov;
+        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
+                struct lov_stripe_md submd;
+
+                submd.lsm_object_id = loi->loi_id;
+                submd.lsm_mds_easize = lov_mds_md_size(lsm->lsm_ost_count);
+                submd.lsm_stripe_count = 0;
+                rc = obd_cancel_unused(&lov->tgts[loi->loi_ost_idx].conn,
+                                       &submd);
+                if (rc)
+                        CERROR("Error cancel unused objid "LPX64" subobj "LPX64
+                               " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
+                               loi->loi_id, loi->loi_ost_idx, rc);
+        }
+        RETURN(rc);
+}
+
 static int lov_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
 {
         struct obd_export *export = class_conn2export(conn);
@@ -869,7 +903,8 @@ struct obd_ops lov_obd_ops = {
         o_brw:         lov_brw,
         o_punch:       lov_punch,
         o_enqueue:     lov_enqueue,
-        o_cancel:      lov_cancel
+        o_cancel:      lov_cancel,
+        o_cancel_unused: lov_cancel_unused
 };
 
 

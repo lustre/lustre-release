@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001  Cluster File Systems, Inc.
+ * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
  *
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
@@ -26,7 +26,7 @@ struct obd_type {
         int  typ_refcnt;
 };
 
-struct brw_page { 
+struct brw_page {
         struct page *pg;
         obd_size count;
         obd_off  off;
@@ -145,7 +145,7 @@ struct echo_obd {
 struct recovd_obd {
         __u32                 recovd_phase;
         __u32                 recovd_next_phase;
-        __u32                 recovd_flags; 
+        __u32                 recovd_flags;
         struct recovd_data   *recovd_current_rd;
         spinlock_t            recovd_lock;
         struct list_head      recovd_managed_items; /* items managed  */
@@ -174,9 +174,9 @@ struct ost_obd {
 };
 
 
-struct lov_tgt_desc { 
+struct lov_tgt_desc {
         uuid_t uuid;
-        struct lustre_handle conn; 
+        struct lustre_handle conn;
 };
 
 struct lov_obd {
@@ -272,7 +272,7 @@ struct obd_ops {
                        struct lov_stripe_md *);
         int (*o_brw)(int rw, struct lustre_handle *conn,
                      struct lov_stripe_md *md, obd_count oa_bufs,
-                     struct brw_page *pgarr, brw_callback_t callback, 
+                     struct brw_page *pgarr, brw_callback_t callback,
                      struct io_cb_data *data);
         int (*o_punch)(struct lustre_handle *conn, struct obdo *tgt,
                        struct lov_stripe_md *md, obd_size count,
@@ -296,11 +296,13 @@ struct obd_ops {
                           int niocount, struct niobuf_local *local,
                           void *desc_private);
         int (*o_enqueue)(struct lustre_handle *conn, struct lov_stripe_md *md,
-                         struct lustre_handle *parent_lock, 
+                         struct lustre_handle *parent_lock,
                          __u32 type, void *cookie, int cookielen, __u32 mode,
                          int *flags, void *cb, void *data, int datalen,
                          struct lustre_handle *lockh);
-        int (*o_cancel)(struct lustre_handle *, struct lov_stripe_md *md, __u32 mode, struct lustre_handle *);
+        int (*o_cancel)(struct lustre_handle *, struct lov_stripe_md *md,
+                        __u32 mode, struct lustre_handle *);
+        int (*o_cancel_unused)(struct lustre_handle *, struct lov_stripe_md *);
 };
 
 static inline void *mds_fs_start(struct mds_obd *mds, struct inode *inode,
