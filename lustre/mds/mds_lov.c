@@ -397,6 +397,14 @@ int mds_lov_connect(struct obd_device *obd)
         }
         mds->mds_osc_exp = class_conn2export(&conn);
 
+#ifdef ENABLE_ORPHANS
+        /* before this set info call is made, we must initialize the logging */
+        rc = llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count);
+        if (rc) {
+                CERROR("failed to initialize catalog %d\n", rc);
+                RETURN(rc);
+        }
+#endif
         rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"), "mds_conn",
                           0, NULL);
         if (rc) {
@@ -456,8 +464,6 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (mds->mds_cfg_llh)
                         RETURN(-EBUSY);
 
-                obd->obd_log_exp = class_export_get(exp);
-
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
                 rc = llog_create(obd, &mds->mds_cfg_llh, NULL, name);
                 if (rc == 0)
@@ -480,8 +486,6 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 
                 mds->mds_cfg_llh = NULL;
-                class_export_put(obd->obd_log_exp);
-                obd->obd_log_exp = NULL;
                 RETURN(rc);
         }
 
