@@ -181,8 +181,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 CERROR("request allocation out of memory\n");
                 GOTO(err_alloc_req, rc = -ENOMEM);
         }
-        rc = lustre_pack_msg(3, lengths, NULL, &req->rq_replen,
-                                      &req->rq_repmsg);
+        rc = lustre_pack_reply(req, 3, lengths, NULL);
         if (rc) {
                 CERROR("cannot pack request %d\n", rc);
                 GOTO(out_free_req, rc);

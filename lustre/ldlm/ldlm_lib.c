@@ -428,7 +428,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         memcpy(&conn, tmp, sizeof conn);
 
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
+        rc = lustre_pack_reply(req, 0, NULL, NULL);
         if (rc)
                 GOTO(out, rc);
 
@@ -549,7 +549,7 @@ int target_handle_disconnect(struct ptlrpc_request *req)
         int rc;
         ENTRY;
 
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
+        rc = lustre_pack_reply(req, 0, NULL, NULL);
         if (rc)
                 RETURN(rc);
 
@@ -606,8 +606,7 @@ static void abort_recovery_queue(struct obd_device *obd)
                 DEBUG_REQ(D_ERROR, req, "aborted:");
                 req->rq_status = -ENOTCONN;
                 req->rq_type = PTL_RPC_MSG_ERR;
-                rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen,
-                                     &req->rq_repmsg);
+                rc = lustre_pack_reply(req, 0, NULL, NULL);
                 if (rc == 0) {
                         ptlrpc_reply(req);
                 } else {
@@ -899,13 +898,13 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
 
         if (rc) {
                 /* Just like ptlrpc_error, but without the sending. */
-                lustre_pack_msg(0, NULL, NULL, &req->rq_replen,
-                                &req->rq_repmsg);
+                rc = lustre_pack_reply(req, 0, NULL, NULL);
+                LASSERT(rc == 0); /* XXX handle this */
                 req->rq_type = PTL_RPC_MSG_ERR;
         }
 
         LASSERT(list_empty(&req->rq_list));
-        /* XXX just like the request-dup code in queue_recovery_request */
+        /* XXX a bit like the request-dup code in queue_recovery_request */
         OBD_ALLOC(saved_req, sizeof *saved_req);
         if (!saved_req)
                 LBUG();
@@ -1114,7 +1113,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
 int target_handle_ping(struct ptlrpc_request *req)
 {
-        return lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
+        return lustre_pack_reply(req, 0, NULL, NULL);
 }
 
 void *ldlm_put_lock_into_req(struct ptlrpc_request *req,
