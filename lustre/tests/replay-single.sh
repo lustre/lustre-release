@@ -107,7 +107,7 @@ test_2b() {
 }
 run_test 2b "touch"
 
-test_3() {
+test_3a() {
     replay_barrier mds
     mcreate $DIR/$tfile
     o_directory $DIR/$tfile
@@ -115,7 +115,32 @@ test_3() {
     $CHECKSTAT -t file $DIR/$tfile || return 2
     rm $DIR/$tfile
 }
-run_test 3 "replay failed open"
+run_test 3a "replay failed open(O_DIRECTORY)"
+
+test_3b() {
+    replay_barrier mds
+#define OBD_FAIL_MDS_OPEN_PACK | OBD_FAIL_ONCE
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000114"
+    touch $DIR/$tfile
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+    fail mds
+    $CHECKSTAT -t file $DIR/$tfile && return 2
+    return 0
+}
+run_test 3b "replay failed open -ENOMEM"
+
+test_3c() {
+    replay_barrier mds
+#define OBD_FAIL_MDS_ALLOC_OBDO | OBD_FAIL_ONCE
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000128"
+    touch $DIR/$tfile
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+    fail mds
+
+    $CHECKSTAT -t file $DIR/$tfile && return 2
+    return 0
+}
+run_test 3c "replay failed open -ENOMEM"
 
 test_4() {
     replay_barrier mds
@@ -124,7 +149,7 @@ test_4() {
     done 
     fail mds
     for i in `seq 10`; do
-      grep -q "tag-$i" $DIR/$tfile-$i || error "f1c-$i"
+      grep -q "tag-$i" $DIR/$tfile-$i || error "$tfile-$i"
     done 
 }
 run_test 4 "|x| 10 open(O_CREAT)s"
