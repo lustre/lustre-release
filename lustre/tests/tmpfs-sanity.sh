@@ -74,9 +74,20 @@ test_list_xattr()
 	message=$2
 
 	echo -n "$message..."
-	`$setattr -n list_name0 -v list_value0 $file 2>/dev/null`
-	`$setattr -n list_name1 -v list_value1 $file 2>/dev/null`
-	`$setattr -n list_name2 -v list_value2 $file 2>/dev/null`
+	`$setattr -n list_name0 -v list_value0 $file 2>/dev/null` || {
+		echo "failed"
+		return 1
+	}
+	
+	`$setattr -n list_name1 -v list_value1 $file 2>/dev/null` || {
+		echo "failed"
+		return 1
+	}
+	
+	`$setattr -n list_name2 -v list_value2 $file 2>/dev/null` || {
+		echo "failed"
+    		return 1
+	}
 
 	values=`$getattr -d -m ".*" $file 2>/dev/null | grep -v "^#" | \
 grep list_name | sed 's/\"//g'`
@@ -103,12 +114,12 @@ test_individual()
 
 	test_set_xattr test_name0 test_value0 $file "Create new attribute" &&
 	test_set_xattr test_name0 test_value012345 $file "Expanding attribute" &&
-	test_set_xattr test_name0 test_value0 $file "Shrinking attribute" &&
+	test_set_xattr test_name0 test_value0123 $file "Shrinking attribute" &&
 	test_del_xattr test_name0 $file "Delete attribute"
 	test_list_xattr $file "Getting list of attributes"
 }
 
-# checking xattr code as whole working. Not implemented yet.
+# checking xattr code as a whole. Not implemented yet.
 test_composite()
 {
 	return 0
