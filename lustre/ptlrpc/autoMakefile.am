@@ -4,15 +4,15 @@
 # See the file COPYING in this distribution
 
 LDLM_COMM_SOURCES= $(top_srcdir)/lustre/ldlm/l_lock.c		\
-	$(top_srcdir)/lustre/ldlm/lustre/ldlm_lock.c		\
-	$(top_srcdir)/lustre/ldlm/lustre/ldlm_resource.c	\
-	$(top_srcdir)/lustre/ldlm/lustre/ldlm_lib.c		\
-	$(top_srcdir)/lustre/ldlm/lustre/ldlm_plain.c		\
-	$(top_srcdir)/lustre/ldlm/lustre/ldlm_extent.c		\
-	$(top_srcdir)/lustre/ldlm/lustre/ldlm_request.c		\
-	$(top_srcdir)/lustre/ldlm/lustre/ldlm_lockd.c		\
-	$(top_srcdir)/lustre/ldlm/lustre/ldlm_internal.h	\
-	$(top_srcdir)/lustre/ldlm/lustre/ldlm_inodebits.c
+	$(top_srcdir)/lustre/ldlm/ldlm_lock.c		\
+	$(top_srcdir)/lustre/ldlm/ldlm_resource.c	\
+	$(top_srcdir)/lustre/ldlm/ldlm_lib.c		\
+	$(top_srcdir)/lustre/ldlm/ldlm_plain.c		\
+	$(top_srcdir)/lustre/ldlm/ldlm_extent.c		\
+	$(top_srcdir)/lustre/ldlm/ldlm_request.c		\
+	$(top_srcdir)/lustre/ldlm/ldlm_lockd.c		\
+	$(top_srcdir)/lustre/ldlm/ldlm_internal.h	\
+	$(top_srcdir)/lustre/ldlm/ldlm_inodebits.c
 
 COMMON_SOURCES =  client.c recover.c connection.c niobuf.c pack_generic.c   \
     events.c ptlrpc_module.c service.c pinger.c recov_thread.c llog_net.c   \
