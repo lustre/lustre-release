@@ -7,25 +7,28 @@
  * Copryright (C) 1999 Seagate Technology Inc.
  *
  */
-#include <linux/config.h>
+#define __NO_VERSION__
 #include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/locks.h>
-#include <linux/unistd.h>
-
-#include <asm/system.h>
-#include <asm/uaccess.h>
-
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <linux/vmalloc.h>
-#include <asm/segment.h>
 #include <linux/sched.h>
+#include <linux/fs.h>
+#include <linux/malloc.h>
+#include <linux/locks.h>
+#include <linux/errno.h>
+#include <linux/swap.h>
+#include <linux/smp_lock.h>
+#include <linux/vmalloc.h>
+#include <linux/blkdev.h>
+#include <linux/sysrq.h>
+#include <linux/file.h>
+#include <linux/init.h>
+#include <linux/quotaops.h>
+#include <linux/iobuf.h>
+#include <linux/highmem.h>
+
+#include <asm/uaccess.h>
+#include <asm/io.h>
+#include <asm/bitops.h>
+#include <asm/mmu_context.h>
 
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
@@ -45,23 +48,24 @@ struct {
 	int interval; /* jiffies delay between kupdate flushes */
 	int age_buffer;  /* Time for normal buffer to age before we flush it */
 	int age_super;  /* Time for superblock to age before we flush it */
-} pupd_prm = {40, 500, 64, 256, 5*HZ, 30*HZ, 5*HZ };
+} pupd_prm = {40, 500, 64, 256, 5*HZ, 30*HZ, 5*HZ }; 
 
-
-atatic void obdfs_flush_reqs(struct obdfs_super_info *sbi, int wait, 
-			     int check_time) 
+/* static void obdfs_flush_reqs(struct obdfs_super_info *sbi, int wait, 
+			     
+*/
+static void obdfs_flush_reqs(struct obdfs_super_info *sbi, int check_time) 
 {
 	struct list_head *wr;
-	struct pg_req *req;
+	struct obdfs_pgrq *req;
 	
-	wr = &si.s_wr_head;
-	while ( (wr = wr->next) != &si.s_wr_head ) {
-		req = list_entry(wr, struct pg_req, rq_list);
+	wr = &sbi->s_wr_head;
+	while ( (wr = wr->next) != &sbi->s_wr_head ) {
+		req = list_entry(wr, struct obdfs_pgrq, rq_list);
 
 		if (!check_time || 
-		    req->rq_jiffies <= (jiffies - pup_rpm.age_buffer)) {
+		    req->rq_jiffies <= (jiffies - pupd_prm.age_buffer)) {
 			/* write request out to disk */
-			obdfs_write_page(req->inode, req->page);
+			obdfs_do_writepage(req->rq_inode, req->rq_page, 1);
 		}
 
 	}
@@ -72,33 +76,33 @@ atatic void obdfs_flush_reqs(struct obdfs_super_info *sbi, int wait,
 static void obdfs_flush_dirty_pages(int check_time)
 {
 	struct list_head *sl;
+	struct obdfs_super_info *sbi;
 
 	sl = &obdfs_super_list;
-	while ( (sl = sl->next) != &obdfs_super_listhead ) {
+	while ( (sl = sl->next) != &obdfs_super_list ) {
 		struct obdfs_super_entry *entry = 
 			list_entry(sl, struct obdfs_super_entry, sl_chain);
-		struct obdfs_sb_info *sbi = sl->sl_sbi;
+		struct obdfs_super_info *sbi = entry->sl_sbi;
 
 		/* walk write requests here */
-		obdfs_flush_reqs(sbi, 0);
+		obdfs_flush_reqs(sbi, jiffies);
 	}
 
 	/* again, but now we wait for completion */
-	sl = &obdfs_super_listhead;
-	while ( (sl = sl->next) != &obdfs_super_listhead ) {
-		struct obdfs_super_list *entry = 
-			list_entry(sl, struct obdfs_super_list, sl_chain);
-		struct super_block *sb = sl->sl_sb;
+	sl = &obdfs_super_list;
+	while ( (sl = sl->next) != &obdfs_super_list ) {
+		struct obdfs_super_entry *entry = 
+			list_entry(sl, struct obdfs_super_entry, sl_chain);
+		sbi = entry->sl_sbi;
 
 		/* walk write requests here */
-		si = &sb->u.generic;
-		obdfs_flush_reqs(si, 1);
+		obdfs_flush_reqs(sbi, jiffies);
 	}
 }
 
-static struct task_struct *pupdatd;
+static struct task_struct *pupdated;
 
-static int pupdate(void) 
+static int pupdate(void *unused) 
 {
 	struct task_struct * tsk = current;
 	int interval;
@@ -127,6 +131,7 @@ static int pupdate(void)
 		{
 		stop_pupdate:
 			tsk->state = TASK_STOPPED;
+			MOD_DEC_USE_COUNT;
 			schedule(); /* wait for SIGCONT */
 		}
 		/* check for sigstop */
@@ -154,6 +159,7 @@ static int pupdate(void)
 int flushd_init(void)
 {
 	/*	kernel_thread(bdflush, NULL, CLONE_FS | CLONE_FILES | CLONE_SIGHAND); */
+	MOD_INC_USE_COUNT;
 	kernel_thread(pupdate, NULL, CLONE_FS | CLONE_FILES | CLONE_SIGHAND);
 	return 0;
 }
@@ -169,7 +175,11 @@ int flushd_cleanup(void)
 	if (pupdated) {
 		/* send updated a STOP signal */
 		/* then let it run at least once, before continuing */
+
 		1;
 	}
+
+	/* not reached */
+	return 0;
 
 }

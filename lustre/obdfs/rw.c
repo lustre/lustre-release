@@ -79,35 +79,29 @@ int obdfs_readpage(struct dentry *dentry, struct page *page)
 	return rc;
 } /* obdfs_readpage */
 
-static kmem_cache_t *obdfs_wreq_cachep = NULL;
+static kmem_cache_t *obdfs_pgrq_cachep;
 
-int obdfs_init_wreqcache(void)
+int obdfs_init_pgrqcache(void)
 {
 	ENTRY;
-
-	if (obdfs_wreq_cachep == NULL) {
-		obdfs_wreq_cachep = kmem_cache_create("obdfs_wreq",
-						      sizeof(struct obdfs_wreq),
-						      0, SLAB_HWCACHE_ALIGN,
-						      NULL, NULL);
-		if (obdfs_wreq_cachep == NULL) {
-			EXIT;
-			return -ENOMEM;
-		}
+	obdfs_pgrq_cachep = kmem_cache_create("obdfs_pgrq",
+					      sizeof(struct obdfs_pgrq),
+					      0, SLAB_HWCACHE_ALIGN,
+					      NULL, NULL);
+	if (obdfs_pgrq_cachep == NULL) {
+		EXIT;
+		return -ENOMEM;
 	}
+
 	EXIT;
 	return 0;
 } /* obdfs_init_wreqcache */
 
-void obdfs_cleanup_wreqcache(void)
+void obdfs_cleanup_pgrqcache(void)
 {
-	ENTRY;
-	if (obdfs_wreq_cachep != NULL) {
-		if (kmem_cache_shrink(obdfs_wreq_cachep))
-			printk(KERN_INFO "obdfs_cleanup_wreqcache: unable to free all of cache\n");
-	} else
-		printk(KERN_ERR "obdfs_cleanup_wreqcache: called with NULL cache pointer\n");
-	
+	if (obdfs_pgrq_cachep != NULL)
+		kmem_cache_destroy(obdfs_pgrq_cachep);
+	obdfs_pgrq_cachep = NULL;
 	EXIT;
 } /* obdfs_cleanup_wreqcache */
 
@@ -116,28 +110,30 @@ void obdfs_cleanup_wreqcache(void)
  * Find a specific page in the page cache.  If it is found, we return
  * the write request struct associated with it, if not found return NULL.
  */
-static struct obdfs_wreq *obdfs_find_in_page_cache(struct inode *inode,
-						   struct page *page)
+static struct obdfs_pgrq *
+obdfs_find_in_page_cache(struct inode *inode, struct page *page)
 {
-	struct list_head *list_head = &OBD_LIST(inode);
-	struct obdfs_wreq *head, *wreq;
+	struct list_head *page_list = &OBD_LIST(inode);
+	struct list_head *tmp;
+	struct obdfs_pgrq *pgrq;
 
 	ENTRY;
 	CDEBUG(D_INODE, "looking for inode %ld page %p\n", inode->i_ino, page);
-	if (list_empty(list_head)) {
+	if (list_empty(page_list)) {
 		CDEBUG(D_INODE, "empty list\n");
 		EXIT;
 		return NULL;
 	}
-	wreq = head = WREQ(list_head->next);
-	do {
-		CDEBUG(D_INODE, "checking page %p\n", wreq->wb_page);
-		if (wreq->wb_page == page) {
+	tmp = page_list;
+	while ( (tmp = tmp->next) != page_list ) {
+		pgrq = list_entry(tmp, struct obdfs_pgrq, rq_list);
+		CDEBUG(D_INODE, "checking page %p\n", pgrq->rq_page);
+		if (pgrq->rq_page == page) {
 			CDEBUG(D_INODE, "found page %p in list\n", page);
 			EXIT;
-			return wreq;
+			return pgrq;
 		}
-	} while ((wreq = WB_NEXT(wreq)) != head);
+	} 
 
 	EXIT;
 	return NULL;
@@ -147,23 +143,23 @@ static struct obdfs_wreq *obdfs_find_in_page_cache(struct inode *inode,
 /*
  * Remove a writeback request from a list
  */
-static inline int obdfs_remove_from_page_cache(struct obdfs_wreq *wreq)
+static inline int
+obdfs_remove_from_page_cache(struct obdfs_pgrq *pgrq)
 {
-	struct inode *inode = wreq->wb_inode;
-	struct page *page = wreq->wb_page;
+	struct inode *inode = pgrq->rq_inode;
+	struct page *page = pgrq->rq_page;
 	int rc;
 
 	ENTRY;
-	CDEBUG(D_INODE, "removing inode %ld, wreq: %p\n",
-	       inode->i_ino, wreq);
-	PDEBUG(page, "REM_CACHE");
+	CDEBUG(D_INODE, "removing inode %ld page %p, pgrq: %p\n",
+	       inode->i_ino, page, pgrq);
 	rc = obdfs_brw(WRITE, inode, page, 1);
 	/* XXX probably should handle error here somehow.  I think that
 	 *     ext2 also does the same thing - discard write even if error?
 	 */
 	put_page(page);
-	list_del(&wreq->wb_list);
-	kmem_cache_free(obdfs_wreq_cachep, wreq);
+        list_del(&pgrq->rq_list);
+	kmem_cache_free(obdfs_pgrq_cachep, pgrq);
 
 	EXIT;
 	return rc;
@@ -174,38 +170,36 @@ static inline int obdfs_remove_from_page_cache(struct obdfs_wreq *wreq)
  */
 static int obdfs_add_to_page_cache(struct inode *inode, struct page *page)
 {
-	struct obdfs_wreq *wreq;
+	struct obdfs_pgrq *pgrq;
 
 	ENTRY;
-	wreq = kmem_cache_alloc(obdfs_wreq_cachep, SLAB_KERNEL);
-	CDEBUG(D_INODE, "adding inode %ld page %p, wreq: %p\n",
-	       inode->i_ino, page, wreq);
-	if (!wreq) {
+	pgrq = kmem_cache_alloc(obdfs_pgrq_cachep, SLAB_KERNEL);
+	CDEBUG(D_INODE, "adding inode %ld page %p, pgrq: %p\n",
+	       inode->i_ino, page, pgrq);
+	if (!pgrq) {
 		EXIT;
 		return -ENOMEM;
 	}
-	memset(wreq, 0, sizeof(*wreq)); 
+	memset(pgrq, 0, sizeof(*pgrq)); 
 
-	wreq->wb_page = page;
-	wreq->wb_inode = inode;
+	pgrq->rq_page = page;
+	pgrq->rq_inode = inode;
 
-	get_page(wreq->wb_page);
-	list_add(&wreq->wb_list, &OBD_LIST(inode));
+	get_page(pgrq->rq_page);
+	list_add(&pgrq->rq_list, &OBD_LIST(inode));
 
 	/* For testing purposes, we write out the page here.
 	 * In the future, a flush daemon will write out the page.
 	return 0;
 	 */
-	printk(KERN_INFO "finding page in cache for write\n");
-	wreq = obdfs_find_in_page_cache(inode, page);
-	if (!wreq) {
+	pgrq = obdfs_find_in_page_cache(inode, page);
+	if (!pgrq) {
 		CDEBUG(D_INODE, "XXXX Can't find page after adding it!!!\n");
 		EXIT;
 		return -EINVAL;
-	}
-
-	EXIT;
-	return obdfs_remove_from_page_cache(wreq);
+	} 
+		
+	return obdfs_remove_from_page_cache(pgrq);
 } /* obdfs_add_to_page_cache */
 
 

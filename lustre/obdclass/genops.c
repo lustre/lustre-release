@@ -260,20 +260,21 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 	lck_page(page);
 	
 	while (index < ((src->o_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
+		obd_size count = PAGE_SIZE;
 		
 		page->index = index;
 		rc = OBP(src_conn->oc_dev, brw)
 			(READ, src_conn, src, (char *)page_address(page), 
-			 PAGE_SIZE, (page->index) << PAGE_SHIFT, 0);
+			 &count, (page->index) << PAGE_SHIFT, 0);
 
-		if ( rc != PAGE_SIZE ) 
+		if ( rc != 0  ) 
 			break;
 		CDEBUG(D_INODE, "Read page %ld ...\n", page->index);
 
 		rc = OBP(dst_conn->oc_dev, brw)
 			(WRITE, dst_conn, dst, (char *)page_address(page), 
-			 PAGE_SIZE, (page->index) << PAGE_SHIFT, 1);
-		if ( rc != PAGE_SIZE)
+			 &count, (page->index) << PAGE_SHIFT, 1);
+		if ( rc != 0)
 			break;
 
 		CDEBUG(D_INODE, "Wrote page %ld ...\n", page->index);

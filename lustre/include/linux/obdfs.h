@@ -23,8 +23,8 @@ int flushd_init(void);
 
 /* rw.c */
 int obdfs_do_writepage(struct inode *, struct page *, int sync);
-int obdfs_init_wreqcache(void);
-void obdfs_cleanup_wreqcache(void);
+int obdfs_init_pgrqcache(void);
+void obdfs_cleanup_pgrqcache(void);
 int obdfs_readpage(struct dentry *dentry, struct page *page);
 int obdfs_writepage(struct dentry *dentry, struct page *page);
 struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create, int locked);
@@ -49,15 +49,24 @@ int obdfs_check_dir_entry (const char * function, struct inode * dir,
 int obdfs_readlink (struct dentry *, char *, int);
 struct dentry *obdfs_follow_link(struct dentry *, struct dentry *, unsigned int); 
 
-struct obdfs_super_entry {
-	struct list_head sl_chain;
-	struct obdfs_sb_info *sbi;
+
+struct obdfs_super_info {
+	struct list_head s_wr_head;
 };
 
-struct obdfs_wreq {
-	struct list_head	 wb_list;	/* linked list of req's */
-	struct inode 		*wb_inode;	/* dentry referenced */
-	struct page 		*wb_page;	/* page to be written */
+
+/* list of all OBDFS super blocks  */
+struct list_head obdfs_super_list;
+struct obdfs_super_entry {
+	struct list_head sl_chain;
+	struct obdfs_super_info *sl_sbi;
+};
+
+struct obdfs_pgrq {
+	struct list_head	 rq_list;	/* linked list of req's */
+	unsigned long          rq_jiffies;
+	struct inode 		*rq_inode;	/* dentry referenced */
+	struct page 		*rq_page;	/* page to be written */
 };
 
 struct obdfs_sb_info {
@@ -72,18 +81,14 @@ struct obdfs_sb_info {
 
 struct obdfs_inode_info {
 	int		 oi_flags;
-	struct list_head oi_list;
+	struct list_head oi_pages;
 	char 		*oi_inline;
 };
 
-#define OBD_INFO(inode) ((struct obdfs_inode_info *)(&(inode)->u.generic_ip))
 
-/* this was used when the list was in the superblock
-#define OBD_LIST(inode)	(((struct obdfs_sb_info *)(&(inode)->i_sb->u.generic_sbp))->osi_list)
-*/
-#define OBD_LIST(inode)	(OBD_INFO(inode)->oi_list)
-#define WB_NEXT(req)	((struct obdfs_wreq *) ((req)->wb_list.next))
-#define WREQ(entry)	(list_entry(entry, struct obdfs_wreq, wb_list))
+#define OBD_LIST(inode)	(((struct obdfs_inode_info *)(&(inode)->u.generic_ip))->oi_pages)
+#define WREQ(entry)	(list_entry(entry, struct obdfs_pgrq, rq_list))
+#define OBD_INFO(inode) ((struct obdfs_inode_info *)(&(inode)->u.generic_ip))
 
 void obdfs_sysctl_init(void);
 void obdfs_sysctl_clean(void);

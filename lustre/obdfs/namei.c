@@ -485,8 +485,7 @@ struct inode *obdfs_new_inode(struct inode *dir)
 		return ERR_PTR(-EIO);
 	}
 
-	INIT_LIST_HEAD(&OBD_LIST(inode));
-
+	obdo_free(oa);
 	EXIT;
 	return inode;
 } /* obdfs_new_inode */

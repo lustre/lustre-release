@@ -95,7 +95,7 @@ static int obd_class_release(struct inode * inode, struct file * file)
 		return -ENODEV;
 	fsync_dev(inode->i_rdev);
 	if (obd_dev[dev].obd_refcnt <= 0)
-		printk(KERN_ALERT "obd_class_release: refcount(%d) <= 0\n",
+		printk(KERN_ALERT "presto_psdev_release: refcount(%d) <= 0\n",
 		       obd_dev[dev].obd_refcnt);
 	obd_dev[dev].obd_refcnt--;
 

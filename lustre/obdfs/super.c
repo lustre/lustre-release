@@ -326,6 +326,7 @@ void obdfs_read_inode(struct inode *inode)
 {
 	struct obdo *oa;
 	int err;
+	struct obdfs_inode_info *ii;
 
 	ENTRY;
 	oa = obdo_alloc();
@@ -336,6 +337,10 @@ void obdfs_read_inode(struct inode *inode)
 	}
 	oa->o_valid = ~OBD_MD_FLOBDMD;
 	oa->o_id = inode->i_ino;
+	ii = (struct obdfs_inode_info *)(&inode->u.generic_ip);
+	INIT_LIST_HEAD(&ii->oi_pages);
+
+	
 	err = IOPS(inode, getattr)(IID(inode), oa);
 	if (err) {
 		printk("obdfs_read_inode: obd_getattr fails (%d)\n", err);
@@ -473,14 +478,11 @@ int init_obdfs(void)
 	obdfs_sysctl_init();
 
 	INIT_LIST_HEAD(&obdfs_super_list);
-	err = obdfs_init_wreqcache();
+	err = obdfs_init_pgrqcache();
 	if (err)
 		return err;
 
-	/* XXX
 	flushd_init();
-	*/
-
 	return register_filesystem(&obdfs_fs_type);
 }
 
@@ -495,8 +497,8 @@ void cleanup_module(void)
 {
         ENTRY;
 
-	obdfs_cleanup_wreqcache();
 	obdfs_sysctl_clean();
+	obdfs_cleanup_pgrqcache();
 	unregister_filesystem(&obdfs_fs_type);
 
 	EXIT;
