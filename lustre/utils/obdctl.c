@@ -1,3 +1,27 @@
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
+ *  Copyright (C) 2002 Cluster File Systems, Inc.
+ *   Author: Peter J. Braam <braam@clusterfs.com>
+ *   Author: Phil Schwan <phil@clusterfs.com>
+ *
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ */
+
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
@@ -14,6 +38,7 @@
 #include <netinet/in.h>
 #include <errno.h>
 #include <string.h>
+#include <linux/module.h>
 
 #define __KERNEL__
 #include <linux/list.h>
@@ -79,7 +104,6 @@ char * obdo_print(struct obdo *obd)
 	return strdup(buf);
 }
 
-
 static int jt_device(int argc, char **argv)
 {
 	struct obd_ioctl_data data;
@@ -135,8 +159,6 @@ static int jt_connect(int argc, char **argv)
 
 	return 0;
 }
-
-
 
 static int jt_disconnect(int argc, char **argv)
 {
@@ -393,22 +415,62 @@ static int jt_getattr(int argc, char **argv)
 	return 0;
 }
 
+static int jt_modules(int argc, char **argv)
+{
+        char *modules[] = {"portals", "ksocknal", "obdclass", "ptlrpc",
+                           "obdext2", "ost", "osc", "mds", "mdc", "llight",
+                           NULL};
+        char *path = "../obd";
+        int i;
+
+        if (argc == 2)
+                path = argv[1];
+        if (argc > 2) {
+                printf("%s [path]\n", argv[0]);
+                return 0;
+        }
+
+        for (i = 0; modules[i] != NULL; i++) {
+                struct module_info info;
+                char *mod;
+                int rc;
+                size_t crap;
+                int query_module(const char *name, int which, void *buf,
+                                 size_t bufsize, size_t *ret);
+
+                mod = modules[i];
+                rc = query_module(mod, QM_INFO, &info, sizeof(info), &crap);
+                if (rc < 0) {
+                        if (errno != ENOENT)
+                                printf("query_module(%s) failed: %s\n", mod,
+                                       strerror(errno));
+                } else {
+                        printf("add-symbol-file %s/%s/%s.o 0x%0lx\n", path,
+                               mod, mod, info.addr + sizeof(struct module));
+                }
+                mod++;
+        }
+
+        return 0;
+}
+
 command_t list[] = {
 	{"device", jt_device, 0, "set current device (args device no)"},
-    {"attach", jt_attach, 0, "name the typed of device (args: type data"},
-    {"setup", jt_setup, 0, "setup device (args: blkdev, data"},
-    {"detach", jt_detach, 0, "detach the current device (arg: )"},
-    {"cleanup", jt_cleanup, 0, "cleanup the current device (arg: )"},
-    {"create", jt_create, 0, "create [count [mode [silent]]]"},
-    {"destroy", jt_destroy, 0, "destroy id"},
-    {"getattr", jt_getattr, 0, "getattr id"},
-    {"setattr", jt_setattr, 0, "setattr id mode"},
-    {"connect", jt_connect, 0, "connect - get a connection to device"},
-    {"disconnect", jt_disconnect, 0, "disconnect - break connection to device"},
-    {"help", Parser_help, 0, "help"},
-    {"exit", Parser_quit, 0, "quit"},
-    {"quit", Parser_quit, 0, "quit"},
-    { 0, 0, 0, NULL }
+        {"attach", jt_attach, 0, "name the typed of device (args: type data"},
+        {"setup", jt_setup, 0, "setup device (args: blkdev, data"},
+        {"detach", jt_detach, 0, "detach the current device (arg: )"},
+        {"cleanup", jt_cleanup, 0, "cleanup the current device (arg: )"},
+        {"create", jt_create, 0, "create [count [mode [silent]]]"},
+        {"destroy", jt_destroy, 0, "destroy id"},
+        {"getattr", jt_getattr, 0, "getattr id"},
+        {"setattr", jt_setattr, 0, "setattr id mode"},
+        {"connect", jt_connect, 0, "connect - get a connection to device"},
+        {"disconnect", jt_disconnect, 0, "disconnect - break connection to device"},
+        {"modules", jt_modules, 0, "provide gdb-friendly module info (arg: <path>)"},
+        {"help", Parser_help, 0, "help"},
+        {"exit", Parser_quit, 0, "quit"},
+        {"quit", Parser_quit, 0, "quit"},
+        { 0, 0, 0, NULL }
 };
 
 int main(int argc, char **argv)
