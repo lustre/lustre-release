@@ -188,6 +188,7 @@ static inline void our_cond_resched(void)
         if (current->need_resched)
                schedule ();
 }
+#define work_struct_t       struct tq_struct 
 
 #else
 
@@ -203,6 +204,8 @@ static inline void our_cond_resched(void)
 {
         cond_resched();
 }
+#define work_struct_t      struct work_struct
+
 #endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0) */
 
 #ifdef PORTAL_DEBUG
