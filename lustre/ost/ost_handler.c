@@ -415,7 +415,7 @@ static int ost_handle(struct ptlrpc_request *req)
         ENTRY;
 
         rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
-        if (rc || OBD_FAIL_CHECK(OBD_FAIL_MDS_HANDLE_UNPACK)) {
+        if (rc || OBD_FAIL_CHECK(OBD_FAIL_OST_HANDLE_UNPACK)) {
                 CERROR("lustre_ost: Invalid request\n");
                 GOTO(out, rc);
         }
@@ -427,8 +427,11 @@ static int ost_handle(struct ptlrpc_request *req)
         }
 
         if (req->rq_reqmsg->opc != OST_CONNECT &&
-            req->rq_export == NULL)
+            req->rq_export == NULL) {
+                CERROR("lustre_ost: operation %d on unconnected OST\n",
+                       req->rq_reqmsg->opc);
                 GOTO(out, rc = -ENOTCONN);
+        }
 
         if (strcmp(req->rq_obd->obd_type->typ_name, "ost") != 0)
                 GOTO(out, rc = -EINVAL);
