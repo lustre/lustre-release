@@ -21,6 +21,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#define DEBUG_SUBSYSTEM S_MDS
 #ifdef __KERNEL__
 #include <linux/config.h>
 #include <linux/module.h>
@@ -49,7 +50,6 @@
 #include <liblustre.h>
 #endif
 
-#define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
