@@ -131,7 +131,7 @@ kqswnal_get_tx_desc (struct portals_cfg *pcfg)
 
 		pcfg->pcfg_pbuf1 = (char *)ktx;
 		pcfg->pcfg_count = NTOH__u32(ktx->ktx_wire_hdr->type);
-		pcfg->pcfg_size  = NTOH__u32(PTL_HDR_LENGTH(ktx->ktx_wire_hdr));
+		pcfg->pcfg_size  = NTOH__u32(ktx->ktx_wire_hdr->payload_length);
 		pcfg->pcfg_nid   = NTOH__u64(ktx->ktx_wire_hdr->dest_nid);
 		pcfg->pcfg_nid2  = ktx->ktx_nid;
 		pcfg->pcfg_misc  = ktx->ktx_launcher;

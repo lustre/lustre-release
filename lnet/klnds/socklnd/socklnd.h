@@ -25,7 +25,9 @@
  */
 
 #define DEBUG_PORTAL_ALLOC
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #include <linux/config.h>
 #include <linux/module.h>
@@ -58,6 +60,7 @@
 #include <linux/kp30.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
+#include <portals/socknal.h>
 
 #if CONFIG_SMP
 # define SOCKNAL_N_SCHED       num_online_cpus() /* # socknal schedulers */
@@ -71,9 +74,10 @@
 
 /* default vals for runtime tunables */
 #define SOCKNAL_IO_TIMEOUT       50             /* default comms timeout (seconds) */
-#define SOCKNAL_EAGER_ACK        1              /* default eager ack (boolean) */
+#define SOCKNAL_EAGER_ACK        0              /* default eager ack (boolean) */
+#define SOCKNAL_TYPED_CONNS      1              /* unidirectional large, bidirectional small? */
 #define SOCKNAL_ZC_MIN_FRAG     (2<<10)         /* default smallest zerocopy fragment */
-
+#define SOCKNAL_MIN_BULK        (1<<10)         /* smallest "large" message */
 #define SOCKNAL_USE_KEEPALIVES   0              /* use tcp/ip keepalive? */
 
 #define SOCKNAL_PEER_HASH_SIZE   101            /* # peer lists */
@@ -142,6 +146,8 @@ typedef struct {
         int               ksnd_init;            /* initialisation state */
         int               ksnd_io_timeout;      /* "stuck" socket timeout (seconds) */
         int               ksnd_eager_ack;       /* make TCP ack eagerly? */
+        int               ksnd_typed_conns;     /* drive sockets by type? */
+        int               ksnd_min_bulk;        /* smallest "large" message */
 #if SOCKNAL_ZC
         unsigned int      ksnd_zc_min_frag;     /* minimum zero copy frag size */
 #endif
@@ -300,6 +306,7 @@ typedef struct ksock_conn
         __u32               ksnc_ipaddr;        /* peer's IP */
         int                 ksnc_port;          /* peer's port */
         int                 ksnc_closing;       /* being shut down */
+        int                 ksnc_type;          /* type of connection */
         
         /* READER */
         struct list_head    ksnc_rx_list;       /* where I enq waiting input or a forwarding descriptor */
@@ -327,6 +334,10 @@ typedef struct ksock_conn
         int                 ksnc_tx_scheduled;  /* being progressed */
 } ksock_conn_t;
 
+#define KSNR_TYPED_ROUTES   ((1 << SOCKNAL_CONN_CONTROL) |      \
+                             (1 << SOCKNAL_CONN_BULK_IN) |      \
+                             (1 << SOCKNAL_CONN_BULK_OUT))
+
 typedef struct ksock_route
 {
         struct list_head    ksnr_list;          /* chain on peer route list */
@@ -340,13 +351,12 @@ typedef struct ksock_route
         int                 ksnr_port;          /* port to connect to */
         int                 ksnr_buffer_size;   /* size of socket buffers */
         unsigned int        ksnr_irq_affinity:1; /* set affinity? */
-        unsigned int        ksnr_xchange_nids:1; /* do hello protocol? */
         unsigned int        ksnr_nonagel:1;     /* disable nagle? */
         unsigned int        ksnr_eager:1;       /* connect eagery? */
-        unsigned int        ksnr_connecting:1;  /* autoconnect in progress? */
+        unsigned int        ksnr_connecting:4;  /* autoconnects in progress by type */
+        unsigned int        ksnr_connected:4;   /* connections established by type */
         unsigned int        ksnr_deleted:1;     /* been removed from peer? */
-        int                 ksnr_generation;    /* connection incarnation # */
-        ksock_conn_t       *ksnr_conn;          /* NULL/active connection */
+        int                 ksnr_conn_count;    /* # conns established by this route */
 } ksock_route_t;
 
 typedef struct ksock_peer
@@ -402,13 +412,13 @@ extern ksock_peer_t *ksocknal_get_peer (ptl_nid_t nid);
 extern int ksocknal_del_route (ptl_nid_t nid, __u32 ipaddr,
                                int single, int keep_conn);
 extern int ksocknal_create_conn (ptl_nid_t nid, ksock_route_t *route,
-                                 struct socket *sock, int bind_irq);
+                                 struct socket *sock, int bind_irq, int type);
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
-extern int ksocknal_close_conn_unlocked (ksock_conn_t *conn, int why);
 extern void ksocknal_terminate_conn (ksock_conn_t *conn);
 extern void ksocknal_destroy_conn (ksock_conn_t *conn);
 extern void ksocknal_put_conn (ksock_conn_t *conn);
-extern int ksocknal_close_conn (ptl_nid_t nid, __u32 ipaddr);
+extern int ksocknal_close_conn_and_siblings (ksock_conn_t *conn, int why);
+extern int ksocknal_close_matching_conns (ptl_nid_t nid, __u32 ipaddr);
 
 extern void ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn);
 extern void ksocknal_tx_done (ksock_tx_t *tx, int asynch);

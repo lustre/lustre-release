@@ -59,7 +59,7 @@ int lib_finalize(nal_cb_t * nal, void *private, lib_msg_t *msg)
                 ack.src_nid  = HTON__u64 (nal->ni.nid);
                 ack.dest_pid = HTON__u32 (msg->pid);
                 ack.src_pid  = HTON__u32 (nal->ni.pid);
-                PTL_HDR_LENGTH(&ack) = 0;
+                ack.payload_length = 0;
 
                 ack.msg.ack.dst_wmd = msg->ack_wmd;
                 ack.msg.ack.match_bits = msg->ev.match_bits;

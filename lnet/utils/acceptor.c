@@ -19,6 +19,7 @@
 #include <portals/api-support.h>
 #include <portals/list.h>
 #include <portals/lib-types.h>
+#include <portals/socknal.h>
 
 /* should get this from autoconf somehow */
 #ifndef PIDFILE_DIR
@@ -100,7 +101,7 @@ parse_size (int *sizep, char *str)
 }
 
 void
-show_connection (int fd, __u32 net_ip, ptl_nid_t nid)
+show_connection (int fd, __u32 net_ip, ptl_nid_t nid, int type)
 {
         struct hostent *h = gethostbyaddr ((char *)&net_ip, sizeof net_ip, AF_INET);
         __u32 host_ip = ntohl (net_ip);
@@ -128,8 +129,12 @@ show_connection (int fd, __u32 net_ip, ptl_nid_t nid)
         else
                 snprintf (host, sizeof(host), "%s", h->h_name);
                 
-        syslog (LOG_INFO, "Accepted host: %s NID: "LPX64" snd: %d rcv %d nagle: %s\n", 
-                 host, nid, txmem, rxmem, nonagle ? "disabled" : "enabled");
+        syslog (LOG_INFO, "Accepted host: %s NID: "LPX64" snd: %d rcv %d nagle: %s type %s\n", 
+                 host, nid, txmem, rxmem, nonagle ? "disabled" : "enabled",
+                (type == SOCKNAL_CONN_ANY) ? "A" :
+                (type == SOCKNAL_CONN_CONTROL) ? "C" :
+                (type == SOCKNAL_CONN_BULK_IN) ? "I" :
+                (type == SOCKNAL_CONN_BULK_OUT) ? "O" : "?");
 }
 
 int
@@ -189,9 +194,10 @@ sock_read (int cfd, void *buffer, int nob)
 }
 
 int
-exchange_nids (int cfd, ptl_nid_t my_nid, ptl_nid_t *peer_nid)
+exchange_nids (int cfd, ptl_nid_t my_nid, ptl_nid_t *peer_nid, int *type)
 {
         int                      rc;
+        int                      t;
         ptl_hdr_t                hdr;
         ptl_magicversion_t      *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
 
@@ -248,15 +254,32 @@ exchange_nids (int cfd, ptl_nid_t my_nid, ptl_nid_t *peer_nid)
 
         /* ...and check we got what we expected */
         if (__cpu_to_le32 (hdr.type) != PTL_MSG_HELLO ||
-            __cpu_to_le32 (PTL_HDR_LENGTH (&hdr)) != 0) {
+            __cpu_to_le32 (hdr.payload_length) != 0) {
                 fprintf (stderr, "Expecting a HELLO hdr with 0 payload,"
                          " but got type %d with %d payload\n",
                          __cpu_to_le32 (hdr.type),
-                         __cpu_to_le32 (PTL_HDR_LENGTH (&hdr)));
+                         __cpu_to_le32 (hdr.payload_length));
                 return (-1);
         }
         
         *peer_nid = __le64_to_cpu (hdr.src_nid);
+
+        t  = __le32_to_cpu (*(__u32 *)&hdr.msg);
+        switch (t) {                            /* swap sense of connection type */
+        case SOCKNAL_CONN_CONTROL:
+                break;
+        case SOCKNAL_CONN_BULK_IN:
+                t = SOCKNAL_CONN_BULK_OUT;
+                break;
+        case SOCKNAL_CONN_BULK_OUT:
+                t = SOCKNAL_CONN_BULK_IN;
+                break;
+        default:
+                t = SOCKNAL_CONN_ANY;
+                break;
+        }
+        *type = t;
+        
         return (0);
 }
 
@@ -277,10 +300,10 @@ int main(int argc, char **argv)
         int noclose = 0;
         int nonagle = 1;
         int nal = SOCKNAL;
-        int xchg_nids = 0;
         int bind_irq = 0;
+        int type = 0;
         
-        while ((c = getopt (argc, argv, "N:r:s:nlxi")) != -1)
+        while ((c = getopt (argc, argv, "N:r:s:nli")) != -1)
                 switch (c)
                 {
                 case 'r':
@@ -299,10 +322,6 @@ int main(int argc, char **argv)
 
                 case 'l':
                         noclose = 1;
-                        break;
-
-                case 'x':
-                        xchg_nids = 1;
                         break;
 
                 case 'i':
@@ -419,35 +438,29 @@ int main(int argc, char **argv)
                         continue;
                 }
 
-                if (!xchg_nids)
-                        peer_nid = ntohl (clntaddr.sin_addr.s_addr); /* HOST byte order */
-                else
-                {
-                        PORTAL_IOC_INIT (data);
-                        data.ioc_nal = nal;
-                        rc = ioctl (pfd, IOC_PORTAL_GET_NID, &data);
-                        if (rc < 0)
-                        {
-                                perror ("Can't get my NID");
-                                close (cfd);
-                                continue;
-                        }
-                        
-                        rc = exchange_nids (cfd, data.ioc_nid, &peer_nid);
-                        if (rc != 0)
-                        {
-                                close (cfd);
-                                continue;
-                        }
+                PORTAL_IOC_INIT (data);
+                data.ioc_nal = nal;
+                rc = ioctl (pfd, IOC_PORTAL_GET_NID, &data);
+                if (rc < 0) {
+                        perror ("Can't get my NID");
+                        close (cfd);
+                        continue;
                 }
 
-                show_connection (cfd, clntaddr.sin_addr.s_addr, peer_nid);
+                rc = exchange_nids (cfd, data.ioc_nid, &peer_nid, &type);
+                if (rc != 0) {
+                        close (cfd);
+                        continue;
+                }
+
+                show_connection (cfd, clntaddr.sin_addr.s_addr, peer_nid, type);
 
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
                 pcfg.pcfg_nal = nal;
                 pcfg.pcfg_fd = cfd;
                 pcfg.pcfg_nid = peer_nid;
                 pcfg.pcfg_flags = bind_irq;
+                pcfg.pcfg_misc = type;
 
                 PORTAL_IOC_INIT(data);
                 data.ioc_pbuf1 = (char*)&pcfg;

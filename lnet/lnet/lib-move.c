@@ -583,7 +583,7 @@ static int parse_put(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
 
         me = lib_find_me(nal, hdr->msg.put.ptl_index, PTL_MD_OP_PUT,
                          hdr->src_nid, hdr->src_pid,
-                         PTL_HDR_LENGTH (hdr), hdr->msg.put.offset,
+                         hdr->payload_length, hdr->msg.put.offset,
                          hdr->msg.put.match_bits,
                          &mlength, &offset, &unlink);
         if (me == NULL)
@@ -592,7 +592,7 @@ static int parse_put(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
         md = me->md;
         CDEBUG(D_NET, "Incoming put index %x from "LPU64"/%u of length %d/%d "
                "into md "LPX64" [%d] + %d\n", hdr->msg.put.ptl_index,
-               hdr->src_nid, hdr->src_pid, mlength, PTL_HDR_LENGTH(hdr), 
+               hdr->src_nid, hdr->src_pid, mlength, hdr->payload_length, 
                md->md_lh.lh_cookie, md->md_niov, offset);
 
         msg = get_new_msg (nal, md);
@@ -617,7 +617,7 @@ static int parse_put(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                 msg->ev.initiator.pid = hdr->src_pid;
                 msg->ev.portal = hdr->msg.put.ptl_index;
                 msg->ev.match_bits = hdr->msg.put.match_bits;
-                msg->ev.rlength = PTL_HDR_LENGTH(hdr);
+                msg->ev.rlength = hdr->payload_length;
                 msg->ev.mlength = mlength;
                 msg->ev.offset = offset;
                 msg->ev.hdr_data = hdr->msg.put.hdr_data;
@@ -646,14 +646,14 @@ static int parse_put(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
 
         state_unlock(nal, &flags);
 
-        lib_recv (nal, private, msg, md, offset, mlength, PTL_HDR_LENGTH (hdr));
+        lib_recv (nal, private, msg, md, offset, mlength, hdr->payload_length);
         return 0;
 
  drop:
         nal->ni.counters.drop_count++;
-        nal->ni.counters.drop_length += PTL_HDR_LENGTH(hdr);
+        nal->ni.counters.drop_length += hdr->payload_length;
         state_unlock (nal, &flags);
-        lib_recv (nal, private, NULL, NULL, 0, 0, PTL_HDR_LENGTH (hdr));
+        lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
         return -1;
 }
 
@@ -676,11 +676,6 @@ static int parse_get(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
         hdr->msg.get.sink_length = NTOH__u32 (hdr->msg.get.sink_length);
         hdr->msg.get.src_offset = NTOH__u32 (hdr->msg.get.src_offset);
 
-        /* compatibility check until field is deleted */
-        if (hdr->msg.get.return_offset != 0)
-                CERROR("Unexpected non-zero get.return_offset %x from "
-                       LPU64"\n", hdr->msg.get.return_offset, hdr->src_nid);
-
         state_lock(nal, &flags);
 
         me = lib_find_me(nal, hdr->msg.get.ptl_index, PTL_MD_OP_GET,
@@ -694,7 +689,7 @@ static int parse_get(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
         md = me->md;
         CDEBUG(D_NET, "Incoming get index %d from "LPU64".%u of length %d/%d "
                "from md "LPX64" [%d] + %d\n", hdr->msg.get.ptl_index,
-               hdr->src_nid, hdr->src_pid, mlength, PTL_HDR_LENGTH(hdr), 
+               hdr->src_nid, hdr->src_pid, mlength, hdr->payload_length, 
                md->md_lh.lh_cookie, md->md_niov, offset);
 
         msg = get_new_msg (nal, md);
@@ -710,7 +705,7 @@ static int parse_get(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                 msg->ev.initiator.pid = hdr->src_pid;
                 msg->ev.portal = hdr->msg.get.ptl_index;
                 msg->ev.match_bits = hdr->msg.get.match_bits;
-                msg->ev.rlength = PTL_HDR_LENGTH(hdr);
+                msg->ev.rlength = hdr->payload_length;
                 msg->ev.mlength = mlength;
                 msg->ev.offset = offset;
                 msg->ev.hdr_data = 0;
@@ -745,7 +740,7 @@ static int parse_get(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
         reply.src_nid  = HTON__u64 (ni->nid);
         reply.dest_pid = HTON__u32 (hdr->src_pid);
         reply.src_pid  = HTON__u32 (ni->pid);
-        PTL_HDR_LENGTH(&reply) = HTON__u32 (mlength);
+        reply.payload_length = HTON__u32 (mlength);
 
         reply.msg.reply.dst_wmd = hdr->msg.get.return_wmd;
 
@@ -763,13 +758,13 @@ static int parse_get(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
         }
 
         /* Complete the incoming message */
-        lib_recv (nal, private, NULL, NULL, 0, 0, PTL_HDR_LENGTH (hdr));
+        lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
         return (rc);
  drop:
         ni->counters.drop_count++;
         ni->counters.drop_length += hdr->msg.get.sink_length;
         state_unlock(nal, &flags);
-        lib_recv (nal, private, NULL, NULL, 0, 0, PTL_HDR_LENGTH (hdr));
+        lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
         return -1;
 }
 
@@ -781,11 +776,6 @@ static int parse_reply(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
         int              length;
         lib_msg_t       *msg;
         unsigned long    flags;
-
-        /* compatibility check until field is deleted */
-        if (hdr->msg.reply.dst_offset != 0)
-                CERROR("Unexpected non-zero reply.dst_offset %x from "LPU64"\n",
-                       hdr->msg.reply.dst_offset, hdr->src_nid);
 
         state_lock(nal, &flags);
 
@@ -802,7 +792,7 @@ static int parse_reply(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
 
         LASSERT (md->offset == 0);
 
-        length = rlength = PTL_HDR_LENGTH(hdr);
+        length = rlength = hdr->payload_length;
 
         if (length > md->length) {
                 if ((md->options & PTL_MD_TRUNCATE) == 0) {
@@ -848,9 +838,9 @@ static int parse_reply(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
 
  drop:
         nal->ni.counters.drop_count++;
-        nal->ni.counters.drop_length += PTL_HDR_LENGTH(hdr);
+        nal->ni.counters.drop_length += hdr->payload_length;
         state_unlock (nal, &flags);
-        lib_recv (nal, private, NULL, NULL, 0, 0, PTL_HDR_LENGTH (hdr));
+        lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
         return -1;
 }
 
@@ -901,13 +891,13 @@ static int parse_ack(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
 
         ni->counters.recv_count++;
         state_unlock(nal, &flags);
-        lib_recv (nal, private, msg, NULL, 0, 0, PTL_HDR_LENGTH (hdr));
+        lib_recv (nal, private, msg, NULL, 0, 0, hdr->payload_length);
         return 0;
 
  drop:
         nal->ni.counters.drop_count++;
         state_unlock (nal, &flags);
-        lib_recv (nal, private, NULL, NULL, 0, 0, PTL_HDR_LENGTH (hdr));
+        lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
         return -1;
 }
 
@@ -954,7 +944,7 @@ void print_hdr(nal_cb_t * nal, ptl_hdr_t * hdr)
                                hdr->msg.put.match_bits);
                 nal->cb_printf(nal,
                                "    Length %d, offset %d, hdr data "LPX64"\n",
-                               PTL_HDR_LENGTH(hdr), hdr->msg.put.offset,
+                               hdr->payload_length, hdr->msg.put.offset,
                                hdr->msg.put.hdr_data);
                 break;
 
@@ -984,7 +974,7 @@ void print_hdr(nal_cb_t * nal, ptl_hdr_t * hdr)
                                "length %d\n",
                                hdr->msg.reply.dst_wmd.wh_interface_cookie,
                                hdr->msg.reply.dst_wmd.wh_object_cookie,
-                               PTL_HDR_LENGTH(hdr));
+                               hdr->payload_length);
         }
 
 }                               /* end of print_hdr() */
@@ -994,21 +984,13 @@ int lib_parse(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
 {
         unsigned long  flags;
 
-        /* NB static check; optimizer will elide this if it's right */
-        LASSERT (offsetof (ptl_hdr_t, msg.ack.length) ==
-                 offsetof (ptl_hdr_t, msg.put.length));
-        LASSERT (offsetof (ptl_hdr_t, msg.ack.length) ==
-                 offsetof (ptl_hdr_t, msg.get.length));
-        LASSERT (offsetof (ptl_hdr_t, msg.ack.length) ==
-                 offsetof (ptl_hdr_t, msg.reply.length));
-
         /* convert common fields to host byte order */
         hdr->dest_nid = NTOH__u64 (hdr->dest_nid);
         hdr->src_nid = NTOH__u64 (hdr->src_nid);
         hdr->dest_pid = NTOH__u32 (hdr->dest_pid);
         hdr->src_pid = NTOH__u32 (hdr->src_pid);
         hdr->type = NTOH__u32 (hdr->type);
-        PTL_HDR_LENGTH(hdr) = NTOH__u32 (PTL_HDR_LENGTH(hdr));
+        hdr->payload_length = NTOH__u32(hdr->payload_length);
 #if 0
         nal->cb_printf(nal, "%d: lib_parse: nal=%p hdr=%p type=%d\n",
                        nal->ni.nid, nal, hdr, hdr->type);
@@ -1023,7 +1005,7 @@ int lib_parse(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                         nal->ni.nid, mv->magic, 
                         mv->version_major, mv->version_minor,
                         hdr->src_nid);
-                lib_recv (nal, private, NULL, NULL, 0, 0, PTL_HDR_LENGTH (hdr));
+                lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
                 return (-1);
         }
         
@@ -1034,10 +1016,10 @@ int lib_parse(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
 
                 state_lock (nal, &flags);
                 nal->ni.counters.drop_count++;
-                nal->ni.counters.drop_length += PTL_HDR_LENGTH(hdr);
+                nal->ni.counters.drop_length += hdr->payload_length;
                 state_unlock (nal, &flags);
 
-                lib_recv (nal, private, NULL, NULL, 0, 0, PTL_HDR_LENGTH (hdr));
+                lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
                 return (-1);
         }
 
@@ -1048,7 +1030,7 @@ int lib_parse(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                        ": simulated failure\n",
                        nal->ni.nid, hdr_type_string (hdr), 
                        hdr->src_nid);
-                lib_recv (nal, private, NULL, NULL, 0, 0, PTL_HDR_LENGTH (hdr));
+                lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
                 return (-1);
         }
         
@@ -1069,7 +1051,7 @@ int lib_parse(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                        ": Bad type=0x%x\n",  nal->ni.nid, hdr->src_nid,
                        hdr->type);
 
-                lib_recv (nal, private, NULL, NULL, 0, 0, PTL_HDR_LENGTH (hdr));
+                lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
                 return (-1);
         }
 }
@@ -1126,7 +1108,7 @@ int do_PtlPut(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         hdr.src_nid  = HTON__u64 (ni->nid);
         hdr.dest_pid = HTON__u32 (id->pid);
         hdr.src_pid  = HTON__u32 (ni->pid);
-        PTL_HDR_LENGTH(&hdr) = HTON__u32 (md->length);
+        hdr.payload_length = HTON__u32 (md->length);
 
         /* NB handles only looked up by creator (no flips) */
         if (args->ack_req_in == PTL_ACK_REQ) {
@@ -1303,7 +1285,7 @@ int do_PtlGet(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         hdr.src_nid  = HTON__u64 (ni->nid);
         hdr.dest_pid = HTON__u32 (id->pid);
         hdr.src_pid  = HTON__u32 (ni->pid);
-        PTL_HDR_LENGTH(&hdr) = 0;
+        hdr.payload_length = 0;
 
         /* NB handles only looked up by creator (no flips) */
         hdr.msg.get.return_wmd.wh_interface_cookie = ni->ni_interface_cookie;
@@ -1364,12 +1346,15 @@ int do_PtlGet(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
 
 void lib_assert_wire_constants (void)
 {
-        /* Wire protocol assertions generated by 'wirecheck' */
+        /* Wire protocol assertions generated by 'wirecheck'
+         * running on Linux mdev2 2.4.18-p4smp-15llp #1 SMP Wed Oct 8 11:01:07 PDT 2003 i686 unknown
+         * with gcc version 2.96 20000731 (Red Hat Linux 7.3 2.96-113) */
+
 
         /* Constants... */
         LASSERT (PORTALS_PROTO_MAGIC == 0xeebc0ded);
         LASSERT (PORTALS_PROTO_VERSION_MAJOR == 0);
-        LASSERT (PORTALS_PROTO_VERSION_MINOR == 1);
+        LASSERT (PORTALS_PROTO_VERSION_MINOR == 2);
         LASSERT (PTL_MSG_ACK == 0);
         LASSERT (PTL_MSG_PUT == 1);
         LASSERT (PTL_MSG_GET == 2);
@@ -1377,79 +1362,71 @@ void lib_assert_wire_constants (void)
         LASSERT (PTL_MSG_HELLO == 4);
 
         /* Checks for struct ptl_handle_wire_t */
-        LASSERT (sizeof (ptl_handle_wire_t) == 16);
-        LASSERT (offsetof (ptl_handle_wire_t, wh_interface_cookie) == 0);
-        LASSERT (sizeof (((ptl_handle_wire_t *)0)->wh_interface_cookie) == 8);
-        LASSERT (offsetof (ptl_handle_wire_t, wh_object_cookie) == 8);
-        LASSERT (sizeof (((ptl_handle_wire_t *)0)->wh_object_cookie) == 8);
+        LASSERT ((int)sizeof(ptl_handle_wire_t) == 16);
+        LASSERT (offsetof(ptl_handle_wire_t, wh_interface_cookie) == 0);
+        LASSERT ((int)sizeof(((ptl_handle_wire_t *)0)->wh_interface_cookie) == 8);
+        LASSERT (offsetof(ptl_handle_wire_t, wh_object_cookie) == 8);
+        LASSERT ((int)sizeof(((ptl_handle_wire_t *)0)->wh_object_cookie) == 8);
 
         /* Checks for struct ptl_magicversion_t */
-        LASSERT (sizeof (ptl_magicversion_t) == 8);
-        LASSERT (offsetof (ptl_magicversion_t, magic) == 0);
-        LASSERT (sizeof (((ptl_magicversion_t *)0)->magic) == 4);
-        LASSERT (offsetof (ptl_magicversion_t, version_major) == 4);
-        LASSERT (sizeof (((ptl_magicversion_t *)0)->version_major) == 2);
-        LASSERT (offsetof (ptl_magicversion_t, version_minor) == 6);
-        LASSERT (sizeof (((ptl_magicversion_t *)0)->version_minor) == 2);
+        LASSERT ((int)sizeof(ptl_magicversion_t) == 8);
+        LASSERT (offsetof(ptl_magicversion_t, magic) == 0);
+        LASSERT ((int)sizeof(((ptl_magicversion_t *)0)->magic) == 4);
+        LASSERT (offsetof(ptl_magicversion_t, version_major) == 4);
+        LASSERT ((int)sizeof(((ptl_magicversion_t *)0)->version_major) == 2);
+        LASSERT (offsetof(ptl_magicversion_t, version_minor) == 6);
+        LASSERT ((int)sizeof(((ptl_magicversion_t *)0)->version_minor) == 2);
 
         /* Checks for struct ptl_hdr_t */
-        LASSERT (sizeof (ptl_hdr_t) == 72);
-        LASSERT (offsetof (ptl_hdr_t, dest_nid) == 0);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->dest_nid) == 8);
-        LASSERT (offsetof (ptl_hdr_t, src_nid) == 8);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->src_nid) == 8);
-        LASSERT (offsetof (ptl_hdr_t, dest_pid) == 16);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->dest_pid) == 4);
-        LASSERT (offsetof (ptl_hdr_t, src_pid) == 20);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->src_pid) == 4);
-        LASSERT (offsetof (ptl_hdr_t, type) == 24);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->type) == 4);
+        LASSERT ((int)sizeof(ptl_hdr_t) == 72);
+        LASSERT (offsetof(ptl_hdr_t, dest_nid) == 0);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->dest_nid) == 8);
+        LASSERT (offsetof(ptl_hdr_t, src_nid) == 8);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->src_nid) == 8);
+        LASSERT (offsetof(ptl_hdr_t, dest_pid) == 16);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->dest_pid) == 4);
+        LASSERT (offsetof(ptl_hdr_t, src_pid) == 20);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->src_pid) == 4);
+        LASSERT (offsetof(ptl_hdr_t, type) == 24);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->type) == 4);
+        LASSERT (offsetof(ptl_hdr_t, payload_length) == 28);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->payload_length) == 4);
+        LASSERT (offsetof(ptl_hdr_t, msg) == 32);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg) == 40);
 
         /* Ack */
-        LASSERT (offsetof (ptl_hdr_t, msg.ack.mlength) == 28);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.ack.mlength) == 4);
-        LASSERT (offsetof (ptl_hdr_t, msg.ack.dst_wmd) == 32);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.ack.dst_wmd) == 16);
-        LASSERT (offsetof (ptl_hdr_t, msg.ack.match_bits) == 48);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.ack.match_bits) == 8);
-        LASSERT (offsetof (ptl_hdr_t, msg.ack.length) == 56);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.ack.length) == 4);
+        LASSERT (offsetof(ptl_hdr_t, msg.ack.dst_wmd) == 32);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.ack.dst_wmd) == 16);
+        LASSERT (offsetof(ptl_hdr_t, msg.ack.match_bits) == 48);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.ack.match_bits) == 8);
+        LASSERT (offsetof(ptl_hdr_t, msg.ack.mlength) == 56);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.ack.mlength) == 4);
 
         /* Put */
-        LASSERT (offsetof (ptl_hdr_t, msg.put.ptl_index) == 28);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.put.ptl_index) == 4);
-        LASSERT (offsetof (ptl_hdr_t, msg.put.ack_wmd) == 32);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.put.ack_wmd) == 16);
-        LASSERT (offsetof (ptl_hdr_t, msg.put.match_bits) == 48);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.put.match_bits) == 8);
-        LASSERT (offsetof (ptl_hdr_t, msg.put.length) == 56);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.put.length) == 4);
-        LASSERT (offsetof (ptl_hdr_t, msg.put.offset) == 60);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.put.offset) == 4);
-        LASSERT (offsetof (ptl_hdr_t, msg.put.hdr_data) == 64);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.put.hdr_data) == 8);
+        LASSERT (offsetof(ptl_hdr_t, msg.put.ack_wmd) == 32);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.ack_wmd) == 16);
+        LASSERT (offsetof(ptl_hdr_t, msg.put.match_bits) == 48);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.match_bits) == 8);
+        LASSERT (offsetof(ptl_hdr_t, msg.put.hdr_data) == 56);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.hdr_data) == 8);
+        LASSERT (offsetof(ptl_hdr_t, msg.put.ptl_index) == 64);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.ptl_index) == 4);
+        LASSERT (offsetof(ptl_hdr_t, msg.put.offset) == 68);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.put.offset) == 4);
 
         /* Get */
-        LASSERT (offsetof (ptl_hdr_t, msg.get.ptl_index) == 28);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.ptl_index) == 4);
-        LASSERT (offsetof (ptl_hdr_t, msg.get.return_wmd) == 32);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.return_wmd) == 16);
-        LASSERT (offsetof (ptl_hdr_t, msg.get.match_bits) == 48);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.match_bits) == 8);
-        LASSERT (offsetof (ptl_hdr_t, msg.get.length) == 56);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.length) == 4);
-        LASSERT (offsetof (ptl_hdr_t, msg.get.src_offset) == 60);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.src_offset) == 4);
-        LASSERT (offsetof (ptl_hdr_t, msg.get.return_offset) == 64);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.return_offset) == 4);
-        LASSERT (offsetof (ptl_hdr_t, msg.get.sink_length) == 68);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.get.sink_length) == 4);
+        LASSERT (offsetof(ptl_hdr_t, msg.get.return_wmd) == 32);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.return_wmd) == 16);
+        LASSERT (offsetof(ptl_hdr_t, msg.get.match_bits) == 48);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.match_bits) == 8);
+        LASSERT (offsetof(ptl_hdr_t, msg.get.ptl_index) == 56);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.ptl_index) == 4);
+        LASSERT (offsetof(ptl_hdr_t, msg.get.src_offset) == 60);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.src_offset) == 4);
+        LASSERT (offsetof(ptl_hdr_t, msg.get.sink_length) == 64);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.get.sink_length) == 4);
 
         /* Reply */
-        LASSERT (offsetof (ptl_hdr_t, msg.reply.dst_wmd) == 32);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.reply.dst_wmd) == 16);
-        LASSERT (offsetof (ptl_hdr_t, msg.reply.dst_offset) == 48);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.reply.dst_offset) == 4);
-        LASSERT (offsetof (ptl_hdr_t, msg.reply.length) == 56);
-        LASSERT (sizeof (((ptl_hdr_t *)0)->msg.reply.length) == 4);
+        LASSERT (offsetof(ptl_hdr_t, msg.reply.dst_wmd) == 32);
+        LASSERT ((int)sizeof(((ptl_hdr_t *)0)->msg.reply.dst_wmd) == 16);
 }

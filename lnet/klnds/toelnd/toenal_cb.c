@@ -708,26 +708,7 @@ ktoenal_fwd_parse (ksock_conn_t *conn)
         LASSERT (conn->ksnc_rx_state == SOCKNAL_RX_HEADER);
         LASSERT (conn->ksnc_rx_scheduled);
 
-        switch (conn->ksnc_hdr.type)
-        {
-        case PTL_MSG_GET:
-        case PTL_MSG_ACK:
-                body_len = 0;
-                break;
-        case PTL_MSG_PUT:
-                body_len = conn->ksnc_hdr.msg.put.length;
-                break;
-        case PTL_MSG_REPLY:
-                body_len = conn->ksnc_hdr.msg.reply.length;
-                break;
-        default:
-                /* Unrecognised packet type */
-                CERROR ("Unrecognised packet type %d from "LPX64" for "LPX64"\n",
-                        conn->ksnc_hdr.type, conn->ksnc_hdr.src_nid, conn->ksnc_hdr.dest_nid);
-                /* Ignore this header and go back to reading a new packet. */
-                ktoenal_new_packet (conn, 0);
-                return;
-        }
+        body_len = conn->ksnc_hdr.payload_length;
 
         if (body_len < 0)                               /* length corrupt */
         {

@@ -542,8 +542,9 @@ kqswnal_cerror_hdr(ptl_hdr_t * hdr)
 {
         char *type_str = hdr_type_string (hdr);
 
-        CERROR("P3 Header at %p of type %s\n", hdr, type_str);
-        CERROR("    From nid/pid "LPU64"/%u", NTOH__u64(hdr->src_nid),
+        CERROR("P3 Header at %p of type %s length %d\n", hdr, type_str,
+               NTOH__u32(hdr->payload_length));
+        CERROR("    From nid/pid "LPU64"/%u\n", NTOH__u64(hdr->src_nid),
                NTOH__u32(hdr->src_pid));
         CERROR("    To nid/pid "LPU64"/%u\n", NTOH__u64(hdr->dest_nid),
                NTOH__u32(hdr->dest_pid));
@@ -556,8 +557,7 @@ kqswnal_cerror_hdr(ptl_hdr_t * hdr)
                        hdr->msg.put.ack_wmd.wh_interface_cookie,
                        hdr->msg.put.ack_wmd.wh_object_cookie,
                        NTOH__u64 (hdr->msg.put.match_bits));
-                CERROR("    Length %d, offset %d, hdr data "LPX64"\n",
-                       NTOH__u32(PTL_HDR_LENGTH(hdr)),
+                CERROR("    offset %d, hdr data "LPX64"\n",
                        NTOH__u32(hdr->msg.put.offset),
                        hdr->msg.put.hdr_data);
                 break;
@@ -582,10 +582,9 @@ kqswnal_cerror_hdr(ptl_hdr_t * hdr)
                 break;
 
         case PTL_MSG_REPLY:
-                CERROR("    dst md "LPX64"."LPX64", length %d\n",
+                CERROR("    dst md "LPX64"."LPX64"\n",
                        hdr->msg.reply.dst_wmd.wh_interface_cookie,
-                       hdr->msg.reply.dst_wmd.wh_object_cookie,
-                       NTOH__u32 (PTL_HDR_LENGTH(hdr)));
+                       hdr->msg.reply.dst_wmd.wh_object_cookie);
         }
 
 }                               /* end of print_hdr() */

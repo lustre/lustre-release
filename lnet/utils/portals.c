@@ -40,6 +40,7 @@
 #include <portals/ptlctl.h>
 #include <portals/list.h>
 #include <portals/lib-types.h>
+#include <portals/socknal.h>
 #include "parser.h"
 
 unsigned int portal_debug;
@@ -435,14 +436,13 @@ jt_ptl_print_autoconnects (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                printf (LPX64"@%s:%d #%d buffer %d nonagle %s xchg %s "
-                        "affinity %s eager %s share %d\n",
+                printf (LPX64"@%s:%d #%d buffer %d "
+                        "nonagle %s affinity %s eager %s share %d\n",
                         pcfg.pcfg_nid, ptl_ipaddr_2_str (pcfg.pcfg_id, buffer),
                         pcfg.pcfg_misc, pcfg.pcfg_count, pcfg.pcfg_size, 
                         (pcfg.pcfg_flags & 1) ? "on" : "off",
                         (pcfg.pcfg_flags & 2) ? "on" : "off",
                         (pcfg.pcfg_flags & 4) ? "on" : "off",
-                        (pcfg.pcfg_flags & 8) ? "on" : "off",
                         pcfg.pcfg_wait);
         }
 
@@ -458,14 +458,13 @@ jt_ptl_add_autoconnect (int argc, char **argv)
         ptl_nid_t                nid;
         __u32                    ip;
         int                      port;
-        int                      xchange_nids = 0;
         int                      irq_affinity = 0;
         int                      share = 0;
         int                      eager = 0;
         int                      rc;
 
         if (argc < 4 || argc > 5) {
-                fprintf (stderr, "usage: %s nid ipaddr port [ixse]\n", argv[0]);
+                fprintf (stderr, "usage: %s nid ipaddr port [ise]\n", argv[0]);
                 return 0;
         }
 
@@ -493,9 +492,6 @@ jt_ptl_add_autoconnect (int argc, char **argv)
                 
                 while (*opts != 0)
                         switch (*opts++) {
-                        case 'x':
-                                xchange_nids = 1;
-                                break;
                         case 'i':
                                 irq_affinity = 1;
                                 break;
@@ -519,10 +515,9 @@ jt_ptl_add_autoconnect (int argc, char **argv)
         /* only passing one buffer size! */
         pcfg.pcfg_size    = MAX (g_socket_rxmem, g_socket_txmem);
         pcfg.pcfg_flags   = (g_socket_nonagle ? 0x01 : 0) |
-                           (xchange_nids     ? 0x02 : 0) |
-                           (irq_affinity     ? 0x04 : 0) |
-                           (share            ? 0x08 : 0) |
-                           (eager            ? 0x10 : 0);
+                            (irq_affinity     ? 0x02 : 0) |
+                            (share            ? 0x04 : 0) |
+                            (eager            ? 0x08 : 0);
 
         rc = pcfg_ioctl (&pcfg);
         if (rc != 0) {
@@ -618,10 +613,14 @@ jt_ptl_print_connections (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                printf (LPX64"@%s:%d\n",
+                printf (LPX64"@%s:%d:%s\n",
                         pcfg.pcfg_nid, 
                         ptl_ipaddr_2_str (pcfg.pcfg_id, buffer),
-                        pcfg.pcfg_misc);
+                        pcfg.pcfg_misc,
+                        (pcfg.pcfg_flags == SOCKNAL_CONN_ANY) ? "A" :
+                        (pcfg.pcfg_flags == SOCKNAL_CONN_CONTROL) ? "C" :
+                        (pcfg.pcfg_flags == SOCKNAL_CONN_BULK_IN) ? "I" :
+                        (pcfg.pcfg_flags == SOCKNAL_CONN_BULK_OUT) ? "O" : "?");
         }
 
         if (index == 0)
@@ -630,7 +629,7 @@ jt_ptl_print_connections (int argc, char **argv)
 }
 
 int
-exchange_nids (int cfd, ptl_nid_t my_nid, ptl_nid_t *peer_nid)
+exchange_nids (int cfd, ptl_nid_t my_nid, int type, ptl_nid_t *peer_nid)
 {
         int                      rc;
         ptl_hdr_t                hdr;
@@ -646,6 +645,8 @@ exchange_nids (int cfd, ptl_nid_t my_nid, ptl_nid_t *peer_nid)
 
         hdr.src_nid = __cpu_to_le64 (my_nid);
         hdr.type = __cpu_to_le32 (PTL_MSG_HELLO);
+
+        *(__u32 *)&hdr.msg = __cpu_to_le32(type);
         
         /* Assume there's sufficient socket buffering for a portals HELLO header */
         rc = sock_write (cfd, &hdr, sizeof (hdr));
@@ -689,11 +690,11 @@ exchange_nids (int cfd, ptl_nid_t my_nid, ptl_nid_t *peer_nid)
 
         /* ...and check we got what we expected */
         if (hdr.type != __cpu_to_le32 (PTL_MSG_HELLO) ||
-            PTL_HDR_LENGTH (&hdr) != __cpu_to_le32 (0)) {
+            hdr.payload_length != __cpu_to_le32 (0)) {
                 fprintf (stderr, "Expecting a HELLO hdr with 0 payload,"
                          " but got type %d with %d payload\n",
                          __le32_to_cpu (hdr.type),
-                         __le32_to_cpu (PTL_HDR_LENGTH (&hdr)));
+                         __le32_to_cpu (hdr.payload_length));
                 return (-1);
         }
         
@@ -714,13 +715,13 @@ int jt_ptl_connect(int argc, char **argv)
         int rxmem = 0;
         int txmem = 0;
         int bind_irq = 0;
-        int xchange_nids = 0;
+        int type = SOCKNAL_CONN_ANY;
         int port;
         int o;
         int olen;
 
         if (argc < 3) {
-                fprintf(stderr, "usage: %s ip port [xi]\n", argv[0]);
+                fprintf(stderr, "usage: %s ip port [xibctr]\n", argv[0]);
                 return 0;
         }
 
@@ -746,8 +747,28 @@ int jt_ptl_connect(int argc, char **argv)
                                 bind_irq = 1;
                                 break;
                                 
-                        case 'x':
-                                xchange_nids = 1;
+                        case 'I':
+                                if (type != SOCKNAL_CONN_ANY) {
+                                        fprintf(stderr, "Can't flag type twice\n");
+                                        return -1;
+                                }
+                                type = SOCKNAL_CONN_BULK_IN;
+                                break;
+
+                        case 'O':
+                                if (type != SOCKNAL_CONN_ANY) {
+                                        fprintf(stderr, "Can't flag type twice\n");
+                                        return -1;
+                                }
+                                type = SOCKNAL_CONN_BULK_OUT;
+                                break;
+
+                        case 'C':
+                                if (type != SOCKNAL_CONN_ANY) {
+                                        fprintf(stderr, "Can't flag type twice\n");
+                                        return -1;
+                                }
+                                type = SOCKNAL_CONN_CONTROL;
                                 break;
                                 
                         default:
@@ -808,33 +829,35 @@ int jt_ptl_connect(int argc, char **argv)
         if (getsockopt (fd, IPPROTO_TCP, TCP_NODELAY, &nonagle, &olen) != 0)
                 fprintf (stderr, "Can't get nagle: %s\n", strerror (errno));
 
-        if (!xchange_nids) 
-                peer_nid = ipaddr;
-        else {
-                PORTAL_IOC_INIT (data);
-                data.ioc_nal = g_nal;
-                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_NID, &data);
-                if (rc != 0) {
-                        fprintf (stderr, "failed to get my nid: %s\n",
-                                 strerror (errno));
-                        close (fd);
-                        return (-1);
-                }
+        PORTAL_IOC_INIT (data);
+        data.ioc_nal = g_nal;
+        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_NID, &data);
+        if (rc != 0) {
+                fprintf (stderr, "failed to get my nid: %s\n",
+                         strerror (errno));
+                close (fd);
+                return (-1);
+        }
 
-                rc = exchange_nids (fd, data.ioc_nid, &peer_nid);
-                if (rc != 0) {
-                        close (fd);
-                        return (-1);
-                }
-        } 
-        printf("Connected host: %s NID "LPX64" snd: %d rcv: %d nagle: %s\n", argv[1],
-               peer_nid, txmem, rxmem, nonagle ? "Disabled" : "Enabled");
+        rc = exchange_nids (fd, data.ioc_nid, type, &peer_nid);
+        if (rc != 0) {
+                close (fd);
+                return (-1);
+        }
+
+        printf("Connected host: %s NID "LPX64" snd: %d rcv: %d nagle: %s type: %s\n", 
+               argv[1], peer_nid, txmem, rxmem, nonagle ? "Disabled" : "Enabled",
+               (type == SOCKNAL_CONN_ANY) ? "A" :
+               (type == SOCKNAL_CONN_CONTROL) ? "C" :
+               (type == SOCKNAL_CONN_BULK_IN) ? "I" :
+               (type == SOCKNAL_CONN_BULK_OUT) ? "O" : "?");
 
         PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
         pcfg.pcfg_fd = fd;
         pcfg.pcfg_nid = peer_nid;
         pcfg.pcfg_flags = bind_irq;
-
+        pcfg.pcfg_misc = type;
+        
         rc = pcfg_ioctl(&pcfg);
         if (rc) {
                 fprintf(stderr, "failed to register fd with portals: %s\n", 
