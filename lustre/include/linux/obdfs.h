@@ -12,12 +12,14 @@
 #ifndef _OBDFS_H
 #define OBDFS_H
 #include <linux/obd_class.h>
+#include <linux/list.h>
 
 /* super.c */
 void obdfs_read_inode(struct inode *inode);
 
 
 /* rw.c */
+int obdfs_init_wreqcache(void);
 int obdfs_readpage(struct dentry *dentry, struct page *page);
 int obdfs_writepage(struct dentry *dentry, struct page *page);
 struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create, int locked);
@@ -42,6 +44,12 @@ int obdfs_check_dir_entry (const char * function, struct inode * dir,
 int obdfs_readlink (struct dentry *, char *, int);
 struct dentry *obdfs_follow_link(struct dentry *, struct dentry *, unsigned int); 
 
+struct obdfs_wreq {
+	struct list_head	 wb_list;	/* linked list of req's */
+	struct inode 		*wb_inode;	/* dentry referenced */
+	struct page 		*wb_page;	/* page to be written */
+};
+
 struct obdfs_sb_info {
 	struct obd_conn osi_conn;
 	struct super_block *osi_super;
@@ -49,7 +57,13 @@ struct obdfs_sb_info {
 	struct obd_ops *osi_ops;     
 	ino_t           osi_rootino; /* which root inode */
 	int             osi_minor;   /* minor of /dev/obdX */
+	struct list_head osi_list;  /* linked list of pages to write */
 };
+
+#define WB_NEXT(req)	((struct obdfs_wreq *) ((req)->wb_list.next))
+/* XXX page list should go on each inode instead of supberblock */
+#define OBD_LIST(inode)	(((struct obdfs_sb_info *)(&(inode)->i_sb->u.generic_sbp))->osi_list)
+#define WREQ(entry)	(list_entry(entry, struct obdfs_wreq, wb_list))
 
 void obdfs_sysctl_init(void);
 void obdfs_sysctl_clean(void);

@@ -192,7 +192,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 		goto error;
 	}
 
-	
+	INIT_LIST_HEAD(&sbi->osi_list);
 
 	sbi->osi_super = sb;
 
@@ -388,9 +388,15 @@ struct file_system_type obdfs_fs_type = {
 
 int init_obdfs(void)
 {
+	int err;
+
 	printk(KERN_INFO "OBDFS v0.1, braam@stelias.com\n");
 
 	obdfs_sysctl_init();
+
+	err = obdfs_init_wreqcache();
+	if (err)
+		return err;
 
 	return register_filesystem(&obdfs_fs_type);
 }
