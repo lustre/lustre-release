@@ -19,6 +19,12 @@ while ($line = <>) {
         $name = $6;
         $size = $7;
         $addr = $8;
+
+	# we can't dump the log after portals has exited, so skip "leaks"
+	# from memory freed in the portals module unloading.
+	if ($func eq 'portals_handle_init') {
+	    next;
+	}
         printf("%8s %6d bytes at %s called %s (%s:%s:%d)\n", $type, $size,
                $addr, $name, $file, $func, $lno);
     } else {
