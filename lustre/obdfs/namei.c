@@ -860,8 +860,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 	     symname [l]; l++)
 		;
 
-	/* For obdfs we always use normal (not fast) symlinks
-	if (l >= sizeof (inode->u.ext2_i.i_data)) { */
+	if (l >= sizeof (inode->u.ext2_i.i_data)) {
 		CDEBUG(D_INODE, "l=%d, normal symlink\n", l);
 
 		name_page = obdfs_getpage(inode, 0, 1, LOCKED);
@@ -873,12 +872,12 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 			return err;
 		}
 		link = (char *)page_address(name_page);
-	/* } else {
+	} else {
 		link = (char *) inode->u.ext2_i.i_data;
 
 		CDEBUG(D_INODE, "l=%d, fast symlink\n", l);
 
-	} */
+	}
 	i = 0;
 	while (i < inode->i_sb->s_blocksize - 1 && (c = *(symname++)))
 		link[i++] = c;

@@ -9,14 +9,14 @@ directory.
 
 3. insmod obdfs
 
-4. mount -t obdfs /dev/obd /mnt
+4. mount -t obdfs -o device=/dev/obd0 /dev/obd0 /mnt/obd
 
 To verify: type mount (output:
-/dev/obd on /mnt type obdfs (rw))
+/dev/obd on /mnt/obd type obdfs (rw))
 
-5. ls -ld /mnt
+5. ls -ld /mnt/obd
 
-6. chmod 711 /mnt, ls -ld /mnt
+6. chmod 711 /mnt/obd, ls -ld /mnt/obd
 
-7. chown seagate /mnt , ls -ld /mnt
+7. chown disk /mnt/obd, ls -ld /mnt/obd
 
