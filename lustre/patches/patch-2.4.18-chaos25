@@ -1,3 +1,7 @@
+--- linux-2.4.18-17.8.0-uml-pristine/include/linux/lustre_version.h	Wed Dec 31 19:00:00 1969
++++ linux-2.4.18-17.8.0-uml/include/linux/lustre_version.h	Tue Nov 26 07:02:14 2002
+@@ -0,0 +1 @@
++#define LUSTRE_KERNEL_VERSION 3
 --- kernel-2.4.18-pristine/arch/ia64/mm/init.c	2002-10-14 13:47:20.000000000 -0600
 +++ kernel-2.4.18/arch/ia64/mm/init.c	2002-10-14 14:08:23.000000000 -0600
 @@ -37,6 +37,12 @@
