@@ -1394,7 +1394,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                         LBUG();
                         break;
                 default:
-                        CERROR("Unhandled intent\n");
+                        CERROR("Unhandled intent "LPD64"\n", it->opc);
                         LBUG();
                 }
 

@@ -116,6 +116,8 @@ int mdc_create(struct lustre_handle *conn,
                 goto resend;
         }
 
+        mdc_store_inode_generation(req, 0, 0);
+
         *request = req;
         RETURN(rc);
 }

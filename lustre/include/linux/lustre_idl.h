@@ -420,6 +420,7 @@ struct mds_rec_create {
         __u32           cr_fsgid;
         __u32           cr_mode;
         struct ll_fid   cr_fid;
+        struct ll_fid   cr_replayfid;
         __u32           cr_uid;
         __u32           cr_gid;
         __u64           cr_time;

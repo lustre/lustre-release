@@ -145,6 +145,7 @@ void mds_create_pack(struct ptlrpc_request *req, int offset,
         rec->cr_fsuid = HTON__u32(current->fsuid);
         rec->cr_fsgid = HTON__u32(current->fsgid);
         ll_inode2fid(&rec->cr_fid, dir);
+        memset(&rec->cr_replayfid, 0, sizeof rec->cr_replayfid);
         rec->cr_mode = HTON__u32(mode);
         rec->cr_rdev = HTON__u64(rdev);
         rec->cr_uid = HTON__u32(uid);
@@ -331,6 +332,7 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fsuid = NTOH__u32(rec->cr_fsuid);
         r->ur_fsgid = NTOH__u32(rec->cr_fsgid);
         r->ur_fid1 = &rec->cr_fid;
+        r->ur_fid2 = &rec->cr_replayfid;
         r->ur_mode = NTOH__u32(rec->cr_mode);
         r->ur_rdev = NTOH__u64(rec->cr_rdev);
         r->ur_uid = NTOH__u32(rec->cr_uid);

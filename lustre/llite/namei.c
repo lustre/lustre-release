@@ -236,7 +236,7 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                 ino = mds_body->fid1.id;
                 mode = mds_body->mode;
                 if (it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) {
-                        mdc_store_create_replay_data(request, parent->i_sb);
+                        mdc_store_inode_generation(request, 2, 1);
                         /* For create ops, we want the lookup to be negative,
                          * unless the create failed in a way that indicates
                          * that the file is already there */

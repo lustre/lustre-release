@@ -187,8 +187,9 @@ int mdc_rename(struct lustre_handle *conn,
                struct ptlrpc_request **);
 int mdc_create_client(obd_uuid_t uuid, struct ptlrpc_client *cl);
 
-void mdc_store_create_replay_data(struct ptlrpc_request *req,
-                                  struct super_block *sb);
+/* Store the generation of a newly-created inode in |req| for replay. */
+void mdc_store_inode_generation(struct ptlrpc_request *req, int reqoff,
+                                int repoff);
 
 extern int mds_client_add(struct mds_export_data *med, int cl_off);
 extern int mds_client_free(struct obd_export *exp);

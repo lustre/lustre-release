@@ -300,8 +300,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 struct inode *inode = dchild->d_inode;
                 struct mds_body *body;
 
-                CDEBUG(D_INODE, "created ino %ld\n", dchild->d_inode->i_ino);
-
                 iattr.ia_atime = rec->ur_time;
                 iattr.ia_ctime = rec->ur_time;
                 iattr.ia_mtime = rec->ur_time;
@@ -309,6 +307,16 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 iattr.ia_gid = rec->ur_gid;
                 iattr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
                         ATTR_MTIME | ATTR_CTIME;
+
+                if (rec->ur_fid2->id) {
+                        LASSERT(rec->ur_opcode & REINT_REPLAYING);
+                        inode->i_generation = rec->ur_fid2->generation;
+                        /* Dirtied and committed by this setattr: */
+                        CDEBUG(D_INODE, "recreated ino %ld with gen %ld\n",
+                               inode->i_ino, inode->i_generation);
+                } else {
+                        CDEBUG(D_INODE, "created ino %ld\n", inode->i_ino);
+                }
 
                 rc = mds_fs_setattr(mds, dchild, handle, &iattr);
                 if (rc) {
