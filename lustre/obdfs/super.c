@@ -9,6 +9,7 @@
  * Copryright (C) 1999 Stelias Computing Inc. <braam@stelias.com>
  * Copryright (C) 1999 Seagate Technology Inc.
  * Copryright (C) 2001 Mountain View Data, Inc.
+ * Copryright (C) 2002 Cluster File Systems, Inc.
  *
  */
 
@@ -84,42 +85,13 @@ static void obdfs_options(char *options, char **dev, char **vers)
         }
 }
 
-static int obdfs_getdev(char *devpath, int *dev)
-{
-        struct dentry *dentry;
-        kdev_t devno;
-        struct nameidata nd;
-        int error = 0; 
-
-        ENTRY;
-        if (path_init(devpath, LOOKUP_POSITIVE, &nd))
-                error = path_walk(devpath, &nd);
-        if (error)
-                return error;
-
-        dentry = nd.dentry;
-        if (!S_ISCHR(dentry->d_inode->i_mode))
-                return -ENODEV;
-
-        devno = dentry->d_inode->i_rdev;
-        if ( MAJOR(devno) != OBD_PSDEV_MAJOR ) 
-                return -ENODEV;
-        
-        if ( MINOR(devno) >= MAX_OBD_DEVICES ) 
-                return -ENODEV;
-
-        *dev = devno;
-        return 0;
-}
-
-
 static struct super_block * obdfs_read_super(struct super_block *sb, 
                                             void *data, int silent)
 {
         struct inode *root = 0; 
         struct obdfs_sb_info *sbi = (struct obdfs_sb_info *)(&sb->u.generic_sbp);
         struct obd_device *obddev;
-        char *device = NULL;
+	char *device = NULL;
         char *version = NULL;
 	int connected = 0;
         int devno;
@@ -144,30 +116,16 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
                 goto ERR;
         }
 
+	devno = simple_strtoul(device, NULL, 0);
         CDEBUG(D_INFO, "\n"); 
-        if ( (err = obdfs_getdev(device, &devno)) ) {
-                printk("Cannot get devno of %s, error %d\n", device, err);
-                EXIT;
-                goto ERR;;
-        }
-
-        CDEBUG(D_INFO, "\n"); 
-        if ( MAJOR(devno) != OBD_PSDEV_MAJOR ) {
-                printk(__FUNCTION__ ": wrong major number %d!\n", MAJOR(devno));
-                EXIT;
-                goto ERR;
-        }
-                
-        CDEBUG(D_INFO, "\n"); 
-        if ( MINOR(devno) >= MAX_OBD_DEVICES ) {
-                printk(__FUNCTION__ ": minor of %s too high (%d)\n",
-                       device, MINOR(devno));
+        if ( devno >= MAX_OBD_DEVICES ) {
+                printk(__FUNCTION__ ": device of %s too high (%d)\n", device, devno);
                 EXIT;
                 goto ERR;
         } 
 
         CDEBUG(D_INFO, "\n"); 
-        obddev = &obd_dev[MINOR(devno)];
+        obddev = &obd_dev[devno];
 
         CDEBUG(D_INFO, "\n"); 
         if ( ! (obddev->obd_flags & OBD_ATTACHED) || 
@@ -550,7 +508,7 @@ struct file_system_type obdfs_fs_type = {
 
 int init_obdfs(void)
 {
-        int err;
+        //int err;
 
         printk(KERN_INFO "OBDFS v0.1, braam@stelias.com\n");
 

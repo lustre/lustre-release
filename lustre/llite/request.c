@@ -33,6 +33,23 @@
 #define REQUEST_MINOR 244
 extern int mds_queue_req(struct mds_request *);
 
+static int mds_send_req(struct mds_request *req)
+{
+	int rc;
+	init_waitqueue_head(&req->rq_wait_for_rep);
+	/* XXX replace the following with networking code */ 
+	rc = mds_queue_req(req); 
+	if (rc) { 
+		EXIT;
+		return rc;
+	}
+
+	printk("-- sleeping\n");
+	interruptible_sleep_on(&req->rq_wait_for_rep);
+	printk("-- done\n");
+	return 0;
+}
+
 int llight_getattr(ino_t ino, struct  mds_rep  *rep)
 {
 	struct mds_request *request;
@@ -56,7 +73,7 @@ int llight_getattr(ino_t ino, struct  mds_rep  *rep)
 
 	request->rq_reqhdr->opc = MDS_GETATTR;
 	
-	rc = mds_queue_req(request);
+	rc = mds_send_req(request);
 	if (rc) { 
 		printk("llight request: error in handling %d\n", rc); 
 		return rc;

@@ -257,6 +257,7 @@ static int jt_setup(int argc, char **argv)
 
 	data.ioc_inllen1 =  strlen(argv[1]) + 1;
 	data.ioc_inlbuf1 = argv[1];
+	data.ioc_dev = strtoul(argv[1], NULL, 0); 
 	if ( argc == 3 ) { 
 		data.ioc_inllen2 = strlen(argv[2]) + 1;
 		data.ioc_inlbuf2 = argv[2];
@@ -293,7 +294,9 @@ static int jt_create(int argc, char **argv)
 	IOCINIT(data);
 	if (argc > 1) { 
 		num = strtoul(argv[1], NULL, 0);
-	} else
+	} else { 
+		printf("usage %s num [mode] [silent]\n", argv[0]); 
+	}
 
 	if (argc > 2) { 
 		data.ioc_obdo1.o_mode = strtoul(argv[2], NULL, 0);
@@ -320,6 +323,31 @@ static int jt_create(int argc, char **argv)
 	return 0;
 }
 
+static int jt_getattr(int argc, char **argv)
+{
+	struct obd_ioctl_data data;
+	int rc;
+
+	IOCINIT(data);
+	if (argc != 1) { 
+		data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
+		data.ioc_obdo1.o_valid = 0xffffffff;
+		printf("getting attr for %Ld\n", data.ioc_obdo1.o_id);
+	} else { 
+		printf("usage %s id\n", argv[0]); 
+		return 0;
+	}
+
+	rc = ioctl(fd, OBD_IOC_GETATTR , &data);
+	if (rc) { 
+		printf("Error: %s\n", strerror(rc)); 
+	} else { 
+		printf("attr obdo %Ld, mode %o\n", data.ioc_obdo1.o_id, 
+		       data.ioc_obdo1.o_mode);
+	}
+	return 0;
+}
+
 command_t list[] = {
 	{"device", jt_device, 0, "set current device (args device no)"},
     {"attach", jt_attach, 0, "name the typed of device (args: type data"},
@@ -327,6 +355,7 @@ command_t list[] = {
     {"detach", jt_detach, 0, "detach the current device (arg: )"},
     {"cleanup", jt_cleanup, 0, "cleanup the current device (arg: )"},
     {"create", jt_create, 0, "create [count [mode [silent]]]"},
+    {"getattr", jt_getattr, 0, "getattr id"},
     {"connect", jt_connect, 0, "connect - get a connection to device"},
     {"disconnect", jt_disconnect, 0, "disconnect - break connection to device"},
     {"help", Parser_help, 0, "help"},

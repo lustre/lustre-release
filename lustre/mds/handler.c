@@ -35,21 +35,42 @@
 // for testing
 static struct mds_obd *MDS;
 
-// for testing
+// XXX make this networked!  
 static int mds_queue_req(struct mds_request *req)
 {
+	struct mds_request *srv_request;
 	
 	if (!MDS) { 
 		EXIT;
 		return -1;
 	}
 
-	list_add(&req->rq_list, &MDS->mds_reqs); 
-	init_waitqueue_head(&req->rq_wait_for_mds_rep);
-	req->rq_obd = MDS;
+	srv_request = kmalloc(sizeof(*srv_request), GFP_KERNEL);
+	if (!srv_request) { 
+		EXIT;
+		return -ENOMEM;
+	}
+
+	/* move the request buffer */
+	srv_request->rq_reqlen = req->rq_reqlen;
+	srv_request->rq_reqbuf = req->rq_reqbuf;
+	srv_request->rq_obd = MDS;
+
+	req->rq_reqbuf = NULL;
+	req->rq_reqlen = 0; 
+
+	/* remember where it came from */
+	srv_request->rq_reply_handle = req;
+
+	/* get the server working on this request */
+	spin_lock(&MDS->mds_lock); 
+	list_add(&srv_request->rq_list, &MDS->mds_reqs); 
+	spin_unlock(&MDS->mds_lock); 
 	wake_up(&MDS->mds_waitq);
+
+	/* put client asleep */
 	printk("-- sleeping\n");
-	interruptible_sleep_on(&req->rq_wait_for_mds_rep);
+	interruptible_sleep_on(&req->rq_wait_for_rep);
 	printk("-- done\n");
 	return 0;
 }
@@ -113,12 +134,25 @@ int mds_getattr(struct mds_request *req)
 	return 0;
 }
 
+/* XXX replace with networking code */
 int mds_reply(struct mds_request *req)
 {
+	struct mds_request *clnt_req = req->rq_reply_handle;
+
 	ENTRY;
+
+	/* free the request buffer */
 	kfree(req->rq_reqbuf);
 	req->rq_reqbuf = NULL; 
-	wake_up_interruptible(&req->rq_wait_for_mds_rep); 
+	
+	/* move the reply to the client */ 
+	clnt_req->rq_replen = req->rq_replen;
+	clnt_req->rq_repbuf = req->rq_repbuf;
+	req->rq_repbuf = NULL;
+	req->rq_replen = 0;
+
+	/* wake up the client */ 
+	wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
 	EXIT;
 	return 0;
 }
@@ -139,7 +173,9 @@ int mds_error(struct mds_request *req)
 	hdr->seqno = req->rq_reqhdr->seqno;
 	hdr->status = req->rq_status; 
 	hdr->type = MDS_TYPE_ERR;
+
 	req->rq_repbuf = (char *)hdr;
+	req->rq_replen = sizeof(*hdr); 
 
 	EXIT;
 	return mds_reply(req);

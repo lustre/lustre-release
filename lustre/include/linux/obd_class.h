@@ -24,23 +24,12 @@
 #include <linux/obd.h>
 #endif
 
-
-
-
-
-
 /*
  *  ======== OBD Device Declarations ===========
  */
-
-
-#define OBD_PSDEV_MAJOR 186
 #define MAX_OBD_DEVICES 8
 #define MAX_MULTI       16
-
-
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
-
 
 #define OBD_ATTACHED 0x1
 #define OBD_SET_UP   0x2
@@ -49,9 +38,6 @@ struct obd_conn {
         struct obd_device *oc_dev;
         uint32_t oc_id;
 };
-
-
-
 
 typedef struct {
 	uint32_t len;
@@ -91,6 +77,7 @@ struct obd_device {
                 struct snap_obd snap;
 	        struct trace_obd trace;
                 struct ost_obd ost;
+                struct osc_obd osc;
         } u;
 };
 
@@ -144,6 +131,12 @@ struct obd_ops {
                       obd_size count, obd_off offset);
         int (*o_iterate)(struct obd_conn *conn, int (*)(obd_id, obd_gr, void *),
                          obd_id *startid, obd_gr group, void *data);
+	int (*o_dmaread)(struct obd_conn *conn, int count, struct obd_buf **dest, 
+			 struct obd_bufref **source); 
+	int (*o_pre_dmawrite)(struct obd_conn *conn, int count, struct obd_buf **dstbufs, 
+			 struct obd_bufref **dest); 
+	int (*o_dmawrite)(struct obd_conn *conn, int count, struct obd_buf **dstbufs, 
+			 struct obd_buf **dest); 
 };
 
 struct obd_request {

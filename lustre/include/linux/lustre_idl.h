@@ -47,12 +47,14 @@
 
 
 /* opcodes */
+#define OST_GET_INFO  6
+#define OST_CONNECT  7
+#define OST_DISCONNECT 8
 #define OST_GETATTR  1
 #define OST_SETATTR  2
 #define OST_BRW      3
 #define OST_CREATE   4
 #define OST_DESTROY  5
-#define OST_GETINFO  6
 
 /* packet types */
 #define OST_TYPE_REQ 1
@@ -152,6 +154,7 @@ struct ost_req_packed {
 
 struct ost_rep_packed {
 	__u32   result;
+	__u32   connid;
 	struct obdo oa;
 	__u32   buflen1;
 	__u32   buflen2;
@@ -159,6 +162,21 @@ struct ost_rep_packed {
 	__u32   bufoffset2;
 };
 
+struct obd_buf { 
+        __u64 addr;       // address 
+        __u64 handle;     // DMA handle
+        __u64 matchbits;  // portals match bits
+        __u32 offset;     // first bit after addr that is relevant
+        __u32 size;       // size from addr + offset that needs moving
+};
+
+struct obd_bufref { 
+        obd_id    obj_id;
+        obd_gr    obj_gr;
+        __u64     offset;
+        __u32     size; 
+        __u32     flags;
+}; 
 
 /* reply structure for OST's */
 

@@ -7,4 +7,3 @@ CPPFLAGS :=
 LDADD := -lreadline -ltermcap # -lefence
 bin_PROGRAMS = obdctl
 obdctl_SOURCES = parser.c obdctl.c
-

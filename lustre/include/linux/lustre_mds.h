@@ -84,7 +84,8 @@ struct mds_request {
 	struct mds_rep_hdr *rq_rephdr;
 	struct mds_rep *rq_rep;
 
-	wait_queue_head_t rq_wait_for_mds_rep;
+        void * rq_reply_handle;
+	wait_queue_head_t rq_wait_for_rep;
 };
 
 

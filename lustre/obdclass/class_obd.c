@@ -151,8 +151,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	data = (struct obd_ioctl_data *)buf;
 
         switch (cmd) {
-        case TCGETS:
+        case TCGETS: { 
+		EXIT;
                 return -EINVAL;
+	}
 	case OBD_IOC_DEVICE: { 
 		CDEBUG(D_IOCTL, "\n");
 		if (data->ioc_dev >= MAX_OBD_DEVICES ||
@@ -366,6 +368,34 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 EXIT;
                 return err;
         }
+
+        case OBD_IOC_GETATTR: {
+                /* has this minor been registered? */
+		printk("---> getattr!"); 
+                if ( !(obd->obd_flags & OBD_ATTACHED) ||
+                     !(obd->obd_flags & OBD_SET_UP)) {
+                        CDEBUG(D_IOCTL, "Device not attached or set up\n");
+                        return -ENODEV;
+                }
+                conn.oc_id = data->ioc_conn1;
+		conn.oc_dev = obd;
+
+                if ( !OBT(obd) || !OBP(obd, getattr) ) { 
+			EXIT;
+                        return -EOPNOTSUPP;
+		}
+
+                err = OBP(obd, getattr)(&conn, &data->ioc_obdo1);
+                if (err) {
+                        EXIT;
+                        return err;
+                }
+
+                err = copy_to_user((int *)arg, data, sizeof(*data));
+                EXIT;
+                return err;
+        }
+
 #if 0
         case OBD_IOC_SYNC: {
                 struct oic_range_s *range = tmp_buf;
@@ -747,8 +777,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 } /* obd_class_ioctl */
 
-/* Driver interface done, utility functions follow */
 
+/* Driver interface done, utility functions follow */
 int obd_register_type(struct obd_ops *ops, char *nm)
 {
         struct obd_type *type;

@@ -11,6 +11,9 @@
  *  by Peter Braam <braam@clusterfs.com>
  * 
  *  This server is single threaded at present (but can easily be multi threaded). 
+ *  For testing and management it is treated as an obd_device, although it does
+ *  not export a full OBD method table (the requests are coming in over the wire, 
+ *  so object target modules do not have a full method table.)
  * 
  */
 
@@ -33,40 +36,59 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 
-
 // for testing
-static struct ost_obd *OST;
-
-// for testing
-static int ost_queue_req(struct ost_request *req)
+static int ost_queue_req(struct obd_device *obddev, struct ost_request *req)
 {
+	struct ost_request *srv_req; 
+	struct ost_obd *ost = &obddev->u.ost;
 	
-	if (!OST) { 
+	printk("---> OST at %d %p\n", __LINE__, ost);
+	if (!ost) { 
 		EXIT;
 		return -1;
 	}
 
-	list_add(&req->rq_list, &OST->ost_reqs); 
-	init_waitqueue_head(&req->rq_wait_for_ost_rep);
-	req->rq_obd = OST;
-	wake_up(&OST->ost_waitq);
-	printk("-- sleeping\n");
-	interruptible_sleep_on(&req->rq_wait_for_ost_rep);
-	printk("-- done\n");
+	srv_req = kmalloc(sizeof(*srv_req), GFP_KERNEL); 
+	if (!srv_req) { 
+		EXIT;
+		return -ENOMEM;
+	}
+	memcpy(srv_req, req, sizeof(*req)); 
+	srv_req->rq_reply_handle = req;
+	srv_req->rq_obd = ost;
+	list_add(&srv_req->rq_list, &ost->ost_reqs); 
+
+	wake_up(&ost->ost_waitq);
 	return 0;
 }
 
-int ost_reply(struct ost_request *req)
+
+/* XXX replace with networking code */
+int ost_reply(struct obd_device *obddev, struct ost_request *req)
 {
+	struct ost_request *clnt_req = req->rq_reply_handle;
+
 	ENTRY;
+
+	/* free the request buffer */
 	kfree(req->rq_reqbuf);
 	req->rq_reqbuf = NULL; 
-	wake_up_interruptible(&req->rq_wait_for_ost_rep); 
+	
+	/* move the reply to the client */ 
+	clnt_req->rq_replen = req->rq_replen;
+	clnt_req->rq_repbuf = req->rq_repbuf;
+	req->rq_repbuf = NULL;
+	req->rq_replen = 0;
+	
+	/* free the server request */
+	kfree(req); 
+	/* wake up the client */ 
+	wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
 	EXIT;
 	return 0;
 }
 
-int ost_error(struct ost_request *req)
+int ost_error(struct obd_device *obddev, struct ost_request *req)
 {
 	struct ost_rep_hdr *hdr;
 
@@ -85,7 +107,7 @@ int ost_error(struct ost_request *req)
 	req->rq_repbuf = (char *)hdr;
 
 	EXIT;
-	return ost_reply(req);
+	return ost_reply(obddev, req);
 }
 
 static int ost_destroy(struct ost_obd *ost, struct ost_request *req)
@@ -99,7 +121,7 @@ static int ost_destroy(struct ost_obd *ost, struct ost_request *req)
 	conn.oc_dev = ost->ost_tgt;
 
 	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_reqlen, &req->rq_reqbuf); 
+			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
 		printk("ost_destroy: cannot pack reply\n"); 
 		return rc;
@@ -123,7 +145,7 @@ static int ost_getattr(struct ost_obd *ost, struct ost_request *req)
 	conn.oc_dev = ost->ost_tgt;
 
 	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_reqlen, &req->rq_reqbuf); 
+			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
 		printk("ost_getattr: cannot pack reply\n"); 
 		return rc;
@@ -148,7 +170,7 @@ static int ost_create(struct ost_obd *ost, struct ost_request *req)
 	conn.oc_dev = ost->ost_tgt;
 
 	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_reqlen, &req->rq_reqbuf); 
+			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
 		printk("ost_create: cannot pack reply\n"); 
 		return rc;
@@ -175,7 +197,7 @@ static int ost_setattr(struct ost_obd *ost, struct ost_request *req)
 	conn.oc_dev = ost->ost_tgt;
 
 	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
-			  &req->rq_reqlen, &req->rq_reqbuf); 
+			  &req->rq_replen, &req->rq_repbuf); 
 	if (rc) { 
 		printk("ost_setattr: cannot pack reply\n"); 
 		return rc;
@@ -190,11 +212,87 @@ static int ost_setattr(struct ost_obd *ost, struct ost_request *req)
 	return 0;
 }
 
+static int ost_connect(struct ost_obd *ost, struct ost_request *req)
+{
+	struct obd_conn conn; 
+	int rc;
+
+	ENTRY;
+	
+	conn.oc_dev = ost->ost_tgt;
+
+	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+			  &req->rq_replen, &req->rq_repbuf); 
+	if (rc) { 
+		printk("ost_setattr: cannot pack reply\n"); 
+		return rc;
+	}
+
+	req->rq_rep->result =ost->ost_tgt->obd_type->typ_ops->o_connect(&conn);
+	req->rq_rep->connid = conn.oc_id;
+
+	EXIT;
+	return 0;
+}
+
+
+static int ost_disconnect(struct ost_obd *ost, struct ost_request *req)
+{
+	struct obd_conn conn; 
+	int rc;
+
+	ENTRY;
+	
+	conn.oc_dev = ost->ost_tgt;
+	conn.oc_id = req->rq_req->connid;
+
+	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+			  &req->rq_replen, &req->rq_repbuf); 
+	if (rc) { 
+		printk("ost_setattr: cannot pack reply\n"); 
+		return rc;
+	}
+
+	req->rq_rep->result =ost->ost_tgt->obd_type->typ_ops->o_disconnect(&conn);
+
+	EXIT;
+	return 0;
+}
+
+static int ost_get_info(struct ost_obd *ost, struct ost_request *req)
+{
+	struct obd_conn conn; 
+	int rc;
+	int vallen;
+	void *val;
+
+	ENTRY;
+	
+	conn.oc_id = req->rq_req->connid;
+	conn.oc_dev = ost->ost_tgt;
+
+	req->rq_rep->result =ost->ost_tgt->obd_type->typ_ops->o_get_info
+		(&conn, req->rq_req->buflen1, req->rq_req->buf1, &vallen, &val); 
+
+
+	rc = ost_pack_rep(val, vallen, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+			  &req->rq_replen, &req->rq_repbuf); 
+	if (rc) { 
+		printk("ost_setattr: cannot pack reply\n"); 
+		return rc;
+	}
+
+	EXIT;
+	return 0;
+}
+
+
 
 //int ost_handle(struct ost_conn *conn, int len, char *buf)
-int ost_handle(struct ost_obd *ost, struct ost_request *req)
+int ost_handle(struct obd_device *obddev, struct ost_request *req)
 {
 	int rc;
+	struct ost_obd *ost = &obddev->u.ost;
 	struct ost_req_hdr *hdr;
 
 	ENTRY;
@@ -218,6 +316,18 @@ int ost_handle(struct ost_obd *ost, struct ost_request *req)
 
 	switch (req->rq_reqhdr->opc) { 
 
+	case OST_CONNECT:
+		CDEBUG(D_INODE, "connect\n");
+		rc = ost_connect(ost, req);
+		break;
+	case OST_DISCONNECT:
+		CDEBUG(D_INODE, "disconnect\n");
+		rc = ost_disconnect(ost, req);
+		break;
+	case OST_GET_INFO:
+		CDEBUG(D_INODE, "get_info\n");
+		rc = ost_get_info(ost, req);
+		break;
 	case OST_CREATE:
 		CDEBUG(D_INODE, "create\n");
 		rc = ost_create(ost, req);
@@ -236,16 +346,16 @@ int ost_handle(struct ost_obd *ost, struct ost_request *req)
 		break;
 
 	default:
-		return ost_error(req);
+		return ost_error(obddev, req);
 	}
 
 out:
 	if (rc) { 
 		printk("ost: processing error %d\n", rc);
-		ost_error(req);
+		ost_error(obddev, req);
 	} else { 
 		CDEBUG(D_INODE, "sending reply\n"); 
-		ost_reply(req); 
+		ost_reply(obddev, req); 
 	}
 
 	return 0;
@@ -253,20 +363,34 @@ out:
 
 int ost_main(void *arg)
 {
-	struct ost_obd *ost = (struct ost_obd *) arg;
+	struct obd_device *obddev = (struct obd_device *) arg;
+	struct ost_obd *ost = &obddev->u.ost;
+	ENTRY;
+	printk("---> %d\n", __LINE__);
+
 
 	lock_kernel();
+	printk("---> %d\n", __LINE__);
 	daemonize();
+	printk("---> %d\n", __LINE__);
 	spin_lock_irq(&current->sigmask_lock);
+	printk("---> %d\n", __LINE__);
 	sigfillset(&current->blocked);
+	printk("---> %d\n", __LINE__);
 	recalc_sigpending(current);
+	printk("---> %d\n", __LINE__);
 	spin_unlock_irq(&current->sigmask_lock);
+	printk("---> %d\n", __LINE__);
 
+	printk("---> %d\n", __LINE__);
 	sprintf(current->comm, "lustre_ost");
+	printk("---> %d\n", __LINE__);
 
 	/* Record that the  thread is running */
 	ost->ost_thread = current;
+	printk("---> %d\n", __LINE__);
 	wake_up(&ost->ost_done_waitq); 
+	printk("---> %d\n", __LINE__);
 
 	/* XXX maintain a list of all managed devices: insert here */
 
@@ -288,16 +412,19 @@ int ost_main(void *arg)
 		if (list_empty(&ost->ost_reqs)) { 
 			CDEBUG(D_INODE, "woke because of timer\n"); 
 		} else { 
+			printk("---> %d\n", __LINE__);
 			request = list_entry(ost->ost_reqs.next, 
 					     struct ost_request, rq_list);
+			printk("---> %d\n", __LINE__);
 			list_del(&request->rq_list);
-			rc = ost_handle(ost, request); 
+			rc = ost_handle(obddev, request); 
 		}
 	}
 
 	/* XXX maintain a list of all managed devices: cleanup here */
-
+	printk("---> %d\n", __LINE__);
 	ost->ost_thread = NULL;
+	printk("---> %d\n", __LINE__);
 	wake_up(&ost->ost_done_waitq);
 	printk("lustre_ost: exiting\n");
 	return 0;
@@ -313,14 +440,22 @@ static void ost_stop_srv_thread(struct ost_obd *ost)
 	}
 }
 
-static void ost_start_srv_thread(struct ost_obd *ost)
+static void ost_start_srv_thread(struct obd_device *obd)
 {
+	struct ost_obd *ost = &obd->u.ost;
+	ENTRY;
+
 	init_waitqueue_head(&ost->ost_waitq);
+	printk("---> %d\n", __LINE__);
 	init_waitqueue_head(&ost->ost_done_waitq);
-	kernel_thread(ost_main, (void *)ost, 
+	printk("---> %d\n", __LINE__);
+	kernel_thread(ost_main, (void *)obd, 
 		      CLONE_VM | CLONE_FS | CLONE_FILES);
+	printk("---> %d\n", __LINE__);
 	while (!ost->ost_thread) 
 		sleep_on(&ost->ost_done_waitq);
+	printk("---> %d\n", __LINE__);
+	EXIT;
 }
 
 /* mount the file system (secretly) */
@@ -349,6 +484,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
 		return -EINVAL;
         } 
 
+	ost->ost_conn.oc_dev = tgt;
 	err = tgt->obd_type->typ_ops->o_connect(&ost->ost_conn);
 	if (err) { 
 		printk("lustre ost: fail to connect to device %d\n", 
@@ -356,14 +492,17 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
 		return -EINVAL;
 	}
 
+	printk("---> OST at %d %p\n", __LINE__, ost);
 	INIT_LIST_HEAD(&ost->ost_reqs);
 	ost->ost_thread = NULL;
 	ost->ost_flags = 0;
-	OST = ost;
 
+	printk("---> %d\n", __LINE__);
 	spin_lock_init(&obddev->u.ost.fo_lock);
 
-	ost_start_srv_thread(ost);
+	printk("---> %d\n", __LINE__);
+	ost_start_srv_thread(obddev);
+	printk("---> %d\n", __LINE__);
 
         MOD_INC_USE_COUNT;
         EXIT; 
@@ -389,7 +528,6 @@ static int ost_cleanup(struct obd_device * obddev)
                 return -EBUSY;
         }
 
-	OST = NULL;
 	ost_stop_srv_thread(ost);
 
 	if (!list_empty(&ost->ost_reqs)) {
@@ -430,7 +568,6 @@ static void __exit ost_exit(void)
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Object Storage Target (OST) v0.01");
 MODULE_LICENSE("GPL");
-
 
 // for testing (maybe this stays)
 EXPORT_SYMBOL(ost_queue_req);
