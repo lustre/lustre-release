@@ -5,6 +5,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
+#include <pwd.h>
+#include <grp.h>
 
 void
 usage (char *argv0, int help)
@@ -15,7 +17,7 @@ usage (char *argv0, int help)
 		progname = argv0;
 	
 	fprintf (help ? stdout : stderr,
-		 "Usage: %s [-p perms][-t type][-l link][-a][-v] file[s]\n",
+		 "Usage: %s [flags] file[s]\n",
 		 progname);
 	
 	if (!help)
@@ -29,6 +31,8 @@ usage (char *argv0, int help)
 	printf (" -t    dir|file|link    file must be of the specified type\n");
 	printf (" -l    link_name        file must be a link to the given name\n");
 	printf (" -s    size             file must have the given size\n");
+	printf (" -u    user             file must be owned by given user\n");
+	printf (" -g    group            file must be owned by given group\n");
 	printf (" -f                     follow symlinks\n");
 	printf (" -a                     file must be absent\n");
 	printf (" -v                     increase verbosity\n");
@@ -42,6 +46,8 @@ main (int argc, char **argv)
 	int           c;
 	struct stat64 buf;
 	int           perms = -1;
+	uid_t         uid = (uid_t)-1;
+	gid_t         gid = (gid_t)-1;
 	char         *type = NULL;
 	long          absent = 0;
 	char         *checklink = NULL;
@@ -50,7 +56,7 @@ main (int argc, char **argv)
 	int           follow = 0;
 	char         *term;
    
-	while ((c = getopt (argc, argv, "p:t:l:s:avfh")) != -1)
+	while ((c = getopt (argc, argv, "p:t:l:s:u:g:avfh")) != -1)
 		switch (c)
 		{
 		case 'p':
@@ -74,7 +80,49 @@ main (int argc, char **argv)
 				return (1);
 			}
 			break;
-	 
+
+		case 'u':
+			if (*optarg == '#')
+			{
+				uid = (uid_t)strtol (optarg + 1, &term, 0);
+				if (term == optarg + 1)
+				{
+					fprintf (stderr, "Can't parse numeric uid %s\n", optarg);
+					return (1);
+				}
+			} else {
+				struct passwd *pw = getpwnam (optarg);
+				
+				if (pw == NULL)
+				{
+					fprintf (stderr, "Can't find user %s\n", optarg);
+					return (1);
+				}
+				uid = pw->pw_uid;
+			}
+			break;
+
+		case 'g':
+			if (*optarg == '#')
+			{
+				gid = (gid_t)strtol (optarg + 1, &term, 0);
+				if (term == optarg + 1)
+				{
+					fprintf (stderr, "Can't parse numeric gid %s\n", optarg);
+					return (1);
+				}
+			} else {
+				struct group *gr = getgrnam (optarg);
+				
+				if (gr == NULL)
+				{
+					fprintf (stderr, "Can't find group %s\n", optarg);
+					return (1);
+				}
+				uid = gr->gr_gid;
+			}
+			break;
+			
 		case 't':
 			type = optarg;
 			break;
@@ -123,6 +171,13 @@ main (int argc, char **argv)
 			continue;
 		}
 
+		if (absent)
+		{
+			if (verbose)
+				printf ("%s exists\n", fname);
+			return (1);
+		}
+		
 		if (type != NULL)
 		{
 			if (!strcmp (type, "d") || 
@@ -223,6 +278,37 @@ main (int argc, char **argv)
 			if (verbose)
 				printf ("%s links to %s OK\n", fname, checklink);
 		}
+
+		if (uid != (uid_t)-1)
+		{
+			if (buf.st_uid != uid)
+			{
+				if (verbose)
+					printf ("%s is owned by user #%ld and not #%ld\n",
+						fname, (long)buf.st_uid, (long)uid);
+				return (1);
+			}
+			
+			if (verbose)
+				printf ("%s is owned by user #%ld OK\n",
+					fname, (long)uid);
+		}
+		
+		if (gid != (gid_t)-1)
+		{
+			if (buf.st_gid != gid)
+			{
+				if (verbose)
+					printf ("%s is owned by group #%ld and not #%ld\n",
+						fname, (long)buf.st_gid, (long)gid);
+				return (1);
+			}
+			
+			if (verbose)
+				printf ("%s is owned by group #%ld OK\n",
+					fname, (long)gid);
+		}
+		
 	} while (++optind < argc);
 	
 	return (0);
