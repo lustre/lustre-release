@@ -256,7 +256,7 @@ static int mds_extN_set_last_rcvd(struct mds_obd *mds, void *handle)
         CDEBUG(D_EXT2, "set callback for last_rcvd: "LPD64"\n",
                mcb->cb_last_rcvd);
         lock_kernel();
-        /* Note that an "incompatible pointer warning here is OK for now */
+        /* Note that an "incompatible pointer" warning here is OK for now */
         journal_callback_set(handle, mds_extN_callback_status,
                              (struct journal_callback *)mcb);
         unlock_kernel();

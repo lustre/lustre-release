@@ -75,10 +75,8 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
         ENTRY;
 
         OBD_ALLOC(service, sizeof(*service));
-        if (!service) {
-                LBUG();
+        if (!service)
                 RETURN(NULL);
-        }
 
         service->srv_name = name;
         spin_lock_init(&service->srv_lock);
@@ -87,9 +85,9 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
 
         service->srv_max_req_size = max_req_size;
         service->srv_buf_size = bufsize;
-        INIT_LIST_HEAD (&service->srv_rqbds);
+        INIT_LIST_HEAD(&service->srv_rqbds);
         service->srv_nrqbds = 0;
-        atomic_set (&service->srv_nrqbds_receiving, 0);
+        atomic_set(&service->srv_nrqbds_receiving, 0);
 
         service->srv_rep_portal = rep_portal;
         service->srv_req_portal = req_portal;
@@ -97,7 +95,7 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
 
         err = kportal_uuid_to_peer(uuid, &service->srv_self);
         if (err) {
-                CERROR("cannot get peer for uuid '%s'\n", uuid);
+                CERROR("%s: cannot get peer for uuid '%s'\n", name, uuid);
                 OBD_FREE(service, sizeof(*service));
                 RETURN(NULL);
         }
@@ -106,7 +104,7 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
                         request_in_callback, &(service->srv_eq_h));
 
         if (rc != PTL_OK) {
-                CERROR("PtlEQAlloc failed: %d\n", rc);
+                CERROR("%s: PtlEQAlloc failed: %d\n", name, rc);
                 OBD_FREE(service, sizeof(*service));
                 RETURN(NULL);
         }
@@ -114,22 +112,19 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
         for (i = 0; i < nbufs; i++) {
                 struct ptlrpc_request_buffer_desc *rqbd;
 
-                OBD_ALLOC (rqbd, sizeof (*rqbd));
-                if (rqbd == NULL) {
-                        CERROR ("no memory\n");
-                        GOTO (failed, NULL);
-                }
+                OBD_ALLOC(rqbd, sizeof(*rqbd));
+                if (rqbd == NULL)
+                        GOTO(failed, NULL);
 
                 rqbd->rqbd_service = service;
-                ptl_set_inv_handle (&rqbd->rqbd_me_h);
-                atomic_set (&rqbd->rqbd_refcount, 0);
+                ptl_set_inv_handle(&rqbd->rqbd_me_h);
+                atomic_set(&rqbd->rqbd_refcount, 0);
                 OBD_ALLOC(rqbd->rqbd_buffer, service->srv_buf_size);
                 if (rqbd->rqbd_buffer == NULL) {
-                        OBD_FREE (rqbd, sizeof (*rqbd));
-                        CERROR("no memory\n");
+                        OBD_FREE(rqbd, sizeof(*rqbd));
                         GOTO(failed, NULL);
                 }
-                list_add (&rqbd->rqbd_list, &service->srv_rqbds);
+                list_add(&rqbd->rqbd_list, &service->srv_rqbds);
                 service->srv_nrqbds++;
 
                 ptlrpc_link_svc_me(rqbd);
