@@ -10,7 +10,7 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/insanity-local.sh}
 
-ALWAYS_EXCEPT="7 8 9 10"
+ALWAYS_EXCEPT=""
 
 build_test_filter
 
@@ -44,7 +44,14 @@ shutdown_client() {
     if [ "$FAILURE_MODE" = HARD ]; then
        $POWER_DOWN $client
     elif [ "$FAILURE_MODE" = SOFT ]; then
-       stop $facet --force --nomod
+       $PDSH $client $LCONF --clenaup --force --nomod $XMLCONFIG
+    fi
+}
+
+reboot_node() {
+    NODE=$1
+    if [ "$FAILURE_MODE" = HARD ]; then
+       $POWER_UP $NODE
     fi
 }
 
@@ -66,7 +73,7 @@ fail_clients() {
     done
 
     for client in $DOWN_CLIENTS; do
-	restart_node $client
+	reboot_node $client
     done
     DOWN_NUM=`echo $DOWN_CLIENTS | wc -w`
     $PDSH $LIVE_CLIENT "cd $MOUNT && rmdir $CLIENTLIST"
@@ -128,7 +135,7 @@ cleanup() {
 trap exit INT
 
 client_mkdirs() {
-   $PDSH $CLIENTLIST "mkdir $MOUNT/\`hostname\`; ls $MOUNT/\`hostname\` > /dev/null"
+   $PDSH $CLIENTS "mkdir $MOUNT/\`hostname\`; ls $MOUNT/\`hostname\` > /dev/null"
 }
 
 clients_recover_osts() {
