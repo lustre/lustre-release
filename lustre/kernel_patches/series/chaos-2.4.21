@@ -42,3 +42,4 @@ ext3-mballoc-2.4.21-chaos.patch
 blkdev_tunables-2.4.21-chaos.patch
 small_scatterlist-2.4.21-chaos.patch
 ext3-nlinks-2.4.21-chaos.patch
+sd_iostats-2.4.21-chaos.patch
