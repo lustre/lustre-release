@@ -23,7 +23,6 @@ extern struct list_head obd_types;
 kmem_cache_t *obdo_cachep = NULL;
 kmem_cache_t *import_cachep = NULL;
 kmem_cache_t *export_cachep = NULL;
-kmem_cache_t *handle_cachep = NULL;
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 
@@ -268,12 +267,6 @@ void obd_cleanup_caches(void)
                         CERROR("Cannot destory ll_export_cache\n");
                 export_cachep = NULL;
         }
-        if (handle_cachep) {
-                rc = kmem_cache_destroy(handle_cachep);
-                if (rc)
-                        CERROR("Cannot destory ll_handle_cache\n");
-                handle_cachep = NULL;
-        }
         EXIT;
 }
 
@@ -299,13 +292,6 @@ int obd_init_caches(void)
                                           0, 0, NULL, NULL);
         if (!import_cachep)
                 GOTO(out, -ENOMEM);
-
-        LASSERT(handle_cachep == NULL);
-        handle_cachep = kmem_cache_create("ll_handle_cache",
-                                          sizeof(struct lustre_handle),
-                                          0, 0, NULL, NULL);
-        if (!handle_cachep)
-                RETURN(-ENOMEM);
 
         RETURN(0);
  out:

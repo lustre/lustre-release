@@ -488,25 +488,6 @@ static inline void obdo_free(struct obdo *oa)
         kmem_cache_free(obdo_cachep, oa);
 }
 
-extern kmem_cache_t *handle_cachep;
-static inline struct lustre_handle *handle_alloc(void)
-{
-        struct lustre_handle *handle;
-
-        handle = kmem_cache_alloc(handle_cachep, SLAB_KERNEL);
-        memset(handle, 0, sizeof (*handle));
-
-        return handle;
-}
-
-static inline void handle_free(struct lustre_handle *handle)
-{
-        if (!handle)
-                return;
-        kmem_cache_free(handle_cachep, handle);
-}
-
-
 static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
 {
         unsigned int ia_valid = attr->ia_valid;

@@ -1061,7 +1061,6 @@ void (*class_signal_connection_failure)(struct ptlrpc_connection *);
 
 EXPORT_SYMBOL(obd_dev);
 EXPORT_SYMBOL(obdo_cachep);
-EXPORT_SYMBOL(handle_cachep);
 EXPORT_SYMBOL(obd_memory);
 EXPORT_SYMBOL(obd_fail_loc);
 EXPORT_SYMBOL(obd_timeout);
