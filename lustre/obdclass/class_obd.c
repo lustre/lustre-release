@@ -77,7 +77,6 @@ char* obd_dir_nm_1[]= {
 };
 
 lprocfs_vars_t obd_var_nm_1[]= {
-        
         {"num_ops", lprocfs_ll_rd, lprocfs_ll_wr},
         {"min_time", lprocfs_ll_rd, lprocfs_ll_wr},
         {"max_time", lprocfs_ll_rd, lprocfs_ll_wr},
@@ -86,11 +85,11 @@ lprocfs_vars_t obd_var_nm_1[]= {
 };
 
 
-/* 
- *  MDC Spcific namespace for lprocFS 
+/*
+ *  MDC Spcific namespace for lprocFS
  */
 
-char* mdc_dir_nm_1[]= {
+char *mdc_dir_nm_1[]= {
         "reint",
         "getstatus",
         "getattr",
@@ -102,13 +101,11 @@ char* mdc_dir_nm_1[]= {
         "link",
         "rename",
         0
-        
 };
 
 /*
  * Create the MDC groupings
  */
-
 lprocfs_group_t lprocfs_mdc_nm[]= {
 
         {obd_dir_nm_1, obd_var_nm_1, e_generic},
@@ -119,8 +116,7 @@ lprocfs_group_t lprocfs_mdc_nm[]= {
 /*
  * MDS Device Groupings
  */
-
-char* mds_dir_nm_1[]={
+char *mds_dir_nm_1[]={
         "getstatus",
         "connect",
         "disconnect_callback",
@@ -143,10 +139,9 @@ char* mds_dir_nm_1[]={
         0
 };
 
-char* mds_dir_nm_2[]={
+char *mds_dir_nm_2[]={
         "mstatfs",
         0
-        
 };
 
 
@@ -164,11 +159,11 @@ lprocfs_vars_t mds_var_nm_2[]={
 lprocfs_group_t lprocfs_mds_nm[]={
          {obd_dir_nm_1, obd_var_nm_1, e_generic},
          {mds_dir_nm_1, obd_var_nm_1, e_generic},
-         {mds_dir_nm_2, mds_var_nm_2, e_specific}, 
+         {mds_dir_nm_2, mds_var_nm_2, e_specific},
          {0, 0, 0}
 };
 
-/* 
+/*
  * OSC Namespace
  */
 
@@ -188,7 +183,7 @@ char* osc_dir_nm_1[]={
 
 lprocfs_group_t lprocfs_osc_nm[]={
          {obd_dir_nm_1, obd_var_nm_1, e_generic},
-         {osc_dir_nm_1, obd_var_nm_1, e_generic}, 
+         {osc_dir_nm_1, obd_var_nm_1, e_generic},
          {0, 0, 0}
 };
 
@@ -200,15 +195,16 @@ lprocfs_group_t lprocfs_osc_nm[]={
  * those attributes that are missing in osc_dir_namespace.
  */
 
-char* ost_lov_obdfilter_dir_nm_1[]={
+char *ost_lov_obdfilter_dir_nm_1[]={
         "getinfo",
         0
 
 };
-char* ost_lov_obdfilter_dir_nm_2[]={
+
+char *ost_lov_obdfilter_dir_nm_2[]={
         "ostatfs",
         0
-}; 
+};
 
 lprocfs_vars_t ost_lov_obdfilter_var_nm_2[]={
         {"f_type", rd_other, wr_other},
@@ -245,10 +241,8 @@ char* ldlm_dir_nm_1[]={
         "locks/matches",
         0
 };
- 
 
 lprocfs_vars_t ldlm_var_nm_1[]= {
-        
         {"num_total", lprocfs_ll_rd, lprocfs_ll_wr},
         {"num_zerolatency", lprocfs_ll_rd, lprocfs_ll_wr},
         {"num_zerolatency_inflight", lprocfs_ll_rd, lprocfs_ll_wr},
@@ -262,7 +256,7 @@ lprocfs_vars_t ldlm_var_nm_1[]= {
 
 lprocfs_group_t lprocfs_ldlm_nm[]={
          {obd_dir_nm_1, obd_var_nm_1, e_generic},
-         {ldlm_dir_nm_1, ldlm_var_nm_1, e_generic}, 
+         {ldlm_dir_nm_1, ldlm_var_nm_1, e_generic},
          {0, 0, 0}
 };
 
@@ -288,11 +282,12 @@ lprocfs_vars_t ptlrpc_var_nm_1[]={
         {"portal_kmemory", lprocfs_ll_rd, lprocfs_ll_wr},
         {"0", 0, 0}
 };
+
 char* ptlrpc_dir_nm_2[] = {
         "network",
         0
 };
- 
+
 lprocfs_vars_t ptlrpc_var_nm_2[] = {
         {"type", rd_string, wr_string},
         {"mtu", lprocfs_ll_rd, lprocfs_ll_wr},
@@ -305,7 +300,7 @@ lprocfs_vars_t ptlrpc_var_nm_2[] = {
 lprocfs_group_t lprocfs_ptlrpc_nm[]={
          {obd_dir_nm_1, obd_var_nm_1, e_generic},
          {ptlrpc_dir_nm_1, ptlrpc_var_nm_1, e_generic},
-         {ptlrpc_dir_nm_2, ptlrpc_var_nm_2, e_specific}, 
+         {ptlrpc_dir_nm_2, ptlrpc_var_nm_2, e_specific},
          {0, 0, 0}
 };
 
@@ -322,10 +317,10 @@ lprocfs_obd_nm_t obd_nm[]={
         {"ost", lprocfs_ost_lov_obdf_nm, sizeof(struct lprofiler_gen)},
         {"lov", lprocfs_ost_lov_obdf_nm, sizeof(struct lprofiler_gen)},
         {"obdfilter", lprocfs_ost_lov_obdf_nm, sizeof(struct lprofiler_gen)},
+        {"obdecho", lprocfs_ost_lov_obdf_nm, sizeof(struct lprofiler_gen)},
         {"ldlm", lprocfs_ldlm_nm, sizeof(struct lprofiler_ldlm)},
         {"ptlrpc", lprocfs_ptlrpc_nm, sizeof(struct lprofiler_ptlrpc)},
         {"0", 0, 0}
-        
 };
 
 #else
@@ -379,7 +374,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         int len = 0;
         struct obd_ioctl_data *data;
         struct obd_device *obd = filp->private_data;
-        
+
         struct lustre_handle conn;
         int rw = OBD_BRW_READ;
         int err = 0;
@@ -398,7 +393,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 serialised = 1;
                 break;
         }
-        
+
         if (!obd && cmd != OBD_IOC_DEVICE && cmd != TCGETS &&
             cmd != OBD_IOC_LIST &&
             cmd != OBD_IOC_NAME2DEV && cmd != OBD_IOC_NEWDEV) {
@@ -626,23 +621,15 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                 }
                                 memcpy(obd->obd_uuid, data->ioc_inlbuf3, len);
                         }
-                          /*
-                         * Get the LprocFS namespace for this device class
-                         */
-                        
-                        l_idx=lprocfs_get_nm(data->ioc_inlbuf1, \
-                                             obd_nm);
-                       
-                        if(l_idx<0){
+                        /* Get the LprocFS namespace for this device class */
+                        l_idx = lprocfs_get_nm(data->ioc_inlbuf1, obd_nm);
+                        if (l_idx < 0) {
                                 CERROR("Non-existent device class"
                                        "or proc/lustre not compiled \n");
-                                
                         } else {
-                                lprocfs_reg_dev(obd,\
-                                                obd_nm[l_idx].obd_names,\
-                                                obd_nm[l_idx].cntr_blk_sz); 
+                                lprocfs_reg_dev(obd, obd_nm[l_idx].obd_names,
+                                                obd_nm[l_idx].cntr_blk_sz);
                         }
-                        
                         MOD_INC_USE_COUNT;
                 }
 
@@ -673,7 +660,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
                         obd->obd_name = NULL;
                 }
-                /* 
+                /*
                 if (obd->obd_proc_entry)
                         proc_lustre_release_obd_device(obd);
                 */
