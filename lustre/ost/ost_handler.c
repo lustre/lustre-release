@@ -747,12 +747,9 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
                 LASSERT(j == npages);
         }
+        /*XXX This write extents only for write-back cache extents*/
         rc = obd_write_extents(req->rq_export, ioo, objcount, niocount, 
                                local_nb, rc);
-        if (rc) {
-                CERROR("write extents error of id "LPU64" rc=%d\n", 
-                        ioo->ioo_id, rc);  
-        }
  out_bulk:
         ptlrpc_free_bulk(desc);
  out_local:
