@@ -347,7 +347,7 @@ int llog_delete_log(struct llog_handle *cathandle,struct llog_handle *loghandle)
         CDEBUG(D_HA, "log "LPX64":%x empty, closing\n",
                lgc->lgc_lgl.lgl_oid, lgc->lgc_lgl.lgl_ogen);
 
-        if (ext2_clear_bit(catindex, llh->llh_bitmap)) {
+        if (!ext2_clear_bit(catindex, llh->llh_bitmap)) {
                 CERROR("catalog index %u already clear?\n", catindex);
                 LBUG();
         } else {
