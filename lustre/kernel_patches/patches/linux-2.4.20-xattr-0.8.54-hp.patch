@@ -2248,7 +2248,7 @@
 +#endif
 +	if (error)
 +		return error;
-+  
++
 +	return ext2_xattr_set(inode, EXT2_XATTR_INDEX_USER, name,
 +			      value, size, flags);
 +}
@@ -3920,7 +3920,7 @@
 +#endif
 +	if (error)
 +		return error;
-+  
++
 +	handle = ext3_journal_start(inode, EXT3_XATTR_TRANS_BLOCKS);
 +	if (IS_ERR(handle))
 +		return PTR_ERR(handle);
