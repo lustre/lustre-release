@@ -606,10 +606,6 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(rc);
 }
 
-static struct lprocfs_vars lprocfs_ost_obd_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_ost_module_vars[] = { {0} };
-LPROCFS_INIT_VARS(ost, lprocfs_ost_module_vars, lprocfs_ost_obd_vars)
-
 static int llog_test_attach(struct obd_device *dev, obd_count len, void *data)
 {
         struct lprocfs_static_vars lvars;
@@ -634,15 +630,11 @@ static struct obd_ops llog_obd_ops = {
 
 };
 
-static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
-LPROCFS_INIT_VARS(llog_test, lprocfs_module_vars, lprocfs_obd_vars)
-
 static int __init llog_test_init(void)
 {
         struct lprocfs_static_vars lvars;
 
-        lprocfs_init_vars(llog_test, &lvars);
+        lprocfs_init_multi_vars(0, &lvars);
         return class_register_type(&llog_obd_ops,lvars.module_vars,"llog_test");
 }
 
