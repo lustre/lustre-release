@@ -107,7 +107,6 @@ struct namespace_index dir_mdc_index[] = {
         LPROCFS_DIR_INDEX(mdc, unlink),
         LPROCFS_DIR_INDEX(mdc, link),
         LPROCFS_DIR_INDEX(mdc, rename),
-        {"0", 0, 0}
 };
 
 struct namespace_index dir_mds_index[] = {
@@ -133,7 +132,6 @@ struct namespace_index dir_mds_index[] = {
         LPROCFS_DIR_INDEX(mds, reint_link),
         LPROCFS_DIR_INDEX(mds, reint_rename),
         LPROCFS_DIR_INDEX(mds, reint_recreate),
-        {"0", 0, 0}
 };
 
 struct namespace_index dir_osc_index[] = {
@@ -151,7 +149,6 @@ struct namespace_index dir_osc_index[] = {
         LPROCFS_DIR_INDEX(osc, punch),
         LPROCFS_DIR_INDEX(osc, summary),
         LPROCFS_DIR_INDEX(osc, cancel),
-        {"0", 0, 0}
 };
 
 struct namespace_index dir_ost_index[] = {
@@ -170,7 +167,6 @@ struct namespace_index dir_ost_index[] = {
         LPROCFS_DIR_INDEX(ost, summary),
         LPROCFS_DIR_INDEX(ost, cancel),
         LPROCFS_DIR_INDEX(ost, getinfo),
-        {"0", 0, 0}
 };
 
 struct namespace_index dir_lov_index[] = {
@@ -189,7 +185,6 @@ struct namespace_index dir_lov_index[] = {
         LPROCFS_DIR_INDEX(lov, summary),
         LPROCFS_DIR_INDEX(lov, cancel),
         LPROCFS_DIR_INDEX(lov, getinfo),
-        {"0", 0, 0}
 };
 
 struct namespace_index dir_obdfilter_index[] = {
@@ -208,7 +203,6 @@ struct namespace_index dir_obdfilter_index[] = {
         LPROCFS_DIR_INDEX(obdfilter, summary),
         LPROCFS_DIR_INDEX(obdfilter, cancel),
         LPROCFS_DIR_INDEX(obdfilter, getinfo),
-        {"0", 0, 0}
 };
 
 struct namespace_index dir_ldlm_index[] = {
@@ -220,7 +214,6 @@ struct namespace_index dir_ldlm_index[] = {
         LPROCFS_DIR_INDEX(ldlm, locks_cancels),
         LPROCFS_DIR_INDEX(ldlm, locks_converts),
         LPROCFS_DIR_INDEX(ldlm, locks_matches),
-        {"0", 0, 0}
 };
 
 struct namespace_index dir_ptlrpc_index[] = {
@@ -229,7 +222,6 @@ struct namespace_index dir_ptlrpc_index[] = {
         LPROCFS_DIR_INDEX(ptlrpc, mgmt_connect),
         LPROCFS_DIR_INDEX(ptlrpc, mgmt_disconnect),
         LPROCFS_DIR_INDEX(ptlrpc, counters),
-        {"0", 0, 0}
 };
 
 struct namespace_index prof_mdc_index[] = {
@@ -237,7 +229,6 @@ struct namespace_index prof_mdc_index[] = {
         LPROCFS_CNTR_INDEX(mdc, max_time),
         LPROCFS_CNTR_INDEX(mdc, sum_time),
         LPROCFS_CNTR_INDEX(mdc, num_ops),
-        {"0", 0, 0}
 };
 
 struct namespace_index prof_mds_index[]= {
@@ -245,7 +236,6 @@ struct namespace_index prof_mds_index[]= {
         LPROCFS_CNTR_INDEX(mds, max_time),
         LPROCFS_CNTR_INDEX(mds, sum_time),
         LPROCFS_CNTR_INDEX(mds, num_ops),
-        {"0", 0, 0}
 };
 
 struct namespace_index prof_osc_index[]= {
@@ -253,7 +243,6 @@ struct namespace_index prof_osc_index[]= {
         LPROCFS_CNTR_INDEX(osc, max_time),
         LPROCFS_CNTR_INDEX(osc, sum_time),
         LPROCFS_CNTR_INDEX(osc, num_ops),
-        {"0", 0, 0}
 };
 
 struct namespace_index prof_ost_index[]= {
@@ -261,7 +250,6 @@ struct namespace_index prof_ost_index[]= {
         LPROCFS_CNTR_INDEX(ost, max_time),
         LPROCFS_CNTR_INDEX(ost, sum_time),
         LPROCFS_CNTR_INDEX(ost, num_ops),
-        {"0", 0, 0}
 };
 
 struct namespace_index prof_lov_index[]= {
@@ -269,7 +257,6 @@ struct namespace_index prof_lov_index[]= {
         LPROCFS_CNTR_INDEX(lov, max_time),
         LPROCFS_CNTR_INDEX(lov, sum_time),
         LPROCFS_CNTR_INDEX(lov, num_ops),
-        {"0", 0, 0}
 };
 
 struct namespace_index prof_obdfilter_index[]= {
@@ -277,7 +264,6 @@ struct namespace_index prof_obdfilter_index[]= {
         LPROCFS_CNTR_INDEX(obdfilter, max_time),
         LPROCFS_CNTR_INDEX(obdfilter, sum_time),
         LPROCFS_CNTR_INDEX(obdfilter, num_ops),
-        {"0", 0, 0}
 };
 
 struct namespace_index prof_ldlm_index[] = {
@@ -292,7 +278,6 @@ struct namespace_index prof_ldlm_index[] = {
         LPROCFS_CNTR_INDEX(ldlm, nonzero_mintime),
         LPROCFS_CNTR_INDEX(ldlm, nonzero_maxtime),
         LPROCFS_CNTR_INDEX(ldlm, nonzero_sumtime),
-        {"0", 0, 0}
 };
 
 struct namespace_index prof_ptlrpc_index[] = {
@@ -307,7 +292,6 @@ struct namespace_index prof_ptlrpc_index[] = {
         LPROCFS_CNTR_INDEX(ptlrpc, send_count),
         LPROCFS_CNTR_INDEX(ptlrpc, send_length),
         LPROCFS_CNTR_INDEX(ptlrpc, portal_kmemory),
-        {"0", 0, 0}
 };
 
 /*
@@ -324,7 +308,6 @@ struct groupspace_index class_index[] = {
         LPROCFS_GROUP_CREATE(obdfilter),
         LPROCFS_GROUP_CREATE(ldlm),
         LPROCFS_GROUP_CREATE(ptlrpc),
-        {"0", 0, 0}
 };
 
 
