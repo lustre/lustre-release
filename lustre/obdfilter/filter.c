@@ -2136,7 +2136,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
 
                 /*only do precreate rec record. so clean kml flags here*/
                 fsfilt_clear_fs_flags(obd, dparent->d_inode, 
-                                      SM_DO_REC | SM_DO_COW);
+                                      SM_DO_REC);
                 
                 dchild = filter_fid2dentry(obd, dparent, group, next_id);
                 if (IS_ERR(dchild))
@@ -2183,7 +2183,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                                 CERROR("unable to write lastobjid "
                                        "but file created\n");
                 }
-                fsfilt_set_fs_flags(obd, dparent->d_inode, SM_DO_REC | SM_DO_COW);
+                fsfilt_set_fs_flags(obd, dparent->d_inode, SM_DO_REC);
         
         cleanup:
                 switch(cleanup_phase) {
@@ -2736,6 +2736,13 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                 RETURN(rc);
         }
 
+        case OBD_IOC_SNAP_ADD: {
+                char *name = data->ioc_inlbuf1;
+                if (name) {
+                        rc = fsfilt_set_snap_item(obd, obd->u.filter.fo_sb, name);
+                }
+                RETURN(rc);
+        }
         case OBD_IOC_LLOG_CANCEL:
         case OBD_IOC_LLOG_REMOVE:
         case OBD_IOC_LLOG_INFO:
@@ -2863,6 +2870,7 @@ static struct obd_ops filter_obd_ops = {
         .o_sync           = filter_sync,
         .o_preprw         = filter_preprw,
         .o_commitrw       = filter_commitrw,
+        .o_do_cow         = filter_do_cow,
         .o_write_extents  = filter_write_extents,
         .o_destroy_export = filter_destroy_export,
         .o_llog_init      = filter_llog_init,
@@ -2893,6 +2901,7 @@ static struct obd_ops filter_sanobd_ops = {
         .o_sync           = filter_sync,
         .o_preprw         = filter_preprw,
         .o_commitrw       = filter_commitrw,
+        .o_do_cow         = filter_do_cow,
         .o_write_extents  = filter_write_extents,
         .o_san_preprw     = filter_san_preprw,
         .o_destroy_export = filter_destroy_export,

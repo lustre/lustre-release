@@ -34,6 +34,7 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_snap.h>
 #include <linux/lustre_smfs.h>
 
 #include "smfs_internal.h"
@@ -74,10 +75,10 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
         if (!cache_dentry || !cache_parent)
                 GOTO(exit, rc = -ENOMEM);
 
+
+        SMFS_PRE_COW(dir, dentry, NULL, NULL, REINT_CREATE, "create", rc, exit);
+        
         pre_smfs_inode(dir, cache_dir);
-
-        SMFS_PRE_COW(dir, dentry, REINT_CREATE, "create", rc, exit);
-
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (cache_dir && cache_dir->i_op->create)
                 rc = cache_dir->i_op->create(cache_dir, cache_dentry,
@@ -209,7 +210,7 @@ static int smfs_link(struct dentry * old_dentry,
         
         lock_kernel();
         
-        SMFS_PRE_COW(dir, old_dentry, REINT_LINK, "link", rc, exit);
+        SMFS_PRE_COW(dir, old_dentry, NULL, NULL, REINT_LINK, "link", rc, exit);
         
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
@@ -270,7 +271,7 @@ static int smfs_unlink(struct inode * dir,
 
         SMFS_CACHE_HOOK_PRE(CACHE_HOOK_UNLINK, handle, dir, rc);
 
-        SMFS_PRE_COW(dir, dentry, REINT_UNLINK, "unlink", rc, exit);
+        SMFS_PRE_COW(dir, dentry, NULL, NULL, REINT_UNLINK, "unlink", rc, exit);
         
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, cache_inode, dentry);
@@ -323,6 +324,9 @@ static int smfs_symlink(struct inode *dir, struct dentry *dentry,
 
         SMFS_CACHE_HOOK_PRE(CACHE_HOOK_SYMLINK, handle, dir, rc);
 
+        SMFS_PRE_COW(dir, dentry, NULL, NULL, REINT_CREATE, "symlink", rc, 
+                     exit);
+        
         pre_smfs_inode(dir, cache_dir);
         lock_kernel();
         if (cache_dir->i_op->symlink)
@@ -369,6 +373,8 @@ static int smfs_mkdir(struct inode *dir, struct dentry *dentry,
 
         SMFS_CACHE_HOOK_PRE(CACHE_HOOK_MKDIR, handle, dir, rc);
 
+        SMFS_PRE_COW(dir, dentry, NULL, NULL, REINT_CREATE, "mkdir", rc, 
+                     exit);
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
 
@@ -425,6 +431,8 @@ static int smfs_rmdir(struct inode *dir, struct dentry *dentry)
 
         SMFS_CACHE_HOOK_PRE(CACHE_HOOK_RMDIR, handle, dir, rc);
 
+        SMFS_PRE_COW(dir, dentry, NULL, NULL, REINT_UNLINK, "rmdir", rc, exit);
+
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, cache_inode, dentry);
 
@@ -478,6 +486,7 @@ static int smfs_mknod(struct inode *dir, struct dentry *dentry,
         }
         SMFS_CACHE_HOOK_PRE(CACHE_HOOK_MKNOD, handle, dir, rc);
 
+        SMFS_PRE_COW(dir, dentry, NULL, NULL, REINT_CREATE, "mknod", rc, exit);
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry->d_parent);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
         lock_kernel();
@@ -541,6 +550,8 @@ static int smfs_rename(struct inode * old_dir, struct dentry *old_dentry,
         }
         lock_kernel();
 
+        SMFS_PRE_COW(old_dir, old_dentry, new_dir, new_dentry, REINT_RENAME, 
+                     "rename", rc, exit);
         SMFS_CACHE_HOOK_PRE(CACHE_HOOK_RENAME, handle, old_dir, rc);
 
         cache_old_parent = pre_smfs_dentry(NULL, cache_old_dir, old_dentry);
@@ -561,7 +572,7 @@ static int smfs_rename(struct inode * old_dir, struct dentry *old_dentry,
         if (cache_old_dir->i_op->rename)
                 rc = cache_old_dir->i_op->rename(cache_old_dir, cache_old_dentry,
                                                  cache_new_dir, cache_new_dentry);
-
+        
         post_smfs_inode(old_dir, cache_old_dir);
         post_smfs_inode(new_dir, cache_new_dir);
 

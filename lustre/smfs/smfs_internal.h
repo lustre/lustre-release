@@ -315,21 +315,22 @@ static inline int get_active_entry(struct inode *dir, __u64 *active_entry)
 }
 #if CONFIG_SNAPFS
 /*snap macros*/
-#define SMFS_PRE_COW(dir, dentry, op, name, rc, label)                  \
-do {                                                                    \
-        if (smfs_do_cow(dir) && !rc) {                                  \
-                CDEBUG(D_INODE, "Do %s snap post for dir %lu \n",       \
-                              name, dir->i_ino);                        \
-                rc = smfs_cow(dir, dentry, op);                         \
-                if (rc)                                                 \
-                        GOTO(label, rc);                                \
-        }                                                               \
+#define SMFS_PRE_COW(dir, dentry, new_dir, new_dentry, op, name, rc, label)    \
+do {                                                                           \
+        if (smfs_do_cow(dir) && !rc) {                                         \
+                CDEBUG(D_INODE, "Do %s snap post for dir %lu \n",              \
+                              name, dir->i_ino);                               \
+                rc = smfs_cow(dir, dentry, new_dir, new_dentry, op);           \
+                if (rc)                                                        \
+                        GOTO(label, rc);                                       \
+        }                                                                      \
 } while(0)
+
 extern int smfs_cow_init(struct super_block *sb);
 extern int smfs_cow_cleanup(struct super_block *sb);
 extern int smfs_init_snap_inode_info(struct inode *inode, int flags);
 #else
-#define SMFS_PRE_COW(dir, dentry, op, name, rc, label)                 
+#define SMFS_PRE_COW(dir, dentry, new_dir, new_dentry, op, name, rc, label)                 
 #endif 
 
 #endif /*__KERNEL*/

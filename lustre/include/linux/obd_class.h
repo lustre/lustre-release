@@ -902,8 +902,28 @@ static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-static inline int obd_write_extents(struct obd_export *exp, struct obd_ioobj *obj,
-                                    int niocount, struct niobuf_local *local, int rc)
+static inline int obd_do_cow(struct obd_export *exp, struct obd_ioobj *obj,
+                            int objcount,struct niobuf_remote *rnb)
+{
+        int rc;
+        ENTRY;
+
+        /* there are cases when write_extents is not implemented. */
+        if (!OBP(exp->exp_obd, do_cow))
+                RETURN(0);
+                
+        OBD_COUNTER_INCREMENT(exp->exp_obd, do_cow);
+
+        rc = OBP(exp->exp_obd, do_cow)(exp, obj, objcount, rnb);
+
+        RETURN(rc);
+}
+
+static inline int obd_write_extents(struct obd_export *exp, 
+                                    struct obd_ioobj *obj,
+                                    int objcount, int niocount,  
+                                    struct niobuf_local *local, 
+                                    int rc)
 {
         ENTRY;
 
@@ -913,7 +933,8 @@ static inline int obd_write_extents(struct obd_export *exp, struct obd_ioobj *ob
                 
         OBD_COUNTER_INCREMENT(exp->exp_obd, write_extents);
 
-        rc = OBP(exp->exp_obd, write_extents)(exp, obj, niocount, local, rc);
+        rc = OBP(exp->exp_obd, write_extents)(exp, obj, objcount, niocount, 
+                                              local, rc);
         RETURN(rc);
 }
 

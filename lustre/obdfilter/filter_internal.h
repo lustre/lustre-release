@@ -118,8 +118,10 @@ int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, int niocount, struct niobuf_local *,
                     struct obd_trans_info *, int rc);
 int filter_write_extents(struct obd_export *exp, struct obd_ioobj *obj,
-                         int niocount, struct niobuf_local *local, 
+                         int objcount, int niocount,struct niobuf_local *local, 
                          int rc);
+int filter_do_cow(struct obd_export *exp, struct obd_ioobj *obj,
+                  int nioo, struct niobuf_remote *rnb);
 int filter_brw(int cmd, struct obd_export *, struct obdo *,
 	       struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
 	       struct obd_trans_info *);

@@ -592,7 +592,7 @@ static int fsfilt_smfs_post_setup(struct obd_device *obd, struct vfsmount *mnt)
                 smfs_post_setup(sb, mnt);
                 if (SMFS_DO_REC(S2SMI(sb)))
                         rc = smfs_start_rec(sb, mnt);
-#ifdef CONFIG_SNAPFS
+#if CONFIG_SNAPFS
                 if (SMFS_DO_COW(S2SMI(sb)))
                         rc = smfs_start_cow(sb);
 #endif
@@ -614,12 +614,13 @@ static int fsfilt_smfs_post_cleanup(struct obd_device *obd,
 {
         struct super_block *sb = NULL;
         int rc = 0;
-
+        ENTRY;
+        
         if (mnt) {
                 sb = mnt->mnt_sb;
                 if (SMFS_DO_REC(S2SMI(sb)))
                         rc = smfs_stop_rec(sb);
-#ifdef CONFIG_SNAPFS
+#if CONFIG_SNAPFS
                 if (SMFS_DO_COW(S2SMI(sb)))
                         rc = smfs_stop_cow(sb);
 #endif
@@ -631,6 +632,8 @@ static int fsfilt_smfs_post_cleanup(struct obd_device *obd,
 static int fsfilt_smfs_set_fs_flags(struct inode *inode, int flags)
 {
         int rc = 0;
+        ENTRY;
+
         if (SMFS_DO_REC(S2SMI(inode->i_sb)) && (flags & SM_DO_REC))
                 SMFS_SET_INODE_REC(inode);
         if (SMFS_DO_COW(S2SMI(inode->i_sb)) && (flags & SM_DO_COW))
@@ -641,6 +644,8 @@ static int fsfilt_smfs_set_fs_flags(struct inode *inode, int flags)
 static int fsfilt_smfs_clear_fs_flags(struct inode *inode, int flags)
 {
         int rc = 0;
+        ENTRY;
+        
         if (SMFS_DO_REC(S2SMI(inode->i_sb)) && (flags & SM_DO_REC))
                 SMFS_CLEAN_INODE_REC(inode);
         if (SMFS_DO_COW(S2SMI(inode->i_sb)) && (flags & SM_DO_COW))
@@ -648,6 +653,21 @@ static int fsfilt_smfs_clear_fs_flags(struct inode *inode, int flags)
         RETURN(rc);
 }
 
+static int fsfilt_smfs_get_fs_flags(struct dentry *de)
+{
+        struct inode *inode = de->d_inode;
+        int flags = 0;
+        ENTRY;
+
+        LASSERT(inode);
+
+        if (SMFS_DO_REC(S2SMI(inode->i_sb)) && SMFS_DO_INODE_REC(inode))
+                flags |= SM_DO_REC;
+        if (SMFS_DO_COW(S2SMI(inode->i_sb)) && SMFS_DO_INODE_COW(inode))
+                flags |= SM_DO_COW;
+       
+        RETURN(flags); 
+}
 static int fsfilt_smfs_set_ost_flags(struct super_block *sb)
 {
         int rc = 0;
@@ -928,7 +948,25 @@ static int fsfilt_smfs_set_snap_item(struct super_block *sb, char *name)
 #endif
         RETURN(rc);        
 }
-
+static int fsfilt_smfs_do_write_cow(struct dentry *de, void *extents,
+                                    int num_extents)
+{
+        int rc = 0;
+#if CONFIG_SNAPFS
+        struct write_extents *w_ext = (struct write_extents *)extents;
+        int i = 0;
+        ENTRY;
+        for (i = 0; i < num_extents; i++) {
+               size_t count = w_ext->w_count;
+               loff_t off = w_ext->w_pos;
+               rc = smfs_cow_write(de->d_inode, de, &count, &off);
+               if (rc)
+                        RETURN(rc);  
+               w_ext ++;
+        }
+#endif
+        RETURN(rc);
+}
 static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_type                = "smfs",
         .fs_owner               = THIS_MODULE,
@@ -955,6 +993,7 @@ static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_post_cleanup        = fsfilt_smfs_post_cleanup,
         .fs_set_fs_flags       = fsfilt_smfs_set_fs_flags,
         .fs_clear_fs_flags     = fsfilt_smfs_clear_fs_flags,
+        .fs_get_fs_flags       = fsfilt_smfs_get_fs_flags,
         .fs_set_ost_flags       = fsfilt_smfs_set_ost_flags,
         .fs_set_mds_flags       = fsfilt_smfs_set_mds_flags,
         .fs_precreate_rec       = fsfilt_smfs_precreate_rec,
@@ -969,7 +1008,7 @@ static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_free_write_extents  = fsfilt_smfs_free_extents,
         .fs_write_extents       = fsfilt_smfs_write_extents,
         .fs_set_snap_item       = fsfilt_smfs_set_snap_item,
-        
+        .fs_do_write_cow        = fsfilt_smfs_do_write_cow,
         /* FIXME-UMKA: probably fsfilt_smfs_get_op_len() should be
          * put here too. */
 };

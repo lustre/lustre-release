@@ -33,6 +33,8 @@
 
 #include <linux/obd_class.h>
 #include <linux/lustre_fsfilt.h>
+#include <linux/lustre_smfs.h>
+#include <linux/lustre_snap.h>
 #include "filter_internal.h"
 
 static int filter_start_page_read(struct obd_device *obd, struct inode *inode,
@@ -832,19 +834,17 @@ void filter_grant_commit(struct obd_export *exp, int niocount,
 
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
 }
-
-int filter_write_extents(struct obd_export *exp, struct obd_ioobj *obj,
-                         int niocount, struct niobuf_local *local,
-                         int rc)
+int filter_do_cow(struct obd_export *exp, struct obd_ioobj *obj,
+                  int nioo, struct niobuf_remote *rnb)
 {
-        struct lvfs_run_ctxt saved;
         struct dentry *dentry;
-        struct niobuf_local *lnb;
-        __u64  offset = 0;
-        __u32  len = 0;
-        int    i; 
- 
+        struct lvfs_run_ctxt saved;
+        struct write_extents *extents = NULL;
+        int j, rc = 0, numexts = 0, flags = 0;
+
         ENTRY;
+
+        LASSERT(nioo == 1);
 
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         
@@ -861,6 +861,72 @@ int filter_write_extents(struct obd_export *exp, struct obd_ioobj *obj,
                 GOTO(cleanup, rc = -ENOENT);
         }
         
+        flags = fsfilt_get_fs_flags(exp->exp_obd, dentry);
+        if (!(flags & SM_DO_COW)) {
+                GOTO(cleanup, rc);
+        }
+        OBD_ALLOC(extents, obj->ioo_bufcnt * sizeof(struct write_extents)); 
+        if (!extents) {
+                CERROR("No Memory\n");
+                GOTO(cleanup, rc = -ENOMEM);
+        }
+        for (j = 0; j < obj->ioo_bufcnt; j++) {
+                if (rnb[j].len != 0) {
+                        extents[numexts].w_count = rnb[j].len;
+                        extents[numexts].w_pos = rnb[j].offset;
+                        numexts++;
+                } 
+        } 
+        rc = fsfilt_do_write_cow(exp->exp_obd, dentry, extents, numexts);
+        if (rc) {
+                CERROR("Do cow error id "LPU64" rc:%d \n",
+                        obj->ioo_id, rc);
+                GOTO(cleanup, rc); 
+        }
+        
+cleanup:
+        if (extents) {
+                OBD_FREE(extents, obj->ioo_bufcnt * sizeof(struct write_extents));
+        }
+        f_dput(dentry);
+        pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+        RETURN(rc);
+
+}
+int filter_write_extents(struct obd_export *exp, struct obd_ioobj *obj, int nobj,
+                         int niocount, struct niobuf_local *local, int rc)
+{
+        struct lvfs_run_ctxt saved;
+        struct dentry *dentry;
+        struct niobuf_local *lnb;
+        __u64  offset = 0;
+        __u32  len = 0;
+        int    i, flags; 
+ 
+        ENTRY;
+
+        LASSERT(nobj == 1);
+
+        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+
+        dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr,
+                                   obj->ioo_id);
+        if (IS_ERR(dentry)) {
+                pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
+                RETURN (PTR_ERR(dentry));
+        }
+
+        if (dentry->d_inode == NULL) {
+                CERROR("trying to write extents to non-existent file "LPU64"\n",
+                       obj->ioo_id);
+                GOTO(cleanup, rc = -ENOENT);
+        }
+        
+        flags = fsfilt_get_fs_flags(exp->exp_obd, dentry);
+        if (!(flags & SM_DO_REC)) {
+                GOTO(cleanup, rc);
+        }
+
         for (i = 0, lnb = local; i < obj->ioo_bufcnt; i++, lnb++) {
                 if (len == 0) {
                         offset = lnb->offset;
@@ -891,7 +957,7 @@ int filter_write_extents(struct obd_export *exp, struct obd_ioobj *obj,
 cleanup:
         f_dput(dentry);
         pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
-        return rc;
+        RETURN(rc);
 }
 
 int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,

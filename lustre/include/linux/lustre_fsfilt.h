@@ -109,8 +109,10 @@ struct fsfilt_operations {
         int     (* fs_init_extents_ea)(struct inode *inode); 
         int     (* fs_insert_extents_ea)(struct inode *inode, unsigned long from, 
                                          unsigned long num); 
+        int     (* fs_do_write_cow)(struct dentry *dentry, void *extents, int nexts);
         int     (* fs_write_extents)(struct dentry *dentry, 
                                      unsigned long offset, unsigned long blks);
+        int     (* fs_get_fs_flags)(struct dentry *dentry);
         int     (* fs_remove_extents_ea)(struct inode *inode, unsigned long from, 
                                          unsigned long num); 
         int     (* fs_get_ino_write_extents)(struct super_block *sb, ino_t ino, 
@@ -493,6 +495,13 @@ static inline int fsfilt_map_inode_pages(struct obd_device *obd,
         return obd->obd_fsops->fs_map_inode_pages(inode, page, pages, blocks,
                                                   created, create, sem);
 }
+static inline int fsfilt_get_fs_flags(struct obd_device *obd, 
+                                      struct dentry *dentry)
+{
+        if (obd->obd_fsops->fs_get_fs_flags) 
+                return obd->obd_fsops->fs_get_fs_flags(dentry);
+        return 0;
+}
 
 static inline int 
 fsfilt_write_extents(struct obd_device *obd, struct dentry *dentry, 
@@ -503,7 +512,15 @@ fsfilt_write_extents(struct obd_device *obd, struct dentry *dentry,
                                                         offset, blks);
         return 0;
 }
-
+static inline int
+fsfilt_do_write_cow(struct obd_device *obd, struct dentry *dentry,
+                    void *extents, int num_extents)
+{
+        if (obd->obd_fsops->fs_do_write_cow)
+                return obd->obd_fsops->fs_do_write_cow(dentry, extents,
+                                                       num_extents);
+        return 0;
+}
 static inline int
 fs_prep_san_write(struct obd_device *obd, struct inode *inode,
                   long *blocks, int nblocks, loff_t newsize)

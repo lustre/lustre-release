@@ -145,6 +145,7 @@ struct snap_ea{
 #define SNAPTABLE_MAGIC	        0x19760218
 #define SNAPTABLE_INFO          "snaptable"
 #define SNAP_GENERATION         "snap_generation"
+
 struct snap {
         time_t          sn_time;
         unsigned int    sn_index;
@@ -172,4 +173,13 @@ struct snap_info {
 extern int smfs_add_snap_item(struct super_block *sb, char *name);
 extern int smfs_start_cow(struct super_block *sb);
 extern int smfs_stop_cow(struct super_block *sb);
+
+struct write_extents {
+       size_t w_count;
+       loff_t w_pos; 
+};
+int smfs_cow(struct inode *dir, struct dentry *dentry,
+             void *data1, void *data2, int op);
+int smfs_cow_write(struct inode *inode, struct dentry *dentry, void *data1,
+                   void *data2);
 #endif /*_LUSTRE_SNAP_H*/

@@ -324,6 +324,90 @@ static void ext3_copy_meta(handle_t *handle, struct inode *dst, struct inode *sr
 		}
 	}
 }
+static int ext3_copy_reg_block(struct inode *dst, struct inode *src, int blk)
+{
+        struct page     *src_page, *dst_page; 
+        loff_t          offset = blk << src->i_sb->s_blocksize_bits;
+        unsigned long   index = offset >> PAGE_CACHE_SHIFT;
+        int             rc = 0;
+        ENTRY;
+        
+        /*read the src page*/
+        src_page = grab_cache_page(src->i_mapping, index);
+        if (src_page == NULL)
+                RETURN(-ENOMEM);
+
+        if (!PageUptodate(src_page)) {
+                rc = src->i_mapping->a_ops->readpage(NULL, src_page);
+                if (rc < 0) {
+                        page_cache_release(src_page);
+                        RETURN(rc);
+                }
+        }
+        kmap(src_page);
+        /*get dst page*/
+        
+        dst_page = grab_cache_page(dst->i_mapping, index);
+        if (dst_page == NULL)
+                GOTO(src_page_unlock, rc = -ENOMEM);
+        kmap(dst_page);
+        
+        /*FIXME: should use mapping ops or block_prepare_write to prepare the block*/ 
+        rc = block_prepare_write(dst_page, 0, PAGE_CACHE_SIZE, ext3_get_block);
+        if (rc) {
+                CERROR("inode %lu, prepare write rc=%d \n", dst->i_ino, rc);
+                GOTO(dst_page_unlock, rc);
+        }
+                                                                                                                                                                                                     
+        memcpy(page_address(dst_page), page_address(src_page), PAGE_CACHE_SIZE);
+                                                                                                                                                                                                     
+        generic_commit_write(NULL, dst_page, 0, PAGE_CACHE_SIZE);
+
+dst_page_unlock:
+       kunmap(dst_page);
+       UnlockPage(dst_page);
+       page_cache_release(dst_page);
+src_page_unlock:
+       kunmap(src_page);
+       page_cache_release(src_page);
+
+       RETURN(rc);
+}
+static int ext3_copy_dir_block(struct inode *dst, struct inode *src, int blk)
+{
+        struct buffer_head *bh_dst = NULL, *bh_src = NULL;
+        int rc = 0;
+        handle_t *handle = NULL;
+        ENTRY;                                                                                                                                                                                             
+        handle = ext3_journal_start(dst, SNAP_COPYBLOCK_TRANS_BLOCKS);
+        if( !handle )
+                RETURN(-EINVAL);
+                                                                                                                                                                                                     
+        bh_src = ext3_bread(handle, src, blk, 0, &rc);
+        if (!bh_src) {
+                CERROR("rcor for src blk %d, rcor %d\n", blk, rc);
+                GOTO(exit_relese, rc);
+        }
+        bh_dst = ext3_getblk(handle, dst, blk, 1, &rc);
+        if (!bh_dst) {
+                CERROR("rcor for dst blk %d, rcor %d\n", blk, rc);
+                GOTO(exit_relese, rc);
+        }
+        CDEBUG(D_INODE, "copy block %lu to %lu (%ld bytes)\n",
+               bh_src->b_blocknr, bh_dst->b_blocknr, src->i_sb->s_blocksize);
+        
+        ext3_journal_get_write_access(handle, bh_dst);
+        memcpy(bh_dst->b_data, bh_src->b_data, src->i_sb->s_blocksize);
+        ext3_journal_dirty_metadata(handle, bh_dst);
+        rc = 1;
+
+exit_relese:
+        if (bh_src) brelse(bh_src);
+        if (bh_dst) brelse(bh_dst);
+        if (handle)
+                ext3_journal_stop(handle, dst);
+        RETURN(rc);
+}
 /* fsfilt_ext3_copy_block - copy one data block from inode @src to @dst.
    No lock here.  User should do the lock.
    User should check the return value to see if the result is correct.
@@ -335,46 +419,20 @@ static void ext3_copy_meta(handle_t *handle, struct inode *dst, struct inode *sr
                                                                                                                                                                                                      
 static int fsfilt_ext3_copy_block (struct inode *dst, struct inode *src, int blk)
 {
-        struct buffer_head *bh_dst = NULL, *bh_src = NULL;
-        int err = 0;
-        handle_t *handle = NULL;
+        int rc = 0;
         ENTRY;                                                                                                                                                                                             
         CDEBUG(D_INODE, "copy blk %d from %lu to %lu \n", blk, src->i_ino, 
                dst->i_ino);
         /*
          * ext3_getblk() require handle!=NULL
          */
-        if (S_ISREG(src->i_mode)) 
-                RETURN(0);
-
-        handle = ext3_journal_start(dst, SNAP_COPYBLOCK_TRANS_BLOCKS);
-        if( !handle )
-                RETURN(-EINVAL);
-                                                                                                                                                                                                     
-        bh_src = ext3_bread(handle, src, blk, 0, &err);
-        if (!bh_src) {
-                CERROR("error for src blk %d, error %d\n", blk, err);
-                GOTO(exit_relese, err);
+        if (S_ISREG(src->i_mode)) { 
+                rc = ext3_copy_reg_block(dst, src, blk);
+        } else {
+                rc = ext3_copy_dir_block(dst, src, blk);
         }
-        bh_dst = ext3_getblk(handle, dst, blk, 1, &err);
-        if (!bh_dst) {
-                CERROR("error for dst blk %d, error %d\n", blk, err);
-                GOTO(exit_relese, err);
-        }
-        CDEBUG(D_INODE, "copy block %lu to %lu (%ld bytes)\n",
-               bh_src->b_blocknr, bh_dst->b_blocknr, src->i_sb->s_blocksize);
-        
-        ext3_journal_get_write_access(handle, bh_dst);
-        memcpy(bh_dst->b_data, bh_src->b_data, src->i_sb->s_blocksize);
-        ext3_journal_dirty_metadata(handle, bh_dst);
-        err = 1;
 
-exit_relese:
-        if (bh_src) brelse(bh_src);
-        if (bh_dst) brelse(bh_dst);
-        if (handle)
-                ext3_journal_stop(handle, dst);
-        RETURN(err);
+        RETURN(rc);
 }
                                                                                                                                                                                              
 static inline int ext3_has_ea(struct inode *inode)

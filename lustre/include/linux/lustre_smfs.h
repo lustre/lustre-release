@@ -30,7 +30,6 @@ struct snap_inode_info {
 	int sn_flags;		/* the flags indicated inode type */
 	int sn_gen; 	        /*the inode generation*/
 };
-
 struct smfs_inode_info {
         struct inode *smi_inode;
         __u32  smi_flags;
@@ -463,7 +462,6 @@ extern int smfs_rec_md(struct inode *inode, void * lmm, int lmm_size);
 extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
                            char **pbuf, int *opcode);
 	
-int smfs_cow(struct inode *dir, struct dentry *dentry, int op);
 
 extern int smfs_post_setup(struct super_block *sb, struct vfsmount *mnt);
 extern int smfs_post_cleanup(struct super_block *sb);

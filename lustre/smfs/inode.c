@@ -192,10 +192,10 @@ static void smfs_write_inode(struct inode *inode, int wait)
                 return;
         }
         pre_smfs_inode(inode, cache_inode);
-
         if (S2CSB(inode->i_sb)->s_op->write_inode)
                 S2CSB(inode->i_sb)->s_op->write_inode(cache_inode, wait);
-
+        
+        post_smfs_inode(inode, cache_inode);
         EXIT;
 }
 

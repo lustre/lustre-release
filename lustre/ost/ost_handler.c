@@ -600,6 +600,11 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 GOTO(out, rc);
         rcs = lustre_msg_buf(req->rq_repmsg, 1, niocount * sizeof(*rcs));
 
+        /* Do snap options here*/
+        rc = obd_do_cow(req->rq_export, ioo, objcount, remote_nb);
+        if (rc)
+                GOTO(out, rc = npages); 
+
         /* FIXME all niobuf splitting should be done in obdfilter if needed */
         /* CAVEAT EMPTOR this sets ioo->ioo_bufcnt to # pages */
         npages = get_per_page_niobufs(ioo, objcount,remote_nb,niocount,&pp_rnb);
@@ -705,11 +710,12 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
                 LASSERT(j == npages);
         }
-        rc = obd_write_extents(req->rq_export, ioo, npages, local_nb, rc);
+        rc = obd_write_extents(req->rq_export, ioo, objcount, niocount, 
+                               local_nb, rc);
         if (rc) {
                 CERROR("write extents error of id "LPU64" rc=%d\n", 
                         ioo->ioo_id, rc);  
-        } 
+        }
  out_bulk:
         ptlrpc_free_bulk(desc);
  out_local:

@@ -39,6 +39,7 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_smfs.h>
+#include <linux/lustre_snap.h>
 
 #include "smfs_internal.h"
 
@@ -61,6 +62,15 @@ static ssize_t smfs_write(struct file *filp, const char *buf, size_t count,
 
         if (sfi->magic != SMFS_FILE_MAGIC) 
                 LBUG();
+
+        if (filp->f_flags & O_APPEND)
+                tmp_ppos = filp->f_dentry->d_inode->i_size;
+        else {
+                tmp_ppos = *ppos;
+        }
+
+        SMFS_PRE_COW(filp->f_dentry->d_inode, filp->f_dentry, &count, &tmp_ppos, 
+                     REINT_WRITE, "write", rc, exit);  
 
         if (ppos != &(filp->f_pos)) {
                 cache_ppos = &tmp_ppos;

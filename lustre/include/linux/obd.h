@@ -709,8 +709,11 @@ struct obd_ops {
                           int objcount, struct obd_ioobj *obj,
                           int niocount, struct niobuf_local *local,
                           struct obd_trans_info *oti, int rc);
+        int (*o_do_cow)(struct obd_export *exp, struct obd_ioobj *obj, 
+                        int objcount, struct niobuf_remote *rnb);
         int (*o_write_extents)(struct obd_export *exp, struct obd_ioobj *obj,
-                               int niocount, struct niobuf_local *local,int rc);
+                               int objcount, int niocount, 
+                               struct niobuf_local *local,int rc);
         int (*o_enqueue)(struct obd_export *, struct lov_stripe_md *,
                          __u32 type, ldlm_policy_data_t *, __u32 mode,
                          int *flags, void *bl_cb, void *cp_cb, void *gl_cb,

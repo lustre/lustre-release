@@ -24,6 +24,7 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
+#include <linux/pagemap.h>
 #include <linux/string.h>
 #include <linux/slab.h>
 #include <linux/stat.h>
@@ -443,7 +444,8 @@ int snap_do_cow(struct inode *inode, struct dentry *dparent, int del)
         RETURN(0);
 }
 /*Dir inode will do cow*/
-int smfs_cow_create(struct inode *dir, struct dentry *dentry)
+int smfs_cow_create(struct inode *dir, struct dentry *dentry,
+                    void *data1, void *data2)
 {
         int rc = 0;
         struct dentry *dparent;
@@ -461,7 +463,8 @@ int smfs_cow_create(struct inode *dir, struct dentry *dentry)
         RETURN(rc);
 }
 
-int smfs_cow_setattr(struct inode *dir, struct dentry *dentry)
+int smfs_cow_setattr(struct inode *dir, struct dentry *dentry,
+                     void *data1, void *data2)
 {
         int rc = 0;
         ENTRY;
@@ -475,7 +478,8 @@ int smfs_cow_setattr(struct inode *dir, struct dentry *dentry)
         RETURN(rc);
 }
 
-int smfs_cow_link(struct inode *dir, struct dentry *dentry)
+int smfs_cow_link(struct inode *dir, struct dentry *dentry,
+                  void *data1, void *data2)
 {
         int rc = 0;
         struct dentry *dparent;
@@ -497,7 +501,8 @@ int smfs_cow_link(struct inode *dir, struct dentry *dentry)
         RETURN(rc);
 }
 
-int smfs_cow_unlink(struct inode *dir, struct dentry *dentry)
+int smfs_cow_unlink(struct inode *dir, struct dentry *dentry,
+                    void *data1, void *data2)
 {
         struct dentry *dparent;
         int rc = 0;
@@ -520,23 +525,123 @@ int smfs_cow_unlink(struct inode *dir, struct dentry *dentry)
         RETURN(rc);
 }
 
-int smfs_cow_rename(struct inode *dir, struct dentry *dentry)
+int smfs_cow_rename(struct inode *dir, struct dentry *dentry, 
+                    void *data1, void *data2)
 {
+        struct inode *new_dir = (struct inode *)data1;
+        struct dentry *new_dentry = (struct dentry *)data2;
+        struct dentry *dparent;
         int rc = 0;
         ENTRY;
-        
+       
+        LASSERT(new_dir);
+        LASSERT(new_dentry); 
+        if (smfs_needs_cow(dir) != -1) {
+		CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n", dir->i_ino);
+                LASSERT(dentry->d_parent && dentry->d_parent->d_parent);
+                dparent = dentry->d_parent->d_parent;
+		if ((snap_do_cow(dir, dparent, 0))) {
+			CERROR("Do cow error\n");
+			RETURN(-EINVAL);
+		}
+               	if ((snap_do_cow(dentry->d_inode, dentry->d_parent, 0))) {
+			CERROR("Do cow error\n");
+			RETURN(-EINVAL);
+                }
+        }
+        if (smfs_needs_cow(new_dir) != -1) {
+        	CDEBUG(D_INODE, "snap_needs_cow for ino %lu \n", new_dir->i_ino);
+                LASSERT(new_dentry->d_parent && new_dentry->d_parent->d_parent);
+                dparent = new_dentry->d_parent->d_parent;
+		if ((new_dir != dir) && (snap_do_cow(new_dir, dparent, 0))){
+			CERROR("Do cow error\n");
+			RETURN(-EINVAL);
+		}
+                if (new_dentry->d_inode && new_dentry->d_inode->i_nlink == 1) {
+               	        if ((snap_do_cow(new_dentry->d_inode, 
+                                         new_dentry->d_parent, 0))) {
+			        CERROR("Do cow error\n");
+			        RETURN(-EINVAL);
+                        }
+                }
+        } 
         RETURN(rc);
 }
 
-int smfs_cow_write(struct inode *dir, struct dentry *dentry)
+int smfs_cow_write(struct inode *inode, struct dentry *dentry, void *data1,
+                   void *data2)
 {
-        int rc = 0;
+        struct snap_info *snap_info = S2SNAPI(inode->i_sb); 
+        struct snap_table *table = snap_info->sntbl; 
+	long   blocks[2]={-1,-1};
+       	int  index = 0, i, rc = 0;
+        size_t count = *(size_t *)data1;
+	loff_t pos = *(loff_t*)data2;
+
         ENTRY;
+
+        LASSERT(count);
+        LASSERT(pos);
+ 
+	down(&inode->i_sem);
         
+        if (smfs_needs_cow(inode) != -1 ) {
+                CDEBUG(D_INFO, "snap_needs_cow for ino %lu \n",inode->i_ino);
+                snap_do_cow(inode, dentry->d_parent, 0);
+	}
+	
+	CDEBUG(D_INFO, "write offset %lld count %u \n", pos, count);
+	
+	if(pos & (PAGE_CACHE_SIZE - 1)){
+	        blocks[0] = pos >> inode->i_sb->s_blocksize_bits;
+        }
+	pos += count - 1;
+	if((pos + 1) & (PAGE_CACHE_SIZE - 1)){
+	        blocks[1] = pos >> inode->i_sb->s_blocksize_bits;
+	}
+
+	if (blocks[0] == blocks[1]) 
+                blocks[1] = -1;
+	
+        for (i = 0; i < 2; i++) {
+		int slot = 0;
+                if (blocks[i] == -1) 
+			continue;
+		/*Find the nearest page in snaptable and copy back it*/
+		for (slot = table->sntbl_count - 1; slot >= 0; slot--) {
+                        struct fsfilt_operations *snapops = snap_info->snap_fsfilt;
+			struct inode *cache_inode = NULL;
+               		int result = 0;
+
+                        index = table->sntbl_items[slot].sn_index;
+			cache_inode = snapops->fs_get_indirect(inode, NULL, index);
+
+			if (!cache_inode)  continue;
+
+			CDEBUG(D_INFO, "find cache_ino %lu\n", cache_inode->i_ino);
+		
+			result = snapops->fs_copy_block(inode, cache_inode, blocks[i]);
+			if (result == 1) {
+               			iput(cache_inode);
+				result = 0;
+				break;
+			}
+			if (result < 0) {
+				iput(cache_inode);
+				up(&inode->i_sem);
+				GOTO(exit, rc = result);
+			}
+               		iput(cache_inode);
+        	}
+	}
+exit:
+        up(&inode->i_sem); 
         RETURN(rc);
 }
+EXPORT_SYMBOL(smfs_cow_write);
 
-typedef int (*cow_funcs)(struct inode *dir, struct dentry *dentry);
+typedef int (*cow_funcs)(struct inode *dir, struct dentry *dentry, 
+                         void *new_dir, void *new_dentry);
 
 static cow_funcs smfs_cow_funcs[REINT_MAX + 1] = {
         [REINT_SETATTR] smfs_cow_setattr,
@@ -547,8 +652,9 @@ static cow_funcs smfs_cow_funcs[REINT_MAX + 1] = {
         [REINT_WRITE]   smfs_cow_write,
 };
 
-int smfs_cow(struct inode *dir, struct dentry *dentry, int op)
+int smfs_cow(struct inode *dir, struct dentry *dentry, void *new_dir, 
+             void *new_dentry, int op)
 {
-        return smfs_cow_funcs[op](dir, dentry);
+        return smfs_cow_funcs[op](dir, dentry, new_dir, new_dentry);
 }
 
