@@ -1,0 +1,92 @@
+Index: linux-2.4.20-20.9/kernel/kksymoops.c
+===================================================================
+--- linux-2.4.20-20.9.orig/kernel/kksymoops.c	2003-08-18 23:16:51.000000000 +0800
++++ linux-2.4.20-20.9/kernel/kksymoops.c	2003-11-06 18:38:12.000000000 +0800
+@@ -80,3 +80,5 @@
+ 	printk("%s\n",modlist);
+ #endif
+ }
++
++EXPORT_SYMBOL(lookup_symbol);
+Index: linux-2.4.20-20.9/kernel/Makefile
+===================================================================
+--- linux-2.4.20-20.9.orig/kernel/Makefile	2003-11-06 18:35:56.000000000 +0800
++++ linux-2.4.20-20.9/kernel/Makefile	2003-11-06 18:42:57.000000000 +0800
+@@ -9,7 +9,7 @@
+ 
+ O_TARGET := kernel.o
+ 
+-export-objs = signal.o sys.o kmod.o context.o ksyms.o pm.o exec_domain.o printk.o cpufreq.o profile.o
++export-objs = signal.o sys.o kmod.o context.o ksyms.o pm.o exec_domain.o printk.o cpufreq.o profile.o kksymoops.o
+ 
+ obj-y     = sched.o dma.o fork.o exec_domain.o panic.o printk.o lowlat.o profile.o \
+ 	    module.o exit.o itimer.o info.o time.o softirq.o resource.o \
+Index: linux-2.4.20-20.9/arch/i386/kernel/traps.c
+===================================================================
+--- linux-2.4.20-20.9.orig/arch/i386/kernel/traps.c	2003-11-06 18:35:56.000000000 +0800
++++ linux-2.4.20-20.9/arch/i386/kernel/traps.c	2003-11-06 18:43:26.000000000 +0800
+@@ -52,10 +52,6 @@
+ #include <linux/irq.h>
+ #include <linux/module.h>
+ 
+-#ifdef CONFIG_MCL_COREDUMP
+-#include <linux/crash.h>
+-#endif
+-
+ asmlinkage int system_call(void);
+ asmlinkage void lcall7(void);
+ asmlinkage void lcall27(void);
+@@ -313,11 +309,7 @@
+ 		netdump_func(regs);
+ 	bust_spinlocks(0);
+ 	spin_unlock_irq(&die_lock);
+-#ifdef CONFIG_MCL_COREDUMP 
+-	if(panic_on_oops)
+-		panic("die");
+-#endif
+-	do_exit(SIGSEGV);/* NOTREACHED */
++	do_exit(SIGSEGV);
+ }
+ 
+ static inline void die_if_kernel(const char * str, struct pt_regs * regs, long err)
+@@ -1027,9 +1019,39 @@
+ #endif
+ }
+ 
++#ifdef CONFIG_MODULES
++extern struct module *module_list;
++extern struct module kernel_module;
++#endif
++
++int is_kernel_text_address(unsigned long addr)
++{
++       int retval = 0;
++#ifdef CONFIG_MODULES
++       struct module *mod;
++#endif
++       if (addr >= (unsigned long) &_stext &&
++           addr <= (unsigned long) &_etext);
++               return 1;
++
++#ifdef CONFIG_MODULES
++       for (mod = module_list; mod != &kernel_module; mod = mod->next) {
++               /* mod_bound tests for addr being inside the vmalloc'ed
++                * module area. Of course it'd be better to test only
++                * for the .text subset... */
++               if (mod_bound(addr, 0, mod)) {
++                       retval = 1;
++                       break;
++               }
++       }
++#endif
++
++       return retval;
++}
++
+ EXPORT_SYMBOL_GPL(netdump_func);
+ EXPORT_SYMBOL_GPL(netdump_mode);
+ #if CONFIG_X86_LOCAL_APIC
+ EXPORT_SYMBOL_GPL(nmi_watchdog);
+ #endif
+-
++EXPORT_SYMBOL_GPL(is_kernel_text_address);

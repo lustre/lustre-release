@@ -78,6 +78,8 @@ extern unsigned int portal_cerror;
 # define THREAD_SIZE 8192
 #endif
 
+#define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
+
 #ifdef __KERNEL__
 # ifdef  __ia64__
 #  define CDEBUG_STACK (THREAD_SIZE -                                      \
@@ -596,6 +598,9 @@ extern struct prof_ent prof_ents[MAX_PROFS];
 #endif /* PORTALS_PROFILING */
 
 /* debug.c */
+extern spinlock_t stack_backtrace_lock;
+
+char *portals_debug_dumpstack(void);
 char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
 void portals_run_upcall(char **argv);
 void portals_run_lbug_upcall(char * file, const char *fn, const int line);

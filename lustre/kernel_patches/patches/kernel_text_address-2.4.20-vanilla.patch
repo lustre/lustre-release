@@ -1,0 +1,57 @@
+Index: linux-2.4.20/arch/um/kernel/Makefile
+===================================================================
+--- linux-2.4.20.orig/arch/um/kernel/Makefile	2003-10-30 11:31:21.000000000 +0800
++++ linux-2.4.20/arch/um/kernel/Makefile	2003-10-30 11:35:28.000000000 +0800
+@@ -37,7 +37,8 @@
+ export-objs-$(CONFIG_GPROF) += gprof_syms.o
+ export-objs-$(CONFIG_GCOV) += gmon_syms.o
+ 
+-export-objs = ksyms.o process_kern.o signal_kern.o user_syms.o $(export-objs-y)
++export-objs = ksyms.o process_kern.o signal_kern.o user_syms.o sysrq.o \
++        $(export-objs-y)
+ 
+ CFLAGS_user_syms.o = -D__AUTOCONF_INCLUDED__ $(DMODULES-y) $(DMODVERSIONS-y) \
+ 	-I/usr/include -I../include
+Index: linux-2.4.20/arch/um/kernel/sysrq.c
+===================================================================
+--- linux-2.4.20.orig/arch/um/kernel/sysrq.c	2003-10-30 11:31:22.000000000 +0800
++++ linux-2.4.20/arch/um/kernel/sysrq.c	2003-10-30 11:37:36.000000000 +0800
+@@ -86,6 +86,40 @@
+ 	show_trace((unsigned long *)esp);
+ }
+
++#ifdef CONFIG_MODULES 
++extern struct module *module_list;
++extern struct module kernel_module;
++#endif
++
++int is_kernel_text_address(unsigned long addr)
++{
++       int retval = 0;
++#ifdef CONFIG_MODULES
++       struct module *mod;
++#endif
++	if (addr >= (unsigned long) &_stext &&
++           addr <= (unsigned long) &_etext);
++       	return 1;
++
++#ifdef CONFIG_MODULES
++       for (mod = module_list; mod != &kernel_module; mod = mod->next) {
++               /* mod_bound tests for addr being inside the vmalloc'ed
++                * module area. Of course it'd be better to test only
++                * for the .text subset... */
++               if (mod_bound(addr, 0, mod)) {
++                       retval = 1;
++                       break;
++               }
++       }
++#endif
++
++	return retval;
++}
++
++EXPORT_SYMBOL(is_kernel_text_address);
++
+ /*
+  * Overrides for Emacs so that we follow Linus's tabbing style.
+  * Emacs will notice this stuff at the end of the file and automatically

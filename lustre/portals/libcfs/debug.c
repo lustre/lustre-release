@@ -941,9 +941,94 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         return str;
 }
 
+char stack_backtrace[LUSTRE_TRACE_SIZE];
+spinlock_t stack_backtrace_lock = SPIN_LOCK_UNLOCKED;
+
+#if defined(__arch_um__)
+# warning in arch_um
+
+extern int is_kernel_text_address(unsigned long addr);
+
+char *portals_debug_dumpstack(void)
+{
+        int size;
+        unsigned long addr;
+        char *buf = stack_backtrace;
+        char *pbuf = buf;
+        unsigned long *stack = (unsigned long *)&buf;
+                                   
+        size = sprintf(pbuf, " Call Trace: ");
+        pbuf += size;
+        while (((long) stack & (THREAD_SIZE-1)) != 0) {
+                addr = *stack++;
+                if (is_kernel_text_address(addr)) {
+                        size = sprintf(pbuf, "[<%08lx>] ", addr);
+                        pbuf += size;
+                        if (buf + LUSTRE_TRACE_SIZE <= pbuf + 12)
+                                break;
+                }
+        }
+        
+        return buf;
+}
+
+#elif defined(CONFIG_X86)
+# warning in __i386__
+
+extern int is_kernel_text_address(unsigned long addr);
+extern int lookup_symbol(unsigned long address, char *buf, int buflen);
+
+char *portals_debug_dumpstack(void)
+{
+	unsigned long esp = current->thread.esp;
+        unsigned long *stack = (unsigned long *)&esp;
+        int size;
+        unsigned long addr;
+        char *buf = stack_backtrace;
+        char *pbuf = buf;
+        static char buffer[512];
+        
+	/* User space on another CPU? */
+	if ((esp ^ (unsigned long)current) & (PAGE_MASK<<1)){
+                memset(buf, 0x0, LUSTRE_TRACE_SIZE);
+                goto out;
+        }
+                                    
+        size = sprintf(pbuf, " Call Trace: ");
+        pbuf += size;
+        while (((long) stack & (THREAD_SIZE-1)) != 0) {
+                addr = *stack++;
+                if (is_kernel_text_address(addr)) {
+                        lookup_symbol(addr, buffer, 512);
+                        if (buf + LUSTRE_TRACE_SIZE
+                                            /* fix length + sizeof('\0') */
+                            <= pbuf + strlen(buffer) + 28 + 1)
+                                break;
+                        size = sprintf(pbuf, "([<%08lx>] %s (0x%x)) ",
+                                       addr, buffer, stack-1);
+                        pbuf += size;
+                }
+        }
+out:
+        return buf;
+}
+
+#else /* !__arch_um__ && !__i386__ */
+
+char *portals_debug_dumpstack(void)
+{
+        char *buf = stack_backtrace;
+        memset(buf, 0x0, LUSTRE_TRACE_SIZE);
+        return buf;
+}
+
+#endif /* __arch_um__ */
+
 EXPORT_SYMBOL(portals_debug_dumplog);
 EXPORT_SYMBOL(portals_debug_msg);
 EXPORT_SYMBOL(portals_debug_set_level);
 EXPORT_SYMBOL(portals_run_upcall);
 EXPORT_SYMBOL(portals_run_lbug_upcall);
 EXPORT_SYMBOL(portals_nid2str);
+EXPORT_SYMBOL(portals_debug_dumpstack);
+EXPORT_SYMBOL(stack_backtrace_lock);
