@@ -172,7 +172,7 @@ struct obd_ops {
         int (*o_write)(struct obd_conn *conn, struct obdo *oa, char *buf,
                        obd_size *count, obd_off offset);
         int (*o_brw)(int rw, struct obd_conn *conn, obd_count num_oa,
-                     struct obdo **oa, obd_count *oa_bufs, char **buf,
+                     struct obdo **oa, obd_count *oa_bufs, struct page **buf,
                      obd_size *count, obd_off *offset, obd_flag *flags);
         int (*o_punch)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
                        obd_off offset);
