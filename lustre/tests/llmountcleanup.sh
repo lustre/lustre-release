@@ -6,5 +6,5 @@ if [ ! -f local.xml ]; then
    ./local.sh
 fi
 
-${LCONF} --cleanup local.xml
+${LCONF} --cleanup --dump /tmp/debug local.xml
 
