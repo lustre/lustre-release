@@ -61,8 +61,11 @@ int ldlm_expired_completion_wait(void *data)
                    imp->imp_target_uuid.uuid,
                    imp->imp_connection->c_remote_uuid.uuid);
         if (time_after(jiffies, next_dump)) {
+                unsigned int debug = portal_debug;
                 next_dump = jiffies + 300 * HZ;
+                portal_debug |= D_OTHER;
                 ldlm_namespace_dump(lock->l_resource->lr_namespace);
+                portal_debug = debug;
         }
 
         RETURN(0);
