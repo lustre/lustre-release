@@ -56,7 +56,7 @@ static void waiting_locks_callback(unsigned long unused)
                                                  l_pending_chain);
                 if (l->l_callback_timeout > jiffies)
                         break;
-                LDLM_DEBUG(l, "timer expired, recovering conn %p\n",
+                LDLM_DEBUG(l, "timer expired, recovering conn %p",
                            l->l_export->exp_connection);
                 recovd_conn_fail(l->l_export->exp_connection);
         }

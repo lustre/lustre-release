@@ -338,6 +338,7 @@ int ldlm_regression_stop(void);
 
 /* resource.c */
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 local);
+int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local);
 int ldlm_namespace_free(struct ldlm_namespace *ns);
 int ldlm_proc_setup(struct obd_device *obd);
 void ldlm_proc_cleanup(struct obd_device *obd);

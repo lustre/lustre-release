@@ -120,7 +120,9 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 
 extern struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
 
-static void cleanup_resource(struct ldlm_resource *res, struct list_head *q)
+/* If 'local' is true, don't try to tell the server, just cleanup. */
+static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
+                             int local)
 {
         struct list_head *tmp, *pos;
         int rc = 0, client = res->lr_namespace->ns_client;
@@ -134,14 +136,14 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q)
                 if (client) {
                         struct lustre_handle lockh;
                         ldlm_lock2handle(lock, &lockh);
-                        /* can we get away without a connh here? */
-                        rc = ldlm_cli_cancel(&lockh);
-                        if (rc != ELDLM_OK) {
-                                /* It failed remotely, but we'll force it to
-                                 * cleanup locally. */
-                                CERROR("ldlm_cli_cancel: %d\n", rc);
-                                ldlm_lock_cancel(lock);
+                        if (!local) {
+                                rc = ldlm_cli_cancel(&lockh);
+                                if (rc)
+                                        CERROR("ldlm_cli_cancel: %d\n", rc);
                         }
+                        /* Force local cleanup on errors, too. */
+                        if (local || rc != ELDLM_OK)
+                                ldlm_lock_cancel(lock);
                 } else {
                         LDLM_DEBUG(lock, "Freeing a lock still held by a "
                                    "client node.\n");
@@ -153,32 +155,21 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q)
         }
 }
 
-int ldlm_namespace_free(struct ldlm_namespace *ns)
+int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local)
 {
-        struct list_head *tmp, *pos;
         int i;
 
-        if (!ns)
-                RETURN(ELDLM_OK);
-
-        spin_lock(&ldlm_namespace_lock);
-        list_del(&ns->ns_list_chain);
-        remove_proc_entry("resource_count", ns->ns_proc_dir);
-        remove_proc_entry("lock_count", ns->ns_proc_dir);
-        remove_proc_entry(ns->ns_name, ldlm_ns_proc_dir);
-        spin_unlock(&ldlm_namespace_lock);
-
         l_lock(&ns->ns_lock);
-
         for (i = 0; i < RES_HASH_SIZE; i++) {
+                struct list_head *tmp, *pos;
                 list_for_each_safe(tmp, pos, &(ns->ns_hash[i])) {
                         struct ldlm_resource *res;
                         res = list_entry(tmp, struct ldlm_resource, lr_hash);
                         ldlm_resource_getref(res);
 
-                        cleanup_resource(res, &res->lr_granted);
-                        cleanup_resource(res, &res->lr_converting);
-                        cleanup_resource(res, &res->lr_waiting);
+                        cleanup_resource(res, &res->lr_granted, local);
+                        cleanup_resource(res, &res->lr_converting, local);
+                        cleanup_resource(res, &res->lr_waiting, local);
 
                         if (!ldlm_resource_put(res)) {
                                 CERROR("Resource refcount nonzero (%d) after "
@@ -190,6 +181,25 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
                         }
                 }
         }
+        l_unlock(&ns->ns_lock);
+
+        return ELDLM_OK;
+}
+
+/* Cleanup, but also free, the namespace */
+int ldlm_namespace_free(struct ldlm_namespace *ns)
+{
+        if (!ns)
+                RETURN(ELDLM_OK);
+
+        spin_lock(&ldlm_namespace_lock);
+        list_del(&ns->ns_list_chain);
+        remove_proc_entry("resource_count", ns->ns_proc_dir);
+        remove_proc_entry("lock_count", ns->ns_proc_dir);
+        remove_proc_entry(ns->ns_name, ldlm_ns_proc_dir);
+        spin_unlock(&ldlm_namespace_lock);
+
+        ldlm_namespace_cleanup(ns, 0);
 
         vfree(ns->ns_hash /* , sizeof(*ns->ns_hash) * RES_HASH_SIZE */);
         obd_memory -= sizeof(*ns->ns_hash) * RES_HASH_SIZE;
