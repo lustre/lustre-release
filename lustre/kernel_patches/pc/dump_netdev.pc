@@ -1,9 +1,0 @@
-drivers/net/3c59x.c
-drivers/net/e100/e100_main.c
-drivers/net/e1000/e1000_main.c
-drivers/net/eepro100.c
-drivers/net/smc-ultra.c
-drivers/net/tlan.c
-drivers/net/tulip/tulip_core.c
-include/linux/netdevice.h
-net/core/dev.c
