@@ -26,9 +26,9 @@ crglo=1
 crghi=256
 
 # threads to share between concurrent regions per device
-# NB survey skips over #thr < #regions and #thr > SG_MAX_QUEUE
+# NB survey skips over #thr < #regions and #thr/#regions > SG_MAX_QUEUE
 thrlo=1
-thrhi=8192
+thrhi=4096
 
 #####################################################################
 
