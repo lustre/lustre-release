@@ -52,7 +52,7 @@
 
 #define LTIME_S(time)                   (time.tv_sec)
 #define ll_path_lookup                  path_lookup
-#define ll_permission                   permission
+#define ll_permission(inode,mask,nd)    permission(inode,mask,nd)
 
 #define ll_pgcache_lock(mapping)          spin_lock(&mapping->page_lock)
 #define ll_pgcache_unlock(mapping)        spin_unlock(&mapping->page_lock)
@@ -85,6 +85,21 @@ static inline void lustre_daemonize_helper(void)
         current->tty = NULL;
 }
 
+static inline int cleanup_group_info(void)
+{
+        struct group_info *ginfo;
+
+        ginfo = groups_alloc(2);
+        if (!ginfo)
+                return -ENOMEM;
+
+        ginfo->ngroups = 0;
+        set_current_groups(ginfo);
+        put_group_info(ginfo);
+
+        return 0;
+}
+
 #define smp_num_cpus    NR_CPUS
 
 #ifndef conditional_schedule
@@ -96,7 +111,7 @@ static inline void lustre_daemonize_helper(void)
 #else /* 2.4.. */
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
-#define ll_permission(a,b,c)                permission(a,b)
+#define ll_permission(inode,mask,nd)        permission(inode,mask)
 #define ILOOKUP(sb, ino, test, data)        ilookup4(sb, ino, test, data);
 #define DCACHE_DISCONNECTED                 DCACHE_NFSD_DISCONNECTED
 #define ll_dev_t                            int
@@ -129,15 +144,15 @@ static inline void clear_page_dirty(struct page *page)
 #define cpu_online(cpu)                 (cpu_online_map & (1<<cpu))
 #endif
 
-static inline int ll_path_lookup(const char *path, unsigned flags, 
-                              struct nameidata *nd)
+static inline int ll_path_lookup(const char *path, unsigned flags,
+                                 struct nameidata *nd)
 {
         int error = 0;
         if (path_init(path, flags, nd))
                 error = path_walk(path, nd);
         return error;
 }
-#define ll_permission(a,b,c)  permission(a,b)
+#define ll_permission(inode,mask,nd)    permission(inode,mask)
 typedef long sector_t;
 
 #define ll_pgcache_lock(mapping)        spin_lock(&pagecache_lock)
@@ -160,6 +175,14 @@ static inline void lustre_daemonize_helper(void)
         current->tty = NULL;
 }
 
+static inline int cleanup_group_info(void)
+{
+        /* Get rid of unneeded supplementary groups */
+        current->ngroups = 0;
+        memset(current->groups, 0, sizeof(current->groups));
+        return 0;
+}
+
 #ifndef conditional_schedule
 #define conditional_schedule() if (unlikely(need_resched())) schedule()
 #endif
@@ -170,6 +193,43 @@ static inline void lustre_daemonize_helper(void)
 #endif
 
 #endif /* end of 2.4 compat macros */
+
+#ifdef HAVE_PAGE_LIST
+static inline int mapping_has_pages(struct address_space *mapping)
+{
+        int rc = 1;
+
+        ll_pgcache_lock(mapping);
+        if (list_empty(&mapping->dirty_pages) &&
+            list_empty(&mapping->clean_pages) &&
+            list_empty(&mapping->locked_pages)) {
+                rc = 0;
+        }
+        ll_pgcache_unlock(mapping);
+
+        return rc;
+}
+
+static inline int clear_page_dirty_for_io(struct page *page)
+{
+        struct address_space *mapping = page->mapping;
+
+        if (page->mapping && PageDirty(page)) {
+                ClearPageDirty(page);
+                ll_pgcache_lock(mapping);
+                list_del(&page->list);
+                list_add(&page->list, &mapping->locked_pages);
+                ll_pgcache_unlock(mapping);
+                return 1;
+        }
+        return 0;
+}
+#else
+static inline int mapping_has_pages(struct address_space *mapping)
+{
+        return mapping->nrpages > 0;
+}
+#endif
 
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */
