@@ -126,7 +126,7 @@ static struct page *trace_get_page(struct trace_cpu_data *tcd,
                         return NULL;
                 }
                 page->index = 0;
-                page->mapping = (void *)smp_processor_id();
+                page->mapping = (void *)(long)smp_processor_id();
                 list_add_tail(&PAGE_LIST(page), &tcd->tcd_pages);
                 tcd->tcd_cur_pages++;
 
@@ -453,7 +453,8 @@ int tracefile_dump_all_pages(char *filename)
         filp = filp_open(filename, O_CREAT|O_EXCL|O_WRONLY, 0600);
         if (IS_ERR(filp)) {
                 rc = PTR_ERR(filp);
-                printk(KERN_ERR "couldn't open %s: %d\n", filename, rc);
+                printk(KERN_ERR "LustreError: can't open %s for dump: rc %d\n",
+                       filename, rc);
                 goto out;
         }
 
