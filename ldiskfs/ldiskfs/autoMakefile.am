@@ -35,7 +35,6 @@ sources: $(ext3_sources) $(ext3_headers) $(linux_headers) $(series)
 	mkdir -p linux-stage/fs/ext3 linux-stage/include/linux
 	cp $(ext3_sources) $(ext3_headers) $(ext3_extra) linux-stage/fs/ext3
 	cp $(linux_headers) linux-stage/include/linux
-	cd linux-stage && quilt push -a -q
 if USE_QUILT
 	cd linux-stage && quilt setup -l ../$(series) -d ../$(patches)
 	cd linux-stage && quilt push -a -q
