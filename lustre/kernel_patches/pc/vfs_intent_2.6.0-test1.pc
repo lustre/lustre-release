@@ -1,4 +1,3 @@
-fs/sysfs/inode.c
 fs/dcache.c
 fs/exec.c
 fs/xattr.c
@@ -10,5 +9,4 @@ include/linux/dcache.h
 include/linux/fs.h
 include/linux/namei.h
 kernel/ksyms.c
-net/unix/af_unix.c
-net/sunrpc/rpc_pipe.c
+fs/nfs/dir.c
