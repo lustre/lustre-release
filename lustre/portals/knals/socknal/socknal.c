@@ -796,6 +796,10 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock,
         peer->ksnp_last_alive = jiffies;
         peer->ksnp_error = 0;
 
+        /* Set the deadline for the outgoing HELLO to drain */
+        conn->ksnc_tx_deadline = jiffies + 
+                                 ksocknal_data.ksnd_io_timeout * HZ;
+
         list_add (&conn->ksnc_list, &peer->ksnp_conns);
         atomic_inc (&conn->ksnc_refcount);
 
