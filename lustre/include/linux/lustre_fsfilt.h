@@ -185,15 +185,15 @@ static inline int fsfilt_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
                                                 cb_func, cb_data);
 }
 
-static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *fs,
+static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
                                 struct obd_statfs *osfs)
 {
-        return obd->obd_fsops->fs_statfs(fs, osfs);
+        return obd->obd_fsops->fs_statfs(sb, osfs);
 }
 
-static inline int fsfilt_sync(struct obd_device *obd, struct super_block *fs)
+static inline int fsfilt_sync(struct obd_device *obd, struct super_block *sb)
 {
-        return obd->obd_fsops->fs_sync(fs);
+        return obd->obd_fsops->fs_sync(sb);
 }
 
 static inline int fs_prep_san_write(struct obd_device *obd,
