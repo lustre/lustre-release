@@ -1762,7 +1762,7 @@ static void filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
                 filter_destroy(exp, &doa, NULL, NULL);
         }
 
-        CDEBUG(D_HA, "%s: after destroy: set last_objids[%d] = "LPU64"\n", 
+        CDEBUG(D_HA, "%s: after destroy: set last_objids["LPU64"] = "LPU64"\n",
                exp->exp_obd->obd_name, doa.o_gr, oa->o_id);
 
         spin_lock(&filter->fo_objidlock);
