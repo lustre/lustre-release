@@ -21,7 +21,6 @@ MDSFS=ext2
 new_fs ${MDSFS} /tmp/mds 10000
 MDS=$LOOPDEV
 
-mknod /dev/obd c 10 241
 echo 0xffffffff > /proc/sys/portals/debug
 
 $R/usr/src/obd/utils/obdctl <<EOF

@@ -115,7 +115,7 @@ int server_request_callback(ptl_event_t *ev, void *data)
                 }
 
                 service->srv_me_active = NEXT_INDEX(service->srv_me_active,
-                        service->srv_ring_length);
+                                                    service->srv_ring_length);
 
                 if (service->srv_me_h[service->srv_me_active] == 0)
                         CERROR("All %d ring ME's are unlinked!\n",
@@ -130,7 +130,6 @@ int server_request_callback(ptl_event_t *ev, void *data)
 
         return 0;
 }
-
 
 static int bulk_source_callback(ptl_event_t *ev, void *data)
 {

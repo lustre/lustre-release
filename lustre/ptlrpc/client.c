@@ -267,6 +267,7 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 
         if (req->rq_flags != PTL_RPC_REPLY) { 
                 CERROR("Unknown reason for wakeup\n");
+                BUG();
                 EXIT;
                 return -EINTR;
         }

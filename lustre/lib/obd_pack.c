@@ -77,12 +77,12 @@ int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2,
 
 	(*hdr)->type =  OST_TYPE_REQ;
 
-	req->buflen1 = NTOH__u32(buflen1);
+        req->buflen1 = HTON__u32(buflen1);
 	if (buf1) { 
 		LOGL(buf1, buflen1, ptr); 
 	} 
 
-	req->buflen2 = NTOH__u32(buflen2);
+        req->buflen2 = HTON__u32(buflen2);
 	if (buf2) { 
 		LOGL(buf2, buflen2, ptr);
 	}
@@ -155,12 +155,14 @@ int ost_pack_rep(char *buf1, int buflen1, char *buf2, int buflen2,
 
 	ptr = *buf + sizeof(**hdr) + sizeof(*rep);
 
-	rep->buflen1 = NTOH__u32(buflen1);
+        rep->buflen1 = HTON__u32(buflen1);
 	if (buf1) { 
 		LOGL(buf1, buflen1, ptr); 
-	} 
+	} else {
+                ptr += size_round(buflen1);
+        }
 
-	rep->buflen2 = NTOH__u32(buflen2);
+        rep->buflen2 = HTON__u32(buflen2);
 	if (buf2) { 
 		LOGL(buf2, buflen2, ptr);
 	}
@@ -214,11 +216,11 @@ void ost_pack_ioo(void **tmp, struct obdo *oa, int bufcnt)
 {
         struct obd_ioobj *ioo = *tmp;
         char *c = *tmp;
-        
-        ioo->ioo_id = NTOH__u64(oa->o_id); 
-        ioo->ioo_gr = NTOH__u64(oa->o_gr); 
-        ioo->ioo_type = NTOH__u64(oa->o_mode); 
-        ioo->ioo_bufcnt = NTOH__u32(bufcnt); 
+
+        ioo->ioo_id = HTON__u64(oa->o_id); 
+        ioo->ioo_gr = HTON__u64(oa->o_gr); 
+        ioo->ioo_type = HTON__u64(oa->o_mode); 
+        ioo->ioo_bufcnt = HTON__u32(bufcnt); 
         *tmp = c + sizeof(*ioo); 
 }
 
@@ -227,7 +229,7 @@ void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop)
         char *c = *tmp;
         struct obd_ioobj *ioo = *tmp;
         *ioop = *tmp;
-        
+
         ioo->ioo_id = NTOH__u64(ioo->ioo_id); 
         ioo->ioo_gr = NTOH__u64(ioo->ioo_gr); 
         ioo->ioo_type = NTOH__u64(ioo->ioo_type); 
@@ -241,11 +243,14 @@ void ost_pack_niobuf(void **tmp, void *addr, __u64 offset, __u32 len,
         struct niobuf *ioo = *tmp;
         char *c = *tmp;
 
-        ioo->addr = NTOH__u64((__u64)(unsigned long)addr); 
-        ioo->offset = NTOH__u64(offset); 
-        ioo->len = NTOH__u32(len); 
-        ioo->flags = NTOH__u32(flags); 
-        ioo->xid = NTOH__u32(xid);
+        if ((offset >> 32) != 0)
+                BUG();
+
+        ioo->addr = HTON__u64((__u64)(unsigned long)addr); 
+        ioo->offset = HTON__u64(offset); 
+        ioo->len = HTON__u32(len); 
+        ioo->flags = HTON__u32(flags); 
+        ioo->xid = HTON__u32(xid);
         *tmp = c + sizeof(*ioo); 
 }
 
@@ -260,6 +265,9 @@ void ost_unpack_niobuf(void **tmp, struct niobuf **nbp)
         nb->offset = NTOH__u64(nb->offset); 
         nb->len = NTOH__u32(nb->len); 
         nb->flags = NTOH__u32(nb->flags); 
+
+        if ((nb->offset >> 32) != 0)
+                BUG();
 
         *tmp = c + sizeof(*nb); 
 }

@@ -93,8 +93,8 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
 
         rc = PtlMDBind(peer->peer_ni, request->rq_req_md, &md_h);
         if (rc != 0) {
-                BUG();
                 CERROR("PtlMDBind failed: %d\n", rc);
+                BUG();
                 return rc;
         }
 
@@ -107,10 +107,10 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
 
         rc = PtlPut(md_h, ack, remote_id, portal, 0, request->rq_xid, 0, 0);
         if (rc != PTL_OK) {
-                BUG();
                 CERROR("PtlPut(%d, %d, %d) failed: %d\n", remote_id.nid,
                        portal, request->rq_xid, rc);
                 /* FIXME: tear down md */
+                BUG();
         }
 
         return rc;
@@ -131,8 +131,8 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *bulk, int portal)
 
         rc = PtlMDBind(bulk->b_peer.peer_ni, bulk->b_md, &md_h);
         if (rc != 0) {
-                BUG();
                 CERROR("PtlMDBind failed: %d\n", rc);
+                BUG();
                 return rc;
         }
 
@@ -145,10 +145,10 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *bulk, int portal)
 
         rc = PtlPut(md_h, PTL_ACK_REQ, remote_id, portal, 0, bulk->b_xid, 0, 0);
         if (rc != PTL_OK) {
-                BUG();
                 CERROR("PtlPut(%d, %d, %d) failed: %d\n", remote_id.nid,
                        portal, bulk->b_xid, rc);
-                /* FIXME: tear down md */
+                PtlMDUnlink(md_h);
+                BUG();
         }
 
         return rc;
@@ -190,11 +190,9 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *bulk)
         return 0;
 
  cleanup2:
-        EXIT;
         PtlMEUnlink(bulk->b_me_h);
  cleanup1:
         PtlMDUnlink(bulk->b_md_h);
-        EXIT;
         return rc;
 }
 
@@ -373,8 +371,8 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
                 CDEBUG(D_INFO, "Attach MD in ring, rc %d\n", rc);
                 if (rc != PTL_OK) {
                         /* XXX cleanup */
-                        BUG();
                         CERROR("PtlMDAttach failed: %d\n", rc);
+                        BUG();
                         return rc;
                 }
 

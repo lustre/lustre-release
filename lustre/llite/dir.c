@@ -237,6 +237,7 @@ Eend:
 fail:
 	SetPageChecked(page);
 	SetPageError(page);
+        BUG();
 }
 
 static struct page * ext2_get_page(struct inode *dir, unsigned long n)

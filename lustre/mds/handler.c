@@ -437,8 +437,7 @@ out:
 
 
 /* mount the file system (secretly) */
-static int mds_setup(struct obd_device *obddev, obd_count len,
-                     void *buf)
+static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
 	struct obd_ioctl_data* data = buf;
 	struct mds_obd *mds = &obddev->u.mds;
@@ -448,7 +447,8 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
 
 	mnt = do_kern_mount(data->ioc_inlbuf2, 0, data->ioc_inlbuf1, NULL); 
 	err = PTR_ERR(mnt);
-	if (IS_ERR(mnt)) { 
+        if (IS_ERR(mnt)) {
+                CERROR("do_kern_mount failed: %d\n", err);
 		EXIT;
 		return err;
 	}

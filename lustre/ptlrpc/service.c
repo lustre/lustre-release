@@ -36,7 +36,6 @@ extern int server_request_callback(ptl_event_t *ev, void *data);
 
 static int ptlrpc_check_event(struct ptlrpc_service *svc)
 {
-        
         if (sigismember(&(current->pending.signal), SIGKILL) ||
             sigismember(&(current->pending.signal), SIGINT)) { 
                 svc->srv_flags |= SVC_KILLED;
@@ -48,6 +47,9 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
                 EXIT;
                 return 1;
         }
+
+        if (svc->srv_flags & SVC_EVENT)
+                BUG();
 
         if ( svc->srv_eq_h ) { 
                 int rc;
@@ -73,7 +75,7 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
                 EXIT;
                 return 1;
         }
-                
+
         EXIT;
         return 0;
 }
@@ -143,7 +145,6 @@ static int ptlrpc_main(void *arg)
 
         /* And now, loop forever on requests */
         while (1) {
-
                 wait_event(svc->srv_waitq, ptlrpc_check_event(svc));
                 
                 if (svc->srv_flags & SVC_SIGNAL) {
@@ -165,7 +166,8 @@ static int ptlrpc_main(void *arg)
                          * mds_handle instead. */
                         memset(&request, 0, sizeof(request));
                         request.rq_obd = obddev;
-                        request.rq_reqbuf = svc->srv_ev.mem_desc.start + svc->srv_ev.offset;
+                        request.rq_reqbuf = (svc->srv_ev.mem_desc.start +
+                                             svc->srv_ev.offset);
                         request.rq_reqlen = svc->srv_ev.mem_desc.length;
                         request.rq_xid = svc->srv_ev.match_bits;
                         CDEBUG(D_NET, "got req %d\n", request.rq_xid);
@@ -176,6 +178,7 @@ static int ptlrpc_main(void *arg)
                         request.rq_peer.peer_ni = svc->srv_self.peer_ni;
                         rc = svc->srv_handler(obddev, svc, &request);
                         ptl_received_rpc(svc);
+                        svc->srv_flags &= ~SVC_EVENT;
                         continue;
                 }
 
@@ -266,6 +269,9 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
                 return rc;
         }
 
+        CDEBUG(D_NET, "Starting service listening on portal %d\n",
+               service->srv_req_portal);
+
         /* Attach the leading ME on which we build the ring */
         rc = PtlMEAttach(peer.peer_ni, service->srv_req_portal,
                          service->srv_id, 0, ~0, PTL_RETAIN,
@@ -344,4 +350,3 @@ int rpc_unregister_service(struct ptlrpc_service *service)
 
         return 0;
 }
-
