@@ -1,0 +1,3 @@
+fs/namei.c
+fs/dcache.c
+include/linux/dcache.h
