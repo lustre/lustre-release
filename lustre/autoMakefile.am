@@ -9,7 +9,7 @@ SUBDIRS = include ldiskfs lvfs obdclass lov ldlm ptlrpc			\
 	obdecho osc mdc mds obdfilter ost llite cobd ptlbd snapfs smfs	\
 	liblustre doc utils tests conf scripts autoconf
 
-EXTRA_DIST = BUGS FDL kernel_patches README.kernel-source
+EXTRA_DIST = BUGS FDL kernel_patches
 
 if LDISKFS
 LDISKFS = ldiskfs-sources
