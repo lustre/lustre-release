@@ -28,6 +28,15 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- reset bulk XID's when resending them (caught by 1138 test)
 	- unregister_bulk after timeout
 	- fix lconf error (2694)
+	- handle write after unfinished setstripe, stripe-only getstripe (2388)
+	- readahead locks pages, leaves pending causing memory pressure (2673)
+	- increase OST request buffers to 4096 on large machines (2729)
+	- fix up permission of existing directories in simple_mkdir (2661)
+	- init deleted item, add assertions ptlrpc_abort_inflight() (2725)
+	- don't assign transno to errored transactions (2742)
+	- don't delete objects on OST if given a bogus objid from MDS (2751)
+	- handle large client PAGE_SIZE readdir on small PAGE_SIZE MDS (2777)
+	- if rq_no_resend, then timeout request after recovery (2432)
        * miscellania
 	- return LL_SUPER_MAGIC from statfs for the filesystem type (1972)
 

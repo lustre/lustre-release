@@ -517,8 +517,8 @@ equals_msg() {
 run_one() {
     testnum=$1
     message=$2
-    tfile=f$base
-    tdir=d$base
+    tfile=f${testnum}
+    tdir=d${base}
 
     # Pretty tests run faster.
     equals_msg $testnum: $message

@@ -184,8 +184,6 @@ do {                                                                          \
         PREPARE_TQUEUE((wq), (cb), (cbdata));                                 \
 } while (0)
 
-#define ll_invalidate_inode_pages(inode) invalidate_inode_pages(inode)
-#define ll_truncate_complete_page(page) truncate_complete_page(page)
 #define PageUptodate Page_Uptodate
 #define our_recalc_sigpending(current) recalc_sigpending(current)
 #define num_online_cpus() smp_num_cpus
@@ -202,10 +200,6 @@ static inline void our_cond_resched(void)
 do {                                                                          \
         INIT_WORK((wq), (void *)(cb), (void *)(cbdata));                      \
 } while (0)
-#define ll_invalidate_inode_pages(inode) \
-        invalidate_inode_pages((inode)->i_mapping)
-#define ll_truncate_complete_page(page) \
-        truncate_complete_page((page)->mapping, page)
 #define wait_on_page wait_on_page_locked
 #define our_recalc_sigpending(current) recalc_sigpending()
 #define strtok(a,b) strpbrk(a, b)

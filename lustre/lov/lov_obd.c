@@ -1918,12 +1918,12 @@ static int lov_set_async_flags(struct obd_export *exp,
         RETURN(rc);
 }
 
-static int lov_queue_sync_io(struct obd_export *exp,
-                             struct lov_stripe_md *lsm,
-                             struct lov_oinfo *loi,
-                             struct obd_sync_io_container *osic, void *cookie,
-                             int cmd, obd_off off, int count,
-                             obd_flag brw_flags)
+static int lov_queue_group_io(struct obd_export *exp,
+                              struct lov_stripe_md *lsm,
+                              struct lov_oinfo *loi,
+                              struct obd_io_group *oig, void *cookie,
+                              int cmd, obd_off off, int count,
+                              obd_flag brw_flags, obd_flag async_flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         struct lov_async_page *lap;
@@ -1939,19 +1939,19 @@ static int lov_queue_sync_io(struct obd_export *exp,
                 RETURN(PTR_ERR(lap));
 
         loi = &lsm->lsm_oinfo[lap->lap_stripe];
-        rc = obd_queue_sync_io(lov->tgts[loi->loi_ost_idx].ltd_exp, lsm, loi,
-                               osic, lap->lap_sub_cookie, cmd, off, count,
-                               brw_flags);
+        rc = obd_queue_group_io(lov->tgts[loi->loi_ost_idx].ltd_exp, lsm, loi,
+                                oig, lap->lap_sub_cookie, cmd, off, count,
+                                brw_flags, async_flags);
         RETURN(rc);
 }
 
 /* this isn't exactly optimal.  we may have queued sync io in oscs on
  * all stripes, but we don't record that fact at queue time.  so we
  * trigger sync io on all stripes. */
-static int lov_trigger_sync_io(struct obd_export *exp,
-                               struct lov_stripe_md *lsm,
-                               struct lov_oinfo *loi,
-                               struct obd_sync_io_container *osic)
+static int lov_trigger_group_io(struct obd_export *exp,
+                                struct lov_stripe_md *lsm,
+                                struct lov_oinfo *loi,
+                                struct obd_io_group *oig)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         int rc = 0, i, err;
@@ -1963,8 +1963,8 @@ static int lov_trigger_sync_io(struct obd_export *exp,
 
         for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
              i++, loi++) {
-                err = obd_trigger_sync_io(lov->tgts[loi->loi_ost_idx].ltd_exp, 
-                                          lsm, loi, osic);
+                err = obd_trigger_group_io(lov->tgts[loi->loi_ost_idx].ltd_exp, 
+                                           lsm, loi, oig);
                 if (rc == 0 && err != 0)
                         rc = err;
         };
@@ -2826,8 +2826,8 @@ struct obd_ops lov_obd_ops = {
         .o_prep_async_page =    lov_prep_async_page,
         .o_queue_async_io =     lov_queue_async_io,
         .o_set_async_flags =    lov_set_async_flags,
-        .o_queue_sync_io =      lov_queue_sync_io,
-        .o_trigger_sync_io =    lov_trigger_sync_io,
+        .o_queue_group_io =     lov_queue_group_io,
+        .o_trigger_group_io =   lov_trigger_group_io,
         .o_teardown_async_page  lov_teardown_async_page,
         o_punch:       lov_punch,
         o_sync:        lov_sync,

@@ -57,9 +57,11 @@
 #define ll_pgcache_lock(mapping)          spin_lock(&mapping->page_lock)
 #define ll_pgcache_unlock(mapping)        spin_unlock(&mapping->page_lock)
 #define ll_call_writepage(inode, page)  \
-                               (inode)->i_mapping->a_ops->writepage(page, NULL)
+                                (inode)->i_mapping->a_ops->writepage(page, NULL)
+#define ll_invalidate_inode_pages(inode) \
+                                invalidate_inode_pages((inode)->i_mapping)
 #define ll_truncate_complete_page(page) \
-                                    truncate_complete_page(page->mapping, page)
+                                truncate_complete_page(page->mapping, page)
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c,d)
 
@@ -142,6 +144,7 @@ typedef long sector_t;
 #define ll_pgcache_unlock(mapping)      spin_unlock(&pagecache_lock)
 #define ll_call_writepage(inode, page)  \
                                (inode)->i_mapping->a_ops->writepage(page)
+#define ll_invalidate_inode_pages(inode) invalidate_inode_pages(inode)
 #define ll_truncate_complete_page(page) truncate_complete_page(page)
 
 static inline void __d_drop(struct dentry *dentry)

@@ -1713,7 +1713,7 @@ test_62() {
 }
 run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
-# bug 2319 - osic_wait() interrupted causes crash because of invalid waitq.
+# bug 2319 - oig_wait() interrupted causes crash because of invalid waitq.
 test_63() {
 	MAX_DIRTY_MB=`cat /proc/fs/lustre/osc/*/max_dirty_mb | head -1`
 	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
@@ -1731,7 +1731,7 @@ test_63() {
 	done
 	true
 }
-run_test 63 "Verify osic_wait interruption does not crash ======"
+run_test 63 "Verify oig_wait interruption does not crash ======"
 
 test_64a () {
 	df $DIR

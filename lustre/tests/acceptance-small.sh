@@ -12,8 +12,8 @@ if [ -z "$THREADS" ]; then
 	THREADS=`expr $KB / 16384`
 	[ $THREADS -gt $MAX_THREADS ] && THREADS=$MAX_THREADS
 fi
-[ "$SIZE" ] || SIZE=20480
-[ "$RSIZE" ] || RSIZE=64
+[ "$SIZE" ] || SIZE=40960
+[ "$RSIZE" ] || RSIZE=512
 [ "$UID" ] || UID=1000
 [ "$MOUNT" ] || MOUNT=/mnt/lustre
 [ "$MOUNT2" ] || MOUNT2=${MOUNT}2
@@ -27,13 +27,13 @@ fi
 for NAME in $CONFIGS; do
 	export NAME MOUNT
 	[ -e $NAME.sh ] && sh $NAME.sh
-	[ ! -e $NAME.xml ] && [ -z "$LDAPURL" ] && echo "no config '$NAME.xml'" 1>&2 && exit 1
+	[ ! -e $NAME.xml ] && [ -z "$LDAPURL" ] && \
+		echo "no config '$NAME.xml'" 1>&2 && exit 1
 
 	if [ "$RUNTESTS" != "no" ]; then
 		sh runtests
 	fi
 
-	#[ "$SANITY" != "no" ] && sh sanity.sh
 	if [ "$SANITY" != "no" ]; then
 		SANITYLOG=/tmp/sanity.log START=: CLEAN=: sh sanity.sh
 	fi
@@ -62,7 +62,7 @@ for NAME in $CONFIGS; do
 	if [ "$BONNIE" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
 		$DEBUG_OFF
-		bonnie++ -s 0 -n 10 -u $UID -d $MOUNT
+		bonnie++ -f -r 0 -s $(($SIZE / 1024)) -n 10 -u $UID -d $MOUNT
 		$DEBUG_ON
 		sh llmountcleanup.sh
 		sh llrmount.sh
@@ -83,7 +83,7 @@ for NAME in $CONFIGS; do
 	if [ "$IOZONE_DIR" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
 		SPACE=`df $MOUNT | tail -1 | awk '{ print $4 }'`
-		IOZ_THREADS=`expr $SPACE / \( $SIZE + $SIZE / 1000 \)`
+		IOZ_THREADS=`expr $SPACE / \( $SIZE + $SIZE / 512 \)`
 		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
 
 		$DEBUG_OFF

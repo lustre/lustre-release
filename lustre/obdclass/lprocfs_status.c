@@ -149,8 +149,8 @@ void lprocfs_remove(struct proc_dir_entry *root)
                 /* Memory corruption once caused this to fail, and
                    without this LASSERT we would loop here forever. */
                 LASSERTF(strlen(rm_entry->name) == rm_entry->namelen,
-                         "0x%p  %s/%s len %d\n", rm_entry,
-                         temp->name, rm_entry->name, strlen(rm_entry->name));
+                         "0x%p  %s/%s len %d\n", rm_entry, temp->name,
+                         rm_entry->name, (int)strlen(rm_entry->name));
 
                 remove_proc_entry(rm_entry->name, rm_entry->parent);
                 if (temp == parent)
@@ -624,8 +624,8 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, prep_async_page);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, queue_async_io);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, set_async_flags);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, queue_sync_io);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, trigger_sync_io);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, queue_group_io);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, trigger_group_io);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, teardown_async_page);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, punch);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, sync);

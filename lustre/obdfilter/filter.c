@@ -1708,6 +1708,12 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
             (oa->o_flags & OBD_FL_DELORPHAN)) {
                 if (diff >= 0)
                         RETURN(diff);
+                if (-diff > 10000) { /* XXX make this smarter */
+                        CERROR("ignoring bogus orphan destroy request: obdid "
+                               LPU64" last_id "LPU64"\n",
+                               oa->o_id, filter_last_id(filter, oa));
+                        RETURN(-EINVAL);
+                }
                 filter_destroy_precreated(exp, oa, filter);
                 rc = filter_update_last_objid(obd, group, 0);
                 if (rc)
@@ -1723,7 +1729,6 @@ static int filter_should_precreate(struct obd_export *exp, struct obdo *oa,
                 LASSERT(diff >= 0);
                 RETURN(diff);
         }
-
 }
 
 /* We rely on the fact that only one thread will be creating files in a given
@@ -1874,8 +1879,14 @@ static int filter_create(struct obd_export *exp, struct obdo *oa,
 
         if ((oa->o_valid & OBD_MD_FLFLAGS) &&
             (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
-                diff = 1;
-                rc = filter_precreate(obd, oa, group, &diff);
+                if (oa->o_id > filter_last_id(&obd->u.filter, oa)) {
+                        CERROR("recreate objid "LPU64" > last id "LPU64"\n",
+                               oa->o_id, filter_last_id(&obd->u.filter, oa));
+                        rc = -EINVAL;
+                } else {
+                        diff = 1;
+                        rc = filter_precreate(obd, oa, group, &diff);
+                }
         } else {
                 diff = filter_should_precreate(exp, oa, group);
                 if (diff > 0) {
@@ -2094,11 +2105,11 @@ static void filter_grant_total_exports(struct obd_device *obd,
         spin_lock(&obd->obd_dev_lock);
         list_for_each_entry(exp_pos, &obd->obd_exports, exp_obd_chain) {
                 fed = &exp_pos->exp_filter_data;
-                LASSERTF(fed->fed_dirty <= maxsize, "cli %s/%p %lu > "LPU64,
+                LASSERTF(fed->fed_dirty <= maxsize, "cli %s/%p %lu > "LPU64"\n",
                          exp_pos->exp_client_uuid.uuid, exp_pos,
                          fed->fed_dirty, maxsize);
                 LASSERTF(fed->fed_grant + fed->fed_pending <= maxsize,
-                         "cli %s/%p %lu+%lu > "LPU64,
+                         "cli %s/%p %lu+%lu > "LPU64"\n",
                          exp_pos->exp_client_uuid.uuid, exp_pos,
                          fed->fed_grant, fed->fed_pending, maxsize);
                 *tot_dirty += fed->fed_dirty;
@@ -2114,16 +2125,17 @@ static void filter_grant_sanity_check(obd_size tot_dirty, obd_size tot_pending,
                                       obd_size fo_tot_pending,
                                       obd_size fo_tot_granted, obd_size maxsize)
 {
-        LASSERTF(tot_dirty == fo_tot_dirty, LPU64" != "LPU64,
+        LASSERTF(tot_dirty == fo_tot_dirty, LPU64" != "LPU64"\n",
                  tot_dirty, fo_tot_dirty);
-        LASSERTF(tot_pending == fo_tot_pending, LPU64" != "LPU64,
+        LASSERTF(tot_pending == fo_tot_pending, LPU64" != "LPU64"\n",
                  tot_pending, fo_tot_pending);
-        LASSERTF(tot_granted == fo_tot_granted, LPU64" != "LPU64,
+        LASSERTF(tot_granted == fo_tot_granted, LPU64" != "LPU64"\n",
                  tot_granted, fo_tot_granted);
-        LASSERTF(tot_dirty <= maxsize, LPU64" > "LPU64, tot_dirty, maxsize);
-        LASSERTF(tot_pending <= tot_granted, LPU64" > "LPU64, tot_pending,
+        LASSERTF(tot_dirty <= maxsize, LPU64" > "LPU64"\n", tot_dirty, maxsize);
+        LASSERTF(tot_pending <= tot_granted, LPU64" > "LPU64"\n", tot_pending,
                  tot_granted);
-        LASSERTF(tot_granted <= maxsize, LPU64" > "LPU64, tot_granted, maxsize);
+        LASSERTF(tot_granted <= maxsize, LPU64" > "LPU64"\n",
+                 tot_granted, maxsize);
 }
 
 static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,

@@ -678,6 +678,7 @@ void lustre_assert_wire_constants(void)
         LASSERT(PTL_RPC_MSG_REPLY == 4713);
         LASSERT(MSG_LAST_REPLAY == 1);
         LASSERT(MSG_RESENT == 2);
+        LASSERT(MSG_REPLAY == 4);
         LASSERT(MSG_CONNECT_RECOVERING == 1);
         LASSERT(MSG_CONNECT_RECONNECT == 2);
         LASSERT(MSG_CONNECT_REPLAYABLE == 4);

@@ -408,11 +408,11 @@ EXPORT_SYMBOL(class_conn2cliimp);
 EXPORT_SYMBOL(class_disconnect);
 EXPORT_SYMBOL(class_disconnect_exports);
 
-EXPORT_SYMBOL(osic_init);
-EXPORT_SYMBOL(osic_release);
-EXPORT_SYMBOL(osic_add_one);
-EXPORT_SYMBOL(osic_wait);
-EXPORT_SYMBOL(osic_complete_one);
+EXPORT_SYMBOL(oig_init);
+EXPORT_SYMBOL(oig_release);
+EXPORT_SYMBOL(oig_add_one);
+EXPORT_SYMBOL(oig_wait);
+EXPORT_SYMBOL(oig_complete_one);
 
 /* uuid.c */
 EXPORT_SYMBOL(class_uuid_unparse);

@@ -68,13 +68,13 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
 struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, 
                                            int *next);
 
-void osic_init(struct obd_sync_io_container **osic);
-void osic_add_one(struct obd_sync_io_container *osic,
-                  struct osic_callback_context *occ);
-void osic_complete_one(struct obd_sync_io_container *osic, 
-                       struct osic_callback_context *occ, int rc);
-void osic_release(struct obd_sync_io_container *osic);
-int osic_wait(struct obd_sync_io_container *osic);
+int oig_init(struct obd_io_group **oig);
+void oig_add_one(struct obd_io_group *oig,
+                  struct oig_callback_context *occ);
+void oig_complete_one(struct obd_io_group *oig, 
+                       struct oig_callback_context *occ, int rc);
+void oig_release(struct obd_io_group *oig);
+int oig_wait(struct obd_io_group *oig);
 
 /* config.c */
 int class_process_config(struct lustre_cfg *lcfg);
@@ -758,37 +758,39 @@ static inline int obd_set_async_flags(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_queue_sync_io(struct obd_export *exp, 
-                                    struct lov_stripe_md *lsm, 
-                                    struct lov_oinfo *loi, 
-                                    struct obd_sync_io_container *osic, 
-                                    void *cookie, int cmd, obd_off off, 
-                                    int count, obd_flag brw_flags)
+static inline int obd_queue_group_io(struct obd_export *exp, 
+                                     struct lov_stripe_md *lsm, 
+                                     struct lov_oinfo *loi, 
+                                     struct obd_io_group *oig, 
+                                     void *cookie, int cmd, obd_off off, 
+                                     int count, obd_flag brw_flags,
+                                     obd_flag async_flags)
 {
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, queue_sync_io, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(exp->exp_obd, queue_sync_io);
+        OBD_CHECK_OP(exp->exp_obd, queue_group_io, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, queue_group_io);
         LASSERT(cmd & OBD_BRW_RWMASK);
 
-        rc = OBP(exp->exp_obd, queue_sync_io)(exp, lsm, loi, osic, cookie, 
-                                              cmd, off, count, brw_flags);
+        rc = OBP(exp->exp_obd, queue_group_io)(exp, lsm, loi, oig, cookie, 
+                                               cmd, off, count, brw_flags,
+                                               async_flags);
         RETURN(rc);
 }
 
-static inline int obd_trigger_sync_io(struct obd_export *exp, 
-                                      struct lov_stripe_md *lsm, 
-                                      struct lov_oinfo *loi,
-                                      struct obd_sync_io_container *osic)
+static inline int obd_trigger_group_io(struct obd_export *exp, 
+                                       struct lov_stripe_md *lsm, 
+                                       struct lov_oinfo *loi,
+                                       struct obd_io_group *oig)
 {
         int rc;
         ENTRY;
 
-        OBD_CHECK_OP(exp->exp_obd, trigger_sync_io, -EOPNOTSUPP);
-        OBD_COUNTER_INCREMENT(exp->exp_obd, trigger_sync_io);
+        OBD_CHECK_OP(exp->exp_obd, trigger_group_io, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(exp->exp_obd, trigger_group_io);
 
-        rc = OBP(exp->exp_obd, trigger_sync_io)(exp, lsm, loi, osic);
+        rc = OBP(exp->exp_obd, trigger_group_io)(exp, lsm, loi, oig);
         RETURN(rc);
 }
 

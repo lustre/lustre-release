@@ -193,9 +193,18 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
                 GOTO(out_up, dchild);
 
         if (dchild->d_inode) {
-                if (!S_ISREG(dchild->d_inode->i_mode))
+                int old_mode = dchild->d_inode->i_mode;
+                if (!S_ISREG(old_mode))
                         GOTO(out_err, err = -EEXIST);
 
+                /* Fixup file permissions if necessary */
+                if ((old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
+                        CWARN("fixing permissions on %s from %o to %o\n",
+                              name, old_mode, mode);
+                        dchild->d_inode->i_mode = (mode & S_IALLUGO) |
+                                                  (old_mode & ~S_IALLUGO);
+                        mark_inode_dirty(dchild->d_inode);
+                }
                 GOTO(out_up, dchild);
         }
 
@@ -228,9 +237,18 @@ struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
                 GOTO(out_up, dchild);
 
         if (dchild->d_inode) {
-                if (!S_ISDIR(dchild->d_inode->i_mode))
+                int old_mode = dchild->d_inode->i_mode;
+                if (!S_ISDIR(old_mode))
                         GOTO(out_err, err = -ENOTDIR);
 
+                /* Fixup directory permissions if necessary */
+                if ((old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
+                        CWARN("fixing permissions on %s from %o to %o\n",
+                              name, old_mode, mode);
+                        dchild->d_inode->i_mode = (mode & S_IALLUGO) |
+                                                  (old_mode & ~S_IALLUGO);
+                        mark_inode_dirty(dchild->d_inode);
+                }
                 GOTO(out_up, dchild);
         }
 

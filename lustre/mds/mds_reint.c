@@ -129,7 +129,9 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         off = med->med_off;
 
         transno = req->rq_reqmsg->transno;
-        if (transno == 0) {
+        if (rc != 0) {
+                LASSERT(transno == 0);
+        } else if (transno == 0) {
                 spin_lock(&mds->mds_transno_lock);
                 transno = ++mds->mds_last_transno;
                 spin_unlock(&mds->mds_transno_lock);

@@ -654,118 +654,125 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
         EXIT;
 }
 
-void osic_init(struct obd_sync_io_container **osic_out)
+int oig_init(struct obd_io_group **oig_out)
 {
-        struct obd_sync_io_container *osic;
-        OBD_ALLOC(osic, sizeof(*osic));
-        spin_lock_init(&osic->osic_lock);
-        osic->osic_rc = 0;
-        osic->osic_pending = 0;
-        atomic_set(&osic->osic_refcount, 1);
-        init_waitqueue_head(&osic->osic_waitq);
-        INIT_LIST_HEAD(&osic->osic_occ_list);
-        *osic_out = osic;
+        struct obd_io_group *oig;
+        ENTRY;
+
+        OBD_ALLOC(oig, sizeof(*oig));
+        if (oig == NULL)
+                RETURN(-ENOMEM);
+
+        spin_lock_init(&oig->oig_lock);
+        oig->oig_rc = 0;
+        oig->oig_pending = 0;
+        atomic_set(&oig->oig_refcount, 1);
+        init_waitqueue_head(&oig->oig_waitq);
+        INIT_LIST_HEAD(&oig->oig_occ_list);
+
+        *oig_out = oig;
+        RETURN(0);
 };
 
-static inline void osic_grab(struct obd_sync_io_container *osic)
+static inline void oig_grab(struct obd_io_group *oig)
 {
-        atomic_inc(&osic->osic_refcount);
+        atomic_inc(&oig->oig_refcount);
 }
-void osic_release(struct obd_sync_io_container *osic)
+void oig_release(struct obd_io_group *oig)
 {
-        if (atomic_dec_and_test(&osic->osic_refcount))
-                OBD_FREE(osic, sizeof(*osic));
+        if (atomic_dec_and_test(&oig->oig_refcount))
+                OBD_FREE(oig, sizeof(*oig));
 }
 
-void osic_add_one(struct obd_sync_io_container *osic,
-                  struct osic_callback_context *occ)
+void oig_add_one(struct obd_io_group *oig,
+                  struct oig_callback_context *occ)
 {
         unsigned long flags;
-        CDEBUG(D_CACHE, "osic %p ready to roll\n", osic);
-        spin_lock_irqsave(&osic->osic_lock, flags);
-        osic->osic_pending++;
+        CDEBUG(D_CACHE, "oig %p ready to roll\n", oig);
+        spin_lock_irqsave(&oig->oig_lock, flags);
+        oig->oig_pending++;
         if (occ != NULL)
-                list_add_tail(&occ->occ_osic_item, &osic->osic_occ_list);
-        spin_unlock_irqrestore(&osic->osic_lock, flags);
-        osic_grab(osic);
+                list_add_tail(&occ->occ_oig_item, &oig->oig_occ_list);
+        spin_unlock_irqrestore(&oig->oig_lock, flags);
+        oig_grab(oig);
 }
 
-void osic_complete_one(struct obd_sync_io_container *osic,
-                       struct osic_callback_context *occ, int rc)
+void oig_complete_one(struct obd_io_group *oig,
+                      struct oig_callback_context *occ, int rc)
 {
         unsigned long flags;
         wait_queue_head_t *wake = NULL;
         int old_rc;
 
-        spin_lock_irqsave(&osic->osic_lock, flags);
+        spin_lock_irqsave(&oig->oig_lock, flags);
 
         if (occ != NULL)
-                list_del_init(&occ->occ_osic_item);
+                list_del_init(&occ->occ_oig_item);
 
-        old_rc = osic->osic_rc;
-        if (osic->osic_rc == 0 && rc != 0)
-                osic->osic_rc = rc;
+        old_rc = oig->oig_rc;
+        if (oig->oig_rc == 0 && rc != 0)
+                oig->oig_rc = rc;
 
-        if (--osic->osic_pending <= 0)
-                wake = &osic->osic_waitq;
+        if (--oig->oig_pending <= 0)
+                wake = &oig->oig_waitq;
 
-        spin_unlock_irqrestore(&osic->osic_lock, flags);
+        spin_unlock_irqrestore(&oig->oig_lock, flags);
 
-        CDEBUG(D_CACHE, "osic %p completed, rc %d -> %d via %d, %d now "
-                        "pending (racey)\n", osic, old_rc, osic->osic_rc, rc,
-                        osic->osic_pending);
+        CDEBUG(D_CACHE, "oig %p completed, rc %d -> %d via %d, %d now "
+                        "pending (racey)\n", oig, old_rc, oig->oig_rc, rc,
+                        oig->oig_pending);
         if (wake)
                 wake_up(wake);
-        osic_release(osic);
+        oig_release(oig);
 }
 
-static int osic_done(struct obd_sync_io_container *osic)
+static int oig_done(struct obd_io_group *oig)
 {
         unsigned long flags;
         int rc = 0;
-        spin_lock_irqsave(&osic->osic_lock, flags);
-        if (osic->osic_pending <= 0)
+        spin_lock_irqsave(&oig->oig_lock, flags);
+        if (oig->oig_pending <= 0)
                 rc = 1;
-        spin_unlock_irqrestore(&osic->osic_lock, flags);
+        spin_unlock_irqrestore(&oig->oig_lock, flags);
         return rc;
 }
 
-static void interrupted_osic(void *data)
+static void interrupted_oig(void *data)
 {
-        struct obd_sync_io_container *osic = data;
+        struct obd_io_group *oig = data;
         struct list_head *pos;
-        struct osic_callback_context *occ;
+        struct oig_callback_context *occ;
         unsigned long flags;
 
-        spin_lock_irqsave(&osic->osic_lock, flags);
-        list_for_each(pos, &osic->osic_occ_list) {
-                occ = list_entry(pos, struct osic_callback_context,
-                                 occ_osic_item);
+        spin_lock_irqsave(&oig->oig_lock, flags);
+        list_for_each(pos, &oig->oig_occ_list) {
+                occ = list_entry(pos, struct oig_callback_context,
+                                 occ_oig_item);
                 occ->occ_interrupted(occ);
         }
-        spin_unlock_irqrestore(&osic->osic_lock, flags);
+        spin_unlock_irqrestore(&oig->oig_lock, flags);
 }
 
-int osic_wait(struct obd_sync_io_container *osic)
+int oig_wait(struct obd_io_group *oig)
 {
-        struct l_wait_info lwi = LWI_INTR(interrupted_osic, osic);
+        struct l_wait_info lwi = LWI_INTR(interrupted_oig, oig);
         int rc;
 
-        CDEBUG(D_CACHE, "waiting for osic %p\n", osic);
+        CDEBUG(D_CACHE, "waiting for oig %p\n", oig);
 
         do {
-                rc = l_wait_event(osic->osic_waitq, osic_done(osic), &lwi);
+                rc = l_wait_event(oig->oig_waitq, oig_done(oig), &lwi);
                 LASSERTF(rc == 0 || rc == -EINTR, "rc: %d\n", rc);
-                /* we can't continue until the osic has emptied and stopped
+                /* we can't continue until the oig has emptied and stopped
                  * referencing state that the caller will free upon return */
                 if (rc == -EINTR)
                         lwi = (struct l_wait_info){ 0, };
         } while (rc == -EINTR);
 
-        LASSERTF(osic->osic_pending == 0,
-                 "exiting osic_wait(osic = %p) with %d pending\n", osic,
-                 osic->osic_pending);
+        LASSERTF(oig->oig_pending == 0,
+                 "exiting oig_wait(oig = %p) with %d pending\n", oig,
+                 oig->oig_pending);
 
-        CDEBUG(D_CACHE, "done waiting on osic %p rc %d\n", osic, osic->osic_rc);
-        return osic->osic_rc;
+        CDEBUG(D_CACHE, "done waiting on oig %p rc %d\n", oig, oig->oig_rc);
+        return oig->oig_rc;
 }

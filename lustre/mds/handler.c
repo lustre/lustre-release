@@ -79,7 +79,8 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         if (!pages)
                 GOTO(out, rc = -ENOMEM);
 
-        desc = ptlrpc_prep_bulk_exp (req, 1, BULK_PUT_SOURCE, MDS_BULK_PORTAL);
+        desc = ptlrpc_prep_bulk_exp(req, npages, BULK_PUT_SOURCE,
+                                    MDS_BULK_PORTAL);
         if (desc == NULL)
                 GOTO(out_free, rc = -ENOMEM);
 

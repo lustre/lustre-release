@@ -39,7 +39,7 @@ if [ "$BUSY" ]; then
 	mv $TMP/debug $TMP/debug-busy.`date +%s`
 	exit 255
 fi
-LEAK_LUSTRE=`dmesg | grep "obd mem.*leaked" | tail -1 | grep -v "leaked: 0"`
+LEAK_LUSTRE=`dmesg | tail -40 | grep "obd mem.*leaked"`
 LEAK_PORTALS=`dmesg | tail -20 | grep "Portals memory leaked"`
 if [ "$LEAK_LUSTRE" -o "$LEAK_PORTALS" ]; then
 	echo "$LEAK_LUSTRE" 1>&2

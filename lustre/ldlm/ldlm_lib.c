@@ -93,8 +93,8 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         sema_init(&cli->cl_sem, 1);
         cli->cl_conn_count = 0;
-        memcpy(server_uuid.uuid, lcfg->lcfg_inlbuf2, min(lcfg->lcfg_inllen2,
-                                                        sizeof(server_uuid)));
+        memcpy(server_uuid.uuid, lcfg->lcfg_inlbuf2,
+               min_t(unsigned int, lcfg->lcfg_inllen2, sizeof(server_uuid)));
 
         cli->cl_dirty = 0;
         cli->cl_avail_grant = 0;

@@ -333,6 +333,14 @@ int mdc_enqueue(struct obd_export *exp,
         it->d.lustre.it_lock_mode = lock_mode;
         it->d.lustre.it_data = req;
 
+        if (it->d.lustre.it_status < 0 && req->rq_replay) {
+                LASSERT(req->rq_transno == 0);
+                /* Don't hold error requests for replay. */
+                spin_lock(&req->rq_lock);
+                req->rq_replay = 0;
+                spin_unlock(&req->rq_lock);
+        }
+
         /* We know what to expect, so we do any byte flipping required here */
         LASSERT(reply_buffers == 4 || reply_buffers == 3 || reply_buffers == 1);
         if (reply_buffers >= 3) {
@@ -399,8 +407,8 @@ EXPORT_SYMBOL(mdc_enqueue);
 int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                     struct ll_fid *pfid, const char *name, int len,
                     void *lmm, int lmmsize,
-                    struct ll_fid *cfid, struct lookup_intent *it, int flags,
-                    struct ptlrpc_request **reqp,
+                    struct ll_fid *cfid, struct lookup_intent *it,
+                    int lookup_flags, struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking)
 {
         struct lustre_handle lockh;
@@ -413,28 +421,28 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         LASSERT(it);
 
         CDEBUG(D_DLMTRACE, "name: %*s in %ld, intent: %s\n", len, name,
-               (unsigned long) pfid->id, ldlm_it2str(it->it_op));
+               (unsigned long)pfid->id, ldlm_it2str(it->it_op));
 
         if (cfid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate_it if we already have a lock, let's
                  * verify that. */
-                struct ldlm_res_id res_id ={.name = {cfid->id, 
+                struct ldlm_res_id res_id ={.name = {cfid->id,
                                                      cfid->generation}};
                 struct lustre_handle lockh;
-                int mode, flags = LDLM_FL_BLOCK_GRANTED;
+                int mode = LCK_PR;
 
-                mode = LCK_PR;
-                rc = ldlm_lock_match(exp->exp_obd->obd_namespace, flags,
-                                     &res_id, LDLM_PLAIN, NULL, LCK_PR, &lockh);
+                rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
+                                     LDLM_FL_BLOCK_GRANTED, &res_id,
+                                     LDLM_PLAIN, NULL, LCK_PR, &lockh);
                 if (!rc) {
                         mode = LCK_PW;
-                        rc = ldlm_lock_match(exp->exp_obd->obd_namespace, flags,
-                                             &res_id, LDLM_PLAIN, NULL, LCK_PW,
-                                             &lockh);
+                        rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
+                                             LDLM_FL_BLOCK_GRANTED, &res_id,
+                                             LDLM_PLAIN, NULL, LCK_PW, &lockh);
                 }
                 if (rc) {
-                        memcpy(&it->d.lustre.it_lock_handle, &lockh, 
+                        memcpy(&it->d.lustre.it_lock_handle, &lockh,
                                sizeof(lockh));
                         it->d.lustre.it_lock_mode = mode;
                 }
@@ -492,11 +500,11 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         if (it->it_op & IT_OPEN) {
                 if (!it_disposition(it, DISP_OPEN_OPEN) ||
                     it->d.lustre.it_status != 0) {
-                        unsigned long flags;
+                        unsigned long irqflags;
 
-                        spin_lock_irqsave(&request->rq_lock, flags);
+                        spin_lock_irqsave(&request->rq_lock, irqflags);
                         request->rq_replay = 0;
-                        spin_unlock_irqrestore(&request->rq_lock, flags);
+                        spin_unlock_irqrestore(&request->rq_lock, irqflags);
                 }
         }
 

@@ -154,7 +154,7 @@ static int ll_local_open(struct file *file, struct lookup_intent *it)
         memcpy(&fd->fd_mds_och.och_fh, &body->handle, sizeof(body->handle));
         fd->fd_mds_och.och_magic = OBD_CLIENT_HANDLE_MAGIC;
         file->private_data = fd;
-        ll_readahead_init(&fd->fd_ras);
+        ll_readahead_init(file->f_dentry->d_inode, &fd->fd_ras);
 
         lli->lli_io_epoch = body->io_epoch;
 
@@ -759,6 +759,11 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         /* POSIX, but surprised the VFS doesn't check this already */
         if (count == 0)
                 RETURN(0);
+
+        /* If file was opened for LL_IOC_LOV_SETSTRIPE but the ioctl wasn't
+         * called on the file, don't fail the below assertion (bug 2388). */
+        if (file->f_flags & O_LOV_DELAY_CREATE && lsm == NULL)
+                RETURN(-EBADF);
 
         LASSERT(lsm);
 

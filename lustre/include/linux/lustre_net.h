@@ -87,7 +87,7 @@
  * except in the open case where there are a large number of OSTs in a LOV.
  */
 #define MDS_MAXREQSIZE  (5 * 1024)
-#define MDS_MAXMEM      (num_physpages*(PAGE_SIZE/512))
+#define MDS_MAXMEM      (num_physpages*(PAGE_SIZE/128))
 #define MDS_NBUFS       min(MDS_MAXMEM/MDS_BUFSIZE, MDS_NBUF_MAX)
 
 #define OST_MAX_THREADS 36UL

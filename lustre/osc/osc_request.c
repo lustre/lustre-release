@@ -784,7 +784,7 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                 LASSERT((pg->off & ~PAGE_MASK) + pg->count <= PAGE_SIZE);
                 LASSERTF(i == 0 || pg->off > pg_prev->off,
                          "i %d p_c %u pg %p [pri %lu ind %lu] off "LPU64
-                         " prev_pg %p [pri %lu ind %lu] off "LPU64,
+                         " prev_pg %p [pri %lu ind %lu] off "LPU64"\n",
                          i, page_count,
                          pg->pg, pg->pg->private, pg->pg->index, pg->off,
                          pg_prev->pg, pg_prev->pg->private, pg_prev->pg->index,
@@ -1154,7 +1154,7 @@ static void lop_update_pending(struct client_obd *cli,
  * rpc yet it can dequeue immediately.  Otherwise it has to mark the rpc as
  * desiring interruption which will forcefully complete the rpc once the rpc
  * has timed out */
-static void osc_occ_interrupted(struct osic_callback_context *occ)
+static void osc_occ_interrupted(struct oig_callback_context *occ)
 {
         struct osc_async_page *oap;
         struct loi_oap_pages *lop;
@@ -1188,8 +1188,8 @@ static void osc_occ_interrupted(struct osic_callback_context *occ)
                 lop_update_pending(oap->oap_cli, lop, oap->oap_cmd, -1);
                 loi_list_maint(oap->oap_cli, oap->oap_loi);
 
-                osic_complete_one(oap->oap_osic, &oap->oap_occ, 0);
-                oap->oap_osic = NULL;
+                oig_complete_one(oap->oap_oig, &oap->oap_occ, 0);
+                oap->oap_oig = NULL;
         }
 
 unlock:
@@ -1210,9 +1210,9 @@ static void osc_complete_oap(struct client_obd *cli,
                 oap->oap_request = NULL;
         }
 
-        if (oap->oap_osic) {
-                osic_complete_one(oap->oap_osic, &oap->oap_occ, rc);
-                oap->oap_osic = NULL;
+        if (oap->oap_oig) {
+                oig_complete_one(oap->oap_oig, &oap->oap_occ, rc);
+                oap->oap_oig = NULL;
                 EXIT;
                 return;
         }
@@ -1918,11 +1918,12 @@ out:
         RETURN(rc);
 }
 
-static int osc_queue_sync_io(struct obd_export *exp, struct lov_stripe_md *lsm,
+static int osc_queue_group_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                              struct lov_oinfo *loi,
-                             struct obd_sync_io_container *osic, void *cookie,
+                             struct obd_io_group *oig, void *cookie,
                              int cmd, obd_off off, int count,
-                             obd_flag brw_flags)
+                             obd_flag brw_flags,
+                             obd_flag async_flags)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
         struct osc_async_page *oap;
@@ -1950,34 +1951,35 @@ static int osc_queue_sync_io(struct obd_export *exp, struct lov_stripe_md *lsm,
         oap->oap_page_off = off;
         oap->oap_count = count;
         oap->oap_brw_flags = brw_flags;
+        oap->oap_async_flags = async_flags;
 
         if (cmd == OBD_BRW_WRITE)
                 lop = &loi->loi_write_lop;
         else
                 lop = &loi->loi_read_lop;
 
-        list_add_tail(&oap->oap_pending_item, &lop->lop_pending_sync);
-        oap->oap_osic = osic;
-        osic_add_one(osic, &oap->oap_occ);
+        list_add_tail(&oap->oap_pending_item, &lop->lop_pending_group);
+        if (oap->oap_async_flags & ASYNC_GROUP_SYNC) {
+                oap->oap_oig = oig;
+                oig_add_one(oig, &oap->oap_occ);
+        }
 
-        LOI_DEBUG(loi, "oap %p page %p on sync pending\n", oap, oap->oap_page);
+        LOI_DEBUG(loi, "oap %p page %p on group pending\n", oap, oap->oap_page);
 
         spin_unlock(&cli->cl_loi_list_lock);
 
         RETURN(0);
 }
 
-static void osc_sync_to_pending(struct client_obd *cli, struct lov_oinfo *loi,
-                                struct loi_oap_pages *lop, int cmd)
+static void osc_group_to_pending(struct client_obd *cli, struct lov_oinfo *loi,
+                                 struct loi_oap_pages *lop, int cmd)
 {
         struct list_head *pos, *tmp;
         struct osc_async_page *oap;
 
-        list_for_each_safe(pos, tmp, &lop->lop_pending_sync) {
+        list_for_each_safe(pos, tmp, &lop->lop_pending_group) {
                 oap = list_entry(pos, struct osc_async_page, oap_pending_item);
                 list_del(&oap->oap_pending_item);
-                oap->oap_async_flags |= ASYNC_READY | ASYNC_URGENT |
-                                        ASYNC_COUNT_STABLE;
                 list_add_tail(&oap->oap_pending_item, &lop->lop_pending);
                 list_add(&oap->oap_urgent_item, &lop->lop_urgent);
                 lop_update_pending(cli, lop, cmd, 1);
@@ -1985,10 +1987,10 @@ static void osc_sync_to_pending(struct client_obd *cli, struct lov_oinfo *loi,
         loi_list_maint(cli, loi);
 }
 
-static int osc_trigger_sync_io(struct obd_export *exp,
-                               struct lov_stripe_md *lsm,
-                               struct lov_oinfo *loi,
-                               struct obd_sync_io_container *osic)
+static int osc_trigger_group_io(struct obd_export *exp,
+                                struct lov_stripe_md *lsm,
+                                struct lov_oinfo *loi,
+                                struct obd_io_group *oig)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
         ENTRY;
@@ -2001,8 +2003,8 @@ static int osc_trigger_sync_io(struct obd_export *exp,
 
         spin_lock(&cli->cl_loi_list_lock);
 
-        osc_sync_to_pending(cli, loi, &loi->loi_write_lop, OBD_BRW_WRITE);
-        osc_sync_to_pending(cli, loi, &loi->loi_read_lop, OBD_BRW_READ);
+        osc_group_to_pending(cli, loi, &loi->loi_write_lop, OBD_BRW_WRITE);
+        osc_group_to_pending(cli, loi, &loi->loi_read_lop, OBD_BRW_READ);
 
         osc_check_rpcs(cli);
         spin_unlock(&cli->cl_loi_list_lock);
@@ -2545,9 +2547,8 @@ static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
  */
 static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
 {
-        struct lov_user_md lum;
-        struct lov_mds_md *lmmk;
-        int rc, lmm_size;
+        struct lov_user_md lum, *lumk;
+        int rc, lum_size;
         ENTRY;
 
         if (!lsm)
@@ -2560,22 +2561,26 @@ static int osc_getstripe(struct lov_stripe_md *lsm, struct lov_user_md *lump)
         if (lum.lmm_magic != LOV_USER_MAGIC)
                 RETURN(-EINVAL);
 
-        if (lum.lmm_stripe_count < 1)
-                RETURN(-EOVERFLOW);
+        if (lum.lmm_stripe_count > 0) {
+                lum_size = sizeof(lum) + sizeof(lum.lmm_objects[0]);
+                OBD_ALLOC(lumk, lum_size);
+                if (!lumk)
+                        RETURN(-ENOMEM);
 
-        lmm_size = sizeof(lum) + sizeof(lum.lmm_objects[0]);
-        OBD_ALLOC(lmmk, lmm_size);
-        if (!lmmk)
-                RETURN(-ENOMEM);
+                lumk->lmm_objects[0].l_object_id = lsm->lsm_object_id;
+        } else {
+                lum_size = sizeof(lum);
+                lumk = &lum;
+        }
 
-        lmmk->lmm_stripe_count = 1;
-        lmmk->lmm_object_id = lsm->lsm_object_id;
-        lmmk->lmm_objects[0].l_object_id = lsm->lsm_object_id;
+        lumk->lmm_object_id = lsm->lsm_object_id;
+        lumk->lmm_stripe_count = 1;
 
-        if (copy_to_user(lump, lmmk, lmm_size))
+        if (copy_to_user(lump, lumk, lum_size))
                 rc = -EFAULT;
 
-        OBD_FREE(lmmk, lmm_size);
+        if (lumk != &lum)
+                OBD_FREE(lumk, lum_size);
 
         RETURN(rc);
 }
@@ -2919,8 +2924,8 @@ struct obd_ops osc_obd_ops = {
         .o_prep_async_page =            osc_prep_async_page,
         .o_queue_async_io =             osc_queue_async_io,
         .o_set_async_flags =            osc_set_async_flags,
-        .o_queue_sync_io =              osc_queue_sync_io,
-        .o_trigger_sync_io =            osc_trigger_sync_io,
+        .o_queue_group_io =             osc_queue_group_io,
+        .o_trigger_group_io =           osc_trigger_group_io,
         .o_teardown_async_page =        osc_teardown_async_page,
         o_punch:        osc_punch,
         o_sync:         osc_sync,

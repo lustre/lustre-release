@@ -238,6 +238,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         spin_lock_init(&request->rq_lock);
         INIT_LIST_HEAD(&request->rq_list);
         INIT_LIST_HEAD(&request->rq_replay_list);
+        INIT_LIST_HEAD(&request->rq_set_chain);
         init_waitqueue_head(&request->rq_reply_waitq);
         request->rq_xid = ptlrpc_next_xid();
         atomic_set(&request->rq_refcount, 1);
@@ -632,7 +633,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                 }
 
                 /* ptlrpc_queue_wait->l_wait_event guarantees that rq_intr
-                 * will only be set after rq_timedout, but the osic waiting
+                 * will only be set after rq_timedout, but the oig waiting
                  * path sets rq_intr irrespective of whether ptlrpcd has
                  * seen a timeout.  our policy is to only interpret 
                  * interrupted rpcs after they have timed out */
@@ -665,10 +666,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                         continue;
                                 } 
 
-                                list_del(&req->rq_list);
-                                list_add_tail(&req->rq_list,
-                                              &imp->imp_sending_list);
-
+                                list_del_init(&req->rq_list);
                                 if (status != 0)  {
                                         req->rq_status = status;
                                         req->rq_phase = RQ_PHASE_INTERPRET;
@@ -676,6 +674,16 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                                                                flags);
                                         GOTO(interpret, req->rq_status);
                                 }
+                                if (req->rq_no_resend) {
+                                        req->rq_status = -ENOTCONN;
+                                        req->rq_phase = RQ_PHASE_INTERPRET;
+                                        spin_unlock_irqrestore(&imp->imp_lock,
+                                                               flags);
+                                        GOTO(interpret, req->rq_status);
+                                }
+                                list_add_tail(&req->rq_list,
+                                              &imp->imp_sending_list);
+
                                 spin_unlock_irqrestore(&imp->imp_lock, flags);
 
                                 req->rq_waiting = 0;
@@ -992,8 +1000,10 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
                 return;
         }
 
-        LASSERT(!request->rq_receiving_reply);
-        LASSERT(request->rq_rqbd == NULL);    /* client-side */
+        LASSERTF(!request->rq_receiving_reply, "req %p\n", request);
+        LASSERTF(request->rq_rqbd == NULL, "req %p\n",request);/* client-side */
+        LASSERTF(list_empty(&request->rq_list), "req %p\n", request);
+        LASSERTF(list_empty(&request->rq_set_chain), "req %p\n", request);
 
         /* We must take it off the imp_replay_list first.  Otherwise, we'll set
          * request->rq_reqmsg to NULL while osc_close is dereferencing it. */
@@ -1006,6 +1016,7 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
                         spin_unlock_irqrestore(&request->rq_import->imp_lock,
                                                flags);
         }
+        LASSERTF(list_empty(&request->rq_replay_list), "req %p\n", request);
 
         if (atomic_read(&request->rq_refcount) != 0) {
                 DEBUG_REQ(D_ERROR, request,
@@ -1259,6 +1270,9 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
         if (!list_empty(&req->rq_replay_list))
                 return;
 
+        lustre_msg_add_flags(req->rq_reqmsg,
+                             MSG_REPLAY);
+
         LASSERT(imp->imp_replayable);
         /* Balanced in ptlrpc_free_committed, usually. */
         ptlrpc_request_addref(req);
@@ -1347,6 +1361,10 @@ restart:
                 } 
                 else if (req->rq_intr) {
                         rc = -EINTR;
+                }
+                else if (req->rq_no_resend) {
+                        spin_unlock_irqrestore(&imp->imp_lock, flags);
+                        GOTO(out, rc = -ETIMEDOUT);
                 }
                 else {
                         GOTO(restart, rc);

@@ -40,7 +40,7 @@ struct loi_oap_pages {
         struct list_head        lop_pending;
         int                     lop_num_pending;
         struct list_head        lop_urgent;
-        struct list_head        lop_pending_sync;
+        struct list_head        lop_pending_group;
 };
 
 struct lov_oinfo {                 /* per-stripe data structure */
@@ -65,10 +65,10 @@ static inline void loi_init(struct lov_oinfo *loi)
 {
         INIT_LIST_HEAD(&loi->loi_read_lop.lop_pending);
         INIT_LIST_HEAD(&loi->loi_read_lop.lop_urgent);
-        INIT_LIST_HEAD(&loi->loi_read_lop.lop_pending_sync);
+        INIT_LIST_HEAD(&loi->loi_read_lop.lop_pending_group);
         INIT_LIST_HEAD(&loi->loi_write_lop.lop_pending);
         INIT_LIST_HEAD(&loi->loi_write_lop.lop_urgent);
-        INIT_LIST_HEAD(&loi->loi_write_lop.lop_pending_sync);
+        INIT_LIST_HEAD(&loi->loi_write_lop.lop_pending_group);
         INIT_LIST_HEAD(&loi->loi_cli_item);
         INIT_LIST_HEAD(&loi->loi_write_item);
 }
@@ -103,9 +103,16 @@ struct brw_page {
 };
 
 enum async_flags {
-        ASYNC_READY = 0x1,
+        ASYNC_READY = 0x1, /* ap_make_ready will not be called before this
+                              page is added to an rpc */
         ASYNC_URGENT = 0x2,
-        ASYNC_COUNT_STABLE = 0x4,
+        ASYNC_COUNT_STABLE = 0x4, /* ap_refresh_count will not be called
+                                     to give the caller a chance to update
+                                     or cancel the size of the io */
+        ASYNC_GROUP_SYNC = 0x8,  /* ap_completion will not be called, instead
+                                    the page is accounted for in the
+                                    obd_io_group given to 
+                                    obd_queue_group_io */
 };
 
 struct obd_async_page_ops {
@@ -115,26 +122,26 @@ struct obd_async_page_ops {
         void (*ap_completion)(void *data, int cmd, int rc);
 };
 
-/* the `osic' is passed down from a caller of obd rw methods.  the callee
- * records enough state such that the caller can sleep on the osic and
+/* the `oig' is passed down from a caller of obd rw methods.  the callee
+ * records enough state such that the caller can sleep on the oig and
  * be woken when all the callees have finished their work */
-struct obd_sync_io_container {
-        spinlock_t      osic_lock;
-        atomic_t        osic_refcount;
-        int             osic_pending;
-        int             osic_rc;
-        struct list_head osic_occ_list;
-        wait_queue_head_t osic_waitq;
+struct obd_io_group {
+        spinlock_t      oig_lock;
+        atomic_t        oig_refcount;
+        int             oig_pending;
+        int             oig_rc;
+        struct list_head oig_occ_list;
+        wait_queue_head_t oig_waitq;
 };
 
-/* the osic callback context lets the callee of obd rw methods register
+/* the oig callback context lets the callee of obd rw methods register
  * for callbacks from the caller. */
-struct osic_callback_context {
-        struct list_head occ_osic_item;
+struct oig_callback_context {
+        struct list_head occ_oig_item;
         /* called when the caller has received a signal while sleeping.
          * callees of this method are encouraged to abort their state 
-         * in the osic.  This may be called multiple times. */
-        void (*occ_interrupted)(struct osic_callback_context *occ);
+         * in the oig.  This may be called multiple times. */
+        void (*occ_interrupted)(struct oig_callback_context *occ);
 };
 
 /* if we find more consumers this could be generalized */
@@ -570,16 +577,16 @@ struct obd_ops {
                                 struct lov_oinfo *loi, void *cookie, 
                                 int cmd, obd_off off, int count, 
                                 obd_flag brw_flags, obd_flag async_flags);
-        int (*o_queue_sync_io)(struct obd_export *exp, 
-                               struct lov_stripe_md *lsm, 
-                               struct lov_oinfo *loi, 
-                               struct obd_sync_io_container *osic, 
-                               void *cookie, int cmd, obd_off off, int count, 
-                               obd_flag brw_flags);
-        int (*o_trigger_sync_io)(struct obd_export *exp, 
-                                 struct lov_stripe_md *lsm, 
-                                 struct lov_oinfo *loi, 
-                                 struct obd_sync_io_container *osic);
+        int (*o_queue_group_io)(struct obd_export *exp, 
+                                struct lov_stripe_md *lsm, 
+                                struct lov_oinfo *loi, 
+                                struct obd_io_group *oig, 
+                                void *cookie, int cmd, obd_off off, int count, 
+                                obd_flag brw_flags, obd_flag async_flags);
+        int (*o_trigger_group_io)(struct obd_export *exp, 
+                                  struct lov_stripe_md *lsm, 
+                                  struct lov_oinfo *loi, 
+                                  struct obd_io_group *oig);
         int (*o_set_async_flags)(struct obd_export *exp,
                                 struct lov_stripe_md *lsm,
                                 struct lov_oinfo *loi, void *cookie,

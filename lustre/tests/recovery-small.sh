@@ -190,4 +190,11 @@ test_14() {
 }
 run_test 14 "mdc_readpage resend test (bug 1138)"
 
+test_15() {
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000128"
+    touch $DIR/$tfile && return 1
+    return 0
+}
+run_test 15 "failed open (-ENOMEM)"
+
 $CLEANUP

@@ -339,7 +339,8 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         }
 
         /* replay case */
-        if (rec->ur_fid2->id) {
+        if(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                LASSERT (rec->ur_fid2->id);
                 body->valid |= OBD_MD_FLBLKSZ | OBD_MD_FLEASIZE;
                 lmm_size = rec->ur_eadatalen;
                 lmm = rec->ur_eadata;
@@ -357,6 +358,10 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         CERROR("open replay failed to set md:%d\n", rc);
                 RETURN(0);
         }
+
+        
+        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_ALLOC_OBDO))
+                GOTO(out_ids, rc = -ENOMEM);
 
         oa = obdo_alloc();
         if (oa == NULL)
@@ -784,15 +789,23 @@ int mds_open(struct mds_update_record *rec, int offset,
         /* Step 0: If we are passed a fid, then we assume the client already
          * opened this file and is only replaying the RPC, so we open the
          * inode by fid (at some large expense in security). */
-        if (rec->ur_fid2->id) {
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                DEBUG_REQ(D_HA, req, "open replay, disp: "LPX64"\n", 
+                          rep->lock_policy_res1);
+
+                LASSERT(rec->ur_fid2->id);
+                
                 rc = mds_open_by_fid(req, rec->ur_fid2, body, rec->ur_flags,
                                      rec, rep);
-                if (rc != -ENOENT)
+                if (rc != -ENOENT) 
                         RETURN(rc);
                 /* We didn't find the correct inode on disk either, so we
                  * need to re-create it via a regular replay. */
                 LASSERT(rec->ur_flags & MDS_OPEN_CREAT);
+        } else {
+                LASSERT(!rec->ur_fid2->id);
         }
+
         LASSERT(offset == 2); /* If we got here, we must be called via intent */
 
         med = &req->rq_export->exp_mds_data;
@@ -938,6 +951,16 @@ int mds_open(struct mds_update_record *rec, int offset,
         if ((rec->ur_flags & MDS_OPEN_DIRECTORY) &&
             !S_ISDIR(dchild->d_inode->i_mode))
                 GOTO(cleanup, rc = -ENOTDIR);
+ 
+        if (S_ISDIR(dchild->d_inode->i_mode)) { 
+                if (rec->ur_flags & MDS_OPEN_CREAT || rec->ur_flags & FMODE_WRITE) {
+                        /*we are tryying to create or write a exist dir*/
+                        GOTO(cleanup, rc = -EISDIR);
+                }
+                if (ll_permission(dchild->d_inode, acc_mode, NULL)) {
+                        GOTO(cleanup, rc = -EACCES);
+                }
+        }
 
         /* Step 5: mds_open it */
         rc = mds_finish_open(req, dchild, body, rec->ur_flags, &handle, rec,

@@ -80,6 +80,7 @@ extern unsigned int obd_sync_filter;
 #define OBD_FAIL_MDS_SYNC_PACK           0x125
 #define OBD_FAIL_MDS_DONE_WRITING_NET    0x126
 #define OBD_FAIL_MDS_DONE_WRITING_PACK   0x127
+#define OBD_FAIL_MDS_ALLOC_OBDO          0x128
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -125,6 +126,8 @@ extern unsigned int obd_sync_filter;
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
 #define OBD_FAIL_OBD_LOGD_NET            0x602
+
+#define OBD_FAIL_TGT_REPLY_NET           0x700
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00

@@ -34,8 +34,8 @@ struct osc_async_page {
         enum async_flags        oap_async_flags;
 
         unsigned long           oap_interrupted:1;
-        struct obd_sync_io_container *oap_osic;
-        struct osic_callback_context oap_occ;
+        struct obd_io_group      *oap_oig;
+        struct oig_callback_context oap_occ;
         struct ptlrpc_request   *oap_request;
         struct client_obd       *oap_cli;
         struct lov_oinfo        *oap_loi;

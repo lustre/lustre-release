@@ -265,18 +265,25 @@ static
 struct llu_sysio_cookie* get_sysio_cookie(struct inode *inode, int maxpages)
 {
         struct llu_sysio_cookie *cookie;
+        int rc;
 
         OBD_ALLOC(cookie, LLU_SYSIO_COOKIE_SIZE(maxpages));
-        if (cookie) {
-                I_REF(inode);
-                cookie->lsc_inode = inode;
-                cookie->lsc_maxpages = maxpages;
-                cookie->lsc_llap = (struct ll_async_page *)(cookie + 1);
-                cookie->lsc_pages = (struct page *) (cookie->lsc_llap + maxpages);
+        if (cookie == NULL)
+                goto out;
 
-                osic_init(&cookie->lsc_osic);
+        I_REF(inode);
+        cookie->lsc_inode = inode;
+        cookie->lsc_maxpages = maxpages;
+        cookie->lsc_llap = (struct ll_async_page *)(cookie + 1);
+        cookie->lsc_pages = (struct page *) (cookie->lsc_llap + maxpages);
+
+        rc = oig_init(&cookie->lsc_oig);
+        if (rc) {
+                OBD_FREE(cookie, LLU_SYSIO_COOKIE_SIZE(maxpages));
+                cookie = NULL;
         }
 
+out:
         return cookie;
 }
 
@@ -305,7 +312,7 @@ void put_sysio_cookie(struct llu_sysio_cookie *cookie)
 
         I_RELE(cookie->lsc_inode);
 
-        osic_release(cookie->lsc_osic);
+        oig_release(cookie->lsc_oig);
         OBD_FREE(cookie, LLU_SYSIO_COOKIE_SIZE(cookie->lsc_maxpages));
 }
 
@@ -463,9 +470,11 @@ int llu_prep_async_io(struct llu_sysio_cookie *cookie, int cmd,
                 llap[i].llap_page = &pages[i];
                 llap[i].llap_inode = cookie->lsc_inode;
 
-                rc = obd_queue_sync_io(exp, lsm, NULL, cookie->lsc_osic,
-                                       llap[i].llap_cookie, cmd,
-                                       pages[i]._offset, pages[i]._count, 0);
+                rc = obd_queue_group_io(exp, lsm, NULL, cookie->lsc_oig,
+                                        llap[i].llap_cookie, cmd,
+                                        pages[i]._offset, pages[i]._count, 0,
+                                        ASYNC_READY | ASYNC_URGENT |
+                                        ASYNC_COUNT_STABLE | ASYNC_GROUP_SYNC);
                 if (rc)
                         RETURN(rc);
 
@@ -481,7 +490,7 @@ int llu_start_async_io(struct llu_sysio_cookie *cookie)
         struct lov_stripe_md *lsm = llu_i2info(cookie->lsc_inode)->lli_smd;
         struct obd_export *exp = llu_i2obdexp(cookie->lsc_inode);
 
-        return obd_trigger_sync_io(exp, lsm, NULL, cookie->lsc_osic);
+        return obd_trigger_group_io(exp, lsm, NULL, cookie->lsc_oig);
 }
 
 /*
@@ -509,7 +518,7 @@ llu_rw(int cmd, struct inode *inode, char *buf, size_t count, loff_t pos)
                 GOTO(out_cleanup, rc);
 
 /*
-        rc = osic_wait(&osic);
+        rc = oig_wait(&oig);
         if (rc) {
                 CERROR("file i/o error!\n");
                 rw_count = rc;
@@ -730,7 +739,7 @@ int llu_iop_iodone(struct ioctx *ioctxp)
         for (i = 0; i < lsca->ncookies; i++) {
                 cookie = lsca->cookies[i];
                 if (cookie) {
-                        err = osic_wait(cookie->lsc_osic);
+                        err = oig_wait(cookie->lsc_oig);
                         if (err && !rc)
                                 rc = err;
                         if (!rc)

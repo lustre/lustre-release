@@ -121,15 +121,16 @@ void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
 #endif
 }
 
-int ptlrpc_replay_next(struct obd_import *imp)
+int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
 {
         int rc = 0;
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
         unsigned long flags;
         __u64 last_transno;
-        int sent_req = 0;
         ENTRY;
+
+        *inflight = 0;
 
         /* It might have committed some after we last spoke, so make sure we
          * get rid of them now.
@@ -139,8 +140,10 @@ int ptlrpc_replay_next(struct obd_import *imp)
         last_transno = imp->imp_last_replay_transno;
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 
-        CDEBUG(D_HA, "import %p from %s has committed "LPD64"\n",
-               imp, imp->imp_target_uuid.uuid, imp->imp_peer_committed_transno);
+        CDEBUG(D_HA, "import %p from %s committed "LPU64" last "LPU64"\n",
+               imp, imp->imp_target_uuid.uuid, imp->imp_peer_committed_transno,
+               last_transno);
+
         /* Do I need to hold a lock across this iteration?  We shouldn't be
          * racing with any additions to the list, because we're in recovery
          * and are therefore not processing additional requests to add.  Calls
@@ -159,25 +162,17 @@ int ptlrpc_replay_next(struct obd_import *imp)
         list_for_each_safe(tmp, pos, &imp->imp_replay_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_replay_list);
                 if (req->rq_transno > last_transno) {
-                        /* remove from list so ptlrpcd can send the
-                           req, it should be reinserted after it is
-                           sent and replied.  Perhaps better solution
-                           would be to add req->rq_replay_list so the
-                           req can be saved for replay and still go
-                           through the normal send thread. */
                         rc = ptlrpc_replay_req(req);
                         if (rc) {
-                                CERROR("recovery replay error %d for req "LPD64"\n",
-                                       rc, req->rq_xid);
+                                CERROR("recovery replay error %d for req "
+                                       LPD64"\n", rc, req->rq_xid);
                                 RETURN(rc);
                         }
-                        sent_req = 1;
+                        *inflight = 1;
                         break;
                 }
-
         }
-
-        RETURN(sent_req);
+        RETURN(rc);
 }
 
 int ptlrpc_resend(struct obd_import *imp)
@@ -369,13 +364,13 @@ static int ptlrpc_recover_import_no_retry(struct obd_import *imp,
                 RETURN(rc);
 
         CDEBUG(D_ERROR, "%s: recovery started, waiting\n", 
-               imp->imp_client->cli_name);
+               imp->imp_target_uuid.uuid);
 
         lwi = LWI_TIMEOUT(MAX(obd_timeout * HZ, 1), NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq, 
                           !ptlrpc_import_in_recovery(imp), &lwi);
         CDEBUG(D_ERROR, "%s: recovery finished\n", 
-               imp->imp_client->cli_name);
+               imp->imp_target_uuid.uuid);
 
         RETURN(rc);
         

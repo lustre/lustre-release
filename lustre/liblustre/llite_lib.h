@@ -114,7 +114,7 @@ struct llu_inode_info {
          sizeof(struct page) * (x))
 
 struct llu_sysio_cookie {
-        struct obd_sync_io_container *lsc_osic;
+        struct obd_io_group    *lsc_oig;
         struct inode           *lsc_inode;
         int                     lsc_maxpages;
         int                     lsc_npages;

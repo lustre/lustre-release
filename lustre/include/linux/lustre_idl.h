@@ -180,6 +180,7 @@ struct lustre_msg {
 #define MSG_GEN_FLAG_MASK      0x0000ffff
 #define MSG_LAST_REPLAY        1
 #define MSG_RESENT             2
+#define MSG_REPLAY             4
 
 static inline int lustre_msg_get_flags(struct lustre_msg *msg)
 {
