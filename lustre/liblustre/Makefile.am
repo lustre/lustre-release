@@ -15,14 +15,16 @@ LUSTRE_LIBS = libllite.a \
               $(top_builddir)/obdclass/liblustreclass.a \
               $(top_builddir)/lvfs/liblvfs.a
 
+if !CRAY_PORTALS
 PTL_LIBS =    $(top_builddir)/portals/utils/libuptlctl.a \
               $(top_builddir)/portals/unals/libtcpnal.a \
               $(top_builddir)/portals/portals/libportals.a
+else
+PTL_LIBS =    $(top_builddir)/portals/utils/libuptlctl.a \
+              $(CRAY_PORTALS_PATH)/lib_TV/snos64/libportals.a
+endif
 
-SYSIO_LIBS =  $(SYSIO)/drivers/native/libsysio_native.a \
-              $(SYSIO)/drivers/sockets/libsysio_sockets.a \
-              $(SYSIO)/src/libsysio.a \
-              $(SYSIO)/dev/stdfd/libsysio_stdfd.a
+SYSIO_LIBS =  $(SYSIO)/lib/libsysio.a
 
 if LIBLUSTRE
 lib_LIBRARIES = liblustre.a
@@ -35,6 +37,6 @@ libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c llite_lib.h
 liblustre_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c
 
 liblustre.a : $(LUSTRE_LIBS) $(PTL_LIBS) $(SYSIO_LIBS)
-	$(srcdir)/genlib.sh $(SYSIO) $(AR) $(LINK) || ( rm -f $@; exit 1 )
+	$(srcdir)/genlib.sh $(SYSIO) $(CRAY_PORTALS_PATH)
 
 EXTRA_DIST = genlib.sh
