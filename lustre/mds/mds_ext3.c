@@ -123,13 +123,13 @@ static int mds_ext3_setattr(struct dentry *dentry, void *handle,
  */
 static int mds_ext3_set_objid(struct inode *inode, void *handle, obd_id id)
 {
-        (__u64)EXT3_I(inode)->i_data[0] = cpu_to_le64(id);
+        *((__u64 *)EXT3_I(inode)->i_data) = cpu_to_le64(id);
         return 0;
 }
 
 static int mds_ext3_get_objid(struct inode *inode, obd_id *id)
 {
-        *id = le64_to_cpu(EXT3_I(inode)->i_data[0]);
+        *id = le64_to_cpu(*((__u64 *)EXT3_I(inode)->i_data));
 
         return 0;
 }
@@ -193,7 +193,6 @@ static void mds_ext3_callback_status(void *jcb, int error)
                 mcb->cb_mds->mds_last_committed = mcb->cb_last_rcvd;
 
         kmem_cache_free(jcb_cache, mcb);
-        //OBD_FREE(mcb, sizeof(*mcb));
         --jcb_cache_count;
 }
 
@@ -208,7 +207,6 @@ static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
 {
         struct mds_cb_data *mcb;
 
-        //OBD_ALLOC(mcb, sizeof(*mcb));
         mcb = kmem_cache_alloc(jcb_cache, GFP_NOFS);
         if (!mcb)
                 RETURN(-ENOMEM);
