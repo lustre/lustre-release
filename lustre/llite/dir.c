@@ -382,8 +382,6 @@ static int ll_mkdir_stripe(struct inode *inode, unsigned long arg)
         mode_t mode;
         int err = 0;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "ioctl Op:name=%s,dir=%lu/%u(%p)\n",
-               name, inode->i_ino, inode->i_generation, inode);
 
         if (copy_from_user(&lums, (void *)arg, sizeof(lums)))
                 RETURN(-EFAULT);
@@ -397,6 +395,8 @@ static int ll_mkdir_stripe(struct inode *inode, unsigned long arg)
         if (copy_from_user(name, lums.lums_name, lums.lums_namelen))
                 GOTO(out, err=-EFAULT);
 
+        CDEBUG(D_VFSTRACE, "ioctl Op:name=%s,dir=%lu/%u(%p)\n",
+               name, inode->i_ino, inode->i_generation, inode);
         nstripes = lums.lums_nstripes;
 
         mode = lums.lums_mode;
