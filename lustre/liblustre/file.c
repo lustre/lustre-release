@@ -145,7 +145,7 @@ int llu_create(struct inode *dir, struct pnode_base *pnode, int mode)
 
         it = dentry->d_it;
 
-        rc = ll_it_open_error(IT_OPEN_CREATE, it);
+        rc = ll_it_open_error(DISP_OPEN_CREATE, it);
         if (rc) {
                 LL_GET_INTENT(dentry, it);
                 ptlrpc_req_finished(it->it_data);
@@ -317,7 +317,7 @@ static int llu_file_open(struct inode *inode)
 #if 0
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu\n", inode->i_ino);
         LL_GET_INTENT(file->f_dentry, it);
-        rc = ll_it_open_error(IT_OPEN_OPEN, it);
+        rc = ll_it_open_error(DISP_OPEN_OPEN, it);
         if (rc)
                 RETURN(rc);
 #endif
