@@ -1,3 +1,19 @@
+tbd
+       * version v0_7
+       * bug fixes
+	- imports and exports cleanup too early, need refcounts (349, 879, 1045)
+	- per-import/export recovery handling (958, 931, 959)
+	- multiple last-rcvd slots, for serving multiple FSes (949)
+	- connections are again shared between multiple imp/exports (963, 964)
+	- "umount -f" would hang if any requests needed to be sent (393, 978)
+	- avoid pinning large req buffer by copying for queued messages (989)
+	- add "uuid" to "lctl device" command to help upcalls (991)
+	- "open" RPCs with transnos would confuse recovery counters (1037)
+       * major user-visible changes
+	- fail out/fail over policy now controlled by the upcall (993)
+       * protocol changes
+	- add OBD_PING to check server availability and failure (954)
+
 2003-03-11  Phil Schwan  <phil@clusterfs.com>
        * version v0_6
        * bug fixes
