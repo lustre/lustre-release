@@ -57,7 +57,7 @@ int lgmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, uns
 {
 	lgmnal_srxd_t	*srxd = (lgmnal_srxd_t*)private;
 	int		status = PTL_OK;
-	struct iovec	*iovec = NULL;
+	struct iovec	*iovec = NULL, *iovec_dup = NULL;
 	int		i = 0;
 
 
@@ -69,6 +69,7 @@ int lgmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, uns
 			CDEBUG(D_ERROR, "Can't malloc\n");
 			return(LGMNAL_STATUS_FAIL);
 		}
+                iovec_dup = iovec;
 
 		/*
 		 *	map each page and create an iovec for it
@@ -79,12 +80,13 @@ int lgmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, uns
 			iovec->iov_len = kiov->kiov_len;
 			CDEBUG(D_INFO, "Calling kmap[%p]", kiov->kiov_page);
 			iovec->iov_base = kmap(kiov->kiov_page) + kiov->kiov_offset;
-			CDEBUG(D_INFO, "Calling iov_base is [%p]", iovec->iov_base);
-			iovec->iov_len = kiov->kiov_len;
+			CDEBUG(D_INFO, "iov_base is [%p]\n", iovec->iov_base);
+                        iovec++;
+                        kiov++;
 		}
 		CDEBUG(D_INFO, "calling lgmnal_small_rx\n");
-		status = lgmnal_small_rx(nal_cb, private, cookie, kniov, iovec, mlen, rlen);
-		PORTAL_FREE(iovec, sizeof(struct iovec)*kniov);
+		status = lgmnal_small_rx(nal_cb, private, cookie, kniov, iovec_dup, mlen, rlen);
+		PORTAL_FREE(iovec_dup, sizeof(struct iovec)*kniov);
 	}
 		
 
@@ -121,11 +123,12 @@ int lgmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl
 
 	int	i = 0;
 	lgmnal_data_t	*nal_data;
-	struct	iovec 	*iovec;
+	struct	iovec 	*iovec = NULL, *iovec_dup = NULL;
 
 	CDEBUG(D_TRACE, "lgmnal_cb_send_pages nid ["LPU64"] niov[%d] len[%u]\n", nid, kniov, len);
 	nal_data = nal_cb->nal_data;
 	PORTAL_ALLOC(iovec, kniov*sizeof(struct iovec));
+        iovec_dup = iovec;
 	if (LGMNAL_IS_SMALL_MESSAGE(nal_data, 0, NULL, len)) {
 		CDEBUG(D_INFO, "This is a small message send\n");
 		
@@ -135,8 +138,10 @@ int lgmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl
 			iovec->iov_len = kiov->kiov_len;
 			iovec->iov_base = kmap(kiov->kiov_page) + kiov->kiov_offset;
 			iovec->iov_len = kiov->kiov_len;
+                        iovec++;
+                        kiov++;
 		}
-		lgmnal_small_tx(nal_cb, private, cookie, hdr, type, nid, pid, kniov, iovec, len);
+		lgmnal_small_tx(nal_cb, private, cookie, hdr, type, nid, pid, kniov, iovec_dup, len);
 	} else {
 		CDEBUG(D_ERROR, "lgmnal_cb_send_pages This is a large message send it is not supported yet\n");
 		return(PTL_FAIL);
@@ -146,10 +151,12 @@ int lgmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl
 			iovec->iov_len = kiov->kiov_len;
 			iovec->iov_base = kmap(kiov->kiov_page) + kiov->kiov_offset;
 			iovec->iov_len = kiov->kiov_len;
+                        iovec++;
+                        kiov++;
 		}
 		lgmnal_large_tx(nal_cb, private, cookie, hdr, type, nid, pid, kniov, iovec, len);
 	}
-	PORTAL_FREE(iovec, kniov*sizeof(struct iovec));
+	PORTAL_FREE(iovec_dup, kniov*sizeof(struct iovec));
 	return(PTL_OK);
 }
 
