@@ -120,7 +120,7 @@ restart:
 		} else {
                         hlist_del_init(&dentry->d_hash);
                         dentry->d_flags |= DCACHE_LUSTRE_INVALID;
-                        hlist_add_head(&dentry->d_hash, 
+                        hlist_add_head(&dentry->d_hash,
                                        &sbi->ll_orphan_dentry_list);
                 }
 	}
@@ -179,14 +179,14 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 {
         struct lookup_intent *it = *itp;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        if (it && it->it_magic != INTENT_MAGIC) { 
+        if (it && it->it_magic != INTENT_MAGIC) {
                 CERROR("WARNING: uninitialized intent\n");
                 LBUG();
         }
         if (it && (it->it_op == IT_GETATTR || it->it_op == 0))
                 it->it_op = IT_LOOKUP;
-        
 #endif
+
         if (!it || it->it_op == IT_GETXATTR)
                 it = *itp = deft;
 
@@ -217,10 +217,8 @@ int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
         icbd.icbd_parent = de->d_parent->d_inode;
         icbd.icbd_childp = &de;
 
-        /* 
-         * never execute intents for mount points
-         * - attrs will be fixed up in ll_revalidate_inode
-         */
+        /* Never execute intents for mount points.
+         * Attributes will be fixed up in ll_inode_revalidate_it */
         if (d_mountpoint(de))
                 RETURN(1);
 
@@ -262,10 +260,10 @@ int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
  out:
         if (req != NULL && rc == 1)
                 ptlrpc_req_finished(req);
-        if (rc == 0) { 
+        if (rc == 0) {
                 ll_unhash_aliases(de->d_inode);
                 de->d_flags |= DCACHE_LUSTRE_INVALID;
-        } else { 
+        } else {
                 ll_lookup_finish_locks(it, de);
                 de->d_flags &= ~DCACHE_LUSTRE_INVALID;
         }
@@ -364,7 +362,7 @@ static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 
         if (nd && nd->flags & LOOKUP_LAST && !(nd->flags & LOOKUP_LINK_NOTLAST))
                 rc = ll_revalidate_it(dentry, nd->flags, &nd->intent);
-        else 
+        else
                 rc = ll_revalidate_it(dentry, 0, NULL);
 
         RETURN(rc);
