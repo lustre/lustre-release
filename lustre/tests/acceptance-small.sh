@@ -157,10 +157,10 @@ if [ "$CONF_SANITY" != "no" ]; then
         sh conf-sanity.sh
 fi
 
-if [ "$REPLAY_OST_SINGLE" != "no" ]; then
-        sh replay-ost-single.sh
-fi
-
 if [ "$RECOVERY_SMALL" != "no" ]; then
         sh recovery-small.sh
+fi
+
+if [ "$REPLAY_OST_SINGLE" != "no" ]; then
+        sh replay-ost-single.sh
 fi

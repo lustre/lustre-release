@@ -843,9 +843,12 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                 lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
                 LDLM_DEBUG(lock, "completion AST, new lock mode");
         }
-        if (lock->l_resource->lr_type != LDLM_PLAIN)
+
+        if (lock->l_resource->lr_type != LDLM_PLAIN) {
                 memcpy(&lock->l_policy_data, &dlm_req->lock_desc.l_policy_data,
                        sizeof(lock->l_policy_data));
+                LDLM_DEBUG(lock, "completion AST, new policy data");
+        }
 
         ldlm_resource_unlink_lock(lock);
         if (memcmp(&dlm_req->lock_desc.l_resource.lr_name,

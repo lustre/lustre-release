@@ -333,17 +333,6 @@ int ldlm_cli_enqueue(struct obd_export *exp,
 
         CDEBUG(D_INFO, "local: %p, remote cookie: "LPX64", flags: 0x%x\n",
                lock, reply->lock_handle.cookie, *flags);
-        if (type == LDLM_EXTENT) {
-                CDEBUG(D_INFO, "requested extent: "LPU64" -> "LPU64", got "
-                       "extent "LPU64" -> "LPU64"\n",
-                       body->lock_desc.l_policy_data.l_extent.start,
-                       body->lock_desc.l_policy_data.l_extent.end,
-                       reply->lock_desc.l_policy_data.l_extent.start,
-                       reply->lock_desc.l_policy_data.l_extent.end);
-        }
-        if (policy != NULL)
-                memcpy(&lock->l_policy_data, &reply->lock_desc.l_policy_data,
-                       sizeof(reply->lock_desc.l_policy_data));
 
         /* If enqueue returned a blocked lock but the completion handler has
          * already run, then it fixed up the resource and we don't need to do it
@@ -372,7 +361,14 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                         }
                         LDLM_DEBUG(lock, "client-side enqueue, new resource");
                 }
+                if (policy != NULL)
+                        memcpy(&lock->l_policy_data,
+                               &reply->lock_desc.l_policy_data,
+                               sizeof(reply->lock_desc.l_policy_data));
+                if (type != LDLM_PLAIN)
+                        LDLM_DEBUG(lock,"client-side enqueue, new policy data");
         }
+
         if ((*flags) & LDLM_FL_AST_SENT) {
                 l_lock(&ns->ns_lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;

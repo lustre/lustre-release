@@ -1244,16 +1244,21 @@ stop_kupdated() {
 	trap start_kupdated EXIT
 }
 
+# ensure that all stripes have some grant before we test client-side cache
+for i in `seq -f $DIR/f42-%g 1 $STRIPECOUNT`; do
+	dd if=/dev/zero of=$i bs=4k count=1
+done
+
 # Tests 42* verify that our behaviour is correct WRT caching, file closure,
 # file truncation, and file removal.
 test_42a() {
 	cancel_lru_locks OSC
 	stop_kupdated
-        sync # just to be safe
-        BEFOREWRITES=`count_ost_writes`
-        dd if=/dev/zero of=$DIR/f42a bs=1024 count=100
-        AFTERWRITES=`count_ost_writes`
-        [ $BEFOREWRITES -eq $AFTERWRITES ] || \
+	sync; sleep 1; sync # just to be safe
+	BEFOREWRITES=`count_ost_writes`
+	dd if=/dev/zero of=$DIR/f42a bs=1024 count=100
+	AFTERWRITES=`count_ost_writes`
+	[ $BEFOREWRITES -eq $AFTERWRITES ] || \
 		error "$BEFOREWRITES < $AFTERWRITES"
 	start_kupdated
 }
