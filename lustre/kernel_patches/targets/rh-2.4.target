@@ -10,7 +10,6 @@ BOOT_ARCHS=""
 JENSEN_ARCHS=""
 SMP_ARCHS="i686"
 UP_ARCHS=""
-SRC_ARCHS="i686"
 
 # the modules in this kernel do not build with gcc 3
 for cc in i386-redhat-linux-gcc-2.96 gcc296 gcc ; do
