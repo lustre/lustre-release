@@ -42,11 +42,8 @@ static unsigned long last_rcvd_slots[MDS_MAX_CLIENT_WORDS];
  * Otherwise, we have just read the data from the last_rcvd file and
  * we know its offset.
  */
-int mds_client_add(struct mds_obd *mds, struct mds_export_data *med, int cl_off)
+int mds_client_add(struct mds_export_data *med, int cl_off)
 {
-        CDEBUG(D_INFO, "client at offset %d with UUID '%s' added\n",
-               cl_off, med->med_mcd->mcd_uuid);
-
         if (cl_off == -1) {
                 unsigned long *word;
                 int bit;
@@ -56,13 +53,14 @@ int mds_client_add(struct mds_obd *mds, struct mds_export_data *med, int cl_off)
                 while(*word == ~0UL)
                         ++word;
                 if (word - last_rcvd_slots >= MDS_MAX_CLIENT_WORDS) {
-                        CERROR("no room in client MDS bitmap - fix code\n");
+                        CERROR("no room for clients - fix MDS_MAX_CLIENTS\n");
                         return -ENOMEM;
                 }
                 bit = ffz(*word);
                 if (test_and_set_bit(bit, word)) {
-                        CERROR("found bit %d set for word %d - fix code\n",
+                        CERROR("found bit %d set for word %d - fix locking\n",
                                bit, word - last_rcvd_slots);
+                        LBUG();
                         goto repeat;
                 }
                 cl_off = word - last_rcvd_slots + bit;
@@ -74,45 +72,32 @@ int mds_client_add(struct mds_obd *mds, struct mds_export_data *med, int cl_off)
                 }
         }
 
-        med->med_off = cl_off;
-        mds->mds_client_count++;
+        CDEBUG(D_INFO, "client at offset %d with UUID '%s' added\n",
+               cl_off, med->med_mcd->mcd_uuid);
 
+        med->med_off = cl_off;
         return 0;
 }
 
-static int mds_client_free_all(struct obd_device *obddev)
+int mds_client_free(struct mds_export_data *med)
 {
-        struct mds_obd *mds = &obddev->u.mds;
-        struct list_head *p, *n;
+        unsigned long *word;
+        int bit;
 
-        list_for_each_safe(p, n, &obddev->obd_exports) {
-                struct obd_export *exp;
-                struct mds_export_data *med;
-                unsigned long *word;
-                int bit;
+        CDEBUG(D_INFO, "freeing client at offset %d with UUID '%s'\n",
+               med->med_off, med->med_mcd->mcd_uuid);
 
-                exp = list_entry(p, struct obd_export, exp_chain);
-                med = &exp->exp_mds_data;
-                
-                word = last_rcvd_slots + med->med_off / sizeof(unsigned long);
-                bit = med->med_off % sizeof(unsigned long);
+        word = last_rcvd_slots + med->med_off / sizeof(unsigned long);
+        bit = med->med_off % sizeof(unsigned long);
 
-                if (!test_and_clear_bit(bit, word)) {
-                        CERROR("bit %d already clear in word %d - bad bad\n",
-                               bit, word - last_rcvd_slots);
-                        LBUG();
-                }
-
-                OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
-                --mds->mds_client_count;
+        if (!test_and_clear_bit(bit, word)) {
+                CERROR("bit %d already clear in word %d - bad bad\n",
+                       bit, word - last_rcvd_slots);
+                LBUG();
         }
 
-        if (mds->mds_client_count) {
-                CERROR("%d mds clients remaining after cleanup\n",
-                       mds->mds_client_count);
-                /* LBUG()? */
-        }
-        
+        OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
+
         return 0;
 }
 
@@ -136,6 +121,7 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
         int cl_off;
         __u64 last_rcvd = 0;
         __u64 last_mount;
+        int clients = 0;
         int rc = 0;
 
         OBD_ALLOC(msd, sizeof(*msd));
@@ -175,10 +161,11 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
         for (off = MDS_LR_CLIENT, cl_off = 0, rc = sizeof(*mcd);
              off <= fsize - sizeof(*mcd) && rc == sizeof(*mcd);
              off = MDS_LR_CLIENT + ++cl_off * MDS_LR_SIZE) {
-                if (!mcd)
+                if (!mcd) {
                         OBD_ALLOC(mcd, sizeof(*mcd));
-                if (!mcd)
-                        GOTO(err_msd, rc = -ENOMEM);
+                        if (!mcd)
+                                GOTO(err_msd, rc = -ENOMEM);
+                }
 
                 rc = lustre_fread(f, (char *)mcd, sizeof(*mcd), &off);
                 if (rc != sizeof(*mcd)) {
@@ -191,6 +178,7 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
 
                 last_rcvd = le64_to_cpu(mcd->mcd_last_rcvd);
 
+                /* Do client recovery here (open files, etc) */
                 if (last_rcvd && (last_mount - le64_to_cpu(mcd->mcd_mount_count)
                                   < MDS_MOUNT_RECOV)) {
                         struct obd_export *export = class_new_export(obddev);
@@ -199,11 +187,14 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                                 break;
                         }
                         export->exp_mds_data.med_mcd = mcd;
+                        mds_client_add(&export->exp_mds_data, cl_off);
                         mcd = NULL;
+                        clients++;
                 } else {
                         CDEBUG(D_INFO,
-                               "client at offset %d with UUID '%s' ignored\n",
-                               cl_off, mcd->mcd_uuid);
+                               "ignored client %d, UUID '%s', last_mount %Ld\n",
+                               cl_off, mcd->mcd_uuid,
+                               (long long)le64_to_cpu(mcd->mcd_mount_count));
                 }
 
                 if (last_rcvd > mds->mds_last_rcvd) {
@@ -213,8 +204,8 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                         mds->mds_last_rcvd = last_rcvd;
                 }
         }
-        CDEBUG(D_INODE, "got %Lu for highest last_rcvd value, %d clients\n",
-               (unsigned long long)mds->mds_last_rcvd, mds->mds_client_count);
+        CDEBUG(D_INODE, "got %Lu for highest last_rcvd value, %d/%d clients\n",
+               (unsigned long long)mds->mds_last_rcvd, clients, cl_off);
 
         if (mcd)
                 OBD_FREE(mcd, sizeof(*mcd));
@@ -244,25 +235,12 @@ static int mds_fs_prep(struct obd_device *obddev)
                 CERROR("cannot create ROOT directory: rc = %d\n", rc);
                 GOTO(err_pop, rc);
         }
-        /* XXX probably want to hold on to this later... */
-        dput(dentry);
-        f = filp_open("ROOT", O_RDONLY, 0);
-        if (IS_ERR(f)) {
-                rc = PTR_ERR(f);
-                CERROR("cannot open ROOT: rc = %d\n", rc);
-                LBUG();
-                GOTO(err_pop, rc);
-        }
 
-        mds->mds_rootfid.id = f->f_dentry->d_inode->i_ino;
-        mds->mds_rootfid.generation = f->f_dentry->d_inode->i_generation;
+        mds->mds_rootfid.id = dentry->d_inode->i_ino;
+        mds->mds_rootfid.generation = dentry->d_inode->i_generation;
         mds->mds_rootfid.f_type = S_IFDIR;
 
-        rc = filp_close(f, 0);
-        if (rc) {
-                CERROR("cannot close ROOT: rc = %d\n", rc);
-                LBUG();
-        }
+        dput(dentry);
 
         dentry = simple_mkdir(current->fs->pwd, "FH", 0700);
         if (IS_ERR(dentry)) {
@@ -297,19 +275,17 @@ static int mds_fs_prep(struct obd_device *obddev)
                 GOTO(err_client, rc);
         }
         mds->mds_rcvd_filp = f;
-        pop_ctxt(&saved);
-
-        RETURN(0);
-
-err_client:
-        mds_client_free_all(obddev);
-err_filp:
-        if (filp_close(f, 0))
-                CERROR("can't close %s after error\n", LAST_RCVD);
 err_pop:
         pop_ctxt(&saved);
 
         return rc;
+
+err_client:
+        class_disconnect_all(obddev);
+err_filp:
+        if (filp_close(f, 0))
+                CERROR("can't close %s after error\n", LAST_RCVD);
+        goto err_pop;
 }
 
 static struct mds_fs_operations *mds_search_fs_type(const char *name)
@@ -466,7 +442,8 @@ out_dec:
 void mds_fs_cleanup(struct obd_device *obddev)
 {
         struct mds_obd *mds = &obddev->u.mds;
-        mds_client_free_all(obddev);
+
+        class_disconnect_all(obddev); /* this cleans up client info too */
         mds_server_free_data(mds);
 
         OBD_FREE(mds->mds_sop, sizeof(*mds->mds_sop));

@@ -93,7 +93,15 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         return rc;
 }
 
-/* 'dir' is a inode for which a lock has already been taken */
+/*
+ * Look up a named entry in a directory, and get an LDLM lock on it.
+ * 'dir' is a inode for which an LDLM lock has already been taken.
+ *
+ * If we do not need an exclusive or write lock on this entry (e.g.
+ * a read lock for attribute lookup only) then we do not hold the
+ * directory on return.  It is up to the caller to know what type
+ * of lock it is getting, and clean up appropriately.
+ */
 struct dentry *mds_name2locked_dentry(struct obd_device *obd,
                                       struct dentry *dir, struct vfsmount **mnt,
                                       char *name, int namelen, int lock_mode,
@@ -161,6 +169,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
         RETURN(retval);
 }
 
+/* Look up an entry by inode number. */
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                               struct vfsmount **mnt)
 {
@@ -221,49 +230,84 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         return result;
 }
 
+/* Establish a connection to the MDS.
+ *
+ * This will set up an export structure for the client to hold state data
+ * about that client, like open files, the last operation number it did
+ * on the server, etc.
+ */
 static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
                        char *cluuid)
 {
+        struct obd_export *exp;
+        struct mds_client_data *mcd;
         int rc;
-        struct list_head *p, *n;
 
         MOD_INC_USE_COUNT;
         if (cluuid) {
-                list_for_each_safe(p, n, &obd->obd_exports) {
-                        struct obd_export *exp;
-                        struct mds_client_data *mcd;
-                        
+                struct list_head *p;
+                list_for_each(p, &obd->obd_exports) {
                         exp = list_entry(p, struct obd_export, exp_chain);
                         mcd = exp->exp_mds_data.med_mcd;
                         if (mcd && !memcmp(cluuid, mcd->mcd_uuid,
                                            sizeof(mcd->mcd_uuid))) {
-                                CDEBUG(D_INFO, 
+                                CDEBUG(D_INFO,
                                        "existing export for UUID '%s' at %p\n",
                                        cluuid, exp);
-                                if (exp->exp_obd != obd) 
-                                        LBUG();
+                                LASSERT(exp->exp_obd == obd);
                                 exp->exp_rconnh.addr = conn->addr;
                                 exp->exp_rconnh.cookie = conn->cookie;
                                 conn->addr = (__u64) (unsigned long)exp;
                                 conn->cookie = exp->exp_cookie;
-                                CDEBUG(D_IOCTL, "connect: addr %Lx cookie %Lx\n",
+                                CDEBUG(D_IOCTL,"connect: addr %Lx cookie %Lx\n",
                                        (long long)conn->addr,
                                        (long long)conn->cookie);
-                                return 0;
+                                RETURN(0);
                         }
                 }
         }
+#warning shaver: we might need a real cluuid here
         rc = class_connect(conn, obd, NULL);
-
         if (rc)
-                MOD_DEC_USE_COUNT;
+                GOTO(out_dec, rc);
+        exp = class_conn2export(conn);
+        LASSERT(exp);
 
-        return rc;
+        OBD_ALLOC(mcd, sizeof(*mcd));
+        if (!mcd) {
+                CERROR("mds: out of memory for client data\n");
+                GOTO(out_export, rc = -ENOMEM);
+        }
+        memcpy(mcd->mcd_uuid, cluuid, sizeof(mcd->mcd_uuid));
+        exp->exp_mds_data.med_mcd = mcd;
+        rc = mds_client_add(&exp->exp_mds_data, -1);
+        if (rc)
+                GOTO(out_mdc, rc);
+
+        return 0;
+
+out_mdc:
+        OBD_FREE(mcd, sizeof(*mcd));
+out_export:
+        class_disconnect(conn);
+out_dec:
+        MOD_DEC_USE_COUNT;
+
+        RETURN(rc);
 }
 
 static int mds_disconnect(struct lustre_handle *conn)
 {
+        struct obd_export *exp;
         int rc;
+
+        exp = class_conn2export(conn);
+        if (!exp)
+                RETURN(-EINVAL);
+
+        rc = mds_client_free(&exp->exp_mds_data);
+        if (rc)
+                CERROR("error freeing client data: rc = %d\n", rc);
 
         rc = class_disconnect(conn);
         if (!rc)
@@ -272,12 +316,10 @@ static int mds_disconnect(struct lustre_handle *conn)
         return rc;
 }
 
-/* FIXME: the error cases need fixing to avoid leaks */
 static int mds_getstatus(struct ptlrpc_request *req)
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct mds_body *body;
-        struct mds_client_data *mcd;
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -296,34 +338,11 @@ static int mds_getstatus(struct ptlrpc_request *req)
         body = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&body->fid1, &mds->mds_rootfid, sizeof(body->fid1));
 
-        mcd = med->med_mcd;
-        if (!mcd) {
-                int rc;
-                
-                CDEBUG(D_INFO, "allocating new client data for UUID '%s'\n",
-                        ptlrpc_req_to_uuid(req));
-                OBD_ALLOC(mcd, sizeof(*mcd));
-                if (!mcd) {
-                        CERROR("mds: out of memory for client data\n");
-                        req->rq_status = -ENOMEM;
-                        RETURN(0);
-                }
-                memcpy(mcd->mcd_uuid, ptlrpc_req_to_uuid(req),
-                       sizeof(mcd->mcd_uuid));
-                rc = mds_client_add(mds, med, -1);
-                if (rc) {
-                        req->rq_status = rc;
-                        OBD_FREE(mcd, sizeof(*mcd));
-                        RETURN(0);
-                }
-                med->med_mcd = mcd;
-        } else {
-                CDEBUG(D_INFO, "found existing data for UUID '%s' at #%d\n",
-                       mcd->mcd_uuid, med->med_off);
-        }
+        LASSERT(med->med_mcd);
+
         /* mcd_last_xid is is stored in little endian on the disk and
            mds_pack_rep_body converts it to network order */
-        body->last_xid = le32_to_cpu(mcd->mcd_last_xid);
+        body->last_xid = le32_to_cpu(med->med_mcd->mcd_last_xid);
         mds_pack_rep_body(req);
         RETURN(0);
 }
@@ -332,7 +351,7 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct mds_status_req *streq;
-        struct lov_desc *desc; 
+        struct lov_desc *desc;
         int tgt_count;
         int rc, size[2] = {sizeof(*desc)};
         ENTRY;
@@ -401,8 +420,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         __u64 res_id[3] = {0, 0, 0};
         ENTRY;
 
-        if (strcmp(req->rq_export->exp_obd->obd_type->typ_name, "mds") != 0)
-                LBUG();
+        LASSERT(!strcmp(req->rq_export->exp_obd->obd_type->typ_name, "mds"));
 
         if (req->rq_reqmsg->bufcount <= offset + 1) {
                 LBUG();
@@ -424,7 +442,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         }
 
         dir = de->d_inode;
-        CDEBUG(D_INODE, "parent ino %ld\n", dir->i_ino);
+        CDEBUG(D_INODE, "parent ino %ld, name %*s\n", dir->i_ino,namelen,name);
 
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
         res_id[0] = dir->i_ino;
@@ -694,6 +712,7 @@ static int mds_open(struct ptlrpc_request *req)
         list_add(&mfd->mfd_list, &med->med_open_head);
 
         body = lustre_msg_buf(req->rq_repmsg, 0);
+        /* FIXME: need to have cookies involved here */
         body->extra = (__u64) (unsigned long)file;
         RETURN(0);
 }
@@ -723,6 +742,7 @@ static int mds_close(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
+        /* FIXME: need to have cookies involved here */
         file = (struct file *)(unsigned long)body->extra;
         if (!file->f_dentry)
                 LBUG();
@@ -872,7 +892,7 @@ int mds_handle(struct ptlrpc_request *req)
                 rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen,
                                      &req->rq_repmsg);
                 if (rc) {
-                        rc = req->rq_status = -ENOMEM;
+                        req->rq_status = rc;
                         break;
                 }
                 rc = mds_reint(0, req);
@@ -959,11 +979,12 @@ int mds_handle(struct ptlrpc_request *req)
  * also the last_rcvd value to disk.  If we don't have a clean shutdown,
  * then the server last_rcvd value may be less than that of the clients.
  * This will alert us that we may need to do client recovery.
+ *
+ * Assumes we are already in the server filesystem context.
  */
 static
 int mds_update_server_data(struct mds_obd *mds)
 {
-        struct obd_run_ctxt saved;
         struct mds_server_data *msd = mds->mds_server_data;
         struct file *filp = mds->mds_rcvd_filp;
         loff_t off = 0;
@@ -975,7 +996,6 @@ int mds_update_server_data(struct mds_obd *mds)
         CDEBUG(D_SUPER, "MDS mount_count is %Lu, last_rcvd is %Lu\n",
                (unsigned long long)mds->mds_mount_count,
                (unsigned long long)mds->mds_last_rcvd);
-        push_ctxt(&saved, &mds->mds_ctxt);
         rc = lustre_fwrite(filp, (char *)msd, sizeof(*msd), &off);
         if (rc != sizeof(*msd)) {
                 CERROR("error writing MDS server data: rc = %d\n", rc);
@@ -984,7 +1004,6 @@ int mds_update_server_data(struct mds_obd *mds)
                 RETURN(rc);
         }
         rc = fsync_dev(filp->f_dentry->d_inode->i_rdev);
-        pop_ctxt(&saved);
         if (rc)
                 CERROR("error flushing MDS server data: rc = %d\n", rc);
 
@@ -995,11 +1014,14 @@ int mds_update_server_data(struct mds_obd *mds)
 static int mds_recover(struct obd_device *obddev)
 {
         struct mds_obd *mds = &obddev->u.mds;
+        struct obd_run_ctxt saved;
         int rc;
 
         /* This happens at the end when recovery is complete */
         ++mds->mds_mount_count;
+        push_ctxt(&saved, &mds->mds_ctxt);
         rc = mds_update_server_data(mds);
+        pop_ctxt(&saved);
 
         return rc;
 }
@@ -1049,13 +1071,11 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_fs, rc = -EINVAL);
         }
 
-        rc = -ENOENT;
         obddev->obd_namespace =
                 ldlm_namespace_new("mds_server", LDLM_NAMESPACE_SERVER);
         if (obddev->obd_namespace == NULL) {
-                LBUG();
                 mds_cleanup(obddev);
-                GOTO(err_svc, rc);
+                GOTO(err_svc, rc = -ENOMEM);
         }
 
         for (i = 0; i < MDS_NUM_THREADS; i++) {
@@ -1064,7 +1084,6 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 rc = ptlrpc_start_thread(obddev, mds->mds_service, name);
                 if (rc) {
                         CERROR("cannot start MDS thread #%d: rc %d\n", i, rc);
-                        LBUG();
                         GOTO(err_thread, rc);
                 }
         }
@@ -1097,17 +1116,8 @@ static int mds_cleanup(struct obd_device *obddev)
 {
         struct super_block *sb;
         struct mds_obd *mds = &obddev->u.mds;
-
+        struct obd_run_ctxt saved;
         ENTRY;
-
-        if (!list_empty(&obddev->obd_exports)) {
-                CERROR("still has exports; forcing cleanup\n");
-                class_disconnect_all(obddev);
-                if (!list_empty(&obddev->obd_exports)) {
-                        CERROR("still has exports after forced cleanup?\n");
-                        RETURN(-EBUSY);
-                }
-        }
 
         ptlrpc_stop_all_threads(mds->mds_service);
         ptlrpc_unregister_service(mds->mds_service);
@@ -1116,6 +1126,7 @@ static int mds_cleanup(struct obd_device *obddev)
         if (!mds->mds_sb)
                 RETURN(0);
 
+        push_ctxt(&saved, &mds->mds_ctxt);
         mds_update_server_data(mds);
 
         if (mds->mds_rcvd_filp) {
@@ -1125,6 +1136,7 @@ static int mds_cleanup(struct obd_device *obddev)
                 if (rc)
                         CERROR("last_rcvd file won't close, rc=%d\n", rc);
         }
+        pop_ctxt(&saved);
 
         unlock_kernel();
         mntput(mds->mds_vfsmnt);

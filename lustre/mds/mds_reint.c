@@ -128,11 +128,11 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         }
 
         EXIT;
-      out_unlock:
+out_unlock:
         unlock_kernel();
-      out_setattr_de:
+out_setattr_de:
         l_dput(de);
-      out_setattr:
+out_setattr:
         req->rq_status = rc;
         return (0);
 }
@@ -177,10 +177,10 @@ static int mds_reint_recreate(struct mds_update_record *rec, int offset,
                 LBUG();
         }
 
-      out_create_dchild:
+out_create_dchild:
         l_dput(dchild);
         up(&dir->i_sem);
-      out_create_de:
+out_create_de:
         l_dput(de);
         req->rq_status = rc;
         return 0;
@@ -352,24 +352,24 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 body->valid = OBD_MD_FLID | OBD_MD_FLGENER;
         }
         EXIT;
-      out_create_commit:
+out_create_commit:
         err = mds_fs_commit(mds, dir, handle);
         if (err) {
                 CERROR("error on commit: err = %d\n", err);
                 if (!rc)
                         rc = err;
         }
-      out_create_dchild:
+out_create_dchild:
         l_dput(dchild);
         ldlm_lock_decref(&lockh, lock_mode);
-      out_create_de:
+out_create_de:
         up(&dir->i_sem);
         l_dput(de);
-      out_create:
+out_create:
         req->rq_status = rc;
         return 0;
 
-      out_create_unlink:
+out_create_unlink:
         /* Destroy the file we just created.  This should not need extra
          * journal credits, as we have already modified all of the blocks
          * needed in order to create the file in the first place.
@@ -482,7 +482,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         EXIT;
 
-      out_unlink_cancel:
+out_unlink_cancel:
         ldlm_lock_decref(&child_lockh, LCK_EX);
         err = ldlm_cli_cancel(&child_lockh);
         if (err < 0) {
@@ -490,10 +490,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 if (!rc)
                         rc = -ENOLCK;   /*XXX translate LDLM lock error */
         }
-      out_unlink_dchild:
+out_unlink_dchild:
         l_dput(dchild);
         up(&dir->i_sem);
-      out_unlink:
+out_unlink:
         ldlm_lock_decref(&lockh, lock_mode);
         l_dput(de);
         req->rq_status = rc;
@@ -555,14 +555,14 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         }
         EXIT;
 
-      out_link_dchild:
+out_link_dchild:
         l_dput(dchild);
-      out_link_de_tgt_dir:
+out_link_de_tgt_dir:
         up(&de_tgt_dir->d_inode->i_sem);
         l_dput(de_tgt_dir);
-      out_link_de_src:
+out_link_de_src:
         l_dput(de_src);
-      out_link:
+out_link:
         req->rq_status = rc;
         return 0;
 }
@@ -692,16 +692,16 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                         CERROR("failed to cancel child inode lock ino "
                                "%Ld: %d\n", res_id[0], rc);
         }
-      out_rename_tgtdir:
+out_rename_tgtdir:
         double_up(&de_srcdir->d_inode->i_sem, &de_tgtdir->d_inode->i_sem);
         ldlm_lock_decref(&tgtlockh, lock_mode);
-      out_rename_tgtput:
+out_rename_tgtput:
         l_dput(de_tgtdir);
-      out_rename_srcdir:
+out_rename_srcdir:
         ldlm_lock_decref(&srclockh, lock_mode);
-      out_rename_srcput:
+out_rename_srcput:
         l_dput(de_srcdir);
-      out_rename:
+out_rename:
         req->rq_status = rc;
         return 0;
 }

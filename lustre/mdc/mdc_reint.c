@@ -58,8 +58,7 @@ int mdc_setattr(struct lustre_handle *conn,
         ENTRY;
 
         mdc_con2cl(conn, &cl, &connection, &rconn);
-        req = ptlrpc_prep_req2(conn, 
-                               MDS_REINT, 1, &size, NULL);
+        req = ptlrpc_prep_req2(conn, MDS_REINT, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
