@@ -132,15 +132,14 @@ kpr_upcall (int gw_nalid, ptl_nid_t gw_nid, int alive, time_t when)
                         gw_nalid, gw_nid, alive ? "up" : "down");
                 return;
         }
-        
-        u->kpru_tq.routine = kpr_do_upcall;
-        u->kpru_tq.data    = u;
+
         u->kpru_nal_id     = gw_nalid;
         u->kpru_nid        = gw_nid;
         u->kpru_alive      = alive;
         u->kpru_when       = when;
-        
-        schedule_task (&u->kpru_tq);
+
+        prepare_work (&u->kpru_tq, kpr_do_upcall, u);
+        schedule_work (&u->kpru_tq);
 }
 
 int
