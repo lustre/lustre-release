@@ -361,11 +361,12 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
 
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
-static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
+static int llog_lvfs_create(struct llog_obd_ctxt *ctxt, struct llog_handle **res,
                             struct llog_logid *logid, char *name)
 {
         char logname[24];
         struct llog_handle *handle;
+        struct obd_device *obd;
         struct l_dentry *dchild = NULL;
         struct obdo *oa = NULL;
         int rc = 0, cleanup_phase = 1;
@@ -377,8 +378,12 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                 RETURN(-ENOMEM);
         *res = handle;
 
+        LASSERT(ctxt);
+        LASSERT(ctxt->loc_exp);
+        obd = ctxt->loc_exp->exp_obd;
+
         if (logid != NULL) {
-                dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, logid->lgl_oid,
+                dchild = obd_lvfs_fid2dentry(ctxt->loc_exp, logid->lgl_oid,
                                              logid->lgl_ogen, logid->lgl_ogr);
 
                 if (IS_ERR(dchild)) {
@@ -429,11 +434,11 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
                 /* XXX get some filter group constants */
                 oa->o_gr = 1;
                 oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
-                rc = obd_create(obd->obd_log_exp, oa, NULL, NULL);
+                rc = obd_create(ctxt->loc_exp, oa, NULL, NULL);
                 if (rc)
                         GOTO(cleanup, rc);
 
-                dchild = obd_lvfs_fid2dentry(obd->obd_log_exp, oa->o_id,
+                dchild = obd_lvfs_fid2dentry(ctxt->loc_exp, oa->o_id,
                                              oa->o_generation, oa->o_gr);
 
                 if (IS_ERR(dchild))
@@ -450,6 +455,7 @@ static int llog_lvfs_create(struct obd_device *obd, struct llog_handle **res,
         }
 
         handle->lgh_obd = obd;
+        handle->lgh_ctxt = ctxt;
  finish:
         if (oa)
                 obdo_free(oa);
@@ -494,7 +500,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         if (rc)
                 GOTO(out, rc);
 
-        rc = obd_destroy(handle->lgh_obd->obd_log_exp, oa, NULL, NULL);
+        rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL);
  out:
         obdo_free(oa);
         RETURN(rc);
