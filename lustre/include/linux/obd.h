@@ -111,12 +111,26 @@ struct obd_async_page_ops {
         void (*ap_completion)(void *data, int cmd, int rc);
 };
 
+/* the `osic' is passed down from a caller of obd rw methods.  the callee
+ * records enough state such that the caller can sleep on the osic and
+ * be woken when all the callees have finished their work */
 struct obd_sync_io_container {
         spinlock_t      osic_lock;
         atomic_t        osic_refcount;
         int             osic_pending;
         int             osic_rc;
+        struct list_head osic_occ_list;
         wait_queue_head_t osic_waitq;
+};
+
+/* the osic callback context lets the callee of obd rw methods register
+ * for callbacks from the caller. */
+struct osic_callback_context {
+        struct list_head occ_osic_item;
+        /* called when the caller has received a signal while sleeping.
+         * callees of this method are encouraged to abort their state 
+         * in the osic.  This may be called multiple times. */
+        void (*occ_interrupted)(struct osic_callback_context *occ);
 };
 
 /* if we find more consumers this could be generalized */

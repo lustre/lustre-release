@@ -67,8 +67,10 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                                           struct obd_uuid *grp_uuid);
 
 void osic_init(struct obd_sync_io_container **osic);
-void osic_add_one(struct obd_sync_io_container *osic);
-void osic_complete_one(struct obd_sync_io_container *osic, int rc);
+void osic_add_one(struct obd_sync_io_container *osic,
+                  struct osic_callback_context *occ);
+void osic_complete_one(struct obd_sync_io_container *osic, 
+                       struct osic_callback_context *occ, int rc);
 void osic_release(struct obd_sync_io_container *osic);
 int osic_wait(struct obd_sync_io_container *osic);
 

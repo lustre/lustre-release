@@ -662,7 +662,12 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                         GOTO(interpret, req->rq_status);
                 }
 
-                if (req->rq_intr) {
+                /* ptlrpc_queue_wait->l_wait_event guarantees that rq_intr
+                 * will only be set after rq_timedout, but the osic waiting
+                 * path sets rq_intr irrespective of whether ptlrpcd has
+                 * seen a timeout.  our policy is to only interpret 
+                 * interrupted rpcs after they have timed out */
+                if (req->rq_intr && (req->rq_timedout || req->rq_waiting)) {
                         /* NB could be on delayed list */
                         ptlrpc_unregister_reply(req);
                         req->rq_status = -EINTR;
@@ -870,11 +875,18 @@ int ptlrpc_expired_set(void *data)
         RETURN(1);
 }
 
+void ptlrpc_mark_interrupted(struct ptlrpc_request *req)
+{
+        unsigned long flags;
+        spin_lock_irqsave(&req->rq_lock, flags);
+        req->rq_intr = 1;
+        spin_unlock_irqrestore(&req->rq_lock, flags);
+}
+
 void ptlrpc_interrupted_set(void *data)
 {
         struct ptlrpc_request_set *set = data;
         struct list_head *tmp;
-        unsigned long flags;
 
         LASSERT(set != NULL);
         CERROR("INTERRUPTED SET %p\n", set);
@@ -886,9 +898,7 @@ void ptlrpc_interrupted_set(void *data)
                 if (req->rq_phase != RQ_PHASE_RPC)
                         continue;
 
-                spin_lock_irqsave (&req->rq_lock, flags);
-                req->rq_intr = 1;
-                spin_unlock_irqrestore (&req->rq_lock, flags);
+                ptlrpc_mark_interrupted(req);
         }
 }
 

@@ -479,6 +479,7 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set);
 int ptlrpc_set_wait(struct ptlrpc_request_set *);
 int ptlrpc_expired_set(void *data);
 void ptlrpc_interrupted_set(void *data);
+void ptlrpc_mark_interrupted(struct ptlrpc_request *req);
 void ptlrpc_set_destroy(struct ptlrpc_request_set *);
 void ptlrpc_set_add_req(struct ptlrpc_request_set *, struct ptlrpc_request *);
 void ptlrpc_set_add_new_req(struct ptlrpc_request_set *,
@@ -552,6 +553,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp);
 int ptlrpc_pinger_del_import(struct obd_import *imp);
 
 /* ptlrpc/ptlrpcd.c */
+void ptlrpcd_wake(void);
 void ptlrpcd_add_req(struct ptlrpc_request *req);
 int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);

@@ -1090,15 +1090,74 @@ static int osc_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
 static void osc_check_rpcs(struct client_obd *cli);
 static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap);
 static void loi_list_maint(struct client_obd *cli, struct lov_oinfo *loi);
+static void lop_update_pending(struct client_obd *cli,
+                               struct loi_oap_pages *lop, int cmd, int delta);
 
+/* this is called when a sync waiter receives an interruption.  Its job is to
+ * get the caller woken as soon as possible.  If its page hasn't been put in an
+ * rpc yet it can dequeue immediately.  Otherwise it has to mark the rpc as
+ * desiring interruption which will forcefully complete the rpc once the rpc
+ * has timed out */
+static void osc_occ_interrupted(struct osic_callback_context *occ)
+{
+        struct osc_async_page *oap;
+        struct loi_oap_pages *lop;
+        struct lov_oinfo *loi;
+        ENTRY;
+
+        /* XXX member_of() */
+        oap = list_entry(occ, struct osc_async_page, oap_occ);
+
+        spin_lock(&oap->oap_cli->cl_loi_list_lock);
+
+        oap->oap_interrupted = 1;
+
+        /* ok, it's been put in an rpc. */
+        if (oap->oap_request != NULL) {
+                ptlrpc_mark_interrupted(oap->oap_request);
+                ptlrpcd_wake();
+                GOTO(unlock, 0);
+        }
+
+        /* we don't get interruption callbacks until osc_trigger_sync_io()
+         * has been called and put the sync oaps in the pending/urgent lists.*/
+        if (!list_empty(&oap->oap_pending_item)) {
+                list_del_init(&oap->oap_pending_item);
+                if (oap->oap_async_flags & ASYNC_URGENT)
+                        list_del_init(&oap->oap_urgent_item);
+
+                loi = oap->oap_loi;
+                lop = (oap->oap_cmd == OBD_BRW_WRITE) ? 
+                        &loi->loi_write_lop : &loi->loi_read_lop;
+                lop_update_pending(oap->oap_cli, lop, oap->oap_cmd, -1);
+                loi_list_maint(oap->oap_cli, oap->oap_loi);
+
+                osic_complete_one(oap->oap_osic, &oap->oap_occ, 0);
+                oap->oap_osic = NULL;
+
+        }
+
+unlock:
+        spin_unlock(&oap->oap_cli->cl_loi_list_lock);
+}
+
+/* this must be called holding the list lock to give coverage to exit_cache, 
+ * async_flag maintenance, and oap_request */
 static void osc_complete_oap(struct client_obd *cli,
                              struct osc_async_page *oap, int rc)
 {
         ENTRY;
         osc_exit_cache(cli, oap);
         oap->oap_async_flags = 0;
+        oap->oap_interrupted = 0;
+
+        if (oap->oap_request != NULL) {
+                ptlrpc_req_finished(oap->oap_request);
+                oap->oap_request = NULL;
+        }
+
         if (oap->oap_osic) {
-                osic_complete_one(oap->oap_osic, rc);
+                osic_complete_one(oap->oap_osic, &oap->oap_occ, rc);
                 oap->oap_osic = NULL;
                 EXIT;
                 return;
@@ -1339,6 +1398,16 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                         oap = list_entry(pos, struct osc_async_page,
                                          oap_rpc_item);
                         list_del_init(&oap->oap_rpc_item);
+
+                        /* queued sync pages can be torn down while the pages
+                         * were between the pending list and the rpc */
+                        if (oap->oap_interrupted) {
+                                CDEBUG(D_INODE, "oap %p interrupted\n", oap);
+                                osc_complete_oap(cli, oap, oap->oap_count);
+                                continue;
+                        }
+
+                        /* put the page back in the loi/lop lists */
                         list_add_tail(&oap->oap_pending_item,
                                       &lop->lop_pending);
                         lop_update_pending(cli, lop, cmd, 1);
@@ -1356,22 +1425,34 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         list_splice(&rpc_list, &aa->aa_oaps);
         INIT_LIST_HEAD(&rpc_list);
 
-        if (cmd == OBD_BRW_READ)
+        if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
-        else 
-                lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
-
-        spin_lock(&cli->cl_loi_list_lock);
-        if (cmd == OBD_BRW_READ)
                 lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_brw_in_flight);
-        else 
+        } else {
+                lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_write_rpc_hist, 
                                  cli->cl_brw_in_flight);
+        }
+
+        spin_lock(&cli->cl_loi_list_lock);
 
         cli->cl_brw_in_flight++;
+        /* queued sync pages can be torn down while the pages
+         * were between the pending list and the rpc */
+        list_for_each(pos, &aa->aa_oaps) {
+                oap = list_entry(pos, struct osc_async_page, oap_rpc_item);
+                if (oap->oap_interrupted) {
+                        CDEBUG(D_INODE, "oap %p in req %p interrupted\n", 
+                               oap, request);
+                        ptlrpc_mark_interrupted(request);
+                        break;
+                }
+        }
+
         CDEBUG(D_INODE, "req %p: %d pages, aa %p.  now %d in flight\n", request,
                page_count, aa, cli->cl_brw_in_flight);
 
+        oap->oap_request = ptlrpc_request_addref(request);
         request->rq_interpret_reply = brw_interpret_oap;
         ptlrpcd_add_req(request);
         RETURN(1);
@@ -1628,6 +1709,9 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
                 return -ENOMEM;
 
         oap->oap_magic = OAP_MAGIC;
+        oap->oap_cli = &exp->exp_obd->u.cli;
+        oap->oap_loi = loi;
+
         oap->oap_caller_ops = ops;
         oap->oap_caller_data = data;
 
@@ -1637,6 +1721,8 @@ int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
         INIT_LIST_HEAD(&oap->oap_pending_item);
         INIT_LIST_HEAD(&oap->oap_urgent_item);
         INIT_LIST_HEAD(&oap->oap_rpc_item);
+
+        oap->oap_occ.occ_interrupted = osc_occ_interrupted;
 
         CDEBUG(D_CACHE, "oap %p page %p obj off "LPU64"\n", oap, page, offset);
         *res = oap;
@@ -1808,7 +1894,7 @@ static int osc_queue_sync_io(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         list_add_tail(&oap->oap_pending_item, &lop->lop_pending_sync);
         oap->oap_osic = osic;
-        osic_add_one(osic);
+        osic_add_one(osic, &oap->oap_occ);
 
         LOI_DEBUG(loi, "oap %p page %p on sync pending\n", oap, oap->oap_page);
 
@@ -1885,10 +1971,10 @@ static int osc_teardown_async_page(struct obd_export *exp,
 
         spin_lock(&cli->cl_loi_list_lock);
 
-        osc_exit_cache(cli, oap);
-
         if (!list_empty(&oap->oap_rpc_item))
                 GOTO(out, rc = -EBUSY);
+
+        osc_exit_cache(cli, oap);
 
         if (!list_empty(&oap->oap_urgent_item)) {
                 list_del_init(&oap->oap_urgent_item);
@@ -1903,7 +1989,8 @@ static int osc_teardown_async_page(struct obd_export *exp,
         LOI_DEBUG(loi, "oap %p page %p torn down\n", oap, oap->oap_page);
 out:
         spin_unlock(&cli->cl_loi_list_lock);
-        OBD_FREE(oap, sizeof(*oap));
+        if (rc == 0)
+                OBD_FREE(oap, sizeof(*oap));
         RETURN(rc);
 }
 
