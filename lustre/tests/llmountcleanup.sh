@@ -36,6 +36,9 @@ quit
 EOF
 
 rmmod obdecho
+rmmod mds_extN
+rmmod mds_ext3
+rmmod mds_ext2
 rmmod mds
 rmmod osc
 rmmod ost

@@ -27,8 +27,8 @@ do_insmod() {
 
 	[ "$MODULE" ] || fail "usage: $0 <module>"
 	[ -f $MODULE ] || fail "$0: module '$MODULE' not found"
-	lsmod | grep -q "\<$BASE\>" && return 1
-	insmod $MODULE || exit -1
+	lsmod | grep -q "\<$BASE\>" && return 0
+	insmod $MODULE
 }
 
 # Return the next unused loop device on stdout and in the $LOOPDEV
@@ -50,6 +50,11 @@ next_loop_dev() {
 # filesystem on a device we use mkfs, because that only writes sparsely
 # to the device.  The empty filesystems are also highly compressed (1000:1)
 # so they don't take too much space.
+#
+new_fs_usage() {
+	echo "new_fs <fstype> {device | file} [size]" 1>&2
+	exit -1
+}
 new_fs () {
  	EFILE="$1_$3.gz"
 	MKFS="mkfs.$1"
@@ -58,13 +63,11 @@ new_fs () {
 	[ "$1" = "ext3" ] && MKFS="mkfs.ext2 -j"
 	if [ "$1" = "extN" ]; then
 		MKFS="mkfs.ext2 -j"
-		EFILE="$1_ext3.gz"
-		do_insmod $LUSTRE/extN/extN.o
+		EFILE="ext3_$3.gz"
 	fi
 
 	if [ -b "$2" ]; then
-		[ $# -lt 2 -o $# -gt 3 ] && \
-			echo "usage: $0 <fstype> <file> [size]" 1>&2 && exit -1
+		[ $# -lt 2 -o $# -gt 3 ] && new_fs_usage
 
 		PM="/proc/mounts"
 		[ -r "$PM" ] || PM="/etc/mtab"
@@ -74,8 +77,7 @@ new_fs () {
 		$MKFS $MKFSOPT $2 $3 || exit -1
 		LOOPDEV=$2	# Not really a loop device
 	else
-		[ $# -ne 3 ] && \
-			echo "usage: $0 <fstype> <file> <size>" 1>&2 && exit -1
+		[ $# -ne 3 ] && new_fs_usage
 
 		if [ -r "$EFILE" ]; then
 			echo "using prepared filesystem $EFILE for $2"
@@ -96,8 +98,6 @@ new_fs () {
 # make it easy to convert between new_fs and old_fs in testing scripts.
 old_fs () {
 	[ -e $2 ] || exit -1
-
-	[ "$1" = "extN" ] && do_insmod $LUSTRE/extN/extN.o
 
 	if [ -b "$2" ]; then
 		LOOPDEV=$2	# Not really a loop device
@@ -160,14 +160,14 @@ setup_portals() {
 
 	[ -c /dev/portals ] || mknod /dev/portals c 10 240
 
-	do_insmod $PORTALS/linux/oslib/portals.o
+	do_insmod $PORTALS/linux/oslib/portals.o || exit -1
 
 	case $NETWORK in
 	elan)	[ "$PORT" ] && fail "$0: NETWORK is elan but PORT is set"
-		do_insmod $PORTALS/linux/qswnal/kqswnal.o
+		do_insmod $PORTALS/linux/qswnal/kqswnal.o || exit -1
 		;;
 	tcp)	[ "$PORT" ] || fail "$0: NETWORK is tcp but PORT is not set"
-		do_insmod $PORTALS/linux/socknal/ksocknal.o
+		do_insmod $PORTALS/linux/socknal/ksocknal.o || exit -1
 		$ACCEPTOR $PORT
 		;;
 	*) 	fail "$0: unknown NETWORK '$NETWORK'" ;;
@@ -190,18 +190,21 @@ setup_portals() {
 setup_lustre() {
 	[ -c /dev/obd ] || mknod /dev/obd c 10 241
 
-	do_insmod $LUSTRE/class/obdclass.o
-	do_insmod $LUSTRE/rpc/ptlrpc.o
-	do_insmod $LUSTRE/ldlm/ldlm.o
+	do_insmod $LUSTRE/class/obdclass.o || exit -1
+	do_insmod $LUSTRE/rpc/ptlrpc.o || exit -1
+	do_insmod $LUSTRE/ldlm/ldlm.o || exit -1
 	do_insmod $LUSTRE/extN/extN.o
-	do_insmod $LUSTRE/mds/mds.o
-	do_insmod $LUSTRE/obdecho/obdecho.o
-	do_insmod $LUSTRE/ext2obd/obdext2.o
-	do_insmod $LUSTRE/filterobd/obdfilter.o
-	do_insmod $LUSTRE/ost/ost.o
-	do_insmod $LUSTRE/osc/osc.o
-	do_insmod $LUSTRE/mdc/mdc.o
-	do_insmod $LUSTRE/llight/llite.o
+	do_insmod $LUSTRE/mds/mds.o || exit -1
+	do_insmod $LUSTRE/mds/mds_ext2.o || exit -1
+	do_insmod $LUSTRE/mds/mds_ext3.o || exit -1
+	do_insmod $LUSTRE/mds/mds_extN.o
+	do_insmod $LUSTRE/obdecho/obdecho.o || exit -1
+	do_insmod $LUSTRE/ext2obd/obdext2.o || exit -1
+	do_insmod $LUSTRE/filterobd/obdfilter.o || exit -1
+	do_insmod $LUSTRE/ost/ost.o || exit -1
+	do_insmod $LUSTRE/osc/osc.o || exit -1
+	do_insmod $LUSTRE/mdc/mdc.o || exit -1
+	do_insmod $LUSTRE/llight/llite.o || exit -1
 
 	list_mods
 
@@ -414,6 +417,9 @@ cleanup_lustre() {
 	rmmod llite
 	rmmod mdc
 
+	rmmod mds_extN
+	rmmod mds_ext3
+	rmmod mds_ext2
 	rmmod mds
 	rmmod ost
 	rmmod osc
