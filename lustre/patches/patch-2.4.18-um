@@ -47,7 +47,7 @@
  	return(0);
  }
  
---- lum/include/asm/pgtable.h.orig	2002-12-04 01:58:36.000000000 -0700
+--- lum/include/asm/pgtable.h	2002-12-04 01:58:36.000000000 -0700
 +++ lum/include/asm/pgtable.h	2002-12-04 01:58:54.000000000 -0700
 @@ -200,7 +200,7 @@ static inline void pgd_clear(pgd_t * pgd
   * called on a highmem page.
