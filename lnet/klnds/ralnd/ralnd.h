@@ -77,7 +77,7 @@
 #define RANAL_NTX             64                /* # tx descs */
 #define RANAL_NTX_NBLK        256               /* # reserved tx descs */
 
-#define RANAL_FMA_CQ_SIZE     8192              /* # entries in receive CQ 
+#define RANAL_FMA_CQ_SIZE     8192              /* # entries in receive CQ
                                                  * (overflow is a performance hit) */
 
 #define RANAL_RESCHED         100               /* # scheduler loops before reschedule */
@@ -92,7 +92,7 @@
 #define RANAL_PORT             988              /* listener's port */
 #define RANAL_MAX_IMMEDIATE    (2<<10)          /* immediate payload breakpoint */
 
-typedef struct 
+typedef struct
 {
         int               kra_timeout;          /* comms timeout (seconds) */
         int               kra_listener_timeout; /* max time the listener can block */
@@ -117,8 +117,8 @@ typedef struct
         spinlock_t              rad_lock;       /* serialise */
         void                   *rad_scheduler;  /* scheduling thread */
 } kra_device_t;
-        
-typedef struct 
+
+typedef struct
 {
         int               kra_init;             /* initialisation state */
         int               kra_shutdown;         /* shut down? */
@@ -148,7 +148,7 @@ typedef struct
         long              kra_new_min_timeout;  /* minimum timeout on any new conn */
         wait_queue_head_t kra_reaper_waitq;     /* reaper sleeps here */
         spinlock_t        kra_reaper_lock;      /* serialise */
-        
+
         struct list_head  kra_connd_peers;      /* peers waiting for a connection */
         struct list_head  kra_connd_acceptq;    /* accepted sockets to handshake */
         wait_queue_head_t kra_connd_waitq;      /* connection daemons sleep here */
@@ -269,7 +269,7 @@ typedef struct kra_tx                           /* message descriptor */
         struct list_head          tx_list;      /* queue on idle_txs/rac_sendq/rac_waitq */
         struct kra_conn          *tx_conn;      /* owning conn */
         lib_msg_t                *tx_libmsg[2]; /* lib msgs to finalize on completion */
-        unsigned long             tx_qtime;     /* when tx started to wait for something */
+        unsigned long             tx_qtime;     /* when tx started to wait for something (jiffies) */
         int                       tx_isnblk;    /* I'm reserved for non-blocking sends */
         int                       tx_nob;       /* # bytes of payload */
         int                       tx_buftype;   /* payload buffer type */
@@ -306,7 +306,7 @@ typedef struct kra_tx                           /* message descriptor */
 #define RANAL_TX_GETT_DONE       0x52           /* GET target about to send GET_DONE */
 
 typedef struct kra_conn
-{ 
+{
         struct kra_peer    *rac_peer;           /* owning peer */
         struct list_head    rac_list;           /* stash on peer's conn list */
         struct list_head    rac_hashlist;       /* stash in connection hash table */
@@ -317,10 +317,10 @@ typedef struct kra_conn
         __u64               rac_peerstamp;      /* peer's unique stamp */
         __u64               rac_peer_connstamp; /* peer's unique connection stamp */
         __u64               rac_my_connstamp;   /* my unique connection stamp */
-        unsigned long       rac_last_tx;        /* when I last sent an FMA message */
-        unsigned long       rac_last_rx;        /* when I last received an FMA messages */
-        long                rac_keepalive;      /* keepalive interval */
-        long                rac_timeout;        /* infer peer death on (last_rx + timout > now) */
+        unsigned long       rac_last_tx;        /* when I last sent an FMA message (jiffies) */
+        unsigned long       rac_last_rx;        /* when I last received an FMA messages (jiffies) */
+        long                rac_keepalive;      /* keepalive interval (seconds) */
+        long                rac_timeout;        /* infer peer death if no rx for this many seconds */
         __u32               rac_cqid;           /* my completion callback id (non-unique) */
         __u32               rac_tx_seq;         /* tx msg sequence number */
         __u32               rac_rx_seq;         /* rx msg sequence number */
@@ -394,10 +394,10 @@ kranal_peer_decref(kra_peer_t *peer)
 }
 
 static inline struct list_head *
-kranal_nid2peerlist (ptl_nid_t nid) 
+kranal_nid2peerlist (ptl_nid_t nid)
 {
         unsigned int hash = ((unsigned int)nid) % kranal_data.kra_peer_hash_size;
-        
+
         return (&kranal_data.kra_peers[hash]);
 }
 
@@ -426,27 +426,27 @@ kranal_conn_decref(kra_conn_t *conn)
 }
 
 static inline struct list_head *
-kranal_cqid2connlist (__u32 cqid) 
+kranal_cqid2connlist (__u32 cqid)
 {
         unsigned int hash = cqid % kranal_data.kra_conn_hash_size;
-        
+
         return (&kranal_data.kra_conns [hash]);
 }
 
 static inline kra_conn_t *
-kranal_cqid2conn_locked (__u32 cqid) 
+kranal_cqid2conn_locked (__u32 cqid)
 {
         struct list_head *conns = kranal_cqid2connlist(cqid);
         struct list_head *tmp;
         kra_conn_t       *conn;
-        
+
         list_for_each(tmp, conns) {
                 conn = list_entry(tmp, kra_conn_t, rac_hashlist);
-                
+
                 if (conn->rac_cqid == cqid)
                         return conn;
         }
-        
+
         return NULL;
 }
 
@@ -464,8 +464,8 @@ kranal_page2phys (struct page *p)
 }
 
 extern void kranal_free_acceptsock (kra_acceptsock_t *ras);
-extern int kranal_listener_procint (ctl_table *table, 
-                                    int write, struct file *filp, 
+extern int kranal_listener_procint (ctl_table *table,
+                                    int write, struct file *filp,
                                     void *buffer, size_t *lenp);
 extern void kranal_update_reaper_timeout (long timeout);
 extern void kranal_tx_done (kra_tx_t *tx, int completion);
@@ -484,3 +484,4 @@ extern void kranal_close_conn_locked (kra_conn_t *conn, int error);
 extern void kranal_terminate_conn_locked (kra_conn_t *conn);
 extern void kranal_connect (kra_peer_t *peer);
 extern int kranal_conn_handshake (struct socket *sock, kra_peer_t *peer);
+extern void kranal_pause(int ticks);
