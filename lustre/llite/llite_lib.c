@@ -441,6 +441,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
         INIT_LIST_HEAD(&lli->lli_pending_write_llaps);
+        lli->lli_inode_magic = LLI_INODE_MAGIC;
 }
 
 int ll_fill_super(struct super_block *sb, void *data, int silent)
@@ -918,12 +919,17 @@ int ll_process_config_update(struct ll_sb_info *sbi, int clean)
 
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 {
-        struct inode *inode;
+        struct inode *inode = NULL;
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        if (lock->l_ast_data)
-                inode = igrab(lock->l_ast_data);
-        else
-                inode = NULL;
+        if (lock->l_ast_data) {
+                struct ll_inode_info *lli = ll_i2info(lock->l_ast_data);
+                if (lli->lli_inode_magic == LLI_INODE_MAGIC) {
+                        inode = igrab(lock->l_ast_data);
+                } else {
+                        CERROR("DEBUG: l_ast_data %p is bogus: magic %x\n",
+                               lock->l_ast_data, lli->lli_inode_magic);
+                }
+        }
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return inode;
 }
@@ -949,6 +955,7 @@ void ll_clear_inode(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
 
+        lli->lli_inode_magic = LLI_INODE_DEAD;
         ll_inode2fid(&fid, inode);
         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &(ll_i2info(inode)->lli_flags));
         md_change_cbdata(sbi->ll_mdc_exp, &fid, null_if_equal, inode);

@@ -316,15 +316,25 @@ static int ll_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock)
         ENTRY;
 
         if (lsm->lsm_stripe_count == 1)
-                RETURN(0);
+                GOTO(check, stripe = 0);
 
         /* get our offset in the lov */
         rc = obd_get_info(exp, sizeof(key), &key, &vallen, &stripe);
         if (rc != 0) {
                 CERROR("obd_get_info: rc = %d\n", rc);
-                LBUG();
+                RETURN(rc);
         }
         LASSERT(stripe < lsm->lsm_stripe_count);
+
+check:
+        if (lsm->lsm_oinfo[stripe].loi_id != lock->l_resource->lr_name.name[0]||
+            lsm->lsm_oinfo[stripe].loi_gr != lock->l_resource->lr_name.name[2]){
+                LDLM_ERROR(lock, "resource doesn't match object "LPU64"/"LPU64,
+                           lsm->lsm_oinfo[stripe].loi_id,
+                           lsm->lsm_oinfo[stripe].loi_gr);
+                RETURN(-ELDLM_NO_LOCK_DATA);
+        }
+
         RETURN(stripe);
 }
 
@@ -489,6 +499,8 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                 lsm = lli->lli_smd;
 
                 stripe = ll_lock_to_stripe_offset(inode, lock);
+                if (stripe < 0)
+                        goto iput;
                 ll_pgcache_remove_extent(inode, lsm, lock, stripe);
 
                 down(&inode->i_sem);
@@ -536,6 +548,8 @@ int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         LDLM_DEBUG(lock, "client-side async enqueue: granted/glimpsed");
 
         stripe = ll_lock_to_stripe_offset(inode, lock);
+        if (stripe < 0)
+                goto iput;
 
         if (lock->l_lvb_len) {
                 struct lov_stripe_md *lsm = lli->lli_smd;
@@ -553,6 +567,7 @@ int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 up(&inode->i_sem);
         }
 
+iput:
         iput(inode);
         wake_up(&lock->l_waitq);
 
@@ -568,7 +583,7 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         struct inode *inode = ll_inode_from_lock(lock);
         struct ll_inode_info *lli;
         struct ost_lvb *lvb;
-        int rc, size = sizeof(*lvb), stripe = 0;
+        int rc, size = sizeof(*lvb), stripe;
         ENTRY;
 
         if (inode == NULL)
@@ -580,8 +595,9 @@ static int ll_glimpse_callback(struct ldlm_lock *lock, void *reqp)
                 GOTO(iput, rc = -ELDLM_NO_LOCK_DATA);
 
         /* First, find out which stripe index this lock corresponds to. */
-        if (lli->lli_smd->lsm_stripe_count > 1)
-                stripe = ll_lock_to_stripe_offset(inode, lock);
+        stripe = ll_lock_to_stripe_offset(inode, lock);
+        if (stripe < 0)
+                GOTO(iput, rc = -ELDLM_NO_LOCK_DATA);
 
         rc = lustre_pack_reply(req, 1, &size, NULL);
         if (rc) {

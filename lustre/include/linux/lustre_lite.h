@@ -71,10 +71,13 @@ struct ll_dentry_data {
 
 extern struct file_operations ll_pgcache_seq_fops;
 
+#define LLI_INODE_MAGIC                 0x111d0de5
+#define LLI_INODE_DEAD                  0xdeadd00d
 #define LLI_F_HAVE_OST_SIZE_LOCK        0
 #define LLI_F_HAVE_MDS_SIZE_LOCK        1
 #define LLI_F_PREFER_EXTENDED_SIZE      2
 struct ll_inode_info {
+        int                     lli_inode_magic;
         struct lov_stripe_md   *lli_smd;
         struct mea             *lli_mea;
         char                   *lli_symlink_name;
