@@ -70,12 +70,12 @@ static void record_start_io(struct dio_request *dreq, int rw, int size)
                                  filter->fo_w_in_flight);
                 lprocfs_oh_tally_log2(&filter->fo_w_disk_iosize, size);
         }
-        spin_lock_irqsave(&filter->fo_objidlock, flags);
+        spin_lock_irqsave(&filter->fo_stats_lock, flags);
         if (rw == OBD_BRW_READ)
                 filter->fo_r_in_flight++;
         else
                 filter->fo_w_in_flight++;
-        spin_unlock_irqrestore(&filter->fo_objidlock, flags);
+        spin_unlock_irqrestore(&filter->fo_stats_lock, flags);
         dreq->dr_start_time = jiffies;
 }
 
@@ -84,12 +84,12 @@ static void record_finish_io(struct dio_request *dreq, int rw, int rc)
         struct filter_obd *filter = dreq->dr_filter;
         unsigned long flags, stop_time = jiffies;
 
-        spin_lock_irqsave(&filter->fo_objidlock, flags);
+        spin_lock_irqsave(&filter->fo_stats_lock, flags);
         if (rw == OBD_BRW_READ)
                 filter->fo_r_in_flight--;
         else
                 filter->fo_w_in_flight--;
-        spin_unlock_irqrestore(&filter->fo_objidlock, flags);
+        spin_unlock_irqrestore(&filter->fo_stats_lock, flags);
 
         if (atomic_dec_and_test(&dreq->dr_numreqs))
                 wake_up(&dreq->dr_wait);

@@ -1240,6 +1240,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
 
         spin_lock_init(&filter->fo_translock);
         spin_lock_init(&filter->fo_objidlock);
+        spin_lock_init(&filter->fo_stats_lock);
         INIT_LIST_HEAD(&filter->fo_export_list);
         sema_init(&filter->fo_alloc_lock, 1);
         spin_lock_init(&filter->fo_r_pages.oh_lock);
@@ -2257,7 +2258,7 @@ static int filter_truncate(struct obd_export *exp, struct obdo *oa,
                 CERROR("PUNCH not supported, only truncate: end = "LPX64"\n",
                        end);
 
-        CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = %x, "
+        CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = %x, ",
                "o_size = "LPD64"\n", oa->o_id, oa->o_valid, start);
         oa->o_size = start;
         error = filter_setattr(exp, oa, NULL, oti);

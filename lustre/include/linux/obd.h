@@ -206,8 +206,9 @@ struct filter_obd {
 
         struct semaphore     fo_alloc_lock;
 
-        int fo_r_in_flight; /* protected by fo_objidlock */
-        int fo_w_in_flight; /* protected by fo_objidlock */
+        spinlock_t fo_stats_lock;
+        int fo_r_in_flight; /* protected by fo_stats_lock */
+        int fo_w_in_flight; /* protected by fo_stats_lock */
 
         struct obd_histogram     fo_r_pages;
         struct obd_histogram     fo_w_pages;
