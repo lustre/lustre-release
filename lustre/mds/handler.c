@@ -1308,7 +1308,6 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         struct ldlm_res_id res_id = { .name = {0} };
         struct mds_obd *mds = &obd->u.mds;
         struct ost_body *body, *repbody;
-        int rc, size = sizeof(*repbody);
         char fidname[LL_FID_NAMELEN];
         struct inode *parent_inode;
         struct lustre_handle lockh;
@@ -1316,7 +1315,7 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         ldlm_policy_data_t policy;
         struct dentry *new = NULL;
         struct dentry_params dp;
-        int mealen, flags = 0;
+        int mealen, flags = 0, rc, size = sizeof(*repbody), cleanup_phase = 0;
         unsigned int tmpname;
         struct lvfs_ucred uc;
         struct mea *mea;
@@ -1327,8 +1326,7 @@ static int mdt_obj_create(struct ptlrpc_request *req)
 
         parent_inode = mds->mds_objects_dir->d_inode;
 
-        body = lustre_swab_reqbuf(req, 0, sizeof(*body),
-                                  lustre_swab_ost_body);
+        body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_ost_body);
         if (body == NULL)
                 RETURN(-EFAULT);
 
@@ -1363,7 +1361,8 @@ static int mdt_obj_create(struct ptlrpc_request *req)
                         repbody->oa.o_id = new->d_inode->i_ino;
                         repbody->oa.o_generation = new->d_inode->i_generation;
                         repbody->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGENER;
-                        GOTO(cleanup2, rc = 0);
+                        cleanup_phase = 1;
+                        GOTO(cleanup, rc = 0);
                 }
                 CWARN("hmm. for some reason dir %lu/%lu (or reply) got lost\n",
                       (unsigned long) fid.id, (unsigned long) fid.generation);
@@ -1375,6 +1374,7 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         down(&parent_inode->i_sem);
         handle = fsfilt_start(obd, parent_inode, FSFILT_OP_MKDIR, NULL);
         LASSERT(!IS_ERR(handle));
+        cleanup_phase = 1; /* transaction */
 
 repeat:
         tmpname = ll_insecure_random_int();
@@ -1429,6 +1429,7 @@ repeat:
                                 NULL, 0, NULL, &lockh);
                 if (rc != ELDLM_OK)
                         GOTO(cleanup, rc);
+                cleanup_phase = 2; /* valid lockh */
 
                 CDEBUG(D_OTHER, "created dirobj: %lu/%lu mode %o\n",
                                 (unsigned long) new->d_inode->i_ino,
@@ -1437,9 +1438,10 @@ repeat:
         } else {
                 up(&parent_inode->i_sem);
                 CERROR("%s: can't create dirobj: %d\n", obd->obd_name, rc);
+                GOTO(cleanup, rc);
         }
 
-        if (rc == 0 && body->oa.o_valid & OBD_MD_FLID) {
+        if (body->oa.o_valid & OBD_MD_FLID) {
                 /* this is new object for splitted dir. we have to
                  * prevent recursive splitting on it -bzzz */
                 mealen = obd_size_diskmd(mds->mds_lmv_exp, NULL);
@@ -1454,17 +1456,21 @@ repeat:
                 CDEBUG(D_OTHER, "%s: mark non-splittable %lu/%u - %d\n",
                        obd->obd_name, new->d_inode->i_ino,
                        new->d_inode->i_generation, flags);
-        } else if (rc == 0 && body->oa.o_easize) {
+        } else if (body->oa.o_easize) {
                 mds_try_to_split_dir(obd, new, NULL, body->oa.o_easize);
         }
 
 cleanup:
-        rc = mds_finish_transno(mds, parent_inode, handle, req, rc, 0);
-        if (rc == 0)
-                ptlrpc_save_lock(req, &lockh, LCK_EX);
-        else
-                ldlm_lock_decref(&lockh, LCK_EX);
-cleanup2:
+        if (cleanup_phase == 1) /* transaction */
+                rc = mds_finish_transno(mds, parent_inode, handle, req, rc, 0);
+
+        if (cleanup_phase == 2) { /* valid lockh */
+                if (rc == 0)
+                        ptlrpc_save_lock(req, &lockh, LCK_EX);
+                else
+                        ldlm_lock_decref(&lockh, LCK_EX);
+        }
+
         l_dput(new);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &uc);
         RETURN(rc);
