@@ -228,6 +228,8 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         }
         
         CDEBUG(D_INFO, "\n"); 
+	sb->s_maxbytes = 1LL << 36;
+	printk("Max bytes: %Lx\n", sb->s_maxbytes);
         sb->s_blocksize = PAGE_SIZE;
         sb->s_blocksize_bits = (unsigned char)PAGE_SHIFT;
         sb->s_magic = OBDFS_SUPER_MAGIC;
