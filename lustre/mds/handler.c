@@ -762,9 +762,9 @@ static int mds_open(struct ptlrpc_request *req)
                 if (!memcmp(&mfd->mfd_clienthandle, &body->handle,
                             sizeof(mfd->mfd_clienthandle)) &&
                     body->fid1.id == mfd->mfd_file->f_dentry->d_inode->i_ino) {
-                        CERROR("Re opening "LPD64"\n", body->fid1.id);
                         de = mfd->mfd_file->f_dentry;
                         spin_unlock(&med->med_open_lock);
+                        CERROR("Re opening "LPD64"\n", body->fid1.id);
                         GOTO(out_pack, rc = 0);
                 }
         }
