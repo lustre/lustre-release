@@ -10,8 +10,8 @@ if [ -f $SRCDIR/Makefile.am ]; then
 	PORTALS=$SRCDIR/../../portals
 	LUSTRE=$SRCDIR/..
 
-	PTLCTL=$PORTALS/linux/utils/ptlctl
-	DBGCTL=$PORTALS/linux/utils/debugctl
+	PTLCTL=$LUSTRE/utils/lctl
+	DBGCTL=$LUSTRE/utils/lctl
 	ACCEPTOR=$PORTALS/linux/utils/acceptor
 
 	OBDCTL=$LUSTRE/utils/lctl
@@ -465,7 +465,7 @@ setup_lov () {
 	$OBDCTL <<- EOF || return $?
 	newdev
 	attach lov LOVNAME  ${LOVUUID}
-	setup  MDCDEV-UUID
+	setup MDCDEV-UUID
 	quit
 	EOF
 }        
@@ -526,7 +526,7 @@ cleanup_portals() {
 	setup_variables
 
 	$PTLCTL <<- EOF
-	setup $NETWORK
+	network $NETWORK
 	disconnect
 	del_uuid self
 	del_uuid $MDSNODE
@@ -542,6 +542,8 @@ cleanup_portals() {
 	#do_rmmod kqswnal
 	do_rmmod ksocknal
 	do_rmmod kptlrouter
+
+        [ -z "$TIME" ] || $DBGCTL debug_kernel /tmp/debug.3.$TIME
 
 	do_rmmod portals
 }
