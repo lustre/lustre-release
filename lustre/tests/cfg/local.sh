@@ -12,16 +12,16 @@ NETTYPE=${NETTYPE:-tcp}
 
 MOUNT=${MOUNT:-"/mnt/lustre"}
 MOUNT1=${MOUNT1:-$MOUNT}
-MOUNT2=${MOUNT2:-"/mnt/lustre2"}
+MOUNT2=${MOUNT2:-${MOUNT}2}
 DIR=${DIR:-$MOUNT}
 DIR2=${DIR2:-$MOUNT1}
 PTLDEBUG=${PTLDEBUG:-0x3f0400}
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 PDSH=${PDSH:-no_dsh}
 
-MDSDEV=${MDSDEV:-$ROOT/tmp/mds-`hostname`}
+MDSDEV=${MDSDEV:-$ROOT/tmp/mds1-`hostname`}
 MDSSIZE=${MDSSIZE:-10000}
-OSTDEV=${OSTDEV:-$ROOT/tmp/ost-`hostname`}
+OSTDEV=${OSTDEV:-$ROOT/tmp/ost1-`hostname`}
 OSTSIZE=${OSTSIZE:-50000}
 FSTYPE=${FSTYPE:-ext3}
 TIMEOUT=${TIMEOUT:-10}
