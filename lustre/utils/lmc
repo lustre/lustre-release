@@ -711,6 +711,7 @@ def lov_mod_obd(gen, lustre, lov, tgt, osc_uuid, options):
     else:
         gener = int(tgt.getAttribute('generation')) + 1
     tgt.setAttribute('generation', str(gener))
+    tgt.setAttribute('active', '1')
     lov_index = int(tgt.getAttribute('index'))
     addUpdate(gen, lustre, gen.add(getUUID(lov), osc_uuid, str(lov_index),
               str(gener)))
