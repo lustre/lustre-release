@@ -126,6 +126,7 @@ EXPORT_SYMBOL(ptlrpc_check_set);
 EXPORT_SYMBOL(ptlrpc_set_wait);
 EXPORT_SYMBOL(ptlrpc_expired_set);
 EXPORT_SYMBOL(ptlrpc_interrupted_set);
+EXPORT_SYMBOL(ptlrpc_mark_interrupted);
 
 /* service.c */
 EXPORT_SYMBOL(ptlrpc_init_svc);
@@ -192,6 +193,7 @@ EXPORT_SYMBOL(ptlrpc_pinger_sending_on_import);
 EXPORT_SYMBOL(ptlrpcd_addref);
 EXPORT_SYMBOL(ptlrpcd_decref);
 EXPORT_SYMBOL(ptlrpcd_add_req);
+EXPORT_SYMBOL(ptlrpcd_wake);
 
 /* lproc_ptlrpc.c */
 EXPORT_SYMBOL(ptlrpc_lprocfs_register_obd);
