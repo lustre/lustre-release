@@ -30,6 +30,7 @@
 #include <linux/obd_ost.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_mds.h>
+#include <linux/lustre_net.h>
 
 int client_import_connect(struct lustre_handle *dlm_handle,
                           struct obd_device *obd,
@@ -151,7 +152,7 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
         }
 
         /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
-        if (obd->obd_no_recov && imp->imp_level != LUSTRE_CONN_FULL) {
+        if (obd->obd_no_recov) {
                 ptlrpc_abort_inflight(imp);
         } else {
                 request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
@@ -422,12 +423,21 @@ static void abort_recovery_queue(struct obd_device *obd)
 {
         struct ptlrpc_request *req;
         struct list_head *tmp, *n;
+        int rc;
+
         list_for_each_safe(tmp, n, &obd->obd_recovery_queue) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 DEBUG_REQ(D_ERROR, req, "aborted:");
                 req->rq_status = -ENOTCONN;
                 req->rq_type = PTL_RPC_MSG_ERR;
-                ptlrpc_reply(req);
+                rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen,
+                                     &req->rq_repmsg);
+                if (rc == 0) {
+                        ptlrpc_reply(req);
+                } else {
+                        DEBUG_REQ(D_ERROR, req,
+                                  "packing failed for abort-reply; skipping");
+                }
                 list_del(&req->rq_list);
                 class_export_put(req->rq_export);
                 OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
@@ -756,8 +766,6 @@ static void ptlrpc_abort_reply (struct ptlrpc_request *req)
                 spin_unlock_irqrestore (&req->rq_lock, flags);
                 return;
         case PTL_INV_MD:
-                /* Both SENT and ACK callbacks happened */
-                LASSERT (!req->rq_want_ack);
                 return;
         case PTL_MD_INUSE:
                 /* Still sending or ACK callback in progress: wait until
