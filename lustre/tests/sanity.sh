@@ -8,7 +8,9 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 2739
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"57a 57b 65a 65b 65c 65d 65e 65f"}
+# 51b and 51c depend on kernel
+# 65* fixes in b_hd_cray_merge3
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"51b 51c 65a 65b 65c 65d 65e 65f"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -1834,12 +1836,13 @@ test_54d() {
 run_test 54d "fifo device works in lustre ======================"
 
 check_fstype() {
-       grep -q $FSTYPE /proc/filesystems && return 0
-       modprobe $FSTYPE
-       grep -q $FSTYPE /proc/filesystems && return 0
-       insmod ../$FSTYPE/$FSTYPE.o
-       grep -q $FSTYPE /proc/filesystems && return 0
-       return 1
+        test "x$FSTYPE" = "x$(grep $FSTYPE /proc/filesystems)" && return 0
+        modprobe $FSTYPE > /dev/null 2>&1
+        test "x$FSTYPE" = "x$(grep $FSTYPE /proc/filesystems)" && return 0
+	test "x$(uname -r | grep -o "2.6")" = "x2.6" && MODEXT="ko" || MODEXT="o"
+        insmod ../$FSTYPE/$FSTYPE.$MODEXT > /dev/null 2>&1
+        test "x$FSTYPE" = "x$(grep $FSTYPE /proc/filesystems)" && return 0
+        return 1
 }
 
 test_55() {
@@ -1914,7 +1917,7 @@ run_test 56 "check lfs find ===================================="
 test_57a() {
 	# note test will not do anything if MDS is not local
 	for DEV in `cat /proc/fs/lustre/mds/*/mntdev`; do
-		dumpe2fs -h $DEV > $TMP/t57a.dump || error "can't access $DEV"
+		dumpe2fs -hf $DEV > $TMP/t57a.dump || error "can't access $DEV"
 		DEVISIZE=`awk '/Inode size:/ { print $3 }' $TMP/t57a.dump`
 		[ "$DEVISIZE" -gt 128 ] || error "inode size $DEVISIZE"
 		rm $TMP/t57a.dump
