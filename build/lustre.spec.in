@@ -127,34 +127,8 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 
 %files
 %attr(-, root, root) /sbin/mount.lustre
-%attr(-, root, root) /usr/sbin/lmc
-%attr(-, root, root) /usr/sbin/lctl
-%attr(-, root, root) /usr/sbin/lconf
-%attr(-, root, root) /usr/sbin/lrun
-%attr(-, root, root) /usr/sbin/llmount
-%attr(-, root, root) /usr/sbin/lwizard
-%attr(-, root, root) /usr/sbin/wiretest
-%attr(-, root, root) /usr/sbin/lactive
-%attr(-, root, root) /usr/sbin/llanalyze
-%if %{enable_gm}
-%attr(-, root, root) /usr/sbin/gmnalnid
-%endif
-%attr(-, root, root) /usr/sbin/llstat.pl
-%attr(-, root, root) /usr/sbin/llobdstat.pl
-%attr(-, root, root) /usr/sbin/load_ldap.sh
-%attr(-, root, root) /usr/sbin/acceptor
-%attr(-, root, root) /usr/sbin/ptlctl
-%attr(-, root, root) /usr/sbin/debugctl
-%attr(-, root, root) /usr/sbin/lload
-%attr(-, root, root) /usr/sbin/obdbarrier
-%attr(-, root, root) /usr/sbin/obdio
-%attr(-, root, root) /usr/sbin/routerstat
-%attr(-, root, root) /usr/sbin/wirecheck
-%attr(-, root, root) /usr/bin/lfs
-%attr(-, root, root) /usr/bin/lfind
-%attr(-, root, root) /usr/bin/lstripe
-%attr(-, root, root) /usr/bin/mcreate
-%attr(-, root, root) /usr/bin/munlink
+%attr(-, root, root) /usr/sbin/*
+%attr(-, root, root) /usr/bin/*
 %attr(-, root, root) %{_libdir}/lustre/python
 %attr(-, root, root) /usr/share/lustre/examples
 
