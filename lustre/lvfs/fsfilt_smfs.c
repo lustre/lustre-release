@@ -988,7 +988,7 @@ static int fsfilt_smfs_do_write_cow(struct dentry *de, void *extents,
         for (i = 0; i < num_extents; i++) {
                size_t count = w_ext->w_count;
                loff_t off = w_ext->w_pos;
-               rc = smfs_cow_write(de->d_inode, de, &count, &off);
+               rc = smfs_cow_write_pre(de->d_inode, de, &count, &off);
                if (rc)
                         RETURN(rc);  
                w_ext ++;

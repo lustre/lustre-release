@@ -183,9 +183,8 @@ int ost_rec_pack(char *buffer, struct dentry *dentry, struct inode *dir,
         return 0;
 }
 
-int ost_rec_pack_init(struct super_block *sb)
+int ost_rec_pack_init(struct smfs_super_info *smsi)
 {
-        struct smfs_super_info *smsi = S2SMI(sb);
 
         smsi->smsi_pack_rec[PACK_OST] = ost_rec_pack;
 

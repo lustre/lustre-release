@@ -169,11 +169,8 @@ struct smfs_iget_args {
 extern struct inode_operations smfs_sym_iops;
 extern struct file_operations smfs_sym_fops;
 /*journal.c */
-extern void *smfs_trans_start(struct inode *inode, int op, void *desc_private);
-extern void smfs_trans_commit(struct inode *inode, void *handle,
-                              int force_sync);
-extern int  smfs_post_kml_rec(struct inode *dir, struct dentry *dst_dentry,
-                              void   *data1, void *data2, int op);
+void *smfs_trans_start(struct inode *inode, int op, void *desc_private);
+void smfs_trans_commit(struct inode *inode, void *handle, int force_sync);
 
 extern int smfs_post_rec_write(struct inode *dir, struct dentry *dentry,
                                void   *data1, void *data2);
@@ -190,13 +187,11 @@ extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
                            char **pbuf, int *opcode);
 extern int smfs_process_rec(struct super_block *sb, int count,
                             char *dir, int flags);
-extern smfs_pack_rec_func smfs_get_rec_pack_type(struct super_block *sb);
-
 
 /*mds_kml.c*/
-int mds_rec_pack_init(struct super_block *sb);
+int mds_rec_pack_init(struct smfs_super_info *smb);
 /*ost_kml.c*/
-int ost_rec_pack_init(struct super_block *sb);
+int ost_rec_pack_init(struct smfs_super_info *smb);
 
 /*smfs_llog.c*/
 extern int smfs_llog_setup(struct super_block *sb, struct vfsmount *mnt);
@@ -292,7 +287,8 @@ static inline int get_active_entry(struct inode *dir, __u64 *active_entry)
 #define HOOK_RENAME       9
 #define HOOK_SETATTR      10
 #define HOOK_WRITE        11 
-#define HOOK_MAX          11 
+#define HOOK_READDIR      12
+#define HOOK_MAX          12 
 
 #define PRE_HOOK 0
 #define POST_HOOK 1

@@ -42,7 +42,10 @@ static void smfs_init_inode_info (struct inode *inode, void *opaque)
         struct smfs_iget_args *sargs = (struct smfs_iget_args*)opaque;
         struct inode *cache_inode = NULL;
         
-        cache_inode = iget(S2CSB(inode->i_sb), inode->i_ino);
+        if (sargs)
+                cache_inode = iget(S2CSB(inode->i_sb), sargs->s_ino);
+        else 
+                cache_inode = iget(S2CSB(inode->i_sb), inode->i_ino); 
                  
         OBD_ALLOC(I2SMI(inode), sizeof(struct smfs_inode_info));
         LASSERT(I2SMI(inode));
@@ -51,13 +54,11 @@ static void smfs_init_inode_info (struct inode *inode, void *opaque)
                cache_inode->i_ino, atomic_read(&cache_inode->i_count));
         post_smfs_inode(inode, cache_inode);
         sm_set_inode_ops(cache_inode, inode);
-       
         if (sargs) { 
                 struct inode *dir = sargs->s_inode; 
-               
                 if (dir)
                         I2SMI(inode)->smi_flags = I2SMI(dir)->smi_flags;
-          }
+        }
 }
 
 static void smfs_clear_inode_info(struct inode *inode)
@@ -130,6 +131,7 @@ struct inode *smfs_iget(struct super_block *sb, ino_t hash,
                         unlock_new_inode(inode);
                 CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n", inode->i_ino,
                        inode->i_generation, inode);
+                inode->i_ino = hash;
         }
         return inode;
 }
@@ -151,12 +153,12 @@ struct inode *smfs_iget(struct super_block *sb, ino_t hash,
 struct inode *smfs_get_inode (struct super_block *sb, ino_t hash,
                               struct inode *dir, int index)
 {
-        struct inode *inode = NULL;      
+        struct inode *inode;
         struct smfs_iget_args sargs; 
         ENTRY;
        
         sargs.s_index = index;
-        sargs.s_inode = inode; 
+        sargs.s_inode = dir; 
         sargs.s_ino = hash; 
         inode = smfs_iget(sb, hash, &sargs);
         

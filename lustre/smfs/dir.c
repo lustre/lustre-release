@@ -614,9 +614,17 @@ static int smfs_readdir(struct file *filp, void *dirent, filldir_t filldir)
         sfi = F2SMFI(filp);
         if (sfi->magic != SMFS_FILE_MAGIC) BUG();
 
+        SMFS_HOOK(dentry->d_inode, filp, dirent, filldir, HOOK_READDIR, NULL, 
+                  PRE_HOOK, rc, exit); 
+        
         if (cache_inode->i_fop->readdir)
                 rc = cache_inode->i_fop->readdir(sfi->c_file, dirent, filldir);
 
+        SMFS_HOOK(dentry->d_inode, filp, dirent, filldir, HOOK_READDIR, NULL, 
+                  POST_HOOK, rc, exit);
+exit:
+        if (rc > 0)
+                rc = 0;
         duplicate_file(filp, sfi->c_file);
         RETURN(rc);
 }

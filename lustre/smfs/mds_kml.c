@@ -156,7 +156,7 @@ static int mds_rec_create_pack(char *buffer, struct dentry *dentry,
                               dentry->d_inode->i_mode, data1, tgt_len);
 
         rec = (struct mds_rec_create *)lustre_msg_buf(msg, 0, 0);
-
+        
         rec->cr_replayfid = op_data.fid2;
         rec->cr_flags |= REC_REINT_CREATE; 
         mkpi->mpi_total_size = tmp - (void*)msg;
@@ -248,10 +248,9 @@ int mds_rec_pack(char *buffer, struct dentry *dentry, struct inode *dir,
         return mds_kml_pack[op](buffer, dentry, dir, data1, data2);
 }
 
-int mds_rec_pack_init(struct super_block *sb)
+int mds_rec_pack_init(struct smfs_super_info *smsi)
 {
-        struct smfs_super_info *smsi = S2SMI(sb);
-
+        
         smsi->smsi_pack_rec[PACK_MDS] = mds_rec_pack;
 
         return 0;

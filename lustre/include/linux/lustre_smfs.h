@@ -72,7 +72,7 @@ struct mds_kml_pack_info {
         int mpi_size[4];
         int mpi_total_size;
 };
-typedef int (*smfs_hook_func)(struct inode *inode, struct dentry *dentry,
+typedef int (*smfs_hook_func)(struct inode *inode, void *dentry,
                              void *data1, void *data2, int op, void *handle);
 struct smfs_hook_ops {
         struct list_head smh_list;

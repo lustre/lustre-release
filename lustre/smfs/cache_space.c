@@ -44,7 +44,7 @@ static struct cache_purge_queue smfs_cpq;
 static struct cache_purge_queue *cpq = &smfs_cpq;
 
 #define CACHE_HOOK "cache_hook"
-int cache_space_pre_hook(struct inode *inode, struct dentry *dentry,
+int cache_space_pre_hook(struct inode *inode, void *dentry,
                          void *data1, void *data2, int op, void *handle)
 {
         int rc = 0;
@@ -62,14 +62,16 @@ int cache_space_pre_hook(struct inode *inode, struct dentry *dentry,
         RETURN(rc); 
 }
 
-int cache_space_post_hook(struct inode *inode, struct dentry *dentry,
-                         void *data1, void *data2, int op, void *handle)
+int cache_space_post_hook(struct inode *inode, void *de, void *data1, 
+                          void *data2, int op, void *handle)
 {
         int rc = 0;
         ENTRY;
         if (smfs_cache_hook(inode)) {      
                 struct inode *new_inode = (struct inode*)data1;
-                struct dentry *new_dentry = (struct dentry*)data2;                    
+                struct dentry *new_dentry = (struct dentry*)data2;        
+                struct dentry *dentry = (struct dentry *)de;
+            
                 LASSERT(handle != NULL);                                
                 rc = cache_space_post(op, handle, inode, dentry, new_inode, 
                                       new_dentry);

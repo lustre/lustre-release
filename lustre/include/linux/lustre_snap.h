@@ -201,8 +201,7 @@ struct write_extents {
 };
 int smfs_cow(struct inode *dir, struct dentry *dentry,
              void *data1, void *data2, int op);
-int smfs_cow_write(struct inode *inode, struct dentry *dentry, void *data1,
-                   void *data2);
+int smfs_cow_write_pre(struct inode *inode, void *de, void *data1, void *data2);
 struct inode* smfs_cow_get_ind(struct inode *inode, int index);
 
 

@@ -417,3 +417,31 @@ struct smfs_hook_ops *smfs_unregister_hook_ops(struct smfs_super_info *smb,
         RETURN(NULL);
 }
 
+void *smfs_trans_start(struct inode *inode, int op, void *desc_private)
+{
+        struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
+
+        CDEBUG(D_INFO, "trans start %p\n", fsfilt->fs_start);
+
+        SMFS_TRANS_OP(inode, op);
+        
+        /* There are some problem here. fs_start in fsfilt is used by lustre
+         * the journal blocks of write rec are not counted in FIXME later */
+        if (fsfilt->fs_start)
+                return fsfilt->fs_start(inode, op, desc_private, 0);
+        return NULL;
+}
+
+void smfs_trans_commit(struct inode *inode, void *handle, int force_sync)
+{
+        struct fsfilt_operations *fsfilt = S2SMI(inode->i_sb)->sm_fsfilt;
+
+        if (!handle)
+                return;
+
+        CDEBUG(D_INFO, "trans commit %p\n", fsfilt->fs_commit);
+
+        if (fsfilt->fs_commit)
+                fsfilt->fs_commit(inode->i_sb, inode, handle, force_sync);
+}
+
