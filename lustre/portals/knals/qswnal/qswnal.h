@@ -317,13 +317,8 @@ static inline void kqswnal_rx_done (kqswnal_rx_t *krx)
 
 #if MULTIRAIL_EKC
 
-#if (!defined(EP_RAILMASK_ALL) && !defined(EP_SHUTDOWN))
-/* These are making their way into the EKC subsystem.... */
-# define EP_RAILMASK_ALL    0xFFFF
-# define EP_SHUTDOWN        EP_ABORT
-#else
-/* ...Oh! they've got there already! */
-# error "qswnal.h older than EKC headers"
+#ifndef EP_RAILMASK_ALL
+# error "old (unsupported) version of EKC headers"
 #endif
 
 static inline int
