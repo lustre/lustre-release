@@ -42,12 +42,10 @@ static void smfs_init_inode_info (struct inode *inode, void *opaque)
         struct smfs_iget_args *sargs = (struct smfs_iget_args*)opaque;
         struct inode *cache_inode = NULL;
         
-#if 0
         if (sargs)
                 cache_inode = iget(S2CSB(inode->i_sb), sargs->s_ino);
         else 
-#endif
-        cache_inode = iget(S2CSB(inode->i_sb), inode->i_ino); 
+                cache_inode = iget(S2CSB(inode->i_sb), inode->i_ino); 
                  
         OBD_ALLOC(I2SMI(inode), sizeof(struct smfs_inode_info));
         LASSERT(I2SMI(inode));
@@ -67,12 +65,13 @@ static void smfs_clear_inode_info(struct inode *inode)
 {
         if (I2SMI(inode)) {
                 struct inode *cache_inode = I2CI(inode);
-                LASSERTF(((atomic_read(&cache_inode->i_count) == 0) || 
+                LASSERTF(((atomic_read(&cache_inode->i_count) == 1) || 
                            cache_inode == cache_inode->i_sb->s_root->d_inode),  
                          "inode %p cache inode %p %lu i_count %d != 0 \n", 
                           inode, cache_inode, cache_inode->i_ino, 
                           atomic_read(&cache_inode->i_count));
-
+                if (cache_inode != cache_inode->i_sb->s_root->d_inode)
+                        iput(cache_inode);
                 OBD_FREE(I2SMI(inode), sizeof(struct smfs_inode_info));
                 I2SMI(inode) = NULL;
         }
@@ -105,15 +104,23 @@ static int smfs_test_inode(struct inode *inode, void *opaque)
         LASSERT(sargs);
         if (!sargs)
                 return 1;
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+
         if (inode->i_ino != sargs->s_ino)
                 return 0; 
-#endif       
 #ifdef CONFIG_SNAPFS        
         if (SMFS_DO_COW(S2SMI(inode->i_sb)) && 
             !smfs_snap_test_inode(inode, opaque))
                 return 0;  
-#endif        
+#endif  
+        if (I2SMI(inode)) {
+                struct inode *cache_inode = I2CI(inode);
+        
+                LASSERTF(cache_inode->i_ino == inode->i_ino, 
+                         "inode ino %lu != cache ino %lu",
+                         cache_inode->i_ino, inode->i_ino); 
+        }
+        if (!I2SMI(inode))
+                smfs_init_inode_info(inode, opaque); 
         return 1;
 }
 
@@ -151,9 +158,15 @@ struct inode *smfs_iget(struct super_block *sb, ino_t hash,
 
         inode = iget4(sb, hash, smfs_test_inode, sargs);
 
-        if (inode)
+        if (inode) {
+                struct inode *cache_inode = I2CI(inode);
+
+                LASSERTF((inode->i_ino == cache_inode->i_ino), 
+                         "inode %p ino %lu != cache inode %p ino %lu",
+                          inode, inode->i_ino, cache_inode, cache_inode->i_ino); 
                 CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n", inode->i_ino,
                        inode->i_generation, inode);
+        }
         return inode;
 }
 #endif
@@ -177,31 +190,14 @@ static void smfs_delete_inode(struct inode *inode)
         struct inode *cache_inode;
 
         ENTRY;
-        cache_inode = I2CI(inode);
-
-        if (!cache_inode || !S2CSB(inode->i_sb))
-                return;
-
-        pre_smfs_inode(inode, cache_inode);
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        list_del(&cache_inode->i_hash);
-        INIT_LIST_HEAD(&cache_inode->i_hash);
-#else
-        hlist_del_init(&cache_inode->i_hash);
-#endif
-        list_del(&cache_inode->i_list);
-        INIT_LIST_HEAD(&cache_inode->i_list);
-
-        if (cache_inode->i_data.nrpages)
-                truncate_inode_pages(&cache_inode->i_data, 0);
-
-        if (S2CSB(inode->i_sb)->s_op->delete_inode)
-                S2CSB(inode->i_sb)->s_op->delete_inode(cache_inode);
-
-        post_smfs_inode(inode, cache_inode);
-        smfs_clear_inode_info(inode);
-        
+        if (I2SMI(inode)) {
+                cache_inode = I2CI(inode);
+                if (!cache_inode || !S2CSB(inode->i_sb))
+                        return;
+                post_smfs_inode(inode, cache_inode);
+                smfs_clear_inode_info(inode);
+        }
+        inode->i_state = I_CLEAR;
         return;
 }
 
@@ -254,12 +250,16 @@ static void smfs_put_inode(struct inode *inode)
                 return;
         }
         
-        if (atomic_read(&cache_inode->i_count) > 0) {
+        if (atomic_read(&cache_inode->i_count) > 1) {
                 iput(cache_inode);
         }
         
         if (S2CSB(inode->i_sb)->s_op->put_inode)
                 S2CSB(inode->i_sb)->s_op->put_inode(cache_inode);
+        
+        if (atomic_read(&inode->i_count) == 0 &&
+            cache_inode->i_sb->s_root->d_inode != cache_inode)
+                smfs_clear_inode_info(inode);
         
         EXIT;
 }
