@@ -1,4 +1,5 @@
 #!/bin/bash
+#set -xv
 
 #
 # This script is to generate lib lustre library as a whole. It will leave
@@ -19,8 +20,24 @@ ALL_OBJS=
 build_obj_list() {
   _objs=`$AR -t $1/$2`
   for _lib in $_objs; do
-  ALL_OBJS=$ALL_OBJS"$1/$_lib ";
+    ALL_OBJS=$ALL_OBJS"$1/$_lib ";
   done;
+}
+
+#
+# special treatment for libsysio
+#
+sysio_tmp=$CWD/sysio_tmp_`date +%s`
+build_sysio_obj_list() {
+  _objs=`$AR -t $1`
+  mkdir -p $sysio_tmp
+  savepwd=`pwd`
+  cd $sysio_tmp
+  $AR -x ../$1
+  for _lib in $_objs; do
+    ALL_OBJS=$ALL_OBJS"$sysio_tmp/$_lib ";
+  done
+  cd $savepwd
 }
 
 # lustre components libs
@@ -44,10 +61,7 @@ $AR -cru $CWD/liblsupport.a $ALL_OBJS
 $RANLIB $CWD/liblsupport.a
 
 # libsysio components libs
-build_obj_list $SYSIO/drivers/native libsysio_native.a
-build_obj_list $SYSIO/drivers/sockets libsysio_sockets.a
-build_obj_list $SYSIO/src libsysio.a
-build_obj_list $SYSIO/dev/stdfd libsysio_stdfd.a
+build_sysio_obj_list $SYSIO/lib/libsysio.a
 
 # create static lib lustre
 rm -f $CWD/liblustre.a
@@ -58,3 +72,5 @@ $RANLIB $CWD/liblustre.a
 rm -f $CWD/liblustre.so
 $LD -shared -o $CWD/liblustre.so -init __liblustre_setup_ -fini __liblustre_cleanup_ \
 	$ALL_OBJS -lpthread
+
+rm -rf $sysio_tmp
