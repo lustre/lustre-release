@@ -28,7 +28,7 @@ ext3-o_direct-1.2.4.20-rh.patch
 ext3-no-write-super-chaos.patch
 dynamic-locks-2.4.20-rh.patch 
 vfs-pdirops-2.4.20-rh.patch 
-ext3-pdirops-2.4.18-chaos.patch
+ext3-pdirops-2.4.20-chaos.patch 
 tcp_zero_copy_2.4.20_chaos.patch
 gpl_header-chaos-2.4.20.patch
 add_page_private.patch
