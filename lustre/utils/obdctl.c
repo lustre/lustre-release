@@ -166,6 +166,20 @@ static int be_verbose(int verbose, struct timeval *next_time,
         return 0;
 }
 
+static int get_verbose(const char *arg)
+{
+        int verbose;
+
+        if (!arg || arg[0] == 'v')
+                verbose = 1;
+        else if (arg[0] == 's' || arg[0] == 'q')
+                verbose = 0;
+        else
+                verbose = strtoul(arg, NULL, 0);
+
+        return verbose;
+}
+
 static int do_disconnect(char *func, int verbose)
 {
         struct obd_ioctl_data data;
@@ -297,7 +311,7 @@ static int jt__device(int argc, char **argv)
 static int jt__threads(int argc, char **argv)
 {
         int threads, next_thread;
-        int verbose = 1;
+        int verbose;
         int i, j;
         int rc;
 
@@ -310,12 +324,7 @@ static int jt__threads(int argc, char **argv)
 
         threads = strtoul(argv[1], NULL, 0);
 
-        if (argv[2][0] == 's' || argv[2][0] == 'q')
-                verbose = 0;
-        else if (argv[2][0] == 'v')
-                verbose = 1;
-        else
-                verbose = strtoul(argv[2], NULL, 0);
+        verbose = get_verbose(argv[2]);
 
         printf("%s: starting %d threads on device %s running %s\n",
                argv[0], threads, argv[3], argv[4]);
@@ -498,7 +507,7 @@ static int jt_create(int argc, char **argv)
         struct obd_ioctl_data data;
         struct timeval next_time;
         int count = 1, next_count;
-        int verbose = 1;
+        int verbose;
         int i;
         int rc;
 
@@ -516,14 +525,7 @@ static int jt_create(int argc, char **argv)
                 data.ioc_obdo1.o_mode = 0100644;
         data.ioc_obdo1.o_valid = OBD_MD_FLMODE;
 
-        if (argc > 3) {
-                if (argv[3][0] == 's' || argv[3][0] == 'q')
-                        verbose = 0;
-                else if (argv[3][0] == 'v')
-                        verbose = 1;
-                else
-                        verbose = strtoul(argv[3], NULL, 0);
-        }
+        verbose = get_verbose(argv[3]);
 
         printf("%s: %d obdos\n", cmdname(argv[0]), count);
         gettimeofday(&next_time, NULL);
@@ -621,7 +623,7 @@ static int jt_test_getattr(int argc, char **argv)
         struct obd_ioctl_data data;
         struct timeval start, next_time;
         int i, count, next_count;
-        int verbose = 1;
+        int verbose;
         int rc;
 
         if (argc != 2 && argc != 3) {
@@ -632,14 +634,8 @@ static int jt_test_getattr(int argc, char **argv)
         IOCINIT(data);
         count = strtoul(argv[1], NULL, 0);
 
-        if (argc == 3) {
-                if (argv[2][0] == 's' || argv[2][0] == 'q')
-                        verbose = 0;
-                else if (argv[2][0] == 'v')
-                        verbose = 1;
-                else
-                        verbose = strtoul(argv[2], NULL, 0);
-        }
+        verbose = get_verbose(argv[2]);
+
         data.ioc_obdo1.o_valid = 0xffffffff;
         data.ioc_obdo1.o_id = 2;
         gettimeofday(&start, NULL);
@@ -699,15 +695,10 @@ static int jt_test_brw(int argc, char **argv)
                         write = 1;
                 else if (argv[2][0] == 'r' || argv[2][0] == '0')
                         write = 0;
+
+                verbose = get_verbose(argv[3]);
         }
-        if (argc >= 4) {
-                if (argv[3][0] == 's' || argv[3][0] == 'q')
-                        verbose = 0;
-                else if (argv[3][0] == 'v')
-                        verbose = 1;
-                else
-                        verbose = strtoul(argv[3], NULL, 0);
-        }
+
         if (argc >= 5)
                 pages = strtoul(argv[4], NULL, 0);
         if (argc >= 6)
