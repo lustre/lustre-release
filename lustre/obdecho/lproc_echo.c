@@ -33,9 +33,10 @@ int rd_fstype(char* page, char **start, off_t off, int count, int *eof,
               void *data)
 {
         struct obd_device* dev = (struct obd_device*)data;
-        int rc = snprintf(page, count, "%s\n", dev->u.echo.eo_fstype);
+        
+        LASSERT(dev != NULL);
         *eof = 1;
-        return rc;
+        return snprintf(page, count, "%s\n", dev->u.echo.eo_fstype);
 }
 
 struct lprocfs_vars lprocfs_obd_vars[] = {
