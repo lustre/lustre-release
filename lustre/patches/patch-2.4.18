@@ -607,7 +607,7 @@
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
 --- lum-pristine/fs/namei.c	Mon Feb 25 12:38:09 2002
-+++ lum/fs/namei.c	Wed Jul  3 12:23:08 2002
++++ lum/fs/namei.c	Wed Jul  3 15:00:09 2002
 @@ -94,6 +94,14 @@
   * XEmacs seems to be relying on it...
   */
@@ -1162,7 +1162,7 @@
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
  		goto exit3;
-@@ -1884,14 +1996,15 @@
+@@ -1884,18 +1996,21 @@
  		if (newnd.last.name[newnd.last.len])
  			goto exit4;
  	}
@@ -1179,7 +1179,13 @@
 +				   new_dir->d_inode, new_dentry, &it);
  	unlock_kernel();
  
++        intent_release(new_dentry);
  	dput(new_dentry);
+ exit4:
++        intent_release(old_dentry);
+ 	dput(old_dentry);
+ exit3:
+ 	double_up(&new_dir->d_inode->i_sem, &old_dir->d_inode->i_sem);
 --- lum-pristine/fs/open.c	Fri Oct 12 14:48:42 2001
 +++ lum/fs/open.c	Sat Jun 22 16:44:30 2002
 @@ -19,6 +19,8 @@
