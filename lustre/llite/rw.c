@@ -288,15 +288,23 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
 
         ENTRY;
 
+        if (blocksize != PAGE_SIZE) {
+                CERROR("direct_IO blocksize != PAGE_SIZE, what to do?\n");
+                LBUG();
+        }
+
         OBD_ALLOC(count, sizeof(obd_size) * bufs_per_obdo);
         OBD_ALLOC(offset, sizeof(obd_off) * bufs_per_obdo);
         OBD_ALLOC(flags, sizeof(obd_flag) * bufs_per_obdo);
         if (!count || !offset || !flags)
                 GOTO(out, rc = -ENOMEM);
 
-        for (i = 0 ; i < bufs_per_obdo ; i++) {
+        /* NB: we can't use iobuf->maplist[i]->index for the offset
+         * instead of "blocknr" because ->index contains garbage.
+         */
+        for (i = 0; i < bufs_per_obdo; i++, blocknr++) {
                 count[i] = PAGE_SIZE;
-                offset[i] = ((obd_off)(iobuf->maplist[i])->index) << PAGE_SHIFT;
+                offset[i] = (obd_off)blocknr << PAGE_SHIFT;
                 flags[i] = OBD_BRW_CREATE;
         }
 
