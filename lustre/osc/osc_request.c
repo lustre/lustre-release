@@ -22,7 +22,6 @@
 #include <linux/module.h>
 #include <linux/lustre_dlm.h>
 #include <linux/obd_ost.h>
-#include <linux/lustre_debug.h>
 
 static void osc_con2cl(struct obd_conn *conn, struct ptlrpc_client **cl,
                        struct ptlrpc_connection **connection)
@@ -367,8 +366,6 @@ static int osc_sendpage(struct ptlrpc_bulk_desc *desc,
         struct ptlrpc_bulk_page *page;
         ENTRY;
 
-        ASSERT_FILE_OFFSET(NTOH__u64(src->offset),
-                           RETURN(dump_rniobuf(dst) | dump_lniobuf(src)));
         page = ptlrpc_prep_bulk_page(desc);
         if (page == NULL)
                 RETURN(-ENOMEM);
