@@ -74,7 +74,7 @@ parse_options(char * options, struct lustre_mount_data *lmd)
         int val;
         char *opt;
         char * opteq;
-
+        
         /* parsing ideas here taken from util-linux/mount/nfsmount.c */
         for (opt = strtok(options, ","); opt; opt = strtok(NULL, ",")) {
                 if ((opteq = strchr(opt, '='))) {
@@ -218,7 +218,7 @@ main(int argc, char * const argv[])
 {
         char * source = argv[1];
         char * target = argv[2];
-        char * options = NULL;
+        char * options = "";
         int opt;
         int i;
         struct lustre_mount_data lmd;
