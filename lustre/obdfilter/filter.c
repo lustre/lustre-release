@@ -878,7 +878,7 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct dentry *dir_dentry, *object_dentry;
-        struct filter_dentry_data *fdd = object_dentry->d_fsdata;
+        struct filter_dentry_data *fdd;
         int rc;
         ENTRY;
 
@@ -896,9 +896,8 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
         if (IS_ERR(object_dentry))
                 GOTO(out, rc = -ENOENT);
 
+        fdd = object_dentry->d_fsdata;
         if (fdd && atomic_read(&fdd->fdd_open_count)) {
-                struct filter_dentry_data *fdd = object_dentry->d_fsdata;
-
                 if (!(fdd->fdd_flags & FILTER_FLAG_DESTROY)) {
                         fdd->fdd_flags |= FILTER_FLAG_DESTROY;
                         /* XXX put into PENDING directory in case of crash */
