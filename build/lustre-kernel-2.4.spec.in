@@ -637,11 +637,7 @@ EOF
    	    fi
         done
         make -s $OLDCONFIG -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
-        %if %{linux26}
-           make -s include/asm -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
-        %else
-           make -s symlinks -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
-        %endif
+        make -s symlinks -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
         make -s include/linux/version.h -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
 
         #this generates modversions info which we want to include and we may as
