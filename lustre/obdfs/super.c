@@ -128,7 +128,6 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 
         obddev = &obd_dev[devno];
         sbi->osi_obd = obddev;
-        sbi->osi_ops = sbi->osi_obd->obd_type->typ_ops;
         sbi->osi_conn.oc_dev = obddev;
 
         err = obd_connect(&sbi->osi_conn);
@@ -148,9 +147,9 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         sbi->osi_super = sb;
 
         CDEBUG(D_INFO, "\n"); 
-        err = sbi->osi_ops->o_get_info(&sbi->osi_conn, strlen("blocksize"),
-                                       "blocksize", &scratch,
-                                       (void *)&blocksize);
+        err = obd_get_info(&sbi->osi_conn, strlen("blocksize"),
+			     "blocksize", &scratch,
+			     (void *)&blocksize);
         if ( err ) {
                 printk("getinfo call to drive failed (blocksize)\n");
                 EXIT;
@@ -158,9 +157,9 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         }
 
         CDEBUG(D_INFO, "\n"); 
-        err = sbi->osi_ops->o_get_info(&sbi->osi_conn, strlen("blocksize_bits"),
-                                       "blocksize_bits", &scratch,
-                                       (void *)&blocksize_bits);
+        err = obd_get_info(&sbi->osi_conn, strlen("blocksize_bits"),
+			   "blocksize_bits", &scratch,
+			   (void *)&blocksize_bits);
         if ( err ) {
                 printk("getinfo call to drive failed (blocksize_bits)\n");
                 EXIT;
@@ -168,8 +167,8 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         }
 
         CDEBUG(D_INFO, "\n"); 
-        err = sbi->osi_ops->o_get_info(&sbi->osi_conn, strlen("root_ino"), 
-                                       "root_ino", &scratch, (void *)&root_ino);
+        err = obd_get_info(&sbi->osi_conn, strlen("root_ino"), 
+			   "root_ino", &scratch, (void *)&root_ino);
         if ( err ) {
                 printk("getinfo call to drive failed (root_ino)\n");
                 EXIT;
