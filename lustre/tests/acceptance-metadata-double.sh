@@ -31,7 +31,7 @@ debug_client_on()
 
 debug_client_off()
 {
-	echo 0 > /proc/sys/portals/debug
+	echo 0x3f0400 > /proc/sys/portals/debug
 }
 
 MNT=${MNT:-/mnt/lustre}
