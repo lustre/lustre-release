@@ -70,7 +70,7 @@ class LustreDB:
         node_db = self.lookup_name(node_name)
         if not node_db:
             return None
-        return self.get_tgt_dev(target_uuid)
+        return node_db.get_tgt_dev(target_uuid)
 
     # get all network uuids for this node
     def get_networks(self):
