@@ -73,10 +73,15 @@ int ll_recover(struct ptlrpc_client *cli)
                 if (req->rq_flags & PTL_RPC_FL_REPLAY) {
                         CDEBUG(D_INODE, "req %Ld needs replay [last rcvd %Ld]\n",
                                req->rq_xid, conn->c_last_xid);
-                        rc = ptlrpc_replay_req(req); 
-                        if (rc) { 
-                                CERROR("recovery replay error %d for req %Ld\n", 
-                                       rc, req->rq_xid); 
+#error We should not hold a spinlock over such a lengthy operation.
+#error If necessary, drop spinlock, do operation, re-get spinlock, restart loop.
+#error If we need to avoid re-processint items, then delete them from the list
+#error as they are replayed and re-add at the tail of this list, so the next
+#error item to process will always be at the head of the list.
+                        rc = ptlrpc_replay_req(req);
+                        if (rc) {
+                                CERROR("recovery replay error %d for req %Ld\n",
+                                       rc, req->rq_xid);
                                 GOTO(out, rc);
                         }
                 }

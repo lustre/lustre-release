@@ -331,18 +331,19 @@ static int ptlrpc_abort(struct ptlrpc_request *request)
         return 0;
 }
 
-/* caller must lock cli */
+/* caller must hold conn->c_lock */
 void ptlrpc_free_committed(struct ptlrpc_connection *conn)
 {
         struct list_head *tmp, *saved;
         struct ptlrpc_request *req;
 
+restart:
         list_for_each_safe(tmp, saved, &conn->c_sending_head) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
-                if ( (req->rq_flags & PTL_RPC_FL_REPLAY) ) { 
-                        CDEBUG(D_INFO, "Retaining request %Ld for replay\n",
-                               req->rq_xid);
+                if (req->rq_flags & PTL_RPC_FL_REPLAY) {
+                        CDEBUG(D_INFO, "Keeping req %p xid %Ld for replay\n",
+                               req, req->rq_xid);
                         continue;
                 }
 
@@ -350,17 +351,23 @@ void ptlrpc_free_committed(struct ptlrpc_connection *conn)
                 if (req->rq_transno > conn->c_last_committed)
                         break;
 
-                CDEBUG(D_INFO, "Marking request xid %Ld as committed ("
-                       "transno=%Lu, last_committed=%Lu\n",
+                CDEBUG(D_INFO, "Marking request %p xid %Ld as committed "
+                       "transno=%Lu, last_committed=%Lu\n", req,
                        (long long)req->rq_xid, (long long)req->rq_transno,
                        (long long)conn->c_last_committed);
                 if (atomic_dec_and_test(&req->rq_refcount)) {
-                        /* we do this to prevent free_req deadlock */
-                        list_del_init(&req->rq_list); 
                         req->rq_client = NULL;
+
+                        /* We do this to prevent free_req deadlock.  Restarting
+                         * after each removal is not so bad, as we are almost
+                         * always deleting the first item in the list.
+                         */
+                        spin_unlock(&conn->c_lock);
                         ptlrpc_free_req(req);
+                        spin_lock(&conn->c_lock);
+                        goto restart;
                 } else {
-                        list_del_init(&req->rq_list);
+                        list_del(&req->rq_list);
                         list_add(&req->rq_list, &conn->c_dying_head);
                 }
         }
@@ -381,6 +388,7 @@ void ptlrpc_cleanup_client(struct ptlrpc_client *cli)
                 return;
         }
 
+restart1:
         spin_lock(&conn->c_lock);
         list_for_each_safe(tmp, saved, &conn->c_sending_head) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
@@ -389,8 +397,11 @@ void ptlrpc_cleanup_client(struct ptlrpc_client *cli)
                 CDEBUG(D_INFO, "Cleaning req %p from sending list.\n", req);
                 list_del_init(&req->rq_list);
                 req->rq_client = NULL;
-                ptlrpc_free_req(req); 
+                spin_unlock(&conn->c_lock);
+                ptlrpc_free_req(req);
+                goto restart1;
         }
+restart2:
         list_for_each_safe(tmp, saved, &conn->c_dying_head) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 if (req->rq_client != cli)
@@ -398,7 +409,10 @@ void ptlrpc_cleanup_client(struct ptlrpc_client *cli)
                 CERROR("Request %p is on the dying list at cleanup!\n", req);
                 list_del_init(&req->rq_list);
                 req->rq_client = NULL;
+                spin_unlock(&conn->c_lock);
                 ptlrpc_free_req(req); 
+                spin_lock(&conn->c_lock);
+                goto restart2;
         }
         spin_unlock(&conn->c_lock);
 
@@ -485,24 +499,23 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                req->rq_connection->c_level);
 
         /* XXX probably both an import and connection level are needed */
-        if (req->rq_level > req->rq_connection->c_level) { 
+        if (req->rq_level > conn->c_level) { 
                 CERROR("process %d waiting for recovery (%d > %d)\n", 
-                       current->pid, req->rq_level, req->rq_connection->c_level);
+                       current->pid, req->rq_level, conn->c_level);
 
                 spin_lock(&conn->c_lock);
-                list_del_init(&req->rq_list);
+                list_del(&req->rq_list);
                 list_add_tail(&req->rq_list, &conn->c_delayed_head);
                 spin_unlock(&conn->c_lock);
 
                 lwi = LWI_INTR(NULL, NULL);
                 rc = l_wait_event(req->rq_wait_for_rep,
-                                  req->rq_level <= req->rq_connection->c_level,
-                                  &lwi);
+                                  req->rq_level <= conn->c_level, &lwi);
 
                 spin_lock(&conn->c_lock);
                 list_del_init(&req->rq_list);
                 spin_unlock(&conn->c_lock);
-                
+
                 if (rc)
                         RETURN(rc);
 
@@ -522,7 +535,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         }
 
         spin_lock(&conn->c_lock);
-        list_del_init(&req->rq_list);
+        list_del(&req->rq_list);
         list_add_tail(&req->rq_list, &conn->c_sending_head);
         spin_unlock(&conn->c_lock);
 
@@ -567,7 +580,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         spin_lock(&conn->c_lock);
         conn->c_last_xid = req->rq_repmsg->last_xid;
         conn->c_last_committed = req->rq_repmsg->last_committed;
-        ptlrpc_free_committed(conn); 
+        ptlrpc_free_committed(conn);
         spin_unlock(&conn->c_lock);
 
         EXIT;

@@ -37,14 +37,14 @@ struct ptlrpc_connection {
         struct list_head        c_link;
         struct lustre_peer      c_peer;
         __u8                    c_local_uuid[37];  /* XXX do we need this? */
-        __u8                    c_remote_uuid[37]; 
+        __u8                    c_remote_uuid[37];
 
         int                     c_level;
         __u32                   c_generation;  /* changes upon new connection */
         __u32                   c_epoch;       /* changes when peer changes */
-        __u32                   c_bootcount;   /* peer's boot count */ 
+        __u32                   c_bootcount;   /* peer's boot count */
 
-        spinlock_t              c_lock;
+        spinlock_t              c_lock;        /* also protects req->rq_list */
         __u32                   c_xid_in;
         __u32                   c_xid_out;
 
@@ -53,11 +53,11 @@ struct ptlrpc_connection {
         __u64                   c_remote_conn;
         __u64                   c_remote_token;
 
-        __u64                   c_last_xid;
-        __u64                   c_last_committed;
-        struct list_head        c_delayed_head; /* delayed until post-recovery */
-        struct list_head        c_sending_head;
-        struct list_head        c_dying_head;
+        __u64                   c_last_xid;    /* protected by c_lock */
+        __u64                   c_last_committed;/* protected by c_lock */
+        struct list_head        c_delayed_head;/* delayed until post-recovery */
+        struct list_head        c_sending_head;/* protected by c_lock */
+        struct list_head        c_dying_head;  /* protected by c_lock */
         struct recovd_data      c_recovd_data;
 
         struct list_head        c_clients; /* XXXshaver will be c_imports */
@@ -75,10 +75,10 @@ struct ptlrpc_client {
         __u32                     cli_target_devno;
 
         struct ptlrpc_connection *cli_connection;
-        
+
         void                     *cli_data;
         struct semaphore          cli_rpc_sem; /* limits outstanding requests */
-        
+
         struct list_head          cli_client_chain;
         char                     *cli_name;
 };
