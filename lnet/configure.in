@@ -23,13 +23,11 @@ cp portals/Makefile.mk portals/Makefile.in
 cp knals/Makefile.mk knals/Makefile.in
 cp knals/socknal/Makefile.mk knals/socknal/Makefile.in
 cp router/Makefile.mk router/Makefile.in
-AC_OUTPUT(Kernelenv)
 fi
-
 
 AM_CONFIG_HEADER(include/config.h)
 
-AC_OUTPUT([Rules.linux Makefile libcfs/Makefile portals/Makefile \
+AC_OUTPUT([Makefile Kernelenv libcfs/Makefile portals/Makefile \
           unals/Makefile knals/Makefile router/Makefile \
 	  knals/socknal/Makefile knals/gmnal/Makefile knals/qswnal/Makefile \
 	  knals/scimacnal/Makefile knals/toenal/Makefile \
