@@ -65,11 +65,6 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
                 OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLTYPE | OBD_MD_FLMODE |
                 OBD_MD_FLNLINK | OBD_MD_FLGENER;
 
-        /* The MDS file size isn't authoritative for regular files, so don't
-         * even pretend. */
-        if (S_ISREG(inode->i_mode))
-                b->valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
-
         b->ino = inode->i_ino;
         b->atime = LTIME_S(inode->i_atime);
         b->mtime = LTIME_S(inode->i_mtime);

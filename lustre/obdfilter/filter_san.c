@@ -54,23 +54,16 @@ int filter_san_setup(struct obd_device *obd, obd_count len, void *buf)
         return filter_common_setup(obd, len, buf, option);
 }
 
-int filter_san_preprw(int cmd, struct lustre_handle *conn, int objcount,
-                      struct obd_ioobj *obj, int niocount,
+int filter_san_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
+                      int objcount, struct obd_ioobj *obj, int niocount,
                       struct niobuf_remote *nb)
 {
-        struct obd_device *obd;
         struct obd_ioobj *o = obj;
         struct niobuf_remote *rnb = nb;
         int rc = 0;
         int i;
         ENTRY;
-
-        obd = class_conn2obd(conn);
-        if (!obd) {
-                CDEBUG(D_IOCTL, "invalid client cookie "LPX64"\n",
-                       conn->cookie);
-                RETURN(-EINVAL);
-        }
+        LASSERT(objcount == 1);
 
         for (i = 0; i < objcount; i++, o++) {
                 struct dentry *dentry;
@@ -78,9 +71,10 @@ int filter_san_preprw(int cmd, struct lustre_handle *conn, int objcount,
                 int (*fs_bmap)(struct address_space *, long);
                 int j;
 
-                dentry = filter_fid2dentry(obd, NULL, o->ioo_type, o->ioo_id);
+                dentry = filter_oa2dentry(exp->exp_obd, oa);
                 if (IS_ERR(dentry))
                         GOTO(out, rc = PTR_ERR(dentry));
+
                 inode = dentry->d_inode;
                 if (!inode) {
                         CERROR("trying to BRW to non-existent file "LPU64"\n",
@@ -110,8 +104,8 @@ int filter_san_preprw(int cmd, struct lustre_handle *conn, int objcount,
                                  * simplicity. And if error happens, we
                                  * probably need to release previous alloced
                                  * block */
-                                rc = fs_prep_san_write(obd, inode, &block,
-                                                       1, newsize);
+                                rc = fs_prep_san_write(exp->exp_obd, inode,
+                                                       &block, 1, newsize);
                                 if (rc)
                                         break;
                         }

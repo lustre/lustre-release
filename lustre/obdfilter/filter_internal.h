@@ -91,6 +91,11 @@ struct filter_dentry_data {
 #define FILTER_DENTRY_MAGIC 0x9efba101
 #define FILTER_FLAG_DESTROY 0x0001      /* destroy dentry on last file close */
 
+/* Limit the returned fields marked valid to those that we actually might set */
+#define FILTER_VALID_FLAGS (OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLGENER  |\
+                            OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLBLKSZ|\
+                            OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME)
+
 enum {
         LPROC_FILTER_READ_BYTES = 0,
         LPROC_FILTER_WRITE_BYTES = 1,
@@ -105,9 +110,9 @@ struct dentry *filter_parent_lock(struct obd_device *, obd_mode mode,
 void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
                                  obd_mode mode, obd_id id);
-struct dentry *__filter_oa2dentry(struct lustre_handle *conn,
-                                  struct obdo *oa, char *what);
-#define filter_oa2dentry(conn, oa) __filter_oa2dentry(conn, oa, __FUNCTION__)
+struct dentry *__filter_oa2dentry(struct obd_device *obd,struct obdo *oa,
+                                  char *what);
+#define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__)
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
 __u64 filter_next_id(struct filter_obd *);
@@ -119,11 +124,12 @@ int filter_common_setup(struct obd_device *, obd_count len, void *buf,
 int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
                   struct obd_ioobj *, int niocount, struct niobuf_remote *,
                   struct niobuf_local *, struct obd_trans_info *);
-int filter_commitrw(int cmd, struct obd_export *, int objcount,
+int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, int niocount, struct niobuf_local *,
                     struct obd_trans_info *);
-int filter_brw(int cmd, struct lustre_handle *, struct lov_stripe_md *,
-               obd_count oa_bufs, struct brw_page *, struct obd_trans_info *);
+int filter_brw(int cmd, struct lustre_handle *, struct obdo *,
+	       struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
+	       struct obd_trans_info *);
 
 /* filter_log.c */
 int filter_log_cancel(struct lustre_handle *, struct lov_stripe_md *,
@@ -135,7 +141,7 @@ int filter_log_op_orphan(struct llog_handle *cathandle, obd_id oid,
 
 /* filter_san.c */
 int filter_san_setup(struct obd_device *obd, obd_count len, void *buf);
-int filter_san_preprw(int cmd, struct lustre_handle *, int objcount,
+int filter_san_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
                       struct obd_ioobj *, int niocount, struct niobuf_remote *);
 
 #endif

@@ -24,7 +24,7 @@
 
 #ifdef __KERNEL__
 # include <linux/module.h>
-#else 
+#else
 # include <liblustre.h>
 #endif
 #include <linux/obd.h>
