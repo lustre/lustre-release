@@ -496,7 +496,7 @@ static void reset_recovery_timer(struct obd_device *obd)
 
         if (!recovering)
                 return;
-        CERROR("timer will expire in %ld seconds\n", OBD_RECOVERY_TIMEOUT / HZ);
+        CERROR("timer will expire in %d seconds\n", OBD_RECOVERY_TIMEOUT / HZ);
         mod_timer(&obd->obd_recovery_timer, jiffies + OBD_RECOVERY_TIMEOUT);
 }
 
@@ -821,12 +821,15 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         }
 
         if (!OBD_FAIL_CHECK(fail_id | OBD_FAIL_ONCE)) {
-                if (rc) {
-                        DEBUG_REQ(D_ERROR, req, "processing error (%d)", rc);
-                        netrc = ptlrpc_error(req);
-                } else {
+                if (rc == 0) {
                         DEBUG_REQ(D_NET, req, "sending reply");
                         netrc = ptlrpc_reply(req);
+                } else if (rc == -ENOTCONN) {
+                        DEBUG_REQ(D_HA, req, "processing error (%d)", rc);
+                        netrc = ptlrpc_error(req);
+                } else {
+                        DEBUG_REQ(D_ERROR, req, "processing error (%d)", rc);
+                        netrc = ptlrpc_error(req);
                 }
         } else {
                 obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED;
