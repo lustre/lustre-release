@@ -23,6 +23,37 @@ typedef unsigned long long cycles_t;
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
 
+#ifndef __KERNEL__
+/* Userpace byte flipping */
+# include <endian.h>
+# include <byteswap.h>
+# define __swab16(x) bswap_16(x)
+# define __swab32(x) bswap_32(x)
+# define __swab64(x) bswap_64(x)
+# define __swab16s(x) do {*(x) = bswap_16(*(x));} while (0)
+# define __swab32s(x) do {*(x) = bswap_32(*(x));} while (0)
+# define __swab64s(x) do {*(x) = bswap_64(*(x));} while (0)
+# if __BYTE_ORDER == __LITTLE_ENDIAN
+#  define le16_to_cpu(x) (x)
+#  define cpu_to_le16(x) (x)
+#  define le32_to_cpu(x) (x)
+#  define cpu_to_le32(x) (x)
+#  define le64_to_cpu(x) (x)
+#  define cpu_to_le64(x) (x)
+# else
+#  if __BYTE_ORDER == __BIG_ENDIAN
+#   define le16_to_cpu(x) bswap_16(x)
+#   define cpu_to_le16(x) bswap_16(x)
+#   define le32_to_cpu(x) bswap_32(x)
+#   define cpu_to_le32(x) bswap_32(x)
+#   define le64_to_cpu(x) bswap_64(x)
+#   define cpu_to_le64(x) bswap_64(x)
+#  else
+#   error "Unknown byte order"
+#  endif
+# endif
+#endif
+
 /*
  *  Debugging
  */
