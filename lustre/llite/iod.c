@@ -139,13 +139,13 @@ static void ll_get_dirty_pages(struct inode *inode,
                 list_del(&page->list);
                 list_add(&page->list, &mapping->locked_pages);
 
-                if ( ! PageDirty(page) ) {
+                if (!PageDirty(page)) {
                         unlock_page(page);
                         continue;
                 }
                 ClearPageDirty(page);
 
-                if ( llwp_consume_page(llwp, inode, page) != 0)
+                if (llwp_consume_page(llwp, inode, page) != 0)
                         break;
         }
 
