@@ -101,7 +101,6 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_dirty_max = 64*1024*1024; /* some default */
         cli->cl_ost_can_grant = 1;
         INIT_LIST_HEAD(&cli->cl_cache_waiters);
-        init_waitqueue_head(&cli->cl_cache_waitq);
         INIT_LIST_HEAD(&cli->cl_loi_ready_list);
         spin_lock_init(&cli->cl_loi_list_lock);
         cli->cl_brw_in_flight = 0;
