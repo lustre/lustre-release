@@ -3,8 +3,8 @@ export PATH=$PATH:/sbin:/usr/sbin
 
 [ -d /r ] && R=/r
 
-PORTALS=$SRCDIR/../../portals
-LUSTRE=$SRCDIR/../../obd
+PORTALS=$SRCDIR../../portals
+LUSTRE=$SRCDIR../../obd
 
 PTLCTL=$PORTALS/linux/utils/ptlctl
 DBGCTL=$PORTALS/linux/utils/debugctl
@@ -22,12 +22,13 @@ else
 fi
 
 do_insmod() {
-	MODULE=$LUSTRE/$1
+	MODULE=$1
+	BASE=`echo $MODULE | sed -e "s^.*/^^" -e "s/\.o$//"`
 
 	[ "$MODULE" ] || fail "usage: $0 <module>"
 	[ -f $MODULE ] || fail "$0: module '$MODULE' not found"
-
-	lsmod | grep -q `basename $MODULE` || insmod $MODULE || exit -1
+	lsmod | grep -q "\<$BASE\>" && return 1
+	insmod $MODULE || exit -1
 }
 
 # Return the next unused loop device on stdout and in the $LOOPDEV
@@ -58,7 +59,7 @@ new_fs () {
 	if [ "$1" = "extN" ]; then
 		MKFS="mkfs.ext2 -j"
 		EFILE="$1_ext3.gz"
-		do_insmod extN/extN.o
+		do_insmod $LUSTRE/extN/extN.o
 	fi
 
 	if [ -b "$2" ]; then
@@ -96,7 +97,7 @@ new_fs () {
 old_fs () {
 	[ -e $2 ] || exit -1
 
-	[ "$1" = "extN" ] && do_insmod extN/extN.o
+	[ "$1" = "extN" ] && do_insmod $LUSTRE/extN/extN.o
 
 	if [ -b "$2" ]; then
 		LOOPDEV=$2	# Not really a loop device
@@ -137,31 +138,36 @@ setup_opts() {
 }
 
 setup_portals() {
+	if grep -q portals /proc/modules; then
+		echo "$0: portals already appears to be set up, skipping"
+		return 0
+	fi
+
 	if [ -z "$NETWORK" -o -z "$LOCALHOST" -o -z "$SERVER" ]; then
 		echo "$0: NETWORK or LOCALHOST or SERVER is not set" 1>&2
 		exit -1
 	fi
 
-	if [ -z "$OSTNODE" ]; then 
-	        OSTNODE=$SERVER
-        fi 
+	[ -z "$OSTNODE" ] && OSTNODE=$SERVER
 
-	if [ "$LOCALHOST" == "$SERVER" ]; then
-		DLM=localhost
-	else
-		DLM=$SERVER
+	if [ -z "$DLM" ]; then
+		if [ "$LOCALHOST" == "$SERVER" ]; then
+			DLM=localhost
+		else
+			DLM=$SERVER
+		fi
 	fi
 
 	[ -c /dev/portals ] || mknod /dev/portals c 10 240
 
-	insmod $PORTALS/linux/oslib/portals.o || exit -1
+	do_insmod $PORTALS/linux/oslib/portals.o
 
 	case $NETWORK in
 	elan)	[ "$PORT" ] && fail "$0: NETWORK is elan but PORT is set"
-		insmod $PORTALS/linux/qswnal/kqswnal.o
+		do_insmod $PORTALS/linux/qswnal/kqswnal.o
 		;;
 	tcp)	[ "$PORT" ] || fail "$0: NETWORK is tcp but PORT is not set"
-		insmod $PORTALS/linux/socknal/ksocknal.o || exit -1
+		do_insmod $PORTALS/linux/socknal/ksocknal.o
 		$ACCEPTOR $PORT
 		;;
 	*) 	fail "$0: unknown NETWORK '$NETWORK'" ;;
@@ -184,19 +190,25 @@ setup_portals() {
 setup_lustre() {
 	[ -c /dev/obd ] || mknod /dev/obd c 10 241
 
-	do_insmod class/obdclass.o
-	do_insmod rpc/ptlrpc.o
-	do_insmod ldlm/ldlm.o
-	do_insmod mds/mds.o
-	do_insmod obdecho/obdecho.o
-	do_insmod ext2obd/obdext2.o
-	do_insmod filterobd/obdfilter.o
-	do_insmod ost/ost.o
-	do_insmod osc/osc.o
-	do_insmod mdc/mdc.o
-	do_insmod llight/llite.o
+	do_insmod $LUSTRE/class/obdclass.o
+	do_insmod $LUSTRE/rpc/ptlrpc.o
+	do_insmod $LUSTRE/ldlm/ldlm.o
+	do_insmod $LUSTRE/extN/extN.o
+	do_insmod $LUSTRE/mds/mds.o
+	do_insmod $LUSTRE/obdecho/obdecho.o
+	do_insmod $LUSTRE/ext2obd/obdext2.o
+	do_insmod $LUSTRE/filterobd/obdfilter.o
+	do_insmod $LUSTRE/ost/ost.o
+	do_insmod $LUSTRE/osc/osc.o
+	do_insmod $LUSTRE/mdc/mdc.o
+	do_insmod $LUSTRE/llight/llite.o
 
 	list_mods
+
+	if $OBDCTL name2dev RPCDEV > /dev/null 2>&1; then
+		echo "$0: RPCDEV is already configured, skipping"
+		return 0
+	fi
 
 	$OBDCTL <<- EOF || return $rc
 	newdev
@@ -209,16 +221,17 @@ setup_lustre() {
 }
 
 setup_ldlm() {
+	[ "$SETUP_LDLM" = "y" ] || return 0
+
 	[ -c /dev/portals ] || mknod /dev/portals c 10 240
 
-	insmod $PORTALS/linux/oslib/portals.o || exit -1
+	$OBDCTL <<- EOF || return $rc
+	newdev
+	attach ldlm LDLMDEV
+	setup
+	quit
+	EOF
 
-	do_insmod class/obdclass.o
-	do_insmod rpc/ptlrpc.o
-	do_insmod ldlm/ldlm.o
-
-	DEBUG_WAIT=yes
-	list_mods
 }
 
 find_devno() {
@@ -244,10 +257,15 @@ setup_mds() {
 		return -1
 	fi
 
+	if $OBDCTL name2dev MDSDEV > /dev/null 2>&1; then
+		echo "$0: MDSDEV is already configured"
+		return 0
+	fi
+
 	$DO_FS ${MDSFS} ${MDSDEV} ${MDSSIZE}
 	MDS=${LOOPDEV}
 
-	$OBDCTL <<- EOF
+	$OBDCTL <<- EOF || return $rc
 	newdev
 	attach mds MDSDEV
 	setup ${MDS} ${MDSFS}
@@ -279,6 +297,11 @@ setup_ost() {
 		;;
 	esac
 
+	if $OBDCTL name2dev OBDDEV > /dev/null 2>&1; then
+		echo "$0: OBDDEV is already configured"
+		return 0
+	fi
+
 	if [ "$NEED_FS" = "y" ]; then
 		[ "$1" ] && DO_FS=$1
 		if [ -z "$OSTFS" -o -z "$OSTDEV" ]; then
@@ -295,7 +318,7 @@ setup_ost() {
 		OBD=${LOOPDEV}
 	fi
 
-	$OBDCTL <<- EOF
+	$OBDCTL <<- EOF || return $rc
 	newdev
 	attach ${OSTTYPE} OBDDEV
 	setup ${OBD} ${OBDARG}
@@ -313,6 +336,11 @@ setup_server() {
 setup_osc() {
 	[ "$SETUP_OSC" != "y" ] && return 0
 
+	if $OBDCTL name2dev OSCDEV > /dev/null 2>&1; then
+		echo "$0: OSCDEV is already configured"
+		return 0
+	fi
+
 	$OBDCTL <<- EOF || return $rc
 	newdev
 	attach osc OSCDEV
@@ -325,6 +353,11 @@ setup_mount() {
 	[ "$SETUP_MOUNT" != "y" ] && return 0
 
 	[ "$OSCMT" ] || fail "error: $0: OSCMT unset"
+
+	if mount | grep -q $OSCMT; then
+		echo "$0: $OSCMT is already mounted"
+		return 0
+	fi
 
 	[ ! -d $OSCMT ] && mkdir $OSCMT
 	mount -t lustre_lite -o device=`find_devno OSCDEV` none $OSCMT
@@ -387,10 +420,25 @@ cleanup_lustre() {
 	rmmod obdecho
 	rmmod obdfilter
 	rmmod obdext2
+	rmmod extN
 
 	rmmod ldlm
 	rmmod ptlrpc
 	rmmod obdclass
+}
+
+cleanup_ldlm() {
+	[ "$SETUP" -a -z "$SETUP_LDLM" ] && return 0
+
+	LDLMDEVNO=`find_devno LDLMDEV`
+	if [ "$LDLMDEVNO" ]; then
+		$OBDCTL <<- EOF
+		device $LDLMDEVNO
+		cleanup
+		detach
+		quit
+		EOF
+	fi
 }
 
 cleanup_mds() {
