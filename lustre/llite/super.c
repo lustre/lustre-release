@@ -15,6 +15,7 @@
 #include <linux/random.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
+#include <linux/obd_lov.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
 
@@ -396,7 +397,7 @@ out:
         RETURN(rc);
 }
 
-inline int ll_stripe_md_size(struct super_block *sb)
+inline int ll_stripe_mds_md_size(struct super_block *sb)
 {
         struct client_obd *mdc = sbi2mdc(ll_s2sbi(sb));
         return mdc->cl_max_mdsize;
@@ -482,19 +483,21 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
 
         //if (body->valid & OBD_MD_FLEASIZE)
         if (md && md->md && md->md->lmd_stripe_count) { 
-                struct lov_stripe_md *smd = md->md;
-                int size = ll_stripe_md_size(inode->i_sb);
-                if (md->md->lmd_easize != size) { 
+                struct lov_mds_md *smd = md->md;
+                int size;
+                if (md->md->lmd_easize != ll_stripe_mds_md_size(inode->i_sb)) { 
                         CERROR("Striping metadata size error %ld\n",
                                inode->i_ino); 
                         LBUG();
                 }
+                size = sizeof(*ii->lli_smd) + 
+                        md->md->lmd_stripe_count * sizeof(struct lov_oinfo);
                 OBD_ALLOC(ii->lli_smd, size);
                 if (!ii->lli_smd){ 
                         CERROR("No memory for %d\n", size);
                         LBUG();
                 }
-                memcpy(ii->lli_smd, smd, size);
+                lov_unpackmd(ii->lli_smd, smd);
         }
 
         /* OIDEBUG(inode); */

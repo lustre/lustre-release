@@ -32,7 +32,7 @@ struct ll_file_data {
 
 struct ll_inode_md {
         struct mds_body *body;
-        struct lov_stripe_md *md;
+        struct lov_mds_md *md;
 };
 
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)

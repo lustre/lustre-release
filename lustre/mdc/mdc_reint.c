@@ -80,7 +80,7 @@ int mdc_create(struct lustre_handle *conn,
         struct mds_rec_create *rec;
         struct ptlrpc_request *req;
         int rc, size[3] = {sizeof(struct mds_rec_create), namelen + 1, 0};
-        char *tmp, *bufs[3] = {NULL, NULL, NULL};
+        char *tmp;
         int level, bufcount = 2;
         ENTRY;
 
@@ -91,18 +91,17 @@ int mdc_create(struct lustre_handle *conn,
                         LBUG();
                 }
                 size[2] = smd->lmd_easize;
-                bufs[2] = (char *)smd;
                 bufcount = 3;
         } else if (S_ISLNK(mode)) {
                 size[2] = tgtlen + 1;
                 bufcount = 3;
         }
 
-        req = ptlrpc_prep_req2(conn, MDS_REINT, bufcount, size, bufs);
+        req = ptlrpc_prep_req2(conn, MDS_REINT, bufcount, size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
 
-        /* mds_create_pack fills bufs[1] with name */
+        /* mds_create_pack fills msg->bufs[1] with name */
         rec = lustre_msg_buf(req->rq_reqmsg, 0);
         mds_create_pack(req, 0, dir, mode, rdev, uid, gid, time,
                         name, namelen, NULL, 0);
