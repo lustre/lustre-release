@@ -223,7 +223,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         ssize_t retval;
         ENTRY;
 
-        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+        if (0) { 
+        //        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 extent.start = *ppos;
                 extent.end = *ppos + count;
                 CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
@@ -244,7 +245,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         if (retval > 0)
                 ll_update_atime(inode);
 
-        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+        if (0) { 
+                //        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 err = obd_cancel(&sbi->ll_conn, LCK_PR, &lockh);
                 if (err != ELDLM_OK)
                         CERROR("lock cancel: err: %d\n", err);
@@ -270,7 +272,8 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         ssize_t retval;
         ENTRY;
 
-        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+        if (0) { 
+                //        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 /* FIXME: this should check whether O_APPEND is set and adjust
                  * extent.start accordingly */
                 extent.start = *ppos;
@@ -292,7 +295,8 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 
         retval = generic_file_write(file, buf, count, ppos);
 
-        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
+        if (0) { 
+                //        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 err = obd_cancel(&sbi->ll_conn, LCK_PW, &lockh);
                 if (err != ELDLM_OK)
                         CERROR("lock cancel: err: %d\n", err);
