@@ -298,6 +298,28 @@ test_3a() {
 }
 run_test 3a " dir splitting with cross-ref ============================="
 
+test_3b() {
+	mkdir $DIR/3b1 || error
+	createmany -m $DIR/3b1/f 5000 || error
+	rm -rf $DIR/3b1 || error
+}
+run_test 3b " dir splitting via createmany -m ============================="
+
+test_3c() {
+	mkdir $DIR/3c1 || error
+	echo "MDS nodes: $MDSCOUNT"
+	for j in `seq 3`; do
+		for i in `seq 10`; do
+			$LFS dirstripe $DIR/3c1/d-${j}-${i} $j || error
+			createmany -m $DIR/3c1/d-${j}-${i}/m 200 || error
+			createmany -o $DIR/3c1/d-${j}-${i}/o 200 || error
+		done
+	done
+	rm -rf $DIR/3c1 || error
+}
+
+run_test 3c " dir splitting via lfs stripe ============================="
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME

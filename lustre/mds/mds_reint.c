@@ -602,10 +602,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                  * should live at this MDS or at another one */
                 int i;
                 i = mea_name2idx(mea, rec->ur_name, rec->ur_namelen - 1);
-                if (mea->mea_master != i) {
-                        CERROR("inapropriate MDS(%d) for %lu/%u:%s. should be %d\n",
-                                mea->mea_master, dparent->d_inode->i_ino,
-                                dparent->d_inode->i_generation, rec->ur_name, i);
+                if (mea->mea_master != mea->mea_fids[i].mds) {
+                        CERROR("inapropriate MDS(%d) for %lu/%u:%s."
+                               " should be %d(%d)\n",
+                               mea->mea_master, dparent->d_inode->i_ino,
+                               dparent->d_inode->i_generation, rec->ur_name,
+                               mea->mea_fids[i].mds, i);
                         GOTO(cleanup, rc = -ERESTART);
                 }
         }

@@ -130,25 +130,28 @@ int lmv_intent_open(struct obd_export *exp, struct ll_uctxt *uctxt,
         struct ll_fid rpfid = *pfid;
         struct lmv_obj *obj;
         struct mea *mea;
-        int rc, mds;
+        int rc, mds, loop = 0;
         ENTRY;
 
         /* IT_OPEN is intended to open (and create, possible) an object. Parent
          * (pfid) may be splitted dir */
 
 repeat:
+        LASSERT(++loop <= 2);
         mds = rpfid.mds;
         obj = lmv_grab_obj(obd, &rpfid);
         if (obj) {
                 /* directory is already splitted, so we have to forward
                  * request to the right MDS */
                 mds = raw_name2idx(obj->objcount, (char *)name, len);
-                CDEBUG(D_OTHER, "forward to MDS #%u\n", mds);
+                CDEBUG(D_OTHER, "forward to MDS #%u (%lu/%lu/%lu)\n", mds,
+                       (unsigned long) rpfid.mds, (unsigned long) rpfid.id,
+                       (unsigned long) rpfid.generation);
                 rpfid = obj->objs[mds].fid;
                 lmv_put_obj(obj);
         }
 
-        rc = md_intent_lock(lmv->tgts[mds].ltd_exp, uctxt, &rpfid, name,
+        rc = md_intent_lock(lmv->tgts[rpfid.mds].ltd_exp, uctxt, &rpfid, name,
                             len, lmm, lmmsize, cfid, it, flags, reqp,
                             cb_blocking);
         if (rc == -ERESTART) {
@@ -244,6 +247,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct ll_uctxt *uctxt,
                         /* in fact, we need not this with current intent_lock(),
                          * but it may change some day */
                         rpfid = obj->objs[mds].fid;
+                        mds = rpfid.mds;
                         lmv_put_obj(obj);
                 }
                 rc = md_intent_lock(lmv->tgts[mds].ltd_exp, uctxt, &rpfid, name,
@@ -278,6 +282,7 @@ int lmv_intent_getattr(struct obd_export *exp, struct ll_uctxt *uctxt,
                 /* directory is already splitted. calculate mds */
                 mds = raw_name2idx(obj->objcount, (char *) name, len);
                 rpfid = obj->objs[mds].fid;
+                mds = rpfid.mds;
                 lmv_put_obj(obj);
                 
                 CDEBUG(D_OTHER, "forward to MDS #%u (slave %lu/%lu/%lu)\n",
@@ -473,7 +478,7 @@ int lmv_intent_lookup(struct obd_export *exp, struct ll_uctxt *uctxt,
         struct ll_fid rpfid = *pfid;
         struct lmv_obj *obj;
         struct mea *mea;
-        int rc, mds;
+        int rc, mds, loop = 0;
         ENTRY;
 
         /* IT_LOOKUP is intended to produce name -> fid resolving (let's call
@@ -505,6 +510,7 @@ int lmv_intent_lookup(struct obd_export *exp, struct ll_uctxt *uctxt,
 
         mds = pfid->mds;
 repeat:
+        LASSERT(++loop <= 2);
         /* this is lookup. during lookup we have to update all the attributes,
          * because returned values will be put in struct inode */
 
@@ -514,6 +520,7 @@ repeat:
                         /* directory is already splitted. calculate mds */
                         mds = raw_name2idx(obj->objcount, (char *)name, len);
                         rpfid = obj->objs[mds].fid;
+                        mds = rpfid.mds;
                 }
                 lmv_put_obj(obj);
         }

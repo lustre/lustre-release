@@ -304,6 +304,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         if (!inode)
                 RETURN(ERR_PTR(-ENOENT));
 
+#warning "I think we need something another here -bzzz"
 #if 0
         /* here we disabled generation check, as root inode i_generation
          * of cache mds and real mds are different. */
@@ -821,9 +822,9 @@ int mds_check_mds_num(struct obd_device *obd, struct inode* inode,
                  * should live at this MDS or at another one */
                 int i;
                 i = mea_name2idx(mea, name, namelen - 1);
-                if (mea->mea_master != i) {
-                        CERROR("inapropriate MDS(%d) for %s. should be %d\n",
-                                mea->mea_master, name, i);
+                if (mea->mea_master != mea->mea_fids[i].mds) {
+                        CERROR("inapropriate MDS(%d) for %s. should be %d(%d)\n",
+                               mea->mea_master, name, mea->mea_fids[i].mds, i);
                         rc = -ERESTART;
                 }
         }
@@ -1450,10 +1451,11 @@ repeat:
                 rc = fsfilt_set_md(obd, new->d_inode, handle, mea, mealen);
                 up(&new->d_inode->i_sem);
                 OBD_FREE(mea, mealen);
+                CDEBUG(D_OTHER, "%s: mark non-splittable %lu/%u - %d\n",
+                       obd->obd_name, new->d_inode->i_ino,
+                       new->d_inode->i_generation, flags);
         } else if (rc == 0 && body->oa.o_easize) {
-                flags = mds_try_to_split_dir(obd, new, NULL, body->oa.o_easize);
-                CERROR("%s: splitted %lu/%u - %d\n", obd->obd_name,
-                       new->d_inode->i_ino, new->d_inode->i_generation, flags);
+                mds_try_to_split_dir(obd, new, NULL, body->oa.o_easize);
         }
 
 cleanup:
