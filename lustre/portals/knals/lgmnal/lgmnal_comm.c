@@ -26,19 +26,99 @@
 #include "lgmnal.h"
 
 /*
- *	The recevive thread
- *	This is main thread of execution for the receive side
+ *	The caretaker thread
+ *	This is main thread of execution for the NAL side
  *	This guy waits in gm_blocking_recvive and gets
  *	woken up when the myrinet adaptor gets an interrupt.
- *	Hands off processing of small messages and blocks again
+ *	Hands off receive operations to the receive thread 
+ *	This thread Looks after gm_callbacks etc inline.
  */
 int
-lgmnal_rx_thread(void *arg)
+lgmnal_ct_thread(void *arg)
+{
+	lgmnal_data_t		*nal_data;
+	gm_recv_event_t		*rxevent = NULL;
+
+	if (!arg) {
+		CDEBUG(D_TRACE, "CTTHREAD:: This is the lgmnal_ct_thread. NO nal_data. Exiting\n");
+		return(-1);
+	}
+
+	nal_data = (lgmnal_data_t*)arg;
+	CDEBUG(D_TRACE, "CTTHREAD:: This is the lgmnal_ct_thread nal_data is [%p]\n", arg);
+
+	nal_data->ctthread_flag = LGMNAL_THREAD_STARTED;
+	while (nal_data->ctthread_flag == LGMNAL_THREAD_STARTED) {
+		CDEBUG(D_INFO, "CTTHREAD:: lgmnal_ct_thread waiting for LGMNAL_CONTINUE flag\n");
+		set_current_state(TASK_INTERRUPTIBLE);
+		schedule_timeout(1024);
+		
+	}
+
+	CDEBUG(D_INFO, "CTTHREAD:: calling daemonize\n");
+	daemonize();
+	LGMNAL_GM_LOCK(nal_data);
+	while(nal_data->ctthread_flag == LGMNAL_THREAD_CONTINUE) {
+		CDEBUG(D_NET, "CTTHREAD:: Caretaker thread waiting\n");
+		rxevent = gm_blocking_receive_no_spin(nal_data->gm_port);
+		CDEBUG(D_INFO, "CTTHREAD:: caretaker thread got [%s]\n", lgmnal_rxevent(rxevent));
+		if (nal_data->ctthread_flag != LGMNAL_THREAD_CONTINUE) {
+			CDEBUG(D_INFO, "CTTHREAD:: Caretaker thread time to exit\n");
+			break;
+		}
+		switch (GM_RECV_EVENT_TYPE(rxevent)) {
+
+			case(GM_RECV_EVENT):
+				CDEBUG(D_NET, "CTTHREAD:: GM_RECV_EVENT\n");
+				LGMNAL_GM_UNLOCK(nal_data);
+				lgmnal_add_rxtwe(nal_data, rxevent);
+				LGMNAL_GM_LOCK(nal_data);
+				CDEBUG(D_NET, "CTTHREAD:: Added event to Q\n");
+			break;
+			case(_GM_SLEEP_EVENT):
+				/*
+				 *	Blocking receive above just returns
+				 *	immediatly with _GM_SLEEP_EVENT
+				 *	Don't know what this is
+				 */
+				CDEBUG(D_NET, "CTTHREAD:: Sleeping in gm_unknown\n");
+				LGMNAL_GM_UNLOCK(nal_data);
+				gm_unknown(nal_data->gm_port, rxevent);
+				LGMNAL_GM_LOCK(nal_data);
+				CDEBUG(D_INFO, "CTTHREAD:: Awake from gm_unknown\n");
+				break;
+				
+			default:
+				/*
+				 *	Don't know what this is
+				 *	gm_unknown will make sense of it
+				 *	Should be able to do something with
+				 *	FAST_RECV_EVENTS here.
+				 */
+				CDEBUG(D_NET, "CTTHREAD:: Passing event to gm_unknown\n");
+				LGMNAL_GM_UNLOCK(nal_data);
+				gm_unknown(nal_data->gm_port, rxevent);
+				LGMNAL_GM_LOCK(nal_data);
+				CDEBUG(D_INFO, "CTTHREAD:: Processed unknown event\n");
+		}
+	}
+	LGMNAL_GM_UNLOCK(nal_data);
+	nal_data->ctthread_flag = LGMNAL_THREAD_STOPPED;
+	CDEBUG(D_ERROR, "CTTHREAD:: The lgmnal_receive_thread nal_data [%p] is exiting\n", nal_data);
+	return(LGMNAL_STATUS_OK);
+}
+
+
+/*
+ *	process a receive event
+ */
+int lgmnal_rx_thread(void *arg)
 {
 	lgmnal_data_t		*nal_data;
 	gm_recv_event_t		*rxevent = NULL;
 	gm_recv_t		*recv = NULL;
 	void			*buffer;
+	lgmnal_rxtwe_t		*we = NULL;
 
 	if (!arg) {
 		CDEBUG(D_TRACE, "RXTHREAD:: This is the lgmnal_rx_thread. NO nal_data. Exiting\n");
@@ -58,86 +138,39 @@ lgmnal_rx_thread(void *arg)
 
 	CDEBUG(D_INFO, "RXTHREAD:: calling daemonize\n");
 	daemonize();
-	LGMNAL_GM_LOCK(nal_data);
 	while(nal_data->rxthread_flag == LGMNAL_THREAD_CONTINUE) {
 		CDEBUG(D_NET, "RXTHREAD:: Receive thread waiting\n");
-		rxevent = gm_blocking_receive_no_spin(nal_data->gm_port);
-		CDEBUG(D_INFO, "RXTHREAD:: receive thread got [%s]\n", lgmnal_rxevent(rxevent));
-		if (nal_data->rxthread_flag != LGMNAL_THREAD_CONTINUE) {
+		we = lgmnal_get_rxtwe(nal_data);
+		if (!we) {
 			CDEBUG(D_INFO, "RXTHREAD:: Receive thread time to exit\n");
 			break;
 		}
-		switch (GM_RECV_EVENT_TYPE(rxevent)) {
+		rxevent = we->rx;
+		CDEBUG(D_INFO, "RXTHREAD:: receive thread got [%s]\n", lgmnal_rxevent(rxevent));
+		recv = (gm_recv_t*)&(rxevent->recv);
+		buffer = gm_ntohp(recv->buffer);
+		PORTAL_FREE(we, sizeof(lgmnal_rxtwe_t));
 
-			case(GM_RECV_EVENT):
-				CDEBUG(D_NET, "RXTHREAD:: GM_RECV_EVENT\n");
-				recv = (gm_recv_t*)&(rxevent->recv);
-				buffer = gm_ntohp(recv->buffer);
-				switch(((lgmnal_msghdr_t*)buffer)->type) {
-				case(LGMNAL_SMALL_MESSAGE):
-					LGMNAL_GM_UNLOCK(nal_data);
-					lgmnal_pre_receive(nal_data, recv, LGMNAL_SMALL_MESSAGE);
-					LGMNAL_GM_LOCK(nal_data);
-				break;	
-				case(LGMNAL_LARGE_MESSAGE_INIT):
-					LGMNAL_GM_UNLOCK(nal_data);
-					lgmnal_pre_receive(nal_data, recv, LGMNAL_LARGE_MESSAGE_INIT);
-					LGMNAL_GM_LOCK(nal_data);
-				break;	
-				case(LGMNAL_LARGE_MESSAGE_ACK):
-					LGMNAL_GM_UNLOCK(nal_data);
-					lgmnal_pre_receive(nal_data, recv, LGMNAL_LARGE_MESSAGE_ACK);
-					LGMNAL_GM_LOCK(nal_data);
-				break;	
-				default:
-					CDEBUG(D_ERROR, "RXTHREAD:: Unsupported message type\n");
-					/*
-					 * Will get deadlock here as
-					 * GM_LOCK is required by badrx_message
-					 * to requeue the buffer
-					 */
-					LGMNAL_GM_UNLOCK(nal_data);
-					lgmnal_rx_bad(nal_data, recv, NULL);
-					LGMNAL_GM_LOCK(nal_data);
-				}
-			break;
-			case(_GM_SLEEP_EVENT):
-				/*
-				 *	Blocking receive above just returns
-				 *	immediatly with _GM_SLEEP_EVENT
-				 *	Don't know what this is
-				 */
-				CDEBUG(D_NET, "RXTHREAD:: Sleeping in gm_unknown\n");
-				LGMNAL_GM_UNLOCK(nal_data);
-				gm_unknown(nal_data->gm_port, rxevent);
-				LGMNAL_GM_LOCK(nal_data);
-				CDEBUG(D_INFO, "RXTHREAD:: Awake from gm_unknown\n");
-				break;
-				
-			default:
-				/*
-				 *	Don't know what this is
-				 *	gm_unknown will make sense of it
-				 *	Should be able to do something with
-				 *	FAST_RECV_EVENTS here.
-				 */
-				CDEBUG(D_NET, "RXTHREAD:: Passing event to gm_unknown\n");
-				LGMNAL_GM_UNLOCK(nal_data);
-				gm_unknown(nal_data->gm_port, rxevent);
-				LGMNAL_GM_LOCK(nal_data);
-				CDEBUG(D_INFO, "RXTHREAD:: Processed unknown event\n");
-				
+		switch(((lgmnal_msghdr_t*)buffer)->type) {
+		case(LGMNAL_SMALL_MESSAGE):
+			lgmnal_pre_receive(nal_data, recv, LGMNAL_SMALL_MESSAGE);
+		break;	
+		case(LGMNAL_LARGE_MESSAGE_INIT):
+			lgmnal_pre_receive(nal_data, recv, LGMNAL_LARGE_MESSAGE_INIT);
+		break;	
+		case(LGMNAL_LARGE_MESSAGE_ACK):
+			lgmnal_pre_receive(nal_data, recv, LGMNAL_LARGE_MESSAGE_ACK);
+		break;	
+		default:
+			CDEBUG(D_ERROR, "RXTHREAD:: Unsupported message type\n");
+			lgmnal_rx_bad(nal_data, recv, NULL);
 		}
-
-		
 	}
-	LGMNAL_GM_UNLOCK(nal_data);
+
 	nal_data->rxthread_flag = LGMNAL_THREAD_STOPPED;
 	CDEBUG(D_ERROR, "RXTHREAD:: The lgmnal_receive_thread nal_data [%p] is exiting\n", nal_data);
 	return(LGMNAL_STATUS_OK);
 }
-
-
 
 
 
@@ -146,7 +179,7 @@ lgmnal_rx_thread(void *arg)
  *	Get here from lgmnal_receive_thread
  *	Hand off to lib_parse, which calls cb_recv
  *	which hands back to lgmnal_small_receive
- *	Deal with all endian stuff here (if we can!)
+ *	Deal with all endian stuff here.
  */
 int
 lgmnal_pre_receive(lgmnal_data_t *nal_data, gm_recv_t *recv, int lgmnal_type)
@@ -157,7 +190,7 @@ lgmnal_pre_receive(lgmnal_data_t *nal_data, gm_recv_t *recv, int lgmnal_type)
 	lgmnal_msghdr_t	*lgmnal_msghdr;
 	ptl_hdr_t	*portals_hdr;
 
-	CDEBUG(D_TRACE, "lgmnal_pre_receive nal_data [%p], recv [%p] type [%d]\n", nal_data, recv, lgmnal_type);
+	CDEBUG(D_INFO, "lgmnal_pre_receive nal_data [%p], recv [%p] type [%d]\n", nal_data, recv, lgmnal_type);
 
 	buffer = gm_ntohp(recv->buffer);;
 	snode = (int)gm_ntoh_u16(recv->sender_node_id);
@@ -512,10 +545,10 @@ lgmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 		CDEBUG(D_INFO, "lgmnal_small_tx_callback large transmit done\n");
 		return;
 	}
+	lgmnal_return_stxd(nal_data, stxd);
 	if (lib_finalize(nal_cb, stxd, cookie) != PTL_OK) {
 		CDEBUG(D_INFO, "Call to lib_finalize failed for stxd [%p]\n", stxd);
 	}
-	lgmnal_return_stxd(nal_data, stxd);
 	return;
 }
 
@@ -1166,7 +1199,11 @@ lgmnal_large_tx_ack_received(lgmnal_data_t *nal_data, lgmnal_srxd_t *srxd)
 	return;
 }
 
+
+
+
 EXPORT_SYMBOL(lgmnal_rx_thread);
+EXPORT_SYMBOL(lgmnal_ct_thread);
 EXPORT_SYMBOL(lgmnal_pre_receive);
 EXPORT_SYMBOL(lgmnal_rx_requeue_buffer);
 EXPORT_SYMBOL(lgmnal_rx_bad);

@@ -358,14 +358,43 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	 *	it needs to be stopped
 	 */
 	CDEBUG(D_NET, "Initializing receive thread alarm and flag\n");
-	gm_initialize_alarm(&nal_data->rxthread_alarm);
-	nal_data->rxthread_flag = LGMNAL_THREAD_START;
+	gm_initialize_alarm(&nal_data->ctthread_alarm);
+	nal_data->ctthread_flag = LGMNAL_THREAD_START;
 
 
-	CDEBUG(D_INFO, "Starting receive thread\n");
+	CDEBUG(D_INFO, "Starting caretaker thread\n");
+	nal_data->ctthread_pid = kernel_thread(lgmnal_ct_thread, (void*)nal_data, 0);
+	if (nal_data->ctthread_pid <= 0) {
+		CDEBUG(D_ERROR, "Caretaker thread failed to start\n");
+		lgmnal_free_stxd(nal_data);
+		lgmnal_free_srxd(nal_data);
+		LGMNAL_GM_LOCK(nal_data);
+		gm_close(nal_data->gm_port);
+		gm_finalize();
+		LGMNAL_GM_UNLOCK(nal_data);
+		PORTAL_FREE(nal, sizeof(nal_t));	
+		PORTAL_FREE(nal_data, sizeof(lgmnal_data_t));	
+		PORTAL_FREE(nal_cb, sizeof(nal_cb_t));
+		return(NULL);
+	}
+	while (nal_data->ctthread_flag != LGMNAL_THREAD_STARTED) {
+		set_current_state(TASK_INTERRUPTIBLE);
+		schedule_timeout(128);
+		CDEBUG(D_INFO, "Waiting for caretaker thread signs of life\n");
+	}
+	CDEBUG(D_INFO, "caretaker thread seems to have started\n");
+	nal_data->ctthread_flag = LGMNAL_THREAD_CONTINUE;
+
+
+	nal_data->rxthread_pid = -1;
+	spin_lock_init(&nal_data->rxtwe_lock);
+	sema_init(&nal_data->rxtwe_wait, 0);
+	nal_data->rxtwe_head = NULL;
+	nal_data->rxtwe_tail = NULL;
 	nal_data->rxthread_pid = kernel_thread(lgmnal_rx_thread, (void*)nal_data, 0);
 	if (nal_data->rxthread_pid <= 0) {
 		CDEBUG(D_ERROR, "Receive thread failed to start\n");
+		lgmnal_stop_ctthread(nal_data);
 		lgmnal_free_stxd(nal_data);
 		lgmnal_free_srxd(nal_data);
 		LGMNAL_GM_LOCK(nal_data);
@@ -386,7 +415,6 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	nal_data->rxthread_flag = LGMNAL_THREAD_CONTINUE;
 
 
-
 	/*
 	 *	Initialise the portals library
 	 */
@@ -396,6 +424,7 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	LGMNAL_GM_UNLOCK(nal_data);
 	if (gm_status != GM_SUCCESS) {
 		lgmnal_stop_rxthread(nal_data);
+		lgmnal_stop_ctthread(nal_data);
 		CDEBUG(D_ERROR, "can't determine node id\n");
 		lgmnal_free_stxd(nal_data);
 		lgmnal_free_srxd(nal_data);
@@ -416,6 +445,7 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	if (gm_status != GM_SUCCESS) {
 		CDEBUG(D_ERROR, "failed to obtain global id\n");
 		lgmnal_stop_rxthread(nal_data);
+		lgmnal_stop_ctthread(nal_data);
 		lgmnal_free_stxd(nal_data);
 		lgmnal_free_srxd(nal_data);
 		LGMNAL_GM_LOCK(nal_data);
@@ -441,6 +471,7 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	if (lib_init(nal_cb, portals_nid, portals_pid, 1024, ptl_size, ac_size) != PTL_OK) {
 		CDEBUG(D_ERROR, "lib_init failed\n");
 		lgmnal_stop_rxthread(nal_data);
+		lgmnal_stop_ctthread(nal_data);
 		lgmnal_free_stxd(nal_data);
 		lgmnal_free_srxd(nal_data);
 		LGMNAL_GM_LOCK(nal_data);
@@ -476,6 +507,7 @@ void lgmnal_fini()
 	lib_fini(nal_cb);
 
 	lgmnal_stop_rxthread(nal_data);
+	lgmnal_stop_ctthread(nal_data);
 	lgmnal_free_stxd(nal_data);
 	lgmnal_free_srxd(nal_data);
 	LGMNAL_GM_LOCK(nal_data);

@@ -104,6 +104,9 @@ typedef struct _lgmnal_stxd_t {
 	struct iovec		iov[PTL_MD_MAX_IOV];
 	struct	_lgmnal_srxd_t  *srxd;	/* for gm_gets */
 	struct _lgmnal_stxd_t	*next;
+        int                     rxt;    /* this txd for use by rx thread only */
+        int                     kniov;
+        struct iovec            *iovec_dup;
 } lgmnal_stxd_t;
 
 /*
@@ -139,6 +142,12 @@ typedef struct	_lgmnal_msghdr {
 	} lgmnal_msghdr_t;
 #define LGMNAL_MSGHDR_SIZE	sizeof(lgmnal_msghdr_t)
 
+/* rxthread work entry */
+typedef struct _lgmnal_rxtwe {
+	gm_recv_event_t *rx;
+	struct _lgmnal_rxtwe	*next;
+} lgmnal_rxtwe_t;
+
 /* 
  *	There's one of these for each interface that is initialised
  *	There's a maximum of LGMNAL_NUM_IF lgmnal_data_t
@@ -150,6 +159,9 @@ typedef struct _lgmnal_data_t {
 	spinlock_t 	stxd_lock;	/* lock to add or remove stxd to/from free list */
 	struct semaphore stxd_token;	/* Don't try to access the list until get a token */
 	lgmnal_stxd_t	*stxd;		/* list of free stxd's */
+	spinlock_t 	rxt_stxd_lock;	/* stxd free list  for the rxthread */
+	struct semaphore rxt_stxd_token; /* for rx thread */
+	lgmnal_stxd_t	*rxt_stxd;	 /* for rx thread */
 	spinlock_t 	srxd_lock;
 	struct semaphore srxd_token;
 	lgmnal_srxd_t	*srxd;
@@ -160,18 +172,24 @@ typedef struct _lgmnal_data_t {
 	unsigned int	gm_local_nid;	/* our gm local node id */
 	unsigned int	gm_global_nid;	/* our gm global node id */
 	spinlock_t 	gm_lock;	/* GM is not threadsage */
-	long		rxthread_pid;	/* thread id of our receiver thread */
-	int		rxthread_flag;	/* stop the thread flag	*/
-	gm_alarm_t	rxthread_alarm;	/* used to wake sleeping rx thread */
+	long		rxthread_pid;	/* pid of our receiver thread */
+	long		rxthread_flag;	/* stop the receiver thread */
+	long		ctthread_pid;	/* pid of our caretaker thread */
+	int		ctthread_flag;	/* stop the thread flag	*/
+	gm_alarm_t	ctthread_alarm;	/* used to wake sleeping ct thread */
 	int		small_msg_size;
 	int		small_msg_gmsize;
+	spinlock_t	rxtwe_lock;
+	struct	semaphore rxtwe_wait;
+	lgmnal_rxtwe_t	*rxtwe_head;
+	lgmnal_rxtwe_t	*rxtwe_tail;
 	char		_file[128];
 	char		_function[128];
 	int		_line;
 } lgmnal_data_t;
 
 /*
- *	For nal_data->rxthread_flag
+ *	For nal_data->ctthread_flag
  */
 #define LGMNAL_THREAD_START	444	
 #define LGMNAL_THREAD_STARTED	333
@@ -220,6 +238,13 @@ extern lgmnal_data_t	*global_nal_data;
 #define LGMNAL_TXD_TRYGETTOKEN(a)		down_trylock(&a->stxd_token)
 #define LGMNAL_TXD_RETURNTOKEN(a)		up(&a->stxd_token);
 
+#define LGMNAL_RXT_TXD_LOCK_INIT(a)		spin_lock_init(&a->rxt_stxd_lock);
+#define LGMNAL_RXT_TXD_LOCK(a)			spin_lock(&a->rxt_stxd_lock);
+#define LGMNAL_RXT_TXD_UNLOCK(a)		spin_unlock(&a->rxt_stxd_lock);
+#define LGMNAL_RXT_TXD_TOKEN_INIT(a, n)		sema_init(&a->rxt_stxd_token, n);
+#define LGMNAL_RXT_TXD_GETTOKEN(a)		down(&a->rxt_stxd_token);
+#define LGMNAL_RXT_TXD_TRYGETTOKEN(a)		down_trylock(&a->rxt_stxd_token)
+#define LGMNAL_RXT_TXD_RETURNTOKEN(a)		up(&a->rxt_stxd_token);
 
 #define LGMNAL_RXD_LOCK_INIT(a)			spin_lock_init(&a->srxd_lock);
 #define LGMNAL_RXD_LOCK(a)			spin_lock(&a->srxd_lock);
@@ -230,6 +255,8 @@ extern lgmnal_data_t	*global_nal_data;
 #define LGMNAL_RXD_RETURNTOKEN(a)		up(&a->srxd_token);
 
 #define LGMNAL_GM_LOCK_INIT(a)			spin_lock_init(&a->gm_lock);
+#define LGMNAL_GM_LOCK(a)			spin_lock(&a->gm_lock);
+/*
 #define LGMNAL_GM_LOCK(a)			do { \
 							while (!spin_trylock(&a->gm_lock)) { \
 								CDEBUG(D_INFO, "waiting %s:%s:%d holder %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__, nal_data->_function, nal_data->_file, nal_data->_line); \
@@ -240,6 +267,9 @@ extern lgmnal_data_t	*global_nal_data;
 								sprintf(nal_data->_file, "%s", __FILE__); \
 								nal_data->_line = __LINE__; \
 						} while (0)
+*/
+#define LGMNAL_GM_UNLOCK(a)			spin_unlock(&a->gm_lock);
+/*
 #define LGMNAL_GM_UNLOCK(a)			do { \
 							spin_unlock(&a->gm_lock); \
 							memset(nal_data->_function, 0, 128); \
@@ -248,6 +278,7 @@ extern lgmnal_data_t	*global_nal_data;
 							CDEBUG(D_INFO, "GM Unlocked %s:%s:%d\n", __FUNCTION__, __FILE__, __LINE__); \
 						} while(0);
 
+*/
 #define LGMNAL_CB_LOCK_INIT(a)			spin_lock_init(&a->cb_lock);
 
 
@@ -367,6 +398,7 @@ void 		lgmnal_return_srxd(lgmnal_data_t *, lgmnal_srxd_t *);
 void 		lgmnal_print(const char *, ...);
 lgmnal_srxd_t	*lgmnal_rxbuffer_to_srxd(lgmnal_data_t *, void*);
 void		lgmnal_stop_rxthread(lgmnal_data_t *);
+void		lgmnal_stop_ctthread(lgmnal_data_t *);
 void		lgmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
 void		lgmnal_drop_sends_callback(gm_port_t *, void *, gm_status_t);
 char		*lgmnal_gm_error(gm_status_t);
@@ -382,10 +414,14 @@ void 		lgmnal_yield(int);
 /*
  *	Receive threads
  */
-int 		lgmnal_rx_thread(void *);
+int 		lgmnal_ct_thread(void *); /* caretaker thread */
+int 		lgmnal_rx_thread(void *); /* receive thread */
 int 		lgmnal_pre_receive(lgmnal_data_t*, gm_recv_t*, int);
 int		lgmnal_rx_bad(lgmnal_data_t *, gm_recv_t *, lgmnal_srxd_t *);
 int		lgmnal_rx_requeue_buffer(lgmnal_data_t *, lgmnal_srxd_t *);
+int		lgmnal_add_rxtwe(lgmnal_data_t *, gm_recv_event_t *);
+lgmnal_rxtwe_t * lgmnal_get_rxtwe(lgmnal_data_t *);
+void		lgmnal_remove_rxtwe(lgmnal_data_t *);
 
 
 /*

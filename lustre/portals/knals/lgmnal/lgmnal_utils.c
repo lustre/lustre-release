@@ -79,7 +79,7 @@ void lgmnal_print(const char *fmt, ...)
 int
 lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 {
-	int ntx = 0, nstx = 0, i = 0;
+	int ntx = 0, nstx = 0, i = 0, nrxt_stx = 10;
 	lgmnal_stxd_t	*txd = NULL;
 	void	*txbuffer = NULL;
 
@@ -91,7 +91,8 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 	CDEBUG(D_INFO, "total number of send tokens available is [%d]\n", ntx);
 	
 	nstx = ntx/2;
-	nstx = 10;
+	nstx = 5;
+        nrxt_stx = nstx + 1;
 
 	CDEBUG(D_INFO, "Allocated [%d] send tokens to small messages\n", nstx);
 
@@ -108,6 +109,8 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 	 */
 	LGMNAL_TXD_TOKEN_INIT(nal_data, nstx);
 	LGMNAL_TXD_LOCK_INIT(nal_data);
+	LGMNAL_RXT_TXD_TOKEN_INIT(nal_data, nrxt_stx);
+	LGMNAL_RXT_TXD_LOCK_INIT(nal_data);
 	
 	for (i=0; i<=nstx; i++) {
 		PORTAL_ALLOC(txd, sizeof(lgmnal_stxd_t));
@@ -115,39 +118,6 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 			CDEBUG(D_ERROR, "Failed to malloc txd [%d]\n", i);
 			return(LGMNAL_STATUS_NOMEM);
 		}
-#if 0
-		PORTAL_ALLOC(txbuffer, LGMNAL_SMALL_MSG_SIZE(nal_data));
-		if (!txbuffer) {
-			CDEBUG(D_ERROR, "Failed to malloc txbuffer [%d], size [%d]\n", i, LGMNAL_SMALL_MSG_SIZE(nal_data));
-			PORTAL_FREE(txd, sizeof(lgmnal_stxd_t));
-			return(LGMNAL_STATUS_FAIL);
-		}
-		CDEBUG(D_NET, "Calling gm_register_memory with port [%p] txbuffer [%p], size [%d]\n",
-				nal_data->gm_port, txbuffer, LGMNAL_SMALL_MSG_SIZE(nal_data));
-		LGMNAL_GM_LOCK(nal_data);
-		gm_status = gm_register_memory(nal_data->gm_port, txbuffer, LGMNAL_SMALL_MSG_SIZE(nal_data));
-		LGMNAL_GM_UNLOCK(nal_data);
-		if (gm_status != GM_SUCCESS) {
-			CDEBUG(D_ERROR, "gm_register_memory failed buffer [%p], index [%d]\n", txbuffer, i);
-			switch(gm_status) {
-				case(GM_FAILURE):
-					CDEBUG(D_ERROR, "GM_FAILURE\n");
-				break;
-				case(GM_PERMISSION_DENIED):
-					CDEBUG(D_ERROR, "GM_PERMISSION_DENIED\n");
-				break;
-				case(GM_INVALID_PARAMETER):
-					CDEBUG(D_ERROR, "GM_INVALID_PARAMETER\n");
-				break;
-				default:
-					CDEBUG(D_ERROR, "Unknown error\n");
-				break;
-			}
-			return(LGMNAL_STATUS_FAIL);
-		} else {
-			CDEBUG(D_INFO, "gm_register_memory ok for buffer [%p], index [%d]\n", txbuffer, i);
-		}
-#else
 		LGMNAL_GM_LOCK(nal_data);
 		txbuffer = gm_dma_malloc(nal_data->gm_port, LGMNAL_SMALL_MSG_SIZE(nal_data));
 		LGMNAL_GM_UNLOCK(nal_data);
@@ -156,15 +126,39 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 			PORTAL_FREE(txd, sizeof(lgmnal_stxd_t));
 			return(LGMNAL_STATUS_FAIL);
 		}
-#endif
-		
 		txd->buffer = txbuffer;
 		txd->buffer_size = LGMNAL_SMALL_MSG_SIZE(nal_data);
 		txd->gm_size = gm_min_size_for_length(txd->buffer_size);
 		txd->nal_data = (struct _lgmnal_data_t*)nal_data;
+                txd->rxt = 0;
 
 		txd->next = nal_data->stxd;
 		nal_data->stxd = txd;
+		CDEBUG(D_INFO, "Registered txd [%p] with buffer [%p], size [%d]\n", txd, txd->buffer, txd->buffer_size);
+	}
+
+	for (i=0; i<=nrxt_stx; i++) {
+		PORTAL_ALLOC(txd, sizeof(lgmnal_stxd_t));
+		if (!txd) {
+			CDEBUG(D_ERROR, "Failed to malloc txd [%d]\n", i);
+			return(LGMNAL_STATUS_NOMEM);
+		}
+		LGMNAL_GM_LOCK(nal_data);
+		txbuffer = gm_dma_malloc(nal_data->gm_port, LGMNAL_SMALL_MSG_SIZE(nal_data));
+		LGMNAL_GM_UNLOCK(nal_data);
+		if (!txbuffer) {
+			CDEBUG(D_ERROR, "Failed to gm_dma_malloc txbuffer [%d], size [%d]\n", i, LGMNAL_SMALL_MSG_SIZE(nal_data));
+			PORTAL_FREE(txd, sizeof(lgmnal_stxd_t));
+			return(LGMNAL_STATUS_FAIL);
+		}
+		txd->buffer = txbuffer;
+		txd->buffer_size = LGMNAL_SMALL_MSG_SIZE(nal_data);
+		txd->gm_size = gm_min_size_for_length(txd->buffer_size);
+		txd->nal_data = (struct _lgmnal_data_t*)nal_data;
+                txd->rxt = 1;
+
+		txd->next = nal_data->rxt_stxd;
+		nal_data->rxt_stxd = txd;
 		CDEBUG(D_INFO, "Registered txd [%p] with buffer [%p], size [%d]\n", txd, txd->buffer, txd->buffer_size);
 	}
 
@@ -187,16 +181,19 @@ lgmnal_free_stxd(lgmnal_data_t *nal_data)
 		CDEBUG(D_INFO, "Freeing txd [%p] with buffer [%p], size [%d]\n", txd, txd->buffer, txd->buffer_size);
 		_txd = txd;
 		txd = txd->next;
-#if 0
-		LGMNAL_GM_LOCK(nal_data);
-		gm_deregister_memory(nal_data->gm_port, _txd->buffer, _txd->size);
-		LGMNAL_GM_UNLOCK(nal_data);
-		PORTAL_FREE(_txd->buffer, LGMNAL_SMALL_MSG_SIZE(nal_data));
-#else
 		LGMNAL_GM_LOCK(nal_data);
 		gm_dma_free(nal_data->gm_port, _txd->buffer);
 		LGMNAL_GM_UNLOCK(nal_data);
-#endif
+		PORTAL_FREE(_txd, sizeof(lgmnal_stxd_t));
+	}
+        txd = nal_data->rxt_stxd;
+	while(txd) {
+		CDEBUG(D_INFO, "Freeing txd [%p] with buffer [%p], size [%d]\n", txd, txd->buffer, txd->buffer_size);
+		_txd = txd;
+		txd = txd->next;
+		LGMNAL_GM_LOCK(nal_data);
+		gm_dma_free(nal_data->gm_port, _txd->buffer);
+		LGMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(_txd, sizeof(lgmnal_stxd_t));
 	}
 	return;
@@ -213,23 +210,42 @@ lgmnal_get_stxd(lgmnal_data_t *nal_data, int block)
 {
 
 	lgmnal_stxd_t	*txd = NULL;
-	CDEBUG(D_TRACE, "lgmnal_get_stxd nal_data [%p] block[%d]\n", 
-						nal_data, block);
+        pid_t           pid = current->pid;
 
-	if (block) {
-		LGMNAL_TXD_GETTOKEN(nal_data);
-	} else {
-		if (LGMNAL_TXD_TRYGETTOKEN(nal_data)) {
-			CDEBUG(D_ERROR, "lgmnal_get_stxd can't get token\n");
-			return(NULL);
-		}
-	}
-	LGMNAL_TXD_LOCK(nal_data);
-	txd = nal_data->stxd;
-	if (txd)
-		nal_data->stxd = txd->next;
-	LGMNAL_TXD_UNLOCK(nal_data);
-	CDEBUG(D_INFO, "lgmnal_get_stxd got [%p], head is [%p]\n", txd, nal_data->stxd);
+
+	CDEBUG(D_TRACE, "lgmnal_get_stxd nal_data [%p] block[%d] pid [%d]\n", 
+						nal_data, block, pid);
+
+        if (pid == nal_data->rxthread_pid) {
+                CDEBUG(D_INFO, "RXTHREAD Attempting to get token\n");
+		LGMNAL_RXT_TXD_GETTOKEN(nal_data);
+	        LGMNAL_RXT_TXD_LOCK(nal_data);
+	        txd = nal_data->rxt_stxd;
+	        if (txd)
+		        nal_data->rxt_stxd = txd->next;
+	        LGMNAL_RXT_TXD_UNLOCK(nal_data);
+	        CDEBUG(D_INFO, "lgmnal_get_stxd RXTHREAD got [%p], head is [%p]\n", txd, nal_data->rxt_stxd);
+                txd->kniov = 0;
+                txd->rxt = 1;
+        } else {
+	        if (block) {
+                        CDEBUG(D_INFO, "Attempting to get token\n");
+		        LGMNAL_TXD_GETTOKEN(nal_data);
+                        CDEBUG(D_PORTALS, "Got token\n");
+	        } else {
+		        if (LGMNAL_TXD_TRYGETTOKEN(nal_data)) {
+			        CDEBUG(D_ERROR, "lgmnal_get_stxd can't get token\n");
+			        return(NULL);
+		        }
+	        }
+	        LGMNAL_TXD_LOCK(nal_data);
+	        txd = nal_data->stxd;
+	        if (txd)
+		        nal_data->stxd = txd->next;
+	        LGMNAL_TXD_UNLOCK(nal_data);
+	        CDEBUG(D_INFO, "lgmnal_get_stxd got [%p], head is [%p]\n", txd, nal_data->stxd);
+                txd->kniov = 0;
+        }       /* general txd get */
 	return(txd);
 }
 
@@ -239,13 +255,27 @@ lgmnal_get_stxd(lgmnal_data_t *nal_data, int block)
 void
 lgmnal_return_stxd(lgmnal_data_t *nal_data, lgmnal_stxd_t *txd)
 {
-	CDEBUG(D_TRACE, "lgmnal_return_stxd nal_data [%p], txd[%p]\n", nal_data, txd);
+	CDEBUG(D_TRACE, "lgmnal_return_stxd nal_data [%p], txd[%p] rxt[%d]\n", nal_data, txd, txd->rxt);
 
-	LGMNAL_TXD_LOCK(nal_data);
-	txd->next = nal_data->stxd;
-	nal_data->stxd = txd;
-	LGMNAL_TXD_UNLOCK(nal_data);
-	LGMNAL_TXD_RETURNTOKEN(nal_data);
+        /*
+         *      this transmit descriptor is 
+         *      for the rxthread
+         */
+        if (txd->rxt) {
+	        LGMNAL_RXT_TXD_LOCK(nal_data);
+	        txd->next = nal_data->rxt_stxd;
+	        nal_data->rxt_stxd = txd;
+	        LGMNAL_RXT_TXD_UNLOCK(nal_data);
+	        LGMNAL_RXT_TXD_RETURNTOKEN(nal_data);
+                CDEBUG(D_INFO, "Returned stxd to rxthread list\n");
+        } else {
+	        LGMNAL_TXD_LOCK(nal_data);
+	        txd->next = nal_data->stxd;
+	        nal_data->stxd = txd;
+	        LGMNAL_TXD_UNLOCK(nal_data);
+	        LGMNAL_TXD_RETURNTOKEN(nal_data);
+                CDEBUG(D_INFO, "Returned stxd to general list\n");
+        }
 	return;
 }
 
@@ -274,7 +304,7 @@ lgmnal_alloc_srxd(lgmnal_data_t *nal_data)
 	CDEBUG(D_INFO, "total number of receive tokens available is [%d]\n", nrx);
 	
 	nsrx = nrx/2;
-	nsrx = 10;
+	nsrx = 12;
 
 	CDEBUG(D_INFO, "Allocated [%d] receive tokens to small messages\n", nsrx);
 
@@ -462,19 +492,22 @@ lgmnal_stop_rxthread(lgmnal_data_t *nal_data)
 
 	CDEBUG(D_TRACE, "Attempting to stop rxthread nal_data [%p]\n", nal_data);
 	
-	if (nal_data->rxthread_flag != LGMNAL_THREAD_CONTINUE) {
+	if (nal_data->ctthread_flag != LGMNAL_THREAD_CONTINUE) {
 		CDEBUG(D_ERROR, "thread flag not correctly set\n");
 	}	
 
 	nal_data->rxthread_flag = LGMNAL_THREAD_STOP;
-	LGMNAL_GM_LOCK(nal_data);
-	gm_set_alarm(nal_data->gm_port, &nal_data->rxthread_alarm, 10, NULL, NULL);
-	LGMNAL_GM_UNLOCK(nal_data);
+
+	lgmnal_remove_rxtwe(nal_data);
+	/*
+	 *	kick the thread 
+	 */
+	up(&nal_data->rxtwe_wait);
 
 	while(nal_data->rxthread_flag == LGMNAL_THREAD_STOP && delay--) {
 		CDEBUG(D_INFO, "lgmnal_stop_rxthread sleeping\n");
-		current->state = TASK_INTERRUPTIBLE;
-		schedule_timeout(128);
+                lgmnal_yield(1);
+		up(&nal_data->rxtwe_wait);
 	}
 
 	if (nal_data->rxthread_flag == LGMNAL_THREAD_STOP) {
@@ -482,7 +515,36 @@ lgmnal_stop_rxthread(lgmnal_data_t *nal_data)
 	} else {
 		CDEBUG(D_INFO, "RX THREAD SEEMS TO HAVE STOPPED\n");
 	}
+}
 
+void
+lgmnal_stop_ctthread(lgmnal_data_t *nal_data)
+{
+	int 	delay = 15;
+
+
+
+	CDEBUG(D_TRACE, "Attempting to stop ctthread nal_data [%p]\n", nal_data);
+	
+	if (nal_data->ctthread_flag != LGMNAL_THREAD_CONTINUE) {
+		CDEBUG(D_ERROR, "thread flag not correctly set\n");
+	}	
+
+	nal_data->ctthread_flag = LGMNAL_THREAD_STOP;
+	LGMNAL_GM_LOCK(nal_data);
+	gm_set_alarm(nal_data->gm_port, &nal_data->ctthread_alarm, 10, NULL, NULL);
+	LGMNAL_GM_UNLOCK(nal_data);
+
+	while(nal_data->ctthread_flag == LGMNAL_THREAD_STOP && delay--) {
+		CDEBUG(D_INFO, "lgmnal_stop_ctthread sleeping\n");
+                lgmnal_yield(1);
+	}
+
+	if (nal_data->ctthread_flag == LGMNAL_THREAD_STOP) {
+		CDEBUG(D_ERROR, "I DON'T KNOW HOW TO WAKE THE THREAD\n");
+	} else {
+		CDEBUG(D_INFO, "RX THREAD SEEMS TO HAVE STOPPED\n");
+	}
 }
 
 
@@ -760,6 +822,87 @@ lgmnal_is_small_message(lgmnal_data_t *nal_data, int niov, struct iovec *iov, in
 
 }
 
+int
+lgmnal_add_rxtwe(lgmnal_data_t *nal_data, gm_recv_event_t *rxevent)
+{
+	lgmnal_rxtwe_t	*we = NULL;
+
+	CDEBUG(D_NET, "adding entry to list\n");
+
+	PORTAL_ALLOC(we, sizeof(lgmnal_rxtwe_t));
+	if (!we) {
+		CDEBUG(D_ERROR, "failed to malloc\n");
+		return(LGMNAL_STATUS_FAIL);
+	}
+        we->rx = rxevent;
+
+	spin_lock(&nal_data->rxtwe_lock);
+	if (nal_data->rxtwe_tail) {
+		nal_data->rxtwe_tail->next = we;
+	} else {
+		nal_data->rxtwe_head = we;
+		nal_data->rxtwe_tail = we;
+	}
+	nal_data->rxtwe_tail = we;
+	spin_unlock(&nal_data->rxtwe_lock);
+
+	up(&nal_data->rxtwe_wait);
+	return(LGMNAL_STATUS_OK);
+}
+
+void
+lgmnal_remove_rxtwe(lgmnal_data_t *nal_data)
+{
+	lgmnal_rxtwe_t	*_we, *we = nal_data->rxtwe_head;
+
+	CDEBUG(D_NET, "removing all work list entries\n");
+
+	spin_lock(&nal_data->rxtwe_lock);
+	CDEBUG(D_NET, "Got lock\n");
+	while (we) {
+		_we = we;
+		we = we->next;
+		PORTAL_FREE(_we, sizeof(lgmnal_rxtwe_t));
+	}
+	spin_unlock(&nal_data->rxtwe_lock);
+	nal_data->rxtwe_head = NULL;
+	nal_data->rxtwe_tail = NULL;
+}
+
+lgmnal_rxtwe_t *
+lgmnal_get_rxtwe(lgmnal_data_t *nal_data)
+{
+	lgmnal_rxtwe_t	*we = NULL;
+
+	CDEBUG(D_NET, "Getting entry to list\n");
+
+	do  {
+		down(&nal_data->rxtwe_wait);
+		if (nal_data->rxthread_flag == LGMNAL_THREAD_STOP) {
+			/*
+			 *	time to stop
+			 * 	TO DO some one free the work entries	
+			 */
+			return(NULL);
+		}
+		spin_lock(&nal_data->rxtwe_lock);
+		if (nal_data->rxtwe_head) {
+			CDEBUG(D_WARNING, "Got a work entry\n");
+			we = nal_data->rxtwe_head;
+			nal_data->rxtwe_head = we->next;
+			if (!nal_data->rxtwe_head)
+				nal_data->rxtwe_tail = NULL;
+		} else {
+			CDEBUG(D_WARNING, "woken but no work\n");
+		}
+		spin_unlock(&nal_data->rxtwe_lock);
+	} while (!we);
+
+	CDEBUG(D_WARNING, "Returning we[%p]\n", we);
+	return(we);
+}
+
+
 EXPORT_SYMBOL(lgmnal_yield);
 EXPORT_SYMBOL(lgmnal_print);
 EXPORT_SYMBOL(lgmnal_alloc_srxd);
@@ -773,4 +916,6 @@ EXPORT_SYMBOL(lgmnal_free_stxd);
 EXPORT_SYMBOL(lgmnal_rxbuffer_to_srxd);
 EXPORT_SYMBOL(lgmnal_rxevent);
 EXPORT_SYMBOL(lgmnal_gm_error);
-EXPORT_SYMBOL(lgmnal_stop_rxthread);
+EXPORT_SYMBOL(lgmnal_stop_ctthread);
+EXPORT_SYMBOL(lgmnal_add_rxtwe);
+EXPORT_SYMBOL(lgmnal_get_rxtwe);
