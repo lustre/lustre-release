@@ -435,7 +435,7 @@ int class_process_config(struct lustre_cfg *lcfg)
         }
         case LCFG_ADD_UUID: {
                 CDEBUG(D_IOCTL, "adding mapping from uuid %s to nid "LPX64
-                       " (%s), nal %d\n", lcfg->lcfg_inlbuf1, lcfg->lcfg_nid,
+                       " (%s), nal %x\n", lcfg->lcfg_inlbuf1, lcfg->lcfg_nid,
                        portals_nid2str(lcfg->lcfg_nal, lcfg->lcfg_nid, str),
                        lcfg->lcfg_nal);
 
@@ -662,10 +662,10 @@ int class_config_dump_handler(struct llog_handle * handle,
 
                 CDEBUG(D_INFO, "pcfg command: %d\n", pcfg->pcfg_command);
                 if (pcfg->pcfg_nal)
-                        CDEBUG(D_INFO, "         nal: %d\n",
+                        CDEBUG(D_INFO, "         nal: %x\n",
                                pcfg->pcfg_nal);
                 if (pcfg->pcfg_gw_nal)
-                        CDEBUG(D_INFO, "      gw_nal: %d\n",
+                        CDEBUG(D_INFO, "      gw_nal: %x\n",
                                pcfg->pcfg_gw_nal);
                 if (pcfg->pcfg_nid)
                         CDEBUG(D_INFO, "         nid: "LPX64"\n",

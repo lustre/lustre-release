@@ -103,7 +103,7 @@ int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
                 return -ENOMEM;
         }
 
-        CDEBUG(D_INFO, "add uuid %s "LPX64" %u\n", uuid, nid, nal);
+        CDEBUG(D_INFO, "add uuid %s "LPX64" %x\n", uuid, nid, nal);
         memcpy(data->uuid, uuid, nob);
         data->nid = nid;
         data->nal = nal;

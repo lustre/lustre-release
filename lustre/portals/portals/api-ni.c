@@ -165,7 +165,7 @@ void PtlFini(void)
                                 continue;
                         
                         if (nal->nal_refct != 0) {
-                                CWARN("NAL %d has outstanding refcount %d\n",
+                                CWARN("NAL %x has outstanding refcount %d\n",
                                       i, nal->nal_refct);
                                 nal->nal_ni_fini(nal);
                         }
@@ -212,11 +212,11 @@ int PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
         nal->nal_handle.nal_idx = (NI_HANDLE_MAGIC & ~NI_HANDLE_MASK) | interface;
         nal->nal_handle.cookie = 0;
         
-        CDEBUG(D_OTHER, "Starting up NAL (%d) refs %d\n", interface, nal->nal_refct);
+        CDEBUG(D_OTHER, "Starting up NAL (%x) refs %d\n", interface, nal->nal_refct);
         rc = nal->nal_ni_init(nal, requested_pid, desired_limits, actual_limits);
 
         if (rc != PTL_OK) {
-                CERROR("Error %d starting up NAL %d, refs %d\n", rc,
+                CERROR("Error %d starting up NAL %x, refs %d\n", rc,
                        interface, nal->nal_refct);
                 GOTO(out, rc);
         }

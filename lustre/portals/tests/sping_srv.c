@@ -195,7 +195,7 @@ static struct pingsrv_data *pingsrv_setup(void)
 
         rc = PtlNIInit(nal, 0, NULL, NULL, &server->ni);
         if (rc != PTL_OK && rc != PTL_IFACE_DUP) {
-                CDEBUG (D_OTHER, "Nal %d not loaded.\n", nal);
+                CDEBUG (D_OTHER, "Nal %x not loaded.\n", nal);
                 return pingsrv_shutdown (4);
         }
 

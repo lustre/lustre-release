@@ -127,7 +127,7 @@ print_options(struct lustre_mount_data *lmd)
         printf("profile:         %s\n", lmd->lmd_profile);
         printf("server_nid:      "LPX64"\n", lmd->lmd_server_nid);
         printf("local_nid:       "LPX64"\n", lmd->lmd_local_nid);
-        printf("nal:             %d\n", lmd->lmd_nal);
+        printf("nal:             %x\n", lmd->lmd_nal);
         printf("server_ipaddr:   0x%x\n", lmd->lmd_server_ipaddr);
         printf("port:            %d\n", lmd->lmd_port);
 

@@ -81,7 +81,7 @@ static int kportal_ioctl(struct portal_ioctl_data *data,
                 ptl_handle_ni_t    nih;
                 ptl_process_id_t   pid;
 
-                CDEBUG (D_IOCTL, "Getting nid for nal [%d]\n", data->ioc_nal);
+                CDEBUG (D_IOCTL, "Getting nid for nal [%x]\n", data->ioc_nal);
 
                 err = PtlNIInit(data->ioc_nal, LUSTRE_SRV_PTL_PID, NULL,
                                 NULL, &nih);

@@ -266,7 +266,7 @@ libcfs_nal_cmd_register(int nal, nal_cmd_handler_fn *handler, void *private)
         int                     i;
         int                     rc;
 
-        CDEBUG(D_IOCTL, "Register NAL %d, handler: %p\n", nal, handler);
+        CDEBUG(D_IOCTL, "Register NAL %x, handler: %p\n", nal, handler);
 
         down(&nal_cmd_sem);
 
@@ -302,7 +302,7 @@ libcfs_nal_cmd_unregister(int nal)
 {
         struct nal_cmd_handler *cmd;
 
-        CDEBUG(D_IOCTL, "Unregister NAL %d\n", nal);
+        CDEBUG(D_IOCTL, "Unregister NAL %x\n", nal);
 
         down(&nal_cmd_sem);
         cmd = libcfs_find_nal_cmd_handler(nal);
@@ -324,11 +324,11 @@ libcfs_nal_cmd(struct portals_cfg *pcfg)
         down(&nal_cmd_sem);
         cmd = libcfs_find_nal_cmd_handler(nal);
         if (cmd != NULL) {
-                CDEBUG(D_IOCTL, "calling handler nal: %d, cmd: %d\n", nal, 
+                CDEBUG(D_IOCTL, "calling handler nal: %x, cmd: %d\n", nal, 
                        pcfg->pcfg_command);
                 rc = cmd->nch_handler(pcfg, cmd->nch_private);
         } else {
-                CERROR("invalid nal: %d, cmd: %d\n", nal, pcfg->pcfg_command);
+                CERROR("invalid nal: %x, cmd: %d\n", nal, pcfg->pcfg_command);
         }
         up(&nal_cmd_sem);
 
@@ -464,7 +464,7 @@ static int libcfs_ioctl(struct inode *inode, struct file *file,
                         break;
                 }
 
-                CDEBUG (D_IOCTL, "nal command nal %d cmd %d\n", pcfg.pcfg_nal,
+                CDEBUG (D_IOCTL, "nal command nal %x cmd %d\n", pcfg.pcfg_nal,
                         pcfg.pcfg_command);
                 err = libcfs_nal_cmd(&pcfg);
 

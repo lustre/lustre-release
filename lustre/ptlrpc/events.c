@@ -369,7 +369,7 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
                 }
         }
 
-        CERROR("Can't find ptlrpc interface for NAL %d, NID %s\n",
+        CERROR("Can't find ptlrpc interface for NAL %x, NID %s\n",
                peer_nal, portals_nid2str(peer_nal, peer_nid, str));
         return (-ENOENT);
 }
@@ -443,7 +443,7 @@ int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
         CDEBUG(D_NET, "My pid is: %x\n", ptl_get_pid());
         
         PtlSnprintHandle(str, sizeof(str), nih);
-        CDEBUG (D_NET, "init %d %s: %s\n", number, name, str);
+        CDEBUG (D_NET, "init %x %s: %s\n", number, name, str);
 
         pni->pni_name = name;
         pni->pni_number = number;

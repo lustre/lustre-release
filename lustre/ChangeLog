@@ -27,6 +27,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- add software watchdogs to catch hung threads quickly (4941)
 	- make lustrefs init script start after nfs is mounted
 	- fix CWARN/ERROR duplication (4930)
+	- print NAL number in %x format (4645)
 
 2004-10-07  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.7
