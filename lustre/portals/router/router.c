@@ -43,6 +43,7 @@ kpr_router_interface_t kpr_router_interface = {
 	kprri_lookup:		kpr_lookup_target,
 	kprri_fwd_start:	kpr_forward_packet,
 	kprri_fwd_done:		kpr_complete_packet,
+        kprri_notify:           kpr_nal_notify,
 	kprri_shutdown:		kpr_shutdown_nal,
 	kprri_deregister:	kpr_deregister_nal,
 };
@@ -50,8 +51,8 @@ kpr_router_interface_t kpr_router_interface = {
 kpr_control_interface_t kpr_control_interface = {
 	kprci_add_route:	kpr_add_route,
 	kprci_del_route:        kpr_del_route,
-	kprci_set_route:        kpr_set_route,
 	kprci_get_route:        kpr_get_route,
+	kprci_notify:           kpr_sys_notify,
 };
 
 int
@@ -95,6 +96,75 @@ kpr_register_nal (kpr_nal_interface_t *nalif, void **argp)
 	*argp = ne;
 	PORTAL_MODULE_USE;
         return (0);
+}
+
+int
+kpr_do_notify (int gateway_nalid, ptl_nid_t gateway_nid,
+               int alive, struct timeval when, int byNal)
+{
+	unsigned long	   flags;
+        int                rc = -ENOENT;
+	struct list_head  *e;
+	struct list_head  *n;
+
+        CDEBUG (D_NET, "%s notifying [%d] "LPX64": %s\n", 
+                byNal ? "NAL" : "userspace", 
+                gateway_nalid, gateway_nid, alive ? "up" : "down");
+
+        /* Serialise with lookups (i.e. write lock) */
+	write_lock_irqsave(&kpr_rwlock, flags);
+
+        list_for_each_safe (e, n, &kpr_gateways) {
+                kpr_gateway_entry_t *ge = list_entry(e, kpr_gateway_entry_t,
+                                                     kpge_list);
+                if (ge->kpge_nid != gateway_nid) 
+                        continue;
+
+                if (when.tv_sec < ge->kpge_timestamp.tv_sec ||
+                    (when.tv_sec == ge->kpge_timestamp.tv_sec &&
+                     when.tv_usec < ge->kpge_timestamp.tv_usec) ||
+                    (!ge->kpge_alive) == (!alive)) {
+                        /* out-of-date or nothing new */
+                        write_unlock_irqrestore (&kpr_rwlock, flags);
+                        return (0);
+                }
+                
+                rc = 0;
+                ge->kpge_alive = alive;
+                ge->kpge_timestamp = when;
+                CDEBUG(D_NET, "set "LPX64" [%p] %d\n", gateway_nid, ge, alive);
+        }
+
+        if (rc == 0 && alive) {
+                /* Reset all gateway weights so the newly-enabled gateway
+                 * doesn't have to play catch-up */
+                list_for_each_safe (e, n, &kpr_gateways) {
+                        kpr_gateway_entry_t *ge = list_entry(e, kpr_gateway_entry_t,
+                                                             kpge_list);
+
+                        atomic_set (&ge->kpge_weight, 0);
+                }
+        }
+
+        write_unlock_irqrestore(&kpr_rwlock, flags);
+
+        if (rc != 0 || !byNal)
+                return (rc);
+        
+        /* We make an upcall to notify the rest of the world about the
+         * failure of a gateway if it's new-news from the NAL */
+
+        //        do upcall;
+        
+        return (0);
+}
+
+void
+kpr_nal_notify (void *arg, ptl_nid_t peer, int alive, struct timeval when)
+{
+        kpr_nal_entry_t *ne = (kpr_nal_entry_t *)arg;
+        
+        kpr_do_notify (ne->kpne_interface.kprni_nalid, peer, alive, when, 1);
 }
 
 void
@@ -375,8 +445,8 @@ kpr_complete_packet (void *arg, kpr_fwd_desc_t *fwd, int error)
 }
 
 int
-kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
-               ptl_nid_t hi_nid)
+kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, 
+               ptl_nid_t lo_nid, ptl_nid_t hi_nid)
 {
 	unsigned long	     flags;
 	struct list_head    *e;
@@ -452,58 +522,15 @@ kpr_add_route (int gateway_nalid, ptl_nid_t gateway_nid, ptl_nid_t lo_nid,
 }
 
 int
-kpr_set_route (ptl_nid_t gateway_nid, int alive, struct timeval when)
+kpr_sys_notify (int gateway_nalid, ptl_nid_t gateway_nid,
+            int alive, struct timeval when)
 {
-	unsigned long	   flags;
-        int                rc = -ENOENT;
-	struct list_head  *e;
-	struct list_head  *n;
-
-        LASSERT(!in_interrupt());
-
-        if (gateway_nid == PTL_NID_ANY)
-                return (-EINVAL);
-
-        /* Serialise with lookups (i.e. write lock) */
-	write_lock_irqsave(&kpr_rwlock, flags);
-
-        list_for_each_safe (e, n, &kpr_gateways) {
-                kpr_gateway_entry_t *ge = list_entry(e, kpr_gateway_entry_t,
-                                                     kpge_list);
-                if (ge->kpge_nid != gateway_nid) 
-                        continue;
-
-                if (when.tv_sec < ge->kpge_timestamp.tv_sec ||
-                    (when.tv_sec == ge->kpge_timestamp.tv_sec &&
-                     when.tv_usec < ge->kpge_timestamp.tv_usec)) {
-                        /* Old information */
-                        write_unlock_irqrestore (&kpr_rwlock, flags);
-                        return (0);
-                }
-
-                rc = 0;
-                ge->kpge_alive = alive;
-                ge->kpge_timestamp = when;
-                CDEBUG(D_NET, "set "LPX64" [%p] %d\n", gateway_nid, ge, alive);
-        }
-
-        if (rc == 0 && alive) {
-                /* Reset all gateway weights so the newly-enabled gateway
-                 * doesn't have to play catch-up */
-                list_for_each_safe (e, n, &kpr_gateways) {
-                        kpr_gateway_entry_t *ge = list_entry(e, kpr_gateway_entry_t,
-                                                             kpge_list);
-
-                        atomic_set (&ge->kpge_weight, 0);
-                }
-        }
-
-        write_unlock_irqrestore(&kpr_rwlock, flags);
-        return (rc);
+        return (kpr_do_notify (gateway_nalid, gateway_nid, alive, when, 0));
 }
 
 int
-kpr_del_route (ptl_nid_t gw, ptl_nid_t lo, ptl_nid_t hi)
+kpr_del_route (int gw_nalid, ptl_nid_t gw_nid,
+               ptl_nid_t lo, ptl_nid_t hi)
 {
         int                specific = (lo != PTL_NID_ANY);
 	unsigned long	   flags;
@@ -511,7 +538,8 @@ kpr_del_route (ptl_nid_t gw, ptl_nid_t lo, ptl_nid_t hi)
 	struct list_head  *e;
 	struct list_head  *n;
 
-        CDEBUG(D_NET, "Del route "LPX64" : "LPX64" - "LPX64"\n", gw, lo, hi);
+        CDEBUG(D_NET, "Del route [%d] "LPX64" : "LPX64" - "LPX64"\n", 
+               gw_nalid, gw_nid, lo, hi);
 
         LASSERT(!in_interrupt());
 
@@ -519,25 +547,27 @@ kpr_del_route (ptl_nid_t gw, ptl_nid_t lo, ptl_nid_t hi)
          * (lo/hi == PTL_NID_ANY) or a specific route entry (lo/hi are
          * actual NIDs) */
         
-        if (gw == PTL_NID_ANY ||
-            (specific ? (hi == PTL_NID_ANY || hi < lo) : (hi != PTL_NID_ANY)))
+        if (specific ? (hi == PTL_NID_ANY || hi < lo) : (hi != PTL_NID_ANY))
                 return (-EINVAL);
 
 	write_lock_irqsave(&kpr_rwlock, flags);
 
         list_for_each_safe (e, n, &kpr_routes) {
-                kpr_route_entry_t *re = list_entry(e, kpr_route_entry_t,
+                kpr_route_entry_t   *re = list_entry(e, kpr_route_entry_t,
                                                    kpre_list);
-
-                if (re->kpre_gateway->kpge_nid != gw ||
-                    (specific && (lo != re->kpre_lo_nid || hi != re->kpre_hi_nid)))
+                kpr_gateway_entry_t *ge = re->kpre_gateway;
+                
+                if (ge->kpge_nalid != gw_nalid ||
+                    ge->kpge_nid != gw_nid ||
+                    (specific && 
+                     (lo != re->kpre_lo_nid || hi != re->kpre_hi_nid)))
                         continue;
 
                 rc = 0;
 
-                if (--re->kpre_gateway->kpge_refcount == 0) {
-                        list_del (&re->kpre_gateway->kpge_list);
-                        PORTAL_FREE (re->kpre_gateway, sizeof (*re->kpre_gateway));
+                if (--ge->kpge_refcount == 0) {
+                        list_del (&ge->kpge_list);
+                        PORTAL_FREE (ge, sizeof (*ge));
                 }
 
                 list_del (&re->kpre_list);
@@ -552,21 +582,22 @@ kpr_del_route (ptl_nid_t gw, ptl_nid_t lo, ptl_nid_t hi)
 }
 
 int
-kpr_get_route(int idx, int *gateway_nalid, ptl_nid_t *gateway_nid,
-              ptl_nid_t *lo_nid, ptl_nid_t *hi_nid, int *alive)
+kpr_get_route (int idx, int *gateway_nalid, ptl_nid_t *gateway_nid,
+               ptl_nid_t *lo_nid, ptl_nid_t *hi_nid, int *alive)
 {
 	struct list_head  *e;
 
 	read_lock(&kpr_rwlock);
 
         for (e = kpr_routes.next; e != &kpr_routes; e = e->next) {
-                kpr_route_entry_t *re = list_entry(e, kpr_route_entry_t,
-                                                   kpre_list);
-
+                kpr_route_entry_t   *re = list_entry(e, kpr_route_entry_t,
+                                                     kpre_list);
+                kpr_gateway_entry_t *ge = re->kpre_gateway;
+                
                 if (idx-- == 0) {
-                        *gateway_nalid = re->kpre_gateway->kpge_nalid;
-                        *gateway_nid = re->kpre_gateway->kpge_nid;
-                        *alive = re->kpre_gateway->kpge_alive;
+                        *gateway_nalid = ge->kpge_nalid;
+                        *gateway_nid = ge->kpge_nid;
+                        *alive = ge->kpge_alive;
                         *lo_nid = re->kpre_lo_nid;
                         *hi_nid = re->kpre_hi_nid;
 
