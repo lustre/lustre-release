@@ -1510,6 +1510,10 @@ class MDSDEV(Module):
             self.active = 1
         else:
             self.active = 0
+
+        # make sure the filesystem is valid
+        verify_devpath(self.devpath, self.name)
+
         if self.active and config.group and config.group != mds.get_val('group'):
             self.active = 0
 
@@ -1764,6 +1768,11 @@ class OSD(Module):
             self.active = 1
         else:
             self.active = 0
+
+        # make sure the filesystem is valid
+        verify_devpath(self.devpath, self.name)
+
+
         if self.active and config.group and config.group != ost.get_val('group'):
             self.active = 0
             
@@ -2711,6 +2720,18 @@ def default_gdb_script():
         return '/r' + script
     else:
         return script
+
+# make sure the filesystem is valid
+def verify_devpath(devpath, name):
+    ret, out = runcmd("/sbin/dumpe2fs -h " + devpath)
+    if ret:
+        panic("The back-end storage device \""+devpath+"\", specified for Lustre service \""+name+"\", does not appear to contain a valid ext3 file system.\n\nThis could have several causes:\n- there is a mistake in the configuration file\n- the drivers for that device are not loaded\n- you forgot to reformat the device before starting Lustre for the first time\n\nIf you want to reformat, you can re-run this lconf command with --reformat, which will REFORMAT ALL CONFIGURED LUSTRE DEVICES ON THIS NODE, AND DESTROY ALL DATA ON THOSE DEVICES.  Please use extreme caution with the --reformat command.\n")
+
+    else:
+        for line in out:
+            res = re.compile("^Filesystem.features:.*journal_dev.").search(line)            if res:
+                panic("The back-end storage device \""+devpath+"\", specified for Lustre service \""+name+"\", contains an ext3 external journal, instead of a proper ext3 file system.\n\nIt's possible that you meant to specify a different device, or that you meant to reformat this device before using it.  If you are intending to use a file system with an external journal, then the Lustre configuration file should point to the device that contains the main ext3 file system, not the journal device.\n");
+
 
 
 DEFAULT_PATH = ('/sbin', '/usr/sbin', '/bin', '/usr/bin')
