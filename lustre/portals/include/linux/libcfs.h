@@ -188,27 +188,28 @@ do {                                                                          \
 } while (0)
 
 #define CDEBUG_MAX_LIMIT 600
-#define CDEBUG_LIMIT(mask, format, a...)                                      \
+#define CDEBUG_LIMIT(cdebug_mask, cdebug_format, a...)                        \
 do {                                                                          \
-        static unsigned long next;                                            \
-        static int count, delay = 1;                                          \
+        static unsigned long cdebug_next;                                     \
+        static int cdebug_count, cdebug_delay = 1;                            \
                                                                               \
-        if (time_after(jiffies, next)) {                                      \
-                CDEBUG(mask, format, ## a);                                   \
-                if (count) {                                                  \
-                        CDEBUG(mask, "skipped %d similar messages\n", count); \
-                        count = 0;                                            \
+        if (time_after(jiffies, cdebug_next)) {                               \
+                CDEBUG(cdebug_mask, cdebug_format, ## a);                     \
+                if (cdebug_count) {                                           \
+                        CDEBUG(cdebug_mask, "skipped %d similar messages\n",  \
+                               cdebug_count);                                 \
+                        cdebug_count = 0;                                     \
                 }                                                             \
-                if (time_after(jiffies, next + (CDEBUG_MAX_LIMIT + 10) * HZ)) \
-                        delay = delay > 8 ? delay / 8 : 1;                    \
+                if (time_after(jiffies, cdebug_next+(CDEBUG_MAX_LIMIT+10)*HZ))\
+                        cdebug_delay = cdebug_delay > 8 ? cdebug_delay/8 : 1; \
                 else                                                          \
-                        delay = delay * 2 >= CDEBUG_MAX_LIMIT * HZ ?          \
-                                        CDEBUG_MAX_LIMIT * HZ : delay * 2;    \
-                next = jiffies + delay;                                       \
+                        cdebug_delay = cdebug_delay*2 >= CDEBUG_MAX_LIMIT*HZ ?\
+                                        CDEBUG_MAX_LIMIT*HZ : cdebug_delay*2; \
+                cdebug_next = jiffies + cdebug_delay;                         \
         } else {                                                              \
                 CDEBUG(portal_debug & ~(D_EMERG|D_ERROR|D_WARNING),           \
-                       format, ## a);                                         \
-                count++;                                                      \
+                       cdebug_format, ## a);                                  \
+                cdebug_count++;                                               \
         }                                                                     \
 } while (0)
 
