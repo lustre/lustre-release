@@ -91,6 +91,9 @@ new_fs () {
 		LOOPDEV=`next_loop_dev`
 		losetup ${LOOPDEV} $2 1>&2 || exit -1
 	fi
+
+	# Enable hash-indexed directories for extN filesystems
+	[ "$1" = "extN" ] && echo "feature FEATURE_C5" | debugfs -w $2
 }
 
 # Set up to use an existing filesystem.  We take the same parameters as
@@ -193,11 +196,13 @@ setup_lustre() {
 	do_insmod $LUSTRE/class/obdclass.o || exit -1
 	do_insmod $LUSTRE/rpc/ptlrpc.o || exit -1
 	do_insmod $LUSTRE/ldlm/ldlm.o || exit -1
-	do_insmod $LUSTRE/extN/extN.o
+	do_insmod $LUSTRE/extN/extN.o || \
+		echo "info: can't load extN.o module, not fatal if using ext3"
 	do_insmod $LUSTRE/mds/mds.o || exit -1
 	do_insmod $LUSTRE/mds/mds_ext2.o || exit -1
 	do_insmod $LUSTRE/mds/mds_ext3.o || exit -1
-	do_insmod $LUSTRE/mds/mds_extN.o
+	do_insmod $LUSTRE/mds/mds_extN.o || \
+		echo "info: can't load mds_extN.o module, needs extN.o"
 	do_insmod $LUSTRE/obdecho/obdecho.o || exit -1
 	do_insmod $LUSTRE/ext2obd/obdext2.o || exit -1
 	do_insmod $LUSTRE/filterobd/obdfilter.o || exit -1
