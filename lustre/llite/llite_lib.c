@@ -1019,15 +1019,15 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 /* bug 1639: avoid write/truncate i_sem/DLM deadlock */
                 LASSERT(atomic_read(&inode->i_sem.count) <= 0);
                 up(&inode->i_sem);
-                up_write(&inode->i_alloc_sem);
+                UP_WRITE_I_ALLOC_SEM(inode);
                 rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy, &lockh,
                                     ast_flags);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                down_write(&inode->i_alloc_sem);
+                DOWN_WRITE_I_ALLOC_SEM(inode);
                 down(&inode->i_sem);
 #else
                 down(&inode->i_sem);
-                down_write(&inode->i_alloc_sem);
+                DOWN_WRITE_I_ALLOC_SEM(inode);
 #endif
                 if (rc != 0)
                         RETURN(rc);
@@ -1037,16 +1037,16 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 /* We need to drop the semaphore here, because this unlock may
                  * result in a cancellation, which will need the i_sem */
                 up(&inode->i_sem);
-                up_write(&inode->i_alloc_sem);
+                UP_WRITE_I_ALLOC_SEM(inode);
                 /* unlock now as we don't mind others file lockers racing with
                  * the mds updates below? */
                 err = ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                down_write(&inode->i_alloc_sem);
+                DOWN_WRITE_I_ALLOC_SEM(inode);
                 down(&inode->i_sem);
 #else
                 down(&inode->i_sem);
-                down_write(&inode->i_alloc_sem);
+                DOWN_WRITE_I_ALLOC_SEM(inode);
 #endif
                 if (err) {
                         CERROR("ll_extent_unlock failed: %d\n", err);

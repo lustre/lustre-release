@@ -1253,9 +1253,9 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
         LASSERT(body != NULL);
 
-        /* child i_alloc_sem protects orphan_dec_test && is_orphan race */
-        DOWN_READ_I_ALLOC_SEM(child_inode);
-        cleanup_phase = 4; /* up(&child_inode->i_sem) when finished */
+        /* child orphan sem protects orphan_dec_test && is_orphan race */
+        MDS_DOWN_READ_ORPHAN_SEM(child_inode);
+        cleanup_phase = 4; /* MDS_UP_READ_ORPHAN_SEM(new_inode) when finished */
 
         /* If this is potentially the last reference to this inode, get the
          * OBD EA data first so the client can destroy OST objects.  We
@@ -1373,7 +1373,7 @@ cleanup:
         case 5: /* pending_dir semaphore */
                 up(&mds->mds_pending_dir->d_inode->i_sem);
         case 4: /* child inode semaphore */
-                UP_READ_I_ALLOC_SEM(child_inode);
+                MDS_UP_READ_ORPHAN_SEM(child_inode);
         case 3: /* child ino-reuse lock */
                 if (rc && body != NULL) {
                         // Don't unlink the OST objects if the MDS unlink failed
@@ -1780,9 +1780,9 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
         LASSERT(body != NULL);
 
-        /* child i_alloc_sem protects orphan_dec_test && is_orphan race */
-        DOWN_READ_I_ALLOC_SEM(new_inode);
-        cleanup_phase = 3; /* up(&new_inode->i_sem) when finished */
+        /* child orphan sem protects orphan_dec_test && is_orphan race */
+        MDS_DOWN_READ_ORPHAN_SEM(new_inode);
+        cleanup_phase = 3; /* MDS_UP_READ_ORPHAN_SEM(new_inode) when finished */
 
         if ((S_ISDIR(new_inode->i_mode) && new_inode->i_nlink == 2) ||
             new_inode->i_nlink == 1) {
@@ -1854,7 +1854,7 @@ cleanup:
         case 4:
                 up(&mds->mds_pending_dir->d_inode->i_sem);
         case 3:
-                UP_READ_I_ALLOC_SEM(new_inode);
+                MDS_UP_READ_ORPHAN_SEM(new_inode);
         case 2:
                 iput(new_inode);
         case 1:

@@ -30,6 +30,26 @@ static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 # define mds_inode_oatomic(inode)    ((inode)->i_attr_flags)
 #endif
 
+#ifdef HAVE_I_ALLOC_SEM
+#define MDS_UP_READ_ORPHAN_SEM(i)          UP_READ_I_ALLOC_SEM(i)
+#define MDS_DOWN_READ_ORPHAN_SEM(i)        DOWN_READ_I_ALLOC_SEM(i)
+#define LASSERT_MDS_ORPHAN_READ_LOCKED(i)  LASSERT_I_ALLOC_SEM_READ_LOCKED(i)
+
+#define MDS_UP_WRITE_ORPHAN_SEM(i)         UP_WRITE_I_ALLOC_SEM(i)
+#define MDS_DOWN_WRITE_ORPHAN_SEM(i)       DOWN_WRITE_I_ALLOC_SEM(i)
+#define LASSERT_MDS_ORPHAN_WRITE_LOCKED(i) LASSERT_I_ALLOC_SEM_WRITE_LOCKED(i)
+#define MDS_PACK_MD_LOCK 1
+#else
+#define MDS_UP_READ_ORPHAN_SEM(i)          do { up(&(i)->i_sem); } while (0)
+#define MDS_DOWN_READ_ORPHAN_SEM(i)        do { down(&(i)->i_sem); } while (0)
+#define LASSERT_MDS_ORPHAN_READ_LOCKED(i)  LASSERT(down_trylock(&(i)->i_sem)!=0)
+
+#define MDS_UP_WRITE_ORPHAN_SEM(i)         do { up(&(i)->i_sem); } while (0)
+#define MDS_DOWN_WRITE_ORPHAN_SEM(i)       do { down(&(i)->i_sem); } while (0)
+#define LASSERT_MDS_ORPHAN_WRITE_LOCKED(i) LASSERT(down_trylock(&(i)->i_sem)!=0)
+#define MDS_PACK_MD_LOCK 0
+#endif
+
 static inline int mds_orphan_open_count(struct inode *inode)
 {
         LASSERT_MDS_ORPHAN_READ_LOCKED(inode);
@@ -49,16 +69,19 @@ static inline int mds_orphan_open_dec_test(struct inode *inode)
 }
 
 #define mds_inode_is_orphan(inode)  ((inode)->i_flags & 0x4000000)
-#define mds_inode_set_orphan(inode)                                        \
-do {                                                                       \
-        (inode)->i_flags |= 0x4000000;                                     \
-        CDEBUG(D_VFSTRACE, "setting orphan flag on inode %p\n", inode);    \
-} while (0)
-#define mds_inode_unset_orphan(inode)                                      \
-do {                                                                       \
-        (inode)->i_flags &= ~(0x4000000);                                  \
-        CDEBUG(D_VFSTRACE, "removing orphan flag from inode %p\n", inode); \
-} while (0)
+
+static inline void mds_inode_set_orphan(struct inode *inode)
+{
+        inode->i_flags |= 0x4000000;
+        CDEBUG(D_VFSTRACE, "setting orphan flag on inode %p\n", inode);
+}
+
+static inline void mds_inode_unset_orphan(struct inode *inode)
+{
+        inode->i_flags &= ~(0x4000000);
+        CDEBUG(D_VFSTRACE, "removing orphan flag from inode %p\n", inode);
+}
+
 #endif /* __KERNEL__ */
 
 #define MDS_CHECK_RESENT(req, reconstruct)                                    \

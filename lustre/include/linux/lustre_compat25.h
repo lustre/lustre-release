@@ -297,23 +297,21 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #endif
 
 #ifdef HAVE_I_ALLOC_SEM
-#define UP_WRITE_I_ALLOC_SEM(i) do { up_write(&(i)->i_alloc_sem); } while (0)
+#define UP_WRITE_I_ALLOC_SEM(i)   do { up_write(&(i)->i_alloc_sem); } while (0)
 #define DOWN_WRITE_I_ALLOC_SEM(i) do { down_write(&(i)->i_alloc_sem); } while(0)
-#define LASSERT_MDS_ORPHAN_WRITE_LOCKED(i) LASSERT(down_read_trylock(&(i)->i_alloc_sem) == 0)
+#define LASSERT_I_ALLOC_SEM_WRITE_LOCKED(i) LASSERT(down_read_trylock(&(i)->i_alloc_sem) == 0)
 
-#define UP_READ_I_ALLOC_SEM(i) do { up_read(&(i)->i_alloc_sem); } while (0)
-#define DOWN_READ_I_ALLOC_SEM(i) do { down_read(&(i)->i_alloc_sem); } while (0)
-#define LASSERT_MDS_ORPHAN_READ_LOCKED(i) LASSERT(down_write_trylock(&(i)->i_alloc_sem) == 0)
-#define MDS_PACK_MD_LOCK 1
+#define UP_READ_I_ALLOC_SEM(i)    do { up_read(&(i)->i_alloc_sem); } while (0)
+#define DOWN_READ_I_ALLOC_SEM(i)  do { down_read(&(i)->i_alloc_sem); } while (0)
+#define LASSERT_I_ALLOC_SEM_READ_LOCKED(i) LASSERT(down_write_trylock(&(i)->i_alloc_sem) == 0)
 #else
-#define UP_READ_I_ALLOC_SEM(i) do { up(&(i)->i_sem); } while (0)
-#define DOWN_READ_I_ALLOC_SEM(i) do { down(&(i)->i_sem); } while (0)
-#define LASSERT_MDS_ORPHAN_READ_LOCKED(i) LASSERT(down_trylock(&(i)->i_sem) != 0)
+#define UP_READ_I_ALLOC_SEM(i)              do { } while (0)
+#define DOWN_READ_I_ALLOC_SEM(i)            do { } while (0)
+#define LASSERT_I_ALLOC_SEM_READ_LOCKED(i)  do { } while (0)
 
-#define UP_WRITE_I_ALLOC_SEM(i) do { up(&(i)->i_sem); } while (0)
-#define DOWN_WRITE_I_ALLOC_SEM(i) do { down(&(i)->i_sem); } while (0)
-#define LASSERT_MDS_ORPHAN_WRITE_LOCKED(i) LASSERT(down_trylock(&(i)->i_sem) != 0)
-#define MDS_PACK_MD_LOCK 0
+#define UP_WRITE_I_ALLOC_SEM(i)             do { } while (0)
+#define DOWN_WRITE_I_ALLOC_SEM(i)           do { } while (0)
+#define LASSERT_I_ALLOC_SEM_WRITE_LOCKED(i) do { } while (0)
 #endif
 
 #ifndef HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP

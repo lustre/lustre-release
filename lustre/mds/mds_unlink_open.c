@@ -220,14 +220,14 @@ int mds_cleanup_orphans(struct obd_device *obd)
                 }
 
                 child_inode = dchild->d_inode;
-                DOWN_READ_I_ALLOC_SEM(child_inode);
+                MDS_DOWN_READ_ORPHAN_SEM(child_inode);
                 if (mds_inode_is_orphan(child_inode) &&
                     mds_orphan_open_count(child_inode)) {
-                        UP_READ_I_ALLOC_SEM(child_inode);
+                        MDS_UP_READ_ORPHAN_SEM(child_inode);
                         CWARN("orphan %s re-opened during recovery\n", d_name);
                         GOTO(next, rc = 0);
                 }
-                UP_READ_I_ALLOC_SEM(child_inode);
+                MDS_UP_READ_ORPHAN_SEM(child_inode);
 
                 rc = mds_unlink_orphan(obd, dchild, child_inode, pending_dir);
                 if (rc == 0) {

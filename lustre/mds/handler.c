@@ -346,9 +346,9 @@ static int mds_destroy_export(struct obd_export *export)
                        dentry->d_name.len, dentry->d_name.name,
                        ll_bdevname(dentry->d_inode->i_sb, btmp),
                        dentry->d_inode->i_ino);
-                /* child inode->i_alloc_sem protects orphan_dec_test and
+                /* child orphan sem protects orphan_dec_test and
                  * is_orphan race, mds_mfd_close drops it */
-                DOWN_WRITE_I_ALLOC_SEM(dentry->d_inode);
+                MDS_DOWN_WRITE_ORPHAN_SEM(dentry->d_inode);
                 rc = mds_mfd_close(NULL, obd, mfd,
                                    !(export->exp_flags & OBD_OPT_FAILOVER));
 

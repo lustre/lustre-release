@@ -267,9 +267,9 @@ static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
         dget(dentry);
 
         /* Mark the file as open to handle open-unlink. */
-        DOWN_WRITE_I_ALLOC_SEM(dentry->d_inode);
+        MDS_DOWN_WRITE_ORPHAN_SEM(dentry->d_inode);
         mds_orphan_open_inc(dentry->d_inode);
-        UP_WRITE_I_ALLOC_SEM(dentry->d_inode);
+        MDS_UP_WRITE_ORPHAN_SEM(dentry->d_inode);
 
         mfd->mfd_mode = flags;
         mfd->mfd_dentry = dentry;
@@ -1066,7 +1066,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
 
         last_orphan = mds_orphan_open_dec_test(inode) &&
                 mds_inode_is_orphan(inode);
-        UP_WRITE_I_ALLOC_SEM(inode);
+        MDS_UP_WRITE_ORPHAN_SEM(inode);
 
         /* this is half of the actual "close" */
         if (mfd->mfd_mode & FMODE_WRITE) {
@@ -1258,8 +1258,8 @@ int mds_close(struct ptlrpc_request *req)
         }
 
         inode = mfd->mfd_dentry->d_inode;
-        /* child i_alloc_sem protects orphan_dec_test && is_orphan race */
-        DOWN_WRITE_I_ALLOC_SEM(inode); /* mds_mfd_close drops this */
+        /* child orphan sem protects orphan_dec_test && is_orphan race */
+        MDS_DOWN_WRITE_ORPHAN_SEM(inode); /* mds_mfd_close drops this */
         if (mds_inode_is_orphan(inode) && mds_orphan_open_count(inode) == 1) {
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
                 LASSERT(body != NULL);
