@@ -1,6 +1,3 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
- */ 
 #ifndef __LVFS_LINUX_H__
 #define __LVFS_LINUX_H__
 
@@ -25,14 +22,17 @@ struct l_file *l_dentry_open(struct obd_run_ctxt *, struct l_dentry *,
                              int flags);
 
 struct l_linux_dirent {
-        struct list_head lld_list;
-        ino_t           lld_ino;
-        unsigned long   lld_off;
-        char            lld_name[LL_FID_NAMELEN];
+        ino_t           d_ino;
+        unsigned long   d_off;
+        unsigned short  d_reclen;
+        char            d_name[1]; 
 };
+
 struct l_readdir_callback {
-        struct l_linux_dirent *lrc_dirent;
-        struct list_head      *lrc_list;
+        struct l_linux_dirent *current_dir;
+        struct l_linux_dirent *previous;
+        int count;
+        int error;
 };
 
 #endif
