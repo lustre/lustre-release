@@ -66,7 +66,7 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
 
         if (!S_ISREG(inode->i_mode))
                 b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLATIME |
-                            OBD_MD_FLMTIME;
+                            OBD_MD_FLMTIME | OBD_MD_FLRDEV;
 
         b->ino = inode->i_ino;
         b->atime = LTIME_S(inode->i_atime);
@@ -78,7 +78,7 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
         b->uid = inode->i_uid;
         b->gid = inode->i_gid;
         b->flags = inode->i_flags;
-        b->rdev = b->rdev;
+        b->rdev = inode->i_rdev;
         /* Return the correct link count for orphan inodes */
         b->nlink = mds_inode_is_orphan(inode) ? 0 : inode->i_nlink;
         b->generation = inode->i_generation;
