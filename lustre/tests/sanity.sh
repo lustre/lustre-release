@@ -1841,52 +1841,52 @@ run_test 64b "check out-of-space detection on client ==========="
 
 # bug 1414 - set/get directories' stripe info
 test_65a() {
-        mkdir -p $DIR/d65
-        touch $DIR/d65/f1
-        $LVERIFY $DIR/d65 $DIR/d65/f1 || error "lverify failed"
+	mkdir -p $DIR/d65
+	touch $DIR/d65/f1
+	$LVERIFY $DIR/d65 $DIR/d65/f1 || error "lverify failed"
 }
 run_test 65a "directory with no stripe info ===================="
 
 test_65b() {
-        mkdir -p $DIR/d65
+	mkdir -p $DIR/d65
        	$LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
-        touch $DIR/d65/f2
-        $LVERIFY $DIR/d65 $DIR/d65/f2 || error "lverify failed"
+	touch $DIR/d65/f2
+	$LVERIFY $DIR/d65 $DIR/d65/f2 || error "lverify failed"
 }
 run_test 65b "directory setstripe $(($STRIPESIZE * 2)) 0 1 ==============="
 
 test_65c() {
-        if [ $OSTCOUNT -gt 1 ]; then
+	if [ $OSTCOUNT -gt 1 ]; then
 		mkdir -p $DIR/d65
-    		$LSTRIPE DIR/d65 $(($STRIPESIZE * 4)) 1 \
+    		$LSTRIPE $DIR/d65 $(($STRIPESIZE * 4)) 1 \
 			$(($OSTCOUNT - 1)) || error "setstripe"
-                touch $DIR/d65/f3
-                $LVERIFY $DIR/d65 $DIR/d65/f3 || error "lverify failed"
-        fi
+	        touch $DIR/d65/f3
+	        $LVERIFY $DIR/d65 $DIR/d65/f3 || error "lverify failed"
+	fi
 }
 run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
 
 [ $STRIPECOUNT -eq 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
 
 test_65d() {
-        mkdir -p $DIR/d65
-        $LSTRIPE $DIR/d65 $STRIPESIZE -1 $sc || error "setstripe"
-        touch $DIR/d65/f4 $DIR/d65/f5
-        $LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error "lverify failed"
+	mkdir -p $DIR/d65
+	$LSTRIPE $DIR/d65 $STRIPESIZE -1 $sc || error "setstripe"
+	touch $DIR/d65/f4 $DIR/d65/f5
+	$LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error "lverify failed"
 }
 run_test 65d "directory setstripe $STRIPESIZE -1 $sc ======================"
 
 test_65e() {
-        mkdir -p $DIR/d65
-        $LSTRIPE $DIR/d65 0 -1 0 || error "setstripe"
-        touch $DIR/d65/f6
-        $LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
+	mkdir -p $DIR/d65
+	$LSTRIPE $DIR/d65 0 -1 0 || error "setstripe"
+	touch $DIR/d65/f6
+	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
 }
 run_test 65e "directory setstripe 0 -1 0 (default) ============="
 
 test_65f() {
-        mkdir -p $DIR/d65f
-        $RUNAS $LSTRIPE $DIR/d65f 0 -1 0 && error "setstripe succeeded" || true
+	mkdir -p $DIR/d65f
+	$RUNAS $LSTRIPE $DIR/d65f 0 -1 0 && error "setstripe succeeded" || true
 }
 run_test 65f "dir setstripe permission (should return error) ==="
 
