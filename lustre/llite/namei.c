@@ -156,7 +156,7 @@ static int ll_intent_to_lock_mode(struct lookup_intent *it)
         } else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_UNLINK |
                                 IT_RMDIR | IT_RENAME | IT_RENAME2 | IT_READLINK|
                                 IT_LINK | IT_LINK2 | IT_LOOKUP | IT_SYMLINK)) {
-                return LCK_PW;
+                return LCK_PR;
         }
 
         LBUG();
@@ -347,7 +347,7 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
 
 /* Search "inode"'s alias list for a dentry that has the same name and parent as
  * de.  If found, return it.  If not found, return de. */
-static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
+struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 {
 	struct list_head *tmp;
 
@@ -357,6 +357,12 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 
                 /* We are called here with 'de' already on the aliases list. */
                 if (dentry == de)
+                        continue;
+
+                if (!atomic_read(&dentry->d_count))
+                        continue;
+
+                if (!list_empty(&dentry->d_lru))
                         continue;
 
                 if (dentry->d_parent != de->d_parent)
@@ -369,11 +375,17 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                            de->d_name.len) != 0)
                         continue;
 
+                list_del_init(&dentry->d_hash);
+
                 spin_unlock(&dcache_lock);
                 d_rehash(dentry);
-                return dget(dentry);
+		atomic_inc(&dentry->d_count);
+                iput(inode);
+                return dentry;
 	}
+
 	spin_unlock(&dcache_lock);
+
         return de;
 }
 
@@ -430,7 +442,7 @@ lookup2_finish(int flag, struct ptlrpc_request *request, struct dentry **de,
         if (dentry == saved)
                 d_add(dentry, inode);
 
-        if (it->it_status == 0) {
+        if (it->it_status == 0 && it->it_op != IT_RENAME2) {
                 LL_SAVE_INTENT(dentry, it);
         } else {
                 dentry->d_it = NULL;
@@ -872,7 +884,7 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
         struct page * old_page;
         int err;
 
-        LL_GET_INTENT(new_dentry, it);
+        LL_GET_INTENT(old_dentry, it);
 
         if (it && it->it_disposition) {
                 if (tgt_inode) {

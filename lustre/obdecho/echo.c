@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.42 2002/11/01 17:23:13 thantry Exp $";
-#define OBDECHO_VERSION "$Revision: 1.42 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.43 2002/11/02 01:09:28 braam Exp $";
+#define OBDECHO_VERSION "$Revision: 1.43 $"
 
 #define EXPORT_SYMTAB
 

@@ -618,7 +618,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         dir = de->d_inode;
         CDEBUG(D_INODE, "parent ino %ld, name %*s\n", dir->i_ino,namelen,name);
 
-        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
+        lock_mode = LCK_PR;
         res_id[0] = dir->i_ino;
         res_id[1] = dir->i_generation;
 
@@ -1247,8 +1247,13 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (rc)
                 GOTO(err_fs, rc);
 
-        ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
-                           "mds_ldlm_client", &obddev->obd_ldlm_client);
+        ptlrpc_init_client(LDLM_CANCEL_REQUEST_PORTAL, 
+                           LDLM_CANCEL_REPLY_PORTAL,
+                           "mds_ldlm_client", &obddev->obd_ldlm_cancel_client);
+
+        ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, 
+                           LDLM_CB_REPLY_PORTAL,
+                           "mds_ldlm_client", &obddev->obd_ldlm_cb_client);
 
         RETURN(0);
 

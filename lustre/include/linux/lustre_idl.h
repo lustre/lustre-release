@@ -68,10 +68,12 @@ typedef __u8 obd_uuid_t[37];
 #define MDS_REQUEST_PORTAL      12
 #define MDS_REPLY_PORTAL        13
 #define MDS_BULK_PORTAL         14
-#define LDLM_REQUEST_PORTAL     15
-#define LDLM_REPLY_PORTAL       16
-#define LDLM_CLI_REQUEST_PORTAL 17
-#define LDLM_CLI_REPLY_PORTAL   18
+#define LDLM_CB_REQUEST_PORTAL     15
+#define LDLM_CB_REPLY_PORTAL       16
+#define LDLM_CANCEL_REQUEST_PORTAL     17
+#define LDLM_CANCEL_REPLY_PORTAL       18
+#define LDLM_CLI_REQUEST_PORTAL 19
+#define LDLM_CLI_REPLY_PORTAL   20
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2

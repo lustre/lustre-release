@@ -459,8 +459,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                         GOTO(out, rc = -ENOMEM);
 
                 /* XXX FIXME bug 249 */
-                req->rq_request_portal = LDLM_REQUEST_PORTAL;
-                req->rq_reply_portal = LDLM_REPLY_PORTAL;
+                req->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
+                req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;
 
                 body = lustre_msg_buf(req->rq_reqmsg, 0);
                 memcpy(&body->lock_handle1, &lock->l_remote_handle,

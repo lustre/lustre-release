@@ -271,7 +271,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 handle = mds_fs_start(mds, dir, MDS_FSOP_SYMLINK);
                 if (!handle)
                         GOTO(out_create_dchild, PTR_ERR(handle));
-                rc = vfs_symlink(dir, dchild, rec->ur_tgt);
+                rc = vfs_symlink(dir, dchild, rec->ur_name);
                 EXIT;
                 break;
         }

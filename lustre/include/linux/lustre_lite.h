@@ -88,6 +88,8 @@ struct ll_sb_info {
         time_t                    ll_commitcbd_timeout;
         spinlock_t                ll_commitcbd_lock;
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
+
+        struct list_head          ll_orphan_dentry_list; /*please don't ask -p*/
 };
 
 static inline struct ll_sb_info *ll_s2sbi(struct super_block *sb)

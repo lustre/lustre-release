@@ -1,14 +1,14 @@
-AC_MSG_CHECKING(if you are running user mode linux for $host_alias..)
+AC_MSG_CHECKING(if you are running user mode linux for $host_cpu ...)
 if test -e $LINUX/include/asm-um ; then
-if test  X`ls -id $LINUX/include/asm | awk '{print $1}'` = X`ls -id $LINUX/include/asm-um | awk '{print $1}'` ; then
+if test  X`ls -id $LINUX/include/asm/ | awk '{print $1}'` = X`ls -id $LINUX/include/asm-um | awk '{print $1}'` ; then
 	host_cpu="um";
 	AC_MSG_RESULT(yes)
 else
-	AC_MSG_RESULT(no)
+	AC_MSG_RESULT(no (asm doesn't point at asm-um))
 fi
 
 else 
-        AC_MSG_RESULT(no)
+        AC_MSG_RESULT(no (asm-um missing))
 fi
 
 AC_MSG_CHECKING(setting make flags system architecture: )
@@ -21,7 +21,7 @@ case ${host_cpu} in
 ;;
 	i*86 )
 	AC_MSG_RESULT($host_cpu)
-        KCFLAGS='-g -O2 -Wall -Wstrict-prototypes -pipe'
+        KCFLAGS='-g -Wall -Wstrict-prototypes -pipe'
         KCPPFLAGS='-D__KERNEL__ -DMODULE '
         MOD_LINK=elf_i386
 ;;

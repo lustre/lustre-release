@@ -1,3 +1,5 @@
+
+
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
@@ -503,6 +505,34 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 rc = ldlm_handle_cp_callback(req);
                 RETURN(rc);
 
+        default:
+                CERROR("invalid opcode %d\n", req->rq_reqmsg->opc);
+                RETURN(-EINVAL);
+        }
+
+        RETURN(0);
+}
+
+
+static int ldlm_cancel_handler(struct ptlrpc_request *req)
+{
+        int rc;
+        ENTRY;
+
+        rc = lustre_unpack_msg(req->rq_reqmsg, req->rq_reqlen);
+        if (rc) {
+                CERROR("lustre_ldlm: Invalid request: %d\n", rc);
+                RETURN(rc);
+        }
+
+        if (req->rq_export == NULL) {
+                CERROR("lustre_dlm: operation %d with missing/invalid export\n",
+                       req->rq_reqmsg->opc);
+                RETURN(-ENOTCONN);
+        }
+
+        switch (req->rq_reqmsg->opc) {
+ 
         /* XXX FIXME move this back to mds/handler.c, bug 625069 */
         case LDLM_CANCEL:
                 CDEBUG(D_INODE, "cancel\n");
@@ -562,7 +592,7 @@ static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len,
         return err;
 }
 
-#define LDLM_NUM_THREADS        8
+#define LDLM_NUM_THREADS        4
 
 static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
@@ -579,18 +609,40 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (rc != 0)
                 GOTO(out_dec, rc);
         */
-        ldlm->ldlm_service =
+        ldlm->ldlm_cb_service =
                 ptlrpc_init_svc(LDLM_NEVENTS, LDLM_NBUFS, LDLM_BUFSIZE,
-                                LDLM_MAXREQSIZE, LDLM_REQUEST_PORTAL,
-                                LDLM_REPLY_PORTAL, "self",
-                                ldlm_callback_handler, "ldlm");
-        if (!ldlm->ldlm_service)
+                                LDLM_MAXREQSIZE, LDLM_CB_REQUEST_PORTAL,
+                                LDLM_CB_REPLY_PORTAL, "self",
+                                ldlm_callback_handler, "ldlm_cbd");
+
+        if (!ldlm->ldlm_cb_service)
+                GOTO(out_dec, rc = -ENOMEM);
+
+        ldlm->ldlm_cancel_service =
+                ptlrpc_init_svc(LDLM_NEVENTS, LDLM_NBUFS, LDLM_BUFSIZE,
+                                LDLM_MAXREQSIZE, 
+                                LDLM_CANCEL_REQUEST_PORTAL,
+                                LDLM_CANCEL_REPLY_PORTAL, "self",
+                                ldlm_cancel_handler, "ldlm_canceld");
+
+        if (!ldlm->ldlm_cancel_service)
                 GOTO(out_dec, rc = -ENOMEM);
 
         for (i = 0; i < LDLM_NUM_THREADS; i++) {
                 char name[32];
                 sprintf(name, "lustre_dlm_%02d", i);
-                rc = ptlrpc_start_thread(obddev, ldlm->ldlm_service, name);
+                rc = ptlrpc_start_thread(obddev, ldlm->ldlm_cancel_service, name);
+                if (rc) {
+                        CERROR("cannot start LDLM thread #%d: rc %d\n", i, rc);
+                        LBUG();
+                        GOTO(out_thread, rc);
+                }
+        }
+
+        for (i = 0; i < LDLM_NUM_THREADS; i++) {
+                char name[32];
+                sprintf(name, "lustre_dlm_%02d", i);
+                rc = ptlrpc_start_thread(obddev, ldlm->ldlm_cb_service, name);
                 if (rc) {
                         CERROR("cannot start LDLM thread #%d: rc %d\n", i, rc);
                         LBUG();
@@ -609,8 +661,10 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         RETURN(0);
 
  out_thread:
-        ptlrpc_stop_all_threads(ldlm->ldlm_service);
-        ptlrpc_unregister_service(ldlm->ldlm_service);
+        ptlrpc_stop_all_threads(ldlm->ldlm_cancel_service);
+        ptlrpc_unregister_service(ldlm->ldlm_cancel_service);
+        ptlrpc_stop_all_threads(ldlm->ldlm_cb_service);
+        ptlrpc_unregister_service(ldlm->ldlm_cb_service);
         /*
  out_proc:
 
@@ -631,8 +685,10 @@ static int ldlm_cleanup(struct obd_device *obddev)
                 RETURN(-EBUSY);
         }
 
-        ptlrpc_stop_all_threads(ldlm->ldlm_service);
-        ptlrpc_unregister_service(ldlm->ldlm_service);
+        ptlrpc_stop_all_threads(ldlm->ldlm_cb_service);
+        ptlrpc_unregister_service(ldlm->ldlm_cb_service);
+        ptlrpc_stop_all_threads(ldlm->ldlm_cancel_service);
+        ptlrpc_unregister_service(ldlm->ldlm_cancel_service);
         /* ldlm_proc_cleanup(obddev); */
 
         ldlm_already_setup = 0;

@@ -40,12 +40,13 @@ void ll_release(struct dentry *de)
         EXIT;
 }
 
+extern void d_delete_aliases(struct inode *);
 void ll_intent_release(struct dentry *de, struct lookup_intent *it)
 {
         struct lustre_handle *handle;
         ENTRY;
 
-        if (it == NULL) {
+        if (it == NULL || it->it_op == IT_RENAME2) {
                 EXIT;
                 return;
         }
@@ -56,10 +57,15 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
                 handle = (struct lustre_handle *)it->it_lock_handle;
                 if (it->it_op == IT_SETATTR) {
                         int rc;
+                        struct inode *inode = de->d_inode;
                         ldlm_lock_decref(handle, it->it_lock_mode);
                         rc = ldlm_cli_cancel(handle);
                         if (rc < 0)
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
+                        /* XXX should we only do this when the last lock goes? */
+                        LASSERT(igrab(inode) == inode);
+                        d_delete_aliases(inode);
+                        iput(inode);
                 } else
                         ldlm_lock_decref(handle, it->it_lock_mode);
         }
@@ -69,6 +75,19 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
                 it->it_op = IT_RELEASED_MAGIC;
         }
         EXIT;
+}
+
+extern struct dentry *ll_find_alias(struct inode *, struct dentry *);
+
+static int revalidate2_finish(int flag, struct ptlrpc_request *request, 
+                          struct dentry **de,
+                          struct lookup_intent *it, 
+                          int offset, obd_id ino)
+{
+        ldlm_lock_set_data((struct lustre_handle *)it->it_lock_handle,
+                           (*de)->d_inode, sizeof(*((*de)->d_inode)));
+        ptlrpc_req_finished(request);
+        return 0;
 }
 
 int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
@@ -84,80 +103,25 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                 RETURN(0);
         }
 
-        rc = ll_intent_lock(de->d_parent->d_inode, &de, it, NULL);
+        rc = ll_intent_lock(de->d_parent->d_inode, &de, it, revalidate2_finish);
         if (rc < 0) {
                 /* Something bad happened; overwrite it_status? */
                 CERROR("ll_intent_lock: %d\n", rc);
         }
+        /* unfortunately ll_intent_lock may cause a callback and revoke our 
+           dentry */
+        spin_lock(&dcache_lock);
+        list_del_init(&de->d_hash);
+        spin_unlock(&dcache_lock);
+        d_rehash(de);
 
-        if (it != NULL && it->it_status == 0) {
+        if (it != NULL) { 
                 LL_SAVE_INTENT(de, it);
-        } else if (it != NULL) {
+        } else {
                 de->d_it = NULL;
-                CDEBUG(D_DENTRY,
-                       "D_IT dentry %p fsdata %p intent: %s status %d\n",
-                       de, ll_d2d(de), ldlm_it2str(it->it_op), it->it_status);
         }
 
         RETURN(1);
-#if 0
-        struct ll_sb_info *sbi = ll_s2sbi(de->d_sb);
-        struct lustre_handle lockh;
-        __u64 res_id[RES_NAME_SIZE] = {0};
-        struct obd_device *obddev;
-        int rc = 0;
-        ENTRY;
-
-        if (it) {
-                CDEBUG(D_INFO, "name: %*s, intent: %s\n", de->d_name.len,
-                       de->d_name.name, ldlm_it2str(it->it_op));
-                if (it->it_op == IT_RENAME)
-                        it->it_data = de;
-        }
-
-        if (!de->d_inode)
-                GOTO(out, rc = 0);
-
-        obddev = class_conn2obd(&sbi->ll_mdc_conn);
-        res_id[0] = de->d_inode->i_ino;
-
-        CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id[0]);
-
-        if (ldlm_lock_match(obddev->obd_namespace, res_id, LDLM_PLAIN, NULL, 0,
-                            LCK_PR, &lockh)) {
-                ldlm_lock_decref(&lockh, LCK_PR);
-                GOTO(out, rc = 1);
-        }
-
-        if (ldlm_lock_match(obddev->obd_namespace, res_id, LDLM_PLAIN, NULL, 0,
-                            LCK_PW, &lockh)) {
-                ldlm_lock_decref(&lockh, LCK_PW);
-                GOTO(out, rc = 1);
-        }
-
-        /* If the dentry is busy, we won't get called in lookup2 if we
-         * return 0, so return 1.
-         *
-         * This is a temporary fix for bug 224, but is one of the causes of
-         * 225. */
-        CDEBUG(D_INFO, "d_count: %d\n", atomic_read(&de->d_count));
-        if (it && atomic_read(&de->d_count) > 1) {
-                CDEBUG(D_INFO, "returning 1 for %*s during %s because d_count "
-                       "is %d\n", de->d_name.len, de->d_name.name,
-                       ldlm_it2str(it->it_op), atomic_read(&de->d_count));
-                GOTO(out, rc = 1);
-        }
-
- out:
-        if (ll_d2d(de) == NULL) {
-                CERROR("allocating fsdata\n");
-                ll_set_dd(de);
-        }
-        //down(&ll_d2d(de)->lld_it_sem);
-        de->d_it = it;
-
-        RETURN(rc);
-#endif
 }
 
 int ll_set_dd(struct dentry *de)

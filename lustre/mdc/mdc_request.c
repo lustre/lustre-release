@@ -1,3 +1,5 @@
+
+
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
@@ -155,34 +157,27 @@ int mdc_getattr(struct lustre_handle *conn,
         return rc;
 }
 
-static void d_delete_aliases(struct inode *inode)
+void d_delete_aliases(struct inode *inode)
 {
         struct dentry *dentry = NULL;
 	struct list_head *tmp;
-        int dentry_count = 0;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
         ENTRY;
 
 	spin_lock(&dcache_lock);
         list_for_each(tmp, &inode->i_dentry) {
                 dentry = list_entry(tmp, struct dentry, d_alias);
-                dentry_count++;
+
+                //                if (atomic_read(&dentry->d_count))
+                //      continue;
+                //if (!list_empty(&dentry->d_lru))
+                //        continue;
+
+                list_del_init(&dentry->d_hash);
+                list_add(&dentry->d_hash, &sbi->ll_orphan_dentry_list);
         }
 
-        /* XXX FIXME tell phil/peter that you see this -- unless you're playing
-         * with hard links, in which case, stop. */
-        LASSERT(dentry_count <= 1);
-
-        if (dentry_count == 0) {
-                spin_unlock(&dcache_lock);
-                EXIT;
-                return;
-        }
-
-        CDEBUG(D_INODE, "d_deleting dentry %p\n", dentry);
-        dget_locked(dentry);
         spin_unlock(&dcache_lock);
-        d_delete(dentry);
-        dput(dentry);
         EXIT;
 }
 
@@ -212,6 +207,7 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 if (S_ISDIR(inode->i_mode)) {
                         CDEBUG(D_INODE, "invalidating inode %ld\n",
                                inode->i_ino);
+
                         ll_invalidate_inode_pages(inode);
                 }
 
@@ -527,10 +523,6 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 /* pack the intended request */
                 mds_getattr_pack(req, 2, dir, de->d_name.name, de->d_name.len);
 
-                /* we need to replay opens */
-                if (it->it_op == IT_OPEN)
-                        req->rq_flags |= PTL_RPC_FL_REPLAY;
-
                 /* get ready for the reply */
                 req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op == IT_READDIR) {
@@ -826,6 +818,7 @@ MODULE_AUTHOR("Cluster File Systems <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Metadata Client v1.0");
 MODULE_LICENSE("GPL");
 
+EXPORT_SYMBOL(d_delete_aliases);
 EXPORT_SYMBOL(mdc_getstatus);
 EXPORT_SYMBOL(mdc_getlovinfo);
 EXPORT_SYMBOL(mdc_enqueue);

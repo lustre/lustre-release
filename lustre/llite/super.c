@@ -138,6 +138,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
+        INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, sbi->ll_sb_uuid);
 
@@ -168,7 +169,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-#warning Peter: is this the right place to raise the connection level?
+#warning Mike: is this the right place to raise the connection level?
         mdc_conn = sbi2mdc(sbi)->cl_import.imp_connection;
         mdc_conn->c_level = LUSTRE_CONN_FULL;
         list_add(&mdc_conn->c_sb_chain, &sbi->ll_conn_chain);
@@ -321,6 +322,7 @@ out_free:
 static void ll_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
+        struct list_head *tmp, *next;
         struct ll_fid rootfid;
         ENTRY;
 
@@ -338,6 +340,14 @@ static void ll_put_super(struct super_block *sb)
 
         lprocfs_dereg_mnt(sbi->ll_mnt_root);
         obd_disconnect(&sbi->ll_mdc_conn);
+
+        spin_lock(&dcache_lock);
+        list_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
+                struct dentry *dentry = list_entry(tmp, struct dentry, d_hash);
+                shrink_dcache_parent(dentry);
+        }
+        spin_unlock(&dcache_lock);
+
         OBD_FREE(sbi, sizeof(*sbi));
 
         MOD_DEC_USE_COUNT;

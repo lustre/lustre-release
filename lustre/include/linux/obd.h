@@ -142,7 +142,8 @@ struct mds_obd {
 };
 
 struct ldlm_obd {
-        struct ptlrpc_service *ldlm_service;
+        struct ptlrpc_service *ldlm_cb_service;
+        struct ptlrpc_service *ldlm_cancel_service;
         struct ptlrpc_client *ldlm_client;
         struct ptlrpc_connection *ldlm_server_conn;
 };
@@ -233,7 +234,8 @@ struct obd_device {
         struct list_head       obd_exports;
         struct list_head       obd_imports;
         struct ldlm_namespace *obd_namespace;
-        struct ptlrpc_client   obd_ldlm_client; /* XXX OST/MDS only */
+        struct ptlrpc_client   obd_ldlm_cancel_client; /* XXX OST/MDS only */
+        struct ptlrpc_client   obd_ldlm_cb_client; /* XXX OST/MDS only */
         /* a spinlock is OK for what we do now, may need a semaphore later */
         spinlock_t obd_dev_lock;
         union {
