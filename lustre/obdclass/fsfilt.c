@@ -38,7 +38,7 @@ int fsfilt_register_ops(struct fsfilt_operations *fs_ops)
                         RETURN(-EEXIST);
                 }
         } else {
-		MOD_INC_USE_COUNT;
+      PORTAL_MODULE_USE;
 		list_add(&fs_ops->fs_list, &fsfilt_types);
 	}
 
@@ -57,7 +57,7 @@ void fsfilt_unregister_ops(struct fsfilt_operations *fs_ops)
                 found = list_entry(p, typeof(*found), fs_list);
                 if (found == fs_ops) {
                         list_del(p);
-                        MOD_DEC_USE_COUNT;
+                        PORTAL_MODULE_UNUSE;
                         break;
                 }
         }
