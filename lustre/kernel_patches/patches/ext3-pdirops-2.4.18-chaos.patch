@@ -1,13 +1,13 @@
  fs/ext3/ialloc.c          |    3 
  fs/ext3/inode.c           |    3 
  fs/ext3/namei.c           |  582 +++++++++++++++++++++++++++++++++++++---------
- fs/ext3/super.c           |   11 
+ fs/ext3/super.c           |   14 +
  include/linux/ext3_fs.h   |    1 
  include/linux/ext3_fs_i.h |    6 
- 6 files changed, 497 insertions(+), 109 deletions(-)
+ 6 files changed, 500 insertions(+), 109 deletions(-)
 
 --- linux-2.4.18/fs/ext3/namei.c~ext3-pdirops-2.4.18-chaos	2003-09-01 14:58:06.000000000 +0400
-+++ linux-2.4.18-alexey/fs/ext3/namei.c	2003-09-02 10:40:18.000000000 +0400
++++ linux-2.4.18-alexey/fs/ext3/namei.c	2003-09-02 11:46:15.000000000 +0400
 @@ -52,6 +52,9 @@ static struct buffer_head *ext3_append(h
  {
  	struct buffer_head *bh;
@@ -1135,7 +1135,7 @@
   */
  struct inode_operations ext3_dir_inode_operations = {
 --- linux-2.4.18/fs/ext3/super.c~ext3-pdirops-2.4.18-chaos	2003-09-01 16:33:25.000000000 +0400
-+++ linux-2.4.18-alexey/fs/ext3/super.c	2003-09-02 11:18:00.000000000 +0400
++++ linux-2.4.18-alexey/fs/ext3/super.c	2003-09-02 12:46:29.000000000 +0400
 @@ -786,6 +786,8 @@ static int parse_options (char * options
  				return 0;
  			}
@@ -1166,17 +1166,20 @@
  	setup_ro_after(sb);
  	return res;
  }
-@@ -1463,6 +1472,8 @@ struct super_block * ext3_read_super (st
+@@ -1463,6 +1472,11 @@ struct super_block * ext3_read_super (st
  		test_opt(sb,DATA_FLAGS) == EXT3_MOUNT_ORDERED_DATA ? "ordered":
  		"writeback");
  
-+	if (test_opt(sb, PDIROPS))
-+		sb->s_flags |= S_PDIROPS; 
++	if (test_opt(sb, PDIROPS)) {
++		printk (KERN_INFO "EXT3-fs: mounted filesystem with parallel dirops\n");
++		sb->s_flags |= S_PDIROPS;
++	}
++		
  	return sb;
  
  failed_mount3:
 --- linux-2.4.18/include/linux/ext3_fs.h~ext3-pdirops-2.4.18-chaos	2003-09-01 14:58:06.000000000 +0400
-+++ linux-2.4.18-alexey/include/linux/ext3_fs.h	2003-09-01 17:56:13.000000000 +0400
++++ linux-2.4.18-alexey/include/linux/ext3_fs.h	2003-09-02 11:46:15.000000000 +0400
 @@ -310,6 +310,7 @@ struct ext3_inode {
  /*
   * Mount flags
@@ -1186,7 +1189,7 @@
  #define EXT3_MOUNT_GRPID		0x0004	/* Create files with directory's group */
  #define EXT3_MOUNT_DEBUG		0x0008	/* Some debugging messages */
 --- linux-2.4.18/include/linux/ext3_fs_i.h~ext3-pdirops-2.4.18-chaos	2003-08-29 11:57:30.000000000 +0400
-+++ linux-2.4.18-alexey/include/linux/ext3_fs_i.h	2003-09-01 17:56:13.000000000 +0400
++++ linux-2.4.18-alexey/include/linux/ext3_fs_i.h	2003-09-02 11:46:15.000000000 +0400
 @@ -17,6 +17,7 @@
  #define _LINUX_EXT3_FS_I
  
@@ -1208,7 +1211,7 @@
  
  #endif	/* _LINUX_EXT3_FS_I */
 --- linux-2.4.18/fs/ext3/inode.c~ext3-pdirops-2.4.18-chaos	2003-09-01 16:33:25.000000000 +0400
-+++ linux-2.4.18-alexey/fs/ext3/inode.c	2003-09-02 10:39:36.000000000 +0400
++++ linux-2.4.18-alexey/fs/ext3/inode.c	2003-09-02 11:46:15.000000000 +0400
 @@ -2454,6 +2454,9 @@ void ext3_read_inode(struct inode * inod
  	} else if (S_ISDIR(inode->i_mode)) {
  		inode->i_op = &ext3_dir_inode_operations;
@@ -1220,7 +1223,7 @@
  		if (ext3_inode_is_fast_symlink(inode))
  			inode->i_op = &ext3_fast_symlink_inode_operations;
 --- linux-2.4.18/fs/ext3/ialloc.c~ext3-pdirops-2.4.18-chaos	2003-09-01 14:58:05.000000000 +0400
-+++ linux-2.4.18-alexey/fs/ext3/ialloc.c	2003-09-02 10:39:50.000000000 +0400
++++ linux-2.4.18-alexey/fs/ext3/ialloc.c	2003-09-02 11:46:15.000000000 +0400
 @@ -601,6 +601,9 @@ repeat:
  		return ERR_PTR(-EDQUOT);
  	}
