@@ -88,9 +88,15 @@ run_test() {
 	fi
 }
 
+[ "$SANITYLOG" ] && rm -f $SANITYLOG || true
+
 error () {
-	log "FAIL: $TESTNAME $@"
-	exit 1
+	log "FAIL: $@"
+	if [ "$SANITYLOG" ]; then
+		echo "FAIL: $TESTNAME $@" >> $SANITYLOG
+	else
+		exit 1
+	fi
 }
 
 pass() {
@@ -265,3 +271,4 @@ run_test 13 "test directory page revocation ===================="
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
 echo '=========================== finished ==============================='
+[ -f "$SANITYLOG" ] && cat $SANITYLOG && exit 1 || true
