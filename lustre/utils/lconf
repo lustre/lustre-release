@@ -441,7 +441,7 @@ class LCTLInterface:
     def connect(self, srv):
         self.add_uuid(srv.net_type, srv.nid_uuid, srv.nid)
         if srv.net_type  in ('tcp',) and not config.lctl_dump:
-            flags = 's'
+            flags = 'se'
             if srv.irq_affinity:
                 flags = flags + 'i'
             self.add_autoconn(srv.net_type, srv.send_mem, srv.recv_mem,

@@ -601,10 +601,12 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         /* We're finishing using body->oa as an input variable, so reset
          * o_valid here. */
-        if (oa && oa->o_valid & OBD_MD_FLGRANT)
+        if (oa && oa->o_valid & OBD_MD_FLGRANT) {
                 oa->o_grant = filter_grant(exp,oa->o_grant,oa->o_undirty,left);
-
-        oa->o_valid = 0;
+                oa->o_valid = OBD_MD_FLGRANT;
+        } else if (oa) {
+                oa->o_valid = 0;
+        }
 
         spin_unlock(&exp->exp_obd->obd_osfs_lock);
 

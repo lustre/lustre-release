@@ -11,6 +11,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't unlink "objects" from directory with default EA (4554)
 	- hold socknal file ref over connect in case target is down (4394)
 	- allow more than 32000 subdirectories in a single directory (3244)
+	- fix blocks count for O_DIRECT writes (3751)
 	- OST returns ENOSPC from object create when no space left (4539)
 	- don't send truncate RPC if file size isn't changing (4410)
 	- limit OSC precreate to 1/2 of value OST considers bogus (4778)
