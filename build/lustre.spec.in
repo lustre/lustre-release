@@ -88,6 +88,7 @@ cd $RPM_BUILD_DIR/lustre-%{version}
 ./configure \
 	--with-linux='%{linuxdir}' \
 	--with-linux-obj='@LINUX_OBJ@' \
+	--with-linux-config=@LINUX_CONFIG@ \
 	%{disable_doc} --disable-liblustre \
 	--sysconfdir=%{_sysconfdir} \
 	--mandir=%{_mandir} \
