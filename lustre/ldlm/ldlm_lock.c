@@ -462,8 +462,8 @@ int ldlm_local_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
 
         EXIT;
  out:
-        ldlm_resource_put(res);
-        spin_unlock(&res->lr_lock);
+        if (!ldlm_resource_put(res))
+                spin_unlock(&res->lr_lock);
         return rc;
 }
 
@@ -491,8 +491,8 @@ ldlm_error_t ldlm_local_lock_create(struct ldlm_namespace *ns,
         lock = ldlm_lock_new(parent_lock, res);
         if (lock == NULL) {
                 spin_lock(&res->lr_lock);
-                ldlm_resource_put(res);
-                spin_unlock(&res->lr_lock);
+                if (!ldlm_resource_put(res))
+                        spin_unlock(&res->lr_lock);
                 RETURN(-ENOMEM);
         }
 
@@ -540,16 +540,19 @@ ldlm_error_t ldlm_local_lock_enqueue(struct lustre_handle *lockh,
                 rc = policy(lock, cookie, lock->l_req_mode, NULL);
 
                 spin_lock(&res->lr_lock);
-                ldlm_resource_put(res);
+                if (ldlm_resource_put(res))
+                        res = NULL;
 
                 if (rc == ELDLM_LOCK_CHANGED) {
-                        spin_unlock(&res->lr_lock);
+                        if (res)
+                                spin_unlock(&res->lr_lock);
                         res = lock->l_resource;
                         spin_lock(&res->lr_lock);
                         *flags |= LDLM_FL_LOCK_CHANGED;
                 } else if (rc == ELDLM_LOCK_ABORTED) {
                         /* Abort. */
-                        ldlm_resource_put(lock->l_resource);
+                        if (res && !ldlm_resource_put(res))
+                                spin_unlock(&res->lr_lock);
                         ldlm_lock_free(lock);
                         RETURN(rc);
                 }
@@ -602,12 +605,14 @@ ldlm_error_t ldlm_local_lock_enqueue(struct lustre_handle *lockh,
         /* We're called with a lock that has a referenced resource and is not on
          * any resource list.  When we added it to a list, we incurred an extra
          * reference. */
-        ldlm_resource_put(lock->l_resource);
+        if (ldlm_resource_put(lock->l_resource))
+                res = NULL;
  out_noput:
         /* Don't set 'completion_ast' until here so that if the lock is granted
          * immediately we don't do an unnecessary completion call. */
         lock->l_completion_ast = completion;
-        spin_unlock(&res->lr_lock);
+        if (res)
+                spin_unlock(&res->lr_lock);
         return ELDLM_OK;
 }
 

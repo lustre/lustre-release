@@ -35,6 +35,8 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
         void *cookie = NULL;
         ENTRY;
 
+        LDLM_DEBUG_NOLOCK("server-side enqueue handler START");
+
         callback = ldlm_cli_callback;
 
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
@@ -68,7 +70,7 @@ static int _ldlm_enqueue(struct obd_device *obddev, struct ptlrpc_service *svc,
         lock = lustre_handle2object(&lockh);
         memcpy(&lock->l_remote_handle, &dlm_req->lock_handle1,
                sizeof(lock->l_remote_handle));
-        LDLM_DEBUG(lock, "server-side enqueue handler START");
+        LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
 
         flags = dlm_req->lock_flags;
         err = ldlm_local_lock_enqueue(&lockh, cookie, cookielen, &flags,
