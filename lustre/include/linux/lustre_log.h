@@ -181,7 +181,11 @@ static inline int llog_handle2ops(struct llog_handle *loghandle,
 static inline int llog_data_len(int len)
 {
         int mask = LLOG_MIN_REC_SIZE - 1;
-        return (len < 8) ? 8 : (((len + mask) & (~mask)) + 8);
+        int remains = LLOG_MIN_REC_SIZE - sizeof(struct llog_rec_hdr) -
+                sizeof(struct llog_rec_tail); 
+        
+        return (len <= remains) ? 
+                remains : (((len + mask) & (~mask)) + remains);
 }
 
 static inline int llog_write_rec(struct llog_handle *handle,
