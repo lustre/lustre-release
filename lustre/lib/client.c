@@ -306,7 +306,7 @@ int ptlrpc_import_disconnect(struct lustre_handle *conn, int failover)
         }
 
         /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
-        if (obd->obd_no_recov) {
+        if (obd->obd_no_recov && imp->imp_level != LUSTRE_CONN_FULL) {
                 ptlrpc_abort_inflight(imp);
         } else {
                 request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
