@@ -141,7 +141,7 @@ ksocknal_dist(nal_cb_t *nal, ptl_nid_t nid, unsigned long *dist)
 ksock_ltx_t *
 ksocknal_get_ltx (int may_block)
 {
-        long             flags;
+        unsigned long flags;
         ksock_ltx_t *ltx = NULL;
 
         for (;;) {
@@ -253,7 +253,7 @@ ksocknal_send_iov (struct socket *sock, ksock_tx_t *tx, int more)
                 mm_segment_t oldmm = get_fs();
                 
                 set_fs (KERNEL_DS);
-                rc = sock->sk->prot->sendmsg(sock->sk, &msg, fragsize);
+                rc = sock_sendmsg(sock, &msg, fragsize);
                 set_fs (oldmm);
         } 
 
@@ -322,7 +322,7 @@ ksocknal_send_kiov (struct socket *sock, ksock_tx_t *tx, int more)
                 mm_segment_t  oldmm = get_fs();
                 
                 set_fs (KERNEL_DS);
-                rc = sock->sk->prot->sendmsg(sock->sk, &msg, fragsize);
+                rc = sock_sendmsg(sock, &msg, fragsize);
                 set_fs (oldmm);
                 kunmap (page);
         }
@@ -527,7 +527,7 @@ ksocknal_zc_callback (zccd_t *zcd)
 void
 ksocknal_tx_done (ksock_tx_t *tx)
 {
-        long           flags;
+        unsigned long flags;
         ksock_ltx_t   *ltx;
         ENTRY;
 
@@ -559,7 +559,7 @@ ksocknal_tx_done (ksock_tx_t *tx)
 }
 
 void
-ksocknal_process_transmit (ksock_sched_t *sched, long *irq_flags)
+ksocknal_process_transmit (ksock_sched_t *sched, unsigned long *irq_flags)
 {
         ksock_conn_t *conn;
         ksock_tx_t *tx;
@@ -882,7 +882,7 @@ ksocknal_fmb_callback (void *arg, int error)
         ptl_hdr_t         *hdr = (ptl_hdr_t *) page_address(fmb->fmb_pages[0]);
         ksock_conn_t      *conn = NULL;
         ksock_sched_t     *sched;
-        long               flags;
+        unsigned long      flags;
 
         if (error != 0)
                 CERROR("Failed to route packet from "LPX64" to "LPX64": %d\n",
@@ -930,7 +930,7 @@ ksocknal_get_idle_fmb (ksock_conn_t *conn)
 {
         int               payload_nob = conn->ksnc_rx_nob_left;
         int               packet_nob = sizeof (ptl_hdr_t) + payload_nob;
-        long              flags;
+        unsigned long     flags;
         ksock_fmb_pool_t *pool;
         ksock_fmb_t      *fmb;
 
@@ -1174,7 +1174,7 @@ ksocknal_new_packet (ksock_conn_t *conn, int nob_to_skip)
 }
 
 void
-ksocknal_process_receive (ksock_sched_t *sched, long *irq_flags)
+ksocknal_process_receive (ksock_sched_t *sched, unsigned long *irq_flags)
 {
         ksock_conn_t *conn;
         ksock_fmb_t  *fmb;
@@ -1296,6 +1296,7 @@ ksocknal_process_receive (ksock_sched_t *sched, long *irq_flags)
                 goto out;                       /* (later) */
 
         default:
+                break;
         }
 
         /* Not Reached */

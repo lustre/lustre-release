@@ -295,7 +295,7 @@ error:
 int
 ksocknal_close_sock(ptl_nid_t nid)
 {
-        long               flags;
+        unsigned long      flags;
         ksock_conn_t      *conn;
         LIST_HEAD         (death_row);
         struct list_head  *tmp;
