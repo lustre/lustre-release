@@ -1,11 +1,12 @@
+ arch/i386/mm/init.c  |    6 +++++
  arch/ia64/mm/init.c  |    6 +++++
  include/linux/slab.h |    1 
  kernel/ksyms.c       |    1 
  mm/slab.c            |   53 +++++++++++++++++++++++++++++++++++++++++++++++++++
- 4 files changed, 61 insertions(+)
+ 5 files changed, 67 insertions(+)
 
---- linux/arch/ia64/mm/init.c~kmem_cache_validate_hp	Wed Apr  9 11:09:46 2003
-+++ linux-mmonroe/arch/ia64/mm/init.c	Wed Apr  9 11:12:23 2003
+--- linux/arch/ia64/mm/init.c~kmem_cache_validate_hp	2003-04-11 14:24:25.000000000 +0800
++++ linux-root/arch/ia64/mm/init.c	2003-05-16 20:03:56.000000000 +0800
 @@ -45,6 +45,12 @@ unsigned long vmalloc_end = VMALLOC_END_
  static struct page *vmem_map;
  static unsigned long num_dma_physpages;
@@ -19,8 +20,8 @@
  int
  do_check_pgt_cache (int low, int high)
  {
---- linux/include/linux/slab.h~kmem_cache_validate_hp	Wed Apr  9 11:08:48 2003
-+++ linux-mmonroe/include/linux/slab.h	Wed Apr  9 11:12:23 2003
+--- linux/include/linux/slab.h~kmem_cache_validate_hp	2002-11-29 07:53:15.000000000 +0800
++++ linux-root/include/linux/slab.h	2003-05-16 20:03:56.000000000 +0800
 @@ -56,6 +56,7 @@ extern kmem_cache_t *kmem_cache_create(c
  extern int kmem_cache_destroy(kmem_cache_t *);
  extern int kmem_cache_shrink(kmem_cache_t *);
@@ -29,8 +30,8 @@
  extern void kmem_cache_free(kmem_cache_t *, void *);
  extern unsigned int kmem_cache_size(kmem_cache_t *);
  
---- linux/kernel/ksyms.c~kmem_cache_validate_hp	Wed Apr  9 11:12:20 2003
-+++ linux-mmonroe/kernel/ksyms.c	Wed Apr  9 11:12:23 2003
+--- linux/kernel/ksyms.c~kmem_cache_validate_hp	2003-05-16 20:03:55.000000000 +0800
++++ linux-root/kernel/ksyms.c	2003-05-16 20:03:56.000000000 +0800
 @@ -119,6 +119,7 @@ EXPORT_SYMBOL(kmem_find_general_cachep);
  EXPORT_SYMBOL(kmem_cache_create);
  EXPORT_SYMBOL(kmem_cache_destroy);
@@ -39,8 +40,8 @@
  EXPORT_SYMBOL(kmem_cache_alloc);
  EXPORT_SYMBOL(kmem_cache_free);
  EXPORT_SYMBOL(kmem_cache_size);
---- linux/mm/slab.c~kmem_cache_validate_hp	Wed Apr  9 11:08:47 2003
-+++ linux-mmonroe/mm/slab.c	Wed Apr  9 11:12:23 2003
+--- linux/mm/slab.c~kmem_cache_validate_hp	2002-11-29 07:53:15.000000000 +0800
++++ linux-root/mm/slab.c	2003-05-16 20:03:56.000000000 +0800
 @@ -1205,6 +1205,59 @@ failed:
   * Called with the cache-lock held.
   */
@@ -101,5 +102,20 @@
  #if DEBUG
  static int kmem_extra_free_checks (kmem_cache_t * cachep,
  			slab_t *slabp, void * objp)
+--- linux/arch/i386/mm/init.c~kmem_cache_validate_hp	2003-05-16 20:03:22.000000000 +0800
++++ linux-root/arch/i386/mm/init.c	2003-05-16 20:06:16.000000000 +0800
+@@ -42,6 +42,12 @@ mmu_gather_t mmu_gathers[NR_CPUS];
+ unsigned long highstart_pfn, highend_pfn;
+ static unsigned long totalram_pages;
+ static unsigned long totalhigh_pages;
++                                                                                                                                             
++struct page *check_get_page(unsigned long kaddr)
++{
++#warning FIXME: Lustre team, is this solid?
++       return virt_to_page(kaddr);
++}
+ 
+ int do_check_pgt_cache(int low, int high)
+ {
 
 _
