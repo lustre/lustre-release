@@ -1,8 +1,9 @@
  fs/ext3/inode.c |   81 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 files changed, 81 insertions(+)
+ fs/ext3/super.c |    4 ++
+ 2 files changed, 85 insertions(+)
 
---- linux-2.4.18-chaos60-lustre17/fs/ext3/inode.c~extN-san	2003-05-17 14:11:34.000000000 -0600
-+++ linux-2.4.18-chaos60-lustre17-braam/fs/ext3/inode.c	2003-05-17 19:48:18.000000000 -0600
+--- linux-2.4.18-18.8.0-l18/fs/ext3/inode.c~extN-san	Sun May 18 12:58:13 2003
++++ linux-2.4.18-18.8.0-l18-phil/fs/ext3/inode.c	Sun May 18 13:24:49 2003
 @@ -2781,3 +2781,84 @@ int ext3_change_inode_journal_flag(struc
   * here, in ext3_aops_journal_start() to ensure that the forthcoming "see if we
   * need to extend" test in ext3_prepare_write() succeeds.  
@@ -88,5 +89,18 @@
 +		ret = ret2;
 +	return ret;
 +}
+--- linux-2.4.18-18.8.0-l18/fs/ext3/super.c~extN-san	Sun May 18 13:24:35 2003
++++ linux-2.4.18-18.8.0-l18-phil/fs/ext3/super.c	Sun May 18 13:24:55 2003
+@@ -1774,6 +1774,10 @@ static int __init init_ext3_fs(void)
+ 
+ EXPORT_SYMBOL(ext3_bread);
+ 
++int ext3_prep_san_write(struct inode *inode, long *blocks,
++                        int nblocks, loff_t newsize);
++EXPORT_SYMBOL(ext3_prep_san_write);
++
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+ MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
+ MODULE_LICENSE("GPL");
 
 _
