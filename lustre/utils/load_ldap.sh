@@ -13,6 +13,8 @@ LDAP_PW=${LDAP_PW:-secret}
 LDAP_AUTH="-x -D $LDAP_ROOTDN -w $LDAP_PW"
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 
+[ ! -z $LDAPURL ] && LDAP_AUTH="$LDAP_AUTH -H $LDAPURL"
+
 XML=${XML:-$1}
 
 if [ -z "$XML" ] || [  ! -r $XML ]; then
