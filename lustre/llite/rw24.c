@@ -93,7 +93,7 @@ static int ll_writepage_24(struct page *page)
         exp = ll_i2obdexp(inode);
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
-  
+
         llap = llap_from_page(page);
         if (IS_ERR(llap))
                 GOTO(out, rc = PTR_ERR(llap));
@@ -164,10 +164,8 @@ static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
                 pga[i].count = min_t(int, PAGE_SIZE - (offset & ~PAGE_MASK),
                                      length);
                 pga[i].flag = flags;
-                if (rw == READ) {
-                        //POISON(kmap(iobuf->maplist[i]), 0xc5, PAGE_SIZE);
-                        //kunmap(iobuf->maplist[i]);
-                }
+                if (rw == READ)
+                        POISON_PAGE(iobuf->maplist[i], 0x0d);
         }
 
         oa.o_id = lsm->lsm_object_id;
