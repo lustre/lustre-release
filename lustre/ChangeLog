@@ -11,6 +11,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- overwrite old logs when running lconf --write_conf (2264)
 	- bump LLOG_CHUNKSIZE to 8k to allow for larger clusters (2306)
 	- fix race in target_handle_connect (2898)
+	- mds_reint_create() should take same inode create lock (2926)
 
 2004-03-04  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0
