@@ -33,6 +33,9 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lib.h>
 
+struct buffer_head *ext3_bread(void *handle, struct inode *inode,
+                               int block, int create, int *err);
+
 int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                  __u64 offset, struct niobuf *dst)
 {
@@ -40,11 +43,33 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         mm_segment_t oldfs = get_fs();
 
         if (req->rq_peer.peer_nid == 0) {
+                struct inode *inode = file->f_dentry->d_inode;
+                char *buf = (char *)(long)dst->addr;
+
                 /* dst->addr is a user address, but in a different task! */
                 set_fs(KERNEL_DS);
-                /* FIXME: Can't use file->f_op->read() on a directory */
-                rc = generic_file_read(file, (char *)(long)dst->addr,
-                                       PAGE_SIZE, &offset);
+                /* FIXME: we need to use ext3_bread because ext3 does not
+                 *        have the directories in page cache yet.  If we
+                 *        just use generic_file_read() then the pages we
+                 *        get are in a different address space than those
+                 *        used by the filesystem == cache incoherency.
+                 */
+                if (S_ISREG(inode->i_mode))
+                        rc = file->f_op->read(file, buf, PAGE_SIZE, &offset);
+                else if (!strcmp(inode->i_sb->s_type->name, "ext3")) {
+                        struct buffer_head *bh;
+
+                        bh = ext3_bread(NULL, inode, offset >> inode->i_blkbits,
+                                        0, &rc);
+
+                        if (bh) {
+                                memcpy(buf, bh->b_data, inode->i_blksize);
+                                brelse(bh);
+                                rc = inode->i_blksize;
+                        }
+                } else
+                        rc = generic_file_read(file, buf, PAGE_SIZE, &offset);
+
                 set_fs(oldfs);
 
                 if (rc != PAGE_SIZE) {
@@ -53,8 +78,9 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 }
                 EXIT;
         } else {
+                struct inode *inode = file->f_dentry->d_inode;
                 struct ptlrpc_bulk_desc *bulk;
-                char *buf = NULL;
+                char *buf;
 
                 bulk = ptlrpc_prep_bulk(&req->rq_peer);
                 if (bulk == NULL) {
@@ -71,9 +97,23 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 }
 
                 set_fs(KERNEL_DS);
-                /* FIXME: Can't use file->f_op->read() on a directory */
-                //rc = file->f_op->read(file, buf, PAGE_SIZE, &offset);
-                rc = generic_file_read(file, buf, PAGE_SIZE, &offset);
+                /* FIXME: see comments above */
+                if (S_ISREG(inode->i_mode))
+                        rc = file->f_op->read(file, buf, PAGE_SIZE, &offset);
+                else if (!strcmp(inode->i_sb->s_type->name, "ext3")) {
+                        struct buffer_head *bh;
+
+                        bh = ext3_bread(NULL, inode, offset >> inode->i_blkbits,
+                                        0, &rc);
+
+                        if (bh) {
+                                memcpy(buf, bh->b_data, inode->i_blksize);
+                                brelse(bh);
+                                rc = inode->i_blksize;
+                        }
+                } else
+                        rc = generic_file_read(file, buf, PAGE_SIZE, &offset);
+
                 set_fs(oldfs);
 
                 if (rc != PAGE_SIZE) {
@@ -124,9 +164,8 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 
         CDEBUG(D_DENTRY, "--> mds_fid2dentry: sb %p\n", inode->i_sb);
 
-        if (is_bad_inode(inode)
-            || (generation && inode->i_generation != generation)
-                ) {
+        if (is_bad_inode(inode) ||
+            (generation && inode->i_generation != generation)) {
                 /* we didn't find the right inode.. */
                 CERROR("bad inode %lu, link: %d ct: %d or version  %u/%u\n",
                         inode->i_ino,
