@@ -107,12 +107,16 @@ do_lmc() {
 }
 
 h2tcp() {
-    echo $1
+   if [ "$1" = "client" ]; then echo \'*\'; else
+   echo $1 
+   fi
 }
 declare -fx h2tcp
 
 h2elan() {
-    echo $1 | sed "s/[^0-9]*//"
+   if [ "$1" = "client" ]; then echo \'*\'; else
+   echo $1 | sed 's/[^0-9]*//g'
+   fi
 }
 declare -fx h2elan
 
