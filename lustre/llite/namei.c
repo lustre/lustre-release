@@ -640,7 +640,7 @@ static int ll_create(struct inode *dir, struct dentry *dentry, int mode)
         if (IS_ERR(inode))
                 RETURN(PTR_ERR(inode));
 
-        if (it->it_disposition) {
+        if (it && it->it_disposition) {
                 struct ll_inode_info *lli = ll_i2info(inode);
                 memcpy(&lli->lli_intent_lock_handle, it->it_lock_handle,
                        sizeof(lli->lli_intent_lock_handle));
