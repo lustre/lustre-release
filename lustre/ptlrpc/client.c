@@ -361,7 +361,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         init_waitqueue_head(&req->rq_wait_for_rep);
  resend:
         req->rq_time = CURRENT_TIME;
-        req->rq_timeout = 3;
+        req->rq_timeout = 30;
         rc = ptl_send_rpc(req);
         if (rc) {
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqmsg->opc);

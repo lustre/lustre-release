@@ -28,6 +28,7 @@ typedef enum {
 #define LDLM_FL_BLOCK_GRANTED  (1 << 1)
 #define LDLM_FL_BLOCK_CONV     (1 << 2)
 #define LDLM_FL_BLOCK_WAIT     (1 << 3)
+#define LDLM_FL_DYING          (1 << 4)
 
 #define L2B(c) (1 << c)
 
@@ -74,12 +75,12 @@ static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
 */
 
 struct ldlm_namespace {
-        struct list_head      ns_link;      /* in the list of ns's */
-        __u32                 ns_id;        /* identifier of ns */
-        struct list_head     *ns_hash;      /* hash table for ns */
-        atomic_t              ns_refcount;  /* count of resources in the hash */
-        struct list_head      ns_root_list; /* all root resources in ns */
         struct obd_device    *ns_obddev;
+        __u32                 ns_local;     /* is this a local lock tree? */
+        struct list_head     *ns_hash;      /* hash table for ns */
+        __u32                 ns_refcount;  /* count of resources in the hash */
+        struct list_head      ns_root_list; /* all root resources in ns */
+        spinlock_t            ns_lock;      /* protects hash, refcount, list */
 };
 
 /* 
@@ -103,19 +104,32 @@ struct ldlm_lock {
         struct list_head      l_children;
         struct list_head      l_childof;
         struct list_head      l_res_link; /*position in one of three res lists*/
+
         ldlm_mode_t           l_req_mode;
         ldlm_mode_t           l_granted_mode;
+
         ldlm_lock_callback    l_completion_ast;
         ldlm_lock_callback    l_blocking_ast;
+
         struct ptlrpc_connection *l_connection;
+        struct ptlrpc_client *l_client;
+        __u32                 l_flags;
+        struct ldlm_handle    l_remote_handle;
         void                 *l_data;
         __u32                 l_data_len;
         struct ldlm_extent    l_extent;
-        struct ldlm_handle    l_remote_handle;
         //void                 *l_event;
         //XXX cluster_host    l_holder;
         __u32                 l_version[RES_VERSION_SIZE];
+
+        __u32                 l_readers;
+        __u32                 l_writers;
+
+        /* If the lock is granted, a process sleeps on this waitq to learn when
+         * it's no longer in use.  If the lock is not granted, a process sleeps
+         * on this waitq to learn when it becomes granted. */
         wait_queue_head_t     l_waitq;
+        spinlock_t            l_lock;
 };
 
 typedef int (*ldlm_res_compat)(struct ldlm_lock *child, struct ldlm_lock *new);
@@ -124,11 +138,12 @@ typedef int (*ldlm_res_policy)(struct ldlm_resource *parent,
                                struct ldlm_extent *new_ex,
                                ldlm_mode_t mode, void *data);
 
-#define LDLM_PLAIN       0x0
-#define LDLM_EXTENT      0x1
-#define LDLM_MDSINTENT   0x2
+#define LDLM_PLAIN       0
+#define LDLM_EXTENT      1
+#define LDLM_MDSINTENT   2
 
-#define LDLM_MAX_TYPE    0x2
+#define LDLM_MAX_TYPE 2
+
 extern ldlm_res_compat ldlm_res_compat_table []; 
 extern ldlm_res_policy ldlm_res_policy_table []; 
 
@@ -144,13 +159,13 @@ struct ldlm_resource {
         struct list_head       lr_converting;
         struct list_head       lr_waiting;
         ldlm_mode_t            lr_most_restr;
-        atomic_t               lr_refcount;
         __u32                  lr_type; /* PLAIN, EXTENT, or MDSINTENT */
         struct ldlm_resource  *lr_root;
         //XXX cluster_host          lr_master;
         __u64                  lr_name[RES_NAME_SIZE];
         __u32                  lr_version[RES_VERSION_SIZE];
-        spinlock_t             lr_lock;
+        __u32                  lr_refcount;
+        spinlock_t             lr_lock; /* protects lists, refcount */
 };
 
 static inline struct ldlm_extent *ldlm_res2extent(struct ldlm_resource *res)
@@ -170,19 +185,6 @@ static inline void ldlm_object2handle(void *object, struct ldlm_handle *handle)
         handle->addr = (__u64)(unsigned long)object;
 }
 
-extern struct list_head ldlm_namespaces;
-extern spinlock_t ldlm_spinlock;
-
-static inline void ldlm_lock(void)
-{
-        spin_lock(&ldlm_spinlock);
-}
-
-static inline void ldlm_unlock(void)
-{
-        spin_unlock(&ldlm_spinlock);
-}
-
 extern struct obd_ops ldlm_obd_ops;
 
 /* ldlm_extent.c */
@@ -193,31 +195,35 @@ int ldlm_extent_policy(struct ldlm_resource *, struct ldlm_extent *,
 /* ldlm_lock.c */
 void ldlm_lock_free(struct ldlm_lock *lock);
 void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc);
-ldlm_error_t ldlm_local_lock_create(__u32 ns_id,
+void ldlm_lock_addref(struct ldlm_lock *lock, __u32 mode);
+void ldlm_lock_decref(struct ldlm_lock *lock, __u32 mode);
+void ldlm_grant_lock(struct ldlm_resource *res, struct ldlm_lock *lock);
+int ldlm_local_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
+                          struct ldlm_extent *extent, ldlm_mode_t mode,
+                          struct ldlm_handle *lockh);
+ldlm_error_t ldlm_local_lock_create(struct ldlm_namespace *ns,
                                     struct ldlm_handle *parent_lock_handle,
-                                    __u64 *res_id,
-                                    __u32 type,
+                                    __u64 *res_id, __u32 type,
+                                     ldlm_mode_t mode,
+                                    void *data,
+                                    __u32 data_len,
                                     struct ldlm_handle *lockh);
 ldlm_error_t ldlm_local_lock_enqueue(struct ldlm_handle *lockh,
-                                     ldlm_mode_t mode,
                                      struct ldlm_extent *req_ex,
                                      int *flags,
                                      ldlm_lock_callback completion,
-                                     ldlm_lock_callback blocking,
-                                     void *data,
-                                     __u32 data_len);
-ldlm_error_t ldlm_local_lock_convert(struct ldlm_handle *lockh,
-                                     int new_mode, int *flags);
-ldlm_error_t ldlm_local_lock_cancel(struct ldlm_handle *lockh);
+                                     ldlm_lock_callback blocking);
+struct ldlm_resource *ldlm_local_lock_convert(struct ldlm_handle *lockh,
+                                              int new_mode, int *flags);
+struct ldlm_resource *ldlm_local_lock_cancel(struct ldlm_lock *lock);
+void ldlm_reprocess_all(struct ldlm_resource *res);
 void ldlm_lock_dump(struct ldlm_lock *lock);
 
 /* ldlm_test.c */
 int ldlm_test(struct obd_device *device, struct ptlrpc_connection *conn);
 
 /* resource.c */
-struct ldlm_namespace *ldlm_namespace_find(__u32 id);
-ldlm_error_t ldlm_namespace_new(struct obd_device *, __u32 id,
-                                struct ldlm_namespace **);
+struct ldlm_namespace *ldlm_namespace_new(struct obd_device *, __u32 local);
 int ldlm_namespace_free(struct ldlm_namespace *ns);
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
@@ -230,28 +236,22 @@ void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc);
 void ldlm_resource_dump(struct ldlm_resource *res);
 
 /* ldlm_request.c */
-int ldlm_cli_namespace_new(struct obd_device *, struct ptlrpc_client *,
-                           struct ptlrpc_connection *, __u32 ns_id);
 int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *peer,
-                     __u32 ns_id,
+                     struct ldlm_namespace *ns,
                      struct ldlm_handle *parent_lock_handle,
                      __u64 *res_id,
                      __u32 type,
                      struct ldlm_extent *req_ex,
                      ldlm_mode_t mode,
                      int *flags,
-                     ldlm_lock_callback completion,
-                     ldlm_lock_callback blocking,
                      void *data,
                      __u32 data_len,
-                     struct ldlm_handle *lockh,
-                     struct ptlrpc_request **request);
+                     struct ldlm_handle *lockh);
 int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
                       void *data, __u32 data_len);
 int ldlm_cli_convert(struct ptlrpc_client *, struct ldlm_handle *,
-                     int new_mode, int *flags, struct ptlrpc_request **);
-int ldlm_cli_cancel(struct ptlrpc_client *, struct ldlm_handle *,
-                    struct ptlrpc_request **);
+                     int new_mode, int *flags);
+int ldlm_cli_cancel(struct ptlrpc_client *, struct ldlm_lock *);
 
 
 #endif /* __KERNEL__ */

@@ -31,6 +31,14 @@ static void osc_con2cl(struct obd_conn *conn, struct ptlrpc_client **cl,
         *connection = osc->osc_conn;
 }
 
+static void osc_con2dlmcl(struct obd_conn *conn, struct ptlrpc_client **cl,
+                          struct ptlrpc_connection **connection)
+{
+        struct osc_obd *osc = &conn->oc_dev->u.osc;
+        *cl = osc->osc_ldlm_client;
+        *connection = osc->osc_conn;
+}
+
 static int osc_connect(struct obd_conn *conn)
 {
         struct ptlrpc_request *request;
@@ -345,43 +353,35 @@ int osc_sendpage(struct obd_conn *conn, struct ptlrpc_request *req,
 {
         struct ptlrpc_client *cl;
         struct ptlrpc_connection *connection;
+        struct ptlrpc_bulk_desc *bulk;
+        int rc;
+        ENTRY;
 
         osc_con2cl(conn, &cl, &connection);
 
-        if (cl->cli_obd) {
-                /* local sendpage */
-                memcpy((char *)(unsigned long)dst->addr,
-                       (char *)(unsigned long)src->addr, src->len);
-        } else {
-                struct ptlrpc_bulk_desc *bulk;
-                int rc;
+        bulk = ptlrpc_prep_bulk(connection);
+        if (bulk == NULL)
+                RETURN(-ENOMEM);
 
-                bulk = ptlrpc_prep_bulk(connection);
-                if (bulk == NULL)
-                        RETURN(-ENOMEM);
-
-                bulk->b_buf = (void *)(unsigned long)src->addr;
-                bulk->b_buflen = src->len;
-                bulk->b_xid = dst->xid;
-                rc = ptlrpc_send_bulk(bulk, OSC_BULK_PORTAL);
-                if (rc != 0) {
-                        CERROR("send_bulk failed: %d\n", rc);
-                        ptlrpc_free_bulk(bulk);
-                        LBUG();
-                        RETURN(rc);
-                }
-                wait_event_interruptible(bulk->b_waitq,
-                                         ptlrpc_check_bulk_sent(bulk));
-
-                if (bulk->b_flags & PTL_RPC_FL_INTR) {
-                        ptlrpc_free_bulk(bulk);
-                        RETURN(-EINTR);
-                }
-
+        bulk->b_buf = (void *)(unsigned long)src->addr;
+        bulk->b_buflen = src->len;
+        bulk->b_xid = dst->xid;
+        rc = ptlrpc_send_bulk(bulk, OSC_BULK_PORTAL);
+        if (rc != 0) {
+                CERROR("send_bulk failed: %d\n", rc);
                 ptlrpc_free_bulk(bulk);
+                LBUG();
+                RETURN(rc);
+        }
+        wait_event_interruptible(bulk->b_waitq, ptlrpc_check_bulk_sent(bulk));
+
+        if (bulk->b_flags & PTL_RPC_FL_INTR) {
+                ptlrpc_free_bulk(bulk);
+                RETURN(-EINTR);
         }
 
-        return 0;
+        ptlrpc_free_bulk(bulk);
+        RETURN(0);
 }
 
 int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
@@ -392,18 +392,16 @@ int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
         struct ptlrpc_connection *connection;
         struct ptlrpc_request *request;
         struct ost_body *body;
-        struct obd_ioobj ioo;
-        struct niobuf src;
         int pages, rc, i, j, size[3] = {sizeof(*body)};
         void *ptr1, *ptr2;
         struct ptlrpc_bulk_desc **bulk;
         ENTRY;
 
-        size[1] = num_oa * sizeof(ioo);
+        size[1] = num_oa * sizeof(struct obd_ioobj);
         pages = 0;
         for (i = 0; i < num_oa; i++)
                 pages += oa_bufs[i];
-        size[2] = pages * sizeof(src);
+        size[2] = pages * sizeof(struct niobuf);
 
         OBD_ALLOC(bulk, pages * sizeof(*bulk));
         if (bulk == NULL)
@@ -475,7 +473,8 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
         struct obd_ioobj ioo;
         struct ost_body *body;
         struct niobuf *src;
-        int pages, rc, i, j, size[3] = {sizeof(*body)};
+        long pages;
+        int rc, i, j, size[3] = {sizeof(*body)};
         void *ptr1, *ptr2;
         ENTRY;
 
@@ -519,7 +518,7 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
                 GOTO(out, rc = -EINVAL);
 
         if (request->rq_repmsg->buflens[1] != pages * sizeof(struct niobuf)) {
-                CERROR("buffer length wrong (%d vs. %d)\n",
+                CERROR("buffer length wrong (%d vs. %ld)\n",
                        request->rq_repmsg->buflens[1],
                        pages * sizeof(struct niobuf));
                 GOTO(out, rc = -EINVAL);
@@ -552,6 +551,74 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
         else
                 return osc_brw_write(conn, num_oa, oa, oa_bufs, buf, count,
                                      offset, flags);
+}
+
+int osc_enqueue(struct obd_conn *oconn, struct ldlm_namespace *ns,
+                struct ldlm_handle *parent_lock, __u64 *res_id, __u32 type,
+                struct ldlm_extent *extent, __u32 mode, int *flags, void *data,
+                int datalen, struct ldlm_handle *lockh)
+{
+        struct ptlrpc_connection *conn;
+        struct ptlrpc_client *cl;
+        int rc;
+        __u32 mode2;
+
+        /* Filesystem locks are given a bit of special treatment: first we
+         * fixup the lock to start and end on page boundaries. */
+        extent->start &= PAGE_MASK;
+        extent->end = (extent->end + PAGE_SIZE - 1) & PAGE_MASK;
+
+        /* Next, search for already existing extent locks that will cover us */
+        osc_con2dlmcl(oconn, &cl, &conn);
+        rc = ldlm_local_lock_match(ns, res_id, type, extent, mode, lockh);
+        if (rc == 1) {
+                /* We already have a lock, and it's referenced */
+                return 0;
+        }
+
+        /* Next, search for locks that we can upgrade (if we're trying to write)
+         * or are more than we need (if we're trying to read).  Because the VFS
+         * and page cache already protect us locally, lots of readers/writers
+         * can share a single PW lock. */
+        if (mode == LCK_PW)
+                mode2 = LCK_PR;
+        else
+                mode2 = LCK_PW;
+
+        rc = ldlm_local_lock_match(ns, res_id, type, extent, mode2, lockh);
+        if (rc == 1) {
+                int flags;
+                struct ldlm_lock *lock = ldlm_handle2object(lockh);
+                /* FIXME: This is not incredibly elegant, but it might
+                 * be more elegant than adding another parameter to
+                 * lock_match.  I want a second opinion. */
+                ldlm_lock_addref(lock, mode);
+                ldlm_lock_decref(lock, mode2);
+
+                if (mode == LCK_PR)
+                        return 0;
+
+                rc = ldlm_cli_convert(cl, lockh, type, &flags);
+                if (rc)
+                        LBUG();
+
+                return rc;
+        }
+
+        rc = ldlm_cli_enqueue(cl, conn, ns, parent_lock, res_id, type,
+                              extent, mode, flags, data, datalen, lockh);
+        return rc;
+}
+
+int osc_cancel(struct obd_conn *oconn, __u32 mode, struct ldlm_handle *lockh)
+{
+        struct ldlm_lock *lock;
+        ENTRY;
+
+        lock = ldlm_handle2object(lockh);
+        ldlm_lock_decref(lock, mode);
+
+        RETURN(0);
 }
 
 static int osc_setup(struct obd_device *obddev, obd_count len, void *buf)
@@ -613,7 +680,9 @@ struct obd_ops osc_obd_ops = {
         o_connect: osc_connect,
         o_disconnect: osc_disconnect,
         o_brw: osc_brw,
-        o_punch: osc_punch
+        o_punch: osc_punch,
+        o_enqueue: osc_enqueue,
+        o_cancel: osc_cancel
 };
 
 static int __init osc_init(void)

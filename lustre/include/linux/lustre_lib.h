@@ -46,6 +46,14 @@ int simple_mkdir(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, char *str, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off);
 int lustre_fsync(struct file *file);
+
+static inline void ll_sleep(int t)
+{
+        set_current_state(TASK_INTERRUPTIBLE);
+        schedule_timeout(t * HZ);
+        set_current_state(TASK_RUNNING);
+}
+
 #endif
 
 #include <linux/portals_lib.h>

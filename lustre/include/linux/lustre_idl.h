@@ -269,11 +269,10 @@ struct mds_rec_rename {
  */
 
 /* opcodes */
-#define LDLM_NAMESPACE_NEW 1
-#define LDLM_ENQUEUE       2
-#define LDLM_CONVERT       3
-#define LDLM_CANCEL        4
-#define LDLM_CALLBACK      5
+#define LDLM_ENQUEUE       1
+#define LDLM_CONVERT       2
+#define LDLM_CANCEL        3
+#define LDLM_CALLBACK      4
 
 #define RES_NAME_SIZE 3
 #define RES_VERSION_SIZE 4
@@ -299,7 +298,6 @@ struct ldlm_extent {
 };
 
 struct ldlm_resource_desc {
-        __u32 lr_ns_id;
         __u32 lr_type;
         __u64 lr_name[RES_NAME_SIZE];
         __u64 lr_version[RES_VERSION_SIZE];

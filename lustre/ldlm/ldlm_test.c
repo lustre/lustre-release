@@ -30,21 +30,21 @@ int ldlm_test_basics(struct obd_device *obddev)
         struct ldlm_handle lockh_1, lockh_2;
         int flags;
 
-        ldlm_lock();
+        ns = ldlm_namespace_new(obddev, 0);
+        if (ns == NULL)
+                LBUG();
 
-        err = ldlm_namespace_new(obddev, 1, &ns);
+        err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_PLAIN, LCK_CR,
+                                     NULL, 0, &lockh_1);
+        err = ldlm_local_lock_enqueue(&lockh_1, NULL, &flags,
+                                      ldlm_test_callback, ldlm_test_callback);
         if (err != ELDLM_OK)
                 LBUG();
 
-        err = ldlm_local_lock_create(1, NULL, res_id, LDLM_PLAIN, &lockh_1);
-        err = ldlm_local_lock_enqueue(&lockh_1, LCK_CR, NULL, &flags, NULL,
-                                      ldlm_test_callback, NULL, 0);
-        if (err != ELDLM_OK)
-                LBUG();
-
-        err = ldlm_local_lock_create(1, NULL, res_id, LDLM_PLAIN, &lockh_2);
-        err = ldlm_local_lock_enqueue(&lockh_2, LCK_EX, NULL, &flags, NULL,
-                                      ldlm_test_callback, NULL, 0);
+        err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_PLAIN, LCK_EX,
+                                     NULL, 0, &lockh_2);
+        err = ldlm_local_lock_enqueue(&lockh_2, NULL, &flags,
+                                      ldlm_test_callback, ldlm_test_callback);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_BLOCK_GRANTED))
@@ -55,12 +55,12 @@ int ldlm_test_basics(struct obd_device *obddev)
                 LBUG();
         ldlm_resource_dump(res);
 
-        err = ldlm_local_lock_convert(&lockh_1, LCK_NL, &flags);
-        if (err != ELDLM_OK)
-                LBUG();
+        res = ldlm_local_lock_convert(&lockh_1, LCK_NL, &flags);
+        if (res != NULL)
+                ldlm_reprocess_all(res);
 
         ldlm_resource_dump(res);
-        ldlm_unlock();
+        ldlm_namespace_free(ns);
 
         return 0;
 }
@@ -69,40 +69,39 @@ int ldlm_test_extents(struct obd_device *obddev)
 {
         struct ldlm_namespace *ns;
         struct ldlm_resource *res;
+        struct ldlm_lock *lock;
         __u64 res_id[RES_NAME_SIZE] = {0, 0, 0};
         struct ldlm_extent ext1 = {4, 6}, ext2 = {6, 9}, ext3 = {10, 11};
         struct ldlm_handle ext1_h, ext2_h, ext3_h;
         ldlm_error_t err;
         int flags;
 
-        ldlm_lock();
-
-        err = ldlm_namespace_new(obddev, 2, &ns);
-        if (err != ELDLM_OK)
+        ns = ldlm_namespace_new(obddev, 0);
+        if (ns == NULL)
                 LBUG();
 
         flags = 0;
-        err = ldlm_local_lock_create(2, NULL, res_id, LDLM_EXTENT, &ext1_h);
-        err = ldlm_local_lock_enqueue(&ext1_h, LCK_PR, &ext1, &flags, NULL,
-                                      NULL, NULL, 0);
-        if (err != ELDLM_OK)
-                LBUG();
-        if (!(flags & LDLM_FL_LOCK_CHANGED))
-                LBUG();
-
-        flags = 0;
-        err = ldlm_local_lock_create(2, NULL, res_id, LDLM_EXTENT, &ext2_h);
-        err = ldlm_local_lock_enqueue(&ext2_h, LCK_PR, &ext2, &flags, NULL,
-                                      NULL, NULL, 0);
+        err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR,
+                                     NULL, 0, &ext1_h);
+        err = ldlm_local_lock_enqueue(&ext1_h, &ext1, &flags, NULL, NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_LOCK_CHANGED))
                 LBUG();
 
         flags = 0;
-        err = ldlm_local_lock_create(2, NULL, res_id, LDLM_EXTENT, &ext3_h);
-        err = ldlm_local_lock_enqueue(&ext3_h, LCK_EX, &ext3, &flags, NULL,
-                                      NULL, NULL, 0);
+        err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR,
+                                     NULL, 0, &ext2_h);
+        err = ldlm_local_lock_enqueue(&ext2_h, &ext2, &flags, NULL, NULL);
+        if (err != ELDLM_OK)
+                LBUG();
+        if (!(flags & LDLM_FL_LOCK_CHANGED))
+                LBUG();
+
+        flags = 0;
+        err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_EX,
+                                     NULL, 0, &ext3_h);
+        err = ldlm_local_lock_enqueue(&ext3_h, &ext3, &flags, NULL, NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_BLOCK_GRANTED))
@@ -112,22 +111,22 @@ int ldlm_test_extents(struct obd_device *obddev)
 
         /* Convert/cancel blocking locks */
         flags = 0;
-        err = ldlm_local_lock_convert(&ext1_h, LCK_NL, &flags);
-        if (err != ELDLM_OK)
-                LBUG();
+        res = ldlm_local_lock_convert(&ext1_h, LCK_NL, &flags);
+        if (res != NULL)
+                ldlm_reprocess_all(res);
 
         flags = 0;
-        err = ldlm_local_lock_cancel(&ext2_h);
-        if (err != ELDLM_OK)
-                LBUG();
+        lock = ldlm_handle2object(&ext2_h);
+        res = ldlm_local_lock_cancel(lock);
+        if (res != NULL)
+                ldlm_reprocess_all(res);
 
         /* Dump the results */
         res = ldlm_resource_get(ns, NULL, res_id, LDLM_EXTENT, 0);
         if (res == NULL)
                 LBUG();
         ldlm_resource_dump(res);
-
-        ldlm_unlock();
+        ldlm_namespace_free(ns);
 
         return 0;
 }
@@ -136,36 +135,19 @@ static int ldlm_test_network(struct obd_device *obddev,
                              struct ptlrpc_connection *conn)
 {
         struct ldlm_obd *ldlm = &obddev->u.ldlm;
-        struct ptlrpc_request *request;
 
         __u64 res_id[RES_NAME_SIZE] = {1, 2, 3};
         struct ldlm_extent ext = {4, 6};
-        struct ldlm_handle lockh1, lockh2;
+        struct ldlm_handle lockh1;
         int flags = 0;
         ldlm_error_t err;
 
-        err = ldlm_cli_namespace_new(obddev, ldlm->ldlm_client, conn, 3);
-        ptlrpc_free_req(request);
-        CERROR("ldlm_cli_namespace_new: %d\n", err);
-        if (err != ELDLM_OK)
-                GOTO(out, err);
-
-        err = ldlm_cli_enqueue(ldlm->ldlm_client, conn, 3,
+        err = ldlm_cli_enqueue(ldlm->ldlm_client, conn, obddev->obd_namespace,
                                NULL, res_id, LDLM_EXTENT, &ext, LCK_PR, &flags,
-                               NULL, NULL, NULL, 0, &lockh1, &request);
-        ptlrpc_free_req(request);
+                               NULL, 0, &lockh1);
         CERROR("ldlm_cli_enqueue: %d\n", err);
 
-        flags = 0;
-        err = ldlm_cli_enqueue(ldlm->ldlm_client, conn, 3,
-                               NULL, res_id, LDLM_EXTENT, &ext, LCK_EX, &flags,
-                               NULL, NULL, NULL, 0, &lockh2, &request);
-        ptlrpc_free_req(request);
-        CERROR("ldlm_cli_enqueue: %d\n", err);
-
-        EXIT;
- out:
-        return err;
+        RETURN(err);
 }
 
 int ldlm_test(struct obd_device *obddev, struct ptlrpc_connection *conn)

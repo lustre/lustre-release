@@ -26,9 +26,9 @@ int ldlm_extent_compat(struct ldlm_lock *a, struct ldlm_lock *b)
 {
         if (MAX(a->l_extent.start, b->l_extent.start) <=
             MIN(a->l_extent.end, b->l_extent.end))
-                return 0;
+                RETURN(0);
 
-        return 1;
+        RETURN(1);
 }
 
 static void policy_internal(struct list_head *queue, struct ldlm_extent *req_ex,

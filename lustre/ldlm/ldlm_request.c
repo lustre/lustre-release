@@ -14,59 +14,41 @@
 
 #include <linux/lustre_dlm.h>
 
-#define LOOPBACK(x) (((x) & cpu_to_be32(0xff000000)) == cpu_to_be32(0x7f000000))
-
-static int is_local_conn(struct ptlrpc_connection *conn)
-{
-        ENTRY;
-        if (conn == NULL)
-                RETURN(1);
-
-        RETURN(LOOPBACK(conn->c_peer.peer_nid));
-}
-
 int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
-                     __u32 ns_id,
+                     struct ldlm_namespace *ns,
                      struct ldlm_handle *parent_lock_handle,
                      __u64 *res_id,
                      __u32 type,
                      struct ldlm_extent *req_ex,
                      ldlm_mode_t mode,
                      int *flags,
-                     ldlm_lock_callback completion,
-                     ldlm_lock_callback blocking,
                      void *data,
                      __u32 data_len,
-                     struct ldlm_handle *lockh,
-                     struct ptlrpc_request **request)
+                     struct ldlm_handle *lockh)
 {
-        struct ldlm_handle local_lockh;
         struct ldlm_lock *lock;
         struct ldlm_request *body;
         struct ldlm_reply *reply;
-        struct ptlrpc_request *req = NULL;
+        struct ptlrpc_request *req;
         char *bufs[2] = {NULL, data};
         int rc, size[2] = {sizeof(*body), data_len};
-        ldlm_error_t err;
         ENTRY;
 
-        err = ldlm_local_lock_create(ns_id, parent_lock_handle, res_id,
-                                     type, &local_lockh);
-        if (err != ELDLM_OK)
-                RETURN(err);
+        *flags = 0;
+        rc = ldlm_local_lock_create(ns, parent_lock_handle, res_id, type, mode,
+                                    NULL, 0, lockh);
+        if (rc != ELDLM_OK)
+                GOTO(out, rc);
 
-        lock = ldlm_handle2object(&local_lockh);
-        /* Is this lock locally managed? */
-        if (is_local_conn(conn))
-                GOTO(local, 0);
+        lock = ldlm_handle2object(lockh);
 
+        spin_unlock(&lock->l_lock);
         req = ptlrpc_prep_req(cl, conn, LDLM_ENQUEUE, 2, size, bufs);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
 
         /* Dump all of this data into the request buffer */
         body = lustre_msg_buf(req->rq_reqmsg, 0);
-        body->lock_desc.l_resource.lr_ns_id = ns_id;
         body->lock_desc.l_resource.lr_type = type;
         memcpy(body->lock_desc.l_resource.lr_name, res_id,
                sizeof(body->lock_desc.l_resource.lr_name));
@@ -77,7 +59,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
                        sizeof(body->lock_desc.l_extent));
         body->flags = *flags;
 
-        memcpy(&body->lock_handle1, &local_lockh, sizeof(body->lock_handle1));
+        memcpy(&body->lock_handle1, lockh, sizeof(body->lock_handle1));
 
         if (parent_lock_handle)
                 memcpy(&body->lock_handle2, parent_lock_handle,
@@ -90,73 +72,43 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
         if (rc != ELDLM_OK) {
+                spin_lock(&lock->l_resource->lr_lock);
                 ldlm_resource_put(lock->l_resource);
+                spin_unlock(&lock->l_resource->lr_lock);
                 ldlm_lock_free(lock);
                 GOTO(out, rc);
         }
 
         lock->l_connection = conn;
+        lock->l_client = cl;
         reply = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&lock->l_remote_handle, &reply->lock_handle,
                sizeof(lock->l_remote_handle));
+        memcpy(req_ex, &reply->lock_extent, sizeof(*req_ex));
         *flags = reply->flags;
 
-        CERROR("remote handle: %p, flags: %d\n",
+        CDEBUG(D_INFO, "remote handle: %p, flags: %d\n",
                (void *)(unsigned long)reply->lock_handle.addr, *flags);
-        CERROR("extent: %Lu -> %Lu\n",
+        CDEBUG(D_INFO, "extent: %Lu -> %Lu\n",
                (unsigned long long)reply->lock_extent.start,
                (unsigned long long)reply->lock_extent.end);
 
-        EXIT;
- local:
-        rc = ldlm_local_lock_enqueue(&local_lockh, mode, req_ex, flags,
-                                     completion, blocking, data, data_len);
+        ptlrpc_free_req(req);
+
+        rc = ldlm_local_lock_enqueue(lockh, req_ex, flags, NULL, NULL);
+
         if (*flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
-                     LDLM_FL_BLOCK_CONV)) {
+                      LDLM_FL_BLOCK_CONV)) {
                 /* Go to sleep until the lock is granted. */
                 /* FIXME: or cancelled. */
+                CDEBUG(D_NET, "enqueue returned a blocked lock (%p), "
+                       "going to sleep.\n", lock);
+                ldlm_lock_dump(lock);
                 wait_event_interruptible(lock->l_waitq, lock->l_req_mode ==
                                          lock->l_granted_mode);
+                CDEBUG(D_NET, "waking up, the lock must be granted.\n");
         }
- out:
-        *request = req;
-        return rc;
-}
-
-int ldlm_cli_namespace_new(struct obd_device *obddev, struct ptlrpc_client *cl,
-                           struct ptlrpc_connection *conn, __u32 ns_id)
-{
-        struct ldlm_namespace *ns;
-        struct ldlm_request *body;
-        struct ptlrpc_request *req;
-        int rc, size = sizeof(*body);
-        ENTRY;
-
-        if (is_local_conn(conn))
-                GOTO(local, 0);
-
-        req = ptlrpc_prep_req(cl, conn, LDLM_NAMESPACE_NEW, 1, &size, NULL);
-        if (!req)
-                GOTO(out, rc = -ENOMEM);
-
-        body = lustre_msg_buf(req->rq_reqmsg, 0);
-        body->lock_desc.l_resource.lr_ns_id = ns_id;
-
-        req->rq_replen = lustre_msg_size(0, NULL);
-
-        rc = ptlrpc_queue_wait(req);
-        rc = ptlrpc_check_status(req, rc);
-        ptlrpc_free_req(req);
-        if (rc)
-                GOTO(out, rc);
-
         EXIT;
- local:
-        rc = ldlm_namespace_new(obddev, ns_id, &ns);
-        if (rc != ELDLM_OK) {
-                /* XXX: It succeeded remotely but failed locally. What to do? */
-                CERROR("Local ldlm_namespace_new failed.\n");
-        }
  out:
         return rc;
 }
@@ -181,7 +133,11 @@ int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
         memcpy(&body->lock_handle1, &lock->l_remote_handle,
                sizeof(body->lock_handle1));
 
-        if (new != NULL) {
+        if (new == NULL) {
+                CDEBUG(D_NET, "Sending granted AST\n");
+                ldlm_lock2desc(lock, &body->lock_desc);
+        } else {
+                CDEBUG(D_NET, "Sending blocked AST\n");
                 ldlm_lock2desc(new, &body->lock_desc);
                 ldlm_object2handle(new, &body->lock_handle2);
         }
@@ -198,20 +154,18 @@ int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
 }
 
 int ldlm_cli_convert(struct ptlrpc_client *cl, struct ldlm_handle *lockh,
-                     int new_mode, int *flags, struct ptlrpc_request **request)
+                     int new_mode, int *flags)
 {
         struct ldlm_request *body;
-        struct ldlm_reply *reply;
         struct ldlm_lock *lock;
-        struct ptlrpc_request *req = NULL;
+        struct ldlm_resource *res;
+        struct ptlrpc_request *req;
         int rc, size[2] = {sizeof(*body), 0};
         char *bufs[2] = {NULL, NULL};
         ENTRY;
 
         lock = ldlm_handle2object(lockh);
-
-        if (is_local_conn(lock->l_connection))
-                GOTO(local, 0);
+        *flags = 0;
 
         size[1] = lock->l_data_len;
         bufs[1] = lock->l_data;
@@ -234,31 +188,43 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct ldlm_handle *lockh,
         if (rc != ELDLM_OK)
                 GOTO(out, rc);
 
-        reply = lustre_msg_buf(req->rq_repmsg, 0);
-        *flags = reply->flags;
-
+        body = lustre_msg_buf(req->rq_repmsg, 0);
+        res = ldlm_local_lock_convert(lockh, new_mode, &body->flags);
+        if (res != NULL)
+                ldlm_reprocess_all(res);
+        if (lock->l_req_mode != lock->l_granted_mode) {
+                /* Go to sleep until the lock is granted. */
+                /* FIXME: or cancelled. */
+                CDEBUG(D_NET, "convert returned a blocked lock, "
+                       "going to sleep.\n");
+                wait_event_interruptible(lock->l_waitq, lock->l_req_mode ==
+                                         lock->l_granted_mode);
+                CDEBUG(D_NET, "waking up, the lock must be granted.\n");
+        }
         EXIT;
- local:
-        rc = ldlm_local_lock_convert(lockh, new_mode, flags);
  out:
-        *request = req;
+        ptlrpc_free_req(req);
         return rc;
 }
 
-int ldlm_cli_cancel(struct ptlrpc_client *cl, struct ldlm_handle *lockh,
-                    struct ptlrpc_request **request)
+int ldlm_cli_cancel(struct ptlrpc_client *cl, struct ldlm_lock *lock)
 {
         struct ldlm_request *body;
-        struct ldlm_lock *lock;
-        struct ptlrpc_request *req = NULL;
+        struct ptlrpc_request *req;
+        struct ldlm_resource *res;
         int rc, size[2] = {sizeof(*body), 0};
         char *bufs[2] = {NULL, NULL};
         ENTRY;
 
-        lock = ldlm_handle2object(lockh);
-
-        if (is_local_conn(lock->l_connection))
-                GOTO(local, 0);
+        if (lock->l_data_len == sizeof(struct inode)) {
+                /* FIXME: do something better than throwing away everything */
+                struct inode *inode = lock->l_data;
+                if (inode == NULL)
+                        LBUG();
+                down(&inode->i_sem);
+                invalidate_inode_pages(inode);
+                up(&inode->i_sem);
+        }
 
         size[1] = lock->l_data_len;
         bufs[1] = lock->l_data;
@@ -275,13 +241,14 @@ int ldlm_cli_cancel(struct ptlrpc_client *cl, struct ldlm_handle *lockh,
 
         rc = ptlrpc_queue_wait(req);
         rc = ptlrpc_check_status(req, rc);
+        ptlrpc_free_req(req);
         if (rc != ELDLM_OK)
                 GOTO(out, rc);
 
+        res = ldlm_local_lock_cancel(lock);
+        if (res != NULL)
+                ldlm_reprocess_all(res);
         EXIT;
- local:
-        rc = ldlm_local_lock_cancel(lockh);
  out:
-        *request = req;
         return rc;
 }

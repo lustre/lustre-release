@@ -14,13 +14,12 @@
  *
  */
 
-#include <linux/config.h>
-#include <linux/module.h>
-
 #define DEBUG_SUBSYSTEM S_LLITE
 
+#include <linux/module.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
+#include <linux/lustre_dlm.h>
 
 kmem_cache_t *ll_file_data_slab;
 extern struct address_space_operations ll_aops;
@@ -121,6 +120,12 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
+        sbi->ll_namespace = ldlm_namespace_new(NULL, 1);
+        if (sbi->ll_namespace == NULL) {
+                CERROR("failed to create local lock namespace\n");
+                GOTO(out_free, sb = NULL);
+        }
+
         ptlrpc_init_client(ptlrpc_connmgr, ll_recover,
                            MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                            &sbi->ll_mds_client);
@@ -193,6 +198,8 @@ out_disc:
                 obd_disconnect(&sbi->ll_conn);
 out_free:
                 MOD_DEC_USE_COUNT;
+                if (sbi->ll_namespace)
+                        ldlm_namespace_free(sbi->ll_namespace);
                 OBD_FREE(sbi, sizeof(*sbi));
         }
         if (device)
@@ -209,6 +216,7 @@ static void ll_put_super(struct super_block *sb)
         ENTRY;
         ll_commitcbd_cleanup(sbi);
         obd_disconnect(&sbi->ll_conn);
+        ldlm_namespace_free(sbi->ll_namespace);
         ptlrpc_put_connection(sbi->ll_mds_conn);
         ptlrpc_cleanup_client(&sbi->ll_mds_client);
         OBD_FREE(sb->u.generic_sbp, sizeof(*sbi));

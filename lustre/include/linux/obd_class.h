@@ -344,6 +344,33 @@ static inline int obd_iocontrol(int cmd, struct obd_conn *conn,
         RETURN(rc);
 }
 
+static inline int obd_enqueue(struct obd_conn *conn, struct ldlm_namespace *ns,
+                              struct ldlm_handle *parent_lock, __u64 *res_id,
+                              __u32 type, struct ldlm_extent *extent,
+                              __u32 mode, int *flags, void *data, int datalen,
+                              struct ldlm_handle *lockh)
+{
+        int rc;
+        OBD_CHECK_SETUP(conn);
+        OBD_CHECK_OP(conn, enqueue);
+        
+        rc = OBP(conn->oc_dev, enqueue)(conn, ns, parent_lock, res_id, type,
+                                        extent, mode, flags, data, datalen,
+                                        lockh);
+        RETURN(rc);
+}
+
+static inline int obd_cancel(struct obd_conn *conn, __u32 mode,
+                             struct ldlm_handle *lockh)
+{
+        int rc;
+        OBD_CHECK_SETUP(conn);
+        OBD_CHECK_OP(conn, cancel);
+        
+        rc = OBP(conn->oc_dev, cancel)(conn, mode, lockh);
+        RETURN(rc);
+}
+
 #endif 
 
 /*
@@ -396,8 +423,7 @@ static __inline__ struct obdo *obdo_fromid(struct obd_conn *conn, obd_id id,
         ENTRY;
         oa = obdo_alloc();
         if ( !oa ) {
-                EXIT;
-                return ERR_PTR(-ENOMEM);
+                RETURN(ERR_PTR(-ENOMEM));
         }
 
         oa->o_id = id;
@@ -405,11 +431,9 @@ static __inline__ struct obdo *obdo_fromid(struct obd_conn *conn, obd_id id,
         oa->o_valid = valid;
         if ((err = OBP(conn->oc_dev, getattr)(conn, oa))) {
                 obdo_free(oa);
-                EXIT;
-                return ERR_PTR(err);
+                RETURN(ERR_PTR(err));
         }
-        EXIT;
-        return oa;
+        RETURN(oa);
 }
 
 static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
