@@ -8,3 +8,4 @@ Makefile.in
 tags
 TAGS
 obdctl
+lctl

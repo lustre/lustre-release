@@ -3,7 +3,13 @@ CPPFLAGS := -I. -I$(PORTALS)/include -I$(top_srcdir)/include -D_LARGEFILE64_SOUR
 CFLAGS := -g -Wall
 # LDADD = -lldap
 # LDADD := -lreadline -ltermcap # -lefence
-bin_PROGRAMS = openunlink testreq truncate directio openme writeme mcreate tchmod toexcl fsx #ldaptest 
+pkglibdir = @libdir@/lustre
+pkgcfgdir = @sysconfdir@/lustre
+EXTRA_DIST = llsetup.sh llrsetup.sh llcleanup.sh common.sh lustre.cfg
+sbin_SCRIPTS = llsetup.sh llrsetup.sh llcleanup.sh
+pkglib_SCRIPTS = common.sh
+pkgcfg_DATA = lustre.cfg
+noinst_PROGRAMS = openunlink testreq truncate directio openme writeme mcreate tchmod toexcl fsx #ldaptest 
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c

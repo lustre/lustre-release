@@ -3,7 +3,7 @@
 %define kversion @RELEASE@
 %define linuxdir @LINUX@
 %define portalsdir @PORTALS@
-Release: 1
+Release: 2
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -20,6 +20,7 @@ servers and utilities.
 
 %package -n lustre-modules
 Summary: Kernel Lustre drivers for Linux %{kversion}
+Requires: portals-modules
 Group: Development/Kernel
 
 %description -n lustre-modules
@@ -55,16 +56,13 @@ find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/obd-%{version}
 %files
 %attr(-, root, root) %doc COPYING FDL
 %attr(-, root, root) %doc doc/master.pdf doc/lustre-HOWTO.txt
-%attr(-, root, root) /usr/bin/directio
-%attr(-, root, root) /usr/bin/fsx
-%attr(-, root, root) /usr/bin/mcreate
-%attr(-, root, root) /usr/bin/obdctl
-%attr(-, root, root) /usr/bin/openme
-%attr(-, root, root) /usr/bin/openunlink
-%attr(-, root, root) /usr/bin/tchmod
-%attr(-, root, root) /usr/bin/toexcl
-%attr(-, root, root) /usr/bin/truncate
-%attr(-, root, root) /usr/bin/writeme
+%attr(-, root, root) /usr/sbin/obdctl
+%attr(-, root, root) /usr/sbin/lctl
+%attr(-, root, root) /usr/sbin/llsetup.sh
+%attr(-, root, root) /usr/sbin/llrsetup.sh
+%attr(-, root, root) /usr/sbin/llcleanup.sh
+%attr(-, root, root) /lib/lustre/common.sh
+%attr(-, root, root) /etc/lustre/lustre.cfg
 
 %files -n lustre-modules
 %attr(-, root, root) %doc COPYING
