@@ -684,7 +684,7 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                         struct l_wait_info lwi;
                         if (lock->l_completion_ast) {
                                 int err = lock->l_completion_ast(lock,
-                                                           LDLM_FL_WAIT_NOREPROC,
+                                                          LDLM_FL_WAIT_NOREPROC,
                                                                  NULL);
                                 if (err) {
                                         rc = 0;
@@ -708,7 +708,7 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                            type == LDLM_PLAIN ? res_id->name[3] :
                                 policy->l_extent.end);
                 l_unlock(&ns->ns_lock);
-        } else if (!(flags & LDLM_FL_TEST_LOCK)) { /*less verbose for test-only*/
+        } else if (!(flags & LDLM_FL_TEST_LOCK)) {/*less verbose for test-only*/
                 LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
                                   LPU64"/"LPU64" ("LPU64" "LPU64")", ns,
                                   type, mode, res_id->name[0], res_id->name[1],

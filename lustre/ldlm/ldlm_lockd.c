@@ -66,6 +66,7 @@ static struct timer_list waiting_locks_timer;
 static struct expired_lock_thread {
         wait_queue_head_t         elt_waitq;
         int                       elt_state;
+        int                       elt_dump;
         struct list_head          elt_expired_locks;
 } expired_lock_thread;
 #endif
@@ -129,6 +130,18 @@ static int expired_lock_main(void *arg)
                              &lwi);
 
                 spin_lock_bh(&waiting_locks_spinlock);
+                if (expired_lock_thread.elt_dump) {
+                        spin_unlock_bh(&waiting_locks_spinlock);
+
+                        /* from waiting_locks_callback, but not in timer */
+                        portals_debug_dumplog();
+                        portals_run_lbug_upcall(__FILE__, "waiting_locks_cb",
+                                                expired_lock_thread.elt_dump);
+
+                        spin_lock_bh(&waiting_locks_spinlock);
+                        expired_lock_thread.elt_dump = 0;
+                }
+
                 while (!list_empty(expired)) {
                         struct obd_export *export;
                         struct ldlm_lock *lock;
@@ -168,6 +181,7 @@ static int expired_lock_main(void *arg)
         RETURN(0);
 }
 
+/* This is called from within a timer interrupt and cannot schedule */
 static void waiting_locks_callback(unsigned long unused)
 {
         struct ldlm_lock *lock, *last = NULL;
@@ -194,8 +208,17 @@ static void waiting_locks_callback(unsigned long unused)
                                &lock->l_pending_chain,
                                lock->l_pending_chain.next,
                                lock->l_pending_chain.prev);
+
+                        INIT_LIST_HEAD(&waiting_locks_list);    /* HACK */
+                        expired_lock_thread.elt_dump = __LINE__;
                         spin_unlock_bh(&waiting_locks_spinlock);
-                        LBUG();
+
+                        /* LBUG(); */
+                        CEMERG("would be an LBUG, but isn't (bug 5653)\n");
+                        portals_debug_dumpstack(NULL);
+                        /*blocks* portals_debug_dumplog(); */
+                        /*blocks* portals_run_lbug_upcall(file, func, line); */
+                        break;
                 }
                 last = lock;
 
@@ -235,6 +258,17 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
         l_check_ns_lock(lock->l_resource->lr_namespace);
 
         spin_lock_bh(&waiting_locks_spinlock);
+        if (lock->l_destroyed) {
+                static unsigned long next;
+                spin_unlock_bh(&waiting_locks_spinlock);
+                LDLM_ERROR(lock, "not waiting on destroyed lock (bug 5653)");
+                if (time_after(jiffies, next)) {
+                        next = jiffies + 14400 * HZ;
+                        portals_debug_dumpstack(NULL);
+                }
+                return 0;
+        }
+
         if (!list_empty(&lock->l_pending_chain)) {
                 spin_unlock_bh(&waiting_locks_spinlock);
                 LDLM_DEBUG(lock, "not re-adding to wait list");

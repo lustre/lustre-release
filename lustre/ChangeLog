@@ -7,6 +7,7 @@
 	- swab llog records of type '0' so we get proper header size/idx (5861)
 	- send llog cancel req to DLM cancel portal instead of cb portal (5515)
         - avoid SetPageDirty on 2.6 (5981)
+	- don't re-add just-being-destroyed locks to the waiting list (5653)
        * miscellania
 	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
 	- allow --write-conf on an MDS with different nettype than client (5619)
