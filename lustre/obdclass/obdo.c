@@ -215,7 +215,7 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
                 LTIME_S(dst->i_mtime) = src->o_mtime;
         if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime))
                 LTIME_S(dst->i_ctime) = src->o_ctime;
-        if (valid & OBD_MD_FLSIZE && src->o_size > dst->i_size)
+        if (valid & OBD_MD_FLSIZE) 
                 dst->i_size = src->o_size;
         /* optimum IO size */
         if (valid & OBD_MD_FLBLKSZ && src->o_blksize > dst->i_blksize)
