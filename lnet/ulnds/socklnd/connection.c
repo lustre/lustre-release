@@ -56,9 +56,14 @@ unsigned short tcpnal_acceptor_port = 988;
  */
 static int compare_connection(void *arg1, void *arg2)
 {
-        connection c = arg1;
-        unsigned int * id = arg2;
-        return((c->ip==id[0]) && (c->port==id[1]));
+    connection c = arg1;
+    unsigned int * id = arg2;
+#if 0
+    return((c->ip==id[0]) && (c->port==id[1]));
+#else
+    /* CFS specific hacking */
+    return (c->ip == id[0]);
+#endif
 }
 
 
@@ -69,7 +74,12 @@ static int compare_connection(void *arg1, void *arg2)
  */
 static unsigned int connection_key(unsigned int *id)
 {
+#if 0
     return(id[0]^id[1]);
+#else
+    /* CFS specific hacking */
+    return (unsigned int) id[0];
+#endif
 }
 
 
