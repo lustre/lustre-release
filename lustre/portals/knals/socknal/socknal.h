@@ -44,6 +44,7 @@
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
+#include <asm/irq.h>
 
 #include <linux/init.h>
 #include <linux/fs.h>
