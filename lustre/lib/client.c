@@ -245,6 +245,8 @@ int ptlrpc_import_connect(struct lustre_handle *conn, struct obd_device *obd,
         }
         imp->imp_level = LUSTRE_CONN_FULL;
         imp->imp_remote_handle = request->rq_repmsg->handle;
+        CDEBUG(D_HA, "local import: %p, remote handle: "LPX64"\n", imp,
+               imp->imp_remote_handle.cookie);
 
         EXIT;
 out_req:
