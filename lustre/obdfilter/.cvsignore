@@ -1,9 +1,8 @@
-config.h
-config.out
-config.mk
-.depfiles
-.prereq.ok
-.ready
-*~
+.Xrefs
+config.log
+config.status
+configure
+Makefile
+Makefile.in
+.deps
 TAGS
-Xrefs
