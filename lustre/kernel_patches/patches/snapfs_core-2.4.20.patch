@@ -2,8 +2,8 @@
 Index: linux-2.4.20-8/fs/ext3/snap.c
 ===================================================================
 --- linux-2.4.20-8.orig/fs/ext3/snap.c	2003-01-30 18:24:37.000000000 +0800
-+++ linux-2.4.20-8/fs/ext3/snap.c	2004-01-16 20:38:50.000000000 +0800
-@@ -0,0 +1,2644 @@
++++ linux-2.4.20-8/fs/ext3/snap.c	2004-01-18 01:48:54.000000000 +0800
+@@ -0,0 +1,2588 @@
 +/* fs/ext3/snap.c
 + *
 + * Copyright (c) 2002 Cluster File Systems, Inc. <info@clusterfs.com>
@@ -977,9 +977,7 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +static int ext3_copy_block (struct inode *dst, struct inode *src, int blk) 
 +{
 +	struct buffer_head *bh_dst = NULL, *bh_src = NULL;
-+	struct page *dst_page = NULL, *src_page = NULL;
 +	int err = 0;
-+	int journal_data;
 +	handle_t *handle = NULL;
 +
 +	
@@ -987,91 +985,37 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +	/* 
 +	 * ext3_getblk() require handle!=NULL
 +	 */
-+	journal_data = !S_ISREG(src->i_mode);
++	if (S_ISREG(src->i_mode))
++		return 0;
 +
-+	if (journal_data) {
-+		handle = ext3_journal_start(dst, SNAP_COPYBLOCK_TRANS_BLOCKS);
-+		if( !handle )
-+			return -1;
++	handle = ext3_journal_start(dst, SNAP_COPYBLOCK_TRANS_BLOCKS);
++	if( !handle )
++		return -1;
 +
-+		bh_src = ext3_bread(handle, src, blk, 0, &err);
-+		if (!bh_src) {
-+			snap_err("error for src blk %d, error %d\n", blk, err);
-+			goto exit_relese;
-+		}
-+		bh_dst = ext3_getblk(handle, dst, blk, 1, &err);
-+		if (!bh_dst) {
-+			snap_err("error for dst blk %d, error %d\n", blk, err);
-+			err = -ENOSPC;
-+			goto exit_relese;
-+		}
-+		snap_debug("copy block %lu to %lu (%ld bytes)\n",
-+		    	   bh_src->b_blocknr, bh_dst->b_blocknr, 
-+		    	   src->i_sb->s_blocksize);
-+
-+		ext3_journal_get_write_access(handle, bh_dst);
-+
-+		memcpy(bh_dst->b_data, bh_src->b_data, src->i_sb->s_blocksize);
-+
-+		ext3_journal_dirty_metadata(handle, bh_dst);
-+		err = 1;
-+exit_relese:
-+		if (bh_src) brelse(bh_src);
-+		if (bh_dst) brelse(bh_dst);
-+	} else {
-+		/*copy block of reg file*/
-+		unsigned long bytes, index, offset; 
-+		struct address_space	*mapping = src->i_mapping;
-+
-+		offset = ((blk >> dst->i_sb->s_blocksize_bits) & (PAGE_CACHE_SIZE -1));
-+		index = (blk >> dst->i_sb->s_blocksize_bits) >> PAGE_CACHE_SHIFT; 
-+		bytes = dst->i_sb->s_blocksize;
-+		
-+		src_page = grab_cache_page(src->i_mapping, index);
-+	        if (!src_page) {
-+			snap_err("copy block %d from %lu to %lu ENOMEM \n",
-+				  blk, src->i_ino, dst->i_ino);
-+			err = -ENOMEM;
-+			goto exit;
-+		}
-+		ext3_readpage(NULL, src_page);
-+		wait_on_page(src_page);
-+		
-+		kmap(src_page);
-+		if (!Page_Uptodate(src_page)) {
-+			snap_err("Can not read page index %lu of inode %lu\n",
-+				  index, src->i_ino);
-+			err = -EIO;
-+			goto unlock_src_page;
-+		}
-+		dst_page = grab_cache_page(dst->i_mapping, index);
-+	        if (!dst_page) {
-+			snap_err("copy block %d from %lu to %lu ENOMEM \n",
-+				  blk, src->i_ino, dst->i_ino);
-+			err = -ENOMEM;
-+			goto unlock_src_page;
-+		}	
-+		kmap(dst_page);
-+	
-+		err = mapping->a_ops->prepare_write(NULL, dst_page, offset, offset+bytes);
-+		if (err) 
-+			goto unlock_dst_page; 
-+		memcpy(page_address(dst_page), page_address(src_page), bytes);
-+		flush_dcache_page(dst_page);
-+	
-+		err = mapping->a_ops->commit_write(NULL, dst_page, offset, offset+bytes);
-+		if (err) 
-+			goto unlock_dst_page; 
-+		err = 1;
-+unlock_dst_page:
-+		kunmap(dst_page);
-+		UnlockPage(dst_page);
-+		page_cache_release(dst_page);
-+unlock_src_page:
-+		kunmap(src_page);
-+		page_cache_release(src_page);
++	bh_src = ext3_bread(handle, src, blk, 0, &err);
++	if (!bh_src) {
++		snap_err("error for src blk %d, error %d\n", blk, err);
++		goto exit_relese;
 +	}
-+exit:
++	bh_dst = ext3_getblk(handle, dst, blk, 1, &err);
++	if (!bh_dst) {
++		snap_err("error for dst blk %d, error %d\n", blk, err);
++		err = -ENOSPC;
++		goto exit_relese;
++	}
++	snap_debug("copy block %lu to %lu (%ld bytes)\n",
++		   bh_src->b_blocknr, bh_dst->b_blocknr, 
++		   src->i_sb->s_blocksize);
++
++	ext3_journal_get_write_access(handle, bh_dst);
++
++	memcpy(bh_dst->b_data, bh_src->b_data, src->i_sb->s_blocksize);
++
++	ext3_journal_dirty_metadata(handle, bh_dst);
++	err = 1;
++exit_relese:
++	if (bh_src) brelse(bh_src);
++	if (bh_dst) brelse(bh_dst);
 +	if (handle)	
 +		ext3_journal_stop(handle, dst);
 +	return err;
@@ -2664,7 +2608,7 @@ Index: linux-2.4.20-8/fs/ext3/Makefile
 Index: linux-2.4.20-8/fs/ext3/inode.c
 ===================================================================
 --- linux-2.4.20-8.orig/fs/ext3/inode.c	2004-01-05 10:54:03.000000000 +0800
-+++ linux-2.4.20-8/fs/ext3/inode.c	2004-01-16 20:39:21.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/inode.c	2004-01-18 01:48:19.000000000 +0800
 @@ -1191,7 +1191,7 @@
   * So, if we see any bmap calls here on a modified, data-journaled file,
   * take extra steps to flush any blocks which might be in the cache. 
@@ -2674,15 +2618,6 @@ Index: linux-2.4.20-8/fs/ext3/inode.c
  {
  	struct inode *inode = mapping->host;
  	journal_t *journal;
-@@ -1367,7 +1367,7 @@
- 	return ret;
- }
- 
--static int ext3_readpage(struct file *file, struct page *page)
-+int ext3_readpage(struct file *file, struct page *page)
- {
- 	return block_read_full_page(page,ext3_get_block);
- }
 Index: linux-2.4.20-8/fs/ext3/ialloc.c
 ===================================================================
 --- linux-2.4.20-8.orig/fs/ext3/ialloc.c	2004-01-05 10:54:03.000000000 +0800
@@ -2701,6 +2636,24 @@ Index: linux-2.4.20-8/fs/ext3/ialloc.c
  /*
   * NOTE! When we get the inode, we're the only people
   * that have access to it, and as such there are no
+Index: linux-2.4.20-8/fs/ext3/super.c
+===================================================================
+--- linux-2.4.20-8.orig/fs/ext3/super.c	2004-01-05 10:54:03.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/super.c	2004-01-18 01:40:10.000000000 +0800
+@@ -1324,6 +1324,13 @@
+ 	sbi->s_mount_state = le16_to_cpu(es->s_state);
+ 	sbi->s_addr_per_block_bits = log2(EXT3_ADDR_PER_BLOCK(sb));
+ 	sbi->s_desc_per_block_bits = log2(EXT3_DESC_PER_BLOCK(sb));
++#define EXT3_SNAP_FS
++#ifdef EXT3_SNAP_FS
++	init_MUTEX(&(sbi->s_snap_list_sem));
++	sbi->s_snaptable_ino = le32_to_cpu(es->s_snaptable_ino);
++	sbi->s_first_cowed_pri_ino = le32_to_cpu(es->s_first_cowed_pri_ino);
++	sbi->s_last_cowed_pri_ino = le32_to_cpu(es->s_last_cowed_pri_ino);
++#endif	
+ 	for (i=0; i < 4; i++)
+ 		sbi->s_hash_seed[i] = le32_to_cpu(es->s_hash_seed[i]);
+ 	sbi->s_def_hash_version = es->s_def_hash_version;
 Index: linux-2.4.20-8/include/linux/snap.h
 ===================================================================
 --- linux-2.4.20-8.orig/include/linux/snap.h	2003-01-30 18:24:37.000000000 +0800
@@ -3105,11 +3058,12 @@ Index: linux-2.4.20-8/include/linux/ext3_jbd.h
 %diffstat
  fs/ext3/Makefile           |    2 
  fs/ext3/ialloc.c           |    7 
- fs/ext3/inode.c            |    4 
- fs/ext3/snap.c             | 2644 +++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext3/inode.c            |    2 
+ fs/ext3/snap.c             | 2588 +++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext3/super.c            |    7 
  include/linux/ext3_fs.h    |   38 
  include/linux/ext3_fs_sb.h |    7 
  include/linux/ext3_jbd.h   |   27 
  include/linux/snap.h       |  266 ++++
- 8 files changed, 2989 insertions(+), 6 deletions(-)
+ 9 files changed, 2939 insertions(+), 5 deletions(-)
 
