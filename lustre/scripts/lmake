@@ -1,0 +1,340 @@
+#!/bin/sh
+
+# option variables
+DESTDIR=
+KERNELDIR=
+PHASE=
+TARGET=
+JOBS=1
+CONFIGURE_FLAGS=
+
+# provide by target file
+KERNEL=
+SERIES=
+CONFIG=
+VERSION=
+EXTRA_VERSION=
+
+# flat-out globals
+TOPDIR=
+TARGET_FILE=
+KERNEL_FILE=
+SERIES_FILE=
+CONFIG_FILE=
+CC=${CC:-gcc}
+
+canon()
+{
+    pushd $1 >/dev/null
+    echo $PWD
+    popd >/dev/null
+}
+TOPDIR=$(canon "${0%%${0##*/}}/..")
+
+cleanup()
+{
+    true
+}
+
+fatal()
+{
+    cleanup
+    [ "$2" ] && echo
+    [ "$2" ] && echo "${0##*/}: $2"
+    exit $1
+}
+
+list_targets()
+{
+    echo -n "Available targets:"
+    for target in $TOPDIR/kernel_patches/targets/*.target ; do
+	target_file=${target##*/}
+	echo -n " ${target_file%%.target}"
+    done
+    echo
+}
+
+
+usage()
+{
+    cat <<EOF
+Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
+
+${0##*/} has two phases.  The build phase, and the install phase.  The
+phase is specified with the --phase option:
+
+  --phase=build/install
+
+Options not requiring a phase:
+
+  -h, --help
+    Display this message.
+
+Options appropriate with both phases include:
+
+  -j jobs
+    This works just like the -j option to make, and is passed to make
+    when building.
+
+  --target=TARGET
+    Name of the configuration to use.  The available targets are
+    listed below.
+
+Options appropriate with the build phase are:
+
+  --kerneldir=KERNELDIR
+    Directory containing linux source tarballs.
+
+  --extraversion=EXTRAVERSION
+    Overrides the target kernel\'s EXTRAVERSION text.
+
+Options appropriate with the install phase are:
+
+  --destdir=DESTDIR
+	Root directory to install into (like DESTDIR with auto*).
+EOF
+    list_targets
+
+    fatal "$1" "$2"
+}
+
+check_options()
+{
+    [ "$PHASE" ] || usage 1 "A phase must be specified with --phase"
+    case "$PHASE" in
+	build)
+	    [ "$KERNELDIR" ] || \
+		usage 1 "A kernel directory must be specified with --kerneldir."
+	    [ -d "$KERNELDIR" ] || \
+		usage 1 "$KERNELDIR is not a directory."
+	    ;;
+	install)
+	    [ -z "$DESTDIR" -o -d "$DESTDIR" ] || \
+		usage 1 "$DESTDIR is not a directory."
+	    ;;
+	*)
+	    usage 1 "Phase must be build or install."
+	    ;;
+    esac
+    [ "$TARGET" ] || usage 1 "A target must be specified with --target."
+    TARGET_FILE="$TOPDIR/kernel_patches/targets/$TARGET.target"
+    [ -r "$TARGET_FILE" ] || \
+	usage 1 "Target '$TARGET' was not found.  Try --list-targets."
+
+    if [ -z "$JOBS" -o "$JOBS" -lt "1" ] ; then
+	JOBS=1
+    fi
+}
+
+get_lustre_version()
+{
+    for patch in $(<"$SERIES_FILE") ; do
+	if [ "${patch#lustre_version}" = "${patch}" ] ; then
+	    continue
+	fi
+	awk '/^#define LUSTRE_VERSION_VERSION /{ print $3 }' \
+	    < "$TOPDIR/kernel_patches/patches/$patch" 2>/dev/null
+	break
+    done
+}
+
+load_target()
+{
+    EXTRA_VERSION_save="$EXTRA_VERSION"
+
+    . "$TARGET_FILE"
+
+    [ "$KERNEL" ] || fatal 1 "Target $TARGET did not specify a kernel."
+    [ "$SERIES" ] || fatal 1 "Target $TARGET did not specify a patch series."
+    [ "$CONFIG" ] || fatal 1 "Target $TARGET did not specify a kernel config."
+    [ "$VERSION" ] || fatal 1 "Target $TARGET did not specify the kernel version."
+    
+    if [ "$KERNELDIR" ] ; then
+	KERNEL_FILE="$KERNELDIR/$KERNEL"
+	[ -r "$KERNELDIR/$KERNEL" ] || \
+	    fatal 1 "Target $TARGET's kernel file $KERNEL not found in kernel directory $KERNELDIR."
+    fi
+
+    SERIES_FILE="$TOPDIR/kernel_patches/series/$SERIES"
+    [ -r "$SERIES_FILE" ] || \
+	fatal 1 "Target $TARGET's series $SERIES missing from $TOPDIR/kernel_patches/series."
+
+    CONFIG_FILE="$TOPDIR/kernel_patches/kernel_configs/$CONFIG"
+    [ -r "$CONFIG_FILE" ] || \
+	fatal 1 "Target $TARGET's config file $CONFIG missing from $TOPDIR/kernel_patches/configs."
+
+    if [ "$EXTRA_VERSION_save" ] ; then
+	EXTRA_VERSION="$EXTRA_VERSION_save"
+    else
+	EXTRA_VERSION="${EXTRA_VERSION}_$(get_lustre_version)"
+    fi
+    EXTRA_VERSION=$(echo $EXTRA_VERSION | sed -e s/-/_/g)
+}
+
+tarflags()
+{
+    case "$1" in
+	'')
+	    fatal 1 "tarflags(): File name argument missing."
+	    ;;
+	*.tar.gz)
+	    echo 'zxf'
+	    ;;
+	*.tar.bz2)
+	    echo 'jxf'
+	    ;;
+	*)
+	    fatal 1 "tarflags(): Unrecognized tar extension in file: $1"
+	    ;;
+    esac
+}
+
+untar()
+{
+    echo "Untarring ${1##*/}..."
+    tar $(tarflags $1) $1
+}
+
+
+extract_kernel()
+{
+    pushd "$TOPDIR" >/dev/null
+    untar "$KERNEL_FILE"
+    [ -d linux ] || ln -sf linux* linux
+    popd >/dev/null
+}
+
+patch_kernel()
+{
+    pushd "$TOPDIR/linux" >/dev/null
+    echo "Overriding EXTRAVERSION in kernel..."
+    perl -p -i -e "s/^EXTRAVERSION.*/EXTRAVERSION = -${EXTRA_VERSION}/" Makefile
+    echo -n "Applying patch"
+    for patch in $(<"$SERIES_FILE") ; do
+	PATCH_FILE="$TOPDIR/kernel_patches/patches/$patch"
+	[ -r "$PATCH_FILE" ] || \
+	    fatal 1 "Patch file not found: $patch"
+	echo -n " $patch"
+	patch -s -p1 < "$PATCH_FILE"
+    done
+    echo
+    popd >/dev/null
+}
+
+build_kernel()
+{
+    # we need to override $CC at make time, since there is no
+    # configure
+    MAKE="make -s CC=$CC"
+    pushd "$TOPDIR/linux" >/dev/null
+    echo "Making depend in $PWD..."
+    make -s mrproper || fatal 1 "Error running make mrproper"
+    cp "$CONFIG_FILE" .config
+    $MAKE -s oldconfig_nonint || fatal 1 "Error running make oldconfig"
+    $MAKE -j $JOBS -s dep || fatal 1 "Error running make dep"
+    $MAKE -s include/linux/version.h || fatal 1 "Error making include/linux/version.h"
+    echo "Building kernel in $PWD..."
+    $MAKE -j $JOBS -s bzImage || fatal 1 "Error making bzImage."
+    $MAKE -j $JOBS -s modules || fatal 1 "Error building modules."
+    popd >/dev/null
+}
+
+configure_lustre()
+{
+    pushd "$TOPDIR" >/dev/null
+    [ -f configure ] || sh ./autogen.sh
+    ./configure --with-linux=$PWD/linux $CONFIGURE_FLAGS || \
+	fatal 1 "Error configuring Lustre."
+    popd >/dev/null
+}
+
+build_lustre()
+{
+    pushd "$TOPDIR" >/dev/null
+    make -j $JOBS -s
+    popd >/dev/null
+}
+
+install_kernel()
+{
+    FULL_VERSION="${VERSION}-${EXTRA_VERSION}"
+    pushd "$TOPDIR/linux" >/dev/null
+    mkdir -p "$DESTDIR/boot" "$DESTDIR/lib/modules"
+    INSTALL_MOD_PATH="$DESTDIR" make CC=$CC -s modules_install || \
+	fatal 1 "Error installing modules."
+    cp arch/i386/boot/bzImage "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
+    cp System.map "$DESTDIR/boot/System.map-${FULL_VERSION}"
+    cp .config "$DESTDIR/boot/config-${FULL_VERSION}"
+    popd >/dev/null
+}
+
+install_lustre()
+{
+    pushd "$TOPDIR" >/dev/null
+    make -s install "DESTDIR=$DESTDIR" || fatal 1 "Error installing Lustre."
+    popd >/dev/null
+}
+
+options=$(getopt -o hj: -l destdir:,extraversion:,help,kerneldir:,phase:,target: -- "$@")
+
+eval set -- "$options"
+    
+while [ "$1" ] ; do
+    case "$1" in
+	'')
+	    usage 1
+	    ;;
+	--destdir)
+	    DESTDIR=$2
+	    shift 2
+	    ;;
+	--extraversion)
+	    EXTRA_VERSION=$2
+	    shift 2
+	    ;;
+	--help | -h)
+	    usage 0
+	    ;;
+	-j)
+	    JOBS=$2
+	    shift 2
+	    ;;
+	--kerneldir)
+	    KERNELDIR=$2
+	    shift 2
+	    ;;
+	--phase)
+	    PHASE=$2
+	    shift 2
+	    ;;
+	--target)
+	    TARGET=$2
+	    shift 2
+	    ;;
+	--)
+	    shift
+	    CONFIGURE_FLAGS=$@
+	    break
+	    ;; 
+	*)
+	    usage 1 "Unrecognized option: $1"
+	    ;;
+    esac
+done
+
+check_options
+load_target
+
+case "$PHASE" in
+    build)
+	extract_kernel
+	patch_kernel
+	build_kernel
+	configure_lustre
+	build_lustre
+	;;
+    install)
+	install_kernel
+	install_lustre
+	;;
+esac
