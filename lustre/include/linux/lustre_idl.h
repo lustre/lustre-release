@@ -305,7 +305,7 @@ struct lov_mds_md {
         __u16 lmm_stripe_count;    /* number of stipes in use for this object */
         __u16 lmm_ost_count;       /* how many OST idx are in this LOV md */
         struct lov_object_id lmm_objects[0];
-};
+} __attribute__((packed));
 
 #define OBD_MD_FLALL    (0xffffffff)
 #define OBD_MD_FLID     (0x00000001)    /* object ID */
