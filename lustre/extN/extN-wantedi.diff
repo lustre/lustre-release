@@ -1,20 +1,22 @@
 --- lustre/extN-clean/namei.c	2002-12-30 05:56:09.000000000 -0500
 +++ lustre/extN/namei.c	2002-12-30 06:29:39.000000000 -0500
-@@ -1224,7 +1224,7 @@
+@@ -1224,7 +1224,8 @@
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
 -	inode = extN_new_inode (handle, dir, mode);
-+	inode = extN_new_inode (handle, dir, mode, (int)dentry->d_fsdata);
++	inode = extN_new_inode (handle, dir, mode,
++				(unsigned long)dentry->d_fsdata);
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		inode->i_op = &extN_file_inode_operations;
-@@ -1254,7 +1254,7 @@
+@@ -1254,7 +1254,8 @@
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
 -	inode = extN_new_inode (handle, dir, mode);
-+	inode = extN_new_inode (handle, dir, mode, (int)dentry->d_fsdata);
++	inode = extN_new_inode (handle, dir, mode,
++				(unsigned long)dentry->d_fsdata);
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		init_special_inode(inode, mode, rdev);
@@ -24,7 +26,7 @@
  
 -	inode = extN_new_inode (handle, dir, S_IFDIR | mode);
 +	inode = extN_new_inode (handle, dir, S_IFDIR | mode,
-+				(int)dentry->d_fsdata);
++				(unsigned long)dentry->d_fsdata);
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
@@ -34,30 +36,31 @@
  
 -	inode = extN_new_inode (handle, dir, S_IFLNK|S_IRWXUGO);
 +	inode = extN_new_inode (handle, dir, S_IFLNK|S_IRWXUGO,
-+				(int)dentry->d_fsdata);
++				(unsigned long)dentry->d_fsdata);
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
 --- lustre/extN-clean/ialloc.c	2002-12-28 23:56:42.000000000 -0500
 +++ lustre/extN/ialloc.c	2002-12-30 06:29:39.000000000 -0500
-@@ -330,7 +330,8 @@
+@@ -329,8 +329,8 @@
+  * For other inodes, search forward from the parent directory's block
   * group to find a free inode.
   */
- struct inode * extN_new_inode (handle_t *handle,
+-struct inode * extN_new_inode (handle_t *handle,
 -				const struct inode * dir, int mode)
-+			       const struct inode * dir, int mode,
-+			       int wantedi)
++struct inode *extN_new_inode(handle_t *handle, const struct inode *dir,
++			     int mode, unsigned long goal)
  {
  	struct super_block * sb;
  	struct buffer_head * bh;
-@@ -360,6 +361,40 @@
+@@ -360,6 +361,38 @@
  
  	lock_super (sb);
  	es = sbi->s_es;
 +
-+	if (wantedi) {
-+		i = (wantedi - 1) / EXTN_INODES_PER_GROUP(sb);
-+		j = (wantedi - 1) % EXTN_INODES_PER_GROUP(sb);
++	if (goal) {
++		i = (goal - 1) / EXTN_INODES_PER_GROUP(sb);
++		j = (goal - 1) % EXTN_INODES_PER_GROUP(sb);
 +		gdp = extN_get_group_desc(sb, i, &bh2);
 +
 +		bitmap_nr = load_inode_bitmap (sb, i);
@@ -71,10 +74,8 @@
 +		if (err) goto fail;
 +
 +		if (extN_set_bit(j, bh->b_data)) {
-+			printk(KERN_ERR "wantedi %d not available",
-+			       wantedi);
++			printk(KERN_ERR "goal inode %lu unavailable", goal);
 +			/* Oh well, we tried. */
-+			wantedi = 0;
 +			goto repeat;
 +		}
 +
@@ -149,7 +150,7 @@
  /* ialloc.c */
 -extern struct inode * extN_new_inode (handle_t *, const struct inode *, int);
 +extern struct inode * extN_new_inode (handle_t *, const struct inode *, int,
-+				      int);
++				      unsigned long);
  extern void extN_free_inode (handle_t *, struct inode *);
  extern struct inode * extN_orphan_get (struct super_block *, ino_t);
  extern unsigned long extN_count_free_inodes (struct super_block *);
