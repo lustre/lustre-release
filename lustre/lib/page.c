@@ -94,29 +94,38 @@ inline void lustre_put_page(struct page *page)
 struct page *lustre_get_page_read(struct inode *inode, unsigned long index)
 {
         struct address_space *mapping = inode->i_mapping;
-        struct page *page = read_cache_page(mapping, index,
-                                (filler_t*)mapping->a_ops->readpage, NULL);
+        struct page *page;
+        int rc;
 
+        page = read_cache_page(mapping, index,
+                               (filler_t*)mapping->a_ops->readpage, NULL);
         if (!IS_ERR(page)) {
                 wait_on_page(page);
                 kmap(page);
-                if (!Page_Uptodate(page))
-                        GOTO(fail, -EIO);
-                if (PageError(page))
-                        GOTO(fail, -EIO);
+                if (!Page_Uptodate(page)) {
+                        CERROR("page index %lu not uptodate\n", index);
+                        GOTO(err_page, rc = -EIO);
+                }
+                if (PageError(page)) {
+                        CERROR("page index %lu has error\n", index);
+                        GOTO(err_page, rc = -EIO);
+                }
         }
         return page;
 
-fail:
+err_page:
         lustre_put_page(page);
-        return ERR_PTR(-EIO);
+err:
+        return ERR_PTR(rc);
 }
 
 struct page *lustre_get_page_write(struct inode *inode, unsigned long index)
 {
         struct address_space *mapping = inode->i_mapping;
-        struct page *page = grab_cache_page(mapping, index); /* locked page */
-        int err;
+        struct page *page;
+        int rc;
+
+        page = grab_cache_page(mapping, index); /* locked page */
 
         if (!IS_ERR(page)) {
                 kmap(page);
@@ -125,22 +134,27 @@ struct page *lustre_get_page_write(struct inode *inode, unsigned long index)
                  * a no-op for most filesystems, because we write the whole
                  * page.  For partial-page I/O this will read in the page.
                  */
-                err = mapping->a_ops->prepare_write(NULL, page, 0, PAGE_SIZE);
-                if (err) {
-                        CERROR("page index %ld, err %d\n", index, err);
-                        LBUG();
-                        GOTO(fail, err);
+                rc = mapping->a_ops->prepare_write(NULL, page, 0, PAGE_SIZE);
+                if (rc) {
+                        CERROR("page index %lu, rc = %d\n", index, rc);
+                        if (rc != -ENOSPC)
+                                LBUG();
+                        GOTO(err_unlock, rc);
                 }
                 /* XXX not sure if we need this if we are overwriting page */
-                if (PageError(page))
-                        GOTO(fail, err = -EIO);
+                if (PageError(page)) {
+                        CERROR("error on page index %lu, rc = %d\n", index, rc);
+                        LBUG();
+                        GOTO(err_unlock, rc = -EIO);
+                }
         }
         return page;
 
-fail:
+err_unlock:
         UnlockPage(page);
         lustre_put_page(page);
-        return ERR_PTR(-EIO);
+err:
+        return ERR_PTR(rc);
 }
 
 int lustre_commit_page(struct page *page, unsigned from, unsigned to)
