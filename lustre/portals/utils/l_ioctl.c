@@ -20,6 +20,8 @@
  *
  */
 
+#define __USE_FILE_OFFSET64
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -244,12 +246,7 @@ parse_dump(char * dump_file, int (*ioc_func)(int dev_id, int opc, void *))
                 exit(1);
         }
 
-#ifndef SYS_fstat64
-# define __SYS_fstat__ SYS_fstat
-#else
-# define __SYS_fstat__ SYS_fstat64
-#endif
-	if (syscall(__SYS_fstat__, fd, &st)) { 
+	if (fstat(fd, &st)) { 
 		perror("stat fails");
 		exit(1);
 	}
