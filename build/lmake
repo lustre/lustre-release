@@ -502,18 +502,21 @@ install_kms()
 
 save_headers()
 {
-    echo "Saving headers for $1 $2..."
+    (( $SAVE_HEADERS )) || return 0
+
+    echo "Saving headers for ${TARGET_CONFIG:-up} ${TARGET_ARCH}..."
     pushd linux >/dev/null
 
     KVERREL="${VERSION}-${EXTRA_VERSION}"
     # deal with the kernel headers that are version specific
     
-    saveddir="$RPM_BUILD_ROOT/usr/src/linux-${KVERREL}/savedheaders/$2/$1"
+    saveddir="$RPM_BUILD_ROOT/usr/src/linux-${KVERREL}/savedheaders/${TARGET_ARCH}/${TARGET_CONFIG:-up}"
     mkdir -p "$saveddir"
     install -m 644 include/linux/autoconf.h "$saveddir/autoconf.h"
     install -m 644 include/linux/version.h  "$saveddir/version.h"
     mv include/linux/modules "$saveddir/"
-    echo $2 $1 ../../savedheaders/$2/$1/ >>  $RPM_BUILD_ROOT/usr/src/linux-${KVERREL}/savedheaders/list
+    echo ${TARGET_ARCH} ${TARGET_CONFIG} ../../savedheaders/${TARGET_ARCH}/${TARGET_CONFIG:-up}/ \
+	>>  "$RPM_BUILD_ROOT/usr/src/linux-${KVERREL}/savedheaders/list"
     popd >/dev/null
 }
 
@@ -660,6 +663,6 @@ install_lustre
 
 install_kms
 
-save_all_headers
+save_headers
 
 exit 0

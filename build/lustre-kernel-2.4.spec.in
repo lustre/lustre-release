@@ -472,6 +472,7 @@ BuildKernel()
   sh -x ./build/lmake \
 	--build-kernel --build-lustre \
 	--install \
+	--save-headers \
 	--target @LUSTRE_TARGET@ \
 	--target-arch %{_target_cpu} \
 	${target_config} \
@@ -546,7 +547,6 @@ BuildKernel
 
 %if %{buildbase}
 BuildLustre
-SaveHeaders
 %endif
 
 popd >/dev/null
