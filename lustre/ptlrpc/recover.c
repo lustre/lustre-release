@@ -78,7 +78,7 @@ static int ptlrpc_reconnect(struct ptlrpc_connection *conn)
                        cli->cl_target_uuid, conn->c_remote_uuid,
                        imp->imp_handle.addr, imp->imp_handle.cookie,
                        old_hdl.addr, old_hdl.cookie);
-                ptlrpc_free_req(request);
+                ptlrpc_req_finished(request);
         }
         conn->c_level = LUSTRE_CONN_RECOVD;
 

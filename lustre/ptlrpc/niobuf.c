@@ -339,10 +339,14 @@ int ptl_send_rpc(struct ptlrpc_request *request)
 
                 /* request->rq_repmsg is set only when the reply comes in, in
                  * client_packet_callback() */
-                if (request->rq_reply_md.start)
+                if (request->rq_reply_md.start) {
                         OBD_FREE(request->rq_reply_md.start,
                                  request->rq_replen);
-
+                        /* If we're resending, rq_repmsg needs to be NULLed out
+                         * again so that ptlrpc_check_reply doesn't trip early.
+                         */
+                        request->rq_repmsg = NULL;
+                }
                 OBD_ALLOC(repbuf, request->rq_replen);
                 if (!repbuf) {
                         LBUG();
@@ -380,6 +384,9 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                        request->rq_import->imp_client->cli_reply_portal);
         }
 
+        /* Clear any flags that may be present from previous sends,
+         * except for REPLAY. */
+        request->rq_flags &= PTL_RPC_FL_REPLAY;
         rc = ptl_send_buf(request, request->rq_connection,
                           request->rq_import->imp_client->cli_request_portal);
         RETURN(rc);

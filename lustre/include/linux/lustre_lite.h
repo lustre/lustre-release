@@ -80,8 +80,10 @@ struct ll_sb_info {
 
 #define CHECK_MOUNT_EPOCH(i)                                                  \
 do {                                                                          \
-        if (ll_i2info(i)->lli_mount_epoch != ll_i2sbi(i)->ll_mount_epoch)     \
+        if (ll_i2info(i)->lli_mount_epoch != ll_i2sbi(i)->ll_mount_epoch) {   \
+                make_bad_inode(i);                                            \
                 RETURN(-EIO);                                                 \
+        }                                                                     \
 } while(0)
 
 static inline struct ll_sb_info *ll_s2sbi(struct super_block *sb)

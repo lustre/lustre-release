@@ -285,7 +285,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
 
                 /* pack the intended request */
                 mds_link_pack(req, 2, old_de->d_inode, dir,
-                                de->d_name.name, de->d_name.len);
+                              de->d_name.name, de->d_name.len);
                 req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op == IT_UNLINK || it->it_op == IT_RMDIR) {
                 size[2] = sizeof(struct mds_rec_unlink);
@@ -420,7 +420,7 @@ int mdc_open(struct lustre_handle *conn, obd_id ino, int type, int flags,
 
         /* If open is replayed, we need to fix up the fh. */
         req->rq_replay_cb = mdc_replay_open;
-        memcpy(&req->rq_replay_cb_handle, fh, sizeof(req->rq_replay_cb_handle));
+        memcpy(&req->rq_replay_cb_handle, fh, sizeof(fh));
 
         EXIT;
  out:

@@ -108,20 +108,20 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
         int tgtlen = 0;
         int err, lock_mode;
 
-        if ((it->it_op & (IT_CREAT | IT_MKDIR | IT_SETATTR | IT_MKNOD)))
+        /* CREAT needs to be tested before open (both could be set) */
+        if ((it->it_op & (IT_CREAT | IT_MKDIR | IT_SETATTR | IT_MKNOD))) {
                 lock_mode = LCK_PW;
-        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_UNLINK |
-                              IT_RMDIR | IT_RENAME | IT_RENAME2 | IT_READLINK|
-                              IT_LINK | IT_LINK2))
+        } else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_UNLINK |
+                                IT_RMDIR | IT_RENAME | IT_RENAME2 | IT_READLINK|
+                                IT_LINK | IT_LINK2 | IT_LOOKUP)) {
+                /* XXXphil PW for LINK2/RENAME2? */
                 lock_mode = LCK_PR;
-        else if (it->it_op & IT_SYMLINK) {
+        } else if (it->it_op & IT_SYMLINK) {
                 lock_mode = LCK_PW;
                 tgt = it->it_data;
                 tgtlen = strlen(tgt);
                 it->it_data = NULL;
-        } else if (it->it_op & IT_LOOKUP)
-                lock_mode = LCK_PR;
-        else {
+        } else {
                 LBUG();
                 RETURN(-EINVAL);
         }
@@ -156,8 +156,10 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
         ENTRY;
 
         /* CHECK_MOUNT_EPOCH(dir); */
-        if (ll_i2info(dir)->lli_mount_epoch != ll_i2sbi(dir)->ll_mount_epoch)
+        if (ll_i2info(dir)->lli_mount_epoch != ll_i2sbi(dir)->ll_mount_epoch) {
+                make_bad_inode(dir);
                 RETURN(ERR_PTR(-EIO));
+        }
 
         if (it == NULL) {
                 it = &lookup_it;

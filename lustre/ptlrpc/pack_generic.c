@@ -116,14 +116,15 @@ void *lustre_msg_buf(struct lustre_msg *m, int n)
         }
 
         if (n < 0 || n >= m->bufcount) {
-                CERROR("referencing bad sub buffer (want %d, count is %d)!\n",
-                       n, m->bufcount);
+                CERROR("referencing bad sub buffer in %p (want %d, count %d)!\n",
+                       m, n, m->bufcount);
                 LBUG();
                 return NULL;
         }
 
         if (m->buflens[n] == 0) {
-                CERROR("zero-length buffer requested for buffer %d\n", n);
+                CERROR("zero-length buffer requested for buffer %d in %p\n", n,
+                       m);
                 return NULL;
         }
 
