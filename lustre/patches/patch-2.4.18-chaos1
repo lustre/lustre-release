@@ -339,12 +339,13 @@
  extern void	 journal_unlock_updates (journal_t *);
 --- kernel-rh-2.4.18-pristine/kernel/ksyms.c	Thu Jun 13 12:27:15 2002
 +++ kernel-rh-2.4.18/kernel/ksyms.c	Thu Jun 13 14:49:48 2002
-@@ -305,6 +305,11 @@
+@@ -305,6 +305,12 @@
  EXPORT_SYMBOL(lock_may_write);
  EXPORT_SYMBOL(dcache_readdir);
  
 +/* lustre */
 +EXPORT_SYMBOL(pagecache_lock);
++EXPORT_SYMBOL(kmem_cache_validate);
 +EXPORT_SYMBOL(do_kern_mount);
 +
 +
@@ -426,7 +427,6 @@
  			slab_t *slabp, void * objp)
 --- lum-pristine/arch/i386/mm/init.c	Fri Dec 21 10:41:53 2001
 +++ lum/arch/i386/mm/init.c	Sat Jun 15 00:31:15 2002
-@@ -43,6 +43,12 @@
  static unsigned long totalram_pages;
  static unsigned long totalhigh_pages;
  
@@ -439,32 +439,7 @@
  int do_check_pgt_cache(int low, int high)
  {
  	int freed = 0;
---- lum-pristine/arch/um/kernel/mem.c	Thu Jun 13 14:07:26 2002
-+++ lum/arch/um/kernel/mem.c	Fri Jun 14 17:00:21 2002
-@@ -489,6 +489,22 @@
- 	return(phys_mem_map(pte_val(pte)));
- }
- 
-+struct page *check_get_page(unsigned long kaddr)
-+{
-+        struct page *page;
-+        struct mem_region *mr;
-+        unsigned long phys = __pa(kaddr);
-+	unsigned int n = phys_region_index(phys);
-+
-+	if(regions[n] == NULL) 
-+                return NULL; 
-+
-+        mr = regions[n];
-+        page = (struct page *) mr->mem_map;
-+	return page + ((phys_addr(phys)) >> PAGE_SHIFT);
-+}
-+
-+
- struct mem_region *page_region(struct page *page, int *index_out)
- {
- 	int i;
-@@ -504,12 +520,14 @@
+@@ -504,12 +502,14 @@
  			return(region);
  		}
  	}
