@@ -1,10 +1,22 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2002 Cluster File Systems, Inc. <info@clusterfs.com>
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_COBD
@@ -308,7 +320,7 @@ static int __init cobd_init(void)
         struct lprocfs_static_vars lvars;
         ENTRY;
 
-	printk(KERN_INFO "Lustre Caching OBD driver\n");
+	printk(KERN_INFO "Lustre Caching OBD driver; info@clusterfs.com\n");
 
         lprocfs_init_vars(&lvars);
         RETURN(class_register_type(&cobd_ops, lvars.module_vars,
@@ -320,7 +332,7 @@ static void __exit cobd_exit(void)
 	class_unregister_type(OBD_CACHE_DEVICENAME);
 }
 
-MODULE_AUTHOR("Cluster Filesystems Inc. <info@clusterfs.com>");
+MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Caching OBD driver");
 MODULE_LICENSE("GPL");
 
