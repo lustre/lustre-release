@@ -76,6 +76,17 @@ static ssize_t mds_ext2_readpage(struct file *file, char *buf, size_t count,
                 return generic_file_read(file, buf, count, offset);
 }
 
+struct mds_fs_operations mds_ext2_fs_ops;
+
+void mds_ext2_delete_inode(struct inode * inode)
+{
+        if (!S_ISDIR(inode->i_mode))
+                mds_ext2_set_objid(inode, NULL, 0);
+
+        if (mds_ext2_fs_ops.cl_delete_inode)
+                mds_ext2_fs_ops.cl_delete_inode(inode);
+}
+
 struct mds_fs_operations mds_ext2_fs_ops = {
         fs_start:       mds_ext2_start,
         fs_commit:      mds_ext2_stop,
@@ -83,4 +94,6 @@ struct mds_fs_operations mds_ext2_fs_ops = {
         fs_set_objid:   mds_ext2_set_objid,
         fs_get_objid:   mds_ext2_get_objid,
         fs_readpage:    mds_ext2_readpage,
+        fs_delete_inode:mds_ext2_delete_inode,
+        cl_delete_inode:NULL,
 };
