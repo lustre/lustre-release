@@ -35,11 +35,11 @@ setup() {
     start ost2 --reformat $OSTLCONFARGS 
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     start mds $MDSLCONFARGS --reformat
-    zconf_mount $MOUNT
+    zconf_mount `hostname`  $MOUNT
 }
 
 cleanup() {
-    zconf_umount $MOUNT
+    zconf_umount `hostname` $MOUNT
     stop mds ${FORCE} $MDSLCONFARGS
     stop ost2 ${FORCE} --dump cleanup.log
     stop ost ${FORCE} --dump cleanup.log
@@ -152,21 +152,12 @@ test_11(){
 }
 run_test 11 "wake up a thead waiting for completion after eviction (b=2460)"
 
-clear_failloc() {
-    facet=$1
-    pause=$2
-    sleep $pause
-    echo "clearing fail_loc on $facet"
-    do_facet $facet "sysctl -w lustre.fail_loc=0"
-}
-
 #b=2494
 test_12(){
     $LCTL mark multiop $MOUNT/$tfile OS_c 
     multiop $MOUNT/$tfile OS_c  &
     PID=$!
 #define OBD_FAIL_MDS_CLOSE_NET           0x115
-    DDPID=$!
     do_facet mds "sysctl -w lustre.fail_loc=0x115"
     clear_failloc mds $((TIMEOUT * 2)) &
     kill -USR1 $PID
@@ -176,5 +167,34 @@ test_12(){
 }
 run_test 12 "recover from timed out resend in ptlrpcd (b=2494)"
 
+# Bug 113, check that readdir lost recv timeout works.
+test_13() {
+    mkdir /mnt/lustre/readdir
+    touch /mnt/lustre/readdir/newentry
+# OBD_FAIL_MDS_READPAGE_NET|OBD_FAIL_ONCE
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000104"
+    ls /mnt/lustre/readdir || return 1
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+    rm -rf /mnt/lustre/readdir
+}
+run_test 13 "mdc_readpage restart test (bug 1138)"
+
+# Bug 113, check that readdir lost send timeout works.
+test_14() {
+    mkdir /mnt/lustre/readdir
+    touch /mnt/lustre/readdir/newentry
+# OBD_FAIL_MDS_SENDPAGE|OBD_FAIL_ONCE
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000106"
+    ls /mnt/lustre/readdir || return 1
+    do_facet mds "sysctl -w lustre.fail_loc=0"
+}
+run_test 14 "mdc_readpage resend test (bug 1138)"
+
+test_15() {
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000128"
+    touch $DIR/$tfile && return 1
+    return 0
+}
+run_test 15 "failed open (-ENOMEM)"
+
 $CLEANUP
-    
