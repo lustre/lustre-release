@@ -140,7 +140,7 @@ ktoenal_dist(nal_cb_t *nal, ptl_nid_t nid, unsigned long *dist)
 ksock_ltx_t *
 ktoenal_get_ltx (int may_block)
 {
-        long	     flags;
+        unsigned long   flags;
         ksock_ltx_t *ltx = NULL;
         
         for (;;)
@@ -268,7 +268,7 @@ ktoenal_recvmsg(struct file *sock, struct iovec *iov, int niov, int toread)
 }
 
 void
-ktoenal_process_transmit (ksock_conn_t *conn, long *irq_flags)
+ktoenal_process_transmit (ksock_conn_t *conn, unsigned long *irq_flags)
 {
         ksock_tx_t *tx = list_entry (conn->ksnc_tx_queue.next, ksock_tx_t, tx_list);
         int         rc;
@@ -358,7 +358,7 @@ ktoenal_process_transmit (ksock_conn_t *conn, long *irq_flags)
 void
 ktoenal_launch_packet (ksock_conn_t *conn, ksock_tx_t *tx)
 {
-        long          flags;
+        unsigned long flags;
         int           nob = tx->tx_nob;
         struct iovec *iov = tx->tx_iov;
         int           niov = 1;
@@ -541,7 +541,7 @@ ktoenal_fmb_callback (void *arg, int error)
         ksock_fmb_t       *fmb = (ksock_fmb_t *)arg;
         ptl_hdr_t         *hdr = (ptl_hdr_t *) page_address(fmb->fmb_pages[0]);
         ksock_conn_t      *conn;
-        long               flags;
+        unsigned long     flags;
 
         CDEBUG (D_NET, "routed packet from "LPX64" to "LPX64": %d\n", 
                 hdr->src_nid, hdr->dest_nid, error);
@@ -790,7 +790,7 @@ ktoenal_new_packet (ksock_conn_t *conn, int nob_to_skip)
 }
 
 void
-ktoenal_process_receive (ksock_conn_t *conn, long *irq_flags)
+ktoenal_process_receive (ksock_conn_t *conn, unsigned long *irq_flags)
 {
         ksock_fmb_t *fmb;
         int          len;

@@ -291,7 +291,7 @@ int client_disconnect_export(struct obd_export *exp, int failover)
         if (!obd) {
                 CERROR("invalid export for disconnect: "
                        "exp %p cookie "LPX64"\n", exp, 
-                       exp ? exp->exp_handle.h_cookie : -1UL);
+                       exp ? exp->exp_handle.h_cookie : -1);
                 RETURN(-EINVAL);
         }
 

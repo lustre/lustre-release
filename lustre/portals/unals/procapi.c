@@ -53,8 +53,8 @@
           lib_fini(b->nal_cb);\
           return(PTL_SEGV);\
        }
-static int procbridge_forward(nal_t *n, int id, void *args, ptl_size_t args_len,
-			      void *ret, ptl_size_t ret_len)
+static int procbridge_forward(nal_t *n, int id, void *args, size_t args_len,
+			      void *ret, size_t ret_len)
 {
     bridge b=(bridge)n->nal_data;
     procbridge p=(procbridge)b->local;
@@ -108,7 +108,7 @@ static int procbridge_shutdown(nal_t *n, int ni)
 /* Function: validate
  *    useless stub
  */
-static int procbridge_validate(nal_t *nal, void *base, ptl_size_t extent)
+static int procbridge_validate(nal_t *nal, void *base, size_t extent)
 {
     return(0);
 }

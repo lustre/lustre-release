@@ -120,8 +120,8 @@ int tcpnal_recv(nal_cb_t *n,
 		lib_msg_t *cookie,
                 unsigned int niov,
                 struct iovec *iov,
-		ptl_size_t mlen,
-		ptl_size_t rlen)
+		size_t mlen,
+		size_t rlen)
 
 {
     if (mlen) {

@@ -74,8 +74,10 @@ extern unsigned int portal_cerror;
 
 #ifdef __KERNEL__
 # include <linux/sched.h> /* THREAD_SIZE */
-#else
-# define THREAD_SIZE 8192
+#else 
+# ifndef THREAD_SIZE /* x86_64 has THREAD_SIZE in userspace */
+#  define THREAD_SIZE 8192
+# endif
 #endif
 
 #define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
@@ -1108,14 +1110,19 @@ void kportal_put_ni (int nal);
 # endif
 #endif
 
-#if (BITS_PER_LONG == 32 || __WORDSIZE == 32)
+#if defined(__x86_64__)
+# define LPU64 "%Lu"
+# define LPD64 "%Ld"
+# define LPX64 "%#Lx"
+# define LPSZ  "%lu"
+# define LPSSZ "%ld"
+#elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
 # define LPSZ  "%u"
 # define LPSSZ "%d"
-#endif
-#if (BITS_PER_LONG == 64 || __WORDSIZE == 64)
+#elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
 # define LPU64 "%lu"
 # define LPD64 "%ld"
 # define LPX64 "%#lx"
