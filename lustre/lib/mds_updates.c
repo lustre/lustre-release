@@ -21,6 +21,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#ifdef __KERNEL__
 #include <linux/config.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -44,6 +45,9 @@
 #include <asm/uaccess.h>
 #include <linux/slab.h>
 #include <asm/segment.h>
+#else
+#include <liblustre.h>
+#endif
 
 #define DEBUG_SUBSYSTEM S_MDS
 
@@ -52,6 +56,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
 
+#ifdef __KERNEL__
 void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
         fid->id = inode->i_ino;
@@ -86,6 +91,7 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
         b->generation = inode->i_generation;
         b->suppgid = -1;
 }
+#endif /* __KERNEL__ */
 
 static void mds_pack_body(struct mds_body *b)
 {
@@ -97,8 +103,7 @@ static void mds_pack_body(struct mds_body *b)
 }
 
 void mds_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
-                      int flags,
-                      struct inode *inode, const char *name, int namelen)
+                      int flags, struct mdc_op_data *data)
 {
         struct mds_body *b;
         b = lustre_msg_buf(req->rq_reqmsg, offset, sizeof (*b));
@@ -108,16 +113,16 @@ void mds_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
         b->capability = current->cap_effective;
         b->valid = valid;
         b->flags = flags;
-        if (in_group_p(inode->i_gid))
-                b->suppgid = inode->i_gid;
+        if (in_group_p(data->gid1))
+                b->suppgid = data->gid1;
         else
                 b->suppgid = -1;
 
-        ll_inode2fid(&b->fid1, inode);
-        if (name) {
+        ll_ino2fid(&b->fid1, data->ino1, data->gen1, data->typ1);
+        if (data->name) {
                 char *tmp;
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, namelen + 1);
-                LOGL0(name, namelen, tmp);
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, data->namelen + 1);
+                LOGL0(data->name, data->namelen, tmp);
         }
 }
 
@@ -152,9 +157,9 @@ void mds_pack_rep_body(struct ptlrpc_request *req)
 
 
 /* packing of MDS records */
-void mds_create_pack(struct ptlrpc_request *req, int offset, struct inode *dir,
+void mds_create_pack(struct ptlrpc_request *req, int offset,
+                     struct mdc_op_data *op_data,
                      __u32 mode, __u64 rdev, __u32 uid, __u32 gid, __u64 time,
-                     const char *name, int namelen, 
                      const void *data, int datalen)
 {
         struct mds_rec_create *rec;
@@ -165,20 +170,20 @@ void mds_create_pack(struct ptlrpc_request *req, int offset, struct inode *dir,
         rec->cr_fsuid = current->fsuid;
         rec->cr_fsgid = current->fsgid;
         rec->cr_cap = current->cap_effective;
-        ll_inode2fid(&rec->cr_fid, dir);
+        ll_ino2fid(&rec->cr_fid, op_data->ino1, op_data->gen1, op_data->typ1);
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode = mode;
         rec->cr_rdev = rdev;
         rec->cr_uid = uid;
         rec->cr_gid = gid;
         rec->cr_time = time;
-        if (in_group_p(dir->i_gid))
-                rec->cr_suppgid = dir->i_gid;
+        if (in_group_p(op_data->gid1))
+                rec->cr_suppgid = op_data->gid1;
         else
                 rec->cr_suppgid = -1;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, namelen + 1);
-        LOGL0(name, namelen, tmp);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
+        LOGL0(op_data->name, op_data->namelen, tmp);
 
         if (data) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, datalen);
@@ -186,11 +191,11 @@ void mds_create_pack(struct ptlrpc_request *req, int offset, struct inode *dir,
         }
 }
 /* packing of MDS records */
-void mds_open_pack(struct ptlrpc_request *req, int offset, struct inode *dir,
-                     __u32 mode, __u64 rdev, __u32 uid, __u32 gid, __u64 time,
-                     __u32 flags,
-                     const char *name, int namelen,
-                     const void *data, int datalen)
+void mds_open_pack(struct ptlrpc_request *req, int offset,
+                   struct mdc_op_data *op_data,
+                   __u32 mode, __u64 rdev, __u32 uid, __u32 gid, __u64 time,
+                   __u32 flags,
+                   const void *data, int datalen)
 {
         struct mds_rec_create *rec;
         char *tmp;
@@ -201,7 +206,8 @@ void mds_open_pack(struct ptlrpc_request *req, int offset, struct inode *dir,
         rec->cr_fsuid = current->fsuid;
         rec->cr_fsgid = current->fsgid;
         rec->cr_cap = current->cap_effective;
-        ll_inode2fid(&rec->cr_fid, dir);
+        ll_ino2fid(&rec->cr_fid, op_data->ino1,
+                   op_data->gen1, op_data->typ1);
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode = mode;
         rec->cr_flags = flags;
@@ -209,13 +215,13 @@ void mds_open_pack(struct ptlrpc_request *req, int offset, struct inode *dir,
         rec->cr_uid = uid;
         rec->cr_gid = gid;
         rec->cr_time = time;
-        if (in_group_p(dir->i_gid))
-                rec->cr_suppgid = dir->i_gid;
+        if (in_group_p(op_data->gid1))
+                rec->cr_suppgid = op_data->gid1;
         else
                 rec->cr_suppgid = -1;
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, namelen + 1);
-        LOGL0(name, namelen, tmp);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, op_data->namelen + 1);
+        LOGL0(op_data->name, op_data->namelen, tmp);
 
         if (data) {
                 tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, datalen);
@@ -224,8 +230,8 @@ void mds_open_pack(struct ptlrpc_request *req, int offset, struct inode *dir,
 }
 
 void mds_setattr_pack(struct ptlrpc_request *req,
-                      struct inode *inode, struct iattr *iattr,
-                      void *ea, int ealen)
+                      struct mdc_op_data *data,
+                      struct iattr *iattr, void *ea, int ealen)
 {
         struct mds_rec_setattr *rec = lustre_msg_buf(req->rq_reqmsg, 0, 
                                                      sizeof (*rec));
@@ -233,7 +239,7 @@ void mds_setattr_pack(struct ptlrpc_request *req,
         rec->sa_fsuid = current->fsuid;
         rec->sa_fsgid = current->fsgid;
         rec->sa_cap = current->cap_effective;
-        ll_inode2fid(&rec->sa_fid, inode);
+        ll_ino2fid(&rec->sa_fid, data->ino1, data->gen1, data->typ1);
 
         if (iattr) {
                 rec->sa_valid = iattr->ia_valid;
@@ -249,8 +255,8 @@ void mds_setattr_pack(struct ptlrpc_request *req,
                 if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
                         rec->sa_suppgid = iattr->ia_gid;
                 else if ((iattr->ia_valid & ATTR_MODE) &&
-                         in_group_p(inode->i_gid))
-                        rec->sa_suppgid = inode->i_gid;
+                         in_group_p(data->gid1))
+                        rec->sa_suppgid = data->gid1;
                 else
                         rec->sa_suppgid = -1;
         }
@@ -260,8 +266,7 @@ void mds_setattr_pack(struct ptlrpc_request *req,
 }
 
 void mds_unlink_pack(struct ptlrpc_request *req, int offset,
-                     struct inode *inode, struct inode *child, __u32 mode,
-                     const char *name, int namelen)
+                     struct mdc_op_data *data)
 {
         struct mds_rec_unlink *rec;
         char *tmp;
@@ -273,23 +278,22 @@ void mds_unlink_pack(struct ptlrpc_request *req, int offset,
         rec->ul_fsuid = current->fsuid;
         rec->ul_fsgid = current->fsgid;
         rec->ul_cap = current->cap_effective;
-        rec->ul_mode = mode;
-        if (in_group_p(inode->i_gid))
-                rec->ul_suppgid = inode->i_gid;
+        rec->ul_mode = data->mode;
+        if (in_group_p(data->gid1))
+                rec->ul_suppgid = data->gid1;
         else
                 rec->ul_suppgid = -1;
-        ll_inode2fid(&rec->ul_fid1, inode);
-        if (child)
-                ll_inode2fid(&rec->ul_fid2, child);
+        ll_ino2fid(&rec->ul_fid1, data->ino1, data->gen1, data->typ1);
+        if (data->ino2)
+                ll_ino2fid(&rec->ul_fid2, data->ino2, data->gen2, data->typ2);
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, namelen + 1);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, data->namelen + 1);
         LASSERT (tmp != NULL);
-        LOGL0(name, namelen, tmp);
+        LOGL0(data->name, data->namelen, tmp);
 }
 
 void mds_link_pack(struct ptlrpc_request *req, int offset,
-                   struct inode *inode, struct inode *dir,
-                   const char *name, int namelen)
+                   struct mdc_op_data *data)
 {
         struct mds_rec_link *rec;
         char *tmp;
@@ -300,19 +304,19 @@ void mds_link_pack(struct ptlrpc_request *req, int offset,
         rec->lk_fsuid = current->fsuid;
         rec->lk_fsgid = current->fsgid;
         rec->lk_cap = current->cap_effective;
-        if (in_group_p(dir->i_gid))
-                rec->lk_suppgid = dir->i_gid;
+        if (in_group_p(data->gid1))
+                rec->lk_suppgid = data->gid1;
         else
                 rec->lk_suppgid = -1;
-        ll_inode2fid(&rec->lk_fid1, inode);
-        ll_inode2fid(&rec->lk_fid2, dir);
+        ll_ino2fid(&rec->lk_fid1, data->ino1, data->gen1, data->typ1);
+        ll_ino2fid(&rec->lk_fid2, data->ino2, data->gen2, data->typ2);
 
-        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, namelen + 1);
-        LOGL0(name, namelen, tmp);
+        tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, data->namelen + 1);
+        LOGL0(data->name, data->namelen, tmp);
 }
 
 void mds_rename_pack(struct ptlrpc_request *req, int offset,
-                     struct inode *srcdir, struct inode *tgtdir,
+                     struct mdc_op_data *data,
                      const char *old, int oldlen, const char *new, int newlen)
 {
         struct mds_rec_rename *rec;
@@ -325,16 +329,16 @@ void mds_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_fsuid = current->fsuid;
         rec->rn_fsgid = current->fsgid;
         rec->rn_cap = current->cap_effective;
-        if (in_group_p(srcdir->i_gid))
-                rec->rn_suppgid1 = srcdir->i_gid;
+        if (in_group_p(data->gid1))
+                rec->rn_suppgid1 = data->gid1;
         else
                 rec->rn_suppgid1 = -1;
-        if (in_group_p(tgtdir->i_gid))
-                rec->rn_suppgid2 = tgtdir->i_gid;
+        if (in_group_p(data->gid2))
+                rec->rn_suppgid2 = data->gid2;
         else
                 rec->rn_suppgid2 = -1;
-        ll_inode2fid(&rec->rn_fid1, srcdir);
-        ll_inode2fid(&rec->rn_fid2, tgtdir);
+        ll_ino2fid(&rec->rn_fid1, data->ino1, data->gen1, data->typ1);
+        ll_ino2fid(&rec->rn_fid2, data->ino2, data->gen2, data->typ2);
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1, oldlen + 1);
         LOGL0(old, oldlen, tmp);
@@ -345,6 +349,7 @@ void mds_rename_pack(struct ptlrpc_request *req, int offset,
         }
 }
 
+#ifdef __KERNEL__
 /* unpacking */
 static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
                               struct mds_update_record *r)
@@ -569,3 +574,4 @@ int mds_update_unpack(struct ptlrpc_request *req, int offset,
         rc = mds_unpackers[opcode](req, offset, rec);
         RETURN(rc);
 }
+#endif /* __KERNEL__ */
