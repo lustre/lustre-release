@@ -127,7 +127,6 @@ int mds_client_free(struct obd_export *exp, int clear_client)
         int rc;
         unsigned long *bitmap = mds->mds_client_bitmap;
 
-        LASSERT(bitmap);
         if (!med->med_mcd)
                 RETURN(0);
 
@@ -137,6 +136,8 @@ int mds_client_free(struct obd_export *exp, int clear_client)
 
         CDEBUG(D_INFO, "freeing client at idx %u (%lld)with UUID '%s'\n",
                med->med_idx, med->med_off, med->med_mcd->mcd_uuid);
+
+        LASSERT(bitmap);
 
         /* Clear the bit _after_ zeroing out the client so we don't
            race with mds_client_add and zero out new clients.*/
@@ -402,10 +403,15 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         dentry = lookup_one_len("__iopen__", current->fs->pwd,
                                 strlen("__iopen__"));
-        if (IS_ERR(dentry) || !dentry->d_inode) {
-                rc = (IS_ERR(dentry)) ? PTR_ERR(dentry): -ENOENT;
-                CERROR("cannot open iopen FH directory: rc = %d\n", rc);
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
+                CERROR("cannot lookup __iopen__ directory: rc = %d\n", rc);
                 GOTO(err_pop, rc);
+        }
+        if (!dentry->d_inode) {
+                rc = -ENOENT;
+                CERROR("__iopen__ directory has no inode? rc = %d\n", rc);
+                GOTO(err_fid, rc);
         }
         mds->mds_fid_de = dentry;
 
