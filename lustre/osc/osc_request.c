@@ -472,8 +472,8 @@ static int osc_brw_read(struct obd_conn *conn, obd_count num_oa,
         list_for_each(tmp, &desc->b_page_list) {
                 struct ptlrpc_bulk_page *bulk;
                 bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
-                if (bulk->b_buf != NULL)
-                        kunmap(bulk->b_buf);
+                if (bulk->b_page != NULL)
+                        kunmap(bulk->b_page);
         }
         ptlrpc_free_bulk(desc);
  out2:
