@@ -189,6 +189,10 @@ echoclientRef: <value-of select="@uuidref"/>
 lovRef: <value-of select="@uuidref"/>
 </template>
 
+<template match="lovconfig_ref">
+lovconfigRef: <value-of select="@uuidref"/>
+</template>
+
 <template match="path">
 path: <value-of select="."/>
 </template>
