@@ -301,13 +301,20 @@ int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
-        struct client_obd *cli;
-
+        struct obd_import *imp;
+        static char* import_state_names[] = {
+                "<UNKNOWN 0>", "INVALID", "NEW", "DISCONN", "CONNECTING",
+                "REPLAY", "RECOVER", "FULL", "EVICTED",
+        };
+        char *imp_state_name = NULL;
+        
         LASSERT(obd != NULL);
-        cli = &obd->u.cli;
+        imp = obd->u.cli.cl_import;
+        LASSERT(imp->imp_state <= LUSTRE_IMP_EVICTED);
+        imp_state_name = import_state_names[imp->imp_state];
         *eof = 1;
-        return snprintf(page, count, "%s\n",
-                        cli->cl_import->imp_target_uuid.uuid);
+        return snprintf(page, count, "%s\t%s\n",
+                        imp->imp_target_uuid.uuid, imp_state_name);
 }
 
 int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
