@@ -984,7 +984,7 @@ class MDS(Module):
         if self.fstype == 'extN':
             self.add_module(config.src_dir()+'extN', 'extN') 
         self.add_module(config.src_dir()+'mds', 'mds')
-        self.add_module(config.src_dir()+'mds', 'mds_%s' % (self.fstype))
+        self.add_module(config.src_dir()+'mds' , 'fsfilt_%s' % (self.fstype))
             
     def prepare(self):
         if is_prepared(self.uuid):
@@ -1048,6 +1048,7 @@ class OBD(Module):
         if self.fstype == 'extN':
             self.add_module(config.src_dir()+'extN', 'extN') 
         self.add_module(config.src_dir()+'' + self.obdtype, self.obdtype)
+        self.add_module(config.src_dir()+'obdclass' , 'fsfilt_%s' % (self.fstype))
 
     # need to check /proc/mounts and /etc/mtab before
     # formatting anything.
