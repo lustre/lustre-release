@@ -23,17 +23,19 @@ fi
 
 
 # loop device
-insmod loop > /dev/null 2>&1
-if [ "$LOOPDEV" -a "`losetup $LOOPDEV 2> /dev/null`" ]; then
-    echo "It appears that $LOOPDEV is in use.  Unable to continue" 1>&2
-    echo "You need to clean up $LOOPDEV (via cleanup.sh),"
-    echo "or you can change which device is used in demos/config.sh" 1>&2
-    # undo previous
-    [ "$TMPFILE" ] && rm $TMPFILE
-    exit 2
+if [ "$LOOPDEV" ]; then
+    insmod loop > /dev/null 2>&1
+    if [ -a "`losetup $LOOPDEV 2> /dev/null`" ]; then
+	echo "It appears that $LOOPDEV is in use.  Unable to continue" 1>&2
+	echo "You need to clean up $LOOPDEV (via cleanup.sh),"
+	echo "or you can change which device is used in demos/config.sh" 1>&2
+	# undo previous
+	[ "$TMPFILE" ] && rm $TMPFILE
+	exit 2
+    fi
+    losetup $LOOPDEV $TMPFILE
 fi
 
-[ "$LOOPDEV" ] && losetup $LOOPDEV $TMPFILE
 # Ensure that we have the correct devices for OBD to work
 [ ! -c /dev/obd0 ] && mknod /dev/obd0 c $OBDMAJ 0
 [ ! -c /dev/obd1 ] && mknod /dev/obd1 c $OBDMAJ 1
@@ -41,7 +43,7 @@ fi
 
 
 if [ "$BASEDEV" ]; then
-    mke2fs -b 4096 $BASEDEV
+    mke2fs -r 0 -b 4096 $BASEDEV
 else
     echo "\$BASEDEV not defined in demos/config.sh.  Please fix!"
     [ "$LOOPDEV" ] && losetup -d $LOOPDEV 

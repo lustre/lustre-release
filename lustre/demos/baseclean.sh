@@ -23,8 +23,10 @@ if [ x$? = x0 ]; then
 fi
 
 
-[ "$LOOPDEV" ] && losetup -d $LOOPDEV
-rmmod loop > /dev/null 2>&1
+if [ "$LOOPDEV" ]; then
+    losetup -d $LOOPDEV
+    rmmod loop > /dev/null 2>&1
+fi
 
 if [ "$TMPFILE" -a -f "$TMPFILE" ]; then
     rm -i $TMPFILE
