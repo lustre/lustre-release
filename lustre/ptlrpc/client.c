@@ -135,8 +135,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 
 void ptlrpc_free_bulk_page(struct ptlrpc_bulk_page *bulk)
 {
-        ENTRY;
-        if (bulk == NULL) {
+        if (!bulk) {
                 EXIT;
                 return;
         }
@@ -144,7 +143,6 @@ void ptlrpc_free_bulk_page(struct ptlrpc_bulk_page *bulk)
         list_del(&bulk->b_link);
         bulk->b_desc->b_page_count--;
         OBD_FREE(bulk, sizeof(*bulk));
-        EXIT;
 }
 
 struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
@@ -165,6 +163,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         rc = lustre_pack_msg(count, lengths, bufs,
                              &request->rq_reqlen, &request->rq_reqmsg);
         if (rc) {
+                OBD_FREE(request);
                 CERROR("cannot pack request %d\n", rc);
                 RETURN(NULL);
         }
@@ -345,11 +344,10 @@ void ptlrpc_free_committed(struct ptlrpc_client *cli)
                                req->rq_xid);
                         continue;
                 }
-                        
-                /* not yet committed */ 
-                if (!req->rq_transno ||
-                    req->rq_transno > cli->cli_last_committed)
-                        break; 
+
+                /* not yet committed */
+                if (req->rq_transno > cli->cli_last_committed)
+                        break;
 
                 CDEBUG(D_INFO, "Marking request %Ld as committed ("
                        "transno=%Lu, last_committed=%Lu\n", 
@@ -472,7 +470,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 
         spin_lock(&cli->cli_lock);
         list_del_init(&req->rq_list);
-        list_add(&req->rq_list, cli->cli_sending_head.prev);
+        list_add_tail(&req->rq_list, &cli->cli_sending_head);
         spin_unlock(&cli->cli_lock);
 
         CDEBUG(D_OTHER, "-- sleeping\n");
