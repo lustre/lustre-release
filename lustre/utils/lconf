@@ -25,7 +25,7 @@
 # Based in part on the XML obdctl modifications done by Brian Behlendorf 
 
 import sys, getopt
-import string, os, stat, popen2, socket, time
+import string, os, stat, popen2, socket, time, random
 import re, exceptions
 import xml.dom.minidom
 
@@ -688,8 +688,6 @@ class Module:
 
     def cleanup(self):
         """ default cleanup, used for most modules """
-        if not is_prepared(self.uuid):
-            return
         self.info()
         srv = self.get_server()
         if srv and local_net(srv):
@@ -1003,8 +1001,8 @@ class MDC(Module):
         self._connected = 0
 
         host = socket.gethostname()
-        self.name = 'MDC_%s_%s' % ( host, self.mds.name )
-        self.uuid = self.name + '_UUID' 
+        self.name = 'MDC_%s' % (self.mds.name)
+        self.uuid = '%s_%4.4x_UUID' % (self.name , int(random.random() * 100000 ))
 
         self.lookup_server(self.mds.uuid)
         self.add_module('lustre/mdc', 'mdc')
