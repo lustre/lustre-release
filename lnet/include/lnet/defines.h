@@ -1,3 +1,4 @@
+#include "build_check.h"
 /*
 **
 ** This files contains definitions that are used throughout the cplant code.
