@@ -385,7 +385,7 @@ connection force_tcp_connection(manager m,
                                  sizeof(struct sockaddr_in));
                     if (rc == 0) {
                             break;
-                    } else if (errno != EADDRINUSE) {
+                    } else if (errno != EADDRINUSE && errno != EADDRNOTAVAIL) {
                             perror("Error connecting to remote host");
                             close(fd);
                             goto out;
