@@ -98,6 +98,47 @@ kpr_register_nal (kpr_nal_interface_t *nalif, void **argp)
         return (0);
 }
 
+void
+kpr_do_upcall (void *arg)
+{
+        kpr_upcall_t *u = (kpr_upcall_t *)arg;
+        char          nalstr[10];
+        char          nidstr[36];
+        char         *argv[] = {
+                NULL,
+                "ROUTER_NOTIFY",
+                nalstr,
+                nidstr,
+                u->kpru_alive ? "up" : "down",
+                NULL};
+        
+        snprintf (nalstr, sizeof(nalstr), "%d", u->kpru_nal_id);
+        snprintf (nidstr, sizeof(nidstr), LPX64, u->kpru_nid);
+        
+        portals_run_upcall (argv);
+}
+
+void
+kpr_upcall (int gw_nalid, ptl_nid_t gw_nid, int alive) 
+{
+        /* May be in arbitrary context */
+        kpr_upcall_t  *u = kmalloc (sizeof (kpr_upcall_t), GFP_ATOMIC);
+
+        if (u == NULL) {
+                CERROR ("Upcall out of memory: nal %d nid "LPX64" %s\n",
+                        gw_nalid, gw_nid, alive ? "up" : "down");
+                return;
+        }
+        
+        u->kpru_tq.routine = kpr_do_upcall;
+        u->kpru_tq.data    = u;
+        u->kpru_nal_id     = gw_nalid;
+        u->kpru_nid        = gw_nid;
+        u->kpru_alive      = alive;
+        
+        schedule_task (&u->kpru_tq);
+}
+
 int
 kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
                int alive, struct timeval when)
@@ -182,11 +223,8 @@ kpr_do_notify (int byNal, int gateway_nalid, ptl_nid_t gateway_nid,
         }
         
         if (byNal) {
-                /* It wasn't userland that notified me: upcall... */
-                //        do upcall;
-                CERROR ("UPCALL [%d] "LPX64" is %s\n", 
-                        gateway_nalid, gateway_nid,
-                        alive ? "up" : "down");
+                /* It wasn't userland that notified me... */
+                kpr_upcall (gateway_nalid, gateway_nid, alive);
         }
         
         return (0);
