@@ -19,23 +19,23 @@ extern unsigned long obd_memory;
 #define OBD_ALLOC(ptr, size)                                    \
 do {                                                            \
         (ptr) = kmalloc((unsigned long)(size), GFP_KERNEL);     \
-        obd_memory += (size);                                   \
-        CDEBUG(D_MALLOC, "kmalloced: %ld at %x (tot %ld).\n",   \
-               (long)(size), (int)(ptr), obd_memory);           \
-        if (ptr == NULL) {                                      \
+        if ((ptr) == NULL) {                                    \
                 CERROR("kernel malloc failed at %s:%d\n",       \
                        __FILE__, __LINE__);                     \
         } else {                                                \
                 memset((ptr), 0, (size));                       \
+                obd_memory += (size);                           \
         }                                                       \
+        CDEBUG(D_MALLOC, "kmalloced: %ld at %x (tot %ld).\n",   \
+               (long)(size), (int)(ptr), obd_memory);           \
 } while (0)
 
 #define OBD_FREE(ptr, size)                                  \
 do {                                                         \
         kfree((ptr));                                        \
-        obd_memory -= (size);                                \
         CDEBUG(D_MALLOC, "kfreed: %d at %x (tot %ld).\n",    \
                (int)(size), (int)(ptr), obd_memory);         \
+        obd_memory -= (size);                                \
 } while (0)
 
 #endif

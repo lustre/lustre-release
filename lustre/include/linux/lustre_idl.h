@@ -56,7 +56,8 @@
 #define OST_CONNECT    7
 #define OST_DISCONNECT 8
 #define OST_PUNCH      9
-#define OST_BRW_COMPLETE 10
+#define OST_OPEN      10
+#define OST_CLOSE     11
 
 /* packet types */
 #define OST_TYPE_REQ 1

@@ -123,7 +123,77 @@ static int osc_getattr(struct obd_conn *conn, struct obdo *oa)
 	}
 	
 	memcpy(&request->rq_req.ost->oa, oa, sizeof(*oa));
+        request->rq_req.ost->connid = conn->oc_id;
 	request->rq_req.ost->oa.o_valid = ~0;
+	request->rq_replen = 
+		sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep);
+	
+	rc = ptlrpc_queue_wait(peer, request);
+	if (rc) { 
+		EXIT;
+		goto out;
+	}
+
+	CDEBUG(D_INODE, "mode: %o\n", request->rq_rep.ost->oa.o_mode); 
+	if (oa) { 
+		memcpy(oa, &request->rq_rep.ost->oa, sizeof(*oa));
+	}
+
+ out:
+	ptlrpc_free_req(request);
+	return 0;
+}
+
+static int osc_open(struct obd_conn *conn, struct obdo *oa)
+{
+	struct ptlrpc_request *request;
+	struct ptlrpc_client *peer = osc_con2cl(conn);
+	int rc; 
+
+	request = ptlrpc_prep_req(peer, OST_OPEN, 0, NULL, 0, NULL);
+	if (!request) { 
+		CERROR("cannot pack req!\n"); 
+		return -ENOMEM;
+	}
+	
+	memcpy(&request->rq_req.ost->oa, oa, sizeof(*oa));
+        request->rq_req.ost->connid = conn->oc_id;
+        if (request->rq_req.ost->oa.o_valid != (OBD_MD_FLMODE | OBD_MD_FLID))
+                BUG();
+	request->rq_replen = 
+		sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep);
+	
+	rc = ptlrpc_queue_wait(peer, request);
+	if (rc) { 
+		EXIT;
+		goto out;
+	}
+
+	CDEBUG(D_INODE, "mode: %o\n", request->rq_rep.ost->oa.o_mode); 
+	if (oa) { 
+		memcpy(oa, &request->rq_rep.ost->oa, sizeof(*oa));
+	}
+
+ out:
+	ptlrpc_free_req(request);
+	return 0;
+}
+
+static int osc_close(struct obd_conn *conn, struct obdo *oa)
+{
+	struct ptlrpc_request *request;
+	struct ptlrpc_client *peer = osc_con2cl(conn);
+	int rc; 
+
+	request = ptlrpc_prep_req(peer, OST_CLOSE, 0, NULL, 0, NULL);
+	if (!request) { 
+		CERROR("cannot pack req!\n"); 
+		return -ENOMEM;
+	}
+	
+	memcpy(&request->rq_req.ost->oa, oa, sizeof(*oa));
+        request->rq_req.ost->connid = conn->oc_id;
+
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep);
 	
@@ -156,6 +226,7 @@ static int osc_setattr(struct obd_conn *conn, struct obdo *oa)
 	}
 	
 	memcpy(&request->rq_req.ost->oa, oa, sizeof(*oa));
+        request->rq_req.ost->connid = conn->oc_id;
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep);
 	
@@ -220,6 +291,7 @@ static int osc_punch(struct obd_conn *conn, struct obdo *oa, obd_size count,
 	}
 	
 	memcpy(&request->rq_req.ost->oa, oa, sizeof(*oa));
+        request->rq_req.ost->connid = conn->oc_id;
 	request->rq_req.ost->oa.o_valid = ~0;
 	request->rq_req.ost->oa.o_size = offset;
 	request->rq_req.ost->oa.o_blocks = count;
@@ -254,6 +326,7 @@ static int osc_destroy(struct obd_conn *conn, struct obdo *oa)
 	}
 	
 	memcpy(&request->rq_req.ost->oa, oa, sizeof(*oa));
+        request->rq_req.ost->connid = conn->oc_id;
 	request->rq_req.ost->oa.o_valid = ~0;
 	request->rq_replen = 
 		sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep);
@@ -530,6 +603,8 @@ struct obd_ops osc_obd_ops = {
 	o_destroy: osc_destroy,
 	o_getattr: osc_getattr,
 	o_setattr: osc_setattr,
+	o_open: osc_open,
+	o_close: osc_close,
 	o_connect: osc_connect,
 	o_disconnect: osc_disconnect,
 	o_brw: osc_brw,

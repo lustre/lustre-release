@@ -36,6 +36,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_light.h>
 
+kmem_cache_t *ll_file_data_slab;
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
@@ -403,6 +404,11 @@ struct file_system_type lustre_light_fs_type = {
 static int __init init_lustre_light(void)
 {
         printk(KERN_INFO "Lustre Light 0.0.1, braam@clusterfs.com\n");
+	ll_file_data_slab = kmem_cache_create("ll_file_data",
+					      sizeof(struct ll_file_data), 0,
+					       SLAB_HWCACHE_ALIGN, NULL, NULL);
+	if (ll_file_data_slab == NULL)
+		return -ENOMEM;
 
         return register_filesystem(&lustre_light_fs_type);
 }
@@ -410,6 +416,7 @@ static int __init init_lustre_light(void)
 static void __exit exit_lustre_light(void)
 {
         unregister_filesystem(&lustre_light_fs_type);
+	kmem_cache_destroy(ll_file_data_slab);
 }
 
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");

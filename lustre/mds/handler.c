@@ -250,6 +250,39 @@ int mds_open(struct ptlrpc_request *req)
 	return 0;
 }
 
+int mds_close(struct ptlrpc_request *req)
+{
+	struct dentry *de;
+	struct mds_rep *rep;
+	struct file *file;
+	struct vfsmount *mnt;
+	int rc;
+	
+	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep, 
+			  &req->rq_replen, &req->rq_repbuf);
+	if (rc) { 
+		EXIT;
+		CERROR("mds: out of memory\n");
+		req->rq_status = -ENOMEM;
+		return 0;
+	}
+
+	req->rq_rephdr->xid = req->rq_reqhdr->xid;
+	rep = req->rq_rep.mds;
+
+	de = mds_fid2dentry(&req->rq_obd->u.mds, &req->rq_req.mds->fid1, &mnt);
+	if (IS_ERR(de)) { 
+		EXIT;
+		req->rq_rephdr->status = -ENOENT;
+		return 0;
+	}
+
+        file = (struct file *)(unsigned long) req->rq_req.mds->objid;
+        req->rq_rephdr->status = filp_close(file, 0); 
+	dput(de); 
+	return 0;
+}
+
 
 int mds_readpage(struct ptlrpc_request *req)
 {

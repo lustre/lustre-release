@@ -101,6 +101,57 @@ static int ost_getattr(struct ost_obd *ost, struct ptlrpc_request *req)
 	return 0;
 }
 
+static int ost_open(struct ost_obd *ost, struct ptlrpc_request *req)
+{
+	struct obd_conn conn; 
+	int rc;
+
+	ENTRY;
+	
+	conn.oc_id = req->rq_req.ost->connid;
+	conn.oc_dev = ost->ost_tgt;
+
+	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+			  &req->rq_replen, &req->rq_repbuf); 
+	if (rc) { 
+		CERROR("cannot pack reply\n"); 
+		return rc;
+	}
+	req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
+	req->rq_rep.ost->oa.o_valid = req->rq_req.ost->oa.o_valid;
+
+	req->rq_rep.ost->result =  obd_open(&conn, &req->rq_rep.ost->oa); 
+
+	EXIT;
+	return 0;
+}
+
+static int ost_close(struct ost_obd *ost, struct ptlrpc_request *req)
+{
+	struct obd_conn conn; 
+	int rc;
+
+	ENTRY;
+	
+	conn.oc_id = req->rq_req.ost->connid;
+	conn.oc_dev = ost->ost_tgt;
+
+	rc = ost_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep,
+			  &req->rq_replen, &req->rq_repbuf); 
+	if (rc) { 
+		CERROR("cannot pack reply\n"); 
+		return rc;
+	}
+	req->rq_rep.ost->oa.o_id = req->rq_req.ost->oa.o_id;
+	req->rq_rep.ost->oa.o_valid = req->rq_req.ost->oa.o_valid;
+
+	req->rq_rep.ost->result =  obd_close(&conn, &req->rq_rep.ost->oa); 
+
+	EXIT;
+	return 0;
+}
+
+
 static int ost_create(struct ost_obd *ost, struct ptlrpc_request *req)
 {
 	struct obd_conn conn; 
@@ -581,6 +632,14 @@ static int ost_handle(struct obd_device *obddev,
 	case OST_SETATTR:
 		CDEBUG(D_INODE, "setattr\n");
 		rc = ost_setattr(ost, req);
+		break;
+	case OST_OPEN:
+		CDEBUG(D_INODE, "setattr\n");
+		rc = ost_open(ost, req);
+		break;
+	case OST_CLOSE:
+		CDEBUG(D_INODE, "setattr\n");
+		rc = ost_close(ost, req);
 		break;
 	case OST_BRW:
 		CDEBUG(D_INODE, "brw\n");

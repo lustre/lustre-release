@@ -16,7 +16,11 @@
 #include <linux/list.h>
 #include <linux/lustre_net.h>
 
-#define LL_SUPER_MAGIC 0x0BD00BD0;
+
+extern kmem_cache_t *ll_file_data_slab;
+struct ll_file_data { 
+	__u64 fd_mdshandle; 
+};
 
 #define LL_INLINESZ      60
 struct ll_inode_info {
@@ -25,6 +29,7 @@ struct ll_inode_info {
         char             lli_inline[LL_INLINESZ];
 };
 
+#define LL_SUPER_MAGIC 0x0BD00BD0;
 struct ll_sb_info {
         struct list_head         ll_list;      /* list of supers */
         struct obd_conn          ll_conn;

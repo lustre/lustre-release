@@ -351,6 +351,8 @@ EXPORT_SYMBOL(mdc_link);
 EXPORT_SYMBOL(mdc_getattr); 
 EXPORT_SYMBOL(mdc_readpage); 
 EXPORT_SYMBOL(mdc_setattr); 
+EXPORT_SYMBOL(mdc_close);
+EXPORT_SYMBOL(mdc_open);
 
 module_init(ptlrpc_request_init);
 module_exit(ptlrpc_request_exit);

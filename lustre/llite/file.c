@@ -41,6 +41,101 @@
 
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
 
+static int ll_file_open(struct inode *inode, struct file *file)
+{
+	int rc; 
+	int flags = 0; 
+	struct ptlrpc_request *req;
+	struct ll_file_data *fd;
+	struct obdo oa; 
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+	ENTRY;
+
+	fd = kmem_cache_alloc(ll_file_data_slab, SLAB_KERNEL); 
+	if (!fd) { 
+		rc = -ENOMEM;
+		goto out;
+	}
+
+	memset(&oa, 0, sizeof(oa)); 
+	oa.o_valid = OBD_MD_FLMODE | OBD_MD_FLID; 
+	oa.o_mode = inode->i_mode;
+	oa.o_id = HTON__u64((__u64)inode->i_ino);
+	rc = obd_open(ll_i2obdconn(inode),  &oa); 
+	if (rc) { 
+		if (rc > 0) 
+			rc = -rc;
+		EXIT;
+		goto out;
+	}
+
+	rc = mdc_open(&sbi->ll_mds_client, inode->i_ino, S_IFREG, flags, 
+		      &fd->fd_mdshandle, &req); 
+	ptlrpc_free_req(req);
+	if (rc) { 
+		if (rc > 0) 
+			rc = -rc;
+		EXIT;
+		goto out;
+	}
+	file->private_data = fd;
+
+	EXIT; 
+ out:
+	if (rc && fd) { 
+		kmem_cache_free(ll_file_data_slab, fd); 
+	}
+	return rc;
+}
+
+
+static int ll_file_release(struct inode *inode, struct file *file)
+{
+	int rc; 
+	struct ptlrpc_request *req;
+	struct ll_file_data *fd;
+	struct obdo oa; 
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+	ENTRY;
+
+	fd = (struct ll_file_data *)file->private_data;
+	if (!fd) { 
+		BUG();
+		goto out;
+	}
+
+	memset(&oa, 0, sizeof(oa)); 
+	oa.o_valid = OBD_MD_FLMODE | OBD_MD_FLID; 
+	oa.o_mode = inode->i_mode;
+	oa.o_id = HTON__u64((__u64)inode->i_ino);
+	rc = obd_close(ll_i2obdconn(inode),  &oa); 
+	if (rc) { 
+		if (rc > 0) 
+			rc = -rc;
+		EXIT;
+		goto out;
+	}
+
+	rc = mdc_close(&sbi->ll_mds_client, inode->i_ino, S_IFREG, 
+		      fd->fd_mdshandle, &req); 
+	ptlrpc_free_req(req);
+	if (rc) { 
+		if (rc > 0) 
+			rc = -rc;
+		EXIT;
+		goto out;
+	}
+	EXIT; 
+
+ out:
+	if (!rc && fd) { 
+		kmem_cache_free(ll_file_data_slab, fd); 
+		file->private_data = NULL;
+	}
+	return rc;
+}
+
+
 static inline void ll_remove_suid(struct inode *inode)
 {
         unsigned int mode;
@@ -55,6 +150,7 @@ static inline void ll_remove_suid(struct inode *inode)
 		// XXX careful here - we cannot change the size
         }
 }
+
 
 /*
  * Write to a file (through the page cache).
@@ -92,6 +188,8 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 struct file_operations ll_file_operations = {
         read: generic_file_read,
         write: ll_file_write,
+	open: ll_file_open,
+	release: ll_file_release,
         mmap: generic_file_mmap,
 	fsync: NULL
 };

@@ -103,6 +103,10 @@ int mdc_getattr(struct ptlrpc_client *peer, ino_t ino, int type, int valid,
 		struct ptlrpc_request **);
 int mdc_setattr(struct ptlrpc_client *peer, struct inode *inode,
                 struct iattr *iattr, struct ptlrpc_request **);
+int mdc_open(struct ptlrpc_client *cl, ino_t ino, int type, int flags,
+             __u64 *fh, struct ptlrpc_request **req);
+int mdc_close(struct ptlrpc_client *cl, ino_t ino, int type, __u64 fh, 
+              struct ptlrpc_request **req);
 int mdc_readpage(struct ptlrpc_client *peer, ino_t ino, int type, __u64 offset,
                  char *addr, struct ptlrpc_request **);
 int mdc_create(struct ptlrpc_client *peer, 

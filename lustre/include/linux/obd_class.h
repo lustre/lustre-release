@@ -137,6 +137,8 @@ struct obd_ops {
         int (*o_destroy)(struct obd_conn *conn, struct obdo *oa);
         int (*o_setattr)(struct obd_conn *conn, struct obdo *oa);
         int (*o_getattr)(struct obd_conn *conn, struct obdo *oa);
+        int (*o_open)(struct obd_conn *conn, struct obdo *oa);
+        int (*o_close)(struct obd_conn *conn, struct obdo *oa);
         int (*o_read)(struct obd_conn *conn, struct obdo *oa, char *buf,
                       obd_size *count, obd_off offset);
         int (*o_write)(struct obd_conn *conn, struct obdo *oa, char *buf,
@@ -321,6 +323,27 @@ static inline int obd_getattr(struct obd_conn *conn, struct obdo *obdo)
 	OBD_CHECK_OP(conn,getattr);
 	
 	rc = OBP(conn->oc_dev, getattr)(conn, obdo);
+	EXIT;
+	return rc;
+}
+
+static inline int obd_close(struct obd_conn *conn, struct obdo *obdo) 
+{
+	int rc;
+        OBD_CHECK_SETUP(conn);
+	OBD_CHECK_OP(conn,close);
+	
+	rc = OBP(conn->oc_dev, close)(conn, obdo);
+	EXIT;
+	return rc;
+}
+static inline int obd_open(struct obd_conn *conn, struct obdo *obdo) 
+{
+	int rc;
+        OBD_CHECK_SETUP(conn);
+	OBD_CHECK_OP(conn,open);
+	
+	rc = OBP(conn->oc_dev, open) (conn, obdo);
 	EXIT;
 	return rc;
 }
