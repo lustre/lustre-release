@@ -183,9 +183,10 @@ test_5() {
 	# if all the modules have unloaded.
  	umount $MOUNT &
 	UMOUNT_PID=$!
-	sleep $TIMEOUT
+	sleep 2
 	echo "killing umount"
 	kill -TERM $UMOUNT_PID
+	echo "waiting for umount to finish"
 	wait $UMOUNT_PID 
 
 	# cleanup client modules
@@ -199,6 +200,33 @@ test_5() {
 	return 0
 }
 run_test 5 "force cleanup mds, then cleanup"
+
+test_5b() {
+	start_ost
+	start_mds
+	stop_mds
+
+	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	llmount $mds_HOST://mds_svc/client_facet $MOUNT &
+	MOUNT_PID=$!
+	sleep 2
+	echo "killing mount"
+	kill -TERM $MOUNT_PID
+	echo "waiting for mount to finish"
+	wait $MOUNT_PID
+
+	# cleanup client modules
+	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	
+	# stop_mds is a no-op here, and should not fail
+	stop_mds || return 2
+	stop_ost || return 3
+
+	lsmod | grep -q portals && return 3
+	return 0
+
+}
+run_test 5b "cleanup after failed mount (bug 2712)"
 
 test_6() {
 	setup
