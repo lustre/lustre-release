@@ -5,11 +5,11 @@
  include/linux/ext3_fs_sb.h |   10 +
  5 files changed, 365 insertions(+)
 
-Index: linux-2.4.24-vanilla/fs/ext3/super.c
+Index: linux-2.4.24/fs/ext3/super.c
 ===================================================================
---- linux-2.4.24-vanilla.orig/fs/ext3/super.c	2004-01-10 17:49:10.000000000 +0300
-+++ linux-2.4.24-vanilla/fs/ext3/super.c	2004-01-11 23:13:34.000000000 +0300
-@@ -400,6 +400,127 @@
+--- linux-2.4.24.orig/fs/ext3/super.c	2004-01-12 20:36:31.000000000 +0300
++++ linux-2.4.24/fs/ext3/super.c	2004-01-13 16:27:43.000000000 +0300
+@@ -400,6 +400,128 @@
  	}
  }
  
@@ -127,7 +127,8 @@ Index: linux-2.4.24-vanilla/fs/ext3/super.c
 +
 +	clear_opt(sbi->s_mount_opt, ASYNCDEL);
 +	wake_up(&sbi->s_delete_thread_queue);
-+	wait_event(sbi->s_delete_waiter_queue, sbi->s_delete_list.next == 0);
++	wait_event(sbi->s_delete_waiter_queue,
++			sbi->s_delete_list.next == 0 && sbi->s_delete_inodes == 0);
 +}
 +#else
 +#define ext3_start_delete_thread(sbi) do {} while(0)
@@ -137,7 +138,15 @@ Index: linux-2.4.24-vanilla/fs/ext3/super.c
  void ext3_put_super (struct super_block * sb)
  {
  	struct ext3_sb_info *sbi = EXT3_SB(sb);
-@@ -527,6 +648,13 @@
+@@ -407,6 +529,7 @@
+ 	kdev_t j_dev = sbi->s_journal->j_dev;
+ 	int i;
+ 
++	J_ASSERT(sbi->s_delete_inodes == 0);
+ 	ext3_xattr_put_super(sb);
+ 	journal_destroy(sbi->s_journal);
+ 	if (!(sb->s_flags & MS_RDONLY)) {
+@@ -527,6 +650,13 @@
  			clear_opt (*mount_options, XATTR_USER);
  		else
  #endif
@@ -151,7 +160,7 @@ Index: linux-2.4.24-vanilla/fs/ext3/super.c
  		if (!strcmp (this_char, "bsddf"))
  			clear_opt (*mount_options, MINIX_DF);
  		else if (!strcmp (this_char, "nouid32")) {
-@@ -1227,6 +1355,7 @@
+@@ -1227,6 +1357,7 @@
  	}
  
  	ext3_setup_super (sb, es, sb->s_flags & MS_RDONLY);
@@ -159,7 +168,7 @@ Index: linux-2.4.24-vanilla/fs/ext3/super.c
  	/*
  	 * akpm: core read_super() calls in here with the superblock locked.
  	 * That deadlocks, because orphan cleanup needs to lock the superblock
-@@ -1618,7 +1747,12 @@
+@@ -1618,7 +1749,12 @@
  static int ext3_sync_fs(struct super_block *sb)
  {
  	tid_t target;
@@ -173,7 +182,7 @@ Index: linux-2.4.24-vanilla/fs/ext3/super.c
  	sb->s_dirt = 0;
  	target = log_start_commit(EXT3_SB(sb)->s_journal, NULL);
  	log_wait_commit(EXT3_SB(sb)->s_journal, target);
-@@ -1682,6 +1816,9 @@
+@@ -1682,6 +1818,9 @@
  	if (!parse_options(data, &tmp, sbi, &tmp, 1))
  		return -EINVAL;
  
@@ -183,10 +192,10 @@ Index: linux-2.4.24-vanilla/fs/ext3/super.c
  	if (sbi->s_mount_opt & EXT3_MOUNT_ABORT)
  		ext3_abort(sb, __FUNCTION__, "Abort forced by user");
  
-Index: linux-2.4.24-vanilla/fs/ext3/inode.c
+Index: linux-2.4.24/fs/ext3/inode.c
 ===================================================================
---- linux-2.4.24-vanilla.orig/fs/ext3/inode.c	2004-01-10 17:49:11.000000000 +0300
-+++ linux-2.4.24-vanilla/fs/ext3/inode.c	2004-01-11 23:12:44.000000000 +0300
+--- linux-2.4.24.orig/fs/ext3/inode.c	2004-01-12 20:36:31.000000000 +0300
++++ linux-2.4.24/fs/ext3/inode.c	2004-01-12 20:36:32.000000000 +0300
 @@ -2551,6 +2551,118 @@
  	return err;
  }
@@ -306,10 +315,10 @@ Index: linux-2.4.24-vanilla/fs/ext3/inode.c
  /* 
   * On success, We end up with an outstanding reference count against
   * iloc->bh.  This _must_ be cleaned up later. 
-Index: linux-2.4.24-vanilla/fs/ext3/file.c
+Index: linux-2.4.24/fs/ext3/file.c
 ===================================================================
---- linux-2.4.24-vanilla.orig/fs/ext3/file.c	2004-01-10 17:49:10.000000000 +0300
-+++ linux-2.4.24-vanilla/fs/ext3/file.c	2004-01-11 23:08:54.000000000 +0300
+--- linux-2.4.24.orig/fs/ext3/file.c	2004-01-12 20:36:29.000000000 +0300
++++ linux-2.4.24/fs/ext3/file.c	2004-01-12 20:36:32.000000000 +0300
 @@ -126,7 +126,11 @@
  };
  
@@ -322,10 +331,10 @@ Index: linux-2.4.24-vanilla/fs/ext3/file.c
  	setattr:	ext3_setattr,		/* BKL held */
  	setxattr:	ext3_setxattr,		/* BKL held */
  	getxattr:	ext3_getxattr,		/* BKL held */
-Index: linux-2.4.24-vanilla/fs/ext3/namei.c
+Index: linux-2.4.24/fs/ext3/namei.c
 ===================================================================
---- linux-2.4.24-vanilla.orig/fs/ext3/namei.c	2004-01-10 17:49:10.000000000 +0300
-+++ linux-2.4.24-vanilla/fs/ext3/namei.c	2004-01-11 23:08:54.000000000 +0300
+--- linux-2.4.24.orig/fs/ext3/namei.c	2004-01-12 20:36:31.000000000 +0300
++++ linux-2.4.24/fs/ext3/namei.c	2004-01-12 20:36:32.000000000 +0300
 @@ -1936,6 +1936,36 @@
  	return retval;
  }
@@ -375,10 +384,10 @@ Index: linux-2.4.24-vanilla/fs/ext3/namei.c
  	inode->i_ctime = dir->i_ctime;
  	ext3_mark_inode_dirty(handle, inode);
  	retval = 0;
-Index: linux-2.4.24-vanilla/include/linux/ext3_fs.h
+Index: linux-2.4.24/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.24-vanilla.orig/include/linux/ext3_fs.h	2004-01-10 17:49:11.000000000 +0300
-+++ linux-2.4.24-vanilla/include/linux/ext3_fs.h	2004-01-11 23:08:54.000000000 +0300
+--- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-01-12 20:36:31.000000000 +0300
++++ linux-2.4.24/include/linux/ext3_fs.h	2004-01-12 20:36:32.000000000 +0300
 @@ -193,6 +193,7 @@
   */
  #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
@@ -405,10 +414,10 @@ Index: linux-2.4.24-vanilla/include/linux/ext3_fs.h
  extern void ext3_set_inode_flags(struct inode *);
  
  /* ioctl.c */
-Index: linux-2.4.24-vanilla/include/linux/ext3_fs_sb.h
+Index: linux-2.4.24/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.4.24-vanilla.orig/include/linux/ext3_fs_sb.h	2004-01-10 17:49:10.000000000 +0300
-+++ linux-2.4.24-vanilla/include/linux/ext3_fs_sb.h	2004-01-11 23:08:54.000000000 +0300
+--- linux-2.4.24.orig/include/linux/ext3_fs_sb.h	2004-01-12 20:36:31.000000000 +0300
++++ linux-2.4.24/include/linux/ext3_fs_sb.h	2004-01-12 20:36:32.000000000 +0300
 @@ -29,6 +29,8 @@
  
  #define EXT3_MAX_GROUP_LOADED	8

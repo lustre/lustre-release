@@ -5,11 +5,11 @@
  include/linux/ext3_fs_sb.h |   10 +
  5 files changed, 365 insertions(+)
 
-Index: linux-2.4.21-chaos/fs/ext3/super.c
+Index: linux-2.4.20-hp4-pnnl13/fs/ext3/super.c
 ===================================================================
---- linux-2.4.21-chaos.orig/fs/ext3/super.c	2004-01-12 19:20:07.000000000 +0300
-+++ linux-2.4.21-chaos/fs/ext3/super.c	2004-01-13 17:25:49.000000000 +0300
-@@ -425,6 +425,221 @@
+--- linux-2.4.20-hp4-pnnl13.orig/fs/ext3/super.c	2004-01-12 19:22:32.000000000 +0300
++++ linux-2.4.20-hp4-pnnl13/fs/ext3/super.c	2004-01-13 17:04:38.000000000 +0300
+@@ -400,6 +400,221 @@
  	}
  }
  
@@ -231,7 +231,7 @@ Index: linux-2.4.21-chaos/fs/ext3/super.c
  void ext3_put_super (struct super_block * sb)
  {
  	struct ext3_sb_info *sbi = EXT3_SB(sb);
-@@ -432,6 +647,7 @@
+@@ -407,6 +622,7 @@
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
  
@@ -239,20 +239,21 @@ Index: linux-2.4.21-chaos/fs/ext3/super.c
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -501,7 +717,11 @@
+@@ -455,7 +671,11 @@
  	write_inode:	ext3_write_inode,	/* BKL not held.  Don't need */
  	dirty_inode:	ext3_dirty_inode,	/* BKL not held.  We take it */
  	put_inode:	ext3_put_inode,		/* BKL not held.  Don't need */
+-	delete_inode:	ext3_delete_inode,	/* BKL not held.  We take it */
 +#ifdef EXT3_DELETE_THREAD
 +	delete_inode:	ext3_delete_inode_thread,/* BKL not held. We take it */
 +#else
- 	delete_inode:	ext3_delete_inode,	/* BKL not held.  We take it */
++  	delete_inode:	ext3_delete_inode,	/* BKL not held.  We take it */
 +#endif
  	put_super:	ext3_put_super,		/* BKL held */
  	write_super:	ext3_write_super,	/* BKL held */
  	sync_fs:	ext3_sync_fs,
-@@ -579,6 +799,13 @@
- 			*mount_flags &= ~MS_POSIXACL;
+@@ -524,6 +744,13 @@
+ 			clear_opt (*mount_options, XATTR_USER);
  		else
  #endif
 +#ifdef EXT3_DELETE_THREAD
@@ -265,7 +266,7 @@ Index: linux-2.4.21-chaos/fs/ext3/super.c
  		if (!strcmp (this_char, "bsddf"))
  			clear_opt (*mount_options, MINIX_DF);
  		else if (!strcmp (this_char, "nouid32")) {
-@@ -1283,6 +1510,7 @@
+@@ -1223,6 +1450,7 @@
  	}
  
  	ext3_setup_super (sb, es, sb->s_flags & MS_RDONLY);
@@ -273,7 +274,7 @@ Index: linux-2.4.21-chaos/fs/ext3/super.c
  	/*
  	 * akpm: core read_super() calls in here with the superblock locked.
  	 * That deadlocks, because orphan cleanup needs to lock the superblock
-@@ -1676,7 +1904,12 @@
+@@ -1614,7 +1842,12 @@
  static int ext3_sync_fs(struct super_block *sb)
  {
  	tid_t target;
@@ -287,8 +288,8 @@ Index: linux-2.4.21-chaos/fs/ext3/super.c
  	sb->s_dirt = 0;
  	target = log_start_commit(EXT3_SB(sb)->s_journal, NULL);
  	log_wait_commit(EXT3_SB(sb)->s_journal, target);
-@@ -1746,6 +1979,9 @@
- 	if (!parse_options(data, &tmp, sbi, &mount_flags, &tmp, 1))
+@@ -1678,6 +1911,9 @@
+ 	if (!parse_options(data, &tmp, sbi, &tmp, 1))
  		return -EINVAL;
  
 +	if (!test_opt(sb, ASYNCDEL) || (*flags & MS_RDONLY))
@@ -297,12 +298,12 @@ Index: linux-2.4.21-chaos/fs/ext3/super.c
  	if (sbi->s_mount_opt & EXT3_MOUNT_ABORT)
  		ext3_abort(sb, __FUNCTION__, "Abort forced by user");
  
-Index: linux-2.4.21-chaos/fs/ext3/inode.c
+Index: linux-2.4.20-hp4-pnnl13/fs/ext3/inode.c
 ===================================================================
---- linux-2.4.21-chaos.orig/fs/ext3/inode.c	2004-01-12 19:20:06.000000000 +0300
-+++ linux-2.4.21-chaos/fs/ext3/inode.c	2004-01-12 19:20:07.000000000 +0300
-@@ -2179,6 +2179,118 @@
- 	return;		/* AKPM: return what? */
+--- linux-2.4.20-hp4-pnnl13.orig/fs/ext3/inode.c	2004-01-12 19:22:32.000000000 +0300
++++ linux-2.4.20-hp4-pnnl13/fs/ext3/inode.c	2004-01-13 17:01:40.000000000 +0300
+@@ -2500,6 +2500,118 @@
+ 	return err;
  }
  
 +#ifdef EXT3_DELETE_THREAD
@@ -418,13 +419,13 @@ Index: linux-2.4.21-chaos/fs/ext3/inode.c
 +#endif /* EXT3_DELETE_THREAD */
 +
  /* 
-  * ext3_get_inode_loc returns with an extra refcount against the
-  * inode's underlying buffer_head on success. 
-Index: linux-2.4.21-chaos/fs/ext3/file.c
+  * On success, We end up with an outstanding reference count against
+  * iloc->bh.  This _must_ be cleaned up later. 
+Index: linux-2.4.20-hp4-pnnl13/fs/ext3/file.c
 ===================================================================
---- linux-2.4.21-chaos.orig/fs/ext3/file.c	2004-01-12 19:20:06.000000000 +0300
-+++ linux-2.4.21-chaos/fs/ext3/file.c	2004-01-12 19:20:07.000000000 +0300
-@@ -132,7 +132,11 @@
+--- linux-2.4.20-hp4-pnnl13.orig/fs/ext3/file.c	2004-01-12 19:22:32.000000000 +0300
++++ linux-2.4.20-hp4-pnnl13/fs/ext3/file.c	2004-01-13 17:01:40.000000000 +0300
+@@ -125,7 +125,11 @@
  };
  
  struct inode_operations ext3_file_inode_operations = {
@@ -436,11 +437,24 @@ Index: linux-2.4.21-chaos/fs/ext3/file.c
  	setattr:	ext3_setattr,		/* BKL held */
  	setxattr:	ext3_setxattr,		/* BKL held */
  	getxattr:	ext3_getxattr,		/* BKL held */
-Index: linux-2.4.21-chaos/include/linux/ext3_fs.h
+Index: linux-2.4.20-hp4-pnnl13/fs/buffer.c
 ===================================================================
---- linux-2.4.21-chaos.orig/include/linux/ext3_fs.h	2004-01-12 19:20:06.000000000 +0300
-+++ linux-2.4.21-chaos/include/linux/ext3_fs.h	2004-01-12 19:20:07.000000000 +0300
-@@ -195,6 +195,7 @@
+--- linux-2.4.20-hp4-pnnl13.orig/fs/buffer.c	2003-09-13 15:19:26.000000000 +0400
++++ linux-2.4.20-hp4-pnnl13/fs/buffer.c	2004-01-13 17:01:40.000000000 +0300
+@@ -376,6 +376,8 @@
+ 	if (sb->s_op && sb->s_op->sync_fs)
+ 		sb->s_op->sync_fs(sb);
+ 	unlock_super(sb);
++	if (sb->s_op && sb->s_op->sync_fs)
++		sb->s_op->sync_fs(sb);
+ 	unlock_kernel();
+ 
+ 	return sync_buffers(dev, 1);
+Index: linux-2.4.20-hp4-pnnl13/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.4.20-hp4-pnnl13.orig/include/linux/ext3_fs.h	2004-01-12 19:22:32.000000000 +0300
++++ linux-2.4.20-hp4-pnnl13/include/linux/ext3_fs.h	2004-01-13 17:01:40.000000000 +0300
+@@ -193,6 +193,7 @@
   */
  #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
  #define EXT3_STATE_NEW			0x00000002 /* inode is newly created */
@@ -448,31 +462,31 @@ Index: linux-2.4.21-chaos/include/linux/ext3_fs.h
  
  /*
   * ioctl commands
-@@ -323,6 +324,7 @@
+@@ -320,6 +321,7 @@
+ #define EXT3_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
  #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
  #define EXT3_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */
- #define EXT3_MOUNT_POSIX_ACL		0x8000	/* POSIX Access Control Lists */
 +#define EXT3_MOUNT_ASYNCDEL		0x20000 /* Delayed deletion */
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
-@@ -693,6 +695,9 @@
+@@ -694,6 +696,9 @@
+ extern void ext3_dirty_inode(struct inode *);
  extern int ext3_change_inode_journal_flag(struct inode *, int);
  extern void ext3_truncate (struct inode *);
- extern void ext3_set_inode_flags(struct inode *);
 +#ifdef EXT3_DELETE_THREAD
 +extern void ext3_truncate_thread(struct inode *inode);
 +#endif
  
  /* ioctl.c */
  extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
-Index: linux-2.4.21-chaos/include/linux/ext3_fs_sb.h
+Index: linux-2.4.20-hp4-pnnl13/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.4.21-chaos.orig/include/linux/ext3_fs_sb.h	2004-01-12 19:20:07.000000000 +0300
-+++ linux-2.4.21-chaos/include/linux/ext3_fs_sb.h	2004-01-12 20:53:51.000000000 +0300
+--- linux-2.4.20-hp4-pnnl13.orig/include/linux/ext3_fs_sb.h	2004-01-12 19:22:32.000000000 +0300
++++ linux-2.4.20-hp4-pnnl13/include/linux/ext3_fs_sb.h	2004-01-13 17:01:40.000000000 +0300
 @@ -29,6 +29,8 @@
  
- #define EXT3_MAX_GROUP_LOADED	32
+ #define EXT3_MAX_GROUP_LOADED	8
  
 +#define EXT3_DELETE_THREAD
 +

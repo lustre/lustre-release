@@ -10,7 +10,7 @@ linux-2.4.18ea-0.8.26.patch
 ext3-2.4-ino_t.patch
 ext3-2.4.18-ino_sb_macro.patch
 ext3-orphan_lock.patch
-ext3-delete_thread-2.4.18.patch
+ext3-delete_thread-2.4.18.patch 
 extN-misc-fixup.patch
 extN-noread.patch
 extN-wantedi.patch
@@ -24,7 +24,7 @@ jbd-commit-tricks.patch
 ext3-o_direct-1-2.4.18-chaos.patch
 ext3-no-write-super-chaos.patch
 add_page_private.patch
-ext3-extents-2.4.18-chaos.patch
+ext3-extents-2.4.18-chaos.patch 
 ext3-extents-oflag-2.4.18-chaos.patch
 ext3-raw-lookup.patch
 nfs_export_kernel-2.4.18.patch

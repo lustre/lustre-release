@@ -5,9 +5,11 @@
  include/linux/ext3_fs_sb.h |   10 +
  5 files changed, 365 insertions(+)
 
---- kernel-2.4.20-6chaos_18_7/fs/ext3/super.c~ext3_delete_thread_2.4.20_chaos	2003-07-12 15:35:26.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/fs/ext3/super.c	2003-07-12 15:36:19.000000000 -0600
-@@ -400,6 +400,220 @@ static void dump_orphan_list(struct supe
+Index: linux-2.4.20-rh-20.9/fs/ext3/super.c
+===================================================================
+--- linux-2.4.20-rh-20.9.orig/fs/ext3/super.c	2004-01-12 19:27:46.000000000 +0300
++++ linux-2.4.20-rh-20.9/fs/ext3/super.c	2004-01-13 17:20:31.000000000 +0300
+@@ -400,6 +400,221 @@
  	}
  }
  
@@ -121,7 +123,8 @@
 +
 +	clear_opt(sbi->s_mount_opt, ASYNCDEL);
 +	wake_up(&sbi->s_delete_thread_queue);
-+	wait_event(sbi->s_delete_waiter_queue, list_empty(&sbi->s_delete_list));
++	wait_event(sbi->s_delete_waiter_queue,
++			sbi->s_delete_list.next == 0 && sbi->s_delete_inodes == 0);
 +}
 +
 +/* Instead of playing games with the inode flags, destruction, etc we just
@@ -228,15 +231,15 @@
  void ext3_put_super (struct super_block * sb)
  {
  	struct ext3_sb_info *sbi = EXT3_SB(sb);
-@@ -407,6 +621,7 @@ void ext3_put_super (struct super_block 
+@@ -407,6 +622,7 @@
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
  
-+	ext3_stop_delete_thread(sbi);
++	J_ASSERT(sbi->s_delete_inodes == 0);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -455,7 +670,11 @@ static struct super_operations ext3_sops
+@@ -455,7 +671,11 @@
  	write_inode:	ext3_write_inode,	/* BKL not held.  Don't need */
  	dirty_inode:	ext3_dirty_inode,	/* BKL not held.  We take it */
  	put_inode:	ext3_put_inode,		/* BKL not held.  Don't need */
@@ -248,7 +251,7 @@
  	put_super:	ext3_put_super,		/* BKL held */
  	write_super:	ext3_write_super,	/* BKL held */
  	sync_fs:	ext3_sync_fs,
-@@ -524,6 +743,13 @@ static int parse_options (char * options
+@@ -524,6 +744,13 @@
  			clear_opt (*mount_options, XATTR_USER);
  		else
  #endif
@@ -262,7 +265,7 @@
  		if (!strcmp (this_char, "bsddf"))
  			clear_opt (*mount_options, MINIX_DF);
  		else if (!strcmp (this_char, "nouid32")) {
-@@ -1223,6 +1449,7 @@ struct super_block * ext3_read_super (st
+@@ -1223,6 +1450,7 @@
  	}
  
  	ext3_setup_super (sb, es, sb->s_flags & MS_RDONLY);
@@ -270,7 +273,21 @@
  	/*
  	 * akpm: core read_super() calls in here with the superblock locked.
  	 * That deadlocks, because orphan cleanup needs to lock the superblock
-@@ -1678,6 +1905,9 @@ int ext3_remount (struct super_block * s
+@@ -1614,7 +1842,12 @@
+ static int ext3_sync_fs(struct super_block *sb)
+ {
+ 	tid_t target;
+-	
++
++	if (atomic_read(&sb->s_active) == 0) {
++		/* fs is being umounted: time to stop delete thread */
++		ext3_stop_delete_thread(EXT3_SB(sb));
++	}
++
+ 	sb->s_dirt = 0;
+ 	target = log_start_commit(EXT3_SB(sb)->s_journal, NULL);
+ 	log_wait_commit(EXT3_SB(sb)->s_journal, target);
+@@ -1678,6 +1911,9 @@
  	if (!parse_options(data, &tmp, sbi, &tmp, 1))
  		return -EINVAL;
  
@@ -280,9 +297,11 @@
  	if (sbi->s_mount_opt & EXT3_MOUNT_ABORT)
  		ext3_abort(sb, __FUNCTION__, "Abort forced by user");
  
---- kernel-2.4.20-6chaos_18_7/fs/ext3/inode.c~ext3_delete_thread_2.4.20_chaos	2003-07-12 15:34:44.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/fs/ext3/inode.c	2003-07-12 15:36:19.000000000 -0600
-@@ -2017,6 +2017,122 @@ out_stop:
+Index: linux-2.4.20-rh-20.9/fs/ext3/inode.c
+===================================================================
+--- linux-2.4.20-rh-20.9.orig/fs/ext3/inode.c	2004-01-12 19:27:46.000000000 +0300
++++ linux-2.4.20-rh-20.9/fs/ext3/inode.c	2004-01-13 17:15:48.000000000 +0300
+@@ -2017,6 +2017,122 @@
  	ext3_journal_stop(handle, inode);
  }
  
@@ -405,9 +424,11 @@
  /* 
   * ext3_get_inode_loc returns with an extra refcount against the
   * inode's underlying buffer_head on success. 
---- kernel-2.4.20-6chaos_18_7/fs/ext3/file.c~ext3_delete_thread_2.4.20_chaos	2003-07-12 15:34:44.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/fs/ext3/file.c	2003-07-12 15:36:19.000000000 -0600
-@@ -125,7 +125,11 @@ struct file_operations ext3_file_operati
+Index: linux-2.4.20-rh-20.9/fs/ext3/file.c
+===================================================================
+--- linux-2.4.20-rh-20.9.orig/fs/ext3/file.c	2004-01-12 19:27:46.000000000 +0300
++++ linux-2.4.20-rh-20.9/fs/ext3/file.c	2004-01-13 17:15:48.000000000 +0300
+@@ -125,7 +125,11 @@
  };
  
  struct inode_operations ext3_file_inode_operations = {
@@ -419,9 +440,11 @@
  	setattr:	ext3_setattr,		/* BKL held */
  	setxattr:	ext3_setxattr,		/* BKL held */
  	getxattr:	ext3_getxattr,		/* BKL held */
---- kernel-2.4.20-6chaos_18_7/include/linux/ext3_fs.h~ext3_delete_thread_2.4.20_chaos	2003-07-12 15:34:44.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/include/linux/ext3_fs.h	2003-07-12 15:37:13.000000000 -0600
-@@ -193,6 +193,7 @@ struct ext3_group_desc
+Index: linux-2.4.20-rh-20.9/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.4.20-rh-20.9.orig/include/linux/ext3_fs.h	2004-01-12 19:27:46.000000000 +0300
++++ linux-2.4.20-rh-20.9/include/linux/ext3_fs.h	2004-01-13 17:15:48.000000000 +0300
+@@ -193,6 +193,7 @@
   */
  #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
  #define EXT3_STATE_NEW			0x00000002 /* inode is newly created */
@@ -429,7 +452,7 @@
  
  /*
   * ioctl commands
-@@ -320,6 +321,7 @@ struct ext3_inode {
+@@ -320,6 +321,7 @@
  #define EXT3_MOUNT_UPDATE_JOURNAL	0x1000	/* Update the journal format */
  #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
  #define EXT3_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */
@@ -437,7 +460,7 @@
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
-@@ -695,6 +697,9 @@ extern void ext3_discard_prealloc (struc
+@@ -695,6 +697,9 @@
  extern void ext3_dirty_inode(struct inode *);
  extern int ext3_change_inode_journal_flag(struct inode *, int);
  extern void ext3_truncate (struct inode *);
@@ -447,8 +470,10 @@
  extern void ext3_set_inode_flags(struct inode *);
  
  /* ioctl.c */
---- kernel-2.4.20-6chaos_18_7/include/linux/ext3_fs_sb.h~ext3_delete_thread_2.4.20_chaos	2003-07-12 15:35:26.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/include/linux/ext3_fs_sb.h	2003-07-12 15:36:19.000000000 -0600
+Index: linux-2.4.20-rh-20.9/include/linux/ext3_fs_sb.h
+===================================================================
+--- linux-2.4.20-rh-20.9.orig/include/linux/ext3_fs_sb.h	2004-01-12 19:27:46.000000000 +0300
++++ linux-2.4.20-rh-20.9/include/linux/ext3_fs_sb.h	2004-01-13 17:15:48.000000000 +0300
 @@ -29,6 +29,8 @@
  
  #define EXT3_MAX_GROUP_LOADED	32
@@ -458,7 +483,7 @@
  /*
   * third extended-fs super-block data in memory
   */
-@@ -76,6 +78,14 @@ struct ext3_sb_info {
+@@ -76,6 +78,14 @@
  	struct timer_list turn_ro_timer;	/* For turning read-only (crash simulation) */
  	wait_queue_head_t ro_wait_queue;	/* For people waiting for the fs to go read-only */
  #endif
@@ -473,5 +498,3 @@
  };
  
  #endif	/* _LINUX_EXT3_FS_SB */
-
-_
