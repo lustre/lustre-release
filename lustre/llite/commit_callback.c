@@ -60,7 +60,7 @@ static int ll_commitcbd_main(void *arg)
         daemonize();
         spin_lock_irq(&current->sigmask_lock);
         sigfillset(&current->blocked);
-        recalc_sigpending(current);
+        our_recalc_sigpending(current);
         spin_unlock_irq(&current->sigmask_lock);
 
         sprintf(current->comm, "lustre_commitcbd");

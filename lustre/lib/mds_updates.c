@@ -18,7 +18,11 @@
 #include <linux/string.h>
 #include <linux/stat.h>
 #include <linux/errno.h>
-#include <linux/locks.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#include <linux/locks.h>   // for wait_on_buffer
+#else 
+#include <linux/buffer_head.h>   // for wait_on_buffer
+#endif
 #include <linux/unistd.h>
 
 #include <asm/system.h>

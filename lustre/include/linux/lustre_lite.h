@@ -50,7 +50,18 @@ struct ll_inode_info {
         struct lustre_handle  lli_intent_lock_handle;
         struct semaphore      lli_open_sem;
         __u32                 lli_mount_epoch;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        struct inode          lli_vfs_inode;
+#endif
 };
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+static inline struct ll_inode_info *LL_I(struct inode *inode)
+{
+	return container_of(inode, struct ll_inode_info, lli_vfs_inode);
+}
+#endif
+
 
 #define LL_SUPER_MAGIC 0x0BD00BD0
 
@@ -149,8 +160,50 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
 int ll_unlock(__u32 mode, struct lustre_handle *lockh);
 
 /* dcache.c */
-void ll_intent_release(struct dentry *de);
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+void ll_intent_release(struct nameidata *);
+#else
+void ll_intent_release(struct dentry *, struct lookup_intent *);
+#endif
 int ll_set_dd(struct dentry *de);
+
+/****
+
+I originally implmented these as functions, then realized a macro
+would be more helpful for debugging, so the CDEBUG messages show 
+the current calling function.  The orignal functions are in llite/dcache.c
+
+int ll_save_intent(struct dentry * de, struct lookup_intent * it);
+struct lookup_intent * ll_get_intent(struct dentry * de);
+****/
+
+#define LL_SAVE_INTENT(de, it)                                                  \
+do {                                                                            \
+        LASSERT(ll_d2d(de) != NULL);                                            \
+                                                                                \
+        down(&ll_d2d(de)->lld_it_sem);                                          \
+        de->d_it = it;                                                          \
+        CDEBUG(D_DENTRY, "D_IT DOWN dentry %p fsdata %p intent: %s sem %d\n",   \
+               de, ll_d2d(de), ldlm_it2str(de->d_it->it_op),                    \
+               atomic_read(&(ll_d2d(de)->lld_it_sem.count)));                   \
+                                                                                \
+} while(0)
+
+#define LL_GET_INTENT(de, it)                                                           \
+do {                                                                                    \
+        it = de->d_it;                                                                  \
+                                                                                        \
+        LASSERT(ll_d2d(de) != NULL);                                                    \
+                                                                                        \
+        CDEBUG(D_DENTRY, "D_IT UP dentry %p fsdata %p intent: %s\n", de, ll_d2d(de),    \
+               ldlm_it2str(de->d_it->it_op));                                           \
+        de->d_it = NULL;                                                                \
+        up(&ll_d2d(de)->lld_it_sem);                                                    \
+                                                                                        \
+                                                                                        \
+} while(0)
+
+
 
 /* dir.c */
 extern struct file_operations ll_dir_operations;

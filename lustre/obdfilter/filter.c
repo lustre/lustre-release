@@ -1001,10 +1001,10 @@ static inline void lustre_put_page(struct page *page)
         page_cache_release(page);
 }
 
+
 #ifndef PageUptodate
 #define PageUptodate(page) Page_Uptodate(page)
 #endif
-
 static struct page *
 lustre_get_page_read(struct inode *inode, unsigned long index)
 {
@@ -1076,9 +1076,12 @@ static int lustre_commit_write(struct page *page, unsigned from, unsigned to)
         int err;
 
         err = page->mapping->a_ops->commit_write(NULL, page, from, to);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (!err && IS_SYNC(inode))
                 err = waitfor_one_page(page);
-
+#else
+#warn ADD 2.5 waiting code here?
+#endif
         //SetPageUptodate(page); // the client commit_write will do this
 
         SetPageReferenced(page);

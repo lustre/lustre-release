@@ -124,20 +124,22 @@ do {                                                                         \
 
 #define fixme() CDEBUG(D_OTHER, "FIXME\n");
 
-static inline void OBD_FAIL_WRITE(int id, kdev_t dev)
-{
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-# define __bdevname bdevname
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#define ll_bdevname(a) __bdevname((a))
+#else 
+#define ll_bdevname(a) bdevname((a))
 #endif
 
+static inline void OBD_FAIL_WRITE(int id, kdev_t dev)
+{
         if (OBD_FAIL_CHECK(id)) {
 #ifdef CONFIG_DEV_RDONLY
                 CERROR("obd_fail_loc=%x, fail write operation on %s\n",
-                       id, __bdevname(dev));
+                       id, ll_bdevname(dev));
                 dev_set_rdonly(dev, 2);
 #else
                 CERROR("obd_fail_loc=%x, can't fail write operation on %s\n",
-                       id, __bdevname(dev));
+                       id, ll_bdevname(dev));
 #endif
                 /* We set FAIL_ONCE because we never "un-fail" a device */
                 obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;

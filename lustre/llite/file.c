@@ -673,7 +673,9 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         if (offset >= 0 && offset <= inode->i_sb->s_maxbytes) {
                 if (offset != file->f_pos) {
                         file->f_pos = offset;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                         file->f_reada = 0;
+#endif
                         file->f_version = ++event;
                 }
                 retval = offset;

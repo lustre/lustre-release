@@ -438,7 +438,11 @@ static int ldlm_test_main(void *data)
         daemonize();
         spin_lock_irq(&current->sigmask_lock);
         sigfillset(&current->blocked);
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+        recalc_sigpending();
+#else
         recalc_sigpending(current);
+#endif
         spin_unlock_irq(&current->sigmask_lock);
 
         sprintf(current->comm, "ldlm_test");

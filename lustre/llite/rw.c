@@ -33,6 +33,8 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_lib.h>
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+
 /*
  * Remove page from dirty list
  */
@@ -379,3 +381,4 @@ struct address_space_operations ll_aops = {
         commit_write: ll_commit_write,
         bmap: NULL
 };
+#endif

@@ -589,6 +589,11 @@ static inline void iattr_from_obdo(struct iattr *attr, struct obdo *oa,
 /* WARNING: the file systems must take care not to tinker with
    attributes they don't manage (such as blocks). */
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#define to_kdev_t(dev) dev
+#define to_dev_t(dev) dev
+#endif
+
 static inline void obdo_from_inode(struct obdo *dst, struct inode *src,
                                    obd_flag valid)
 {
@@ -621,7 +626,7 @@ static inline void obdo_from_inode(struct obdo *dst, struct inode *src,
         if (valid & OBD_MD_FLGENER)
                 dst->o_generation = src->i_generation;
         if (valid & OBD_MD_FLRDEV)
-                dst->o_rdev = src->i_rdev;
+                dst->o_rdev = to_kdev_t(src->i_rdev);
 
         dst->o_valid |= (valid & ~OBD_MD_FLID);
 }
@@ -658,7 +663,7 @@ static inline void obdo_to_inode(struct inode *dst, struct obdo *src,
         if (valid & OBD_MD_FLGENER)
                 dst->i_generation = src->o_generation;
         if (valid & OBD_MD_FLRDEV)
-                dst->i_rdev = src->o_rdev;
+                dst->i_rdev = to_dev_t(src->o_rdev);
 }
 #endif
 

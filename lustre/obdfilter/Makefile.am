@@ -21,8 +21,5 @@ obdfilter_SOURCES = $(FILTERC) $(LINX)
 dist-hook:
 	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done
 
-distclean: 
-	$(RM) Makefile.in
-
 include $(top_srcdir)/Rules
 

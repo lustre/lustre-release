@@ -40,13 +40,12 @@ void ll_release(struct dentry *de)
         EXIT;
 }
 
-void ll_intent_release(struct dentry *de)
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+void ll_intent_release(struct dentry *de, struct lookup_intent *it)
 {
-        struct lookup_intent *it;
         struct lustre_handle *handle;
         ENTRY;
 
-        it = de->d_it;
         if (it == NULL) {
                 EXIT;
                 return;
@@ -65,10 +64,10 @@ void ll_intent_release(struct dentry *de)
                 } else
                         ldlm_lock_decref(handle, it->it_lock_mode);
         }
-        de->d_it = NULL;
         //up(&ll_d2d(de)->lld_it_sem);
         EXIT;
 }
+#endif
 
 int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
 {

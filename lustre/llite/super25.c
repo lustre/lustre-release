@@ -21,15 +21,18 @@
 #include <linux/init.h>
 #include <linux/fs.h>
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 kmem_cache_t *ll_file_data_slab;
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
 
+extern int ll_init_inodecache(void);
+extern void ll_destroy_inodecache(void);
 extern int ll_recover(struct recovd_data *, int);
 extern int ll_commitcbd_setup(struct ll_sb_info *);
 extern int ll_commitcbd_cleanup(struct ll_sb_info *);
+static int ll_read_inode2(struct inode *inode, void *opaque);
 
 static char *ll_read_opt(const char *opt, char *data)
 {
@@ -68,6 +71,7 @@ static int ll_set_opt(const char *opt, char *data, int fl)
 
 static void ll_options(char *options, char **ost, char **mds, int *flags)
 {
+        char *opt_ptr = options;
         char *this_char;
         ENTRY;
 
@@ -76,9 +80,7 @@ static void ll_options(char *options, char **ost, char **mds, int *flags)
                 return;
         }
 
-        for (this_char = strtok (options, ",");
-             this_char != NULL;
-             this_char = strtok (NULL, ",")) {
+        while ((this_char = strsep (&opt_ptr, ",")) != NULL) {
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
                 if ( (!*ost && (*ost = ll_read_opt("osc", this_char)))||
                      (!*mds && (*mds = ll_read_opt("mdc", this_char)))||
@@ -93,8 +95,8 @@ static void ll_options(char *options, char **ost, char **mds, int *flags)
 #define log2(n) ffz(~(n))
 #endif
 
-static struct super_block * ll_read_super(struct super_block *sb,
-                                          void *data, int silent)
+
+static int ll_fill_super(struct super_block *sb, void *data, int silent)
 {
         struct inode *root = 0;
         struct obd_device *obd;
@@ -117,7 +119,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         OBD_ALLOC(sbi, sizeof(*sbi));
         if (!sbi) {
                 MOD_DEC_USE_COUNT;
-                RETURN(NULL);
+                RETURN(-ENOMEM);
         }
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
@@ -214,8 +216,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         lic.lic_body = lustre_msg_buf(request->rq_repmsg, 0);
         lic.lic_lmm = NULL;
-        LASSERT(sbi->ll_rootino != 0);
-        root = iget4(sb, sbi->ll_rootino, NULL, &lic);
+        root = iget5_locked(sb, sbi->ll_rootino, NULL,
+                            ll_read_inode2, &lic);
 
         if (root) {
                 sb->s_root = d_alloc_root(root);
@@ -232,7 +234,7 @@ out_dev:
         if (osc)
                 OBD_FREE(osc, strlen(osc) + 1);
 
-        RETURN(sb);
+        RETURN(0);
 
 out_cdb:
         ll_commitcbd_cleanup(sbi);
@@ -246,7 +248,13 @@ out_free:
 
         MOD_DEC_USE_COUNT;
         goto out_dev;
-} /* ll_read_super */
+} /* ll_fill_super */
+
+struct super_block * ll_get_sb(struct file_system_type *fs_type, 
+                                   int flags, char *devname, void * data)
+{
+	return get_sb_nodev(fs_type, flags, data, ll_fill_super);
+}
 
 static void ll_put_super(struct super_block *sb)
 {
@@ -457,12 +465,12 @@ void ll_update_inode(struct inode *inode, struct mds_body *body)
         if (body->valid & OBD_MD_FLGENER)
                 inode->i_generation = body->generation;
         if (body->valid & OBD_MD_FLRDEV)
-                inode->i_rdev = body->rdev;
+                inode->i_rdev = to_kdev_t(body->rdev);
         if (body->valid & OBD_MD_FLSIZE)
                 inode->i_size = body->size;
 }
 
-static void ll_read_inode2(struct inode *inode, void *opaque)
+static int ll_read_inode2(struct inode *inode, void *opaque)
 {
         struct ll_read_inode2_cookie *lic = opaque;
         struct mds_body *body = lic->lic_body;
@@ -524,9 +532,11 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                 inode->i_op = &ll_fast_symlink_inode_operations;
                 EXIT;
         } else {
-                init_special_inode(inode, inode->i_mode, inode->i_rdev);
+                init_special_inode(inode, inode->i_mode, 
+                                   kdev_t_to_nr(inode->i_rdev));
                 EXIT;
         }
+        return 0;
 }
 
 static inline void invalidate_request_list(struct list_head *req_list)
@@ -535,7 +545,7 @@ static inline void invalidate_request_list(struct list_head *req_list)
         list_for_each_safe(tmp, n, req_list) {
                 struct ptlrpc_request *req = 
                         list_entry(tmp, struct ptlrpc_request, rq_list);
-                CERROR("invalidating req xid "LPD64" op %d to %s:%d\n",
+                CERROR("invalidating req xid %d op %d to %s:%d\n",
                        (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
                        req->rq_connection->c_remote_uuid,
                        req->rq_import->imp_client->cli_request_portal);
@@ -565,10 +575,61 @@ void ll_umount_begin(struct super_block *sb)
         EXIT;
 }
 
+
+static kmem_cache_t *ll_inode_cachep;
+
+static struct inode *ll_alloc_inode(struct super_block *sb)
+{
+	struct ll_inode_info *lli;
+	lli = kmem_cache_alloc(ll_inode_cachep, SLAB_KERNEL);
+	if (!lli)
+		return NULL;
+
+	memset(lli, 0, sizeof(*lli));
+        sema_init(&lli->lli_open_sem, 1);
+        lli->lli_mount_epoch = ll_i2sbi(&lli->lli_vfs_inode)->ll_mount_epoch;
+
+	return &lli->lli_vfs_inode;
+}
+
+static void ll_destroy_inode(struct inode *inode)
+{
+	kmem_cache_free(ll_inode_cachep, LL_I(inode));
+}
+
+static void init_once(void * foo, kmem_cache_t * cachep, unsigned long flags)
+{
+	struct ll_inode_info *lli = foo;
+
+	if ((flags & (SLAB_CTOR_VERIFY|SLAB_CTOR_CONSTRUCTOR)) ==
+	    SLAB_CTOR_CONSTRUCTOR)
+		inode_init_once(&lli->lli_vfs_inode);
+}
+ 
+int ll_init_inodecache(void)
+{
+	ll_inode_cachep = kmem_cache_create("lustre_inode_cache",
+					     sizeof(struct ll_inode_info),
+					     0, SLAB_HWCACHE_ALIGN,
+					     init_once, NULL);
+	if (ll_inode_cachep == NULL)
+		return -ENOMEM;
+	return 0;
+}
+
+void ll_destroy_inodecache(void)
+{
+	if (kmem_cache_destroy(ll_inode_cachep))
+		CERROR("ll_inode_cache: not all structures were freed\n");
+}
+
+
+
 /* exported operations */
 struct super_operations ll_super_operations =
 {
-        read_inode2: ll_read_inode2,
+        alloc_inode: ll_alloc_inode,
+        destroy_inode: ll_destroy_inode,
         clear_inode: ll_clear_inode,
         delete_inode: ll_delete_inode,
         put_super: ll_put_super,
@@ -577,23 +638,33 @@ struct super_operations ll_super_operations =
 };
 
 struct file_system_type lustre_lite_fs_type = {
-        "lustre_lite", 0, ll_read_super, NULL
+        .owner  = THIS_MODULE,
+        .name =   "lustre_lite", 
+        .get_sb = ll_get_sb,
+        .kill_sb = kill_litter_super,
 };
 
 static int __init init_lustre_lite(void)
 {
+        int rc;
         printk(KERN_INFO "Lustre Lite 0.5.14, info@clusterfs.com\n");
+        rc = ll_init_inodecache();
+        if (rc) 
+                return -ENOMEM;
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
                                               SLAB_HWCACHE_ALIGN, NULL, NULL);
-        if (ll_file_data_slab == NULL)
+        if (ll_file_data_slab == NULL) { 
+                ll_destroy_inodecache();
                 return -ENOMEM;
+        }
         return register_filesystem(&lustre_lite_fs_type);
 }
 
 static void __exit exit_lustre_lite(void)
 {
         unregister_filesystem(&lustre_lite_fs_type);
+        ll_destroy_inodecache();
         kmem_cache_destroy(ll_file_data_slab);
 }
 

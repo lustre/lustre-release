@@ -48,6 +48,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 #define MAX_STRING_SIZE 100
 
+
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lprocfs.h>
