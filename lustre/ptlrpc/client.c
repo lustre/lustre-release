@@ -157,6 +157,8 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
 
 void ptlrpc_free_req(struct ptlrpc_request *request)
 {
+        if (request->rq_repbuf != NULL)
+                OBD_FREE(request->rq_repbuf, request->rq_replen);
 	OBD_FREE(request, sizeof(*request));
 }
 

@@ -840,7 +840,8 @@ static void __exit cleanup_obdclass(void)
 
         obd_cleanup_obdo_cache();
         obd_sysctl_clean();
-        CDEBUG(D_MALLOC, "CLASS mem used %ld\n", obd_memory);
+        if (obd_memory)
+                CERROR("obd memory leaked: %ld bytes\n", obd_memory);
         obd_init_magic = 0;
         EXIT;
 }
