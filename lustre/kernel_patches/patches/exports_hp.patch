@@ -9,18 +9,15 @@
 
 --- linux-2.4.20/fs/ext3/Makefile~exports_hp	Sat Apr  5 03:55:19 2003
 +++ linux-2.4.20-braam/fs/ext3/Makefile	Sat Apr  5 03:56:03 2003
-@@ -9,8 +9,10 @@
+@@ -9,8 +9,8 @@
  
  O_TARGET := ext3.o
  
 +export-objs :=	super.o inode.o
 +
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
--		ioctl.o namei.o super.o symlink.o
-+		ioctl.o namei.o super.o symlink.o 
+ 		ioctl.o namei.o super.o symlink.o
  obj-m    := $(O_TARGET)
- 
- include $(TOPDIR)/Rules.make
 --- linux-2.4.20/fs/ext3/super.c~exports_hp	Sat Apr  5 03:55:19 2003
 +++ linux-2.4.20-braam/fs/ext3/super.c	Sat Apr  5 03:55:19 2003
 @@ -1769,7 +1769,7 @@ static void __exit exit_ext3_fs(void)
