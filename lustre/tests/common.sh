@@ -194,7 +194,7 @@ setup_variables() {
 setup_portals() {
 	setup_variables
 
-	if grep -q portals /proc/modules; then
+	if egrep -q "ksocknal|kqswnal" /proc/modules; then
 		echo "$0: portals already appears to be set up, skipping"
 		return 0
 	fi
@@ -207,6 +207,7 @@ setup_portals() {
 	[ -c /dev/portals ] || mknod /dev/portals c 10 240
 
   	do_insmod $PORTALS/linux/oslib/portals.o || exit -1
+  	#do_insmod $PORTALS/linux/router/kptlrouter.o || exit -1
 
 	case $NETWORK in
 	elan)  do_insmod $PORTALS/linux/qswnal/kqswnal.o || exit -1
