@@ -12,13 +12,12 @@
 
 config=${1:-ba-mount.xml}
 
-LMC_REAL="${LMC:-../utils/lmc} -m config"
+LMC_REAL="${LMC:-../utils/lmc} -m $config"
 LMC="save_cmd"
 
-PORT=988
 TCPBUF=1048576
 OST=ba-ost-1
-MDS=mds-hostname
+MDS=`hostname`
  
 UUIDLIST=${UUIDLIST:-/usr/local/admin/ba-ost/UUID.txt}
 
@@ -33,21 +32,21 @@ save_cmd() {
 [ -f $config ] && rm $config
 
 # MDS/client node
-${LMC} --node $MDS --tcpbuf $TCPBUF --net '*' tcp $PORT
+${LMC} --node $MDS --tcpbuf $TCPBUF --net $MDS tcp
 ${LMC} --node $MDS --mds mds1 /tmp/mds1 50000
 
 OBD_UUID=`awk "/$OST / { print \\$3 }" $UUIDLIST`
 [ "$OBD_UUID" ] && OBD_UUID="--obduuid=$OBD_UUID" || echo "$OST: no UUID"
 
 # server node
-${LMC} --node $OST --tcpbuf $TCPBUF --net $OST tcp $PORT
+${LMC} --node $OST --tcpbuf $TCPBUF --net $OST tcp
 ${LMC} --node $OST $OBD_UUID --ost bluearc
 
 # mount point on the MDS/client
 ${LMC} --node $MDS --mtpt /mnt/lustre mds1 OSC_$OST
 
 # other clients
-${LMC} --node client --tcpbuf $TCPBUF --net '*' tcp $PORT
+${LMC} --node client --tcpbuf $TCPBUF --net '*' tcp
 ${LMC} --node client --mtpt /mnt/lustre mds1 OSC_$OST
 
 $LMC_REAL --batch $BATCH
