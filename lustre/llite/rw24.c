@@ -77,6 +77,7 @@ int ll_start_readpage_24(struct ll_file_data *fd, struct obd_export *exp,
                 RETURN(PTR_ERR(ocp));
 
         ocp->ocp_callback = ll_complete_readpage_24;
+        ocp->ocp_off = (obd_off)page->index << PAGE_CACHE_SHIFT;
         ocp->ocp_count = PAGE_CACHE_SIZE;
         ocp->ocp_flag = 0;
 
@@ -235,6 +236,7 @@ void ll_complete_writepage_24(struct obd_client_page *ocp, int rc)
         LASSERT(page->private == (unsigned long)ocp);
         LASSERT(PageLocked(page));
 
+        ll_page_acct(0, -1); /* io before dirty, this is so lame. */
         rc = ll_clear_dirty_pages(ll_i2obdconn(inode),
                                   ll_i2info(inode)->lli_smd,
                                   page->index, page->index);
@@ -269,13 +271,14 @@ static int ll_writepage_24(struct page *page)
                 GOTO(out, rc = PTR_ERR(ocp));
 
         ocp->ocp_callback = ll_complete_writepage_24;
+        ocp->ocp_off = (obd_off)page->index << PAGE_CACHE_SHIFT;
         ocp->ocp_count = ll_ocp_write_count(inode, page);
         ocp->ocp_flag = OBD_BRW_CREATE|OBD_BRW_FROM_GRANT;
 
         obd_brw_plug(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, NULL);
         rc = ll_start_ocp_io(page);
         if (rc == 0) {
-                ll_page_acct(-1, 1);
+                ll_page_acct(0, 1);
                 ll_start_io_from_dirty(inode, ll_complete_writepage_24);
         } else {
                 ocp_free(page);
