@@ -30,7 +30,6 @@
 #include <linux/module.h>
 #include <linux/pagemap.h> // XXX kill me soon
 #include <linux/version.h>
-#include <asm/div64.h>
 
 #include <linux/obd_class.h>
 #include <linux/lustre_fsfilt.h>
