@@ -73,6 +73,7 @@ class Config:
         self._cleanup = 0
         self._gdb = 0
         self._nomod = 0
+        self._nosetup = 0
         # parameters
         self._modules = None
         self._node = None
@@ -104,6 +105,10 @@ class Config:
     def nomod(self, flag = None):
         if flag: self._nomod = flag
         return self._nomod
+
+    def nosetup(self, flag = None):
+        if flag: self._nosetup = flag
+        return self._nosetup
 
     def node(self, val = None):
         if val: self._node = val
@@ -903,6 +908,8 @@ def startService(node, clean_flag, module_flag):
         else:
             n.load_module()
     else:
+        if config.nosetup():
+            return
         if clean_flag:
             n.cleanup()
         else:
@@ -964,7 +971,7 @@ def parse_cmdline(argv):
     short_opts = "hdv"
     long_opts = ["ldap", "reformat", "lustre=", "verbose", "gdb",
                  "portals=", "makeldiff", "cleanup",
-                 "help", "debug", "node=", "get=", "nomod"]
+                 "help", "debug", "node=", "get=", "nomod", "nosetup"]
     opts = []
     args = []
     try:
@@ -997,6 +1004,8 @@ def parse_cmdline(argv):
             config.gdb(1)
         if o  == "--nomod":
             config.nomod(1)
+        if o  == "--nosetup":
+            config.nosetup(1)
     return args
 
 def fetch(url):
