@@ -1,0 +1,125 @@
+--- lum/fs/inode.c	Sat Oct 19 11:42:42 2002
++++ linux-2.4.18-uml35-ext3online/fs/inode.c	Mon Oct 14 00:41:20 2002
+@@ -606,7 +553,8 @@ static void dispose_list(struct list_hea
+ /*
+  * Invalidate all inodes for a device.
+  */
+-static int invalidate_list(struct list_head *head, struct super_block * sb, struct list_head * dispose)
++static int invalidate_list(struct list_head *head, struct super_block * sb,
++			   struct list_head * dispose, int show)
+ {
+ 	struct list_head *next;
+ 	int busy = 0, count = 0;
+@@ -631,6 +579,10 @@ static int invalidate_list(struct list_h
+ 			count++;
+ 			continue;
+ 		}
++		if (show)
++			printk(KERN_ERR "inode busy: %s: %d (count %ld)\n",
++			       kdevname(sb->s_dev), inode->i_ino,
++			       atomic_read(&inode->i_count));
+ 		busy = 1;
+ 	}
+ 	/* only unused inodes may be cached with i_count zero */
+@@ -649,22 +601,23 @@ static int invalidate_list(struct list_h
+ /**
+  *	invalidate_inodes	- discard the inodes on a device
+  *	@sb: superblock
++ *	@show: whether we should display any busy inodes found
+  *
+  *	Discard all of the inodes for a given superblock. If the discard
+  *	fails because there are busy inodes then a non zero value is returned.
+  *	If the discard is successful all the inodes have been discarded.
+  */
+  
+-int invalidate_inodes(struct super_block * sb)
++int invalidate_inodes(struct super_block * sb, int show)
+ {
+ 	int busy;
+ 	LIST_HEAD(throw_away);
+ 
+ 	spin_lock(&inode_lock);
+-	busy = invalidate_list(&inode_in_use, sb, &throw_away);
+-	busy |= invalidate_list(&inode_unused, sb, &throw_away);
+-	busy |= invalidate_list(&sb->s_dirty, sb, &throw_away);
+-	busy |= invalidate_list(&sb->s_locked_inodes, sb, &throw_away);
++	busy = invalidate_list(&inode_in_use, sb, &throw_away, show);
++	busy |= invalidate_list(&inode_unused, sb, &throw_away, show);
++	busy |= invalidate_list(&sb->s_dirty, sb, &throw_away, show);
++	busy |= invalidate_list(&sb->s_locked_inodes, sb, &throw_away, show);
+ 	spin_unlock(&inode_lock);
+ 
+ 	dispose_list(&throw_away);
+@@ -672,7 +625,7 @@ int invalidate_inodes(struct super_block
+ 	return busy;
+ }
+  
+-int invalidate_device(kdev_t dev, int do_sync)
++int invalidate_device(kdev_t dev, int do_sync, int show)
+ {
+ 	struct super_block *sb;
+ 	int res;
+@@ -690,7 +643,7 @@ int invalidate_device(kdev_t dev, int do
+ 		 * hold).
+ 		 */
+ 		shrink_dcache_sb(sb);
+-		res = invalidate_inodes(sb);
++		res = invalidate_inodes(sb, show);
+ 		drop_super(sb);
+ 	}
+ 	invalidate_buffers(dev);
+--- lum/fs/devfs/base.c.orig	Sat Oct 19 11:42:16 2002
++++ lum/fs/devfs/base.c	Wed Oct 30 17:12:33 2002
+@@ -2448,7 +2448,7 @@
+     retval = 1;
+     printk (KERN_DEBUG "VFS: Disk change detected on device %s\n",
+ 	     kdevname (dev) );
+-    if ( invalidate_device (dev, 0) )
++    if ( invalidate_device (dev, 0, 1) )
+ 	printk (KERN_WARNING "VFS: busy inodes on changed media..\n");
+     /*  Ugly hack to disable messages about unable to read partition table  */
+     tmp = warn_no_part;
+--- lum/fs/super.c.orig	Sat Oct 19 11:42:42 2002
++++ lum/fs/super.c	Wed Oct 30 17:16:55 2002
+@@ -936,7 +936,7 @@
+ 	lock_super(sb);
+ 	lock_kernel();
+ 	sb->s_flags &= ~MS_ACTIVE;
+-	invalidate_inodes(sb);	/* bad name - it should be evict_inodes() */
++	invalidate_inodes(sb, 0);  /* bad name - it should be evict_inodes() */
+ 	if (sop) {
+ 		if (sop->write_super && sb->s_dirt)
+ 			sop->write_super(sb);
+@@ -945,7 +945,7 @@
+ 	}
+ 
+ 	/* Forget any remaining inodes */
+-	if (invalidate_inodes(sb)) {
++	if (invalidate_inodes(sb, 1)) {
+ 		printk(KERN_ERR "VFS: Busy inodes after unmount. "
+ 			"Self-destruct in 5 seconds.  Have a nice day...\n");
+ 	}
+--- lum/fs/block_dev.c.orig	Sat Oct 19 11:42:16 2002
++++ lum/fs/block_dev.c	Wed Oct 30 17:18:15 2002
+@@ -533,7 +533,7 @@
+ 	if (!bdops->check_media_change(dev))
+ 		return 0;
+ 
+-	if (invalidate_device(dev, 0))
++	if (invalidate_device(dev, 0, 1))
+ 		printk("VFS: busy inodes on changed media.\n");
+ 
+ 	if (bdops->revalidate)
+--- lum/include/linux/fs.h	Wed Oct 30 17:10:42 2002
++++ lum/include/linux/fs.h.orig	Tue Oct 22 23:15:00 2002
+@@ -1261,8 +1261,8 @@
+ extern void set_buffer_flushtime(struct buffer_head *);
+ extern void balance_dirty(void);
+ extern int check_disk_change(kdev_t);
+-extern int invalidate_inodes(struct super_block *);
+-extern int invalidate_device(kdev_t, int);
++extern int invalidate_inodes(struct super_block *, int);
++extern int invalidate_device(kdev_t, int, int);
+ extern void invalidate_inode_pages(struct inode *);
+ extern void invalidate_inode_pages2(struct address_space *);
+ extern void invalidate_inode_buffers(struct inode *);
