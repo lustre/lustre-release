@@ -25,6 +25,7 @@
 #include <linux/lprocfs_status.h>
 #include <linux/obd.h>
 #include <linux/seq_file.h>
+#include <linux/version.h>
 
 #include "filter_internal.h"
 
@@ -123,10 +124,14 @@ void filter_tally_read(struct filter_obd *filter, struct niobuf_local *lnb,
                        if (page->index != (last_page->index + 1))
                                 discont_pages++;
                         /* XXX not so smart for now */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                         if ((page->buffers && last_page->buffers) &&
                             (page->buffers->b_blocknr != 
                              (last_page->buffers->b_blocknr + 1)))
                                 discont_blocks++;
+#else
+#warning "port on 2.6 -bzzz"
+#endif
                 }
                 last_page = page;
         }
@@ -250,7 +255,7 @@ struct seq_operations filter_brw_stats_seq_sops = {
 
 static int filter_brw_stats_seq_open(struct inode *inode, struct file *file)
 {
-        struct proc_dir_entry *dp = inode->u.generic_ip;
+        struct proc_dir_entry *dp = PDE(inode);
         struct seq_file *seq;
         int rc;
  
