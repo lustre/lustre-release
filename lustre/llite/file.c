@@ -230,11 +230,6 @@ static int ll_lock_callback(struct lustre_handle *lockh,
         struct inode *inode = data;
         ENTRY;
 
-        if (new == NULL) {
-                /* Completion AST.  Do nothing. */
-                RETURN(0);
-        }
-
         if (data_len != sizeof(struct inode))
                 LBUG();
 
