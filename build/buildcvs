@@ -65,7 +65,7 @@ case "$lustretag" in
 	portalstag="$lustretag"
 	;;
 
-    v[1-9]*)
+    v[1-9]*|cray_200[5-9]*)
 	portalstag="$lustretag"
 	libsysiotag="$lustretag"
 	;;
