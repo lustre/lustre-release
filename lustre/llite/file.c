@@ -413,11 +413,11 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
 
                 tmpex.l_extent.end = tmpex.l_extent.start + PAGE_CACHE_SIZE - 1;
                 /* check to see if another DLM lock covers this page */
-                rc2 = ldlm_lock_match(lock->l_resource->lr_namespace,
+                ldlm_lock2handle(lock, &lockh);
+                rc2 = ldlm_lock_match(NULL, 
                                       LDLM_FL_BLOCK_GRANTED|LDLM_FL_CBPENDING |
                                       LDLM_FL_TEST_LOCK,
-                                      &lock->l_resource->lr_name, LDLM_EXTENT,
-                                      &tmpex, LCK_PR | LCK_PW, &lockh);
+                                      NULL, 0, &tmpex, 0, &lockh);
                 if (rc2 == 0 && page->mapping != NULL) {
                         // checking again to account for writeback's lock_page()
                         LL_CDEBUG_PAGE(D_PAGE, page, "truncating\n");

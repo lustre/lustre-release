@@ -54,6 +54,7 @@ void ll_ap_completion_24(void *data, int cmd, int rc)
 {
         struct ll_async_page *llap;
         struct page *page;
+        ENTRY;
 
         llap = llap_from_cookie(data);
         if (IS_ERR(llap)) {
@@ -64,6 +65,8 @@ void ll_ap_completion_24(void *data, int cmd, int rc)
         page = llap->llap_page;
         LASSERT(PageLocked(page));
 
+        LL_CDEBUG_PAGE(D_PAGE, page, "completing cmd %d with %d\n", cmd, rc);
+
         if (rc == 0)  {
                 if (cmd == OBD_BRW_READ) {
                         if (!llap->llap_defer_uptodate)
@@ -71,11 +74,13 @@ void ll_ap_completion_24(void *data, int cmd, int rc)
                 } else {
                         llap->llap_write_queued = 0;
                 }
+                ClearPageError(page);
         } else {
+                if (cmd == OBD_BRW_READ)
+                        llap->llap_defer_uptodate = 0;
                 SetPageError(page);
         }
 
-        LL_CDEBUG_PAGE(D_PAGE, page, "io complete, unlocking\n");
 
         unlock_page(page);
 
@@ -85,6 +90,7 @@ void ll_ap_completion_24(void *data, int cmd, int rc)
         }
 
         page_cache_release(page);
+        EXIT;
 }
 
 static int ll_writepage_24(struct page *page)

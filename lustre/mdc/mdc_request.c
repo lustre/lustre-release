@@ -844,13 +844,16 @@ static int mdc_import_event(struct obd_device *obd,
         case IMP_EVENT_DISCON: {
                 break;
         }
+        case IMP_EVENT_INACTIVE: {
+                if (obd->obd_observer)
+                        rc = obd_notify(obd->obd_observer, obd, 0);
+                break;
+        }
         case IMP_EVENT_INVALIDATE: {
                 struct ldlm_namespace *ns = obd->obd_namespace;
                 
                 ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
 
-                if (obd->obd_observer)
-                        rc = obd_notify(obd->obd_observer, obd, 0);
                 break;
         }
         case IMP_EVENT_ACTIVE: {

@@ -327,6 +327,7 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
         list_add_tail(&req->rq_set_chain, &set->set_requests);
         req->rq_set = set;
         set->set_remaining++;
+        atomic_inc(&req->rq_import->imp_inflight);
 }
 
 /* lock so many callers can add things, the context that owns the set
@@ -369,6 +370,11 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
         else if (imp->imp_state == LUSTRE_IMP_CLOSED) {
                 DEBUG_REQ(D_ERROR, req, "IMP_CLOSED ");
                 *status = -EIO;
+        }
+        /* allow CONNECT even if import is invalid */
+        else if (req->rq_send_state == LUSTRE_IMP_CONNECTING &&
+                 imp->imp_state == LUSTRE_IMP_CONNECTING) {
+                ;
         }
         /*
          * If the import has been invalidated (such as by an OST failure), the
@@ -532,13 +538,6 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 
         imp = req->rq_import;
         spin_lock_irqsave(&imp->imp_lock, flags);
-
-        if (imp->imp_invalid) {
-                spin_unlock_irqrestore(&imp->imp_lock, flags);
-                req->rq_status = -EIO;
-                req->rq_phase = RQ_PHASE_INTERPRET;
-                RETURN(-EIO);
-        }
 
         req->rq_import_generation = imp->imp_generation;
 
@@ -797,6 +796,9 @@ int ptlrpc_check_set(struct ptlrpc_request_set *set)
                        req->rq_reqmsg->opc);
 
                 set->set_remaining--;
+
+                atomic_dec(&imp->imp_inflight);
+                wake_up(&imp->imp_recovery_waitq);
         }
 
         /* If we hit an error, we want to recover promptly. */
@@ -1312,6 +1314,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
 
         LASSERT(req->rq_set == NULL);
         LASSERT(!req->rq_receiving_reply);
+        atomic_inc(&imp->imp_inflight);
 
         /* for distributed debugging */
         req->rq_reqmsg->status = current->pid;
@@ -1486,6 +1489,9 @@ restart:
 
         LASSERT(!req->rq_receiving_reply);
         req->rq_phase = RQ_PHASE_INTERPRET;
+
+        atomic_dec(&imp->imp_inflight);
+        wake_up(&imp->imp_recovery_waitq);
         RETURN(rc);
 }
 

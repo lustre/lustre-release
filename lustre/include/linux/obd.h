@@ -54,6 +54,7 @@ struct lov_oinfo {                 /* per-stripe data structure */
         /* _cli_ is poorly named, it should be _ready_ */
         struct list_head loi_cli_item;
         struct list_head loi_write_item;
+        struct list_head loi_read_item;
 
         int loi_kms_valid:1;
         __u64 loi_kms; /* known minimum size */
@@ -71,6 +72,7 @@ static inline void loi_init(struct lov_oinfo *loi)
         INIT_LIST_HEAD(&loi->loi_write_lop.lop_pending_group);
         INIT_LIST_HEAD(&loi->loi_cli_item);
         INIT_LIST_HEAD(&loi->loi_write_item);
+        INIT_LIST_HEAD(&loi->loi_read_item);
 }
 
 struct lov_stripe_md {
@@ -238,6 +240,7 @@ struct client_obd {
         spinlock_t               cl_loi_list_lock;
         struct list_head         cl_loi_ready_list;
         struct list_head         cl_loi_write_list;
+        struct list_head         cl_loi_read_list;
         int                      cl_brw_in_flight;
         /* just a sum of the loi/lop pending numbers to be exported by /proc */
         int                      cl_pending_w_pages;

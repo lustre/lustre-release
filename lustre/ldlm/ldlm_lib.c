@@ -102,6 +102,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         INIT_LIST_HEAD(&cli->cl_cache_waiters);
         INIT_LIST_HEAD(&cli->cl_loi_ready_list);
         INIT_LIST_HEAD(&cli->cl_loi_write_list);
+        INIT_LIST_HEAD(&cli->cl_loi_read_list);
         spin_lock_init(&cli->cl_loi_list_lock);
         cli->cl_brw_in_flight = 0;
         spin_lock_init(&cli->cl_read_rpc_hist.oh_lock);
@@ -313,7 +314,7 @@ int client_disconnect_export(struct obd_export *exp, int failover)
 
         /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
         if (obd->obd_no_recov)
-                ptlrpc_invalidate_import(imp);
+                ptlrpc_invalidate_import(imp, 0);
         else
                 rc = ptlrpc_disconnect_import(imp);
 

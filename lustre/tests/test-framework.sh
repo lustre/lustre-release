@@ -125,7 +125,6 @@ reboot_facet() {
 wait_for_host() {
    HOST=$1
    check_network  $HOST 900
-   while ! do_node $HOST "$CHECKSTAT -t dir $LUSTRE"; do sleep 5; done
    while ! do_node $HOST "ls -d $LUSTRE " > /dev/null; do sleep 5; done
 }
 

@@ -124,6 +124,8 @@ extern wait_queue_head_t obd_race_waitq;
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501
 #define OBD_FAIL_PTLRPC_RQBD             0x502
+#define OBD_FAIL_PTLRPC_BULK_GET_NET     0x503
+#define OBD_FAIL_PTLRPC_BULK_PUT_NET     0x504
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601

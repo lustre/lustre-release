@@ -102,6 +102,9 @@ int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
         __u64               xid;
         ENTRY;
 
+        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_PTLRPC_BULK_PUT_NET)) 
+                RETURN(0);
+
         /* NB no locking required until desc is on the network */
         LASSERT (!desc->bd_network_rw);
         LASSERT (desc->bd_type == BULK_PUT_SOURCE ||
@@ -214,6 +217,9 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
         ptl_handle_me_t  me_h;
         ptl_md_t         md;
         ENTRY;
+
+        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_PTLRPC_BULK_GET_NET)) 
+                RETURN(0);
 
         /* NB no locking required until desc is on the network */
         LASSERT (desc->bd_nob > 0);

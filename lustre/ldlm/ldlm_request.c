@@ -117,9 +117,9 @@ noreproc:
         /* Go to sleep until the lock is granted or cancelled. */
         rc = l_wait_event(lock->l_waitq,
                           ((lock->l_req_mode == lock->l_granted_mode) ||
-                           (lock->l_flags & LDLM_FL_CANCEL)), &lwi);
+                           (lock->l_flags & LDLM_FL_FAILED)), &lwi);
 
-        if (lock->l_destroyed) {
+        if (lock->l_destroyed || lock->l_flags & LDLM_FL_FAILED) {
                 LDLM_DEBUG(lock, "client-side enqueue waking up: destroyed");
                 RETURN(-EIO);
         }
@@ -665,11 +665,6 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
 
                 w->w_lock = LDLM_LOCK_GET(lock);
 
-                /* Prevent the cancel callback from being called by setting
-                 * LDLM_FL_CANCEL in the lock.  Very sneaky. -p */
-                if (flags & LDLM_FL_NO_CALLBACK)
-                        w->w_lock->l_flags |= LDLM_FL_CANCEL;
-
                 list_add(&w->w_list, &list);
         }
         l_unlock(&ns->ns_lock);
@@ -702,7 +697,6 @@ static int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
  *
  * If flags & LDLM_FL_LOCAL_ONLY, throw the locks away without trying
  * to notify the server.
- * If flags & LDLM_FL_NO_CALLBACK, don't run the cancel callback.
  * If flags & LDLM_FL_WARN, print a warning if some locks are still in use. */
 int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
                            struct ldlm_res_id *res_id, int flags, void *opaque)

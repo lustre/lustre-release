@@ -284,7 +284,7 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
                 LDLM_LOCK_GET(lock);
 
-                lock->l_flags |= LDLM_FL_CANCEL;
+                lock->l_flags |= LDLM_FL_FAILED;
                 lock->l_flags |= flags;
 
                 if (local_only && (lock->l_readers || lock->l_writers)) {

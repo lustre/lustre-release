@@ -823,14 +823,15 @@ run_test 41 "read from a valid osc while other oscs are invalid"
 
 # test MDS recovery after ost failure
 test_42() {
+    blocks=`df $MOUNT | tail -1 | awk '{ print $1 }'`
     createmany -o $DIR/$tfile-%d 800
     replay_barrier ost
     unlinkmany $DIR/$tfile-%d 0 400
     facet_failover ost
     
-    # osc is evicted after
-    df $MOUNT && return 1
-    df $MOUNT || return 2
+    # osc is evicted, fs is smaller
+    blocks_after=`df $MOUNT | tail -1 | awk '{ print $1 }'`
+    [ $blocks_after -lt $blocks ] || return 1
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
     unlinkmany $DIR/$tfile-%d 400 400

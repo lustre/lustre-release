@@ -132,11 +132,12 @@ test_5() {
 run_test 5 "Fail OST during iozone"
 
 kbytesfree() {
-   cat /proc/fs/lustre/osc/OSC_*MNT*/kbytesfree | awk '{total+=$1} END {print total}'
+   awk '{total+=$1} END {print total}' /proc/fs/lustre/osc/OSC_*MNT*/kbytesfree
 }
 
 test_6() {
     f=$DIR/$tfile
+    sync
     before=`kbytesfree`
     dd if=/dev/urandom bs=1024 count=5120 of=$f
 #define OBD_FAIL_MDS_REINT_NET_REP       0x119

@@ -2,6 +2,10 @@
 
 set -e
 
+# 17 = bug 2732
+ALWAYS_EXCEPT="17"
+
+
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 UPCALL=${UPCALL:-$PWD/recovery-small-upcall.sh}
 . $LUSTRE/tests/test-framework.sh
@@ -58,6 +62,12 @@ replay() {
 if [ ! -z "$EVAL" ]; then
     eval "$EVAL"
     exit $?
+fi
+
+if [ "$ONLY" == "cleanup" ]; then
+    sysctl -w portals.debug=0 || true
+    cleanup
+    exit
 fi
 
 REFORMAT=--reformat $SETUP
@@ -198,5 +208,73 @@ test_15() {
     return 0
 }
 run_test 15 "failed open (-ENOMEM)"
+
+test_16() {
+# OBD_FAIL_PTLRPC_BULK_PUT_NET | OBD_FAIL_ONCE
+    do_facet client cp /etc/termcap $MOUNT
+    sync
+
+    sysctl -w lustre.fail_loc=0x80000504
+    cancel_lru_locks OSC
+    # wil get evicted here
+    do_facet client "diff /etc/termcap $MOUNT/termcap"  && return 1
+    sysctl -w lustre.fail_loc=0
+    do_facet client "diff /etc/termcap $MOUNT/termcap"  || return 2
+
+}
+run_test 16 "timeout bulk put, evict client (2732)"
+
+test_17() {
+# OBD_FAIL_PTLRPC_BULK_GET_NET | OBD_FAIL_ONCE
+    # wil get evicted here
+    sysctl -w lustre.fail_loc=0x80000503
+    do_facet client cp /etc/termcap $MOUNT && return 1
+
+    do_facet client "diff /etc/termcap $MOUNT/termcap"  && return 1
+    sysctl -w lustre.fail_loc=0
+    do_facet client "diff /etc/termcap $MOUNT/termcap"  || return 2
+
+}
+run_test 17 "timeout bulk get, evict client (2732)"
+
+test_18() {
+# OBD_FAIL_PTLRPC_BULK_PUT_NET|OBD_FAIL_ONCE
+    do_facet client mkdir -p $MOUNT/$tdir
+    f=$MOUNT/$tdir/$tfile
+    f2=$MOUNT/$tdir/${tfile}-2
+
+    cancel_lru_locks OSC
+    for a in /proc/fs/lustre/llite/*/dump_page_cache; do
+        if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
+                echo there is still data in page cache $a ?
+                cat $a;
+                return 1;
+        fi
+    done
+
+    # shouldn't have to set stripe size of count==1
+    lfs setstripe $f $((128 * 1024)) 0 1
+    lfs setstripe $f2 $((128 * 1024)) 0 1
+
+    do_facet client cp /etc/termcap $f
+    sync
+    # just use this write to trigger the client's eviction from the ost
+    sysctl -w lustre.fail_loc=0x80000503
+    do_facet client dd if=/dev/zero of=$f2 bs=4k count=1
+    sync
+    sysctl -w lustre.fail_loc=0
+    # allow recovery to complete
+    sleep 10
+    # my understanding is that there should be nothing in the page
+    # cache after the client reconnects?     
+    for a in /proc/fs/lustre/llite/*/dump_page_cache; do
+        if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
+                echo there is still data in page cache $a ?
+                cat $a;
+                return 1;
+        fi
+    done
+}
+run_test 18 "eviction and reconnect clears page cache (2766)"
 
 $CLEANUP

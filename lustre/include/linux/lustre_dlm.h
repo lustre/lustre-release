@@ -60,7 +60,7 @@ typedef enum {
 #define LDLM_FL_LOCAL_ONLY     0x000400 /* see ldlm_cli_cancel_unused */
 
 /* don't run the cancel callback under ldlm_cli_cancel_unused */
-#define LDLM_FL_NO_CALLBACK    0x000800
+#define LDLM_FL_FAILED         0x000800
 
 #define LDLM_FL_HAS_INTENT     0x001000 /* lock request has intent */
 #define LDLM_FL_CANCELING      0x002000 /* lock cancel has already been sent */
