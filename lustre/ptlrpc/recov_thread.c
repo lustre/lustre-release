@@ -425,12 +425,13 @@ static int log_commit_thread(void *arg)
         spin_unlock(&lcm->lcm_thread_lock);
         OBD_FREE(lcd, sizeof(*lcd));
 
+        CDEBUG(D_HA, "%s exiting\n", current->comm);
+
         spin_lock(&lcm->lcm_thread_lock);
         atomic_dec(&lcm->lcm_thread_total);
         spin_unlock(&lcm->lcm_thread_lock);
         wake_up(&lcm->lcm_waitq);
 
-        CDEBUG(D_HA, "%s exiting\n", current->comm);
         return 0;
 }
 
