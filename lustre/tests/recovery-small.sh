@@ -25,13 +25,13 @@ CLIENT=${CLIENT:-mdev8}
 NETWORKTYPE=${NETWORKTYPE:-tcp}
 MOUNTPT=${MOUNTPT:-/mnt/lustre}
 CONFIG=${CONFIG:-recovery-small.xml}
-MDSDEV=${MDSDEV:-/tmp/mds}
-OSTDEV=${OSTDEV:-/tmp/ost}
+MDSDEV=${MDSDEV:-/tmp/mds-`hostname`}
 MDSSIZE=${MDSSIZE:-100000}
+OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
 OSTSIZE=${OSTSIZE:-100000}
 UPCALL=${UPCALL:-$RPWD/recovery-small-upcall.sh}
 FSTYPE=${FSTYPE:-ext3}
-
+TIMEOUT=${TIMEOUT:-5}
 do_mds() {
     $PDSH $MDSNODE "PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; $@" || exit $?
 }
@@ -58,6 +58,13 @@ drop_reply() {
     do_mds "echo 0 > /proc/sys/lustre/fail_loc"
 }
 
+pause_bulk() {
+#define OBD_FAIL_OST_BRW_PAUSE_BULK      0x214
+    do_ost "echo 0x214 > /proc/sys/lustre/fail_loc"
+    do_client "$1"
+    do_client "sync"
+    do_ost "echo 0 > /proc/sys/lustre/fail_loc"
+}
 make_config() {
     rm -f $CONFIG
     for NODE in $CLIENT $MDSNODE $OSTNODE; do
@@ -97,10 +104,10 @@ unmount_client() {
 }
 
 setup() {
-    start_mds ${REFORMAT}
-    start_ost ${REFORMAT}
+    start_mds --timeout=$TIMEOUT ${REFORMAT}
+    start_ost --timeout=$TIMEOUT ${REFORMAT}
     # XXX we should write our own upcall, when we move this somewhere better.
-    mount_client --timeout=${TIMEOUT:-5} \
+    mount_client --timeout=${TIMEOUT} \
         --lustre_upcall=$UPCALL
 }
 
@@ -155,5 +162,8 @@ drop_reply "mlink /mnt/lustre/renamed-again /mnt/lustre/link2"
 
 drop_request "munlink /mnt/lustre/link1"
 drop_reply "munlink /mnt/lustre/link2"
+
+#bug 1423
+drop_reply "touch /mnt/lustre/renamed"
 
 $CLEANUP
