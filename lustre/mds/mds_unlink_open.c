@@ -180,7 +180,8 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 rc = 0;
         }
 
-        handle = fsfilt_start(obd, pending_dir, FSFILT_OP_UNLINK_LOG, NULL);
+        handle = fsfilt_start_log(obd, pending_dir, FSFILT_OP_UNLINK, NULL,
+                                  le32_to_cpu(lmm->lmm_stripe_count));
         if (IS_ERR(handle)) {
                 rc = PTR_ERR(handle);
                 CERROR("error fsfilt_start: %d\n", rc);

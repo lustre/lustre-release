@@ -71,8 +71,10 @@
 #define DEBUG_SUBSYSTEM S_QSWNAL
 
 #include <linux/kp30.h>
+#include <linux/kpr.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
+#include <portals/nal.h>
 
 #define KQSW_CHECKSUM   0
 #if KQSW_CHECKSUM
@@ -153,8 +155,7 @@ typedef struct
         int              krx_rpc_reply_sent;    /* rpc reply sent */
         atomic_t         krx_refcount;          /* how to tell when rpc is done */
         kpr_fwd_desc_t   krx_fwd;               /* embedded forwarding descriptor */
-        struct page     *krx_pages[KQSW_NRXMSGPAGES_LARGE]; /* pages allocated */
-        struct iovec     krx_iov[KQSW_NRXMSGPAGES_LARGE]; /* iovec for forwarding */
+        ptl_kiov_t       krx_kiov[KQSW_NRXMSGPAGES_LARGE]; /* buffer frags */
 }  kqswnal_rx_t;
 
 typedef struct
@@ -194,17 +195,19 @@ typedef struct
 
 typedef struct
 {
+        /* dynamic tunables... */
+        int                      kqn_optimized_gets;  /* optimized GETs? */
+#if CONFIG_SYSCTL
+        struct ctl_table_header *kqn_sysctl;          /* sysctl interface */
+#endif        
+} kqswnal_tunables_t;
+
+typedef struct
+{
         char               kqn_init;            /* what's been initialised */
         char               kqn_shuttingdown;    /* I'm trying to shut down */
-        atomic_t           kqn_nthreads;        /* # threads not terminated */
-        atomic_t           kqn_nthreads_running;/* # threads still running */
+        atomic_t           kqn_nthreads;        /* # threads running */
 
-        int                kqn_optimized_gets;  /* optimized GETs? */
-        int                kqn_copy_small_fwd;  /* fwd small msgs from pre-allocated buffer? */
-
-#if CONFIG_SYSCTL
-        struct ctl_table_header *kqn_sysctl;    /* sysctl interface */
-#endif        
         kqswnal_rx_t      *kqn_rxds;            /* all the receive descriptors */
         kqswnal_tx_t      *kqn_txds;            /* all the transmit descriptors */
 
@@ -214,6 +217,7 @@ typedef struct
         spinlock_t         kqn_idletxd_lock;    /* serialise idle txd access */
         wait_queue_head_t  kqn_idletxd_waitq;   /* sender blocks here waiting for idle txd */
         struct list_head   kqn_idletxd_fwdq;    /* forwarded packets block here waiting for idle txd */
+        atomic_t           kqn_pending_txs;     /* # transmits being prepped */
         
         spinlock_t         kqn_sched_lock;      /* serialise packet schedulers */
         wait_queue_head_t  kqn_sched_waitq;     /* scheduler blocks here */
@@ -223,6 +227,7 @@ typedef struct
         struct list_head   kqn_delayedtxds;     /* delayed transmits */
 
         spinlock_t         kqn_statelock;       /* cb_cli/cb_sti */
+        wait_queue_head_t  kqn_yield_waitq;     /* where yield waits */
         nal_cb_t          *kqn_cb;              /* -> kqswnal_lib */
 #if MULTIRAIL_EKC
         EP_SYS            *kqn_ep;              /* elan system */
@@ -246,12 +251,13 @@ typedef struct
 /* kqn_init state */
 #define KQN_INIT_NOTHING        0               /* MUST BE ZERO so zeroed state is initialised OK */
 #define KQN_INIT_DATA           1
-#define KQN_INIT_PTL            2
+#define KQN_INIT_LIB            2
 #define KQN_INIT_ALL            3
 
-extern nal_cb_t        kqswnal_lib;
-extern nal_t           kqswnal_api;
-extern kqswnal_data_t  kqswnal_data;
+extern nal_cb_t            kqswnal_lib;
+extern nal_t               kqswnal_api;
+extern kqswnal_tunables_t  kqswnal_tunables;
+extern kqswnal_data_t      kqswnal_data;
 
 /* global pre-prepared replies to keep off the stack */
 extern EP_STATUSBLK    kqswnal_rpc_success;

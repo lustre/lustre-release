@@ -25,6 +25,7 @@
 #define LIBLUSTRE_H__
 
 #include <sys/mman.h>
+#include <asm/byteorder.h>
 #ifndef  __CYGWIN__
 #include <stdint.h>
 #include <asm/page.h>
@@ -51,7 +52,7 @@
 #define PAGE_SHIFT 12
 #define PAGE_SIZE (1UL << PAGE_SHIFT)
 #define PAGE_MASK (~(PAGE_SIZE-1))
-#define loff_t __u64
+#define loff_t long long
 #define ERESTART 2001
 typedef unsigned short umode_t;
 
@@ -120,7 +121,6 @@ static inline void *kmalloc(int size, int prot)
 
 typedef struct {
         void *cwd;
-
 }mm_segment_t;
 
 typedef int (read_proc_t)(char *page, char **start, off_t off,
@@ -130,60 +130,12 @@ struct file; /* forward ref */
 typedef int (write_proc_t)(struct file *file, const char *buffer,
                            unsigned long count, void *data);
 
-/* byteorder */
-#define __swab16(x) \
-({ \
-	__u16 __x = (x); \
-	((__u16)( \
-		(((__u16)(__x) & (__u16)0x00ffU) << 8) | \
-		(((__u16)(__x) & (__u16)0xff00U) >> 8) )); \
-})
-
-#define __swab32(x) \
-({ \
-	__u32 __x = (x); \
-	((__u32)( \
-		(((__u32)(__x) & (__u32)0x000000ffUL) << 24) | \
-		(((__u32)(__x) & (__u32)0x0000ff00UL) <<  8) | \
-		(((__u32)(__x) & (__u32)0x00ff0000UL) >>  8) | \
-		(((__u32)(__x) & (__u32)0xff000000UL) >> 24) )); \
-})
-
-#define __swab64(x) \
-({ \
-	__u64 __x = (x); \
-	((__u64)( \
-		(__u64)(((__u64)(__x) & (__u64)0x00000000000000ffULL) << 56) | \
-		(__u64)(((__u64)(__x) & (__u64)0x000000000000ff00ULL) << 40) | \
-		(__u64)(((__u64)(__x) & (__u64)0x0000000000ff0000ULL) << 24) | \
-		(__u64)(((__u64)(__x) & (__u64)0x00000000ff000000ULL) <<  8) | \
-	        (__u64)(((__u64)(__x) & (__u64)0x000000ff00000000ULL) >>  8) | \
-		(__u64)(((__u64)(__x) & (__u64)0x0000ff0000000000ULL) >> 24) | \
-		(__u64)(((__u64)(__x) & (__u64)0x00ff000000000000ULL) >> 40) | \
-		(__u64)(((__u64)(__x) & (__u64)0xff00000000000000ULL) >> 56) )); \
-})
-
-#define __swab16s(x)    __swab16(*(x))
-#define __swab32s(x)    __swab32(*(x))
-#define __swab64s(x)    __swab64(*(x))
-
-#define __LITTLE_ENDIAN__
-#ifdef  __LITTLE_ENDIAN__
-# define le16_to_cpu(x) ((__u16)(x))
-# define cpu_to_le16(x) ((__u16)(x))
-# define le32_to_cpu(x) ((__u32)(x))
-# define cpu_to_le32(x) ((__u32)(x))
-# define le64_to_cpu(x) ((__u64)(x))
-# define cpu_to_le64(x) ((__u64)(x))
-#else
-# define le16_to_cpu(x) __swab16(x)
-# define cpu_to_le16(x) __swab16(x)
-# define le32_to_cpu(x) __swab32(x)
-# define cpu_to_le32(x) __swab32(x)
-# define le64_to_cpu(x) __swab64(x)
-# define cpu_to_le64(x) __swab64(x)
-# error "do more check here!!!"
-#endif
+# define le16_to_cpu(x) __le16_to_cpu(x)
+# define cpu_to_le16(x) __cpu_to_le16(x)
+# define le32_to_cpu(x) __le32_to_cpu(x)
+# define cpu_to_le32(x) __cpu_to_le32(x)
+# define le64_to_cpu(x) __le64_to_cpu(x)
+# define cpu_to_le64(x) __cpu_to_le64(x)
 
 #define NIPQUAD(addr) \
         ((unsigned char *)&addr)[0], \
@@ -191,17 +143,17 @@ typedef int (write_proc_t)(struct file *file, const char *buffer,
         ((unsigned char *)&addr)[2], \
         ((unsigned char *)&addr)[3]
                                                                                                                         
-#if defined(__LITTLE_ENDIAN__)
+#if defined(__LITTLE_ENDIAN)
 #define HIPQUAD(addr) \
         ((unsigned char *)&addr)[3], \
         ((unsigned char *)&addr)[2], \
         ((unsigned char *)&addr)[1], \
         ((unsigned char *)&addr)[0]
-#elif defined(__BIG_ENDIAN__)
+#elif defined(__BIG_ENDIAN)
 #define HIPQUAD NIPQUAD
 #else
-#error "Please fix asm/byteorder.h"
-#endif /* __LITTLE_ENDIAN__ */
+#error "Undefined byteorder??"
+#endif /* __LITTLE_ENDIAN */
 
 /* bits ops */
 static __inline__ int set_bit(int nr,long * addr)
@@ -284,12 +236,22 @@ static inline int request_module(char *name)
         return (-EINVAL);
 }
 
-#define __MOD_INC_USE_COUNT(m)  do {int a = 1; a++; } while (0)
-#define __MOD_DEC_USE_COUNT(m)  do {int a = 1; a++; } while (0)
-#define MOD_INC_USE_COUNT  do {int a = 1; a++; } while (0)
-#define MOD_DEC_USE_COUNT  do {int a = 1; a++; } while (0)
-#define try_module_get                  __MOD_INC_USE_COUNT
-#define module_put                      __MOD_DEC_USE_COUNT
+#define __MOD_INC_USE_COUNT(m)  do {} while (0)
+#define __MOD_DEC_USE_COUNT(m)  do {} while (0)
+#define MOD_INC_USE_COUNT       do {} while (0)
+#define MOD_DEC_USE_COUNT       do {} while (0)
+static inline void __module_get(struct module *module)
+{
+}
+
+static inline int try_module_get(struct module *module)
+{
+        return 1;
+}
+
+static inline void module_put(struct module *module)
+{
+}
 
 /* module initialization */
 extern int init_obdclass(void);
@@ -303,14 +265,15 @@ extern int echo_client_init(void);
 
 
 /* general stuff */
-#define jiffies 0
 
 #define EXPORT_SYMBOL(S)
 
-typedef int spinlock_t;
+typedef struct { } spinlock_t;
 typedef __u64 kdev_t;
 
-#define SPIN_LOCK_UNLOCKED 0
+#define SPIN_LOCK_UNLOCKED (spinlock_t) { }
+#define LASSERT_SPIN_LOCKED(lock) do {} while(0)
+
 static inline void spin_lock(spinlock_t *l) {return;}
 static inline void spin_unlock(spinlock_t *l) {return;}
 static inline void spin_lock_init(spinlock_t *l) {return;}
@@ -318,22 +281,10 @@ static inline void local_irq_save(unsigned long flag) {return;}
 static inline void local_irq_restore(unsigned long flag) {return;}
 static inline int spin_is_locked(spinlock_t *l) {return 1;}
 
-static inline void spin_lock_bh(spinlock_t *l)
-{
-        return;
-}
-static inline void spin_unlock_bh(spinlock_t *l)
-{
-        return;
-}
-static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b)
-{
-        return;
-}
-static inline void spin_lock_irqsave(spinlock_t *a, unsigned long b)
-{
-        return;
-}
+static inline void spin_lock_bh(spinlock_t *l) {}
+static inline void spin_unlock_bh(spinlock_t *l) {}
+static inline void spin_lock_irqsave(spinlock_t *a, unsigned long b) {}
+static inline void spin_unlock_irqrestore(spinlock_t *a, unsigned long b) {}
 
 #define min(x,y) ((x)<(y) ? (x) : (y))
 #define max(x,y) ((x)>(y) ? (x) : (y))
@@ -434,8 +385,12 @@ struct page {
 #endif
 };
 
+/* 2.4 defines */
+#define PAGE_LIST_ENTRY list
+#define PAGE_LIST(page) ((page)->list)
+
 #define kmap(page) (page)->addr
-#define kunmap(a) do { int foo = 1; foo++; } while (0)
+#define kunmap(a) do {} while (0)
 
 static inline struct page *alloc_pages(int mask, unsigned long order)
 {
@@ -529,6 +484,7 @@ struct iattr {
 #define IT_GETXATTR 0x0040
 #define IT_EXEC     0x0080
 #define IT_PIN      0x0100
+#define IT_CHDIR    0x0200
 
 #define IT_FL_LOCKED   0x0001
 #define IT_FL_FOLLOWED 0x0002 /* set by vfs_follow_link */
@@ -571,8 +527,6 @@ struct vfsmount {
         void *pwd;
 };
 
-#define cpu_to_le32(x) ((__u32)(x))
-
 /* semaphores */
 struct rw_semaphore {
         int count;
@@ -583,14 +537,15 @@ struct semaphore {
         int count;
 };
 
-#define down(a) do {(a)->count++;} while (0)
-#define up(a) do {(a)->count--;} while (0)
-#define down_read(a) do {(a)->count++;} while (0)
-#define up_read(a) do {(a)->count--;} while (0)
-#define down_write(a) do {(a)->count++;} while (0)
-#define up_write(a) do {(a)->count--;} while (0)
-#define sema_init(a,b) do { (a)->count = b; } while (0)
-#define init_rwsem(a) do {} while (0)
+/* use the macro's argument to avoid unused warnings */
+#define down(a) do { (void)a; } while (0)
+#define up(a) do { (void)a; } while (0)
+#define down_read(a) do { (void)a; } while (0)
+#define up_read(a) do { (void)a; } while (0)
+#define down_write(a) do { (void)a; } while (0)
+#define up_write(a) do { (void)a; } while (0)
+#define sema_init(a,b) do { (void)a; } while (0)
+#define init_rwsem(a) do { (void)a; } while (0)
 #define DECLARE_MUTEX(name)     \
         struct semaphore name = { 1 }
 static inline void init_MUTEX (struct semaphore *sem)
@@ -638,6 +593,10 @@ extern struct task_struct *current;
 #define del_wait_queue(p) do { list_del(&(p)->sleeping); } while (0)
 #define remove_wait_queue(q,p) do { list_del(&(p)->sleeping); } while (0)
 
+#define DECLARE_WAIT_QUEUE_HEAD(HEAD)                           \
+        wait_queue_head_t HEAD = {                              \
+                .sleepers = LIST_HEAD_INIT(HEAD.sleepers)       \
+        }
 #define init_waitqueue_head(l) INIT_LIST_HEAD(&(l)->sleepers)
 #define wake_up(l) do { int a; a++; } while (0)
 #define TASK_INTERRUPTIBLE 0
@@ -658,31 +617,36 @@ extern struct task_struct *current;
 
 #define in_interrupt() (0)
 
-#define schedule() do { int a; a++; } while (0)
+#define schedule() do {} while (0)
 static inline int schedule_timeout(signed long t)
 {
         return 0;
 }
 
-#define lock_kernel() do { int a; a++; } while (0)
-#define daemonize(l) do { int a; a++; } while (0)
-#define sigfillset(l) do { int a; a++; } while (0)
-#define recalc_sigpending(l) do { int a; a++; } while (0)
+#define lock_kernel() do {} while (0)
+#define daemonize(l) do {} while (0)
+#define sigfillset(l) do {} while (0)
+#define recalc_sigpending(l) do {} while (0)
 #define kernel_thread(l,m,n) LBUG()
 
 #define USERMODEHELPER(path, argv, envp) (0)
-
-static inline int call_usermodehelper(char *prog, char **argv, char **evnp, int unknown)
-{
-        return 0;
-}
-
-
 #define SIGNAL_MASK_ASSERT()
-
 #define KERN_INFO
 
-
+#include <sys/time.h>
+#if HZ != 1
+#error "liblustre's jiffies currently expects HZ to be 1"
+#endif
+#define jiffies                                 \
+({                                              \
+        unsigned long _ret = 0;                 \
+        struct timeval tv;                      \
+        if (gettimeofday(&tv, NULL) == 0)       \
+                _ret = tv.tv_sec;               \
+        _ret;                                   \
+})
+#define time_after(a, b) ((long)(b) - (long)(a) > 0)
+#define time_before(a, b) time_after(b,a)
 
 struct timer_list {
         struct list_head tl_list;
@@ -714,12 +678,6 @@ static inline void del_timer(struct timer_list *l)
 {
         free(l);
 }
-
-#define time_after(a, b)                                        \
-({                                                              \
-        printf("Error: inapproiate call time_after()\n");       \
-        1;                                                      \
-})
 
 typedef struct { volatile int counter; } atomic_t;
 
@@ -791,4 +749,3 @@ int liblustre_wait_event(int timeout);
 
 
 #endif
-
