@@ -22,6 +22,13 @@ SUB=-e "s/ext3/extN/g" -e "s/EXT3/EXTN/g"
 
 include $(top_srcdir)/Rules
 
+# Create a fresh ext2 patch.
+diff:
+	rm -f extN.patchT
+	for f in $(EXTNC); do diff -u $(top_srcdir)/fs/extN/$$f $$f >> extN.patchT ; done
+	mv -f ext2.patchT $(srcdir)/ext2.patch-$(RELEASE)
+.PHONY: diff
+
 # Patch the kernel files with our ext3 patches.  We need to go through some
 # extra hoops because the include files are in a different tree and because
 # patch likes to make local copies of files with (sym)links when it is patching
@@ -42,11 +49,15 @@ patch-stamp: $(EXTNP)
 		$(top_srcdir)/include/linux/$$i;                              \
 	done
 	set -vx;\
-	list='$(EXTNP)'; for p in $$list; do                                  \
-	sed $(SUB) $(srcdir)/$$p | (cd $(top_srcdir); patch -p1);             \
-	done
-	(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-ino_sb_fixup.diff
-	-(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-exports.diff
+	if [ -f $(srcdir)/extN.patch-$(RELEASE) ]; then \
+		patch -p0 < $(srcdir)/extN.patch-$(RELEASE); \
+	else \
+		list='$(EXTNP)'; for p in $$list; do                        \
+		sed $(SUB) $(srcdir)/$$p | (cd $(top_srcdir); patch -p1);   \
+		done;  \
+		(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-ino_sb_fixup.diff; \
+		(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-exports.diff; \
+	fi
 	echo timestamp > patch-stamp
 
 $(EXTNC) $(EXTNI): patch-stamp
