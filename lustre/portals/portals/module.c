@@ -83,7 +83,8 @@ static int kportal_ioctl(struct portal_ioctl_data *data,
 
                 CDEBUG (D_IOCTL, "Getting nid for nal [%d]\n", data->ioc_nal);
 
-                err = PtlNIInit(data->ioc_nal, 0, NULL, NULL, &nih);
+                err = PtlNIInit(data->ioc_nal, LUSTRE_SRV_PTL_PID, NULL,
+                                NULL, &nih);
                 if (!(err == PTL_OK || err == PTL_IFACE_DUP))
                         RETURN (-EINVAL);
 
@@ -104,7 +105,8 @@ static int kportal_ioctl(struct portal_ioctl_data *data,
                 CDEBUG (D_IOCTL, "fail nid: [%d] "LPU64" count %d\n",
                         data->ioc_nal, data->ioc_nid, data->ioc_count);
 
-                err = PtlNIInit(data->ioc_nal, 0, NULL, NULL, &nih);
+                err = PtlNIInit(data->ioc_nal, LUSTRE_SRV_PTL_PID, NULL,
+                                NULL, &nih);
                 if (!(err == PTL_OK || err == PTL_IFACE_DUP))
                         return (-EINVAL);
 
