@@ -39,8 +39,8 @@
 
 struct uuid_nid_data {
         struct list_head head;
+        ptl_nid_t nid;
         char *uuid;
-        __u32 nid;
         __u32 nal;
         ptl_handle_ni_t ni;
 };
@@ -74,7 +74,7 @@ int lustre_uuid_to_peer(char *uuid, struct lustre_peer *peer)
         struct list_head *tmp;
 
         spin_lock (&g_uuid_lock);
- 
+
         list_for_each(tmp, &g_uuid_list) {
                 struct uuid_nid_data *data =
                         list_entry(tmp, struct uuid_nid_data, head);
@@ -101,7 +101,7 @@ int class_add_uuid(char *uuid, __u64 nid, __u32 nal)
 
         if (nob > PAGE_SIZE)
                 return -EINVAL;
-        
+
         nip = kportal_get_ni (nal);
         if (nip == NULL) {
                 CERROR("get_ni failed: is the NAL module loaded?\n");
@@ -144,9 +144,9 @@ int class_del_uuid (char *uuid)
         struct list_head *tmp;
         struct list_head *n;
         struct uuid_nid_data *data;
-        
+
         INIT_LIST_HEAD (&deathrow);
-        
+
         spin_lock (&g_uuid_lock);
 
         list_for_each_safe(tmp, n, &g_uuid_list) {
@@ -164,7 +164,7 @@ int class_del_uuid (char *uuid)
 
         if (list_empty (&deathrow))
                 return -EINVAL;
-        
+
         do {
                 data = list_entry(deathrow.next, struct uuid_nid_data, head);
 
@@ -174,6 +174,6 @@ int class_del_uuid (char *uuid)
                 PORTAL_FREE(data->uuid, strlen(data->uuid) + 1);
                 PORTAL_FREE(data, sizeof(*data));
         } while (!list_empty (&deathrow));
-        
+
         return 0;
 }
