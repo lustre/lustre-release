@@ -1,5 +1,3 @@
-subdir-m += portals
-
 @LDISKFS_TRUE@subdir-m  += ldiskfs
 
 subdir-m += lvfs

@@ -22,27 +22,27 @@ libtestcommon_a_SOURCES = test_common.c test_common.h
 echo_test_SOURCES = echo_test.c  ../../utils/parser.c ../../utils/obd.c ../../utils/lustre_cfg.c
 echo_test_CFLAGS = $(LL_CFLAGS)
 echo_test_LDADD = ../liblsupport.a $(LIBREADLINE) -lpthread 
-echo_test_DEPENDENCIES=$(top_builddir)/liblustre/liblsupport.a
+echo_test_DEPENDENCIES=$(top_builddir)/lustre/liblustre/liblsupport.a
 
 sanity_SOURCES = sanity.c
 sanity_CFLAGS = $(LL_CFLAGS)
 sanity_LDADD := ./libtestcommon.a $(LLIB_EXEC)
-sanity_DEPENDENCIES = $(top_builddir)/liblustre/liblustre.a ./libtestcommon.a
+sanity_DEPENDENCIES = $(top_builddir)/lustre/liblustre/liblustre.a ./libtestcommon.a
 
 recovery_small_SOURCES = recovery_small.c
 recovery_small_CFLAGS = $(LL_CFLAGS)
 recovery_small_LDADD := ./libtestcommon.a $(LLIB_EXEC) 
-recovery_small_DEPENDENCIES = $(top_builddir)/liblustre/liblustre.a
+recovery_small_DEPENDENCIES = $(top_builddir)/lustre/liblustre/liblustre.a
 
 replay_single_SOURCES = replay_single.c
 replay_single_CFLAGS = $(LL_CFLAGS)
 replay_single_LDADD := ./libtestcommon.a $(LLIB_EXEC)
-replay_single_DEPENDENCIES = $(top_builddir)/liblustre/liblustre.a
+replay_single_DEPENDENCIES = $(top_builddir)/lustre/liblustre/liblustre.a
 
 replay_ost_single_SOURCES = replay_ost_single.c
 replay_ost_single_CFLAGS = $(LL_CFLAGS)
 replay_ost_single_LDADD := ./libtestcommon.a $(LLIB_EXEC)
-replay_ost_single_DEPENDENCIES = $(top_builddir)/liblustre/liblustre.a
+replay_ost_single_DEPENDENCIES = $(top_builddir)/lustre/liblustre/liblustre.a
 
 if MPITESTS
 test_lock_cancel_SOURCES = test_lock_cancel.c

@@ -35,6 +35,10 @@ ldiskfs_sed_flags = \
 fsfilt_ldiskfs.c: fsfilt_ext3.c
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
 
+else
+
+sources:
+
 endif # MODULES
 
 DIST_SOURCES = fsfilt.c fsfilt_ext3.c fsfilt_reiserfs.c lvfs_common.c \

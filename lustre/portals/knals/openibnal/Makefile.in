@@ -1,6 +1,0 @@
-MODULES := kopenibnal
-kopenibnal-objs := openibnal.o openibnal_cb.o
-
-EXTRA_POST_CFLAGS := @OPENIBCPPFLAGS@
-
-@INCLUDE_RULES@
