@@ -6,8 +6,8 @@
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
  * 
- *
- *
+ * Copyright (C) 2002 Cluster File Systems, Inc. <info@clusterfs.com>
+ */
 
 
 
@@ -134,6 +134,9 @@ extern struct inode_operations ll_dir_inode_operations;
 /* file.c */
 extern struct file_operations ll_file_operations;
 extern struct inode_operations ll_file_inode_operations;
+struct ldlm_lock;
+int ll_lock_callback(struct ldlm_lock *, struct ldlm_lock_desc *, void *data,
+                     __u32 data_len);
 
 /* rw.c */
 struct page *ll_getpage(struct inode *inode, unsigned long offset,

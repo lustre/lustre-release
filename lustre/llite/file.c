@@ -134,7 +134,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
         struct obdo *oa;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct obd_device *obddev = class_conn2obd(&sbi->ll_osc_conn);
+        //struct obd_device *obddev = class_conn2obd(&sbi->ll_osc_conn);
         struct list_head *tmp, *next;
 
         ENTRY;
@@ -243,8 +243,8 @@ static void ll_update_atime(struct inode *inode)
         ll_inode_setattr(inode, &attr, 0);
 }
 
-static int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
-                            void *data, __u32 data_len)
+int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
+                     void *data, __u32 data_len)
 {
         struct inode *inode = data;
         struct lustre_handle lockh;
@@ -321,9 +321,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 err = obd_cancel(&sbi->ll_osc_conn, md, LCK_PR, lockhs);
                 if (err != ELDLM_OK) {
-                        OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
                         CERROR("lock cancel: err: %d\n", err);
-                        RETURN(err);
+                        retval = err;
                 }
         }
 
