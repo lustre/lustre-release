@@ -27,19 +27,31 @@ module=lustre
 
 case $parent in
   HEAD) : ;;
-  b_*|b1*) : ;;
+  b_*|b[1-4]*) : ;;
   *) parent="b_$parent" ;;
 esac
 case $child in
   HEAD) : ;;
-  b_*|b1*) : ;;
+  b_*|b[1-4]*) : ;;
   *) child="b_$child"
 esac
 
 if [ "$parent" != "HEAD" -a "`cat CVS/Tag 2> /dev/null`" != "T$parent" ]; then
-        echo "This script must be run within the $parent branch"
+        echo "$0: this script must be run within the $parent branch"
 	exit 1
 fi
+
+TEST_FILE=${TEST_FILE:-ChangeLog} # does this need to be smarter?
+check_tag() {
+	[ -z "$1" ] && echo "check_tag() missing arg" && exit3
+	[ "$1" = "HEAD" ] && return
+	$CVS log $TEST_FILE | grep -q "	$1: " && return
+	echo "$0: tag $1 not found in $TEST_FILE"
+	exit 2
+}
+
+check_tag $child
+check_tag ${CHILD}_BASE
 
 dir=$3
 
@@ -52,6 +64,8 @@ date=$date
 module=$module
 dir=$dir
 CONFLICTS=$CONFLICTS
+OPERATION=Land
+OPERWHERE=onto
 EOF
 
 echo PARENT $PARENT parent $parent CHILD $CHILD child $child date $date
