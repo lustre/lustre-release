@@ -460,6 +460,11 @@ kpr_set_route (ptl_nid_t gateway_nid, int alive)
                 kpr_route_entry_t *re = list_entry(e, kpr_route_entry_t,
                                                    kpre_list);
 
+                /* Reset weight so newly-enabled routes don't have to play
+                 * catch-up */
+                if (alive)
+                        atomic_set (&re->kpre_weight, 0);
+
                 if (re->kpre_gateway_nid != gateway_nid) 
                         continue;
 
