@@ -17,7 +17,7 @@ LYXFILES= lustre.lin evolution.lyx  llocks.lyx mgmt.lyx uncertain.lyx\
 MAINTAINERCLEANFILES =  $(IMAGES) $(DOCS) $(GENERATED)
 GENERATED = lustre-HOWTO.lyx lustre.lyx
 
-EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES) master.bib
+EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES) lustre.bib
 
 all: $(DOCS)
 
