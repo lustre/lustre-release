@@ -5,7 +5,7 @@
 
 DEFS=
 
-modulefs_DATA = mgmt_svc.o
-EXTRA_PROGRAMS = mgmt_svc
+modulefs_DATA = mgmt_svc.o mgmt_cli.o
+EXTRA_PROGRAMS = mgmt_svc mgmt_cli
 
 include $(top_srcdir)/Rules

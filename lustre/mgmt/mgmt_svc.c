@@ -23,7 +23,7 @@
  */
 
 #define EXPORT_SYMTAB
-#define DEBUG_SUBSYSTEM S_RPC /* S_MGMT */
+#define DEBUG_SUBSYSTEM S_FILTER
 #include <linux/module.h>
 #include <linux/init.h>
 
@@ -33,25 +33,18 @@
 #define MGMT_NEVENTS     1024UL
 #define MGMT_NBUFS       128UL
 #define MGMT_BUFSIZE     8192
-#define MGMT_MAXREQSIZE  128
+#define MGMT_MAXREQSIZE  512
 #define MGMT_NUM_THREADS 4
 #define MGMT_DEVICE_NAME "mgmt"
 
 static int mgmt_initialized;
 static struct ptlrpc_service *mgmt_service;
 
-static int mgmt_connect(struct ptlrpc_request *req)
-{
-        int rc;
-        ENTRY;
-
-        rc = -EINVAL;
-        
-        RETURN(rc);
-}
-
 static int mgmt_ping(struct ptlrpc_request *req)
 {
+        /* handle_incoming_request will have already updated the export's
+         * last_request_time, so we don't need to do anything else.
+         */
         return lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
 }
 
@@ -67,7 +60,11 @@ static int mgmt_handler(struct ptlrpc_request *req)
                 break;
         case MGMT_CONNECT:
                 DEBUG_REQ(D_RPCTRACE, req, "connect");
-                rc = mgmt_connect(req);
+                rc = target_handle_connect(req, NULL /* no recovery handler */);
+                break;
+        case MGMT_DISCONNECT:
+                DEBUG_REQ(D_RPCTRACE, req, "disconnect");
+                rc = target_handle_disconnect(req);
                 break;
         default:
                 DEBUG_REQ(D_RPCTRACE, req, "UNKNOWN OP");
@@ -114,7 +111,7 @@ static int mgmt_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(0);
 }
 
-static int mgmt_cleanup(struct obd_device *obd, int force, int failover)
+static int mgmt_cleanup(struct obd_device *obd, int flags)
 {
         ENTRY;
         
@@ -129,9 +126,11 @@ static int mgmt_cleanup(struct obd_device *obd, int force, int failover)
 }
 
 static struct obd_ops mgmt_obd_ops = {
-        o_owner:   THIS_MODULE,
-        o_setup:   mgmt_setup,
-        o_cleanup: mgmt_cleanup
+        o_owner:      THIS_MODULE,
+        o_setup:      mgmt_setup,
+        o_cleanup:    mgmt_cleanup,
+        o_connect:    class_connect,
+        o_disconnect: class_disconnect
 };
 
 static int __init mgmt_init(void)
