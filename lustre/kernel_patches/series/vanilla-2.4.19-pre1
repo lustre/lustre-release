@@ -40,4 +40,4 @@ kernel_text_address-2.4.19-pre1.patch
 jbd-2.4.19-pre1-jcberr.patch 
 seq-private-2.4.19-pre1.patch 
 kdev-2.4.19-pre1.patch 
-resched-2.4.19-pre1
+resched-2.4.19-pre1.patch
