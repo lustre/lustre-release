@@ -104,13 +104,18 @@ out_lock:
 static int mds_osc_destroy_orphan(struct mds_obd *mds,
                                   struct inode *inode,
                                   struct lov_mds_md *lmm,
-                                  int lmm_size)
+                                  int lmm_size,
+                                  struct llog_cookie *logcookies,
+                                  int log_unlink)
 {
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
         struct obdo *oa;
         int rc;
         ENTRY;
+
+        if (lmm_size == 0)
+                RETURN(0);
         
         rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0) {
@@ -129,15 +134,9 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
 
 #ifdef ENABLE_ORPHANS
-        if (body->valid & OBD_MD_FLCOOKIE) {
+        if (log_unlink && logcookies) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
-                oti.oti_logcookies = 
-                        lustre_msg_buf(request->rq_repmsg, 2,
-                                       sizeof(struct llog_cookie) *
-                                       lsm->lsm_stripe_count);
-                if (oti.oti_logcookies == NULL)
-                        oa->o_valid &= ~OBD_MD_FLCOOKIE;
-                        body->valid &= ~OBD_MD_FLCOOKIE;
+                oti.oti_logcookies = logcookies; 
         }
 #endif
 
@@ -156,16 +155,33 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lov_mds_md *lmm = NULL;
-        int lmm_size;
+        struct llog_cookie *logcookies = NULL;
+        int lmm_size = 0, log_unlink = 0;
         void *handle = NULL;
-        int rc;
+        int rc, err;
         ENTRY;
 
         LASSERT(mds->mds_osc_obd != NULL);
 
         OBD_ALLOC(lmm, mds->mds_max_mdsize);
-        LASSERT(lmm != NULL);
+        if (lmm == NULL)
+                RETURN(-ENOMEM);
 
+        down(&inode->i_sem);
+        rc = fsfilt_get_md(obd, inode, lmm, mds->mds_max_mdsize);
+        up(&inode->i_sem);
+
+        if (rc < 0) {
+                CERROR("Error %d reading eadata for ino %lu\n",
+                       rc, inode->i_ino);
+                GOTO(out_free_lmm, rc);
+        } else if (rc > 0) {
+                lmm_size = rc;
+                rc = mds_convert_lov_ea(obd, inode, lmm, lmm_size);
+                if (rc > 0)
+                        lmm_size = rc;
+                rc = 0;
+        }
 
         handle = fsfilt_start(obd, pending_dir, FSFILT_OP_UNLINK_LOG, NULL);
         if (IS_ERR(handle)) {
@@ -198,20 +214,31 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                        rc, dchild->d_name.len, dchild->d_name.name);
 
 #ifdef ENABLE_ORPHANS
-        if ((body->valid & OBD_MD_FLEASIZE)) {
-                if (mds_log_op_unlink(obd, inode, req->rq_repmsg, 1) > 0)
-                        body->valid |= OBD_MD_FLCOOKIE;
+        if (!rc && lmm_size) {
+                OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
+                if (logcookies == NULL)
+                        rc = -ENOMEM; 
+
+                if (!rc && mds_log_op_unlink(obd, inode, lmm, lmm_size,
+                              logcookies, mds->mds_max_cookiesize) > 0)
+                        log_unlink = 1;
         }
 #endif
-        if (handle) {
-                int err = fsfilt_commit(obd, pending_dir, handle, 0);
-                if (err) {
-                        CERROR("error committing orphan unlink: %d\n", err);
+        err = fsfilt_commit(obd, pending_dir, handle, 0);
+        if (err) {
+                CERROR("error committing orphan unlink: %d\n", err);
+                if (!rc)
                         rc = err;
-                        GOTO(out_free_lmm, rc);
-                }
         }
-        rc = mds_osc_destroy_orphan(mds, inode, lmm, lmm_size);
+        if (!rc) {
+                rc = mds_osc_destroy_orphan(mds, inode, lmm, lmm_size,
+                                            logcookies, log_unlink);
+        }
+
+#ifdef ENABLE_ORPHANS
+        if (logcookies != NULL)
+                OBD_FREE(logcookies, mds->mds_max_cookiesize);
+#endif
 out_free_lmm:
         OBD_FREE(lmm, mds->mds_max_mdsize);
         RETURN(rc);
