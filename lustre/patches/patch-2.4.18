@@ -12,8 +12,32 @@
  /* for stackable file systems (lofs, wrapfs, cryptfs, etc.) */
  EXPORT_SYMBOL(default_llseek);
  EXPORT_SYMBOL(dentry_open);
+--- linux-2.4.18/include/linux/errno.h	Fri Feb  9 23:46:13 2001
++++ linux-2.4.18ea/include/linux/errno.h	Sun Mar 24 23:39:31 2002
+@@ -21,6 +21,10 @@
+ #define EBADTYPE	527	/* Type not supported by server */
+ #define EJUKEBOX	528	/* Request initiated, but will not complete before timeout */
+ 
++/* Defined for extended attributes */
++#define ENOATTR ENODATA		/* No such attribute */
++#define ENOTSUP EOPNOTSUPP	/* Operation not supported */
++
+ #endif
+ 
+ #endif
 --- linux-2.4.17/include/linux/fs.h.lustre	Fri Feb 22 15:27:53 2002
 +++ linux-2.4.17/include/linux/fs.h	Fri Feb 22 15:28:52 2002
+@@ -853,6 +865,10 @@
+ 	int (*revalidate) (struct dentry *);
+ 	int (*setattr) (struct dentry *, struct iattr *);
+ 	int (*getattr) (struct dentry *, struct iattr *);
++	int (*setxattr) (struct dentry *, const char *, void *, size_t, int);
++	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
++	ssize_t (*listxattr) (struct dentry *, char *, size_t);
++	int (*removexattr) (struct dentry *, const char *);
+ };
+ 
+ struct seq_file;
 @@ -983,7 +984,7 @@
  extern struct vfsmount *kern_mount(struct file_system_type *);
  extern int may_umount(struct vfsmount *);
@@ -23,6 +47,19 @@
  #define kern_umount mntput
  
  extern int vfs_statfs(struct super_block *, struct statfs *);
+diff -Nur linux-2.4.18/include/linux/limits.h linux-2.4.18ea/include/linux/limits.h
+--- linux-2.4.18/include/linux/limits.h	Sun Feb 24 04:42:59 2002
++++ linux-2.4.18ea/include/linux/limits.h	Sun Feb 24 04:34:48 2002
+@@ -13,6 +13,9 @@
+ #define NAME_MAX         255	/* # chars in a file name */
+ #define PATH_MAX        4096	/* # chars in a path name including nul */
+ #define PIPE_BUF        4096	/* # bytes in atomic write to a pipe */
++#define XATTR_NAME_MAX   255	/* # chars in an extended attribute name */
++#define XATTR_SIZE_MAX 65536	/* size of an extended attribute value (64k) */
++#define XATTR_LIST_MAX 65536	/* size of extended attribute namelist (64k) */
+ 
+ #define RTSIG_MAX	  32
+ 
 --- linux-2.4.17/fs/ext3/Makefile.orig	Fri Dec 21 10:41:55 2001
 +++ linux-2.4.17/fs/ext3/Makefile	Fri Mar 22 11:00:58 2002
 @@ -8,6 +8,8 @@
