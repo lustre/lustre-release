@@ -642,9 +642,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
 out:
         size = (((obd_off)page->index) << PAGE_SHIFT) + to;
         if (rc == 0) {
-                spin_lock(&lli->lli_lock);
                 obd_increase_kms(exp, lsm, size);
-                spin_unlock(&lli->lli_lock);
                 if (size > inode->i_size)
                         inode->i_size = size;
                 SetPageUptodate(page);

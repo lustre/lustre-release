@@ -496,18 +496,17 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                  * lock hold times should be very short as ast processing
                  * requires them and has a short timeout.  so, i_sem before ns
                  * lock.*/
+                down(&inode->i_sem);
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
-                spin_lock(&lli->lli_lock);
-
                 kms = ldlm_extent_shift_kms(lock,
                                             lsm->lsm_oinfo[stripe].loi_kms);
+
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
-
-                spin_unlock(&lli->lli_lock);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+                up(&inode->i_sem);
                 //ll_try_done_writing(inode);
         iput:
                 iput(inode);
@@ -554,16 +553,14 @@ int ll_async_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 lsm->lsm_oinfo[stripe].loi_rss = lvb->lvb_size;
 
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
-                spin_lock(&lli->lli_lock);
-
+                down(&inode->i_sem);
                 kms = MAX(lsm->lsm_oinfo[stripe].loi_kms, lvb->lvb_size);
                 kms = ldlm_extent_shift_kms(NULL, kms);
                 if (lsm->lsm_oinfo[stripe].loi_kms != kms)
                         LDLM_DEBUG(lock, "updating kms from "LPU64" to "LPU64,
                                    lsm->lsm_oinfo[stripe].loi_kms, kms);
                 lsm->lsm_oinfo[stripe].loi_kms = kms;
-
-                spin_unlock(&lli->lli_lock);
+                up(&inode->i_sem);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         }
 

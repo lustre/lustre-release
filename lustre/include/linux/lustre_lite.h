@@ -76,7 +76,7 @@ struct ll_inode_info {
         __u64                   lli_io_epoch;
         unsigned long           lli_flags;
 
-        /* this lock protects s_d_w, p_w_ll, and the KMS */
+        /* this lock protects s_d_w and p_w_ll */
         spinlock_t              lli_lock;
         int                     lli_send_done_writing;
         struct list_head        lli_pending_write_llaps;

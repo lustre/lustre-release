@@ -17,7 +17,6 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- use "int" for stripe value returned from lock_to_stripe (5544)
 	- mballoc allocation and error-checking fixes in 2.6 (5504)
 	- block device patches to fix I/O request sizes in 2.6 (5482)
-	- protect KMS changes with its own lock, not i_sem (5492, 5624, 3453)
 	- look up hostnames for IB nals (5602)
 	- 2.6 changed lock ordering of 2 semaphores, caused deadlock (5654)
        * miscellania
