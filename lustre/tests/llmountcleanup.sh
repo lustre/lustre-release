@@ -1,10 +1,14 @@
 #!/bin/sh
 
 LCONF=${LCONF:-../utils/lconf}
+NAME=${NAME:-local}
 
-if [ ! -f local.xml ]; then
-   ./local.sh
+config=$NAME.xml
+mkconfig=./$NAME.sh
+
+if [ ! -f $config -o $mkconfig -nt $config ]; then
+   $mkconfig $config || exit 1
 fi
 
-${LCONF} --cleanup --dump /tmp/debug local.xml
+${LCONF} --cleanup --dump /tmp/debug $config
 

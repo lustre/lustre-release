@@ -1,9 +1,13 @@
 #!/bin/sh
 
-LCONF=../utils/lconf
+LCONF=${LCONF:-../utils/lconf}
+NAME=${NAME:-local}
 
-if [ ! -f local.xml ]; then
-   ./local.sh
+config=$NAME.xml
+mkconfig=./$NAME.sh
+
+if [ ! -f $config -o $mkconfig -nt $config ]; then
+   $mkconfig $config || exit 1
 fi
 
-${LCONF} --gdb local.xml
+${LCONF} --gdb $config || exit 2

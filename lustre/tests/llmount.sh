@@ -7,7 +7,7 @@ NAME=${NAME:-local}
 config=$NAME.xml
 mkconfig=./$NAME.sh
 
-if [ ! -f $local.xml -o $mkconfig -nt $local.xml ]; then
+if [ ! -f $config -o $mkconfig -nt $config ]; then
    $mkconfig $config || exit 1
 fi
 
