@@ -23,6 +23,8 @@
  *
  */
 
+#define __USE_FILE_OFFSET64
+
 #include <stdio.h>
 #include <netdb.h>
 #include <stdlib.h>
@@ -416,16 +418,7 @@ int jt_dbg_debug_file(int argc, char **argv)
                 return -1;
         }
 
-#ifndef __CYGWIN__
-# ifndef SYS_fstat64
-#  define __SYS_fstat__ SYS_fstat
-# else
-#  define __SYS_fstat__ SYS_fstat64
-# endif
-        rc = syscall(__SYS_fstat__, fd, &statbuf);
-#else
         rc = fstat(fd, &statbuf);
-#endif
         if (rc < 0) {
                 fprintf(stderr, "fstat failed: %s\n", strerror(errno));
                 goto out;
