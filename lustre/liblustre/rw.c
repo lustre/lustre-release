@@ -74,7 +74,7 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
         down(&lli->lli_getattr_sem);
 
         if (!test_bit(LLI_F_DID_GETATTR, &lli->lli_flags)) {
-                rc = ll_inode_getattr(inode, lsm, fd ? &fd->fd_ost_och : NULL);
+                rc = ll_inode_getattr(inode, lsm);
                 if (rc == 0) {
                         set_bit(LLI_F_DID_GETATTR, &lli->lli_flags);
                 } else {

@@ -470,6 +470,7 @@ static int llu_file_release(struct inode *inode)
         if (!fd) /* no process opened the file after an mcreate */
                 RETURN(rc = 0);
 
+#if 0
         /* we might not be able to get a valid handle on this file
          * again so we really want to flush our write cache.. */
         if (S_ISREG(inode->i_mode) && lsm) {
@@ -481,11 +482,12 @@ static int llu_file_release(struct inode *inode)
                 memcpy(&oa.o_inline, &fd->fd_ost_och, FD_OSTDATA_SIZE);
                 oa.o_valid |= OBD_MD_FLHANDLE;
 
-                rc = obd_close(&sbi->ll_osc_conn, &oa, lsm, NULL);
+                rc = obd_close(ll_s2obdexp(sbi), &oa, lsm, NULL);
                 if (rc)
                         CERROR("inode %lu object close failed: rc = "
                                "%d\n", lli->lli_st_ino, rc);
 	}
+#endif
 
         rc2 = llu_mdc_close(&sbi->ll_mdc_conn, inode);
         if (rc2 && !rc)

@@ -96,7 +96,6 @@ enum {
 };
 
 int ptlrpc_expire_one_request(struct ptlrpc_request *req);
-int ptlrpc_check_set(struct ptlrpc_request_set *set);
 
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
 #endif /* PTLRPC_INTERNAL_H */

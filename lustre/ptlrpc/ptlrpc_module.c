@@ -120,9 +120,7 @@ static void __exit ptlrpc_exit(void)
 {
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
-#ifdef ENABLE_ORPHANS
         llog_cleanup_commit_master(0);
-#endif
 }
 
 /* connection.c */
@@ -170,8 +168,13 @@ EXPORT_SYMBOL(ptlrpc_next_xid);
 
 EXPORT_SYMBOL(ptlrpc_prep_set);
 EXPORT_SYMBOL(ptlrpc_set_add_req);
+EXPORT_SYMBOL(ptlrpc_set_add_new_req);
 EXPORT_SYMBOL(ptlrpc_set_destroy);
+EXPORT_SYMBOL(ptlrpc_set_next_timeout);
+EXPORT_SYMBOL(ptlrpc_check_set);
 EXPORT_SYMBOL(ptlrpc_set_wait);
+EXPORT_SYMBOL(ptlrpc_expired_set);
+EXPORT_SYMBOL(ptlrpc_interrupted_set);
 
 /* service.c */
 EXPORT_SYMBOL(ptlrpc_init_svc);
@@ -192,6 +195,7 @@ EXPORT_SYMBOL(lustre_swab_obd_statfs);
 EXPORT_SYMBOL(lustre_swab_obd_ioobj);
 EXPORT_SYMBOL(lustre_swab_niobuf_remote);
 EXPORT_SYMBOL(lustre_swab_ost_body);
+EXPORT_SYMBOL(lustre_swab_ost_last_id);
 EXPORT_SYMBOL(lustre_swab_ll_fid);
 EXPORT_SYMBOL(lustre_swab_mds_status_req);
 EXPORT_SYMBOL(lustre_swab_mds_fileh_body);

@@ -32,8 +32,11 @@
 #include <linux/portals_compat25.h>
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-# define PGCACHE_WRLOCK(mapping)          write_lock(&mapping->page_lock)
-# define PGCACHE_WRUNLOCK(mapping)        write_unlock(&mapping->page_lock)
+
+/* XXX our code should be using the 2.6 calls, not the other way around */
+#define TryLockPage(page)                TestSetPageLocked(page)
+#define filemap_fdatasync(mapping)       filemap_fdatawrite(mapping)
+#define Page_Uptodate(page)              PageUptodate(page)
 
 #define KDEVT_INIT(val)                 { .value = val }
 
@@ -46,12 +49,22 @@
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c,d)
 
+#define ll_dev_t                        dev_t
+
+#include <linux/writeback.h>
+
 #else /* 2.4.. */
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
 #define ll_permission(a,b,c)                permission(a,b)
-# define PGCACHE_WRLOCK(mapping)          spin_lock(&pagecache_lock)
-# define PGCACHE_WRUNLOCK(mapping)        spin_unlock(&pagecache_lock)
+
+#define ll_dev_t                        int
+
+static inline void clear_page_dirty(struct page *page)
+{
+        if (PageDirty(page))
+                ClearPageDirty(page); 
+}
 
 /* 2.5 uses hlists for some things, like the d_hash.  we'll treat them
  * as 2.5 and let macros drop back.. */
@@ -93,20 +106,6 @@ static inline void __d_drop(struct dentry *dentry)
 }
 
 #endif /* end of 2.4 compat macros */
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-# define filemap_fdatasync(mapping)       filemap_fdatawrite(mapping)
-#endif
-
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-# define TryLockPage(page)                TestSetPageLocked(page)
-#endif
-
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
-# define Page_Uptodate(page)              PageUptodate(page)
-#endif
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 #define  rb_node_s rb_node

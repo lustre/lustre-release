@@ -170,8 +170,7 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
         dst->o_valid |= (valid & ~OBD_MD_FLID);
 }
 
-int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm,
-                      char *ostdata)
+static int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
 {
         struct llu_sb_info *sbi = llu_i2sbi(inode);
         struct obdo oa;
@@ -186,11 +185,6 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm,
         oa.o_mode = S_IFREG;
         oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
                 OBD_MD_FLBLOCKS | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
-
-        if (ostdata != NULL) {
-                memcpy(&oa.o_inline, ostdata, FD_OSTDATA_SIZE);
-                oa.o_valid |= OBD_MD_FLHANDLE;
-        }
 
         rc = obd_getattr(&sbi->ll_osc_conn, &oa, lsm);
         if (rc)
@@ -327,7 +321,7 @@ static int llu_iop_lookup(struct pnode *pnode,
         llu_update_inode(*inop, body, lic.lic_lsm);
 
         if (llu_i2info(*inop)->lli_smd) {
-                rc = llu_inode_getattr(*inop, llu_i2info(*inop)->lli_smd, NULL);
+                rc = llu_inode_getattr(*inop, llu_i2info(*inop)->lli_smd);
                 if (rc)
                         _sysio_i_gone(*inop);
         }
