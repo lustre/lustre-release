@@ -316,15 +316,3 @@ Index: kernel-2.4.21/include/linux/sched.h
  
  extern unsigned long event;
  
-Index: kernel-2.4.21/include/asm-x86_64/current.h
-===================================================================
---- kernel-2.4.21.orig/include/asm-x86_64/current.h	2003-06-13 15:26:52.000000000 -0700
-+++ kernel-2.4.21/include/asm-x86_64/current.h	2003-12-04 12:00:13.000000000 -0800
-@@ -5,6 +5,7 @@
- struct task_struct;
- 
- #include <asm/pda.h>
-+#include <asm/page.h>
- 
- static inline struct task_struct *get_current(void) 
- { 
