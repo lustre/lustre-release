@@ -71,15 +71,17 @@ is_applied()
 }
 check_pc_match()
 {
-	tmpfile=$(mktemp /tmp/p_XXXXXX) || exit 1
-	lsdiff --strip=1 $1 > $tmpfile 
-	diff $2 $tmpfile > /dev/null
-	if [ $? != 0 ]; then
-		echo " $1 do not match with $2 "
-		echo " $2 will be changed to match $2"
-		cat $tmpfile > $P/pc/$PATCH_NAME.pc
+	if [ -f /usr/bin/lsdiff ]; then
+		tmpfile=$(mktemp /tmp/p_XXXXXX) || exit 1
+		lsdiff --strip=1 $1 > $tmpfile 
+		diff $2 $tmpfile > /dev/null
+		if [ $? != 0 ]; then
+			echo " $1 do not match with $2 "
+			echo " $2 will be changed to match $2"
+			cat $tmpfile > $P/pc/$PATCH_NAME.pc
+		fi
+		rm -rf $tmpfile
 	fi
-	rm -rf $tmpfile
 } 
 can_apply()
 {
