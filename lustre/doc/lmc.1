@@ -296,6 +296,13 @@ Print system commands as they are run.
 --batch filename 
 Used to execute lmc commands in batch mode.
 .SH EXAMPLES
-Real life examples are given in the Lustre-conf manual page.
+.TP
+.B lmc --node adev3 --add net --nid adev3 --cluster_id 0x1000 --nettype tcp --hostaddr adev3-eth0 --port 988
+.TP
+.B lmc --node adev3 --add net --nid adev3 --cluster_id 0x2000 --nettype tcp --hostaddr adev3-eth1 --port 989
+Used to add a Lustre node to a specified Lustre cluster through a network interface. In this example, Lustre node adev3 has been added to 2 Lustre clusters whose cluster_id are 0x1000 and 0x2000 separately through 2 network interface cards: adev3-eth0 and adev3-eth1. adev3 would listen in some specified port(s) to prepare for possible connection requests from nodes in these two clusters.
+.TP
+.B lmc --node adev3 --add route --nettype tcp --gw 5 --gateway_cluster_id 0x1000 --target_cluster_id 0x1000 --lo 4 --hi 7
+Used to add a route entry for a Lustre node. Here Lustre node adev3 is told it has a new route entry that now it could send packets to Lustre nodes whose nids is from 4 to 7 with the help of Lustre gateway node whose nid is 5. Besides, Lustre gateway node is in cluster whose id is 0x1000 and target of the route belongs to cluster whose id is also 0x1000. The network in this route path is a tcp network.
 .SH BUGS
 None are known.
