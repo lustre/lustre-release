@@ -73,7 +73,7 @@ Configures openldap server for LDAP Lustre config database
 %build
 # if RPM_BUILD_NCPUS unset, set it
 if [ -z "$RPM_BUILD_NCPUS" ] ; then
-    RPM_BUILD_NCPUS=$(egrep -c "^cpu[0-9]+" /proc/stat || :)
+    RPM_BUILD_NCPUS=$(egrep -c "^cpu[0-9]+" /proc/stat 2>/dev/null || echo 0 :)
     if [ $RPM_BUILD_NCPUS -eq 0 ] ; then
         RPM_BUILD_NCPUS=1
     fi
