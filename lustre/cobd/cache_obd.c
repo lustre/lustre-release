@@ -71,11 +71,11 @@ cobd_setup (struct obd_device *dev, obd_count len, void *buf)
 
         /* don't bother checking attached/setup;
          * obd_connect() should, and it can change underneath us */
-        rc = obd_connect (&cobd->cobd_target, target, &target_uuid, NULL, NULL);
+        rc = obd_connect (&cobd->cobd_target, target, &target_uuid);
         if (rc != 0)
                 return (rc);
 
-        rc = obd_connect (&cobd->cobd_cache, cache, &cache_uuid, NULL, NULL);
+        rc = obd_connect (&cobd->cobd_cache, cache, &cache_uuid);
         if (rc != 0)
                 goto fail_0;
 
@@ -108,8 +108,7 @@ cobd_cleanup (struct obd_device *dev)
 
 static int
 cobd_connect (struct lustre_handle *conn, struct obd_device *obd,
-              struct obd_uuid *cluuid, struct recovd_obd *recovd,
-              ptlrpc_recovery_cb_t recover)
+              struct obd_uuid *cluuid)
 {
         int rc = class_connect (conn, obd, cluuid);
 
@@ -179,7 +178,8 @@ cobd_getattr(struct lustre_handle *conn, struct obdo *oa,
 
 static int
 cobd_open(struct lustre_handle *conn, struct obdo *oa,
-          struct lov_stripe_md *lsm, struct obd_trans_info *oti)
+          struct lov_stripe_md *lsm, struct obd_trans_info *oti,
+          struct obd_client_handle *och)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
@@ -190,7 +190,7 @@ cobd_open(struct lustre_handle *conn, struct obdo *oa,
         }
 
         cobd = &obd->u.cobd;
-        return (obd_open (&cobd->cobd_target, oa, lsm, oti));
+        return (obd_open (&cobd->cobd_target, oa, lsm, oti, och));
 }
 
 static int

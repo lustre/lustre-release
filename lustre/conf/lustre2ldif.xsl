@@ -23,8 +23,27 @@ networkRef: <value-of select="network/@uuid"/>
 <for-each select="profile_ref">
 profileRef: <value-of select="@uuidref"/>
 </for-each>
+<if test="timeout">
+timeout: <value-of select="timeout"/>
+</if>
+<if test="recoveryUpcall">
+recoveryUpcall: <value-of select="recoveryUpcall"/>
+</if>
 <text>
-</text><apply-templates/>
+</text>
+<for-each select="network">
+dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
+objectClass: NETWORK
+lustreName: <value-of select="@name"/>
+uuid: <value-of select="@uuid"/>
+nettype: <value-of select="@nettype"/>
+nid: <value-of select="nid"/>
+<if test="port">
+port: <value-of select="port"/>
+</if>
+<text>
+</text>
+</for-each>
 </template>
 
 <template match="profile">
@@ -50,11 +69,15 @@ port: <value-of select="port"/>
 </text>
 </template>
 
+
 <template match="mds">
 dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
 objectClass: MDS
 lustreName: <value-of select="@name"/>
 uuid: <value-of select="@uuid"/><apply-templates/>
+<if test="@failover">
+failover: <value-of select="@failover"/>
+</if>
 <text>
 </text>
 </template>
@@ -75,6 +98,9 @@ devpath: <value-of select="devpath"/>
 </if>
 <if test="devsize">
 devsize: <value-of select="devsize"/>
+</if>
+<if test="journalsize">
+journalsize: <value-of select="journalsize"/>
 </if>
 nodeRef: <value-of select="node_ref/@uuidref"/>
 targetRef: <value-of select="target_ref/@uuidref"/>
@@ -124,6 +150,9 @@ devpath: <value-of select="devpath"/>
 <if test="devsize">
 devsize: <value-of select="devsize"/>
 </if>
+<if test="journalsize">
+journalsize: <value-of select="journalsize"/>
+</if>
 <text>
 </text>
 </template>
@@ -133,6 +162,9 @@ dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
 objectClass: OST
 lustreName: <value-of select="@name"/>
 uuid: <value-of select="@uuid"/><apply-templates/>
+<if test="@failover">
+failover: <value-of select="@failover"/>
+</if>
 <text>
 </text>
 </template>
@@ -228,6 +260,7 @@ path: <value-of select="."/>
 <template match="active_ref">
 activeRef: <value-of select="@uuidref"/>
 </template>
+
 </stylesheet>
 
 
