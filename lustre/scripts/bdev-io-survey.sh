@@ -72,8 +72,13 @@ pid_has_stopped() {
 commas() {
 	echo $* | sed -e 's/ /,/g'
 }
+do_bc_scale() {
+	local scale=$1
+	shift
+        echo "scale=$scale; $*" | bc
+}
 do_bc() {
-        echo "scale=2; $*" | bc
+	do_bc_scale 10 $*
 }
 mean_stddev() {
 	local points=$*
@@ -95,7 +100,8 @@ mean_stddev() {
 	        local dev=`do_bc \($p - $avg\) \^ 2`
 	        tmp=`do_bc $tmp + $dev`
 	done
-	tmp=`do_bc sqrt \( $tmp / \($num - 1\) \)`
+	tmp=`do_bc_scale 1 sqrt \( $tmp / \($num - 1\) \)`
+	avg=`do_bc_scale 1 $avg / 1`
 	echo "$avg:$tmp"
 }
 
@@ -314,7 +320,7 @@ ext2_iozone_result() {
 
 	kps=`awk '($2 == "reclen"){results=NR+1}(results == NR){print $3}' \
 		< $output`
-	do_bc "$kps / 1024"
+	do_bc_scale 0 "$kps / 1024"
 }
 ext2_iozone_cleanup() {
 	local id=$1
@@ -493,7 +499,7 @@ echo_filter_result() {
 	for mbs in `awk '($8=="MB/s):"){print substr($7,2)}' < $output`; do
 		total=$(do_bc $total + $mbs)
 	done
-	echo $total
+	do_bc_scale $total / 1
 }
 echo_filter_cleanup() {
 	local id=$1
@@ -524,13 +530,20 @@ echo_filter_teardown() {
 test_one() {
 	local test=$1
 	local my_x=$2
-	local my_y=$3
-	local threads=$4
-	local iosize=$5
-	local wor=$6
+	local threads=$3
+	local iosize=$4
+	local wor=$5
 	local vmstat_pid
 	local vmstat_log="$tmpdir/vmstat.log"
 	local opref="$test-$threads-$iosize-$wor"
+	local -a iostat_pids
+	# sigh.  but this makes it easier to dump into the tables
+	local -a read_req_s
+	local -a mb_s
+	local -a write_req_s
+	local -a sects_req
+	local -a queued_reqs
+	local -a service_ms
 
 	for i in `seq 0 $last_block`; do
 		${test}_setup $i $wor $threads
@@ -539,16 +552,25 @@ test_one() {
 	echo $test with $threads threads
 
 	# start up vmstat and record its pid
-	echo starting `date`
         nice -19 vmstat 1 > $vmstat_log 2>&1 &
 	[ $? = 0 ] || die "vmstat failed"
 	vmstat_pid=$!
 	pid_now_running $vmstat_pid
 
+	# start up each block device's iostat
+	for i in `seq 0 $last_block`; do
+		nice -19 iostat -x ${blocks[$i]} 1 | awk \
+			'($1 == "'${blocks[$i]}'"){print $0; fflush()}' \
+			> $tmpdir/iostat.$i &
+		local pid=$!
+		pid_now_running $pid
+		iostat_pids[$i]=$pid
+	done
+
 	# start all the tests.  each returns a pid to wait on
 	pids=""
 	for i in `seq 0 $last_block`; do
-		cmd=`${test}_start $threads $iosize $wor $i`
+		local cmd=`${test}_start $threads $iosize $wor $i`
 		$cmd > $tmpdir/$i 2>&1 &
 		local pid=$!
 		pids="$pids $pid"
@@ -561,29 +583,50 @@ test_one() {
 		echo -n .
 		pid_has_stopped $p
 	done
-	echo
 
-	# stop vmstat and get cpu use from it
+	# stop vmstat and all the iostats
 	kill $vmstat_pid
-	echo stopping `date`
 	pid_has_stopped $vmstat_pid
+	for i in `seq 0 $last_block`; do
+		local pid=${iostat_pids[$i]}
+		[ -z "$pid" ] && continue
+
+		kill $pid
+		unset iostat_pids[$i]
+		pid_has_stopped $pid
+	done
+
+	# collect the results of vmstat and iostat
 	cpu=$(mean_stddev $(awk \
 	      '(NR > 3 && NF == 16 && $16 != "id" )	\
 		{print 100 - $16}' < $vmstat_log) )
 	save_output $vmstat_log $opref.vmstat
 
+	for i in `seq 0 $last_block`; do
+		read_req_s[$i]=$(mean_stddev $(awk \
+		      '(NR > 1)	{print $4}' < $tmpdir/iostat.$i) )
+		write_req_s[$i]=$(mean_stddev $(awk \
+		      '(NR > 1)	{print $5}' < $tmpdir/iostat.$i) )
+		sects_req[$i]=$(mean_stddev $(awk \
+		      '(NR > 1)	{print $10}' < $tmpdir/iostat.$i) )
+		queued_reqs[$i]=$(mean_stddev $(awk \
+		      '(NR > 1)	{print $11}' < $tmpdir/iostat.$i) )
+		service_ms[$i]=$(mean_stddev $(awk \
+		      '(NR > 1)	{print $13}' < $tmpdir/iostat.$i) )
+
+		save_output $tmpdir/iostat.$i $opref.iostat.$i
+	done
+
 	# record each index's test results and sum them
 	thru=0
-	line=""
 	for i in `seq 0 $last_block`; do
 		local t=`${test}_result $tmpdir/$i`
 		save_output $tmpdir/$i $opref.$i
 		echo test returned "$t"
-		line="$line $t"
-		# some tests return mean:stddev per thread, filter out stddev
+		mb_s[$i]="$t"
+		# some tests return mean:stddev per device, filter out stddev
 		thru=$(do_bc $thru + $(echo $t | sed -e 's/:.*$//g'))
 	done
-	line="("`commas $line`")"
 
 	for i in `seq 0 $last_block`; do
 		${test}_cleanup $i $wor $threads
@@ -591,9 +634,20 @@ test_one() {
 
 	# tabulate the results
 	echo $test did $thru mb/s with $cpu
-	table_set $test $my_x $my_y $thru
-	table_set $test $(($my_x + 1)) $my_y $cpu
-	table_set $test $(($my_x + 2)) $my_y $line
+	table_set $test $my_x $cur_y `do_bc_scale 2 $thru / 1`
+	table_set $test $(($my_x + 1)) $cur_y $cpu
+
+	for i in `seq 0 $last_block`; do
+		cur_y=$(($cur_y + 1))
+		table_set $test $(($my_x)) $cur_y ${mb_s[$i]}
+		table_set $test $(($my_x + 1)) $cur_y ${read_req_s[$i]}
+		table_set $test $(($my_x + 2)) $cur_y ${write_req_s[$i]}
+		table_set $test $(($my_x + 3)) $cur_y ${sects_req[$i]}
+		table_set $test $(($my_x + 4)) $cur_y ${queued_reqs[$i]}
+		table_set $test $(($my_x + 5)) $cur_y ${service_ms[$i]}
+	done
+
+	cur_y=$(($cur_y + 1))
 }
 
 test_iterator() {
@@ -629,12 +683,10 @@ test_iterator() {
 		for iosize in 64 128; do
 			table_set $test 0 $cur_y $thr
 			table_set $test 1 $cur_y $iosize
-			table_set $test 2 $cur_y "|"
 
 			for wor in w r; do
-				table_set $test 3 $cur_y $wor
-				test_one $test 4 $cur_y $thr $iosize $wor
-				cur_y=$(($cur_y + 1))
+				table_set $test 2 $cur_y $wor
+				test_one $test 3 $thr $iosize $wor
 			done
 		done
 		thr=$(($thr + $thr))
@@ -710,11 +762,16 @@ for t in $run_tests; do
 
 	table_set $t 0 0 "T"
 	table_set $t 1 0 "L"
-	table_set $t 2 0 "|"
-	table_set $t 3 0 "W"
-	table_set $t 5 0 "C:S"
-	table_set $t 6 0 "B"
-	cur_y=1;
+	table_set $t 2 0 "m"
+	table_set $t 3 0 "A"
+	table_set $t 4 0 "C"
+	table_set $t 3 1 "MB"
+	table_set $t 4 1 "rR"
+	table_set $t 5 1 "wR"
+	table_set $t 6 1 "SR"
+	table_set $t 7 1 "Q"
+	table_set $t 8 1 "ms"
+	cur_y=2;
 
 	if ! test_iterator $t; then
 		continue;
@@ -726,11 +783,16 @@ done
 	echo
 	echo "T = number of concurrent threads per device"
 	echo "L = base io operation length, in KB"
-	echo "W/O/R = write/overwrite/read throughput, in MB/s"
+	echo "m = IO method: read, write, or over-write"
 	echo "C = percentage CPU used, both user and system"
-	echo "S = standard deviation in cpu use"
-	echo "B = per-block results: ("`echo ${blocks[*]} | sed -e 's/ /,/g'`")"
+	echo "MB/s = per-device throughput"
+	echo "rR = read requests issued to the device per second"
+	echo "wR = write requests issued to the device per second"
+	echo "SR = sectors per request; sectors tend to be 512 bytes"
+	echo "Q = the average number of requests queued on the device"
+	echo "ms = the average ms taken by the device to service a req"
 	echo
+	echo "foo:bar represents a mean of foo with a stddev of bar"
 )
 
 for t in $test_results; do
