@@ -611,6 +611,19 @@ test_24k() {
 }
 run_test 24k "touch .../R11a/f; mv .../R11a/f .../R11a/d ======="
 
+# bug 2429 - rename foo foo foo creates invalid file
+test_24l() {
+	f="$DIR/f24l"
+	multiop $f OcNs || error
+}
+run_test 24l "Renaming a file to itself ========================"
+
+test_24m() {
+	f="$DIR/f24m"
+	multiop $f OcLN ${f}2 ${f}2 || error
+}
+run_test 24m "Renaming a file to a hard link to itself ========="
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 	mkdir $DIR/d25

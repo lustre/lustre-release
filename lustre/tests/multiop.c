@@ -21,10 +21,13 @@ char usage[] =
 "        D  open(O_DIRECTORY)\n"
 "        o  open(O_RDONLY)\n"
 "        O  open(O_CREAT|O_RDWR)\n"
+"        L  link\n"
+"        l  symlink\n"
 "        u  unlink\n"
 "        U  munmap\n"
 "        m  mknod\n"
 "        M  rw mmap to EOF (must open and stat prior)\n"
+"        N  rename\n"
 "        c  close\n"
 "        _  wait for signal\n"
 "        R  reference entire mmap-ed region\n"
@@ -41,15 +44,28 @@ char usage[] =
 
 void null_handler(int unused) { }
 
+static const char *
+pop_arg(int argc, char *argv[])
+{
+	static int cur_arg = 3;
+
+	if (cur_arg >= argc)
+		return NULL;
+
+	return argv[cur_arg++];
+}
+#define POP_ARG() (pop_arg(argc, argv))
+
 int main(int argc, char **argv)
 {
         char *fname, *commands;
+	const char *newfile;
         struct stat st;
 	size_t mmap_len, i;
 	unsigned char *mmap_ptr = NULL, junk = 0;
         int fd = -1;
 
-        if (argc != 3) {
+        if (argc < 3) {
                 fprintf(stderr, usage, argv[0]);
                 exit(1);
         }
@@ -82,6 +98,24 @@ int main(int argc, char **argv)
 				exit(1);
 			}
 			break;
+		case 'l':
+			newfile = POP_ARG();
+			if (!newfile)
+				newfile = fname;
+			if (symlink(fname, newfile)) {
+				perror("symlink()");
+				exit(1);
+			}
+			break;
+		case 'L':
+			newfile = POP_ARG();
+			if (!newfile)
+				newfile = fname;
+			if (link(fname, newfile)) {
+				perror("symlink()");
+				exit(1);
+			}
+			break;
                 case 'm':
                         if (mknod(fname, S_IFREG | 0644, 0) == -1) {
                                 perror("mknod(S_IFREG|0644, 0)");
@@ -94,6 +128,15 @@ int main(int argc, char **argv)
 					MAP_SHARED, fd, 0);
 			if (mmap_ptr == MAP_FAILED) {
 				perror("mmap");
+				exit(1);
+			}
+			break;
+		case 'N':
+			newfile = POP_ARG();
+			if (!newfile)
+				newfile = fname;
+			if (rename (fname, newfile)) {
+				perror("rename()");
 				exit(1);
 			}
 			break;

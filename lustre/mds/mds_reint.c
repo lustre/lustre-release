@@ -1664,6 +1664,10 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
              de_new->d_inode->i_ino == de_tgtdir->d_inode->i_ino))
                 GOTO(cleanup, rc = -EINVAL);
 
+        if (de_old->d_inode == de_new->d_inode) {
+                GOTO(cleanup, rc = 0);
+        }
+
         /* if we are about to remove the target at first, pass the EA of
          * that inode to client to perform and cleanup on OST */
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
