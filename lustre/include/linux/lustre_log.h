@@ -220,9 +220,9 @@ static inline int llog_gen_lt(struct llog_gen a, struct llog_gen b)
 static inline int llog_obd2ops(struct llog_ctxt *ctxt,
                                struct llog_operations **lop)
 {
-        if (ctxt == NULL)
+       if (ctxt == NULL)
                 return -ENOTCONN;
-
+        
         *lop = ctxt->loc_logops;
         if (*lop == NULL)
                 return -EOPNOTSUPP;
