@@ -38,6 +38,7 @@ void ptlrpc_init_client(struct connmgr_obd *mgr, int req_portal,
         cl->cli_reply_portal = rep_portal;
         INIT_LIST_HEAD(&cl->cli_sending_head);
         INIT_LIST_HEAD(&cl->cli_sent_head);
+        spin_lock_init(&cl->cli_lock);
         sema_init(&cl->cli_rpc_sem, 32);
 }
 
@@ -132,9 +133,11 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
         if (request->rq_repmsg != NULL)
                 OBD_FREE(request->rq_repmsg, request->rq_replen);
 
-        spin_lock(&request->rq_client->cli_ha_mgr->mgr_lock);
-        list_del(&request->rq_list);
-        spin_unlock(&request->rq_client->cli_ha_mgr->mgr_lock);
+        if (request->rq_client) {
+                spin_lock(&request->rq_client->cli_lock);
+                list_del(&request->rq_list);
+                spin_unlock(&request->rq_client->cli_lock);
+        }
 
         ptlrpc_put_connection(request->rq_connection);
 

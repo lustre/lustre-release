@@ -89,7 +89,8 @@ struct ptlrpc_client {
 
         struct semaphore cli_rpc_sem; /* limits outstanding requests */
 
-        struct list_head cli_sending_head; /* lists protected by ha_mgr lock */
+        spinlock_t cli_lock; /* protects lists */
+        struct list_head cli_sending_head;
         struct list_head cli_sent_head;
         struct list_head cli_ha_item; 
 
