@@ -319,23 +319,18 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
         if (rc)
                 GOTO(out_bulk, rc);
 
-        ptlrpc_free_bulk(desc);
-
         /* The unpackers move tmp1 and tmp2, so reset them before using */
         tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
         tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
         req->rq_status = obd_commitrw(cmd, &conn, objcount,
                                       tmp1, niocount, local_nb);
 
-        RETURN(rc);
-
- out_bulk:
+out_bulk:
         ptlrpc_free_bulk(desc);
- out_local:
-        if (local_nb != NULL)
-                OBD_FREE(local_nb, sizeof(*local_nb) * niocount);
- out:
-        return 0;
+out_local:
+        OBD_FREE(local_nb, sizeof(*local_nb) * niocount);
+out:
+        RETURN(rc);
 }
 
 static int ost_commit_page(struct obd_conn *conn, struct page *page)
@@ -422,12 +417,12 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         size[1] = niocount * sizeof(*remote_nb);
         rc = lustre_pack_msg(2, size, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
-                GOTO(fail, rc);
+                GOTO(out, rc);
         remote_nb = lustre_msg_buf(req->rq_repmsg, 1);
 
         OBD_ALLOC(local_nb, niocount * sizeof(*local_nb));
         if (local_nb == NULL)
-                GOTO(fail, rc = -ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         /* The unpackers move tmp1 and tmp2, so reset them before using */
         tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
@@ -435,7 +430,7 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
         req->rq_status = obd_preprw(cmd, &conn, objcount,
                                     tmp1, niocount, tmp2, local_nb);
         if (req->rq_status)
-                GOTO(success, 0);
+                GOTO(out_free, rc = 0); /* XXX is this correct? */
 
         desc = ptlrpc_prep_bulk(req->rq_connection);
         if (desc == NULL)
@@ -477,17 +472,16 @@ static int ost_brw_write(struct ost_obd *obddev, struct ptlrpc_request *req)
                 GOTO(fail_bulk, rc);
 
         EXIT;
- success:
+out_free:
         OBD_FREE(local_nb, niocount * sizeof(*local_nb));
-        return 0;
-
- fail_bulk:
-        ptlrpc_free_bulk(desc);
- fail_preprw:
-        OBD_FREE(local_nb, niocount * sizeof(*local_nb));
-        /* FIXME: how do we undo the preprw? */
- fail:
+out:
         return rc;
+
+fail_bulk:
+        ptlrpc_free_bulk(desc);
+        /* FIXME: how do we undo the preprw? */
+fail_preprw:
+        goto out_free;
 }
 
 static int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
