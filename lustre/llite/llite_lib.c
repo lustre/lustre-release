@@ -1171,6 +1171,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 set_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 
         lli->lli_mds = body->mds;
+        inode->i_dev = (kdev_t) body->mds;
         LASSERT(body->mds < 1000);
 }
 
