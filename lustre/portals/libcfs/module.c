@@ -243,7 +243,7 @@ kportal_router_cmd(struct portals_cfg *pcfg, void * private)
                         pcfg->pcfg_flags ? "Enabling" : "Disabling",
                         (time_t)pcfg->pcfg_nid3);
                 
-                err = kportal_notify_router (pcfg->pcfg_nal, pcfg->pcfg_nid,
+                err = kportal_notify_router (pcfg->pcfg_gw_nal, pcfg->pcfg_nid,
                                              pcfg->pcfg_flags, 
                                              (time_t)pcfg->pcfg_nid3);
                 break;
