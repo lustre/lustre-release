@@ -94,4 +94,44 @@ void obd_statfs_unpack(struct obd_statfs *osfs, struct statfs *sfs);
 
 #include <linux/portals_lib.h>
 
+/* XXX this should be one mask-check */
+#define l_killable_pending(task)                                               \
+(sigismember(&(task->pending.signal), SIGKILL) ||                              \
+ sigismember(&(task->pending.signal), SIGINT) ||                               \
+ sigismember(&(task->pending.signal), SIGTERM))
+
+/*
+ * Like wait_event_interruptible, but we're only interruptible by KILL, INT, or
+ * TERM.
+ */
+#define __l_wait_event_killable(wq, condition, ret)                          \
+do {                                                                         \
+        wait_queue_t __wait;                                                 \
+        init_waitqueue_entry(&__wait, current);                              \
+                                                                             \
+        add_wait_queue(&wq, &__wait);                                        \
+        for (;;) {                                                           \
+                set_current_state(TASK_INTERRUPTIBLE);                       \
+                if (condition)                                               \
+                        break;                                               \
+                if (!signal_pending(current) ||                              \
+                    !l_killable_pending(current)) {                          \
+                        schedule();                                          \
+                        continue;                                            \
+                }                                                            \
+                ret = -ERESTARTSYS;                                          \
+                break;                                                       \
+        }                                                                    \
+        current->state = TASK_RUNNING;                                       \
+        remove_wait_queue(&wq, &__wait);                                     \
+} while(0)
+
+#define l_wait_event_killable(wq, condition)                            \
+({                                                                      \
+        int __ret = 0;                                                  \
+        if (!(condition))                                               \
+                __l_wait_event_killable(wq, condition, __ret);          \
+        __ret;                                                          \
+})
+
 #endif /* _LUSTRE_LIB_H */
