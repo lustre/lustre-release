@@ -83,6 +83,7 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         LASSERT(list_empty(&res->lr_converting));
 
         if (!first_enq) {
+                LASSERT(res->lr_tmp != NULL);
                 rc = ldlm_plain_compat_queue(&res->lr_granted, lock, 0);
                 if (!rc)
                         RETURN(LDLM_ITER_STOP);
@@ -96,6 +97,7 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         }
 
  restart:
+        LASSERT(res->lr_tmp == NULL);
         res->lr_tmp = &rpc_list;
         rc = ldlm_plain_compat_queue(&res->lr_granted, lock, 1);
         rc += ldlm_plain_compat_queue(&res->lr_waiting, lock, 1);
@@ -107,7 +109,7 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 ldlm_resource_unlink_lock(lock);
                 ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 l_unlock(&res->lr_namespace->ns_lock);
-                rc = ldlm_run_ast_work(&rpc_list);
+                rc = ldlm_run_ast_work(res->lr_namespace, &rpc_list);
                 l_lock(&res->lr_namespace->ns_lock);
                 if (rc == -ERESTART)
                         GOTO(restart, -ERESTART);

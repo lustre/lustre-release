@@ -371,7 +371,8 @@ restart:
                                 res->lr_tmp = NULL;
 
                                 l_unlock(&ns->ns_lock);
-                                rc = ldlm_run_ast_work(&rpc_list);
+                                rc = ldlm_run_ast_work(res->lr_namespace,
+                                                       &rpc_list);
                                 l_lock(&ns->ns_lock);
                                 if (rc == -ERESTART)
                                         GOTO(restart, -ERESTART);
