@@ -137,7 +137,7 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
         if (rc) {
                 CERROR("error adding objectid "LPX64" to inode %ld: %d\n",
                        lmm->lmm_object_id, inode->i_ino, rc);
-                LBUG();
+                if (rc != -ENOSPC) LBUG();
         }
         return rc;
 }
