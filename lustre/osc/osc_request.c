@@ -36,6 +36,7 @@
 #include <linux/lustre_ha.h>
 #include <linux/obd_support.h> /* for OBD_FAIL_CHECK */
 #include <linux/lustre_lite.h> /* for ll_i2info */
+#include <portals/lib-types.h> /* for PTL_MD_MAX_IOV */
 
 static int osc_getattr(struct lustre_handle *conn, struct obdo *oa,
                        struct lov_stripe_md *md)
@@ -609,10 +610,31 @@ static int osc_brw(int cmd, struct lustre_handle *conn,
                    struct brw_page *pga, brw_callback_t callback,
                    struct io_cb_data *data)
 {
-        if (cmd & OBD_BRW_WRITE)
-                return osc_brw_write(conn, md, page_count, pga, callback, data);
-        else
-                return osc_brw_read(conn, md, page_count, pga, callback, data);
+        ENTRY;
+
+        while (page_count) {
+                obd_count pages_per_brw;
+                int rc;
+
+                if (page_count > PTL_MD_MAX_IOV)
+                        pages_per_brw = PTL_MD_MAX_IOV;
+                else
+                        pages_per_brw = page_count;
+
+                if (cmd & OBD_BRW_WRITE)
+                        rc = osc_brw_write(conn, md, pages_per_brw, pga,
+                                           callback, data);
+                else
+                        rc = osc_brw_read(conn, md, pages_per_brw, pga,
+                                          callback, data);
+
+                if (rc != 0)
+                        RETURN(rc);
+
+                page_count -= pages_per_brw;
+                pga += pages_per_brw;
+        }
+        RETURN(0);
 }
 
 static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
@@ -783,7 +805,7 @@ static int osc_iocontrol(long cmd, struct lustre_handle *conn, int len,
                 obddev->u.cli.cl_containing_lov = (struct obd_device *)karg;
                 GOTO(out, err);
         }
-            
+
         default:
                 GOTO(out, err = -ENOTTY);
         }
