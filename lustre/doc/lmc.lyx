@@ -32,7 +32,7 @@ lmc
 NAME
 \layout Standard
 
-lmc - lustre configuration maker.
+lctl - low level Lustre file system configuration utility
 \layout Subsection
 
 SYNOPSIS
@@ -40,253 +40,84 @@ SYNOPSIS
 
 
 \series bold 
-lmc [options] --add <objectype> [args] 
-\layout Standard
-
-
-\series bold 
-NOT IMPLEMENTED -- lmc [options] --remove <objecttype> [args]
-\layout Standard
-
-
-\series bold 
-NOT IMPLEMENTED -- lmc [options] --convert [args]
+lmc [options] [cmd args] 
 \layout Subsection
 
 DESCRIPTION
 \layout Standard
 
-At present lmc when invoked adds configuration data to the config file.
- lmc will also be able to remove configuration data or convert its forma.
- One generates a single config file for the cluster at present including
- at the minimum mds's, mtpt's and ost's and whatever those reference (e.g.
- net's and profiles)
-\layout Standard
-
-The objecttype refers to a collection of related configuration entities
- and can be one of 
-\series bold 
-net, mds, lov, ost, mtpt, route, oscref.
+lmc can be invoked to generate configuration data associated with systems
+ in a Lustre cluster.
  
-\series default 
-We describe the arguments required for the addition of each objecttype.
- [NOT implemented] Lmc can also remove items from or convert the format
- of configuration data.
-\layout Standard
-
-to generate configuration data associated with systems in a Lustre cluster.
- 
-\layout Description
-
---add\SpecialChar ~
-net Adds a network device descriptor for the given node, with parameters
- as indicated.
-\begin_deeper 
-\layout Standard
-
-The arguments required are 
 \layout Description
 
 --node\SpecialChar ~
-''node_name'' If not present this will create a new node with the
- given name.
+''node_name'' By itself, this will create a new node.
  This is also used to specify a specific node for other elements, and the
 \layout Description
 
---nettype\SpecialChar ~
-<type> this can be 
-\series bold 
-tcp, elan, gm
-\layout Description
-
---nid\SpecialChar ~
-nid the network id, e.g.
- ElanID or IP address as used by portals.
+--net\SpecialChar ~
+host_name\SpecialChar ~
+net_type\SpecialChar ~
+[port] Adds a network interface to a node.
  If host_name is '*', then the local address while be substituted when the
  node is configured with lconf.
-\layout Description
-
---router optional flag to mark this node as a router
-\layout Description
-
---profile optional flag to mark this node as a profile node.
- This is automatically true if the the --nid argument contains a '*'.
-\layout Description
-
---port\SpecialChar ~
-[port] optional argument to indicate the tcp port.
- The default is 988.
- 
-\layout Description
-
---tcpbuf\SpecialChar ~
-<size> optional argument
-\end_deeper 
-\layout Description
-
---add\SpecialChar ~
-mds
-\begin_deeper 
+ This requires a --node argument.
 \layout Description
 
 --mds\SpecialChar ~
-<mds_name> 
-\layout Description
-
---device\SpecialChar ~
-<pathname>
-\layout Description
-
---size\SpecialChar ~
-<size> optional argument indicating the size of the device to be created
- (used typically for loop devices).
-\layout Description
-
---node\SpecialChar ~
-<nodename> Adds an MDS to the specified node.
- This requires a --node argument, and it must not be a profile node.
-\end_deeper 
-\layout Description
-
---add\SpecialChar ~
-lov Creates an LOV with the specified parameters.
- The mds_name must already exist in the descriptor.
-\begin_deeper 
-\layout Description
-
---lov_<name>
-\layout Description
-
---mds_<name>
-\layout Description
-
---stripesize\SpecialChar ~
-<size>
-\layout Description
-
---stripecount\SpecialChar ~
-<count>
-\layout Description
-
---pattern\SpecialChar ~
-<pattern> Pattern can be 0.
-\end_deeper 
-\layout Description
-
---add\SpecialChar ~
-ost Creates an OBD, OST, and OSC.
- The OST and OBD are created on the specified node.
-\begin_deeper 
-\layout Description
-
---ost\SpecialChar ~
-<name> [NOT IMPLEMENTED] Name to give to this OST target.
-\layout Description
-
---node\SpecialChar ~
-<nodename> Node on which the OST service is run, can not be a profile
- node.
-\layout Description
-
---device\SpecialChar ~
-
-\layout Description
-
---size\SpecialChar ~
-[size]
+mds_name Adds an MDS to the specified node.
+ This requires a --node argument.
 \layout Description
 
 --lov\SpecialChar ~
-<name> Name of LOV to which this OSC will be attached.
- 
+lov_name\SpecialChar ~
+mds_name\SpecialChar ~
+stripe_sz\SpecialChar ~
+stripe_off\SpecialChar ~
+pattern Creates an LOV with the
+ specified parameters.
+ The mds_name must already exist in the descriptor.
+ When used as an argument to other commands, only the lov_name is specified.
+\layout Description
+
+--ost\SpecialChar ~
+device\SpecialChar ~
+[size] Creates an OBD, OST, and OSC.
+ The OST and OBD are created on the specified node.
+ If an lov option is used, then the OSC will be added to the LOV.
+ Requires: --node.
 \layout Description
 
 --obduuid\SpecialChar ~
 UUID specify the UUID of the OBD device.
- The default value is OBD_nodename_UUID.
-\end_deeper 
+ 
 \layout Description
 
---add\SpecialChar ~
-mtpt Creates a mount point on the specified node.
- Either an LOV or OSC name can be used.
-\begin_deeper 
-\layout Description
-
---node\SpecialChar ~
-node node or profile node that will use the mtpt
-\layout Description
-
---path\SpecialChar ~
+--mtpt\SpecialChar ~
 /mnt/path\SpecialChar ~
-
-\layout Description
-
---mds\SpecialChar ~
-mds_name 
-\layout Description
-
---mdc\SpecialChar ~
-lov_name|osc_name
-\end_deeper 
-\layout Description
-
---add\SpecialChar ~
-route Creates a static route through a gateway to a specific nid or
- a range of nids.
-\begin_deeper 
-\layout Description
-
---node\SpecialChar ~
-node node or profile node to add the route to
-\layout Description
-
---gw\SpecialChar ~
-nid the nid of the gateway (must be a local interface or a peer)
-\layout Description
-
---tgt\SpecialChar ~
-nid for a specific route, this is the target nid
-\layout Description
-
---lo\SpecialChar ~
-nid for a range route, this is the lo value nid
-\layout Description
-
---hi\SpecialChar ~
-nid for a range route, this is the hi value nid
-\end_deeper 
-\layout Description
-
---add\SpecialChar ~
-oscref Adds an OSC reference to a node.
- This is only necessary when the the OSC will be used without a mountpoint.
-\begin_deeper 
-\layout Description
-
---node\SpecialChar ~
-node node or profile node to add the OSC ref to
-\layout Description
-
---osc\SpecialChar ~
-osc_name Name of the OSC to add a reference to.
- The --add ost command automatically creates the OSC, and the name will
- be OSC_<node>, where node is the name of node the OST is on.
-\end_deeper 
+mdc_uuid\SpecialChar ~
+lov_uuid|osc_uuid Creates a mount point on the specified
+ node.
+ Either an LOV or OSC name can be used.
+ The default OSC name currently used is OSC_<node_name>.
+ Requires: --node
 \layout Description
 
 Options: 
 \begin_deeper 
 \layout Description
 
---output\SpecialChar ~
-filename Sends output to the file.
+--output filename Sends output to the file.
  If the file exists, it will be overwritten.
 \layout Description
 
---merge\SpecialChar ~
-filename Add the new element to an existing file.
+--merge filename Add the new element to an existing file.
  
+\layout Description
+
+--format Turns on autoformat.
+ The block devices for MDS and OBD will be formatted if necessary.
 \end_deeper 
 \layout Subsection
 
