@@ -28,18 +28,16 @@
  * Common STATUS namespace
  */
 
-static int 
-rd_uuid (char *page, char **start, off_t off, int count, 
-	 int *eof, void *data)
+static int rd_uuid (char *page, char **start, off_t off, int count,
+                    int *eof, void *data)
 {
         struct obd_device* dev = (struct obd_device*)data;
-	
+
         return (snprintf(page, count, "%s\n", dev->obd_uuid));
 }
 
-static int 
-rd_target (char *page, char **start, off_t off, int count, 
-	   int *eof, void *data)
+static int rd_target (char *page, char **start, off_t off, int count,
+                      int *eof, void *data)
 {
         struct obd_device    *dev = (struct obd_device*)data;
         struct cache_obd     *cobd = &dev->u.cobd;
@@ -57,16 +55,15 @@ rd_target (char *page, char **start, off_t off, int count,
 	return (rc);
 }
 
-static int 
-rd_cache (char *page, char **start, off_t off, int count, 
-	  int *eof, void *data)
+static int rd_cache(char *page, char **start, off_t off, int count,
+                    int *eof, void *data)
 {
         struct obd_device    *dev = (struct obd_device*)data;
 	struct cache_obd     *cobd = &dev->u.cobd;
 	struct lustre_handle *conn = &cobd->cobd_cache;
 	struct obd_export    *exp;
 	int    rc;
-	
+
 	if ((dev->obd_flags & OBD_SET_UP) == 0)
 		rc = snprintf (page, count, "not set up\n");
 	else {
@@ -81,13 +78,11 @@ struct lprocfs_vars status_var_nm_1[] = {
         {"status/uuid", rd_uuid, 0, 0},
         {"status/target_uuid", rd_target, 0, 0},
         {"status/cache_uuid", rd_cache, 0, 0},
-       
         {0}
 };
 
-int 
-rd_numrefs (char* page, char **start, off_t off, int count, 
-	    int *eof, void *data)
+int rd_numrefs(char *page, char **start, off_t off, int count,
+               int *eof, void *data)
 {
         struct obd_type* class = (struct obd_type*)data;
 

@@ -119,11 +119,12 @@ static int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
 #endif
 
 static struct obd_ops ptlbd_cl_obd_ops = {
-        o_setup:       ptlbd_cl_setup,
-        o_cleanup:     ptlbd_cl_cleanup,
+        o_owner:        THIS_MODULE,
+        o_setup:        ptlbd_cl_setup,
+        o_cleanup:      ptlbd_cl_cleanup,
 #if 0
-        o_connect:     ptlbd_cl_connect,
-        o_disconnect:  class_disconnect
+        o_connect:      ptlbd_cl_connect,
+        o_disconnect:   class_disconnect
 #endif
 };
 

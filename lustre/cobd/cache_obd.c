@@ -60,9 +60,8 @@ cobd_setup (struct obd_device *dev, obd_count len, void *buf)
         rc = obd_connect (&cobd->cobd_cache, cache, NULL, NULL, NULL);
         if (rc != 0)
                 goto fail_0;
-        
-        MOD_INC_USE_COUNT;
-	return (0);
+
+        return (0);
 
  fail_0:
         obd_disconnect (&cobd->cobd_target);
@@ -85,17 +84,16 @@ cobd_cleanup (struct obd_device *dev)
         rc = obd_disconnect (&cobd->cobd_target);
         if (rc != 0)
                 CERROR ("error %d disconnecting target\n", rc);
-        
-        MOD_DEC_USE_COUNT;
-	return (0);
+
+        return (0);
 }
 
 static int
 cobd_connect (struct lustre_handle *conn, struct obd_device *obd,
-	      obd_uuid_t cluuid, struct recovd_obd *recovd,
-	      ptlrpc_recovery_cb_t recover)
+              obd_uuid_t cluuid, struct recovd_obd *recovd,
+              ptlrpc_recovery_cb_t recover)
 {
-	int rc = class_connect (conn, obd, cluuid);
+        int rc = class_connect (conn, obd, cluuid);
 
         CERROR ("rc %d\n", rc);
         return (rc);
@@ -281,17 +279,18 @@ cobd_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
 }
 
 static struct obd_ops cobd_ops = {
-	o_attach:		cobd_attach,
-	o_detach:		cobd_detach,
+        o_owner:                THIS_MODULE,
+        o_attach:               cobd_attach,
+        o_detach:               cobd_detach,
 
-	o_setup:		cobd_setup,
-	o_cleanup:		cobd_cleanup,
+        o_setup:                cobd_setup,
+        o_cleanup:              cobd_cleanup,
 
-	o_connect:		cobd_connect,
-	o_disconnect:		cobd_disconnect,
+        o_connect:              cobd_connect,
+        o_disconnect:           cobd_disconnect,
 
-        o_get_info:		cobd_get_info,
-        o_statfs:		cobd_statfs,
+        o_get_info:             cobd_get_info,
+        o_statfs:               cobd_statfs,
 
         o_getattr:              cobd_getattr,
         o_open:                 cobd_open,
@@ -299,7 +298,7 @@ static struct obd_ops cobd_ops = {
         o_preprw:               cobd_preprw,
         o_commitrw:             cobd_commitrw,
         o_brw:                  cobd_brw,
-        o_iocontrol:		cobd_iocontrol,
+        o_iocontrol:            cobd_iocontrol,
 };
 
 static int __init

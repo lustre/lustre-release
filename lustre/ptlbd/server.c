@@ -62,16 +62,15 @@ static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
         int rc;
         ENTRY;
 
-        MOD_INC_USE_COUNT;
 #if 0
         if (data->ioc_inllen1 < 1) {
                 CERROR("requires a PTLBD server UUID\n");
-                GOTO(out_dec, rc = -EINVAL);
+                RETURN(rc = -EINVAL);
         }
 
         if (data->ioc_inllen1 > 37) {
                 CERROR("PTLBD server UUID must be less than 38 characters\n");
-                GOTO(out_dec, rc = -EINVAL);
+                RETURN(rc = -EINVAL);
         }
 
         memcpy(server_uuid, data->ioc_inlbuf1, MIN(data->ioc_inllen1,
@@ -86,7 +85,7 @@ static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         if (!ptlbd->ptlbd_service) {
                 CERROR("failed to start service\n");
-                GOTO(out_dec, rc = -ENOMEM);
+                RETURN(rc = -ENOMEM);
         }
 
         rc = ptlrpc_start_thread(obddev, ptlbd->ptlbd_service, "ptldb");
@@ -104,8 +103,6 @@ static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
         ptlrpc_stop_all_threads(ptlbd->ptlbd_service);
         ptlrpc_unregister_service(ptlbd->ptlbd_service);
 
- out_dec:
-        MOD_DEC_USE_COUNT;
         return rc;
 }
 
@@ -120,7 +117,6 @@ static int ptlbd_sv_cleanup(struct obd_device *obddev)
         ptlrpc_unregister_service(ptlbd->ptlbd_service);
 
         ptlbd_sv_already_setup = 0;
-        MOD_DEC_USE_COUNT;
         RETURN(0);
 }
 
@@ -134,12 +130,13 @@ static int ptlbd_sv_connect(struct lustre_handle *conn, struct obd_device *src,
 #endif
 
 static struct obd_ops ptlbd_sv_obd_ops = {
-/*        o_iocontrol:   ptlbd_iocontrol,*/
-        o_setup:       ptlbd_sv_setup,
-        o_cleanup:     ptlbd_sv_cleanup,
+        o_owner:        THIS_MODULE,
+/*        o_iocontrol:    ptlbd_iocontrol,*/
+        o_setup:        ptlbd_sv_setup,
+        o_cleanup:      ptlbd_sv_cleanup,
 #if 0
-        o_connect:     ptlbd_sv_connect,
-        o_disconnect:  class_disconnect
+        o_connect:      ptlbd_sv_connect,
+        o_disconnect:   class_disconnect
 #endif
 };
 
