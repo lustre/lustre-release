@@ -90,8 +90,48 @@ exit:
 	d_unalloc(cache_dentry);	
 	RETURN(rc);
 }
+static struct dentry *smfs_lookup(struct inode *dir,
+		       		  struct dentry *dentry)
+{
+	struct	inode *cache_dir; 
+	struct	inode *cache_inode, *inode;
+	struct  dentry tmp; 
+	struct  dentry *cache_dentry;
+	struct  dentry *rc = NULL;
+	
+	ENTRY;
+	
+	cache_dir = I2CI(dir);
+        if (!cache_dir)
+                RETURN(ERR_PTR(-ENOENT));
+	prepare_parent_dentry(&tmp, cache_dir);      
+	cache_dentry = d_alloc(&tmp, &dentry->d_name);
+      
+	if (!cache_dentry)
+		RETURN(ERR_PTR(-ENOENT));
 
-struct inode_operations smfs_dir_fops = {
-	create: smfs_create,
+	if(cache_dir && cache_dir->i_op->lookup)
+		rc = cache_dir->i_op->lookup(cache_dir, cache_dentry);
+
+	if (rc || !cache_dentry->d_inode || 
+            is_bad_inode(cache_dentry->d_inode) ||
+	    IS_ERR(cache_dentry->d_inode)) {
+		GOTO(exit, rc);	
+	}
+
+	cache_inode = cache_dentry->d_inode;
+	
+	inode = iget(dir->i_sb, cache_inode->i_ino);	
+		
+	d_add(dentry, inode);	
+exit:
+	d_unalloc(cache_dentry);	
+	RETURN(rc);
+}		       
+struct inode_operations smfs_dir_iops = {
+	create:	smfs_create,
+	lookup:	smfs_lookup,
 };
-
+struct file_operations smfs_dir_fops = {
+	
+};

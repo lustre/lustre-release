@@ -190,6 +190,14 @@ static char *parse_path2dev(struct super_block *sb, char *dev_path)
 	memcpy(name, dev_path, strlen(dev_path) + 1);
 	RETURN(name);
 }
+static void duplicate_sb(struct super_block *csb, 
+			 struct super_block *sb)
+{
+	sb->s_blocksize = csb->s_blocksize;
+	sb->s_magic = csb->s_magic;
+	sb->s_blocksize_bits = csb->s_blocksize_bits;
+	sb->s_maxbytes = csb->s_maxbytes;
+}
 extern struct super_operations smfs_super_ops;
 
 static int sm_mount_cache(struct super_block *sb, 
@@ -222,6 +230,8 @@ static int sm_mount_cache(struct super_block *sb,
 	smb = S2SMI(sb); 
 	smb->smsi_sb = mnt->mnt_sb;
 	smb->smsi_mnt = mnt;
+	
+	duplicate_sb(mnt->mnt_sb, sb);
 	sm_set_sb_ops(mnt->mnt_sb, sb);	
 err_out:
 	if (dev_name) 
@@ -234,6 +244,7 @@ static int sm_umount_cache(struct super_block *sb)
 	struct smfs_super_info *smb = S2SMI(sb);
 	
 	mntput(smb->smsi_mnt);
+	
 	return 0;
 }
 void smfs_put_super(struct super_block *sb)
@@ -249,8 +260,6 @@ smfs_read_super(
         void *data,
         int silent)
 {
-	struct smfs_inode_info *smi;
-	struct dentry *bottom_root;
 	struct inode *root_inode = NULL;
 	char *devstr = NULL, *typestr = NULL;
 	char *cache_data;
@@ -278,19 +287,10 @@ smfs_read_super(
 		CERROR("Can not mount %s as %s\n", devstr, typestr);
 		GOTO(out_err, 0);
 	}
-	/* set up the super block */
 
-	bottom_root = dget(S2SMI(sb)->smsi_sb->s_root);
-	if (!bottom_root) {
-		CERROR("bottom not mounted\n");
-		GOTO(out_err, err=-ENOENT);
-        }
-
-	root_ino = bottom_root->d_inode->i_ino;
+	root_ino = S2CSB(sb)->s_root->d_inode->i_ino;
 	root_inode = iget(sb, root_ino);
-	smi = I2SMI(root_inode);
-	/*FIXME Intialize smi here*/
-	
+		
 	CDEBUG(D_SUPER, "readinode %p, root ino %ld, root inode at %p\n",
 	       sb->s_op->read_inode, root_ino, root_inode);
 	
@@ -299,13 +299,11 @@ smfs_read_super(
 	if (!sb->s_root) {
 		GOTO(out_err, err=-EINVAL);
 	}
-
+	
 	CDEBUG(D_SUPER, "sb %lx, &sb->u.generic_sbp: %lx\n",
                 (ulong) sb, (ulong) &sb->u.generic_sbp);
  	
- out_err:
-	if (root_inode)
-		iput(root_inode);
+out_err:
 	cleanup_option();
 	if (err)
 		return NULL;

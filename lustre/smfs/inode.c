@@ -50,15 +50,13 @@ static void smfs_read_inode(struct inode *inode)
 	if(cache_sb && cache_sb->s_op->read_inode)
 		cache_sb->s_op->read_inode(cache_inode);
 
-	CDEBUG(D_INODE, "read_inode ino %lu icount %d \n", 
-	       inode->i_ino, atomic_read(&inode->i_count));
-
 	duplicate_inode(cache_inode, inode);
 	sm_set_inode_ops(cache_inode, inode);
 	
 	CDEBUG(D_INODE, "read_inode ino %lu icount %d \n", 
 	       inode->i_ino, atomic_read(&inode->i_count));
 	
+	iput(cache_inode);	
 	return; 
 }
 /* Although some filesystem(such as ext3) do not have

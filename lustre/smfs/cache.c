@@ -74,41 +74,12 @@ void cleanup_smfs_cache()
 	return;
 }
 
-static void setup_sm_symlink_ops(struct inode *cache_inode, 
-				 struct  inode *inode,
-		       		 struct inode_operations *cache_sym_iops,
-				 struct file_operations *cache_sym_fops)
+static void setup_iops(struct inode *cache_inode, 
+		       struct inode_operations *iops,
+		       struct inode_operations *cache_iops)
 {
-	return;
-}
 
-static void setup_sm_file_ops(struct inode *cache_inode, 
-		       	      struct inode *inode,
-		       	      struct inode_operations *cache_iops,
-		              struct file_operations *cache_fops,
-		              struct address_space_operations *cache_aops)
-{
-	
-	struct smfs_super_info *smb;
-	struct inode_operations *iops;
-	struct file_operations *fops;
-        struct address_space_operations *aops;
-
-	smb = S2SMI(inode->i_sb); 
-	
-	if (smb->ops_check & FILE_OPS_CHECK) 
-		return; 
-	smb->ops_check |= FILE_OPS_CHECK;
-
-	iops = cache_fiops(&smfs_operations);
-	fops = cache_ffops(&smfs_operations);
-	aops = cache_faops(&smfs_operations);
-
-	memset(iops , 0 , sizeof (struct inode_operations));	
-	memset(fops , 0 , sizeof (struct file_operations));	
-	memset(aops , 0 , sizeof (struct address_space_operations));	
-	
-	if (cache_inode->i_op) {
+	if (cache_inode->i_op && cache_iops && iops) {
 		if (cache_inode->i_op->create) 
 			iops->create = cache_iops->create;
 		if (cache_inode->i_op->create_it) 
@@ -174,12 +145,163 @@ static void setup_sm_file_ops(struct inode *cache_inode,
 		if (cache_inode->i_op->removexattr)
 			iops->removexattr = cache_iops->removexattr;
 	}
-	if (cache_inode->i_fop) {
-	
-	}	
-	if (cache_inode->i_mapping && cache_inode->i_mapping->a_ops) {
-	
+}
+static void setup_fops(struct inode *cache_inode,
+		       struct file_operations *fops,
+		       struct file_operations *cache_fops)
+{
+	if (cache_inode->i_fop && cache_fops && fops) {
+		if (cache_inode->i_fop->llseek)
+			fops->llseek = cache_fops->llseek;
+		if (cache_inode->i_fop->read)
+			fops->read = cache_fops->read;
+		if (cache_inode->i_fop->write)
+			fops->write = cache_fops->write;
+		if (cache_inode->i_fop->readdir)
+			fops->readdir = cache_fops->readdir;
+		if (cache_inode->i_fop->poll)
+			fops->poll = cache_fops->poll;
+		if (cache_inode->i_fop->ioctl)
+			fops->ioctl = cache_fops->ioctl;
+		if (cache_inode->i_fop->mmap)
+			fops->mmap = cache_fops->mmap;
+		if (cache_inode->i_fop->open)
+			fops->open = cache_fops->open;
+		if (cache_inode->i_fop->flush)
+			fops->flush = cache_fops->flush;
+		if (cache_inode->i_fop->release)
+			fops->release = cache_fops->release;
+		if (cache_inode->i_fop->fsync)
+			fops->fsync = cache_fops->fsync;
+		if (cache_inode->i_fop->fasync)
+			fops->fasync = cache_fops->fasync;
+		if (cache_inode->i_fop->lock)
+			fops->lock = cache_fops->lock;
+		if (cache_inode->i_fop->readv)
+			fops->readv = cache_fops->readv;
+		if (cache_inode->i_fop->writev)
+			fops->writev = cache_fops->writev;
+		if (cache_inode->i_fop->sendpage)
+			fops->sendpage = cache_fops->sendpage;
+		if (cache_inode->i_fop->get_unmapped_area)
+			fops->get_unmapped_area = cache_fops->get_unmapped_area;										 	
 	}
+}
+static void setup_aops(struct inode *cache_inode,
+		       struct address_space_operations *aops,
+		       struct address_space_operations *cache_aops)
+{
+	if (cache_inode && cache_inode->i_mapping && 
+	    aops && cache_aops) {
+		struct address_space_operations *caops = cache_inode->i_mapping->a_ops;
+
+		if (caops->writepage) 
+			aops->writepage = cache_aops->writepage;
+		if (caops->readpage)
+			aops->readpage = cache_aops->readpage;
+		if (caops->sync_page)
+			aops->sync_page = cache_aops->sync_page;
+		if (caops->prepare_write)
+			aops->prepare_write = cache_aops->prepare_write;
+		if (caops->commit_write)
+			aops->commit_write = cache_aops->commit_write;
+		if (caops->bmap)
+			aops->bmap = cache_aops->bmap;
+		if (caops->flushpage)
+			aops->flushpage = cache_aops->flushpage;
+		if (caops->releasepage)
+			aops->releasepage = cache_aops->releasepage;
+		if (caops->direct_IO)
+			aops->direct_IO = cache_aops->direct_IO;
+		if (caops->removepage)
+			aops->removepage = cache_aops->removepage;
+	}									
+};
+		
+static void setup_sm_file_ops(struct inode *cache_inode, 
+		       	      struct inode *inode,
+		       	      struct inode_operations *cache_iops,
+		              struct file_operations *cache_fops,
+		              struct address_space_operations *cache_aops)
+{
+	
+	struct smfs_super_info *smb;
+	struct inode_operations *iops;
+	struct file_operations *fops;
+        struct address_space_operations *aops;
+
+	smb = S2SMI(inode->i_sb); 
+	
+	if (smb->ops_check & FILE_OPS_CHECK) 
+		return; 
+	smb->ops_check |= FILE_OPS_CHECK;
+
+	iops = cache_fiops(&smfs_operations);
+	fops = cache_ffops(&smfs_operations);
+	aops = cache_faops(&smfs_operations);
+
+	memset(iops , 0 , sizeof (struct inode_operations));	
+	memset(fops , 0 , sizeof (struct file_operations));	
+	memset(aops , 0 , sizeof (struct address_space_operations));	
+
+	setup_iops(cache_inode, iops, cache_iops); 	
+	setup_fops(cache_inode, fops, cache_fops);
+	setup_aops(cache_inode, aops, cache_aops);
+
+	return;
+}
+
+static void setup_sm_dir_ops(struct inode *cache_inode, 
+			     struct  inode *inode,
+		       	     struct inode_operations *cache_dir_iops,
+			     struct file_operations *cache_dir_fops)
+{
+	struct smfs_super_info *smb;
+	struct inode_operations *iops;
+	struct file_operations *fops;
+
+	smb = S2SMI(inode->i_sb); 
+	
+	if (smb->ops_check & DIR_OPS_CHECK) 
+		return; 
+	smb->ops_check |= DIR_OPS_CHECK;
+
+	iops = cache_diops(&smfs_operations);
+	fops = cache_dfops(&smfs_operations);
+
+	memset(iops, 0, sizeof (struct inode_operations));	
+	memset(fops, 0, sizeof (struct file_operations));	
+
+	setup_iops(cache_inode, iops, cache_dir_iops); 	
+	setup_fops(cache_inode, fops, cache_dir_fops);
+
+	return;
+}
+
+static void setup_sm_symlink_ops(struct inode *cache_inode, 
+				 struct  inode *inode,
+		       		 struct inode_operations *cache_sym_iops,
+				 struct file_operations *cache_sym_fops)
+{
+	struct smfs_super_info *smb;
+	struct inode_operations *iops;
+	struct file_operations *fops;
+
+	smb = S2SMI(inode->i_sb); 
+	
+	if (smb->ops_check & SYMLINK_OPS_CHECK) 
+		return; 
+	smb->ops_check |= SYMLINK_OPS_CHECK;
+
+	iops = cache_siops(&smfs_operations);
+	fops = cache_sfops(&smfs_operations);
+
+	memset(iops , 0 , sizeof (struct inode_operations));	
+	memset(fops , 0 , sizeof (struct file_operations));	
+
+	setup_iops(cache_inode, iops, cache_sym_iops); 	
+	setup_fops(cache_inode, fops, cache_sym_fops);
+
 	return;
 }
 
@@ -236,14 +358,17 @@ static void setup_sm_sb_ops(struct super_block *cache_sb,
 		if (cache_sb->s_op->show_options)
 			sops->show_options = smfs_sops->show_options;
 	}
-						
+					
 	return;
 }	
 void sm_set_inode_ops(struct inode *cache_inode, struct inode *inode)
 {
         /* XXX now set the correct snap_{file,dir,sym}_iops */
         if (S_ISDIR(inode->i_mode)) {
-                inode->i_op = cache_diops(&smfs_operations);
+       	        setup_sm_dir_ops(cache_inode, inode,
+                                 &smfs_dir_iops,
+                                 &smfs_dir_fops);
+	        inode->i_op = cache_diops(&smfs_operations);
                 inode->i_fop = cache_dfops(&smfs_operations);
         } else if (S_ISREG(inode->i_mode)) {
 	        setup_sm_file_ops(cache_inode, inode,
@@ -256,9 +381,8 @@ void sm_set_inode_ops(struct inode *cache_inode, struct inode *inode)
                 inode->i_op = cache_fiops(&smfs_operations);
                 if (inode->i_mapping)
                         inode->i_mapping->a_ops = cache_faops(&smfs_operations);
-                                                                                                                                                                                                     
-        }
-        else if (S_ISLNK(inode->i_mode)) {
+        
+	} else if (S_ISLNK(inode->i_mode)) {
                 setup_sm_symlink_ops(cache_inode, inode,
                                      &smfs_sym_iops, 
 				     &smfs_sym_fops);
