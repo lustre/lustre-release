@@ -45,7 +45,13 @@ static void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
         CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08x\n",
                inode->i_ino, (long)oa->o_id, oa->o_valid);
         obdo_from_inode(oa, inode);
-        if (obdfs_has_inline(inode)) {
+	if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode)) {
+                CDEBUG(D_INODE, "copying device %x from inode to obdo\n",
+		       inode->i_rdev);
+		*((obd_rdev *)oa->o_inline) = kdev_t_to_nr(inode->i_rdev);
+                oa->o_obdflags |= OBD_FL_INLINEDATA;
+                oa->o_valid |= OBD_MD_FLINLINE;
+	} else if (obdfs_has_inline(inode)) {
                 CDEBUG(D_INODE, "copying inline data from inode to obdo\n");
                 memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
                 oa->o_obdflags |= OBD_FL_INLINEDATA;
@@ -63,8 +69,16 @@ static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
         obdo_to_inode(inode, oa);
 
         if (obdo_has_inline(oa)) {
-                CDEBUG(D_INODE, "copying inline data from obdo to inode\n");
-                memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
+		if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) ||
+		    S_ISFIFO(inode->i_mode)) {
+			obd_rdev rdev = *((obd_rdev *)oa->o_inline);
+			CDEBUG(D_INODE,
+			       "copying device %x from obdo to inode\n", rdev);
+			init_special_inode(inode, inode->i_mode, rdev);
+		} else {
+			CDEBUG(D_INFO, "copying inline from obdo to inode\n");
+			memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
+		}
                 oinfo->oi_flags |= OBD_FL_INLINEDATA;
         }
 } /* obdfs_to_inode */

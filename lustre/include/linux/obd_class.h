@@ -33,7 +33,7 @@ typedef uint32_t        obd_blksize;
 typedef uint32_t        obd_mode;
 typedef uint32_t        obd_uid;
 typedef uint32_t        obd_gid;
-typedef uint16_t        obd_rdev;
+typedef uint32_t        obd_rdev;
 typedef uint32_t        obd_flag;
 typedef uint32_t        obd_count;
 
@@ -55,7 +55,6 @@ struct obdo {
         obd_mode                o_mode;
         obd_uid                 o_uid;
         obd_gid                 o_gid;
-	obd_rdev                o_rdev;
         obd_flag                o_flags;
         obd_flag                o_obdflags;
         obd_count               o_nlink;
@@ -84,7 +83,6 @@ struct obdo {
 #define OBD_MD_FLGENER  (0x00002000UL)
 #define OBD_MD_FLINLINE (0x00004000UL)
 #define OBD_MD_FLOBDMD  (0x00008000UL)
-#define OBD_MD_FLRDEV   (0x00010000UL)
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS))
 
 /*
@@ -325,8 +323,6 @@ static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
                 dst->o_gid = src->o_gid;
         if ( src->o_valid & OBD_MD_FLFLAGS ) 
                 dst->o_flags = src->o_flags;
-        if ( src->o_valid & OBD_MD_FLRDEV ) 
-                dst->o_rdev = src->o_rdev;
         /*
         if ( src->o_valid & OBD_MD_FLOBDFLG ) 
                 dst->o_obdflags = src->o_obdflags;
@@ -371,8 +367,6 @@ static __inline__ void obdo_from_inode(struct obdo *dst, struct inode *src)
                 dst->o_uid = src->i_uid;
         if ( dst->o_valid & OBD_MD_FLGID )
                 dst->o_gid = src->i_gid;
-        if ( dst->o_valid & OBD_MD_FLRDEV )
-                dst->o_rdev = src->i_rdev;
         if ( dst->o_valid & OBD_MD_FLFLAGS )
                 dst->o_flags = src->i_flags;
         if ( dst->o_valid & OBD_MD_FLNLINK )
@@ -404,8 +398,6 @@ static __inline__ void obdo_to_inode(struct inode *dst, struct obdo *src)
                 dst->i_uid = src->o_uid;
         if ( src->o_valid & OBD_MD_FLGID ) 
                 dst->i_gid = src->o_gid;
-        if ( src->o_valid & OBD_MD_FLRDEV ) 
-                dst->i_rdev = src->o_rdev;
         if ( src->o_valid & OBD_MD_FLFLAGS ) 
                 dst->i_flags = src->o_flags;
         if ( src->o_valid & OBD_MD_FLNLINK )
@@ -438,8 +430,6 @@ static __inline__ int obdo_cmp_md(struct obdo *dst, struct obdo *src,
                 res = (res || (dst->o_uid != src->o_uid));
         if ( compare & OBD_MD_FLGID )
                 res = (res || (dst->o_gid != src->o_gid));
-        if ( compare & OBD_MD_FLRDEV )
-                res = (res || (dst->o_rdev != src->o_rdev));
         if ( compare & OBD_MD_FLFLAGS ) 
                 res = (res || (dst->o_flags != src->o_flags));
         if ( compare & OBD_MD_FLNLINK )
