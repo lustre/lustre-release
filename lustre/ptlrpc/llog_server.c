@@ -458,7 +458,7 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
                 data.remains -= l;
                 data.init = 1;
                 
-                llog_process(handle, llog_catinfo_cb, &data);
+                llog_process(handle, llog_catinfo_cb, &data, NULL);
                 llog_close(handle);
                 
                 if (data.remains <= 0)

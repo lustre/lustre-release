@@ -334,7 +334,7 @@ static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
 static int plain_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
                           void *data)
 {
-        if (!le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN) {
+        if (!(le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
@@ -350,7 +350,7 @@ static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         struct llog_cookie cookie;
         static int i = 0;
 
-        if (!le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN) {
+        if (!(le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
@@ -391,7 +391,7 @@ static int llog_test_5(struct obd_device *obd)
         llog_init_handle(llh, LLOG_F_IS_CAT, &uuid);
 
         CERROR("5b: print the catalog entries.. we expect 2\n");
-        rc = llog_process(llh, (llog_cb_t)cat_print_cb, "test 5");
+        rc = llog_process(llh, (llog_cb_t)cat_print_cb, "test 5", NULL);
         if (rc) {
                 CERROR("5b: process with cat_print_cb failed: %d\n", rc);
                 GOTO(out, rc);
@@ -413,7 +413,7 @@ static int llog_test_5(struct obd_device *obd)
         }
 
         CERROR("5b: print the catalog entries.. we expect 1\n");
-        rc = llog_process(llh, (llog_cb_t)cat_print_cb, "test 5");
+        rc = llog_process(llh, (llog_cb_t)cat_print_cb, "test 5", NULL);
         if (rc) {
                 CERROR("5b: process with cat_print_cb failed: %d\n", rc);
                 GOTO(out, rc);
@@ -476,7 +476,7 @@ static int llog_test_6(struct obd_device *obd, char *name)
                 GOTO(parse_out, rc);
         }
 
-        rc = llog_process(llh, (llog_cb_t)plain_print_cb, NULL);
+        rc = llog_process(llh, (llog_cb_t)plain_print_cb, NULL, NULL);
         if (rc)
                 CERROR("6: llog_process failed %d\n", rc);
 
