@@ -165,16 +165,16 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
 
         if (lmm) {
                 if (lmm_bytes < sizeof (*lmm)) {
-                        CERROR ("lov_mds_md too small: %d, need at least %d\n",
-                                lmm_bytes, sizeof (*lmm));
-                        RETURN (-EINVAL);
+                        CERROR("lov_mds_md too small: %d, need %d\n",
+                                lmm_bytes, (int)sizeof(*lmm));
+                        RETURN(-EINVAL);
                 }
                 if (le32_to_cpu (lmm->lmm_magic) != LOV_MAGIC) {
                         CERROR("bad disk LOV MAGIC: %#08x != %#08x\n",
                                le32_to_cpu (lmm->lmm_magic), LOV_MAGIC);
                         RETURN(-EINVAL);
                 }
-                
+
                 ost_count = le16_to_cpu (lmm->lmm_ost_count);
                 stripe_count = le16_to_cpu (lmm->lmm_stripe_count);
 
