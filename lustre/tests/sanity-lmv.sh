@@ -277,6 +277,17 @@ test_2a() {
 }
 run_test 2a " list splitted dir ============================="
 
+test_2b() {
+	mkdir $DIR/2b1 || error 
+	createmany -o $DIR/2b1/f 5000
+	$CLEAN
+	$START
+	statmany -l $DIR/2b1/f 5000 5000 || error
+	statmany -s $DIR/2b1/f 5000 5000 || error
+	rm -rf $DIR/2b1 || error
+}
+run_test 2b " list splitted dir after remount ============================="
+
 TMPDIR=$OLDTMPDIR
 TMP=$OLDTMP
 HOME=$OLDHOME
