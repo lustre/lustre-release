@@ -137,7 +137,7 @@ setup() {
     wait_for mds
     start mds $MDSLCONFARGS ${REFORMAT}
     while ! do_node $CLIENTS "ls -d $LUSTRE" > /dev/null; do sleep 5; done
-    zconf_mount $CLIENTS $MOUNT
+    grep " $MOUNT " /proc/mounts || zconf_mount $CLIENTS $MOUNT
 
 }
 
@@ -156,7 +156,7 @@ client_touch() {
     file=$1
     for c in $LIVE_CLIENT $FAIL_CLIENTS;  do
 	if echo $DOWN_CLIENTS | grep -q $c; then continue; fi
-	$PDSH $c touch $MOUNT/${c}_$file
+	$PDSH $c touch $MOUNT/${c}_$file || return 1
     done
 }
 
