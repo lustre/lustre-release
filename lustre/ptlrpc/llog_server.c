@@ -34,6 +34,7 @@
 #include <linux/lustre_log.h>
 #include <linux/lustre_net.h>
 #include <portals/list.h>
+#include <linux/lustre_fsfilt.h>
 
 int llog_origin_handle_create(struct ptlrpc_request *req)
 {
@@ -238,16 +239,17 @@ int llog_origin_handle_close(struct ptlrpc_request *req)
         RETURN(rc);
 }
 
-#ifdef ENABLE_ORPHANS
 int llog_origin_handle_cancel(struct ptlrpc_request *req)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct obd_device *disk_obd;
         struct llog_cookie *logcookies;
         struct llog_ctxt *ctxt;
-        int num_cookies, rc = 0;
+        int num_cookies, rc = 0, err, i;
         struct obd_run_ctxt saved;
         struct llog_handle *cathandle;
+        struct inode *inode;
+        void *handle;
         ENTRY;
 
         logcookies = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*logcookies));
@@ -262,25 +264,61 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
                 CWARN("llog subsys not setup or already cleanup\n");
                 RETURN(-ENOENT);
         }
+
         down(&ctxt->loc_sem);
         disk_obd = ctxt->loc_exp->exp_obd;
-        cathandle = ctxt->loc_handle;
-        LASSERT(cathandle);
+        up(&ctxt->loc_sem);
 
         push_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
-        rc = llog_cat_cancel_records(cathandle, num_cookies, logcookies);
+        for (i = 0; i < num_cookies; i++, logcookies++) {
+                ctxt = llog_get_context(obd, logcookies->lgc_subsys);
+                if (ctxt == NULL) {
+                        CWARN("llog subsys already cleanup\n");
+                        GOTO(pop_ctxt, rc = -ENOENT);
+                }
+
+                down(&ctxt->loc_sem);
+                cathandle = ctxt->loc_handle;
+                LASSERT(cathandle != NULL);
+                inode = cathandle->lgh_file->f_dentry->d_inode;
+                up(&ctxt->loc_sem);
+
+                handle = fsfilt_start(disk_obd, inode, 
+                                      FSFILT_OP_CANCEL_UNLINK_LOG, NULL);
+                if (IS_ERR(handle)) {
+                        CERROR("fsfilt_start failed: %ld\n", PTR_ERR(handle));
+                        GOTO(pop_ctxt, rc = PTR_ERR(handle));
+                }
+                                                                                                                             
+                ctxt = llog_get_context(obd, logcookies->lgc_subsys);
+                if (ctxt == NULL) {
+                        CWARN("llog subsys already cleanup\n");
+                        GOTO(pop_ctxt, rc = -ENOENT);
+                }
+                down(&ctxt->loc_sem);
+                cathandle = ctxt->loc_handle;
+                LASSERT(cathandle);
+                rc = llog_cat_cancel_records(cathandle, 1, logcookies);
+                up(&ctxt->loc_sem);
+
+                err = fsfilt_commit(disk_obd, inode, handle, 0);
+                if (err) {
+                        CERROR("error committing transaction: %d\n", err);
+                        if (!rc)
+                                rc = err;
+                        GOTO(pop_ctxt, rc);
+                }
+        }
+pop_ctxt:
+        pop_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
         if (rc)
                 CERROR("cancel %d llog-records failed: %d\n", num_cookies, rc);
         else
                 CWARN("cancel %d llog-records\n", num_cookies);
 
-        pop_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
-        up(&ctxt->loc_sem);
-
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_origin_handle_cancel);
-#endif
 
 static int llog_catinfo_config(struct obd_device *obd, char *buf, int buf_len, 
                                char *client)
