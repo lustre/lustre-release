@@ -240,6 +240,9 @@ struct obd_device {
                 struct snap_obd snap;
 #endif
         } u;
+       /* Fields used by LProcFS */
+        unsigned int cntr_mem_size;
+        void* counters;
 };
 
 struct io_cb_data;
