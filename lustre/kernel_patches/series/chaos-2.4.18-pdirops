@@ -32,4 +32,4 @@ ext3-no-write-super-chaos.patch
 dynamic-locks-2.4.18-chaos.patch
 vfs-pdirops-2.4.18-chaos.patch
 ext3-pdirops-2.4.18-chaos.patch
-add_page_private.patch
+ext3-extents-2.4.18-chaos-pdirops.patch
