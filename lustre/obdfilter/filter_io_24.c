@@ -29,8 +29,6 @@
 #include <linux/pagemap.h> // XXX kill me soon
 #include <linux/version.h>
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <linux/iobuf.h>
@@ -225,7 +223,8 @@ static int filter_range_is_mapped(struct inode *inode, obd_size offset, int len)
 
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           struct obd_ioobj *obj, int niocount,
-                          struct niobuf_local *res, struct obd_trans_info *oti)
+                          struct niobuf_local *res, struct obd_trans_info *oti,
+                          int rc)
 {
         struct obd_device *obd = exp->exp_obd;
         struct obd_run_ctxt saved;
@@ -234,7 +233,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         struct iattr iattr = { 0 };
         struct kiobuf *iobuf;
         struct inode *inode = NULL;
-        int rc = 0, i, n, cleanup_phase = 0, err;
+        int i, n, cleanup_phase = 0, err;
         unsigned long now = jiffies; /* DEBUGGING OST TIMEOUTS */
         void *wait_handle;
         ENTRY;
@@ -242,12 +241,15 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         LASSERT(objcount == 1);
         LASSERT(current->journal_info == NULL);
 
+        if (rc != 0)
+                GOTO(cleanup, rc);
+
         rc = alloc_kiovec(1, &iobuf);
         if (rc)
                 GOTO(cleanup, rc);
         cleanup_phase = 1;
 
-#if (LINUX_VERSION_CODE == KERNEL_VERSION(2,4,18))
+#ifdef HAVE_KIOBUF_DOVARY
         iobuf->dovary = 0; /* this prevents corruption, not present in 2.4.20 */
 #endif
         rc = expand_kiobuf(iobuf, obj->ioo_bufcnt);
@@ -341,6 +343,3 @@ cleanup:
 
         RETURN(rc);
 }
-
-#endif
-
