@@ -546,7 +546,7 @@ out_close:
         up(&parent->d_inode->i_sem);
         if (rc) {
                 filp_close(filp, 0);
-                filp = (struct file *)rc;
+                filp = ERR_PTR(rc);
         }
 
         RETURN(filp);
