@@ -179,19 +179,23 @@ copy_file_to_bup()
 	file=$1
 	patch=$2
 	bup="$file"~"$patch"
+	orig="$file"~"orig"
+	src_dir=`pwd`
 
 	if [ -e $bup ]
 	then
 		echo "Cannot install file $file in patch $patch: backup $bup exists"
 		exit 1
 	fi
-
 	if [ -e $file ]
 	then
 		cp -p $file "$file"~"$patch"
 	else
 		echo "file $file appears to be newly added"
 	fi
+	if [ ! -L "$orig" ]; then
+		ln -s "$src_dir/$bup" $orig
+	fi	
 }
 
 install_file_in_patch()

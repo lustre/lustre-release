@@ -21,7 +21,13 @@ do_remove()
 {
 	FILES=$(cat $P/pc/$1.pc)
 	for file in $FILES ; do
-            if [ -f "$file"~"$1" ]; then
+	    base_dir=`pwd`	
+	    if [ -L "$file"~"orig" ]; then
+	    	if [ `readlink "$file"~"orig"` = "$base_dir/""$file"~"$1" ]; then
+		    rm -rf "$file"~"orig"
+	        fi
+	    fi 
+	    if [ -f "$file"~"$1" ]; then
 	    	mv -f "$file"~"$1" "$file"
             else
 	    	rm -f "$file"
