@@ -13,6 +13,11 @@ fail() {
 
 export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
 
+cleanup() {
+        $LCONF --cleanup $OPTS
+	trap 0
+}
+
 ERROR=
 SRC=/etc
 [ "$COUNT" ] || COUNT=1000
@@ -23,17 +28,23 @@ OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
 if [ -z "$OSCMT" ]; then
 	[ -z "$*" ] && fail "usage: $0 [--reformat] <conf>.xml" 1
 	$LCONF $@ || exit 1
-        trap "$LCONF --cleanup $@" 0
+        trap cleanup 0
 	OSCMT="`mount | awk '/ lustre_lite / { print $3 }' | tail -1`"
 	[ -z "$OSCMT" ] && fail "no lustre filesystem mounted" 1
 fi
 
-case $1 in
--v|--verbose) V=-v;;
-esac
+while [ "$1" ]; do
+	case $1 in
+	-v|--verbose) V=-v;;
+	--reformat) : ;;
+	*) OPTS="$OPTS $1" ;;
+	esac
+	shift
+done
 
 OSCTMP=`echo $OSCMT | tr "/" "."`
 USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
+USED=`expr $USED + 16`	# Some space for the status file
 
 # let's start slowly here...
 echo "touching $OSCMT"
@@ -70,8 +81,8 @@ done
 
 [ "$ERROR" ] && fail "old and new files are different" $ERROR
 
-$LCONF --cleanup $@ || exit 19
-$LCONF $@ || exit 20
+$LCONF --cleanup $OPTS || exit 19
+$LCONF $OPTS || exit 20
 
 echo "comparing previously copied files"
 for f in $FILES; do
@@ -81,8 +92,8 @@ done
 
 [ "$ERROR" ] && fail "old and new files are different on second diff" $ERROR
 
-$LCONF --cleanup $@ || exit 29
-$LCONF $@ || exit 30
+$LCONF --cleanup $OPTS || exit 29
+$LCONF $OPTS || exit 30
 
 echo "renaming $HOSTS.ren to $HOSTS"
 mv $HOSTS.ren $HOSTS || fail "can't rename $HOSTS.ren to $HOSTS" 32
@@ -94,11 +105,9 @@ echo "removing $DST"
 rm -r $V $DST || fail "can't remove $DST" 37
 
 NOWUSED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
-if [ $USED -ne $NOWUSED ]; then
-	echo "space not all freed: now ${NOWUSED}kB, was ${USED}kB" 1>&2
-	echo "this is normal on BA OSTs, because of subdirectories" 1>&2
+if [ $NOWUSED -gt $USED ]; then
+	echo "Space not all freed: now ${NOWUSED}kB, was ${USED}kB." 1>&2
+	echo "This is normal on BA OSTs, because of subdirectories." 1>&2
 fi
 
-trap 0
-
-$LCONF --cleanup $@ || exit 29
+cleanup $OPTS || exit 29
