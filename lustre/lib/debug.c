@@ -117,24 +117,24 @@ int page_debug_check(char *who, void *addr, int end, __u64 off, __u64 id)
         ne_off = HTON__u64(off);
         id = HTON__u64(id);
         if (memcmp(addr, (char *)&ne_off, LPDS)) {
-                CERROR("%s: for offset "LPU64" off: "LPX64" != "LPX64"\n",
+                CERROR("%s: offset "LPU64" off: "LPX64" != "LPX64"\n",
                        who, off, *(__u64 *)addr, ne_off);
                 err = -EINVAL;
         }
         if (memcmp(addr + LPDS, (char *)&id, LPDS)) {
-                CERROR("%s: for offset "LPU64" id: "LPX64" != "LPX64"\n",
+                CERROR("%s: offset "LPU64" id: "LPX64" != "LPX64"\n",
                        who, off, *(__u64 *)(addr + LPDS), id);
                 err = -EINVAL;
         }
 
         addr += end - LPDS - LPDS;
         if (memcmp(addr, (char *)&ne_off, LPDS)) {
-                CERROR("%s: for offset "LPU64" end off: "LPX64" != "LPX64"\n",
+                CERROR("%s: offset "LPU64" end off: "LPX64" != "LPX64"\n",
                        who, off, *(__u64 *)addr, ne_off);
                 err = -EINVAL;
         }
         if (memcmp(addr + LPDS, (char *)&id, LPDS)) {
-                CERROR("%s: for offset "LPU64" end id: "LPX64" != "LPX64"\n",
+                CERROR("%s: offset "LPU64" end id: "LPX64" != "LPX64"\n",
                        who, off, *(__u64 *)(addr + LPDS), id);
                 err = -EINVAL;
         }
