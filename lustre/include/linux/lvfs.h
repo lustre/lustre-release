@@ -58,6 +58,7 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
 int lustre_fsync(struct file *file);
+long l_readdir(struct file * file, void * dirent, unsigned int count);
 
 static inline void l_dput(struct dentry *de)
 {

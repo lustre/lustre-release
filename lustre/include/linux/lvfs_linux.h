@@ -21,4 +21,18 @@ struct obd_run_ctxt;
 struct l_file *l_dentry_open(struct obd_run_ctxt *, struct l_dentry *,
                              int flags);
 
+struct l_linux_dirent {
+        ino_t           d_ino;
+        unsigned long   d_off;
+        unsigned short  d_reclen;
+        char            d_name[1]; 
+};
+
+struct l_readdir_callback {
+        struct l_linux_dirent *current_dir;
+        struct l_linux_dirent *previous;
+        int count;
+        int error;
+};
+
 #endif
