@@ -186,6 +186,17 @@ int mds_open(struct mds_update_record *rec, int offset,
         int rc = 0, parent_mode, child_mode = LCK_PR, lock_flags, created = 0;
         ENTRY;
 
+        /* XXX macroize with reint_create, etc. */
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
+                struct mds_client_data *mcd = 
+                        req->rq_export->exp_mds_data.med_mcd;
+                if (mcd->mcd_last_xid == req->rq_xid) {
+                        reconstruct_open(rec, req);
+                        RETURN(0);
+                }
+                DEBUG_REQ(D_HA, req, "no reply for resent request");
+        }
+
         med = &req->rq_export->exp_mds_data;
         rep->lock_policy_res1 |= IT_OPEN_LOOKUP;
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK)) {
