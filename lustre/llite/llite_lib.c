@@ -118,7 +118,6 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        ll_lldo_init(&lli->lli_dirty);
         spin_lock_init(&lli->lli_pg_lock);
         INIT_LIST_HEAD(&lli->lli_lc_item);
         plist_init(&lli->lli_pl_read);
@@ -151,14 +150,9 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 RETURN(-ENOMEM);
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);
-        sb->u.generic_sbp = sbi;
-#else
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
-        spin_lock_init(&sbi->ll_iostats.fis_lock);
         ll_s2sbi(sb) = sbi;
-#endif
+
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
 
@@ -564,7 +558,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
         struct mdc_op_data op_data;
-        time_t now = LTIME_S(CURRENT_TIME);
+        struct timespec now = CURRENT_TIME;
         int ia_valid = attr->ia_valid;
         int rc = 0;
         ENTRY;
@@ -597,7 +591,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime %lu, ctime %lu, now = %lu\n",
-                       attr->ia_mtime, attr->ia_ctime, now);
+                       LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime), LTIME_S(now));
         if (lsm)
                 attr->ia_valid &= ~ATTR_SIZE;
 
@@ -694,7 +688,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 struct obdo oa;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
-                       inode->i_ino, attr->ia_mtime);
+                       inode->i_ino, LTIME_S(attr->ia_mtime));
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_valid = OBD_MD_FLID;
                 obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
