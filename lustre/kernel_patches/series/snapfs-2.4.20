@@ -49,4 +49,5 @@ ext3-trusted_ea-2.4.20.patch
 kernel_text_address-2.4.20-vanilla.patch 
 ext3-xattr-ptr-arith-fix.patch
 gfp_memalloc-2.4.22.patch
+loop_device_get_info.patch
 snapfs_core-2.4.20.patch 
