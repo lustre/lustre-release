@@ -194,6 +194,9 @@ do {                                                                          \
                                                                               \
         CHECK_STACK(CDEBUG_STACK);                                            \
         if (time_after(jiffies, cdebug_next)) {                               \
+                portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask, __FILE__,     \
+                                  __FUNCTION__, __LINE__, CDEBUG_STACK,       \
+                                  cdebug_format, ## a);                       \
                 if (cdebug_count) {                                           \
                         portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,       \
                                           __FILE__, __FUNCTION__, __LINE__,   \
@@ -201,9 +204,6 @@ do {                                                                          \
                                           cdebug_count);                      \
                         cdebug_count = 0;                                     \
                 }                                                             \
-                portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask, __FILE__,     \
-                                  __FUNCTION__, __LINE__, CDEBUG_STACK,       \
-                                  cdebug_format, ## a);                       \
                 if (time_after(jiffies, cdebug_next+(CDEBUG_MAX_LIMIT+10)*HZ))\
                         cdebug_delay = cdebug_delay > 8 ? cdebug_delay/8 : 1; \
                 else                                                          \

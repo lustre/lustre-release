@@ -25,7 +25,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't interrupt __l_wait_event() during strace
        * miscellania
 	- add software watchdogs to catch hung threads quickly (4941)
-	- make lustrefs init script start after nfs is mounted 
+	- make lustrefs init script start after nfs is mounted
+	- fix CWARN/ERROR duplication (4930)
 
 2004-10-07  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.7
