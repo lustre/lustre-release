@@ -204,7 +204,7 @@ static inline int obd_check_conn(struct obd_conn *conn)
 	return 0;
 }
 
-#define OBT(dev)        dev->obd_type->typ_ops
+#define OBT(dev)        dev->obd_type
 #define OBP(dev,op)     dev->obd_type->typ_ops->o_ ## op
 
 #define OBD_CHECK_SETUP(conn)                                                   \
@@ -259,6 +259,19 @@ static inline int obd_set_info(struct obd_conn *conn, obd_count keylen, void *ke
 	OBD_CHECK_OP(conn,set_info);
 	
 	rc = OBP(conn->oc_dev, set_info)(conn, keylen, key, vallen, val);
+	EXIT;
+	return rc;
+}
+
+static inline int obd_setup(struct obd_device *obd, int datalen, void *data)
+{
+	struct obd_conn conn;
+	int rc;
+	conn.oc_dev = obd;
+
+	OBD_CHECK_OP((&conn),setup);
+	
+	rc = OBP(conn.oc_dev, setup)(obd, datalen, data);
 	EXIT;
 	return rc;
 }

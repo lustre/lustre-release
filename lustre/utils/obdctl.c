@@ -390,13 +390,42 @@ static int jt_destroy(int argc, char **argv)
 	return rc;
 }
 
+static int jt_multi_getattr(int argc, char **argv)
+{
+	struct obd_ioctl_data data;
+        int count, i;
+	int rc;
+
+	IOCINIT(data);
+	if (argc == 2) { 
+		count = strtoul(argv[1], NULL, 0);
+		data.ioc_obdo1.o_valid = 0xffffffff;
+                data.ioc_obdo1.o_id = 2;
+		printf("getting %d attrs (testing only)\n", count);
+	} else { 
+		printf("usage %s id\n", argv[0]); 
+		return 0;
+	}
+
+        for (i = 0 ; i < count; i++) {
+                rc = ioctl(fd, OBD_IOC_GETATTR , &data);
+                if (rc) { 
+                        printf("Error: %s on i=%d\n", strerror(rc), i); 
+                        break;
+                } else { 
+                        printf("attr number %d\n", i);
+                }
+	}
+	return 0;
+}
+
 static int jt_getattr(int argc, char **argv)
 {
 	struct obd_ioctl_data data;
 	int rc;
 
 	IOCINIT(data);
-	if (argc != 1) { 
+	if (argc == 2) { 
 		data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
 		data.ioc_obdo1.o_valid = 0xffffffff;
 		printf("getting attr for %Ld\n", data.ioc_obdo1.o_id);
@@ -419,10 +448,11 @@ static int jt_modules(int argc, char **argv)
 {
         char *modules[] = {"portals", "ksocknal", "obdclass", "ptlrpc",
                            "obdext2", "ost", "osc", "mds", "mdc", "llight",
-                           NULL};
+                           "obdecho", NULL};
         char *paths[] = {"portals/linux/oslib", "portals/linux/socknal",
                          "obd/class", "obd/rpc", "obd/ext2obd", "obd/ost",
-                         "obd/osc", "obd/mds", "obd/mdc", "obd/llight", NULL};
+                         "obd/osc", "obd/mds", "obd/mdc", "obd/llight",
+                        "obd/obdecho", NULL};
         char *path = "..";
         char *kernel = "linux";
         int i;
@@ -469,6 +499,7 @@ command_t list[] = {
         {"cleanup", jt_cleanup, 0, "cleanup the current device (arg: )"},
         {"create", jt_create, 0, "create [count [mode [silent]]]"},
         {"destroy", jt_destroy, 0, "destroy id"},
+        {"test_getattr", jt_multi_getattr, 0, "test_getattr count [silent]"},
         {"getattr", jt_getattr, 0, "getattr id"},
         {"setattr", jt_setattr, 0, "setattr id mode"},
         {"connect", jt_connect, 0, "connect - get a connection to device"},

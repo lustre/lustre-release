@@ -266,7 +266,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 }
 
                 if ( OBT(obd) && OBP(obd, setup) )
-			err = OBP(obd, setup)(obd, sizeof(*data), data);
+			err = obd_setup(obd, sizeof(*data), data);
 
 		if (!err) { 
 			obd->obd_type->typ_refcnt++;
@@ -279,16 +279,21 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         case OBD_IOC_CLEANUP: {
                 ENTRY;
 
-                err = obd_cleanup(obd);
-                if ( err ) {
-                        EXIT;
-                        return err;
+                /* have we attached a type to this device? */
+                if (!(obd->obd_flags & OBD_ATTACHED)) {
+                        CERROR("Device %d not attached\n", obd->obd_minor);
+                        return -ENODEV;
                 }
 
-                obd->obd_flags &= ~OBD_SET_UP;
-                obd->obd_type->typ_refcnt--;
-                EXIT;
-                return 0;
+                if ( OBT(obd) && OBP(obd, cleanup) )
+			err = obd_cleanup(obd);
+
+		if (!err) {
+			obd->obd_flags &= ~OBD_SET_UP;
+			obd->obd_type->typ_refcnt--;
+			EXIT;
+		}
+                return err;
         }
 
         case OBD_IOC_CONNECT:
