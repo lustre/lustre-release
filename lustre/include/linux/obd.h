@@ -877,8 +877,7 @@ struct md_ops {
                         struct ptlrpc_request **);
         int (*m_valid_attrs)(struct obd_export *, struct lustre_id *);
         
-        struct obd_device *(*m_get_real_obd)(struct obd_export *,
-                                             char *name, int len);
+        struct obd_device *(*m_get_real_obd)(struct obd_export *, struct lustre_id *);
         
         int (*m_req2lustre_md)(struct obd_export *exp, 
                                struct ptlrpc_request *req, unsigned int offset,

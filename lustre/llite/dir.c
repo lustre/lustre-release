@@ -218,7 +218,7 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         int rc;
 
-        obddev = md_get_real_obd(ll_i2sbi(dir)->ll_md_exp, NULL, 0);
+        obddev = md_get_real_obd(ll_i2sbi(dir)->ll_md_exp, &li->lli_id);
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
                              &res_id, LDLM_IBITS, &policy, LCK_PR, &lockh);
         if (!rc) {

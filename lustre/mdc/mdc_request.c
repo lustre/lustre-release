@@ -1172,7 +1172,7 @@ static int mdc_llog_finish(struct obd_device *obd,
         RETURN(rc);
 }
 static struct obd_device *mdc_get_real_obd(struct obd_export *exp,
-                                           char *name, int len)
+                                           struct lustre_id *id)
 {
        ENTRY;
        RETURN(exp->exp_obd);

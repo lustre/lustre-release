@@ -1429,7 +1429,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
                "start="LPU64", end="LPU64"\n", inode->i_ino, flock.l_flock.pid,
                flags, mode, flock.l_flock.start, flock.l_flock.end);
 
-        obddev = md_get_real_obd(sbi->ll_md_exp, NULL, 0);
+        obddev = md_get_real_obd(sbi->ll_md_exp, &li->lli_id);
         rc = ldlm_cli_enqueue(obddev->obd_self_export, NULL,
                               obddev->obd_namespace,
                               res_id, LDLM_FLOCK, &flock, mode, &flags,

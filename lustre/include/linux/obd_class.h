@@ -1447,13 +1447,13 @@ static inline int md_unlink(struct obd_export *exp, struct mdc_op_data *data,
 }
 
 static inline struct obd_device *md_get_real_obd(struct obd_export *exp,
-                                                 char *name, int len)
+                                                 struct lustre_id *fid)
 {
         ENTRY;
         if (MDP(exp->exp_obd, get_real_obd) == NULL)
                 return exp->exp_obd;
         MD_COUNTER_INCREMENT(exp->exp_obd, get_real_obd);
-        return MDP(exp->exp_obd, get_real_obd)(exp, name, len);
+        return MDP(exp->exp_obd, get_real_obd)(exp, fid);
 }
 
 static inline int md_valid_attrs(struct obd_export *exp,

@@ -1531,7 +1531,7 @@ int lmv_unlink(struct obd_export *exp, struct mdc_op_data *data,
 }
 
 struct obd_device *lmv_get_real_obd(struct obd_export *exp,
-                                    char *name, int len)
+                                    struct lustre_id *id)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -1541,7 +1541,7 @@ struct obd_device *lmv_get_real_obd(struct obd_export *exp,
         rc = lmv_check_connect(obd);
 	if (rc)
 		RETURN(ERR_PTR(rc));
-        obd = lmv->tgts[0].ltd_exp->exp_obd;
+        obd = lmv->tgts[id_group(id)].ltd_exp->exp_obd;
         EXIT;
         
         return obd;

@@ -1197,7 +1197,7 @@ static int cobd_md_intent_lock(struct obd_export *exp, struct lustre_id *pid,
 }
 
 static struct obd_device *cobd_md_get_real_obd(struct obd_export *exp,
-                                               char *name, int len)
+                                               struct lustre_id *id)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -1208,7 +1208,7 @@ static struct obd_device *cobd_md_get_real_obd(struct obd_export *exp,
                 return NULL;
         }
         cobd_exp = cobd_get_exp(obd);
-        return md_get_real_obd(cobd_exp, name, len);
+        return md_get_real_obd(cobd_exp, id);
 }
 
 static int cobd_md_change_cbdata_name(struct obd_export *exp,
