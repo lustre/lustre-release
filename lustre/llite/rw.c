@@ -215,7 +215,7 @@ static int ll_readpage(struct file *file, struct page *first_page)
                 end_index = extent_end;
 
         CDEBUG(D_INFO, "max_pages: %d, extent_end: %lu, end_index: %lu, "
-               "i_size: "LPU64"\n",
+               "i_size: %llu\n",
                max_pages, extent_end, end_index, inode->i_size);
 
         /* to balance the find_get_page ref the other pages get that is
