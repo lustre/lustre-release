@@ -17,12 +17,8 @@ def usage():
     print 'lstat [-h|--help]|[-a|--all]'
     print "prints the /proc/fs/lustre entries in formatted/readable way."
 
-def print_name(msg,i):
-    print
-    print ("%s%s:")%(getindent(i),msg)
-
-def print_msg(msg,i):
-    print ("%s%s")%(getindent(i),msg)
+def display (i, fmt, *args):
+    print i * '  '  +  fmt % args
 
 # Opens the files and print all the entries in the file in formatted way.
 def print_file(filename,i):
@@ -34,33 +30,26 @@ def print_file(filename,i):
     
     if msges:
         msg = msges[0]
-        if (msg != '') and (msg[ len(msg)-1 ] == '\n' ): msg = msg[:len(msg)-1]
-        print ("%s%-15s ----> %s")%(getindent(i),os.path.basename(filename),msg)
+        if (msg != '') and (msg[-1] == '\n' ): msg = msg[:-1]
+        display(i, "%-15s ----> %s", basename(filename), msg)
 
     for j in range(1,len(msges)):
         msg = msges[j]
 
         #trim new line
-        if (msg != '') and (msg[ len(msg)-1 ] == '\n' ): msg = msg[:len(msg)-1]
-
-        print ("%s%-15s |---> %s")%(getindent(i),'',msg)    
+        if (msg != '') and (msg[-1] == '\n' ): msg = msg[:-1]
+        display(i, "%-15s |---> %s",'',msg)    
 
 #For links print the target directory name then link name.
 def print_link(msg,i):
     print
-    dname = os.path.basename(msg)
-    lname = os.path.basename( os.path.realpath(msg) )
+    dname = basename(msg)
+    lname = basename( realpath(msg) )
     #If this is link, prefix 'osc'
-    if string.find(os.path.realpath(msg),'lustre/osc/') != -1:
-        print ("%s%s -> %s:")%(getindent(i),'osc',lname)
+    if string.find(realpath(msg),'lustre/osc/') != -1:
+        display (i, "%s -> %s:", 'osc', lname)
         return
-    
-    print ("%s%s -> %s:")%(getindent(i),dname,lname)
-
-def getindent(i):
-    space = ''
-    for j in range(i): space = space + '  '
-    return space
+    display (i, "%s -> %s:", dname, lname)
 
 #Recursive functions that calls itself for all the subdirectory of dir passed.
 def visit(path):
@@ -74,17 +63,18 @@ def visit(path):
         print_link(path,indent)
         is_link = 1
     else:
-        print_name(os.path.basename(path),indent)
+        print
+        display(indent, "%s:", basename(path))
 
     files = os.listdir(path)
     dirs = []
 
     for file in files:
-        if os.path.isdir ( os.path.join(path,file) ):
-            dirs.append( (os.path.join(path,file),indent+1 ))
+        if os.path.isdir ( join(path,file) ):
+            dirs.append( (join(path,file),indent+1 ))
         else:
             if not is_link:
-                print_file( os.path.join(path,file), indent+1 )
+                print_file( join(path,file), indent+1 )
     for dir in dirs:
         visit(dir[0])
 
@@ -92,12 +82,12 @@ def visit(path):
 
 # Returns the target directory name for the link name
 def get_realname(link):
-    os.path.basename( os.path.realpath(link) )
+    basename( realpath(link) )
 
 def getfile_content(filename):
     f = open(filename,'r')
     msg = f.readline()
-    if (msg != '') and (msg[ len(msg)-1 ] == '\n' ): msg = msg[:len(msg)-1]
+    if (msg != '') and (msg[-1] == '\n' ): msg = msg[:-1]
     return msg 
 
 def get_osc_summary(osc):
@@ -117,39 +107,39 @@ def get_mdc_summary(mdc):
 #this prints summary for client file system.
 def print_summary():
     format = 0
-    llite_path = os.path.join(pathname, 'llite')
+    llite_path = join(pathname, 'llite')
     if os.path.exists(llite_path):
         print '=====> SUMMARY'
         print
         files = os.listdir(llite_path)
         for file in files:
             fs = file
-            print_msg("MNT: "+fs+"",1)
+            display(1, "%s", "MNT: "+fs)
             print
-            fs_path = os.path.join(llite_path,fs)
-            osc_path = os.path.join(fs_path, 'osc')
-            lov_path = os.path.join(fs_path, 'lov')
-            mdc_path = os.path.join(fs_path, 'mdc')
+            fs_path = join(llite_path,fs)
+            osc_path = join(fs_path, 'osc')
+            lov_path = join(fs_path, 'lov')
+            mdc_path = join(fs_path, 'mdc')
             if os.path.exists( mdc_path ):
                 mdcname = get_realname(mdc_path)
-                print_msg(get_mdc_summary(mdc_path),2)
+                display(2, "%s", get_mdc_summary(mdc_path))
                 print
             if os.path.exists(osc_path):
                 oscname = get_osc_summary(osc_path)
-                print_msg(oscname,2)
+                display(2, "%s", oscname)
                 print
             if os.path.exists(lov_path):
                 lovname = basename( realpath(lov_path) )
-                print_msg("LOV: "+lovname,2)
+                display(2, "%s","LOV: "+lovname)
                 print
 
                 obd_path = join(lov_path, 'target_obds')
                 oscs = os.listdir( obd_path )
                 for osc in oscs:
-                    print_msg( get_osc_summary( join(obd_path, osc)),3 )
+                    display(3, "%s", get_osc_summary( join(obd_path, osc)) )
 
                 print
-                print_msg( get_mdc_summary( join(lov_path,'target_mdc')),3)                    
+                display(3, "%s", get_mdc_summary( join(lov_path,'target_mdc')))
 def main():
 
     if len(sys.argv) > 1 and sys.argv[1] in ('-h','--help'):
@@ -171,7 +161,7 @@ def main():
     for dir in top_dir:
         print
         print ('%s %s%s %s') %('=====>', dir,'-information','')
-        visit(os.path.join(pathname,dir))
+        visit(join(pathname,dir))
 
 if __name__ == "__main__":
     main()
