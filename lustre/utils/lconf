@@ -57,6 +57,7 @@ config.xml          Lustre configuration in xml format.
 --nomod             Skip load/unload module step.
 --nosetup           Skip device setup/cleanup step.
 --reformat          Reformat all devices (without question)
+--dump              Dump the kernel debug log before portals is unloaded
 """
     TODO = """
 --ldap server       LDAP server with lustre config database
