@@ -19,12 +19,11 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  */
-#define DEBUG_SUBSYSTEM S_CLASS
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lprocfs.h>
-#include <linux/string.h>
-#include <linux/lustre_lib.h>
+#define DEBUG_SUBSYSTEM S_ECHO
+
+#include <linux/lustre_lite.h>
+#include <linux/lprocfs_status.h>
+
 
 int rd_uuid(char* page, char **start, off_t off,
                int count, int *eof, void *data)
@@ -47,8 +46,22 @@ int rd_fstype(char* page, char **start, off_t off,
 }
 
 
-lprocfs_vars_t snmp_var_nm_1[]={
-        {"snmp/uuid", rd_uuid, 0},
-        {"snmp/fstype", rd_fstype, 0},
+lprocfs_vars_t status_var_nm_1[]={
+        {"status/uuid", rd_uuid, 0},
+        {"status/fstype", rd_fstype, 0},
+        {0}
+};
+
+int rd_numdevices(char* page, char **start, off_t off,
+                  int count, int *eof, void *data)
+{
+        struct obd_type* class=(struct obd_type*)data;
+        int len=0;
+        len+=snprintf(page, count, "%d\n", class->typ_refcnt);
+        return len;
+}
+
+lprocfs_vars_t status_class_var[]={
+        {"status/num_devices", rd_numdevices, 0},
         {0}
 };

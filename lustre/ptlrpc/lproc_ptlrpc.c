@@ -20,112 +20,34 @@
  *
  */
 #define DEBUG_SUBSYSTEM S_CLASS
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lprocfs.h>
-#include <linux/string.h>
-#include <linux/lustre_lib.h>
 
-
-
+#include <linux/lustre_lite.h>
+#include <linux/lprocfs_status.h>
 
 int rd_uuid(char* page, char **start, off_t off,
                int count, int *eof, void *data)
 {
         int len=0;
-        len+=snprintf(page, count, "%s\n", \
+        len+=snprintf(page, count, "%s\n", 
                       ((struct obd_device*)data)->obd_uuid);
         return len;
 
 }
 
-int rd_blksize(char* page, char **start, off_t off,
+lprocfs_vars_t status_var_nm_1[]={
+        {"status/uuid", rd_uuid, 0},
+        {0}
+};
+int rd_numdevices(char* page, char **start, off_t off,
                int count, int *eof, void *data)
 {
-        return 0;
-
-}
-int rd_blktotal(char* page, char **start, off_t off,
-                int count, int *eof, void *data)
-{
-        return 0;
+        struct obd_type* class=(struct obd_type*)data;
+        int len=0;
+        len+=snprintf(page, count, "%d\n", class->typ_refcnt);
+        return len;
 }
 
-int rd_blkfree(char* page, char **start, off_t off,
-               int count, int *eof, void *data)
-{
-        return 0;
-}
-
-int rd_kbfree(char* page, char **start, off_t off,
-              int count, int *eof, void *data)
-{
-        return 0;
-}
-
-int rd_numobjects(char* page, char **start, off_t off,
-                  int count, int *eof, void *data)
-{
-        return 0;
-}
-
-int rd_objfree(char* page, char **start, off_t off,
-               int count, int *eof, void *data)
-{
-        return 0;
-}
-
-int rd_objgroups(char* page, char **start, off_t off,
-                 int count, int *eof, void *data)
-{
-        return 0;
-}
-
-
-int rd_fs_type(char* page, char **start, off_t off,
-               int count, int *eof, void *data)
-{
-        return 0;
-}
-
-int rd_other(char* page, char **start, off_t off, int count, int *eof,
-             void *data)
-{
-        return 0;
-}
-
-int rd_string(char* page, char **start, off_t off, int count, int *eof,
-              void *data)
-{
-        printk("Hello string");
-        return 0;
-}
-
-int lprocfs_ll_wr(struct file* file, const char *buffer, unsigned long count,
-                  void *data)
-{
-        return 0;
-}
-
-int wr_other(struct file* file, const char *buffer, unsigned long count,
-             void *data)
-{
-        return 0;
-}
-
-int wr_string(struct file* file, const char *buffer, unsigned long count,
-              void *data)
-{
-        return 0;
-}
-lprocfs_vars_t snmp_var_nm_1[]={
-        {"snmp/uuid", rd_uuid, 0},
-        {"snmp/f_blocksize",rd_blksize, 0},
-        {"snmp/f_blockstotal",rd_blktotal, 0},
-        {"snmp/f_blocksfree",rd_blkfree, 0},
-        {"snmp/f_kbytesfree", rd_kbfree, 0},
-        {"snmp/f_objects", rd_numobjects, 0},
-        {"snmp/f_objectsfree", rd_objfree, 0},
-        {"snmp/f_objectgroups", rd_objgroups, 0},
+lprocfs_vars_t status_class_var[]={
+        {"status/num_devices", rd_numdevices, 0},
         {0}
 };

@@ -20,15 +20,12 @@
  *
  */
 #define DEBUG_SUBSYSTEM S_CLASS
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lprocfs.h>
-#include <linux/string.h>
-#include <linux/lustre_lib.h>
 
+#include <linux/lustre_lite.h>
+#include <linux/lprocfs_status.h>
 
 /*
- * Common SNMP namespace
+ * Common STATUS namespace
  */
 
 int rd_uuid(char* page, char **start, off_t off,
@@ -47,30 +44,19 @@ int rd_stripesize(char* page, char **start, off_t off,
         struct obd_device* dev=(struct obd_device*)data;
         int len=0;
         struct lov_obd* lov=&dev->u.lov;
-        len+=snprintf(page, count, LPU64"\n", \
-                      (__u64)(lov->desc.ld_default_stripe_count));
+        len+=snprintf(page, count, LPU64"\n", 
+                      (__u64)(lov->desc.ld_default_stripe_size));
         
         return len;
 }
 
-int rd_stripedepth(char* page, char **start, off_t off,
+int rd_stripeoffset(char* page, char **start, off_t off,
                int count, int *eof, void *data)
 {
         struct obd_device* dev=(struct obd_device*)data;
         int len=0;
         struct lov_obd* lov=&dev->u.lov;
-        len+=snprintf(page, count, LPU64"\n", \
-                      lov->desc.ld_default_stripe_size);
-        return len;
-
-}
-int rd_stripefactor(char* page, char **start, off_t off,
-               int count, int *eof, void *data)
-{
-        struct obd_device* dev=(struct obd_device*)data;
-        int len=0;
-        struct lov_obd* lov=&dev->u.lov;
-        len+=snprintf(page, count, LPU64"\n", \
+        len+=snprintf(page, count, LPU64"\n", 
                       lov->desc.ld_default_stripe_offset);
         return len;
 
@@ -78,12 +64,46 @@ int rd_stripefactor(char* page, char **start, off_t off,
 
 int rd_stripetype(char* page, char **start, off_t off,
                int count, int *eof, void *data)
+{
+        struct obd_device* dev=(struct obd_device*)data;
+        int len=0;
+        struct lov_obd* lov=&dev->u.lov;
+        len+=snprintf(page, count, LPU64"\n", 
+                      (__u64)(lov->desc.ld_pattern));
+        return len;
+
+}
+int rd_stripecount(char* page, char **start, off_t off,
+               int count, int *eof, void *data)
 {       
         struct obd_device* dev=(struct obd_device*)data;
         int len=0;
         struct lov_obd* lov=&dev->u.lov;
-        len+=snprintf(page, count, LPU64"\n", \
-                      (__u64)(lov->desc.ld_pattern));
+        len+=snprintf(page, count, LPU64"\n", 
+                      (__u64)(lov->desc.ld_default_stripe_count));
+        return len;
+
+}
+int rd_numobd(char* page, char **start, off_t off,
+               int count, int *eof, void *data)
+{       
+        struct obd_device* dev=(struct obd_device*)data;
+        int len=0;
+        struct lov_obd* lov=&dev->u.lov;
+        len+=snprintf(page, count, LPU64"\n", 
+                      (__u64)(lov->desc.ld_tgt_count));
+        return len;
+
+}
+
+int rd_activeobd(char* page, char **start, off_t off,
+               int count, int *eof, void *data)
+{       
+        struct obd_device* dev=(struct obd_device*)data;
+        int len=0;
+        struct lov_obd* lov=&dev->u.lov;
+        len+=snprintf(page, count, LPU64"\n", 
+                      (__u64)(lov->desc.ld_active_tgt_count));
         return len;
 
 }
@@ -139,10 +159,7 @@ int rd_target(char* page, char **start, off_t off,
         struct lov_obd* lov=&dev->u.lov;
         struct lov_tgt_desc* tgts=lov->tgts;
         while(i<lov->desc.ld_tgt_count){
-                len+=snprintf(page, count, \
-                              "OBD Device [%d] UUID: %s\n", \
-                              i, tgts->uuid);
-
+                len+=snprintf(page, count, "%d: %s\n", i, tgts->uuid);
                 i++;
                 tgts++;
         }
@@ -155,26 +172,40 @@ int rd_mdc(char* page, char **start, off_t off,
         struct obd_device* dev=(struct obd_device*)data;
         int len=0;
         struct lov_obd* lov=&dev->u.lov;
-        len+=snprintf(page, count, \
-                              "%s\n", \
-                              lov->mdcobd->obd_uuid);
+        len+=snprintf(page, count, "%s\n", lov->mdcobd->obd_uuid);
         return len;
 }
 
-lprocfs_vars_t snmp_var_nm_1[]={
-        {"snmp/uuid", rd_uuid, 0},
-        {"snmp/lov_stripesize",rd_stripesize, 0},
-        {"snmp/lov_stripedepth",rd_stripedepth, 0},
-        {"snmp/lov_stripefactor",rd_stripefactor, 0},
-        {"snmp/lov_stripetype", rd_stripetype, 0},
-        {"snmp/f_objects", rd_numobjects, 0},
-        {"snmp/f_objectsfree", rd_objfree, 0},
-        {"snmp/f_objectgroups", rd_objgroups, 0},
-        {"snmp/f_blocksize", rd_blksize, 0},
-        {"snmp/f_blockstotal", rd_blktotal, 0},
-        {"snmp/f_kbytesfree", rd_kbfree, 0},
-        {"snmp/f_blocksfree", rd_blkfree, 0},
-        {"snmp/target_obd", rd_target, 0},
-        {"snmp/target_mdc", rd_mdc, 0},
+lprocfs_vars_t status_var_nm_1[]={
+        {"status/uuid", rd_uuid, 0},
+        {"status/stripesize",rd_stripesize, 0},
+        {"status/stripeoffset",rd_stripeoffset, 0},
+        {"status/stripecount",rd_stripecount, 0},
+        {"status/stripetype", rd_stripetype, 0},
+        {"status/numobd",rd_numobd, 0},
+        {"status/activeobd", rd_activeobd, 0},
+        {"status/objects", rd_numobjects, 0},
+        {"status/objectsfree", rd_objfree, 0},
+        {"status/objectgroups", rd_objgroups, 0},
+        {"status/blocksize", rd_blksize, 0},
+        {"status/blockstotal", rd_blktotal, 0},
+        {"status/kbytesfree", rd_kbfree, 0},
+        {"status/blocksfree", rd_blkfree, 0},
+        {"status/target_obd", rd_target, 0},
+        {"status/target_mdc", rd_mdc, 0},
+       
+        {0}
+};
+int rd_numdevices(char* page, char **start, off_t off,
+                  int count, int *eof, void *data)
+{
+        struct obd_type* class=(struct obd_type*)data;
+        int len=0;
+        len+=snprintf(page, count, "%d\n", class->typ_refcnt);
+        return len;
+}
+
+lprocfs_vars_t status_class_var[]={
+        {"status/num_devices", rd_numdevices, 0},
         {0}
 };

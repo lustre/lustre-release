@@ -20,11 +20,10 @@
  *
  */
 #define DEBUG_SUBSYSTEM S_CLASS
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-#include <linux/lprocfs.h>
-#include <linux/string.h>
-#include <linux/lustre_lib.h>
+
+#include <linux/lustre_lite.h>
+#include <linux/lprocfs_status.h>
+
 
 int rd_uuid(char* page, char **start, off_t off,
                int count, int *eof, void *data)
@@ -101,7 +100,7 @@ int rd_kbfree(char* page, char **start, off_t off,
                 return 0;
         }
         blk_size=mystats.f_bsize;
-        len+=snprintf(page, count, LPU64"\n", \
+        len+=snprintf(page, count, LPU64"\n", 
                       (__u64)((mystats.f_bfree)/(blk_size*1024))); 
         return len;  
        
@@ -132,8 +131,7 @@ int rd_ffiles(char* page, char **start, off_t off,
                 return 0;
         }
         
-        len+=snprintf(page, count, LPU64"\n", \
-                      (__u64)(mystats.f_files));
+        len+=snprintf(page, count, LPU64"\n", (__u64)(mystats.f_files));
         return len;  
 
         
@@ -153,8 +151,7 @@ int rd_inodesfree(char* page, char **start, off_t off,
                 return 0;
         }
         
-        len+=snprintf(page, count, LPU64"\n", \
-                      (__u64)(mystats.f_ffree));
+        len+=snprintf(page, count, LPU64"\n", (__u64)(mystats.f_ffree));
         return len; 
 }
 
@@ -163,15 +160,28 @@ int rd_filesets(char* page, char **start, off_t off,
 {
         return 0;
 }
-lprocfs_vars_t snmp_var_nm_1[]={
-        {"snmp/uuid", rd_uuid, 0},
-        {"snmp/f_blocksize",rd_blksize, 0},
-        {"snmp/f_blockstotal",rd_blktotal, 0},
-        {"snmp/f_blocksfree",rd_blkfree, 0},
-        {"snmp/f_kbytesfree", rd_kbfree, 0},
-        {"snmp/f_fstype", rd_fstype, 0},
-        {"snmp/f_files", rd_ffiles, 0},
-        {"snmp/f_inodesfree", rd_inodesfree, 0},
-        {"snmp/f_filesets", rd_filesets, 0},
+lprocfs_vars_t status_var_nm_1[]={
+        {"status/uuid", rd_uuid, 0},
+        {"status/f_blocksize",rd_blksize, 0},
+        {"status/f_blockstotal",rd_blktotal, 0},
+        {"status/f_blocksfree",rd_blkfree, 0},
+        {"status/f_kbytesfree", rd_kbfree, 0},
+        {"status/f_fstype", rd_fstype, 0},
+        {"status/f_files", rd_ffiles, 0},
+        {"status/f_inodesfree", rd_inodesfree, 0},
+        {"status/f_filesets", rd_filesets, 0},
+        {0}
+};
+int rd_numdevices(char* page, char **start, off_t off,
+                  int count, int *eof, void *data)
+{
+        struct obd_type* class=(struct obd_type*)data;
+        int len=0;
+        len+=snprintf(page, count, "%d\n", class->typ_refcnt);
+        return len;
+}
+
+lprocfs_vars_t status_class_var[]={
+        {"status/num_devices", rd_numdevices, 0},
         {0}
 };
