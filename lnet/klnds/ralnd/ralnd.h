@@ -111,10 +111,11 @@ typedef struct
         int                     rad_idx;        /* index in kra_devices */
         int                     rad_ready;      /* set by device callback */
         struct list_head        rad_connq;      /* connections requiring attention */
-        struct list_head        rad_zombies;    /* connections to free */
         wait_queue_head_t       rad_waitq;      /* scheduler waits here */
         spinlock_t              rad_lock;       /* serialise */
         void                   *rad_scheduler;  /* scheduling thread */
+        int                     rad_setri_please; /* ++ when connd wants to setri */
+        struct semaphore        rad_setri_mutex; /* serialise setri */
 } kra_device_t;
 
 typedef struct

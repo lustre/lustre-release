@@ -1397,6 +1397,10 @@ kranal_sendmsg(kra_conn_t *conn, kra_msg_t *msg,
                 return 0;
 
         case RAP_NOT_DONE:
+                if (time_after_eq(jiffies,
+                                  conn->rac_last_tx + conn->rac_keepalive*HZ))
+                        CDEBUG(D_WARNING, "EAGAIN sending %02x (idle %lu secs)\n",
+                               msg->ram_type, (jiffies - conn->rac_last_tx)/HZ);
                 return -EAGAIN;
         }
 }
@@ -1466,7 +1470,9 @@ kranal_process_fmaq (kra_conn_t *conn)
 
                 if (time_after_eq(jiffies,
                                   conn->rac_last_tx + conn->rac_keepalive * HZ)) {
-                        CDEBUG(D_NET, "sending NOOP (idle)\n");
+                        CDEBUG(D_NET, "sending NOOP -> "LPX64" (%p idle %lu(%ld))\n",
+                               conn->rac_peer->rap_nid, conn,
+                               (jiffies - conn->rac_last_tx)/HZ, conn->rac_keepalive);
                         kranal_init_msg(&conn->rac_msg, RANAL_MSG_NOOP);
                         kranal_sendmsg(conn, &conn->rac_msg, NULL, 0);
                 }
@@ -1829,12 +1835,14 @@ void
 kranal_complete_closed_conn (kra_conn_t *conn)
 {
         kra_tx_t   *tx;
+        int         nfma;
+        int         nreplies;
 
         LASSERT (conn->rac_state == RANAL_CONN_CLOSED);
         LASSERT (list_empty(&conn->rac_list));
         LASSERT (list_empty(&conn->rac_hashlist));
 
-        while (!list_empty(&conn->rac_fmaq)) {
+        for (nfma = 0; !list_empty(&conn->rac_fmaq); nfma++) {
                 tx = list_entry(conn->rac_fmaq.next, kra_tx_t, tx_list);
 
                 list_del(&tx->tx_list);
@@ -1843,12 +1851,15 @@ kranal_complete_closed_conn (kra_conn_t *conn)
 
         LASSERT (list_empty(&conn->rac_rdmaq));
 
-        while (!list_empty(&conn->rac_replyq)) {
+        for (nreplies = 0; !list_empty(&conn->rac_replyq); nreplies++) {
                 tx = list_entry(conn->rac_replyq.next, kra_tx_t, tx_list);
 
                 list_del(&tx->tx_list);
                 kranal_tx_done(tx, -ECONNABORTED);
         }
+
+        CDEBUG(D_WARNING, "Closed conn %p -> "LPX64": nmsg %d nreplies %d\n",
+               conn, conn->rac_peer->rap_nid, nfma, nreplies);
 }
 
 int
@@ -1868,6 +1879,9 @@ kranal_scheduler (void *arg)
         dev->rad_scheduler = current;
         init_waitqueue_entry(&wait, current);
 
+        /* prevent connd from doing setri until requested */
+        down(&dev->rad_setri_mutex);
+
         spin_lock_irqsave(&dev->rad_lock, flags);
 
         while (!kranal_data.kra_shutdown) {
@@ -1882,6 +1896,19 @@ kranal_scheduler (void *arg)
                         spin_lock_irqsave(&dev->rad_lock, flags);
                 }
 
+                /* Ghastly hack to ensure RapkSetRiParams() serialises with
+                 * other comms */
+                if (dev->rad_setri_please != 0) {
+                        spin_unlock_irqrestore(&dev->rad_lock, flags);
+                        up(&dev->rad_setri_mutex);
+                        
+                        wait_event_interruptible(dev->rad_waitq,
+                                                 dev->rad_setri_please == 0);
+                        
+                        down(&dev->rad_setri_mutex);
+                        spin_lock_irqsave(&dev->rad_lock, flags);
+                }
+                
                 if (dev->rad_ready) {
                         /* Device callback fired since I last checked it */
                         dev->rad_ready = 0;
@@ -1933,6 +1960,7 @@ kranal_scheduler (void *arg)
         }
 
         spin_unlock_irqrestore(&dev->rad_lock, flags);
+        up(&dev->rad_setri_mutex);
 
         dev->rad_scheduler = NULL;
         kranal_thread_fini();

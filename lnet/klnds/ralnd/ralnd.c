@@ -22,6 +22,8 @@
  */
 #include "ranal.h"
 
+static int        kranal_devids[] = {RAPK_MAIN_DEVICE_ID,
+                                     RAPK_EXPANSION_DEVICE_ID};
 
 nal_t                   kranal_api;
 ptl_handle_ni_t         kranal_ni;
@@ -533,7 +535,17 @@ int
 kranal_set_conn_params(kra_conn_t *conn, kra_connreq_t *connreq,
                        __u32 peer_ip, int peer_port)
 {
-        RAP_RETURN    rrc;
+        kra_device_t  *dev = conn->rac_device;
+        unsigned long  flags;
+        RAP_RETURN     rrc;
+
+        /* tell scheduler to release the setri_mutex... */
+        spin_lock_irqsave(&dev->rad_lock, flags);
+        dev->rad_setri_please++;
+        wake_up(&dev->rad_waitq);
+        spin_unlock_irqrestore(&dev->rad_lock, flags);
+        /* ...and grab it */
+        down(&dev->rad_setri_mutex);
 
         rrc = RapkSetRiParams(conn->rac_rihandle, &connreq->racr_riparams);
         if (rrc != RAP_SUCCESS) {
@@ -542,6 +554,14 @@ kranal_set_conn_params(kra_conn_t *conn, kra_connreq_t *connreq,
                 return -EPROTO;
         }
 
+        /* release the setri_mutex... */
+        up(&dev->rad_setri_mutex);
+        /* ...and tell scheduler we're all done */
+        spin_lock_irqsave(&dev->rad_lock, flags);
+        dev->rad_setri_please--;
+        wake_up(&dev->rad_waitq);
+        spin_unlock_irqrestore(&dev->rad_lock, flags);
+        
         conn->rac_peerstamp = connreq->racr_peerstamp;
         conn->rac_peer_connstamp = connreq->racr_connstamp;
         conn->rac_keepalive = RANAL_TIMEOUT2KEEPALIVE(connreq->racr_timeout);
@@ -893,6 +913,9 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
 
         if (nstale != 0)
                 CWARN("Closed %d stale conns to "LPX64"\n", nstale, peer_nid);
+
+        CDEBUG(D_WARNING, "New connection to "LPX64" on devid[%d] = %d\n",
+               peer_nid, conn->rac_device->rad_idx, conn->rac_device->rad_id);
 
         /* Ensure conn gets checked.  Transmits may have been queued and an
          * FMA event may have happened before it got in the cq hash table */
@@ -1720,6 +1743,11 @@ kranal_device_init(int id, kra_device_t *dev)
         const int         total_ntx = RANAL_NTX + RANAL_NTX_NBLK;
         RAP_RETURN        rrc;
 
+        /* The awful serialise RapkSetRiParams with the device scheduler
+         * work-around! */
+        dev->rad_setri_please = 0;
+        init_MUTEX(&dev->rad_setri_mutex);
+
         dev->rad_id = id;
         rrc = RapkGetDeviceByIndex(id, kranal_device_callback,
                                    &dev->rad_handle);
@@ -1893,8 +1921,6 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                     ptl_ni_limits_t *requested_limits,
                     ptl_ni_limits_t *actual_limits)
 {
-        static int        device_ids[] = {RAPK_MAIN_DEVICE_ID,
-                                          RAPK_EXPANSION_DEVICE_ID};
         struct timeval    tv;
         ptl_process_id_t  process_id;
         int               pkmem = atomic_read(&portal_kmemory);
@@ -2012,11 +2038,14 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                 }
         }
 
-        LASSERT(kranal_data.kra_ndevs == 0);
-        for (i = 0; i < sizeof(device_ids)/sizeof(device_ids[0]); i++) {
+        LASSERT (kranal_data.kra_ndevs == 0);
+
+        for (i = 0; i < sizeof(kranal_devids)/sizeof(kranal_devids[0]); i++) {
+                LASSERT (i < RANAL_MAXDEVS);
+
                 dev = &kranal_data.kra_devices[kranal_data.kra_ndevs];
 
-                rc = kranal_device_init(device_ids[i], dev);
+                rc = kranal_device_init(kranal_devids[i], dev);
                 if (rc == 0)
                         kranal_data.kra_ndevs++;
 
