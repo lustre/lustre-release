@@ -193,11 +193,15 @@ do {                                                                          \
         static unsigned long cdebug_next;                                     \
         static int cdebug_count, cdebug_delay = 1;                            \
                                                                               \
+        CHECK_STACK(CDEBUG_STACK);                                            \
         if (time_after(jiffies, cdebug_next)) {                               \
-                CDEBUG(cdebug_mask, cdebug_format, ## a);                     \
+                portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask, __FILE__,     \
+                                  __FUNCTION__, __LINE__, CDEBUG_STACK,       \
+                                  cdebug_format, ## a);                       \
                 if (cdebug_count) {                                           \
-                        CDEBUG(cdebug_mask, "skipped %d similar messages\n",  \
-                               cdebug_count);                                 \
+                        portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,       \
+                                          __FILE__, __FUNCTION__, __LINE__,   \
+                                          CDEBUG_STACK, cdebug_format, ## a); \
                         cdebug_count = 0;                                     \
                 }                                                             \
                 if (time_after(jiffies, cdebug_next+(CDEBUG_MAX_LIMIT+10)*HZ))\
@@ -207,8 +211,10 @@ do {                                                                          \
                                         CDEBUG_MAX_LIMIT*HZ : cdebug_delay*2; \
                 cdebug_next = jiffies + cdebug_delay;                         \
         } else {                                                              \
-                CDEBUG(portal_debug & ~(D_EMERG|D_ERROR|D_WARNING),           \
-                       cdebug_format, ## a);                                  \
+                portals_debug_msg(DEBUG_SUBSYSTEM,                            \
+                                  portal_debug & ~(D_EMERG|D_ERROR|D_WARNING),\
+                                  __FILE__, __FUNCTION__, __LINE__,           \
+                                  CDEBUG_STACK, cdebug_format, ## a);         \
                 cdebug_count++;                                               \
         }                                                                     \
 } while (0)
