@@ -125,7 +125,7 @@ class Options:
                 sys.exit(0)
             return self.option_wrapper(values), args
         except getopt.error, e:
-            raise error.OptionError(e)
+            raise error.OptionError(str(e))
 
     def usage(self):
         ret = 'usage: %s [options] %s\n' % (self.cmd, self.remain_help)

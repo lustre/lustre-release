@@ -18,7 +18,10 @@
 #   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
 
-# Make the new node the active node for all devices it shares with the
+# For all the OST/MDSs that are primary on the --primary node, set
+# them to be active on --active if that OST is available on --active.
+#
+# Make the active node the active node for all devices it shares with the
 # old. The bulk of this code is for figuring out which devices to
 # change, and what to change them to.
 
@@ -31,48 +34,52 @@ import ldap
 import Lustre
 
 lactive_options = [
-    ('ldapurl',"LDAP server URL, eg. ldap://localhost", Lustre.Options.PARAM),
+    ('ldapurl',"LDAP server URL", Lustre.Options.PARAM,
+     "ldap://localhost"),
     ('config', "Cluster config name used for LDAP query", Lustre.Options.PARAM),
-    ('old', "The old, failed node name", Lustre.Options.PARAM),
-    ('new', "The new node name", Lustre.Options.PARAM),
+    ('group', "The group of devices to update", Lustre.Options.PARAM),
+    ('active', "The active node name", Lustre.Options.PARAM),
     ]
-
-cl = Lustre.Options("lactive","", lactive_options)
-config, args = cl.parse(sys.argv[1:])
-
-base = "config=%s,fs=lustre" % (config.config,)
-db = Lustre.LustreDB_LDAP('', {}, base=base, url = config.ldapurl)
-
-old = db.lookup_name(config.old)
-new = db.lookup_name(config.new)
-
-print "old:", old.getUUID()
-print "new:",  new.getUUID()
 
 def fatal(*args):
     msg = string.join(map(str,args))
     print "! " + msg
     sys.exit(1)
 
-# find all the targets on the failed node and, change the active
-# pointers to point to the devices on the new node.
-prof_list = old.get_refs('profile')
-for prof_uuid in prof_list:
-    prof_db = db.lookup(prof_uuid)
-    if not prof_db:
-        fatal("profile:", profile, "not found.")
-    for ref_class, ref_uuid in prof_db.get_all_refs(): 
-        if ref_class in ('osd', 'mdsdev'):
-            devdb = db.lookup(ref_uuid)
-            tgtuuid = devdb.get_first_ref('target')
-            active_uuid = old.get_active_dev(tgtuuid)
-            if ref_uuid != active_uuid:
-                continue
-            inactive_uuid = new.get_tgt_dev(tgtuuid)
-            print ("%s: changing active %s:%s to %s:%s"
-                   % (tgtuuid, config.old, active_uuid,
-                      config.new, inactive_uuid))
-            db.update_active(tgtuuid, inactive_uuid)
+
+cl = Lustre.Options("lactive","", lactive_options)
+config, args = cl.parse(sys.argv[1:])
+
+if not (config.group or config.active):
+    fatal("Must specify both  group and active node.")
+
+if not config.config:
+    fatal("Missing config")
+    
+base = "config=%s,fs=lustre" % (config.config,)
+db = Lustre.LustreDB_LDAP('', {}, base=base, url = config.ldapurl)
+
+active_node = db.lookup_name(config.active)
+if not active_node:
+    fatal(config.active, "node not found in database.")
+
+devices =  db.get_group(config.group)
+if len(devices) < 0:
+    fatal("no devices found for group", config.group)
+
+# for all devices in group
+  # lookup device in active node
+  # update the active device 
+for tgtuuid in devices:
+    active_uuid = db.get_active_dev(tgtuuid)
+    new_active_uuid = active_node.get_tgt_dev(tgtuuid)
+    if active_uuid != new_active_uuid:
+        print ("%s: changing active %s to %s:%s"
+               % (tgtuuid, active_uuid,
+                  config.active, new_active_uuid))
+        db.update_active(tgtuuid, new_active_uuid)
+
+
 
 
 

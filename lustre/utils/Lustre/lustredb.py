@@ -102,6 +102,18 @@ class LustreDB:
                         return ref_uuid
         return None
 
+    def get_group(self, group):
+        ret = []
+        devs = self.lookup_class('mds')
+        for tgt in devs:
+            if tgt.get_val('group', "") == group:
+                ret.append(tgt.getUUID())
+        devs = self.lookup_class('ost')
+        for tgt in devs:
+            if tgt.get_val('group', "") == group:
+                ret.append(tgt.getUUID())
+        return ret
+
     # Change the current active device for a target
     def update_active(self, tgtuuid, new_uuid):
         self._update_active(tgtuuid, new_uuid)
