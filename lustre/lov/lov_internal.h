@@ -13,13 +13,13 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count);
 void lov_free_memmd(struct lov_stripe_md **lsmp);
 
 /* lov_pack.c */
-int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmm,
+int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmm,
                struct lov_stripe_md *lsm);
-int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsm,
+int lov_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsm,
                  struct lov_mds_md *lmm, int lmmsize);
-int lov_setstripe(struct lustre_handle *conn,
+int lov_setstripe(struct obd_export *exp,
                   struct lov_stripe_md **lsmp, struct lov_mds_md *lmmu);
-int lov_getstripe(struct lustre_handle *conn,
+int lov_getstripe(struct obd_export *exp,
                   struct lov_stripe_md *lsm, struct lov_mds_md *lmmu);
 
 /* lproc_lov.c */
