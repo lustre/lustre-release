@@ -48,7 +48,7 @@ static int llog_lvfs_pad(struct l_file *file, int len, int index)
         struct llog_rec_tail tail;
         int rc;
         ENTRY;
-        
+
         LASSERT(len >= LLOG_MIN_REC_SIZE && (len & 0xf) == 0);
 
         tail.lrt_len = rec.lrh_len = cpu_to_le32(len);
@@ -60,7 +60,7 @@ static int llog_lvfs_pad(struct l_file *file, int len, int index)
                 CERROR("error writing padding record: rc %d\n", rc);
                 GOTO(out, rc < 0 ? rc : rc = -EIO);
         }
-        
+
         file->f_pos += len - sizeof(rec) - sizeof(tail);
         rc = lustre_fwrite(file, &tail, sizeof(tail), &file->f_pos);
         if (rc != sizeof(tail)) {
@@ -68,7 +68,7 @@ static int llog_lvfs_pad(struct l_file *file, int len, int index)
                 GOTO(out, rc < 0 ? rc : rc = -EIO);
         }
         rc = 0;
- out: 
+ out:
         RETURN(rc);
 }
 
@@ -115,7 +115,7 @@ static int llog_lvfs_write_blob(struct l_file *file, struct llog_rec_hdr *rec,
         }
 
         rc = 0;
- out: 
+ out:
         if (saved_off > file->f_pos)
                 file->f_pos = saved_off;
         LASSERT(rc <= 0);
@@ -171,7 +171,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
 /* appends if idx == -1, otherwise overwrites record idx. */
 static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                                struct llog_rec_hdr *rec,
-                               struct llog_cookie *reccookie, int cookiecount, 
+                               struct llog_cookie *reccookie, int cookiecount,
                                void *buf, int idx)
 {
         struct llog_log_hdr *llh;
@@ -184,7 +184,7 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
 
         llh = loghandle->lgh_hdr;
         file = loghandle->lgh_file;
-        
+
         /* record length should not bigger than LLOG_CHUNK_SIZE */
         if (buf)
                 rc = (reclen > LLOG_CHUNK_SIZE - sizeof(struct llog_rec_hdr)
@@ -312,7 +312,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
         if (len == 0 || len & (LLOG_CHUNK_SIZE - 1))
                 RETURN(-EINVAL);
 
-        CDEBUG(D_OTHER, "looking for log index %u (cur idx %u off "LPU64"\n",
+        CDEBUG(D_OTHER, "looking for log index %u (cur idx %u off "LPU64")\n",
                next_idx, *cur_idx, *cur_offset);
 
         while (*cur_offset < loghandle->lgh_file->f_dentry->d_inode->i_size) {
@@ -321,15 +321,16 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
 
                 llog_skip_over(cur_offset, *cur_idx, next_idx);
 
-                rc = lustre_fread(loghandle->lgh_file, buf, len, cur_offset);
+                rc = lustre_fread(loghandle->lgh_file, buf, len,
+                                  (loff_t *)cur_offset); /* ugh */
 
                 if (rc == 0) /* end of file, nothing to do */
                         RETURN(0);
 
                 if (rc < sizeof(*tail)) {
-                        CERROR("Invalid llog block at log id "LPU64"/%u offset "LPU64"\n",
-                               loghandle->lgh_id.lgl_oid, loghandle->lgh_id.lgl_ogen, 
-                               *cur_offset);
+                        CERROR("Invalid llog block at log id "LPU64"/%u offset "
+                               LPU64"\n", loghandle->lgh_id.lgl_oid,
+                               loghandle->lgh_id.lgl_ogen, *cur_offset);
                          RETURN(-EINVAL);
                 }
 
@@ -338,9 +339,9 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
 
                 /* this shouldn't happen */
                 if (tail->lrt_index == 0) {
-                        CERROR("Invalid llog tail at log id "LPU64"/%u offset "LPU64"\n",
-                               loghandle->lgh_id.lgl_oid, loghandle->lgh_id.lgl_ogen, 
-                               *cur_offset);
+                        CERROR("Invalid llog tail at log id "LPU64"/%u offset "
+                               LPU64"\n", loghandle->lgh_id.lgl_oid,
+                               loghandle->lgh_id.lgl_ogen, *cur_offset);
                         RETURN(-EINVAL);
                 }
                 if (le32_to_cpu(tail->lrt_index) < next_idx)
@@ -361,7 +362,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
 
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
-static int llog_lvfs_create(struct llog_obd_ctxt *ctxt, struct llog_handle **res,
+static int llog_lvfs_create(struct llog_obd_ctxt *ctxt,struct llog_handle **res,
                             struct llog_logid *logid, char *name)
 {
         char logname[24];
@@ -425,11 +426,13 @@ static int llog_lvfs_create(struct llog_obd_ctxt *ctxt, struct llog_handle **res
                 }
 
                 handle->lgh_id.lgl_ogr = 1;
-                handle->lgh_id.lgl_oid = handle->lgh_file->f_dentry->d_inode->i_ino;
-                handle->lgh_id.lgl_ogen = handle->lgh_file->f_dentry->d_inode->i_generation;
+                handle->lgh_id.lgl_oid =
+                        handle->lgh_file->f_dentry->d_inode->i_ino;
+                handle->lgh_id.lgl_ogen =
+                        handle->lgh_file->f_dentry->d_inode->i_generation;
         } else {
                 oa = obdo_alloc();
-                if (oa == NULL) 
+                if (oa == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
                 /* XXX get some filter group constants */
                 oa->o_gr = 1;
@@ -488,7 +491,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
         ENTRY;
 
         oa = obdo_alloc();
-        if (oa == NULL) 
+        if (oa == NULL)
                 RETURN(-ENOMEM);
 
         oa->o_id = handle->lgh_id.lgl_oid;
@@ -507,7 +510,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 }
 
 /* reads the catalog list */
-int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd, 
+int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int count, struct llog_logid *idarray)
 {
         struct obd_run_ctxt saved;
@@ -517,7 +520,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         loff_t off = 0;
 
         LASSERT(count);
-        
+
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
@@ -539,7 +542,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                        name, rc);
                 GOTO(out, rc);
         }
-        
+
  out:
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
         if (file && !IS_ERR(file))
@@ -548,7 +551,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
 }
 
 /* writes the cat list */
-int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd, 
+int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                       char *name, int count, struct llog_logid *idarray)
 {
         struct obd_run_ctxt saved;
@@ -558,7 +561,7 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
         loff_t off = 0;
 
         LASSERT(count);
-        
+
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
         file = filp_open(name, O_RDWR | O_CREAT | O_LARGEFILE, 0700);
         if (!file || IS_ERR(file)) {
@@ -580,7 +583,7 @@ int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                        name, rc);
                 GOTO(out, rc);
         }
-        
+
  out:
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
         if (file && !IS_ERR(file))
