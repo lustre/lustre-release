@@ -18,6 +18,7 @@
 typedef int (*import_recover_t)(struct obd_import *imp, int phase);
 
 #include <linux/lustre_idl.h>
+
 struct obd_import {
         import_recover_t          imp_recover;
         struct ptlrpc_connection *imp_connection;
@@ -37,10 +38,9 @@ struct obd_import {
         int                       imp_level;
         __u64                     imp_last_xid;
         __u64                     imp_max_transno;
-        __u64                     imp_peer_last_xid;
         __u64                     imp_peer_committed_transno;
 
-        /* Protects flags, level, *_xid, *_list */
+        /* Protects flags, level, last_xid, *_list */
         spinlock_t                imp_lock;
 };
 
