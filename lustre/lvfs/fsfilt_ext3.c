@@ -952,13 +952,16 @@ int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
                                 struct semaphore *optional_sem)
 {
         int rc;
-#ifdef EXT3_MULTIBLOCK_ALLOCATOR
         if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL) {
+#ifdef EXT3_MULTIBLOCK_ALLOCATOR
                 rc = fsfilt_ext3_map_ext_inode_pages(inode, page, pages,
                                                      blocks, created, create);
+#else
+                CERROR("extent-mapped file with unsupported kernel\n");
+                rc = -EIO;
+#endif
                 return rc;
         }
-#endif
         if (optional_sem != NULL)
                 down(optional_sem);
         rc = fsfilt_ext3_map_bm_inode_pages(inode, page, pages, blocks,
