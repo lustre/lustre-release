@@ -510,6 +510,10 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op: sb %p\n", sb);
+        if (lmd == NULL) {
+                CERROR("lustre_mount_data is NULL: check that /sbin/mount.lustre exists?\n");
+                RETURN(-EINVAL);
+        }
         sbi = lustre_init_sbi(sb);
         if (!sbi)
                 RETURN(-ENOMEM);
@@ -881,8 +885,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
          * last one is especially bad for racing o_append users on other
          * nodes. */
         if (ia_valid & ATTR_SIZE) {
-                struct ldlm_extent extent = { .start = attr->ia_size,
-                                              .end = OBD_OBJECT_EOF };
+                ldlm_policy_data_t policy = { .l_extent = {attr->ia_size,
+                                                           OBD_OBJECT_EOF } };
                 struct lustre_handle lockh = { 0 };
                 int err, ast_flags = 0;
                 /* XXX when we fix the AST intents to pass the discard-range
@@ -894,22 +898,21 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 /* bug 1639: avoid write/truncate i_sem/DLM deadlock */
                 LASSERT(atomic_read(&inode->i_sem.count) <= 0);
                 up(&inode->i_sem);
-                rc = ll_extent_lock_no_validate(NULL, inode, lsm, LCK_PW,
-                                                &extent, &lockh, ast_flags);
+                rc = ll_extent_lock(NULL, inode, lsm, LCK_PW, &policy, &lockh,
+                                    ast_flags);
                 down(&inode->i_sem);
                 if (rc != ELDLM_OK)
                         RETURN(rc);
 
                 rc = vmtruncate(inode, attr->ia_size);
-                if (rc == 0)
-                        set_bit(LLI_F_HAVE_OST_SIZE_LOCK,
-                                &ll_i2info(inode)->lli_flags);
 
-                //ll_try_done_writing(inode);
-
+                /* We need to drop the semaphore here, because this unlock may
+                 * result in a cancellation, which will need the i_sem */
+                up(&inode->i_sem);
                 /* unlock now as we don't mind others file lockers racing with
                  * the mds updates below? */
                 err = ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
+                down(&inode->i_sem);
                 if (err) {
                         CERROR("ll_extent_unlock failed: %d\n", err);
                         if (!rc)
