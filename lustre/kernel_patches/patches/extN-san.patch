@@ -1,6 +1,9 @@
---- linux/fs/ext3/inode.orig.c	2002-12-29 18:48:56.000000000 +0800
-+++ linux/fs/ext3/inode.c	2002-12-29 19:17:24.000000000 +0800
-@@ -2728,3 +2728,85 @@
+ fs/ext3/inode.c |   82 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 82 insertions(+)
+
+--- linux-2.4.20/fs/ext3/inode.c~extN-san	2003-04-08 23:35:59.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/inode.c	2003-04-08 23:35:59.000000000 -0600
+@@ -2734,3 +2734,85 @@ int ext3_change_inode_journal_flag(struc
   * here, in ext3_aops_journal_start() to ensure that the forthcoming "see if we
   * need to extend" test in ext3_prepare_write() succeeds.  
   */
@@ -86,3 +89,5 @@
 +	return ret;
 +}
 +EXPORT_SYMBOL(ext3_prep_san_write);
+
+_

@@ -1,10 +1,12 @@
- balloc.c |   53 +++++++++++++++++++++++++++++++----------------------
+
+
+
+ fs/ext3/balloc.c |   53 +++++++++++++++++++++++++++++++----------------------
  1 files changed, 31 insertions(+), 22 deletions(-)
 
-diff -ru lum-2.4.18-um30/fs/ext3/balloc.c uml-2.4.18-12.5/fs/ext3/balloc.c
---- lum-2.4.18-um30/fs/ext3/balloc.c	Mon Feb 25 12:38:08 2002
-+++ uml-2.4.18-12.5/fs/ext3/balloc.c	Thu Sep 19 13:40:11 2002
-@@ -276,7 +276,8 @@
+--- linux-2.4.20/fs/ext3/balloc.c~ext3-2.4.20-fixes	2003-04-08 23:35:17.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/balloc.c	2003-04-08 23:35:17.000000000 -0600
+@@ -276,7 +276,8 @@ void ext3_free_blocks (handle_t *handle,
  	}
  	lock_super (sb);
  	es = sb->u.ext3_sb.s_es;
@@ -14,7 +16,7 @@ diff -ru lum-2.4.18-um30/fs/ext3/balloc.c uml-2.4.18-12.5/fs/ext3/balloc.c
  	    (block + count) > le32_to_cpu(es->s_blocks_count)) {
  		ext3_error (sb, "ext3_free_blocks",
  			    "Freeing blocks not in datazone - "
-@@ -309,17 +310,6 @@
+@@ -309,17 +310,6 @@ do_more:
  	if (!gdp)
  		goto error_return;
  
@@ -32,7 +34,7 @@ diff -ru lum-2.4.18-um30/fs/ext3/balloc.c uml-2.4.18-12.5/fs/ext3/balloc.c
  	/*
  	 * We are about to start releasing blocks in the bitmap,
  	 * so we need undo access.
-@@ -345,14 +335,24 @@
+@@ -345,14 +335,24 @@ do_more:
  	if (err)
  		goto error_return;
  
@@ -59,7 +61,7 @@ diff -ru lum-2.4.18-um30/fs/ext3/balloc.c uml-2.4.18-12.5/fs/ext3/balloc.c
  			if (debug_bh) {
  				BUFFER_TRACE(debug_bh, "Deleted!");
  				if (!bh2jh(bitmap_bh)->b_committed_data)
-@@ -365,9 +365,8 @@
+@@ -365,9 +365,8 @@ do_more:
  #endif
  		BUFFER_TRACE(bitmap_bh, "clear bit");
  		if (!ext3_clear_bit (bit + i, bitmap_bh->b_data)) {
@@ -71,7 +73,7 @@ diff -ru lum-2.4.18-um30/fs/ext3/balloc.c uml-2.4.18-12.5/fs/ext3/balloc.c
  			BUFFER_TRACE(bitmap_bh, "bit already cleared");
  		} else {
  			dquot_freed_blocks++;
-@@ -415,7 +417,6 @@
+@@ -415,7 +414,6 @@ do_more:
  	if (!err) err = ret;
  
  	if (overflow && !err) {
@@ -79,7 +81,7 @@ diff -ru lum-2.4.18-um30/fs/ext3/balloc.c uml-2.4.18-12.5/fs/ext3/balloc.c
  		count = overflow;
  		goto do_more;
  	}
-@@ -575,6 +577,7 @@
+@@ -576,6 +574,7 @@ int ext3_new_block (handle_t *handle, st
  
  	ext3_debug ("goal=%lu.\n", goal);
  
@@ -87,7 +89,7 @@ diff -ru lum-2.4.18-um30/fs/ext3/balloc.c uml-2.4.18-12.5/fs/ext3/balloc.c
  	/*
  	 * First, test whether the goal block is free.
  	 */
-@@ -684,10 +686,20 @@
+@@ -684,10 +683,20 @@ got_block:
  	if (tmp == le32_to_cpu(gdp->bg_block_bitmap) ||
  	    tmp == le32_to_cpu(gdp->bg_inode_bitmap) ||
  	    in_range (tmp, le32_to_cpu(gdp->bg_inode_table),
@@ -112,3 +114,5 @@ diff -ru lum-2.4.18-um30/fs/ext3/balloc.c uml-2.4.18-12.5/fs/ext3/balloc.c
  
  	/* The superblock lock should guard against anybody else beating
  	 * us to this point! */
+
+_

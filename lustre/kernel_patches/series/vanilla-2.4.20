@@ -1,3 +1,4 @@
+uml-patch-2.4.20-3.patch
 dev_read_only_hp.patch
 exports_hp.patch
 kmem_cache_validate_hp.patch

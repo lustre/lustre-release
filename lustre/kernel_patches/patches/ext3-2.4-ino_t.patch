@@ -1,6 +1,11 @@
---- linux/fs/ext3/ialloc.c.orig	Sat Oct 19 11:42:23 2002
-+++ linux/fs/ext3/ialloc.c	Sat Jan  4 12:14:18 2003
-@@ -64,8 +64,8 @@ static int read_inode_bitmap (struct sup
+ fs/ext3/ialloc.c        |   20 ++++++++++----------
+ fs/ext3/namei.c         |   16 ++++++++--------
+ include/linux/ext3_fs.h |    2 +-
+ 3 files changed, 19 insertions(+), 19 deletions(-)
+
+--- linux-2.4.20/fs/ext3/ialloc.c~ext3-2.4-ino_t	2003-04-08 23:35:24.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/ialloc.c	2003-04-08 23:35:24.000000000 -0600
+@@ -65,8 +65,8 @@ static int read_inode_bitmap (struct sup
  	if (!bh) {
  		ext3_error (sb, "read_inode_bitmap",
  			    "Cannot read inode bitmap - "
@@ -11,7 +16,7 @@
  		retval = -EIO;
  	}
  	/*
-@@ -531,19 +532,19 @@ out:
+@@ -533,19 +533,19 @@ out:
  }
  
  /* Verify that we are loading a valid orphan from disk */
@@ -35,7 +40,7 @@
  		return NULL;
  	}
  
-@@ -552,7 +553,7 @@ struct inode *ext3_orphan_get (struct su
+@@ -554,7 +554,7 @@ struct inode *ext3_orphan_get (struct su
  	if ((bitmap_nr = load_inode_bitmap(sb, block_group)) < 0 ||
  	    !(bh = EXT3_SB(sb)->s_inode_bitmap[bitmap_nr])) {
  		ext3_warning(sb, __FUNCTION__,
@@ -44,7 +49,7 @@
  		return NULL;
  	}
  
-@@ -563,7 +564,7 @@ struct inode *ext3_orphan_get (struct su
+@@ -565,16 +565,16 @@ struct inode *ext3_orphan_get (struct su
  	if (!ext3_test_bit(bit, bh->b_data) || !(inode = iget(sb, ino)) ||
  	    is_bad_inode(inode) || NEXT_ORPHAN(inode) > max_ino) {
  		ext3_warning(sb, __FUNCTION__,
@@ -53,7 +58,6 @@
  		printk(KERN_NOTICE "ext3_test_bit(bit=%d, block=%ld) = %d\n",
  		       bit, bh->b_blocknr, ext3_test_bit(bit, bh->b_data));
  		printk(KERN_NOTICE "inode=%p\n", inode);
-@@ -570,9 +571,9 @@ struct inode *ext3_orphan_get (struct su
  		if (inode) {
  			printk(KERN_NOTICE "is_bad_inode(inode)=%d\n",
  			       is_bad_inode(inode));
@@ -65,11 +69,11 @@
  		}
  		/* Avoid freeing blocks if we got a bad deleted inode */
  		if (inode && inode->i_nlink == 0)
---- linux/fs/ext3/namei.c.orig	Sat Oct 19 11:42:45 2002
-+++ linux/fs/ext3/namei.c	Sat Jan  4 12:13:27 2003
-@@ -716,10 +716,10 @@ int ext3_orphan_del(handle_t *handle, st
- {
+--- linux-2.4.20/fs/ext3/namei.c~ext3-2.4-ino_t	2003-04-08 23:35:24.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/namei.c	2003-04-08 23:35:24.000000000 -0600
+@@ -1808,10 +1808,10 @@ int ext3_orphan_del(handle_t *handle, st
  	struct list_head *prev;
+ 	struct ext3_inode_info *ei = EXT3_I(inode);
  	struct ext3_sb_info *sbi;
 -	ino_t ino_next; 
 +	unsigned long ino_next;
@@ -78,18 +82,18 @@
 -	
 +
  	lock_super(inode->i_sb);
- 	if (list_empty(&inode->u.ext3_i.i_orphan)) {
+ 	if (list_empty(&ei->i_orphan)) {
  		unlock_super(inode->i_sb);
-@@ -730,7 +730,7 @@ int ext3_orphan_del(handle_t *handle, st
- 	prev = inode->u.ext3_i.i_orphan.prev;
+@@ -1822,7 +1822,7 @@ int ext3_orphan_del(handle_t *handle, st
+ 	prev = ei->i_orphan.prev;
  	sbi = EXT3_SB(inode->i_sb);
  
 -	jbd_debug(4, "remove inode %ld from orphan list\n", inode->i_ino);
 +	jbd_debug(4, "remove inode %lu from orphan list\n", inode->i_ino);
  
- 	list_del(&inode->u.ext3_i.i_orphan);
- 	INIT_LIST_HEAD(&inode->u.ext3_i.i_orphan);
-@@ -741,13 +741,13 @@ int ext3_orphan_del(handle_t *handle, st
+ 	list_del(&ei->i_orphan);
+ 	INIT_LIST_HEAD(&ei->i_orphan);
+@@ -1833,13 +1833,13 @@ int ext3_orphan_del(handle_t *handle, st
  	 * list in memory. */
  	if (!handle)
  		goto out;
@@ -105,7 +109,7 @@
  		BUFFER_TRACE(sbi->s_sbh, "get_write_access");
  		err = ext3_journal_get_write_access(handle, sbi->s_sbh);
  		if (err)
-@@ -758,8 +758,8 @@ int ext3_orphan_del(handle_t *handle, st
+@@ -1850,8 +1850,8 @@ int ext3_orphan_del(handle_t *handle, st
  		struct ext3_iloc iloc2;
  		struct inode *i_prev =
  			list_entry(prev, struct inode, u.ext3_i.i_orphan);
@@ -116,7 +120,7 @@
  			  i_prev->i_ino, ino_next);
  		err = ext3_reserve_inode_write(handle, i_prev, &iloc2);
  		if (err)
-@@ -774,7 +774,7 @@ int ext3_orphan_del(handle_t *handle, st
+@@ -1866,7 +1866,7 @@ int ext3_orphan_del(handle_t *handle, st
  	if (err)
  		goto out_brelse;
  
@@ -125,9 +129,9 @@
  	ext3_std_error(inode->i_sb, err);
  out:
  	unlock_super(inode->i_sb);
---- linux/include/linux/ext3_fs.h.orig	Thu Jan  2 16:10:24 2003
-+++ linux/include/linux/ext3_fs.h	Sat Jan  4 12:25:41 2003
-@@ -622,7 +622,7 @@ extern int ext3_sync_file (struct file *
+--- linux-2.4.20/include/linux/ext3_fs.h~ext3-2.4-ino_t	2003-04-08 23:35:24.000000000 -0600
++++ linux-2.4.20-braam/include/linux/ext3_fs.h	2003-04-08 23:35:24.000000000 -0600
+@@ -673,7 +673,7 @@ extern int ext3fs_dirhash(const char *na
  /* ialloc.c */
  extern struct inode * ext3_new_inode (handle_t *, const struct inode *, int);
  extern void ext3_free_inode (handle_t *, struct inode *);
@@ -136,3 +140,5 @@
  extern unsigned long ext3_count_free_inodes (struct super_block *);
  extern void ext3_check_inodes_bitmap (struct super_block *);
  extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
+
+_

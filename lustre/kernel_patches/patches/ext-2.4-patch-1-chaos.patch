@@ -1,806 +1,20 @@
-# This is a BitKeeper generated patch for the following project:
-# Project Name: Linux kernel tree
-# This patch format is intended for GNU patch command version 2.5 or higher.
-# This patch includes the following deltas:
-#	           ChangeSet	1.775   -> 1.783  
-#	     fs/ext3/namei.c	1.2     -> 1.6    
-#	include/linux/ext3_fs.h	1.4     -> 1.9    
-#	     fs/ext2/inode.c	1.15    -> 1.16   
-#	        lib/rbtree.c	1.2     -> 1.3    
-#	    fs/ext3/Makefile	1.2     -> 1.3    
-#	include/linux/ext3_jbd.h	1.2     -> 1.3    
-#	include/linux/ext2_fs.h	1.6     -> 1.9    
-#	include/linux/ext2_fs_sb.h	1.1     -> 1.2    
-#	include/linux/rbtree.h	1.1     -> 1.2    
-#	include/linux/ext2_fs_i.h	1.4     -> 1.5    
-#	    fs/ext3/ialloc.c	1.4     -> 1.5    
-#	    fs/ext2/ialloc.c	1.8     -> 1.10   
-#	       fs/ext3/dir.c	1.1     -> 1.3    
-#	     fs/ext2/super.c	1.9     -> 1.13   
-#	     fs/ext3/inode.c	1.10    -> 1.11   
-#	     fs/ext3/super.c	1.7     -> 1.12   
-#	include/linux/ext3_fs_sb.h	1.2     -> 1.4    
-#	      fs/ext3/file.c	1.3     -> 1.4    
-#	               (new)	        -> 1.1     fs/ext3/hash.c 
-#
-# The following is the BitKeeper ChangeSet Log
-# --------------------------------------------
-# 02/11/06	tytso@snap.thunk.org	1.776
-# Port patch-ext3-dxdir-2.4.19-4 to 2.4.20-rc1
-# --------------------------------------------
-# 02/11/07	tytso@snap.thunk.org	1.777
-# Add '.' and '..' entries to be returned by readdir of htree directories
-# 
-# This patch from Chris Li adds '.' and '..' to the rbtree so that they 
-# are properly returned by readdir.
-# --------------------------------------------
-# 02/11/07	tytso@snap.thunk.org	1.778
-# Check for failed kmalloc() in ext3_htree_store_dirent()
-# 
-# This patch checks for a failed kmalloc() in ext3_htree_store_dirent(),
-# and passes the error up to its caller, ext3_htree_fill_tree().
-# --------------------------------------------
-# 02/11/07	tytso@snap.thunk.org	1.779
-# Fix ext3 htree rename bug.
-# 
-# This fixes an ext3 htree bug pointed out by Christopher Li; if 
-# adding the new name to the directory causes a split, this can cause
-# the directory entry containing the old name to move to another 
-# block, and then the removal of the old name will fail.
-# --------------------------------------------
-# 02/11/07	tytso@snap.thunk.org	1.780
-# Default mount options from superblock for ext2/3 filesystems
-# 
-# This patch adds support for default mount options to be stored in the
-# superblock, so they don't have to be specified on the mount command line
-# (or in /etc/fstab).  While I was in the code, I also cleaned up the
-# handling of how mount options are processed in the ext2 and ext3
-# filesystems.
-# 
-# Most mount options are now processed *after* the superblock has been
-# read in.  This allows for a much cleaner handling of those default mount
-# option parameters that were already stored in the superblock: the
-# resuid, resgid, and s_errors fields were handled using some fairly gross
-# special cases.  Now the only mount option which is processed first is
-# the sb option, which specifies the location of the superblock.  This
-# allows the handling of all of the default mount parameters to be much
-# more cleanly and more generally handled.
-# 
-# This does change the behaviour from earlier kernels, in that if the sb
-# mount option is specified, it must be specified *first*.  However, this
-# option is rarely used, and if it is, it generally is specified first, so
-# this seems to be a reasonable restriction.
-# --------------------------------------------
-# 02/11/07	tytso@snap.thunk.org	1.781
-# Ext2/3 forward compatibility: on-line resizing
-# 
-# This patch allows forward compatibility with future filesystems which
-# are dynamically grown by using an alternate algorithm for storing the
-# block group descriptors.  It's also a bit more efficient, in that it
-# uses just a little bit less disk space.  Currently, the ext2 filesystem
-# format requires either relocating the inode table, or reserving space in
-# before doing the on-line resize.  The new scheme, which is documented in
-# "Planned Extensions to the Ext2/3 Filesystem", by Stephen Tweedie and I 
-# (see: http://e2fsprogs.sourceforge.net/extensions-ext23)
-# --------------------------------------------
-# 02/11/07	tytso@snap.thunk.org	1.782
-# Ext2/3 forward compatibility: inode size
-# 
-# This patch allows filesystems with expanded inodes to be mounted.
-# (compatibility feature flags will be used to control whether or not the
-# filesystem should be mounted in case the new inode fields will result in
-# compatibility issues).  This allows for future compatibility with newer
-# versions of ext2fs.
-# --------------------------------------------
-# 02/11/07	tytso@snap.thunk.org	1.783
-# Orlov block allocator for ext2/3
-# 
-# This is Al's implementation of the Orlov block allocator for ext2/3.
-# 
-# At least doubles the throughput for the traverse-a-kernel-tree
-# test and is well tested.
-# --------------------------------------------
-#
-diff -Nru a/fs/ext2/ialloc.c b/fs/ext2/ialloc.c
---- a/fs/ext2/ialloc.c	Thu Nov  7 11:58:05 2002
-+++ b/fs/ext2/ialloc.c	Thu Nov  7 11:58:05 2002
-@@ -17,6 +17,7 @@
- #include <linux/ext2_fs.h>
- #include <linux/locks.h>
- #include <linux/quotaops.h>
-+#include <linux/random.h>
- 
- 
- /*
-@@ -228,8 +229,7 @@
-  * For other inodes, search forward from the parent directory\'s block
-  * group to find a free inode.
-  */
--
--static int find_group_dir(struct super_block *sb, int parent_group)
-+static int find_group_dir(struct super_block *sb, const struct inode *parent)
- {
- 	struct ext2_super_block * es = sb->u.ext2_sb.s_es;
- 	int ngroups = sb->u.ext2_sb.s_groups_count;
-@@ -262,8 +262,140 @@
- 	return best_group;
- }
- 
--static int find_group_other(struct super_block *sb, int parent_group)
-+/* 
-+ * Orlov's allocator for directories. 
-+ * 
-+ * We always try to spread first-level directories.
-+ *
-+ * If there are blockgroups with both free inodes and free blocks counts 
-+ * not worse than average we return one with smallest directory count. 
-+ * Otherwise we simply return a random group. 
-+ * 
-+ * For the rest rules look so: 
-+ * 
-+ * It's OK to put directory into a group unless 
-+ * it has too many directories already (max_dirs) or 
-+ * it has too few free inodes left (min_inodes) or 
-+ * it has too few free blocks left (min_blocks) or 
-+ * it's already running too large debt (max_debt). 
-+ * Parent's group is prefered, if it doesn't satisfy these 
-+ * conditions we search cyclically through the rest. If none 
-+ * of the groups look good we just look for a group with more 
-+ * free inodes than average (starting at parent's group). 
-+ * 
-+ * Debt is incremented each time we allocate a directory and decremented 
-+ * when we allocate an inode, within 0--255. 
-+ */ 
-+
-+#define INODE_COST 64
-+#define BLOCK_COST 256
-+
-+static int find_group_orlov(struct super_block *sb, const struct inode *parent)
- {
-+	int parent_group = parent->u.ext2_i.i_block_group;
-+	struct ext2_sb_info *sbi = EXT2_SB(sb);
-+	struct ext2_super_block *es = sbi->s_es;
-+	int ngroups = sbi->s_groups_count;
-+	int inodes_per_group = EXT2_INODES_PER_GROUP(sb);
-+	int avefreei = le32_to_cpu(es->s_free_inodes_count) / ngroups;
-+	int avefreeb = le32_to_cpu(es->s_free_blocks_count) / ngroups;
-+	int blocks_per_dir;
-+	int ndirs = sbi->s_dir_count;
-+	int max_debt, max_dirs, min_blocks, min_inodes;
-+	int group = -1, i;
-+	struct ext2_group_desc *desc;
-+	struct buffer_head *bh;
-+
-+	if ((parent == sb->s_root->d_inode) ||
-+	    (parent->i_flags & EXT2_TOPDIR_FL)) {
-+		struct ext2_group_desc *best_desc = NULL;
-+		struct buffer_head *best_bh = NULL;
-+		int best_ndir = inodes_per_group;
-+		int best_group = -1;
-+
-+		get_random_bytes(&group, sizeof(group));
-+		parent_group = (unsigned)group % ngroups;
-+		for (i = 0; i < ngroups; i++) {
-+			group = (parent_group + i) % ngroups;
-+			desc = ext2_get_group_desc (sb, group, &bh);
-+			if (!desc || !desc->bg_free_inodes_count)
-+				continue;
-+			if (le16_to_cpu(desc->bg_used_dirs_count) >= best_ndir)
-+				continue;
-+			if (le16_to_cpu(desc->bg_free_inodes_count) < avefreei)
-+				continue;
-+			if (le16_to_cpu(desc->bg_free_blocks_count) < avefreeb)
-+				continue;
-+			best_group = group;
-+			best_ndir = le16_to_cpu(desc->bg_used_dirs_count);
-+			best_desc = desc;
-+			best_bh = bh;
-+		}
-+		if (best_group >= 0) {
-+			desc = best_desc;
-+			bh = best_bh;
-+			group = best_group;
-+			goto found;
-+		}
-+		goto fallback;
-+	}
-+
-+	blocks_per_dir = (le32_to_cpu(es->s_blocks_count) -
-+			  le32_to_cpu(es->s_free_blocks_count)) / ndirs;
-+
-+	max_dirs = ndirs / ngroups + inodes_per_group / 16;
-+	min_inodes = avefreei - inodes_per_group / 4;
-+	min_blocks = avefreeb - EXT2_BLOCKS_PER_GROUP(sb) / 4;
-+
-+	max_debt = EXT2_BLOCKS_PER_GROUP(sb) / max(blocks_per_dir, BLOCK_COST);
-+	if (max_debt * INODE_COST > inodes_per_group)
-+		max_debt = inodes_per_group / INODE_COST;
-+	if (max_debt > 255)
-+		max_debt = 255;
-+	if (max_debt == 0)
-+		max_debt = 1;
-+
-+	for (i = 0; i < ngroups; i++) {
-+		group = (parent_group + i) % ngroups;
-+		desc = ext2_get_group_desc (sb, group, &bh);
-+		if (!desc || !desc->bg_free_inodes_count)
-+			continue;
-+		if (sbi->s_debts[group] >= max_debt)
-+			continue;
-+		if (le16_to_cpu(desc->bg_used_dirs_count) >= max_dirs)
-+			continue;
-+		if (le16_to_cpu(desc->bg_free_inodes_count) < min_inodes)
-+			continue;
-+		if (le16_to_cpu(desc->bg_free_blocks_count) < min_blocks)
-+			continue;
-+		goto found;
-+	}
-+
-+fallback:
-+	for (i = 0; i < ngroups; i++) {
-+		group = (parent_group + i) % ngroups;
-+		desc = ext2_get_group_desc (sb, group, &bh);
-+		if (!desc || !desc->bg_free_inodes_count)
-+			continue;
-+		if (le16_to_cpu(desc->bg_free_inodes_count) >= avefreei)
-+			goto found;
-+	}
-+
-+	return -1;
-+
-+found:
-+	desc->bg_free_inodes_count =
-+		cpu_to_le16(le16_to_cpu(desc->bg_free_inodes_count) - 1);
-+	desc->bg_used_dirs_count =
-+		cpu_to_le16(le16_to_cpu(desc->bg_used_dirs_count) + 1);
-+	sbi->s_dir_count++;
-+	mark_buffer_dirty(bh);
-+	return group;
-+}
-+
-+static int find_group_other(struct super_block *sb, const struct inode *parent)
-+{
-+	int parent_group = parent->u.ext2_i.i_block_group;
- 	int ngroups = sb->u.ext2_sb.s_groups_count;
- 	struct ext2_group_desc *desc;
- 	struct buffer_head *bh;
-@@ -331,10 +463,13 @@
- 	lock_super (sb);
- 	es = sb->u.ext2_sb.s_es;
- repeat:
--	if (S_ISDIR(mode))
--		group = find_group_dir(sb, dir->u.ext2_i.i_block_group);
--	else 
--		group = find_group_other(sb, dir->u.ext2_i.i_block_group);
-+	if (S_ISDIR(mode)) {
-+		if (test_opt (sb, OLDALLOC))
-+			group = find_group_dir(sb, dir);
-+		else
-+			group = find_group_orlov(sb, dir);
-+	} else 
-+		group = find_group_other(sb, dir);
- 
- 	err = -ENOSPC;
- 	if (group == -1)
-@@ -368,6 +503,15 @@
- 
- 	es->s_free_inodes_count =
- 		cpu_to_le32(le32_to_cpu(es->s_free_inodes_count) - 1);
-+
-+	if (S_ISDIR(mode)) {
-+		if (EXT2_SB(sb)->s_debts[group] < 255)
-+			EXT2_SB(sb)->s_debts[group]++;
-+	} else {
-+		if (EXT2_SB(sb)->s_debts[group])
-+			EXT2_SB(sb)->s_debts[group]--;
-+	}
-+
- 	mark_buffer_dirty(sb->u.ext2_sb.s_sbh);
- 	sb->s_dirt = 1;
- 	inode->i_uid = current->fsuid;
-@@ -385,7 +529,7 @@
- 	inode->i_blksize = PAGE_SIZE;	/* This is the optimal IO size (for stat), not the fs block size */
- 	inode->i_blocks = 0;
- 	inode->i_mtime = inode->i_atime = inode->i_ctime = CURRENT_TIME;
--	inode->u.ext2_i.i_new_inode = 1;
-+	inode->u.ext2_i.i_state = EXT2_STATE_NEW;
- 	inode->u.ext2_i.i_flags = dir->u.ext2_i.i_flags;
- 	if (S_ISLNK(mode))
- 		inode->u.ext2_i.i_flags &= ~(EXT2_IMMUTABLE_FL|EXT2_APPEND_FL);
-@@ -469,6 +613,21 @@
- #else
- 	return le32_to_cpu(sb->u.ext2_sb.s_es->s_free_inodes_count);
- #endif
-+}
-+
-+/* Called at mount-time, super-block is locked */
-+unsigned long ext2_count_dirs (struct super_block * sb)
-+{
-+	unsigned long count = 0;
-+	int i;
-+
-+	for (i = 0; i < EXT2_SB(sb)->s_groups_count; i++) {
-+		struct ext2_group_desc *gdp = ext2_get_group_desc (sb, i, NULL);
-+		if (!gdp)
-+			continue;
-+		count += le16_to_cpu(gdp->bg_used_dirs_count);
-+	}
-+	return count;
- }
- 
- #ifdef CONFIG_EXT2_CHECK
-diff -Nru a/fs/ext2/inode.c b/fs/ext2/inode.c
---- a/fs/ext2/inode.c	Thu Nov  7 11:58:05 2002
-+++ b/fs/ext2/inode.c	Thu Nov  7 11:58:05 2002
-@@ -955,6 +955,7 @@
- 	else
- 		inode->u.ext2_i.i_dir_acl = le32_to_cpu(raw_inode->i_dir_acl);
- 	inode->i_generation = le32_to_cpu(raw_inode->i_generation);
-+ 	inode->u.ext2_i.i_state = 0;
- 	inode->u.ext2_i.i_prealloc_count = 0;
- 	inode->u.ext2_i.i_block_group = block_group;
- 
-@@ -1061,6 +1062,11 @@
- 	offset &= EXT2_BLOCK_SIZE(inode->i_sb) - 1;
- 	raw_inode = (struct ext2_inode *) (bh->b_data + offset);
- 
-+	/* For fields not tracked in the in-memory inode,
-+	 * initialise them to zero for new inodes. */
-+	if (inode->u.ext2_i.i_state & EXT2_STATE_NEW)
-+		memset(raw_inode, 0, EXT2_SB(inode->i_sb)->s_inode_size);
-+
- 	raw_inode->i_mode = cpu_to_le16(inode->i_mode);
- 	if(!(test_opt(inode->i_sb, NO_UID32))) {
- 		raw_inode->i_uid_low = cpu_to_le16(low_16_bits(inode->i_uid));
-@@ -1133,6 +1139,7 @@
- 			err = -EIO;
- 		}
- 	}
-+	inode->u.ext2_i.i_state &= ~EXT2_STATE_NEW;
- 	brelse (bh);
- 	return err;
- }
-diff -Nru a/fs/ext2/super.c b/fs/ext2/super.c
---- a/fs/ext2/super.c	Thu Nov  7 11:58:05 2002
-+++ b/fs/ext2/super.c	Thu Nov  7 11:58:05 2002
-@@ -48,16 +48,12 @@
- 	va_start (args, fmt);
- 	vsprintf (error_buf, fmt, args);
- 	va_end (args);
--	if (test_opt (sb, ERRORS_PANIC) ||
--	    (le16_to_cpu(sb->u.ext2_sb.s_es->s_errors) == EXT2_ERRORS_PANIC &&
--	     !test_opt (sb, ERRORS_CONT) && !test_opt (sb, ERRORS_RO)))
-+	if (test_opt (sb, ERRORS_PANIC))
- 		panic ("EXT2-fs panic (device %s): %s: %s\n",
- 		       bdevname(sb->s_dev), function, error_buf);
- 	printk (KERN_CRIT "EXT2-fs error (device %s): %s: %s\n",
- 		bdevname(sb->s_dev), function, error_buf);
--	if (test_opt (sb, ERRORS_RO) ||
--	    (le16_to_cpu(sb->u.ext2_sb.s_es->s_errors) == EXT2_ERRORS_RO &&
--	     !test_opt (sb, ERRORS_CONT) && !test_opt (sb, ERRORS_PANIC))) {
-+	if (test_opt (sb, ERRORS_RO)) {
- 		printk ("Remounting filesystem read-only\n");
- 		sb->s_flags |= MS_RDONLY;
- 	}
-@@ -136,6 +132,7 @@
- 		if (sb->u.ext2_sb.s_group_desc[i])
- 			brelse (sb->u.ext2_sb.s_group_desc[i]);
- 	kfree(sb->u.ext2_sb.s_group_desc);
-+	kfree(sb->u.ext2_sb.s_debts);
- 	for (i = 0; i < EXT2_MAX_GROUP_LOADED; i++)
- 		if (sb->u.ext2_sb.s_inode_bitmap[i])
- 			brelse (sb->u.ext2_sb.s_inode_bitmap[i]);
-@@ -158,12 +155,61 @@
- 	remount_fs:	ext2_remount,
- };
- 
-+static unsigned long get_sb_block(void **data)
-+{
-+	unsigned long 	sb_block;
-+	char 		*options = (char *) *data;
-+
-+	if (!options || strncmp(options, "sb=", 3) != 0)
-+		return 1;	/* Default location */
-+	options += 3;
-+	sb_block = simple_strtoul(options, &options, 0);
-+	if (*options && *options != ',') {
-+		printk("EXT2-fs: Invalid sb specification: %s\n",
-+		       (char *) *data);
-+		return 1;
-+	}
-+	if (*options == ',')
-+		options++;
-+	*data = (void *) options;
-+	return sb_block;
-+}
-+
-+static int want_value(char *value, char *option)
-+{
-+	if (!value || !*value) {
-+		printk(KERN_NOTICE "EXT2-fs: the %s option needs an argument\n",
-+		       option);
-+		return -1;
-+	}
-+	return 0;
-+}
-+
-+static int want_null_value(char *value, char *option)
-+{
-+	if (*value) {
-+		printk(KERN_NOTICE "EXT2-fs: Invalid %s argument: %s\n",
-+		       option, value);
-+		return -1;
-+	}
-+	return 0;
-+}
-+
-+static int want_numeric(char *value, char *option, unsigned long *number)
-+{
-+	if (want_value(value, option))
-+		return -1;
-+	*number = simple_strtoul(value, &value, 0);
-+	if (want_null_value(value, option))
-+		return -1;
-+	return 0;
-+}
-+
- /*
-  * This function has been shamelessly adapted from the msdos fs
-  */
--static int parse_options (char * options, unsigned long * sb_block,
--			  unsigned short *resuid, unsigned short * resgid,
--			  unsigned long * mount_options)
-+static int parse_options (char * options,
-+			  struct ext2_sb_info *sbi)
- {
- 	char * this_char;
- 	char * value;
-@@ -176,22 +222,22 @@
- 		if ((value = strchr (this_char, '=')) != NULL)
- 			*value++ = 0;
- 		if (!strcmp (this_char, "bsddf"))
--			clear_opt (*mount_options, MINIX_DF);
-+			clear_opt (sbi->s_mount_opt, MINIX_DF);
- 		else if (!strcmp (this_char, "nouid32")) {
--			set_opt (*mount_options, NO_UID32);
-+			set_opt (sbi->s_mount_opt, NO_UID32);
- 		}
- 		else if (!strcmp (this_char, "check")) {
- 			if (!value || !*value || !strcmp (value, "none"))
--				clear_opt (*mount_options, CHECK);
-+				clear_opt (sbi->s_mount_opt, CHECK);
- 			else
- #ifdef CONFIG_EXT2_CHECK
--				set_opt (*mount_options, CHECK);
-+				set_opt (sbi->s_mount_opt, CHECK);
- #else
- 				printk("EXT2 Check option not supported\n");
- #endif
- 		}
- 		else if (!strcmp (this_char, "debug"))
--			set_opt (*mount_options, DEBUG);
-+			set_opt (sbi->s_mount_opt, DEBUG);
- 		else if (!strcmp (this_char, "errors")) {
- 			if (!value || !*value) {
- 				printk ("EXT2-fs: the errors option requires "
-@@ -199,19 +245,19 @@
- 				return 0;
- 			}
- 			if (!strcmp (value, "continue")) {
--				clear_opt (*mount_options, ERRORS_RO);
--				clear_opt (*mount_options, ERRORS_PANIC);
--				set_opt (*mount_options, ERRORS_CONT);
-+				clear_opt (sbi->s_mount_opt, ERRORS_RO);
-+				clear_opt (sbi->s_mount_opt, ERRORS_PANIC);
-+				set_opt (sbi->s_mount_opt, ERRORS_CONT);
- 			}
- 			else if (!strcmp (value, "remount-ro")) {
--				clear_opt (*mount_options, ERRORS_CONT);
--				clear_opt (*mount_options, ERRORS_PANIC);
--				set_opt (*mount_options, ERRORS_RO);
-+				clear_opt (sbi->s_mount_opt, ERRORS_CONT);
-+				clear_opt (sbi->s_mount_opt, ERRORS_PANIC);
-+				set_opt (sbi->s_mount_opt, ERRORS_RO);
- 			}
- 			else if (!strcmp (value, "panic")) {
--				clear_opt (*mount_options, ERRORS_CONT);
--				clear_opt (*mount_options, ERRORS_RO);
--				set_opt (*mount_options, ERRORS_PANIC);
-+				clear_opt (sbi->s_mount_opt, ERRORS_CONT);
-+				clear_opt (sbi->s_mount_opt, ERRORS_RO);
-+				set_opt (sbi->s_mount_opt, ERRORS_PANIC);
- 			}
- 			else {
- 				printk ("EXT2-fs: Invalid errors option: %s\n",
-@@ -221,53 +267,30 @@
- 		}
- 		else if (!strcmp (this_char, "grpid") ||
- 			 !strcmp (this_char, "bsdgroups"))
--			set_opt (*mount_options, GRPID);
-+			set_opt (sbi->s_mount_opt, GRPID);
- 		else if (!strcmp (this_char, "minixdf"))
--			set_opt (*mount_options, MINIX_DF);
-+			set_opt (sbi->s_mount_opt, MINIX_DF);
- 		else if (!strcmp (this_char, "nocheck"))
--			clear_opt (*mount_options, CHECK);
-+			clear_opt (sbi->s_mount_opt, CHECK);
- 		else if (!strcmp (this_char, "nogrpid") ||
- 			 !strcmp (this_char, "sysvgroups"))
--			clear_opt (*mount_options, GRPID);
-+			clear_opt (sbi->s_mount_opt, GRPID);
- 		else if (!strcmp (this_char, "resgid")) {
--			if (!value || !*value) {
--				printk ("EXT2-fs: the resgid option requires "
--					"an argument\n");
-+			unsigned long v;
-+			if (want_numeric(value, "resgid", &v))
- 				return 0;
--			}
--			*resgid = simple_strtoul (value, &value, 0);
--			if (*value) {
--				printk ("EXT2-fs: Invalid resgid option: %s\n",
--					value);
--				return 0;
--			}
-+			sbi->s_resgid = v;
- 		}
- 		else if (!strcmp (this_char, "resuid")) {
--			if (!value || !*value) {
--				printk ("EXT2-fs: the resuid option requires "
--					"an argument");
-+			unsigned long v;
-+			if (want_numeric(value, "resuid", &v))
- 				return 0;
--			}
--			*resuid = simple_strtoul (value, &value, 0);
--			if (*value) {
--				printk ("EXT2-fs: Invalid resuid option: %s\n",
--					value);
--				return 0;
--			}
--		}
--		else if (!strcmp (this_char, "sb")) {
--			if (!value || !*value) {
--				printk ("EXT2-fs: the sb option requires "
--					"an argument");
--				return 0;
--			}
--			*sb_block = simple_strtoul (value, &value, 0);
--			if (*value) {
--				printk ("EXT2-fs: Invalid sb option: %s\n",
--					value);
--				return 0;
--			}
-+			sbi->s_resuid = v;
- 		}
-+		else if (!strcmp (this_char, "oldalloc"))
-+			set_opt (sbi->s_mount_opt, OLDALLOC);
-+		else if (!strcmp (this_char, "orlov"))
-+			clear_opt (sbi->s_mount_opt, OLDALLOC);
- 		/* Silently ignore the quota options */
- 		else if (!strcmp (this_char, "grpquota")
- 		         || !strcmp (this_char, "noquota")
-@@ -397,17 +420,37 @@
- 	return res;
- }
- 
-+static unsigned long descriptor_loc(struct super_block *sb,
-+				    unsigned long logic_sb_block,
-+				    int nr)
-+{
-+	struct ext2_sb_info *sbi = EXT2_SB(sb);
-+	unsigned long bg, first_data_block, first_meta_bg;
-+	int has_super = 0;
-+	
-+	first_data_block = le32_to_cpu(sbi->s_es->s_first_data_block);
-+	first_meta_bg = le32_to_cpu(sbi->s_es->s_first_meta_bg);
-+
-+	if (!EXT2_HAS_INCOMPAT_FEATURE(sb, EXT2_FEATURE_INCOMPAT_META_BG) ||
-+	    nr < first_meta_bg)
-+		return (logic_sb_block + nr + 1);
-+	bg = sbi->s_desc_per_block * nr;
-+	if (ext2_bg_has_super(sb, bg))
-+		has_super = 1;
-+	return (first_data_block + has_super + (bg * sbi->s_blocks_per_group));
-+}
-+
- struct super_block * ext2_read_super (struct super_block * sb, void * data,
- 				      int silent)
- {
- 	struct buffer_head * bh;
-+  	struct ext2_sb_info * sbi = EXT2_SB(sb);
- 	struct ext2_super_block * es;
--	unsigned long sb_block = 1;
--	unsigned short resuid = EXT2_DEF_RESUID;
--	unsigned short resgid = EXT2_DEF_RESGID;
--	unsigned long logic_sb_block = 1;
--	unsigned long offset = 0;
-+	unsigned long sb_block = get_sb_block(&data);
-+	unsigned long block, logic_sb_block;
-+	unsigned long offset;
- 	kdev_t dev = sb->s_dev;
-+	unsigned long def_mount_opts;
- 	int blocksize = BLOCK_SIZE;
- 	int db_count;
- 	int i, j;
-@@ -423,12 +466,6 @@
- 	if(blocksize < BLOCK_SIZE )
- 	    blocksize = BLOCK_SIZE;
- 
--	sb->u.ext2_sb.s_mount_opt = 0;
--	if (!parse_options ((char *) data, &sb_block, &resuid, &resgid,
--	    &sb->u.ext2_sb.s_mount_opt)) {
--		return NULL;
--	}
--
- 	if (set_blocksize(dev, blocksize) < 0) {
- 		printk ("EXT2-fs: unable to set blocksize %d\n", blocksize);
- 		return NULL;
-@@ -436,14 +473,11 @@
- 	sb->s_blocksize = blocksize;
- 
- 	/*
--	 * If the superblock doesn't start on a sector boundary,
--	 * calculate the offset.  FIXME(eric) this doesn't make sense
--	 * that we would have to do this.
-+	 * If the superblock doesn't start on a hardware sector boundary,
-+	 * calculate the offset.  
- 	 */
--	if (blocksize != BLOCK_SIZE) {
--		logic_sb_block = (sb_block*BLOCK_SIZE) / blocksize;
--		offset = (sb_block*BLOCK_SIZE) % blocksize;
--	}
-+	logic_sb_block = (sb_block*BLOCK_SIZE) / blocksize;
-+	offset = (sb_block*BLOCK_SIZE) % blocksize;
- 
- 	if (!(bh = sb_bread(sb, logic_sb_block))) {
- 		printk ("EXT2-fs: unable to read superblock\n");
-@@ -462,6 +496,27 @@
- 				bdevname(dev));
- 		goto failed_mount;
- 	}
-+
-+	/* Set defaults before we parse the mount options */
-+	def_mount_opts = le32_to_cpu(es->s_default_mount_opts);
-+	if (def_mount_opts & EXT2_DEFM_DEBUG)
-+		set_opt(sbi->s_mount_opt, DEBUG);
-+	if (def_mount_opts & EXT2_DEFM_BSDGROUPS)
-+		set_opt(sbi->s_mount_opt, GRPID);
-+	if (def_mount_opts & EXT2_DEFM_UID16)
-+		set_opt(sbi->s_mount_opt, NO_UID32);
-+	
-+	if (le16_to_cpu(sbi->s_es->s_errors) == EXT2_ERRORS_PANIC)
-+		set_opt(sbi->s_mount_opt, ERRORS_PANIC);
-+	else if (le16_to_cpu(sbi->s_es->s_errors) == EXT2_ERRORS_RO)
-+		set_opt(sbi->s_mount_opt, ERRORS_RO);
-+
-+	sbi->s_resuid = le16_to_cpu(es->s_def_resuid);
-+	sbi->s_resgid = le16_to_cpu(es->s_def_resgid);
-+	
-+	if (!parse_options ((char *) data, sbi))
-+		goto failed_mount;
-+
- 	if (le32_to_cpu(es->s_rev_level) == EXT2_GOOD_OLD_REV &&
- 	    (EXT2_HAS_COMPAT_FEATURE(sb, ~0U) ||
- 	     EXT2_HAS_RO_COMPAT_FEATURE(sb, ~0U) ||
-@@ -522,14 +577,16 @@
- 	}
- 
- 	if (le32_to_cpu(es->s_rev_level) == EXT2_GOOD_OLD_REV) {
--		sb->u.ext2_sb.s_inode_size = EXT2_GOOD_OLD_INODE_SIZE;
--		sb->u.ext2_sb.s_first_ino = EXT2_GOOD_OLD_FIRST_INO;
-+		sbi->s_inode_size = EXT2_GOOD_OLD_INODE_SIZE;
-+		sbi->s_first_ino = EXT2_GOOD_OLD_FIRST_INO;
- 	} else {
--		sb->u.ext2_sb.s_inode_size = le16_to_cpu(es->s_inode_size);
--		sb->u.ext2_sb.s_first_ino = le32_to_cpu(es->s_first_ino);
--		if (sb->u.ext2_sb.s_inode_size != EXT2_GOOD_OLD_INODE_SIZE) {
-+		sbi->s_inode_size = le16_to_cpu(es->s_inode_size);
-+		sbi->s_first_ino = le32_to_cpu(es->s_first_ino);
-+		if ((sbi->s_inode_size < EXT2_GOOD_OLD_INODE_SIZE) ||
-+		    (sbi->s_inode_size & (sbi->s_inode_size - 1)) ||
-+		    (sbi->s_inode_size > blocksize)) {
- 			printk ("EXT2-fs: unsupported inode size: %d\n",
--				sb->u.ext2_sb.s_inode_size);
-+				sbi->s_inode_size);
- 			goto failed_mount;
- 		}
- 	}
-@@ -550,14 +607,6 @@
- 	sb->u.ext2_sb.s_desc_per_block = sb->s_blocksize /
- 					 sizeof (struct ext2_group_desc);
- 	sb->u.ext2_sb.s_sbh = bh;
--	if (resuid != EXT2_DEF_RESUID)
--		sb->u.ext2_sb.s_resuid = resuid;
--	else
--		sb->u.ext2_sb.s_resuid = le16_to_cpu(es->s_def_resuid);
--	if (resgid != EXT2_DEF_RESGID)
--		sb->u.ext2_sb.s_resgid = resgid;
--	else
--		sb->u.ext2_sb.s_resgid = le16_to_cpu(es->s_def_resgid);
- 	sb->u.ext2_sb.s_mount_state = le16_to_cpu(es->s_state);
- 	sb->u.ext2_sb.s_addr_per_block_bits =
- 		log2 (EXT2_ADDR_PER_BLOCK(sb));
-@@ -610,14 +659,22 @@
- 		printk ("EXT2-fs: not enough memory\n");
- 		goto failed_mount;
- 	}
-+	sbi->s_debts = kmalloc(sbi->s_groups_count * sizeof(*sbi->s_debts),
-+			       GFP_KERNEL);
-+	if (!sbi->s_debts) {
-+		printk ("EXT2-fs: not enough memory\n");
-+		goto failed_mount_group_desc;
-+	}
-+	memset(sbi->s_debts, 0, sbi->s_groups_count * sizeof(*sbi->s_debts));
- 	for (i = 0; i < db_count; i++) {
--		sb->u.ext2_sb.s_group_desc[i] = sb_bread(sb, logic_sb_block + i + 1);
--		if (!sb->u.ext2_sb.s_group_desc[i]) {
-+		block = descriptor_loc(sb, logic_sb_block, i);
-+		sbi->s_group_desc[i] = sb_bread(sb, block);
-+		if (!sbi->s_group_desc[i]) {
- 			for (j = 0; j < i; j++)
--				brelse (sb->u.ext2_sb.s_group_desc[j]);
--			kfree(sb->u.ext2_sb.s_group_desc);
-+				brelse (sbi->s_group_desc[j]);
-+			kfree(sbi->s_group_desc);
- 			printk ("EXT2-fs: unable to read group descriptors\n");
--			goto failed_mount;
-+			goto failed_mount_group_desc;
- 		}
- 	}
- 	if (!ext2_check_descriptors (sb)) {
-@@ -634,6 +691,7 @@
- 	sb->u.ext2_sb.s_loaded_inode_bitmaps = 0;
- 	sb->u.ext2_sb.s_loaded_block_bitmaps = 0;
- 	sb->u.ext2_sb.s_gdb_count = db_count;
-+ 	sb->u.ext2_sb.s_dir_count = ext2_count_dirs(sb);
- 	/*
- 	 * set up enough so that it can read an inode
- 	 */
-@@ -654,7 +712,10 @@
- failed_mount2:
- 	for (i = 0; i < db_count; i++)
- 		brelse(sb->u.ext2_sb.s_group_desc[i]);
-+failed_mount_group_desc:
- 	kfree(sb->u.ext2_sb.s_group_desc);
-+	if (sb->u.ext2_sb.s_debts)
-+		kfree(sb->u.ext2_sb.s_debts);
- failed_mount:
- 	brelse(bh);
- 	return NULL;
-@@ -709,24 +770,16 @@
- 
- int ext2_remount (struct super_block * sb, int * flags, char * data)
- {
-+  	struct ext2_sb_info * sbi = EXT2_SB(sb);
- 	struct ext2_super_block * es;
--	unsigned short resuid = sb->u.ext2_sb.s_resuid;
--	unsigned short resgid = sb->u.ext2_sb.s_resgid;
--	unsigned long new_mount_opt;
--	unsigned long tmp;
- 
- 	/*
- 	 * Allow the "check" option to be passed as a remount option.
- 	 */
--	new_mount_opt = sb->u.ext2_sb.s_mount_opt;
--	if (!parse_options (data, &tmp, &resuid, &resgid,
--			    &new_mount_opt))
-+	if (!parse_options (data, sbi))
- 		return -EINVAL;
- 
--	sb->u.ext2_sb.s_mount_opt = new_mount_opt;
--	sb->u.ext2_sb.s_resuid = resuid;
--	sb->u.ext2_sb.s_resgid = resgid;
--	es = sb->u.ext2_sb.s_es;
-+	es = sbi->s_es;
- 	if ((*flags & MS_RDONLY) == (sb->s_flags & MS_RDONLY))
- 		return 0;
- 	if (*flags & MS_RDONLY) {
-diff -Nru a/fs/ext3/Makefile b/fs/ext3/Makefile
---- a/fs/ext3/Makefile	Thu Nov  7 11:58:05 2002
-+++ b/fs/ext3/Makefile	Thu Nov  7 11:58:05 2002
-@@ -10,7 +10,7 @@
- O_TARGET := ext3.o
+ fs/ext3/Makefile           |    2 
+ fs/ext3/dir.c              |  299 +++++++++
+ fs/ext3/file.c             |    3 
+ fs/ext3/hash.c             |  215 ++++++
+ fs/ext3/namei.c            | 1388 ++++++++++++++++++++++++++++++++++++++++-----
+ fs/ext3/super.c            |    7 
+ include/linux/ext3_fs.h    |   85 ++
+ include/linux/ext3_fs_sb.h |    2 
+ include/linux/ext3_jbd.h   |    2 
+ include/linux/rbtree.h     |    2 
+ lib/rbtree.c               |   42 +
+ 11 files changed, 1887 insertions(+), 160 deletions(-)
+
+--- linux-chaos-2.4.20-6/fs/ext3/Makefile~ext-2.4-patch-1-chaos	2003-04-09 16:10:38.000000000 -0600
++++ linux-chaos-2.4.20-6-braam/fs/ext3/Makefile	2003-04-09 16:18:55.000000000 -0600
+@@ -12,7 +12,7 @@ O_TARGET := ext3.o
+ export-objs :=	super.o
  
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
 -		ioctl.o namei.o super.o symlink.o
@@ -808,9 +22,8 @@ diff -Nru a/fs/ext3/Makefile b/fs/ext3/Makefile
  obj-m    := $(O_TARGET)
  
  include $(TOPDIR)/Rules.make
-diff -Nru a/fs/ext3/dir.c b/fs/ext3/dir.c
---- a/fs/ext3/dir.c	Thu Nov  7 11:58:05 2002
-+++ b/fs/ext3/dir.c	Thu Nov  7 11:58:05 2002
+--- linux-chaos-2.4.20-6/fs/ext3/dir.c~ext-2.4-patch-1-chaos	2002-05-07 15:53:46.000000000 -0600
++++ linux-chaos-2.4.20-6-braam/fs/ext3/dir.c	2003-04-09 16:18:55.000000000 -0600
 @@ -21,12 +21,16 @@
  #include <linux/fs.h>
  #include <linux/jbd.h>
@@ -828,7 +41,7 @@ diff -Nru a/fs/ext3/dir.c b/fs/ext3/dir.c
  
  struct file_operations ext3_dir_operations = {
  	read:		generic_read_dir,
-@@ -35,6 +39,17 @@
+@@ -35,6 +39,17 @@ struct file_operations ext3_dir_operatio
  	fsync:		ext3_sync_file,		/* BKL held */
  };
  
@@ -846,7 +59,7 @@ diff -Nru a/fs/ext3/dir.c b/fs/ext3/dir.c
  int ext3_check_dir_entry (const char * function, struct inode * dir,
  			  struct ext3_dir_entry_2 * de,
  			  struct buffer_head * bh,
-@@ -79,6 +94,16 @@
+@@ -79,6 +94,16 @@ static int ext3_readdir(struct file * fi
  
  	sb = inode->i_sb;
  
@@ -863,7 +76,7 @@ diff -Nru a/fs/ext3/dir.c b/fs/ext3/dir.c
  	stored = 0;
  	bh = NULL;
  	offset = filp->f_pos & (sb->s_blocksize - 1);
-@@ -162,18 +187,12 @@
+@@ -162,18 +187,12 @@ revalidate:
  				 * during the copy operation.
  				 */
  				unsigned long version = filp->f_version;
@@ -883,7 +96,7 @@ diff -Nru a/fs/ext3/dir.c b/fs/ext3/dir.c
  				if (error)
  					break;
  				if (version != filp->f_version)
-@@ -188,3 +207,272 @@
+@@ -188,3 +207,269 @@ revalidate:
  	UPDATE_ATIME(inode);
  	return 0;
  }
@@ -988,7 +201,7 @@ diff -Nru a/fs/ext3/dir.c b/fs/ext3/dir.c
 +/*
 + * Given a directory entry, enter it into the fname rb tree.
 + */
-+int ext3_htree_store_dirent(struct file *dir_file, __u32 hash,
++void ext3_htree_store_dirent(struct file *dir_file, __u32 hash,
 +			     __u32 minor_hash,
 +			     struct ext3_dir_entry_2 *dirent)
 +{
@@ -1003,8 +216,6 @@ diff -Nru a/fs/ext3/dir.c b/fs/ext3/dir.c
 +	/* Create and allocate the fname structure */
 +	len = sizeof(struct fname) + dirent->name_len + 1;
 +	new_fn = kmalloc(len, GFP_KERNEL);
-+	if (!new_fn)
-+		return -ENOMEM;
 +	memset(new_fn, 0, len);
 +	new_fn->hash = hash;
 +	new_fn->minor_hash = minor_hash;
@@ -1026,7 +237,7 @@ diff -Nru a/fs/ext3/dir.c b/fs/ext3/dir.c
 +		    (new_fn->minor_hash == fname->minor_hash)) {
 +			new_fn->next = fname->next;
 +			fname->next = new_fn;
-+			return 0;
++			return;
 +		}
 +			
 +		if (new_fn->hash < fname->hash)
@@ -1041,7 +252,6 @@ diff -Nru a/fs/ext3/dir.c b/fs/ext3/dir.c
 +
 +	rb_link_node(&new_fn->rb_hash, parent, p);
 +	rb_insert_color(&new_fn->rb_hash, &info->root);
-+	return 0;
 +}
 +
 +
@@ -1156,10 +366,9 @@ diff -Nru a/fs/ext3/dir.c b/fs/ext3/dir.c
 +	return 0;
 +}
 +#endif
-diff -Nru a/fs/ext3/file.c b/fs/ext3/file.c
---- a/fs/ext3/file.c	Thu Nov  7 11:58:05 2002
-+++ b/fs/ext3/file.c	Thu Nov  7 11:58:05 2002
-@@ -35,6 +35,9 @@
+--- linux-chaos-2.4.20-6/fs/ext3/file.c~ext-2.4-patch-1-chaos	2003-02-14 15:59:09.000000000 -0700
++++ linux-chaos-2.4.20-6-braam/fs/ext3/file.c	2003-04-09 16:18:55.000000000 -0600
+@@ -35,6 +35,9 @@ static int ext3_release_file (struct ino
  {
  	if (filp->f_mode & FMODE_WRITE)
  		ext3_discard_prealloc (inode);
@@ -1169,9 +378,8 @@ diff -Nru a/fs/ext3/file.c b/fs/ext3/file.c
  	return 0;
  }
  
-diff -Nru a/fs/ext3/hash.c b/fs/ext3/hash.c
---- /dev/null	Wed Dec 31 16:00:00 1969
-+++ b/fs/ext3/hash.c	Thu Nov  7 11:58:05 2002
+--- /dev/null	2003-01-30 03:24:37.000000000 -0700
++++ linux-chaos-2.4.20-6-braam/fs/ext3/hash.c	2003-04-09 16:18:55.000000000 -0600
 @@ -0,0 +1,215 @@
 +/*
 + *  linux/fs/ext3/hash.c
@@ -1388,449 +596,8 @@ diff -Nru a/fs/ext3/hash.c b/fs/ext3/hash.c
 +	hinfo->minor_hash = minor_hash;
 +	return 0;
 +}
-diff -Nru a/fs/ext3/ialloc.c b/fs/ext3/ialloc.c
---- a/fs/ext3/ialloc.c	Thu Nov  7 11:58:05 2002
-+++ b/fs/ext3/ialloc.c	Thu Nov  7 11:58:05 2002
-@@ -21,6 +21,7 @@
- #include <linux/string.h>
- #include <linux/locks.h>
- #include <linux/quotaops.h>
-+#include <linux/random.h>
- 
- #include <asm/bitops.h>
- #include <asm/byteorder.h>
-@@ -293,6 +294,199 @@
-  * the groups with above-average free space, that group with the fewest
-  * directories already is chosen.
-  *
-+ * For other inodes, search forward from the parent directory\'s block
-+ * group to find a free inode.
-+ */
-+static int find_group_dir(struct super_block *sb, const struct inode *parent)
-+{
-+	struct ext3_super_block * es = EXT3_SB(sb)->s_es;
-+	int ngroups = EXT3_SB(sb)->s_groups_count;
-+	int avefreei = le32_to_cpu(es->s_free_inodes_count) / ngroups;
-+	struct ext3_group_desc *desc, *best_desc = NULL;
-+	struct buffer_head *bh;
-+	int group, best_group = -1;
-+
-+	for (group = 0; group < ngroups; group++) {
-+		desc = ext3_get_group_desc (sb, group, &bh);
-+		if (!desc || !desc->bg_free_inodes_count)
-+			continue;
-+		if (le16_to_cpu(desc->bg_free_inodes_count) < avefreei)
-+			continue;
-+		if (!best_desc || 
-+		    (le16_to_cpu(desc->bg_free_blocks_count) >
-+		     le16_to_cpu(best_desc->bg_free_blocks_count))) {
-+			best_group = group;
-+			best_desc = desc;
-+		}
-+	}
-+	return best_group;
-+}
-+
-+/* 
-+ * Orlov's allocator for directories. 
-+ * 
-+ * We always try to spread first-level directories.
-+ *
-+ * If there are blockgroups with both free inodes and free blocks counts 
-+ * not worse than average we return one with smallest directory count. 
-+ * Otherwise we simply return a random group. 
-+ * 
-+ * For the rest rules look so: 
-+ * 
-+ * It's OK to put directory into a group unless 
-+ * it has too many directories already (max_dirs) or 
-+ * it has too few free inodes left (min_inodes) or 
-+ * it has too few free blocks left (min_blocks) or 
-+ * it's already running too large debt (max_debt). 
-+ * Parent's group is prefered, if it doesn't satisfy these 
-+ * conditions we search cyclically through the rest. If none 
-+ * of the groups look good we just look for a group with more 
-+ * free inodes than average (starting at parent's group). 
-+ * 
-+ * Debt is incremented each time we allocate a directory and decremented 
-+ * when we allocate an inode, within 0--255. 
-+ */ 
-+
-+#define INODE_COST 64
-+#define BLOCK_COST 256
-+
-+static int find_group_orlov(struct super_block *sb, const struct inode *parent)
-+{
-+	int parent_group = EXT3_I(parent)->i_block_group;
-+	struct ext3_sb_info *sbi = EXT3_SB(sb);
-+	struct ext3_super_block *es = sbi->s_es;
-+	int ngroups = sbi->s_groups_count;
-+	int inodes_per_group = EXT3_INODES_PER_GROUP(sb);
-+	int avefreei = le32_to_cpu(es->s_free_inodes_count) / ngroups;
-+	int avefreeb = le32_to_cpu(es->s_free_blocks_count) / ngroups;
-+	int blocks_per_dir;
-+	int ndirs = sbi->s_dir_count;
-+	int max_debt, max_dirs, min_blocks, min_inodes;
-+	int group = -1, i;
-+	struct ext3_group_desc *desc;
-+	struct buffer_head *bh;
-+
-+	if ((parent == sb->s_root->d_inode) ||
-+	    (parent->i_flags & EXT3_TOPDIR_FL)) {
-+		int best_ndir = inodes_per_group;
-+		int best_group = -1;
-+
-+		get_random_bytes(&group, sizeof(group));
-+		parent_group = (unsigned)group % ngroups;
-+		for (i = 0; i < ngroups; i++) {
-+			group = (parent_group + i) % ngroups;
-+			desc = ext3_get_group_desc (sb, group, &bh);
-+			if (!desc || !desc->bg_free_inodes_count)
-+				continue;
-+			if (le16_to_cpu(desc->bg_used_dirs_count) >= best_ndir)
-+				continue;
-+			if (le16_to_cpu(desc->bg_free_inodes_count) < avefreei)
-+				continue;
-+			if (le16_to_cpu(desc->bg_free_blocks_count) < avefreeb)
-+				continue;
-+			best_group = group;
-+			best_ndir = le16_to_cpu(desc->bg_used_dirs_count);
-+		}
-+		if (best_group >= 0)
-+			return best_group;
-+		goto fallback;
-+	}
-+
-+	blocks_per_dir = (le32_to_cpu(es->s_blocks_count) -
-+			  le32_to_cpu(es->s_free_blocks_count)) / ndirs;
-+
-+	max_dirs = ndirs / ngroups + inodes_per_group / 16;
-+	min_inodes = avefreei - inodes_per_group / 4;
-+	min_blocks = avefreeb - EXT3_BLOCKS_PER_GROUP(sb) / 4;
-+
-+	max_debt = EXT3_BLOCKS_PER_GROUP(sb) / max(blocks_per_dir, BLOCK_COST);
-+	if (max_debt * INODE_COST > inodes_per_group)
-+		max_debt = inodes_per_group / INODE_COST;
-+	if (max_debt > 255)
-+		max_debt = 255;
-+	if (max_debt == 0)
-+		max_debt = 1;
-+
-+	for (i = 0; i < ngroups; i++) {
-+		group = (parent_group + i) % ngroups;
-+		desc = ext3_get_group_desc (sb, group, &bh);
-+		if (!desc || !desc->bg_free_inodes_count)
-+			continue;
-+		if (sbi->s_debts[group] >= max_debt)
-+			continue;
-+		if (le16_to_cpu(desc->bg_used_dirs_count) >= max_dirs)
-+			continue;
-+		if (le16_to_cpu(desc->bg_free_inodes_count) < min_inodes)
-+			continue;
-+		if (le16_to_cpu(desc->bg_free_blocks_count) < min_blocks)
-+			continue;
-+		return group;
-+	}
-+
-+fallback:
-+	for (i = 0; i < ngroups; i++) {
-+		group = (parent_group + i) % ngroups;
-+		desc = ext3_get_group_desc (sb, group, &bh);
-+		if (!desc || !desc->bg_free_inodes_count)
-+			continue;
-+		if (le16_to_cpu(desc->bg_free_inodes_count) >= avefreei)
-+			return group;
-+	}
-+
-+	return -1;
-+}
-+
-+static int find_group_other(struct super_block *sb, const struct inode *parent)
-+{
-+	int parent_group = EXT3_I(parent)->i_block_group;
-+	int ngroups = EXT3_SB(sb)->s_groups_count;
-+	struct ext3_group_desc *desc;
-+	struct buffer_head *bh;
-+	int group, i;
-+
-+	/*
-+	 * Try to place the inode in its parent directory
-+	 */
-+	group = parent_group;
-+	desc = ext3_get_group_desc (sb, group, &bh);
-+	if (desc && le16_to_cpu(desc->bg_free_inodes_count))
-+		return group;
-+
-+	/*
-+	 * Use a quadratic hash to find a group with a
-+	 * free inode
-+	 */
-+	for (i = 1; i < ngroups; i <<= 1) {
-+		group += i;
-+		if (group >= ngroups)
-+			group -= ngroups;
-+		desc = ext3_get_group_desc (sb, group, &bh);
-+		if (desc && le16_to_cpu(desc->bg_free_inodes_count))
-+			return group;
-+	}
-+
-+	/*
-+	 * That failed: try linear search for a free inode
-+	 */
-+	group = parent_group + 1;
-+	for (i = 2; i < ngroups; i++) {
-+		if (++group >= ngroups)
-+			group = 0;
-+		desc = ext3_get_group_desc (sb, group, &bh);
-+		if (desc && le16_to_cpu(desc->bg_free_inodes_count))
-+			return group;
-+	}
-+
-+	return -1;
-+}
-+
-+/*
-+ * There are two policies for allocating an inode.  If the new inode is
-+ * a directory, then a forward search is made for a block group with both
-+ * free space and a low directory-to-inode ratio; if that fails, then of
-+ * the groups with above-average free space, that group with the fewest
-+ * directories already is chosen.
-+ *
-  * For other inodes, search forward from the parent directory's block
-  * group to find a free inode.
-  */
-@@ -302,11 +496,11 @@
- 	struct super_block * sb;
- 	struct buffer_head * bh;
- 	struct buffer_head * bh2;
--	int i, j, avefreei;
-+	int group;
-+	ino_t ino;
- 	struct inode * inode;
- 	int bitmap_nr;
- 	struct ext3_group_desc * gdp;
--	struct ext3_group_desc * tmp;
- 	struct ext3_super_block * es;
- 	int err = 0;
- 
-@@ -323,94 +517,36 @@
- 	lock_super (sb);
- 	es = sb->u.ext3_sb.s_es;
- repeat:
--	gdp = NULL;
--	i = 0;
--
- 	if (S_ISDIR(mode)) {
--		avefreei = le32_to_cpu(es->s_free_inodes_count) /
--			sb->u.ext3_sb.s_groups_count;
--		if (!gdp) {
--			for (j = 0; j < sb->u.ext3_sb.s_groups_count; j++) {
--				struct buffer_head *temp_buffer;
--				tmp = ext3_get_group_desc (sb, j, &temp_buffer);
--				if (tmp &&
--				    le16_to_cpu(tmp->bg_free_inodes_count) &&
--				    le16_to_cpu(tmp->bg_free_inodes_count) >=
--							avefreei) {
--					if (!gdp || (le16_to_cpu(tmp->bg_free_blocks_count) >
--						le16_to_cpu(gdp->bg_free_blocks_count))) {
--						i = j;
--						gdp = tmp;
--						bh2 = temp_buffer;
--					}
--				}
--			}
--		}
--	} else {
--		/*
--		 * Try to place the inode in its parent directory
--		 */
--		i = dir->u.ext3_i.i_block_group;
--		tmp = ext3_get_group_desc (sb, i, &bh2);
--		if (tmp && le16_to_cpu(tmp->bg_free_inodes_count))
--			gdp = tmp;
-+		if (test_opt (sb, OLDALLOC))
-+			group = find_group_dir(sb, dir);
- 		else
--		{
--			/*
--			 * Use a quadratic hash to find a group with a
--			 * free inode
--			 */
--			for (j = 1; j < sb->u.ext3_sb.s_groups_count; j <<= 1) {
--				i += j;
--				if (i >= sb->u.ext3_sb.s_groups_count)
--					i -= sb->u.ext3_sb.s_groups_count;
--				tmp = ext3_get_group_desc (sb, i, &bh2);
--				if (tmp &&
--				    le16_to_cpu(tmp->bg_free_inodes_count)) {
--					gdp = tmp;
--					break;
--				}
--			}
--		}
--		if (!gdp) {
--			/*
--			 * That failed: try linear search for a free inode
--			 */
--			i = dir->u.ext3_i.i_block_group + 1;
--			for (j = 2; j < sb->u.ext3_sb.s_groups_count; j++) {
--				if (++i >= sb->u.ext3_sb.s_groups_count)
--					i = 0;
--				tmp = ext3_get_group_desc (sb, i, &bh2);
--				if (tmp &&
--				    le16_to_cpu(tmp->bg_free_inodes_count)) {
--					gdp = tmp;
--					break;
--				}
--			}
--		}
--	}
--
-+			group = find_group_orlov(sb, dir);
-+	} else 
-+		group = find_group_other(sb, dir);
-+  
- 	err = -ENOSPC;
--	if (!gdp)
-+	if (!group == -1)
- 		goto out;
- 
- 	err = -EIO;
--	bitmap_nr = load_inode_bitmap (sb, i);
-+	bitmap_nr = load_inode_bitmap (sb, group);
- 	if (bitmap_nr < 0)
- 		goto fail;
- 
- 	bh = sb->u.ext3_sb.s_inode_bitmap[bitmap_nr];
-+	gdp = ext3_get_group_desc (sb, group, &bh2);
- 
--	if ((j = ext3_find_first_zero_bit ((unsigned long *) bh->b_data,
-+	if ((ino = ext3_find_first_zero_bit ((unsigned long *) bh->b_data,
- 				      EXT3_INODES_PER_GROUP(sb))) <
- 	    EXT3_INODES_PER_GROUP(sb)) {
- 		BUFFER_TRACE(bh, "get_write_access");
- 		err = ext3_journal_get_write_access(handle, bh);
- 		if (err) goto fail;
- 		
--		if (ext3_set_bit (j, bh->b_data)) {
-+		if (ext3_set_bit (ino, bh->b_data)) {
- 			ext3_error (sb, "ext3_new_inode",
--				      "bit already set for inode %d", j);
-+				      "bit already set for inode %lu", ino);
- 			goto repeat;
- 		}
- 		BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
-@@ -420,7 +556,7 @@
- 		if (le16_to_cpu(gdp->bg_free_inodes_count) != 0) {
- 			ext3_error (sb, "ext3_new_inode",
- 				    "Free inodes count corrupted in group %d",
--				    i);
-+				    group);
- 			/* Is it really ENOSPC? */
- 			err = -ENOSPC;
- 			if (sb->s_flags & MS_RDONLY)
-@@ -436,11 +572,11 @@
- 		}
- 		goto repeat;
- 	}
--	j += i * EXT3_INODES_PER_GROUP(sb) + 1;
--	if (j < EXT3_FIRST_INO(sb) || j > le32_to_cpu(es->s_inodes_count)) {
-+	ino += group * EXT3_INODES_PER_GROUP(sb) + 1;
-+	if (ino < EXT3_FIRST_INO(sb) || ino > le32_to_cpu(es->s_inodes_count)) {
- 		ext3_error (sb, "ext3_new_inode",
- 			    "reserved inode or inode > inodes count - "
--			    "block_group = %d,inode=%d", i, j);
-+			    "block_group = %d, inode=%lu", group, ino);
- 		err = -EIO;
- 		goto fail;
- 	}
-@@ -450,9 +586,11 @@
- 	if (err) goto fail;
- 	gdp->bg_free_inodes_count =
- 		cpu_to_le16(le16_to_cpu(gdp->bg_free_inodes_count) - 1);
--	if (S_ISDIR(mode))
-+	if (S_ISDIR(mode)) {
- 		gdp->bg_used_dirs_count =
- 			cpu_to_le16(le16_to_cpu(gdp->bg_used_dirs_count) + 1);
-+		EXT3_SB(sb)->s_dir_count++;
-+	}
- 	BUFFER_TRACE(bh2, "call ext3_journal_dirty_metadata");
- 	err = ext3_journal_dirty_metadata(handle, bh2);
- 	if (err) goto fail;
-@@ -478,7 +616,7 @@
- 		inode->i_gid = current->fsgid;
- 	inode->i_mode = mode;
- 
--	inode->i_ino = j;
-+	inode->i_ino = ino;
- 	/* This is the optimal IO size (for stat), not the fs block size */
- 	inode->i_blksize = PAGE_SIZE;
- 	inode->i_blocks = 0;
-@@ -498,7 +636,7 @@
- #ifdef EXT3_PREALLOCATE
- 	inode->u.ext3_i.i_prealloc_count = 0;
- #endif
--	inode->u.ext3_i.i_block_group = i;
-+	inode->u.ext3_i.i_block_group = group;
- 	
- 	if (inode->u.ext3_i.i_flags & EXT3_SYNC_FL)
- 		inode->i_flags |= S_SYNC;
-@@ -620,6 +758,21 @@
- #else
- 	return le32_to_cpu(sb->u.ext3_sb.s_es->s_free_inodes_count);
- #endif
-+}
-+
-+/* Called at mount-time, super-block is locked */
-+unsigned long ext3_count_dirs (struct super_block * sb)
-+{
-+	unsigned long count = 0;
-+	int i;
-+
-+	for (i = 0; i < EXT3_SB(sb)->s_groups_count; i++) {
-+		struct ext3_group_desc *gdp = ext3_get_group_desc (sb, i, NULL);
-+		if (!gdp)
-+			continue;
-+		count += le16_to_cpu(gdp->bg_used_dirs_count);
-+	}
-+	return count;
- }
- 
- #ifdef CONFIG_EXT3_CHECK
-diff -Nru a/fs/ext3/inode.c b/fs/ext3/inode.c
---- a/fs/ext3/inode.c	Thu Nov  7 11:58:05 2002
-+++ b/fs/ext3/inode.c	Thu Nov  7 11:58:05 2002
-@@ -2194,6 +2194,11 @@
- 		if (err)
- 			goto out_brelse;
- 	}
-+	/* For fields not not tracking in the in-memory inode,
-+	 * initialise them to zero for new inodes. */
-+	if (EXT3_I(inode)->i_state & EXT3_STATE_NEW)
-+		memset(raw_inode, 0, EXT3_SB(inode->i_sb)->s_inode_size);
-+
- 	raw_inode->i_mode = cpu_to_le16(inode->i_mode);
- 	if(!(test_opt(inode->i_sb, NO_UID32))) {
- 		raw_inode->i_uid_low = cpu_to_le16(low_16_bits(inode->i_uid));
-@@ -2231,15 +2236,6 @@
- 	raw_inode->i_faddr = cpu_to_le32(inode->u.ext3_i.i_faddr);
- 	raw_inode->i_frag = inode->u.ext3_i.i_frag_no;
- 	raw_inode->i_fsize = inode->u.ext3_i.i_frag_size;
--#else
--	/* If we are not tracking these fields in the in-memory inode,
--	 * then preserve them on disk, but still initialise them to zero
--	 * for new inodes. */
--	if (EXT3_I(inode)->i_state & EXT3_STATE_NEW) {
--		raw_inode->i_faddr = 0;
--		raw_inode->i_frag = 0;
--		raw_inode->i_fsize = 0;
--	}
- #endif
- 	raw_inode->i_file_acl = cpu_to_le32(inode->u.ext3_i.i_file_acl);
- 	if (!S_ISREG(inode->i_mode)) {
-diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
---- a/fs/ext3/namei.c	Thu Nov  7 11:58:05 2002
-+++ b/fs/ext3/namei.c	Thu Nov  7 11:58:05 2002
+--- linux-chaos-2.4.20-6/fs/ext3/namei.c~ext-2.4-patch-1-chaos	2003-03-12 12:51:02.000000000 -0700
++++ linux-chaos-2.4.20-6-braam/fs/ext3/namei.c	2003-04-09 16:26:04.000000000 -0600
 @@ -16,6 +16,12 @@
   *        David S. Miller (davem@caip.rutgers.edu), 1995
   *  Directory entry file type support and forward compatibility hooks
@@ -1844,7 +611,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
   */
  
  #include <linux/fs.h>
-@@ -38,6 +44,642 @@
+@@ -38,6 +44,630 @@
  #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
  #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
  
@@ -2350,17 +1117,6 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +	if (!frame)
 +		return err;
 +
-+	/* Add '.' and '..' from the htree header */
-+	if (!start_hash && !start_minor_hash) {
-+		de = (struct ext3_dir_entry_2 *) frames[0].bh->b_data;
-+		if ((err = ext3_htree_store_dirent(dir_file, 0, 0, de)) != 0)
-+			goto errout;
-+		de = ext3_next_entry(de);
-+		if ((err = ext3_htree_store_dirent(dir_file, 0, 0, de)) != 0)
-+			goto errout;
-+		count += 2;
-+	}
-+
 +	while (1) {
 +		block = dx_get_block(frame->at);
 +		dxtrace(printk("Reading block %d\n", block));
@@ -2376,9 +1132,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +			    ((hinfo.hash == start_hash) &&
 +			     (hinfo.minor_hash < start_minor_hash)))
 +				continue;
-+			if ((err = ext3_htree_store_dirent(dir_file,
-+				   hinfo.hash, hinfo.minor_hash, de)) != 0)
-+				goto errout;
++			ext3_htree_store_dirent(dir_file, hinfo.hash,
++						hinfo.minor_hash, de);
 +			count++;
 +		}
 +		brelse (bh);
@@ -2487,7 +1242,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  /*
   * NOTE! unlike strncmp, ext3_match returns 1 for success, 0 for failure.
   *
-@@ -94,6 +736,7 @@
+@@ -94,6 +724,7 @@ static int inline search_dirblock(struct
  	return 0;
  }
  
@@ -2495,7 +1250,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  /*
   *	ext3_find_entry()
   *
-@@ -105,6 +748,8 @@
+@@ -105,6 +736,8 @@ static int inline search_dirblock(struct
   * The returned buffer_head has ->b_count elevated.  The caller is expected
   * to brelse() it when appropriate.
   */
@@ -2504,7 +1259,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  static struct buffer_head * ext3_find_entry (struct dentry *dentry,
  					struct ext3_dir_entry_2 ** res_dir)
  {
-@@ -119,12 +764,32 @@
+@@ -119,12 +752,32 @@ static struct buffer_head * ext3_find_en
  	int num = 0;
  	int nblocks, i, err;
  	struct inode *dir = dentry->d_parent->d_inode;
@@ -2539,7 +1294,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	if (start >= nblocks)
  		start = 0;
  	block = start;
-@@ -165,7 +830,7 @@
+@@ -166,7 +819,7 @@ restart:
  		i = search_dirblock(bh, dir, dentry,
  			    block << EXT3_BLOCK_SIZE_BITS(sb), res_dir);
  		if (i == 1) {
@@ -2548,7 +1303,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  			ret = bh;
  			goto cleanup_and_exit;
  		} else {
-@@ -196,6 +861,66 @@
+@@ -197,6 +850,66 @@ cleanup_and_exit:
  	return ret;
  }
  
@@ -2615,7 +1370,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  static struct dentry *ext3_lookup(struct inode * dir, struct dentry *dentry)
  {
  	struct inode * inode;
-@@ -212,8 +937,9 @@
+@@ -213,8 +926,9 @@ static struct dentry *ext3_lookup(struct
  		brelse (bh);
  		inode = iget(dir->i_sb, ino);
  
@@ -2626,7 +1381,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	}
  	d_add(dentry, inode);
  	return NULL;
-@@ -237,6 +963,300 @@
+@@ -238,6 +952,300 @@ static inline void ext3_set_de_type(stru
  		de->file_type = ext3_type_by_mode[(mode & S_IFMT)>>S_SHIFT];
  }
  
@@ -2927,7 +1682,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  /*
   *	ext3_add_entry()
   *
-@@ -247,127 +1267,198 @@
+@@ -248,127 +1256,198 @@ static inline void ext3_set_de_type(stru
   * may not sleep between calling this and putting something into
   * the entry, as someone else might have used it while you slept.
   */
@@ -3224,7 +1979,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  /*
   * ext3_delete_entry deletes a directory entry by merging it with the
-@@ -451,9 +1542,11 @@
+@@ -455,9 +1534,11 @@ static int ext3_create (struct inode * d
  	struct inode * inode;
  	int err;
  
@@ -3238,7 +1993,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
-@@ -478,9 +1571,11 @@
+@@ -481,9 +1562,11 @@ static int ext3_mknod (struct inode * di
  	struct inode *inode;
  	int err;
  
@@ -3252,7 +2007,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
-@@ -507,9 +1602,11 @@
+@@ -509,9 +1592,11 @@ static int ext3_mkdir(struct inode * dir
  	if (dir->i_nlink >= EXT3_LINK_MAX)
  		return -EMLINK;
  
@@ -3266,7 +2021,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
-@@ -521,7 +1618,7 @@
+@@ -523,7 +1608,7 @@ static int ext3_mkdir(struct inode * dir
  
  	inode->i_op = &ext3_dir_inode_operations;
  	inode->i_fop = &ext3_dir_operations;
@@ -3275,7 +2030,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	inode->i_blocks = 0;	
  	dir_block = ext3_bread (handle, inode, 0, 1, &err);
  	if (!dir_block) {
-@@ -554,21 +1651,19 @@
+@@ -556,21 +1641,19 @@ static int ext3_mkdir(struct inode * dir
  		inode->i_mode |= S_ISGID;
  	ext3_mark_inode_dirty(handle, inode);
  	err = ext3_add_entry (handle, dentry, inode);
@@ -3304,7 +2059,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  }
  
  /*
-@@ -655,7 +1750,7 @@
+@@ -657,7 +1740,7 @@ int ext3_orphan_add(handle_t *handle, st
  	int err = 0, rc;
  	
  	lock_super(sb);
@@ -3313,7 +2068,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  		goto out_unlock;
  
  	/* Orphan handling is only valid for files with data blocks
-@@ -696,7 +1791,7 @@
+@@ -698,7 +1781,7 @@ int ext3_orphan_add(handle_t *handle, st
  	 * This is safe: on error we're going to ignore the orphan list
  	 * anyway on the next recovery. */
  	if (!err)
@@ -3322,38 +2077,38 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  	jbd_debug(4, "superblock will point to %ld\n", inode->i_ino);
  	jbd_debug(4, "orphan inode %ld will point to %d\n",
-@@ -714,25 +1809,26 @@
+@@ -716,25 +1799,26 @@ out_unlock:
  int ext3_orphan_del(handle_t *handle, struct inode *inode)
  {
  	struct list_head *prev;
-+	struct ext3_inode_info *ei = EXT3_I(inode);
++ 	struct ext3_inode_info *ei = EXT3_I(inode);
  	struct ext3_sb_info *sbi;
- 	ino_t ino_next; 
+ 	unsigned long ino_next;
  	struct ext3_iloc iloc;
  	int err = 0;
- 	
+ 
  	lock_super(inode->i_sb);
 -	if (list_empty(&inode->u.ext3_i.i_orphan)) {
-+	if (list_empty(&ei->i_orphan)) {
++ 	if (list_empty(&ei->i_orphan)) {
  		unlock_super(inode->i_sb);
  		return 0;
  	}
  
  	ino_next = NEXT_ORPHAN(inode);
 -	prev = inode->u.ext3_i.i_orphan.prev;
-+	prev = ei->i_orphan.prev;
++ 	prev = ei->i_orphan.prev;
  	sbi = EXT3_SB(inode->i_sb);
  
- 	jbd_debug(4, "remove inode %ld from orphan list\n", inode->i_ino);
+ 	jbd_debug(4, "remove inode %lu from orphan list\n", inode->i_ino);
  
 -	list_del(&inode->u.ext3_i.i_orphan);
 -	INIT_LIST_HEAD(&inode->u.ext3_i.i_orphan);
-+	list_del(&ei->i_orphan);
-+	INIT_LIST_HEAD(&ei->i_orphan);
++ 	list_del(&ei->i_orphan);
++ 	INIT_LIST_HEAD(&ei->i_orphan);
  
  	/* If we're on an error path, we may not have a valid
  	 * transaction handle with which to update the orphan list on
-@@ -793,8 +1889,9 @@
+@@ -795,8 +1879,9 @@ static int ext3_rmdir (struct inode * di
  	handle_t *handle;
  
  	handle = ext3_journal_start(dir, EXT3_DELETE_TRANS_BLOCKS);
@@ -3364,7 +2119,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  	retval = -ENOENT;
  	bh = ext3_find_entry (dentry, &de);
-@@ -832,7 +1929,7 @@
+@@ -834,7 +1919,7 @@ static int ext3_rmdir (struct inode * di
  	dir->i_nlink--;
  	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
  	ext3_mark_inode_dirty(handle, inode);
@@ -3373,7 +2128,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	ext3_mark_inode_dirty(handle, dir);
  
  end_rmdir:
-@@ -850,8 +1947,9 @@
+@@ -852,8 +1937,9 @@ static int ext3_unlink(struct inode * di
  	handle_t *handle;
  
  	handle = ext3_journal_start(dir, EXT3_DELETE_TRANS_BLOCKS);
@@ -3384,7 +2139,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
-@@ -878,7 +1976,7 @@
+@@ -880,7 +1966,7 @@ static int ext3_unlink(struct inode * di
  	if (retval)
  		goto end_unlink;
  	dir->i_ctime = dir->i_mtime = CURRENT_TIME;
@@ -3393,7 +2148,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	ext3_mark_inode_dirty(handle, dir);
  	inode->i_nlink--;
  	if (!inode->i_nlink)
-@@ -904,9 +2002,11 @@
+@@ -906,9 +1992,11 @@ static int ext3_symlink (struct inode * 
  	if (l > dir->i_sb->s_blocksize)
  		return -ENAMETOOLONG;
  
@@ -3407,7 +2162,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
-@@ -916,7 +2016,7 @@
+@@ -918,7 +2006,7 @@ static int ext3_symlink (struct inode * 
  	if (IS_ERR(inode))
  		goto out_stop;
  
@@ -3416,28 +2171,28 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  		inode->i_op = &page_symlink_inode_operations;
  		inode->i_mapping->a_ops = &ext3_aops;
  		/*
-@@ -925,25 +2025,23 @@
+@@ -927,24 +2015,23 @@ static int ext3_symlink (struct inode * 
  		 * i_size in generic_commit_write().
  		 */
  		err = block_symlink(inode, symname, l);
 -		if (err)
 -			goto out_no_entry;
-+		if (err) {
-+			ext3_dec_count(handle, inode);
-+			ext3_mark_inode_dirty(handle, inode);
-+			iput (inode);
-+			goto out_stop;
-+		}
++ 		if (err) {
++ 			ext3_dec_count(handle, inode);
++ 			ext3_mark_inode_dirty(handle, inode);
++ 			iput (inode);
++ 			goto out_stop;
++ 		}
  	} else {
  		inode->i_op = &ext3_fast_symlink_inode_operations;
 -		memcpy((char*)&inode->u.ext3_i.i_data,symname,l);
-+		memcpy((char*)&EXT3_I(inode)->i_data,symname,l);
++ 		memcpy((char*)&EXT3_I(inode)->i_data,symname,l);
  		inode->i_size = l-1;
  	}
 -	inode->u.ext3_i.i_disksize = inode->i_size;
-+	EXT3_I(inode)->i_disksize = inode->i_size;
++ 	EXT3_I(inode)->i_disksize = inode->i_size;
  	err = ext3_add_nondir(handle, dentry, inode);
- 	ext3_mark_inode_dirty(handle, inode);
++  	ext3_mark_inode_dirty(handle, inode);
  out_stop:
  	ext3_journal_stop(handle, dir);
  	return err;
@@ -3450,7 +2205,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  }
  
  static int ext3_link (struct dentry * old_dentry,
-@@ -956,12 +2054,15 @@
+@@ -957,12 +2044,15 @@ static int ext3_link (struct dentry * ol
  	if (S_ISDIR(inode->i_mode))
  		return -EPERM;
  
@@ -3469,7 +2224,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
-@@ -995,9 +2096,11 @@
+@@ -995,9 +2085,11 @@ static int ext3_rename (struct inode * o
  
  	old_bh = new_bh = dir_bh = NULL;
  
@@ -3483,34 +2238,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  	if (IS_SYNC(old_dir) || IS_SYNC(new_dir))
  		handle->h_sync = 1;
-@@ -1070,14 +2173,33 @@
- 	/*
- 	 * ok, that's it
- 	 */
--	ext3_delete_entry(handle, old_dir, old_de, old_bh);
-+	retval = ext3_delete_entry(handle, old_dir, old_de, old_bh);
-+	if (retval == -ENOENT) {
-+		/*
-+		 * old_de could have moved out from under us.
-+		 */
-+		struct buffer_head *old_bh2;
-+		struct ext3_dir_entry_2 *old_de2;
-+		
-+		old_bh2 = ext3_find_entry(old_dentry, &old_de2);
-+		if (old_bh2) {
-+			retval = ext3_delete_entry(handle, old_dir,
-+						   old_de2, old_bh2);
-+			brelse(old_bh2);
-+		}
-+	}
-+	if (retval) {
-+		ext3_warning(old_dir->i_sb, "ext3_rename",
-+				"Deleting old file (%lu), %d, error=%d",
-+				old_dir->i_ino, old_dir->i_nlink, retval);
-+	}
- 
- 	if (new_inode) {
- 		new_inode->i_nlink--;
+@@ -1077,7 +2169,7 @@ static int ext3_rename (struct inode * o
  		new_inode->i_ctime = CURRENT_TIME;
  	}
  	old_dir->i_ctime = old_dir->i_mtime = CURRENT_TIME;
@@ -3519,7 +2247,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	if (dir_bh) {
  		BUFFER_TRACE(dir_bh, "get_write_access");
  		ext3_journal_get_write_access(handle, dir_bh);
-@@ -1089,7 +2211,7 @@
+@@ -1089,7 +2181,7 @@ static int ext3_rename (struct inode * o
  			new_inode->i_nlink--;
  		} else {
  			new_dir->i_nlink++;
@@ -3528,254 +2256,9 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  			ext3_mark_inode_dirty(handle, new_dir);
  		}
  	}
-diff -Nru a/fs/ext3/super.c b/fs/ext3/super.c
---- a/fs/ext3/super.c	Thu Nov  7 11:58:05 2002
-+++ b/fs/ext3/super.c	Thu Nov  7 11:58:05 2002
-@@ -106,32 +106,6 @@
- 
- static char error_buf[1024];
- 
--/* Determine the appropriate response to ext3_error on a given filesystem */
--
--static int ext3_error_behaviour(struct super_block *sb)
--{
--	/* First check for mount-time options */
--	if (test_opt (sb, ERRORS_PANIC))
--		return EXT3_ERRORS_PANIC;
--	if (test_opt (sb, ERRORS_RO))
--		return EXT3_ERRORS_RO;
--	if (test_opt (sb, ERRORS_CONT))
--		return EXT3_ERRORS_CONTINUE;
--	
--	/* If no overrides were specified on the mount, then fall back
--	 * to the default behaviour set in the filesystem's superblock
--	 * on disk. */
--	switch (le16_to_cpu(sb->u.ext3_sb.s_es->s_errors)) {
--	case EXT3_ERRORS_PANIC:
--		return EXT3_ERRORS_PANIC;
--	case EXT3_ERRORS_RO:
--		return EXT3_ERRORS_RO;
--	default:
--		break;
--	}
--	return EXT3_ERRORS_CONTINUE;
--}
--
- /* Deal with the reporting of failure conditions on a filesystem such as
-  * inconsistencies detected or read IO failures.
-  *
-@@ -157,18 +131,15 @@
- 	if (sb->s_flags & MS_RDONLY)
- 		return;
- 
--	if (ext3_error_behaviour(sb) != EXT3_ERRORS_CONTINUE) {
--		EXT3_SB(sb)->s_mount_opt |= EXT3_MOUNT_ABORT;
--		journal_abort(EXT3_SB(sb)->s_journal, -EIO);
--	}
--
--	if (ext3_error_behaviour(sb) == EXT3_ERRORS_PANIC) 
-+	if (test_opt (sb, ERRORS_PANIC))
- 		panic ("EXT3-fs (device %s): panic forced after error\n",
- 		       bdevname(sb->s_dev));
--
--	if (ext3_error_behaviour(sb) == EXT3_ERRORS_RO) {
-+	if (test_opt (sb, ERRORS_RO)) {
- 		printk (KERN_CRIT "Remounting filesystem read-only\n");
- 		sb->s_flags |= MS_RDONLY;
-+	} else {
-+		EXT3_SB(sb)->s_mount_opt |= EXT3_MOUNT_ABORT;
-+		journal_abort(EXT3_SB(sb)->s_journal, -EIO);
- 	}
- 
- 	ext3_commit_super(sb, es, 1);
-@@ -258,7 +229,7 @@
- 	vsprintf (error_buf, fmt, args);
- 	va_end (args);
- 
--	if (ext3_error_behaviour(sb) == EXT3_ERRORS_PANIC)
-+	if (test_opt (sb, ERRORS_PANIC))
- 		panic ("EXT3-fs panic (device %s): %s: %s\n",
- 		       bdevname(sb->s_dev), function, error_buf);
- 
-@@ -416,6 +387,7 @@
- 	for (i = 0; i < sbi->s_gdb_count; i++)
- 		brelse(sbi->s_group_desc[i]);
- 	kfree(sbi->s_group_desc);
-+	kfree(sbi->s_debts);
- 	for (i = 0; i < EXT3_MAX_GROUP_LOADED; i++)
- 		brelse(sbi->s_inode_bitmap[i]);
- 	for (i = 0; i < EXT3_MAX_GROUP_LOADED; i++)
-@@ -490,17 +462,32 @@
- 	return 0;
- }
- 
-+static unsigned long get_sb_block(void **data)
-+{
-+	unsigned long 	sb_block;
-+	char 		*options = (char *) *data;
-+
-+	if (!options || strncmp(options, "sb=", 3) != 0)
-+		return 1;	/* Default location */
-+	options += 3;
-+	sb_block = simple_strtoul(options, &options, 0);
-+	if (*options && *options != ',') {
-+		printk("EXT3-fs: Invalid sb specification: %s\n",
-+		       (char *) *data);
-+		return 1;
-+	}
-+	if (*options == ',')
-+		options++;
-+	*data = (void *) options;
-+	return sb_block;
-+}
-+
- /*
-  * This function has been shamelessly adapted from the msdos fs
-  */
--static int parse_options (char * options, unsigned long * sb_block,
--			  struct ext3_sb_info *sbi,
--			  unsigned long * inum,
--			  int is_remount)
--{
--	unsigned long *mount_options = &sbi->s_mount_opt;
--	uid_t *resuid = &sbi->s_resuid;
--	gid_t *resgid = &sbi->s_resgid;
-+static int parse_options (char * options, struct ext3_sb_info *sbi,
-+			  unsigned long * inum, int is_remount)
-+{
- 	char * this_char;
- 	char * value;
- 
-@@ -512,42 +499,42 @@
- 		if ((value = strchr (this_char, '=')) != NULL)
- 			*value++ = 0;
- 		if (!strcmp (this_char, "bsddf"))
--			clear_opt (*mount_options, MINIX_DF);
-+			clear_opt (sbi->s_mount_opt, MINIX_DF);
- 		else if (!strcmp (this_char, "nouid32")) {
--			set_opt (*mount_options, NO_UID32);
-+			set_opt (sbi->s_mount_opt, NO_UID32);
- 		}
- 		else if (!strcmp (this_char, "abort"))
--			set_opt (*mount_options, ABORT);
-+			set_opt (sbi->s_mount_opt, ABORT);
- 		else if (!strcmp (this_char, "check")) {
- 			if (!value || !*value || !strcmp (value, "none"))
--				clear_opt (*mount_options, CHECK);
-+				clear_opt (sbi->s_mount_opt, CHECK);
- 			else
- #ifdef CONFIG_EXT3_CHECK
--				set_opt (*mount_options, CHECK);
-+				set_opt (sbi->s_mount_opt, CHECK);
- #else
- 				printk(KERN_ERR 
- 				       "EXT3 Check option not supported\n");
- #endif
- 		}
- 		else if (!strcmp (this_char, "debug"))
--			set_opt (*mount_options, DEBUG);
-+			set_opt (sbi->s_mount_opt, DEBUG);
- 		else if (!strcmp (this_char, "errors")) {
- 			if (want_value(value, "errors"))
- 				return 0;
- 			if (!strcmp (value, "continue")) {
--				clear_opt (*mount_options, ERRORS_RO);
--				clear_opt (*mount_options, ERRORS_PANIC);
--				set_opt (*mount_options, ERRORS_CONT);
-+				clear_opt (sbi->s_mount_opt, ERRORS_RO);
-+				clear_opt (sbi->s_mount_opt, ERRORS_PANIC);
-+				set_opt (sbi->s_mount_opt, ERRORS_CONT);
- 			}
- 			else if (!strcmp (value, "remount-ro")) {
--				clear_opt (*mount_options, ERRORS_CONT);
--				clear_opt (*mount_options, ERRORS_PANIC);
--				set_opt (*mount_options, ERRORS_RO);
-+				clear_opt (sbi->s_mount_opt, ERRORS_CONT);
-+				clear_opt (sbi->s_mount_opt, ERRORS_PANIC);
-+				set_opt (sbi->s_mount_opt, ERRORS_RO);
- 			}
- 			else if (!strcmp (value, "panic")) {
--				clear_opt (*mount_options, ERRORS_CONT);
--				clear_opt (*mount_options, ERRORS_RO);
--				set_opt (*mount_options, ERRORS_PANIC);
-+				clear_opt (sbi->s_mount_opt, ERRORS_CONT);
-+				clear_opt (sbi->s_mount_opt, ERRORS_RO);
-+				set_opt (sbi->s_mount_opt, ERRORS_PANIC);
- 			}
- 			else {
- 				printk (KERN_ERR
-@@ -558,29 +545,25 @@
- 		}
- 		else if (!strcmp (this_char, "grpid") ||
- 			 !strcmp (this_char, "bsdgroups"))
--			set_opt (*mount_options, GRPID);
-+			set_opt (sbi->s_mount_opt, GRPID);
- 		else if (!strcmp (this_char, "minixdf"))
--			set_opt (*mount_options, MINIX_DF);
-+			set_opt (sbi->s_mount_opt, MINIX_DF);
- 		else if (!strcmp (this_char, "nocheck"))
--			clear_opt (*mount_options, CHECK);
-+			clear_opt (sbi->s_mount_opt, CHECK);
- 		else if (!strcmp (this_char, "nogrpid") ||
- 			 !strcmp (this_char, "sysvgroups"))
--			clear_opt (*mount_options, GRPID);
-+			clear_opt (sbi->s_mount_opt, GRPID);
- 		else if (!strcmp (this_char, "resgid")) {
- 			unsigned long v;
- 			if (want_numeric(value, "resgid", &v))
- 				return 0;
--			*resgid = v;
-+			sbi->s_resgid = v;
- 		}
- 		else if (!strcmp (this_char, "resuid")) {
- 			unsigned long v;
- 			if (want_numeric(value, "resuid", &v))
- 				return 0;
--			*resuid = v;
--		}
--		else if (!strcmp (this_char, "sb")) {
--			if (want_numeric(value, "sb", sb_block))
--				return 0;
-+			sbi->s_resuid = v;
- 		}
- #ifdef CONFIG_JBD_DEBUG
- 		else if (!strcmp (this_char, "ro-after")) {
-@@ -611,12 +594,12 @@
- 			if (want_value(value, "journal"))
- 				return 0;
- 			if (!strcmp (value, "update"))
--				set_opt (*mount_options, UPDATE_JOURNAL);
-+				set_opt (sbi->s_mount_opt, UPDATE_JOURNAL);
- 			else if (want_numeric(value, "journal", inum))
- 				return 0;
- 		}
- 		else if (!strcmp (this_char, "noload"))
--			set_opt (*mount_options, NOLOAD);
-+			set_opt (sbi->s_mount_opt, NOLOAD);
- 		else if (!strcmp (this_char, "data")) {
- 			int data_opt = 0;
- 
-@@ -635,7 +618,7 @@
- 				return 0;
- 			}
- 			if (is_remount) {
--				if ((*mount_options & EXT3_MOUNT_DATA_FLAGS) !=
-+				if ((sbi->s_mount_opt & EXT3_MOUNT_DATA_FLAGS) !=
- 							data_opt) {
- 					printk(KERN_ERR
- 					       "EXT3-fs: cannot change data "
-@@ -643,8 +626,8 @@
- 					return 0;
- 				}
- 			} else {
--				*mount_options &= ~EXT3_MOUNT_DATA_FLAGS;
--				*mount_options |= data_opt;
-+				sbi->s_mount_opt &= ~EXT3_MOUNT_DATA_FLAGS;
-+				sbi->s_mount_opt |= data_opt;
- 			}
- 		} else if (!strcmp (this_char, "commit")) {
- 			unsigned long v;
-@@ -707,6 +690,7 @@
+--- linux-chaos-2.4.20-6/fs/ext3/super.c~ext-2.4-patch-1-chaos	2003-04-09 16:10:38.000000000 -0600
++++ linux-chaos-2.4.20-6-braam/fs/ext3/super.c	2003-04-09 16:18:55.000000000 -0600
+@@ -710,6 +710,7 @@ static int ext3_setup_super(struct super
  	es->s_mtime = cpu_to_le32(CURRENT_TIME);
  	ext3_update_dynamic_rev(sb);
  	EXT3_SET_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_RECOVER);
@@ -3783,7 +2266,7 @@ diff -Nru a/fs/ext3/super.c b/fs/ext3/super.c
  	ext3_commit_super (sb, es, 1);
  	if (test_opt (sb, DEBUG))
  		printk (KERN_INFO
-@@ -717,6 +701,7 @@
+@@ -720,6 +721,7 @@ static int ext3_setup_super(struct super
  			EXT3_BLOCKS_PER_GROUP(sb),
  			EXT3_INODES_PER_GROUP(sb),
  			sbi->s_mount_opt);
@@ -3791,131 +2274,15 @@ diff -Nru a/fs/ext3/super.c b/fs/ext3/super.c
  	printk(KERN_INFO "EXT3 FS " EXT3FS_VERSION ", " EXT3FS_DATE " on %s, ",
  				bdevname(sb->s_dev));
  	if (EXT3_SB(sb)->s_journal->j_inode == NULL) {
-@@ -890,17 +875,39 @@
+@@ -893,6 +895,7 @@ static loff_t ext3_max_size(int bits)
  	return res;
  }
  
-+static unsigned long descriptor_loc(struct super_block *sb,
-+				    unsigned long logic_sb_block,
-+				    int nr)
-+{
-+	struct ext3_sb_info *sbi = EXT3_SB(sb);
-+	unsigned long bg, first_data_block, first_meta_bg;
-+	int has_super = 0;
-+	
-+	first_data_block = le32_to_cpu(sbi->s_es->s_first_data_block);
-+	first_meta_bg = le32_to_cpu(sbi->s_es->s_first_meta_bg);
-+
-+	if (!EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_META_BG) ||
-+	    nr < first_meta_bg)
-+		return (logic_sb_block + nr + 1);
-+	bg = sbi->s_desc_per_block * nr;
-+	if (ext3_bg_has_super(sb, bg))
-+		has_super = 1;
-+	return (first_data_block + has_super + (bg * sbi->s_blocks_per_group));
-+}
-+
 +
  struct super_block * ext3_read_super (struct super_block * sb, void * data,
  				      int silent)
  {
- 	struct buffer_head * bh;
- 	struct ext3_super_block *es = 0;
- 	struct ext3_sb_info *sbi = EXT3_SB(sb);
--	unsigned long sb_block = 1;
--	unsigned long logic_sb_block = 1;
--	unsigned long offset = 0;
-+	unsigned long sb_block = get_sb_block(&data);
-+	unsigned long block, logic_sb_block;
-+	unsigned long offset;
- 	unsigned long journal_inum = 0;
- 	kdev_t dev = sb->s_dev;
-+	unsigned long def_mount_opts;
- 	int blocksize;
- 	int hblock;
- 	int db_count;
-@@ -922,14 +929,6 @@
- 	if (blocksize < hblock)
- 		blocksize = hblock;
- 
--	sbi->s_mount_opt = 0;
--	sbi->s_resuid = EXT3_DEF_RESUID;
--	sbi->s_resgid = EXT3_DEF_RESGID;
--	if (!parse_options ((char *) data, &sb_block, sbi, &journal_inum, 0)) {
--		sb->s_dev = 0;
--		goto out_fail;
--	}
--
- 	sb->s_blocksize = blocksize;
- 	set_blocksize (dev, blocksize);
- 
-@@ -937,10 +936,8 @@
- 	 * The ext3 superblock will not be buffer aligned for other than 1kB
- 	 * block sizes.  We need to calculate the offset from buffer start.
- 	 */
--	if (blocksize != EXT3_MIN_BLOCK_SIZE) {
--		logic_sb_block = (sb_block * EXT3_MIN_BLOCK_SIZE) / blocksize;
--		offset = (sb_block * EXT3_MIN_BLOCK_SIZE) % blocksize;
--	}
-+	logic_sb_block = (sb_block * EXT3_MIN_BLOCK_SIZE) / blocksize;
-+	offset = (sb_block * EXT3_MIN_BLOCK_SIZE) % blocksize;
- 
- 	if (!(bh = sb_bread(sb, logic_sb_block))) {
- 		printk (KERN_ERR "EXT3-fs: unable to read superblock\n");
-@@ -960,6 +957,34 @@
- 			       bdevname(dev));
- 		goto failed_mount;
- 	}
-+	
-+	/* Set defaults before we parse the mount options */
-+	def_mount_opts = le32_to_cpu(es->s_default_mount_opts);
-+	sbi->s_mount_opt = 0;
-+	if (def_mount_opts & EXT3_DEFM_DEBUG)
-+		set_opt(sbi->s_mount_opt, DEBUG);
-+	if (def_mount_opts & EXT3_DEFM_BSDGROUPS)
-+		set_opt(sbi->s_mount_opt, GRPID);
-+	if (def_mount_opts & EXT3_DEFM_UID16)
-+		set_opt(sbi->s_mount_opt, NO_UID32);
-+	if ((def_mount_opts & EXT3_DEFM_JMODE) == EXT3_DEFM_JMODE_DATA)
-+		sbi->s_mount_opt |= EXT3_MOUNT_JOURNAL_DATA;
-+	else if ((def_mount_opts & EXT3_DEFM_JMODE) == EXT3_DEFM_JMODE_ORDERED)
-+		sbi->s_mount_opt |= EXT3_MOUNT_ORDERED_DATA;
-+	else if ((def_mount_opts & EXT3_DEFM_JMODE) == EXT3_DEFM_JMODE_WBACK)
-+		sbi->s_mount_opt |= EXT3_MOUNT_WRITEBACK_DATA;
-+
-+	if (le16_to_cpu(sbi->s_es->s_errors) == EXT3_ERRORS_PANIC)
-+		set_opt(sbi->s_mount_opt, ERRORS_PANIC);
-+	else if (le16_to_cpu(sbi->s_es->s_errors) == EXT3_ERRORS_RO)
-+		set_opt(sbi->s_mount_opt, ERRORS_RO);
-+	
-+	sbi->s_resuid = le16_to_cpu(es->s_def_resuid);
-+	sbi->s_resgid = le16_to_cpu(es->s_def_resgid);
-+
-+	if (!parse_options ((char *) data, sbi, &journal_inum, 0))
-+		goto failed_mount;
-+
- 	if (le32_to_cpu(es->s_rev_level) == EXT3_GOOD_OLD_REV &&
- 	    (EXT3_HAS_COMPAT_FEATURE(sb, ~0U) ||
- 	     EXT3_HAS_RO_COMPAT_FEATURE(sb, ~0U) ||
-@@ -1036,7 +1061,9 @@
- 	} else {
- 		sbi->s_inode_size = le16_to_cpu(es->s_inode_size);
- 		sbi->s_first_ino = le32_to_cpu(es->s_first_ino);
--		if (sbi->s_inode_size != EXT3_GOOD_OLD_INODE_SIZE) {
-+		if ((sbi->s_inode_size < EXT3_GOOD_OLD_INODE_SIZE) ||
-+		    (sbi->s_inode_size & (sbi->s_inode_size - 1)) ||
-+		    (sbi->s_inode_size > blocksize)) {
- 			printk (KERN_ERR
- 				"EXT3-fs: unsupported inode size: %d\n",
- 				sbi->s_inode_size);
-@@ -1059,13 +1086,12 @@
- 	sbi->s_itb_per_group = sbi->s_inodes_per_group /sbi->s_inodes_per_block;
- 	sbi->s_desc_per_block = blocksize / sizeof(struct ext3_group_desc);
- 	sbi->s_sbh = bh;
--	if (sbi->s_resuid == EXT3_DEF_RESUID)
--		sbi->s_resuid = le16_to_cpu(es->s_def_resuid);
--	if (sbi->s_resgid == EXT3_DEF_RESGID)
--		sbi->s_resgid = le16_to_cpu(es->s_def_resgid);
+@@ -1069,6 +1072,9 @@ struct super_block * ext3_read_super (st
  	sbi->s_mount_state = le16_to_cpu(es->s_state);
  	sbi->s_addr_per_block_bits = log2(EXT3_ADDR_PER_BLOCK(sb));
  	sbi->s_desc_per_block_bits = log2(EXT3_DESC_PER_BLOCK(sb));
@@ -3925,180 +2292,16 @@ diff -Nru a/fs/ext3/super.c b/fs/ext3/super.c
  
  	if (sbi->s_blocks_per_group > blocksize * 8) {
  		printk (KERN_ERR
-@@ -1098,8 +1124,16 @@
- 		printk (KERN_ERR "EXT3-fs: not enough memory\n");
- 		goto failed_mount;
- 	}
-+	sbi->s_debts = kmalloc(sbi->s_groups_count * sizeof(*sbi->s_debts),
-+			GFP_KERNEL);
-+	if (!sbi->s_debts) {
-+		printk ("EXT3-fs: not enough memory\n");
-+		goto failed_mount2;
-+	}
-+	memset(sbi->s_debts, 0, sbi->s_groups_count * sizeof(*sbi->s_debts));
- 	for (i = 0; i < db_count; i++) {
--		sbi->s_group_desc[i] = sb_bread(sb, logic_sb_block + i + 1);
-+		block = descriptor_loc(sb, logic_sb_block, i);
-+		sbi->s_group_desc[i] = sb_bread(sb, block);
- 		if (!sbi->s_group_desc[i]) {
- 			printk (KERN_ERR "EXT3-fs: "
- 				"can't read group descriptor %d\n", i);
-@@ -1120,6 +1154,7 @@
- 	sbi->s_loaded_inode_bitmaps = 0;
- 	sbi->s_loaded_block_bitmaps = 0;
- 	sbi->s_gdb_count = db_count;
-+	sbi->s_dir_count = ext3_count_dirs(sb);
- 	get_random_bytes(&sbi->s_next_generation, sizeof(u32));
- 	/*
- 	 * set up enough so that it can read an inode
-@@ -1223,6 +1258,8 @@
- failed_mount3:
- 	journal_destroy(sbi->s_journal);
- failed_mount2:
-+	if (sbi->s_debts)
-+		kfree(sbi->s_debts);
- 	for (i = 0; i < db_count; i++)
- 		brelse(sbi->s_group_desc[i]);
- 	kfree(sbi->s_group_desc);
-@@ -1651,7 +1688,7 @@
- 	/*
- 	 * Allow the "check" option to be passed as a remount option.
- 	 */
--	if (!parse_options(data, &tmp, sbi, &tmp, 1))
-+	if (!parse_options(data, sbi, &tmp, 1))
- 		return -EINVAL;
+@@ -1770,6 +1776,7 @@ static void __exit exit_ext3_fs(void)
+ 	unregister_filesystem(&ext3_fs_type);
+ }
  
- 	if (sbi->s_mount_opt & EXT3_MOUNT_ABORT)
-diff -Nru a/include/linux/ext2_fs.h b/include/linux/ext2_fs.h
---- a/include/linux/ext2_fs.h	Thu Nov  7 11:58:05 2002
-+++ b/include/linux/ext2_fs.h	Thu Nov  7 11:58:05 2002
-@@ -198,10 +198,11 @@
- #define EXT2_ECOMPR_FL			0x00000800 /* Compression error */
- /* End compression flags --- maybe not all used */	
- #define EXT2_BTREE_FL			0x00001000 /* btree format dir */
-+#define EXT2_TOPDIR_FL			0x00020000 /* Top of directory hierarchies*/
- #define EXT2_RESERVED_FL		0x80000000 /* reserved for ext2 lib */
++EXPORT_SYMBOL(ext3_force_commit);
+ EXPORT_SYMBOL(ext3_bread);
  
--#define EXT2_FL_USER_VISIBLE		0x00001FFF /* User visible flags */
--#define EXT2_FL_USER_MODIFIABLE		0x000000FF /* User modifiable flags */
-+#define EXT2_FL_USER_VISIBLE		0x0003DFFF /* User visible flags */
-+#define EXT2_FL_USER_MODIFIABLE		0x000380FF /* User modifiable flags */
- 
- /*
-  * ioctl commands
-@@ -307,6 +308,7 @@
-  * Mount flags
-  */
- #define EXT2_MOUNT_CHECK		0x0001	/* Do mount-time checks */
-+#define EXT2_MOUNT_OLDALLOC		0x0002  /* Don't use the new Orlov allocator */
- #define EXT2_MOUNT_GRPID		0x0004	/* Create files with directory's group */
- #define EXT2_MOUNT_DEBUG		0x0008	/* Some debugging messages */
- #define EXT2_MOUNT_ERRORS_CONT		0x0010	/* Continue on errors */
-@@ -392,7 +394,20 @@
- 	__u8	s_prealloc_blocks;	/* Nr of blocks to try to preallocate*/
- 	__u8	s_prealloc_dir_blocks;	/* Nr to preallocate for dirs */
- 	__u16	s_padding1;
--	__u32	s_reserved[204];	/* Padding to the end of the block */
-+	/*
-+	 * Journaling support valid if EXT3_FEATURE_COMPAT_HAS_JOURNAL set.
-+	 */
-+	__u8	s_journal_uuid[16];	/* uuid of journal superblock */
-+	__u32	s_journal_inum;		/* inode number of journal file */
-+	__u32	s_journal_dev;		/* device number of journal file */
-+	__u32	s_last_orphan;		/* start of list of inodes to delete */
-+	__u32	s_hash_seed[4];		/* HTREE hash seed */
-+	__u8	s_def_hash_version;	/* Default hash version to use */
-+	__u8	s_reserved_char_pad;
-+	__u16	s_reserved_word_pad;
-+	__u32	s_default_mount_opts;
-+ 	__u32	s_first_meta_bg; 	/* First metablock block group */
-+	__u32	s_reserved[190];	/* Padding to the end of the block */
- };
- 
- #ifdef __KERNEL__
-@@ -464,10 +479,12 @@
- #define EXT2_FEATURE_INCOMPAT_FILETYPE		0x0002
- #define EXT3_FEATURE_INCOMPAT_RECOVER		0x0004
- #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008
-+#define EXT2_FEATURE_INCOMPAT_META_BG		0x0010
- #define EXT2_FEATURE_INCOMPAT_ANY		0xffffffff
- 
- #define EXT2_FEATURE_COMPAT_SUPP	0
--#define EXT2_FEATURE_INCOMPAT_SUPP	EXT2_FEATURE_INCOMPAT_FILETYPE
-+#define EXT2_FEATURE_INCOMPAT_SUPP	(EXT2_FEATURE_INCOMPAT_FILETYPE| \
-+					 EXT2_FEATURE_INCOMPAT_META_BG)
- #define EXT2_FEATURE_RO_COMPAT_SUPP	(EXT2_FEATURE_RO_COMPAT_SPARSE_SUPER| \
- 					 EXT2_FEATURE_RO_COMPAT_LARGE_FILE| \
- 					 EXT2_FEATURE_RO_COMPAT_BTREE_DIR)
-@@ -475,10 +492,18 @@
- #define EXT2_FEATURE_INCOMPAT_UNSUPPORTED	~EXT2_FEATURE_INCOMPAT_SUPP
- 
- /*
-- * Default values for user and/or group using reserved blocks
-+ * Default mount options
-  */
--#define	EXT2_DEF_RESUID		0
--#define	EXT2_DEF_RESGID		0
-+#define EXT2_DEFM_DEBUG		0x0001
-+#define EXT2_DEFM_BSDGROUPS	0x0002
-+#define EXT2_DEFM_XATTR_USER	0x0004
-+#define EXT2_DEFM_ACL		0x0008
-+#define EXT2_DEFM_UID16		0x0010
-+    /* Not used by ext2, but reserved for use by ext3 */
-+#define EXT3_DEFM_JMODE		0x0060 
-+#define EXT3_DEFM_JMODE_DATA	0x0020
-+#define EXT3_DEFM_JMODE_ORDERED	0x0040
-+#define EXT3_DEFM_JMODE_WBACK	0x0060
- 
- /*
-  * Structure of a directory entry
-@@ -576,6 +601,7 @@
- extern struct inode * ext2_new_inode (const struct inode *, int);
- extern void ext2_free_inode (struct inode *);
- extern unsigned long ext2_count_free_inodes (struct super_block *);
-+extern unsigned long ext2_count_dirs (struct super_block *);
- extern void ext2_check_inodes_bitmap (struct super_block *);
- extern unsigned long ext2_count_free (struct buffer_head *, unsigned);
- 
-diff -Nru a/include/linux/ext2_fs_i.h b/include/linux/ext2_fs_i.h
---- a/include/linux/ext2_fs_i.h	Thu Nov  7 11:58:05 2002
-+++ b/include/linux/ext2_fs_i.h	Thu Nov  7 11:58:05 2002
-@@ -25,6 +25,7 @@
- 	__u32	i_faddr;
- 	__u8	i_frag_no;
- 	__u8	i_frag_size;
-+	__u16	i_state;
- 	__u32	i_file_acl;
- 	__u32	i_dir_acl;
- 	__u32	i_dtime;
-@@ -34,7 +35,11 @@
- 	__u32	i_prealloc_block;
- 	__u32	i_prealloc_count;
- 	__u32	i_dir_start_lookup;
--	int	i_new_inode:1;	/* Is a freshly allocated inode */
- };
-+
-+/*
-+ * Inode dynamic state flags
-+ */
-+#define EXT2_STATE_NEW			0x00000001 /* inode is newly created */
- 
- #endif	/* _LINUX_EXT2_FS_I */
-diff -Nru a/include/linux/ext2_fs_sb.h b/include/linux/ext2_fs_sb.h
---- a/include/linux/ext2_fs_sb.h	Thu Nov  7 11:58:05 2002
-+++ b/include/linux/ext2_fs_sb.h	Thu Nov  7 11:58:05 2002
-@@ -56,6 +56,8 @@
- 	int s_desc_per_block_bits;
- 	int s_inode_size;
- 	int s_first_ino;
-+	unsigned long s_dir_count;
-+	u8 *s_debts;
- };
- 
- #endif	/* _LINUX_EXT2_FS_SB */
-diff -Nru a/include/linux/ext3_fs.h b/include/linux/ext3_fs.h
---- a/include/linux/ext3_fs.h	Thu Nov  7 11:58:05 2002
-+++ b/include/linux/ext3_fs.h	Thu Nov  7 11:58:05 2002
+ MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
+--- linux-chaos-2.4.20-6/include/linux/ext3_fs.h~ext-2.4-patch-1-chaos	2003-03-12 12:51:27.000000000 -0700
++++ linux-chaos-2.4.20-6-braam/include/linux/ext3_fs.h	2003-04-09 16:18:55.000000000 -0600
 @@ -40,6 +40,11 @@
  #define EXT3FS_VERSION		"2.4-0.9.19"
  
@@ -4111,29 +2314,7 @@ diff -Nru a/include/linux/ext3_fs.h b/include/linux/ext3_fs.h
   * Debug code
   */
  #ifdef EXT3FS_DEBUG
-@@ -203,10 +208,11 @@
- #define EXT3_INDEX_FL			0x00001000 /* hash-indexed directory */
- #define EXT3_IMAGIC_FL			0x00002000 /* AFS directory */
- #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
-+#define EXT3_TOPDIR_FL			0x00020000 /* Top of directory hierarchies*/
- #define EXT3_RESERVED_FL		0x80000000 /* reserved for ext3 lib */
- 
--#define EXT3_FL_USER_VISIBLE		0x00005FFF /* User visible flags */
--#define EXT3_FL_USER_MODIFIABLE		0x000000FF /* User modifiable flags */
-+#define EXT3_FL_USER_VISIBLE		0x0003DFFF /* User visible flags */
-+#define EXT3_FL_USER_MODIFIABLE		0x000380FF /* User modifiable flags */
- 
- /*
-  * Inode dynamic state flags
-@@ -325,6 +331,7 @@
-  * Mount flags
-  */
- #define EXT3_MOUNT_CHECK		0x0001	/* Do mount-time checks */
-+#define EXT3_MOUNT_OLDALLOC		0x0002  /* Don't use the new Orlov allocator */
- #define EXT3_MOUNT_GRPID		0x0004	/* Create files with directory's group */
- #define EXT3_MOUNT_DEBUG		0x0008	/* Some debugging messages */
- #define EXT3_MOUNT_ERRORS_CONT		0x0010	/* Continue on errors */
-@@ -437,8 +444,13 @@
+@@ -437,8 +442,11 @@ struct ext3_super_block {
  /*E0*/	__u32	s_journal_inum;		/* inode number of journal file */
  	__u32	s_journal_dev;		/* device number of journal file */
  	__u32	s_last_orphan;		/* start of list of inodes to delete */
@@ -4143,46 +2324,11 @@ diff -Nru a/include/linux/ext3_fs.h b/include/linux/ext3_fs.h
 +	__u8	s_def_hash_version;	/* Default hash version to use */
 +	__u8	s_reserved_char_pad;
 +	__u16	s_reserved_word_pad;
-+	__u32	s_default_mount_opts;
-+	__u32	s_first_meta_bg; 	/* First metablock block group */
-+	__u32	s_reserved[190];	/* Padding to the end of the block */
++	__u32	s_reserved[192];	/* Padding to the end of the block */
  };
  
  #ifdef __KERNEL__
-@@ -511,19 +523,28 @@
- #define EXT3_FEATURE_INCOMPAT_FILETYPE		0x0002
- #define EXT3_FEATURE_INCOMPAT_RECOVER		0x0004 /* Needs recovery */
- #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
-+#define EXT3_FEATURE_INCOMPAT_META_BG		0x0010
- 
- #define EXT3_FEATURE_COMPAT_SUPP	0
- #define EXT3_FEATURE_INCOMPAT_SUPP	(EXT3_FEATURE_INCOMPAT_FILETYPE| \
--					 EXT3_FEATURE_INCOMPAT_RECOVER)
-+					 EXT3_FEATURE_INCOMPAT_RECOVER| \
-+					 EXT3_FEATURE_INCOMPAT_META_BG)
- #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
- 					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
- 					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
- 
- /*
-- * Default values for user and/or group using reserved blocks
-+ * Default mount options
-  */
--#define	EXT3_DEF_RESUID		0
--#define	EXT3_DEF_RESGID		0
-+#define EXT3_DEFM_DEBUG		0x0001
-+#define EXT3_DEFM_BSDGROUPS	0x0002
-+#define EXT3_DEFM_XATTR_USER	0x0004
-+#define EXT3_DEFM_ACL		0x0008
-+#define EXT3_DEFM_UID16		0x0010
-+#define EXT3_DEFM_JMODE		0x0060
-+#define EXT3_DEFM_JMODE_DATA	0x0020
-+#define EXT3_DEFM_JMODE_ORDERED	0x0040
-+#define EXT3_DEFM_JMODE_WBACK	0x0060
- 
- /*
-  * Structure of a directory entry
-@@ -575,9 +596,46 @@
+@@ -575,9 +583,46 @@ struct ext3_dir_entry_2 {
  #define EXT3_DIR_ROUND			(EXT3_DIR_PAD - 1)
  #define EXT3_DIR_REC_LEN(name_len)	(((name_len) + 8 + EXT3_DIR_ROUND) & \
  					 ~EXT3_DIR_ROUND)
@@ -4229,7 +2375,7 @@ diff -Nru a/include/linux/ext3_fs.h b/include/linux/ext3_fs.h
   * Describe an inode's exact location on disk and in memory
   */
  struct ext3_iloc
-@@ -587,6 +645,27 @@
+@@ -587,6 +632,27 @@ struct ext3_iloc
  	unsigned long block_group;
  };
  
@@ -4257,7 +2403,7 @@ diff -Nru a/include/linux/ext3_fs.h b/include/linux/ext3_fs.h
  /*
   * Function prototypes
   */
-@@ -614,16 +693,26 @@
+@@ -614,11 +680,20 @@ extern struct ext3_group_desc * ext3_get
  
  /* dir.c */
  extern int ext3_check_dir_entry(const char *, struct inode *,
@@ -4265,7 +2411,7 @@ diff -Nru a/include/linux/ext3_fs.h b/include/linux/ext3_fs.h
 -				unsigned long);
 +				struct ext3_dir_entry_2 *,
 +				struct buffer_head *, unsigned long);
-+extern int ext3_htree_store_dirent(struct file *dir_file, __u32 hash,
++extern void ext3_htree_store_dirent(struct file *dir_file, __u32 hash,
 +				    __u32 minor_hash,
 +				    struct ext3_dir_entry_2 *dirent);
 +extern void ext3_htree_free_dir_info(struct dir_private_info *p);
@@ -4280,13 +2426,7 @@ diff -Nru a/include/linux/ext3_fs.h b/include/linux/ext3_fs.h
  /* ialloc.c */
  extern struct inode * ext3_new_inode (handle_t *, const struct inode *, int);
  extern void ext3_free_inode (handle_t *, struct inode *);
- extern struct inode * ext3_orphan_get (struct super_block *, ino_t);
- extern unsigned long ext3_count_free_inodes (struct super_block *);
-+extern unsigned long ext3_count_dirs (struct super_block *);
- extern void ext3_check_inodes_bitmap (struct super_block *);
- extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
- 
-@@ -650,6 +739,8 @@
+@@ -650,6 +725,8 @@ extern int ext3_ioctl (struct inode *, s
  /* namei.c */
  extern int ext3_orphan_add(handle_t *, struct inode *);
  extern int ext3_orphan_del(handle_t *, struct inode *);
@@ -4295,36 +2435,31 @@ diff -Nru a/include/linux/ext3_fs.h b/include/linux/ext3_fs.h
  
  /* super.c */
  extern void ext3_error (struct super_block *, const char *, const char *, ...)
-diff -Nru a/include/linux/ext3_fs_sb.h b/include/linux/ext3_fs_sb.h
---- a/include/linux/ext3_fs_sb.h	Thu Nov  7 11:58:05 2002
-+++ b/include/linux/ext3_fs_sb.h	Thu Nov  7 11:58:05 2002
-@@ -62,6 +62,10 @@
+--- linux-chaos-2.4.20-6/include/linux/ext3_fs_sb.h~ext-2.4-patch-1-chaos	2003-03-12 12:51:27.000000000 -0700
++++ linux-chaos-2.4.20-6-braam/include/linux/ext3_fs_sb.h	2003-04-09 16:18:55.000000000 -0600
+@@ -62,6 +62,8 @@ struct ext3_sb_info {
  	int s_inode_size;
  	int s_first_ino;
  	u32 s_next_generation;
 +	u32 s_hash_seed[4];
 +	int s_def_hash_version;
-+	unsigned long s_dir_count;
-+	u8 *s_debts;
  
  	/* Journaling */
  	struct inode * s_journal_inode;
-diff -Nru a/include/linux/ext3_jbd.h b/include/linux/ext3_jbd.h
---- a/include/linux/ext3_jbd.h	Thu Nov  7 11:58:05 2002
-+++ b/include/linux/ext3_jbd.h	Thu Nov  7 11:58:05 2002
-@@ -63,6 +63,8 @@
+--- linux-chaos-2.4.20-6/include/linux/ext3_jbd.h~ext-2.4-patch-1-chaos	2003-03-12 12:51:27.000000000 -0700
++++ linux-chaos-2.4.20-6-braam/include/linux/ext3_jbd.h	2003-04-09 16:18:55.000000000 -0600
+@@ -63,6 +63,8 @@ extern int ext3_writepage_trans_blocks(s
  
- #define EXT3_RESERVE_TRANS_BLOCKS	12
+ #define EXT3_RESERVE_TRANS_BLOCKS	12U
  
 +#define EXT3_INDEX_EXTRA_TRANS_BLOCKS	8
 +
  int
  ext3_mark_iloc_dirty(handle_t *handle, 
  		     struct inode *inode,
-diff -Nru a/include/linux/rbtree.h b/include/linux/rbtree.h
---- a/include/linux/rbtree.h	Thu Nov  7 11:58:05 2002
-+++ b/include/linux/rbtree.h	Thu Nov  7 11:58:05 2002
-@@ -120,6 +120,8 @@
+--- linux-chaos-2.4.20-6/include/linux/rbtree.h~ext-2.4-patch-1-chaos	2002-05-07 15:53:47.000000000 -0600
++++ linux-chaos-2.4.20-6-braam/include/linux/rbtree.h	2003-04-09 16:18:55.000000000 -0600
+@@ -120,6 +120,8 @@ rb_root_t;
  
  extern void rb_insert_color(rb_node_t *, rb_root_t *);
  extern void rb_erase(rb_node_t *, rb_root_t *);
@@ -4333,9 +2468,8 @@ diff -Nru a/include/linux/rbtree.h b/include/linux/rbtree.h
  
  static inline void rb_link_node(rb_node_t * node, rb_node_t * parent, rb_node_t ** rb_link)
  {
-diff -Nru a/lib/rbtree.c b/lib/rbtree.c
---- a/lib/rbtree.c	Thu Nov  7 11:58:05 2002
-+++ b/lib/rbtree.c	Thu Nov  7 11:58:05 2002
+--- linux-chaos-2.4.20-6/lib/rbtree.c~ext-2.4-patch-1-chaos	2002-09-25 11:14:03.000000000 -0600
++++ linux-chaos-2.4.20-6-braam/lib/rbtree.c	2003-04-09 16:18:55.000000000 -0600
 @@ -17,6 +17,8 @@
    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  
@@ -4345,7 +2479,7 @@ diff -Nru a/lib/rbtree.c b/lib/rbtree.c
  */
  
  #include <linux/rbtree.h>
-@@ -294,3 +296,43 @@
+@@ -294,3 +296,43 @@ void rb_erase(rb_node_t * node, rb_root_
  		__rb_erase_color(child, parent, root);
  }
  EXPORT_SYMBOL(rb_erase);
@@ -4389,3 +2523,5 @@ diff -Nru a/lib/rbtree.c b/lib/rbtree.c
 +}
 +EXPORT_SYMBOL(rb_get_next);
 +
+
+_

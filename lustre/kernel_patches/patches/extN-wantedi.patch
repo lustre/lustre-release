@@ -1,12 +1,12 @@
- fs/ext3/ialloc.c        |   36 +++++++++++++++++++++++++++++++++++-
+ fs/ext3/ialloc.c        |   38 ++++++++++++++++++++++++++++++++++++--
  fs/ext3/ioctl.c         |   25 +++++++++++++++++++++++++
  fs/ext3/namei.c         |   12 ++++++++----
  include/linux/ext3_fs.h |    5 ++++-
- 4 files changed, 72 insertions(+), 6 deletions(-)
+ 4 files changed, 73 insertions(+), 7 deletions(-)
 
---- linux-2.4.18-18/fs/ext3/namei.c~extN-wantedi	Sat Apr  5 02:51:31 2003
-+++ linux-2.4.18-18-braam/fs/ext3/namei.c	Sat Apr  5 02:51:31 2003
-@@ -1212,7 +1212,8 @@ static int ext3_create (struct inode * d
+--- linux-2.4.20/fs/ext3/namei.c~extN-wantedi	2003-04-08 23:35:55.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/namei.c	2003-04-08 23:35:55.000000000 -0600
+@@ -1555,7 +1555,8 @@ static int ext3_create (struct inode * d
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
@@ -16,7 +16,7 @@
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		inode->i_op = &ext3_file_inode_operations;
-@@ -1240,7 +1241,8 @@ static int ext3_mknod (struct inode * di
+@@ -1583,7 +1584,8 @@ static int ext3_mknod (struct inode * di
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
@@ -26,7 +26,7 @@
  	err = PTR_ERR(inode);
  	if (!IS_ERR(inode)) {
  		init_special_inode(inode, mode, rdev);
-@@ -1270,7 +1272,8 @@ static int ext3_mkdir(struct inode * dir
+@@ -1613,7 +1615,8 @@ static int ext3_mkdir(struct inode * dir
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
@@ -36,7 +36,7 @@
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
-@@ -1663,7 +1666,8 @@ static int ext3_symlink (struct inode * 
+@@ -2009,7 +2012,8 @@ static int ext3_symlink (struct inode * 
  	if (IS_SYNC(dir))
  		handle->h_sync = 1;
  
@@ -46,9 +46,9 @@
  	err = PTR_ERR(inode);
  	if (IS_ERR(inode))
  		goto out_stop;
---- linux-2.4.18-18/fs/ext3/ialloc.c~extN-wantedi	Sat Apr  5 02:51:31 2003
-+++ linux-2.4.18-18-braam/fs/ext3/ialloc.c	Sat Apr  5 02:51:31 2003
-@@ -330,7 +330,8 @@ int ext3_itable_block_used(struct super_
+--- linux-2.4.20/fs/ext3/ialloc.c~extN-wantedi	2003-04-08 23:35:55.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/ialloc.c	2003-04-08 23:35:55.000000000 -0600
+@@ -299,7 +299,8 @@ error_return:
   * group to find a free inode.
   */
  struct inode * ext3_new_inode (handle_t *handle,
@@ -58,7 +58,8 @@
  {
  	struct super_block * sb;
  	struct buffer_head * bh;
-@@ -360,6 +361,38 @@ struct inode * ext3_new_inode (handle_t 
+@@ -323,7 +324,39 @@ struct inode * ext3_new_inode (handle_t 
+ 	init_rwsem(&inode->u.ext3_i.truncate_sem);
  
  	lock_super (sb);
 -	es = sb->u.ext3_sb.s_es;
@@ -98,17 +99,17 @@
  repeat:
  	gdp = NULL;
  	i = 0;
-@@ -474,6 +507,7 @@ repeat:
+@@ -438,6 +471,7 @@ repeat:
  		}
  		goto repeat;
  	}
 + have_bit_and_group:
-	j += i * EXT3_INODES_PER_GROUP(sb) + 1;
-	if (j < EXT3_FIRST_INO(sb) || j > le32_to_cpu(es->s_inodes_count)) {
+ 	j += i * EXT3_INODES_PER_GROUP(sb) + 1;
+ 	if (j < EXT3_FIRST_INO(sb) || j > le32_to_cpu(es->s_inodes_count)) {
  		ext3_error (sb, "ext3_new_inode",
---- linux-2.4.18-18/fs/ext3/ioctl.c~extN-wantedi	Sat Apr  5 02:51:31 2003
-+++ linux-2.4.18-18-braam/fs/ext3/ioctl.c	Sat Apr  5 02:51:31 2003
-@@ -24,6 +24,31 @@ int ext3_ioctl (struct inode * inode, st
+--- linux-2.4.20/fs/ext3/ioctl.c~extN-wantedi	2003-04-08 23:35:55.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/ioctl.c	2003-04-08 23:35:55.000000000 -0600
+@@ -23,6 +23,31 @@ int ext3_ioctl (struct inode * inode, st
  	ext3_debug ("cmd = %u, arg = %lu\n", cmd, arg);
  
  	switch (cmd) {
@@ -138,11 +139,11 @@
 + 		return rc;
 + 	}
  	case EXT3_IOC_GETFLAGS:
- 		flags = ei->i_flags & EXT3_FL_USER_VISIBLE;
+ 		flags = inode->u.ext3_i.i_flags & EXT3_FL_USER_VISIBLE;
  		return put_user(flags, (int *) arg);
---- linux-2.4.18-18/include/linux/ext3_fs.h~extN-wantedi	Sat Apr  5 02:51:31 2003
-+++ linux-2.4.18-18-braam/include/linux/ext3_fs.h	Sat Apr  5 02:52:43 2003
-@@ -198,6 +198,7 @@ struct ext3_group_desc
+--- linux-2.4.20/include/linux/ext3_fs.h~extN-wantedi	2003-04-08 23:35:55.000000000 -0600
++++ linux-2.4.20-braam/include/linux/ext3_fs.h	2003-04-08 23:35:55.000000000 -0600
+@@ -201,6 +201,7 @@ struct ext3_group_desc
  #define	EXT3_IOC_SETFLAGS		_IOW('f', 2, long)
  #define	EXT3_IOC_GETVERSION		_IOR('f', 3, long)
  #define	EXT3_IOC_SETVERSION		_IOW('f', 4, long)
@@ -150,8 +151,8 @@
  #define	EXT3_IOC_GETVERSION_OLD		_IOR('v', 1, long)
  #define	EXT3_IOC_SETVERSION_OLD		_IOW('v', 2, long)
  #ifdef CONFIG_JBD_DEBUG
-@@ -628,7 +629,8 @@ extern int ext3_check_dir_entry(const ch
- extern int ext3_sync_file (struct file *, struct dentry *, int);
+@@ -671,7 +672,8 @@ extern int ext3fs_dirhash(const char *na
+ 			  dx_hash_info *hinfo);
  
  /* ialloc.c */
 -extern struct inode * ext3_new_inode (handle_t *, const struct inode *, int);
@@ -160,7 +161,7 @@
  extern void ext3_free_inode (handle_t *, struct inode *);
  extern struct inode * ext3_orphan_get (struct super_block *, unsigned long);
  extern unsigned long ext3_count_free_inodes (struct super_block *);
-@@ -712,4 +714,5 @@ extern struct inode_operations ext3_fast
+@@ -757,4 +759,5 @@ extern struct inode_operations ext3_fast
  
  #endif	/* __KERNEL__ */
  

@@ -175,7 +175,7 @@ copy_file_to_bup()
 
 	if [ -e $file ]
 	then
-		cp $file "$file"~"$patch"
+		cp -p $file "$file"~"$patch"
 	else
 		echo "file $file appears to be newly added"
 	fi

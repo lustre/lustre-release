@@ -1,21 +1,9 @@
-
-
-If ext3_add_nondir() fails it will do an iput() of the inode.  But we
-continue to run ext3_mark_inode_dirty() against the potentially-freed
-inode.  This oopses when slab poisoning is enabled.
-
-Fix it so that we only run ext3_mark_inode_dirty() if the inode was
-successfully instantiated.
-
-This bug was added in 2.4.20-pre9.
-
-
- fs/ext3/namei.c |   11 +++++------
+ ./fs/ext3/namei.c |   11 +++++------
  1 files changed, 5 insertions(+), 6 deletions(-)
 
---- 24/fs/ext3/namei.c~ext3-use-after-free	Sun Dec 15 11:27:50 2002
-+++ 24-akpm/fs/ext3/namei.c	Sun Dec 15 11:27:50 2002
-@@ -429,8 +429,11 @@ static int ext3_add_nondir(handle_t *han
+--- linux-2.4.20/./fs/ext3/namei.c~ext3-use-after-free	2003-04-08 23:35:51.000000000 -0600
++++ linux-2.4.20-braam/./fs/ext3/namei.c	2003-04-08 23:35:51.000000000 -0600
+@@ -1521,8 +1521,11 @@ static int ext3_add_nondir(handle_t *han
  {
  	int err = ext3_add_entry(handle, dentry, inode);
  	if (!err) {
@@ -29,7 +17,7 @@ This bug was added in 2.4.20-pre9.
  	}
  	ext3_dec_count(handle, inode);
  	iput(inode);
-@@ -465,7 +468,6 @@ static int ext3_create (struct inode * d
+@@ -1559,7 +1562,6 @@ static int ext3_create (struct inode * d
  		inode->i_fop = &ext3_file_operations;
  		inode->i_mapping->a_ops = &ext3_aops;
  		err = ext3_add_nondir(handle, dentry, inode);
@@ -37,7 +25,7 @@ This bug was added in 2.4.20-pre9.
  	}
  	ext3_journal_stop(handle, dir);
  	return err;
-@@ -490,7 +492,6 @@ static int ext3_mknod (struct inode * di
+@@ -1586,7 +1588,6 @@ static int ext3_mknod (struct inode * di
  	if (!IS_ERR(inode)) {
  		init_special_inode(inode, mode, rdev);
  		err = ext3_add_nondir(handle, dentry, inode);
@@ -45,15 +33,15 @@ This bug was added in 2.4.20-pre9.
  	}
  	ext3_journal_stop(handle, dir);
  	return err;
-@@ -934,7 +935,6 @@ static int ext3_symlink (struct inode * 
+@@ -2035,7 +2036,6 @@ static int ext3_symlink (struct inode * 
  	}
- 	inode->u.ext3_i.i_disksize = inode->i_size;
+ 	EXT3_I(inode)->i_disksize = inode->i_size;
  	err = ext3_add_nondir(handle, dentry, inode);
 -	ext3_mark_inode_dirty(handle, inode);
  out_stop:
  	ext3_journal_stop(handle, dir);
  	return err;
-@@ -971,7 +971,6 @@ static int ext3_link (struct dentry * ol
+@@ -2069,7 +2069,6 @@ static int ext3_link (struct dentry * ol
  	atomic_inc(&inode->i_count);
  
  	err = ext3_add_nondir(handle, dentry, inode);

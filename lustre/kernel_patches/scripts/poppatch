@@ -68,3 +68,4 @@ do
 		fi
 	fi
 done
+sum-series applied-patch

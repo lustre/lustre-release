@@ -1,18 +1,9 @@
-Under rare conditions (filesystem corruption, really) it is possible
-for ext3_dirty_inode() to require _two_ blocks for the transaction: one
-for the inode and one to update the superblock - to set
-EXT3_FEATURE_RO_COMPAT_LARGE_FILE.  This causes the filesystem to go
-BUG.
-
-So reserve an additional block for that eventuality.
-
-
  fs/ext3/inode.c |    2 +-
  1 files changed, 1 insertion(+), 1 deletion(-)
 
---- 25/fs/ext3/inode.c~ext3-transaction-reserved-blocks	Sat Dec 14 18:28:21 2002
-+++ 25-akpm/fs/ext3/inode.c	Sat Dec 14 18:28:21 2002
-@@ -2698,7 +2698,7 @@ void ext3_dirty_inode(struct inode *inod
+--- linux-2.4.20/fs/ext3/inode.c~ext3-largefile	2003-04-08 23:35:36.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/inode.c	2003-04-08 23:35:36.000000000 -0600
+@@ -2562,7 +2562,7 @@ void ext3_dirty_inode(struct inode *inod
  	handle_t *handle;
  
  	lock_kernel();
@@ -21,3 +12,5 @@ So reserve an additional block for that eventuality.
  	if (IS_ERR(handle))
  		goto out;
  	if (current_handle &&
+
+_
