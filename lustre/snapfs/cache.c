@@ -58,7 +58,7 @@ struct snap_cache *snap_find_cache(kdev_t dev)
 
 	lh = &(snap_caches[snap_cache_hash(dev)]);
         list_for_each_entry(cache, lh, cache_chain) { 
-		if ( cache->cache_dev == dev )
+		if (cache->cache_dev == dev)
 			return cache;
 	}
 	return NULL;
