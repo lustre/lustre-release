@@ -652,6 +652,8 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name);
 int ptlrpc_unregister_service(struct ptlrpc_service *service);
 int liblustre_check_services (void *arg);
+void ptlrpc_daemonize(void);
+
 
 struct ptlrpc_svc_data {
         char *name;

@@ -1395,7 +1395,7 @@
 +		struct ext3_dir_entry_2 *de = (struct ext3_dir_entry_2 *) (from + map->offs);
 +		rec_len = EXT3_DIR_REC_LEN(de->name_len);
 +		memcpy (to, de, rec_len);
-+		((struct ext3_dir_entry_2 *) to)->rec_len = rec_len;
++		((struct ext3_dir_entry_2 *)to)->rec_len = cpu_to_le16(rec_len);
 +		de->inode = 0;
 +		map++;
 +		to += rec_len;
@@ -1416,9 +1416,9 @@
 +			rec_len = EXT3_DIR_REC_LEN(de->name_len);
 +			if (de > to)
 +				memmove(to, de, rec_len);
-+			to->rec_len = rec_len;
++			to->rec_len = cpu_to_le16(rec_len);
 +			prev = to;
-+			to = (struct ext3_dir_entry_2 *) (((char *) to) + rec_len);
++			to = (struct ext3_dir_entry_2 *)((char *)to + rec_len);
 +		}
 +		de = next;
 +	}
@@ -1642,8 +1642,8 @@
 +	data1 = bh2->b_data;
 +
 +	/* The 0th block becomes the root, move the dirents out */
-+	de = (struct ext3_dir_entry_2 *) &root->dotdot;
-+	de = (struct ext3_dir_entry_2 *) ((char *)de + de->rec_len);
++	de = (struct ext3_dir_entry_2 *)&root->dotdot;
++	de = (struct ext3_dir_entry_2 *)((char *)de + le16_to_cpu(de->rec_len));
 +	len = ((char *) root) + blocksize - (char *) de;
 +	memcpy (data1, de, len);
 +	de = (struct ext3_dir_entry_2 *) data1;

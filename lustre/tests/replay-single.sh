@@ -876,7 +876,7 @@ test_42() {
 run_test 42 "recovery after ost failure"
 
 # b=2530
-# directory orphans can't be unlinked from PENDING directory
+# timeout in MDS/OST recovery RPC will LBUG MDS
 test_43() {
     replay_barrier mds
 
@@ -935,6 +935,31 @@ test_46() {
     return 0
 }
 run_test 46 "Don't leak file handle after open resend (3325)"
+
+# b=2824
+test_47() {
+
+    # create some files to make sure precreate has been done on all 
+    # OSTs. (just in case this test is run independently)
+    createmany -o $DIR/$tfile 20  || return 1
+
+    # OBD_FAIL_OST_CREATE_NET 0x204
+    fail ost
+    do_facet ost "sysctl -w lustre.fail_loc=0x80000204"
+    df $MOUNT || return 2
+
+    # let the MDS discover the OST failure, attempt to recover, fail
+    # and recover again.  
+    sleep $((3 * TIMEOUT))
+
+    # Without 2824, this createmany would hang 
+    createmany -o $DIR/$tfile 20 || return 3
+    unlinkmany $DIR/$tfile 20 || return 4
+
+    do_facet ost "sysctl -w lustre.fail_loc=0"
+    return 0
+}
+run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
 equals_msg test complete, cleaning up
 $CLEANUP

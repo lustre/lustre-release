@@ -37,7 +37,7 @@ static void cray_portals_callback(ptl_event_t *ev);
 #endif
 
 
-struct ptlrpc_ni  ptlrpc_interfaces[NAL_MAX_NR];
+struct ptlrpc_ni  ptlrpc_interfaces[8];
 int               ptlrpc_ninterfaces;
 
 /*  
@@ -597,12 +597,16 @@ int ptlrpc_init_portals(void)
                 int   number;
                 char *name;
         } ptl_nis[] = {
+#ifndef CRAY_PORTALS
                 {QSWNAL,  "qswnal"},
                 {SOCKNAL, "socknal"},
                 {GMNAL,   "gmnal"},
                 {IBNAL,   "ibnal"},
                 {TCPNAL,  "tcpnal"},
-                {CRAY_KB_ERNAL, "cray_kb_ernal"}};
+#else
+                {CRAY_KB_ERNAL, "cray_kb_ernal"},
+#endif
+        };
         int   rc;
         int   i;
 

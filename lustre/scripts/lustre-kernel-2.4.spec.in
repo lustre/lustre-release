@@ -21,6 +21,7 @@ Summary: The Linux kernel (the core of the Linux operating system)
 %define nptlarchs %{all_x86}
 #define nptlarchs noarch
 %define rhbuild @RHBUILD@
+%define linux26 @LINUX26@
 
 # disable build root strip policy
 %define __spec_install_post /usr/lib/rpm/brp-compress || :
@@ -444,7 +445,8 @@ ln -sf linux-%{KVERREL} $RPM_BUILD_ROOT/usr/src/linux
 
 #clean up the destination
 make -s mrproper -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
-rm -rf $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs/*
+rm -rf $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs
+mkdir -p $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs
 cp ../kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@*.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/configs
 cp ../kernel_patches/kernel_configs/kernel-%{kversion}-@LUSTRE_TARGET@-%{_target_cpu}%{dashtargetboard}.config $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/.config
 if grep -q oldconfig_nonint $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/Makefile ; then
@@ -453,7 +455,11 @@ else
 	OLDCONFIG='oldconfig'
 fi
 make -s $OLDCONFIG -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
+%if %{linux26}
+make -s include/asm -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
+%else
 make -s symlinks -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
+%endif
 make -s include/linux/version.h -C $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}
 
 #this generates modversions info which we want to include and we may as
@@ -753,7 +759,6 @@ exit 0
 /usr/src/linux-%{KVERREL}/Makefile
 /usr/src/linux-%{KVERREL}/README
 /usr/src/linux-%{KVERREL}/REPORTING-BUGS
-/usr/src/linux-%{KVERREL}/Rules.make
 /usr/src/linux-%{KVERREL}/arch
 %ifarch sparc
 /usr/src/linux-%{KVERREL}/arch/sparc64
@@ -794,6 +799,14 @@ exit 0
 %dir /usr/src/linux-%{KVERREL}/arch
 %ifarch alpha sparc
 /usr/src/linux-%{KVERREL}/include/math-emu
+%endif
+%if %{linux26}
+%dir /usr/src/linux-%{KVERREL}/crypto
+%dir /usr/src/linux-%{KVERREL}/kdb
+%dir /usr/src/linux-%{KVERREL}/rpmify
+%dir /usr/src/linux-%{KVERREL}/security
+%else
+/usr/src/linux-%{KVERREL}/Rules.make
 %endif
 %endif
 

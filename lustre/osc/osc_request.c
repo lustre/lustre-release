@@ -317,6 +317,8 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                         oa->o_flags == OBD_FL_DELORPHAN);
                 DEBUG_REQ(D_HA, request,
                           "delorphan from OST integration");
+                /* Don't resend the delorphan request */
+                request->rq_no_resend = request->rq_no_delay = 1;
         }
 
         rc = ptlrpc_queue_wait(request);
@@ -2481,7 +2483,8 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type,
                              policy, mode, lockh);
         if (rc) {
-                osc_set_data_with_check(lockh, data);
+                if (!(*flags & LDLM_FL_TEST_LOCK))
+                        osc_set_data_with_check(lockh, data);
                 RETURN(rc);
         }
         /* If we're trying to read, we also search for an existing PW lock.  The

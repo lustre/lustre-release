@@ -1,7 +1,7 @@
-KERNEL=linux-2.6.4-51.8.tar.gz
+KERNEL=linux-2.6.5-12.1.tar.gz
 SERIES=2.6-suse
-VERSION=2.6.4
-EXTRA_VERSION=51.8_lustre
+VERSION=2.6.5
+EXTRA_VERSION=12.1_lustre
 RHBUILD=0
 
 BASE_ARCHS=""

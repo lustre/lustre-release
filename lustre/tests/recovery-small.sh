@@ -221,9 +221,22 @@ test_15() {
 }
 run_test 15 "failed open (-ENOMEM)"
 
+stop_read_ahead() {
+   for f in /proc/fs/lustre/llite/*/read_ahead; do 
+      echo 0 > $f
+   done
+}
+
+start_read_ahead() {
+   for f in /proc/fs/lustre/llite/*/read_ahead; do 
+      echo 1 > $f
+   done
+}
+
 test_16() {
     do_facet client cp /etc/termcap $MOUNT
     sync
+    stop_read_ahead
 
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | OBD_FAIL_ONCE
     sysctl -w lustre.fail_loc=0x80000504
@@ -234,6 +247,7 @@ test_16() {
     # give recovery a chance to finish (shouldn't take long)
     sleep $TIMEOUT
     do_facet client "cmp /etc/termcap $MOUNT/termcap"  || return 2
+    start_read_ahead
 }
 run_test 16 "timeout bulk put, evict client (2732)"
 

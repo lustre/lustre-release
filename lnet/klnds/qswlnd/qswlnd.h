@@ -109,7 +109,8 @@ typedef unsigned long kqsw_csum_t;
 
 #define KQSW_RESCHED                    100     /* # busy loops that forces scheduler to yield */
 
-#define KQSW_OPTIMIZED_GETS             1       /* optimized gets? */
+#define KQSW_OPTIMIZED_GETS             1       /* optimize gets >= this size */
+#define KQSW_OPTIMIZED_PUTS            (32<<10) /* optimize puts >= this size */
 #define KQSW_COPY_SMALL_FWD             0       /* copy small fwd messages to pre-mapped buffer? */
 
 /*
@@ -156,11 +157,17 @@ typedef struct
         int              krx_npages;            /* # pages in receive buffer */
         int              krx_nob;               /* Number Of Bytes received into buffer */
         int              krx_rpc_reply_needed;  /* peer waiting for EKC RPC reply */
-        int              krx_rpc_reply_sent;    /* rpc reply sent */
+        int              krx_rpc_reply_status;  /* what status to send */
+        int              krx_state;             /* what this RX is doing */
         atomic_t         krx_refcount;          /* how to tell when rpc is done */
         kpr_fwd_desc_t   krx_fwd;               /* embedded forwarding descriptor */
         ptl_kiov_t       krx_kiov[KQSW_NRXMSGPAGES_LARGE]; /* buffer frags */
 }  kqswnal_rx_t;
+
+#define KRX_POSTED       1                      /* receiving */
+#define KRX_PARSE        2                      /* ready to be parsed */
+#define KRX_COMPLETING   3                      /* waiting to be completed */
+
 
 typedef struct
 {
@@ -174,7 +181,7 @@ typedef struct
         int               ktx_nmappedpages;     /* # pages mapped for current message */
         int               ktx_port;             /* destination ep port */
         ptl_nid_t         ktx_nid;              /* destination node */
-        void             *ktx_args[2];          /* completion passthru */
+        void             *ktx_args[3];          /* completion passthru */
         char             *ktx_buffer;           /* pre-allocated contiguous buffer for hdr + small payloads */
         unsigned long     ktx_launchtime;       /* when (in jiffies) the transmit was launched */
 
@@ -193,13 +200,16 @@ typedef struct
 } kqswnal_tx_t;
 
 #define KTX_IDLE        0                       /* on kqn_(nblk_)idletxds */
-#define KTX_SENDING     1                       /* local send */
-#define KTX_FORWARDING  2                       /* routing a packet */
-#define KTX_GETTING     3                       /* local optimised get */
+#define KTX_FORWARDING  1                       /* sending a forwarded packet */
+#define KTX_SENDING     2                       /* normal send */
+#define KTX_GETTING     3                       /* sending optimised get */
+#define KTX_PUTTING     4                       /* sending optimised put */
+#define KTX_RDMAING     5                       /* handling optimised put/get */
 
 typedef struct
 {
         /* dynamic tunables... */
+        int                      kqn_optimized_puts;  /* optimized PUTs? */
         int                      kqn_optimized_gets;  /* optimized GETs? */
 #if CONFIG_SYSCTL
         struct ctl_table_header *kqn_sysctl;          /* sysctl interface */
@@ -230,9 +240,6 @@ typedef struct
         struct list_head   kqn_delayedfwds;     /* delayed forwards */
         struct list_head   kqn_delayedtxds;     /* delayed transmits */
 
-        spinlock_t         kqn_statelock;       /* cb_cli/cb_sti */
-        wait_queue_head_t  kqn_yield_waitq;     /* where yield waits */
-        nal_cb_t          *kqn_cb;              /* -> kqswnal_lib */
 #if MULTIRAIL_EKC
         EP_SYS            *kqn_ep;              /* elan system */
         EP_NMH            *kqn_ep_tx_nmh;       /* elan reserved tx vaddrs */
@@ -250,6 +257,9 @@ typedef struct
         ptl_nid_t          kqn_nid_offset;      /* this cluster's NID offset */
         int                kqn_nnodes;          /* this cluster's size */
         int                kqn_elanid;          /* this nodes's elan ID */
+
+        EP_STATUSBLK       kqn_rpc_success;     /* preset RPC reply status blocks */
+        EP_STATUSBLK       kqn_rpc_failed;
 }  kqswnal_data_t;
 
 /* kqn_init state */
@@ -258,21 +268,16 @@ typedef struct
 #define KQN_INIT_LIB            2
 #define KQN_INIT_ALL            3
 
-extern nal_cb_t            kqswnal_lib;
+extern lib_nal_t           kqswnal_lib;
 extern nal_t               kqswnal_api;
 extern kqswnal_tunables_t  kqswnal_tunables;
 extern kqswnal_data_t      kqswnal_data;
-
-/* global pre-prepared replies to keep off the stack */
-extern EP_STATUSBLK    kqswnal_rpc_success;
-extern EP_STATUSBLK    kqswnal_rpc_failed;
 
 extern int kqswnal_thread_start (int (*fn)(void *arg), void *arg);
 extern void kqswnal_rxhandler(EP_RXD *rxd);
 extern int kqswnal_scheduler (void *);
 extern void kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd);
-extern void kqswnal_dma_reply_complete (EP_RXD *rxd);
-extern void kqswnal_requeue_rx (kqswnal_rx_t *krx);
+extern void kqswnal_rx_done (kqswnal_rx_t *krx);
 
 static inline ptl_nid_t
 kqswnal_elanid2nid (int elanid) 
@@ -289,6 +294,12 @@ kqswnal_nid2elanid (ptl_nid_t nid)
                 return (-1);
         
         return (nid - kqswnal_data.kqn_nid_offset);
+}
+
+static inline ptl_nid_t
+kqswnal_rx_nid(kqswnal_rx_t *krx) 
+{
+        return (kqswnal_elanid2nid(ep_rxd_node(krx->krx_rxd)));
 }
 
 static inline int
@@ -313,11 +324,11 @@ static inline kqsw_csum_t kqsw_csum (kqsw_csum_t sum, void *base, int nob)
 }
 #endif
 
-static inline void kqswnal_rx_done (kqswnal_rx_t *krx)
+static inline void kqswnal_rx_decref (kqswnal_rx_t *krx)
 {
         LASSERT (atomic_read (&krx->krx_refcount) > 0);
         if (atomic_dec_and_test (&krx->krx_refcount))
-                kqswnal_requeue_rx(krx);
+                kqswnal_rx_done(krx);
 }
 
 #if MULTIRAIL_EKC

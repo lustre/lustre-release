@@ -27,7 +27,7 @@
 
 #include "gmnal.h"
 
-int gmnal_cb_recv(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, 
+int gmnal_cb_recv(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
 		   unsigned int niov, struct iovec *iov, size_t mlen, 
 		   size_t rlen)
 {
@@ -35,19 +35,19 @@ int gmnal_cb_recv(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	int		status = PTL_OK;
 
 
-	CDEBUG(D_TRACE, "gmnal_cb_recv nal_cb [%p], private[%p], cookie[%p], "
+	CDEBUG(D_TRACE, "gmnal_cb_recv libnal [%p], private[%p], cookie[%p], "
 	       "niov[%d], iov [%p], mlen["LPSZ"], rlen["LPSZ"]\n", 
-	       nal_cb, private, cookie, niov, iov, mlen, rlen);
+	       libnal, private, cookie, niov, iov, mlen, rlen);
 
 	switch(srxd->type) {
 	case(GMNAL_SMALL_MESSAGE):
 		CDEBUG(D_INFO, "gmnal_cb_recv got small message\n");
-		status = gmnal_small_rx(nal_cb, private, cookie, niov, 
+		status = gmnal_small_rx(libnal, private, cookie, niov, 
 				         iov, mlen, rlen);
 	break;
 	case(GMNAL_LARGE_MESSAGE_INIT):
 		CDEBUG(D_INFO, "gmnal_cb_recv got large message init\n");
-		status = gmnal_large_rx(nal_cb, private, cookie, niov, 
+		status = gmnal_large_rx(libnal, private, cookie, niov, 
 					 iov, mlen, rlen);
 	}
 		
@@ -56,7 +56,7 @@ int gmnal_cb_recv(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	return(status);
 }
 
-int gmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, 
+int gmnal_cb_recv_pages(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
 			 unsigned int kniov, ptl_kiov_t *kiov, size_t mlen, 
 			 size_t rlen)
 {
@@ -67,9 +67,9 @@ int gmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	ptl_kiov_t	*kiov_dup = kiov;;
 
 
-	CDEBUG(D_TRACE, "gmnal_cb_recv_pages nal_cb [%p],private[%p], "
+	CDEBUG(D_TRACE, "gmnal_cb_recv_pages libnal [%p],private[%p], "
 	       "cookie[%p], kniov[%d], kiov [%p], mlen["LPSZ"], rlen["LPSZ"]\n",
-	       nal_cb, private, cookie, kniov, kiov, mlen, rlen);
+	       libnal, private, cookie, kniov, kiov, mlen, rlen);
 
 	if (srxd->type == GMNAL_SMALL_MESSAGE) {
 		PORTAL_ALLOC(iovec, sizeof(struct iovec)*kniov);
@@ -98,7 +98,7 @@ int gmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
                         kiov++;
 		}
 		CDEBUG(D_INFO, "calling gmnal_small_rx\n");
-		status = gmnal_small_rx(nal_cb, private, cookie, kniov, 
+		status = gmnal_small_rx(libnal, private, cookie, kniov, 
 				         iovec_dup, mlen, rlen);
 		for (i=0; i<kniov; i++) {
 			kunmap(kiov_dup->kiov_page);
@@ -113,7 +113,7 @@ int gmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 }
 
 
-int gmnal_cb_send(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, 
+int gmnal_cb_send(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
 		   ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid, 
 		   unsigned int niov, struct iovec *iov, size_t len)
 {
@@ -123,24 +123,25 @@ int gmnal_cb_send(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 
 	CDEBUG(D_TRACE, "gmnal_cb_send niov[%d] len["LPSZ"] nid["LPU64"]\n", 
 	       niov, len, nid);
-	nal_data = nal_cb->nal_data;
+	nal_data = libnal->libnal_data;
 	
 	if (GMNAL_IS_SMALL_MESSAGE(nal_data, niov, iov, len)) {
 		CDEBUG(D_INFO, "This is a small message send\n");
-		gmnal_small_tx(nal_cb, private, cookie, hdr, type, nid, pid, 
+		gmnal_small_tx(libnal, private, cookie, hdr, type, nid, pid, 
 			       	niov, iov, len);
 	} else {
 		CDEBUG(D_ERROR, "Large message send it is not supported\n");
-		lib_finalize(nal_cb, private, cookie, PTL_FAIL);
+		lib_finalize(libnal, private, cookie, PTL_FAIL);
 		return(PTL_FAIL);
-		gmnal_large_tx(nal_cb, private, cookie, hdr, type, nid, pid, 
+		gmnal_large_tx(libnal, private, cookie, hdr, type, nid, pid, 
 				niov, iov, len);
 	}
 	return(PTL_OK);
 }
 
-int gmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, 
-			 ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid, 			 unsigned int kniov, ptl_kiov_t *kiov, size_t len)
+int gmnal_cb_send_pages(lib_nal_t *libnal, void *private, lib_msg_t *cookie, 
+			 ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+                         unsigned int kniov, ptl_kiov_t *kiov, size_t len)
 {
 
 	int	i = 0;
@@ -149,7 +150,7 @@ int gmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	ptl_kiov_t	*kiov_dup = kiov;
 
 	CDEBUG(D_TRACE, "gmnal_cb_send_pages nid ["LPU64"] niov[%d] len["LPSZ"]\n", nid, kniov, len);
-	nal_data = nal_cb->nal_data;
+	nal_data = libnal->libnal_data;
 	PORTAL_ALLOC(iovec, kniov*sizeof(struct iovec));
         iovec_dup = iovec;
 	if (GMNAL_IS_SMALL_MESSAGE(nal_data, 0, NULL, len)) {
@@ -168,7 +169,7 @@ int gmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
                         iovec++;
                         kiov++;
 		}
-		gmnal_small_tx(nal_cb, private, cookie, hdr, type, nid, 
+		gmnal_small_tx(libnal, private, cookie, hdr, type, nid, 
 				pid, kniov, iovec_dup, len);
 	} else {
 		CDEBUG(D_ERROR, "Large message send it is not supported yet\n");
@@ -185,7 +186,7 @@ int gmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
                         iovec++;
                         kiov++;
 		}
-		gmnal_large_tx(nal_cb, private, cookie, hdr, type, nid, 
+		gmnal_large_tx(libnal, private, cookie, hdr, type, nid, 
 				pid, kniov, iovec, len);
 	}
 	for (i=0; i<kniov; i++) {
@@ -196,94 +197,7 @@ int gmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie,
 	return(PTL_OK);
 }
 
-int gmnal_cb_read(nal_cb_t *nal_cb, void *private, void *dst, 
-		   user_ptr src, size_t len)
-{
-	gm_bcopy(src, dst, len);
-	return(PTL_OK);
-}
-
-int gmnal_cb_write(nal_cb_t *nal_cb, void *private, user_ptr dst, 
-		    void *src, size_t len)
-{
-	gm_bcopy(src, dst, len);
-	return(PTL_OK);
-}
-
-int gmnal_cb_callback(nal_cb_t *nal_cb, void *private, lib_eq_t *eq, 
-		       ptl_event_t *ev)
-{
-
-	if (eq->event_callback != NULL) {
-		CDEBUG(D_INFO, "found callback\n");
-		eq->event_callback(ev);
-	}
-	
-	return(PTL_OK);
-}
-
-void *gmnal_cb_malloc(nal_cb_t *nal_cb, size_t len)
-{
-	void *ptr = NULL;
-	CDEBUG(D_TRACE, "gmnal_cb_malloc len["LPSZ"]\n", len);
-	PORTAL_ALLOC(ptr, len);
-	return(ptr);
-}
-
-void gmnal_cb_free(nal_cb_t *nal_cb, void *buf, size_t len)
-{
-	CDEBUG(D_TRACE, "gmnal_cb_free :: buf[%p] len["LPSZ"]\n", buf, len);
-	PORTAL_FREE(buf, len);
-	return;
-}
-
-void gmnal_cb_unmap(nal_cb_t *nal_cb, unsigned int niov, struct iovec *iov, 
-		     void **addrkey)
-{
-	return;
-}
-
-int  gmnal_cb_map(nal_cb_t *nal_cb, unsigned int niov, struct iovec *iov, 
-		   void**addrkey)
-{
-	return(PTL_OK);
-}
-
-void gmnal_cb_printf(nal_cb_t *nal_cb, const char *fmt, ...)
-{
-	CDEBUG(D_TRACE, "gmnal_cb_printf\n");
-	printk(fmt);
-	return;
-}
-
-void gmnal_cb_cli(nal_cb_t *nal_cb, unsigned long *flags)
-{
-	gmnal_data_t	*nal_data = (gmnal_data_t*)nal_cb->nal_data;
-
-	spin_lock_irqsave(&nal_data->cb_lock, *flags);
-	return;
-}
-
-void gmnal_cb_sti(nal_cb_t *nal_cb, unsigned long *flags)
-{
-	gmnal_data_t	*nal_data = (gmnal_data_t*)nal_cb->nal_data;
-
-	spin_unlock_irqrestore(&nal_data->cb_lock, *flags);
-	return;
-}
-
-void gmnal_cb_callback(nal_cb_t *nal_cb, void *private, lib_eq_t *eq, ptl_event_t *ev)
-{
-        /* holding cb_lock */
-
-        if (eq->event_callback != NULL)
-                eq->event_callback(ev);
-
-        /* We will wake theads sleeping in yield() here, AFTER the
-         * callback, when we implement blocking yield */
-}
-
-int gmnal_cb_dist(nal_cb_t *nal_cb, ptl_nid_t nid, unsigned long *dist)
+int gmnal_cb_dist(lib_nal_t *libnal, ptl_nid_t nid, unsigned long *dist)
 {
 	CDEBUG(D_TRACE, "gmnal_cb_dist\n");
 	if (dist)

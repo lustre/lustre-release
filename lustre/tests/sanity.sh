@@ -10,6 +10,9 @@ ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 2108
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"24j 48c 48d 58"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+case `uname -r` in
+2.6.*) ALWAYS_EXCEPT="$ALWAYS_EXCEPT 54c 55" # bug 3117
+esac
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
@@ -17,6 +20,7 @@ SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
 TMP=${TMP:-/tmp}
+FSTYPE=${FSTYPE:-ext3}
 
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
@@ -190,11 +194,7 @@ build_test_filter
 echo preparing for tests involving mounts
 EXT2_DEV=${EXT2_DEV:-/tmp/SANITY.LOOP}
 touch $EXT2_DEV
-mke2fs -F $EXT2_DEV 1000 > /dev/null
-
-EXT3_DEV=${EXT3_DEV:-/tmp/SANITY_EXT3_DEV.LOOP}
-touch $EXT3_DEV
-mkfs.ext3 -F $EXT3_DEV 10000 > /dev/null
+mke2fs -j -F $EXT2_DEV 8000 > /dev/null
 
 test_0() {
 	touch $DIR/f
@@ -662,6 +662,12 @@ test_24n() {
     $CHECKSTAT -a ${f}
 }
 run_test 24n "Statting the old file after renameing (Posix rename 2)"
+
+test_24o() {
+	check_kernel_version 37 || return 0
+	rename_many -s 3287 -v -n 10 $DIR
+}
+run_test 24o "rename of files during htree split ==============="
 
 test_25a() {
 	echo '== symlink sanity ============================================='
@@ -1576,7 +1582,7 @@ test_48c() { # bug 2350
 	#set -vx
 	mkdir -p $DIR/d48c/dir
 	cd $DIR/d48c/dir
-	rmdir $DIR/d48c/dir || error "remove cwd $DIR/d48c/dir failed"
+	$TRACE rmdir $DIR/d48c/dir || error "remove cwd $DIR/d48c/dir failed"
 	$TRACE touch foo && error "'touch foo' worked after removing cwd"
 	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
 	$TRACE ls . && error "'ls .' worked after removing cwd"
@@ -1585,7 +1591,7 @@ test_48c() { # bug 2350
 	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
 	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
 	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd" ||true
-	$TRACE cd .. || error "'cd ..' failed after removing cwd"
+	$TRACE cd .. || echo "'cd ..' failed after removing cwd (`pwd)`"
 }
 run_test 48c "Access removed working subdir (should return errors)"
 
@@ -1595,11 +1601,13 @@ test_48d() { # bug 2350
 	#set -vx
 	mkdir -p $DIR/d48d/dir
 	cd $DIR/d48d/dir
-	rm -r $DIR/d48d || error "remove cwd and parent $DIR/d48d failed"
+	pwd
+	ls .
+	$TRACE rm -vr $DIR/d48d || error "remove cwd+parent $DIR/d48d failed"
 	$TRACE touch foo && error "'touch foo' worked after removing cwd"
 	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
 	$TRACE ls . && error "'ls .' worked after removing cwd"
-	$TRACE ls .. && error "'ls ..' worked after removing cwd"
+	$TRACE ls .. && echo "'ls ..' worked after removing cwd" # bug 3415
 	$TRACE cd . && error "'cd .' worked after recreate cwd"
 	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
 	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
@@ -1735,11 +1743,11 @@ run_test 54d "fifo device works in lustre ======================"
 test_55() {
         rm -rf $DIR/d55
         mkdir $DIR/d55
-        mount -t ext3 -o loop,iopen $EXT3_DEV $DIR/d55 || error
+        mount -t $FSTYPE -o loop,iopen $EXT2_DEV $DIR/d55 || error
         touch $DIR/d55/foo
         $IOPENTEST1 $DIR/d55/foo $DIR/d55 || error
         $IOPENTEST2 $DIR/d55 || error
-        echo "check for $EXT3_DEV. Please wait..."
+        echo "check for $EXT2_DEV. Please wait..."
         rm -rf $DIR/d55/*
         umount $DIR/d55 || error
 }

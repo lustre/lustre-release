@@ -1,7 +1,6 @@
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.x
        * bug fixes
-	- clear page cache after eviction (2766)
 	- don't dereference NULL peer_ni in ldlm_handle_ast_error (3258)
 	- don't allow unlinking open directory if it isn't empty (2904)
 	- handle partial page writes in filter; fix 512b direct IO (3138)
@@ -12,7 +11,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * miscellania
 	- drop scimac NAL (unmaintained)
 
-tbd  Cluster File Systems, Inc. <info@clusterfs.com>
+2004-05-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.2
        * bug fixes
 	- don't copy lvb into (possibly NULL) reply on error (2983)
@@ -47,11 +46,20 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- update iopen-2.6 patch with fixes from 2399,2517,2904 (3301)
 	- don't leak open file on MDS after open resend (3325)
 	- serialize filter_precreate and filter_destroy_precreated (3329)
+	- loop device shouldn't call sync_dev() for nul device (3092)
+	- clear page cache after eviction (2766)
+	- resynchronize MDS->OST in background (2824)
+	- refuse to mount the same filesystem twice on same mountpoint (3394)
+	- allow llmount to create routes for mounting behind routers (3320)
+	- push lock cancellation to blocking thread for glimpse ASTs (3409)
+	- don't call osc_set_data_with_check() for TEST_LOCK matches (3159)
+	- fix rare problem with rename on htree directories (3417)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
 	- fix compilation for qswnal for 2.6 kernels (3125)
 	- increase maximum number of MDS request buffers for large systems
 	- change liblustreapi to be useful for external progs like lfsck (3098)
+	- increase local configuration timeout for slow disks (3353)
 
 2004-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.1

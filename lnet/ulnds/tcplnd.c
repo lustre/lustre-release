@@ -55,7 +55,7 @@
  *
  * sends a packet to the peer, after insuring that a connection exists
  */
-ptl_err_t tcpnal_send(nal_cb_t *n,
+ptl_err_t tcpnal_send(lib_nal_t *n,
                       void *private,
                       lib_msg_t *cookie,
                       ptl_hdr_t *hdr,
@@ -68,7 +68,7 @@ ptl_err_t tcpnal_send(nal_cb_t *n,
                       size_t len)
 {
     connection c;
-    bridge b=(bridge)n->nal_data;
+    bridge b=(bridge)n->libnal_data;
     struct iovec tiov[257];
     static pthread_mutex_t send_lock = PTHREAD_MUTEX_INITIALIZER;
     ptl_err_t rc = PTL_OK;
@@ -142,7 +142,7 @@ ptl_err_t tcpnal_send(nal_cb_t *n,
 
 
 /* Function:  tcpnal_recv
- * Arguments: nal_cb_t *nal:     pointer to my nal control block
+ * Arguments: lib_nal_t *nal:    pointer to my nal control block
  *            void *private:     connection pointer passed through
  *                               lib_parse()
  *            lib_msg_t *cookie: passed back to portals library
@@ -154,7 +154,7 @@ ptl_err_t tcpnal_send(nal_cb_t *n,
  * blocking read of the requested data. must drain out the
  * difference of mainpulated and requested lengths from the network
  */
-ptl_err_t tcpnal_recv(nal_cb_t *n,
+ptl_err_t tcpnal_recv(lib_nal_t *n,
                       void *private,
                       lib_msg_t *cookie,
                       unsigned int niov,
@@ -217,7 +217,8 @@ static int from_connection(void *a, void *d)
     ptl_hdr_t hdr;
 
     if (read_connection(c, (unsigned char *)&hdr, sizeof(hdr))){
-        lib_parse(b->nal_cb, &hdr, c);
+        lib_parse(b->lib_nal, &hdr, c);
+        /*TODO: check error status*/
         return(1);
     }
     return(0);
@@ -239,19 +240,19 @@ int tcpnal_init(bridge b)
 {
     manager m;
         
-    b->nal_cb->cb_send=tcpnal_send;
-    b->nal_cb->cb_recv=tcpnal_recv;
+    b->lib_nal->libnal_send=tcpnal_send;
+    b->lib_nal->libnal_recv=tcpnal_recv;
     b->shutdown=tcpnal_shutdown;
     
-    if (!(m=init_connections(PNAL_PORT(b->nal_cb->ni.nid,
-                                       b->nal_cb->ni.pid),
+    if (!(m=init_connections(PNAL_PORT(b->lib_nal->libnal_ni.ni_pid.nid,
+                                       b->lib_nal->libnal_ni.ni_pid.pid),
                              from_connection,b))){
         /* TODO: this needs to shut down the
            newly created junk */
         return(PTL_NAL_FAILED);
     }
     /* XXX cfs hack */
-    b->nal_cb->ni.pid=0;
+    b->lib_nal->libnal_ni.ni_pid.pid=0;
     b->lower=m;
     return(PTL_OK);
 }

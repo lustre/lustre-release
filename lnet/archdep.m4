@@ -218,12 +218,13 @@ if test x$enable_modules != xno ; then
 	fi
 	LUSTRE_MODULE_TRY_MAKE(
 		[#include <linux/version.h>],
-		[LINUXRELEASE=UTS_RELEASE],
+		[char *LINUXRELEASE;
+		 LINUXRELEASE=UTS_RELEASE;],
 		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
 		[test -s kernel-tests/conftest.i],
 		[
 			# LINUXRELEASE="UTS_RELEASE"
-			eval $(grep LINUXRELEASE kernel-tests/conftest.i)
+			eval $(grep "LINUXRELEASE=" kernel-tests/conftest.i)
 		],[
 			AC_MSG_RESULT([unknown])
 			AC_MSG_ERROR([Could not preprocess test program.  Consult config.log for details.])

@@ -190,7 +190,6 @@ typedef struct _gmnal_rxtwe {
 #define NRXTHREADS 10 /* max number of receiver threads */
 
 typedef struct _gmnal_data_t {
-	spinlock_t	cb_lock;
 	spinlock_t 	stxd_lock;
 	struct semaphore stxd_token;
 	gmnal_stxd_t	*stxd;
@@ -205,7 +204,7 @@ typedef struct _gmnal_data_t {
 	gmnal_srxd_t	*srxd;
 	struct gm_hash	*srxd_hash;
 	nal_t		*nal;	
-	nal_cb_t	*nal_cb;
+	lib_nal_t	*libnal;
 	struct gm_port	*gm_port;
 	unsigned int	gm_local_nid;
 	unsigned int	gm_global_nid;
@@ -298,7 +297,6 @@ extern gmnal_data_t	*global_nal_data;
 #define GMNAL_GM_LOCK_INIT(a)		spin_lock_init(&a->gm_lock);
 #define GMNAL_GM_LOCK(a)		spin_lock(&a->gm_lock);
 #define GMNAL_GM_UNLOCK(a)		spin_unlock(&a->gm_lock);
-#define GMNAL_CB_LOCK_INIT(a)		spin_lock_init(&a->cb_lock);
 
 
 /*
@@ -340,39 +338,19 @@ void gmnal_api_unlock(nal_t *, unsigned long *);
  *	CB NAL
  */
 
-int gmnal_cb_send(nal_cb_t *, void *, lib_msg_t *, ptl_hdr_t *,
+int gmnal_cb_send(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *,
 	int, ptl_nid_t, ptl_pid_t, unsigned int, struct iovec *, size_t);
 
-int gmnal_cb_send_pages(nal_cb_t *, void *, lib_msg_t *, ptl_hdr_t *,
+int gmnal_cb_send_pages(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *,
 	int, ptl_nid_t, ptl_pid_t, unsigned int, ptl_kiov_t *, size_t);
 
-int gmnal_cb_recv(nal_cb_t *, void *, lib_msg_t *, 
+int gmnal_cb_recv(lib_nal_t *, void *, lib_msg_t *, 
 	unsigned int, struct iovec *, size_t, size_t);
 
-int gmnal_cb_recv_pages(nal_cb_t *, void *, lib_msg_t *, 
+int gmnal_cb_recv_pages(lib_nal_t *, void *, lib_msg_t *, 
 	unsigned int, ptl_kiov_t *, size_t, size_t);
 
-int gmnal_cb_read(nal_cb_t *, void *private, void *, user_ptr, size_t);
-
-int gmnal_cb_write(nal_cb_t *, void *private, user_ptr, void *, size_t);
-
-int gmnal_cb_callback(nal_cb_t *, void *, lib_eq_t *, ptl_event_t *);
-
-void *gmnal_cb_malloc(nal_cb_t *, size_t);
-
-void gmnal_cb_free(nal_cb_t *, void *, size_t);
-
-void gmnal_cb_unmap(nal_cb_t *, unsigned int, struct iovec*, void **);
-
-int  gmnal_cb_map(nal_cb_t *, unsigned int, struct iovec*, void **); 
-
-void gmnal_cb_printf(nal_cb_t *, const char *fmt, ...);
-
-void gmnal_cb_cli(nal_cb_t *, unsigned long *);
-
-void gmnal_cb_sti(nal_cb_t *, unsigned long *);
-
-int gmnal_cb_dist(nal_cb_t *, ptl_nid_t, unsigned long *);
+int gmnal_cb_dist(lib_nal_t *, ptl_nid_t, unsigned long *);
 
 int gmnal_init(void);
 
@@ -381,22 +359,14 @@ void  gmnal_fini(void);
 
 
 #define GMNAL_INIT_NAL_CB(a)	do {	\
-				a->cb_send = gmnal_cb_send; \
-				a->cb_send_pages = gmnal_cb_send_pages; \
-				a->cb_recv = gmnal_cb_recv; \
-				a->cb_recv_pages = gmnal_cb_recv_pages; \
-				a->cb_read = gmnal_cb_read; \
-				a->cb_write = gmnal_cb_write; \
-				a->cb_callback = gmnal_cb_callback; \
-				a->cb_malloc = gmnal_cb_malloc; \
-				a->cb_free = gmnal_cb_free; \
-				a->cb_map = NULL; \
-				a->cb_unmap = NULL; \
-				a->cb_printf = gmnal_cb_printf; \
-				a->cb_cli = gmnal_cb_cli; \
-				a->cb_sti = gmnal_cb_sti; \
-				a->cb_dist = gmnal_cb_dist; \
-				a->nal_data = NULL; \
+				a->libnal_send = gmnal_cb_send; \
+				a->libnal_send_pages = gmnal_cb_send_pages; \
+				a->libnal_recv = gmnal_cb_recv; \
+				a->libnal_recv_pages = gmnal_cb_recv_pages; \
+				a->libnal_map = NULL; \
+				a->libnal_unmap = NULL; \
+				a->libnal_dist = gmnal_cb_dist; \
+				a->libnal_data = NULL; \
 				} while (0)
 
 
@@ -451,9 +421,9 @@ void		gmnal_remove_rxtwe(gmnal_data_t *);
 /*
  *	Small messages
  */
-int 		gmnal_small_rx(nal_cb_t *, void *, lib_msg_t *, unsigned int, 
+int 		gmnal_small_rx(lib_nal_t *, void *, lib_msg_t *, unsigned int, 
 			        struct iovec *, size_t, size_t);
-int 		gmnal_small_tx(nal_cb_t *, void *, lib_msg_t *, ptl_hdr_t *, 
+int 		gmnal_small_tx(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *, 
 				int, ptl_nid_t, ptl_pid_t, 
 				unsigned int, struct iovec*, int);
 void 		gmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
@@ -463,10 +433,10 @@ void 		gmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
 /*
  *	Large messages
  */
-int 		gmnal_large_rx(nal_cb_t *, void *, lib_msg_t *, unsigned int, 
+int 		gmnal_large_rx(lib_nal_t *, void *, lib_msg_t *, unsigned int, 
 				struct iovec *, size_t, size_t);
 
-int 		gmnal_large_tx(nal_cb_t *, void *, lib_msg_t *, ptl_hdr_t *, 
+int 		gmnal_large_tx(lib_nal_t *, void *, lib_msg_t *, ptl_hdr_t *, 
 				int, ptl_nid_t, ptl_pid_t, unsigned int, 
 				struct iovec*, int);
 

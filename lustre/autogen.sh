@@ -48,7 +48,7 @@ or for RH9 systems you can use:
 
 ftp://fr2.rpmfind.net/linux/redhat/9/en/os/i386/RedHat/RPMS/autoconf-2.57-3.noarch.rpm
 EOF
-	[ "$cmd" = "automake" -a "$required" = "1.7.8" ] && cat >&2 <<EOF
+	[ "$cmd" = "automake-1.7" -a "$required" = "1.7.8" ] && cat >&2 <<EOF
 
 or for RH9 systems you can use:
 
@@ -58,31 +58,33 @@ EOF
 }
 
 check_version() {
+    local tool
     local cmd
     local required
     local version
 
-    cmd=$1
-    required=$2
+    tool=$1
+    cmd=$2
+    required=$3
     echo -n "checking for $cmd $required... "
     if ! $cmd --version >/dev/null ; then
 	error_msg "missing"
     fi
-    version=$($cmd --version | awk "BEGIN { IGNORECASE=1 } /$cmd \(GNU $cmd\)/ { print \$4 }")
+    version=$($cmd --version | awk "BEGIN { IGNORECASE=1 } /$tool \(GNU $tool\)/ { print \$4 }")
     echo "found $version"
     if ! compare_versions "$required" "$version" ; then
 	error_msg "too old"
     fi
 }
 
-check_version automake "1.7.8"
-check_version autoconf "2.57"
+check_version automake automake-1.7 "1.7.8"
+check_version autoconf autoconf "2.57"
 echo "Running aclocal..."
-aclocal
+aclocal-1.7
 echo "Running autoheader..."
 autoheader
 echo "Running automake..."
-automake -a -c
+automake-1.7 -a -c
 echo "Running autoconf..."
 autoconf
 

@@ -77,12 +77,12 @@
 static inline void lustre_daemonize_helper(void)
 {
         LASSERT(current->signal != NULL);
-        current->session = 1;
+        current->signal->session = 1;
         if (current->group_leader)
-                current->group_leader->__pgrp = 1;
+                current->group_leader->signal->pgrp = 1;
         else
                 CERROR("we aren't group leader\n");
-        current->tty = NULL;
+        current->signal->tty = NULL;
 }
 
 static inline int cleanup_group_info(void)

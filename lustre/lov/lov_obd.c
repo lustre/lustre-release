@@ -338,24 +338,20 @@ static int lov_notify(struct obd_device *obd, struct obd_device *watched,
         }
         uuid = &watched->u.cli.cl_import->imp_target_uuid;
 
-        /*
-         * Must notify (MDS) before we mark the OSC as active, so that
-         * the orphan deletion happens without interference from racing
-         * creates.
+        /* Set OSC as active before notifying the observer, so the
+         * observer can use the OSC normally.  
          */
-        if (obd->obd_observer) {
-                /* Pass the notification up the chain. */
-                rc = obd_notify(obd->obd_observer, watched, active);
-                if (rc)
-                        RETURN(rc);
-        }
-
         rc = lov_set_osc_active(&obd->u.lov, uuid, active);
-
         if (rc) {
                 CERROR("%sactivation of %s failed: %d\n",
                        active ? "" : "de", uuid->uuid, rc);
+                RETURN(rc);
         }
+
+        if (obd->obd_observer)
+                /* Pass the notification up the chain. */
+                rc = obd_notify(obd->obd_observer, watched, active);
+
         RETURN(rc);
 }
 
@@ -936,7 +932,7 @@ static int lov_destroy(struct obd_export *exp, struct obdo *oa,
                 err = obd_destroy(lov->tgts[loi->loi_ost_idx].ltd_exp, &tmp,
                                   NULL, oti);
                 if (err && lov->tgts[loi->loi_ost_idx].active) {
-                        CERROR("error: destroying objid "LPX64" subobj "
+                        CDEBUG(D_INODE, "error: destroying objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
                                oa->o_id, loi->loi_id, loi->loi_ost_idx, err);
                         if (!rc)

@@ -43,85 +43,7 @@
 /* the following functions are stubs to satisfy the nal definition
    without doing anything particularily useful*/
 
-static ptl_err_t nal_write(nal_cb_t *nal,
-                           void *private,
-                           user_ptr dst_addr,
-                           void *src_addr,
-                           size_t len)
-{
-    memcpy(dst_addr, src_addr, len);
-    return PTL_OK;
-}
-
-static ptl_err_t nal_read(nal_cb_t * nal,
-                          void *private,
-                          void *dst_addr,
-                          user_ptr src_addr,
-                          size_t len)
-{
-	memcpy(dst_addr, src_addr, len);
-	return PTL_OK;
-}
-
-static void *nal_malloc(nal_cb_t *nal,
-                        size_t len)
-{
-    void *buf =  malloc(len);
-    return buf;
-}
-
-static void nal_free(nal_cb_t *nal,
-                     void *buf,
-                     size_t len)
-{
-    free(buf);
-}
-
-static void nal_printf(nal_cb_t *nal,
-                       const char *fmt,
-                       ...)
-{
-    va_list        ap;
-
-    va_start(ap, fmt);
-    vprintf(fmt, ap);
-    va_end(ap);
-}
-
-
-static void nal_cli(nal_cb_t *nal,
-                    unsigned long *flags)
-{
-    bridge b = (bridge) nal->nal_data;
-    procbridge p = (procbridge) b->local;
-
-    pthread_mutex_lock(&p->mutex);
-}
-
-
-static void nal_sti(nal_cb_t *nal,
-                    unsigned long *flags)
-{
-    bridge b = (bridge)nal->nal_data;
-    procbridge p = (procbridge) b->local;
-
-    pthread_mutex_unlock(&p->mutex);
-}
-
-static void nal_callback(nal_cb_t *nal, void *private,
-                         lib_eq_t *eq, ptl_event_t *ev)
-{
-        bridge b = (bridge)nal->nal_data;
-        procbridge p = (procbridge) b->local;
-
-        /* holding p->mutex */
-        if (eq->event_callback != NULL)
-                eq->event_callback(ev);
-        
-        pthread_cond_broadcast(&p->cond);
-}
-
-static int nal_dist(nal_cb_t *nal,
+static int nal_dist(lib_nal_t *nal,
                     ptl_nid_t nid,
                     unsigned long *dist)
 {
@@ -170,33 +92,25 @@ void *nal_thread(void *z)
     ptl_process_id_t process_id;
     int nal_type;
     
-    b->nal_cb=(nal_cb_t *)malloc(sizeof(nal_cb_t));
-    b->nal_cb->nal_data=b;
-    b->nal_cb->cb_read=nal_read;
-    b->nal_cb->cb_write=nal_write;
-    b->nal_cb->cb_malloc=nal_malloc;
-    b->nal_cb->cb_free=nal_free;
-    b->nal_cb->cb_map=NULL;
-    b->nal_cb->cb_unmap=NULL;
-    b->nal_cb->cb_printf=nal_printf;
-    b->nal_cb->cb_cli=nal_cli;
-    b->nal_cb->cb_sti=nal_sti;
-    b->nal_cb->cb_callback=nal_callback;
-    b->nal_cb->cb_dist=nal_dist;
+    b->lib_nal=(lib_nal_t *)malloc(sizeof(lib_nal_t));
+    b->lib_nal->libnal_data=b;
+    b->lib_nal->libnal_map=NULL;
+    b->lib_nal->libnal_unmap=NULL;
+    b->lib_nal->libnal_dist=nal_dist;
 
     nal_type = args->nia_nal_type;
 
-    /* Wierd, but this sets b->nal_cb->ni.{nid,pid}, which lib_init() is
-     * about to do from the process_id passed to it...*/
+    /* Wierd, but this sets b->lib_nal->libnal_ni.ni_pid.{nid,pid}, which
+     * lib_init() is about to do from the process_id passed to it...*/
     set_address(b,args->nia_requested_pid);
 
-    process_id.pid = b->nal_cb->ni.pid;
-    process_id.nid = b->nal_cb->ni.nid;
+    process_id = b->lib_nal->libnal_ni.ni_pid;
     
     if (nal_table[nal_type]) rc=(*nal_table[nal_type])(b);
     /* initialize the generic 'library' level code */
 
-    rc = lib_init(b->nal_cb, process_id, 
+    rc = lib_init(b->lib_nal, args->nia_apinal, 
+                  process_id, 
                   args->nia_requested_limits, 
                   args->nia_actual_limits);
 

@@ -175,6 +175,27 @@ test_6() {
 }
 run_test 6 "open1, open2, unlink |X| close1 [fail mds] close2"
 
+test_7() {
+    mcreate $MOUNT1/a
+    multiop $MOUNT2/a o_c &
+    pid1=$!
+    multiop $MOUNT1/a o_c &
+    pid2=$!
+    # give multiop a chance to open
+    sleep 1
+    rm -f $MOUNT1/a
+    replay_barrier mds
+    kill -USR1 $pid2
+    wait $pid2 || return 1
+
+    fail mds
+    kill -USR1 $pid1
+    wait $pid1 || return 1
+    [ -e $MOUNT2/a ] && return 2
+    return 0
+}
+run_test 7 "open1, open2, unlink |X| close2 [fail mds] close1"
+
 if [ "$ONLY" != "setup" ]; then
 	equals_msg test complete, cleaning up
 	cleanup

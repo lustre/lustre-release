@@ -74,83 +74,9 @@ static ctl_table ksocknal_top_ctl_table[] = {
 #endif
 
 int
-ksocknal_api_forward(nal_t *nal, int id, void *args, size_t args_len,
-                       void *ret, size_t ret_len)
-{
-        ksock_nal_data_t *k;
-        nal_cb_t *nal_cb;
-
-        k = nal->nal_data;
-        nal_cb = k->ksnd_nal_cb;
-
-        lib_dispatch(nal_cb, k, id, args, ret); /* ksocknal_send needs k */
-        return PTL_OK;
-}
-
-void
-ksocknal_api_lock(nal_t *nal, unsigned long *flags)
-{
-        ksock_nal_data_t *k;
-        nal_cb_t *nal_cb;
-
-        k = nal->nal_data;
-        nal_cb = k->ksnd_nal_cb;
-        nal_cb->cb_cli(nal_cb,flags);
-}
-
-void
-ksocknal_api_unlock(nal_t *nal, unsigned long *flags)
-{
-        ksock_nal_data_t *k;
-        nal_cb_t *nal_cb;
-
-        k = nal->nal_data;
-        nal_cb = k->ksnd_nal_cb;
-        nal_cb->cb_sti(nal_cb,flags);
-}
-
-int
-ksocknal_api_yield(nal_t *nal, unsigned long *flags, int milliseconds)
-{
-	/* NB called holding statelock */
-        wait_queue_t       wait;
-	unsigned long      now = jiffies;
-
-	CDEBUG (D_NET, "yield\n");
-
-	if (milliseconds == 0) {
-                our_cond_resched();
-		return 0;
-	}
-
-	init_waitqueue_entry(&wait, current);
-	set_current_state (TASK_INTERRUPTIBLE);
-	add_wait_queue (&ksocknal_data.ksnd_yield_waitq, &wait);
-
-	ksocknal_api_unlock(nal, flags);
-
-	if (milliseconds < 0)
-		schedule ();
-	else
-		schedule_timeout((milliseconds * HZ) / 1000);
-	
-	ksocknal_api_lock(nal, flags);
-
-	remove_wait_queue (&ksocknal_data.ksnd_yield_waitq, &wait);
-
-	if (milliseconds > 0) {
-		milliseconds -= ((jiffies - now) * 1000) / HZ;
-		if (milliseconds < 0)
-			milliseconds = 0;
-	}
-	
-	return (milliseconds);
-}
-
-int
 ksocknal_set_mynid(ptl_nid_t nid)
 {
-        lib_ni_t *ni = &ksocknal_lib.ni;
+        lib_ni_t *ni = &ksocknal_lib.libnal_ni;
 
         /* FIXME: we have to do this because we call lib_init() at module
          * insertion time, which is before we have 'mynid' available.  lib_init
@@ -159,9 +85,9 @@ ksocknal_set_mynid(ptl_nid_t nid)
          * problem. */
 
         CDEBUG(D_IOCTL, "setting mynid to "LPX64" (old nid="LPX64")\n",
-               nid, ni->nid);
+               nid, ni->ni_pid.nid);
 
-        ni->nid = nid;
+        ni->ni_pid.nid = nid;
         return (0);
 }
 
@@ -1527,14 +1453,18 @@ ksocknal_api_shutdown (nal_t *nal)
 
                 /* flag threads to terminate; wake and wait for them to die */
                 ksocknal_data.ksnd_shuttingdown = 1;
+                mb();
                 wake_up_all (&ksocknal_data.ksnd_autoconnectd_waitq);
                 wake_up_all (&ksocknal_data.ksnd_reaper_waitq);
 
                 for (i = 0; i < SOCKNAL_N_SCHED; i++)
                        wake_up_all(&ksocknal_data.ksnd_schedulers[i].kss_waitq);
 
+                i = 4;
                 while (atomic_read (&ksocknal_data.ksnd_nthreads) != 0) {
-                        CDEBUG (D_NET, "waitinf for %d threads to terminate\n",
+                        i++;
+                        CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* power of 2? */
+                               "waiting for %d threads to terminate\n",
                                 atomic_read (&ksocknal_data.ksnd_nthreads));
                         set_current_state (TASK_UNINTERRUPTIBLE);
                         schedule_timeout (HZ);
@@ -1590,7 +1520,7 @@ ksocknal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
 
         if (nal->nal_refct != 0) {
                 if (actual_limits != NULL)
-                        *actual_limits = ksocknal_lib.ni.actual_limits;
+                        *actual_limits = ksocknal_lib.libnal_ni.ni_actual_limits;
                 /* This module got the first ref */
                 PORTAL_MODULE_USE;
                 return (PTL_OK);
@@ -1613,10 +1543,6 @@ ksocknal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
 
         rwlock_init(&ksocknal_data.ksnd_global_lock);
 
-        ksocknal_data.ksnd_nal_cb = &ksocknal_lib;
-        spin_lock_init (&ksocknal_data.ksnd_nal_cb_lock);
-        init_waitqueue_head(&ksocknal_data.ksnd_yield_waitq);
-        
         spin_lock_init(&ksocknal_data.ksnd_small_fmp.fmp_lock);
         INIT_LIST_HEAD(&ksocknal_data.ksnd_small_fmp.fmp_idle_fmbs);
         INIT_LIST_HEAD(&ksocknal_data.ksnd_small_fmp.fmp_blocked_conns);
@@ -1646,7 +1572,7 @@ ksocknal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         PORTAL_ALLOC(ksocknal_data.ksnd_schedulers,
                      sizeof(ksock_sched_t) * SOCKNAL_N_SCHED);
         if (ksocknal_data.ksnd_schedulers == NULL) {
-                ksocknal_api_shutdown (&ksocknal_api);
+                ksocknal_api_shutdown (nal);
                 return (-ENOMEM);
         }
 
@@ -1666,11 +1592,11 @@ ksocknal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         process_id.pid = 0;
         process_id.nid = 0;
         
-        rc = lib_init(&ksocknal_lib, process_id,
+        rc = lib_init(&ksocknal_lib, nal, process_id,
                       requested_limits, actual_limits);
         if (rc != PTL_OK) {
                 CERROR("lib_init failed: error %d\n", rc);
-                ksocknal_api_shutdown (&ksocknal_api);
+                ksocknal_api_shutdown (nal);
                 return (rc);
         }
 
@@ -1682,7 +1608,7 @@ ksocknal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                 if (rc != 0) {
                         CERROR("Can't spawn socknal scheduler[%d]: %d\n",
                                i, rc);
-                        ksocknal_api_shutdown (&ksocknal_api);
+                        ksocknal_api_shutdown (nal);
                         return (rc);
                 }
         }
@@ -1691,7 +1617,7 @@ ksocknal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                 rc = ksocknal_thread_start (ksocknal_autoconnectd, (void *)((long)i));
                 if (rc != 0) {
                         CERROR("Can't spawn socknal autoconnectd: %d\n", rc);
-                        ksocknal_api_shutdown (&ksocknal_api);
+                        ksocknal_api_shutdown (nal);
                         return (rc);
                 }
         }
@@ -1699,7 +1625,7 @@ ksocknal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         rc = ksocknal_thread_start (ksocknal_reaper, NULL);
         if (rc != 0) {
                 CERROR ("Can't spawn socknal reaper: %d\n", rc);
-                ksocknal_api_shutdown (&ksocknal_api);
+                ksocknal_api_shutdown (nal);
                 return (rc);
         }
 
@@ -1725,7 +1651,7 @@ ksocknal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                         PORTAL_ALLOC(fmb, offsetof(ksock_fmb_t, 
                                                    fmb_kiov[pool->fmp_buff_pages]));
                         if (fmb == NULL) {
-                                ksocknal_api_shutdown(&ksocknal_api);
+                                ksocknal_api_shutdown(nal);
                                 return (-ENOMEM);
                         }
 
@@ -1735,7 +1661,7 @@ ksocknal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                                 fmb->fmb_kiov[j].kiov_page = alloc_page(GFP_KERNEL);
 
                                 if (fmb->fmb_kiov[j].kiov_page == NULL) {
-                                        ksocknal_api_shutdown (&ksocknal_api);
+                                        ksocknal_api_shutdown (nal);
                                         return (-ENOMEM);
                                 }
 
@@ -1749,7 +1675,7 @@ ksocknal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
         rc = libcfs_nal_cmd_register(SOCKNAL, &ksocknal_cmd, NULL);
         if (rc != 0) {
                 CERROR ("Can't initialise command interface (rc = %d)\n", rc);
-                ksocknal_api_shutdown (&ksocknal_api);
+                ksocknal_api_shutdown (nal);
                 return (rc);
         }
 
@@ -1794,14 +1720,8 @@ ksocknal_module_init (void)
         /* check ksnr_connected/connecting field large enough */
         LASSERT(SOCKNAL_CONN_NTYPES <= 4);
         
-        ksocknal_api.startup  = ksocknal_api_startup;
-        ksocknal_api.forward  = ksocknal_api_forward;
-        ksocknal_api.shutdown = ksocknal_api_shutdown;
-        ksocknal_api.lock     = ksocknal_api_lock;
-        ksocknal_api.unlock   = ksocknal_api_unlock;
-        ksocknal_api.nal_data = &ksocknal_data;
-
-        ksocknal_lib.nal_data = &ksocknal_data;
+        ksocknal_api.nal_ni_init = ksocknal_api_startup;
+        ksocknal_api.nal_ni_fini = ksocknal_api_shutdown;
 
         /* Initialise dynamic tunables to defaults once only */
         ksocknal_tunables.ksnd_io_timeout = SOCKNAL_IO_TIMEOUT;

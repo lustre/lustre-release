@@ -32,8 +32,6 @@ struct obd_import;
 struct ldlm_res_id;
 struct ptlrpc_request_set;
 
-void ptlrpc_daemonize(void);
-
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *);
 void lustre_assert_wire_constants(void);
 int ptlrpc_import_in_recovery(struct obd_import *imp);

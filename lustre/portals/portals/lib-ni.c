@@ -25,92 +25,48 @@
 
 #define DEBUG_SUBSYSTEM S_PORTALS
 #include <portals/lib-p30.h>
-#include <portals/arg-blocks.h>
 
 #define MAX_DIST 18446744073709551615ULL
 
-int do_PtlNIStatus(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
+int lib_api_ni_status (nal_t *apinal, ptl_sr_index_t sr_idx,
+                       ptl_sr_value_t *status)
 {
-        /*
-         * Incoming:
-         *      ptl_handle_ni_t interface_in
-         *      ptl_sr_index_t register_in
-         *
-         * Outgoing:
-         *      ptl_sr_value_t          * status_out
-         */
+        lib_nal_t      *nal = apinal->nal_data;
+        lib_ni_t       *ni = &nal->libnal_ni;
+        lib_counters_t *count = &ni->ni_counters;
 
-        PtlNIStatus_in *args = v_args;
-        PtlNIStatus_out *ret = v_ret;
-        lib_ni_t *ni = &nal->ni;
-        lib_counters_t *count = &ni->counters;
-
-        if (!args)
-                return ret->rc = PTL_SEGV;
-
-        ret->rc = PTL_OK;
-        ret->status_out = 0;
-
-        /*
-         * I hate this sort of code....  Hash tables, offset lists?
-         * Treat the counters as an array of ints?
-         */
-        if (args->register_in == PTL_SR_DROP_COUNT)
-                ret->status_out = count->drop_count;
-
-        else if (args->register_in == PTL_SR_DROP_LENGTH)
-                ret->status_out = count->drop_length;
-
-        else if (args->register_in == PTL_SR_RECV_COUNT)
-                ret->status_out = count->recv_count;
-
-        else if (args->register_in == PTL_SR_RECV_LENGTH)
-                ret->status_out = count->recv_length;
-
-        else if (args->register_in == PTL_SR_SEND_COUNT)
-                ret->status_out = count->send_count;
-
-        else if (args->register_in == PTL_SR_SEND_LENGTH)
-                ret->status_out = count->send_length;
-
-        else if (args->register_in == PTL_SR_MSGS_MAX)
-                ret->status_out = count->msgs_max;
-        else
-                ret->rc = PTL_SR_INDEX_INVALID;
-
-        return ret->rc;
+        switch (sr_idx) {
+        case PTL_SR_DROP_COUNT:
+                *status = count->drop_count;
+                return PTL_OK;
+        case PTL_SR_DROP_LENGTH:
+                *status = count->drop_length;
+                return PTL_OK;
+        case PTL_SR_RECV_COUNT:
+                *status = count->recv_count;
+                return PTL_OK;
+        case PTL_SR_RECV_LENGTH:
+                *status = count->recv_length;
+                return PTL_OK;
+        case PTL_SR_SEND_COUNT:
+                *status = count->send_count;
+                return PTL_OK;
+        case PTL_SR_SEND_LENGTH:
+                *status = count->send_length;
+                return PTL_OK;
+        case PTL_SR_MSGS_MAX:
+                *status = count->msgs_max;
+                return PTL_OK;
+        default:
+                *status = 0;
+                return PTL_SR_INDEX_INVALID;
+        }
 }
 
 
-int do_PtlNIDist(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
+int lib_api_ni_dist (nal_t *apinal, ptl_process_id_t *pid, unsigned long *dist)
 {
-        /*
-         * Incoming:
-         *      ptl_handle_ni_t interface_in
-         *      ptl_process_id_t process_in
+        lib_nal_t *nal = apinal->nal_data;
 
-         *
-         * Outgoing:
-         *      unsigned long   * distance_out
-
-         */
-
-        PtlNIDist_in *args = v_args;
-        PtlNIDist_out *ret = v_ret;
-
-        unsigned long dist;
-        ptl_process_id_t id_in = args->process_in;
-        ptl_nid_t nid;
-        int rc;
-
-        nid = id_in.nid;
-
-        if ((rc = nal->cb_dist(nal, nid, &dist)) != 0) {
-                ret->distance_out = (unsigned long) MAX_DIST;
-                return PTL_PROCESS_INVALID;
-        }
-
-        ret->distance_out = dist;
-
-        return ret->rc = PTL_OK;
+        return (nal->libnal_dist(nal, pid->nid, dist));
 }

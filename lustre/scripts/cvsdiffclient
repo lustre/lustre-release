@@ -1,12 +1,27 @@
 #!/bin/bash
+# Put this script and cvs-modified-files.pl into your PATH (~bin is good) and 
+#
+# export CVSEDITOR=cvsdiffclient
+#
+# in your .bashrc and you will get a nice bunch of CVS commit reminders:
+# <merge/land tag information>
+# b=<bug_number>
+# r=<reviewed by>
+#
+# Remember to remove the leading "CVS: " part of the comment before saving
+# your commit comment if you want those entries to be saved.
 
 [ -f .mergeinfo ] && . ./.mergeinfo
 
 FILES=`cvs-modified-files.pl $1`
 TMP=`mktemp /tmp/cvslog-XXXXXXXX`
 if [ -f $TMP ]; then
-	[ -f .mergeinfo ] && \
-		echo "CVS: Update $child from $parent ($date)" >> $TMP
+	if [ -f .mergeinfo ]; then
+		. .mergeinfo
+		[ "$OPERATION" ] || OPERATION=Update
+		[ "$OPERWHERE" ] || OPERWHERE=from
+		echo "CVS: $OPERATION $child $OPERWHERE $parent ($date)" >> $TMP
+	fi
 	echo "CVS: did you update the ChangeLog for a bug fix?" >> $TMP
 	echo "CVS: b=" >> $TMP
 	echo "CVS: r=" >> $TMP

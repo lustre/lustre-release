@@ -32,101 +32,12 @@
  *  LIB functions follow
  *
  */
-ptl_err_t
-ksocknal_read(nal_cb_t *nal, void *private, void *dst_addr,
-              user_ptr src_addr, size_t len)
-{
-        CDEBUG(D_NET, LPX64": reading %ld bytes from %p -> %p\n",
-               nal->ni.nid, (long)len, src_addr, dst_addr);
-
-        memcpy( dst_addr, src_addr, len );
-        return PTL_OK;
-}
-
-ptl_err_t
-ksocknal_write(nal_cb_t *nal, void *private, user_ptr dst_addr,
-               void *src_addr, size_t len)
-{
-        CDEBUG(D_NET, LPX64": writing %ld bytes from %p -> %p\n",
-               nal->ni.nid, (long)len, src_addr, dst_addr);
-
-        memcpy( dst_addr, src_addr, len );
-        return PTL_OK;
-}
-
-void *
-ksocknal_malloc(nal_cb_t *nal, size_t len)
-{
-        void *buf;
-
-        PORTAL_ALLOC(buf, len);
-
-        if (buf != NULL)
-                memset(buf, 0, len);
-
-        return (buf);
-}
-
-void
-ksocknal_free(nal_cb_t *nal, void *buf, size_t len)
-{
-        PORTAL_FREE(buf, len);
-}
-
-void
-ksocknal_printf(nal_cb_t *nal, const char *fmt, ...)
-{
-        va_list ap;
-        char msg[256];
-
-        va_start (ap, fmt);
-        vsnprintf (msg, sizeof (msg), fmt, ap); /* sprint safely */
-        va_end (ap);
-
-        msg[sizeof (msg) - 1] = 0;              /* ensure terminated */
-
-        CDEBUG (D_NET, "%s", msg);
-}
-
-void
-ksocknal_cli(nal_cb_t *nal, unsigned long *flags)
-{
-        ksock_nal_data_t *data = nal->nal_data;
-
-        /* OK to ignore 'flags'; we're only ever serialise threads and
-         * never need to lock out interrupts */
-        spin_lock(&data->ksnd_nal_cb_lock);
-}
-
-void
-ksocknal_sti(nal_cb_t *nal, unsigned long *flags)
-{
-        ksock_nal_data_t *data;
-        data = nal->nal_data;
-
-        /* OK to ignore 'flags'; we're only ever serialise threads and
-         * never need to lock out interrupts */
-        spin_unlock(&data->ksnd_nal_cb_lock);
-}
-
-void
-ksocknal_callback(nal_cb_t *nal, void *private, lib_eq_t *eq, ptl_event_t *ev)
-{
-        /* holding ksnd_nal_cb_lock */
-
-        if (eq->event_callback != NULL)
-                eq->event_callback(ev);
-        
-        if (waitqueue_active(&ksocknal_data.ksnd_yield_waitq))
-                wake_up_all(&ksocknal_data.ksnd_yield_waitq);
-}
-
 int
-ksocknal_dist(nal_cb_t *nal, ptl_nid_t nid, unsigned long *dist)
+ksocknal_dist(lib_nal_t *nal, ptl_nid_t nid, unsigned long *dist)
 {
         /* I would guess that if ksocknal_get_peer (nid) == NULL,
            and we're not routing, then 'nid' is very distant :) */
-        if ( nal->ni.nid == nid ) {
+        if (nal->libnal_ni.ni_pid.nid == nid) {
                 *dist = 0;
         } else {
                 *dist = 1;
@@ -882,8 +793,8 @@ ksocknal_find_connectable_route_locked (ksock_peer_t *peer)
 {
         struct list_head  *tmp;
         ksock_route_t     *route;
-        ksock_route_t     *candidate = NULL;
-        int                found = 0;
+        ksock_route_t     *first_lazy = NULL;
+        int                found_connecting_or_connected = 0;
         int                bits;
         
         list_for_each (tmp, &peer->ksnp_routes) {
@@ -896,7 +807,7 @@ ksocknal_find_connectable_route_locked (ksock_peer_t *peer)
                         /* All typed connections have been established, or
                          * an untyped connection has been established, or
                          * connections are currently being established */
-                        found = 1;
+                        found_connecting_or_connected = 1;
                         continue;
                 }
 
@@ -904,20 +815,24 @@ ksocknal_find_connectable_route_locked (ksock_peer_t *peer)
                 if (!time_after_eq (jiffies, route->ksnr_timeout))
                         continue;
                 
-                /* always do eager routes */
+                /* eager routes always want to be connected */
                 if (route->ksnr_eager)
                         return (route);
 
-                if (candidate == NULL) {
-                        /* If we don't find any other route that is fully
-                         * connected or connecting, the first connectable
-                         * route is returned.  If it fails to connect, it
-                         * will get placed at the end of the list */
-                        candidate = route;
-                }
+                if (first_lazy == NULL)
+                        first_lazy = route;
         }
- 
-        return (found ? NULL : candidate);
+        
+        /* No eager routes need to be connected.  If some connection has
+         * already been established, or is being established there's nothing to
+         * do.  Otherwise we return the first lazy route we found.  If it fails
+         * to connect, it will go to the end of the list. */
+
+        if (!list_empty (&peer->ksnp_conns) ||
+            found_connecting_or_connected)
+                return (NULL);
+        
+        return (first_lazy);
 }
 
 ksock_route_t *
@@ -1028,7 +943,7 @@ ksocknal_launch_packet (ksock_tx_t *tx, ptl_nid_t nid)
 }
 
 ptl_err_t
-ksocknal_sendmsg(nal_cb_t     *nal, 
+ksocknal_sendmsg(lib_nal_t     *nal, 
                  void         *private, 
                  lib_msg_t    *cookie,
                  ptl_hdr_t    *hdr, 
@@ -1125,7 +1040,7 @@ ksocknal_sendmsg(nal_cb_t     *nal,
 }
 
 ptl_err_t
-ksocknal_send (nal_cb_t *nal, void *private, lib_msg_t *cookie,
+ksocknal_send (lib_nal_t *nal, void *private, lib_msg_t *cookie,
                ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
                unsigned int payload_niov, struct iovec *payload_iov,
                size_t payload_offset, size_t payload_len)
@@ -1137,7 +1052,7 @@ ksocknal_send (nal_cb_t *nal, void *private, lib_msg_t *cookie,
 }
 
 ptl_err_t
-ksocknal_send_pages (nal_cb_t *nal, void *private, lib_msg_t *cookie, 
+ksocknal_send_pages (lib_nal_t *nal, void *private, lib_msg_t *cookie, 
                      ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
                      unsigned int payload_niov, ptl_kiov_t *payload_kiov, 
                      size_t payload_offset, size_t payload_len)
@@ -1159,7 +1074,7 @@ ksocknal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
                 fwd->kprfd_gateway_nid, fwd->kprfd_target_nid);
 
         /* I'm the gateway; must be the last hop */
-        if (nid == ksocknal_lib.ni.nid)
+        if (nid == ksocknal_lib.libnal_ni.ni_pid.nid)
                 nid = fwd->kprfd_target_nid;
 
         /* setup iov for hdr */
@@ -1544,7 +1459,8 @@ ksocknal_process_receive (ksock_conn_t *conn)
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_HEADER:
                 if (conn->ksnc_hdr.type != HTON__u32(PTL_MSG_HELLO) &&
-                    NTOH__u64(conn->ksnc_hdr.dest_nid) != ksocknal_lib.ni.nid) {
+                    NTOH__u64(conn->ksnc_hdr.dest_nid) != 
+                    ksocknal_lib.libnal_ni.ni_pid.nid) {
                         /* This packet isn't for me */
                         ksocknal_fwd_parse (conn);
                         switch (conn->ksnc_rx_state) {
@@ -1561,7 +1477,13 @@ ksocknal_process_receive (ksock_conn_t *conn)
                 }
 
                 /* sets wanted_len, iovs etc */
-                lib_parse(&ksocknal_lib, &conn->ksnc_hdr, conn);
+                rc = lib_parse(&ksocknal_lib, &conn->ksnc_hdr, conn);
+
+                if (rc != PTL_OK) {
+                        /* I just received garbage: give up on this conn */
+                        ksocknal_close_conn_and_siblings (conn, rc);
+                        return (-EPROTO);
+                }
 
                 if (conn->ksnc_rx_nob_wanted != 0) { /* need to get payload? */
                         conn->ksnc_rx_state = SOCKNAL_RX_BODY;
@@ -1608,7 +1530,7 @@ ksocknal_process_receive (ksock_conn_t *conn)
 }
 
 ptl_err_t
-ksocknal_recv (nal_cb_t *nal, void *private, lib_msg_t *msg,
+ksocknal_recv (lib_nal_t *nal, void *private, lib_msg_t *msg,
                unsigned int niov, struct iovec *iov, 
                size_t offset, size_t mlen, size_t rlen)
 {
@@ -1636,7 +1558,7 @@ ksocknal_recv (nal_cb_t *nal, void *private, lib_msg_t *msg,
 }
 
 ptl_err_t
-ksocknal_recv_pages (nal_cb_t *nal, void *private, lib_msg_t *msg,
+ksocknal_recv_pages (lib_nal_t *nal, void *private, lib_msg_t *msg,
                      unsigned int niov, ptl_kiov_t *kiov, 
                      size_t offset, size_t mlen, size_t rlen)
 {
@@ -2029,7 +1951,7 @@ ksocknal_hello (struct socket *sock, ptl_nid_t *nid, int *type,
         hmv->version_major = __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR);
         hmv->version_minor = __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR);
 
-        hdr.src_nid = __cpu_to_le64 (ksocknal_lib.ni.nid);
+        hdr.src_nid = __cpu_to_le64 (ksocknal_lib.libnal_ni.ni_pid.nid);
         hdr.type    = __cpu_to_le32 (PTL_MSG_HELLO);
 
         hdr.msg.hello.type = __cpu_to_le32 (*type);
@@ -2698,19 +2620,11 @@ ksocknal_reaper (void *arg)
         return (0);
 }
 
-nal_cb_t ksocknal_lib = {
-        nal_data:       &ksocknal_data,                /* NAL private data */
-        cb_send:         ksocknal_send,
-        cb_send_pages:   ksocknal_send_pages,
-        cb_recv:         ksocknal_recv,
-        cb_recv_pages:   ksocknal_recv_pages,
-        cb_read:         ksocknal_read,
-        cb_write:        ksocknal_write,
-        cb_malloc:       ksocknal_malloc,
-        cb_free:         ksocknal_free,
-        cb_printf:       ksocknal_printf,
-        cb_cli:          ksocknal_cli,
-        cb_sti:          ksocknal_sti,
-        cb_callback:     ksocknal_callback,
-        cb_dist:         ksocknal_dist
+lib_nal_t ksocknal_lib = {
+        libnal_data:       &ksocknal_data,      /* NAL private data */
+        libnal_send:        ksocknal_send,
+        libnal_send_pages:  ksocknal_send_pages,
+        libnal_recv:        ksocknal_recv,
+        libnal_recv_pages:  ksocknal_recv_pages,
+        libnal_dist:        ksocknal_dist
 };

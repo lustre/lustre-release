@@ -7,12 +7,6 @@
 #include <linux/libcfs.h>
 #define PORTAL_DEBUG
 
-#ifndef offsetof
-# define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
-#endif
-
-#define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
-
 #ifdef __KERNEL__
 # include <linux/vmalloc.h>
 # include <linux/time.h>
@@ -647,7 +641,6 @@ enum {
         TCPNAL    = 5,
         ROUTER    = 6,
         IBNAL     = 7,
-        CRAY_KB_ERNAL = 8,
         NAL_ENUM_END_MARKER
 };
 

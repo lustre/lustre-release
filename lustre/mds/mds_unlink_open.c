@@ -149,7 +149,7 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
         rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti);
         obdo_free(oa);
         if (rc)
-                CERROR("destroy orphan objid 0x"LPX64" on ost error "
+                CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
                        "%d\n", lsm->lsm_object_id, rc);
 out_free_memmd:
         obd_free_memmd(mds->mds_osc_exp, &lsm);
@@ -320,7 +320,7 @@ int mds_cleanup_orphans(struct obd_device *obd)
                         item ++;
                         CWARN("removed orphan %s from MDS and OST\n", d_name);
                 } else {
-                        CERROR("removed orphan %s from MDS and OST failed,"
+                        CDEBUG(D_INODE, "removed orphan %s from MDS/OST failed,"
                                " rc = %d\n", d_name, rc);
                         rc = 0;
                 }

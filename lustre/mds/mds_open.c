@@ -1178,6 +1178,12 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                 int stripe_count = 0;
                 LASSERT(rc == 0); /* mds_put_write_access must have succeeded */
 
+                if (obd->obd_recovering) {
+                        CDEBUG(D_HA, "not remove orphan %s until recovery"
+                               " is over\n", fidname);
+                        GOTO(out, rc);
+                }
+
                 CDEBUG(D_HA, "destroying orphan object %s\n", fidname);
 
                 /* Sadly, there is no easy way to save pending_child from

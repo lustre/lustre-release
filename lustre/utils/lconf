@@ -2852,7 +2852,7 @@ def sys_optimize_elan ():
                  "/proc/qsnet/elan4/config/elan4_mainint_punt_loops"]
     for p in procfiles:
         if os.access(p, os.R_OK):
-            run ("echo 0 > " + p)
+            run ("echo 1 > " + p)
 
 def sys_set_ptldebug(ptldebug):
     if config.ptldebug:

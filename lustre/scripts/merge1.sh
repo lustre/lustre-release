@@ -27,12 +27,12 @@ module=lustre
 
 case $parent in
   HEAD) : ;;
-  b_*|b1*) : ;;
+  b_*|b[1-4]*) : ;;
   *) parent="b_$parent" ;;
 esac
 case $child in
   HEAD) : ;;
-  b_*|b1*) : ;;
+  b_*|b[1-4]*) : ;;
   *) child="b_$child"
 esac
 
@@ -40,6 +40,18 @@ if [ "$child" != "HEAD" -a "`cat CVS/Tag 2> /dev/null`" != "T$child" ]; then
 	echo "This script must be run within the $child branch"
 	exit 1
 fi
+
+TEST_FILE=${TEST_FILE:-ChangeLog} # does this need to be smarter?
+check_tag() {
+	[ -z "$1" ] && echo "check_tag() missing arg" && exit3
+	[ "$1" = "HEAD" ] && return
+	$CVS log $TEST_FILE | grep -q "	$1: " && return
+	echo "$0: tag $1 not found in $TEST_FILE"
+	exit 2
+}
+
+check_tag $parent
+check_tag ${CHILD}_BASE
 
 cat << EOF > .mergeinfo
 parent=$parent
@@ -49,6 +61,8 @@ CHILD=$CHILD
 date=$date
 module=$module
 CONFLICTS=$CONFLICTS
+OPERATION=Merge
+OPERWHERE=from
 EOF
 
 echo PARENT: $PARENT parent: $parent CHILD: $CHILD child: $child date: $date

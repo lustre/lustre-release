@@ -77,8 +77,10 @@ static inline char *strdup(const char *str)
 #endif
 
 #ifdef __KERNEL__
+# define NTOH__u16(var) le16_to_cpu(var)
 # define NTOH__u32(var) le32_to_cpu(var)
 # define NTOH__u64(var) le64_to_cpu(var)
+# define HTON__u16(var) cpu_to_le16(var)
 # define HTON__u32(var) cpu_to_le32(var)
 # define HTON__u64(var) cpu_to_le64(var)
 #else
@@ -92,8 +94,10 @@ static inline char *strdup(const char *str)
        };       \
        (ret);     \
     })
+# define NTOH__u16(var) (var)
 # define NTOH__u32(var) (var)
 # define NTOH__u64(var) (expansion_u64(var))
+# define HTON__u16(var) (var)
 # define HTON__u32(var) (var)
 # define HTON__u64(var) (expansion_u64(var))
 #endif

@@ -66,6 +66,8 @@ nal_t *ptl_hndl2nal(ptl_handle_any_t *handle)
          * invalidated out from under her (or worse, swapped for a
          * completely different interface!) */
 
+        LASSERT (ptl_init);
+
         if (((idx ^ NI_HANDLE_MAGIC) & ~NI_HANDLE_MASK) != 0)
                 return NULL;
 
@@ -112,12 +114,17 @@ void ptl_unregister_nal (ptl_interface_t interface)
         ptl_mutex_exit();
 }
 
-int ptl_ni_init(void)
+int PtlInit(int *max_interfaces)
 {
+        LASSERT(!strcmp(ptl_err_str[PTL_MAX_ERRNO], "PTL_MAX_ERRNO"));
+
         /* If this assertion fails, we need more bits in NI_HANDLE_MASK and
          * to shift NI_HANDLE_MAGIC left appropriately */
         LASSERT (NAL_MAX_NR <= (NI_HANDLE_MASK + 1));
         
+        if (max_interfaces != NULL)
+                *max_interfaces = NAL_MAX_NR;
+
         ptl_mutex_enter();
 
         if (!ptl_init) {
@@ -143,7 +150,7 @@ int ptl_ni_init(void)
         return PTL_OK;
 }
 
-void ptl_ni_fini(void)
+void PtlFini(void)
 {
         nal_t  *nal;
         int     i;
@@ -160,7 +167,7 @@ void ptl_ni_fini(void)
                         if (nal->nal_refct != 0) {
                                 CWARN("NAL %d has outstanding refcount %d\n",
                                       i, nal->nal_refct);
-                                nal->shutdown(nal);
+                                nal->nal_ni_fini(nal);
                         }
                         
                         ptl_nal_table[i] = NULL;
@@ -202,9 +209,11 @@ int PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
         }
 
         nal = ptl_nal_table[interface];
-
+        nal->nal_handle.nal_idx = (NI_HANDLE_MAGIC & ~NI_HANDLE_MASK) | interface;
+        nal->nal_handle.cookie = 0;
+        
         CDEBUG(D_OTHER, "Starting up NAL (%d) refs %d\n", interface, nal->nal_refct);
-        rc = nal->startup(nal, requested_pid, desired_limits, actual_limits);
+        rc = nal->nal_ni_init(nal, requested_pid, desired_limits, actual_limits);
 
         if (rc != PTL_OK) {
                 CERROR("Error %d starting up NAL %d, refs %d\n", rc,
@@ -218,10 +227,11 @@ int PtlNIInit(ptl_interface_t interface, ptl_pid_t requested_pid,
         }
         
         nal->nal_refct++;
-        handle->nal_idx = (NI_HANDLE_MAGIC & ~NI_HANDLE_MASK) | interface;
+        *handle = nal->nal_handle;
 
  out:
         ptl_mutex_exit ();
+
         return rc;
 }
 
@@ -248,15 +258,8 @@ int PtlNIFini(ptl_handle_ni_t ni)
         nal->nal_refct--;
 
         /* nal_refct == 0 tells nal->shutdown to really shut down */
-        nal->shutdown(nal);
+        nal->nal_ni_fini(nal);
 
         ptl_mutex_exit ();
-        return PTL_OK;
-}
-
-int PtlNIHandle(ptl_handle_any_t handle_in, ptl_handle_ni_t * ni_out)
-{
-        *ni_out = handle_in;
-
         return PTL_OK;
 }

@@ -2110,33 +2110,59 @@ static int mds_postsetup(struct obd_device *obd)
 err_cleanup:
         mds_lov_clean(obd);
 err_llog:
-        obd_llog_cleanup(llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT));
+        obd_llog_cleanup(llog_get_context(&obd->obd_llogs,
+                                          LLOG_CONFIG_ORIG_CTXT));
         RETURN(rc);
 }
 
-static int mds_postrecov(struct obd_device *obd)
-
+int mds_postrecov(struct obd_device *obd)
 {
+        struct mds_obd *mds = &obd->u.mds;
         struct llog_ctxt *ctxt;
-        int rc, rc2;
+        int rc, item = 0;
         ENTRY;
 
         LASSERT(!obd->obd_recovering);
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_UNLINK_ORIG_CTXT);
         LASSERT(ctxt != NULL);
 
-        rc = llog_connect(ctxt, obd->u.mds.mds_lov_desc.ld_tgt_count,
-                          NULL, NULL, NULL);
-        if (rc != 0) {
-                CERROR("faild at llog_origin_connect: %d\n", rc);
+        /* set nextid first, so we are sure it happens */
+        rc = mds_lov_set_nextid(obd);
+        if (rc) {
+                CERROR("%s: mds_lov_set_nextid failed\n", obd->obd_name);
+                GOTO(out, rc);
         }
 
+        /* clean PENDING dir */
         rc = mds_cleanup_orphans(obd);
+        if (rc < 0)
+                GOTO(out, rc);
+        item = rc;
 
-        rc2 = mds_lov_set_nextid(obd);
-        if (rc2 == 0)
-                rc2 = rc;
-        RETURN(rc2);
+        rc = llog_connect(ctxt, obd->u.mds.mds_lov_desc.ld_tgt_count,
+                          NULL, NULL, NULL);
+        if (rc) {
+                CERROR("%s: failed at llog_origin_connect: %d\n", 
+                       obd->obd_name, rc);
+                GOTO(out, rc);
+        }
+
+        /* remove the orphaned precreated objects */
+        rc = mds_lov_clearorphans(mds, NULL /* all OSTs */);
+        if (rc)
+                GOTO(err_llog, rc);
+
+out:
+        RETURN(rc < 0 ? rc : item);
+
+err_llog:
+        /* cleanup all llogging subsystems */
+        rc = obd_llog_finish(obd, &obd->obd_llogs,
+                             mds->mds_lov_desc.ld_tgt_count);
+        if (rc)
+                CERROR("%s: failed to cleanup llogging subsystems\n",
+                        obd->obd_name);
+        goto out;
 }
 
 int mds_lov_clean(struct obd_device *obd)
