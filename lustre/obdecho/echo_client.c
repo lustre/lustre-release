@@ -949,14 +949,19 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                         if (page == NULL && lnb[i].rc == 0)
                                 continue;
 
+                        if (oa->o_id == ECHO_PERSISTENT_OBJID)
+                                continue;
+
                         if (rw == OBD_BRW_WRITE)
-                                echo_page_debug_setup(lsm, page, rw, oa->o_id,
-                                                      rnb[i].offset,
-                                                      rnb[i].len);
+                                echo_client_page_debug_setup(lsm, page, rw,
+                                                             oa->o_id,
+                                                             rnb[i].offset,
+                                                             rnb[i].len);
                         else
-                                echo_page_debug_check(lsm, page, oa->o_id,
-                                                      rnb[i].offset,
-                                                      rnb[i].len);
+                                echo_client_page_debug_check(lsm, page,
+                                                             oa->o_id,
+                                                             rnb[i].offset,
+                                                             rnb[i].len);
                 }
 
                 ret = obd_commitrw(rw, exp, oa, 1, &ioo, npages, lnb, oti, ret);
