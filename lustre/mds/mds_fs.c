@@ -101,9 +101,9 @@ int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
                 (cl_idx * le16_to_cpu(mds->mds_server_data->msd_client_size));
 
         if (new_client) {
+                struct file *file = mds->mds_rcvd_filp;
                 struct lvfs_run_ctxt saved;
                 loff_t off = med->med_off;
-                struct file *file = mds->mds_rcvd_filp;
                 int rc;
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
@@ -124,11 +124,11 @@ int mds_client_free(struct obd_export *exp, int clear_client)
 {
         struct mds_export_data *med = &exp->exp_mds_data;
         struct mds_obd *mds = &exp->exp_obd->u.mds;
+        unsigned long *bitmap = mds->mds_client_bitmap;
         struct obd_device *obd = exp->exp_obd;
         struct mds_client_data zero_mcd;
         struct lvfs_run_ctxt saved;
         int rc;
-        unsigned long *bitmap = mds->mds_client_bitmap;
 
         if (!med->med_mcd)
                 RETURN(0);
@@ -174,7 +174,7 @@ int mds_client_free(struct obd_export *exp, int clear_client)
          * transactions have been committed. */
         mds_update_server_data(exp->exp_obd, 1);
 
- free_and_out:
+free_and_out:
         OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
         return 0;
 }
@@ -233,11 +233,11 @@ static int mds_read_last_fid(struct obd_device *obd, struct file *file)
 
 static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
 {
+        unsigned long last_rcvd_size = file->f_dentry->d_inode->i_size;
         struct mds_obd *mds = &obd->u.mds;
-        struct mds_server_data *msd;
+        struct mds_server_data *msd = NULL;
         struct mds_client_data *mcd = NULL;
         loff_t off = 0;
-        unsigned long last_rcvd_size = file->f_dentry->d_inode->i_size;
         __u64 mount_count;
         int cl_idx, rc = 0;
         ENTRY;
@@ -461,35 +461,32 @@ int mds_fs_setup_rootid(struct obd_device *obd)
         void *handle;
         struct inode *inode;
         struct dentry *dentry;
-        struct lustre_id rootid;
         struct mds_obd *mds = &obd->u.mds;
         ENTRY;
 
-        memcpy(&rootid, &mds->mds_rootid, sizeof(rootid));
-        
         /* getting root directory and setup its fid. */
-        dentry = mds_id2dentry(obd, &rootid, NULL);
+        dentry = mds_id2dentry(obd, &mds->mds_rootid, NULL);
         if (IS_ERR(dentry)) {
-                CERROR("Can't find ROOT, err = %d\n",
-                       (int)PTR_ERR(dentry));
+                CERROR("Can't find ROOT by "DLID4", err = %d\n",
+                       OLID4(&mds->mds_rootid), (int)PTR_ERR(dentry));
                 RETURN(PTR_ERR(dentry));
         }
 
         inode = dentry->d_inode;
         LASSERT(dentry->d_inode);
 
-        rc = mds_pack_inode2id(obd, &rootid, inode, 1);
+        rc = mds_pack_inode2id(obd, &mds->mds_rootid, inode, 1);
         if (rc < 0) {
                 if (rc != -ENODATA)
-                        goto out_dentry;
+                        GOTO(out_dentry, rc);
         } else {
                 /*
                  * rootid is filled by mds_read_inode_sid(), so we do not need
                  * to allocate it and update. The only thing we need to check is
                  * mds_num.
                  */
-                LASSERT(id_group(&rootid) == mds->mds_num);
-                mds_set_last_fid(obd, id_fid(&rootid));
+                LASSERT(id_group(&mds->mds_rootid) == mds->mds_num);
+                mds_set_last_fid(obd, id_fid(&mds->mds_rootid));
                 GOTO(out_dentry, rc);
         }
 
@@ -504,7 +501,7 @@ int mds_fs_setup_rootid(struct obd_device *obd)
         }
         
         down(&inode->i_sem);
-        rc = mds_alloc_inode_sid(obd, inode, handle, &rootid);
+        rc = mds_alloc_inode_sid(obd, inode, handle, &mds->mds_rootid);
         up(&inode->i_sem);
         
         if (rc) {
@@ -517,14 +514,13 @@ int mds_fs_setup_rootid(struct obd_device *obd)
         if (rc)
                 CERROR("fsfilt_commit() failed, rc = %d\n", rc);
 
+        EXIT;
 out_dentry:
         l_dput(dentry);
-        if (rc == 0) {
-                memcpy(&mds->mds_rootid, &rootid, sizeof(rootid));
+        if (rc == 0)
                 CWARN("%s: rootid: "DLID4"\n", obd->obd_name,
-                      OLID4(&rootid));
-        }
-        RETURN(rc);
+                      OLID4(&mds->mds_rootid));
+        return rc;
 }
 
 /*

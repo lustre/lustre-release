@@ -2170,6 +2170,7 @@ static void filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
 
         OBD_ALLOC(doa, sizeof(*doa));
+	doa = obdo_alloc();
         if (doa == NULL) {
                 CERROR("cannot allocate doa, error %d\n",
                        -ENOMEM);
@@ -2177,7 +2178,6 @@ static void filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
                 return;
         }
 
-        memset(doa, 0, sizeof(*doa));
         doa->o_mode = S_IFREG;
         doa->o_gr = oa->o_gr;
         doa->o_valid = oa->o_valid & (OBD_MD_FLGROUP | OBD_MD_FLID);
@@ -2209,7 +2209,7 @@ static void filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
 
         EXIT;
 out_free_doa:
-        OBD_FREE(doa, sizeof(*doa));
+        obdo_free(doa);
 }
 
 /* returns a negative error or a nonnegative number of files to create */

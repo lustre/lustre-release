@@ -1826,11 +1826,12 @@ int lmv_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lmv_obd *lmv = &obd->u.lmv;
-        int mea_size;
+        struct mea *meap, *lsmp;
+        int mea_size, i;
         ENTRY;
 
-	mea_size = sizeof(struct lustre_id) * 
-                lmv->desc.ld_tgt_count + sizeof(struct mea);
+	mea_size = (sizeof(struct lustre_id) * 
+                    lmv->desc.ld_tgt_count) + sizeof(struct mea);
         if (!lmmp)
                 RETURN(mea_size);
 
@@ -1849,8 +1850,18 @@ int lmv_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         if (!lsm)
                 RETURN(mea_size);
 
-#warning "MEA packing/convertation must be here! -bzzz"
-        memcpy(*lmmp, lsm, mea_size);
+        lsmp = (struct mea *)lsm;
+        meap = (struct mea *)*lmmp;
+
+        meap->mea_magic = cpu_to_le32(lsmp->mea_magic);
+        meap->mea_count = cpu_to_le32(lsmp->mea_count);
+        meap->mea_master = cpu_to_le32(lsmp->mea_master);
+
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                meap->mea_ids[i] = meap->mea_ids[i];
+                id_cpu_to_le(&meap->mea_ids[i]);
+        }
+
         RETURN(mea_size);
 }
 
@@ -1858,10 +1869,10 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **mem_tgt,
                  struct lov_mds_md *disk_src, int mdsize)
 {
         struct obd_device *obd = class_exp2obd(exp);
+        struct mea **tmea = (struct mea **)mem_tgt;
+        struct mea *mea = (struct mea *)disk_src;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct mea **tmea = (struct mea **) mem_tgt;
-        struct mea *mea = (void *) disk_src;
-        int mea_size;
+        int mea_size, i;
         ENTRY;
 
 	mea_size = sizeof(struct lustre_id) * 
@@ -1883,8 +1894,15 @@ int lmv_unpackmd(struct obd_export *exp, struct lov_stripe_md **mem_tgt,
         if (!disk_src)
                 RETURN(mea_size);
 
-#warning "MEA unpacking/convertation must be here! -bzzz"
-        memcpy(*tmea, mea, mdsize);
+        (*tmea)->mea_magic = le32_to_cpu(mea->mea_magic);
+        (*tmea)->mea_count = le32_to_cpu(mea->mea_count);
+        (*tmea)->mea_master = le32_to_cpu(mea->mea_master);
+
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                (*tmea)->mea_ids[i] = mea->mea_ids[i];
+                id_le_to_cpu(&(*tmea)->mea_ids[i]);
+        }
+
         RETURN(mea_size);
 }
 

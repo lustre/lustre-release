@@ -133,7 +133,7 @@ int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
          * missing objects below this ID, they will be created.  If it finds
          * objects above this ID, they will be removed.
          */
-        OBD_ALLOC(oa, sizeof(*oa));
+	oa = obdo_alloc();
         if (oa == NULL)
                 RETURN(-ENOMEM);
         
@@ -147,7 +147,7 @@ int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
                 oa->o_valid |= OBD_MD_FLINLINE;
         }
         rc = obd_create(mds->mds_lov_exp, oa, &empty_ea, &oti);
-        OBD_FREE(oa, sizeof(*oa));
+        obdo_free(oa);
         RETURN(rc);
 }
 
@@ -848,10 +848,10 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
                           struct lustre_msg *msg, int offset)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_export *osc_exp = mds->mds_lov_exp;
+        struct obd_export *lov_exp = mds->mds_lov_exp;
         struct lov_mds_md *lmm= NULL;
         struct lov_stripe_md *lsm = NULL;
-        struct obdo *oa;
+        struct obdo *oa = NULL;
         struct obd_trans_info oti = {0};
         obd_valid valid = 0;
         int lmm_size = 0, lsm_size = 0, err, rc;
@@ -872,7 +872,7 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
         }
         lmm_size = msg->buflens[offset];
 
-        rc = obd_unpackmd(osc_exp, &lsm, lmm, lmm_size);
+        rc = obd_unpackmd(lov_exp, &lsm, lmm, lmm_size);
         if (rc < 0)
                 RETURN(0);
 
@@ -897,7 +897,7 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
                 OBD_MD_FLCTIME;
         obdo_from_inode(oa, inode, valid);
 
-        rc = obd_revalidate_md(osc_exp, oa, lsm, &oti);
+        rc = obd_revalidate_md(lov_exp, oa, lsm, &oti);
         if (rc == 0)
                 GOTO(out_oa, rc);
         if (rc < 0) {
@@ -906,7 +906,7 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
                 GOTO(out_oa, rc);
         }
 
-        rc = obd_packmd(osc_exp, &lmm, lsm);
+        rc = obd_packmd(lov_exp, &lmm, lsm);
         if (rc < 0)
                 GOTO(out_oa, rc);
         lmm_size = rc;
@@ -926,6 +926,6 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
 out_oa:
         obdo_free(oa);
 out_lsm:
-        obd_free_memmd(osc_exp, &lsm);
+        obd_free_memmd(lov_exp, &lsm);
         return rc;
 }

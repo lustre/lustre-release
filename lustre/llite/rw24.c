@@ -100,7 +100,6 @@ static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
                         POISON_PAGE(iobuf->maplist[i], 0x0d);
         }
 
-
         oa = obdo_alloc();
         if (oa == NULL) {
                 ptlrpc_set_destroy(set);

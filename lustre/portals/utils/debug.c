@@ -620,6 +620,7 @@ static struct mod_paths {
         {"mds", "lustre/mds"},
         {"mdc", "lustre/mdc"},
         {"llite", "lustre/llite"},
+        {"ldiskfs", "lustre/ldiskfs"},
         {"smfs", "lustre/smfs"},
         {"obdecho", "lustre/obdecho"},
         {"ldlm", "lustre/ldlm"},
