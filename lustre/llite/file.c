@@ -33,13 +33,13 @@ extern int ll_setattr(struct dentry *de, struct iattr *attr);
 
 static int ll_file_open(struct inode *inode, struct file *file)
 {
-        int rc;
         struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
         struct obdo *oa = NULL;
         struct lov_stripe_md *lsm = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
+        int rc;
         ENTRY;
 
         if (file->private_data)
@@ -99,18 +99,20 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 /* XXX handle this how, abort or is it non-fatal? */
         }
 
-        if (oa == NULL && (oa = obdo_alloc()) == NULL)
+        if (!oa)
+                oa = obdo_alloc();
+        if (!oa)
                 GOTO(out_mdc, rc = -EINVAL);
 
         oa->o_id = lsm->lsm_object_id;
         oa->o_mode = S_IFREG;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE;
         rc = obd_open(ll_i2obdconn(inode), oa, lsm);
-        obdo_free(oa);
-        oa = NULL;
 
         if (rc)
                 GOTO(out_mdc, rc = -abs(rc));
+
+        obdo_free(oa);
 
         file->private_data = fd;
 
@@ -371,11 +373,11 @@ int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
                         CERROR("ldlm_cli_cancel failed: %d\n", rc);
                 break;
         case LDLM_CB_CANCELING:
-                down(&inode->i_sem);
                 CDEBUG(D_INODE, "invalidating obdo/inode %ld\n", inode->i_ino);
                 /* FIXME: do something better than throwing away everything */
+                //down(&inode->i_sem);
                 invalidate_inode_pages(inode);
-                up(&inode->i_sem);
+                //up(&inode->i_sem);
                 break;
         default:
                 LBUG();
@@ -459,21 +461,31 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         ENTRY;
 
         if (!S_ISBLK(inode->i_mode) && file->f_flags & O_APPEND) {
-                struct obdo oa;
+                struct obdo *oa;
+
+                oa = obdo_alloc();
+                if (!oa)
+                        RETURN(-ENOMEM);
+
                 err = ll_size_lock(inode, lsm, 0, LCK_PW, &eof_lockhs);
-                if (err)
+                if (err) {
+                        obdo_free(oa);
                         RETURN(err);
+                }
 
-                oa.o_id = lsm->lsm_object_id;
-                oa.o_mode = inode->i_mode;
-                oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
+                oa->o_id = lsm->lsm_object_id;
+                oa->o_mode = inode->i_mode;
+                oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
                         OBD_MD_FLBLOCKS;
-                retval = obd_getattr(&sbi->ll_osc_conn, &oa, lsm);
-                if (retval)
+                retval = obd_getattr(&sbi->ll_osc_conn, oa, lsm);
+                if (retval) {
+                        obdo_free(oa);
                         GOTO(out_eof, retval);
+                }
 
-                *ppos = oa.o_size;
-                obdo_to_inode(inode, &oa, oa.o_valid);
+                *ppos = oa->o_size;
+                obdo_to_inode(inode, oa, oa->o_valid);
+                obdo_free(oa);
         }
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
