@@ -12,12 +12,12 @@ DIRS24 = ptlbd
 endif
 
 if LIBLUSTRE
-SUBDIRS = portals lov obdclass ptlrpc obdecho ldlm osc utils mdc #liblustre
+SUBDIRS = portals obdclass lov ptlrpc obdecho ldlm osc utils mdc #liblustre
 else
 # NOTE: keep extN before obdclass, mds, and obdfilter.  Keep obdclass as early
 # as possible, to have the best chance at stopping with "wrong kernel version"
 # instead of some related build failure.
-SUBDIRS = portals $(DIRS24) obdclass mds utils ldlm obdfilter mdc osc ost
+SUBDIRS = portals obdclass $(DIRS24) mds utils ldlm obdfilter mdc osc ost
 SUBDIRS+= llite obdecho lov cobd tests doc scripts conf ptlrpc
 endif
 

@@ -248,6 +248,9 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
         if (obd == NULL)
                 RETURN(-EINVAL);
 
+        /* Temp fix to stop falling foul of osc_announce_cached() */
+        oa->o_valid &= ~(OBD_MD_FLBLOCKS | OBD_MD_FLRDEV);
+
         memset(res, 0, sizeof(*res) * niocount);
 
         CDEBUG(D_PAGE, "%s %d obdos with %d IOs\n",
@@ -280,7 +283,7 @@ int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
                                 }
                         }
 
-                        tot_bytes += r->len;
+                        tot_bytes += nb->len;
 
                         atomic_inc(&obd->u.echo.eo_prep);
 
