@@ -471,34 +471,37 @@ int mdc_readpage(struct obd_conn *conn, ino_t ino, int type, __u64 offset,
         return rc;
 }
 
-#if 0
-int mdc_statfs(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
-               struct statfs *statfs,
+int mdc_statfs(struct obd_conn *conn, struct statfs *sfs,
                struct ptlrpc_request **request)
 {
-        struct mds_rec_setattr *rec;
+        struct mdc_obd *mdc = mdc_conn2mdc(conn);
+        struct obd_statfs *osfs;
         struct ptlrpc_request *req;
-        int rc, size = sizeof(*rec);
+        int rc, size = sizeof(*osfs);
         ENTRY;
 
-        req = ptlrpc_prep_req(cl, conn, MDS_STATFS, 1, &size, NULL);
+        req = ptlrpc_prep_req(mdc->mdc_client, mdc->mdc_conn, MDS_STATFS,
+                              0, NULL, NULL);
         if (!req)
-                RETURN(-ENOMEM);
-
-        rec = lustre_msg_buf(req->rq_reqmsg, 0);
-        mds_setattr_pack(rec, inode, iattr);
-
-        size = sizeof(struct mds_body);
+                GOTO(out, rc = -ENOMEM);
         req->rq_replen = lustre_msg_size(1, &size);
+        req->rq_level = LUSTRE_CONN_FULL;
 
-        rc = mdc_reint(cl, req, LUSTRE_CONN_FULL);
+        rc = ptlrpc_queue_wait(req);
+        rc = ptlrpc_check_status(req, rc);
+
+        if (rc)
+                GOTO(out, rc);
+
+        osfs = lustre_msg_buf(req->rq_repmsg, 0);
+        obd_statfs_unpack(osfs, sfs);
+
+        EXIT;
+out:
         *request = req;
-        if (rc == -ERESTARTSYS )
-                rc = 0;
 
-        RETURN(rc);
+        return rc;
 }
-#endif
 
 static int mdc_ioctl(long cmd, struct obd_conn *conn, int len, void *karg,
                      void *uarg)
@@ -791,6 +794,7 @@ MODULE_LICENSE("GPL");
 EXPORT_SYMBOL(mdc_getstatus);
 EXPORT_SYMBOL(mdc_enqueue);
 EXPORT_SYMBOL(mdc_getattr);
+EXPORT_SYMBOL(mdc_statfs);
 EXPORT_SYMBOL(mdc_create);
 EXPORT_SYMBOL(mdc_unlink);
 EXPORT_SYMBOL(mdc_rename);

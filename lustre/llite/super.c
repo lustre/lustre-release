@@ -163,7 +163,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         sb->s_maxbytes = 1ULL << 36;
         /* XXX get this with a get_info call (like we have in OBDFS),
-           this info call should return the blocksize of the MDS */
+           this info call should return the blocksize of the MDS (statfs?) */
         sb->s_blocksize = 4096;
         sb->s_blocksize_bits = 12;
         sb->s_magic = LL_SUPER_MAGIC;
@@ -276,19 +276,18 @@ out:
         clear_inode(inode);
 }
 
-/* like inode_setattr, but doesn't mark the inode dirty */ 
+/* like inode_setattr, but doesn't mark the inode dirty */
 static int ll_attr2inode(struct inode * inode, struct iattr * attr, int trunc)
 {
         unsigned int ia_valid = attr->ia_valid;
         int error = 0;
 
-        if ((ia_valid & ATTR_SIZE) && trunc ) {
+        if ((ia_valid & ATTR_SIZE) && trunc) {
                 error = vmtruncate(inode, attr->ia_size);
                 if (error)
                         goto out;
-        } else if (ia_valid & ATTR_SIZE) { 
+        } else if (ia_valid & ATTR_SIZE)
                 inode->i_size = attr->ia_size;
-        }               
 
         if (ia_valid & ATTR_UID)
                 inode->i_uid = attr->ia_uid;
@@ -332,69 +331,65 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
+        int rc = inode_change_ok(de->d_inode, attr);
+
+        if (rc)
+                return rc;
+
         return ll_inode_setattr(de->d_inode, attr, 1);
 }
 
-static int ll_statfs(struct super_block *sb, struct statfs *buf)
+static int ll_statfs(struct super_block *sb, struct statfs *sfs)
 {
-        struct statfs tmp;
+        struct ptlrpc_request *request = NULL;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
         int err;
         ENTRY;
 
-        err = obd_statfs(&ll_s2sbi(sb)->ll_osc_conn, &tmp);
-        if (err) {
+        memset(sfs, 0, sizeof(*sfs));
+        err = mdc_statfs(&sbi->ll_mdc_conn, sfs, &request);
+        if (err)
                 CERROR("obd_statfs fails (%d)\n", err);
-                RETURN(err);
-        }
-        memcpy(buf, &tmp, sizeof(*buf));
-#if 0
-        err = mdc_statfs(&sbi->ll_mds_client, sbi->ll_mds_conn, &tmp,
-                          &request);
-        if (err) {
-                CERROR("obd_statfs fails (%d)\n", err);
-                RETURN(err);
-        }
-	if (tmp.f_files < buf->f_files)
-                buf->f_files = tmp.f_files;
-	if (tmp.f_ffree < buf->f_ffree)
-                buf->f_ffree = tmp.f_ffree;
-        buf->f_namelen = tmp.f_namelen;
-#endif
-        CDEBUG(D_SUPER, "statfs returns avail %ld\n", tmp.f_bavail);
+        else
+                CDEBUG(D_SUPER,
+                       "statfs returns blocks %ld/%ld objects %ld/%ld\n",
+                       sfs->f_bavail, sfs->f_blocks, sfs->f_files,sfs->f_ffree);
+
+        ptlrpc_req_finished(request);
 
         RETURN(err);
 }
 
-static void inline ll_to_inode(struct inode *dst, struct ll_inode_md *md)
+static void ll_to_inode(struct inode *dst, struct ll_inode_md *md)
 {
         struct mds_body *body = md->body;
         struct ll_inode_info *ii = ll_i2info(dst);
 
         /* core attributes first */
-        if ( body->valid & OBD_MD_FLID )
+        if (body->valid & OBD_MD_FLID)
                 dst->i_ino = body->ino;
-        if ( body->valid & OBD_MD_FLATIME ) 
+        if (body->valid & OBD_MD_FLATIME)
                 dst->i_atime = body->atime;
-        if ( body->valid & OBD_MD_FLMTIME ) 
+        if (body->valid & OBD_MD_FLMTIME)
                 dst->i_mtime = body->mtime;
-        if ( body->valid & OBD_MD_FLCTIME ) 
+        if (body->valid & OBD_MD_FLCTIME)
                 dst->i_ctime = body->ctime;
-        if ( body->valid & OBD_MD_FLSIZE ) 
+        if (body->valid & OBD_MD_FLSIZE)
                 dst->i_size = body->size;
-        if ( body->valid & OBD_MD_FLMODE ) 
+        if (body->valid & OBD_MD_FLMODE)
                 dst->i_mode = body->mode;
-        if ( body->valid & OBD_MD_FLUID ) 
+        if (body->valid & OBD_MD_FLUID)
                 dst->i_uid = body->uid;
-        if ( body->valid & OBD_MD_FLGID ) 
+        if (body->valid & OBD_MD_FLGID)
                 dst->i_gid = body->gid;
-        if ( body->valid & OBD_MD_FLFLAGS ) 
+        if (body->valid & OBD_MD_FLFLAGS)
                 dst->i_flags = body->flags;
-        if ( body->valid & OBD_MD_FLNLINK )
+        if (body->valid & OBD_MD_FLNLINK)
                 dst->i_nlink = body->nlink;
-        if ( body->valid & OBD_MD_FLGENER )
+        if (body->valid & OBD_MD_FLGENER)
                 dst->i_generation = body->generation;
 
-        /* this will become more elaborate for striping etc */ 
+        /* this will become more elaborate for striping etc */
         if (md->obdo != NULL && md->obdo->o_valid != 0) {
                 ii->lli_obdo = obdo_alloc();
                 memcpy(ii->lli_obdo, md->obdo, sizeof(*md->obdo));
@@ -417,10 +412,10 @@ static void inline ll_to_inode(struct inode *dst, struct ll_inode_md *md)
 #endif 
 } /* ll_to_inode */
 
-static inline void ll_read_inode2(struct inode *inode, void *opaque)
+static void ll_read_inode2(struct inode *inode, void *opaque)
 {
         struct ll_inode_md *md = opaque;
-        
+
         ENTRY;
         ll_to_inode(inode, md);
 
@@ -433,7 +428,7 @@ static inline void ll_read_inode2(struct inode *inode, void *opaque)
                 EXIT;
         } else if (S_ISDIR(inode->i_mode)) {
                 inode->i_op = &ll_dir_inode_operations;
-                inode->i_fop = &ll_dir_operations; 
+                inode->i_fop = &ll_dir_operations;
                 inode->i_mapping->a_ops = &ll_dir_aops;
                 EXIT;
         } else if (S_ISLNK(inode->i_mode)) {
