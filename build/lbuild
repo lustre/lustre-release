@@ -230,6 +230,8 @@ load_target()
     if [ "$EXTRA_VERSION_save" ] ; then
 	EXTRA_VERSION="$EXTRA_VERSION_save"
     elif ! (( $RELEASE )) ; then
+	#remove the @VERSION@ (lustre version)
+	EXTRA_VERSION=$(echo $EXTRA_VERSION | sed -e "s/\(.*_lustre\)\..*/\1/")
 	EXTRA_VERSION="${EXTRA_VERSION}-${TAG}.${TIMESTAMP}"
     fi
     # EXTRA_VERSION=${EXTRA_VERSION//-/_}
