@@ -1,4 +1,39 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.0
+       * bug fixes
+
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.0.3
+       * kernel patches
+	- add series for the vanilla 2.6.0 kernel
+	- add series for the vanilla 2.4.24 kernel
+	- add series for a cray x86/64 UL kernel drop
+	- fix xattr patches for the vanilla 2.4.19 series
+       * bug fixes
+	- generate true UUIDs in lmc (1171)
+	- have portals stack dumping break in UML (2466)
+	- avoid bad dchild deref; avoid inum lock w/o creation (2362)
+	- allocate with _NOFS in ldlm to avoid deadlock (1933)
+	- wake callback waiting threads on client eviction (2460)
+	- Add --ptldebug and --subsystem to lmc (1719)
+	- update assertion to allow safe interrupt allocation
+	- set rq_no_resend for cancel requests (2432)
+	- recalculate ptlrpcd timeout after resend (2494)
+	- call vfs_rmdir when removing pending directories (2368)
+	- fix renaming a file to itself (2429)
+	- lmc creates a default one-stripe lov (2454)
+	- expand procfs space to handle large clusters (2326)
+	- increase UML stack to avoid overflow
+	- update lconf's list of debug and subsystem masks
+	- fix lfs find --obd (2510)
+       * miscellania
+	- add --disable-doc to avoid pdf generation (2421)
+	- update documentation, tests, type-os, comments
+	- avoid format warnings on ia64
+	- remove the TOE NAL
+	- tiny code cleanups by removing unused fields
+
+2004-01-07  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.2
        * bug fixes
 	- fix obvious semaphore misuse in as-yet-unused setattr path (2348)
@@ -22,6 +57,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't create duplicate records when a failover MDS is present (2442)
 	- remove unnecessary mount age check (2332)
 	- don't remove directory inodes from locks prematurely (2451)
+	- don't break if MDS service name is the same as hostname (2103)
 	- fix races in client write RPC generation when cache full (2482)
 
 2003-12-13  Cluster File Systems, Inc. <info@clusterfs.com>
@@ -44,11 +80,23 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix MDS lock inversions in getattr/reint paths (1844)
 	- fix a rare lock re-ordering bug, which caused deadlock (2322)
 	- fix i_sem/journal inversion in fsfilt_ext3_write_record (2306)
+	- DLM race condition prevented some lock evictions (2328)
+	- ENOMEM detection and retry on socknal sends (2230)
+	- use GFP_NOFS throughout Lustre, to combat ENOMEM (2230)
+	- move osc_rpcd into ptlrpc, for use in MDC and others (2329)
 	- protect MDS inode fsdata with stronger locking (2313)
 	- better error messages when a client is rejected during recovery (1505)
 	- avoid cancelling locks which were never granted, after failure (2330)
 	- fix i_sem/journal inversion in mds_client_add (2333)
 	- fix truncate/getattr lock cycle deadlock (2334)
+	- use rpcd to send close; allows resend after timeout, avoid leak (1897)
+	- fix two rare exit paths which could leak an l_lock() ref (2321)
+	- fencepost error in MDS/OST orphan recovery (2226)
+	- make log record alignment 8 bytes (1988)
+	- lstripe now fails when requested offset > ost_count (2237)
+	- ensure that all kernel series have a complete list.h (1607)
+	- fix crashes in special-file operations (2316)
+	- lctl create/brw OID mismatch, caused by obsolete filter loop (2339)
        * miscellania
 	- allow configurable automake binary, for testing new versions
 	- small update to the lfs documentation
