@@ -24,6 +24,9 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
+#ifndef __KERNEL__
+#include <liblustre.h>
+#endif
 
 #include <linux/lustre_net.h>
 #include <linux/obd.h>
