@@ -67,7 +67,9 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
         err = IOPS(inode, brw)(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);
         if ( !err )
-                obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
+                obdfs_set_size (inode, oa->o_size); /* copy o_blocks to i_blocks */
+		
+
 
         obdo_free(oa);
         EXIT;
@@ -278,7 +280,7 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
                 --num_obdos;
                 CDEBUG(D_INFO, "free obdo %ld\n",(long)obdos[num_obdos]->o_id);
                 /* copy o_blocks to i_blocks */
-                obdfs_to_inode(inodes[num_obdos], obdos[num_obdos]);
+                obdfs_set_size (inodes[num_obdos], obdos[num_obdos]->o_size);
                 obdo_free(obdos[num_obdos]);
         }
         CDEBUG(D_INFO, "obdo_free done\n");
@@ -394,7 +396,7 @@ int obdfs_commit_write(struct file *file, struct page *page, unsigned from, unsi
         rc = obdfs_do_writepage(page, 1);
         kunmap(page);
         if (pos > inode->i_size) {
-                inode->i_size = pos;
+		obdfs_set_size (inode, pos);
                 obdfs_change_inode(inode);
         }
         return 0;
@@ -524,6 +526,8 @@ void obdfs_truncate(struct inode *inode)
                 EXIT;
                 return;
         }
+
+	obdfs_set_size (inode, inode->i_size);
         oa = obdo_alloc();
         if ( !oa ) {
                 /* XXX This would give an inconsistent FS, so deal with it as

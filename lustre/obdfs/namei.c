@@ -85,7 +85,8 @@ static struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry)
         struct obdo *oa;
 	struct inode * inode = NULL;
 	ino_t ino;
-	
+	int err;
+
         ENTRY;
 	if (dentry->d_name.len > EXT2_NAME_LEN)
 		return ERR_PTR(-ENAMETOOLONG);
@@ -102,10 +103,24 @@ static struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry)
         }
 
 	inode = iget4(dir->i_sb, ino, NULL, oa);
-        obdo_free(oa);
 
-	if (!inode) 
+	if (!inode) {
+		obdo_free(oa);
 		return ERR_PTR(-EACCES);
+	}
+
+	err = IOPS(inode, getattr)(IID(inode), oa);
+	if (err) {
+		printk(__FUNCTION__ ": obd_getattr fails (%d)\n", err);
+	} else {
+#ifdef CHECK_SIZE
+		if (inode->i_size != oa->o_size)
+			CDEBUG(D_SUPER, "update %Ld size to %Ld\n",
+			       inode->i_size, oa->o_size);
+#endif
+		obdfs_set_size (inode, oa->o_size);
+	}
+	obdo_free(oa);
 
  negative:
 	d_add(dentry, inode);

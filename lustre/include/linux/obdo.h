@@ -83,6 +83,15 @@ static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
         }
 } /* obdfs_to_inode */
 
+static void inline obdfs_set_size (struct inode *inode, obd_size size)
+{
+	inode->i_size = size;
+	inode->i_blocks = (inode->i_size + inode->i_sb->s_blocksize - 1) >>
+		inode->i_sb->s_blocksize_bits;
+	inode->i_bytes = inode->i_size &
+		((1 << inode->i_sb->s_blocksize_bits) - 1);
+} /* obdfs_set_size */
+
 #define NOLOCK 0
 #define LOCKED 1
 
