@@ -37,6 +37,7 @@
 #include <ipmap.h>
 #include <connection.h>
 #include <pthread.h>
+#include <errno.h>
 #ifndef __CYGWIN__
 #include <syscall.h>
 #endif
@@ -69,9 +70,9 @@ int tcpnal_send(nal_cb_t *n,
     bridge b=(bridge)n->nal_data;
     struct iovec tiov[257];
     static pthread_mutex_t send_lock = PTHREAD_MUTEX_INITIALIZER;
-#ifdef __CYGWIN__
+    int   rc;
+    int   total;
     int i;
-#endif
 
     if (!(c=force_tcp_connection((manager)b->lower,
                                  PNAL_IP(nid,b),
@@ -96,13 +97,37 @@ int tcpnal_send(nal_cb_t *n,
 
     if (niov > 0)
             memcpy(&tiov[1], iov, niov * sizeof(struct iovec));
-
     pthread_mutex_lock(&send_lock);
-#ifndef __CYGWIN__
-    syscall(SYS_writev, c->fd, tiov, niov+1);
+#if 1
+    for (i = total = 0; i <= niov; i++)
+            total += tiov[i].iov_len;
+    
+    rc = syscall(SYS_writev, c->fd, tiov, niov+1);
+    if (rc != total) {
+            fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
+                     rc, total, errno);
+            abort();
+    }
 #else
-    for (i = 0; i <= niov; i++)
-        send(c->fd, tiov[i].iov_base, tiov[i].iov_len, 0);
+    for (i = total = 0; i <= niov; i++) {
+            rc = send(c->fd, tiov[i].iov_base, tiov[i].iov_len, 0);
+            
+            if (rc != tiov[i].iov_len) {
+                    fprintf (stderr, "BAD SEND rc %d != %d, errno %d\n",
+                             rc, tiov[i].iov_len, errno);
+                    abort();
+            }
+            total != rc;
+    }
+#endif
+#if 0
+    fprintf (stderr, "sent %s total %d in %d frags\n", 
+             hdr->type == PTL_MSG_ACK ? "ACK" :
+             hdr->type == PTL_MSG_PUT ? "PUT" :
+             hdr->type == PTL_MSG_GET ? "GET" :
+             hdr->type == PTL_MSG_REPLY ? "REPLY" :
+             hdr->type == PTL_MSG_HELLO ? "HELLO" : "UNKNOWN",
+             total, niov + 1);
 #endif
     pthread_mutex_unlock(&send_lock);
 #endif
