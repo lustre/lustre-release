@@ -16,7 +16,7 @@ SUCCESS=1
 rm -f $OOS
 
 STRIPECOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -1`
-ORIGFREE=`df | grep $MOUNT | awk '{ print $4 }'`
+ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -1`
 MAXFREE=${MAXFREE:-$((200000 * $STRIPECOUNT))}
 if [ $ORIGFREE -gt $MAXFREE ]; then
 	echo "skipping out-of-space test on $OSC"
@@ -41,7 +41,7 @@ if [ -z "`grep "No space left on device" $LOG`" ]; then
 	SUCCESS=0
 fi
 
-LEFTFREE=`df | grep $MOUNT | awk '{ print $4 }'`
+LEFTFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -1`
 if [ $(($ORIGFREE - $LEFTFREE)) -lt $RECORDSOUT ]; then
         echo "ERROR: space used by dd not equal to available space"
         SUCCESS=0
@@ -50,7 +50,7 @@ fi
 
 if [ $LEFTFREE -gt $((400 * $STRIPECOUNT)) ]; then
 	echo "ERROR: too much space left $LEFTFREE and -ENOSPC returned"
-	grep '[0-9]' /proc/fs/lustre/osc/OSC*MNT*/cur*
+	grep "[0-9]" /proc/fs/lustre/osc/OSC*MNT*/cur*
 	SUCCESS=0
 fi
 
