@@ -125,28 +125,26 @@ int rd_mdc(char *page, char **start, off_t off, int count, int *eof, void *data)
         return snprintf(page, count, "%s\n", lov->mdcobd->obd_uuid.uuid);
 }
 
-static void *ll_tgt_seq_start(struct seq_file *p, loff_t *pos) 
+static void *ll_tgt_seq_start(struct seq_file *p, loff_t *pos)
 {
         struct obd_device *dev = p->private;
         struct lov_obd *lov = &dev->u.lov;
-                
-        return (*pos >=lov->desc.ld_tgt_count)? NULL:
-                &(lov->tgts[*pos]);
-        
+
+        return (*pos >= lov->desc.ld_tgt_count) ? NULL : &(lov->tgts[*pos]);
+
 }
 static void ll_tgt_seq_stop(struct seq_file *p, void *v)
 {
 
 }
 
-static void *ll_tgt_seq_next(struct seq_file *p, void *v, loff_t *pos) 
+static void *ll_tgt_seq_next(struct seq_file *p, void *v, loff_t *pos)
 {
         struct obd_device *dev = p->private;
         struct lov_obd *lov = &dev->u.lov;
 
-        ++*pos;        
-        return (*pos >=lov->desc.ld_tgt_count)? NULL:
-                &(lov->tgts[*pos]);
+        ++*pos;
+        return (*pos >=lov->desc.ld_tgt_count) ? NULL : &(lov->tgts[*pos]);
 }
 
 static int ll_tgt_seq_show(struct seq_file *p, void *v)
@@ -154,9 +152,9 @@ static int ll_tgt_seq_show(struct seq_file *p, void *v)
         struct lov_tgt_desc *tgt = v;
         struct obd_device *dev = p->private;
         struct lov_obd *lov = &dev->u.lov;
-        int idx = (tgt-&(lov->tgts[0]));
-        return seq_printf(p, "%d:%s %sACTIVE\n", idx+1, tgt->uuid.uuid, 
-                          tgt->active ? " " : "IN");
+        int idx = tgt - &(lov->tgts[0]);
+        return seq_printf(p, "%d: %s %sACTIVE\n", idx+1, tgt->uuid.uuid,
+                          tgt->active ? "" : "IN");
 }
 
 struct seq_operations ll_tgt_sops = {
@@ -166,17 +164,18 @@ struct seq_operations ll_tgt_sops = {
         .show = ll_tgt_seq_show,
 };
 
-static int ll_target_seq_open(struct inode *inode, struct file *file) 
+static int ll_target_seq_open(struct inode *inode, struct file *file)
 {
         struct proc_dir_entry *dp = inode->u.generic_ip;
         struct seq_file *seq;
-        int rc;
-        
-        rc = seq_open(file, &ll_tgt_sops);
-        if (rc) 
+        int rc = seq_open(file, &ll_tgt_sops);
+
+        if (rc)
                 return rc;
+
         seq = file->private_data;
         seq->private = dp->data;
+
         return 0;
 }
 struct lprocfs_vars lprocfs_obd_vars[] = {
