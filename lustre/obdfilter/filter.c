@@ -1259,7 +1259,8 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
                 RETURN(-EINVAL);
 
-        if (!strcmp(lcfg->lcfg_inlbuf2, "ext3")) {
+        if (!strcmp(lcfg->lcfg_inlbuf2, "ext3") ||
+            !strcmp(lcfg->lcfg_inlbuf2, "ldiskfs")) {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         /* bug 1577: implement async-delete for 2.5 */
                 str = "errors=remount-ro,asyncdel";
