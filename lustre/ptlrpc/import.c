@@ -270,7 +270,7 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 if (msg_flags & MSG_CONNECT_REPLAYABLE) {
                         CDEBUG(D_HA, "connected to replayable target: %s\n",
                                imp->imp_target_uuid.uuid);
-                        imp->imp_replayable = 1;
+                        imp->imp_pingable = imp->imp_replayable = 1;
                 } else {
                         imp->imp_replayable = 0;
                 }
