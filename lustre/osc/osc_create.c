@@ -92,7 +92,7 @@ static int oscc_has_objects(struct osc_creator *oscc, int count)
 {
         int rc;
         spin_lock(&oscc->oscc_lock);
-        rc = (oscc->oscc_last_id - oscc->oscc_next_id >= count);
+        rc = ((__s64)(oscc->oscc_last_id - oscc->oscc_next_id) >= count);
         spin_unlock(&oscc->oscc_lock);
         return rc;
 }
@@ -139,8 +139,7 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
         struct obd_export *export = class_conn2export(exph);
         struct osc_creator *oscc = &export->u.eu_osc_data.oed_oscc;
         struct osc_created *osccd = oscc->oscc_osccd;
-        int rc;
-        int try_again = 1;
+        int try_again = 1, rc;
         ENTRY;
 
         class_export_put(export);
@@ -148,7 +147,7 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
         LASSERT(ea);
 
         lsm = *ea;
-        if (!lsm) {
+        if (lsm == NULL) {
                 rc = obd_alloc_memmd(exph, &lsm);
                 if (rc < 0)
                         RETURN(rc);
@@ -168,7 +167,9 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
                 rc = oscc_precreate(oscc, osccd, try_again);
         }
 
-        if (rc && !*ea)
+        if (rc == 0)
+                CDEBUG(D_INFO, "returning objid "LPU64"\n", lsm->lsm_object_id);
+        else if (*ea == NULL)
                 obd_free_memmd(exph, &lsm);
         RETURN(rc);
 }
@@ -187,8 +188,9 @@ void osccd_do_create(struct osc_created *osccd)
                 list_add(&oscc->oscc_list, &osccd->osccd_work_list_head);
                 spin_unlock(&osccd->osccd_lock);
 
-                rc =  osc_real_create(oscc->oscc_exph, &oscc->oscc_oa,
-                                      &oscc->oscc_ea, NULL);
+                rc = osc_real_create(oscc->oscc_exph, &oscc->oscc_oa,
+                                     &oscc->oscc_ea, NULL);
+
                 spin_lock(&osccd->osccd_lock);
                 spin_lock(&oscc->oscc_lock);
                 list_del_init(&oscc->oscc_list);
@@ -196,6 +198,9 @@ void osccd_do_create(struct osc_created *osccd)
                 oscc->oscc_last_id = oscc->oscc_oa.o_id;
                 spin_unlock(&oscc->oscc_lock);
                 spin_unlock(&osccd->osccd_lock);
+
+                CDEBUG(D_INFO, "preallocated through id "LPU64" (last used "
+                       LPU64")\n", oscc->oscc_last_id, oscc->oscc_next_id);
                 wake_up(&oscc->oscc_waitq);
                 goto next;
         }
@@ -239,7 +244,6 @@ static int osccd_main(void *arg)
                         spin_unlock(&osccd->osccd_lock);
                         osccd_do_create(osccd);
                 }
-                CERROR("create daemon woken up - FIXME\n");
                 spin_unlock(&osccd->osccd_created_lock);
         }
 
@@ -265,9 +269,11 @@ void oscc_init(struct lustre_handle *exph)
         oed->oed_oscc.oscc_grow_count = 1;
         oed->oed_oscc.oscc_initial_create_count = 1;
 
+        oed->oed_oscc.oscc_next_id = 2;
+        oed->oed_oscc.oscc_last_id = 1;
         /* XXX the export handle should give the oscc the last object */
         /* oed->oed_oscc.oscc_last_id = exph->....; */
-        saved_grow_count =  oed->oed_oscc.oscc_grow_count;
+        saved_grow_count = oed->oed_oscc.oscc_grow_count;
         oed->oed_oscc.oscc_grow_count = oed->oed_oscc.oscc_initial_create_count;
         oscc_precreate(&oed->oed_oscc, oed->oed_oscc.oscc_osccd, 0);
         oed->oed_oscc.oscc_grow_count = saved_grow_count;
