@@ -24,8 +24,8 @@ device 0
 attach mds
 setup ${MDS} ${MDSFS}
 device 1
-attach obdext2
-setup ${OST}
+attach obdfilter
+setup ${OST} ext2
 device 2
 attach ost
 setup 1

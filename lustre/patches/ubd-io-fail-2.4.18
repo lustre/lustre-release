@@ -1,0 +1,34 @@
+--- lum/arch/um/drivers/ubd.c.orig	Wed Mar 13 14:04:59 2002
++++ lum/arch/um/drivers/ubd.c	Thu Mar 28 23:39:15 2002
+@@ -693,14 +697,23 @@
+ 		spin_unlock(&io_request_lock);
+ 		return(1);
+ 	}
+-	if((req->cmd == WRITE) && 
+-	   ((dev->openflags & O_ACCMODE) == O_RDONLY)){
+-		printk("Write attempted on readonly ubd device %d\n", 
+-		       minor(req->rq_dev));
+-		spin_lock(&io_request_lock);
+-		end_request(0);
+-		spin_unlock(&io_request_lock);
+-		return(1);
++	if (req->cmd == WRITE) {
++#ifdef CONFIG_DEV_RDONLY
++		if (dev_check_rdonly(req->rq_dev)) {
++			spin_lock(&io_request_lock);
++			end_request(1);
++			spin_unlock(&io_request_lock);
++			return(0);
++		}
++#endif
++		if ((dev->openflags & O_ACCMODE) == O_RDONLY) {
++			printk("Write attempted on readonly ubd device %d\n",
++			       minor(req->rq_dev));
++			spin_lock(&io_request_lock);
++			end_request(0);
++			spin_unlock(&io_request_lock);
++			return(1);
++		}
+ 	}
+ 
+         block = req->sector;
