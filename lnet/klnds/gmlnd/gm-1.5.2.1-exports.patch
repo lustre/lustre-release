@@ -1,0 +1,43 @@
+diff -ru gm-1.5.2.1_Linux/drivers/linux/gm/gm_arch.c gm-1.5.2.1_Linux-cfs/drivers/linux/gm/gm_arch.c
+--- gm-1.5.2.1_Linux/drivers/linux/gm/gm_arch.c	Mon Jul  1 10:35:09 2002
++++ gm-1.5.2.1_Linux-cfs/drivers/linux/gm/gm_arch.c	Thu Sep 19 14:19:38 2002
+@@ -30,6 +30,8 @@
+  *
+  ************************************************************************/
+ 
++#define EXPORT_SYMTAB
++
+ #include <linux/config.h>
+ #include <linux/module.h>
+ 
+@@ -4075,6 +4077,28 @@
+   return 0;
+ }
+ 
++EXPORT_SYMBOL(gm_blocking_receive_no_spin);
++EXPORT_SYMBOL(gm_close);
++EXPORT_SYMBOL(gm_dma_free);
++EXPORT_SYMBOL(gm_dma_malloc);
++EXPORT_SYMBOL(gm_drop_sends);
++EXPORT_SYMBOL(gm_finalize);
++EXPORT_SYMBOL(gm_get_node_id);
++EXPORT_SYMBOL(gm_init);
++EXPORT_SYMBOL(gm_initialize_alarm);
++EXPORT_SYMBOL(gm_max_node_id_in_use);
++EXPORT_SYMBOL(gm_min_size_for_length);
++EXPORT_SYMBOL(gm_num_receive_tokens);
++EXPORT_SYMBOL(gm_num_send_tokens);
++EXPORT_SYMBOL(gm_open);
++EXPORT_SYMBOL(gm_provide_receive_buffer);
++EXPORT_SYMBOL(gm_resume_sending);
++EXPORT_SYMBOL(gm_send_with_callback);
++EXPORT_SYMBOL(gm_set_acceptable_sizes);
++EXPORT_SYMBOL(gm_set_alarm);
++EXPORT_SYMBOL(gm_unknown);
++
++
+ /*
+   This file uses GM standard indentation.
+ 
+Only in gm-1.5.2.1_Linux-cfs/drivers/linux/gm: gm_arch.c~
+Only in gm-1.5.2.1_Linux-cfs/: trace
