@@ -201,28 +201,6 @@ static ssize_t fsfilt_extN_readpage(struct file *file, char *buf, size_t count,
         return rc;
 }
 
-static void fsfilt_extN_delete_inode(struct inode *inode)
-{
-        if (S_ISREG(inode->i_mode)) {
-                void *handle = fsfilt_extN_start(inode, FSFILT_OP_UNLINK);
-
-                if (IS_ERR(handle)) {
-                        CERROR("unable to start transaction");
-                        EXIT;
-                        return;
-                }
-                if (fsfilt_extN_set_md(inode, handle, NULL, 0))
-                        CERROR("error clearing objid on %lu\n", inode->i_ino);
-
-                if (fsfilt_extN_fs_ops.cl_delete_inode)
-                        fsfilt_extN_fs_ops.cl_delete_inode(inode);
-
-                if (fsfilt_extN_commit(inode, handle))
-                        CERROR("error closing handle on %lu\n", inode->i_ino);
-        } else
-                fsfilt_extN_fs_ops.cl_delete_inode(inode);
-}
-
 static void fsfilt_extN_cb_func(struct journal_callback *jcb, int error)
 {
         struct fsfilt_cb_data *fcb = (struct fsfilt_cb_data *)jcb;
@@ -309,8 +287,6 @@ static struct fsfilt_fs_operations fsfilt_extN_fs_ops = {
         fs_set_md:              fsfilt_extN_set_md,
         fs_get_md:              fsfilt_extN_get_md,
         fs_readpage:            fsfilt_extN_readpage,
-        fs_delete_inode:        fsfilt_extN_delete_inode,
-        cl_delete_inode:        clear_inode,
         fs_journal_data:        fsfilt_extN_journal_data,
         fs_set_last_rcvd:       fsfilt_extN_set_last_rcvd,
         fs_statfs:              fsfilt_extN_statfs,

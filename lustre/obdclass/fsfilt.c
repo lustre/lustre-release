@@ -106,3 +106,5 @@ void fsfilt_put_ops(struct fsfilt_operations *fs_ops)
 
 EXPORT_SYMBOL(fsfilt_register_fs_type);
 EXPORT_SYMBOL(fsfilt_unregister_fs_type);
+EXPORT_SYMBOL(fsfilt_get_ops);
+EXPORT_SYMBOL(fsfilt_put_ops);

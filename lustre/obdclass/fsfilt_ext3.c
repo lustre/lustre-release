@@ -201,28 +201,6 @@ static ssize_t fsfilt_ext3_readpage(struct file *file, char *buf, size_t count,
         return rc;
 }
 
-static void fsfilt_ext3_delete_inode(struct inode *inode)
-{
-        if (S_ISREG(inode->i_mode)) {
-                void *handle = fsfilt_ext3_start(inode, FSFILT_OP_UNLINK);
-
-                if (IS_ERR(handle)) {
-                        CERROR("unable to start transaction");
-                        EXIT;
-                        return;
-                }
-                if (fsfilt_ext3_set_md(inode, handle, NULL, 0))
-                        CERROR("error clearing objid on %lu\n", inode->i_ino);
-
-                if (fsfilt_ext3_fs_ops.cl_delete_inode)
-                        fsfilt_ext3_fs_ops.cl_delete_inode(inode);
-
-                if (fsfilt_ext3_commit(inode, handle))
-                        CERROR("error closing handle on %lu\n", inode->i_ino);
-        } else
-                fsfilt_ext3_fs_ops.cl_delete_inode(inode);
-}
-
 static void fsfilt_ext3_callback_status(struct journal_callback *jcb, int error)
 {
         struct fsfilt_cb_data *fcb = (struct fsfilt_cb_data *)jcb;
