@@ -88,7 +88,7 @@ __u64 lov_merge_mtime(struct lov_stripe_md *lsm, __u64 current_time)
 }
 EXPORT_SYMBOL(lov_merge_mtime);
 
-void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
+int lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                       obd_off size)
 {
         struct lov_oinfo *loi;
@@ -105,7 +105,8 @@ void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
                stripe, kms > loi->loi_kms ? "" : "not ", loi->loi_kms, kms);
         if (kms > loi->loi_kms)
                 loi->loi_kms = kms;
-        EXIT;
+
+        RETURN(0);
 }
 EXPORT_SYMBOL(lov_increase_kms);
 

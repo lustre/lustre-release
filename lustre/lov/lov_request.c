@@ -732,7 +732,25 @@ out:
 
 static int brw_done(struct lov_request_set *set)
 {
-        return common_attr_done(set);
+        struct lov_stripe_md *lsm = set->set_md;
+        struct lov_oinfo     *loi = NULL;
+        struct list_head *pos;
+        struct lov_request *req;
+        ENTRY;
+                                                                                                                             
+        list_for_each (pos, &set->set_list) {
+                req = list_entry(pos, struct lov_request, rq_link);
+                                                                                                                             
+                if (!req->rq_complete || req->rq_rc)
+                        continue;
+                                                                                                                             
+                loi = &lsm->lsm_oinfo[req->rq_stripe];
+                                                                                                                             
+                if (req->rq_oa->o_valid & OBD_MD_FLBLOCKS)
+                        loi->loi_blocks = req->rq_oa->o_blocks;
+        }
+                                                                                                                             
+        RETURN(0);
 }
 
 int lov_fini_brw_set(struct lov_request_set *set)
