@@ -48,47 +48,39 @@
 #include <linux/list.h>
 #include <linux/kmod.h>
 #include <linux/sysctl.h>
+#include <linux/random.h>
 
-#define DEBUG_SUBSYSTEM S_IBNAL
+#include <net/sock.h>
+#include <linux/in.h>
 
-#define IBNAL_CHECK_ADVERT
+#define DEBUG_SUBSYSTEM S_NAL
 
 #include <libcfs/kp30.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 #include <portals/nal.h>
 
+/* CPU_{L,B}E #defines needed by Voltaire headers */
+#include <asm/byteorder.h>
+#ifdef __BIG_ENDIAN__
+#define CPU_BE 1
+#define CPU_LE 0
+#endif
+#ifdef __LITTLE_ENDIAN__
+#define CPU_BE 0
+#define CPU_LE 1
+#endif
+
 #include <vverbs.h>
-#include <sa-mads.h>
 #include <ib-cm.h>
-#include <gsi.h>
+#include <ibat.h>
 
-#if 0
-#undef CDEBUG
-#define CDEBUG(mask, format, a...) printk(KERN_INFO "%s:%d - " format, __func__, __LINE__,##a)
-#endif
-
-#ifdef __CHECKER__
-#undef CDEBUG
-#undef CERROR
-#define CDEBUG(a...)
-#define CERROR(a...)
-#endif
-
-#define GCC_VERSION (__GNUC__ * 10000 \
-                + __GNUC_MINOR__ * 100 \
-                + __GNUC_PATCHLEVEL__)
-
-/* Test for GCC > 3.2.2 */
-#if GCC_VERSION <= 30202
-/* GCC 3.2.2, and presumably several versions before it, will
- * miscompile this driver. See
- * http://gcc.gnu.org/bugzilla/show_bug.cgi?id=9853. */
+/* GCC 3.2.2, miscompiles this driver.  
+ * See http://gcc.gnu.org/bugzilla/show_bug.cgi?id=9853. */
+#define GCC_VERSION ((__GNUC__*100 + __GNUC_MINOR__)*100 + __GNUC_PATCHLEVEL__)
+#if GCC_VERSION < 30203
 #error Invalid GCC version. Must use GCC >= 3.2.3
 #endif
-
-#define IBNAL_SERVICE_NAME   "vibnal"
-#define IBNAL_SERVICE_NUMBER 0x11b9a2 /* TODO */
 
 #if CONFIG_SMP
 # define IBNAL_N_SCHED      num_online_cpus()   /* # schedulers */
@@ -96,35 +88,64 @@
 # define IBNAL_N_SCHED      1                   /* # schedulers */
 #endif
 
+/* sdp-connection.c */
+#define IBNAL_QKEY               0
+#define IBNAL_PKEY               0xffff
+#define IBNAL_PKEY_IDX           0
+#define IBNAL_SGID_IDX           0
+#define IBNAL_SERVICE_LEVEL      0
+#define IBNAL_STATIC_RATE        0
+#define IBNAL_RETRY_CNT          7
+#define IBNAL_RNR_CNT            7 
+#define IBNAL_EE_FLOW_CNT        1
+#define IBNAL_LOCAL_SUB          1
+#define IBNAL_TRAFFIC_CLASS      0
+#define IBNAL_SOURCE_PATH_BIT    0
+#define IBNAL_OUS_DST_RD         32
+#define IBNAL_IB_MTU             vv_mtu_1024
+
+/* sdp-hca-params.h */
+#define PATH_RATE_2_5GB           2
+#define MLX_IPD_1x                1
+#define MLX_IPD_4x                0
+#define IBNAL_R_2_STATIC_RATE(r)  ((r) == PATH_RATE_2_5GB ? MLX_IPD_1x : MLX_IPD_4x)
+
+/* other low-level IB constants */
+#define IBNAL_LOCAL_ACK_TIMEOUT   0x12
+#define IBNAL_PKT_LIFETIME        5
+#define IBNAL_ARB_INITIATOR_DEPTH 0
+#define IBNAL_ARB_RESP_RES        0
+#define IBNAL_FAILOVER_ACCEPTED   0
+#define IBNAL_SERVICE_NUMBER      0x11b9a2      /* Fixed service number */
+
 #define IBNAL_MIN_RECONNECT_INTERVAL HZ         /* first failed connection retry... */
 #define IBNAL_MAX_RECONNECT_INTERVAL (60*HZ)    /* ...exponentially increasing to this */
 
-#define IBNAL_MSG_SIZE       (4<<10)            /* max size of queued messages (inc hdr) */
+#define IBNAL_MSG_SIZE           (4<<10)        /* max size of queued messages (inc hdr) */
 
-#define IBNAL_MSG_QUEUE_SIZE   8                /* # messages/RDMAs in-flight */
-#define IBNAL_CREDIT_HIGHWATER 7                /* when to eagerly return credits */
+#define IBNAL_MSG_QUEUE_SIZE      8             /* # messages/RDMAs in-flight */
+#define IBNAL_CREDIT_HIGHWATER    7             /* when to eagerly return credits */
 
-/* 7 indicates infinite retry attempts, Infinicon recommended 5 */
-#define IBNAL_RETRY            5                /* # times to retry */
-#define IBNAL_RNR_RETRY        5                /*  */
-#define IBNAL_CM_RETRY         5                /* # times to retry connection */
+#define IBNAL_NTX                 64            /* # tx descs */
+#define IBNAL_NTX_NBLK            128           /* # reserved tx descs */
+/* reduced from 256 to ensure we register < 255 pages per region.  
+ * this can change if we register all memory. */
 
-#define IBNAL_FLOW_CONTROL     1
-#define IBNAL_ACK_TIMEOUT       20              /* supposedly 4 secs */
+#define IBNAL_PEER_HASH_SIZE      101           /* # peer lists */
 
-#define IBNAL_NTX             64                /* # tx descs */
-/* this had to be dropped down so that we only register < 255 pages per
- * region.  this will change if we register all memory. */
-#define IBNAL_NTX_NBLK        128               /* # reserved tx descs */
+#define IBNAL_RESCHED             100           /* # scheduler loops before reschedule */
 
-#define IBNAL_PEER_HASH_SIZE  101               /* # peer lists */
+#define IBNAL_CONCURRENT_PEERS    1000          /* # nodes all talking at once to me */
 
-#define IBNAL_RESCHED         100               /* # scheduler loops before reschedule */
-
-#define IBNAL_CONCURRENT_PEERS 1000             /* # nodes all talking at once to me */
+#define IBNAL_RDMA_BASE  0x0eeb0000
+#define IBNAL_CKSUM      0
+#define IBNAL_WHOLE_MEM  1
+#if !IBNAL_WHOLE_MEM
+# error "incompatible with voltaire adaptor-tavor (REGISTER_RAM_IN_ONE_PHY_MR)"
+#endif
 
 /* default vals for runtime tunables */
-#define IBNAL_IO_TIMEOUT      50                /* default comms timeout (seconds) */
+#define IBNAL_IO_TIMEOUT          50            /* default comms timeout (seconds) */
 
 /************************/
 /* derived constants... */
@@ -134,30 +155,19 @@
 #define IBNAL_TX_MSG_BYTES  (IBNAL_TX_MSGS * IBNAL_MSG_SIZE)
 #define IBNAL_TX_MSG_PAGES  ((IBNAL_TX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
 
-#define IBNAL_TX_MAX_SG (PTL_MD_MAX_IOV + 1)
+#if IBNAL_WHOLE_MEM
+# define IBNAL_MAX_RDMA_FRAGS PTL_MD_MAX_IOV
+#else
+# define IBNAL_MAX_RDMA_FRAGS 1
+#endif
 
 /* RX messages (per connection) */
 #define IBNAL_RX_MSGS       IBNAL_MSG_QUEUE_SIZE
 #define IBNAL_RX_MSG_BYTES  (IBNAL_RX_MSGS * IBNAL_MSG_SIZE)
 #define IBNAL_RX_MSG_PAGES  ((IBNAL_RX_MSG_BYTES + PAGE_SIZE - 1)/PAGE_SIZE)
 
-
-/* we may have up to 2 completions per transmit +
-   1 completion per receive, per connection */
-#define IBNAL_CQ_ENTRIES  ((2*IBNAL_TX_MSGS) +                          \
-                           (IBNAL_RX_MSGS * IBNAL_CONCURRENT_PEERS))
-
-#define IBNAL_RDMA_BASE  0x0eeb0000
-#define IBNAL_FMR        0
-#define IBNAL_WHOLE_MEM  1
-#define IBNAL_CKSUM      0
-
-/* Starting sequence number. */
-#define IBNAL_STARTING_PSN 0x465A
-
-/* Timeout for SA requests, in seconds */
-#define GSI_TIMEOUT 5
-#define GSI_RETRY 10
+#define IBNAL_CQ_ENTRIES  (IBNAL_TX_MSGS * (1 + IBNAL_MAX_RDMA_FRAGS) + \
+                           IBNAL_RX_MSGS * IBNAL_CONCURRENT_PEERS)
 
 typedef struct
 {
@@ -165,8 +175,6 @@ typedef struct
         struct ctl_table_header *kib_sysctl;    /* sysctl interface */
 } kib_tunables_t;
 
-/* some of these have specific types in the stack that just map back
- * to the uFOO types, like IB_{L,R}_KEY. */
 typedef struct
 {
         int               ibp_npages;           /* # pages */
@@ -184,51 +192,38 @@ typedef struct
         __u32             md_lkey;
         __u32             md_rkey;
         __u64             md_addr;
-} kib_md_t __attribute__((packed));
+} kib_md_t;
 
 typedef struct
 {
-        /* initialisation state. These values are sorted by their initialization order. */
-        enum {
-                IBNAL_INIT_NOTHING,
-                IBNAL_INIT_DATA,
-                IBNAL_INIT_LIB,
-                IBNAL_INIT_HCA,
-                IBNAL_INIT_ASYNC,
-                IBNAL_INIT_PORT,
-                IBNAL_INIT_GSI_POOL,
-                IBNAL_INIT_GSI,
-                IBNAL_INIT_PD,
-#if IBNAL_FMR
-                IBNAL_INIT_FMR,
-#endif
-                IBNAL_INIT_TXD,
-                IBNAL_INIT_CQ,
-                IBNAL_INIT_ALL,
-        } kib_init;
-
+        int               kib_init;             /* initialisation state */
         __u64             kib_incarnation;      /* which one am I */
         int               kib_shutdown;         /* shut down? */
         atomic_t          kib_nthreads;         /* # live threads */
 
-        __u64             kib_service_id;       /* service number I listen on */
-        vv_gid_t          kib_port_gid;         /* port GID in HOST ORDER! */
-        vv_p_key_t        kib_port_pkey;        /* my pkey */
-        ptl_nid_t         kib_nid;              /* my NID */
+        __u64             kib_svc_id;           /* service number I listen on */
+        vv_gid_t          kib_port_gid;         /* device/port GID */
+        vv_p_key_t        kib_port_pkey;        /* device/port pkey */
+        
         struct semaphore  kib_nid_mutex;        /* serialise NID ops */
-        cm_cep_handle_t   kib_cep;              /* connection end point */
+        cm_cep_handle_t   kib_listen_handle;    /* IB listen handle */
 
         rwlock_t          kib_global_lock;      /* stabilize peer/conn ops */
-
+        spinlock_t        kib_vverbs_lock;      /* serialize vverbs calls */
+        int               kib_ready;            /* CQ callback fired */
+        int               kib_checking_cq;      /* a scheduler is checking the CQ */
+        
         struct list_head *kib_peers;            /* hash table of all my known peers */
         int               kib_peer_hash_size;   /* size of kib_peers */
         atomic_t          kib_npeers;           /* # peers extant */
         atomic_t          kib_nconns;           /* # connections extant */
 
-        struct list_head  kib_connd_conns;      /* connections to progress */
-        struct list_head  kib_connd_peers;      /* peers waiting for a connection */
-        wait_queue_head_t kib_connd_waitq;      /* connection daemons sleep here */
-        unsigned long     kib_connd_waketime;   /* when connd will wake */
+        void             *kib_connd;            /* the connd task (serialisation assertions) */
+        struct list_head  kib_connd_peers;      /* peers wanting to get connected */
+        struct list_head  kib_connd_pcreqs;     /* passive connection requests */
+        struct list_head  kib_connd_conns;      /* connections to setup/teardown */
+        struct list_head  kib_connd_zombies;    /* connections with zero refcount */
+        wait_queue_head_t kib_connd_waitq;      /* connection daemon sleeps here */
         spinlock_t        kib_connd_lock;       /* serialise */
 
         wait_queue_head_t kib_sched_waitq;      /* schedulers sleep here */
@@ -246,44 +241,36 @@ typedef struct
         spinlock_t        kib_tx_lock;          /* serialise */
 
         vv_hca_h_t        kib_hca;              /* The HCA */
-        vv_hca_attrib_t   kib_hca_attrs;      /* HCA attributes */
-
+        vv_hca_attrib_t   kib_hca_attrs;        /* its properties */
         int               kib_port;             /* port on the device */
-        vv_port_attrib_t  kib_port_attr;      /* port attributes */
+        vv_port_attrib_t  kib_port_attr;        /* its properties */
 
         vv_pd_h_t         kib_pd;               /* protection domain */
         vv_cq_h_t         kib_cq;               /* completion queue */
 
-        void             *kib_listen_handle;    /* where I listen for connections */
-
-        /* These fields are left untouched, so they can be shared. */
-        union {
-                cm_drequest_data_t dreq_data;
-                cm_dreply_data_t   drep_data;
-        } cm_data;
-
-        /* Send and receive MADs (service records, path records) */
-        gsi_class_handle_t      gsi_handle;
-        gsi_dtgrm_pool_handle_t gsi_pool_handle;
-        struct semaphore gsi_mutex; /* protect GSI list - TODO:spinlock instead? */
-        struct list_head gsi_pending; /* pending GSI datagrams */
-
 } kib_data_t;
 
+#define IBNAL_INIT_NOTHING         0
+#define IBNAL_INIT_DATA            1
+#define IBNAL_INIT_LIB             2
+#define IBNAL_INIT_HCA             3
+#define IBNAL_INIT_ASYNC           4
+#define IBNAL_INIT_PD              5
+#define IBNAL_INIT_TXD             6
+#define IBNAL_INIT_CQ              7
+#define IBNAL_INIT_ALL             8
+
 /************************************************************************
- * Wire message structs.
+ * IB Wire message format.
  * These are sent in sender's byte order (i.e. receiver flips).
- * CAVEAT EMPTOR: other structs communicated between nodes (e.g. MAD
- * private data and SM service info), is LE on the wire.
  */
 
-/* also kib_md_t above */
-
-typedef struct
+typedef struct kib_connparams
 {
-        __u32                 rd_nob;           /* # of bytes */
-        __u64                 rd_addr;          /* remote io vaddr */
-} kib_rdma_desc_t __attribute__((packed));
+        __u32             ibcp_queue_depth;
+        __u32             ibcp_max_msg_size;
+        __u32             ibcp_max_frags;
+} kib_connparams_t __attribute__((packed));
 
 typedef struct
 {
@@ -291,54 +278,91 @@ typedef struct
         char              ibim_payload[0];      /* piggy-backed payload */
 } kib_immediate_msg_t __attribute__((packed));
 
-/* these arrays serve two purposes during rdma.  they are built on the passive
- * side and sent to the active side as remote arguments.  On the active side
- * the descs are used as a data structure on the way to local gather items.
- * the different roles result in split local/remote meaning of desc->rd_key */
+/* YEUCH! the __u64 address is split into 2 __u32 fields to ensure proper
+ * packing.  Otherwise we can't fit enough frags into an IBNAL message (<=
+ * smallest page size on any arch). */
 typedef struct
 {
-        ptl_hdr_t         ibrm_hdr;             /* portals header */
-        __u64             ibrm_cookie;          /* opaque completion cookie */
-        __u32             ibrm_num_descs;       /* how many descs */
-        __u32             rd_key;               /* remote key */
-        kib_rdma_desc_t   ibrm_desc[0];         /* where to suck/blow */
-} kib_rdma_msg_t __attribute__((packed));
+        __u32             rf_nob;               /* # of bytes */
+        __u32             rf_addr_lo;           /* lo 4 bytes of vaddr */
+        __u32             rf_addr_hi;           /* hi 4 bytes of vaddr */
+} kib_rdma_frag_t __attribute__((packed));
 
-#define kib_rdma_msg_len(num_descs) \
-        offsetof(kib_msg_t, ibm_u.rdma.ibrm_desc[num_descs])
+typedef struct
+{
+        __u32             rd_key;               /* local/remote key */
+        __u32             rd_nfrag;             /* # fragments */
+        kib_rdma_frag_t   rd_frags[0];          /* buffer frags */
+} kib_rdma_desc_t __attribute__((packed));
+
+/* CAVEAT EMPTOR!  We don't actually put ibprm_rd on the wire; it's just there
+ * to remember the source buffers while we wait for the PUT_ACK */
+
+typedef struct
+{
+        ptl_hdr_t         ibprm_hdr;            /* portals header */
+        __u64             ibprm_cookie;         /* opaque completion cookie */
+        kib_rdma_frag_t   ibprm_rd;             /* source buffer */
+} kib_putreq_msg_t __attribute__((packed));
+
+typedef struct
+{
+        __u64             ibpam_src_cookie;     /* reflected completion cookie */
+        __u64             ibpam_dst_cookie;     /* opaque completion cookie */
+        kib_rdma_desc_t   ibpam_rd;             /* sender's sink buffer */
+} kib_putack_msg_t __attribute__((packed));
+
+typedef struct
+{
+        ptl_hdr_t         ibgm_hdr;             /* portals header */
+        __u64             ibgm_cookie;          /* opaque completion cookie */
+        kib_rdma_desc_t   ibgm_rd;              /* rdma descriptor */
+} kib_get_msg_t __attribute__((packed));
 
 typedef struct
 {
         __u64             ibcm_cookie;          /* opaque completion cookie */
-        __u32             ibcm_status;          /* completion status */
+        __s32             ibcm_status;          /* < 0 failure: >= 0 length */
 } kib_completion_msg_t __attribute__((packed));
 
 typedef struct
 {
-        __u32              ibm_magic;           /* I'm an openibnal message */
-        __u16              ibm_version;         /* this is my version number */
-        __u8               ibm_type;            /* msg type */
-        __u8               ibm_credits;         /* returned credits */
-#if IBNAL_CKSUM
-        __u32              ibm_nob;
-        __u32              ibm_cksum;
-#endif
+        /* First 2 fields fixed FOR ALL TIME */
+        __u32             ibm_magic;            /* I'm an openibnal message */
+        __u16             ibm_version;          /* this is my version number */
+
+        __u8              ibm_type;             /* msg type */
+        __u8              ibm_credits;          /* returned credits */
+        __u32             ibm_nob;              /* # bytes in whole message */
+        __u32             ibm_cksum;            /* checksum (0 == no checksum) */
+        __u64             ibm_srcnid;           /* sender's NID */
+        __u64             ibm_srcstamp;         /* sender's incarnation */
+        __u64             ibm_dstnid;           /* destination's NID */
+        __u64             ibm_dststamp;         /* destination's incarnation */
+
         union {
+                kib_connparams_t      connparams;
                 kib_immediate_msg_t   immediate;
-                kib_rdma_msg_t        rdma;
+                kib_putreq_msg_t      putreq;
+                kib_putack_msg_t      putack;
+                kib_get_msg_t         get;
                 kib_completion_msg_t  completion;
         } ibm_u __attribute__((packed));
 } kib_msg_t __attribute__((packed));
 
 #define IBNAL_MSG_MAGIC       0x0be91b91        /* unique magic */
-#define IBNAL_MSG_VERSION              1        /* current protocol version */
+#define IBNAL_MSG_VERSION              4        /* current protocol version */
 
+#define IBNAL_MSG_CONNREQ           0xc0        /* connection request */
+#define IBNAL_MSG_CONNACK           0xc1        /* connection acknowledge */
 #define IBNAL_MSG_NOOP              0xd0        /* nothing (just credits) */
-#define IBNAL_MSG_IMMEDIATE         0xd1        /* portals hdr + payload */
-#define IBNAL_MSG_PUT_RDMA          0xd2        /* portals PUT hdr + source rdma desc */
-#define IBNAL_MSG_PUT_DONE          0xd3        /* signal PUT rdma completion */
-#define IBNAL_MSG_GET_RDMA          0xd4        /* portals GET hdr + sink rdma desc */
-#define IBNAL_MSG_GET_DONE          0xd5        /* signal GET rdma completion */
+#define IBNAL_MSG_IMMEDIATE         0xd1        /* immediate */
+#define IBNAL_MSG_PUT_REQ           0xd2        /* putreq (src->sink) */
+#define IBNAL_MSG_PUT_NAK           0xd3        /* completion (sink->src) */
+#define IBNAL_MSG_PUT_ACK           0xd4        /* putack (sink->src) */
+#define IBNAL_MSG_PUT_DONE          0xd5        /* completion (src->sink) */
+#define IBNAL_MSG_GET_REQ           0xd6        /* getreq (sink->src) */
+#define IBNAL_MSG_GET_DONE          0xd7        /* completion (src->sink: all OK) */
 
 /***********************************************************************/
 
@@ -346,13 +370,25 @@ typedef struct kib_rx                           /* receive message */
 {
         struct list_head          rx_list;      /* queue for attention */
         struct kib_conn          *rx_conn;      /* owning conn */
-        int                       rx_rdma;      /* RDMA completion posted? */
+        int                       rx_responded; /* responded to peer? */
         int                       rx_posted;    /* posted? */
-        kib_msg_t                *rx_msg;     /* pre-mapped buffer */
-        vv_l_key_t                l_key;
-        vv_wr_t                   rx_wrq;
+#if IBNAL_WHOLE_MEM
+        vv_l_key_t                rx_lkey;      /* local key */
+#else        
+        __u64                     rx_vaddr;     /* pre-mapped buffer (hca vaddr) */
+#endif
+        kib_msg_t                *rx_msg;       /* pre-mapped buffer (host vaddr) */
+        vv_wr_t                   rx_wrq;       /* receive work item */
         vv_scatgat_t              rx_gl;        /* and its memory */
 } kib_rx_t;
+
+#if IBNAL_WHOLE_MEM
+# define KIBNAL_RX_VADDR(rx) ((__u64)((unsigned long)((rx)->rx_msg)))
+# define KIBNAL_RX_LKEY(rx)  ((rx)->rx_lkey)
+#else
+# define KIBNAL_RX_VADDR(rx) ((rx)->rx_vaddr)
+# define KIBNAL_RX_LKEY(rx)  ((rx)->rx_conn->ibc_rx_pages->ibp_lkey)
+#endif
 
 typedef struct kib_tx                           /* transmit message */
 {
@@ -361,55 +397,59 @@ typedef struct kib_tx                           /* transmit message */
         struct kib_conn          *tx_conn;      /* owning conn */
         int                       tx_mapped;    /* mapped for RDMA? */
         int                       tx_sending;   /* # tx callbacks outstanding */
+        int                       tx_waiting;   /* waiting for peer */
         int                       tx_status;    /* completion status */
         unsigned long             tx_deadline;  /* completion deadline */
-        int                       tx_passive_rdma; /* peer sucks/blows */
-        int                       tx_passive_rdma_wait; /* waiting for peer to complete */
-        __u64                     tx_passive_rdma_cookie; /* completion cookie */
+        __u64                     tx_cookie;    /* completion cookie */
         lib_msg_t                *tx_libmsg[2]; /* lib msgs to finalize on completion */
+#if IBNAL_WHOLE_MEM
+        vv_l_key_t                tx_lkey;      /* local key for message buffer */
+#else
         kib_md_t                  tx_md;        /* RDMA mapping (active/passive) */
-        kib_msg_t                *tx_msg;       /* pre-mapped buffer */
-        vv_l_key_t                l_key;
-        vv_r_key_t                r_key;
-        int                       tx_nsp;       /* # send work items */
-        vv_wr_t                  tx_wrq[IBNAL_TX_MAX_SG];    /* send work items... */
-        vv_scatgat_t              tx_gl[IBNAL_TX_MAX_SG];     /* ...and their memory */
+        __u64                     tx_vaddr;     /* pre-mapped buffer (hca vaddr) */
+#endif
+        kib_msg_t                *tx_msg;       /* message buffer (host vaddr) */
+        int                       tx_nwrq;      /* # send work items */
+        vv_wr_t                  *tx_wrq;       /* send work items... */
+        vv_scatgat_t             *tx_gl;        /* ...and their memory */
+        kib_rdma_desc_t          *tx_rd;        /* rdma descriptor (src buffers) */
 } kib_tx_t;
+
+#if IBNAL_WHOLE_MEM
+# define KIBNAL_TX_VADDR(tx) ((__u64)((unsigned long)((tx)->tx_msg)))
+# define KIBNAL_TX_LKEY(tx)  ((tx)->tx_lkey)
+#else
+# define KIBNAL_TX_VADDR(tx) ((tx)->tx_vaddr)
+# define KIBNAL_TX_LKEY(tx)  (kibnal_data.kib_tx_pages->ibp_lkey)
+#endif
 
 #define KIB_TX_UNMAPPED       0
 #define KIB_TX_MAPPED         1
-#define KIB_TX_MAPPED_FMR     2
 
-typedef struct kib_wire_connreq
+/* Passive connection request (listener callback) queued for handling by connd */
+typedef struct kib_pcreq
 {
-        __u32        wcr_magic;                 /* I'm an openibnal connreq */
-        __u16        wcr_version;               /* this is my version number */
-        __u16        wcr_queue_depth;           /* this is my receive queue size */
-        __u64        wcr_nid;                   /* peer's NID */
-        __u64        wcr_incarnation;           /* peer's incarnation */
-} kib_wire_connreq_t;
+        struct list_head  pcr_list;             /* queue for handling by connd */
+        cm_cep_handle_t   pcr_cep;              /* listening handle */
+        cm_request_data_t pcr_cmreq;            /* request data */
+} kib_pcreq_t;
 
-typedef struct kib_gid
+typedef struct kib_connvars
 {
-        __u64   hi, lo;
-} kib_gid_t;
-
-typedef struct kib_connreq
-{
-        /* connection-in-progress */
-        struct kib_conn                    *cr_conn;
-        kib_wire_connreq_t                  cr_wcr;
-        __u64                               cr_tid;
-        //ib_service_record_v2_t              cr_service;
-        kib_gid_t                           cr_gid;
-        ib_path_record_v2_t                 cr_path;
-
-        union {
-                cm_request_data_t                   cr_cm_req;
-                cm_rtu_data_t                       cr_cm_rtu;
-        } ;
-
-} kib_connreq_t;
+        /* connection-in-progress variables */
+        __u32               cv_port;
+        __u32               cv_pkey_index;
+        __u32               cv_rnr_count;
+        __u32               cv_sgid_index;
+        __u32               cv_remote_qpn;
+        __u32               cv_local_qpn;
+        __u32               cv_rxpsn;
+        __u32               cv_txpsn;
+        ib_path_record_v2_t cv_path;
+        ibat_arp_data_t     cv_arp;
+        ibat_stat_t         cv_arprc;
+        cm_conn_data_t      cv_conndata;
+} kib_connvars_t;
 
 typedef struct kib_conn
 {
@@ -422,43 +462,39 @@ typedef struct kib_conn
         int                 ibc_nsends_posted;  /* # uncompleted sends */
         int                 ibc_credits;        /* # credits I have */
         int                 ibc_outstanding_credits; /* # credits to return */
-        int                 ibc_rcvd_disconnect;/* received discon request */
-        int                 ibc_sent_disconnect;/* sent discon request */
+        int                 ibc_disconnect;     /* some disconnect callback fired */
+        int                 ibc_comms_error;    /* set on comms error */
+        struct list_head    ibc_early_rxs;      /* rxs completed before ESTABLISHED */
         struct list_head    ibc_tx_queue;       /* send queue */
         struct list_head    ibc_active_txs;     /* active tx awaiting completion */
         spinlock_t          ibc_lock;           /* serialise */
         kib_rx_t           *ibc_rxs;            /* the rx descs */
         kib_pages_t        *ibc_rx_pages;       /* premapped rx msg pages */
         vv_qp_h_t           ibc_qp;             /* queue pair */
-        cm_cep_handle_t     ibc_cep;            /* connection ID? */
-        vv_qp_attr_t        ibc_qp_attrs;    /* QP attrs */
-        kib_connreq_t      *ibc_connreq;        /* connection request state */
+        cm_cep_handle_t     ibc_cep;            /* connection endpoint */
+        kib_connvars_t     *ibc_connvars;       /* in-progress connection state */
 } kib_conn_t;
 
-#define IBNAL_CONN_INIT_NOTHING      0          /* initial state */
-#define IBNAL_CONN_INIT_QP           1          /* ibc_qp set up */
-#define IBNAL_CONN_CONNECTING        2          /* started to connect */
-#define IBNAL_CONN_ESTABLISHED       3          /* connection established */
-#define IBNAL_CONN_SEND_DREQ         4          /* to send disconnect req */
-#define IBNAL_CONN_DREQ              5          /* sent disconnect req */
-#define IBNAL_CONN_DREP              6          /* sent disconnect rep */
-#define IBNAL_CONN_DISCONNECTED      7          /* no more QP or CM traffic */
-
-#define KIB_ASSERT_CONN_STATE(conn, state) do {                         \
-        LASSERTF((conn)->ibc_state == state, "%d\n", conn->ibc_state);  \
-} while (0)
-
-#define KIB_ASSERT_CONN_STATE_RANGE(conn, low, high) do {               \
-        LASSERTF(low <= high, "%d %d\n", low, high);                    \
-        LASSERTF((conn)->ibc_state >= low && (conn)->ibc_state <= high, \
-                 "%d\n", conn->ibc_state);                              \
-} while (0)
+#define IBNAL_CONN_INIT_NOTHING       0         /* incomplete init */
+#define IBNAL_CONN_INIT               1         /* completed init */
+#define IBNAL_CONN_ACTIVE_ARP         2         /* active arping */
+#define IBNAL_CONN_ACTIVE_CONNECT     3         /* active sending req */
+#define IBNAL_CONN_ACTIVE_CHECK_REPLY 4         /* active checking reply */
+#define IBNAL_CONN_ACTIVE_RTU         5         /* active sending rtu */
+#define IBNAL_CONN_PASSIVE_WAIT       6         /* passive waiting for rtu */
+#define IBNAL_CONN_ESTABLISHED        7         /* connection established */
+#define IBNAL_CONN_DISCONNECT1        8         /* disconnect phase 1 */
+#define IBNAL_CONN_DISCONNECT2        9         /* disconnect phase 2 */
+#define IBNAL_CONN_DISCONNECTED       10        /* disconnect complete */
 
 typedef struct kib_peer
 {
         struct list_head    ibp_list;           /* stash on global peer list */
         struct list_head    ibp_connd_list;     /* schedule on kib_connd_peers */
         ptl_nid_t           ibp_nid;            /* who's on the other end(s) */
+        __u32               ibp_ip;             /* IP to query for peer conn params */
+        int                 ibp_port;           /* port to qery for peer conn params */
+        __u64               ibp_incarnation;    /* peer's incarnation */
         atomic_t            ibp_refcount;       /* # users */
         int                 ibp_persistence;    /* "known" peer refs */
         struct list_head    ibp_conns;          /* all active connections */
@@ -468,75 +504,95 @@ typedef struct kib_peer
         unsigned long       ibp_reconnect_interval; /* exponential backoff */
 } kib_peer_t;
 
-struct sa_request;
-typedef void (*sa_request_cb_t)(struct sa_request *request);
-
-struct sa_request {
-        /* Link all the pending GSI datagrams together. */
-        struct list_head list;
-
-        int retry;              /* number of retries left (after a timeout only) */
-        int status;             /* status of the request */
-        gsi_dtgrm_t *dtgrm_req; /* request */
-        gsi_dtgrm_t *dtgrm_resp; /* response */
-        sa_mad_v2_t *mad;       /* points inside the datagram */
-
-        void *context;
-
-        struct timer_list timer;
-
-        /* When the requests is completed, we either call the callback
-         * or post a completion. They are mutually exclusive. */
-        struct completion signal;
-        sa_request_cb_t callback;
-};
-
-/* The CM callback are called on the interrupt level. However we
- * cannot do everything we want on that level, so we let keventd run
- * the callback. */
-struct cm_off_level {
-        struct tq_struct tq;
-
-        cm_cep_handle_t cep;
-        cm_conn_data_t *info;
-        kib_conn_t *conn;
-};
 
 extern lib_nal_t       kibnal_lib;
 extern kib_data_t      kibnal_data;
 extern kib_tunables_t  kibnal_tunables;
 
-static inline int wrq_signals_completion(vv_wr_t *wrq)
+extern void kibnal_init_msg(kib_msg_t *msg, int type, int body_nob);
+extern void kibnal_pack_msg(kib_msg_t *msg, int credits, 
+                            ptl_nid_t dstnid, __u64 dststamp);
+extern int kibnal_unpack_msg(kib_msg_t *msg, int nob);
+extern kib_peer_t *kibnal_create_peer(ptl_nid_t nid);
+extern void kibnal_destroy_peer(kib_peer_t *peer);
+extern int kibnal_del_peer(ptl_nid_t nid, int single_share);
+extern kib_peer_t *kibnal_find_peer_locked(ptl_nid_t nid);
+extern void kibnal_unlink_peer_locked(kib_peer_t *peer);
+extern int  kibnal_close_stale_conns_locked(kib_peer_t *peer,
+                                            __u64 incarnation);
+extern kib_conn_t *kibnal_create_conn(cm_cep_handle_t cep);
+extern void kibnal_listen_callback(cm_cep_handle_t cep, cm_conn_data_t *info, void *arg);
+
+extern int kibnal_alloc_pages(kib_pages_t **pp, int npages, int access);
+extern void kibnal_free_pages(kib_pages_t *p);
+
+extern void kibnal_check_sends(kib_conn_t *conn);
+extern void kibnal_close_conn_locked(kib_conn_t *conn, int error);
+extern void kibnal_destroy_conn(kib_conn_t *conn);
+extern int  kibnal_thread_start(int (*fn)(void *arg), void *arg);
+extern int  kibnal_scheduler(void *arg);
+extern int  kibnal_connd(void *arg);
+extern void kibnal_init_tx_msg(kib_tx_t *tx, int type, int body_nob);
+extern void kibnal_close_conn(kib_conn_t *conn, int why);
+extern int  kibnal_set_qp_state(kib_conn_t *conn, vv_qp_state_t new_state);
+extern void kibnal_async_callback(vv_event_record_t ev);
+extern void kibnal_cq_callback(unsigned long context);
+extern void kibnal_passive_connreq(kib_pcreq_t *pcr, int reject);
+extern void kibnal_pause(int ticks);
+extern void kibnal_queue_tx(kib_tx_t *tx, kib_conn_t *conn);
+extern int  kibnal_init_rdma(kib_tx_t *tx, int type, int nob,
+                             kib_rdma_desc_t *dstrd, __u64 dstcookie);
+
+static inline int
+wrq_signals_completion (vv_wr_t *wrq)
 {
         return wrq->completion_notification != 0;
 }
 
-/******************************************************************************/
+static inline void
+kibnal_conn_addref (kib_conn_t *conn)
+{
+        CDEBUG(D_NET, "++conn[%p] (%d)\n",
+               conn, atomic_read(&conn->ibc_refcount));
+        LASSERT(atomic_read(&conn->ibc_refcount) > 0);
+        atomic_inc(&conn->ibc_refcount);
+}
 
-/* these are purposely avoiding using local vars so they don't increase
- * stack consumption. */
+static inline void
+kibnal_conn_decref (kib_conn_t *conn)
+{
+        unsigned long   flags;
 
-#define kib_peer_addref(peer) do {                                      \
-        LASSERTF(atomic_read(&peer->ibp_refcount) > 0, "%d\n",          \
-                 atomic_read(&peer->ibp_refcount));                     \
-        CDEBUG(D_NET, "++peer[%p] -> "LPX64" (%d)\n",                   \
-               peer, peer->ibp_nid, atomic_read (&peer->ibp_refcount)); \
-        atomic_inc(&peer->ibp_refcount);                                \
-} while (0)
+        CDEBUG(D_NET, "--conn[%p] (%d)\n",
+               conn, atomic_read(&conn->ibc_refcount));
+        LASSERT(atomic_read(&conn->ibc_refcount) > 0);
+        if (atomic_dec_and_test(&conn->ibc_refcount)) {
+                spin_lock_irqsave(&kibnal_data.kib_connd_lock, flags);
+                list_add_tail(&conn->ibc_list, &kibnal_data.kib_connd_zombies);
+                wake_up(&kibnal_data.kib_connd_waitq);
+                spin_unlock_irqrestore(&kibnal_data.kib_connd_lock, flags);
+        }
+}
 
-#define kib_peer_decref(peer) do {                                      \
-        LASSERTF(atomic_read(&peer->ibp_refcount) > 0, "%d\n",          \
-                 atomic_read(&peer->ibp_refcount));                     \
-        CDEBUG(D_NET, "--peer[%p] -> "LPX64" (%d)\n",                   \
-               peer, peer->ibp_nid, atomic_read (&peer->ibp_refcount)); \
-        if (atomic_dec_and_test (&peer->ibp_refcount)) {                \
-                CDEBUG (D_NET, "destroying peer "LPX64" %p\n",          \
-                        peer->ibp_nid, peer);                           \
-                kibnal_destroy_peer (peer);                             \
-        }                                                               \
-} while (0)
+static inline void
+kibnal_peer_addref (kib_peer_t *peer)
+{
+        CDEBUG(D_NET, "++peer[%p] -> "LPX64" (%d)\n",
+               peer, peer->ibp_nid, atomic_read (&peer->ibp_refcount));
+        LASSERT(atomic_read(&peer->ibp_refcount) > 0);
+        atomic_inc(&peer->ibp_refcount);
+}
 
-/******************************************************************************/
+static inline void
+kibnal_peer_decref (kib_peer_t *peer)
+{
+        CDEBUG(D_NET, "--peer[%p] -> "LPX64" (%d)\n",
+               peer, peer->ibp_nid, atomic_read (&peer->ibp_refcount));
+
+        LASSERT(atomic_read(&peer->ibp_refcount) > 0);
+        if (atomic_dec_and_test (&peer->ibp_refcount))
+                kibnal_destroy_peer (peer);
+}
 
 static inline struct list_head *
 kibnal_nid2peerlist (ptl_nid_t nid)
@@ -547,7 +603,7 @@ kibnal_nid2peerlist (ptl_nid_t nid)
 }
 
 static inline int
-kibnal_peer_active(kib_peer_t *peer)
+kibnal_peer_active (kib_peer_t *peer)
 {
         /* Am I in the peer hash table? */
         return (!list_empty(&peer->ibp_list));
@@ -558,43 +614,23 @@ kibnal_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
 {
         /* CAVEAT EMPTOR: tx takes caller's ref on conn */
 
-        LASSERT (tx->tx_nsp > 0);               /* work items set up */
-        LASSERT (tx->tx_conn == NULL);          /* only set here */
-
-        tx->tx_conn = conn;
+        LASSERT (tx->tx_nwrq > 0);              /* work items set up */
+        if (tx->tx_conn == NULL) {
+                kibnal_conn_addref(conn);
+                tx->tx_conn = conn;
+        } else {
+                LASSERT (tx->tx_conn == conn);
+                LASSERT (tx->tx_msg->ibm_type == IBNAL_MSG_PUT_DONE);
+        }
         tx->tx_deadline = jiffies + kibnal_tunables.kib_io_timeout * HZ;
         list_add_tail(&tx->tx_list, &conn->ibc_tx_queue);
 }
 
-static inline __u64*
-kibnal_service_nid_field(ib_service_record_v2_t *sr)
-{
-        /* The service key mask must have byte 0 to 7 set. */
-        return (__u64 *)sr->service_data8;
-}
-
-static inline void
-kibnal_set_service_keys(ib_service_record_v2_t *sr, ptl_nid_t nid)
-{
-        LASSERT (strlen(IBNAL_SERVICE_NAME) < sizeof(sr->service_name));
-
-        strcpy (sr->service_name, IBNAL_SERVICE_NAME);
-
-        *kibnal_service_nid_field(sr) = cpu_to_le64(nid);
-}
-
-#if CONFIG_X86
-/* TODO: use vv_va2adverize instead */
 static inline __u64
 kibnal_page2phys (struct page *p)
 {
-        __u64 page_number = p - mem_map;
-
-        return (page_number << PAGE_SHIFT);
+        return page_to_phys(p);
 }
-#else
-# error "no page->phys"
-#endif
 
 /* CAVEAT EMPTOR: We rely on tx/rx descriptor alignment to allow us to
  * use the lowest bit of the work request id as a flag to determine if
@@ -622,199 +658,35 @@ kibnal_wreqid_is_rx (vv_wr_id_t wreqid)
         return (wreqid & 1) != 0;
 }
 
+static inline void
+kibnal_set_conn_state (kib_conn_t *conn, int state)
+{
+        conn->ibc_state = state;
+        mb();
+}
+
+static inline __u64
+kibnal_rf_addr (kib_rdma_frag_t *rf)
+{
+        return  (((__u64)rf->rf_addr_hi)<<32) | ((__u64)rf->rf_addr_lo);
+}
+
+static inline void
+kibnal_rf_set (kib_rdma_frag_t *rf, __u64 addr, int nob)
+{
+        rf->rf_addr_lo = addr & 0xffffffff;
+        rf->rf_addr_hi = (addr >> 32) & 0xffffffff;
+        rf->rf_nob = nob;
+}
+
 static inline int
-kibnal_whole_mem(void)
+kibnal_rd_size (kib_rdma_desc_t *rd)
 {
-#if IBNAL_WHOLE_MEM
-        return true;
-#else
-        return false;
-#endif
+        int   i;
+        int   size;
+        
+        for (i = size = 0; i < rd->rd_nfrag; i++)
+                size += rd->rd_frags[i].rf_nob;
+        
+        return size;
 }
-
-/* Voltaire stores GIDs in host order. */
-static inline void gid_swap(vv_gid_t *gid)
-{
-        u_int64_t s;
-
-        s = gid->scope.g.subnet;
-        gid->scope.g.subnet = cpu_to_be64(gid->scope.g.eui64);
-        gid->scope.g.eui64 = cpu_to_be64(s);
-}
-
-#if 0
-static void dump_qp(kib_conn_t *conn)
-{
-        vv_qp_attr_t *qp_attrs;
-        void *qp_context;
-        vv_return_t retval;
-
-        CERROR("QP dumping %p\n", conn);
-
-        retval = vv_qp_query(kibnal_data.kib_hca, conn->ibc_qp, &qp_context, &conn->ibc_qp_attrs);
-        if (retval) {
-                CERROR ("Couldn't query qp attributes: %d\n", retval);
-                return;
-        }
-
-        qp_attrs = &conn->ibc_qp_attrs;
-
-        CERROR("QP %x dump\n", qp_attrs->query.qp_num);
-        CERROR("  vv_qp_attr_mask = %llx\n", qp_attrs->query.vv_qp_attr_mask);
-        CERROR("  qp_state = %d\n", qp_attrs->query.qp_state);
-        CERROR("  cq_send_h = %p\n", qp_attrs->query.cq_send_h);
-        CERROR("  cq_receive_h = %p \n", qp_attrs->query.cq_receive_h);
-        CERROR("  send_max_outstand_wr = %d\n", qp_attrs->query.send_max_outstand_wr);
-        CERROR("  receive_max_outstand_wr = %d\n", qp_attrs->query.receive_max_outstand_wr);
-        CERROR("  max_scatgat_per_send_wr = %d\n", qp_attrs->query.max_scatgat_per_send_wr);
-        CERROR("  max_scatgat_per_receive_wr = %d\n", qp_attrs->query.max_scatgat_per_receive_wr);
-        CERROR("  send_psn = %x\n", qp_attrs->query.send_psn);
-        CERROR("  receve_psn = %x\n", qp_attrs->query.receve_psn);
-        CERROR("  access_control = %x\n", qp_attrs->query.access_control);
-        CERROR("  phy_port_num = %d\n", qp_attrs->query.phy_port_num);
-        CERROR("  primary_p_key_indx = %x\n", qp_attrs->query.primary_p_key_indx);
-        CERROR("  q_key = %x\n", qp_attrs->query.q_key);
-        CERROR("  destanation_qp = %x\n", qp_attrs->query.destanation_qp);
-        CERROR("  rdma_r_atom_outstand_num = %d\n", qp_attrs->query.rdma_r_atom_outstand_num);
-        CERROR("  responder_rdma_r_atom_num = %d\n", qp_attrs->query.responder_rdma_r_atom_num);
-        CERROR("  min_rnr_nak_timer = %d\n", qp_attrs->query.min_rnr_nak_timer);
-        CERROR("  pd_h = %lx\n", qp_attrs->query.pd_h);
-        CERROR("  recv_solicited_events = %d\n", qp_attrs->query.recv_solicited_events);
-        CERROR("  send_signaled_comp = %d\n", qp_attrs->query.send_signaled_comp);
-        CERROR("  flow_control = %d\n", qp_attrs->query.flow_control);
-}
-#else
-#define dump_qp(a)
-#endif
-
-#if 0
-static void dump_wqe(vv_wr_t *wr)
-{
-        CERROR("Dumping send WR %p\n", wr);
-
-        CERROR("  wr_id = %llx\n", wr->wr_id);
-        CERROR("  completion_notification = %d\n", wr->completion_notification);
-        CERROR("  scatgat_list = %p\n", wr->scatgat_list);
-        CERROR("  num_of_data_segments = %d\n", wr->num_of_data_segments);
-
-        if (wr->scatgat_list && wr->num_of_data_segments) {
-                CERROR("    scatgat_list[0].v_address = %p\n", wr->scatgat_list[0].v_address);
-                CERROR("    scatgat_list[0].length = %d\n", wr->scatgat_list[0].length);
-                CERROR("    scatgat_list[0].l_key = %x\n", wr->scatgat_list[0].l_key);
-        }
-
-        CERROR("  wr_type = %d\n", wr->wr_type);
-
-        switch(wr->wr_type) {
-        case vv_wr_send:
-                CERROR("  send\n");
-
-                CERROR("  fance_indicator = %d\n", wr->type.send.send_qp_type.rc_type.fance_indicator);
-                break;
-
-        case vv_wr_receive:
-                break;
-
-        case vv_wr_rdma_write:
-        case vv_wr_rdma_read:
-                CERROR("  rdma\n");
-                CERROR("  fance_indicator = %d\n", wr->type.send.send_qp_type.rc_type.fance_indicator);
-                CERROR("  r_addr = %llx\n", wr->type.send.send_qp_type.rc_type.r_addr);
-                CERROR("  r_r_key = %x\n", wr->type.send.send_qp_type.rc_type.r_r_key);
-                break;
-
-        default:
-                break;
-        }
-}
-
-#else
-#define dump_wqe(a)
-#endif
-
-#if 0
-static void dump_wc(vv_wc_t *wc)
-{
-        CERROR("Dumping WC\n");
-
-        CERROR("  wr_id = %llx\n", wc->wr_id);
-        CERROR("  operation_type = %d\n", wc->operation_type);
-        CERROR("  num_bytes_transfered = %lld\n", wc->num_bytes_transfered);
-        CERROR("  completion_status = %d\n", wc->completion_status);
-}
-#else
-#define dump_wc(a)
-#endif
-
-#if 0
-static void hexdump(char *string, void *ptr, int len)
-{
-        unsigned char *c = ptr;
-        int i;
-
-        if (len < 0 || len > 2048)  {
-                printk("XXX what the hell? %d\n",len);
-                return;
-        }
-
-        printk("%d bytes of '%s' from 0x%p\n", len, string, ptr);
-
-        for (i = 0; i < len;) {
-                printk("%02x",*(c++));
-                i++;
-                if (!(i & 15)) {
-                        printk("\n");
-                } else if (!(i&1)) {
-                        printk(" ");
-                }
-        }
-
-        if(len & 15) {
-                printk("\n");
-        }
-}
-#else
-#define hexdump(a,b,c)
-#endif
-
-/*--------------------------------------------------------------------------*/
-
-
-extern kib_peer_t *kibnal_create_peer (ptl_nid_t nid);
-extern void kibnal_destroy_peer (kib_peer_t *peer);
-extern int kibnal_del_peer (ptl_nid_t nid, int single_share);
-extern kib_peer_t *kibnal_find_peer_locked (ptl_nid_t nid);
-extern void kibnal_unlink_peer_locked (kib_peer_t *peer);
-extern int  kibnal_close_stale_conns_locked (kib_peer_t *peer,
-                                              __u64 incarnation);
-extern kib_conn_t *kibnal_create_conn (void);
-extern void kibnal_put_conn (kib_conn_t *conn);
-extern void kibnal_destroy_conn (kib_conn_t *conn);
-extern void kibnal_listen_callback(cm_cep_handle_t cep, cm_conn_data_t *info, void *arg);
-
-extern int kibnal_alloc_pages (kib_pages_t **pp, int npages, int access);
-extern void kibnal_free_pages (kib_pages_t *p);
-
-extern void kibnal_check_sends (kib_conn_t *conn);
-extern void kibnal_close_conn_locked (kib_conn_t *conn, int error);
-extern void kibnal_destroy_conn (kib_conn_t *conn);
-extern int  kibnal_thread_start (int (*fn)(void *arg), void *arg);
-extern int  kibnal_scheduler(void *arg);
-extern int  kibnal_connd (void *arg);
-extern void kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob);
-extern void kibnal_close_conn (kib_conn_t *conn, int why);
-extern void kibnal_start_active_rdma (int type, int status,
-                                      kib_rx_t *rx, lib_msg_t *libmsg,
-                                      unsigned int niov,
-                                      struct iovec *iov, ptl_kiov_t *kiov,
-                                      size_t offset, size_t nob);
-
-void kibnal_ca_async_callback(vv_event_record_t ev);
-void kibnal_ca_callback (unsigned long context);
-extern void vibnal_mad_received_cb(gsi_class_handle_t handle, void *context, gsi_dtgrm_t * dtgrm);
-extern void vibnal_mad_sent_cb(gsi_class_handle_t handle, void *context, gsi_dtgrm_t * dtgrm);
-extern int kibnal_advertize_op(ptl_nid_t nid, int op, sa_request_cb_t callback, void *context);
-extern int vibnal_start_sa_request(struct sa_request *request);
-extern struct sa_request *alloc_sa_request(void);
-extern void free_sa_request(struct sa_request *request);
-extern int kibnal_pathrecord_op(struct sa_request *request, vv_gid_t dgid, sa_request_cb_t callback, void *context);

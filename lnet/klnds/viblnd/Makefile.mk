@@ -6,5 +6,5 @@
 include $(src)/../../Kernelenv
 
 obj-y += kvibnal.o
-kvibnal-objs := vibnal.o vibnal_cb.o vibnal_sa.o
+kvibnal-objs := vibnal.o vibnal_cb.o
 

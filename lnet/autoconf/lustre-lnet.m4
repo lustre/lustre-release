@@ -1,4 +1,25 @@
 #
+# LP_CHECK_GCC_VERSION
+#
+# Check compiler version
+#
+AC_DEFUN([LP_CHECK_GCC_VERSION],
+[AC_MSG_CHECKING([compiler version])
+PTL_CC_VERSION=`$CC --version | awk '/^gcc/{print $ 3}'`
+PTL_MIN_CC_VERSION="3.2.3"
+v2n() {
+	awk -F. '{printf "%d\n", (($ 1)*100+($ 2))*100+($ 3)}'
+}
+if test -z "$PTL_CC_VERSION" -o \
+        `echo $PTL_CC_VERSION | v2n` -ge `echo $PTL_MIN_CC_VERSION | v2n`; then
+	AC_MSG_RESULT([ok])
+else
+	AC_MSG_RESULT([Buggy compiler found])
+	AC_MSG_ERROR([Need gcc version >= $PTL_MIN_CC_VERSION])
+fi
+])
+
+#
 # LP_CONFIG_ZEROCOPY
 #
 # check if zerocopy is available/wanted
@@ -242,29 +263,66 @@ AC_SUBST(IIBNAL)
 # check for Voltaire infiniband support
 #
 AC_DEFUN([LP_CONFIG_VIB],
-[AC_MSG_CHECKING([if Voltaire IB kernel headers are present])
-VIBCPPFLAGS="-I/usr/local/include/ibhost-kdevel -DCPU_BE=0 -DCPU_LE=1 -DGSI_PASS_PORT_NUM"
-EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS $VIBCPPFLAGS"
-LB_LINUX_TRY_COMPILE([
-        #include <linux/list.h>
- 	#include <vverbs.h>
-],[
-        vv_hca_h_t     kib_hca;
-	vv_return_t    retval;
-
-	retval = vv_hca_open("ANY_HCA", NULL, &kib_hca);
-
-	return retval == vv_return_ok ? 0 : 1;
-],[
-	AC_MSG_RESULT([yes])
-	VIBNAL="vibnal"
-],[
-	AC_MSG_RESULT([no])
+[AC_MSG_CHECKING([whether to enable Voltaire IB support])
+VIBPATH=""
+AC_ARG_WITH([vib],
+	AC_HELP_STRING([--with-vib=path],
+		       [build vibnal against path]),
+	[
+		case $with_vib in
+		no)     AC_MSG_RESULT([no]);;
+		*)	VIBPATH="${with_vib}/src/nvigor/ib-code"
+			if test -d "$with_vib" -a -d "$VIBPATH"; then
+	                        AC_MSG_RESULT([yes])
+			else
+				AC_MSG_RESULT([no])
+				AC_MSG_ERROR([No directory $VIBPATH])
+                        fi;;
+		esac
+	],[
+		AC_MSG_RESULT([no])
+	])
+if test -z "$VIBPATH"; then
 	VIBNAL=""
-	VIBCPPFLAGS=""
-])
-EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+else
+	VIBCPPFLAGS="-I${VIBPATH}/include -I${VIBPATH}/cm"
+	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $VIBCPPFLAGS"
+	LB_LINUX_TRY_COMPILE([
+        	#include <linux/list.h>
+		#include <asm/byteorder.h>
+		#ifdef __BIG_ENDIAN
+		# define CPU_BE 1
+                # define CPU_LE 0
+		#endif
+		#ifdef __LITTLE_ENDIAN
+		# define CPU_BE 0
+		# define CPU_LE 1
+		#endif
+	 	#include <vverbs.h>
+	        #include <ib-cm.h>
+	        #include <ibat.h>
+	],[
+	        vv_hca_h_t       kib_hca;
+		vv_return_t      vvrc;
+	        cm_cep_handle_t  cep;
+	        ibat_arp_data_t  arp_data;
+		ibat_stat_t      ibatrc;
+
+		vvrc = vv_hca_open("ANY_HCA", NULL, &kib_hca);
+	        cep = cm_create_cep(cm_cep_transp_rc);
+	        ibatrc = ibat_get_ib_data((uint32_t)0, (uint32_t)0,
+                                          ibat_paths_primary, &arp_data,
+					  (ibat_get_ib_data_reply_fn_t)NULL,
+                                          NULL, 0);
+		return 0;
+	],[
+		VIBNAL="vibnal"
+	],[
+	        AC_MSG_ERROR([can't compile vibnal with given path])
+	])
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+fi
 AC_SUBST(VIBCPPFLAGS)
 AC_SUBST(VIBNAL)
 ])
@@ -411,13 +469,15 @@ fi
 # Portals linux kernel checks
 #
 AC_DEFUN([LP_PROG_LINUX],
-[LP_CONFIG_ZEROCOPY
+[LP_CHECK_GCC_VERSION
+
+LP_CONFIG_ZEROCOPY
 LP_CONFIG_AFFINITY
 LP_CONFIG_QUADRICS
 LP_CONFIG_GM
 LP_CONFIG_OPENIB
-LP_CONFIG_IIB
 LP_CONFIG_VIB
+LP_CONFIG_IIB
 LP_CONFIG_RANAL
 
 LP_STRUCT_PAGE_LIST
