@@ -13,23 +13,37 @@ start() {
 }
 START=start
 
+error () { 
+    echo FAIL
+    exit 1
+}
 
+pass() { 
+    echo PASS
+}
 
 echo '== touch .../f ; rm .../f ======================== test 0'
 touch /mnt/lustre/f
+[ -f /mnt/lustre/f ] || error 
 rm /mnt/lustre/f
+[ ! -f /mnt/lustre/f ] || error
+pass
 $CLEAN
 $START
 
 echo '== mkdir .../d1; mkdir .../d1/d2 ================= test 1'
 mkdir /mnt/lustre/d1
 mkdir /mnt/lustre/d1/d2
+[ -d /mnt/lustre/d1/d2 ] || error
+pass
 $CLEAN
 $START
 
 echo '== rmdir .../d1/d2; rmdir .../d1 ================= test 1b'
 rmdir /mnt/lustre/d1/d2
 rmdir /mnt/lustre/d1
+[ ! -d /mnt/lustre/d1 ] || error
+pass
 $CLEAN
 $START
 
@@ -203,7 +217,7 @@ $START
 echo '== unpack tar archive as nonroot user =========== test 22'
 mkdir /mnt/lustre/d22
 chown 4711 /mnt/lustre/d22
-sudo -u \#4711 tar cf - /etc/hosts /etc/sysconfig/network | tar xfC - /mnt/lustre/d22
+sudo -u \#4711 tar cf - /etc/hosts /etc/sysconfig/network | sudo -u \#4711 tar xfC - /mnt/lustre/d22
 ls -lR /mnt/lustre/d22/etc
 $CLEAN
 $START
