@@ -14,25 +14,106 @@ AC_MSG_RESULT([$enable_inkernel])
 AM_CONDITIONAL(INKERNEL, test x$enable_inkernel = xyes)
 
 # -------- are we building against an external portals? -------
-AC_MSG_CHECKING([if Cray portals should be used])
+AC_MSG_CHECKING([for Cray portals])
 AC_ARG_WITH([cray-portals],
 	AC_HELP_STRING([--with-cray-portals=path],
 		       [path to cray portals]),
 	[
 	        if test "$with_cray_portals" != no; then
-			if test -r $with_cray_portals/include/portals/api.h ; then
-				CRAY_PORTALS_PATH=$with_cray_portals
-				CRAY_PORTALS_INCLUDE="-I$with_cray_portals/include"
-				AC_DEFINE(CRAY_PORTALS, 1, [Building with Cray Portals])
-			else
-				AC_MSG_ERROR([--with-cray-portals specified badly])
-			fi
-		fi
+			CRAY_PORTALS_PATH=$with_cray_portals
+			CRAY_PORTALS_INCLUDES="$with_cray_portals/include"
+			CRAY_PORTALS_LIBS="$with_cray_portals"
+                fi
 	],[with_cray_portals=no])
 AC_SUBST(CRAY_PORTALS_PATH)
-AC_MSG_RESULT([$with_cray_portals])
+AC_MSG_RESULT([$CRAY_PORTALS_PATH])
 
+AC_MSG_CHECKING([for Cray portals includes])
+AC_ARG_WITH([cray-portals-includes],
+	AC_HELP_STRING([--with-cray-portals-includes=path],
+		       [path to cray portals includes]),
+	[
+	        if test "$with_cray_portals_includes" != no; then
+			CRAY_PORTALS_INCLUDES="$with_cray_portals_includes"
+                fi
+	])
+AC_SUBST(CRAY_PORTALS_INCLUDES)
+AC_MSG_RESULT([$CRAY_PORTALS_INCLUDES])
+
+AC_MSG_CHECKING([for Cray portals libs])
+AC_ARG_WITH([cray-portals-libs],
+	AC_HELP_STRING([--with-cray-portals-libs=path],
+		       [path to cray portals libs]),
+	[
+	        if test "$with_cray_portals_libs" != no; then
+			CRAY_PORTALS_LIBS="$with_cray_portals_libs"
+                fi
+	])
+AC_SUBST(CRAY_PORTALS_LIBS)
+AC_MSG_RESULT([$CRAY_PORTALS_LIBS])
+
+if test x$CRAY_PORTALS_INCLUDES != x ; then
+	if test ! -r $CRAY_PORTALS_INCLUDES/portals/api.h ; then
+		AC_MSG_ERROR([Cray portals headers were not found in $CRAY_PORTALS_INCLUDES.  Please check the paths passed to --with-cray-portals or --with-cray-portals-includes.])
+	fi
+fi
+if test x$CRAY_PORTALS_LIBS != x ; then
+	if test ! -r $CRAY_PORTALS_LIBS/libportals.a ; then
+		AC_MSG_ERROR([Cray portals libraries were not found in $CRAY_PORTALS_LIBS.  Please check the paths passed to --with-cray-portals or --with-cray-portals-libs.])
+	fi
+fi
+
+AC_MSG_CHECKING([whether to use Cray portals])
+if test x$CRAY_PORTALS_INCLUDES != x -a x$CRAY_PORTALS_LIBS != x ; then
+	with_cray_portals=yes
+	AC_DEFINE(CRAY_PORTALS, 1, [Building with Cray Portals])
+	CRAY_PORTALS_INCLUDES="-I$CRAY_PORTALS_INCLUDES"
+else
+	with_cray_portals=no
+fi
+AC_MSG_RESULT([$with_cray_portals])
 AM_CONDITIONAL(CRAY_PORTALS, test x$with_cray_portals != xno)
+
+# ----------------------------------------
+# some tests for catamount-like systems
+# ----------------------------------------
+AC_ARG_ENABLE([sysio_init],
+	AC_HELP_STRING([--disable-sysio-init],
+		[call sysio init functions when initializing liblustre]),
+	[],[enable_sysio_init=yes])
+AC_MSG_CHECKING([whether to initialize libsysio])
+AC_MSG_RESULT([$enable_sysio_init])
+if test x$enable_sysio_init != xno ; then
+	AC_DEFINE([INIT_SYSIO], 1, [call sysio init functions])
+fi
+
+AC_ARG_ENABLE([urandom],
+	AC_HELP_STRING([--disable-urandom],
+		[disable use of /dev/urandom for liblustre]),
+	[],[enable_urandom=yes])
+AC_MSG_CHECKING([whether to use /dev/urandom for liblustre])
+AC_MSG_RESULT([$enable_urandom])
+if test x$enable_urandom != xno ; then
+	AC_DEFINE([LIBLUSTRE_USE_URANDOM], 1, [use /dev/urandom for random data])
+fi
+
+# -------- check for -lcap and -lpthread ----
+if test x$enable_liblustre = xyes ; then
+	AC_CHECK_LIB([cap], [cap_get_proc],
+		[
+			CAP_LIBS="-lcap"
+			AC_DEFINE([HAVE_LIBCAP], 1, [use libcap])
+		],
+		[CAP_LIBS=""])
+	AC_SUBST(CAP_LIBS)
+	AC_CHECK_LIB([pthread], [pthread_create],
+		[
+			PTHREAD_LIBS="-lpthread"
+			AC_DEFINE([HAVE_LIBPTHREAD], 1, [use libpthread])
+		],
+		[PTHREAD_LIBS=""])
+	AC_SUBST(PTHREAD_LIBS)
+fi
 
 # -------- enable tests and utils? -------
 if test x$enable_tests = xno ; then
@@ -128,7 +209,7 @@ AM_CONDITIONAL(USE_QUILT, test x$QUILT != xno)
 
 # -------  Makeflags ------------------
 
-CPPFLAGS="$CRAY_PORTALS_INCLUDE $CRAY_PORTALS_COMMANDLINE -I\$(top_srcdir)/include -I\$(top_srcdir)/portals/include"
+CPPFLAGS="$CPPFLAGS $CRAY_PORTALS_INCLUDES -I\$(top_srcdir)/include -I\$(top_srcdir)/portals/include"
 
 # liblustre are all the same
 LLCPPFLAGS="-D__arch_lib__ -D_LARGEFILE64_SOURCE=1"
@@ -146,7 +227,7 @@ if test x$enable_ldiskfs = xyes ; then
 	AC_DEFINE(CONFIG_LDISKFS_FS_SECURITY, 1, [enable fs security])
 fi
 
-EXTRA_KCFLAGS="-g $CRAY_PORTALS_INCLUDE $CRAY_PORTALS_COMMANDLINE -I$PWD/portals/include -I$PWD/include"
+EXTRA_KCFLAGS="-g $CRAY_PORTALS_INCLUDES -I$PWD/portals/include -I$PWD/include"
 
 # these are like AC_TRY_COMPILE, but try to build modules against the
 # kernel, inside the kernel-tests directory
@@ -408,6 +489,35 @@ if test x$enable_modules != xno ; then
 	AC_SUBST(OPENIBCPPFLAGS)
 	AC_SUBST(OPENIBNAL)
 
+	#### Infinicon IB
+	AC_MSG_CHECKING([if Infinicon IB kernel headers are present])
+	# for how the only infinicon ib build has headers in /usr/include/iba
+	IIBCPPFLAGS="-I/usr/include -DIN_TREE_BUILD"
+	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $IIBCPPFLAGS"
+	LUSTRE_MODULE_TRY_COMPILE(
+		[
+			#include <linux/iba/ibt.h>
+		],[
+	                IBT_INTERFACE_UNION interfaces;
+	                FSTATUS             rc;
+
+	                rc = IbtGetInterfaceByVersion(IBT_INTERFACE_VERSION_2,
+						      &interfaces);
+
+			return rc == FSUCCESS ? 0 : 1;
+		],[
+			AC_MSG_RESULT([yes])
+			IIBNAL="iibnal"
+		],[
+			AC_MSG_RESULT([no])
+			IIBNAL=""
+			IIBCPPFLAGS=""
+		])
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+	AC_SUBST(IIBCPPFLAGS)
+	AC_SUBST(IIBNAL)
+
 	# ---------- Red Hat 2.4.18 has iobuf->dovary --------------
 	# But other kernels don't
 
@@ -667,15 +777,34 @@ fi
 AM_CONDITIONAL(BUILD_QSWNAL, test x$QSWNAL = "xqswnal")
 AM_CONDITIONAL(BUILD_GMNAL, test x$GMNAL = "xgmnal")
 AM_CONDITIONAL(BUILD_OPENIBNAL, test x$OPENIBNAL = "xopenibnal")
+AM_CONDITIONAL(BUILD_IIBNAL, test x$IIBNAL = "xiibnal")
+
+# portals/utils/portals.c
+AC_CHECK_HEADERS([netdb.h netinet/tcp.h asm/types.h])
+AC_CHECK_FUNCS([gethostbyname socket connect])
+
+# portals/utils/debug.c
+AC_CHECK_HEADERS([linux/version.h])
+
+# include/liblustre.h
+AC_CHECK_HEADERS([asm/page.h sys/user.h stdint.h])
+
+# liblustre/llite_lib.h
+AC_CHECK_HEADERS([xtio.h file.h])
+
+# liblustre/dir.c
+AC_CHECK_HEADERS([linux/types.h sys/types.h linux/unistd.h unistd.h])
+
+# liblustre/lutil.c
+AC_CHECK_HEADERS([netinet/in.h arpa/inet.h catamount/data.h])
+AC_CHECK_FUNCS([inet_ntoa])
 
 CPPFLAGS="-include \$(top_builddir)/include/config.h $CPPFLAGS"
 EXTRA_KCFLAGS="-include $PWD/include/config.h $EXTRA_KCFLAGS"
 AC_SUBST(EXTRA_KCFLAGS)
 
-#echo "KCPPFLAGS: $KCPPFLAGS"
-#echo "KCFLAGS: $KCFLAGS"
-#echo "LLCPPFLAGS: $LLCPPFLAGS"
-#echo "LLCFLAGS: $LLCFLAGS"
-#echo "MOD_LINK: $MOD_LINK"
-#echo "CFLAGS: $CFLAGS"
-#echo "CPPFLAGS: $CPPFLAGS"
+echo "CPPFLAGS: $CPPFLAGS"
+echo "LLCPPFLAGS: $LLCPPFLAGS"
+echo "CFLAGS: $CFLAGS"
+echo "EXTRA_KCFLAGS: $EXTRA_KCFLAGS"
+echo "LLCFLAGS: $LLCFLAGS"

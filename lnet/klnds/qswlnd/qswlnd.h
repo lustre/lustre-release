@@ -99,10 +99,10 @@ typedef unsigned long kqsw_csum_t;
 #define KQSW_TX_MAXCONTIG               (1<<10) /* largest payload that gets made contiguous on transmit */
 
 #define KQSW_NTXMSGS                    8       /* # normal transmit messages */
-#define KQSW_NNBLK_TXMSGS               256     /* # reserved transmit messages if can't block */
+#define KQSW_NNBLK_TXMSGS               512     /* # reserved transmit messages if can't block */
 
 #define KQSW_NRXMSGS_LARGE              64      /* # large receive buffers */
-#define KQSW_EP_ENVELOPES_LARGE         128     /* # large ep envelopes */
+#define KQSW_EP_ENVELOPES_LARGE         256     /* # large ep envelopes */
 
 #define KQSW_NRXMSGS_SMALL              256     /* # small receive buffers */
 #define KQSW_EP_ENVELOPES_SMALL         2048    /* # small ep envelopes */
@@ -144,9 +144,10 @@ typedef struct
 #endif
 } kqswnal_remotemd_t;
 
-typedef struct 
+typedef struct kqswnal_rx
 {
         struct list_head krx_list;              /* enqueue -> thread */
+        struct kqswnal_rx *krx_alloclist;       /* stack in kqn_rxds */
         EP_RCVR         *krx_eprx;              /* port to post receives to */
         EP_RXD          *krx_rxd;               /* receive descriptor (for repost) */
 #if MULTIRAIL_EKC
@@ -169,10 +170,11 @@ typedef struct
 #define KRX_COMPLETING   3                      /* waiting to be completed */
 
 
-typedef struct
+typedef struct kqswnal_tx
 {
         struct list_head  ktx_list;             /* enqueue idle/active */
         struct list_head  ktx_delayed_list;     /* enqueue delayedtxds */
+        struct kqswnal_tx *ktx_alloclist;       /* stack in kqn_txds */
         unsigned int      ktx_isnblk:1;         /* reserved descriptor? */
         unsigned int      ktx_state:7;          /* What I'm doing */
         unsigned int      ktx_firsttmpfrag:1;   /* ktx_frags[0] is in my ebuffer ? 0 : 1 */
@@ -222,8 +224,8 @@ typedef struct
         char               kqn_shuttingdown;    /* I'm trying to shut down */
         atomic_t           kqn_nthreads;        /* # threads running */
 
-        kqswnal_rx_t      *kqn_rxds;            /* all the receive descriptors */
-        kqswnal_tx_t      *kqn_txds;            /* all the transmit descriptors */
+        kqswnal_rx_t      *kqn_rxds;            /* stack of all the receive descriptors */
+        kqswnal_tx_t      *kqn_txds;            /* stack of all the transmit descriptors */
 
         struct list_head   kqn_idletxds;        /* transmit descriptors free to use */
         struct list_head   kqn_nblk_idletxds;   /* reserved free transmit descriptors */

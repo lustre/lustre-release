@@ -107,6 +107,10 @@ nal_t procapi_nal = {
 
 ptl_nid_t tcpnal_mynid;
 
+#ifdef ENABLE_SELECT_DISPATCH
+procbridge __global_procbridge = NULL;
+#endif
+
 /* Function: procbridge_startup
  *
  * Arguments:  pid: requested process id (port offset)
@@ -162,6 +166,10 @@ int procbridge_startup (nal_t *nal, ptl_pid_t requested_pid,
         perror("fail to register notifier handler");
         return PTL_FAIL;
     }
+
+#ifdef ENABLE_SELECT_DISPATCH
+    __global_procbridge = p;
+#endif
 
     /* create nal thread */
     if (pthread_create(&p->t, NULL, nal_thread, &args)) {

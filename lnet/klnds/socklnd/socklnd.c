@@ -1226,9 +1226,9 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
                             conn2->ksnc_type != conn->ksnc_type ||
                             conn2->ksnc_incarnation != incarnation)
                                 continue;
-                        
+
                         CWARN("Not creating duplicate connection to "
-                              "%u.%u.%u.%u type %d\n", 
+                              "%u.%u.%u.%u type %d\n",
                               HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_type);
                         rc = -EALREADY;
                         goto failed_2;
@@ -1259,6 +1259,9 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
                 ksocknal_associate_route_conn_locked(route, conn);
                 break;
         }
+
+        /* Give conn a ref on sock->file since we're going to return success */
+        get_file(sock->file);
 
         conn->ksnc_peer = peer;                 /* conn takes my ref on peer */
         conn->ksnc_incarnation = incarnation;
@@ -1311,9 +1314,9 @@ ksocknal_create_conn (ksock_route_t *route, struct socket *sock, int type)
                 ksocknal_putconnsock(conn);
         }
 
-        CWARN("New conn nid:"LPX64" [type:%d] %u.%u.%u.%u -> %u.%u.%u.%u/%d"
+        CWARN("New conn nid:"LPX64" %u.%u.%u.%u -> %u.%u.%u.%u/%d"
               " incarnation:"LPX64" sched[%d]/%d\n",
-              nid, conn->ksnc_type, HIPQUAD(conn->ksnc_myipaddr), 
+              nid, HIPQUAD(conn->ksnc_myipaddr), 
               HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port, incarnation,
               (int)(conn->ksnc_scheduler - ksocknal_data.ksnd_schedulers), irq);
 
@@ -2054,8 +2057,7 @@ ksocknal_cmd(struct portals_cfg *pcfg, void * private)
                         rc = -EINVAL;
                         break;
                 }
-                if (rc != 0)
-                        fput (sock->file);
+                fput (sock->file);
                 break;
         }
         case NAL_CMD_CLOSE_CONNECTION: {

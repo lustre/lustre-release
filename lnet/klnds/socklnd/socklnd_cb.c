@@ -2324,17 +2324,34 @@ ksocknal_setup_sock (struct socket *sock)
         return (0);
 }
 
-int
-ksocknal_connect_peer (ksock_route_t *route, int type)
+static int
+ksocknal_connect_sock(struct socket **sockp, int *may_retry, 
+                      ksock_route_t *route, int local_port)
 {
-        struct sockaddr_in  ipaddr;
-        mm_segment_t        oldmm = get_fs();
-        struct timeval      tv;
-        int                 fd;
+        struct sockaddr_in  locaddr;
+        struct sockaddr_in  srvaddr;
         struct socket      *sock;
         int                 rc;
-        
+        int                 option;
+        mm_segment_t        oldmm = get_fs();
+        struct timeval      tv;
+
+        memset(&locaddr, 0, sizeof(locaddr)); 
+        locaddr.sin_family = AF_INET; 
+        locaddr.sin_port = htons(local_port);
+        locaddr.sin_addr.s_addr = 
+                (route->ksnr_myipaddr != 0) ? htonl(route->ksnr_myipaddr) 
+                                            : INADDR_ANY;
+ 
+        memset (&srvaddr, 0, sizeof (srvaddr));
+        srvaddr.sin_family = AF_INET;
+        srvaddr.sin_port = htons (route->ksnr_port);
+        srvaddr.sin_addr.s_addr = htonl (route->ksnr_ipaddr);
+
+        *may_retry = 0;
+
         rc = sock_create (PF_INET, SOCK_STREAM, 0, &sock);
+        *sockp = sock;
         if (rc != 0) {
                 CERROR ("Can't create autoconnect socket: %d\n", rc);
                 return (rc);
@@ -2344,15 +2361,21 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
          * from userspace.  And we actually need the sock->file refcounting
          * that this gives you :) */
 
-        fd = sock_map_fd (sock);
-        if (fd < 0) {
+        rc = sock_map_fd (sock);
+        if (rc < 0) {
                 sock_release (sock);
-                CERROR ("sock_map_fd error %d\n", fd);
-                return (fd);
+                CERROR ("sock_map_fd error %d\n", rc);
+                return (rc);
         }
 
-        /* NB the fd now owns the ref on sock->file */
+        /* NB the file descriptor (rc) now owns the ref on sock->file */
         LASSERT (sock->file != NULL);
+        LASSERT (file_count(sock->file) == 1);
+
+        get_file(sock->file);                /* extra ref makes sock->file */
+        sys_close(rc);                       /* survive this close */
+
+        /* Still got a single ref on sock->file */
         LASSERT (file_count(sock->file) == 1);
 
         /* Set the socket timeouts, so our connection attempt completes in
@@ -2367,7 +2390,7 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
         if (rc != 0) {
                 CERROR ("Can't set send timeout %d: %d\n", 
                         ksocknal_tunables.ksnd_io_timeout, rc);
-                goto out;
+                goto failed;
         }
         
         set_fs (KERNEL_DS);
@@ -2377,53 +2400,83 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
         if (rc != 0) {
                 CERROR ("Can't set receive timeout %d: %d\n",
                         ksocknal_tunables.ksnd_io_timeout, rc);
-                goto out;
+                goto failed;
         }
 
-        if (route->ksnr_myipaddr != 0) {
-                /* Bind to the local IP address */
-                memset (&ipaddr, 0, sizeof (ipaddr));
-                ipaddr.sin_family = AF_INET;
-                ipaddr.sin_port = htons (0); /* ANY */
-                ipaddr.sin_addr.s_addr = htonl(route->ksnr_myipaddr);
-
-                rc = sock->ops->bind (sock, (struct sockaddr *)&ipaddr,
-                                      sizeof (ipaddr));
-                if (rc != 0) {
-                        CERROR ("Can't bind to local IP %u.%u.%u.%u: %d\n",
-                                HIPQUAD(route->ksnr_myipaddr), rc);
-                        goto out;
-                }
-        }
-        
-        memset (&ipaddr, 0, sizeof (ipaddr));
-        ipaddr.sin_family = AF_INET;
-        ipaddr.sin_port = htons (route->ksnr_port);
-        ipaddr.sin_addr.s_addr = htonl (route->ksnr_ipaddr);
-        
-        rc = sock->ops->connect (sock, (struct sockaddr *)&ipaddr, 
-                                 sizeof (ipaddr), sock->file->f_flags);
+        set_fs (KERNEL_DS);
+        option = 1;
+        rc = sock_setsockopt(sock, SOL_SOCKET, SO_REUSEADDR, 
+                             (char *)&option, sizeof (option)); 
+        set_fs (oldmm);
         if (rc != 0) {
-                CERROR ("Can't connect to nid "LPX64
-                        " local IP: %u.%u.%u.%u,"
-                        " remote IP: %u.%u.%u.%u/%d: %d\n", 
-                        route->ksnr_peer->ksnp_nid,
-                        HIPQUAD(route->ksnr_myipaddr),
-                        HIPQUAD(route->ksnr_ipaddr),
-                        route->ksnr_port, rc);
-                goto out;
+                CERROR("Can't set SO_REUSEADDR for socket: %d\n", rc);
+                goto failed;
         }
 
-        rc = ksocknal_create_conn (route, sock, type);
-        if (rc == 0) {
-                /* Take an extra ref on sock->file to compensate for the
-                 * upcoming close which will lose fd's ref on it. */
-                get_file (sock->file);
+        rc = sock->ops->bind(sock, 
+                             (struct sockaddr *)&locaddr, sizeof(locaddr));
+        if (rc == -EADDRINUSE) {
+                CDEBUG(D_NET, "Port %d already in use\n", local_port);
+                *may_retry = 1;
+                goto failed;
+        }
+        if (rc != 0) {
+                CERROR("Error trying to bind to reserved port %d: %d\n",
+                       local_port, rc);
+                goto failed;
         }
 
- out:
-        sys_close (fd);
-        return (rc);
+        rc = sock->ops->connect(sock,
+                                (struct sockaddr *)&srvaddr, sizeof(srvaddr),
+                                sock->file->f_flags);
+        if (rc == 0)
+                return 0;
+
+        /* EADDRNOTAVAIL probably means we're already connected to the same
+         * peer/port on the same local port on a differently typed
+         * connection.  Let our caller retry with a different local
+         * port... */
+        *may_retry = (rc == -EADDRNOTAVAIL);
+
+        CDEBUG(*may_retry ? D_NET : D_ERROR,
+               "Error %d connecting %u.%u.%u.%u/%d -> %u.%u.%u.%u/%d\n", rc,
+               HIPQUAD(route->ksnr_myipaddr), local_port,
+               HIPQUAD(route->ksnr_ipaddr), route->ksnr_port);
+
+ failed:
+        fput(sock->file);
+        return rc;
+}
+
+int
+ksocknal_connect_peer (ksock_route_t *route, int type)
+{
+        struct socket      *sock;
+        int                 rc;
+        int                 port;
+        int                 may_retry;
+        
+        /* Iterate through reserved ports.  When typed connections are
+         * used, we will need to bind to multiple ports, but we only know
+         * this at connect time.  But, by that time we've already called
+         * bind() so we need a new socket. */
+
+        for (port = 1023; port > 512; --port) {
+
+                rc = ksocknal_connect_sock(&sock, &may_retry, route, port);
+
+                if (rc == 0) {
+                        rc = ksocknal_create_conn(route, sock, type);
+                        fput(sock->file);
+                        return rc;
+                }
+
+                if (!may_retry)
+                        return rc;
+        }
+
+        CERROR("Out of ports trying to bind to a reserved port\n");
+        return (-EADDRINUSE);
 }
 
 void
@@ -2443,7 +2496,6 @@ ksocknal_autoconnect (ksock_route_t *route)
                 LASSERT (type < SOCKNAL_CONN_NTYPES);
 
                 rc = ksocknal_connect_peer (route, type);
-
                 if (rc != 0)
                         break;
                 

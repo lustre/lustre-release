@@ -251,8 +251,6 @@ int tcpnal_init(bridge b)
            newly created junk */
         return(PTL_NAL_FAILED);
     }
-    /* XXX cfs hack */
-//    b->lib_nal->libnal_ni.ni_pid.pid=0;
     b->lower=m;
     return(PTL_OK);
 }

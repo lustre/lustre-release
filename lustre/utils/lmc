@@ -73,9 +73,9 @@ Object creation command summary:
 --add net
   --node node_name
   --nid nid
-  --cluster_id
-  --nettype tcp|elan|gm|openib
-  --hostaddr addr
+  --cluster_id 
+  --nettype tcp|elan|gm|openib|iib
+  --hostaddr ip[/netmask]
   --port port
   --tcpbuf size
   --irq_affinity 0|1
@@ -176,6 +176,7 @@ Object creation command summary:
 """
 
 PARAM = Lustre.Options.PARAM
+PARAMLIST = Lustre.Options.PARAMLIST
 lmc_options = [
     # lmc input/output options
     ('reference', "Print short reference for commands."),
@@ -200,11 +201,11 @@ lmc_options = [
     ('ptldebug', "Set the portals debug level",  PARAM),
     ('subsystem', "Specify which Lustre subsystems have debug output recorded in the log",  PARAM),
 
-    # network
-    ('nettype', "Specify the network type. This can be tcp/elan/gm/openib.", PARAM),
+    # network 
+    ('nettype', "Specify the network type. This can be tcp/elan/gm/openib/iib.", PARAM),
     ('nid', "Give the network ID, e.g ElanID/IP Address as used by portals.", PARAM),
     ('port', "Optional argument to specify the TCP port number.", PARAM, DEFAULT_PORT),
-    ('hostaddr', "", PARAM,""),
+    ('hostaddr', "Optional argument to specify the host address.", PARAMLIST),
     ('cluster_id', "Specify the cluster ID", PARAM, "0"),
 
     # routes
@@ -392,8 +393,8 @@ class GenConfig:
         network.setAttribute("nettype", net);
         self.addElement(network, "nid", nid)
         self.addElement(network, "clusterid", cluster_id)
-        if hostaddr:
-            self.addElement(network, "hostaddr", hostaddr)
+        for host in  hostaddr:
+            self.addElement(network, "hostaddr", host)
         if port:
             self.addElement(network, "port", "%d" %(port))
         
@@ -922,7 +923,7 @@ def add_net(gen, lustre, options):
 
     if net_type in ('tcp',):
         port = get_option_int(options, 'port')
-    elif net_type in ('elan', 'gm', 'openib'):
+    elif net_type in ('elan', 'gm', 'openib','iib'):
         port = 0
     else:
         print "Unknown net_type: ", net_type

@@ -23,7 +23,7 @@
 # lconf is the main driver script for starting and stopping
 # lustre filesystem services.
 #
-# Based in part on the XML obdctl modifications done by Brian Behlendorf
+# Based in part on the XML obdctl modifications done by Brian Behlendorf 
 
 import sys, getopt, types
 import string, os, stat, popen2, socket, time, random, fcntl, select
@@ -61,10 +61,10 @@ MAX_LOOP_DEVICES = 256
 PORTALS_DIR = 'portals'
 
 # Needed to call lconf --record
-CONFIG_FILE = ""
+CONFIG_FILE = "" 
 
 # Please keep these in sync with the values in portals/kp30.h
-ptldebug_names = {
+ptldebug_names = { 
     "trace" :     (1 << 0),
     "inode" :     (1 << 1),
     "super" :     (1 << 2),
@@ -88,8 +88,8 @@ ptldebug_names = {
     "rpctrace" :  (1 << 20),
     "vfstrace" :  (1 << 21),
     "reada" :     (1 << 22),
-    "config" :    (1 << 23),
-    "mmap" :      (1 << 24),    
+    "mmap" :      (1 << 23),
+    "config" :    (1 << 24),
 }
 
 subsystem_names = {
@@ -115,8 +115,11 @@ subsystem_names = {
     "gmnal" :        (1 << 19),
     "ptlrouter" :    (1 << 20),
     "cobd" :         (1 << 21),
-    "openibnal" :    (1 << 22),
-    "cmobd" :        (1 << 23),
+    "ibnal" :        (1 << 22),
+    "sm" :           (1 << 23),
+    "asobd" :        (1 << 24),
+    "lmv" :          (1 << 25),
+    "cmobd" :        (1 << 26),
     }
 
 
@@ -126,7 +129,7 @@ def cleanup_error(rc):
     if not first_cleanup_error:
         first_cleanup_error = rc
 
-# ============================================================
+# ============================================================ 
 # debugging and error funcs
 
 def fixme(msg = "this feature"):
@@ -243,7 +246,7 @@ class DaemonHandler:
             return pid
         except IOError:
             return 0
-
+        
     def clean_pidfile(self):
         """ Remove a stale pidfile """
         log("removing stale pidfile:", self.pidfile())
@@ -251,7 +254,7 @@ class DaemonHandler:
             os.unlink(self.pidfile())
         except OSError, e:
             log(self.pidfile(), e)
-
+            
 class AcceptorHandler(DaemonHandler):
     def __init__(self, port, net_type):
         DaemonHandler.__init__(self, "acceptor")
@@ -262,8 +265,8 @@ class AcceptorHandler(DaemonHandler):
         return "/var/run/%s-%d.pid" % (self.command, self.port)
 
     def command_line(self):
-	return string.join(map(str,(self.flags, self.port)))
-
+        return string.join(map(str,(self.flags, self.port)))
+    
 acceptors = {}
 
 # start the acceptors
@@ -283,14 +286,14 @@ def run_one_acceptor(port):
         if not daemon.running():
             daemon.start()
     else:
-         panic("run_one_acceptor: No acceptor defined for port:", port)
-
+         panic("run_one_acceptor: No acceptor defined for port:", port)   
+        
 def stop_acceptor(port):
     if acceptors.has_key(port):
         daemon = acceptors[port]
         if daemon.running():
             daemon.stop()
-
+        
 
 # ============================================================
 # handle lctl interface
@@ -315,7 +318,7 @@ class LCTLInterface:
 
     def use_save_file(self, file):
         self.save_file = file
-
+        
     def record(self, dev_name, logname):
         log("Recording log", logname, "on", dev_name)
         self.record_device = dev_name
@@ -347,7 +350,7 @@ class LCTLInterface:
     device $%s
     record %s
     %s""" % (self.record_device, self.record_log, cmds)
-
+            
         debug("+", cmd_line, cmds)
         if config.noexec: return (0, [])
 
@@ -399,7 +402,7 @@ class LCTLInterface:
             raise CommandError(self.lctl, out, rc)
         return rc, out
 
-
+            
     def clear_log(self, dev, log):
         """ clear an existing log """
         cmds =  """
@@ -407,6 +410,13 @@ class LCTLInterface:
   probe
   clear_log %s
   quit """ % (dev, log)
+        self.run(cmds)
+
+    def root_squash(self, name, uid, nid):
+        cmds = """
+  device $%s
+  root_squash %s %s
+  quit""" % (name, uid, nid)
         self.run(cmds)
 
     def network(self, net, nid):
@@ -417,11 +427,22 @@ class LCTLInterface:
   quit """ % (net, nid)
         self.run(cmds)
 
-    def root_squash(self, name, uid, nid):
+    # add an interface
+    def add_interface(self, net, ip, netmask = ""):
+        """ add an interface """
         cmds = """
-  device $%s
-  root_squash %s %s
-  quit""" % (name, uid, nid)
+  network %s
+  add_interface %s %s
+  quit """ % (net, ip, netmask)
+        self.run(cmds)
+
+    # delete an interface
+    def del_interface(self, net, ip):
+        """ delete an interface """
+        cmds = """
+  network %s
+  del_interface %s
+  quit """ % (net, ip)
         self.run(cmds)
 
     # create a new connection
@@ -429,26 +450,28 @@ class LCTLInterface:
         cmds = "\n  add_uuid %s %s %s" %(uuid, nid, net_type)
         self.run(cmds)
 
-    def add_peer(self, net_type, nid, hostaddr, port):     
-	if net_type  in ('tcp',) and not config.lctl_dump:
+    def add_peer(self, net_type, nid, hostaddr, port):
+        if net_type  in ('tcp',) and not config.lctl_dump:
             cmds =  """
   network %s
   add_peer %s %s %d
   quit""" % (net_type,
              nid, hostaddr, port )
             self.run(cmds)
-        elif net_type in ('openib',) and not config.lctl_dump:
+        elif net_type in ('openib','iib',) and not config.lctl_dump:
             cmds =  """
   network %s
   add_peer %s
   quit""" % (net_type,
-             nid)
-	    self.run(cmds)
-
+             nid )
+            self.run(cmds)
+    
     def connect(self, srv):
         self.add_uuid(srv.net_type, srv.nid_uuid, srv.nid)
-        if srv.net_type  in ('tcp','openib',) and not config.lctl_dump:
-            self.add_peer(srv.net_type, srv.nid, srv.hostaddr, srv.port)
+        if srv.net_type  in ('tcp','openib','iib',) and not config.lctl_dump:
+            if srv.hostaddr[0]:
+                hostaddr = string.split(srv.hostaddr[0], '/')[0]
+            self.add_peer(srv.net_type, srv.nid, hostaddr, srv.port)
 
     # Recover a device
     def recover(self, dev_name, new_conn):
@@ -456,7 +479,7 @@ class LCTLInterface:
     device $%s
     recover %s""" %(dev_name, new_conn)
         self.run(cmds)
-
+                
     # add a route to a range
     def add_route(self, net, gw, lo, hi):
         cmds =  """
@@ -469,7 +492,7 @@ class LCTLInterface:
         except CommandError, e:
             log ("ignore: ")
             e.dump()
-
+                
     def del_route(self, net, gw, lo, hi):
         cmds =  """
   ignore_errors
@@ -502,6 +525,7 @@ class LCTLInterface:
   quit  """ % (net, gw, tgt)
         self.run(cmds)
 
+
     def del_peer(self, net_type, nid, hostaddr):
         if net_type  in ('tcp',) and not config.lctl_dump:
                 cmds =  """
@@ -511,7 +535,7 @@ class LCTLInterface:
   quit""" % (net_type,
              nid, hostaddr)
                 self.run(cmds)
-        elif net_type  in ('openib',) and not config.lctl_dump:
+        elif net_type  in ('openib','iib',) and not config.lctl_dump:
                 cmds =  """
   ignore_errors
   network %s
@@ -519,12 +543,14 @@ class LCTLInterface:
   quit""" % (net_type,
              nid)
                 self.run(cmds)
-
+        
     # disconnect one connection
     def disconnect(self, srv):
         self.del_uuid(srv.nid_uuid)
-        if srv.net_type  in ('tcp','openib',) and not config.lctl_dump:
-            self.del_peer(srv.net_type, srv.nid, srv.hostaddr)
+        if srv.net_type  in ('tcp','openib','iib',) and not config.lctl_dump:
+            if srv.hostaddr[0]:
+                hostaddr = string.split(srv.hostaddr[0], '/')[0]
+            self.del_peer(srv.net_type, srv.nid, hostaddr)
 
     def del_uuid(self, uuid):
         cmds =  """
@@ -554,7 +580,7 @@ class LCTLInterface:
   setup %s
   quit""" % (name, setup)
         self.run(cmds)
-
+        
     def add_conn(self, name, conn_uuid):
         cmds = """
   cfg_device %s
@@ -571,7 +597,7 @@ class LCTLInterface:
         except CommandError, e:
             self.cleanup(name, uuid, 0)
             raise e
-
+        
 
     # cleanup a device
     def cleanup(self, name, uuid, force, failover = 0):
@@ -591,8 +617,8 @@ class LCTLInterface:
         cmds = """
   attach lov %s %s
   lov_setup %s %d %d %d %s %s
-  quit""" % (name, uuid, desc_uuid, stripe_cnt, stripe_sz, stripe_off, 
-	     pattern, devlist)
+  quit""" % (name, uuid, desc_uuid, stripe_cnt, stripe_sz, stripe_off,
+             pattern, devlist)
         self.run(cmds)
 
     # add an OBD to a LOV
@@ -741,7 +767,7 @@ def find_module(src_dir, dev_dir, modname):
     modbase = src_dir +'/'+ dev_dir +'/'+ modname
     for modext in '.ko', '.o':
         module = modbase + modext
-        try:
+        try: 
             if os.access(module, os.R_OK):
                 return module
         except OSError:
@@ -770,8 +796,6 @@ def jdev(opts):
         i=i+1
     return ''
 
-
-    
 # build fs according to type
 # fixme: dangerous
 def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
@@ -789,7 +813,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
         # ext3 journal size is in megabytes
         # but don't set jsize if mkfsoptions indicates a separate journal device
         if jsize == 0 and jdev(mkfsoptions) == '':
-	    if devsize == 0:
+            if devsize == 0:
                 if not is_block(dev):
                     ret, out = runcmd("ls -l %s" %dev)
                     devsize = int(string.split(out[0])[4]) / 1024
@@ -801,7 +825,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
                     else:
                         # sfdisk -s will fail for too large block device,
                         # then, read the size of partition from /proc/partitions
-                                                                                                               
+
                         # get the realpath of the device
                         # it may be the real device, such as /dev/hda7
                         # or the hardlink created via mknod for a device
@@ -819,14 +843,14 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
                                     real_dev = os.path.join(os.path.dirname(real_dev), dev_link)
                                 if link_count > 19:
                                     panic("Entountered too many symbolic links resolving block device:", dev)
-                                                                                                               
+
                         # get the major and minor number of the realpath via ls
-                        # it seems python(os.stat) does not return
+                        # it seems python(os.stat) does not return 
                         # the st_rdev member of the stat structure
                         ret, out = runcmd("ls -l %s" %real_dev)
                         major = string.split(string.split(out[0])[4], ",")[0]
                         minor = string.split(out[0])[5]
-                                                                                                               
+
                         # get the devsize from /proc/partitions with the major and minor number
                         ret, out = runcmd("cat /proc/partitions")
                         for line in out:
@@ -838,7 +862,7 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
             if devsize > 1024 * 1024:
                 jsize = ((devsize / 102400) * 4)
             if jsize > 400:
-                jsize = 400
+                jsize = 400        
         if jsize:  jopt = "-J size=%d" %(jsize,)
         if isize:  iopt = "-I %d" %(isize,)
         mkfs = 'mkfs.ext2 -j -b 4096 '
@@ -848,11 +872,10 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
             jmkfs = 'mkfs.ext2 -b 4096 -O journal_dev '
             if config.force:
                 jmkfs = jmkfs + '-F '
-            jmkfs = jmkfs + jdev(mkfsoptions)
+            jmkfs = jmkfs + jdev(mkfsoptions)                
             (ret, out) = run (jmkfs)
             if ret:
                 panic("Unable format journal device:", jdev(mkfsoptions), string.join(out))
-
     elif fstype == 'reiserfs':
         # reiserfs journal size is in blocks
         if jsize:  jopt = "--journal_size %d" %(jsize,)
@@ -954,7 +977,7 @@ def clean_loop(file):
 
 # determine if dev is formatted as a <fstype> filesystem
 def need_format(fstype, dev):
-    # FIXME don't know how to implement this
+    # FIXME don't know how to implement this    
     return 0
 
 # initialize a block device if needed
@@ -973,7 +996,7 @@ def block_dev(dev, size, fstype, reformat, autoformat, journal_size,
 #        panic("device:", dev,
 #              "not prepared, and autoformat is not set.\n",
 #              "Rerun with --reformat option to format ALL filesystems")
-
+        
     return dev
 
 def if2addr(iface):
@@ -1011,11 +1034,11 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
     else:
         local = sys_get_local_address(net_type, wildcard, cluster_id)
     return local
-
+        
 def sys_get_local_address(net_type, wildcard, cluster_id):
     """Return the local address for the network type."""
     local = ""
-    if net_type in ('tcp','openib',):   
+    if net_type in ('tcp','openib','iib',):
         if  ':' in wildcard:
             iface, star = string.split(wildcard, ':')
             local = if2addr(iface)
@@ -1039,7 +1062,7 @@ def sys_get_local_address(net_type, wildcard, cluster_id):
                     elan_id = a[1]
                     break
             try:
-                nid = my_int(cluster_id) + my_int(elan_id)
+                nid = my_int(cluster_id) + my_int(elan_id) 
                 local = "%d" % (nid)
             except ValueError, e:
                 local = elan_id
@@ -1116,7 +1139,7 @@ def fs_is_mounted(path):
     except IOError, e:
         log(e)
     return 0
-
+        
 
 class kmod:
     """Manage kernel modules"""
@@ -1140,7 +1163,7 @@ class kmod:
                 continue
             log ('loading module:', mod, 'srcdir', src_dir, 'devdir', dev_dir)
             if src_dir:
-                module = find_module(src_dir, dev_dir,  mod)
+                module = find_module(src_dir, dev_dir, mod)
                 if not module:
                     panic('module not found:', mod)
                 (rc, out)  = run('/sbin/insmod', module)
@@ -1182,7 +1205,7 @@ class Module:
         self._server = None
         self._connected = 0
         self.kmod = kmod(config.lustre, config.portals)
-
+        
     def info(self, *args):
         msg = string.join(map(str,args))
         print self.module_name + ":", self.name, self.uuid, msg
@@ -1196,7 +1219,7 @@ class Module:
             log(self.module_name, "cleanup failed: ", self.name)
             e.dump()
             cleanup_error(e.rc)
-
+            
     def add_portals_module(self, dev_dir, modname):
         """Append a module to list of modules to load."""
         self.kmod.add_portals_module(dev_dir, modname)
@@ -1208,7 +1231,7 @@ class Module:
     def load_module(self):
         """Load all the modules in the list in the order they appear."""
         self.kmod.load_module()
-
+            
     def cleanup_module(self):
         """Unload the modules in the list in reverse order."""
         if self.safe_to_clean():
@@ -1216,10 +1239,10 @@ class Module:
 
     def safe_to_clean(self):
         return 1
-
+        
     def safe_to_clean_modules(self):
         return self.safe_to_clean()
-
+        
 class Network(Module):
     def __init__(self,db):
         Module.__init__(self, 'NETWORK', db)
@@ -1239,12 +1262,14 @@ class Network(Module):
 
         self.nid_uuid = self.nid_to_uuid(self.nid)
 
-        self.hostaddr = self.db.get_val('hostaddr', self.nid)
-        if '*' in self.hostaddr:
-            self.hostaddr = sys_get_local_address(self.net_type, self.hostaddr, self.cluster_id)
-            if not self.hostaddr:
-                panic("unable to set hostaddr for", self.net_type, self.hostaddr, self.cluster_id)
-            debug("hostaddr:", self.hostaddr)
+        self.hostaddr = self.db.get_hostaddr()
+        if len(self.hostaddr) == 0:
+            self.hostaddr.append(self.nid)
+        if '*' in self.hostaddr[0]:
+            self.hostaddr[0] = sys_get_local_address(self.net_type, self.hostaddr[0], self.cluster_id)
+            if not self.hostaddr[0]:
+                panic("unable to set hostaddr for", self.net_type, self.hostaddr[0], self.cluster_id)
+            debug("hostaddr:", self.hostaddr[0])
 
         self.add_portals_module("libcfs", 'libcfs')
         self.add_portals_module("portals", 'portals')
@@ -1258,6 +1283,8 @@ class Network(Module):
             self.add_portals_module("knals/gmnal", 'kgmnal')
         if self.net_type == 'openib':
             self.add_portals_module("knals/openibnal", 'kopenibnal')
+        if self.net_type == 'iib':
+            self.add_portals_module("knals/iibnal", 'kiibnal')
 
     def nid_to_uuid(self, nid):
         return "NID_%s_UUID" %(nid,)
@@ -1270,6 +1297,13 @@ class Network(Module):
             lctl.network(self.net_type, self.nid)
         if self.net_type == 'tcp':
             sys_tweak_socknal()
+            for hostaddr in self.db.get_hostaddr():
+                ip = string.split(hostaddr, '/')[0]
+                if len(string.split(hostaddr, '/')) == 2:
+                    netmask = string.split(hostaddr, '/')[1]
+                else:
+                    netmask = ""
+                lctl.add_interface(self.net_type, ip, netmask)
         if self.net_type == 'elan':
             sys_optimize_elan()
         if self.port and  node_is_router():
@@ -1312,6 +1346,10 @@ class Network(Module):
             stop_acceptor(self.port)
         if  node_is_router():
             self.disconnect_peer_gateways()
+        if self.net_type == 'tcp':
+            for hostaddr in self.db.get_hostaddr():
+                ip = string.split(hostaddr, '/')[0]
+                lctl.del_interface(self.net_type, ip)
 
     def correct_level(self, level, op=None):
         return level
@@ -1322,10 +1360,9 @@ class RouteTable(Module):
 
     def server_for_route(self, net_type, gw, gw_cluster_id, tgt_cluster_id,
                          lo, hi):
-        # only setup connections for tcp and openib NALs
-	srvdb = None
-        
-	if not net_type in ('tcp','openib'):
+        # only setup connections for tcp, openib, and iib NALs
+        srvdb = None
+        if not net_type in ('tcp','openib','iib',):
             return None
 
         # connect to target if route is to single node and this node is the gw
@@ -1345,7 +1382,7 @@ class RouteTable(Module):
             return None
 
         return Network(srvdb)
-
+        
     def prepare(self):
         if not config.record and is_network_prepared():
             return
@@ -1412,7 +1449,7 @@ class LOV(Module):
         self.devlist = self.db.get_lov_tgts('lov_tgt')
         self.stripe_cnt = self.db.get_val_int('stripecount', len(self.devlist))
         self.osclist = []
-	self.obdlist = [] 
+	self.obdlist = []
         self.desc_uuid = self.uuid
         self.uuid = generate_client_uuid(self.name)
         self.fs_name = fs_name
@@ -1506,7 +1543,7 @@ class LMV(Module):
 	         self.mdclist.append(mdc)
             else:
 	         panic('mdc not found:', mds_uuid)
-            
+
     def prepare(self):
         if is_prepared(self.name):
             return
@@ -1600,7 +1637,7 @@ class MDSDEV(Module):
 
 		if not self.lmv:
 		    panic("No LMV initialized and not lovconfig_uuid found")
-		    
+		
                 lovconfig_uuid = self.lmv.get_first_ref('lovconfig')
                 lovconfig = self.lmv.lookup(lovconfig_uuid)
                 lov_uuid = lovconfig.get_first_ref('lov')
@@ -1624,8 +1661,7 @@ class MDSDEV(Module):
                 stripe_count = lov.stripe_cnt
             else:
                 stripe_count = len(lov.devlist)
-
-	    if stripe_count > 77:
+            if stripe_count > 77:
                 self.inode_size = 4096
             elif stripe_count > 35:
                 self.inode_size = 2048
@@ -1655,14 +1691,14 @@ class MDSDEV(Module):
 
         if self.fstype == 'smfs':
             self.add_lustre_module('smfs', 'smfs')
-        
+
         if self.fstype == 'ldiskfs':
             self.add_lustre_module('ldiskfs', 'ldiskfs')
 
         if self.fstype:
             self.add_lustre_module('lvfs', 'fsfilt_%s' % (self.fstype))
-            
-        # if fstype is smfs, then we should also take care about backing 
+
+        # if fstype is smfs, then we should also take care about backing
         # store fs.
         if self.fstype == 'smfs':
             self.add_lustre_module('lvfs', 'fsfilt_%s' % (self.backfstype))
@@ -1695,12 +1731,12 @@ class MDSDEV(Module):
         blkdev = block_dev(self.devpath, self.size, self.fstype, 0,
                            self.format, self.journal_size, self.inode_size,
                            self.mkfsoptions, self.backfstype, self.backdevpath)
-        
+
         if not is_prepared('MDT'):
             lctl.newdev("mdt", 'MDT', 'MDT_UUID', setup ="")
-        try: 
+        try:
             mountfsoptions = def_mount_options(self.fstype, 'mds')
-            
+
             if config.mountfsoptions:
                 if mountfsoptions:
                     mountfsoptions = mountfsoptions + ',' + config.mountfsoptions
@@ -1714,28 +1750,28 @@ class MDSDEV(Module):
                         mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
                     else:
                         mountfsoptions = self.mountfsoptions
-            
+
             if self.fstype == 'smfs':
                 realdev = self.fstype
-                
+
                 if mountfsoptions:
-                    mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions, 
-                                                            self.backfstype, 
+                    mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions,
+                                                            self.backfstype,
                                                             blkdev)
                 else:
-                    mountfsoptions = "type=%s,dev=%s" % (self.backfstype, 
+                    mountfsoptions = "type=%s,dev=%s" % (self.backfstype,
                                                          blkdev)
             else:
                 realdev = blkdev
-                
+
             print 'MDS mount options: ' + mountfsoptions
-            
+
 	    if not self.master_mds:
-                self.master_mds = 'dumb'	    
+                self.master_mds = 'dumb'	
             if not self.cachetype:
                 self.cachetype = 'dumb'
 	    lctl.newdev("mds", self.name, self.uuid,
-                        setup ="%s %s %s %s %s %s" %(realdev, self.fstype, 
+                        setup ="%s %s %s %s %s %s" %(realdev, self.fstype,
                                                self.name, mountfsoptions,
                                                self.master_mds, self.cachetype))
 
@@ -1796,28 +1832,28 @@ class MDSDEV(Module):
 
             if self.fstype == 'smfs':
                 realdev = self.fstype
-                
+
                 if mountfsoptions:
-                    mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions, 
-                                                            self.backfstype, 
+                    mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions,
+                                                            self.backfstype,
                                                             blkdev)
                 else:
-                    mountfsoptions = "type=%s,dev=%s" % (self.backfstype, 
+                    mountfsoptions = "type=%s,dev=%s" % (self.backfstype,
                                                          blkdev)
             else:
                 realdev = blkdev
 	
                 print 'MDS mount options: ' + mountfsoptions
 
-            # As mount options are passed by 4th param to config tool, we need 
+            # As mount options are passed by 4th param to config tool, we need
             # to pass something in 3rd param. But we do not want this 3rd param
             # be counted as a profile name for reading log on MDS setup, thus,
-            # we pass there some predefined sign like 'dumb', which will be 
+            # we pass there some predefined sign like 'dumb', which will be
             # checked in MDS code and skipped. Probably there is more nice way
             # like pass empty string and check it in config tool and pass null
             # as 4th param.
             lctl.newdev("mds", self.name, self.uuid,
-                        setup ="%s %s %s %s" %(realdev, self.fstype, 
+                        setup ="%s %s %s %s" %(realdev, self.fstype,
                                                'dumb', mountfsoptions))
             do_cleanup = 1
 
@@ -1829,14 +1865,14 @@ class MDSDEV(Module):
             # this is ugly, should be organized nice later.
             target_uuid = self.db.get_first_ref('target')
             mds = self.db.lookup(target_uuid)
-            
+
             lovconfig_uuid = mds.get_first_ref('lovconfig')
             if lovconfig_uuid:
                 lovconfig = mds.lookup(lovconfig_uuid)
                 obd_uuid = lovconfig.get_first_ref('lov')
             else:
                 obd_uuid = fs.get_first_ref('obd')
-                
+
             client_uuid = generate_client_uuid(self.name)
             client = VOSC(self.db.lookup(obd_uuid), client_uuid, self.name,
                           self.name)
@@ -1947,7 +1983,7 @@ class MDSDEV(Module):
                 print "cleanup failed: ", self.name
                 e.dump()
                 cleanup_error(e.rc)
-        
+
         if self.fstype == 'smfs':
             clean_loop(self.backdevpath)
         else:
@@ -1990,7 +2026,7 @@ class OSD(Module):
             self.active = 0
         if self.active and config.group and config.group != ost.get_val('group'):
             self.active = 0
-
+            
         self.target_dev_uuid = self.uuid
         self.uuid = target_uuid
         # modules
@@ -2039,7 +2075,7 @@ class OSD(Module):
                                self.backdevpath)
 
         mountfsoptions = def_mount_options(self.fstype, 'ost')
-            
+
         if config.mountfsoptions:
             if mountfsoptions:
                 mountfsoptions = mountfsoptions + ',' + config.mountfsoptions
@@ -2053,25 +2089,25 @@ class OSD(Module):
                     mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
                 else:
                     mountfsoptions = self.mountfsoptions
-            
+
         if self.fstype == 'smfs':
             realdev = self.fstype
-                
+
             if mountfsoptions:
-                mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions, 
-                                                        self.backfstype, 
+                mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions,
+                                                        self.backfstype,
                                                         blkdev)
             else:
-                mountfsoptions = "type=%s,dev=%s" % (self.backfstype, 
+                mountfsoptions = "type=%s,dev=%s" % (self.backfstype,
                                                      blkdev)
         else:
             realdev = blkdev
-                
+
         print 'OSD mount options: ' + mountfsoptions
-        
+
         lctl.newdev(self.osdtype, self.name, self.uuid,
                     setup ="%s %s %s %s" %(realdev, self.fstype,
-                                           self.failover_ost, 
+                                           self.failover_ost,
                                            mountfsoptions))
         if not is_prepared('OSS'):
             lctl.newdev("ost", 'OSS', 'OSS_UUID', setup ="")
@@ -2127,7 +2163,7 @@ class Client(Module):
         self.db = tgtdb
         self.active = 1
 	self.backup_targets = []
-        
+
 	self.tgt_dev_uuid = get_active_target(tgtdb)
         if not self.tgt_dev_uuid:
             panic("No target device found for target(1):", self.target_name)
@@ -2274,15 +2310,15 @@ class VLOV(Module):
         if name_override != None:
             self.name = "lov_%s" % name_override
         self.add_lustre_module('lov', 'lov')
-        self.stripe_sz = 65536 
-        self.stripe_off = 0 
+        self.stripe_sz = 65536
+        self.stripe_off = 0
         self.pattern =  0
-        self.stripe_cnt = 1 
+        self.stripe_cnt = 1
         self.desc_uuid = self.uuid
         self.uuid = generate_client_uuid(self.name)
         self.fs_name = fs_name
         self.osc = get_osc(db, self.uuid, fs_name)
-        if not self.osc:        
+        if not self.osc:
 	    panic('osc not found:', self.uuid)
 	if config_only:
             self.config_only = 1
@@ -2299,7 +2335,7 @@ class VLOV(Module):
                        self.stripe_sz, self.stripe_off, self.pattern)
         target_uuid = self.osc.target_uuid
         try:
-	    self.osc.active = 1 
+	    self.osc.active = 1
             self.osc.prepare(ignore_connect_failure=0)
         except CommandError, e:
             print "Error preparing OSC %s\n" % osc.uuid
@@ -2332,7 +2368,7 @@ class VLOV(Module):
 class CMOBD(Module):
     def __init__(self,db):
 	Module.__init__(self, 'CMOBD', db)
-	self.name = self.db.getName(); 
+	self.name = self.db.getName();
 	self.uuid = generate_client_uuid(self.name)
 	self.master_uuid = self.db.get_first_ref('masterobd')
 	self.cache_uuid = self.db.get_first_ref('cacheobd')
@@ -2345,12 +2381,12 @@ class CMOBD(Module):
 	    panic('cache obd not found:', self.cache_uuid)
 	
 	if master_obd.get_class() == 'ost':
-	    self.client_uuid = generate_client_uuid(self.name) 
-	    self.master= VLOV(master_obd, self.client_uuid, self.name, 
+	    self.client_uuid = generate_client_uuid(self.name)
+	    self.master= VLOV(master_obd, self.client_uuid, self.name,
 			    "%s_master" % (self.name))
 	    self.master_uuid = self.master.get_uuid()
 	else:
-	    self.master = get_mdc(db, self.name, self.master_uuid) 
+	    self.master = get_mdc(db, self.name, self.master_uuid)
     # need to check /proc/mounts and /etc/mtab before
     # formatting anything.
     # FIXME: check if device is already formatted.
@@ -2375,14 +2411,14 @@ class CMOBD(Module):
     def cleanup_module(self):
         Module.cleanup_module(self)
         self.master.cleanup_module()
-                                                                                                                                                                                                     
+
     def correct_level(self, level, op=None):
         return level
 
 class COBD(Module):
     def __init__(self, db, uuid, name, type, name_override = None):
         Module.__init__(self, 'COBD', db)
-        self.name = self.db.getName(); 
+        self.name = self.db.getName();
         self.uuid = generate_client_uuid(self.name)
         self.real_uuid = self.db.get_first_ref('realobd')
         self.cache_uuid = self.db.get_first_ref('cacheobd')
@@ -2394,13 +2430,13 @@ class COBD(Module):
         if not cache_obd:
             panic('cache obd not found:', self.cache_uuid)
         if type == 'obd':
-            self.real = LOV(real_obd, self.real_uuid, name, 
+            self.real = LOV(real_obd, self.real_uuid, name,
                             "%s_real" % (self.name));
-            self.cache = LOV(cache_obd, self.cache_uuid, name, 
+            self.cache = LOV(cache_obd, self.cache_uuid, name,
                             "%s_cache" % (self.name));
         else:
-            self.real = get_mdc(db,  name, self.real_uuid) 
-            self.cache = get_mdc(db, name, self.cache_uuid) 
+            self.real = get_mdc(db,  name, self.real_uuid)
+            self.cache = get_mdc(db, name, self.cache_uuid)
     # need to check /proc/mounts and /etc/mtab before
     # formatting anything.
     # FIXME: check if device is already formatted.
@@ -2565,18 +2601,18 @@ class Mountpoint(Module):
         ost = self.db.lookup(self.obd_uuid)
         if not ost:
             panic("no ost: ", self.obd_uuid)
-            
+
         mds = self.db.lookup(self.mds_uuid)
 	if not mds:
 	    panic("no mds: ", self.mds_uuid)
-       
+
         self.add_lustre_module('mdc', 'mdc')
         self.add_lustre_module('lmv', 'lmv')
         self.add_lustre_module('llite', 'llite')
-        
+
         self.vosc = VOSC(ost, client_uuid, self.name)
 	self.vmdc = VMDC(mds, client_uuid, self.name)
-        
+
     def prepare(self):
         if not config.record and fs_is_mounted(self.path):
             log(self.path, "already mounted.")
@@ -2601,16 +2637,16 @@ class Mountpoint(Module):
             self.clientoptions = ',' + self.clientoptions
             # Linux kernel will deal with async and not pass it to ll_fill_super,
             # so replace it with Lustre async
-            self.clientoptions = string.replace(self.clientoptions, "async", 
+            self.clientoptions = string.replace(self.clientoptions, "async",
 						"lasync")
 
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s%s %s %s" % \
-              (self.vosc.get_name(), vmdc_name, self.clientoptions, 
+              (self.vosc.get_name(), vmdc_name, self.clientoptions,
 	       config.config, self.path)
         run("mkdir", self.path)
         ret, val = run(cmd)
         if ret:
-            self.vmdc.cleanup()            
+            self.vmdc.cleanup()
             self.vosc.cleanup()
             panic("mount failed:", self.path, ":", string.join(val))
 
@@ -2664,7 +2700,7 @@ def get_ost_net(self, osd_uuid):
     return srv_list
 
 
-# the order of iniitailization is based on level.
+# the order of iniitailization is based on level. 
 def getServiceLevel(self):
     type = self.get_class()
     ret=0;
@@ -2681,7 +2717,7 @@ def getServiceLevel(self):
     elif type in ('lmv',):
         ret = 45
     elif type in ('cmobd',):
-        ret = 50 
+        ret = 50
     elif type in ('mountpoint', 'echoclient'):
         ret = 70
     else:
@@ -2728,6 +2764,7 @@ def get_mdc(db, fs_name, mds_uuid):
 
 ############################################################
 # routing ("rooting")
+
 # list of (nettype, cluster_id, nid)
 local_clusters = []
 
@@ -2741,7 +2778,7 @@ def find_local_clusters(node_db):
         if srv.port > 0:
             if acceptors.has_key(srv.port):
                 panic("duplicate port:", srv.port)
-	    acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type)
+            acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type)
 
 # This node is a gateway.
 is_router = 0
@@ -2817,7 +2854,7 @@ def find_route(srv_list):
             if  (r[3] <= to and to <= r[4]) and cluster_id == r[2]:
                 result.append((srv, r))
     return result
-
+           
 def get_active_target(db):
     target_uuid = db.getUUID()
     target_name = db.getName()
@@ -2833,7 +2870,7 @@ def get_server_by_nid_uuid(db,  nid_uuid):
         net = Network(n)
         if net.nid_uuid == nid_uuid:
             return net
-
+        
 
 ############################################################
 # lconf level logic
@@ -2870,7 +2907,7 @@ def newService(db):
 
 #
 # Prepare the system to run lustre using a particular profile
-# in a the configuration.
+# in a the configuration. 
 #  * load & the modules
 #  * setup networking for the current node
 #  * make sure partitions are in place and prepared
@@ -2881,7 +2918,7 @@ def for_each_profile(db, prof_list, operation):
         prof_db = db.lookup(prof_uuid)
         if not prof_db:
             panic("profile:", prof_uuid, "not found.")
-	services = getServices(prof_db)
+        services = getServices(prof_db)
         operation(services)
 
 def magic_get_osc(db, rec, lov):
@@ -3077,7 +3114,7 @@ def doUnloadModules(services):
             n.cleanup_module()
 
 #
-# Load profile for
+# Load profile for 
 def doHost(lustreDB, hosts):
     global is_router, local_node_name
     node_db = None
@@ -3095,7 +3132,7 @@ def doHost(lustreDB, hosts):
     timeout = node_db.get_val_int('timeout', 0)
     ptldebug = node_db.get_val('ptldebug', '')
     subsystem = node_db.get_val('subsystem', '')
-
+    
     find_local_clusters(node_db)
     if not is_router:
         find_local_routes(lustreDB)
@@ -3202,7 +3239,7 @@ def setupModulePath(cmd, portals_dir = PORTALS_DIR):
     base = os.path.dirname(cmd)
     if development_mode():
         if not config.lustre:
-            debug('using objdir module paths')
+            debug('using objdir module paths')            
             config.lustre = (os.path.join(base, ".."))
         # normalize the portals dir, using command line arg if set
         if config.portals:
@@ -3212,7 +3249,7 @@ def setupModulePath(cmd, portals_dir = PORTALS_DIR):
         debug('config.portals', config.portals)
     elif config.lustre and config.portals:
         # production mode
-        # if --lustre and --portals, normalize portals
+        # if --lustre and --portals, normalize portals 
         # can ignore POTRALS_DIR here, since it is probly useless here
         config.portals = os.path.join(config.lustre, config.portals)
         debug('config.portals B', config.portals)
@@ -3320,8 +3357,8 @@ def sys_set_netmem_max(path, max):
         fp = open(path, 'w')
         fp.write('%d\n' %(max))
         fp.close()
-
-
+    
+    
 def sys_make_devices():
     if not os.access('/dev/portals', os.R_OK):
         run('mknod /dev/portals c 10 240')
@@ -3335,7 +3372,7 @@ def add_to_path(new_dir):
     if new_dir in syspath:
         return
     os.environ['PATH'] = os.environ['PATH'] + ':' + new_dir
-
+    
 def default_debug_path():
     path = '/tmp/lustre-log'
     if os.path.isdir('/r'):
@@ -3418,7 +3455,7 @@ lconf_options = [
               PARAM),
     ('minlevel', "Minimum level of services to configure/cleanup",
                  INTPARAM, 0),
-    ('maxlevel', """Maximum level of services to configure/cleanup
+    ('maxlevel', """Maximum level of services to configure/cleanup 
                     Levels are aproximatly like:
                             10 - netwrk
                             20 - device, ldlm
@@ -3449,14 +3486,14 @@ lconf_options = [
     ('inactive', """The name of an inactive service, to be ignored during
                     mounting (currently OST-only). Can be repeated.""",
                 PARAMLIST),
-    ]
+    ]      
 
 def main():
     global lctl, config, toplustreDB, CONFIG_FILE
 
     # in the upcall this is set to SIG_IGN
     signal.signal(signal.SIGCHLD, signal.SIG_DFL)
-
+    
     cl = Lustre.Options("lconf", "config.xml", lconf_options)
     try:
         config, args = cl.parse(sys.argv[1:])
@@ -3479,7 +3516,7 @@ def main():
     random.seed(seed)
 
     sanitise_path()
-
+    
     init_select(config.select)
 
     if len(args) > 0:

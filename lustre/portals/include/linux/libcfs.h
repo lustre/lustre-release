@@ -4,7 +4,11 @@
 #ifndef _LIBCFS_H
 #define _LIBCFS_H
 
+#ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>
+#else
+#include "types.h"
+#endif
 
 #ifdef __KERNEL__
 # include <linux/time.h>
@@ -62,7 +66,6 @@ extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
 
-#include <asm/types.h>
 struct ptldebug_header {
         __u32 ph_len;
         __u32 ph_flags;
@@ -102,7 +105,7 @@ struct ptldebug_header {
 #define S_GMNAL       0x00080000
 #define S_PTLROUTER   0x00100000
 #define S_COBD        0x00200000
-#define S_OPENIBNAL   0x00400000
+#define S_IBNAL       0x00400000 /* All IB NALs */
 #define S_SM          0x00800000
 #define S_ASOBD       0x01000000
 #define S_LMV         0x02000000
@@ -185,8 +188,40 @@ do {                                                                          \
                                   CDEBUG_STACK, format, ## a);                \
 } while (0)
 
-#define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
-#define CERROR(format, a...) CDEBUG(D_ERROR, format, ## a)
+#define CDEBUG_MAX_LIMIT 600
+#define CDEBUG_LIMIT(cdebug_mask, cdebug_format, a...)                        \
+do {                                                                          \
+        static unsigned long cdebug_next;                                     \
+        static int cdebug_count, cdebug_delay = 1;                            \
+                                                                              \
+        CHECK_STACK(CDEBUG_STACK);                                            \
+        if (time_after(jiffies, cdebug_next)) {                               \
+                portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask, __FILE__,     \
+                                  __FUNCTION__, __LINE__, CDEBUG_STACK,       \
+                                  cdebug_format, ## a);                       \
+                if (cdebug_count) {                                           \
+                        portals_debug_msg(DEBUG_SUBSYSTEM, cdebug_mask,       \
+                                          __FILE__, __FUNCTION__, __LINE__,   \
+                                          CDEBUG_STACK, cdebug_format, ## a); \
+                        cdebug_count = 0;                                     \
+                }                                                             \
+                if (time_after(jiffies, cdebug_next+(CDEBUG_MAX_LIMIT+10)*HZ))\
+                        cdebug_delay = cdebug_delay > 8 ? cdebug_delay/8 : 1; \
+                else                                                          \
+                        cdebug_delay = cdebug_delay*2 >= CDEBUG_MAX_LIMIT*HZ ?\
+                                        CDEBUG_MAX_LIMIT*HZ : cdebug_delay*2; \
+                cdebug_next = jiffies + cdebug_delay;                         \
+        } else {                                                              \
+                portals_debug_msg(DEBUG_SUBSYSTEM,                            \
+                                  portal_debug & ~(D_EMERG|D_ERROR|D_WARNING),\
+                                  __FILE__, __FUNCTION__, __LINE__,           \
+                                  CDEBUG_STACK, cdebug_format, ## a);         \
+                cdebug_count++;                                               \
+        }                                                                     \
+} while (0)
+
+#define CWARN(format, a...) CDEBUG_LIMIT(D_WARNING, format, ## a)
+#define CERROR(format, a...) CDEBUG_LIMIT(D_ERROR, format, ## a)
 #define CEMERG(format, a...) CDEBUG(D_EMERG, format, ## a)
 
 #define GOTO(label, rc)                                                 \
@@ -229,14 +264,13 @@ do {                                                                    \
 /* initial pid  */
 # if CRAY_PORTALS
 /* 
+ * 1) ptl_pid_t in cray portals is only 16 bits, not 32 bits, therefore this
+ *    is too big.
  *
- * 1) ptl_pid_t in cray portals is only 16 bits, not 32 bits, therefore this is too
- * big.
- *
- * 2) the implementation of ernal in cray portals further restricts the pid space
- * that may be used to 0 <= pid <= 255 (an 8 bit value).  Returns an error at nal
- * init time for any pid outside this range.  Other nals in cray portals don't have
- * this restriction.
+ * 2) the implementation of ernal in cray portals further restricts the pid
+ *    space that may be used to 0 <= pid <= 255 (an 8 bit value).  Returns
+ *    an error at nal init time for any pid outside this range.  Other nals
+ *    in cray portals don't have this restriction.
  * */
 #define LUSTRE_PTL_PID          9
 # else

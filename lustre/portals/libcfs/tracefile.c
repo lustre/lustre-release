@@ -38,7 +38,6 @@
 
 #include <linux/kp30.h>
 #include <linux/portals_compat25.h>
-#include <linux/lustre_compat25.h>
 #include <linux/libcfs.h>
 
 #define TCD_MAX_PAGES 1280
@@ -190,7 +189,7 @@ static void print_to_console(struct ptldebug_header *hdr, int mask, char *buf,
                 prefix = "Lustre";
                 ptype = KERN_INFO;
         }
-        
+
         printk("%s%s: %d:%d:(%s:%d:%s()) %.*s", ptype, prefix, hdr->ph_pid,
                hdr->ph_extern_pid, file, hdr->ph_line_num, fn, len, buf);
 }
@@ -455,7 +454,7 @@ int tracefile_dump_all_pages(char *filename)
         if (IS_ERR(filp)) {
                 rc = PTR_ERR(filp);
                 printk(KERN_ERR "LustreError: can't open %s for dump: rc %d\n",
-                      filename, rc);
+                       filename, rc);
                 goto out;
         }
 
@@ -773,6 +772,7 @@ int trace_write_debug_size(struct file *file, const char *buffer,
                        "(%lu).\n", max * smp_num_cpus, num_physpages / 5 * 4);
                 return count;
         }
+
         for (i = 0; i < NR_CPUS; i++) {
                 struct trace_cpu_data *tcd;
                 tcd = &trace_data[i].tcd;

@@ -83,7 +83,8 @@ lib_match_md(lib_nal_t *nal, int index, int op_mask,
                     me->match_id.nid != src_nid)
                         continue;
                 
-                CDEBUG(D_NET,"match_id.pid [%x], src_pid [%x]\n", me->match_id.pid, src_pid);
+                CDEBUG(D_NET, "match_id.pid [%x], src_pid [%x]\n",
+                       me->match_id.pid, src_pid);
 
                 if (me->match_id.pid != PTL_PID_ANY &&
                     me->match_id.pid != src_pid)

@@ -66,9 +66,7 @@
 #include <portals/lib-p30.h>
 #include <portals/nal.h>
 #include <portals/socknal.h>
-#include <linux/lustre_idl.h>
 
-#include <linux/lustre_idl.h>
 #define SOCKNAL_N_AUTOCONNECTD  4               /* # socknal autoconnect daemons */
 
 #define SOCKNAL_MIN_RECONNECT_INTERVAL	HZ      /* first failed connection retry... */

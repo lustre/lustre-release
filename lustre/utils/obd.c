@@ -2308,6 +2308,7 @@ int jt_llog_cancel(int argc, char **argv)
         return rc;
 
 }
+
 int jt_llog_check(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -2375,6 +2376,7 @@ int jt_llog_remove(int argc, char **argv)
 
         return rc;
 }
+
 int jt_obd_reint_sync(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -2410,6 +2412,7 @@ int jt_obd_cache_on(int argc, char **argv)
         return rc;  
                
 }
+
 int jt_obd_cache_off(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -2425,8 +2428,13 @@ int jt_obd_cache_off(int argc, char **argv)
                         rc);
         return rc;  
 }
+
 int jt_obd_snap_add(int argc, char **argv)
 {
+#if 1
+        return -1;
+#else
+# error "FIX the missing #defines before committing"        
         struct obd_ioctl_data data;
         int rc = 0;
       
@@ -2452,7 +2460,9 @@ int jt_obd_snap_add(int argc, char **argv)
         if (rc)
                 fprintf(stderr, "OBD_IOC_SNAP_ADD failed: rc=%d\n", rc);
         return rc;
+#endif
 }
+
 static void signal_server(int sig)
 {
         if (sig == SIGINT) {

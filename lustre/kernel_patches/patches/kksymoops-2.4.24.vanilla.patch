@@ -170,7 +170,7 @@ Index: linux-2.4.24-b1_4/include/linux/kallsyms.h
 +   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 + */
 +
-+#ident "$Id: kksymoops-2.4.24.vanilla.patch,v 1.9 2004/10/24 17:00:18 yury Exp $"
++#ident "$Id: kksymoops-2.4.24.vanilla.patch,v 1.10 2004/10/29 15:04:35 eeb Exp $"
 +
 +#ifndef MODUTILS_KALLSYMS_H
 +#define MODUTILS_KALLSYMS_H 1

@@ -29,9 +29,12 @@
 #include <portals/list.h>
 
 #include <stdio.h>
+#ifdef HAVE_NETDB_H
 #include <netdb.h>
+#endif
 #include <stdlib.h>
 #include <string.h>
+#include "ioctl.h"
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
@@ -45,12 +48,15 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
+#ifdef HAVE_LINUX_VERSION_H
 #include <linux/version.h>
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define BUG()                            /* workaround for module.h includes */
 #include <linux/module.h>
 #endif
+#endif /* !HAVE_LINUX_VERSION_H */
+
 #include <sys/utsname.h>
 
 #include <portals/api-support.h>
@@ -62,7 +68,7 @@
 static char rawbuf[8192];
 static char *buf = rawbuf;
 static int max = 8192;
-//static int g_pfd = -1;
+/*static int g_pfd = -1;*/
 static int subsystem_mask = ~0;
 static int debug_mask = ~0;
 
@@ -72,7 +78,7 @@ static const char *portal_debug_subsystems[] =
         {"undefined", "mdc", "mds", "osc", "ost", "class", "log", "llite",
          "rpc", "mgmt", "portals", "libcfs", "socknal", "qswnal", "pinger",
          "filter", "ptlbd", "echo", "ldlm", "lov", "gmnal", "router", "cobd",
-         "openibnal", "lmv", "smfs", "cmobd", NULL};
+         "ibnal", NULL};
 static const char *portal_debug_masks[] =
         {"trace", "inode", "super", "ext2", "malloc", "cache", "info", "ioctl",
          "blocks", "net", "warning", "buffs", "other", "dentry", "portals",
@@ -371,15 +377,24 @@ int jt_dbg_debug_kernel(int argc, char **argv)
                 fprintf(stderr, "usage: %s [file] [raw]\n", argv[0]);
                 return 0;
         }
-        sprintf(filename, "%s.%lu.%u", argc > 1 ? argv[1] : "/tmp/lustre-log",
-                time(NULL), getpid());
 
-        if (argc > 2)
+        if (argc > 2) {
                 raw = atoi(argv[2]);
+        } else if (argc > 1 && (argv[1][0] == '0' || argv[1][0] == '1')) {
+                raw = atoi(argv[1]);
+                argc--;
+        } else {
+                sprintf(filename, "%s.%lu.%u", argc > 1 ? argv[1] :
+                        "/tmp/lustre-log", time(NULL), getpid());
+        }
+
         unlink(filename);
 
         fd = open("/proc/sys/portals/dump_kernel", O_WRONLY);
         if (fd < 0) {
+                if (errno == ENOENT) /* no dump file created */
+                        return 0;
+
                 fprintf(stderr, "open(dump_kernel) failed: %s\n",
                         strerror(errno));
                 return 1;
@@ -477,25 +492,25 @@ const char debug_daemon_usage[]="usage: debug_daemon {start file [MB]|stop}\n";
 int jt_dbg_debug_daemon(int argc, char **argv)
 {
         int rc, fd;
-                                                                                                                                                                                                     
+
         if (argc <= 1) {
                 fprintf(stderr, debug_daemon_usage);
                 return 0;
         }
-                                                                                                                                                                                                     
+
         fd = open("/proc/sys/portals/daemon_file", O_WRONLY);
         if (fd < 0) {
                 fprintf(stderr, "open(daemon_file) failed: %s\n",
                         strerror(errno));
                 return 1;
         }
-                                                                                                                                                                                                     
+
         if (strcasecmp(argv[1], "start") == 0) {
                 if (argc != 3) {
                         fprintf(stderr, debug_daemon_usage);
                         return 1;
                 }
-                                                                                                                                                                                                     
+
                 rc = write(fd, argv[2], strlen(argv[2]));
                 if (rc != strlen(argv[2])) {
                         fprintf(stderr, "write(%s) failed: %s\n", argv[2],
@@ -515,7 +530,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                 fprintf(stderr, debug_daemon_usage);
                 return 1;
         }
-                                                                                                                                                                                                     
+
         close(fd);
         return 0;
 }
@@ -611,7 +626,6 @@ static struct mod_paths {
         {"obdfilter", "lustre/obdfilter"},
         {"extN", "lustre/extN"},
         {"lov", "lustre/lov"},
-        {"lmv", "lustre/lmv"},
         {"fsfilt_ext3", "lustre/lvfs"},
         {"fsfilt_extN", "lustre/lvfs"},
         {"fsfilt_reiserfs", "lustre/lvfs"},
@@ -623,13 +637,13 @@ static struct mod_paths {
         {"ptlbd", "lustre/ptlbd"},
         {"mgmt_svc", "lustre/mgmt"},
         {"mgmt_cli", "lustre/mgmt"},
-        {"cobd", "lustre/cobd"},
-        {"cmobd", "lustre/cmobd"},
+        {"conf_obd", "lustre/obdclass"},
         {NULL, NULL}
 };
 
 static int jt_dbg_modules_2_4(int argc, char **argv)
 {
+#ifdef HAVE_LINUX_VERSION_H
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         struct mod_paths *mp;
         char *path = "..";
@@ -665,9 +679,9 @@ static int jt_dbg_modules_2_4(int argc, char **argv)
         }
 
         return 0;
-#else /* Headers are 2.6-only */
+#endif /* Headers are 2.6-only */
+#endif /* !HAVE_LINUX_VERSION_H */
         return -EINVAL;
-#endif
 }
 
 static int jt_dbg_modules_2_5(int argc, char **argv)

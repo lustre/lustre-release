@@ -60,7 +60,7 @@
 #endif
 
 unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
-                                            S_GMNAL | S_OPENIBNAL);
+                                            S_GMNAL | S_IBNAL);
 EXPORT_SYMBOL(portal_subsystem_debug);
 
 unsigned int portal_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
@@ -97,6 +97,7 @@ int portals_do_debug_dumplog(void *arg)
 
         snprintf(debug_file_name, sizeof(debug_file_path) - 1,
                  "%s.%ld.%ld", debug_file_path, CURRENT_SECONDS, (long)arg);
+        printk(KERN_ALERT "LustreError: dumping log to %s\n", debug_file_name);
         tracefile_dump_all_pages(debug_file_name);
 
         current->journal_info = journal_info;
@@ -180,7 +181,7 @@ int portals_debug_clear_buffer(void)
 int portals_debug_mark_buffer(char *text)
 {
         CDEBUG(D_TRACE,"***************************************************\n");
-        CWARN("DEBUG MARKER: %s\n", text);
+        CDEBUG(D_WARNING, "DEBUG MARKER: %s\n", text);
         CDEBUG(D_TRACE,"***************************************************\n");
 
         return 0;
@@ -251,61 +252,45 @@ void portals_run_lbug_upcall(char *file, const char *fn, const int line)
 char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 {
         if (nid == PTL_NID_ANY) {
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%s",
-                         "PTL_NID_ANY");
+                snprintf(str, PTL_NALFMT_SIZE, "%s", "PTL_NID_ANY");
                 return str;
         }
 
         switch(nal){
 /* XXX this could be a nal method of some sort, 'cept it's config
  * dependent whether (say) socknal NIDs are actually IP addresses... */
-#ifndef CRAY_PORTALS 
+#if !CRAY_PORTALS 
         case TCPNAL:
                 /* userspace NAL */
+        case IIBNAL:
         case OPENIBNAL:
         case SOCKNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u",
+                snprintf(str, PTL_NALFMT_SIZE, "%u:%u.%u.%u.%u",
                          (__u32)(nid >> 32), HIPQUAD(nid));
                 break;
         case QSWNAL:
         case GMNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u",
+                snprintf(str, PTL_NALFMT_SIZE, "%u:%u",
                          (__u32)(nid >> 32), (__u32)nid);
                 break;
 #endif
         default:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx",
+                snprintf(str, PTL_NALFMT_SIZE, "?%x? %llx",
                          nal, (long long)nid);
                 break;
         }
         return str;
 }
-/*      bug #4615       */
+
 char *portals_id2str(int nal, ptl_process_id_t id, char *str)
 {
-        switch(nal){
-#ifndef CRAY_PORTALS
-        case TCPNAL:
-                /* userspace NAL */
-        case OPENIBNAL:
-        case SOCKNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u.%u.%u.%u,%u",
-                         (__u32)(id.nid >> 32), HIPQUAD((id.nid)) , id.pid);
-                break;
-        case QSWNAL:
-        case GMNAL:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "%u:%u,%u",
-                         (__u32)(id.nid >> 32), (__u32)id.nid, id.pid);
-                break;
-#endif
-        default:
-                snprintf(str, PTL_NALFMT_SIZE - 1, "?%d? %llx,%lx",
-                         nal, (long long)id.nid, (long)id.pid );
-                break;
-        }
+        int   len;
+        
+        portals_nid2str(nal, id.nid, str);
+        len = strlen(str);
+        snprintf(str + len, PTL_NALFMT_SIZE, "-%u", id.pid);
         return str;
 }
-
 
 #ifdef __KERNEL__
 char stack_backtrace[LUSTRE_TRACE_SIZE];

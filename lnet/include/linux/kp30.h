@@ -294,7 +294,6 @@ extern void kportal_blockallsigs (void);
 # include <unistd.h>
 # include <time.h>
 # include <limits.h>
-# include <asm/types.h>
 # ifndef DEBUG_SUBSYSTEM
 #  define DEBUG_SUBSYSTEM S_UNDEFINED
 # endif
@@ -320,6 +319,11 @@ void portals_debug_dumplog(void);
     printf("%02x:%06x (@%lu %s:%s,l. %d %d %lu): " format,                    \
            (subsys), (mask), (long)time(0), file, fn, line,                   \
            getpid() , stack, ## a);
+
+#undef CWARN
+#undef CERROR
+#define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)
+#define CERROR(format, a...) CDEBUG(D_ERROR, format, ## a)
 #endif
 
 /* support decl needed both by kernel and liblustre */
@@ -338,6 +342,16 @@ char *portals_id2str(int nal, ptl_process_id_t nid, char *str);
 #define LWT_MEMORY   (16<<20)
 
 #if !KLWT_SUPPORT
+# if defined(__KERNEL__)
+#  if !defined(BITS_PER_LONG)
+#   error "BITS_PER_LONG not defined"
+#  endif
+# elif !defined(__WORDSIZE)
+#  error "__WORDSIZE not defined"
+# else
+#  define BITS_PER_LONG __WORDSIZE
+# endif
+
 /* kernel hasn't defined this? */
 typedef struct {
         long long   lwte_when;
@@ -572,49 +586,42 @@ static inline int portal_ioctl_getdata(char *buf, char *end, void *arg)
         data = (struct portal_ioctl_data *)buf;
 
         err = copy_from_user(buf, (void *)arg, sizeof(*hdr));
-        if ( err ) {
-                EXIT;
-                return err;
-        }
+        if (err)
+                RETURN(err);
 
         if (hdr->ioc_version != PORTAL_IOCTL_VERSION) {
-                CERROR ("PORTALS: version mismatch kernel vs application\n");
-                return -EINVAL;
+                CERROR("PORTALS: version mismatch kernel vs application\n");
+                RETURN(-EINVAL);
         }
 
         if (hdr->ioc_len + buf >= end) {
-                CERROR ("PORTALS: user buffer exceeds kernel buffer\n");
-                return -EINVAL;
+                CERROR("PORTALS: user buffer exceeds kernel buffer\n");
+                RETURN(-EINVAL);
         }
 
 
         if (hdr->ioc_len < sizeof(struct portal_ioctl_data)) {
-                CERROR ("PORTALS: user buffer too small for ioctl\n");
-                return -EINVAL;
+                CERROR("PORTALS: user buffer too small for ioctl\n");
+                RETURN(-EINVAL);
         }
 
         err = copy_from_user(buf, (void *)arg, hdr->ioc_len);
-        if ( err ) {
-                EXIT;
-                return err;
-        }
+        if (err)
+                RETURN(err);
 
         if (portal_ioctl_is_invalid(data)) {
-                CERROR ("PORTALS: ioctl not correctly formatted\n");
-                return -EINVAL;
+                CERROR("PORTALS: ioctl not correctly formatted\n");
+                RETURN(-EINVAL);
         }
 
-        if (data->ioc_inllen1) {
+        if (data->ioc_inllen1)
                 data->ioc_inlbuf1 = &data->ioc_bulk[0];
-        }
 
-        if (data->ioc_inllen2) {
+        if (data->ioc_inllen2)
                 data->ioc_inlbuf2 = &data->ioc_bulk[0] +
                         size_round(data->ioc_inllen1);
-        }
 
-        EXIT;
-        return 0;
+        RETURN(0);
 }
 #endif
 
@@ -645,10 +652,11 @@ enum {
         TCPNAL    = 5,
         ROUTER    = 6,
         OPENIBNAL = 7,
+        IIBNAL    = 8,
         NAL_ENUM_END_MARKER
 };
 
-#define PTL_NALFMT_SIZE              30 /* %u:%u.%u.%u.%u,%u (10+4+4+4+3+4+1) */
+#define PTL_NALFMT_SIZE             32 /* %u:%u.%u.%u.%u,%u (10+4+4+4+3+5+1) */
 
 #define NAL_MAX_NR (NAL_ENUM_END_MARKER - 1)
 
