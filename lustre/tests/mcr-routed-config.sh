@@ -1,6 +1,8 @@
 #!/bin/bash
 
-config=${1:-mcr2.xml}
+BASE=`hostname | sed "s/[i0-9]*$//"`
+
+config=${1:-$BASE.xml}
 
 LMC="save_cmd"
 LMC_REAL="../../lustre/utils/lmc -m $config"
@@ -10,7 +12,6 @@ SERVER_START=1
 SERVER_CNT=62
 GW_START=1
 GW_CNT=31
-BASE=`hostname | sed "s/[i0-9]*$//"`
 MDS=${BASE}23
 UUIDLIST=${UUIDLIST:-/usr/local/admin/ba-ost/UUID.txt}
 
