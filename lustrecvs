@@ -39,6 +39,9 @@ case "$lustretag" in
 
     # this is the branch table
     # keep this list sorted alphabetically!
+    b1_2)
+        portalstag="b1_2"
+	;;
 
     *)
         buildtag="HEAD"
