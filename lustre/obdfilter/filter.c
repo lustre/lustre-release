@@ -1533,8 +1533,6 @@ static int filter_disconnect(struct obd_export *exp, int flags)
         exp->exp_flags = flags;
         spin_unlock_irqrestore(&exp->exp_lock, irqflags);
 
-        if (!(flags & OBD_OPT_FORCE))
-                filter_grant_sanity_check(obd, __FUNCTION__);
         filter_grant_discard(exp);
 
         /* Disconnect early so that clients can't keep using export */
@@ -1542,8 +1540,6 @@ static int filter_disconnect(struct obd_export *exp, int flags)
 
         /* Do this twice in case a BRW arrived between the first call and
          * the class_export_unlink() call (bug 2663) */
-        if (!(flags & OBD_OPT_FORCE))
-                filter_grant_sanity_check(obd, __FUNCTION__);
         filter_grant_discard(exp);
 
         ldlm_cancel_locks_for_export(exp);
@@ -2183,11 +2179,10 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         spin_unlock(&obd->obd_osfs_lock);
 
         CDEBUG(D_SUPER | D_CACHE, "blocks cached "LPU64" granted "LPU64
-               "pending "LPU64" free "LPU64" avail "LPU64"\n",
-               filter->fo_tot_dirty >> blockbits,
-               filter->fo_tot_granted >> blockbits,
-               filter->fo_tot_pending >> blockbits,
-               osfs->os_bfree, osfs->os_bavail);
+               " pending "LPU64" free "LPU64" avail "LPU64"\n",
+               filter->fo_tot_dirty, filter->fo_tot_granted,
+               filter->fo_tot_pending,
+               osfs->os_bfree << blockbits, osfs->os_bavail << blockbits);
 
         filter_grant_sanity_check(obd, __FUNCTION__);
 

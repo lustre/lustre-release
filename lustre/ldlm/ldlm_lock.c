@@ -430,9 +430,9 @@ void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
 {
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         ldlm_lock_remove_from_lru(lock);
-        if (mode == LCK_NL || mode == LCK_CR || mode == LCK_PR)
+        if (mode & (LCK_NL | LCK_CR | LCK_PR))
                 lock->l_readers++;
-        else
+        if (mode & (LCK_EX | LCK_CW | LCK_PW))
                 lock->l_writers++;
         lock->l_last_used = jiffies;
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
@@ -448,10 +448,11 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
         LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
         ns = lock->l_resource->lr_namespace;
         l_lock(&ns->ns_lock);
-        if (mode == LCK_NL || mode == LCK_CR || mode == LCK_PR) {
+        if (mode & (LCK_NL | LCK_CR | LCK_PR)) {
                 LASSERT(lock->l_readers > 0);
                 lock->l_readers--;
-        } else {
+        }
+        if (mode & (LCK_EX | LCK_CW | LCK_PW)) {
                 LASSERT(lock->l_writers > 0);
                 lock->l_writers--;
         }
@@ -473,13 +474,11 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                                "warning\n");
 
                 LDLM_DEBUG(lock, "final decref done on cbpending lock");
-                l_unlock(&ns->ns_lock);
 
-                l_check_no_ns_lock(ns);
-                /* FIXME: need a real 'desc' here */
-                if (lock->l_blocking_ast != NULL)
-                        lock->l_blocking_ast(lock, NULL, lock->l_ast_data,
-                                             LDLM_CB_BLOCKING);
+                LDLM_LOCK_GET(lock); /* dropped by bl thread */
+                ldlm_lock_remove_from_lru(lock);
+                ldlm_bl_to_thread(ns, NULL, lock);
+                l_unlock(&ns->ns_lock);
         } else if (ns->ns_client == LDLM_NAMESPACE_CLIENT &&
                    !lock->l_readers && !lock->l_writers) {
                 /* If this is a client-side namespace and this was the last
@@ -577,7 +576,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                     lock->l_readers == 0 && lock->l_writers == 0)
                         continue;
 
-                if (lock->l_req_mode != mode)
+                if (!(lock->l_req_mode & mode))
                         continue;
 
                 if (lock->l_resource->lr_type == LDLM_EXTENT &&
@@ -593,7 +592,10 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                     !(lock->l_flags & LDLM_FL_LOCAL))
                         continue;
 
-                ldlm_lock_addref_internal(lock, mode);
+                if (flags & LDLM_FL_TEST_LOCK)
+                        LDLM_LOCK_GET(lock);
+                else
+                        ldlm_lock_addref_internal(lock, mode);
                 return lock;
         }
 
@@ -622,6 +624,8 @@ void ldlm_lock_allow_match(struct ldlm_lock *lock)
  * If 'flags' contains LDLM_FL_CBPENDING, then locks that have been marked
  *     to be canceled can still be matched as long as they still have reader
  *     or writer refernces
+ * If 'flags' contains LDLM_FL_TEST_LOCK, then don't actually reference a lock,
+ *     just tell us if we would have matched.
  *
  * Returns 1 if it finds an already-existing lock that is compatible; in this
  * case, lockh is filled in with a addref()ed lock
@@ -691,6 +695,8 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags,
 
         if (old_lock)
                 LDLM_LOCK_PUT(old_lock);
+        if (flags & LDLM_FL_TEST_LOCK && rc)
+                LDLM_LOCK_PUT(lock);
 
         return rc;
 }
@@ -1041,7 +1047,7 @@ void ldlm_cancel_locks_for_export(struct obd_export *exp)
         struct ldlm_resource *res;
 
         l_lock(&ns->ns_lock);
-        while(!list_empty(&exp->exp_ldlm_data.led_held_locks)) {
+        while(!list_empty(&exp->exp_ldlm_data.led_held_locks)) { 
                 lock = list_entry(exp->exp_ldlm_data.led_held_locks.next,
                                   struct ldlm_lock, l_export_chain);
                 res = ldlm_resource_getref(lock->l_resource);

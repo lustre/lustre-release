@@ -340,8 +340,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                 LASSERT((oa->o_valid & OBD_MD_FLFLAGS) &&
                         oa->o_flags == OBD_FL_DELORPHAN);
                 DEBUG_REQ(D_HA, request,
-                          "delorphan from OST integration; level == RECOVER");
-                request->rq_send_state = LUSTRE_IMP_RECOVER;
+                          "delorphan from OST integration");
         }
 
         rc = ptlrpc_queue_wait(request);
@@ -2466,7 +2465,7 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (mode == LCK_PR) {
                 rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type,
                                      policy, LCK_PW, lockh);
-                if (rc == 1) {
+                if (rc == 1 && !(*flags & LDLM_FL_TEST_LOCK)) {
                         /* FIXME: This is not incredibly elegant, but it might
                          * be more elegant than adding another parameter to
                          * lock_match.  I want a second opinion. */

@@ -168,6 +168,9 @@ static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
         lock->l_lvb_swabber = lvb_swabber;
         if (policy != NULL)
                 memcpy(&lock->l_policy_data, policy, sizeof(*policy));
+        if (type == LDLM_EXTENT)
+                memcpy(&lock->l_req_extent, &policy->l_extent,
+                       sizeof(policy->l_extent));
 
         err = ldlm_lock_enqueue(ns, &lock, policy, flags);
         if (err != ELDLM_OK)
@@ -255,6 +258,9 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 lock->l_lvb_swabber = lvb_swabber;
                 if (policy != NULL)
                         memcpy(&lock->l_policy_data, policy, sizeof(*policy));
+                if (type == LDLM_EXTENT)
+                        memcpy(&lock->l_req_extent, &policy->l_extent,
+                               sizeof(policy->l_extent));
                 LDLM_DEBUG(lock, "client-side enqueue START");
         }
 
@@ -583,9 +589,8 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
 
 int ldlm_cancel_lru(struct ldlm_namespace *ns)
 {
-        struct list_head *tmp, *next, list = LIST_HEAD_INIT(list);
+        struct list_head *tmp, *next;
         int count, rc = 0;
-        struct ldlm_ast_work *w;
         ENTRY;
 
         l_lock(&ns->ns_lock);
@@ -609,33 +614,14 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns)
                  * won't see this flag and call l_blocking_ast */
                 lock->l_flags |= LDLM_FL_CBPENDING;
 
-                OBD_ALLOC(w, sizeof(*w));
-                LASSERT(w);
-
-                w->w_lock = LDLM_LOCK_GET(lock);
-                list_add(&w->w_list, &list);
+                LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 ldlm_lock_remove_from_lru(lock);
+                ldlm_bl_to_thread(ns, NULL, lock);
 
                 if (--count == 0)
                         break;
         }
         l_unlock(&ns->ns_lock);
-
-        list_for_each_safe(tmp, next, &list) {
-                struct lustre_handle lockh;
-                int rc;
-                w = list_entry(tmp, struct ldlm_ast_work, w_list);
-
-                ldlm_lock2handle(w->w_lock, &lockh);
-                rc = ldlm_cli_cancel(&lockh);
-                if (rc != ELDLM_OK)
-                        CDEBUG(D_INFO, "ldlm_cli_cancel: %d\n", rc);
-
-                list_del(&w->w_list);
-                LDLM_LOCK_PUT(w->w_lock);
-                OBD_FREE(w, sizeof(*w));
-        }
-
         RETURN(rc);
 }
 

@@ -295,6 +295,7 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, int pattern)
         (*lsmp)->lsm_magic = LOV_MAGIC;
         (*lsmp)->lsm_stripe_count = stripe_count;
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;
+        (*lsmp)->lsm_xfersize = PTL_MTU * stripe_count;
         (*lsmp)->lsm_pattern = pattern;
         (*lsmp)->lsm_oinfo[0].loi_ost_idx = ~0;
 
@@ -319,6 +320,7 @@ int lov_unpackmd_v0(struct lov_obd *lov, struct lov_stripe_md *lsm,
         lsm->lsm_object_id = le64_to_cpu(lmm->lmm_object_id);
         /* lsm->lsm_object_gr = 0; implicit */
         lsm->lsm_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
+        lsm->lsm_xfersize = lsm->lsm_stripe_size * lsm->lsm_stripe_count;
         lsm->lsm_pattern = LOV_PATTERN_RAID0;
         ost_offset = le32_to_cpu(lmm->lmm_stripe_offset);
         ost_count = le16_to_cpu(lmm->lmm_ost_count);
@@ -356,6 +358,7 @@ int lov_unpackmd_v1(struct lov_obd *lov, struct lov_stripe_md *lsm,
         lsm->lsm_object_gr = le64_to_cpu(lmm->lmm_object_gr);
         lsm->lsm_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
         lsm->lsm_pattern = le32_to_cpu(lmm->lmm_pattern);
+        lsm->lsm_xfersize = lsm->lsm_stripe_size * lsm->lsm_stripe_count;
 
         for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++) {
                 /* XXX LOV STACKING call down to osc_unpackmd() */
@@ -496,6 +499,7 @@ int lov_setstripe(struct obd_export *exp, struct lov_stripe_md **lsmp,
 
         (*lsmp)->lsm_oinfo[0].loi_ost_idx = lum.lmm_stripe_offset;
         (*lsmp)->lsm_stripe_size = lum.lmm_stripe_size;
+        (*lsmp)->lsm_xfersize = lum.lmm_stripe_size * stripe_count;
 
         RETURN(0);
 }

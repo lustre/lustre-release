@@ -59,62 +59,20 @@ typedef struct ext2_dir_entry_2 ext2_dirent;
 static int ll_dir_readpage(struct file *file, struct page *page)
 {
         struct inode *inode = page->mapping->host;
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_fid mdc_fid;
         __u64 offset;
-        int rc = 0;
         struct ptlrpc_request *request;
-        struct lustre_handle lockh;
         struct mds_body *body;
-        struct lookup_intent it = { .it_op = IT_READDIR };
-        struct mdc_op_data data;
-        struct obd_device *obddev = class_exp2obd(sbi->ll_mdc_exp);
-        struct ldlm_res_id res_id =
-                { .name = {inode->i_ino, (__u64)inode->i_generation} };
+        int rc = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
-        if ((inode->i_size + PAGE_CACHE_SIZE - 1) >> PAGE_SHIFT <= page->index){
-                /* XXX why do we need this exactly, and why do we think that
-                 *     an all-zero directory page is useful?
-                 */
-                CERROR("memsetting dir page %lu to zero (size %lld)\n",
-                       page->index, inode->i_size);
-                memset(kmap(page), 0, PAGE_CACHE_SIZE);
-                kunmap(page);
-                GOTO(readpage_out, rc);
-        }
-
-        rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
-                             &res_id, LDLM_PLAIN, NULL, LCK_PR, &lockh);
-        if (!rc) {
-                ll_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
-
-                rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, &it, LCK_PR,
-                                 &data, &lockh, NULL, 0,
-                                 ldlm_completion_ast, ll_mdc_blocking_ast,
-                                 inode);
-                request = (struct ptlrpc_request *)it.d.lustre.it_data;
-                if (request)
-                        ptlrpc_req_finished(request);
-                if (rc < 0) {
-                        CERROR("lock enqueue: err: %d\n", rc);
-                        unlock_page(page);
-                        RETURN(rc);
-                }
-        }
-        ldlm_lock_dump_handle(D_OTHER, &lockh);
-
-        if (PageUptodate(page)) {
-                CERROR("Explain this please?\n");
-                GOTO(readpage_out, rc);
-        }
 
         mdc_pack_fid(&mdc_fid, inode->i_ino, inode->i_generation, S_IFDIR);
 
         offset = page->index << PAGE_SHIFT;
-        rc = mdc_readpage(sbi->ll_mdc_exp, &mdc_fid,
+        rc = mdc_readpage(ll_i2sbi(inode)->ll_mdc_exp, &mdc_fid,
                           offset, page, &request);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
@@ -122,16 +80,12 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 LASSERT_REPSWABBED (request, 0); /* swabbed by mdc_readpage() */
 
                 inode->i_size = body->size;
+                SetPageUptodate(page);
         }
         ptlrpc_req_finished(request);
-        EXIT;
-
- readpage_out:
-        if (!rc)
-                SetPageUptodate(page);
 
         unlock_page(page);
-        ldlm_lock_decref(&lockh, LCK_PR);
+        EXIT;
         return rc;
 }
 
@@ -252,9 +206,39 @@ fail:
 
 static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 {
+        struct ldlm_res_id res_id =
+                { .name = { dir->i_ino, (__u64)dir->i_generation} };
+        struct lustre_handle lockh;
+        struct obd_device *obddev = class_exp2obd(ll_i2sbi(dir)->ll_mdc_exp);
         struct address_space *mapping = dir->i_mapping;
-        struct page *page = read_cache_page(mapping, n,
-                                (filler_t*)mapping->a_ops->readpage, NULL);
+        struct page *page;
+        int rc;
+
+        rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
+                             &res_id, LDLM_PLAIN, NULL, LCK_PR, &lockh);
+        if (!rc) {
+                struct lookup_intent it = { .it_op = IT_READDIR };
+                struct ptlrpc_request *request;
+                struct mdc_op_data data;
+
+                ll_prepare_mdc_op_data(&data, dir, NULL, NULL, 0, 0);
+
+                rc = mdc_enqueue(ll_i2sbi(dir)->ll_mdc_exp, LDLM_PLAIN, &it,
+                                 LCK_PR, &data, &lockh, NULL, 0,
+                                 ldlm_completion_ast, ll_mdc_blocking_ast, dir);
+
+                request = (struct ptlrpc_request *)it.d.lustre.it_data;
+                if (request)
+                        ptlrpc_req_finished(request);
+                if (rc < 0) {
+                        CERROR("lock enqueue: rc: %d\n", rc);
+                        return ERR_PTR(rc);
+                }
+        }
+        ldlm_lock_dump_handle(D_OTHER, &lockh);
+
+        page = read_cache_page(mapping, n,
+                               (filler_t*)mapping->a_ops->readpage, NULL);
         if (!IS_ERR(page)) {
                 wait_on_page(page);
                 (void)kmap(page);
@@ -265,13 +249,16 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
                 if (PageError(page))
                         goto fail;
         }
+
+out_unlock:
+        ldlm_lock_decref(&lockh, LCK_PR);
         return page;
 
 fail:
         ext2_put_page(page);
-        return ERR_PTR(-EIO);
+        page = ERR_PTR(-EIO);
+        goto out_unlock;
 }
-
 
 /*
  * p is at least 6 bytes before the end of page
@@ -305,8 +292,8 @@ static unsigned char ext2_filetype_table[EXT2_FT_MAX] = {
 
 int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
 {
-        loff_t pos = filp->f_pos;
         struct inode *inode = filp->f_dentry->d_inode;
+        loff_t pos = filp->f_pos;
         // XXX struct super_block *sb = inode->i_sb;
         unsigned offset = pos & ~PAGE_CACHE_MASK;
         unsigned long n = pos >> PAGE_CACHE_SHIFT;
@@ -314,12 +301,14 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
         unsigned chunk_mask = ~(ext2_chunk_size(inode)-1);
         unsigned char *types = NULL;
         int need_revalidate = (filp->f_version != inode->i_version);
+        int rc = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
-               inode->i_generation, inode);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %llu/%llu\n",
+               inode->i_ino, inode->i_generation, inode, pos, inode->i_size);
+
         if (pos > inode->i_size - EXT2_DIR_REC_LEN(1))
-                GOTO(done, 0);
+                RETURN(0);
 
         types = ext2_filetype_table;
 
@@ -328,15 +317,21 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
                 ext2_dirent *de;
                 struct page *page;
 
-                CDEBUG(D_EXT2, "reading %lu of dir %lu page %lu, size %llu\n",
-                       PAGE_CACHE_SIZE, inode->i_ino, n, inode->i_size);
+                CDEBUG(D_EXT2,"read %lu of dir %lu/%u page %lu/%lu size %llu\n",
+                       PAGE_CACHE_SIZE, inode->i_ino, inode->i_generation,
+                       n, npages, inode->i_size);
                 page = ll_get_dir_page(inode, n);
 
                 /* size might have been updated by mdc_readpage */
                 npages = dir_pages(inode);
 
-                if (IS_ERR(page))
+                if (IS_ERR(page)) {
+                        rc = PTR_ERR(page);
+                        CERROR("error reading dir %lu/%u page %lu: rc %d\n",
+                               inode->i_ino, inode->i_generation, n, rc);
                         continue;
+                }
+
                 kaddr = page_address(page);
                 if (need_revalidate) {
                         offset = ext2_validate_entry(kaddr, offset, chunk_mask);
@@ -349,6 +344,7 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
                                 int over;
                                 unsigned char d_type = DT_UNKNOWN;
 
+                                rc = 0; /* no error if we return something */
                                 if (types && de->file_type < EXT2_FT_MAX)
                                         d_type = types[de->file_type];
 
@@ -358,7 +354,7 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
                                                le32_to_cpu(de->inode), d_type);
                                 if (over) {
                                         ext2_put_page(page);
-                                        GOTO(done,0);
+                                        GOTO(done, rc);
                                 }
                         }
                 }
@@ -369,7 +365,7 @@ done:
         filp->f_pos = (n << PAGE_CACHE_SHIFT) | offset;
         filp->f_version = inode->i_version;
         update_atime(inode);
-        RETURN(0);
+        RETURN(rc);
 }
 
 static int ll_dir_ioctl(struct inode *inode, struct file *file,

@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1557
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"8"}
+# bug number for skipped test: 1768 1557
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   8    14b"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"

@@ -192,6 +192,8 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_root, err);
         }
 
+        /* bug 2805 - set VM readahead to zero */
+        vm_max_readahead = vm_min_readahead = 0;
         sb->s_root = d_alloc_root(root);
         RETURN(err);
 
@@ -1053,6 +1055,9 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                                 LBUG();
                         }
                 }
+                /* bug 2844 - limit i_blksize for broken user-space apps */
+                LASSERTF(lsm->lsm_xfersize != 0, "%lu\n", lsm->lsm_xfersize);
+                inode->i_blksize = min(lsm->lsm_xfersize, LL_MAX_BLKSIZE);
                 if (lli->lli_smd != lsm)
                         obd_free_memmd(ll_i2obdexp(inode), &lsm);
         }

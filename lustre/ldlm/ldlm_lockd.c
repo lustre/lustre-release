@@ -51,7 +51,7 @@ static int ldlm_refcount = 0;
 
 /* LDLM state */
 
-static struct ldlm_state *ldlm ;
+static struct ldlm_state *ldlm_state;
 
 inline unsigned long round_timeout(unsigned long timeout)
 {
@@ -625,6 +625,9 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         if (dlm_req->lock_desc.l_resource.lr_type != LDLM_PLAIN)
                 memcpy(&lock->l_policy_data, &dlm_req->lock_desc.l_policy_data,
                        sizeof(ldlm_policy_data_t));
+        if (dlm_req->lock_desc.l_resource.lr_type == LDLM_EXTENT)
+                memcpy(&lock->l_req_extent, &lock->l_policy_data.l_extent,
+                       sizeof(lock->l_req_extent));
 
         err = ldlm_lock_enqueue(obddev->obd_namespace, &lock, cookie, &flags);
         if (err)
@@ -924,10 +927,10 @@ static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
 }
 
 #ifdef __KERNEL__
-static int ldlm_bl_to_thread(struct ldlm_state *ldlm, struct ldlm_namespace *ns,
-                             struct ldlm_lock_desc *ld, struct ldlm_lock *lock)
+int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
+                      struct ldlm_lock *lock)
 {
-        struct ldlm_bl_pool *blp = ldlm->ldlm_bl_pool;
+        struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;
         struct ldlm_bl_work_item *blwi;
         ENTRY;
 
@@ -936,7 +939,8 @@ static int ldlm_bl_to_thread(struct ldlm_state *ldlm, struct ldlm_namespace *ns,
                 RETURN(-ENOMEM);
 
         blwi->blwi_ns = ns;
-        blwi->blwi_ld = *ld;
+        if (ld != NULL)
+                blwi->blwi_ld = *ld;
         blwi->blwi_lock = lock;
 
         spin_lock(&blp->blp_lock);
@@ -1063,7 +1067,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         case LDLM_BL_CALLBACK:
                 CDEBUG(D_INODE, "blocking ast\n");
 #ifdef __KERNEL__
-                rc = ldlm_bl_to_thread(ldlm, ns, &dlm_req->lock_desc, lock);
+                rc = ldlm_bl_to_thread(ns, &dlm_req->lock_desc, lock);
                 ldlm_callback_reply(req, rc);
 #else
                 rc = 0;
@@ -1239,11 +1243,11 @@ static int ldlm_setup(void)
 #endif
         ENTRY;
 
-        if (ldlm != NULL)
+        if (ldlm_state != NULL)
                 RETURN(-EALREADY);
 
-        OBD_ALLOC(ldlm, sizeof(*ldlm));
-        if (ldlm == NULL)
+        OBD_ALLOC(ldlm_state, sizeof(*ldlm_state));
+        if (ldlm_state == NULL)
                 RETURN(-ENOMEM);
 
 #ifdef __KERNEL__
@@ -1252,25 +1256,25 @@ static int ldlm_setup(void)
                 GOTO(out_free, rc);
 #endif
 
-        ldlm->ldlm_cb_service =
+        ldlm_state->ldlm_cb_service =
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
                                 LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                                 ldlm_callback_handler, "ldlm_cbd",
                                 ldlm_svc_proc_dir);
 
-        if (!ldlm->ldlm_cb_service) {
+        if (!ldlm_state->ldlm_cb_service) {
                 CERROR("failed to start service\n");
                 GOTO(out_proc, rc = -ENOMEM);
         }
 
-        ldlm->ldlm_cancel_service =
-                ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE, 
+        ldlm_state->ldlm_cancel_service =
+                ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
                                 LDLM_CANCEL_REQUEST_PORTAL,
                                 LDLM_CANCEL_REPLY_PORTAL,
                                 ldlm_cancel_handler, "ldlm_canceld",
                                 ldlm_svc_proc_dir);
 
-        if (!ldlm->ldlm_cancel_service) {
+        if (!ldlm_state->ldlm_cancel_service) {
                 CERROR("failed to start service\n");
                 GOTO(out_proc, rc = -ENOMEM);
         }
@@ -1278,7 +1282,7 @@ static int ldlm_setup(void)
         OBD_ALLOC(blp, sizeof(*blp));
         if (blp == NULL)
                 GOTO(out_proc, rc = -ENOMEM);
-        ldlm->ldlm_bl_pool = blp;
+        ldlm_state->ldlm_bl_pool = blp;
 
         atomic_set(&blp->blp_num_threads, 0);
         init_waitqueue_head(&blp->blp_waitq);
@@ -1302,14 +1306,14 @@ static int ldlm_setup(void)
                 wait_for_completion(&blp->blp_comp);
         }
 
-        rc = ptlrpc_start_n_threads(NULL, ldlm->ldlm_cancel_service,
+        rc = ptlrpc_start_n_threads(NULL, ldlm_state->ldlm_cancel_service,
                                     LDLM_NUM_THREADS, "ldlm_cn");
         if (rc) {
                 LBUG();
                 GOTO(out_thread, rc);
         }
 
-        rc = ptlrpc_start_n_threads(NULL, ldlm->ldlm_cb_service,
+        rc = ptlrpc_start_n_threads(NULL, ldlm_state->ldlm_cb_service,
                                     LDLM_NUM_THREADS, "ldlm_cb");
         if (rc) {
                 LBUG();
@@ -1341,8 +1345,8 @@ static int ldlm_setup(void)
 
 #ifdef __KERNEL__
  out_thread:
-        ptlrpc_unregister_service(ldlm->ldlm_cancel_service);
-        ptlrpc_unregister_service(ldlm->ldlm_cb_service);
+        ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
+        ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
 #endif
 
  out_proc:
@@ -1350,15 +1354,15 @@ static int ldlm_setup(void)
         ldlm_proc_cleanup();
  out_free:
 #endif
-        OBD_FREE(ldlm, sizeof(*ldlm));
-        ldlm = NULL;
+        OBD_FREE(ldlm_state, sizeof(*ldlm_state));
+        ldlm_state = NULL;
         return rc;
 }
 
 static int ldlm_cleanup(int force)
 {
 #ifdef __KERNEL__
-        struct ldlm_bl_pool *blp = ldlm->ldlm_bl_pool;
+        struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;
 #endif
         ENTRY;
 
@@ -1383,10 +1387,10 @@ static int ldlm_cleanup(int force)
         }
         OBD_FREE(blp, sizeof(*blp));
 
-        ptlrpc_stop_all_threads(ldlm->ldlm_cb_service);
-        ptlrpc_unregister_service(ldlm->ldlm_cb_service);
-        ptlrpc_stop_all_threads(ldlm->ldlm_cancel_service);
-        ptlrpc_unregister_service(ldlm->ldlm_cancel_service);
+        ptlrpc_stop_all_threads(ldlm_state->ldlm_cb_service);
+        ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
+        ptlrpc_stop_all_threads(ldlm_state->ldlm_cancel_service);
+        ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
         ldlm_proc_cleanup();
 
         expired_lock_thread.elt_state = ELT_TERMINATE;
@@ -1396,8 +1400,8 @@ static int ldlm_cleanup(int force)
 
 #endif
 
-        OBD_FREE(ldlm, sizeof(*ldlm));
-        ldlm = NULL;
+        OBD_FREE(ldlm_state, sizeof(*ldlm_state));
+        ldlm_state = NULL;
 
         RETURN(0);
 }
@@ -1498,6 +1502,8 @@ EXPORT_SYMBOL(ldlm_regression_stop);
 EXPORT_SYMBOL(ldlm_namespace_new);
 EXPORT_SYMBOL(ldlm_namespace_cleanup);
 EXPORT_SYMBOL(ldlm_namespace_free);
+EXPORT_SYMBOL(ldlm_namespace_dump);
+EXPORT_SYMBOL(ldlm_dump_all_namespaces);
 EXPORT_SYMBOL(ldlm_resource_get);
 EXPORT_SYMBOL(ldlm_resource_putref);
 

@@ -168,13 +168,13 @@ void lustre_assert_wire_constants(void)
                  (long long)LCK_EX);
         LASSERTF(LCK_PW == 2, " found %lld\n",
                  (long long)LCK_PW);
-        LASSERTF(LCK_PR == 3, " found %lld\n",
+        LASSERTF(LCK_PR == 4, " found %lld\n",
                  (long long)LCK_PR);
-        LASSERTF(LCK_CW == 4, " found %lld\n",
+        LASSERTF(LCK_CW == 8, " found %lld\n",
                  (long long)LCK_CW);
-        LASSERTF(LCK_CR == 5, " found %lld\n",
+        LASSERTF(LCK_CR == 16, " found %lld\n",
                  (long long)LCK_CR);
-        LASSERTF(LCK_NL == 6, " found %lld\n",
+        LASSERTF(LCK_NL == 32, " found %lld\n",
                  (long long)LCK_NL);
         LASSERTF(PTLBD_QUERY == 200, " found %lld\n",
                  (long long)PTLBD_QUERY);

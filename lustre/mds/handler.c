@@ -1485,7 +1485,8 @@ static int mds_postrecov(struct obd_device *obd)
         LASSERT(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT) != NULL);
 
         rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
-                          obd->u.mds.mds_lov_desc.ld_tgt_count, NULL, NULL);
+                          obd->u.mds.mds_lov_desc.ld_tgt_count,
+                          NULL, NULL, NULL);
         if (rc != 0) {
                 CERROR("faild at llog_origin_connect: %d\n", rc);
         }

@@ -48,6 +48,14 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't write pages to disk if there was an error (1450)
 	- don't ping imports that have recovery disabled (2676)
 	- take buffered bytes into account when balancing socknal conn (2817)
+	- hold a DLM lock over readdir always, use truncate_inode_pages (2706)
+	- reconnect unlink llog connection after MDS reconnects to OST (2816)
+	- remove little-endian swabbing of llog records (1987)
+	- set/limit i_blksize to LL_MAX_BLKSIZE on client (2884)
+	- retry reposting request buffers if they fail (1191)
+	- grow extent at grant time to avoid granting a revoked lock (2809)
+	- lock revoke doesn't evict page if covered by a second lock (2765)
+	- disable VM readahead to avoid reading outside lock extents (2805)
        * miscellania
 	- return LL_SUPER_MAGIC from statfs for the filesystem type (1972)
 

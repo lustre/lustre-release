@@ -772,6 +772,19 @@ test_27j() {
 }
 run_test 27j "lstripe with bad stripe offset (should return error)"
 
+test_27k() { # bug 2844
+	FILE=$DIR/d27/f27k
+	LL_MAX_BLKSIZE=$((4 * 1024 * 1024))
+	[ ! -d $DIR/d27 ] && mkdir -p $DIR/d27
+	$LSTRIPE $FILE 67108864 -1 0 || error "lstripe failed"
+	BLKSIZE=`stat $FILE | awk '/IO Block:/ { print $7 }'`
+	[ $BLKSIZE -le $LL_MAX_BLKSIZE ] || error "$BLKSIZE > $LL_MAX_BLKSIZE"
+	dd if=/dev/zero of=$FILE bs=4k count=1
+	BLKSIZE=`stat $FILE | awk '/IO Block:/ { print $7 }'`
+	[ $BLKSIZE -le $LL_MAX_BLKSIZE ] || error "$BLKSIZE > $LL_MAX_BLKSIZE"
+}
+run_test 27k "limit i_blksize for broken user apps ============="
+
 test_28() {
 	mkdir $DIR/d28
 	$CREATETEST $DIR/d28/ct || error

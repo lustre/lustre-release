@@ -128,13 +128,13 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
         int rc, index;
         ENTRY;
 
-        if (le32_to_cpu(rec->lrh_type) != LLOG_LOGID_MAGIC) {
+        if (rec->lrh_type != LLOG_LOGID_MAGIC) {
                 CERROR("invalid record in catalog\n");
                 RETURN(-EINVAL);
         }
         CWARN("processing log "LPX64":%x at index %u of catalog "LPX64"\n",
                lir->lid_id.lgl_oid, lir->lid_id.lgl_ogen,
-               le32_to_cpu(rec->lrh_index), cathandle->lgh_id.lgl_oid);
+               rec->lrh_index, cathandle->lgh_id.lgl_oid);
 
         rc = llog_cat_id2handle(cathandle, &loghandle, &lir->lid_id);
         if (rc) {
@@ -144,8 +144,8 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
         }
 
         llh = loghandle->lgh_hdr;
-        if ((le32_to_cpu(llh->llh_flags) & LLOG_F_ZAP_WHEN_EMPTY) &&
-            (le32_to_cpu(llh->llh_count) == 1)) {
+        if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
+            (llh->llh_count == 1)) {
                 rc = llog_destroy(loghandle);
                 if (rc)
                         CERROR("failure destroying log in postsetup: %d\n", rc);
@@ -160,7 +160,7 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
                 if (rc == 0)
                         CWARN("cancel log "LPX64":%x at index %u of catalog "
                               LPX64"\n", lir->lid_id.lgl_oid,
-                              lir->lid_id.lgl_ogen, le32_to_cpu(rec->lrh_index),
+                              lir->lid_id.lgl_ogen, rec->lrh_index,
                               cathandle->lgh_id.lgl_oid);
         }
 
@@ -233,9 +233,9 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
                                          &cathandle->u.chd.chd_head,
                                          u.phd.phd_entry) {
                         llh = loghandle->lgh_hdr;
-                        if ((le32_to_cpu(llh->llh_flags) &
+                        if ((llh->llh_flags &
                                 LLOG_F_ZAP_WHEN_EMPTY) &&
-                            (le32_to_cpu(llh->llh_count) == 1)) {
+                            (llh->llh_count == 1)) {
                                 rc = llog_destroy(loghandle);
                                 if (rc)
                                         CERROR("failure destroying log during "

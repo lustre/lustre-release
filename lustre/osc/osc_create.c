@@ -262,8 +262,10 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 rc = l_wait_event(oscc->oscc_waitq, !oscc_recovering(oscc),
                                   &lwi);
                 LASSERT(rc == 0 || rc == -ETIMEDOUT);
-                if (rc == -ETIMEDOUT)
+                if (rc == -ETIMEDOUT) {
+                        CDEBUG(D_HA, "%p: timed out waiting for recovery\n", oscc);
                         RETURN(rc);
+                }
                 CDEBUG(D_HA, "%p: oscc recovery over, waking up\n", oscc);
         }
         

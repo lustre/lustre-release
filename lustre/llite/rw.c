@@ -530,18 +530,13 @@ static int ll_page_matches(struct page *page)
         page_extent.l_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
         page_extent.l_extent.end =
                 page_extent.l_extent.start + PAGE_CACHE_SIZE - 1;
-        flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
+        flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED | LDLM_FL_TEST_LOCK;
         matches = obd_match(ll_i2sbi(inode)->ll_osc_exp,
                             ll_i2info(inode)->lli_smd, LDLM_EXTENT,
-                            &page_extent, LCK_PR, &flags, inode, &match_lockh);
-        if (matches < 0) {
+                            &page_extent, LCK_PR | LCK_PW, &flags, inode,
+                            &match_lockh);
+        if (matches < 0)
                 LL_CDEBUG_PAGE(page, "lock match failed\n");
-                RETURN(matches);
-        }
-        if (matches) {
-                obd_cancel(ll_i2sbi(inode)->ll_osc_exp,
-                           ll_i2info(inode)->lli_smd, LCK_PR, &match_lockh);
-        }
         RETURN(matches);
 }
 
@@ -565,7 +560,8 @@ static int ll_issue_page_read(struct obd_export *exp,
 }
 
 #define LL_RA_MIN(inode) ((unsigned long)PTL_MD_MAX_PAGES / 2)
-#define LL_RA_MAX(inode) (inode->i_blksize * 3)
+#define LL_RA_MAX(inode) ((ll_i2info(inode)->lli_smd->lsm_xfersize * 3) >> \
+                          PAGE_CACHE_SHIFT)
 
 static void ll_readahead(struct ll_readahead_state *ras,
                          struct obd_export *exp, struct address_space *mapping,
@@ -612,10 +608,14 @@ static void ll_readahead(struct ll_readahead_state *ras,
                 if (page == NULL)
                        break;
 
+                /* Don't try to readahead beyond the end of the lock extent */
+                if (ll_page_matches(page) <= 0)
+                       break;
+
                 /* the book-keeping above promises that we've tried
                  * all the indices from start to end, so we don't
                  * stop if anyone returns an error. This may not be good. */
-                if (Page_Uptodate(page) || ll_page_matches(page) <= 0)
+                if (Page_Uptodate(page))
                         goto next_page;
 
                 llap = llap_from_page(page);
@@ -781,11 +781,20 @@ int ll_readpage(struct file *filp, struct page *page)
 
         if (rc == 0) {
                 static unsigned long next_print;
-                CDEBUG(D_INODE, "didn't match a lock\n");
+                CDEBUG(D_INODE, "ino %lu page %lu (%llu) didn't match a lock\n",
+                       inode->i_ino, page->index,
+                       (long long)page->index << PAGE_CACHE_SHIFT);
                 if (time_after(jiffies, next_print)) {
+                        CERROR("ino %lu page %lu (%llu) not covered by "
+                               "a lock (mmap?).  check debug logs.\n",
+                               inode->i_ino, page->index,
+                               (long long)page->index << PAGE_CACHE_SHIFT);
+                        ldlm_dump_all_namespaces();
+                        if (next_print == 0) {
+                                CERROR("%s\n", portals_debug_dumpstack());
+                                portals_debug_dumplog();
+                        }
                         next_print = jiffies + 30 * HZ;
-                        CERROR("not covered by a lock (mmap?).  check debug "
-                               "logs.\n");
                 }
         }
 

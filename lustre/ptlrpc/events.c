@@ -228,7 +228,6 @@ void request_in_callback(ptl_event_t *ev)
 
         list_add_tail(&req->rq_list, &service->srv_request_queue);
         service->srv_n_queued_reqs++;
-        rqbd->rqbd_eventcount++;
 
         /* NB everything can disappear under us once the request
          * has been queued and we unlock, so do the wake now... */

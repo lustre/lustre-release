@@ -318,14 +318,18 @@ static int ll_lock_to_stripe_offset(struct inode *inode, struct ldlm_lock *lock)
  *
  * No one can dirty the extent until we've finished our work and they can
  * enqueue another lock.  The DLM protects us from ll_file_read/write here,
- * but other kernel actors could have pages locked. */
+ * but other kernel actors could have pages locked.
+ *
+ * Called with the DLM lock held. */
 void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                               struct ldlm_lock *lock, __u32 stripe)
 {
         struct ldlm_extent *extent = &lock->l_policy_data.l_extent;
+        ldlm_policy_data_t tmpex;
         unsigned long start, end, count, skip, i, j;
         struct page *page;
-        int rc, discard = lock->l_flags & LDLM_FL_DISCARD_DATA;
+        int rc, rc2, discard = lock->l_flags & LDLM_FL_DISCARD_DATA;
+        struct lustre_handle lockh;
         ENTRY;
 
         CDEBUG(D_INODE, "obdo %lu inode %p ["LPU64"->"LPU64"] size: %llu\n",
@@ -348,7 +352,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 start += (start/count * skip) + (stripe * count);
                 if (end != ~0)
                         end += (end/count * skip) + (stripe * count);
-        } 
+        }
 
         i = (inode->i_size + PAGE_CACHE_SIZE-1) >> PAGE_CACHE_SHIFT;
         if (i < end)
@@ -407,8 +411,16 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                         lock_page(page);
                 }
 
-                /* checking again to account for writeback's lock_page() */
-                if (page->mapping != NULL) {
+                tmpex.l_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
+                tmpex.l_extent.end = tmpex.l_extent.start + PAGE_CACHE_SIZE - 1;
+                /* check to see if another DLM lock covers this page */
+                rc2 = ldlm_lock_match(lock->l_resource->lr_namespace,
+                                      LDLM_FL_BLOCK_GRANTED|LDLM_FL_CBPENDING |
+                                      LDLM_FL_TEST_LOCK,
+                                      &lock->l_resource->lr_name, LDLM_EXTENT,
+                                      &tmpex, LCK_PR | LCK_PW, &lockh);
+                if (rc2 == 0 && page->mapping != NULL) {
+                        // checking again to account for writeback's lock_page()
                         LL_CDEBUG_PAGE(page, "truncating\n");
                         ll_truncate_complete_page(page);
                 }
@@ -439,12 +451,17 @@ static int ll_extent_lock_callback(struct ldlm_lock *lock,
                         CERROR("ldlm_cli_cancel failed: %d\n", rc);
                 break;
         case LDLM_CB_CANCELING: {
-                struct inode *inode = ll_inode_from_lock(lock);
+                struct inode *inode;
                 struct ll_inode_info *lli;
                 struct lov_stripe_md *lsm;
                 __u32 stripe;
                 __u64 kms;
 
+                /* This lock wasn't granted, don't try to evict pages */
+                if (lock->l_req_mode != lock->l_granted_mode)
+                        RETURN(0);
+
+                inode = ll_inode_from_lock(lock);
                 if (inode == NULL)
                         RETURN(0);
                 lli = ll_i2info(inode);

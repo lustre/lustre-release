@@ -8,7 +8,7 @@
 
 #ifdef __KERNEL__
 # include <linux/proc_fs.h>
-#endif 
+#endif
 
 #include <linux/lustre_lib.h>
 #include <linux/lustre_net.h>
@@ -91,15 +91,13 @@ typedef enum {
 #define LDLM_CB_BLOCKING    1
 #define LDLM_CB_CANCELING   2
 
-#define L2B(c) (1 << c)
-
 /* compatibility matrix */
-#define LCK_COMPAT_EX  L2B(LCK_NL)
-#define LCK_COMPAT_PW  (LCK_COMPAT_EX | L2B(LCK_CR))
-#define LCK_COMPAT_PR  (LCK_COMPAT_PW | L2B(LCK_PR))
-#define LCK_COMPAT_CW  (LCK_COMPAT_PW | L2B(LCK_CW))
-#define LCK_COMPAT_CR  (LCK_COMPAT_CW | L2B(LCK_PR) | L2B(LCK_PW))
-#define LCK_COMPAT_NL  (LCK_COMPAT_CR | L2B(LCK_EX))
+#define LCK_COMPAT_EX  LCK_NL
+#define LCK_COMPAT_PW  (LCK_COMPAT_EX | LCK_CR)
+#define LCK_COMPAT_PR  (LCK_COMPAT_PW | LCK_PR)
+#define LCK_COMPAT_CW  (LCK_COMPAT_PW | LCK_CW)
+#define LCK_COMPAT_CR  (LCK_COMPAT_CW | LCK_PR | LCK_PW)
+#define LCK_COMPAT_NL  (LCK_COMPAT_CR | LCK_EX)
 
 static ldlm_mode_t lck_compat_array[] = {
         [LCK_EX] LCK_COMPAT_EX,
@@ -110,12 +108,14 @@ static ldlm_mode_t lck_compat_array[] = {
         [LCK_NL] LCK_COMPAT_NL
 };
 
+static inline void lockmode_verify(ldlm_mode_t mode)
+{
+       LASSERT(mode >= LCK_EX && mode <= LCK_NL);
+}
+
 static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
 {
-       LASSERT(exist >= LCK_EX && exist <= LCK_NL);
-       LASSERT(new >= LCK_EX && new <= LCK_NL);
-
-       return (lck_compat_array[exist] & L2B(new));
+       return (lck_compat_array[exist] & new);
 }
 
 /*
@@ -133,8 +133,8 @@ static inline int lockmode_compat(ldlm_mode_t exist, ldlm_mode_t new)
    -
 */
 
-struct ldlm_lock; 
-struct ldlm_resource; 
+struct ldlm_lock;
+struct ldlm_resource;
 struct ldlm_namespace;
 
 typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
@@ -155,7 +155,7 @@ struct ldlm_namespace {
         struct list_head       ns_root_list; /* all root resources in ns */
         struct lustre_lock     ns_lock; /* protects hash, refcount, list */
         struct list_head       ns_list_chain; /* position in global NS list */
-        /* 
+        /*
         struct proc_dir_entry *ns_proc_dir;
         */
 
@@ -200,8 +200,6 @@ struct ldlm_lock {
         struct list_head      l_lru;
         struct list_head      l_res_link; // position in one of three res lists
         struct list_head      l_export_chain; // per-export chain of locks
-        struct list_head      l_pending_chain; // locks with callbacks pending
-        unsigned long         l_callback_timeout;
 
         ldlm_mode_t           l_req_mode;
         ldlm_mode_t           l_granted_mode;
@@ -209,21 +207,12 @@ struct ldlm_lock {
         ldlm_completion_callback l_completion_ast;
         ldlm_blocking_callback   l_blocking_ast;
         ldlm_glimpse_callback    l_glimpse_ast;
-        void                    *l_ast_data;
 
         struct obd_export    *l_export;
-        /* XXX phil can fix this, I'm sure */
         struct obd_export    *l_conn_export;
-//        struct lustre_handle *l_connh;
         __u32                 l_flags;
         struct lustre_handle  l_remote_handle;
         ldlm_policy_data_t    l_policy_data;
-
-        /* This LVB is used only on the client side, as temporary storage for
-         * a lock value block received during an enqueue */
-        __u32                 l_lvb_len;
-        void                 *l_lvb_data;
-        void                 *l_lvb_swabber;
 
         __u32                 l_readers;
         __u32                 l_writers;
@@ -234,9 +223,20 @@ struct ldlm_lock {
          * on this waitq to learn when it becomes granted. */
         wait_queue_head_t     l_waitq;
         struct timeval        l_enqueued_time;
-        unsigned long         l_last_used; /* jiffies */
-};
 
+        unsigned long         l_last_used;      /* jiffies */
+        struct ldlm_extent    l_req_extent;
+
+        /* Client-side-only members */
+        __u32                 l_lvb_len;        /* temporary storage for */
+        void                 *l_lvb_data;       /* an LVB received during */
+        void                 *l_lvb_swabber;    /* an enqueue */
+        void                 *l_ast_data;
+
+        /* Server-side-only members */
+        struct list_head      l_pending_chain;  /* callbacks pending */
+        unsigned long         l_callback_timeout;
+};
 
 #define LDLM_PLAIN       10
 #define LDLM_EXTENT      11
@@ -308,7 +308,8 @@ do {                                                                          \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
                        "res: "LPU64"/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64\
-                       "] flags: %x remote: "LPX64" expref: %d\n" , ## a,     \
+                       "] (req "LPU64"->"LPU64") flags: %x remote: "LPX64     \
+                       " expref: %d\n" , ## a,                                \
                        lock->l_resource->lr_namespace->ns_name, lock,         \
                        lock->l_handle.h_cookie, atomic_read(&lock->l_refc),   \
                        lock->l_readers, lock->l_writers,                      \
@@ -320,6 +321,7 @@ do {                                                                          \
                        ldlm_typename[lock->l_resource->lr_type],              \
                        lock->l_policy_data.l_extent.start,                    \
                        lock->l_policy_data.l_extent.end,                      \
+                       lock->l_req_extent.start, lock->l_req_extent.end,      \
                        lock->l_flags, lock->l_remote_handle.cookie,           \
                        lock->l_export ?                                       \
                        atomic_read(&lock->l_export->exp_refcount) : -99);     \

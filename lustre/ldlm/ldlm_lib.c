@@ -255,6 +255,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
                 GOTO(out_ldlm, rc);
         }
 
+        ptlrpc_pinger_add_import(imp);
         EXIT;
 
         if (rc) {

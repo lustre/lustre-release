@@ -77,7 +77,8 @@ struct lov_stripe_md {
         /* Public members. */
         __u64 lsm_object_id;        /* lov object id */
         __u64 lsm_object_gr;        /* lov object id */
-        __u64 lsm_maxbytes;
+        __u64 lsm_maxbytes;         /* maximum possible file size */
+        unsigned long lsm_xfersize; /* optimal transfer size */
 
         /* LOV-private members start here -- only for use in lov/. */
         __u32 lsm_magic;

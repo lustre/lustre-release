@@ -54,7 +54,8 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt,
 
 static int mds_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                                    struct llog_logid *logid,
-                                   struct llog_gen *gen)
+                                   struct llog_gen *gen,
+                                   struct obd_uuid *uuid)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
@@ -63,7 +64,7 @@ static int mds_llog_origin_connect(struct llog_ctxt *ctxt, int count,
         ENTRY;
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
-        rc = llog_connect(lctxt, count, logid, gen);
+        rc = llog_connect(lctxt, count, logid, gen, uuid);
         RETURN(rc);
 }
 

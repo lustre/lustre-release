@@ -92,7 +92,8 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt,
 
 static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                                    struct llog_logid *logid, 
-                                   struct llog_gen *gen)
+                                   struct llog_gen *gen,
+                                   struct obd_uuid *uuid)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
@@ -103,7 +104,11 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
                 struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
-                rc = llog_connect(cctxt, 1, logid, gen);
+
+                if (uuid && !obd_uuid_equals(uuid, &lov->tgts[i].uuid))
+                        continue;
+
+                rc = llog_connect(cctxt, 1, logid, gen, uuid);
                 if (rc) {
                         CERROR("error osc_llog_connect %d\n", i);
                         break;

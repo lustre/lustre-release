@@ -716,11 +716,11 @@ extern void lustre_swab_ldlm_res_id (struct ldlm_res_id *id);
 /* lock types */
 typedef enum {
         LCK_EX = 1,
-        LCK_PW,
-        LCK_PR,
-        LCK_CW,
-        LCK_CR,
-        LCK_NL
+        LCK_PW = 2,
+        LCK_PR = 4,
+        LCK_CW = 8,
+        LCK_CR = 16,
+        LCK_NL = 32
 } ldlm_mode_t;
 
 struct ldlm_extent {
