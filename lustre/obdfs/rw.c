@@ -160,6 +160,9 @@ static int obdfs_brw(int rw, struct inode *inode2,
 
         ENTRY;
 
+        CHECK_MOUNT_EPOCH(inode);
+        CHECK_MOUNT_EPOCH(inode2);
+
         err = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ, IID(inode),
                       md, 1, &page, &count, &offset,
 		      &flags, NULL);

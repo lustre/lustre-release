@@ -48,6 +48,7 @@ struct ll_inode_info {
         char                 *lli_symlink_name;
         struct lustre_handle  lli_intent_lock_handle;
         struct semaphore      lli_open_sem;
+        __u32                 lli_mount_epoch;
 };
 
 #define LL_SUPER_MAGIC 0x0BD00BD0
@@ -72,8 +73,15 @@ struct ll_sb_info {
         time_t                    ll_commitcbd_waketime;
         time_t                    ll_commitcbd_timeout;
         spinlock_t                ll_commitcbd_lock;
+        struct list_head          ll_conn_chain; /* per-conn chain of SBs */
+        __u32                     ll_mount_epoch;
 };
 
+#define CHECK_MOUNT_EPOCH(i)                                                    \
+do {                                                                            \
+        if (ll_i2info(i)->lli_mount_epoch != ll_i2sbi(i)->ll_mount_epoch)       \
+                RETURN(-EIO);                                                   \
+} while(0)
 
 static inline struct ll_sb_info *ll_s2sbi(struct super_block *sb)
 {

@@ -97,6 +97,7 @@ struct ptlrpc_connection {
 
         struct list_head        c_imports;
         struct list_head        c_exports;
+        struct list_head        c_sb_chain;
 };
 
 struct ptlrpc_client {

@@ -155,6 +155,8 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
 
         ENTRY;
 
+        CHECK_MOUNT_EPOCH(dir);
+        
         if (it == NULL) {
                 it = &lookup_it;
                 dentry->d_it = it;
@@ -443,6 +445,8 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         struct ll_inode_info *lli = NULL;
         ENTRY;
 
+        CHECK_MOUNT_EPOCH(dir);
+
         if (dentry->d_it->it_disposition == 0) {
                 memset(&oa, 0, sizeof(oa));
                 oa.o_mode = S_IFREG | 0600;
@@ -519,6 +523,8 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         struct ll_inode_info *lli;
         int err = 0;
         ENTRY;
+
+        CHECK_MOUNT_EPOCH(dir);
 
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
                                symname, l, S_IFLNK | S_IRWXUGO, 0,

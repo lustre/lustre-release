@@ -33,6 +33,8 @@ static int ll_readlink_internal(struct inode *inode,
 
         *request = NULL;
 
+        CHECK_MOUNT_EPOCH(inode);
+
         if (lli->lli_symlink_name) {
                 *symname = lli->lli_symlink_name;
                 CDEBUG(D_INODE, "using cached symlink %s\n", *symname);
@@ -65,6 +67,8 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         int rc;
         ENTRY;
 
+        CHECK_MOUNT_EPOCH(inode);
+
         /* on symlinks lli_open_sem protects lli_symlink_name allocation/data */
         down(&lli->lli_open_sem);
         rc = ll_readlink_internal(inode, &request, &symname);
@@ -87,6 +91,8 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
         char *symname;
         int rc;
         ENTRY;
+
+        CHECK_MOUNT_EPOCH(inode);
 
         down(&lli->lli_open_sem);
         rc = ll_readlink_internal(inode, &request, &symname);

@@ -18,6 +18,7 @@
 #include <linux/obd_lov.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
+#include <linux/fs.h>
 
 kmem_cache_t *ll_file_data_slab;
 extern struct address_space_operations ll_aops;
@@ -104,6 +105,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         __u64 last_committed;
         __u64 last_xid;
         struct ptlrpc_request *request = NULL;
+        struct ptlrpc_connection *mdc_conn;
         struct ll_read_inode2_cookie lic;
         class_uuid_t uuid;
 
@@ -116,6 +118,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 RETURN(NULL);
         }
 
+        INIT_LIST_HEAD(&sbi->ll_conn_chain);
+        sbi->ll_mount_epoch = 0;
         generate_random_uuid(uuid);
         class_uuid_unparse(uuid, sbi->ll_sb_uuid);
 
@@ -146,7 +150,9 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 
 #warning Peter: is this the right place to raise the connection level?
-        sbi2mdc(sbi)->cl_import.imp_connection->c_level = LUSTRE_CONN_FULL;
+        mdc_conn = sbi2mdc(sbi)->cl_import.imp_connection;
+        mdc_conn->c_level = LUSTRE_CONN_FULL;
+        list_add(&mdc_conn->c_sb_chain, &sbi->ll_conn_chain);
 
         obd = class_uuid2obd(osc);
         if (!obd) {
@@ -240,7 +246,9 @@ out_free:
 static void ll_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
+
         ENTRY;
+        list_del(&sbi->ll_conn_chain);
         ll_commitcbd_cleanup(sbi);
         obd_disconnect(&sbi->ll_osc_conn);
         obd_disconnect(&sbi->ll_mdc_conn);
@@ -252,6 +260,8 @@ static void ll_put_super(struct super_block *sb)
 
 static void ll_clear_inode(struct inode *inode)
 {
+        /* XXX EPOCH */
+
         if (atomic_read(&inode->i_count) == 0) {
                 struct ll_inode_info *lli = ll_i2info(inode);
                 struct lov_stripe_md *lsm = lli->lli_smd;
@@ -450,9 +460,10 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         struct mds_body *body = lic->lic_body;
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
-
+        
         sema_init(&lli->lli_open_sem, 1);
-
+        lli->lli_mount_epoch = ll_i2sbi(inode)->ll_mount_epoch;
+        
         /* core attributes first */
         ll_update_inode(inode, body);
 
@@ -526,10 +537,10 @@ struct file_system_type lustre_lite_fs_type = {
 
 static int __init init_lustre_lite(void)
 {
-        printk(KERN_INFO "Lustre Lite 0.0.1, info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre Lite 0.5.14, info@clusterfs.com\n");
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
-                                               SLAB_HWCACHE_ALIGN, NULL, NULL);
+                                              SLAB_HWCACHE_ALIGN, NULL, NULL);
         if (ll_file_data_slab == NULL)
                 return -ENOMEM;
         return register_filesystem(&lustre_lite_fs_type);

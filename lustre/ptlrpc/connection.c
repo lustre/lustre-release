@@ -91,6 +91,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
         INIT_LIST_HEAD(&c->c_dying_head);
         INIT_LIST_HEAD(&c->c_imports);
         INIT_LIST_HEAD(&c->c_exports);
+        INIT_LIST_HEAD(&c->c_sb_chain);
         atomic_set(&c->c_refcount, 0);
         ptlrpc_connection_addref(c);
         spin_lock_init(&c->c_lock);

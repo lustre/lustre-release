@@ -80,6 +80,8 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
         int err;
         ENTRY;
 
+        CHECK_MOUNT_EPOCH(inode);
+
         if (!cbd)
                 RETURN(-ENOMEM);
 
@@ -200,6 +202,8 @@ static int ll_commit_write(struct file *file, struct page *page,
         struct io_cb_data *cbd = ll_init_cb();
         ENTRY;
 
+        CHECK_MOUNT_EPOCH(inode);
+
         pg.pg = page;
         pg.count = to;
         pg.off = (((obd_off)page->index) << PAGE_SHIFT);
@@ -282,6 +286,8 @@ static int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         struct brw_page *pga;
         int i, rc = 0;
         struct io_cb_data *cbd;
+
+        CHECK_MOUNT_EPOCH(inode);
 
         ENTRY;
         if (!lsm || !lsm->lsm_object_id)
