@@ -39,7 +39,7 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 {
         struct list_head *tmp;
         struct ldlm_lock *lock;
-	ldlm_mode_t req_mode = req->l_req_mode;
+        ldlm_mode_t req_mode = req->l_req_mode;
         int compat = 1;
         ENTRY;
 
@@ -67,11 +67,11 @@ ldlm_plain_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 }
 
 int
-ldlm_plain_enqueue(struct ldlm_lock *lock, int *flags, int first_enq,
-                   ldlm_error_t *err)
+ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
+                        ldlm_error_t *err)
 {
         struct ldlm_resource *res = lock->l_resource;
-	int compat;
+        int compat;
         ENTRY;
 
         if (first_enq) {
