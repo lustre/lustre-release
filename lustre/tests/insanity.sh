@@ -125,10 +125,6 @@ cleanup() {
     stop ost2 ${FORCE} --dump cleanup.log
 }
 
-client_df() {
-    $PDSH $CLIENTS "df $MOUNT" | dshbak -c
-}
-
 trap exit INT
 
 client_mkdirs() {
