@@ -40,8 +40,6 @@ n *
 #include <linux/lustre_net.h>
 #include <portals/list.h>
 
-#ifdef __KERNEL__
-
 int llog_origin_handle_create(struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
@@ -410,33 +408,3 @@ struct llog_operations llog_client_ops = {
         lop_create:      llog_client_create,
         lop_close:       llog_client_close,
 };
-
-#else /* !__KERNEL__ */
-
-int llog_client_next_block(struct llog_handle *loghandle, 
-                                         int *cur_idx, int next_idx,
-                                         __u64 *cur_offset, void *buf, int len)
-{
-        return 0;
-}
-int llog_client_read_header(struct llog_handle *handle)
-{
-        return 0;
-}
-int llog_client_create(struct llog_obd_ctxt *ctxt, struct llog_handle **res,
-                            struct llog_logid *logid, char *name)
-{
-        return 0;
-}
-int llog_client_close(struct llog_handle *handle)
-{
-        return 0;
-}
-
-struct llog_operations llog_client_ops = {
-        lop_next_block:  llog_client_next_block,
-        lop_read_header: llog_client_read_header,
-        lop_create:      llog_client_create,
-        lop_close:       llog_client_close,
-};
-#endif
