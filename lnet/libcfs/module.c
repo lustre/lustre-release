@@ -225,13 +225,13 @@ kportal_router_cmd(struct portals_cfg *pcfg, void * private)
                 CDEBUG(D_IOCTL, "Adding route: [%d] "LPU64" : "LPU64" - "LPU64"\n",
                        pcfg->pcfg_nal, pcfg->pcfg_nid, 
                        pcfg->pcfg_nid2, pcfg->pcfg_nid3);
-                err = kportal_add_route(pcfg->pcfg_nal, pcfg->pcfg_nid,
+                err = kportal_add_route(pcfg->pcfg_gw_nal, pcfg->pcfg_nid,
                                         pcfg->pcfg_nid2, pcfg->pcfg_nid3);
                 break;
 
         case NAL_CMD_DEL_ROUTE:
                 CDEBUG (D_IOCTL, "Removing routes via [%d] "LPU64" : "LPU64" - "LPU64"\n",
-                        pcfg->pcfg_nal, pcfg->pcfg_nid, 
+                        pcfg->pcfg_gw_nal, pcfg->pcfg_nid, 
                         pcfg->pcfg_nid2, pcfg->pcfg_nid3);
                 err = kportal_del_route (pcfg->pcfg_nal, pcfg->pcfg_nid,
                                          pcfg->pcfg_nid2, pcfg->pcfg_nid3);
@@ -239,7 +239,7 @@ kportal_router_cmd(struct portals_cfg *pcfg, void * private)
 
         case NAL_CMD_NOTIFY_ROUTER: {
                 CDEBUG (D_IOCTL, "Notifying peer [%d] "LPU64" %s @ %ld\n",
-                        pcfg->pcfg_nal, pcfg->pcfg_nid,
+                        pcfg->pcfg_gw_nal, pcfg->pcfg_nid,
                         pcfg->pcfg_flags ? "Enabling" : "Disabling",
                         (time_t)pcfg->pcfg_nid3);
                 
@@ -251,45 +251,13 @@ kportal_router_cmd(struct portals_cfg *pcfg, void * private)
                 
         case NAL_CMD_GET_ROUTE:
                 CDEBUG (D_IOCTL, "Getting route [%d]\n", pcfg->pcfg_count);
-                err = kportal_get_route(pcfg->pcfg_count, &pcfg->pcfg_nal,
+                err = kportal_get_route(pcfg->pcfg_count, &pcfg->pcfg_gw_nal,
                                         &pcfg->pcfg_nid, 
                                         &pcfg->pcfg_nid2, &pcfg->pcfg_nid3,
                                         &pcfg->pcfg_flags);
                 break;
         }
         RETURN(err);
-}
-
-static int
-kportal_register_router (void)
-{
-        int rc;
-        kpr_control_interface_t *ci;
-
-        ci = (kpr_control_interface_t *)PORTAL_SYMBOL_GET(kpr_control_interface);
-        if (ci == NULL)
-                return (0);
-
-        rc = kportal_nal_register(ROUTER, kportal_router_cmd, NULL);
-
-        PORTAL_SYMBOL_PUT(kpr_control_interface);
-        return (rc);
-}
-
-static int
-kportal_unregister_router (void)
-{
-        int rc;
-        kpr_control_interface_t *ci;
-
-        ci = (kpr_control_interface_t *)PORTAL_SYMBOL_GET(kpr_control_interface);
-        if (ci == NULL)
-                return (0);
-
-        rc = kportal_nal_unregister(ROUTER);
-
-        PORTAL_SYMBOL_PUT(kpr_control_interface);
-        return (rc);
 }
 
 int
@@ -626,9 +594,9 @@ static int init_kportals_module(void)
                 goto cleanup_fini;
         }
 
-        rc = kportal_register_router();
+        rc = kportal_nal_register(ROUTER, kportal_router_cmd, NULL);
         if (rc) {
-                CERROR("kportals_register_router: error %d\n", rc);
+                CERROR("kportal_nal_registre: ROUTER error %d\n", rc);
                 goto cleanup_proc;
         }
 
@@ -654,7 +622,7 @@ static void exit_kportals_module(void)
 {
         int rc;
 
-        kportal_unregister_router();
+        kportal_nal_unregister(ROUTER);
         remove_proc();
         PtlFini();
 

@@ -85,7 +85,8 @@ pcfg_ioctl(struct portals_cfg *pcfg)
 {
         int rc;
 
-        pcfg->pcfg_nal    = g_nal;
+        if (pcfg->pcfg_nal ==0)
+                pcfg->pcfg_nal    = g_nal;
 
         if (g_record_cb) {
                 rc = g_record_cb(PORTALS_CFG_TYPE, sizeof(*pcfg), pcfg);
@@ -1170,14 +1171,15 @@ jt_ptl_add_route (int argc, char **argv)
 
         PCFG_INIT(pcfg, NAL_CMD_ADD_ROUTE);
         pcfg.pcfg_nid = gateway_nid;
-        pcfg.pcfg_nal = g_nal;
+        pcfg.pcfg_nal = ROUTER;
+        pcfg.pcfg_gw_nal = g_nal;
         pcfg.pcfg_nid2 = MIN (nid1, nid2);
         pcfg.pcfg_nid3 = MAX (nid1, nid2);
 
         rc = pcfg_ioctl(&pcfg);
         if (rc != 0) 
         {
-                fprintf (stderr, "IOC_PORTAL_ADD_ROUTE failed: %s\n", strerror (errno));
+                fprintf (stderr, "NAL_CMD_ADD_ROUTE failed: %s\n", strerror (errno));
                 return (-1);
         }
         
@@ -1232,7 +1234,8 @@ jt_ptl_del_route (int argc, char **argv)
         }
         
         PCFG_INIT(pcfg, NAL_CMD_DEL_ROUTE);
-        pcfg.pcfg_nal = g_nal;
+        pcfg.pcfg_nal = ROUTER;
+        pcfg.pcfg_gw_nal = g_nal;
         pcfg.pcfg_nid = nid;
         pcfg.pcfg_nid2 = nid1;
         pcfg.pcfg_nid3 = nid2;
@@ -1240,7 +1243,7 @@ jt_ptl_del_route (int argc, char **argv)
         rc = pcfg_ioctl(&pcfg);
         if (rc != 0) 
         {
-                fprintf (stderr, "IOC_PORTAL_DEL_ROUTE ("LPX64") failed: %s\n", nid, strerror (errno));
+                fprintf (stderr, "NAL_CMD_DEL_ROUTE ("LPX64") failed: %s\n", nid, strerror (errno));
                 return (-1);
         }
         
@@ -1291,7 +1294,8 @@ jt_ptl_notify_router (int argc, char **argv)
         }
 
         PCFG_INIT(pcfg, NAL_CMD_NOTIFY_ROUTER);
-        pcfg.pcfg_nal = g_nal;
+        pcfg.pcfg_nal = ROUTER;
+        pcfg.pcfg_gw_nal = g_nal;
         pcfg.pcfg_nid = nid;
         pcfg.pcfg_flags = enable;
         /* Yeuch; 'cept I need a __u64 on 64 bit machines... */
@@ -1300,7 +1304,7 @@ jt_ptl_notify_router (int argc, char **argv)
         rc = pcfg_ioctl(&pcfg);
         if (rc != 0) 
         {
-                fprintf (stderr, "IOC_PORTAL_NOTIFY_ROUTER ("LPX64") failed: %s\n",
+                fprintf (stderr, "NAL_CMD_NOTIFY_ROUTER ("LPX64") failed: %s\n",
                          nid, strerror (errno));
                 return (-1);
         }
@@ -1324,13 +1328,14 @@ jt_ptl_print_routes (int argc, char **argv)
         for (index = 0;;index++)
         {
                 PCFG_INIT(pcfg, NAL_CMD_GET_ROUTE);
+                pcfg.pcfg_nal = ROUTER;
                 pcfg.pcfg_count = index;
                 
                 rc = pcfg_ioctl(&pcfg);
                 if (rc != 0)
                         break;
 
-                gateway_nal = pcfg.pcfg_nal;
+                gateway_nal = pcfg.pcfg_gw_nal;
                 gateway_nid = pcfg.pcfg_nid;
                 nid1 = pcfg.pcfg_nid2;
                 nid2 = pcfg.pcfg_nid3;
