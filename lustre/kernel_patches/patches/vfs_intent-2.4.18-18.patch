@@ -964,7 +964,6 @@
 +		newattrs.ia_valid |= ATTR_FROM_OPEN;
 +	if (op->setattr_raw) {
 +		newattrs.ia_valid |= ATTR_RAW;
-+		newattrs.ia_ctime = CURRENT_TIME;
 +		error = op->setattr_raw(inode, &newattrs);
 +	} else 
 +		error = notify_change(dentry, &newattrs);
@@ -1025,7 +1024,7 @@
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto dput_and_out;
-@@ -279,11 +294,29 @@ asmlinkage long sys_utime(char * filenam
+@@ -279,11 +294,25 @@ asmlinkage long sys_utime(char * filenam
  			goto dput_and_out;
  
  		newattrs.ia_valid |= ATTR_ATIME_SET | ATTR_MTIME_SET;
@@ -1041,10 +1040,6 @@
 +		if (error != -EOPNOTSUPP)
 +			goto dput_and_out;
 +	}
-+
-+	error = -EROFS;
-+	if (IS_RDONLY(inode))
-+		goto dput_and_out;
 +
 +	error = -EPERM;
 +	if (!times) {
@@ -1189,7 +1184,7 @@
 +
 +		newattrs.ia_uid = user;
 +		newattrs.ia_gid = group;
-+		newattrs.ia_valid = ATTR_UID | ATTR_GID;
++		newattrs.ia_valid = ATTR_UID | ATTR_GID | ATTR_CTIME;
 +		newattrs.ia_valid |= ATTR_RAW;
 +		error = op->setattr_raw(inode, &newattrs);
 +		/* the file system wants to use normal vfs path now */
@@ -1411,12 +1406,13 @@
  
 --- linux-2.4.18-61chaos/include/linux/fs.h~vfs_intent-2.4.18-18	Sun Jun  1 21:59:03 2003
 +++ linux-2.4.18-61chaos-root/include/linux/fs.h	Sun Jun  1 22:01:46 2003
-@@ -339,6 +339,8 @@ extern void set_bh_page(struct buffer_he
+@@ -339,6 +339,9 @@ extern void set_bh_page(struct buffer_he
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
  #define ATTR_ATTR_FLAG	1024
-+#define ATTR_RAW	2048	/* file system, not vfs will massage attrs */
-+#define ATTR_FROM_OPEN	4096	/* called from open path, ie O_TRUNC */
++#define ATTR_RAW	0x0800	/* file system, not vfs will massage attrs */
++#define ATTR_FROM_OPEN	0x1000	/* called from open path, ie O_TRUNC */
++#define ATTR_CTIME_SET	0x2000
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
