@@ -752,6 +752,7 @@ int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
         RETURN(rc);
 }
+EXPORT_SYMBOL(ost_brw_write);
 
 static int ost_san_brw(struct ptlrpc_request *req, int cmd)
 {
@@ -925,7 +926,7 @@ static int ost_filter_recovery_request(struct ptlrpc_request *req,
 
 
 
-static int ost_handle(struct ptlrpc_request *req)
+int ost_handle(struct ptlrpc_request *req)
 {
         struct obd_trans_info trans_info = { 0, };
         struct obd_trans_info *oti = &trans_info;
@@ -937,7 +938,7 @@ static int ost_handle(struct ptlrpc_request *req)
         /* XXX identical to MDS */
         if (req->rq_reqmsg->opc != OST_CONNECT) {
                 struct obd_device *obd;
-                int abort_recovery, recovering;
+                int recovering;
 
                 exp = req->rq_export;
 
@@ -952,16 +953,18 @@ static int ost_handle(struct ptlrpc_request *req)
 
                 /* Check for aborted recovery. */
                 spin_lock_bh(&obd->obd_processing_task_lock);
-                abort_recovery = obd->obd_abort_recovery;
                 recovering = obd->obd_recovering;
                 spin_unlock_bh(&obd->obd_processing_task_lock);
-                if (abort_recovery) {
-                        target_abort_recovery(obd);
-                } else if (recovering) {
+                if (recovering) {
                         rc = ost_filter_recovery_request(req, obd,
                                                          &should_process);
                         if (rc || !should_process)
                                 RETURN(rc);
+                        if (should_process < 0) {
+                                req->rq_status = should_process;
+                                rc = ptlrpc_error(req);
+                                RETURN(rc);
+                        }
                 }
         }
 
@@ -971,7 +974,7 @@ static int ost_handle(struct ptlrpc_request *req)
         case OST_CONNECT: {
                 CDEBUG(D_INODE, "connect\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CONNECT_NET, 0);
-                rc = target_handle_connect(req, ost_handle);
+                rc = target_handle_connect(req);
                 break;
         }
         case OST_DISCONNECT:
@@ -1135,6 +1138,7 @@ out:
         target_send_reply(req, rc, fail);
         return 0;
 }
+EXPORT_SYMBOL(ost_handle);
 
 int ost_attach(struct obd_device *dev, obd_count len, void *data)
 {

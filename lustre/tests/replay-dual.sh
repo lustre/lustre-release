@@ -37,6 +37,9 @@ gen_config() {
 
 build_test_filter
 
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"cleanup"}
+
 cleanup() {
     # make sure we are using the primary MDS, so the config log will
     # be able to clean up properly.
@@ -61,28 +64,32 @@ if [ "$ONLY" == "cleanup" ]; then
     exit
 fi
 
-gen_config
-start ost --reformat $OSTLCONFARGS 
-PINGER=`cat /proc/fs/lustre/pinger`
+setup() {
+    gen_config
+    start ost --reformat $OSTLCONFARGS 
+    PINGER=`cat /proc/fs/lustre/pinger`
 
-if [ "$PINGER" != "on" ]; then
-    echo "ERROR: Lustre must be built with --enable-pinger for replay-dual"
-    stop ost
-    exit 1
-fi
+    if [ "$PINGER" != "on" ]; then
+	echo "ERROR: Lustre must be built with --enable-pinger for replay-dual"
+	stop ost
+	exit 1
+    fi
 
-start ost2 --reformat $OSTLCONFARGS 
+    start ost2 --reformat $OSTLCONFARGS 
+    [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+    for mds in `mds_list`; do
+	start $mds --reformat $MDSLCONFARGS
+    done
+    grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
+    grep " $MOUNT2 " /proc/mounts || zconf_mount `hostname` $MOUNT2
+
+    echo $TIMEOUT > /proc/sys/lustre/timeout
+    echo $UPCALL > /proc/sys/lustre/upcall
+}
+
+$SETUP
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-for mds in `mds_list`; do
-    start $mds --reformat $MDSLCONFARGS
-done
-grep " $MOUNT " /proc/mounts || zconf_mount `hostname` $MOUNT
-grep " $MOUNT2 " /proc/mounts || zconf_mount `hostname` $MOUNT2
 
-echo $TIMEOUT > /proc/sys/lustre/timeout
-echo $UPCALL > /proc/sys/lustre/upcall
-
-[ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 
 test_1() {
     touch $MOUNT1/a
@@ -341,7 +348,25 @@ test_13() {
 }
 run_test 13 "close resend timeout"
 
+test_20 () {
+    replay_barrier mds1
+    multiop $MOUNT2/$tfile O_c &
+    pid2=$!
+    multiop $MOUNT1/$tfile O_c &
+    pid1=$!
+    # give multiop a chance to open
+    sleep 1 
+    kill -USR1 $pid2
+    kill -USR1 $pid1
+    sleep 1
+    umount $MOUNT2
+    facet_failover mds1
+    df || df ||  return 1
+    zconf_mount `hostname` $MOUNT2
+}
+run_test 20 "replay open, Abort recovery, don't assert (3892)"
+
 if [ "$ONLY" != "setup" ]; then
 	equals_msg test complete, cleaning up
-	cleanup
+	$CLEANUP
 fi

@@ -354,7 +354,7 @@ int ptlbd_handle(struct ptlrpc_request *req)
         swab = lustre_msg_swabbed (req->rq_reqmsg);
 
         if (req->rq_reqmsg->opc == PTLBD_CONNECT) {
-                rc = target_handle_connect(req, ptlbd_handle);
+                rc = target_handle_connect(req);
                 target_send_reply(req, rc, OBD_FAIL_PTLRPC);
                 RETURN(0);
         }

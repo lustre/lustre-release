@@ -49,6 +49,7 @@
 # include <linux/locks.h>
 #endif
 #include <linux/obd_lov.h>
+#include <linux/obd_ost.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_snap.h>
@@ -344,18 +345,11 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct obd_export *exp;
         struct mds_export_data *med; /*  */
         struct mds_client_data *mcd;
-        int rc, abort_recovery;
+        int rc;
         ENTRY;
 
         if (!conn || !obd || !cluuid)
                 RETURN(-EINVAL);
-
-        /* Check for aborted recovery. */
-        spin_lock_bh(&obd->obd_processing_task_lock);
-        abort_recovery = obd->obd_abort_recovery;
-        spin_unlock_bh(&obd->obd_processing_task_lock);
-        if (abort_recovery)
-                target_abort_recovery(obd);
 
         /* XXX There is a small race between checking the list and adding a
          * new connection for the same UUID, but the real threat (list
@@ -1618,7 +1612,6 @@ static int mdt_set_info(struct ptlrpc_request *req)
         RETURN(-EINVAL);
 }
 
-extern int ost_brw_write(struct ptlrpc_request *, struct obd_trans_info *);
 int mds_handle(struct ptlrpc_request *req)
 {
         int should_process, fail = OBD_FAIL_MDS_ALL_REPLY_NET;
@@ -1633,7 +1626,7 @@ int mds_handle(struct ptlrpc_request *req)
         /* XXX identical to OST */
         if (req->rq_reqmsg->opc != MDS_CONNECT) {
                 struct mds_export_data *med;
-                int recovering, abort_recovery;
+                int recovering;
 
                 if (req->rq_export == NULL) {
                         CERROR("lustre_mds: operation %d on unconnected MDS\n",
@@ -1661,18 +1654,19 @@ int mds_handle(struct ptlrpc_request *req)
                  * match the last xid, however it could for a
                  * committed, but still retained, open. */
 
-                /* Check for aborted recovery. */
                 spin_lock_bh(&obd->obd_processing_task_lock);
-                abort_recovery = obd->obd_abort_recovery;
                 recovering = obd->obd_recovering;
                 spin_unlock_bh(&obd->obd_processing_task_lock);
-                if (abort_recovery) {
-                        target_abort_recovery(obd);
-                } else if (recovering) {
+                if (recovering) {
                         rc = mds_filter_recovery_request(req, obd,
                                                          &should_process);
-                        if (rc || !should_process)
+                        if (rc || should_process == 0) {
                                 RETURN(rc);
+                        } else if (should_process < 0) {
+                                req->rq_status = should_process;
+                                rc = ptlrpc_error(req);
+                                RETURN(rc);
+                        }
                 }
         }
 
@@ -1680,7 +1674,7 @@ int mds_handle(struct ptlrpc_request *req)
         case MDS_CONNECT:
                 DEBUG_REQ(D_INODE, req, "connect");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_CONNECT_NET, 0);
-                rc = target_handle_connect(req, mds_handle);
+                rc = target_handle_connect(req);
                 if (!rc)
                         /* Now that we have an export, set mds. */
                         mds = mds_req2mds(req);

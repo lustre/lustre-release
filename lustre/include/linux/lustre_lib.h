@@ -75,7 +75,7 @@ struct obd_export;
 #include <linux/lustre_compat25.h>
 #include <linux/lvfs.h>
 
-int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler);
+int target_handle_connect(struct ptlrpc_request *req);
 int target_handle_disconnect(struct ptlrpc_request *req);
 void target_destroy_export(struct obd_export *exp);
 int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
@@ -84,8 +84,10 @@ int target_handle_ping(struct ptlrpc_request *req);
 void target_cancel_recovery_timer(struct obd_device *obd);
 
 #define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
-void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler);
-void target_abort_recovery(void *data);
+void target_start_recovery_timer(struct obd_device *obd);
+int target_start_recovery_thread(struct obd_device *obd, 
+                                  svc_handler_t handler);
+void target_stop_recovery_thread(struct obd_device *obd);
 int target_queue_recovery_request(struct ptlrpc_request *req,
                                   struct obd_device *obd);
 int target_queue_final_reply(struct ptlrpc_request *req, int rc);

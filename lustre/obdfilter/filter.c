@@ -48,6 +48,7 @@
 
 #include <linux/obd_class.h>
 #include <linux/obd_lov.h>
+#include <linux/obd_ost.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lprocfs_status.h>
@@ -509,7 +510,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                       LPU64"\n", obd->obd_recoverable_clients,
                       le64_to_cpu(fsd->fsd_last_transno));
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
-                obd->obd_recovering = 1;
+                target_start_recovery_thread(obd, ost_handle);
         }
 
         if (fcd)
@@ -2717,8 +2718,7 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
 
         switch (cmd) {
         case OBD_IOC_ABORT_RECOVERY:
-                CERROR("aborting recovery for device %s\n", obd->obd_name);
-                target_abort_recovery(obd);
+                target_stop_recovery_thread(obd);
                 RETURN(0);
 
         case OBD_IOC_SET_READONLY: {

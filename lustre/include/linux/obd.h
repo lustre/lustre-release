@@ -531,6 +531,13 @@ struct obd_llogs {
         struct llog_ctxt        *llog_ctxt[LLOG_MAX_CTXTS];
 };
 
+struct target_recovery_data {
+        svc_handler_t     trd_recovery_handler;
+        pid_t             trd_processing_task;
+        struct completion trd_starting;
+        struct completion trd_finishing;
+};
+
 /* corresponds to one of the obd's */
 struct obd_device {
         struct obd_type *obd_type;
@@ -563,13 +570,12 @@ struct obd_device {
         struct obd_device       *obd_observer;
         struct obd_export       *obd_self_export;
 
-        /* XXX encapsulate all this recovery data into one struct */
-        svc_handler_t                    obd_recovery_handler;
+        struct target_recovery_data      obd_recovery_data;
+        /* XXX encapsulate all this recovery data into target_recovery_data */
         int                              obd_max_recoverable_clients;
         int                              obd_connected_clients;
         int                              obd_recoverable_clients;
         spinlock_t                       obd_processing_task_lock;
-        pid_t                            obd_processing_task;
         __u64                            obd_next_recovery_transno;
         int                              obd_replayed_requests;
         int                              obd_requests_queued_for_recovery;

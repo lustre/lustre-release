@@ -48,4 +48,7 @@ struct osc_getattr_async_args {
         struct obdo     *aa_oa;
 };
 
+extern int ost_brw_write(struct ptlrpc_request *, struct obd_trans_info *);
+extern int ost_handle(struct ptlrpc_request *req);
+
 #endif

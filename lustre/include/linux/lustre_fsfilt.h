@@ -215,7 +215,7 @@ fsfilt_start_ops(struct fsfilt_operations *ops, struct inode *inode,
         unsigned long now = jiffies;
         void *parent_handle = oti ? oti->oti_handle : NULL;
         void *handle = ops->fs_start(inode, op, parent_handle, logs);
-        CDEBUG(D_HA, "started handle %p (%p)\n", handle, parent_handle);
+        CDEBUG(D_INFO, "started handle %p (%p)\n", handle, parent_handle);
 
         if (oti != NULL) {
                 if (parent_handle == NULL) {
@@ -258,7 +258,7 @@ fsfilt_commit_ops(struct fsfilt_operations *ops, struct super_block *sb,
 {
         unsigned long now = jiffies;
         int rc = ops->fs_commit(sb, inode, handle, force_sync);
-        CDEBUG(D_HA, "committing handle %p\n", handle);
+        CDEBUG(D_INFO, "committing handle %p\n", handle);
 
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
@@ -291,7 +291,7 @@ fsfilt_brw_start_log(struct obd_device *obd, int objcount,
         void *parent_handle = oti ? oti->oti_handle : NULL;
         void *handle = obd->obd_fsops->fs_brw_start(objcount, fso, niocount, nb,
                                                     parent_handle, logs);
-        CDEBUG(D_HA, "started handle %p (%p)\n", handle, parent_handle);
+        CDEBUG(D_INFO, "started handle %p (%p)\n", handle, parent_handle);
 
         if (oti != NULL) {
                 if (parent_handle == NULL) {
@@ -323,7 +323,7 @@ fsfilt_commit_async(struct obd_device *obd, struct inode *inode,
         unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit_async(inode, handle, wait_handle);
 
-        CDEBUG(D_HA, "committing handle %p (async)\n", *wait_handle);
+        CDEBUG(D_INFO, "committing handle %p (async)\n", *wait_handle);
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
 
@@ -335,7 +335,7 @@ fsfilt_commit_wait(struct obd_device *obd, struct inode *inode, void *handle)
 {
         unsigned long now = jiffies;
         int rc = obd->obd_fsops->fs_commit_wait(inode, handle);
-        CDEBUG(D_HA, "waiting for completion %p\n", handle);
+        CDEBUG(D_INFO, "waiting for completion %p\n", handle);
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long journal start time %lus\n", (jiffies - now) / HZ);
         return rc;

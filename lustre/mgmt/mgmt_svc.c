@@ -61,7 +61,7 @@ static int mgmt_handler(struct ptlrpc_request *req)
                 break;
         case MGMT_CONNECT:
                 DEBUG_REQ(D_RPCTRACE, req, "connect");
-                rc = target_handle_connect(req, NULL /* no recovery handler */);
+                rc = target_handle_connect(req);
                 break;
         case MGMT_DISCONNECT:
                 DEBUG_REQ(D_RPCTRACE, req, "disconnect");
