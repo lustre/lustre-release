@@ -54,8 +54,12 @@ int simple_mkdir(struct dentry *dir, char *name, int mode)
         if (IS_ERR(dchild))
                 RETURN(PTR_ERR(dchild));
 
-        if (dchild->d_inode)
+        if (dchild->d_inode) {
+		if (!S_ISDIR(dchild->d_inode->i_mode))
+			GOTO(out, err = -ENOTDIR);
+
                 GOTO(out, err = -EEXIST);
+	}
 
         err = vfs_mkdir(dir->d_inode, dchild, mode);
 out:
