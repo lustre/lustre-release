@@ -59,12 +59,6 @@
 
 #include <rapl.h>
 
-#if CONFIG_SMP
-# define RANAL_N_SCHED      num_online_cpus()   /* # schedulers */
-#else
-# define RANAL_N_SCHED      1                   /* # schedulers */
-#endif
-
 #define RANAL_MAXDEVS       2                   /* max # devices RapidArray supports */
 
 #define RANAL_N_CONND       4                   /* # connection daemons */
@@ -72,8 +66,8 @@
 #define RANAL_MIN_RECONNECT_INTERVAL 1          /* first failed connection retry (seconds)... */
 #define RANAL_MAX_RECONNECT_INTERVAL 60         /* ...exponentially increasing to this */
 
-#define RANAL_FMA_PREFIX_LEN      232           /* size of FMA "Prefix" */
-#define RANAL_FMA_MAX_DATA_LEN    ((7<<10)-256) /* Max FMA MSG is 7K including prefix */
+#define RANAL_FMA_MAX_PREFIX      232           /* max size of FMA "Prefix" */
+#define RANAL_FMA_MAX_DATA        ((7<<10)-256) /* Max FMA MSG is 7K including prefix */
 
 #define RANAL_PEER_HASH_SIZE  101               /* # peer lists */
 #define RANAL_CONN_HASH_SIZE  101               /* # conn lists */
@@ -92,7 +86,7 @@
 /* default vals for runtime tunables */
 #define RANAL_TIMEOUT           30              /* comms timeout (seconds) */
 #define RANAL_LISTENER_TIMEOUT   5              /* listener timeout (seconds) */
-#define RANAL_MAX_IMMEDIATE    (2<<10)          /* biggest immediate payload */
+#define RANAL_MAX_IMMEDIATE    (2<<10)          /* immediate payload breakpoint */
 
 typedef struct 
 {
@@ -100,7 +94,8 @@ typedef struct
         int               kra_listener_timeout; /* max time the listener can block */
 	int               kra_backlog;          /* listener's backlog */
 	int               kra_port;		/* listener's TCP/IP port */
-        int               kra_max_immediate;    /* biggest immediate payload */
+        int               kra_max_immediate;    /* immediate payload breakpoint */
+
         struct ctl_table_header *kra_sysctl;    /* sysctl interface */
 } kra_tunables_t;
 
@@ -114,8 +109,10 @@ typedef struct
         int                     rad_idx;        /* index in kra_devices */
         int                     rad_ready;      /* set by device callback */
         struct list_head        rad_connq;      /* connections requiring attention */
+        struct list_head        rad_zombies;    /* connections to free */
         wait_queue_head_t       rad_waitq;      /* scheduler waits here */
         spinlock_t              rad_lock;       /* serialise */
+        void                   *rad_scheduler;  /* scheduling thread */
 } kra_device_t;
         
 typedef struct 
@@ -140,7 +137,8 @@ typedef struct
 
         struct list_head *kra_conns;            /* conns hashed by cqid */
         int               kra_conn_hash_size;   /* size of kra_conns */
-        __u64             kra_next_incarnation; /* conn incarnation # generator */
+        __u64             kra_peerstamp;        /* when I started up */
+        __u64             kra_connstamp;        /* conn stamp generator */
         int               kra_next_cqid;        /* cqid generator */
         atomic_t          kra_nconns;           /* # connections extant */
 
@@ -173,11 +171,12 @@ typedef struct kra_connreq			/* connection request/response */
 {						/* (sent via socket) */
         __u32             racr_magic;		/* I'm an ranal connreq */
         __u16             racr_version;		/* this is my version number */
-        __u16             racr_devid;           /* which device to connect on */
-        __u64             racr_nid;		/* my NID */
-        __u64             racr_incarnation;	/* my incarnation */
-        __u32             racr_timeout;         /* my timeout */
-	RAP_RI_PARAMETERS racr_riparams;	/* my endpoint info */
+        __u16             racr_devid;           /* sender's device ID */
+        __u64             racr_nid;		/* sender's NID */
+        __u64             racr_peerstamp;       /* sender's instance stamp */
+        __u64             racr_connstamp;       /* sender's connection stamp */
+        __u32             racr_timeout;         /* sender's timeout */
+	RAP_RI_PARAMETERS racr_riparams;	/* sender's endpoint info */
 } kra_connreq_t;
 
 typedef struct
@@ -224,7 +223,7 @@ typedef struct                                  /* NB must fit in FMA "Prefix" *
         __u16             ram_version;		/* this is my version number */
         __u16             ram_type;		/* msg type */
         __u64             ram_srcnid;           /* sender's NID */
-        __u64             ram_incarnation;      /* sender's connection incarnation */
+        __u64             ram_connstamp;        /* sender's connection stamp */
         union {
                 kra_immediate_msg_t   immediate;
 		kra_putreq_msg_t      putreq;
@@ -300,12 +299,13 @@ typedef struct kra_conn
         struct kra_peer    *rac_peer;           /* owning peer */
         struct list_head    rac_list;           /* stash on peer's conn list */
         struct list_head    rac_hashlist;       /* stash in connection hash table */
-        struct list_head    rac_schedlist;      /* queue for scheduler */
+        struct list_head    rac_schedlist;      /* schedule (on rad_connq) for attention */
         struct list_head    rac_fmaq;           /* txs queued for FMA */
         struct list_head    rac_rdmaq;          /* txs awaiting RDMA completion */
         struct list_head    rac_replyq;         /* txs awaiting replies */
-        __u64               rac_peer_incarnation; /* peer's unique connection stamp */
-        __u64               rac_my_incarnation; /* my unique connection stamp */
+        __u64               rac_peerstamp;      /* peer's unique stamp */
+        __u64               rac_peer_connstamp; /* peer's unique connection stamp */
+        __u64               rac_my_connstamp;   /* my unique connection stamp */
         unsigned long       rac_last_tx;        /* when I last sent an FMA message */
         unsigned long       rac_last_rx;        /* when I last received an FMA messages */
         long                rac_keepalive;      /* keepalive interval */
@@ -316,7 +316,7 @@ typedef struct kra_conn
         atomic_t            rac_refcount;       /* # users */
         unsigned int        rac_close_sent;     /* I've sent CLOSE */
         unsigned int        rac_close_recvd;    /* I've received CLOSE */
-        unsigned int        rac_closing;        /* connection being torn down */
+        unsigned int        rac_state;          /* connection state */
         unsigned int        rac_scheduled;      /* being attented to */
         spinlock_t          rac_lock;           /* serialise */
         kra_device_t       *rac_device;         /* which device */
@@ -324,6 +324,10 @@ typedef struct kra_conn
         kra_msg_t          *rac_rxmsg;          /* incoming message (FMA prefix) */
         kra_msg_t           rac_msg;            /* keepalive/CLOSE message buffer */
 } kra_conn_t;
+
+#define RANAL_CONN_ESTABLISHED     0
+#define RANAL_CONN_CLOSING         1
+#define RANAL_CONN_CLOSED          2
 
 typedef struct kra_peer
 {
@@ -358,8 +362,8 @@ extern lib_nal_t       kranal_lib;
 extern kra_data_t      kranal_data;
 extern kra_tunables_t  kranal_tunables;
 
-extern void __kranal_peer_decref(kra_peer_t *peer);
-extern void __kranal_conn_decref(kra_conn_t *conn);
+extern void kranal_destroy_peer(kra_peer_t *peer);
+extern void kranal_destroy_conn(kra_conn_t *conn);
 
 static inline void
 kranal_peer_addref(kra_peer_t *peer)
@@ -375,7 +379,7 @@ kranal_peer_decref(kra_peer_t *peer)
         CDEBUG(D_NET, "%p->"LPX64"\n", peer, peer->rap_nid);
 	LASSERT(atomic_read(&peer->rap_refcount) > 0);
 	if (atomic_dec_and_test(&peer->rap_refcount))
-		__kranal_peer_decref(peer);
+		kranal_destroy_peer(peer);
 }
 
 static inline struct list_head *
@@ -383,7 +387,7 @@ kranal_nid2peerlist (ptl_nid_t nid)
 {
         unsigned int hash = ((unsigned int)nid) % kranal_data.kra_peer_hash_size;
         
-        return (&kranal_data.kra_peers [hash]);
+        return (&kranal_data.kra_peers[hash]);
 }
 
 static inline int
@@ -407,7 +411,7 @@ kranal_conn_decref(kra_conn_t *conn)
         CDEBUG(D_NET, "%p->"LPX64"\n", conn, conn->rac_peer->rap_nid);
 	LASSERT(atomic_read(&conn->rac_refcount) > 0);
 	if (atomic_dec_and_test(&conn->rac_refcount))
-		__kranal_conn_decref(conn);
+                kranal_destroy_conn(conn);
 }
 
 static inline struct list_head *
@@ -457,8 +461,6 @@ kranal_page2phys (struct page *p)
 extern int kranal_listener_procint(ctl_table *table, 
                                    int write, struct file *filp, 
                                    void *buffer, size_t *lenp);
-extern int kranal_close_stale_conns_locked (kra_peer_t *peer, 
-                                            __u64 incarnation);
 extern void kranal_update_reaper_timeout(long timeout);
 extern void kranal_tx_done (kra_tx_t *tx, int completion);
 extern void kranal_unlink_peer_locked (kra_peer_t *peer);
