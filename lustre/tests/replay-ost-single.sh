@@ -47,23 +47,28 @@ fi
 
 build_test_filter
 
-rm -f ostactive
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"cleanup"}
 
-gen_config
+setup() {
+    gen_config
 
-start ost --reformat $OSTLCONFARGS
-
-[ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
-start mds --reformat $MDSLCONFARGS
-zconf_mount `hostname` $MOUNT
+    start ost --reformat $OSTLCONFARGS
+    [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
+    start mds --reformat $MDSLCONFARGS
+    zconf_mount `hostname` $MOUNT
+}
 
 mkdir -p $DIR
+
+$SETUP
 
 test_0() {
     fail ost
     cp /etc/profile  $DIR/$tfile
     sync
     diff /etc/profile $DIR/$tfile
+    rm -f $DIR/$tfile
 }
 run_test 0 "empty replay"
 
@@ -71,6 +76,7 @@ test_1() {
     date > $DIR/$tfile
     fail ost
     $CHECKSTAT -t file $DIR/$tfile || return 1
+    rm -f $DIR/$tfile
 }
 run_test 1 "touch"
 
@@ -82,6 +88,7 @@ test_2() {
     for i in `seq 10`; do
       grep -q "tag-$i" $DIR/$tfile-$i || error "f2-$i"
     done 
+    rm -f $DIR/$tfile-*
 }
 run_test 2 "|x| 10 open(O_CREAT)s"
 
@@ -120,8 +127,56 @@ test_5() {
     sleep 10
     fail ost
     wait $PID || return 1
+    rm -f $DIR/$tfile
 }
 run_test 5 "Fail OST during iozone"
 
+kbytesfree() {
+   cat /proc/fs/lustre/osc/OSC_*MNT*/kbytesfree | awk '{total+=$1} END {print total}'
+}
+
+test_6() {
+    f=$DIR/$tfile
+    before=`kbytesfree`
+    dd if=/dev/urandom bs=1024 count=5120 of=$f
+#define OBD_FAIL_MDS_REINT_NET_REP       0x119
+    do_facet mds "sysctl -w lustre.fail_loc=0x80000119"
+    sync
+    after_dd=`kbytesfree`
+    echo "before: $before after_dd: $after_dd"
+    (( before > after_dd )) || return 1
+    rm -f $f
+    fail ost
+    $CHECKSTAT -t file $f && return 2 || true
+    sync
+    # let the delete happen
+    sleep 2
+    after=`kbytesfree`
+    echo "before: $before after: $after"
+    (( before == after ))  || return 3
+}
+run_test 6 "Fail OST before obd_destroy"
+
+test_7() {
+    f=$DIR/$tfile
+    before=`kbytesfree`
+    dd if=/dev/urandom bs=1024 count=5120 of=$f
+    sync
+    after_dd=`kbytesfree`
+    echo "before: $before after_dd: $after_dd"
+    (( before > after_dd )) || return 1
+    replay_barrier ost
+    rm -f $f
+    fail ost
+    $CHECKSTAT -t file $f && return 2 || true
+    sync
+    # let the delete happen
+    sleep 2
+    after=`kbytesfree`
+    echo "before: $before after: $after"
+    (( before == after )) || return 3
+}
+run_test 7 "Fail OST before obd_destroy"
+
 equals_msg test complete, cleaning up
-cleanup
+$CLEANUP
