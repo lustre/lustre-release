@@ -78,7 +78,7 @@ Commands:
    Create a MDS using the device
    Requires --node 
 
---lov lov_name [mds_name stripe_sz stripe_off pattern]
+--lov lov_name [mds_name stripe_sz sub_stripe_count pattern]
    Creates a logical volume
    When used with other commands, it specifics the lov to modify
 
@@ -254,12 +254,12 @@ class GenConfig:
         ost.appendChild(self.ref("obd", obd_uuid))
         return ost
 
-    def lov(self, name, uuid, mds_uuid, stripe_sz, stripe_off, pattern):
+    def lov(self, name, uuid, mds_uuid, stripe_sz, stripe_count, pattern):
         lov = self.newService("lov", name, uuid)
         lov.appendChild(self.ref("mds", mds_uuid))
         devs = self.addElement(lov, "devices" )
         devs.setAttribute("stripesize", stripe_sz)
-        devs.setAttribute("stripeoffset", stripe_off)
+        devs.setAttribute("stripecount", stripe_count)
         devs.setAttribute("pattern", pattern)
         return lov
 
@@ -582,7 +582,7 @@ def add_lov(gen, lustre, options, args):
     name = options['lov']
     mds_name = args[0]
     stripe_sz = args[1]
-    stripe_off = args[2]
+    stripe_count = args[2]
     pattern = args[3]
     uuid = new_uuid(name)
 
@@ -591,7 +591,7 @@ def add_lov(gen, lustre, options, args):
         error("LOV: ", name, " already exists.")
 
     mds_uuid = name2uuid(lustre, mds_name)
-    lov = gen.lov(name, uuid, mds_uuid, stripe_sz, stripe_off, pattern)
+    lov = gen.lov(name, uuid, mds_uuid, stripe_sz, stripe_count, pattern)
     lustre.appendChild(lov)
     
     # add an lovconfig entry to the mds profile

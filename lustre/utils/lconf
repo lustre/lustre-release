@@ -46,7 +46,7 @@ def usage():
 config.xml          Lustre configuration in xml format.
 --get <url>         URL to fetch a config file
 --node <nodename>   Load config for <nodename>
--d | --cleanup	    Cleans up config. (Shutdown)
+-d | --cleanup      Cleans up config. (Shutdown)
 -v | --verbose      Print system commands as they are run
 -h | --help         Print this help 
 --gdb               Prints message after creating gdb module script
@@ -56,10 +56,10 @@ config.xml          Lustre configuration in xml format.
                     config file is doing what it should be doing. (Implies -v)
 --nomod             Skip load/unload module step.
 --nosetup           Skip device setup/cleanup step.
---reformat	    Reformat all devices (without question)
+--reformat          Reformat all devices (without question)
 """
     TODO = """
---ldap server	    LDAP server with lustre config database
+--ldap server       LDAP server with lustre config database
 --makeldiff         Translate xml source to LDIFF 
 This are perhaps not needed:
 --lustre="src dir"  Base directory of lustre sources. Used to search
@@ -697,8 +697,8 @@ class Network(Module):
             debug("nid:", self.nid)
 
         self.add_module('portals/linux/oslib/', 'portals')
-	if node_needs_router():
-	    self.add_module('portals/linux/router', 'kptlrouter')
+        if node_needs_router():
+            self.add_module('portals/linux/router', 'kptlrouter')
         if self.net_type == 'tcp':
             self.add_module('portals/linux/socknal', 'ksocknal')
         if self.net_type == 'elan':
@@ -745,14 +745,14 @@ class Network(Module):
                     if not srv:
                         panic("no server for nid", lo)
                     else:
-			try:
+                        try:
                             lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
-        	 	except CommandError, e:
-                    		print "disconnect failed: ", self.name
-                    		e.dump()
-		try:
+                        except CommandError, e:
+                            print "disconnect failed: ", self.name
+                            e.dump()
+                try:
                     lctl.del_route(self.net_type, self.nid, lo, hi)
-        	except CommandError, e:
+                except CommandError, e:
                     print "del_route failed: ", self.name
                     e.dump()
               
@@ -792,7 +792,7 @@ class LOV(Module):
             self.stripe_off = get_attr_int(dev_node, 'stripeoffset', 0)
             self.pattern = get_attr_int(dev_node, 'pattern', 0)
             self.devlist = get_all_refs(dev_node, 'osc')
-            self.stripe_cnt = len(self.devlist)
+            self.stripe_cnt = get_attr_int(dev_node, 'stripecount', len(self.devlist))
         self.add_module('lustre/mdc', 'mdc')
         self.add_module('lustre/lov', 'lov')
 
@@ -805,8 +805,8 @@ class LOV(Module):
             else:
                 panic('osc not found:', osc_uuid)
         mdc_uuid = prepare_mdc(self.dom_node.parentNode, self.mds_uuid)
-        self.info(self.mds_uuid, self.stripe_cnt, self.stripe_sz, self.stripe_off, self.pattern,
-        self.devlist, self.mds_name)
+        self.info(self.mds_uuid, self.stripe_cnt, self.stripe_sz,
+                  self.stripe_off, self.pattern, self.devlist, self.mds_name)
         lctl.newdev(attach="lov %s %s" % (self.name, self.uuid),
                     setup ="%s" % (mdc_uuid))
 
@@ -1271,7 +1271,7 @@ def init_route_config(lustre):
     list = lustre.getElementsByTagName('node')
     for node in list:
         if get_attr(node, 'router'):
-	    router_flag = 1
+            router_flag = 1
             for (local_type, local_nid) in local_node:
                 gw = None
                 netlist = node.getElementsByTagName('network')
@@ -1390,8 +1390,8 @@ def doHost(lustreNode, hosts):
         init_node(dom_node)
         init_route_config(lustreNode)
     else:
-  	global router_flag 
- 	router_flag = 1
+        global router_flag 
+        router_flag = 1
 
     # Two step process: (1) load modules, (2) setup lustre
     # if not cleaning, load modules first.
