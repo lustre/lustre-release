@@ -58,7 +58,7 @@ DEFAULT_PORT = 988
 # Maximum number of devices to search for.
 # (the /dev/loop* nodes need to be created beforehand)
 MAX_LOOP_DEVICES = 256
-PORTALS_DIR = 'portals'
+PORTALS_DIR = '../portals'
 
 # Needed to call lconf --record
 CONFIG_FILE = "" 
