@@ -104,6 +104,11 @@
 
 #define SOCKNAL_TX_LOW_WATER(sk) (((sk)->sk_sndbuf*8)/10)
 
+#define SOCKNAL_SINGLE_FRAG_TX      0           /* disable multi-fragment sends */
+#define SOCKNAL_SINGLE_FRAG_RX      0           /* disable multi-fragment receives */
+#define SOCKNAL_RISK_KMAP_DEADLOCK  0           /* risk kmap deadlock on multi-frag I/O 
+                                                 * (backs off to single-frag if disabled) */
+                                                
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,72))
 # define sk_allocation  allocation
 # define sk_data_ready	data_ready
@@ -349,6 +354,13 @@ typedef struct ksock_conn
         atomic_t            ksnc_tx_nob;        /* # bytes queued */
         int                 ksnc_tx_ready;      /* write space */
         int                 ksnc_tx_scheduled;  /* being progressed */
+
+#if !SOCKNAL_SINGLE_FRAG_RX
+        struct iovec        ksnc_rx_scratch_iov[PTL_MD_MAX_IOV];
+#endif
+#if !SOCKNAL_SINGLE_FRAG_TX
+        struct iovec        ksnc_tx_scratch_iov[PTL_MD_MAX_IOV];
+#endif
 } ksock_conn_t;
 
 #define KSNR_TYPED_ROUTES   ((1 << SOCKNAL_CONN_CONTROL) |      \
