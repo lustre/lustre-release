@@ -1,0 +1,597 @@
+2001-06-29 18:15 PDT rzahir
+
+	* obdfs/flushd.c: conditionalized number of C_DEBUG messages.
+	* include/linux/obd_class.h: added obd_devicename member to 
+	  struct obd_device (name is either ptr to dentry or uuid).
+	* ext2obd/ext2_obd.c: setup() converts dentry into rdev number.
+	  class/class_obd.c: setup() converts name into obd_device dentry
+	  class/obdcontrol: setup() passes /dev/obd name into ioctl
+	  (used to be rdev number and if invalid rdev number was passed
+	   old ext2_obd.c would crash kernel when trying to read superblock).
+	* class/obdcontrol: added "status, procsys, script, insmod, rmmod,
+	  lsmod, shell and close" commands for obdcontrol. This allows
+	  easier scripting from within obdcontrol. Introduced ability to
+	  maintain multiple open obd devices from a single obdcontrol
+	  session.  Device command toggles device context. Obdcontrol
+	  maintains multiple open file handles. "script <file>" command is
+	  useful for "sourcing" scripts without leaving obdcontrol.
+	  shell <command> allows any shell command to be executed from
+	  within obdcontrol.
+	* class/proc_lustre.c: added support for /proc/lustre/obd/<n>/status.
+	  These are read-only /proc entries that track /dev/obd<n> 
+	  internal state. 
+        * obdtrace/* & include/linux/obd_class.h: obd_trace a logical obd
+	  module useful for tracing and performance debug of the Lustre
+	  obd protocol stack. obdtrace module creates
+	  /proc/lustre/obd/<n>/stats file. Reading this /proc file shows
+	  per OBD performance statistics.  Any write to this /proc file
+	  resets the counters for this OBD. 
+	* scripts/obdtrace_demo.scr: Example of obdtrace that
+	  takes advantage of new obdcontrol functionality.
+        * doc/obdtrace_demo.txt: shows obdtrace capabilities.
+
+	
+2000-03-06 12:33 adilger
+
+	* obdfs/ext2_obd: added punch/truncate methods
+
+2000-01-26 01:40 adilger
+
+	* obdfs/flushd.c: removed iput() from dequeue routine, since we no
+	    longer remove the inodes from the list in this routine, rather
+	    waiting to do it in flush_reqs, which also does a iput()
+
+2000-01-25 12:55 adilger
+
+	* obdfs/super.c: add call to flush pages when unmounting filesystem
+	* obdfs/flushd.c: pass "check_time" parameter to flush routines
+	* obdfs/namei.c: fixed rename call to getpage to use offset, not index
+	* snap/*: tested snapshots with new vector I/O, async writes - OK
+	* tests/snaprun.sh: small script to step through testing of some
+	    snapshot features
+
+2000-01-24 18:55 braam
+
+	* obdfs/rw.c: fixed obdfs_getpage() to use page index, not offset
+	* obdfs/rw.c, flushd.c: added superblock lock for inode/page lists,
+	    added new iget()/iput() on all inodes in page cache to prevent
+	    them from being flushed from memory while waiting for write.
+
+2000-01-22 02:55 adilger
+
+	* flush daemon testing/debugging - inode list still needs a lock
+	* snapshot compiles with vector I/O now - untested
+
+2000-01-20 18:05 adilger
+
+	* add dirty inode list to superblock
+
+2000-01-20 11:50 adilger
+
+	* ext2obd/ext2obd.c: fixed brw I/O to have array of iobufs, not pointer
+	* obdfs/super.c: add superblock to list of superblocks
+	* obdfs/flushd.c: use pupdated() to do page writes
+
+2000-01-19 18:05 adilger
+
+	* ext2obd/ext2obd.c: changed _brw to use vector I/O with brw_kiovec()
+	* obdfs/rw.c, obdfs/flushd.c: updated for async page cache
+
+2000-01-18 20:20 adilger
+
+	* class/obdcontrol: fixed read, write, create to work with obdos
+	    (write is still not fully functional)
+	* ext2obd/ext2obd.c: ext2obd_write() - copy inode data back into obdo
+	    add a few missing iput()s for error conditions
+	    
+2000-01-18 13:30 adilger
+
+	* modified _brw method to allow array of obdos to be submitted for
+	  multiple I/Os with one call
+
+2000-01-18 11:30 adilger
+
+	* include/obd_support.h: removed printk() of long long values
+	  (sometimes does not print properly)
+	* obdfs/rw.c: added obdo_from_inode() call in obdfs_brw(), as inode
+	  was not properly being copied into obdo, causing occasional confusion
+	* snap/snap.c: always copy back obdo data to primary from disk obdo
+	* obdsync/*: removed from CVS
+
+2000-01-14 08:05  adilger
+
+	* snap/*: obdo snapshots should be working now.
+
+2000-01-13 13:50  adilger
+
+	* snap/*: working on storing obdmd outside of inode
+
+2000-01-11 14:25  adilger
+
+	* snap/*: updated to work with new obdo methods, untested
+
+2000-01-10 10:37  adilger
+
+	* obdfs/*, ext2obd/*: updated to work with new obdo methods, tested
+
+1999-12-29 13:57  adilger
+
+	* obdsync/*: added to CVS
+	* obdfs/super.c,rw.c: added start of page cache
+
+1999-12-29 10:20  adilger
+
+	* ext2obd/ext2_obd.c, snap/snap.c: change parameters for create
+	* class/obdcontrol: update copy, migrate dst & src parameter order
+
+1999-12-23 14:21  adilger
+
+	* demos/snaprest.sh: ensure client is disconnected after snaprestore
+	* class/class_obd.c: debugging for connection counts, made error
+	  returns more consistent, check connections when doing cleanup
+
+1999-12-23 03:10  adilger
+
+	* ext2obd/ext2_obd.c: added iput() after reading a bad inode,
+	  remove EXT2_UNDEL_DIR_INO from list of iterated inodes.
+	* class/obdcontrol: after snaprestore remove snapshot from
+	  table by key not index
+
+1999-12-22 13:44  adilger
+
+	* demos/snaprest.sh: mount /dev/obd2 on /mnt/obd at end of restore
+
+1999-12-22 13:11  adilger
+
+	* snap/snap.c: always try to collapse an object in snap_restoreobj()
+	* demos/snaprest.sh: need to rework snaprestore process
+	* demos/basesetup.sh: check if /dev/obd* exist
+	* demos/baseclean.sh: don't remove temp file
+
+1999-12-22 08:43  adilger
+
+	* demos/obdtest.sh: added new script
+
+1999-12-21 18:03  adilger
+
+	* class/obdcontrol: added "basedev" parameter to the attach command
+	  for ext2_obd.  This was required after the removal of Filesystem()
+	* demos/*: moved test scripts here, renamed by function
+
+1999-12-21 17:03  adilger
+
+	* class/obdcontrol: merge snapattach into attach, fix scsi_obd packing
+	* snap/cleanup.sh: use ../class/cleanup.sh like snap/setup.sh does
+
+1999-12-21 00:41  braam
+
+	* doc/obd-howto.sgml: numerous edits
+	* class/obdcontrol: make things clearer (no implicit filesystem)
+	* change to our official MAJOR (186). 
+
+1999-12-20 17:03  adilger
+
+	* doc/obd-howto.sgml: added issues/bugs section
+	* snap/test*.sh: added brief comments to each script
+
+1999-12-20 16:08  adilger
+
+	* doc/obd-howto.sgml: updated for initial public release
+	* obdfs/many: changed to have separate dir/file operations,
+	* ext2obd/ext2_obd: cosmetic changes to match ext2 code more closely
+	* include/linux/obd_class.h: change obdo_{cpy,cmp}_md() to allow
+	  include or exclude flags for copy/compare of metadata
+	* snap/snaptable.c: comment iterator functions clearly
+
+1999-12-17 10:20  adilger
+
+	* include/linux/obd_sim.h: renamed to obd_ext2.h
+	* Configure: revert PCI, APIC checks (otherwise won't compile after
+	  config)
+
+1999-12-17 08:45  adilger
+
+	* doc/obd-howto.sgml: completed OBD tutorial section
+	* snap/snap.c: in eliminate_obj() turn off S_IFDIR flag on object
+	  before passing to underlying obdext2 driver, so it doesn't
+	  decrement the dir count for the group
+	* Configure: removed questions for PCMCIA specific features
+	* class/obdcontrol: disconnect session when changing devices
+
+1999-12-14 20:32  adilger
+
+	* include/linux/obdfs.h: add symlink_inode_operations, prototypes
+	* obdfs/symlink.c, obdfs/namei.c: handle obdfs symlinks properly
+
+1999-12-13 17:55  adilger
+
+	* snap/snap.c, class/obdcontrol: added support for snapshot restores
+	  on unmounted OBD filesystems
+	* snap/setup3.sh, snap/cleanup3.sh: scripts to test 3 snapshots
+	* include/linux/obd_snap_support.h: iterator struct/function prototypes
+
+1999-12-13 09:30  adilger
+
+	* all: significant overhaul by Peter to avoid problems with OBD
+	  metadata conflicting with ext2 block data in the inode.
+	* class/obdcontrol: added proper commands for snapdelete/snaprestore
+	* class/obdcontrol: device command now disconnects old session if any
+	* ext2obd/*: updated for kernel 2.3.30
+	* include/linux/obd_class.h: helper functions inode metadata cpy/cmp
+	* include/linux/obd_snap.h: new magic less likely for block conflict
+	  now that the redirector can have "i_blocks" set
+	* obd/obdfs: updated for kernel 2.3.30
+	* snap/snap.c: use new obd metadata copy helper routines
+	* snap/snap.c: updated delete/restore snapshot iterator functions
+
+1999-12-08 21:42  adilger
+
+	* snap/snap.c: snap_do_cow() fixed case with existing indirect object
+	* snap/snap.c: snap_delsnap() removes (partly) a snapshot
+	* ext2obd/ext2_obd.c: fixed iterator to handle reserved inodes
+	* ext2obd/ext2_obd.c: fixed direct_brw() to handle > 1 block offset
+	* class/obdcontrol: added testsnapiterator command/ioctl
+	* class/setup.sh: added creation of /tmp/fs, 4k block size
+	* obdfs/namei.c: fixed new directory size after write
+
+1999-12-07 11:45  adilger
+
+	* snap/snap.c: fixed check for snap_create() to test for correct
+	  read-only copy
+
+1999-12-06 16:53  adilger
+
+	* snap/snap.c, snap/snaptable.c: Fixed up snapshot to work again with
+	  snaptables, added snap_iterate() calldown, snap_cleanup() to free
+	  a snapshot table entry
+	* ext2obd/ext2_obd.c: added iterator ext2obd_iterate() for all inodes
+	* class/class_obd.c: blocked TCGETS IOCTL, added connection ID to calls
+	* class/obdcontrol: added IOCTL for testing iterator, connection ID
+
+1999-12-06 08:00 braam
+
+	* Added a file handling snapshot tables
+	* Added an ioctl system that allows ioctls to be made without
+	  specific devices being attached (pass method down).
+	* Numerous small routines for snapshot handling.
+	
+1999-12-03 16:53  adilger
+
+	* Makefile: made "all" the default target
+	* class/class_obd.c, class/genops.c, snap/snap.c: re-ordered
+	  migrate, copy argument order to be consistent (dst, src)
+	* snap/snap.c: fixed unlink to work in all cases of (direct,
+	  indirect)
+	* snap/setup.sh: check for mounted obdfs before starting
+	* snap/cleanup.sh: remove loop device
+	* ext2obd/ext2_obd.c: start of iterator
+
+1999-12-03 11:08  adilger
+
+	* snap/snap.c: implemented unlink functionality for snapshots.
+	* doc/obd-howto.sgml: started on OBD howto documentation
+
+1999-12-02 13:40  braam
+
+	* class/genops.c: Undo accidental commit
+
+1999-12-02 13:36  braam
+
+	* .cvsignore, class/.cvsignore, class/genops.c, ext2obd/.cvsignore,
+	inofs/.cvsignore, obdfs/.cvsignore, oraid1/.cvsignore,
+	rpcclient/.cvsignore, rpctarget/.cvsignore, snap/.cvsignore: Added
+	.cvsignore files to the repository
+
+1999-12-02 12:33  adilger
+
+	* snap/setup.sh: Updated to use the new "now" and "current" flags
+	when creating snapshots.
+
+1999-12-01 17:11  braam
+
+	* class/obdcontrol, doc/OLVM.txt, include/linux/obd_snap.h,
+	obdfs/super.c, snap/snap.c: Updated snapshot indexes in superblock
+	to not depend on index "0" as being the current snapshot.  We still
+	need to push the inode attributes to the snap copy so that
+	size/times are correct.
+
+1999-12-01 11:45  adilger
+
+	* class/genops.c, ext2obd/Makefile, ext2obd/dir.c, ext2obd/file.c,
+	ext2obd/inode.c, ext2obd/truncate.c, include/linux/obdfs.h,
+	obdfs/rw.c, snap/cleanup.sh, snap/setup.sh, tests/fs.sh: Updated
+	parameters for obdfs_writepage() to use struct *dentry instead of
+	struct *file, and call in odbfs_write_one_page() to use new
+	parameters.  Updated gen_copy_data() to round up the number of
+	pages copied in while loop.
+
+1999-12-01 01:02  braam
+
+	* snap/snap.c: small test
+
+1999-11-30 12:06  braam
+
+	* class/genops.c, class/setup.sh, ext2obd/Makefile,
+	ext2obd/ext2_obd.c, include/linux/obd_support.h, obdfs/namei.c,
+	snap/snap.c: fixes for 2.3.25 and higher
+
+1999-11-24 14:15  braam
+
+	* BUGS, Makefile, doc/OLVM.txt, ext2obd/ext2_obd.c,
+	include/linux/obd_class.h, include/linux/obd_snap.h,
+	include/linux/obd_support.h, include/linux/obdfs.h, obdfs/dir.c,
+	obdfs/rw.c, obdfs/super.c: Changes to accomodate the snapshot
+	features!
+
+1999-11-24 12:46  braam
+
+	* class/: class_obd.c, cleanup.sh, genops.c, obdcontrol, setup.sh:
+	Changes to accomodate the snapshot driver.
+	
+	For working snapshot code, see the snap directory and the
+	snap/setup.sh script.  The code is not complete, unlink hasn't been
+	done yet.
+
+1999-11-24 12:42  braam
+
+	* snap/snap.c: first working snapshot OBD driver; see setup.sh for
+	usage.
+
+1999-11-03    <braam@cs.cmu.edu>
+
+	* class/obdcontrol: add Device directive to change OBD device
+	while running
+	* class/obdcontrol: add Filesystem directive to change disk
+	partition while running
+	* rename sim_obd to ext2_obd; prevent doubling up on ext2_unlink
+	etc.
+	* obdfs/super.c fixes to pass device to kernel and to allow
+	mouting multiple devices.
+	* clean up the calling of operations and finding of connection
+	numbers from obdfs
+
+1999-11-02 12:19  braam
+
+	* Makefile: Minimal changes to the makefiles.
+
+1999-11-02 12:12  braam
+
+	* Configure, Makefile, make.rules, class/Makefile, doc/notes.txt,
+	ext2obd/Makefile, ext2obd/sim_obd.c, ext2obd/test.c,
+	ext2obd/test2.c, include/linux/inofs.h, include/linux/obd_rpc.h,
+	include/linux/obd_support.h, include/linux/obdfs.h, inofs/Makefile,
+	inofs/file.c, inofs/inofs.h, inofs/namei.c, inofs/rw.c,
+	inofs/super.c, obdfs/Makefile, obdfs/dir.c, obdfs/file.c,
+	obdfs/namei.c, obdfs/notes.txt, obdfs/rw.c, obdfs/super.c,
+	oraid1/Makefile, rpcclient/Makefile, rpcclient/obdxdr.c,
+	rpcclient/proc.c, rpcclient/rpc_obd.c, snap/Makefile, snap/snap.c,
+	tests/test.c, tests/test2.c: New direcotory layout:   subdirs for
+	different clients and file systems   documentation, tests and lib
+	subdirectories.
+
+1999-11-01    <braam@wolf.rockies.stelias.com>
+
+	* OBDFS fixes:
+	  -	code ported to 2.3.24 (no patches needed anymore)
+ 	  -	the obdfs_find_entry function which had a nasty bug
+	  - 	rename now works
+	  -	all pages are currently in a locked state when touched by obdfs
+	  -	Configure/Makefile fixed to work without MODVERSIONS
+	  -	read_inode/write_inode copy out the data area
+
+1999-11-01 10:44  braam
+
+	* .cvsignore, ChangeLog, Configure, class/cleanup.sh,
+	class/genops.c, class/obdcontrol, class/setup.sh, class/sysctl.c,
+	doc/API.txt, ext2obd/Makefile, ext2obd/inode.c, ext2obd/sim_obd.c,
+	include/linux/obd_class.h, include/linux/obd_rpc.h,
+	include/linux/obd_snap.h, include/linux/obd_support.h,
+	include/linux/obdfs.h, inofs/Makefile, inofs/file.c, inofs/inofs.h,
+	inofs/namei.c, inofs/rw.c, inofs/super.c, inofs/sysctl.c,
+	obdfs/Makefile, obdfs/dir.c, obdfs/file.c, obdfs/namei.c,
+	obdfs/rw.c, obdfs/super.c, obdfs/symlink.c, obdfs/sysctl.c,
+	rpcclient/obdxdr.c, rpcclient/rpc_obd.c: Over of the changes:	 
+	Many bugfixes	  INOFS added	  SNAP added
+	
+	   See ChangeLog for details
+
+1999-10-28    <braam@wolf.rockies.stelias.com>
+
+	* INOFS: a new "inode" file system was written.  It tests components
+ 	of obdfs and could be useful for Coda/AFS servers and object
+ 	databases.
+
+	* This file system will not have directories, but access pure
+ 	objects. Readdir will be an iterator and to create objects with
+ 	known names (integers of course) the preallocation function will
+ 	need to be completed.
+	
+	* This will still need to exploit preallocation and and a readdir
+	function should be added
+
+1999-10-22    <braam@wolf.rockies.stelias.com>
+
+	* Beginning of a "rpc_client" layout for OBD
+
+	
+1999-10-21    <braam@wolf.rockies.stelias.com>
+
+	* Much of the snap shot client driver is there (see API.txt).
+  	This driver introduced the need for substantial changes in the
+ 	calling interface of the OBD layers. More to come.
+
+	* Part of the RAID1 driver added.  Also here many changes to the
+ 	calling interface were needed.
+
+1999-10-21 12:39  braam
+
+	* BUGS, ChangeLog, Configure, class/class_obd.c, class/genops.c,
+	class/obdcontrol, class/setup.sh, doc/OLVM.txt, ext2obd/Makefile,
+	ext2obd/sim_obd.c, oraid1/raid1_obd.c, snap/snap.c,
+	include/linux/obd.h, include/linux/obd_class.h,
+	include/linux/obd_raid1.h, include/linux/obd_sim.h,
+	include/linux/obd_snap.h, include/linux/obd_support.h,
+	include/linux/obdfs.h, obdfs/dir.c, obdfs/file.c, obdfs/namei.c,
+	obdfs/rw.c, obdfs/super.c, patches/patch-2.3.21: New files:  for
+	raid1	    for snap shots  OLVM a technical description of the
+	logical volume management   genops generic operations useful to
+	many obd clients
+	
+	Fixes:	numerous fixes to the file system	several fixes to
+	OBD and obdcontrol
+	
+	Current state:	does not compile
+
+1999-10-21 00:47  braam
+
+	* ChangeLog, Makefile, class/class_obd.c, class/cleanup.sh,
+	class/genops.c, class/obdcontrol, class/setup.sh, doc/OLVM.txt,
+	ext2obd/Makefile, ext2obd/ext2_obd.c, ext2obd/sim_obd.c,
+	ext2obd/super.c, include/linux/obd_class.h,
+	include/linux/obd_sim.h, include/linux/obd_snap.h,
+	include/linux/obd_support.h, include/linux/obdfs.h, obdfs/namei.c,
+	obdfs/rw.c, obdfs/super.c, oraid1/raid1_obd.c, rpcclient/rpc_obd.c,
+	scripts/maketags.sh, snap/snap.c: Cleanup : no more "sim" now
+	"ext2"		 can mount multiple devices	 obdcontrol
+	improved     more work on snap (doesn't compile yet)
+	
+		  check in just before we are again overhauling the
+	interface.
+
+1999-10-12 21:29  braam
+
+	* Configure, class/class_obd.c, class/obdcontrol,
+	ext2obd/sim_obd.c, include/linux/obd_class.h,
+	include/linux/obd_support.h, include/linux/obdfs.h, obdfs/dir.c,
+	obdfs/namei.c, obdfs/rw.c, obdfs/super.c: Numerous fixes, including
+	the attach code, better page locking etc.
+
+1999-09-25 21:20  braam
+
+	* class/class_obd.c, class/obdcontrol, doc/API.txt,
+	ext2obd/sim_obd.c, ext2obd/super.c, include/linux/obd_class.h,
+	include/linux/obd_sim.h, include/linux/obd_support.h,
+	include/linux/obdfs.h, obdfs/Makefile, obdfs/dir.c, obdfs/file.c,
+	obdfs/namei.c, obdfs/rw.c, obdfs/super.c, obdfs/sysctl.c: Added
+	code for obdfs to do writes to files and reads of directories and
+	files.
+
+1999-09-11 00:25  braam
+
+	* class/class_obd.c, class/obdcontrol, class/sysctl.c,
+	ext2obd/Makefile, ext2obd/balloc.c, ext2obd/bitmap.c,
+	ext2obd/dir.c, ext2obd/file.c, ext2obd/fsync.c, ext2obd/ialloc.c,
+	ext2obd/inode.c, ext2obd/interface.c, ext2obd/ioctl.c,
+	ext2obd/psdev.c, ext2obd/sim_obd.c, ext2obd/super.c,
+	ext2obd/truncate.c, include/linux/obd_class.h,
+	include/linux/obd_psdev.h, include/linux/obd_sim.h,
+	include/linux/presto.h, include/linux/presto_upcall.h,
+	include/linux/sim_obd.h: Much cleaner separation of the class and
+	simulated obd code.
+
+1999-09-11 00:25  braam
+
+	* include/linux/obd_support.h: Whoops, forgotten!
+
+1999-09-03 15:01  braam
+
+	* Configure, class/obdcontrol, ext2obd/interface.c,
+	ext2obd/ioctl.c, ext2obd/psdev.c: fixes for deliverables.
+
+1999-09-03 15:01  braam
+
+	* COPYING: forgot the good old gpl
+
+1999-08-31 17:05  braam
+
+	* class/obdcontrol, ext2obd/Makefile, ext2obd/README,
+	ext2obd/acl.c, ext2obd/balloc.c, ext2obd/dir.c, ext2obd/file.c,
+	ext2obd/fsync.c, ext2obd/ialloc.c, ext2obd/inode.c,
+	ext2obd/interface.c, ext2obd/ioctl.c, ext2obd/super.c,
+	ext2obd/symlink.c, ext2obd/test.c, ext2obd/truncate.c: Fixes for
+	Linux 2.3 as well as bug fixes after Ayman's testing.
+
+1999-08-31 17:05  braam
+
+	* patches/: patch-2.2.10, patch-2.3.15: patches for the kernel
+	code.
+
+1999-08-31 17:05  braam
+
+	* obdfs/super.c: Minor change for Linux 2.3
+
+1999-08-16 16:41  braam
+
+	* obdfs/super.c: fix the module unloading bug.
+
+1999-08-10 10:18  braam
+
+	* Configure, class/obdcontrol, doc/API.txt, ext2obd/Makefile,
+	ext2obd/README, ext2obd/file.c, ext2obd/ialloc.c, ext2obd/inode.c,
+	ext2obd/interface.c, ext2obd/ioctl.c, ext2obd/psdev.c,
+	ext2obd/super.c, include/linux/obdfs.h, include/linux/sim_obd.h,
+	obdfs/README, obdfs/notes.txt: Numerous patches and fixes to Phil's
+	initial attack.
+	
+	In particular we now have clean tracking of inode counts, so that
+	things attach detach cleanly.  Enough there for deliverable 1 & 2.
+
+1999-07-28 22:10  pschwan
+
+	* doc/API.txt, ext2obd/README, ext2obd/interface.c: [no log
+	message]
+
+1999-07-28 10:11  braam
+
+	* Configure, Makefile, class/sysctl.c, ext2obd/balloc.c,
+	ext2obd/bitmap.c, ext2obd/dir.c, ext2obd/file.c, ext2obd/fsync.c,
+	ext2obd/ialloc.c, ext2obd/inode.c, ext2obd/interface.c,
+	ext2obd/ioctl.c, ext2obd/psdev.c, ext2obd/super.c,
+	ext2obd/truncate.c, include/linux/obdfs.h, include/linux/sim_obd.h,
+	include/linux/sym_obd.h, obdfs/super.c, obdfs/sysctl.c: Fixed a
+	spelling mistake: "symulated" --> "simulated" (sym_obd etc).
+	
+	Improved configuration scripts
+	
+	Removed compiler warnings from re-defining ext2_error
+
+1999-06-24 16:16  pschwan
+
+	* Configure, Makefile, class/obdcontrol, ext2obd/file.c,
+	ext2obd/ialloc.c, ext2obd/inode.c, ext2obd/interface.c,
+	ext2obd/ioctl.c, ext2obd/psdev.c, ext2obd/super.c,
+	include/linux/sym_obd.h, include/linux/obdfs.h, obdfs/Makefile,
+	obdfs/super.c, obdfs/sysctl.c: the last two weeks' work
+
+1999-06-09 18:17  pschwan
+
+	* class/obdcontrol, ext2obd/balloc.c, ext2obd/bitmap.c,
+	ext2obd/dir.c, ext2obd/file.c, ext2obd/fsync.c, ext2obd/ialloc.c,
+	ext2obd/inode.c, ext2obd/interface.c, ext2obd/ioctl.c,
+	ext2obd/super.c, ext2obd/truncate.c, include/linux/sym_obd.h:
+	mostly read, 2.2.1 -> 2.2.9 updates
+
+1999-06-05 13:02  pschwan
+
+	* class/obdcontrol, class/sysctl.c, ext2obd/Makefile,
+	ext2obd/balloc.c, ext2obd/bitmap.c, ext2obd/file.c,
+	ext2obd/ialloc.c, ext2obd/inode.c, ext2obd/interface.c,
+	ext2obd/ioctl.c, ext2obd/psdev.c, ext2obd/super.c, ext2obd/test.c,
+	ext2obd/test2.c, ext2obd/truncate.c, include/linux/presto.h,
+	include/linux/sym_obd.h: A couple days of changes--much
+	improvement.
+
+1999-06-02 19:34  pschwan
+
+	* ext2obd/Makefile, ext2obd/balloc.c, ext2obd/bitmap.c,
+	ext2obd/dir.c, ext2obd/file.c, ext2obd/fsync.c, ext2obd/ialloc.c,
+	ext2obd/inode.c, ext2obd/interface.c, ext2obd/ioctl.c,
+	ext2obd/psdev.c, ext2obd/super.c, ext2obd/test.c, ext2obd/test2.c,
+	ext2obd/truncate.c, include/linux/obd_psdev.h,
+	include/linux/presto.h, include/linux/presto_upcall.h,
+	include/linux/sym_obd.h: foo
+
+1999-06-02 19:28  pschwan
+
+	* Configure, Makefile, config.in: foo
+

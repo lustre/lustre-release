@@ -1,0 +1,15 @@
+include /dev/obd in the documentation
+
+
+attach: attaching ext2obd allows ext2 module to be unloaded.  Unload,
+then do cleanup, get Oops...
+
+syncing: invalid IOCTL
+
+create: more than one object
+
+preallocate: IOCTL
+
+statfs: 
+
+restoresnap: decrements directory count for ext2
