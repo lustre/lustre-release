@@ -147,7 +147,7 @@ static int lov_tgt_seq_show(struct seq_file *p, void *v)
         struct obd_device *dev = p->private;
         struct lov_obd *lov = &dev->u.lov;
         int idx = tgt - &(lov->tgts[0]);
-        return seq_printf(p, "%d: %s %sACTIVE\n", idx+1, tgt->uuid.uuid,
+        return seq_printf(p, "%d: %s %sACTIVE\n", idx, tgt->uuid.uuid,
                           tgt->active ? "" : "IN");
 }
 
@@ -187,6 +187,7 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
         { "blocksize",    lprocfs_rd_blksize,     0, 0 },
         { "kbytestotal",  lprocfs_rd_kbytestotal, 0, 0 },
         { "kbytesfree",   lprocfs_rd_kbytesfree,  0, 0 },
+        { "kbytesavail",  lprocfs_rd_kbytesavail, 0, 0 },
         { "desc_uuid",    lov_rd_desc_uuid,       0, 0 },
         { 0 }
 };
