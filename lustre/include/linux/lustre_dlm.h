@@ -22,6 +22,9 @@ typedef enum {
         ELDLM_BAD_NAMESPACE    = 401
 } ldlm_error_t;
 
+#define LDLM_NAMESPACE_SERVER 0
+#define LDLM_NAMESPACE_CLIENT 1
+
 #define LDLM_FL_LOCK_CHANGED   (1 << 0)
 #define LDLM_FL_BLOCK_GRANTED  (1 << 1)
 #define LDLM_FL_BLOCK_CONV     (1 << 2)
@@ -242,6 +245,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl,
                      void *cookie, int cookielen,
                      ldlm_mode_t mode,
                      int *flags,
+                     ldlm_lock_callback callback,
                      void *data,
                      __u32 data_len,
                      struct ldlm_handle *lockh);
