@@ -57,7 +57,7 @@
   */
  
  #include <linux/fs.h>
-@@ -38,6 +42,439 @@
+@@ -38,6 +42,456 @@
  #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
  #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
  
@@ -362,20 +362,28 @@
 + * Probe for a directory leaf block to search
 + */
 +
-+static struct dx_frame *dx_probe (struct inode *dir, u32 hash, struct dx_frame *frame)
++static struct dx_frame *
++dx_probe(struct inode *dir, u32 hash, struct dx_frame *frame_in)
 +{
 +	unsigned count, indirect;
 +	struct dx_entry *at, *entries, *p, *q, *m;
 +	struct dx_root *root;
 +	struct buffer_head *bh;
++	struct dx_frame *frame = frame_in;
 +	int err;
-+	if (!(bh = ext3_bread (NULL,dir, 0, 0,&err)))
++
++	frame->bh = NULL;
++	if (!(bh = ext3_bread(NULL, dir, 0, 0, &err)))
 +		goto fail;
 +	root = (struct dx_root *) bh->b_data;
-+	if (root->info.hash_version > 0 || root->info.unused_flags & 1)
++	if (root->info.hash_version > 0 || root->info.unused_flags & 1) {
++		brelse(bh);
 +		goto fail;
-+	if ((indirect = root->info.indirect_levels) > 1)
++	}
++	if ((indirect = root->info.indirect_levels) > 1) {
++		brelse(bh);
 +		goto fail;
++	}
 +	entries = (struct dx_entry *) (((char *) &root->info) + root->info.info_length);
 +	assert (dx_get_limit(entries) == dx_root_limit(dir, root->info.info_length));
 +	dxtrace (printk("Look up %x", hash));
@@ -424,14 +432,20 @@
 +		frame++;
 +	}
 +fail2:
-+	brelse(frame->bh);
++	while (frame >= frame_in) {
++		brelse(frame->bh);
++		frame--;
++	}
 +fail:
 +	return NULL;
 +}
 +
 +static void dx_release (struct dx_frame *frames)
 +{
-+	if (((struct dx_root *) frames[0].bh->b_data)->info.indirect_levels)
++	if (frames[0].bh == NULL)
++		return;
++
++	if (((struct dx_root *)frames[0].bh->b_data)->info.indirect_levels)
 +		brelse (frames[1].bh);
 +	brelse (frames[0].bh);
 +}
@@ -482,15 +496,18 @@
 +	} while(more);
 +}
 +
-+static void dx_insert_block (struct dx_frame *frame, u32 hash, u32 block)
++static void dx_insert_block(struct dx_frame *frame, u32 hash, u32 block)
 +{
-+	struct dx_entry *entries = frame->entries, *at = frame->at;
-+	assert (dx_get_count (entries) < dx_get_limit (entries) &&
-+		frame->at < frame->entries+dx_get_count(entries));
-+	memmove (at + 2, at+1, (char *) (entries + dx_get_count(entries)) - (char *) (at));
-+	dx_set_hash(at + 1, hash);
-+	dx_set_block(at + 1, block);
-+	dx_set_count(entries, dx_get_count(entries) + 1);
++	struct dx_entry *entries = frame->entries;
++	struct dx_entry *old = frame->at, *new = old + 1;
++	int count = dx_get_count(entries);
++
++	assert(count < dx_get_limit(entries));
++	assert(old < entries + count);
++	memmove(new + 1, new, (char *)(entries + count) - (char *)(new));
++	dx_set_hash(new, hash);
++	dx_set_block(new, block);
++	dx_set_count(entries, count + 1);
 +}
 +#endif
 +
@@ -735,19 +752,19 @@
 -				if (dir->i_size == 0) {
 -					brelse(bh);
 -					return -ENOENT;
-+	if (ext3_dx && is_dx(dir))
-+	{
++	if (ext3_dx && is_dx(dir)) {
 +		struct dx_frame frames[2], *frame;
 +		struct dx_entry *entries, *at;
 +		u32 hash;
 +		char *data1;
 +
-+		hash = dx_hash (name, namelen);
-+		frame = dx_probe (dir, hash, frames); // do something if null
++		hash = dx_hash(name, namelen);
++		/* FIXME: do something if dx_probe() fails here */
++		frame = dx_probe(dir, hash, frames);
 +		entries = frame->entries;
 +		at = frame->at;
 +
-+		if (!(bh = ext3_bread (handle,dir, dx_get_block(frame->at), 0,&retval)))
++		if (!(bh = ext3_bread(handle,dir, dx_get_block(at), 0,&retval)))
 +			goto dxfail1;
 +
 +		BUFFER_TRACE(bh, "get_write_access");
