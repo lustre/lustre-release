@@ -775,8 +775,17 @@ Index: linux-2.6.4-51.0/kernel/exit.c
  	/* No need to hold fs->lock if we are killing it */
 ===== include/linux/mount.h 1.10 vs edited =====
 --- linux-2.6.4-51.0.orig/include/linux/mount.h	Fri Jul 11 08:23:45 2003
-+++ linux-2.6.4-51.0/include/linux/mount.h	Tue May  4 20:10:27 2004
-@@ -41,6 +41,7 @@
++++ linux-2.6.4-51.0/include/linux/mount.h	Tue May  4 21:44:49 2004
+@@ -31,6 +31,8 @@
+ 	int mnt_flags;
+ 	char *mnt_devname;		/* Name of device e.g. /dev/dsk/hda1 */
+ 	struct list_head mnt_list;
++	struct list_head mnt_lustre_list; /* GNS mount list */
++	unsigned long mnt_last_used;      /* for GNS auto-umount (jiffies) */
+ };
+ 
+ static inline struct vfsmount *mntget(struct vfsmount *mnt)
+@@ -41,6 +43,7 @@
  }
  
  extern void __mntput(struct vfsmount *mnt);
