@@ -1,4 +1,3 @@
-arch/i386/mm/init.c
 arch/ia64/mm/init.c
 include/linux/slab.h
 kernel/ksyms.c
