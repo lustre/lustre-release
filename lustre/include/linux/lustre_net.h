@@ -308,6 +308,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req);
 void ptlrpc_continue_req(struct ptlrpc_request *req);
 int ptlrpc_replay_req(struct ptlrpc_request *req);
 void ptlrpc_restart_req(struct ptlrpc_request *req);
+void ptlrpc_abort_inflight(struct obd_import *imp);
 
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
                                        int count, int *lengths, char **bufs);

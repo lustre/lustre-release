@@ -646,6 +646,7 @@ static int mdc_recover(struct obd_import *imp, int phase)
                                        NULL, LDLM_FL_LOCAL_ONLY);
                 RETURN(0);
             case PTLRPC_RECOVD_PHASE_RECOVER:
+        reconnect:
                 rc = ptlrpc_reconnect_import(imp, MDS_CONNECT);
                 if (rc == EALREADY)
                         RETURN(ptlrpc_replay(imp, 0));
@@ -671,6 +672,12 @@ static int mdc_recover(struct obd_import *imp, int phase)
                         RETURN(rc);
 
                 RETURN(0);
+
+            case PTLRPC_RECOVD_PHASE_NOTCONN:
+                ldlm_namespace_cleanup(imp->imp_obd->obd_namespace, 1);
+                ptlrpc_abort_inflight(imp);
+                goto reconnect;
+
             default:
                 RETURN(-EINVAL);
         }

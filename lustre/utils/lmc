@@ -32,7 +32,50 @@ from xml.dom.ext import PrettyPrint
 DEFAULT_PORT = 988 
 
 def usage():
-    print """usage: lmc --add object [object parameters]"""
+    print """usage: lmc --add object [object parameters]
+
+Object creation command summary:
+
+--add node
+  --node node_name
+  --timeout num
+  --recovery_upcall path
+
+--add net
+  --node node_name
+  --nid addr
+  --nettype tcp|elan|toe|gm
+  --port port
+  --tcpbuf size
+  --router
+
+--add mds
+  --node node_name
+  --mds mds_name
+  --dev path
+  --size size
+
+--add lov
+  --lov lov_name
+  --mds mds_name
+  --stripe_sz num
+  --stripe_cnt num
+  --stripe_pattern num
+
+-add ost
+  --node node_name
+  --obd obd_name 
+  --lov lov_name 
+  --dev path
+  --size size
+  --obduuid uuid
+  
+--add mtpt  - Mountpoint
+  --node node_name
+  --path /mnt/point
+  --mds mds_name
+  --obd obd_name OR --lov lovname
+"""
     sys.exit(1)
 
 def error(*args):
@@ -167,9 +210,10 @@ class GenConfig:
         ldlm = self.newService("ldlm", name, uuid)
         return ldlm
 
-    def obd(self, name, uuid, fs, obdtype, devname, format, dev_size=0):
+    def obd(self, name, uuid, fs, obdtype, devname, format, ost_uuid, dev_size=0):
         obd = self.newService("obd", name, uuid)
         obd.setAttribute('type', obdtype)
+        self.addElement(obd, 'active_target', ost_uuid)
         if fs:
             self.addElement(obd, "fstype", fs)
         if devname:
@@ -179,17 +223,17 @@ class GenConfig:
             self.addElement(obd, "autoformat", format)
         return obd
 
+#    def osc(self, name, uuid, obd_uuid, net_uuid):
+#        osc = self.newService("osc", name, uuid)
+#        osc.appendChild(self.ref("ost", net_uuid))
+#        osc.appendChild(self.ref("obd", obd_uuid))
+#        return osc
+
     def cobd(self, name, uuid, real_uuid, cache_uuid):
         cobd = self.newService("cobd", name, uuid)
         cobd.appendChild(self.ref("real_obd",real_uuid))
         cobd.appendChild(self.ref("cache_obd",cache_uuid))
         return cobd
-
-    def osc(self, name, uuid, obd_uuid, net_uuid):
-        osc = self.newService("osc", name, uuid)
-        osc.appendChild(self.ref("ost", net_uuid))
-        osc.appendChild(self.ref("obd", obd_uuid))
-        return osc
 
     def ost(self, name, uuid, obd_uuid, net_uuid):
         ost = self.newService("ost", name, uuid)
@@ -228,13 +272,13 @@ class GenConfig:
     def mountpoint(self, name, uuid, mds_uuid, osc_uuid, path):
         mtpt = self.newService("mountpoint", name, uuid)
         mtpt.appendChild(self.ref("mds", mds_uuid))
-        mtpt.appendChild(self.ref("osc", osc_uuid))
+        mtpt.appendChild(self.ref("obd", osc_uuid))
         self.addElement(mtpt, "path", path)
         return mtpt
 
     def echo_client(self, name, uuid, osc_uuid):
         ec = self.newService("echo_client", name, uuid)
-        ec.appendChild(self.ref("osc", osc_uuid))
+        ec.appendChild(self.ref("obd", osc_uuid))
         return ec
 
 ############################################################
@@ -308,10 +352,10 @@ def get_net_uuid(lustre, node_name):
     return None
 
 
-def lov_add_osc(gen, lov, osc_uuid):
+def lov_add_obd(gen, lov, osc_uuid):
     devs = lov.getElementsByTagName('devices')
     if len(devs) == 1:
-        devs[0].appendChild(gen.ref("osc", osc_uuid))
+        devs[0].appendChild(gen.ref("obd", osc_uuid))
     else:
         error("No devices element found for LOV:", lov)
 
@@ -335,8 +379,12 @@ def do_add_node(gen, lustre,  options, node_name):
     uuid = new_uuid(node_name)
     node = gen.node(node_name, uuid)
     node_add_profile(gen, node, 'ldlm', ldlm_uuid)
-    if options.has_key('router'):
+    if has_option(options, 'router'):
         node.setAttribute('router', '1')
+    if has_option(options, 'timeout'):
+        node.setAttribute('timeout', get_option(options, 'timeout'))
+    if has_option(options, 'recovery_upcall'):
+        node.setAttribute('recovery_upcall', get_option(options, 'recovery_upcall'))
     lustre.appendChild(node)
     return node
 
@@ -446,7 +494,6 @@ def add_ost(gen, lustre, options):
         
     obdname = get_option(options, 'obd', 'OBD_'+ node_name)
     obdname = new_name(obdname)
-    oscname = new_name('OSC_'+ obdname)
     ostname = new_name('OST_'+ obdname)
     if options.has_key('obduuid'):
         obd_uuid = options['obduuid']
@@ -456,28 +503,26 @@ def add_ost(gen, lustre, options):
     else:
         obd_uuid = new_uuid(obdname)
     ost_uuid = new_uuid(ostname)
-    osc_uuid = new_uuid(oscname)
 
     net_uuid = get_net_uuid(lustre, node_name)
     if not net_uuid:
         error("NODE: ", node_name, "not found")
     
-    obd = gen.obd(obdname, obd_uuid, fstype, obdtype, devname, get_format_flag(options), size)
+    obd = gen.obd(obdname, obd_uuid, fstype, obdtype, devname, get_format_flag(options), ost_uuid,
+                  size)
     ost = gen.ost(ostname, ost_uuid, obd_uuid, net_uuid)
-    osc = gen.osc(oscname, osc_uuid, obd_uuid, ost_uuid)
     
     if lovname:
         lov = findByName(lustre, lovname, "lov")
         if not lov:
             error('add_ost:', '"'+lovname+'"', "lov element not found.")
-        lov_add_osc(gen, lov, osc_uuid)
+        lov_add_obd(gen, lov, obd_uuid)
 
     node = findByName(lustre, node_name, "node")
     node_add_profile(gen, node, 'obd', obd_uuid)
     node_add_profile(gen, node, 'ost', ost_uuid)
 
     lustre.appendChild(obd)
-    lustre.appendChild(osc)
     lustre.appendChild(ost)
 
                    
@@ -488,12 +533,9 @@ def add_cobd(gen, lustre, options):
 
     real_name = get_option(options, 'real_obd')
     cache_name = get_option(options, 'cache_obd')
-    # temp hack until merged with b_recover and OSC is removed
-    real_name = 'OSC_' + real_name
-    cache_name = 'OSC_' + cache_name
     
-    real_uuid = name2uuid(lustre, real_name, tag='osc')
-    cache_uuid = name2uuid(lustre, cache_name, tag='osc')
+    real_uuid = name2uuid(lustre, real_name, tag='obd')
+    cache_uuid = name2uuid(lustre, cache_name, tag='obd')
 
     node = findByName(lustre, node_name, "node")
     node_add_profile(gen, node, "cobd", uuid)
@@ -514,9 +556,7 @@ def add_echo_client(gen, lustre, options):
 
     lov_uuid = name2uuid(lustre, lov_name, tag='lov', fatal=0)
     if not lov_uuid:
-        # remove this hack when the osc uuids are removed
-        lov_name = 'OSC_' + lov_name
-        lov_uuid = name2uuid(lustre, lov_name, tag='osc', fatal=1)
+        lov_uuid = name2uuid(lustre, lov_name, tag='obd', fatal=1)
 
     echo = gen.echo_client(echoname, echo_uuid, lov_uuid)
     lustre.appendChild(echo)
@@ -574,9 +614,7 @@ def add_mtpt(gen, lustre, options):
     mds_uuid = name2uuid(lustre, mds_name, tag='mds')
     lov_uuid = name2uuid(lustre, lov_name, tag='lov', fatal=0)
     if not lov_uuid:
-        # remove this hack when OSC is removed
-        lov_name = 'OSC_' + lov_name
-        lov_uuid = name2uuid(lustre, lov_name, tag='osc', fatal=1)
+        lov_uuid = name2uuid(lustre, lov_name, tag='obd', fatal=1)
 
     uuid = new_uuid(name)
     mtpt = gen.mountpoint(name, uuid, mds_uuid, lov_uuid, path)
@@ -604,6 +642,12 @@ class OptionError (exceptions.Exception):
     def __init__(self, args):
         self.args = args
 
+def has_option(options, tag):
+    """Look for tag in options hash and return the true if set"""
+    if options.has_key(tag):
+        return 1
+    return 0
+
 def get_option(options, tag, default = None):
     """Look for tag in options hash and return the value if set. If not
     set, then if return default it is set, otherwise exception."""
@@ -627,7 +671,8 @@ def parse_cmdline(argv):
                  "mds=", "route", "router", "merge=", "format", "reformat", "output=",
                  "dev=", "size=", "obd=", "obdtype=", "obduuid=", "in=",
                  "path=", "help", "batch=", "lov=", "gw=", "lo=", "hi=",
-		  "oscref", "osc=", "real_obd=", "cache_obd=", "fstype="]
+                 "oscref", "osc=", "real_obd=", "cache_obd=", "fstype=",
+                 "timeout=", "recovery_upcall="]
     opts = []
     args = []
     options = {}
@@ -652,6 +697,14 @@ def parse_cmdline(argv):
         if o == "--obd":
             options['obd'] = a
 
+        # node options
+        if o == "--timeout":
+            options['timeout'] = a
+        if o == "--recovery_upcall":
+            options['recovery_upcall'] = a
+        if o == "--router":
+            options['router'] = 1
+        
         # network options
         if o == "--nid":
             options['nid'] = a
@@ -667,8 +720,6 @@ def parse_cmdline(argv):
             options['mtpt'] = 1
         if o == "--route":
             options['route'] = 1
-        if o == "--router":
-            options['router'] = 1
 
         # ost options
         if o == "--dev":

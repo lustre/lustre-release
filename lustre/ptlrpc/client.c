@@ -620,9 +620,9 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                NTOH__u32(req->rq_reqmsg->status), req->rq_xid,
                conn->c_peer.peer_nid, NTOH__u32(req->rq_reqmsg->opc));
 
+        spin_lock(&imp->imp_lock);
+        EIO_IF_INVALID(req);
         if (req->rq_level > imp->imp_level) {
-                spin_lock(&imp->imp_lock);
-                EIO_IF_INVALID(req);
                 list_del(&req->rq_list);
                 list_add_tail(&req->rq_list, &imp->imp_delayed_list);
                 spin_unlock(&imp->imp_lock);
@@ -647,9 +647,6 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 CERROR("process %d resumed\n", current->pid);
         }
  resend:
-        req->rq_timeout = obd_timeout;
-        spin_lock(&imp->imp_lock);
-        EIO_IF_INVALID(req);
 
         LASSERT(list_empty(&req->rq_list));
         list_add_tail(&req->rq_list, &imp->imp_sending_list);
@@ -716,11 +713,28 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 GOTO(out, rc = -EINVAL);
         }
 #endif
-        CDEBUG(D_NET, "got rep "LPU64"\n", req->rq_xid);
-        if (req->rq_repmsg->status == 0)
-                CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repmsg,
-                       req->rq_replen, req->rq_repmsg->status);
+        DEBUG_REQ(D_NET, req, "status %d\n", req->rq_repmsg->status);
 
+        /* We're a rejected connection, need to invalidate and rebuild. */
+        if (req->rq_repmsg->status == -ENOTCONN) {
+                spin_lock(&imp->imp_lock);
+                /* If someone else is reconnecting us (CONN_RECOVD) or has
+                 * already completed it (handle mismatch), then we just need
+                 * to get out.
+                 */
+                if (imp->imp_level == LUSTRE_CONN_RECOVD ||
+                    imp->imp_handle.addr != req->rq_reqmsg->addr ||
+                    imp->imp_handle.cookie != req->rq_reqmsg->cookie) {
+                        spin_unlock(&imp->imp_lock);
+                        GOTO(out, rc = -EIO);
+                }
+                imp->imp_level = LUSTRE_CONN_RECOVD;
+                spin_unlock(&imp->imp_lock);
+                rc = imp->imp_recover(imp, PTLRPC_RECOVD_PHASE_NOTCONN);
+                if (rc)
+                        LBUG();
+                GOTO(out, rc = -EIO);
+        }
 
         if (req->rq_import->imp_flags & IMP_REPLAYABLE) {
                 spin_lock(&imp->imp_lock);
@@ -818,4 +832,36 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
  out:
         req->rq_level = old_level;
         RETURN(rc);
+}
+
+/* XXX looks a lot like super.c:invalidate_request_list, don't it? */
+void ptlrpc_abort_inflight(struct obd_import *imp)
+{
+        struct list_head *tmp, *n;
+
+        /* Make sure that no new requests get processed for this import.
+         * ptlrpc_queue_wait must (and does) hold imp_lock while testing this
+         * flag and then putting requests on sending_list or delayed_list.
+         */
+        spin_lock(&imp->imp_lock);
+        imp->imp_flags |= IMP_INVALID;
+        spin_unlock(&imp->imp_lock);
+
+        list_for_each_safe(tmp, n, &imp->imp_sending_list) {
+                struct ptlrpc_request *req =
+                        list_entry(tmp, struct ptlrpc_request, rq_list);
+
+                DEBUG_REQ(D_HA, req, "inflight");
+                req->rq_flags |= PTL_RPC_FL_ERR;
+                wake_up(&req->rq_wait_for_rep);
+        }
+
+        list_for_each_safe(tmp, n, &imp->imp_delayed_list) {
+                struct ptlrpc_request *req =
+                        list_entry(tmp, struct ptlrpc_request, rq_list);
+
+                DEBUG_REQ(D_HA, req, "aborting waiting req");
+                req->rq_flags |= PTL_RPC_FL_ERR;
+                wake_up(&req->rq_wait_for_rep);
+        }
 }

@@ -2,7 +2,7 @@
 
 config=${1:-local.xml}
 
-LMC=${LMC:-../utils/lmc}
+LMC="${LMC:-../utils/lmc} -m $config"
 TMP=${TMP:-/tmp}
 
 MDSDEV=$TMP/mds1
@@ -22,15 +22,17 @@ case $kver in
 esac
 
 
+rm -f $config
+
 # create nodes
-${LMC} -o $config --add node --node localhost || exit 10
-${LMC} -o $config --add net --node  localhost --nid localhost --nettype tcp || exit 11
+${LMC} --add node --node localhost || exit 10
+${LMC} --add net --node  localhost --nid localhost --nettype tcp || exit 11
 
 # configure mds server
-${LMC} -m $config --add mds  --node localhost --mds mds1 --dev $MDSDEV --size $MDSSIZE || exit 20
+${LMC} --add mds  --node localhost --mds mds1 --dev $MDSDEV --size $MDSSIZE || exit 20
 
 # configure ost
-${LMC} -m $config --add ost --node localhost --obd obd1 --dev $OSTDEV --size  $OSTSIZE || exit 30
+${LMC} --add ost --node localhost --obd obd1 --dev $OSTDEV --size  $OSTSIZE || exit 30
 
 # create client config
-${LMC} -m $config --add mtpt --node localhost --path /mnt/lustre --mds mds1 --obd obd1 || exit 40
+${LMC} --add mtpt --node localhost --path /mnt/lustre --mds mds1 --obd obd1 || exit 40

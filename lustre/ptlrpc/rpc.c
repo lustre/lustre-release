@@ -255,6 +255,7 @@ EXPORT_SYMBOL(ptlrpc_free_bulk);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_page);
 EXPORT_SYMBOL(ptlrpc_free_bulk_page);
 EXPORT_SYMBOL(ll_brw_sync_wait);
+EXPORT_SYMBOL(ptlrpc_abort_inflight);
 
 /* service.c */
 EXPORT_SYMBOL(ptlrpc_init_svc);

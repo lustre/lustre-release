@@ -64,6 +64,7 @@ int client_obd_disconnect(struct lustre_handle *conn);
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
 int client_obd_cleanup(struct obd_device * obddev);
 struct client_obd *client_conn2cli(struct lustre_handle *conn); 
+struct obd_device *client_tgtuuid2obd(char *tgtuuid);
 
 int target_revoke_connection(struct recovd_data *rd, int phase);
 

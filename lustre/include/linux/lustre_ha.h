@@ -29,6 +29,7 @@ struct ptlrpc_connection;
 #define PTLRPC_RECOVD_PHASE_PREPARE  1
 #define PTLRPC_RECOVD_PHASE_RECOVER  2
 #define PTLRPC_RECOVD_PHASE_FAILURE  3
+#define PTLRPC_RECOVD_PHASE_NOTCONN  4
 
 typedef int (*ptlrpc_recovery_cb_t)(struct recovd_data *, int);
 

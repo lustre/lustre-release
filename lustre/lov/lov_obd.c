@@ -158,7 +158,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 memcpy(lov->tgts[i].uuid, uuidarray[i], sizeof(*uuidarray));
 
         for (i = 0; i < desc->ld_tgt_count; i++) {
-                struct obd_device *tgt = class_uuid2obd(uuidarray[i]);
+                struct obd_device *tgt = client_tgtuuid2obd(uuidarray[i]);
                 int rc2;
 
                 if (!tgt) {

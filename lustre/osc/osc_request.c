@@ -958,10 +958,11 @@ static int osc_recover(struct obd_import *imp, int phase)
         ENTRY;
 
         switch(phase) {
+
             case PTLRPC_RECOVD_PHASE_PREPARE: {
                 struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
                 ldlm_namespace_cleanup(ns, 1 /* no network ops */);
-                abort_inflight_for_import(imp);
+                ptlrpc_abort_inflight(imp);
                 set_osc_active(imp, 0 /* inactive */);
                 RETURN(0);
             }
@@ -980,6 +981,10 @@ static int osc_recover(struct obd_import *imp, int phase)
 
                 set_osc_active(imp, 1 /* active */);
                 RETURN(0);
+
+            case PTLRPC_RECOVD_PHASE_NOTCONN:
+                osc_recover(imp, PTLRPC_RECOVD_PHASE_PREPARE);
+                RETURN(osc_recover(imp, PTLRPC_RECOVD_PHASE_RECOVER));
 
             default:
                 RETURN(-EINVAL);
