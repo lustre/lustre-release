@@ -1542,7 +1542,8 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec, int offset,
         rc = md_unlink(mds->mds_lmv_exp, &op_data, &request);
         cleanup_phase = 2;
         if (request) {
-                mds_copy_unlink_reply(req, request);
+                if (rc == 0)
+                        mds_copy_unlink_reply(req, request);
                 ptlrpc_req_finished(request);
         }
         if (rc == 0) {
