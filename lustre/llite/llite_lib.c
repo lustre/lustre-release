@@ -582,15 +582,15 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         }
 
         /* We mark all of the fields "set" so MDS/OST does not re-set them */
-        if (ia_valid & ATTR_CTIME) {
+        if (attr->ia_valid & ATTR_CTIME) {
                 attr->ia_ctime = now;
                 attr->ia_valid |= ATTR_CTIME_SET;
         }
-        if (!(ia_valid & ATTR_ATIME_SET) && (ia_valid & ATTR_ATIME)) {
+        if (!(ia_valid & ATTR_ATIME_SET) && (attr->ia_valid & ATTR_ATIME)) {
                 attr->ia_atime = now;
                 attr->ia_valid |= ATTR_ATIME_SET;
         }
-        if (!(ia_valid & ATTR_MTIME_SET) && (ia_valid & ATTR_MTIME)) {
+        if (!(ia_valid & ATTR_MTIME_SET) && (attr->ia_valid & ATTR_MTIME)) {
                 attr->ia_mtime = now;
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
