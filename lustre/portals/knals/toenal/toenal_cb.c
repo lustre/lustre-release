@@ -718,7 +718,7 @@ ktoenal_fwd_parse (ksock_conn_t *conn)
                 return;
         }
 
-        if (body_len > SOCKNAL_MAX_FWD_PAYLOAD)         /* too big to forward */
+        if (body_len > PTL_MTU)         /* too big to forward */
         {
                 CERROR ("dropping packet from "LPX64" for "LPX64": packet size %d too big\n",
                         conn->ksnc_hdr.src_nid, conn->ksnc_hdr.dest_nid, body_len);
