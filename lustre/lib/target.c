@@ -32,6 +32,42 @@
 #include <linux/lustre_net.h>
 #include <linux/lustre_dlm.h>
 
+int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
+                            char *cluuid)
+{
+        if (exp->exp_connection) {
+                struct lustre_handle *hdl;
+                hdl = &exp->exp_ldlm_data.led_import.imp_handle;
+                /* Might be a re-connect after a partition. */
+                if (!memcmp(conn, hdl, sizeof *conn)) {
+                        CERROR("%s reconnecting\n", cluuid);
+                        conn->addr = (__u64) (unsigned long)exp;
+                        conn->cookie = exp->exp_cookie;
+                        RETURN(EALREADY);
+                } else {
+                        CERROR("%s reconnecting from %s, "
+                               "handle mismatch (ours "LPX64"/"LPX64", "
+                               "theirs "LPX64"/"LPX64")\n", cluuid,
+                               exp->exp_connection->c_remote_uuid, hdl->addr,
+                               hdl->cookie, conn->addr, conn->cookie);
+                        /* XXX disconnect them here? */
+                        memset(conn, 0, sizeof *conn);
+                        /* This is a little scary, but right now we build this
+                         * file separately into each server module, so I won't
+                         * go _immediately_ to hell.
+                         */
+                        RETURN(-EALREADY);
+                }
+        }
+
+        conn->addr = (__u64) (unsigned long)exp;
+        conn->cookie = exp->exp_cookie;
+        CDEBUG(D_INFO, "existing export for UUID '%s' at %p\n", cluuid, exp);
+        CDEBUG(D_IOCTL,"connect: addr %Lx cookie %Lx\n",
+               (long long)conn->addr, (long long)conn->cookie);
+        RETURN(0);
+}
+
 int target_handle_connect(struct ptlrpc_request *req)
 {
         struct obd_device *target;
@@ -73,6 +109,9 @@ int target_handle_connect(struct ptlrpc_request *req)
         if (rc && rc != EALREADY)
                 GOTO(out, rc);
 
+        /* If all else goes well, this is our RPC return code. */
+        req->rq_status = rc;
+
         rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 GOTO(out, rc);
@@ -100,10 +139,15 @@ int target_handle_connect(struct ptlrpc_request *req)
         dlmimp->imp_handle.addr = req->rq_reqmsg->addr;
         dlmimp->imp_handle.cookie = req->rq_reqmsg->cookie;
         dlmimp->imp_obd = /* LDLM! */ NULL;
+        dlmimp->imp_recover = NULL;
+        INIT_LIST_HEAD(&dlmimp->imp_replay_list);
+        INIT_LIST_HEAD(&dlmimp->imp_sending_list);
+        INIT_LIST_HEAD(&dlmimp->imp_delayed_list);
         spin_lock_init(&dlmimp->imp_lock);
         dlmimp->imp_level = LUSTRE_CONN_FULL;
 out:
-        req->rq_status = rc;
+        if (rc)
+                req->rq_status = rc;
         RETURN(rc);
 }
 
