@@ -607,6 +607,8 @@ class Module:
     def lookup_server(self, srv_uuid):
         """ Lookup a server's network information """
         net = get_ost_net(self.dom_node.parentNode, srv_uuid)
+        if not net:
+            panic ("Unable to find a server for:", srv_uuid)
         self._server = Network(net)
 
     def get_server(self):
