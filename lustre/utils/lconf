@@ -35,7 +35,7 @@ if sys.version[0] == '1':
 else:
     from fcntl import F_GETFL, F_SETFL
 
-PYMOD_DIR = "/usr/lib/lustre/python"
+PYMOD_DIR = ["/usr/lib/lustre/python", "/usr/lib64/lustre/python"]
 
 def development_mode():
     base = os.path.dirname(sys.argv[0])
@@ -46,7 +46,7 @@ def development_mode():
 if development_mode():
     sys.path.append('../utils')
 else:
-    sys.path.append(PYMOD_DIR)
+    sys.path.extend(PYMOD_DIR)
 
 import Lustre
 
