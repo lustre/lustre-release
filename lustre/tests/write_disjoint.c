@@ -42,6 +42,7 @@ void rprintf(int rank, int loop, const char *fmt, ...)
 int main (int argc, char *argv[]) {
          int i, n, fd, chunk_size, file_size;
          int rank, noProcessors, done;
+         int error;
          off_t offset;
          char **chunk_buf;
          char *read_buf, c;
@@ -49,6 +50,9 @@ int main (int argc, char *argv[]) {
          ssize_t ret;
          char *filename = "/mnt/lustre/write_disjoint";
 
+        error = MPI_Init(&argc, &argv);
+        if (error != MPI_SUCCESS)
+                rprintf(-1, -1, "MPI_Init failed: %d\n", error);
         /* Parse command line options */
         while (1) {
                 c = getopt(argc, argv, "f:");
@@ -62,7 +66,6 @@ int main (int argc, char *argv[]) {
                 }
         }
 
-         MPI_Init(&argc, &argv);
          MPI_Comm_size(MPI_COMM_WORLD, &noProcessors);
          MPI_Comm_rank(MPI_COMM_WORLD, &rank);
                          
