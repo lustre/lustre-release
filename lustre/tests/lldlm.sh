@@ -19,9 +19,22 @@ test_ldlm
 The regression stress test will start some
 number of threads, each locking and unlocking
 extents from a set of resources. To run it:
-ldlm_regress_start [numthreads]
+ldlm_regress_start [numthreads [refheld [numres [numext]]]] 
+numthreads is the number of threads to start.
+       (default 1)
+refheld is the total number of resources to hold,
+       between all the threads. Once this number
+       is reached, every time a lock is granted
+       or matched, the oldest reference is
+       decremented.
+       (default 10)
+numres is the number of resources to use
+       (default 10)
+numext is the number of extents to divide
+       each resource into
+       (default 10)
 
-And to stop it:
+To stop the test:
 ldlm_regress_stop
 **********************************************
 EOF

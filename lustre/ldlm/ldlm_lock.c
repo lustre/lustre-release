@@ -645,6 +645,8 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock * lock,
                 /* The server returned a blocked lock, but it was granted before
                  * we got a chance to actually enqueue it.  We don't need to do
                  * anything else. */
+                *flags &= ~(LDLM_FL_BLOCK_GRANTED | 
+                          LDLM_FL_BLOCK_CONV | LDLM_FL_BLOCK_WAIT);
                 GOTO(out, ELDLM_OK);
         }
 

@@ -301,7 +301,10 @@ void ldlm_lock_dump(struct ldlm_lock *lock);
 /* ldlm_test.c */
 int ldlm_test(struct obd_device *device, struct lustre_handle *connh);
 int ldlm_regression_start(struct obd_device *obddev, 
-                struct lustre_handle *connh, int count);
+                          struct lustre_handle *connh, 
+                          unsigned int threads, unsigned int max_locks_in, 
+                          unsigned int num_resources_in, 
+                          unsigned int num_extents_in);
 int ldlm_regression_stop(void);
 
 

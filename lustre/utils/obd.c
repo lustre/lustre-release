@@ -1131,17 +1131,24 @@ int jt_obd_ldlm_regress_start(int argc, char **argv)
 {
         int rc;
         struct obd_ioctl_data data;
+        char argstring[200];
+        int i, count = sizeof(argstring) - 1;
 
         IOCINIT(data);
-
-        if (argc > 2)
+        if (argc > 5)
                 return CMD_HELP;
 
-        if (argc == 2) {
-                data.ioc_inllen1 =  strlen(argv[1]) + 1;
-                data.ioc_inlbuf1 = argv[1];
-        } else {
-                data.ioc_inllen1 = 0;
+        argstring[0] = '\0';
+        for (i = 1; i < argc; i++) {
+                strncat(argstring, " ", count);
+                count--;
+                strncat(argstring, argv[i], count);
+                count -= strlen(argv[i]);
+        }
+
+        if (strlen(argstring)) {
+                data.ioc_inlbuf1 = argstring;
+                data.ioc_inllen1 = strlen(argstring) + 1;
         }
 
         if (obd_ioctl_pack(&data, &buf, max)) {

@@ -24,6 +24,7 @@
 #include <linux/lustre_mds.h> /* for mds_objid */
 #include <linux/obd_ost.h>
 #include <linux/obd_lov.h>
+#include <linux/ctype.h>
 #include <linux/init.h>
 #include <linux/lustre_ha.h>
 #include <linux/obd_support.h> /* for OBD_FAIL_CHECK */
@@ -712,14 +713,39 @@ static int osc_iocontrol(long cmd, struct lustre_handle *conn, int len,
                 GOTO(out, err);
         }
         case IOC_LDLM_REGRESS_START: {
-                unsigned int numthreads; 
+                unsigned int numthreads = 1; 
+                unsigned int numheld = 10; 
+                unsigned int numres = 10; 
+                unsigned int numext = 10;
+                char *parse;
                 
-                if (data->ioc_inllen1) 
-                        numthreads = simple_strtoul(data->ioc_inlbuf1, NULL, 0);
-                else 
-                        numthreads = 1;
+                if (data->ioc_inllen1) {
+                        parse = data->ioc_inlbuf1;
+                        if (*parse != '\0') {
+                                while(isspace(*parse)) parse++;
+                                numthreads = simple_strtoul(parse, &parse, 0);
+                                while(isspace(*parse)) parse++;
+                        }
+                        if (*parse != '\0') {
+                                while(isspace(*parse)) parse++;
+                                numheld = simple_strtoul(parse, &parse, 0);
+                                while(isspace(*parse)) parse++;
+                        }
+                        if (*parse != '\0') {
+                                while(isspace(*parse)) parse++;
+                                numres = simple_strtoul(parse, &parse, 0);
+                                while(isspace(*parse)) parse++;
+                        }
+                        if (*parse != '\0') {
+                                while(isspace(*parse)) parse++;
+                                numext = simple_strtoul(parse, &parse, 0);
+                                while(isspace(*parse)) parse++;
+                        }
+                }
 
-                err = ldlm_regression_start(obddev, conn, numthreads);
+                err = ldlm_regression_start(obddev, conn, numthreads, 
+                                numheld, numres, numext);
+
                 CERROR("-- done err %d\n", err);
                 GOTO(out, err);
         }

@@ -141,8 +141,8 @@ command_t cmdlist[] = {
         {"test_ldlm", jt_obd_test_ldlm, 0, "perform lock manager test\n"
          "usage: test_ldlm"},
         {"ldlm_regress_start", jt_obd_ldlm_regress_start, 0,
-         "start lock manager stress test (usage: ldlm_regress_start "
-         "[numthreads])\n"},
+         "start lock manager stress test (usage: %s [numthreads [refheld "
+         "[numres [numext]]]]\n"}, 
         {"ldlm_regress_stop", jt_obd_ldlm_regress_stop, 0,
          "stop lock manager stress test (no args)\n"},
         {"dump_ldlm", jt_obd_dump_ldlm, 0,
