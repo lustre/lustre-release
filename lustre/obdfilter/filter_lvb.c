@@ -87,6 +87,11 @@ static int filter_lvbo_init(struct ldlm_resource *res)
  out:
         if (oa)
                 obdo_free(oa);
+        if (rc && lvb != NULL) {
+                OBD_FREE(lvb, sizeof(*lvb));
+                res->lr_lvb_data = NULL;
+                res->lr_lvb_len = 0;
+        }
         up(&res->lr_lvb_sem);
         return rc;
 }
