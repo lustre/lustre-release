@@ -116,6 +116,10 @@ void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid)
                 attr->ia_gid = oa->o_gid;
                 attr->ia_valid |= ATTR_GID;
         }
+        if (valid & OBD_MD_FLFLAGS) {
+                attr->ia_attr_flags = oa->o_flags;
+                attr->ia_valid |= ATTR_ATTR_FLAG;
+        }
 }
 EXPORT_SYMBOL(iattr_from_obdo);
 
