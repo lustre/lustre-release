@@ -29,6 +29,7 @@ static int ll_readlink_internal(struct inode *inode,
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         int rc, len = inode->i_size + 1;
+        ENTRY;
 
         *request = NULL;
 

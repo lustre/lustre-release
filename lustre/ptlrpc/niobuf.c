@@ -158,7 +158,7 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
         rc = PtlMDBind(desc->bd_connection->c_peer.peer_ni, desc->bd_md,
                        &desc->bd_md_h);
 
-        ptlrpc_put_bulk_iov (desc, iov);        /* move down to reduce latency to send */
+        ptlrpc_put_bulk_iov (desc, iov); /*move down to reduce latency to send*/
 
         if (rc != PTL_OK) {
                 CERROR("PtlMDBind failed: %d\n", rc);
@@ -169,8 +169,8 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
         remote_id.nid = desc->bd_connection->c_peer.peer_nid;
         remote_id.pid = 0;
 
-        CDEBUG(D_NET, "Sending %u pages %u bytes to portal %d nid "LPX64" pid %d xid %d\n",
-               desc->bd_md.niov, desc->bd_md.length,
+        CDEBUG(D_NET, "Sending %u pages %u bytes to portal %d nid "LPX64" pid "
+               "%d xid %d\n", desc->bd_md.niov, desc->bd_md.length,
                desc->bd_portal, remote_id.nid, remote_id.pid, xid);
 
         rc = PtlPut(desc->bd_md_h, PTL_ACK_REQ, remote_id,
@@ -195,8 +195,9 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
         ptl_process_id_t source_id;
         ENTRY;
 
-        if (desc->bd_page_count > PTL_MD_MAX_IOV) { 
-                CERROR("iov longer than %d not supported\n", PTL_MD_MAX_IOV);
+        if (desc->bd_page_count > PTL_MD_MAX_IOV) {
+                CERROR("iov longer than %d pages not supported (count=%d)\n",
+                       PTL_MD_MAX_IOV, desc->bd_page_count);
                 RETURN(-EINVAL);
         }
 
@@ -336,8 +337,9 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 /* request->rq_repmsg is set only when the reply comes in, in
                  * client_packet_callback() */
                 if (request->rq_reply_md.start)
-                        OBD_FREE(request->rq_reply_md.start, request->rq_replen);
-                
+                        OBD_FREE(request->rq_reply_md.start,
+                                 request->rq_replen);
+
                 OBD_ALLOC(repbuf, request->rq_replen);
                 if (!repbuf) {
                         LBUG();
@@ -360,7 +362,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 request->rq_reply_md.options = PTL_MD_OP_PUT;
                 request->rq_reply_md.user_ptr = request;
                 request->rq_reply_md.eventq = reply_in_eq;
-                
+
                 rc = PtlMDAttach(request->rq_reply_me_h, request->rq_reply_md,
                                  PTL_UNLINK, &request->rq_reply_md_h);
                 if (rc != PTL_OK) {
@@ -368,7 +370,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                         LBUG();
                         GOTO(cleanup2, rc);
                 }
-                
+
                 CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid "LPU64
                        ", portal %u\n",
                        request->rq_replen, request->rq_xid,
@@ -397,7 +399,7 @@ void ptlrpc_link_svc_me(struct ptlrpc_request_buffer_desc *rqbd)
         ptl_handle_md_t md_h;
 
         LASSERT (atomic_read (&rqbd->rqbd_refcount) == 0);
-        
+
         /* Attach the leading ME on which we build the ring */
         rc = PtlMEAttach(service->srv_self.peer_ni, service->srv_req_portal,
                          match_id, 0, ~0,
@@ -407,17 +409,17 @@ void ptlrpc_link_svc_me(struct ptlrpc_request_buffer_desc *rqbd)
                 LBUG();
         }
 
-        dummy.start         = rqbd->rqbd_buffer;
-        dummy.length        = service->srv_buf_size;
-        dummy.max_size      = service->srv_max_req_size;
-        dummy.threshold     = PTL_MD_THRESH_INF;
-        dummy.options       = PTL_MD_OP_PUT | PTL_MD_MAX_SIZE | PTL_MD_AUTO_UNLINK;
-        dummy.user_ptr      = rqbd;
-        dummy.eventq        = service->srv_eq_h;
+        dummy.start      = rqbd->rqbd_buffer;
+        dummy.length     = service->srv_buf_size;
+        dummy.max_size   = service->srv_max_req_size;
+        dummy.threshold  = PTL_MD_THRESH_INF;
+        dummy.options    = PTL_MD_OP_PUT | PTL_MD_MAX_SIZE | PTL_MD_AUTO_UNLINK;
+        dummy.user_ptr   = rqbd;
+        dummy.eventq     = service->srv_eq_h;
 
         atomic_inc (&service->srv_nrqbds_receiving);
         atomic_set (&rqbd->rqbd_refcount, 1);   /* 1 ref for portals */
-        
+
         rc = PtlMDAttach(rqbd->rqbd_me_h, dummy, PTL_UNLINK, &md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);

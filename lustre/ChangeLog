@@ -1,3 +1,23 @@
+2002-10-01  Phil Schwan  <phil@clusterfs.com>
+	* version 0_5_13
+	* bug fixes:
+	  - locks would be cancelled without throwing away data pages,
+	    resulting in inconsistent data (605627)
+	  - inode attributes were not always being refreshed (605627, 612449)
+	  - lconf now continues to cleanup after lctl reports an error
+	  - MDS now enforces user permissions (602707)
+	  - lprocfs cleanup fixed, but not yet enabled (614157)
+	  - fixed infinite server hang, should a client not respond to an AST
+	  - avoid going into recovery if user calls readlink() with a buffer
+	    that's too small (613941)
+	  - AST RPCs no longer require replies (614867) -- this may be changed
+	  - don't crash server if client sends an IOV that's too big (611336)
+	  - fixed lock conversion deadlock (611892)
+	  - fixed the following of symlinks (614622)
+	* recovery: the server can remove locks from a client that dies, other
+	  clients can make progress
+	* more extN patch fixes
+
 2002-09-20  Andreas Dilger  <adilger@clusterfs.com>
 	* version v0_5_12
 	* bug fix

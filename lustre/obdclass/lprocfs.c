@@ -387,9 +387,9 @@ int lprocfs_reg_dev(struct obd_device* device, lprocfs_group_t* namespace,
 
 
                 DEV_PROF_START(mds, device, gen, open);
-                for(i = 0; i < 50; i++){
+                for (i = 0; i < 50; i++) {
                         DEV_PROF_START(mds, device, gen, close);
-                        for(j=0; j<2000; j++)
+                        for (j = 0; j < 2000; j++)
                                 continue;
                         DEV_PROF_END(mds, device, gen, close);
                 }
@@ -398,9 +398,9 @@ int lprocfs_reg_dev(struct obd_device* device, lprocfs_group_t* namespace,
 
         if (!(strcmp(device->obd_type->typ_name, "ldlm"))) {
                 DEV_PROF_START(ldlm, device, ldlm, mgmt_connect);
-                for(i = 0; i < 200; i++) {
+                for (i = 0; i < 200; i++) {
                         DEV_PROF_START(ldlm, device, ldlm, mgmt_disconnect);
-                        for (j = 0; j< 2000; j++)
+                        for (j = 0; j < 2000; j++)
                                 continue;
                         DEV_PROF_END(ldlm, device, ldlm, mgmt_disconnect);
                 }
@@ -830,13 +830,13 @@ void lprocfs_remove_all(struct proc_dir_entry* root)
 }
 
 
-int lprocfs_ll_rd(char* page, char **start, off_t off,
-		 int count, int *eof, void *data)
+int lprocfs_ll_rd(char *page, char **start, off_t off,
+                  int count, int *eof, void *data)
 {
         int len;
-        __u64 *temp = (__u64*)data;
+        __u64 *temp = (__u64 *)data;
 
-        len = sprintf(page, "%lld\n", *temp);
+        len = snprintf(page, count, "%Lu\n", *temp);
 
         return len;
 }

@@ -1020,7 +1020,8 @@ int mds_handle(struct ptlrpc_request *req)
         }
  out:
         if (rc) {
-                CERROR("mds: processing error %d\n", rc);
+                CERROR("mds: processing error (opcode %d): %d\n",
+                       req->rq_reqmsg->opc, rc);
                 ptlrpc_error(req->rq_svc, req);
         } else {
                 CDEBUG(D_NET, "sending reply\n");
