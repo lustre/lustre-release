@@ -337,8 +337,7 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
          */
         if (inode->i_blocks == 0 && lmm_size <= sizeof(EXT3_I(inode)->i_data) -
                                             sizeof(EXT3_I(inode)->i_data[0])) {
-                /* XXX old_size is debugging only */
-                int old_size = EXT3_I(inode)->i_data[0];
+                unsigned old_size = EXT3_I(inode)->i_data[0];
                 if (old_size != 0) {
                         LASSERT(old_size < sizeof(EXT3_I(inode)->i_data));
                         CERROR("setting EA on %lu again... interesting\n",
