@@ -356,7 +356,7 @@ diff -Nur linux-2.4.18/include/linux/limits.h linux-2.4.18ea/include/linux/limit
  	current->journal_info = handle;
  
  	err = try_start_this_handle(journal, handle);
-@@ -1328,6 +1337,28 @@
+@@ -1328,6 +1337,29 @@
  #endif
  
  /*
