@@ -89,6 +89,7 @@ static int filter_prep(struct obd_device *obddev)
                 GOTO(out, rc = PTR_ERR(file));
         }
         filp_close(file, 0);
+        /* FIXME: this is the same as the _file_ we just created? */
         rc = simple_mkdir(current->fs->pwd, rootid, 0755);
 
         file = filp_open("D/status", O_RDWR | O_CREAT, 0700);
@@ -122,6 +123,7 @@ static int filter_prep(struct obd_device *obddev)
         obddev->u.filter.fo_lastino = lastino;
         filp_close(file, 0); 
 
+        rc = 0;
  out:
         pop_ctxt(&saved);
 
