@@ -1390,7 +1390,7 @@ void ll_put_inode(struct inode *inode)
 
                 rc = md_put_inode(sbi->ll_lmv_exp, &id);
                 if (rc) {
-                        CDEBUG("md_put_inode() failed, error %d\n", 
+                        CERROR("md_put_inode() failed, error %d\n", 
                                rc);
                 }
         }

@@ -1959,6 +1959,9 @@ int __init lmv_init(void)
         rc = class_register_type(&lmv_obd_ops, &lmv_md_ops,
                                  lvars.module_vars,
                                  OBD_LMV_DEVICENAME);
+        if (rc)
+                kmem_cache_destroy(obj_cache);
+        
         return rc;
 }
 
