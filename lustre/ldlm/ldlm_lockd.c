@@ -349,7 +349,9 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                         ldlm_lock_cancel(lock);
                         rc = -ERESTART;
                 } else {
+                        l_lock(&lock->l_resource->lr_namespace->ns_lock);
                         ldlm_del_waiting_lock(lock);
+                        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                         ldlm_failed_ast(lock, rc, ast_type);
                 }
         } else if (rc) {
@@ -768,17 +770,21 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
         if (!lock) {
                 req->rq_status = EINVAL;
         } else {
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_DEBUG(lock, "server-side convert handler START");
                 ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
                                   &dlm_rep->lock_flags);
                 if (ldlm_del_waiting_lock(lock))
                         CDEBUG(D_DLMTRACE, "converted waiting lock %p\n", lock);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 req->rq_status = 0;
         }
 
         if (lock) {
                 ldlm_reprocess_all(lock->l_resource);
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_DEBUG(lock, "server-side convert handler END");
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 LDLM_LOCK_PUT(lock);
         } else
                 LDLM_DEBUG_NOLOCK("server-side convert handler END");
