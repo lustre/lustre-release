@@ -43,6 +43,7 @@ replay_barrier() {
     sync
     lctl --device %${dev}1 readonly
     lctl --device %${dev}1 notransno
+    lctl mark "REPLAY BARRIER"
 }
 
 fail() {
@@ -131,7 +132,7 @@ EQUALS="======================================================================"
 run_one() {
     testnum=$1
     message=$2
-    
+
     # Pretty tests run faster.
     echo -n '=====' $testnum: $message
     local suffixlen=`echo -n $2 | awk '{print 65 - length($0)}'`
@@ -214,12 +215,11 @@ test_6() {
     mv $MOUNTPT/f6 $MOUNTPT/F6
     rm -f $MOUNTPT/F6
     fail mds
-    ls $MOUNTPT/f6 
-    ls $MOUNTPT/F6
-    rm -f  $MOUNTPT/f6
-    rm -f  $MOUNTPT/F6
-
+    checkstat $MOUNTPT/f6 && return 1
+    checkstat $MOUNTPT/F6 && return 2
+    return 0
 }
+
 run_test 6 "create |X| rename unlink"
 
 test_7() {
@@ -237,8 +237,26 @@ test_7() {
 }
 run_test 7 "create open write rename |X| create-old-name read"
 
+test_8() {
+    mcreate $MOUNTPT/f8 
+    multiop $MOUNTPT/f8 o_tSc &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+    rm -f $MOUNTPT/f8
+    replay_barrier mds
+    kill -USR1 $pid
+    wait $pid || return 1
+
+    fail mds
+    [ -e $MOUNTPT/f8 ] && return 2
+    return 0
+}
+run_test 8 "open, unlink |X| close"
+
+
 stop client $CLIENTLCONFARGS
 stop ost
-stop mds $MDSLCONFARGS
+stop mds $MDSLCONFARGS --dump cleanup.log
 
 trap - EXIT
