@@ -353,8 +353,6 @@ int gmnal_cb_read(nal_cb_t *, void *private, void *, user_ptr, size_t);
 
 int gmnal_cb_write(nal_cb_t *, void *private, user_ptr, void *, size_t);
 
-int gmnal_cb_callback(nal_cb_t *, void *, lib_eq_t *, ptl_event_t *);
-
 void *gmnal_cb_malloc(nal_cb_t *, size_t);
 
 void gmnal_cb_free(nal_cb_t *, void *, size_t);
@@ -384,7 +382,7 @@ void  gmnal_fini(void);
 				a->cb_recv_pages = gmnal_cb_recv_pages; \
 				a->cb_read = gmnal_cb_read; \
 				a->cb_write = gmnal_cb_write; \
-				a->cb_callback = gmnal_cb_callback; \
+				a->cb_callback = NULL; \
 				a->cb_malloc = gmnal_cb_malloc; \
 				a->cb_free = gmnal_cb_free; \
 				a->cb_map = NULL; \

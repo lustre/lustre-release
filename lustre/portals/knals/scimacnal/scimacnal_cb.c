@@ -176,7 +176,8 @@ kscimacnal_txrelease(mac_mblk_t *msg, mac_msg_status_t status, void *context)
                         break;
         }
 
-        lib_finalize(ktx->ktx_nal, ktx->ktx_private, ktx->ktx_cookie);
+        lib_finalize(ktx->ktx_nal, ktx->ktx_private, ktx->ktx_cookie,
+                     (err == 0) ? PTL_OK : PTL_FAIL);
 
         PORTAL_FREE(ktx, (sizeof(kscimacnal_tx_t)));
 }
@@ -225,14 +226,14 @@ kscimacnal_sendmsg(nal_cb_t        *nal,
         if (buf_len > mac_get_mtusize(ksci->ksci_machandle)) {
                 CERROR("kscimacnal:request exceeds TX MTU size (%ld).\n",
                                 mac_get_mtusize(ksci->ksci_machandle));
-                return -EINVAL;
+                return PTL_FAIL;
         }
 
 
         /* save transaction info for later finalize and cleanup */
         PORTAL_ALLOC(ktx, (sizeof(kscimacnal_tx_t)));
         if (!ktx) {
-                return -ENOMEM;
+                return PTL_NOSPACE;
         }
 
         ktx->ktx_nmapped = 0; /* Start with no mapped pages :) */
@@ -247,7 +248,7 @@ kscimacnal_sendmsg(nal_cb_t        *nal,
                         kscimacnal_txrelease, ktx);
         if (!msg) {
                 PORTAL_FREE(ktx, (sizeof(kscimacnal_tx_t)));
-                return -ENOMEM;
+                return PTL_NOSPACE;
         }
         mac_put_mblk(msg, sizeof(ptl_hdr_t));
         lastblk=msg;
@@ -284,7 +285,7 @@ kscimacnal_sendmsg(nal_cb_t        *nal,
                 if(!newblk) {
                         mac_free_msg(msg);
                         PORTAL_FREE(ktx, (sizeof(kscimacnal_tx_t)));
-                        return -ENOMEM;
+                        return PTL_NOSPACE;
                 }
                 mac_put_mblk(newblk, nob);
                 mac_link_mblk(lastblk, newblk);
@@ -315,10 +316,10 @@ kscimacnal_sendmsg(nal_cb_t        *nal,
                 CERROR("kscimacnal: mac_send() failed, rc=%d\n", rc);
                 mac_free_msg(msg);
                 PORTAL_FREE(ktx, (sizeof(kscimacnal_tx_t)));
-                return rc;
+                return PTL_FAIL;
         }
 
-        return 0;
+        return PTL_OK;
 }
 
 
@@ -463,12 +464,15 @@ kscimacnal_recvmsg(nal_cb_t     *nal,
                         krx->msg, mlen, rlen, niov);
 
         /* What was actually received must be >= what sender claims to have
-         * sent.  This is an LASSERT, since lib-move doesn't check cb return
-         * code yet. Also, rlen seems to be negative when mlen==0 so don't
-         * assert on that.
-         */
-        LASSERT (mlen==0 || mac_msg_size(krx->msg) >= sizeof(ptl_hdr_t)+rlen);
-        LASSERT (mlen==0 || mlen <= rlen);
+         * sent. */
+        LASSERT (mlen <= rlen); /* something is wrong if this isn't true */
+        if (mac_msg_size(krx->msg) < sizeof(ptl_hdr_t)+mlen) {
+                /* We didn't receive everything lib thinks we did */
+                CERROR("Bad message size: have %d, need %d + %d\n",
+                       mac_msg_size(krx->msg), sizeof(ptl_hdr_t), mlen);
+                return (PTL_FAIL);
+        }
+
         /* It must be OK to kmap() if required */
         LASSERT (kiov == NULL || !in_interrupt ());
         /* Either all pages or all vaddrs */
@@ -545,12 +549,12 @@ kscimacnal_recvmsg(nal_cb_t     *nal,
         CDEBUG(D_NET, "Calling lib_finalize.\n");
 
         PROF_START(lib_finalize);
-        lib_finalize(nal, private, cookie);
+        lib_finalize(nal, private, cookie, PTL_OK);
         PROF_FINISH(lib_finalize);
 
         CDEBUG(D_NET, "Done.\n");
 
-        return rlen;
+        return PTL_OK;
 }
 
 

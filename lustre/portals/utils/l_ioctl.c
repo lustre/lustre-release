@@ -23,7 +23,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <syscall.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -34,6 +33,16 @@
 
 #include <portals/api-support.h>
 #include <portals/ptlctl.h>
+
+#ifndef __CYGWIN__
+ #include <syscall.h>
+#else
+ #include <windows.h>
+ #include <windef.h>
+#endif
+
+static ioc_handler_t  do_ioctl;                 /* forward ref */
+static ioc_handler_t *current_ioc_handler = &do_ioctl;
 
 struct ioc_dev {
 	const char * dev_name;
@@ -48,7 +57,16 @@ struct dump_hdr {
 	int opc;
 };
 
-char * dump_filename;
+char *dump_filename;
+
+void
+set_ioc_handler (ioc_handler_t *handler)
+{
+        if (handler == NULL)
+                current_ioc_handler = do_ioctl;
+        else
+                current_ioc_handler = handler;
+}
 
 static int
 open_ioc_dev(int dev_id) 
@@ -115,7 +133,7 @@ dump(int dev_id, int opc, void *buf)
 {
 	FILE *fp;
 	struct dump_hdr dump_hdr;
-	struct portal_ioctl_hdr * ioc_hdr = (struct  portal_ioctl_hdr *) buf;
+        struct portal_ioctl_hdr * ioc_hdr = (struct  portal_ioctl_hdr *) buf;
 	int rc;
 	
 	printf("dumping opc %x to %s\n", opc, dump_filename);
@@ -132,17 +150,17 @@ dump(int dev_id, int opc, void *buf)
 		return -EINVAL;
 	}
 	
-	rc = fwrite(&dump_hdr, sizeof(dump_hdr), 1, fp);
-	if (rc == 1)
-		rc = fwrite(buf, ioc_hdr->ioc_len, 1, fp);
-	fclose(fp);
-	if (rc != 1) {
-		fprintf(stderr, "%s: %s\n", dump_filename, 
-			strerror(errno));
-		return -EINVAL;
-	}
-	
-	return 0;
+        rc = fwrite(&dump_hdr, sizeof(dump_hdr), 1, fp);
+        if (rc == 1)
+                rc = fwrite(buf, ioc_hdr->ioc_len, 1, fp);
+        fclose(fp);
+        if (rc != 1) {
+                fprintf(stderr, "%s: %s\n", dump_filename,
+                        strerror(errno));
+                return -EINVAL;
+        }
+
+        return 0;
 }
 
 /* register a device to send ioctls to.  */
@@ -184,16 +202,17 @@ set_ioctl_dump(char * file)
 		free(dump_filename);
 	
 	dump_filename = strdup(file);
+        if (dump_filename == NULL)
+                abort();
+
+        set_ioc_handler(&dump);
 	return 0;
 }
 
 int
 l_ioctl(int dev_id, int opc, void *buf)
 {
-	if (dump_filename) 
-		return dump(dev_id, opc, buf);
-	else 
-		return do_ioctl(dev_id, opc, buf);
+        return current_ioc_handler(dev_id, opc, buf);
 }
 
 /* Read an ioctl dump file, and call the ioc_func for each ioctl buffer
@@ -207,16 +226,28 @@ l_ioctl(int dev_id, int opc, void *buf)
 int 
 parse_dump(char * dump_file, int (*ioc_func)(int dev_id, int opc, void *))
 {
-	int fd, line =0;
+	int line =0;
 	struct stat st;
-	char *buf, *end;
+	char *start, *buf, *end;
+#ifndef __CYGWIN__
+        int fd;
+#else
+        HANDLE fd, hmap;
+        DWORD size;
+#endif
 	
+#ifndef __CYGWIN__
 	fd = syscall(SYS_open, dump_file, O_RDONLY);
+        if (fd < 0) {
+                fprintf(stderr, "couldn't open %s: %s\n", dump_file, 
+                        strerror(errno));
+                exit(1);
+        }
 
 #ifndef SYS_fstat64
-#define __SYS_fstat__ SYS_fstat
+# define __SYS_fstat__ SYS_fstat
 #else
-#define __SYS_fstat__ SYS_fstat64
+# define __SYS_fstat__ SYS_fstat64
 #endif
 	if (syscall(__SYS_fstat__, fd, &st)) { 
 		perror("stat fails");
@@ -228,41 +259,72 @@ parse_dump(char * dump_file, int (*ioc_func)(int dev_id, int opc, void *))
 		exit(1);
 	}
 
-	buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE , fd, 0);
-	end = buf + st.st_size;
+	start = buf = mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE , fd, 0);
+	end = start + st.st_size;
 	close(fd);
-	while (buf < end) {
-		struct dump_hdr *dump_hdr = (struct dump_hdr *) buf;
-		struct portal_ioctl_hdr * data;
-		char tmp[8096];
-		int rc;
-		
-		line++;
+        if (start == MAP_FAILED) {
+		fprintf(stderr, "can't create file mapping\n");
+		exit(1);
+        }
+#else
+        fd = CreateFile(dump_file, GENERIC_READ, FILE_SHARE_READ, NULL,
+                        OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+        size = GetFileSize(fd, NULL);
+        if (size < 1) {
+		fprintf(stderr, "KML is empty\n");
+		exit(1);
+	}
 
-		data = (struct portal_ioctl_hdr *) (buf + sizeof(*dump_hdr));
-		if (buf + data->ioc_len > end ) {
-			fprintf(stderr, "dump file overflow, %p + %d > %p\n", buf,
-				data->ioc_len, end);
-			return -1;
-		}
+        hmap = CreateFileMapping(fd, NULL, PAGE_READONLY, 0,0, NULL);
+        start = buf = MapViewOfFile(hmap, FILE_MAP_READ, 0, 0, 0);
+        end = buf + size;
+        CloseHandle(fd);
+        if (start == NULL) {
+		fprintf(stderr, "can't create file mapping\n");
+		exit(1);
+        }
+#endif /* __CYGWIN__ */
+
+	while (buf < end) {
+                struct dump_hdr *dump_hdr = (struct dump_hdr *) buf;
+                struct portal_ioctl_hdr * data;
+                char tmp[8096];
+                int rc;
+
+                line++;
+
+                data = (struct portal_ioctl_hdr *) (buf + sizeof(*dump_hdr));
+                if (buf + data->ioc_len > end ) {
+                        fprintf(stderr, "dump file overflow, %p + %d > %p\n", buf,
+                                data->ioc_len, end);
+                        return -1;
+                }
 #if 0
-		printf ("dump_hdr: %lx data: %lx\n",
-			(unsigned long)dump_hdr - (unsigned long)buf, (unsigned long)data - (unsigned long)buf);
-		
-		printf("%d: opcode %x len: %d  ver: %x ", line, dump_hdr->opc,
-		       data->ioc_len, data->ioc_version);
+                printf ("dump_hdr: %lx data: %lx\n",
+                        (unsigned long)dump_hdr - (unsigned long)buf, (unsigned long)data - (unsigned long)buf);
+
+                printf("%d: opcode %x len: %d  ver: %x ", line, dump_hdr->opc,
+                       data->ioc_len, data->ioc_version);
 #endif
 
-		memcpy(tmp, data, data->ioc_len);
+                memcpy(tmp, data, data->ioc_len);
 
-		rc = ioc_func(dump_hdr->dev_id, dump_hdr->opc, tmp);
-		if (rc) {
-			printf("failed: %d\n", rc);
-			exit(1);
-		}
+                rc = ioc_func(dump_hdr->dev_id, dump_hdr->opc, tmp);
+                if (rc) {
+                        printf("failed: %d\n", rc);
+                        exit(1);
+                }
 
-		buf += data->ioc_len + sizeof(*dump_hdr);
+                buf += data->ioc_len + sizeof(*dump_hdr);
 	}
+
+#ifndef __CYGWIN__
+        munmap(start, end - start);
+#else
+        UnmapViewOfFile(start);
+        CloseHandle(hmap);
+#endif
+
 	return 0;
 }
 
