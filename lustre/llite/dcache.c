@@ -41,7 +41,10 @@ static void ll_release(struct dentry *de)
         ENTRY;
         LASSERT(de != NULL);
         lld = ll_d2d(de);
-        LASSERT(lld != NULL);
+        if (lld == NULL) {
+                EXIT;
+                return;
+        }
         LASSERT(lld->lld_cwd_count == 0);
         LASSERT(lld->lld_mnt_count == 0);
         OBD_FREE(de->d_fsdata, sizeof(*lld));
