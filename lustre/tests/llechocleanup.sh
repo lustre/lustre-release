@@ -5,7 +5,7 @@ NAME=${NAME:-echo}
 TMP=${TMP:-/tmp}
 
 config=$NAME.xml
-mkconfig=./$NAME.sh
+mkconfig=$NAME.sh
 
 if [ ! -f $config ]; then
    sh $mkconfig $config || exit 1
