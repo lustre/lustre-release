@@ -294,7 +294,7 @@ void ll_put_super(struct super_block *sb)
 
         obd_disconnect(sbi->ll_mdc_exp, 0);
 
-#warning We do this to get rid of orphaned dentries. That is not really trw.
+        // We do this to get rid of orphaned dentries. That is not really trw.
         spin_lock(&dcache_lock);
         hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
                 struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
