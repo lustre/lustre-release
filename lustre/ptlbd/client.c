@@ -35,12 +35,12 @@
 static int ptlbd_cl_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct ptlbd_obd *ptlbd = &obddev->u.ptlbd;
-        struct obd_import *imp = &ptlbd->bd_import;
+        struct obd_import *imp;
         struct obd_ioctl_data* data = buf;
         struct obd_uuid server_uuid;
         ENTRY;
 
-        if ( ptlbd->bd_import.imp_connection != NULL )
+        if (ptlbd->bd_import != NULL)
                 RETURN(-EALREADY);
 
         if (data->ioc_inllen1 < 1) {
@@ -55,20 +55,16 @@ static int ptlbd_cl_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         obd_str2uuid(&server_uuid, data->ioc_inlbuf1);
 
-        imp->imp_connection = ptlrpc_uuid_to_connection(&server_uuid);
-        if (!imp->imp_connection)
-                RETURN(-ENOENT);
-
-        INIT_LIST_HEAD(&imp->imp_replay_list);
-        INIT_LIST_HEAD(&imp->imp_sending_list);
-        INIT_LIST_HEAD(&imp->imp_delayed_list);
-        spin_lock_init(&imp->imp_lock);
         /*
          * from client_obd_connect.. *shrug*
          */
-        INIT_LIST_HEAD(&imp->imp_chain);
-        imp->imp_max_transno = 0;
-        imp->imp_peer_committed_transno = 0;
+        imp = ptlbd->bd_import = class_new_import();
+        imp->imp_connection = ptlrpc_uuid_to_connection(&server_uuid);
+        if (!imp->imp_connection) {
+                class_destroy_import(imp);
+                class_import_put(imp);
+                RETURN(-ENOENT);
+        }
         imp->imp_level = LUSTRE_CONN_FULL;
 
         ptlrpc_init_client(PTLBD_REQUEST_PORTAL, PTLBD_REPLY_PORTAL, 
@@ -89,46 +85,22 @@ static int ptlbd_cl_cleanup(struct obd_device *obddev)
         if (!ptlbd)
                 RETURN(-ENOENT);
 
-        if (!ptlbd->bd_import.imp_connection)
+        if (!ptlbd->bd_import->imp_connection)
                 RETURN(-ENOENT);
 
-        ptlrpc_cleanup_client(&ptlbd->bd_import);
-        ptlrpc_put_connection(ptlbd->bd_import.imp_connection);
+        ptlrpc_cleanup_client(ptlbd->bd_import);
+        ptlrpc_put_connection(ptlbd->bd_import->imp_connection);
+
+        class_destroy_import(ptlbd->bd_import);
+        class_import_put(ptlbd->bd_import);
 
         RETURN(0);
 }
-
-#if 0
-static int ptlbd_cl_connect(struct lustre_handle *conn, struct obd_device *obd,
-                        struct obd_uuid cluuid, struct recovd_obd *recovd,
-                        ptlrpc_recovery_cb_t recover)
-{
-        struct ptlbd_obd *ptlbd = &obd->u.ptlbd;
-        struct obd_import *imp = &ptlbd->bd_import;
-        int rc;
-        ENTRY;
-
-        rc = class_connect(conn, obd, cluuid);
-        if (rc)
-                RETURN(rc);
-
-        INIT_LIST_HEAD(&imp->imp_chain);
-        imp->imp_max_transno = 0;
-        imp->imp_peer_committed_transno = 0;
-        imp->imp_level = LUSTRE_CONN_FULL;
-
-        RETURN(0);
-}
-#endif
 
 static struct obd_ops ptlbd_cl_obd_ops = {
         o_owner:        THIS_MODULE,
         o_setup:        ptlbd_cl_setup,
         o_cleanup:      ptlbd_cl_cleanup,
-#if 0
-        o_connect:      ptlbd_cl_connect,
-        o_disconnect:   class_disconnect
-#endif
 };
 
 int ptlbd_cl_init(void)
