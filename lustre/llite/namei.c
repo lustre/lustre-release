@@ -315,7 +315,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                 }
                 body = lustre_msg_buf(request->rq_repmsg, 0);
                 if (lsm != NULL) {
-                        mds_md_size = ll_mds_easize(inode->i_sb);
+                        mds_md_size = ll_mds_easize(dir->i_sb);
                         OBD_ALLOC(lmm, mds_md_size);
                         lov_packmd(lmm, lsm);
                         lic.lic_lmm = lmm;
