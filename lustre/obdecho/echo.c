@@ -185,10 +185,11 @@ struct obd_ops echo_obd_ops = {
         o_commitrw:    echo_commitrw,
 };
 
+#define OBDECHO_VERSION "$Version$
 
 static int __init obdecho_init(void)
 {
-        printk(KERN_INFO "Echo OBD driver  v0.001, braam@clusterfs.com\n");
+        printk(KERN_INFO "Echo OBD driver " OBDECHO_VERSION " braam@clusterfs.com\n");
 
         return class_register_type(&echo_obd_ops, OBD_ECHO_DEVICENAME);
 }
@@ -200,7 +201,7 @@ static void __exit obdecho_exit(void)
 }
 
 MODULE_AUTHOR("Cluster Filesystems Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Testing Echo OBD driver v1.0");
+MODULE_DESCRIPTION("Lustre Testing Echo OBD driver " OBDECHO_VERSION);
 MODULE_LICENSE("GPL"); 
 
 module_init(obdecho_init);
