@@ -39,7 +39,6 @@ void lustre_assert_wire_constants(void);
 int ptlrpc_import_in_recovery(struct obd_import *imp);
 int ptlrpc_set_import_discon(struct obd_import *imp);
 void ptlrpc_handle_failed_import(struct obd_import *imp);
-int ptlrpc_import_recovery_state_machine(struct obd_import *imp);
 int ptlrpc_replay_next(struct obd_import *imp);
 
 
@@ -100,9 +99,9 @@ static inline int opcode_offset(__u32 opc) {
                             (OBD_LAST_OPC - OBD_FIRST_OPC))
 
 enum {
-        PTLRPC_REQWAIT_CNTR     = 0,
-        PTLRPC_SVCIDLETIME_CNTR = 1,
-        //PTLRPC_SVCEQDEPTH_CNTR,
+        PTLRPC_REQWAIT_CNTR = 0,
+        PTLRPC_REQQDEPTH_CNTR,
+        PTLRPC_REQACTIVE_CNTR,
         PTLRPC_LAST_CNTR
 };
 
