@@ -118,6 +118,8 @@ lgmnal_rx_thread(void *arg)
 				/*
 				 *	Don't know what this is
 				 *	gm_unknown will make sense of it
+				 *	Should be able to do something with
+				 *	FAST_RECV_EVENTS here.
 				 */
 				CDEBUG(D_NET, "RXTHREAD:: Passing event to gm_unknown\n");
 				LGMNAL_GM_UNLOCK(nal_data);
@@ -450,7 +452,9 @@ lgmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 		 *	drop these ones
 		 */
 			CDEBUG(D_INFO, "lgmnal_small_tx_callback calling gm_drop_sends\n");
+			LGMNAL_GM_LOCK(nal_data);
 			gm_drop_sends(nal_data->gm_port, stxd->gm_priority, stxd->gm_target_node, LGMNAL_GM_PORT, lgmnal_drop_sends_callback, context);
+			LGMNAL_GM_UNLOCK(nal_data);
 
 		return;
 
@@ -520,10 +524,13 @@ lgmnal_small_tx_callback(gm_port_t *gm_port, void *context, gm_status_t status)
 void lgmnal_drop_sends_callback(struct gm_port *gm_port, void *context, gm_status_t status)
 {
 	lgmnal_stxd_t	*stxd = (lgmnal_stxd_t*)context;
+	lgmnal_data_t	*nal_data = stxd->nal_data;
 
 	CDEBUG(D_TRACE, "lgmnal_drop_sends_callback :: status is [%d] context is [%p]\n", status, context);
 	if (status == GM_SUCCESS) {
+		LGMNAL_GM_LOCK(nal_data);
 		gm_send_to_peer_with_callback(gm_port, stxd->buffer, stxd->gm_size, stxd->msg_size, stxd->gm_priority, stxd->gm_target_node, lgmnal_small_tx_callback, context);
+		LGMNAL_GM_LOCK(nal_data);
 	} else {
 		CDEBUG(D_ERROR, "lgmnal_drop send_to_peer status for stxd [%p} is [%d][%s]\n", 
 						stxd, status, lgmnal_gm_error(status));
