@@ -81,7 +81,7 @@ static int cmobd_reint_setattr(struct obd_device *obd, void *record)
         struct ptlrpc_request *req = NULL;
         struct mds_kml_pack_info *mkpi;
         struct mds_rec_setattr *rec;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct lustre_msg *msg;
         int ea1len, ea2len;
         struct iattr iattr;
@@ -111,7 +111,10 @@ static int cmobd_reint_setattr(struct obd_device *obd, void *record)
                 RETURN(rc);
         }
 
-        cmobd_prepare_mdc_data(&op_data, &rec->sa_id, NULL,
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        cmobd_prepare_mdc_data(op_data, &rec->sa_id, NULL,
                                NULL, 0, 0);
 
         /* handling possible EAs. */
@@ -121,8 +124,9 @@ static int cmobd_reint_setattr(struct obd_device *obd, void *record)
         ea2 = lustre_msg_buf(msg, 2, 0);
         ea2len = ea2 ? msg->buflens[2] : 0;
 
-        rc = md_setattr(cmobd->master_exp, &op_data, &iattr,
+        rc = md_setattr(cmobd->master_exp, op_data, &iattr,
                         ea1, ea1len, ea2, ea2len, &req);
+        OBD_FREE(op_data, sizeof(*op_data));
 
         if (req)
                 ptlrpc_req_finished(req);
@@ -136,7 +140,7 @@ static int cmobd_reint_create(struct obd_device *obd, void *record)
         struct mds_kml_pack_info *mkpi;
         int rc = 0, namelen, datalen;
         struct mds_rec_create *rec;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct lustre_msg *msg;
         struct mds_body *body;
         struct lustre_id lid;
@@ -173,14 +177,19 @@ static int cmobd_reint_create(struct obd_device *obd, void *record)
         data = (char *)lustre_msg_buf(msg, 2, 0);
         datalen = data ? msg->buflens[2] : 0;
 
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        
         /* prepare mdc request data. */
-        cmobd_prepare_mdc_data(&op_data, &rec->cr_id, &rec->cr_replayid,
+        cmobd_prepare_mdc_data(op_data, &rec->cr_id, &rec->cr_replayid,
                                name, namelen, rec->cr_mode);
 
         /* requesting to master to create object with passed attributes. */
-        rc = md_create(cmobd->master_exp, &op_data, data, datalen,
+        rc = md_create(cmobd->master_exp, op_data, data, datalen,
                        rec->cr_mode, current->fsuid, current->fsgid,
                        rec->cr_rdev, &req);
+        OBD_FREE(op_data, sizeof(*op_data));
 
         if (!rc) {
                 /* here we save store cookie from master MDS to local 
@@ -201,7 +210,7 @@ static int cmobd_reint_unlink(struct obd_device *obd, void *record)
         struct cm_obd *cmobd = &obd->u.cm;
         struct ptlrpc_request *req = NULL;
         struct mds_kml_pack_info *mkpi;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct mds_rec_unlink *rec;
         struct lustre_msg *msg;
         int rc = 0, namelen;
@@ -228,11 +237,16 @@ static int cmobd_reint_unlink(struct obd_device *obd, void *record)
         name = lustre_msg_string(msg, 1, 0);
         namelen = name ? msg->buflens[1] - 1 : 0;
 
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+
         /* prepare mdc request data. */
-        cmobd_prepare_mdc_data(&op_data, &rec->ul_id1, NULL,
+        cmobd_prepare_mdc_data(op_data, &rec->ul_id1, NULL,
                                name, namelen, rec->ul_mode);
 
-        rc = md_unlink(cmobd->master_exp, &op_data, &req);
+        rc = md_unlink(cmobd->master_exp, op_data, &req);
+        OBD_FREE(op_data, sizeof(*op_data));
 
         if (req)
                 ptlrpc_req_finished(req);
@@ -244,7 +258,7 @@ static int cmobd_reint_link(struct obd_device *obd, void *record)
         struct cm_obd *cmobd = &obd->u.cm;
         struct ptlrpc_request *req = NULL;
         struct mds_kml_pack_info *mkpi;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct mds_rec_link *rec;
         struct lustre_msg *msg;
         int rc = 0, namelen;
@@ -279,11 +293,16 @@ static int cmobd_reint_link(struct obd_device *obd, void *record)
         name = lustre_msg_string(msg, 1, 0);
         namelen = name ? msg->buflens[1] - 1: 0;
 
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+
         /* prepare mdc request data. */
-        cmobd_prepare_mdc_data(&op_data, &rec->lk_id1, &rec->lk_id2,
+        cmobd_prepare_mdc_data(op_data, &rec->lk_id1, &rec->lk_id2,
                                name, namelen, 0);
 
-        rc = md_link(cmobd->master_exp, &op_data, &req);
+        rc = md_link(cmobd->master_exp, op_data, &req);
+        OBD_FREE(op_data, sizeof(*op_data));
 
         if (req)
                 ptlrpc_req_finished(req);
@@ -295,7 +314,7 @@ static int cmobd_reint_rename(struct obd_device *obd, void *record)
         struct cm_obd *cmobd = &obd->u.cm;
         struct ptlrpc_request *req = NULL;
         struct mds_kml_pack_info *mkpi;
-        struct mdc_op_data op_data;
+        struct mdc_op_data *op_data;
         struct mds_rec_rename *rec;
         int rc = 0, oldlen, newlen;
         struct lustre_msg *msg;
@@ -334,12 +353,17 @@ static int cmobd_reint_rename(struct obd_device *obd, void *record)
         new = lustre_msg_string(msg, 2, 0);
         newlen = new ? msg->buflens[2] - 1: 0;
         
+        OBD_ALLOC(op_data, sizeof(*op_data));
+        if (op_data == NULL)
+                RETURN(-ENOMEM);
+        
         /* prepare mdc request data. */
-        cmobd_prepare_mdc_data(&op_data, &rec->rn_id1, &rec->rn_id1,
+        cmobd_prepare_mdc_data(op_data, &rec->rn_id1, &rec->rn_id1,
                                NULL, 0, 0);
 
-        rc = md_rename(cmobd->master_exp, &op_data, old, oldlen,
+        rc = md_rename(cmobd->master_exp, op_data, old, oldlen,
                        new, newlen, &req);
+        OBD_FREE(op_data, sizeof(*op_data));
 
         if (req)
                 ptlrpc_req_finished(req);
