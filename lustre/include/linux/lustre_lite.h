@@ -25,6 +25,7 @@
 extern kmem_cache_t *ll_file_data_slab;
 struct ll_file_data {
         __u64 fd_mdshandle;
+        struct lustre_handle fd_osthandle;
         struct ptlrpc_request *fd_req;
         __u32 fd_flags;
 };
