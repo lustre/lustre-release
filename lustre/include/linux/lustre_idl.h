@@ -339,7 +339,7 @@ struct mds_body {
         struct ll_fid  fid1;
         struct ll_fid  fid2;
         __u64          size;
-        __u64          extra;
+        __u64          extra; /* should become a lustre_handle */
         __u32          valid;
         __u32          mode;
         __u32          uid;
