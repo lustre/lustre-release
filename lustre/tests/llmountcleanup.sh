@@ -24,6 +24,7 @@ detach
 quit
 EOF
 
+rmmod obdecho
 rmmod mds
 rmmod osc
 rmmod ost

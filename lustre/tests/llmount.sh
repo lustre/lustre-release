@@ -19,7 +19,7 @@ insmod $R/usr/src/obd/mds/mds.o || exit -1
 insmod $R/usr/src/obd/mdc/mdc.o || exit -1
 insmod $R/usr/src/obd/llight/llight.o || exit -1
 
-$R/usr/src/obd/utils/obdctl modules > $R/tmp/ogdb
+$R/usr/src/portals/linux/utils/debugctl modules > $R/tmp/ogdb
 echo "The GDB module script is in /tmp/ogdb.  Press enter to continue"
 read
 

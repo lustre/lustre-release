@@ -37,7 +37,7 @@ echo 4095 > /proc/sys/obd/trace
 
 mknod /dev/obd c 10 241
 
-$R/usr/src/obd/utils/obdctl modules > $R/tmp/ogdb
+$R/usr/src/portals/linux/utils/debugctl modules > $R/tmp/ogdb
 
 $R/usr/src/obd/utils/obdctl <<EOF
 device 0
