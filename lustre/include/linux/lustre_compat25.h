@@ -38,8 +38,10 @@
  * initialization routines must be called after device
  * driver initialization
  */
+#ifndef MODULE
 #undef module_init
 #define module_init(a)     late_initcall(a)
+#endif
 
 /* XXX our code should be using the 2.6 calls, not the other way around */
 #define TryLockPage(page)                TestSetPageLocked(page)
