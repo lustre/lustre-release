@@ -169,6 +169,38 @@ int ll_size_unlock(struct inode *inode, struct lov_stripe_md *md, int mode,
         RETURN(rc);
 }
 
+int ll_file_size(struct inode *inode, struct lov_stripe_md *md)
+{
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct lustre_handle *lockhs;
+        struct obdo oa;
+        int err, rc;
+
+        rc = ll_size_lock(inode, md, 0, LCK_PR, &lockhs);
+        if (rc != ELDLM_OK) {
+                CERROR("lock enqueue: %d\n", rc);
+                RETURN(rc);
+        }
+
+        /* FIXME: I don't like this; why doesn't osc_getattr get o_id from md
+         * like lov_getattr? --phil */
+        oa.o_id = md->lmd_object_id;
+        oa.o_mode = S_IFREG;
+        oa.o_valid = OBD_MD_FLID|OBD_MD_FLMODE|OBD_MD_FLSIZE|OBD_MD_FLBLOCKS;
+        rc = obd_getattr(&sbi->ll_osc_conn, &oa, md);
+        if (!rc) {
+                inode->i_size = oa.o_size;
+                inode->i_blocks = oa.o_blocks;
+        }
+
+        err = ll_size_unlock(inode, md, LCK_PR, lockhs);
+        if (err != ELDLM_OK) {
+                CERROR("lock cancel: %d\n", err);
+                LBUG();
+        }
+        RETURN(rc);
+}
+
 static int ll_file_release(struct inode *inode, struct file *file)
 {
         int rc;
@@ -197,7 +229,6 @@ static int ll_file_release(struct inode *inode, struct file *file)
         /* If this fails and we goto out_fd, the file size on the MDS is out of
          * date.  Is that a big deal? */
         if (file->f_mode & FMODE_WRITE) {
-                struct iattr attr;
                 struct lustre_handle *lockhs;
 
                 rc = ll_size_lock(inode, lli->lli_smd, 0, LCK_PR, &lockhs);
@@ -209,6 +240,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE;
                 rc = obd_getattr(&sbi->ll_osc_conn, &oa, lli->lli_smd);
                 if (!rc) {
+                        struct iattr attr;
                         attr.ia_valid = (ATTR_MTIME | ATTR_CTIME | ATTR_ATIME |
                                          ATTR_SIZE);
                         attr.ia_mtime = inode->i_mtime;
@@ -374,19 +406,32 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ldlm_extent extent;
-        struct lustre_handle *lockhs = NULL;
+        struct lustre_handle *lockhs = NULL, *eof_lockhs = NULL;
         struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
         int flags = 0;
         ldlm_error_t err;
         ssize_t retval;
         ENTRY;
 
+        if (!S_ISBLK(inode->i_mode) && file->f_flags & O_APPEND) {
+                struct obdo oa;
+                err = ll_size_lock(inode, md, 0, LCK_PW, &eof_lockhs);
+                if (err)
+                        RETURN(err);
+
+                oa.o_id = md->lmd_object_id;
+                oa.o_mode = inode->i_mode;
+                oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLSIZE;
+                retval = obd_getattr(&sbi->ll_osc_conn, &oa, md);
+                if (retval)
+                        GOTO(out_eof, retval);
+                *ppos = oa.o_size;
+        }
+
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 OBD_ALLOC(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
                 if (!lockhs)
-                        RETURN(-ENOMEM); 
-                /* FIXME: this should check whether O_APPEND is set and adjust
-                 * extent.start accordingly */
+                        GOTO(out_eof, retval = -ENOMEM);
                 extent.start = *ppos;
                 extent.end = *ppos + count;
                 CDEBUG(D_INFO, "Locking inode %ld, start %Lu end %Lu\n",
@@ -397,9 +442,8 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                                   ll_lock_callback, inode, sizeof(*inode),
                                   lockhs);
                 if (err != ELDLM_OK) {
-                        OBD_FREE(lockhs, md->lmd_stripe_count *sizeof(*lockhs));
                         CERROR("lock enqueue: err: %d\n", err);
-                        RETURN(err);
+                        GOTO(out_free, retval = err);
                 }
         }
 
@@ -411,15 +455,24 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 err = obd_cancel(&sbi->ll_osc_conn, md, LCK_PW, lockhs);
                 if (err != ELDLM_OK) {
-                        OBD_FREE(lockhs, md->lmd_stripe_count *sizeof(*lockhs));
                         CERROR("lock cancel: err: %d\n", err);
-                        RETURN(err);
+                        GOTO(out_free, retval = err);
                 }
         }
 
+        EXIT;
+ out_free:
         if (lockhs)
                 OBD_FREE(lockhs, md->lmd_stripe_count * sizeof(*lockhs));
-        RETURN(retval);
+
+ out_eof:
+        if (!S_ISBLK(inode->i_mode) && file->f_flags & O_APPEND) {
+                err = ll_size_unlock(inode, md, LCK_PW, eof_lockhs);
+                if (err && !retval)
+                        retval = err;
+        }
+
+        return retval;
 }
 
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
@@ -462,6 +515,38 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         }
 }
 
+loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
+{
+        struct inode *inode = file->f_dentry->d_inode;
+        long long retval;
+        ENTRY;
+
+        switch (origin) {
+        case 2: {
+                struct ll_inode_info *lli = ll_i2info(inode);
+
+                retval = ll_file_size(inode, lli->lli_smd);
+                if (retval)
+                        RETURN(retval);
+
+                offset += inode->i_size;
+                break;
+        }
+        case 1:
+                offset += file->f_pos;
+        }
+        retval = -EINVAL;
+        if (offset >= 0 && offset <= inode->i_sb->s_maxbytes) {
+                if (offset != file->f_pos) {
+                        file->f_pos = offset;
+                        file->f_reada = 0;
+                        file->f_version = ++event;
+                }
+                retval = offset;
+        }
+        RETURN(retval);
+}
+
 /* XXX this does not need to do anything for data, it _does_ need to
    call setattr */
 int ll_fsync(struct file *file, struct dentry *dentry, int data)
@@ -476,6 +561,7 @@ struct file_operations ll_file_operations = {
         open:           ll_file_open,
         release:        ll_file_release,
         mmap:           generic_file_mmap,
+        llseek:         ll_file_seek,
         fsync:          NULL
 };
 

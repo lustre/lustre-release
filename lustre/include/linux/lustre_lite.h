@@ -140,6 +140,7 @@ int ll_size_lock(struct inode *, struct lov_stripe_md *, __u64 start, int mode,
                  struct lustre_handle **);
 int ll_size_unlock(struct inode *, struct lov_stripe_md *, int mode,
                    struct lustre_handle *);
+int ll_file_size(struct inode *inode, struct lov_stripe_md *md);
 
 /* rw.c */
 struct page *ll_getpage(struct inode *inode, unsigned long offset,

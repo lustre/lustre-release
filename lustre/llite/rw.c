@@ -206,6 +206,7 @@ void ll_truncate(struct inode *inode)
 {
         struct obdo oa = {0};
         struct lov_stripe_md *md = ll_i2info(inode)->lli_smd;
+        struct lustre_handle *lockhs = NULL;
         int err;
         ENTRY;
 
@@ -215,10 +216,19 @@ void ll_truncate(struct inode *inode)
                 return;
         }
 
+        oa.o_id = md->lmd_object_id;
+        oa.o_size = inode->i_size;
+
         CDEBUG(D_INFO, "calling punch for %ld (all bytes after %Ld)\n",
                (long)oa.o_id, (unsigned long long)oa.o_size);
 
-        oa.o_id = md->lmd_object_id;
+        err = ll_size_lock(inode, md, oa.o_size, LCK_PW, &lockhs);
+        if (err) {
+                CERROR("ll_size_lock failed: %d\n", err);
+                /* FIXME: What to do here?  It's too late to back out... */
+                LBUG();
+        }
+
         oa.o_valid = OBD_MD_FLID;
         /* truncate == punch to/from start from/to end:
            set end to -1 for that. */
@@ -232,6 +242,10 @@ void ll_truncate(struct inode *inode)
                  * Needed for POSIX.
                  */
                 inode->i_mtime = inode->i_ctime = CURRENT_TIME;
+
+        err = ll_size_unlock(inode, md, LCK_PW, lockhs);
+        if (err)
+                CERROR("ll_size_unlock failed: %d\n", err);
 
         EXIT;
         return;

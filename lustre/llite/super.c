@@ -405,38 +405,6 @@ inline int ll_stripe_mds_md_size(struct super_block *sb)
         return mdc->cl_max_mdsize;
 }
 
-static int ll_file_size(struct inode *inode, struct lov_stripe_md *md)
-{
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct lustre_handle *lockhs;
-        struct obdo oa;
-        int err, rc;
-
-        rc = ll_size_lock(inode, md, 0, LCK_PR, &lockhs);
-        if (rc != ELDLM_OK) {
-                CERROR("lock enqueue: %d\n", rc);
-                RETURN(rc);
-        }
-
-        /* FIXME: I don't like this; why doesn't osc_getattr get o_id from md
-         * like lov_getattr? --phil */
-        oa.o_id = md->lmd_object_id;
-        oa.o_mode = S_IFREG;
-        oa.o_valid = OBD_MD_FLID|OBD_MD_FLMODE|OBD_MD_FLSIZE|OBD_MD_FLBLOCKS;
-        rc = obd_getattr(&sbi->ll_osc_conn, &oa, md);
-        if (!rc) {
-                inode->i_size = oa.o_size;
-                inode->i_blocks = oa.o_blocks;
-        }
-
-        err = ll_size_unlock(inode, md, LCK_PR, lockhs);
-        if (err != ELDLM_OK) {
-                CERROR("lock cancel: %d\n", err);
-                LBUG();
-        }
-        RETURN(rc);
-}
-
 static void ll_read_inode2(struct inode *inode, void *opaque)
 {
         struct ll_inode_md *md = opaque;
