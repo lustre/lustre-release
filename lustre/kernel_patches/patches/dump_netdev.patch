@@ -1,0 +1,340 @@
+ drivers/net/3c59x.c            |   27 +++++++++++++++++++++++++++
+ drivers/net/e100/e100_main.c   |   19 +++++++++++++++++++
+ drivers/net/e1000/e1000_main.c |   13 +++++++++++++
+ drivers/net/eepro100.c         |   21 +++++++++++++++++++++
+ drivers/net/smc-ultra.c        |   11 +++++++++++
+ drivers/net/tlan.c             |   14 +++++++++++++-
+ drivers/net/tulip/tulip_core.c |   22 ++++++++++++++++++++++
+ include/linux/netdevice.h      |    3 +++
+ net/core/dev.c                 |   18 ++++++++++++++++--
+ 9 files changed, 145 insertions(+), 3 deletions(-)
+
+--- linux-2.5.73/drivers/net/3c59x.c~dump_netdev	Sun Jun 22 11:32:27 2003
++++ linux-2.5.73-n9560/drivers/net/3c59x.c	Mon Jun 30 14:56:29 2003
+@@ -907,6 +907,7 @@ static void set_rx_mode(struct net_devic
+ static int vortex_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
+ static void vortex_tx_timeout(struct net_device *dev);
+ static void acpi_set_WOL(struct net_device *dev);
++static void vorboom_poll(struct net_device *dev);
+ 
+ /* This driver uses 'options' to pass the media type, full-duplex flag, etc. */
+ /* Option count limit only -- unlimited interfaces are supported. */
+@@ -1463,6 +1464,9 @@ static int __devinit vortex_probe1(struc
+ 	dev->set_multicast_list = set_rx_mode;
+ 	dev->tx_timeout = vortex_tx_timeout;
+ 	dev->watchdog_timeo = (watchdog * HZ) / 1000;
++#ifdef HAVE_POLL_CONTROLLER
++	dev->poll_controller = &vorboom_poll;
++#endif
+ 	if (pdev && vp->enable_wol) {
+ 		vp->pm_state_valid = 1;
+  		pci_save_state(VORTEX_PCI(vp), vp->power_state);
+@@ -2453,6 +2457,29 @@ handler_exit:
+ 	return IRQ_HANDLED;
+ }
+ 
++#ifdef HAVE_POLL_CONTROLLER
++
++/*
++ * Polling 'interrupt' - used by things like netconsole to send skbs
++ * without having to re-enable interrupts. It's not called while
++ * the interrupt routine is executing.
++ */
++
++static void vorboom_poll (struct net_device *dev)
++{
++	struct vortex_private *vp = (struct vortex_private *)dev->priv;
++
++	disable_irq(dev->irq);
++	if (vp->full_bus_master_tx)
++		boomerang_interrupt(dev->irq, dev, 0);
++	else
++		vortex_interrupt(dev->irq, dev, 0);
++	enable_irq(dev->irq);
++}
++
++#endif
++
++
+ static int vortex_rx(struct net_device *dev)
+ {
+ 	struct vortex_private *vp = (struct vortex_private *)dev->priv;
+--- linux-2.5.73/drivers/net/e100/e100_main.c~dump_netdev	Sun Jun 22 11:32:44 2003
++++ linux-2.5.73-n9560/drivers/net/e100/e100_main.c	Mon Jun 30 14:56:29 2003
+@@ -558,6 +558,22 @@ e100_trigger_SWI(struct e100_private *bd
+ 	readw(&(bdp->scb->scb_status));	/* flushes last write, read-safe */
+ }
+ 
++#ifdef HAVE_POLL_CONTROLLER
++
++/*
++ * Polling 'interrupt' - used by things like netconsole to send skbs
++ * without having to re-enable interrupts. It's not called while
++ * the interrupt routine is executing.
++ */
++static void
++e100_poll(struct net_device *dev)
++{
++	disable_irq(dev->irq);
++	e100intr(dev->irq, dev, NULL);
++	enable_irq(dev->irq);
++}
++#endif
++
+ static int __devinit
+ e100_found1(struct pci_dev *pcid, const struct pci_device_id *ent)
+ {
+@@ -576,6 +592,9 @@ e100_found1(struct pci_dev *pcid, const 
+ 
+ 	SET_MODULE_OWNER(dev);
+ 
++#ifdef HAVE_POLL_CONTROLLER
++	dev->poll_controller = &e100_poll;
++#endif
+ 	if (first_time) {
+ 		first_time = false;
+         	printk(KERN_NOTICE "%s - version %s\n",
+--- linux-2.5.73/drivers/net/e1000/e1000_main.c~dump_netdev	Sun Jun 22 11:32:41 2003
++++ linux-2.5.73-n9560/drivers/net/e1000/e1000_main.c	Mon Jun 30 15:28:13 2003
+@@ -145,6 +145,7 @@ static void e1000_leave_82542_rst(struct
+ static inline void e1000_rx_checksum(struct e1000_adapter *adapter,
+                                      struct e1000_rx_desc *rx_desc,
+                                      struct sk_buff *skb);
++static void e1000_Poll(struct net_device *dev);
+ static void e1000_tx_timeout(struct net_device *dev);
+ static void e1000_tx_timeout_task(struct net_device *dev);
+ static void e1000_smartspeed(struct e1000_adapter *adapter);
+@@ -413,6 +414,9 @@ e1000_probe(struct pci_dev *pdev,
+ 
+ 	adapter->bd_number = cards_found;
+ 
++#ifdef HAVE_POLL_CONTROLLER
++	netdev->poll_controller = &e1000_Poll;
++#endif
+ 	/* setup the private structure */
+ 
+ 	if(e1000_sw_init(adapter))
+@@ -1699,6 +1703,15 @@ e1000_xmit_frame(struct sk_buff *skb, st
+ 	return 0;
+ }
+ 
++#ifdef HAVE_POLL_CONTROLLER
++static void e1000_Poll(struct net_device *dev)
++{
++	disable_irq(dev->irq);
++	e1000_intr(dev->irq, dev, NULL);
++	enable_irq(dev->irq);
++}
++#endif
++
+ /**
+  * e1000_tx_timeout - Respond to a Tx Hang
+  * @netdev: network interface device structure
+--- linux-2.5.73/drivers/net/eepro100.c~dump_netdev	Sun Jun 22 11:32:57 2003
++++ linux-2.5.73-n9560/drivers/net/eepro100.c	Mon Jun 30 14:56:29 2003
+@@ -542,6 +542,7 @@ static void speedo_refill_rx_buffers(str
+ static int speedo_rx(struct net_device *dev);
+ static void speedo_tx_buffer_gc(struct net_device *dev);
+ static irqreturn_t speedo_interrupt(int irq, void *dev_instance, struct pt_regs *regs);
++static void poll_speedo (struct net_device *dev);
+ static int speedo_close(struct net_device *dev);
+ static struct net_device_stats *speedo_get_stats(struct net_device *dev);
+ static int speedo_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
+@@ -880,6 +881,9 @@ static int __devinit speedo_found1(struc
+ 	dev->get_stats = &speedo_get_stats;
+ 	dev->set_multicast_list = &set_rx_mode;
+ 	dev->do_ioctl = &speedo_ioctl;
++#ifdef HAVE_POLL_CONTROLLER
++	dev->poll_controller = &poll_speedo;
++#endif
+ 
+ 	return 0;
+ }
+@@ -1661,6 +1665,23 @@ static irqreturn_t speedo_interrupt(int 
+ 	return IRQ_RETVAL(handled);
+ }
+ 
++#ifdef HAVE_POLL_CONTROLLER
++
++/*
++ * Polling 'interrupt' - used by things like netconsole to send skbs
++ * without having to re-enable interrupts. It's not called while
++ * the interrupt routine is executing.
++ */
++
++static void poll_speedo (struct net_device *dev)
++{
++	disable_irq(dev->irq);
++	speedo_interrupt (dev->irq, dev, NULL);
++	enable_irq(dev->irq);
++}
++
++#endif
++
+ static inline struct RxFD *speedo_rx_alloc(struct net_device *dev, int entry)
+ {
+ 	struct speedo_private *sp = (struct speedo_private *)dev->priv;
+--- linux-2.5.73/drivers/net/smc-ultra.c~dump_netdev	Sun Jun 22 11:32:33 2003
++++ linux-2.5.73-n9560/drivers/net/smc-ultra.c	Mon Jun 30 14:56:29 2003
+@@ -122,6 +122,14 @@ MODULE_DEVICE_TABLE(isapnp, ultra_device
+ #define ULTRA_IO_EXTENT 32
+ #define EN0_ERWCNT		0x08	/* Early receive warning count. */
+ 
++
++static void ultra_poll(struct net_device *dev)
++{
++	disable_irq(dev->irq);
++	ei_interrupt(dev->irq, dev, NULL);
++	enable_irq(dev->irq);
++}
++
+ /*	Probe for the Ultra.  This looks like a 8013 with the station
+ 	address PROM at I/O ports <base>+8 to <base>+13, with a checksum
+ 	following.
+@@ -134,6 +142,9 @@ int __init ultra_probe(struct net_device
+ 
+ 	SET_MODULE_OWNER(dev);
+ 
++#ifdef HAVE_POLL_CONTROLLER
++	dev->poll_controller = &ultra_poll;
++#endif
+ 	if (base_addr > 0x1ff)		/* Check a single specified location. */
+ 		return ultra_probe1(dev, base_addr);
+ 	else if (base_addr != 0)	/* Don't probe at all. */
+--- linux-2.5.73/drivers/net/tlan.c~dump_netdev	Sun Jun 22 11:32:33 2003
++++ linux-2.5.73-n9560/drivers/net/tlan.c	Mon Jun 30 14:56:29 2003
+@@ -345,6 +345,8 @@ static int	TLan_EeSendByte( u16, u8, int
+ static void	TLan_EeReceiveByte( u16, u8 *, int );
+ static int	TLan_EeReadByte( struct net_device *, u8, u8 * );
+ 
++static void	TLan_Poll(struct net_device *);
++
+ 
+ static void 
+ TLan_StoreSKB( struct tlan_list_tag *tag, struct sk_buff *skb)
+@@ -890,6 +892,9 @@ static int TLan_Init( struct net_device 
+ 	dev->get_stats = &TLan_GetStats;
+ 	dev->set_multicast_list = &TLan_SetMulticastList;
+ 	dev->do_ioctl = &TLan_ioctl;
++#ifdef HAVE_POLL_CONTROLLER
++	dev->poll_controller = &TLan_Poll;
++#endif
+ 	dev->tx_timeout = &TLan_tx_timeout;
+ 	dev->watchdog_timeo = TX_TIMEOUT;
+ 
+@@ -1173,7 +1178,14 @@ static irqreturn_t TLan_HandleInterrupt(
+ 	return IRQ_HANDLED;
+ } /* TLan_HandleInterrupts */
+ 
+-
++#ifdef HAVE_POLL_CONTROLLER
++static void TLan_Poll(struct net_device *dev)
++{
++	disable_irq(dev->irq);
++	TLan_HandleInterrupt(dev->irq, dev, NULL);
++	enable_irq(dev->irq);
++}
++#endif
+ 
+ 
+ 	/***************************************************************
+--- linux-2.5.73/drivers/net/tulip/tulip_core.c~dump_netdev	Sun Jun 22 11:32:56 2003
++++ linux-2.5.73-n9560/drivers/net/tulip/tulip_core.c	Mon Jun 30 14:56:29 2003
+@@ -243,6 +243,7 @@ static void tulip_down(struct net_device
+ static struct net_device_stats *tulip_get_stats(struct net_device *dev);
+ static int private_ioctl(struct net_device *dev, struct ifreq *rq, int cmd);
+ static void set_rx_mode(struct net_device *dev);
++static void poll_tulip(struct net_device *dev);
+ 
+ 
+ 
+@@ -1618,6 +1619,9 @@ static int __devinit tulip_init_one (str
+ 	dev->get_stats = tulip_get_stats;
+ 	dev->do_ioctl = private_ioctl;
+ 	dev->set_multicast_list = set_rx_mode;
++#ifdef HAVE_POLL_CONTROLLER
++	dev->poll_controller = &poll_tulip;
++#endif
+ 
+ 	if (register_netdev(dev))
+ 		goto err_out_free_ring;
+@@ -1775,6 +1779,24 @@ static void __devexit tulip_remove_one (
+ }
+ 
+ 
++#ifdef HAVE_POLL_CONTROLLER
++
++/*
++ * Polling 'interrupt' - used by things like netconsole to send skbs
++ * without having to re-enable interrupts. It's not called while
++ * the interrupt routine is executing.
++ */
++
++static void poll_tulip (struct net_device *dev)
++{
++       disable_irq(dev->irq);
++       tulip_interrupt (dev->irq, dev, NULL);
++       enable_irq(dev->irq);
++}
++
++#endif
++
++
+ static struct pci_driver tulip_driver = {
+ 	.name		= DRV_NAME,
+ 	.id_table	= tulip_pci_tbl,
+--- linux-2.5.73/include/linux/netdevice.h~dump_netdev	Sun Jun 22 11:33:18 2003
++++ linux-2.5.73-n9560/include/linux/netdevice.h	Mon Jun 30 14:56:29 2003
+@@ -439,6 +439,9 @@ struct net_device
+ 						     unsigned char *haddr);
+ 	int			(*neigh_setup)(struct net_device *dev, struct neigh_parms *);
+ 	int			(*accept_fastpath)(struct net_device *, struct dst_entry*);
++#define HAVE_POLL_CONTROLLER
++ 	void			(*poll_controller)(struct net_device *dev);
++	int			(*rx_hook)(struct sk_buff *skb);
+ 
+ 	/* bridge stuff */
+ 	struct net_bridge_port	*br_port;
+--- linux-2.5.73/net/core/dev.c~dump_netdev	Sun Jun 22 11:32:46 2003
++++ linux-2.5.73-n9560/net/core/dev.c	Mon Jun 30 14:56:29 2003
+@@ -1348,8 +1348,6 @@ int netif_rx(struct sk_buff *skb)
+ 	struct softnet_data *queue;
+ 	unsigned long flags;
+ 
+-	if (!skb->stamp.tv_sec)
+-		do_gettimeofday(&skb->stamp);
+ 
+ 	/*
+ 	 * The code is rearranged so that the path is the most
+@@ -1359,6 +1357,13 @@ int netif_rx(struct sk_buff *skb)
+ 	this_cpu = smp_processor_id();
+ 	queue = &softnet_data[this_cpu];
+ 
++	if (skb->dev->rx_hook)
++		goto rx_hook;
++rx_hook_continue:
++
++	if (!skb->stamp.tv_sec )
++		do_gettimeofday(&skb->stamp);
++
+ 	netdev_rx_stat[this_cpu].total++;
+ 	if (queue->input_pkt_queue.qlen <= netdev_max_backlog) {
+ 		if (queue->input_pkt_queue.qlen) {
+@@ -1401,6 +1406,15 @@ drop:
+ 
+ 	kfree_skb(skb);
+ 	return NET_RX_DROP;
++rx_hook:
++	{
++		int ret;
++
++		ret = skb->dev->rx_hook(skb);
++		if (ret == NET_RX_DROP)
++			goto drop;
++		goto rx_hook_continue;
++	}
+ }
+ 
+ /* Deliver skb to an old protocol, which is not threaded well
+
+_
