@@ -51,6 +51,8 @@ typedef struct
 typedef struct
 {
 	struct list_head   	kpre_list;
+        atomic_t                kpre_weight;
+        int                     kpre_gateway_alive;
 	int                     kpre_gateway_nalid;
 	ptl_nid_t           	kpre_gateway_nid;
 	ptl_nid_t           	kpre_lo_nid;
@@ -58,7 +60,8 @@ typedef struct
 } kpr_route_entry_t;
 
 extern int kpr_register_nal (kpr_nal_interface_t *nalif, void **argp);
-extern int kpr_lookup_target (void *arg, ptl_nid_t target_nid, ptl_nid_t *gateway_nidp);
+extern int kpr_lookup_target (void *arg, ptl_nid_t target_nid, int nob, 
+                              ptl_nid_t *gateway_nidp);
 extern void kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd);
 extern void kpr_complete_packet (void *arg, kpr_fwd_desc_t *fwd, int error);
 extern void kpr_shutdown_nal (void *arg);
@@ -70,8 +73,9 @@ extern void kpr_proc_fini (void);
 extern int kpr_add_route (int gateway_nal, ptl_nid_t gateway_nid, 
                           ptl_nid_t lo_nid, ptl_nid_t hi_nid);
 extern int kpr_del_route (ptl_nid_t nid);
+extern int kpr_set_route (ptl_nid_t nid, int alive);
 extern int kpr_get_route (int idx, int *gateway_nal, ptl_nid_t *gateway_nid, 
-                          ptl_nid_t *lo_nid, ptl_nid_t *hi_nid);
+                          ptl_nid_t *lo_nid, ptl_nid_t *hi_nid, int *alive);
 
 extern unsigned long long kpr_fwd_bytes;
 extern unsigned long      kpr_fwd_packets;
