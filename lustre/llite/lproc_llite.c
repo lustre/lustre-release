@@ -108,39 +108,37 @@ struct llite_file_opcode {
         const char *opname;
 } llite_opcode_table[LPROC_LL_FILE_OPCODES] = {
         /* file operation */
-        { LPROC_LL_DIRTY_PAGES,    LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES, 
-                                   "dirty_pages" }, 
-        { LPROC_LL_DIRTY_HITS,     LPROCFS_TYPE_REGS, "dirty_pages_hits" }, 
-        { LPROC_LL_DIRTY_MISSES,   LPROCFS_TYPE_REGS, "dirty_pages_misses" }, 
+        { LPROC_LL_DIRTY_PAGES,    LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
+                                   "dirty_pages" },
+        { LPROC_LL_DIRTY_HITS,     LPROCFS_TYPE_REGS, "dirty_pages_hits" },
+        { LPROC_LL_DIRTY_MISSES,   LPROCFS_TYPE_REGS, "dirty_pages_misses" },
         { LPROC_LL_WB_WRITEPAGE,   LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "writeback_from_writepage" }, 
+                                   "writeback_from_writepage" },
         { LPROC_LL_WB_PRESSURE,    LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "writeback_from_pressure" }, 
+                                   "writeback_from_pressure" },
         { LPROC_LL_WB_OK,          LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "writeback_ok_pages" }, 
+                                   "writeback_ok_pages" },
         { LPROC_LL_WB_FAIL,        LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "writeback_failed_pages" }, 
-        { LPROC_LL_READ,           LPROCFS_TYPE_REGS, "read" }, 
+                                   "writeback_failed_pages" },
         { LPROC_LL_READ_BYTES,     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
-                                   "read_bytes" }, 
-        { LPROC_LL_WRITE,          LPROCFS_TYPE_REGS, "write" }, 
+                                   "read_bytes" },
         { LPROC_LL_WRITE_BYTES,    LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
-                                   "write_bytes" }, 
-        { LPROC_LL_BRW_READ,       LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES, 
-                                   "brw_read" }, 
-        { LPROC_LL_BRW_WRITE,      LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES, 
-                                   "brw_write" }, 
+                                   "write_bytes" },
+        { LPROC_LL_BRW_READ,       LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
+                                   "brw_read" },
+        { LPROC_LL_BRW_WRITE,      LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
+                                   "brw_write" },
 
-        { LPROC_LL_IOCTL,          LPROCFS_TYPE_REGS, "ioctl" }, 
-        { LPROC_LL_OPEN,           LPROCFS_TYPE_REGS, "open" }, 
-        { LPROC_LL_RELEASE,        LPROCFS_TYPE_REGS, "close" }, 
-        { LPROC_LL_MAP,            LPROCFS_TYPE_REGS, "mmap" }, 
-        { LPROC_LL_LLSEEK,         LPROCFS_TYPE_REGS, "seek" }, 
-        { LPROC_LL_FSYNC,          LPROCFS_TYPE_REGS, "fsync" }, 
-        /* inode operation */ 
-        { LPROC_LL_SETATTR_RAW,    LPROCFS_TYPE_REGS, "setattr_raw" }, 
-        { LPROC_LL_SETATTR,        LPROCFS_TYPE_REGS, "setattr" }, 
-        { LPROC_LL_TRUNCT,         LPROCFS_TYPE_REGS, "punch" },
+        { LPROC_LL_IOCTL,          LPROCFS_TYPE_REGS, "ioctl" },
+        { LPROC_LL_OPEN,           LPROCFS_TYPE_REGS, "open" },
+        { LPROC_LL_RELEASE,        LPROCFS_TYPE_REGS, "close" },
+        { LPROC_LL_MAP,            LPROCFS_TYPE_REGS, "mmap" },
+        { LPROC_LL_LLSEEK,         LPROCFS_TYPE_REGS, "seek" },
+        { LPROC_LL_FSYNC,          LPROCFS_TYPE_REGS, "fsync" },
+        /* inode operation */
+        { LPROC_LL_SETATTR_RAW,    LPROCFS_TYPE_REGS, "setattr_raw" },
+        { LPROC_LL_SETATTR,        LPROCFS_TYPE_REGS, "setattr" },
+        { LPROC_LL_TRUNC,          LPROCFS_TYPE_REGS, "punch" },
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         { LPROC_LL_GETATTR,        LPROCFS_TYPE_REGS, "getattr" },
 #else
@@ -150,9 +148,9 @@ struct llite_file_opcode {
         { LPROC_LL_STAFS,          LPROCFS_TYPE_REGS, "statfs" },
         { LPROC_LL_ALLOC_INODE,    LPROCFS_TYPE_REGS, "alloc_inode" },
         { LPROC_LL_DIRECT_READ,    LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "direct_read" }, 
+                                   "direct_read" },
         { LPROC_LL_DIRECT_WRITE,   LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "direct_write" }, 
+                                   "direct_write" },
 
 };
 
@@ -164,8 +162,8 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         struct obd_device *obd;
         char name[MAX_STRING_SIZE + 1];
         struct obd_uuid uuid;
-        int err, id; 
-        struct lprocfs_counters *svc_cntrs = NULL;
+        int err, id;
+        struct lprocfs_stats *svc_stats = NULL;
         ENTRY;
 
         memset(lvars, 0, sizeof(lvars));
@@ -188,15 +186,15 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                 RETURN(err);
         }
 
-        svc_cntrs = lprocfs_alloc_counters(LPROC_LL_FILE_OPCODES);
-        if (svc_cntrs == NULL) {
-                err = -ENOMEM; 
+        svc_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES);
+        if (svc_stats == NULL) {
+                err = -ENOMEM;
                 goto out;
         }
         /* do counter init */
-        for (id=0; id < LPROC_LL_FILE_OPCODES; id++) {
+        for (id = 0; id < LPROC_LL_FILE_OPCODES; id++) {
                 __u32 type = llite_opcode_table[id].type;
-                void *ptr=NULL;
+                void *ptr = NULL;
                 if (type & LPROCFS_TYPE_REGS)
                         ptr = "regs";
                 else {
@@ -207,17 +205,16 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                         ptr = "pages";
                         }
                 }
-                LPROCFS_COUNTER_INIT(svc_cntrs, llite_opcode_table[id].opcode, 
-                        (type & LPROCFS_CNTR_AVGMINMAX), 
-                        llite_opcode_table[id].opname, ptr); 
+                lprocfs_counter_init(svc_stats, llite_opcode_table[id].opcode,
+                                     (type & LPROCFS_CNTR_AVGMINMAX),
+                                     llite_opcode_table[id].opname, ptr);
         }
-        err = lprocfs_register_counters(sbi->ll_proc_root, "stats", 
-                        svc_cntrs);
+        err = lprocfs_register_stats(sbi->ll_proc_root, "stats", svc_stats);
         if (err)
                 goto out;
         else
-                sbi->ll_lprocfs_cntrs = svc_cntrs;
-        /* need place to keep svc_cntrs */
+                sbi->ll_stats = svc_stats;
+        /* need place to keep svc_stats */
 
         /* Static configuration info */
         err = lprocfs_add_vars(sbi->ll_proc_root, lprocfs_obd_vars, sb);
@@ -265,8 +262,8 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         err = lprocfs_add_vars(sbi->ll_proc_root, lvars, obd);
 out:
         if (err) {
-                if (svc_cntrs)
-                        lprocfs_free_counters(svc_cntrs);
+                if (svc_stats)
+                        lprocfs_free_stats(svc_stats);
                 if (sbi->ll_proc_root)
                         lprocfs_remove(sbi->ll_proc_root);
         }
@@ -276,11 +273,11 @@ out:
 void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi)
 {
         if (sbi->ll_proc_root) {
-                struct proc_dir_entry *file_stats = 
+                struct proc_dir_entry *file_stats =
                         lprocfs_srch(sbi->ll_proc_root, "stats");
 
                 if (file_stats) {
-                        lprocfs_free_counters(sbi->ll_lprocfs_cntrs);
+                        lprocfs_free_stats(sbi->ll_stats);
                         lprocfs_remove(file_stats);
                 }
         }
