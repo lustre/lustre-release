@@ -199,7 +199,7 @@ int lustre_common_fill_super(struct super_block *sb, char *lmv, char *lov)
         /* make root inode
          * XXX: move this to after cbd setup? */
         err = md_getattr(sbi->ll_md_exp, &sbi->ll_rootid,
-                         OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS,
+                         (OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS | OBD_MD_FID),
                          0, &request);
         if (err) {
                 CERROR("md_getattr failed for root: rc = %d\n", err);
