@@ -235,10 +235,6 @@ int ldlm_resource_put(struct ldlm_resource *res)
                 struct ldlm_namespace *ns = res->lr_namespace;
 
                 spin_lock(&ns->ns_lock);
-                spin_lock(&res->lr_lock);
-                if (res->lr_refcount != 0)
-                        goto out;
-
                 if (!list_empty(&res->lr_granted))
                         LBUG();
 
@@ -257,10 +253,8 @@ int ldlm_resource_put(struct ldlm_resource *res)
                 list_del(&res->lr_childof);
 
                 kmem_cache_free(ldlm_resource_slab, res);
-                rc = 1;
-        out:
-                spin_unlock(&res->lr_lock);
                 spin_unlock(&ns->ns_lock);
+                rc = 1;
         }
 
         return rc; 
