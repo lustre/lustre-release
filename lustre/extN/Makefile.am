@@ -55,12 +55,13 @@ patch-stamp: $(EXTNP)
 		list='$(EXTNP)'; for p in $$list; do                        \
 		sed $(SUB) $(srcdir)/$$p | (cd $(top_srcdir); patch -p1);   \
 		done;  \
+		echo "It is OK if the following patch fails";		    \
+		(cd $(top_srcdir); patch -N -p1) < $(srcdir)/extN-2.4.18-exports.diff; \
 		(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-ino_sb_fixup.diff; \
-		(cd $(top_srcdir); patch -p1) < $(srcdir)/extN-2.4.18-exports.diff; \
 	fi
 	echo timestamp > patch-stamp
 
-$(EXTNC) $(EXTNI): patch-stamp
+$(EXTNC) $(EXTNI) $(EXTN_EXTRA): patch-stamp
 
 # Don't distribute any patched files.
 dist-hook:
@@ -69,3 +70,4 @@ dist-hook:
 	list='$(EXTNI)'; for i in $$list; do                                  \
 		rm -f $(distdir)/../include/linux/$$i;                        \
 	done
+	list='$(EXTN_EXTRA)'; for f in $$list; do rm -f $(distdir)/../$$f; done
