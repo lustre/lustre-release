@@ -156,6 +156,14 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 	    oa->o_flags == OBD_FL_DELORPHAN) {
 		oa->o_id = oscc->oscc_next_id - 1;
                 rc = osc_real_create(oscc->oscc_exp, oa, ea, NULL);
+
+                spin_lock(&osccd->osccd_lock);
+                spin_lock(&oscc->oscc_lock);
+                oscc->oscc_status = rc;
+                oscc->oscc_last_id = oscc->oscc_next_id - 1;
+                spin_unlock(&oscc->oscc_lock);
+                spin_unlock(&osccd->osccd_lock);
+
 		RETURN(rc);
 	}
 
