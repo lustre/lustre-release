@@ -5,7 +5,7 @@
 
 --- linux-2.4.19-hp2_pnnl2/drivers/block/blkpg.c~dev_read_only_hp	Sun Jan 19 18:51:12 2003
 +++ linux-2.4.19-hp2_pnnl2-root/drivers/block/blkpg.c	Sun Jan 19 18:52:28 2003
-@@ -310,6 +310,44 @@ int blk_ioctl(kdev_t dev, unsigned int c
+@@ -310,6 +310,42 @@ int blk_ioctl(kdev_t dev, unsigned int c
  
  EXPORT_SYMBOL(blk_ioctl);
  
@@ -45,37 +45,31 @@
 +EXPORT_SYMBOL(dev_check_rdonly);
 +EXPORT_SYMBOL(dev_clear_rdonly);
 +
-+
-+
  /**
   * get_last_sector()
   *  
 --- linux-2.4.19-hp2_pnnl2/drivers/block/loop.c~dev_read_only_hp	Sun Jan 19 18:51:12 2003
 +++ linux-2.4.19-hp2_pnnl2-root/drivers/block/loop.c	Sun Jan 19 18:51:12 2003
-@@ -474,6 +474,11 @@ static int loop_make_request(request_que
+@@ -474,6 +474,9 @@ static int loop_make_request(request_que
  	spin_unlock_irq(&lo->lo_lock);
  
  	if (rw == WRITE) {
-+#ifdef CONFIG_DEV_RDONLY
 +		if (dev_check_rdonly(rbh->b_rdev))
 +			goto err;
-+#endif
 +
  		if (lo->lo_flags & LO_FLAGS_READ_ONLY)
  			goto err;
  	} else if (rw == READA) {
 --- linux-2.4.19-hp2_pnnl2/drivers/ide/ide-disk.c~dev_read_only_hp	Sun Jan 19 18:51:12 2003
 +++ linux-2.4.19-hp2_pnnl2-root/drivers/ide/ide-disk.c	Sun Jan 19 18:51:12 2003
-@@ -551,6 +551,12 @@ static ide_startstop_t lba_48_rw_disk (i
+@@ -551,6 +551,10 @@ static ide_startstop_t lba_48_rw_disk (i
   */
  static ide_startstop_t do_rw_disk (ide_drive_t *drive, struct request *rq, unsigned long block)
  {
-+#ifdef CONFIG_DEV_RDONLY
 +	if (rq->cmd == WRITE && dev_check_rdonly(rq->rq_dev)) {
 +		ide_end_request(1, HWGROUP(drive));
 +		return ide_stopped;
 +	}
-+#endif
  	if (IDE_CONTROL_REG)
  		OUT_BYTE(drive->ctl,IDE_CONTROL_REG);
  
