@@ -238,47 +238,49 @@ ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev,
         return rc;
 }
 
-ldlm_error_t ldlm_local_lock_cancel(struct obd_device *obddev, 
-                                     struct ldlm_handle *lockh)
+ldlm_error_t ldlm_local_lock_cancel(struct obd_device *obddev,
+                                    struct ldlm_handle *lockh)
 {
         struct ldlm_lock *lock;
-        struct ldlm_resource *res = lock->l_resource;
+        struct ldlm_resource *res;
         ENTRY;
 
         lock = (struct ldlm_lock *)(unsigned long)lockh->addr;
-        list_del(&lock->l_res_link); 
+        res = lock->l_resource;
+        list_del(&lock->l_res_link);
 
-        kmem_cache_free(ldlm_lock_slab, lock); 
-        if (ldlm_resource_put(lock->l_resource)) {
+        kmem_cache_free(ldlm_lock_slab, lock);
+        if (ldlm_resource_put(res)) {
                 EXIT;
                 return 0;
         }
-        
-        ldlm_reprocess_queue(&res->lr_converting, &res->lr_granted); 
+
+        ldlm_reprocess_queue(&res->lr_converting, &res->lr_granted);
         if (list_empty(&res->lr_converting))
-                ldlm_reprocess_queue(&res->lr_waiting, &res->lr_granted); 
-        
+                ldlm_reprocess_queue(&res->lr_waiting, &res->lr_granted);
+
         return 0;
 }
 
-ldlm_error_t ldlm_local_lock_convert(struct obd_device *obddev, 
+ldlm_error_t ldlm_local_lock_convert(struct obd_device *obddev,
                                      struct ldlm_handle *lockh,
-                                    int new_mode, int flags)
+                                     int new_mode, int flags)
 {
         struct ldlm_lock *lock;
-        struct ldlm_resource *res = lock->l_resource;
+        struct ldlm_resource *res;
         ENTRY;
 
         lock = (struct ldlm_lock *)(unsigned long)lockh->addr;
-        list_del(&lock->l_res_link); 
+        res = lock->l_resource;
+        list_del(&lock->l_res_link);
         lock->l_req_mode = new_mode;
 
-        list_add(&lock->l_res_link, &lock->l_resource->lr_converting); 
-        
-        ldlm_reprocess_queue(&res->lr_converting, &res->lr_granted); 
+        list_add(&lock->l_res_link, &res->lr_converting);
+
+        ldlm_reprocess_queue(&res->lr_converting, &res->lr_granted);
         if (list_empty(&res->lr_converting))
-                ldlm_reprocess_queue(&res->lr_waiting, &res->lr_granted); 
-        
+                ldlm_reprocess_queue(&res->lr_waiting, &res->lr_granted);
+
         return 0;
 }
 
