@@ -105,7 +105,7 @@ main(int argc, char * const argv[])
 	}
 #endif
 #if 1
-	fd = fixme_open("/newfile5", O_RDWR|O_CREAT|O_TRUNC, 00664);
+	fd = fixme_open("/newfile7", O_RDWR|O_CREAT|O_TRUNC, 00664);
 	printf("***************** open return %d ****************\n", fd);
 
 	memset(pgbuf, 'A', 4096);

@@ -378,6 +378,12 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         return llu_file_open(pnode->p_base->pb_ino);
 }
 
+int llu_iop_close(struct inode *inode)
+{
+        /* FIXME do proper cleanup here */
+        return 0;
+}
+
 int llu_iop_ipreadv(struct inode *ino,
                     struct io_arguments *ioargs,
                     struct ioctx **ioctxp)

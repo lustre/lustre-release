@@ -102,6 +102,7 @@ extern struct fssw_ops llu_fssw_ops;
 /* file.c */
 int llu_create(struct inode *dir, struct pnode_base *pnode, int mode);
 int llu_iop_open(struct pnode *pnode, int flags, mode_t mode);
+int llu_iop_close(struct inode *inode);
 int llu_iop_ipreadv(struct inode *ino,
                     struct io_arguments *ioargs,
                     struct ioctx **ioctxp);
@@ -113,5 +114,7 @@ int llu_iop_ipwritev(struct inode *ino,
 int llu_iop_iodone(struct ioctx *ioctxp __IS_UNUSED);
 ssize_t llu_file_write(struct inode *inode, const struct iovec *iovec,
 		       size_t iovlen, loff_t pos);
+ssize_t llu_file_read(struct inode *inode, const struct iovec *iovec,
+                       size_t iovlen, loff_t pos);
 
 #endif
