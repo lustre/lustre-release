@@ -1,6 +1,6 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
- * 
+ *
  * Copyright (C) 2001  Cluster File Systems, Inc.
  *
  * This code is issued under the GNU General Public License.
@@ -43,7 +43,7 @@
 #include <linux/obd_class.h>
 #include <linux/smp_lock.h>
 
-struct semaphore obd_conf_sem;   /* serialize configuration commands */ 
+struct semaphore obd_conf_sem;   /* serialize configuration commands */
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
 unsigned long obd_memory = 0;
@@ -101,7 +101,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         int err = 0;
         ENTRY;
 
-        down(&obd_conf_sem); 
+        down(&obd_conf_sem);
 
         if (!obd && cmd != OBD_IOC_DEVICE && cmd != TCGETS &&
             cmd != OBD_IOC_LIST &&
@@ -145,18 +145,18 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         int l;
                         char *status;
                         struct obd_device *obd = &obd_dev[i];
-                        if (!obd->obd_type) 
+                        if (!obd->obd_type)
                                 continue;
                         if (obd->obd_flags & OBD_SET_UP)
                                 status = "*";
-                        else 
+                        else
                                 status = " ";
                         l = snprintf(buf2, remains, "%2d %s %s %s %s\n",
-                                     i, status, obd->obd_type->typ_name, 
+                                     i, status, obd->obd_type->typ_name,
                                      obd->obd_name, obd->obd_uuid);
                         buf2 +=l;
                         remains -=l;
-                        if (remains <= 0) { 
+                        if (remains <= 0) {
                                 CERROR("not enough space for device listing\n");
                                 break;
                         }
@@ -269,7 +269,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         GOTO(out, err=-EINVAL);
                 }
 
-                CDEBUG(D_IOCTL, "attach type %s name: %s uuid: %s\n", 
+                CDEBUG(D_IOCTL, "attach type %s name: %s uuid: %s\n",
                        MKSTR(data->ioc_inlbuf1),
                        MKSTR(data->ioc_inlbuf2), MKSTR(data->ioc_inlbuf3));
 
@@ -303,21 +303,21 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                 memcpy(obd->obd_name, data->ioc_inlbuf2, len);
                                 //obd->obd_proc_entry =
                                 //        proc_lustre_register_obd_device(obd);
-                        } else { 
+                        } else {
                                 CERROR("WARNING: unnamed obd device\n");
                                 obd->obd_proc_entry = NULL;
                         }
 
                         if (data->ioc_inlbuf3) {
                                 int len = strlen(data->ioc_inlbuf3);
-                                if (len > 37) { 
+                                if (len > 37) {
                                         CERROR("uuid should be shorter than 37 bytes\n");
                                         if (obd->obd_name)
-                                                OBD_FREE(obd->obd_name, 
+                                                OBD_FREE(obd->obd_name,
                                                          strlen(obd->obd_name) + 1);
                                         GOTO(out, err=-EINVAL);
                                 }
-                                memcpy(obd->obd_uuid, data->ioc_inlbuf3, 
+                                memcpy(obd->obd_uuid, data->ioc_inlbuf3,
                                        sizeof(obd->obd_uuid));
                         }
 
@@ -400,7 +400,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_CONNECT: {
-                obd_data2conn(&conn, data); 
+                obd_data2conn(&conn, data);
 
                 err = obd_connect(&conn, obd);
 
@@ -478,43 +478,39 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                  *        for example offset and count are not per-obdo.
                  */
                 struct lov_stripe_md *md;
-                obd_count       oa_bufs = 0;
+                obd_count       pages = 0;
                 struct page     **bufs = NULL;
                 obd_size        *counts = NULL;
                 obd_off         *offsets = NULL;
                 obd_flag        *flags = NULL;
-                int             pages;
                 int             j;
                 unsigned long off;
                 void *from;
-                        
 
                 obd_data2conn(&conn, data);
 
-                pages = oa_bufs = data->ioc_plen1 / PAGE_SIZE;
+                pages = data->ioc_plen1 / PAGE_SIZE;
 
                 CDEBUG(D_INODE, "BRW %s with %d pages\n",
-                       rw == OBD_BRW_READ ? "read" : "write",
-                       oa_bufs);
+                       rw == OBD_BRW_READ ? "read" : "write", pages);
                 OBD_ALLOC(bufs, pages * sizeof(*bufs));
                 OBD_ALLOC(counts, pages * sizeof(*counts));
                 OBD_ALLOC(offsets, pages * sizeof(*offsets));
                 OBD_ALLOC(flags, pages * sizeof(*flags));
                 if (!bufs || !counts || !offsets || !flags) {
                         CERROR("no memory for %d BRW per-page data\n", pages);
-                        err = -ENOMEM;
-                        GOTO(brw_free, err);
+                        GOTO(brw_free, err = -ENOMEM);
                 }
 
                 md = &data->ioc_obdo1;
 
                 from = (&data->ioc_pbuf1)[0];
                 off = data->ioc_offset;
-                
-                for (j = 0; j < oa_bufs;
-                     j++, pages++, off += PAGE_SIZE, from += PAGE_SIZE){
+
+                for (j = 0; j < pages;
+                     j++, off += PAGE_SIZE, from += PAGE_SIZE) {
                         unsigned long to;
-                        
+
                         to = __get_free_pages(GFP_KERNEL, 0);
                         if (!to) {
                                 /*      ||
@@ -523,23 +519,22 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                                         free_pages(to, 0);
                                 */
                                 CERROR("no memory for brw pages\n");
-                                err = -ENOMEM;
-                                GOTO(brw_cleanup, err);
+                                GOTO(brw_cleanup, err = -ENOMEM);
                         }
-                        bufs[pages] = virt_to_page(to);
-                        counts[pages] = PAGE_SIZE;
-                        offsets[pages] = off;
-                        flags[pages] = 0;
+                        bufs[j] = virt_to_page(to);
+                        counts[j] = PAGE_SIZE;
+                        offsets[j] = off;
+                        flags[j] = 0;
                 }
-                
-                err = obd_brw(rw, &conn, md, oa_bufs, bufs,
-                              counts, offsets, flags, NULL);
-                
+
+                err = obd_brw(rw, &conn, md, j, bufs, counts, offsets, flags,
+                              NULL);
+
                 EXIT;
         brw_cleanup:
-                j = pages;
-                while (j-- > 0)
-                        __free_pages(bufs[j], 0);
+                for (j = 0; j < pages; j++)
+                        if (bufs[j] != NULL)
+                                __free_pages(bufs[j], 0);
         brw_free:
                 OBD_FREE(bufs, pages * sizeof(*bufs));
                 OBD_FREE(counts, pages * sizeof(*counts));
@@ -558,11 +553,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 GOTO(out, err);
         }
 
- out: 
-        if (buf) 
-                OBD_FREE(buf, len); 
-        up(&obd_conf_sem); 
-        RETURN(err); 
+ out:
+        if (buf)
+                OBD_FREE(buf, len);
+        up(&obd_conf_sem);
+        RETURN(err);
 } /* obd_class_ioctl */
 
 
@@ -607,7 +602,7 @@ static int __init init_obdclass(void)
 
         printk(KERN_INFO "OBD class driver  v0.9, info@clusterfs.com\n");
 
-        sema_init(&obd_conf_sem, 1); 
+        sema_init(&obd_conf_sem, 1);
         INIT_LIST_HEAD(&obd_types);
 
         if ((err = misc_register(&obd_psdev))) {
