@@ -75,7 +75,7 @@ int
 main(int argc, char * const argv[])
 {
 	struct stat statbuf;
-	int	err, i;
+	int	err, i, fd;
 
 	if (_sysio_init() != 0) {
 		perror("init sysio");
@@ -102,6 +102,10 @@ main(int argc, char * const argv[])
 			perror(root_driver);
 		printf("******** end stat %s: %d*********\n", files[i], err);
 	}
+#endif
+#if 1
+	fd = fixme_open("/newfile", O_CREAT, 00666);
+	printf("***************** open return %d ****************\n", fd);
 #endif
 	printf("sysio is about shutdown\n");
 	/*
