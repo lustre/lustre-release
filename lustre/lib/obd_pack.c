@@ -34,7 +34,7 @@ void ost_pack_ioo(void **tmp, struct obdo *oa, int bufcnt)
 
         ioo->ioo_id = HTON__u64(oa->o_id); 
         ioo->ioo_gr = HTON__u64(oa->o_gr); 
-        ioo->ioo_type = HTON__u64(oa->o_mode); 
+        ioo->ioo_type = HTON__u32(oa->o_mode); 
         ioo->ioo_bufcnt = HTON__u32(bufcnt); 
         *tmp = c + sizeof(*ioo); 
 }
@@ -47,7 +47,7 @@ void ost_unpack_ioo(void **tmp, struct obd_ioobj **ioop)
 
         ioo->ioo_id = NTOH__u64(ioo->ioo_id); 
         ioo->ioo_gr = NTOH__u64(ioo->ioo_gr); 
-        ioo->ioo_type = NTOH__u64(ioo->ioo_type); 
+        ioo->ioo_type = NTOH__u32(ioo->ioo_type); 
         ioo->ioo_bufcnt = NTOH__u32(ioo->ioo_bufcnt); 
         *tmp = c + sizeof(*ioo); 
 }

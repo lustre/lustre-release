@@ -367,11 +367,12 @@ static int ost_brw_write_cb(struct ptlrpc_bulk_page *bulk)
          */
         journal_save = current->journal_info;
         current->journal_info = bulk->b_desc->b_journal_info;
-        CERROR("journal_info: saved %p->%p, restored %p\n", current,
+        CDEBUG(D_BUFFS, "journal_info: saved %p->%p, restored %p\n", current,
                journal_save, bulk->b_desc->b_journal_info);
         rc = ost_commit_page(&bulk->b_desc->b_conn, bulk->b_page);
         current->journal_info = journal_save;
-        CERROR("journal_info: restored %p->%p\n", current, journal_save);
+        CDEBUG(D_BUFFS, "journal_info: restored %p->%p\n", current,
+               journal_save);
         if (rc)
                 CERROR("ost_commit_page failed: %d\n", rc);
 
