@@ -51,7 +51,7 @@ static struct {
 
 static int drop_index = 0;
 
-static char mds_server[1024];
+static char mds_server[1024] = {0, };
 
 int do_stat(const char *name, struct stat *buf)
 {
@@ -309,7 +309,7 @@ void usage(const char *cmd)
 int main(int argc, char * argv[])
 {
         int opt_index, c;
-        char cmd[1024] = {0,};
+        char cmd[1024];
         static struct option long_opts[] = {
                 {"target", 1, 0, 0},
                 {"dumpfile", 1, 0, 0},
@@ -344,7 +344,7 @@ int main(int argc, char * argv[])
         if (optind != argc)
                 usage(argv[0]);
 
-        if (strlen(cmd) == 0)
+        if (strlen(mds_server) == 0)
                 usage(argv[0]);
 
         sprintf(cmd, "ssh %s cat /dev/null", mds_server);

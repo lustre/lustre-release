@@ -89,6 +89,14 @@ static void mds_failover()
                 printf("-------------------\n");                        \
         } while (0)
 
+void t0()
+{
+        ENTRY("empty replay");
+        replay_barrier();
+        mds_failover();
+        LEAVE();
+}
+
 void t1()
 {
         char *path="/mnt/lustre/f1";
@@ -102,7 +110,7 @@ void t1()
         LEAVE();
 }
 
-void t1a()
+void t2a()
 {
         char *path="/mnt/lustre/f1a";
         ENTRY("touch");
@@ -115,7 +123,63 @@ void t1a()
         LEAVE();
 }
 
-void t2()
+void t2b()
+{
+        char *path="/mnt/lustre/f1a";
+        ENTRY("mcreate+touch");
+
+        t_create(path);
+        replay_barrier();
+        t_touch(path);
+        mds_failover();
+        t_check_stat(path, NULL);
+        t_unlink(path);
+        LEAVE();
+}
+
+
+void t3()
+{
+        char *base="/mnt/lustre/f3_";
+        char path[100];
+        char str[100];
+        char buf[100];
+        int i;
+        ENTRY("10 create/delete");
+
+        replay_barrier();
+        for (i = 0; i < 10; i++) {
+                sprintf(path, "%s%d\n", base, i);
+                sprintf(str, "TEST#%d CONTENT\n", i);
+                t_echo_create(path, str);
+        }
+        mds_failover();
+        for (i = 0; i < 10; i++) {
+                sprintf(path, "%s%d\n", base, i);
+                sprintf(str, "TEST#%d CONTENT\n", i);
+                t_pread_once(path, buf, 100, 0);
+                if (!strstr(buf, str)) {
+                        printf("f%d: content error !\n", i);
+                        exit(-1);
+                }
+        }
+        replay_barrier();
+        for (i = 0; i < 10; i++) {
+                sprintf(path, "%s%d\n", base, i);
+                t_unlink(path);
+        }
+        mds_failover();
+        for (i = 0; i < 10; i++) {
+                sprintf(path, "%s%d\n", base, i);
+                if (!stat(path, NULL)) {
+                        printf("f%d still exist!\n", i);
+                        exit(-1);
+                }
+        }
+        LEAVE();
+}
+
+void t4()
 {
         char *dir="/mnt/lustre/d2";
         char *path="/mnt/lustre/d2/f2";
@@ -132,7 +196,7 @@ void t2()
         LEAVE();
 }
 
-void t3()
+void t5()
 {
         char *dir="/mnt/lustre/d3";
         char *path="/mnt/lustre/d3/f3";
@@ -149,7 +213,7 @@ void t3()
         LEAVE();
 }
 
-void t4()
+void t6()
 {
         char *path="/mnt/lustre/f4";
         int fd;
@@ -245,11 +309,14 @@ int main(int argc, char * const argv[])
 
         __liblustre_setup_();
 
+        t0();
         t1();
-        t1a();
-        t2();
+        t2a();
+        t2b();
         t3();
         t4();
+        t5();
+        t6();
 
 	printf("liblustre is about shutdown\n");
         __liblustre_cleanup_();

@@ -206,3 +206,44 @@ int t_check_stat(const char *name, struct stat *buf)
 
 	return 0;
 }
+
+void t_echo_create(const char *path, const char *str)
+{
+        int fd, rc;
+
+        fd = open(path, O_RDWR|O_CREAT, 0644);
+        if (fd < 0) {
+                printf("open(%s) error: %s\n", path, strerror(errno));
+                EXIT(fd);
+        }
+
+	if (write(fd, str, strlen(str)+1) != strlen(str)+1) {
+                printf("write(%s) error: %s\n", path, strerror(errno));
+                EXIT(fd);
+	}
+
+        rc = close(fd);
+        if (rc) {
+                printf("close(%s) error: %s\n", path, strerror(errno));
+                EXIT(rc);
+        }
+}
+
+int t_pread_once(const char *path, char *buf, size_t size, off_t offset)
+{
+	int fd;
+	int rc;
+	
+	memset(buf, 0, size);
+
+	fd = t_open_readonly(path);
+	if (lseek(fd, offset, SEEK_SET) == -1) {
+		printf("pread_once: seek to %lu error: %s\n",
+			offset, strerror(errno));
+		EXIT(fd);
+	}
+
+	rc = read(fd, buf, size);
+	close(fd);
+	return rc;
+}
