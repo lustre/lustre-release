@@ -16,7 +16,7 @@
 struct obd_import {
         struct portals_handle     imp_handle;
         atomic_t                  imp_refcount;
-        struct obd_export        *imp_export;
+        struct lustre_handle      imp_dlm_handle; /* client's ldlm export */
         struct ptlrpc_connection *imp_connection;
         struct ptlrpc_client     *imp_client;
         struct list_head          imp_observers;
