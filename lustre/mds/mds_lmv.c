@@ -674,9 +674,8 @@ int mds_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         fid.generation = obj->ioo_gr;
         dentry = mds_fid2dentry(mds, &fid, NULL);
         if (IS_ERR(dentry)) {
-                CERROR("can't get dentry for %lu/%lu: %d\n",
-                       (unsigned long) fid.id,
-                       (unsigned long) fid.generation, (int) PTR_ERR(dentry));
+                CERROR("can't get dentry for "LPU64"/%u: %d\n",
+                       fid.id, fid.generation, (int) PTR_ERR(dentry));
                 GOTO(cleanup, rc = (int) PTR_ERR(dentry));
         }
 
@@ -753,6 +752,18 @@ int mds_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                         err = fsfilt_add_dir_entry(obd, res->dentry, de->name,
                                                    de->namelen, de->ino,
                                                    de->generation, de->mds);
+                        if (err) {
+                                CERROR("can't add dir entry %*s->%u/%u/%u"
+                                       " to %lu/%u: %d\n",
+                                       de->namelen, de->name,
+                                       de->mds, (unsigned) de->ino,
+                                       (unsigned) de->generation,
+                                       res->dentry->d_inode->i_ino,
+                                       res->dentry->d_inode->i_generation,
+                                       err);
+                                rc = err;
+                                break;
+                        }
                         LASSERT(err == 0);
                         de = (struct dir_entry *)
                                 ((char *) de + DIR_REC_LEN(de->namelen));

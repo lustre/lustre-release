@@ -250,6 +250,8 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                        de->d_inode->i_ino, de->d_inode->i_generation,
                        res_id.name[2]);
         }
+#else
+#warning "No PDIROPS support in the kernel"
 #endif
         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
                               LDLM_IBITS, &policy, lock_mode, &flags,
@@ -1448,6 +1450,8 @@ repeat:
                 rc = fsfilt_set_md(obd, new->d_inode, handle, mea, mealen);
                 up(&new->d_inode->i_sem);
                 OBD_FREE(mea, mealen);
+        } else if (rc == 0 && body->oa.o_easize) {
+                mds_try_to_split_dir(obd, new, NULL, body->oa.o_easize);
         }
 
 cleanup:

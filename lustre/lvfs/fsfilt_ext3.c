@@ -1096,8 +1096,13 @@ static int fsfilt_ext3_add_dir_entry(struct obd_device *obd,
         struct dentry *dentry;
         int err;
         dentry = ll_lookup_one_len(name, parent, namelen);
-        if (IS_ERR(dentry))
+        if (IS_ERR(dentry)) {
+                CERROR("can't lookup %*s in %lu/%lu: %d\n", dentry->d_name.len,
+                       dentry->d_name.name, dentry->d_inode->i_ino,
+                       (unsigned long) dentry->d_inode->i_generation,
+                       (int) PTR_ERR(dentry));
                 RETURN(PTR_ERR(dentry));
+        }
         if (dentry->d_inode != NULL) {
                 CERROR("dentry %*s(0x%p) found\n", dentry->d_name.len,
                        dentry->d_name.name, dentry);
