@@ -235,7 +235,7 @@ if test x$enable_modules != xno ; then
 
 	# ------------ RELEASE --------------------------------
 	AC_MSG_CHECKING([for Lustre release])
-  	RELEASE="${LINUXRELEASE}_`date +%Y%m%d%H%M`"
+  	RELEASE="`echo ${LINUXRELEASE} | tr '-' '_'`_`date +%Y%m%d%H%M`"
 	AC_MSG_RESULT($RELEASE)
 	AC_SUBST(RELEASE)
 fi
