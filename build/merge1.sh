@@ -14,7 +14,7 @@ if [ -f $CONFLICTS ] ; then
 fi
 
 if [ $# -lt 2 -o $# -gt 3 ]; then
-    echo "This is phase 1 of merging branches. Usage: $0 parent child [dir]"
+    echo "This is phase 1 of merging branches. Usage: $0 parent child dir"
     exit
 fi
 
