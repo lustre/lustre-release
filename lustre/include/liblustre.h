@@ -133,8 +133,8 @@ static inline int misc_register(void *foo)
 }
 #define misc_deregister misc_register
 
-#define __MOD_INC_USE_COUNT(m)  (m->count++)
-#define __MOD_DEC_USE_COUNT(m)  (m->count--)
+#define __MOD_INC_USE_COUNT(m)  do {int a = 1; a++; } while (0)
+#define __MOD_DEC_USE_COUNT(m)  do {int a = 1; a++; } while (0)
 #define MOD_INC_USE_COUNT  do {int a = 1; a++; } while (0)
 #define MOD_DEC_USE_COUNT  do {int a = 1; a++; } while (0)
 
