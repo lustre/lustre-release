@@ -1,0 +1,8 @@
+Documentation/filesystems/ext2.txt
+fs/ext3/Makefile
+fs/ext3/inode.c
+fs/ext3/iopen.c
+fs/ext3/iopen.h
+fs/ext3/namei.c
+fs/ext3/super.c
+include/linux/ext3_fs.h
