@@ -1113,8 +1113,7 @@ class Network(Module):
                 panic("unable to set hostaddr for", self.net_type, self.hostaddr, self.cluster_id)
             debug("hostaddr:", self.hostaddr)
 
-        self.add_portals_module("libcfs", 'libcfs')
-        self.add_portals_module("portals", 'portals')
+        self.add_portals_module("libcfs", 'portals')
         if node_needs_router():
             self.add_portals_module("router", 'kptlrouter')
         if self.net_type == 'tcp':
