@@ -191,7 +191,7 @@ int filter_get_page_write(struct inode *inode, struct niobuf_local *lnb,
 
         /* This page is currently locked, so get a temporary page instead. */
         if (page == NULL) {
-                CDEBUG(D_ERROR,"ino %lu page %ld locked\n", inode->i_ino,index);
+                CDEBUG(D_INFO, "ino %lu page %ld locked\n", inode->i_ino,index);
                 page = alloc_pages(GFP_KERNEL, 0); /* locked page */
                 if (page == NULL) {
                         CERROR("no memory for a temp page\n");
