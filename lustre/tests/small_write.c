@@ -72,7 +72,8 @@ int main (int argc, char **argv) {
 	rc = fstat(fd, &st);
 	if (rc < 0 || st.st_size != bytes) {
 		printf("bad file %lu size first write %lu != %lu: rc %d\n",
-		       st.st_ino, st.st_size, bytes, rc);
+		       (unsigned long)st.st_ino, (unsigned long)st.st_size,
+                       bytes, rc);
 		return 1;
 	}
 
@@ -91,7 +92,8 @@ int main (int argc, char **argv) {
 	rc = fstat(fd, &st);
 	if (rc < 0 || st.st_size != bytes + bytes / 2) {
 		printf("bad file %lu size second write %lu != %lu: rc %d\n",
-		       st.st_ino, st.st_size, bytes, rc);
+		       (unsigned long)st.st_ino, (unsigned long)st.st_size,
+                       bytes, rc);
 		return 1;
 	}
 
@@ -111,7 +113,8 @@ int main (int argc, char **argv) {
 		rc = fstat(fd, &st);
 		if (rc < 0 || st.st_size != bytes + bytes / 2) {
 			printf("bad file size after read %lu != %lu: rc %d\n",
-			       st.st_size, bytes + bytes / 2, rc);
+			       (unsigned long)st.st_size, bytes + bytes / 2,
+                               rc);
 			return 1;
 		}
 
