@@ -15,6 +15,14 @@ CWD=`pwd`
 
 SYSIO=$1
 
+if [ ! -f $SYSIO/lib/libsysio.a ]; then
+  echo "ERROR: $SYSIO/lib/libsysio.a dosen't exist"
+  exit 1
+fi
+
+# do cleanup at first
+rm -f liblustre.so
+
 ALL_OBJS=
 
 build_obj_list() {
@@ -31,13 +39,11 @@ sysio_tmp=$CWD/sysio_tmp_`date +%s`
 build_sysio_obj_list() {
   _objs=`$AR -t $1`
   mkdir -p $sysio_tmp
-  savepwd=`pwd`
-  cd $sysio_tmp
-  $AR -x ../$1
+  $AR $1
+  mv $_objs $sysio_tmp
   for _lib in $_objs; do
     ALL_OBJS=$ALL_OBJS"$sysio_tmp/$_lib ";
   done
-  cd $savepwd
 }
 
 # lustre components libs
