@@ -131,9 +131,11 @@ struct proc_dir_entry *lprocfs_register(const char *name,
         struct proc_dir_entry *newchild;
 
         newchild = lprocfs_srch(parent, name);
-        if (newchild) /* return what already exists */
-                return newchild;
-
+        if (newchild) {
+                CERROR(" Lproc: Attempting to register %s more than once \n", name); 
+                return NULL;
+        }
+        
         newchild = proc_mkdir(name, parent);
         if (newchild && list) {
                 int rc = lprocfs_add_vars(newchild, list, data);
@@ -261,7 +263,7 @@ int lprocfs_obd_attach(struct obd_device *dev, struct lprocfs_vars *list)
                                                dev->obd_type->typ_procroot,
                                                list, dev);
         if (IS_ERR(dev->obd_proc_entry)) {
-               rc = PTR_ERR(dev->obd_proc_entry);
+                rc = PTR_ERR(dev->obd_proc_entry);
                dev->obd_proc_entry = NULL;
         }
         return rc;
