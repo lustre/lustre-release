@@ -63,7 +63,6 @@
 #endif
 
 static kmem_cache_t *fcb_cache;
-static atomic_t fcb_cache_count = ATOMIC_INIT(0);
 
 struct fsfilt_cb_data {
         struct journal_callback cb_jcb; /* jbd private data - MUST BE FIRST */
@@ -592,7 +591,6 @@ static void fsfilt_ext3_cb_func(struct journal_callback *jcb, int error)
         fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, fcb->cb_data, error);
 
         OBD_SLAB_FREE(fcb, fcb_cache, sizeof *fcb);
-        atomic_dec(&fcb_cache_count);
 }
 
 static int fsfilt_ext3_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
@@ -605,7 +603,6 @@ static int fsfilt_ext3_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
         if (fcb == NULL)
                 RETURN(-ENOMEM);
 
-        atomic_inc(&fcb_cache_count);
         fcb->cb_func = cb_func;
         fcb->cb_obd = obd;
         fcb->cb_last_rcvd = last_rcvd;
@@ -1222,9 +1219,7 @@ out:
 static void __exit fsfilt_ext3_exit(void)
 {
         fsfilt_unregister_ops(&fsfilt_ext3_ops);
-        LASSERTF(kmem_cache_destroy(fcb_cache) == 0,
-                 "can't free fsfilt callback cache: count %d\n",
-                 atomic_read(&fcb_cache_count));
+        LASSERT(kmem_cache_destroy(fcb_cache) == 0);
 }
 
 module_init(fsfilt_ext3_init);
