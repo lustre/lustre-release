@@ -1,0 +1,264 @@
+#!/usr/bin/perl
+
+use Getopt::Long;
+use Term::ANSIColor;
+
+GetOptions("pid=i" => \$pid, 
+           "trace!" => \$trace, 
+           "silent!" => \$silent, 
+           "rpctrace!" => \$rpctrace, 
+           "nodlm!" => \$nodlm,
+           "noclass!" => \$noclass,
+           "nonet!" => \$nonet);
+
+print "pid: $pid, nodlm $nodlm nonet $nonet trace $trace\n";
+
+
+$subsys->{UNDEFINED} = 0;
+$subsys->{MDC} = 1;
+$subsys->{MDS} = 2;
+$subsys->{OSC} = 3;
+$subsys->{OST} = 4;
+$subsys->{CLASS} = 5;
+$subsys->{OBDFS} = 6;
+$subsys->{LLITE} = 7;
+$subsys->{RPC} = 8;
+$subsys->{EXT2OBD} = 9;
+$subsys->{PORTALS} = 10;
+$subsys->{SOCKNAL} = 11;
+$subsys->{QSWNAL} = 12;
+$subsys->{PINGER} = 13;
+$subsys->{FILTER} = 14;
+$subsys->{TRACE} = 15; # obdtrace, not to be confused with D_TRACE */
+$subsys->{ECHO} = 16;
+$subsys->{LDLM} = 17;
+$subsys->{LOV} = 18;
+$subsys->{GMNAL} = 19;
+$subsys->{PTLROUTER} = 20;
+
+
+$masks->{TRACE} = 1 << 0; # /* ENTRY/EXIT markers */
+$masks->{INODE} = 1 << 1; #
+$masks->{SUPER} = 1 << 2; #
+$masks->{EXT2} = 1 << 3; # /* anything from ext2_debug */
+$masks->{MALLOC} = 1 << 4; # /* print malloc, free information */
+$masks->{CACHE} = 1 << 5; # /* cache-related items */
+$masks->{INFO} = 1 << 6; # /* general information */
+$masks->{IOCTL} = 1 << 7; # /* ioctl related information */
+$masks->{BLOCKS} = 1 << 8; # /* ext2 block allocation */
+$masks->{NET} = 1 << 9; # /* network communications */
+$masks->{WARNING} = 1 << 10; #
+$masks->{BUFFS} = 1 << 11; #
+$masks->{OTHER} = 1 << 12; #
+$masks->{DENTRY} = 1 << 13; #
+$masks->{PORTALS} = 1 << 14; # /* ENTRY/EXIT markers */
+$masks->{PAGE} = 1 << 15; # /* bulk page handling */
+$masks->{DLMTRACE} = 1 << 16; #
+$masks->{ERROR} = 1 << 17; # /* CERROR} = ...) == CDEBUG} = D_ERROR, ...) */
+$masks->{EMERG} = 1 << 18; # /* CEMERG} = ...) == CDEBUG} = D_EMERG, ...) */
+$masks->{HA} = 1 << 19; # /* recovery and failover */
+$masks->{RPCTRACE} = 1 << 19; # /* recovery and failover */
+
+sub extractpid
+{
+    $_ = shift;
+#    print "$_\n";
+    /\(\) ([0-9]*)\+[0-9]*\):/;
+    return $1;
+}
+
+sub entering
+{
+    $_ = shift;
+    $entering = /Process entered/;
+}
+
+sub leaving
+{
+    $_ = shift;
+    $entering = /Process leaving/;
+}
+
+sub getsubsys
+{
+    my ($subsys, $mask) = split ":";
+    return hex($subsys);
+}
+
+sub getmask
+{
+    my ($subsys, $mask) = split ":";
+    return hex($mask);
+}
+
+sub setcolor
+{
+    my $linemask = shift;
+    if ($linemask == $masks->{TRACE}) {
+        print color("yellow on_black");
+    }
+    if ($linemask == $masks->{DLMTRACE}) {
+        print color("magenta on_black");
+    }
+    if ($linemask == $masks->{DLM}) {
+        print color("magenta on_black");
+    }
+    if ($linemask == $masks->{DENTRY}) {
+        print color("red on_black");
+    }
+}
+
+sub study_lock
+{
+    $_ = shift;
+    my $rc;
+
+    $rc = /completion callback handler START ns: (.*) lock: (.*) lrc: (.*) mode/;
+    if ($rc) {
+        $completion_callbacks{$1}->{$2} = $3;
+#         print color("white");
+#         print "---CP CB START: $1 $2 $3\n";
+#         print color("reset");
+    }
+    $rc = /callback handler finished.* ns: (.*) lock: (.*) lrc: (.*) mode/;
+    if ($rc) {
+#         print color("white");
+#         print "---CP CB END: $1 $2 $3 deleting $completion_callbacks{$1}->{$2}\n";
+#         print color("reset");
+        delete $completion_callbacks{$1}->{$2};
+    }
+
+    if ($rc) {
+        $rc = /client blocking AST callback handler START ns: (.*) lock: (.*) lrc: (.*) mode/;
+        $blocking_callbacks{$1}->{$2} = $3;
+#         print color("white");
+#         print "---BL CB START: $1 $2\n";
+#         print color("reset");
+    }
+    $rc = /client blocking callback handler END ns: (.*) lock: (.*) lrc: (.*) mode/;
+    if ($rc) {
+#         print color("white");
+#         print "---BL CB END: $1 $2 $3 deleting $blocking_callbacks{$1}->{$2}\n";
+#         print color("reset");
+        delete $blocking_callbacks{$1}->{$2};
+    }
+
+    $rc = /ldlm_lock_addref.*ns: (.*) lock: (.*) lrc: (.*) mode/;
+#     print color("white");
+#     print "------>addref ns: $1 lock: $2 lrc: $3\n" if ($rc);
+#     print color("reset");
+    $locks{$1}->{$2} = {$3} if ($rc);
+    $rc = /ldlm_lock_decref.*ns: (.*) lock: (.*) lrc: (.*) mode/;
+#     print color("white");
+#     print "------>decref ns: $1 lock: $2 lrc: $3\n" if ($rc);
+#     print color("reset");
+    $locks{$1}->{$2} = {$3} if ($rc);
+}
+
+sub hanging_locks 
+{
+    my $found; 
+    my $ns;
+
+    foreach (keys %completion_callbacks) {
+        $ns = $_;
+        $found = 0;
+        foreach (keys %{$completion_callbacks{$ns}}) {
+            if (!$found) {
+                print "Unfinished completions in ns $ns: \n";
+                $found =1;
+            }
+            print "  lock: $_ lrc: $completion_callbacks{$ns}->{$_}\n";
+        }
+    }
+    foreach (keys %blocking_callbacks) {
+        $ns = $_;
+        $found = 0;
+        foreach (keys %{$blocking_callbacks{$ns}}) {
+            if (!$found) {
+                print "Unfinished blocking in ns $ns: \n";
+                $found =1;
+            }
+            printf("  lock: $_ lrc: %s\n", $blocking_callbacks{$ns}->{$_});
+        }
+    }
+
+}
+
+sub study_intent 
+{
+    $_ = shift;
+    my $rc;
+
+    $rc = /D_IT UP dentry (.*) fsdata/;
+    delete $it{$1} if ($rc);
+    $rc = /D_IT DOWN dentry (.*) fsdata/;
+    $it{$1} = "yes"  if ($rc);
+}
+
+sub unmatched_intents { 
+    my $found;
+    foreach (keys %it) {
+        if (!$found) {
+            print "Unmatched intents: \n";
+            $found =1;
+        }
+        print "  $_\n";
+    }
+}
+
+while (<STDIN>) {
+    $linepid = extractpid($_);
+    $linemask = getmask($_);
+    $linesubsys = getsubsys($_);
+
+#    printf "---> mask %x subsys %x\n", $linemask, $linesubsys;
+
+    if (leaving($_)) {
+        chop $prefix->{$linepid};
+        chop $prefix->{$linepid};
+    }
+
+    if ($linemask == $masks->{DENTRY}) {
+        study_intent($_);
+    }
+    if ($linemask == $masks->{DLMTRACE}) {
+        study_lock($_);
+    }
+
+    if ( !$pid || $linepid == $pid) {
+        next if ($rpctrace && $linemask != $masks->{RPCTRACE});
+        next if ($trace && $linemask != $masks->{TRACE});
+
+
+        next if ($nodlm && 
+                 (  $linesubsys == $subsys->{LDLM}));
+        next if ($noclass && 
+                 (  $linesubsys == $subsys->{CLASS}));
+
+        next if ($nonet && 
+                 (  $linesubsys == $subsys->{RPC} ||
+                    $linesubsys == $subsys->{NET} ||
+                    $linesubsys == $subsys->{PORTALS} ||
+                    $linesubsys == $subsys->{SOCKNAL} ||
+                    $linesubsys == $subsys->{QSWNAL} ||
+                    $linesubsys == $subsys->{GMNAL}));
+
+
+#        printf "sub/mask: %s - %s\n", getsubsys($_), getmask($_);
+        if (!$silent) { 
+            setcolor($linemask);
+            printf("%s%s", $prefix->{$linepid}, $_);
+            print color("reset");
+        }
+            #        last if $count++ > 100;
+    }
+    if (entering($_)) {
+        $prefix->{$linepid} .= '  ';
+    } 
+}
+
+
+unmatched_intents();
+hanging_locks();
+# printf "argv %s pid %d\n", $ARGV[0], extractpid($ARGV[0]);
