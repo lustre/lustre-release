@@ -49,12 +49,19 @@
 #include <linux/lustre_lib.h>
 #include <linux/lustre_mds.h>
 
-void mds_pack_dentry2fid(struct ll_fid *fid,
-                                struct dentry *dentry)
+void mds_pack_dentry2fid(struct ll_fid *fid, struct dentry *dentry)
 {
         fid->id = dentry->d_inum;
         fid->generation = dentry->d_generation;
         fid->mds = dentry->d_mdsnum;
+}
+
+void mds_pack_dentry2body(struct mds_body *b, struct dentry *dentry)
+{
+        b->valid |= OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_MDS;
+        b->ino = dentry->d_inum;
+        b->generation = dentry->d_generation;
+        b->mds = dentry->d_mdsnum;
 }
 
 void mds_pack_inode2fid(struct obd_device *obd, struct ll_fid *fid,
@@ -73,7 +80,7 @@ void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
         b->valid |= OBD_MD_FLID | OBD_MD_FLCTIME | OBD_MD_FLUID |
                     OBD_MD_FLGID | OBD_MD_FLFLAGS | OBD_MD_FLTYPE |
                     OBD_MD_FLMODE | OBD_MD_FLNLINK | OBD_MD_FLGENER |
-                    OBD_MD_FLATIME | OBD_MD_FLMTIME; /* bug 2020 */
+                    OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_MDS; /* bug 2020 */
 
         if (!S_ISREG(inode->i_mode))
                 b->valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS | OBD_MD_FLATIME |
