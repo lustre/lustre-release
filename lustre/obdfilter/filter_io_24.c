@@ -34,6 +34,7 @@
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <linux/iobuf.h>
+#include <linux/locks.h>
 
 #include <linux/obd_class.h>
 #include <linux/lustre_fsfilt.h>
@@ -51,6 +52,31 @@ void inode_update_time(struct inode *inode, int ctime_too)
         if (ctime_too)
                 inode->i_ctime = now;
         mark_inode_dirty_sync(inode);
+}
+
+/* Bug 2254 -- this is better done in ext3_map_inode_page, but this
+ * workaround will suffice until everyone has upgraded their kernels */
+static void check_pending_bhs(unsigned long *blocks, int nr_pages, dev_t dev,
+                              int size)
+{
+#if (LUSTRE_KERNEL_VERSION < 32)
+        struct buffer_head *bh;
+        int i;
+
+        for (i = 0; i < nr_pages; i++) {
+                bh = get_hash_table(dev, blocks[i], size);
+                if (bh == NULL)
+                        continue;
+                if (!buffer_dirty(bh)) {
+                        put_bh(bh);
+                        continue;
+                }
+                mark_buffer_clean(bh);
+                wait_on_buffer(bh);
+                clear_bit(BH_Req, &bh->b_state);
+                __brelse(bh);
+        }
+#endif
 }
 
 /* Must be called with i_sem taken; this will drop it */
@@ -116,6 +142,9 @@ static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
         committed = 1;
         if (rc)
                 GOTO(cleanup, rc);
+
+        check_pending_bhs(iobuf->blocks, iobuf->nr_pages, inode->i_dev,
+                          1 << inode->i_blkbits);
 
         rc = brw_kiovec(WRITE, 1, &iobuf, inode->i_dev, iobuf->blocks,
                         1 << inode->i_blkbits);
