@@ -77,10 +77,9 @@ static int can_be_merged(struct bio *bio, sector_t sector)
 	return bio->bi_sector + size == sector ? 1 : 0;
 }
 
-int filter_commitrw_write(struct obd_export *exp, int objcount,
-                                 struct obd_ioobj *obj, int niocount,
-                                 struct niobuf_local *res,
-                                 struct obd_trans_info *oti)
+int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
+                          struct obd_ioobj *obj, int niocount,
+                          struct niobuf_local *res, struct obd_trans_info *oti)
 {
         struct obd_device *obd = exp->exp_obd;
         struct obd_run_ctxt saved;

@@ -56,11 +56,12 @@ void inode_update_time(struct inode *inode, int ctime_too)
 int ext3_map_inode_page(struct inode *inode, struct page *page,
                         unsigned long *blocks, int *created, int create);
 /* Must be called with i_sem taken; this will drop it */
-static int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf,
-                            struct obd_export *exp, struct obd_trans_info *oti,
-                            void **wait_handle)
+static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
+                            struct obd_export *exp, struct iattr *attr,
+                            struct obd_trans_info *oti, void **wait_handle)
 {
         struct obd_device *obd = exp->exp_obd;
+        struct inode *inode = dchild->d_inode;
         struct page *page;
         unsigned long *b = iobuf->blocks;
         int rc, i, create = (rw == OBD_BRW_WRITE), blocks_per_page;
@@ -86,12 +87,22 @@ static int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf,
                 page = iobuf->maplist[i];
 
                 rc = ext3_map_inode_page(inode, page, b, cr, create);
-                if (rc)
+                if (rc) {
+                        CERROR("ino %lu, blk %lu cr %u create %d: rc %d\n",
+                               inode->i_ino, *b, *cr, create, rc);
                         GOTO(cleanup, rc);
+                }
 
                 b += blocks_per_page;
                 cr += blocks_per_page;
         }
+
+        if (attr->ia_size > inode->i_size)
+                attr->ia_valid |= ATTR_SIZE;
+        rc = fsfilt_setattr(obd, dchild, oti->oti_handle, attr, 0);
+        if (rc)
+                GOTO(cleanup, rc);
+
         up(&inode->i_sem);
         cleanup_phase = 3;
 
@@ -100,6 +111,7 @@ static int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf,
                 GOTO(cleanup, rc);
 
         rc = fsfilt_commit_async(obd, inode, oti->oti_handle, wait_handle);
+        oti->oti_handle = NULL;
         committed = 1;
         if (rc)
                 GOTO(cleanup, rc);
@@ -119,7 +131,8 @@ static int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf,
 cleanup:
         if (!committed) {
                 int err = fsfilt_commit_async(obd, inode,
-                                          oti->oti_handle, wait_handle);
+                                              oti->oti_handle, wait_handle);
+                oti->oti_handle = NULL;
                 if (err)
                         CERROR("can't close transaction: %d\n", err);
                 /*
@@ -148,16 +161,15 @@ cleanup:
         return rc;
 }
 
-int filter_commitrw_write(struct obd_export *exp, int objcount,
-                                 struct obd_ioobj *obj, int niocount,
-                                 struct niobuf_local *res,
-                                 struct obd_trans_info *oti)
+int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
+                          struct obd_ioobj *obj, int niocount,
+                          struct niobuf_local *res, struct obd_trans_info *oti)
 {
         struct obd_device *obd = exp->exp_obd;
         struct obd_run_ctxt saved;
         struct niobuf_local *lnb;
         struct fsfilt_objinfo fso;
-        struct iattr iattr = { .ia_valid = ATTR_SIZE, .ia_size = 0, };
+        struct iattr iattr = { 0 };
         struct kiobuf *iobuf;
         struct inode *inode = NULL;
         int rc = 0, i, cleanup_phase = 0, err;
@@ -189,6 +201,7 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
         fso.fso_bufcnt = obj->ioo_bufcnt;
         inode = res->dentry->d_inode;
 
+        iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
         for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
                 loff_t this_size;
                 iobuf->maplist[i] = lnb->page;
@@ -215,20 +228,8 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow brw_start %lus\n", (jiffies - now) / HZ);
 
-        rc = filter_direct_io(OBD_BRW_WRITE, inode, iobuf, exp,
-                                oti, &wait_handle);
-        if (rc == 0) {
-                lock_kernel();
-                inode_update_time(inode, 1);
-                if (iattr.ia_size > inode->i_size) {
-                        CDEBUG(D_INFO, "setting i_size to "LPU64"\n",
-                               iattr.ia_size);
-                        fsfilt_setattr(obd, res->dentry, oti->oti_handle,
-                                       &iattr, 0);
-                }
-                unlock_kernel();
-        }
-
+        rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, iobuf, exp, &iattr,
+                              oti, &wait_handle);
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("slow direct_io %lus\n", (jiffies - now) / HZ);
 
