@@ -19,7 +19,9 @@
 #   include <asm/timex.h>
 #  else
 #   include <sys/time.h>
-#   define cycles_t unsigned long
+/* CAVEAT EMPTOR!  the size and type of cycles_t in userspace MUST AGREE
+ * with the kernel, otherwise LWT is hosed. */
+typedef unsigned long long cycles_t;
 static inline cycles_t get_cycles(void) 
 {
         struct timeval tv;

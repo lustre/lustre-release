@@ -121,7 +121,7 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
         obd_id oid;
         int rc = 0;
         ENTRY;
-                                                                                                                             
+
         if (!(le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
