@@ -45,7 +45,7 @@
 #include <liblustre.h>
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
-#include <linux/lustre_user.h>
+#include <lustre/lustre_user.h>
 #include <linux/obd_lov.h>
 
 #include <portals/ptlctl.h>
@@ -277,6 +277,16 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
                 printf("%s/%s\n", dname, fname);
                 obdstripe = 1;
         }
+
+        /* if it's a directory */
+        if (*fname == '\0') {
+                if (header && (obdstripe == 1)) {
+                        printf("count: %d, size: %d, offset: %d\n\n",
+                               lum->lmm_stripe_count, lum->lmm_stripe_size,
+                               (short int)lum->lmm_stripe_offset);
+                }                
+                return;
+        }        
 
         if (header && (obdstripe == 1)) {
                 printf("lmm_magic:          0x%08X\n",  lum->lmm_magic);
