@@ -1,12 +1,16 @@
-2002-09-19  Peter Braam  <braam@clusterfs.com>
+2002-09-20  Andreas Dilger  <adilger@clusterfs.com>
+	* version v0_5_11
+	* bug fixes
+	  - clear ptlrpc request each time in handle_incoming_request()
+	  - unlink of files now destroys the object on the OST
 
+2002-09-19  Peter Braam  <braam@clusterfs.com>
 	* version 0_5_10
 	* add hard link support
 	* change obdfile creation method
 	* kernel patch changed
 	
 2002-09-19  Peter Braam  <braam@clusterfs.com>
-
 	* version 0_5_9
 	* bug fix
 	  - stack overflow bug in extN fixed
