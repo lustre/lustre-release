@@ -75,9 +75,9 @@ static int ll_brw(int cmd, struct inode *inode, struct page *page, int create)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *md = lli->lli_smd;
+        struct io_cb_data *cbd = ll_init_cb();
         struct brw_page pg;
         int err;
-        struct io_cb_data *cbd = ll_init_cb();
         ENTRY;
 
         if (!cbd)
@@ -243,19 +243,19 @@ void ll_truncate(struct inode *inode)
         }
 
         oa.o_id = lsm->lsm_object_id;
-        oa.o_size = inode->i_size;
+        oa.o_mode = inode->i_mode;
+        oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
 
         CDEBUG(D_INFO, "calling punch for "LPX64" (all bytes after "LPD64")\n",
-               oa.o_id, oa.o_size);
+               oa.o_id, inode->i_size);
 
-        err = ll_size_lock(inode, lsm, oa.o_size, LCK_PW, &lockhs);
+        err = ll_size_lock(inode, lsm, inode->i_size, LCK_PW, &lockhs);
         if (err) {
                 CERROR("ll_size_lock failed: %d\n", err);
                 /* FIXME: What to do here?  It's too late to back out... */
                 LBUG();
         }
 
-        oa.o_valid = OBD_MD_FLID;
         /* truncate == punch to/from start from/to end:
            set end to -1 for that. */
         err = obd_punch(ll_i2obdconn(inode), &oa, lsm, inode->i_size,
