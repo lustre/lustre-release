@@ -55,7 +55,7 @@ static int ptlbd_size_size[PTLBD_MAX_MINOR];
 static int ptlbd_size[PTLBD_MAX_MINOR];
 static int ptlbd_hardsect_size[PTLBD_MAX_MINOR];
 static int ptlbd_max_sectors[PTLBD_MAX_MINOR];
-static char ptlbd_dev_varyio[PTLBD_MAX_MINOR];
+//RHism static char ptlbd_dev_varyio[PTLBD_MAX_MINOR];
 
 /*
  * per minor state, indexed by minor.
@@ -217,7 +217,7 @@ int ptlbd_blk_init(void)
         blksize_size[PTLBD_MAJOR] = ptlbd_size_size;
         hardsect_size[PTLBD_MAJOR] = ptlbd_hardsect_size;
         max_sectors[PTLBD_MAJOR] = ptlbd_max_sectors;
-        blkdev_varyio[PTLBD_MAJOR] = ptlbd_dev_varyio;
+        //RHism blkdev_varyio[PTLBD_MAJOR] = ptlbd_dev_varyio;
 
         blk_init_queue(BLK_DEFAULT_QUEUE(PTLBD_MAJOR), ptlbd_request);
         blk_queue_headactive(BLK_DEFAULT_QUEUE(MAJOR_NR), 0);
@@ -227,7 +227,7 @@ int ptlbd_blk_init(void)
                 ptlbd_size[i] = (4096*2048) >> BLOCK_SIZE_BITS;
                 ptlbd_hardsect_size[i] = 4096;
                 ptlbd_max_sectors[i] = 2;
-                ptlbd_dev_varyio[i] = 0;
+                //RHism ptlbd_dev_varyio[i] = 0;
                 /* XXX register_disk? */
         }
 
