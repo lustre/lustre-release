@@ -8,3 +8,5 @@ testreq_SOURCES = testreq.c
 truncate_SOURCES = truncate.c
 openunlink_SOURCES = openunlink.c
 
+include $(top_srcdir)/Rules
+

@@ -113,6 +113,7 @@ int lustre_prepare_page(unsigned from, unsigned to, struct page *page)
                 unlock_page(page);
                 CERROR("page index %ld from %d to %d err %d\n",
                                 page->index, from, to, err);
+                BUG();
         }
         return err;
 }

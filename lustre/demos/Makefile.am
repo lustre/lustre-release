@@ -8,3 +8,6 @@ demo_SCRIPTS = baseclean.sh basesetup.sh obdfsclean.sh obdfssetup.sh \
 	snaprest.sh snaprestclean.sh snapsetup.sh snaptest.sh
 demo_DATA = config.sh
 EXTRA_DIST = $(demo_SCRIPTS) $(demo_DATA)
+
+include $(top_srcdir)/Rules
+

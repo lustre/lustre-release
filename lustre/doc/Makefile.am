@@ -18,3 +18,6 @@ SUFFIXES = .sgml .html .txt
 
 dist-hook:
 	rm -rf $(distdir)/figs/CVS
+
+include $(top_srcdir)/Rules
+

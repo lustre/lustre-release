@@ -41,6 +41,9 @@ rm -rf $RPM_BUILD_ROOT
 # Create the pristine source directory.
 mkdir -p $RPM_BUILD_ROOT/usr/src/obd-%{version}
 tar -cf - . | (cd $RPM_BUILD_ROOT/usr/src/obd-%{version} && tar -xvBpf -)
+mkdir -p $RPM_BUILD_ROOT/tmp
+echo :pserver:anonymous@cvs.lustre.sf.net:/cvsroot/lustre > $RPM_BUILD_ROOT/tmp/Root
+(cd $RPM_BUILD_ROOT/usr/src/obd-%{version} && find . -name Root -exec cp $RPM_BUILD_ROOT/tmp/Root {} \; )
 
 # Set an explicit path to our Linux tree, if we can.
 ./configure --enable-linuxdir=%{linuxdir} --enable-portalsdir=%{portalsdir}

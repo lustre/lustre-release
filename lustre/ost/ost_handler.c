@@ -332,6 +332,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
         for (i = 0; i < objcount; i++) {
 		ost_unpack_ioo((void *)&tmp1, &ioo);
 		if (tmp2 + ioo->ioo_bufcnt > end2) { 
+                        BUG();
 			rc = -EFAULT;
 			break; 
 		}
