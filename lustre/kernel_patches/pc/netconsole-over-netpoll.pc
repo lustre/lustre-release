@@ -4,6 +4,6 @@ Documentation/networking/netconsole.txt
 drivers/net/Kconfig
 drivers/net/Makefile
 drivers/net/netconsole.c
-include/asm/netconsole.h
+include/asm-i386/netconsole.h
 net/core/dev.c
 net/Kconfig
