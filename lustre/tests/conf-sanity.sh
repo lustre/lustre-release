@@ -385,4 +385,54 @@ test_12() {
 }
 run_test 12 "lmc --batch, with single/double quote, backslash in batchfile"
 
+test_13() {
+        OLDXMLCONFIG=$XMLCONFIG
+        XMLCONFIG="conf13-1.xml"
+        SECONDXMLCONFIG="conf13-2.xml"
+
+        # check long uuid will be truncated properly and uniquely
+        echo "To generate XML configuration file(with long ost name): $XMLCONFIG"
+        [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
+        do_lmc --add net --node localhost --nid localhost.localdomain --nettype tcp
+        do_lmc --add mds --node localhost --mds mds1_name_longer_than_31characters
+        do_lmc --add mds --node localhost --mds mds2_name_longer_than_31characters
+        if [ ! -f "$XMLCONFIG" ]; then
+                echo "Error:no file $XMLCONFIG created!"
+                return 1
+        fi
+        EXPECTEDMDS1UUID="e_longer_than_31characters_UUID"
+        EXPECTEDMDS2UUID="longer_than_31characters_UUID_2"
+        FOUNDMDS1UUID=`awk -F"'" '/<mds uuid=/{print $2}' $XMLCONFIG | sed -n '1p'`
+        FOUNDMDS2UUID=`awk -F"'" '/<mds uuid=/{print $2}' $XMLCONFIG | sed -n '2p'`
+        if [ $EXPECTEDMDS1UUID != $FOUNDMDS1UUID ]; then
+                echo "Error:expected uuid for mds1: $EXPECTEDMDS1UUID; found: $FOUNDMDS1UUID"
+                return 1
+        fi
+        if [ $EXPECTEDMDS2UUID != $FOUNDMDS2UUID ]; then
+                echo "Error:expected uuid for mds2: $EXPECTEDMDS2UUID; found: $FOUNDMDS2UUID"
+                return 1
+        fi
+        echo "Success:long uuid truncated successfully and being unique."
+
+        # check multiple invocations for lmc generate same XML configuration file
+        rm -f $XMLCONFIG
+        echo "Generate the first XML configuration file"
+        gen_config
+        echo "mv $XMLCONFIG to $SECONDXMLCONFIG"
+        mv $XMLCONFIG $SECONDXMLCONFIG || return $?
+        echo "Generate the second XML configuration file"
+        gen_config
+        if [ `diff $XMLCONFIG $SECONDXMLCONFIG | wc -l` -eq 0 ]; then
+                echo "Success:multiple invocations for lmc generate same XML file"
+        else
+                echo "Error: multiple invocations for lmc generate different XML file"
+                return 1
+        fi
+
+        rm -f $XMLCONFIG
+        rm -f $SECONDXMLCONFIG
+        XMLCONFIG=$OLDXMLCONFIG
+}
+run_test 13 "check new_uuid of lmc operating correctly"
+
 equals_msg "Done"
