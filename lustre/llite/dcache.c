@@ -18,15 +18,32 @@
 
 extern struct address_space_operations ll_aops;
 
+void ll_intent_release(struct dentry *de)
+{
+        struct ldlm_lock *lock;
+        struct lustre_handle *handle;
+        ENTRY;
+
+        if (de->d_it == NULL) {
+                EXIT;
+                return;
+        }
+
+        handle = (struct lustre_handle *)de->d_it->it_lock_handle;
+        lock = lustre_handle2object(handle);
+        ldlm_lock_decref(lock, de->d_it->it_lock_mode);
+        EXIT;
+}
+
 int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
 {
         ENTRY;
         
-
-        RETURN(1);
+        RETURN(0);
 }
 
 
 struct dentry_operations ll_d_ops = { 
-        d_revalidate2: ll_revalidate2
+        d_revalidate2: ll_revalidate2,
+        d_intent_release: ll_intent_release
 };
