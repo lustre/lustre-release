@@ -59,7 +59,8 @@
 
 static int obd_init_magic;
 int obd_print_entry = 0;
-int obd_debug_level = D_IOCTL|D_INODE|D_SUPER|D_WARNING;
+int obd_debug_level = D_IOCTL|D_INODE|D_SUPER|D_WARNING|D_MALLOC|D_CACHE;
+long obd_memory = 0;
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
 
@@ -132,10 +133,12 @@ static int getdata(int len, void **data)
 {
 	void *tmp = NULL;
 
-	if (!len) 
+	if (!len) {
+		*data = NULL;
 		return 0;
+	}
 
-	CDEBUG(D_INFO, "getdata: len %d, add %p\n", len, *data);
+	CDEBUG(D_MALLOC, "len %d, add %p\n", len, *data);
 
 	OBD_ALLOC(tmp, void *, len);
 	if ( !tmp )
@@ -143,7 +146,7 @@ static int getdata(int len, void **data)
 	
 	memset(tmp, 0, len);
 	if ( copy_from_user(tmp, *data, len)) {
-		OBD_FREE(tmp,len);
+		OBD_FREE(tmp, len);
 		return -EFAULT;
 	}
 	*data = tmp;
@@ -239,14 +242,16 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		INIT_LIST_HEAD(&obddev->obd_gen_clients);
 		obddev->obd_multi_count = 0;
 
-		CDEBUG(D_INFO, "Attach %d, datalen %d, type %s\n", 
+		CDEBUG(D_IOCTL, "Attach %d, datalen %d, type %s\n", 
 		       dev, input->att_datalen, obddev->obd_type->typ_name);
 		/* maybe we are done */
 		if ( !OBT(obddev) || !OBP(obddev, attach) ) {
-			obddev->obd_flags |=  OBD_ATTACHED;
+			obddev->obd_flags |= OBD_ATTACHED;
 			type->typ_refcnt++;
 			CDEBUG(D_PSDEV, "Dev %d refcount now %d\n", dev,
 			       type->typ_refcnt);
+			if (input->att_data)
+				OBD_FREE(input->att_data, input->att_datalen);
 			MOD_INC_USE_COUNT;
 			EXIT;
 			return 0;
@@ -255,7 +260,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		/* do the attach */
 		err = OBP(obddev, attach)(obddev, input->att_datalen,
 					  input->att_data);
-		OBD_FREE(input->att_data, input->att_datalen);
+		if (input->att_data)
+			OBD_FREE(input->att_data, input->att_datalen);
 
 		if ( err ) {
 			obddev->obd_flags &= ~OBD_ATTACHED;
@@ -345,6 +351,9 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			obddev->obd_type->typ_refcnt++;
 			CDEBUG(D_PSDEV, "Dev %d refcount now %d\n",
 			       dev, obddev->obd_type->typ_refcnt);
+			if (setup->setup_data)
+				OBD_FREE(setup->setup_data,
+					 setup->setup_datalen);
 			obddev->obd_flags |= OBD_SET_UP;
 			EXIT;
 			return 0;
@@ -363,6 +372,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			obddev->obd_flags |= OBD_SET_UP;
 			EXIT;
 		}
+		if (setup->setup_data)
+			OBD_FREE(setup->setup_data, setup->setup_datalen);
 		return err;
 	}
 	case OBD_IOC_CLEANUP: {
@@ -968,6 +979,7 @@ void cleanup_module(void)
 
 	obd_cleanup_obdo_cache();
 	obd_sysctl_clean();
+	CDEBUG(D_MALLOC, "CLASS mem used %ld\n", obd_memory);
 	obd_init_magic = 0;
 	EXIT;
 }

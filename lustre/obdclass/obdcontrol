@@ -61,6 +61,8 @@ eval 'sub OBD_IOC_COPY () { &_IOC(3, ord(\'f\'), 22, 4);}' unless
   defined(&OBD_IOC_COPY);
 eval 'sub OBD_IOC_MIGR () { &_IOC(3, ord(\'f\'), 23, 4);}' unless
   defined(&OBD_IOC_MIGR);
+eval 'sub OBD_IOC_PUNCH () { &_IOC(3, ord(\'f\'), 24, 4);}' unless
+  defined(&OBD_IOC_PUNCH);
 eval 'sub OBD_SNAP_SETTABLE () { &_IOC(3, ord(\'f\'), 40, 4);}' unless
   defined(&OBD_SNAP_SETTABLE);
 eval 'sub OBD_SNAP_PRINTTABLE () { &_IOC(3, ord(\'f\'), 41, 4);}' unless
@@ -232,6 +234,7 @@ my %commands =
      'read' => {func => "Read", doc => "read <id> <count> [offset]: read data from object"},
      'fsread' => {func => "Read2", doc => "read <id> <count> [offset]: read data from object"},
      'write' => {func => "Write", doc => "write <id> <offset> <text>: write data to object"},
+     'punch' => {func => "Punch", doc => "punch <id> <start> <count>: punch a hole in object"},
      'setattr' => {func => "Setattr", doc => "setattr <id> [mode [uid [gid [size [atime [mtime [ctime]]]]]]]: sets object attributes"},
      'getattr' => {func => "Getattr", doc => "getattr <id>: displays object attributes"},
      'preallocate' => {func => "Preallocate", doc => "preallocate [num]: requests preallocation of num objects."},
@@ -1244,8 +1247,7 @@ sub Write {
 	$count = 0;
     }
 
-    print("Writing $count bytes starting at byte $offset to object " .
-	  "$id...\n");
+    print("Writing $count bytes starting at byte $offset to object $id...\n");
 
     my $obdo;
     $obdo->{id} = $id;
@@ -1263,6 +1265,49 @@ sub Write {
     } elsif ($rc eq "0 but true") {
 	if ($retval >= 0) {
 		print "\nWrote $retval of an attempted $count bytes.\n";
+		print "Finished (success)\n";
+	} else {
+		print "Finished (error $retval)\n";
+	}
+    } else {
+	print "ioctl returned error code $rc.\n";
+    }
+}
+
+sub Punch {
+    if (!defined($::client_id)) {
+	print "You must first ``connect''.\n";
+	return;
+    }
+
+    my $id = shift;
+    my $start = shift;
+    my $count = shift;
+
+    if (!defined($id) || scalar($id) < 1 || !defined($start) ||
+	scalar($start) < 0 || !defined($count) || scalar($count) < 0) {
+	print "invalid arguments; type \"help punch\" for a synopsis\n";
+	return;
+    }
+
+    print("Punching $count bytes starting at byte $start in object $id...\n");
+
+    my $obdo;
+    $obdo->{id} = $id;
+
+    # the perl we're using doesn't support pack type Q
+    my $packed = pack("L", $::client_id) . obdo_pack($obdo) .
+    		 pack("p LL LL", $buf, $start, $count);
+
+    my $rc = ioctl(DEV_OBD, &OBD_IOC_PUNCH, $packed);
+
+    $retval = unpack("l", $packed);
+
+    if (!defined $rc) {
+	print STDERR "ioctl failed: $!\n";
+    } elsif ($rc eq "0 but true") {
+	if ($retval >= 0) {
+		print "\nPunched $retval of an attempted $count bytes.\n";
 		print "Finished (success)\n";
 	} else {
 		print "Finished (error $retval)\n";
