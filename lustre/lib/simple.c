@@ -77,15 +77,15 @@ void pop_ctxt(struct obd_run_ctxt *saved)
         //printk("pc6\n");
 }
 
-/* utility to make a directory */
+/* utility to make a file */
 struct dentry *simple_mknod(struct dentry *dir, char *name, int mode)
 {
         struct dentry *dchild;
         int err = 0;
         ENTRY;
 
-        ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
-        CDEBUG(D_INODE, "creating directory %*s\n", (int)strlen(name), name);
+        ASSERT_KERNEL_CTXT("kernel doing mknod outside kernel context\n");
+        CDEBUG(D_INODE, "creating file %*s\n", (int)strlen(name), name);
         down(&dir->d_inode->i_sem);
         dchild = lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))

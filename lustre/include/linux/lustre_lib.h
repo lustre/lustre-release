@@ -103,6 +103,7 @@ struct obd_run_ctxt;
 void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new);
 void pop_ctxt(struct obd_run_ctxt *saved);
 struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode);
+struct dentry *simple_mknod(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, char *str, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off);
 int lustre_fsync(struct file *file);
