@@ -168,8 +168,8 @@ void ptlrpc_invalidate_import(struct obd_import *imp, int in_rpc)
         
         if (rc)
                 CERROR("%s: rc = %d waiting for callback (%d != %d)\n",
-                       atomic_read(&imp->imp_inflight), inflight,
-                       imp->imp_target_uuid.uuid, rc);
+                       imp->imp_target_uuid.uuid, rc,
+                       atomic_read(&imp->imp_inflight), inflight);
         
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 }
