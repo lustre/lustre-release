@@ -78,8 +78,8 @@
 /* GCC 3.2.2, miscompiles this driver.  
  * See http://gcc.gnu.org/bugzilla/show_bug.cgi?id=9853. */
 #define GCC_VERSION ((__GNUC__*100 + __GNUC_MINOR__)*100 + __GNUC_PATCHLEVEL__)
-#if GCC_VERSION < 30203
-#error Invalid GCC version. Must use GCC >= 3.2.3
+#if (GCC_VERSION >= 30000) && (GCC_VERSION < 30203)
+# error Invalid GCC version. Must use GCC < 3.0.0 || GCC >= 3.2.3
 #endif
 
 #if CONFIG_SMP
@@ -547,7 +547,12 @@ kibnal_page2phys (struct page *p)
 
 #if IBNAL_VOIDSTAR_SGADDR
 # if CONFIG_HIGHMEM
-#  error "Can't support HIGHMEM when vv_scatgat_t::v_address is void *"
+#  if CONFIG_X86 && CONFIG_HIGHMEM4G
+   /* truncation to void* doesn't matter if 0 <= physmem < 4G
+    * so allow x86 with 32 bit phys addrs */
+#  else
+#   error "Can't support HIGHMEM when vv_scatgat_t::v_address is void *"
+#  endif
 # endif
 # define KIBNAL_ADDR2SG(a)       ((void *)((unsigned long)(a)))
 # define KIBNAL_SG2ADDR(a)       ((__u64)((unsigned long)(a)))
