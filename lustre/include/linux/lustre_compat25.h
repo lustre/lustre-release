@@ -33,6 +33,13 @@
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
 
+/*
+ * OBD need working random driver, thus all our
+ * initialization routines must be called after device
+ * driver initialization
+ */
+#define module_init(a)     late_initcall(a)
+
 /* XXX our code should be using the 2.6 calls, not the other way around */
 #define TryLockPage(page)                TestSetPageLocked(page)
 #define filemap_fdatasync(mapping)       filemap_fdatawrite(mapping)
@@ -58,6 +65,14 @@
 
 #include <linux/writeback.h>
 
+static inline void lustre_daemonize_helper(void)
+{
+        LASSERT(current->signal != NULL);
+        current->signal->session = 1;
+        current->signal->pgrp = 1;
+        current->signal->tty = NULL;
+}
+
 #else /* 2.4.. */
 
 #define ll_vfs_create(a,b,c,d)              vfs_create(a,b,c)
@@ -74,6 +89,7 @@ static inline void clear_page_dirty(struct page *page)
 
 /* 2.5 uses hlists for some things, like the d_hash.  we'll treat them
  * as 2.5 and let macros drop back.. */
+#ifndef HLIST_HEAD /* until we get a kernel newer than l28 */
 #define hlist_entry                     list_entry
 #define hlist_head                      list_head
 #define hlist_node                      list_head
@@ -82,6 +98,7 @@ static inline void clear_page_dirty(struct page *page)
 #define hlist_del_init                  list_del_init
 #define hlist_add_head                  list_add
 #define hlist_for_each_safe             list_for_each_safe
+#endif
 #define KDEVT_INIT(val)                 (val)
 #define ext3_xattr_set_handle           ext3_xattr_set
 #define try_module_get                  __MOD_INC_USE_COUNT
@@ -109,6 +126,13 @@ static inline void __d_drop(struct dentry *dentry)
 {
 	list_del(&dentry->d_hash);
 	INIT_LIST_HEAD(&dentry->d_hash);
+}
+
+static inline void lustre_daemonize_helper(void)
+{
+        current->session = 1;
+        current->pgrp = 1;
+        current->tty = NULL;
 }
 
 #endif /* end of 2.4 compat macros */

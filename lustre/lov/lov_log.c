@@ -64,10 +64,12 @@ int lov_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
         LASSERT(lov->desc.ld_tgt_count  == count);
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
+                child->obd_log_exp = disk_obd->obd_log_exp;
                 rc = obd_llog_setup(child, disk_obd, index, 1, logids + i);
-                CERROR("error lov_llog_open %d\n", i);
-                if (rc) 
+                if (rc) {
+                        CERROR("error lov_llog_open %d\n", i);
                         break;
+                }
         }
         RETURN(rc);
 }
@@ -75,7 +77,7 @@ int lov_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
 int lov_llog_cleanup(struct obd_device *obd)
 {
         struct lov_obd *lov = &obd->u.lov;
-        int i, rc;
+        int i, rc = 0;
 
         ENTRY;
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {

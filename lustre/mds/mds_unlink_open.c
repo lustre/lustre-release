@@ -189,14 +189,14 @@ static int mds_unlink(struct obd_device *obd, struct dentry *dchild,
         LASSERT(body != NULL);
 
         mds_pack_inode2body(body, inode);
-        mds_pack_md(obd, req->rq_repmsg, 1, body, inode);
+        mds_pack_md(obd, req->rq_repmsg, 1, body, inode, 1);
 
         handle = fsfilt_start(obd, pending_dir, FSFILT_OP_UNLINK_LOG, NULL);
         if (IS_ERR(handle)) {
                 rc = PTR_ERR(handle);
                 CERROR("error fsfilt_start: %d\n", rc);
                 handle = NULL;
-                GOTO(out_free_req, rc);
+                GOTO(out_free_msg, rc);
         }
         rc = vfs_unlink(pending_dir, dchild);
         if (rc) 
@@ -214,10 +214,13 @@ static int mds_unlink(struct obd_device *obd, struct dentry *dchild,
                         CERROR("error committing orphan unlink: %d\n",
                                err);
                         rc = err;
-                        GOTO(out_free_req, rc);
+                        GOTO(out_free_msg, rc);
                 }
         }
         rc = mds_osc_destroy(mds, req);
+out_free_msg:
+        OBD_FREE(req->rq_repmsg, req->rq_replen);
+        req->rq_repmsg = NULL;
 out_free_req:
         OBD_FREE(req, sizeof(*req));
 err_alloc_req:

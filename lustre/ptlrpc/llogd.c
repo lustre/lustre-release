@@ -55,7 +55,7 @@ int llogd_create(struct ptlrpc_request *req)
 	int rc, rc2;
 	ENTRY;
 
-        LASSERT(obd->obd_log_exp == NULL);
+        LASSERT(obd->obd_log_exp != NULL);
 
         body = lustre_swab_reqbuf(req, 0, sizeof(*body),
                                  lustre_swab_llogd_body);
@@ -76,7 +76,6 @@ int llogd_create(struct ptlrpc_request *req)
         } 
 
 	push_ctxt(&saved, &obd->obd_ctxt, NULL);
-        obd->obd_log_exp = class_export_get(exp);
         
 	rc = llog_create(obd, &loghandle, logid, name);
 	if (rc)
@@ -91,11 +90,9 @@ int llogd_create(struct ptlrpc_request *req)
 
 out_close:
 	rc2 = llog_close(loghandle);
-        class_export_put(obd->obd_log_exp);
         if (!rc) 
                 rc = rc2;
 out_pop:
-        obd->obd_log_exp = NULL;
 	pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 out:
 	RETURN(rc);
@@ -115,7 +112,7 @@ int llogd_next_block(struct ptlrpc_request *req)
 	int rc, rc2;
 	ENTRY;
 
-        LASSERT(obd->obd_log_exp == NULL);
+        LASSERT(obd->obd_log_exp != NULL);
 
 	body = lustre_swab_reqbuf(req, 0, sizeof(*body),
 				  lustre_swab_llogd_body);
@@ -129,7 +126,6 @@ int llogd_next_block(struct ptlrpc_request *req)
                 GOTO(out, rc = -ENOMEM);
 
 	push_ctxt(&saved, &obd->obd_ctxt, NULL);
-        obd->obd_log_exp = class_export_get(exp);
 
 	rc = llog_create(obd, &loghandle, &body->lgd_logid, NULL);
 	if (rc)
@@ -159,8 +155,6 @@ int llogd_next_block(struct ptlrpc_request *req)
 
 out_close:
 	rc2 = llog_close(loghandle);
-        class_export_put(obd->obd_log_exp);
-        obd->obd_log_exp = NULL;
 	if (!rc)
                 rc = rc2;
 
@@ -184,7 +178,7 @@ int llogd_read_header(struct ptlrpc_request *req)
 	int rc, rc2;
 	ENTRY;
 
-        LASSERT(obd->obd_log_exp == NULL);
+        LASSERT(obd->obd_log_exp != NULL);
 
 	body = lustre_swab_reqbuf(req, 0, sizeof(*body),
 				  lustre_swab_llogd_body);
@@ -198,7 +192,6 @@ int llogd_read_header(struct ptlrpc_request *req)
                 GOTO(out, rc = -ENOMEM);
 
 	push_ctxt(&saved, &obd->obd_ctxt, NULL);
-        obd->obd_log_exp = class_export_get(exp);
 
 	rc = llog_create(obd, &loghandle, &body->lgd_logid, NULL);
 	if (rc)
@@ -219,8 +212,6 @@ int llogd_read_header(struct ptlrpc_request *req)
 
 out_close:
 	rc2 = llog_close(loghandle);
-        class_export_put(obd->obd_log_exp);
-        obd->obd_log_exp = NULL;
 	if (!rc)
                 rc = rc2;
 
@@ -410,19 +401,8 @@ int llogd_client_close(struct llog_handle *handle)
         RETURN(rc);
 }
 
-int llogd_client_write_rec(struct llog_handle *loghandle,
-                          struct llog_rec_hdr *rec, 
-                          struct llog_cookie *logcookies, 
-                          int numcookies, 
-                          void *buf,
-                          int idx)
-{
-        int rc = 0;
-        RETURN(rc);
-}
 
 struct llog_operations llogd_client_ops = {
-//        lob_write_rec:   llogd_client_write_rec,
         lop_next_block:  llogd_client_next_block,
         lop_read_header: llogd_client_read_header,
         lop_create:      llogd_client_create,

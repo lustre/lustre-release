@@ -53,19 +53,6 @@
 #include "parser.h"
 #include <stdio.h>
 
-
-#define LCFG_INIT(lcfg, cmd)						\
-do {									\
-        memset(&lcfg, 0, sizeof(lcfg));					\
-        lcfg.lcfg_version = LUSTRE_CFG_VERSION;				\
-        lcfg.lcfg_command = (cmd);					\
-        if (lcfg_devname) {						\
-                lcfg.lcfg_dev_namelen = strlen(lcfg_devname) + 1;	\
-                lcfg.lcfg_dev_name = lcfg_devname;			\
-        }								\
-									\
-} while (0)
-
 static char * lcfg_devname;
 
 void lcfg_set_devname(char *name)
@@ -109,7 +96,7 @@ int jt_lcfg_attach(int argc, char **argv)
         struct lustre_cfg lcfg;
         int rc;
 
-        LCFG_INIT(lcfg, LCFG_ATTACH);
+        LCFG_INIT(lcfg, LCFG_ATTACH, lcfg_devname);
 
         if (argc != 2 && argc != 3 && argc != 4)
                 return CMD_HELP;
@@ -159,7 +146,7 @@ int jt_lcfg_setup(int argc, char **argv)
         struct lustre_cfg lcfg;
         int rc;
 
-        LCFG_INIT(lcfg, LCFG_SETUP);
+        LCFG_INIT(lcfg, LCFG_SETUP, lcfg_devname);
 
         if (argc > 5)
                 return CMD_HELP;
@@ -194,7 +181,7 @@ int jt_obd_detach(int argc, char **argv)
         struct lustre_cfg lcfg;
         int rc;
 
-        LCFG_INIT(lcfg, LCFG_DETACH);
+        LCFG_INIT(lcfg, LCFG_DETACH, lcfg_devname);
 
         if (argc != 1)
                 return CMD_HELP;
@@ -216,7 +203,7 @@ int jt_obd_cleanup(int argc, char **argv)
         int flag_cnt = 0, n;
         int rc;
 
-        LCFG_INIT(lcfg, LCFG_CLEANUP);
+        LCFG_INIT(lcfg, LCFG_CLEANUP, lcfg_devname);
 
         if (argc < 1 || argc > 3)
                 return CMD_HELP;
@@ -250,7 +237,7 @@ int do_add_uuid(char * func, char *uuid, ptl_nid_t nid, int nal)
         int rc;
         struct lustre_cfg lcfg;
 
-        LCFG_INIT(lcfg, LCFG_ADD_UUID);
+        LCFG_INIT(lcfg, LCFG_ADD_UUID, lcfg_devname);
         lcfg.lcfg_nid = nid;
         lcfg.lcfg_inllen1 = strlen(uuid) + 1;
         lcfg.lcfg_inlbuf1 = uuid;
@@ -301,7 +288,7 @@ int jt_lcfg_del_uuid(int argc, char **argv)
                 return 0;
         }
 
-        LCFG_INIT(lcfg, LCFG_DEL_UUID);
+        LCFG_INIT(lcfg, LCFG_DEL_UUID, lcfg_devname);
 
         if (strcmp (argv[1], "_all_"))
         {
@@ -326,7 +313,7 @@ int jt_lcfg_lov_setconfig(int argc, char **argv)
         int rc, i;
         char *end;
 
-        LCFG_INIT(lcfg, LCFG_LOV_SET_CONFIG);
+        LCFG_INIT(lcfg, LCFG_LOV_SET_CONFIG, lcfg_devname);
 
         if (argc <= 6)
                 return CMD_HELP;
@@ -428,7 +415,7 @@ int jt_lcfg_mount_option(int argc, char **argv)
         int rc;
         struct lustre_cfg lcfg;
 
-        LCFG_INIT(lcfg, LCFG_MOUNTOPT);
+        LCFG_INIT(lcfg, LCFG_MOUNTOPT, lcfg_devname);
 
         if (argc != 4)
                 return CMD_HELP;
@@ -457,7 +444,7 @@ int jt_lcfg_del_mount_option(int argc, char **argv)
         int rc;
         struct lustre_cfg lcfg;
 
-        LCFG_INIT(lcfg, LCFG_DEL_MOUNTOPT);
+        LCFG_INIT(lcfg, LCFG_DEL_MOUNTOPT, lcfg_devname);
 
         if (argc != 2)
                 return CMD_HELP;
