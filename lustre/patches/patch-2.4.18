@@ -966,11 +966,12 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1557,10 +1661,12 @@
+@@ -1557,10 +1661,13 @@
  			error = path_walk(to, &nd);
  		if (error)
  			goto out;
 -		dentry = lookup_create(&nd, 0);
++		it.it_data = from;
 +		dentry = lookup_create(&nd, 0, &it);
  		error = PTR_ERR(dentry);
  		if (!IS_ERR(dentry)) {
