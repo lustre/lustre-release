@@ -30,15 +30,15 @@ extern ptl_handle_eq_t request_out_eq, reply_in_eq, reply_out_eq,
         bulk_source_eq, bulk_sink_eq;
 static ptl_process_id_t local_id = {PTL_NID_ANY, PTL_PID_ANY};
 
-int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk)
+int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *desc)
 {
         ENTRY;
 
-        if (bulk->b_flags & PTL_BULK_FL_SENT)
+        if (desc->b_flags & PTL_BULK_FL_SENT)
                 RETURN(1);
 
         if (l_killable_pending(current)) {
-                bulk->b_flags |= PTL_RPC_FL_INTR;
+                desc->b_flags |= PTL_RPC_FL_INTR;
                 RETURN(1);
         }
 
@@ -46,15 +46,15 @@ int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk)
         RETURN(0);
 }
 
-int ptlrpc_check_bulk_received(struct ptlrpc_bulk_desc *bulk)
+int ptlrpc_check_bulk_received(struct ptlrpc_bulk_desc *desc)
 {
         ENTRY;
 
-        if (bulk->b_flags & PTL_BULK_FL_RCVD)
+        if (desc->b_flags & PTL_BULK_FL_RCVD)
                 RETURN(1);
-        
+
         if (l_killable_pending(current)) {
-                bulk->b_flags |= PTL_RPC_FL_INTR;
+                desc->b_flags |= PTL_RPC_FL_INTR;
                 RETURN(1);
         }
 
