@@ -258,55 +258,78 @@ lib_iov_nob (int niov, struct iovec *iov)
 }
 
 void
-lib_copy_iov2buf (char *dest, int niov, struct iovec *iov, ptl_size_t len)
+lib_copy_iov2buf (char *dest, int niov, struct iovec *iov, 
+                  ptl_size_t offset, ptl_size_t len)
 {
         ptl_size_t nob;
 
-        while (len > 0)
-        {
+        if (len == 0)
+                return;
+        
+        /* skip complete frags before 'offset' */
+        LASSERT (niov > 0);
+        while (offset >= iov->iov_len) {
+                offset -= iov->iov_len;
+                iov++;
+                niov--;
                 LASSERT (niov > 0);
-                nob = MIN (iov->iov_len, len);
-                memcpy (dest, iov->iov_base, nob);
+        }
+                
+        do {
+                LASSERT (niov > 0);
+                nob = MIN (iov->iov_len - offset, len);
+                memcpy (dest, iov->iov_base + offset, nob);
 
                 len -= nob;
                 dest += nob;
                 niov--;
                 iov++;
-        }
+                offset = 0;
+        } while (len > 0);
 }
 
 void
-lib_copy_buf2iov (int niov, struct iovec *iov, char *src, ptl_size_t len)
+lib_copy_buf2iov (int niov, struct iovec *iov, ptl_size_t offset, 
+                  char *src, ptl_size_t len)
 {
         ptl_size_t nob;
 
-        while (len > 0)
-        {
+        if (len == 0)
+                return;
+
+        /* skip complete frags before 'offset' */
+        LASSERT (niov > 0);
+        while (offset >= iov->iov_len) {
+                offset -= iov->iov_len;
+                iov++;
+                niov--;
                 LASSERT (niov > 0);
-                nob = MIN (iov->iov_len, len);
-                memcpy (iov->iov_base, src, nob);
+        }
+        
+        do {
+                LASSERT (niov > 0);
+                nob = MIN (iov->iov_len - offset, len);
+                memcpy (iov->iov_base + offset, src, nob);
                 
                 len -= nob;
                 src += nob;
                 niov--;
                 iov++;
-        }
+                offset = 0;
+        } while (len > 0);
 }
 
-static int
-lib_extract_iov (struct iovec *dst, lib_md_t *md,
+int
+lib_extract_iov (int dst_niov, struct iovec *dst,
+                 int src_niov, struct iovec *src,
                  ptl_size_t offset, ptl_size_t len)
 {
         /* Initialise 'dst' to the subset of 'src' starting at 'offset',
          * for exactly 'len' bytes, and return the number of entries.
          * NB not destructive to 'src' */
-        int             src_niov = md->md_niov;  
-        struct iovec   *src = md->md_iov.iov;
         ptl_size_t      frag_len;
-        int             dst_niov;
+        int             niov;
 
-        LASSERT (offset + len <= md->length);
-        
         if (len == 0)                           /* no data => */
                 return (0);                     /* no frags */
 
@@ -318,17 +341,17 @@ lib_extract_iov (struct iovec *dst, lib_md_t *md,
                 LASSERT (src_niov > 0);
         }
 
-        dst_niov = 1;
+        niov = 1;
         for (;;) {
                 LASSERT (src_niov > 0);
-                LASSERT (dst_niov <= PTL_MD_MAX_IOV);
+                LASSERT (niov <= dst_niov);
                 
                 frag_len = src->iov_len - offset;
                 dst->iov_base = ((char *)src->iov_base) + offset;
 
                 if (len <= frag_len) {
                         dst->iov_len = len;
-                        return (dst_niov);
+                        return (niov);
                 }
                 
                 dst->iov_len = frag_len;
@@ -336,7 +359,7 @@ lib_extract_iov (struct iovec *dst, lib_md_t *md,
                 len -= frag_len;
                 dst++;
                 src++;
-                dst_niov++;
+                niov++;
                 src_niov--;
                 offset = 0;
         }
@@ -351,19 +374,22 @@ lib_kiov_nob (int niov, ptl_kiov_t *kiov)
 }
 
 void
-lib_copy_kiov2buf (char *dest, int niov, ptl_kiov_t *kiov, ptl_size_t len)
+lib_copy_kiov2buf (char *dest, int niov, ptl_kiov_t *kiov, 
+                   ptl_size_t offset, ptl_size_t len)
 {
         LASSERT (0);
 }
 
 void
-lib_copy_buf2kiov (int niov, ptl_kiov_t *kiov, char *dest, ptl_size_t len)
+lib_copy_buf2kiov (int niov, ptl_kiov_t *kiov, ptl_size_t offset,
+                   char *src, ptl_size_t len)
 {
         LASSERT (0);
 }
 
-static int
-lib_extract_kiov (ptl_kiov_t *dst, lib_md_t *md,
+int
+lib_extract_kiov (int dst_niov, ptl_kiov_t *dst, 
+                  int src_niov, ptl_kiov_t *src,
                   ptl_size_t offset, ptl_size_t len)
 {
         LASSERT (0);
@@ -383,18 +409,30 @@ lib_kiov_nob (int niov, ptl_kiov_t *kiov)
 }
 
 void
-lib_copy_kiov2buf (char *dest, int niov, ptl_kiov_t *kiov, ptl_size_t len)
+lib_copy_kiov2buf (char *dest, int niov, ptl_kiov_t *kiov, 
+                   ptl_size_t offset, ptl_size_t len)
 {
         ptl_size_t  nob;
         char       *addr;
+
+        if (len == 0)
+                return;
         
         LASSERT (!in_interrupt ());
-        while (len > 0)
-        {
+
+        LASSERT (niov > 0);
+        while (offset > kiov->kiov_len) {
+                offset -= kiov->kiov_len;
+                kiov++;
+                niov--;
                 LASSERT (niov > 0);
-                nob = MIN (kiov->kiov_len, len);
+        }
+        
+        do{
+                LASSERT (niov > 0);
+                nob = MIN (kiov->kiov_len - offset, len);
                 
-                addr = ((char *)kmap (kiov->kiov_page)) + kiov->kiov_offset;
+                addr = ((char *)kmap (kiov->kiov_page)) + kiov->kiov_offset + offset;
                 memcpy (dest, addr, nob);
                 kunmap (kiov->kiov_page);
                 
@@ -402,22 +440,35 @@ lib_copy_kiov2buf (char *dest, int niov, ptl_kiov_t *kiov, ptl_size_t len)
                 dest += nob;
                 niov--;
                 kiov++;
-        }
+                offset = 0;
+        } while (len > 0);
 }
 
 void
-lib_copy_buf2kiov (int niov, ptl_kiov_t *kiov, char *src, ptl_size_t len)
+lib_copy_buf2kiov (int niov, ptl_kiov_t *kiov, ptl_size_t offset,
+                   char *src, ptl_size_t len)
 {
         ptl_size_t  nob;
         char       *addr;
 
+        if (len == 0)
+                return;
+
         LASSERT (!in_interrupt ());
-        while (len > 0)
-        {
+
+        LASSERT (niov > 0);
+        while (offset >= kiov->kiov_len) {
+                offset -= kiov->kiov_len;
+                kiov++;
+                niov--;
                 LASSERT (niov > 0);
-                nob = MIN (kiov->kiov_len, len);
+        }
+        
+        do {
+                LASSERT (niov > 0);
+                nob = MIN (kiov->kiov_len - offset, len);
                 
-                addr = ((char *)kmap (kiov->kiov_page)) + kiov->kiov_offset;
+                addr = ((char *)kmap (kiov->kiov_page)) + kiov->kiov_offset + offset;
                 memcpy (addr, src, nob);
                 kunmap (kiov->kiov_page);
                 
@@ -425,23 +476,21 @@ lib_copy_buf2kiov (int niov, ptl_kiov_t *kiov, char *src, ptl_size_t len)
                 src += nob;
                 niov--;
                 kiov++;
-        }
+                offset = 0;
+        } while (len > 0);
 }
 
-static int
-lib_extract_kiov (ptl_kiov_t *dst, lib_md_t *md,
+int
+lib_extract_kiov (int dst_niov, ptl_kiov_t *dst, 
+                  int src_niov, ptl_kiov_t *src,
                   ptl_size_t offset, ptl_size_t len)
 {
         /* Initialise 'dst' to the subset of 'src' starting at 'offset',
          * for exactly 'len' bytes, and return the number of entries.
          * NB not destructive to 'src' */
-        int             src_niov = md->md_niov;  
-        ptl_kiov_t     *src = md->md_iov.kiov;
         ptl_size_t      frag_len;
-        int             dst_niov;
+        int             niov;
 
-        LASSERT (offset + len <= md->length);
-        
         if (len == 0)                           /* no data => */
                 return (0);                     /* no frags */
 
@@ -453,10 +502,10 @@ lib_extract_kiov (ptl_kiov_t *dst, lib_md_t *md,
                 LASSERT (src_niov > 0);
         }
 
-        dst_niov = 1;
+        niov = 1;
         for (;;) {
                 LASSERT (src_niov > 0);
-                LASSERT (dst_niov <= PTL_MD_MAX_IOV);
+                LASSERT (niov <= dst_niov);
                 
                 frag_len = src->kiov_len - offset;
                 dst->kiov_page = src->kiov_page;
@@ -465,7 +514,7 @@ lib_extract_kiov (ptl_kiov_t *dst, lib_md_t *md,
                 if (len <= frag_len) {
                         dst->kiov_len = len;
                         LASSERT (dst->kiov_offset + dst->kiov_len <= PAGE_SIZE);
-                        return (dst_niov);
+                        return (niov);
                 }
 
                 dst->kiov_len = frag_len;
@@ -474,73 +523,66 @@ lib_extract_kiov (ptl_kiov_t *dst, lib_md_t *md,
                 len -= frag_len;
                 dst++;
                 src++;
-                dst_niov++;
+                niov++;
                 src_niov--;
                 offset = 0;
         }
 }
 #endif
 
-void
+ptl_err_t
 lib_recv (nal_cb_t *nal, void *private, lib_msg_t *msg, lib_md_t *md,
           ptl_size_t offset, ptl_size_t mlen, ptl_size_t rlen)
 {
-        int   niov;
-
         if (mlen == 0)
-                nal->cb_recv (nal, private, msg, 0, NULL, 0, rlen);
-        else if ((md->options & PTL_MD_KIOV) == 0) {
-                niov = lib_extract_iov (msg->msg_iov.iov, md, offset, mlen);
-                nal->cb_recv (nal, private, msg,
-                              niov, msg->msg_iov.iov, mlen, rlen);
-        } else {
-                niov = lib_extract_kiov (msg->msg_iov.kiov, md, offset, mlen);
-                nal->cb_recv_pages (nal, private, msg, 
-                                    niov, msg->msg_iov.kiov, mlen, rlen);
-        }
+                return (nal->cb_recv(nal, private, msg,
+                                     0, NULL,
+                                     offset, mlen, rlen));
+
+        if ((md->options & PTL_MD_KIOV) == 0)
+                return (nal->cb_recv(nal, private, msg,
+                                     md->md_niov, md->md_iov.iov, 
+                                     offset, mlen, rlen));
+
+        return (nal->cb_recv_pages(nal, private, msg, 
+                                   md->md_niov, md->md_iov.kiov,
+                                   offset, mlen, rlen));
 }
 
-int
+ptl_err_t
 lib_send (nal_cb_t *nal, void *private, lib_msg_t *msg,
           ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
           lib_md_t *md, ptl_size_t offset, ptl_size_t len) 
 {
-        int   niov;
-
         if (len == 0)
-                return (nal->cb_send (nal, private, msg, 
-                                      hdr, type, nid, pid,
-                                      0, NULL, 0));
+                return (nal->cb_send(nal, private, msg,
+                                     hdr, type, nid, pid,
+                                     0, NULL,
+                                     offset, len));
         
-        if ((md->options & PTL_MD_KIOV) == 0) {
-                niov = lib_extract_iov (msg->msg_iov.iov, md, offset, len);
-                return (nal->cb_send (nal, private, msg, 
-                                      hdr, type, nid, pid,
-                                      niov, msg->msg_iov.iov, len));
-        }
+        if ((md->options & PTL_MD_KIOV) == 0)
+                return (nal->cb_send(nal, private, msg, 
+                                     hdr, type, nid, pid,
+                                     md->md_niov, md->md_iov.iov,
+                                     offset, len));
 
-        niov = lib_extract_kiov (msg->msg_iov.kiov, md, offset, len);
-        return (nal->cb_send_pages (nal, private, msg, 
-                                    hdr, type, nid, pid,
-                                    niov, msg->msg_iov.kiov, len));
+        return (nal->cb_send_pages(nal, private, msg, 
+                                   hdr, type, nid, pid,
+                                   md->md_niov, md->md_iov.kiov,
+                                   offset, len));
 }
 
-static lib_msg_t *
-get_new_msg (nal_cb_t *nal, lib_md_t *md)
+static void
+lib_commit_md (nal_cb_t *nal, lib_md_t *md, lib_msg_t *msg)
 {
         /* ALWAYS called holding the state_lock */
         lib_counters_t *counters = &nal->ni.counters;
-        lib_msg_t      *msg      = lib_msg_alloc (nal);
 
-        if (msg == NULL)
-                return (NULL);
-
-        memset (msg, 0, sizeof (*msg));
-
-        msg->send_ack = 0;
-
+        /* Here, we commit the MD to a network OP by marking it busy and
+         * decrementing its threshold.  Come what may, the network "owns"
+         * the MD until a call to lib_finalize() signals completion. */
         msg->md = md;
-        do_gettimeofday(&msg->ev.arrival_time);
+         
         md->pending++;
         if (md->threshold != PTL_MD_THRESH_INF) {
                 LASSERT (md->threshold > 0);
@@ -552,8 +594,24 @@ get_new_msg (nal_cb_t *nal, lib_md_t *md)
                 counters->msgs_max = counters->msgs_alloc;
 
         list_add (&msg->msg_list, &nal->ni.ni_active_msgs);
+}
 
-        return (msg);
+static void
+lib_drop_message (nal_cb_t *nal, void *private, ptl_hdr_t *hdr)
+{
+        unsigned long flags;
+
+        /* CAVEAT EMPTOR: this only drops messages that we've not committed
+         * to receive (init_msg() not called) and therefore can't cause an
+         * event. */
+        
+        state_lock(nal, &flags);
+        nal->ni.counters.drop_count++;
+        nal->ni.counters.drop_length += hdr->payload_length;
+        state_unlock(nal, &flags);
+
+        /* NULL msg => if NAL calls lib_finalize it will be a noop */
+        (void) lib_recv(nal, private, NULL, NULL, 0, 0, hdr->payload_length);
 }
 
 /*
@@ -563,17 +621,18 @@ get_new_msg (nal_cb_t *nal, lib_md_t *md)
  * of long messages.
  *
  */
-static int parse_put(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
+static ptl_err_t
+parse_put(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
 {
         lib_ni_t        *ni = &nal->ni;
         ptl_size_t       mlength = 0;
         ptl_size_t       offset = 0;
         int              unlink = 0;
+        ptl_err_t        rc;
         lib_me_t        *me;
         lib_md_t        *md;
-        lib_msg_t       *msg;
         unsigned long    flags;
-
+                
         /* Convert put fields to host byte order */
         hdr->msg.put.match_bits = NTOH__u64 (hdr->msg.put.match_bits);
         hdr->msg.put.ptl_index = NTOH__u32 (hdr->msg.put.ptl_index);
@@ -586,8 +645,10 @@ static int parse_put(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                          hdr->payload_length, hdr->msg.put.offset,
                          hdr->msg.put.match_bits,
                          &mlength, &offset, &unlink);
-        if (me == NULL)
-                goto drop;
+        if (me == NULL) {
+                state_unlock(nal, &flags);
+                return (PTL_FAIL);
+        }
 
         md = me->md;
         CDEBUG(D_NET, "Incoming put index %x from "LPU64"/%u of length %d/%d "
@@ -595,69 +656,46 @@ static int parse_put(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                hdr->src_nid, hdr->src_pid, mlength, hdr->payload_length, 
                md->md_lh.lh_cookie, md->md_niov, offset);
 
-        msg = get_new_msg (nal, md);
-        if (msg == NULL) {
-                CERROR(LPU64": Dropping PUT from "LPU64": can't allocate msg\n",
-                       ni->nid, hdr->src_nid);
-                goto drop;
-        }
+        lib_commit_md(nal, md, msg);
+
+        msg->ev.type = PTL_EVENT_PUT;
+        msg->ev.initiator.nid = hdr->src_nid;
+        msg->ev.initiator.pid = hdr->src_pid;
+        msg->ev.portal = hdr->msg.put.ptl_index;
+        msg->ev.match_bits = hdr->msg.put.match_bits;
+        msg->ev.rlength = hdr->payload_length;
+        msg->ev.mlength = mlength;
+        msg->ev.offset = offset;
+        msg->ev.hdr_data = hdr->msg.put.hdr_data;
+
+        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
 
         if (!ptl_is_wire_handle_none(&hdr->msg.put.ack_wmd) &&
             !(md->options & PTL_MD_ACK_DISABLE)) {
-                msg->send_ack = 1;
                 msg->ack_wmd = hdr->msg.put.ack_wmd;
-                msg->nid = hdr->src_nid;
-                msg->pid = hdr->src_pid;
-                msg->ev.match_bits = hdr->msg.put.match_bits;
-        }
-
-        if (md->eq) {
-                msg->ev.type = PTL_EVENT_PUT;
-                msg->ev.initiator.nid = hdr->src_nid;
-                msg->ev.initiator.pid = hdr->src_pid;
-                msg->ev.portal = hdr->msg.put.ptl_index;
-                msg->ev.match_bits = hdr->msg.put.match_bits;
-                msg->ev.rlength = hdr->payload_length;
-                msg->ev.mlength = mlength;
-                msg->ev.offset = offset;
-                msg->ev.hdr_data = hdr->msg.put.hdr_data;
-
-                /* NB if this match has exhausted the MD, we can't be sure
-                 * that this event will the the last one associated with
-                 * this MD in the event queue (another message already
-                 * matching this ME/MD could end up being last).  So we
-                 * remember the ME handle anyway and check again when we're
-                 * allocating our slot in the event queue.
-                 */
-                ptl_me2handle (&msg->ev.unlinked_me, me);
-
-                lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
         }
 
         ni->counters.recv_count++;
         ni->counters.recv_length += mlength;
 
-        /* only unlink after MD's pending count has been bumped
-         * in get_new_msg() otherwise lib_me_unlink() will nuke it */
-        if (unlink) {
-                md->md_flags |= PTL_MD_FLAG_AUTO_UNLINKED;
+        /* only unlink after MD's pending count has been bumped in
+         * lib_commit_md() otherwise lib_me_unlink() will nuke it */
+        if (unlink)
                 lib_me_unlink (nal, me);
-        }
 
         state_unlock(nal, &flags);
 
-        lib_recv (nal, private, msg, md, offset, mlength, hdr->payload_length);
-        return 0;
+        rc = lib_recv(nal, private, msg, md, offset, mlength,
+                      hdr->payload_length);
+        if (rc != PTL_OK)
+                CERROR(LPU64": error on receiving PUT from "LPU64": %d\n",
+                       ni->nid, hdr->src_nid, rc);
 
- drop:
-        nal->ni.counters.drop_count++;
-        nal->ni.counters.drop_length += hdr->payload_length;
-        state_unlock (nal, &flags);
-        lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
-        return -1;
+        return (rc);
 }
 
-static int parse_get(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
+static ptl_err_t
+parse_get(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
 {
         lib_ni_t        *ni = &nal->ni;
         ptl_size_t       mlength = 0;
@@ -665,7 +703,6 @@ static int parse_get(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
         int              unlink = 0;
         lib_me_t        *me;
         lib_md_t        *md;
-        lib_msg_t       *msg;
         ptl_hdr_t        reply;
         unsigned long    flags;
         int              rc;
@@ -683,8 +720,10 @@ static int parse_get(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                          hdr->msg.get.sink_length, hdr->msg.get.src_offset,
                          hdr->msg.get.match_bits,
                          &mlength, &offset, &unlink);
-        if (me == NULL)
-                goto drop;
+        if (me == NULL) {
+                state_unlock(nal, &flags);
+                return (PTL_FAIL);
+        }
 
         md = me->md;
         CDEBUG(D_NET, "Incoming get index %d from "LPU64".%u of length %d/%d "
@@ -692,45 +731,27 @@ static int parse_get(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                hdr->src_nid, hdr->src_pid, mlength, hdr->payload_length, 
                md->md_lh.lh_cookie, md->md_niov, offset);
 
-        msg = get_new_msg (nal, md);
-        if (msg == NULL) {
-                CERROR(LPU64": Dropping GET from "LPU64": can't allocate msg\n",
-                       ni->nid, hdr->src_nid);
-                goto drop;
-        }
+        lib_commit_md(nal, md, msg);
 
-        if (md->eq) {
-                msg->ev.type = PTL_EVENT_GET;
-                msg->ev.initiator.nid = hdr->src_nid;
-                msg->ev.initiator.pid = hdr->src_pid;
-                msg->ev.portal = hdr->msg.get.ptl_index;
-                msg->ev.match_bits = hdr->msg.get.match_bits;
-                msg->ev.rlength = hdr->payload_length;
-                msg->ev.mlength = mlength;
-                msg->ev.offset = offset;
-                msg->ev.hdr_data = 0;
+        msg->ev.type = PTL_EVENT_GET;
+        msg->ev.initiator.nid = hdr->src_nid;
+        msg->ev.initiator.pid = hdr->src_pid;
+        msg->ev.portal = hdr->msg.get.ptl_index;
+        msg->ev.match_bits = hdr->msg.get.match_bits;
+        msg->ev.rlength = hdr->payload_length;
+        msg->ev.mlength = mlength;
+        msg->ev.offset = offset;
+        msg->ev.hdr_data = 0;
 
-                /* NB if this match has exhausted the MD, we can't be sure
-                 * that this event will the the last one associated with
-                 * this MD in the event queue (another message already
-                 * matching this ME/MD could end up being last).  So we
-                 * remember the ME handle anyway and check again when we're
-                 * allocating our slot in the event queue.
-                 */
-                ptl_me2handle (&msg->ev.unlinked_me, me);
-
-                lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
-        }
+        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
 
         ni->counters.send_count++;
         ni->counters.send_length += mlength;
 
-        /* only unlink after MD's refcount has been bumped
-         * in get_new_msg() otherwise lib_me_unlink() will nuke it */
-        if (unlink) {
-                md->md_flags |= PTL_MD_FLAG_AUTO_UNLINKED;
+        /* only unlink after MD's refcount has been bumped in
+         * lib_commit_md() otherwise lib_me_unlink() will nuke it */
+        if (unlink)
                 lib_me_unlink (nal, me);
-        }
 
         state_unlock(nal, &flags);
 
@@ -749,36 +770,25 @@ static int parse_get(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
 
         rc = lib_send (nal, private, msg, &reply, PTL_MSG_REPLY, 
                        hdr->src_nid, hdr->src_pid, md, offset, mlength);
-        if (rc != PTL_OK) {
-                CERROR(LPU64": Dropping GET from "LPU64": send REPLY failed\n",
-                       ni->nid, hdr->src_nid);
-                /* Hmm, this will create a GET event and make believe
-                 * the reply completed, which it kind of did, only the
-                 * source won't get her reply */
-                lib_finalize (nal, private, msg);
-                state_lock (nal, &flags);
-                goto drop;
-        }
+        if (rc != PTL_OK)
+                CERROR(LPU64": Unable to send REPLY for GET from "LPU64": %d\n",
+                       ni->nid, hdr->src_nid, rc);
 
-        /* Complete the incoming message */
-        lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
+        /* Discard any junk after the hdr */
+        (void) lib_recv(nal, private, NULL, NULL, 0, 0, hdr->payload_length);
+
         return (rc);
- drop:
-        ni->counters.drop_count++;
-        ni->counters.drop_length += hdr->msg.get.sink_length;
-        state_unlock(nal, &flags);
-        lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
-        return -1;
 }
 
-static int parse_reply(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
+static ptl_err_t
+parse_reply(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
 {
         lib_ni_t        *ni = &nal->ni;
         lib_md_t        *md;
         int              rlength;
         int              length;
-        lib_msg_t       *msg;
         unsigned long    flags;
+        ptl_err_t        rc;
 
         state_lock(nal, &flags);
 
@@ -790,7 +800,9 @@ static int parse_reply(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                         md == NULL ? "invalid" : "inactive",
                         hdr->msg.reply.dst_wmd.wh_interface_cookie,
                         hdr->msg.reply.dst_wmd.wh_object_cookie);
-                goto drop;
+
+                state_unlock(nal, &flags);
+                return (PTL_FAIL);
         }
 
         LASSERT (md->offset == 0);
@@ -804,7 +816,8 @@ static int parse_reply(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                                 ni->nid, hdr->src_nid, length,
                                 hdr->msg.reply.dst_wmd.wh_object_cookie,
                                 md->length);
-                        goto drop;
+                        state_unlock(nal, &flags);
+                        return (PTL_FAIL);
                 }
                 length = md->length;
         }
@@ -813,46 +826,36 @@ static int parse_reply(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                hdr->src_nid, length, rlength, 
                hdr->msg.reply.dst_wmd.wh_object_cookie);
 
-        msg = get_new_msg (nal, md);
-        if (msg == NULL) {
-                CERROR(LPU64": Dropping REPLY from "LPU64": can't "
-                       "allocate msg\n", ni->nid, hdr->src_nid);
-                goto drop;
-        }
+        lib_commit_md(nal, md, msg);
 
-        if (md->eq) {
-                msg->ev.type = PTL_EVENT_REPLY;
-                msg->ev.initiator.nid = hdr->src_nid;
-                msg->ev.initiator.pid = hdr->src_pid;
-                msg->ev.rlength = rlength;
-                msg->ev.mlength = length;
-                msg->ev.offset = 0;
+        msg->ev.type = PTL_EVENT_REPLY;
+        msg->ev.initiator.nid = hdr->src_nid;
+        msg->ev.initiator.pid = hdr->src_pid;
+        msg->ev.rlength = rlength;
+        msg->ev.mlength = length;
+        msg->ev.offset = 0;
 
-                lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
-        }
+        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
 
         ni->counters.recv_count++;
         ni->counters.recv_length += length;
 
         state_unlock(nal, &flags);
 
-        lib_recv (nal, private, msg, md, 0, length, rlength);
-        return 0;
+        rc = lib_recv(nal, private, msg, md, 0, length, rlength);
+        if (rc != PTL_OK)
+                CERROR(LPU64": error on receiving REPLY from "LPU64": %d\n",
+                       ni->nid, hdr->src_nid, rc);
 
- drop:
-        nal->ni.counters.drop_count++;
-        nal->ni.counters.drop_length += hdr->payload_length;
-        state_unlock (nal, &flags);
-        lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
-        return -1;
+        return (rc);
 }
 
-static int parse_ack(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
+static ptl_err_t
+parse_ack(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
 {
-        lib_ni_t *ni = &nal->ni;
-        lib_md_t *md;
-        lib_msg_t *msg = NULL;
-        unsigned long flags;
+        lib_ni_t      *ni = &nal->ni;
+        lib_md_t      *md;
+        unsigned long  flags;
 
         /* Convert ack fields to host byte order */
         hdr->msg.ack.match_bits = NTOH__u64 (hdr->msg.ack.match_bits);
@@ -868,40 +871,37 @@ static int parse_ack(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                        (md == NULL) ? "invalid" : "inactive",
                        hdr->msg.ack.dst_wmd.wh_interface_cookie,
                        hdr->msg.ack.dst_wmd.wh_object_cookie);
-                goto drop;
+
+                state_unlock(nal, &flags);
+                return (PTL_FAIL);
         }
 
         CDEBUG(D_NET, LPU64": ACK from "LPU64" into md "LPX64"\n",
                ni->nid, hdr->src_nid, 
                hdr->msg.ack.dst_wmd.wh_object_cookie);
 
-        msg = get_new_msg (nal, md);
-        if (msg == NULL) {
-                CERROR(LPU64": Dropping ACK from "LPU64": can't allocate msg\n",
-                       ni->nid, hdr->src_nid);
-                goto drop;
-        }
+        lib_commit_md(nal, md, msg);
 
-        if (md->eq) {
-                msg->ev.type = PTL_EVENT_ACK;
-                msg->ev.initiator.nid = hdr->src_nid;
-                msg->ev.initiator.pid = hdr->src_pid;
-                msg->ev.mlength = hdr->msg.ack.mlength;
-                msg->ev.match_bits = hdr->msg.ack.match_bits;
+        msg->ev.type = PTL_EVENT_ACK;
+        msg->ev.initiator.nid = hdr->src_nid;
+        msg->ev.initiator.pid = hdr->src_pid;
+        msg->ev.mlength = hdr->msg.ack.mlength;
+        msg->ev.match_bits = hdr->msg.ack.match_bits;
 
-                lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
-        }
+        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
 
         ni->counters.recv_count++;
-        state_unlock(nal, &flags);
-        lib_recv (nal, private, msg, NULL, 0, 0, hdr->payload_length);
-        return 0;
 
- drop:
-        nal->ni.counters.drop_count++;
-        state_unlock (nal, &flags);
-        lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
-        return -1;
+        state_unlock(nal, &flags);
+        
+        /* We have received and matched up the ack OK, create the
+         * completion event now... */
+        lib_finalize(nal, private, msg, PTL_OK);
+
+        /* ...and now discard any junk after the hdr */
+        (void) lib_recv(nal, private, NULL, NULL, 0, 0, hdr->payload_length);
+ 
+       return (PTL_OK);
 }
 
 static char *
@@ -983,10 +983,13 @@ void print_hdr(nal_cb_t * nal, ptl_hdr_t * hdr)
 }                               /* end of print_hdr() */
 
 
-int lib_parse(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
+void 
+lib_parse(nal_cb_t *nal, ptl_hdr_t *hdr, void *private)
 {
         unsigned long  flags;
-
+        ptl_err_t      rc;
+        lib_msg_t     *msg;
+        
         /* convert common fields to host byte order */
         hdr->dest_nid = NTOH__u64 (hdr->dest_nid);
         hdr->src_nid = NTOH__u64 (hdr->src_nid);
@@ -1008,22 +1011,16 @@ int lib_parse(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                         nal->ni.nid, mv->magic, 
                         mv->version_major, mv->version_minor,
                         hdr->src_nid);
-                lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
-                return (-1);
+                lib_drop_message(nal, private, hdr);
+                return;
         }
         
         if (hdr->dest_nid != nal->ni.nid) {
                 CERROR(LPU64": Dropping %s message from "LPU64" to "LPU64
                        " (not me)\n", nal->ni.nid, hdr_type_string (hdr),
                        hdr->src_nid, hdr->dest_nid);
-
-                state_lock (nal, &flags);
-                nal->ni.counters.drop_count++;
-                nal->ni.counters.drop_length += hdr->payload_length;
-                state_unlock (nal, &flags);
-
-                lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
-                return (-1);
+                lib_drop_message(nal, private, hdr);
+                return;
         }
 
         if (!list_empty (&nal->ni.ni_test_peers) && /* normally we don't */
@@ -1033,34 +1030,59 @@ int lib_parse(nal_cb_t * nal, ptl_hdr_t * hdr, void *private)
                        ": simulated failure\n",
                        nal->ni.nid, hdr_type_string (hdr), 
                        hdr->src_nid);
-                lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
-                return (-1);
+                lib_drop_message(nal, private, hdr);
+                return;
         }
-        
+
+        msg = lib_msg_alloc(nal);
+        if (msg == NULL) {
+                CERROR(LPU64": Dropping incoming %s from "LPU64
+                       ": can't allocate a lib_msg_t\n",
+                       nal->ni.nid, hdr_type_string (hdr), 
+                       hdr->src_nid);
+                lib_drop_message(nal, private, hdr);
+                return;
+        }
+
+        do_gettimeofday(&msg->ev.arrival_time);
+
         switch (hdr->type) {
         case PTL_MSG_ACK:
-                return (parse_ack(nal, hdr, private));
+                rc = parse_ack(nal, hdr, private, msg);
+                break;
         case PTL_MSG_PUT:
-                return (parse_put(nal, hdr, private));
+                rc = parse_put(nal, hdr, private, msg);
                 break;
         case PTL_MSG_GET:
-                return (parse_get(nal, hdr, private));
+                rc = parse_get(nal, hdr, private, msg);
                 break;
         case PTL_MSG_REPLY:
-                return (parse_reply(nal, hdr, private));
+                rc = parse_reply(nal, hdr, private, msg);
                 break;
         default:
                 CERROR(LPU64": Dropping <unknown> message from "LPU64
                        ": Bad type=0x%x\n",  nal->ni.nid, hdr->src_nid,
                        hdr->type);
+                rc = PTL_FAIL;
+                break;
+        }
+                
+        if (rc != PTL_OK) {
+                if (msg->md != NULL) {
+                        /* committed... */
+                        lib_finalize(nal, private, msg, rc);
+                } else {
+                        state_lock(nal, &flags);
+                        lib_msg_free(nal, msg); /* expects state_lock held */
+                        state_unlock(nal, &flags);
 
-                lib_recv (nal, private, NULL, NULL, 0, 0, hdr->payload_length);
-                return (-1);
+                        lib_drop_message(nal, private, hdr);
+                }
         }
 }
 
-
-int do_PtlPut(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
+int 
+do_PtlPut(nal_cb_t *nal, void *private, void *v_args, void *v_ret)
 {
         /*
          * Incoming:
@@ -1075,16 +1097,15 @@ int do_PtlPut(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
          * Outgoing:
          */
 
-        PtlPut_in *args = v_args;
-        PtlPut_out *ret = v_ret;
-        ptl_hdr_t hdr;
-
-        lib_ni_t *ni = &nal->ni;
-        lib_md_t *md;
-        lib_msg_t *msg = NULL;
+        PtlPut_in        *args = v_args;
         ptl_process_id_t *id = &args->target_in;
-        unsigned long flags;
-        int           rc;
+        PtlPut_out       *ret = v_ret;
+        lib_ni_t         *ni = &nal->ni;
+        lib_msg_t        *msg;
+        ptl_hdr_t         hdr;
+        lib_md_t         *md;
+        unsigned long     flags;
+        int               rc;
         
         if (!list_empty (&nal->ni.ni_test_peers) && /* normally we don't */
             fail_peer (nal, id->nid, 1))           /* shall we now? */
@@ -1093,13 +1114,22 @@ int do_PtlPut(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
                        nal->ni.nid, id->nid);
                 return (ret->rc = PTL_INV_PROC);
         }
-        
-        ret->rc = PTL_OK;
+
+        msg = lib_msg_alloc(nal);
+        if (msg == NULL) {
+                CERROR(LPU64": Dropping PUT to "LPU64": ENOMEM on lib_msg_t\n",
+                       ni->nid, id->nid);
+                return (ret->rc = PTL_NOSPACE);
+        }
+
         state_lock(nal, &flags);
+
         md = ptl_handle2md(&args->md_in, nal);
-        if (md == NULL || !md->threshold) {
+        if (md == NULL || md->threshold == 0) {
+                lib_msg_free(nal, msg);
                 state_unlock(nal, &flags);
-                return ret->rc = PTL_INV_MD;
+        
+                return (ret->rc = PTL_INV_MD);
         }
 
         CDEBUG(D_NET, "PtlPut -> %Lu: %lu\n", (unsigned long long)id->nid,
@@ -1126,57 +1156,39 @@ int do_PtlPut(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         hdr.msg.put.offset = HTON__u32 (args->offset_in);
         hdr.msg.put.hdr_data = args->hdr_data_in;
 
+        lib_commit_md(nal, md, msg);
+        
+        msg->ev.type = PTL_EVENT_SENT;
+        msg->ev.initiator.nid = ni->nid;
+        msg->ev.initiator.pid = ni->pid;
+        msg->ev.portal = args->portal_in;
+        msg->ev.match_bits = args->match_bits_in;
+        msg->ev.rlength = md->length;
+        msg->ev.mlength = md->length;
+        msg->ev.offset = args->offset_in;
+        msg->ev.hdr_data = args->hdr_data_in;
+
+        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
+
         ni->counters.send_count++;
         ni->counters.send_length += md->length;
-
-        msg = get_new_msg (nal, md);
-        if (msg == NULL) {
-                CERROR("BAD: could not allocate msg!\n");
-                state_unlock(nal, &flags);
-                return ret->rc = PTL_NOSPACE;
-        }
-
-        /*
-         * If this memory descriptor has an event queue associated with
-         * it we need to allocate a message state object and record the
-         * information about this operation that will be recorded into
-         * event queue once the message has been completed.
-         *
-         * NB. We're now committed to the GET, since we just marked the MD
-         * busy.  Callers who observe this (by getting PTL_MD_INUSE from
-         * PtlMDUnlink()) expect a completion event to tell them when the
-         * MD becomes idle. 
-         */
-        if (md->eq) {
-                msg->ev.type = PTL_EVENT_SENT;
-                msg->ev.initiator.nid = ni->nid;
-                msg->ev.initiator.pid = ni->pid;
-                msg->ev.portal = args->portal_in;
-                msg->ev.match_bits = args->match_bits_in;
-                msg->ev.rlength = md->length;
-                msg->ev.mlength = md->length;
-                msg->ev.offset = args->offset_in;
-                msg->ev.hdr_data = args->hdr_data_in;
-
-                lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
-        }
 
         state_unlock(nal, &flags);
         
         rc = lib_send (nal, private, msg, &hdr, PTL_MSG_PUT,
                        id->nid, id->pid, md, 0, md->length);
         if (rc != PTL_OK) {
-                /* get_new_msg() committed us to sending by decrementing
-                 * md->threshold, so we have to act like we did send, but
-                 * the network dropped it. */
-                lib_finalize (nal, private, msg);
+                CERROR(LPU64": error sending PUT to "LPU64": %d\n",
+                       ni->nid, id->nid, rc);
+                lib_finalize (nal, private, msg, rc);
         }
         
+        /* completion will be signalled by an event */
         return ret->rc = PTL_OK;
 }
 
-lib_msg_t * lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid, 
-                                lib_md_t *getmd)
+lib_msg_t * 
+lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid, lib_md_t *getmd)
 {
         /* The NAL can DMA direct to the GET md (i.e. no REPLY msg).  This
          * returns a msg the NAL can pass to lib_finalize() so that a REPLY
@@ -1188,39 +1200,38 @@ lib_msg_t * lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid,
          * lib_finalize() of the original GET. */
 
         lib_ni_t        *ni = &nal->ni;
-        lib_msg_t       *msg;
+        lib_msg_t       *msg = lib_msg_alloc(nal);
         unsigned long    flags;
 
         state_lock(nal, &flags);
 
         LASSERT (getmd->pending > 0);
 
+        if (msg == NULL) {
+                CERROR ("Dropping REPLY from "LPU64": can't allocate msg\n",
+                        peer_nid);
+                goto drop;
+        }
+
         if (getmd->threshold == 0) {
                 CERROR ("Dropping REPLY from "LPU64" for inactive MD %p\n",
                         peer_nid, getmd);
-                goto drop;
+                goto drop_msg;
         }
 
         LASSERT (getmd->offset == 0);
 
         CDEBUG(D_NET, "Reply from "LPU64" md %p\n", peer_nid, getmd);
 
-        msg = get_new_msg (nal, getmd);
-        if (msg == NULL) {
-                CERROR("Dropping REPLY from "LPU64" md %p: can't allocate msg\n", 
-                       peer_nid, getmd);
-                goto drop;
-        }
+        lib_commit_md (nal, getmd, msg);
 
-        if (getmd->eq) {
-                msg->ev.type = PTL_EVENT_REPLY;
-                msg->ev.initiator.nid = peer_nid;
-                msg->ev.initiator.pid = 0;      /* XXX FIXME!!! */
-                msg->ev.rlength = msg->ev.mlength = getmd->length;
-                msg->ev.offset = 0;
+        msg->ev.type = PTL_EVENT_REPLY;
+        msg->ev.initiator.nid = peer_nid;
+        msg->ev.initiator.pid = 0;      /* XXX FIXME!!! */
+        msg->ev.rlength = msg->ev.mlength = getmd->length;
+        msg->ev.offset = 0;
 
-                lib_md_deconstruct(nal, getmd, &msg->ev.mem_desc);
-        }
+        lib_md_deconstruct(nal, getmd, &msg->ev.mem_desc);
 
         ni->counters.recv_count++;
         ni->counters.recv_length += getmd->length;
@@ -1228,7 +1239,9 @@ lib_msg_t * lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid,
         state_unlock(nal, &flags);
 
         return msg;
-        
+
+ drop_msg:
+        lib_msg_free(nal, msg);
  drop:
         nal->ni.counters.drop_count++;
         nal->ni.counters.drop_length += getmd->length;
@@ -1238,7 +1251,8 @@ lib_msg_t * lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid,
         return NULL;
 }
 
-int do_PtlGet(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
+int 
+do_PtlGet(nal_cb_t *nal, void *private, void *v_args, void *v_ret)
 {
         /*
          * Incoming:
@@ -1252,15 +1266,15 @@ int do_PtlGet(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
          * Outgoing:
          */
 
-        PtlGet_in *args = v_args;
-        PtlGet_out *ret = v_ret;
-        ptl_hdr_t hdr;
-        lib_msg_t *msg = NULL;
-        lib_ni_t *ni = &nal->ni;
+        PtlGet_in        *args = v_args;
         ptl_process_id_t *id = &args->target_in;
-        lib_md_t *md;
-        unsigned long flags;
-        int           rc;
+        PtlGet_out       *ret = v_ret;
+        lib_ni_t         *ni = &nal->ni;
+        lib_msg_t        *msg;
+        ptl_hdr_t         hdr;
+        lib_md_t         *md;
+        unsigned long     flags;
+        int               rc;
         
         if (!list_empty (&nal->ni.ni_test_peers) && /* normally we don't */
             fail_peer (nal, id->nid, 1))           /* shall we now? */
@@ -1269,15 +1283,23 @@ int do_PtlGet(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
                        nal->ni.nid, id->nid);
                 return (ret->rc = PTL_INV_PROC);
         }
-        
-        state_lock(nal, &flags);
-        md = ptl_handle2md(&args->md_in, nal);
-        if (md == NULL || !md->threshold) {
-                state_unlock(nal, &flags);
-                return ret->rc = PTL_INV_MD;
+
+        msg = lib_msg_alloc(nal);
+        if (msg == NULL) {
+                CERROR(LPU64": Dropping GET to "LPU64": ENOMEM on lib_msg_t\n",
+                       ni->nid, id->nid);
+                return (ret->rc = PTL_NOSPACE);
         }
 
-        LASSERT (md->offset == 0);
+        state_lock(nal, &flags);
+
+        md = ptl_handle2md(&args->md_in, nal);
+        if (md == NULL || !md->threshold) {
+                lib_msg_free(nal, msg);
+                state_unlock(nal, &flags);
+
+                return ret->rc = PTL_INV_MD;
+        }
 
         CDEBUG(D_NET, "PtlGet -> %Lu: %lu\n", (unsigned long long)id->nid,
                (unsigned long)id->pid);
@@ -1299,51 +1321,33 @@ int do_PtlGet(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         hdr.msg.get.src_offset = HTON__u32 (args->offset_in);
         hdr.msg.get.sink_length = HTON__u32 (md->length);
 
+        lib_commit_md(nal, md, msg);
+
+        msg->ev.type = PTL_EVENT_SENT;
+        msg->ev.initiator.nid = ni->nid;
+        msg->ev.initiator.pid = ni->pid;
+        msg->ev.portal = args->portal_in;
+        msg->ev.match_bits = args->match_bits_in;
+        msg->ev.rlength = md->length;
+        msg->ev.mlength = md->length;
+        msg->ev.offset = args->offset_in;
+        msg->ev.hdr_data = 0;
+
+        lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
+
         ni->counters.send_count++;
-
-        msg = get_new_msg (nal, md);
-        if (msg == NULL) {
-                CERROR("do_PtlGet: BAD - could not allocate cookie!\n");
-                state_unlock(nal, &flags);
-                return ret->rc = PTL_NOSPACE;
-        }
-
-        /*
-         * If this memory descriptor has an event queue associated with
-         * it we must allocate a message state object that will record
-         * the information to be filled in once the message has been
-         * completed.  More information is in the do_PtlPut() comments.
-         *
-         * NB. We're now committed to the GET, since we just marked the MD
-         * busy.  Callers who observe this (by getting PTL_MD_INUSE from
-         * PtlMDUnlink()) expect a completion event to tell them when the
-         * MD becomes idle. 
-         */
-        if (md->eq) {
-                msg->ev.type = PTL_EVENT_SENT;
-                msg->ev.initiator.nid = ni->nid;
-                msg->ev.initiator.pid = ni->pid;
-                msg->ev.portal = args->portal_in;
-                msg->ev.match_bits = args->match_bits_in;
-                msg->ev.rlength = md->length;
-                msg->ev.mlength = md->length;
-                msg->ev.offset = args->offset_in;
-                msg->ev.hdr_data = 0;
-
-                lib_md_deconstruct(nal, md, &msg->ev.mem_desc);
-        }
 
         state_unlock(nal, &flags);
 
         rc = lib_send (nal, private, msg, &hdr, PTL_MSG_GET,
                        id->nid, id->pid, NULL, 0, 0);
         if (rc != PTL_OK) {
-                /* get_new_msg() committed us to sending by decrementing
-                 * md->threshold, so we have to act like we did send, but
-                 * the network dropped it. */
-                lib_finalize (nal, private, msg);
+                CERROR(LPU64": error sending GET to "LPU64": %d\n",
+                       ni->nid, id->nid, rc);
+                lib_finalize (nal, private, msg, rc);
         }
         
+        /* completion will be signalled by an event */
         return ret->rc = PTL_OK;
 }
 
