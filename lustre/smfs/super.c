@@ -45,18 +45,7 @@ static char *smfs_options(char *options, char **devstr, char **namestr)
 	}
 	return pos;
 }
-static int close_fd(int fd)
-{
-	struct files_struct *files = current->files;	
-        
-	write_lock(&files->file_lock);
-       
-	files->fd[fd] = NULL;
-        __put_unused_fd(files, fd); 
-	
-	write_unlock(&files->file_lock);
-	return 0;
-}
+
 static int set_loop_fd(char *dev_path, char *loop_dev)
 {
         struct loop_info loopinfo;
@@ -190,7 +179,7 @@ static char *parse_path2dev(struct super_block *sb, char *dev_path)
 	memcpy(name, dev_path, strlen(dev_path) + 1);
 	RETURN(name);
 }
-static void duplicate_sb(struct super_block *csb, 
+void duplicate_sb(struct super_block *csb, 
 			 struct super_block *sb)
 {
 	sb->s_blocksize = csb->s_blocksize;
@@ -224,7 +213,7 @@ static int sm_mount_cache(struct super_block *sb,
         free_page(page);
 	
 	if (IS_ERR(mnt)) {
-                CERROR("do_kern_mount failed: rc = %d\n", PTR_ERR(mnt));
+                CERROR("do_kern_mount failed: rc = %ld\n", PTR_ERR(mnt));
                 GOTO(err_out, err = PTR_ERR(mnt));
         }
 	smb = S2SMI(sb); 

@@ -37,7 +37,6 @@ struct sm_ops {
         struct file_operations sm_file_fops;
         struct file_operations sm_sym_fops;
                                                                                                                                                                                                      
-        struct address_space_operations sm_file_aops;
         struct dentry_operations sm_dentry_ops;
 };
 

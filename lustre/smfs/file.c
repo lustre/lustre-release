@@ -12,208 +12,6 @@
 #include <linux/unistd.h>
 #include <linux/pagemap.h>
 #include "smfs_internal.h" 
-
-static int smfs_readpage(struct file *file, 
-			 struct page *page)
-{
-	struct  inode *inode = page->mapping->host;
-	struct	inode *cache_inode;
-	struct page *cache_page = NULL;
-	int rc = 0; 
-
-	ENTRY;
-	
-	cache_inode = I2CI(inode);
- 
-        if (!cache_inode)
-                RETURN(-ENOENT);
-	
-	cache_page = grab_cache_page(cache_inode->i_mapping, page->index);
-
-	if (!cache_page) 
-		GOTO(exit_release, rc = -ENOMEM);
-
-	if ((rc = cache_inode->i_mapping->a_ops->readpage(file, cache_page)))
-		GOTO(exit_release, 0);
-	
-	wait_on_page(cache_page);
-
-	if (!Page_Uptodate(cache_page))
-		GOTO(exit_release, rc = -EIO);
-
-	memcpy(kmap(page), kmap(cache_page), PAGE_CACHE_SIZE);
-
-	flush_dcache_page(page);
-
-	kunmap(cache_page);
-	page_cache_release(cache_page);
-
-exit:	
-	kunmap(page);
-	SetPageUptodate(page);
-	UnlockPage(page);
-
-	RETURN(rc);
-
-exit_release:
-	if (cache_page) 
-		page_cache_release(cache_page);
-	UnlockPage(page);
-	RETURN(rc);
-}
-
-static int smfs_writepage(struct page *page)
-{
-
-	struct  inode *inode = page->mapping->host;
-	struct	inode *cache_inode;
-	int 	rc;
-	
-	ENTRY;
-	
-	cache_inode = I2CI(inode);
- 
-        if (!cache_inode)
-                RETURN(-ENOENT);
-
-	if (cache_inode->i_mapping->a_ops->writepage)
-		rc = cache_inode->i_mapping->a_ops->writepage(page);
-		
-        RETURN(rc);
-}
-
-static int smfs_sync_page(struct page *page)
-{
-	struct inode *inode = page->mapping->host;
-	struct inode *cache_inode;
-	int    rc = 0;
-		
-	cache_inode = I2CI(inode);
- 
-        if (!cache_inode)
-                RETURN(-ENOENT);
-
-	if (cache_inode->i_mapping->a_ops->sync_page)
-		rc = cache_inode->i_mapping->a_ops->sync_page(page);
-
-        RETURN(rc);
-}
-
-static int smfs_prepare_write(struct file *file, struct page *page,
-                              unsigned from, unsigned to)
-{
-	struct inode *inode = page->mapping->host;
-	struct inode *cache_inode;
-	int    rc = 0;
-		
-	cache_inode = I2CI(inode);
- 
-        if (!cache_inode)
-                RETURN(-ENOENT);
-
-	if (cache_inode->i_mapping->a_ops->prepare_write)
-		rc = cache_inode->i_mapping->a_ops->prepare_write(file, page, from, to);
-
-        RETURN(rc);
-}
-
-static int smfs_commit_write(struct file *file, struct page *page,
-                             unsigned from, unsigned to)
-{
-	struct inode *inode = page->mapping->host;
-	struct inode *cache_inode;
-	int    rc = 0;
-		
-	cache_inode = I2CI(inode);
- 
-        if (!cache_inode)
-                RETURN(-ENOENT);
-
-	if (cache_inode->i_mapping->a_ops->commit_write)
-		rc = cache_inode->i_mapping->a_ops->commit_write(file, page, from, to);
-
-        RETURN(rc);
-}
-
-static int smfs_bmap(struct address_space *mapping, long block)
-{
-	struct inode *inode = mapping->host;
-	struct inode *cache_inode;
-	int    rc = 0;
-		
-	cache_inode = I2CI(inode);
- 
-        if (!cache_inode)
-                RETURN(-ENOENT);
-
-	if (cache_inode->i_mapping->a_ops->bmap)
-		rc = cache_inode->i_mapping->a_ops->bmap(mapping, block);
-
-        RETURN(rc);
-}
-
-static int smfs_flushpage(struct page *page, unsigned long offset) 
-{
-	struct inode *inode = page->mapping->host;
-	struct inode *cache_inode;
-	int    rc = 0;
-		
-	cache_inode = I2CI(inode);
- 
-        if (!cache_inode)
-                RETURN(-ENOENT);
-
-	if (cache_inode->i_mapping->a_ops->flushpage)
-		rc = cache_inode->i_mapping->a_ops->flushpage(page, offset);
-
-        RETURN(rc);
-}
-
-static int smfs_releasepage(struct page *page, int wait) 
-{
-	struct inode *inode = page->mapping->host;
-	struct inode *cache_inode;
-	int    rc = 0;
-		
-	cache_inode = I2CI(inode);
- 
-        if (!cache_inode)
-                RETURN(-ENOENT);
-
-	if (cache_inode->i_mapping->a_ops->releasepage)
-		rc = cache_inode->i_mapping->a_ops->releasepage(page, wait);
-
-        RETURN(rc);
-}
-
-static int smfs_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
-                unsigned long blocknr, int blocksize) 
-{
-	struct inode *cache_inode;
-	int    rc = 0;
-		
-	cache_inode = I2CI(inode);
- 
-        if (!cache_inode)
-                RETURN(-ENOENT);
-
-	if (cache_inode->i_mapping->a_ops->direct_IO)
-		rc = cache_inode->i_mapping->a_ops->direct_IO(rw, cache_inode, iobuf,
-							      blocknr, blocksize);
-        RETURN(rc);
-}
-
-struct address_space_operations smfs_file_aops = {
-	readpage:   	smfs_readpage,
-	writepage:  	smfs_writepage,
-	sync_page:   	smfs_sync_page,
-	prepare_write:  smfs_prepare_write,
-	commit_write:	smfs_commit_write,
-	bmap:		smfs_bmap,
-	flushpage:	smfs_flushpage,
-	releasepage:	smfs_releasepage,
-	direct_IO:	smfs_direct_IO,	
-};
         
 /* instantiate a file handle to the cache file */
 void smfs_prepare_cachefile(struct inode *inode,
@@ -393,8 +191,7 @@ static loff_t smfs_llseek(struct file *file,
 
 static int smfs_mmap(struct file * file, struct vm_area_struct * vma)
 {
-	struct address_space *mapping = file->f_dentry->d_inode->i_mapping;
-        struct inode *inode = mapping->host;
+        struct inode *inode = file->f_dentry->d_inode;
         struct inode *cache_inode = NULL;
         struct  file open_file;
 	struct  dentry open_dentry;
@@ -406,10 +203,13 @@ static int smfs_mmap(struct file * file, struct vm_area_struct * vma)
 
 	smfs_prepare_cachefile(inode, file, cache_inode, 
 			       &open_file, &open_dentry);
-	
+  
+	if (cache_inode->i_mapping == &cache_inode->i_data)
+                inode->i_mapping = cache_inode->i_mapping;
+
 	if (cache_inode->i_fop->mmap)
 		rc = cache_inode->i_fop->mmap(&open_file, vma);
-       
+      
 	duplicate_inode(cache_inode, inode);
 	smfs_update_file(file, &open_file);
 	
