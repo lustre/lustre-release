@@ -832,11 +832,15 @@ test_42() {
     
     # osc is evicted, fs is smaller
     blocks_after=`df $MOUNT | tail -1 | awk '{ print $1 }'`
-    [ $blocks_after -lt $blocks ] || return 1
+    if [ "$blocks_after" = "Filesystem" ]; then
+	echo "df failed, assuming caused by OST failout"
+    else
+        [ $blocks_after -lt $blocks ] || return 1
+    fi
     echo wait for MDS to timeout and recover
     sleep $((TIMEOUT * 2))
     unlinkmany $DIR/$tfile-%d 400 400
-    $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
+    $CHECKSTAT -t file $DIR/$tfile-* && return 2 || true
 }
 run_test 42 "recovery after ost failure"
 
