@@ -15,6 +15,13 @@ SUCCESS=1
 
 rm -f $OOS
 
+sleep 1	# to ensure we get up-to-date statfs info
+
+#echo -1 > /proc/sys/portals/debug
+#echo 0x40a8 > /proc/sys/portals/subsystem_debug
+#lctl clear
+#lctl debug_daemon start /r/tmp/debug 1024
+
 STRIPECOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -1`
 ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -1`
 MAXFREE=${MAXFREE:-$((200000 * $STRIPECOUNT))}
@@ -58,6 +65,8 @@ if [ $RECORDSOUT -ne $(($FILESIZE / 1024)) ]; then
         echo "ERROR: blocks written by dd not equal to the size of file"
         SUCCESS=0
 fi
+
+#lctl debug_daemon stop
 
 rm -f $OOS $LOG
 
