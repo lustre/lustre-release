@@ -192,6 +192,8 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_root, err);
         }
 
+        /* bug 2805 - set VM readahead to zero */
+        vm_max_readahead = vm_min_readahead = 0;
         sb->s_root = d_alloc_root(root);
         RETURN(err);
 
