@@ -949,7 +949,7 @@ int jt_obd_test_getattr(int argc, char **argv)
         }
 
         if (argc >= 4) {
-                if (argv[3][0] == 't')
+                if (argv[3][0] == 't' && thread)
                         objid = strtoull(argv[3] + 1, &end, 0) + thread - 1;
                 else
                         objid = strtoull(argv[3], &end, 0);
@@ -1022,7 +1022,7 @@ int jt_obd_test_brw(int argc, char **argv)
         }
 
         /* make each thread write to a different offset */
-        if (argv[1][0] == 't') {
+        if (argv[1][0] == 't' && thread) {
                 thr_offset = thread - 1;
                 count = strtoull(argv[1] + 1, &end, 0);
         } else
@@ -1056,7 +1056,7 @@ int jt_obd_test_brw(int argc, char **argv)
                 }
         }
         if (argc >= 6) {
-                if (argv[5][0] == 't')
+                if (argv[5][0] == 't' && thread)
                         objid = strtoull(argv[5] + 1, &end, 0) + thread - 1;
                 else
                         objid = strtoull(argv[5], &end, 0);
