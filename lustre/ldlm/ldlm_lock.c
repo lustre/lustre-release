@@ -108,7 +108,7 @@ ldlm_res_policy ldlm_res_policy_table[] = {
 };
 
 void ldlm_register_intent(int (*arg) (struct ldlm_lock * lock, void *req_cookie,
-                                      ldlm_mode_t mode, void *data))
+                                      ldlm_mode_t mode, int flags, void *data))
 {
         ldlm_res_policy_table[LDLM_MDSINTENT] = arg;
 }
@@ -678,7 +678,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock * lock,
         if (!local && !(*flags & LDLM_FL_REPLAY) &&
             (policy = ldlm_res_policy_table[res->lr_type])) {
                 int rc;
-                rc = policy(lock, cookie, lock->l_req_mode, NULL);
+                rc = policy(lock, cookie, lock->l_req_mode, *flags, NULL);
 
                 if (rc == ELDLM_LOCK_CHANGED) {
                         res = lock->l_resource;

@@ -159,7 +159,7 @@ struct ldlm_lock {
 
 typedef int (*ldlm_res_compat)(struct ldlm_lock *child, struct ldlm_lock *new);
 typedef int (*ldlm_res_policy)(struct ldlm_lock *lock, void *req_cookie,
-                               ldlm_mode_t mode, void *data);
+                               ldlm_mode_t mode, int flags, void *data);
 
 #define LDLM_PLAIN       10
 #define LDLM_EXTENT      11
@@ -267,7 +267,8 @@ do {                                                                          \
 
 /* ldlm_extent.c */
 int ldlm_extent_compat(struct ldlm_lock *, struct ldlm_lock *);
-int ldlm_extent_policy(struct ldlm_lock *, void *, ldlm_mode_t, void *);
+int ldlm_extent_policy(struct ldlm_lock *, void *, ldlm_mode_t, int flags,
+                       void *);
 
 /* ldlm_lockd.c */
 int ldlm_handle_enqueue(struct ptlrpc_request *req);
@@ -277,7 +278,7 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 
 /* ldlm_lock.c */
 void ldlm_register_intent(int (*arg)(struct ldlm_lock *lock, void *req_cookie,
-                                     ldlm_mode_t mode, void *data));
+                                     ldlm_mode_t mode, int flags, void *data));
 void ldlm_unregister_intent(void);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
 struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int strict);

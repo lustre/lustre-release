@@ -68,7 +68,7 @@ static void policy_internal(struct list_head *queue, struct ldlm_extent *req_ex,
 
 /* apply the internal policy by walking all the lists */
 int ldlm_extent_policy(struct ldlm_lock *lock, void *req_cookie,
-                       ldlm_mode_t mode, void *data)
+                       ldlm_mode_t mode, int flags, void *data)
 {
         struct ldlm_resource *res = lock->l_resource;
         struct ldlm_extent *req_ex = req_cookie;

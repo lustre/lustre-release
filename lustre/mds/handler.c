@@ -1302,7 +1302,7 @@ static int mds_cleanup(struct obd_device *obddev)
 }
 
 static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
-                              ldlm_mode_t mode, void *data)
+                              ldlm_mode_t mode, int flags, void *data)
 {
         struct ptlrpc_request *req = req_cookie;
         int rc = 0;
