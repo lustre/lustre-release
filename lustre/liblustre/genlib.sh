@@ -51,4 +51,4 @@ $AR -r $CWD/liblustre.a $ALL_OBJS
 # create shared lib
 rm -f $CWD/liblustre.so
 $LD -shared -o $CWD/liblustre.so -init __liblustre_setup_ -fini __liblustre_cleanup_ \
-	$ALL_OBJS
+	$ALL_OBJS -lpthread
