@@ -323,6 +323,7 @@ CFLAGS_save="$CFLAGS"
 CFLAGS="-m64 $CFLAGS"
 AC_TRY_COMPILE([],[],[
 	AC_MSG_RESULT([yes])
+	EXTRA_KCFLAGS="-m64 $EXTRA_KCFLAGS"
 ],[
 	AC_MSG_RESULT([no])
 	CFLAGS="$CFLAGS_save"
@@ -337,7 +338,7 @@ LLCFLAGS="-g -Wall -fPIC"
 AC_SUBST(LLCFLAGS)
 
 # everyone builds against portals and lustre
-EXTRA_KCFLAGS="-g -I$PWD/portals/include -I$PWD/lustre/include"
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/portals/include -I$PWD/lustre/include"
 AC_SUBST(EXTRA_KCFLAGS)
 ])
 
