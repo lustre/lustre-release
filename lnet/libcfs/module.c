@@ -320,6 +320,8 @@ kportal_get_ni (int nal)
                 return  (PORTAL_SYMBOL_GET(ktoenal_ni));
         case GMNAL:
                 return  (PORTAL_SYMBOL_GET(kgmnal_ni));
+        case IBNAL:
+                return  (PORTAL_SYMBOL_GET(kibnal_ni));
         case TCPNAL:
                 /* userspace NAL */
                 return (NULL);
@@ -349,6 +351,9 @@ kportal_put_ni (int nal)
                 break;
         case GMNAL:
                 PORTAL_SYMBOL_PUT(kgmnal_ni);
+                break;
+        case IBNAL:
+                PORTAL_SYMBOL_PUT(kibnal_ni);
                 break;
         case TCPNAL:
                 /* A lesson to a malicious caller */

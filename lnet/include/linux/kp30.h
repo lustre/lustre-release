@@ -43,6 +43,7 @@ extern unsigned int portal_cerror;
 #define S_GMNAL       (1 << 19)
 #define S_PTLROUTER   (1 << 20)
 #define S_COBD        (1 << 21)
+#define S_IBNAL       (1 << 22)
 
 /* If you change these values, please keep portals/utils/debug.c
  * up to date! */
@@ -1034,6 +1035,7 @@ enum {
         TCPNAL,
         SCIMACNAL,
         ROUTER,
+        IBNAL,
         NAL_ENUM_END_MARKER
 };
 
@@ -1042,6 +1044,7 @@ extern ptl_handle_ni_t  kqswnal_ni;
 extern ptl_handle_ni_t  ksocknal_ni;
 extern ptl_handle_ni_t  ktoenal_ni;
 extern ptl_handle_ni_t  kgmnal_ni;
+extern ptl_handle_ni_t  kibnal_ni;
 extern ptl_handle_ni_t  kscimacnal_ni;
 #endif
 
