@@ -15,7 +15,7 @@ AC_MSG_CHECKING(setting make flags system architecture: )
 case ${host_cpu} in
 	um )
 	AC_MSG_RESULT($host_cpu)
-	KCFLAGS='-g -O2 -Wall -pipe -Wno-trigraphs -Wstrict-prototypes -fno-strict-aliasing -fno-common '
+	KCFLAGS='-g -Wall -pipe -Wno-trigraphs -Wstrict-prototypes -fno-strict-aliasing -fno-common '
 	KCPPFLAGS='-D__KERNEL__ -U__i386__ -Ui386 -DUM_FASTCALL -D__arch_um__ -DSUBARCH="i386" -DNESTING=0 -D_LARGEFILE64_SOURCE  -Derrno=kernel_errno -DPATCHLEVEL=4 -DMODULE -I$(LINUX)/arch/um/include '
         MOD_LINK=elf_i386
 ;;
