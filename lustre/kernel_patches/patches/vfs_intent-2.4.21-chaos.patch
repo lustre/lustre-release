@@ -316,7 +316,7 @@ Index: linux-ia64/fs/namei.c
 +						&dentry->d_name, 0, NULL);
 +				d_invalidate(dentry);
 +				dput(dentry);
-+				if (IS_ERR(new)) { 
++				if (IS_ERR(new)) {
 +					err = PTR_ERR(new);
 +					break;
 +				}
