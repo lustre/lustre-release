@@ -450,7 +450,7 @@ int tracefile_dump_all_pages(char *filename)
 
         down_write(&tracefile_sem);
 
-        filp = filp_open(filename, O_CREAT|O_EXCL|O_RDWR, 0600);
+        filp = filp_open(filename, O_CREAT|O_EXCL|O_WRONLY, 0600);
         if (IS_ERR(filp)) {
                 rc = PTR_ERR(filp);
                 printk(KERN_ERR "couldn't open %s: %d\n", filename, rc);
