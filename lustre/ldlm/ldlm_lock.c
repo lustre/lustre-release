@@ -150,7 +150,8 @@ void ldlm_lock_put(struct ldlm_lock *lock)
         if (lock->l_refc < 0)
                 LBUG();
 
-        ldlm_resource_put(lock->l_resource);
+        if (ldlm_resource_put(lock->l_resource))
+                lock->l_resource = NULL;
         if (lock->l_parent)
                 LDLM_LOCK_PUT(lock->l_parent);
 
