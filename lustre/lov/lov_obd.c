@@ -219,9 +219,10 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         ENTRY;
 
         if (!ea) {
-                CERROR("lov_create needs EA for striping information\n");
+                CERROR("lov_create needs ea\n");
                 RETURN(-EINVAL);
         }
+
         if (!export)
                 RETURN(-EINVAL);
 
@@ -315,6 +316,12 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
+        if (lsm->lsm_magic != LOV_MAGIC) {
+                CERROR("LOV striping magic bad %#lx != %#lx\n",
+                       lsm->lsm_magic, LOV_MAGIC);
+                RETURN(-EINVAL);
+        }
+
         if (!export || !export->exp_obd)
                 RETURN(-ENODEV);
 
@@ -345,6 +352,12 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
 
         if (!lsm) {
                 CERROR("LOV requires striping ea\n");
+                RETURN(-EINVAL);
+        }
+
+        if (lsm->lsm_magic != LOV_MAGIC) {
+                CERROR("LOV striping magic bad %#lx != %#lx\n",
+                       lsm->lsm_magic, LOV_MAGIC);
                 RETURN(-EINVAL);
         }
 
@@ -408,10 +421,16 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(-EINVAL);
         }
 
+        if (lsm->lsm_magic != LOV_MAGIC) {
+                CERROR("LOV striping magic bad %#lx != %#lx\n",
+                       lsm->lsm_magic, LOV_MAGIC);
+                RETURN(-EINVAL);
+        }
+
         if (!export || !export->exp_obd)
                 RETURN(-ENODEV);
 
-        if (oa->o_valid && OBD_MD_FLSIZE)
+        if (oa->o_valid & OBD_MD_FLSIZE)
                 CERROR("setting size on an LOV object is totally broken\n");
 
         lov = &export->exp_obd->u.lov;
@@ -446,6 +465,12 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
 
         if (!lsm) {
                 CERROR("LOV requires striping ea for opening\n");
+                RETURN(-EINVAL);
+        }
+
+        if (lsm->lsm_magic != LOV_MAGIC) {
+                CERROR("LOV striping magic bad %#lx != %#lx\n",
+                       lsm->lsm_magic, LOV_MAGIC);
                 RETURN(-EINVAL);
         }
 
@@ -492,6 +517,12 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
 
         if (!lsm) {
                 CERROR("LOV requires striping ea\n");
+                RETURN(-EINVAL);
+        }
+
+        if (lsm->lsm_magic != LOV_MAGIC) {
+                CERROR("LOV striping magic bad %#lx != %#lx\n",
+                       lsm->lsm_magic, LOV_MAGIC);
                 RETURN(-EINVAL);
         }
 
@@ -573,7 +604,13 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
         ENTRY;
 
         if (!lsm) {
-                CERROR("LOV requires striping ea for desctruction\n");
+                CERROR("LOV requires striping ea\n");
+                RETURN(-EINVAL);
+        }
+
+        if (lsm->lsm_magic != LOV_MAGIC) {
+                CERROR("LOV striping magic bad %#lx != %#lx\n",
+                       lsm->lsm_magic, LOV_MAGIC);
                 RETURN(-EINVAL);
         }
 
@@ -646,6 +683,17 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
         struct lov_oinfo *loi;
         int *where;
         ENTRY;
+
+        if (!lsm) {
+                CERROR("LOV requires striping ea\n");
+                RETURN(-EINVAL);
+        }
+
+        if (lsm->lsm_magic != LOV_MAGIC) {
+                CERROR("LOV striping magic bad %#lx != %#lx\n",
+                       lsm->lsm_magic, LOV_MAGIC);
+                RETURN(-EINVAL);
+        }
 
         lov = &export->exp_obd->u.lov;
 
@@ -732,7 +780,13 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         ENTRY;
 
         if (!lsm) {
-                CERROR("LOV requires striping ea for desctruction\n");
+                CERROR("LOV requires striping ea\n");
+                RETURN(-EINVAL);
+        }
+
+        if (lsm->lsm_magic != LOV_MAGIC) {
+                CERROR("LOV striping magic bad %#lx != %#lx\n",
+                       lsm->lsm_magic, LOV_MAGIC);
                 RETURN(-EINVAL);
         }
 
@@ -779,7 +833,13 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         ENTRY;
 
         if (!lsm) {
-                CERROR("LOV requires striping ea for lock cancellation\n");
+                CERROR("LOV requires striping ea\n");
+                RETURN(-EINVAL);
+        }
+
+        if (lsm->lsm_magic != LOV_MAGIC) {
+                CERROR("LOV striping magic bad %#lx != %#lx\n",
+                       lsm->lsm_magic, LOV_MAGIC);
                 RETURN(-EINVAL);
         }
 
