@@ -98,7 +98,7 @@ run_one() {
 	BEFORE=`date +%s`
 	log "== test $1: $2= `date +%H:%M:%S` ($BEFORE)"
 	export TESTNAME=test_$1
-	test_$1 || error "test_$1: exit with rc=$?"
+	test_$1 || error "exit with rc=$?"
 	unset TESTNAME
 	pass "($((`date +%s` - $BEFORE))s)"
 	cd $SAVE_PWD
@@ -155,7 +155,7 @@ run_test() {
 [ "$SANITYLOG" ] && rm -f $SANITYLOG || true
 
 error() { 
-	log "FAIL: $@"
+	log "FAIL: $TESTNAME $@"
 	if [ "$SANITYLOG" ]; then
 		echo "FAIL: $TESTNAME $@" >> $SANITYLOG
 	else
