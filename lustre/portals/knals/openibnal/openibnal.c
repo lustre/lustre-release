@@ -48,7 +48,7 @@ static ctl_table koibnal_top_ctl_table[] = {
 #endif
 
 void
-print_service(tTS_IB_COMMON_ATTRIB_SERVICE service, char *tag, int rc)
+print_service(struct ib_common_attrib_service *service, char *tag, int rc)
 {
         char name[32];
 
@@ -71,7 +71,7 @@ print_service(tTS_IB_COMMON_ATTRIB_SERVICE service, char *tag, int rc)
 
 void
 koibnal_service_setunset_done (tTS_IB_CLIENT_QUERY_TID tid, int status,
-                               tTS_IB_COMMON_ATTRIB_SERVICE service, void *arg)
+                               struct ib_common_attrib_service *service, void *arg)
 {
         *(int *)arg = status;
         up (&koibnal_data.koib_nid_signal);
@@ -195,7 +195,7 @@ koibnal_check_advert (void)
         int     rc;
         int     rc2;
 
-        static struct tTS_IB_COMMON_ATTRIB_SERVICE_STRUCT srv;
+        static struct ib_common_attrib_service srv;
 
         memset (&srv, 0, sizeof (srv));
 
@@ -1327,7 +1327,7 @@ koibnal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
 
         CDEBUG(D_NET, "Max Initiator: %d Max Responder %d\n", 
                koibnal_data.koib_device_props.max_initiator_per_qp,
-               koibnal_data.koib_device_props.max_initiator_per_qp);
+               koibnal_data.koib_device_props.max_responder_per_qp);
 
         koibnal_data.koib_port = 0;
         for (i = 1; i <= 2; i++) {

@@ -31,7 +31,7 @@ LIVE_CLIENT=${LIVE_CLIENT:-${CLIENT1}}
 # This should always be a list, not a regexp
 FAIL_CLIENTS=${FAIL_CLIENTS:-"`all_but_one_clients`"}
 
-NETTYPE=${NETTYPE:-${NETWORKTYPE}}
+NETTYPE=${NETTYPE:-${NETTYPE}}
 
 TIMEOUT=${TIMEOUT:-30}
 PTLDEBUG=${PTLDEBUG:-0}

@@ -72,7 +72,8 @@
 
 #define OPENIBNAL_MSG_SIZE       (4<<10)          /* max size of queued messages (inc hdr) */
 
-#define OPENIBNAL_MSG_QUEUE_SIZE   16             /* # messages in-flight */
+#define OPENIBNAL_MSG_QUEUE_SIZE   8              /* # messages in-flight */
+#define OPENIBNAL_CREDIT_HIGHWATER 6              /* when to eagerly return credits */
 #define OPENIBNAL_RETRY            7              /* # times to retry */
 #define OPENIBNAL_RNR_RETRY        7              /*  */
 #define OPENIBNAL_CM_RETRY         7              /* # times to retry connection */
@@ -85,7 +86,6 @@
 #define OPENIBNAL_PEER_HASH_SIZE  101             /* # peer lists */
 
 #define OPENIBNAL_RESCHED         100             /* # scheduler loops before reschedule */
-#define OPENIBNAL_ENOMEM_RETRY    1               /* jiffies between retries */
 
 #define OPENIBNAL_CONCURRENT_PEERS 1000           /* # nodes all talking at once to me */
 
@@ -184,7 +184,7 @@ typedef struct
         struct ib_cq     *koib_rx_cq;           /* receive completion queue */
         struct ib_cq     *koib_tx_cq;           /* transmit completion queue */
         void             *koib_listen_handle;   /* where I listen for connections */
-        struct tTS_IB_COMMON_ATTRIB_SERVICE_STRUCT koib_service; /* SM service */
+        struct ib_common_attrib_service koib_service; /* SM service */
         
 } koib_data_t;
 
@@ -247,7 +247,8 @@ typedef struct
 {
         __u32              oibm_magic;          /* I'm an openibnal message */
         __u16              oibm_version;        /* this is my version number */
-        __u16              oibm_type;           /* msg type */
+        __u8               oibm_type;           /* msg type */
+        __u8               oibm_credits;        /* returned credits */
 #if OPENIBNAL_CKSUM
         __u32              oibm_nob;
         __u32              oibm_cksum;
@@ -260,13 +261,14 @@ typedef struct
 } koib_msg_t;
 
 #define OPENIBNAL_MSG_MAGIC       0x0be91b91    /* unique magic */
-#define OPENIBNAL_MSG_VERSION              0    /* current protocol version */
+#define OPENIBNAL_MSG_VERSION              1    /* current protocol version */
 
-#define OPENIBNAL_MSG_IMMEDIATE       0x40d0    /* portals hdr + payload */
-#define OPENIBNAL_MSG_PUT_RDMA        0x40d1    /* portals PUT hdr + source rdma desc */
-#define OPENIBNAL_MSG_PUT_DONE        0x40d2    /* signal PUT rdma completion */
-#define OPENIBNAL_MSG_GET_RDMA        0x40d3    /* portals GET hdr + sink rdma desc */
-#define OPENIBNAL_MSG_GET_DONE        0x40d4    /* signal GET rdma completion */
+#define OPENIBNAL_MSG_NOOP              0xd0    /* nothing (just credits) */
+#define OPENIBNAL_MSG_IMMEDIATE         0xd1    /* portals hdr + payload */
+#define OPENIBNAL_MSG_PUT_RDMA          0xd2    /* portals PUT hdr + source rdma desc */
+#define OPENIBNAL_MSG_PUT_DONE          0xd3    /* signal PUT rdma completion */
+#define OPENIBNAL_MSG_GET_RDMA          0xd4    /* portals GET hdr + sink rdma desc */
+#define OPENIBNAL_MSG_GET_DONE          0xd5    /* signal GET rdma completion */
 
 /***********************************************************************/
 
@@ -275,6 +277,7 @@ typedef struct koib_rx                          /* receive message */
         struct list_head          rx_list;      /* queue for attention */
         struct koib_conn         *rx_conn;      /* owning conn */
         int                       rx_rdma;      /* RDMA completion posted? */
+        int                       rx_posted;    /* posted? */
         __u64                     rx_vaddr;     /* pre-mapped buffer (hca vaddr) */
         koib_msg_t               *rx_msg;       /* pre-mapped buffer (host vaddr) */
         struct ib_receive_param   rx_sp;        /* receive work item */
@@ -290,6 +293,7 @@ typedef struct koib_tx                          /* transmit message */
         int                       tx_sending;   /* # tx callbacks outstanding */
         int                       tx_status;    /* completion status */
         int                       tx_passive_rdma; /* waiting for peer to RDMA? */
+        int                       tx_passive_rdma_wait; /* on ibc_rdma_queue */
         unsigned long             tx_passive_rdma_deadline; /* completion deadline */
         __u64                     tx_passive_rdma_cookie; /* completion cookie */
         lib_msg_t                *tx_libmsg[2]; /* lib msgs to finalize on completion */
@@ -307,6 +311,9 @@ typedef struct koib_tx                          /* transmit message */
 
 typedef struct koib_wire_connreq
 {
+        __u32        wcr_magic;                 /* I'm an openibnal connreq */
+        __u16        wcr_version;               /* this is my version number */
+        __u16        wcr_queue_depth;           /* this is my receive queue size */
         __u64        wcr_nid;                   /* peer's NID */
         __u64        wcr_incarnation;           /* peer's incarnation */
 } koib_wire_connreq_t;
@@ -317,7 +324,7 @@ typedef struct koib_connreq
         struct koib_conn                   *cr_conn;
         koib_wire_connreq_t                 cr_wcr;
         __u64                               cr_tid;
-        tTS_IB_COMMON_ATTRIB_SERVICE_STRUCT cr_service;
+        struct ib_common_attrib_service     cr_service;
         tTS_IB_GID                          cr_gid;
         struct ib_path_record               cr_path;
         struct ib_cm_active_param           cr_connparam;
@@ -331,7 +338,9 @@ typedef struct koib_conn
         atomic_t            ibc_refcount;       /* # users */
         int                 ibc_state;          /* what's happening */
         atomic_t            ibc_nob;            /* # bytes buffered */
-        int                 ibc_nsends_posted;  /* # uncompleted send work items */
+        int                 ibc_nsends_posted;  /* # uncompleted sends */
+        int                 ibc_credits;        /* # credits I have */
+        int                 ibc_outstanding_credits; /* # credits to return */
         struct list_head    ibc_tx_queue;       /* send queue */
         struct list_head    ibc_rdma_queue;     /* tx awaiting RDMA completion */
         spinlock_t          ibc_lock;           /* serialise */
@@ -407,7 +416,7 @@ koibnal_queue_tx_locked (koib_tx_t *tx, koib_conn_t *conn)
                                    IB_SA_SERVICE_COMP_MASK_DATA8_8)
 
 static inline __u64*
-koibnal_service_nid_field(tTS_IB_COMMON_ATTRIB_SERVICE srv)
+koibnal_service_nid_field(struct ib_common_attrib_service *srv)
 {
         /* must be consistent with KOIBNAL_SERVICE_KEY_MASK */
         return (__u64 *)srv->service_data8;
@@ -415,13 +424,13 @@ koibnal_service_nid_field(tTS_IB_COMMON_ATTRIB_SERVICE srv)
 
 
 static inline void
-koibnal_set_service_keys(tTS_IB_COMMON_ATTRIB_SERVICE srv, ptl_nid_t nid)
+koibnal_set_service_keys(struct ib_common_attrib_service *srv, ptl_nid_t nid)
 {
         LASSERT (strlen (OPENIBNAL_SERVICE_NAME) < sizeof(srv->service_name));
         memset (srv->service_name, 0, sizeof(srv->service_name));
         strcpy (srv->service_name, OPENIBNAL_SERVICE_NAME);
 
-        *koibnal_service_nid_field(srv) = HTON__u64(nid);
+        *koibnal_service_nid_field(srv) = cpu_to_le64(nid);
 }
 
 #if 0
@@ -472,6 +481,8 @@ extern void koibnal_destroy_conn (koib_conn_t *conn);
 extern int koibnal_alloc_pages (koib_pages_t **pp, int npages, int access);
 extern void koibnal_free_pages (koib_pages_t *p);
 
+extern void koibnal_check_sends (koib_conn_t *conn);
+
 extern tTS_IB_CM_CALLBACK_RETURN
 koibnal_conn_callback (tTS_IB_CM_EVENT event, tTS_IB_CM_COMM_ID cid,
                        void *param, void *arg);
@@ -486,6 +497,7 @@ extern int  koibnal_scheduler(void *arg);
 extern int  koibnal_connd (void *arg);
 extern void koibnal_rx_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg);
 extern void koibnal_tx_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg);
+extern void koibnal_init_tx_msg (koib_tx_t *tx, int type, int body_nob);
 extern int  koibnal_close_conn (koib_conn_t *conn, int why);
 extern void koibnal_start_active_rdma (int type, int status, 
                                        koib_rx_t *rx, lib_msg_t *libmsg, 

@@ -49,7 +49,7 @@ koibnal_tx_done (koib_tx_t *tx)
         int              rc;
 
         LASSERT (tx->tx_sending == 0);          /* mustn't be awaiting callback */
-        LASSERT (!tx->tx_passive_rdma);         /* mustn't be awaiting RDMA completion */
+        LASSERT (!tx->tx_passive_rdma_wait);    /* mustn't be on ibc_rdma_queue */
 
         switch (tx->tx_mapped) {
         default:
@@ -166,7 +166,8 @@ koibnal_get_idle_tx (int may_block)
                 LASSERT (tx->tx_sending == 0);
                 LASSERT (tx->tx_status == 0);
                 LASSERT (tx->tx_conn == NULL);
-                LASSERT (tx->tx_passive_rdma == 0);
+                LASSERT (!tx->tx_passive_rdma);
+                LASSERT (!tx->tx_passive_rdma_wait);
                 LASSERT (tx->tx_libmsg[0] == NULL);
                 LASSERT (tx->tx_libmsg[1] == NULL);
         }
@@ -202,17 +203,17 @@ koibnal_complete_passive_rdma(koib_conn_t *conn, __u64 cookie, int status)
         list_for_each (ttmp, &conn->ibc_rdma_queue) {
                 koib_tx_t *tx = list_entry(ttmp, koib_tx_t, tx_list);
                 
+                LASSERT (tx->tx_passive_rdma);
+                LASSERT (tx->tx_passive_rdma_wait);
+
                 if (tx->tx_passive_rdma_cookie != cookie)
                         continue;
 
                 CDEBUG(D_NET, "Complete %p "LPD64"\n", tx, cookie);
 
-                /* This one completed */
-                LASSERT (tx->tx_passive_rdma);
-
                 list_del (&tx->tx_list);
 
-                tx->tx_passive_rdma = 0;
+                tx->tx_passive_rdma_wait = 0;
                 idle = (tx->tx_sending == 0);
 
                 tx->tx_status = status;
@@ -233,10 +234,11 @@ koibnal_complete_passive_rdma(koib_conn_t *conn, __u64 cookie, int status)
 }
 
 void
-koibnal_post_rx (koib_rx_t *rx)
+koibnal_post_rx (koib_rx_t *rx, int do_credits)
 {
-        koib_conn_t *conn = rx->rx_conn;
-        int          rc;
+        koib_conn_t  *conn = rx->rx_conn;
+        int           rc;
+        unsigned long flags;
 
         rx->rx_gl = (struct ib_gather_scatter) {
                 .address = rx->rx_vaddr,
@@ -253,15 +255,26 @@ koibnal_post_rx (koib_rx_t *rx)
         };
 
         LASSERT (conn->ibc_state >= OPENIBNAL_CONN_ESTABLISHED);
+        LASSERT (!rx->rx_posted);
+        rx->rx_posted = 1;
+        mb();
 
         if (conn->ibc_state != OPENIBNAL_CONN_ESTABLISHED)
                 rc = -ECONNABORTED;
         else
                 rc = ib_receive (conn->ibc_qp, &rx->rx_sp, 1);
 
-        if (rc == 0)
+        if (rc == 0) {
+                if (do_credits) {
+                        spin_lock_irqsave(&conn->ibc_lock, flags);
+                        conn->ibc_outstanding_credits++;
+                        spin_unlock_irqrestore(&conn->ibc_lock, flags);
+
+                        koibnal_check_sends(conn);
+                }
                 return;
-        
+        }
+
         if (conn->ibc_state == OPENIBNAL_CONN_ESTABLISHED) {
                 CERROR ("Error posting receive -> "LPX64": %d\n",
                         conn->ibc_peer->ibp_nid, rc);
@@ -296,6 +309,7 @@ koibnal_rx_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg)
         koib_conn_t  *conn = rx->rx_conn;
         int           nob = e->bytes_transferred;
         const int     base_nob = offsetof(koib_msg_t, oibm_u);
+        int           credits;
         int           flipped;
         unsigned long flags;
 #if OPENIBNAL_CKSUM
@@ -304,6 +318,9 @@ koibnal_rx_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg)
 #endif
 
         CDEBUG (D_NET, "rx %p conn %p\n", rx, conn);
+        LASSERT (rx->rx_posted);
+        rx->rx_posted = 0;
+        mb();
 
         /* receives complete with error in any case after we've started
          * closing the QP */
@@ -337,7 +354,8 @@ koibnal_rx_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg)
                 }
                 flipped = 1;
                 __swab16s (&msg->oibm_version);
-                __swab16s (&msg->oibm_type);
+                LASSERT (sizeof(msg->oibm_type) == 1);
+                LASSERT (sizeof(msg->oibm_credits) == 1);
         }
 
         if (msg->oibm_version != OPENIBNAL_MSG_VERSION) {
@@ -352,7 +370,7 @@ koibnal_rx_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg)
                 goto failed;
         }
 
-        msg_cksum = NTOH__u32 (msg->oibm_cksum);
+        msg_cksum = le32_to_cpu(msg->oibm_cksum);
         msg->oibm_cksum = 0;
         computed_cksum = koibnal_cksum (msg, nob);
         
@@ -362,8 +380,23 @@ koibnal_rx_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg)
                 goto failed;
         }
         CDEBUG(D_NET, "cksum %x, nob %d\n", computed_cksum, nob);
-#endif        
+#endif
+
+        /* Have I received credits that will let me send? */
+        credits = msg->oibm_credits;
+        if (credits != 0) {
+                spin_lock_irqsave(&conn->ibc_lock, flags);
+                conn->ibc_credits += credits;
+                spin_unlock_irqrestore(&conn->ibc_lock, flags);
+                
+                koibnal_check_sends(conn);
+        }
+
         switch (msg->oibm_type) {
+        case OPENIBNAL_MSG_NOOP:
+                koibnal_post_rx (rx, 1);
+                return;
+
         case OPENIBNAL_MSG_IMMEDIATE:
                 if (nob < base_nob + sizeof (koib_immediate_msg_t)) {
                         CERROR ("Short IMMEDIATE from "LPX64": %d\n",
@@ -408,7 +441,7 @@ koibnal_rx_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg)
                 koibnal_complete_passive_rdma (conn, 
                                                msg->oibm_u.completion.oibcm_cookie,
                                                msg->oibm_u.completion.oibcm_status);
-                koibnal_post_rx (rx);
+                koibnal_post_rx (rx, 1);
                 return;
                         
         default:
@@ -482,7 +515,7 @@ koibnal_rx (koib_rx_t *rx)
                 break;
         }
 
-        koibnal_post_rx (rx);
+        koibnal_post_rx (rx, 1);
 }
 
 #if 0
@@ -709,6 +742,22 @@ koibnal_check_sends (koib_conn_t *conn)
 
         spin_lock_irqsave (&conn->ibc_lock, flags);
 
+        if (list_empty(&conn->ibc_tx_queue) &&
+            conn->ibc_outstanding_credits >= OPENIBNAL_CREDIT_HIGHWATER) {
+                spin_unlock_irqrestore(&conn->ibc_lock, flags);
+
+                tx = koibnal_get_idle_tx(0);     /* don't block */
+                if (tx != NULL)
+                        koibnal_init_tx_msg(tx, OPENIBNAL_MSG_NOOP, 0);
+
+                spin_lock_irqsave(&conn->ibc_lock, flags);
+
+                if (tx != NULL) {
+                        atomic_inc(&conn->ibc_refcount);
+                        koibnal_queue_tx_locked(tx, conn);
+                }
+        }
+
         LASSERT (conn->ibc_nsends_posted <= OPENIBNAL_MSG_QUEUE_SIZE);
 
         while (!list_empty (&conn->ibc_tx_queue)) {
@@ -716,22 +765,52 @@ koibnal_check_sends (koib_conn_t *conn)
 
                 /* We rely on this for QP sizing */
                 LASSERT (tx->tx_nsp > 0 && tx->tx_nsp <= 2);
+
+                LASSERT (conn->ibc_outstanding_credits >= 0);
+                LASSERT (conn->ibc_outstanding_credits <= OPENIBNAL_MSG_QUEUE_SIZE);
+                LASSERT (conn->ibc_credits >= 0);
+                LASSERT (conn->ibc_credits <= OPENIBNAL_MSG_QUEUE_SIZE);
+
+                /* Not on ibc_rdma_queue */
+                LASSERT (!tx->tx_passive_rdma_wait);
+
+                if (conn->ibc_nsends_posted == OPENIBNAL_MSG_QUEUE_SIZE)
+                        break;
+
+                if (conn->ibc_credits == 0)     /* no credits */
+                        break;
                 
-                if (conn->ibc_nsends_posted + tx->tx_nsp > OPENIBNAL_MSG_QUEUE_SIZE)
+                if (conn->ibc_credits == 1 &&   /* last credit reserved for */
+                    conn->ibc_outstanding_credits == 0) /* giving back credits */
                         break;
 
                 list_del (&tx->tx_list);
 
+                if (tx->tx_msg->oibm_type == OPENIBNAL_MSG_NOOP &&
+                    (!list_empty(&conn->ibc_tx_queue) ||
+                     conn->ibc_outstanding_credits < OPENIBNAL_CREDIT_HIGHWATER)) {
+                        /* Redundant NOOP */
+                        spin_unlock_irqrestore(&conn->ibc_lock, flags);
+                        koibnal_tx_done(tx);
+                        spin_lock_irqsave(&conn->ibc_lock, flags);
+                        continue;
+                }
+                
                 /* incoming RDMA completion can find this one now */
                 if (tx->tx_passive_rdma) {
                         list_add (&tx->tx_list, &conn->ibc_rdma_queue);
+                        tx->tx_passive_rdma_wait = 1;
                         tx->tx_passive_rdma_deadline = 
                                 jiffies + koibnal_tunables.koib_io_timeout * HZ;
                 }
 
+                tx->tx_msg->oibm_credits = conn->ibc_outstanding_credits;
+                conn->ibc_outstanding_credits = 0;
+
                 /* use the free memory barrier when we unlock to ensure
                  * sending set before we can get the tx callback. */
-                conn->ibc_nsends_posted += tx->tx_nsp;
+                conn->ibc_nsends_posted++;
+                conn->ibc_credits--;
                 tx->tx_sending = tx->tx_nsp;
 
 #if OPENIBNAL_CKSUM
@@ -761,13 +840,17 @@ koibnal_check_sends (koib_conn_t *conn)
 
                 spin_lock_irqsave (&conn->ibc_lock, flags);
                 if (rc != 0) {
-                        conn->ibc_nsends_posted -= tx->tx_nsp - nwork;
+                        /* NB credits are transferred in the actual
+                         * message, which can only be the last work item */
+                        conn->ibc_outstanding_credits += tx->tx_msg->oibm_credits;
+                        conn->ibc_credits++;
+                        conn->ibc_nsends_posted--;
                         tx->tx_sending -= tx->tx_nsp - nwork;
                         tx->tx_status = rc;
                         done = (tx->tx_sending == 0);
                         
                         if (tx->tx_passive_rdma) {
-                                tx->tx_passive_rdma = 0;
+                                tx->tx_passive_rdma_wait = 0;
                                 list_del (&tx->tx_list);
                         }
                         
@@ -817,14 +900,15 @@ koibnal_tx_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg)
 
         tx->tx_sending--;
         idle = (tx->tx_sending == 0) &&         /* This is the final callback */
-               (!tx->tx_passive_rdma);          /* Not waiting for RDMA completion */
+               (!tx->tx_passive_rdma_wait);     /* Not waiting for RDMA completion */
 
         CDEBUG(D_NET, "++conn[%p] state %d -> "LPX64" (%d)\n",
                conn, conn->ibc_state, conn->ibc_peer->ibp_nid,
                atomic_read (&conn->ibc_refcount));
         atomic_inc (&conn->ibc_refcount);
 
-        conn->ibc_nsends_posted--;
+        if (tx->tx_sending == 0)
+                conn->ibc_nsends_posted--;
 
         if (e->status != IB_COMPLETION_STATUS_SUCCESS &&
             tx->tx_status == 0)
@@ -1578,7 +1662,7 @@ koibnal_connreq_done (koib_conn_t *conn, int active, int status)
         int               rc;
         int               i;
 
-        /* active connection has no cr & vice versa */
+        /* passive connection has no connreq & vice versa */
         LASSERT (!active == !(conn->ibc_connreq != NULL));
         if (active) {
                 PORTAL_FREE (conn->ibc_connreq, sizeof (*conn->ibc_connreq));
@@ -1665,7 +1749,7 @@ koibnal_connreq_done (koib_conn_t *conn, int active, int status)
                                i, &conn->ibc_rxs[i], conn->ibc_rxs[i].rx_msg,
                                conn->ibc_rxs[i].rx_vaddr);
 
-                        koibnal_post_rx (&conn->ibc_rxs[i]);
+                        koibnal_post_rx (&conn->ibc_rxs[i], 0);
                 }
 
                 koibnal_check_sends (conn);
@@ -1694,7 +1778,7 @@ koibnal_connreq_done (koib_conn_t *conn, int active, int status)
 
 int
 koibnal_accept (koib_conn_t **connp, tTS_IB_CM_COMM_ID cid,
-                ptl_nid_t nid, __u64 incarnation)
+                ptl_nid_t nid, __u64 incarnation, int queue_depth)
 {
         koib_conn_t   *conn = koibnal_create_conn();
         koib_peer_t   *peer;
@@ -1704,6 +1788,12 @@ koibnal_accept (koib_conn_t **connp, tTS_IB_CM_COMM_ID cid,
         if (conn == NULL)
                 return (-ENOMEM);
 
+        if (queue_depth != OPENIBNAL_MSG_QUEUE_SIZE) {
+                CERROR("Can't accept "LPX64": bad queue depth %d (%d expected)\n",
+                       nid, queue_depth, OPENIBNAL_MSG_QUEUE_SIZE);
+                return (-EPROTO);
+        }
+        
         /* assume 'nid' is a new peer */
         peer = koibnal_create_peer (nid);
         if (peer == NULL) {
@@ -1737,6 +1827,7 @@ koibnal_accept (koib_conn_t **connp, tTS_IB_CM_COMM_ID cid,
         conn->ibc_state = OPENIBNAL_CONN_CONNECTING;
         conn->ibc_comm_id = cid;
         conn->ibc_incarnation = incarnation;
+        conn->ibc_credits = OPENIBNAL_MSG_QUEUE_SIZE;
 
         *connp = conn;
         return (0);
@@ -1763,8 +1854,7 @@ koibnal_conn_callback (tTS_IB_CM_EVENT event,
         koib_conn_t *conn = arg;
         int          rc;
 
-        /* both active and passive sides now expect TS_IB_CM_ESTABLISHED or
-         * some error... */
+        /* Established Connection Notifier */
 
         switch (event) {
         default:
@@ -1822,7 +1912,7 @@ koibnal_passive_conn_callback (tTS_IB_CM_EVENT event,
 
                 LASSERT (conn == NULL);
 
-                CDEBUG(D_NET, "REQ from "LPX64"\n", NTOH__u64(wcr->wcr_nid));
+                CDEBUG(D_NET, "REQ from "LPX64"\n", le64_to_cpu(wcr->wcr_nid));
 
                 if (req->remote_private_data_len < sizeof (*wcr)) {
                         CERROR("Connect from remote LID %04x: too short %d\n",
@@ -1830,13 +1920,26 @@ koibnal_passive_conn_callback (tTS_IB_CM_EVENT event,
                         return TS_IB_CM_CALLBACK_ABORT;
                 }
 
+                if (wcr->wcr_magic != cpu_to_le32(OPENIBNAL_MSG_MAGIC)) {
+                        CERROR ("Can't accept LID %04x: bad magic %08x\n",
+                                req->dlid, le32_to_cpu(wcr->wcr_magic));
+                        return TS_IB_CM_CALLBACK_ABORT;
+                }
+                
+                if (wcr->wcr_version != cpu_to_le16(OPENIBNAL_MSG_VERSION)) {
+                        CERROR ("Can't accept LID %04x: bad version %d\n",
+                                req->dlid, le16_to_cpu(wcr->wcr_magic));
+                        return TS_IB_CM_CALLBACK_ABORT;
+                }
+                                
                 rc = koibnal_accept(&conn,
                                     cid,
-                                    NTOH__u64(wcr->wcr_nid),
-                                    NTOH__u64(wcr->wcr_incarnation));
+                                    le64_to_cpu(wcr->wcr_nid),
+                                    le64_to_cpu(wcr->wcr_incarnation),
+                                    le16_to_cpu(wcr->wcr_queue_depth));
                 if (rc != 0) {
                         CERROR ("Can't accept "LPX64": %d\n",
-                                NTOH__u64(wcr->wcr_nid), rc);
+                                le64_to_cpu(wcr->wcr_nid), rc);
                         return TS_IB_CM_CALLBACK_ABORT;
                 }
 
@@ -1848,8 +1951,11 @@ koibnal_passive_conn_callback (tTS_IB_CM_EVENT event,
                 req->accept_param.qp                     = conn->ibc_qp;
                 *((koib_wire_connreq_t *)req->accept_param.reply_private_data)
                         = (koib_wire_connreq_t) {
-                                .wcr_nid         = HTON__u64(koibnal_data.koib_nid),
-                                .wcr_incarnation = HTON__u64(koibnal_data.koib_incarnation),
+                                .wcr_magic       = cpu_to_le32(OPENIBNAL_MSG_MAGIC),
+                                .wcr_version     = cpu_to_le16(OPENIBNAL_MSG_VERSION),
+                                .wcr_queue_depth = cpu_to_le32(OPENIBNAL_MSG_QUEUE_SIZE),
+                                .wcr_nid         = cpu_to_le64(koibnal_data.koib_nid),
+                                .wcr_incarnation = cpu_to_le64(koibnal_data.koib_incarnation),
                         };
                 req->accept_param.reply_private_data_len = sizeof(koib_wire_connreq_t);
                 req->accept_param.responder_resources    = OPENIBNAL_RESPONDER_RESOURCES;
@@ -1887,10 +1993,6 @@ koibnal_active_conn_callback (tTS_IB_CM_EVENT event,
                 struct ib_cm_rep_received_param *rep = param;
                 koib_wire_connreq_t             *wcr = rep->remote_private_data;
 
-                CDEBUG(D_NET, "wcr NID "LPX64", inc "LPX64" len %d\n",
-                       NTOH__u64(wcr->wcr_nid), NTOH__u64(wcr->wcr_incarnation),
-                       rep->remote_private_data_len);
-
                 if (rep->remote_private_data_len < sizeof (*wcr)) {
                         CERROR ("Short reply from "LPX64": %d\n",
                                 conn->ibc_peer->ibp_nid,
@@ -1899,12 +2001,30 @@ koibnal_active_conn_callback (tTS_IB_CM_EVENT event,
                         break;
                 }
 
-                CDEBUG(D_NET, "wcr NID "LPX64", inc "LPX64"\n",
-                       NTOH__u64(wcr->wcr_nid), NTOH__u64(wcr->wcr_incarnation));
-
-                if (NTOH__u64(wcr->wcr_nid) != conn->ibc_peer->ibp_nid) {
+                if (wcr->wcr_magic != cpu_to_le32(OPENIBNAL_MSG_MAGIC)) {
+                        CERROR ("Can't connect "LPX64": bad magic %08x\n",
+                                conn->ibc_peer->ibp_nid, le32_to_cpu(wcr->wcr_magic));
+                        koibnal_connreq_done (conn, 1, -EPROTO);
+                        break;
+                }
+                
+                if (wcr->wcr_version != cpu_to_le16(OPENIBNAL_MSG_VERSION)) {
+                        CERROR ("Can't connect "LPX64": bad version %d\n",
+                                conn->ibc_peer->ibp_nid, le16_to_cpu(wcr->wcr_magic));
+                        koibnal_connreq_done (conn, 1, -EPROTO);
+                        break;
+                }
+                                
+                if (wcr->wcr_queue_depth != cpu_to_le16(OPENIBNAL_MSG_QUEUE_SIZE)) {
+                        CERROR ("Can't connect "LPX64": bad queue depth %d\n",
+                                conn->ibc_peer->ibp_nid, le16_to_cpu(wcr->wcr_queue_depth));
+                        koibnal_connreq_done (conn, 1, -EPROTO);
+                        break;
+                }
+                                
+                if (le64_to_cpu(wcr->wcr_nid) != conn->ibc_peer->ibp_nid) {
                         CERROR ("Unexpected NID "LPX64" from "LPX64"\n",
-                                NTOH__u64(wcr->wcr_nid), conn->ibc_peer->ibp_nid);
+                                le64_to_cpu(wcr->wcr_nid), conn->ibc_peer->ibp_nid);
                         koibnal_connreq_done (conn, 1, -EPROTO);
                         break;
                 }
@@ -1912,7 +2032,8 @@ koibnal_active_conn_callback (tTS_IB_CM_EVENT event,
                 CDEBUG(D_NET, "Connection %p -> "LPX64" REP_RECEIVED.\n",
                        conn, conn->ibc_peer->ibp_nid);
 
-                conn->ibc_incarnation = NTOH__u64(wcr->wcr_incarnation);
+                conn->ibc_incarnation = le64_to_cpu(wcr->wcr_incarnation);
+                conn->ibc_credits = OPENIBNAL_MSG_QUEUE_SIZE;
                 break;
         }
 
@@ -1959,8 +2080,11 @@ koibnal_pathreq_callback (tTS_IB_CLIENT_QUERY_TID tid, int status,
         conn->ibc_connreq->cr_path = *resp;
 
         conn->ibc_connreq->cr_wcr = (koib_wire_connreq_t) {
-                .wcr_nid         = HTON__u64 (koibnal_data.koib_nid),
-                .wcr_incarnation = HTON__u64 (koibnal_data.koib_incarnation),
+                .wcr_magic       = cpu_to_le32(OPENIBNAL_MSG_MAGIC),
+                .wcr_version     = cpu_to_le16(OPENIBNAL_MSG_VERSION),
+                .wcr_queue_depth = cpu_to_le16(OPENIBNAL_MSG_QUEUE_SIZE),
+                .wcr_nid         = cpu_to_le64(koibnal_data.koib_nid),
+                .wcr_incarnation = cpu_to_le64(koibnal_data.koib_incarnation),
         };
 
         conn->ibc_connreq->cr_connparam = (struct ib_cm_active_param) {
@@ -2006,7 +2130,7 @@ koibnal_pathreq_callback (tTS_IB_CLIENT_QUERY_TID tid, int status,
 
 void
 koibnal_service_get_callback (tTS_IB_CLIENT_QUERY_TID tid, int status,
-                              tTS_IB_COMMON_ATTRIB_SERVICE resp, void *arg)
+                              struct ib_common_attrib_service *resp, void *arg)
 {
         koib_conn_t *conn = arg;
         
@@ -2090,17 +2214,40 @@ koibnal_connect_peer (koib_peer_t *peer)
         koibnal_connreq_done (conn, 1, rc);
 }
 
+int
+koibnal_conn_timed_out (koib_conn_t *conn)
+{
+        koib_tx_t         *tx;
+        struct list_head  *ttmp;
+        unsigned long      flags;
+        int                rc = 0;
+
+        spin_lock_irqsave (&conn->ibc_lock, flags);
+
+        list_for_each (ttmp, &conn->ibc_rdma_queue) {
+                tx = list_entry (ttmp, koib_tx_t, tx_list);
+
+                LASSERT (tx->tx_passive_rdma);
+                LASSERT (tx->tx_passive_rdma_wait);
+
+                if (time_after_eq (jiffies, tx->tx_passive_rdma_deadline)) {
+                        rc = 1;
+                        break;
+                }
+        }
+        spin_unlock_irqrestore (&conn->ibc_lock, flags);
+
+        return rc;
+}
+
 void
-koibnal_check_rdma_timeouts (int idx)
+koibnal_check_conns (int idx)
 {
         struct list_head  *peers = &koibnal_data.koib_peers[idx];
         struct list_head  *ptmp;
         koib_peer_t       *peer;
         koib_conn_t       *conn;
         struct list_head  *ctmp;
-        koib_tx_t         *tx;
-        struct list_head  *ttmp;
-        unsigned long      flags;
 
  again:
         /* NB. We expect to have a look at all the peers and not find any
@@ -2116,33 +2263,29 @@ koibnal_check_rdma_timeouts (int idx)
 
                         LASSERT (conn->ibc_state == OPENIBNAL_CONN_ESTABLISHED);
 
-                        spin_lock_irqsave (&conn->ibc_lock, flags);
+                        /* In case we have enough credits to return via a
+                         * NOOP, but there were no non-blocking tx descs
+                         * free to do it last time... */
+                        koibnal_check_sends(conn);
 
-                        list_for_each (ttmp, &conn->ibc_rdma_queue) {
-                                tx = list_entry (ttmp, koib_tx_t, tx_list);
+                        if (!koibnal_conn_timed_out(conn))
+                                continue;
+                        
+                        CDEBUG(D_NET, "++conn[%p] state %d -> "LPX64" (%d)\n",
+                               conn, conn->ibc_state, peer->ibp_nid,
+                               atomic_read (&conn->ibc_refcount));
 
-                                LASSERT (tx->tx_passive_rdma);
-                                if (time_after_eq (jiffies, 
-                                                   tx->tx_passive_rdma_deadline)) {
-                                        CDEBUG(D_NET, "++conn[%p] state %d -> "LPX64" (%d)\n",
-                                               conn, conn->ibc_state, peer->ibp_nid,
-                                               atomic_read (&conn->ibc_refcount));
-                                        atomic_inc (&conn->ibc_refcount);
+                        atomic_inc (&conn->ibc_refcount);
+                        read_unlock (&koibnal_data.koib_global_lock);
 
-                                        spin_unlock_irqrestore (&conn->ibc_lock, flags);
-                                        read_unlock (&koibnal_data.koib_global_lock);
+                        CERROR("Timed out RDMA with "LPX64"\n",
+                               peer->ibp_nid);
 
-                                        CERROR("Timed out RDMA with "LPX64"\n",
-                                               peer->ibp_nid);
+                        koibnal_close_conn (conn, -ETIMEDOUT);
+                        koibnal_put_conn (conn);
 
-                                        koibnal_close_conn (conn, -ETIMEDOUT);
-                                        koibnal_put_conn (conn);
-
-                                        /* start again now I've dropped the lock */
-                                        goto again;
-                                }
-                        }
-                        spin_unlock_irqrestore (&conn->ibc_lock, flags);
+                        /* start again now I've dropped the lock */
+                        goto again;
                 }
         }
 
@@ -2172,11 +2315,16 @@ koibnal_terminate_conn (koib_conn_t *conn)
                 koib_tx_t *tx = list_entry (conn->ibc_rdma_queue.next,
                                             koib_tx_t, tx_list);
 
+                LASSERT (tx->tx_passive_rdma);
+                LASSERT (tx->tx_passive_rdma_wait);
+                
                 list_del (&tx->tx_list);
-                tx->tx_status = -ECONNABORTED;
-                tx->tx_passive_rdma = 0;
+
+                tx->tx_passive_rdma_wait = 0;
                 done = (tx->tx_sending == 0);
                 
+                tx->tx_status = -ECONNABORTED;
+
                 spin_unlock_irqrestore (&conn->ibc_lock, flags);
 
                 if (done)
@@ -2186,6 +2334,9 @@ koibnal_terminate_conn (koib_conn_t *conn)
         }
         
         spin_unlock_irqrestore (&conn->ibc_lock, flags);
+
+        /* Complete all blocked transmits */
+        koibnal_check_sends(conn);
 }
 
 int
@@ -2280,7 +2431,7 @@ koibnal_connd (void *arg)
                                 chunk = 1;
 
                         for (i = 0; i < chunk; i++) {
-                                koibnal_check_rdma_timeouts (peer_index);
+                                koibnal_check_conns (peer_index);
                                 peer_index = (peer_index + 1) % 
                                              koibnal_data.koib_peer_hash_size;
                         }
