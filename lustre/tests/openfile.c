@@ -61,7 +61,7 @@ int main(int argc, char** argv)
         int    flag_set=0;
         int    file_set=0;
         char   c;
-        char*  cloned_flags;
+        char*  cloned_flags = NULL;
 
         if (argc == 1)
                 Usage_and_abort();

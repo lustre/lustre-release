@@ -1,4 +1,4 @@
-uml-patch-2.4.23-1.patch
+uml-patch-2.4.24-1.patch
 uml-2.4.20-do_mmap_pgoff-fix.patch
 uml-export-end_iomem.patch 
 configurable-x86-stack-2.4.20.patch

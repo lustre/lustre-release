@@ -61,7 +61,7 @@ int main(int argc, char **argv)
         char *fname, *commands;
 	const char *newfile;
         struct stat st;
-	size_t mmap_len, i;
+	size_t mmap_len = 0, i;
 	unsigned char *mmap_ptr = NULL, junk = 0;
         int fd = -1;
 

@@ -1,0 +1,15 @@
+MODULES := obdclass llog_test
+
+obdclass-objs := llog.o llog_cat.o llog_lvfs.o llog_obd.o class_obd.o
+obdclass-objs += debug.o genops.o sysctl.o uuid.o llog_ioctl.o
+obdclass-objs += lprocfs_status.o lustre_handles.o lustre_peer.o
+obdclass-objs += statfs_pack.o obdo.o obd_config.o
+
+ifeq ($(PATCHLEVEL),6)
+llog_test-objs := llog-test.o
+
+llog-test.c: llog_test.c
+	ln -sf $< $@
+endif
+
+@INCLUDE_RULES@

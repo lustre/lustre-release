@@ -61,6 +61,7 @@ static struct file_operations **get_save_fops(struct file* filp, int mode)
         } else {
                 CERROR("invalid special file ops %d\n", mode);
                 LBUG();
+                return NULL;
         }
 }
 

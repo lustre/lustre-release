@@ -239,9 +239,8 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
          * has and what we think it has, don't grant very much and let the
          * client consume its grant first.  Either it just has lots of RPCs
          * in flight, or it was evicted and its grants will soon be used up. */
-        if (current_grant < want) {
-                if (current_grant > fed->fed_grant + FILTER_GRANT_CHUNK)
-                        want = 65536;
+        if (current_grant < want &&
+            current_grant < fed->fed_grant + FILTER_GRANT_CHUNK) {
                 grant = min((want >> blockbits) / 2,
                             (fs_space_left >> blockbits) / 8);
                 grant <<= blockbits;

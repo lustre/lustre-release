@@ -1,0 +1,6 @@
+MODULES := kqswnal
+kqswnal-objs := qswnal.o qswnal_cb.o
+
+EXTRA_CFLAGS := @QSWCPPFLAGS@
+
+@INCLUDE_RULES@

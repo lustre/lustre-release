@@ -417,8 +417,9 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
         CDEBUG(D_INODE, "%s: server subdir_count: %u\n",
                obd->obd_name, le16_to_cpu(fsd->fsd_subdir_count));
         CDEBUG(D_INODE, "%s: last_rcvd clients: %lu\n", obd->obd_name,
-               last_rcvd_size <= FILTER_LR_CLIENT_START ? 0 :
-               (last_rcvd_size-FILTER_LR_CLIENT_START) /FILTER_LR_CLIENT_SIZE);
+               last_rcvd_size <= le32_to_cpu(fsd->fsd_client_start) ? 0 :
+               (last_rcvd_size - le32_to_cpu(fsd->fsd_client_start)) /
+                le16_to_cpu(fsd->fsd_client_size));
 
         if (!obd->obd_replayable) {
                 CWARN("%s: recovery support OFF\n", obd->obd_name);
@@ -491,8 +492,8 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
 
         if (obd->obd_recoverable_clients) {
                 CWARN("RECOVERY: %d recoverable clients, last_rcvd "
-                       LPU64"\n", obd->obd_recoverable_clients,
-                       le64_to_cpu(fsd->fsd_last_transno));
+                      LPU64"\n", obd->obd_recoverable_clients,
+                      le64_to_cpu(fsd->fsd_last_transno));
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
         }
@@ -559,6 +560,8 @@ static int filter_cleanup_groups(struct obd_device *obd)
         if (filter->fo_last_objid_files != NULL)
                 OBD_FREE(filter->fo_last_objid_files,
                          FILTER_GROUPS * sizeof(struct file *));
+        if (filter->fo_dentry_O != NULL)
+                f_dput(filter->fo_dentry_O);
         RETURN(0);
 }
 
@@ -658,8 +661,8 @@ static int filter_prep_groups(struct obd_device *obd)
 
                 sprintf(name, "O/%d/LAST_ID", i);
                 filp = filp_open(name, O_CREAT | O_RDWR, 0700);
-                if (IS_ERR(dentry)) {
-                        rc = PTR_ERR(dentry);
+                if (IS_ERR(filp)) {
+                        rc = PTR_ERR(filp);
                         CERROR("cannot create %s: rc = %d\n", name, rc);
                         GOTO(cleanup, rc);
                 }
@@ -719,15 +722,7 @@ static int filter_prep_groups(struct obd_device *obd)
         RETURN(0);
 
  cleanup:
-        switch (cleanup_phase) {
-        case 2:
-                filter_cleanup_groups(obd);
-        case 1:
-                f_dput(filter->fo_dentry_O);
-                filter->fo_dentry_O = NULL;
-        default:
-                break;
-        }
+        filter_cleanup_groups(obd);
         return rc;
 }
 
@@ -812,13 +807,12 @@ static void filter_post(struct obd_device *obd)
                                i, rc);
         }
 
-        filp_close(filter->fo_rcvd_filp, 0);
+        rc = filp_close(filter->fo_rcvd_filp, 0);
         filter->fo_rcvd_filp = NULL;
         if (rc)
                 CERROR("error closing %s: rc = %d\n", LAST_RCVD, rc);
 
         filter_cleanup_groups(obd);
-        f_dput(filter->fo_dentry_O);
         filter_free_server_data(filter);
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
 }
@@ -1257,6 +1251,9 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         char *option = NULL;
         int n = 0;
         int rc;
+
+        if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
+                RETURN(-EINVAL);
 
         if (!strcmp(lcfg->lcfg_inlbuf2, "ext3")) {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

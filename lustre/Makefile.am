@@ -5,45 +5,92 @@
 
 AUTOMAKE_OPTIONS = foreign
 
-if LINUX25
-DIRS24 = 
+DIST_SUBDIRS = 
+SUBDIRS = include portals conf scripts ldlm
+
+# ldiskfs creates headers that the ldiskfs fsfilt will need
+if MODULES
+if LDISKFS
+SUBDIRS += ldiskfs
 else
-DIRS24 = ptlbd
+DIST_SUBDIRS += ldiskfs
+endif
+else
+DIST_SUBDIRS += ldiskfs
 endif
 
-# just until things are farther along
-if CRAY_PORTALS
-UTILS_TESTS = 
+# directories shared by the liblustre and modules builds
+CORE_SUBDIRS = lvfs obdclass lov ptlrpc obdecho osc mdc
+if LIBLUSTRE
+SUBDIRS += $(CORE_SUBDIRS)
 else
-UTILS_TESTS = utils tests
+if MODULES
+SUBDIRS += $(CORE_SUBDIRS)
+else
+DIST_SUBDIRS += $(CORE_SUBDIRS)
+endif
+endif
+
+# directories only built in the modules build
+MODULES_SUBDIRS = mds obdfilter ost llite cobd
+MODULES_DIST_SUBDIRS =
+
+if LINUX25
+MODULES_DIST_SUBDIRS += ptlbd
+else
+MODULES_SUBDIRS += ptlbd
+endif
+
+if SNAPFS
+MODULES_SUBDIRS += snapfs
+else
+MODULES_DIST_SUBDIRS += snapfs
+endif
+
+if SMFS
+MODULES_SUBDIRS += smfs
+else
+MODULES_DIST_SUBDIRS += smfs
+endif
+
+if MODULES
+SUBDIRS += $(MODULES_SUBDIRS)
+DIST_SUBDIRS += $(MODULES_DIST_SUBDIRS)
+else
+DIST_SUBDIRS += $(MODULES_SUBDIRS) $(MODULES_DIST_SUBDIRS)
 endif
 
 if LIBLUSTRE
-SUBDIRS = portals obdclass lov ptlrpc obdecho osc utils mdc lvfs liblustre
+SUBDIRS += liblustre
 else
-SUBDIRS = lvfs portals obdclass include $(DIRS24) mds obdfilter mdc osc ost 
-SUBDIRS+= llite obdecho lov cobd doc scripts conf ptlrpc $(UTILS_TESTS)
+DIST_SUBDIRS += liblustre
 endif
 
-
-if SNAPFS
-SUBDIRS+= snapfs
+if DOC
+SUBDIRS += doc
+else
+DIST_SUBDIRS += doc
 endif
 
-if SMFS 
-SUBDIRS += smfs
+if UTILS
+SUBDIRS += utils
+else
+DIST_SUBDIRS += utils
 endif
-DIST_SUBDIRS = $(SUBDIRS) liblustre snapfs smfs
-EXTRA_DIST = BUGS FDL Rules kernel_patches
 
-# We get the version from the spec file.
-CONFIGURE_DEPENDENCIES = scripts/lustre.spec.in
+if TESTS
+SUBDIRS += tests
+else
+DIST_SUBDIRS += tests
+endif
+
+DIST_SUBDIRS += $(SUBDIRS)
+
+EXTRA_DIST = BUGS FDL Rules.in kernel_patches kernel-tests/Makefile
 
 dist-hook:
 	find $(distdir) -name .deps | xargs rm -rf
 	find $(distdir) -name CVS | xargs rm -rf
-
-include $(top_srcdir)/Rules
 
 rpms: dist Makefile
 	rpmbuild -ta $(distdir).tar.gz

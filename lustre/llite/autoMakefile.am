@@ -1,0 +1,10 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+modulefs_DATA = llite$(KMODEXT)
+
+DIST_SOURCES := $(llite-objs:.o=.c) llite_internal.h rw24.c super.c rw26.c super25.c
+
+MOSTLYCLEANFILES = *.o *.ko *.mod.c

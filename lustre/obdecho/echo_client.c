@@ -794,7 +794,7 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                         GOTO(out, rc = -ENOMEM);
 
                 page->private = 0;
-                list_add_tail(&page->list, &pages);
+                list_add_tail(&PAGE_LIST(page), &pages);
 
                 OBD_ALLOC(eap, sizeof(*eap));
                 if (eap == NULL)
@@ -880,9 +880,10 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
 
 out:
         list_for_each_safe(pos, n, &pages) {
-                struct page *page = list_entry(pos, struct page, list);
+                struct page *page = list_entry(pos, struct page, 
+                                               PAGE_LIST_ENTRY);
 
-                list_del(&page->list);
+                list_del(&PAGE_LIST(page));
                 if (page->private != 0) {
                         eap = (struct echo_async_page *)page->private;
                         if (eap->eap_cookie != NULL)

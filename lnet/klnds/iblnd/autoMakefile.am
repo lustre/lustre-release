@@ -1,0 +1,4 @@
+modulenet_DATA = kibnal$(KMODEXT)
+
+MOSTLYCLEANFILES = *.o *.ko *.mod.c
+DIST_SOURCES = $(kibnal-objs:%.o=%.c) ibnal.h

@@ -2,8 +2,8 @@
 
 set -e
 
-# 17 = bug 2732   2986
-ALWAYS_EXCEPT="17 19b"
+#         bug 2732 2986
+ALWAYS_EXCEPT="17   20b"
 
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -117,13 +117,11 @@ test_7() {
 }
 run_test 7 "unlink: drop req, drop rep"
 
-
 #bug 1423
 test_8() {
     drop_reply "touch $MOUNT/renamed"    || return 1
 }
 run_test 8 "touch: drop rep (bug 1423)"
-
 
 #bug 1420
 test_9() {
@@ -217,22 +215,21 @@ test_16() {
     sysctl -w lustre.fail_loc=0x80000504
     cancel_lru_locks OSC
     # will get evicted here
-    do_facet client "diff /etc/termcap $MOUNT/termcap"  && return 1
+    do_facet client "cmp /etc/termcap $MOUNT/termcap"  && return 1
     sysctl -w lustre.fail_loc=0
-    do_facet client "diff /etc/termcap $MOUNT/termcap"  || return 2
+    do_facet client "cmp /etc/termcap $MOUNT/termcap"  || return 2
 }
 run_test 16 "timeout bulk put, evict client (2732)"
 
 test_17() {
-# OBD_FAIL_PTLRPC_BULK_GET_NET | OBD_FAIL_ONCE
-    # wil get evicted here
+#define OBD_FAIL_PTLRPC_BULK_GET_NET 0x0503 | OBD_FAIL_ONCE
+    # will get evicted here
     sysctl -w lustre.fail_loc=0x80000503
     do_facet client cp /etc/termcap $MOUNT && return 1
 
-    do_facet client "diff /etc/termcap $MOUNT/termcap"  && return 1
+    do_facet client "cmp /etc/termcap $MOUNT/termcap"  && return 1
     sysctl -w lustre.fail_loc=0
-    do_facet client "diff /etc/termcap $MOUNT/termcap"  || return 2
-
+    do_facet client "cmp /etc/termcap $MOUNT/termcap"  || return 2
 }
 run_test 17 "timeout bulk get, evict client (2732)"
 
@@ -292,7 +289,31 @@ test_18b() {
 }
 run_test 18b "eviction and reconnect clears page cache (2766)"
 
-test_19a() {	# bug 2983 - ldlm_handle_enqueue cleanup
+test_19a() {
+    f=$MOUNT/$tfile
+    do_facet client mcreate $f        || return 1
+    drop_ldlm_cancel "chmod 0777 $f"  || echo evicted
+
+    do_facet client checkstat -v -p 0777 $f  || echo evicted
+    do_facet client "munlink $f"
+}
+run_test 19a "test expired_lock_main on mds (2867)"
+
+test_19b() {
+    f=$MOUNT/$tfile
+    do_facet client multiop $f Ow  || return 1
+    do_facet client multiop $f or  || return 2
+
+    cancel_lru_locks OSC
+
+    do_facet client multiop $f or  || return 3
+    drop_ldlm_cancel multiop $f Ow  || echo "client evicted, as expected"
+
+    do_facet client munlink $f  || return 4
+}
+run_test 19b "test expired_lock_main on ost (2867)"
+
+test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	mkdir -p $DIR/$tdir
 	multiop $DIR/$tdir/${tfile} O_wc &
 	MULTI_PID=$!
@@ -307,10 +328,10 @@ test_19a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	[ $rc -eq 0 ] && error "multiop didn't fail enqueue: rc $rc" || true
 	set +vx
 }
-run_test 19a "ldlm_handle_enqueue error (should return error)" 
+run_test 20a "ldlm_handle_enqueue error (should return error)" 
 
-test_19b() {	# bug 2986 - ldlm_handle_enqueue error during open
-	mkdir $DIR/$tdir
+test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
+	mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/${tfile}
 	cancel_lru_locks OSC
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
@@ -318,7 +339,6 @@ test_19b() {	# bug 2986 - ldlm_handle_enqueue error during open
 	dd if=/etc/hosts of=$DIR/$tdir/$tfile && \
 		error "didn't fail open enqueue" || true
 }
-run_test 19b "ldlm_handle_enqueue error (should return error)"
-
+run_test 20b "ldlm_handle_enqueue error (should return error)"
 
 $CLEANUP

@@ -3,8 +3,13 @@ config.log
 config.status
 configure
 Makefile
-Makefile.in
 .deps
 tags
 TAGS
 .*.cmd
+autoMakefile.in
+autoMakefile
+*.ko
+*.mod.c
+.*.flags
+.tmp_versions

@@ -1,0 +1,9 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+modulenet_DATA = kqswnal$(KMODEXT)
+
+MOSTLYCLEANFILES = *.o *.ko *.mod.c
+DIST_SOURCES = $(kqswnal-objs:%.o=%.c) qswnal.h

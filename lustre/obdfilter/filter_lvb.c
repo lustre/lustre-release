@@ -76,6 +76,7 @@ static int filter_lvbo_init(struct ldlm_resource *res)
         lvb->lvb_mtime = LTIME_S(dentry->d_inode->i_mtime);
         lvb->lvb_blocks = dentry->d_inode->i_blocks;
         f_dput(dentry);
+
         CDEBUG(D_DLMTRACE, "res: "LPU64" initial lvb size: "LPU64", "
                "mtime: "LPU64", blocks: "LPU64"\n",
                res->lr_name.name[0], lvb->lvb_size,

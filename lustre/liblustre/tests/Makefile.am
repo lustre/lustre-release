@@ -1,12 +1,13 @@
 ## Liblustre excecutables & libraries Makefile
-DEFS=
 
-LL_CFLAGS = -I$(SYSIO)/include
+AM_CPPFLAGS = -I$(SYSIO)/include -I/opt/lam/include $(LLCPPFLAGS) -I$(top_srcdir)/portals/unals
+AM_CFLAGS = $(LLCFLAGS)
+LIBS = $(LIBEFENCE) $(LIBREADLINE)
 
 LLIB_EXEC= ../liblustre.a -lpthread
 
 noinst_LIBRARIES = libtestcommon.a
-libtestcommon_a_SOURCES = test_common.c
+libtestcommon_a_SOURCES = test_common.c test_common.h
 
 def_tests = echo_test sanity recovery_small replay_single replay_ost_single
 
@@ -47,5 +48,4 @@ test_lock_cancel_CFLAGS = $(LL_CFLAGS) -I/opt/lam/include -L/opt/lam/lib
 test_lock_cancel_LDADD :=  $(LLIB_EXEC) -lmpi -llam
 endif
 
-include $(top_srcdir)/Rules
 

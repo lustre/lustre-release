@@ -67,7 +67,10 @@ ldlm_extent_internal_policy(struct list_head *queue, struct ldlm_lock *req,
                         continue;
 
                 /* Locks are compatible, overlap doesn't matter */
-                if (lockmode_compat(lock->l_req_mode, req_mode))
+                /* Until bug 20 is fixed, try to avoid granting overlapping
+                 * locks on one client (they take a long time to cancel) */
+                if (lockmode_compat(lock->l_req_mode, req_mode) &&
+                    lock->l_export != req->l_export)
                         continue;
 
                 /* If this is a high-traffic lock, don't grow downwards at all
@@ -333,15 +336,27 @@ __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
         ENTRY;
 
         l_lock(&res->lr_namespace->ns_lock);
+
+        /* don't let another thread in ldlm_extent_shift_kms race in just after
+         * we finish and take our lock into account in its calculation of the
+         * kms */
+        lock->l_flags |= LDLM_FL_KMS_IGNORE;
+
         list_for_each(tmp, &res->lr_granted) {
                 lck = list_entry(tmp, struct ldlm_lock, l_res_link);
 
-                if (lock == lck)
+                if (lck->l_flags & LDLM_FL_KMS_IGNORE)
                         continue;
+
                 if (lck->l_policy_data.l_extent.end >= old_kms)
                         GOTO(out, kms = old_kms);
-                kms = lck->l_policy_data.l_extent.end + 1;
+
+                /* This extent _has_ to be smaller than old_kms (checked above)
+                 * so kms can only ever be smaller or the same as old_kms. */
+                if (lck->l_policy_data.l_extent.end + 1 > kms)
+                        kms = lck->l_policy_data.l_extent.end + 1;
         }
+        LASSERTF(kms <= old_kms, "kms "LPU64" old_kms "LPU64"\n", kms, old_kms);
 
         GOTO(out, kms);
  out:

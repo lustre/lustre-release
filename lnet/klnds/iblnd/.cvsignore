@@ -1,3 +1,9 @@
 .deps
 Makefile
-Makefile.in
+autoMakefile.in
+autoMakefile
+*.ko
+*.mod.c
+.*.flags
+.*.cmd
+.tmp_versions

@@ -39,7 +39,11 @@
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
  #include <linux/ext3_xattr.h>
 #else
- #include <linux/../../fs/ext3/xattr.h>
+/* 
+ * our build flags set -I$LINUX/fs and -I$LUSTRE so that ext3 and
+ * ldiskfs work correctly
+ */
+ #include <ext3/xattr.h>
 #endif
 #include <linux/kp30.h>
 #include <linux/lustre_fsfilt.h>
@@ -61,9 +65,6 @@ struct fsfilt_cb_data {
 #define EXT3_XATTR_INDEX_TRUSTED        4
 #endif
 #define XATTR_LUSTRE_MDS_LOV_EA         "lov"
-
-#define EXT3_XATTR_INDEX_LUSTRE         5                         /* old */
-#define XATTR_LUSTRE_MDS_OBJID          "system.lustre_mds_objid" /* old */
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -419,71 +420,20 @@ static int fsfilt_ext3_iocontrol(struct inode * inode, struct file *file,
         RETURN(rc);
 }
 
-#undef INLINE_EA
-#undef OLD_EA
 static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
                               void *lmm, int lmm_size)
 {
-        int rc, old_ea = 0;
+        int rc;
 
-#ifdef INLINE_EA  /* can go away before 1.0 - just for testing bug 2097 now */
-        /* Nasty hack city - store stripe MD data in the block pointers if
-         * it will fit, because putting it in an EA currently kills the MDS
-         * performance.  We'll fix this with "fast EAs" in the future.
-         */
-        if (inode->i_blocks == 0 && lmm_size <= sizeof(EXT3_I(inode)->i_data) -
-                                            sizeof(EXT3_I(inode)->i_data[0])) {
-                unsigned old_size = EXT3_I(inode)->i_data[0];
-                if (old_size != 0) {
-                        LASSERT(old_size < sizeof(EXT3_I(inode)->i_data));
-                        CERROR("setting EA on %lu/%u again... interesting\n",
-                               inode->i_ino, inode->i_generation);
-                }
-
-                EXT3_I(inode)->i_data[0] = cpu_to_le32(lmm_size);
-                memcpy(&EXT3_I(inode)->i_data[1], lmm, lmm_size);
-                mark_inode_dirty(inode);
-                return 0;
-        }
-#endif
-#ifdef OLD_EA
         /* keep this when we get rid of OLD_EA (too noisy during conversion) */
-        if (EXT3_I(inode)->i_file_acl /* || large inode EA flag */) {
+        if (EXT3_I(inode)->i_file_acl /* || large inode EA flag */)
                 CWARN("setting EA on %lu/%u again... interesting\n",
                        inode->i_ino, inode->i_generation);
-                old_ea = 1;
-        }
 
-        lock_kernel();
-        /* this can go away before 1.0.  For bug 2097 testing only. */
-        rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_LUSTRE,
-                                   XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size, 0);
-#else
         lock_kernel();
         rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
                                    XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size, 0);
 
-        /* This tries to delete the old-format LOV EA, but only as long as we
-         * have successfully saved the new-format LOV EA (we can always try
-         * the conversion again the next time the file is accessed).  It is
-         * possible (although unlikely) that the new-format LOV EA couldn't be
-         * saved because it ran out of space but we would need a file striped
-         * over least 123 OSTs before the two EAs filled a 4kB block.
-         *
-         * This can be removed when all filesystems have converted to the
-         * new EA format, but otherwise adds little if any overhead.  If we
-         * wanted backward compatibility for existing files, we could keep
-         * the old EA around for a while but we'd have to clean it up later. */
-        if (rc >= 0 && old_ea) {
-                int err = ext3_xattr_set_handle(handle, inode,
-                                                EXT3_XATTR_INDEX_LUSTRE,
-                                                XATTR_LUSTRE_MDS_OBJID,
-                                                NULL, 0, 0);
-                if (err)
-                        CERROR("error deleting old LOV EA on %lu/%u: rc %d\n",
-                               inode->i_ino, inode->i_generation, err);
-        }
-#endif
         unlock_kernel();
 
         if (rc)
@@ -499,61 +449,9 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
 
         LASSERT(down_trylock(&inode->i_sem) != 0);
         lock_kernel();
-        /* Keep support for reading "inline EAs" until we convert
-         * users over to new format entirely.  See bug 841/2097. */
-        if (inode->i_blocks == 0 && EXT3_I(inode)->i_data[0]) {
-                unsigned size = le32_to_cpu(EXT3_I(inode)->i_data[0]);
-                void *handle;
-
-                LASSERT(size < sizeof(EXT3_I(inode)->i_data));
-                if (lmm) {
-                        if (size > lmm_size) {
-                                CERROR("inline EA on %lu/%u bad size %u > %u\n",
-                                       inode->i_ino, inode->i_generation,
-                                       size, lmm_size);
-                                return -ERANGE;
-                        }
-                        memcpy(lmm, &EXT3_I(inode)->i_data[1], size);
-                }
-
-#ifndef INLINE_EA
-                /* migrate LOV EA data to external block - keep same format */
-                CWARN("DEBUG: migrate inline EA for inode %lu/%u to block\n",
-                      inode->i_ino, inode->i_generation);
-
-                handle = journal_start(EXT3_JOURNAL(inode),
-                                       EXT3_XATTR_TRANS_BLOCKS);
-                if (!IS_ERR(handle)) {
-                        int err;
-                        rc = fsfilt_ext3_set_md(inode, handle,
-                                                &EXT3_I(inode)->i_data[1],size);
-                        if (rc == 0) {
-                                memset(EXT3_I(inode)->i_data, 0,
-                                       sizeof(EXT3_I(inode)->i_data));
-                                mark_inode_dirty(inode);
-                        }
-                        err = journal_stop(handle);
-                        if (err && rc == 0)
-                                rc = err;
-                } else {
-                        rc = PTR_ERR(handle);
-                }
-#endif
-                unlock_kernel();
-                return size;
-        }
 
         rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
                             XATTR_LUSTRE_MDS_LOV_EA, lmm, lmm_size);
-        /* try old EA type if new one failed - MDS will convert it for us */
-        if (rc == -ENODATA) {
-                CDEBUG(D_INFO,"failed new LOV EA %d/%s from inode %lu: rc %d\n",
-                       EXT3_XATTR_INDEX_TRUSTED, XATTR_LUSTRE_MDS_LOV_EA,
-                       inode->i_ino, rc);
-
-                rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_LUSTRE,
-                                    XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size);
-        }
         unlock_kernel();
 
         /* This gives us the MD size */
@@ -562,7 +460,7 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
 
         if (rc < 0) {
                 CDEBUG(D_INFO, "error getting EA %d/%s from inode %lu: rc %d\n",
-                       EXT3_XATTR_INDEX_LUSTRE, XATTR_LUSTRE_MDS_OBJID,
+                       EXT3_XATTR_INDEX_TRUSTED, XATTR_LUSTRE_MDS_LOV_EA,
                        inode->i_ino, rc);
                 memset(lmm, 0, lmm_size);
                 return (rc == -ENODATA) ? 0 : rc;

@@ -33,8 +33,6 @@
 #include <linux/stat.h>
 #include <linux/sched.h>
 #include <linux/smp_lock.h>
-#include <linux/ext2_fs.h>
-#include <linux/quotaops.h>
 #include <linux/proc_fs.h>
 #include <linux/init.h>
 #include <asm/unistd.h>

@@ -1,0 +1,22 @@
+# Copyright (C) 2002  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+my_sources = api-eq.c api-init.c api-me.c api-errno.c api-ni.c api-wrap.c \
+		lib-dispatch.c lib-init.c lib-me.c lib-msg.c lib-eq.c \
+		lib-md.c lib-move.c lib-ni.c lib-pid.c
+
+if LIBLUSTRE
+noinst_LIBRARIES= libportals.a
+libportals_a_SOURCES= $(my_sources)
+libportals_a_CPPFLAGS = $(LLCPPFLAGS)
+libportals_a_CFLAGS = $(LLCFLAGS)
+endif
+
+if MODULES
+modulenet_DATA = portals$(KMODEXT)
+endif
+
+MOSTLYCLEANFILES = *.o *.ko *.mod.c
+DIST_SOURCES = $(portals-objs:%.o=%.c)

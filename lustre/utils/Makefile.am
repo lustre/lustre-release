@@ -1,24 +1,14 @@
 # Administration utilities Makefile
-DEFS=
+
 SUBDIRS = Lustre
 
-CFLAGS:=-g -O2 -I$(top_srcdir)/utils -I$(top_srcdir)/portals/include  -I$(srcdir)/../include -Wall -L../portals/utils
-CPPFLAGS = $(HAVE_LIBREADLINE)
+AM_CFLAGS=$(LLCFLAGS)
+AM_CPPFLAGS=$(LLCPPFLAGS)
+AM_LDFLAGS := -L$(top_builddir)/portals/utils
 
-if LIBLUSTRE
-
-bin_SCRIPTS = lrun
-
-EXTRA_DIST = $(sbin_SCRIPTS)
-
-include $(top_srcdir)/Rules
-
-else
-
-KFLAGS:=
 lctl_LDADD := $(LIBREADLINE) -lptlctl
 lfs_LDADD := $(LIBREADLINE) parser.o liblustreapi.a -lptlctl obd.o
-lload_LDADD := -lptlctl
+lload_LDADD := $(LIBREADLINE) -lptlctl
 rootsbin_SCRIPTS = mount.lustre
 sbin_PROGRAMS = lctl obdio obdbarrier lload wirecheck wiretest llmount
 sbin_SCRIPTS = lconf lmc llanalyze llstat.pl llobdstat.pl lactive load_ldap.sh lrun
@@ -35,11 +25,13 @@ obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
 obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 lfs_SOURCES = lfs.c 
 llmount_SOURCES = llmount.c 
-llmount_LDADD = -lptlctl
+llmount_LDADD = $(LIBREADLINE) -lptlctl
+
+if LIBLUSTRE
+sbin_SCRIPTS += lrun
+endif
 
 EXTRA_DIST = $(bin_SCRIPTS) $(sbin_SCRIPTS)
-
-include $(top_srcdir)/Rules
 
 # NOTE: this should only be run on i386.
 newwiretest: wirehdr.c wirecheck
@@ -47,6 +39,4 @@ newwiretest: wirehdr.c wirecheck
 	./wirecheck >> wiretest.c
 
 mount.lustre$(EXEEXT): llmount
-	cp llmount mount.lustre
-
-endif
+	cp $< $@

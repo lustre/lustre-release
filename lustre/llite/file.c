@@ -131,7 +131,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         ll_prepare_mdc_op_data(&data, parent->d_inode, NULL, name, len, O_RDWR);
 
-        rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, itp, LCK_PR, &data,
+        rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, itp, LCK_PW, &data,
                          &lockh, lmm, lmmsize, ldlm_completion_ast,
                          ll_mdc_blocking_ast, parent->d_inode);
         if (rc < 0)
@@ -389,15 +389,10 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                          tmpex.l_extent.start, lock->l_policy_data.l_extent.end,
                          start, i, end);
 
-                ll_pgcache_lock(inode->i_mapping);
-                if (list_empty(&inode->i_mapping->dirty_pages) &&
-                    list_empty(&inode->i_mapping->clean_pages) &&
-                    list_empty(&inode->i_mapping->locked_pages)) {
+                if (!mapping_has_pages(inode->i_mapping)) {
                         CDEBUG(D_INODE|D_PAGE, "nothing left\n");
-                        ll_pgcache_unlock(inode->i_mapping);
                         break;
                 }
-                ll_pgcache_unlock(inode->i_mapping);
 
                 conditional_schedule();
 
@@ -409,14 +404,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 lock_page(page);
 
                 /* page->mapping to check with racing against teardown */
-                if (page->mapping && PageDirty(page) && !discard) {
-                        ClearPageDirty(page);
-                        LL_CDEBUG_PAGE(D_PAGE, page, "found dirty\n");
-                        ll_pgcache_lock(inode->i_mapping);
-                        list_del(&page->list);
-                        list_add(&page->list, &inode->i_mapping->locked_pages);
-                        ll_pgcache_unlock(inode->i_mapping);
-
+                if (!discard && clear_page_dirty_for_io(page)) {
                         rc = ll_call_writepage(inode, page);
                         if (rc != 0)
                                 CERROR("writepage of page %p failed: %d\n",
@@ -621,7 +609,7 @@ int ll_glimpse_size(struct inode *inode, struct ost_lvb *lvb)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         ldlm_policy_data_t policy = { .l_extent = { 0, OBD_OBJECT_EOF } };
-        struct lustre_handle lockh;
+        struct lustre_handle lockh = { .cookie = 0 };
         int rc, flags = LDLM_FL_HAS_INTENT;
         ENTRY;
 

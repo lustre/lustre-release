@@ -1,0 +1,52 @@
+# Directories building kernel modules should have two files:
+#
+# Makefile.in:
+#
+# MODULES := <module-name>
+# <module-name>-objs := file1.o file2.o file3.o
+# @INCLUDE_RULES@
+#
+# and autoMakefile.am:
+#
+# if LIBLUSTRE
+# <liblustre rules>
+# endif
+#
+# if MODULES
+# modulefs_DATA = <module-name>$(KMODEXT)
+# endif
+#
+# DIST_SOURCES = $(<module-name>-objs:.o=.c) <other sources>
+# MOSTLYCLEANFILES = *.o *.ko *.mod.c
+
+ifeq ($(KERNELRELEASE),)
+
+include autoMakefile
+
+ifeq (@MODULES_TRUE@,)
+$(foreach MODULE,$(MODULES),$(MODULE)@KMODEXT@): FORCE
+	$(MAKE) @ARCH_UM@ -C $(LINUX) SUBDIRS=$(PWD) modules
+FORCE:
+endif
+
+else
+
+# we want to use -O0 for UML, unless it's already set (ie, in the
+# socknal where we need to build with -O2 so that htonl etc. are
+# linked correctly
+ifeq ($(filter -O%,$(EXTRA_CFLAGS)),)
+EXTRA_CFLAGS += @UML_CFLAGS@
+endif
+EXTRA_CFLAGS += @EXTRA_KCFLAGS@
+
+obj-m := $(patsubst %,%.o,$(MODULES))
+
+ifeq ($(PATCHLEVEL),4)
+# 2.4 rules
+O_TARGET := $(firstword $(obj-m))
+obj-y := $($(firstword $(MODULES))-objs)
+export-objs := $(obj-y) $(filter-out $(O_TARGET),$(obj-m))
+include $(TOPDIR)/Rules.make
+endif # PATCHLEVEL
+
+endif # KERNELRELEASE

@@ -568,7 +568,7 @@ static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
                         continue;
 
                 memcpy(tmp_oa, src_oa, sizeof(*tmp_oa));
-                
+
                 /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
                 err = obd_create(lov->tgts[i].ltd_exp, tmp_oa, &obj_mdp, oti);
                 if (err)
@@ -664,7 +664,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
 
                         if (stripes > lov->desc.ld_active_tgt_count)
                                 RETURN(-EFBIG);
-                        if (stripes > ost_count)
+                        if (stripes < ost_count)
                                 stripes = ost_count;
                 } else {
                         stripes = ost_count;

@@ -64,4 +64,14 @@
         sprintf(comm, fmt, ## a)
 #endif
 
+#ifdef HAVE_PAGE_LIST
+/* 2.4 alloc_page users can use page->list */
+#define PAGE_LIST_ENTRY list
+#define PAGE_LIST(page) ((page)->list)
+#else
+/* 2.6 alloc_page users can use page->lru */
+#define PAGE_LIST_ENTRY lru
+#define PAGE_LIST(page) ((page)->lru)
+#endif
+
 #endif /* _PORTALS_COMPAT_H */

@@ -32,8 +32,8 @@ int main(int argc, char **argv)
         int gid_is_set = 0;
         int uid_is_set = 0;
         int clear_supp_groups = 0;
-        uid_t user_id;
-        gid_t grp_id;
+        uid_t user_id = 0;
+        gid_t grp_id = 0;
 
         if (argc == 1)
                 Usage_and_abort(name);

@@ -10,6 +10,3 @@ ldapconf_SCRIPTS = slapd-lustre.conf
 ldapschema_SCRIPTS = lustre.schema
 pkglibdir = '${exec_prefix}/usr/lib/$(PACKAGE)'
 pkglib_DATA = top.ldif lustre2ldif.xsl
-
-include $(top_srcdir)/Rules
-

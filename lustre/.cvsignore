@@ -4,6 +4,8 @@ aclocal.m4
 config.log
 config.status
 config.cache
+config.guess
+config.sub
 configure
 Makefile
 Makefile.in
@@ -15,5 +17,11 @@ cscope.files
 cscope.out
 autom4te-2.53.cache
 autom4te.cache
-.*.o.cmd
+depcomp
+compile
+.*.cmd
 .mergeinfo-*
+Rules
+missing
+mkinstalldirs
+install-sh

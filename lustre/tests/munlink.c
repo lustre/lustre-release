@@ -11,7 +11,7 @@
 
 int main(int argc, char ** argv)
 {
-        int rc, i;
+        int rc = 0, i;
 
         if (argc < 2) {
                 printf("Usage %s filename {filename ...}\n", argv[0]);

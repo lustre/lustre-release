@@ -99,7 +99,7 @@ int main(int argc, char *argv[])
         unsigned long count, i;
 	int threads = 0;
 	char *end;
-	int rc;
+	int rc = 0;
 
         if (argc < 3 || argc > 5) {
                 fprintf(stderr,

@@ -432,16 +432,20 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
             rec->ur_eadata != NULL) {
                 struct lov_stripe_md *lsm = NULL;
 
+                rc = ll_permission(inode, MAY_WRITE, NULL);
+                if (rc < 0)
+                        GOTO(cleanup, rc);
+
                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
                                    mds->mds_osc_exp, 0, &lsm, rec->ur_eadata);
                 if (rc)
                         GOTO(cleanup, rc);
-                
+
                 obd_free_memmd(mds->mds_osc_exp, &lsm);
 
                 rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
                                    rec->ur_eadatalen);
-                if (rc) 
+                if (rc)
                         GOTO(cleanup, rc);
         }
 

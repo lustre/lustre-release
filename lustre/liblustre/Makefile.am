@@ -1,9 +1,8 @@
 ## Liblustre excecutables & libraries Makefile
-DEFS=
-
 SUBDIRS = . tests
 
-LL_CFLAGS = -I$(SYSIO)/include
+AM_CPPFLAGS = $(HAVE_EFENCE) -I$(SYSIO)/include -D_LARGEFILE64_SOURCE=1 $(LLCPPFLAGS) -I$(top_srcdir)/portals/unals
+AM_CFLAGS = $(LLCFLAGS)
 
 LIBS = $(LIBEFENCE)
 
@@ -28,15 +27,12 @@ SYSIO_LIBS =  $(SYSIO)/drivers/native/libsysio_native.a \
 lib_LIBRARIES = liblustre.a
 noinst_LIBRARIES = libllite.a
 
-libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c
-libllite_a_CFLAGS = $(LL_CFLAGS)
+libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c llite_lib.h
 
 # for make rpms -- need cleanup
 liblustre_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c
-liblustre_a_CFLAGS = $(LL_CFLAGS)
 
 liblustre.a : $(LUSTRE_LIBS) $(PTL_LIBS) $(SYSIO_LIBS)
-	$(shell $(top_srcdir)/liblustre/genlib.sh $(SYSIO) $(AR) $(LINK))
+	$(srcdir)/genlib.sh $(SYSIO) $(AR) $(LINK) || ( rm -f $@; exit 1 )
 
-include $(top_srcdir)/Rules
-
+EXTRA_DIST = genlib.sh

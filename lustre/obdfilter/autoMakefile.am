@@ -1,0 +1,9 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+modulefs_DATA = obdfilter$(KMODEXT)
+
+MOSTLYCLEANFILES = *.o *.ko *.mod.c
+DIST_SOURCES = $(obdfilter-objs:%.o=%.c) filter_io_24.c filter_io_26.c filter_internal.h

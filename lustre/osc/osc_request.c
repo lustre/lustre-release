@@ -1438,7 +1438,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 if (oap->oap_count <= 0) {
                         CDEBUG(D_CACHE, "oap %p count %d, completing\n", oap,
                                oap->oap_count);
-                        osc_ap_completion(cli, aa->aa_oa, oap, 0, oap->oap_count);
+                        osc_ap_completion(cli, NULL, oap, 0, oap->oap_count);
                         continue;
                 }
 
@@ -1470,7 +1470,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                          * were between the pending list and the rpc */
                         if (oap->oap_interrupted) {
                                 CDEBUG(D_INODE, "oap %p interrupted\n", oap);
-                                osc_ap_completion(cli, aa->aa_oa, oap, 0, 
+                                osc_ap_completion(cli, NULL, oap, 0,
                                                   oap->oap_count);
                                 continue;
                         }
@@ -3042,12 +3042,17 @@ struct obd_ops sanosc_obd_ops = {
 
 int __init osc_init(void)
 {
-        struct lprocfs_static_vars lvars, sanlvars;
+        struct lprocfs_static_vars lvars;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        struct lprocfs_static_vars sanlvars;
+#endif
         int rc;
         ENTRY;
 
         lprocfs_init_vars(osc, &lvars);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         lprocfs_init_vars(osc, &sanlvars);
+#endif
 
         rc = class_register_type(&osc_obd_ops, lvars.module_vars,
                                  LUSTRE_OSC_NAME);

@@ -28,6 +28,9 @@ pkgexampledir='${prefix}/usr/lib/$(PACKAGE)/examples'
 AC_SUBST(pkgexampledir)
 pymoddir='${prefix}/usr/lib/${PACKAGE}/python/Lustre'
 AC_SUBST(pymoddir)
+# for substitution in lconf
+PYMOD_DIR="/usr/lib/$PACKAGE/python"
+AC_SUBST(PYMOD_DIR)
 modulenetdir='$(moduledir)/net/$(PACKAGE)'
 AC_SUBST(modulenetdir)
 
@@ -35,14 +38,15 @@ AC_SUBST(modulenetdir)
 # ----------  BAD gcc? ------------
 AC_PROG_RANLIB
 AC_PROG_CC
-AC_MSG_CHECKING(for buggy compiler)
+AC_MSG_CHECKING([for buggy compiler])
 CC_VERSION=`$CC -v 2>&1 | grep "^gcc version"`
 bad_cc() {
+	AC_MSG_RESULT([buggy compiler found!])
 	echo
 	echo "   '$CC_VERSION'"
 	echo "  has been known to generate bad code, "
 	echo "  please get an updated compiler."
-	AC_MSG_ERROR(sorry)
+	AC_MSG_ERROR([sorry])
 }
 TMP_VERSION=`echo $CC_VERSION | cut -c 1-16`
 if test "$TMP_VERSION" = "gcc version 2.95"; then
@@ -61,7 +65,7 @@ case "$CC_VERSION" in
 		bad_cc
 		;;
 	*)
-		AC_MSG_RESULT(no known problems)
+		AC_MSG_RESULT([no known problems])
 		;;
 esac
 # end ------  BAD gcc? ------------
@@ -70,29 +74,30 @@ esac
 
 # this doesn't seem to work on older autoconf
 # AC_CHECK_LIB(readline, readline,,)
-AC_ARG_ENABLE(readline,	[  --enable-readline  use readline library],,
-			enable_readline="yes")
- 
-if test "$enable_readline" = "yes" ; then
-   LIBREADLINE="-lreadline -lncurses"
-   HAVE_LIBREADLINE="-DHAVE_LIBREADLINE=1"
+AC_MSG_CHECKING([for readline support])
+AC_ARG_ENABLE(readline,
+	AC_HELP_STRING([--disable-readline],
+			[do not use readline library]),
+	[],[enable_readline='yes'])
+AC_MSG_RESULT([$enable_readline]) 
+if test x$enable_readline = xyes ; then
+	LIBREADLINE="-lreadline -lncurses"
+	AC_DEFINE(HAVE_LIBREADLINE, 1, [readline library is available])
 else 
-   LIBREADLINE=""
-   HAVE_LIBREADLINE=""
+	LIBREADLINE=""
 fi
 AC_SUBST(LIBREADLINE)
-AC_SUBST(HAVE_LIBREADLINE)
 
-AC_ARG_ENABLE(efence,  [  --enable-efence  use efence library],,
-			enable_efence="no")
- 
+AC_MSG_CHECKING([if efence debugging support is requested])
+AC_ARG_ENABLE(efence,
+	AC_HELP_STRING([--enable-efence],
+			[use efence library]),
+	[],[enable_efence='no'])
+AC_MSG_RESULT([$enable_efence])
 if test "$enable_efence" = "yes" ; then
-   LIBEFENCE="-lefence"
-   HAVE_LIBEFENCE="-DHAVE_LIBEFENCE=1"
+	LIBEFENCE="-lefence"
+	AC_DEFINE(HAVE_LIBEFENCE, 1, [libefence support is requested])
 else 
-   LIBEFENCE=""
-   HAVE_LIBEFENCE=""
+	LIBEFENCE=""
 fi
 AC_SUBST(LIBEFENCE)
-AC_SUBST(HAVE_LIBEFENCE)
-

@@ -1,5 +1,5 @@
 # lustre.spec
-%define version HEAD
+%define version @VERSION@
 %define kversion @LINUXRELEASE@
 %define linuxdir @LINUX@
 %define enable_doc @ENABLE_DOC@
@@ -72,7 +72,7 @@ rm -rf $RPM_BUILD_ROOT
 
 # Set an explicit path to our Linux tree, if we can.
 cd $RPM_BUILD_DIR/lustre-%{version}
-./configure --with-linux='%{linuxdir}' %{disable_doc}
+./configure --with-linux='%{linuxdir}' %{disable_doc} --disable-liblustre
 make
 
 %install

@@ -162,9 +162,9 @@ run_test 6 "Fail OST before obd_destroy"
 
 test_7() {
     f=$DIR/$tfile
-    before=`kbytesfree`
     rm -f $f
     sync && sleep 2 && sync	# wait for delete thread
+    before=`kbytesfree`
     dd if=/dev/urandom bs=4096 count=1280 of=$f
     sync
     after_dd=`kbytesfree`
@@ -179,7 +179,7 @@ test_7() {
     sleep 2
     after=`kbytesfree`
     log "before: $before after: $after"
-    (( $before == $after )) || return 3
+    (( $before <= $after + 40 )) || return 3	# take OST logs into account
 }
 run_test 7 "Fail OST before obd_destroy"
 

@@ -686,7 +686,7 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
                         rc = -ENOMEM;
                         goto cleanup;
                 }
-                list_add(&page->list, &my_pages);
+                list_add(&PAGE_LIST(page), &my_pages);
         }
 
         spin_lock_irqsave(&portals_debug_lock, flags);
@@ -711,7 +711,7 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
                 unsigned long to_copy;
                 void *addr;
 
-                page = list_entry(pos, struct page, list);
+                page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 to_copy = min(total - off, PAGE_SIZE);
                 if (to_copy == 0) {
                         off = 0;
@@ -740,7 +740,7 @@ finish_partial:
         off = 0;
         list_for_each(pos, &my_pages) {
                 unsigned long to_copy;
-                page = list_entry(pos, struct page, list);
+                page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
 
                 to_copy = min(copied - off, PAGE_SIZE);
                 rc = copy_to_user(buf + off, kmap(page), to_copy);
@@ -757,8 +757,8 @@ finish_partial:
 
 cleanup:
         list_for_each_safe(pos, n, &my_pages) {
-                page = list_entry(pos, struct page, list);
-                list_del(&page->list);
+                page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
+                list_del(&PAGE_LIST(page));
                 __free_page(page);
         }
         return rc;

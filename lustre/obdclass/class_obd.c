@@ -63,7 +63,9 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_debug.h>
 #include <linux/lprocfs_status.h>
+#ifdef __KERNEL__
 #include <linux/lustre_build_version.h>
+#endif
 #include <portals/list.h>
 #include "llog_internal.h"
 
@@ -600,16 +602,11 @@ int init_obdclass(void)
         return 0;
 }
 
-#ifdef __KERNEL__
-static void /*__exit*/ cleanup_obdclass(void)
-#else
 static void cleanup_obdclass(void)
-#endif
 {
-#ifdef __KERNEL__
         int i;
-#else
-        int i, leaked;
+#ifndef __KERNEL__
+        int leaked;
 #endif
         ENTRY;
 

@@ -1,0 +1,6 @@
+MODULES := kscimacnal
+kscimacnal-objs := scimacnal.o scimacnal_cb.o
+
+EXTRA_CFLAGS += @SCIMACCPPFLAGS@
+
+@INCLUDE_RULES@

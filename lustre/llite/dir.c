@@ -385,7 +385,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         switch(cmd) {
         case EXT3_IOC_GETFLAGS:
         case EXT3_IOC_SETFLAGS:
-                RETURN( ll_iocontrol(inode, file, cmd, arg) );
+                RETURN(ll_iocontrol(inode, file, cmd, arg));
         case IOC_MDC_LOOKUP: {
                 struct ptlrpc_request *request = NULL;
                 struct ll_fid fid;
@@ -426,17 +426,15 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         case LL_IOC_LOV_SETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
                 struct mdc_op_data op_data;
-                struct iattr attr;
+                struct iattr attr = { 0 };
                 struct lov_user_md lum, *lump = (struct lov_user_md *)arg;
                 int rc = 0;
 
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
-                memset(&attr, 0x0, sizeof(attr));
-
                 LASSERT(sizeof(lum) == sizeof(*lump));
-                LASSERT(sizeof(lum.lmm_objects[0])
-                        == sizeof(lump->lmm_objects[0]));
+                LASSERT(sizeof(lum.lmm_objects[0]) ==
+                        sizeof(lump->lmm_objects[0]));
                 rc = copy_from_user(&lum, lump, sizeof(lum));
                 if (rc)
                         return(-EFAULT);
@@ -455,7 +453,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 ptlrpc_req_finished(request);
 
                 return rc;
-        }        
+        }
         case LL_IOC_LOV_GETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
                 struct lov_user_md *lump = (struct lov_user_md *)arg;
@@ -482,7 +480,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 lmmsize = body->eadatasize;
                 if (lmmsize == 0)
-                        GOTO(out_get, rc = -ENODATA);                        
+                        GOTO(out_get, rc = -ENODATA);
 
                 lmm = lustre_msg_buf(request->rq_repmsg, 1, lmmsize);
                 LASSERT(lmm != NULL);
@@ -553,17 +551,17 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 int rc, len=0;
                 struct client_obd *cli;
                 struct obd_device *obd;
-                                                                                                                             
+
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
                 if (rc)
                         RETURN(rc);
                 data = (void *)buf;
 
                 obd = class_name2obd(data->ioc_inlbuf1);
-                                                                                                                             
+
                 if (!obd )
                         GOTO(out_ping, rc = -ENODEV);
-                                                                                                                             
+
                 if (!obd->obd_attached) {
                         CERROR("Device %d not attached\n", obd->obd_minor);
                         GOTO(out_ping, rc = -ENODEV);
@@ -582,7 +580,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 rc = ptlrpc_queue_wait(req);
 
-                ptlrpc_req_finished(req);                                                                                                 
+                ptlrpc_req_finished(req);
         out_ping:
                 obd_ioctl_freedata(buf, len);
                 return rc;
@@ -593,7 +591,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 int rc, len = 0;
                 char *bufs[2], *str;
                 int lens[2], size;
-                
+
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
                 if (rc)
                         RETURN(rc);
@@ -603,7 +601,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         obd_ioctl_freedata(buf, len);
                         RETURN(-EINVAL);
                 }
-                
+
                 lens[0] = data->ioc_inllen1;
                 bufs[0] = data->ioc_inlbuf1;
                 if (data->ioc_inllen2) {
@@ -614,22 +612,22 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         bufs[1] = NULL;
                 }
                 size = data->ioc_plen1;
-                req = ptlrpc_prep_req(sbi2mdc(sbi)->cl_import, LLOG_CATINFO, 
+                req = ptlrpc_prep_req(sbi2mdc(sbi)->cl_import, LLOG_CATINFO,
                                       2, lens, bufs);
                 if (!req)
                         GOTO(out_catinfo, rc = -ENOMEM);
                 req->rq_replen = lustre_msg_size(1, &size);
-               
+
                 rc = ptlrpc_queue_wait(req);
                 str = lustre_msg_string(req->rq_repmsg, 0, data->ioc_plen1);
                 if (!rc)
-                        rc = copy_to_user(data->ioc_pbuf1, str, 
+                        rc = copy_to_user(data->ioc_pbuf1, str,
                                           data->ioc_plen1);
                 ptlrpc_req_finished(req);
         out_catinfo:
                 obd_ioctl_freedata(buf, len);
                 RETURN(rc);
-        }                  
+        }
         default:
                 return obd_iocontrol(cmd, sbi->ll_osc_exp,0,NULL,(void *)arg);
         }

@@ -15,6 +15,14 @@ listen(Server,SOMAXCONN)			|| die "listen: $!";
 
 logmsg "server started on $NAME";
 
+my $rc = fork();
+if ($rc > 0) { #parent
+    exit();
+} elsif ($rc < 0) { # error
+    logmsg "fork failed: $rc";
+    exit();
+}
+
 accept(Client,Server);
 logmsg "connection on $NAME";
 print Client "from server\n";

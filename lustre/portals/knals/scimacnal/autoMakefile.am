@@ -1,0 +1,7 @@
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+modulenet_DATA = kscimacnal$(KMODEXT)
+
+MOSTLYCLEANFILES = *.o *.ko *.mod.c
+DIST_SOURCES = $(ksimacnal-objs:%.o=%.c) scimacnal.h

@@ -1,0 +1,11 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+noinst_DATA := pingsrv$(KMODEXT) pingcli$(KMODEXT)
+noinst_DATA += spingsrv$(KMODEXT) spingcli$(KMODEXT)
+
+MOSTLYCLEANFILES = *.o *.ko *.mod.c pingsrv.c pingcli.c spingsrv.c spingcli.c
+DIST_SOURCES = $(pingsrc-objs:%.o=%.c) $(pingcli:%.o=%.c) \
+	$(spingsrv:%.o=%.c) $(spingcli:%.o=%.c) ping.h

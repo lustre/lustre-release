@@ -376,6 +376,10 @@ struct page {
 #endif
 };
 
+/* 2.4 defines */
+#define PAGE_LIST_ENTRY list
+#define PAGE_LIST(page) ((page)->list)
+
 #define kmap(page) (page)->addr
 #define kunmap(a) do {} while (0)
 

@@ -1,13 +1,52 @@
 /* include/config.h.in.  Generated from configure.in by autoheader.  */
 
+/* build ldiskfs as a module */
+#undef CONFIG_LDISKFS_FS_MODULE
+
+/* enable fs security */
+#undef CONFIG_LDISKFS_FS_SECURITY
+
+/* enable extended attributes for ldiskfs */
+#undef CONFIG_LDISKFS_FS_XATTR
+
+/* enable posix acls */
+#undef CONFIG_LDISKFS_POSIX_ACL
+
+/* this kernel contains Red Hat 2.4.20 patches */
+#undef CONFIG_RH_2_4_20
+
+/* kernel has cpu affinity support */
+#undef CPU_AFFINITY
+
+/* Building with Cray Portals */
+#undef CRAY_PORTALS
+
 /* Use the Pinger */
 #undef ENABLE_PINGER
+
+/* the kernel passes struct file to direct_IO */
+#undef HAVE_DIO_FILE
 
 /* Define to 1 if you have the <inttypes.h> header file. */
 #undef HAVE_INTTYPES_H
 
+/* struct kiobuf has a dovary field */
+#undef HAVE_KIOBUF_DOVARY
+
+/* libefence support is requested */
+#undef HAVE_LIBEFENCE
+
+/* readline library is available */
+#undef HAVE_LIBREADLINE
+
 /* Define to 1 if you have the <memory.h> header file. */
 #undef HAVE_MEMORY_H
+
+/* struct page has a list field */
+#undef HAVE_PAGE_LIST
+
+/* the kernel defines PDE */
+#undef HAVE_PDE
 
 /* Define to 1 if you have the <stdint.h> header file. */
 #undef HAVE_STDINT_H
@@ -53,6 +92,9 @@
 
 /* The size of a `unsigned long long', as computed by sizeof. */
 #undef SIZEOF_UNSIGNED_LONG_LONG
+
+/* use zero-copy TCP */
+#undef SOCKNAL_ZC
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS

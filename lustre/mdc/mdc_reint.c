@@ -41,7 +41,6 @@ static int mdc_reint(struct ptlrpc_request *request,
                      struct mdc_rpc_lock *rpc_lock, int level)
 {
         int rc;
-        
 
         request->rq_send_state = level;
 
