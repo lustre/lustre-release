@@ -48,7 +48,7 @@ static int ll_commitcbd_check_event(struct ll_sb_info *sbi)
                 GOTO(out, rc = 1);
 
  out:
-        spin_unlock(&mgr->mgr_lock); 
+        spin_unlock(&sbi->ll_commitcbd_lock);
         RETURN(rc);
 }
 
