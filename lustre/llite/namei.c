@@ -109,9 +109,10 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
                 err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT,
                                   it, LCK_PR, dir, dentry, lockh, 0, NULL, 0,
                                   dir, sizeof(*dir));
-
-        else
+        else {
                 LBUG();
+                RETURN(-1);
+        }
 
         RETURN(err);
 }
@@ -193,6 +194,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 request = (struct ptlrpc_request *)it->it_data;
                 body = lustre_msg_buf(request->rq_repmsg, 1);
                 type = body->mode;
+                ino = body->fid1.id;
         }
 
         if (S_ISREG(type)) {

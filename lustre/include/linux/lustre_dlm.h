@@ -193,8 +193,7 @@ do {                                                            \
 } while (0)
 
 #define LDLM_DEBUG_NOLOCK(format, a...)                 \
-        CDEBUG(D_DLMTRACE, "### " format "\n" , ## a);
-
+        CDEBUG(D_DLMTRACE, "### " format "\n" , ## a)
 
 /* ldlm_extent.c */
 int ldlm_extent_compat(struct ldlm_lock *, struct ldlm_lock *);
