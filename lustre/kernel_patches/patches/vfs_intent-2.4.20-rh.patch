@@ -1547,7 +1547,7 @@ Index: linux-2.4.20-rh/fs/proc/base.c
  	nd->last_type = LAST_BIND;
 +
 +	if (nd->intent != NULL)
-+		nd->intent->it_int_flags |= IT_FL_FOLLOWED;
++		nd->intent->d.lustre.it_int_flags |= IT_FL_FOLLOWED;
  out:
  	return error;
  }
