@@ -12,7 +12,7 @@ sub usage () {
     exit;
 }
 my ($j, $k, $d, $f1, $f2, $path, $count, $silent);
-my $create = 1;
+my $create = 0;
 
 GetOptions("silent!"=> \$silent,
            "count=i" => \$count,
@@ -23,8 +23,6 @@ my $i = shift || usage();
 my $files = 6;
 my $dirs = 3;
 my $mcreate = 0; # should we use mcreate or open?
-
-$count = 0;
 
 my $which = "";
 if ($count > 0) {
