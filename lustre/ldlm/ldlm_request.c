@@ -75,34 +75,41 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
         int rc = 0;
         ENTRY;
 
-        if (flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
-                     LDLM_FL_BLOCK_CONV)) {
-                /* Go to sleep until the lock is granted. */
-                /* FIXME: or cancelled. */
-                LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock,"
-                           " sleeping");
-                ldlm_lock_dump(lock);
-                ldlm_reprocess_all(lock->l_resource);
-                rc = l_wait_event(lock->l_waitq,
-                                  (lock->l_req_mode == lock->l_granted_mode),
-                                  &lwi);
-                if (rc) {
-                        LDLM_DEBUG(lock,
-                                   "client-side enqueue waking up: failed (%d)",
-                                   rc);
-                } else {
-                        LDLM_DEBUG(lock,
-                                   "client-side enqueue waking up: granted");
-                }
-        } else if (flags == LDLM_FL_WAIT_NOREPROC) {
-                rc = l_wait_event(lock->l_waitq,
-                                  (lock->l_req_mode == lock->l_granted_mode),
-                                  &lwi);
-        } else if (flags == 0) {
+        if (flags == 0) {
                 wake_up(&lock->l_waitq);
+                RETURN(0);
         }
 
-        RETURN(rc);
+        if (flags == LDLM_FL_WAIT_NOREPROC)
+                goto noreproc;
+
+        LASSERT(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
+                         LDLM_FL_BLOCK_CONV));
+
+        LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
+                   "sleeping");
+        ldlm_lock_dump(lock);
+        ldlm_reprocess_all(lock->l_resource);
+
+ noreproc:
+        /* Go to sleep until the lock is granted or cancelled. */
+        rc = l_wait_event(lock->l_waitq,
+                          ((lock->l_req_mode == lock->l_granted_mode) ||
+                           (lock->l_flags & LDLM_FL_DESTROYED)), &lwi);
+
+        if (lock->l_flags & LDLM_FL_DESTROYED) {
+                LDLM_DEBUG(lock, "client-side enqueue waking up: destroyed");
+                RETURN(-EIO);
+        }
+
+        if (rc) {
+                LDLM_DEBUG(lock, "client-side enqueue waking up: failed (%d)",
+                           rc);
+                RETURN(rc);
+        }
+
+        LDLM_DEBUG(lock, "client-side enqueue waking up: granted");
+        RETURN(0);
 }
 
 static int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
