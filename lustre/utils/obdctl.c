@@ -303,7 +303,7 @@ static int jt_create(int argc, char **argv)
 	} else { 
 		data.ioc_obdo1.o_mode = 0100644;
 	}
-	data.ioc_obdo1.o_mode = OBD_MD_FLMODE;
+	data.ioc_obdo1.o_valid = OBD_MD_FLMODE;
 
 	if (argc > 3) { 
 		silent = strtoul(argv[3], NULL, 0);
@@ -321,6 +321,46 @@ static int jt_create(int argc, char **argv)
 		printf("created obdo %Ld\n", data.ioc_obdo1.o_id);
 	}
 	return 0;
+}
+
+static int jt_setattr(int argc, char **argv)
+{
+	struct obd_ioctl_data data;
+	int rc;
+
+	IOCINIT(data);
+	if (argc < 2) { 
+		printf("usage %s id mode\n", argv[0]); 
+	}
+
+        data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
+        data.ioc_obdo1.o_mode = strtoul(argv[2], NULL, 0);
+        data.ioc_obdo1.o_valid = OBD_MD_FLMODE; 
+
+	rc = ioctl(fd, OBD_IOC_SETATTR , &data);
+	if (rc < 0) {
+		printf("setattr: %x %s\n", OBD_IOC_SETATTR, strerror(errno));
+	}
+	return rc;
+}
+
+static int jt_destroy(int argc, char **argv)
+{
+	struct obd_ioctl_data data;
+	int rc;
+
+	IOCINIT(data);
+	if (argc < 1) { 
+		printf("usage %s id\n", argv[0]); 
+	}
+
+        data.ioc_obdo1.o_id = strtoul(argv[1], NULL, 0);
+
+	rc = ioctl(fd, OBD_IOC_DESTROY , &data);
+	if (rc < 0) {
+		printf("setattr: %x %s\n", OBD_IOC_SETATTR, strerror(errno));
+	}
+	return rc;
 }
 
 static int jt_getattr(int argc, char **argv)
@@ -355,7 +395,9 @@ command_t list[] = {
     {"detach", jt_detach, 0, "detach the current device (arg: )"},
     {"cleanup", jt_cleanup, 0, "cleanup the current device (arg: )"},
     {"create", jt_create, 0, "create [count [mode [silent]]]"},
+    {"destroy", jt_destroy, 0, "destroy id"},
     {"getattr", jt_getattr, 0, "getattr id"},
+    {"setattr", jt_setattr, 0, "setattr id mode"},
     {"connect", jt_connect, 0, "connect - get a connection to device"},
     {"disconnect", jt_disconnect, 0, "disconnect - break connection to device"},
     {"help", Parser_help, 0, "help"},

@@ -1,5 +1,5 @@
 /*
- * OBDFS Super operations
+ * Lustre Light Super operations
  *
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
@@ -121,25 +121,14 @@ static struct super_block * ll_read_super(struct super_block *sb,
         } 
 
         CDEBUG(D_INFO, "\n"); 
+
         obddev = &obd_dev[devno];
-
-
-        CDEBUG(D_INFO, "\n"); 
-        if ( ! (obddev->obd_flags & OBD_ATTACHED) || 
-             ! (obddev->obd_flags & OBD_SET_UP) ){
-                printk("device %s not attached or not set up (%d)\n", 
-                       device, MINOR(devno));
-                EXIT;
-                goto ERR;;
-        } 
-
-        CDEBUG(D_INFO, "\n"); 
         sbi->ll_obd = obddev;
         sbi->ll_ops = sbi->ll_obd->obd_type->typ_ops;
         sbi->ll_conn.oc_dev = obddev;
-
         CDEBUG(D_INFO, "\n"); 
-        err = sbi->ll_ops->o_connect(&sbi->ll_conn);
+
+        err = obd_connect(&sbi->ll_conn);
         CDEBUG(D_INFO, "\n"); 
         if ( err ) {
                 printk("OBDFS: cannot connect to %s\n", device);

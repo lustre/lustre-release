@@ -271,33 +271,13 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
         case OBD_IOC_CLEANUP: {
                 ENTRY;
-                /* has this minor been registered? */
-                if (!obd->obd_type) {
-                        printk("OBD cleanup dev %d has no type.\n", 
-			       obd->obd_minor);
-                        EXIT;
-                        return -ENODEV;
-                }
 
-                if ( (!(obd->obd_flags & OBD_SET_UP)) ||
-                     (!(obd->obd_flags & OBD_ATTACHED))) {
-                        printk("OBD cleanup device %d not attached/set up\n",
-			       obd->obd_minor);
-                        EXIT;
-                        return -ENODEV;
-                }
-
-                if ( !OBT(obd) || !OBP(obd, cleanup) )
-                        goto cleanup_out;
-
-                /* cleanup has no argument */
-                err = OBP(obd, cleanup)(obd);
+                err = obd_cleanup(obd);
                 if ( err ) {
                         EXIT;
                         return err;
                 }
 
-        cleanup_out: 
                 obd->obd_flags &= ~OBD_SET_UP;
                 obd->obd_type->typ_refcnt--;
                 EXIT;
@@ -306,19 +286,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
         case OBD_IOC_CONNECT:
         {
-                if ( (!(obd->obd_flags & OBD_SET_UP)) ||
-                     (!(obd->obd_flags & OBD_ATTACHED))) {
-                        CDEBUG(D_IOCTL, "Device not attached or set up\n");
-                        return -ENODEV;
-                }
-
-                if ( !OBT(obd) || !OBP(obd, connect) )
-                        return -EOPNOTSUPP;
-
 		conn.oc_id = data->ioc_conn1;
 		conn.oc_dev = obd; 
-                
-                err = OBP(obd, connect)(&conn);
+
+                err = obd_connect(&conn);
+
 		CDEBUG(D_IOCTL, "assigned connection %d\n", conn.oc_id);
 		data->ioc_conn1 = conn.oc_id;
                 if ( err )
@@ -326,18 +298,13 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 
                 return copy_to_user((int *)arg, data, sizeof(*data));
         }
+
         case OBD_IOC_DISCONNECT: { 
-
-                if (!obd->obd_type)
-                        return -ENODEV;
-
-                if ( !OBT(obd) || !OBP(obd, disconnect))
-                        return -EOPNOTSUPP;
-                
 		conn.oc_id = data->ioc_conn1;
 		conn.oc_dev = obd;
-                OBP(obd, disconnect)(&conn);
-                return 0;
+
+                err = obd_disconnect(&conn);
+                return err;
 	}		
 
 	case OBD_IOC_DEC_USE_COUNT: { 
@@ -346,19 +313,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 	}
 
         case OBD_IOC_CREATE: {
-                /* has this minor been registered? */
-                if ( !(obd->obd_flags & OBD_ATTACHED) ||
-                     !(obd->obd_flags & OBD_SET_UP)) {
-                        CDEBUG(D_IOCTL, "Device not attached or set up\n");
-                        return -ENODEV;
-                }
                 conn.oc_id = data->ioc_conn1;
 		conn.oc_dev = obd;
 
-                if ( !OBT(obd) || !OBP(obd, create) )
-                        return -EOPNOTSUPP;
-
-                err = OBP(obd, create)(&conn, &data->ioc_obdo1);
+                err = obd_create(&conn, &data->ioc_obdo1);
                 if (err) {
                         EXIT;
                         return err;
@@ -370,22 +328,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_GETATTR: {
-                /* has this minor been registered? */
-		printk("---> getattr!"); 
-                if ( !(obd->obd_flags & OBD_ATTACHED) ||
-                     !(obd->obd_flags & OBD_SET_UP)) {
-                        CDEBUG(D_IOCTL, "Device not attached or set up\n");
-                        return -ENODEV;
-                }
                 conn.oc_id = data->ioc_conn1;
 		conn.oc_dev = obd;
 
-                if ( !OBT(obd) || !OBP(obd, getattr) ) { 
-			EXIT;
-                        return -EOPNOTSUPP;
-		}
-
-                err = OBP(obd, getattr)(&conn, &data->ioc_obdo1);
+                err = obd_getattr(&conn, &data->ioc_obdo1);
                 if (err) {
                         EXIT;
                         return err;
@@ -395,6 +341,36 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 EXIT;
                 return err;
         }
+
+        case OBD_IOC_SETATTR: {
+                conn.oc_id = data->ioc_conn1;
+		conn.oc_dev = obd;
+
+                err = obd_setattr(&conn, &data->ioc_obdo1);
+                if (err) {
+                        EXIT;
+                        return err;
+                }
+
+                err = copy_to_user((int *)arg, data, sizeof(*data));
+                EXIT;
+                return err;
+	}
+
+        case OBD_IOC_DESTROY: {
+                conn.oc_id = data->ioc_conn1;
+		conn.oc_dev = obd;
+
+                err = obd_destroy(&conn, &data->ioc_obdo1);
+                if (err) {
+                        EXIT;
+                        return err;
+                }
+
+                err = copy_to_user((int *)arg, data, sizeof(*data));
+                EXIT;
+                return err;
+	}
 
 #if 0
         case OBD_IOC_SYNC: {
@@ -426,68 +402,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 }
                         
                 return put_user(err, (int *) arg);
-        }
-
-        case OBD_IOC_DESTROY: {
-                struct oic_attr_s *attr = tmp_buf;
-                
-                /* has this minor been registered? */
-                if (!obd->obd_type)
-                        return -ENODEV;
-
-                err = copy_from_user(attr, (int *)arg, sizeof(*attr));
-                if ( err ) {
-                        EXIT;
-                        return err;
-                }
-
-                if ( !OBT(obd) || !OBP(obd, destroy) )
-                        return -EOPNOTSUPP;
-
-                conn.oc_id = attr->conn_id;
-                err = OBP(obd, destroy)(&conn, &attr->obdo);
-                EXIT;
-                return err;
-        }
-
-        case OBD_IOC_SETATTR: {
-                struct oic_attr_s *attr = tmp_buf;
-
-                /* has this minor been registered? */
-                if (!obd->obd_type)
-                        return -ENODEV;
-
-                err = copy_from_user(attr, (int *)arg, sizeof(*attr));
-                if (err)
-                        return err;
-
-                if ( !OBT(obd) || !OBP(obd, setattr) )
-                        return -EOPNOTSUPP;
-                
-                conn.oc_id = attr->conn_id;
-                err = OBP(obd, setattr)(&conn, &attr->obdo);
-                EXIT;
-                return err;
-        }
-
-        case OBD_IOC_GETATTR: {
-                struct oic_attr_s *attr = tmp_buf;
-
-                err = copy_from_user(attr, (int *)arg, sizeof(*attr));
-                if (err)
-                        return err;
-
-                conn.oc_id = attr->conn_id;
-                ODEBUG(&attr->obdo);
-                err = OBP(obd, getattr)(&conn, &attr->obdo);
-                if ( err ) {
-                        EXIT;
-                        return err;
-                }
-
-                err = copy_to_user((int *)arg, attr, sizeof(*attr));
-                EXIT;
-                return err;
         }
 
         case OBD_IOC_READ: {

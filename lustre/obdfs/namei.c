@@ -139,11 +139,6 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
         int err;
 
         ENTRY;
-        if (IOPS(dir, create) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no create method!\n");
-                EXIT;
-                return ERR_PTR(-EIO);
-        }
         oa = obdo_alloc();
         if (!oa) {
                 EXIT;
@@ -154,7 +149,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
         oa->o_mode = mode;
         oa->o_valid |= OBD_MD_FLMODE;
 	CDEBUG(D_INODE, "\n");
-        err = IOPS(dir, create)(IID(dir), oa);
+        err = obd_create(IID(dir), oa);
 	CDEBUG(D_INODE, "\n");
 
         if ( err ) {
