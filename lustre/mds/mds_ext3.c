@@ -100,17 +100,15 @@ static int mds_ext3_setattr(struct dentry *dentry, void *handle,
  *        dirty (it currently is used with other operations that
  *        subsequently also mark the inode dirty).
  */
-#define EXT3_OBJID_FL   0x40000000
 static int mds_ext3_set_objid(struct inode *inode, void *handle, obd_id id)
 {
-        memcpy(&EXT3_I(inode)->i_data, &id, sizeof(id));
-        EXT3_I(inode)->i_flags |= EXT3_OBJID_FL;
+        (__u64)EXT3_I(inode)->i_data[0] = cpu_to_le64(id);
         return 0;
 }
 
 static void mds_ext3_get_objid(struct inode *inode, obd_id *id)
 {
-        memcpy(id, &EXT3_I(inode)->i_data, sizeof(*id));
+        *id = le64_to_cpu(EXT3_I(inode)->i_data[0]);
 }
 
 static ssize_t mds_ext3_readpage(struct file *file, char *buf, size_t count,
@@ -146,7 +144,7 @@ void mds_ext3_delete_inode(struct inode * inode)
 {
         void *handle;
 
-        if (EXT3_I(inode)->i_flags & EXT3_OBJID_FL) {
+        if (S_ISREG(inode->i_mode)) {
                 handle = mds_ext3_start(inode, MDS_FSOP_UNLINK);
 
                 if (IS_ERR(handle)) {
