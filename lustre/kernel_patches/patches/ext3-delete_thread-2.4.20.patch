@@ -1,7 +1,7 @@
 diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 --- origin/fs/ext3/super.c	2003-05-04 17:23:52.000000000 +0400
 +++ linux/fs/ext3/super.c	2003-05-04 17:09:20.000000000 +0400
-@@ -398,6 +398,218 @@ static void dump_orphan_list(struct supe
+@@ -398,6 +398,219 @@ static void dump_orphan_list(struct supe
  	}
  }
  
@@ -154,7 +154,8 @@ diff -puNr origin/fs/ext3/super.c linux/fs/ext3/super.c
 +		return;
 +	}
 +
-+	if (EXT3_I(old_inode)->i_state & EXT3_STATE_DELETE) {
++	if ((EXT3_I(old_inode)->i_state & EXT3_STATE_DELETE) ||
++	    (EXT3_SB(old_inode->i_sb)->s_mount_state & EXT3_ORPHAN_FS)) {
 +		ext3_debug("doing deferred inode %lu delete (%lu blocks)\n",
 +			   old_inode->i_ino, blocks);
 +		ext3_delete_inode(old_inode);
