@@ -20,11 +20,14 @@
 #define NAL_FLAG_STOPPED        4
 
 typedef struct procbridge {
+    /* sync between user threads and nal thread */
     pthread_t t;
     pthread_cond_t cond;
     pthread_mutex_t mutex;
 
     int nal_flags;
+
+    pthread_mutex_t nal_cb_lock;
 } *procbridge;
 
 typedef struct nal_init_args {

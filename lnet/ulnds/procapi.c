@@ -189,9 +189,11 @@ nal_t *procbridge_interface(int num_interface,
     args.nia_nal_type = nal_type;
     args.nia_bridge = b;
 
+    /* init procbridge */
     pthread_mutex_init(&p->mutex,0);
     pthread_cond_init(&p->cond, 0);
     p->nal_flags = 0;
+    pthread_mutex_init(&p->nal_cb_lock, 0);
 
     if (pthread_create(&p->t, NULL, nal_thread, &args)) {
         perror("nal_init: pthread_create");

@@ -93,12 +93,20 @@ static void nal_printf(nal_cb_t *nal,
 static void nal_cli(nal_cb_t *nal,
                     unsigned long *flags)
 {
+    bridge b = (bridge) nal->nal_data;
+    procbridge p = (procbridge) b->local;
+
+    pthread_mutex_lock(&p->nal_cb_lock);
 }
 
 
 static void nal_sti(nal_cb_t *nal,
                     unsigned long *flags)
 {
+    bridge b = (bridge)nal->nal_data;
+    procbridge p = (procbridge) b->local;
+
+    pthread_mutex_unlock(&p->nal_cb_lock);
 }
 
 
