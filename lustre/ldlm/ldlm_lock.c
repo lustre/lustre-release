@@ -504,6 +504,11 @@ void ldlm_lock_dump(struct ldlm_lock *lock)
         if (RES_VERSION_SIZE != 4)
                 LBUG();
 
+        if (!lock) {
+                CDEBUG(D_OTHER, "  NULL LDLM lock\n");
+                return;
+        }
+
         snprintf(ver, sizeof(ver), "%x %x %x %x",
                  lock->l_version[0], lock->l_version[1],
                  lock->l_version[2], lock->l_version[3]);
