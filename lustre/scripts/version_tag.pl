@@ -145,13 +145,27 @@ sub generate_ver($$$)
         print "$tag-$show_last-CHANGED-$linuxdir-$kernver\"\n";
     }
 }
+chomp(my $cwd = `pwd`);
+
+# ARGV[0] = srcdir
+# ARGV[1] = builddir
+
+# for get_latest_mtime and get_tag you need to be in srcdir
 
 if ($ARGV[0]) {
     chdir($ARGV[0]);
 }
-my $linuxdir = get_linuxdir();
 my $tag = get_tag();
 my $mtime = get_latest_mtime();
+
+# for get_linuxdir you need to be in builddir 
+
+if ($ARGV[1]) {
+   chdir($cwd);
+   chdir($ARGV[1]);
+}
+my $linuxdir = get_linuxdir();
+
 generate_ver($tag, $mtime, $linuxdir);
 
 exit(0);

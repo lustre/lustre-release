@@ -19,7 +19,7 @@ include $(top_srcdir)/Rules
 
 # XXX I'm sure there's some automake mv-if-different helper for this.
 lustre_build_version:
-	perl $(top_srcdir)/scripts/version_tag.pl $(top_srcdir) > tmpver
+	perl $(top_srcdir)/scripts/version_tag.pl $(top_srcdir) $(top_builddir)> tmpver
 	cmp -z $(top_builddir)/include/linux/lustre_build_version.h tmpver \
 		2> /dev/null &&                                            \
 		$(RM) tmpver ||                                            \
