@@ -1,0 +1,235 @@
+ fs/namei.c             |   65 +++++++++++++++++++++++++++++++++++++++++++++----
+ include/linux/dcache.h |    1 
+ include/linux/fs.h     |   16 +++++-------
+ 3 files changed, 67 insertions(+), 15 deletions(-)
+
+--- uml-2.5/fs/namei.c~vfs_nointent_2.5.69_rev1	2003-05-26 02:42:14.000000000 -0600
++++ uml-2.5-braam/fs/namei.c	2003-05-28 04:26:25.000000000 -0600
+@@ -1462,6 +1462,7 @@ asmlinkage long sys_mknod(const char __u
+ 	char * tmp;
+ 	struct dentry * dentry;
+ 	struct nameidata nd;
++        nd.it = {0}; /* no intent yet */
+ 
+ 	if (S_ISDIR(mode))
+ 		return -EPERM;
+@@ -1472,6 +1473,15 @@ asmlinkage long sys_mknod(const char __u
+ 	error = path_lookup(tmp, LOOKUP_PARENT, &nd);
+ 	if (error)
+ 		goto out;
++
++	if (nd.dentry->d_inode->i_op->mknod_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++		error = op->mknod_raw(&nd, mode, dev);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto out2;
++	}
++
+ 	dentry = lookup_create(&nd, 0);
+ 	error = PTR_ERR(dentry);
+ 
+@@ -1494,6 +1504,7 @@ asmlinkage long sys_mknod(const char __u
+ 		dput(dentry);
+ 	}
+ 	up(&nd.dentry->d_inode->i_sem);
++out2:
+ 	path_release(&nd);
+ out:
+ 	putname(tmp);
+@@ -1535,10 +1546,18 @@ asmlinkage long sys_mkdir(const char __u
+ 	if (!IS_ERR(tmp)) {
+ 		struct dentry *dentry;
+ 		struct nameidata nd;
++                nd.it = {0}; /* no intent yet */
+ 
+ 		error = path_lookup(tmp, LOOKUP_PARENT, &nd);
+ 		if (error)
+ 			goto out;
++ 		if (nd.dentry->d_inode->i_op->mkdir_raw) {
++ 			struct inode_operations *op = nd.dentry->d_inode->i_op;
++ 			error = op->mkdir_raw(&nd, mode);
++ 			/* the file system wants to use normal vfs path now */
++ 			if (error != -EOPNOTSUPP)
++ 				goto out2;
++ 		}
+ 		dentry = lookup_create(&nd, 1);
+ 		error = PTR_ERR(dentry);
+ 		if (!IS_ERR(dentry)) {
+@@ -1548,6 +1567,7 @@ asmlinkage long sys_mkdir(const char __u
+ 			dput(dentry);
+ 		}
+ 		up(&nd.dentry->d_inode->i_sem);
++out2:
+ 		path_release(&nd);
+ out:
+ 		putname(tmp);
+@@ -1628,6 +1648,7 @@ asmlinkage long sys_rmdir(const char __u
+ 	char * name;
+ 	struct dentry *dentry;
+ 	struct nameidata nd;
++        nd.it = {0}; /* no intent yet */
+ 
+ 	name = getname(pathname);
+ 	if(IS_ERR(name))
+@@ -1648,6 +1669,16 @@ asmlinkage long sys_rmdir(const char __u
+ 			error = -EBUSY;
+ 			goto exit1;
+ 	}
++
++	if (nd.dentry->d_inode->i_op->rmdir_raw) {
++		struct inode_operations *op = nd.dentry->d_inode->i_op;
++
++		error = op->rmdir_raw(&nd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit1;
++	}
++
+ 	down(&nd.dentry->d_inode->i_sem);
+ 	dentry = lookup_hash(&nd.last, nd.dentry, &nd.it);
+ 	error = PTR_ERR(dentry);
+@@ -1704,6 +1735,7 @@ asmlinkage long sys_unlink(const char __
+ 	struct dentry *dentry;
+ 	struct nameidata nd;
+ 	struct inode *inode = NULL;
++        nd.it = {0}; /* no intent yet */
+ 
+ 	name = getname(pathname);
+ 	if(IS_ERR(name))
+@@ -1715,17 +1747,14 @@ asmlinkage long sys_unlink(const char __
+ 	error = -EISDIR;
+ 	if (nd.last_type != LAST_NORM)
+ 		goto exit1;
+-	if (nd.dentry->d_inode->i_op->unlink2) {
++	if (nd.dentry->d_inode->i_op->unlink_raw) {
+ 		struct inode_operations *op = nd.dentry->d_inode->i_op;
+-		error = op->unlink2(nd.dentry->d_inode,
+-				nd.last.name,
+-				nd.last.len);
++		error = op->unlink_raw(&nd);
+ 		/* the file system wants to use normal vfs path now */
+ 		if (error != -EOPNOTSUPP)
+ 			goto exit1;
+ 	}
+ 	down(&nd.dentry->d_inode->i_sem);
+-//	dentry = lookup_hash(&nd.last, nd.dentry, &nd.it);
+ 	dentry = lookup_hash(&nd.last, nd.dentry, NULL);
+ 	error = PTR_ERR(dentry);
+ 	if (!IS_ERR(dentry)) {
+@@ -1792,10 +1821,18 @@ asmlinkage long sys_symlink(const char _
+ 	if (!IS_ERR(to)) {
+ 		struct dentry *dentry;
+ 		struct nameidata nd;
++                nd.it = {0}; /* no intent yet */
+ 
+ 		error = path_lookup(to, LOOKUP_PARENT, &nd);
+ 		if (error)
+ 			goto out;
++		if (nd.dentry->d_inode->i_op->symlink_raw) {
++			struct inode_operations *op = nd.dentry->d_inode->i_op;
++			error = op->symlink_raw(&nd, from);
++			/* the file system wants to use normal vfs path now */
++			if (error != -EOPNOTSUPP)
++				goto out2;
++		}
+ 		dentry = lookup_create(&nd, 0);
+ 		error = PTR_ERR(dentry);
+ 		if (!IS_ERR(dentry)) {
+@@ -1803,6 +1840,7 @@ asmlinkage long sys_symlink(const char _
+ 			dput(dentry);
+ 		}
+ 		up(&nd.dentry->d_inode->i_sem);
++out2:
+ 		path_release(&nd);
+ out:
+ 		putname(to);
+@@ -1866,6 +1904,8 @@ asmlinkage long sys_link(const char __us
+ 	struct nameidata nd, old_nd;
+ 	int error;
+ 	char * to;
++        nd.it = {0}; /* no intent yet */
++        oldnd.it = {0}; /* no intent yet */
+ 
+ 	to = getname(newname);
+ 	if (IS_ERR(to))
+@@ -1880,6 +1920,13 @@ asmlinkage long sys_link(const char __us
+ 	error = -EXDEV;
+ 	if (old_nd.mnt != nd.mnt)
+ 		goto out_release;
++        if (nd.dentry->d_inode->i_op->link_raw) {
++                struct inode_operations *op = nd.dentry->d_inode->i_op;
++                error = op->link_raw(&old_nd, &nd);
++                /* the file system wants to use normal vfs path now */
++                if (error != -EOPNOTSUPP)
++                        goto out_release;
++        }
+ 	new_dentry = lookup_create(&nd, 0);
+ 	error = PTR_ERR(new_dentry);
+ 	if (!IS_ERR(new_dentry)) {
+@@ -2055,6 +2102,8 @@ static inline int do_rename(const char *
+ 	struct dentry * old_dentry, *new_dentry;
+ 	struct dentry * trap;
+ 	struct nameidata oldnd, newnd;
++        oldnd.it = {0}; /* no intent yet */
++        newnd.it = {0}; /* no intent yet */
+ 
+ 	error = path_lookup(oldname, LOOKUP_PARENT, &oldnd);
+ 	if (error)
+@@ -2077,6 +2126,12 @@ static inline int do_rename(const char *
+ 	if (newnd.last_type != LAST_NORM)
+ 		goto exit2;
+ 
++	if (old_dir->d_inode->i_op->rename_raw) {
++		error = old_dir->d_inode->i_op->rename_raw(&oldnd, &newnd);
++		/* the file system wants to use normal vfs path now */
++		if (error != -EOPNOTSUPP)
++			goto exit2;
++	}
+ 	trap = lock_rename(new_dir, old_dir);
+ 
+ 	old_dentry = lookup_hash(&oldnd.last, old_dir, &oldnd.it);
+--- uml-2.5/include/linux/dcache.h~vfs_nointent_2.5.69_rev1	2003-05-25 23:19:05.000000000 -0600
++++ uml-2.5-braam/include/linux/dcache.h	2003-05-28 04:27:15.000000000 -0600
+@@ -19,7 +19,6 @@ struct vfsmount;
+ #define IT_LOOKUP   (1<<4)
+ #define IT_UNLINK   (1<<5)
+ 
+-
+ struct lookup_intent {
+        int it_op;
+        int it_mode;
+--- uml-2.5/include/linux/fs.h~vfs_nointent_2.5.69_rev1	2003-05-25 23:19:05.000000000 -0600
++++ uml-2.5-braam/include/linux/fs.h	2003-05-28 03:33:38.000000000 -0600
+@@ -736,22 +736,20 @@ struct inode_operations {
+ 	struct dentry * (*lookup2) (struct inode *,struct dentry *,
+ 					struct lookup_intent *);
+ 	int (*link) (struct dentry *,struct inode *,struct dentry *);
+-	int (*link2) (struct dentry *,struct inode *,struct dentry *, int);
++	int (*link_raw) (struct nameidata *, struct nameidata *);
+ 	int (*unlink) (struct inode *,struct dentry *);
+-	int (*unlink2) (struct inode *,const char *, int);
++	int (*unlink_raw) (struct nameidata *);
+ 	int (*symlink) (struct inode *,struct dentry *,const char *);
+-	int (*symlink2) (struct inode *,const char *, int, const char *);
++	int (*symlink_raw) (struct nameidata *, const char *);
+ 	int (*mkdir) (struct inode *,struct dentry *,int);
+-	int (*mkdir2) (struct inode *,const char *, int, int);
++	int (*mkdir_raw) (struct nameidata *, int);
+ 	int (*rmdir) (struct inode *,struct dentry *);
+-	int (*rmdir2) (struct inode *,const char *, int);
++	int (*rmdir_raw) (struct nameidata *);
+ 	int (*mknod) (struct inode *,struct dentry *,int,dev_t);
+-	int (*mknod2) (struct inode *, const char *, int, int, int);
++	int (*mknod_raw) (struct nameidata *, int, int);
+ 	int (*rename) (struct inode *, struct dentry *,
+ 			struct inode *, struct dentry *);
+-	int (*rename2) (struct inode *, struct inode *,
+-			const char *oldname, int oldlen,
+-			const char *newname, int newlen);
++	int (*rename_raw) (struct nameidata *oldnd, struct nameidata *newnd);
+ 	int (*readlink) (struct dentry *, char __user *,int);
+ 	int (*follow_link) (struct dentry *, struct nameidata *);
+ 	int (*follow_link2) (struct dentry *, struct nameidata *,
+
+_

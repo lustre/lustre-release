@@ -1,6 +1,7 @@
 uml-make-fix.patch
 lustre_version.patch
 vfs_intent_2.5.69_rev1.patch
+vfs_nointent_2.5.69_rev1.patch
 ext3-san-jdike-2.5.69.patch
 iopen-jdike-2.5.69.patch
 export-truncate-2.5.63.patch
