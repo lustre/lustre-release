@@ -535,7 +535,7 @@ cleanup_portals() {
 	do_rmmod ptlrpc
 	do_rmmod obdclass
 
-	do_rmmod kqswnal
+	#do_rmmod kqswnal
 	do_rmmod ksocknal
 	do_rmmod kptlrouter
 	do_rmmod portals
