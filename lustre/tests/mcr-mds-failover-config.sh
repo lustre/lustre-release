@@ -27,22 +27,22 @@ h2ip () {
 
 
 # create client node
-$LMC -o $CONFIG --node client --net '*' elan
-$LMC -m $CONFIG --router --node mcr21 --tcpbuf $TCPBUF --net `h2ip $GW_NODE` tcp
-$LMC -m $CONFIG --router --node mcr21 --net `h2elan $GW_NODE` elan
-$LMC -m $CONFIG --node $GW_NODE --route elan `h2elan $GW_NODE` $CLIENT_ELAN 
+$LMC -o $CONFIG --add net --node client --nid '*' --nettype elan
+$LMC -m $CONFIG --add net --router --node mcr21 --tcpbuf $TCPBUF --nid `h2ip $GW_NODE` --nettype tcp
+$LMC -m $CONFIG --add net --router --node mcr21 --nid `h2elan $GW_NODE` --nettype elan
+$LMC -m $CONFIG --add route --node $GW_NODE --nettype elan --gw `h2elan $GW_NODE` --lo $CLIENT_ELAN 
 
 # create MDS node entries
 for mds in $MDSNODES; do
   elanaddr=`$LUSTRE_QUERY -h emcri -s id=$mds -e`
-  $LMC -m $CONFIG --node $mds --net $elanaddr elan
-  $LMC -m $CONFIG --node $mds --mds mds_$mds $MDS_DEVICE $MDS_SIZE
+  $LMC -m $CONFIG --add net --node $mds --nid $elanaddr --nettype elan
+  $LMC -m $CONFIG --add mds --node $mds --mds mds_$mds --dev $MDS_DEVICE --size $MDS_SIZE
 done
 
 # create OST node entry
-$LMC -m $CONFIG --node $OST_BA --tcpbuf $TCPBUF --net $OST_BA tcp
-$LMC -m $CONFIG --node $OST_BA --obduuid $OST_UUID --ost bluearc
-$LMC -m $CONFIG --node $GW_NODE --route tcp `h2ip $GW_NODE` $OST_BA
+$LMC -m $CONFIG --add net --node $OST_BA --tcpbuf $TCPBUF --nid $OST_BA --nettype tcp
+$LMC -m $CONFIG --add ost --node $OST_BA --obd obd_$OST_BA --obduuid $OST_UUID --dev bluearc
+$LMC -m $CONFIG --add route --node $GW_NODE --nettype tcp --gw `h2ip $GW_NODE` --lo $OST_BA
 
 # mount
-$LMC -m $CONFIG --node client --mtpt /mnt/lustre mds_$ACTIVEMDS OSC_$OST_BA
+$LMC -m $CONFIG --add mtpt --node client --path /mnt/lustre --mds mds_$ACTIVEMDS --lov obd_$OST_BA
