@@ -1406,37 +1406,43 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
 {
         ksock_peer_t *peer;
         ptl_nid_t     dest_nid = NTOH__u64 (conn->ksnc_hdr.dest_nid);
+        ptl_nid_t     src_nid = NTOH__u64 (conn->ksnc_hdr.src_nid);
         int           body_len = NTOH__u32 (conn->ksnc_hdr.payload_length);
+        char str[PTL_NALFMT_SIZE];
 
         CDEBUG (D_NET, "%p "LPX64"->"LPX64" %d parsing header\n", conn,
-                NTOH__u64 (conn->ksnc_hdr.src_nid),
-                dest_nid, conn->ksnc_rx_nob_left);
+                src_nid, dest_nid, conn->ksnc_rx_nob_left);
 
         LASSERT (conn->ksnc_rx_state == SOCKNAL_RX_HEADER);
         LASSERT (conn->ksnc_rx_scheduled);
 
         if (body_len < 0) {                 /* length corrupt (overflow) */
-                CERROR("dropping packet from "LPX64" for "LPX64": packet "
-                       "size %d illegal\n", NTOH__u64 (conn->ksnc_hdr.src_nid),
-                       dest_nid, body_len);
+                CERROR("dropping packet from "LPX64" (%s) for "LPX64" (%s): "
+                       "packet size %d illegal\n",
+                       src_nid, portals_nid2str(TCPNAL, src_nid, str),
+                       dest_nid, portals_nid2str(TCPNAL, dest_nid, str),
+                       body_len);
 
                 ksocknal_new_packet (conn, 0);  /* on to new packet */
                 return;
         }
 
         if (ksocknal_data.ksnd_fmbs == NULL) {        /* not forwarding */
-                CERROR("dropping packet from "LPX64" for "LPX64": not "
-                       "forwarding\n", conn->ksnc_hdr.src_nid,
-                       conn->ksnc_hdr.dest_nid);
+                CERROR("dropping packet from "LPX64" (%s) for "LPX64
+                       " (%s): not forwarding\n",
+                       src_nid, portals_nid2str(TCPNAL, src_nid, str),
+                       dest_nid, portals_nid2str(TCPNAL, dest_nid, str));
                 /* on to new packet (skip this one's body) */
                 ksocknal_new_packet (conn, body_len);
                 return;
         }
 
-        if (body_len > SOCKNAL_MAX_FWD_PAYLOAD) {      /* too big to forward */
-                CERROR ("dropping packet from "LPX64" for "LPX64
-                        ": packet size %d too big\n", conn->ksnc_hdr.src_nid,
-                        conn->ksnc_hdr.dest_nid, body_len);
+        if (body_len > PTL_MTU) {      /* too big to forward */
+                CERROR ("dropping packet from "LPX64" (%s) for "LPX64
+                        "(%s): packet size %d too big\n",
+                        src_nid, portals_nid2str(TCPNAL, src_nid, str),
+                        dest_nid, portals_nid2str(TCPNAL, dest_nid, str),
+                        body_len);
                 /* on to new packet (skip this one's body) */
                 ksocknal_new_packet (conn, body_len);
                 return;
@@ -1445,9 +1451,10 @@ ksocknal_fwd_parse (ksock_conn_t *conn)
         /* should have gone direct */
         peer = ksocknal_get_peer (conn->ksnc_hdr.dest_nid);
         if (peer != NULL) {
-                CERROR ("dropping packet from "LPX64" for "LPX64
-                        ": target is a peer\n", conn->ksnc_hdr.src_nid,
-                        conn->ksnc_hdr.dest_nid);
+                CERROR ("dropping packet from "LPX64" (%s) for "LPX64
+                        "(%s): target is a peer\n",
+                        src_nid, portals_nid2str(TCPNAL, src_nid, str),
+                        dest_nid, portals_nid2str(TCPNAL, dest_nid, str));
                 ksocknal_put_peer (peer);  /* drop ref from get above */
 
                 /* on to next packet (skip this one's body) */

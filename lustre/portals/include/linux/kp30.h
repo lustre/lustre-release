@@ -778,6 +778,7 @@ struct portals_cfg {
         __u32 pcfg_nal;
         __u32 pcfg_flags;
 
+        __u32 pcfg_gw_nal;
         __u64 pcfg_nid;
         __u64 pcfg_nid2;
         __u64 pcfg_nid3;

@@ -82,12 +82,6 @@
 
 #define SOCKNAL_PEER_HASH_SIZE   101            /* # peer lists */
 
-#if PTL_LARGE_MTU
-# define SOCKNAL_MAX_FWD_PAYLOAD (256<<10)      /* biggest payload I can forward */
-#else
-# define SOCKNAL_MAX_FWD_PAYLOAD (64<<10)       /* biggest payload I can forward */
-#endif
-
 #define SOCKNAL_NLTXS           128             /* # normal transmit messages */
 #define SOCKNAL_NNBLK_LTXS	128             /* # transmit messages reserved if can't block */
 
@@ -96,7 +90,7 @@
 
 #define SOCKNAL_SMALL_FWD_PAGES	1               /* # pages in a small message fwd buffer */
 
-#define SOCKNAL_LARGE_FWD_PAGES (PAGE_ALIGN (sizeof (ptl_hdr_t) + SOCKNAL_MAX_FWD_PAYLOAD) >> PAGE_SHIFT)
+#define SOCKNAL_LARGE_FWD_PAGES (PAGE_ALIGN (sizeof (ptl_hdr_t) + PTL_MTU) >> PAGE_SHIFT)
 						/* # pages in a large message fwd buffer */
 
 #define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */
