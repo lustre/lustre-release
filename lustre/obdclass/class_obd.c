@@ -579,7 +579,6 @@ struct file_operations obd_device_list_fops = {
 #ifdef OBD_INIT_CHECK
 int obd_init_checks(void)
 {
-        long long llval;
         __u64 u64val, div64val;
         char buf[64];
         int len, ret = 0;
@@ -589,20 +588,20 @@ int obd_init_checks(void)
 
         CDEBUG(D_INFO, "OBD_OBJECT_EOF = "LPX64"\n", OBD_OBJECT_EOF);
 
-        llval = OBD_OBJECT_EOF;
-        CDEBUG(D_INFO, "llval OBD_OBJECT_EOF = "LPX64"\n", llval);
-        if (llval != OBD_OBJECT_EOF) {
-                CERROR("long long "LPX64"(%d) != 0xffffffffffffffff\n",
-                       llval, sizeof(llval));
+        u64val = OBD_OBJECT_EOF;
+        CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = "LPX64"\n", u64val);
+        if (u64val != OBD_OBJECT_EOF) {
+                CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
+                       u64val, sizeof(u64val));
                 ret = -EINVAL;
         }
-        len = snprintf(buf, sizeof(buf), LPX64, llval);
+        len = snprintf(buf, sizeof(buf), LPX64, u64val);
         if (len != 18) {
                 CWARN("LPX64 wrong length! strlen(%s)=%d != 18\n", buf, len);
                 ret = -EINVAL;
         }
 
-        u64val = div64val = OBD_OBJECT_EOF;
+        div64val = OBD_OBJECT_EOF;
         CDEBUG(D_INFO, "u64val OBD_OBJECT_EOF = "LPX64"\n", u64val);
         if (u64val != OBD_OBJECT_EOF) {
                 CERROR("__u64 "LPX64"(%d) != 0xffffffffffffffff\n",
