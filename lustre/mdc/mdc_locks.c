@@ -593,7 +593,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                                sizeof(lockh));
                 }
         }
-        CDEBUG(D_DENTRY, "D_IT dentry %.*s intent: %s status %d disp %x rc %d\n",
+        CDEBUG(D_DENTRY,"D_IT dentry %.*s intent: %s status %d disp %x rc %d\n",
                len, name, ldlm_it2str(it->it_op), it->d.lustre.it_status,
                it->d.lustre.it_disposition, rc);
 
