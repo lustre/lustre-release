@@ -35,13 +35,7 @@ do_ost() {
 
 drop_request() {
     do_mds "echo 0x121 > /proc/sys/lustre/fail_loc"
-    do_client "$1"
-    do_mds "echo 0 > /proc/sys/lustre/fail_loc"
-}
-
-drop_reply() {
-    do_mds "echo 0x120 > /proc/sys/lustre/fail_loc"
-    do_client "$@"
+    do_client "$1 & sleep ${TIMEOUT:-5}; sleep 2; kill \$!"
     do_mds "echo 0 > /proc/sys/lustre/fail_loc"
 }
 
@@ -97,9 +91,14 @@ cleanup() {
     shutdown_ost $@ || true
 }
 
-try_to_cleanup() {
+wait_for_timeout() {
     # wait to make sure we enter recovery
+    # it'd be better if the upcall notified us somehow, I think
     sleep $(( ${TIMEOUT:-5} + 2 ))
+}
+
+try_to_cleanup() {
+    kill -INT $!
     unmount_client --force
     mount_client --timeout=${TIMEOUT:-5} --recovery_upcall=/bin/true
 }
@@ -110,26 +109,26 @@ if [ ! -z "$ONLY" ]; then
 fi
 
 setup
-drop_request "mcreate /mnt/lustre/1"
+drop_request "mcreate /mnt/lustre/1" & wait_for_timeout
 try_to_cleanup
 
-drop_request "tchmod 111 /mnt/lustre/2"
+drop_request "tchmod 111 /mnt/lustre/2" & wait_for_timeout
 try_to_cleanup
 
-drop_request "statone /mnt/lustre/2"
+drop_request "statone /mnt/lustre/2" & wait_for_timeout
 try_to_cleanup
 
 do_client "cp /etc/resolv.conf /mnt/lustre/resolv.conf"
-drop_request "cat /mnt/lustre/resolv.conf > /dev/null"
+drop_request "cat /mnt/lustre/resolv.conf > /dev/null" & wait_for_timeout
 try_to_cleanup
 
-drop_request "mv /mnt/lustre/resolv.conf /mnt/lustre/renamed"
+drop_request "mv /mnt/lustre/resolv.conf /mnt/lustre/renamed" & wait_for_timeout
 try_to_cleanup
 
-drop_request "mlink /mnt/lustre/renamed-again /mnt/lustre/link1"
+drop_request "mlink /mnt/lustre/renamed-again /mnt/lustre/link1" & wait_for_timeout
 try_to_cleanup
 
-drop_request "munlink /mnt/lustre/link1"
+drop_request "munlink /mnt/lustre/link1" & wait_for_timeout
 try_to_cleanup
 
 cleanup
