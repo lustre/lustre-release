@@ -112,7 +112,7 @@
 +	handle_t *handle = NULL;
 +	int ret;
 +	int orphan = 0;
-+	loff_t offset = blocknr << inode->i_blkbits;	/* ugh */
++	loff_t offset = (loff_t)blocknr << inode->i_blkbits;	/* ugh */
 +	ssize_t count = iobuf->length;			/* ditto */
 +
 +	if (rw == WRITE) {
