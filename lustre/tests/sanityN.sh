@@ -24,12 +24,12 @@ touch /mnt/lustre1/f1
 [ -f /mnt/lustre2/f1 ] || error "test 1 failure" 
 echo "pass"
 
-echo "test 2: check attribute updates on 2 mtpt's..."
+echo -n "test 2: check attribute updates on 2 mtpt's..."
 chmod a+x /mnt/lustre2/f1
 [ -x /mnt/lustre1/f1 ] || error "test 2 failure"
 echo "pass"
 
-echo "test 3: check after remount attribute updates on 2 mtpt's..."
+echo -n "test 3: check after remount attribute updates on 2 mtpt's..."
 chmod a-x /mnt/lustre2/f1
 $CLEAN
 $START
@@ -37,7 +37,15 @@ $START
 [ ! -x /mnt/lustre1/f1 ] || error "test 3 failure"
 echo "pass"
 
+echo -n "test 4: symlink on one mtpt, readlink on another..."
+( cd /mnt/lustre1 ; ln -s this/is/good lnk )
+
+[ "Xthis/is/good" = X`perl -e 'print readlink("/mnt/lustre2/lnk");'` ] || error  "test 4 fails"
+echo "pass"
+
 $CLEAN
 $START
+
+
 
 exit
