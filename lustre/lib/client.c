@@ -145,8 +145,9 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         INIT_LIST_HEAD(&imp->imp_request_list);
         spin_lock_init(&imp->imp_lock);
         imp->imp_last_xid = 0;
+        imp->imp_max_transno = 0;
         imp->imp_peer_last_xid = 0;
-        imp->imp_peer_committed_xid = 0;
+        imp->imp_peer_committed_transno = 0;
 
         request = ptlrpc_prep_req(&cli->cl_import, rq_opc, 2, size, tmp);
         if (!request)
