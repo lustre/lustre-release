@@ -11,9 +11,9 @@ else
 DIRS24 = extN mds
 endif
 
-# NOTE: keep extN before mds
-SUBDIRS = obdclass utils ptlrpc ldlm lib obdfilter mdc osc ost llite 
-SUBDIRS+= $(DIRS24) obdecho lov tests doc scripts 
+# NOTE: keep extN before mds and obdfilter
+SUBDIRS = $(DIRS24) obdclass utils ptlrpc ldlm lib obdfilter mdc osc ost llite 
+SUBDIRS+= obdecho lov tests doc scripts 
 
 DIST_SUBDIRS = $(SUBDIRS)
 EXTRA_DIST = BUGS FDL Rules include patches archdep.m4
