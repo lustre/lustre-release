@@ -173,6 +173,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         }
         CDEBUG(log_pri, "wrote objids: err = %d\n", err);
 
+        EXIT;
 out_commit:
         err = fsfilt_commit(obd, mds->mds_sb, inode, handle, 0);
         if (err) {
@@ -181,7 +182,7 @@ out_commit:
                         rc = err;
         }
 
-        RETURN(rc);
+        return rc;
 }
 
 /* this gives the same functionality as the code between
@@ -989,8 +990,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
                 mds_pack_inode2body(obd, body, inode, 1);
         }
-        EXIT;
 
+        EXIT;
 cleanup:
         err = mds_finish_transno(mds, dir, handle, req, rc, 0);
 
@@ -1354,6 +1355,7 @@ changed:
                 memset(child_res_id, 0, sizeof(*child_res_id));
         }
 
+        EXIT;
 cleanup:
         if (rc) {
                 switch(cleanup_phase) {
@@ -1364,7 +1366,7 @@ cleanup:
                         ldlm_lock_decref(parent_lockh, parent_mode);
                 }
         }
-        RETURN(rc);
+        return rc;
 }
 
 int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
@@ -1510,6 +1512,7 @@ retry_locks:
                 GOTO(cleanup, rc);
         }
 
+        EXIT;
 cleanup:
         if (rc) {
                 switch (cleanup_phase) {
@@ -1527,15 +1530,15 @@ cleanup:
                         l_dput(*dparentp);
                 }
         }
-        RETURN(rc);
+        return rc;
 }
 
 void mds_reconstruct_generic(struct ptlrpc_request *req)
 {
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
-
         mds_req_from_mcd(req, med->med_mcd);
 }
+
 /* If we are unlinking an open file/dir (i.e. creating an orphan) then
  * we instead link the inode into the PENDING directory until it is
  * finally released.  We can't simply call mds_reint_rename() or some
@@ -1611,10 +1614,10 @@ static int mds_orphan_add_link(struct mds_update_record *rec,
                 mark_inode_dirty(pending_dir);
         }
 
-        GOTO(out_dput, rc = 1);
+        EXIT;
 out_dput:
         l_dput(pending_child);
-        RETURN(rc);
+        return rc;
 }
 
 int mds_create_local_dentry(struct mds_update_record *rec,
@@ -1719,6 +1722,8 @@ int mds_create_local_dentry(struct mds_update_record *rec,
 
         id_fid(rec->ur_id1) = id_fid(&sid);
         id_group(rec->ur_id1) = id_group(&sid);
+
+        EXIT;
 cleanup:
         switch(cleanup_phase) {
                 case 2:
@@ -1730,7 +1735,7 @@ cleanup:
                 case 0:
                        break; 
         }
-        RETURN(rc);
+        return rc;
 }
 
 static int mds_copy_unlink_reply(struct ptlrpc_request *master,
@@ -2989,9 +2994,8 @@ static int mds_reint_rename_create_name(struct mds_update_record *rec,
         rc = mds_add_local_dentry(rec, offset, req, rec->ur_id1,
                                   de_tgtdir, de_new, 0);
 
-        GOTO(cleanup, rc);
-cleanup:
         EXIT;
+cleanup:
         
         if (cleanup_phase == 1) {
 #ifdef S_PDIROPS
@@ -3006,7 +3010,7 @@ cleanup:
         }
 
         req->rq_status = rc;
-        RETURN(0);
+        return 0;
 }
 
 static int mds_reint_rename_to_remote(struct mds_update_record *rec, int offset,
@@ -3083,6 +3087,8 @@ static int mds_reint_rename_to_remote(struct mds_update_record *rec, int offset,
         
         rc = mds_del_local_dentry(rec, offset, req, de_srcdir,
                                   de_old);
+
+        EXIT;
 cleanup:
         if (req2)
                 ptlrpc_req_finished(req2);
@@ -3099,7 +3105,7 @@ cleanup:
         l_dput(de_srcdir);
 
         req->rq_status = rc;
-        RETURN(0);
+        return 0;
 }
 
 static int mds_reint_rename(struct mds_update_record *rec, int offset,
@@ -3305,9 +3311,8 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                 }
         }
 
-        GOTO(cleanup, rc);
-cleanup:
         EXIT;
+cleanup:
         rc = mds_finish_transno(mds, (de_tgtdir ? de_tgtdir->d_inode : NULL),
                                 handle, req, rc, 0);
 

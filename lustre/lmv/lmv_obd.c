@@ -1630,7 +1630,8 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
         }
 
         rc = 0;
-        
+
+        LASSERT(oa->o_id != 0);
         id_ino(&mid) = oa->o_id;
         id_fid(&mid) = oa->o_fid;
         id_gen(&mid) = oa->o_generation;

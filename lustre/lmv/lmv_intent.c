@@ -425,10 +425,12 @@ release_lock:
                 if (it.d.lustre.it_lock_mode)
                         ldlm_lock_decref(lockh, it.d.lustre.it_lock_mode);
         }
+
+        EXIT;
 cleanup:
         lmv_unlock_obj(obj);
         lmv_put_obj(obj);
-        RETURN(rc);
+        return rc;
 }
 
 int lmv_intent_lookup(struct obd_export *exp, struct lustre_id *pid,
@@ -746,8 +748,10 @@ release_lock:
                         oit->d.lustre.it_lock_mode = master_lock_mode;
                 rc = 1;
         }
+
+        EXIT;
 cleanup:
         lmv_unlock_obj(obj);
         lmv_put_obj(obj);
-        RETURN(rc);
+        return rc;
 }

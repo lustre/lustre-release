@@ -124,7 +124,7 @@ err_discon:
         mds->mds_lmv_obd = ERR_PTR(rc);
 err_last:
         up(&mds->mds_lmv_sem);
-        RETURN(rc);
+        return rc;
 }
 
 int mds_lmv_postsetup(struct obd_device *obd)
@@ -522,6 +522,7 @@ int scan_and_distribute(struct obd_device *obd, struct dentry *dentry,
                         GOTO(cleanup, err);
         }
 
+        EXIT;
 cleanup:
         for (i = 0; i < mea->mea_count; i++) {
                 struct list_head *cur, *tmp;
@@ -537,7 +538,7 @@ cleanup:
         OBD_FREE(dc.cache, sizeof(struct dir_cache) * mea->mea_count);
         OBD_FREE(file_name, nlen);
 
-        RETURN(err);
+        return err;
 }
 
 #define MAX_DIR_SIZE      (64 * 1024)
@@ -726,7 +727,7 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
 
 err_oa:
 	obdo_free(oa);
-        RETURN(rc);
+        return rc;
 }
 
 static int filter_start_page_write(struct inode *inode,
@@ -735,12 +736,11 @@ static int filter_start_page_write(struct inode *inode,
         struct page *page = alloc_pages(GFP_HIGHUSER, 0);
         if (page == NULL) {
                 CERROR("no memory for a temp page\n");
-                RETURN(lnb->rc = -ENOMEM);
+                return lnb->rc = -ENOMEM;
         }
         POISON_PAGE(page, 0xf1);
         page->index = lnb->offset >> PAGE_SHIFT;
         lnb->page = page;
-
         return 0;
 }
 
@@ -761,6 +761,7 @@ int mds_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         struct dentry *dentry;
         struct lustre_id id;
         ENTRY;
+
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
 
@@ -987,7 +988,6 @@ void mds_unlock_slave_objs(struct obd_device *obd, struct dentry *dentry,
 
         OBD_FREE(lockh, sizeof(struct lustre_handle) * mea->mea_count);
         OBD_FREE(mea, mea_size);
-        return;
 }
 
 int mds_unlink_slave_objs(struct obd_device *obd, struct dentry *dentry)
@@ -997,10 +997,11 @@ int mds_unlink_slave_objs(struct obd_device *obd, struct dentry *dentry)
         struct mdc_op_data op_data;
         struct mea *mea = NULL;
         int mea_size, rc;
+        ENTRY;
 
 	/* clustered MD ? */
 	if (!mds->mds_lmv_obd)
-	        return 0;
+	        RETURN(0);
 
         /* a dir can be splitted only */
         if (!S_ISDIR(dentry->d_inode->i_mode))
@@ -1011,7 +1012,8 @@ int mds_unlink_slave_objs(struct obd_device *obd, struct dentry *dentry)
                 RETURN(rc);
 
         if (mea == NULL)
-                return 0;
+                RETURN(0);
+                       
         if (mea->mea_count == 0)
                 GOTO(cleanup, rc = 0);
 
@@ -1023,9 +1025,10 @@ int mds_unlink_slave_objs(struct obd_device *obd, struct dentry *dentry)
         op_data.mea1 = mea;
         rc = md_unlink(mds->mds_lmv_exp, &op_data, &req);
         LASSERT(req == NULL);
+        EXIT;
 cleanup:
         OBD_FREE(mea, mea_size);
-        RETURN(rc);
+        return rc;
 }
 
 struct ide_tracking {
@@ -1147,6 +1150,7 @@ int mds_lock_and_check_slave(int offset, struct ptlrpc_request *req,
         if (!mds_is_dir_empty(obd, dentry))
                 rc = -ENOTEMPTY;
 
+        EXIT;
 cleanup:
         switch(cleanup_phase) {
         case 1:
@@ -1158,7 +1162,7 @@ cleanup:
         default:
                 break;
         }
-        RETURN(rc);
+        return rc;
 }
 
 int mds_convert_mea_ea(struct obd_device *obd, struct inode *inode,
@@ -1220,7 +1224,7 @@ int mds_convert_mea_ea(struct obd_device *obd, struct inode *inode,
         err = fsfilt_commit(obd, obd->u.mds.mds_sb, inode, handle, 0);
         if (!rc)
                 rc = err ? err : size;
-        GOTO(conv_free, rc);
+        EXIT;
 conv_free:
         OBD_FREE(new, size);
         return rc;

@@ -304,7 +304,7 @@ err_discon:
         obd_disconnect(mds->mds_lov_exp, 0);
         mds->mds_lov_exp = NULL;
         mds->mds_lov_obd = ERR_PTR(rc);
-        RETURN(rc);
+        return rc;
 }
 
 int mds_lov_disconnect(struct obd_device *obd, int flags)
@@ -914,9 +914,11 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
         err = fsfilt_commit(obd, inode->i_sb, inode, handle, 0);
         if (!rc)
                 rc = err;
+
+        EXIT;
 out_oa:
         obdo_free(oa);
 out_lsm:
         obd_free_memmd(osc_exp, &lsm);
-        RETURN(rc);
+        return rc;
 }
