@@ -182,9 +182,6 @@ extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,
                            char **pbuf, int *opcode);
 extern int smfs_process_rec(struct super_block *sb, int count,
                             char *dir, int flags);
-extern void smfs_rec_pack(struct update_record *rec,
-                          struct inode *dst, void* data, int op);
-
 extern smfs_pack_rec_func smfs_get_rec_pack_type(struct super_block *sb);
 
 extern int ost_rec_pack_init(struct super_block *sb);

@@ -80,34 +80,6 @@ static inline void copy_inode_attr(struct iattr *iattr, struct inode *inode)
         iattr->ia_size = inode->i_size;
 }
 
-void smfs_rec_pack(struct update_record *rec, struct inode *dst,
-                   void *data, int op)
-{
-        rec->ur_fsuid = current->fsuid;
-        rec->ur_fsgid = current->fsgid;
-        rec->ur_rdev = dst->i_rdev;
-        rec->ur_opcode = op;
-        copy_inode_attr(&rec->ur_iattr, dst);
-        if (data) {
-                switch (op) {
-                case REINT_CREATE:
-                case REINT_LINK:
-                case REINT_UNLINK:
-                case REINT_RENAME: {
-                        struct inode *dir = (struct inode *)data;
-                        copy_inode_attr(&rec->ur_pattr, dir);
-                        break;
-                }
-                case REINT_SETATTR: {
-                        struct iattr *attr = (struct iattr *)data;
-                        memcpy(&rec->ur_pattr, attr, sizeof(struct iattr));
-                        break;
-                }
-                }
-        }
-        return;
-}
-
 static inline int unpack_rec_data(char **p_buffer, int *size,
                                   char *in_data, char *args_data)
 {
