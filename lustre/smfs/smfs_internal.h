@@ -183,7 +183,7 @@ extern int smfs_post_rec_create(struct inode *dir, struct dentry *dentry,
                                 void   *data1, void   *data2);
 /*kml.c*/
 int smfs_do_rec(struct inode *inode);
-int smfs_rec_cleanup(struct super_block *sb);
+int smfs_rec_cleanup(struct smfs_super_info *sb);
 int smfs_rec_init(struct super_block *sb);
 
 extern int smfs_rec_unpack(struct smfs_proc_args *args, char *record,

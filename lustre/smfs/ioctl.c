@@ -54,6 +54,7 @@ static struct super_block *smfs_get_sb_by_path(char *path, int len)
         ENTRY;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (path_init(path, LOOKUP_FOLLOW, &nd)) {
+                int error = 0;
                 error = path_walk(path, &nd);
                 if (error) {
                         path_release(&nd);
