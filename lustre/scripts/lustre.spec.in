@@ -59,6 +59,7 @@ find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/lustre-%{version}
 %attr(-, root, root) /usr/sbin/llcleanup.sh
 %attr(-, root, root) /lib/lustre/common.sh
 %attr(-, root, root) /etc/lustre/lustre.cfg
+%attr(-, root, root) /etc/init.d/lustre
 
 %files -n lustre-modules
 %attr(-, root, root) %doc COPYING
