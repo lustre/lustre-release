@@ -1891,7 +1891,6 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
 
         f_dput(dentry);
 out_exp:
-        class_export_put(exp);
         RETURN(rc);
 }
 
