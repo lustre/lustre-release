@@ -80,6 +80,7 @@ void refile_clean_page(struct page *page)
  * Note: here we are more sensitive than kswapd, hope we could
  * do more flush work by ourselves, not resort to kswapd
  */
+#if 0
 static inline int balance_dirty_state(void)
 {
 	if (free_high(ALL_ZONES) > 0) {
@@ -93,8 +94,22 @@ static inline int balance_dirty_state(void)
 	else
 		return -1;
 }
+#else
+/* FIXME need verify the parameters later */
+static inline int balance_dirty_state(void)
+{
+	if (free_plenty(ALL_ZONES) > -2048) {
+		return 1;
+	}
+	if (free_plenty(ALL_ZONES) > -4096) {
+		return 0;
+	}
 
+	return -1;
+}
+#endif
 extern spinlock_t inode_lock;
+extern void wakeup_kswapd(unsigned int gfp_mask);
 
 static int flush_some_pages(struct super_block *sb);
 
@@ -125,11 +140,21 @@ static int liod_main(void *arg)
 	set_bit(LIOD_FLAG_ALIVE, &iod->io_flag);
         wake_up(&iod->io_waitq);
 
+#if 0
+	current->flags |= PF_KERNTHREAD;
+#endif
+
+#if 0
+	pgdat_list->node_zones[0].pages_min *= 2;
+	pgdat_list->node_zones[0].pages_low *= 2;
+	pgdat_list->node_zones[0].pages_high *= 2;
+	pgdat_list->node_zones[0].pages_plenty *= 2;
+#endif
+
         CDEBUG(D_CACHE, "liod(%d) started\n", current->pid);
         while (1) {
 		int flushed;
 		int t;
-		int times;
 
 		/* check the stop command */
 		if (test_bit(LIOD_FLAG_STOP, &iod->io_flag)) {
@@ -144,17 +169,27 @@ static int liod_main(void *arg)
 		CDEBUG(D_NET, "liod(%d) active due to %s\n", current->pid,
 				(t ? "wakeup" : "timeout"));
 
-		printk("liod(%d) active due to %s\n", current->pid,
-				(t ? "wakeup" : "timeout"));
-
-		times=0;
+		/* try to flush */
 		down(&iod->io_sem);
 		do {
 			flushed = flush_some_pages(sb);
 			conditional_schedule();
-			printk("iod: loop %d times\n", ++times);
 		} while (flushed && (balance_dirty_state() >= 0));
 		up(&iod->io_sem);
+
+		/* if still out of balance, it shows all dirty
+		 * pages generate by this llite are flushing or
+		 * flushed, so inbalance must be caused by other
+		 * part of the kernel. here we wakeup kswapd
+		 * immediately, it probably too earliar (because
+		 * we are more sensitive than kswapd), but could
+		 * gurantee the the amount of free+inactive_clean
+		 * pages, at least could accelerate aging of pages
+		 *
+		 * Note: it start kswapd and return immediately
+		 */
+		if (balance_dirty_state() >= 0)
+			wakeup_kswapd(GFP_ATOMIC);
 	}
 
 	clear_bit(LIOD_FLAG_ALIVE, &iod->io_flag);
@@ -271,7 +306,7 @@ static int select_inode_pages(struct inode *inode, struct brw_page *pgs, int *np
 			if (list == &mapping->dirty_pages)
 				break;
 
-			/* move to tail */
+			/* move to head */
 			list_del(&page->list);
 			list_add(&page->list, &mapping->dirty_pages);
 			if (end == &mapping->dirty_pages)
@@ -348,7 +383,7 @@ static int bulk_flush_pages(
 	return rc;
 }
 
-/* syncronously flush certain amount of dirty pages right away
+/* synchronously flush certain amount of dirty pages right away
  * don't simply call fdatasync(), we need a more efficient way
  * to do flush in bunch mode.
  *
@@ -356,7 +391,7 @@ static int bulk_flush_pages(
  *
  * caller should gain the sbi->io_sem lock
  *
- * FIXME now we simply flush pages on at most one inode, probably
+ * now we simply flush pages on at most one inode, probably
  * need add multiple inode flush later.
  */
 static int flush_some_pages(struct super_block *sb)
@@ -377,18 +412,6 @@ static int flush_some_pages(struct super_block *sb)
         INIT_LIST_HEAD(&set->brw_desc_head);
         atomic_set(&set->brw_refcount, 0);
 
-	{
-		int n = 0;
-		list = sb->s_dirty.prev;
-		while (list != &sb->s_dirty) {
-			n++;
-			list = list->prev;
-		}
-		printk("dirty inode length %d\n", n);
-	}
-
-	/* FIXME simutanously gain inode_lock and pagecache_lock could
-	 * cause busy spin forever? Check this */
 	spin_lock(&inode_lock);
 
 	/* sync dirty inodes from tail, since we try to sync
@@ -406,10 +429,9 @@ static int flush_some_pages(struct super_block *sb)
 		inode = list_entry(list, struct inode, i_list);
 		list = list->next;
 
-		/* if inode is locked, it should be have been moved away
+		/* if inode is locked, it should have been moved away
 		 * from dirty list */
-		if (inode->i_state & I_LOCK)
-			LBUG();
+		LASSERT(!(inode->i_state & I_LOCK));
 
 		npgs = LIOD_FLUSH_NR;
 		ret = select_inode_pages(inode, pgs, &npgs);
@@ -417,17 +439,17 @@ static int flush_some_pages(struct super_block *sb)
 		/* quit if found some pages */
 		if (npgs) {
 			/* if all pages are searched on this inode,
-			 * we could move it to the list end */
+			 * we could move it to the list head */
 			if (!ret) {
 				list_del(&inode->i_list);
 				list_add(&inode->i_list, &sb->s_dirty);
 			}
 			break;
 		} else {
-			/* no page found, move inode to the end of list */
+			/* no page found */
 			if (list == &sb->s_dirty)
 				break;
-
+			/* move inode to the end of list */
 			list_del(&inode->i_list);
 			list_add(&inode->i_list, &sb->s_dirty);
 			if (end == &sb->s_dirty)
@@ -436,17 +458,10 @@ static int flush_some_pages(struct super_block *sb)
 	}
 	spin_unlock(&inode_lock);
 
-	if (npgs)
-		printk("got %d pages of inode %lu to flush\n",
-			npgs, inode->i_ino);
-	else
-		printk("didn't found dirty pages\n");
-
 	if (!npgs)
 		return 0;
 
-	if (!inode)
-		LBUG();
+	LASSERT(inode);
 
 	CDEBUG(D_CACHE, "got %d pages of inode %lu to flush\n",
 			npgs, inode->i_ino);
@@ -469,10 +484,15 @@ void ll_balance_dirty_pages(struct super_block *sb)
 		if (!down_trylock(&sbi->ll_iod.io_sem)) {
 			do {
 				flush = flush_some_pages(sb);
-				printk("ll_balance_dirty: loop %d times\n", ++n);
 			} while (flush && (balance_dirty_state() > 0));
 
 			up(&sbi->ll_iod.io_sem);
+
+			/* this will sleep until kswapd wakeup us.
+			 * it maybe low efficient but hope could
+			 * slow down the memory-allocation a bit */
+			if (balance_dirty_state() >= 0)
+				wakeup_kswapd(GFP_KSWAPD);
 		}
 	}
 
