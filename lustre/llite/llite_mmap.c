@@ -283,6 +283,10 @@ static struct vm_area_struct * our_vma(unsigned long addr, size_t count)
         struct vm_area_struct *vma, *ret = NULL;
         ENTRY;
 
+        /* No MM (e.g. NFS)? No vmas too. */
+        if (!mm)
+                RETURN(NULL);
+
         spin_lock(&mm->page_table_lock);
         for(vma = find_vma(mm, addr);
             vma != NULL && vma->vm_start < (addr + count); vma = vma->vm_next) {
