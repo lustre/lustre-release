@@ -245,8 +245,6 @@ check_mds_rec_create (void)
 	CHECK_MEMBER (mds_rec_create, cr_mode);
 	CHECK_MEMBER (mds_rec_create, cr_fid);
 	CHECK_MEMBER (mds_rec_create, cr_replayfid);
-	CHECK_MEMBER (mds_rec_create, cr_uid);
-	CHECK_MEMBER (mds_rec_create, cr_gid);
 	CHECK_MEMBER (mds_rec_create, cr_time);
 	CHECK_MEMBER (mds_rec_create, cr_rdev);
 	CHECK_MEMBER (mds_rec_create, cr_suppgid);
