@@ -56,7 +56,16 @@ This program configures a node following directives in the <XML-config-file>..
  on an LDAP server that can be reached from all the cluster nodes.
 \layout Description
 
---ldapurl LDAP server URL 
+--ldapurl\SpecialChar ~
+<arg> LDAP server URL 
+\layout Description
+
+--config\SpecialChar ~
+<arg> Cluster configuration name used for LDAP query
+\layout Description
+
+--select\SpecialChar ~
+<arg> Select a particular node for a service 
 \layout Description
 
 --node\SpecialChar ~
@@ -75,7 +84,7 @@ node_name
  error.
 \layout Description
 
---cleanup Unconfigure a node.
+--d|--cleanup Unconfigure a node.
  The same config and 
 \emph on 
 --node
@@ -83,6 +92,21 @@ node_name
  argument used for configuration needs to be used for cleanup as well.
  This will attempt to undo all of the configuration steps done by lconf,
  including unloading the kernel modules.
+\layout Description
+
+--force Forced unmounting and/or obd detach during cleanup.
+ Default is 0.
+ 
+\layout Description
+
+--mds_ost_conn Open connections to OSTs on MDS.
+\layout Description
+
+--failover Used to shutdown without saving state.
+ Default is 0.
+ This will allow the node to give up service to another node for failover
+ purposes.
+ This will not be a clean shutdown.
 \layout Description
 
 --noexec Print, but don't execute, the steps lconf will perform.
@@ -98,7 +122,25 @@ node_name
  module script is always created, however).
 \layout Description
 
+--gdb_script\SpecialChar ~
+<arg> Full name of gdb debug script.
+ Default is /tmp/ogdb.
+\layout Description
+
+--dump_path\SpecialChar ~
+<arg> Path to save debug dumps.
+ Default is /tmp/lustre_log
+\layout Description
+
+--recover\SpecialChar ~
+<arg> Recover a device.
+\layout Description
+
 --nosetup Only load modules, do not configure devices or services.
+\layout Description
+
+--group\SpecialChar ~
+<arg> The group of devices tol cleanup/configure.
 \layout Description
 
 --nomod Only setup devices and services, do not load modules.
@@ -108,6 +150,29 @@ node_name
 \layout Description
 
 --verbose,-v Be verbose and show actions while going along.
+\layout Description
+
+--timeout\SpecialChar ~
+<arg> Set the recovery timeout period.
+\layout Description
+
+--lustre_upcall\SpecialChar ~
+<path> Set the location of the Lustre upcall scripts used
+ by the client for recovery
+\layout Description
+
+--portals_upcall\SpecialChar ~
+<path> Specify the location of the Portals upcall scripts
+ used by the client for recovery
+\layout Description
+
+--upcall\SpecialChar ~
+<path> Set the location of both Lustre and Portals upcall scripts
+ used by the client for recovery
+\layout Description
+
+--lctl-dump\SpecialChar ~
+<arg> Dump all ioctls to the specified file
 \layout Description
 
 --dump\SpecialChar ~
@@ -155,18 +220,13 @@ When used in conjunction with cleanup, services are torn down up to a certain
 \layout Description
 
 --ptldebug\SpecialChar ~
-
-\begin_inset Quotes eld
-\end_inset 
-
-subsystems\SpecialChar ~
-|\SpecialChar ~
 debug\SpecialChar ~
-type
-\begin_inset Quotes erd
-\end_inset 
+level This options can be used to set the required debug
+ level 
+\layout Description
 
- This options can be used to set the required debug level 
+--subsystem\SpecialChar ~
+<arg> Set the portals debug subsystem 
 \layout Subsection
 
 EXAMPLES
