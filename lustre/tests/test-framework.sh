@@ -121,6 +121,13 @@ wait_for() {
    wait_for_host $HOST
 }
 
+client_df() {
+    # not every config has many clients
+    if [ ! -z "$CLIENTS" ]; then
+	$PDSH $CLIENTS "df $MOUNT" | dshbak -c
+    fi
+}
+
 facet_failover() {
     facet=$1
     echo "Failing $facet node `facet_active_host $facet`"
