@@ -5,7 +5,6 @@
 #ifndef _OBD_LOV_H__
 #define _OBD_LOV_H__
 
-#ifdef __KERNEL__
 
 #define OBD_LOV_DEVICENAME "lov"
 
@@ -16,7 +15,6 @@ static inline int lov_stripe_md_size(int stripes)
 {
         return sizeof(struct lov_stripe_md) + stripes*sizeof(struct lov_oinfo);
 }
-#endif
 
 static inline int lov_mds_md_size(int stripes)
 {
