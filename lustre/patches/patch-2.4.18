@@ -1603,3 +1603,18 @@
  
  	f = fget(fd);
  	if (f) {
+--- linux-lustre/arch/ia64/mm/init.c	Tue Jun 18 17:27:49 2002
++++ linux-lustre-new/arch/ia64/mm/init.c	Tue Jun 18 17:42:23 2002
+@@ -44,6 +44,12 @@
+ static unsigned long num_dma_physpages;
+ #endif
+ 
++struct page *check_get_page(unsigned long kaddr)
++{
++#warning FIXME: Lustre team, is this solid?
++        return virt_to_page(kaddr);
++}
++
+ int
+ do_check_pgt_cache (int low, int high)
+ {
