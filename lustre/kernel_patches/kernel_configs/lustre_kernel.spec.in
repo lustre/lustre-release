@@ -1,0 +1,347 @@
+# Copyright (C) 2001  Cluster File Systems, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+%define arch i586-smp
+%define kernel_version 2.4.20
+%define patch_version 
+%define lustre_version 22
+%define lustre_release PQ_TEST 
+%define lustre_branch b_devel
+%define kernel_config kernel-2.4.20
+
+# disable build root strip policy
+%define __spec_install_post /usr/lib/rpm/brp-compress || :
+%ifarch ia64
+%define initrd_dir /boot/efi/redhat
+%else
+%define initrd_dir /boot
+%endif
+
+Name: lustre-kernel
+Summary: The Linux_lustre kernel
+Version: %{kernel_version}%{patch_version}_lustre%{lustre_version}
+Release: %{lustre_release}
+License: GPL
+Group: System Environment/Kernel
+URL: http://www.lustre.org/pub/lustre/
+BuildRoot: %{_tmppath}/%{kernel_version}-%{patch_version}-buildroot
+BuildConflicts: rhbuildsys(DiskFree) < 500Mb
+BuildRequires: gcc >= 2.96-98 modutils >= 2.4.10
+
+Source0: linux-%{kernel_version}-%{patch_version}.tar.gz
+Source1: lustre-%{lustre_branch}.tar.gz 
+Patch0:  lustre-patch-%{lustre_version}
+
+%description
+The Lustre Lite Cluster File System: kernel for lustre file system
+
+%package -n lustre-kernel-debug
+Summary: lustre-kernel-packages with debug info
+Group: System Environment/Kernel
+
+%description -n lustre-kernel-debug
+lustre-kernel-packages with debug info
+
+%package -n lustre-lite-utils
+Summary: Lustre utils for Linux %{kernel_version}
+Group: Development
+
+%description -n lustre-lite-utils
+The Lustre Lite Cluster File System utilities.
+
+%package -n lustre-doc
+Summary: Documentation and sample configuration files
+Group: Documentation
+
+%description -n lustre-doc
+Documentation and sample configuration files for Lustre
+
+%package -n lustre-ldap
+Summary: Configures openldap server for LDAP Lustre config database
+Group: Configuration
+Requires: openldap-servers, openldap-clients, python-ldap, 4Suite
+
+%description -n lustre-ldap
+Configures openldap server for LDAP Lustre config database
+
+#####################################################
+%prep
+%setup -q -n linux-%{kernel_version}-%{patch_version}
+
+#patch the lustre kernel
+%patch0 -p1
+#mkdir -p configs
+#cp -fv $RPM_SOURCE_DIR/kernel-%{kernel_version}-%{arch}.config configs
+sed -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{patch_version}_lustre%{lustre_version}/g" < Makefile > Makefile.new
+mv -f Makefile.new Makefile
+
+#get rid of -g flags
+sed -e "s/\([^$]\)*CFLAGS\([^$]\)*\+=\([^$]\)*\-g//g" < Makefile > Makefile.new 
+mv -f Makefile.new Makefile
+# get rid of unwanted files
+find . -name "*.orig" -exec rm -fv {} \;
+find . -name "*~" -exec rm -fv {} \;
+
+#FIXME later, I do not know how to setup two build directory
+#For debug info kernel FIXME later
+rm -rf $RPM_BUILD_DIR/linux-%{kernel_version}-%{patch_version}-debug
+mkdir -p $RPM_BUILD_DIR/linux-%{kernel_version}-%{patch_version}-debug
+gzip -dc  $RPM_SOURCE_DIR/linux-%{kernel_version}-%{patch_version}.tar.gz | tar -xf- -C $RPM_BUILD_DIR/linux-%{kernel_version}-%{patch_version}-debug 
+
+#for release lustre   
+rm -rf $RPM_BUILD_DIR/lustre-%{lustre_branch}
+gzip -dc $RPM_SOURCE_DIR/lustre-%{lustre_branch}.tar.gz | tar -xf- -C $RPM_BUILD_DIR/ 
+
+#for debug lustre
+rm -rf $RPM_BUILD_DIR/lustre-%{lustre_release}-debug
+mkdir -p $RPM_BUILD_DIR/lustre-%{lustre_release}-debug
+gzip -dc $RPM_SOURCE_DIR/lustre-%{lustre_branch}.tar.gz | tar -xf- -C $RPM_BUILD_DIR/lustre-%{lustre_release}-debug 
+# end of prepare 
+#####################################################
+
+#####################################################
+# build
+%build
+
+BuildKernel() {
+    cd $RPM_BUILD_DIR/linux-%{kernel_version}-%{patch_version}
+    make distclean
+    cp -fv $RPM_BUILD_DIR/lustre-%{lustre_branch}/kernel_patches/kernel_configs/%{kernel_config} .config
+    if [ %{arch} = "ia64" ]; then
+        make oldconfig dep vmlinux modules
+    else
+        make oldconfig dep bzImage modules
+    fi
+}
+BuildLustre() {
+    cd $RPM_BUILD_DIR/lustre-%{lustre_branch}
+    sh autogen.sh
+    ./configure --with-linux="$RPM_BUILD_DIR/linux-%{kernel_version}-%{patch_version}"
+    make
+}
+
+BuildDebugKernel() {
+    cd 	$RPM_BUILD_DIR/linux-%{kernel_version}-%{patch_version}-debug/linux-%{kernel_version}-%{patch_version}
+    patch -p1 < $RPM_SOURCE_DIR/lustre-patch-%{lustre_version}
+    make distclean
+    cp -fv $RPM_BUILD_DIR/lustre-%{lustre_branch}/kernel_patches/kernel_configs/%{kernel_config} .config
+    sed -e "s/^EXTRAVERSION.*/EXTRAVERSION = -%{patch_version}_lustre%{lustre_version}-debug/g" < Makefile > Makefile.new
+    mv -f Makefile.new Makefile
+    if [ %{arch} = "ia64" ]; then
+	make oldconfig dep vmlinux modules
+    else
+        make oldconfig dep bzImage modules
+    fi
+}
+BuildDebugLustre() {
+   cd $RPM_BUILD_DIR/lustre-%{lustre_release}-debug/lustre-%{lustre_branch}
+   sh autogen.sh
+    ./configure --with-linux="$RPM_BUILD_DIR/linux-%{kernel_version}-%{patch_version}-debug/linux-%{kernel_version}-%{patch_version}"
+    make
+}
+rm -rf $RPM_BUILD_ROOT
+
+BuildKernel 
+BuildLustre  
+BuildDebugKernel
+BuildDebugLustre
+# end of build 
+#####################################################
+
+#####################################################
+# install kernel and lustre_modules
+%install
+
+#install kernel
+cd $RPM_BUILD_DIR/linux-%{kernel_version}-%{patch_version}
+mkdir -p $RPM_BUILD_ROOT/boot $RPM_BUILD_ROOT/lib $RPM_BUILD_ROOT/lib/modules 
+INSTALL_MOD_PATH=$RPM_BUILD_ROOT/ make modules_install
+if [ %{arch} = "ia64" ]; then
+    cp vmlinux $RPM_BUILD_ROOT/boot/vmlinuz-%{kernel_version}_lustre%{lustre_version}
+else
+    cp arch/i386/boot/bzImage $RPM_BUILD_ROOT/boot/vmlinuz-%{kernel_version}_lustre%{lustre_version}
+fi
+cp System.map $RPM_BUILD_ROOT/boot/System.map-%{kernel_version}-%{patch_version}_lustre%{lustre_version}
+cp .config $RPM_BUILD_ROOT/boot/config-%{kernel_version}_lustre%{lustre_version}
+
+#install debug kernel
+cd $RPM_BUILD_DIR/linux-%{kernel_version}-%{patch_version}-debug/linux-%{kernel_version}-%{patch_version}
+mkdir -p $RPM_BUILD_ROOT/boot $RPM_BUILD_ROOT/lib $RPM_BUILD_ROOT/lib/modules 
+INSTALL_MOD_PATH=$RPM_BUILD_ROOT make modules_install
+if [ %{arch} = "ia64" ]; then
+    cp vmlinux $RPM_BUILD_ROOT/boot/vmlinuz-%{kernel_version}_lustre%{lustre_version}-debug
+else
+    cp arch/i386/boot/bzImage $RPM_BUILD_ROOT/boot/vmlinuz-%{kernel_version}_lustre%{lustre_version}-debug
+fi
+cp System.map $RPM_BUILD_ROOT/boot/System.map-%{kernel_version}-%{patch_version}_lustre%{lustre_version}-debug
+cp vmlinux $RPM_BUILD_ROOT/boot/vmlinux-%{kernel_version}_lustre%{lustre_version}-debug
+cp .config $RPM_BUILD_ROOT/boot/config-%{kernel_version}_lustre%{lustre_version}-debug
+
+#install lustre
+cd $RPM_BUILD_DIR/lustre-%{lustre_branch}
+make install prefix="$RPM_BUILD_ROOT"
+
+#install debug lustre
+cd $RPM_BUILD_DIR/lustre-%{lustre_release}-debug/lustre-%{lustre_branch}
+make install prefix="$RPM_BUILD_ROOT/"
+
+#install Document of lustre
+mkdir -p $RPM_BUILD_ROOT/usr/share/doc/lustre
+cp -pr $RPM_BUILD_DIR/lustre-%{lustre_branch}/COPYING $RPM_BUILD_ROOT/usr/share/doc/lustre
+cp -pr $RPM_BUILD_DIR/lustre-%{lustre_branch}/doc/lustre.pdf  $RPM_BUILD_ROOT/usr/share/doc/lustre
+cp -pr $RPM_BUILD_DIR/lustre-%{lustre_branch}/doc/lustre-HOWTO.txt $RPM_BUILD_ROOT/usr/share/doc/lustre
+
+%ifarch alpha
+# this hurts me
+    conf_flag=
+    linuxdir=$RPM_BUILD_ROOT/linux-%{kernel_version}-%{patch_version}
+    test -d $linuxdir && conf_flag=--with-linux=$linuxdir
+    make clean
+    ./configure --enable-rtscts-myrinet $conf_flag
+    make
+    cp linux/rtscts/rtscts.o $RPM_BUILD_ROOT/lib/modules/%{kernel_version}-%{patch_version}/kernel/net/lustre/rtscts_myrinet.o
+    cp user/myrinet_utils/mcpload $RPM_BUILD_ROOT/lustre/usr/sbin/mcpload
+%endif
+
+mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
+# end of install 
+#################################################
+
+#################################################
+# file lists
+%files 
+%defattr (-, root, root)
+/boot/vmlinuz-%{kernel_version}_lustre%{lustre_version}
+/boot/System.map-%{kernel_version}-%{patch_version}_lustre%{lustre_version}
+/boot/config-%{kernel_version}_lustre%{lustre_version}
+%dir /lib/modules/%{kernel_version}-%{patch_version}_lustre%{lustre_version}
+/lib/modules/%{kernel_version}-%{patch_version}_lustre%{lustre_version}
+
+%files -n lustre-kernel-debug
+%defattr (-, root, root)
+/boot/vmlinuz-%{kernel_version}_lustre%{lustre_version}-debug
+/boot/vmlinux-%{kernel_version}_lustre%{lustre_version}-debug
+/boot/System.map-%{kernel_version}-%{patch_version}_lustre%{lustre_version}-debug
+/boot/config-%{kernel_version}_lustre%{lustre_version}-debug
+%dir /lib/modules/%{kernel_version}-%{patch_version}_lustre%{lustre_version}-debug
+/lib/modules/%{kernel_version}-%{patch_version}_lustre%{lustre_version}-debug
+
+%files -n lustre-lite-utils
+%attr(-, root, root) /usr/sbin/lmc
+%attr(-, root, root) /usr/sbin/lctl
+%attr(-, root, root) /usr/sbin/lconf
+%attr(-, root, root) /usr/sbin/lactive
+%attr(-, root, root) /usr/sbin/llanalyze
+%attr(755, root, root) /usr/sbin/lfind
+%attr(755, root, root) /usr/sbin/lstripe
+%attr(-, root, root) /usr/sbin/mcreate
+%attr(-, root, root) /usr/sbin/mkdirmany
+%attr(-, root, root) /usr/sbin/munlink
+%attr(-, root, root) /usr/sbin/llstat.pl
+%attr(-, root, root) /usr/sbin/llobdstat.pl
+%attr(-, root, root) /usr/sbin/load_ldap.sh
+%attr(755, root, root) /usr/lib/lustre/python/*
+%attr(755, root, root) /usr/lib/lustre/examples/llmount.sh
+%attr(755, root, root) /usr/lib/lustre/examples/llmountcleanup.sh
+%attr(755, root, root) /usr/lib/lustre/examples/llecho.sh
+%attr(755, root, root) /usr/lib/lustre/examples/local.sh
+%attr(755, root, root) /usr/lib/lustre/examples/uml.sh
+%attr(755, root, root) /usr/lib/lustre/examples/lov.sh
+%attr(755, root, root) /usr/lib/lustre/examples/echo.sh
+%attr(755, root, root) /usr/lib/lustre/examples/llechocleanup.sh
+
+%attr(-, root, root) /etc/init.d/lustre
+%attr(-, root, root) /usr/sbin/acceptor
+%attr(-, root, root) /usr/sbin/ptlctl
+%attr(-, root, root) /usr/sbin/debugctl
+%attr(-, root, root) /lib/libportals.a
+%attr(-, root, root) /lib/libptlctl.a
+%attr(-, root, root) /lib/libtcpnal.a
+%attr(-, root, root) /usr/include/lustre/*.h
+%attr(-, root, root) /usr/sbin/lload
+%attr(-, root, root) /usr/sbin/obdbarrier
+%attr(-, root, root) /usr/sbin/obdio
+%attr(-, root, root) /usr/sbin/routerstat
+%attr(-, root, root) /usr/sbin/wirecheck
+
+%ifarch alpha
+%attr(-, root, root) /usr/sbin/mcpload
+%endif
+
+%files -n lustre-doc
+%attr(-, root, root) /usr/share/doc/lustre/COPYING 
+%attr(-, root, root) /usr/share/doc/lustre/lustre.pdf
+%attr(-, root, root) /usr/share/doc/lustre/lustre-HOWTO.txt
+
+%files -n lustre-ldap
+%attr(-, root, root) /etc/openldap/slapd-lustre.conf
+%attr(-, root, root) /etc/openldap/schema/lustre.schema
+%attr(-, root, root) /usr/lib/lustre/lustre2ldif.xsl
+%attr(-, root, root) /usr/lib/lustre/top.ldif
+#%dir /var/lib/ldap/lustre
+%attr(700, ldap, ldap) /var/lib/ldap/lustre
+	
+################################################
+# clean
+%clean
+rm -rf $RPM_BUILD_ROOT
+# end of clean
+###############################################
+
+###############################################
+# post 
+%post
+if [ ! -e /dev/obd ]; then
+      mknod /dev/obd c 10 241
+fi
+if [ ! -e /dev/portals ]; then
+      mknod /dev/portals c 10 240
+fi
+depmod -ae || exit 0
+
+#change the grub.conf
+#cd /boot
+#[ -x /usr/sbin/module_upgrade ] && /usr/sbin/module_upgrade
+#[ -x /sbin/mkkerneldoth ] && /sbin/mkkerneldoth
+#if [ -x /sbin/new-kernel-pkg ] ; then
+#        /sbin/new-kernel-pkg --mkinitrd --depmod --install %{kernel_version}-%{patch_version}_lustre%{lustre_version} 
+#fi
+
+%postun
+depmod -ae || exit 0
+
+%post -n lustre-kernel-debug
+if [ ! -e /dev/obd ]; then
+      mknod /dev/obd c 10 241
+fi
+if [ ! -e /dev/portals ]; then
+      mknod /dev/portals c 10 240
+fi
+depmod -ae || exit 0
+
+#change the grub.conf
+#cd /boot
+#[ -x /usr/sbin/module_upgrade ] && /usr/sbin/module_upgrade
+#[ -x /sbin/mkkerneldoth ] && /sbin/mkkerneldoth
+#if [ -x /sbin/new-kernel-pkg ] ; then
+#        /sbin/new-kernel-pkg --mkinitrd --depmod --install %{kernel_version}-%{patch_version}_lustre%{lustre_version}-debug
+#fi
+
+%post -n lustre-ldap
+if ! grep -q slapd-lustre /etc/openldap/slapd.conf; then
+        echo "include /etc/openldap/slapd-lustre.conf" >> /etc/openldap/slapd.conf
+fi
+
+%postun -n lustre-ldap
+  slapd=/etc/openldap/slapd.conf
+  if grep -q slapd-lustre $slapd; then
+       tmp=/tmp/lustre-ldap.$$
+       sed "/slapd-lustre/d" $slapd >> $tmp
+       cp $tmp $slapd
+       rm $tmp
+  fi
+# end of post  
+##############################################
+
