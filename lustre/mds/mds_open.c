@@ -69,13 +69,10 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct file *file;
         struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1);
         struct dentry *dchild, *parent;
-        struct inode *dir;
         struct mds_export_data *med;
         struct mds_file_data *mfd = NULL;
-        struct vfsmount *mnt = mds->mds_vfsmnt;
         struct ldlm_res_id child_res_id = { .name = {0} };
         struct lustre_handle parent_lockh;
-        __u32 flags;
         int rc = 0, parent_mode, child_mode = LCK_PR, lock_flags, created = 0;
         ENTRY;
 
@@ -115,8 +112,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 LBUG();
                 RETURN(rc);
         }
-        dir = parent->d_inode;
-        LASSERT(dir);
+        LASSERT(parent->d_inode);
 
         /* Step 2: Lookup the child */
         dchild = lookup_one_len(lustre_msg_buf(req->rq_reqmsg, 3),
@@ -136,15 +132,15 @@ int mds_open(struct mds_update_record *rec, int offset,
                 void *handle;
                 mds_start_transno(mds);
                 rep->lock_policy_res1 |= IT_OPEN_CREATE;
-                handle = fsfilt_start(obd, dir, FSFILT_OP_CREATE);
+                handle = fsfilt_start(obd, parent->d_inode, FSFILT_OP_CREATE);
                 if (IS_ERR(handle)) {
                         rc = PTR_ERR(handle);
                         mds_finish_transno(mds, handle, req, rc);
                         GOTO(out_step_3, rc);
                 }
-                rc = vfs_create(dir, dchild, rec->ur_mode);
+                rc = vfs_create(parent->d_inode, dchild, rec->ur_mode);
                 rc = mds_finish_transno(mds, handle, req, rc);
-                err = fsfilt_commit(obd, dir, handle);
+                err = fsfilt_commit(obd, parent->d_inode, handle);
                 if (rc || err) {
                         CERROR("error on commit: err = %d\n", err);
                         if (!rc)
@@ -206,10 +202,10 @@ int mds_open(struct mds_update_record *rec, int offset,
                 GOTO(out_step_4, req->rq_status = -ENOMEM);
         }
 
-        flags = rec->ur_flags;
-        /* dentry_open does a dput(de) and mntput(mnt) on error */
-        mntget(mnt);
-        file = dentry_open(dchild, mnt, flags & ~O_DIRECT & ~O_TRUNC);
+        /* dentry_open does a dput(de) and mntput(mds->mds_vfsmnt) on error */
+        mntget(mds->mds_vfsmnt);
+        file = dentry_open(dchild,mds->mds_vfsmnt,
+                           rec->ur_flags & ~(O_DIRECT | O_TRUNC));
         if (IS_ERR(file))
                 GOTO(out_step_5, rc = PTR_ERR(file));
 
