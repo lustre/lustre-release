@@ -1,3 +1,8 @@
+.Xrefs
+Makefile
+Makefile.in
+.deps
+TAGS
 balloc.c
 bitmap.c
 dir.c
@@ -9,3 +14,4 @@ ioctl.c
 namei.c
 super.c
 symlink.c
+patch-stamp
