@@ -68,8 +68,6 @@ struct pingcli_args {
 
 struct task_struct *current;
 
-struct obd_class_user_state ocus;
-
 /* portals interfaces */
 ptl_handle_ni_t *
 kportal_get_ni (int nal)
@@ -137,7 +135,7 @@ int init_lib_portals()
         return rc;
 }
 
-extern int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd, unsigned long arg);
+extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
 
 int liblustre_ioctl(int dev_id, int opc, void *ptr)
 {
@@ -150,7 +148,7 @@ int liblustre_ioctl(int dev_id, int opc, void *ptr)
 		break;
 		
 	case OBD_DEV_ID:
-		rc = class_handle_ioctl(&ocus, opc, (unsigned long)ptr);
+		rc = class_handle_ioctl(opc, (unsigned long)ptr);
 		break;
 	}
 
@@ -178,7 +176,6 @@ static int connect_echo_client(void)
 	char *peer = "ECHO_PEER_NID";
 	class_uuid_t osc_uuid, echo_uuid;
 	struct obd_uuid osc_uuid_str, echo_uuid_str;
-	struct obd_ioctl_data ioctl;
 	int nal, err;
 	ENTRY;
 
@@ -257,44 +254,14 @@ static int connect_echo_client(void)
                 RETURN(-EINVAL);
 	}
 
-	/* select echo_client as current device */
-        ocus.ocus_current_obd = class_name2obd(echo_dev_name);
-        if (ocus.ocus_current_obd == NULL) {
-		CERROR("can't find device %s\n", echo_dev_name);
-                RETURN(-EINVAL);
-	}
-
-	/* connect echo_client to echo server */
-	memset(&ioctl, 0, sizeof(ioctl));
-
-	ioctl.ioc_version = OBD_IOCTL_VERSION;
-	ioctl.ioc_len = obd_ioctl_packlen(&ioctl);
-	ioctl.ioc_cookie = 0x65522767;
-	ioctl.ioc_dev = OBD_DEV_ID;
-	ioctl.ioc_command = OBD_IOC_CONNECT;
-
-	if (class_handle_ioctl(&ocus, OBD_IOC_CONNECT, (unsigned long)&ioctl)) {
-		CERROR("cannot connect to %s: rc = %d\n",
-			echo_server_ostname, err);
-		RETURN(-EINVAL);
-	}
-
 	RETURN(0);
 }
 
 static int disconnect_echo_client(void)
 {
 	struct lustre_cfg lcfg;
-	struct obd_class_user_conn *conn;
-	struct list_head *lp;
 	int err;
 	ENTRY;
-
-	/* disconnect with echo_client */
-	list_for_each(lp, &ocus.ocus_conns) {
-		conn = list_entry(lp, struct obd_class_user_conn, ocuc_chain);
-		obd_disconnect(conn->ocuc_exp, 0);
-	}
 
 	/* cleanup echo_client */
         LCFG_INIT(lcfg, LCFG_CLEANUP, echo_dev_name);
@@ -370,7 +337,6 @@ int main(int argc, char **argv)
 
         srand(time(NULL));
 
-        INIT_LIST_HEAD(&ocus.ocus_conns);
 	tcpnal_mynid = rand();
 #if 1
 	portal_debug = 0;
