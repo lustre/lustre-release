@@ -1288,9 +1288,9 @@ int lmv_delete_object(struct obd_export *exp, struct ll_fid *fid)
         ENTRY;
 
         if (!lmv_delete_obj(exp, fid)) {
-                CWARN("Object %lu/%lu/%lu is not found.\n",
-                      (unsigned long)fid->mds, (unsigned long)fid->id,
-                      (unsigned long)fid->generation);
+                CDEBUG(D_OTHER, "Object %lu/%lu/%lu is not found.\n",
+                       (unsigned long)fid->mds, (unsigned long)fid->id,
+                       (unsigned long)fid->generation);
         }
         
         RETURN(0);
