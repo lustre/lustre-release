@@ -51,4 +51,7 @@ extern struct super_operations ll_super_operations;
 int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
 int ll_setattr(struct dentry *de, struct iattr *attr);
 
+/* llite/dcache.c */
+void ll_set_dd(struct dentry *);
+
 #endif /* LLITE_INTERNAL_H */
