@@ -64,7 +64,7 @@ int ll_reconnect(struct ptlrpc_connection *conn)
                 old_hdl = imp->imp_handle;
                 imp->imp_handle.addr = request->rq_repmsg->addr;
                 imp->imp_handle.cookie = request->rq_repmsg->cookie;
-                CERROR("reconnected to %s@%s (%Lx/%Lx, was %Lx/%Lx)!\n",
+                CDEBUG(D_HA, "reconnected to %s@%s (%Lx/%Lx, was %Lx/%Lx)!\n",
                        cli->cl_target_uuid, conn->c_remote_uuid,
                        imp->imp_handle.addr, imp->imp_handle.cookie,
                        old_hdl.addr, old_hdl.cookie);
@@ -95,11 +95,15 @@ static int ll_recover_upcall(struct ptlrpc_connection *conn)
 
         rc = call_usermodehelper(argv[0], argv, envp);
         if (rc < 0) {
+                /*
+                 * Tragically, this will never be run, because call_umh doesn't
+                 * report errors like -ENOENT to its caller.
+                 */
                 CERROR("Error invoking recovery upcall (%s): %d\n",
                        obd_recovery_upcall, rc);
                 CERROR("Check /proc/sys/lustre/recovery_upcall?\n");
         } else {
-                CERROR("Invoked upcall %s for connection %s\n",
+                CDEBUG(D_HA, "Invoked upcall %s for connection %s\n",
                        argv[0], argv[1]);
         }
         RETURN(rc);
@@ -120,13 +124,17 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
         /* 2. walk the request list */
         spin_lock(&conn->c_lock);
 
+        CDEBUG(D_HA, "connection %p to %s has last_xid "LPD64"\n",
+               conn, conn->c_remote_uuid, conn->c_last_xid);
+
         list_for_each_safe(tmp, pos, &conn->c_sending_head) { 
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 
                 /* replay what needs to be replayed */
                 if (req->rq_flags & PTL_RPC_FL_REPLAY) {
-                        CDEBUG(D_NET, "req %Ld needs replay [last rcvd %Ld]\n",
-                               req->rq_xid, conn->c_last_xid);
+                        CDEBUG(D_HA, "FL_REPLAY: xid "LPD64" op %d @ %d\n",
+                               req->rq_xid, req->rq_reqmsg->opc,
+                               req->rq_import->imp_client->cli_request_portal);
                         rc = ptlrpc_replay_req(req);
 #if 0
 #error We should not hold a spinlock over such a lengthy operation.
@@ -145,17 +153,18 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
                 /* server has seen req, we have reply: skip */
                 if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                     req->rq_xid <= conn->c_last_xid) { 
-                        CDEBUG(D_NET,
-                               "req %Ld was complete: skip [last rcvd %Ld]\n", 
-                               req->rq_xid, conn->c_last_xid);
+                        CDEBUG(D_HA, "REPLIED SKIP: xid "LPD64" op %d @ %d\n",
+                               req->rq_xid, req->rq_reqmsg->opc,
+                               req->rq_import->imp_client->cli_request_portal);
                         continue;
                 }
 
                 /* server has lost req, we have reply: resend, ign reply */
                 if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                     req->rq_xid > conn->c_last_xid) { 
-                        CDEBUG(D_NET, "lost req %Ld have rep: replay [last "
-                               "rcvd %Ld]\n", req->rq_xid, conn->c_last_xid);
+                        CDEBUG(D_HA, "REPLIED RESEND: xid "LPD64" op %d @ %d\n",
+                               req->rq_xid, req->rq_reqmsg->opc,
+                               req->rq_import->imp_client->cli_request_portal);
                         rc = ptlrpc_replay_req(req); 
                         if (rc) {
                                 CERROR("request resend error %d for req %Ld\n", 
@@ -167,18 +176,18 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
                 /* server has seen req, we have lost reply: -ERESTARTSYS */
                 if ( !(req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                      req->rq_xid <= conn->c_last_xid) { 
-                        CDEBUG(D_NET, "lost rep %Ld srv did req: restart "
-                               "[last rcvd %Ld]\n", 
-                               req->rq_xid, conn->c_last_xid);
+                        CDEBUG(D_HA, "RESTARTSYS: xid "LPD64" op %d @ %d\n",
+                               req->rq_xid, req->rq_reqmsg->opc,
+                               req->rq_import->imp_client->cli_request_portal);
                         ptlrpc_restart_req(req);
                 }
 
                 /* service has not seen req, no reply: resend */
                 if ( !(req->rq_flags & PTL_RPC_FL_REPLIED)  &&
                      req->rq_xid > conn->c_last_xid) {
-                        CDEBUG(D_NET,
-                               "lost rep/req %Ld: resend [last rcvd %Ld]\n", 
-                               req->rq_xid, conn->c_last_xid);
+                        CDEBUG(D_HA, "RESEND: xid "LPD64" op %d @ %d\n",
+                               req->rq_xid, req->rq_reqmsg->opc,
+                               req->rq_import->imp_client->cli_request_portal);
                         ptlrpc_resend_req(req);
                 }
 
@@ -203,7 +212,7 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
 
 static int ll_retry_recovery(struct ptlrpc_connection *conn)
 {
-        CERROR("Recovery has failed on conn %p\n", conn);
+        CDEBUG(D_HA, "Recovery has failed on conn %p\n", conn);
 #if 0
         /* XXX use a timer, sideshow bob */
         recovd_conn_fail(conn);

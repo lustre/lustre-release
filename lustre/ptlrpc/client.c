@@ -376,6 +376,7 @@ restart1:
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 if (req->rq_import != imp)
                         continue;
+                /* XXX we should make sure that nobody's sleeping on these! */
                 CDEBUG(D_INFO, "Cleaning req %p from sending list.\n", req);
                 list_del_init(&req->rq_list);
                 req->rq_import = NULL;
@@ -405,7 +406,7 @@ restart2:
 void ptlrpc_continue_req(struct ptlrpc_request *req)
 {
         ENTRY;
-        CDEBUG(D_INODE, "continue delayed request "LPD64" opc %d\n", 
+        CDEBUG(D_HA, "continue delayed request "LPD64" opc %d\n", 
                req->rq_xid, req->rq_reqmsg->opc); 
         req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
         req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;
@@ -416,7 +417,7 @@ void ptlrpc_continue_req(struct ptlrpc_request *req)
 void ptlrpc_resend_req(struct ptlrpc_request *req)
 {
         ENTRY;
-        CDEBUG(D_INODE, "resend request "LPD64", opc %d\n", 
+        CDEBUG(D_HA, "resend request "LPD64", opc %d\n", 
                req->rq_xid, req->rq_reqmsg->opc);
         req->rq_reqmsg->addr = req->rq_import->imp_handle.addr;
         req->rq_reqmsg->cookie = req->rq_import->imp_handle.cookie;
@@ -431,7 +432,7 @@ void ptlrpc_resend_req(struct ptlrpc_request *req)
 void ptlrpc_restart_req(struct ptlrpc_request *req)
 {
         ENTRY;
-        CDEBUG(D_INODE, "restart completed request "LPD64", opc %d\n", 
+        CDEBUG(D_HA, "restart completed request "LPD64", opc %d\n", 
                req->rq_xid, req->rq_reqmsg->opc);
         req->rq_status = -ERESTARTSYS;
         req->rq_flags |= PTL_RPC_FL_RECOVERY;
@@ -445,7 +446,7 @@ static int expired_request(void *data)
         struct ptlrpc_request *req = data;
 
         ENTRY;
-        CERROR("req xid "LPD64" op %d: timeout on conn to %s:%d\n",
+        CDEBUG(D_HA, "req xid "LPD64" op %d: timeout on conn to %s:%d\n",
                (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
                req->rq_connection->c_remote_uuid,
                req->rq_import->imp_client->cli_request_portal);
@@ -503,8 +504,8 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 list_add_tail(&req->rq_list, &conn->c_delayed_head);
                 spin_unlock(&conn->c_lock);
 
-                CERROR("req xid "LPD64" op %d to %s:%d: waiting for recovery "
-                       "(%d < %d)\n",
+                CDEBUG(D_HA, "req xid "LPD64" op %d to %s:%d: waiting for "
+                       "recovery (%d < %d)\n",
                        (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
                        req->rq_connection->c_remote_uuid,
                        req->rq_import->imp_client->cli_request_portal,
@@ -525,7 +526,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 if (rc)
                         RETURN(rc);
                 
-                CERROR("process %d resumed\n", current->pid);
+                CDEBUG(D_HA, "process %d resumed\n", current->pid);
         }
  resend:
         req->rq_timeout = obd_timeout;
@@ -544,23 +545,31 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
         spin_unlock(&conn->c_lock);
         rc = ptl_send_rpc(req);
         if (rc) {
-                CERROR("error %d, opcode %d, need recovery\n", rc,
+                CDEBUG(D_HA, "error %d, opcode %d, need recovery\n", rc,
                        req->rq_reqmsg->opc);
                 /* the sleep below will time out, triggering recovery */
         }
 
-        CDEBUG(D_OTHER, "-- sleeping on xid "LPD64"\n", req->rq_xid);
+        CDEBUG(D_NET, "-- sleeping on req xid "LPD64" op %d to %s:%d\n",
+                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
+                       req->rq_connection->c_remote_uuid,
+                       req->rq_import->imp_client->cli_request_portal);
         lwi = LWI_TIMEOUT_INTR(req->rq_timeout * HZ, expired_request,
                                interrupted_request,req);
         l_wait_event(req->rq_wait_for_rep, ptlrpc_check_reply(req), &lwi);
-        CDEBUG(D_OTHER, "-- done sleeping on xid "LPD64"\n", req->rq_xid);
+        CDEBUG(D_NET, "-- done sleeping on req xid "LPD64" op %d to %s:%d\n",
+                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
+                       req->rq_connection->c_remote_uuid,
+                       req->rq_import->imp_client->cli_request_portal);
 
         /* Don't resend if we were interrupted. */
         if ((req->rq_flags & (PTL_RPC_FL_RESEND | PTL_RPC_FL_INTR)) ==
             PTL_RPC_FL_RESEND) {
                 req->rq_flags &= ~PTL_RPC_FL_RESEND;
-                CDEBUG(D_OTHER, "resending req %p xid "LPD64"\n",
-                       req, req->rq_xid);
+                CDEBUG(D_HA, "req xid "LPD64" op %d to %s:%d\n",
+                       (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
+                       req->rq_connection->c_remote_uuid,
+                       req->rq_import->imp_client->cli_request_portal);
                 /* we'll get sent again, so balance 2nd request_out_callback */
                 atomic_inc(&req->rq_refcount);
                 goto resend;

@@ -1228,7 +1228,7 @@ err_kfree:
         kfree(mds->mds_fstype);
 err_dec:
         MOD_DEC_USE_COUNT;
-        return rc;
+        RETURN(rc);
 }
 
 static int mds_cleanup(struct obd_device *obddev)

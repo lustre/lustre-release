@@ -62,7 +62,7 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
                 return;
         }
                 
-        CERROR("connection %p to %s failed\n", conn, conn->c_remote_uuid);
+        CDEBUG(D_HA, "connection %p to %s failed\n", conn, conn->c_remote_uuid);
         list_del(&rd->rd_managed_chain);
         list_add_tail(&rd->rd_managed_chain, &recovd->recovd_troubled_items);
         rd->rd_phase = RD_TROUBLED;
@@ -78,6 +78,8 @@ void recovd_conn_fixed(struct ptlrpc_connection *conn)
         struct recovd_data *rd = &conn->c_recovd_data;
         ENTRY;
 
+        CDEBUG(D_HA, "connection %p (now to %s) fixed\n",
+               conn, conn->c_remote_uuid);
         spin_lock(&rd->rd_recovd->recovd_lock);
         list_del(&rd->rd_managed_chain);
         rd->rd_phase = RD_IDLE;
@@ -124,7 +126,7 @@ static void dump_connection_list(struct list_head *head)
                 struct ptlrpc_connection *conn =
                         list_entry(tmp, struct ptlrpc_connection,
                                    c_recovd_data.rd_managed_chain);
-                CERROR("   %p = %s (%d/%d)\n", conn, conn->c_remote_uuid,
+                CDEBUG(D_HA, "   %p = %s (%d/%d)\n", conn, conn->c_remote_uuid,
                        conn->c_recovd_data.rd_phase,
                        conn->c_recovd_data.rd_next_phase);
         }
@@ -138,9 +140,9 @@ static int recovd_handle_event(struct recovd_obd *recovd)
 
         spin_lock(&recovd->recovd_lock);
 
-        CERROR("managed: \n");
+        CDEBUG(D_HA, "managed: \n");
         dump_connection_list(&recovd->recovd_managed_items);
-        CERROR("troubled: \n");
+        CDEBUG(D_HA, "troubled: \n");
         dump_connection_list(&recovd->recovd_troubled_items);
 
         /*
@@ -173,7 +175,7 @@ static int recovd_handle_event(struct recovd_obd *recovd)
                                 rc = -EINVAL;
                                 break;
                         }
-                        CERROR("starting recovery for rd %p (conn %p)\n",
+                        CDEBUG(D_HA, "starting recovery for rd %p (conn %p)\n",
                                rd, class_rd2conn(rd));
                         rd->rd_phase = RD_PREPARING;
                         
@@ -249,7 +251,7 @@ static int recovd_main(void *arg)
         recovd->recovd_thread = NULL;
         recovd->recovd_state = RECOVD_STOPPED;
         wake_up(&recovd->recovd_ctl_waitq);
-        CDEBUG(D_NET, "mgr exiting process %d\n", current->pid);
+        CDEBUG(D_HA, "mgr exiting process %d\n", current->pid);
         RETURN(0);
 }
 
@@ -284,6 +286,7 @@ int recovd_setup(struct recovd_obd *recovd)
 
 int recovd_cleanup(struct recovd_obd *recovd)
 {
+        ENTRY;
         spin_lock(&recovd->recovd_lock);
         recovd->recovd_state = RECOVD_STOPPING;
         wake_up(&recovd->recovd_waitq);
