@@ -45,38 +45,23 @@
 
 struct ctl_table_header *obd_table_header = NULL;
 
-static int vars[2];
-static int index = 0;
-
-static int obd_sctl_vars( ctl_table * table, int write, struct file *
-                          filp, void * buffer, size_t * lenp );
-static int obd_sctl_reset( ctl_table * table, int write, struct file
-                           * filp, void * buffer, size_t * lenp );
-
 #define OBD_SYSCTL 300
 
-#define OBD_FAIL_LOC        1       /* control test failures instrumentation */
-#define OBD_ENTRY           2       /* control enter/leave pattern */
-#define OBD_VARS            3
-#define OBD_INDEX           4
-#define OBD_RESET           5
-#define OBD_TIMEOUT         6       /* RPC timeout before recovery/intr */
-/* XXX move to /proc/sys/lustre/recovery? */
-#define OBD_UPCALL          7       /* path to recovery upcall */
-/* XXX temporary, as we play with sync osts.. */
-#define OBD_SYNCFILTER      8
-
-#define OBD_VARS_SLOT       2
+enum {
+        OBD_FAIL_LOC = 1,       /* control test failures instrumentation */
+        OBD_TIMEOUT,            /* RPC timeout before recovery/intr */
+        OBD_UPCALL,             /* path to recovery upcall */
+        OBD_SYNCFILTER,         /* XXX temporary, as we play with sync osts.. */
+};
 
 static ctl_table obd_table[] = {
-        {OBD_FAIL_LOC, "fail_loc", &obd_fail_loc, sizeof(int), 0644, NULL, &proc_dointvec},
-        {OBD_VARS, "vars", &vars[0], sizeof(int), 0644, NULL, &proc_dointvec},
-        {OBD_INDEX, "index", &index, sizeof(int), 0644, NULL, &obd_sctl_vars},
-        {OBD_RESET, "reset", NULL, 0, 0644, NULL, &obd_sctl_reset},
-        {OBD_TIMEOUT, "timeout", &obd_timeout, sizeof(int), 0644, NULL, &proc_dointvec},
-        /* XXX need to lock so we avoid update races with the recovery upcall! */
+        {OBD_FAIL_LOC, "fail_loc", &obd_fail_loc, sizeof(int), 0644, NULL,
+                &proc_dointvec},
+        {OBD_TIMEOUT, "timeout", &obd_timeout, sizeof(int), 0644, NULL,
+                &proc_dointvec},
+        /* XXX need to lock so we avoid update races with recovery upcall! */
         {OBD_UPCALL, "upcall", obd_lustre_upcall, 128, 0644, NULL,
-         &proc_dostring, &sysctl_string },
+                &proc_dostring, &sysctl_string },
         {OBD_SYNCFILTER, "filter_sync_on_commit", &obd_sync_filter, sizeof(int),
                 0644, NULL, &proc_dointvec},
         { 0 }
@@ -91,7 +76,7 @@ void obd_sysctl_init (void)
 {
 #ifdef CONFIG_SYSCTL
         if ( !obd_table_header )
-                obd_table_header = register_sysctl_table(parent_table, 0); 
+                obd_table_header = register_sysctl_table(parent_table, 0);
 #endif
 }
 
@@ -102,39 +87,4 @@ void obd_sysctl_clean (void)
                 unregister_sysctl_table(obd_table_header);
         obd_table_header = NULL;
 #endif
-}
-
-int obd_sctl_reset (ctl_table * table, int write, 
-                    struct file * filp, void * buffer, 
-                    size_t * lenp)
-{
-        if ( write ) {
-                /* do something here */
-                vars[0]=0;
-                vars[1]=0;
-        }
-
-        *lenp = 0;
-        return 0;
-}
-
-int obd_sctl_vars (ctl_table * table, int write, 
-                   struct file * filp, void * buffer, 
-                   size_t * lenp)
-{
-        int rc;
-
-        rc = proc_dointvec(table, write, filp, buffer, lenp);
-
-        if ( rc ) 
-                return rc;
-
-        if ( index < 0 || index > 1 ) {
-                CERROR("Illegal index %d!\n", index);
-                index = 0;
-        } else {
-                obd_table[OBD_VARS_SLOT].data = &vars[index];
-        }
-
-        return rc; 
 }
