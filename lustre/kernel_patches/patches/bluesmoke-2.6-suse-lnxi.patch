@@ -1,7 +1,7 @@
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/Kconfig
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/Kconfig	2004-11-11 10:28:08.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/Kconfig	2004-11-18 18:38:03.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/Kconfig	2004-12-17 12:45:23.000000000 -0500
 @@ -6,6 +6,8 @@
  
  source "drivers/mtd/Kconfig"
@@ -14,7 +14,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/Kconfig
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/Makefile
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/Makefile	2004-11-11 10:28:16.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/Makefile	2004-11-18 18:38:03.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/Makefile	2004-12-17 12:45:23.000000000 -0500
 @@ -29,6 +29,7 @@
  obj-$(CONFIG_IEEE1394)		+= ieee1394/
  obj-y				+= cdrom/ video/
@@ -26,7 +26,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/Makefile
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/Kconfig
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/bluesmoke/Kconfig	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/Kconfig	2004-11-18 18:38:03.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/Kconfig	2004-12-17 12:46:23.000000000 -0500
 @@ -0,0 +1,72 @@
 +#
 +#	Bluesmoke Kconfig
@@ -103,7 +103,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/Kconfig
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/Makefile
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/bluesmoke/Makefile	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/Makefile	2004-11-18 18:38:03.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/Makefile	2004-12-17 12:46:23.000000000 -0500
 @@ -0,0 +1,26 @@
 +#
 +# Makefile for the Linux kernel bluesmoke drivers.
@@ -134,7 +134,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/Makefile
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_amd76x.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/bluesmoke/bluesmoke_amd76x.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_amd76x.c	2004-11-18 18:38:03.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_amd76x.c	2004-12-17 12:46:23.000000000 -0500
 @@ -0,0 +1,323 @@
 +/*
 + * AMD 76x Memory Controller kernel module
@@ -462,8 +462,8 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_e752x.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/bluesmoke/bluesmoke_e752x.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_e752x.c	2004-11-18 18:38:03.000000000 -0500
-@@ -0,0 +1,1017 @@
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_e752x.c	2004-12-17 12:46:23.000000000 -0500
+@@ -0,0 +1,1027 @@
 +/*
 + * Intel e752x Memory Controller kernel module
 + * (C) 2004 Linux Networx (http://lnxi.com)
@@ -477,7 +477,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 + * Contributors:
 + * 	Thayne Harbaugh (Linux Networx)
 + *
-+ * $Id: bluesmoke_e752x.c,v 1.4 2004/11/10 01:12:35 thayne Exp $
++ * $Id: bluesmoke_e752x.c,v 1.5 2004/11/18 22:19:46 thayne Exp $
 + *
 + */
 +
@@ -492,6 +492,16 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +#include <linux/slab.h>
 +
 +#include "bluesmoke_mc.h"
++
++
++#ifndef PCI_DEVICE_ID_INTEL_7520_0     
++#define PCI_DEVICE_ID_INTEL_7520_0      0x3590
++#endif /* PCI_DEVICE_ID_INTEL_7520_0      */
++
++#ifndef PCI_DEVICE_ID_INTEL_7520_1_ERR 
++#define PCI_DEVICE_ID_INTEL_7520_1_ERR  0x3591
++#endif /* PCI_DEVICE_ID_INTEL_7520_1_ERR  */
++
 +
 +#define E752X_NR_CSROWS		8	/* number of csrows */
 +
@@ -1167,7 +1177,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +	mci->edac_ctl_cap = EDAC_FLAG_NONE | EDAC_FLAG_SECDED | EDAC_FLAG_S4ECD4ED;
 +	/* FIXME - what if different memory types are in different csrows? */
 +	mci->mod_name = BS_MOD_STR;
-+	mci->mod_ver = "$Revision: 1.4 $";
++	mci->mod_ver = "$Revision: 1.5 $";
 +	mci->pdev = pdev;
 +
 +	debugf3( "MC: " __FILE__ ": %s(): init pvt\n", __func__ );
@@ -1484,8 +1494,8 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_e7xxx.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/bluesmoke/bluesmoke_e7xxx.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_e7xxx.c	2004-11-18 18:38:03.000000000 -0500
-@@ -0,0 +1,518 @@
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_e7xxx.c	2004-12-17 12:46:23.000000000 -0500
+@@ -0,0 +1,552 @@
 +/*
 + * Intel e7xxx Memory Controller kernel module
 + * (C) 2003 Linux Networx (http://lnxi.com)
@@ -1505,7 +1515,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 + *	Dave Peterson (Lawrence Livermore National Labs)
 + *	That One Guy (Some other place)
 + *
-+ * $Id: bluesmoke_e7xxx.c,v 1.4 2004/11/10 01:12:36 thayne Exp $
++ * $Id: bluesmoke_e7xxx.c,v 1.5 2004/11/18 22:19:46 thayne Exp $
 + *
 + */
 +
@@ -1520,6 +1530,40 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +#include <linux/slab.h>
 +
 +#include "bluesmoke_mc.h"
++
++
++#ifndef PCI_DEVICE_ID_INTEL_7205_0
++#define PCI_DEVICE_ID_INTEL_7205_0	0x255d
++#endif /* PCI_DEVICE_ID_INTEL_7205_0 */
++
++#ifndef PCI_DEVICE_ID_INTEL_7205_1_ERR
++#define PCI_DEVICE_ID_INTEL_7205_1_ERR	0x2551
++#endif /* PCI_DEVICE_ID_INTEL_7205_1_ERR */
++
++#ifndef PCI_DEVICE_ID_INTEL_7500_0
++#define PCI_DEVICE_ID_INTEL_7500_0	0x2540
++#endif /* PCI_DEVICE_ID_INTEL_7500_0 */
++
++#ifndef PCI_DEVICE_ID_INTEL_7500_1_ERR
++#define PCI_DEVICE_ID_INTEL_7500_1_ERR	0x2541
++#endif /* PCI_DEVICE_ID_INTEL_7500_1_ERR */
++
++#ifndef PCI_DEVICE_ID_INTEL_7501_0
++#define PCI_DEVICE_ID_INTEL_7501_0	0x254c
++#endif /* PCI_DEVICE_ID_INTEL_7501_0 */
++
++#ifndef PCI_DEVICE_ID_INTEL_7501_1_ERR
++#define PCI_DEVICE_ID_INTEL_7501_1_ERR	0x2541
++#endif /* PCI_DEVICE_ID_INTEL_7501_1_ERR */
++
++#ifndef PCI_DEVICE_ID_INTEL_7505_0
++#define PCI_DEVICE_ID_INTEL_7505_0	0x2550
++#endif /* PCI_DEVICE_ID_INTEL_7505_0 */
++
++#ifndef PCI_DEVICE_ID_INTEL_7505_1_ERR
++#define PCI_DEVICE_ID_INTEL_7505_1_ERR	0x2551
++#endif /* PCI_DEVICE_ID_INTEL_7505_1_ERR */
++
 +
 +#define E7XXX_NR_CSROWS		8	/* number of csrows */
 +#define E7XXX_NR_DIMMS		8	/* FIXME - is this correct? */
@@ -1784,7 +1828,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +	mci->edac_ctl_cap = EDAC_FLAG_NONE | EDAC_FLAG_SECDED | EDAC_FLAG_S4ECD4ED;
 +	/* FIXME - what if different memory types are in different csrows? */
 +	mci->mod_name = BS_MOD_STR;
-+	mci->mod_ver = "$Revision: 1.4 $";
++	mci->mod_ver = "$Revision: 1.5 $";
 +	mci->pdev = pdev;
 +
 +	debugf3( "MC: " __FILE__ ": %s(): init pvt\n", __func__ );
@@ -2007,8 +2051,8 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_i82875p.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/bluesmoke/bluesmoke_i82875p.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_i82875p.c	2004-11-18 18:38:03.000000000 -0500
-@@ -0,0 +1,501 @@
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_i82875p.c	2004-12-17 12:46:23.000000000 -0500
+@@ -0,0 +1,510 @@
 +/*
 + * AMD 76x Memory Controller kernel module
 + * (C) 2003 Linux Networx (http://lnxi.com)
@@ -2017,7 +2061,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 + *
 + * Written by Thayne Harbaugh
 + *
-+ * $Id: bluesmoke_i82875p.c,v 1.4 2004/11/10 01:12:36 thayne Exp $
++ * $Id: bluesmoke_i82875p.c,v 1.5 2004/11/18 22:19:46 thayne Exp $
 + *
 + */
 +
@@ -2032,6 +2076,15 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +#include <linux/slab.h>
 +
 +#include "bluesmoke_mc.h"
++
++
++#ifndef PCI_DEVICE_ID_INTEL_82875_0
++#define PCI_DEVICE_ID_INTEL_82875_0	0x2578
++#endif /* PCI_DEVICE_ID_INTEL_82875_0 */
++
++#ifndef PCI_DEVICE_ID_INTEL_82875_6
++#define PCI_DEVICE_ID_INTEL_82875_6	0x257e
++#endif /* PCI_DEVICE_ID_INTEL_82875_6 */
 +
 +
 +/* four csrows in dual channel, eight in single channel */
@@ -2320,7 +2373,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +	/* adjust FLAGS */
 +
 +	mci->mod_name = BS_MOD_STR;
-+	mci->mod_ver = "$Revision: 1.4 $";
++	mci->mod_ver = "$Revision: 1.5 $";
 +	mci->ctl_name = i82875p_devs[dev_idx].ctl_name;
 +	mci->edac_check = i82875p_check;
 +	mci->clear_err = NULL;
@@ -2513,8 +2566,8 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_k8.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/bluesmoke/bluesmoke_k8.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_k8.c	2004-11-18 18:38:03.000000000 -0500
-@@ -0,0 +1,1235 @@
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_k8.c	2004-12-17 12:46:23.000000000 -0500
+@@ -0,0 +1,1252 @@
 +/*
 + * AMD K8 class Memory Controller kernel module
 + * (C) 2003 Linux Networx (http://lnxi.com)
@@ -2523,7 +2576,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 + *
 + * Written by Thayne Harbaugh
 + *
-+ * $Id: bluesmoke_k8.c,v 1.4 2004/11/10 01:12:36 thayne Exp $
++ * $Id: bluesmoke_k8.c,v 1.6 2004/11/23 01:34:25 thayne Exp $
 + *
 + */
 +
@@ -2538,6 +2591,23 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +#include <linux/slab.h>
 +
 +#include "bluesmoke_mc.h"
++
++
++#ifndef PCI_DEVICE_ID_AMD_OPT_0_HT
++#define PCI_DEVICE_ID_AMD_OPT_0_HT	0x1100
++#endif /* PCI_DEVICE_ID_AMD_OPT_0_HT */
++
++#ifndef PCI_DEVICE_ID_AMD_OPT_1_ADDRMAP
++#define PCI_DEVICE_ID_AMD_OPT_1_ADDRMAP	0x1101
++#endif /* PCI_DEVICE_ID_AMD_OPT_1_ADDRMAP */
++
++#ifndef PCI_DEVICE_ID_AMD_OPT_2_MEMCTL
++#define PCI_DEVICE_ID_AMD_OPT_2_MEMCTL	0x1102
++#endif /* PCI_DEVICE_ID_AMD_OPT_2_MEMCTL */
++
++#ifndef PCI_DEVICE_ID_AMD_OPT_3_MISCCTL
++#define PCI_DEVICE_ID_AMD_OPT_3_MISCCTL	0x1103
++#endif /* PCI_DEVICE_ID_AMD_OPT_3_MISCCTL */
 +
 +
 +#define K8_NR_CSROWS 8
@@ -2749,17 +2819,6 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +};
 +
 +
-+/* FIXME - stolen from msr.c - the calls in msr.c could be exported */
-+#ifdef CONFIG_SMP
-+
-+struct msr_command {
-+	int cpu;
-+	int err;
-+	u32 reg;
-+	u32 data[2];
-+};
-+
-+
 +static inline void pci_find_related_function( unsigned int vendor,
 +					      unsigned int device,
 +					      struct pci_dev **from,
@@ -2776,6 +2835,17 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +		}
 +	} while ( 1 );
 +}
++
++
++/* FIXME - stolen from msr.c - the calls in msr.c could be exported */
++#ifdef CONFIG_SMP
++
++struct msr_command {
++	int cpu;
++	int err;
++	u32 reg;
++	u32 data[2];
++};
 +
 +
 +static void msr_smp_wrmsr(void *cmd_block)
@@ -3519,7 +3589,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +	}
 +
 +	mci->mod_name = BS_MOD_STR;
-+	mci->mod_ver = "$Revision: 1.4 $";
++	mci->mod_ver = "$Revision: 1.6 $";
 +	mci->ctl_name = k8_devs[dev_idx].ctl_name;
 +	mci->edac_check = k8_check;
 +	mci->clear_err = NULL;
@@ -3753,8 +3823,8 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_mc.c
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/bluesmoke/bluesmoke_mc.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_mc.c	2004-11-18 18:38:03.000000000 -0500
-@@ -0,0 +1,1097 @@
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_mc.c	2004-12-17 12:46:23.000000000 -0500
+@@ -0,0 +1,1112 @@
 +/*
 + * bluesmoke_mc kernel module
 + * (C) 2003 Linux Networx (http://lnxi.com)
@@ -3765,7 +3835,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 + * Based on work by Dan Hollis <goemon at anime dot net> and others.
 + *	http://www.anime.net/~goemon/linux-ecc/
 + *
-+ * $Id: bluesmoke_mc.c,v 1.6 2004/11/16 15:17:26 thayne Exp $
++ * $Id: bluesmoke_mc.c,v 1.9 2004/12/13 22:19:40 thayne Exp $
 + *
 + */
 +
@@ -4213,7 +4283,9 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +
 +	debugf3( "MC%d: " __FILE__ ": %s()\n", mci->mc_idx, __func__ );
 +
++	down(&mem_ctls_mutex);
 +        len = mc_proc_output(mci, page);
++	up(&mem_ctls_mutex);
 +        if (len <= off+count) *eof = 1;
 +        *start = page + off;
 +        len -= off;
@@ -4420,11 +4492,6 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +	/* set load time so that error rate can be tracked */
 +	do_gettimeofday(&mci->tv);
 +
-+	if ( ! timer_pending( &timer ) ) {
-+		timer.expires = jiffies + (HZ * poll_msec) / 1000;
-+		add_timer(&timer);
-+	}
-+
 +#ifdef CONFIG_PROC_FS
 +	if ( snprintf( mci->proc_name, MC_PROC_NAME_MAX_LEN, "%d", i )
 +	     == MC_PROC_NAME_MAX_LEN ) {
@@ -4507,8 +4574,12 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +	int i;
 +
 +	debugf3( "MC: " __FILE__ ": %s()\n", __func__ );
++#ifndef CONFIG_DISCONTIGMEM
 +	if(page > max_mapnr)
 +		return;		/* pointer is beyond memory, so bail */
++#else
++/* FIXME - use the per-pgdat data instead for discontigmem */
++#endif
 +	pg = pfn_to_page(page);
 +
 +	virt_addr = kmap_atomic(pg, KM_BOUNCE_READ) + offset;
@@ -4760,7 +4831,20 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +	int i;
 +
 +	debugf3( "MC: " __FILE__ ": %s()\n", __func__ );
-+	down( &mem_ctls_mutex );
++
++	if (in_atomic()) {
++		if (down_trylock(&mem_ctls_mutex)) {
++			if (timer_pending(&timer)) {
++				mod_timer(&timer, jiffies + (HZ * poll_msec) / 1000);
++			} else {
++				timer.function = check_mc;
++				timer.expires = jiffies + (HZ * poll_msec) / 1000;
++				add_timer(&timer);
++			}
++			return;
++		}
++	} else 
++		down(&mem_ctls_mutex);
 +
 +	for ( i = 0; i < MAX_MC_DEVICES; i++ ) {
 +		struct mem_ctl_info *mci = mcis[ i ];
@@ -4776,8 +4860,13 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +		if ( mci->clear_err ) mci->clear_err(mci);
 +	}
 +
-+	timer.expires = jiffies + (HZ * poll_msec) /1000;
-+	add_timer(&timer);
++	if (timer_pending(&timer)) {
++		mod_timer(&timer, jiffies + (HZ * poll_msec) / 1000);
++	} else {
++		timer.function = check_mc;
++		timer.expires = jiffies + (HZ * poll_msec) /1000;
++		add_timer(&timer);
++	}
 +
 +	up( &mem_ctls_mutex );
 +}
@@ -4792,11 +4881,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 +
 +	memset( mcis, 0, sizeof(mcis) );
 +
-+	init_timer(&timer);
-+	timer.function = check_mc;
-+
-+	init_timer(&timer);
-+	timer.function = check_mc;
++	check_mc(0);
 +
 +#ifdef CONFIG_PROC_FS
 +	if ( NULL == (proc_mc = proc_mkdir( MC_PROC_DIR, &proc_root ) ) ) {
@@ -4855,7 +4940,7 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_mc.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/bluesmoke/bluesmoke_mc.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_mc.h	2004-11-18 18:38:03.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke_mc.h	2004-12-17 12:46:23.000000000 -0500
 @@ -0,0 +1,435 @@
 +/*
 + * MC kernel module
@@ -5295,8 +5380,8 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/bluesmoke
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/compatmac.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/drivers/bluesmoke/compatmac.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/compatmac.h	2004-11-18 18:38:03.000000000 -0500
-@@ -0,0 +1,58 @@
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/compatmac.h	2004-12-17 12:46:23.000000000 -0500
+@@ -0,0 +1,63 @@
 +#ifndef __LINUX_BLUESMOKE_COMPATMAC_H__
 +#define __LINUX_BLUESMOKE_COMPATMAC_H__
 +
@@ -5352,13 +5437,18 @@ Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/drivers/bluesmoke/compatmac
 +# define pci_pretty_name(pdev) ((pdev)->pretty_name)
 +#endif
 +
-+#endif
++#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2,6,0) */
++
++#ifndef in_atomic
++#define in_atomic() 0
++#define down_trylock(mtx) 1
++#endif /* in_atomic */
 +
 +#endif /* __LINUX_BLUESMOKE_COMPATMAC_H__ */
 Index: linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/pci_ids.h
 ===================================================================
 --- linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891.orig/include/linux/pci_ids.h	2004-11-11 10:28:34.000000000 -0500
-+++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/pci_ids.h	2004-11-18 18:38:03.000000000 -0500
++++ linux-2.6.5-SLES9_SP1_BRANCH_2004111114454891/include/linux/pci_ids.h	2004-12-17 12:45:23.000000000 -0500
 @@ -454,6 +454,10 @@
  #define PCI_DEVICE_ID_AMI_MEGARAID2	0x9060
  
