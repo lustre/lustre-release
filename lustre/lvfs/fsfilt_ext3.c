@@ -749,7 +749,9 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         count = ext3_ext_calc_credits_for_insert(tree, path);
         up_write(&EXT3_I(inode)->truncate_sem);
 
-        handle = ext3_journal_start(inode, count + EXT3_ALLOC_NEEDED + 1);
+        lock_kernel();
+        handle = journal_start(EXT3_JOURNAL(inode), count + EXT3_ALLOC_NEEDED + 1);
+        unlock_kernel();
         if (IS_ERR(handle)) {
                 down_write(&EXT3_I(inode)->truncate_sem);
                 return PTR_ERR(handle);
@@ -757,7 +759,9 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
 
         if (tgen != EXT_GENERATION(tree)) {
                 /* the tree has changed. so path can be invalid at moment */
-                ext3_journal_stop(handle, inode);
+                lock_kernel();
+                journal_stop(handle);
+                unlock_kernel();
                 down_write(&EXT3_I(inode)->truncate_sem);
                 return EXT_REPEAT;
         }
@@ -788,7 +792,9 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         }
 
 out:
-        ext3_journal_stop(handle, inode);
+        lock_kernel();
+        journal_stop(handle);
+        unlock_kernel();
 map:
         if (err >= 0) {
                 /* map blocks */
