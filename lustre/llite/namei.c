@@ -520,8 +520,9 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
         int err;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
-               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir);
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p) mode %o dev %x\n",
+               nd->last.len, nd->last.name, dir->i_ino, dir->i_generation, dir,
+               mode, rdev);
 
         mode &= ~current->fs->umask;
 
