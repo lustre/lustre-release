@@ -234,18 +234,18 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
         /* Assume sufficient socket buffering for this message */
         rc = syscall(SYS_write, sockfd, &hdr, sizeof(hdr));
         if (rc <= 0) {
-                CERROR ("Error %d sending HELLO to %llx\n", rc, *nid);
+                CERROR ("Error %d sending HELLO to "LPX64"\n", rc, *nid);
                 return (rc);
         }
 
         rc = syscall(SYS_read, sockfd, hmv, sizeof(*hmv));
         if (rc <= 0) {
-                CERROR ("Error %d reading HELLO from %llx\n", rc, *nid);
+                CERROR ("Error %d reading HELLO from "LPX64"\n", rc, *nid);
                 return (rc);
         }
         
         if (hmv->magic != __le32_to_cpu (PORTALS_PROTO_MAGIC)) {
-                CERROR ("Bad magic %#08x (%#08x expected) from %llx\n",
+                CERROR ("Bad magic %#08x (%#08x expected) from "LPX64"\n",
                         __cpu_to_le32 (hmv->magic), PORTALS_PROTO_MAGIC, *nid);
                 return (-EPROTO);
         }
@@ -253,7 +253,7 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
         if (hmv->version_major != __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR) ||
             hmv->version_minor != __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR)) {
                 CERROR ("Incompatible protocol version %d.%d (%d.%d expected)"
-                        " from %llx\n",
+                        " from "LPX64"\n",
                         __le16_to_cpu (hmv->version_major),
                         __le16_to_cpu (hmv->version_minor),
                         PORTALS_PROTO_VERSION_MAJOR,
@@ -270,7 +270,7 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
 
         rc = syscall(SYS_read, sockfd, hmv + 1, sizeof(hdr) - sizeof(*hmv));
         if (rc <= 0) {
-                CERROR ("Error %d reading rest of HELLO hdr from %llx\n",
+                CERROR ("Error %d reading rest of HELLO hdr from "LPX64"\n",
                         rc, *nid);
                 return (rc);
         }
@@ -279,7 +279,7 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
         if (hdr.type != __cpu_to_le32 (PTL_MSG_HELLO) ||
             hdr.payload_length != __cpu_to_le32 (0)) {
                 CERROR ("Expecting a HELLO hdr with 0 payload,"
-                        " but got type %d with %d payload from %llx\n",
+                        " but got type %d with %d payload from "LPX64"\n",
                         __le32_to_cpu (hdr.type),
                         __le32_to_cpu (hdr.payload_length), *nid);
                 return (-EPROTO);
@@ -293,7 +293,7 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
         if (*nid == PTL_NID_ANY) {              /* don't know peer's nid yet */
                 *nid = __le64_to_cpu(hdr.src_nid);
         } else if (*nid != __le64_to_cpu (hdr.src_nid)) {
-                CERROR ("Connected to nid %llx, but expecting %llx\n",
+                CERROR ("Connected to nid "LPX64", but expecting "LPX64"\n",
                         __le64_to_cpu (hdr.src_nid), *nid);
                 return (-EPROTO);
         }
