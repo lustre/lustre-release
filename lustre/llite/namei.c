@@ -247,32 +247,46 @@ int ll_mdc_rename(struct inode *src, struct inode *tgt,
 
 static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
 {
-        int err; 
+        int err, rc;
         struct obdo oa;
         struct inode * inode;
 
-        memset(&oa, 0, sizeof(oa)); 
-        oa.o_valid = OBD_MD_FLMODE; 
+        memset(&oa, 0, sizeof(oa));
+        oa.o_valid = OBD_MD_FLMODE;
         oa.o_mode = S_IFREG | 0600;
-        err = obd_create(ll_i2obdconn(dir), &oa);  
-        if (err) { 
-                RETURN(err);
-        }
+        rc = obd_create(ll_i2obdconn(dir), &oa);
+        if (rc) {
+		CERROR("error creating OST object: rc = %d\n", rc);
+                RETURN(rc);
+	}
 
         mode = mode | S_IFREG;
         CDEBUG(D_DENTRY, "name %s mode %o o_id %lld\n",
                dentry->d_name.name, mode, (unsigned long long)oa.o_id);
-        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len, 
+        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
                                NULL, 0, mode, oa.o_id);
-        err = PTR_ERR(inode);
-        if (!IS_ERR(inode)) {
-                // XXX clean up the object
-                inode->i_op = &ll_file_inode_operations;
-                inode->i_fop = &ll_file_operations;
-                inode->i_mapping->a_ops = &ll_aops;
-                err = ext2_add_nondir(dentry, inode);
-        }
-        RETURN(err);
+
+	if (IS_ERR(inode)) {
+		rc = PTR_ERR(inode);
+		CERROR("error creating MDS object for id %Ld: rc = %d\n",
+		       (unsigned long long)oa.o_id, rc);
+		GOTO(out_destroy, rc);
+	}
+
+	inode->i_op = &ll_file_inode_operations;
+	inode->i_fop = &ll_file_operations;
+	inode->i_mapping->a_ops = &ll_aops;
+	rc = ext2_add_nondir(dentry, inode);
+	/* XXX Handle err, but this will probably get more complex anyways */
+
+        RETURN(rc);
+
+out_destroy:
+        err = obd_destroy(ll_i2obdconn(dir), &oa);
+	if (err)
+		CERROR("error destroying object %Ld in error path: err = %d\n",
+		       (unsigned long long)oa.o_id, err);
+	return err;
 } /* ll_create */
 
 
