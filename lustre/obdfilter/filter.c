@@ -947,8 +947,8 @@ static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
 
 static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
                               struct lov_stripe_md *lsm, obd_count oa_bufs,
-                              struct brw_page *pga, brw_callback_t callback,
-                              struct io_cb_data *data)
+                              struct brw_page *pga, brw_cb_t callback,
+                              struct brw_cb_data *data)
 {
         struct obd_export       *export = class_conn2export(conn);
         struct obd_run_ctxt      saved;
@@ -1703,9 +1703,9 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
          */
         while (index < ((src->o_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
                 struct brw_page pg;
-                struct io_cb_data *cbd = ll_init_cb();
+                struct brw_cb_data *brw_cbd = ll_init_brw_cb_data();
 
-                if (!cbd) {
+                if (!brw_cbd) {
                         err = -ENOMEM;
                         EXIT;
                         break;
@@ -1718,15 +1718,15 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
 
                 page->index = index;
                 err = obd_brw(OBD_BRW_READ, src_conn, &srcmd, 1, &pg,
-                              ll_sync_io_cb, cbd);
+                              ll_sync_brw_cb, brw_cbd);
 
                 if ( err ) {
                         EXIT;
                         break;
                 }
 
-                cbd = ll_init_cb();
-                if (!cbd) {
+                brw_cbd = ll_init_brw_cb_data();
+                if (!brw_cbd) {
                         err = -ENOMEM;
                         EXIT;
                         break;
@@ -1735,7 +1735,7 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
                 CDEBUG(D_INFO, "Read page %ld ...\n", page->index);
 
                 err = obd_brw(OBD_BRW_WRITE, dst_conn, &dstmd, 1, &pg,
-                              ll_sync_io_cb, cbd);
+                              ll_sync_brw_cb, brw_cbd);
 
                 /* XXX should handle dst->o_size, dst->o_blocks here */
                 if ( err ) {

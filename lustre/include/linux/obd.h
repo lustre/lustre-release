@@ -258,7 +258,7 @@ struct obd_device {
         void* counters;
 };
 
-struct io_cb_data;
+struct brw_cb_data;
 
 struct obd_ops {
         int (*o_iocontrol)(long cmd, struct lustre_handle *, int len,
@@ -294,8 +294,8 @@ struct obd_ops {
                        struct lov_stripe_md *ea);
         int (*o_brw)(int rw, struct lustre_handle *conn,
                      struct lov_stripe_md *ea, obd_count oa_bufs,
-                     struct brw_page *pgarr, brw_callback_t callback,
-                     struct io_cb_data *data);
+                     struct brw_page *pgarr, brw_cb_t callback,
+                     struct brw_cb_data *data);
         int (*o_punch)(struct lustre_handle *conn, struct obdo *tgt,
                        struct lov_stripe_md *ea, obd_size count,
                        obd_off offset);

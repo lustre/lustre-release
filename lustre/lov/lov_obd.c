@@ -982,7 +982,7 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
         RETURN(rc);
 }
 
-static int lov_osc_brw_callback(struct io_cb_data *cbd, int err, int phase)
+static int lov_osc_brw_cb(struct brw_cb_data *brw_cbd, int err, int phase)
 {
         int ret = 0;
         ENTRY;
@@ -992,9 +992,9 @@ static int lov_osc_brw_callback(struct io_cb_data *cbd, int err, int phase)
 
         if (phase == CB_PHASE_FINISH) {
                 if (err)
-                        cbd->err = err;
-                if (atomic_dec_and_test(&cbd->refcount))
-                        ret = cbd->cb(cbd->data, cbd->err, phase);
+                        brw_cbd->brw_err = err;
+                if (atomic_dec_and_test(&brw_cbd->brw_refcount))
+                        ret = brw_cbd->brw_cb(brw_cbd->brw_data, brw_cbd->brw_err, phase);
                 RETURN(ret);
         }
 
@@ -1005,7 +1005,7 @@ static int lov_osc_brw_callback(struct io_cb_data *cbd, int err, int phase)
 static inline int lov_brw(int cmd, struct lustre_handle *conn,
                           struct lov_stripe_md *lsm, obd_count oa_bufs,
                           struct brw_page *pga,
-                          brw_callback_t callback, struct io_cb_data *cbd)
+                          brw_cb_t brw_cb, struct brw_cb_data *brw_cbd)
 {
         int stripe_count = lsm->lsm_stripe_count;
         struct obd_export *export = class_conn2export(conn);
@@ -1019,7 +1019,7 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
         } *stripeinfo, *si, *si_last;
         struct brw_page *ioarr;
         int rc, i;
-        struct io_cb_data *our_cb;
+        struct brw_cb_data *osc_brw_cbd;
         struct lov_oinfo *loi;
         int *where;
         ENTRY;
@@ -1037,8 +1037,8 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
 
         lov = &export->exp_obd->u.lov;
 
-        our_cb = ll_init_cb();
-        if (!our_cb)
+        osc_brw_cbd = ll_init_brw_cb_data();
+        if (!osc_brw_cbd)
                 RETURN(-ENOMEM);
 
         OBD_ALLOC(stripeinfo, stripe_count * sizeof(*stripeinfo));
@@ -1055,14 +1055,14 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
 
         /* This is the only race-free way I can think of to get the refcount
          * correct. -phil */
-        atomic_set(&our_cb->refcount, 0);
-        our_cb->cb = callback;
-        our_cb->data = cbd;
+        atomic_set(&osc_brw_cbd->brw_refcount, 0);
+        osc_brw_cbd->brw_cb = brw_cb;
+        osc_brw_cbd->brw_data = brw_cbd;
 
         for (i = 0; i < oa_bufs; i++) {
                 where[i] = lov_stripe_number(lsm, pga[i].off);
                 if (stripeinfo[where[i]].bufct++ == 0)
-                        atomic_inc(&our_cb->refcount);
+                        atomic_inc(&osc_brw_cbd->brw_refcount);
         }
 
         for (i = 0, loi = lsm->lsm_oinfo, si_last = si = stripeinfo;
@@ -1092,11 +1092,11 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
                         /* XXX handle error returns here */
                         obd_brw(cmd, &lov->tgts[si->ost_idx].conn,
                                 &si->lsm, si->bufct, &ioarr[shift],
-                                lov_osc_brw_callback, our_cb);
+                                lov_osc_brw_cb, osc_brw_cbd);
                 }
         }
 
-        rc = callback(cbd, 0, CB_PHASE_START);
+        rc = brw_cb(brw_cbd, 0, CB_PHASE_START);
 
         OBD_FREE(ioarr, sizeof(*ioarr) * oa_bufs);
  out_where:
@@ -1104,7 +1104,7 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
  out_sinfo:
         OBD_FREE(stripeinfo, stripe_count * sizeof(*stripeinfo));
  out_cbdata:
-        OBD_FREE(our_cb, sizeof(*our_cb));
+        OBD_FREE(osc_brw_cbd, sizeof(*osc_brw_cbd));
         RETURN(rc);
 }
 

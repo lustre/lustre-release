@@ -29,14 +29,14 @@ int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 
 /* I would prefer if these next four functions were in ptlrpc, to be honest,
  * but obdclass uses them for the netregression ioctls. -phil */
-static int sync_io_timeout(void *data)
+static int ll_sync_brw_timeout(void *data)
 {
-        struct io_cb_data *cbd = data;
+        struct brw_cb_data *brw_cbd = data;
         struct ptlrpc_bulk_desc *desc;
         ENTRY;
 
-        LASSERT(cbd);
-        desc = cbd->desc;
+        LASSERT(brw_cbd);
+        desc = brw_cbd->brw_desc;
 
         if (!desc) {
                 CERROR("no desc for timed-out BRW, reopen Bugzilla 214!\n");
@@ -61,36 +61,36 @@ static int sync_io_timeout(void *data)
         RETURN(1);
 }
 
-static int sync_io_intr(void *data)
+static int ll_sync_brw_intr(void *data)
 {
-        struct io_cb_data *cbd = data;
-        struct ptlrpc_bulk_desc *desc = cbd->desc;
+        struct brw_cb_data *brw_cbd = data;
+        struct ptlrpc_bulk_desc *desc = brw_cbd->brw_desc;
 
         ENTRY;
         desc->bd_flags |= PTL_RPC_FL_INTR;
         RETURN(1); /* ignored, as of this writing */
 }
 
-int ll_sync_io_cb(struct io_cb_data *data, int err, int phase)
+int ll_sync_brw_cb(struct brw_cb_data *brw_cbd, int err, int phase)
 {
         int ret;
         ENTRY;
 
         if (phase == CB_PHASE_START) {
                 struct l_wait_info lwi;
-                lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ, sync_io_timeout,
-                                       sync_io_intr, data);
-                ret = l_wait_event(data->waitq, data->complete, &lwi);
-                if (atomic_dec_and_test(&data->refcount))
-                        OBD_FREE(data, sizeof(*data));
+                lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ, ll_sync_brw_timeout,
+                                       ll_sync_brw_intr, brw_cbd);
+                ret = l_wait_event(brw_cbd->brw_waitq, brw_cbd->brw_complete, &lwi);
+                if (atomic_dec_and_test(&brw_cbd->brw_refcount))
+                        OBD_FREE(brw_cbd, sizeof(*brw_cbd));
                 if (ret == -EINTR)
                         RETURN(ret);
         } else if (phase == CB_PHASE_FINISH) {
-                data->err = err;
-                data->complete = 1;
-                wake_up(&data->waitq);
-                if (atomic_dec_and_test(&data->refcount))
-                        OBD_FREE(data, sizeof(*data));
+                brw_cbd->brw_err = err;
+                brw_cbd->brw_complete = 1;
+                wake_up(&brw_cbd->brw_waitq);
+                if (atomic_dec_and_test(&brw_cbd->brw_refcount))
+                        OBD_FREE(brw_cbd, sizeof(*brw_cbd));
                 RETURN(err);
         } else                
                 LBUG();
@@ -98,16 +98,16 @@ int ll_sync_io_cb(struct io_cb_data *data, int err, int phase)
         return 0;
 }
 
-struct io_cb_data *ll_init_cb(void)
+struct brw_cb_data *ll_init_brw_cb_data(void)
 {
-        struct io_cb_data *d;
+        struct brw_cb_data *brw_cbd;
 
-        OBD_ALLOC(d, sizeof(*d));
-        if (d) {
-                init_waitqueue_head(&d->waitq);
-                atomic_set(&d->refcount, 2);
+        OBD_ALLOC(brw_cbd, sizeof(*brw_cbd));
+        if (brw_cbd) {
+                init_waitqueue_head(&brw_cbd->brw_waitq);
+                atomic_set(&brw_cbd->brw_refcount, 2);
         }
-        RETURN(d);
+        RETURN(brw_cbd);
 }
 
 /*

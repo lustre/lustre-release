@@ -194,8 +194,8 @@ struct ptlrpc_bulk_desc {
         struct ptlrpc_client *bd_client;
         __u32 bd_portal;
         struct lustre_handle bd_conn;
-        void (*bd_cb)(struct ptlrpc_bulk_desc *, void *);
-        void *bd_cb_data;
+        void (*bd_ptl_ev_hdlr)(struct ptlrpc_bulk_desc *, void *);
+        void *bd_ptl_ev_data;
 
         wait_queue_head_t bd_waitq;
         struct list_head bd_page_list;

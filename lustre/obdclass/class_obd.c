@@ -549,7 +549,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         case OBD_IOC_BRW_READ: {
                 struct lov_stripe_md tmp_lsm; // XXX fill in from create
                 struct lov_stripe_md *lsm = &tmp_lsm; // XXX fill in from create
-                struct io_cb_data *cbd = ll_init_cb();
+                struct brw_cb_data *brw_cbd = ll_init_brw_cb_data();
                 obd_count       pages = 0;
                 struct brw_page *pga, *pgp;
                 __u64 id = data->ioc_obdo1.o_id;
@@ -558,7 +558,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 __u64 off;
                 int j;
 
-                if (!cbd)
+                if (!brw_cbd)
                         GOTO(out, err = -ENOMEM);
 
                 obd_data2conn(&conn, data);
@@ -601,7 +601,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                         }
                 }
 
-                err = obd_brw(rw, &conn, lsm, j, pga, ll_sync_io_cb, cbd);
+                err = obd_brw(rw, &conn, lsm, j, pga, ll_sync_brw_cb, brw_cbd);
                 if (err)
                         CERROR("test_brw: error from obd_brw: err = %d\n", err);
                 EXIT;
@@ -690,8 +690,8 @@ EXPORT_SYMBOL(class_uuid_unparse);
 //EXPORT_SYMBOL(class_multi_cleanup);
 
 EXPORT_SYMBOL(class_signal_connection_failure);
-EXPORT_SYMBOL(ll_sync_io_cb);
-EXPORT_SYMBOL(ll_init_cb);
+EXPORT_SYMBOL(ll_sync_brw_cb);
+EXPORT_SYMBOL(ll_init_brw_cb_data);
 EXPORT_SYMBOL(class_nm_to_type);
 
 static int __init init_obdclass(void)

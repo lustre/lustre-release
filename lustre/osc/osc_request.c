@@ -307,7 +307,7 @@ static int osc_destroy(struct lustre_handle *conn, struct obdo *oa,
 }
 
 struct osc_brw_cb_data {
-        brw_callback_t callback;
+        brw_cb_t callback;
         void *cb_data;
         void *obd_data;
         size_t obd_size;
@@ -332,7 +332,7 @@ static void unmap_and_decref_bulk_desc(void *data)
         EXIT;
 }
 
-static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
+static void osc_ptl_ev_hdlr(struct ptlrpc_bulk_desc *desc, void *data)
 {
         struct osc_brw_cb_data *cb_data = data;
         int err = 0;
@@ -360,7 +360,7 @@ static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
 
 static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                         obd_count page_count, struct brw_page *pga,
-                        brw_callback_t callback, struct io_cb_data *data)
+                        brw_cb_t callback, struct brw_cb_data *data)
 {
         struct ptlrpc_connection *connection =
                 client_conn2cli(conn)->cl_import.imp_connection;
@@ -388,7 +388,7 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         if (!desc)
                 GOTO(out_req, rc = -ENOMEM);
         desc->bd_portal = OST_BULK_PORTAL;
-        desc->bd_cb = brw_finish;
+        desc->bd_ptl_ev_hdlr = osc_ptl_ev_hdlr;
         OBD_ALLOC(cb_data, sizeof(*cb_data));
         if (!cb_data)
                 GOTO(out_desc, rc = -ENOMEM);
@@ -396,8 +396,8 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         cb_data->callback = callback;
         cb_data->cb_data = data;
         CDEBUG(D_PAGE, "data(%p)->desc = %p\n", data, desc);
-        data->desc = desc;
-        desc->bd_cb_data = cb_data;
+        data->brw_desc = desc;
+        desc->bd_ptl_ev_data = cb_data;
 
         iooptr = lustre_msg_buf(request->rq_reqmsg, 1);
         nioptr = lustre_msg_buf(request->rq_reqmsg, 2);
@@ -478,7 +478,7 @@ out_desc:
 
 static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
                          obd_count page_count, struct brw_page *pga,
-                         brw_callback_t callback, struct io_cb_data *data)
+                         brw_cb_t callback, struct brw_cb_data *data)
 {
         struct ptlrpc_connection *connection =
                 client_conn2cli(conn)->cl_import.imp_connection;
@@ -507,7 +507,7 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
         if (!desc)
                 GOTO(out_req, rc = -ENOMEM);
         desc->bd_portal = OSC_BULK_PORTAL;
-        desc->bd_cb = brw_finish;
+        desc->bd_ptl_ev_hdlr = osc_ptl_ev_hdlr;
         OBD_ALLOC(cb_data, sizeof(*cb_data));
         if (!cb_data)
                 GOTO(out_desc, rc = -ENOMEM);
@@ -515,8 +515,8 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
         cb_data->callback = callback;
         cb_data->cb_data = data;
         CDEBUG(D_PAGE, "data(%p)->desc = %p\n", data, desc);
-        data->desc = desc;
-        desc->bd_cb_data = cb_data;
+        data->brw_desc = desc;
+        desc->bd_ptl_ev_data = cb_data;
 
         iooptr = lustre_msg_buf(request->rq_reqmsg, 1);
         nioptr = lustre_msg_buf(request->rq_reqmsg, 2);
@@ -612,8 +612,8 @@ out_desc:
 
 static int osc_brw(int cmd, struct lustre_handle *conn,
                    struct lov_stripe_md *md, obd_count page_count,
-                   struct brw_page *pga, brw_callback_t callback,
-                   struct io_cb_data *data)
+                   struct brw_page *pga, brw_cb_t callback,
+                   struct brw_cb_data *data)
 {
         ENTRY;
 

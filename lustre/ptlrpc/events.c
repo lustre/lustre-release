@@ -175,8 +175,8 @@ static int bulk_source_callback(ptl_event_t *ev)
                 }
                 desc->bd_flags |= PTL_BULK_FL_SENT;
                 wake_up(&desc->bd_waitq);
-                if (desc->bd_cb != NULL)
-                        desc->bd_cb(desc, desc->bd_cb_data);
+                if (desc->bd_ptl_ev_hdlr != NULL)
+                        desc->bd_ptl_ev_hdlr(desc, desc->bd_ptl_ev_data);
         }
 
         RETURN(0);
@@ -213,8 +213,8 @@ static int bulk_sink_callback(ptl_event_t *ev)
 
                 desc->bd_flags |= PTL_BULK_FL_RCVD;
                 wake_up(&desc->bd_waitq);
-                if (desc->bd_cb != NULL)
-                        desc->bd_cb(desc, desc->bd_cb_data);
+                if (desc->bd_ptl_ev_hdlr != NULL)
+                        desc->bd_ptl_ev_hdlr(desc, desc->bd_ptl_ev_data);
         } else {
                 CERROR("Unexpected event type!\n");
                 LBUG();

@@ -373,7 +373,7 @@ static int ost_brw_write(struct ptlrpc_request *req)
         desc = ptlrpc_prep_bulk(req->rq_connection);
         if (desc == NULL)
                 GOTO(fail_preprw, rc = -ENOMEM);
-        desc->bd_cb = NULL;
+        desc->bd_ptl_ev_hdlr = NULL;
         desc->bd_portal = OSC_BULK_PORTAL;
         desc->bd_desc_private = desc_priv;
         memcpy(&(desc->bd_conn), &conn, sizeof(conn));
