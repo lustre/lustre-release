@@ -72,7 +72,7 @@
 #include <linux/sysctl.h>
 #include <asm/segment.h>
 
-#define DEBUG_SUBSYSTEM S_QSWNAL
+#define DEBUG_SUBSYSTEM S_NAL
 
 #include <linux/kp30.h>
 #include <linux/kpr.h>

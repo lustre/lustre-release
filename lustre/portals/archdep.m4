@@ -531,6 +531,35 @@ if test x$enable_modules != xno ; then
 	AC_SUBST(IIBCPPFLAGS)
 	AC_SUBST(IIBNAL)
 
+	#### Rapid Array
+	AC_MSG_CHECKING([if RapidArray kernel headers are present])
+	# placeholder
+	RACPPFLAGS="-I/tmp"
+	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $RACPPFLAGS"
+	LUSTRE_MODULE_TRY_COMPILE(
+		[
+			#include <linux/types.h>
+			#include <rapl.h>
+		],[
+	                RAP_RETURN          rc;
+			RAP_PVOID           dev_handle;
+
+	                rc = RapkGetDeviceByIndex(0, NULL, NULL, &dev_handle);
+
+			return rc == RAP_SUCCESS ? 0 : 1;
+		],[
+			AC_MSG_RESULT([yes])
+			RANAL="ranal"
+		],[
+			AC_MSG_RESULT([no])
+			RANAL=""
+			RACPPFLAGS=""
+		])
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+	AC_SUBST(RACPPFLAGS)
+	AC_SUBST(RANAL)
+
 	# ---------- Red Hat 2.4.18 has iobuf->dovary --------------
 	# But other kernels don't
 
@@ -826,6 +855,7 @@ AM_CONDITIONAL(BUILD_QSWNAL, test x$QSWNAL = "xqswnal")
 AM_CONDITIONAL(BUILD_GMNAL, test x$GMNAL = "xgmnal")
 AM_CONDITIONAL(BUILD_OPENIBNAL, test x$OPENIBNAL = "xopenibnal")
 AM_CONDITIONAL(BUILD_IIBNAL, test x$IIBNAL = "xiibnal")
+AM_CONDITIONAL(BUILD_RANAL, test x$RANAL = "xranal")
 
 # portals/utils/portals.c
 AC_CHECK_HEADERS([netdb.h netinet/tcp.h asm/types.h])

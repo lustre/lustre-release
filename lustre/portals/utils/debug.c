@@ -77,12 +77,11 @@ static int debug_mask = ~0;
 static const char *portal_debug_subsystems[] =
         {"undefined", "mdc", "mds", "osc", 
          "ost", "class", "log", "llite",
-         "rpc", "mgmt", "portals", "socknal", 
-         "qswnal", "pinger", "filter", "ptlbd", 
-         "echo", "ldlm", "lov", "gmnal",
-         "router", "cobd", "ibnal", "sm",
-         "asobd", "confobd", "lmv", "cmobd",
-         "lonal", NULL};
+         "rpc", "mgmt", "portals", "nal", 
+         "pinger", "filter", "ptlbd", "echo", 
+         "ldlm", "lov", "router", "cobd", 
+         "sm", "asobd", "confobd", "lmv", 
+         "cmobd", NULL};
 static const char *portal_debug_masks[] =
         {"trace", "inode", "super", "ext2", 
          "malloc", "cache", "info", "ioctl",
@@ -507,7 +506,7 @@ dbg_write_cmd(int fd, char *str)
 {
         int    len = strlen(str);
         int    rc  = write(fd, str, len);
-
+        
         return (rc == len ? 0 : 1);
 }
 
@@ -529,7 +528,7 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                         strerror(errno));
                 return -1;
         }
-
+        
         rc = -1;
         if (strcasecmp(argv[1], "start") == 0) {
                 if (argc < 3 || argc > 4 ||

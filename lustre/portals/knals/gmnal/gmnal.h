@@ -47,7 +47,7 @@
 #include "linux/vmalloc.h"
 #include "linux/sysctl.h"
 
-#define DEBUG_SUBSYSTEM S_GMNAL
+#define DEBUG_SUBSYSTEM S_NAL
 
 #include "portals/nal.h"
 #include "portals/api.h"

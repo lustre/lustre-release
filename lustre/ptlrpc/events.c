@@ -630,6 +630,7 @@ int ptlrpc_init_portals(void)
                 {IIBNAL,    "iibnal"},
                 {TCPNAL,    "tcpnal"},
                 {LONAL,     "lonal"},
+                {RANAL,     "ranal"},
 #else
                 {CRAY_KB_ERNAL, "cray_kb_ernal"},
 #endif

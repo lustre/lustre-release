@@ -48,8 +48,7 @@
 
 #include "llite_lib.h"
 
-unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
-                                            S_GMNAL | S_IBNAL);
+unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
 
 ptl_handle_ni_t         tcpnal_ni;
 struct task_struct     *current;

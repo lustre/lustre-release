@@ -19,8 +19,7 @@ struct ldlm_namespace;
 struct ldlm_res_id;
 struct obd_import;
 
-unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
-                                            S_GMNAL | S_IBNAL);
+unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
 
 void *inter_module_get(char *arg)
 {

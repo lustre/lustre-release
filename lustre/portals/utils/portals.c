@@ -79,6 +79,7 @@ static name2num_t nalnames[] = {
         {"openib",      OPENIBNAL},
         {"iib",         IIBNAL},
         {"lo",          LONAL},
+        {"ra",          RANAL},
 #else
         {"cray_kern_nal", CRAY_KERN_NAL},
         {"cray_user_nal", CRAY_USER_NAL},
@@ -711,10 +712,10 @@ jt_ptl_add_peer (int argc, char **argv)
         int                      port = 0;
         int                      rc;
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, 0))
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, RANAL, 0))
                 return -1;
 
-        if (g_nal_is_compatible(NULL, SOCKNAL, 0)) {
+        if (g_nal_is_compatible(NULL, SOCKNAL, RANAL, 0)) {
                 if (argc != 4) {
                         fprintf (stderr, "usage(tcp): %s nid ipaddr port\n", 
                                  argv[0]);
@@ -731,7 +732,7 @@ jt_ptl_add_peer (int argc, char **argv)
                 return -1;
         }
 
-        if (g_nal_is_compatible (NULL, SOCKNAL, 0)) {
+        if (g_nal_is_compatible (NULL, SOCKNAL, RANAL, 0)) {
                 if (ptl_parse_ipaddr (&ip, argv[2]) != 0) {
                         fprintf (stderr, "Can't parse ip addr: %s\n", argv[2]);
                         return -1;
@@ -768,7 +769,7 @@ jt_ptl_del_peer (int argc, char **argv)
         int                      argidx;
         int                      rc;
 
-        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, 0))
+        if (!g_nal_is_compatible (argv[0], SOCKNAL, OPENIBNAL, IIBNAL, RANAL, 0))
                 return -1;
 
         if (g_nal_is_compatible(NULL, SOCKNAL, 0)) {
