@@ -14,7 +14,7 @@
     <service_ref uuidref="lov1-UUID"></service_ref>
     <service_ref uuidref="mtpt1-UUID"></service_ref>
     <service_ref uuidref="mdc1-UUID"></service_ref>
-    <service_ref uuidref="mds1-UUID"></service_ref>
+    <service_ref uuidref="mds-UUID"></service_ref>
     <service_ref uuidref="net-UUID"></service_ref>
     <service_ref uuidref="obd1-UUID"></service_ref>
     <service_ref uuidref="obd2-UUID"></service_ref>
@@ -26,7 +26,7 @@
 
   <lov name="lov1" uuid="lov1-UUID">
     <mdc_ref uuidref="mdc1-UUID"/>
-    <devices stripesize="4096" pattern="0">
+    <devices stripesize="65536" pattern="0">
       <osc_ref uuidref="osc1-UUID"/>
       <osc_ref uuidref="osc2-UUID"/>
     </devices>
@@ -34,13 +34,13 @@
 
   <mdc name="mdc1" uuid="mdc1-UUID">
     <network_ref name='net' uuidref='net-UUID'/>
-    <mds_ref uuidref="mds1-UUID"/>
+    <mds_ref uuidref="mds-UUID"/>
   </mdc>
 
-  <mds name="mds1" uuid="mds1-UUID">
+  <mds name="mds" uuid="mds-UUID">
     <network_ref name='net-local' uuidref="net-local-UUID"/>
     <fstype>extN</fstype>
-    <device size="10000">/tmp/mds1</device>
+    <device size="50000">/tmp/mds</device>
     <autoformat>yes</autoformat>
   </mds>
 
@@ -66,20 +66,20 @@
 
   <obd name="obd1" uuid="obd1-UUID" type="obdfilter">
     <fstype>extN</fstype>
-    <device size="10000">/tmp/obd1</device>
+    <device size="100000">/tmp/obd1</device>
     <autoformat>yes</autoformat>
   </obd>
 
   <obd name="obd2" uuid="obd2-UUID" type="obdfilter">
     <fstype>extN</fstype>
-    <device size="10000">/tmp/obd2</device>
+    <device size="100000">/tmp/obd2</device>
     <autoformat>yes</autoformat>
   </obd>
 
   <mountpoint name="mtpt1" uuid="mtpt1-UUID">
-    <path>/mnt/lov1</path>
+    <path>/mnt/lustre</path>
     <mdc_ref uuidref="mdc1-UUID"/>
-    <lov_ref uuidref="lov1-UUID"/>
+    <osc_ref uuidref="lov1-UUID"/>
   </mountpoint>
 
 </lustre>

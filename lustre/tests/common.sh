@@ -443,7 +443,7 @@ setup_mdc() {
 
 	$OBDCTL <<- EOF || return $?
 	newdev
-	attach mdc $THEMDC  ${THEMDC}-UUID
+	attach mdc $THEMDC ${THEMDC}-UUID
 	setup MDSUUID $MDSNODE
 	quit
 	EOF
