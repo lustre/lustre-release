@@ -71,23 +71,23 @@ cobd_setup (struct obd_device *dev, obd_count len, void *buf)
 
         /* don't bother checking attached/setup;
          * obd_connect() should, and it can change underneath us */
-        rc = obd_connect (&cobd->cobd_target, target, &target_uuid, NULL, NULL);
+        rc = obd_connect (&cobd->cobd_target, target, &target_uuid);
         if (rc != 0)
                 return (rc);
 
-        rc = obd_connect (&cobd->cobd_cache, cache, &cache_uuid, NULL, NULL);
+        rc = obd_connect (&cobd->cobd_cache, cache, &cache_uuid);
         if (rc != 0)
                 goto fail_0;
 
         return (0);
 
  fail_0:
-        obd_disconnect (&cobd->cobd_target);
+        obd_disconnect (&cobd->cobd_target, 0 );
         return (rc);
 }
 
 static int
-cobd_cleanup (struct obd_device *dev)
+cobd_cleanup (struct obd_device *dev, int force, int failover)
 {
         struct cache_obd  *cobd = &dev->u.cobd;
         int                rc;
@@ -95,11 +95,11 @@ cobd_cleanup (struct obd_device *dev)
         if (!list_empty (&dev->obd_exports))
                 return (-EBUSY);
 
-        rc = obd_disconnect (&cobd->cobd_cache);
+        rc = obd_disconnect (&cobd->cobd_cache, failover);
         if (rc != 0)
                 CERROR ("error %d disconnecting cache\n", rc);
 
-        rc = obd_disconnect (&cobd->cobd_target);
+        rc = obd_disconnect (&cobd->cobd_target, failover);
         if (rc != 0)
                 CERROR ("error %d disconnecting target\n", rc);
 
@@ -108,8 +108,7 @@ cobd_cleanup (struct obd_device *dev)
 
 static int
 cobd_connect (struct lustre_handle *conn, struct obd_device *obd,
-              struct obd_uuid *cluuid, struct recovd_obd *recovd,
-              ptlrpc_recovery_cb_t recover)
+              struct obd_uuid *cluuid)
 {
         int rc = class_connect (conn, obd, cluuid);
 
@@ -118,9 +117,9 @@ cobd_connect (struct lustre_handle *conn, struct obd_device *obd,
 }
 
 static int
-cobd_disconnect (struct lustre_handle *conn)
+cobd_disconnect (struct lustre_handle *conn, int failover)
 {
-	int rc = class_disconnect (conn);
+	int rc = class_disconnect (conn, failover);
 
         CERROR ("rc %d\n", rc);
 	return (rc);
@@ -128,13 +127,13 @@ cobd_disconnect (struct lustre_handle *conn)
 
 static int
 cobd_get_info(struct lustre_handle *conn, obd_count keylen,
-              void *key, obd_count *vallen, void **val)
+              void *key, __u32 *vallen, void *val)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -142,8 +141,7 @@ cobd_get_info(struct lustre_handle *conn, obd_count keylen,
 
         /* intercept cache utilisation info? */
 
-        return (obd_get_info (&cobd->cobd_target,
-                              keylen, key, vallen, val));
+        return obd_get_info(&cobd->cobd_target, keylen, key, vallen, val);
 }
 
 static int
@@ -153,7 +151,7 @@ cobd_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -169,7 +167,7 @@ cobd_getattr(struct lustre_handle *conn, struct obdo *oa,
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -179,18 +177,19 @@ cobd_getattr(struct lustre_handle *conn, struct obdo *oa,
 
 static int
 cobd_open(struct lustre_handle *conn, struct obdo *oa,
-          struct lov_stripe_md *lsm, struct obd_trans_info *oti)
+          struct lov_stripe_md *lsm, struct obd_trans_info *oti,
+          struct obd_client_handle *och)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
         cobd = &obd->u.cobd;
-        return (obd_open (&cobd->cobd_target, oa, lsm, oti));
+        return (obd_open (&cobd->cobd_target, oa, lsm, oti, och));
 }
 
 static int
@@ -201,7 +200,7 @@ cobd_close(struct lustre_handle *conn, struct obdo *oa,
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -209,66 +208,59 @@ cobd_close(struct lustre_handle *conn, struct obdo *oa,
         return (obd_close (&cobd->cobd_target, oa, lsm, oti));
 }
 
-static int
-cobd_preprw(int cmd, struct lustre_handle *conn,
-            int objcount, struct obd_ioobj *obj,
-            int niocount, struct niobuf_remote *nb,
-            struct niobuf_local *res, void **desc_private, 
-            struct obd_trans_info *oti)
+static int cobd_preprw(int cmd, struct obd_export *exp,
+                       int objcount, struct obd_ioobj *obj,
+                       int niocount, struct niobuf_remote *nb,
+                       struct niobuf_local *res, void **desc_private,
+                       struct obd_trans_info *oti)
 {
-        struct obd_device *obd = class_conn2obd(conn);
-        struct cache_obd  *cobd;
+        struct obd_export *cobd_exp;
+        int rc;
 
-        if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+        if (exp->exp_obd == NULL)
                 return -EINVAL;
-        }
 
         if ((cmd & OBD_BRW_WRITE) != 0)
                 return -EOPNOTSUPP;
 
-        cobd = &obd->u.cobd;
-        return (obd_preprw (cmd, &cobd->cobd_target,
-                            objcount, obj,
-                            niocount, nb,
-                            res, desc_private, oti));
+        cobd_exp = class_conn2export(&exp->exp_obd->u.cobd.cobd_target);
+        rc = obd_preprw(cmd, cobd_exp, objcount, obj, niocount, nb, res,
+                        desc_private, oti);
+        class_export_put(cobd_exp);
+        return rc;
 }
 
-static int
-cobd_commitrw(int cmd, struct lustre_handle *conn,
-              int objcount, struct obd_ioobj *obj,
-              int niocount, struct niobuf_local *local,
-              void *desc_private, struct obd_trans_info *oti)
+static int cobd_commitrw(int cmd, struct obd_export *exp,
+                         int objcount, struct obd_ioobj *obj,
+                         int niocount, struct niobuf_local *local,
+                         void *desc_private, struct obd_trans_info *oti)
 {
-        struct obd_device *obd = class_conn2obd(conn);
-        struct cache_obd  *cobd;
+        struct obd_export *cobd_exp;
+        int rc;
 
-        if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+        if (exp->exp_obd == NULL)
                 return -EINVAL;
-        }
 
         if ((cmd & OBD_BRW_WRITE) != 0)
                 return -EOPNOTSUPP;
 
-        cobd = &obd->u.cobd;
-        return (obd_commitrw (cmd, &cobd->cobd_target,
-                              objcount, obj,
-                              niocount, local,
-                              desc_private, oti));
+        cobd_exp = class_conn2export(&exp->exp_obd->u.cobd.cobd_target);
+        rc = obd_commitrw(cmd, cobd_exp, objcount, obj, niocount, local,
+                          desc_private, oti);
+        class_export_put(cobd_exp);
+        return rc;
 }
 
 static inline int
 cobd_brw(int cmd, struct lustre_handle *conn,
          struct lov_stripe_md *lsm, obd_count oa_bufs,
-         struct brw_page *pga, struct obd_brw_set *set, 
-         struct obd_trans_info *oti)
+         struct brw_page *pga, struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -277,7 +269,7 @@ cobd_brw(int cmd, struct lustre_handle *conn,
 
         cobd = &obd->u.cobd;
         return (obd_brw (cmd, &cobd->cobd_target,
-                         lsm, oa_bufs, pga, set, oti));
+                         lsm, oa_bufs, pga, oti));
 }
 
 static int
@@ -288,7 +280,7 @@ cobd_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 

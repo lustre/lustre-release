@@ -215,7 +215,8 @@ main (int argc, char **argv)
 			}
 			else
 			{
-				fprintf (stderr, "Can't parse file type %s\n", type);
+				fprintf (stderr, "Can't parse file type %s\n",
+					 type);
 				return (1);
 			}
 
@@ -229,7 +230,8 @@ main (int argc, char **argv)
 			{
 				if (verbose)
 					printf ("%s has perms 0%o, not 0%o\n",
-						fname, (buf.st_mode & ~S_IFMT), perms);
+						fname, (buf.st_mode & ~S_IFMT),
+						perms);
 				return (1);
 			}
 
@@ -244,7 +246,8 @@ main (int argc, char **argv)
 			{
 				if (verbose)
 					printf ("%s has size %Ld, not %Ld\n",
-						fname, (long long)buf.st_size, size);
+						fname, (long long)buf.st_size,
+						size);
 				return (1);
 			}
 

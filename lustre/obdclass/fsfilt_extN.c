@@ -222,15 +222,13 @@ static void *fsfilt_extN_brw_start(int objcount, struct fsfilt_objinfo *fso,
         RETURN(handle);
 }
 
-static int fsfilt_extN_commit(struct inode *inode, void *h /*, force_sync */)
+static int fsfilt_extN_commit(struct inode *inode, void *h, int force_sync)
 {
         int rc;
         handle_t *handle = h;
 
-#if 0
         if (force_sync)
                 handle->h_sync = 1; /* recovery likes this */
-#endif
 
         lock_kernel();
         rc = journal_stop(handle);
@@ -273,8 +271,11 @@ static int fsfilt_extN_setattr(struct dentry *dentry, void *handle,
         }
         if (inode->i_op->setattr)
                 rc = inode->i_op->setattr(dentry, iattr);
-        else
-                rc = inode_setattr(inode, iattr);
+        else{
+                rc = inode_change_ok(inode, iattr);
+                if (!rc)
+                        rc = inode_setattr(inode, iattr);
+        }
 
         unlock_kernel();
 
@@ -386,7 +387,7 @@ static ssize_t fsfilt_extN_readpage(struct file *file, char *buf, size_t count,
                                         brelse(bh);
                                 } else if (err) {
                                         /* XXX in theory we should just fake
-                                         * this buffer and continue like ext3,
+                                         * this buffer and continue like extN,
                                          * especially if this is a partial read
                                          */
                                         CERROR("error read dir %lu+%llu: %d\n",
@@ -417,7 +418,7 @@ static void fsfilt_extN_cb_func(struct journal_callback *jcb, int error)
 
         fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, error);
 
-        kmem_cache_free(fcb_cache, fcb);
+        OBD_SLAB_FREE(fcb, fcb_cache, sizeof *fcb);
         atomic_dec(&fcb_cache_count);
 }
 
@@ -426,8 +427,8 @@ static int fsfilt_extN_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
 {
         struct fsfilt_cb_data *fcb;
 
-        fcb = kmem_cache_alloc(fcb_cache, GFP_NOFS);
-        if (!fcb)
+        OBD_SLAB_ALLOC(fcb, fcb_cache, GFP_NOFS, sizeof *fcb);
+        if (fcb == NULL)
                 RETURN(-ENOMEM);
 
         atomic_inc(&fcb_cache_count);
@@ -466,8 +467,10 @@ static int fsfilt_extN_statfs(struct super_block *sb, struct obd_statfs *osfs)
         struct statfs sfs;
         int rc = vfs_statfs(sb, &sfs);
 
-        if (!rc && sfs.f_bfree < sfs.f_ffree)
+        if (!rc && sfs.f_bfree < sfs.f_ffree) {
+                sfs.f_files = (sfs.f_files - sfs.f_ffree) + sfs.f_bfree;
                 sfs.f_ffree = sfs.f_bfree;
+        }
 
         statfs_pack(osfs, &sfs);
         return rc;

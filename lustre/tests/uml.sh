@@ -1,15 +1,22 @@
 #!/bin/bash
 
-config=${1-uml.xml}
-LMC=${LMC-../utils/lmc}
+export PATH=`dirname $0`/../utils:$PATH
+
+config=${1:-uml.xml}
+LMC=${LMC:-lmc}
 TMP=${TMP:-/tmp}
 
 MDSDEV=${MDSDEV:-$TMP/mds1}
 MDSSIZE=${MDSSIZE:-50000}
 
-OSTDEV1=${OSTDEV1:-$TMP/ost1}
-OSTDEV2=${OSTDEV2:-$TMP/ost2}
+OSTDEVBASE=$TMP/ost
+#OSTDEV1=${OSTDEV1:-${OSTDEVBASE}1}
+#OSTDEV2=${OSTDEV2:-${OSTDEVBASE}2}
+#etc
 OSTSIZE=${OSTSIZE:-100000}
+STRIPECNT=${STRIPECNT:-1}
+
+FSTYPE=${FSTYPE:-ext3}
 
 NETTYPE=${NETTYPE:-tcp}
 
@@ -66,17 +73,17 @@ done
 
 # configure mds server
 echo; echo "adding MDS on: $MDSNODE"
-${LMC} -m $config --add mds --format --node $MDSNODE --mds mds1 --dev $MDSDEV --size $MDSSIZE ||exit 10
+${LMC} -m $config --add mds --format --node $MDSNODE --mds mds1 --fstype $FSTYPE --dev $MDSDEV --size $MDSSIZE ||exit 10
 
 # configure ost
-${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz 65536 --stripe_cnt 1 --stripe_pattern 0 || exit 20
+${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz 65536 --stripe_cnt $STRIPECNT --stripe_pattern 0 || exit 20
 COUNT=1
 echo -n "adding OST on:"
 for NODE in $OSTNODES; do
 	eval OSTDEV=\$OSTDEV$COUNT
 	echo -n " $NODE"
-	OSTDEV=${OSTDEV:-$OSTDEV1}
-        ${LMC} -m $config --add ost --node $NODE --lov lov1 --dev $OSTDEV --size $OSTSIZE || exit 21
+	OSTDEV=${OSTDEV:-$OSTDEVBASE$COUNT}
+        ${LMC} -m $config --add ost --node $NODE --lov lov1 --fstype $FSTYPE --dev $OSTDEV --size $OSTSIZE || exit 21
 	COUNT=`expr $COUNT + 1`
 done
 

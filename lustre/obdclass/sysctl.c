@@ -75,7 +75,7 @@ static ctl_table obd_table[] = {
         {OBD_RESET, "reset", NULL, 0, 0644, NULL, &obd_sctl_reset},
         {OBD_TIMEOUT, "timeout", &obd_timeout, sizeof(int), 0644, NULL, &proc_dointvec},
         /* XXX need to lock so we avoid update races with the recovery upcall! */
-        {OBD_UPCALL, "recovery_upcall", obd_recovery_upcall, 128, 0644, NULL,
+        {OBD_UPCALL, "upcall", obd_lustre_upcall, 128, 0644, NULL,
          &proc_dostring, &sysctl_string },
         {OBD_SYNCFILTER, "filter_sync_on_commit", &obd_sync_filter, sizeof(int),
                 0644, NULL, &proc_dointvec},

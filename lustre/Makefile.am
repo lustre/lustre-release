@@ -8,22 +8,21 @@ AUTOMAKE_OPTIONS = foreign
 if LINUX25
 DIRS24 = 
 else
-DIRS24 = extN ptlbd
+DIRS24 = ptlbd
 endif
 
 if LIBLUSTRE
-#SUBDIRS = lov obdclass ptlrpc obdecho ldlm osc liblustre utils
-SUBDIRS = lov obdclass ptlrpc obdecho ldlm osc utils
+SUBDIRS = portals lov obdclass ptlrpc obdecho ldlm osc utils mdc #liblustre
 else
 # NOTE: keep extN before obdclass, mds, and obdfilter.  Keep obdclass as early
 # as possible, to have the best chance at stopping with "wrong kernel version"
 # instead of some related build failure.
-SUBDIRS = $(DIRS24) obdclass mds utils ptlrpc ldlm lib obdfilter mdc osc ost
-SUBDIRS+= llite obdecho lov cobd tests doc scripts conf
+SUBDIRS = portals $(DIRS24) obdclass mds utils ldlm obdfilter mdc osc ost
+SUBDIRS+= llite obdecho lov cobd tests doc scripts conf ptlrpc
 endif
 
 DIST_SUBDIRS = $(SUBDIRS) liblustre
-EXTRA_DIST = BUGS FDL Rules include archdep.m4 kernel_patches
+EXTRA_DIST = BUGS FDL Rules include kernel_patches
 
 # We get the version from the spec file.
 CONFIGURE_DEPENDENCIES = scripts/lustre.spec.in
@@ -36,3 +35,4 @@ include $(top_srcdir)/Rules
 
 rpms: dist Makefile
 	rpmbuild -ta $(distdir).tar.gz
+

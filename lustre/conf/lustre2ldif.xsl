@@ -10,6 +10,7 @@ dn: <value-of select="$basedn"/>
 uuid: CONFIG_UUID
 objectClass: LUSTRECONFIG
 config: <value-of select="$config"/>
+version: <value-of select="@version"/>
 <text>
 </text><apply-templates/>
 </template>
@@ -23,8 +24,30 @@ networkRef: <value-of select="network/@uuid"/>
 <for-each select="profile_ref">
 profileRef: <value-of select="@uuidref"/>
 </for-each>
+<if test="timeout">
+timeout: <value-of select="timeout"/>
+</if>
+<if test="lustreUpcall">
+lustreUpcall: <value-of select="lustreUpcall"/>
+</if>
+<if test="portalsUpcall">
+portalsUpcall: <value-of select="portalsUpcall"/>
+</if>
 <text>
-</text><apply-templates/>
+</text>
+<for-each select="network">
+dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
+objectClass: NETWORK
+lustreName: <value-of select="@name"/>
+uuid: <value-of select="@uuid"/>
+nettype: <value-of select="@nettype"/>
+nid: <value-of select="nid"/>
+<if test="port">
+port: <value-of select="port"/>
+</if>
+<text>
+</text>
+</for-each>
 </template>
 
 <template match="profile">
@@ -50,11 +73,25 @@ port: <value-of select="port"/>
 </text>
 </template>
 
+
 <template match="mds">
 dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
 objectClass: MDS
 lustreName: <value-of select="@name"/>
-uuid: <value-of select="@uuid"/><apply-templates/>
+uuid: <value-of select="@uuid"/>
+activeRef: <value-of select="active_ref/@uuidref"/>
+<if test="lovconfig_ref">
+lovconfigRef: <value-of select="lovconfig_ref/@uuidref"/>
+</if>
+<if test="filesystem_ref">
+filesystemRef: <value-of select="filesystem_ref/@uuidref"/>
+</if>
+<if test="@failover">
+failover: <value-of select="@failover"/>
+</if>
+<if test="group">
+group: <value-of select="group"/>
+</if>
 <text>
 </text>
 </template>
@@ -75,6 +112,9 @@ devpath: <value-of select="devpath"/>
 </if>
 <if test="devsize">
 devsize: <value-of select="devsize"/>
+</if>
+<if test="journalsize">
+journalsize: <value-of select="journalsize"/>
 </if>
 nodeRef: <value-of select="node_ref/@uuidref"/>
 targetRef: <value-of select="target_ref/@uuidref"/>
@@ -124,6 +164,9 @@ devpath: <value-of select="devpath"/>
 <if test="devsize">
 devsize: <value-of select="devsize"/>
 </if>
+<if test="journalsize">
+journalsize: <value-of select="journalsize"/>
+</if>
 <text>
 </text>
 </template>
@@ -131,6 +174,22 @@ devsize: <value-of select="devsize"/>
 <template match="ost">
 dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
 objectClass: OST
+lustreName: <value-of select="@name"/>
+uuid: <value-of select="@uuid"/>
+activeRef: <value-of select="active_ref/@uuidref"/>
+<if test="@failover">
+failover: <value-of select="@failover"/>
+</if>
+<if test="group">
+group: <value-of select="group"/>
+</if>
+<text>
+</text>
+</template>
+
+<template match="filesystem">
+dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
+objectClass: FILESYSTEM
 lustreName: <value-of select="@name"/>
 uuid: <value-of select="@uuid"/><apply-templates/>
 <text>
@@ -209,6 +268,10 @@ mdsdevRef: <value-of select="@uuidref"/>
 mountpointRef: <value-of select="@uuidref"/>
 </template>
 
+<template match="filesystem_ref">
+filesystemRef: <value-of select="@uuidref"/>
+</template>
+
 <template match="echoclient_ref">
 echoclientRef: <value-of select="@uuidref"/>
 </template>
@@ -217,17 +280,8 @@ echoclientRef: <value-of select="@uuidref"/>
 lovRef: <value-of select="@uuidref"/>
 </template>
 
-<template match="lovconfig_ref">
-lovconfigRef: <value-of select="@uuidref"/>
-</template>
-
 <template match="path">
 path: <value-of select="."/>
 </template>
 
-<template match="active_ref">
-activeRef: <value-of select="@uuidref"/>
-</template>
 </stylesheet>
-
-

@@ -38,7 +38,6 @@ obdio_iocinit (struct obdio_conn *conn)
 {
         memset (&conn->oc_data, 0, sizeof (conn->oc_data));
         conn->oc_data.ioc_version = OBD_IOCTL_VERSION;
-        conn->oc_data.ioc_addr = conn->oc_conn_addr;
         conn->oc_data.ioc_cookie = conn->oc_conn_cookie;
         conn->oc_data.ioc_len = sizeof (conn->oc_data);
 }
@@ -103,12 +102,11 @@ obdio_connect (int device)
         obdio_iocinit (conn);
         rc = obdio_ioctl (conn, OBD_IOC_CONNECT);
         if (rc != 0) {
-                fprintf (stderr, "obdio_connect: Can't connect to device %d: %s\n",
-                         device, strerror (errno));
+                fprintf(stderr, "obdio_connect: Can't connect to device "
+                        "%d: %s\n", device, strerror (errno));
                 goto failed;
         }
 
-        conn->oc_conn_addr = conn->oc_data.ioc_addr;
         conn->oc_conn_cookie = conn->oc_data.ioc_cookie;
         return (conn);
 

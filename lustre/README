@@ -1,4 +1,4 @@
-Instructions for building, configuring, and running Lustre can be found in
+Instructions for building, configuring and running Lustre can be found in
 the file doc/lustre-HOWTO.txt.
 
 If you have checked lustre directly out of CVS, then you either need to

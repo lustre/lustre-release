@@ -22,6 +22,7 @@
 #include <linux/module.h>
 #include <linux/major.h>
 #include <linux/smp.h>
+#include <linux/hdreg.h>
 
 #define DEBUG_SUBSYSTEM S_PTLBD
 
@@ -95,20 +96,26 @@ static int ptlbd_open(struct inode *inode, struct file  *file)
         struct ptlbd_obd *ptlbd = ptlbd_get_inode(inode);
         ENTRY;
 
+
         if ( IS_ERR(ptlbd) )
                 RETURN(PTR_ERR(ptlbd));
-        if ( ptlbd->bd_import.imp_connection == NULL )
-                RETURN(-ENODEV);
+
+        if (! ptlbd->bd_import->imp_remote_handle.cookie)
+               if (ptlbd_do_connect(ptlbd))
+                       RETURN(-ENOTCONN);
 
         ptlbd->refcount++;
         RETURN(0);
 }
+
 
 static int ptlbd_ioctl(struct inode *inode, struct file *file,
                 unsigned int cmd, unsigned long arg)
 {
         struct ptlbd_obd *ptlbd;
         int ret;
+        __u16   major, minor, dev;
+        struct hd_geometry geo;
 
         if ( ! capable(CAP_SYS_ADMIN) )
                 RETURN(-EPERM);
@@ -117,11 +124,50 @@ static int ptlbd_ioctl(struct inode *inode, struct file *file,
         if ( IS_ERR(ptlbd) )
                 RETURN( PTR_ERR(ptlbd) );
 
+        major = MAJOR(inode->i_rdev);
+        minor = MINOR(inode->i_rdev);
+        dev = inode->i_rdev;
+
         switch(cmd) {
-                case BLKFLSBUF:
-                        ret = blk_ioctl(inode->i_rdev, cmd, arg);
+                case HDIO_GETGEO:
+                        geo.heads = 64;
+                        geo.sectors = 32;
+                        geo.start = 4;
+                        geo.cylinders = blk_size[major][minor]/
+                                        (geo.heads * geo.sectors);
+                        if (copy_to_user((void *) arg, &geo, sizeof(geo)))
+                                ret = -EFAULT;
+                        else  
+                                ret = 0;
                         break;
+
+                case BLKSECTGET:
+                        ret = copy_to_user((void *) arg, 
+                                & max_sectors[major][minor], sizeof(arg));
+                        break;
+
+                case BLKFLSBUF:
+                        ret = blk_ioctl(dev, cmd, arg);
+                        ptlbd_send_flush_req(ptlbd, PTLBD_FLUSH);
+                        break;
+
+                case BLKGETSIZE:
+                case BLKGETSIZE64:
+                case BLKROSET:
+                case BLKROGET:
+                case BLKRASET:
+                case BLKRAGET:
+                case BLKSSZGET:
+                case BLKELVGET:
+                case BLKELVSET:
                 default:
+                        ret = blk_ioctl(dev, cmd, arg);
+                        break;
+
+                case BLKSECTSET:       /* don't allow setting of max_sectors */
+
+                case BLKRRPART:        /* not a partitionable device */
+                case BLKPG:            /* "" */
                         ret = -EINVAL;
                         break;
         }
@@ -137,7 +183,9 @@ static int ptlbd_release(struct inode *inode, struct file *file)
         if ( IS_ERR(ptlbd) ) 
                 RETURN( PTR_ERR(ptlbd) );
 
-        ptlbd->refcount--;
+        if (--ptlbd->refcount == 0)
+                ptlbd_do_disconnect(ptlbd);
+
         RETURN(0);
 }
 
@@ -174,6 +222,7 @@ static void ptlbd_request(request_queue_t *q)
         struct ptlbd_obd *ptlbd;
         struct request *req;
         ptlbd_cmd_t cmd;
+        int     errors = 0;
         ENTRY;
 
         while ( !QUEUE_EMPTY ) {
@@ -190,18 +239,17 @@ static void ptlbd_request(request_queue_t *q)
 
                 spin_unlock_irq(&io_request_lock);
 
-                /* XXX dunno if we're supposed to get this or not.. */
-                /* __make_request() changes READA to READ - Kris */
-                LASSERT(req->cmd != READA);
-
                 if ( req->cmd == READ )
                         cmd = PTLBD_READ;
                 else 
                         cmd = PTLBD_WRITE;
 
-                ptlbd_send_req(ptlbd, cmd, req);
+                errors = ptlbd_send_rw_req(ptlbd, cmd, req->bh);
 
                 spin_lock_irq(&io_request_lock);
+
+                if (errors)
+                        req->errors += errors;
 
                 ptlbd_end_request_havelock(req);
         }
@@ -228,7 +276,6 @@ int ptlbd_blk_init(void)
         blksize_size[PTLBD_MAJOR] = ptlbd_size_size;
         hardsect_size[PTLBD_MAJOR] = ptlbd_hardsect_size;
         max_sectors[PTLBD_MAJOR] = ptlbd_max_sectors;
-        //RHism blkdev_varyio[PTLBD_MAJOR] = ptlbd_dev_varyio;
 
         blk_init_queue(BLK_DEFAULT_QUEUE(PTLBD_MAJOR), ptlbd_request);
         blk_queue_headactive(BLK_DEFAULT_QUEUE(MAJOR_NR), 0);
@@ -238,9 +285,7 @@ int ptlbd_blk_init(void)
                 /* avoid integer overflow */
                 ptlbd_size[i] = (16*1024*((1024*1024) >> BLOCK_SIZE_BITS));
                 ptlbd_hardsect_size[i] = 4096;
-                ptlbd_max_sectors[i] = 2;
-                //RHism ptlbd_dev_varyio[i] = 0;
-                /* XXX register_disk? */
+                ptlbd_max_sectors[i] = PTL_MD_MAX_IOV * (4096/512);
         }
 
         return 0;

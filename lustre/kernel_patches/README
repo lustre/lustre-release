@@ -57,7 +57,7 @@ within the root of that tree.  The scripts manage a "stack" of patches.
 Each patch is a changeset against the base tree plus the preceding patches.
 
 All patches are listed, in order, in the file ./series.  You manage the
-series file.
+series file.  Lines in the series file which start with `#' are ignored.
 
 Any currently-applied patches are described in the file
 ./applied-patches.  The patch scripts manage this file.
@@ -350,6 +350,15 @@ inpatch
   This is basically
 
 	cat pc/$(toppatch).pc
+
+join-patch patchname
+
+  "joins" the named patch to the current topmost patch.
+
+  Use this when you want to merge two patches into one.  All the
+  files which `patchname' affects are added to pc/$(toppatch).pc (if
+  they are not already there) and patch `patchname' is applied.  The
+  top patch remains unchanged.  You'll need to run refpatch afterwards.
 
 mpatch
 

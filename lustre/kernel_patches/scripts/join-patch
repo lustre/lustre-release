@@ -1,0 +1,28 @@
+#!/bin/sh
+
+usage()
+{
+	echo "Usage: join-patch patchname"
+	exit 1
+}
+
+if [ $# -ne 1 ]
+then
+	usage
+fi
+
+PATCHNAME=$(stripit $1)
+
+if ! can_apply $PATCHNAME
+then
+	echo Patch $PATCHNAME does not apply
+	exit 1
+fi
+
+pcpatch $PATCHNAME
+for i in $(cat $P/pc/$PATCHNAME.pc)
+do
+	fpatch $i
+done
+
+patch -p1 -i "$P/patches/$PATCHNAME.patch" -f

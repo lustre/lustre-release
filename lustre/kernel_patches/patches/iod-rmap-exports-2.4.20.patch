@@ -1,0 +1,86 @@
+ fs/Makefile     |    4 +++-
+ fs/inode.c      |    4 +++-
+ mm/Makefile     |    2 +-
+ mm/page_alloc.c |    1 +
+ mm/vmscan.c     |    3 +++
+ 5 files changed, 11 insertions(+), 3 deletions(-)
+
+--- linux-rh-2.4.20-6/fs/inode.c~iod-rmap-exports	Tue Apr  1 01:01:56 2003
++++ linux-rh-2.4.20-6-braam/fs/inode.c	Tue Apr  1 01:01:56 2003
+@@ -5,6 +5,7 @@
+  */
+ 
+ #include <linux/config.h>
++#include <linux/module.h>
+ #include <linux/fs.h>
+ #include <linux/string.h>
+ #include <linux/mm.h>
+@@ -66,7 +67,8 @@ static LIST_HEAD(anon_hash_chain); /* fo
+  * NOTE! You also have to own the lock if you change
+  * the i_state of an inode while it is in use..
+  */
+-static spinlock_t inode_lock = SPIN_LOCK_UNLOCKED;
++spinlock_t inode_lock = SPIN_LOCK_UNLOCKED;
++EXPORT_SYMBOL(inode_lock);
+ 
+ /*
+  * Statistics gathering..
+--- linux-rh-2.4.20-6/fs/Makefile~iod-rmap-exports	Tue Apr  1 01:01:56 2003
++++ linux-rh-2.4.20-6-braam/fs/Makefile	Tue Apr  1 01:02:34 2003
+@@ -1,3 +1,5 @@
++
++
+ #
+ # Makefile for the Linux filesystems.
+ #
+@@ -7,7 +9,7 @@
+ 
+ O_TARGET := fs.o
+ 
+-export-objs :=	filesystems.o open.o dcache.o buffer.o dquot.o dcookies.o
++export-objs :=	filesystems.o open.o dcache.o buffer.o dquot.o dcookies.o inode.o
+ mod-subdirs :=	nls
+ 
+ obj-y :=	open.o read_write.o devices.o file_table.o buffer.o \
+--- linux-rh-2.4.20-6/mm/vmscan.c~iod-rmap-exports	Tue Apr  1 01:01:56 2003
++++ linux-rh-2.4.20-6-braam/mm/vmscan.c	Tue Apr  1 01:01:56 2003
+@@ -15,6 +15,8 @@
+  *  O(1) rmap vm, Arjan van de ven <arjanv@redhat.com>
+  */
+ 
++#include <linux/config.h>
++#include <linux/module.h>
+ #include <linux/slab.h>
+ #include <linux/kernel_stat.h>
+ #include <linux/swap.h>
+@@ -1061,6 +1063,7 @@ void wakeup_kswapd(unsigned int gfp_mask
+ 	set_current_state(TASK_RUNNING);
+ 	remove_wait_queue(&kswapd_done, &wait);
+ }
++EXPORT_SYMBOL(wakeup_kswapd);
+ 
+ static void wakeup_memwaiters(void)
+ {
+--- linux-rh-2.4.20-6/mm/Makefile~iod-rmap-exports	Tue Apr  1 01:01:56 2003
++++ linux-rh-2.4.20-6-braam/mm/Makefile	Tue Apr  1 01:01:56 2003
+@@ -9,7 +9,7 @@
+ 
+ O_TARGET := mm.o
+ 
+-export-objs := shmem.o filemap.o memory.o page_alloc.o mempool.o
++export-objs := shmem.o filemap.o memory.o page_alloc.o mempool.o vmscan.o
+ 
+ obj-y	 := memory.o mmap.o filemap.o mprotect.o mlock.o mremap.o \
+ 	    vmalloc.o slab.o bootmem.o swap.o vmscan.o page_io.o \
+--- linux-rh-2.4.20-6/mm/page_alloc.c~iod-rmap-exports	Tue Apr  1 01:01:56 2003
++++ linux-rh-2.4.20-6-braam/mm/page_alloc.c	Tue Apr  1 01:01:56 2003
+@@ -27,6 +27,7 @@
+ 
+ int nr_swap_pages;
+ pg_data_t *pgdat_list;
++EXPORT_SYMBOL(pgdat_list);
+ 
+ /*
+  *
+
+_

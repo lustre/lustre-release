@@ -5,7 +5,7 @@
 
 DEFS= 
 
-LDLMSOURCES= l_lock.c ldlm_lock.c ldlm_resource.c  \
+LDLMSOURCES= l_lock.c ldlm_lock.c ldlm_resource.c ldlm_lib.c \
 ldlm_extent.c ldlm_request.c ldlm_lockd.c
 
 if LIBLUSTRE
@@ -20,5 +20,3 @@ ldlm_SOURCES = $(LDLMSOURCES)
 endif
 
 include $(top_srcdir)/Rules
-
-

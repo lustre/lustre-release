@@ -11,6 +11,6 @@ EXTRA_PROGRAMS = llite
 
 llite_SOURCES = dcache.c commit_callback.c super.c rw.c iod.c super25.c
 llite_SOURCES += file.c dir.c sysctl.c symlink.c
-llite_SOURCES += recover.c namei.c lproc_llite.c
+llite_SOURCES += namei.c lproc_llite.c
 
 include $(top_srcdir)/Rules

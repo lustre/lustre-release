@@ -1,0 +1,12 @@
+arch/um/kernel/mem.c
+fs/namei.c
+fs/nfsd/vfs.c
+fs/sysfs/inode.c
+include/linux/dcache.h
+include/linux/fs.h
+include/linux/namei.h
+include/linux/slab.h
+kernel/ksyms.c
+mm/slab.c
+net/unix/af_unix.c
+fs/dcache.c

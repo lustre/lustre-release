@@ -45,29 +45,125 @@
 #include <linux/obd_lov.h>
 #include <linux/lprocfs_status.h>
 
-static kmem_cache_t *lov_file_cache;
-
 struct lov_file_handles {
+        struct portals_handle lfh_handle;
+        atomic_t lfh_refcount;
         struct list_head lfh_list;
-        __u64 lfh_cookie;
         int lfh_count;
-        char *lfh_data; /* an array of opaque data saved on behalf of
-                        * each osc, FD_OSTDATA_SIZE bytes for each */
+        struct obd_client_handle *lfh_och;
 };
 
 struct lov_lock_handles {
-        __u64 llh_cookie;
+        struct portals_handle llh_handle;
+        atomic_t llh_refcount;
+        int llh_stripe_count;
         struct lustre_handle llh_handles[0];
 };
 
-extern int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmm,
-                       struct lov_stripe_md *lsm);
-extern int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsm,
-                         struct lov_mds_md *lmm);
-extern int lov_setstripe(struct lustre_handle *conn,
-                         struct lov_stripe_md **lsmp, struct lov_mds_md *lmmu);
-extern int lov_getstripe(struct lustre_handle *conn, struct lov_mds_md *lmmu,
-                         struct lov_stripe_md *lsm);
+/* lov_file_handles helpers */
+static void lov_lfh_addref(void *lfhp)
+{
+        struct lov_file_handles *lfh = lfhp;
+
+        atomic_inc(&lfh->lfh_refcount);
+        CDEBUG(D_INFO, "GETting lfh %p : new refcount %d\n", lfh,
+               atomic_read(&lfh->lfh_refcount));
+}
+
+static struct lov_file_handles *lov_lfh_new(void)
+{
+        struct lov_file_handles *lfh;
+
+        OBD_ALLOC(lfh, sizeof *lfh);
+        if (lfh == NULL) {
+                CERROR("out of memory\n");
+                return NULL;
+        }
+
+        atomic_set(&lfh->lfh_refcount, 2);
+
+        INIT_LIST_HEAD(&lfh->lfh_handle.h_link);
+        class_handle_hash(&lfh->lfh_handle, lov_lfh_addref);
+
+        return lfh;
+}
+
+static struct lov_file_handles *lov_handle2lfh(struct lustre_handle *handle)
+{
+        ENTRY;
+        LASSERT(handle != NULL);
+        RETURN(class_handle2object(handle->cookie));
+}
+
+static void lov_lfh_put(struct lov_file_handles *lfh)
+{
+        CDEBUG(D_INFO, "PUTting lfh %p : new refcount %d\n", lfh,
+               atomic_read(&lfh->lfh_refcount) - 1);
+        LASSERT(atomic_read(&lfh->lfh_refcount) > 0 &&
+                atomic_read(&lfh->lfh_refcount) < 0x5a5a);
+        if (atomic_dec_and_test(&lfh->lfh_refcount)) {
+                LASSERT(list_empty(&lfh->lfh_handle.h_link));
+                OBD_FREE(lfh, sizeof *lfh);
+        }
+}
+
+static void lov_lfh_destroy(struct lov_file_handles *lfh)
+{
+        class_handle_unhash(&lfh->lfh_handle);
+        lov_lfh_put(lfh);
+}
+
+static void lov_llh_addref(void *llhp)
+{
+        struct lov_lock_handles *llh = llhp;
+
+        atomic_inc(&llh->llh_refcount);
+        CDEBUG(D_INFO, "GETting llh %p : new refcount %d\n", llh,
+               atomic_read(&llh->llh_refcount));
+}
+
+static struct lov_lock_handles *lov_llh_new(struct lov_stripe_md *lsm)
+{
+        struct lov_lock_handles *llh;
+
+        OBD_ALLOC(llh, sizeof *llh +
+                  sizeof(*llh->llh_handles) * lsm->lsm_stripe_count);
+        if (llh == NULL) {
+                CERROR("out of memory\n");
+                return NULL;
+        }
+        atomic_set(&llh->llh_refcount, 2);
+        llh->llh_stripe_count = lsm->lsm_stripe_count;
+        INIT_LIST_HEAD(&llh->llh_handle.h_link);
+        class_handle_hash(&llh->llh_handle, lov_llh_addref);
+        return llh;
+}
+
+static struct lov_lock_handles *lov_handle2llh(struct lustre_handle *handle)
+{
+        ENTRY;
+        LASSERT(handle != NULL);
+        RETURN(class_handle2object(handle->cookie));
+}
+
+static void lov_llh_put(struct lov_lock_handles *llh)
+{
+        CDEBUG(D_INFO, "PUTting llh %p : new refcount %d\n", llh,
+               atomic_read(&llh->llh_refcount) - 1);
+        LASSERT(atomic_read(&llh->llh_refcount) > 0 &&
+                atomic_read(&llh->llh_refcount) < 0x5a5a);
+        if (atomic_dec_and_test(&llh->llh_refcount)) {
+                LASSERT(list_empty(&llh->llh_handle.h_link));
+                OBD_FREE(llh, sizeof *llh +
+                         sizeof(*llh->llh_handles) * llh->llh_stripe_count);
+        }
+}
+
+static void lov_llh_destroy(struct lov_lock_handles *llh)
+{
+        class_handle_unhash(&llh->llh_handle);
+        lov_llh_put(llh);
+}
 
 /* obd methods */
 int lov_attach(struct obd_device *dev, obd_count len, void *data)
@@ -84,18 +180,18 @@ int lov_detach(struct obd_device *dev)
 }
 
 static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
-                       struct obd_uuid *cluuid, struct recovd_obd *recovd,
-                       ptlrpc_recovery_cb_t recover)
+                       struct obd_uuid *cluuid)
 {
         struct ptlrpc_request *req = NULL;
         struct lov_obd *lov = &obd->u.lov;
         struct client_obd *mdc = &lov->mdcobd->u.cli;
         struct lov_desc *desc = &lov->desc;
+        struct lov_desc *mdesc;
         struct lov_tgt_desc *tgts;
         struct obd_export *exp;
         struct lustre_handle mdc_conn;
         struct obd_uuid lov_mds_uuid = {"LOV_MDS_UUID"};
-        char *tmp;
+        struct obd_uuid *uuids;
         int rc, rc2, i;
         ENTRY;
 
@@ -114,14 +210,14 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         INIT_LIST_HEAD(&exp->exp_lov_data.led_open_head);
 
         /* retrieve LOV metadata from MDS */
-        rc = obd_connect(&mdc_conn, lov->mdcobd, &lov_mds_uuid, recovd,recover);
+        rc = obd_connect(&mdc_conn, lov->mdcobd, &lov_mds_uuid);
         if (rc) {
                 CERROR("cannot connect to mdc: rc = %d\n", rc);
                 GOTO(out_conn, rc);
         }
 
         rc = mdc_getlovinfo(obd, &mdc_conn, &req);
-        rc2 = obd_disconnect(&mdc_conn);
+        rc2 = obd_disconnect(&mdc_conn, 0);
         if (rc) {
                 CERROR("cannot get lov info %d\n", rc);
                 GOTO(out_conn, rc);
@@ -129,36 +225,24 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         if (rc2) {
                 CERROR("error disconnecting from MDS %d\n", rc2);
-                GOTO(out_conn, rc = rc2);
+                GOTO(out_req, rc = rc2);
         }
 
-        /* sanity... */
-        if (req->rq_repmsg->bufcount < 2 ||
-            req->rq_repmsg->buflens[0] < sizeof(*desc)) {
-                CERROR("LOV desc: invalid descriptor returned\n");
-                GOTO(out_conn, rc = -EINVAL);
-        }
+        /* mdc_getlovinfo() has checked and swabbed the reply.  It has also
+         * done some simple checks (e.g. #uuids consistent with desc, uuid
+         * array fits in LOV_MAX_UUID_BUFFER_SIZE and all uuids are
+         * terminated), but I still need to verify it makes overall
+         * sense */
+        mdesc = lustre_msg_buf (req->rq_repmsg, 0, sizeof (*mdesc));
+        LASSERT (mdesc != NULL);
+        LASSERT_REPSWABBED (req, 0);
 
-        memcpy(desc, lustre_msg_buf(req->rq_repmsg, 0), sizeof(*desc));
-        lov_unpackdesc(desc);
+        *desc = *mdesc;
 
-        if (req->rq_repmsg->buflens[1] <
-            sizeof(desc->ld_uuid.uuid) * desc->ld_tgt_count){
-                CERROR("LOV desc: invalid uuid array returned\n");
-                GOTO(out_conn, rc = -EINVAL);
-        }
-
-        if (memcmp(obd->obd_uuid.uuid, desc->ld_uuid.uuid,
-                   sizeof(desc->ld_uuid.uuid))) {
+        if (!obd_uuid_equals(&obd->obd_uuid, &desc->ld_uuid)) {
                 CERROR("LOV desc: uuid %s not on mds device (%s)\n",
                        obd->obd_uuid.uuid, desc->ld_uuid.uuid);
-                GOTO(out_conn, rc = -EINVAL);
-        }
-
-        if (desc->ld_tgt_count > 1000) {
-                CERROR("LOV desc: target count > 1000 (%d)\n",
-                       desc->ld_tgt_count);
-                GOTO(out_conn, rc = -EINVAL);
+                GOTO(out_req, rc = -EINVAL);
         }
 
         /* Because of 64-bit divide/mod operations only work with a 32-bit
@@ -172,38 +256,45 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                        desc->ld_default_stripe_size,
                        desc->ld_default_stripe_count ?
                        desc->ld_default_stripe_count : desc->ld_tgt_count,~0UL);
-                GOTO(out_conn, rc = -EINVAL);
+                GOTO(out_req, rc = -EINVAL);
         }
 
+        /* We know ld_tgt_count is reasonable (the array of UUIDS fits in
+         * the maximum buffer size, so we won't be making outrageous
+         * demands on memory here. */
         lov->bufsize = sizeof(struct lov_tgt_desc) * desc->ld_tgt_count;
         OBD_ALLOC(lov->tgts, lov->bufsize);
         if (!lov->tgts) {
                 CERROR("Out of memory\n");
-                GOTO(out_conn, rc = -ENOMEM);
+                GOTO(out_req, rc = -ENOMEM);
         }
 
-        tmp = lustre_msg_buf(req->rq_repmsg, 1);
+        uuids = lustre_msg_buf(req->rq_repmsg, 1,
+                               sizeof(*uuids) * desc->ld_tgt_count);
+        LASSERT (uuids != NULL);
+        LASSERT_REPSWABBED (req, 1);
+
         for (i = 0, tgts = lov->tgts; i < desc->ld_tgt_count; i++, tgts++) {
                 struct obd_uuid *uuid = &tgts->uuid;
                 struct obd_device *tgt_obd;
                 struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
 
-                obd_str2uuid(uuid, tmp);
+                /* NULL termination already checked */
+                *uuid = uuids[i];
+
                 tgt_obd = client_tgtuuid2obd(uuid);
-                tmp += sizeof(uuid->uuid);
 
                 if (!tgt_obd) {
                         CERROR("Target %s not attached\n", uuid->uuid);
                         GOTO(out_disc, rc = -EINVAL);
                 }
 
-                if (!(tgt_obd->obd_flags & OBD_SET_UP)) {
+                if (!tgt_obd->obd_set_up) {
                         CERROR("Target %s not set up\n", uuid->uuid);
                         GOTO(out_disc, rc = -EINVAL);
                 }
 
-                rc = obd_connect(&tgts->conn, tgt_obd, &lov_osc_uuid, recovd,
-                                 recover);
+                rc = obd_connect(&tgts->conn, tgt_obd, &lov_osc_uuid);
 
                 if (rc) {
                         CERROR("Target %s connect error %d\n", uuid->uuid, rc);
@@ -215,7 +306,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 if (rc) {
                         CERROR("Target %s REGISTER_LOV error %d\n",
                                uuid->uuid, rc);
-                        obd_disconnect(&tgts->conn);
+                        obd_disconnect(&tgts->conn, 0);
                         GOTO(out_disc, rc);
                 }
 
@@ -223,11 +314,10 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 tgts->active = 1;
         }
 
-        mdc->cl_max_mds_easize = obd_size_wiremd(conn, NULL);
-
- out:
-        ptlrpc_req_finished(req);
-        RETURN(rc);
+        mdc->cl_max_mds_easize = obd_size_diskmd(conn, NULL);
+        ptlrpc_req_finished (req);
+        class_export_put(exp);
+        RETURN (0);
 
  out_disc:
         while (i-- > 0) {
@@ -235,25 +325,30 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 --tgts;
                 --desc->ld_active_tgt_count;
                 tgts->active = 0;
-                obd_str2uuid(&uuid, tgts->uuid.uuid);
-                rc2 = obd_disconnect(&tgts->conn);
+                /* save for CERROR below; (we know it's terminated) */
+                uuid = tgts->uuid;
+                rc2 = obd_disconnect(&tgts->conn, 0);
                 if (rc2)
                         CERROR("error: LOV target %s disconnect on OST idx %d: "
                                "rc = %d\n", uuid.uuid, i, rc2);
         }
         OBD_FREE(lov->tgts, lov->bufsize);
+ out_req:
+        ptlrpc_req_finished (req);
  out_conn:
-        class_disconnect(conn);
-        goto out;
+        class_export_put(exp);
+        class_disconnect(conn, 0);
+        RETURN (rc);
 }
 
-static int lov_disconnect(struct lustre_handle *conn)
+static int lov_disconnect(struct lustre_handle *conn, int failover)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct lov_obd *lov = &obd->u.lov;
         struct obd_export *exp;
         struct list_head *p, *n;
         int rc, i;
+        ENTRY;
 
         if (!lov->tgts)
                 goto out_local;
@@ -264,7 +359,16 @@ static int lov_disconnect(struct lustre_handle *conn)
                 goto out_local;
 
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                rc = obd_disconnect(&lov->tgts[i].conn);
+                if (obd->obd_no_recov) {
+                        /* Pass it on to our clients.
+                         * XXX This should be an argument to disconnect,
+                         * XXX not a back-door flag on the OBD.  Ah well.
+                         */
+                        struct obd_device *osc_obd =
+                                class_conn2obd(&lov->tgts[i].conn);
+                        osc_obd->obd_no_recov = 1;
+                }
+                rc = obd_disconnect(&lov->tgts[i].conn, failover);
                 if (rc) {
                         if (lov->tgts[i].active) {
                                 CERROR("Target %s disconnect error %d\n",
@@ -282,22 +386,29 @@ static int lov_disconnect(struct lustre_handle *conn)
         lov->tgts = NULL;
 
         exp = class_conn2export(conn);
+        if (exp == NULL) {
+                CERROR("export handle "LPU64" invalid!  If you can reproduce, "
+                       "please send a full debug log to phik\n", conn->cookie);
+                RETURN(0);
+        }
         spin_lock(&exp->exp_lov_data.led_lock);
         list_for_each_safe(p, n, &exp->exp_lov_data.led_open_head) {
                 /* XXX close these, instead of just discarding them? */
                 struct lov_file_handles *lfh;
                 lfh = list_entry(p, typeof(*lfh), lfh_list);
                 CERROR("discarding open LOV handle %p:"LPX64"\n",
-                       lfh, lfh->lfh_cookie);
+                       lfh, lfh->lfh_handle.h_cookie);
                 list_del(&lfh->lfh_list);
-                OBD_FREE(lfh->lfh_data, lfh->lfh_count * FD_OSTDATA_SIZE);
-                PORTAL_SLAB_FREE(lfh, lov_file_cache, sizeof(*lfh));
+                OBD_FREE(lfh->lfh_och, lfh->lfh_count * FD_OSTDATA_SIZE);
+                lov_lfh_destroy(lfh);
+                lov_lfh_put(lfh);
         }
         spin_unlock(&exp->exp_lov_data.led_lock);
+        class_export_put(exp);
 
  out_local:
-        rc = class_disconnect(conn);
-        return rc;
+        rc = class_disconnect(conn, 0);
+        RETURN(rc);
 }
 
 /* Error codes:
@@ -305,7 +416,6 @@ static int lov_disconnect(struct lustre_handle *conn)
  *  -EINVAL  : UUID can't be found in the LOV's target list
  *  -ENOTCONN: The UUID is found, but the target connection is bad (!)
  *  -EBADF   : The UUID is found, but the OBD is the wrong type (!)
- *  -EALREADY: The OSC is already marked (in)active
  */
 static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
                               int activate)
@@ -321,8 +431,8 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
         spin_lock(&lov->lov_lock);
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
                 CDEBUG(D_INFO, "lov idx %d is %s conn "LPX64"\n",
-                       i, tgt->uuid.uuid, tgt->conn.addr);
-                if (strncmp(uuid->uuid, tgt->uuid.uuid, sizeof(uuid->uuid)) == 0)
+                       i, tgt->uuid.uuid, tgt->conn.cookie);
+                if (strncmp(uuid->uuid, tgt->uuid.uuid, sizeof uuid->uuid) == 0)
                         break;
         }
 
@@ -331,22 +441,19 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
 
         obd = class_conn2obd(&tgt->conn);
         if (obd == NULL) {
-                LBUG();
+                /* This can happen if OST failure races with node shutdown */
                 GOTO(out, rc = -ENOTCONN);
         }
 
         CDEBUG(D_INFO, "Found OBD %s=%s device %d (%p) type %s at LOV idx %d\n",
                obd->obd_name, obd->obd_uuid.uuid, obd->obd_minor, obd,
                obd->obd_type->typ_name, i);
-        if (strcmp(obd->obd_type->typ_name, "osc") != 0) {
-                LBUG();
-                GOTO(out, rc = -EBADF);
-        }
+        LASSERT(strcmp(obd->obd_type->typ_name, "osc") == 0);
 
         if (tgt->active == activate) {
                 CDEBUG(D_INFO, "OBD %p already %sactive!\n", obd,
                        activate ? "" : "in");
-                GOTO(out, rc = -EALREADY);
+                GOTO(out, rc);
         }
 
         CDEBUG(D_INFO, "Marking OBD %p %sactive\n", obd, activate ? "" : "in");
@@ -407,21 +514,55 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(rc);
 }
 
-static struct lov_file_handles *lov_handle2lfh(struct lustre_handle *handle)
+/* compute object size given "stripeno" and the ost size */
+static obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
+                                int stripeno)
 {
-        struct lov_file_handles *lfh = NULL;
+        unsigned long ssize  = lsm->lsm_stripe_size;
+        unsigned long swidth = ssize * lsm->lsm_stripe_count;
+        unsigned long stripe_size;
+        obd_size lov_size;
 
-        if (!handle || !handle->addr)
-                RETURN(NULL);
+        if (ost_size == 0)
+                return 0;
 
-        lfh = (struct lov_file_handles *)(unsigned long)(handle->addr);
-        if (!kmem_cache_validate(lov_file_cache, lfh))
-                RETURN(NULL);
+        /* do_div(a, b) returns a % b, and a = a / b */
+        stripe_size = do_div(ost_size, ssize);
 
-        if (lfh->lfh_cookie != handle->cookie)
-                RETURN(NULL);
+        if (stripe_size)
+                lov_size = ost_size * swidth + stripeno * ssize + stripe_size;
+        else
+                lov_size = (ost_size - 1) * swidth + (stripeno + 1) * ssize;
 
-        return lfh;
+        return lov_size;
+}
+
+static void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
+                            struct lov_stripe_md *lsm, int stripeno, int *set)
+{
+        if (*set) {
+                if (valid & OBD_MD_FLSIZE) {
+                        /* this handles sparse files properly */
+                        obd_size lov_size;
+
+                        lov_size = lov_stripe_size(lsm, src->o_size, stripeno);
+                        if (lov_size > tgt->o_size)
+                                tgt->o_size = lov_size;
+                }
+                if (valid & OBD_MD_FLBLOCKS)
+                        tgt->o_blocks += src->o_blocks;
+                if (valid & OBD_MD_FLBLKSZ)
+                        tgt->o_blksize += src->o_blksize;
+                if (valid & OBD_MD_FLCTIME && tgt->o_ctime < src->o_ctime)
+                        tgt->o_ctime = src->o_ctime;
+                if (valid & OBD_MD_FLMTIME && tgt->o_mtime < src->o_mtime)
+                        tgt->o_mtime = src->o_mtime;
+        } else {
+                obdo_cpy_md(tgt, src, valid);
+                if (valid & OBD_MD_FLSIZE)
+                        tgt->o_size = lov_stripe_size(lsm,src->o_size,stripeno);
+                *set = 1;
+        }
 }
 
 /* the LOV expects oa->o_id to be set to the LOV object id */
@@ -433,24 +574,24 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         struct lov_stripe_md *lsm;
         struct lov_oinfo *loi;
         struct obdo *tmp;
-        int ost_count, ost_idx;
-        int first = 1, obj_alloc = 0;
+        unsigned ost_count, ost_idx;
+        int set = 0, obj_alloc = 0;
         int rc = 0, i;
         ENTRY;
 
         LASSERT(ea);
 
         if (!export)
-                RETURN(-EINVAL);
+                GOTO(out_exp, rc = -EINVAL);
 
         lov = &export->exp_obd->u.lov;
 
         if (!lov->desc.ld_active_tgt_count)
-                RETURN(-EIO);
+                GOTO(out_exp, rc = -EIO);
 
         tmp = obdo_alloc();
         if (!tmp)
-                RETURN(-ENOMEM);
+                GOTO(out_exp, rc = -ENOMEM);
 
         lsm = *ea;
 
@@ -471,11 +612,8 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                 lsm->lsm_stripe_size = lov->desc.ld_default_stripe_size;
 
         if (!*ea || lsm->lsm_stripe_offset >= ost_count) {
-                int mult = lsm->lsm_object_id * lsm->lsm_stripe_count;
-                int stripe_offset = mult % ost_count;
-                int sub_offset = (mult / ost_count);
-
-                ost_idx = (stripe_offset + sub_offset) % ost_count;
+                get_random_bytes(&ost_idx, 2);
+                ost_idx %= ost_count;
         } else
                 ost_idx = lsm->lsm_stripe_offset;
 
@@ -517,10 +655,9 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                 CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64" at idx %d\n",
                        lsm->lsm_object_id, loi->loi_id, ost_idx);
 
-                if (first) {
+                if (!set)
                         lsm->lsm_stripe_offset = ost_idx;
-                        first = 0;
-                }
+                lov_merge_attrs(oa, tmp, OBD_MD_FLBLKSZ, lsm, obj_alloc, &set);
 
                 ++obj_alloc;
                 ++loi;
@@ -532,13 +669,15 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                 }
         }
 
-        if (*ea)
+        if (*ea != NULL) {
                 GOTO(out_cleanup, rc);
-        else {
+        } else {
                 struct lov_stripe_md *lsm_new;
                 /* XXX LOV STACKING call into osc for sizes */
-                int size = lov_stripe_md_size(obj_alloc);
+                unsigned size = lov_stripe_md_size(obj_alloc);
 
+                CERROR("reallocating LSM for objid "LPX64": old %u new %u\n",
+                       lsm->lsm_object_id, obj_alloc, lsm->lsm_stripe_count);
                 OBD_ALLOC(lsm_new, size);
                 if (!lsm_new)
                         GOTO(out_cleanup, rc = -ENOMEM);
@@ -554,6 +693,8 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
 
  out_tmp:
         obdo_free(tmp);
+ out_exp:
+        class_export_put(export);
         return rc;
 
  out_cleanup:
@@ -564,14 +705,15 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                 /* destroy already created objects here */
                 memcpy(tmp, oa, sizeof(*tmp));
                 tmp->o_id = loi->loi_id;
-                err = obd_destroy(&lov->tgts[loi->loi_ost_idx].conn, tmp, NULL, NULL);
+                err = obd_destroy(&lov->tgts[loi->loi_ost_idx].conn, tmp, NULL,
+                                  NULL);
                 if (err)
                         CERROR("Failed to uncreate objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",
                                oa->o_id, loi->loi_id, loi->loi_ost_idx,
                                err);
         }
-        if (!*ea)
+        if (*ea == NULL)
                 obd_free_memmd(conn, &lsm);
         goto out_tmp;
 }
@@ -589,17 +731,17 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
 
         if (!lsm) {
                 CERROR("LOV requires striping ea for destruction\n");
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (lsm->lsm_magic != LOV_MAGIC) {
                 CERROR("LOV striping magic bad %#x != %#x\n",
                        lsm->lsm_magic, LOV_MAGIC);
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (!export || !export->exp_obd)
-                RETURN(-ENODEV);
+                GOTO(out, rc = -ENODEV);
 
         if (oa->o_valid & OBD_MD_FLHANDLE)
                 lfh = lov_handle2lfh(obdo_handle(oa));
@@ -616,8 +758,7 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
                 memcpy(&tmp, oa, sizeof(tmp));
                 tmp.o_id = loi->loi_id;
                 if (lfh)
-                        memcpy(obdo_handle(&tmp),
-                               lfh->lfh_data + i * FD_OSTDATA_SIZE,
+                        memcpy(obdo_handle(&tmp), lfh->lfh_och + i,
                                FD_OSTDATA_SIZE);
                 else
                         tmp.o_valid &= ~OBD_MD_FLHANDLE;
@@ -625,62 +766,18 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
                                   NULL, NULL);
                 if (err && lov->tgts[loi->loi_ost_idx].active) {
                         CERROR("error: destroying objid "LPX64" subobj "
-                               LPX64" on OST idx %d\n: rc = %d",
+                               LPX64" on OST idx %d: rc = %d\n",
                                oa->o_id, loi->loi_id, loi->loi_ost_idx, err);
                         if (!rc)
                                 rc = err;
                 }
         }
-        RETURN(rc);
-}
-
-/* compute object size given "stripeno" and the ost size */
-static obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
-                                int stripeno)
-{
-        unsigned long ssize  = lsm->lsm_stripe_size;
-        unsigned long swidth = ssize * lsm->lsm_stripe_count;
-        unsigned long stripe_size;
-        obd_size lov_size;
-
-        if (ost_size == 0)
-                return 0;
-
-        /* do_div(a, b) returns a % b, and a = a / b */
-        stripe_size = do_div(ost_size, ssize);
-
-        if (stripe_size)
-                lov_size = ost_size * swidth + stripeno * ssize + stripe_size;
-        else
-                lov_size = (ost_size - 1) * swidth + (stripeno + 1) * ssize;
-
-        return lov_size;
-}
-
-static void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
-                            struct lov_stripe_md *lsm, int stripeno, int *set)
-{
-        if (*set) {
-                if (valid & OBD_MD_FLSIZE) {
-                        /* this handles sparse files properly */
-                        obd_size lov_size;
-
-                        lov_size = lov_stripe_size(lsm, src->o_size, stripeno);
-                        if (lov_size > tgt->o_size)
-                                tgt->o_size = lov_size;
-                }
-                if (valid & OBD_MD_FLBLOCKS)
-                        tgt->o_blocks += src->o_blocks;
-                if (valid & OBD_MD_FLCTIME && tgt->o_ctime < src->o_ctime)
-                        tgt->o_ctime = src->o_ctime;
-                if (valid & OBD_MD_FLMTIME && tgt->o_mtime < src->o_mtime)
-                        tgt->o_mtime = src->o_mtime;
-        } else {
-                obdo_cpy_md(tgt, src, valid);
-                if (valid & OBD_MD_FLSIZE)
-                        tgt->o_size = lov_stripe_size(lsm,src->o_size,stripeno);
-                *set = 1;
-        }
+        if (lfh != NULL)
+                lov_lfh_put(lfh);
+        EXIT;
+ out:
+        class_export_put(export);
+        return rc;
 }
 
 static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
@@ -691,23 +788,22 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
         struct lov_obd *lov;
         struct lov_oinfo *loi;
         struct lov_file_handles *lfh = NULL;
-        int i;
-        int set = 0;
+        int i, rc = 0, set = 0;
         ENTRY;
 
         if (!lsm) {
                 CERROR("LOV requires striping ea\n");
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (lsm->lsm_magic != LOV_MAGIC) {
                 CERROR("LOV striping magic bad %#x != %#x\n",
                        lsm->lsm_magic, LOV_MAGIC);
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (!export || !export->exp_obd)
-                RETURN(-ENODEV);
+                GOTO(out, rc = -ENODEV);
 
         lov = &export->exp_obd->u.lov;
 
@@ -730,8 +826,7 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
                 memcpy(&tmp, oa, sizeof(tmp));
                 tmp.o_id = loi->loi_id;
                 if (lfh)
-                        memcpy(obdo_handle(&tmp),
-                               lfh->lfh_data + i * FD_OSTDATA_SIZE,
+                        memcpy(obdo_handle(&tmp), lfh->lfh_och + i,
                                FD_OSTDATA_SIZE);
                 else
                         tmp.o_valid &= ~OBD_MD_FLHANDLE;
@@ -743,14 +838,145 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
                                        LPX64" on OST idx %d: rc = %d\n",
                                        oa->o_id, loi->loi_id, loi->loi_ost_idx,
                                        err);
-                                RETURN(err);
+                                GOTO(out, rc = err);
                         }
                 } else {
                         lov_merge_attrs(oa, &tmp, tmp.o_valid, lsm, i, &set);
                 }
         }
+        if (!set)
+                rc = -EIO;
+        GOTO(out, rc);
+ out:
+        if (lfh != NULL)
+                lov_lfh_put(lfh);
+        class_export_put(export);
+        return rc;
+}
 
-        RETURN(set ? 0 : -EIO);
+static int lov_getattr_interpret(struct ptlrpc_request_set *rqset,
+                                 struct lov_getattr_async_args *aa, int rc)
+{
+        struct lov_stripe_md *lsm = aa->aa_lsm;
+        struct obdo          *oa = aa->aa_oa;
+        struct obdo          *obdos = aa->aa_stripe_oas;
+        struct lov_oinfo     *loi;
+        int                   i;
+        int                   set = 0;
+        ENTRY;
+
+        if (rc == 0) {
+                /* NB all stripe requests succeeded to get here */
+
+                for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
+                     i++,loi++) {
+                        if (obdos[i].o_valid == 0)      /* inactive stripe */
+                                continue;
+
+                        lov_merge_attrs(oa, &obdos[i], obdos[i].o_valid, lsm,
+                                        i, &set);
+                }
+
+                if (!set) {
+                        CERROR ("No stripes had valid attrs\n");
+                        rc = -EIO;
+                }
+        }
+
+        OBD_FREE (obdos, lsm->lsm_stripe_count * sizeof (*obdos));
+        RETURN (rc);
+}
+
+static int lov_getattr_async (struct lustre_handle *conn, struct obdo *oa,
+                              struct lov_stripe_md *lsm,
+                              struct ptlrpc_request_set *rqset)
+{
+        struct obdo *obdos;
+        struct obd_export *export = class_conn2export(conn);
+        struct lov_obd *lov;
+        struct lov_oinfo *loi;
+        struct lov_file_handles *lfh = NULL;
+        struct lov_getattr_async_args *aa;
+        int i;
+        int set = 0;
+        int rc = 0;
+        ENTRY;
+
+        if (!lsm) {
+                CERROR("LOV requires striping ea\n");
+                GOTO(out, rc = -EINVAL);
+        }
+
+        if (lsm->lsm_magic != LOV_MAGIC) {
+                CERROR("LOV striping magic bad %#x != %#x\n",
+                       lsm->lsm_magic, LOV_MAGIC);
+                GOTO(out, rc = -EINVAL);
+        }
+
+        if (!export || !export->exp_obd)
+                GOTO(out, rc = -ENODEV);
+
+        lov = &export->exp_obd->u.lov;
+
+        OBD_ALLOC (obdos, lsm->lsm_stripe_count * sizeof (*obdos));
+        if (obdos == NULL)
+                GOTO (out, rc = -ENOMEM);
+
+        if (oa->o_valid & OBD_MD_FLHANDLE)
+                lfh = lov_handle2lfh(obdo_handle(oa));
+
+        CDEBUG(D_INFO, "objid "LPX64": %ux%u byte stripes\n",
+               lsm->lsm_object_id, lsm->lsm_stripe_count, lsm->lsm_stripe_size);
+        for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
+                int err;
+
+                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
+                        /* leaves obdos[i].obd_valid unset */
+                        continue;
+                }
+
+                CDEBUG(D_INFO, "objid "LPX64"[%d] has subobj "LPX64" at idx "
+                       "%u\n", oa->o_id, i, loi->loi_id, loi->loi_ost_idx);
+                /* create data objects with "parent" OA */
+                memcpy(&obdos[i], oa, sizeof(obdos[i]));
+                obdos[i].o_id = loi->loi_id;
+                if (lfh)
+                        memcpy(obdo_handle(&obdos[i]), lfh->lfh_och + i,
+                               FD_OSTDATA_SIZE);
+                else
+                        obdos[i].o_valid &= ~OBD_MD_FLHANDLE;
+
+                err = obd_getattr_async (&lov->tgts[loi->loi_ost_idx].conn,
+                                         &obdos[i], NULL, rqset);
+                if (err) {
+                        CERROR("error: getattr objid "LPX64" subobj "
+                               LPX64" on OST idx %d: rc = %d\n",
+                               oa->o_id, loi->loi_id, loi->loi_ost_idx,
+                               err);
+                        GOTO(out_obdos, rc = err);
+                }
+                set = 1;
+        }
+        if (!set)
+                GOTO (out_obdos, rc = -EIO);
+
+        LASSERT (rqset->set_interpret == NULL);
+        rqset->set_interpret = lov_getattr_interpret;
+        LASSERT (sizeof (rqset->set_args) >= sizeof (*aa));
+        aa = (struct lov_getattr_async_args *)&rqset->set_args;
+        aa->aa_lsm = lsm;
+        aa->aa_oa = oa;
+        aa->aa_stripe_oas = obdos;
+        GOTO (out, rc = 0);
+
+ out_obdos:
+        OBD_FREE (obdos, lsm->lsm_stripe_count * sizeof (*obdos));
+ out:
+        if (lfh != NULL)
+                lov_lfh_put(lfh);
+        class_export_put(export);
+        RETURN (rc);
 }
 
 static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
@@ -766,17 +992,17 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
 
         if (!lsm) {
                 CERROR("LOV requires striping ea\n");
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (lsm->lsm_magic != LOV_MAGIC) {
                 CERROR("LOV striping magic bad %#x != %#x\n",
                        lsm->lsm_magic, LOV_MAGIC);
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (!export || !export->exp_obd)
-                RETURN(-ENODEV);
+                GOTO(out, rc = -ENODEV);
 
         /* size changes should go through punch and not setattr */
         LASSERT(!(oa->o_valid & OBD_MD_FLSIZE));
@@ -786,7 +1012,7 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
 
         tmp = obdo_alloc();
         if (!tmp)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         if (oa->o_valid & OBD_MD_FLHANDLE)
                 lfh = lov_handle2lfh(obdo_handle(oa));
@@ -803,8 +1029,7 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
                 obdo_cpy_md(tmp, oa, oa->o_valid);
 
                 if (lfh)
-                        memcpy(obdo_handle(tmp),
-                               lfh->lfh_data + i * FD_OSTDATA_SIZE,
+                        memcpy(obdo_handle(tmp), lfh->lfh_och + i,
                                FD_OSTDATA_SIZE);
                 else
                         tmp->o_valid &= ~OBD_MD_FLHANDLE;
@@ -828,45 +1053,50 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
         obdo_free(tmp);
         if (!set && !rc)
                 rc = -EIO;
-        RETURN(rc);
+        if (lfh != NULL)
+                lov_lfh_put(lfh);
+        GOTO(out, rc);
+ out:
+        class_export_put(export);
+        return rc;
 }
 
 static int lov_open(struct lustre_handle *conn, struct obdo *oa,
-                    struct lov_stripe_md *lsm, struct obd_trans_info *oti)
+                    struct lov_stripe_md *lsm, struct obd_trans_info *oti,
+                    struct obd_client_handle *och)
 {
         struct obdo *tmp; /* on the heap here, on the stack in lov_close? */
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
         struct lov_oinfo *loi;
         struct lov_file_handles *lfh = NULL;
-        struct lustre_handle *handle;
-        int set = 0;
-        int rc = 0, i;
+        int set = 0, rc = 0, i;
         ENTRY;
+        LASSERT(och != NULL);
 
         if (!lsm) {
                 CERROR("LOV requires striping ea for opening\n");
-                RETURN(-EINVAL);
+                GOTO(out_exp, rc = -EINVAL);
         }
 
         if (lsm->lsm_magic != LOV_MAGIC) {
                 CERROR("LOV striping magic bad %#x != %#x\n",
                        lsm->lsm_magic, LOV_MAGIC);
-                RETURN(-EINVAL);
+                GOTO(out_exp, rc = -EINVAL);
         }
 
         if (!export || !export->exp_obd)
-                RETURN(-ENODEV);
+                GOTO(out_exp, rc = -ENODEV);
 
         tmp = obdo_alloc();
         if (!tmp)
-                RETURN(-ENOMEM);
+                GOTO(out_exp, rc = -ENOMEM);
 
-        PORTAL_SLAB_ALLOC(lfh, lov_file_cache, sizeof(*lfh));
-        if (!lfh)
+        lfh = lov_lfh_new();
+        if (lfh == NULL)
                 GOTO(out_tmp, rc = -ENOMEM);
-        OBD_ALLOC(lfh->lfh_data, lsm->lsm_stripe_count * FD_OSTDATA_SIZE);
-        if (!lfh->lfh_data)
+        OBD_ALLOC(lfh->lfh_och, lsm->lsm_stripe_count * sizeof *och);
+        if (!lfh->lfh_och)
                 GOTO(out_lfh, rc = -ENOMEM);
 
         lov = &export->exp_obd->u.lov;
@@ -883,10 +1113,12 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
                 tmp->o_id = loi->loi_id;
 
                 rc = obd_open(&lov->tgts[loi->loi_ost_idx].conn, tmp,
-                              NULL, NULL);
+                              NULL, NULL, lfh->lfh_och + i);
                 if (rc) {
-                        if (!lov->tgts[loi->loi_ost_idx].active)
+                        if (!lov->tgts[loi->loi_ost_idx].active) {
+                                rc = 0;
                                 continue;
+                        }
                         CERROR("error: open objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n",
                                oa->o_id, lsm->lsm_oinfo[i].loi_id,
@@ -895,31 +1127,26 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
                 }
 
                 lov_merge_attrs(oa, tmp, tmp->o_valid, lsm, i, &set);
-
-                if (tmp->o_valid & OBD_MD_FLHANDLE)
-                        memcpy(lfh->lfh_data + i * FD_OSTDATA_SIZE,
-                               obdo_handle(tmp), FD_OSTDATA_SIZE);
         }
 
-        handle = obdo_handle(oa);
-
         lfh->lfh_count = lsm->lsm_stripe_count;
-        get_random_bytes(&lfh->lfh_cookie, sizeof(lfh->lfh_cookie));
-
-        handle->addr = (__u64)(unsigned long)lfh;
-        handle->cookie = lfh->lfh_cookie;
+        och->och_fh.cookie = lfh->lfh_handle.h_cookie;
+        obdo_handle(oa)->cookie = lfh->lfh_handle.h_cookie;
         oa->o_valid |= OBD_MD_FLHANDLE;
+
+        /* llfh refcount transfers to list */
         spin_lock(&export->exp_lov_data.led_lock);
         list_add(&lfh->lfh_list, &export->exp_lov_data.led_open_head);
         spin_unlock(&export->exp_lov_data.led_lock);
 
-        if (!set && !rc)
-                rc = -EIO;
-out_tmp:
+        GOTO(out_tmp, rc);
+ out_tmp:
         obdo_free(tmp);
-        RETURN(rc);
+ out_exp:
+        class_export_put(export);
+        return rc;
 
-out_handles:
+ out_handles:
         for (i--, loi = &lsm->lsm_oinfo[i]; i >= 0; i--, loi--) {
                 int err;
 
@@ -928,8 +1155,7 @@ out_handles:
 
                 memcpy(tmp, oa, sizeof(*tmp));
                 tmp->o_id = loi->loi_id;
-                memcpy(obdo_handle(tmp), lfh->lfh_data + i * FD_OSTDATA_SIZE,
-                       FD_OSTDATA_SIZE);
+                memcpy(obdo_handle(tmp), lfh->lfh_och + i, FD_OSTDATA_SIZE);
 
                 err = obd_close(&lov->tgts[loi->loi_ost_idx].conn, tmp,
                                 NULL, NULL);
@@ -940,9 +1166,10 @@ out_handles:
                 }
         }
 
-        OBD_FREE(lfh->lfh_data, lsm->lsm_stripe_count * FD_OSTDATA_SIZE);
-out_lfh:
-        PORTAL_SLAB_FREE(lfh, lov_file_cache, sizeof(*lfh));
+        OBD_FREE(lfh->lfh_och, lsm->lsm_stripe_count * FD_OSTDATA_SIZE);
+ out_lfh:
+        lov_lfh_destroy(lfh);
+        lov_lfh_put(lfh);
         goto out_tmp;
 }
 
@@ -959,17 +1186,17 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
 
         if (!lsm) {
                 CERROR("LOV requires striping ea\n");
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (lsm->lsm_magic != LOV_MAGIC) {
                 CERROR("LOV striping magic bad %#x != %#x\n",
                        lsm->lsm_magic, LOV_MAGIC);
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (!export || !export->exp_obd)
-                RETURN(-ENODEV);
+                GOTO(out, rc = -ENODEV);
 
         if (oa->o_valid & OBD_MD_FLHANDLE)
                 lfh = lov_handle2lfh(obdo_handle(oa));
@@ -978,17 +1205,11 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 int err;
 
-                if (lov->tgts[loi->loi_ost_idx].active == 0) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
-                        continue;
-                }
-
                 /* create data objects with "parent" OA */
                 memcpy(&tmp, oa, sizeof(tmp));
                 tmp.o_id = loi->loi_id;
                 if (lfh)
-                        memcpy(obdo_handle(&tmp),
-                               lfh->lfh_data + i * FD_OSTDATA_SIZE,
+                        memcpy(obdo_handle(&tmp), lfh->lfh_och + i,
                                FD_OSTDATA_SIZE);
                 else
                         tmp.o_valid &= ~OBD_MD_FLHANDLE;
@@ -1005,50 +1226,140 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
                                 rc = err;
                 }
         }
-        if (lfh) {
+        if (lfh != NULL) {
                 spin_lock(&export->exp_lov_data.led_lock);
                 list_del(&lfh->lfh_list);
                 spin_unlock(&export->exp_lov_data.led_lock);
+                lov_lfh_put(lfh); /* drop the reference owned by the list */
 
-                OBD_FREE(lfh->lfh_data, lsm->lsm_stripe_count*FD_OSTDATA_SIZE);
-                PORTAL_SLAB_FREE(lfh, lov_file_cache, sizeof(*lfh));
+                OBD_FREE(lfh->lfh_och, lsm->lsm_stripe_count * FD_OSTDATA_SIZE);
+                lov_lfh_destroy(lfh);
+                lov_lfh_put(lfh); /* balance handle2lfh above */
         }
-
-        RETURN(rc);
+        GOTO(out, rc);
+ out:
+        class_export_put(export);
+        return rc;
 }
 
 #ifndef log2
 #define log2(n) ffz(~(n))
 #endif
 
-#warning FIXME: merge these two functions now that they are nearly the same
-
-/* compute ost offset in stripe "stripeno" corresponding to offset "lov_off" */
-static obd_off lov_stripe_offset(struct lov_stripe_md *lsm, obd_off lov_off,
-                                 int stripeno)
+/* we have an offset in file backed by an lov and want to find out where
+ * that offset lands in our given stripe of the file.  for the easy
+ * case where the offset is within the stripe, we just have to scale the
+ * offset down to make it relative to the stripe instead of the lov.
+ *
+ * the harder case is what to do when the offset doesn't intersect the
+ * stripe.  callers will want start offsets clamped ahead to the start
+ * of the nearest stripe in the file.  end offsets similarly clamped to the
+ * nearest ending byte of a stripe in the file:
+ *
+ * all this function does is move offsets to the nearest region of the
+ * stripe, and it does its work "mod" the full length of all the stripes.
+ * consider a file with 3 stripes:
+ *
+ *             S                                              E
+ * ---------------------------------------------------------------------
+ * |    0    |     1     |     2     |    0    |     1     |     2     |
+ * ---------------------------------------------------------------------
+ *
+ * to find stripe 1's offsets for S and E, it divides by the full stripe
+ * width and does its math in the context of a single set of stripes:
+ *
+ *             S         E
+ * -----------------------------------
+ * |    0    |     1     |     2     |
+ * -----------------------------------
+ *
+ * it'll notice that E is outside stripe 1 and clamp it to the end of the
+ * stripe, then multiply it back out by lov_off to give the real offsets in
+ * the stripe:
+ *
+ *   S                   E
+ * ---------------------------------------------------------------------
+ * |    1    |     1     |     1     |    1    |     1     |     1     |
+ * ---------------------------------------------------------------------
+ *
+ * it would have done similarly and pulled S forward to the start of a 1
+ * stripe if, say, S had landed in a 0 stripe.
+ *
+ * this rounding isn't always correct.  consider an E lov offset that lands
+ * on a 0 stripe, the "mod stripe width" math will pull it forward to the
+ * start of a 1 stripe, when in fact it wanted to be rounded back to the end
+ * of a previous 1 stripe.  this logic is handled by callers and this is why:
+ *
+ * this function returns < 0 when the offset was "before" the stripe and
+ * was moved forward to the start of the stripe in question;  0 when it
+ * falls in the stripe and no shifting was done; > 0 when the offset
+ * was outside the stripe and was pulled back to its final byte. */
+static int lov_stripe_offset(struct lov_stripe_md *lsm, obd_off lov_off,
+                             int stripeno, obd_off *obd_off)
 {
         unsigned long ssize  = lsm->lsm_stripe_size;
         unsigned long swidth = ssize * lsm->lsm_stripe_count;
         unsigned long stripe_off, this_stripe;
+        int ret = 0;
 
-        if (lov_off == OBD_OBJECT_EOF || lov_off == 0)
-                return lov_off;
+        if (lov_off == OBD_OBJECT_EOF) {
+                *obd_off = OBD_OBJECT_EOF;
+                return 0;
+        }
 
         /* do_div(a, b) returns a % b, and a = a / b */
         stripe_off = do_div(lov_off, swidth);
 
         this_stripe = stripeno * ssize;
-        if (stripe_off <= this_stripe)
+        if (stripe_off < this_stripe) {
                 stripe_off = 0;
-        else {
+                ret = -1;
+        } else {
                 stripe_off -= this_stripe;
 
-                if (stripe_off > ssize)
+                if (stripe_off >= ssize) {
                         stripe_off = ssize;
+                        ret = 1;
+                }
         }
 
+        *obd_off = lov_off * ssize + stripe_off;
+        return ret;
+}
 
-        return lov_off * ssize + stripe_off;
+/* given an extent in an lov and a stripe, calculate the extent of the stripe
+ * that is contained within the lov extent.  this returns true if the given
+ * stripe does intersect with the lov extent. */
+static int lov_stripe_intersects(struct lov_stripe_md *lsm, int stripeno,
+                                 obd_off start, obd_off end,
+                                 obd_off *obd_start, obd_off *obd_end)
+{
+        int start_side, end_side;
+
+        start_side = lov_stripe_offset(lsm, start, stripeno, obd_start);
+        end_side = lov_stripe_offset(lsm, end, stripeno, obd_end);
+
+        CDEBUG(D_INODE, "["LPU64"->"LPU64"] -> [(%d) "LPU64"->"LPU64" (%d)]\n",
+               start, end, start_side, *obd_start, *obd_end, end_side);
+
+        /* this stripe doesn't intersect the file extent when neither
+         * start or the end intersected the stripe and obd_start and
+         * obd_end got rounded up to the save value. */
+        if (start_side != 0 && end_side != 0 && *obd_start == *obd_end)
+                return 0;
+
+        /* as mentioned in the lov_stripe_offset commentary, end
+         * might have been shifted in the wrong direction.  This
+         * happens when an end offset is before the stripe when viewed
+         * through the "mod stripe size" math. we detect it being shifted
+         * in the wrong direction and touch it up.
+         * interestingly, this can't underflow since end must be > start
+         * if we passed through the previous check.
+         * (should we assert for that somewhere?) */
+        if (end_side != 0)
+                (*obd_end)--;
+
+        return 1;
 }
 
 /* compute which stripe number "lov_off" will be written into */
@@ -1062,7 +1373,6 @@ static int lov_stripe_number(struct lov_stripe_md *lsm, obd_off lov_off)
 
         return stripe_off / ssize;
 }
-
 
 /* FIXME: maybe we'll just make one node the authoritative attribute node, then
  * we can send this 'punch' to just the authoritative node and the nodes
@@ -1081,36 +1391,39 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
 
         if (!lsm) {
                 CERROR("LOV requires striping ea\n");
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (lsm->lsm_magic != LOV_MAGIC) {
                 CERROR("LOV striping magic bad %#x != %#x\n",
                        lsm->lsm_magic, LOV_MAGIC);
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (!export || !export->exp_obd)
-                RETURN(-ENODEV);
+                GOTO(out, rc = -ENODEV);
 
         if (oa->o_valid & OBD_MD_FLHANDLE)
                 lfh = lov_handle2lfh(obdo_handle(oa));
 
         lov = &export->exp_obd->u.lov;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
-                obd_off starti = lov_stripe_offset(lsm, start, i);
-                obd_off endi = lov_stripe_offset(lsm, end, i);
+                obd_off starti, endi;
                 int err;
 
-                if (starti == endi)
+                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
+                        continue;
+                }
+
+                if (!lov_stripe_intersects(lsm, i, start, end, &starti, &endi))
                         continue;
 
                 /* create data objects with "parent" OA */
                 memcpy(&tmp, oa, sizeof(tmp));
                 tmp.o_id = loi->loi_id;
                 if (lfh)
-                        memcpy(obdo_handle(&tmp),
-                               lfh->lfh_data + i * FD_OSTDATA_SIZE,
+                        memcpy(obdo_handle(&tmp), lfh->lfh_och + i,
                                FD_OSTDATA_SIZE);
                 else
                         tmp.o_valid &= ~OBD_MD_FLHANDLE;
@@ -1127,13 +1440,43 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
                                 rc = err;
                 }
         }
-        RETURN(rc);
+        if (lfh != NULL)
+                lov_lfh_put(lfh);
+        GOTO(out, rc);
+ out:
+        class_export_put(export);
+        return rc;
 }
 
-static inline int lov_brw(int cmd, struct lustre_handle *conn,
-                          struct lov_stripe_md *lsm, obd_count oa_bufs,
-                          struct brw_page *pga, struct obd_brw_set *set,
-                          struct obd_trans_info *oti)
+static int lov_brw_check(struct lov_obd *lov, struct lov_stripe_md *lsm,
+                         obd_count oa_bufs, struct brw_page *pga)
+{
+        int i;
+
+        /* The caller just wants to know if there's a chance that this
+         * I/O can succeed */
+        for (i = 0; i < oa_bufs; i++) {
+                int stripe = lov_stripe_number(lsm, pga[i].off);
+                int ost = lsm->lsm_oinfo[stripe].loi_ost_idx;
+                struct ldlm_extent ext, subext;
+                ext.start = pga[i].off;
+                ext.start = pga[i].off + pga[i].count;
+
+                if (!lov_stripe_intersects(lsm, i, ext.start, ext.end,
+                                           &subext.start, &subext.end))
+                        continue;
+
+                if (lov->tgts[ost].active == 0) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", ost);
+                        return -EIO;
+                }
+        }
+        return 0;
+}
+
+static int lov_brw(int cmd, struct lustre_handle *conn,
+                   struct lov_stripe_md *lsm, obd_count oa_bufs,
+                   struct brw_page *pga, struct obd_trans_info *oti)
 {
         struct {
                 int bufct;
@@ -1151,20 +1494,25 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
 
         if (!lsm) {
                 CERROR("LOV requires striping ea\n");
-                RETURN(-EINVAL);
+                GOTO(out_exp, rc = -EINVAL);
         }
 
         if (lsm->lsm_magic != LOV_MAGIC) {
                 CERROR("LOV striping magic bad %#x != %#x\n",
                        lsm->lsm_magic, LOV_MAGIC);
-                RETURN(-EINVAL);
+                GOTO(out_exp, rc = -EINVAL);
         }
 
         lov = &export->exp_obd->u.lov;
 
+        if (cmd == OBD_BRW_CHECK) {
+                rc = lov_brw_check(lov, lsm, oa_bufs, pga);
+                GOTO(out_exp, rc);
+        }
+
         OBD_ALLOC(stripeinfo, stripe_count * sizeof(*stripeinfo));
         if (!stripeinfo)
-                GOTO(out_cbdata, rc = -ENOMEM);
+                GOTO(out_exp, rc = -ENOMEM);
 
         OBD_ALLOC(where, sizeof(*where) * oa_bufs);
         if (!where)
@@ -1194,65 +1542,159 @@ static inline int lov_brw(int cmd, struct lustre_handle *conn,
                 shift = stripeinfo[which].index + stripeinfo[which].subcount;
                 LASSERT(shift < oa_bufs);
                 ioarr[shift] = pga[i];
-                ioarr[shift].off = lov_stripe_offset(lsm, pga[i].off, which);
+                lov_stripe_offset(lsm, pga[i].off, which, &ioarr[shift].off);
                 stripeinfo[which].subcount++;
         }
 
         for (i = 0, si = stripeinfo; i < stripe_count; i++, si++) {
                 int shift = si->index;
 
+                if (lov->tgts[si->ost_idx].active == 0) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", si->ost_idx);
+                        GOTO(out_ioarr, rc = -EIO);
+                }
+
                 if (si->bufct) {
                         LASSERT(shift < oa_bufs);
                         rc = obd_brw(cmd, &lov->tgts[si->ost_idx].conn,
                                      &si->lsm, si->bufct, &ioarr[shift],
-                                     set, oti);
+                                     oti);
                         if (rc)
                                 GOTO(out_ioarr, rc);
                 }
         }
-
+        GOTO(out_ioarr, rc);
  out_ioarr:
         OBD_FREE(ioarr, sizeof(*ioarr) * oa_bufs);
  out_where:
         OBD_FREE(where, sizeof(*where) * oa_bufs);
  out_sinfo:
         OBD_FREE(stripeinfo, stripe_count * sizeof(*stripeinfo));
- out_cbdata:
-        RETURN(rc);
+ out_exp:
+        class_export_put(export);
+        return rc;
 }
 
-static struct lov_lock_handles *lov_newlockh(struct lov_stripe_md *lsm)
+static int lov_brw_interpret (struct ptlrpc_request_set *set,
+                              struct lov_brw_async_args *aa, int rc)
 {
-        struct lov_lock_handles *lov_lockh;
+        obd_count        oa_bufs = aa->aa_oa_bufs;
+        struct brw_page *ioarr = aa->aa_ioarr;
+        ENTRY;
 
-        OBD_ALLOC(lov_lockh, sizeof(*lov_lockh) +
-                  sizeof(*lov_lockh->llh_handles) * lsm->lsm_stripe_count);
-        if (!lov_lockh)
-                return NULL;
-
-        get_random_bytes(&lov_lockh->llh_cookie, sizeof(lov_lockh->llh_cookie));
-
-        return lov_lockh;
+        OBD_FREE (ioarr, sizeof (*ioarr) * oa_bufs);
+        RETURN (rc);
 }
 
-/* We are only ever passed local lock handles here, so we do not need to
- * validate (and we can't really because these structs are variable sized
- * and therefore alloced, and not from a private slab).
- *
- * We just check because we can...
- */
-static struct lov_lock_handles *lov_h2lovlockh(struct lustre_handle *handle)
+static int lov_brw_async(int cmd, struct lustre_handle *conn,
+                         struct lov_stripe_md *lsm, obd_count oa_bufs,
+                         struct brw_page *pga, struct ptlrpc_request_set *set,
+                         struct obd_trans_info *oti)
 {
-        struct lov_lock_handles *lov_lockh = NULL;
+        struct {
+                int bufct;
+                int index;
+                int subcount;
+                struct lov_stripe_md lsm;
+                int ost_idx;
+        } *stripeinfo, *si, *si_last;
+        struct obd_export *export = class_conn2export(conn);
+        struct lov_obd *lov;
+        struct brw_page *ioarr;
+        struct lov_oinfo *loi;
+        struct lov_brw_async_args *aa;
+        int rc = 0, i, *where, stripe_count = lsm->lsm_stripe_count;
+        ENTRY;
 
-        if (!handle || !handle->addr)
-                RETURN(NULL);
+        if (!lsm) {
+                CERROR("LOV requires striping ea\n");
+                GOTO(out_exp, rc = -EINVAL);
+        }
 
-        lov_lockh = (struct lov_lock_handles *)(unsigned long)(handle->addr);
-        if (lov_lockh->llh_cookie != handle->cookie)
-                RETURN(NULL);
+        if (lsm->lsm_magic != LOV_MAGIC) {
+                CERROR("LOV striping magic bad %#x != %#x\n",
+                       lsm->lsm_magic, LOV_MAGIC);
+                GOTO(out_exp, rc = -EINVAL);
+        }
 
-        return lov_lockh;
+        lov = &export->exp_obd->u.lov;
+
+        if (cmd == OBD_BRW_CHECK) {
+                rc = lov_brw_check(lov, lsm, oa_bufs, pga);
+                GOTO(out_exp, rc);
+        }
+
+        OBD_ALLOC(stripeinfo, stripe_count * sizeof(*stripeinfo));
+        if (!stripeinfo)
+                GOTO(out_exp, rc = -ENOMEM);
+
+        OBD_ALLOC(where, sizeof(*where) * oa_bufs);
+        if (!where)
+                GOTO(out_sinfo, rc = -ENOMEM);
+
+        OBD_ALLOC(ioarr, sizeof(*ioarr) * oa_bufs);
+        if (!ioarr)
+                GOTO(out_where, rc = -ENOMEM);
+
+        for (i = 0; i < oa_bufs; i++) {
+                where[i] = lov_stripe_number(lsm, pga[i].off);
+                stripeinfo[where[i]].bufct++;
+        }
+
+        for (i = 0, loi = lsm->lsm_oinfo, si_last = si = stripeinfo;
+             i < stripe_count; i++, loi++, si_last = si, si++) {
+                if (i > 0)
+                        si->index = si_last->index + si_last->bufct;
+                si->lsm.lsm_object_id = loi->loi_id;
+                si->ost_idx = loi->loi_ost_idx;
+        }
+
+        for (i = 0; i < oa_bufs; i++) {
+                int which = where[i];
+                int shift;
+
+                shift = stripeinfo[which].index + stripeinfo[which].subcount;
+                LASSERT(shift < oa_bufs);
+                ioarr[shift] = pga[i];
+                lov_stripe_offset(lsm, pga[i].off, which, &ioarr[shift].off);
+                stripeinfo[which].subcount++;
+        }
+
+        for (i = 0, si = stripeinfo; i < stripe_count; i++, si++) {
+                int shift = si->index;
+
+                if (si->bufct == 0)
+                        continue;
+
+                if (lov->tgts[si->ost_idx].active == 0) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", si->ost_idx);
+                        GOTO(out_ioarr, rc = -EIO);
+                }
+
+                LASSERT(shift < oa_bufs);
+                rc = obd_brw_async(cmd, &lov->tgts[si->ost_idx].conn,
+                                   &si->lsm, si->bufct, &ioarr[shift],
+                                   set, oti);
+                if (rc)
+                        GOTO(out_ioarr, rc);
+        }
+        LASSERT (rc == 0);
+        LASSERT (set->set_interpret == NULL);
+        set->set_interpret = lov_brw_interpret;
+        LASSERT (sizeof (set->set_args) >= sizeof (struct lov_brw_async_args));
+        aa = (struct lov_brw_async_args *)&set->set_args;
+        aa->aa_oa_bufs = oa_bufs;
+        aa->aa_ioarr = ioarr;
+        GOTO(out_where, rc);
+ out_ioarr:
+        OBD_FREE(ioarr, sizeof(*ioarr) * oa_bufs);
+ out_where:
+        OBD_FREE(where, sizeof(*where) * oa_bufs);
+ out_sinfo:
+        OBD_FREE(stripeinfo, stripe_count * sizeof(*stripeinfo));
+ out_exp:
+        class_export_put(export);
+        return rc;
 }
 
 static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
@@ -1267,35 +1709,33 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         struct lov_obd *lov;
         struct lov_oinfo *loi;
         struct lov_stripe_md submd;
-        ldlm_error_t rc = ELDLM_LOCK_MATCHED, err;
+        ldlm_error_t rc;
         int i;
         ENTRY;
 
         if (!lsm) {
                 CERROR("LOV requires striping ea\n");
-                RETURN(-EINVAL);
+                GOTO(out_exp, rc = -EINVAL);
         }
 
         if (lsm->lsm_magic != LOV_MAGIC) {
                 CERROR("LOV striping magic bad %#x != %#x\n",
                        lsm->lsm_magic, LOV_MAGIC);
-                RETURN(-EINVAL);
+                GOTO(out_exp, rc = -EINVAL);
         }
 
-        /* we should never be asked to replay a lock. */
-
+        /* we should never be asked to replay a lock this way. */
         LASSERT((*flags & LDLM_FL_REPLAY) == 0);
 
         if (!export || !export->exp_obd)
-                RETURN(-ENODEV);
+                GOTO(out_exp, rc = -ENODEV);
 
         if (lsm->lsm_stripe_count > 1) {
-                lov_lockh = lov_newlockh(lsm);
-                if (!lov_lockh)
-                        RETURN(-ENOMEM);
+                lov_lockh = lov_llh_new(lsm);
+                if (lov_lockh == NULL)
+                        GOTO(out_exp, rc = -ENOMEM);
 
-                lockh->addr = (__u64)(unsigned long)lov_lockh;
-                lockh->cookie = lov_lockh->llh_cookie;
+                lockh->cookie = lov_lockh->llh_handle.h_cookie;
                 lov_lockhp = lov_lockh->llh_handles;
         } else {
                 lov_lockhp = lockh;
@@ -1307,32 +1747,27 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                 struct ldlm_extent *extent = (struct ldlm_extent *)cookie;
                 struct ldlm_extent sub_ext;
 
+                *flags = 0;
+                if (!lov_stripe_intersects(lsm, i, extent->start, extent->end,
+                                           &sub_ext.start, &sub_ext.end))
+                        continue;
+
                 if (lov->tgts[loi->loi_ost_idx].active == 0) {
                         CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
                         continue;
                 }
-
-                *flags = 0;
-                sub_ext.start = lov_stripe_offset(lsm, extent->start, i);
-                sub_ext.end = lov_stripe_offset(lsm, extent->end, i);
-                if (sub_ext.start == sub_ext.end /* || !active */)
-                        continue;
 
                 /* XXX LOV STACKING: submd should be from the subobj */
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_stripe_count = 0;
                 /* XXX submd is not fully initialized here */
                 *flags = 0;
-                err = obd_enqueue(&(lov->tgts[loi->loi_ost_idx].conn), &submd,
+                rc = obd_enqueue(&(lov->tgts[loi->loi_ost_idx].conn), &submd,
                                   parent_lock, type, &sub_ext, sizeof(sub_ext),
                                   mode, flags, cb, data, datalen, lov_lockhp);
 
                 // XXX add a lock debug statement here
-                /* return _MATCHED only when all locks matched.. */
-                if (err == ELDLM_OK) {
-                        rc = ELDLM_OK;
-                } else if (err != ELDLM_LOCK_MATCHED) {
-                        rc = err;
+                if (rc != ELDLM_OK) {
                         memset(lov_lockhp, 0, sizeof(*lov_lockhp));
                         if (lov->tgts[loi->loi_ost_idx].active) {
                                 CERROR("error: enqueue objid "LPX64" subobj "
@@ -1343,15 +1778,16 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                         }
                 }
         }
-        RETURN(rc);
+        if (lsm->lsm_stripe_count > 1)
+                lov_llh_put(lov_lockh);
+        GOTO(out_exp, rc = ELDLM_OK);
 
-out_locks:
+ out_locks:
         while (loi--, lov_lockhp--, i-- > 0) {
                 struct lov_stripe_md submd;
                 int err;
 
-                if (lov_lockhp->cookie == 0 ||
-                    lov->tgts[loi->loi_ost_idx].active == 0)
+                if (lov_lockhp->cookie == 0)
                         continue;
 
                 /* XXX LOV STACKING: submd should be from the subobj */
@@ -1367,13 +1803,112 @@ out_locks:
         }
 
         if (lsm->lsm_stripe_count > 1) {
-                lov_lockh->llh_cookie = DEAD_HANDLE_MAGIC;
-                OBD_FREE(lov_lockh, sizeof(*lov_lockh) +
-                          sizeof(*lov_lockh->llh_handles) *
-                          lsm->lsm_stripe_count);
+                lov_llh_destroy(lov_lockh);
+                lov_llh_put(lov_lockh);
         }
-        lockh->cookie = DEAD_HANDLE_MAGIC;
+ out_exp:
+        class_export_put(export);
+        RETURN(rc);
+}
 
+static int lov_match(struct lustre_handle *conn, struct lov_stripe_md *lsm,
+                       __u32 type, void *cookie, int cookielen, __u32 mode,
+                       int *flags, struct lustre_handle *lockh)
+{
+        struct obd_export *export = class_conn2export(conn);
+        struct lov_lock_handles *lov_lockh = NULL;
+        struct lustre_handle *lov_lockhp;
+        struct lov_obd *lov;
+        struct lov_oinfo *loi;
+        struct lov_stripe_md submd;
+        ldlm_error_t rc = 0;
+        int i;
+        ENTRY;
+
+        if (!lsm) {
+                CERROR("LOV requires striping ea\n");
+                GOTO(out_exp, rc = -EINVAL);
+        }
+
+        if (lsm->lsm_magic != LOV_MAGIC) {
+                CERROR("LOV striping magic bad %#x != %#x\n",
+                       lsm->lsm_magic, LOV_MAGIC);
+                GOTO(out_exp, rc = -EINVAL);
+        }
+
+        if (!export || !export->exp_obd)
+                GOTO(out_exp, rc = -ENODEV);
+
+        if (lsm->lsm_stripe_count > 1) {
+                lov_lockh = lov_llh_new(lsm);
+                if (lov_lockh == NULL)
+                        GOTO(out_exp, rc = -ENOMEM);
+
+                lockh->cookie = lov_lockh->llh_handle.h_cookie;
+                lov_lockhp = lov_lockh->llh_handles;
+        } else {
+                lov_lockhp = lockh;
+        }
+
+        lov = &export->exp_obd->u.lov;
+        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
+             i++, loi++, lov_lockhp++) {
+                struct ldlm_extent *extent = (struct ldlm_extent *)cookie;
+                struct ldlm_extent sub_ext;
+                int lov_flags;
+
+                if (!lov_stripe_intersects(lsm, i, extent->start, extent->end,
+                                           &sub_ext.start, &sub_ext.end))
+                        continue;
+
+                if (lov->tgts[loi->loi_ost_idx].active == 0) {
+                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
+                        rc = -EIO;
+                        break;
+                }
+
+                /* XXX LOV STACKING: submd should be from the subobj */
+                submd.lsm_object_id = loi->loi_id;
+                submd.lsm_stripe_count = 0;
+                lov_flags = *flags;
+                /* XXX submd is not fully initialized here */
+                rc = obd_match(&(lov->tgts[loi->loi_ost_idx].conn), &submd,
+                               type, &sub_ext, sizeof(sub_ext), mode,
+                               &lov_flags, lov_lockhp);
+                if (rc != 1)
+                        break;
+        }
+        if (rc == 1) {
+                if (lsm->lsm_stripe_count > 1)
+                        lov_llh_put(lov_lockh);
+                GOTO(out_exp, 1);
+        }
+
+        while (loi--, lov_lockhp--, i-- > 0) {
+                struct lov_stripe_md submd;
+                int err;
+
+                if (lov_lockhp->cookie == 0)
+                        continue;
+
+                /* XXX LOV STACKING: submd should be from the subobj */
+                submd.lsm_object_id = loi->loi_id;
+                submd.lsm_stripe_count = 0;
+                err = obd_cancel(&lov->tgts[loi->loi_ost_idx].conn, &submd,
+                                 mode, lov_lockhp);
+                if (err && lov->tgts[loi->loi_ost_idx].active) {
+                        CERROR("error: cancelling objid "LPX64" on OST "
+                               "idx %d after match failure: rc = %d\n",
+                               loi->loi_id, loi->loi_ost_idx, err);
+                }
+        }
+
+        if (lsm->lsm_stripe_count > 1) {
+                lov_llh_destroy(lov_lockh);
+                lov_llh_put(lov_lockh);
+        }
+ out_exp:
+        class_export_put(export);
         RETURN(rc);
 }
 
@@ -1390,29 +1925,30 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *lsm,
 
         if (!lsm) {
                 CERROR("LOV requires striping ea\n");
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (lsm->lsm_magic != LOV_MAGIC) {
                 CERROR("LOV striping magic bad %#x != %#x\n",
                        lsm->lsm_magic, LOV_MAGIC);
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (!export || !export->exp_obd)
-                RETURN(-ENODEV);
+                GOTO(out, rc = -ENODEV);
 
         LASSERT(lockh);
         if (lsm->lsm_stripe_count > 1) {
-                lov_lockh = lov_h2lovlockh(lockh);
+                lov_lockh = lov_handle2llh(lockh);
                 if (!lov_lockh) {
                         CERROR("LOV: invalid lov lock handle %p\n", lockh);
-                        RETURN(-EINVAL);
+                        GOTO(out, rc = -EINVAL);
                 }
 
                 lov_lockhp = lov_lockh->llh_handles;
-        } else
+        } else {
                 lov_lockhp = lockh;
+        }
 
         lov = &export->exp_obd->u.lov;
         for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
@@ -1421,7 +1957,8 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                 int err;
 
                 if (lov_lockhp->cookie == 0) {
-                        CDEBUG(D_HA, "lov idx %d no lock?\n", loi->loi_ost_idx);
+                        CDEBUG(D_HA, "lov idx %d subobj "LPX64" no lock?\n",
+                               loi->loi_ost_idx, loi->loi_id);
                         continue;
                 }
 
@@ -1442,19 +1979,18 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                 }
         }
 
-        if (lsm->lsm_stripe_count > 1) {
-                lov_lockh->llh_cookie = DEAD_HANDLE_MAGIC;
-                OBD_FREE(lov_lockh, sizeof(*lov_lockh) +
-                          sizeof(*lov_lockh->llh_handles) *
-                          lsm->lsm_stripe_count);
-        }
-        lockh->cookie = DEAD_HANDLE_MAGIC;
-
-        RETURN(rc);
+        if (lsm->lsm_stripe_count > 1)
+                lov_llh_destroy(lov_lockh);
+        if (lov_lockh != NULL)
+                lov_llh_put(lov_lockh);
+        GOTO(out, rc);
+ out:
+        class_export_put(export);
+        return rc;
 }
 
 static int lov_cancel_unused(struct lustre_handle *conn,
-                             struct lov_stripe_md *lsm, int flags)
+                             struct lov_stripe_md *lsm, int flags, void *opaque)
 {
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
@@ -1464,21 +2000,24 @@ static int lov_cancel_unused(struct lustre_handle *conn,
 
         if (!lsm) {
                 CERROR("LOV requires striping ea for lock cancellation\n");
-                RETURN(-EINVAL);
+                GOTO(out, rc = -EINVAL);
         }
 
         if (!export || !export->exp_obd)
-                RETURN(-ENODEV);
+                GOTO(out, rc = -ENODEV);
 
         lov = &export->exp_obd->u.lov;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct lov_stripe_md submd;
                 int err;
 
+                if (lov->tgts[loi->loi_ost_idx].active == 0)
+                        CDEBUG(D_HA, "lov idx %d inactive\n", loi->loi_ost_idx);
+
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_stripe_count = 0;
                 err = obd_cancel_unused(&lov->tgts[loi->loi_ost_idx].conn,
-                                       &submd, flags);
+                                        &submd, flags, opaque);
                 if (err && lov->tgts[loi->loi_ost_idx].active) {
                         CERROR("error: cancel unused objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
@@ -1487,9 +2026,20 @@ static int lov_cancel_unused(struct lustre_handle *conn,
                                 rc = err;
                 }
         }
-
-        RETURN(rc);
+        GOTO(out, rc);
+ out:
+        class_export_put(export);
+        return rc;
 }
+
+#define LOV_U64_MAX ((__u64)~0ULL)
+#define LOV_SUM_MAX(tot, add)                                           \
+        do {                                                            \
+                if ((tot) + (add) < (tot))                              \
+                        (tot) = LOV_U64_MAX;                            \
+                else                                                    \
+                        (tot) += (add);                                 \
+        } while(0)
 
 static int lov_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
 {
@@ -1502,7 +2052,7 @@ static int lov_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
         ENTRY;
 
         if (!export || !export->exp_obd)
-                RETURN(-ENODEV);
+                GOTO(out, rc = -ENODEV);
 
         lov = &export->exp_obd->u.lov;
 
@@ -1539,14 +2089,30 @@ static int lov_statfs(struct lustre_handle *conn, struct obd_statfs *osfs)
                          *     if one of the OBDs has no more objects left)
                          *   - could be sum if we stripe whole objects
                          *   - could be average, just to give a nice number
-                         *   - we just pick first OST and hope it is enough
-                        sfs->f_ffree += lov_sfs.f_ffree;
+                         *
+                         * To give a "reasonable" (if not wholly accurate)
+                         * number, we divide the total number of free objects
+                         * by expected stripe count (watch out for overflow).
                          */
+                        LOV_SUM_MAX(osfs->os_files, lov_sfs.os_files);
+                        LOV_SUM_MAX(osfs->os_ffree, lov_sfs.os_ffree);
                 }
         }
-        if (!set && !rc)
+        if (set) {
+                __u32 expected_stripes = lov->desc.ld_default_stripe_count ?
+                                         lov->desc.ld_default_stripe_count :
+                                         lov->desc.ld_active_tgt_count;
+
+                if (osfs->os_files != LOV_U64_MAX)
+                        do_div(osfs->os_files, expected_stripes);
+                if (osfs->os_ffree != LOV_U64_MAX)
+                        do_div(osfs->os_ffree, expected_stripes);
+        } else if (!rc)
                 rc = -EIO;
-        RETURN(rc);
+        GOTO(out, rc);
+ out:
+        class_export_put(export);
+        return rc;
 }
 
 static int lov_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
@@ -1601,7 +2167,7 @@ static int lov_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
                 rc = copy_to_user((void *)uarg, buf, len);
                 if (rc)
                         rc = -EFAULT;
-                OBD_FREE(buf, len);
+                obd_ioctl_freedata(buf, len);
                 break;
         }
         case LL_IOC_LOV_SETSTRIPE:
@@ -1639,6 +2205,49 @@ static int lov_iocontrol(unsigned int cmd, struct lustre_handle *conn, int len,
         RETURN(rc);
 }
 
+static int lov_get_info(struct lustre_handle *conn, __u32 keylen,
+                        void *key, __u32 *vallen, void *val)
+{
+        struct obd_device *obddev = class_conn2obd(conn);
+        struct lov_obd *lov = &obddev->u.lov;
+        int i;
+        ENTRY;
+
+        if (!vallen || !val)
+                RETURN(-EFAULT);
+
+        if (keylen > strlen("lock_to_stripe") &&
+            strcmp(key, "lock_to_stripe") == 0) {
+                struct {
+                        char name[16];
+                        struct ldlm_lock *lock;
+                        struct lov_stripe_md *lsm;
+                } *data = key;
+                __u32 *stripe = val;
+                struct lov_oinfo *loi;
+
+                if (*vallen < sizeof(*stripe))
+                        RETURN(-EFAULT);
+                *vallen = sizeof(*stripe);
+
+                /* XXX This is another one of those bits that will need to
+                 * change if we ever actually support nested LOVs.  It uses
+                 * the lock's connection to find out which stripe it is. */
+                for (i = 0, loi = data->lsm->lsm_oinfo;
+                     i < data->lsm->lsm_stripe_count;
+                     i++, loi++) {
+                        if (lov->tgts[loi->loi_ost_idx].conn.cookie ==
+                            data->lock->l_connh->cookie) {
+                                *stripe = i;
+                                RETURN(0);
+                        }
+                }
+                RETURN(-ENXIO);
+        }
+
+        RETURN(-EINVAL);
+}
+
 struct obd_ops lov_obd_ops = {
         o_owner:       THIS_MODULE,
         o_attach:      lov_attach,
@@ -1652,15 +2261,19 @@ struct obd_ops lov_obd_ops = {
         o_create:      lov_create,
         o_destroy:     lov_destroy,
         o_getattr:     lov_getattr,
+        o_getattr_async: lov_getattr_async,
         o_setattr:     lov_setattr,
         o_open:        lov_open,
         o_close:       lov_close,
         o_brw:         lov_brw,
+        o_brw_async:   lov_brw_async,
         o_punch:       lov_punch,
         o_enqueue:     lov_enqueue,
+        o_match:       lov_match,
         o_cancel:      lov_cancel,
         o_cancel_unused: lov_cancel_unused,
-        o_iocontrol:   lov_iocontrol
+        o_iocontrol:   lov_iocontrol,
+        o_get_info:    lov_get_info
 };
 
 int __init lov_init(void)
@@ -1670,12 +2283,6 @@ int __init lov_init(void)
 
         printk(KERN_INFO "Lustre Logical Object Volume driver; "
                "info@clusterfs.com\n");
-        lov_file_cache = kmem_cache_create("ll_lov_file_data",
-                                           sizeof(struct lov_file_handles),
-                                           0, 0, NULL, NULL);
-        if (!lov_file_cache)
-                RETURN(-ENOMEM);
-
         lprocfs_init_vars(&lvars);
         rc = class_register_type(&lov_obd_ops, lvars.module_vars,
                                  OBD_LOV_DEVICENAME);
@@ -1684,8 +2291,6 @@ int __init lov_init(void)
 
 static void __exit lov_exit(void)
 {
-        if (kmem_cache_destroy(lov_file_cache))
-                CERROR("couldn't free LOV open cache\n");
         class_unregister_type(OBD_LOV_DEVICENAME);
 }
 

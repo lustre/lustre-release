@@ -1,10 +1,8 @@
 # lustre.spec
-%define version HEAD
+%define version b_devel
 %define kversion @RELEASE@
 %define linuxdir @LINUX@
-%define portalsdir @PORTALS@
-%define portalslibdir @PORTALSLIB@
-Release: 0302240920chaos
+Release: 0305281701chaos
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -21,7 +19,7 @@ servers and utilities.
 
 %package -n lustre-modules
 Summary: Kernel Lustre drivers for Linux %{kversion}
-Requires: portals-modules
+Requires: modutils >= 2.4.10
 Group: Development/Kernel
 
 %description -n lustre-modules
@@ -59,7 +57,6 @@ Group: Development/Kernel
 %description -n liblustre
 Lustre lib binary package.
 
-
 %prep
 %setup -qn lustre-%{version}
 %setup -c -n lustre-%{version}-lib
@@ -69,12 +66,12 @@ rm -rf $RPM_BUILD_ROOT
 
 # Set an explicit path to our Linux tree, if we can.
 cd $RPM_BUILD_DIR/lustre-%{version}
-./configure --with-linux='%{linuxdir}' --with-portals='%{portalsdir}' --with-portalslib='%{portalslibdir}'
+./configure --with-linux='%{linuxdir}' 
 make
 
 %ifarch i386
 cd $RPM_BUILD_DIR/lustre-%{version}-lib/lustre-%{version}
-./configure --with-lib --with-portals='%{portalsdir}' --with-portalslib='%{portalslibdir}'
+./configure --with-lib 
 make
 %endif
 
@@ -87,6 +84,17 @@ cd $RPM_BUILD_DIR/lustre-%{version}-lib/lustre-%{version}
 make install prefix=$RPM_BUILD_ROOT
 %endif
 
+%ifarch alpha
+# this hurts me
+  conf_flag=
+  linuxdir=%{linuxdir}
+  test -d $linuxdir && conf_flag=--with-linux=$linuxdir
+  make clean
+  ./configure --enable-rtscts-myrinet $conf_flag
+  make
+  cp linux/rtscts/rtscts.o $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/net/lustre/rtscts_myrinet.o
+  cp user/myrinet_utils/mcpload $RPM_BUILD_ROOT/usr/sbin/mcpload
+%endif
 
 # Create the pristine source directory.
 cd $RPM_BUILD_DIR/lustre-%{version}
@@ -107,6 +115,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/sbin/lstripe
 %attr(-, root, root) /usr/sbin/mcreate
 %attr(-, root, root) /usr/sbin/mkdirmany
+%attr(-, root, root) /usr/lib/lustre/python/*
 %attr(-, root, root) /usr/lib/lustre/examples/llmount.sh
 %attr(-, root, root) /usr/lib/lustre/examples/llmountcleanup.sh
 %attr(-, root, root) /usr/lib/lustre/examples/llecho.sh
@@ -114,9 +123,19 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/lib/lustre/examples/uml.sh
 %attr(-, root, root) /usr/lib/lustre/examples/lov.sh
 %attr(-, root, root) /etc/init.d/lustre
+%attr(-, root, root) /usr/sbin/acceptor
+%attr(-, root, root) /usr/sbin/ptlctl
+%attr(-, root, root) /usr/sbin/debugctl
+%attr(-, root, root) /lib/libportals.a
+%attr(-, root, root) /lib/libptlctl.a
+%attr(-, root, root) /lib/libtcpnal.a
+%attr(-, root, root) /usr/include/lustre/*.h
+%ifarch alpha
+%attr(-, root, root) /usr/sbin/mcpload
+%endif
 
 %files -n lustre-doc
-%attr(-, root, root) %doc COPYING FDL
+#%attr(-, root, root) %doc COPYING FDL
 %attr(-, root, root) %doc doc/lustre.pdf doc/lustre-HOWTO.txt
 %attr(-, root, root) %doc tests/client-echo.cfg tests/client-mount.cfg
 %attr(-, root, root) %doc tests/client-mount2.cfg
@@ -128,12 +147,11 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 
 %files -n lustre-modules
 %attr(-, root, root) %doc COPYING
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/extN.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ldlm.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/llite.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/mdc.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/mds.o
-%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/fsfilt_extN.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/fsfilt_ext3.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdclass.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdecho.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/obdfilter.o
@@ -141,6 +159,14 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/osc.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ost.o
 %attr(-, root, root) /lib/modules/%{kversion}/kernel/fs/lustre/ptlrpc.o
+#portals modules
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/kptlrouter.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/*nal.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/portals.o
+%ifarch alpha
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/p3mod.o
+%attr(-, root, root) /lib/modules/%{kversion}/kernel/net/lustre/rtscts.o
+%endif
 
 %files -n lustre-source
 %attr(-, root, root) /usr/src/lustre-%{version}
@@ -179,6 +205,9 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 if [ ! -e /dev/obd ]; then
    mknod /dev/obd c 10 241
 fi
+if [ ! -e /dev/portals ]; then
+   mknod /dev/portals c 10 240
+fi
 depmod -ae || exit 0
 
 grep -q obdclass /etc/modules.conf || \
@@ -189,6 +218,12 @@ grep -q '/dev/obd' /etc/modules.conf || \
 
 grep -q '/dev/lustre' /etc/modules.conf || \
 	echo 'alias /dev/lustre obdclass' >> /etc/modules.conf
+
+grep -q portals /etc/modules.conf || \
+        echo 'alias char-major-10-240 portals' >> /etc/modules.conf
+
+grep -q '/dev/portals' /etc/modules.conf || \
+        echo 'alias /dev/portals portals' >> /etc/modules.conf
 
 %postun
 depmod -ae || exit 0
@@ -206,7 +241,6 @@ if grep -q slapd-lustre $slapd; then
    cp $tmp $slapd
    rm $tmp
 fi
-
 %clean
 #rm -rf $RPM_BUILD_ROOT
 

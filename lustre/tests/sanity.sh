@@ -1,9 +1,8 @@
 #!/bin/bash
-
 set -e
 
 SRCDIR=`dirname $0`
-PATH=$SRCDIR:$SRCDIR/../utils:$PATH
+PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
 CHECKSTAT=${CHECKSTAT:-"./checkstat -v"}
 CREATETEST=${CREATETEST:-createtest}
@@ -11,6 +10,7 @@ LFIND=${LFIND:-lfind}
 LSTRIPE=${LSTRIPE:-lstripe}
 MCREATE=${MCREATE:-mcreate}
 TOEXCL=${TOEXCL:-toexcl}
+TRUNCATE=${TRUNCATE:-truncate}
 
 RUNAS_ID=${RUNAS_ID:-500}
 RUNAS=${RUNAS:-"runas -u $RUNAS_ID"}
@@ -32,7 +32,7 @@ START=${START:-start}
 
 log() {
 	echo "$*"
-	lctl mark "$*"
+	lctl mark "$*" || /bin/true
 }
 
 error() { 
@@ -45,6 +45,15 @@ pass() {
 }
 
 mount | grep $MOUNT || sh llmount.sh
+
+echo preparing for tests involving mounts
+EXT2_DEV=/tmp/SANITY.LOOP
+dd if=/dev/zero of=$EXT2_DEV bs=1k count=1000
+#losetup /dev/loop0 || losetup /dev/loop0 /tmp/SANITY.LOOP
+#mke2fs -c /dev/loop0 100
+#losetup -d /dev/loop0
+mke2fs -F /tmp/SANITY.LOOP 
+
 
 log '== touch .../f ; rm .../f ======================== test 0'
 touch $DIR/f
@@ -301,10 +310,11 @@ $START
 
 log '== unpack tar archive as non-root user =========== test 22'
 mkdir $DIR/d22
-[ $UID -ne 0 ] && RUNAS=""
 [ $UID -ne 0 ] && RUNAS_ID="$UID"
+[ $UID -ne 0 ] && RUNAS=""
 chown $RUNAS_ID $DIR/d22
-$RUNAS tar cf - /etc/hosts /etc/sysconfig/network | $RUNAS tar xfC - $DIR/d22
+# Tar gets pissy if it can't access $PWD *sigh*
+(cd /tmp ; $RUNAS tar cf - /etc/hosts /etc/sysconfig/network | $RUNAS tar xfC - $DIR/d22)
 ls -lR $DIR/d22/etc
 $CHECKSTAT -t dir $DIR/d22/etc || error
 $CHECKSTAT -u \#$RUNAS_ID $DIR/d22/etc || error
@@ -516,7 +526,10 @@ pass
 $CLEAN
 $START
 
-log "--test 27.8 lfind "
+log "--test 27.8 mcreate file without objects to test lfind"
+$MCREATE $DIR/d27/fnone || error
+
+log "--test 27.9 lfind "
 $LFIND $DIR/d27
 pass
 $CLEAN
@@ -554,8 +567,281 @@ log '== open-unlink file ============================== test31'
 ./openunlink $DIR/f31 $DIR/f31 || error
 pass
 
+
+log '== more mountpoints and symlinks ================= test32'
+
+log '-- test 32-R1: stat d32/ext2-mountpoint/..'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+mkdir -p $DIR/d32/ext2-mountpoint 
+mount -t ext2 -o loop $EXT2_DEV $DIR/d32/ext2-mountpoint  
+$CHECKSTAT -t dir $DIR/d32/ext2-mountpoint/.. || error  
+umount $DIR/d32/ext2-mountpoint/
+pass
+$CLEAN
+$START
+
+log '-- test 32-R2: open d32/ext2-mountpoint/..'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+mkdir -p $DIR/d32/ext2-mountpoint 
+mount -t ext2 -o loop $EXT2_DEV $DIR/d32/ext2-mountpoint  
+ls -al $DIR/d32/ext2-mountpoint/.. || error
+umount $DIR/d32/ext2-mountpoint/
+pass
+$CLEAN
+$START
+ 
+log '-- test 32-R3: stat d32/ext2-mountpoint/../d2/test_dir'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+mkdir -p $DIR/d32/ext2-mountpoint 
+mount -t ext2 -o loop $EXT2_DEV $DIR/d32/ext2-mountpoint  
+mkdir -p $DIR/d32/d2/test_dir    
+$CHECKSTAT -t dir $DIR/d32/ext2-mountpoint/../d2/test_dir || error
+umount $DIR/d32/ext2-mountpoint/
+pass
+$CLEAN
+$START
+
+log '-- test 32-R4: open d32/ext2-mountpoint/../d2/test_dir'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+mkdir -p $DIR/d32/ext2-mountpoint 
+mount -t ext2 -o loop $EXT2_DEV $DIR/d32/ext2-mountpoint  
+mkdir -p $DIR/d32/d2/test_dir    
+ls -al $DIR/d32/ext2-mountpoint/../d2/test_dir || error
+umount $DIR/d32/ext2-mountpoint/
+pass
+$CLEAN
+$START
+
+log '-- test 32-R5: stat d32/symlink->tmp/symlink->lustre-subdir'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+mkdir -p $DIR/d32/tmp    
+TMP_DIR=$DIR/d32/tmp       
+ln -s $DIR/d32 $TMP_DIR/symlink11 
+ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01 
+$CHECKSTAT -t link $DIR/d32/tmp/symlink11 || error
+$CHECKSTAT -t link $DIR/d32/symlink01 || error
+pass
+$CLEAN
+$START
+
+log '-- test 32-R6: open d32/symlink->tmp/symlink->lustre-subdir'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+mkdir -p $DIR/d32/tmp    
+TMP_DIR=$DIR/d32/tmp       
+ln -s $DIR/d32 $TMP_DIR/symlink11 
+ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01 
+ls $DIR/d32/tmp/symlink11  || error
+ls $DIR/d32/symlink01 || error
+pass
+$CLEAN
+$START
+
+log '-- test 32-R7: stat d32/symlink->tmp/symlink->lustre-subdir/test_dir'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+[ -e $DIR/test_dir ] && rm -fr $DIR/test_dir
+mkdir -p $DIR/test_dir 
+mkdir -p $DIR/d32/tmp    
+TMP_DIR=$DIR/d32/tmp       
+ln -s $DIR/test_dir $TMP_DIR/symlink12 
+ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
+$CHECKSTAT -t link $DIR/d32/tmp/symlink12 || error
+$CHECKSTAT -t link $DIR/d32/symlink02 || error
+$CHECKSTAT -t dir -f $DIR/d32/tmp/symlink12 || error
+$CHECKSTAT -t dir -f $DIR/d32/symlink02 || error
+pass
+$CLEAN
+$START
+
+log '-- test 32-R8: open d32/symlink->tmp/symlink->lustre-subdir/test_dir'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+[ -e $DIR/test_dir ] && rm -fr $DIR/test_dir
+mkdir -p $DIR/test_dir 
+mkdir -p $DIR/d32/tmp    
+TMP_DIR=$DIR/d32/tmp       
+ln -s $DIR/test_dir $TMP_DIR/symlink12 
+ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
+ls $DIR/d32/tmp/symlink12 || error
+ls $DIR/d32/symlink02  || error
+pass
+$CLEAN
+$START
+
+log '-- test 32-R9: stat d32/ext2-mountpoint/../test_file'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+mkdir -p $DIR/d32/ext2-mountpoint 
+mount -t ext2 -o loop $EXT2_DEV $DIR/d32/ext2-mountpoint  
+touch $DIR/d32/test_file
+$CHECKSTAT -t file $DIR/d32/ext2-mountpoint/../test_file || error  
+umount $DIR/d32/ext2-mountpoint  
+pass
+$CLEAN
+$START
+
+log '-- test 32-R10: open d32/ext2-mountpoint/../test_file'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+mkdir -p $DIR/d32/ext2-mountpoint 
+mount -t ext2 -o loop $EXT2_DEV $DIR/d32/ext2-mountpoint  
+touch $DIR/d32/test_file
+cat $DIR/d32/ext2-mountpoint/../test_file || error
+umount $DIR/d32/ext2-mountpoint/
+pass
+$CLEAN
+$START
+
+log '-- test 32-R11: stat d32/ext2-mountpoint/../d2/test_file'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+mkdir -p $DIR/d32/ext2-mountpoint 
+mount -t ext2 -o loop $EXT2_DEV $DIR/d32/ext2-mountpoint  
+mkdir -p $DIR/d32/d2
+touch $DIR/d32/d2/test_file
+$CHECKSTAT -t file $DIR/d32/ext2-mountpoint/../d2/test_file || error
+umount $DIR/d32/ext2-mountpoint/
+pass
+$CLEAN
+$START
+
+log '-- test 32-R12: open d32/ext2-mountpoint/../d2/test_file'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+mkdir -p $DIR/d32/ext2-mountpoint 
+mount -t ext2 -o loop $EXT2_DEV $DIR/d32/ext2-mountpoint  
+mkdir -p $DIR/d32/d2
+touch $DIR/d32/d2/test_file
+cat  $DIR/d32/ext2-mountpoint/../d2/test_file || error
+umount $DIR/d32/ext2-mountpoint/
+pass
+$CLEAN
+$START
+
+log '-- test 32-R13: stat d32/symlink->tmp/symlink->lustre-root'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+mkdir -p $DIR/d32/tmp    
+TMP_DIR=$DIR/d32/tmp       
+ln -s $DIR $TMP_DIR/symlink11 
+ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01 
+$CHECKSTAT -t link $DIR/d32/tmp/symlink11 || error
+$CHECKSTAT -t link $DIR/d32/symlink01 || error
+pass
+$CLEAN
+$START
+
+log '-- test 32-R14: open d32/symlink->tmp/symlink->lustre-root'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+mkdir -p $DIR/d32/tmp    
+TMP_DIR=$DIR/d32/tmp       
+ln -s $DIR $TMP_DIR/symlink11 
+ln -s $TMP_DIR/symlink11 $TMP_DIR/../symlink01 
+ls -l $DIR/d32/tmp/symlink11  || error
+ls -l $DIR/d32/symlink01 || error
+pass
+$CLEAN
+$START
+
+log '-- test 32-R15: stat d32/symlink->tmp/symlink->lustre-root/test_file'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+[ -e $DIR/test_file ] && rm -fr $DIR/test_file
+touch $DIR/test_file 
+mkdir -p $DIR/d32/tmp    
+TMP_DIR=$DIR/d32/tmp       
+ln -s $DIR/test_file $TMP_DIR/symlink12 
+ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
+$CHECKSTAT -t link $DIR/d32/tmp/symlink12 || error
+$CHECKSTAT -t link $DIR/d32/symlink02 || error
+$CHECKSTAT -t file -f $DIR/d32/tmp/symlink12 || error
+$CHECKSTAT -t file -f $DIR/d32/symlink02 || error
+pass
+$CLEAN
+$START
+
+log '-- test 32-R16: open d32/symlink->tmp/symlink->lustre-root/test_file'
+[ -e $DIR/d32 ] && rm -fr $DIR/d32
+[ -e $DIR/test_file ] && rm -fr $DIR/test_file
+touch $DIR/test_file 
+mkdir -p $DIR/d32/tmp    
+TMP_DIR=$DIR/d32/tmp       
+ln -s $DIR/test_file $TMP_DIR/symlink12 
+ln -s $TMP_DIR/symlink12 $TMP_DIR/../symlink02 
+cat $DIR/d32/tmp/symlink12 || error
+cat $DIR/d32/symlink02  || error
+pass
+$CLEAN
+$START
+
+log '-- test 33: write file with mode 444 (should return error)'
+#   chmod 444 /mnt/lustre/somefile
+#   open(/mnt/lustre/somefile, O_RDWR)
+#   Should return -1
+[ $UID -ne 0 ] && RUNAS_ID="$UID"
+[ $UID -ne 0 ] && RUNAS=""
+[ -e $DIR/test_33_file ] && rm -fr $DIR/test_33_file
+touch $DIR/test_33_file
+chmod 444 $DIR/test_33_file
+chown $RUNAS_ID $DIR/test_33_file
+$RUNAS openfile -f O_RDWR $DIR/test_33_file && error
+pass
+$CLEAN
+$START
+
+if [ -n "$BUG1360" ]; then
+log '-- test 34: execute a file with mode 444 (should return error)'
+[ $UID -ne 0 ] && RUNAS_ID="$UID"
+[ $UID -ne 0 ] && RUNAS=""
+[ -e $DIR/test_35_file ] && rm -fr $DIR/test_35_file
+cp /bin/sh $DIR/test_35_file
+chmod 444 $DIR/test_35_file
+chown $RUNAS_ID $DIR/test_35_file
+$DIR/test_35_file && error
+pass
+$CLEAN
+$START
+else
+echo "Skipping test for 1360: set \$BUG_1360 to run it (fail cleanup, likely)."
+fi
+
+if [ -n "$BUG_1365" ]; then
+log '-- test 35: truncate file that has not been opened'
+$MCREATE $DIR/f
+$TRUNCATE $DIR/f 100
+rm $DIR/f
+pass
+$CLEAN
+$START
+else
+echo "Skipping test for 1365: set \$BUG_1365 to run it (and crash, likely)."
+fi
+
+log '-- test 36: cvs operations'
+[ $UID -ne 0 ] && RUNAS_ID="$UID"
+[ $UID -ne 0 ] && RUNAS=""
+mkdir -p $DIR/cvsroot
+log '-- test 36-1: cvs init'
+cvs -d $DIR/cvsroot init 
+$CLEAN
+$START
+log '-- test 36-2: cvs import'
+(cd /etc/init.d ; cvs -d $DIR/cvsroot import -m "nomesg"  reposname vtag rtag )
+$CLEAN
+$START
+log '-- test 36-3: cvs checkout'
+(cd $DIR ; cvs -d $DIR/cvsroot co reposname )
+$CLEAN
+$START
+log '-- test 36-4: cvs add'
+(cd $DIR/reposname ; touch foo34 ; cvs add -m 'addmsg' foo34 )
+$CLEAN
+$START
+log '-- test 36-5: cvs update'
+(cd $DIR/reposname ; cvs update )
+$CLEAN
+$START
+log '-- test 36-5: cvs commit'
+#
+# XXX change this: use a non rooot users
+(cd $DIR/reposname ; cvs commit -m 'nomsg'  foo32 )
+pass
+$CLEAN
+$START
+
 log '== cleanup ============================================='
 rm -r $DIR/[Rdfs][1-9]* $DIR/ls
 
 echo '======================= finished ======================='
-exit

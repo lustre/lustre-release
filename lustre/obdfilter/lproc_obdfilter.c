@@ -55,6 +55,18 @@ int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
         return snprintf(page, count, "%s\n", dev->u.filter.fo_fstype);
 }
 
+int lprocfs_filter_rd_mntdev(char *page, char **start, off_t off, int count,
+                    int *eof, void *data)
+{
+        struct obd_device* obd = (struct obd_device *)data;
+
+        LASSERT(obd != NULL);
+        LASSERT(obd->u.filter.fo_vfsmnt->mnt_devname);
+        *eof = 1;
+        return snprintf(page, count, "%s\n", 
+                        obd->u.filter.fo_vfsmnt->mnt_devname);
+}
+
 struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",        lprocfs_rd_uuid,    0, 0 },
         { "blocksize",   rd_blksize,         0, 0 },
@@ -64,6 +76,7 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
         { "filesfree",   rd_filesfree,       0, 0 },
         { "filegroups",  rd_filegroups,      0, 0 },
         { "fstype",      rd_fstype,          0, 0 },
+        { "mntdev",      lprocfs_filter_rd_mntdev,    0, 0 },
         { 0 }
 };
 

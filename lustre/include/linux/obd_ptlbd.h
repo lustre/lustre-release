@@ -22,9 +22,12 @@ extern void ptlbd_blk_exit(void);
 extern void ptlbd_cl_exit(void);
 extern void ptlbd_sv_exit(void);
 
+extern int ptlbd_do_connect(struct ptlbd_obd *);
+extern int ptlbd_do_disconnect(struct ptlbd_obd *);
 extern void ptlbd_blk_register(struct ptlbd_obd *ptlbd);
-extern int ptlbd_send_req(struct ptlbd_obd *, ptlbd_cmd_t cmd, 
-		struct request *);
-extern int ptlbd_parse_req(struct ptlrpc_request *req);
+extern int ptlbd_send_rw_req(struct ptlbd_obd *, ptlbd_cmd_t cmd, 
+		struct buffer_head *);
+extern int ptlbd_send_flush_req(struct ptlbd_obd *, ptlbd_cmd_t cmd);
+extern int ptlbd_handle(struct ptlrpc_request *req);
 
 #endif

@@ -3,43 +3,56 @@
 set -ex
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
+LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
 
-. $LUSTRE/../ltest/functional/llite/common/common.sh
+RLUSTRE=${RLUSTRE:-$LUSTRE}
+RPWD=${RPWD:-$PWD}
 
-PDSH='pdsh -S -w'
+. $LTESTDIR/functional/llite/common/common.sh
+
+# Allow us to override the setup if we already have a mounted system by
+# setting SETUP=" " and CLEANUP=" "
+SETUP=${SETUP:-"setup"}
+CLEANUP=${CLEANUP:-"cleanup"}
+
+PDSH=${PDSH:-'pdsh -S -w'}
 
 # XXX I wish all this stuff was in some default-config.sh somewhere
 MDSNODE=${MDSNODE:-mdev6}
 OSTNODE=${OSTNODE:-mdev7}
-CLIENT=${CLIENTNODE:-mdev8}
+CLIENT=${CLIENT:-mdev8}
 NETWORKTYPE=${NETWORKTYPE:-tcp}
 MOUNTPT=${MOUNTPT:-/mnt/lustre}
-CONFIG=recovery-small.xml
-MDSDEV=/tmp/mds
-OSTDEV=/tmp/ost
-MDSSIZE=100000
-OSTSIZE=100000
+CONFIG=${CONFIG:-recovery-small.xml}
+MDSDEV=${MDSDEV:-/tmp/mds}
+OSTDEV=${OSTDEV:-/tmp/ost}
+MDSSIZE=${MDSSIZE:-100000}
+OSTSIZE=${OSTSIZE:-100000}
+UPCALL=${UPCALL:-$RPWD/recovery-small-upcall.sh}
+FSTYPE=${FSTYPE:-ext3}
 
 do_mds() {
-    $PDSH $MDSNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
+    $PDSH $MDSNODE "PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; $@" || exit $?
 }
 
 do_client() {
-    $PDSH $CLIENT "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
+    $PDSH $CLIENT "PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; $@"  || exit $?
 }
 
 do_ost() {
-    $PDSH $OSTNODE "PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests; cd $PWD; $@"
+    $PDSH $OSTNODE "PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests; cd $RPWD; $@" || exit $?
 }
 
 drop_request() {
+# OBD_FAIL_MDS_ALL_REQUEST_NET
     do_mds "echo 0x121 > /proc/sys/lustre/fail_loc"
     do_client "$1"
     do_mds "echo 0 > /proc/sys/lustre/fail_loc"
 }
 
 drop_reply() {
+# OBD_FAIL_MDS_ALL_REPLY_NET
     do_mds "echo 0x120 > /proc/sys/lustre/fail_loc"
     do_client "$@"
     do_mds "echo 0 > /proc/sys/lustre/fail_loc"
@@ -52,9 +65,9 @@ make_config() {
            --nettype $NETWORKTYPE || exit 4
     done
     lmc -m $CONFIG --add mds --node $MDSNODE --mds mds1 --dev $MDSDEV \
-        --size $MDSSIZE || exit 5
+        --size $MDSSIZE --fstype $FSTYPE || exit 5
     lmc -m $CONFIG --add ost --node $OSTNODE --ost ost1 --dev $OSTDEV \
-        --size $OSTSIZE || exit 6
+        --size $OSTSIZE --fstype $FSTYPE || exit 6
     lmc -m $CONFIG --add mtpt --node $CLIENT --path $MOUNTPT --mds mds1 \
         --ost ost1 || exit 7
 }
@@ -84,12 +97,11 @@ unmount_client() {
 }
 
 setup() {
-    make_config
-    start_mds ${REFORMAT:---reformat}
-    start_ost ${REFORMAT:---reformat}
+    start_mds ${REFORMAT}
+    start_ost ${REFORMAT}
     # XXX we should write our own upcall, when we move this somewhere better.
     mount_client --timeout=${TIMEOUT:-5} \
-        --recovery_upcall=$PWD/../../ltest/functional/llite/09/client-upcall.sh
+        --lustre_upcall=$UPCALL
 }
 
 cleanup() {
@@ -114,7 +126,11 @@ if [ ! -z "$ONLY" ]; then
     exit $?
 fi
 
-setup
+make_config
+
+REFORMAT=--reformat $SETUP
+unset REFORMAT
+
 drop_request "mcreate /mnt/lustre/1"
 drop_reply "mcreate /mnt/lustre/2"
 # replay "mcreate /mnt/lustre/3"
@@ -140,5 +156,4 @@ drop_reply "mlink /mnt/lustre/renamed-again /mnt/lustre/link2"
 drop_request "munlink /mnt/lustre/link1"
 drop_reply "munlink /mnt/lustre/link2"
 
-
-cleanup
+$CLEANUP

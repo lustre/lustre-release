@@ -4,21 +4,10 @@
 # See the file COPYING in this distribution
 
 DEFS= 
-
 MODULE = mds
-
 modulefs_DATA = mds.o
 EXTRA_PROGRAMS = mds
-
-LINX= mds_updates.c mds_open.c simple.c target.c
-
-mds_updates.c: 
-	test -e mds_updates.c || ln -sf $(top_srcdir)/lib/mds_updates.c
-simple.c: 
-	test -e simple.c || ln -sf $(top_srcdir)/lib/simple.c
-target.c: 
-	test -e target.c || ln -sf $(top_srcdir)/lib/target.c
-
-mds_SOURCES = mds_lov.c handler.c mds_reint.c mds_fs.c lproc_mds.c $(LINX)
+mds_SOURCES = mds_lov.c handler.c mds_reint.c mds_fs.c lproc_mds.c mds_open.c \
+mds_lib.c mds_internal.h
 
 include $(top_srcdir)/Rules

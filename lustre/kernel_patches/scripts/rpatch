@@ -6,15 +6,34 @@
 	exit 1
 }
 
+# do_remove()
+# {
+# 	if patch -R -p1 -s -i $P/patches/"$1".patch
+# 	then
+# 		true
+# 	else
+# 		echo SOMETHING WENT WRONG
+# 		exit 1
+# 	fi
+# }
+
 do_remove()
 {
-	if patch -R -p1 -s -i $P/patches/"$1".patch
-	then
-		true
-	else
-		echo SOMETHING WENT WRONG
-		exit 1
-	fi
+	FILES=$(cat $P/pc/$1.pc)
+	for file in $FILES ; do
+	    base_dir=`pwd`	
+	    if [ -L "$file"~"orig" ]; then
+	    	if [ `readlink "$file"~"orig"` = "$base_dir/""$file"~"$1" ]; then
+		    rm -rf "$file"~"orig"
+	        fi
+	    fi 
+	    if [ -f "$file"~"$1" ]; then
+	    	mv -f "$file"~"$1" "$file"
+            else
+	    	rm -f "$file"
+            fi
+        done
+        true
 }
 
 kill_old_ones()
@@ -40,18 +59,20 @@ fi
 PATCH_NAME=$(stripit $1)
 
 warn_top_current
-
 if is_applied "$PATCH_NAME"
 then
-	if can_remove "$PATCH_NAME"
-	then
+#	if can_remove "$PATCH_NAME"
+#	then
+		if [ ! -f $P/pc/$PATCH_NAME.pc ]; then
+			exit 1
+		fi
 		do_remove "$PATCH_NAME"
 		kill_old_ones "$PATCH_NAME"
 		remove_from_db "$PATCH_NAME"
-	else
-		echo "$PATCH_NAME" does not remove cleanly
-		exit 1
-	fi
+#	else
+#		echo "$PATCH_NAME" does not remove cleanly
+#		exit 1
+#	fi
 else
 	echo "$PATCH_NAME" is not applied
 	exit 1

@@ -5,16 +5,15 @@
 
 DEFS=
 
+if LIBLUSTRE
+lib_LIBRARIES = libmdc.a
+libmdc_a_SOURCES = mdc_request.c mdc_reint.c mdc_lib.c mdc_internal.h
+else
 MODULE = mdc
 modulefs_DATA = mdc.o
 EXTRA_PROGRAMS = mdc
 
-LINX= mds_updates.c client.c
-mdc_SOURCES =  mdc_request.c mdc_reint.c lproc_mdc.c $(LINX)
-
-mds_updates.c: 
-	test -e mds_updates.c || ln -sf $(top_srcdir)/lib/mds_updates.c .
-client.c: 
-	test -e client.c || ln -sf $(top_srcdir)/lib/client.c .
+mdc_SOURCES = mdc_request.c mdc_reint.c lproc_mdc.c mdc_lib.c mdc_internal.h
+endif
 
 include $(top_srcdir)/Rules

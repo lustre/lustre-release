@@ -15,12 +15,20 @@ if [ "$LUSTRE" ]; then
   lustre_opt="--lustre=$LUSTRE"
 fi
 
+if [ "$LDAPURL" ]; then
+    conf_opt="--ldapurl $LDAPURL --config $NAME"
+else
+    sh $mkconfig $config || exit 1
+    conf_opt="$config"
+fi    
+
+[ "$NODE" ] && node_opt="--node $NODE"
+
 if [ "$1" = "-v" ]; then
   verbose="-v"
 fi
 
 [ -x $LCONF ] || chmod a+rx $LCONF
 
-sh $mkconfig $config || exit 1
-
-${LCONF} $portals_opt $lustre_opt --reformat --gdb $verbose $config  || exit 2
+${LCONF} $portals_opt $lustre_opt $node_opt --reformat --gdb \
+    $verbose $conf_opt  || exit 2

@@ -12,16 +12,6 @@ MDSSIZE=50000
 OSTDEV=$TMP/ost1
 OSTSIZE=200000
 
-kver=`uname -r | cut -d "." -f 1,2`
-
-case $kver in
-  2.4) FSTYPE="--fstype=extN"  ;;
-  2.5) FSTYPE="--fstype=ext3"  ;;
-  *) echo "Kernel version $kver not supported"
-     exit 1
-     ;;
-esac
-
 rm -f $config
 # create nodes
 ${LMC} --add node --node localhost || exit 10

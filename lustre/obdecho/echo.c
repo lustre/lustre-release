@@ -63,7 +63,7 @@ struct xprocfs_io_stat {
         __u64    st_create_reqs;
         __u64    st_destroy_reqs;
         __u64    st_statfs_reqs;
-        __u64    st_sync_reqs;
+        __u64    st_syncfs_reqs;
         __u64    st_open_reqs;
         __u64    st_close_reqs;
         __u64    st_punch_reqs;
@@ -77,6 +77,7 @@ do {                                                            \
         xprocfs_iostats[smp_processor_id()].field += (count);   \
 } while (0)
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #define DECLARE_XPROCFS_SUM_STAT(field)                 \
 static long long                                        \
 xprocfs_sum_##field (void)                              \
@@ -88,7 +89,7 @@ xprocfs_sum_##field (void)                              \
                 stat += xprocfs_iostats[i].field;       \
         return (stat);                                  \
 }
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+
 DECLARE_XPROCFS_SUM_STAT (st_read_bytes)
 DECLARE_XPROCFS_SUM_STAT (st_read_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_write_bytes)
@@ -98,7 +99,7 @@ DECLARE_XPROCFS_SUM_STAT (st_setattr_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_create_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_destroy_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_statfs_reqs)
-DECLARE_XPROCFS_SUM_STAT (st_sync_reqs)
+DECLARE_XPROCFS_SUM_STAT (st_syncfs_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_open_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_close_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_punch_reqs)
@@ -146,7 +147,7 @@ xprocfs_init (char *name)
 
         xprocfs_dir = proc_mkdir (dirname, NULL);
         if (xprocfs_dir == NULL) {
-                CERROR ("Can't make dir\n");
+                CERROR ("Can't make procfs dir %s\n", dirname);
                 return;
         }
 
@@ -160,7 +161,7 @@ xprocfs_init (char *name)
         xprocfs_add_stat ("create_reqs",  xprocfs_sum_st_create_reqs);
         xprocfs_add_stat ("destroy_reqs", xprocfs_sum_st_destroy_reqs);
         xprocfs_add_stat ("statfs_reqs",  xprocfs_sum_st_statfs_reqs);
-        xprocfs_add_stat ("sync_reqs",    xprocfs_sum_st_sync_reqs);
+        xprocfs_add_stat ("syncfs_reqs",  xprocfs_sum_st_syncfs_reqs);
         xprocfs_add_stat ("open_reqs",    xprocfs_sum_st_open_reqs);
         xprocfs_add_stat ("close_reqs",   xprocfs_sum_st_close_reqs);
         xprocfs_add_stat ("punch_reqs",   xprocfs_sum_st_punch_reqs);
@@ -181,7 +182,7 @@ void xprocfs_fini (void)
         remove_proc_entry ("create_reqs",  xprocfs_dir);
         remove_proc_entry ("destroy_reqs", xprocfs_dir);
         remove_proc_entry ("statfs_reqs",  xprocfs_dir);
-        remove_proc_entry ("sync_reqs",    xprocfs_dir);
+        remove_proc_entry ("syncfs_reqs",  xprocfs_dir);
         remove_proc_entry ("open_reqs",    xprocfs_dir);
         remove_proc_entry ("close_reqs",   xprocfs_dir);
         remove_proc_entry ("punch_reqs",   xprocfs_dir);
@@ -191,20 +192,20 @@ void xprocfs_fini (void)
 }
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
-                        struct obd_uuid *cluuid, struct recovd_obd *recovd,
-                        ptlrpc_recovery_cb_t recover)
+                        struct obd_uuid *cluuid)
 {
         return class_connect(conn, obd, cluuid);
 }
 
-static int echo_disconnect(struct lustre_handle *conn)
+static int echo_disconnect(struct lustre_handle *conn, int failover)
 {
         struct obd_export *exp = class_conn2export(conn);
 
         LASSERT (exp != NULL);
 
-        ldlm_cancel_locks_for_export (exp);
-        return (class_disconnect (conn));
+        ldlm_cancel_locks_for_export(exp);
+        class_export_put(exp);
+        return (class_disconnect(conn, failover));
 }
 
 static __u64 echo_next_id(struct obd_device *obddev)
@@ -226,7 +227,7 @@ int echo_create(struct lustre_handle *conn, struct obdo *oa,
         XPROCFS_BUMP_MYCPU_IOSTAT (st_create_reqs, 1);
 
         if (!obd) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return -EINVAL;
         }
 
@@ -255,7 +256,7 @@ int echo_destroy(struct lustre_handle *conn, struct obdo *oa,
         XPROCFS_BUMP_MYCPU_IOSTAT (st_destroy_reqs, 1);
 
         if (!obd) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 RETURN(-EINVAL);
         }
 
@@ -275,7 +276,8 @@ int echo_destroy(struct lustre_handle *conn, struct obdo *oa,
 }
 
 static int echo_open(struct lustre_handle *conn, struct obdo *oa,
-                     struct lov_stripe_md *md, struct obd_trans_info *oti)
+                     struct lov_stripe_md *md, struct obd_trans_info *oti,
+                     struct obd_client_handle *och)
 {
         struct lustre_handle *fh = obdo_handle (oa);
         struct obd_device    *obd = class_conn2obd (conn);
@@ -283,7 +285,7 @@ static int echo_open(struct lustre_handle *conn, struct obdo *oa,
         XPROCFS_BUMP_MYCPU_IOSTAT (st_open_reqs, 1);
 
         if (!obd) {
-                CERROR ("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return (-EINVAL);
         }
 
@@ -292,7 +294,6 @@ static int echo_open(struct lustre_handle *conn, struct obdo *oa,
                 return (-EINVAL);
         }
 
-        fh->addr = oa->o_id;
         fh->cookie = ECHO_HANDLE_MAGIC;
 
         oa->o_valid |= OBD_MD_FLHANDLE;
@@ -308,7 +309,7 @@ static int echo_close(struct lustre_handle *conn, struct obdo *oa,
         XPROCFS_BUMP_MYCPU_IOSTAT (st_close_reqs, 1);
 
         if (!obd) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 return (-EINVAL);
         }
 
@@ -334,7 +335,7 @@ static int echo_getattr(struct lustre_handle *conn, struct obdo *oa,
         XPROCFS_BUMP_MYCPU_IOSTAT (st_getattr_reqs, 1);
 
         if (!obd) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 RETURN(-EINVAL);
         }
 
@@ -357,7 +358,7 @@ static int echo_setattr(struct lustre_handle *conn, struct obdo *oa,
         XPROCFS_BUMP_MYCPU_IOSTAT (st_setattr_reqs, 1);
 
         if (!obd) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+                CERROR("invalid client cookie "LPX64"\n", conn->cookie);
                 RETURN(-EINVAL);
         }
 
@@ -376,7 +377,7 @@ static int echo_setattr(struct lustre_handle *conn, struct obdo *oa,
 /* This allows us to verify that desc_private is passed unmolested */
 #define DESC_PRIV 0x10293847
 
-int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
+int echo_preprw(int cmd, struct obd_export *export, int objcount,
                 struct obd_ioobj *obj, int niocount, struct niobuf_remote *nb,
                 struct niobuf_local *res, void **desc_private,
                 struct obd_trans_info *oti)
@@ -392,11 +393,9 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
         else
                 XPROCFS_BUMP_MYCPU_IOSTAT (st_read_reqs, 1);
 
-        obd = class_conn2obd(conn);
-        if (!obd) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+        obd = export->exp_obd;
+        if (obd == NULL)
                 RETURN(-EINVAL);
-        }
 
         memset(res, 0, sizeof(*res) * niocount);
 
@@ -404,8 +403,6 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                cmd == OBD_BRW_READ ? "reading" : "writing", objcount, niocount);
 
         *desc_private = (void *)DESC_PRIV;
-
-        obd_kmap_get(niocount, 1);
 
         for (i = 0; i < objcount; i++, obj++) {
                 int gfp_mask = (obj->ioo_id & 1) ? GFP_HIGHUSER : GFP_KERNEL;
@@ -434,24 +431,30 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                         atomic_inc(&obd->u.echo.eo_prep);
 
                         r->offset = nb->offset;
-                        r->addr = kmap(r->page);
                         r->len = nb->len;
+                        LASSERT ((r->offset & (PAGE_SIZE - 1)) + r->len <= PAGE_SIZE);
 
-                        CDEBUG(D_PAGE, "$$$$ get page %p, addr %p@"LPU64"\n",
-                               r->page, r->addr, r->offset);
+                        CDEBUG(D_PAGE, "$$$$ get page %p @ "LPU64" for %d\n",
+                               r->page, r->offset, r->len);
 
                         if (cmd == OBD_BRW_READ) {
+                                r->rc = r->len;
                                 XPROCFS_BUMP_MYCPU_IOSTAT(st_read_bytes,r->len);
-                                if (verify)
-                                        page_debug_setup(r->addr, r->len,
+                                if (verify) {
+                                        page_debug_setup(kmap (r->page), r->len,
                                                          r->offset,obj->ioo_id);
+                                        kunmap (r->page);
+                                }
+                                r->rc = r->len;
                         } else {
                                 XPROCFS_BUMP_MYCPU_IOSTAT(st_write_bytes,
                                                           r->len);
-                                if (verify)
-                                        page_debug_setup(r->addr, r->len,
+                                if (verify) {
+                                        page_debug_setup(kmap (r->page), r->len,
                                                          0xecc0ecc0ecc0ecc0,
                                                          0xecc0ecc0ecc0ecc0);
+                                        kunmap (r->page);
+                                }
                         }
                 }
         }
@@ -474,28 +477,23 @@ preprw_cleanup:
                 __free_pages(r->page, 0);
                 atomic_dec(&obd->u.echo.eo_prep);
         }
-        obd_kmap_put(niocount);
         memset(res, 0, sizeof(*res) * niocount);
 
         return rc;
 }
 
-int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
+int echo_commitrw(int cmd, struct obd_export *export, int objcount,
                   struct obd_ioobj *obj, int niocount, struct niobuf_local *res,
                   void *desc_private, struct obd_trans_info *oti)
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;
-        int rc = 0;
-        int vrc = 0;
-        int i;
+        int i, vrc = 0, rc = 0;
         ENTRY;
 
-        obd = class_conn2obd(conn);
-        if (!obd) {
-                CERROR("invalid client "LPX64"\n", conn->addr);
+        obd = export->exp_obd;
+        if (obd == NULL)
                 RETURN(-EINVAL);
-        }
 
         if ((cmd & OBD_BRW_RWMASK) == OBD_BRW_READ) {
                 CDEBUG(D_PAGE, "reading %d obdos with %d IOs\n",
@@ -520,11 +518,14 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
                         struct page *page = r->page;
                         void *addr;
 
+                        kmap (page);
+                        
                         if (!page || !(addr = page_address(page)) ||
                             !kern_addr_valid(addr)) {
 
                                 CERROR("bad page objid "LPU64":%p, buf %d/%d\n",
                                        obj->ioo_id, page, j, obj->ioo_bufcnt);
+                                kunmap (page);
                                 GOTO(commitrw_cleanup, rc = -EFAULT);
                         }
 
@@ -541,7 +542,6 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
 
                         kunmap(page);
                         /* NB see comment above regarding object0 pages */
-                        obd_kmap_put(1);
                         __free_pages(page, 0);
                         atomic_dec(&obd->u.echo.eo_prep);
                 }
@@ -556,8 +556,6 @@ commitrw_cleanup:
         while (++r < res + niocount) {
                 struct page *page = r->page;
 
-                kunmap(page);
-                obd_kmap_put(1);
                 /* NB see comment above regarding object0 pages */
                 __free_pages(page, 0);
                 atomic_dec(&obd->u.echo.eo_prep);
@@ -584,7 +582,7 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
         RETURN(0);
 }
 
-static int echo_cleanup(struct obd_device *obddev)
+static int echo_cleanup(struct obd_device *obddev, int force, int failover)
 {
         ENTRY;
 

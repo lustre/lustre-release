@@ -1,0 +1,118 @@
+This documents the life cycle of message as it arrives and is handled by
+a basic async, packetized NAL.  There are four types of messages that have
+slightly different life cycles, so they are addressed independently.
+
+
+Put request
+-----------
+
+1.  NAL notices that there is a incoming message header on the network
+and reads an ptl_hdr_t in from the wire.
+
+2.  It may store additional NAL specific data that provides context
+for this event in a void* that it will interpret in some fashion
+later.
+
+3.  The NAL calls lib_parse() with a pointer to the header and its
+private data structure.
+
+4.  The library decodes the header and may build a message state
+object that describes the event to be written and the ACK to be
+sent, if any.  It then calls nal->recv() with the private data
+that the NAL passed in, a pointer to the message state object
+and a translated user address.
+
+	The NAL will have been given a chance to pretranslate
+	all user addresses when the buffers are created.  This
+	process is described in the NAL-HOWTO.
+
+5.  The NAL should restore what ever context it required from the
+private data pointer, begin receiving the bytes and possibly store
+some extra state of its own.  It should return at this point.
+
+
+
+Get request
+-----------
+
+1.  As with a Put, the NAL notices the incoming message header and
+passes it to lib_parse().
+
+2.  The library decodes the header and calls nal->recv() with a
+zero byte length, offset and destination to instruct it to clean
+up the wire after reading the header.  The private data will
+be passed in as well, allowing the NAL to retrieve any state
+or context that it requires.
+
+3.  The library may build a message state object to possibly
+write an event log or invalidate a memory region.
+
+4.  The library will build a ptl_msg_t header that specifies the
+Portals protocol information for delivery at the remote end.
+
+5.  The library calls nal->send() with the pre-built header,
+the optional message state object, the four part address
+component, a translated user pointer + offset, and some
+other things.
+
+6.  The NAL is to put the header on the wire or copy it at
+this point (since it off the stack).  It should store some
+amount of state about its current position in the message and
+the destination address.
+
+7.  And then return to the library.
+
+
+Reply request
+-------------
+
+1.  Starting at "The library decodes the header..."
+
+2.  The library decodes the header and calls nal->recv()
+to bring in the rest of the message.  Flow continues in
+exactly the same fashion as with all other receives.
+
+
+Ack request
+-----------
+
+1.  The library decodes the header, builds the appropriate data
+structures for the event in a message state object and calls nal->recv()
+with a zero byte length, etc.
+
+
+Packet arrival
+--------------
+
+1.  The NAL should notice the arrival of a packet, retrieve whatever
+state it needs from the message ID or other NAL specific header data
+and place the data bytes directly into the user address that were
+given to nal->recv().
+
+	How this happens is outside the scope of the Portals library
+	and soley determined by the NAL...
+
+2.  If this is the last packet in a message, the NAL should retrieve
+the lib_msg_t *cookie that it was given in the call to nal->recv()
+and pass it to lib_finalize().  lib_finalize() may call nal->send()
+to send an ACK, nal->write() to record an entry in the event log,
+nal->invalidate() to unregister a region of memory or do nothing at all.
+
+3.  It should then clean up any remaining NAL specific state about
+the message and go back into the main loop.
+
+
+Outgoing packets
+----------------
+
+1.  When the NAL has pending output, it should put the packets on
+the wire wrapped with whatever implementation specified wrappers.
+
+2.  Once it has output all the packets of a message it should
+call lib_finalize() with the message state object that was
+handed to nal->send().  This will allows the library to clean
+up its state regarding the message and write any pending event
+entries.
+
+
+

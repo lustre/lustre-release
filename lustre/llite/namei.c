@@ -98,12 +98,17 @@ static int ll_test_inode(struct inode *inode, void *opaque)
         struct ll_read_inode2_cookie *lic = opaque;
         struct mds_body *body = lic->lic_body;
 
+        if (!(lic->lic_body->valid & (OBD_MD_FLGENER | OBD_MD_FLID)))
+                CERROR("invalid generation\n");
+        CDEBUG(D_VFSTRACE, "comparing inode %p ino %lu/%u to body %lu/%u\n",
+               inode, inode->i_ino, inode->i_generation, ino,
+               lic->lic_body->generation);
+
         if (inode->i_generation != lic->lic_body->generation)
                 return 0;
 
         /* Apply the attributes in 'opaque' to this inode */
-        ll_update_inode(inode, body, lic->lic_lmm);
-
+        ll_update_inode(inode, body, lic->lic_lsm);
         return 1;
 }
 
@@ -118,6 +123,9 @@ int ll_unlock(__u32 mode, struct lustre_handle *lockh)
         RETURN(0);
 }
 
+/* Get an inode by inode number (already instantiated by the intent lookup).
+ * Returns inode or NULL
+ */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 extern int ll_read_inode2(struct inode *inode, void *opaque);
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
@@ -127,9 +135,8 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 
         LASSERT(hash != 0);
         inode = iget5_locked(sb, hash, ll_test_inode, ll_read_inode2, lic);
-
-        if (!inode)
-                return ERR_PTR(-ENOMEM);
+        if (inode == NULL)
+                return NULL;              /* removed ERR_PTR(-ENOMEM) -eeb */
 
         if (inode->i_state & I_NEW)
                 unlock_new_inode(inode);
@@ -144,6 +151,8 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
         struct inode *inode;
         LASSERT(hash != 0);
         inode = iget4(sb, hash, ll_find_inode, lic);
+        CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n", inode->i_ino,
+               inode->i_generation, inode);
         return inode;
 }
 #endif
@@ -186,18 +195,112 @@ int ll_it_open_error(int phase, struct lookup_intent *it)
         return 0;
 }
 
+int ll_mdc_blocking_ast(struct ldlm_lock *lock,
+                        struct ldlm_lock_desc *desc,
+                        void *data, int flag)
+{
+        int rc;
+        struct lustre_handle lockh;
+        ENTRY;
+
+        switch (flag) {
+        case LDLM_CB_BLOCKING:
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc < 0) {
+                        CDEBUG(D_INODE, "ldlm_cli_cancel: %d\n", rc);
+                        RETURN(rc);
+                }
+                break;
+        case LDLM_CB_CANCELING: {
+                /* Invalidate all dentries associated with this inode */
+                struct inode *inode = lock->l_data;
+                LASSERT(inode != NULL);
+
+                //if (inode->i_state & I_FREEING)
+                //        break;
+
+                if (S_ISDIR(inode->i_mode)) {
+                        CDEBUG(D_INODE, "invalidating inode %lu\n",
+                               inode->i_ino);
+
+                        ll_invalidate_inode_pages(inode);
+                }
+
+                if (inode->i_sb->s_root &&
+                    inode != inode->i_sb->s_root->d_inode)
+                        d_unhash_aliases(inode);
+                break;
+        }
+        default:
+                LBUG();
+        }
+
+        RETURN(0);
+}
+
+void ll_mdc_lock_set_inode(struct lustre_handle *lockh, struct inode *inode)
+{
+        struct ldlm_lock *lock = ldlm_handle2lock(lockh);
+        ENTRY;
+
+        LASSERT(lock != NULL);
+        lock->l_data = inode;
+        LDLM_LOCK_PUT(lock);
+        EXIT;
+}
+
+int ll_mdc_cancel_unused(struct lustre_handle *conn, struct inode *inode,
+                         int flags, void *opaque)
+{
+        struct ldlm_res_id res_id =
+                { .name = {inode->i_ino, inode->i_generation} };
+        struct obd_device *obddev = class_conn2obd(conn);
+        ENTRY;
+        RETURN(ldlm_cli_cancel_unused(obddev->obd_namespace, &res_id, flags,
+                                      opaque));
+}
+
+void ll_prepare_mdc_op_data(struct mdc_op_data *data,
+                            struct inode *i1,
+                            struct inode *i2,
+                            const char *name,
+                            int namelen,
+                            int mode)
+{
+        LASSERT(i1);
+
+        data->ino1 = i1->i_ino;
+        data->gen1 = i1->i_generation;
+        data->typ1 = i1->i_mode & S_IFMT;
+        data->gid1 = i1->i_gid;
+
+        if (i2) {
+                data->ino2 = i2->i_ino;
+                data->gen2 = i2->i_generation;
+                data->typ2 = i2->i_mode & S_IFMT;
+                data->gid2 = i2->i_gid;
+        } else {
+                data->ino2 = 0;
+        }
+
+        data->name = name;
+        data->namelen = namelen;
+        data->mode = mode;
+}
+
 #define IT_ENQ_COMPLETE (1<<16)
 
 int ll_intent_lock(struct inode *parent, struct dentry **de,
                    struct lookup_intent *it, intent_finish_cb intent_finish)
 {
         struct dentry *dentry = *de;
+        struct inode *inode = dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(parent);
         struct lustre_handle lockh;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct ptlrpc_request *request = NULL;
-        char *data = NULL;
-        int rc = 0, datalen = 0, offset, flag = 0;
+        int rc = 0, offset, flag = 0;
         obd_id ino = 0;
         ENTRY;
 
@@ -208,17 +311,23 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
         if (it == NULL)
                 it = &lookup_it;
 
-        CDEBUG(D_INFO, "name: %*s, intent: %s\n", dentry->d_name.len,
+        CDEBUG(D_DLMTRACE, "name: %*s, intent: %s\n", dentry->d_name.len,
                dentry->d_name.name, ldlm_it2str(it->it_op));
 
         if (dentry->d_name.len > EXT2_NAME_LEN)
                 RETURN(-ENAMETOOLONG);
 
         if (!(it->it_disposition & IT_ENQ_COMPLETE)) {
+                struct mdc_op_data op_data;
+
+                ll_prepare_mdc_op_data(&op_data, parent, dentry->d_inode,
+                                       dentry->d_name.name, dentry->d_name.len,
+                                       0);
+
                 rc = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_PLAIN, it,
-                                 ll_intent_to_lock_mode(it), parent, dentry,
-                                 &lockh, data, datalen, parent,
-                                 sizeof(*parent));
+                                 ll_intent_to_lock_mode(it), &op_data,
+                                 &lockh, NULL, 0, ldlm_completion_ast,
+                                 ll_mdc_blocking_ast, parent);
                 if (rc < 0)
                         RETURN(rc);
                 memcpy(it->it_lock_handle, &lockh, sizeof(lockh));
@@ -256,14 +365,17 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                  */
 
                 offset = 1;
-                mds_body = lustre_msg_buf(request->rq_repmsg, offset);
+                mds_body = lustre_msg_buf(request->rq_repmsg, offset,
+                                          sizeof(*mds_body));
+                LASSERT (mds_body != NULL);           /* mdc_enqueue checked */
+                LASSERT_REPSWABBED (request, offset); /* mdc_enqueue swabbed */
+
                 ino = mds_body->fid1.id;
                 mode = mds_body->mode;
 
                 /*We were called from revalidate2: did we find the same inode?*/
-                if ((*de)->d_inode &&
-                    (ino != (*de)->d_inode->i_ino || 
-                   mds_body->fid1.generation != (*de)->d_inode->i_generation)) {
+                if (inode && (ino != inode->i_ino ||
+                   mds_body->fid1.generation != inode->i_generation)) {
                         it->it_disposition |= IT_ENQ_COMPLETE;
                         RETURN(-ESTALE);
                 }
@@ -273,8 +385,13 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                  * this request for unconditional replay. */
                 if (it->it_op & IT_OPEN &&
                     (!(it->it_disposition & IT_OPEN_OPEN) ||
-                     it->it_status != 0))
-                        request->rq_flags &= ~PTL_RPC_FL_REPLAY;
+                     it->it_status != 0)) {
+                        unsigned long flags;
+
+                        spin_lock_irqsave (&request->rq_lock, flags);
+                        request->rq_replay = 0;
+                        spin_unlock_irqrestore (&request->rq_lock, flags);
+                }
 
                 if (it->it_op & IT_CREAT) {
                         mdc_store_inode_generation(request, 2, 1);
@@ -329,7 +446,9 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                 } else
                         LBUG();
         } else {
+                struct ll_fid fid;
                 obd_flag valid;
+                int eadatalen;
                 int mode;
 
                 LBUG(); /* For the moment, no non-intent locks */
@@ -351,32 +470,44 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                 valid = OBD_MD_FLNOTOBD;
 
                 if (S_ISREG(mode)) {
-                        datalen = obd_size_wiremd(&sbi->ll_osc_conn, NULL),
+                        eadatalen = obd_size_diskmd(&sbi->ll_osc_conn, NULL),
                         valid |= OBD_MD_FLEASIZE;
                 } else {
+                        eadatalen = 0;
                         valid |= OBD_MD_FLBLOCKS;
                 }
 
-                rc = mdc_getattr(&sbi->ll_mdc_conn, ino, mode, valid,
-                                 datalen, &request);
+                fid.id = ino;
+                fid.generation = 0;
+                fid.f_type = mode;
+                rc = mdc_getattr(&sbi->ll_mdc_conn, &fid, valid,
+                                 eadatalen, &request);
                 if (rc) {
                         CERROR("failure %d inode "LPX64"\n", rc, ino);
-                        GOTO(drop_req, rc = -abs(rc));
+                        GOTO(drop_lock, rc = -abs(rc));
                 }
         }
 
+        LASSERT (request != NULL);
+
         if (intent_finish != NULL) {
-                rc = intent_finish(flag, request, de, it, offset, ino);
+                rc = intent_finish(flag, request, parent, de, it, offset, ino);
                 dentry = *de; /* intent_finish may change *de */
-        } else {
-                ptlrpc_req_finished(request);
+                inode = dentry->d_inode;
+                if (rc != 0)
+                        GOTO(drop_lock, rc);
         }
+        ptlrpc_req_finished(request);
 
         /* This places the intent in the dentry so that the vfs_xxx
          * operation can lay its hands on it; but that is not always
          * needed...  (we need to save it in the GETATTR case for the
          * benefit of ll_inode_revalidate -phil) */
-        if (it->it_op & (IT_OPEN | IT_GETATTR))
+        /* Ignore trying to save the intent for "special" inodes as
+         * they have special semantics that can cause deadlocks on
+         * the intent semaphore. -mmex */
+        if ((!inode || S_ISDIR(inode->i_mode) || S_ISREG(inode->i_mode) ||
+             S_ISLNK(inode->i_mode)) && (it->it_op & (IT_OPEN | IT_GETATTR)))
                 LL_SAVE_INTENT(dentry, it);
         else
                 CDEBUG(D_DENTRY,
@@ -389,10 +520,10 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
 
         RETURN(rc);
 
+ drop_lock:
+        ll_intent_release(dentry, it);
  drop_req:
         ptlrpc_req_finished(request);
- drop_lock:
-#warning FIXME: must release lock here
         RETURN(rc);
 }
 
@@ -440,32 +571,87 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
 }
 
 static int
-lookup2_finish(int flag, struct ptlrpc_request *request, struct dentry **de,
+lookup2_finish(int flag, struct ptlrpc_request *request,
+               struct inode *parent, struct dentry **de,
                struct lookup_intent *it, int offset, obd_id ino)
 {
+        struct ll_sb_info *sbi = ll_i2sbi(parent);
         struct dentry *dentry = *de, *saved = *de;
         struct inode *inode = NULL;
-        struct ll_read_inode2_cookie lic = {.lic_body = NULL, .lic_lmm = NULL};
+        struct ll_read_inode2_cookie lic = {.lic_body = NULL, .lic_lsm = NULL};
+
+        /* NB 1 request reference will be taken away by ll_intent_lock()
+         * when I return */
 
         if (!(flag & LL_LOOKUP_NEGATIVE)) {
                 ENTRY;
-                lic.lic_body = lustre_msg_buf(request->rq_repmsg, offset);
+
+                /* We only get called if the mdc_enqueue() called from
+                 * ll_intent_lock() was successful.  Therefore the mds_body
+                 * is present and correct, and the eadata is present if
+                 * body->eadatasize != 0 (but still opaque, so only
+                 * obd_unpackmd() can check the size) */
+                lic.lic_body = lustre_msg_buf(request->rq_repmsg, offset,
+                                              sizeof (*lic.lic_body));
+                LASSERT(lic.lic_body != NULL);
+                LASSERT_REPSWABBED(request, offset);
 
                 if (S_ISREG(lic.lic_body->mode) &&
-                    lic.lic_body->valid & OBD_MD_FLEASIZE) {
-                        LASSERT(request->rq_repmsg->bufcount > offset);
-                        lic.lic_lmm = lustre_msg_buf(request->rq_repmsg,
-                                                     offset + 1);
-                } else {
-                        lic.lic_lmm = NULL;
+                    (lic.lic_body->valid & OBD_MD_FLEASIZE)) {
+                        struct lov_mds_md    *lmm;
+                        int                   lmm_size;
+                        int                   rc;
+
+                        lmm_size = lic.lic_body->eadatasize;
+                        if (lmm_size == 0) {
+                                CERROR("OBD_MD_FLEASIZE set but "
+                                       "eadatasize 0\n");
+                                RETURN(-EPROTO);
+                        }
+                        lmm = lustre_msg_buf(request->rq_repmsg, offset + 1,
+                                             lmm_size);
+                        LASSERT(lmm != NULL);
+                        LASSERT_REPSWABBED(request, offset + 1);
+
+                        rc = obd_unpackmd(&sbi->ll_osc_conn,
+                                          &lic.lic_lsm, lmm, lmm_size);
+                        if (rc < 0) {
+                                CERROR("Error %d unpacking eadata\n", rc);
+                                RETURN(rc);
+                        }
+                        LASSERT(rc >= sizeof(*lic.lic_lsm));
                 }
 
-                /* No rpc's happen during iget4, -ENOMEM's are possible */
+                /* Both ENOMEM and an RPC timeout are possible in ll_iget; which
+                 * to pick?  A more generic EIO?  -phik */
                 inode = ll_iget(dentry->d_sb, ino, &lic);
                 if (!inode) {
-                        /* XXX make sure that request is freed in this case;
-                         * I think it is, but double-check refcounts. -phil */
+                        /* free the lsm if we allocated one above */
+                        if (lic.lic_lsm != NULL)
+                                obd_free_memmd(&sbi->ll_osc_conn, &lic.lic_lsm);
                         RETURN(-ENOMEM);
+                } else if (lic.lic_lsm != NULL &&
+                           ll_i2info(inode)->lli_smd != lic.lic_lsm) {
+                        obd_free_memmd(&sbi->ll_osc_conn, &lic.lic_lsm);
+                }
+
+                /* If this is a stat, get the authoritative file size */
+                if (it->it_op == IT_GETATTR && S_ISREG(inode->i_mode) &&
+                    ll_i2info(inode)->lli_smd != NULL) {
+                        struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
+                        struct lustre_handle lockh = {0};
+                        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+                        ldlm_error_t rc;
+
+                        LASSERT(lsm->lsm_object_id != 0);
+
+                        rc = ll_extent_lock(NULL, inode, lsm, LCK_PR, &extent,
+                                            &lockh);
+                        if (rc != ELDLM_OK) {
+                                iput(inode);
+                                RETURN(-EIO);
+                        }
+                        ll_extent_unlock(NULL, inode, lsm, LCK_PR, &lockh);
                 }
 
                 dentry = *de = ll_find_alias(inode, dentry);
@@ -473,13 +659,11 @@ lookup2_finish(int flag, struct ptlrpc_request *request, struct dentry **de,
                 /* We asked for a lock on the directory, and may have been
                  * granted a lock on the inode.  Just in case, fixup the data
                  * pointer. */
-                mdc_lock_set_inode((struct lustre_handle *)it->it_lock_handle,
-                                   inode);
+                ll_mdc_lock_set_inode((struct lustre_handle*)it->it_lock_handle,
+                                      inode);
         } else {
                 ENTRY;
         }
-
-        ptlrpc_req_finished(request);
 
         dentry->d_op = &ll_d_ops;
         ll_set_dd(dentry);
@@ -493,21 +677,26 @@ lookup2_finish(int flag, struct ptlrpc_request *request, struct dentry **de,
 static struct dentry *ll_lookup2(struct inode *parent, struct dentry *dentry,
                                  struct lookup_intent *it)
 {
-        struct dentry *save = dentry;
+        struct dentry *save = dentry, *retval;
         int rc;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
+               dentry->d_name.name, parent->i_ino, parent->i_generation,
+               parent, LL_IT2STR(it));
+
         rc = ll_intent_lock(parent, &dentry, it, lookup2_finish);
         if (rc < 0) {
                 CDEBUG(D_INFO, "ll_intent_lock: %d\n", rc);
-                RETURN(ERR_PTR(rc));
+                GOTO(out, retval = ERR_PTR(rc));
         }
 
         if (dentry == save)
-                RETURN(NULL);
+                GOTO(out, retval = NULL);
         else
-                RETURN(dentry);
+                GOTO(out, retval = dentry);
+ out:
+        return retval;
 }
 
 /* We depend on "mode" being set with the proper file type/umask by now */
@@ -519,20 +708,19 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         struct inode *inode;
         struct ptlrpc_request *request = NULL;
         struct mds_body *body;
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        time_t time = CURRENT_TIME.tv_sec;
-#else
-        time_t time = CURRENT_TIME;
-#endif
+        time_t time = LTIME_S(CURRENT_TIME);
         struct ll_sb_info *sbi = ll_i2sbi(dir);
-        struct ll_read_inode2_cookie lic = { .lic_lmm = NULL, };
+        struct ll_read_inode2_cookie lic;
         ENTRY;
 
         if (it && it->it_disposition) {
                 ll_invalidate_inode_pages(dir);
                 request = it->it_data;
-                body = lustre_msg_buf(request->rq_repmsg, 1);
+                body = lustre_msg_buf(request->rq_repmsg, 1, sizeof (*body));
+                LASSERT (body != NULL);         /* checked already */
+                LASSERT_REPSWABBED (request, 1); /* swabbed already */
         } else {
+                struct mdc_op_data op_data;
                 int gid = current->fsgid;
                 int rc;
 
@@ -542,21 +730,29 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                                 mode |= S_ISGID;
                 }
 
-                rc = mdc_create(&sbi->ll_mdc_conn, dir, name, namelen,
+                ll_prepare_mdc_op_data(&op_data, dir, NULL, name, namelen, 0);
+                rc = mdc_create(&sbi->ll_mdc_conn, &op_data,
                                 data, datalen, mode, current->fsuid, gid,
                                 time, extra, &request);
                 if (rc) {
                         inode = ERR_PTR(rc);
                         GOTO(out, rc);
                 }
-                body = lustre_msg_buf(request->rq_repmsg, 0);
+                body = lustre_swab_repbuf(request, 0, sizeof (*body),
+                                          lustre_swab_mds_body);
+                if (body == NULL) {
+                        CERROR ("Can't unpack mds_body\n");
+                        GOTO (out, inode = ERR_PTR(-EPROTO));
+                }
         }
 
         lic.lic_body = body;
+        lic.lic_lsm = NULL;
 
         inode = ll_iget(dir->i_sb, body->ino, &lic);
-        if (IS_ERR(inode)) {
-                int rc = PTR_ERR(inode);
+        if (!inode || is_bad_inode(inode)) {
+                /* XXX might need iput() for bad inode */
+                int rc = -EIO;
                 CERROR("new_inode -fatal: rc %d\n", rc);
                 LBUG();
                 GOTO(out, rc);
@@ -576,8 +772,8 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                 /* We asked for a lock on the directory, but were
                  * granted a lock on the inode.  Since we finally have
                  * an inode pointer, stuff it in the lock. */
-                mdc_lock_set_inode((struct lustre_handle *)it->it_lock_handle,
-                                   inode);
+                ll_mdc_lock_set_inode((struct lustre_handle*)it->it_lock_handle,
+                                      inode);
         }
 
         EXIT;
@@ -592,22 +788,21 @@ static int ll_mdc_unlink(struct inode *dir, struct inode *child, __u32 mode,
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct mds_body *body;
+        struct lov_mds_md *eadata;
         struct lov_stripe_md *lsm = NULL;
         struct lustre_handle lockh;
         struct lookup_intent it = { .it_op = IT_UNLINK };
         struct obdo *oa;
         int err;
-        struct mdc_unlink_data data;
+        struct mdc_op_data op_data;
         ENTRY;
 
-        data.unl_dir = dir;
-        data.unl_de = child;
-        data.unl_mode = mode;
-        data.unl_name = name;
-        data.unl_len = len;
+        ll_prepare_mdc_op_data(&op_data, dir, child, name, len, mode);
 
-        err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_PLAIN, &it, LCK_EX, dir,
-                         NULL, &lockh, NULL, 0, &data, sizeof(data));
+        err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_PLAIN, &it, LCK_EX,
+                         &op_data, &lockh, NULL, 0,
+                         ldlm_completion_ast, ll_mdc_blocking_ast,
+                         dir);
         request = (struct ptlrpc_request *)it.it_data;
         if (err < 0)
                 GOTO(out, err);
@@ -615,21 +810,39 @@ static int ll_mdc_unlink(struct inode *dir, struct inode *child, __u32 mode,
                 GOTO(out, err = it.it_status);
         err = 0;
 
-        body = lustre_msg_buf(request->rq_repmsg, 1);
-        LASSERT(body != NULL);
+        body = lustre_msg_buf (request->rq_repmsg, 1, sizeof (*body));
+        LASSERT (body != NULL);                 /* checked by mdc_enqueue() */
+        LASSERT_REPSWABBED (request, 1);        /* swabbed by mdc_enqueue() */
+
         if (!(body->valid & OBD_MD_FLEASIZE))
                 GOTO(out, 0);
 
+        if (body->eadatasize == 0) {
+                CERROR ("OBD_MD_FLEASIZE set but eadatasize zero\n");
+                GOTO (out, err = -EPROTO);
+        }
+
         /* The MDS sent back the EA because we unlinked the last reference
-         * to this file.  Use this EA to unlink the objects on the OST */
-        err = obd_unpackmd(ll_i2obdconn(dir), &lsm,
-                           lustre_msg_buf(request->rq_repmsg, 2));
-        if (err < 0)
+         * to this file. Use this EA to unlink the objects on the OST.
+         * Note that mdc_enqueue() has already checked there _is_ some EA
+         * data, but this data is opaque to both mdc_enqueue() and the MDS.
+         * We have to leave it to obd_unpackmd() to check it is complete
+         * and sensible. */
+        eadata = lustre_msg_buf (request->rq_repmsg, 2, body->eadatasize);
+        LASSERT (eadata != NULL);
+        LASSERT_REPSWABBED (request, 2);
+
+        err = obd_unpackmd(ll_i2obdconn(dir), &lsm, eadata,
+                           body->eadatasize);
+        if (err < 0) {
                 CERROR("obd_unpackmd: %d\n", err);
+                GOTO (out_unlock, err);
+        }
+        LASSERT (err >= sizeof (*lsm));
 
         oa = obdo_alloc();
         if (oa == NULL)
-                GOTO(out_unlock, err = -ENOMEM);
+                GOTO(out_free_memmd, err = -ENOMEM);
 
         oa->o_id = lsm->lsm_object_id;
         oa->o_mode = body->mode & S_IFMT;
@@ -640,7 +853,7 @@ static int ll_mdc_unlink(struct inode *dir, struct inode *child, __u32 mode,
         if (err)
                 CERROR("obd destroy objid 0x"LPX64" error %d\n",
                        lsm->lsm_object_id, err);
-
+ out_free_memmd:
         obd_free_memmd(ll_i2obdconn(dir), &lsm);
  out_unlock:
         ldlm_lock_decref_and_cancel(&lockh, LCK_EX);
@@ -670,7 +883,10 @@ static int ll_create(struct inode *dir, struct dentry *dentry, int mode)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
+               dentry->d_name.name, dir->i_ino, dir->i_generation, dir,
+               LL_IT2STR(dentry->d_it));
+
         it = dentry->d_it;
 
         rc = ll_it_open_error(IT_OPEN_CREATE, it);
@@ -702,16 +918,15 @@ static int ll_mknod2(struct inode *dir, const char *name, int len, int mode,
                      int rdev)
 {
         struct ptlrpc_request *request = NULL;
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        time_t time = CURRENT_TIME.tv_sec;
-#else
-        time_t time = CURRENT_TIME;
-#endif
+        time_t time = LTIME_S(CURRENT_TIME);
         struct ll_sb_info *sbi = ll_i2sbi(dir);
+        struct mdc_op_data op_data;
         int err = -EMLINK;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
+               name, dir->i_ino, dir->i_generation, dir);
+
         if (dir->i_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
@@ -722,8 +937,9 @@ static int ll_mknod2(struct inode *dir, const char *name, int len, int mode,
                 mode |= S_IFREG; /* for mode = 0 case, fallthrough */
         case S_IFCHR: case S_IFBLK:
         case S_IFIFO: case S_IFSOCK:
-                err = mdc_create(&sbi->ll_mdc_conn, dir, name, len, NULL, 0,
-                                 mode, current->fsuid, current->fsgid, time,
+                ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+                err = mdc_create(&sbi->ll_mdc_conn, &op_data, NULL, 0, mode,
+                                 current->fsuid, current->fsgid, time,
                                  rdev, &request);
                 ptlrpc_req_finished(request);
                 break;
@@ -743,7 +959,10 @@ static int ll_mknod(struct inode *dir, struct dentry *dentry, int mode,
         struct inode *inode;
         int rc = 0;
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
+               dentry->d_name.name, dir->i_ino, dir->i_generation, dir,
+               LL_IT2STR(dentry->d_it));
+
         LL_GET_INTENT(dentry, it);
 
         if ((mode & S_IFMT) == 0)
@@ -767,20 +986,20 @@ static int ll_symlink2(struct inode *dir, const char *name, int len,
                        const char *tgt)
 {
         struct ptlrpc_request *request = NULL;
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        time_t time = CURRENT_TIME.tv_sec;
-#else
-        time_t time = CURRENT_TIME;
-#endif
+        time_t time = LTIME_S(CURRENT_TIME);
         struct ll_sb_info *sbi = ll_i2sbi(dir);
+        struct mdc_op_data op_data;
         int err = -EMLINK;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),target=%s\n",
+               name, dir->i_ino, dir->i_generation, dir, tgt);
+
         if (dir->i_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
-        err = mdc_create(&sbi->ll_mdc_conn, dir, name, len,
+        ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+        err = mdc_create(&sbi->ll_mdc_conn, &op_data,
                          tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                          current->fsuid, current->fsgid, time, 0, &request);
         ptlrpc_req_finished(request);
@@ -797,7 +1016,10 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         int err = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
+               dentry->d_name.name, dir->i_ino, dir->i_generation, dir,
+               LL_IT2STR(dentry->d_it));
+
         LL_GET_INTENT(dentry, it);
 
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
@@ -830,13 +1052,17 @@ static int ll_link2(struct inode *src, struct inode *dir,
                     const char *name, int len)
 {
         struct ptlrpc_request *request = NULL;
+        struct mdc_op_data op_data;
         int err;
         struct ll_sb_info *sbi = ll_i2sbi(dir);
 
         ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),dir=%lu/%u(%p),target=%s\n",
+               src->i_ino, src->i_generation, src,
+               dir->i_ino, dir->i_generation, dir, name);
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
-        err = mdc_link(&sbi->ll_mdc_conn, src, dir, name, len, &request);
+        ll_prepare_mdc_op_data(&op_data, src, dir, name, len, 0);
+        err = mdc_link(&sbi->ll_mdc_conn, &op_data, &request);
         ptlrpc_req_finished(request);
 
         RETURN(err);
@@ -848,18 +1074,18 @@ static int ll_link(struct dentry *old_dentry, struct inode * dir,
         struct lookup_intent *it;
         struct inode *inode = old_dentry->d_inode;
         int rc;
+        CDEBUG(D_VFSTRACE,
+               "VFS Op:inode=%lu/%u(%p),dir=%lu/%u(%p),target=%s,intent=%s\n",
+               inode->i_ino, inode->i_generation, inode, dir->i_ino,
+               dir->i_generation, dir, dentry->d_name.name,
+               LL_IT2STR(dentry->d_it));
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
         LL_GET_INTENT(dentry, it);
 
         if (it && it->it_disposition) {
                 if (it->it_status)
                         RETURN(it->it_status);
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-                inode->i_ctime.tv_sec = CURRENT_TIME.tv_sec;
-#else
-                inode->i_ctime = CURRENT_TIME;
-#endif
+                LTIME_S(inode->i_ctime) = LTIME_S(CURRENT_TIME);
                 ext2_inc_count(inode);
                 atomic_inc(&inode->i_count);
                 d_instantiate(dentry, inode);
@@ -878,11 +1104,7 @@ static int ll_link(struct dentry *old_dentry, struct inode * dir,
         if (rc)
                 RETURN(rc);
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-                inode->i_ctime.tv_sec = CURRENT_TIME.tv_sec;
-#else
-                inode->i_ctime = CURRENT_TIME;
-#endif
+        LTIME_S(inode->i_ctime) = LTIME_S(CURRENT_TIME);
         ext2_inc_count(inode);
         atomic_inc(&inode->i_count);
 
@@ -892,22 +1114,21 @@ static int ll_link(struct dentry *old_dentry, struct inode * dir,
 static int ll_mkdir2(struct inode *dir, const char *name, int len, int mode)
 {
         struct ptlrpc_request *request = NULL;
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        time_t time = CURRENT_TIME.tv_sec;
-#else
-        time_t time = CURRENT_TIME;
-#endif
+        time_t time = LTIME_S(CURRENT_TIME);
         struct ll_sb_info *sbi = ll_i2sbi(dir);
+        struct mdc_op_data op_data;
         int err = -EMLINK;
         ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
+               name, dir->i_ino, dir->i_generation, dir);
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
         if (dir->i_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
         mode = (mode & (S_IRWXUGO|S_ISVTX) & ~current->fs->umask) | S_IFDIR;
-        err = mdc_create(&sbi->ll_mdc_conn, dir, name, len, NULL, 0,
-                         mode, current->fsuid, current->fsgid,
+        ll_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
+        err = mdc_create(&sbi->ll_mdc_conn, &op_data, NULL, 0, mode,
+                         current->fsuid, current->fsgid,
                          time, 0, &request);
         ptlrpc_req_finished(request);
         RETURN(err);
@@ -920,8 +1141,10 @@ static int ll_mkdir(struct inode *dir, struct dentry *dentry, int mode)
         struct inode * inode;
         int err = -EMLINK;
         ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
+               dentry->d_name.name, dir->i_ino, dir->i_generation, dir,
+               LL_IT2STR(dentry->d_it));
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
         LL_GET_INTENT(dentry, it);
 
         if (dir->i_nlink >= EXT2_LINK_MAX)
@@ -967,8 +1190,9 @@ static int ll_rmdir2(struct inode *dir, const char *name, int len)
 {
         int rc;
         ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
+               name, dir->i_ino, dir->i_generation, dir);
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
         rc = ll_mdc_unlink(dir, NULL, S_IFDIR, name, len);
         RETURN(rc);
 }
@@ -977,8 +1201,9 @@ static int ll_unlink2(struct inode *dir, const char *name, int len)
 {
         int rc;
         ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p)\n",
+               name, dir->i_ino, dir->i_generation, dir);
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
         rc = ll_mdc_unlink(dir, NULL, S_IFREG, name, len);
         RETURN(rc);
 }
@@ -1029,8 +1254,10 @@ static int ll_unlink(struct inode *dir, struct dentry *dentry)
 {
         struct lookup_intent * it;
         ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
+               dentry->d_name.name, dir->i_ino, dir->i_generation, dir,
+               LL_IT2STR(dentry->d_it));
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
         LL_GET_INTENT(dentry, it);
 
         RETURN(ll_common_unlink(dir, dentry, it, S_IFREG));
@@ -1042,8 +1269,10 @@ static int ll_rmdir(struct inode *dir, struct dentry *dentry)
         struct lookup_intent *it;
         int rc;
         ENTRY;
-        
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
+        CDEBUG(D_VFSTRACE, "VFS Op:name=%s,dir=%lu/%u(%p),intent=%s\n",
+               dentry->d_name.name, dir->i_ino, dir->i_generation, dir,
+               LL_IT2STR(dentry->d_it));
+
         LL_GET_INTENT(dentry, it);
 
         if ((!it || !it->it_disposition) && !ext2_empty_dir(inode))
@@ -1065,11 +1294,15 @@ static int ll_rename2(struct inode *src, struct inode *tgt,
 {
         struct ptlrpc_request *request = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(src);
+        struct mdc_op_data op_data;
         int err;
         ENTRY;
-        
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
-        err = mdc_rename(&sbi->ll_mdc_conn, src, tgt,
+        CDEBUG(D_VFSTRACE, "VFS Op:oldname=%s,src_dir=%lu/%u(%p),newname=%s,"
+               "tgt_dir=%lu/%u(%p)\n", oldname, src->i_ino, src->i_generation,
+               src, newname, tgt->i_ino, tgt->i_generation, tgt);
+
+        ll_prepare_mdc_op_data(&op_data, src, tgt, NULL, 0, 0);
+        err = mdc_rename(&sbi->ll_mdc_conn, &op_data,
                          oldname, oldlen, newname, newlen, &request);
         ptlrpc_req_finished(request);
 
@@ -1089,8 +1322,12 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
         struct ext2_dir_entry_2 * old_de;
         struct page * old_page;
         int err;
+        CDEBUG(D_VFSTRACE, "VFS Op:oldname=%s,src_dir=%lu/%u(%p),newname=%s,"
+               "tgt_dir=%lu/%u(%p),intent=%s\n",
+               old_dentry->d_name.name, old_dir->i_ino, old_dir->i_generation,
+               old_dir, new_dentry->d_name.name, new_dir->i_ino,
+               new_dir->i_generation, new_dir, LL_IT2STR(new_dentry->d_it));
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
         LL_GET_INTENT(new_dentry, it);
 
         if (it && it->it_disposition) {

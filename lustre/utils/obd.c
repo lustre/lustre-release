@@ -43,14 +43,12 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_dlm.h>
 #include <linux/obd.h>          /* for struct lov_stripe_md */
-#include <linux/obd_lov.h>      /* for IOC_LOV_SET_OSC_ACTIVE */
 #include <linux/lustre_build_version.h>
 
 #include <unistd.h>
 #include <sys/un.h>
 #include <time.h>
 #include <sys/time.h>
-#include <netinet/in.h>
 #include <errno.h>
 #include <string.h>
 
@@ -76,8 +74,7 @@ static long long counter_snapshot[2][MAX_SHMEM_COUNT];
 struct timeval prev_time;
 #endif
 
-uint64_t conn_addr = -1;
-uint64_t conn_cookie;
+uint64_t conn_cookie = -1;
 char rawbuf[8192];
 char *buf = rawbuf;
 int max = sizeof(rawbuf);
@@ -94,7 +91,6 @@ static char *cmdname(char *func);
 #define IOC_INIT(data)                                                  \
 do {                                                                    \
         memset(&data, 0, sizeof(data));                                 \
-        data.ioc_addr = conn_addr;                                      \
         data.ioc_cookie = conn_cookie;                                  \
 } while (0)
 
@@ -149,11 +145,27 @@ static int do_name2dev(char *func, char *name)
 
         IOC_PACK(func, data);
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_NAME2DEV, buf);
-        if (rc < 0) {
-                fprintf(stderr, "error: %s: %s - %s\n", cmdname(func),
-                        name, strerror(rc = errno));
-                return rc;
-        }
+        if (rc < 0)
+                return errno;
+        IOC_UNPACK(func, data);
+
+        return data.ioc_dev + N2D_OFF;
+}
+
+static int do_uuid2dev(char *func, char *uuid)
+{
+        struct obd_ioctl_data data;
+        int rc;
+
+        IOC_INIT(data);
+
+        data.ioc_inllen1 = strlen(uuid) + 1;
+        data.ioc_inlbuf1 = uuid;
+
+        IOC_PACK(func, data);
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_UUID2DEV, buf);
+        if (rc < 0)
+                return errno;
         IOC_UNPACK(func, data);
 
         return data.ioc_dev + N2D_OFF;
@@ -161,8 +173,7 @@ static int do_name2dev(char *func, char *name)
 
 /*
  * resolve a device name to a device number.
- * supports a number or name.
- * FIXME: support UUID
+ * supports a number, $name or %uuid.
  */
 static int parse_devname(char *func, char *name)
 {
@@ -172,16 +183,31 @@ static int parse_devname(char *func, char *name)
         if (!name)
                 return ret;
         if (name[0] == '$') {
-                rc = do_name2dev(func, name + 1);
+                name++;
+                rc = do_name2dev(func, name);
                 if (rc >= N2D_OFF) {
                         ret = rc - N2D_OFF;
-                        printf("%s is device %d\n", name, ret);
+                        printf("Name %s is device %d\n", name, ret);
                 } else {
-                        fprintf(stderr, "error: %s: %s: %s\n", cmdname(func),
-                                name, "device not found");
+                        printf("No device found for name %s: %s\n",
+                               name, strerror(rc));
                 }
-        } else
+        } else if (name[0] == '%') {
+                name++;
+                rc = do_uuid2dev(func, name);
+                if (rc >= N2D_OFF) {
+                        ret = rc - N2D_OFF;
+                        printf("UUID %s is device %d\n", name, ret);
+                } else {
+                        printf("No device found for UUID %s: %s\n",
+                               name, strerror(rc));
+                }
+        } else {
+                /* Assume it's a number.  This means that bogus strings become
+                 * 0.  I might care about that some day. */
                 ret = strtoul(name, NULL, 0);
+                printf("Selected device %d\n", ret);
+        }
 
         return ret;
 }
@@ -380,7 +406,7 @@ int do_disconnect(char *func, int verbose)
         int rc;
         struct obd_ioctl_data data;
 
-        if (conn_addr == -1)
+        if (conn_cookie == -1)
                 return 0;
 
         IOC_INIT(data);
@@ -393,8 +419,8 @@ int do_disconnect(char *func, int verbose)
         } else {
                 if (verbose)
                         printf("%s: disconnected conn "LPX64"\n", cmdname(func),
-                               conn_addr);
-                conn_addr = -1;
+                               conn_cookie);
+                conn_cookie = -1;
         }
 
         return rc;
@@ -548,10 +574,8 @@ int jt_obd_connect(int argc, char **argv)
         if (rc < 0)
                 fprintf(stderr, "error: %s: OBD_IOC_CONNECT %s\n",
                         cmdname(argv[0]), strerror(rc = errno));
-        else {
-                conn_addr = data.ioc_addr;
+        else
                 conn_cookie = data.ioc_cookie;
-        }
         return rc;
 }
 
@@ -560,7 +584,7 @@ int jt_obd_disconnect(int argc, char **argv)
         if (argc != 1)
                 return CMD_HELP;
 
-        if (conn_addr == -1)
+        if (conn_cookie == -1)
                 return 0;
 
         return do_disconnect(argv[0], 0);
@@ -705,19 +729,29 @@ int jt_obd_cleanup(int argc, char **argv)
 {
         struct obd_ioctl_data data;
         char force = 'F';
+        char failover = 'A';
+        char flags[3];
+        int flag_cnt = 0, n;
         int rc;
 
         IOC_INIT(data);
 
-        if (argc != 1 && argc != 2)
+        if (argc < 1 || argc > 3)
                 return CMD_HELP;
 
-        if (argc == 2) {
-                if (strcmp(argv[1], "force"))
+        for (n = 1; n < argc; n++) 
+                if (strcmp(argv[n], "force") == 0) {
+                        flags[flag_cnt++] = force;
+                } else if (strcmp(argv[n], "failover") == 0) {
+                        flags[flag_cnt++] = failover;
+                } else {
+                        fprintf(stderr, "unknown option: %s", argv[n]);
                         return CMD_HELP;
-                data.ioc_inllen1 = 1;
-                data.ioc_inlbuf1 = &force;
-        }
+                }
+
+        data.ioc_inllen1 = flag_cnt;
+        if (flag_cnt)
+                data.ioc_inlbuf1 = flags;
 
         IOC_PACK(argv[0], data);
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CLEANUP, buf);
@@ -766,6 +800,25 @@ int jt_obd_set_readonly(int argc, char **argv)
         return rc;
 }
 
+int jt_obd_abort_recovery(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        int rc;
+
+        IOC_INIT(data);
+
+        if (argc != 1)
+                return CMD_HELP;
+
+        IOC_PACK(argv[0], data);
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_ABORT_RECOVERY, buf);
+        if (rc < 0)
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc = errno));
+
+        return rc;
+}
+
 int jt_obd_newdev(int argc, char **argv)
 {
         int rc;
@@ -789,6 +842,29 @@ int jt_obd_newdev(int argc, char **argv)
         return rc;
 }
 
+int jt_obd_mount_option(int argc, char **argv)
+{
+        int rc;
+        struct obd_ioctl_data data;
+
+        IOC_INIT(data);
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        data.ioc_inllen1 = strlen(argv[1]) + 1;
+        data.ioc_inlbuf1 = argv[1];
+
+        IOC_PACK(argv[0], data);
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_MOUNTOPT, buf);
+        if (rc < 0) {
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc = errno));
+        }
+
+        return rc;
+}
+
 int jt_get_version(int argc, char **argv)
 {
         int rc;
@@ -800,8 +876,7 @@ int jt_get_version(int argc, char **argv)
 
         memset(buf, 0, sizeof(buf));
         data->ioc_version = OBD_IOCTL_VERSION;
-        data->ioc_addr = conn_addr;
-        data->ioc_cookie = conn_addr;
+        data->ioc_cookie = conn_cookie;
         data->ioc_inllen1 = sizeof(buf) - size_round(sizeof(*data));
         data->ioc_len = obd_ioctl_packlen(data);
 
@@ -828,8 +903,7 @@ int jt_obd_list(int argc, char **argv)
 
         memset(buf, 0, sizeof(buf));
         data->ioc_version = OBD_IOCTL_VERSION;
-        data->ioc_addr = conn_addr;
-        data->ioc_cookie = conn_addr;
+        data->ioc_cookie = conn_cookie;
         data->ioc_inllen1 = sizeof(buf) - size_round(sizeof(*data));
         data->ioc_len = obd_ioctl_packlen(data);
 
@@ -884,23 +958,6 @@ int jt_obd_attach(int argc, char **argv)
                 }
         }
 
-        return rc;
-}
-
-int jt_obd_name2dev(int argc, char **argv)
-{
-        int rc;
-
-        if (argc != 2)
-                return CMD_HELP;
-
-        rc = do_name2dev(argv[0], argv[1]);
-        if (rc >= N2D_OFF) {
-                int dev = rc - N2D_OFF;
-                rc = do_device(argv[0], dev);
-                if (rc == 0)
-                        printf("%d\n", dev);
-        }
         return rc;
 }
 
@@ -1047,15 +1104,15 @@ int jt_obd_unset_stripe (int argc, char **argv)
         if (argc != 2)
                 return CMD_HELP;
 
-        id = strtoll (argv[1], &end, 0);
-        if (*end == 0) {
+        id = strtoull (argv[1], &end, 0);
+        if (*end != 0) {
                 fprintf (stderr, "error: %s: invalid object id '%s'\n",
                          cmdname (argv[0]), argv[1]);
                 return CMD_HELP;
         }
 
         IOC_INIT (data);
-        data.ioc_obdo1.o_id = lsm_buffer.lsm.lsm_object_id;
+        data.ioc_obdo1.o_id = id;
         data.ioc_obdo1.o_mode = S_IFREG | 0644;
         data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
 
@@ -1070,8 +1127,8 @@ int jt_obd_unset_stripe (int argc, char **argv)
         return (0);
 }
 
-/* Create one or more objects, arg[1] may describe stripe meta-data.  If
- * not, defaults assumed.  This echo-client instances stashes the stripe
+/* Create one or more objects, arg[4] may describe stripe meta-data.  If
+ * not, defaults assumed.  This echo-client instance stashes the stripe
  * object ids.  Use get_stripe on this node to print full lsm and
  * set_stripe on another node to cut/paste between nodes.
  */
@@ -1787,23 +1844,20 @@ int jt_obd_ldlm_regress_stop(int argc, char **argv)
         return rc;
 }
 
-int jt_obd_lov_set_osc_active(int argc, char **argv)
+static int do_activate(int argc, char **argv, int flag)
 {
         struct obd_ioctl_data data;
         int rc;
 
         IOC_INIT(data);
-        if (argc != 3)
+        if (argc != 1)
                 return CMD_HELP;
 
-        data.ioc_inlbuf1 = argv[1];
-        data.ioc_inllen1 = strlen(argv[1]) + 1;
-
         /* reuse offset for 'active' */
-        data.ioc_offset = atoi(argv[2]);
+        data.ioc_offset = flag;
 
         IOC_PACK(argv[0], data);
-        rc = l_ioctl(OBD_DEV_ID, IOC_LOV_SET_OSC_ACTIVE, buf);
+        rc = l_ioctl(OBD_DEV_ID, IOC_OSC_SET_ACTIVE, buf);
         if (rc)
                 fprintf(stderr, "error: %s: failed: %s\n",
                         cmdname(argv[0]), strerror(rc = errno));
@@ -1811,49 +1865,36 @@ int jt_obd_lov_set_osc_active(int argc, char **argv)
         return rc;
 }
 
-int jt_obd_newconn(int argc, char **argv)
+int jt_obd_deactivate(int argc, char **argv)
+{
+        return do_activate(argc, argv, 0);
+}
+
+int jt_obd_activate(int argc, char **argv)
+{
+        return do_activate(argc, argv, 1);
+}
+
+int jt_obd_recover(int argc, char **argv)
 {
         int rc;
         struct obd_ioctl_data data;
 
         IOC_INIT(data);
-        if (argc < 2 || argc > 3)
+        if (argc > 2)
                 return CMD_HELP;
 
-        data.ioc_inllen1 = strlen(argv[1]) + 1;
-        data.ioc_inlbuf1 = argv[1];
-
-        if (argc == 3) {
-                data.ioc_inllen2 = strlen(argv[2]) + 1;
-                data.ioc_inlbuf2 = argv[2];
+        if (argc == 2) {
+                data.ioc_inllen1 = strlen(argv[1]) + 1;
+                data.ioc_inlbuf1 = argv[1];
         }
 
         IOC_PACK(argv[0], data);
-        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_RECOVD_NEWCONN, buf);
-        if (rc < 0)
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CLIENT_RECOVER, buf);
+        if (rc < 0) {
                 fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
                         strerror(rc = errno));
-
-        return rc;
-}
-
-int jt_obd_failconn(int argc, char **argv)
-{
-        int rc;
-        struct obd_ioctl_data data;
-
-        IOC_INIT(data);
-        if (argc < 2)
-                return CMD_HELP;
-
-        data.ioc_inllen1 = strlen(argv[1]) + 1;
-        data.ioc_inlbuf1 = argv[1];
-
-        IOC_PACK(argv[0], data);
-        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_RECOVD_FAILCONN, buf);
-        if (rc < 0)
-                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
-                        strerror(rc = errno));
+        }
 
         return rc;
 }

@@ -1,0 +1,4 @@
+fs/ext3/namei.c
+fs/ext3/ialloc.c
+fs/ext3/ioctl.c
+include/linux/ext3_fs.h

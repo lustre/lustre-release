@@ -42,7 +42,7 @@ static int request_out_callback(ptl_event_t *ev)
         ENTRY;
 
         /* requests always contiguous */
-        LASSERT((ev->mem_desc.options & PTL_MD_IOV) == 0);
+        LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0);
 
         if (ev->type != PTL_EVENT_SENT) {
                 // XXX make sure we understand all events, including ACK's
@@ -50,33 +50,34 @@ static int request_out_callback(ptl_event_t *ev)
                 LBUG();
         }
 
-        /* this balances the atomic_inc in ptl_send_rpc */
+        /* this balances the atomic_inc in ptl_send_rpc() */
         ptlrpc_req_finished(req);
         RETURN(1);
 }
-
 
 /*
  *  Free the packet when it has gone out
  */
 static int reply_out_callback(ptl_event_t *ev)
 {
+        struct ptlrpc_request *req = ev->mem_desc.user_ptr;
+        unsigned long          flags;
         ENTRY;
 
         /* replies always contiguous */
-        LASSERT((ev->mem_desc.options & PTL_MD_IOV) == 0);
+        LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0);
 
         if (ev->type == PTL_EVENT_SENT) {
+                /* NB don't even know if this is the current reply! In fact
+                 * we can't touch any state in the request, since the
+                 * service handler zeros it on each incoming request. */
                 OBD_FREE(ev->mem_desc.start, ev->mem_desc.length);
         } else if (ev->type == PTL_EVENT_ACK) {
-                struct ptlrpc_request *req = ev->mem_desc.user_ptr;
-                if (req->rq_flags & PTL_RPC_FL_WANT_ACK) {
-                        req->rq_flags &= ~PTL_RPC_FL_WANT_ACK;
-                        wake_up(&req->rq_wait_for_rep);
-                } else {
-                        DEBUG_REQ(D_ERROR, req,
-                                  "ack received for reply, not wanted");
-                }
+                LASSERT(req->rq_want_ack);
+                spin_lock_irqsave(&req->rq_lock, flags);
+                req->rq_want_ack = 0;
+                wake_up(&req->rq_wait_for_rep);
+                spin_unlock_irqrestore(&req->rq_lock, flags);
         } else {
                 // XXX make sure we understand all events
                 CERROR("Unknown event %d\n", ev->type);
@@ -92,10 +93,11 @@ static int reply_out_callback(ptl_event_t *ev)
 int reply_in_callback(ptl_event_t *ev)
 {
         struct ptlrpc_request *req = ev->mem_desc.user_ptr;
+        unsigned long flags;
         ENTRY;
 
         /* replies always contiguous */
-        LASSERT((ev->mem_desc.options & PTL_MD_IOV) == 0);
+        LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0);
 
         if (req->rq_xid == 0x5a5a5a5a5a5a5a5a) {
                 CERROR("Reply received for freed request!  Probably a missing "
@@ -109,11 +111,21 @@ int reply_in_callback(ptl_event_t *ev)
         }
 
         if (ev->type == PTL_EVENT_PUT) {
-                req->rq_repmsg = ev->mem_desc.start + ev->offset;
-                barrier();
-                wake_up(&req->rq_wait_for_rep);
+                /* Bug 1190: should handle non-zero offset as a protocol
+                 * error  */
+                LASSERT (ev->offset == 0);
+
+                spin_lock_irqsave (&req->rq_lock, flags);
+                LASSERT (req->rq_receiving_reply);
+                req->rq_receiving_reply = 0;
+                req->rq_replied = 1;
+                if (req->rq_set != NULL)
+                        wake_up(&req->rq_set->set_waitq);
+                else
+                        wake_up(&req->rq_wait_for_rep);
+                spin_unlock_irqrestore (&req->rq_lock, flags);
         } else {
-                // XXX make sure we understand all events, including ACK's
+                // XXX make sure we understand all events, including ACKs
                 CERROR("Unknown event %d\n", ev->type);
                 LBUG();
         }
@@ -128,7 +140,7 @@ int request_in_callback(ptl_event_t *ev)
         struct ptlrpc_service *service = srv_ni->sni_service;
 
         /* requests always contiguous */
-        LASSERT((ev->mem_desc.options & PTL_MD_IOV) == 0);
+        LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0);
         /* we only enable puts */
         LASSERT(ev->type == PTL_EVENT_PUT);
         LASSERT(atomic_read(&srv_ni->sni_nrqbds_receiving) > 0);
@@ -138,14 +150,14 @@ int request_in_callback(ptl_event_t *ev)
                 CERROR("Warning: Possibly truncated rpc (%d/%d)\n",
                        ev->mlength, ev->rlength);
 
-        if (ptl_is_valid_handle(&ev->unlinked_me)) {
+        if (!PtlHandleEqual (ev->unlinked_me, PTL_HANDLE_NONE)) {
                 /* This is the last request to be received into this
                  * request buffer.  We don't bump the refcount, since the
                  * thread servicing this event is effectively taking over
                  * portals' reference.
                  */
-#warning ev->unlinked_me.nal_idx is not set properly in a callback
-                LASSERT(ev->unlinked_me.handle_idx==rqbd->rqbd_me_h.handle_idx);
+                /* NB ev->unlinked_me.nal_idx is not set properly in a callback */
+                LASSERT(ev->unlinked_me.cookie==rqbd->rqbd_me_h.cookie);
 
                 /* we're off the air */
                 /* we'll probably start dropping packets in portals soon */
@@ -163,10 +175,8 @@ int request_in_callback(ptl_event_t *ev)
 
 static int bulk_put_source_callback(ptl_event_t *ev)
 {
+        unsigned long            flags;
         struct ptlrpc_bulk_desc *desc = ev->mem_desc.user_ptr;
-        struct ptlrpc_bulk_page *bulk;
-        struct list_head        *tmp;
-        struct list_head        *next;
         ENTRY;
 
         CDEBUG(D_NET, "got %s event %d\n",
@@ -175,80 +185,77 @@ static int bulk_put_source_callback(ptl_event_t *ev)
 
         LASSERT(ev->type == PTL_EVENT_SENT || ev->type == PTL_EVENT_ACK);
 
-        LASSERT(atomic_read(&desc->bd_source_callback_count) > 0 &&
-                atomic_read(&desc->bd_source_callback_count) <= 2);
-
         /* 1 fragment for each page always */
         LASSERT(ev->mem_desc.niov == desc->bd_page_count);
 
-        if (atomic_dec_and_test(&desc->bd_source_callback_count)) {
-                void (*event_handler)(struct ptlrpc_bulk_desc *);
-
-                list_for_each_safe(tmp, next, &desc->bd_page_list) {
-                        bulk = list_entry(tmp, struct ptlrpc_bulk_page,
-                                          bp_link);
-
-                        if (bulk->bp_cb != NULL)
-                                bulk->bp_cb(bulk);
-                }
-
-                /* We need to make a note of whether there's an event handler
-                 * before we call wake_up, because if there is no event handler,
-                 * 'desc' might be freed before we're scheduled again. */
-                event_handler = desc->bd_ptl_ev_hdlr;
-
-                desc->bd_flags |= PTL_BULK_FL_SENT;
+        spin_lock_irqsave (&desc->bd_lock, flags);
+        
+        LASSERT(desc->bd_callback_count > 0 &&
+                desc->bd_callback_count <= 2);
+        
+        if (--desc->bd_callback_count == 0) {
+                desc->bd_network_rw = 0;
+                desc->bd_complete = 1;
                 wake_up(&desc->bd_waitq);
-                if (event_handler) {
-                        LASSERT(desc->bd_ptl_ev_hdlr == event_handler);
-                        event_handler(desc);
-                }
         }
 
+        spin_unlock_irqrestore (&desc->bd_lock, flags);
         RETURN(0);
 }
+
+struct ptlrpc_bulk_desc ptlrpc_bad_desc;
+ptl_event_t ptlrpc_bad_event;
 
 static int bulk_put_sink_callback(ptl_event_t *ev)
 {
         struct ptlrpc_bulk_desc *desc = ev->mem_desc.user_ptr;
-        struct ptlrpc_bulk_page *bulk;
-        struct list_head        *tmp;
-        struct list_head        *next;
-        ptl_size_t               total = 0;
-        void                   (*event_handler)(struct ptlrpc_bulk_desc *);
+        unsigned long            flags;
         ENTRY;
 
         LASSERT(ev->type == PTL_EVENT_PUT);
 
-        /* put with zero offset */
-        LASSERT(ev->offset == 0);
         /* used iovs */
-        LASSERT((ev->mem_desc.options & PTL_MD_IOV) != 0);
+        LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) ==
+                PTL_MD_KIOV);
+        /* Honestly, it's best to find out early. */
+        if (desc->bd_page_count == 0x5a5a5a5a5a ||
+            desc->bd_page_count != ev->mem_desc.niov ||
+            ev->mem_desc.start != &desc->bd_iov) {
+                /* not guaranteed (don't LASSERT) but good for this bug hunt */
+                ptlrpc_bad_event = *ev;
+                ptlrpc_bad_desc = *desc;
+                CERROR ("XXX ev %p type %d portal %d match "LPX64", seq %ld\n",
+                        ev, ev->type, ev->portal, ev->match_bits, ev->sequence);
+                CERROR ("XXX desc %p, export %p import %p gen %d "
+                        " portal %d\n", 
+                        desc, desc->bd_export,
+                        desc->bd_import, desc->bd_import_generation,
+                        desc->bd_portal);
+                RETURN (0);
+        }
+        
+        LASSERT(desc->bd_page_count != 0x5a5a5a5a);
         /* 1 fragment for each page always */
         LASSERT(ev->mem_desc.niov == desc->bd_page_count);
-
-        list_for_each_safe (tmp, next, &desc->bd_page_list) {
-                bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
-
-                total += bulk->bp_buflen;
-
-                if (bulk->bp_cb != NULL)
-                        bulk->bp_cb(bulk);
+        LASSERT(ev->match_bits == desc->bd_req->rq_xid);
+        
+        /* peer must put with zero offset */
+        if (ev->offset != 0) {
+                /* Bug 1190: handle this as a protocol failure */
+                CERROR ("Bad offset %d\n", ev->offset);
+                LBUG ();
         }
 
-        LASSERT(ev->mem_desc.length == total);
+        /* No check for total # bytes; this could be a short read */
 
-        /* We need to make a note of whether there's an event handler
-         * before we call wake_up, because if there is no event
-         * handler, 'desc' might be freed before we're scheduled again. */
-        event_handler = desc->bd_ptl_ev_hdlr;
-
-        desc->bd_flags |= PTL_BULK_FL_RCVD;
-        wake_up(&desc->bd_waitq);
-        if (event_handler) {
-                LASSERT(desc->bd_ptl_ev_hdlr == event_handler);
-                event_handler(desc);
-        }
+        spin_lock_irqsave (&desc->bd_lock, flags);
+        desc->bd_network_rw = 0;
+        desc->bd_complete = 1;
+        if (desc->bd_req->rq_set != NULL)
+                wake_up (&desc->bd_req->rq_set->set_waitq);
+        else
+                wake_up (&desc->bd_req->rq_wait_for_rep);
+        spin_unlock_irqrestore (&desc->bd_lock, flags);
 
         RETURN(1);
 }
@@ -258,122 +265,108 @@ static int bulk_get_source_callback(ptl_event_t *ev)
         struct ptlrpc_bulk_desc *desc = ev->mem_desc.user_ptr;
         struct ptlrpc_bulk_page *bulk;
         struct list_head        *tmp;
-        struct list_head        *next;
+        unsigned long            flags;
         ptl_size_t               total = 0;
-        void                   (*event_handler)(struct ptlrpc_bulk_desc *);
         ENTRY;
 
         LASSERT(ev->type == PTL_EVENT_GET);
 
-        /* put with zero offset */
-        LASSERT(ev->offset == 0);
         /* used iovs */
-        LASSERT((ev->mem_desc.options & PTL_MD_IOV) != 0);
+        LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) ==
+                PTL_MD_KIOV);
         /* 1 fragment for each page always */
         LASSERT(ev->mem_desc.niov == desc->bd_page_count);
+        LASSERT(ev->match_bits == desc->bd_req->rq_xid);
 
-        list_for_each_safe (tmp, next, &desc->bd_page_list) {
+        /* peer must get with zero offset */
+        if (ev->offset != 0) {
+                /* Bug 1190: handle this as a protocol failure */
+                CERROR ("Bad offset %d\n", ev->offset);
+                LBUG ();
+        }
+        
+        list_for_each (tmp, &desc->bd_page_list) {
                 bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
 
                 total += bulk->bp_buflen;
-
-                if (bulk->bp_cb != NULL)
-                        bulk->bp_cb(bulk);
         }
 
-        LASSERT(ev->mem_desc.length == total);
-
-        /* We need to make a note of whether there's an event handler
-         * before we call wake_up, because if there is no event
-         * handler, 'desc' might be freed before we're scheduled again. */
-        event_handler = desc->bd_ptl_ev_hdlr;
-
-        desc->bd_flags |= PTL_BULK_FL_SENT;
-        wake_up(&desc->bd_waitq);
-        if (event_handler) {
-                LASSERT(desc->bd_ptl_ev_hdlr == event_handler);
-                event_handler(desc);
+        /* peer must get everything */
+        if (ev->mem_desc.length != total) {
+                /* Bug 1190: handle this as a protocol failure */
+                CERROR ("Bad length/total %d/%d\n", ev->mem_desc.length, total);
+                LBUG ();
         }
+
+        spin_lock_irqsave (&desc->bd_lock, flags);
+        desc->bd_network_rw = 0;
+        desc->bd_complete = 1;
+        if (desc->bd_req->rq_set != NULL)
+                wake_up (&desc->bd_req->rq_set->set_waitq);
+        else
+                wake_up (&desc->bd_req->rq_wait_for_rep);
+        spin_unlock_irqrestore (&desc->bd_lock, flags);
 
         RETURN(1);
 }
 
-
 static int bulk_get_sink_callback(ptl_event_t *ev)
 {
         struct ptlrpc_bulk_desc *desc = ev->mem_desc.user_ptr;
-        struct ptlrpc_bulk_page *bulk;
-        struct list_head        *tmp;
-        struct list_head        *next;
+        unsigned long            flags;
         ENTRY;
 
         CDEBUG(D_NET, "got %s event %d\n",
                (ev->type == PTL_EVENT_SENT) ? "SENT" :
-               (ev->type == PTL_EVENT_REPLY)  ? "REPLY"  : "UNEXPECTED", 
+               (ev->type == PTL_EVENT_REPLY)  ? "REPLY"  : "UNEXPECTED",
                ev->type);
 
         LASSERT(ev->type == PTL_EVENT_SENT || ev->type == PTL_EVENT_REPLY);
 
-        LASSERT(atomic_read(&desc->bd_source_callback_count) > 0 &&
-                atomic_read(&desc->bd_source_callback_count) <= 2);
-
         /* 1 fragment for each page always */
         LASSERT(ev->mem_desc.niov == desc->bd_page_count);
 
-        if (atomic_dec_and_test(&desc->bd_source_callback_count)) {
-                void (*event_handler)(struct ptlrpc_bulk_desc *);
+        spin_lock_irqsave (&desc->bd_lock, flags);
+        LASSERT(desc->bd_callback_count > 0 &&
+                desc->bd_callback_count <= 2);
 
-                list_for_each_safe(tmp, next, &desc->bd_page_list) {
-                        bulk = list_entry(tmp, struct ptlrpc_bulk_page,
-                                          bp_link);
-
-                        if (bulk->bp_cb != NULL)
-                                bulk->bp_cb(bulk);
-                }
-
-                /* We need to make a note of whether there's an event handler
-                 * before we call wake_up, because if there is no event handler,
-                 * 'desc' might be freed before we're scheduled again. */
-                event_handler = desc->bd_ptl_ev_hdlr;
-
-                desc->bd_flags |= PTL_BULK_FL_RCVD;
+        if (--desc->bd_callback_count == 0) {
+                desc->bd_network_rw = 0;
+                desc->bd_complete = 1;
                 wake_up(&desc->bd_waitq);
-                if (event_handler) {
-                        LASSERT(desc->bd_ptl_ev_hdlr == event_handler);
-                        event_handler(desc);
-                }
         }
+        spin_unlock_irqrestore (&desc->bd_lock, flags);
 
         RETURN(0);
 }
 
-int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer) 
+int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
 {
         struct ptlrpc_ni   *pni;
         struct lustre_peer  lpeer;
         int                 i;
         int                 rc = lustre_uuid_to_peer (uuid->uuid, &lpeer);
-        
+
         if (rc != 0)
                 RETURN (rc);
-        
+
         for (i = 0; i < ptlrpc_ninterfaces; i++) {
                 pni = &ptlrpc_interfaces[i];
 
-                if (!memcmp (&lpeer.peer_ni, &pni->pni_ni_h,
-                             sizeof (lpeer.peer_ni))) {
+                if (!memcmp(&lpeer.peer_ni, &pni->pni_ni_h,
+                            sizeof (lpeer.peer_ni))) {
                         peer->peer_nid = lpeer.peer_nid;
                         peer->peer_ni = pni;
                         return (0);
                 }
         }
-        
-        CERROR ("Can't find ptlrpc interface for "LPX64" ni handle %08lx %08lx\n",
-                lpeer.peer_nid, lpeer.peer_ni.nal_idx, lpeer.peer_ni.handle_idx);
+
+        CERROR("Can't find ptlrpc interface for "LPX64" ni handle %08lx."LPX64"\n",
+               lpeer.peer_nid, lpeer.peer_ni.nal_idx, lpeer.peer_ni.cookie);
         return (-ENOENT);
 }
 
-void ptlrpc_ni_fini (struct ptlrpc_ni *pni) 
+void ptlrpc_ni_fini(struct ptlrpc_ni *pni)
 {
         PtlEQFree(pni->pni_request_out_eq_h);
         PtlEQFree(pni->pni_reply_out_eq_h);
@@ -382,111 +375,116 @@ void ptlrpc_ni_fini (struct ptlrpc_ni *pni)
         PtlEQFree(pni->pni_bulk_put_sink_eq_h);
         PtlEQFree(pni->pni_bulk_get_source_eq_h);
         PtlEQFree(pni->pni_bulk_get_sink_eq_h);
-        
-        inter_module_put(pni->pni_name);
+
+        kportal_put_ni (pni->pni_number);
 }
 
-int ptlrpc_ni_init (char *name, struct ptlrpc_ni *pni) 
+int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
 {
         int              rc;
-        ptl_handle_ni_t *nip;
+        ptl_handle_ni_t *nip = kportal_get_ni (number);
 
-        nip = (ptl_handle_ni_t *)inter_module_get (name);
         if (nip == NULL) {
                 CDEBUG (D_NET, "Network interface %s not loaded\n", name);
                 return (-ENOENT);
         }
-        
-        CDEBUG (D_NET, "init %s: nal_idx %ld\n", name, nip->nal_idx);
-                
+
+        CDEBUG (D_NET, "init %d %s: nal_idx %ld\n", number, name, nip->nal_idx);
+
         pni->pni_name = name;
+        pni->pni_number = number;
         pni->pni_ni_h = *nip;
 
-        ptl_set_inv_handle (&pni->pni_request_out_eq_h);
-        ptl_set_inv_handle (&pni->pni_reply_out_eq_h);
-        ptl_set_inv_handle (&pni->pni_reply_in_eq_h);
-        ptl_set_inv_handle (&pni->pni_bulk_put_source_eq_h);
-        ptl_set_inv_handle (&pni->pni_bulk_put_sink_eq_h);
-        ptl_set_inv_handle (&pni->pni_bulk_get_source_eq_h);
-        ptl_set_inv_handle (&pni->pni_bulk_get_sink_eq_h);
-        
+        pni->pni_request_out_eq_h = PTL_HANDLE_NONE;
+        pni->pni_reply_out_eq_h = PTL_HANDLE_NONE;
+        pni->pni_reply_in_eq_h = PTL_HANDLE_NONE;
+        pni->pni_bulk_put_source_eq_h = PTL_HANDLE_NONE;
+        pni->pni_bulk_put_sink_eq_h = PTL_HANDLE_NONE;
+        pni->pni_bulk_get_source_eq_h = PTL_HANDLE_NONE;
+        pni->pni_bulk_get_sink_eq_h = PTL_HANDLE_NONE;
+
         /* NB We never actually PtlEQGet() out of these events queues since
          * we're only interested in the event callback, so we can just let
          * them wrap.  Their sizes aren't a big deal, apart from providing
          * a little history for debugging... */
-        
-        rc = PtlEQAlloc(pni->pni_ni_h, 1024, request_out_callback, 
+
+        rc = PtlEQAlloc(pni->pni_ni_h, 1024, request_out_callback,
                         &pni->pni_request_out_eq_h);
         if (rc != PTL_OK)
                 GOTO (fail, rc = -ENOMEM);
-                
-        rc = PtlEQAlloc(pni->pni_ni_h, 1024, reply_out_callback, 
+
+        rc = PtlEQAlloc(pni->pni_ni_h, 1024, reply_out_callback,
                         &pni->pni_reply_out_eq_h);
         if (rc != PTL_OK)
                 GOTO (fail, rc = -ENOMEM);
-        
+
         rc = PtlEQAlloc(pni->pni_ni_h, 1024, reply_in_callback,
                         &pni->pni_reply_in_eq_h);
         if (rc != PTL_OK)
                 GOTO (fail, rc = -ENOMEM);
-                
+
         rc = PtlEQAlloc(pni->pni_ni_h, 1024, bulk_put_source_callback,
                         &pni->pni_bulk_put_source_eq_h);
         if (rc != PTL_OK)
                 GOTO (fail, rc = -ENOMEM);
-                
+
         rc = PtlEQAlloc(pni->pni_ni_h, 1024, bulk_put_sink_callback,
                         &pni->pni_bulk_put_sink_eq_h);
         if (rc != PTL_OK)
                 GOTO (fail, rc = -ENOMEM);
-                
+
         rc = PtlEQAlloc(pni->pni_ni_h, 1024, bulk_get_source_callback,
                         &pni->pni_bulk_get_source_eq_h);
         if (rc != PTL_OK)
                 GOTO (fail, rc = -ENOMEM);
-                
+
         rc = PtlEQAlloc(pni->pni_ni_h, 1024, bulk_get_sink_callback,
                         &pni->pni_bulk_get_sink_eq_h);
         if (rc != PTL_OK)
                 GOTO (fail, rc = -ENOMEM);
-        
+
         return (0);
- fail: 
+ fail:
         CERROR ("Failed to initialise network interface %s: %d\n",
                 name, rc);
 
-        /* OK to do complete teardown since we invalidated the handles above... */
+        /* OK to do complete teardown since we invalidated the handles above */
         ptlrpc_ni_fini (pni);
         return (rc);
 }
 
 int ptlrpc_init_portals(void)
 {
-        /* Add new portals network interface names here.
+        /* Add new portals network interfaces here.
          * Order is irrelevent! */
-        char *ni_names[] = { "kqswnal_ni",
-                             "kgmnal_ni",
-                             "ksocknal_ni",
-                             "ktoenal_ni",
-                             "tcpnal_ni",
-                             NULL };
+        static struct {
+                int   number;
+                char *name;
+        } ptl_nis[] = {
+                {QSWNAL,  "qswnal"},
+                {SOCKNAL, "socknal"},
+                {GMNAL,   "gmnal"},
+                {TOENAL,  "toenal"},
+                {TCPNAL,  "tcpnal"},
+                {SCIMACNAL, "scimacnal"}};
         int   rc;
         int   i;
-        
-        LASSERT (ptlrpc_ninterfaces == 0);
 
-        for (i = 0; ni_names[i] != NULL; i++) {
-                LASSERT (ptlrpc_ninterfaces < 
-                         sizeof (ptlrpc_interfaces)/sizeof (ptlrpc_interfaces[0]));
-                
-                rc = ptlrpc_ni_init (ni_names[i],
-                                     &ptlrpc_interfaces[ptlrpc_ninterfaces]);
+        LASSERT(ptlrpc_ninterfaces == 0);
+
+        for (i = 0; i < sizeof (ptl_nis) / sizeof (ptl_nis[0]); i++) {
+                LASSERT(ptlrpc_ninterfaces < (sizeof(ptlrpc_interfaces) /
+                                              sizeof(ptlrpc_interfaces[0])));
+
+                rc = ptlrpc_ni_init(ptl_nis[i].number, ptl_nis[i].name,
+                                    &ptlrpc_interfaces[ptlrpc_ninterfaces]);
                 if (rc == 0)
                         ptlrpc_ninterfaces++;
         }
-        
+
         if (ptlrpc_ninterfaces == 0) {
-                CERROR("network initialisation failed: is a NAL module loaded?\n");
+                CERROR("network initialisation failed: is a NAL module "
+                       "loaded?\n");
                 return -EIO;
         }
         return 0;

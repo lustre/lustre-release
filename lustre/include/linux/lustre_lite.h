@@ -25,12 +25,17 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_ha.h>
 
+#include <linux/rbtree.h>
+#include <linux/lustre_compat25.h>
+#include <linux/pagemap.h>
+
+/* careful, this is easy to screw up */
+#define PAGE_CACHE_MAXBYTES ((__u64)(~0UL) << PAGE_CACHE_SHIFT)
 
 extern kmem_cache_t *ll_file_data_slab;
 struct ll_file_data {
-        struct lustre_handle fd_mdshandle;
-        struct ptlrpc_request *fd_req;
-        char fd_ostdata[FD_OSTDATA_SIZE];
+        struct obd_client_handle fd_mds_och;
+        struct obd_client_handle fd_ost_och;
         __u32 fd_flags;
 };
 
@@ -47,30 +52,34 @@ struct ll_dentry_data {
 
 #define ll_d2d(dentry) ((struct ll_dentry_data*) dentry->d_fsdata)
 
-struct ll_read_inode2_cookie {
-        struct mds_body *lic_body;
-        struct lov_mds_md *lic_lmm;
+struct ll_dirty_offsets {
+        rb_root_t       do_root;
+        spinlock_t      do_lock;
+        unsigned long   do_num_dirty;
 };
 
+void ll_lldo_init(struct ll_dirty_offsets *lldo);
+void ll_record_dirty(struct inode *inode, unsigned long offset);
+void ll_remove_dirty(struct inode *inode, unsigned long start,
+                     unsigned long end);
+int ll_find_dirty(struct ll_dirty_offsets *lldo, unsigned long *start,
+                  unsigned long *end);
+int ll_farthest_dirty(struct ll_dirty_offsets *lldo, unsigned long *farthest);
+extern struct file_operations ll_pgcache_seq_fops;
+
 struct ll_inode_info {
-        struct lov_stripe_md *lli_smd;
-        char                 *lli_symlink_name;
-        struct semaphore      lli_open_sem;
-        atomic_t              lli_open_count; /* see ll_file_release */
-        /*
-         * the VALID flag and valid_sem are temporary measures to serialize
-         * the manual getattrs that we're doing at lock acquisition.  in
-         * the future the OST will always return its notion of the file
-         * size with the granted locks.
-         */
-        unsigned long         lli_flags;
-#define LLI_F_DID_GETATTR      0
-        struct semaphore      lli_getattr_sem;
-        struct list_head      lli_read_extents;
-        spinlock_t            lli_read_extent_lock;
+        struct lov_stripe_md   *lli_smd;
+        char                   *lli_symlink_name;
+        struct semaphore        lli_open_sem;
+        struct list_head        lli_read_extents;
+        loff_t                  lli_maxbytes;
+        spinlock_t              lli_read_extent_lock;
+        struct ll_dirty_offsets lli_dirty;
+        unsigned long           lli_flags;
+#define LLI_F_HAVE_SIZE_LOCK    0
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-        struct inode          lli_vfs_inode;
+        struct inode            lli_vfs_inode;
 #endif
 };
 
@@ -88,6 +97,32 @@ struct ll_read_extent {
 
 int ll_check_dirty( struct super_block *sb );
 int ll_batch_writepage( struct inode *inode, struct page *page );
+
+struct file_io_stats {
+        spinlock_t     fis_lock;
+        __u64   fis_dirty_pages;
+        __u64   fis_dirty_hits;
+        __u64   fis_dirty_misses;
+        __u64   fis_forced_pages;
+        __u64   fis_writepage_pages;
+        __u64   fis_wb_ok;
+        __u64   fis_wb_fail;
+        __u64   fis_wb_from_writepage;
+        __u64   fis_wb_from_pressure;
+};
+
+#define IO_STAT_ADD(FIS, STAT, VAL) do {        \
+        struct file_io_stats *_fis_ = (FIS);    \
+        spin_lock(&_fis_->fis_lock);            \
+        _fis_->fis_##STAT += VAL;               \
+        spin_unlock(&_fis_->fis_lock);          \
+} while (0)
+
+#define INODE_IO_STAT_ADD(INODE, STAT, VAL)        \
+        IO_STAT_ADD(&ll_i2sbi(INODE)->ll_iostats, STAT, VAL)
+
+#define PAGE_IO_STAT_ADD(PAGE, STAT, VAL)               \
+        INODE_IO_STAT_ADD((PAGE)->mapping, STAT, VAL)
 
 /* interpet return codes from intent lookup */
 #define LL_LOOKUP_POSITIVE 1
@@ -119,6 +154,8 @@ struct ll_sb_info {
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
 
         struct list_head          ll_orphan_dentry_list; /*please don't ask -p*/
+
+        struct  file_io_stats     ll_iostats;
 };
 
 static inline struct ll_sb_info *ll_s2sbi(struct super_block *sb)
@@ -189,12 +226,7 @@ static inline struct lustre_handle *ll_i2obdconn(struct inode *inode)
 }
 
 static inline void ll_ino2fid(struct ll_fid *fid, obd_id ino, __u32 generation,
-                              int type)
-{
-        fid->id = ino;
-        fid->generation = generation;
-        fid->f_type = type;
-}
+                              int type);
 
 static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
@@ -207,16 +239,28 @@ static inline int ll_mds_max_easize(struct super_block *sb)
         return sbi2mdc(ll_s2sbi(sb))->cl_max_mds_easize;
 }
 
+static inline loff_t ll_file_maxbytes(struct inode *inode)
+{
+        return ll_i2info(inode)->lli_maxbytes;
+}
+
 /* namei.c */
 int ll_lock(struct inode *dir, struct dentry *dentry,
             struct lookup_intent *it, struct lustre_handle *lockh);
 int ll_unlock(__u32 mode, struct lustre_handle *lockh);
 
 typedef int (*intent_finish_cb)(int flag, struct ptlrpc_request *,
-                                struct dentry **, struct lookup_intent *,
-                                int offset, obd_id ino);
+                                struct inode *parent, struct dentry **, 
+                                struct lookup_intent *, int offset, obd_id ino);
 int ll_intent_lock(struct inode *parent, struct dentry **,
                    struct lookup_intent *, intent_finish_cb);
+int ll_mdc_blocking_ast(struct ldlm_lock *lock,
+                        struct ldlm_lock_desc *desc,
+                        void *data, int flag);
+void ll_mdc_lock_set_inode(struct lustre_handle *lock, struct inode *inode);
+void ll_prepare_mdc_op_data(struct mdc_op_data *data,
+                            struct inode *i1, struct inode *i2,
+                            const char *name, int namelen, int mode);
 
 /* dcache.c */
 void ll_intent_release(struct dentry *, struct lookup_intent *);
@@ -260,6 +304,8 @@ do {                                                                           \
         up(&ll_d2d(de)->lld_it_sem);                                           \
 } while(0)
 
+#define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
+
 /* dcache.c */
 int ll_have_md_lock(struct dentry *de);
 
@@ -285,6 +331,9 @@ int ll_extent_unlock(struct ll_file_data *fd, struct inode *inode,
                      struct lustre_handle *lockh);
 int ll_create_objects(struct super_block *sb, obd_id id, uid_t uid,
                       gid_t gid, struct lov_stripe_md **lsmp);
+int ll_file_open(struct inode *inode, struct file *file);
+int ll_file_release(struct inode *inode, struct file *file);
+
 
 /* rw.c */
 struct page *ll_getpage(struct inode *inode, unsigned long offset,
@@ -292,7 +341,7 @@ struct page *ll_getpage(struct inode *inode, unsigned long offset,
 void ll_truncate(struct inode *inode);
 
 /* super.c */
-void ll_update_inode(struct inode *, struct mds_body *, struct lov_mds_md *);
+void ll_update_inode(struct inode *, struct mds_body *, struct lov_stripe_md *);
 int ll_setattr_raw(struct inode *inode, struct iattr *attr);
 
 /* symlink.c */
@@ -303,7 +352,24 @@ extern struct inode_operations ll_symlink_inode_operations;
 void ll_sysctl_init(void);
 void ll_sysctl_clean(void);
 
+#else
+#include <linux/lustre_idl.h>
 #endif /* __KERNEL__ */
+
+static inline void ll_ino2fid(struct ll_fid *fid,
+                              obd_id ino,
+                              __u32 generation,
+                              int type)
+{
+        fid->id = ino;
+        fid->generation = generation;
+        fid->f_type = type;
+}
+
+struct ll_read_inode2_cookie {
+        struct mds_body      *lic_body;
+        struct lov_stripe_md *lic_lsm;
+};
 
 #include <asm/types.h>
 

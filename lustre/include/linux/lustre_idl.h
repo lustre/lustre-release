@@ -19,6 +19,23 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
  * (Un)packing of OST requests
+ *
+ * We assume all nodes are either little-endian or big-endian, and we
+ * always send messages in the sender's native format.  The receiver
+ * detects the message format by checking the 'magic' field of the message
+ * (see lustre_msg_swabbed() below).
+ *
+ * Each wire type has corresponding 'lustre_swab_xxxtypexxx()' routines,
+ * implemented either here, inline (trivial implementations) or in
+ * ptlrpc/pack_generic.c.  These 'swabbers' convert the type from "other"
+ * endian, in-place in the message buffer.
+ * 
+ * A swabber takes a single pointer argument.  The caller must already have
+ * verified that the length of the message buffer >= sizeof (type).  
+ *
+ * For variable length types, a second 'lustre_swab_v_xxxtypexxx()' routine
+ * may be defined that swabs just the variable part, after the caller has
+ * verified that the message buffer is large enough.
  */
 
 #ifndef _LUSTRE_IDL_H_
@@ -30,12 +47,15 @@
 # include <linux/types.h>
 # include <linux/list.h>
 # include <linux/string.h> /* for strncpy, below */
+# include <asm/byteorder.h>
 #else
-# define __KERNEL__
+#ifdef __CYGWIN__
+# include <sys/types.h>
+#else
 # include <asm/types.h>
-# include <linux/list.h>
-# undef __KERNEL__
 # include <stdint.h>
+#endif
+# include <portals/list.h>
 #endif
 /*
  * this file contains all data structures used in Lustre interfaces:
@@ -52,11 +72,18 @@ struct obd_uuid {
         __u8 uuid[37];
 };
 
+static inline int obd_uuid_equals(struct obd_uuid *u1, struct obd_uuid *u2)
+{
+        return strcmp(u1->uuid, u2->uuid) == 0;
+}
+
 static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
 {
         strncpy(uuid->uuid, tmp, sizeof(*uuid));
         uuid->uuid[sizeof(*uuid) - 1] = '\0';
 }
+
+extern struct obd_uuid lctl_fake_uuid;
 
 /* FOO_REQUEST_PORTAL is for incoming requests on the FOO
  * FOO_REPLY_PORTAL   is for incoming replies on the FOO
@@ -67,7 +94,7 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
 #define CONNMGR_REPLY_PORTAL    2
 //#define OSC_REQUEST_PORTAL      3
 #define OSC_REPLY_PORTAL        4
-#define OSC_BULK_PORTAL         5
+//#define OSC_BULK_PORTAL         5
 #define OST_REQUEST_PORTAL      6
 //#define OST_REPLY_PORTAL        7
 #define OST_BULK_PORTAL         8
@@ -96,32 +123,27 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
 
 #define LUSTRE_CONN_NEW          1
 #define LUSTRE_CONN_CON          2
-#define LUSTRE_CONN_RECOVD       3
-#define LUSTRE_CONN_FULL         4
+#define LUSTRE_CONN_NOTCONN      3
+#define LUSTRE_CONN_RECOVD       4
+#define LUSTRE_CONN_FULL         5
 
 /* packet types */
 #define PTL_RPC_MSG_REQUEST 4711
 #define PTL_RPC_MSG_ERR     4712
 #define PTL_RPC_MSG_REPLY   4713
 
-#define PTLRPC_MSG_MAGIC (cpu_to_le32(0x0BD00BD0))
-#define PTLRPC_MSG_VERSION (cpu_to_le32(0x00040001))
+#define PTLRPC_MSG_MAGIC    0x0BD00BD0
+#define PTLRPC_MSG_VERSION  0x00040002
 
 struct lustre_handle {
-        __u64 addr;
         __u64 cookie;
 };
 #define DEAD_HANDLE_MAGIC 0xdeadbeefcafebabe
 
-static inline void ptlrpc_invalidate_handle(struct lustre_handle *hdl)
-{
-        hdl->addr = hdl->cookie = 0; /* XXX invalid enough? */
-}
-
 /* we depend on this structure to be 8-byte aligned */
+/* this type is only endian-adjusted in lustre_unpack_msg() */
 struct lustre_msg {
-        __u64 addr;
-        __u64 cookie; /* security token */
+        struct lustre_handle handle;
         __u32 magic;
         __u32 type;
         __u32 version;
@@ -130,10 +152,15 @@ struct lustre_msg {
         __u64 last_committed;
         __u64 transno;
         __u32 status;
-        __u32 bufcount;
         __u32 flags;
+        __u32 bufcount;
         __u32 buflens[0];
 };
+
+static inline int lustre_msg_swabbed (struct lustre_msg *msg)
+{
+        return (msg->magic == __swab32 (PTLRPC_MSG_MAGIC));
+}
 
 /* Flags that are operation-specific go in the top 16 bits. */
 #define MSG_OP_FLAG_MASK   0xffff0000
@@ -206,6 +233,10 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OST_SAN_READ   14
 #define OST_SAN_WRITE  15
 #define OST_SYNCFS     16
+/* When adding OST RPC opcodes, please update 
+ * LAST/FIRST macros used in ptlrpc/ptlrpc_internals.h */
+#define OST_LAST_OPC   (OST_SYNCFS+1)
+#define OST_FIRST_OPC  OST_REPLY
 
 
 typedef uint64_t        obd_id;
@@ -226,10 +257,7 @@ typedef uint32_t        obd_count;
 #define OBD_FL_OBDMDEXISTS      (0x00000002)
 
 #define OBD_INLINESZ    60
-#define FD_OSTDATA_SIZE 32
-#if (FD_OSTDATA_SIZE > OBD_INLINESZ)
-# error FD_OSTDATA_SIZE must be smaller than OBD_INLINESZ
-#endif
+#define FD_OSTDATA_SIZE sizeof(struct obd_client_handle)
 
 /* Note: 64-bit types are 64-bit aligned in structure */
 struct obdo {
@@ -241,7 +269,7 @@ struct obdo {
         obd_size                o_size;
         obd_blocks              o_blocks;
         obd_rdev                o_rdev;
-        obd_blksize             o_blksize;
+        obd_blksize             o_blksize;      /* optimal IO blocksize */
         obd_mode                o_mode;
         obd_uid                 o_uid;
         obd_gid                 o_gid;
@@ -253,6 +281,8 @@ struct obdo {
         __u32                   o_easize;
         char                    o_inline[OBD_INLINESZ];
 };
+
+extern void lustre_swab_obdo (struct obdo *o);
 
 struct lov_object_id { /* per-child structure */
         __u64 l_object_id;
@@ -305,16 +335,20 @@ struct obd_statfs {
         __u8            os_fsid[40];
         __u32           os_bsize;
         __u32           os_namelen;
-        __u32           os_spare[12];
+        __u64           os_maxbytes;
+        __u32           os_spare[10];
 };
+
+extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 
 /* ost_body.data values for OST_BRW */
 
-#define OBD_BRW_READ	0x1
-#define OBD_BRW_WRITE	0x2
-#define OBD_BRW_RWMASK	(OBD_BRW_READ | OBD_BRW_WRITE)
-#define OBD_BRW_CREATE	0x4
-#define OBD_BRW_SYNC	0x8
+#define OBD_BRW_READ    0x01
+#define OBD_BRW_WRITE   0x02
+#define OBD_BRW_RWMASK  (OBD_BRW_READ | OBD_BRW_WRITE)
+#define OBD_BRW_CREATE  0x04
+#define OBD_BRW_SYNC    0x08
+#define OBD_BRW_CHECK   0x10
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
@@ -325,12 +359,16 @@ struct obd_ioobj {
         __u32                ioo_bufcnt;
 } __attribute__((packed));
 
+extern void lustre_swab_obd_ioobj (struct obd_ioobj *ioo);
+
+/* multiple of 8 bytes => can array */
 struct niobuf_remote {
         __u64 offset;
         __u32 len;
-        __u32 xid;
         __u32 flags;
 } __attribute__((packed));
+
+extern void lustre_swab_niobuf_remote (struct niobuf_remote *nbr);
 
 /* request structure for OST's */
 
@@ -339,6 +377,8 @@ struct niobuf_remote {
 struct ost_body {
         struct  obdo oa;
 };
+
+extern void lustre_swab_ost_body (struct ost_body *b);
 
 /*
  *   MDS REQ RECORDS
@@ -355,6 +395,10 @@ struct ost_body {
 #define MDS_GETSTATUS    40
 #define MDS_STATFS       41
 #define MDS_GETLOVINFO   42
+/* When adding MDS RPC opcodes, please update 
+ * LAST/FIRST macros used in ptlrpc/ptlrpc_internals.h */
+#define MDS_LAST_OPC     (MDS_GETLOVINFO+1)
+#define MDS_FIRST_OPC    MDS_GETATTR
 /*
  * Do not exceed 63 
  */
@@ -374,15 +418,13 @@ struct ost_body {
 #define IT_OPEN_CREATE  (1 << 4)
 #define IT_OPEN_OPEN    (1 << 5)
 
-#define REINT_OPCODE_MASK 0xff /* opcodes must fit into this mask */
-#define REINT_REPLAYING 0x1000 /* masked into the opcode to indicate replay */
-
 struct ll_fid {
         __u64 id;
         __u32 generation;
         __u32 f_type;
 };
 
+extern void lustre_swab_ll_fid (struct ll_fid *fid);
 
 #define MDS_STATUS_CONN 1
 #define MDS_STATUS_LOV 2
@@ -392,24 +434,20 @@ struct mds_status_req {
         __u32  repbuf;
 };
 
+extern void lustre_swab_mds_status_req (struct mds_status_req *r);
+
 struct mds_fileh_body {
         struct ll_fid f_fid;
         struct lustre_handle f_handle;
 };
 
-struct mds_conn_status {
-        struct ll_fid rootfid;
-        __u64          xid;
-        __u64          last_committed;
-        __u64          last_rcvd;
-        /* XXX preallocated quota & obj fields here */
-};
+extern void lustre_swab_mds_fileh_body (struct mds_fileh_body *f);
 
 struct mds_body {
         struct ll_fid  fid1;
         struct ll_fid  fid2;
         struct lustre_handle handle;
-        __u64          size;
+        __u64          size;   /* Offset, in the case of MDS_READPAGE */
         __u64          blocks; /* XID, in the case of MDS_READPAGE */
         __u32          ino;   /* make this a __u64 */
         __u32          valid;
@@ -424,16 +462,18 @@ struct mds_body {
         __u32          atime;
         __u32          flags;
         __u32          rdev;
-        __u32          nlink;
+        __u32          nlink; /* #bytes to read in the case of MDS_READPAGE */
         __u32          generation;
         __u32          suppgid;
+        __u32          eadatasize;
 };
+
+extern void lustre_swab_mds_body (struct mds_body *b);
 
 /* This is probably redundant with OBD_MD_FLEASIZE, but we need an audit */
 #define MDS_OPEN_HAS_EA 1 /* this open has an EA, for a delayed create*/
 
 /* MDS update records */
-
 
 //struct mds_update_record_hdr {
 //        __u32 ur_opcode;
@@ -458,6 +498,8 @@ struct mds_rec_setattr {
         __u32           sa_suppgid;
 };
 
+extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
+
 struct mds_rec_create {
         __u32           cr_opcode;
         __u32           cr_fsuid;
@@ -474,15 +516,20 @@ struct mds_rec_create {
         __u32           cr_suppgid;
 };
 
+extern void lustre_swab_mds_rec_create (struct mds_rec_create *cr);
+
 struct mds_rec_link {
         __u32           lk_opcode;
         __u32           lk_fsuid;
         __u32           lk_fsgid;
         __u32           lk_cap;
-        __u32           lk_suppgid;
+        __u32           lk_suppgid1;
+        __u32           lk_suppgid2;
         struct ll_fid   lk_fid1;
         struct ll_fid   lk_fid2;
 };
+
+extern void lustre_swab_mds_rec_link (struct mds_rec_link *lk);
 
 struct mds_rec_unlink {
         __u32           ul_opcode;
@@ -496,6 +543,8 @@ struct mds_rec_unlink {
         struct ll_fid   ul_fid2;
 };
 
+extern void lustre_swab_mds_rec_unlink (struct mds_rec_unlink *ul);
+
 struct mds_rec_rename {
         __u32           rn_opcode;
         __u32           rn_fsuid;
@@ -507,6 +556,7 @@ struct mds_rec_rename {
         struct ll_fid   rn_fid2;
 };
 
+extern void lustre_swab_mds_rec_rename (struct mds_rec_rename *rn);
 
 /*
  *  LOV data structures
@@ -514,6 +564,11 @@ struct mds_rec_rename {
 
 #define LOV_RAID0   0
 #define LOV_RAIDRR  1
+
+#define LOV_MAX_UUID_BUFFER_SIZE  8192
+/* The size of the buffer the lov/mdc reserves for the 
+ * array of UUIDs returned by the MDS.  With the current
+ * protocol, this will limit the max number of OSTs per LOV */
 
 struct lov_desc {
         __u32 ld_tgt_count;                /* how many OBD's */
@@ -525,6 +580,8 @@ struct lov_desc {
         struct obd_uuid ld_uuid;
 };
 
+extern void lustre_swab_lov_desc (struct lov_desc *ld);
+
 /*
  *   LDLM requests:
  */
@@ -534,6 +591,10 @@ struct lov_desc {
 #define LDLM_CANCEL        103
 #define LDLM_BL_CALLBACK   104
 #define LDLM_CP_CALLBACK   105
+/* When adding LDLM RPC opcodes, please update 
+ * LAST/FIRST macros used in ptlrpc/ptlrpc_internals.h */
+#define LDLM_LAST_OPC      (LDLM_CP_CALLBACK+1)
+#define LDLM_FIRST_OPC     LDLM_ENQUEUE
 
 #define RES_NAME_SIZE 3
 #define RES_VERSION_SIZE 4
@@ -541,6 +602,8 @@ struct lov_desc {
 struct ldlm_res_id {
         __u64 name[RES_NAME_SIZE];
 };
+
+extern void lustre_swab_ldlm_res_id (struct ldlm_res_id *id);
 
 /* lock types */
 typedef enum {
@@ -557,9 +620,13 @@ struct ldlm_extent {
         __u64 end;
 };
 
+extern void lustre_swab_ldlm_extent (struct ldlm_extent *e);
+
 struct ldlm_intent {
         __u64 opc;
 };
+
+extern void lustre_swab_ldlm_intent (struct ldlm_intent *i);
 
 /* Note this unaligned structure; as long as it's only used in ldlm_request
  * below, we're probably fine. */
@@ -569,6 +636,8 @@ struct ldlm_resource_desc {
         __u32 lr_version[RES_VERSION_SIZE];
 };
 
+extern void lustre_swab_ldlm_resource_desc (struct ldlm_resource_desc *r);
+
 struct ldlm_lock_desc {
         struct ldlm_resource_desc l_resource;
         ldlm_mode_t l_req_mode;
@@ -577,12 +646,16 @@ struct ldlm_lock_desc {
         __u32 l_version[RES_VERSION_SIZE];
 };
 
+extern void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l);
+
 struct ldlm_request {
         __u32 lock_flags;
         struct ldlm_lock_desc lock_desc;
         struct lustre_handle lock_handle1;
         struct lustre_handle lock_handle2;
 };
+
+extern void lustre_swab_ldlm_request (struct ldlm_request *rq);
 
 struct ldlm_reply {
         __u32 lock_flags;
@@ -594,6 +667,8 @@ struct ldlm_reply {
         __u64  lock_policy_res2;
 };
 
+extern void lustre_swab_ldlm_reply (struct ldlm_reply *r);
+
 /*
  * ptlbd, portal block device requests
  */
@@ -601,7 +676,14 @@ typedef enum {
         PTLBD_QUERY = 200,
         PTLBD_READ = 201,
         PTLBD_WRITE = 202,
+        PTLBD_FLUSH = 203,
+        PTLBD_CONNECT = 204,
+        PTLBD_DISCONNECT = 205,
 } ptlbd_cmd_t;
+/* When adding PTLBD RPC opcodes, please update 
+ * LAST/FIRST macros used in ptlrpc/ptlrpc_internals.h */
+#define PTLBD_LAST_OPC  (PTLBD_FLUSH+1)
+#define PTLBD_FIRST_OPC PTLBD_QUERY
 
 struct ptlbd_op {
         __u16 op_cmd;
@@ -611,6 +693,8 @@ struct ptlbd_op {
         __u32 op_block_cnt;
 };
 
+extern void lustre_swab_ptlbd_op (struct ptlbd_op *op);
+
 struct ptlbd_niob {
         __u64 n_xid;
         __u64 n_block_nr;
@@ -618,8 +702,19 @@ struct ptlbd_niob {
         __u32 n_length;
 };
 
+extern void lustre_swab_ptlbd_niob (struct ptlbd_niob *n);
+
 struct ptlbd_rsp {
         __u16 r_status;
         __u16 r_error_cnt;
 };
+
+extern void lustre_swab_ptlbd_rsp (struct ptlbd_rsp *r);
+
+/*
+ * Opcodes for multiple servers.
+ */
+
+#define OBD_PING 400
+
 #endif

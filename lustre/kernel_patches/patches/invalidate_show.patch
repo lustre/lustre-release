@@ -1,6 +1,15 @@
---- lum/fs/inode.c	Sat Oct 19 11:42:42 2002
-+++ linux-2.4.18-uml35-ext3online/fs/inode.c	Mon Oct 14 00:41:20 2002
-@@ -606,7 +553,8 @@ static void dispose_list(struct list_hea
+
+
+
+ fs/inode.c         |   21 ++++++++++++++-------
+ fs/smbfs/inode.c   |    2 +-
+ fs/super.c         |    4 ++--
+ include/linux/fs.h |    2 +-
+ 4 files changed, 18 insertions(+), 11 deletions(-)
+
+--- linux-rh-2.4.20-8/fs/inode.c~invalidate_show	2003-04-11 14:04:56.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/inode.c	2003-04-16 20:59:35.000000000 +0800
+@@ -604,7 +604,8 @@ static void dispose_list(struct list_hea
  /*
   * Invalidate all inodes for a device.
   */
@@ -10,7 +19,7 @@
  {
  	struct list_head *next;
  	int busy = 0, count = 0;
-@@ -631,6 +579,11 @@ static int invalidate_list(struct list_h
+@@ -629,6 +630,11 @@ static int invalidate_list(struct list_h
  			count++;
  			continue;
  		}
@@ -22,7 +31,7 @@
  		busy = 1;
  	}
  	/* only unused inodes may be cached with i_count zero */
-@@ -649,22 +601,23 @@ static int invalidate_list(struct list_h
+@@ -647,22 +653,23 @@ static int invalidate_list(struct list_h
  /**
   *	invalidate_inodes	- discard the inodes on a device
   *	@sb: superblock
@@ -51,7 +60,7 @@
  	spin_unlock(&inode_lock);
  
  	dispose_list(&throw_away);
-@@ -690,7 +643,7 @@ int invalidate_device(kdev_t dev, int do
+@@ -688,7 +695,7 @@ int invalidate_device(kdev_t dev, int do
  		 * hold).
  		 */
  		shrink_dcache_sb(sb);
@@ -60,9 +69,9 @@
  		drop_super(sb);
  	}
  	invalidate_buffers(dev);
---- lum/fs/super.c.orig	Sat Oct 19 11:42:42 2002
-+++ lum/fs/super.c	Wed Oct 30 17:16:55 2002
-@@ -936,7 +936,7 @@
+--- linux-rh-2.4.20-8/fs/super.c~invalidate_show	2003-04-11 14:04:57.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/super.c	2003-04-16 20:59:35.000000000 +0800
+@@ -943,7 +943,7 @@ void kill_super(struct super_block *sb)
  	lock_super(sb);
  	lock_kernel();
  	sb->s_flags &= ~MS_ACTIVE;
@@ -71,7 +80,7 @@
  	if (sop) {
  		if (sop->write_super && sb->s_dirt)
  			sop->write_super(sb);
-@@ -945,7 +945,7 @@
+@@ -952,7 +952,7 @@ void kill_super(struct super_block *sb)
  	}
  
  	/* Forget any remaining inodes */
@@ -80,9 +89,9 @@
  		printk(KERN_ERR "VFS: Busy inodes after unmount. "
  			"Self-destruct in 5 seconds.  Have a nice day...\n");
  	}
---- lum/include/linux/fs.h	Wed Oct 30 17:10:42 2002
-+++ lum/include/linux/fs.h.orig	Tue Oct 22 23:15:00 2002
-@@ -1261,7 +1261,7 @@
+--- linux-rh-2.4.20-8/include/linux/fs.h~invalidate_show	2003-04-16 20:55:35.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/linux/fs.h	2003-04-16 20:59:35.000000000 +0800
+@@ -1283,7 +1283,7 @@ static inline void mark_buffer_dirty_ino
  extern void set_buffer_flushtime(struct buffer_head *);
  extern void balance_dirty(void);
  extern int check_disk_change(kdev_t);
@@ -91,9 +100,9 @@
  extern int invalidate_device(kdev_t, int);
  extern void invalidate_inode_pages(struct inode *);
  extern void invalidate_inode_pages2(struct address_space *);
---- lum/fs/smbfs/inode.c.orig	Mon Feb 25 12:38:09 2002
-+++ lum/fs/smbfs/inode.c	Thu Feb  6 21:34:26 2003
-@@ -166,7 +166,7 @@
+--- linux-rh-2.4.20-8/fs/smbfs/inode.c~invalidate_show	2003-04-16 20:59:48.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/smbfs/inode.c	2003-04-16 21:00:43.000000000 +0800
+@@ -167,7 +167,7 @@ smb_invalidate_inodes(struct smb_sb_info
  {
  	VERBOSE("\n");
  	shrink_dcache_sb(SB_of(server));
@@ -102,3 +111,5 @@
  }
  
  /*
+
+_

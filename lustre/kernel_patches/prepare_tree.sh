@@ -67,7 +67,7 @@ REVINO=`(cd $TREE ; stat $REVERSE | awk '($3 == "Inode:") {print $4}')`
 
 [ $ABSINO != $REVINO ] && die "inodes differ, my reverse path is bad?"
 
-echo export PATCHSCRIPTS=$REVERSE
+echo export PATCHSCRIPTS_LIBDIR=$REVERSE
 
 cd $TREE
 ln -sf $REVERSE/series/$SERIES series

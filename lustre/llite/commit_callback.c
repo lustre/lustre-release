@@ -34,6 +34,7 @@
 
 #include <linux/lustre_lite.h>
 #include <linux/lustre_lib.h>
+#include <linux/lustre_compat25.h>
 
 static int ll_commitcbd_check_event(struct ll_sb_info *sbi)
 {
@@ -57,26 +58,17 @@ static int ll_commitcbd_main(void *arg)
         ENTRY;
 
         lock_kernel();
-        daemonize();
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        spin_lock_irqsave(&current->sigmask_lock, flags);
-        sigfillset(&current->blocked);
-        our_recalc_sigpending(current);
-        spin_unlock_irqrestore(&current->sigmask_lock, flags);
-#else
-        sigfillset(&current->blocked);
-        our_recalc_sigpending(current);
-#endif
+        kportal_daemonize("lustre_commitcbd");
 
-        sprintf(current->comm, "lustre_commitcbd");
+        SIGNAL_MASK_LOCK(current, flags);
+        sigfillset(&current->blocked);
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
+
         unlock_kernel();
 
         /* Record that the  thread is running */
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        sbi->ll_commitcbd_waketime = CURRENT_TIME;
-#else
-        sbi->ll_commitcbd_waketime = CURRENT_TIME.tv_sec;
-#endif
+        sbi->ll_commitcbd_waketime = LTIME_S(CURRENT_TIME);
         sbi->ll_commitcbd_timeout = 10 * HZ;
         sbi->ll_commitcbd_thread = current;
         sbi->ll_commitcbd_flags =  LL_COMMITCBD_RUNNING;

@@ -29,9 +29,22 @@ import sys, os, getopt, string, exceptions
 import xml.dom.minidom
 from xml.dom.ext import PrettyPrint
 
+PYMOD_DIR = "/usr/lib/lustre/python"
+
+def development_mode():
+    base = os.path.dirname(sys.argv[0])
+    if os.access(base+"/Makefile.am", os.R_OK):
+        return 1
+    return 0
+
+if not development_mode():
+    sys.path.append(PYMOD_DIR)
+
+import Lustre
+
 DEFAULT_PORT = 988 
 
-def usage():
+def reference():
     print """usage: lmc --add object [object parameters]
 
 Object creation command summary:
@@ -39,12 +52,15 @@ Object creation command summary:
 --add node
   --node node_name
   --timeout num
-  --recovery_upcall path
+  --upcall path
+  --lustre_upcall path
+  --portals_upcall path
 
 --add net
   --node node_name
   --nid nid
-  --nettype tcp|elan|toe|gm
+  --cluster_id 
+  --nettype tcp|elan|toe|gm|scimac
   --hostaddr addr
   --port port
   --tcpbuf size
@@ -81,7 +97,74 @@ Object creation command summary:
   --mds mds_name
   --ost ost_name OR --lov lov_name
 """
-    sys.exit(1)
+
+PARAM = Lustre.Options.PARAM
+lmc_options = [
+    # lmc input/output options
+    ('reference', "Print short reference for commands"), 
+    ('verbose,v', "Print system commands as they are run"),
+    ('merge,m', "", PARAM),
+    ('output,o', "", PARAM),
+    ('input,i', "", PARAM),
+    ('batch', "", PARAM),
+
+    # commands
+    ('add', "", PARAM),
+    
+    # node options
+    ('node', "", PARAM),
+    ('timeout', "", PARAM),
+    ('upcall', "Set both lustre and portals upcall scripts.", PARAM),
+    ('lustre_upcall', "Set location of lustre upcall script.", PARAM),
+    ('portals_upcall', "Set location of portals upcall script.", PARAM),
+
+    # network 
+    ('nettype', "", PARAM),
+    ('nid', "", PARAM),
+    ('tcpbuf', "", PARAM, 0),
+    ('port', "", PARAM, DEFAULT_PORT),
+    ('nid_exchange', "", PARAM, 0),
+    ('irq_affinity', "", PARAM, 0),
+    ('hostaddr', "", PARAM, ""),
+    ('cluster_id', "", PARAM, "0"),
+
+    # routes
+    ('route', "", PARAM),
+    ('router', ""),
+    ('gw', "", PARAM),
+    ('gw_cluster_id', "", PARAM, "0"),
+    ('target_cluster_id', "", PARAM, "0"),
+    ('lo', "", PARAM),
+    ('hi', "", PARAM, ""),
+
+    # servers: mds and ost
+    ('mds', "", PARAM),
+    ('ost', "", PARAM, ""),
+    ('osdtype', "", PARAM, "obdfilter"),
+    ('failover', ""),
+    ('group', "", PARAM),
+    ('dev', "", PARAM, ""),
+    ('size', "", PARAM, 0),
+    ('journal_size', "", PARAM, 0),
+    ('fstype', "", PARAM, "ext3"),
+    ('ostuuid', "", PARAM, ""),
+    ('format', ""),
+
+    # clients: mountpoint and echo
+    ('echo_client', "", PARAM),
+    ('path', "", PARAM),
+    ('filesystem', "Lustre filesystem name", PARAM, ''),
+
+    # lov
+    ('lov', "", PARAM, ''),
+    ('stripe_sz', "", PARAM),
+    ('stripe_cnt', "", PARAM, 0),
+    ('stripe_pattern', "", PARAM, 0),
+
+    # cobd
+    ('real_obd', "", PARAM),
+    ('cache_obd', "", PARAM),
+    ]
 
 def error(*args):
     msg = string.join(map(str,args))
@@ -118,17 +201,12 @@ def new_uuid(name):
 ldlm_name = 'ldlm'
 ldlm_uuid = 'ldlm_UUID'
 
-ptlrpc_name = 'RPCDEV'
-ptlrpc_uuid = 'RPCDEV_UUID'
-
 def new_lustre(dom):
     """Create a new empty lustre document"""
     # adding ldlm here is a bit of a hack, but one is enough.
-    str = """<lustre>
+    str = """<lustre version="%s">
     <ldlm name="%s" uuid="%s"/>
-    <ptlrpc name="%s" uuid="%s"/>
-    </lustre>""" % (ldlm_name, ldlm_uuid,
-                    ptlrpc_name, ptlrpc_uuid)
+    </lustre>""" % (Lustre.CONFIG_VERSION, ldlm_name, ldlm_uuid)
     return dom.parseString(str)
 
 names = {}
@@ -146,9 +224,8 @@ def init_names(doc):
             init_names(n)
 
 def get_format_flag(options):
-    if options.has_key('format'):
-        if options['format']:
-            return 'yes'
+    if options.format:
+        return 'yes'
     return 'no'
 
 ############################################################
@@ -187,11 +264,13 @@ class GenConfig:
         node.appendChild(new)
         return new
 
-    def network(self, name, uuid, nid, net, hostaddr="", port=0, tcpbuf=0, irq_aff=0, nid_xchg=0):
+    def network(self, name, uuid, nid, cluster_id, net, hostaddr="",
+                port=0, tcpbuf=0, irq_aff=0, nid_xchg=0):
         """create <network> node"""
         network = self.newService("network", name, uuid)
         network.setAttribute("nettype", net);
         self.addElement(network, "nid", nid)
+        self.addElement(network, "clusterid", cluster_id)
         if hostaddr:
             self.addElement(network, "hostaddr", hostaddr)
         if port:
@@ -211,11 +290,13 @@ class GenConfig:
         rtbl = self.newService("routetbl", name, uuid)
         return rtbl
         
-    def route(self, net_type, gw, lo, hi):
+    def route(self, gw_net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi):
         """ create one entry for the route table """
         ref = self.doc.createElement('route')
-        ref.setAttribute("type", net_type)
+        ref.setAttribute("type", gw_net_type)
         ref.setAttribute("gw", gw)
+        ref.setAttribute("gwclusterid", gw_cluster_id)
+        ref.setAttribute("tgtclusterid", tgt_cluster_id)
         ref.setAttribute("lo", lo)
         if hi:
             ref.setAttribute("hi", hi)
@@ -237,7 +318,8 @@ class GenConfig:
         ldlm = self.newService("ldlm", name, uuid)
         return ldlm
 
-    def osd(self, name, uuid, fs, osdtype, devname, format, ost_uuid, node_uuid, dev_size=0):
+    def osd(self, name, uuid, fs, osdtype, devname, format, ost_uuid,
+            node_uuid, dev_size=0, journal_size=0):
         osd = self.newService("osd", name, uuid)
         osd.setAttribute('osdtype', osdtype)
         osd.appendChild(self.ref("target", ost_uuid))
@@ -249,6 +331,8 @@ class GenConfig:
             self.addElement(osd, "autoformat", format)
             if dev_size:
                 self.addElement(osd, "devsize", "%s" % (dev_size))
+            if journal_size:
+                self.addElement(osd, "journalsize", "%s" % (journal_size))
         return osd
 
     def cobd(self, name, uuid, real_uuid, cache_uuid):
@@ -257,9 +341,11 @@ class GenConfig:
         cobd.appendChild(self.ref("cacheobd",cache_uuid))
         return cobd
 
-    def ost(self, name, uuid, osd_uuid):
+    def ost(self, name, uuid, osd_uuid, group=""):
         ost = self.newService("ost", name, uuid)
         ost.appendChild(self.ref("active", osd_uuid))
+        if group:
+            self.addElement(ost, "group", group)
         return ost
 
     def oss(self, name, uuid):
@@ -279,30 +365,39 @@ class GenConfig:
         lovconfig.appendChild(self.ref("lov", lov_uuid))
         return lovconfig
 
-    def mds(self, name, uuid, mdd_uuid):
+    def mds(self, name, uuid, mdd_uuid, group=""):
         mds = self.newService("mds", name, uuid)
         mds.appendChild(self.ref("active",mdd_uuid))
+        if group:
+            self.addElement(mds, "group", group)
         return mds
 
     def mdsdev(self, name, uuid, fs, devname, format, node_uuid,
-            mds_uuid, dev_size=0 ):
+            mds_uuid, dev_size=0, journal_size=0):
         mdd = self.newService("mdsdev", name, uuid)
         self.addElement(mdd, "fstype", fs)
         dev = self.addElement(mdd, "devpath", devname)
         self.addElement(mdd, "autoformat", format)
         if dev_size:
                 self.addElement(mdd, "devsize", "%s" % (dev_size))
+        if journal_size:
+            self.addElement(mdd, "journalsize", "%s" % (journal_size))
         mdd.appendChild(self.ref("node", node_uuid))
         mdd.appendChild(self.ref("target", mds_uuid))
         return mdd
 
-    def mountpoint(self, name, uuid, mds_uuid, osc_uuid, path):
+    def mountpoint(self, name, uuid, fs_uuid, path):
         mtpt = self.newService("mountpoint", name, uuid)
-        mtpt.appendChild(self.ref("mds", mds_uuid))
-        mtpt.appendChild(self.ref("obd", osc_uuid))
+        mtpt.appendChild(self.ref("filesystem", fs_uuid))
         self.addElement(mtpt, "path", path)
         return mtpt
 
+    def filesystem(self, name, uuid, mds_uuid, obd_uuid):
+        fs = self.newService("filesystem", name, uuid)
+        fs.appendChild(self.ref("mds", mds_uuid))
+        fs.appendChild(self.ref("obd", obd_uuid))
+        return fs
+        
     def echo_client(self, name, uuid, osc_uuid):
         ec = self.newService("echoclient", name, uuid)
         ec.appendChild(self.ref("obd", osc_uuid))
@@ -352,6 +447,12 @@ def name2uuid(lustre, name, tag="",  fatal=1):
             return ""
     return getUUID(ret)
     
+def lookup_filesystem(lustre, mds_uuid, ost_uuid):
+    for n in lustre.childNodes:
+        if n.nodeType == n.ELEMENT_NODE and n.nodeName == 'filesystem':
+            if ref_exists(n, mds_uuid) and ref_exists(n, ost_uuid):
+                return getUUID(n)
+    return None
 
 # XXX: assumes only one network element per node. will fix this
 # as soon as support for routers is added
@@ -403,6 +504,27 @@ def get_attr(dom_node, attr, default=""):
 ############################################################
 # Top level commands
 #
+def set_node_options(gen, node, options):
+    if options.router:
+        node.setAttribute('router', '1')
+    if options.timeout:
+        gen.addElement(node, "timeout", get_option(options, 'timeout'))
+    if options.upcall:
+        default_upcall =  get_option(options, 'upcall')
+    else:
+        default_upcall = ''
+    if default_upcall or options.lustre_upcall:
+        if options.lustre_upcall:
+            gen.addElement(node, 'lustreUpcall', options.lustre_upcall)
+        else: 
+            gen.addElement(node, 'lustreUpcall', default_upcall)
+    if default_upcall or options.portals_upcall:
+        if options.portals_upcall:
+            gen.addElement(node, 'portalsUpcall', options.portals_upcall)
+        else:
+            gen.addElement(node, 'portalsUpcall', default_upcall)
+    return node
+
 def do_add_node(gen, lustre,  options, node_name):
     uuid = new_uuid(node_name)
     prof_name = new_name("PROFILE_" + node_name)
@@ -413,13 +535,7 @@ def do_add_node(gen, lustre,  options, node_name):
     lustre.appendChild(profile)
 
     node_add_profile(gen, node, 'ldlm', ldlm_uuid)
-    node_add_profile(gen, node, 'ptlrpc', ptlrpc_uuid)
-    if has_option(options, 'router'):
-        node.setAttribute('router', '1')
-    if has_option(options, 'timeout'):
-        node.setAttribute('timeout', get_option(options, 'timeout'))
-    if has_option(options, 'recovery_upcall'):
-        node.setAttribute('recovery_upcall', get_option(options, 'recovery_upcall'))
+    set_node_options(gen, node, options)
     return node
 
     
@@ -439,15 +555,16 @@ def add_net(gen, lustre, options):
 
     node_name = get_option(options, 'node')
     nid = get_option(options, 'nid')
-    hostaddr = get_option(options, 'hostaddr', '')
+    cluster_id = get_option(options, 'cluster_id')
+    hostaddr = get_option(options, 'hostaddr')
     net_type = get_option(options, 'nettype')
 
     if net_type in ('tcp', 'toe'):
-        port = get_option_int(options, 'port', DEFAULT_PORT)
-        tcpbuf = get_option_int(options, 'tcpbuf', 0)
-        irq_aff = get_option_int(options, 'irq_affinity', 0)
-        nid_xchg = get_option_int(options, 'nid_exchange', 0)
-    elif net_type in ('elan', 'gm'):
+        port = get_option_int(options, 'port')
+        tcpbuf = get_option_int(options, 'tcpbuf')
+        irq_aff = get_option_int(options, 'irq_affinity')
+        nid_xchg = get_option_int(options, 'nid_exchange')
+    elif net_type in ('elan', 'gm', 'scimac'):
         port = 0
         tcpbuf = 0
         irq_aff = 0
@@ -461,9 +578,12 @@ def add_net(gen, lustre, options):
         node = do_add_node(gen, lustre, options, node_name)
     else:
         node = ret
+        set_node_options(gen, node, options)
+
     net_name = new_name('NET_'+ node_name +'_'+ net_type)
     net_uuid = new_uuid(net_name)
-    node.appendChild(gen.network(net_name, net_uuid, nid, net_type, hostaddr, port, tcpbuf, irq_aff, nid_xchg))
+    node.appendChild(gen.network(net_name, net_uuid, nid, cluster_id, net_type,
+                                 hostaddr, port, tcpbuf, irq_aff, nid_xchg))
     node_add_profile(gen, node, "network", net_uuid)
 
 
@@ -471,10 +591,14 @@ def add_route(gen, lustre, options):
     """ create a node with a network config """
 
     node_name = get_option(options, 'node')
-    net_type = get_option(options, 'nettype')
+    gw_net_type = get_option(options, 'nettype')
     gw = get_option(options, 'gw')
+    gw_cluster_id = get_option(options, 'gw_cluster_id')
+    tgt_cluster_id = get_option(options, 'target_cluster_id')
     lo = get_option(options, 'lo')
-    hi = get_option(options, 'hi', '')
+    hi = get_option(options, 'hi')
+    if not hi:
+        hi = lo
 
     node = findByName(lustre, node_name, "node")
     if not node:
@@ -489,7 +613,8 @@ def add_route(gen, lustre, options):
         rtbl = gen.routetbl(rtbl_name, rtbl_uuid)
         node.appendChild(rtbl)
         node_add_profile(gen, node, "routetbl", rtbl_uuid)
-    rtbl.appendChild(gen.route(net_type, gw, lo, hi))
+    rtbl.appendChild(gen.route(gw_net_type, gw, gw_cluster_id, tgt_cluster_id,
+                               lo, hi))
 
 
 def add_mds(gen, lustre, options):
@@ -501,12 +626,17 @@ def add_mds(gen, lustre, options):
     mds_uuid = name2uuid(lustre, mds_name, fatal=0)
     if not mds_uuid:
         mds_uuid = new_uuid(mds_name)
-        mds = gen.mds(mds_name, mds_uuid, mdd_uuid)
+        mds = gen.mds(mds_name, mds_uuid, mdd_uuid, options.group)
         lustre.appendChild(mds)
-        
+    else:
+        mds = lookup(lustre, mds_uuid)
+    if options.failover:
+        mds.setAttribute('failover', "1")
+
     devname = get_option(options, 'dev')
-    size = get_option(options, 'size', 0)
-    fstype = get_option(options, 'fstype', 'extN')
+    size = get_option(options, 'size')
+    fstype = get_option(options, 'fstype')
+    journal_size = get_option(options, 'journal_size')
 
     node_uuid = name2uuid(lustre, node_name, 'node')
 
@@ -516,15 +646,16 @@ def add_mds(gen, lustre, options):
     if not net_uuid:
         error("NODE: ", node_name, "not found")
 
-    mdd = gen.mdsdev(mdd_name, mdd_uuid, fstype, devname, get_format_flag(options),
-                  node_uuid, mds_uuid, dev_size=size)
+    mdd = gen.mdsdev(mdd_name, mdd_uuid, fstype, devname,
+                     get_format_flag(options), node_uuid, mds_uuid,
+                     dev_size=size, journal_size=journal_size)
     lustre.appendChild(mdd)
                    
 
 def add_ost(gen, lustre, options):
     node_name = get_option(options, 'node')
-    lovname = get_option(options, 'lov', '')
-    osdtype = get_option(options, 'osdtype', 'obdfilter', deprecated_tag="obdtype")
+    lovname = get_option(options, 'lov')
+    osdtype = get_option(options, 'osdtype')
 
     node_uuid = name2uuid(lustre, node_name)
 
@@ -533,37 +664,46 @@ def add_ost(gen, lustre, options):
         devname = ''
         size = 0
         fstype = ''
+        journal_size = ''
     else:
-        devname = get_option(options, 'dev', '') # can be unset for bluearcs
-        size = get_option(options, 'size', 0)
-        fstype = get_option(options, 'fstype', 'extN')
+        devname = get_option(options, 'dev') # can be unset for bluearcs
+        size = get_option(options, 'size')
+        fstype = get_option(options, 'fstype')
+        journal_size = get_option(options, 'journal_size')
         
-    ostname = get_option(options, 'ost', '', deprecated_tag='obd')
+    ostname = get_option(options, 'ost')
     if not ostname:
         ostname = new_name('OST_'+ node_name)
 
-    osdname = new_name("OSD_" + ostname)
+    osdname = new_name("OSD_" + ostname + "_" + node_name)
     osd_uuid = new_uuid(osdname)
 
     ost_uuid = name2uuid(lustre, ostname, fatal=0)
     if not ost_uuid:
-        ost_uuid = get_option(options, 'ostuuid', '', deprecated_tag = 'obduuid')
+        ost_uuid = get_option(options, 'ostuuid')
         if ost_uuid:
             if lookup(lustre, ost_uuid):
                 error("Duplicate OST UUID:", ost_uuid)
         else:
             ost_uuid = new_uuid(ostname)
 
-        ost = gen.ost(ostname, ost_uuid, osd_uuid)
+        ost = gen.ost(ostname, ost_uuid, osd_uuid, options.group)
         lustre.appendChild(ost)
         if lovname:
             lov = findByName(lustre, lovname, "lov")
             if not lov:
                 error('add_ost:', '"'+lovname+'"', "lov element not found.")
             lov_add_obd(gen, lov, ost_uuid)
+    else:
+        ost = lookup(lustre, ost_uuid)
 
-    osd = gen.osd(osdname, osd_uuid, fstype, osdtype, devname, get_format_flag(options), ost_uuid,
-                  node_uuid, size)
+    if options.failover:
+        ost.setAttribute('failover', "1")
+    
+
+    osd = gen.osd(osdname, osd_uuid, fstype, osdtype, devname,
+                  get_format_flag(options), ost_uuid, node_uuid, size,
+                  journal_size)
 
     node = findByName(lustre, node_name, "node")
 
@@ -623,8 +763,8 @@ def add_lov(gen, lustre, options):
 
     mds_name = get_option(options, 'mds')
     stripe_sz = get_option_int(options, 'stripe_sz')
-    stripe_cnt = get_option_int(options, 'stripe_cnt', 0)
-    pattern = get_option_int(options, 'stripe_pattern', 0)
+    stripe_cnt = get_option_int(options, 'stripe_cnt')
+    pattern = get_option_int(options, 'stripe_pattern')
     uuid = new_uuid(name)
 
     ret = findByName(lustre, name, "lov")
@@ -643,49 +783,56 @@ def add_lov(gen, lustre, options):
     lovconfig = gen.lovconfig(lovconfig_name, lovconfig_uuid, uuid)
     lustre.appendChild(lovconfig)
 
+def new_filesystem(gen, lustre, mds_uuid, obd_uuid):
+    fs_name = new_name("FS_fsname")
+    fs_uuid = new_uuid(fs_name)
+    mds = lookup(lustre, mds_uuid)
+    mds.appendChild(gen.ref("filesystem", fs_uuid))
+    fs = gen.filesystem(fs_name, fs_uuid, mds_uuid, obd_uuid)
+    lustre.appendChild(fs)
+    return fs_uuid
 
+def get_fs_uuid(gen, lustre, mds_name, obd_name):
+    mds_uuid = name2uuid(lustre, mds_name, tag='mds')
+    obd_uuid = name2uuid(lustre, obd_name, tag='lov', fatal=0)
+    if not obd_uuid:
+        obd_uuid = name2uuid(lustre, obd_name, tag='ost', fatal=1)
+    fs_uuid = lookup_filesystem(lustre, mds_uuid, obd_uuid)
+    if not fs_uuid:
+        fs_uuid = new_filesystem(gen, lustre, mds_uuid, obd_uuid)
+    return fs_uuid
+    
 def add_mtpt(gen, lustre, options):
     """ create mtpt on a node """
     node_name = get_option(options, 'node')
 
     path = get_option(options, 'path')
-    mds_name = get_option(options, 'mds')
-    lov_name = get_option(options, 'lov', '')
-    if lov_name == '':
-        lov_name = get_option(options, 'ost', '', deprecated_tag='obd')
+    fs_name = get_option(options, 'filesystem')
+    if fs_name == '':
+        mds_name = get_option(options, 'mds')
+        lov_name = get_option(options, 'lov')
         if lov_name == '':
-            error("--add mtpt requires either --lov lov_name or --ost ost_name")
+            lov_name = get_option(options, 'ost')
+            if lov_name == '':
+                error("--add mtpt requires either --filesystem or --mds with an  --lov lov_name or --ost ost_name")
+        fs_uuid = get_fs_uuid(gen, lustre, mds_name, lov_name)
+    else:
+        fs_uuid = name2uuid(lustre, fs_name, tag='filesystem')
 
     name = new_name('MNT_'+ node_name)
 
     ret = findByName(lustre, name, "mountpoint")
     if ret:
+        # this can't happen, because new_name creates unique names
         error("MOUNTPOINT: ", name, " already exists.")
 
-    mds_uuid = name2uuid(lustre, mds_name, tag='mds')
-    lov_uuid = name2uuid(lustre, lov_name, tag='lov', fatal=0)
-    if not lov_uuid:
-        lov_uuid = name2uuid(lustre, lov_name, tag='ost', fatal=1)
-
     uuid = new_uuid(name)
-    mtpt = gen.mountpoint(name, uuid, mds_uuid, lov_uuid, path)
+    mtpt = gen.mountpoint(name, uuid, fs_uuid, path)
     node = findByName(lustre, node_name, "node")
     if not node:
         error('node:',  node_name, "not found.")
     node_add_profile(gen, node, "mountpoint", uuid)
     lustre.appendChild(mtpt)
-
-# obsolete, leaving behind for reference 
-def add_oscref(gen, lustre, options):
-    """ create mtpt on a node """
-    node_name = get_option(options, 'node')
-    osc_name = get_option(options, 'osc')
-
-    osc_uuid = name2uuid(lustre, osc_name, tag='osc')
-    node = findByName(lustre, node_name, "node")
-    if not node:
-        error('node:', node_name, "not found")
-    node_add_profile(gen, node, "osc",osc_uuid)
 
 ############################################################
 # Command line processing
@@ -694,160 +841,22 @@ class OptionError (exceptions.Exception):
     def __init__(self, args):
         self.args = args
 
-def has_option(options, tag):
-    """Look for tag in options hash and return the true if set"""
-    if options.has_key(tag):
-        return 1
-    return 0
-
-def get_option(options, tag, default = None, deprecated_tag=None):
+def get_option(options, tag):
     """Look for tag in options hash and return the value if set. If not
     set, then if return default it is set, otherwise exception."""
-    if options.has_key(tag):
-        return options[tag]
-    elif deprecated_tag and options.has_key(deprecated_tag):
-            warning('--'+deprecated_tag, " is deprecated, please use:", '--'+tag)
-            return options[deprecated_tag]
-    elif default != None:
-        return default
+    if options.__getattr__(tag) != None:
+        return options.__getattr__(tag)
     else:
-        raise OptionError("--add %s requires --%s <value>" % (options['add'], tag))
-        # this exception should print an error like '--add blah requires --<tag> value'
+        raise OptionError("--add %s requires --%s <value>" % (options.add, tag))
 
-def get_option_int(options, tag, default = None):
+def get_option_int(options, tag):
     """Return an integer option.  Raise exception if the value is not an int"""
-    val = get_option(options, tag, default)
+    val = get_option(options, tag)
     try:
         n = int(val)
     except ValueError:
         raise OptionError("--%s <num> (value must be integer)" % (tag))        
     return n
-
-def parse_cmdline(argv):
-    short_opts = "ho:i:m:"
-    long_opts = ["add=", "node=", "nettype=", "nid=", "tcpbuf=", "port=",
-                 "echo_client=", "stripe_sz=", "stripe_cnt=", "stripe_pattern=",
-                 "mds=", "route", "router", "merge=", "format", "reformat", "output=",
-                 "dev=", "size=", "obd=", "ost=", "obdtype=", "osdtype=", "obduuid=", "in=",
-                 "ostuuid=", "path=", "help", "batch=", "lov=", "gw=", "lo=", "hi=",
-                 "osc=", "real_obd=", "cache_obd=", "fstype=",
-                 "timeout=", "recovery_upcall=", "nid_exchange=", "irq_affinity=",
-                 "hostaddr=",]
-    opts = []
-    args = []
-    options = {}
-    try:
-        opts, args = getopt.getopt(argv, short_opts, long_opts)
-    except getopt.error, e:
-        panic(string.join(sys.argv), e)
-
-    for o, a in opts:
-        # Commands to create new devices
-        if o == "--add":
-            options['add'] = a
-
-        if o == "--node":
-            options['node'] = a
-
-        # devices names
-        if o == "--lov":
-            options['lov'] = a
-        if o == "--mds":
-            options['mds'] = a
-        if o == "--obd":
-            options['obd'] = a
-        if o == "--ost":
-            options['ost'] = a
-
-        # node options
-        if o == "--timeout":
-            options['timeout'] = a
-        if o == "--recovery_upcall":
-            options['recovery_upcall'] = a
-        if o == "--router":
-            options['router'] = 1
-        
-        # network options
-        if o == "--nid":
-            options['nid'] = a
-        if o == "--hostaddr":
-            options['hostaddr'] = a
-        if o == "--nettype":
-            options['nettype'] = a
-        if o == "--net":
-            options[''] = a
-        if o == "--tcpbuf":
-            options['tcpbuf'] = a
-        if o == "--port":
-            options['port'] = a
-        if o == "--mtpt":
-            options['mtpt'] = 1
-        if o == "--route":
-            options['route'] = 1
-        if o == "--nid_exchange":
-            options['nid_exchange'] = a
-        if o == "--irq_affinity":
-            options['irq_affinity'] = a
-
-        # ost options
-        if o == "--dev":
-            options['dev'] = a
-        if o == "--size":
-            options['size'] = a
-        if o == "--path":
-            options['path'] = a
-        if o == "--osc":
-            options['osc'] = a
-        if o == "--obdtype":
-            options['obdtype'] = a
-        if o == "--osdtype":
-            options['osdtype'] = a
-        if o == "--fstype":
-            options['fstype'] = a
-        if o == "--obduuid":
-            options['obduuid'] = a
-        if o == "--ostuuid":
-            options['ostuuid'] = a
-
-        # lov options
-        if o == "--stripe_sz":
-            options['stripe_sz'] = a
-        if o == "--stripe_cnt":
-            options['stripe_cnt'] = a
-        if o == "--stripe_pattern":
-            options['stripe_pattern'] = a
-        if o == "--gw":
-            options['gw'] = a
-        if o == "--lo":
-            options['lo'] = a
-        if o == "--hi":
-            options['hi'] = a
-
-        # cobd
-        if o == "--cache_obd":
-            options['cache_obd'] = a
-        if o == "--real_obd":
-            options['real_obd'] = a
-
-        # lmc options
-        if o in ("-h", "--help"):
-            usage()
-        if o in ("-o", "--output"):
-            options['output'] = a
-        if o in ("-m", "--merge"):
-            options['merge'] = a
-        if o == "--format":
-            options['format'] = 1
-        if o  == "--reformat":
-            warning("the lmc --reformat option is not supported. Use lconf --reformat")
-            options['reformat'] = 1
-        if o  == "--batch":
-            options['batch'] = a
-        if o  in ("--in" , "-i"):
-            options['in'] = a
-            
-    return options, args
-
 
 # simple class for profiling
 import time
@@ -868,8 +877,6 @@ class chrono:
         str = '%s: %g secs' % (msg, d)
         print str
 
-
-
 ############################################################
 # Main
 #
@@ -877,8 +884,6 @@ class chrono:
 def add(devtype, gen, lustre, options):
     if devtype == 'net':
         add_net(gen, lustre, options)
-    elif devtype =='osc':
-        add_osc(gen, lustre, options)
     elif devtype == 'mtpt':
         add_mtpt(gen, lustre, options)
     elif devtype == 'mds':
@@ -899,28 +904,40 @@ def add(devtype, gen, lustre, options):
         error("unknown device type:", devtype)
     
 def do_command(gen, lustre, options, args):
-    if options.has_key('add'):
-        add(options['add'], gen, lustre, options)
+    if options.add:
+        add(options.add, gen, lustre, options)
     else:
         error("Missing command")
 
 def main():
-    options, args = parse_cmdline(sys.argv[1:])
+    cl = Lustre.Options("lmc", "", lmc_options)
+    try:
+        options, args = cl.parse(sys.argv[1:])
+    except Lustre.OptionError, e:
+        panic("lmc", e)
+
+    if len(args) > 0:
+        panic(string.join(sys.argv), "Unexpected extra arguments on command line: " + string.join(args))
+
+    if options.reference:
+        reference()
+        sys.exit(0)
+
     outFile = '-'
 
-    if options.has_key('merge'):
-        outFile = options['merge']
+    if options.merge:
+        outFile = options.merge
         if os.access(outFile, os.R_OK):
             doc = xml.dom.minidom.parse(outFile)
         else:
             doc = new_lustre(xml.dom.minidom)
-    elif options.has_key('in'):
-        doc = xml.dom.minidom.parse(options['in'])
+    elif options.input:
+        doc = xml.dom.minidom.parse(options.input)
     else:
         doc = new_lustre(xml.dom.minidom)
 
-    if options.has_key('output'):
-        outFile = options['output']
+    if options.output:
+        outFile = options.output
 
     lustre = doc.documentElement
     init_names(lustre)
@@ -930,21 +947,25 @@ def main():
 
     gen = GenConfig(doc)
 
-    if options.has_key('batch'):
-        fp = open(options['batch'])
+    if options.batch:
+        fp = open(options.batch)
         batchCommands = fp.readlines()
         fp.close()
         for cmd in batchCommands:
-            options, args = parse_cmdline(string.split(cmd))
             try:
+                options, args = cl.parse(string.split(cmd))
                 do_command(gen, lustre, options, args)
             except OptionError, e:
+                panic(cmd, e)
+            except Lustre.OptionError, e:
                 panic(cmd, e)
     else:
         try:
             do_command(gen, lustre, options, args)
         except OptionError, e:
             panic(string.join(sys.argv),e)
+        except Lustre.OptionError, e:
+            panic("lmc", e)
 
     if outFile == '-':
         PrettyPrint(doc)

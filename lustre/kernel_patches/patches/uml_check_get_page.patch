@@ -1,11 +1,12 @@
 
 
 
- 0 files changed
+ arch/um/kernel/mem.c |   15 +++++++++++++++
+ 1 files changed, 15 insertions(+)
 
---- linux-2.4.18-17.8.0/arch/um/kernel/mem.c~uml_check_get_page	2002-12-06 14:52:30.000000000 -0800
-+++ linux-2.4.18-17.8.0-zab/arch/um/kernel/mem.c	2002-12-06 14:52:30.000000000 -0800
-@@ -529,6 +529,21 @@ struct page *pte_mem_map(pte_t pte)
+--- linux-2.4.20/arch/um/kernel/mem.c~uml_check_get_page	2003-04-08 23:34:50.000000000 -0600
++++ linux-2.4.20-braam/arch/um/kernel/mem.c	2003-04-08 23:34:50.000000000 -0600
+@@ -712,6 +712,21 @@ struct page *pte_mem_map(pte_t pte)
  	return(phys_mem_map(pte_val(pte)));
  }
  

@@ -36,6 +36,8 @@ static int ll_readlink_internal(struct inode *inode,
 {
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_fid fid;
+        struct mds_body *body;
         int rc, symlen = inode->i_size + 1;
         ENTRY;
 
@@ -47,14 +49,38 @@ static int ll_readlink_internal(struct inode *inode,
                 RETURN(0);
         }
 
-        rc = mdc_getattr(&sbi->ll_mdc_conn, inode->i_ino, S_IFLNK,
+        ll_inode2fid(&fid, inode);
+        rc = mdc_getattr(&sbi->ll_mdc_conn, &fid,
                          OBD_MD_LINKNAME, symlen, request);
         if (rc) {
                 CERROR("inode %lu: rc = %d\n", inode->i_ino, rc);
                 RETURN(rc);
         }
 
-        *symname = lustre_msg_buf((*request)->rq_repmsg, 1);
+        body = lustre_msg_buf ((*request)->rq_repmsg, 0, sizeof (*body));
+        LASSERT (body != NULL);
+        LASSERT_REPSWABBED (*request, 0);
+
+        if ((body->valid & OBD_MD_LINKNAME) == 0) {
+                CERROR ("OBD_MD_LINKNAME not set on reply\n");
+                GOTO (failed, rc = -EPROTO);
+        }
+        
+        LASSERT (symlen != 0);
+        if (body->eadatasize != symlen) {
+                CERROR ("inode %lu: symlink length %d not expected %d\n",
+                        inode->i_ino, body->eadatasize - 1, symlen - 1);
+                GOTO (failed, rc = -EPROTO);
+        }
+
+        *symname = lustre_msg_buf ((*request)->rq_repmsg, 1, symlen);
+        if (*symname == NULL ||
+            strnlen (*symname, symlen) != symlen - 1) {
+                /* not full/NULL terminated */
+                CERROR ("inode %lu: symlink not NULL terminated string"
+                        "of length %d\n", inode->i_ino, symlen - 1);
+                GOTO (failed, rc = -EPROTO);
+        }
 
         OBD_ALLOC(lli->lli_symlink_name, symlen);
         /* do not return an error if we cannot cache the symlink locally */
@@ -62,6 +88,10 @@ static int ll_readlink_internal(struct inode *inode,
                 memcpy(lli->lli_symlink_name, *symname, symlen);
 
         RETURN(0);
+
+ failed:
+        ptlrpc_req_finished (*request);
+        RETURN (-EPROTO);
 }
 
 static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
@@ -81,10 +111,9 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
                 GOTO(out, rc);
 
         rc = vfs_readlink(dentry, buffer, buflen, symname);
+        ptlrpc_req_finished(request);
  out:
         up(&lli->lli_open_sem);
-        ptlrpc_req_finished(request);
-
         RETURN(rc);
 }
 
@@ -119,9 +148,8 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
         }
 
         rc = vfs_follow_link_it(nd, symname, it);
- out:
         ptlrpc_req_finished(request);
-
+ out:
         RETURN(rc);
 }
 #else
@@ -149,9 +177,9 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
         nd->it.it_mode = mode;
 
         rc = vfs_follow_link(nd, symname);
+        ptlrpc_req_finished(request);
  out:
         up(&lli->lli_open_sem);
-        ptlrpc_req_finished(request);
 
         RETURN(rc);
 }

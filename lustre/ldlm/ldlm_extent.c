@@ -30,16 +30,11 @@
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
 
-/* This function will be called to judge if the granted queue of another child
- * (read: another extent) is conflicting and needs its granted queue walked to
- * issue callbacks.
- *
- * This helps to find conflicts between read and write locks on overlapping
- * extents. */
+/* This function will be called to judge if one extent overlaps with another */
 int ldlm_extent_compat(struct ldlm_lock *a, struct ldlm_lock *b)
 {
-        if (MAX(a->l_extent.start, b->l_extent.start) <=
-            MIN(a->l_extent.end, b->l_extent.end))
+        if ((a->l_extent.start <= b->l_extent.end) &&
+            (a->l_extent.end >=  b->l_extent.start))
                 RETURN(0);
 
         RETURN(1);
@@ -48,7 +43,7 @@ int ldlm_extent_compat(struct ldlm_lock *a, struct ldlm_lock *b)
 /* The purpose of this function is to return:
  * - the maximum extent
  * - containing the requested extent
- * - and not overlapping existing extents outside the requested one
+ * - and not overlapping existing conflicting extents outside the requested one
  *
  * An alternative policy is to not shrink the new extent when conflicts exist.
  *
@@ -62,21 +57,33 @@ static void policy_internal(struct list_head *queue, struct ldlm_extent *req_ex,
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
-                if (lock->l_extent.end < req_ex->start) {
-                        new_ex->start = MIN(lock->l_extent.end, new_ex->start);
-                } else {
-                        if (lock->l_extent.start < req_ex->start &&
-                            !lockmode_compat(lock->l_req_mode, mode))
-                                /* Policy: minimize conflict overlap */
+                /* if lock doesn't overlap new_ex, skip it. */
+                if (lock->l_extent.end < new_ex->start ||
+                    lock->l_extent.start > new_ex->end)
+                        continue;
+
+                /* Locks are compatible, overlap doesn't matter */
+                if (lockmode_compat(lock->l_req_mode, mode))
+                        continue;
+
+                if (lock->l_extent.start < req_ex->start) {
+                        if (lock->l_extent.end == ~0) {
                                 new_ex->start = req_ex->start;
-                }
-                if (lock->l_extent.start > req_ex->end) {
-                        new_ex->end = MAX(lock->l_extent.start, new_ex->end);
-                } else {
-                        if (lock->l_extent.end > req_ex->end &&
-                            !lockmode_compat(lock->l_req_mode, mode))
-                                /* Policy: minimize conflict overlap */
                                 new_ex->end = req_ex->end;
+                                return;
+                        }
+                        new_ex->start = MIN(lock->l_extent.end + 1,
+                                            req_ex->start);
+                }
+
+                if (lock->l_extent.end > req_ex->end) {
+                        if (lock->l_extent.start == 0) {
+                                new_ex->start = req_ex->start;
+                                new_ex->end = req_ex->end;
+                                return;
+                        }
+                        new_ex->end = MAX(lock->l_extent.start - 1,
+                                          req_ex->end);
                 }
         }
 }
@@ -104,8 +111,9 @@ int ldlm_extent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 
         memcpy(&lock->l_extent, &new_ex, sizeof(new_ex));
 
-        LDLM_DEBUG(lock, "new extent "LPU64" -> "LPU64, new_ex.start,
-                   new_ex.end);
+        LDLM_DEBUG(lock, "requested extent ["LPU64"->"LPU64"], new extent ["
+                   LPU64"->"LPU64"]",
+                   req_ex->start, req_ex->end, new_ex.start, new_ex.end);
 
         if (new_ex.end != req_ex->end || new_ex.start != req_ex->start)
                 return ELDLM_LOCK_CHANGED;

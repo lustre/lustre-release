@@ -29,23 +29,25 @@
 #include <liblustre.h>
 #endif
 
+#include "ptlrpc_internal.h"
+
 static spinlock_t conn_lock;
 static struct list_head conn_list;
 static struct list_head conn_unused_list;
 
-/* If UUID is NULL, c->c_remote_uuid must be all zeroes
- * If UUID is non-NULL, c->c_remote_uuid must match. */
-static int match_connection_uuid(struct ptlrpc_connection *c,
-                                 struct obd_uuid *uuid)
+void ptlrpc_dump_connections(void)
 {
-        struct obd_uuid zero_uuid;
-        memset(&zero_uuid, 0, sizeof(zero_uuid));
+        struct list_head *tmp;
+        struct ptlrpc_connection *c;
+        ENTRY;
 
-        if (uuid)
-                return memcmp(c->c_remote_uuid.uuid, uuid->uuid,
-                              sizeof(uuid->uuid));
-
-        return memcmp(c->c_remote_uuid.uuid, &zero_uuid, sizeof(zero_uuid));
+        list_for_each(tmp, &conn_list) {
+                c = list_entry(tmp, struct ptlrpc_connection, c_link);
+                CERROR("Connection %p/%s has refcount %d (nid="LPX64" on %s)\n",
+                       c, c->c_remote_uuid.uuid, atomic_read(&c->c_refcount),
+                       c->c_peer.peer_nid, c->c_peer.peer_ni->pni_name);
+        }
+        EXIT;
 }
 
 struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
@@ -55,15 +57,22 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
         struct ptlrpc_connection *c;
         ENTRY;
 
+
         CDEBUG(D_INFO, "peer is "LPX64" on %s\n",
                peer->peer_nid, peer->peer_ni->pni_name);
 
         spin_lock(&conn_lock);
+        if (list_empty(&conn_list)) {
+                if (!ptlrpc_get_ldlm_hooks()) {
+                        spin_unlock(&conn_lock);
+                        RETURN(NULL);
+                }
+        }
+
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
                 if (peer->peer_nid == c->c_peer.peer_nid &&
-                    peer->peer_ni == c->c_peer.peer_ni &&
-                    !match_connection_uuid(c, uuid)) {
+                    peer->peer_ni == c->c_peer.peer_ni) {
                         ptlrpc_connection_addref(c);
                         GOTO(out, c);
                 }
@@ -72,8 +81,7 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
         list_for_each_safe(tmp, pos, &conn_unused_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
                 if (peer->peer_nid == c->c_peer.peer_nid &&
-                    peer->peer_ni == c->c_peer.peer_ni &&
-                    !match_connection_uuid(c, uuid)) {
+                    peer->peer_ni == c->c_peer.peer_ni) {
                         ptlrpc_connection_addref(c);
                         list_del(&c->c_link);
                         list_add(&c->c_link, &conn_list);
@@ -91,13 +99,8 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
         c->c_epoch = 1;
         c->c_bootcount = 0;
         c->c_flags = 0;
-        if (uuid->uuid)
+        if (uuid && uuid->uuid)                         /* XXX ???? */
                 obd_str2uuid(&c->c_remote_uuid, uuid->uuid);
-        INIT_LIST_HEAD(&c->c_imports);
-        INIT_LIST_HEAD(&c->c_exports);
-        INIT_LIST_HEAD(&c->c_sb_chain);
-        INIT_LIST_HEAD(&c->c_recovd_data.rd_managed_chain);
-        INIT_LIST_HEAD(&c->c_delayed_head);
         atomic_set(&c->c_refcount, 0);
         memcpy(&c->c_peer, peer, sizeof(c->c_peer));
         spin_lock_init(&c->c_lock);
@@ -123,14 +126,16 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
         }
 
         CDEBUG (D_INFO, "connection=%p refcount %d to "LPX64" on %s\n",
-                c, atomic_read(&c->c_refcount), c->c_peer.peer_nid,
+                c, atomic_read(&c->c_refcount) - 1, c->c_peer.peer_nid,
                 c->c_peer.peer_ni->pni_name);
 
         if (atomic_dec_and_test(&c->c_refcount)) {
-                recovd_conn_unmanage(c);
                 spin_lock(&conn_lock);
                 list_del(&c->c_link);
                 list_add(&c->c_link, &conn_unused_list);
+                if (list_empty(&conn_list)) {
+                        ptlrpc_put_ldlm_hooks();
+                }
                 spin_unlock(&conn_lock);
                 rc = 1;
         }

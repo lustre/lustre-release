@@ -1,2 +1,1 @@
 arch/um/kernel/mem.c
-arch/um/kernel/mem.c.uml-fixes

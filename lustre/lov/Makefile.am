@@ -7,18 +7,12 @@ DEFS=
 
 if LIBLUSTRE
 lib_LIBRARIES = liblov.a
-LINX=client.c
-liblov_a_SOURCES = lov_obd.c lov_pack.c $(LINX)
+liblov_a_SOURCES = lov_obd.c lov_pack.c
 else
 MODULE = lov
 modulefs_DATA = lov.o
 EXTRA_PROGRAMS = lov
-LINX=client.c
-lov_SOURCES = lov_obd.c lov_pack.c lproc_lov.c $(LINX)
+lov_SOURCES = lov_obd.c lov_pack.c lproc_lov.c
 endif
-
-
-client.c: 
-	test -e client.c || ln -sf $(top_srcdir)/lib/client.c
 
 include $(top_srcdir)/Rules

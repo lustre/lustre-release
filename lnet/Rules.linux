@@ -1,0 +1,25 @@
+# included in Linux kernel directories
+# Rules for module building
+
+if LINUX25
+
+basename=$(shell echo $< | sed -e 's/\.c//g' | sed -e 's/-//g' | sed -e 's/\.o//g')
+AM_CPPFLAGS= -Wstrict-prototypes -Wno-trigraphs -fno-strict-aliasing -fno-common -pipe -mpreferred-stack-boundary=2  -DKBUILD_MODNAME=$(MODULE) -DKBUILD_BASENAME=$(basename)
+
+$(MODULE).o: $($(MODULE)_OBJECTS)
+	$(LD) -m $(MOD_LINK) -r -o $(MODULE).o $($(MODULE)_OBJECTS)
+
+else
+
+$(MODULE).o: $($(MODULE)_OBJECTS)
+	$(LD) -m $(MOD_LINK) -r -o $(MODULE).o $($(MODULE)_OBJECTS)
+
+endif
+
+tags:
+	rm -f $(top_srcdir)/TAGS
+	rm -f $(top_srcdir)/tags
+	find $(top_srcdir)/../portals/ -name '*.[hc]' | xargs etags -a
+	find $(top_srcdir) -name '*.[hc]' | grep -v ".orig" | xargs etags -a
+	find $(top_srcdir)/../portals/ -name '*.[hc]' | xargs ctags -a
+	find $(top_srcdir) -name '*.[hc]' | grep -v ".orig" | xargs ctags -a

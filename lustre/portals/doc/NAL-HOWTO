@@ -1,0 +1,293 @@
+This document is a first attempt at describing how to write a NAL
+for the Portals 3 library.  It also defines the library architecture
+and the abstraction of protection domains.
+
+
+First, an overview of the architecture:
+
+    Application
+
+----|----+--------
+         |
+   API  === NAL        (User space)
+         |   
+---------+---|-----
+         |    
+   LIB  === NAL        (Library space)
+         |
+---------+---|-----
+          
+    Physical wire      (NIC space)
+          
+
+Application
+    API
+API-side NAL
+------------
+LIB-side NAL
+    LIB
+LIB-side NAL
+   wire
+
+Communication is through the indicated paths via well defined
+interfaces.  The API and LIB portions are written to be portable
+across platforms and do not depend on the network interface.
+
+Communcation between the application and the API code is
+defined in the Portals 3 API specification.  This is the
+user-visible portion of the interface and should be the most
+stable.
+
+
+
+API-side NAL:
+------------
+
+The user space NAL needs to implement only a few functions
+that are stored in a nal_t data structure and called by the
+API-side library:
+
+	int forward( nal_t *nal,
+		int	index,
+		void	*args,
+		size_t	arg_len,
+		void	*ret,
+		size_t	ret_len
+	);
+
+Most of the data structures in the portals library are held in
+the LIB section of the code, so it is necessary to forward API
+calls across the protection domain to the library.  This is
+handled by the NAL's forward method.  Once the argument and return
+blocks are on the remote side the NAL should call lib_dispatch()
+to invoke the appropriate API function.
+
+	int validate( nal_t *nal,
+		void	*base,
+		size_t	extent,
+		void	**trans_base,
+		void	**trans_data
+	);
+
+The validate method provides a means for the NAL to prevalidate
+and possibly pretranslate user addresses into a form suitable
+for fast use by the network card or kernel module.  The trans_base
+pointer will be used by the library everytime it needs to
+refer to the block of memory.  The trans_data result is a
+cookie that will be handed to the NAL along with the trans_base.
+
+The library never performs calculations on the trans_base value;
+it only computes offsets that are then handed to the NAL.
+
+
+	int shutdown( nal_t *nal, int interface );
+
+Brings down the network interface.  The remote NAL side should
+call lib_fini() to bring down the library side of the network.
+
+	void yield( nal_t *nal );
+
+This allows the user application to gracefully give up the processor
+while busy waiting.  Performance critical applications may not
+want to take the time to call this function, so it should be an
+option to the PtlEQWait call.  Right now it is not implemented as such.
+
+Lastly, the NAL must implement a function named PTL_IFACE_*, where
+* is the name of the NAL such as PTL_IFACE_IP or PTL_IFACE_MYR.
+This initialization function is to set up communication with the
+library-side NAL, which should call lib_init() to bring up the
+network interface.
+
+
+
+LIB-side NAL:
+------------
+
+On the library-side, the NAL has much more responsibility.  It
+is responsible for calling lib_dispatch() on behalf of the user,
+it is also responsible for bringing packets off the wire and
+pushing bits out.  As on the user side, the methods are stored
+in a nal_cb_t structure that is defined on a per network
+interface basis.
+
+The calls to lib_dispatch() need to be examined.  The prototype:
+
+	void	lib_dispatch(
+			nal_cb_t		*nal,
+			void			*private,
+			int			index,
+			void			*arg_block,
+			void			*ret_block
+	);
+
+has two complications.  The private field is a NAL-specific
+value that will be passed to any callbacks produced as a result
+of this API call.  Kernel module implementations may use this
+for task structures, or perhaps network card data.  It is ignored
+by the library.
+
+Secondly, the arg_block and ret_block must be in the same protection
+domain as the library.  The NAL's two halves must communicate the
+sizes and perform the copies.  After the call, the buffer pointed
+to by ret_block will be filled in and should be copied back to
+the user space.  How this is to be done is NAL specific.
+
+	int lib_parse(
+			nal_cb_t		*nal,
+			ptl_hdr_t		*hdr,
+			void			*private
+	);
+
+This is the only other entry point into the library from the NAL.
+When the NAL detects an incoming message on the wire it should read
+sizeof(ptl_hdr_t) bytes and pass a pointer to the header to
+lib_parse().  It may set private to be anything that it needs to
+tie the incoming message to callbacks that are made as a result
+of this event.
+
+The method calls are:
+
+	int	(*send)(
+			nal_cb_t		*nal,
+			void			*private,
+			lib_msg_t		*cookie,
+			ptl_hdr_t		*hdr,
+			int			nid,
+			int			pid,
+			int			gid,
+			int			rid,
+			user_ptr		trans_base,
+			user_ptr		trans_data,
+			size_t			offset,
+			size_t			len
+	);
+
+This is a tricky function -- it must support async output
+of messages as well as properly syncronized event log writing.
+The private field is the same that was passed into lib_dispatch()
+or lib_parse() and may be used to tie this call to the event
+that initiated the entry to the library.
+
+The cookie is a pointer to a library private value that must
+be passed to lib_finalize() once the message has been completely
+sent.  It should not be examined by the NAL for any meaning.
+
+The four ID fields are passed in, although some implementations
+may not use all of them.
+
+The single base pointer has been replaced with the translated
+address that the API NAL generated in the api_nal->validate()
+call.  The trans_data is unchanged and the offset is in bytes.
+
+
+	int	(*recv)(
+			nal_cb_t		*nal,
+			void			*private,
+			lib_msg_t		*cookie,
+			user_ptr		trans_base,
+			user_ptr		trans_data,
+			size_t			offset,
+			size_t			mlen,
+			size_t			rlen
+	);
+
+This callback will only be called in response to lib_parse().
+The cookie, trans_addr and trans_data  are as discussed in send().
+The NAL should read mlen bytes from the wire, deposit them into
+trans_base + offset and then discard (rlen - mlen) bytes.
+Once the entire message has been received the NAL should call
+lib_finalize() with the lib_msg_t *cookie.
+
+The special arguments of base=NULL, data=NULL, offset=0, mlen=0, rlen=0
+is used to indicate that the NAL should clean up the wire.  This could
+be implemented as a blocking call, although having it return as quickly
+as possible is desirable.
+
+	int	(*write)(
+			nal_cb_t		*nal,
+			void			*private,
+			user_ptr		trans_addr,
+			user_ptr		trans_data,
+			size_t			offset,
+
+			void			*src_addr,
+			size_t			len
+	);
+
+This is essentially a cross-protection domain memcpy().  The user address
+has been pretranslated by the api_nal->translate() call.
+
+	void	*(*malloc)(
+			nal_cb_t		*nal,
+			size_t			len
+	);
+
+	void	(*free)(
+			nal_cb_t		*nal,
+			void			*buf
+	);
+
+Since the NAL may be in a non-standard hosted environment it can
+not call malloc().  This allows the library side NAL to implement
+the system specific malloc().  In the current reference implementation
+the libary only calls nal->malloc() when the network interface is
+initialized and then calls free when it is brought down.  The library
+maintains its own pool of objects for allocation so only one call to
+malloc is made per object type.
+
+	void	(*invalidate)(
+			nal_cb_t		*nal,
+			user_ptr		trans_base,
+			user_ptr		trans_data,
+			size_t			extent
+	);
+
+User addresses are validated/translated at the user-level API NAL
+method, which is likely to push them to this level.  Meanwhile,
+the library NAL will be notified when the library no longer
+needs the buffer.  Overlapped buffers are not detected by the
+library, so the NAL should ref count each page involved.
+
+Unfortunately we have a few bugs when the invalidate method is
+called.  It is still in progress...
+
+	void	(*printf)(
+			nal_cb_t		*nal,
+			const char		*fmt,
+			...
+	);
+
+As with malloc(), the library does not have any way to do printf
+or printk.  It is not necessary for the NAL to implement the this
+call, although it will make debugging difficult.
+
+	void	(*cli)(
+			nal_cb_t		*nal,
+			unsigned long		*flags
+	);
+
+	void	(*sti)(
+			nal_cb_t		*nal,
+			unsigned long		*flags
+	);
+
+These are used by the library to mark critical sections.
+
+	int	(*gidrid2nidpid)(
+			nal_cb_t		*nal,
+			ptl_id_t		gid,
+			ptl_id_t		rid,
+			ptl_id_t		*nid,
+			ptl_id_t		*pid
+	);
+
+
+	int	(*nidpid2gidrid)(
+			nal_cb_t		*nal,
+			ptl_id_t		nid,
+			ptl_id_t		pid,
+			ptl_id_t		*gid,
+			ptl_id_t		*rid
+	);
+
+Rolf added these.  I haven't looked at how they have to work yet.

@@ -11,8 +11,8 @@ obdctl
 lctl
 lfind
 lstripe
-lconf
 obdstat
 obdio
 obdbarrier
 lload
+wirecheck

@@ -58,7 +58,7 @@ typedef struct ext2_dir_entry_2 ext2_dirent;
 static int ll_dir_prepare_write(struct file *file, struct page *page,
                                 unsigned from, unsigned to)
 {
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
+        CDEBUG(D_VFSTRACE, "VFS Op:\n");
         return 0;
 }
 
@@ -67,17 +67,18 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 {
         struct inode *inode = page->mapping->host;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        char *buf;
         __u64 offset;
         int rc = 0;
         struct ptlrpc_request *request;
         struct lustre_handle lockh;
         struct mds_body *body;
         struct lookup_intent it = { .it_op = IT_READDIR };
+        struct mdc_op_data data;
 
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
+               inode->i_generation, inode);
         if ((inode->i_size + PAGE_CACHE_SIZE - 1) >> PAGE_SHIFT <= page->index){
                 /* XXX why do we need this exactly, and why do we think that
                  *     an all-zero directory page is useful?
@@ -89,8 +90,11 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 GOTO(readpage_out, rc);
         }
 
-        rc = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_PLAIN, &it, LCK_PR, inode,
-                         NULL, &lockh, NULL, 0, inode, sizeof(*inode));
+        ll_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
+
+        rc = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_PLAIN, &it, LCK_PR,
+                         &data, &lockh, NULL, 0,
+                         ldlm_completion_ast, ll_mdc_blocking_ast, inode);
         request = (struct ptlrpc_request *)it.it_data;
         if (request)
                 ptlrpc_req_finished(request);
@@ -107,16 +111,14 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         }
 
         offset = page->index << PAGE_SHIFT;
-        buf = kmap(page);
         rc = mdc_readpage(&sbi->ll_mdc_conn, inode->i_ino,
-                          S_IFDIR, offset, buf, &request);
-        kunmap(page);
+                          S_IFDIR, offset, page, &request);
         if (!rc) {
-                body = lustre_msg_buf(request->rq_repmsg, 0);
-                if (!body)
-                        rc = -EINVAL;
-                else
-                        inode->i_size = body->size;
+                body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
+                LASSERT (body != NULL);         /* checked by mdc_readpage() */
+                LASSERT_REPSWABBED (request, 0); /* swabbed by mdc_readpage() */
+                
+                inode->i_size = body->size;
         }
         ptlrpc_req_finished(request);
         EXIT;
@@ -398,7 +400,8 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
         int need_revalidate = (filp->f_version != inode->i_version);
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
+               inode->i_generation, inode);
         if (pos > inode->i_size - EXT2_DIR_REC_LEN(1))
                 GOTO(done, 0);
 
@@ -764,15 +767,17 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct obd_ioctl_data *data;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op\n");
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),cmd=%u\n", inode->i_ino,
+               inode->i_generation, inode, cmd);
 
         switch(cmd) {
         case IOC_MDC_LOOKUP: {
                 struct ptlrpc_request *request = NULL;
+                struct ll_fid fid;
                 char *buf = NULL;
+                struct mds_body *body;
                 char *filename;
                 int namelen, rc, err, len = 0;
-                int ea_size = 0; // obd_size_wiremd(&sbi->ll_osc_conn, NULL);
                 unsigned long valid;
 
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
@@ -789,29 +794,32 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 }
 
                 valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE;
-                rc = mdc_getattr_name(&sbi->ll_mdc_conn, inode, filename,
-                                      namelen, valid, ea_size, &request);
+                ll_inode2fid(&fid, inode);
+                rc = mdc_getattr_name(&sbi->ll_mdc_conn, &fid,
+                                      filename, namelen, valid, 0, &request);
                 if (rc < 0) {
                         CERROR("mdc_getattr_name: %d\n", rc);
                         GOTO(out, rc);
-                } else {
-                        struct mds_body *body;
-                        body = lustre_msg_buf(request->rq_repmsg, 0);
-                        /* surely there's a better way -phik */
-                        data->ioc_obdo1.o_mode = body->mode;
-                        data->ioc_obdo1.o_uid = body->uid;
-                        data->ioc_obdo1.o_gid = body->gid;
                 }
+
+                body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
+                LASSERT (body != NULL);         /* checked by mdc_getattr_name() */
+                LASSERT_REPSWABBED (request, 0); /* swabbed by mdc_getattr_name() */
+                
+                /* surely there's a better way -phik */
+                data->ioc_obdo1.o_mode = body->mode;
+                data->ioc_obdo1.o_uid = body->uid;
+                data->ioc_obdo1.o_gid = body->gid;
+
+                ptlrpc_req_finished(request);
 
                 err = copy_to_user((void *)arg, buf, len);
                 if (err)
-                        GOTO(out_req, rc = -EFAULT);
+                        GOTO(out, rc = -EFAULT);
 
                 EXIT;
-        out_req:
-                ptlrpc_req_finished(request);
         out:
-                OBD_FREE(buf, len);
+                obd_ioctl_freedata(buf, len);
                 return rc;
         }
         default:
@@ -820,8 +828,21 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         }
 }
 
+int ll_dir_open(struct inode *inode, struct file *file)
+{
+        return ll_file_open(inode, file);
+}
+
+int ll_dir_release(struct inode *inode, struct file *file)
+{
+        return ll_file_release(inode, file);
+}
+
 struct file_operations ll_dir_operations = {
+        open: ll_dir_open,
+        release: ll_dir_release,
         read: generic_read_dir,
         readdir: ll_readdir,
         ioctl: ll_dir_ioctl
 };
+

@@ -11,9 +11,21 @@
 #define __EXPORT_H
 
 #include <linux/lustre_idl.h>
-#include <linux/lustre_dlm.h>
-#include <linux/lustre_mds.h>
 #include <linux/obd_filter.h>
+
+struct mds_client_data;
+
+struct mds_export_data {
+        struct list_head        med_open_head;
+        spinlock_t              med_open_lock;
+        struct mds_client_data *med_mcd;
+        int                     med_off;
+};
+
+struct ldlm_export_data {
+        struct list_head       led_held_locks; /* protected by namespace lock */
+        struct obd_import     *led_import;
+};
 
 struct lov_export_data {
         spinlock_t       led_lock;
@@ -26,13 +38,17 @@ struct ec_export_data { /* echo client */
 };
 
 struct obd_export {
-        __u64                     exp_cookie;
+        struct portals_handle     exp_handle;
+        atomic_t                  exp_refcount;
         struct obd_uuid           exp_client_uuid;
         struct list_head          exp_obd_chain;
-        struct list_head          exp_conn_chain;
         struct obd_device        *exp_obd;
         struct ptlrpc_connection *exp_connection;
         struct ldlm_export_data   exp_ldlm_data;
+        struct ptlrpc_request    *exp_outstanding_reply;
+        time_t                    exp_last_request_time;
+        spinlock_t                exp_lock; /* protects flags int below */
+        int                       exp_failed:1, exp_failover:1;
         union {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;

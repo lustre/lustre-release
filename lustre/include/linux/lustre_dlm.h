@@ -7,13 +7,14 @@
 #define _LUSTRE_DLM_H__
 
 #ifdef __KERNEL__
-#include <linux/proc_fs.h>
+# include <linux/proc_fs.h>
 #endif 
 
 #include <linux/lustre_lib.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_import.h>
 #include <linux/lustre_handles.h>
+#include <linux/lustre_export.h> /* for obd_export, for LDLM_DEBUG */
 
 struct obd_ops;
 struct obd_device;
@@ -26,11 +27,9 @@ typedef enum {
         ELDLM_LOCK_CHANGED = 300,
         ELDLM_LOCK_ABORTED = 301,
         ELDLM_LOCK_REPLACED = 302,
-        ELDLM_LOCK_MATCHED = 303,
 
         ELDLM_NAMESPACE_EXISTS = 400,
-        ELDLM_BAD_NAMESPACE    = 401,
-        ELDLM_GETATTR_ERROR    = 402
+        ELDLM_BAD_NAMESPACE    = 401
 } ldlm_error_t;
 
 #define LDLM_NAMESPACE_SERVER 0
@@ -56,10 +55,14 @@ typedef enum {
 
 #define LDLM_FL_INTENT_ONLY    (1 << 9) /* don't grant lock, just do intent */
 #define LDLM_FL_LOCAL_ONLY     (1 << 10) /* see ldlm_cli_cancel_unused */
-#define LDLM_FL_NO_CALLBACK    (1 << 11) /* see ldlm_cli_cancel_unused */
+
+/* don't run the cancel callback under ldlm_cli_cancel_unused */
+#define LDLM_FL_NO_CALLBACK    (1 << 11)
+
 #define LDLM_FL_HAS_INTENT     (1 << 12) /* lock request has intent */
 #define LDLM_FL_CANCELING      (1 << 13) /* lock cancel has already been sent */
 #define LDLM_FL_LOCAL          (1 << 14) // a local lock (ie, no srv/cli split)
+#define LDLM_FL_WARN           (1 << 15) /* see ldlm_cli_cancel_unused */
 
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
@@ -146,9 +149,8 @@ struct ldlm_lock;
 typedef int (*ldlm_blocking_callback)(struct ldlm_lock *lock,
                                       struct ldlm_lock_desc *new, void *data,
                                       int flag);
-typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags, void *data);
-typedef int (*ldlm_granted_callback)(struct ldlm_lock *,
-                                     struct lustre_msg *, int offset);
+typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags,
+                                        void *data);
 
 struct ldlm_lock {
         struct portals_handle l_handle; // must be first in the structure
@@ -168,14 +170,12 @@ struct ldlm_lock {
 
         ldlm_completion_callback l_completion_ast;
         ldlm_blocking_callback   l_blocking_ast;
-        ldlm_granted_callback l_granted_cb;
 
         struct obd_export    *l_export;
         struct lustre_handle *l_connh;
         __u32                 l_flags;
         struct lustre_handle  l_remote_handle;
         void                 *l_data;
-        void                 *l_cp_data;
         struct ldlm_extent    l_extent;
         __u32                 l_version[RES_VERSION_SIZE];
 
@@ -233,12 +233,6 @@ struct ldlm_ast_work {
         int w_datalen;
 };
 
-/* Per-export ldlm state. */
-struct ldlm_export_data {
-        struct list_head       led_held_locks; /* protected by namespace lock */
-        struct obd_import      led_import;
-};
-
 extern struct obd_ops ldlm_obd_ops;
 
 extern char *ldlm_lockname[];
@@ -250,8 +244,8 @@ do {                                                                          \
         if (lock->l_resource == NULL) {                                       \
                 CDEBUG(level, "### " format                                   \
                        " ns: \?\? lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "\
-                       "res: \?\? rrc=\?\? type: \?\?\? remote: "LPX64")\n"   \
-                       , ## a, lock, lock->l_handle.h_cookie,                 \
+                       "res: \?\? rrc=\?\? type: \?\?\? remote: "             \
+                       LPX64"\n" , ## a, lock, lock->l_handle.h_cookie,       \
                        atomic_read(&lock->l_refc),                            \
                        lock->l_readers, lock->l_writers,                      \
                        ldlm_lockname[lock->l_granted_mode],                   \
@@ -281,7 +275,8 @@ do {                                                                          \
                 CDEBUG(level, "### " format                                   \
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "  \
                        "res: "LPU64"/"LPU64" rrc: %d type: %s remote: "LPX64  \
-                       "\n" , ## a, lock->l_resource->lr_namespace->ns_name,  \
+                       "\n" , ## a,                                           \
+                       lock->l_resource->lr_namespace->ns_name,               \
                        lock, lock->l_handle.h_cookie,                         \
                        atomic_read (&lock->l_refc),                           \
                        lock->l_readers, lock->l_writers,                      \
@@ -342,7 +337,7 @@ void ldlm_unregister_intent(void);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
 struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int flags);
 void ldlm_cancel_callback(struct ldlm_lock *);
-int ldlm_lock_set_data(struct lustre_handle *, void *data, void *cp_data);
+int ldlm_lock_set_data(struct lustre_handle *, void *data);
 void ldlm_lock_remove_from_lru(struct ldlm_lock *);
 struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *,
                                       struct lustre_handle *);
@@ -380,11 +375,11 @@ int ldlm_lock_match(struct ldlm_namespace *ns, int flags, struct ldlm_res_id *,
 struct ldlm_lock *
 ldlm_lock_create(struct ldlm_namespace *ns,
                  struct lustre_handle *parent_lock_handle, struct ldlm_res_id,
-                 __u32 type, ldlm_mode_t mode, void *data, void *cp_data);
+                 __u32 type, ldlm_mode_t, ldlm_blocking_callback,
+                 void *data);
 ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *, struct ldlm_lock **,
                                void *cookie, int cookie_len, int *flags,
-                               ldlm_completion_callback completion,
-                               ldlm_blocking_callback blocking);
+                               ldlm_completion_callback completion);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         int *flags);
 void ldlm_lock_cancel(struct ldlm_lock *lock);
@@ -444,7 +439,6 @@ int ldlm_cli_enqueue(struct lustre_handle *conn,
                      ldlm_completion_callback completion,
                      ldlm_blocking_callback callback,
                      void *data,
-                     void *cp_data,
                      struct lustre_handle *lockh);
 int ldlm_match_or_enqueue(struct lustre_handle *connh,
                           struct ptlrpc_request *req,
@@ -458,15 +452,13 @@ int ldlm_match_or_enqueue(struct lustre_handle *connh,
                           ldlm_completion_callback completion,
                           ldlm_blocking_callback callback,
                           void *data,
-                          void *cp_data,
                           struct lustre_handle *lockh);
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
 int ldlm_cli_convert(struct lustre_handle *, int new_mode, int *flags);
 int ldlm_cli_cancel(struct lustre_handle *lockh);
 int ldlm_cli_cancel_unused(struct ldlm_namespace *, struct ldlm_res_id *,
-                           int flags);
-int ldlm_cancel_lru(struct ldlm_namespace *ns);
+                           int flags, void *opaque);
 
 /* mds/handler.c */
 /* This has to be here because recurisve inclusion sucks. */

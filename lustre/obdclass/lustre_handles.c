@@ -20,7 +20,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_CLASS
 #ifdef __KERNEL__
 #include <linux/types.h>
 #include <linux/random.h>
@@ -146,7 +146,7 @@ static void cleanup_all_handles(void)
                         class_handle_unhash_nolock(h);
                 }
         }
-        spin_lock(&handle_lock);
+        spin_unlock(&handle_lock);
 }
 
 void class_handle_cleanup(void)

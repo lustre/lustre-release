@@ -1,0 +1,3 @@
+fs/ext3/ialloc.c
+fs/ext3/namei.c
+include/linux/ext3_fs.h

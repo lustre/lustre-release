@@ -355,8 +355,14 @@ echo_put_object (struct ec_object *eco)
         eco->eco_refcount--;
         LASSERT (eco->eco_refcount >= 0);
 
-        if (eco->eco_refcount != 0 ||
-            !eco->eco_deleted) {
+        CDEBUG(D_INFO, "put %p: "LPX64"=%u#%u&%d refs %d del %d\n",
+               eco, eco->eco_id,
+               eco->eco_lsm->lsm_stripe_size,
+               eco->eco_lsm->lsm_stripe_count,
+               eco->eco_lsm->lsm_stripe_offset,
+               eco->eco_refcount, eco->eco_deleted);
+
+        if (eco->eco_refcount != 0 || !eco->eco_deleted) {
                 spin_unlock (&ec->ec_lock);
                 return;
         }
@@ -367,7 +373,7 @@ echo_put_object (struct ec_object *eco)
          * attempting to enqueue on this object number until we can be
          * sure there will be no more lock callbacks.
          */
-        obd_cancel_unused (&ec->ec_conn, eco->eco_lsm, 0);
+        obd_cancel_unused(&ec->ec_conn, eco->eco_lsm, 0, NULL);
 
         /* now we can let it go */
         spin_lock (&ec->ec_lock);
@@ -414,7 +420,6 @@ echo_client_kbrw (struct obd_device *obd, int rw,
                   obd_off offset, obd_size count)
 {
         struct echo_client_obd *ec = &obd->u.echo_client;
-        struct obd_brw_set     *set;
         obd_count               npages;
         struct brw_page        *pga;
         struct brw_page        *pgp;
@@ -438,17 +443,12 @@ echo_client_kbrw (struct obd_device *obd, int rw,
              lsm->lsm_object_id != oa->o_id))
                 return (-EINVAL);
 
-        set = obd_brw_set_new();
-        if (set == NULL)
-                return (-ENOMEM);
-
         /* XXX think again with misaligned I/O */
         npages = count >> PAGE_SHIFT;
 
-        rc = -ENOMEM;
         OBD_ALLOC(pga, npages * sizeof(*pga));
         if (pga == NULL)
-                goto out_0;
+                return (-ENOMEM);
 
         for (i = 0, pgp = pga, off = offset;
              i < npages;
@@ -459,7 +459,7 @@ echo_client_kbrw (struct obd_device *obd, int rw,
                 rc = -ENOMEM;
                 pgp->pg = alloc_pages (gfp_mask, 0);
                 if (pgp->pg == NULL)
-                        goto out_1;
+                        goto out;
 
                 pgp->count = PAGE_SIZE;
                 pgp->off = off;
@@ -484,12 +484,9 @@ echo_client_kbrw (struct obd_device *obd, int rw,
                 }
         }
 
-        set->brw_callback = ll_brw_sync_wait;
-        rc = obd_brw(rw, &ec->ec_conn, lsm, npages, pga, set, NULL);
-        if (rc == 0)
-                rc = ll_brw_sync_wait(set, CB_PHASE_START);
+        rc = obd_brw(rw, &ec->ec_conn, lsm, npages, pga, NULL);
 
- out_1:
+ out:
         if (rc != 0)
                 verify = 0;
 
@@ -514,8 +511,6 @@ echo_client_kbrw (struct obd_device *obd, int rw,
                 __free_pages(pgp->pg, 0);
         }
         OBD_FREE(pga, npages * sizeof(*pga));
- out_0:
-        obd_brw_set_decref(set);
         return (rc);
 }
 
@@ -526,7 +521,6 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
                             obd_off offset, obd_size count, char *buffer)
 {
         struct echo_client_obd *ec = &obd->u.echo_client;
-        struct obd_brw_set     *set;
         obd_count               npages;
         struct brw_page        *pga;
         struct brw_page        *pgp;
@@ -546,17 +540,12 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
             (lsm != NULL && lsm->lsm_object_id != oa->o_id))
                 return (-EINVAL);
 
-        set = obd_brw_set_new();
-        if (set == NULL)
-                return (-ENOMEM);
-
         /* XXX think again with misaligned I/O */
         npages = count >> PAGE_SHIFT;
 
-        rc = -ENOMEM;
         OBD_ALLOC(pga, npages * sizeof(*pga));
         if (pga == NULL)
-                goto out_0;
+                return (-ENOMEM);
 
         rc = alloc_kiovec (1, &kiobuf);
         if (rc != 0)
@@ -579,11 +568,7 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
                 pgp->flag = 0;
         }
 
-        set->brw_callback = ll_brw_sync_wait;
-        rc = obd_brw(rw, &ec->ec_conn, lsm, npages, pga, set, NULL);
-
-        if (rc == 0)
-                rc = ll_brw_sync_wait(set, CB_PHASE_START);
+        rc = obd_brw(rw, &ec->ec_conn, lsm, npages, pga, NULL);
 
         //        if (rw == OBD_BRW_READ)
         //                mark_dirty_kiobuf (kiobuf, count);
@@ -593,8 +578,6 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
         free_kiovec (1, &kiobuf);
  out_1:
         OBD_FREE(pga, npages * sizeof(*pga));
- out_0:
-        obd_brw_set_decref(set);
         return (rc);
 }
 #else
@@ -620,14 +603,14 @@ echo_open (struct obd_export *exp, struct obdo *oa)
 
         rc = echo_get_object (&eco, obd, oa);
         if (rc != 0)
-                return (rc);
+                return rc;
 
         rc = -ENOMEM;
         OBD_ALLOC (ecoo, sizeof (*ecoo));
         if (ecoo == NULL)
                 goto failed_0;
 
-        rc = obd_open (&ec->ec_conn, oa, eco->eco_lsm, NULL);
+        rc = obd_open(&ec->ec_conn, oa, eco->eco_lsm, NULL, &ecoo->ecoo_och);
         if (rc != 0)
                 goto failed_1;
 
@@ -638,12 +621,9 @@ echo_open (struct obd_export *exp, struct obdo *oa)
         spin_lock (&ec->ec_lock);
 
         list_add (&ecoo->ecoo_exp_chain, &exp->exp_ec_data.eced_open_head);
-
-        ufh->addr = (__u64)((long) ecoo);
         ufh->cookie = ecoo->ecoo_cookie = ec->ec_unique++;
-
         spin_unlock (&ec->ec_lock);
-        return (0);
+        return 0;
 
  failed_1:
         OBD_FREE (ecoo, sizeof (*ecoo));
@@ -664,24 +644,23 @@ echo_close (struct obd_export *exp, struct obdo *oa)
         int                     rc;
 
         if ((oa->o_valid & OBD_MD_FLHANDLE) == 0)
-                return (-EINVAL);
+                return -EINVAL;
 
         spin_lock (&ec->ec_lock);
 
         list_for_each (el, &exp->exp_ec_data.eced_open_head) {
                 ecoo = list_entry (el, struct ec_open_object, ecoo_exp_chain);
-                if ((__u64)((long)ecoo) == ufh->addr) {
-                        found = (ecoo->ecoo_cookie == ufh->cookie);
-                        if (found)
-                                list_del (&ecoo->ecoo_exp_chain);
+                found = (ecoo->ecoo_cookie == ufh->cookie);
+                if (found) {
+                        list_del (&ecoo->ecoo_exp_chain);
                         break;
                 }
         }
 
         spin_unlock (&ec->ec_lock);
 
-        if (!found)
-                return (-EINVAL);
+        memcpy(&ecoo->ecoo_oa.o_inline, &ecoo->ecoo_och, FD_OSTDATA_SIZE);
+        ecoo->ecoo_oa.o_valid |= OBD_MD_FLHANDLE;
 
         rc = obd_close (&ec->ec_conn, &ecoo->ecoo_oa,
                         ecoo->ecoo_object->eco_lsm, NULL);
@@ -718,16 +697,16 @@ echo_ldlm_callback (struct ldlm_lock *lock, struct ldlm_lock_desc *new,
 
         switch (flag) {
         case LDLM_CB_BLOCKING:
-                CDEBUG (D_INFO, "blocking callback on "LPX64", handle "LPX64"."
-                        LPX64"\n", eco->eco_id, lockh.addr, lockh.cookie);
+                CDEBUG(D_INFO, "blocking callback on "LPX64", handle "LPX64"\n",
+                       eco->eco_id, lockh.cookie);
                 rc = ldlm_cli_cancel (&lockh);
                 if (rc != ELDLM_OK)
                         CERROR ("ldlm_cli_cancel failed: %d\n", rc);
                 break;
 
         case LDLM_CB_CANCELING:
-                CDEBUG (D_INFO, "canceling callback on "LPX64", handle "LPX64"."
-                        LPX64"\n", eco->eco_id, lockh.addr, lockh.cookie);
+                CDEBUG(D_INFO, "cancel callback on "LPX64", handle "LPX64"\n",
+                       eco->eco_id, lockh.cookie);
                 break;
 
         default:
@@ -750,15 +729,15 @@ echo_enqueue (struct obd_export *exp, struct obdo *oa,
         int                     rc;
 
         if (!(mode == LCK_PR || mode == LCK_PW))
-                return (-EINVAL);
+                return -EINVAL;
 
         if ((offset & (PAGE_SIZE - 1)) != 0 ||
             (nob & (PAGE_SIZE - 1)) != 0)
-                return (-EINVAL);
+                return -EINVAL;
 
         rc = echo_get_object (&eco, obd, oa);
         if (rc != 0)
-                return (rc);
+                return rc;
 
         rc = -ENOMEM;
         OBD_ALLOC (ecl, sizeof (*ecl));
@@ -768,32 +747,28 @@ echo_enqueue (struct obd_export *exp, struct obdo *oa,
         ecl->ecl_mode = mode;
         ecl->ecl_object = eco;
         ecl->ecl_extent.start = offset;
-        ecl->ecl_extent.end = (nob == 0) ? ((obd_off)-1) : (offset + nob - 1);
+        ecl->ecl_extent.end = (nob == 0) ? ((obd_off) -1) : (offset + nob - 1);
 
         flags = 0;
         rc = obd_enqueue (&ec->ec_conn, eco->eco_lsm, NULL, LDLM_EXTENT,
                           &ecl->ecl_extent,sizeof(ecl->ecl_extent), mode,
                           &flags, echo_ldlm_callback, eco, sizeof (*eco),
-                          &ecl->ecl_handle);
+                          &ecl->ecl_lock_handle);
         if (rc != 0)
                 goto failed_1;
 
-        CDEBUG (D_INFO, "enqueue handle "LPX64"."LPX64"\n",
-                ecl->ecl_handle.addr, ecl->ecl_handle.cookie);
+        CDEBUG(D_INFO, "enqueue handle "LPX64"\n", ecl->ecl_lock_handle.cookie);
 
         /* NB ecl takes object ref from echo_get_object() above */
+        spin_lock(&ec->ec_lock);
 
-        spin_lock (&ec->ec_lock);
-
-        list_add (&ecl->ecl_exp_chain, &exp->exp_ec_data.eced_locks);
-
-        ulh->addr = (__u64)((long)ecl);
+        list_add(&ecl->ecl_exp_chain, &exp->exp_ec_data.eced_locks);
         ulh->cookie = ecl->ecl_cookie = ec->ec_unique++;
 
-        spin_unlock (&ec->ec_lock);
+        spin_unlock(&ec->ec_lock);
 
         oa->o_valid |= OBD_MD_FLHANDLE;
-        return (0);
+        return 0;
 
  failed_1:
         OBD_FREE (ecl, sizeof (*ecl));
@@ -814,17 +789,15 @@ echo_cancel (struct obd_export *exp, struct obdo *oa)
         int                     rc;
 
         if ((oa->o_valid & OBD_MD_FLHANDLE) == 0)
-                return (-EINVAL);
+                return -EINVAL;
 
         spin_lock (&ec->ec_lock);
 
         list_for_each (el, &exp->exp_ec_data.eced_locks) {
                 ecl = list_entry (el, struct ec_lock, ecl_exp_chain);
-
-                if ((__u64)((long)ecl) == ulh->addr) {
-                        found = (ecl->ecl_cookie == ulh->cookie);
-                        if (found)
-                                list_del (&ecl->ecl_exp_chain);
+                found = (ecl->ecl_cookie == ulh->cookie);
+                if (found) {
+                        list_del (&ecl->ecl_exp_chain);
                         break;
                 }
         }
@@ -834,15 +807,13 @@ echo_cancel (struct obd_export *exp, struct obdo *oa)
         if (!found)
                 return (-ENOENT);
 
-        rc = obd_cancel (&ec->ec_conn,
-                         ecl->ecl_object->eco_lsm,
-                         ecl->ecl_mode,
-                         &ecl->ecl_handle);
+        rc = obd_cancel(&ec->ec_conn, ecl->ecl_object->eco_lsm, ecl->ecl_mode,
+                        &ecl->ecl_lock_handle);
 
         echo_put_object (ecl->ecl_object);
         OBD_FREE (ecl, sizeof (*ecl));
 
-        return (rc);
+        return rc;
 }
 
 static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn,
@@ -987,8 +958,10 @@ static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn,
                 GOTO (out, rc = -ENOTTY);
         }
 
+        EXIT;
  out:
-        RETURN(rc);
+        class_export_put(exp);
+        return rc;
 }
 
 static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
@@ -1013,8 +986,7 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         obd_str2uuid(&uuid, data->ioc_inlbuf1);
         tgt = class_uuid2obd(&uuid);
-        if (!tgt || !(tgt->obd_flags & OBD_ATTACHED) ||
-            !(tgt->obd_flags & OBD_SET_UP)) {
+        if (!tgt || !tgt->obd_attached || !tgt->obd_set_up) {
                 CERROR("device not attached or not set up (%d)\n",
                        data->ioc_dev);
                 RETURN(rc = -EINVAL);
@@ -1024,7 +996,7 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
         INIT_LIST_HEAD (&ec->ec_objects);
         ec->ec_unique = 0;
 
-        rc = obd_connect(&ec->ec_conn, tgt, &echo_uuid, NULL, NULL);
+        rc = obd_connect(&ec->ec_conn, tgt, &echo_uuid);
         if (rc) {
                 CERROR("fail to connect to device %d\n", data->ioc_dev);
                 return (rc);
@@ -1033,7 +1005,7 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
         ec->ec_lsmsize = obd_alloc_memmd (&ec->ec_conn, &lsm);
         if (ec->ec_lsmsize < 0) {
                 CERROR ("Can't get # stripes: %d\n", rc);
-                obd_disconnect (&ec->ec_conn);
+                obd_disconnect (&ec->ec_conn, 0);
                 rc = ec->ec_lsmsize;
         } else {
                 ec->ec_nstripes = lsm->lsm_stripe_count;
@@ -1043,7 +1015,7 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
         RETURN(rc);
 }
 
-static int echo_cleanup(struct obd_device * obddev)
+static int echo_cleanup(struct obd_device * obddev, int force, int failover)
 {
         struct list_head       *el;
         struct ec_object       *eco;
@@ -1067,7 +1039,7 @@ static int echo_cleanup(struct obd_device * obddev)
                 echo_put_object (eco);
         }
 
-        rc = obd_disconnect (&ec->ec_conn);
+        rc = obd_disconnect (&ec->ec_conn, 0);
         if (rc != 0)
                 CERROR("fail to disconnect device: %d\n", rc);
 
@@ -1075,8 +1047,7 @@ static int echo_cleanup(struct obd_device * obddev)
 }
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *src,
-                        struct obd_uuid *cluuid, struct recovd_obd *recovd,
-                        ptlrpc_recovery_cb_t recover)
+                        struct obd_uuid *cluuid)
 {
         struct obd_export *exp;
         int                rc;
@@ -1084,14 +1055,15 @@ static int echo_connect(struct lustre_handle *conn, struct obd_device *src,
         rc = class_connect(conn, src, cluuid);
         if (rc == 0) {
                 exp = class_conn2export (conn);
-                INIT_LIST_HEAD (&exp->exp_ec_data.eced_open_head);
-                INIT_LIST_HEAD (&exp->exp_ec_data.eced_locks);
+                INIT_LIST_HEAD(&exp->exp_ec_data.eced_open_head);
+                INIT_LIST_HEAD(&exp->exp_ec_data.eced_locks);
+                class_export_put(exp);
         }
 
         RETURN (rc);
 }
 
-static int echo_disconnect(struct lustre_handle *conn)
+static int echo_disconnect(struct lustre_handle *conn, int failover)
 {
         struct obd_export      *exp = class_conn2export (conn);
         struct obd_device      *obd;
@@ -1101,7 +1073,7 @@ static int echo_disconnect(struct lustre_handle *conn)
         int                     rc;
 
         if (exp == NULL)
-                return (-EINVAL);
+                GOTO(out, rc = -EINVAL);
 
         obd = exp->exp_obd;
         ec = &obd->u.echo_client;
@@ -1113,9 +1085,9 @@ static int echo_disconnect(struct lustre_handle *conn)
                 list_del (&ecl->ecl_exp_chain);
 
                 rc = obd_cancel (&ec->ec_conn, ecl->ecl_object->eco_lsm,
-                                 ecl->ecl_mode, &ecl->ecl_handle);
+                                 ecl->ecl_mode, &ecl->ecl_lock_handle);
 
-                CERROR ("Cancel lock on object "LPX64" on disconnect (%d)\n",
+                CDEBUG (D_INFO, "Cancel lock on object "LPX64" on disconnect (%d)\n",
                         ecl->ecl_object->eco_id, rc);
 
                 echo_put_object (ecl->ecl_object);
@@ -1128,6 +1100,10 @@ static int echo_disconnect(struct lustre_handle *conn)
                                    struct ec_open_object, ecoo_exp_chain);
                 list_del (&ecoo->ecoo_exp_chain);
 
+                memcpy (&ecoo->ecoo_oa.o_inline, &ecoo->ecoo_och, 
+                        FD_OSTDATA_SIZE);
+                ecoo->ecoo_oa.o_valid |= OBD_MD_FLHANDLE;
+                
                 rc = obd_close (&ec->ec_conn, &ecoo->ecoo_oa,
                                 ecoo->ecoo_object->eco_lsm, NULL);
 
@@ -1138,8 +1114,11 @@ static int echo_disconnect(struct lustre_handle *conn)
                 OBD_FREE (ecoo, sizeof (*ecoo));
         }
 
-        rc = class_disconnect (conn);
-        RETURN (rc);
+        rc = class_disconnect (conn, 0);
+        GOTO(out, rc);
+ out:
+        class_export_put(exp);
+        return rc;
 }
 
 static struct obd_ops echo_obd_ops = {

@@ -1,0 +1,14 @@
+
+scimacnal - A NAL for the Scali ScaMAC midlayer.
+
+The ScaMAC midlayer is a simplified API to the SCI high performance
+interconnect.
+
+In order to use this NAL you'll need to tune scimac to use larger buffers.
+See scimac.conf in this directory for an example.
+
+Overall performance and stability isn't great but this can be attributed
+to the scimac driver which apparently is in need of some development.
+
+TODO:
+Routing isn't yet implemented.

@@ -28,6 +28,8 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
+#include <portals/types.h>
+#include "ptlrpc_internal.h"
 
 extern int request_in_callback(ptl_event_t *ev);
 
@@ -52,11 +54,10 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc,
                 idx = (svc->srv_interface_rover + i) % ptlrpc_ninterfaces;
                 srv_ni = &svc->srv_interfaces[idx];
 
-                LASSERT (ptl_is_valid_handle (&srv_ni->sni_eq_h));
+                LASSERT (!PtlHandleEqual (srv_ni->sni_eq_h, PTL_HANDLE_NONE));
 
                 rc = PtlEQGet(srv_ni->sni_eq_h, event);
-                switch (rc)
-                {
+                switch (rc) {
                 case PTL_OK:
                         /* next time start with the next interface */
                         svc->srv_interface_rover = (idx+1) % ptlrpc_ninterfaces;
@@ -72,6 +73,7 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc,
                 }
         }
         rc = 0;
+        EXIT;
  out:
         spin_unlock(&svc->srv_lock);
         return rc;
@@ -81,12 +83,10 @@ struct ptlrpc_service *
 ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
                 __u32 bufsize, __u32 max_req_size,
                 int req_portal, int rep_portal,
-                svc_handler_t handler, char *name)
+                svc_handler_t handler, char *name,
+                struct obd_device *obddev)
 {
-        int ssize;
-        int rc;
-        int i;
-        int j;
+        int i, j, ssize, rc;
         struct ptlrpc_service *service;
         struct ptlrpc_srv_ni  *srv_ni;
         ENTRY;
@@ -118,7 +118,7 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
 
                 srv_ni->sni_service = service;
                 srv_ni->sni_ni = &ptlrpc_interfaces[i];
-                ptl_set_inv_handle (&srv_ni->sni_eq_h);
+                srv_ni->sni_eq_h = PTL_HANDLE_NONE;
                 INIT_LIST_HEAD(&srv_ni->sni_rqbds);
                 srv_ni->sni_nrqbds = 0;
                 atomic_set(&srv_ni->sni_nrqbds_receiving, 0);
@@ -152,7 +152,7 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
                         }
 
                         rqbd->rqbd_srv_ni = srv_ni;
-                        ptl_set_inv_handle(&rqbd->rqbd_me_h);
+                        rqbd->rqbd_me_h = PTL_HANDLE_NONE;
                         atomic_set(&rqbd->rqbd_refcount, 0);
 
                         OBD_ALLOC(rqbd->rqbd_buffer, service->srv_buf_size);
@@ -170,6 +170,8 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
                         ptlrpc_link_svc_me(rqbd);
                 }
         }
+
+        ptlrpc_lprocfs_register_service(obddev, service);
 
         CDEBUG(D_NET, "%s: Started on %d interfaces, listening on portal %d\n",
                service->srv_name, ptlrpc_ninterfaces, service->srv_req_portal);
@@ -192,12 +194,13 @@ static int handle_incoming_request(struct obd_device *obddev,
          * on the stack of mds_handle instead. */
 
         LASSERT (atomic_read (&rqbd->rqbd_refcount) > 0);
-        LASSERT ((event->mem_desc.options & PTL_MD_IOV) == 0);
+        LASSERT ((event->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0);
         LASSERT (rqbd->rqbd_srv_ni->sni_service == svc);
         LASSERT (rqbd->rqbd_buffer == event->mem_desc.start);
         LASSERT (event->offset + event->mlength <= svc->srv_buf_size);
 
         memset(request, 0, sizeof(*request));
+        spin_lock_init (&request->rq_lock);
         INIT_LIST_HEAD(&request->rq_list);
         request->rq_svc = svc;
         request->rq_obd = obddev;
@@ -205,40 +208,21 @@ static int handle_incoming_request(struct obd_device *obddev,
         request->rq_reqmsg = event->mem_desc.start + event->offset;
         request->rq_reqlen = event->mlength;
 
-        rc = -EINVAL;
-
-        if (request->rq_reqlen < sizeof(struct lustre_msg)) {
-                CERROR("incomplete request (%d): ptl %d from "LPX64" xid "
-                       LPU64"\n",
-                       request->rq_reqlen, svc->srv_req_portal,
+#if SWAB_PARANOIA
+        /* Clear request swab mask; this is a new request */
+        request->rq_req_swab_mask = 0;
+#endif
+        rc = lustre_unpack_msg (request->rq_reqmsg, request->rq_reqlen);
+        if (rc != 0) {
+                CERROR ("error unpacking request: ptl %d from "LPX64
+                        " xid "LPU64"\n", svc->srv_req_portal,
                        event->initiator.nid, request->rq_xid);
                 goto out;
         }
-
-        CDEBUG(D_RPCTRACE, "Handling RPC ni:pid:xid:nid:opc %d:%d:"LPU64":"
-               LPX64":%d\n", (int)(rqbd->rqbd_srv_ni - svc->srv_interfaces),
-               NTOH__u32(request->rq_reqmsg->status), request->rq_xid,
-               event->initiator.nid, NTOH__u32(request->rq_reqmsg->opc));
-
-        if (NTOH__u32(request->rq_reqmsg->type) != PTL_RPC_MSG_REQUEST) {
+        rc = -EINVAL;
+        if (request->rq_reqmsg->type != PTL_RPC_MSG_REQUEST) {
                 CERROR("wrong packet type received (type=%u)\n",
                        request->rq_reqmsg->type);
-                goto out;
-        }
-
-        if (request->rq_reqmsg->magic != PTLRPC_MSG_MAGIC) {
-                CERROR("wrong lustre_msg magic %d: ptl %d from "LPX64" xid "
-                       LPD64"\n",
-                       request->rq_reqmsg->magic, svc->srv_req_portal,
-                       event->initiator.nid, request->rq_xid);
-                goto out;
-        }
-
-        if (request->rq_reqmsg->version != PTLRPC_MSG_VERSION) {
-                CERROR("wrong lustre_msg version %d: ptl %d from "LPX64" xid "
-                       LPD64"\n",
-                       request->rq_reqmsg->version, svc->srv_req_portal,
-                       event->initiator.nid, request->rq_xid);
                 goto out;
         }
 
@@ -248,12 +232,13 @@ static int handle_incoming_request(struct obd_device *obddev,
         request->rq_peer.peer_nid = event->initiator.nid;
         request->rq_peer.peer_ni = rqbd->rqbd_srv_ni->sni_ni;
 
-        request->rq_export = class_conn2export((struct lustre_handle *)
-                                               request->rq_reqmsg);
+        request->rq_export = class_conn2export(&request->rq_reqmsg->handle);
 
         if (request->rq_export) {
                 request->rq_connection = request->rq_export->exp_connection;
                 ptlrpc_connection_addref(request->rq_connection);
+                request->rq_export->exp_last_request_time =
+                        LTIME_S(CURRENT_TIME);
         } else {
                 /* create a (hopefully temporary) connection that will be used
                  * to send the reply if this call doesn't create an export.
@@ -262,8 +247,28 @@ static int handle_incoming_request(struct obd_device *obddev,
                         ptlrpc_get_connection(&request->rq_peer, NULL);
         }
 
+        CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid:pid:xid:ni:nid:opc %s:%s:%d:"
+               LPU64":%s:"LPX64":%d\n",
+               current->comm,
+               (request->rq_export ? 
+                (char *)request->rq_export->exp_client_uuid.uuid : "0"), 
+               request->rq_reqmsg->status, request->rq_xid,
+               rqbd->rqbd_srv_ni->sni_ni->pni_name, event->initiator.nid,
+               request->rq_reqmsg->opc);
+
         rc = svc->srv_handler(request);
+        CDEBUG(D_RPCTRACE, "Handled RPC pname:cluuid:pid:xid:ni:nid:opc %s:%s:%d:"
+               LPU64":%s:"LPX64":%d\n",
+               current->comm,
+               (request->rq_export ? 
+                (char *)request->rq_export->exp_client_uuid.uuid : "0"),
+               request->rq_reqmsg->status, request->rq_xid,
+               rqbd->rqbd_srv_ni->sni_ni->pni_name, event->initiator.nid,
+               request->rq_reqmsg->opc);
+
         ptlrpc_put_connection(request->rq_connection);
+        if (request->rq_export != NULL)
+                class_export_put(request->rq_export);
 
  out:
         if (atomic_dec_and_test (&rqbd->rqbd_refcount)) /* last reference? */
@@ -272,8 +277,8 @@ static int handle_incoming_request(struct obd_device *obddev,
         return rc;
 }
 
-/* Don't use daemonize, it removes fs struct from new thread  (bug 418) */
-static void ptlrpc_daemonize(void)
+/* Don't use daemonize, it removes fs struct from new thread (bug 418) */
+void ptlrpc_daemonize(void)
 {
         exit_mm(current);
 
@@ -295,25 +300,23 @@ static int ptlrpc_main(void *arg)
         ptl_event_t *event;
         int rc = 0;
         unsigned long flags;
+        cycles_t workdone_time;
+        cycles_t svc_workcycles;
         ENTRY;
 
         lock_kernel();
         ptlrpc_daemonize();
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+        SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
-        recalc_sigpending();
-#else
-        spin_lock_irqsave(&current->sigmask_lock, flags);
-        sigfillset(&current->blocked);
-        recalc_sigpending(current);
-        spin_unlock_irqrestore(&current->sigmask_lock, flags);
-#endif
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
 
-#ifdef __arch_um__
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
         sprintf(current->comm, "%s|%d", data->name,current->thread.extern_pid);
-#endif
+#elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        sprintf(current->comm, "%s|%d", data->name,
+                current->thread.mode.tt.extern_pid);
 #else
         strcpy(current->comm, data->name);
 #endif
@@ -328,6 +331,7 @@ static int ptlrpc_main(void *arg)
 
         /* Record that the thread is running */
         thread->t_flags = SVC_RUNNING;
+        svc_workcycles = workdone_time = 0;
         wake_up(&thread->t_ctl_waitq);
 
         /* XXX maintain a list of all managed devices: insert here */
@@ -348,12 +352,43 @@ static int ptlrpc_main(void *arg)
                 }
 
                 if (thread->t_flags & SVC_EVENT) {
+                        cycles_t  workstart_time;
                         spin_lock(&svc->srv_lock);
                         thread->t_flags &= ~SVC_EVENT;
+                        /* Update Service Statistics */
+                        workstart_time = get_cycles();
+                        if (workdone_time && (svc->svc_counters != NULL)) {
+                                /* Stats for req(n) are updated just before
+                                 * req(n+1) is executed. This avoids need to
+                                 * reacquire svc->srv_lock after
+                                 * call to handling_request().
+                                 */
+                                int opc_offset;
+                                /* req_waittime */
+                                LPROCFS_COUNTER_INCR(&svc->svc_counters->cntr[PTLRPC_REQWAIT_CNTR],
+                                                     (workstart_time -
+                                                      event->arrival_time));
+                                /* svc_eqdepth */
+                                LPROCFS_COUNTER_INCR(&svc->svc_counters->cntr[PTLRPC_SVCEQDEPTH_CNTR],
+                                                     0); /* Wait for b_eq branch */
+                                /* svc_idletime */
+                                LPROCFS_COUNTER_INCR(&svc->svc_counters->cntr[PTLRPC_SVCIDLETIME_CNTR],
+                                                     (workstart_time -
+                                                      workdone_time));
+                                /* previous request */
+                                opc_offset = 
+                                        opcode_offset(request->rq_reqmsg->opc);
+                                if (opc_offset >= 0) {
+                                        LASSERT(opc_offset < LUSTRE_MAX_OPCODES);
+                                        LPROCFS_COUNTER_INCR(&svc->svc_counters->cntr[PTLRPC_LAST_CNTR+opc_offset], svc_workcycles);
+                                }
+                        }
                         spin_unlock(&svc->srv_lock);
 
                         rc = handle_incoming_request(obddev, svc, event,
                                                      request);
+                        workdone_time = get_cycles();
+                        svc_workcycles = workdone_time - workstart_time;
                         continue;
                 }
 
@@ -363,6 +398,10 @@ static int ptlrpc_main(void *arg)
                 break;
         }
 
+        /* NB should wait for all SENT callbacks to complete before exiting
+         * here.  Unfortunately at this time there is no way to track this
+         * state.
+         */
         OBD_FREE(request, sizeof(*request));
 out_event:
         OBD_FREE(event, sizeof(*event));
@@ -415,10 +454,8 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         ENTRY;
 
         OBD_ALLOC(thread, sizeof(*thread));
-        if (thread == NULL) {
-                LBUG();
+        if (thread == NULL)
                 RETURN(-ENOMEM);
-        }
         init_waitqueue_head(&thread->t_ctl_waitq);
 
         d.dev = dev;
@@ -433,9 +470,9 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
          * just drop the VM and FILES in ptlrpc_daemonize() right away.
          */
-        rc = kernel_thread(ptlrpc_main, (void *) &d, CLONE_VM | CLONE_FILES);
+        rc = kernel_thread(ptlrpc_main, &d, CLONE_VM | CLONE_FILES);
         if (rc < 0) {
-                CERROR("cannot start thread\n");
+                CERROR("cannot start thread: %d\n", rc);
                 OBD_FREE(thread, sizeof(*thread));
                 RETURN(rc);
         }
@@ -446,8 +483,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
 
 int ptlrpc_unregister_service(struct ptlrpc_service *service)
 {
-        int i;
-        int rc;
+        int i, rc;
         struct ptlrpc_srv_ni *srv_ni;
 
         LASSERT (list_empty (&service->srv_threads));
@@ -490,7 +526,7 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
 
                 LASSERT (srv_ni->sni_nrqbds == 0);
 
-                if (ptl_is_valid_handle (&srv_ni->sni_eq_h)) {
+                if (!PtlHandleEqual (srv_ni->sni_eq_h, PTL_HANDLE_NONE)) {
                         rc = PtlEQFree(srv_ni->sni_eq_h);
                         if (rc)
                                 CERROR("%s.%d: PtlEQFree failed on %s: %d\n",
@@ -498,6 +534,8 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
                                        srv_ni->sni_ni->pni_name, rc);
                 }
         }
+
+        ptlrpc_lprocfs_unregister_service(service);
 
         OBD_FREE(service,
                  offsetof (struct ptlrpc_service,

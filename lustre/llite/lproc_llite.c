@@ -106,6 +106,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         struct lprocfs_vars lvars[2];
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
+        struct proc_dir_entry *entry;
         char name[MAX_STRING_SIZE + 1];
         struct obd_uuid uuid;
         int err;
@@ -134,6 +135,13 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         err = lprocfs_add_vars(sbi->ll_proc_root, lprocfs_obd_vars, sb);
         if (err)
                 RETURN(err);
+
+        /* llite page cache stats */
+        entry = create_proc_entry("pgcache", 0444, sbi->ll_proc_root);
+        if (entry == NULL)
+                RETURN(-ENOMEM);
+        entry->proc_fops = &ll_pgcache_seq_fops;
+        entry->data = sbi;
 
         /* MDC info */
         strncpy(uuid.uuid, mdc, sizeof(uuid.uuid));

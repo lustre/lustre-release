@@ -1,5 +1,12 @@
---- linux/fs/inode.c.b_io	2003-02-18 16:39:16.000000000 -0800
-+++ linux/fs/inode.c	2003-02-18 16:39:45.000000000 -0800
+ fs/Makefile     |    4 +++-
+ fs/inode.c      |    4 +++-
+ mm/Makefile     |    2 +-
+ mm/page_alloc.c |    1 +
+ mm/vmscan.c     |    3 +++
+ 5 files changed, 11 insertions(+), 3 deletions(-)
+
+--- linux-2.4.18-18/fs/inode.c~iod-rmap-exports	Thu Apr  3 00:40:01 2003
++++ linux-2.4.18-18-braam/fs/inode.c	Thu Apr  3 00:40:01 2003
 @@ -5,6 +5,7 @@
   */
  
@@ -8,7 +15,7 @@
  #include <linux/fs.h>
  #include <linux/string.h>
  #include <linux/mm.h>
-@@ -66,7 +67,8 @@
+@@ -66,7 +67,8 @@ static LIST_HEAD(anon_hash_chain); /* fo
   * NOTE! You also have to own the lock if you change
   * the i_state of an inode while it is in use..
   */
@@ -18,9 +25,15 @@
  
  /*
   * Statistics gathering..
---- linux/fs/Makefile.b_io	2003-02-18 16:39:16.000000000 -0800
-+++ linux/fs/Makefile	2003-02-18 16:39:37.000000000 -0800
-@@ -7,7 +7,7 @@
+--- linux-2.4.18-18/fs/Makefile~iod-rmap-exports	Thu Apr  3 00:40:01 2003
++++ linux-2.4.18-18-braam/fs/Makefile	Thu Apr  3 00:40:29 2003
+@@ -1,3 +1,5 @@
++
++
+ #
+ # Makefile for the Linux filesystems.
+ #
+@@ -7,7 +9,7 @@
  
  O_TARGET := fs.o
  
@@ -29,8 +42,8 @@
  mod-subdirs :=	nls
  
  obj-y :=	open.o read_write.o devices.o file_table.o buffer.o \
---- linux/mm/vmscan.c.b_io	2003-02-18 16:39:16.000000000 -0800
-+++ linux/mm/vmscan.c	2003-02-18 16:40:01.000000000 -0800
+--- linux-2.4.18-18/mm/vmscan.c~iod-rmap-exports	Thu Apr  3 00:40:01 2003
++++ linux-2.4.18-18-braam/mm/vmscan.c	Thu Apr  3 00:40:01 2003
 @@ -14,6 +14,8 @@
   *  Multiqueue VM started 5.8.00, Rik van Riel.
   */
@@ -40,7 +53,7 @@
  #include <linux/slab.h>
  #include <linux/kernel_stat.h>
  #include <linux/swap.h>
-@@ -837,6 +839,7 @@
+@@ -837,6 +839,7 @@ void wakeup_kswapd(unsigned int gfp_mask
  	set_current_state(TASK_RUNNING);
  	remove_wait_queue(&kswapd_done, &wait);
  }
@@ -48,8 +61,8 @@
  
  static void wakeup_memwaiters(void)
  {
---- linux/mm/Makefile.b_io	2003-02-18 16:39:16.000000000 -0800
-+++ linux/mm/Makefile	2003-02-18 16:39:37.000000000 -0800
+--- linux-2.4.18-18/mm/Makefile~iod-rmap-exports	Thu Apr  3 00:40:01 2003
++++ linux-2.4.18-18-braam/mm/Makefile	Thu Apr  3 00:40:01 2003
 @@ -9,7 +9,7 @@
  
  O_TARGET := mm.o
@@ -59,9 +72,9 @@
  
  obj-y	 := memory.o mmap.o filemap.o mprotect.o mlock.o mremap.o \
  	    vmalloc.o slab.o bootmem.o swap.o vmscan.o page_io.o \
---- linux-chaos/mm/page_alloc.c.b_io_export	Wed Jan 29 17:00:32 2003
-+++ linux-chaos/mm/page_alloc.c	Wed Jan 29 17:01:31 2003
-@@ -31,6 +31,7 @@
+--- linux-2.4.18-18/mm/page_alloc.c~iod-rmap-exports	Thu Apr  3 00:40:01 2003
++++ linux-2.4.18-18-braam/mm/page_alloc.c	Thu Apr  3 00:40:01 2003
+@@ -31,6 +31,7 @@ int nr_active_pages;
  int nr_inactive_dirty_pages;
  int nr_inactive_clean_pages;
  pg_data_t *pgdat_list;
@@ -69,3 +82,5 @@
  
  /*
   * The zone_table array is used to look up the address of the
+
+_

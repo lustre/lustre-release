@@ -103,7 +103,7 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
 #endif
 #undef MAX_STRING_SIZE
 
-#define LDLM_MAX_UNUSED 20
+#define LDLM_MAX_UNUSED 100
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 {
         struct ldlm_namespace *ns = NULL;
@@ -280,13 +280,6 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
         return ELDLM_OK;
 }
 
-int ldlm_client_free(struct obd_export *exp)
-{
-        struct ldlm_export_data *led = &exp->exp_ldlm_data;
-        ptlrpc_cleanup_client(&led->led_import);
-        RETURN(0);
-}
-
 static __u32 ldlm_hash_fn(struct ldlm_resource *parent, struct ldlm_res_id name)
 {
         __u32 hash = 0;
@@ -304,7 +297,7 @@ static struct ldlm_resource *ldlm_resource_new(void)
 {
         struct ldlm_resource *res;
 
-        res = kmem_cache_alloc(ldlm_resource_slab, SLAB_KERNEL);
+        OBD_SLAB_ALLOC(res, ldlm_resource_slab, SLAB_KERNEL, sizeof *res);
         if (res == NULL) {
                 LBUG();
                 return NULL;
@@ -461,8 +454,7 @@ int ldlm_resource_putref(struct ldlm_resource *res)
                 list_del_init(&res->lr_hash);
                 list_del_init(&res->lr_childof);
 
-                POISON(res, 0x5a, sizeof(*res));
-                kmem_cache_free(ldlm_resource_slab, res);
+                OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
                 l_unlock(&ns->ns_lock);
 
                 spin_lock(&ns->ns_counter_lock);

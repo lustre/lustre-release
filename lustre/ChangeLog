@@ -1,3 +1,45 @@
+tbd
+       * version v0_7
+       * bug fixes
+	- imports and exports cleanup too early, need refcounts (349, 879, 1045)
+	- per-import/export recovery handling (958, 931, 959)
+	- multiple last-rcvd slots, for serving multiple FSes (949)
+	- connections are again shared between multiple imp/exports (963, 964)
+	- "umount -f" would hang if any requests needed to be sent (393, 978)
+	- avoid pinning large req buffer by copying for queued messages (989)
+	- add "uuid" to "lctl device" command to help upcalls (991)
+	- "open" RPCs with transnos would confuse recovery counters (1037)
+	- do proper endian conversion of all wire messages (288, 340, 891)
+	- remove OST bulk get LBUGs, fix ost_brw_write cleanup (1126)
+	- call waiting locks callback from LDLM recovery thread (1127, 1151)
+	- fix ptlrpc_connection leak in target_handle_connect (1174)
+	- fix import refcounting bug in OST and MDS cleanup (1134)
+	- if an invalid-at-open-time OSC returned before close(), LBUG (1150)
+	- fix very unlikely obd_types race condition (501)
+	- remove osc_open hack for echo_client (1187)
+	- we leaked exports/dlmimps for forcibly disconnected clients (1143)
+	- a failure in read_inode2 leads to deadlock (1139)
+	- cancel ack-locks as soon as transaction is committed (1072)
+	- fix major leaks and crashes in the bulk I/O path (937, 1057)
+	- make sure to commitrw after any preprw to avoid deadlock (1162)
+	- failing to execute a file in a lustre FS would lock inode (1203)
+	- small DEBUG_REQ fix to avoid dereferencing a NULL (1227)
+	- don't ASSERT while cleaning up an incompletely-setup obd (1248)
+	- obd_uuid2tgt would walk off the end of the list (1255)
+	- on IA64 the osc would give portals incorrect bulk size (1258)
+	- fix debug daemon ioctl interface; allows daemon on ia64 (1274)
+	- fix lock inversion caused by new llite matching code (1282)
+	- limit the number of dirty pages on a client to 10MB (1286)
+	- timed out locks were not being corrected cancelled (1289)
+	- fix O_DIRECT above 4GB on IA-32 (1292)
+       * major user-visible changes
+	- fail out/fail over policy now controlled by the upcall (993)
+       * protocol changes
+	- add OBD_PING to check server availability and failure (954)
+	- lustre messages are now sent in sending host order (288, 340, 891)
+	- add eadatalen to MDS getattr reply (340)
+	- OST read replies may contain second buffer, with per-page status (593)
+
 2003-03-11  Phil Schwan  <phil@clusterfs.com>
        * version v0_6
        * bug fixes

@@ -91,10 +91,11 @@ int main(int argc, char **argv)
         if (obd_initialize(argc, argv) < 0)
                 exit(1);
 
+        Parser_init("obdctl > ", cmdlist);
+
         if (argc > 1) {
                 rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
         } else {
-                Parser_init("obdctl > ", cmdlist);
                 rc = Parser_commands();
         }
 

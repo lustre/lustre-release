@@ -12,19 +12,21 @@
 <!-- main elements -->
 <!ELEMENT lustre (node | profile | mountpoint | ldlm | ptlrpc |echoclient |
                   mds | mdsdev| ost | osd | lov | lovconfig)*>
+<!ATTLIST lustre version CDATA #REQUIRED>
 
-<!ELEMENT node (network | routetbl | profile_ref)*>
+<!ELEMENT node (network | routetbl | profile_ref | timeout | 
+                lustreUpcall | portalsUpcall)*>
 <!ATTLIST node %object.attr;
                router CDATA #IMPLIED>
                
 <!ELEMENT network (nid | port | route_tbl | sendmem | recvmem)*>
 <!ATTLIST network %object.attr;
-                  nettype (tcp | elan | gm) 'tcp'>
+                  nettype (tcp | elan | gm | scimac) 'tcp'>
 
 <!ELEMENT routetbl (route)*>
 <!ATTLIST routetbl %object.attr;>
 <!ELEMENT route %object.content;>
-<!ATTLIST route type (elan | tcp | gm) #REQUIRED
+<!ATTLIST route type (elan | tcp | gm | scimac) #REQUIRED
                 gw CDATA #REQUIRED
                 lo CDATA #REQUIRED
                 hi CDATA #IMPLIED >
@@ -47,18 +49,20 @@
 <!ATTLIST ptlrpc %object.attr;>
 
 <!ELEMENT osd (fstype | devpath | devsize | autoformat | 
-               target_ref | node_ref)*>
+               target_ref | node_ref | journalsize )*>
 <!ATTLIST osd %object.attr; 
               osdtype (obdfilter | obdecho) 'obdfilter'>
 
-<!ELEMENT ost (active_ref)*>
-<!ATTLIST ost %object.attr;>
+<!ELEMENT ost (active_ref | group)*>
+<!ATTLIST ost %object.attr;
+              failover ( 1 | 0 ) #IMPLIED>
 
-<!ELEMENT mds (active_ref | lovconfig_ref)*>
-<!ATTLIST mds %object.attr;>
+<!ELEMENT mds (active_ref | lovconfig_ref | group)*>
+<!ATTLIST mds %object.attr;
+              failover ( 1 | 0 ) #IMPLIED>
 
 <!ELEMENT mdsdev (fstype | devpath | devsize | autoformat | 
-                  target_ref | node_ref )*>
+                  target_ref | node_ref | journalsize )*>
 <!ATTLIST mdsdev %object.attr;>
 
 <!ELEMENT lov (mds_ref |(obd_ref)+)*>
@@ -72,11 +76,14 @@
 <!ATTLIST lovconfig %object.attr;>
 
 <!-- basic elements -->
+<!ELEMENT recoveryUpcall %object.content;>
+<!ELEMENT timeout       %object.content;>
+<!ELEMENT journalsize   %object.content;>
 <!ELEMENT fstype        %object.content;>
 <!ELEMENT nid           %object.content;>
 <!ELEMENT port          %object.content;>
-<!ELEMENT sendmem      %object.content;>
-<!ELEMENT recvmem      %object.content;>
+<!ELEMENT sendmem       %object.content;>
+<!ELEMENT recvmem       %object.content;>
 <!ELEMENT autoformat    %object.content;>
 <!ELEMENT activetarget  %object.content;>
 <!ELEMENT devpath       %object.content;>

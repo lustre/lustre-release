@@ -64,15 +64,17 @@ command_t cmdlist[] = {
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},
         {"network", jt_ptl_network, 0, "commands that follow apply to net\n"
-         "usage: network <tcp/elan/myrinet>"},
+         "usage: network <tcp/elan/myrinet/scimac>"},
         {"connect", jt_ptl_connect, 0, "connect to a remote nid\n"
          "usage: connect [[<hostname> <port>] | <elan id>]"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
          "usage: disconnect <nid>"},
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local nid. "
          "The nid defaults to hostname for tcp networks and is automatically "
-         "setup for elan/myrinet networks.\n"
+         "setup for elan/myrinet/scimac networks.\n"
          "usage: mynid [nid]"},
+        {"shownid", jt_ptl_shownid, 0, "print the local NID\n"
+         "usage: shownid"},
         {"add_uuid", jt_obd_add_uuid, 0, "associate a UUID with a nid\n"
          "usage: add_uuid <uuid> <nid> <net_type>"},
         {"close_uuid", jt_obd_close_uuid, 0, "disconnect a UUID\n"
@@ -93,24 +95,21 @@ command_t cmdlist[] = {
         {"send_mem", jt_ptl_txmem, 0, "set socket send buffer size, "
          "if size is omited the current size is reported.\n"
          "usage: send_mem [size]"},
-        {"nagle", jt_ptl_nagle, 0, "enable/disable nagle, omiting the "
+        {"nagle", jt_ptl_nagle, 0, "enable/disable nagle, omitting the "
          "argument will cause the current nagle setting to be reported.\n"
          "usage: nagle [on/off]"},
-
+        {"fail", jt_ptl_fail_nid, 0, "fail/restore communications.\n"
+         "Omitting the count means indefinitely, 0 means restore, "
+         "otherwise fail 'count' messages.\n"
+         "usage: fail nid|_all_ [count]"},
+                
         /* Device selection commands */
         {"=== device selection ===", jt_noop, 0, "device selection"},
         {"newdev", jt_obd_newdev, 0, "create a new device\n"
          "usage: newdev"},
-#if 0
-        {"uuid2dev", jt_obd_uuid2dev, 0,
-         "find device attached with <uuid> and make it the current device\n"
-         "usage: uuid2dev <uuid>"},
-#endif
-        {"name2dev", jt_obd_name2dev, 0,
-         "find device attached with <name> and make it the current device\n"
-         "usage: name2dev <name>"},
-        {"device", jt_obd_device, 0, "set current device to <devno>\n"
-         "usage: device <devno>"},
+        {"device", jt_obd_device, 0,
+         "set current device to <%uuid|$name|devno>\n"
+         "usage: device <%uuid|$name|devno>"},
         {"device_list", jt_obd_list, 0, "show all devices\n"
          "usage: device_list"},
         {"lustre_build_version", jt_get_version, 0,
@@ -126,7 +125,7 @@ command_t cmdlist[] = {
          "type specific device configuration information\n"
          "usage: setup <args...>"},
         {"cleanup", jt_obd_cleanup, 0, "cleanup previously setup device\n"
-         "usage: cleanup [force]"},
+         "usage: cleanup [force | failover]"},
         {"detach", jt_obd_detach, 0,
          "remove driver (and name and uuid) from current device\n"
          "usage: detach"},
@@ -156,7 +155,7 @@ command_t cmdlist[] = {
          "usage: setattr <objid> <mode>"},
          {"create", jt_obd_create, 0,
          "create <num> OST objects (with <mode>)\n"
-         "usage: create [num [mode [verbose]]]"},
+         "usage: create [num [mode [verbose [lsm data]]]]"},
         {"destroy", jt_obd_destroy, 0,
          "destroy OST object <objid> [num [verbose]]\n"
          "usage: destroy <num> objects, starting at objid <objid>"},
@@ -185,21 +184,24 @@ command_t cmdlist[] = {
          "stop lock manager stress test (no args)\n"},
         {"dump_ldlm", jt_obd_dump_ldlm, 0,
          "dump all lock manager state (no args)"},
-        {"lov_set_osc_active", jt_obd_lov_set_osc_active, 0,
-         "(de)activate an OSC in a LOV\n"
-         "usage: lov_set_osc_active <OSC UUID> <1|0 (active|inactive)>"},
-        {"newconn", jt_obd_newconn, 0, "newconn <olduuid> [newuuid]"},
-        {"failconn", jt_obd_failconn, 0, "failconn <uuid>"},
+        {"activate", jt_obd_activate, 0, "activate an import\n"},
+        {"deactivate", jt_obd_deactivate, 0, "deactivate an import\n"},
+        {"recover", jt_obd_recover, 0, "usage: recover [<connection UUID>]"},
         {"lookup", jt_obd_mdc_lookup, 0, "usage: lookup <directory> <file>"},
         {"notransno", jt_obd_no_transno, 0,
-         "disable sending of committed-transno updates\n"
-         "usage: notransno"},
+         "disable sending of committed-transno updates\n"},
         {"readonly", jt_obd_set_readonly, 0,
-         "disable writes to the underlying device\n"
-         "usage: readonly"},
+         "disable writes to the underlying device\n"},
+        {"abort_recovery", jt_obd_abort_recovery, 0,
+         "abort recovery on MDS device\n"},
+        {"mount_option", jt_obd_mount_option, 0,
+         "dump mount options to file\n"},
 
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},
+        {"debug_daemon", jt_dbg_debug_daemon, 0,
+         "debug daemon control and dump to a file"
+         "usage: debug_daemon [start file <#MB>|stop|pause|continue]"},
         {"debug_kernel", jt_dbg_debug_kernel, 0,
          "get debug buffer and dump to a file"
          "usage: debug_kernel [file] [raw]"},
@@ -244,10 +246,11 @@ int main(int argc, char **argv)
         if (dbg_initialize(argc, argv) < 0)
                 exit(3);
 
+        Parser_init("lctl > ", cmdlist);
+
         if (argc > 1) {
                 rc = Parser_execarg(argc - 1, argv + 1, cmdlist);
         } else {
-                Parser_init("lctl > ", cmdlist);
                 rc = Parser_commands();
         }
 

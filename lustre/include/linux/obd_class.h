@@ -24,10 +24,8 @@
 #define __LINUX_CLASS_OBD_H
 
 #ifndef __KERNEL__
-# include <stdint.h>
-# define __KERNEL__
-# include <linux/list.h>
-# undef __KERNEL__
+#include <sys/types.h>
+#include <portals/list.h>
 #else
 #include <asm/segment.h>
 #include <asm/uaccess.h>
@@ -51,16 +49,36 @@
 #define MAX_OBD_DEVICES 128
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
-#define OBD_ATTACHED       0x01
-#define OBD_SET_UP         0x02
-#define OBD_RECOVERING     0x04
-#define OBD_ABORT_RECOVERY 0x08
-#define OBD_REPLAYABLE     0x10
-#define OBD_NO_TRANSNO     0x20 /* XXX needs better name */
-
 /* OBD Operations Declarations */
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
-extern struct obd_export *class_conn2export(struct lustre_handle *);
+
+/* genops.c */
+struct obd_export *class_conn2export(struct lustre_handle *);
+int class_register_type(struct obd_ops *ops, struct lprocfs_vars *, char *nm);
+int class_unregister_type(char *nm);
+int class_name2dev(char *name);
+int class_uuid2dev(struct obd_uuid *uuid);
+struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
+
+struct obd_export *class_export_get(struct obd_export *);
+void class_export_put(struct obd_export *);
+struct obd_export *class_new_export(struct obd_device *obddev);
+void class_unlink_export(struct obd_export *exp);
+
+struct obd_import *class_import_get(struct obd_import *);
+void class_import_put(struct obd_import *);
+struct obd_import *class_new_import(void);
+void class_destroy_import(struct obd_import *exp);
+
+struct obd_type *class_get_type(char *name);
+void class_put_type(struct obd_type *type);
+int class_connect(struct lustre_handle *conn, struct obd_device *obd,
+                  struct obd_uuid *cluuid);
+int class_disconnect(struct lustre_handle *conn, int failover);
+void class_disconnect_exports(struct obd_device *obddev, int failover);
+/* generic operations shared by various OBD types */
+int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data);
+int class_multi_cleanup(struct obd_device *obddev);
 
 static inline int obd_check_conn(struct lustre_handle *conn)
 {
@@ -76,12 +94,12 @@ static inline int obd_check_conn(struct lustre_handle *conn)
                 RETURN(-ENODEV);
         }
 
-        if (!obd->obd_flags & OBD_ATTACHED ) {
+        if (!obd->obd_attached) {
                 CERROR("obd %d not attached\n", obd->obd_minor);
                 RETURN(-ENODEV);
         }
 
-        if (!obd->obd_flags & OBD_SET_UP) {
+        if (!obd->obd_set_up) {
                 CERROR("obd %d not setup\n", obd->obd_minor);
                 RETURN(-ENODEV);
         }
@@ -103,40 +121,107 @@ static inline int obd_check_conn(struct lustre_handle *conn)
 #define OBT(dev)        (dev)->obd_type
 #define OBP(dev, op)    (dev)->obd_type->typ_ops->o_ ## op
 
-#define OBD_CHECK_SETUP(conn, exp)                              \
-do {                                                            \
-        if (!(conn)) {                                          \
-                CERROR("NULL connection\n");                    \
-                RETURN(-EINVAL);                                \
-        }                                                       \
-                                                                \
-        exp = class_conn2export(conn);                          \
-        if (!(exp)) {                                           \
-                CERROR("No export for conn "LPX64":"LPX64"\n",  \
-                       conn->addr, conn->cookie);               \
-                RETURN(-EINVAL);                                \
-        }                                                       \
-                                                                \
-        if (!((exp)->exp_obd->obd_flags & OBD_SET_UP)) {        \
-                CERROR("Device %d not setup\n",                 \
-                       (exp)->exp_obd->obd_minor);              \
-                RETURN(-EINVAL);                                \
-        }                                                       \
+/* Ensure obd_setup: used for disconnect which might be called while
+   an obd is stopping. */
+#define OBD_CHECK_SETUP(conn, exp)                                      \
+do {                                                                    \
+        if (!(conn)) {                                                  \
+                CERROR("NULL connection\n");                            \
+                RETURN(-EINVAL);                                        \
+        }                                                               \
+                                                                        \
+        exp = class_conn2export(conn);                                  \
+        if (!(exp)) {                                                   \
+                CERROR("No export for conn "LPX64"\n", (conn)->cookie); \
+                RETURN(-EINVAL);                                        \
+        }                                                               \
+                                                                        \
+        if (!(exp)->exp_obd->obd_set_up) {                              \
+                CERROR("Device %d not setup\n",                         \
+                       (exp)->exp_obd->obd_minor);                      \
+                class_export_put(exp);                                  \
+                RETURN(-EINVAL);                                        \
+        }                                                               \
 } while (0)
 
-#define OBD_CHECK_DEVSETUP(obd)                                 \
+/* Ensure obd_setup and !obd_stopping. */
+#define OBD_CHECK_ACTIVE(conn, exp)                                     \
+do {                                                                    \
+        if (!(conn)) {                                                  \
+                CERROR("NULL connection\n");                            \
+                RETURN(-EINVAL);                                        \
+        }                                                               \
+                                                                        \
+        exp = class_conn2export(conn);                                  \
+        if (!(exp)) {                                                   \
+                CERROR("No export for conn "LPX64"\n", (conn)->cookie); \
+                RETURN(-EINVAL);                                        \
+        }                                                               \
+                                                                        \
+        if (!(exp)->exp_obd->obd_set_up || (exp)->exp_obd->obd_stopping) { \
+                CERROR("Device %d not setup\n",                         \
+                       (exp)->exp_obd->obd_minor);                      \
+                class_export_put(exp);                                  \
+                RETURN(-EINVAL);                                        \
+        }                                                               \
+} while (0)
+
+/* Ensure obd_setup: used for cleanup which must be called
+   while obd is stopping */
+#define OBD_CHECK_DEV_STOPPING(obd)                             \
 do {                                                            \
         if (!(obd)) {                                           \
                 CERROR("NULL device\n");                        \
-                RETURN(-EINVAL);                                \
+                RETURN(-ENODEV);                                \
         }                                                       \
                                                                 \
-        if (!((obd)->obd_flags & OBD_SET_UP)) {                 \
+        if (!(obd)->obd_set_up) {                               \
                 CERROR("Device %d not setup\n",                 \
                        (obd)->obd_minor);                       \
-                RETURN(-EINVAL);                                \
+                RETURN(-ENODEV);                                \
+        }                                                       \
+                                                                \
+        if (!(obd)->obd_stopping) {                             \
+                CERROR("Device %d not stopping\n",              \
+                       (obd)->obd_minor);                       \
+                RETURN(-ENODEV);                                \
         }                                                       \
 } while (0)
+
+/* ensure obd_setup and !obd_stopping */
+#define OBD_CHECK_DEV_ACTIVE(obd)                               \
+do {                                                            \
+        if (!(obd)) {                                           \
+                CERROR("NULL device\n");                        \
+                RETURN(-ENODEV);                                \
+        }                                                       \
+                                                                \
+        if (!(obd)->obd_set_up || (obd)->obd_stopping) {        \
+                CERROR("Device %d not setup\n",                 \
+                       (obd)->obd_minor);                       \
+                RETURN(-ENODEV);                                \
+        }                                                       \
+} while (0)
+
+
+#ifdef LPROCFS
+#define OBD_COUNTER_OFFSET(op)                                  \
+        ((offsetof(struct obd_ops, o_ ## op) -                  \
+          offsetof(struct obd_ops, o_iocontrol))                \
+         / sizeof(((struct obd_ops *)(0))->o_iocontrol))
+
+#define OBD_COUNTER_INCREMENT(obd, op)                           \
+        if ((obd)->counters != NULL) {                           \
+            struct lprocfs_counters* cntrs = obd->counters;      \
+            unsigned int coffset;                                \
+            coffset = (obd)->cntr_base + OBD_COUNTER_OFFSET(op); \
+            LASSERT(coffset < cntrs->num);                       \
+            LPROCFS_COUNTER_INCBY1(&cntrs->cntr[coffset]);       \
+        }
+#else
+#define OBD_COUNTER_OFFSET(op) 
+#define OBD_COUNTER_INCREMENT(obd, op)           
+#endif
 
 #define OBD_CHECK_OP(obd, op)                                   \
 do {                                                            \
@@ -145,19 +230,21 @@ do {                                                            \
                        obd->obd_minor);                         \
                 RETURN(-EOPNOTSUPP);                            \
         }                                                       \
+        OBD_COUNTER_INCREMENT(obd, op);                         \
 } while (0)
 
-static inline int obd_get_info(struct lustre_handle *conn, obd_count keylen,
-                               void *key, obd_count *vallen, void **val)
+static inline int obd_get_info(struct lustre_handle *conn, __u32 keylen,
+                               void *key, __u32 *vallen, void *val)
 {
         struct obd_export *exp;
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, get_info);
 
         rc = OBP(exp->exp_obd, get_info)(conn, keylen, key, vallen, val);
+        class_export_put(exp);
         RETURN(rc);
 }
 
@@ -168,10 +255,11 @@ static inline int obd_set_info(struct lustre_handle *conn, obd_count keylen,
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, set_info);
 
         rc = OBP(exp->exp_obd, set_info)(conn, keylen, key, vallen, val);
+        class_export_put(exp);
         RETURN(rc);
 }
 
@@ -186,85 +274,93 @@ static inline int obd_setup(struct obd_device *obd, int datalen, void *data)
         RETURN(rc);
 }
 
-static inline int obd_cleanup(struct obd_device *obd)
+static inline int obd_cleanup(struct obd_device *obd, int force, int failover)
 {
         int rc;
         ENTRY;
 
-        OBD_CHECK_DEVSETUP(obd);
+        OBD_CHECK_DEV_STOPPING(obd);
         OBD_CHECK_OP(obd, cleanup);
 
-        rc = OBP(obd, cleanup)(obd);
+        rc = OBP(obd, cleanup)(obd, force, failover);
         RETURN(rc);
 }
 
-/* Pack an in-memory MD struct for sending to the MDS and/or disk.
+/* Pack an in-memory MD struct for storage on disk.
  * Returns +ve size of packed MD (0 for free), or -ve error.
  *
- * If @wire_tgt == NULL, MD size is returned (max size if @mem_src == NULL).
- * If @*wire_tgt != NULL and @mem_src == NULL, @*wire_tgt will be freed.
- * If @*wire_tgt == NULL, it will be allocated
+ * If @disk_tgt == NULL, MD size is returned (max size if @mem_src == NULL).
+ * If @*disk_tgt != NULL and @mem_src == NULL, @*disk_tgt will be freed.
+ * If @*disk_tgt == NULL, it will be allocated
  */
 static inline int obd_packmd(struct lustre_handle *conn,
-                             struct lov_mds_md **wire_tgt,
+                             struct lov_mds_md **disk_tgt,
                              struct lov_stripe_md *mem_src)
 {
         struct obd_export *exp;
+        int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, packmd);
 
-        RETURN(OBP(exp->exp_obd, packmd)(conn, wire_tgt, mem_src));
+        rc = OBP(exp->exp_obd, packmd)(conn, disk_tgt, mem_src);
+        class_export_put(exp);
+        RETURN(rc);
 }
 
-static inline int obd_size_wiremd(struct lustre_handle *conn,
+static inline int obd_size_diskmd(struct lustre_handle *conn,
                                   struct lov_stripe_md *mem_src)
 {
         return obd_packmd(conn, NULL, mem_src);
 }
 
 /* helper functions */
-static inline int obd_alloc_wiremd(struct lustre_handle *conn,
-                                   struct lov_mds_md **wire_tgt)
+static inline int obd_alloc_diskmd(struct lustre_handle *conn,
+                                   struct lov_mds_md **disk_tgt)
 {
-        LASSERT(wire_tgt);
-        LASSERT(*wire_tgt == NULL);
-        return obd_packmd(conn, wire_tgt, NULL);
+        LASSERT(disk_tgt);
+        LASSERT(*disk_tgt == NULL);
+        return obd_packmd(conn, disk_tgt, NULL);
 }
 
-static inline int obd_free_wiremd(struct lustre_handle *conn,
-                                  struct lov_mds_md **wire_tgt)
+static inline int obd_free_diskmd(struct lustre_handle *conn,
+                                  struct lov_mds_md **disk_tgt)
 {
-        LASSERT(wire_tgt);
-        LASSERT(*wire_tgt);
-        return obd_packmd(conn, wire_tgt, NULL);
+        LASSERT(disk_tgt);
+        LASSERT(*disk_tgt);
+        return obd_packmd(conn, disk_tgt, NULL);
 }
 
-/* Unpack an MD struct from the MDS and/or disk to in-memory format.
+/* Unpack an MD struct from disk to in-memory format.
  * Returns +ve size of unpacked MD (0 for free), or -ve error.
  *
- * If @mem_tgt == NULL, MD size is returned (max size if @wire_src == NULL).
- * If @*mem_tgt != NULL and @wire_src == NULL, @*mem_tgt will be freed.
+ * If @mem_tgt == NULL, MD size is returned (max size if @disk_src == NULL).
+ * If @*mem_tgt != NULL and @disk_src == NULL, @*mem_tgt will be freed.
  * If @*mem_tgt == NULL, it will be allocated
  */
 static inline int obd_unpackmd(struct lustre_handle *conn,
                                struct lov_stripe_md **mem_tgt,
-                               struct lov_mds_md *wire_src)
+                               struct lov_mds_md *disk_src,
+                               int disk_len)
 {
         struct obd_export *exp;
+        int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, unpackmd);
 
-        RETURN(OBP(exp->exp_obd, unpackmd)(conn, mem_tgt, wire_src));
+        rc = OBP(exp->exp_obd, unpackmd)(conn, mem_tgt, disk_src, disk_len);
+        class_export_put(exp);
+        RETURN(rc);
 }
 
 static inline int obd_size_memmd(struct lustre_handle *conn,
-                                 struct lov_mds_md *wire_src)
+                                 struct lov_mds_md *disk_src,
+                                 int disk_len)
 {
-        return obd_unpackmd(conn, NULL, wire_src);
+        return obd_unpackmd(conn, NULL, disk_src, disk_len);
 }
 
 /* helper functions */
@@ -273,7 +369,7 @@ static inline int obd_alloc_memmd(struct lustre_handle *conn,
 {
         LASSERT(mem_tgt);
         LASSERT(*mem_tgt == NULL);
-        return obd_unpackmd(conn, mem_tgt, NULL);
+        return obd_unpackmd(conn, mem_tgt, NULL, 0);
 }
 
 static inline int obd_free_memmd(struct lustre_handle *conn,
@@ -281,7 +377,7 @@ static inline int obd_free_memmd(struct lustre_handle *conn,
 {
         LASSERT(mem_tgt);
         LASSERT(*mem_tgt);
-        return obd_unpackmd(conn, mem_tgt, NULL);
+        return obd_unpackmd(conn, mem_tgt, NULL, 0);
 }
 
 static inline int obd_create(struct lustre_handle *conn, struct obdo *obdo,
@@ -292,10 +388,11 @@ static inline int obd_create(struct lustre_handle *conn, struct obdo *obdo,
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, create);
 
         rc = OBP(exp->exp_obd, create)(conn, obdo, ea, oti);
+        class_export_put(exp);
         RETURN(rc);
 }
 
@@ -307,10 +404,11 @@ static inline int obd_destroy(struct lustre_handle *conn, struct obdo *obdo,
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, destroy);
 
         rc = OBP(exp->exp_obd, destroy)(conn, obdo, ea, oti);
+        class_export_put(exp);
         RETURN(rc);
 }
 
@@ -321,10 +419,27 @@ static inline int obd_getattr(struct lustre_handle *conn, struct obdo *obdo,
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, getattr);
 
         rc = OBP(exp->exp_obd, getattr)(conn, obdo, ea);
+        class_export_put(exp);
+        RETURN(rc);
+}
+
+static inline int obd_getattr_async(struct lustre_handle *conn, struct obdo *obdo,
+                                    struct lov_stripe_md *ea, 
+                                    struct ptlrpc_request_set *set)
+{
+        struct obd_export *exp;
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_OP(exp->exp_obd, getattr);
+
+        rc = OBP(exp->exp_obd, getattr_async)(conn, obdo, ea, set);
+        class_export_put(exp);
         RETURN(rc);
 }
 
@@ -336,24 +451,27 @@ static inline int obd_close(struct lustre_handle *conn, struct obdo *obdo,
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, close);
 
         rc = OBP(exp->exp_obd, close)(conn, obdo, ea, oti);
+        class_export_put(exp);
         RETURN(rc);
 }
 
 static inline int obd_open(struct lustre_handle *conn, struct obdo *obdo,
-                           struct lov_stripe_md *ea, struct obd_trans_info *oti)
+                           struct lov_stripe_md *ea, struct obd_trans_info *oti,
+                           struct obd_client_handle *och)
 {
         struct obd_export *exp;
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, open);
 
-        rc = OBP(exp->exp_obd, open)(conn, obdo, ea, oti);
+        rc = OBP(exp->exp_obd, open)(conn, obdo, ea, oti, och);
+        class_export_put(exp);
         RETURN(rc);
 }
 
@@ -365,29 +483,28 @@ static inline int obd_setattr(struct lustre_handle *conn, struct obdo *obdo,
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, setattr);
 
         rc = OBP(exp->exp_obd, setattr)(conn, obdo, ea, oti);
+        class_export_put(exp);
         RETURN(rc);
 }
 
 static inline int obd_connect(struct lustre_handle *conn,
-                              struct obd_device *obd, struct obd_uuid *cluuid,
-                              struct recovd_obd *recovd,
-                              ptlrpc_recovery_cb_t recover)
+                              struct obd_device *obd, struct obd_uuid *cluuid)
 {
         int rc;
         ENTRY;
 
-        OBD_CHECK_DEVSETUP(obd);
+        OBD_CHECK_DEV_ACTIVE(obd);
         OBD_CHECK_OP(obd, connect);
 
-        rc = OBP(obd, connect)(conn, obd, cluuid, recovd, recover);
+        rc = OBP(obd, connect)(conn, obd, cluuid);
         RETURN(rc);
 }
 
-static inline int obd_disconnect(struct lustre_handle *conn)
+static inline int obd_disconnect(struct lustre_handle *conn, int failover)
 {
         struct obd_export *exp;
         int rc;
@@ -396,8 +513,17 @@ static inline int obd_disconnect(struct lustre_handle *conn)
         OBD_CHECK_SETUP(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, disconnect);
 
-        rc = OBP(exp->exp_obd, disconnect)(conn);
+        rc = OBP(exp->exp_obd, disconnect)(conn, failover);
+        class_export_put(exp);
         RETURN(rc);
+}
+
+static inline void obd_destroy_export(struct obd_export *exp)
+{
+        ENTRY;
+        if (OBP(exp->exp_obd, destroy_export))
+                OBP(exp->exp_obd, destroy_export)(exp);
+        EXIT;
 }
 
 static inline int obd_statfs(struct lustre_handle *conn,struct obd_statfs *osfs)
@@ -406,23 +532,22 @@ static inline int obd_statfs(struct lustre_handle *conn,struct obd_statfs *osfs)
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, statfs);
 
         rc = OBP(exp->exp_obd, statfs)(conn, osfs);
+        class_export_put(exp);
         RETURN(rc);
 }
 
-static inline int obd_syncfs(struct lustre_handle *conn)
+static inline int obd_syncfs(struct obd_export *exp)
 {
-        struct obd_export *exp;
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, syncfs);
 
-        rc = OBP(exp->exp_obd, syncfs)(conn);
+        rc = OBP(exp->exp_obd, syncfs)(exp);
         RETURN(rc);
 }
 
@@ -434,65 +559,86 @@ static inline int obd_punch(struct lustre_handle *conn, struct obdo *oa,
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, punch);
 
         rc = OBP(exp->exp_obd, punch)(conn, oa, ea, start, end, oti);
+        class_export_put(exp);
         RETURN(rc);
 }
 
 static inline int obd_brw(int cmd, struct lustre_handle *conn,
                           struct lov_stripe_md *ea, obd_count oa_bufs,
-                          struct brw_page *pg, struct obd_brw_set *set,
-                          struct obd_trans_info *oti)
+                          struct brw_page *pg, struct obd_trans_info *oti)
 {
         struct obd_export *exp;
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, brw);
+
+        if (!(cmd & (OBD_BRW_RWMASK | OBD_BRW_CHECK))) {
+                CERROR("obd_brw: cmd must be OBD_BRW_READ, OBD_BRW_WRITE, "
+                       "or OBD_BRW_CHECK\n");
+                LBUG();
+        }
+
+        rc = OBP(exp->exp_obd, brw)(cmd, conn, ea, oa_bufs, pg, oti);
+        class_export_put(exp);
+        RETURN(rc);
+}
+
+static inline int obd_brw_async(int cmd, struct lustre_handle *conn,
+                                struct lov_stripe_md *ea, obd_count oa_bufs,
+                                struct brw_page *pg,
+                                struct ptlrpc_request_set *set,
+                                struct obd_trans_info *oti)
+{
+        struct obd_export *exp;
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_ACTIVE(conn, exp);
+        OBD_CHECK_OP(exp->exp_obd, brw_async);
 
         if (!(cmd & OBD_BRW_RWMASK)) {
                 CERROR("obd_brw: cmd must be OBD_BRW_READ or OBD_BRW_WRITE\n");
                 LBUG();
         }
 
-        rc = OBP(exp->exp_obd, brw)(cmd, conn, ea, oa_bufs, pg, set, oti);
+        rc = OBP(exp->exp_obd, brw_async)(cmd, conn, ea, oa_bufs, pg, set, oti);
+        class_export_put(exp);
         RETURN(rc);
 }
 
-static inline int obd_preprw(int cmd, struct lustre_handle *conn,
+static inline int obd_preprw(int cmd, struct obd_export *exp,
                              int objcount, struct obd_ioobj *obj,
                              int niocount, struct niobuf_remote *remote,
                              struct niobuf_local *local, void **desc_private,
                              struct obd_trans_info *oti)
 {
-        struct obd_export *exp;
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, preprw);
 
-        rc = OBP(exp->exp_obd, preprw)(cmd, conn, objcount, obj, niocount,
+        rc = OBP(exp->exp_obd, preprw)(cmd, exp, objcount, obj, niocount,
                                        remote, local, desc_private, oti);
         RETURN(rc);
 }
 
-static inline int obd_commitrw(int cmd, struct lustre_handle *conn,
+static inline int obd_commitrw(int cmd, struct obd_export *exp,
                                int objcount, struct obd_ioobj *obj,
                                int niocount, struct niobuf_local *local,
                                void *desc_private, struct obd_trans_info *oti)
 {
-        struct obd_export *exp;
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, commitrw);
 
-        rc = OBP(exp->exp_obd, commitrw)(cmd, conn, objcount, obj, niocount,
+        rc = OBP(exp->exp_obd, commitrw)(cmd, exp, objcount, obj, niocount,
                                          local, desc_private, oti);
         RETURN(rc);
 }
@@ -504,10 +650,11 @@ static inline int obd_iocontrol(unsigned int cmd, struct lustre_handle *conn,
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, iocontrol);
 
         rc = OBP(exp->exp_obd, iocontrol)(cmd, conn, len, karg, uarg);
+        class_export_put(exp);
         RETURN(rc);
 }
 
@@ -522,14 +669,35 @@ static inline int obd_enqueue(struct lustre_handle *conn,
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, enqueue);
 
         rc = OBP(exp->exp_obd, enqueue)(conn, ea, parent_lock, type,
                                         cookie, cookielen, mode, flags, cb,
                                         data, datalen, lockh);
+        class_export_put(exp);
         RETURN(rc);
 }
+
+static inline int obd_match(struct lustre_handle *conn,
+                              struct lov_stripe_md *ea,
+                              __u32 type, void *cookie, int cookielen,
+                              __u32 mode, int *flags, 
+                              struct lustre_handle *lockh)
+{
+        struct obd_export *exp;
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_ACTIVE(conn, exp);
+        OBD_CHECK_OP(exp->exp_obd, match);
+
+        rc = OBP(exp->exp_obd, match)(conn, ea, type, cookie, cookielen, mode,
+                                      flags, lockh);
+        class_export_put(exp);
+        RETURN(rc);
+}
+
 
 static inline int obd_cancel(struct lustre_handle *conn,
                              struct lov_stripe_md *ea, __u32 mode,
@@ -539,24 +707,27 @@ static inline int obd_cancel(struct lustre_handle *conn,
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, cancel);
 
         rc = OBP(exp->exp_obd, cancel)(conn, ea, mode, lockh);
+        class_export_put(exp);
         RETURN(rc);
 }
 
 static inline int obd_cancel_unused(struct lustre_handle *conn,
-                                    struct lov_stripe_md *ea, int local)
+                                    struct lov_stripe_md *ea, int flags,
+                                    void *opaque)
 {
         struct obd_export *exp;
         int rc;
         ENTRY;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, cancel_unused);
 
-        rc = OBP(exp->exp_obd, cancel_unused)(conn, ea, local);
+        rc = OBP(exp->exp_obd, cancel_unused)(conn, ea, flags, opaque);
+        class_export_put(exp);
         RETURN(rc);
 }
 
@@ -567,11 +738,12 @@ static inline int obd_san_preprw(int cmd, struct lustre_handle *conn,
         struct obd_export *exp;
         int rc;
 
-        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_ACTIVE(conn, exp);
         OBD_CHECK_OP(exp->exp_obd, preprw);
 
         rc = OBP(exp->exp_obd, san_preprw)(cmd, conn, objcount, obj,
                                            niocount, remote);
+        class_export_put(exp);
         RETURN(rc);
 }
 
@@ -607,39 +779,28 @@ static inline void obdo_free(struct obdo *oa)
         kmem_cache_free(obdo_cachep, oa);
 }
 
+#if !defined(__KERNEL__) || (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#define to_kdev_t(dev) dev
+#define kdev_t_to_nr(dev) dev
+#endif
+
 #ifdef __KERNEL__
 static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
 {
         unsigned int ia_valid = attr->ia_valid;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (ia_valid & ATTR_ATIME) {
-                oa->o_atime = attr->ia_atime;
+                oa->o_atime = LTIME_S(attr->ia_atime);
                 oa->o_valid |= OBD_MD_FLATIME;
         }
         if (ia_valid & ATTR_MTIME) {
-                oa->o_mtime = attr->ia_mtime;
+                oa->o_mtime = LTIME_S(attr->ia_mtime);
                 oa->o_valid |= OBD_MD_FLMTIME;
         }
         if (ia_valid & ATTR_CTIME) {
-                oa->o_ctime = attr->ia_ctime;
+                oa->o_ctime = LTIME_S(attr->ia_ctime);
                 oa->o_valid |= OBD_MD_FLCTIME;
         }
-#else
-        if (ia_valid & ATTR_ATIME) {
-                oa->o_atime = attr->ia_atime.tv_sec;
-                oa->o_valid |= OBD_MD_FLATIME;
-        }
-        if (ia_valid & ATTR_MTIME) {
-                oa->o_mtime = attr->ia_mtime.tv_sec;
-                oa->o_valid |= OBD_MD_FLMTIME;
-        }
-        if (ia_valid & ATTR_CTIME) {
-                oa->o_ctime = attr->ia_ctime.tv_sec;
-                oa->o_valid |= OBD_MD_FLCTIME;
-        }
-#endif
-
         if (ia_valid & ATTR_SIZE) {
                 oa->o_size = attr->ia_size;
                 oa->o_valid |= OBD_MD_FLSIZE;
@@ -665,33 +826,18 @@ static inline void iattr_from_obdo(struct iattr *attr, struct obdo *oa,
                                    obd_flag valid)
 {
         memset(attr, 0, sizeof(*attr));
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (valid & OBD_MD_FLATIME) {
-                attr->ia_atime = oa->o_atime;
+                LTIME_S(attr->ia_atime) = oa->o_atime;
                 attr->ia_valid |= ATTR_ATIME;
         }
         if (valid & OBD_MD_FLMTIME) {
-                attr->ia_mtime = oa->o_mtime;
+                LTIME_S(attr->ia_mtime) = oa->o_mtime;
                 attr->ia_valid |= ATTR_MTIME;
         }
         if (valid & OBD_MD_FLCTIME) {
-                attr->ia_ctime = oa->o_ctime;
+                LTIME_S(attr->ia_ctime) = oa->o_ctime;
                 attr->ia_valid |= ATTR_CTIME;
         }
-#else
-        if (valid & OBD_MD_FLATIME) {
-                attr->ia_atime.tv_sec = oa->o_atime;
-                attr->ia_valid |= ATTR_ATIME;
-        }
-        if (valid & OBD_MD_FLMTIME) {
-                attr->ia_mtime.tv_sec = oa->o_mtime;
-                attr->ia_valid |= ATTR_MTIME;
-        }
-        if (valid & OBD_MD_FLCTIME) {
-                attr->ia_ctime.tv_sec = oa->o_ctime;
-                attr->ia_valid |= ATTR_CTIME;
-        }
-#endif
         if (valid & OBD_MD_FLSIZE) {
                 attr->ia_size = oa->o_size;
                 attr->ia_valid |= ATTR_SIZE;
@@ -721,29 +867,16 @@ static inline void iattr_from_obdo(struct iattr *attr, struct obdo *oa,
 /* WARNING: the file systems must take care not to tinker with
    attributes they don't manage (such as blocks). */
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#define to_kdev_t(dev) dev
-#define kdev_t_to_nr(dev) dev
-#endif
 
 static inline void obdo_from_inode(struct obdo *dst, struct inode *src,
                                    obd_flag valid)
 {
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (valid & OBD_MD_FLATIME)
-                dst->o_atime = src->i_atime;
+                dst->o_atime = LTIME_S(src->i_atime);
         if (valid & OBD_MD_FLMTIME)
-                dst->o_mtime = src->i_mtime;
+                dst->o_mtime = LTIME_S(src->i_mtime);
         if (valid & OBD_MD_FLCTIME)
-                dst->o_ctime = src->i_ctime;
-#else
-        if (valid & OBD_MD_FLATIME)
-                dst->o_atime = src->i_atime.tv_sec;
-        if (valid & OBD_MD_FLMTIME)
-                dst->o_mtime = src->i_mtime.tv_sec;
-        if (valid & OBD_MD_FLCTIME)
-                dst->o_ctime = src->i_ctime.tv_sec;
-#endif
+                dst->o_ctime = LTIME_S(src->i_ctime);
         if (valid & OBD_MD_FLSIZE)
                 dst->o_size = src->i_size;
         if (valid & OBD_MD_FLBLOCKS)   /* allocation of space */
@@ -775,21 +908,12 @@ static inline void obdo_refresh_inode(struct inode *dst, struct obdo *src,
 {
         valid &= src->o_valid;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        if (valid & OBD_MD_FLATIME && src->o_atime > dst->i_atime)
-                dst->i_atime = src->o_atime;
-        if (valid & OBD_MD_FLMTIME && src->o_mtime > dst->i_mtime)
-                dst->i_mtime = src->o_mtime;
-        if (valid & OBD_MD_FLCTIME && src->o_ctime > dst->i_ctime)
-                dst->i_ctime = src->o_ctime;
-#else
-        if (valid & OBD_MD_FLATIME && src->o_atime > dst->i_atime.tv_sec)
-                dst->i_atime.tv_sec = src->o_atime;
-        if (valid & OBD_MD_FLMTIME && src->o_mtime > dst->i_mtime.tv_sec)
-                dst->i_mtime.tv_sec = src->o_mtime;
-        if (valid & OBD_MD_FLCTIME && src->o_ctime > dst->i_ctime.tv_sec)
-                dst->i_ctime.tv_sec = src->o_ctime;
-#endif
+        if (valid & OBD_MD_FLATIME && src->o_atime > LTIME_S(dst->i_atime))
+                LTIME_S(dst->i_atime) = src->o_atime;
+        if (valid & OBD_MD_FLMTIME && src->o_mtime > LTIME_S(dst->i_mtime))
+                LTIME_S(dst->i_mtime) = src->o_mtime;
+        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime))
+                LTIME_S(dst->i_ctime) = src->o_ctime;
         if (valid & OBD_MD_FLSIZE && src->o_size > dst->i_size)
                 dst->i_size = src->o_size;
         /* allocation of space */
@@ -802,21 +926,12 @@ static inline void obdo_to_inode(struct inode *dst, struct obdo *src,
 {
         valid &= src->o_valid;
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (valid & OBD_MD_FLATIME)
-                dst->i_atime = src->o_atime;
+                LTIME_S(dst->i_atime) = src->o_atime;
         if (valid & OBD_MD_FLMTIME)
-                dst->i_mtime = src->o_mtime;
-        if (valid & OBD_MD_FLCTIME && src->o_ctime > dst->i_ctime)
-                dst->i_ctime = src->o_ctime;
-#else
-        if (valid & OBD_MD_FLATIME)
-                dst->i_atime.tv_sec = src->o_atime;
-        if (valid & OBD_MD_FLMTIME)
-                dst->i_mtime.tv_sec = src->o_mtime;
-        if (valid & OBD_MD_FLCTIME && src->o_ctime > dst->i_ctime.tv_sec)
-                dst->i_ctime.tv_sec = src->o_ctime;
-#endif
+                LTIME_S(dst->i_mtime) = src->o_mtime;
+        if (valid & OBD_MD_FLCTIME && src->o_ctime > LTIME_S(dst->i_ctime))
+                LTIME_S(dst->i_ctime) = src->o_ctime;
         if (valid & OBD_MD_FLSIZE)
                 dst->i_size = src->o_size;
         if (valid & OBD_MD_FLBLOCKS) /* allocation of space */
@@ -931,49 +1046,17 @@ static inline int obdo_cmp_md(struct obdo *dst, struct obdo *src,
         return res;
 }
 
-
 /* I'm as embarrassed about this as you are.
  *
  * <shaver> // XXX do not look into _superhack with remaining eye
  * <shaver> // XXX if this were any uglier, I'd get my own show on MTV */
 extern int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
-extern void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp,
-                                               int dying_import);
-
-int class_register_type(struct obd_ops *ops, struct lprocfs_vars* vars,
-                        char *nm);
-int class_unregister_type(char *nm);
-int class_name2dev(char *name);
-int class_uuid2dev(struct obd_uuid *uuid);
-struct obd_device *class_uuid2obd(struct obd_uuid *uuid);
-struct obd_export *class_new_export(struct obd_device *obddev);
-struct obd_type *class_get_type(char *name);
-void class_put_type(struct obd_type *type);
-void class_destroy_export(struct obd_export *exp);
-int class_connect(struct lustre_handle *conn, struct obd_device *obd,
-                  struct obd_uuid *cluuid);
-int class_disconnect(struct lustre_handle *conn);
-void class_disconnect_all(struct obd_device *obddev);
-
-/* generic operations shared by various OBD types */
-int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data);
-int class_multi_cleanup(struct obd_device *obddev);
-
-extern void (*class_signal_connection_failure)(struct ptlrpc_connection *);
-
-static inline struct ptlrpc_connection *class_rd2conn(struct recovd_data *rd)
-{
-        /* reuse list_entry's member-pointer offset stuff */
-        return list_entry(rd, struct ptlrpc_connection, c_recovd_data);
-}
+extern void (*ptlrpc_abort_inflight_superhack)(struct obd_import *imp);
 
 struct obd_statfs;
 struct statfs;
 void statfs_pack(struct obd_statfs *osfs, struct statfs *sfs);
 void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs);
-void obd_statfs_pack(struct obd_statfs *tgt, struct obd_statfs *src);
-void obd_statfs_unpack(struct obd_statfs *tgt, struct obd_statfs *src);
-
 
 struct obd_class_user_state {
         struct obd_device     *ocus_current_obd;
