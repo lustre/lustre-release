@@ -64,7 +64,8 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 GOTO(out, rc = -ENOMEM);
         memset(fd, 0, sizeof(*fd));
 
-        rc = mdc_open(&sbi->ll_mdc_conn, inode->i_ino, S_IFREG, file->f_flags,
+        rc = mdc_open(&sbi->ll_mdc_conn, inode->i_ino, S_IFREG | inode->i_mode,
+                      file->f_flags,
                       oa, (__u64)(unsigned long)file, &fd->fd_mdshandle, &req);
         fd->fd_req = req;
         ptlrpc_req_finished(req);

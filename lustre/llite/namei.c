@@ -105,7 +105,8 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
                 err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT,
                                   it, LCK_PW, dir, dentry, lockh, 0, NULL, 0,
                                   dir, sizeof(*dir));
-        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_UNLINK))
+        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_UNLINK |
+                              IT_RMDIR))
                 err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT,
                                   it, LCK_PR, dir, dentry, lockh, 0, NULL, 0,
                                   dir, sizeof(*dir));
@@ -159,7 +160,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
              it->it_disposition && !it->it_status)
                 GOTO(negative, NULL);
 
-        if ( (it->it_op & (IT_GETATTR | IT_UNLINK)) &&
+        if ( (it->it_op & (IT_GETATTR | IT_UNLINK | IT_RMDIR)) &&
              it->it_disposition && it->it_status)
                 GOTO(negative, NULL);
 
@@ -190,6 +191,14 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 if (!inode) 
                         GOTO(out_req, -ENOMEM);
                 inode->i_mode= S_IFREG;
+                inode->i_nlink = 1;
+                GOTO(out_req, 0);
+        } else if (it->it_op == IT_RMDIR) { 
+                inode = new_inode(dir->i_sb);
+                if (!inode) 
+                        GOTO(out_req, -ENOMEM);
+                ll_i2info(inode)->lli_obdo = NULL;
+                inode->i_mode= S_IFDIR;
                 inode->i_nlink = 1;
                 GOTO(out_req, 0);
         } else {
@@ -565,17 +574,21 @@ out:
 static int ll_rmdir(struct inode * dir, struct dentry *dentry)
 {
         struct inode * inode = dentry->d_inode;
-        int err = -ENOTEMPTY;
+        int err = 0;
+        int intent_did = dentry->d_it && dentry->d_it->it_disposition;
 
-        if (ext2_empty_dir(inode)) {
+        if (!intent_did) { 
+                if (!ext2_empty_dir(inode))
+                LBUG();
+
                 err = ll_unlink(dir, dentry);
-                if (!err) {
-                        inode->i_size = 0;
-                        ext2_dec_count(inode);
-                        ext2_dec_count(dir);
-                }
+                if (err) 
+                        RETURN(err);
         }
-        return err;
+        inode->i_size = 0;
+        ext2_dec_count(inode);
+        ext2_dec_count(dir);
+        RETURN(err);
 }
 
 static int ll_rename (struct inode * old_dir, struct dentry * old_dentry,

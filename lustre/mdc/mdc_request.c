@@ -259,8 +259,25 @@ int mdc_enqueue(struct obd_conn *conn, int lock_type, struct lookup_intent *it,
                 size[0] = sizeof(struct ldlm_reply);
                 size[1] = sizeof(struct obdo);
                 req->rq_replen = lustre_msg_size(2, size);
+        } else if ( it->it_op == IT_RMDIR ) {
+                size[2] = sizeof(struct mds_rec_unlink);
+                size[3] = de->d_name.len + 1;
+                req = ptlrpc_prep_req(mdc->mdc_ldlm_client, mdc->mdc_conn,
+                                      LDLM_ENQUEUE, 4, size, NULL);
+                if (!req)
+                        RETURN(-ENOMEM);
+
+                /* pack the intent */
+                lit = lustre_msg_buf(req->rq_reqmsg, 1);
+                lit->opc = NTOH__u64((__u64)it->it_op);
+
+                /* pack the intended request */
+                mds_unlink_pack(req, 2, dir, NULL, de->d_name.name, 
+                                de->d_name.len);
+                size[0] = sizeof(struct ldlm_reply);
+                req->rq_replen = lustre_msg_size(1, size);
         } else if ( it->it_op == IT_GETATTR || it->it_op == IT_RENAME ||
-                    it->it_op == IT_OPEN ) {
+                     it->it_op == IT_OPEN ) {
                 size[2] = sizeof(struct mds_body);
                 size[3] = de->d_name.len + 1;
 
