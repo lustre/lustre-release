@@ -49,13 +49,18 @@ new = db.lookup_name(config.new)
 print "old:", old.getUUID()
 print "new:",  new.getUUID()
 
+def fatal(*args):
+    msg = string.join(map(str,args))
+    print "! " + msg
+    sys.exit(1)
+
 # find all the targets on the failed node and, change the active
 # pointers to point to the devices on the new node.
 prof_list = old.get_refs('profile')
 for prof_uuid in prof_list:
     prof_db = db.lookup(prof_uuid)
     if not prof_db:
-        panic("profile:", profile, "not found.")
+        fatal("profile:", profile, "not found.")
     for ref_class, ref_uuid in prof_db.get_all_refs(): 
         if ref_class in ('osd', 'mdsdev'):
             devdb = db.lookup(ref_uuid)
