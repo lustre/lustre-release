@@ -667,7 +667,7 @@ static int ll_mdc_unlink(struct inode *dir, struct inode *child, __u32 mode,
         rc = obd_destroy(ll_i2obdconn(dir), oa, lsm, &oti);
         obdo_free(oa);
         if (rc)
-                CERROR("obd destroy objid 0x"LPX64" error %d\n",
+                CERROR("obd destroy objid "LPX64": rc %d\n",
                        lsm->lsm_object_id, rc);
  out_free_memmd:
         obd_free_memmd(ll_i2obdconn(dir), &lsm);
