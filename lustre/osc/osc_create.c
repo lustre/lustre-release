@@ -57,25 +57,33 @@
 #include <linux/obd_class.h>
 #include "osc_internal.h"
 
-#define OSCC_FLAG_RECOVERING 1
-#define OSCC_FLAG_CREATING   2
-
-static int osc_interpret_create(struct ptlrpc_request *request, void *data,
+static int osc_interpret_create(struct ptlrpc_request *req, void *data,
                                 int rc)
 {
         struct osc_creator *oscc;
-        struct ost_body *body;
+        struct ost_body *body = NULL;
         ENTRY;
 
-        body = lustre_swab_repbuf(request, 0, sizeof(*body),
-                                  lustre_swab_ost_body);
-        if (body == NULL)
-                RETURN(-EPROTO);
+        if (req->rq_repmsg) {
+                body = lustre_swab_repbuf(req, 0, sizeof(*body),
+                                          lustre_swab_ost_body);
+                if (body == NULL)
+                        rc = -EPROTO;
+        }
 
-        oscc = request->rq_async_args.pointer_arg[0];
+        oscc = req->rq_async_args.pointer_arg[0];
         spin_lock(&oscc->oscc_lock);
-        oscc->oscc_status = rc;
-        oscc->oscc_last_id = body->oa.o_id;
+        if (body)
+                oscc->oscc_last_id = body->oa.o_id;
+        if (rc == -ENOSPC) {
+                DEBUG_REQ(D_INODE, req, "OST out of space, flagging");
+                oscc->oscc_flags |= OSCC_FLAG_NOSPC;
+        } else if (rc) {
+                DEBUG_REQ(D_ERROR, req,
+                          "unknown rc %d from async create: failing oscc\n",
+                          rc);
+                ptlrpc_fail_import(req->rq_import, req->rq_import_generation);
+        }
         oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
         spin_unlock(&oscc->oscc_lock);
 
@@ -83,7 +91,7 @@ static int osc_interpret_create(struct ptlrpc_request *request, void *data,
                oscc->oscc_last_id, oscc->oscc_next_id);
 
         wake_up(&oscc->oscc_waitq);
-        RETURN(0);
+        RETURN(rc);
 }
 
 static int oscc_internal_create(struct osc_creator *oscc)
@@ -131,15 +139,29 @@ static int oscc_internal_create(struct osc_creator *oscc)
 
 static int oscc_has_objects(struct osc_creator *oscc, int count)
 {
-        int rc;
+        int have_objs;
         spin_lock(&oscc->oscc_lock);
-        rc = ((__s64)(oscc->oscc_last_id - oscc->oscc_next_id) >= count);
+        have_objs = ((__s64)(oscc->oscc_last_id - oscc->oscc_next_id) >= count);
         spin_unlock(&oscc->oscc_lock);
 
-        if (rc == 0)
+        if (!have_objs)
                 oscc_internal_create(oscc);
 
-        return rc;
+        return have_objs;
+}
+
+static int oscc_wait_for_objects(struct osc_creator *oscc, int count)
+{
+        int have_objs;
+        int ost_full;
+
+        have_objs = oscc_has_objects(oscc, count);
+
+        spin_lock(&oscc->oscc_lock);
+        ost_full = (oscc->oscc_flags & OSCC_FLAG_NOSPC);
+        spin_unlock(&oscc->oscc_lock);
+
+        return have_objs || ost_full;
 }
 
 static int oscc_precreate(struct osc_creator *oscc, int wait)
@@ -151,17 +173,15 @@ static int oscc_precreate(struct osc_creator *oscc, int wait)
         if (oscc_has_objects(oscc, oscc->oscc_kick_barrier))
                 RETURN(0);
 
-        /* an MDS using this call may time out on this. This is a
-         *  recovery style wait. */
-        if (wait)
-                rc = l_wait_event(oscc->oscc_waitq,
-                                  oscc_has_objects(oscc, 1), &lwi);
-        if (rc || !wait)
-                RETURN(rc);
+        if (!wait)
+                RETURN(0);
 
-        spin_lock(&oscc->oscc_lock);
-        rc = oscc->oscc_status;
-        spin_unlock(&oscc->oscc_lock);
+        /* no rc check -- a no-INTR, no-TIMEOUT wait can't fail */
+        l_wait_event(oscc->oscc_waitq, oscc_wait_for_objects(oscc, 1), &lwi);
+
+        if (!oscc_has_objects(oscc, 1) && (oscc->oscc_flags & OSCC_FLAG_NOSPC))
+                rc = -ENOSPC;
+
         RETURN(rc);
 }
 
@@ -196,7 +216,8 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 rc = osc_real_create(oscc->oscc_exp, oa, ea, NULL);
 
                 spin_lock(&oscc->oscc_lock);
-                oscc->oscc_status = rc;
+                if (rc == -ENOSPC)
+                        oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                 oscc->oscc_last_id = oscc->oscc_next_id - 1;
                 spin_unlock(&oscc->oscc_lock);
 
@@ -212,6 +233,10 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         *ea = lsm;
                         oscc->oscc_next_id++;
                         try_again = 0;
+                } else if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
+                        rc = -ENOSPC;
+                        spin_unlock(&oscc->oscc_lock);
+                        break;
                 }
                 spin_unlock(&oscc->oscc_lock);
                 rc = oscc_precreate(oscc, try_again);
@@ -237,7 +262,7 @@ void oscc_init(struct obd_export *exp)
         init_waitqueue_head(&oed->oed_oscc.oscc_waitq);
         spin_lock_init(&oed->oed_oscc.oscc_lock);
         oed->oed_oscc.oscc_exp = exp;
-        oed->oed_oscc.oscc_kick_barrier = 1000;
+        oed->oed_oscc.oscc_kick_barrier = 100;
         oed->oed_oscc.oscc_grow_count = 2000;
         oed->oed_oscc.oscc_initial_create_count = 2000;
 
