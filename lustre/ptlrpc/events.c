@@ -185,7 +185,7 @@ static int bulk_sink_callback(ptl_event_t *ev, void *data)
 
         /* FIXME: This should happen unconditionally */
         if (bulk->b_cb != NULL)
-                OBD_FREE(bulk, sizeof(*bulk));
+                ptlrpc_free_bulk(bulk);
 
         EXIT;
         return 1;

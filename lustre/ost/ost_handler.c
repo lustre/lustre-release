@@ -328,7 +328,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                 if (bulk->b_flags & PTL_RPC_FL_INTR)
                         GOTO(out, 0);
 
-                OBD_FREE(bulk, sizeof(*bulk));
+                ptlrpc_free_bulk(bulk);
         }
         bulk = NULL;
 
@@ -343,11 +343,11 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
         if (res != NULL)
                 OBD_FREE(res, sizeof(*res) * niocount);
         if (bulk != NULL)
-                OBD_FREE(bulk, sizeof(*bulk));
+                ptlrpc_free_bulk(bulk);
         if (bulk_vec != NULL) {
                 for (i = 0; i < niocount; i++)
                         if (bulk_vec[i] != NULL)
-                                OBD_FREE(bulk_vec[i], sizeof(*bulk));
+                                ptlrpc_free_bulk(bulk_vec[i]);
                 OBD_FREE(bulk_vec, niocount * sizeof(*bulk_vec));
         }
 
