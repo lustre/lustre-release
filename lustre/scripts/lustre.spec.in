@@ -3,7 +3,7 @@
 %define kversion @RELEASE@
 %define linuxdir @LINUX@
 %define portalsdir @PORTALS@
-Release: 4
+Release: 7
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -38,24 +38,27 @@ Lustre Lite Source for further development
 %build
 rm -rf $RPM_BUILD_ROOT
 
-# Create the pristine source directory.
-mkdir -p $RPM_BUILD_ROOT/usr/src/lustre-%{version}
-tar -cf - . | (cd $RPM_BUILD_ROOT/usr/src/lustre-%{version} && tar -xvBpf -)
-mkdir -p $RPM_BUILD_ROOT/tmp
-echo :pserver:anonymous@cvs.lustre.sf.net:/cvsroot/lustre > $RPM_BUILD_ROOT/tmp/Root
-(cd $RPM_BUILD_ROOT/usr/src/lustre-%{version} && find . -name Root -exec cp $RPM_BUILD_ROOT/tmp/Root {} \; )
-
 # Set an explicit path to our Linux tree, if we can.
 ./configure --enable-linuxdir=%{linuxdir} --enable-portalsdir=%{portalsdir}
 make
 
 %install
 make install prefix=$RPM_BUILD_ROOT
+# Create the pristine source directory.
+
+make distclean
+mkdir -p $RPM_BUILD_ROOT/usr/src/lustre-%{version}
+find . -print | cpio -ap  $RPM_BUILD_ROOT/usr/src/lustre-%{version}
 
 %files
 %attr(-, root, root) %doc COPYING FDL
 %attr(-, root, root) %doc doc/master.pdf doc/lustre-HOWTO.txt
-%attr(-, root, root) /usr/bin/obdctl
+%attr(-, root, root) /usr/sbin/obdctl
+%attr(-, root, root) /usr/sbin/llsetup.sh
+%attr(-, root, root) /usr/sbin/llrsetup.sh
+%attr(-, root, root) /usr/sbin/llcleanup.sh
+%attr(-, root, root) /lib/lustre/common.sh
+%attr(-, root, root) /etc/lustre/lustre.cfg
 
 %files -n lustre-modules
 %attr(-, root, root) %doc COPYING
