@@ -9,7 +9,7 @@ PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
 RLUSTRE=${RLUSTRE:-$LUSTRE}
 RPWD=${RPWD:-$PWD}
 
-. $LTESTDIR/functional/llite/common/common.sh
+. $LUSTRE/tests/test-framework.sh
 
 # Allow us to override the setup if we already have a mounted system by
 # setting SETUP=" " and CLEANUP=" "
