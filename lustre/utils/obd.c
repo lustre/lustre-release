@@ -547,9 +547,25 @@ int jt_obd_device(int argc, char **argv)
         return rc;
 }
 
-int jt_obd_connect(int argc, char **argv)
+int jt_obd_probe(int argc, char **argv)
 {
-        return 0;
+        struct obd_ioctl_data data;
+        int rc;
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        IOC_INIT(data);
+        data.ioc_inllen1 = strlen(argv[1]) + 1;
+        data.ioc_inlbuf1 = argv[1];
+        IOC_PACK(argv[0], data);
+        
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_PROBE, buf);
+        if (rc) 
+                fprintf(stderr, "OBD_IOC_PROBE failed: %s\n", 
+                        strerror(errno));
+        
+        return rc;
 }
 
 int jt_obd_disconnect(int argc, char **argv)
