@@ -16,6 +16,11 @@ case "$lustretag" in
 
     # this is the branch table
     # keep this list sorted alphabetically!
+    b_ptl_smallfix)
+        portalstag="b_ptl_smallfix"
+	lustretag="b1_4"
+	;;
+
     b1_2)
 	portalstag="b1_2"
 	;;
