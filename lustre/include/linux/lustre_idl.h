@@ -47,7 +47,6 @@
 /*
  *  GENERAL STUFF
  */
-typedef __u8 uuid_t[37]; /* deprecated */
 typedef __u8 obd_uuid_t[37];
 
 /* FOO_REQUEST_PORTAL is for incoming requests on the FOO
@@ -128,16 +127,16 @@ struct lustre_msg {
  */
 
 /* opcodes */
-#define OST_REPLY      0	/* reply ? */
-#define OST_GETATTR    1
-#define OST_SETATTR    2
-#define OST_READ       3
-#define OST_WRITE      4
-#define OST_CREATE     5 
-#define OST_DESTROY    6 
-#define OST_GET_INFO   7 
-#define OST_CONNECT    8 
-#define OST_DISCONNECT 9 
+#define OST_REPLY       0        /* reply ? */
+#define OST_GETATTR     1
+#define OST_SETATTR     2
+#define OST_READ        3
+#define OST_WRITE       4
+#define OST_CREATE      5
+#define OST_DESTROY     6
+#define OST_GET_INFO    7
+#define OST_CONNECT     8
+#define OST_DISCONNECT  9
 #define OST_PUNCH      10
 #define OST_OPEN       11
 #define OST_CLOSE      12
@@ -224,6 +223,7 @@ struct lov_mds_md {
 #define OBD_MD_FLRDEV   (0x00010000)    /* device number */
 #define OBD_MD_FLEASIZE (0x00020000)    /* extended attribute data */
 #define OBD_MD_LINKNAME (0x00040000)    /* symbolic link target */
+#define OBD_MD_FLHANDLE (0x00080000)    /* file handle */
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS | OBD_MD_LINKNAME))
 
 struct obd_statfs {
@@ -249,10 +249,11 @@ struct obd_statfs {
 #define OBD_PUNCH_EOF 0xffffffffffffffffULL
 
 struct obd_ioobj {
-        obd_id    ioo_id;
-        obd_gr    ioo_gr;
-        __u32     ioo_type;
-        __u32     ioo_bufcnt;
+        obd_id               ioo_id;
+        obd_gr               ioo_gr;
+        /* struct lustre_handle ioo_handle; XXX in the future */
+        __u32                ioo_type;
+        __u32                ioo_bufcnt;
 };
 
 struct niobuf_remote {
