@@ -666,7 +666,7 @@ def add_mds(gen, lustre, options):
     mdd_name = new_name("MDD_" + mds_name +"_" + node_name)
     mdd_uuid = new_uuid(mdd_name)
 
-    mds_uuid = name2uuid(lustre, mds_name, fatal=0)
+    mds_uuid = name2uuid(lustre, mds_name, 'mds', fatal=0)
     if not mds_uuid:
         mds_uuid = new_uuid(mds_name)
         mds = gen.mds(mds_name, mds_uuid, mdd_uuid, options.group)
@@ -699,11 +699,11 @@ def add_mds(gen, lustre, options):
 
 def add_mgmt(gen, lustre, options):
     node_name = get_option(options, 'node')
-    node_uuid = name2uuid(lustre, node_name)
+    node_uuid = name2uuid(lustre, node_name, 'mode')
     mgmt_name = get_option(options, 'mgmt')
     if not mgmt_name:
         mgmt_name = new_name('MGMT_' + node_name)
-    mgmt_uuid = name2uuid(lustre, mgmt_name, fatal=0)
+    mgmt_uuid = name2uuid(lustre, mgmt_name, 'mgmt', fatal=0)
     if not mgmt_uuid:
         mgmt_uuid = new_uuid(mgmt_name)
         mgmt = gen.mgmt(mgmt_name, mgmt_uuid, node_uuid)
@@ -719,7 +719,7 @@ def add_ost(gen, lustre, options):
     lovname = get_option(options, 'lov')
     osdtype = get_option(options, 'osdtype')
 
-    node_uuid = name2uuid(lustre, node_name)
+    node_uuid = name2uuid(lustre, node_name, 'node')
 
     if osdtype == 'obdecho':
         fstype = ''
@@ -742,7 +742,7 @@ def add_ost(gen, lustre, options):
     osdname = new_name("OSD_" + ostname + "_" + node_name)
     osd_uuid = new_uuid(osdname)
 
-    ost_uuid = name2uuid(lustre, ostname, fatal=0)
+    ost_uuid = name2uuid(lustre, ostname, 'ost', fatal=0)
     if not ost_uuid:
         ost_uuid = get_option(options, 'ostuuid')
         if ost_uuid:

@@ -255,5 +255,20 @@ test_9() {
 }
 run_test 9 "test --ptldebug and --subsystem for lmc"
 
+test_10() {
+        OLDXMLCONFIG=$XMLCONFIG
+        XMLCONFIG="broken.xml"
+        [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
+        SAMENAME="mds1"
+        do_lmc --add node --node $SAMENAME
+        do_lmc --add net --node $SAMENAME --nid $SAMENAME --nettype tcp
+        do_lmc --add mds --node $SAMENAME --mds $SAMENAME --nid $SAMENAME \
+               --fstype ext3 --dev /dev/mds1 || return $?
+        do_lmc --add lov --lov lov1 --mds $SAMENAME --stripe_sz 65536 \
+               --stripe_cnt 1 --stripe_pattern 0 || return $?
+        echo "Success!"
+        XMLCONFIG=$OLDXMLCONFIG
+}
+run_test 10 "use lmc with the same name for node and mds"
 
 equals_msg "Done"
