@@ -37,7 +37,7 @@
 #include <sysio.h>
 #include <mount.h>
 
-extern errno;
+#include "test_common.h"
 
 
 
@@ -67,126 +67,26 @@ static void mds_failover()
         }
 }
 
-/******************************************************************
- * util functions
- ******************************************************************/
 
-static void touch(const char *filename)
-{
-        int fd, rc;
-
-        fd = open(filename, O_RDWR|O_CREAT, 0644);
-        if (fd < 0) {
-                printf("open(%s) error: %s\n", filename, strerror(errno));
-                exit(1);
-        }
-
-        rc = close(fd);
-        if (rc) {
-                printf("close(%s) error: %s\n", filename, strerror(errno));
-                exit(1);
-        }
-}
-
-/* XXX Now libsysio don't support mcreate */
-static void mcreate(const char *filename)
-{
-        return touch(filename);
-#if 0
-        int rc;
-
-        rc = mknod(filename, S_IFREG | 0644, 0);
-        if (rc) {
-                printf("mknod(%s) error: %s\n", filename, strerror(errno));
-                exit(-1);
-        }
-#endif
-}
-
-static void munlink(const char *filename)
-{
-        int rc;
-
-        rc = unlink(filename);
-        if (rc) {
-                printf("unlink(%s) error: %s\n", filename, strerror(errno));
-                exit(-1);
-        }
-}
-
-static void mmkdir(const char *filename)
-{
-        int rc;
-
-        rc = mkdir(filename, 00644);
-        if (rc < 0) {
-                printf("mkdir(%s) error: %s\n", filename, strerror(errno));
-                exit(1);
-        }
-}
-
-static void mrmdir(const char *filename)
-{
-        int rc;
-
-        rc = rmdir(filename);
-        if (rc) {
-                printf("rmdir(%s) error: %s\n", filename, strerror(errno));
-                exit(1);
-        }
-}
-
-static int mopen(const char *filename)
-{
-        int fd;
-
-        fd = open(filename, O_RDONLY);
-        if (fd < 0) {
-                printf("open(%s) error: %s\n", filename, strerror(errno));
-                exit(1);
-        }
-        return fd;
-}
-
-static void mclose(int fd)
-{
-        int rc;
-
-        rc = close(fd);
-        if (rc < 0) {
-                printf("close(%d) error: %s\n", fd, strerror(errno));
-                exit(1);
-        }
-}
-
-static int check_stat(const char *name, struct stat *buf)
-{
-	struct stat stat;
-        int rc;
-
-	rc = lstat(name, &stat);
-        if (rc) {
-		printf("error %d stat %s\n", rc, name);
-		exit(1);
-	}
-        if (buf)
-                memcpy(buf, &stat, sizeof(*buf));
-
-	return 0;
-}
-
-
-
-#define ENTRY(str)                                              \
-        do {                                                    \
-                printf("===== start test (%s) =====", (str));   \
-                printf("===========================\n");        \
+#define ENTRY(str)                                                      \
+        do {                                                            \
+                char buf[100];                                          \
+                int len;                                                \
+                sprintf(buf, "===== START: %s ", (str));                \
+                len = strlen(buf);                                      \
+                if (len < 79) {                                         \
+                        memset(buf+len, '=', 100-len);                  \
+                        buf[79] = '\n';                                 \
+                        buf[80] = 0;                                    \
+                }                                                       \
+                printf("%s", buf);                                      \
         } while (0)
 
-#define LEAVE()                                                 \
-        do {                                                    \
-                printf("--- end test successfully ---");        \
-                printf("-----------------------------\n");      \
+#define LEAVE()                                                         \
+        do {                                                            \
+                printf("----- END TEST successfully ---");              \
+                printf("-----------------------------");                \
+                printf("-------------------\n");                        \
         } while (0)
 
 void t1()
@@ -195,10 +95,10 @@ void t1()
         ENTRY("simple create");
 
         replay_barrier();
-        mcreate(path);
+        t_create(path);
         mds_failover();
-        check_stat(path, NULL);
-        munlink(path);
+        t_check_stat(path, NULL);
+        t_unlink(path);
         LEAVE();
 }
 
@@ -208,10 +108,10 @@ void t1a()
         ENTRY("touch");
 
         replay_barrier();
-        touch(path);
+        t_touch(path);
         mds_failover();
-        check_stat(path, NULL);
-        munlink(path);
+        t_check_stat(path, NULL);
+        t_unlink(path);
         LEAVE();
 }
 
@@ -222,13 +122,13 @@ void t2()
         ENTRY("mkdir + contained create");
 
         replay_barrier();
-        mmkdir(dir);
-        mcreate(path);
+        t_mkdir(dir);
+        t_create(path);
         mds_failover();
-        check_stat(dir, NULL);
-        check_stat(path, NULL);
-        munlink(path);
-        mrmdir(dir);
+        t_check_stat(dir, NULL);
+        t_check_stat(path, NULL);
+        t_unlink(path);
+        t_rmdir(dir);
         LEAVE();
 }
 
@@ -238,14 +138,14 @@ void t3()
         char *path="/mnt/lustre/d3/f3";
         ENTRY("mkdir |X| contained create");
 
-        mmkdir(dir);
+        t_mkdir(dir);
         replay_barrier();
-        mcreate(path);
+        t_create(path);
         mds_failover();
-        check_stat(dir, NULL);
-        check_stat(path, NULL);
-        munlink(path);
-        mrmdir(dir);
+        t_check_stat(dir, NULL);
+        t_check_stat(path, NULL);
+        t_unlink(path);
+        t_rmdir(dir);
         LEAVE();
 }
 
@@ -256,13 +156,13 @@ void t4()
         ENTRY("open |X| close");
 
         replay_barrier();
-        mcreate(path);
-        fd = mopen(path);
+        t_create(path);
+        fd = t_open(path);
         sleep(1);
         mds_failover();
-        check_stat(path, NULL);
-        mclose(fd);
-        munlink(path);
+        t_check_stat(path, NULL);
+        t_close(fd);
+        t_unlink(path);
 }
 
 extern int portal_debug;
@@ -324,13 +224,11 @@ int main(int argc, char * const argv[])
 
         __liblustre_setup_();
 
-#ifndef __CYGWIN__
         t1();
         t1a();
         t2();
         t3();
         t4();
-#endif
 
 	printf("liblustre is about shutdown\n");
         __liblustre_cleanup_();

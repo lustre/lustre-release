@@ -37,6 +37,7 @@
 #include <sysio.h>
 #include <mount.h>
 
+#include "test_common.h"
 
 static struct {
         const char   *name;
@@ -50,7 +51,7 @@ static struct {
 
 static int drop_index = 0;
 
-char mds_server[1024];
+static char mds_server[1024];
 
 int do_stat(const char *name, struct stat *buf)
 {
@@ -146,15 +147,27 @@ void cleanup_dir(const char *path)
         }                                                                  \
     } while (0)
 
-#define ENTRY(str)                                                         \
-    do {                                                                   \
-        printf("+++++ start test (%s) +++++\n", (str));                    \
-    } while (0)
+#define ENTRY(str)                                                      \
+        do {                                                            \
+                char buf[100];                                          \
+                int len;                                                \
+                sprintf(buf, "===== START: %s ", (str));                \
+                len = strlen(buf);                                      \
+                if (len < 79) {                                         \
+                        memset(buf+len, '=', 100-len);                  \
+                        buf[79] = '\n';                                 \
+                        buf[80] = 0;                                    \
+                }                                                       \
+                printf("%s", buf);                                      \
+        } while (0)
 
-#define LEAVE()                                                            \
-    do {                                                                   \
-        printf("----- end test successfully -----\n");                     \
-    } while (0)
+#define LEAVE()                                                         \
+        do {                                                            \
+                printf("----- END TEST successfully ---");              \
+                printf("-----------------------------");                \
+                printf("-------------------\n");                        \
+        } while (0)
+
 
 void t1()
 {
@@ -162,10 +175,10 @@ void t1()
         ENTRY("create/delete");
 
         FAIL();
-        prepare_reg(path);
+        t_touch(path);
         RECOVER();
         FAIL();
-        cleanup_reg(path);
+        t_unlink(path);
         RECOVER();
         LEAVE();
 }
@@ -176,10 +189,10 @@ void t2()
         ENTRY("mkdir/rmdir");
 
         FAIL();
-        prepare_dir(path);
+        t_mkdir(path);
         RECOVER();
         FAIL();
-        cleanup_dir(path);
+        t_rmdir(path);
         RECOVER();
         LEAVE();
 }
@@ -189,11 +202,11 @@ void t3()
         char *path="/mnt/lustre/test_t3";
         ENTRY("regular stat");
 
-        prepare_reg(path);
+        t_touch(path);
         FAIL();
-        do_stat(path, NULL);
+        t_check_stat(path, NULL);
         RECOVER();
-        cleanup_reg(path);
+        t_unlink(path);
         LEAVE();
 }
 
@@ -202,11 +215,11 @@ void t4()
         char *path="/mnt/lustre/test_t4";
         ENTRY("dir stat");
 
-        prepare_dir(path);
+        t_mkdir(path);
         FAIL();
-        do_stat(path, NULL);
+        t_check_stat(path, NULL);
         RECOVER();
-        cleanup_dir(path);
+        t_rmdir(path);
         LEAVE();
 }
 
@@ -219,13 +232,9 @@ void t5()
         int fd, rc, i;
         ENTRY("sequential page aligned file I/O");
 
-        prepare_reg(path);
+        t_touch(path);
 
-	fd = open(path, O_RDWR, 00664);
-        if (fd < 0) {
-                printf("error %d open %s\n", fd, path);
-                exit(1);
-        }
+	fd = t_open(path);
 
 	for (i = 0; i < npages; i++ ) {
                 memset(wbuf, i, bufsize);
@@ -249,13 +258,9 @@ void t5()
 	}
         printf("succefully read & verified %d pages\n", npages);
 
-        rc = close(fd);
-        if (rc) {
-                printf("close() err %d\n", rc);
-                exit(1);
-        }
+        t_close(fd);
 
-        cleanup_reg(path);
+        t_unlink(path);
         LEAVE();
 }
 
@@ -263,48 +268,28 @@ void t6()
 {
         char *path="/mnt/lustre/test_t6";
         char *path2="/mnt/lustre/test_t6_link";
-        int rc;
         ENTRY("symlink");
 
-        prepare_reg(path);
+        t_touch(path);
         FAIL();
-        rc = symlink(path, path2);
-        if (rc) {
-                printf("error %d symlink %s -< %s\n", rc, path, path2);
-                exit(1);
-        }
+        t_symlink(path, path2);
         RECOVER();
-        do_stat(path2, NULL);
-        rc = unlink(path2);
-        if (rc) {
-                printf("error %d sym unlink %s\n", rc, path2);
-                exit(1);
-        }
-        cleanup_reg(path);
+        t_check_stat(path2, NULL);
+        t_unlink(path2);
+        t_unlink(path);
         LEAVE();
 }
 
 void t7()
 {
         char *path="/mnt/lustre/test_t7";
-        int rc;
         ENTRY("mknod");
 
-#define MKDEV(a,b) (((a) << 8) | (b))
-
         FAIL();
-        rc = mknod(path, S_IFCHR | 0644, MKDEV(5, 4));
-        if (rc < 0) {
-                printf("error %d mknod %s\n", rc, path);
-                exit(1);
-        }
+        t_mknod(path, S_IFCHR | 0644, 5, 4);
         RECOVER();
-        do_stat(path, NULL);
-        rc = unlink(path);
-        if (rc) {
-                printf("error %d node unlink %s\n", rc, path);
-                exit(1);
-        }
+        t_check_stat(path, NULL);
+        t_unlink(path);
         LEAVE();
 }
 
