@@ -216,16 +216,12 @@ static struct llog_handle *llog_current_log(struct llog_handle *cathandle,
         if (loghandle) {
                 struct llog_object_hdr *llh = loghandle->lgh_hdr;
                 if (llh->llh_count < sizeof(llh->llh_bitmap) * 8)
-                        GOTO(out, loghandle);
+                        RETURN(loghandle);
         }
 
-        if (reclen) {
+        if (reclen)
                 loghandle = llog_new_log(cathandle, cathandle->lgh_tgtuuid);
-                GOTO(out, loghandle);
-        }
-        GOTO(out, loghandle);
-out:
-        return loghandle;
+        RETURN(loghandle);
 }
 
 /* Add a single record to the recovery log(s).

@@ -140,7 +140,7 @@ static int log_commit_thread(void *arg)
         CDEBUG(D_HA, "%s started\n", current->comm);
         do {
                 struct ptlrpc_request *request;
-                struct lustre_handle conn;
+                struct obd_import *import;
                 struct list_head *sending_list;
                 int rc = 0;
 
@@ -198,11 +198,11 @@ static int log_commit_thread(void *arg)
                         llcd = list_entry(lcd->lcd_llcd_list.next,
                                           typeof(*llcd), llcd_list);
                         LASSERT(llcd->llcd_lcm == lcm);
-                        conn = llcd->llcd_conn;
+                        import = llcd->llcd_import;
                 }
                 list_for_each_entry_safe(llcd, n, sending_list, llcd_list) {
                         LASSERT(llcd->llcd_lcm == lcm);
-                        if (memcmp(&conn, &llcd->llcd_conn, sizeof(conn)) == 0)
+                        if (import == llcd->llcd_import)
                                 list_move_tail(&llcd->llcd_list,
                                                &lcd->lcd_llcd_list);
                 }
@@ -210,8 +210,7 @@ static int log_commit_thread(void *arg)
                         list_for_each_entry_safe(llcd, n, &lcm->lcm_llcd_resend,
                                                  llcd_list) {
                                 LASSERT(llcd->llcd_lcm == lcm);
-                                if (memcmp(&conn, &llcd->llcd_conn,
-                                           sizeof(conn)) == 0)
+                                if (import == llcd->llcd_import)
                                         list_move_tail(&llcd->llcd_list,
                                                        &lcd->lcd_llcd_list);
                         }
@@ -223,8 +222,7 @@ static int log_commit_thread(void *arg)
                         char *bufs[1] = {(char *)llcd->llcd_cookies};
                         list_del(&llcd->llcd_list);
 
-                        request = ptlrpc_prep_req(class_conn2cliimp(&conn),
-                                                  OBD_LOG_CANCEL, 1,
+                        request = ptlrpc_prep_req(import, OBD_LOG_CANCEL, 1,
                                                   &llcd->llcd_cookiebytes,
                                                   bufs);
                         if (request == NULL) {

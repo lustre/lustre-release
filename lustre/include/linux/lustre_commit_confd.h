@@ -28,7 +28,7 @@
 
 struct llog_commit_data {
         struct list_head           llcd_list;  /* free or pending struct list */
-        struct lustre_handle       llcd_conn;  /* which osc is cancel target */
+        struct obd_import         *llcd_import;
         struct llog_commit_master *llcd_lcm;
         int                        llcd_tries; /* number of tries to send */
         int                        llcd_cookiebytes;
