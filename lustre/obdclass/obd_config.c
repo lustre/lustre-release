@@ -124,6 +124,7 @@ int class_attach(struct lustre_cfg *lcfg)
 
         /* XXX belongs in setup not attach  */
         /* recovery data */
+        init_timer(&obd->obd_recovery_timer);
         spin_lock_init(&obd->obd_processing_task_lock);
         init_waitqueue_head(&obd->obd_next_transno_waitq);
         INIT_LIST_HEAD(&obd->obd_recovery_queue);
