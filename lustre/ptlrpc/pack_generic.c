@@ -1679,7 +1679,7 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct ldlm_resource_desc *)0)->lr_name));
 
         /* Checks for struct ldlm_lock_desc */
-        LASSERTF((int)sizeof(struct ldlm_lock_desc) == 80, " found %lld\n",
+        LASSERTF((int)sizeof(struct ldlm_lock_desc) == 88, " found %lld\n",
                  (long long)(int)sizeof(struct ldlm_lock_desc));
         LASSERTF(offsetof(struct ldlm_lock_desc, l_resource) == 0, " found %lld\n",
                  (long long)offsetof(struct ldlm_lock_desc, l_resource));
@@ -1695,11 +1695,11 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct ldlm_lock_desc *)0)->l_granted_mode));
         LASSERTF(offsetof(struct ldlm_lock_desc, l_policy_data) == 48, " found %lld\n",
                  (long long)offsetof(struct ldlm_lock_desc, l_policy_data));
-        LASSERTF((int)sizeof(((struct ldlm_lock_desc *)0)->l_policy_data) == 32, " found %lld\n",
+        LASSERTF((int)sizeof(((struct ldlm_lock_desc *)0)->l_policy_data) == 40, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_lock_desc *)0)->l_policy_data));
 
         /* Checks for struct ldlm_request */
-        LASSERTF((int)sizeof(struct ldlm_request) == 104, " found %lld\n",
+        LASSERTF((int)sizeof(struct ldlm_request) == 112, " found %lld\n",
                  (long long)(int)sizeof(struct ldlm_request));
         LASSERTF(offsetof(struct ldlm_request, lock_flags) == 0, " found %lld\n",
                  (long long)offsetof(struct ldlm_request, lock_flags));
@@ -1707,19 +1707,19 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct ldlm_request *)0)->lock_flags));
         LASSERTF(offsetof(struct ldlm_request, lock_desc) == 8, " found %lld\n",
                  (long long)offsetof(struct ldlm_request, lock_desc));
-        LASSERTF((int)sizeof(((struct ldlm_request *)0)->lock_desc) == 80, " found %lld\n",
+        LASSERTF((int)sizeof(((struct ldlm_request *)0)->lock_desc) == 88, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_request *)0)->lock_desc));
-        LASSERTF(offsetof(struct ldlm_request, lock_handle1) == 88, " found %lld\n",
+        LASSERTF(offsetof(struct ldlm_request, lock_handle1) == 96, " found %lld\n",
                  (long long)offsetof(struct ldlm_request, lock_handle1));
         LASSERTF((int)sizeof(((struct ldlm_request *)0)->lock_handle1) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_request *)0)->lock_handle1));
-        LASSERTF(offsetof(struct ldlm_request, lock_handle2) == 96, " found %lld\n",
+        LASSERTF(offsetof(struct ldlm_request, lock_handle2) == 104, " found %lld\n",
                  (long long)offsetof(struct ldlm_request, lock_handle2));
         LASSERTF((int)sizeof(((struct ldlm_request *)0)->lock_handle2) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_request *)0)->lock_handle2));
 
         /* Checks for struct ldlm_reply */
-        LASSERTF((int)sizeof(struct ldlm_reply) == 112, " found %lld\n",
+        LASSERTF((int)sizeof(struct ldlm_reply) == 120, " found %lld\n",
                  (long long)(int)sizeof(struct ldlm_reply));
         LASSERTF(offsetof(struct ldlm_reply, lock_flags) == 0, " found %lld\n",
                  (long long)offsetof(struct ldlm_reply, lock_flags));
@@ -1727,17 +1727,17 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct ldlm_reply *)0)->lock_flags));
         LASSERTF(offsetof(struct ldlm_request, lock_desc) == 8, " found %lld\n",
                  (long long)offsetof(struct ldlm_request, lock_desc));
-        LASSERTF((int)sizeof(((struct ldlm_request *)0)->lock_desc) == 80, " found %lld\n",
+        LASSERTF((int)sizeof(((struct ldlm_request *)0)->lock_desc) == 88, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_request *)0)->lock_desc));
-        LASSERTF(offsetof(struct ldlm_reply, lock_handle) == 88, " found %lld\n",
+        LASSERTF(offsetof(struct ldlm_reply, lock_handle) == 96, " found %lld\n",
                  (long long)offsetof(struct ldlm_reply, lock_handle));
         LASSERTF((int)sizeof(((struct ldlm_reply *)0)->lock_handle) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_reply *)0)->lock_handle));
-        LASSERTF(offsetof(struct ldlm_reply, lock_policy_res1) == 96, " found %lld\n",
+        LASSERTF(offsetof(struct ldlm_reply, lock_policy_res1) == 104, " found %lld\n",
                  (long long)offsetof(struct ldlm_reply, lock_policy_res1));
         LASSERTF((int)sizeof(((struct ldlm_reply *)0)->lock_policy_res1) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_reply *)0)->lock_policy_res1));
-        LASSERTF(offsetof(struct ldlm_reply, lock_policy_res2) == 104, " found %lld\n",
+        LASSERTF(offsetof(struct ldlm_reply, lock_policy_res2) == 112, " found %lld\n",
                  (long long)offsetof(struct ldlm_reply, lock_policy_res2));
         LASSERTF((int)sizeof(((struct ldlm_reply *)0)->lock_policy_res2) == 8, " found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_reply *)0)->lock_policy_res2));
@@ -2140,5 +2140,4 @@ void lustre_assert_wire_constants(void)
         LASSERTF((int)sizeof(((struct llogd_conn_body *)0)->lgdc_ctxt_idx) == 4, " found %lld\n",
                  (long long)(int)sizeof(((struct llogd_conn_body *)0)->lgdc_ctxt_idx));
 }
-
 

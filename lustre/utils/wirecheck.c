@@ -416,9 +416,9 @@ check_ldlm_flock(void)
         CHECK_STRUCT(ldlm_flock);
         CHECK_MEMBER(ldlm_flock, start);
         CHECK_MEMBER(ldlm_flock, end);
-        CHECK_MEMBER(ldlm_flock, blocking_export);
-        CHECK_MEMBER(ldlm_flock, blocking_pid);
         CHECK_MEMBER(ldlm_flock, pid);
+        CHECK_MEMBER(ldlm_flock, blocking_pid);
+        CHECK_MEMBER(ldlm_flock, blocking_export);
 }
 
 void
