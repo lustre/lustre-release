@@ -25,8 +25,7 @@
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #include <asm/statfs.h>
 #endif
-#include <linux/lustre_lite.h>
-#include <linux/lustre_fsfilt.h>
+#include <linux/obd.h>
 #include <linux/lprocfs_status.h>
 
 #ifndef LPROCFS
