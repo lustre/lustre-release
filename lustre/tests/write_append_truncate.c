@@ -59,8 +59,7 @@ int rprintf(int rank, int loop, const char *fmt, ...)
 
         vprintf(fmt, ap);
 
-        MPI_Finalize();
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
 }
 
 int main(int argc, char *argv[])

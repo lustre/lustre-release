@@ -24,8 +24,6 @@
 #include <stdarg.h>
 #include "mpi.h"
 
-
-#define FILENAME "/mnt/lustre/write_disjoint"
 #define CHUNK_MAX_SIZE 123456
 
 int rprintf(int rank, int loop, const char *fmt, ...)
@@ -38,8 +36,7 @@ int rprintf(int rank, int loop, const char *fmt, ...)
  
         vprintf(fmt, ap);
  
-        MPI_Finalize();
-        exit(1);
+        MPI_Abort(MPI_COMM_WORLD, 1);
 }
 
 int main (int argc, char *argv[]) {
@@ -47,9 +44,23 @@ int main (int argc, char *argv[]) {
          int rank, noProcessors, done;
          off_t offset;
          char **chunk_buf;
-         char *read_buf;
+         char *read_buf, c;
          struct stat stat_buf;
          ssize_t ret;
+         char *filename = "/mnt/lustre/write_disjoint";
+
+        /* Parse command line options */
+        while (1) {
+                c = getopt(argc, argv, "f:");
+                if (c == -1)
+                        break;
+
+                switch (c) {
+                case 'f':
+                        filename = optarg;
+                        break;
+                }
+        }
 
          MPI_Init(&argc, &argv);
          MPI_Comm_size(MPI_COMM_WORLD, &noProcessors);
@@ -63,21 +74,21 @@ int main (int argc, char *argv[]) {
          read_buf = malloc(noProcessors * CHUNK_MAX_SIZE);
          
          if (rank == 0) {
-                fd = open(FILENAME, O_WRONLY|O_CREAT|O_TRUNC, 0666);
+                fd = open(filename, O_WRONLY|O_CREAT|O_TRUNC, 0666);
                 if (fd < 0) 
                         rprintf(rank, -1, "open() returned %s\n", 
                                 strerror(errno));
          }
          MPI_Barrier(MPI_COMM_WORLD);
 
-         fd = open(FILENAME, O_RDWR);
+         fd = open(filename, O_RDWR);
          if (fd < 0)
                  rprintf(rank, -1, "open() returned %s\n", strerror(errno));
          
          for (n=0; n < 1000 ; n++) {
                  /* reset the environment */
                  if (rank == 0) {
-                         ret = truncate(FILENAME, 0);
+                         ret = truncate(filename, 0);
                          if (ret != 0)
                                  rprintf(rank, n, "truncate() returned %s\n", 
                                          strerror(errno) );
@@ -109,7 +120,7 @@ int main (int argc, char *argv[]) {
                          lseek(fd, 0, SEEK_SET);
                          
                          /* quick check */
-                         stat(FILENAME, &stat_buf);
+                         stat(filename, &stat_buf);
                          file_size = stat_buf.st_size;
                          if (file_size != chunk_size * noProcessors)
                                   rprintf(rank, n, "invalid file size %d"
@@ -147,7 +158,7 @@ int main (int argc, char *argv[]) {
                                                (b + 4096) & ~(4096-1));
                                 }
 
-                                sprintf(command, "od -Ad -a %s", FILENAME);
+                                sprintf(command, "od -Ad -a %s", filename);
                                 system(command);
                                 MPI_Finalize();
                                 exit(1);
