@@ -146,9 +146,14 @@ int getfd(char *func)
         return 0;
 }
 
+/*
 #define difftime(a, b)                                          \
         ((double)(a)->tv_sec - (b)->tv_sec +                    \
          ((double)((a)->tv_usec - (b)->tv_usec) / 1000000))
+*/
+
+#define difftime(a, b)  (((a)->tv_sec - (b)->tv_sec) + \
+                        (((a)->tv_usec - (b)->tv_usec) / 1000000))
 
 static int be_verbose(int verbose, struct timeval *next_time,
                       int num, int *next_num, int num_total)
@@ -193,7 +198,9 @@ static int get_verbose(const char *arg)
         else if (arg[0] == 's' || arg[0] == 'q')
                 verbose = 0;
         else
-                verbose = strtoul(arg, NULL, 0);
+                verbose = (int) strtoul(arg, NULL, 0);
+
+	printf("Verbose = %d\n",verbose);
 
         return verbose;
 }
@@ -758,9 +765,11 @@ static int jt_test_getattr(int argc, char **argv)
                         fprintf(stderr, "error: %s: #%d - %s\n",
                                 cmdname(argv[0]), i, strerror(rc = errno));
                         break;
-                } else if (be_verbose(verbose, &next_time, i,&next_count,count))
+                } else {
+                        if (be_verbose(verbose, &next_time, i,&next_count,count))
                         printf("%s: got attr #%d\n", cmdname(argv[0]), i);
-        }
+        	}
+	}
 
         if (!rc) {
                 struct timeval end;
