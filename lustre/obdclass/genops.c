@@ -38,6 +38,9 @@ static int sync_io_timeout(void *data)
         LASSERT(desc);
         LASSERT(desc->bd_connection);
 
+        CERROR("IO of %d pages to/from %s:%d (conn %p) timed out\n",
+               desc->bd_page_count, desc->bd_connection->c_remote_uuid,
+               desc->bd_portal, desc->bd_connection);
         desc->bd_connection->c_level = LUSTRE_CONN_RECOVD;
         desc->bd_flags |= PTL_RPC_FL_TIMEOUT;
         if (desc->bd_connection && class_signal_connection_failure) {
@@ -73,7 +76,7 @@ int ll_sync_io_cb(struct io_cb_data *data, int err, int phase)
                 ret = l_wait_event(data->waitq, data->complete, &lwi);
                 if (atomic_dec_and_test(&data->refcount))
                         OBD_FREE(data, sizeof(*data));
-                if (ret == -ERESTARTSYS)
+                if (ret == -EINTR)
                         return ret;
         } else if (phase == CB_PHASE_FINISH) {
                 data->err = err;

@@ -447,8 +447,10 @@ static int expired_request(void *data)
         struct ptlrpc_request *req = data;
         
         ENTRY;
-        CERROR("req timeout on connid %d xid %Ld\n", req->rq_connid,
-               (unsigned long long)req->rq_xid);
+        CERROR("req timeout on connid %d xid %Ld portal %d op %d\n",
+               req->rq_connid, (unsigned long long)req->rq_xid,
+               req->rq_import->imp_client->cli_request_portal,
+               req->rq_reqmsg->opc);
         req->rq_flags |= PTL_RPC_FL_TIMEOUT;
         if (!req->rq_import->imp_connection->c_recovd_data.rd_recovd)
                 RETURN(1);

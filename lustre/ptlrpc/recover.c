@@ -98,6 +98,9 @@ static int ll_recover_upcall(struct ptlrpc_connection *conn)
                 CERROR("Error invoking recovery upcall (%s): %d\n",
                        obd_recovery_upcall, rc);
                 CERROR("Check /proc/sys/lustre/recovery_upcall?\n");
+        } else {
+                CERROR("Invoked upcall %s for connection %s\n",
+                       argv[0], argv[1]);
         }
         RETURN(rc);
 }
@@ -184,7 +187,7 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
         conn->c_level = LUSTRE_CONN_FULL;
         recovd_conn_fixed(conn);
 
-        CDEBUG(D_NET, "recovery complete on conn %p(%s), waking delayed reqs\n",
+        CERROR("recovery complete on conn %p(%s), waking delayed reqs\n",
                conn, conn->c_remote_uuid);
         /* Finally, continue what we delayed since recovery started */
         list_for_each_safe(tmp, pos, &conn->c_delayed_head) { 
@@ -200,6 +203,7 @@ static int ll_recover_reconnect(struct ptlrpc_connection *conn)
 
 static int ll_retry_recovery(struct ptlrpc_connection *conn)
 {
+        CERROR("Recovery has failed on conn %p\n", conn);
 #if 0
         /* XXX use a timer, sideshow bob */
         recovd_conn_fail(conn);

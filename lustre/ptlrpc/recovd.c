@@ -53,7 +53,7 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
 
         spin_lock(&recovd->recovd_lock);
         if (rd->rd_phase != RD_IDLE) {
-                CDEBUG(D_INFO, "connection %p to %s already in recovery\n",
+                CERROR("connection %p to %s already in recovery\n",
                        conn, conn->c_remote_uuid);
                 /* XXX need to distinguish from failure-in-recovery */
                 spin_unlock(&recovd->recovd_lock);
@@ -124,7 +124,9 @@ static void dump_connection_list(struct list_head *head)
                 struct ptlrpc_connection *conn =
                         list_entry(tmp, struct ptlrpc_connection,
                                    c_recovd_data.rd_managed_chain);
-                CDEBUG(D_NET, "   %p = %s\n", conn, conn->c_remote_uuid);
+                CERROR("   %p = %s (%d/%d)\n", conn, conn->c_remote_uuid,
+                       conn->c_recovd_data.rd_phase,
+                       conn->c_recovd_data.rd_next_phase);
         }
 }
 
@@ -136,9 +138,9 @@ static int recovd_handle_event(struct recovd_obd *recovd)
 
         spin_lock(&recovd->recovd_lock);
 
-        CDEBUG(D_NET, "managed: \n");
+        CERROR("managed: \n");
         dump_connection_list(&recovd->recovd_managed_items);
-        CDEBUG(D_NET, "troubled: \n");
+        CERROR("troubled: \n");
         dump_connection_list(&recovd->recovd_troubled_items);
 
         /*
