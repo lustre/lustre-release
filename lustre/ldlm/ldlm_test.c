@@ -436,7 +436,7 @@ static int ldlm_test_main(void *data)
         spin_unlock_irq(&current->sigmask_lock);
 
         sprintf(current->comm, "ldlm_test");
-        spin_unlock();
+        unlock_kernel();
 
         /* Record that the thread is running */
         thread->t_flags |= SVC_RUNNING;

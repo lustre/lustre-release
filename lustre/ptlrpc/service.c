@@ -248,7 +248,7 @@ static int ptlrpc_main(void *arg)
         spin_unlock_irq(&current->sigmask_lock);
 
         sprintf(current->comm, data->name);
-        spin_unlock();
+        unlock_kernel();
 
         /* Record that the thread is running */
         thread->t_flags = SVC_RUNNING;

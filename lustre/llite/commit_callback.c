@@ -63,7 +63,7 @@ static int ll_commitcbd_main(void *arg)
         spin_unlock_irq(&current->sigmask_lock);
 
         sprintf(current->comm, "lustre_commitcbd");
-        spin_unlock();
+        unlock_kernel();
 
         /* Record that the  thread is running */
         sbi->ll_commitcbd_waketime = CURRENT_TIME;
