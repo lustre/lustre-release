@@ -209,8 +209,8 @@ static inline void ptlrpc_hdl2req(struct ptlrpc_request *req, struct lustre_hand
 }
 struct ptlrpc_request *ptlrpc_prep_req2(struct ptlrpc_client *cl,
                                         struct ptlrpc_connection *conn,
-                                        struct lustre_handle *handle, 
-                                       int opcode, int count, int *lengths,
+                                        struct lustre_handle *handle,
+                                        int opcode, int count, int *lengths,
                                         char **bufs);
 
 typedef void (*bulk_callback_t)(struct ptlrpc_bulk_desc *, void *);
@@ -294,6 +294,13 @@ static inline void ptlrpc_bulk_decref(struct ptlrpc_bulk_desc *desc)
                 CDEBUG(D_PAGE, "%p -> %d\n", desc,
                        atomic_read(&desc->b_refcount));
         }
+}
+
+static inline void ptlrpc_bulk_addref(struct ptlrpc_bulk_desc *desc)
+{
+        atomic_inc(&desc->b_refcount);
+        CDEBUG(D_PAGE, "Set refcount of %p to %d\n", desc,
+               atomic_read(&desc->b_refcount));
 }
 
 #endif
