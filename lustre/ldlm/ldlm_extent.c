@@ -1,19 +1,29 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2002 Cluster File Systems, Inc.
+ *   Author: Peter Braam <braam@clusterfs.com>
+ *   Author: Phil Schwan <phil@clusterfs.com>
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- * by Cluster File Systems, Inc.
- * authors, Peter Braam <braam@clusterfs.com> & 
- *          Phil Schwan <phil@clusterfs.com>
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
 #ifndef __KERNEL__
-#include <liblustre.h>
+# include <liblustre.h>
 #endif
 
 #include <linux/lustre_dlm.h>
@@ -52,17 +62,17 @@ static void policy_internal(struct list_head *queue, struct ldlm_extent *req_ex,
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
 
-                if (lock->l_extent.end < req_ex->start)
+                if (lock->l_extent.end < req_ex->start) {
                         new_ex->start = MIN(lock->l_extent.end, new_ex->start);
-                else {
+                } else {
                         if (lock->l_extent.start < req_ex->start &&
                             !lockmode_compat(lock->l_req_mode, mode))
                                 /* Policy: minimize conflict overlap */
                                 new_ex->start = req_ex->start;
                 }
-                if (lock->l_extent.start > req_ex->end)
+                if (lock->l_extent.start > req_ex->end) {
                         new_ex->end = MAX(lock->l_extent.start, new_ex->end);
-                else {
+                } else {
                         if (lock->l_extent.end > req_ex->end &&
                             !lockmode_compat(lock->l_req_mode, mode))
                                 /* Policy: minimize conflict overlap */
