@@ -219,13 +219,13 @@ static int handle_incoming_request(struct obd_device *obddev,
 
 static int ptlrpc_main(void *arg)
 {
-        int rc;
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
         struct obd_device *obddev = data->dev;
         struct ptlrpc_service *svc = data->svc;
         struct ptlrpc_thread *thread = data->thread;
         struct ptlrpc_request *request;
         ptl_event_t *event;
+        int rc = 0;
 
         ENTRY;
 
@@ -236,19 +236,21 @@ static int ptlrpc_main(void *arg)
         recalc_sigpending(current);
         spin_unlock_irq(&current->sigmask_lock);
 
-        sprintf(current->comm, data->name);
+        strcpy(current->comm, data->name);
         unlock_kernel();
+
+        OBD_ALLOC(event, sizeof(*event));
+        if (!event)
+                GOTO(out, rc = -ENOMEM);
+        OBD_ALLOC(request, sizeof(*request));
+        if (!request)
+                GOTO(out_event, rc = -ENOMEM);
 
         /* Record that the thread is running */
         thread->t_flags = SVC_RUNNING;
         wake_up(&thread->t_ctl_waitq);
 
         /* XXX maintain a list of all managed devices: insert here */
-
-        OBD_ALLOC(event, sizeof(*event));
-        LASSERT(event);
-        OBD_ALLOC(request, sizeof(*request));
-        LASSERT(request);
 
         /* And now, loop forever on requests */
         while (1) {
@@ -278,13 +280,16 @@ static int ptlrpc_main(void *arg)
                 break;
         }
 
-        OBD_FREE(event, sizeof(*event));
         OBD_FREE(request, sizeof(*request));
-
+out_event:
+        OBD_FREE(event, sizeof(*event));
+out:
         thread->t_flags = SVC_STOPPED;
         wake_up(&thread->t_ctl_waitq);
-        CDEBUG(D_NET, "service thread exiting, process %d\n", current->pid);
-        return 0;
+
+        CDEBUG(D_NET, "service thread exiting, process %d: rc = %d\n",
+               current->pid, rc);
+        return rc;
 }
 
 static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
@@ -338,12 +343,13 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         list_add(&thread->t_link, &svc->srv_threads);
         spin_unlock(&svc->srv_lock);
 
+        /* XXX should we really be cloning open file handles here? */
         rc = kernel_thread(ptlrpc_main, (void *) &d,
                            CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0) {
                 CERROR("cannot start thread\n");
                 OBD_FREE(thread, sizeof(*thread));
-                RETURN(-EINVAL);
+                RETURN(rc);
         }
         wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING);
 
