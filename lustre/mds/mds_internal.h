@@ -87,6 +87,8 @@ extern struct lvfs_callback_ops mds_lvfs_ops;
 extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg);
 #ifdef __KERNEL__
+int mds_pack_md(struct obd_device *, struct lustre_msg *, int offset,
+                struct mds_body *, struct inode *, int lock);
 void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
 void mds_pack_inode2body(struct mds_body *body, struct inode *inode);
 #endif

@@ -190,7 +190,7 @@ static int mds_unlink(struct obd_device *obd, struct dentry *dchild,
         LASSERT(body != NULL);
 
         mds_pack_inode2body(body, inode);
-        mds_pack_md(obd, req->rq_repmsg, 1, body, inode);
+        mds_pack_md(obd, req->rq_repmsg, 1, body, inode, 1);
 
         handle = fsfilt_start(obd, pending_dir, FSFILT_OP_UNLINK_LOG, NULL);
         if (IS_ERR(handle)) {
