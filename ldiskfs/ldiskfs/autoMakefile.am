@@ -52,7 +52,7 @@ endif
 		sed $(strip $(ldiskfs_sed_flags)) \
 			linux-stage/fs/ext3/$$i > $$i ; \
 	done
-	@for i in $(subst ext3,,$(notdir $(linux_headers))) ; do \
+	@for i in $(subst ext3,,$(notdir $(linux_headers) $(new_headers))) ; do \
 		echo -n " ext3$$i" ; \
 		sed $(strip $(ldiskfs_sed_flags)) \
 			linux-stage/include/linux/ext3$$i \
