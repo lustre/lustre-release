@@ -91,6 +91,7 @@
 						/* # pages in a large message fwd buffer */
 
 #define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */
+#define SOCKNAL_ENOMEM_RETRY    1               /* jiffies between retries */
 
 #define SOCKNAL_TX_LOW_WATER(sk) (((sk)->sk_sndbuf*8)/10)
 
@@ -169,9 +170,12 @@ typedef struct {
 
         struct list_head  ksnd_deathrow_conns;  /* conns to be closed */
         struct list_head  ksnd_zombie_conns;    /* conns to be freed */
-        wait_queue_head_t ksnd_reaper_waitq;    /* reaper sleep here */
+        struct list_head  ksnd_enomem_conns;    /* conns to be retried */
+        wait_queue_head_t ksnd_reaper_waitq;    /* reaper sleeps here */
+        unsigned long     ksnd_reaper_waketime; /* when reaper will wake */
         spinlock_t        ksnd_reaper_lock;     /* serialise */
 
+        int               ksnd_enomem_tx;       /* test ENOMEM sender */
         int               ksnd_stall_tx;        /* test sluggish sender */
         int               ksnd_stall_rx;        /* test sluggish receiver */
 

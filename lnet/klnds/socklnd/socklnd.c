@@ -1468,6 +1468,7 @@ ksocknal_module_fini (void)
                 for (i = 0; i < ksocknal_data.ksnd_peer_hash_size; i++) {
                         LASSERT (list_empty (&ksocknal_data.ksnd_peers[i]));
                 }
+                LASSERT (list_empty (&ksocknal_data.ksnd_enomem_conns));
                 LASSERT (list_empty (&ksocknal_data.ksnd_zombie_conns));
                 LASSERT (list_empty (&ksocknal_data.ksnd_autoconnectd_routes));
                 LASSERT (list_empty (&ksocknal_data.ksnd_small_fmp.fmp_blocked_conns));
@@ -1596,6 +1597,7 @@ ksocknal_module_init (void)
         INIT_LIST_HEAD(&ksocknal_data.ksnd_large_fmp.fmp_blocked_conns);
 
         spin_lock_init (&ksocknal_data.ksnd_reaper_lock);
+        INIT_LIST_HEAD (&ksocknal_data.ksnd_enomem_conns);
         INIT_LIST_HEAD (&ksocknal_data.ksnd_zombie_conns);
         INIT_LIST_HEAD (&ksocknal_data.ksnd_deathrow_conns);
         init_waitqueue_head(&ksocknal_data.ksnd_reaper_waitq);
