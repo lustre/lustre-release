@@ -193,20 +193,20 @@ do_lmc() {
 }
 
 h2gm () {
-   if [ "$1" = "client" ]; then echo \'*\'; else
+   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
        $PDSH $1 $GMNALNID -l | cut -d\  -f2
    fi
 }
 
 h2tcp() {
-   if [ "$1" = "client" ]; then echo \'*\'; else
+   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
    echo $1 
    fi
 }
 declare -fx h2tcp
 
 h2elan() {
-   if [ "$1" = "client" ]; then echo \'*\'; else
+   if [ "$1" = "client" -o "$1" = "'*'" ]; then echo \'*\'; else
    echo $1 | sed 's/[^0-9]*//g'
    fi
 }
