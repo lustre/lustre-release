@@ -120,6 +120,12 @@ setup_portals() {
 		exit -1
 	fi
 
+	if [ "$LOCALHOST" == "$SERVER" ]; then
+		DLM=localhost
+	else
+		DLM=$SERVER
+	fi
+
 	[ -c /dev/portals ] || mknod /dev/portals c 10 240
 
 	insmod $PORTALS/linux/oslib/portals.o || exit -1
@@ -150,6 +156,7 @@ setup_portals() {
 	add_uuid self
 	add_uuid mds
 	add_uuid ost
+	connect $DLM $PORT
 	add_uuid ldlm
 	quit
 	EOF
