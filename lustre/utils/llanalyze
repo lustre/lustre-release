@@ -3,6 +3,7 @@
 use Getopt::Long;
 GetOptions("pid=i" => \$pid, 
            "trace!" => \$trace, 
+           "nodlm!" => \$nodlm,
            "nonet!" => \$nonet);
 
 # print "$pid\n";
@@ -99,6 +100,8 @@ while (<STDIN>) {
     }
     if ( !$pid || $linepid == $pid) {
         next if ($trace && $linemask != $masks->{TRACE});
+        next if ($nodlm && 
+                 (  $linesubsys == $subsys->{DLM}));
         next if ($nonet && 
                  (  $linesubsys == $subsys->{RPC} ||
                     $linesubsys == $subsys->{NET} ||
