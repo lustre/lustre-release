@@ -25,7 +25,7 @@ EOF
 
 # portalstag="HEAD"
 buildtag="HEAD"
-portalstag="b1_4"
+portalstag="HEAD"
 lustretag="$1"
 libsysiotag="head_0607"
 
@@ -62,6 +62,7 @@ cvs_cmd ()
     local dir="$1"
     local module="$2"
     local tag="$3"
+    local cvstag=""
 
     if [ "$tag" != "HEAD" ] ; then
 	cvstag="-r $tag"
