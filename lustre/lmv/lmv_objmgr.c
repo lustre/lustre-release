@@ -70,7 +70,8 @@ lmv_alloc_obj(struct obd_device *obd,
         LASSERT(mea->mea_magic == MEA_MAGIC_LAST_CHAR
                 || mea->mea_magic == MEA_MAGIC_ALL_CHARS);
 
-        OBD_SLAB_ALLOC(obj, obj_cache, GFP_NOFS, sizeof(*obj));
+        OBD_SLAB_ALLOC(obj, obj_cache, GFP_NOFS,
+                       sizeof(*obj));
         if (!obj)
                 return NULL;
 
@@ -209,6 +210,16 @@ __grab_obj(struct obd_device *obd, struct lustre_id *id)
                 if (obj->state & O_FREEING)
                         continue;
 
+                /* 
+                 * we should make sure, that we have found object belong to
+                 * passed obd. It is possible that, object manager will have two
+                 * objects with the same fid belong to different obds, if client
+                 * and mds runs on the same host. May be it is good idea to have
+                 * objects list assosiated with obd.
+                 */
+                if (obj->obd != obd)
+                        continue;
+
                 /* check if this is what we're looking for. */
                 if (id_equal_fid(&obj->id, id))
                         return __get_obj(obj);
@@ -329,10 +340,12 @@ cleanup:
         return obj;
 }
 
-/* looks for object with @id and orders to destroy it. It is possible the
- * object will not be destroyed right now, because it is still using by
- * someone. In this case it will be marked as "freeing" and will not be
- * accessible anymore for subsequent callers of lmv_grab_obj(). */
+/*
+ * looks for object with @id and orders to destroy it. It is possible the object
+ * will not be destroyed right now, because it is still using by someone. In
+ * this case it will be marked as "freeing" and will not be accessible anymore
+ * for subsequent callers of lmv_grab_obj().
+ */
 int
 lmv_delete_obj(struct obd_export *exp, struct lustre_id *id)
 {
@@ -349,27 +362,29 @@ lmv_delete_obj(struct obd_export *exp, struct lustre_id *id)
                 __put_obj(obj);
                 rc = 1;
         }
-
         spin_unlock(&obj_list_lock);
+
         RETURN(rc);
 }
 
 int
 lmv_setup_mgr(struct obd_device *obd)
 {
+        ENTRY;
         LASSERT(obd != NULL);
         
         CDEBUG(D_INFO, "LMV object manager setup (%s)\n",
                obd->obd_uuid.uuid);
 
-        return 0;
+        RETURN(0);
 }
 
 void
 lmv_cleanup_mgr(struct obd_device *obd)
 {
-        struct lmv_obj *obj;
         struct list_head *cur, *tmp;
+        struct lmv_obj *obj;
+        ENTRY;
 
         CDEBUG(D_INFO, "LMV object manager cleanup (%s)\n",
                obd->obd_uuid.uuid);
@@ -389,4 +404,5 @@ lmv_cleanup_mgr(struct obd_device *obd)
                 __put_obj(obj);
         }
         spin_unlock(&obj_list_lock);
+        EXIT;
 }

@@ -690,11 +690,13 @@ static int lmv_getattr(struct obd_export *exp, struct lustre_id *id,
         CDEBUG(D_OTHER, "GETATTR for "DLID4" %s\n",
                OLID4(id), obj ? "(splitted)" : "");
 
-        /* if object is splitted, then we loop over all the slaves and gather
+        /*
+         * if object is splitted, then we loop over all the slaves and gather
          * size attribute. In ideal world we would have to gather also mds field
          * from all slaves, as object is spread over the cluster and this is
          * definitely interesting information and it is not good to loss it,
-         * but...*/
+         * but...
+         */
         if (obj) {
                 struct mds_body *body;
 
@@ -906,22 +908,23 @@ repeat:
                op_data->name, OLID4(&op_data->id1));
         
         rc = md_create(lmv->tgts[id_group(&op_data->id1)].ltd_exp, 
-                       op_data, data, datalen, mode, uid, gid, rdev, request);
+                       op_data, data, datalen, mode, uid, gid, rdev,
+                       request);
         if (rc == 0) {
                 if (*request == NULL)
                         RETURN(rc);
 
                 body = lustre_msg_buf((*request)->rq_repmsg, 0,
                                       sizeof(*body));
-                LASSERT(body != NULL);
+                if (body == NULL)
+                        RETURN(-ENOMEM);
                 
                 CDEBUG(D_OTHER, "created. "DLID4"\n", OLID4(&op_data->id1));
-                
-/*                LASSERT(body->valid & OBD_MD_MDS ||
-                        body->mds == id_group(&op_data->id1));*/
         } else if (rc == -ERESTART) {
-                /* directory got splitted. time to update local object and
-                 * repeat the request with proper MDS */
+                /*
+                 * directory got splitted. time to update local object and
+                 * repeat the request with proper MDS.
+                 */
                 rc = lmv_get_mea_and_update_object(exp, &op_data->id1);
                 if (rc == 0) {
                         ptlrpc_req_finished(*request);
@@ -1464,10 +1467,16 @@ int lmv_unlink_slaves(struct obd_export *exp, struct mdc_op_data *data,
         RETURN(rc);
 }
 
+/*
+ * commented for a while, as it will not work in the case when splitted dir is
+ * created from ll_mkdir_stripe(), because mds_reint_create() returns 0 inthis
+ * case even if there is created splitted dir with passed number of stripes. So
+ * mds_reint_create() and lmv_create() need to be fixed first.
+ */
 int lmv_put_inode(struct obd_export *exp, struct lustre_id *id)
 {
         ENTRY;
-        lmv_delete_obj(exp, id);
+//        lmv_delete_obj(exp, id);
         RETURN(0);
 }
 
@@ -1487,7 +1496,9 @@ int lmv_unlink(struct obd_export *exp, struct mdc_op_data *data,
                 /* mds asks to remove slave objects */
                 rc = lmv_unlink_slaves(exp, data, request);
                 RETURN(rc);
-        } else if (data->namelen != 0) {
+        }
+
+        if (data->namelen != 0) {
                 struct lmv_obj *obj;
                 
                 obj = lmv_grab_obj(obd, &data->id1);
@@ -1522,10 +1533,12 @@ struct obd_device *lmv_get_real_obd(struct obd_export *exp,
 		RETURN(ERR_PTR(rc));
         obd = lmv->tgts[0].ltd_exp->exp_obd;
         EXIT;
+        
         return obd;
 }
 
-int lmv_init_ea_size(struct obd_export *exp, int easize, int cookiesize)
+int lmv_init_ea_size(struct obd_export *exp, int easize,
+                     int cookiesize)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;

@@ -741,10 +741,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                 nstripes = *(u16 *)rec->ur_eadata;
 
                         if (rc == 0 && nstripes) {
-                                /* we pass LCK_EX to split routine to signal,
+                                /*
+                                 * we pass LCK_EX to split routine to signal,
                                  * that we have exclusive access to the
                                  * directory. Simple because nobody knows it
-                                 * already exists -bzzz */
+                                 * already exists -bzzz
+                                 */
                                 rc = mds_try_to_split_dir(obd, dchild,
                                                           NULL, nstripes,
                                                           LCK_EX);
