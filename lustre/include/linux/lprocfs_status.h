@@ -264,6 +264,10 @@ extern int lprocfs_counter_read(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
 extern int lprocfs_counter_write(struct file *file, const char *buffer,
                                  unsigned long count, void *data);
+
+/* lprocfs_status.c: recovery status */
+int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data);
 #else
 /* LPROCFS is not defined */
 static inline void lprocfs_counter_add(struct lprocfs_stats *stats,
