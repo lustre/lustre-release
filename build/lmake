@@ -182,7 +182,11 @@ check_options()
 
 get_lustre_version()
 {
-    lustre_patch=$(grep lustre_version "$SERIES_FILE" 2>/dev/null)
+    for series in $SERIES ; do
+	SERIES_FILE="$TOPDIR/lustre/kernel_patches/series/$series"
+	lustre_patch=$(grep lustre_version "$SERIES_FILE" 2>/dev/null)
+	[ "$lustre_patch" ] && break
+    done
     [ "$lustre_patch" ] || \
 	fatal 1 "Could not determine Lustre version from $SERIES series."
 
@@ -208,10 +212,12 @@ load_target()
 	    fatal 1 "Target $TARGET's kernel file $KERNEL not found in kernel directory $KERNELDIR."
     fi
 
-    if [ "$SERIES" ]; then
-        SERIES_FILE="$TOPDIR/lustre/kernel_patches/series/$SERIES"
-        [ -r "$SERIES_FILE" ] || \
-	    fatal 1 "Target $TARGET's series $SERIES missing from $TOPDIR/lustre/kernel_patches/series."
+    if [ "$SERIES" ] ; then
+	for series in $SERIES ; do
+	    SERIES_FILE="$TOPDIR/lustre/kernel_patches/series/$series"
+	    [ -r "$SERIES_FILE" ] || \
+		fatal 1 "Target $TARGET's series $SERIES missing from $TOPDIR/lustre/kernel_patches/series."
+	done
     fi
 
     TARGET_ARCH=${TARGET_ARCH:-$BASE_ARCHS}
@@ -270,15 +276,18 @@ patch_kernel()
     (( $UNPACK_KERNEL )) || return 0
     [ "$SERIES" ] || return 0
     pushd "$TOPDIR/linux" >/dev/null
-    echo -n "Applying patch"
-    for patch in $(<"$SERIES_FILE") ; do
-	PATCH_FILE="$TOPDIR/lustre/kernel_patches/patches/$patch"
-	[ -r "$PATCH_FILE" ] || \
-	    fatal 1 "Patch file not found: $patch"
-	echo -n " $patch"
-	patch -s -p1 < "$PATCH_FILE" || fatal 1 "Error applying patch $patch."
+    for series in $SERIES ; do
+	echo -n "Applying series $series:"
+	SERIES_FILE="$TOPDIR/lustre/kernel_patches/series/$series"
+	for patch in $(<"$SERIES_FILE") ; do
+	    PATCH_FILE="$TOPDIR/lustre/kernel_patches/patches/$patch"
+	    [ -r "$PATCH_FILE" ] || \
+		fatal 1 "Patch file not found: $patch"
+	    echo -n " $patch"
+	    patch -s -p1 < "$PATCH_FILE" || fatal 1 "Error applying patch $patch."
+	done
+	echo
     done
-    echo
     popd >/dev/null
 }
 
