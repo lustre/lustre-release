@@ -33,11 +33,32 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_light.h>
 
+/* packing of MDS records */
+
+void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, char *name, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time)
+{
+	char *tmp = (char *)rec + sizeof(*rec); 
+	/* XXX do something about time, uid, gid */
+	rec->cr_reclen = 
+		HTON__u32(sizeof(*rec)) + size_round(strlen(name) + 1);
+	rec->cr_opcode = HTON__u32(REINT_CREATE);
+
+	ll_inode2fid(&rec->cr_fid, inode); 
+	rec->cr_mode = HTON__u32(mode);
+	rec->cr_id = HTON__u64(id);
+	rec->cr_uid = HTON__u32(uid);
+	rec->cr_gid = HTON__u32(gid);
+	rec->cr_time = HTON__u64(time);
+	rec->cr_namelen = strlen(name);
+	LOGL(name, rec->cr_namelen + 1, tmp); 
+}
+
 
 void mds_setattr_pack(struct mds_rec_setattr *rec, struct inode *inode, struct iattr *iattr)
 {
-	rec->sa_len = HTON__u32(sizeof(*rec));
-	rec->sa_opcode = HTON__u32(sizeof(REINT_SETATTR));
+	rec->sa_reclen = HTON__u32(sizeof(*rec));
+	rec->sa_opcode = HTON__u32(REINT_SETATTR);
+
 	ll_inode2fid(&rec->sa_fid, inode); 
 	rec->sa_valid = HTON__u32(iattr->ia_valid);
 	rec->sa_mode = HTON__u32(iattr->ia_mode);
@@ -50,8 +71,33 @@ void mds_setattr_pack(struct mds_rec_setattr *rec, struct inode *inode, struct i
 	rec->sa_attr_flags = HTON__u32(iattr->ia_attr_flags);
 }
 
-void mds_setattr_unpack(struct mds_rec_setattr *rec, struct iattr *attr)
+/* unpacking */
+
+static int mds_update_hdr_unpack(char *buf, int len, struct mds_update_record *r)
 {
+	struct mds_update_record_hdr *hdr = (struct mds_update_record_hdr *)buf;
+	
+	r->ur_reclen = NTOH__u32(hdr->ur_reclen);
+	if (len < sizeof(*hdr) || len != r->ur_reclen) { 
+		printk(__FUNCTION__ "invalid buffer length\n"); 
+		return -EFAULT;
+	}
+	r->ur_opcode = NTOH__u32(hdr->ur_opcode); 
+	return 0;
+}
+
+static int mds_setattr_unpack(char *buf, int len, struct mds_update_record *r)
+{
+
+	struct iattr *attr = &r->ur_iattr;
+	struct mds_rec_setattr *rec = (struct mds_rec_setattr *)buf; 
+
+	if (len < sizeof(*rec)) { 
+		printk(__FUNCTION__ "invalid buffer length\n"); 
+		return -EFAULT;
+	}
+
+	r->ur_fid1 = &rec->sa_fid; 
 	attr->ia_valid = NTOH__u32(rec->sa_valid);
 	attr->ia_mode = NTOH__u32(rec->sa_mode);
 	attr->ia_uid = NTOH__u32(rec->sa_uid);
@@ -61,4 +107,59 @@ void mds_setattr_unpack(struct mds_rec_setattr *rec, struct iattr *attr)
 	attr->ia_mtime = NTOH__u64(rec->sa_mtime);
 	attr->ia_ctime = NTOH__u64(rec->sa_ctime);
 	attr->ia_attr_flags = NTOH__u32(rec->sa_attr_flags);
+	return 0; 
+}
+
+static int mds_create_unpack(char *buf, int len, struct mds_update_record *r)
+{
+	struct mds_rec_create *rec = (struct mds_rec_create *)buf; 
+	char *ptr, *end;
+
+	if (len < sizeof(*rec)) { 
+		printk(__FUNCTION__ "invalid buffer length\n"); 
+		return -EFAULT;
+	}
+	
+	ptr = (char *)rec + sizeof(*rec); 
+	end = ptr + len - sizeof(*rec); 
+	
+	r->ur_fid1 = &rec->cr_fid;
+	r->ur_mode = NTOH__u32(rec->cr_mode);
+	r->ur_id = NTOH__u64(rec->cr_id);
+	r->ur_uid = NTOH__u32(rec->cr_uid);
+	r->ur_gid = NTOH__u32(rec->cr_gid);
+	r->ur_time = NTOH__u64(rec->cr_time);
+	r->ur_namelen = NTOH__u64(rec->cr_namelen);
+
+	UNLOGL(r->ur_name, char, r->ur_namelen, ptr, end); 
+	return 0;
+}
+
+typedef int (*update_unpacker)(char *, int , struct mds_update_record *); 
+
+static update_unpacker mds_unpackers[REINT_MAX + 1] = {
+	[REINT_SETATTR] mds_setattr_unpack, 	
+        [REINT_CREATE] mds_create_unpack
+};
+
+int mds_update_unpack(char *buf, int len, struct mds_update_record *r)
+{
+	int rc; 
+	ENTRY;
+
+	rc = mds_update_hdr_unpack(buf, len, r);
+
+	if (rc) { 
+		EXIT;
+		return -EFAULT;
+	}
+
+	if ( r->ur_opcode<0 || r->ur_opcode > REINT_MAX) { 
+		EXIT;
+		return EFAULT; 
+	}
+	
+	rc = mds_unpackers[r->ur_opcode](buf, len, r);
+	EXIT;
+	return rc;
 }

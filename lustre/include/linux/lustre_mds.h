@@ -123,6 +123,22 @@ struct mds_rep {
         __u32                       generation;
 };
 
+struct mds_update_record { 
+        __u32 ur_reclen;
+        __u32 ur_opcode;
+        struct ll_fid *ur_fid1;
+        struct ll_fid *ur_fid2;
+        int ur_namelen;
+        char *ur_name;
+        int ur_tgtlen;
+        char *ur_tgt;
+        struct iattr ur_iattr;
+        __u64 ur_id;
+        __u32 ur_mode;
+        __u32 ur_uid;
+        __u32 ur_gid;
+        __u64 ur_time;
+}; 
 
 /* mds/mds_pack.c */
 void *mds_req_tgt(struct mds_req *req);
@@ -132,11 +148,13 @@ int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen, struct mds_rep_
 int mds_unpack_rep(char *buf, int len, struct mds_rep_hdr **hdr, struct mds_rep **rep);
 
 /* mds/mds_reint.c  */
-int mds_reint_setattr(struct mds_request *req);
+int mds_reint_rec(struct mds_update_record *r, struct mds_request *req); 
 
 /* lib/mds_updates.c */
-void mds_setattr_unpack(struct mds_rec_setattr *rec, struct iattr *attr);
+int mds_update_unpack(char *buf, int len, struct mds_update_record *r); 
+
 void mds_setattr_pack(struct mds_rec_setattr *rec, struct inode *inode, struct iattr *iattr);
+void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, char *name, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time);
 
 /* mds/handler.c */
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);
@@ -149,6 +167,9 @@ int mdc_setattr(struct inode *inode, struct iattr *iattr,
 		struct mds_rep  **mds_reply, struct mds_rep_hdr **hdr);
 int mdc_readpage(ino_t ino, int type, __u64 offset, char *addr, 
                  struct mds_rep  **rep, struct mds_rep_hdr **hdr);
+int mdc_create(struct inode *dir, char *name, int mode, __u64 id, 
+               __u32 uid, __u32 gid, __u64 time, 
+               struct mds_rep **rep, struct mds_rep_hdr **hdr);
 
 
 
@@ -159,7 +180,8 @@ int mdc_readpage(ino_t ino, int type, __u64 offset, char *addr,
 #define IOC_REQUEST_GETATTR		_IOWR('f', 30, long)
 #define IOC_REQUEST_READPAGE		_IOWR('f', 31, long)
 #define IOC_REQUEST_SETATTR		_IOWR('f', 32, long)
-#define IOC_REQUEST_MAX_NR               32
+#define IOC_REQUEST_CREATE		_IOWR('f', 33, long)
+#define IOC_REQUEST_MAX_NR               33
 
 #endif
 

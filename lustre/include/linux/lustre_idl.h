@@ -198,7 +198,9 @@ struct obd_bufref {
 #define MDS_REINT     2
 #define MDS_READPAGE  3
 
-#define REINT_SETATTR 1
+#define REINT_SETATTR 0
+#define REINT_CREATE  1
+#define REINT_MAX     1
 
 struct mds_req_hdr { 
 	__u32 opc;
@@ -268,8 +270,15 @@ struct mds_rep_packed {
 };
 
 
+/* MDS update records */ 
+
+struct mds_update_record_hdr { 
+        __u32 ur_reclen;
+        __u32 ur_opcode;
+};
+
 struct mds_rec_setattr { 
-        __u32           sa_len;
+        __u32           sa_reclen;
         __u32           sa_opcode;
 	struct ll_fid   sa_fid;
 	__u32	        sa_valid;
@@ -281,6 +290,20 @@ struct mds_rec_setattr {
 	__u64		sa_mtime;
 	__u64		sa_ctime;
 	__u32 	        sa_attr_flags;
+};
+
+struct mds_rec_create { 
+        __u32           cr_reclen;
+        __u32           cr_opcode;
+	struct ll_fid   cr_fid;
+        __u32           cr_uid;
+        __u32           cr_gid;
+        __u64           cr_time;
+	__u32		cr_mode;
+        /* overloaded: id for create, tgtlen for symlink, rdev for mknod */ 
+	__u64		cr_id; 
+        __u32           cr_namelen;
+        /* name here */
 };
 
 #ifdef __KERNEL__ 

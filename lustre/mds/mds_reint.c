@@ -1,19 +1,17 @@
 /*
- *  linux/mds/handler.c
+ *  linux/mds/mds_reint.c
  *  
- *  Lustre Metadata Server (mds) request handler
+ *  Lustre Metadata Server (mds) reintegration routines
  * 
- *  Copyright (C) 2001  Cluster File Systems, Inc.
+ *  Copyright (C) 2002  Cluster File Systems, Inc.
+ *  author: Peter Braam <braam@clusterfs.com>
  *
  *  This code is issued under the GNU General Public License.
  *  See the file COPYING in this distribution
  *
- *  by Peter Braam <braam@clusterfs.com>
- * 
- *  This server is single threaded at present (but can easily be multi threaded). 
- * 
  */
 
+// XXX - add transaction sequence numbers
 
 #define EXPORT_SYMTAB
 
@@ -35,29 +33,101 @@
 
 extern struct mds_request *mds_prep_req(int size, int opcode, int namelen, char *name, int tgtlen, char *tgt);
 
-
-int mds_reint_setattr(struct mds_request *req)
+static int mds_reint_setattr(struct mds_update_record *rec, struct mds_request *req)
 {
 	struct vfsmount *mnt;
 	struct dentry *de;
-	struct mds_rep *rep;
-	struct mds_rec_setattr *rec;
-	struct iattr attr;
-	int rc;
 
-	if (req->rq_req->tgtlen != sizeof(struct mds_rec_setattr) ) { 
-		EXIT;
-		printk("mds: out of memory\n");
-		req->rq_status = -EINVAL;
-		return -EINVAL;
+	de = mds_fid2dentry(req->rq_obd, rec->ur_fid1, &mnt);
+	if (IS_ERR(de)) { 
+		req->rq_rephdr->status = -ESTALE;
+		return 0;
 	}
-	rec = mds_req_tgt(req->rq_req);
-
-	mds_setattr_unpack(rec, &attr); 
-	de = mds_fid2dentry(req->rq_obd, &rec->sa_fid, &mnt);
 
 	printk("mds_setattr: ino %ld\n", de->d_inode->i_ino);
-	
+	req->rq_rephdr->status = notify_change(de, &rec->ur_iattr);
+
+	dput(de);
+	EXIT;
+	return 0;
+}
+
+static int mds_reint_create(struct mds_update_record *rec, 
+			    struct mds_request *req)
+{
+	struct vfsmount *mnt;
+	int type = rec->ur_mode & S_IFMT;
+	struct dentry *de;
+	struct dentry *dchild; 
+	int rc;
+
+	de = mds_fid2dentry(req->rq_obd, rec->ur_fid1, &mnt);
+	if (IS_ERR(de)) { 
+		req->rq_rephdr->status = -ESTALE;
+		return 0;
+	}
+	printk("mds_reint_create: ino %ld\n", de->d_inode->i_ino);
+
+	dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen);
+	rc = PTR_ERR(dchild);
+	if (IS_ERR(dchild)) { 
+		printk(__FUNCTION__ "child lookup error %d\n", rc);
+		dput(de); 
+		req->rq_rephdr->status = -ESTALE;
+		return 0;
+	}
+
+	if (dchild->d_inode) {
+		printk(__FUNCTION__ "child exists (dir %ld, name %s\n", 
+		       de->d_inode->i_ino, rec->ur_name);
+		dput(de); 
+		req->rq_rephdr->status = -ESTALE;
+		return 0;
+	}
+
+	switch (type) {
+	case S_IFREG: { 
+		rc = vfs_create(de->d_inode, dchild, rec->ur_mode);
+		break;
+	}
+	case S_IFDIR: { 
+		rc = vfs_mkdir(de->d_inode, dchild, rec->ur_mode);
+		break;
+	} 
+	case S_IFCHR:
+	case S_IFBLK:
+	case S_IFIFO:
+	case S_IFSOCK: { 
+		int rdev = rec->ur_id;
+		rc = vfs_mknod(de->d_inode, dchild, rec->ur_mode, rdev); 
+		break;
+	}
+	}
+	req->rq_rephdr->status = rc;
+
+	dput(de);
+	dput(dchild); 
+	EXIT;
+	return 0;
+}
+
+typedef int (*mds_reinter)(struct mds_update_record *, struct mds_request*); 
+
+static mds_reinter  reinters[REINT_MAX+1] = { 
+	[REINT_SETATTR]   mds_reint_setattr, 
+	[REINT_CREATE]   mds_reint_create
+};
+
+int mds_reint_rec(struct mds_update_record *rec, struct mds_request *req)
+{
+	int rc; 
+
+	if (rec->ur_opcode < 0 || rec->ur_opcode > REINT_MAX) { 
+		printk(__FUNCTION__ "opcode %d not valid\n", 
+		       rec->ur_opcode); 
+		return -EINVAL;
+	}
+
 	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep, 
 			  &req->rq_replen, &req->rq_repbuf);
 	if (rc) { 
@@ -66,14 +136,9 @@ int mds_reint_setattr(struct mds_request *req)
 		req->rq_status = -ENOMEM;
 		return -ENOMEM;
 	}
-
 	req->rq_rephdr->seqno = req->rq_reqhdr->seqno;
-	rep = req->rq_rep;
-	req->rq_rephdr->status = notify_change(de, &attr);
 
-	dput(de);
-	EXIT;
-	return 0;
-}
-
+	rc = reinters[rec->ur_opcode](rec, req); 
+	return rc;
+} 
 

@@ -33,7 +33,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 
-// for testing
+// XXX for testing
 static struct mds_obd *MDS;
 
 // XXX make this networked!  
@@ -133,16 +133,7 @@ int mds_error(struct mds_request *req)
 
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt)
 {
-
-	/* iget isn't really right if the inode is currently unallocated!!
-	 * This should really all be done inside each filesystem
-	 *
-	 * ext2fs' read_inode has been strengthed to return a bad_inode if the inode
-	 *   had been deleted.
-	 *
-	 * Currently we don't know the generation for parent directory, so a generation
-	 * of 0 means "accept any"
-	 */
+	/* stolen from NFS */ 
 	struct super_block *sb = mds->mds_sb; 
 	unsigned long ino = fid->id;
 	//__u32 generation = fid->generation;
@@ -157,6 +148,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vf
 
 	if (ino == 0)
 		return ERR_PTR(-ESTALE);
+
 	inode = iget(sb, ino);
 	if (inode == NULL)
 		return ERR_PTR(-ENOMEM);
@@ -167,15 +159,16 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vf
 	    || (generation && inode->i_generation != generation)
 		) {
 		/* we didn't find the right inode.. */
-		printk("mds_fid2dentry: Inode %lu, Bad count: %d %d or version  %u %u\n",
+		printk(__FUNCTION__ 
+		       "bad inode %lu, link: %d ct: %d or version  %u/%u\n",
 			inode->i_ino,
 			inode->i_nlink, atomic_read(&inode->i_count),
 			inode->i_generation,
 			generation);
-
 		iput(inode);
 		return ERR_PTR(-ESTALE);
 	}
+
 	/* now to find a dentry.
 	 * If possible, get a well-connected one
 	 */
@@ -293,16 +286,18 @@ int mds_readpage(struct mds_request *req)
 
 int mds_reint(struct mds_request *req)
 {
-	int opc = NTOH__u32(req->rq_req->opcode);
+	int rc;
+	char *buf = mds_req_tgt(req->rq_req);
+	int len = req->rq_req->tgtlen;
+	struct mds_update_record rec;
 	
-	switch (opc) { 
-	case REINT_SETATTR: 
-		return mds_reint_setattr(req);
-	default: 
-		printk(__FUNCTION__ "opcode %d not handled.\n", opc); 
+	rc = mds_update_unpack(buf, len, &rec);
+	if (rc) { 
+		printk(__FUNCTION__ ": invalid record\n");
 		return -EINVAL;
 	}
 
+	rc = mds_reint_rec(&rec, req); 
 	return 0; 
 }
 

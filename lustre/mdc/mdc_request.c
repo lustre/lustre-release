@@ -266,6 +266,27 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		break;
 	}
 
+	case IOC_REQUEST_CREATE: { 
+		struct inode inode;
+		struct mds_rep_hdr *hdr;
+		struct iattr iattr; 
+
+		inode.i_ino = 2;
+		iattr.ia_mode = 040777;
+		iattr.ia_atime = 0;
+		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
+
+		err = mdc_create(&inode, "foofile", 0100707, 47114711, 
+				 11, 47, 0, NULL, &hdr);
+		printk("-- done err %d\n", err);
+		if (!err) { 
+			printk("-- status: %d\n", hdr->status); 
+			err = hdr->status;
+		}
+		kfree(hdr); 
+		break;
+	}
+
 	default:		
 		err = -EINVAL;
 		EXIT;
@@ -304,6 +325,7 @@ MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre MDS Request Tester v1.0");
 MODULE_LICENSE("GPL");
 
+EXPORT_SYMBOL(mdc_create); 
 EXPORT_SYMBOL(mdc_getattr); 
 EXPORT_SYMBOL(mdc_readpage); 
 EXPORT_SYMBOL(mdc_setattr); 
