@@ -716,8 +716,12 @@ typedef struct { volatile int counter; } atomic_t;
 #define atomic_add(b,a)  do {(a)->counter += b;} while (0)
 #define atomic_sub(b,a)  do {(a)->counter -= b;} while (0)
 
+#ifndef likely
 #define likely(exp) (exp)
+#endif
+#ifndef unlikely
 #define unlikely(exp) (exp)
+#endif
 
 /* log related */
 static inline int llog_init_commit_master(void) { return 0; }

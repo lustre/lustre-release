@@ -306,11 +306,14 @@ static int fsfilt_ext3_commit_async(struct inode *inode, void *h,
                 unlock_kernel();
                 return rc;
         }
-
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0)
         rtid = log_start_commit(journal, transaction);
         if (rtid != tid)
                 CERROR("strange race: %lu != %lu\n",
                        (unsigned long) tid, (unsigned long) rtid);
+#else
+        log_start_commit(journal, transaction->t_tid);
+#endif
         unlock_kernel();
 
         *wait_handle = (void *) tid;
