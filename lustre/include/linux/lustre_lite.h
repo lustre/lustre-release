@@ -55,7 +55,6 @@ struct ll_read_inode2_cookie {
 struct ll_inode_info {
         struct lov_stripe_md *lli_smd;
         char                 *lli_symlink_name;
-        struct lustre_handle  lli_intent_lock_handle;
         struct semaphore      lli_open_sem;
         atomic_t              lli_open_count; /* see ll_file_release */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))

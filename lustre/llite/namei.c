@@ -316,7 +316,7 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                  * request, for which we are very thankful.  move along with
                  * the local lookup then. */
 
-                memcpy(&lli->lli_intent_lock_handle, &lockh, sizeof(lockh));
+                //memcpy(&lli->lli_intent_lock_handle, &lockh, sizeof(lockh));
                 offset = 0;
 
                 ino = ll_inode_by_name(parent, dentry, &mode);
@@ -654,8 +654,6 @@ static int ll_create(struct inode *dir, struct dentry *dentry, int mode)
 
         if (it && it->it_disposition) {
                 struct ll_inode_info *lli = ll_i2info(inode);
-                memcpy(&lli->lli_intent_lock_handle, it->it_lock_handle,
-                       sizeof(lli->lli_intent_lock_handle));
                 d_instantiate(dentry, inode);
         } else {
                 /* no directory data updates when intents rule */
