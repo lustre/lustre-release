@@ -314,4 +314,75 @@ test_11() {
 }
 run_test 11 "use default lov configuration (should return error)"
 
+test_12() {
+        OLDXMLCONFIG=$XMLCONFIG
+        XMLCONFIG="batch.xml"
+        BATCHFILE="batchfile"
+
+        # test double quote
+        [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
+        [ -f "$BATCHFILE" ] && rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions \"-I 128\"" >> $BATCHFILE
+        # --mkfsoptions "-I 128"
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE || return $?
+        if [ `sed -n '/>-I 128</p' $XMLCONFIG | wc -l` -eq 1 ]; then
+                echo "matched double quote success"
+        else
+                echo "matched double quote fail"
+                return 1
+        fi 
+        rm -f $XMLCONFIG
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions \"-I 128" >> $BATCHFILE
+        # --mkfsoptions "-I 128
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE && return $?
+        echo "unmatched double quote should return error"
+
+        # test single quote
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions '-I 128'" >> $BATCHFILE
+        # --mkfsoptions '-I 128'
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE || return $?
+        if [ `sed -n '/>-I 128</p' $XMLCONFIG | wc -l` -eq 1 ]; then
+                echo "matched single quote success"
+        else
+                echo "matched single quote fail"
+                return 1
+        fi
+        rm -f $XMLCONFIG
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions '-I 128" >> $BATCHFILE
+        # --mkfsoptions '-I 128
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE && return $?
+        echo "unmatched single quote should return error"
+
+        # test backslash
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions \-\I\ \128" >> $BATCHFILE
+        # --mkfsoptions \-\I\ \128
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE || return $?
+        if [ `sed -n '/>-I 128</p' $XMLCONFIG | wc -l` -eq 1 ]; then
+                echo "backslash followed by a whitespace/letter success"
+        else
+                echo "backslash followed by a whitespace/letter fail"
+                return 1
+        fi
+        rm -f $XMLCONFIG
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions -I\ 128\\" >> $BATCHFILE
+        # --mkfsoptions -I\ 128\
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE && return $?
+        echo "backslash followed by nothing should return error"
+
+        rm -f $BATCHFILE
+        XMLCONFIG=$OLDXMLCONFIG
+}
+run_test 12 "lmc --batch, with single/double quote, backslash in batchfile"
+
 equals_msg "Done"

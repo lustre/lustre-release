@@ -25,7 +25,7 @@ lmc - lustre configuration data manager
 
 """
 
-import sys, os, getopt, string, exceptions, random
+import sys, os, getopt, string, exceptions, random, re
 import xml.dom.minidom
 from xml.dom.ext import PrettyPrint
 
@@ -993,6 +993,65 @@ class chrono:
         str = '%s: %g secs' % (msg, d)
         print str
 
+#################################################################
+# function cmdlinesplit used to split cmd line from batch file
+#
+def cmdlinesplit(cmdline):
+                                                                                                                                               
+    double_quote  = re.compile(r'"(([^"\\]|\\.)*)"')
+    single_quote  = re.compile(r"'(.*?)'")
+    escaped = re.compile(r'\\(.)')
+    esc_quote = re.compile(r'\\([\\"])')
+    outside = re.compile(r"""([^\s\\'"]+)""")
+                                                                                                                                               
+    arg_list = []
+    i = 0; arg = None
+    while i < len(cmdline):
+        c = cmdline[i]
+        if c == '"':
+            match = double_quote.match(cmdline, i)
+            if not match:
+                print "Unmatched double quote:", cmdline
+                sys.exit(1)
+            i = match.end()
+            if arg is None: arg = esc_quote.sub(r'\1', match.group(1))
+            else:           arg += esc_quote.sub(r'\1', match.group(1))
+                                                                                                                                               
+        elif c == "'":
+            match = single_quote.match(cmdline, i)
+            if not match:
+                print "Unmatched single quote:", cmdline
+                sys.exit(1)
+            i = match.end()
+            if arg is None: arg = match.group(1)
+            else:           arg += match.group(1)
+                                                                                                                                               
+        elif c == "\\":
+            match = escaped.match(cmdline, i)
+            if not match:
+                print "Unmatched backslash", cmdline
+                sys.exit(1)
+            i = match.end()
+            if arg is None: arg = match.group(1)
+            else:           arg += match.group(1)
+                                                                                                                                               
+        elif c.isspace():
+            if arg != None:
+                arg_list.append(str(arg))
+            arg = None
+            while i < len(cmdline) and cmdline[i].isspace():
+                i += 1
+        else:
+            match = outside.match(cmdline, i)
+            assert match
+            i = match.end()
+            if arg is None: arg = match.group()
+            else:           arg += match.group()
+                                                                                                                                               
+    if arg != None: arg_list.append(str(arg))
+                                                                                                                                               
+    return arg_list
+
 ############################################################
 # Main
 #
@@ -1080,7 +1139,7 @@ def main():
         fp.close()
         for cmd in batchCommands:
             try:
-                options, args = cl.parse(string.split(cmd))
+                options, args = cl.parse(cmdlinesplit(cmd))
                 if options.merge or options.input or options.output:
                         print "The batchfile should not contain --merge, --input or --output."
                         sys.exit(1)
