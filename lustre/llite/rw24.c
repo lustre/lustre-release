@@ -253,14 +253,6 @@ void ll_complete_writepage_24(struct obd_client_page *ocp, int rc)
         page_cache_release(page);
 }
 
-int ll_ocp_write_count(struct inode *inode, struct page *page)
-{
-        if (((loff_t)page->index << PAGE_SHIFT) + PAGE_SIZE > inode->i_size)
-                return inode->i_size % PAGE_SIZE;
-        else
-                return PAGE_SIZE;
-}
-
 static int ll_writepage_24(struct page *page)
 {
         struct inode *inode = page->mapping->host;
