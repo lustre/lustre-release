@@ -411,6 +411,46 @@ int scan_and_distribute(struct obd_device *obd, struct dentry *dentry,
 
 #define MAX_DIR_SIZE    (64 * 1024)
 
+int mds_splitting_expected(struct obd_device *obd, struct dentry *dentry)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct mea *mea = NULL;
+        int rc, size;
+
+	/* clustered MD ? */
+	if (!mds->mds_lmv_obd)
+		RETURN(0);
+
+        /* inode exist? */
+        if (dentry->d_inode == NULL)
+                return 0;
+
+        /* a dir can be splitted only */
+        if (!S_ISDIR(dentry->d_inode->i_mode))
+                return 0;
+
+        /* large enough to be splitted? */
+        if (dentry->d_inode->i_size < MAX_DIR_SIZE)
+                return 0;
+
+        /* don't split root directory */
+        if (dentry->d_inode->i_ino == mds->mds_rootfid.id)
+                return 0;
+
+        mds_get_lmv_attr(obd, dentry->d_inode, &mea, &size);
+        if (mea) {
+                /* already splitted or slave object: shouldn't be splitted */
+                rc = 0;
+        } else {
+                /* may be splitted */
+                rc = 1;
+        }
+
+        if (mea)
+                OBD_FREE(mea, size);
+        RETURN(rc);
+}
+
 /*
  * must not be called on already splitted directories
  */
@@ -425,22 +465,10 @@ int mds_try_to_split_dir(struct obd_device *obd,
 	void *handle;
 	ENTRY;
 
-	/* clustered MD ? */
-	if (!mds->mds_lmv_obd)
-		RETURN(0);
-
-        /* don't split root directory */
-        if (dentry->d_inode->i_ino == mds->mds_rootfid.id)
+        /* TODO: optimization possible - we already may have mea here */
+        if (!mds_splitting_expected(obd, dentry))
                 RETURN(0);
-
-        /* we want to split only large dirs. this may be already
-         * splitted dir or a slave dir created during splitting */
-        if (dir->i_size < MAX_DIR_SIZE)
-                RETURN(0);
-
-        /* check is directory marked non-splittable */
-        if (mea && *mea)
-                RETURN(0);
+        LASSERT(mea == NULL || *mea == NULL);
 
         CDEBUG(D_OTHER, "%s: split directory %u/%lu/%lu\n",
                obd->obd_name, mds->mds_num, dir->i_ino,
@@ -459,8 +487,6 @@ int mds_try_to_split_dir(struct obd_device *obd,
                 RETURN(-ENOMEM);
         (*mea)->mea_count = nstripes;
        
-#warning "we have to take EX lock on a dir for splitting"
-        
 	/* 1) create directory objects on slave MDS'es */
 	/* FIXME: should this be OBD method? */
         oa = obdo_alloc();

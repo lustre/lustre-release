@@ -42,7 +42,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                                 struct ll_fid *fid,
                                 struct lustre_handle *parent_lockh,
                                 struct dentry **dparentp, int parent_mode,
-                                __u64 parent_lockpart,
+                                __u64 parent_lockpart, int *update_mode,
                                 char *name, int namelen,
                                 struct lustre_handle *child_lockh,
                                 struct dentry **dchildp, int child_mode,
@@ -107,6 +107,8 @@ extern struct lvfs_callback_ops mds_lvfs_ops;
 int mds_lov_clean(struct obd_device *obd);
 extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg);
+extern int mds_lock_mode_for_dir(struct obd_device *, struct dentry *, int);
+
 #ifdef __KERNEL__
 int mds_get_md(struct obd_device *, struct inode *, void *md, int *size, 
                int lock);
@@ -125,5 +127,6 @@ int mds_try_to_split_dir(struct obd_device *, struct dentry *, struct mea **,
 int mds_get_lmv_attr(struct obd_device *, struct inode *, struct mea **, int *);
 int mds_choose_mdsnum(struct obd_device *, const char *, int, int);
 int mds_lmv_postsetup(struct obd_device *);
+int mds_splitting_expected(struct obd_device *, struct dentry *);
 
 #endif /* _MDS_INTERNAL_H */

@@ -784,7 +784,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         void *handle = NULL;
         struct dentry_params dp;
         struct mea *mea = NULL;
-        int mea_size;
+        int mea_size, update_mode;
         ENTRY;
 
         parent_lockh[0].cookie = 0;
@@ -856,7 +856,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         }
         
         dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
-                                        parent_lockh, rec->ur_name,
+                                        parent_lockh, &update_mode, rec->ur_name,
                                         rec->ur_namelen - 1,
                                         MDS_INODELOCK_UPDATE);
         if (IS_ERR(dparent)) {
@@ -922,7 +922,7 @@ got_child:
                                       NULL, 0, NULL, child_lockh);
 #ifdef S_PDIROPS
                 if (parent_lockh[1].cookie != 0)
-                        ldlm_lock_decref(parent_lockh + 1, LCK_CW);
+                        ldlm_lock_decref(parent_lockh + 1, update_mode);
 #endif
                 ldlm_lock_decref(parent_lockh, parent_mode);
                 if (mea)
@@ -1113,7 +1113,7 @@ got_child:
                 l_dput(dparent);
 #ifdef S_PDIROPS
                 if (parent_lockh[1].cookie != 0)
-                        ldlm_lock_decref(parent_lockh + 1, LCK_CW);
+                        ldlm_lock_decref(parent_lockh + 1, update_mode);
 #endif
                 if (rc)
                         ldlm_lock_decref(parent_lockh, parent_mode);
