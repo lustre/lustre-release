@@ -309,12 +309,17 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
         struct ldlm_lock *lock = NULL, *retval = NULL;
         ENTRY;
 
-        if (!handle || !handle->addr)
+        if (!handle || !handle->addr) {
+                CERROR("bogus handle %p->"LPX64"\n", handle,
+                       handle ? handle->addr : -1);
                 RETURN(NULL);
+        }
 
         lock = (struct ldlm_lock *)(unsigned long)(handle->addr);
-        if (!kmem_cache_validate(ldlm_lock_slab, (void *)lock))
+        if (!kmem_cache_validate(ldlm_lock_slab, (void *)lock)) {
+                CERROR("bogus lock %p\n", lock);
                 RETURN(NULL);
+        }
 
         if (!lock->l_resource) {
                 CERROR("trying to lock bogus resource: lock %p\n", lock);
@@ -327,13 +332,21 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
                 RETURN(NULL);
         }
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        if (lock->l_random != handle->cookie)
+        if (lock->l_random != handle->cookie) {
+                CERROR("bogus cookie: lock "LPX64", handle "LPX64"\n",
+                       lock->l_random, handle->cookie);
                 GOTO(out, NULL);
+        }
 
-        if (lock->l_flags & LDLM_FL_DESTROYED)
+        if (lock->l_flags & LDLM_FL_DESTROYED) {
+                CERROR("lock already destroyed: lock %p\n", lock);
+                LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
                 GOTO(out, NULL);
+        }
 
         retval = LDLM_LOCK_GET(lock);
+        if (!retval)
+                CERROR("lock disappeared below us!!! %p\n", lock);
         EXIT;
  out:
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
