@@ -142,8 +142,8 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         ENTRY;
 
         err = mdc_create(&sbi->ll_mds_client, sbi->ll_mds_conn, dir, name,
-                         namelen, tgt, tgtlen, mode, id,  current->uid,
-                         current->gid, time, &request);
+                         namelen, tgt, tgtlen, mode, id,  current->fsuid,
+                         current->fsgid, time, &request);
         if (err) { 
                 inode = ERR_PTR(err);
                 GOTO(out, err);
@@ -154,6 +154,8 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         body->objid = id; 
         body->nlink = 1;
         body->atime = body->ctime = body->mtime = time;
+        body->uid = current->fsuid;
+        body->gid = current->fsgid;
         body->mode = mode;
         CDEBUG(D_INODE, "-- new_inode: objid %lld, ino %d, mode %o\n",
                (unsigned long long)body->objid, body->ino, body->mode); 

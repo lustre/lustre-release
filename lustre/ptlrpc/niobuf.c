@@ -95,7 +95,7 @@ static int ptl_send_buf(struct ptlrpc_request *request,
         rc = PtlPut(md_h, ack, remote_id, portal, 0, request->rq_reqmsg->xid,
                     0, 0);
         if (rc != PTL_OK) {
-                CERROR("PtlPut(%d, %d, %Ld) failed: %d\n", remote_id.nid,
+                CERROR("PtlPut(%Lu, %d, %Ld) failed: %d\n", remote_id.nid,
                        portal, request->rq_xid, rc);
                 PtlMDUnlink(md_h);
         }
@@ -140,7 +140,7 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
                 rc = PtlPut(bulk->b_md_h, (ack ? PTL_ACK_REQ : PTL_NOACK_REQ),
                             remote_id, desc->b_portal, 0, bulk->b_xid, 0, 0);
                 if (rc != PTL_OK) {
-                        CERROR("PtlPut(%d, %d, %d) failed: %d\n", remote_id.nid,
+                        CERROR("PtlPut(%Lu, %d, %d) failed: %d\n", remote_id.nid,
                                desc->b_portal, bulk->b_xid, rc);
                         PtlMDUnlink(bulk->b_md_h);
                         LBUG();
