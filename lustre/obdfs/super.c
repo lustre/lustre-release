@@ -195,6 +195,7 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
 		goto ERR;
 	}
 
+	/* list of dirty inodes, and a mutex to hold while modifying it */
 	INIT_LIST_HEAD(&sbi->osi_inodes);
 	sema_init(&sbi->osi_list_mutex, 1);
 
@@ -265,22 +266,20 @@ ERR:
         return NULL;
 }
 
-/* XXX remove the super to the obdfs_super_list */
+
 static void obdfs_put_super(struct super_block *sb)
 {
         struct obdfs_sb_info *sbi;
 
         ENTRY;
-
-
         sb->s_dev = 0;
 	
-	/* XXX flush stuff */
 	sbi = (struct obdfs_sb_info *) &sb->u.generic_sbp;
+	obdfs_flush_reqs(&sbi->osi_inodes, 0);
 
 	OPS(sb,disconnect)(ID(sb));
 	list_del(&sbi->osi_list);
-	memset(sbi, 0, sizeof(* sbi));
+	memset(sbi, 0, sizeof(*sbi));
 	
 	printk("OBDFS: Bye bye.\n");
 
@@ -324,7 +323,7 @@ void obdfs_read_inode(struct inode *inode)
 	} else {
 		init_special_inode(inode, inode->i_mode,
 				   /* XXX need to fill in the ext2 side */
-				   ((long *)OBDFS_INFO(inode)->oi_inline)[0]);
+				   ((long *)obdfs_i2info(inode)->oi_inline)[0]);
 	}
 
 	return;
@@ -463,7 +462,7 @@ int init_obdfs(void)
 	if (err)
 		return err;
 
-	flushd_init();
+	obdfs_flushd_init();
 	return register_filesystem(&obdfs_fs_type);
 }
 
@@ -478,6 +477,7 @@ void cleanup_module(void)
 {
         ENTRY;
 
+	obdfs_flushd_cleanup();
 	obdfs_sysctl_clean();
 	obdfs_cleanup_pgrqcache();
 	unregister_filesystem(&obdfs_fs_type);

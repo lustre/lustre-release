@@ -83,7 +83,7 @@ extern int obd_print_entry;
 /* OBDFS inode information */
 #define OIDEBUG(inode) { \
 	ICDEBUG(inode);\
-	printk("oinfo: flags 0x%08x\n", OBDFS_INFO(inode)->oi_flags);\
+	printk("oinfo: flags 0x%08x\n", obdfs_i2info(inode)->oi_flags);\
 	/* obdfs_print_plist(inode); */\
 }
 

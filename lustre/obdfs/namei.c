@@ -874,7 +874,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry,
 	for (l = 0; l < inode->i_sb->s_blocksize - 1 && symname [l]; l++)
 		;
 
-	oinfo = OBDFS_INFO(inode);
+	oinfo = obdfs_i2info(inode);
 
 	if (l >= sizeof(oinfo->oi_inline)) {
 		CDEBUG(D_INODE, "l=%d, normal symlink\n", l);
@@ -1065,9 +1065,10 @@ int obdfs_rename (struct inode * old_dir, struct dentry *old_dentry,
 	old_dir->u.ext2_i.i_flags &= ~EXT2_BTREE_FL;
 	mark_inode_dirty(old_dir);
 	if (dir_page) {
-		PARENT_INO(page_address(dir_page)) = le32_to_cpu(new_dir->i_ino);
+		PARENT_INO(page_address(dir_page)) =le32_to_cpu(new_dir->i_ino);
+		err = obdfs_do_writepage(old_inode, dir_page,
+					 IS_SYNC(old_inode));
 		/* XXX handle err */
-		err = obdfs_do_writepage(old_inode, dir_page, IS_SYNC(old_inode));
 		old_dir->i_nlink--;
 		mark_inode_dirty(old_dir);
 		if (new_inode) {
@@ -1084,10 +1085,11 @@ int obdfs_rename (struct inode * old_dir, struct dentry *old_dentry,
 		/* lock the old_page and release unlocked copy */
 		CDEBUG(D_INODE, "old_page at %p\n", old_page);
 		page_cache_release(old_page);
-		old_page = obdfs_getpage(old_dir, index >> PAGE_SHIFT, 0, LOCKED);
+		old_page = obdfs_getpage(old_dir, index << PAGE_SHIFT, 0,
+					 LOCKED);
 		CDEBUG(D_INODE, "old_page at %p\n", old_page);
-		/* XXX handle err */
 		err = obdfs_do_writepage(old_dir, old_page, IS_SYNC(old_dir));
+		/* XXX handle err */
 	}
 
 	err = obdfs_do_writepage(new_dir, new_page, IS_SYNC(new_dir));
@@ -1105,7 +1107,6 @@ end_rename:
 		UnlockPage(dir_page);
 	if (dir_page)
 		page_cache_release(dir_page);
-
 
 	return err;
 } /* obdfs_rename */

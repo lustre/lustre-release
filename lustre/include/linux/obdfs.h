@@ -18,8 +18,10 @@
 void obdfs_read_inode(struct inode *inode);
 
 /* flush.c */
-int flushd_init(void);
-
+int obdfs_flushd_init(void);
+int obdfs_flushd_cleanup(void);
+int obdfs_flush_reqs(struct list_head *inode_list, int check_time);
+void obdfs_flush_dirty_pages(int check_time);
 
 /* rw.c */
 int obdfs_do_writepage(struct inode *, struct page *, int sync);
@@ -27,8 +29,11 @@ int obdfs_init_pgrqcache(void);
 void obdfs_cleanup_pgrqcache(void);
 int obdfs_readpage(struct dentry *dentry, struct page *page);
 int obdfs_writepage(struct dentry *dentry, struct page *page);
-struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create, int locked);
-int obdfs_write_one_page(struct file *file, struct page *page, unsigned long offset, unsigned long bytes, const char * buf);
+struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
+			   int create, int locked);
+int obdfs_write_one_page(struct file *file, struct page *page,
+			 unsigned long offset, unsigned long bytes,
+			 const char * buf);
 void obdfs_dequeue_reqs(struct inode *inode);
 
 /* namei.c */
@@ -38,16 +43,22 @@ int obdfs_mkdir(struct inode *dir, struct dentry *dentry, int mode);
 int obdfs_rmdir(struct inode *dir, struct dentry *dentry);
 int obdfs_unlink(struct inode *dir, struct dentry *dentry);
 int obdfs_mknod(struct inode *dir, struct dentry *dentry, int mode, int rdev);
-int obdfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname);
-int obdfs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry);
-int obdfs_rename(struct inode *old_dir, struct dentry *old_dentry, struct inode *new_dir, struct dentry *new_dentry);
+int obdfs_symlink(struct inode *dir, struct dentry *dentry,
+		  const char *symname);
+int obdfs_link(struct dentry *old_dentry, struct inode *dir,
+	       struct dentry *dentry);
+int obdfs_rename(struct inode *old_dir, struct dentry *old_dentry,
+		 struct inode *new_dir, struct dentry *new_dentry);
+
 /* dir.c */
 int obdfs_check_dir_entry (const char * function, struct inode * dir,
 			  struct ext2_dir_entry_2 * de, struct page * page,
 			  unsigned long offset);
+
 /* symlink.c */
 int obdfs_readlink (struct dentry *, char *, int);
-struct dentry *obdfs_follow_link(struct dentry *, struct dentry *, unsigned int); 
+struct dentry *obdfs_follow_link(struct dentry *, struct dentry *,
+				 unsigned int); 
 
 
 /* list of all OBDFS super blocks  */
@@ -86,26 +97,26 @@ struct obdfs_inode_info {
 	char 		 oi_inline[OBD_INLINESZ];
 };
 
-#define OBDFS_INFO(inode) ((struct obdfs_inode_info *)(&(inode)->u.generic_ip))
+static inline struct obdfs_inode_info *obdfs_i2info(struct inode *inode)
+{
+	return (struct obdfs_inode_info *)&(inode->u.generic_ip);
+}
 
 static inline struct obdfs_sb_info *obdfs_i2sbi(struct inode *inode)
 {
-	struct obdfs_sb_info *sbi;
-
-	sbi = (struct obdfs_sb_info *) &(inode->i_sb->u.generic_sbp);
-	return sbi;
+	return (struct obdfs_sb_info *) &(inode->i_sb->u.generic_sbp);
 }
 
 static inline struct list_head *obdfs_iplist(struct inode *inode) 
 {
-	struct obdfs_inode_info *info = (struct obdfs_inode_info *)&inode->u.generic_ip;
+	struct obdfs_inode_info *info = obdfs_i2info(inode);
 
 	return &info->oi_pages;
 }
 
 static inline struct list_head *obdfs_islist(struct inode *inode) 
 {
-	struct obdfs_inode_info *info = (struct obdfs_inode_info *)&inode->u.generic_ip;
+	struct obdfs_inode_info *info = obdfs_i2info(inode);
 
 	return &info->oi_inodes;
 }
@@ -113,6 +124,7 @@ static inline struct list_head *obdfs_islist(struct inode *inode)
 static inline struct list_head *obdfs_slist(struct inode *inode) 
 {
 	struct obdfs_sb_info *sbi = obdfs_i2sbi(inode);
+
 	return &sbi->osi_inodes;
 }
 
@@ -159,12 +171,12 @@ extern struct inode_operations obdfs_symlink_inode_operations;
 
 static inline int obdfs_has_inline(struct inode *inode)
 {
-	return (OBDFS_INFO(inode)->oi_flags & OBD_FL_INLINEDATA);
+	return (obdfs_i2info(inode)->oi_flags & OBD_FL_INLINEDATA);
 }
 
 static void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
 {
-	struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
+	struct obdfs_inode_info *oinfo = obdfs_i2info(inode);
 
 	CDEBUG(D_INODE, "src inode %ld, dst obdo %ld valid 0x%08x\n",
 	       inode->i_ino, (long)oa->o_id, oa->o_valid);
@@ -179,7 +191,7 @@ static void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
 
 static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
 {
-	struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
+	struct obdfs_inode_info *oinfo = obdfs_i2info(inode);
 
 	CDEBUG(D_INODE, "src obdo %ld valid 0x%08x, dst inode %ld\n",
 	       (long)oa->o_id, oa->o_valid, inode->i_ino);

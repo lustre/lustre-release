@@ -39,7 +39,7 @@ struct dentry * obdfs_follow_link(struct dentry * dentry, struct dentry *base,
 	char * link;
 
 	ENTRY;
-	link = OBDFS_INFO(inode)->oi_inline;
+	link = obdfs_i2info(inode)->oi_inline;
 	if (!obdfs_has_inline(inode)) {
 		OIDEBUG(inode);
 		page = obdfs_getpage(inode, 0, 0, 0);
@@ -72,7 +72,7 @@ int obdfs_readlink (struct dentry * dentry, char * buffer, int buflen)
 	if (buflen > inode->i_sb->s_blocksize - 1)
 		buflen = inode->i_sb->s_blocksize - 1;
 
-	link = OBDFS_INFO(inode)->oi_inline;
+	link = obdfs_i2info(inode)->oi_inline;
 	if (!obdfs_has_inline(inode)) {
 		OIDEBUG(inode);
 		page = obdfs_getpage(inode, 0, 0, 0);

@@ -40,3 +40,14 @@ plog () {
     fi
 }
 
+# A routine to display a command, and prompt user if it should be run
+qrun () {
+    echo
+    echo -n "Run '$*' [Y/n]?'";
+    read JUNK
+
+    case $JUNK in
+	n*|N*) echo "'$*' not run" ;;
+	*) plog $* ;;
+    esac
+}

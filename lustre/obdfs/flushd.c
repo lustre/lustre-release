@@ -35,7 +35,6 @@
 #include <linux/obdfs.h>
 
 
-
 struct {
 	int nfract;  /* Percentage of buffer cache dirty to 
 			activate bdflush */
@@ -50,7 +49,6 @@ struct {
 	int age_super;  /* Time for superblock to age before we flush it */
 /* } pupd_prm = {40, 500, 64, 256, 5*HZ, 30*HZ, 5*HZ };  */
 } pupd_prm = {40, 500, 64, 256, 10*HZ, 30*HZ, 5*HZ }; 
-
 
 /* Called with the superblock list lock */
 static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
@@ -111,7 +109,7 @@ static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 
 	EXIT;
 	return num;  
-}
+} /* obdfs_enqueue_pages */
 
 /* dequeue requests for a dying inode */
 void obdfs_dequeue_reqs(struct inode *inode)
@@ -145,7 +143,7 @@ void obdfs_dequeue_reqs(struct inode *inode)
 	}
 	iput(inode);
 	obd_up(&obdfs_i2sbi(inode)->osi_list_mutex);
-}
+} /* obdfs_dequeue_reqs */
 
 /* Remove writeback requests for the superblock */
 int obdfs_flush_reqs(struct list_head *inode_list, int check_time)
@@ -212,7 +210,8 @@ int obdfs_flush_reqs(struct list_head *inode_list, int check_time)
 						  &pages[num_io], &bufs[num_io],
 						  &counts[num_io],
 						  &offsets[num_io],
-						  &flags[num_obdos], 1);
+						  &flags[num_obdos],
+						  check_time);
 			CDEBUG(D_INODE, "FLUSHED inode %ld, pages flushed: %d\n", 
 			       inode->i_ino, res);
 			if ( res < 0 ) {
@@ -289,20 +288,20 @@ void obdfs_flush_dirty_pages(int check_time)
 {
 	struct list_head *sl;
 
+	ENTRY;
 	sl = &obdfs_super_list;
 	while ( (sl = sl->next) != &obdfs_super_list ) {
 		struct obdfs_sb_info *sbi = 
 			list_entry(sl, struct obdfs_sb_info, osi_list);
 
 		/* walk write requests here, use the sb, check the time */
-		obdfs_flush_reqs(&sbi->osi_inodes, 0);
+		obdfs_flush_reqs(&sbi->osi_inodes, check_time);
 	}
-
+	EXIT;
 }
 
 
 static struct task_struct *pupdated;
-
 
 static int pupdate(void *unused) 
 {
@@ -319,6 +318,7 @@ static int pupdate(void *unused)
 	sprintf(tsk->comm, "pupdated");
 	pupdated = current;
 
+	MOD_INC_USE_COUNT;	/* XXX until send_sig works */
 	printk("pupdated activated...\n");
 
 	/* sigstop and sigcont will stop and wakeup pupdate */
@@ -339,9 +339,8 @@ static int pupdate(void *unused)
 		else
 		{
 		stop_pupdate:
-			obdfs_flush_dirty_pages(0);
 			tsk->state = TASK_STOPPED;
-			/* MOD_DEC_USE_COUNT; */
+			MOD_DEC_USE_COUNT; /* XXX until send_sig works */
 			printk("pupdated stopped...\n");
 			return 0;
 		}
@@ -360,42 +359,38 @@ static int pupdate(void *unused)
 			if (stopped)
 				goto stop_pupdate;
 		}
-		/* asynchronous setattr etc for the future ... */
-		/* flush_inodes(); */
+		/* asynchronous setattr etc for the future ...
+		flush_inodes();
+		 */
+		/* we don't currently check the time on the pages
 		obdfs_flush_dirty_pages(1); 
+		 */
+		obdfs_flush_dirty_pages(0); 
 	}
 }
 
 
-int flushd_init(void)
+int obdfs_flushd_init(void)
 {
 	/*
 	kernel_thread(bdflush, NULL, CLONE_FS | CLONE_FILES | CLONE_SIGHAND);
 	 */
-	/* MOD_INC_USE_COUNT; */
 	kernel_thread(pupdate, NULL, 0);
 	printk("flushd inited\n");
 	return 0;
 }
 
-int flushd_cleanup(void)
+int obdfs_flushd_cleanup(void)
 {
-	/* this should deliver a signal to */
-	
-
-	/* XXX Andreas, we will do this later, for now, you must kill
-	   pupdated with a SIGTERM from userland, before unloading obdfs.o
-	*/
+	ENTRY;
+	/* deliver a signal to pupdated to shut it down
+	   XXX need to kill it from user space for now XXX
 	if (pupdated) {
-		/* then let it run at least once, before continuing */
-
-		/* XXX need to do something like this here:
-		send_sig(SIGTERM, current, 0);
-		 */
-                1;
-		/*obdfs_flush_dirty_pages(0); */
+		send_sig_info(SIGTERM, 1, pupdated);
 	}
+	 */
 
+	EXIT;
 	/* not reached */
 	return 0;
 
