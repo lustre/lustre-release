@@ -397,5 +397,46 @@ pass
 $CLEAN
 $START
 
+echo "--test 25.1 create file in symlinked directory"
+mkdir $MOUNT/d25
+ln -s d25 $MOUNT/s25
+touch $MOUNT/s25/foo
+pass
+$CLEAN
+$START
+
+echo "--test 25.2 lookup file in symlinked directory"
+$CHECKSTAT -a $MOUNT/s25/foo
+pass
+$CLEAN
+$START
+
+echo "--test 26 multiple component symlink"
+mkdir $MOUNT/d26
+mkdir $MOUNT/d26/d26-2
+ln -s d26/d26-2 $MOUNT/s26
+touch $MOUNT/s26/foo
+pass
+$CLEAN
+$START
+
+echo "--test 26.1 multiple component symlink at the end of a lookup"
+ln -s d26/d26-2/foo $MOUNT/s26-2
+touch $MOUNT/s26-2
+pass
+$CLEAN
+$START
+
+echo "--test 26.2 a chain of symlinks"
+mkdir $MOUNT/d26.2
+touch $MOUNT/d26.2/foo
+ln -s d26.2 $MOUNT/s26.2-1
+ln -s s26.2-1 $MOUNT/s26.2-2
+ln -s s26.2-2 $MOUNT/s26.2-3
+chmod 0666 $MOUNT/s26.2-3/foo
+pass
+$CLEAN
+$START
+
 echo '======================= finished ======================='
 exit
