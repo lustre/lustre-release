@@ -2,7 +2,7 @@
 
 config=${1:-lov.xml}
 
-LMC=../utils/lmc
+LMC=${LMC:-../utils/lmc}
 TMP=${TMP:-/tmp}
 
 MDSDEV=$TMP/mds1
