@@ -1,0 +1,154 @@
+Index: linux/kernel/bootimg.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/kernel/Attic/bootimg.c,v
+retrieving revision 1.1.6.1
+retrieving revision 1.1.6.2
+diff -u -r1.1.6.1 -r1.1.6.2
+--- linux/kernel/bootimg.c	1 Apr 2003 12:17:41 -0000	1.1.6.1
++++ linux/kernel/bootimg.c	9 Apr 2003 10:12:39 -0000	1.1.6.2
+@@ -238,8 +238,19 @@
+ 	int error = -ENOMEM;
+ 
+ 	if (bootimg_checksum(__va(bootimg_dsc.page_dir),bootimg_dsc.pages) 
+-		!= bootimg_dsc.csum)
++		!= bootimg_dsc.csum) {
+ 		printk("Checksum of kernel image failed.  Rebooting via BIOS\n");
++
++		/* Before calling machine_restart(), make sure it will not
++		 * simply call this function recursively.
++		 */
++		bootimg_dsc.page_dir = NULL;
++		machine_restart(NULL);
++
++		/* We should never get here, but just in case... */
++		for (; ; )
++			__asm__ __volatile__ ("hlt");
++	}
+ 
+ 	code_page = get_identity_mapped_page();
+ 	if (!code_page) goto out3;
+Index: linux/kernel/bootimg_pic.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/kernel/Attic/bootimg_pic.c,v
+retrieving revision 1.1.6.1
+retrieving revision 1.1.6.2
+diff -u -r1.1.6.1 -r1.1.6.2
+--- linux/kernel/bootimg_pic.c	1 Apr 2003 12:17:41 -0000	1.1.6.1
++++ linux/kernel/bootimg_pic.c	9 Apr 2003 10:12:39 -0000	1.1.6.2
+@@ -69,7 +69,8 @@
+ 			for (j = i+1; j < dsc.pages; j++) {
+ 				table = dsc.page_dir+FROM_TABLE(j);
+ 				if (((unsigned long) *table) == to) {
+-					copy_and_swap(*table,dsc.scratch);
++					copy_and_swap((unsigned long) (*table),
++						      dsc.scratch);
+ 					break;
+ 				}
+ 				if ((*table)[PAGE_NR(j)] == to) {
+@@ -79,7 +80,8 @@
+ 				}
+ 				table = dsc.page_dir+TO_TABLE(j);
+ 				if (((unsigned long) *table) == to) {
+-					copy_and_swap(*table,dsc.scratch);
++					copy_and_swap((unsigned long) (*table),
++						      dsc.scratch);
+ 					break;
+ 				}
+ 			}
+Index: linux/include/asm-i386/apic.h
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/include/asm-i386/apic.h,v
+retrieving revision 1.2.2.1
+retrieving revision 1.2.2.1.2.1
+diff -u -r1.2.2.1 -r1.2.2.1.2.1
+--- linux/include/asm-i386/apic.h	12 Mar 2003 19:51:13 -0000	1.2.2.1
++++ linux/include/asm-i386/apic.h	9 Apr 2003 10:12:39 -0000	1.2.2.1.2.1
+@@ -86,6 +86,7 @@
+ extern void apic_pm_unregister(struct pm_dev*);
+ 
+ extern int check_nmi_watchdog (void);
++extern void disable_apic_nmi_watchdog(void);
+ 
+ extern unsigned int nmi_watchdog;
+ #define NMI_NONE	0
+Index: linux/include/linux/crash.h
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/include/linux/Attic/crash.h,v
+retrieving revision 1.1.6.1
+retrieving revision 1.1.6.2
+diff -u -r1.1.6.1 -r1.1.6.2
+--- linux/include/linux/crash.h	1 Apr 2003 12:17:41 -0000	1.1.6.1
++++ linux/include/linux/crash.h	9 Apr 2003 10:12:39 -0000	1.1.6.2
+@@ -71,7 +71,7 @@
+ #define CRASH_ZALLOC_PAGES 16*5*2	/* 2 to handle crash in crash */
+ #define CRASH_LOW_WATER_PAGES 100
+ 
+-#define CRASH_CPU_TIMEOUT 5000	/* 5 sec wait for other cpus to stop */
++#define CRASH_CPU_TIMEOUT 15000	/* 15 sec wait for other cpus to stop */
+ 
+ #define CRASH_MARK_RESERVED(addr) (set_bit(PG_reserved,&mem_map[MAP_NR(addr)].flags))
+ #define CRASH_CLEAR_RESERVED(addr) (clear_bit(PG_reserved,&mem_map[MAP_NR(addr)].flags))
+Index: linux/arch/i386/kernel/crash.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/kernel/Attic/crash.c,v
+retrieving revision 1.1.6.1
+retrieving revision 1.1.6.2
+diff -u -r1.1.6.1 -r1.1.6.2
+--- linux/arch/i386/kernel/crash.c	1 Apr 2003 12:17:40 -0000	1.1.6.1
++++ linux/arch/i386/kernel/crash.c	9 Apr 2003 10:12:38 -0000	1.1.6.2
+@@ -9,6 +9,7 @@
+ #include <linux/crash.h>
+ #include <linux/reboot.h>
+ #include <linux/bootimg.h>
++#include <asm/apic.h>
+ 
+ inline void crash_save_regs(void) {
+ 	static unsigned long regs[8];
+@@ -30,15 +31,23 @@
+  */
+ void crash_save_current_state(struct task_struct *tp)
+ {
++	if (tp != NULL) {
++		/*
++		 *  Here we save ebp instead of esp just in case the compiler
++		 *  decides to put an extra push in before we execute this
++		 *  instruction (thus invalidating our frame pointer).
++		 */
++		asm volatile("movl %%ebp,%0":"=m" (*(u_long *)&tp->thread.esp));
++		tp->thread.eip = (u_long)crash_save_current_state;
++		panic_ksp[smp_processor_id()] = tp->thread.esp;
++		mb();
++	}
++
+ 	/*
+-	 *  Here we save ebp instead of esp just in case the compiler
+-	 *  decides to put an extra push in before we execute this
+-	 *  instruction (thus invalidating our frame pointer).
++	 * Just to be safe, disable the NMI watchdog on the calling CPU so it
++	 * doesn't get in the way while we are trying to save a dump.
+ 	 */
+-	asm volatile("movl %%ebp,%0":"=m" (*(u_long *)&tp->thread.esp));
+-	tp->thread.eip = (u_long)crash_save_current_state;
+-	panic_ksp[smp_processor_id()] = tp->thread.esp;
+-	mb();
++	disable_apic_nmi_watchdog();
+ 
+ 	save_core();
+ 
+Index: linux/arch/i386/kernel/nmi.c
+===================================================================
+RCS file: /chaos/cvs/kernel-rh/linux/arch/i386/kernel/nmi.c,v
+retrieving revision 1.2.2.1.2.3
+retrieving revision 1.2.2.1.2.4
+diff -u -r1.2.2.1.2.3 -r1.2.2.1.2.4
+--- linux/arch/i386/kernel/nmi.c	5 Apr 2003 05:51:27 -0000	1.2.2.1.2.3
++++ linux/arch/i386/kernel/nmi.c	9 Apr 2003 10:12:38 -0000	1.2.2.1.2.4
+@@ -138,7 +138,7 @@
+ 
+ struct pm_dev *nmi_pmdev;
+ 
+-static void disable_apic_nmi_watchdog(void)
++void disable_apic_nmi_watchdog(void)
+ {
+ 	switch (boot_cpu_data.x86_vendor) {
+ 	case X86_VENDOR_AMD:
