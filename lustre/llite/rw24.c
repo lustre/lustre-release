@@ -251,7 +251,7 @@ void ll_complete_writepage_24(struct obd_client_page *ocp, int rc)
                                   page->index, page->index);
         LASSERT(rc == 0);
 #endif
-        ll_ocp_free(page);
+        ocp_free(page);
 
         unlock_page(page);
 }
@@ -278,7 +278,7 @@ static int ll_writepage_24(struct page *page)
         obdo_from_inode(&oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                     OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
-        ocp = ll_ocp_alloc(page);
+        ocp = ocp_alloc(page);
         if (IS_ERR(ocp)) 
                 GOTO(out, rc = PTR_ERR(ocp));
 
@@ -286,12 +286,8 @@ static int ll_writepage_24(struct page *page)
         ocp->ocp_flag = OBD_BRW_CREATE|OBD_BRW_FROM_GRANT;
 
         rc = obd_brw_async_ocp(OBD_BRW_WRITE, exp, &oa, 
-                               ll_i2info(inode)->lli_smd, ocp,
-                               ll_i2sbi(inode)->ll_lc.lc_set, NULL);
-        if (rc == 0)
-                rc = obd_brw_async_barrier(OBD_BRW_WRITE, exp, 
-                                           ll_i2info(inode)->lli_smd,
-                                           ll_i2sbi(inode)->ll_lc.lc_set);
+                               ll_i2info(inode)->lli_smd, ocp, NULL);
+
 out:
         class_export_put(exp);
         RETURN(rc);
