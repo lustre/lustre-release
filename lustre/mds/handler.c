@@ -584,7 +584,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len,
 		OBD_ALLOC(mds->mds_service, sizeof(*mds->mds_service));
 		if (mds->mds_service == NULL)
 			return -ENOMEM;
-		mds->mds_service->srv_buf_size = 4 * 1024;
+		mds->mds_service->srv_buf_size = 64 * 1024;
 		mds->mds_service->srv_portal = MDS_REQUEST_PORTAL;
 		memcpy(&mds->mds_service->srv_self, &peer, sizeof(peer));
 		mds->mds_service->srv_wait_queue = &mds->mds_waitq;

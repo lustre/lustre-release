@@ -629,7 +629,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
 		OBD_ALLOC(ost->ost_service, sizeof(*ost->ost_service));
 		if (ost->ost_service == NULL)
 			return -ENOMEM;
-		ost->ost_service->srv_buf_size = 4 * 1024;
+		ost->ost_service->srv_buf_size = 64 * 1024;
 		ost->ost_service->srv_portal = OST_REQUEST_PORTAL;
 		memcpy(&ost->ost_service->srv_self, &peer, sizeof(peer));
 		ost->ost_service->srv_wait_queue = &ost->ost_waitq;
