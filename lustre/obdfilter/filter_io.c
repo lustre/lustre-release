@@ -659,8 +659,9 @@ int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                         }
 
                         if (time_after(jiffies, lnb->start + 15 * HZ))
-                                CERROR("slow commitrw %lus\n",
-                                       (jiffies - lnb->start) / HZ);
+                                CERROR("slow commitrw %lusi (%lus)\n",
+                                       (jiffies - lnb->start) / HZ,
+                                       (jiffies - now) / HZ);
 
                         if (cmd & OBD_BRW_WRITE) {
                                 int err = filter_commit_write(lnb, 0);
@@ -673,8 +674,9 @@ int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
 
                         f_dput(lnb->dentry);
                         if (time_after(jiffies, lnb->start + 15 * HZ))
-                                CERROR("slow commit_write %lus\n",
-                                       (jiffies - lnb->start) / HZ);
+                                CERROR("slow commit_write %lus (%lus)\n",
+                                       (jiffies - lnb->start) / HZ,
+                                       (jiffies - now) / HZ);
                 }
 
                 /* FIXME: MULTI OBJECT BRW */
@@ -699,8 +701,9 @@ int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                                 continue;
 
                         if (time_after(jiffies, lnb->start + 15 * HZ))
-                                CERROR("slow commitrw locked %lus\n",
-                                       (jiffies - lnb->start) / HZ);
+                                CERROR("slow commitrw locked %lus (%lus)\n",
+                                       (jiffies - lnb->start) / HZ,
+                                       (jiffies - now) / HZ);
 
                         err = filter_write_locked_page(lnb);
                         if (!rc)
@@ -709,8 +712,9 @@ int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                         found_locked--;
 
                         if (time_after(jiffies, lnb->start + 15 * HZ))
-                                CERROR("slow commit_write locked %lus\n",
-                                       (jiffies - lnb->start) / HZ);
+                                CERROR("slow commit_write locked %lus (%lus)\n",
+                                       (jiffies - lnb->start) / HZ,
+                                       (jiffies - now) / HZ);
                 }
         }
 
