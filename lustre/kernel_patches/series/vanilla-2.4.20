@@ -51,4 +51,6 @@ ext3-xattr-ptr-arith-fix.patch
 gfp_memalloc-2.4.22.patch
 procfs-ndynamic-2.4.patch
 linux-2.4.20-tmpfs-xattr.patch
+linux-2.4.20-tmpfs-iopen.patch
+linux-2.4.20-filemap.patch
 ext3-truncate-buffer-head.patch
