@@ -1,5 +1,5 @@
---- fs/ext3/namei.c.orig	Thu Jan 30 01:15:13 2003
-+++ fs/ext3/namei.c	Sat Feb  1 00:33:46 2003
+--- linux/fs/ext3/namei.c.orig	Thu Jan 30 01:15:13 2003
++++ linux/fs/ext3/namei.c	Sat Feb  1 00:33:46 2003
 @@ -710,6 +710,24 @@
  	return ret;
  }
@@ -34,8 +34,8 @@
  
  		if (!inode)
  			return ERR_PTR(-EACCES);
---- fs/ext3/inode.c.orig	Thu Jan 30 01:15:13 2003
-+++ fs/ext3/inode.c	Sat Feb  1 00:34:45 2003
+--- linux/fs/ext3/inode.c.orig	Thu Jan 30 01:15:13 2003
++++ linux/fs/ext3/inode.c	Sat Feb  1 00:34:45 2003
 @@ -166,6 +166,9 @@
   */
  void extN_put_inode (struct inode * inode)
