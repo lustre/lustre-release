@@ -282,7 +282,8 @@ do {                                                                          \
 
 #define PORTAL_ALLOC_GFP(ptr, size, mask)                                 \
 do {                                                                      \
-        LASSERT (!in_interrupt());                                        \
+        LASSERT(!in_interrupt() ||                                        \
+               (size <= PORTAL_VMALLOC_SIZE && mask == GFP_ATOMIC));      \
         if ((size) > PORTAL_VMALLOC_SIZE)                                 \
                 (ptr) = vmalloc(size);                                    \
         else                                                              \
@@ -1026,21 +1027,20 @@ static inline int portal_ioctl_getdata(char *buf, char *end, void *arg)
 #define IOC_PORTAL_MAX_NR                             42
 
 enum {
-        QSWNAL  =  1,
-        SOCKNAL,
-        GMNAL,
-        TOENAL,
-        TCPNAL,
-        SCIMACNAL,
-        ROUTER,
-        IBNAL,
+        QSWNAL    = 1,
+        SOCKNAL   = 2,
+        GMNAL     = 3,
+        /*          4 unused */
+        TCPNAL    = 5,
+        SCIMACNAL = 6,
+        ROUTER    = 7,
+        IBNAL     = 8,
         NAL_ENUM_END_MARKER
 };
 
 #ifdef __KERNEL__
 extern ptl_handle_ni_t  kqswnal_ni;
 extern ptl_handle_ni_t  ksocknal_ni;
-extern ptl_handle_ni_t  ktoenal_ni;
 extern ptl_handle_ni_t  kgmnal_ni;
 extern ptl_handle_ni_t  kibnal_ni;
 extern ptl_handle_ni_t  kscimacnal_ni;

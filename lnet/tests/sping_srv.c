@@ -285,7 +285,7 @@ static void /*__exit*/ pingsrv_cleanup(void)
 
 MODULE_PARM(nal, "i");
 MODULE_PARM_DESC(nal, "Use the specified NAL "
-                "(6-kscimacnal, 4-toenal, 2-ksocknal, 1-kqswnal)");
+                "(6-kscimacnal, 2-ksocknal, 1-kqswnal)");
  
 MODULE_AUTHOR("Brian Behlendorf (LLNL)");
 MODULE_DESCRIPTION("A kernel space ping server for portals testing");

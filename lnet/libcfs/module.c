@@ -414,8 +414,6 @@ kportal_get_ni (int nal)
                 return (PORTAL_SYMBOL_GET(kqswnal_ni));
         case SOCKNAL:
                 return (PORTAL_SYMBOL_GET(ksocknal_ni));
-        case TOENAL:
-                return  (PORTAL_SYMBOL_GET(ktoenal_ni));
         case GMNAL:
                 return  (PORTAL_SYMBOL_GET(kgmnal_ni));
         case IBNAL:
@@ -443,9 +441,6 @@ kportal_put_ni (int nal)
                 break;
         case SOCKNAL:
                 PORTAL_SYMBOL_PUT(ksocknal_ni);
-                break;
-        case TOENAL:
-                PORTAL_SYMBOL_PUT(ktoenal_ni);
                 break;
         case GMNAL:
                 PORTAL_SYMBOL_PUT(kgmnal_ni);

@@ -22,7 +22,7 @@ ext3-san-2.4.20.patch
 ext3-map_inode_page.patch
 ext3-error-export.patch
 iopen-2.4.20.patch
-tcp-zero-copy.patch
+tcp-zero-copy-2.4.19-pre1.patch 
 jbd-dont-account-blocks-twice.patch
 jbd-commit-tricks.patch
 ext3-no-write-super.patch
@@ -44,3 +44,4 @@ kdev-2.4.19-pre1.patch
 resched-2.4.19-pre1.patch
 ext3-xattr-ptr-arith-fix.patch
 gfp_memalloc-2.4.22.patch
+vmalloc_to_page-2.4.19-pre1.patch 

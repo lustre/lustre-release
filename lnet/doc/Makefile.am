@@ -8,7 +8,12 @@ LYX2TXT = lyx --export text
 LYX2HTML = lyx --export html
 SUFFIXES = .lin .lyx .pdf .sgml .html .txt .fig .eps
 
-DOCS = portals3.pdf 
+if DOC
+  DOCS = portals3.pdf
+else
+  DOCS =
+endif
+
 IMAGES = file.eps flow_new.eps get.eps mpi.eps portals.eps put.eps
 LYXFILES= portals3.lyx
 

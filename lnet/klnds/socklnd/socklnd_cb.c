@@ -2130,7 +2130,11 @@ ksocknal_setup_sock (struct socket *sock)
         int             option;
         struct linger   linger;
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        sock->sk->sk_allocation = GFP_NOFS;
+#else
         sock->sk->allocation = GFP_NOFS;
+#endif
 
         /* Ensure this socket aborts active sends immediately when we close
          * it. */

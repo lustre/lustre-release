@@ -686,16 +686,18 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
         copied = 0;
         list_for_each(pos, &my_pages) {
                 unsigned long to_copy;
-                page = list_entry(pos, struct page, list);
+                void *addr;
 
+                page = list_entry(pos, struct page, list);
                 to_copy = min(total - off, PAGE_SIZE);
                 if (to_copy == 0) {
                         off = 0;
                         to_copy = min(debug_size - off, PAGE_SIZE);
                 }
 finish_partial:
-                memcpy(kmap(page), debug_buf + off, to_copy);
-                kunmap(page);
+                addr = kmap_atomic(page, KM_USER0);
+                memcpy(addr, debug_buf + off, to_copy);
+                kunmap_atomic(addr, KM_USER0);
                 copied += to_copy;
                 if (copied >= total)
                         break;
@@ -931,7 +933,6 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         case QSWNAL:
         case GMNAL:
         case IBNAL:
-        case TOENAL:
         case SCIMACNAL:
                 sprintf(str, "%u:%u", (__u32)(nid >> 32), (__u32)nid);
                 break;
@@ -954,25 +955,8 @@ extern int is_kernel_text_address(unsigned long addr);
 
 char *portals_debug_dumpstack(void)
 {
-        int size;
-        unsigned long addr;
-        char *buf = stack_backtrace;
-        char *pbuf = buf;
-        unsigned long *stack = (unsigned long *)&buf;
-
-        size = sprintf(pbuf, " Call Trace: ");
-        pbuf += size;
-        while (((long) stack & (THREAD_SIZE-1)) != 0) {
-                addr = *stack++;
-                if (is_kernel_text_address(addr)) {
-                        size = sprintf(pbuf, "[<%08lx>] ", addr);
-                        pbuf += size;
-                        if (buf + LUSTRE_TRACE_SIZE <= pbuf + 12)
-                                break;
-                }
-        }
-
-        return buf;
+        asm("int $3");
+        return "dump stack";
 }
 
 #elif defined(__i386__)

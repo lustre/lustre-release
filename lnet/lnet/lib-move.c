@@ -765,6 +765,9 @@ parse_get(nal_cb_t *nal, ptl_hdr_t *hdr, void *private, lib_msg_t *msg)
 
         reply.msg.reply.dst_wmd = hdr->msg.get.return_wmd;
 
+        /* NB call lib_send() _BEFORE_ lib_recv() completes the incoming
+         * message.  Some NALs _require_ this to implement optimized GET */
+
         rc = lib_send (nal, private, msg, &reply, PTL_MSG_REPLY, 
                        hdr->src_nid, hdr->src_pid, md, offset, mlength);
         if (rc != PTL_OK)
