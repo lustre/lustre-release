@@ -174,7 +174,7 @@ static int ll_readpage(struct file *file, struct page *first_page)
 
         max_pages = ((end_index - first_page->index) << PAGE_CACHE_SHIFT) >>
                 PAGE_SHIFT;
-        pgs = kmalloc(max_pages * sizeof(*pgs), GFP_USER);
+        OBD_ALLOC_GFP(pgs, max_pages * sizeof(*pgs), GFP_USER);
         if (pgs == NULL)
                 RETURN(-ENOMEM);
 
@@ -213,6 +213,10 @@ static int ll_readpage(struct file *file, struct page *first_page)
                 end_index = page->index + 1;
         } else if (extent_end < end_index)
                 end_index = extent_end;
+
+        CDEBUG(D_INFO, "max_pages: %d, extent_end: %lu, end_index: %lu, "
+               "i_size: "LPU64"\n",
+               max_pages, extent_end, end_index, inode->i_size);
 
         /* to balance the find_get_page ref the other pages get that is
          * decrefed on teardown.. */
@@ -317,7 +321,7 @@ static int ll_readpage(struct file *file, struct page *first_page)
                 page_cache_release(page);
         }
 
-        kfree(pgs);
+        OBD_FREE(pgs, max_pages * sizeof(*pgs));
         RETURN(rc);
 } /* ll_readpage */
 
