@@ -279,8 +279,15 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
         CDEBUG(D_HA, "added record "LPX64": idx: %u, %u bytes\n",
                loghandle->lgh_id.lgl_oid, index, le32_to_cpu(rec->lrh_len));
         if (rc == 0 && reccookie) {
-                reccookie->lgc_lgl = loghandle->lgh_id;
-                reccookie->lgc_index = index;
+                if (llog_cookie_get_flags(reccookie) & LLOG_COOKIE_REPLAY) {
+                        LASSERT(EQ_LOGID(reccookie->lgc_lgl, loghandle->lgh_id));
+                        LASSERT(reccookie->lgc_index == index);        
+                } else {
+                        reccookie->lgc_lgl = loghandle->lgh_id;
+                        reccookie->lgc_index = index;
+                        llog_cookie_add_flags(reccookie, LLOG_COOKIE_REPLAY);
+                }
+
                 if (le32_to_cpu(rec->lrh_type) == MDS_UNLINK_REC)
                         reccookie->lgc_subsys = LLOG_UNLINK_ORIG_CTXT;
                 else if (le32_to_cpu(rec->lrh_type) == OST_SZ_REC)
@@ -624,23 +631,63 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
         if (logid != NULL) {
-                char logname[LL_FID_NAMELEN + 10] = "OBJECTS/";
+                struct dentry *dchild;
                 char fidname[LL_FID_NAMELEN];
-                ll_fid2str(fidname, logid->lgl_oid, logid->lgl_ogen);
-                strcat(logname, fidname);
+                int fidlen = 0;
 
-                handle->lgh_file = filp_open(logname, O_RDWR | O_LARGEFILE, 0644);
+                down(&ctxt->loc_objects_dir->d_inode->i_sem);
+                fidlen = ll_fid2str(fidname, logid->lgl_oid, logid->lgl_ogen);
+                dchild = lookup_one_len(fidname, ctxt->loc_objects_dir, fidlen);
+                if (IS_ERR(dchild)) {
+                        up(&ctxt->loc_objects_dir->d_inode->i_sem);
+                        GOTO(cleanup, rc = PTR_ERR(dchild));
+                }
+
+                if (dchild->d_inode == NULL) {
+                        struct dentry_params dp;
+                        struct inode *inode;
+
+                        dchild->d_fsdata = (void *) &dp;
+                        dp.p_ptr = NULL;
+                        dp.p_inum = logid->lgl_oid;
+                        rc = ll_vfs_create(ctxt->loc_objects_dir->d_inode,
+                                           dchild, S_IFREG, NULL); 
+                        if (dchild->d_fsdata == (void *)(unsigned long)logid->lgl_oid)
+                                dchild->d_fsdata = NULL;
+                        if (rc) {
+                                CDEBUG(D_INODE, "err during create: %d\n", rc);
+                                dput(dchild);
+                                up(&ctxt->loc_objects_dir->d_inode->i_sem);
+                                GOTO(cleanup, rc);
+                        }
+                        inode = dchild->d_inode;
+                        LASSERT(inode->i_ino == logid->lgl_oid);
+                        inode->i_generation = logid->lgl_ogen;
+                        CDEBUG(D_HA, "recreated ino %lu with gen %u\n",
+                               inode->i_ino, inode->i_generation);
+                        mark_inode_dirty(inode);
+                }
+
+                mntget(ctxt->loc_lvfs_ctxt->pwdmnt);
+                handle->lgh_file = dentry_open(dchild, 
+                                               ctxt->loc_lvfs_ctxt->pwdmnt,
+                                               O_RDWR | O_LARGEFILE);
                 if (IS_ERR(handle->lgh_file)) {
-                        CERROR("cannot open %s file\n", logname);
+                        dput(dchild);
+                        up(&ctxt->loc_objects_dir->d_inode->i_sem);
                         GOTO(cleanup, rc = PTR_ERR(handle->lgh_file));
                 }
                 if (!S_ISREG(handle->lgh_file->f_dentry->d_inode->i_mode)) {
-                        CERROR("%s is not a regular file!: mode = %o\n", logname,
+                        CERROR("%s is not a regular file!: mode = %o\n", fidname,
                                handle->lgh_file->f_dentry->d_inode->i_mode);
+                        filp_close(handle->lgh_file, 0);
+                        up(&ctxt->loc_objects_dir->d_inode->i_sem);
                         GOTO(cleanup, rc = -ENOENT);
                 }
-                LASSERT(handle->lgh_file->f_dentry->d_parent == ctxt->loc_objects_dir);
+
+                up(&ctxt->loc_objects_dir->d_inode->i_sem);
                 handle->lgh_id = *logid;
+
         } else if (name) {
                 handle->lgh_file = llog_filp_open(name, open_flags, 0644);
                 if (IS_ERR(handle->lgh_file))
@@ -652,6 +699,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 rc = llog_add_link_object(ctxt, handle->lgh_id, handle->lgh_file->f_dentry);
                 if (rc)
                         GOTO(cleanup, rc);
+
         } else {
                 handle->lgh_file = llog_object_create(ctxt);
                 if (IS_ERR(handle->lgh_file))
