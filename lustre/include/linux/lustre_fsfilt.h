@@ -90,6 +90,7 @@ extern void fsfilt_put_ops(struct fsfilt_operations *fs_ops);
 #define FSFILT_OP_LINK           9
 #define FSFILT_OP_CREATE_LOG    10
 #define FSFILT_OP_UNLINK_LOG    11
+#define FSFILT_OP_CANCEL_UNLINK_LOG    12
 
 static inline void *fsfilt_start(struct obd_device *obd, struct inode *inode,
                                  int op, struct obd_trans_info *oti)
