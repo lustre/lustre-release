@@ -28,4 +28,5 @@ fi
 
 TOP_PATCH=$(top_patch)
 mpatch $* $(top_patch)
+sum-series applied-patch
 echo "Refreshed $TOP_PATCH"
