@@ -10,7 +10,7 @@ modulefs_DATA = mdc.o
 EXTRA_PROGRAMS = mdc
 
 LINX= mds_updates.c ll_pack.c lov_pack.c client.c
-mdc_SOURCES =  mdc_request.c mdc_reint.c $(LINX)
+mdc_SOURCES =  mdc_request.c mdc_reint.c lproc_mdc.c $(LINX)
 
 lov_pack.c: 
 	test -e lov_pack.c || ln -sf $(top_srcdir)/lib/lov_pack.c .
