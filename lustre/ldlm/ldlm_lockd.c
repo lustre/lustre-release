@@ -247,8 +247,8 @@ static int _ldlm_callback(struct ptlrpc_service *svc,
                                 lock->l_blocking_ast(lock, new, lock->l_data,
                                                      lock->l_data_len, NULL);
                 } else {
-                        CDEBUG(D_INFO, "Lock still has references; lock will be"
-                               " cancelled later.\n");
+                        LDLM_DEBUG(lock, "Lock still has references, will be"
+                               " cancelled later");
                 }
         }
 
