@@ -104,7 +104,7 @@ static int oscc_precreate(struct osc_creator *oscc, struct osc_created *osccd,
         struct l_wait_info lwi = { 0 };
         ENTRY;
 
-        if (oscc_has_objects(oscc, oscc->oscc_grow_count))
+        if (oscc_has_objects(oscc, oscc->oscc_kick_barrier))
                 RETURN(0);
 
         spin_lock(&osccd->osccd_lock);
@@ -164,8 +164,8 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
         while (try_again) {
                 spin_lock(&oscc->oscc_lock);
                 if (oscc->oscc_last_id >= oscc->oscc_next_id) {
-                        oa->o_id = oscc->oscc_next_id;
                         memcpy(oa, &oscc->oscc_oa, sizeof(*oa));
+                        oa->o_id = oscc->oscc_next_id;
                         lsm->lsm_object_id = oscc->oscc_next_id;
                         *ea = lsm;
                         oscc->oscc_next_id++;
@@ -277,9 +277,9 @@ void oscc_init(struct lustre_handle *exph)
         init_waitqueue_head(&oed->oed_oscc.oscc_waitq);
         oed->oed_oscc.oscc_exph = exph;
         oed->oed_oscc.oscc_osccd = &osc_created;
-        oed->oed_oscc.oscc_kick_barrier = 1;
-        oed->oed_oscc.oscc_grow_count = 1;
-        oed->oed_oscc.oscc_initial_create_count = 1;
+        oed->oed_oscc.oscc_kick_barrier = 50;
+        oed->oed_oscc.oscc_grow_count = 100;
+        oed->oed_oscc.oscc_initial_create_count = 100;
 
         oed->oed_oscc.oscc_next_id = 2;
         oed->oed_oscc.oscc_last_id = 1;
