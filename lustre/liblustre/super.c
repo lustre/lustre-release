@@ -217,6 +217,7 @@ struct inode* llu_new_inode(struct filesys *fs, ino_t ino, mode_t mode)
 #else
 			     mode,	/* all of the bits! */
 #endif
+                             0,
 			     &llu_inode_ops, lli);
 
 	if (!inode)
