@@ -2,10 +2,10 @@
 #if SPINLOCK_DEBUG
 # if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)) || defined(CONFIG_RH_2_4_20)
 #  define SIGNAL_MASK_ASSERT() \
-   LASSERT(current->sighand->siglock->magic == SPINLOCK_MAGIC)
+   LASSERT(current->sighand->siglock.magic == SPINLOCK_MAGIC)
 # else
 #  define SIGNAL_MASK_ASSERT() \
-   LASSERT(current->sigmask_lock->magic == SPINLOCK_MAGIC)
+   LASSERT(current->sigmask_lock.magic == SPINLOCK_MAGIC)
 # endif
 #else
 # define SIGNAL_MASK_ASSERT()
