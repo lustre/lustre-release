@@ -512,6 +512,7 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
 
                 cfg.cfg_instance = sbi->ll_instance;
                 cfg.cfg_uuid = sbi->ll_sb_uuid;
+                cfg.cfg_local_nid = lmd->lmd_local_nid;
                 err = lustre_process_log(lmd, lmd->lmd_profile, &cfg);
                 if (err < 0) {
                         CERROR("Unable to process log: %s\n", lmd->lmd_profile);
