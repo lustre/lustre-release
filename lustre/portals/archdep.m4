@@ -548,7 +548,7 @@ fi
 # ---------- check ->lookup_raw() support --------
 
 AC_MSG_CHECKING([if kernel supports ->lookup_raw()])
-HAVE_LOOKUP_RAW="`grep -c 'lookup_raw.*struct inode' $LINUX/include/linux/proc_fs.h`"
+HAVE_LOOKUP_RAW="`grep -c 'lookup_raw.*struct inode' $LINUX/include/linux/fs.h`"
 if test "$HAVE_LOOKUP_RAW" != 0 ; then
 	AC_DEFINE(HAVE_LOOKUP_RAW, 1, [the kernel supports ->lookup_raw()])
 	AC_MSG_RESULT([yes])
