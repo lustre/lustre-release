@@ -451,6 +451,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		       obddev->obd_type->typ_name);
 		if ( !obddev->obd_type->typ_ops || 
 		     !obddev->obd_type->typ_ops->o_setup ) {
+			obddev->obd_type->typ_refcnt++;
 			obddev->obd_flags |= OBD_SET_UP;
 			return 0;
 		}
