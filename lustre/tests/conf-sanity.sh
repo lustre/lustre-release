@@ -77,7 +77,7 @@ mount_client() {
 umount_client() {
 	local MOUNTPATH=$1
 	echo "umount lustre on ${MOUNTPATH}....."
-	zconf_umount $MOUNTPATH $CMDVERBOSE || return 97
+	zconf_umount `hostname`  $MOUNTPATH $CMDVERBOSE || return 97
 }
 
 manual_umount_client(){

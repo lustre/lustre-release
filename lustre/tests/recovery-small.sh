@@ -35,11 +35,11 @@ setup() {
     start ost2 --reformat $OSTLCONFARGS 
     [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
     start mds $MDSLCONFARGS --reformat
-    zconf_mount $MOUNT
+    zconf_mount `hostname`  $MOUNT
 }
 
 cleanup() {
-    zconf_umount $MOUNT
+    zconf_umount `hostname` $MOUNT
     stop mds ${FORCE} $MDSLCONFARGS
     stop ost2 ${FORCE} --dump cleanup.log
     stop ost ${FORCE} --dump cleanup.log

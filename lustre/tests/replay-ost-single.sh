@@ -34,7 +34,7 @@ cleanup() {
     if [ $activeost != "ost" ]; then
         fail ost
     fi
-    zconf_umount $MOUNT
+    zconf_umount `hostname` $MOUNT
     stop mds ${FORCE} $MDSLCONFARGS
     stop ost ${FORCE} --dump cleanup.log
 }
@@ -55,7 +55,7 @@ start ost --reformat $OSTLCONFARGS
 
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 start mds --reformat $MDSLCONFARGS
-zconf_mount $MOUNT
+zconf_mount `hostname` $MOUNT
 
 mkdir -p $DIR
 
