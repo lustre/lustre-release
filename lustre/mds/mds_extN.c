@@ -21,8 +21,9 @@
 #include <linux/extN_jbd.h>
 #include <linux/extN_xattr.h>
 #include <linux/lustre_mds.h>
+#include <linux/module.h>
 
-struct mds_fs_operations mds_extN_fs_ops;
+static struct mds_fs_operations mds_extN_fs_ops;
 static kmem_cache_t *jcb_cache;
 static int jcb_cache_count;
 
@@ -43,66 +44,6 @@ struct mds_objid {
 #define XATTR_LUSTRE_MDS_OBJID          "system.lustre_mds_objid"
 
 #define XATTR_MDS_MO_MAGIC              0x4711
-
-int mds_extN_init(struct mds_obd *mds)
-{
-        int rc;
-
-        /*
-         * Replace the client filesystem delete_inode method with our own,
-         * so that we can clear the object ID before the inode is deleted.
-         * The fs_delete_inode method will call cl_delete_inode for us.
-         *
-         * We need to do this for the MDS superblock only, hence we install
-         * a modified copy of the original superblock method table.
-         *
-         * We still assume that there is only a single MDS client filesystem
-         * type, as we don't have access to the mds struct in delete_inode
-         * and store the client delete_inode method in a global table.  This
-         * will only become a problem when multiple MDSs are running on a
-         * single host with different client filesystems.
-         */
-        OBD_ALLOC(mds->mds_sop, sizeof(*mds->mds_sop));
-        if (!mds->mds_sop)
-                GOTO(out, rc = -ENOMEM);
-
-        memcpy(mds->mds_sop, mds->mds_sb->s_op, sizeof(*mds->mds_sop));
-        mds_extN_fs_ops.cl_delete_inode = mds->mds_sop->delete_inode;
-        mds->mds_sop->delete_inode = mds_extN_fs_ops.fs_delete_inode;
-        mds->mds_sb->s_op = mds->mds_sop;
-
-        //rc = extN_xattr_register();
-        jcb_cache = kmem_cache_create("mds_extN_jcb",
-                                      sizeof(struct mds_cb_data), 0,
-                                      SLAB_POISON, NULL, NULL);
-        if (!jcb_cache) {
-                CERROR("error allocating MDS journal callback cache\n");
-                GOTO(out_sop, rc = -ENOMEM);
-        }
-
-        return 0;
-
-out_sop:
-        OBD_FREE(mds->mds_sop, sizeof(*mds->mds_sop));
-out:
-        return rc;
-}
-
-int mds_extN_exit(struct mds_obd *mds)
-{
-        int rc;
-
-        rc = kmem_cache_destroy(jcb_cache);
-
-        if (rc || jcb_cache_count) {
-                CERROR("can't free MDS callback cache: count %d, rc = %d\n",
-                       jcb_cache_count, rc);
-        }
-
-        //rc = extN_xattr_unregister();
-        OBD_FREE(mds->mds_sop, sizeof(*mds->mds_sop));
-        return rc;
-}
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -340,17 +281,57 @@ static int mds_extN_journal_data(struct file *filp)
         return 0;
 }
 
-struct mds_fs_operations mds_extN_fs_ops = {
-        fs_init:        mds_extN_init,
-        fs_exit:        mds_extN_exit,
-        fs_start:       mds_extN_start,
-        fs_commit:      mds_extN_commit,
-        fs_setattr:     mds_extN_setattr,
-        fs_set_objid:   mds_extN_set_objid,
-        fs_get_objid:   mds_extN_get_objid,
-        fs_readpage:    mds_extN_readpage,
-        fs_delete_inode:mds_extN_delete_inode,
-        cl_delete_inode:clear_inode,
-        fs_journal_data:mds_extN_journal_data,
-        fs_set_last_rcvd:mds_extN_set_last_rcvd,
+static struct mds_fs_operations mds_extN_fs_ops = {
+        fs_start:               mds_extN_start,
+        fs_commit:              mds_extN_commit,
+        fs_setattr:             mds_extN_setattr,
+        fs_set_objid:           mds_extN_set_objid,
+        fs_get_objid:           mds_extN_get_objid,
+        fs_readpage:            mds_extN_readpage,
+        fs_delete_inode:        mds_extN_delete_inode,
+        cl_delete_inode:        clear_inode,
+        fs_journal_data:        mds_extN_journal_data,
+        fs_set_last_rcvd:       mds_extN_set_last_rcvd,
 };
+
+static int __init mds_extN_init(void)
+{
+        int rc;
+
+        //rc = extN_xattr_register();
+        jcb_cache = kmem_cache_create("mds_extN_jcb",
+                                      sizeof(struct mds_cb_data), 0,
+                                      SLAB_POISON, NULL, NULL);
+        if (!jcb_cache) {
+                CERROR("error allocating MDS journal callback cache\n");
+                GOTO(out, rc = -ENOMEM);
+        }
+        rc = mds_register_fs_type(&mds_extN_fs_ops, "extN");
+
+        if (rc)
+                kmem_cache_destroy(jcb_cache);
+out:
+        return rc;
+}
+
+static void __exit mds_extN_exit(void)
+{
+        int rc;
+
+        mds_unregister_fs_type("extN");
+        rc = kmem_cache_destroy(jcb_cache);
+
+        if (rc || jcb_cache_count) {
+                CERROR("can't free MDS callback cache: count %d, rc = %d\n",
+                       jcb_cache_count, rc);
+        }
+
+        //rc = extN_xattr_unregister();
+}
+
+MODULE_AUTHOR("Cluster File Systems, Inc. <adilger@clusterfs.com>");
+MODULE_DESCRIPTION("Lustre MDS extN Filesystem Helper v0.1");
+MODULE_LICENSE("GPL");
+
+module_init(mds_extN_init);
+module_exit(mds_extN_exit);

@@ -147,13 +147,17 @@ int mdc_rename(struct ptlrpc_client *, struct ptlrpc_connection *,
                struct ptlrpc_request **);
 int mdc_create_client(char *uuid, struct ptlrpc_client *cl);
 
+extern int mds_client_add(struct mds_obd *mds, struct mds_client_data *mcd,
+                          int cl_off);
+
+/* mds/mds_fs.c */
 struct mds_fs_operations {
         void   *(* fs_start)(struct inode *inode, int op);
         int     (* fs_commit)(struct inode *inode, void *handle);
         int     (* fs_setattr)(struct dentry *dentry, void *handle,
                                struct iattr *iattr);
         int     (* fs_set_objid)(struct inode *inode, void *handle, obd_id id);
-        void    (* fs_get_objid)(struct inode *inode, obd_id *id);
+        int     (* fs_get_objid)(struct inode *inode, obd_id *id);
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
         void    (* fs_delete_inode)(struct inode *inode);
@@ -162,15 +166,10 @@ struct mds_fs_operations {
         int     (* fs_set_last_rcvd)(struct mds_obd *mds, void *handle);
 };
 
-#define MDS_FSOP_UNLINK         1
-#define MDS_FSOP_RMDIR          2
-#define MDS_FSOP_RENAME         3
-#define MDS_FSOP_CREATE         4
-#define MDS_FSOP_MKDIR          5
-#define MDS_FSOP_SYMLINK        6
-#define MDS_FSOP_MKNOD          7
-#define MDS_FSOP_SETATTR        8
-#define MDS_FSOP_LINK           9
+extern int mds_register_fs_type(struct mds_fs_operations *op, const char *name);
+extern void mds_unregister_fs_type(const char *name);
+extern int mds_fs_setup(struct mds_obd *mds, struct vfsmount *mnt);
+extern void mds_fs_cleanup(struct mds_obd *mds);
 
 static inline void *mds_fs_start(struct mds_obd *mds, struct inode *inode,
                                  int op)
@@ -203,10 +202,10 @@ static inline int mds_fs_set_objid(struct mds_obd *mds, struct inode *inode,
         return mds->mds_fsops->fs_set_objid(inode, handle, id);
 }
 
-static inline void mds_fs_get_objid(struct mds_obd *mds, struct inode *inode,
+static inline int mds_fs_get_objid(struct mds_obd *mds, struct inode *inode,
                                     __u64 *id)
 {
-        mds->mds_fsops->fs_get_objid(inode, id);
+        return mds->mds_fsops->fs_get_objid(inode, id);
 }
 
 static inline ssize_t mds_fs_readpage(struct mds_obd *mds, struct file *file,
@@ -230,9 +229,15 @@ static inline ssize_t mds_fs_journal_data(struct mds_obd *mds,
         return mds->mds_fsops->fs_journal_data(file);
 }
 
-extern struct mds_fs_operations mds_ext2_fs_ops;
-extern struct mds_fs_operations mds_ext3_fs_ops;
-extern struct mds_fs_operations mds_extN_fs_ops;
+#define MDS_FSOP_UNLINK         1
+#define MDS_FSOP_RMDIR          2
+#define MDS_FSOP_RENAME         3
+#define MDS_FSOP_CREATE         4
+#define MDS_FSOP_MKDIR          5
+#define MDS_FSOP_SYMLINK        6
+#define MDS_FSOP_MKNOD          7
+#define MDS_FSOP_SETATTR        8
+#define MDS_FSOP_LINK           9
 
 #endif /* __KERNEL__ */
 

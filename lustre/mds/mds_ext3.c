@@ -19,8 +19,18 @@
 #include <linux/jbd.h>
 #include <linux/ext3_fs.h>
 #include <linux/ext3_jbd.h>
-#include <linux/extN_fs.h>
 #include <linux/lustre_mds.h>
+#include <linux/module.h>
+
+static struct mds_fs_operations mds_ext3_fs_ops;
+static kmem_cache_t *jcb_cache;
+static int jcb_cache_count;
+
+struct mds_cb_data {
+        struct journal_callback cb_jcb;
+        struct mds_obd *cb_mds;
+        __u64 cb_last_rcvd;
+};
 
 /*
  * We don't currently need any additional blocks for rmdir and
@@ -36,19 +46,29 @@ static void *mds_ext3_start(struct inode *inode, int op)
         switch(op) {
         case MDS_FSOP_RMDIR:
         case MDS_FSOP_UNLINK:
-                nblocks += EXT3_DELETE_TRANS_BLOCKS; break;
+                nblocks += EXT3_DELETE_TRANS_BLOCKS;
+                break;
         case MDS_FSOP_RENAME:
+                /* We may be modifying two directories */
                 nblocks += EXT3_DATA_TRANS_BLOCKS;
-        case MDS_FSOP_CREATE:
-                // FIXME: when we store oa_id in an EA we need more blocks
-                // nblocks += 0;
-        case MDS_FSOP_MKDIR:
         case MDS_FSOP_SYMLINK:
-                /* Create new directory or symlink (more data blocks) */
-                nblocks += 2;
+                /* Possible new block + block bitmap + GDT for long symlink */
+                nblocks += 3;
+        case MDS_FSOP_CREATE:
+        case MDS_FSOP_MKDIR:
         case MDS_FSOP_MKNOD:
-                /* Change parent directory + setattr on new inode */
-                nblocks += EXT3_DATA_TRANS_BLOCKS + 3;
+                /* New inode + block bitmap + GDT for new file */
+                nblocks += 3;
+        case MDS_FSOP_LINK:
+                /* Change parent directory */
+                nblocks += EXT3_DATA_TRANS_BLOCKS;
+                break;
+        case MDS_FSOP_SETATTR:
+                /* Setattr on inode */
+                nblocks += 1;
+                break;
+        default: CERROR("unknown transaction start op %d\n", op);
+                 LBUG();
         }
 
         return journal_start(EXT3_JOURNAL(inode), nblocks);
@@ -107,9 +127,11 @@ static int mds_ext3_set_objid(struct inode *inode, void *handle, obd_id id)
         return 0;
 }
 
-static void mds_ext3_get_objid(struct inode *inode, obd_id *id)
+static int mds_ext3_get_objid(struct inode *inode, obd_id *id)
 {
         *id = le64_to_cpu(EXT3_I(inode)->i_data[0]);
+
+        return 0;
 }
 
 static ssize_t mds_ext3_readpage(struct file *file, char *buf, size_t count,
@@ -139,36 +161,6 @@ static ssize_t mds_ext3_readpage(struct file *file, char *buf, size_t count,
         return rc;
 }
 
-static ssize_t mds_extN_readpage(struct file *file, char *buf, size_t count,
-                                 loff_t *offset)
-{
-        struct inode *inode = file->f_dentry->d_inode;
-        int rc = 0;
-
-        if (S_ISREG(inode->i_mode))
-                rc = file->f_op->read(file, buf, count, offset);
-        else {
-                struct buffer_head *bh;
-
-                /* FIXME: this assumes the blocksize == count, but the calling
-                 *        function will detect this as an error for now */
-                bh = extN_bread(NULL, inode,
-                                *offset >> inode->i_sb->s_blocksize_bits,
-                                0, &rc);
-
-                if (bh) {
-                        memcpy(buf, bh->b_data, inode->i_blksize);
-                        brelse(bh);
-                        rc = inode->i_blksize;
-                }
-        }
-
-        return rc;
-}
-
-struct mds_fs_operations mds_ext3_fs_ops;
-struct mds_fs_operations mds_extN_fs_ops;
-
 static void mds_ext3_delete_inode(struct inode *inode)
 {
         if (S_ISREG(inode->i_mode)) {
@@ -191,34 +183,6 @@ static void mds_ext3_delete_inode(struct inode *inode)
                 mds_ext3_fs_ops.cl_delete_inode(inode);
 }
 
-static void mds_extN_delete_inode(struct inode *inode)
-{
-        if (S_ISREG(inode->i_mode)) {
-                void *handle = mds_ext3_start(inode, MDS_FSOP_UNLINK);
-
-                if (IS_ERR(handle)) {
-                        CERROR("unable to start transaction");
-                        EXIT;
-                        return;
-                }
-                if (mds_ext3_set_objid(inode, handle, 0))
-                        CERROR("error clearing objid on %ld\n", inode->i_ino);
-
-                if (mds_extN_fs_ops.cl_delete_inode)
-                        mds_extN_fs_ops.cl_delete_inode(inode);
-
-                if (mds_ext3_commit(inode, handle))
-                        CERROR("error closing handle on %ld\n", inode->i_ino);
-        } else
-                mds_extN_fs_ops.cl_delete_inode(inode);
-}
-
-struct mds_cb_data {
-        struct journal_callback cb_jcb;
-        struct mds_obd *cb_mds;
-        __u64 cb_last_rcvd;
-};
-
 static void mds_ext3_callback_status(struct journal_callback *jcb, int error)
 {
         struct mds_cb_data *mcb = (struct mds_cb_data *)jcb;
@@ -228,7 +192,8 @@ static void mds_ext3_callback_status(struct journal_callback *jcb, int error)
         if (!error && mcb->cb_last_rcvd > mcb->cb_mds->mds_last_committed)
                 mcb->cb_mds->mds_last_committed = mcb->cb_last_rcvd;
 
-        OBD_FREE(mcb, sizeof(*mcb));
+        kmem_cache_free(jcb_cache, mcb);
+        --jcb_cache_count;
 }
 
 #ifdef HAVE_JOURNAL_CALLBACK
@@ -242,10 +207,11 @@ static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
 {
         struct mds_cb_data *mcb;
 
-        OBD_ALLOC(mcb, sizeof(*mcb));
+        mcb = kmem_cache_alloc(jcb_cache, GFP_NOFS);
         if (!mcb)
                 RETURN(-ENOMEM);
 
+        ++jcb_cache_count;
         mcb->cb_mds = mds;
         mcb->cb_last_rcvd = mds->mds_last_rcvd;
 
@@ -284,7 +250,7 @@ static int mds_ext3_journal_data(struct file *filp)
         return 0;
 }
 
-struct mds_fs_operations mds_ext3_fs_ops = {
+static struct mds_fs_operations mds_ext3_fs_ops = {
         fs_start:       mds_ext3_start,
         fs_commit:      mds_ext3_commit,
         fs_setattr:     mds_ext3_setattr,
@@ -297,15 +263,42 @@ struct mds_fs_operations mds_ext3_fs_ops = {
         fs_set_last_rcvd:mds_ext3_set_last_rcvd,
 };
 
-struct mds_fs_operations mds_extN_fs_ops = {
-        fs_start:       mds_ext3_start,
-        fs_commit:      mds_ext3_commit,
-        fs_setattr:     mds_ext3_setattr,
-        fs_set_objid:   mds_ext3_set_objid,
-        fs_get_objid:   mds_ext3_get_objid,
-        fs_readpage:    mds_extN_readpage,
-        fs_delete_inode:mds_extN_delete_inode,
-        cl_delete_inode:clear_inode,
-        fs_journal_data:mds_ext3_journal_data,
-        fs_set_last_rcvd:mds_ext3_set_last_rcvd,
-};
+static int __init mds_ext3_init(void)
+{
+        int rc;
+
+        jcb_cache = kmem_cache_create("mds_ext3_jcb",
+                                      sizeof(struct mds_cb_data), 0,
+                                      SLAB_POISON, NULL, NULL);
+        if (!jcb_cache) {
+                CERROR("error allocating MDS journal callback cache\n");
+                GOTO(out, rc = -ENOMEM);
+        }
+
+        rc = mds_register_fs_type(&mds_ext3_fs_ops, "ext3");
+
+        if (rc)
+                kmem_cache_destroy(jcb_cache);
+out:
+        return rc;
+}
+
+static void __exit mds_ext3_exit(void)
+{
+        int rc;
+
+        mds_unregister_fs_type("ext3");
+        rc = kmem_cache_destroy(jcb_cache);
+
+        if (rc || jcb_cache_count) {
+                CERROR("can't free MDS callback cache: count %d, rc = %d\n",
+                       jcb_cache_count, rc);
+        }
+}
+
+MODULE_AUTHOR("Cluster File Systems, Inc. <adilger@clusterfs.com>");
+MODULE_DESCRIPTION("Lustre MDS ext3 Filesystem Helper v0.1");
+MODULE_LICENSE("GPL");
+
+module_init(mds_ext3_init);
+module_exit(mds_ext3_exit);

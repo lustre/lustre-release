@@ -18,6 +18,7 @@
 #include <linux/fs.h>
 #include <linux/ext2_fs.h>
 #include <linux/lustre_mds.h>
+#include <linux/module.h>
 
 static void *mds_ext2_start(struct inode *inode, int nblocks)
 {
@@ -67,9 +68,11 @@ static int mds_ext2_set_objid(struct inode *inode, void *handle, obd_id id)
         return 0;
 }
 
-static void mds_ext2_get_objid(struct inode *inode, obd_id *id)
+static int mds_ext2_get_objid(struct inode *inode, obd_id *id)
 {
         *id = le64_to_cpu(inode->u.ext2_i.i_data[0]);
+
+        return 0;
 }
 
 static ssize_t mds_ext2_readpage(struct file *file, char *buf, size_t count,
@@ -81,7 +84,7 @@ static ssize_t mds_ext2_readpage(struct file *file, char *buf, size_t count,
                 return generic_file_read(file, buf, count, offset);
 }
 
-struct mds_fs_operations mds_ext2_fs_ops;
+static struct mds_fs_operations mds_ext2_fs_ops;
 
 static void mds_ext2_delete_inode(struct inode *inode)
 {
@@ -104,7 +107,7 @@ static int mds_ext2_journal_data(struct file *filp)
         return 0;
 }
 
-struct mds_fs_operations mds_ext2_fs_ops = {
+static struct mds_fs_operations mds_ext2_fs_ops = {
         fs_start:       mds_ext2_start,
         fs_commit:      mds_ext2_stop,
         fs_setattr:     mds_ext2_setattr,
@@ -116,3 +119,20 @@ struct mds_fs_operations mds_ext2_fs_ops = {
         fs_journal_data:mds_ext2_journal_data,
         fs_set_last_rcvd:mds_ext2_set_last_rcvd,
 };
+
+static int __init mds_ext2_init(void)
+{
+        return mds_register_fs_type(&mds_ext2_fs_ops, "ext2");
+}
+
+static void __exit mds_ext2_exit(void)
+{
+        mds_unregister_fs_type("ext2");
+}
+
+MODULE_AUTHOR("Cluster File Systems, Inc. <adilger@clusterfs.com>");
+MODULE_DESCRIPTION("Lustre MDS ext2 Filesystem Helper v0.1");
+MODULE_LICENSE("GPL");
+
+module_init(mds_ext2_init);
+module_exit(mds_ext2_exit);
