@@ -123,7 +123,7 @@ static int ll_readpage(struct file *file, struct page *page)
  readpage_out:
         if (!rc)
                 SetPageUptodate(page);
-        UnlockPage(page);
+        unlock_page(page);
         return 0;
 } /* ll_readpage */
 

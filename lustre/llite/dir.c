@@ -86,7 +86,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         ptlrpc_req_finished(request);
         if (rc != ELDLM_OK) {
                 CERROR("lock enqueue: err: %d\n", rc);
-                UnlockPage(page);
+                unlock_page(page);
                 RETURN(rc);
         }
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);
@@ -115,7 +115,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         if (!rc)
                 SetPageUptodate(page);
 
-        UnlockPage(page);
+        unlock_page(page);
         rc = ll_unlock(LCK_PR, &lockh);
         if (rc != ELDLM_OK)
                 CERROR("ll_unlock: err: %d\n", rc);
@@ -523,7 +523,7 @@ void ext2_set_link(struct inode *dir, struct ext2_dir_entry_2 *de,
         ext2_set_de_type (de, inode);
         dir->i_mtime = dir->i_ctime = CURRENT_TIME;
         err = ext2_commit_chunk(page, from, to);
-        UnlockPage(page);
+        unlock_page(page);
         ext2_put_page(page);
 }
 
@@ -600,7 +600,7 @@ got_it:
         /* XXX OFFSET_CACHE */
 
 out_unlock:
-        UnlockPage(page);
+        unlock_page(page);
 out_page:
         ext2_put_page(page);
 out:
@@ -637,7 +637,7 @@ int ext2_delete_entry (struct ext2_dir_entry_2 * dir, struct page * page )
         dir->inode = 0;
         inode->i_ctime = inode->i_mtime = CURRENT_TIME;
         err = ext2_commit_chunk(page, from, to);
-        UnlockPage(page);
+        unlock_page(page);
         ext2_put_page(page);
         return err;
 }
@@ -682,7 +682,7 @@ int ext2_make_empty(struct inode *inode, struct inode *parent)
         err = ext2_commit_chunk(page, 0, chunk_size);
 fail:
         kunmap(page);
-        UnlockPage(page);
+        unlock_page(page);
         page_cache_release(page);
         ENTRY;
         return err;
