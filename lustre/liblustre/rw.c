@@ -692,6 +692,9 @@ out_cleanup:
         RETURN(ERR_PTR(rc));
 }
 
+void lov_increase_kms(struct obd_export *exp, struct lov_stripe_md *lsm,
+                      obd_off size);
+
 struct llu_sysio_callback_args*
 llu_file_write(struct inode *inode, const struct iovec *iovec,
                size_t iovlen, loff_t pos)
@@ -700,6 +703,7 @@ llu_file_write(struct inode *inode, const struct iovec *iovec,
         struct ll_file_data *fd = lli->lli_file_data;
         struct lustre_handle lockh = {0};
         struct lov_stripe_md *lsm = lli->lli_smd;
+        struct obd_export *exp = NULL;
         ldlm_policy_data_t policy;
         struct llu_sysio_callback_args *lsca;
         struct llu_sysio_cookie *cookie;
@@ -712,6 +716,10 @@ llu_file_write(struct inode *inode, const struct iovec *iovec,
                 LBUG();
 
         LASSERT(iovlen <= MAX_IOVEC);
+
+        exp = llu_i2obdexp(inode);
+        if (exp == NULL)
+                RETURN(ERR_PTR(-EINVAL));
 
         OBD_ALLOC(lsca, sizeof(*lsca));
         if (!lsca)
@@ -745,12 +753,10 @@ llu_file_write(struct inode *inode, const struct iovec *iovec,
                         /* save cookie */
                         lsca->cookies[lsca->ncookies++] = cookie;
                         pos += count;
-                        /* file size grow. XXX should be done here? */
-                        if (pos > lli->lli_st_size) {
+                        lov_increase_kms(exp, lsm, pos);
+                        /* file size grow */
+                        if (pos > lli->lli_st_size)
                                 lli->lli_st_size = pos;
-                                set_bit(LLI_F_PREFER_EXTENDED_SIZE,
-                                        &lli->lli_flags);
-                        }
                 } else {
                         llu_extent_unlock(fd, inode, lsm, LCK_PW, &lockh);
                         GOTO(err_out, err = PTR_ERR(cookie));
