@@ -128,11 +128,10 @@ EXPORT_SYMBOL(llcd_send);
  * log record for the deletion.  The commit callback calls this 
  * function 
  */
-int llog_obd_repl_cancel(struct obd_device *obd,
+int llog_obd_repl_cancel(struct llog_obd_ctxt *ctxt,
                          struct lov_stripe_md *lsm, int count,
                          struct llog_cookie *cookies, int flags)
 {
-        struct llog_obd_ctxt *ctxt = obd->obd_llog_ctxt;
         struct llog_commit_data *llcd;
         int rc = 0;
         ENTRY;
@@ -419,7 +418,7 @@ int llog_cleanup_commit_master(int force)
 
 #else /* !__KERNEL__ */
 
-int llog_obd_repl_cancel(struct obd_device *obd,
+int llog_obd_repl_cancel(struct llog_obd_ctxt *ctxt,
                          struct lov_stripe_md *lsm, int count,
                          struct llog_cookie *cookies, int flags)
 {

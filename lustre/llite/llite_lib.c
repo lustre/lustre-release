@@ -80,7 +80,7 @@ int ll_set_opt(const char *opt, char *data, int fl)
 }
 
 void ll_options(char *options, char **ost, char **mdc, char **profile, 
-                char **mds_uuid, int *flags)
+                char **mds_uuid, char **mds_peer, int *flags)
 {
         char *this_char;
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
@@ -107,7 +107,11 @@ void ll_options(char *options, char **ost, char **mdc, char **profile,
                         continue;
                 if (!*profile && (*profile = ll_read_opt("profile", this_char)))
                         continue;
-                if (!*mds_uuid && (*mds_uuid = ll_read_opt("mds_uuid", this_char)))
+                if (!*mds_uuid && (*mds_uuid = ll_read_opt("mds_uuid", 
+                                                           this_char)))
+                        continue;
+                if (!*mds_peer && (*mds_peer = ll_read_opt("mds_peer", 
+                                                           this_char)))
                         continue;
                 if (!(*flags & LL_SBI_NOLCK) &&
                     ((*flags) = (*flags) |
@@ -125,7 +129,8 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
 }
 
-int ll_process_log(char *mds, char *config, struct config_llog_instance *cfg)
+int ll_process_log(char *mds, char *peer, char *config, 
+                   struct config_llog_instance *cfg)
 {
         struct lustre_cfg lcfg;
         struct obd_device *obd;
@@ -133,6 +138,7 @@ int ll_process_log(char *mds, char *config, struct config_llog_instance *cfg)
         struct obd_export *exp;
         char * name = "mdc_dev";
         struct obd_uuid uuid = { "MDC_mount_UUID" };
+        struct llog_obd_ctxt *ctxt;
         int rc = 0;
         int err;
         ENTRY;
@@ -149,35 +155,39 @@ int ll_process_log(char *mds, char *config, struct config_llog_instance *cfg)
         LCFG_INIT(lcfg, LCFG_SETUP, name);
         lcfg.lcfg_inlbuf1 = mds;
         lcfg.lcfg_inllen1 = strlen(lcfg.lcfg_inlbuf1) + 1;
-        lcfg.lcfg_inlbuf2 = "NET_mds_facet_tcp_UUID";
+        lcfg.lcfg_inlbuf2 = peer;
         lcfg.lcfg_inllen2 = strlen(lcfg.lcfg_inlbuf2) + 1;
         err = class_process_config(&lcfg);
         if (err < 0)
-                GOTO(out, err);
+                GOTO(out_detach, err);
         
         obd = class_name2obd(name);
         if (obd == NULL)
-                GOTO(out, err = -EINVAL);
+                GOTO(out_cleanup, err = -EINVAL);
 
         err = obd_connect(&mdc_conn, obd, &uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mds, err);
-                GOTO(out, err);
+                GOTO(out_cleanup, err);
         }
         
         exp = class_conn2export(&mdc_conn);
         
-        rc = class_config_parse_llog(exp, config, cfg);
+        ctxt = exp->exp_obd->obd_llog_ctxt[LLOG_CONFIG_REPL_CTXT];
+        rc = class_config_parse_llog(ctxt, config, cfg);
         if (rc) {
-                CERROR("mdc_llog_process failed: rc = %d\n", err);
+                CERROR("class_config_parse_llog failed: rc = %d\n", rc);
         }
 
         err = obd_disconnect(exp, 0);
 
+out_cleanup:
         LCFG_INIT(lcfg, LCFG_CLEANUP, name);
         err = class_process_config(&lcfg);
         if (err < 0)
                 GOTO(out, err);
+
+out_detach:
 
         LCFG_INIT(lcfg, LCFG_DETACH, name);
         err = class_process_config(&lcfg);
@@ -198,6 +208,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         char *osc = NULL;
         char *mdc = NULL;
         char *mds_uuid = NULL;
+        char *mds_peer = NULL;
         char *profile = NULL;
         int err;
         struct ll_fid rootfid;
@@ -224,7 +235,8 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
 
         sbi->ll_flags |= LL_SBI_READAHEAD;
-        ll_options(data, &osc, &mdc, &profile, &mds_uuid, &sbi->ll_flags);
+        ll_options(data, &osc, &mdc, &profile, &mds_uuid, &mds_peer, 
+                   &sbi->ll_flags);
 
         if (profile) {
                 struct lustre_profile *lprof;
@@ -235,9 +247,15 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                         CERROR("no mds_uuid\n");
                         GOTO(out_free, err = -EINVAL);
                 }
+
+                if (!mds_peer) {
+                        CERROR("no mds_peer\n");
+                        GOTO(out_free, err = -EINVAL);
+                }
                 
                 /* save these so we can cleanup later */
                 obd_str2uuid(&sbi->ll_mds_uuid, mds_uuid);
+                obd_str2uuid(&sbi->ll_mds_peer_uuid, mds_peer);
 
                 len = strlen(profile) + 1;
                 OBD_ALLOC(sbi->ll_profile, len);
@@ -255,7 +273,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
 
                 cfg.cfg_instance = sbi->ll_instance;
                 cfg.cfg_uuid = sbi->ll_sb_uuid;
-                err = ll_process_log(mds_uuid, profile, &cfg);
+                err = ll_process_log(mds_uuid, mds_peer, profile, &cfg);
                 if (err < 0) {
                         CERROR("Unable to process log: %s\n", profile);
 
@@ -303,6 +321,8 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 if (err < 0)
                         CERROR("could not register mount in /proc/lustre");
         }
+
+        mdc_init_ea_size(obd, osc);
 
         err = obd_connect(&mdc_conn, obd, &sbi->ll_sb_uuid);
         if (err) {
@@ -386,6 +406,8 @@ out_dev:
                 OBD_FREE(profile, strlen(profile) + 1);
         if (mds_uuid)
                 OBD_FREE(mds_uuid, strlen(mds_uuid) + 1);
+        if (mds_peer)
+                OBD_FREE(mds_peer, strlen(mds_peer) + 1);
 
         RETURN(err);
 
@@ -397,7 +419,7 @@ out_mdc:
 
 out_free:
         if (sbi->ll_profile != NULL) {
-                int len = sizeof(sbi->ll_profile) + sizeof("-clean") + 1;
+                int len = strlen(sbi->ll_profile) + sizeof("-clean") + 1;
                 int err;
 
                 if (sbi->ll_instance != NULL) {
@@ -410,8 +432,9 @@ out_free:
                         OBD_ALLOC(cln_prof, len);
                         sprintf(cln_prof, "%s-clean", sbi->ll_profile);
 
-                        err = ll_process_log(sbi->ll_mds_uuid.uuid, cln_prof, 
-                                             &cfg);
+                        err = ll_process_log(sbi->ll_mds_uuid.uuid, 
+                                             sbi->ll_mds_peer_uuid.uuid, 
+                                             cln_prof, &cfg);
                         if (err < 0) 
                                 CERROR("Unable to process log: %s\n", cln_prof);
                         OBD_FREE(cln_prof, len);
@@ -454,7 +477,7 @@ void ll_put_super(struct super_block *sb)
 
         if (sbi->ll_profile != NULL) {
                 char * cln_prof;
-                int len = sizeof(sbi->ll_profile) + sizeof("-clean") + 1;
+                int len = strlen(sbi->ll_profile) + sizeof("-clean") + 1;
                 int err;
                 struct config_llog_instance cfg;
 
@@ -464,7 +487,9 @@ void ll_put_super(struct super_block *sb)
                 OBD_ALLOC(cln_prof, len);
                 sprintf(cln_prof, "%s-clean", sbi->ll_profile);
 
-                err = ll_process_log(sbi->ll_mds_uuid.uuid, cln_prof, &cfg);
+                err = ll_process_log(sbi->ll_mds_uuid.uuid, 
+                                     sbi->ll_mds_peer_uuid.uuid, 
+                                     cln_prof, &cfg);
                 if (err < 0)
                         CERROR("Unable to process log: %s\n", cln_prof);
 
@@ -676,11 +701,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 rc = ll_extent_lock_no_validate(NULL, inode, lsm, LCK_PW,
                                                 &extent, &lockh, ast_flags);
                 down(&inode->i_sem);
-                if (rc != ELDLM_OK) {
-                        if (rc > 0)
-                                RETURN(-ENOLCK);
+                if (rc != ELDLM_OK)
                         RETURN(rc);
-                }
 
                 rc = vmtruncate(inode, attr->ia_size);
                 if (rc == 0)
