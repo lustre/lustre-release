@@ -206,6 +206,7 @@ do {                                                                           \
         it = de->d_it;                                                         \
                                                                                \
         LASSERT(ll_d2d(de) != NULL);                                           \
+        LASSERT(it);                                                           \
         LASSERT(it->it_op != IT_RELEASED_MAGIC);                               \
                                                                                \
         CDEBUG(D_DENTRY, "D_IT UP dentry %p fsdata %p intent: %s\n",           \
