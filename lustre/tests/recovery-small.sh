@@ -147,7 +147,7 @@ test_11(){
     drop_bl_callback multiop $MOUNT/$tfile Ow  || 
         echo "client evicted, as expected"
 
-    do_facet client unlink $MOUNT/$tfile  || return 4
+    do_facet client munlink $MOUNT/$tfile  || return 4
 }
 run_test 11 "wake up a thead waiting for completion after eviction (b=2460)"
 $CLEANUP
