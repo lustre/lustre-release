@@ -159,6 +159,7 @@ static void ll_writeback(struct inode *inode, struct obdo *oa,
                inode->i_ino, inode->i_generation, inode,
                ((llwp->npgs-1) << PAGE_SHIFT) + llwp->pga[llwp->npgs-1].count);
 
+        SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
         set = ptlrpc_prep_set();
         if (set == NULL) {
                 CERROR ("Can't create request set\n");
@@ -395,6 +396,7 @@ int ll_batch_writepage(struct inode *inode, struct obdo *oa, struct page *page)
         int rc = 0;
         ENTRY;
 
+        SIGNAL_MASK_ASSERT(); /* XXX BUG 1511 */
         old_flags = current->flags;
         current->flags |= PF_MEMALLOC;
         rc = ll_alloc_brw(inode, &llwp);
