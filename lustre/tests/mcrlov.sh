@@ -2,7 +2,7 @@
 
 config=${1:-mcrlov.xml}
 
-LMC="../utils/lmc -m $config"
+LMC="../utils/lmc"
 
 # TCP/IP servers
 SERVERS="ba-ost-1  ba-ost-2"
@@ -28,24 +28,25 @@ h2ip () {
 [ -f $config ] && rm $config
 
 # Client node
-${LMC} --node client --net '*' elan || exit 1
+${LMC} -o $config --add net --node client --nid '*' --nettype elan || exit 1
 # Router node
-${LMC} --router --node $ROUTER --tcpbuf $TCPBUF --net `h2ip $ROUTER`  tcp || exit 1
-${LMC} --node $ROUTER --net `h2elan $ROUTER` elan|| exit 1
-${LMC} --node $ROUTER --route elan `h2elan $ROUTER` `h2elan $CLIENT_LO` `h2elan $CLIENT_HI` || exit 2
+${LMC} -m $config --add net --router --node $ROUTER --tcpbuf $TCPBUF --nid `h2ip $ROUTER`  --nettype tcp || exit 1
+${LMC} -m $config --add net --node $ROUTER --nid `h2elan $ROUTER` --nettype elan|| exit 1
+${LMC} -m $config --add route --node $ROUTER --gw `h2elan $ROUTER` --lo `h2elan $CLIENT_LO` --hi `h2elan $CLIENT_HI` --nettype elan || exit 2
 
-${LMC} --node $MDS --net `h2elan $MDS` elan || exit 1
-${LMC} --node $MDS --mds mds1 $TMP/mds1 100000 || exit 1
-${LMC} --lov lov1 mds1 65536 0 0
+${LMC} -m $config --add net --node $MDS --nid `h2elan $MDS` --nettype elan || exit 1
+${LMC} -m $config --add mds --node $MDS --mds mds1 --dev $TMP/mds1 --size 100000 || exit 1
+${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz 65536 --stripe_cnt 0 --stripe_pattern 0 || exit 1
 
-${LMC} --node client --mtpt /mnt/lustre mds1 lov1
+${LMC} -m $config --add mtpt --node client --path /mnt/lustre --mds mds1 --lov lov1
 
 for s in $SERVERS
  do
    # server node
-   ${LMC} --node $s --tcpbuf $TCPBUF --net $s tcp || exit 1
+   ${LMC} -m $config --add net --node $s --tcpbuf $TCPBUF --nid $s --nettype tcp || exit 1
    # route to server
-   ${LMC} --node $ROUTER --route tcp `h2ip $ROUTER` $s || exit 2
+   ${LMC} -m $config --add route --node $ROUTER --nettype tcp --gw `h2ip $ROUTER` --lo $s || exit 2
    # the device on the server
-   ${LMC} --format --lov lov1 --node $s --ost bluearc || exit 3
+   #${LMC} --format --lov lov1 --node $s --ost bluearc || exit 3
+   ${LMC} -m $config --add ost  --lov lov1 --node $s --dev bluearc --format || exit 3
 done
