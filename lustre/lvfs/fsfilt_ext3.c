@@ -726,11 +726,13 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
         block_count = (*offs & (blocksize - 1)) + bufsize;
         block_count = (block_count + blocksize - 1) >> inode->i_blkbits;
         
+        down(&inode->i_sem);
         journal = EXT3_SB(inode->i_sb)->s_journal;
         handle = journal_start(journal,
                                block_count * EXT3_DATA_TRANS_BLOCKS + 2);
         if (IS_ERR(handle)) {
                 CERROR("can't start transaction\n");
+                up(&inode->i_sem);
                 return PTR_ERR(handle);
         }
 
@@ -776,17 +778,17 @@ out:
 
         /* correct in-core and on-disk sizes */
         if (new_size > inode->i_size) {
-                down(&inode->i_sem);
                 if (new_size > inode->i_size)
                         inode->i_size = new_size;
                 if (inode->i_size > EXT3_I(inode)->i_disksize)
                         EXT3_I(inode)->i_disksize = inode->i_size;
-                up(&inode->i_sem);
                 if (inode->i_size > old_size)
                         mark_inode_dirty(inode);
         }
 
         journal_stop(handle);
+        up(&inode->i_sem);
+
         if (err == 0)
                 *offs = offset;
         return err;
