@@ -106,8 +106,8 @@ unmount_client() {
 }
 
 setup() {
-    start_mds --timeout=$TIMEOUT ${REFORMAT}
     start_ost --timeout=$TIMEOUT ${REFORMAT}
+    start_mds --timeout=$TIMEOUT ${REFORMAT}
     # XXX we should write our own upcall, when we move this somewhere better.
     mount_client --timeout=${TIMEOUT} \
         --lustre_upcall=$UPCALL
