@@ -103,7 +103,7 @@ void t4()
 }
 
 #define PAGE_SIZE (4096)
-#define _npages (512)
+#define _npages (2048)
 
 static int _buffer[_npages][PAGE_SIZE/sizeof(int)];
 
@@ -145,7 +145,7 @@ static void pages_io(int xfer, loff_t pos)
                         exit(1);
                 }
 	}
-        printf("succefully write %d pages\n", _npages);
+        printf("succefully write %d pages(%d per xfer)\n", _npages, xfer);
 
         memset(_buffer, 0, sizeof(_buffer));
 
@@ -158,7 +158,7 @@ static void pages_io(int xfer, loff_t pos)
                         exit(1);
                 }
 	}
-        printf("succefully read %d pages\n", _npages);
+        printf("succefully read %d pages(%d per xfer)\n", _npages, xfer);
 
         /* compute checksum */
         for (i = 0; i < _npages; i++) {
