@@ -23,7 +23,12 @@ static int interrupted_completion_wait(void *data)
 static int expired_completion_wait(void *data)
 {
         struct ldlm_lock *lock = data;
-        class_signal_connection_failure(lock->l_export->exp_connection);
+        if (!lock)
+                CERROR("NULL lock\n");
+        else if (!lock->l_export)
+                CERROR("lock %p has NULL export\n", lock);
+        else
+                class_signal_connection_failure(lock->l_export->exp_connection);
         RETURN(0);
 }
 
