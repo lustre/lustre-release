@@ -1779,9 +1779,10 @@ test_48e() { # bug 4134
 	$TRACE rmdir $DIR/d48e || error "remove parent $DIR/d48e failed"
 	$TRACE touch $DIR/d48e || error "'touch $DIR/d48e' failed"
 	$TRACE chmod +x $DIR/d48e || error "'chmod +x $DIR/d48e' failed"
-	# On a buggy kernel addition of "; touch file" after cd .. will
+	# On a buggy kernel addition of "touch foo" after cd .. will
 	# produce kernel oops in lookup_hash_it
 	cd -P .. && error "'cd ..' worked after recreate parent"
+	touch foo
 	cd $DIR
 	$TRACE rm $DIR/d48e || error "rm '$DIR/d48e' failed"
 }
