@@ -362,7 +362,7 @@ static inline void filter_from_inode(struct obdo *oa, struct inode *inode)
         }
 
 #if 0
- else if (ext2obd_has_inline(inode)) {
+        else if (filter_has_inline(inode)) {
                 CDEBUG(D_INFO, "copying inline from inode to obdo\n");
                 memcpy(oa->o_inline, inode->u.ext2_i.i_data,
                        MIN(sizeof(inode->u.ext2_i.i_data),OBD_INLINESZ));
@@ -370,7 +370,7 @@ static inline void filter_from_inode(struct obdo *oa, struct inode *inode)
                 oa->o_valid |= OBD_MD_FLINLINE;
         }
 
-        if (ext2obd_has_obdmd(inode)) {
+        if (filter_has_obdmd(inode)) {
                 /* XXX this will change when we don't store the obdmd in data */
                 CDEBUG(D_INFO, "copying obdmd from inode to obdo\n");
                 memcpy(oa->o_obdmd, inode->u.ext2_i.i_data,
@@ -439,6 +439,38 @@ static int filter_setattr(struct obd_conn *conn, struct obdo *oa)
         EXIT;
         return rc;
 }
+
+static int filter_open(struct obd_conn *conn, struct obdo *oa)
+{
+        struct inode *inode;
+        /* ENTRY; */
+
+        if (!gen_client(conn))
+                RETURN(-EINVAL);
+
+        if ( !(inode = filter_inode_from_obj(conn->oc_dev,
+                                             oa->o_id, oa->o_mode)) )
+                RETURN(-ENOENT);
+
+        return 0;
+} /* filter_open */
+
+static int filter_close(struct obd_conn *conn, struct obdo *oa)
+{
+        struct inode *inode;
+        /* ENTRY; */
+
+        if (!gen_client(conn))
+                RETURN(-EINVAL);
+
+        if ( !(inode = filter_inode_from_obj(conn->oc_dev,
+                                             oa->o_id, oa->o_mode)) )
+                RETURN(-ENOENT);
+
+        iput(inode);  /* for the close */
+        iput(inode);  /* for this call */
+        return 0;
+} /* filter_close */
 
 static int filter_create (struct obd_conn* conn, struct obdo *oa)
 {
@@ -611,7 +643,7 @@ static int filter_write(struct obd_conn *conn, struct obdo *oa, char *buf,
         }
 
         return err;
-} /* ext2obd_write */
+} /* filter_write */
 
 static int filter_pgcache_brw(int rw, struct obd_conn *conn, 
                                obd_count num_oa,
@@ -795,6 +827,8 @@ static int filter_commitrw(int cmd, struct obd_conn *conn,
 
                         if (cmd == OBD_BRW_WRITE) {
                                 int rc = lustre_commit_page(page, 0, PAGE_SIZE);
+
+                                /* FIXME: still need to iput the other inodes */
                                 if (rc)
                                         RETURN(rc);
                         } else
@@ -803,7 +837,7 @@ static int filter_commitrw(int cmd, struct obd_conn *conn,
                         iput(page->mapping->host);
                 }
         }
-        return 0;
+        RETURN(0);
 }
 
 static int filter_statfs (struct obd_conn *conn, struct statfs * statfs)
@@ -824,7 +858,7 @@ static int filter_statfs (struct obd_conn *conn, struct statfs * statfs)
         err = sb->s_op->statfs(sb, statfs);
         EXIT;
         return err;
-} /* ext2obd_statfs */
+} /* filter_statfs */
 
 
 static int  filter_get_info(struct obd_conn *conn, obd_count keylen,
@@ -882,6 +916,8 @@ struct obd_ops filter_obd_ops = {
         o_create:      filter_create,
         o_setattr:     filter_setattr,
         o_destroy:     filter_destroy,
+        o_open:        filter_open,
+        o_close:       filter_close,
         o_read:        filter_read,
         o_write:       filter_write,
         o_brw:         filter_pgcache_brw,
@@ -889,10 +925,10 @@ struct obd_ops filter_obd_ops = {
         o_preprw:      filter_preprw,
         o_commitrw:    filter_commitrw
 #if 0
-        o_preallocate: ext2obd_preallocate_inodes,
-        o_migrate:     ext2obd_migrate,
+        o_preallocate: filter_preallocate_inodes,
+        o_migrate:     filter_migrate,
         o_copy:        gen_copy_data,
-        o_iterate:     ext2obd_iterate
+        o_iterate:     filter_iterate
 #endif
 };
 
