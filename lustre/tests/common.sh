@@ -48,7 +48,7 @@ do_insmod() {
 		[ -f $MODULE ] || echo "$0: module '$MODULE' not found" 1>&2
 		insmod $MODULE
         else
-		insmod $BASE
+		modprobe $BASE
 	fi
 }
 
