@@ -219,7 +219,7 @@ else
   AC_MSG_RESULT(no)
 fi
 
-AC_ARG_ENABLE(zerocopy, [  --enable-zerocopy enable socknal zerocopy],enable_zerocopy="-DSOCKNAL_ZC=1", enable_zerocopy=$enable_zerocopy_temp)
+AC_ARG_ENABLE(zerocopy, [  --enable-zerocopy enable socknal zerocopy],enable_zerocopy=$enable_zerocopy_temp, enable_zerocopy="")
 
 AC_ARG_ENABLE(affinity, [  --enable-affinity enable process/irq affinity],enable_affinity="-DCPU_AFFINITY=1", enable_affinity=$enable_affinity_temp)
 #####################################
