@@ -1,0 +1,189 @@
+# This is a BitKeeper generated patch for the following project:
+# Project Name: Linux kernel tree
+# This patch format is intended for GNU patch command version 2.5 or higher.
+# This patch includes the following deltas:
+#	           ChangeSet	1.811   -> 1.812  
+#	      kernel/ksyms.c	1.150   -> 1.151  
+#	  include/linux/fs.h	1.176   -> 1.177  
+#	          fs/namei.c	1.57    -> 1.58   
+#	     fs/ext3/xattr.c	1.1     -> 1.2    
+#	               (new)	        -> 1.1     include/linux/lustre_version.h
+#
+# The following is the BitKeeper ChangeSet Log
+# --------------------------------------------
+# 02/12/11	root@kai.(none)	1.812
+# changed for lustre 
+# --------------------------------------------
+#
+diff -Nru a/fs/ext3/xattr.c b/fs/ext3/xattr.c
+--- a/fs/ext3/xattr.c	Thu Dec 12 20:58:52 2002
++++ b/fs/ext3/xattr.c	Thu Dec 12 20:58:52 2002
+@@ -58,6 +58,7 @@
+ #include <linux/ext3_jbd.h>
+ #include <linux/ext3_fs.h>
+ #include <linux/mbcache.h>
++#include <linux/module.h>
+ #include <linux/quotaops.h>
+ #include <asm/semaphore.h>
+ #include "xattr.h"
+@@ -1096,6 +1097,9 @@
+ }
+ 
+ #undef BLOCK_HASH_SHIFT
++EXPORT_SYMBOL(ext3_xattr_get);
++EXPORT_SYMBOL(ext3_xattr_set);
++EXPORT_SYMBOL(ext3_bread);
+ 
+ int __init
+ init_ext3_xattr(void)
+diff -Nru a/fs/namei.c b/fs/namei.c
+--- a/fs/namei.c	Thu Dec 12 20:58:52 2002
++++ b/fs/namei.c	Thu Dec 12 20:58:52 2002
+@@ -265,7 +265,7 @@
+ 
+ void path_release(struct nameidata *nd)
+ {
+-        if (nd->dentry && nd->dentry->d_op && 
++        if (&nd->it && nd->dentry && nd->dentry->d_op && 
+             nd->dentry->d_op->d_intent_release)
+                 nd->dentry->d_op->d_intent_release(nd->dentry, &nd->it);
+ 	dput(nd->dentry);
+@@ -422,7 +422,8 @@
+  * Without that kind of total limit, nasty chains of consecutive
+  * symlinks can cause almost arbitrarily long lookups. 
+  */
+-static inline int do_follow_link(struct dentry *dentry, struct nameidata *nd)
++static inline int do_follow_link(struct dentry *dentry, struct nameidata *nd, 
++				 struct lookup_intent *it)
+ {
+ 	int err = -ELOOP;
+ 	if (current->link_count >= 5)
+@@ -439,7 +440,10 @@
+ 	current->link_count++;
+ 	current->total_link_count++;
+ 	UPDATE_ATIME(dentry->d_inode);
+-	err = dentry->d_inode->i_op->follow_link(dentry, nd);
++        if (dentry->d_inode->i_op->follow_link2)
++                err = dentry->d_inode->i_op->follow_link2(dentry, nd, it);
++        else 
++                err = dentry->d_inode->i_op->follow_link(dentry, nd);
+ 	current->link_count--;
+ 	return err;
+ loop:
+@@ -682,11 +686,11 @@
+ 		if (!inode->i_op)
+ 			break;
+ 
+-		if (inode->i_op->follow_link) {
++		if (inode->i_op->follow_link || inode->i_op->follow_link2) {
+ 			mntget(next.mnt);
+ 			dget_locked(next.dentry);
+ 			unlock_nd(nd);
+-			err = do_follow_link(next.dentry, nd);
++			err = do_follow_link(next.dentry, nd, &nd->it);
+ 			dput(next.dentry);
+ 			mntput(next.mnt);
+ 			if (err)
+@@ -737,11 +741,12 @@
+ 		follow_mount(&next.mnt, &next.dentry);
+ 		inode = next.dentry->d_inode;
+ 		if ((lookup_flags & LOOKUP_FOLLOW)
+-		    && inode && inode->i_op && inode->i_op->follow_link) {
++		    && inode && inode->i_op && 
++		    (inode->i_op->follow_link || inode->i_op->follow_link2)) {
+ 			mntget(next.mnt);
+ 			dget_locked(next.dentry);
+ 			unlock_nd(nd);
+-			err = do_follow_link(next.dentry, nd);
++			err = do_follow_link(next.dentry, nd, &nd->it);
+ 			dput(next.dentry);
+ 			mntput(next.mnt);
+ 			if (err)
+@@ -1340,7 +1345,8 @@
+ 	error = -ENOENT;
+ 	if (!dentry->d_inode)
+ 		goto exit_dput;
+-	if (dentry->d_inode->i_op && dentry->d_inode->i_op->follow_link)
++	if (dentry->d_inode->i_op && (dentry->d_inode->i_op->follow_link ||
++				      dentry->d_inode->i_op->follow_link2))
+ 		goto do_link;
+ 
+ 	dput(nd->dentry);
+@@ -2133,7 +2139,8 @@
+ }
+ 
+ static inline int
+-__vfs_follow_link(struct nameidata *nd, const char *link)
++__vfs_follow_link(struct nameidata *nd, const char *link, 
++                     struct lookup_intent *it)
+ {
+ 	int res = 0;
+ 	char *name;
+@@ -2169,7 +2176,13 @@
+ 
+ int vfs_follow_link(struct nameidata *nd, const char *link)
+ {
+-	return __vfs_follow_link(nd, link);
++	return __vfs_follow_link(nd, link, NULL);
++}
++
++int vfs_follow_link_it(struct nameidata *nd, const char *link, 
++		       struct lookup_intent *it)
++{
++	return __vfs_follow_link(nd, link, it);
+ }
+ 
+ /* get the link contents into pagecache */
+@@ -2211,7 +2224,7 @@
+ {
+ 	struct page *page = NULL;
+ 	char *s = page_getlink(dentry, &page);
+-	int res = __vfs_follow_link(nd, s);
++	int res = __vfs_follow_link(nd, s, NULL);
+ 	if (page) {
+ 		kunmap(page);
+ 		page_cache_release(page);
+diff -Nru a/include/linux/fs.h b/include/linux/fs.h
+--- a/include/linux/fs.h	Thu Dec 12 20:58:52 2002
++++ b/include/linux/fs.h	Thu Dec 12 20:58:52 2002
+@@ -781,6 +781,7 @@
+ 			struct inode *, struct dentry *);
+ 	int (*readlink) (struct dentry *, char *,int);
+ 	int (*follow_link) (struct dentry *, struct nameidata *);
++	int (*follow_link2) (struct dentry *, struct nameidata *, struct lookup_intent *it);
+ 	void (*truncate) (struct inode *);
+ 	int (*permission) (struct inode *, int);
+ 	int (*setattr) (struct dentry *, struct iattr *);
+@@ -1288,6 +1289,8 @@
+ 
+ extern int vfs_readlink(struct dentry *, char *, int, const char *);
+ extern int vfs_follow_link(struct nameidata *, const char *);
++int vfs_follow_link_it(struct nameidata *nd, const char *link, 
++		       struct lookup_intent *it);
+ extern int page_readlink(struct dentry *, char *, int);
+ extern int page_follow_link(struct dentry *, struct nameidata *);
+ extern int page_symlink(struct inode *inode, const char *symname, int len);
+diff -Nru a/include/linux/lustre_version.h b/include/linux/lustre_version.h
+--- /dev/null	Wed Dec 31 16:00:00 1969
++++ b/include/linux/lustre_version.h	Thu Dec 12 20:58:52 2002
+@@ -0,0 +1 @@
++#define LUSTRE_KERNEL_VERSION 4
+diff -Nru a/kernel/ksyms.c b/kernel/ksyms.c
+--- a/kernel/ksyms.c	Thu Dec 12 20:58:52 2002
++++ b/kernel/ksyms.c	Thu Dec 12 20:58:52 2002
+@@ -286,6 +286,7 @@
+ EXPORT_SYMBOL(mark_page_accessed);
+ EXPORT_SYMBOL(vfs_readlink);
+ EXPORT_SYMBOL(vfs_follow_link);
++EXPORT_SYMBOL(vfs_follow_link_it);
+ EXPORT_SYMBOL(page_readlink);
+ EXPORT_SYMBOL(page_follow_link);
+ EXPORT_SYMBOL(page_symlink_inode_operations);
+@@ -536,6 +537,7 @@
+ EXPORT_SYMBOL(seq_lseek);
+ EXPORT_SYMBOL(single_open);
+ EXPORT_SYMBOL(single_release);
++EXPORT_SYMBOL(reparent_to_init);
+ 
+ /* Program loader interfaces */
+ EXPORT_SYMBOL(setup_arg_pages);
