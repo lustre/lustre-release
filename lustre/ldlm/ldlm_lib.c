@@ -355,12 +355,7 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                                LPX64")\n", cluuid->uuid,
                                exp->exp_connection->c_remote_uuid.uuid,
                                hdl->cookie, conn->cookie);
-                        /* XXX disconnect them here? */
                         memset(conn, 0, sizeof *conn);
-                        /* This is a little scary, but right now we build this
-                         * file separately into each server module, so I won't
-                         * go _immediately_ to hell.
-                         */
                         RETURN(-EALREADY);
                 }
         }
@@ -450,8 +445,13 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                 export = NULL;
         }
         /* If we found an export, we already unlocked. */
-        if (!export)
+        if (!export) {
                 spin_unlock(&target->obd_dev_lock);
+        } else if (req->rq_reqmsg->conn_cnt == 1) {
+                CERROR("%s reconnected with 1 conn_cnt; cookies not random?\n",
+                       cluuid.uuid);
+                GOTO(out, rc = -EALREADY);
+        }
 
         /* Tell the client if we're in recovery. */
         /* If this is the first client, start the recovery timer */
