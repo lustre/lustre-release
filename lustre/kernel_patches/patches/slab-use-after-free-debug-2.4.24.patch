@@ -1,8 +1,8 @@
 %patch
 Index: linux-2.4.24/mm/slab.c
 ===================================================================
---- linux-2.4.24.orig/mm/slab.c	2004-07-14 18:14:27.000000000 +0400
-+++ linux-2.4.24/mm/slab.c	2004-07-16 15:54:07.000000000 +0400
+--- linux-2.4.24.orig/mm/slab.c	2004-07-16 09:33:00.000000000 -0400
++++ linux-2.4.24/mm/slab.c	2004-07-17 08:02:02.000000000 -0400
 @@ -97,6 +97,8 @@
  #define	FORCED_DEBUG	0
  #endif
@@ -88,7 +88,7 @@ Index: linux-2.4.24/mm/slab.c
  	local_irq_save(flags);
  	CHECK_PAGE(virt_to_page(objp));
  	c = GET_PAGE_CACHE(virt_to_page(objp));
-@@ -2076,3 +2110,471 @@
+@@ -2076,3 +2110,478 @@
  #endif
  }
  #endif
@@ -112,7 +112,7 @@ Index: linux-2.4.24/mm/slab.c
 +	atomic_t uaf_failed;
 +};
 +
-+static int uaf_max = 32768;
++static int uaf_max = 8192;
 +static void *uaf_bitmap = NULL;
 +static spinlock_t uaf_lock;
 +static int uaf_last_found = 0;
@@ -349,7 +349,8 @@ Index: linux-2.4.24/mm/slab.c
 +	unsigned long flags;
 +	int i, j;
 +
-+	uaf_printk("UAF: to free 0x%p/%d\n", addr, size);
++	if (cachep->flags & SLAB_USE_UAF)
++		uaf_printk("UAF: to free 0x%p/%d\n", addr, size);
 +
 +	size = (size + (PAGE_SIZE - 1)) / PAGE_SIZE;
 +	if (size > MAX_UAF_OBJ_SIZE)
@@ -363,6 +364,32 @@ Index: linux-2.4.24/mm/slab.c
 +		(unsigned) addr >= (unsigned) uaf_area->addr + uaf_area->size)
 +		return 0;
 +
++	uaf_printk("UAF: to free 0x%p/%d\n", addr, size);
++
++	/* calculate placement in bitmap */
++	i = (unsigned) addr - (unsigned) uaf_area->addr;
++	UAF_ASSERT(i >= 0);
++	i = i / PAGE_SIZE;
++
++	/* check against double-free */
++	spin_lock_irqsave(&uaf_lock, flags);
++	for (j = 0; j < size; j++) {
++		/* now check is correspondend bit set */
++		unsigned long address;
++		UAF_ASSERT(i+j >= 0 && i+j < uaf_max);
++		BUG_ON(!test_bit(i+j, uaf_bitmap));
++
++		address = ((unsigned long) addr) + (PAGE_SIZE * j);
++		pages[j] = vmalloc_to_page((void *) address);
++		BUG_ON(pages[j] == NULL);
++
++		/* now free space in UAF */
++		clear_bit(i+j, uaf_bitmap);
++		uaf_used--;
++	}
++	spin_unlock_irqrestore(&uaf_lock, flags);
++
++	/* check poison bytes */
 +	if (cachep->objsize < PAGE_SIZE) {
 +		unsigned char *a = (void *) addr;
 +		for (i = 0; i < PAGE_SIZE - cachep->objsize; i++)
@@ -380,34 +407,10 @@ Index: linux-2.4.24/mm/slab.c
 +	UAF_ASSERT(i >= 0);
 +	i = i / PAGE_SIZE;
 +
-+	/* collect all the pages */
-+	uaf_printk("free/unmap %d pages: ", size);
-+	/* NOTE: we need not page_table_lock here. bits in bitmap
-+	 * protect those pte's from to be reused */
-+	for (j = 0; j < size; j++) {
-+		unsigned long address;
-+		address = ((unsigned long) addr) + (PAGE_SIZE * j);
-+		pages[j] = vmalloc_to_page((void *) address);
-+		uaf_printk("0x%lx->0x%p ", address, pages[j]);
-+	}
-+	uaf_printk("\n");
-+
 +	uaf_unmap((unsigned long) addr, PAGE_SIZE * size);
 +	/* free all the pages */
 +	for (j = 0; j < size; j++)
 +		__free_page(pages[j]);
-+
-+	spin_lock_irqsave(&uaf_lock, flags);
-+	for (j = 0; j < size; j++) {
-+		/* now check is correspondend bit set */
-+		UAF_ASSERT(i+j >= 0 && i+j < uaf_max);
-+		UAF_ASSERT(test_bit(i+j, uaf_bitmap));
-+		
-+		/* now free space in UAF */
-+		clear_bit(i+j, uaf_bitmap);
-+		uaf_used--;
-+	}
-+	spin_unlock_irqrestore(&uaf_lock, flags);
 +
 +	atomic_dec(&uaf_stats[size].uaf_allocated);
 +	
@@ -468,8 +471,12 @@ Index: linux-2.4.24/mm/slab.c
 +
 +	if (!n)
 +		seq_printf(m, "size(pgs) allocated failed allocations. "
-+				"%d reserved, %d in use, %d last\n",
-+				uaf_max, uaf_used, uaf_last_found);
++				"%d reserved, %d in use, %d last\n"
++				"start 0x%p, size %lu, bitmap 0x%p\n"
++				"VMALLOC_START 0x%x, VMALLOC_END 0x%x\n",
++				uaf_max, uaf_used, uaf_last_found,
++				uaf_area->addr, uaf_area->size,
++				uaf_bitmap, VMALLOC_START, VMALLOC_END);
 +	else if (n > MAX_UAF_OBJ_SIZE)
 +		return NULL;
 +
@@ -562,8 +569,8 @@ Index: linux-2.4.24/mm/slab.c
 +
 Index: linux-2.4.24/mm/vmalloc.c
 ===================================================================
---- linux-2.4.24.orig/mm/vmalloc.c	2004-06-24 09:03:26.000000000 +0400
-+++ linux-2.4.24/mm/vmalloc.c	2004-07-16 15:54:07.000000000 +0400
+--- linux-2.4.24.orig/mm/vmalloc.c	2004-07-16 09:24:01.000000000 -0400
++++ linux-2.4.24/mm/vmalloc.c	2004-07-16 13:55:05.000000000 -0400
 @@ -53,7 +53,7 @@
  	} while (address < end);
  }
@@ -584,8 +591,8 @@ Index: linux-2.4.24/mm/vmalloc.c
  					pgprot_t prot,
 Index: linux-2.4.24/mm/page_alloc.c
 ===================================================================
---- linux-2.4.24.orig/mm/page_alloc.c	2004-07-14 18:14:27.000000000 +0400
-+++ linux-2.4.24/mm/page_alloc.c	2004-07-16 16:11:49.000000000 +0400
+--- linux-2.4.24.orig/mm/page_alloc.c	2004-07-16 09:33:00.000000000 -0400
++++ linux-2.4.24/mm/page_alloc.c	2004-07-16 13:55:05.000000000 -0400
 @@ -91,6 +91,12 @@
  	zone_t *zone;
  
@@ -601,8 +608,8 @@ Index: linux-2.4.24/mm/page_alloc.c
  	 * a reference to a page in order to pin it for io. -ben
 Index: linux-2.4.24/init/main.c
 ===================================================================
---- linux-2.4.24.orig/init/main.c	2004-06-24 09:06:32.000000000 +0400
-+++ linux-2.4.24/init/main.c	2004-07-16 15:54:07.000000000 +0400
+--- linux-2.4.24.orig/init/main.c	2004-07-16 09:24:01.000000000 -0400
++++ linux-2.4.24/init/main.c	2004-07-16 13:55:05.000000000 -0400
 @@ -437,6 +437,9 @@
  #if defined(CONFIG_SYSVIPC)
  	ipc_init();
@@ -615,8 +622,8 @@ Index: linux-2.4.24/init/main.c
  
 Index: linux-2.4.24/fs/proc/proc_misc.c
 ===================================================================
---- linux-2.4.24.orig/fs/proc/proc_misc.c	2004-06-24 09:06:31.000000000 +0400
-+++ linux-2.4.24/fs/proc/proc_misc.c	2004-07-16 15:54:07.000000000 +0400
+--- linux-2.4.24.orig/fs/proc/proc_misc.c	2004-07-16 09:23:51.000000000 -0400
++++ linux-2.4.24/fs/proc/proc_misc.c	2004-07-16 13:55:05.000000000 -0400
 @@ -303,6 +303,22 @@
  	release:	seq_release,
  };
@@ -652,8 +659,8 @@ Index: linux-2.4.24/fs/proc/proc_misc.c
  #endif
 Index: linux-2.4.24/include/linux/slab.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/slab.h	2004-07-16 10:25:19.000000000 +0400
-+++ linux-2.4.24/include/linux/slab.h	2004-07-16 15:54:13.000000000 +0400
+--- linux-2.4.24.orig/include/linux/slab.h	2004-07-16 09:33:00.000000000 -0400
++++ linux-2.4.24/include/linux/slab.h	2004-07-17 05:26:51.000000000 -0400
 @@ -40,6 +40,7 @@
  #define	SLAB_HWCACHE_ALIGN	0x00002000UL	/* align objs on a h/w cache lines */
  #define SLAB_CACHE_DMA		0x00004000UL	/* use GFP_DMA memory */
@@ -664,8 +671,8 @@ Index: linux-2.4.24/include/linux/slab.h
  #define	SLAB_CTOR_CONSTRUCTOR	0x001UL		/* if not set, then deconstructor */
 Index: linux-2.4.24/include/asm-i386/io.h
 ===================================================================
---- linux-2.4.24.orig/include/asm-i386/io.h	2004-07-16 10:25:19.000000000 +0400
-+++ linux-2.4.24/include/asm-i386/io.h	2004-07-16 15:54:13.000000000 +0400
+--- linux-2.4.24.orig/include/asm-i386/io.h	2004-07-16 09:23:54.000000000 -0400
++++ linux-2.4.24/include/asm-i386/io.h	2004-07-17 05:27:02.000000000 -0400
 @@ -75,6 +75,16 @@
   
  static inline unsigned long virt_to_phys(volatile void * address)
@@ -685,9 +692,9 @@ Index: linux-2.4.24/include/asm-i386/io.h
  
 Index: linux-2.4.24/include/asm-i386/page.h
 ===================================================================
---- linux-2.4.24.orig/include/asm-i386/page.h	2004-07-14 18:14:27.000000000 +0400
-+++ linux-2.4.24/include/asm-i386/page.h	2004-07-16 15:54:07.000000000 +0400
-@@ -131,9 +131,49 @@
+--- linux-2.4.24.orig/include/asm-i386/page.h	2004-07-16 09:33:00.000000000 -0400
++++ linux-2.4.24/include/asm-i386/page.h	2004-07-17 05:26:19.000000000 -0400
+@@ -131,9 +131,60 @@
  #define VMALLOC_RESERVE		((unsigned long)__VMALLOC_RESERVE)
  #define __MAXMEM		(-__PAGE_OFFSET-__VMALLOC_RESERVE)
  #define MAXMEM			((unsigned long)(-PAGE_OFFSET-VMALLOC_RESERVE))
@@ -721,12 +728,23 @@ Index: linux-2.4.24/include/asm-i386/page.h
 +				}						\
 +				((void *)((unsigned long)(x) + PAGE_OFFSET));	\
 +			})
-+
++#ifndef PKMAP_BASE
++#define PKMAP_BASE (0xfe000000UL)
++#endif
 +#define virt_to_page(ka) ({							\
 +				struct page *_p;				\
-+				if ((unsigned long)(ka) >= VMALLOC_START) {	\
++				if ((unsigned)(ka) >= VMALLOC_START &&		\
++						(unsigned)(ka) < VMALLOC_END) {	\
 +					_p = vmalloc_to_page((void *)(ka));	\
-+					BUG_ON(!_p);				\
++					if (!_p) {				\
++						printk(KERN_ALERT		\
++							"wrong address 0x%x, "	\
++							"VMALLOC_START 0x%x\n",	\
++							(unsigned) (ka),	\
++						(unsigned)VMALLOC_START);	\
++					_p = mem_map+(__pa(ka) >> PAGE_SHIFT);	\
++						dump_stack();			\
++					}					\
 +				} else 						\
 +					_p = mem_map+(__pa(ka) >> PAGE_SHIFT);	\
 +				(_p);						\
@@ -739,8 +757,8 @@ Index: linux-2.4.24/include/asm-i386/page.h
  #define VM_DATA_DEFAULT_FLAGS	(VM_READ | VM_WRITE | VM_EXEC | \
 Index: linux-2.4.24/arch/i386/config.in
 ===================================================================
---- linux-2.4.24.orig/arch/i386/config.in	2004-07-16 15:54:07.000000000 +0400
-+++ linux-2.4.24/arch/i386/config.in	2004-07-16 15:54:07.000000000 +0400
+--- linux-2.4.24.orig/arch/i386/config.in	2004-07-16 09:33:02.000000000 -0400
++++ linux-2.4.24/arch/i386/config.in	2004-07-16 13:55:05.000000000 -0400
 @@ -509,6 +509,9 @@
     bool '  Check for stack overflows' CONFIG_DEBUG_STACKOVERFLOW
     bool '  Debug high memory support' CONFIG_DEBUG_HIGHMEM
@@ -753,9 +771,9 @@ Index: linux-2.4.24/arch/i386/config.in
     bool '  Spinlock debugging' CONFIG_DEBUG_SPINLOCK
 Index: linux-2.4.24/kernel/ksyms.c
 ===================================================================
---- linux-2.4.24.orig/kernel/ksyms.c	2004-07-13 11:07:55.000000000 +0400
-+++ linux-2.4.24/kernel/ksyms.c	2004-07-16 20:59:09.000000000 +0400
-@@ -117,6 +117,8 @@
+--- linux-2.4.24.orig/kernel/ksyms.c	2004-07-16 09:36:49.000000000 -0400
++++ linux-2.4.24/kernel/ksyms.c	2004-07-16 13:55:05.000000000 -0400
+@@ -123,6 +123,8 @@
  EXPORT_SYMBOL(kfree);
  EXPORT_SYMBOL(vfree);
  EXPORT_SYMBOL(__vmalloc);
@@ -769,12 +787,12 @@ Index: linux-2.4.24/kernel/ksyms.c
  arch/i386/config.in     |    3 
  fs/proc/proc_misc.c     |   19 +
  include/asm-i386/io.h   |   10 
- include/asm-i386/page.h |   40 +++
+ include/asm-i386/page.h |   51 ++++
  include/linux/slab.h    |    1 
  init/main.c             |    3 
  kernel/ksyms.c          |    2 
  mm/page_alloc.c         |    6 
- mm/slab.c               |  506 +++++++++++++++++++++++++++++++++++++++++++++++-
+ mm/slab.c               |  513 +++++++++++++++++++++++++++++++++++++++++++++++-
  mm/vmalloc.c            |    4 
- 10 files changed, 590 insertions(+), 4 deletions(-)
+ 10 files changed, 608 insertions(+), 4 deletions(-)
 
