@@ -136,10 +136,10 @@ struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock)
 
 void ldlm_lock_put(struct ldlm_lock *lock)
 {
-        struct lustre_lock *nslock = &lock->l_resource->lr_namespace->ns_lock;
+        struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
         ENTRY;
 
-        l_lock(nslock);
+        l_lock(&ns->ns_lock);
         lock->l_refc--;
         //LDLM_DEBUG(lock, "after refc--");
         if (lock->l_refc < 0)
@@ -150,6 +150,10 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 LDLM_LOCK_PUT(lock->l_parent);
 
         if (lock->l_refc == 0 && (lock->l_flags & LDLM_FL_DESTROYED)) {
+                spin_lock(&ns->ns_counter_lock);
+                ns->ns_locks--;
+                spin_unlock(&ns->ns_counter_lock);
+
                 lock->l_resource = NULL;
                 LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
                 if (lock->l_export && lock->l_export->exp_connection)
@@ -158,7 +162,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 CDEBUG(D_MALLOC, "kfreed 'lock': %d at %p (tot 0).\n",
                        sizeof(*lock), lock);
         }
-        l_unlock(nslock);
+        l_unlock(&ns->ns_lock);
         EXIT;
 }
 
@@ -232,6 +236,10 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         INIT_LIST_HEAD(&lock->l_export_chain);
         INIT_LIST_HEAD(&lock->l_pending_chain);
         init_waitqueue_head(&lock->l_waitq);
+
+        spin_lock(&resource->lr_namespace->ns_counter_lock);
+        resource->lr_namespace->ns_locks++;
+        spin_unlock(&resource->lr_namespace->ns_counter_lock);
 
         if (parent != NULL) {
                 l_lock(&parent->l_resource->lr_namespace->ns_lock);

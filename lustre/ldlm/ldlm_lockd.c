@@ -673,6 +673,7 @@ EXPORT_SYMBOL(ldlm_lock_change_resource);
 EXPORT_SYMBOL(ldlm_cli_convert);
 EXPORT_SYMBOL(ldlm_cli_enqueue);
 EXPORT_SYMBOL(ldlm_cli_cancel);
+EXPORT_SYMBOL(ldlm_cli_cancel_unused);
 EXPORT_SYMBOL(ldlm_match_or_enqueue);
 EXPORT_SYMBOL(ldlm_it2str);
 EXPORT_SYMBOL(ldlm_test);

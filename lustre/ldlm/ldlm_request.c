@@ -450,5 +450,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id)
                 OBD_FREE(w, sizeof(*w));
         }
 
+        ldlm_resource_put(res);
+
         RETURN(0);
 }

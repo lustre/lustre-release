@@ -40,10 +40,23 @@ void ldlm_proc_cleanup(struct obd_device *obd)
         proc_lustre_remove_obd_entry("namespaces", obd);
 }
 
+/* FIXME: This can go away when we start to really use lprocfs */
+static int lprocfs_ll_rd(char *page, char **start, off_t off,
+                         int count, int *eof, void *data)
+{
+        int len;
+        __u64 *temp = (__u64 *)data;
+
+        len = snprintf(page, count, "%Lu\n", *temp);
+
+        return len;
+}
+
 struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 {
         struct ldlm_namespace *ns = NULL;
         struct list_head *bucket;
+        struct proc_dir_entry *proc_entry;
 
         OBD_ALLOC(ns, sizeof(*ns));
         if (!ns) {
@@ -69,6 +82,9 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         l_lock_init(&ns->ns_lock);
         ns->ns_refcount = 0;
         ns->ns_client = client;
+        spin_lock_init(&ns->ns_counter_lock);
+        ns->ns_locks = 0;
+        ns->ns_resources = 0;
 
         for (bucket = ns->ns_hash + RES_HASH_SIZE - 1; bucket >= ns->ns_hash;
              bucket--)
@@ -76,10 +92,17 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 
         spin_lock(&ldlm_namespace_lock);
         list_add(&ns->ns_list_chain, &ldlm_namespace_list);
+        spin_unlock(&ldlm_namespace_lock);
+
         ns->ns_proc_dir = proc_mkdir(ns->ns_name, ldlm_ns_proc_dir);
         if (ns->ns_proc_dir == NULL)
                 CERROR("Unable to create proc directory for namespace.\n");
-        spin_unlock(&ldlm_namespace_lock);
+        proc_entry = create_proc_entry("resource_count", 0444, ns->ns_proc_dir);
+        proc_entry->read_proc = lprocfs_ll_rd;
+        proc_entry->data = &ns->ns_resources;
+        proc_entry = create_proc_entry("lock_count", 0444, ns->ns_proc_dir);
+        proc_entry->read_proc = lprocfs_ll_rd;
+        proc_entry->data = &ns->ns_locks;
 
         RETURN(ns);
 
@@ -140,6 +163,8 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
 
         spin_lock(&ldlm_namespace_lock);
         list_del(&ns->ns_list_chain);
+        remove_proc_entry("resource_count", ns->ns_proc_dir);
+        remove_proc_entry("lock_count", ns->ns_proc_dir);
         remove_proc_entry(ns->ns_name, ldlm_ns_proc_dir);
         spin_unlock(&ldlm_namespace_lock);
 
@@ -236,6 +261,10 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
                 LBUG();
                 RETURN(NULL);
         }
+
+        spin_lock(&ns->ns_counter_lock);
+        ns->ns_resources++;
+        spin_unlock(&ns->ns_counter_lock);
 
         memcpy(res->lr_name, name, sizeof(res->lr_name));
         res->lr_namespace = ns;
@@ -337,6 +366,11 @@ int ldlm_resource_put(struct ldlm_resource *res)
 
                 kmem_cache_free(ldlm_resource_slab, res);
                 l_unlock(&ns->ns_lock);
+
+                spin_lock(&ns->ns_counter_lock);
+                ns->ns_resources--;
+                spin_unlock(&ns->ns_counter_lock);
+
                 rc = 1;
         } else {
                 ENTRY;

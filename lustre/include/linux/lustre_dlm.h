@@ -92,6 +92,10 @@ struct ldlm_namespace {
         struct lustre_lock     ns_lock; /* protects hash, refcount, list */
         struct list_head       ns_list_chain; /* position in global NS list */
         struct proc_dir_entry *ns_proc_dir;
+
+        spinlock_t             ns_counter_lock;
+        __u64                  ns_locks;
+        __u64                  ns_resources;
 };
 
 /* 
