@@ -84,9 +84,6 @@ static int mds_lov_read_objids(struct obd_device *obd)
                 RETURN(-ENOMEM);
         mds->mds_lov_objids = ids;
 
-        /* for testing */
-        mds->mds_lov_objids_valid = 1;
-
         if (mds->mds_lov_objid_filp->f_dentry->d_inode->i_size == 0)
                 RETURN(0);
         rc = fsfilt_read_record(obd, mds->mds_lov_objid_filp, ids, size, &off);
@@ -110,7 +107,6 @@ int mds_lov_write_objids(struct obd_device *obd)
         loff_t off = 0;
         int i, rc, size = mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id);
         ENTRY;
-
 
         /* I'm pretty sure we don't need this mds_lov_connect here,
          * but we definitely don't want to do it during recovery. */
@@ -424,6 +420,10 @@ int mds_lov_connect(struct obd_device *obd)
                                 CERROR("got last object "LPU64" from OST %d\n",
                                        mds->mds_lov_objids[i], i);
                         mds->mds_lov_objids_valid = 1;
+                        rc = mds_lov_write_objids(obd);
+                        if (rc)
+                                CERROR("got last objids from OSTs, but error "
+                                       "writing objids file: %d\n", rc);
                 }
         }
 
