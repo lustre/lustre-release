@@ -126,7 +126,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         memset(res, 0, niocount * sizeof(*res));
 
-        push_ctxt(&saved, &exp->exp_obd->u.filter.fo_ctxt, NULL);
+        push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
         for (i = 0, o = obj; i < objcount; i++, o++) {
                 LASSERT(o->ioo_bufcnt);
 
@@ -228,7 +228,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                         CERROR("NULL dentry in cleanup -- tell CFS\n");
         case 0:
                 OBD_FREE(fso, objcount * sizeof(*fso));
-                pop_ctxt(&saved, &exp->exp_obd->u.filter.fo_ctxt, NULL);
+                pop_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
         }
         return rc;
 }
@@ -276,7 +276,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         memset(res, 0, niocount * sizeof(*res));
 
-        push_ctxt(&saved, &exp->exp_obd->u.filter.fo_ctxt, NULL);
+        push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
         dentry = filter_fid2dentry(exp->exp_obd, NULL, 0, obj->ioo_id);
         if (IS_ERR(dentry))
                 GOTO(cleanup, rc = PTR_ERR(dentry));
@@ -328,7 +328,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                             tot_bytes);
         EXIT;
 cleanup:
-        pop_ctxt(&saved, &exp->exp_obd->u.filter.fo_ctxt, NULL);
+        pop_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
         return rc;
 }
 

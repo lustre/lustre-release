@@ -127,14 +127,12 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
                           struct obd_trans_info *oti);
 
 /* filter_log.c */
-int filter_log_cancel(struct obd_export *, struct lov_stripe_md *,
-                      int num_cookies, struct llog_cookie *, int flags);
 int filter_log_op_create(struct llog_handle *cathandle, struct ll_fid *mds_fid,
                          obd_id oid, obd_count ogen, struct llog_cookie *);
 int filter_log_op_orphan(struct llog_handle *cathandle, obd_id oid,
                          obd_count ogen, struct llog_cookie *);
 struct llog_handle *filter_get_catalog(struct obd_device *);
-void filter_put_catalog(struct llog_handle *cathandle);
+
 
 /* filter_san.c */
 int filter_san_setup(struct obd_device *obd, obd_count len, void *buf);

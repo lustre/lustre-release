@@ -32,8 +32,7 @@ int mds_update_unpack(struct ptlrpc_request *, int offset,
 
 /* mds/mds_lov.c */
 int mds_lov_connect(struct obd_device *obd);
-int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,
-                    struct obd_uuid *uuidarray);
+int mds_get_lovtgts(struct obd_device *, int tgt_count, struct obd_uuid *);
 int mds_lov_write_objids(struct obd_device *obd);
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
 int mds_lov_set_growth(struct mds_obd *mds, int count);
@@ -57,6 +56,7 @@ int mds_object_create(struct obd_export *exp, struct obdo *oa,
                       struct lov_stripe_md **ea, struct obd_trans_info *oti);
 
 /* mds/handler.c */
+extern struct lvfs_callback_ops mds_lvfs_ops;
 extern int mds_iocontrol(unsigned int cmd, struct obd_export *exp,
                          int len, void *karg, void *uarg);
 
