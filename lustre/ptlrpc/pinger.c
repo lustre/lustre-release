@@ -175,11 +175,15 @@ static int ptlrpc_pinger_main(void *arg)
                 if (time_to_next_ping > 0) {
                         lwi = LWI_TIMEOUT(time_to_next_ping, NULL, NULL);
                         l_wait_event(thread->t_ctl_waitq,
-                                     thread->t_flags & SVC_STOPPING, &lwi);
+                                     thread->t_flags & (SVC_STOPPING|SVC_EVENT),
+                                     &lwi);
                         if (thread->t_flags & SVC_STOPPING) {
                                 thread->t_flags &= ~SVC_STOPPING;
                                 EXIT;
                                 break;
+                        } else if (thread->t_flags & SVC_EVENT) {
+                                /* woken after adding import to reset timer */
+                                thread->t_flags &= ~SVC_EVENT;
                         }
                 }
         }
@@ -270,6 +274,9 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
         /* XXX sort, blah blah */
         list_add_tail(&imp->imp_pinger_chain, &pinger_imports);
         class_import_get(imp);
+
+        pinger_thread->t_flags |= SVC_EVENT;
+        wake_up(&pinger_thread->t_ctl_waitq);
         up(&pinger_sem);
 
         RETURN(0);
