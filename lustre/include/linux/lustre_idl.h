@@ -427,6 +427,7 @@ struct mds_rec_rename {
 
 struct lov_desc {
         __u32 ld_tgt_count;                /* how many OBD's */
+        __u32 ld_active_tgt_count;         /* how many active */
         __u32 ld_default_stripe_count;     /* how many objects are used */
         __u64 ld_default_stripe_size;      /* in bytes */
         __u64 ld_default_stripe_offset;    /* in bytes */

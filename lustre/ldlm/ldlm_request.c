@@ -426,10 +426,10 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         if (lock->l_connh) {
                 LDLM_DEBUG(lock, "client-side cancel");
                 /* Set this flag to prevent others from getting new references*/
-                l_lock(&ldlm_everything_lock);
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
                 ldlm_cancel_callback(lock);
-                l_unlock(&ldlm_everything_lock);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
                 req = ptlrpc_prep_req(class_conn2cliimp(lock->l_connh),
                                       LDLM_CANCEL, 1, &size, NULL);
@@ -485,7 +485,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
                 RETURN(0);
         }
 
-        l_lock(&ldlm_everything_lock);
+        l_lock(&ns->ns_lock);
         list_for_each(tmp, &res->lr_granted) {
                 struct ldlm_lock *lock;
                 lock = list_entry(tmp, struct ldlm_lock, l_res_link);
@@ -506,7 +506,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id,
                 w->w_lock = LDLM_LOCK_GET(lock);
                 list_add(&w->w_list, &list);
         }
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&ns->ns_lock);
 
         list_for_each_safe(tmp, next, &list) {
                 struct lustre_handle lockh;

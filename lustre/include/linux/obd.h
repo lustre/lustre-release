@@ -186,9 +186,11 @@ struct ost_obd {
 struct lov_tgt_desc {
         obd_uuid_t uuid;
         struct lustre_handle conn;
+        int active; /* is this target available for requests, etc */
 };
 
 struct lov_obd {
+        spinlock_t lov_lock;
         struct obd_device *mdcobd;
         struct lov_desc desc;
         int bufsize;

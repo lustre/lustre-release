@@ -58,7 +58,7 @@ struct ll_inode_info {
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 static inline struct ll_inode_info *LL_I(struct inode *inode)
 {
-	return container_of(inode, struct ll_inode_info, lli_vfs_inode);
+        return container_of(inode, struct ll_inode_info, lli_vfs_inode);
 }
 #endif
 
@@ -170,40 +170,35 @@ int ll_set_dd(struct dentry *de);
 /****
 
 I originally implmented these as functions, then realized a macro
-would be more helpful for debugging, so the CDEBUG messages show 
+would be more helpful for debugging, so the CDEBUG messages show
 the current calling function.  The orignal functions are in llite/dcache.c
 
 int ll_save_intent(struct dentry * de, struct lookup_intent * it);
 struct lookup_intent * ll_get_intent(struct dentry * de);
 ****/
 
-#define LL_SAVE_INTENT(de, it)                                                  \
-do {                                                                            \
-        LASSERT(ll_d2d(de) != NULL);                                            \
-                                                                                \
-        down(&ll_d2d(de)->lld_it_sem);                                          \
-        de->d_it = it;                                                          \
-        CDEBUG(D_DENTRY, "D_IT DOWN dentry %p fsdata %p intent: %s sem %d\n",   \
-               de, ll_d2d(de), ldlm_it2str(de->d_it->it_op),                    \
-               atomic_read(&(ll_d2d(de)->lld_it_sem.count)));                   \
-                                                                                \
+#define LL_SAVE_INTENT(de, it)                                                 \
+do {                                                                           \
+        LASSERT(ll_d2d(de) != NULL);                                           \
+                                                                               \
+        down(&ll_d2d(de)->lld_it_sem);                                         \
+        de->d_it = it;                                                         \
+        CDEBUG(D_DENTRY, "D_IT DOWN dentry %p fsdata %p intent: %s sem %d\n",  \
+               de, ll_d2d(de), ldlm_it2str(de->d_it->it_op),                   \
+               atomic_read(&(ll_d2d(de)->lld_it_sem.count)));                  \
 } while(0)
 
-#define LL_GET_INTENT(de, it)                                                           \
-do {                                                                                    \
-        it = de->d_it;                                                                  \
-                                                                                        \
-        LASSERT(ll_d2d(de) != NULL);                                                    \
-                                                                                        \
-        CDEBUG(D_DENTRY, "D_IT UP dentry %p fsdata %p intent: %s\n", de, ll_d2d(de),    \
-               ldlm_it2str(de->d_it->it_op));                                           \
-        de->d_it = NULL;                                                                \
-        up(&ll_d2d(de)->lld_it_sem);                                                    \
-                                                                                        \
-                                                                                        \
+#define LL_GET_INTENT(de, it)                                                  \
+do {                                                                           \
+        it = de->d_it;                                                         \
+                                                                               \
+        LASSERT(ll_d2d(de) != NULL);                                           \
+                                                                               \
+        CDEBUG(D_DENTRY, "D_IT UP dentry %p fsdata %p intent: %s\n",           \
+               de, ll_d2d(de), ldlm_it2str(de->d_it->it_op));                  \
+        de->d_it = NULL;                                                       \
+        up(&ll_d2d(de)->lld_it_sem);                                           \
 } while(0)
-
-
 
 /* dir.c */
 extern struct file_operations ll_dir_operations;

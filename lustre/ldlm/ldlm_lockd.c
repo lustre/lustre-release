@@ -267,10 +267,10 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
 
         lock->l_export = req->rq_export;
         if (lock->l_export) {
-                l_lock(&ldlm_everything_lock);
+                l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 list_add(&lock->l_export_chain,
                          &lock->l_export->exp_ldlm_data.led_held_locks);
-                l_unlock(&ldlm_everything_lock);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         }
 
         EXIT;
@@ -399,10 +399,10 @@ static int ldlm_handle_bl_callback(struct ptlrpc_request *req)
 
         LDLM_DEBUG(lock, "client blocking AST callback handler START");
 
-        l_lock(&ldlm_everything_lock);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         lock->l_flags |= LDLM_FL_CBPENDING;
         do_ast = (!lock->l_readers && !lock->l_writers);
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         if (do_ast) {
                 LDLM_DEBUG(lock, "already unused, calling "
@@ -441,7 +441,7 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req)
 
         LDLM_DEBUG(lock, "client completion callback handler START");
 
-        l_lock(&ldlm_everything_lock);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
 
         /* If we receive the completion AST before the actual enqueue returned,
          * then we might need to switch lock modes, resources, or extents. */
@@ -462,7 +462,7 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req)
         lock->l_resource->lr_tmp = &ast_list;
         ldlm_grant_lock(lock);
         lock->l_resource->lr_tmp = NULL;
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_DEBUG(lock, "callback handler finished, about to run_ast_work");
         LDLM_LOCK_PUT(lock);
 
@@ -669,8 +669,6 @@ static int __init ldlm_init(void)
                 return -ENOMEM;
         }
 
-        l_lock_init(&ldlm_everything_lock);
-
         return 0;
 }
 
@@ -715,7 +713,6 @@ EXPORT_SYMBOL(ldlm_namespace_dump);
 EXPORT_SYMBOL(ldlm_cancel_locks_for_export);
 EXPORT_SYMBOL(l_lock);
 EXPORT_SYMBOL(l_unlock);
-EXPORT_SYMBOL(ldlm_everything_lock);
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Lock Management Module v0.1");

@@ -30,8 +30,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 
-/* this lock protects ldlm_handle2lock's integrity */
-struct lustre_lock ldlm_everything_lock;
+//struct lustre_lock ldlm_everything_lock;
 
 /* lock types */
 char *ldlm_lockname[] = {
@@ -132,10 +131,10 @@ void ldlm_unregister_intent(void)
  */
 struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock)
 {
-        l_lock(&ldlm_everything_lock);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         lock->l_refc++;
         ldlm_resource_getref(lock->l_resource);
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return lock;
 }
 
@@ -144,7 +143,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
         struct ldlm_namespace *ns = lock->l_resource->lr_namespace;
         ENTRY;
 
-        l_lock(&ldlm_everything_lock);
+        l_lock(&ns->ns_lock);
         lock->l_refc--;
         //LDLM_DEBUG(lock, "after refc--");
         if (lock->l_refc < 0)
@@ -158,21 +157,24 @@ void ldlm_lock_put(struct ldlm_lock *lock)
                 LDLM_LOCK_PUT(lock->l_parent);
 
         if (lock->l_refc == 0 && (lock->l_flags & LDLM_FL_DESTROYED)) {
+                l_unlock(&ns->ns_lock);
                 LDLM_DEBUG(lock, "final lock_put on destroyed lock, freeing");
 
+                //spin_lock(&ldlm_handle_lock);
                 spin_lock(&ns->ns_counter_lock);
                 ns->ns_locks--;
                 spin_unlock(&ns->ns_counter_lock);
 
+                lock->l_resource = NULL;
                 lock->l_random = DEAD_HANDLE_MAGIC;
                 if (lock->l_export && lock->l_export->exp_connection)
                         ptlrpc_put_connection(lock->l_export->exp_connection);
                 kmem_cache_free(ldlm_lock_slab, lock);
-                l_unlock(&ldlm_everything_lock);
+                //spin_unlock(&ldlm_handle_lock);
                 CDEBUG(D_MALLOC, "kfreed 'lock': %d at %p (tot 0).\n",
                        sizeof(*lock), lock);
         } else
-                l_unlock(&ldlm_everything_lock);
+                l_unlock(&ns->ns_lock);
 
         EXIT;
 }
@@ -180,7 +182,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 void ldlm_lock_destroy(struct ldlm_lock *lock)
 {
         ENTRY;
-        l_lock(&ldlm_everything_lock);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
 
         if (!list_empty(&lock->l_children)) {
                 LDLM_DEBUG(lock, "still has children (%p)!",
@@ -199,7 +201,7 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         }
 
         if (lock->l_flags & LDLM_FL_DESTROYED) {
-                l_unlock(&ldlm_everything_lock);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
                 EXIT;
                 return;
         }
@@ -214,7 +216,7 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         if (lock->l_export && lock->l_completion_ast)
                 lock->l_completion_ast(lock, 0);
 
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_PUT(lock);
         EXIT;
 }
@@ -256,10 +258,10 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         spin_unlock(&resource->lr_namespace->ns_counter_lock);
 
         if (parent != NULL) {
-                l_lock(&ldlm_everything_lock);
+                l_lock(&parent->l_resource->lr_namespace->ns_lock);
                 lock->l_parent = parent;
                 list_add(&lock->l_childof, &parent->l_children);
-                l_unlock(&ldlm_everything_lock);
+                l_unlock(&parent->l_resource->lr_namespace->ns_lock);
         }
 
         CDEBUG(D_MALLOC, "kmalloced 'lock': %d at "
@@ -276,11 +278,11 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
         int type, i;
         ENTRY;
 
-        l_lock(&ldlm_everything_lock);
+        l_lock(&ns->ns_lock);
         if (memcmp(new_resid, lock->l_resource->lr_name,
                    sizeof(lock->l_resource->lr_name)) == 0) {
                 /* Nothing to do */
-                l_unlock(&ldlm_everything_lock);
+                l_unlock(&ns->ns_lock);
                 RETURN(0);
         }
 
@@ -304,7 +306,7 @@ int ldlm_lock_change_resource(struct ldlm_lock *lock, __u64 new_resid[3])
         /* compensate for the initial get above.. */
         ldlm_resource_put(lock->l_resource);
 
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&ns->ns_lock);
         RETURN(0);
 }
 
@@ -327,29 +329,30 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
         if (!handle || !handle->addr)
                 RETURN(NULL);
 
-        l_lock(&ldlm_everything_lock);
+        //spin_lock(&ldlm_handle_lock);
         lock = (struct ldlm_lock *)(unsigned long)(handle->addr);
         if (!kmem_cache_validate(ldlm_lock_slab, (void *)lock)) {
                 CERROR("bogus lock %p\n", lock);
-                GOTO(out, retval);
+                GOTO(out2, retval);
         }
 
         if (lock->l_random != handle->cookie) {
                 CERROR("bogus cookie: lock %p has "LPX64" vs. handle "LPX64"\n",
                        lock, lock->l_random, handle->cookie);
-                GOTO(out, NULL);
+                GOTO(out2, NULL);
         }
         if (!lock->l_resource) {
                 CERROR("trying to lock bogus resource: lock %p\n", lock);
                 LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
-                GOTO(out, retval);
+                GOTO(out2, retval);
         }
         if (!lock->l_resource->lr_namespace) {
                 CERROR("trying to lock bogus namespace: lock %p\n", lock);
                 LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
-                GOTO(out, retval);
+                GOTO(out2, retval);
         }
 
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (strict && lock->l_flags & LDLM_FL_DESTROYED) {
                 CERROR("lock already destroyed: lock %p\n", lock);
                 LDLM_DEBUG(lock, "ldlm_handle2lock(%p)", lock);
@@ -361,7 +364,9 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *handle,
                 CERROR("lock disappeared below us!!! %p\n", lock);
         EXIT;
  out:
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+ out2:
+        //spin_unlock(&ldlm_handle_lock);
         return retval;
 }
 
@@ -385,7 +390,7 @@ static void ldlm_add_ast_work_item(struct ldlm_lock *lock,
         struct ldlm_ast_work *w;
         ENTRY;
 
-        l_lock(&ldlm_everything_lock);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (new && (lock->l_flags & LDLM_FL_AST_SENT))
                 GOTO(out, 0);
 
@@ -404,7 +409,7 @@ static void ldlm_add_ast_work_item(struct ldlm_lock *lock,
         w->w_lock = LDLM_LOCK_GET(lock);
         list_add(&w->w_list, lock->l_resource->lr_tmp);
       out:
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         return;
 }
 
@@ -420,12 +425,12 @@ void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode)
 /* only called for local locks */
 void ldlm_lock_addref_internal(struct ldlm_lock *lock, __u32 mode)
 {
-        l_lock(&ldlm_everything_lock);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (mode == LCK_NL || mode == LCK_CR || mode == LCK_PR)
                 lock->l_readers++;
         else
                 lock->l_writers++;
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         LDLM_LOCK_GET(lock);
         LDLM_DEBUG(lock, "ldlm_lock_addref(%s)", ldlm_lockname[mode]);
 }
@@ -440,7 +445,7 @@ void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
                 LBUG();
 
         LDLM_DEBUG(lock, "ldlm_lock_decref(%s)", ldlm_lockname[mode]);
-        l_lock(&ldlm_everything_lock);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (mode == LCK_NL || mode == LCK_CR || mode == LCK_PR)
                 lock->l_readers--;
         else
@@ -456,13 +461,13 @@ void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode)
                                "warning\n");
 
                 LDLM_DEBUG(lock, "final decref done on cbpending lock");
-                l_unlock(&ldlm_everything_lock);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
                 /* FIXME: need a real 'desc' here */
                 lock->l_blocking_ast(lock, NULL, lock->l_data,
                                      lock->l_data_len, LDLM_CB_BLOCKING);
         } else
-                l_unlock(&ldlm_everything_lock);
+                l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         LDLM_LOCK_PUT(lock);    /* matches the ldlm_lock_get in addref */
         LDLM_LOCK_PUT(lock);    /* matches the handle2lock above */
@@ -511,7 +516,7 @@ static int ldlm_lock_compat(struct ldlm_lock *lock, int send_cbs)
         int rc;
         ENTRY;
 
-        l_lock(&ldlm_everything_lock);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         rc = ldlm_lock_compat_list(lock, send_cbs,
                                    &lock->l_resource->lr_granted);
         /* FIXME: should we be sending ASTs to converting? */
@@ -519,7 +524,7 @@ static int ldlm_lock_compat(struct ldlm_lock *lock, int send_cbs)
                 rc = ldlm_lock_compat_list
                         (lock, send_cbs, &lock->l_resource->lr_converting);
 
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         RETURN(rc);
 }
 
@@ -531,7 +536,7 @@ void ldlm_grant_lock(struct ldlm_lock *lock)
         struct ldlm_resource *res = lock->l_resource;
         ENTRY;
 
-        l_lock(&ldlm_everything_lock);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         ldlm_resource_add_lock(res, &res->lr_granted, lock);
         lock->l_granted_mode = lock->l_req_mode;
 
@@ -541,7 +546,7 @@ void ldlm_grant_lock(struct ldlm_lock *lock)
         if (lock->l_completion_ast) {
                 ldlm_add_ast_work_item(lock, NULL);
         }
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
         EXIT;
 }
 
@@ -593,7 +598,8 @@ int ldlm_lock_match(struct ldlm_namespace *ns, __u64 * res_id, __u32 type,
         if (res == NULL)
                 RETURN(0);
 
-        l_lock(&ldlm_everything_lock);
+        ns = res->lr_namespace;
+        l_lock(&ns->ns_lock);
 
         if ((lock = search_queue(&res->lr_granted, mode, cookie)))
                 GOTO(out, rc = 1);
@@ -605,7 +611,7 @@ int ldlm_lock_match(struct ldlm_namespace *ns, __u64 * res_id, __u32 type,
         EXIT;
       out:
         ldlm_resource_put(res);
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&ns->ns_lock);
 
         if (lock) {
                 ldlm_lock2handle(lock, lockh);
@@ -685,7 +691,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock * lock,
         lock->l_cookie = cookie;
         lock->l_cookie_len = cookie_len;
 
-        l_lock(&ldlm_everything_lock);
+        l_lock(&res->lr_namespace->ns_lock);
         if (local && lock->l_req_mode == lock->l_granted_mode) {
                 /* The server returned a blocked lock, but it was granted before
                  * we got a chance to actually enqueue it.  We don't need to do
@@ -732,7 +738,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock * lock,
         ldlm_grant_lock(lock);
         EXIT;
       out:
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&res->lr_namespace->ns_lock);
         /* Don't set 'completion_ast' until here so that if the lock is granted
          * immediately we don't do an unnecessary completion call. */
         lock->l_completion_ast = completion;
@@ -800,7 +806,7 @@ void ldlm_reprocess_all(struct ldlm_resource *res)
                 return;
         }
 
-        l_lock(&ldlm_everything_lock);
+        l_lock(&res->lr_namespace->ns_lock);
         res->lr_tmp = &rpc_list;
 
         ldlm_reprocess_queue(res, &res->lr_converting);
@@ -808,7 +814,7 @@ void ldlm_reprocess_all(struct ldlm_resource *res)
                 ldlm_reprocess_queue(res, &res->lr_waiting);
 
         res->lr_tmp = NULL;
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&res->lr_namespace->ns_lock);
 
         ldlm_run_ast_work(&rpc_list);
         EXIT;
@@ -816,13 +822,13 @@ void ldlm_reprocess_all(struct ldlm_resource *res)
 
 void ldlm_cancel_callback(struct ldlm_lock *lock)
 {
-        l_lock(&ldlm_everything_lock);
+        l_lock(&lock->l_resource->lr_namespace->ns_lock);
         if (!(lock->l_flags & LDLM_FL_CANCEL)) {
                 lock->l_flags |= LDLM_FL_CANCEL;
                 lock->l_blocking_ast(lock, NULL, lock->l_data,
                                      lock->l_data_len, LDLM_CB_CANCELING);
         }
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 }
 
 void ldlm_lock_cancel(struct ldlm_lock *lock)
@@ -834,7 +840,7 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         res = lock->l_resource;
         ns = res->lr_namespace;
 
-        l_lock(&ldlm_everything_lock);
+        l_lock(&ns->ns_lock);
         if (lock->l_readers || lock->l_writers)
                 CDEBUG(D_INFO, "lock still has references (%d readers, %d "
                        "writers)\n", lock->l_readers, lock->l_writers);
@@ -844,7 +850,7 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
         ldlm_del_waiting_lock(lock);
         ldlm_resource_unlink_lock(lock);
         ldlm_lock_destroy(lock);
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&ns->ns_lock);
         EXIT;
 }
 
@@ -876,7 +882,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         res = lock->l_resource;
         ns = res->lr_namespace;
 
-        l_lock(&ldlm_everything_lock);
+        l_lock(&ns->ns_lock);
 
         lock->l_req_mode = new_mode;
         ldlm_resource_unlink_lock(lock);
@@ -906,7 +912,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                 *flags |= LDLM_FL_BLOCK_CONV;
         }
 
-        l_unlock(&ldlm_everything_lock);
+        l_unlock(&ns->ns_lock);
 
         if (granted)
                 ldlm_run_ast_work(&rpc_list);
