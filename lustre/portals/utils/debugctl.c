@@ -32,7 +32,7 @@
 
 command_t list[] = {
         {"debug_kernel", jt_dbg_debug_kernel, 0, "usage: debug_kernel [file] [raw], get debug buffer and print it [to a file]"},
-        {"debug_daemon", jt_dbg_debug_daemon, 0, "usage: debug_daemon [start file [#MB]|stop|pause|continue], control debug daemon to dump debug buffer to a file"}, 
+        {"debug_daemon", jt_dbg_debug_daemon, 0, "usage: debug_daemon [start file|stop], control debug daemon to dump debug buffer to a file"}, 
         {"debug_file", jt_dbg_debug_file, 0, "usage: debug_file <input> [output] [raw], read debug buffer from input and print it [to output]"},
         {"clear", jt_dbg_clear_debug_buf, 0, "clear kernel debug buffer"},
         {"mark", jt_dbg_mark_debug_buf, 0, "insert a marker into the kernel debug buffer (args: [marker text])"},

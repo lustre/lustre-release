@@ -533,6 +533,11 @@ static void osc_consume_write_grant(struct client_obd *cli,
         LASSERT(cli->cl_avail_grant >= 0);
 }
 
+static unsigned long rpcs_in_flight(struct client_obd *cli)
+{
+        return cli->cl_r_in_flight + cli->cl_w_in_flight;
+}
+
 /* caller must hold loi_list_lock */
 void osc_wake_cache_waiters(struct client_obd *cli)
 {
@@ -549,9 +554,9 @@ void osc_wake_cache_waiters(struct client_obd *cli)
 
                 /* if still dirty cache but no grant wait for pending RPCs that
                  * may yet return us some grant before doing sync writes */
-                if (cli->cl_brw_in_flight && cli->cl_avail_grant < PAGE_SIZE) {
-                        CDEBUG(D_CACHE, "%d BRWs in flight, no grant\n",
-                               cli->cl_brw_in_flight);
+                if (cli->cl_w_in_flight && cli->cl_avail_grant < PAGE_SIZE) {
+                        CDEBUG(D_CACHE, "%u BRW writes in flight, no grant\n",
+                               cli->cl_w_in_flight);
                         return;
                 }
 
@@ -751,7 +756,9 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                 struct brw_page *pg_prev = pg - 1;
 
                 LASSERT(pg->count > 0);
-                LASSERT((pg->off & ~PAGE_MASK) + pg->count <= PAGE_SIZE);
+                LASSERTF((pg->off & ~PAGE_MASK) + pg->count <= PAGE_SIZE,
+                         "i: %d pg: %p off: "LPU64", count: %u\n", i, pg,
+                         pg->off, pg->count);
                 LASSERTF(i == 0 || pg->off > pg_prev->off,
                          "i %d p_c %u pg %p [pri %lu ind %lu] off "LPU64
                          " prev_pg %p [pri %lu ind %lu] off "LPU64"\n",
@@ -1211,7 +1218,10 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
         /* We need to decrement before osc_ap_completion->osc_wake_cache_waiters
          * is called so we know whether to go to sync BRWs or wait for more
          * RPCs to complete */
-        cli->cl_brw_in_flight--;
+        if (request->rq_reqmsg->opc == OST_WRITE)
+                cli->cl_w_in_flight--;
+        else
+                cli->cl_r_in_flight--;
 
         /* the caller may re-use the oap after the completion call so
          * we need to clean it up a little */
@@ -1387,8 +1397,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 /* take the page out of our book-keeping */
                 list_del_init(&oap->oap_pending_item);
                 lop_update_pending(cli, lop, cmd, -1);
-                if (!list_empty(&oap->oap_urgent_item))
-                        list_del_init(&oap->oap_urgent_item);
+                list_del_init(&oap->oap_urgent_item);
 
                 /* ask the caller for the size of the io as the rpc leaves. */
                 if (!(oap->oap_async_flags & ASYNC_COUNT_STABLE))
@@ -1455,17 +1464,20 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
 #ifdef __KERNEL__
         if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
-                lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_brw_in_flight);
+                lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_r_in_flight);
         } else {
                 lprocfs_oh_tally_log2(&cli->cl_write_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_write_rpc_hist,
-                                 cli->cl_brw_in_flight);
+                                 cli->cl_w_in_flight);
         }
 #endif
 
         spin_lock(&cli->cl_loi_list_lock);
 
-        cli->cl_brw_in_flight++;
+        if (cmd == OBD_BRW_READ)
+                cli->cl_r_in_flight++;
+        else
+                cli->cl_w_in_flight++;
         /* queued sync pages can be torn down while the pages
          * were between the pending list and the rpc */
         list_for_each(pos, &aa->aa_oaps) {
@@ -1478,8 +1490,9 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 }
         }
 
-        CDEBUG(D_INODE, "req %p: %d pages, aa %p.  now %d in flight\n", request,
-               page_count, aa, cli->cl_brw_in_flight);
+        CDEBUG(D_INODE, "req %p: %d pages, aa %p.  now %dr/%dw in flight\n", 
+                        request, page_count, aa, cli->cl_r_in_flight,
+                        cli->cl_w_in_flight);
 
         oap->oap_request = ptlrpc_request_addref(request);
         request->rq_interpret_reply = brw_interpret_oap;
@@ -1603,9 +1616,9 @@ static void osc_check_rpcs(struct client_obd *cli)
         ENTRY;
 
         while ((loi = osc_next_loi(cli)) != NULL) {
-                LOI_DEBUG(loi, "%d in flight\n", cli->cl_brw_in_flight);
+                LOI_DEBUG(loi, "%lu in flight\n", rpcs_in_flight(cli));
 
-                if (cli->cl_brw_in_flight >= cli->cl_max_rpcs_in_flight)
+                if (rpcs_in_flight(cli) >= cli->cl_max_rpcs_in_flight)
                         break;
 
                 /* attempt some read/write balancing by alternating between
@@ -1670,7 +1683,7 @@ static int ocw_granted(struct client_obd *cli, struct osc_cache_waiter *ocw)
         int rc;
         ENTRY;
         spin_lock(&cli->cl_loi_list_lock);
-        rc = list_empty(&ocw->ocw_entry) || cli->cl_brw_in_flight == 0;
+        rc = list_empty(&ocw->ocw_entry) || rpcs_in_flight(cli) == 0;
         spin_unlock(&cli->cl_loi_list_lock);
         RETURN(rc);
 };
@@ -1701,7 +1714,7 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
         /* Make sure that there are write rpcs in flight to wait for.  This
          * is a little silly as this object may not have any pending but
          * other objects sure might. */
-        if (cli->cl_brw_in_flight) {
+        if (cli->cl_w_in_flight) {
                 list_add_tail(&ocw.ocw_entry, &cli->cl_cache_waiters);
                 init_waitqueue_head(&ocw.ocw_waitq);
                 ocw.ocw_oap = oap;
@@ -2369,6 +2382,8 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         struct ldlm_res_id res_id = { .name = {lsm->lsm_object_id} };
         struct obd_device *obd = exp->exp_obd;
         struct ost_lvb lvb;
+        struct ldlm_reply *rep;
+        struct ptlrpc_request *req = NULL;
         int rc;
         ENTRY;
 
@@ -2421,9 +2436,33 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         }
 
  no_match:
-        rc = ldlm_cli_enqueue(exp, NULL, obd->obd_namespace, res_id, type,
+        if (*flags & LDLM_FL_HAS_INTENT) {
+                int size[2] = {sizeof(struct ldlm_request), sizeof(lvb)};
+
+                req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 1,
+                                      size, NULL);
+                if (req == NULL)
+                        RETURN(-ENOMEM);
+
+                size[0] = sizeof(*rep);
+                req->rq_replen = lustre_msg_size(2, size);
+        }
+
+        rc = ldlm_cli_enqueue(exp, req, obd->obd_namespace, res_id, type,
                               policy, mode, flags, bl_cb, cp_cb, gl_cb, data,
                               &lvb, sizeof(lvb), lustre_swab_ost_lvb, lockh);
+
+        if (req != NULL) {
+                if (rc == ELDLM_LOCK_ABORTED) {
+                        /* swabbed by ldlm_cli_enqueue() */
+                        LASSERT_REPSWABBED(req, 0);
+                        rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep));
+                        LASSERT(rep != NULL);
+                        if (rep->lock_policy_res1)
+                                rc = rep->lock_policy_res1;
+                }
+                ptlrpc_req_finished(req);
+        }
 
         if ((*flags & LDLM_FL_HAS_INTENT && rc == ELDLM_LOCK_ABORTED) || !rc) {
                 CDEBUG(D_INODE, "received kms == "LPU64", blocks == "LPU64"\n",
@@ -2780,9 +2819,11 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
 
         ctxt = llog_get_context(exp->exp_obd, LLOG_UNLINK_ORIG_CTXT);
         if (ctxt) {
-                rc = llog_initiator_connect(ctxt);
-                if (rc)
-                        RETURN(rc);
+                if (rc == 0)
+                        rc = llog_initiator_connect(ctxt);
+                else
+                        CERROR("cannot establish the connect for ctxt %p: %d\n",
+                               ctxt, rc);
         }
 
         imp->imp_server_timeout = 1;
@@ -2901,6 +2942,14 @@ static int osc_import_event(struct obd_device *obd,
                 break;
         }
         case IMP_EVENT_ACTIVE: {
+                /* Only do this on the MDS OSC's */
+                if (imp->imp_server_timeout) {
+                        struct osc_creator *oscc = &obd->u.cli.cl_oscc;
+
+                        spin_lock(&oscc->oscc_lock);
+                        oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
+                        spin_unlock(&oscc->oscc_lock);
+                }
                 if (obd->obd_observer)
                         rc = obd_notify(obd->obd_observer, obd, 1);
                 break;

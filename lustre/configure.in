@@ -5,7 +5,7 @@
 
 AC_INIT
 AC_CANONICAL_SYSTEM
-AM_INIT_AUTOMAKE(lustre, 1.2.3.2)
+AM_INIT_AUTOMAKE(lustre, 1.2.4.1)
 # AM_MAINTAINER_MODE
 
 # Four main targets: lustre kernel modules, utilities, tests, and liblustre
@@ -229,8 +229,6 @@ portals/knals/ibnal/Makefile
 portals/knals/ibnal/autoMakefile
 portals/knals/qswnal/Makefile
 portals/knals/qswnal/autoMakefile
-portals/knals/scimacnal/Makefile
-portals/knals/scimacnal/autoMakefile
 portals/knals/socknal/Makefile
 portals/knals/socknal/autoMakefile
 portals/libcfs/Makefile

@@ -32,6 +32,7 @@
 /* /proc/lustre/llite mount point registration */
 struct proc_dir_entry *proc_lustre_fs_root;
 struct file_operations llite_dump_pgcache_fops;
+struct file_operations ll_ra_stats_fops;
 
 #ifndef LPROCFS
 int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
@@ -203,7 +204,7 @@ static int ll_wr_read_ahead(struct file *file, const char *buffer,
         int readahead;
         ENTRY;
 
-        if (1 != sscanf(buffer, "%d", &readahead))
+        if (sscanf(buffer, "%d", &readahead) != 1)
                 RETURN(-EINVAL);        
 
         if (readahead)
@@ -212,6 +213,41 @@ static int ll_wr_read_ahead(struct file *file, const char *buffer,
                 sbi->ll_flags &= ~LL_SBI_READAHEAD;
 
         RETURN(count);
+}
+
+static int ll_rd_max_read_ahead_mb(char *page, char **start, off_t off, 
+                                   int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        unsigned val;
+
+        spin_lock(&sbi->ll_lock);
+        val = (sbi->ll_ra_info.ra_max_pages << PAGE_CACHE_SHIFT) >> 20;
+        spin_unlock(&sbi->ll_lock);
+
+        return snprintf(page, count, "%u\n", val);
+}
+
+static int ll_wr_max_read_ahead_mb(struct file *file, const char *buffer,
+                                   unsigned long count, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        int val, rc;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < 0 || val > (num_physpages << PAGE_SHIFT) >> 20)
+                return -ERANGE;
+
+        spin_lock(&sbi->ll_lock);
+        sbi->ll_ra_info.ra_max_pages = (val << 20) >> PAGE_CACHE_SHIFT;
+        spin_unlock(&sbi->ll_lock);
+
+        return count;
 }
 
 static struct lprocfs_vars lprocfs_obd_vars[] = {
@@ -226,6 +262,8 @@ static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "filesfree",    ll_rd_filesfree,        0, 0 },
         //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
         { "read_ahead",   ll_rd_read_ahead, ll_wr_read_ahead, 0 },
+        { "max_read_ahead_mb",   ll_rd_max_read_ahead_mb, 
+                                 ll_wr_max_read_ahead_mb, 0 },
         { 0 }
 };
 
@@ -316,6 +354,12 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         if (entry == NULL)
                 GOTO(out, err = -ENOMEM);
         entry->proc_fops = &llite_dump_pgcache_fops;
+        entry->data = sbi;
+
+        entry = create_proc_entry("read_ahead_stats", 0444, sbi->ll_proc_root);
+        if (entry == NULL)
+                GOTO(out, err = -ENOMEM);
+        entry->proc_fops = &ll_ra_stats_fops;
         entry->data = sbi;
 
         svc_stats = lprocfs_alloc_stats(LPROC_LL_FILE_OPCODES);
@@ -455,7 +499,7 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
                 return 0;
         }
 
-        spin_lock(&sbi->ll_pglist_lock);
+        spin_lock(&sbi->ll_lock);
 
         llap = llite_pglist_next_llap(sbi, &dummy_llap->llap_proc_item);
         if (llap != NULL)  {
@@ -478,7 +522,7 @@ static int llite_dump_pgcache_seq_show(struct seq_file *seq, void *v)
                         seq_puts(seq, "]\n");
         }
 
-        spin_unlock(&sbi->ll_pglist_lock);
+        spin_unlock(&sbi->ll_lock);
 
         return 0;
 }
@@ -508,14 +552,14 @@ static void *llite_dump_pgcache_seq_next(struct seq_file *seq, void *v,
         /* we've just displayed the llap that is after us in the list.
          * we advance to a position beyond it, returning null if there
          * isn't another llap in the list beyond that new position. */
-        spin_lock(&sbi->ll_pglist_lock);
+        spin_lock(&sbi->ll_lock);
         llap = llite_pglist_next_llap(sbi, &dummy_llap->llap_proc_item);
         list_del_init(&dummy_llap->llap_proc_item);
         if (llap) {
                 list_add(&dummy_llap->llap_proc_item, &llap->llap_proc_item);
                 llap = llite_pglist_next_llap(sbi, &dummy_llap->llap_proc_item);
         }
-        spin_unlock(&sbi->ll_pglist_lock);
+        spin_unlock(&sbi->ll_lock);
 
         ++*pos;
         if (llap == NULL) {
@@ -570,9 +614,9 @@ static int llite_dump_pgcache_seq_open(struct inode *inode, struct file *file)
         seq = file->private_data;
         seq->private = llap;
 
-        spin_lock(&sbi->ll_pglist_lock);
+        spin_lock(&sbi->ll_lock);
         list_add(&llap->llap_proc_item, &sbi->ll_pglist);
-        spin_unlock(&sbi->ll_pglist_lock);
+        spin_unlock(&sbi->ll_lock);
 
         return 0;
 }
@@ -584,10 +628,10 @@ static int llite_dump_pgcache_seq_release(struct inode *inode,
         struct ll_async_page *llap = seq->private;
         struct ll_sb_info *sbi = llap->llap_cookie;
 
-        spin_lock(&sbi->ll_pglist_lock);
+        spin_lock(&sbi->ll_lock);
         if (!list_empty(&llap->llap_proc_item))
                 list_del_init(&llap->llap_proc_item);
-        spin_unlock(&sbi->ll_pglist_lock);
+        spin_unlock(&sbi->ll_lock);
         OBD_FREE(llap, sizeof(*llap));
 
         return seq_release(inode, file);
@@ -598,6 +642,101 @@ struct file_operations llite_dump_pgcache_fops = {
         .open    = llite_dump_pgcache_seq_open,
         .read    = seq_read,
         .release = llite_dump_pgcache_seq_release,
+};
+
+static int ll_ra_stats_seq_show(struct seq_file *seq, void *v)
+{
+        struct timeval now;
+        struct ll_sb_info *sbi = seq->private;
+        struct ll_ra_info *ra = &sbi->ll_ra_info;
+        int i;
+        static char *ra_stat_strings[] = {
+                [RA_STAT_HIT] = "hits",
+                [RA_STAT_MISS] = "misses",
+                [RA_STAT_DISTANT_READPAGE] = "readpage not consecutive",
+                [RA_STAT_MISS_IN_WINDOW] = "miss inside window",
+                [RA_STAT_FAILED_MATCH] = "failed lock match",
+                [RA_STAT_DISCARDED] = "read but discarded",
+                [RA_STAT_ZERO_LEN] = "zero length file",
+                [RA_STAT_ZERO_WINDOW] = "zero size window",
+                [RA_STAT_EOF] = "read-ahead to EOF",
+                [RA_STAT_MAX_IN_FLIGHT] = "hit max r-a issue",
+        };
+
+        do_gettimeofday(&now);
+
+        spin_lock(&sbi->ll_lock);
+
+        seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n",
+                   now.tv_sec, now.tv_usec);
+        seq_printf(seq, "pending issued pages:           %lu\n",
+                   ra->ra_cur_pages);
+
+        for(i = 0; i < _NR_RA_STAT; i++)
+                seq_printf(seq, "%-25s %lu\n", ra_stat_strings[i], 
+                           ra->ra_stats[i]);
+
+        spin_unlock(&sbi->ll_lock);
+
+        return 0;
+}
+
+static void *ll_ra_stats_seq_start(struct seq_file *p, loff_t *pos)
+{
+        if (*pos == 0)
+                return (void *)1;
+        return NULL;
+}
+static void *ll_ra_stats_seq_next(struct seq_file *p, void *v, loff_t *pos)
+{
+        ++*pos;
+        return NULL;
+}
+static void ll_ra_stats_seq_stop(struct seq_file *p, void *v)
+{
+}
+struct seq_operations ll_ra_stats_seq_sops = {
+        .start = ll_ra_stats_seq_start,
+        .stop = ll_ra_stats_seq_stop,
+        .next = ll_ra_stats_seq_next,
+        .show = ll_ra_stats_seq_show,
+};
+
+static int ll_ra_stats_seq_open(struct inode *inode, struct file *file)
+{
+        struct proc_dir_entry *dp = PDE(inode);
+        struct seq_file *seq;
+        int rc;
+
+        rc = seq_open(file, &ll_ra_stats_seq_sops);
+        if (rc)
+                return rc;
+        seq = file->private_data;
+        seq->private = dp->data;
+        return 0;
+}
+
+static ssize_t ll_ra_stats_seq_write(struct file *file, const char *buf,
+                                       size_t len, loff_t *off)
+{
+        struct seq_file *seq = file->private_data;
+        struct ll_sb_info *sbi = seq->private;
+        struct ll_ra_info *ra = &sbi->ll_ra_info;
+
+        spin_lock(&sbi->ll_lock);
+        memset(ra->ra_stats, 0, sizeof(ra->ra_stats));
+        spin_unlock(&sbi->ll_lock);
+
+        return len;
+}
+
+struct file_operations ll_ra_stats_fops = {
+        .owner   = THIS_MODULE,
+        .open    = ll_ra_stats_seq_open,
+        .read    = seq_read,
+        .write   = ll_ra_stats_seq_write,
+        .llseek  = seq_lseek,
+        .release = seq_release,
 };
 
 #endif /* LPROCFS */

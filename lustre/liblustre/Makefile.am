@@ -27,6 +27,20 @@ SYSIO_LIBS =  $(SYSIO)/drivers/native/libsysio_native.a \
 if LIBLUSTRE
 lib_LIBRARIES = liblustre.a
 noinst_LIBRARIES = libllite.a
+
+install-exec-hook: liblustre.so
+	@$(NORMAL_INSTALL)
+	$(mkinstalldirs) $(DESTDIR)$(libdir)
+	@list=$< ; for p in $$list; do \
+	  if test -f $$p; then \
+	    f="`echo $$p | sed -e 's|^.*/||'`"; \
+	    echo " $(libLIBRARIES_INSTALL) $$p $(DESTDIR)$(libdir)/$$f"; \
+	    $(libLIBRARIES_INSTALL) $$p $(DESTDIR)$(libdir)/$$f; \
+	  else :; fi; \
+	done
+else
+install-exec-hook:
+
 endif
 
 libllite_a_SOURCES = llite_lib.c super.c namei.c rw.c file.c dir.c llite_lib.h

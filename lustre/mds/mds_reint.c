@@ -619,7 +619,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (rec->ur_tgt == NULL)        /* no target supplied */
                         rc = -EINVAL;           /* -EPROTO? */
                 else
-                        rc = vfs_symlink(dir, dchild, rec->ur_tgt);
+                        rc = ll_vfs_symlink(dir, dchild, rec->ur_tgt, S_IALLUGO);
                 EXIT;
                 break;
         }
@@ -1059,7 +1059,7 @@ retry_locks:
 
         /* Step 3: Lock parent and child in resource order.  If child doesn't
          *         exist, we still have to lock the parent and re-lookup. */
-        rc = enqueue_ordered_locks(obd, &parent_res_id,parent_lockh,parent_mode,
+        rc = enqueue_ordered_locks(obd,&parent_res_id,parent_lockh,parent_mode,
                                    &child_res_id, child_lockh, child_mode);
         if (rc)
                 GOTO(cleanup, rc);
@@ -1104,18 +1104,98 @@ void mds_reconstruct_generic(struct ptlrpc_request *req)
         mds_req_from_mcd(req, med->med_mcd);
 }
 
+/* If we are unlinking an open file/dir (i.e. creating an orphan) then
+ * we instead link the inode into the PENDING directory until it is
+ * finally released.  We can't simply call mds_reint_rename() or some
+ * part thereof, because we don't have the inode to check for link
+ * count/open status until after it is locked.
+ *
+ * For lock ordering, caller must get child->i_sem first, then pending->i_sem
+ * before starting journal transaction.
+ *
+ * returns 1 on success
+ * returns 0 if we lost a race and didn't make a new link
+ * returns negative on error
+ */
+static int mds_orphan_add_link(struct mds_update_record *rec,
+                               struct obd_device *obd, struct dentry *dentry)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct inode *pending_dir = mds->mds_pending_dir->d_inode;
+        struct inode *inode = dentry->d_inode;
+        struct dentry *pending_child;
+        char fidname[LL_FID_NAMELEN];
+        int fidlen = 0, rc, mode;
+        ENTRY;
+
+        LASSERT(inode != NULL);
+        LASSERT(!mds_inode_is_orphan(inode));
+#ifndef HAVE_I_ALLOC_SEM
+        LASSERT(down_trylock(&inode->i_sem) != 0);
+#endif
+        LASSERT(down_trylock(&pending_dir->i_sem) != 0);
+
+        fidlen = ll_fid2str(fidname, inode->i_ino, inode->i_generation);
+
+        CDEBUG(D_ERROR, "pending destroy of %dx open %d linked %s %s = %s\n",
+               mds_orphan_open_count(inode), inode->i_nlink,
+               S_ISDIR(inode->i_mode) ? "dir" :
+                S_ISREG(inode->i_mode) ? "file" : "other",rec->ur_name,fidname);
+
+        if (mds_orphan_open_count(inode) == 0 || inode->i_nlink != 0)
+                RETURN(0);
+
+        pending_child = lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
+        if (IS_ERR(pending_child))
+                RETURN(PTR_ERR(pending_child));
+
+        if (pending_child->d_inode != NULL) {
+                CERROR("re-destroying orphan file %s?\n", rec->ur_name);
+                LASSERT(pending_child->d_inode == inode);
+                GOTO(out_dput, rc = 0);
+        }
+
+        /* link() is semanticaly-wrong for S_IFDIR, so we set S_IFREG
+         * for linking and return real mode back then -bzzz */
+        mode = inode->i_mode;
+        inode->i_mode = S_IFREG;
+        rc = vfs_link(dentry, pending_dir, pending_child);
+        if (rc)
+                CERROR("error linking orphan %s to PENDING: rc = %d\n",
+                       rec->ur_name, rc);
+        else
+                mds_inode_set_orphan(inode);
+
+        /* return mode and correct i_nlink if inode is directory */
+        inode->i_mode = mode;
+        LASSERTF(inode->i_nlink == 1, "%s nlink == %d\n",
+                 S_ISDIR(mode) ? "dir" : S_ISREG(mode) ? "file" : "other",
+                 inode->i_nlink);
+        if (S_ISDIR(mode)) {
+                inode->i_nlink++;
+                pending_dir->i_nlink++;
+                mark_inode_dirty(inode);
+                mark_inode_dirty(pending_dir);
+        }
+
+        GOTO(out_dput, rc = 1);
+out_dput:
+        l_dput(pending_child);
+        RETURN(rc);
+}
+
 static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                             struct ptlrpc_request *req,
                             struct lustre_handle *lh)
 {
-        struct dentry *dparent, *dchild;
+        struct dentry *dparent = NULL, *dchild;
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
         struct mds_body *body = NULL;
-        struct inode *child_inode;
+        struct inode *child_inode = NULL;
         struct lustre_handle parent_lockh, child_lockh, child_reuse_lockh;
         void *handle = NULL;
-        int rc = 0, log_unlink = 0, cleanup_phase = 0;
+        int rc = 0, cleanup_phase = 0;
         ENTRY;
 
         LASSERT(offset == 0 || offset == 2);
@@ -1164,31 +1244,30 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
         LASSERT(body != NULL);
 
-        /* If this is the last reference to this inode, get the OBD EA
-         * data first so the client can destroy OST objects.
-         * we only do the object removal if no open files remain.
-         * Nobody can get at this name anymore because of the locks so
-         * we make decisions here as to whether to remove the inode */
-        if (S_ISREG(child_inode->i_mode) && child_inode->i_nlink == 1 &&
-            mds_open_orphan_count(child_inode) == 0) {
-                mds_pack_inode2fid(&body->fid1, child_inode);
-                mds_pack_inode2body(body, child_inode);
-                mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
-                            child_inode, 1);
-                if (!(body->valid & OBD_MD_FLEASIZE)) {
-                        body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                                        OBD_MD_FLATIME | OBD_MD_FLMTIME);
-                } else {
-                        log_unlink = 1;
+        /* child i_alloc_sem protects orphan_dec_test && is_orphan race */
+        DOWN_READ_I_ALLOC_SEM(child_inode);
+        cleanup_phase = 4; /* up(&child_inode->i_sem) when finished */
+
+        /* If this is potentially the last reference to this inode, get the
+         * OBD EA data first so the client can destroy OST objects.  We
+         * only do the object removal later if no open files/links remain. */
+        if ((S_ISDIR(child_inode->i_mode) && child_inode->i_nlink == 2) ||
+            child_inode->i_nlink == 1) {
+                if (mds_orphan_open_count(child_inode) > 0) {
+                        /* need to lock pending_dir before transaction */
+                        down(&mds->mds_pending_dir->d_inode->i_sem);
+                        cleanup_phase = 5; /* up(&pending_dir->i_sem) */
+                } else if (S_ISREG(child_inode->i_mode)) {
+                        mds_pack_inode2fid(&body->fid1, child_inode);
+                        mds_pack_inode2body(body, child_inode);
+                        mds_pack_md(obd, req->rq_repmsg, offset + 1, body,
+                                    child_inode, MDS_PACK_MD_LOCK);
                 }
         }
 
         /* We have to do these checks ourselves, in case we are making an
          * orphan.  The client tells us whether rmdir() or unlink() was called,
-         * so we need to return appropriate errors (bug 72).
-         *
-         * We don't have to check permissions, because vfs_rename (called from
-         * mds_open_unlink_rename) also calls may_delete. */
+         * so we need to return appropriate errors (bug 72). */
         if ((rec->ur_mode & S_IFMT) == S_IFDIR) {
                 if (!S_ISDIR(child_inode->i_mode))
                         GOTO(cleanup, rc = -ENOTDIR);
@@ -1208,7 +1287,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                       NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                cleanup_phase = 4; /* transaction */
                 rc = vfs_rmdir(dparent->d_inode, dchild);
                 break;
         case S_IFREG: {
@@ -1219,17 +1297,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                           le32_to_cpu(lmm->lmm_stripe_count));
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-
-                cleanup_phase = 4; /* transaction */
                 rc = vfs_unlink(dparent->d_inode, dchild);
-
-                if (!rc && log_unlink)
-                        if (mds_log_op_unlink(obd, child_inode,
-                                lustre_msg_buf(req->rq_repmsg, offset + 1, 0),
-                                req->rq_repmsg->buflens[offset + 1],
-                                lustre_msg_buf(req->rq_repmsg, offset + 2, 0),
-                                req->rq_repmsg->buflens[offset + 2]) > 0)
-                                body->valid |= OBD_MD_FLCOOKIE;
                 break;
         }
         case S_IFLNK:
@@ -1241,7 +1309,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                                       NULL);
                 if (IS_ERR(handle))
                         GOTO(cleanup, rc = PTR_ERR(handle));
-                cleanup_phase = 4; /* transaction */
                 rc = vfs_unlink(dparent->d_inode, dchild);
                 break;
         default:
@@ -1251,7 +1318,30 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc = -EINVAL);
         }
 
- cleanup:
+        if (rc == 0 && child_inode->i_nlink == 0) {
+                if (mds_orphan_open_count(child_inode) > 0)
+                        rc = mds_orphan_add_link(rec, obd, dchild);
+
+                if (rc == 1)
+                        GOTO(cleanup, rc = 0);
+
+                if (!S_ISREG(child_inode->i_mode))
+                        GOTO(cleanup, rc);
+
+                if (!(body->valid & OBD_MD_FLEASIZE)) {
+                        body->valid |=(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                                       OBD_MD_FLATIME | OBD_MD_FLMTIME);
+                } else if (mds_log_op_unlink(obd, child_inode,
+                                lustre_msg_buf(req->rq_repmsg, offset + 1, 0),
+                                        req->rq_repmsg->buflens[offset + 1],
+                                lustre_msg_buf(req->rq_repmsg, offset + 2, 0),
+                                        req->rq_repmsg->buflens[offset+2]) > 0){
+                        body->valid |= OBD_MD_FLCOOKIE;
+                }
+        }
+
+        GOTO(cleanup, rc);
+cleanup:
         if (rc == 0) {
                 struct iattr iattr;
                 int err;
@@ -1265,21 +1355,16 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         CERROR("error on parent setattr: rc = %d\n", err);
         }
 
+        rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
+                                handle, req, rc, 0);
+        if (!rc)
+                (void)obd_set_info(mds->mds_osc_exp, strlen("unlinked"),
+                                   "unlinked", 0, NULL);
         switch(cleanup_phase) {
-        case 4:
-                LASSERT(dchild != NULL && dchild->d_inode != NULL);
-                LASSERT(atomic_read(&dchild->d_inode->i_count) > 0);
-                if (rc == 0 && dchild->d_inode->i_nlink == 0 &&
-                                mds_open_orphan_count(dchild->d_inode) > 0) {
-                        /* filesystem is really going to destroy an inode
-                         * we have to delay this till inode is opened -bzzz */
-                        mds_open_unlink_rename(rec, obd, dparent, dchild, NULL);
-                }
-                rc = mds_finish_transno(mds, dparent->d_inode, handle, req,
-                                        rc, 0);
-                if (!rc)
-                        (void)obd_set_info(mds->mds_osc_exp, strlen("unlinked"),
-                                           "unlinked", 0, NULL);
+        case 5: /* pending_dir semaphore */
+                up(&mds->mds_pending_dir->d_inode->i_sem);
+        case 4: /* child inode semaphore */
+                UP_READ_I_ALLOC_SEM(child_inode);
         case 3: /* child ino-reuse lock */
                 if (rc && body != NULL) {
                         // Don't unlink the OST objects if the MDS unlink failed
@@ -1428,58 +1513,6 @@ cleanup:
         return 0;
 }
 
-/*
- * add a hard link in the PENDING directory, only used by rename()
- */
-static int mds_add_link_orphan(struct mds_update_record *rec,
-                               struct obd_device *obd,
-                               struct dentry *dentry)
-{
-        struct mds_obd *mds = &obd->u.mds;
-        struct inode *pending_dir = mds->mds_pending_dir->d_inode;
-        struct dentry *pending_child;
-        char fidname[LL_FID_NAMELEN];
-        int fidlen = 0, rc;
-        ENTRY;
-
-        LASSERT(dentry->d_inode);
-        LASSERT(!mds_inode_is_orphan(dentry->d_inode));
-
-        down(&pending_dir->i_sem);
-        fidlen = ll_fid2str(fidname, dentry->d_inode->i_ino,
-                            dentry->d_inode->i_generation);
-
-        CDEBUG(D_ERROR, "pending destroy of %dx open %s %s = %s\n",
-               mds_open_orphan_count(dentry->d_inode),
-               S_ISDIR(dentry->d_inode->i_mode) ? "dir" :
-               S_ISREG(dentry->d_inode->i_mode) ? "file" : "other",
-               rec->ur_name, fidname);
-
-        pending_child = lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
-        if (IS_ERR(pending_child))
-                GOTO(out_lock, rc = PTR_ERR(pending_child));
-
-        if (pending_child->d_inode != NULL) {
-                CERROR("re-destroying orphan file %s?\n", rec->ur_name);
-                LASSERT(pending_child->d_inode == dentry->d_inode);
-                GOTO(out_dput, rc = 0);
-        }
-
-        lock_kernel();
-        rc = vfs_link(dentry, pending_dir, pending_child);
-        unlock_kernel();
-        if (rc)
-                CERROR("error addlink orphan %s to PENDING: rc = %d\n",
-                       rec->ur_name, rc);
-        else
-                mds_inode_set_orphan(dentry->d_inode);
-out_dput:
-        l_dput(pending_child);
-out_lock:
-        up(&pending_dir->i_sem);
-        RETURN(rc);
-}
-
 /* The idea here is that we need to get four locks in the end:
  * one on each parent directory, one on each child.  We need to take
  * these locks in some kind of order (to avoid deadlocks), and the order
@@ -1571,6 +1604,7 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
 
         c1_res_id.name[0] = inode->i_ino;
         c1_res_id.name[1] = inode->i_generation;
+
         iput(inode);
 
         /* Step 4: Lookup the target child entry */
@@ -1679,11 +1713,11 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct dentry *de_tgtdir = NULL;
         struct dentry *de_old = NULL;
         struct dentry *de_new = NULL;
+        struct inode *old_inode = NULL, *new_inode = NULL;
         struct mds_obd *mds = mds_req2mds(req);
         struct lustre_handle dlm_handles[4];
         struct mds_body *body = NULL;
-        int rc = 0, lock_count = 3;
-        int cleanup_phase = 0;
+        int rc = 0, lock_count = 3, cleanup_phase = 0;
         void *handle = NULL;
         ENTRY;
 
@@ -1706,74 +1740,107 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         cleanup_phase = 1; /* parent(s), children, locks */
 
-        if (de_new->d_inode)
+        old_inode = de_old->d_inode;
+        new_inode = de_new->d_inode;
+
+        if (new_inode != NULL)
                 lock_count = 4;
 
         /* sanity check for src inode */
-        if (de_old->d_inode->i_ino == de_srcdir->d_inode->i_ino ||
-            de_old->d_inode->i_ino == de_tgtdir->d_inode->i_ino)
+        if (old_inode->i_ino == de_srcdir->d_inode->i_ino ||
+            old_inode->i_ino == de_tgtdir->d_inode->i_ino)
                 GOTO(cleanup, rc = -EINVAL);
+
+        if (new_inode == NULL)
+                goto no_unlink;
+
+        igrab(new_inode);
+        cleanup_phase = 2; /* iput(new_inode) when finished */
 
         /* sanity check for dest inode */
-        if (de_new->d_inode &&
-            (de_new->d_inode->i_ino == de_srcdir->d_inode->i_ino ||
-             de_new->d_inode->i_ino == de_tgtdir->d_inode->i_ino))
+        if (new_inode->i_ino == de_srcdir->d_inode->i_ino ||
+            new_inode->i_ino == de_tgtdir->d_inode->i_ino)
                 GOTO(cleanup, rc = -EINVAL);
 
-        if (de_old->d_inode == de_new->d_inode) {
+        if (old_inode == new_inode)
                 GOTO(cleanup, rc = 0);
-        }
 
         /* if we are about to remove the target at first, pass the EA of
          * that inode to client to perform and cleanup on OST */
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
         LASSERT(body != NULL);
 
-        if (de_new->d_inode &&
-            S_ISREG(de_new->d_inode->i_mode) &&
-            de_new->d_inode->i_nlink == 1 &&
-            mds_open_orphan_count(de_new->d_inode) == 0) {
-                mds_pack_inode2fid(&body->fid1, de_new->d_inode);
-                mds_pack_inode2body(body, de_new->d_inode);
-                mds_pack_md(obd, req->rq_repmsg, 1, body, de_new->d_inode, 1);
-                if (!(body->valid & OBD_MD_FLEASIZE)) {
-                        body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                        OBD_MD_FLATIME | OBD_MD_FLMTIME);
-                } else {
-                        /* XXX need log unlink? */
+        /* child i_alloc_sem protects orphan_dec_test && is_orphan race */
+        DOWN_READ_I_ALLOC_SEM(new_inode);
+        cleanup_phase = 3; /* up(&new_inode->i_sem) when finished */
+
+        if ((S_ISDIR(new_inode->i_mode) && new_inode->i_nlink == 2) ||
+            new_inode->i_nlink == 1) {
+                if (mds_orphan_open_count(new_inode) > 0) {
+                        /* need to lock pending_dir before transaction */
+                        down(&mds->mds_pending_dir->d_inode->i_sem);
+                        cleanup_phase = 4; /* up(&pending_dir->i_sem) */
+                } else if (S_ISREG(new_inode->i_mode)) {
+                        mds_pack_inode2fid(&body->fid1, new_inode);
+                        mds_pack_inode2body(body, new_inode);
+                        mds_pack_md(obd, req->rq_repmsg, 1, body, new_inode, MDS_PACK_MD_LOCK);
                 }
         }
 
+no_unlink:
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_RENAME_WRITE,
                        de_srcdir->d_inode->i_sb);
+
+        /* Check if we are moving old entry into its child. 2.6 does not
+           check for this in vfs_rename() anymore */
+        if (is_subdir(de_new, de_old))
+                GOTO(cleanup, rc = -EINVAL);
 
         handle = fsfilt_start(obd, de_tgtdir->d_inode, FSFILT_OP_RENAME, NULL);
         if (IS_ERR(handle))
                 GOTO(cleanup, rc = PTR_ERR(handle));
 
-        /* FIXME need adjust the journal block count? */
-        /* if the target should be moved to PENDING, we at first increase the
-         * link and later vfs_rename() will decrease the link count again */
-        if (de_new->d_inode &&
-            S_ISREG(de_new->d_inode->i_mode) &&
-            de_new->d_inode->i_nlink == 1 &&
-            mds_open_orphan_count(de_new->d_inode) > 0) {
-                rc = mds_add_link_orphan(rec, obd, de_new);
-                if (rc)
-                        GOTO(cleanup, rc);
-        }
-
         lock_kernel();
         de_old->d_fsdata = req;
         de_new->d_fsdata = req;
+
         rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new);
         unlock_kernel();
+
+        if (rc == 0 && new_inode != NULL && new_inode->i_nlink == 0) {
+                if (mds_orphan_open_count(new_inode) > 0)
+                        rc = mds_orphan_add_link(rec, obd, de_new);
+
+                if (rc == 1)
+                        GOTO(cleanup, rc = 0);
+
+                if (!S_ISREG(new_inode->i_mode))
+                        GOTO(cleanup, rc);
+
+                if (!(body->valid & OBD_MD_FLEASIZE)) {
+                        body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                                        OBD_MD_FLATIME | OBD_MD_FLMTIME);
+                } else if (mds_log_op_unlink(obd, new_inode,
+                                             lustre_msg_buf(req->rq_repmsg,1,0),
+                                             req->rq_repmsg->buflens[1],
+                                             lustre_msg_buf(req->rq_repmsg,2,0),
+                                             req->rq_repmsg->buflens[2]) > 0) {
+                        body->valid |= OBD_MD_FLCOOKIE;
+                }
+        }
 
         GOTO(cleanup, rc);
 cleanup:
         rc = mds_finish_transno(mds, de_tgtdir ? de_tgtdir->d_inode : NULL,
                                 handle, req, rc, 0);
+
         switch (cleanup_phase) {
+        case 4:
+                up(&mds->mds_pending_dir->d_inode->i_sem);
+        case 3:
+                UP_READ_I_ALLOC_SEM(new_inode);
+        case 2:
+                iput(new_inode);
         case 1:
                 if (rc) {
                         if (lock_count == 4)
@@ -1783,8 +1850,7 @@ cleanup:
                         ldlm_lock_decref(&(dlm_handles[0]), LCK_PW);
                 } else {
                         if (lock_count == 4)
-                                ptlrpc_save_lock(req,
-                                              &(dlm_handles[3]), LCK_EX);
+                                ptlrpc_save_lock(req,&(dlm_handles[3]), LCK_EX);
                         ptlrpc_save_lock(req, &(dlm_handles[2]), LCK_EX);
                         ptlrpc_save_lock(req, &(dlm_handles[1]), LCK_PW);
                         ptlrpc_save_lock(req, &(dlm_handles[0]), LCK_PW);

@@ -20,6 +20,45 @@ static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
         return &req->rq_export->exp_obd->u.mds;
 }
 
+#ifdef __KERNEL__
+/* Open counts for files.  No longer atomic, must hold inode->i_sem */
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+# define mds_inode_oatomic(inode)    ((inode)->i_cindex)
+#else
+# define mds_inode_oatomic(inode)    ((inode)->i_attr_flags)
+#endif
+
+static inline int mds_orphan_open_count(struct inode *inode)
+{
+        LASSERT_MDS_ORPHAN_READ_LOCKED(inode);
+        return mds_inode_oatomic(inode);
+}
+
+static inline int mds_orphan_open_inc(struct inode *inode)
+{
+        LASSERT_MDS_ORPHAN_WRITE_LOCKED(inode);
+        return ++mds_inode_oatomic(inode);
+}
+
+static inline int mds_orphan_open_dec_test(struct inode *inode)
+{
+        LASSERT_MDS_ORPHAN_WRITE_LOCKED(inode);
+        return --mds_inode_oatomic(inode) == 0;
+}
+
+#define mds_inode_is_orphan(inode)  ((inode)->i_flags & 0x4000000)
+#define mds_inode_set_orphan(inode)                                     \
+do {                                                                    \
+        (inode)->i_flags |= 0x4000000;                                  \
+        CDEBUG(D_VFSTRACE, "setting orphan flag on inode %p\n", inode); \
+} while (0)
+#define mds_inode_unset_orphan(inode)                                      \
+do {                                                                       \
+        (inode)->i_flags &= ~(0x4000000);                                  \
+        CDEBUG(D_VFSTRACE, "removing orphan flag from inode %p\n", inode); \
+} while (0)
+#endif /* __KERNEL__ */
+
 /* mds/mds_reint.c */
 int res_gt(struct ldlm_res_id *res1, struct ldlm_res_id *res2);
 int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
@@ -46,9 +85,6 @@ int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
 
 /* mds/mds_unlink_open.c */
-int mds_open_unlink_rename(struct mds_update_record *rec,
-                           struct obd_device *obd, struct dentry *dparent,
-                           struct dentry *dchild, void **handle);
 int mds_cleanup_orphans(struct obd_device *obd);
 
 

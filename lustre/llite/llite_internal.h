@@ -10,27 +10,43 @@
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
 
+/* default to about 40meg of readahead on a given system.  That much tied
+ * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
+#define SBI_DEFAULT_RA_MAX ((40 << 20) >> PAGE_CACHE_SHIFT)
+enum ra_stat {
+        RA_STAT_HIT = 0,
+        RA_STAT_MISS,
+        RA_STAT_DISTANT_READPAGE,
+        RA_STAT_MISS_IN_WINDOW,
+        RA_STAT_FAILED_MATCH,
+        RA_STAT_DISCARDED,
+        RA_STAT_ZERO_LEN,
+        RA_STAT_ZERO_WINDOW,
+        RA_STAT_EOF,
+        RA_STAT_MAX_IN_FLIGHT,
+        _NR_RA_STAT,
+};
+
+struct ll_ra_info {
+        unsigned long             ra_cur_pages;
+        unsigned long             ra_max_pages;
+        unsigned long             ra_stats[_NR_RA_STAT];
+};
+
 struct ll_sb_info {
+        /* this protects pglist and ra_info.  It isn't safe to
+         * grab from interrupt contexts */
+        spinlock_t                ll_lock;
         struct obd_uuid           ll_sb_uuid;
-//        struct lustre_handle      ll_mdc_conn;
         struct obd_export        *ll_mdc_exp;
         struct obd_export        *ll_osc_exp;
         struct proc_dir_entry*    ll_proc_root;
         obd_id                    ll_rootino; /* number of root inode */
 
-        struct obd_uuid           ll_mds_uuid;
-        struct obd_uuid           ll_mds_peer_uuid;
         struct lustre_mount_data *ll_lmd;
         char                     *ll_instance;
 
         int                       ll_flags;
-        wait_queue_head_t         ll_commitcbd_waitq;
-        wait_queue_head_t         ll_commitcbd_ctl_waitq;
-        int                       ll_commitcbd_flags;
-        struct task_struct       *ll_commitcbd_thread;
-        time_t                    ll_commitcbd_waketime;
-        time_t                    ll_commitcbd_timeout;
-        spinlock_t                ll_commitcbd_lock;
         struct list_head          ll_conn_chain; /* per-conn chain of SBs */
 
         struct hlist_head         ll_orphan_dentry_list; /*please don't ask -p*/
@@ -38,14 +54,18 @@ struct ll_sb_info {
 
         struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
 
-        spinlock_t                ll_pglist_lock;
         unsigned long             ll_pglist_gen;
         struct list_head          ll_pglist;
+
+        struct ll_ra_info         ll_ra_info;
 };
 
 struct ll_readahead_state {
         spinlock_t      ras_lock;
-        unsigned long   ras_last, ras_window, ras_next_index;
+        unsigned long   ras_last_readpage, ras_consecutive;
+        unsigned long   ras_window_start, ras_window_len;
+        unsigned long   ras_next_readahead;
+
 };
 
 extern kmem_cache_t *ll_file_data_slab;
@@ -110,8 +130,9 @@ struct ll_async_page {
         struct page     *llap_page;
         struct list_head llap_pending_write;
          /* only trust these if the page lock is providing exclusion */
-        int              llap_write_queued:1,
-                         llap_defer_uptodate:1;
+        unsigned         llap_write_queued:1,
+                         llap_defer_uptodate:1,
+                         llap_ra_used:1;
         struct list_head llap_proc_item;
 };
 
@@ -147,13 +168,12 @@ int ll_commit_write(struct file *, struct page *, unsigned from, unsigned to);
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa);
 void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc);
 void ll_removepage(struct page *page);
-int ll_sync_page(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
 struct ll_async_page *llap_from_page(struct page *page);
 struct ll_async_page *llap_cast_private(struct page *page);
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras);
-
+void ll_ra_accounting(struct page *page, struct address_space *mapping);
 void ll_truncate(struct inode *inode);
 
 /* llite/file.c */
@@ -247,9 +267,6 @@ void ll_try_done_writing(struct inode *inode);
 void ll_queue_done_writing(struct inode *inode);
 void ll_close_thread_shutdown(struct ll_close_queue *lcq);
 int ll_close_thread_start(struct ll_close_queue **lcq_ret);
-
-/* generic */
-#define LL_SUPER_MAGIC 0x0BD00BD0
 
 #define LL_SBI_NOLCK            0x1
 #define LL_SBI_READAHEAD        0x2

@@ -228,12 +228,6 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 GOTO(err_reg, rc);
         }
 
-        /* FIXME before set info call is made, we must initialize logging */
-        rc = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"), "mds_conn",
-                          0, NULL);
-        if (rc)
-                GOTO(err_reg, rc);
-
         /* If we're mounting this code for the first time on an existing FS,
          * we need to populate the objids array from the real OST values */
         if (!mds->mds_lov_objids_valid) {
@@ -451,8 +445,8 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = llog_ioctl(ctxt, cmd, data);
                 pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_ctxt, NULL);
                 llog_cat_initialize(obd, mds->mds_lov_desc.ld_tgt_count);
-                rc2 = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"), "mds_conn",
-                          0, NULL);
+                rc2 = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"),
+                                   "mds_conn", 0, NULL);
                 if (!rc)
                         rc = rc2;
                 RETURN(rc);
@@ -514,7 +508,7 @@ int mds_lov_synchronize(void *data)
                           "mds_conn", 0, uuid);
         if (rc != 0)
                 RETURN(rc);
-        
+
         rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
                           obd->u.mds.mds_lov_desc.ld_tgt_count,
                           NULL, NULL, uuid);
@@ -523,7 +517,7 @@ int mds_lov_synchronize(void *data)
                        obd->obd_name, rc);
                 RETURN(rc);
         }
-        
+
         CWARN("MDS %s: %s now active, resetting orphans\n",
               obd->obd_name, uuid->uuid);
         rc = mds_lov_clearorphans(&obd->u.mds, uuid);
@@ -540,7 +534,7 @@ int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid)
 {
         struct mds_lov_sync_info *mlsi;
         int rc;
-        
+
         ENTRY;
 
         OBD_ALLOC(mlsi, sizeof(*mlsi));

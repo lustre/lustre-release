@@ -58,7 +58,7 @@ struct lov_oinfo {                 /* per-stripe data structure */
         struct list_head loi_write_item;
         struct list_head loi_read_item;
 
-        int loi_kms_valid:1;
+        unsigned loi_kms_valid:1;
         __u64 loi_kms;             /* known minimum size */
         __u64 loi_rss;             /* recently seen size */
         __u64 loi_mtime;           /* recently seen mtime */
@@ -212,10 +212,10 @@ struct filter_obd {
 
 struct mds_server_data;
 
-#define OSC_MAX_RIF_DEFAULT       4
-#define OSC_MAX_RIF_MAX          32
-#define OSC_MAX_DIRTY_DEFAULT     4
-#define OSC_MAX_DIRTY_MB_MAX    256     /* totally arbitrary */
+#define OSC_MAX_RIF_DEFAULT       8
+#define OSC_MAX_RIF_MAX          64
+#define OSC_MAX_DIRTY_DEFAULT     8
+#define OSC_MAX_DIRTY_MB_MAX    512     /* totally arbitrary */
 
 struct mdc_rpc_lock;
 struct client_obd {
@@ -247,7 +247,8 @@ struct client_obd {
         struct list_head         cl_loi_ready_list;
         struct list_head         cl_loi_write_list;
         struct list_head         cl_loi_read_list;
-        int                      cl_brw_in_flight;
+        int                      cl_r_in_flight;
+        int                      cl_w_in_flight;
         /* just a sum of the loi/lop pending numbers to be exported by /proc */
         int                      cl_pending_w_pages;
         int                      cl_pending_r_pages;
@@ -508,6 +509,8 @@ struct obd_device {
         struct timer_list                obd_recovery_timer;
         struct list_head                 obd_recovery_queue;
         struct list_head                 obd_delayed_reply_queue;
+        time_t                           obd_recovery_start;
+        time_t                           obd_recovery_end;
 
         union {
                 struct filter_obd filter;

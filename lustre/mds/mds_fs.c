@@ -349,6 +349,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
                       obd->obd_recoverable_clients, mds->mds_last_transno);
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
+                obd->obd_recovery_start = LTIME_S(CURRENT_TIME);
         }
 
         mds->mds_mount_count = mount_count + 1;
@@ -514,6 +515,7 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
                        " be preserved.\n", obd->obd_name);
 
         class_disconnect_exports(obd, flags); /* cleans up client info too */
+        target_cleanup_recovery(obd);
         mds_server_free_data(mds);
 
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
@@ -552,7 +554,7 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
  * performance sensitive, it is accomplished by creating a file, checking the
  * fid, and renaming it. */
 int mds_obd_create(struct obd_export *exp, struct obdo *oa,
-                      struct lov_stripe_md **ea, struct obd_trans_info *oti)
+                   struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
@@ -652,8 +654,9 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
 
         down(&parent_inode->i_sem);
         de = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
-        if (de == NULL || de->d_inode == NULL) {
-                CERROR("destroying non-existent object "LPU64" %s\n", 
+        if (IS_ERR(de) || de->d_inode == NULL) {
+                rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT;
+                CERROR("destroying non-existent object "LPU64" %s\n",
                        oa->o_id, fidname);
                 GOTO(out_dput, rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT);
         }
@@ -665,12 +668,12 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         if (IS_ERR(handle)) {
                 GOTO(out_dput, rc = PTR_ERR(handle));
         }
-        
+
         rc = vfs_unlink(mds->mds_objects_dir->d_inode, de);
-        if (rc) 
+        if (rc)
                 CERROR("error destroying object "LPU64":%u: rc %d\n",
                        oa->o_id, oa->o_generation, rc);
-        
+
         err = fsfilt_commit(obd, mds->mds_objects_dir->d_inode, handle, 0);
         if (err && !rc)
                 rc = err;

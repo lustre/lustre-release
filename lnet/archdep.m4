@@ -258,10 +258,12 @@ if test x$enable_modules != xno ; then
 	AC_SUBST(LINUXRELEASE)
 
 	moduledir='$(libdir)/modules/'$LINUXRELEASE/kernel
-	AC_SUBST(moduledir)
-
 	modulefsdir='$(moduledir)/fs/$(PACKAGE)'
+        modulenetdir='$(moduledir)/net/$(PACKAGE)'
+
+	AC_SUBST(moduledir)
 	AC_SUBST(modulefsdir)
+        AC_SUBST(modulenetdir)
 
 	# ------------ RELEASE --------------------------------
 	AC_MSG_CHECKING([for Lustre release])
@@ -402,38 +404,6 @@ if test x$enable_modules != xno ; then
 	AC_SUBST(IBNAL)
 	AC_SUBST(IBCPPFLAGS)
 
-	def_scamac=/opt/scali/include
-	AC_MSG_CHECKING([if ScaMAC support was requested])
-	AC_ARG_WITH([scamac],
-		AC_HELP_STRING([--with-scamac=yes/no/path],
-			       [Path to ScaMAC includes (default=/opt/scali/include)]),
-		[
-			case $with_scamac in
-				yes)
-					AC_MSG_RESULT([yes])
-					SCIMACCPPFLAGS="-I/opt/scali/include"
-					SCIMACNAL="scimacnal"
-					;;
-				no)
-					AC_MSG_RESULT([no])
-					SCIMACCPPFLAGS=""
-					SCIMACNAL=""
-					;;
-				*)
-					AC_MSG_RESULT([yes])
-					SCIMACCPPFLAGS="-I$with_scamac -I$with_scamac/icm"
-					SCIMACNAL="scimacnal"
-					;;
-			esac
-		],[
-			AC_MSG_RESULT([no])
-			SCIMACCPPFLAGS=""
-			SCIMACNAL=""
-		])
-	AC_SUBST(SCIMACCPPFLAGS)
-	AC_SUBST(SCIMACNAL)
-	# if test "$with_scamac" != no -a -f ${with_scamac}/scamac.h; then
-
 	# ---------- Red Hat 2.4.18 has iobuf->dovary --------------
 	# But other kernels don't
 
@@ -530,6 +500,7 @@ if test x$enable_modules != xno ; then
 		],[
 			AC_MSG_RESULT([no])
 		])
+
 	AC_MSG_CHECKING([if kernel defines cpumask_t])
 	LUSTRE_MODULE_TRY_COMPILE(
 		[
@@ -543,6 +514,40 @@ if test x$enable_modules != xno ; then
 			AC_MSG_RESULT([no])
 		])
 
+	# ---------- RHEL kernels define page_count in mm_inline.h
+	AC_MSG_CHECKING([if kernel has mm_inline.h header])
+	LUSTRE_MODULE_TRY_COMPILE(
+		[
+			#include <linux/mm_inline.h>
+		],[
+			#ifndef page_count
+			#error mm_inline.h does not define page_count
+			#endif
+		],[
+			AC_MSG_RESULT([yes])
+			AC_DEFINE(HAVE_MM_INLINE, 1, [mm_inline found])
+		],[
+			AC_MSG_RESULT([no])
+		])
+
+	# ---------- inode->i_alloc_sem --------------
+	AC_MSG_CHECKING([if struct inode has i_alloc_sem])
+	LUSTRE_MODULE_TRY_COMPILE(
+		[
+			#include <linux/fs.h>
+			#include <linux/version.h>
+		],[
+			#if defined(CONFIG_X86_64) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,24))
+			#error "x86_64 down_read_trylock broken before 2.4.24"
+			#endif
+			struct inode i;
+			return (char *)&i.i_alloc_sem - (char *)&i;
+		],[
+			AC_MSG_RESULT([yes])
+			AC_DEFINE(HAVE_I_ALLOC_SEM, 1, [struct inode has i_alloc_sem])
+		],[
+			AC_MSG_RESULT([no])
+		])
 
 	# ---------- modules? ------------------------
 	AC_MSG_CHECKING([for module support])
@@ -645,7 +650,6 @@ if test x$enable_modules != xno ; then
 	esac # $BACKINGFS
 fi
 
-AM_CONDITIONAL(BUILD_SCIMACNAL, test x$SCIMACNAL = "xscimacnal")
 AM_CONDITIONAL(BUILD_IBNAL, test x$IBNAL = "xibnal")
 AM_CONDITIONAL(BUILD_GMNAL, test x$GMNAL = "xgmnal")
 AM_CONDITIONAL(BUILD_QSWNAL, test x$QSWNAL = "xqswnal")

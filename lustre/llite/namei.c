@@ -168,8 +168,8 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
                 if (lock->l_resource->lr_name.name[0] != inode->i_ino ||
                     lock->l_resource->lr_name.name[1] != inode->i_generation) {
-                        LDLM_ERROR(lock, "data mismatch with ino %lu/%u",
-                                   inode->i_ino, inode->i_generation);
+                        LDLM_ERROR(lock, "data mismatch with ino %lu/%u (%p)",
+                                   inode->i_ino, inode->i_generation, inode);
                 }
                 if (S_ISDIR(inode->i_mode)) {
                         CDEBUG(D_INODE, "invalidating inode %lu\n",

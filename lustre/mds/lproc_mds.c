@@ -60,64 +60,6 @@ static int lprocfs_mds_rd_filesopen(char *page, char **start, off_t off,
                         atomic_read(&obd->u.mds.mds_open_count));
 }
 
-static int lprocfs_mds_rd_recovery_status(char *page, char **start, off_t off,
-                                          int count, int *eof, void *data)
-{
-        struct obd_device *obd = data;
-        int len = 0, n,
-                connected = obd->obd_connected_clients,
-                max_recoverable = obd->obd_max_recoverable_clients,
-                recoverable = obd->obd_recoverable_clients,
-                completed = max_recoverable - recoverable,
-                queue_len = obd->obd_requests_queued_for_recovery,
-                replayed = obd->obd_replayed_requests;
-        __u64 next_transno = obd->obd_next_recovery_transno;
-
-        LASSERT(obd != NULL);
-        *eof = 1;
-
-        n = snprintf(page, count, "status: ");
-        page += n; len += n; count -= n;
-        if (obd->obd_max_recoverable_clients == 0) {
-                n = snprintf(page, count, "INACTIVE\n");
-                return len + n;
-        }
-
-        if (obd->obd_recoverable_clients == 0) {
-                n = snprintf(page, count, "COMPLETE\n");
-                page += n; len += n; count -= n;
-                n = snprintf(page, count, "recovered_clients: %d\n",
-                             max_recoverable);
-                page += n; len += n; count -= n;
-                n = snprintf(page, count, "last_transno: "LPD64"\n",
-                             next_transno - 1);
-                page += n; len += n; count -= n;
-                n = snprintf(page, count, "replayed_requests: %d\n", replayed);
-                return len + n;
-        }
-
-        /* sampled unlocked, but really... */
-        if (obd->obd_recovering == 0) {
-                n = snprintf(page, count, "ABORTED\n");
-                return len + n;
-        }
-
-        n = snprintf(page, count, "RECOVERING\n");
-        page += n; len += n; count -= n;
-        n = snprintf(page, count, "connected_clients: %d/%d\n",
-                     connected, max_recoverable);
-        page += n; len += n; count -= n;
-        n = snprintf(page, count, "completed_clients: %d/%d\n",
-                     completed, max_recoverable);
-        page += n; len += n; count -= n;
-        n = snprintf(page, count, "replayed_requests: %d/??\n", replayed);
-        page += n; len += n; count -= n;
-        n = snprintf(page, count, "queued_requests: %d\n", queue_len);
-        page += n; len += n; count -= n;
-        n = snprintf(page, count, "next_transno: "LPD64"\n", next_transno);
-        return len + n;
-}
-
 static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
                                        unsigned long count, void *data)
 {
@@ -164,7 +106,7 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "filesfree",    lprocfs_rd_filesfree,   0, 0 },
         { "filesopen",    lprocfs_mds_rd_filesopen,   0, 0 },
         { "mntdev",       lprocfs_mds_rd_mntdev,  0, 0 },
-        { "recovery_status", lprocfs_mds_rd_recovery_status, 0, 0 },
+        { "recovery_status", lprocfs_obd_rd_recovery_status, 0, 0 },
         { "evict_client", 0, lprocfs_mds_wr_evict_client, 0 },
         { "num_exports",  lprocfs_rd_num_exports, 0, 0 },
         { 0 }

@@ -7,12 +7,9 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 2108
+# bug number for skipped test: 2108 3192
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-case `uname -r` in
-2.6.*) ALWAYS_EXCEPT="$ALWAYS_EXCEPT 54c 55 68" # bug 3117
-esac
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
@@ -574,7 +571,7 @@ run_test 24c "mkdir .../R3/f; rename .../R3/f .../R3/g ========="
 test_24d() {
 	mkdir $DIR/R4
 	mkdir $DIR/R4/{f,g}
-	perl -e "rename \"$DIR/R4/f\", \"$DIR/R4/g\";"
+	mrename $DIR/R4/f $DIR/R4/g
 	$CHECKSTAT -a $DIR/R4/f || error
 	$CHECKSTAT -t dir $DIR/R4/g || error
 }
@@ -606,23 +603,23 @@ test_24g() {
 	$CHECKSTAT -a $DIR/R7a/d || error
 	$CHECKSTAT -t dir $DIR/R7b/e || error
 }
-run_test 24g "mkdir .../R7a/d; rename .../R7a/d .../R5b/e ======"
+run_test 24g "mkdir .../R7{a,b}/d; mv .../R7a/d .../R5b/e ======"
 
 test_24h() {
 	mkdir $DIR/R8{a,b}
 	mkdir $DIR/R8a/d $DIR/R8b/e
-	perl -e "rename \"$DIR/R8a/d\", \"$DIR/R8b/e\";"
+	mrename $DIR/R8a/d $DIR/R8b/e
 	$CHECKSTAT -a $DIR/R8a/d || error
 	$CHECKSTAT -t dir $DIR/R8b/e || error
 }
-run_test 24h "mkdir .../R8{a,b} R8a/{d,e}; mv .../R8a/d .../R8b/e"
+run_test 24h "mkdir .../R8{a,b}/{d,e}; rename .../R8a/d .../R8b/e"
 
 test_24i() {
 	echo "-- rename error cases"
 	mkdir $DIR/R9
 	mkdir $DIR/R9/a
 	touch $DIR/R9/f
-	perl -e "rename \"$DIR/R9/f\", \"$DIR/R9/a\";"
+	mrename $DIR/R9/f $DIR/R9/a
 	$CHECKSTAT -t file $DIR/R9/f || error
 	$CHECKSTAT -t dir  $DIR/R9/a || error
 	$CHECKSTAT -a file $DIR/R9/a/f || error
@@ -631,7 +628,7 @@ run_test 24i "rename file to dir error: touch f ; mkdir a ; rename f a"
 
 test_24j() {
 	mkdir $DIR/R10
-	perl -e "rename \"$DIR/R10/f\", \"$DIR/R10/g\"" 
+	mrename $DIR/R10/f $DIR/R10/g
 	$CHECKSTAT -t dir $DIR/R10 || error
 	$CHECKSTAT -a $DIR/R10/f || error
 	$CHECKSTAT -a $DIR/R10/g || error
@@ -673,9 +670,60 @@ run_test 24n "Statting the old file after renameing (Posix rename 2)"
 
 test_24o() {
 	check_kernel_version 37 || return 0
-	rename_many -s 3287 -v -n 10 $DIR
+	rename_many -s random -v -n 10 $DIR
 }
 run_test 24o "rename of files during htree split ==============="
+
+test_24p() {
+	mkdir $DIR/R12{a,b}
+	DIRINO=`ls -lid $DIR/R12a | awk '{ print $1 }'`
+	mrename $DIR/R12a $DIR/R12b
+	$CHECKSTAT -a $DIR/R12a || error
+	$CHECKSTAT -t dir $DIR/R12b || error
+	DIRINO2=`ls -lid $DIR/R12b | awk '{ print $1 }'`
+	[ "$DIRINO" = "$DIRINO2" ] || error "R12a $DIRINO != R12b $DIRINO2"
+}
+run_test 24p "mkdir .../R12{a,b}; rename .../R12a .../R12b"
+
+test_24q() {
+	mkdir $DIR/R13{a,b}
+	DIRINO=`ls -lid $DIR/R13a | awk '{ print $1 }'`
+	multiop $DIR/R13b D_c &
+	MULTIPID=$!
+
+	mrename $DIR/R13a $DIR/R13b
+	$CHECKSTAT -a $DIR/R13a || error
+	$CHECKSTAT -t dir $DIR/R13b || error
+	DIRINO2=`ls -lid $DIR/R13b | awk '{ print $1 }'`
+	[ "$DIRINO" = "$DIRINO2" ] || error "R13a $DIRINO != R13b $DIRINO2"
+	kill -USR1 $MULTIPID
+	wait $MULTIPID || error "multiop close failed"
+}
+run_test 24q "mkdir .../R13{a,b}; open R13b rename R13a R13b ==="
+
+test_24r() { #bug 3789
+	mkdir $DIR/R14a $DIR/R14a/b
+	mrename $DIR/R14a $DIR/R14a/b && error "rename to subdir worked!"
+	$CHECKSTAT -t dir $DIR/R14a || error "$DIR/R14a missing"
+	$CHECKSTAT -t dir $DIR/R14a/b || error "$DIR/R14a/b missing"
+}
+run_test 24r "mkdir .../R14a/b; rename .../R14a .../R14a/b ====="
+
+test_24s() {
+	mkdir $DIR/R15a $DIR/R15a/b $DIR/R15a/b/c
+	mrename $DIR/R15a $DIR/R15a/b/c && error "rename to sub-subdir worked!"
+	$CHECKSTAT -t dir $DIR/R15a || error "$DIR/R15a missing"
+	$CHECKSTAT -t dir $DIR/R15a/b/c || error "$DIR/R15a/b/c missing"
+}
+run_test 24s "mkdir .../R15a/b/c; rename .../R15a .../R15a/b/c ="
+test_24t() {
+	mkdir $DIR/R16a $DIR/R16a/b $DIR/R16a/b/c
+	mrename $DIR/R16a/b/c $DIR/R16a && error "rename to sub-subdir worked!"
+	$CHECKSTAT -t dir $DIR/R16a || error "$DIR/R16a missing"
+	$CHECKSTAT -t dir $DIR/R16a/b/c || error "$DIR/R16a/b/c missing"
+}
+run_test 24t "mkdir .../R16a/b/c; rename .../R16a/b/c .../R16a ="
+
 
 test_25a() {
 	echo '== symlink sanity ============================================='
@@ -731,8 +779,8 @@ run_test 26e "unlink multiple component recursive symlink ======"
 test_27a() {
 	echo '== stripe sanity =============================================='
 	mkdir $DIR/d27
-	$LSTRIPE $DIR/d27/f0 65536 0 1 || error
-	$CHECKSTAT -t file $DIR/d27/f0 || error
+	$LSTRIPE $DIR/d27/f0 65536 0 1 || error "lstripe failed"
+	$CHECKSTAT -t file $DIR/d27/f0 || error "checkstat failed"
 	pass
 	log "== test_27b: write to one stripe file ========================="
 	cp /etc/hosts $DIR/d27/f0 || error
@@ -744,12 +792,12 @@ test_27c() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$LSTRIPE $DIR/d27/f01 65536 0 2 || error
+	$LSTRIPE $DIR/d27/f01 65536 0 2 || error "lstripe failed"
 	[ `$LFIND $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
 		error "two-stripe file doesn't have two stripes"
 	pass
 	log "== test_27d: write to two stripe file file f01 ================"
-	dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4 || error
+	dd if=/dev/zero of=$DIR/d27/f01 bs=4k count=4 || error "dd failed"
 }
 run_test 27c "create two stripe file f01 ======================="
 
@@ -757,8 +805,8 @@ test_27d() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$LSTRIPE $DIR/d27/fdef 0 -1 0 || error
-	$CHECKSTAT -t file $DIR/d27/fdef || error
+	$LSTRIPE $DIR/d27/fdef 0 -1 0 || error "lstripe failed"
+	$CHECKSTAT -t file $DIR/d27/fdef || error "checkstat failed"
 	#dd if=/dev/zero of=$DIR/d27/fdef bs=4k count=4 || error
 }
 run_test 27d "create file with default settings ================"
@@ -767,9 +815,9 @@ test_27e() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$LSTRIPE $DIR/d27/f12 65536 0 2 || error
-	$LSTRIPE $DIR/d27/f12 65536 0 2 && error
-	$CHECKSTAT -t file $DIR/d27/f12 || error
+	$LSTRIPE $DIR/d27/f12 65536 0 2 || error "lstripe failed"
+	$LSTRIPE $DIR/d27/f12 65536 0 2 && error "lstripe succeeded twice"
+	$CHECKSTAT -t file $DIR/d27/f12 || error "checkstat failed"
 }
 run_test 27e "lstripe existing file (should return error) ======"
 
@@ -777,9 +825,9 @@ test_27f() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$LSTRIPE $DIR/d27/fbad 100 0 1 && error
-	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error
-	$LFIND $DIR/d27/fbad || error
+	$LSTRIPE $DIR/d27/fbad 100 0 1 && error "lstripe failed"
+	dd if=/dev/zero of=$DIR/d27/f12 bs=4k count=4 || error "dd failed"
+	$LFIND $DIR/d27/fbad || error "lfind failed"
 }
 run_test 27f "lstripe with bad stripe size (should return error)"
 
@@ -787,14 +835,14 @@ test_27g() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$MCREATE $DIR/d27/fnone || error
+	$MCREATE $DIR/d27/fnone || error "mcreate failed"
 	pass
 	log "== test 27h: lfind with no objects ============================"
-	$LFIND $DIR/d27/fnone 2>&1 | grep "no stripe info" || error
+	$LFIND $DIR/d27/fnone 2>&1 | grep "no stripe info" || error "has object"
 	pass
 	log "== test 27i: lfind with some objects =========================="
-	touch $DIR/d27/fsome || error
-	$LFIND $DIR/d27/fsome | grep obdidx || error
+	touch $DIR/d27/fsome || error "touch failed"
+	$LFIND $DIR/d27/fsome | grep obdidx || error "missing objects"
 }
 run_test 27g "test lfind ======================================="
 
@@ -802,7 +850,7 @@ test_27j() {
         if [ ! -d $DIR/d27 ]; then
                 mkdir $DIR/d27
         fi
-        $LSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error || true
+        $LSTRIPE $DIR/d27/f27j 65536 $OSTCOUNT 1 && error "lstripe failed"||true
 }
 run_test 27j "lstripe with bad stripe offset (should return error)"
 
@@ -1449,7 +1497,7 @@ run_test 43c "md5sum of copy into lustre========================"
 
 test_44() {
 	[  "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
-	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=127
+	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=1023
 	dd if=$DIR/f1 bs=4k count=1
 }
 run_test 44 "zero length read from a sparse stripe ============="
@@ -1526,18 +1574,18 @@ page_size() {
 	getconf PAGE_SIZE
 }
 
-# in a 2 stripe file (lov.sh), page 63 maps to page 31 in its object.  this
+# in a 2 stripe file (lov.sh), page 1023 maps to page 511 in its object.  this
 # test tickles a bug where re-dirtying a page was failing to be mapped to the
-# objects offset and an assert hit when an rpc was built with 63's mapped 
-# offset 31 and 31's raw 31 offset. it also found general redirtying bugs.
+# objects offset and an assert hit when an rpc was built with 1023's mapped 
+# offset 511 and 511's raw 511 offset. it also found general redirtying bugs.
 test_46() {
 	f="$DIR/f46"
 	stop_writeback
 	sync
-	dd if=/dev/zero of=$f bs=`page_size` seek=31 count=1
+	dd if=/dev/zero of=$f bs=`page_size` seek=511 count=1
 	sync
-	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=63 count=1
-	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=31 count=1
+	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=1023 count=1
+	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=511 count=1
 	sync
 	start_writeback
 }
@@ -1619,7 +1667,7 @@ test_48d() { # bug 2350
 	$TRACE mkdir . && error "'mkdir .' worked after removing parent"
 	$TRACE rmdir . && error "'rmdir .' worked after removing parent"
 	$TRACE ln -s . foo && error "'ln -s .' worked after removing parent"
-	$TRACE cd .. && error "'cd ..' worked after recreate parent" || true
+	$TRACE cd .. && error "'cd ..' worked after removing parent" || true
 }
 run_test 48d "Access removed parent subdir (should return errors)"
 

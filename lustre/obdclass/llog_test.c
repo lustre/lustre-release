@@ -364,8 +364,6 @@ static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         RETURN(0);
 }
 
-
-
 /* Test log and catalogue processing */
 static int llog_test_5(struct obd_device *obd)
 {

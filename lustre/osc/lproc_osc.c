@@ -296,21 +296,22 @@ static int osc_rpc_stats_seq_show(struct seq_file *seq, void *v)
         struct client_obd *cli = &dev->u.cli;
         unsigned long flags;
         unsigned long read_tot = 0, write_tot = 0, read_cum, write_cum;
-        int i, rpcs, r, w;
+        int i;
 
         do_gettimeofday(&now);
 
         spin_lock_irqsave(&cli->cl_loi_list_lock, flags);
 
-        rpcs = cli->cl_brw_in_flight;
-        r = cli->cl_pending_r_pages;
-        w = cli->cl_pending_w_pages;
-
         seq_printf(seq, "snapshot_time:         %lu:%lu (secs:usecs)\n",
                    now.tv_sec, now.tv_usec);
-        seq_printf(seq, "RPCs in flight:        %d\n", rpcs);
-        seq_printf(seq, "pending write pages:   %d\n", w);
-        seq_printf(seq, "pending read pages:   %d\n", r);
+        seq_printf(seq, "read RPCs in flight:  %d\n",
+                   cli->cl_r_in_flight);
+        seq_printf(seq, "write RPCs in flight: %d\n",
+                   cli->cl_w_in_flight);
+        seq_printf(seq, "pending write pages:  %d\n",
+                   cli->cl_pending_w_pages);
+        seq_printf(seq, "pending read pages:   %d\n",
+                   cli->cl_pending_r_pages);
 
         seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
         seq_printf(seq, "pages per rpc         rpcs   %% cum %% |");

@@ -34,6 +34,7 @@
 #include <linux/fs.h>
 #include <linux/lprocfs_status.h>
 #include "llite_internal.h"
+#include <lustre/lustre_user.h>
 
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;

@@ -20,8 +20,8 @@ rm -f $OOS $OOS2 $LOG $LOG2
 
 sleep 1	# to ensure we get up-to-date statfs info
 
-STRIPECOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -1`
-ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -1`
+STRIPECOUNT=`cat /proc/fs/lustre/lov/*/activeobd | head -n 1`
+ORIGFREE=`cat /proc/fs/lustre/llite/*/kbytesavail | head -n 1`
 MAXFREE=${MAXFREE:-$((200000 * $STRIPECOUNT))}
 if [ $ORIGFREE -gt $MAXFREE ]; then
 	echo "skipping out-of-space test on $OSC"

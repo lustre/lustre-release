@@ -472,28 +472,29 @@ typedef enum {
         MDS_DONE_WRITING = 45,
         MDS_LAST_OPC
 } mds_cmd_t;
+
 #define MDS_FIRST_OPC    MDS_GETATTR
 
 /*
  * Do not exceed 63
  */
 
-#define REINT_SETATTR  1
-#define REINT_CREATE   2
-#define REINT_LINK     3
-#define REINT_UNLINK   4
-#define REINT_RENAME   5
-#define REINT_OPEN     6
-#define REINT_MAX      6
+#define REINT_SETATTR    1
+#define REINT_CREATE     2
+#define REINT_LINK       3
+#define REINT_UNLINK     4
+#define REINT_RENAME     5
+#define REINT_OPEN       6
+#define REINT_MAX        6
 
 /* the disposition of the intent outlines what was executed */
-#define DISP_IT_EXECD   1
-#define DISP_LOOKUP_EXECD  (1 << 1)
-#define DISP_LOOKUP_NEG     (1 << 2)
-#define DISP_LOOKUP_POS     (1 << 3)
-#define DISP_OPEN_CREATE  (1 << 4)
-#define DISP_OPEN_OPEN    (1 << 5)
-#define DISP_ENQ_COMPLETE (1<<6)
+#define DISP_IT_EXECD     0x01
+#define DISP_LOOKUP_EXECD 0x02
+#define DISP_LOOKUP_NEG   0x04
+#define DISP_LOOKUP_POS   0x08
+#define DISP_OPEN_CREATE  0x10
+#define DISP_OPEN_OPEN    0x20
+#define DISP_ENQ_COMPLETE 0x40
 
 struct ll_fid {
         __u64 id;
@@ -544,12 +545,6 @@ struct mds_body {
 
 extern void lustre_swab_mds_body (struct mds_body *b);
 
-
-/* MDS update records */
-
-//struct mds_update_record_hdr {
-//        __u32 ur_opcode;
-//};
 
 struct mds_rec_setattr {
         __u32           sa_opcode;
@@ -954,7 +949,7 @@ struct llog_log_hdr {
         __u32                   llh_size;
         __u32                   llh_flags;
         __u32                   llh_cat_idx;
-        /* for a catlog the first plain slot is next to it */
+        /* for a catalog the first plain slot is next to it */
         struct obd_uuid         llh_tgtuuid;
         __u32                   llh_reserved[LLOG_HEADER_SIZE/sizeof(__u32) - 23];
         __u32                   llh_bitmap[LLOG_BITMAP_BYTES/sizeof(__u32)];

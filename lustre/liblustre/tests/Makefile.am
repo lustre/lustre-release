@@ -11,9 +11,9 @@ noinst_LIBRARIES = libtestcommon.a
 def_tests = echo_test sanity recovery_small replay_single replay_ost_single
 
 if MPITESTS
-bin_PROGRAMS = $(def_tests) test_lock_cancel
+noinst_PROGRAMS = $(def_tests) test_lock_cancel
 else
-bin_PROGRAMS = $(def_tests)
+noinst_PROGRAMS = $(def_tests)
 endif
 endif # LIBLUSTRE
 

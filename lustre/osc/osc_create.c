@@ -72,20 +72,24 @@ static int osc_interpret_create(struct ptlrpc_request *req, void *data,
 
         oscc = req->rq_async_args.pointer_arg[0];
         spin_lock(&oscc->oscc_lock);
+        oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
         if (body)
                 oscc->oscc_last_id = body->oa.o_id;
         if (rc == -ENOSPC) {
                 DEBUG_REQ(D_INODE, req, "OST out of space, flagging");
                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
+                spin_unlock(&oscc->oscc_lock);
         } else if (rc != 0 && rc != -EIO) {
                 DEBUG_REQ(D_ERROR, req,
                           "unknown rc %d from async create: failing oscc",
                           rc);
                 oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
+                spin_unlock(&oscc->oscc_lock);
                 ptlrpc_fail_import(req->rq_import, req->rq_import_generation);
+        } else {
+                spin_unlock(&oscc->oscc_lock);
         }
-        oscc->oscc_flags &= ~OSCC_FLAG_CREATING;
-        spin_unlock(&oscc->oscc_lock);
+
 
         CDEBUG(D_HA, "preallocated through id "LPU64" (last used "LPU64")\n",
                oscc->oscc_last_id, oscc->oscc_next_id);
@@ -221,19 +225,22 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 RETURN(osc_real_create(exp, oa, ea, oti));
         }
 
-        lsm = *ea;
-        if (lsm == NULL) {
-                rc = obd_alloc_memmd(exp, &lsm);
-                if (rc < 0)
-                        RETURN(rc);
-        }
-
 	/* this is the special case where create removes orphans */
 	if ((oa->o_valid & OBD_MD_FLFLAGS) &&
 	    oa->o_flags == OBD_FL_DELORPHAN) {
+                spin_lock(&oscc->oscc_lock);
+                if (oscc->oscc_flags & OSCC_FLAG_SYNC_IN_PROGRESS) {
+                        spin_unlock(&oscc->oscc_lock);
+                        return -EBUSY;
+                }
+                if (!(oscc->oscc_flags & OSCC_FLAG_RECOVERING)) {
+                        spin_unlock(&oscc->oscc_lock);
+                        return 0;
+                }
+                oscc->oscc_flags |= OSCC_FLAG_SYNC_IN_PROGRESS;
                 CDEBUG(D_HA, "%s: oscc recovery started\n",
                         exp->exp_obd->obd_name);
-                LASSERT(oscc->oscc_flags & OSCC_FLAG_RECOVERING);
+                spin_unlock(&oscc->oscc_lock);
 
                 /* delete from next_id on up */
                 oa->o_valid |= OBD_MD_FLID;
@@ -245,23 +252,30 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 rc = osc_real_create(exp, oa, ea, NULL);
 
                 spin_lock(&oscc->oscc_lock);
+                oscc->oscc_flags &= ~OSCC_FLAG_SYNC_IN_PROGRESS;
                 if (rc == 0 || rc == -ENOSPC) {
                         if (rc == -ENOSPC)
                                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
                         oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
                         oscc->oscc_last_id = oa->o_id;
-                        CDEBUG(D_HA, "%s: oscc recovery finished: %d\n", 
+                        CDEBUG(D_HA, "%s: oscc recovery finished: %d\n",
                                exp->exp_obd->obd_name, rc);
                         wake_up(&oscc->oscc_waitq);
-                        
                 } else {
-                        CDEBUG(D_ERROR, "%s: oscc recovery failed: %d\n", 
+                        CDEBUG(D_ERROR, "%s: oscc recovery failed: %d\n",
                                exp->exp_obd->obd_name, rc);
                 }
                 spin_unlock(&oscc->oscc_lock);
 
 
                 RETURN(rc);
+        }
+
+        lsm = *ea;
+        if (lsm == NULL) {
+                rc = obd_alloc_memmd(exp, &lsm);
+                if (rc < 0)
+                        RETURN(rc);
         }
 
         while (try_again) {

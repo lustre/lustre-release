@@ -115,7 +115,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                 result = list_entry(lp,struct dentry, d_alias);
                 if (!(result->d_flags & DCACHE_DISCONNECTED)) {
                         dget_locked(result);
-                        result->d_vfs_flags |= DCACHE_REFERENCED;
+                        ll_set_dflags(result, DCACHE_REFERENCED);
                         spin_unlock(&dcache_lock);
                         iput(inode);
                         return result;

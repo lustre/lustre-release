@@ -741,8 +741,13 @@ def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
                     ret, out = runcmd("ls -l %s" %dev)
                     devsize = int(string.split(out[0])[4]) / 1024
                 else:
-                    ret, out = runcmd("sfdisk -s %s" %dev)
-                    devsize = int(out[0])
+                    devlast = dev.split("/")[-1]
+                    ret, out = runcmd("cat /proc/partitions | grep %s"%devlast)
+                    if ret:
+                        panic("Unable to read the size of block device:", dev)
+                    else:
+                        out = out[0].split()
+                        devsize = int(out[2])
             if devsize > 1024 * 1024:
                 jsize = ((devsize / 102400) * 4)
             if jsize > 400:
@@ -1887,7 +1892,7 @@ def my_rstrip(s, chars):
                 ns = s[0:i+1]
                 break
     return ns
-	
+
 
 class Mountpoint(Module):
     def __init__(self,db):
@@ -2204,7 +2209,7 @@ def for_each_profile(db, prof_list, operation):
     for prof_uuid in prof_list:
         prof_db = db.lookup(prof_uuid)
         if not prof_db:
-            panic("profile:", profile, "not found.")
+            panic("profile:", prof_uuid, "not found.")
         services = getServices(prof_db)
         operation(services)
         
@@ -2277,11 +2282,11 @@ def doHost(lustreDB, hosts):
     prof_list = node_db.get_refs('profile')
 
     if config.write_conf:
-        lustreDB.close()
         for_each_profile(node_db, prof_list, doModules)
         sys_make_devices()
         for_each_profile(node_db, prof_list, doWriteconf)
         for_each_profile(node_db, prof_list, doUnloadModules)
+        lustreDB.close()
 
     elif config.recover:
         if not (config.tgt_uuid and config.client_uuid and config.conn_uuid):

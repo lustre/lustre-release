@@ -178,11 +178,10 @@ int ll_local_open(struct file *file, struct lookup_intent *it)
 int ll_file_open(struct inode *inode, struct file *file)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct lookup_intent *it;
+        struct lookup_intent *it, oit = { .it_op = IT_OPEN,
+                                          .it_flags = file->f_flags };
         struct lov_stripe_md *lsm;
         struct ptlrpc_request *req;
-        struct lookup_intent oit = { .it_op = IT_OPEN,
-                                     .it_flags = file->f_flags };
         int rc = 0;
         ENTRY;
 
@@ -414,6 +413,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                 if (rc2 == 0 && page->mapping != NULL) {
                         // checking again to account for writeback's lock_page()
                         LL_CDEBUG_PAGE(D_PAGE, page, "truncating\n");
+                        ll_ra_accounting(page, inode->i_mapping);
                         ll_truncate_complete_page(page);
                 }
                 unlock_page(page);
@@ -614,6 +614,8 @@ int ll_glimpse_size(struct inode *inode)
                          LCK_PR, &flags, ll_extent_lock_callback,
                          ldlm_completion_ast, ll_glimpse_callback, inode,
                          sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
+        if (rc == -ENOENT)
+                RETURN(rc);
         if (rc != 0) {
                 CERROR("obd_enqueue returned rc %d, returning -EIO\n", rc);
                 RETURN(rc > 0 ? -EIO : rc);
@@ -740,8 +742,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 inode->i_size = kms;
         }
 
-        CDEBUG(D_PAGE,"ino %lu count %lu offset %llu i_size %llu kms "LPU64"\n",
-               inode->i_ino, (long)count, *ppos, inode->i_size, kms);
+        CDEBUG(D_INFO, "Read ino %lu, "LPSZ" bytes, offset %lld, i_size %llu\n",
+               inode->i_ino, count, *ppos, inode->i_size);
 
         /* turn off the kernel's read-ahead */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -768,8 +770,8 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
         struct lustre_handle lockh = { 0 };
         ldlm_policy_data_t policy;
         loff_t maxbytes = ll_file_maxbytes(inode);
-        int rc;
         ssize_t retval;
+        int rc;
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),size="LPSZ",offset=%Ld\n",
                inode->i_ino, inode->i_generation, inode, count, *ppos);
@@ -848,26 +850,19 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
                 RETURN(-EFAULT);
         }
         oa = obdo_alloc();
-        if (oa == NULL) {
+        if (oa == NULL)
                 RETURN(-ENOMEM);
-        }
 
         down(&lli->lli_open_sem);
         lsm = lli->lli_smd;
-        if (lsm == NULL) {
-                up(&lli->lli_open_sem);
-                obdo_free(oa);
-                RETURN (-ENOENT);
-        }
+        if (lsm == NULL)
+                GOTO(out, rc = -ENOENT);
         lsm_size = sizeof(*lsm) + (sizeof(struct lov_oinfo) *
                    (lsm->lsm_stripe_count));
 
         OBD_ALLOC(lsm2, lsm_size);
-        if (lsm2 == NULL) {
-                up(&lli->lli_open_sem);
-                obdo_free(oa);
-                RETURN(-ENOMEM);
-        }
+        if (lsm2 == NULL)
+                GOTO(out, rc = -ENOMEM);
 
         oa->o_id = ucreatp.lrc_id;
         oa->o_nlink = ucreatp.lrc_ost_idx;
@@ -880,10 +875,12 @@ static int ll_lov_recreate_obj(struct inode *inode, struct file *file,
         memcpy(lsm2, lsm, lsm_size);
         rc = obd_create(exp, oa, &lsm2, &oti);
 
-        up(&lli->lli_open_sem);
         OBD_FREE(lsm2, lsm_size);
+        GOTO(out, rc);
+out:
+        up(&lli->lli_open_sem);
         obdo_free(oa);
-        RETURN (rc);
+        return rc;
 }
 
 static int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
@@ -1072,9 +1069,10 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         struct lustre_handle lockh = {0};
         loff_t retval;
         ENTRY;
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),to=%llu\n", inode->i_ino,
-               inode->i_generation, inode,
-               offset + ((origin==2) ? inode->i_size : file->f_pos));
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),to=%llu(%s)\n",
+               inode->i_ino, inode->i_generation, inode,
+               offset + ((origin==2) ? inode->i_size : file->f_pos),
+               origin == 2 ? "SEEK_END": origin == 1 ? "SEEK_CUR": "SEEK_SET");
 
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_LLSEEK);
         if (origin == 2) { /* SEEK_END */

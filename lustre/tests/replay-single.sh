@@ -936,6 +936,31 @@ test_47() {
 }
 run_test 47 "MDS->OSC failure during precreate cleanup (2824)"
 
+test_48() {
+
+    replay_barrier mds
+    createmany -o $DIR/$tfile 20  || return 1
+    # OBD_FAIL_OST_EROFS 0x216
+    fail mds
+    do_facet ost "sysctl -w lustre.fail_loc=0x80000216"
+    df $MOUNT || return 2
+
+    createmany -o $DIR/$tfile 20 20 || return 2
+    unlinkmany $DIR/$tfile 40 || return 3
+
+    do_facet ost "sysctl -w lustre.fail_loc=0"
+    return 0
+}
+run_test 48 "MDS->OSC failure during precreate cleanup (2824)"
+
+test_49() {
+    local osc_dev=`$LCTL device_list | \
+		awk '(/ost_svc_mds_svc/){print $4}' `
+    $LCTL --device %$osc_dev recover &&  $LCTL --device %$osc_dev recover
+    # give the mds_lov_sync threads a chance to run
+    sleep 5
+}
+run_test 49 "Double OSC recovery, don't LASSERT"
+
 equals_msg test complete, cleaning up
 $CLEANUP
-

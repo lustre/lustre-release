@@ -526,13 +526,23 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
         else
                 res = NULL;
 
-        l_unlock(&ns->ns_lock);
-
         if (create && ns->ns_lvbo && ns->ns_lvbo->lvbo_init) {
-                int rc = ns->ns_lvbo->lvbo_init(res);
+                int rc;
+
+                /* Although this is technically a lock inversion risk (lvb_sem
+                 * should be taken before DLM lock), this resource was just
+                 * created, so nobody else can take the lvb_sem yet. -p */
+                down(&res->lr_lvb_sem);
+                /* Drop the dlm lock, because lvbo_init can touch the disk */
+                l_unlock(&ns->ns_lock);
+                OBD_FAIL_TIMEOUT(OBD_FAIL_LDLM_CREATE_RESOURCE, 2);
+                rc = ns->ns_lvbo->lvbo_init(res);
+                up(&res->lr_lvb_sem);
                 if (rc)
                         CERROR("lvbo_init failed for resource "LPU64": rc %d\n",
                                name.name[0], rc);
+        } else {
+                l_unlock(&ns->ns_lock);
         }
 
         RETURN(res);
@@ -541,7 +551,7 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
 {
         LASSERT(res != NULL);
-        LASSERT(res != (void *)0x5a5a5a5a);
+        LASSERT(res != LP_POISON);
         atomic_inc(&res->lr_refcount);
         CDEBUG(D_INFO, "getref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount));
@@ -557,7 +567,7 @@ int ldlm_resource_putref(struct ldlm_resource *res)
         CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount) - 1);
         LASSERT(atomic_read(&res->lr_refcount) > 0);
-        LASSERT(atomic_read(&res->lr_refcount) < 0x5a5a5a5a);
+        LASSERT(atomic_read(&res->lr_refcount) < LI_POISON);
 
         if (atomic_dec_and_test(&res->lr_refcount)) {
                 struct ldlm_namespace *ns = res->lr_namespace;

@@ -55,10 +55,10 @@
 
 #include <linux/kp30.h>
 #include <asm/div64.h>
+#include "tracefile.h"
 
 static struct ctl_table_header *portals_table_header = NULL;
 extern char debug_file_path[1024];
-extern char debug_daemon_file_path[1024];
 extern char portals_upcall[1024];
 
 #define PSDEV_PORTALS  (0x100)
@@ -82,9 +82,6 @@ static struct ctl_table portals_table[PORTALS_PRIMARY_CTLCNT + 1] = {
          &proc_dointvec},
         {PSDEV_DEBUG_PATH, "debug_path", debug_file_path,
          sizeof(debug_file_path), 0644, NULL, &proc_dostring, &sysctl_string},
-        {PSDEV_DEBUG_DUMP_PATH, "debug_daemon_path", debug_daemon_file_path,
-         sizeof(debug_daemon_file_path), 0644, NULL, &proc_dostring,
-         &sysctl_string},
         {PSDEV_PORTALS_UPCALL, "upcall", portals_upcall,
          sizeof(portals_upcall), 0644, NULL, &proc_dostring,
          &sysctl_string},
@@ -234,9 +231,9 @@ static unsigned char basedir[]="net/portals";
 
 int insert_proc(void)
 {
+        struct proc_dir_entry *ent;
 #if PORTALS_PROFILING
         unsigned char dir[128];
-        struct proc_dir_entry *ent;
 
         if (ARRAY_SIZE(prof_ents) != MAX_PROFS) {
                 CERROR("profiling enum and array are out of sync.\n");
@@ -266,6 +263,29 @@ int insert_proc(void)
                 portals_table_header = register_sysctl_table(top_table, 0);
 #endif
 
+        ent = create_proc_entry("sys/portals/dump_kernel", 0, NULL);
+        if (ent == NULL) {
+                CERROR("couldn't register dump_kernel\n");
+                return -1;
+        }
+        ent->write_proc = trace_dk;
+
+        ent = create_proc_entry("sys/portals/daemon_file", 0, NULL);
+        if (ent == NULL) {
+                CERROR("couldn't register daemon_file\n");
+                return -1;
+        }
+        ent->write_proc = trace_write_daemon_file;
+        ent->read_proc = trace_read_daemon_file;
+
+        ent = create_proc_entry("sys/portals/debug_size", 0, NULL);
+        if (ent == NULL) {
+                CERROR("couldn't register debug_size\n");
+                return -1;
+        }
+        ent->write_proc = trace_write_debug_size;
+        ent->read_proc = trace_read_debug_size;
+
         return 0;
 }
 
@@ -281,11 +301,15 @@ void remove_proc(void)
         end = strlen(dir);
 
         strcat(dir, "/cycles");
-        remove_proc_entry(dir,0);
+        remove_proc_entry(dir, 0);
 
         dir[end] = '\0';
-        remove_proc_entry(dir,0);
+        remove_proc_entry(dir, 0);
 #endif /* PORTALS_PROFILING */
+
+        remove_proc_entry("sys/portals/dump_kernel", NULL);
+        remove_proc_entry("sys/portals/daemon_file", NULL);
+        remove_proc_entry("sys/portals/debug_size", NULL);
 
 #ifdef CONFIG_SYSCTL
         if (portals_table_header)

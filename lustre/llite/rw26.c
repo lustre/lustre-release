@@ -91,7 +91,26 @@ static int ll_writepage_26(struct page *page, struct writeback_control *wbc)
 out:
         if (rc)
                 unlock_page(page);
+        else
+                set_page_writeback(page);
         RETURN(rc);
+}
+
+/* It is safe to not check anything in invalidatepage/releasepage below
+   because they are run with page locked and all our io is happening with
+   locked page too */
+static int ll_invalidatepage(struct page *page, unsigned long offset)
+{
+        if (PagePrivate(page))
+                ll_removepage(page);
+        return 1;
+}
+
+static int ll_releasepage(struct page *page, int gfp_mask)
+{
+        if (PagePrivate(page))
+                ll_removepage(page);
+        return 1;
 }
 
 struct address_space_operations ll_aops = {
@@ -104,6 +123,7 @@ struct address_space_operations ll_aops = {
         .sync_page      = NULL,
         .prepare_write  = ll_prepare_write,
         .commit_write   = ll_commit_write,
-        .removepage     = ll_removepage,
+        .invalidatepage = ll_invalidatepage,
+        .releasepage    = ll_releasepage,
         .bmap           = NULL
 };

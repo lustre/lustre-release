@@ -97,9 +97,11 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                                      void *cb_data, int error)
 {
         struct llog_cookie *cookie = cb_data;
-        llog_cancel(llog_get_context(obd, cookie->lgc_subsys + 1),
-                             NULL, 1, cookie, 0);
-                             //NULL, 1, cookie, OBD_LLOG_FL_SENDNOW);
+        int rc;
+        rc = llog_cancel(llog_get_context(obd, cookie->lgc_subsys + 1),
+                         NULL, 1, cookie, 0);
+        if (rc)
+                CERROR("error cancelling log cookies: rc = %d\n", rc);
         OBD_FREE(cb_data, sizeof(struct llog_cookie));
 }
 
@@ -119,7 +121,7 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
         obd_id oid;
         int rc = 0;
         ENTRY;
-                                                                                                                             
+
         if (!(le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);

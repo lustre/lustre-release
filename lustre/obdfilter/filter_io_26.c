@@ -228,9 +228,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (iattr.ia_size > inode->i_size) {
                 CDEBUG(D_INFO, "setting i_size to "LPU64"\n",
                        iattr.ia_size);
-            		
+
                 iattr.ia_valid |= ATTR_SIZE;
-			
+
                 fsfilt_setattr(obd, res->dentry, oti->oti_handle,
                                &iattr, 0);
         }

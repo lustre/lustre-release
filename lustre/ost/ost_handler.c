@@ -964,11 +964,17 @@ static int ost_handle(struct ptlrpc_request *req)
         case OST_CREATE:
                 CDEBUG(D_INODE, "create\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CREATE_NET, 0);
+                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
+                        GOTO(out, rc = -ENOSPC);
+                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
+                        GOTO(out, rc = -EROFS);
                 rc = ost_create(exp, req, oti);
                 break;
         case OST_DESTROY:
                 CDEBUG(D_INODE, "destroy\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_DESTROY_NET, 0);
+                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
+                        GOTO(out, rc = -EROFS);
                 rc = ost_destroy(exp, req, oti);
                 break;
         case OST_GETATTR:
@@ -984,6 +990,10 @@ static int ost_handle(struct ptlrpc_request *req)
         case OST_WRITE:
                 CDEBUG(D_INODE, "write\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
+                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_ENOSPC))
+                        GOTO(out, rc = -ENOSPC);
+                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
+                        GOTO(out, rc = -EROFS);
                 rc = ost_brw_write(req, oti);
                 LASSERT(current->journal_info == NULL);
                 /* ost_brw sends its own replies */
@@ -1010,6 +1020,8 @@ static int ost_handle(struct ptlrpc_request *req)
         case OST_PUNCH:
                 CDEBUG(D_INODE, "punch\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_PUNCH_NET, 0);
+                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
+                        GOTO(out, rc = -EROFS);
                 rc = ost_punch(exp, req, oti);
                 break;
         case OST_STATFS:

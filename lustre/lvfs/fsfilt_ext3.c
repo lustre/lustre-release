@@ -428,6 +428,8 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
 {
         int rc, old_ea = 0;
 
+        LASSERT(down_trylock(&inode->i_sem) != 0);
+
 #ifdef INLINE_EA  /* can go away before 1.0 - just for testing bug 2097 now */
         /* Nasty hack city - store stripe MD data in the block pointers if
          * it will fit, because putting it in an EA currently kills the MDS
@@ -917,7 +919,6 @@ static int __init fsfilt_ext3_init(void)
 {
         int rc;
 
-        //rc = ext3_xattr_register();
         fcb_cache = kmem_cache_create("fsfilt_ext3_fcb",
                                       sizeof(struct fsfilt_cb_data), 0,
                                       0, NULL, NULL);
@@ -940,8 +941,6 @@ static void __exit fsfilt_ext3_exit(void)
         LASSERTF(kmem_cache_destroy(fcb_cache) == 0,
                  "can't free fsfilt callback cache: count %d\n",
                  atomic_read(&fcb_cache_count));
-
-        //rc = ext3_xattr_unregister();
 }
 
 module_init(fsfilt_ext3_init);

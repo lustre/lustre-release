@@ -620,14 +620,14 @@ static inline int portal_ioctl_getdata(char *buf, char *end, void *arg)
 #define IOC_PORTAL_MIN_NR                 30
 
 #define IOC_PORTAL_PING                    _IOWR('e', 30, long)
-#define IOC_PORTAL_GET_DEBUG               _IOWR('e', 31, long)
+
 #define IOC_PORTAL_CLEAR_DEBUG             _IOWR('e', 32, long)
 #define IOC_PORTAL_MARK_DEBUG              _IOWR('e', 33, long)
 #define IOC_PORTAL_PANIC                   _IOWR('e', 34, long)
 #define IOC_PORTAL_NAL_CMD                 _IOWR('e', 35, long)
 #define IOC_PORTAL_GET_NID                 _IOWR('e', 36, long)
 #define IOC_PORTAL_FAIL_NID                _IOWR('e', 37, long)
-#define IOC_PORTAL_SET_DAEMON              _IOWR('e', 38, long)
+
 #define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 39, long)
 #define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 40, long)
 #define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 41, long)

@@ -40,7 +40,6 @@
 #endif
 
 #include <linux/obd_class.h>
-#include <linux/lustre_mds.h>
 #include <linux/obd_lov.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lprocfs_status.h>
@@ -233,7 +232,7 @@ int mds_query_write_access(struct inode *inode)
         RETURN(atomic_read(&inode->i_writecount));
 }
 
-/* This replaces the VFS mds_dentry_open, it manages mfd and writecount */
+/* This replaces the VFS dentry_open, it manages mfd and writecount */
 static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
                                              struct vfsmount *mnt, int flags,
                                              struct ptlrpc_request *req)
@@ -268,7 +267,9 @@ static struct mds_file_data *mds_dentry_open(struct dentry *dentry,
         dget(dentry);
 
         /* Mark the file as open to handle open-unlink. */
-        mds_open_orphan_inc(dentry->d_inode);
+        DOWN_WRITE_I_ALLOC_SEM(dentry->d_inode);
+        mds_orphan_open_inc(dentry->d_inode);
+        UP_WRITE_I_ALLOC_SEM(dentry->d_inode);
 
         mfd->mfd_mode = flags;
         mfd->mfd_dentry = dentry;
@@ -460,7 +461,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         if (IS_ERR(*handle)) {
                 rc = PTR_ERR(*handle);
                 *handle = NULL;
-                GOTO(out_ids, rc);
+                GOTO(out_oa, rc);
         }
 
         rc = fsfilt_set_md(obd, inode, *handle, lmm, lmm_size);
@@ -491,7 +492,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         struct mds_obd *mds = mds_req2mds(req);
         struct mds_file_data *mfd;
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct dentry *parent, *child;
+        struct dentry *parent, *dchild;
         struct ldlm_reply *rep;
         struct mds_body *body;
         int rc;
@@ -516,12 +517,11 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         parent = mds_fid2dentry(mds, rec->ur_fid1, NULL);
         LASSERT(!IS_ERR(parent));
 
-        child = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
-        LASSERT(!IS_ERR(child));
+        dchild = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
+        LASSERT(!IS_ERR(dchild));
 
-        if (!child->d_inode) {
+        if (!dchild->d_inode)
                 GOTO(out_dput, 0); /* child not present to open */
-        }
 
         /* At this point, we know we have a child. We'll send
          * it back _unless_ it not created and open failed.
@@ -534,11 +534,11 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
 
         /* get lock (write for O_CREAT, read otherwise) */
 
-        mds_pack_inode2fid(&body->fid1, child->d_inode);
-        mds_pack_inode2body(body, child->d_inode);
-        if (S_ISREG(child->d_inode->i_mode)) {
+        mds_pack_inode2fid(&body->fid1, dchild->d_inode);
+        mds_pack_inode2body(body, dchild->d_inode);
+        if (S_ISREG(dchild->d_inode->i_mode)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
-                                 child->d_inode, 1);
+                                 dchild->d_inode, 1);
 
                 if (rc)
                         LASSERT(rc == req->rq_status);
@@ -547,12 +547,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 if (!(body->valid & OBD_MD_FLEASIZE))
                         body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                         OBD_MD_FLATIME | OBD_MD_FLMTIME);
-        } else {
-                /* XXX need to check this case */
         }
-
-        /* If we're opening a file without an EA, change to a write
-           lock (unless we already have one). */
 
         /* If we have -EEXIST as the status, and we were asked to create
          * exclusively, we can tell we failed because the file already existed.
@@ -590,7 +585,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         if (mfd == NULL) {
                 mntget(mds->mds_vfsmnt);
                 CERROR("Re-opened file \n");
-                mfd = mds_dentry_open(child, mds->mds_vfsmnt,
+                mfd = mds_dentry_open(dchild, mds->mds_vfsmnt,
                                       rec->ur_flags & ~MDS_OPEN_TRUNC, req);
                 if (!mfd) {
                         CERROR("mds: out of memory\n");
@@ -605,7 +600,7 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
 
  out_dput:
         if (put_child)
-                l_dput(child);
+                l_dput(dchild);
         l_dput(parent);
         EXIT;
 }
@@ -1042,7 +1037,7 @@ int mds_open(struct mds_update_record *rec, int offset,
 }
 
 /* Close a "file descriptor" and possibly unlink an orphan from the
- * PENDING directory.
+ * PENDING directory.  Caller must hold child->i_sem, this drops it.
  *
  * If we are being called from mds_disconnect() because the client has
  * disappeared, then req == NULL and we do not update last_rcvd because
@@ -1074,8 +1069,12 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
 
         fidlen = ll_fid2str(fidname, inode->i_ino, inode->i_generation);
 
-        last_orphan = mds_open_orphan_dec_test(inode) &&
+        CDEBUG(D_INODE, "inode %p ino %s nlink %d orphan %d\n", inode, fidname,
+               inode->i_nlink, mds_orphan_open_count(inode));
+
+        last_orphan = mds_orphan_open_dec_test(inode) &&
                 mds_inode_is_orphan(inode);
+        UP_WRITE_I_ALLOC_SEM(inode);
 
         /* this is half of the actual "close" */
         if (mfd->mfd_mode & FMODE_WRITE) {
@@ -1092,12 +1091,17 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
 
                 CDEBUG(D_HA, "destroying orphan object %s\n", fidname);
 
+                if ((S_ISREG(inode->i_mode) && inode->i_nlink != 1) ||
+                    (S_ISDIR(inode->i_mode) && inode->i_nlink != 2))
+                        CERROR("found \"orphan\" %s %s with link count %d\n",
+                               S_ISREG(inode->i_mode) ? "file" : "dir",
+                               fidname, inode->i_nlink);
+
                 /* Sadly, there is no easy way to save pending_child from
                  * mds_reint_unlink() into mfd, so we need to re-lookup,
                  * but normally it will still be in the dcache. */
-                pending_dir = mds->mds_pending_dir->d_inode;
                 down(&pending_dir->i_sem);
-                cleanup_phase = 1; /* up(i_sem) when finished */
+                cleanup_phase = 1; /* up(&pending_dir->i_sem) when finished */
                 pending_child = lookup_one_len(fidname, mds->mds_pending_dir,
                                                fidlen);
                 if (IS_ERR(pending_child))
@@ -1140,6 +1144,7 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                 goto out; /* Don't bother updating attrs on unlinked inode */
         }
 
+#if 0
         if (request_body != NULL && mfd->mfd_mode & FMODE_WRITE && rc == 0) {
                 /* Update the on-disk attributes if this was the last write
                  * close, and all information was provided (i.e., rc == 0)
@@ -1147,7 +1152,6 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                  * XXX this should probably be abstracted with mds_reint_setattr
                  */
 
-#if 0
                 if (request_body->valid & OBD_MD_FLMTIME &&
                     LTIME_S(iattr.ia_mtime) > LTIME_S(inode->i_mtime)) {
                         LTIME_S(iattr.ia_mtime) = request_body->mtime;
@@ -1166,8 +1170,8 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                 }
                 /* iattr.ia_blocks = request_body->blocks */
 
-#endif
         }
+#endif
         if (request_body != NULL && request_body->valid & OBD_MD_FLATIME) {
                 /* Only start a transaction to write out only the atime if
                  * it is more out-of-date than the specified limit.  If we
@@ -1258,13 +1262,15 @@ int mds_close(struct ptlrpc_request *req)
         }
 
         inode = mfd->mfd_dentry->d_inode;
-        if (mds_inode_is_orphan(inode) && mds_open_orphan_count(inode) == 1) {
+        /* child i_alloc_sem protects orphan_dec_test && is_orphan race */
+        DOWN_WRITE_I_ALLOC_SEM(inode); /* mds_mfd_close drops this */
+        if (mds_inode_is_orphan(inode) && mds_orphan_open_count(inode) == 1) {
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
                 LASSERT(body != NULL);
 
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
-                mds_pack_md(obd, req->rq_repmsg, 1, body, inode, 1);
+                mds_pack_md(obd, req->rq_repmsg, 1, body, inode, MDS_PACK_MD_LOCK);
         }
         spin_lock(&med->med_open_lock);
         list_del(&mfd->mfd_list);

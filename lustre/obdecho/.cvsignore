@@ -4,7 +4,6 @@ config.status
 configure
 Makefile
 .deps
-.depend
 TAGS
 .*.cmd
 autoMakefile.in
@@ -13,3 +12,4 @@ autoMakefile
 *.mod.c
 .*.flags
 .tmp_versions
+.depend

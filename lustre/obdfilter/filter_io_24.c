@@ -252,6 +252,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         unsigned long now = jiffies; /* DEBUGGING OST TIMEOUTS */
         void *wait_handle;
         ENTRY;
+
         LASSERT(oti != NULL);
         LASSERT(objcount == 1);
         LASSERT(current->journal_info == NULL);
@@ -307,6 +308,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
         oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
                                            oti);
         if (IS_ERR(oti->oti_handle)) {
+                up(&inode->i_sem);
                 rc = PTR_ERR(oti->oti_handle);
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
                        "error starting transaction: rc = %d\n", rc);
@@ -318,6 +320,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 CERROR("slow brw_start %lus\n", (jiffies - now) / HZ);
 
         iattr_from_obdo(&iattr,oa,OBD_MD_FLATIME|OBD_MD_FLMTIME|OBD_MD_FLCTIME);
+        /* filter_direct_io drops i_sem */
         rc = filter_direct_io(OBD_BRW_WRITE, res->dentry, iobuf, exp, &iattr,
                               oti, &wait_handle);
         if (rc == 0)

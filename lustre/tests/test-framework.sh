@@ -55,7 +55,10 @@ init_test_env() {
 	    \?) usage;;
 	esac
     done
-    
+
+    shift $((OPTIND - 1))
+    ONLY=${ONLY:-$*}
+
     # save the name of the config file for the upcall
     echo "XMLCONFIG=$LUSTRE/tests/$XMLCONFIG"  > $LUSTRE/tests/XMLCONFIG
 #    echo "CONFIG=`canonical_path $CONFIG`"  > $LUSTRE/tests/CONFIG

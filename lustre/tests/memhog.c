@@ -1,3 +1,5 @@
+#include <sys/types.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -52,7 +54,8 @@ int main(int argc, char *argv[])
 	}
 
 	alloc = CHUNK;
-	printf("allocating %lld kbytes in %u kbyte chunks\n", kbtotal, alloc);
+	printf("[%d] allocating %lld kbytes in %u kbyte chunks\n",
+	       getpid(), kbtotal, alloc);
 	for (i = kballoc = 0; i < numchunk; i++, kballoc += alloc) {
 		if (kbtotal - kballoc < alloc)
 			alloc = kbtotal - kballoc;

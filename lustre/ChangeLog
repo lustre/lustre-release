@@ -1,4 +1,14 @@
-tbd  Cluster File Systems, Inc. <info@clusterfs.com>
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.2.5
+       * bug fixes
+	- don't close LustreDB during write_conf until it is done (3860)
+	- fix typo in lconf for_each_profile (3821)
+	- allow dumping logs from multiple threads at one time (3820)
+	- don't allow multiple threads in OSC recovery(3812)
+	- fix debug_size parameters (3864)
+	- fix mds_postrecov to initialize import for llog ctxt (3121)
+
+2004-07-14  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.4
        * bug fixes
 	- don't cleanup request in ll_file_open() on failed MDS open (3430)
@@ -6,7 +16,24 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- if default stripe count is 0, use OST count for inode size (3636)
 	- update parent mtime/ctime on client for create/unlink (2611)
 	- drop dentry ref in ext3_add_link from open_connect_dentry (3266)
+	- free recovery state on server during a forced cleanup (3571)
+	- unregister_reply for resent reqs (3063)
+	- loop back devices mounting and status check on 2.6 (3563)
+	- fix resource-creation race that can provoke i_size == 0 (3513)
+	- don't try to use bad inodes returned from MDS/OST fs lookup (3688)
+	- more debugging for page-accounting assertion (3746)
+	- return -ENOENT instead of asserting if ost getattr+unlink race (3558)
+	- avoid deadlock after precreation failure (3758)
+	- fix race and lock order deadlock in orphan handling (3450, 3750)
        * miscellania
+	- add /proc/.../recovery_status to obdfilter (3428)
+	- lightweight CDEBUG infrastructure, debug daemon (3668)
+	- change default OSC RPC parameters to be better on small clusters
+	- turn off OST read cache for files smaller than 32MB
+	- install man pages and include them in rpms (3100)
+	- add new init script for (un)mounting lustre filesystems (2593)
+	- run chkconfig in %post for init scripts (3701)
+	- drop scimac NAL (unmaintained)
 
 2004-06-17  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.3
@@ -61,7 +88,9 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't crash in mdc_close for bad permissions on open (3285)
 	- zero i_rdev for non-device files (3147)
 	- clear page->private before handing to FS, better assertion (3119)
+	- tune the read pipeline (3236)
 	- fix incorrect decref of invalidated dentry (2350)
+	- provide read-ahead stats and refine rpc in flight stats (3328)
 	- don't hold journal transaction open across create RPC (3313)
 	- update atime on MDS at close time (3265)
 	- close LDAP connection when recovering to avoid server load (3315)

@@ -445,12 +445,14 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         total_enqueue_wait = timeval_sub(&granted_time, &lock->l_enqueued_time);
 
         if (total_enqueue_wait / 1000000 > obd_timeout)
-                LDLM_ERROR(lock, "enqueue wait took %ldus", total_enqueue_wait);
+                LDLM_ERROR(lock, "enqueue wait took %luus", total_enqueue_wait);
 
+        down(&lock->l_resource->lr_lvb_sem);
         if (lock->l_resource->lr_lvb_len) {
                 buffers = 2;
                 size[1] = lock->l_resource->lr_lvb_len;
         }
+        up(&lock->l_resource->lr_lvb_sem);
 
         req = ptlrpc_prep_req(lock->l_export->exp_imp_reverse,
                               LDLM_CP_CALLBACK, buffers, size, NULL);
@@ -464,10 +466,14 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         ldlm_lock2desc(lock, &body->lock_desc);
 
         if (buffers == 2) {
-                void *lvb = lustre_msg_buf(req->rq_reqmsg, 1,
-                                           lock->l_resource->lr_lvb_len);
+                void *lvb;
+
+                down(&lock->l_resource->lr_lvb_sem);
+                lvb = lustre_msg_buf(req->rq_reqmsg, 1,
+                                     lock->l_resource->lr_lvb_len);
                 memcpy(lvb, lock->l_resource->lr_lvb_data,
                        lock->l_resource->lr_lvb_len);
+                up(&lock->l_resource->lr_lvb_sem);
         }
 
         LDLM_DEBUG(lock, "server preparing completion AST (after %ldus wait)",
@@ -514,7 +520,9 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
                sizeof(body->lock_handle1));
         ldlm_lock2desc(lock, &body->lock_desc);
 
+        down(&lock->l_resource->lr_lvb_sem);
         size = lock->l_resource->lr_lvb_len;
+        up(&lock->l_resource->lr_lvb_sem);
         req->rq_replen = lustre_msg_size(1, &size);
 
         req->rq_send_state = LUSTRE_IMP_FULL;
@@ -586,10 +594,13 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 cookie = req;
         } else {
                 int buffers = 1;
+
+                down(&lock->l_resource->lr_lvb_sem);
                 if (lock->l_resource->lr_lvb_len) {
                         size[1] = lock->l_resource->lr_lvb_len;
                         buffers = 2;
                 }
+                up(&lock->l_resource->lr_lvb_sem);
 
                 if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR))
                         GOTO(out, rc = -ENOMEM);
@@ -642,12 +653,19 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                 LDLM_DEBUG(lock, "server-side enqueue handler, sending reply"
                            "(err=%d, rc=%d)", err, rc);
 
-                if (lock->l_resource->lr_lvb_len > 0 && rc == 0) {
-                        void *lvb = lustre_msg_buf(req->rq_repmsg, 1,
-                                                  lock->l_resource->lr_lvb_len);
-                        LASSERT(lvb != NULL);
-                        memcpy(lvb, lock->l_resource->lr_lvb_data,
-                               lock->l_resource->lr_lvb_len);
+                if (rc == 0) {
+                        down(&lock->l_resource->lr_lvb_sem);
+                        size[1] = lock->l_resource->lr_lvb_len;
+                        if (size[1] > 0) {
+                                void *lvb = lustre_msg_buf(req->rq_repmsg,
+                                                           1, size[1]);
+                                LASSERTF(lvb != NULL, "req %p, lock %p\n",
+                                         req, lock);
+
+                                memcpy(lvb, lock->l_resource->lr_lvb_data,
+                                       size[1]);
+                        }
+                        up(&lock->l_resource->lr_lvb_sem);
                 }
 
                 if (!err && dlm_req->lock_desc.l_resource.lr_type != LDLM_FLOCK)
@@ -1498,6 +1516,7 @@ EXPORT_SYMBOL(client_obd_cleanup);
 EXPORT_SYMBOL(client_connect_import);
 EXPORT_SYMBOL(client_disconnect_export);
 EXPORT_SYMBOL(target_abort_recovery);
+EXPORT_SYMBOL(target_cleanup_recovery);
 EXPORT_SYMBOL(target_handle_connect);
 EXPORT_SYMBOL(target_destroy_export);
 EXPORT_SYMBOL(target_cancel_recovery_timer);

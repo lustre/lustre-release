@@ -15,29 +15,20 @@ if test $ac_cv_sizeof_unsigned_long_long != 8 ; then
 fi
 
 # directories for binaries
-ac_default_prefix=
-bindir='${exec_prefix}/usr/bin'
-sbindir='${exec_prefix}/usr/sbin'
-includedir='${prefix}/usr/include'
+ac_default_prefix=/usr
 
-rootsbindir='${exec_prefix}/sbin'
+# mount.lustre
+rootsbindir='/sbin'
 AC_SUBST(rootsbindir)
-
 # Directories for documentation and demos.
-docdir='${prefix}/usr/share/doc/$(PACKAGE)'
+docdir='${datadir}/doc/$(PACKAGE)'
 AC_SUBST(docdir)
 demodir='$(docdir)/demo'
 AC_SUBST(demodir)
-pkgexampledir='${prefix}/usr/lib/$(PACKAGE)/examples'
+pkgexampledir='${pkglibdir}/examples'
 AC_SUBST(pkgexampledir)
-pymoddir='${prefix}/usr/lib/${PACKAGE}/python/Lustre'
+pymoddir='${pkglibdir}/python/Lustre'
 AC_SUBST(pymoddir)
-# for substitution in lconf
-PYMOD_DIR="/usr/lib/$PACKAGE/python"
-AC_SUBST(PYMOD_DIR)
-modulenetdir='$(moduledir)/net/$(PACKAGE)'
-AC_SUBST(modulenetdir)
-
 
 # ----------  BAD gcc? ------------
 AC_PROG_RANLIB

@@ -201,7 +201,6 @@ Eend:
 fail:
         SetPageChecked(page);
         SetPageError(page);
-        LBUG();
 }
 
 static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)

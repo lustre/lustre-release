@@ -675,8 +675,6 @@ ptlrpc_check_rqbd_pools(struct ptlrpc_service *svc)
                         ptlrpc_grow_req_bufs(sni);
         }
         lprocfs_counter_add(svc->srv_stats, PTLRPC_REQBUF_AVAIL_CNTR, avail);
-        lprocfs_counter_add(svc->srv_stats, PTLRPC_REQBUF_TOTAL_CNTR,
-                            svc->srv_nbufs);
 }
 
 static int

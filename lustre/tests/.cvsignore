@@ -62,5 +62,6 @@ XMLCONFIG
 logs
 ostactive
 ll_dirstripe_verify
-rename_many
 openfilleddirunlink
+copy_attr
+rename_many

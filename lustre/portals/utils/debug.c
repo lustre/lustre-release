@@ -25,6 +25,8 @@
 
 #define __USE_FILE_OFFSET64
 
+#include <portals/list.h>
+
 #include <stdio.h>
 #include <netdb.h>
 #include <stdlib.h>
@@ -82,8 +84,6 @@ struct debug_daemon_cmd {
 static const struct debug_daemon_cmd portal_debug_daemon_cmd[] = {
         {"start", DEBUG_DAEMON_START},
         {"stop", DEBUG_DAEMON_STOP},
-        {"pause", DEBUG_DAEMON_PAUSE},
-        {"continue", DEBUG_DAEMON_CONTINUE},
         {0, 0}
 };
 
@@ -230,108 +230,230 @@ int jt_dbg_list(int argc, char **argv)
         return 0;
 }
 
-/* if 'raw' is true, don't strip the debug information from the front of the
- * lines */
-static void dump_buffer(FILE *fd, char *buf, int size, int raw)
+/* all strings nul-terminated; only the struct and hdr need to be freed */
+struct dbg_line {
+        struct ptldebug_header *hdr;
+        char *file;
+        char *fn;
+        char *text;
+        struct list_head chain;
+};
+
+/* nurr. */
+static void list_add_ordered(struct dbg_line *new, struct list_head *head)
 {
-        char *p, *z;
-        unsigned long subsystem, debug, dropped = 0, kept = 0;
+        struct list_head *pos;
+        struct dbg_line *curr, *next;
 
-        while (size) {
-                p = memchr(buf, '\n', size);
-                if (!p)
-                        break;
-                subsystem = strtoul(buf, &z, 16);
-                debug = strtoul(z + 1, &z, 16);
+        list_for_each(pos, head) {
+                curr = list_entry(pos, struct dbg_line, chain);
 
-                z++;
-                /* for some reason %*s isn't working. */
-                *p = '\0';
-                if ((subsystem_mask & subsystem) &&
-                    (!debug || (debug_mask & debug))) {
-                        if (raw)
-                                fprintf(fd, "%s\n", buf);
-                        else
-                                fprintf(fd, "%s\n", z);
-                        //printf("%s\n", buf);
-                        kept++;
-                } else {
-                        //fprintf(stderr, "dropping line (%lx:%lx): %s\n", subsystem, debug, buf);
-                        dropped++;
-                }
-                *p = '\n';
-                p++;
-                size -= (p - buf);
-                buf = p;
+                if (curr->hdr->ph_sec < new->hdr->ph_sec)
+                        continue;
+                if (curr->hdr->ph_sec == new->hdr->ph_sec &&
+                    curr->hdr->ph_usec < new->hdr->ph_usec)
+                        continue;
+
+                list_add(&new->chain, pos->prev);
+                return;
         }
+        list_add_tail(&new->chain, head);
+}
+
+static void print_saved_records(struct list_head *list, FILE *out)
+{
+        struct list_head *pos, *tmp;
+
+        list_for_each_safe(pos, tmp, list) {
+                struct dbg_line *line;
+                struct ptldebug_header *hdr;
+
+                line = list_entry(pos, struct dbg_line, chain);
+                list_del(&line->chain);
+
+                hdr = line->hdr;
+                fprintf(out, "%06x:%06x:%u:%u.%06Lu:%u:%u:%u:(%s:%u:%s()) %s",
+                        hdr->ph_subsys, hdr->ph_mask, hdr->ph_cpu_id,
+                        hdr->ph_sec, (unsigned long long)hdr->ph_usec,
+                        hdr->ph_stack, hdr->ph_pid, hdr->ph_extern_pid,
+                        line->file, hdr->ph_line_num, line->fn, line->text);
+                free(line->hdr);
+                free(line);
+        }
+}
+
+static int parse_buffer(FILE *in, FILE *out)
+{
+        struct dbg_line *line;
+        struct ptldebug_header *hdr;
+        char buf[4097], *p;
+        int rc;
+        unsigned long dropped = 0, kept = 0;
+        struct list_head chunk_list, *pos;
+
+        INIT_LIST_HEAD(&chunk_list);
+
+        while (1) {
+                rc = fread(buf, sizeof(hdr->ph_len), 1, in);
+                if (rc <= 0)
+                        break;
+
+                hdr = (void *)buf;
+                if (hdr->ph_len == 0)
+                        break;
+                if (hdr->ph_len > 4094) {
+                        fprintf(stderr, "unexpected large record: %d bytes.  "
+                                "aborting.\n",
+                                hdr->ph_len);
+                        break;
+                }
+
+                if (hdr->ph_flags & PH_FLAG_FIRST_RECORD) {
+                        print_saved_records(&chunk_list, out);
+                        assert(list_empty(&chunk_list));
+                }
+
+                rc = fread(buf + sizeof(hdr->ph_len), 1,
+                           hdr->ph_len - sizeof(hdr->ph_len), in);
+                if (rc <= 0)
+                        break;
+
+                if (hdr->ph_mask &&
+                    (!(subsystem_mask & hdr->ph_subsys) ||
+                     (!(debug_mask & hdr->ph_mask)))) {
+                        dropped++;
+                        continue;
+                }
+
+                line = malloc(sizeof(*line));
+                if (line == NULL) {
+                        fprintf(stderr, "malloc failed; printing accumulated "
+                                "records and exiting.\n");
+                        break;
+                }
+
+                line->hdr = malloc(hdr->ph_len + 1);
+                if (line->hdr == NULL) {
+                        fprintf(stderr, "malloc failed; printing accumulated "
+                                "records and exiting.\n");
+                        break;
+                }
+
+                p = (void *)line->hdr;
+                memcpy(line->hdr, buf, hdr->ph_len);
+                p[hdr->ph_len] = '\0';
+
+                p += sizeof(*hdr);
+                line->file = p;
+                p += strlen(line->file) + 1;
+                line->fn = p;
+                p += strlen(line->fn) + 1;
+                line->text = p;
+
+                list_add_ordered(line, &chunk_list);
+                kept++;
+        }
+
+        print_saved_records(&chunk_list, out);
 
         printf("Debug log: %lu lines, %lu kept, %lu dropped.\n",
                 dropped + kept, kept, dropped);
+        return 0;
 }
 
 int jt_dbg_debug_kernel(int argc, char **argv)
 {
-        int rc, raw = 1;
-        FILE *fd = stdout;
-        const int databuf_size = (6 << 20);
-        struct portal_ioctl_data data, *newdata;
-        char *databuf = NULL;
+        char filename[4096];
+        int rc, raw = 0, fd;
+        FILE *in, *out = stdout;
 
         if (argc > 3) {
                 fprintf(stderr, "usage: %s [file] [raw]\n", argv[0]);
                 return 0;
         }
-
-        if (argc > 1) {
-                fd = fopen(argv[1], "w");
-                if (fd == NULL) {
-                        fprintf(stderr, "fopen(%s) failed: %s\n", argv[1],
-                                strerror(errno));
-                        return -1;
-                }
-        }
+        sprintf(filename, "%s-%ld.tmp", argv[1], random);
         if (argc > 2)
                 raw = atoi(argv[2]);
+        unlink(filename);
 
-        databuf = malloc(databuf_size);
-        if (!databuf) {
-                fprintf(stderr, "No memory for buffer.\n");
-                goto out;
-        }
-
-        memset(&data, 0, sizeof(data));
-        data.ioc_plen1 = databuf_size;
-        data.ioc_pbuf1 = databuf;
-
-        if (portal_ioctl_pack(&data, &buf, max) != 0) {
-                fprintf(stderr, "portal_ioctl_pack failed.\n");
-                goto out;
-        }
-
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_DEBUG, buf);
-        if (rc) {
-                fprintf(stderr, "IOC_PORTAL_GET_DEBUG failed: %s\n",
+        fd = open("/proc/sys/portals/dump_kernel", O_WRONLY);
+        if (fd < 0) {
+                fprintf(stderr, "open(dump_kernel) failed: %s\n",
                         strerror(errno));
-                goto out;
+                return 1;
         }
 
-        newdata = (struct portal_ioctl_data *)buf;
-        if (newdata->ioc_size > 0)
-                dump_buffer(fd, databuf, newdata->ioc_size, raw);
+        rc = write(fd, filename, strlen(filename));
+        if (rc != strlen(filename)) {
+                fprintf(stderr, "write(%s) failed: %s\n", filename,
+                        strerror(errno));
+                close(fd);
+                return 1;
+        }
+        close(fd);
 
- out:
-        if (databuf)
-                free(databuf);
-        if (fd != stdout)
-                fclose(fd);
-        return 0;
+        if (raw)
+                return 0;
+
+        in = fopen(filename, "r");
+        if (in == NULL) {
+                fprintf(stderr, "fopen(%s) failed: %s\n", filename,
+                        strerror(errno));
+                return 1;
+        }
+        if (argc > 1) {
+                out = fopen(argv[1], "w");
+                if (out == NULL) {
+                        fprintf(stderr, "fopen(%s) failed: %s\n", argv[1],
+                                strerror(errno));
+                        return 1;
+                }
+        }
+
+        rc = parse_buffer(in, out);
+        if (rc) {
+                fprintf(stderr, "parse_buffer failed; leaving tmp file %s "
+                        "behind.\n", filename);
+        } else {
+                rc = unlink(filename);
+                if (rc)
+                        fprintf(stderr, "dumped successfully, but couldn't "
+                                "unlink tmp file %s: %s\n", filename,
+                                strerror(errno));
+        }
+        return rc;
+}
+
+int jt_dbg_debug_file(int argc, char **argv)
+{
+        FILE *in, *out = stdout;
+        if (argc > 3 || argc < 2) {
+                fprintf(stderr, "usage: %s <input> [output]\n", argv[0]);
+                return 0;
+        }
+
+        in = fopen(argv[1], "r");
+        if (in == NULL) {
+                fprintf(stderr, "fopen(%s) failed: %s\n", argv[1],
+                        strerror(errno));
+                return 1;
+        }
+        if (argc > 2) {
+                out = fopen(argv[2], "w");
+                if (out == NULL) {
+                        fprintf(stderr, "fopen(%s) failed: %s\n", argv[2],
+                                strerror(errno));
+                        return 1;
+                }
+        }
+
+        return parse_buffer(in, out);
 }
 
 int jt_dbg_debug_daemon(int argc, char **argv)
 {
-        int i, rc;
+        int i, rc, fd;
         unsigned int cmd = 0;
-        FILE *fd = stdout;
         struct portal_ioctl_data data;
 
         if (argc <= 1) {
@@ -339,120 +461,42 @@ int jt_dbg_debug_daemon(int argc, char **argv)
                         "continue]\n", argv[0]);
                 return 0;
         }
-        for (i = 0; portal_debug_daemon_cmd[i].cmd != NULL; i++) {
-                if (strcasecmp(argv[1], portal_debug_daemon_cmd[i].cmd) == 0) {
-                        cmd = portal_debug_daemon_cmd[i].cmdv;
-                        break;
-                }
-        }
-        if (portal_debug_daemon_cmd[i].cmd == NULL) {
-                fprintf(stderr, "usage: %s [start file <#MB>|stop|pause|"
-                        "continue]\n", argv[0]);
-                return 0;
-        }
-        memset(&data, 0, sizeof(data));
-        if (cmd == DEBUG_DAEMON_START) {
-                if (argc < 3) {
-                        fprintf(stderr, "usage: %s [start file <#MB>|stop|"
-                                "pause|continue]\n", argv[0]);
-                        return 0;
-                }
-                if (access(argv[2], F_OK) != 0) {
-                        fd = fopen(argv[2], "w");
-                        if (fd != NULL) {
-                                fclose(fd);
-                                remove(argv[2]);
-                                goto ok;
-                        }
-                }
-                if (access(argv[2], W_OK) == 0)
-                        goto ok;
-                fprintf(stderr, "fopen(%s) failed: %s\n", argv[2],
-                        strerror(errno));
-                return -1;
-ok:
-                data.ioc_inllen1 = strlen(argv[2]) + 1;
-                data.ioc_inlbuf1 = argv[2];
-                data.ioc_misc = 0;
-                if (argc == 4) {
-                        unsigned long size;
-                        errno = 0;
-                        size = strtoul(argv[3], NULL, 0);
-                        if (errno) {
-                                fprintf(stderr, "file size(%s): error %s\n",
-                                        argv[3], strerror(errno));
-                                return -1;
-                        }
-                        data.ioc_misc = size;
-                }
-        }
-        data.ioc_count = cmd;
-        if (portal_ioctl_pack(&data, &buf, max) != 0) {
-                fprintf(stderr, "portal_ioctl_pack failed.\n");
-                return -1;
-        }
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_SET_DAEMON, buf);
-        if (rc < 0) {
-                fprintf(stderr, "IOC_PORTAL_SET_DEMON failed: %s\n",
-                                strerror(errno));
-                return rc;
-        }
-        return 0;
-}
 
-int jt_dbg_debug_file(int argc, char **argv)
-{
-        int rc, fd = -1, raw = 1;
-        FILE *output = stdout;
-        char *databuf = NULL;
-        struct stat statbuf;
-
-        if (argc > 4 || argc < 2) {
-                fprintf(stderr, "usage: %s <input> [output] [raw]\n", argv[0]);
-                return 0;
-        }
-
-        fd = open(argv[1], O_RDONLY);
+        fd = open("/proc/sys/portals/daemon_file", O_WRONLY);
         if (fd < 0) {
-                fprintf(stderr, "fopen(%s) failed: %s\n", argv[1],
+                fprintf(stderr, "open(daemon_file) failed: %s\n",
                         strerror(errno));
-                return -1;
+                return 1;
         }
 
-        rc = fstat(fd, &statbuf);
-        if (rc < 0) {
-                fprintf(stderr, "fstat failed: %s\n", strerror(errno));
-                goto out;
-        }
-
-        if (argc >= 3) {
-                output = fopen(argv[2], "w");
-                if (output == NULL) {
-                        fprintf(stderr, "fopen(%s) failed: %s\n", argv[2],
-                                strerror(errno));
-                        goto out;
+        if (strcasecmp(argv[1], "start") == 0) {
+                if (argc != 3) {
+                        fprintf(stderr, "usage: %s [start file|stop]\n",
+                                argv[0]);
+                        return 1;
                 }
+
+                rc = write(fd, argv[2], strlen(argv[2]));
+                if (rc != strlen(argv[2])) {
+                        fprintf(stderr, "write(%s) failed: %s\n", argv[2],
+                                strerror(errno));
+                        close(fd);
+                        return 1;
+                }
+        } else if (strcasecmp(argv[1], "stop") == 0) {
+                rc = write(fd, "stop", 4);
+                if (rc != 4) {
+                        fprintf(stderr, "write(stop) failed: %s\n",
+                                strerror(errno));
+                        close(fd);
+                        return 1;
+                }
+        } else {
+                fprintf(stderr, "usage: %s [start file|stop]\n", argv[0]);
+                return 1;
         }
 
-        if (argc == 4)
-                raw = atoi(argv[3]);
-
-        databuf = mmap(NULL, statbuf.st_size, PROT_READ | PROT_WRITE,
-                       MAP_PRIVATE, fd, 0);
-        if (databuf == NULL) {
-                fprintf(stderr, "mmap failed: %s\n", strerror(errno));
-                goto out;
-        }
-
-        dump_buffer(output, databuf, statbuf.st_size, raw);
-
- out:
-        if (databuf)
-                munmap(databuf, statbuf.st_size);
-        if (output != stdout)
-                fclose(output);
-        if (fd > 0)
-                close(fd);
+        close(fd);
         return 0;
 }
 

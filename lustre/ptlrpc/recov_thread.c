@@ -506,7 +506,8 @@ static int log_process_thread(void *args)
 
         up(&data->llpa_sem);
         lock_kernel();
-        ptlrpc_daemonize(); /* thread never needs to do IO */
+        ptlrpc_daemonize();     /* thread does IO to log files */
+        THREAD_NAME(current->comm, sizeof(current->comm) - 1, "llog_process");
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);

@@ -405,18 +405,21 @@ static void mdc_commit_close(struct ptlrpc_request *req)
 static int mdc_close_interpret(struct ptlrpc_request *req, void *data, int rc)
 {
         union ptlrpc_async_args *aa = data;
-        struct mdc_rpc_lock *rpc_lock = aa->pointer_arg[0];
+        struct mdc_rpc_lock *rpc_lock;
         struct obd_device *obd = aa->pointer_arg[1];
+        unsigned long flags;
+
+        spin_lock_irqsave(&req->rq_lock, flags);
+        rpc_lock = aa->pointer_arg[0];
+        aa->pointer_arg[0] = NULL;
+        spin_unlock_irqrestore(&req->rq_lock, flags);
 
         if (rpc_lock == NULL) {
                 CERROR("called with NULL rpc_lock\n");
         } else {
                 mdc_put_rpc_lock(rpc_lock, NULL);
-                LASSERTF(req->rq_async_args.pointer_arg[0] ==
-                         obd->u.cli.cl_rpc_lock, "%p != %p\n",
-                         req->rq_async_args.pointer_arg[0],
-                         obd->u.cli.cl_rpc_lock);
-                aa->pointer_arg[0] = NULL;
+                LASSERTF(rpc_lock == obd->u.cli.cl_rpc_lock, "%p != %p\n",
+                         rpc_lock, obd->u.cli.cl_rpc_lock);
         }
         wake_up(&req->rq_reply_waitq);
         RETURN(rc);
@@ -430,9 +433,8 @@ static int mdc_close_check_reply(struct ptlrpc_request *req)
         unsigned long flags;
 
         spin_lock_irqsave(&req->rq_lock, flags);
-        if (PTLRPC_REQUEST_COMPLETE(req)) {
+        if (req->rq_async_args.pointer_arg[0] == NULL)
                 rc = 1;
-        }
         spin_unlock_irqrestore (&req->rq_lock, flags);
         return rc;
 }
@@ -466,7 +468,8 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         if (likely(mod != NULL)) {
                 mod->mod_close_req = req;
                 LASSERT(mod->mod_open_req->rq_type != LI_POISON);
-                DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
+                DEBUG_REQ(D_HA, mod->mod_open_req, "matched open req %p",
+                          mod->mod_open_req);
         } else {
                 CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
         }
@@ -515,7 +518,6 @@ int mdc_close(struct obd_export *exp, struct obdo *oa,
         if (req->rq_async_args.pointer_arg[0] != NULL) {
                 CERROR("returned without dropping rpc_lock: rc %d\n", rc);
                 mdc_close_interpret(req, &req->rq_async_args, rc);
-                //portals_debug_dumplog();
         }
 
         EXIT;

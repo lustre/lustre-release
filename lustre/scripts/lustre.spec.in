@@ -83,12 +83,16 @@ rm -rf $RPM_BUILD_ROOT
 
 # Set an explicit path to our Linux tree, if we can.
 cd $RPM_BUILD_DIR/lustre-%{version}
-./configure --with-linux='%{linuxdir}' %{disable_doc} --disable-liblustre
+./configure \
+	--with-linux='%{linuxdir}' \
+	%{disable_doc} --disable-liblustre \
+	--sysconfdir=%{_sysconfdir} \
+	--mandir=%{_mandir}
 make -j $RPM_BUILD_NCPUS -s
 
 %install
 cd $RPM_BUILD_DIR/lustre-%{version}
-make install prefix=$RPM_BUILD_ROOT
+make install DESTDIR=$RPM_BUILD_ROOT
 
 %ifarch alpha
 # this hurts me
@@ -154,11 +158,14 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/lib/lustre/examples/llechocleanup.sh
 
 %attr(-, root, root) /etc/init.d/lustre
-%attr(-, root, root) /lib/libptlctl.a
-%attr(-, root, root) /lib/liblustreapi.a
+%attr(-, root, root) /etc/init.d/lustrefs
+%attr(-, root, root) /usr/lib/libptlctl.a
+%attr(-, root, root) /usr/lib/liblustreapi.a
 %attr(-, root, root) /usr/include/lustre/*.h
 %attr(-, root, root) /usr/include/portals/*.h
 %attr(-, root, root) /usr/include/linux/lustre_idl.h
+
+%attr(-, root, root) /usr/share/man/man?/*
 
 %ifarch alpha
 %attr(-, root, root) /usr/sbin/mcpload
@@ -223,7 +230,15 @@ fi
 if [ ! -e /dev/portals ]; then
    mknod /dev/portals c 10 240
 fi
+/sbin/chkconfig --add lustre
+/sbin/chkconfig --add lustrefs
 depmod -ae || exit 0
+
+%preun
+if [ $1 = 0 ]; then
+  /sbin/chkconfig --del lustre
+  /sbin/chkconfig --del lustrefs
+fi
 
 %postun -n lustre-modules
 depmod -ae || exit 0

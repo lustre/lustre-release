@@ -647,13 +647,13 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, san_preprw);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, init_export);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy_export);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_init); 
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_finish); 
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pin); 
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_init);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_finish);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pin);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpin);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, import_event);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, notify);
-        
+
         for (i = num_private_stats; i < num_stats; i++) {
                 /* If this LBUGs, it is likely that an obd
                  * operation was added to struct obd_ops in
@@ -786,6 +786,73 @@ void lprocfs_oh_clear(struct obd_histogram *oh)
         spin_unlock_irqrestore(&oh->oh_lock, flags);
 }
 EXPORT_SYMBOL(lprocfs_oh_clear);
+
+int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
+                                          int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        int len = 0, n,
+                connected = obd->obd_connected_clients,
+                max_recoverable = obd->obd_max_recoverable_clients,
+                recoverable = obd->obd_recoverable_clients,
+                completed = max_recoverable - recoverable,
+                queue_len = obd->obd_requests_queued_for_recovery,
+                replayed = obd->obd_replayed_requests;
+        __u64 next_transno = obd->obd_next_recovery_transno;
+
+        LASSERT(obd != NULL);
+        *eof = 1;
+
+        n = snprintf(page, count, "status: ");
+        page += n; len += n; count -= n;
+        if (obd->obd_max_recoverable_clients == 0) {
+                n = snprintf(page, count, "INACTIVE\n");
+                return len + n;
+        }
+
+        /* sampled unlocked, but really... */
+        if (obd->obd_recovering == 0) {
+                n = snprintf(page, count, "COMPLETE\n");
+                page += n; len += n; count -= n;
+
+                n = snprintf(page, count, "recovery_start: %lu\n",
+                             obd->obd_recovery_start);
+                page += n; len += n; count -= n;
+                n = snprintf(page, count, "recovery_end: %lu\n",
+                             obd->obd_recovery_end);
+                page += n; len += n; count -= n;
+                n = snprintf(page, count, "recovered_clients: %d\n",
+                             completed);
+                page += n; len += n; count -= n;
+                n = snprintf(page, count, "unrecovered_clients: %d\n",
+                             obd->obd_recoverable_clients);
+                page += n; len += n; count -= n;
+                n = snprintf(page, count, "last_transno: "LPD64"\n",
+                             next_transno - 1);
+                page += n; len += n; count -= n;
+                n = snprintf(page, count, "replayed_requests: %d\n", replayed);
+                return len + n;
+        }
+
+        n = snprintf(page, count, "RECOVERING\n");
+        page += n; len += n; count -= n;
+        n = snprintf(page, count, "recovery_start: %lu\n",
+                     obd->obd_recovery_start);
+        page += n; len += n; count -= n;
+        n = snprintf(page, count, "connected_clients: %d/%d\n",
+                     connected, max_recoverable);
+        page += n; len += n; count -= n;
+        n = snprintf(page, count, "completed_clients: %d/%d\n",
+                     completed, max_recoverable);
+        page += n; len += n; count -= n;
+        n = snprintf(page, count, "replayed_requests: %d/??\n", replayed);
+        page += n; len += n; count -= n;
+        n = snprintf(page, count, "queued_requests: %d\n", queue_len);
+        page += n; len += n; count -= n;
+        n = snprintf(page, count, "next_transno: "LPD64"\n", next_transno);
+        return len + n;
+}
+EXPORT_SYMBOL(lprocfs_obd_rd_recovery_status);
 
 #endif /* LPROCFS*/
 

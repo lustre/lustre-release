@@ -320,6 +320,8 @@ test_19a() {
     drop_ldlm_cancel "chmod 0777 $f"  || echo evicted
 
     do_facet client checkstat -v -p 0777 $f  || echo evicted
+    # let the client reconnect
+    sleep 5
     do_facet client "munlink $f"
 }
 run_test 19a "test expired_lock_main on mds (2867)"

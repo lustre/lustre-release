@@ -162,8 +162,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp, int in_rpc)
 
         if (in_rpc)
                 inflight = 1;
-        /* wait for all requests to error out and call completion
-           callbacks */
+        /* wait for all requests to error out and call completion callbacks */
         lwi = LWI_TIMEOUT_INTR(MAX(obd_timeout * HZ, 1), NULL,
                                NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq,
@@ -406,21 +405,18 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 } else {
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
                 }
-        } 
-        else if ((MSG_CONNECT_RECOVERING & msg_flags) && !imp->imp_invalid) {
+        } else if ((MSG_CONNECT_RECOVERING & msg_flags) && !imp->imp_invalid) {
                 LASSERT(imp->imp_replayable);
                 imp->imp_remote_handle = request->rq_repmsg->handle;
                 imp->imp_last_replay_transno = 0;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_REPLAY);
-        } 
-        else {
+        } else {
                 imp->imp_remote_handle = request->rq_repmsg->handle;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_EVICTED);
         }
-        
+
         /* Sanity checks for a reconnected import. */
-        if (!(imp->imp_replayable) != 
-             !(msg_flags & MSG_CONNECT_REPLAYABLE)) {
+        if (!(imp->imp_replayable) != !(msg_flags & MSG_CONNECT_REPLAYABLE)) {
                 CERROR("imp_replayable flag does not match server "
                        "after reconnect. We should LBUG right here.\n");
         }
@@ -558,7 +554,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                        imp->imp_obd->obd_name, 
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
-        } 
+        }
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
                 wake_up(&imp->imp_recovery_waitq);

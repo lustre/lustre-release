@@ -104,7 +104,8 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         INIT_LIST_HEAD(&cli->cl_loi_write_list);
         INIT_LIST_HEAD(&cli->cl_loi_read_list);
         spin_lock_init(&cli->cl_loi_list_lock);
-        cli->cl_brw_in_flight = 0;
+        cli->cl_r_in_flight = 0;
+        cli->cl_w_in_flight = 0;
         spin_lock_init(&cli->cl_read_rpc_hist.oh_lock);
         spin_lock_init(&cli->cl_write_rpc_hist.oh_lock);
         spin_lock_init(&cli->cl_read_page_hist.oh_lock);
@@ -578,6 +579,14 @@ void target_destroy_export(struct obd_export *exp)
  * Recovery functions
  */
 
+
+static void target_release_saved_req(struct ptlrpc_request *req) 
+{
+        class_export_put(req->rq_export);
+        OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
+        OBD_FREE(req, sizeof *req);
+}
+
 static void target_finish_recovery(struct obd_device *obd)
 {
         struct list_head *tmp, *n;
@@ -601,13 +610,12 @@ static void target_finish_recovery(struct obd_device *obd)
         list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
                 struct ptlrpc_request *req;
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                list_del(&req->rq_list);
                 DEBUG_REQ(D_ERROR, req, "delayed:");
                 ptlrpc_reply(req);
-                class_export_put(req->rq_export);
-                list_del(&req->rq_list);
-                OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
-                OBD_FREE(req, sizeof *req);
+                target_release_saved_req(req);
         }
+        obd->obd_recovery_end = LTIME_S(CURRENT_TIME);
         return;
 }
 
@@ -619,6 +627,7 @@ static void abort_recovery_queue(struct obd_device *obd)
 
         list_for_each_safe(tmp, n, &obd->obd_recovery_queue) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                list_del(&req->rq_list);
                 DEBUG_REQ(D_ERROR, req, "aborted:");
                 req->rq_status = -ENOTCONN;
                 req->rq_type = PTL_RPC_MSG_ERR;
@@ -629,10 +638,48 @@ static void abort_recovery_queue(struct obd_device *obd)
                         DEBUG_REQ(D_ERROR, req,
                                   "packing failed for abort-reply; skipping");
                 }
+                target_release_saved_req(req);
+        }
+}
+
+/* Called from a cleanup function if the device is being cleaned up 
+   forcefully.  The exports should all have been disconnected already, 
+   the only thing left to do is 
+     - clear the recovery flags
+     - cancel the timer
+     - free queued requests and replies, but don't send replies
+   Because the obd_stopping flag is set, no new requests should be received.
+     
+*/
+void target_cleanup_recovery(struct obd_device *obd)
+{
+        struct list_head *tmp, *n;
+        struct ptlrpc_request *req;
+
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        if (!obd->obd_recovering) {
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+                EXIT;
+                return;
+        }
+        obd->obd_recovering = obd->obd_abort_recovery = 0;
+        target_cancel_recovery_timer(obd);
+        spin_unlock_bh(&obd->obd_processing_task_lock);
+
+
+        list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
+                req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 list_del(&req->rq_list);
-                class_export_put(req->rq_export);
-                OBD_FREE(req->rq_reqmsg, req->rq_reqlen);
-                OBD_FREE(req, sizeof *req);
+                LASSERT (req->rq_reply_state);
+                lustre_free_reply_state(req->rq_reply_state);
+                target_release_saved_req(req);
+        }
+
+        list_for_each_safe(tmp, n, &obd->obd_recovery_queue) {
+                req = list_entry(tmp, struct ptlrpc_request, rq_list);
+                list_del(&req->rq_list);
+                LASSERT (req->rq_reply_state == 0);
+                target_release_saved_req(req);
         }
 }
 

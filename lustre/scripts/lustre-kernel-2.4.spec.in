@@ -358,6 +358,8 @@ BuildKernel()
 	-- --enable-modules \
 	--disable-doc --disable-tests \
 	--disable-utils --disable-liblustre \
+	--sysconfdir=%{_sysconfdir} \
+	--mandir=%{_mandir} \
 	@CONFIGURE_FLAGS@
 }
 
@@ -377,6 +379,8 @@ BuildLustre()
 	-- --enable-utils \
 	--disable-doc --disable-tests \
 	--disable-modules --disable-liblustre \
+	--sysconfdir=%{_sysconfdir} \
+	--mandir=%{_mandir} \
 	@CONFIGURE_FLAGS@
 }
 
@@ -611,6 +615,16 @@ fi
 
 %endif
 
+%post -n lustre-lite-utils
+if [ ! -e /dev/obd ]; then
+   mknod /dev/obd c 10 241
+fi
+if [ ! -e /dev/portals ]; then
+   mknod /dev/portals c 10 240
+fi
+/sbin/chkconfig --add lustre
+/sbin/chkconfig --add lustrefs
+
 # Allow clean removal of modules directory
 %preun 
 /sbin/modprobe loop 2> /dev/null > /dev/null  || :
@@ -690,6 +704,12 @@ if [ -L /usr/src/%{kslnk} ]; then
 fi
 exit 0
 
+%preun -n lustre-lite-utils
+if [ $1 = 0 ]; then
+  /sbin/chkconfig --del lustre
+  /sbin/chkconfig --del lustrefs
+fi
+
 ###
 ### file lists
 ###
@@ -756,62 +776,7 @@ exit 0
 %files source
 %defattr(-,root,root)
 %dir /usr/src/linux-%{KVERREL}
-/usr/src/linux-%{KVERREL}/COPYING*
-/usr/src/linux-%{KVERREL}/CREDITS
-/usr/src/linux-%{KVERREL}/Documentation
-/usr/src/linux-%{KVERREL}/MAINTAINERS
-/usr/src/linux-%{KVERREL}/Makefile
-/usr/src/linux-%{KVERREL}/README
-/usr/src/linux-%{KVERREL}/REPORTING-BUGS
-/usr/src/linux-%{KVERREL}/arch
-%ifarch sparc
-/usr/src/linux-%{KVERREL}/arch/sparc64
-%endif
-/usr/src/linux-%{KVERREL}/drivers
-%if %{rhbuild}
-/usr/src/linux-%{KVERREL}/crypto
-%endif
-/usr/src/linux-%{KVERREL}/fs
-/usr/src/linux-%{KVERREL}/init
-/usr/src/linux-%{KVERREL}/ipc
-/usr/src/linux-%{KVERREL}/kernel
-/usr/src/linux-%{KVERREL}/lib
-/usr/src/linux-%{KVERREL}/mm
-/usr/src/linux-%{KVERREL}/net
-/usr/src/linux-%{KVERREL}/scripts
-%ifarch %{all_x86}
-%{?ibcs_1:/usr/src/linux-%{KVERREL}/abi}
-%endif
-/usr/src/linux-%{KVERREL}/configs
-/usr/src/linux-%{KVERREL}/include
-/usr/src/linux-%{KVERREL}/include/asm
-%ifarch %{all_x86}
-%{?ibcs_1:/usr/src/linux-%{KVERREL}/include/abi}
-%endif
-/usr/src/linux-%{KVERREL}/include/linux
-%if %{rhbuild}
-/usr/src/linux-%{KVERREL}/include/rxrpc
-%endif
-/usr/src/linux-%{KVERREL}/include/net
-/usr/src/linux-%{KVERREL}/include/pcmcia
-/usr/src/linux-%{KVERREL}/include/scsi
-/usr/src/linux-%{KVERREL}/include/video
-%if %{rhbuild}
-/usr/src/linux-%{KVERREL}/tmp_include_depends
-%endif
-%dir /usr/src/linux-%{KVERREL}/include
-%dir /usr/src/linux-%{KVERREL}/arch
-%ifarch alpha sparc
-/usr/src/linux-%{KVERREL}/include/math-emu
-%endif
-%if %{linux26}
-%dir /usr/src/linux-%{KVERREL}/crypto
-%dir /usr/src/linux-%{KVERREL}/kdb
-%dir /usr/src/linux-%{KVERREL}/rpmify
-%dir /usr/src/linux-%{KVERREL}/security
-%else
-/usr/src/linux-%{KVERREL}/Rules.make
-%endif
+/usr/src/linux-%{KVERREL}/*
 %endif
 
 %files doc
@@ -826,10 +791,12 @@ exit 0
 /usr/bin/*
 /usr/lib/lustre/python
 /etc/init.d/lustre
+/etc/init.d/lustrefs
 /usr/include/lustre/*
 /usr/include/portals/*
 /usr/include/linux/*
-/lib/lib*.a
+/usr/lib/lib*.a
+/usr/share/man/man?/*
 
 #%files -n lustre-doc
 #%defattr(-, root, root)

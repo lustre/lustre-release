@@ -30,6 +30,9 @@
 #include <string.h>
 #endif
 
+/* for statfs() */
+#define LL_SUPER_MAGIC 0x0BD00BD0
+
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
@@ -86,12 +89,12 @@ struct obd_uuid {
 
 static inline int obd_uuid_equals(struct obd_uuid *u1, struct obd_uuid *u2)
 {
-        return strcmp(u1->uuid, u2->uuid) == 0;
+        return strcmp((char *)u1->uuid, (char *)u2->uuid) == 0;
 }
 
 static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
 {
-        strncpy(uuid->uuid, tmp, sizeof(*uuid));
+        strncpy((char *)uuid->uuid, tmp, sizeof(*uuid));
         uuid->uuid[sizeof(*uuid) - 1] = '\0';
 }
 

@@ -162,8 +162,6 @@ static int filter_client_add(struct obd_device *obd, struct filter_obd *filter,
                         RETURN(-ENOMEM);
                 }
                 if (test_and_set_bit(cl_idx, bitmap)) {
-                        CERROR("FILTER client %d: found bit is set in bitmap\n",
-                               cl_idx);
                         cl_idx = find_next_zero_bit(bitmap,
                                                     FILTER_LR_MAX_CLIENTS,
                                                     cl_idx);
@@ -479,6 +477,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                 fcd = NULL;
                 exp->exp_replay_needed = 1;
                 obd->obd_recoverable_clients++;
+                obd->obd_max_recoverable_clients++;
                 class_export_put(exp);
 
                 CDEBUG(D_OTHER, "client at idx %d has last_rcvd = "LPU64"\n",
@@ -500,6 +499,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp)
                       le64_to_cpu(fsd->fsd_last_transno));
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
+                obd->obd_recovery_start = LTIME_S(CURRENT_TIME);
         }
 
 out:
@@ -978,8 +978,15 @@ struct dentry *filter_fid2dentry(struct obd_device *obd,
         if (dir_dentry == NULL)
                 filter_parent_unlock(dparent);
         if (IS_ERR(dchild)) {
-                CERROR("child lookup error %ld\n", PTR_ERR(dchild));
+                CERROR("%s: child lookup error %ld\n", obd->obd_name,
+                       PTR_ERR(dchild));
                 RETURN(dchild);
+        }
+
+        if (dchild->d_inode != NULL && is_bad_inode(dchild->d_inode)) {
+                CERROR("%s: got bad inode "LPU64"\n", obd->obd_name, id);
+                f_dput(dchild);
+                RETURN(ERR_PTR(-ENOENT));
         }
 
         CDEBUG(D_INODE, "got child objid %s: %p, count = %d\n",
@@ -1048,10 +1055,10 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         struct ldlm_resource *res = lock->l_resource;
         ldlm_processing_policy policy;
         struct ost_lvb *res_lvb, *reply_lvb;
+        struct ldlm_reply *rep;
         struct list_head *tmp;
         ldlm_error_t err;
-        int tmpflags = 0, rc, repsize[2] = {sizeof(struct ldlm_reply),
-                                            sizeof(struct ost_lvb) };
+        int tmpflags = 0, rc, repsize[2] = {sizeof(*rep), sizeof(*reply_lvb)};
         ENTRY;
 
         policy = ldlm_get_processing_policy(res);
@@ -1061,6 +1068,9 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         rc = lustre_pack_reply(req, 2, repsize, NULL);
         if (rc)
                 RETURN(req->rq_status = rc);
+
+        rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*rep));
+        LASSERT(rep != NULL);
 
         reply_lvb = lustre_msg_buf(req->rq_repmsg, 1, sizeof(*reply_lvb));
         LASSERT(reply_lvb != NULL);
@@ -1103,7 +1113,7 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         down(&res->lr_lvb_sem);
         res_lvb = res->lr_lvb_data;
         LASSERT(res_lvb != NULL);
-        memcpy(reply_lvb, res_lvb, sizeof(*reply_lvb));
+        *reply_lvb = *res_lvb;
         up(&res->lr_lvb_sem);
 
         list_for_each(tmp, &res->lr_granted) {
@@ -1134,7 +1144,13 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         if (l == NULL)
                 RETURN(ELDLM_LOCK_ABORTED);
 
-        LASSERT(l->l_glimpse_ast != NULL);
+        if (l->l_glimpse_ast == NULL) {
+                /* We are racing with unlink(); just return -ENOENT */
+                rep->lock_policy_res1 = -ENOENT;
+                goto out;
+        }
+
+        LASSERTF(l->l_glimpse_ast != NULL, "l == %p", l);
         rc = l->l_glimpse_ast(l, NULL); /* this will update the LVB */
         if (rc != 0 && res->lr_namespace->ns_lvbo &&
             res->lr_namespace->ns_lvbo->lvbo_update) {
@@ -1142,10 +1158,10 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         }
 
         down(&res->lr_lvb_sem);
-        reply_lvb->lvb_size = res_lvb->lvb_size;
-        reply_lvb->lvb_blocks = res_lvb->lvb_blocks;
+        *reply_lvb = *res_lvb;
         up(&res->lr_lvb_sem);
 
+ out:
         LDLM_LOCK_PUT(l);
 
         RETURN(ELDLM_LOCK_ABORTED);
@@ -1158,6 +1174,7 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         struct lustre_cfg* lcfg = buf;
         struct filter_obd *filter = &obd->u.filter;
         struct vfsmount *mnt;
+        char ns_name[48];
         int rc = 0;
         ENTRY;
 
@@ -1221,8 +1238,8 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         spin_lock_init(&filter->fo_w_discont_blocks.oh_lock);
         filter->fo_readcache_max_filesize = FILTER_MAX_CACHE_SIZE;
 
-        obd->obd_namespace = ldlm_namespace_new("filter-tgt",
-                                                LDLM_NAMESPACE_SERVER);
+        sprintf(ns_name, "filter-%s", obd->obd_uuid.uuid);
+        obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (obd->obd_namespace == NULL)
                 GOTO(err_post, rc = -ENOMEM);
         obd->obd_namespace->ns_lvbp = obd;
@@ -1317,6 +1334,7 @@ static int filter_cleanup(struct obd_device *obd, int flags)
                         RETURN(-EBUSY);
                 }
         }
+        target_cleanup_recovery(obd);
 
         ldlm_namespace_free(obd->obd_namespace, flags & OBD_OPT_FORCE);
 
@@ -1579,7 +1597,7 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd,
         }
 
         if (dchild->d_inode == NULL) {
-                CERROR("%s: %s on non-existent object: "LPU64"\n", 
+                CERROR("%s: %s on non-existent object: "LPU64"\n",
                        obd->obd_name, what, oa->o_id);
                 f_dput(dchild);
                 RETURN(ERR_PTR(-ENOENT));
@@ -2375,7 +2393,7 @@ static struct llog_operations filter_size_orig_logops = {
 };
 
 static int filter_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                            int count, struct llog_catid *logid)
+                            int count, struct llog_catid *catid)
 {
         struct llog_ctxt *ctxt;
         int rc;

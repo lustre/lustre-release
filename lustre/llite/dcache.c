@@ -59,7 +59,6 @@ static int ll_ddelete(struct dentry *de)
                de->d_name.len, de->d_name.name, de, de->d_parent, de->d_inode,
                d_unhashed(de) ? "" : "hashed,",
                list_empty(&de->d_subdirs) ? "" : "subdirs");
-        //RETURN(de->d_flags & DCACHE_LUSTRE_INVALID);
         RETURN(0);
 }
 
@@ -110,7 +109,7 @@ void ll_intent_release(struct lookup_intent *it)
 
 void ll_unhash_aliases(struct inode *inode)
 {
-	struct list_head *tmp, *head;
+        struct list_head *tmp, *head;
         struct ll_sb_info *sbi;
         ENTRY;
 
@@ -125,21 +124,21 @@ void ll_unhash_aliases(struct inode *inode)
         sbi = ll_i2sbi(inode);
         head = &inode->i_dentry;
 restart:
-	spin_lock(&dcache_lock);
-	tmp = head;
-	while ((tmp = tmp->next) != head) {
-		struct dentry *dentry = list_entry(tmp, struct dentry, d_alias);
-		if (atomic_read(&dentry->d_count) == 0) {
+        spin_lock(&dcache_lock);
+        tmp = head;
+        while ((tmp = tmp->next) != head) {
+                struct dentry *dentry = list_entry(tmp, struct dentry, d_alias);
+                if (atomic_read(&dentry->d_count) == 0) {
                         CDEBUG(D_DENTRY, "deleting dentry %*s (%p) parent %p "
                                "inode %p\n", dentry->d_name.len,
                                dentry->d_name.name, dentry, dentry->d_parent,
                                dentry->d_inode);
-			dget_locked(dentry);
-			__d_drop(dentry);
-			spin_unlock(&dcache_lock);
-			dput(dentry);
-			goto restart;
-		} else if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
+                        dget_locked(dentry);
+                        __d_drop(dentry);
+                        spin_unlock(&dcache_lock);
+                        dput(dentry);
+                        goto restart;
+                } else if (!(dentry->d_flags & DCACHE_LUSTRE_INVALID)) {
                         CDEBUG(D_DENTRY, "unhashing dentry %*s (%p) parent %p "
                                "inode %p refc %d\n", dentry->d_name.len,
                                dentry->d_name.name, dentry, dentry->d_parent,
@@ -149,8 +148,8 @@ restart:
                         hlist_add_head(&dentry->d_hash,
                                        &sbi->ll_orphan_dentry_list);
                 }
-	}
-	spin_unlock(&dcache_lock);
+        }
+        spin_unlock(&dcache_lock);
         EXIT;
 }
 
@@ -205,12 +204,10 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 {
         struct lookup_intent *it = *itp;
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        if (it && it->it_magic != INTENT_MAGIC) {
-                CERROR("WARNING: uninitialized intent\n");
-                LBUG();
+        if (it) {
+                LASSERTF(it->it_magic == INTENT_MAGIC, "bad intent magic: %x\n",
+                         it->it_magic);
         }
-        if (it && (it->it_op == IT_GETATTR || it->it_op == 0))
-                it->it_op = IT_LOOKUP;
 #endif
 
         if (!it || it->it_op == IT_GETXATTR)

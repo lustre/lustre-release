@@ -53,9 +53,10 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         if (!sbi)
                 RETURN(NULL);
 
-        spin_lock_init(&sbi->ll_pglist_lock);
+        spin_lock_init(&sbi->ll_lock);
         INIT_LIST_HEAD(&sbi->ll_pglist);
         sbi->ll_pglist_gen = 0;
+        sbi->ll_ra_info.ra_max_pages = SBI_DEFAULT_RA_MAX;
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
         ll_s2sbi(sb) = sbi;

@@ -40,75 +40,6 @@
 
 #include "mds_internal.h"
 
-
-/* If we are unlinking an open file/dir (i.e. creating an orphan) then
- * we instead link the inode into the PENDING directory until it is
- * finally released.  We can't simply call mds_reint_rename() or some
- * part thereof, because we don't have the inode to check for link
- * count/open status until after it is locked.
- *
- * For lock ordering, we always get the PENDING, then pending_child lock
- * last to avoid deadlocks.
- */
-
-int mds_open_unlink_rename(struct mds_update_record *rec,
-                           struct obd_device *obd, struct dentry *dparent,
-                           struct dentry *dchild, void **handle)
-{
-        struct mds_obd *mds = &obd->u.mds;
-        struct inode *pending_dir = mds->mds_pending_dir->d_inode;
-        struct dentry *pending_child;
-        char fidname[LL_FID_NAMELEN];
-        int fidlen = 0, rc;
-        unsigned mode;
-        ENTRY;
-
-        LASSERT(!mds_inode_is_orphan(dchild->d_inode));
-
-        down(&pending_dir->i_sem);
-        fidlen = ll_fid2str(fidname, dchild->d_inode->i_ino,
-                            dchild->d_inode->i_generation);
-
-        CDEBUG(D_HA, "pending destroy of %dx open file %s = %s\n",
-               mds_open_orphan_count(dchild->d_inode), rec->ur_name, fidname);
-
-        pending_child = lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
-        if (IS_ERR(pending_child))
-                GOTO(out_lock, rc = PTR_ERR(pending_child));
-
-        if (pending_child->d_inode != NULL) {
-                CERROR("re-destroying orphan file %s?\n", rec->ur_name);
-                LASSERT(pending_child->d_inode == dchild->d_inode);
-                GOTO(out_dput, rc = 0);
-        }
-
-        /* link() is semanticaly-wrong for S_IFDIR, so we set S_IFREG
-         * for linking and return real mode back then -bzzz */
-        mode = dchild->d_inode->i_mode;
-        dchild->d_inode->i_mode = S_IFREG;
-        rc = vfs_link(dchild, pending_dir, pending_child);
-        if (rc)
-                CERROR("error linking orphan %s to PENDING: rc = %d\n",
-                       rec->ur_name, rc);
-        else
-                mds_inode_set_orphan(dchild->d_inode);
-
-        /* return mode and correct i_nlink if inode is directory */
-        LASSERT(dchild->d_inode->i_nlink == 1);
-        dchild->d_inode->i_mode = mode;
-        if ((mode & S_IFMT) == S_IFDIR) {
-                dchild->d_inode->i_nlink++;
-                pending_dir->i_nlink++;
-        }
-        mark_inode_dirty(dchild->d_inode);
-
-out_dput:
-        dput(pending_child);
-out_lock:
-        up(&pending_dir->i_sem);
-        RETURN(rc);
-}
-
 static int mds_osc_destroy_orphan(struct mds_obd *mds,
                                   struct inode *inode,
                                   struct lov_mds_md *lmm,
@@ -149,7 +80,7 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
         rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti);
         obdo_free(oa);
         if (rc)
-                CERROR("destroy orphan objid 0x"LPX64" on ost error "
+                CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
                        "%d\n", lsm->lsm_object_id, rc);
 out_free_memmd:
         obd_free_memmd(mds->mds_osc_exp, &lsm);
@@ -196,19 +127,6 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 CERROR("error fsfilt_start: %d\n", rc);
                 handle = NULL;
                 GOTO(out_free_lmm, rc);
-        }
-
-        down(&inode->i_sem);
-        rc = fsfilt_get_md(obd, inode, lmm, mds->mds_max_mdsize);
-        up(&inode->i_sem);
-
-        if (rc < 0) {
-                CERROR("Error %d reading eadata for ino %lu\n",
-                       rc, inode->i_ino);
-                GOTO(out_free_lmm, rc);
-        } else if (rc > 0) {
-                lmm_size = rc;
-                rc = 0;
         }
 
         if (S_ISDIR(inode->i_mode))
@@ -309,18 +227,21 @@ int mds_cleanup_orphans(struct obd_device *obd)
                 }
 
                 child_inode = dchild->d_inode;
+                DOWN_READ_I_ALLOC_SEM(child_inode);
                 if (mds_inode_is_orphan(child_inode) &&
-                    mds_open_orphan_count(child_inode)) {
-                        CWARN("orphan %s was re-opened during recovery\n", d_name);
+                    mds_orphan_open_count(child_inode)) {
+                        UP_READ_I_ALLOC_SEM(child_inode);
+                        CWARN("orphan %s re-opened during recovery\n", d_name);
                         GOTO(next, rc = 0);
                 }
+                UP_READ_I_ALLOC_SEM(child_inode);
 
                 rc = mds_unlink_orphan(obd, dchild, child_inode, pending_dir);
                 if (rc == 0) {
                         item ++;
                         CWARN("removed orphan %s from MDS and OST\n", d_name);
                 } else {
-                        CERROR("removed orphan %s from MDS and OST failed,"
+                        CDEBUG(D_INODE, "removed orphan %s from MDS/OST failed,"
                                " rc = %d\n", d_name, rc);
                         rc = 0;
                 }

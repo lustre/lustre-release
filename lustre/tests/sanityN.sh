@@ -3,7 +3,7 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1768 
+# bug number for skipped test: 1768 3192
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   14b"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
@@ -101,8 +101,8 @@ pass() {
 	echo PASS
 }
 
-export MOUNT1=`mount| awk '/ lustre/ { print $3 }'| head -1`
-export MOUNT2=`mount| awk '/ lustre/ { print $3 }'| tail -1`
+export MOUNT1=`mount| awk '/ lustre/ { print $3 }'| head -n 1`
+export MOUNT2=`mount| awk '/ lustre/ { print $3 }'| tail -n 1`
 [ -z "$MOUNT1" ] && error "NAME=$NAME not mounted once"
 [ "$MOUNT1" = "$MOUNT2" ] && error "NAME=$NAME not mounted twice"
 [ `mount| awk '/ lustre/ { print $3 }'| wc -l` -ne 2 ] && \
@@ -176,7 +176,7 @@ test_3() {
 run_test 3 "symlink on one mtpt, readlink on another ==========="
 
 test_4() {
-	./multifstat $DIR1/f4 $DIR2/f4
+	multifstat $DIR1/f4 $DIR2/f4
 }
 run_test 4 "fstat validation on multiple mount points =========="
 
@@ -189,17 +189,17 @@ test_5() {
 run_test 5 "create a file on one mount, truncate it on the other"
 
 test_6() {
-	./openunlink $DIR1/f6 $DIR2/f6 || error
+	openunlink $DIR1/f6 $DIR2/f6 || error
 }
 run_test 6 "remove of open file on other node =================="
 
 test_7() {
-	./opendirunlink $DIR1/d7 $DIR2/d7 || error
+	opendirunlink $DIR1/d7 $DIR2/d7 || error
 }
 run_test 7 "remove of open directory on other node ============="
 
 test_8() {
-	./opendevunlink $DIR1/dev8 $DIR2/dev8 || error
+	opendevunlink $DIR1/dev8 $DIR2/dev8 || error
 }
 run_test 8 "remove of open special file on other node =========="
 
@@ -302,7 +302,7 @@ test_14a() {
 }
 run_test 14a "open(RDWR) of executing file returns -ETXTBSY ===="
 
-test_14b() {
+test_14b() { # bug 3192
         mkdir -p $DIR1/d14
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
         $DIR1/d14/multiop $TMP/test14.junk O_c &
@@ -314,7 +314,7 @@ test_14b() {
 }
 run_test 14b "truncate of executing file returns -ETXTBSY ======"
 
-test_14c() {
+test_14c() { # bug 3430
 	mkdir -p $DIR1/d14
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
 	$DIR1/d14/multiop $TMP/test14.junk O_c &
@@ -334,10 +334,30 @@ test_15() {	# bug 974 - ENOSPC
 run_test 15 "test out-of-space with multiple writers ==========="
 
 test_16() {
-	./fsx -R -W -c 50 -p 100 -N 2500 \
-		$MOUNT1/fsxfile $MOUNT2/fsxfile
+	fsx -R -W -c 50 -p 100 -N 2500 $MOUNT1/fsxfile $MOUNT2/fsxfile
 }
 run_test 16 "2500 iterations of dual-mount fsx ================="
+
+cancel_lru_locks() {
+	for d in /proc/fs/lustre/ldlm/namespaces/$1*; do
+		echo clear > $d/lru_size
+	done
+	grep [0-9] /proc/fs/lustre/ldlm/namespaces/$1*/lock_unused_count /dev/null
+}
+
+test_17() { # bug 3513, 3667
+	[ ! -d /proc/fs/lustre/ost ] && echo "skipping OST-only test" && return
+
+	cp /etc/termcap $DIR1/f17
+	cancel_lru_locks OSC > /dev/null
+	#define OBD_FAIL_ONCE|OBD_FAIL_LDLM_CREATE_RESOURCE    0x30a
+	echo 0x8000030a > /proc/sys/lustre/fail_loc
+	ls -ls $DIR1/f17 | awk '{ print $1,$6 }' > $DIR1/f17-1 & \
+	ls -ls $DIR2/f17 | awk '{ print $1,$6 }' > $DIR2/f17-2
+	wait
+	diff -u $DIR1/f17-1 $DIR2/f17-2 || error "files are different"
+}
+run_test 17 "resource creation/LVB creation race ==============="
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true

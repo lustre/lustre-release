@@ -96,7 +96,8 @@ int main(int argc, char **argv)
                         }
                         break;
                 case 'D':
-                        if (open(fname, O_DIRECTORY) == -1) {
+                        fd = open(fname, O_DIRECTORY);
+                        if (fd == -1) {
                                 perror("open(O_DIRECTORY)");
                                 exit(1);
                         }
@@ -204,12 +205,14 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
-                case 'w':
-                        if (write(fd, "w", 1) == -1) {
+                case 'w': {
+                        int rc;
+                        if ((rc = write(fd, "w", 1)) == -1) {
                                 perror("write");
                                 exit(1);
                         }
                         break;
+                }
                 case 'W':
                         for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
                                 mmap_ptr[i] += junk++;

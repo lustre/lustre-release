@@ -27,19 +27,31 @@ module=lustre
 
 case $parent in
   HEAD) : ;;
-  b_*|b1*) : ;;
+  b_*|b[1-4]*) : ;;
   *) parent="b_$parent" ;;
 esac
 case $child in
   HEAD) : ;;
-  b_*|b1*) : ;;
+  b_*|b[1-4]*) : ;;
   *) child="b_$child"
 esac
 
-if [ "$child" != "HEAD" -a "`cat CVS/Tag`" != "T$child" ]; then
+if [ "$child" != "HEAD" -a "`cat CVS/Tag 2> /dev/null`" != "T$child" ]; then
 	echo "This script must be run within the $child branch"
 	exit 1
 fi
+
+TEST_FILE=${TEST_FILE:-ChangeLog} # does this need to be smarter?
+check_tag() {
+	[ -z "$1" ] && echo "check_tag() missing arg" && exit3
+	[ "$1" = "HEAD" ] && return
+	$CVS log $TEST_FILE 2> /dev/null | grep -q "	$1: " && return
+	echo "$0: tag $1 not found in $TEST_FILE"
+	exit 2
+}
+
+check_tag $parent
+check_tag ${CHILD}_BASE
 
 cat << EOF > .mergeinfo
 parent=$parent
@@ -49,6 +61,8 @@ CHILD=$CHILD
 date=$date
 module=$module
 CONFLICTS=$CONFLICTS
+OPERATION=Merge
+OPERWHERE=from
 EOF
 
 echo PARENT: $PARENT parent: $parent CHILD: $CHILD child: $child date: $date
@@ -59,9 +73,12 @@ echo "done"
 echo -n "tagging $child as '${PARENT}_${CHILD}_UPDATE_CHILD_$date' ...."
 $CVS rtag -r $child ${PARENT}_${CHILD}_UPDATE_CHILD_$date $module
 echo "done"
+
+# Apply all of the changes to your local tree:
 echo "Updating: -j ${CHILD}_BASE -j ${PARENT}_${CHILD}_UPDATE_PARENT_$date ...."
 $CVS update -j ${CHILD}_BASE -j ${PARENT}_${CHILD}_UPDATE_PARENT_$date -dP
 echo "done"
+
 echo -n "Recording conflicts in $CONFLICTS ..."
 if $CVS update | grep '^C' > $CONFLICTS; then
     echo "Conflicts found, fix before committing."
@@ -70,4 +87,6 @@ else
     echo "No conflicts found"
     rm -f $CONFLICTS
 fi
+echo "done"
+
 echo "Build, test, commit and then run merge2.sh (no arguments)"
