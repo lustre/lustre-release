@@ -117,6 +117,18 @@ int l_has_lock(struct lustre_lock *lock)
 
 #ifdef __KERNEL__
 #include <linux/lustre_version.h>
+void l_check_ns_lock(struct ldlm_namespace *ns)
+{
+        static unsigned long next_msg;
+
+        if (!l_has_lock(&ns->ns_lock) && time_after(jiffies, next_msg)) {
+                CERROR("namespace %s lock not held when it should be; tell "
+                       "phil\n", ns->ns_name);
+                portals_debug_dumpstack(NULL);
+                next_msg = jiffies + 60 * HZ;
+        }
+}
+
 void l_check_no_ns_lock(struct ldlm_namespace *ns)
 {
         static unsigned long next_msg;
@@ -130,6 +142,14 @@ void l_check_no_ns_lock(struct ldlm_namespace *ns)
 }
 
 #else
+void l_check_ns_lock(struct ldlm_namespace *ns)
+{
+        if (l_has_lock(&ns->ns_lock)) {
+                CERROR("namespace %s lock not held when it should be; tell "
+                       "phil\n", ns->ns_name);
+        }
+}
+
 void l_check_no_ns_lock(struct ldlm_namespace *ns)
 {
         if (l_has_lock(&ns->ns_lock)) {
