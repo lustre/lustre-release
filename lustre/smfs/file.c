@@ -153,8 +153,9 @@ static ssize_t smfs_write (struct file *filp, const char *buf,
 			       &open_file, &open_dentry);
 	
 	if (cache_inode->i_fop->write)
-		rc = cache_inode->i_fop->write(&open_file, buf, count, ppos);
+		rc = cache_inode->i_fop->write(&open_file, buf, count, &open_file.f_pos);
 	
+	*ppos = open_file.f_pos;
 	duplicate_inode(cache_inode, inode);
 	smfs_update_file(filp, &open_file);
 
@@ -191,6 +192,9 @@ static ssize_t smfs_read (struct file *filp, char *buf,
 {
 	struct	inode *cache_inode;
 	struct  dentry *dentry = filp->f_dentry;
+	struct  inode *inode = dentry->d_inode;
+        struct  file open_file;
+	struct  dentry open_dentry;
 	ssize_t rc;
 	
 	ENTRY;
@@ -199,10 +203,15 @@ static ssize_t smfs_read (struct file *filp, char *buf,
         if (!cache_inode)
                 RETURN(-ENOENT);
 
+	smfs_prepare_cachefile(inode, filp, cache_inode, 
+			       &open_file, &open_dentry);
+	
 	if (cache_inode->i_fop->read)
-		rc = cache_inode->i_fop->read(filp, buf, count, ppos);
+		rc = cache_inode->i_fop->read(&open_file, buf, count, &open_file.f_pos);
     
-	duplicate_inode(cache_inode, dentry->d_inode);
+	*ppos = open_file.f_pos;
+	duplicate_inode(cache_inode, inode);
+	smfs_update_file(filp, &open_file);
 	RETURN(rc);
 }
 

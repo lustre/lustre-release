@@ -79,7 +79,7 @@ static void smfs_clear_inode(struct inode *inode)
 	if (cache_sb->s_op->clear_inode)
 		cache_sb->s_op->clear_inode(cache_inode);
 
-	clear_inode(cache_inode);
+	//clear_inode(cache_inode);
 	duplicate_inode(inode, cache_inode);
 	
 	return;	
@@ -97,6 +97,14 @@ static void smfs_delete_inode(struct inode *inode)
 		return;
 		
 	duplicate_inode(inode, cache_inode); 
+	
+	list_del(&cache_inode->i_hash);
+        INIT_LIST_HEAD(&cache_inode->i_hash);
+        list_del(&cache_inode->i_list);
+        INIT_LIST_HEAD(&cache_inode->i_list);
+    	
+	if (cache_inode->i_data.nrpages)
+        	truncate_inode_pages(&cache_inode->i_data, 0);
 	
 	if (cache_sb->s_op->delete_inode)
 		cache_sb->s_op->delete_inode(cache_inode);
@@ -211,9 +219,10 @@ static void smfs_unlockfs(struct super_block *sb)
 	duplicate_sb(cache_sb, sb);
 	return;
 }
-static void smfs_statfs(struct super_block * sb, struct statfs * buf) 
+static int smfs_statfs(struct super_block * sb, struct statfs * buf) 
 {
 	struct super_block *cache_sb;
+	int	rc = 0;
 
 	ENTRY;
 	cache_sb = S2CSB(sb);
@@ -222,10 +231,11 @@ static void smfs_statfs(struct super_block * sb, struct statfs * buf)
 		return;
 		
 	if (cache_sb->s_op->statfs)
-		cache_sb->s_op->statfs(cache_sb, buf);
+		rc = cache_sb->s_op->statfs(cache_sb, buf);
 
 	duplicate_sb(cache_sb, sb);
-	return;
+	
+	return rc;
 }
 static int smfs_remount(struct super_block * sb, int * flags, char * data)
 {
@@ -246,7 +256,7 @@ static int smfs_remount(struct super_block * sb, int * flags, char * data)
 }
 struct super_operations smfs_super_ops = {
 	read_inode:	smfs_read_inode,
-	clear_inode:	smfs_clear_inode,
+	//clear_inode:	smfs_clear_inode,
 	put_super:	smfs_put_super,
 	delete_inode:	smfs_delete_inode,
         write_inode:	smfs_write_inode,
