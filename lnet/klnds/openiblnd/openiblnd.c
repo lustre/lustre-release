@@ -47,7 +47,7 @@ static ctl_table kibnal_top_ctl_table[] = {
 #endif
 
 void
-print_service(struct ib_common_attrib_service *service, char *tag, int rc)
+print_service(tTS_IB_COMMON_ATTRIB_SERVICE service, char *tag, int rc)
 {
         char name[32];
 
@@ -71,7 +71,7 @@ print_service(struct ib_common_attrib_service *service, char *tag, int rc)
 
 void
 kibnal_service_setunset_done (tTS_IB_CLIENT_QUERY_TID tid, int status,
-                               struct ib_common_attrib_service *service, void *arg)
+                               tTS_IB_COMMON_ATTRIB_SERVICE service, void *arg)
 {
         *(int *)arg = status;
         up (&kibnal_data.kib_nid_signal);
@@ -81,7 +81,7 @@ kibnal_service_setunset_done (tTS_IB_CLIENT_QUERY_TID tid, int status,
 void
 kibnal_check_advert (void)
 {
-        struct ib_common_attrib_service *svc;
+        tTS_IB_COMMON_ATTRIB_SERVICE svc;
         __u64   tid;
         int     rc;
         int     rc2;
@@ -118,7 +118,7 @@ kibnal_check_advert (void)
 int
 kibnal_advertise (void)
 {
-        struct ib_common_attrib_service *svc;
+        tTS_IB_COMMON_ATTRIB_SERVICE svc;
         __u64   tid;
         int     rc;
         int     rc2;
@@ -192,7 +192,7 @@ kibnal_advertise (void)
 void
 kibnal_unadvertise (int expect_success)
 {
-        struct ib_common_attrib_service *svc;
+        tTS_IB_COMMON_ATTRIB_SERVICE svc;
         __u64   tid;
         int     rc;
         int     rc2;
