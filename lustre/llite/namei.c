@@ -154,13 +154,8 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 RETURN(ERR_PTR(-ENAMETOOLONG));
 
         err = ll_lock(dir, dentry, it, &lockh);
-        if (err < 0) {
-                /* FIXME: Mike LBUG() can disappear the moment that 
-                 *   ll_lock has sane interrupt behavior 
-                 */
-                LBUG();
+        if (err < 0)
                 RETURN(ERR_PTR(err));
-        }
         memcpy(it->it_lock_handle, &lockh, sizeof(lockh));
 
         if ((it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) &&
@@ -168,7 +163,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 GOTO(negative, NULL);
 
         if ((it->it_op & (IT_RENAME | IT_GETATTR | IT_UNLINK | IT_RMDIR |
-                          IT_SETATTR | IT_LOOKUP)) && 
+                          IT_SETATTR | IT_LOOKUP)) &&
             it->it_disposition && it->it_status)
                 GOTO(negative, NULL);
 
@@ -190,7 +185,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 offset = 0;
         } else if (it->it_op == IT_RENAME2) {
                 inode = ((struct dentry *)(it->it_data))->d_inode;
-                GOTO(out_req, NULL); 
+                GOTO(out_req, NULL);
         } else {
                 offset = 1;
         }
@@ -210,8 +205,8 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
 
  out_req:
         ptlrpc_free_req(request);
-        if (!inode || IS_ERR(inode)) { 
-                ll_intent_release(dentry); 
+        if (!inode || IS_ERR(inode)) {
+                ll_intent_release(dentry);
                 RETURN(ERR_PTR(-ENOMEM));
         }
         EXIT;
@@ -247,7 +242,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                         mode |= S_ISGID;
         }
 
-        if (!it->it_disposition) {
+        if (!it || !it->it_disposition) {
                 rc = mdc_create(&sbi->ll_mdc_conn, dir, name, namelen, tgt,
                                  tgtlen, mode, current->fsuid,
                                  gid, time, extra, smd, &request);
