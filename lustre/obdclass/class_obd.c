@@ -53,6 +53,8 @@ unsigned long obd_fail_loc = 0;
 unsigned long obd_timeout = 100;
 char obd_recovery_upcall[128] = "/usr/lib/lustre/ha_assist";
 
+int  obdclass_highmem = 0;
+
 extern struct obd_type *class_nm_to_type(char *nm);
 
 /*  opening /dev/obd */
@@ -519,7 +521,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 off = data->ioc_offset;
 
                 for (j = 0, pgp = pga; j < pages; j++, off += PAGE_SIZE, pgp++){
-                        pgp->pg = alloc_pages(GFP_KERNEL, 0);
+                        pgp->pg = alloc_pages(obdclass_highmem ? GFP_HIGHUSER : GFP_KERNEL, 0);
                         if (!pgp->pg) {
                                 CERROR("no memory for brw pages\n");
                                 GOTO(brw_cleanup, err = -ENOMEM);
