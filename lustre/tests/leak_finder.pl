@@ -25,8 +25,8 @@ while ($line = <>) {
 	if ($func eq 'portals_handle_init') {
 	    next;
 	}
-        printf("%8s %6d bytes at %s called %s (%s:%s:%d)\n", $type, $size,
-               $addr, $name, $file, $func, $lno);
+        #printf("%8s %6d bytes at %s called %s (%s:%s:%d)\n", $type, $size,
+        #       $addr, $name, $file, $func, $lno);
     } else {
         next;
     }
