@@ -662,7 +662,6 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
         CDEBUG(D_INODE, "destroying object %Ld\n",oa->o_id);
         obddev = conn->oc_dev;
 
-        push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
         dir_dentry = filter_parent(obddev, oa->o_mode);
         down(&dir_dentry->d_inode->i_sem);
 
@@ -678,7 +677,6 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
         }
         inode->i_mode = 010000;
 
-        CDEBUG(D_INODE, "calling vfs_unlink for object #%ld\n", inode->i_ino);
         push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
         rc = vfs_unlink(dir_dentry->d_inode, object_dentry);
         pop_ctxt(&saved);
