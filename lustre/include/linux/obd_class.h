@@ -62,7 +62,7 @@ extern void proc_lustre_remove_obd_entry(const char* name,
 
 #define OBD_BRW_READ    1
 #define OBD_BRW_WRITE   2
-#define OBD_BRW_RWMASK  OBD_BRW_READ | OBD_BRW_WRITE
+#define OBD_BRW_RWMASK  (OBD_BRW_READ | OBD_BRW_WRITE)
 #define OBD_BRW_CREATE  4
 
 #ifdef __KERNEL__
@@ -292,7 +292,7 @@ static inline int obd_punch(struct obd_conn *conn, struct obdo *tgt,
         RETURN(rc);
 }
 
-static inline int obd_brw(int rw, struct obd_conn *conn, obd_count num_oa,
+static inline int obd_brw(int cmd, struct obd_conn *conn, obd_count num_oa,
                           struct obdo **oa, obd_count *oa_bufs,
                           struct page **buf, obd_size *count, obd_off *offset,
                           obd_flag *flags, void *callback)
@@ -301,7 +301,12 @@ static inline int obd_brw(int rw, struct obd_conn *conn, obd_count num_oa,
         OBD_CHECK_SETUP(conn);
         OBD_CHECK_OP(conn,brw);
 
-        rc = OBP(conn->oc_dev, brw)(rw, conn, num_oa, oa, oa_bufs, buf,
+        if (!(cmd & OBD_BRW_RWMASK)) {
+                CERROR("obd_brw: cmd must be OBD_BRW_READ or OBD_BRW_WRITE\n");
+                LBUG();
+        }
+
+        rc = OBP(conn->oc_dev, brw)(cmd, conn, num_oa, oa, oa_bufs, buf,
                                     count, offset, flags, callback);
         RETURN(rc);
 }

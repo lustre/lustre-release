@@ -113,8 +113,7 @@ int mds_update_unpack(struct ptlrpc_request *, int offset,
                       struct mds_update_record *);
 
 void mds_getattr_pack(struct ptlrpc_request *req, int offset,
-                      struct inode *inode, 
-                      const char *name, int namelen);
+                      struct inode *inode, const char *name, int namelen);
 void mds_setattr_pack(struct ptlrpc_request *, int offset, struct inode *,
                       struct iattr *, const char *name, int namelen);
 void mds_create_pack(struct ptlrpc_request *, int offset, struct inode *,
@@ -153,6 +152,8 @@ int mdc_getstatus(struct obd_conn *conn,
 int mdc_getattr(struct obd_conn *conn,
                 ino_t ino, int type, unsigned long valid, size_t ea_size,
                 struct ptlrpc_request **request);
+int mdc_statfs(struct obd_conn *conn,
+               struct statfs *sfs, struct ptlrpc_request **request);
 int mdc_setattr(struct obd_conn *conn,
                 struct inode *, struct iattr *iattr, struct ptlrpc_request **);
 int mdc_open(struct obd_conn *conn,
