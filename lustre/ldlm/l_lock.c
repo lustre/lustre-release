@@ -121,7 +121,7 @@ void l_check_no_ns_lock(struct ldlm_namespace *ns)
         static unsigned long next_msg;
 
         if (l_has_lock(&ns->ns_lock) && time_after(jiffies, next_msg)) {
-                CERROR("namespace %s lock held during RPCs; tell phil\n",
+                CERROR("namespace %s lock held illegally; tell phil\n",
                        ns->ns_name);
 #if (LUSTRE_KERNEL_VERSION >= 30)
                 CERROR(portals_debug_dumpstack());

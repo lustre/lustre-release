@@ -2,6 +2,11 @@
 # requirement:
 #	add uml1 uml2 uml3 in your /etc/hosts
 
+# FIXME - there is no reason to use all of these different
+#   return codes, espcially when most of them are mapped to something
+#   else anyway.  The combination of test number and return code
+#   figure out what failed.
+
 set -e
 
 SRCDIR=`dirname $0`
@@ -15,8 +20,6 @@ RLUSTRE=${RLUSTRE:-$LUSTRE}
 init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
-
-FORCE=${FORCE:-" --force"}
 
 gen_config() {
 	rm -f $XMLCONFIG
@@ -40,33 +43,33 @@ gen_second_config() {
 
 start_mds() {
 	echo "start mds service on `facet_active_host mds`"
-	start mds --reformat $MDSLCONFARGS > /dev/null || return 94
+	start mds --reformat $MDSLCONFARGS  || return 94
 }
 stop_mds() {
 	echo "stop mds service on `facet_active_host mds`"
-	stop mds $@ > /dev/null || return 97 
+	stop mds $@  || return 97 
 }
 
 start_ost() {
 	echo "start ost service on `facet_active_host ost`"
-	start ost --reformat $OSTLCONFARGS > /dev/null || return 95
+	start ost --reformat $OSTLCONFARGS  || return 95
 }
 
 stop_ost() {
 	echo "stop ost service on `facet_active_host ost`"
-	stop ost $@ > /dev/null || return 98 
+	stop ost $@  || return 98 
 }
 
 mount_client() {
 	local MOUNTPATH=$1
 	echo "mount lustre on ${MOUNTPATH}....."
-	zconf_mount $MOUNTPATH > /dev/null || return 96
+	zconf_mount `hostname`  $MOUNTPATH  || return 96
 }
 
 umount_client() {
 	local MOUNTPATH=$1
 	echo "umount lustre on ${MOUNTPATH}....."
-	zconf_umount $MOUNTPATH > /dev/null || return 97
+	zconf_umount `hostname`  $MOUNTPATH || return 97
 }
 
 manual_umount_client(){
@@ -81,9 +84,15 @@ setup() {
 }
 
 cleanup() {
- 	umount_client $MOUNT || return -200
-	stop_mds  || return -201
-	stop_ost || return -202
+ 	umount_client $MOUNT || return 200
+	stop_mds  || return 201
+	stop_ost || return 202
+	# catch case where these return just fine, but modules are still not unloaded
+	/sbin/lsmod | grep -q portals 
+	if [ 1 -ne $? ]; then
+		echo "modules still loaded..."
+		return 203
+	fi
 }
 
 check_mount() {
@@ -112,18 +121,18 @@ test_0() {
 	start_mds	
 	mount_client $MOUNT  
 	check_mount || return 41
-	cleanup  
+	cleanup || return $?
 }
 run_test 0 "single mount setup"
 
 test_1() {
 	start_ost
 	echo "start ost second time..."
-	start ost --reformat $OSTLCONFARGS > /dev/null 
+	start ost --reformat $OSTLCONFARGS 
 	start_mds	
 	mount_client $MOUNT
 	check_mount || return 42
-	cleanup 
+	cleanup || return $?
 }
 run_test 1 "start up ost twice"
 
@@ -131,11 +140,11 @@ test_2() {
 	start_ost
 	start_mds	
 	echo "start mds second time.."
-	start mds --reformat $MDSLCONFARGS > /dev/null 
+	start mds --reformat $MDSLCONFARGS 
 	
 	mount_client $MOUNT  
 	check_mount || return 43
-	cleanup 
+	cleanup || return $?
 }
 run_test 2 "start up mds twice"
 
@@ -146,53 +155,107 @@ test_3() {
 	check_mount || return 44
 	
  	umount_client $MOUNT 	
-	cleanup  
+	cleanup  || return $?
 }
 run_test 3 "mount client twice"
 
 test_4() {
 	setup
 	touch $DIR/$tfile || return 85
-	stop_ost ${FORCE}
-
-	# cleanup may return an error from the failed 
-	# disconnects; for now I'll consider this successful 
-	# if all the modules have unloaded.
-	if ! cleanup ; then
-	    lsmod | grep -q portals && return 1
-        fi
+	stop_ost --force
+	cleanup 
+	eno=$?
+	# ok for ost to fail shutdown
+	if [ 202 -ne $eno ]; then
+		return $eno;
+	fi
 	return 0
 }
 run_test 4 "force cleanup ost, then cleanup"
 
 test_5() {
 	setup
-	touch $DIR/$tfile || return 86
-	stop_mds ${FORCE} || return 98
+	touch $DIR/$tfile || return 1
+	stop_mds --force || return 2
 
 	# cleanup may return an error from the failed 
 	# disconnects; for now I'll consider this successful 
 	# if all the modules have unloaded.
-	if ! cleanup ; then
-	    lsmod | grep -q portals && return 1
-        fi
+ 	umount $MOUNT &
+	UMOUNT_PID=$!
+	sleep 2
+	echo "killing umount"
+	kill -TERM $UMOUNT_PID
+	echo "waiting for umount to finish"
+	wait $UMOUNT_PID 
+
+	# cleanup client modules
+	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	
+	# stop_mds is a no-op here, and should not fail
+	stop_mds  || return 4
+	stop_ost || return 5
+
+	lsmod | grep -q portals && return 6
 	return 0
 }
 run_test 5 "force cleanup mds, then cleanup"
+
+test_5b() {
+	start_ost
+	start_mds
+	stop_mds
+
+	[ -d $MOUNT ] || mkdir -p $MOUNT
+	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	llmount $mds_HOST://mds_svc/client_facet $MOUNT  && exit 1
+
+	# cleanup client modules
+	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	
+	# stop_mds is a no-op here, and should not fail
+	stop_mds || return 2
+	stop_ost || return 3
+
+	lsmod | grep -q portals && return 3
+	return 0
+
+}
+run_test 5b "mds down, cleanup after failed mount (bug 2712)"
+
+test_5c() {
+	start_ost
+	start_mds
+
+	[ -d $MOUNT ] || mkdir -p $MOUNT
+	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	llmount $mds_HOST://wrong_mds_svc/client_facet $MOUNT  && exit 1
+
+	# cleanup client modules
+	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	
+	stop_mds || return 2
+	stop_ost || return 3
+
+	lsmod | grep -q portals && return 3
+	return 0
+
+}
+run_test 5c "cleanup after failed mount (bug 2712)"
 
 test_6() {
 	setup
 	manual_umount_client
 	mount_client ${MOUNT} || return 87
 	touch $DIR/a || return 86
-	cleanup 
+	cleanup  || return $?
 }
 run_test 6 "manual umount, then mount again"
 
 test_7() {
 	setup
 	manual_umount_client
-	cleanup 
+	cleanup || return $?
 }
 run_test 7 "manual umount, then cleanup"
 
@@ -241,7 +304,7 @@ test_9() {
            return 1
         fi
         check_mount || return 41
-        cleanup
+        cleanup || return $?
 
         # the new PTLDEBUG/SUBSYSTEM used for lconf --ptldebug/subsystem
         PTLDEBUG="inode+trace"
@@ -266,7 +329,7 @@ test_9() {
         fi
         mount_client $MOUNT
         check_mount || return 41
-        cleanup
+        cleanup || return $?
 
         # resume the old configuration
         PTLDEBUG=$OLDPTLDEBUG
@@ -434,5 +497,41 @@ test_13() {
         XMLCONFIG=$OLDXMLCONFIG
 }
 run_test 13 "check new_uuid of lmc operating correctly"
+
+test_14() {
+        rm -f $XMLCONFIG
+
+        # create xml file with --mkfsoptions for ost
+        echo "create xml file with --mkfsoptions for ost"
+        add_mds mds --dev $MDSDEV --size $MDSSIZE
+        add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+            --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+        add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE \
+            --mkfsoptions "-Llabel_conf_15"
+        add_client client mds --lov lov1 --path $MOUNT
+
+        FOUNDSTRING=`awk -F"<" '/<mkfsoptions>/{print $2}' $XMLCONFIG`
+        EXPECTEDSTRING="mkfsoptions>-Llabel_conf_15"
+        if [ $EXPECTEDSTRING != $FOUNDSTRING ]; then
+                echo "Error: expected: $EXPECTEDSTRING; found: $FOUNDSTRING"
+                return 1
+        fi
+        echo "Success:mkfsoptions for ost written to xml file correctly."
+
+        # mount lustre to test lconf mkfsoptions-parsing
+        echo "mount lustre"
+        start_ost
+        start_mds
+        mount_client $MOUNT || return $?
+        if [ -z "`dumpe2fs -h $OSTDEV | grep label_conf_15`" ]; then
+                echo "Error: the mkoptions not applied to mke2fs of ost."
+                return 1
+        fi
+        cleanup
+        echo "lconf mkfsoptions for ost success"
+
+        gen_config
+}
+run_test 14 "test mkfsoptions of ost for lmc and lconf"
 
 equals_msg "Done"

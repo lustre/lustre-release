@@ -48,6 +48,8 @@
 #define FILTER_INCOMPAT_GROUPS 0x00000001
 #define FILTER_INCOMPAT_SUPP   (FILTER_INCOMPAT_GROUPS)
 
+#define FILTER_GRANT_CHUNK (2ULL*1024*1024)
+
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
  * Try to keep this the same as mds_server_data so we might one day merge. */
 struct filter_server_data {
@@ -93,9 +95,6 @@ enum {
 #define FILTER_MAX_CACHE_SIZE OBD_OBJECT_EOF
 
 /* filter.c */
-struct dentry *filter_parent(struct obd_device *, obd_gr group, obd_id objid);
-struct dentry *filter_parent_lock(struct obd_device *, obd_gr, obd_id,
-                                  ldlm_mode_t, struct lustre_handle *);
 void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
                                  obd_gr group, obd_id id);
@@ -111,6 +110,10 @@ int filter_update_server_data(struct obd_device *, struct file *,
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         char *option);
+
+/* filter_lvb.c */
+extern struct ldlm_valblock_ops filter_lvbo;
+
 
 /* filter_io.c */
 int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
@@ -128,15 +131,20 @@ void flip_into_page_cache(struct inode *inode, struct page *new_page);
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           struct obd_ioobj *obj, int niocount,
                           struct niobuf_local *res, struct obd_trans_info *oti);
+obd_size filter_grant_space_left(struct obd_export *exp);
+long filter_grant(struct obd_export *exp, obd_size current_grant,
+                  obd_size want, obd_size fs_space_left);
+void filter_grant_commit(struct obd_export *exp, int niocount,
+                         struct niobuf_local *res);
 
 /* filter_log.c */
 struct ost_filterdata {
         __u32  ofd_epoch;
 };
-int filter_log_sz_change(struct llog_handle *cathandle, 
+int filter_log_sz_change(struct llog_handle *cathandle,
                          struct ll_fid *mds_fid,
                          __u32 io_epoch,
-                         struct llog_cookie *logcookie, 
+                         struct llog_cookie *logcookie,
                          struct inode *inode);
 //int filter_get_catalog(struct obd_device *);
 void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
