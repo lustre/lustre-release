@@ -19,6 +19,10 @@ void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue);
 int ldlm_run_ast_work(struct ldlm_namespace *, struct list_head *rpc_list);
 
+/* ldlm_lockd.c */
+int ldlm_bl_to_thread(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
+                      struct ldlm_lock *lock);
+
 /* ldlm_plain.c */
 int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err);
