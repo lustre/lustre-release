@@ -298,7 +298,7 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
 
         entry = create_proc_entry("dump_page_cache", 0444, sbi->ll_proc_root);
         if (entry == NULL)
-                GOTO(out, -ENOMEM);
+                GOTO(out, err = -ENOMEM);
         entry->proc_fops = &llite_dump_pgcache_fops;
         entry->data = sbi;
 
