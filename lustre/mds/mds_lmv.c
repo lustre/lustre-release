@@ -477,6 +477,8 @@ cleanup:
 
 #define MAX_DIR_SIZE    (64 * 1024)
 
+#define I_NON_SPLITTABLE        256
+
 int mds_splitting_expected(struct obd_device *obd, struct dentry *dentry)
 {
         struct mds_obd *mds = &obd->u.mds;
@@ -495,6 +497,10 @@ int mds_splitting_expected(struct obd_device *obd, struct dentry *dentry)
         if (!S_ISDIR(dentry->d_inode->i_mode))
                 return MDS_NO_SPLITTABLE;
 
+        /* already splittied or slave directory (part of splitted dir) */
+        if (dentry->d_inode->i_flags & I_NON_SPLITTABLE)
+                return MDS_NO_SPLITTABLE;
+
         /* don't split root directory */
         if (dentry->d_inode->i_ino == mds->mds_rootfid.id)
                 return MDS_NO_SPLITTABLE;
@@ -507,6 +513,8 @@ int mds_splitting_expected(struct obd_device *obd, struct dentry *dentry)
         if (mea) {
                 /* already splitted or slave object: shouldn't be splitted */
                 rc = MDS_NO_SPLITTABLE;
+                /* mark to skip subsequent checks */
+                dentry->d_inode->i_flags |= I_NON_SPLITTABLE;
         } else {
                 /* may be splitted */
                 rc = MDS_EXPECT_SPLIT;
