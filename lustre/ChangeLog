@@ -1,4 +1,9 @@
 2002-09-20  Andreas Dilger  <adilger@clusterfs.com>
+	* version v0_5_12
+	* bug fix
+	  - fix typo in patch-2.4.18
+
+2002-09-20  Andreas Dilger  <adilger@clusterfs.com>
 	* version v0_5_11
 	* bug fixes
 	  - clear ptlrpc request each time in handle_incoming_request()
