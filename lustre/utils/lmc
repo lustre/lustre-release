@@ -1015,7 +1015,7 @@ def cmdlinesplit(cmdline):
                 sys.exit(1)
             i = match.end()
             if arg is None: arg = esc_quote.sub(r'\1', match.group(1))
-            else:           arg += esc_quote.sub(r'\1', match.group(1))
+            else:           arg = arg + esc_quote.sub(r'\1', match.group(1))
                                                                                                                                                
         elif c == "'":
             match = single_quote.match(cmdline, i)
@@ -1024,7 +1024,7 @@ def cmdlinesplit(cmdline):
                 sys.exit(1)
             i = match.end()
             if arg is None: arg = match.group(1)
-            else:           arg += match.group(1)
+            else:           arg = arg + match.group(1)
                                                                                                                                                
         elif c == "\\":
             match = escaped.match(cmdline, i)
@@ -1033,20 +1033,20 @@ def cmdlinesplit(cmdline):
                 sys.exit(1)
             i = match.end()
             if arg is None: arg = match.group(1)
-            else:           arg += match.group(1)
+            else:           arg = arg + match.group(1)
                                                                                                                                                
         elif c.isspace():
             if arg != None:
                 arg_list.append(str(arg))
             arg = None
             while i < len(cmdline) and cmdline[i].isspace():
-                i += 1
+                i = i + 1
         else:
             match = outside.match(cmdline, i)
             assert match
             i = match.end()
             if arg is None: arg = match.group()
-            else:           arg += match.group()
+            else:           arg = arg + match.group()
                                                                                                                                                
     if arg != None: arg_list.append(str(arg))
                                                                                                                                                
