@@ -191,7 +191,7 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
 
                 last_rcvd = le64_to_cpu(mcd->mcd_last_rcvd);
 
-                if (last_rcvd && (last_mount - le64_to_cpu(mcd->mcd_mount_count) 
+                if (last_rcvd && (last_mount - le64_to_cpu(mcd->mcd_mount_count)
                                   < MDS_MOUNT_RECOV)) {
                         struct obd_export *export = class_new_export(obddev);
                         if (!export) {

@@ -1034,7 +1034,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         for (i = 0; i < MDS_NUM_THREADS; i++) {
                 char name[32];
-                sprintf(name, "lustre_MDS_%2d", i); 
+                sprintf(name, "lustre_MDS_%02d", i);
                 rc = ptlrpc_start_thread(obddev, mds->mds_service, name);
                 if (rc) {
                         CERROR("cannot start MDS thread #%d: rc %d\n", i, rc);
@@ -1048,8 +1048,6 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_thread, rc);
 
         RETURN(0);
-
-        
 
 err_thread:
         ptlrpc_stop_all_threads(mds->mds_service);

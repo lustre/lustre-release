@@ -454,7 +454,7 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         for (i = 0; i < LDLM_NUM_THREADS; i++) {
                 char name[32];
-                sprintf(name, "lustre_dlm_%2d", i); 
+                sprintf(name, "lustre_dlm_%02d", i);
                 rc = ptlrpc_start_thread(obddev, ldlm->ldlm_service, name);
                 if (rc) {
                         CERROR("cannot start LDLM thread #%d: rc %d\n", i, rc);

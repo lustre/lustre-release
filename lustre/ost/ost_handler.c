@@ -591,7 +591,7 @@ static int ost_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         for (i = 0; i < OST_NUM_THREADS; i++) {
                 char name[32];
-                sprintf(name, "lustre_ost_%2d", i);
+                sprintf(name, "lustre_ost_%02d", i);
                 err = ptlrpc_start_thread(obddev, ost->ost_service, name);
                 if (err) {
                         CERROR("error starting thread #%d: rc %d\n", i, err);
