@@ -72,15 +72,22 @@ int ptlrpc_get_ldlm_hooks(void)
 
 #undef GET_HOOK
 
+#define PUT_HOOK(hook)                                                         \
+if (ptlrpc_##hook) {                                                           \
+        inter_module_put(#hook);                                               \
+        ptlrpc_##hook = NULL;                                                  \
+}
+
 void ptlrpc_put_ldlm_hooks(void)
 {
-        if (ptlrpc_ldlm_cli_cancel_unused)
-                inter_module_put("ldlm_cli_cancel_unused");
-        if (ptlrpc_ldlm_namespace_cleanup)
-                inter_module_put("ldlm_namespace_cleanup");
-        if (ptlrpc_ldlm_replay_locks)
-                inter_module_put("ldlm_replay_locks");
+        ENTRY;
+
+        PUT_HOOK(ldlm_cli_cancel_unused);
+        PUT_HOOK(ldlm_namespace_cleanup);
+        PUT_HOOK(ldlm_replay_locks);
 }
+
+#undef PUT_HOOK
 
 __init int ptlrpc_init(void)
 {
@@ -106,7 +113,6 @@ static void __exit ptlrpc_exit(void)
 
 /* connection.c */
 EXPORT_SYMBOL(ptlrpc_readdress_connection);
-EXPORT_SYMBOL(ptlrpc_uuid2conn);
 EXPORT_SYMBOL(ptlrpc_get_connection);
 EXPORT_SYMBOL(ptlrpc_put_connection);
 EXPORT_SYMBOL(ptlrpc_connection_addref);
