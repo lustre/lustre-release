@@ -56,7 +56,8 @@ static void *fsfilt_reiserfs_start(struct inode *inode, int op,
 }
 
 static void *fsfilt_reiserfs_brw_start(int objcount, struct fsfilt_objinfo *fso,
-                                       int niocount, void *desc_private)
+                                       int niocount, struct niobuf_local *nb,
+                                       void *desc_private)
 {
         return (void *)0xf00f00be;
 }
@@ -145,7 +146,7 @@ static int fsfilt_reiserfs_add_journal_cb(struct obd_device *obd,
                                           __u64 last_rcvd, void *handle,
                                           fsfilt_cb_t cb_func, void *cb_data)
 {
-        static long next = 0;
+        static unsigned long next = 0;
 
         if (time_after(jiffies, next)) {
                 CERROR("no journal callback kernel patch, faking it...\n");
@@ -157,10 +158,15 @@ static int fsfilt_reiserfs_add_journal_cb(struct obd_device *obd,
         return 0;
 }
 
-static int fsfilt_reiserfs_statfs(struct super_block *sb, struct obd_statfs *osfs)
+static int fsfilt_reiserfs_statfs(struct super_block *sb,
+                                  struct obd_statfs *osfs)
 {
-        struct statfs sfs;
-        int rc = vfs_statfs(sb, &sfs);
+        struct kstatfs sfs;
+        int rc;
+
+        memset(&sfs, 0, sizeof(sfs));
+
+        rc = sb->s_op->statfs(sb, &sfs);
 
         statfs_pack(osfs, &sfs);
         return rc;
