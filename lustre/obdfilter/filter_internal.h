@@ -25,7 +25,9 @@
 #endif
 
 #define LAST_RCVD "last_rcvd"
-#define INIT_OBJID 2
+#define FILTER_INIT_OBJID 2
+/* max creates/sec * journal->j_commit_interval */
+#define FILTER_SKIP_OBJID (10000 * 5)
 
 #define FILTER_LR_SERVER_SIZE    512
 
@@ -110,13 +112,14 @@ struct dentry *filter_parent_lock(struct obd_device *, obd_mode mode,
 void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
                                  obd_mode mode, obd_id id);
-struct dentry *__filter_oa2dentry(struct obd_device *obd,struct obdo *oa,
+struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
                                   const char *what);
 #define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__)
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
 __u64 filter_next_id(struct filter_obd *);
-int filter_update_server_data(struct file *, struct filter_server_data *);
+int filter_update_server_data(struct obd_device *, struct file *,
+                              struct filter_server_data *);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
                         char *option);
 
@@ -138,6 +141,8 @@ int filter_log_op_create(struct llog_handle *cathandle, struct ll_fid *mds_fid,
                          obd_id oid, obd_count ogen, struct llog_cookie *);
 int filter_log_op_orphan(struct llog_handle *cathandle, obd_id oid,
                          obd_count ogen, struct llog_cookie *);
+struct llog_handle *filter_get_catalog(struct obd_device *);
+void filter_put_catalog(struct llog_handle *cathandle);
 
 /* filter_san.c */
 int filter_san_setup(struct obd_device *obd, obd_count len, void *buf);
