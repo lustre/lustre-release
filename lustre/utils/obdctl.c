@@ -122,6 +122,18 @@ char * obdo_print(struct obdo *obd)
         return strdup(buf);
 }
 
+int getfd()
+{
+        if (fd == -1)                                           
+                fd = open("/dev/obd", O_RDWR);                     
+        if (fd == -1) {                                            
+                fprintf(stderr, "error: opening /dev/obd: %s\n",
+                        strerror(errno));         
+                return -1;
+        }
+        return 0;
+}
+
 static char *cmdname(char *func)
 {
         static char buf[512];
@@ -432,6 +444,32 @@ static int jt_cleanup(int argc, char **argv)
         return rc;
 }
 
+static int jt_newdev(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        int rc;
+
+        if (getfd())
+                return -1;
+
+        IOCINIT(data);
+
+        if (argc != 1) {
+                fprintf(stderr, "usage: %s\n", cmdname(argv[0]));
+                return -1;
+        }
+
+        rc = ioctl(fd, OBD_IOC_NEWDEV , &data);
+        if (rc < 0)
+                fprintf(stderr, "error: %s: %s\n", cmdname(argv[0]),
+                        strerror(rc=errno));
+        else { 
+                printf("Current device set to %d\n", data.ioc_dev); 
+        }
+
+        return rc;
+}
+
 static int jt_attach(int argc, char **argv)
 {
         struct obd_ioctl_data data;
@@ -481,13 +519,8 @@ static int jt_name2dev(int argc, char **argv)
         struct obd_ioctl_data data;
         int rc;
 
-        if (fd == -1)
-                fd = open("/dev/obd", O_RDWR);
-        if (fd == -1) {
-                fprintf(stderr, "error: %s: opening /dev/obd: %s\n",
-                        cmdname(argv[0]), strerror(errno));
-                return errno;
-        }
+        if (getfd())
+                return -1;
 
         IOCINIT(data);
 
@@ -861,6 +894,7 @@ command_t cmdlist[] = {
                 "--threads <threads> <devno> <command [args ...]>"},
 
         /* Device configuration commands */
+        {"newdev", jt_newdev, 0, "set device to a new unused obd (no args)"},
         {"device", jt_device, 0, "set current device (args device_no name)"},
         {"name2dev", jt_name2dev, 0, "set device by name (args name)"},
         {"attach", jt_attach, 0, "name the type of device (args: type data"},

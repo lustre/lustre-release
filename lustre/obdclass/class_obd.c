@@ -158,7 +158,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         memset(buf, 0, sizeof(buf));
 
         if (!obd && cmd != OBD_IOC_DEVICE && cmd != TCGETS
-            && cmd != OBD_IOC_NAME2DEV) {
+            && cmd != OBD_IOC_NAME2DEV && cmd != OBD_IOC_NEWDEV) {
                 CERROR("OBD ioctl: No device\n");
                 RETURN(-EINVAL);
         }
@@ -203,6 +203,29 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 CDEBUG(D_IOCTL, "device name %s, dev %d\n", data->ioc_inlbuf1,
                        dev);
                 filp->private_data = &obd_dev[data->ioc_dev];
+                err = copy_to_user((int *)arg, data, sizeof(*data));
+                RETURN(err);
+        }
+
+        case OBD_IOC_NEWDEV: {
+                int dev = -1;
+                int i;
+
+                filp->private_data = NULL;
+                for (i = 0 ; i < MAX_OBD_DEVICES ; i++) { 
+                        struct obd_device *obd = &obd_dev[i];
+                        if (!obd->obd_type) { 
+                                filp->private_data = obd;
+                                dev = i;
+                                break;
+                        }
+                }
+
+                
+                data->ioc_dev = dev; 
+                if (dev == -1) 
+                        RETURN(-EINVAL); 
+
                 err = copy_to_user((int *)arg, data, sizeof(*data));
                 RETURN(err);
         }

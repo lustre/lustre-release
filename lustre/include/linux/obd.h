@@ -196,6 +196,8 @@ struct obd_ops {
         int (*o_cleanup)(struct obd_device *dev);
         int (*o_connect)(struct obd_conn *conn);
         int (*o_disconnect)(struct obd_conn *conn);
+
+
         int (*o_statfs)(struct obd_conn *conn, struct statfs *statfs);
         int (*o_preallocate)(struct obd_conn *, obd_count *req, obd_id *ids);
         int (*o_create)(struct obd_conn *conn,  struct obdo *oa);
