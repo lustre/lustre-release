@@ -91,25 +91,23 @@ static int mgmt_setup(struct obd_device *obd, obd_count len, void *buf)
         mgmt_service = 
                 ptlrpc_init_svc(MGMT_NBUFS, MGMT_BUFSIZE, MGMT_MAXREQSIZE, 
                                 MGMT_REQUEST_PORTAL, MGMT_REPLY_PORTAL, 
-                                mgmt_handler, "mgmt", obd);
+                                mgmt_handler, "mgmt",
+                                obd->obd_proc_entry);
         if (!mgmt_service) {
                 CERROR("Failed to start mgmt service\n");
                 RETURN(-ENOMEM);
         }
 
-        for (i = 0; i < MGMT_NUM_THREADS; i++) {
-                char name[32];
-                sprintf(name, "mgmt_%02d", i);
-                rc = ptlrpc_start_thread(obd, mgmt_service, name);
-                if (rc) {
-                        CERROR("failed to start mgmt thread %d: %d\n", i, rc);
-                        LBUG();
-                }
-        }
-
+        rc = ptlrpc_start_n_threads(obd, mgmt_service, MGMT_NUM_THREADS,"mgmt");
+        if (rc)
+                GOTO(err, rc);
+                
         mgmt_initialized = 1;
         
         RETURN(0);
+err:
+        ptlrpc_unregister_service(mgmt_service);
+        RETURN(rc):
 }
 
 static int mgmt_cleanup(struct obd_device *obd, int flags)
