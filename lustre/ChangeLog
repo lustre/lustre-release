@@ -28,6 +28,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- print out dotted-quad IP addresses in the socknal (2302)
        * miscellania
 	- additional debugging for MDS client eviction problem (2443)
+	- fix mkfsoptions support for osts (2603, 2604)
 
 2004-01-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.3

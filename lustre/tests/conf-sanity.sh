@@ -472,13 +472,13 @@ test_14() {
         add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
             --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
         add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE \
-            --mkfsoptions -V
+            --mkfsoptions "-Llabel_conf_15"
         add_client client mds --lov lov1 --path $MOUNT
 
         FOUNDSTRING=`awk -F"<" '/<mkfsoptions>/{print $2}' $XMLCONFIG`
-        EXPECTEDSTRING="mkfsoptions>-V"
+        EXPECTEDSTRING="mkfsoptions>-Llabel_conf_15"
         if [ $EXPECTEDSTRING != $FOUNDSTRING ]; then
-                echo "Error:expected string: $EXPECTEDSTRING; found: $FOUNDSTRING"
+                echo "Error: expected: $EXPECTEDSTRING; found: $FOUNDSTRING"
                 return 1
         fi
         echo "Success:mkfsoptions for ost written to xml file correctly."
@@ -488,8 +488,12 @@ test_14() {
         start_ost
         start_mds
         mount_client $MOUNT || return $?
+        if [ -z "`dumpe2fs -h $OSTDEV | grep label_conf_15`" ]; then
+                echo "Error: the mkoptions not applied to mke2fs of ost."
+                return 1
+        fi
         cleanup
-        echo "lconf mkfsoptions-parsing for ost success"
+        echo "lconf mkfsoptions for ost success"
 
         gen_config
 }
