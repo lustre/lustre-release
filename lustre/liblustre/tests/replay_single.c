@@ -384,6 +384,8 @@ int main(int argc, char * const argv[])
         sprintf(barrier_cmd, "ssh %s \"%s\"", mds_server, barrier_script);
         sprintf(failover_cmd, "ssh %s \"%s\"", mds_server, failover_script);
 
+        setenv(ENV_LUSTRE_TIMEOUT, "10", 1);
+
         __liblustre_setup_();
 
         t0();
