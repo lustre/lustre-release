@@ -49,11 +49,8 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         int eadatalen = 0, rc;
         struct inode *inode = NULL;
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-        inode = ilookup5(sb, ino, NULL, NULL);
-#else
-        inode = ilookup4(sb, ino, NULL, NULL);
-#endif
+        inode = ILOOKUP(sb, ino, NULL, NULL);
+
         if (inode)
                 return inode;
         if (S_ISREG(mode)) {
@@ -116,11 +113,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
         spin_lock(&dcache_lock);
         for (lp = inode->i_dentry.next; lp != &inode->i_dentry ; lp=lp->next) {
                 result = list_entry(lp,struct dentry, d_alias);
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
                 if (!(result->d_flags & DCACHE_DISCONNECTED)) {
-#else
-                if (!(result->d_flags & DCACHE_NFSD_DISCONNECTED)) {
-#endif
                         dget_locked(result);
                         result->d_vfs_flags |= DCACHE_REFERENCED;
                         spin_unlock(&dcache_lock);
@@ -134,11 +127,8 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
                 iput(inode);
                 return ERR_PTR(-ENOMEM);
         }
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         result->d_flags |= DCACHE_DISCONNECTED;
-#else
-        result->d_flags |= DCACHE_NFSD_DISCONNECTED;
-#endif
+        
         ll_set_dd(result);
         result->d_op = &ll_d_ops;
         return result;
