@@ -19,15 +19,16 @@ EXTNP = htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
 EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c
-EXTNI = extN_fs.h extN_fs_i.h extN_fs_sb.h extN_jbd.h
+EXTNI = extN_fs.h extN_fs_i.h extN_fs_sb.h extN_jbd.h quotaops.h
 EXTN_EXTRA = include/linux/xattr.h include/linux/extN_xattr.h fs/extN/xattr.c
+EXTN_EXTRA += include/linux/quotaops.h
 extN_SOURCES = $(EXTNC) xattr.c # punch.c
 extN_DEPENDENCIES = patch-stamp
 EXTRA_DIST = $(EXTNP) $(EXTN_FIXES) \
 	extN-2.4.18-ino_sb_fixup.diff extN-2.4.18-exports.diff \
 	$(wildcard extN.patch-*)
 DISTCLEANFILES = -r $(extN_SOURCES) sed-stamp patch-stamp *.orig *.rej
-SUB=-e "s/ext3/extN/g" -e "s/EXT3/EXTN/g"
+SUB=-e "s/ext3/extN/g" -e "s/EXT3/EXTN/g" -e "s/extern __inline__/static inline/"
 
 distclean:
 	cd .. && rm -f $(EXTN_EXTRA)
@@ -81,12 +82,12 @@ sed-stamp:
 	rm -rf $(extN_orig) $(extN_include_orig)
 	mkdir $(extN_orig) $(extN_include_orig)
 	list='$(EXTNC)'; for f in $$list; do                                  \
-          echo "creating $(extN-orig)/$$f";				\
+          echo "creating $(extN_orig)/$$f";				\
           sed $(SUB) $(LINUX)/fs/ext3/$$f > $(extN_orig)/$$f; \
         done
 	list='$(EXTNI)'; for i in $$list; do                                  \
           s=`echo $$i | sed "s/extN/ext3/"`;                                  \
-          echo "creating $(extN-include-orig)/$$i"; \
+          echo "creating $(extN_include_orig)/$$i"; \
           sed $(SUB) $(LINUX)/include/linux/$$s > $(extN_include_orig)/$$i; \
         done
 	echo timestamp > $@
