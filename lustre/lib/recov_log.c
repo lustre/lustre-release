@@ -59,6 +59,8 @@ void llog_free_handle(struct llog_handle *loghandle)
 
 /* Create a new log handle and add it to the open list.
  * This log handle will be closed when all of the records in it are removed.
+ *
+ * Assumes caller has already pushed us into the kernel context.
  */
 static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
                                         struct obd_trans_info *oti)
@@ -85,7 +87,6 @@ static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
 
         lch = cathandle->lgh_hdr;
         bitmap_size = sizeof(lch->lch_bitmap) * 8;
-        CERROR("bitmap size = %d\n", bitmap_size);
         /* This should basically always find the first entry free */
         for (i = 0, index = lch->lch_index; i < bitmap_size; i++, index++) {
                 index %= bitmap_size;
@@ -96,9 +97,12 @@ static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
                         break;
                 }
         }
-        if (i == index)
+        if (i == bitmap_size)
                 CERROR("no free catalog slots for log...\n");
 
+        CDEBUG(D_HA, "new recovery log "LPX64":%x catalog index %u\n",
+               loghandle->lgh_cookie.lgc_lgl.lgl_oid,
+               loghandle->lgh_cookie.lgc_lgl.lgl_ogener, index);
         loghandle->lgh_cookie.lgc_index = index;
 
         offset = sizeof(*lch) + index * sizeof(loghandle->lgh_cookie);
@@ -112,16 +116,19 @@ static struct llog_handle *llog_new_log(struct llog_handle *cathandle,
          */
         rc = lustre_fwrite(cathandle->lgh_file, &loghandle->lgh_cookie,
                            sizeof(loghandle->lgh_cookie), &offset);
-        if (rc) {
+        if (rc != sizeof(loghandle->lgh_cookie)) {
                 CERROR("error adding log "LPX64" to catalog: rc %d\n",
                        loghandle->lgh_cookie.lgc_lgl.lgl_oid, rc);
+                rc = rc < 0 ? : -ENOSPC;
         } else {
                 offset = 0;
                 rc = lustre_fwrite(cathandle->lgh_file, lch, sizeof(*lch),
                                    &offset);
-                if (rc)
+                if (rc != sizeof(*lch)) {
                         CERROR("error marking catalog entry %d in use: rc %d\n",
                                index, rc);
+                        rc = rc < 0 ? : -ENOSPC;
+                }
         }
         loghandle->lgh_log_create = cathandle->lgh_log_create;
         loghandle->lgh_log_open = cathandle->lgh_log_open;
@@ -137,6 +144,7 @@ out_handle:
         RETURN(ERR_PTR(rc));
 }
 
+/* Assumes caller has already pushed us into the kernel context. */
 int llog_init_catalog(struct llog_handle *cathandle)
 {
         struct llog_catalog_hdr *lch;
@@ -154,24 +162,35 @@ int llog_init_catalog(struct llog_handle *cathandle)
         cathandle->lgh_hdr = lch;
 
         if (file->f_dentry->d_inode->i_size == 0) {
+write_hdr:
                 lch->lch_magic = LLOG_CATALOG_MAGIC;
                 lch->lch_size = lch->lch_size_end = LLOG_CHUNK_SIZE;
                 rc = lustre_fwrite(file, lch, sizeof(*lch), &offset);
+                if (rc != sizeof(*lch)) {
+                        CERROR("error writing catalog header: rc %d\n", rc);
+                        OBD_FREE(lch, sizeof(*lch));
+                        if (rc >= 0)
+                                rc = -ENOSPC;
+                } else
+                        rc = 0;
         } else {
                 rc = lustre_fread(file, lch, sizeof(*lch), &offset);
+                if (rc != sizeof(*lch)) {
+                        CERROR("error reading catalog header: rc %d\n", rc);
+                        /* Can we do much else if the header is bad? */
+                        goto write_hdr;
+                }
         }
 
-        if (rc != sizeof(*lch)) {
-                CERROR("error getting catalog header: rc %d\n", rc);
-                OBD_FREE(lch, sizeof(*lch));
-                RETURN(rc < 0 ? rc : -EIO);
-        }
-
-        RETURN(0);
+        RETURN(rc);
 }
 
-/* We start a new log object here if needed, either because no log has been
- * started, or because the current log cannot fit the new record.
+/* Return the currently active log handle.  If the current log handle doesn't
+ * have enough space left for the current record, start a new one.
+ *
+ * If reclen is 0, we only want to know what the currently active log is.
+ *
+ * Assumes caller has already pushed us into the kernel context.
  */
 struct llog_handle *llog_current_log(struct llog_handle *cathandle, int reclen,
                                      struct obd_trans_info *oti)
@@ -181,20 +200,20 @@ struct llog_handle *llog_current_log(struct llog_handle *cathandle, int reclen,
 
         if (!list_empty(loglist)) {
                 struct llog_handle *loghandle;
-                struct llog_object_hdr *loh;
 
                 loghandle = list_entry(loglist->prev, struct llog_handle,
                                        lgh_list);
-                loh = loghandle->lgh_hdr;
                 if (LLOG_MAX_LOG_SIZE - loghandle->lgh_file->f_pos >= reclen)
                         RETURN(loghandle);
         }
 
-        RETURN(llog_new_log(cathandle, oti));
+        RETURN(reclen ? llog_new_log(cathandle, oti) : NULL);
 }
 
 /* Add a single record to the recovery log(s).
  * Returns number of bytes in returned logcookies, or negative error code.
+ *
+ * Assumes caller has already pushed us into the kernel context.
  */
 int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
                     struct lov_mds_md *lmm, struct obd_trans_info *oti,
@@ -225,13 +244,15 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
          * big enough to hold reclen, so all we care about is padding here.
          */
         left = file->f_pos & (LLOG_CHUNK_SIZE - 1);
-        if (left != reclen && left < reclen + LLOG_MIN_REC_SIZE &&
+        if (left != 0 && left != reclen && left < reclen + LLOG_MIN_REC_SIZE &&
             file->f_pos + left < LLOG_MAX_LOG_SIZE) {
                 struct llog_null_trans {
                         struct llog_trans_hdr hdr;
                         __u32 padding;
-                        __u32 end_size;
-                } pad;
+                        __u32 end_len;
+                } pad = { .hdr = { .lth_len = sizeof(pad) },
+                          .end_len = sizeof(pad) };
+
                 rc = lustre_fwrite(loghandle->lgh_file, &pad, sizeof(pad),
                                    &loghandle->lgh_file->f_pos);
                 if (rc != sizeof(pad)) {
@@ -269,6 +290,7 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
         RETURN(sizeof(*logcookies));
 }
 
+/* Assumes caller has already pushed us into the kernel context. */
 struct llog_handle *llog_id2handle(struct llog_handle *cathandle,
                                    struct llog_cookie *logcookie)
 {
@@ -313,6 +335,8 @@ struct llog_handle *llog_id2handle(struct llog_handle *cathandle,
  *
  * The cookies may be in different log files, so we need to get new logs
  * each time.
+ *
+ * Assumes caller has already pushed us into the kernel context.
  */
 int llog_cancel_records(struct llog_handle *cathandle, int count,
                         struct llog_cookie *cookies)
@@ -320,6 +344,7 @@ int llog_cancel_records(struct llog_handle *cathandle, int count,
         struct llog_catalog_hdr *lch = cathandle->lgh_hdr;
         int rc = 0;
         int i;
+        ENTRY;
 
         for (i = 0; i < count; i++, cookies++) {
                 struct llog_handle *loghandle;
@@ -334,14 +359,20 @@ int llog_cancel_records(struct llog_handle *cathandle, int count,
                 }
 
                 loh = loghandle->lgh_hdr;
-                if (!ext2_clear_bit(cookies->lgc_index, loh))
+                CDEBUG(D_HA, "cancelling "LPX64" index %u: %u\n",
+                       lgl->lgl_oid, cookies->lgc_index,
+                        ext2_test_bit(cookies->lgc_index, loh->loh_bitmap));
+                if (!ext2_clear_bit(cookies->lgc_index, loh->loh_bitmap)) {
                         CERROR("log index %u in "LPX64":%x already clear?\n",
                                cookies->lgc_index, lgl->lgl_oid,
                                lgl->lgl_ogener);
-                else if (--loh->loh_numrec == 0) {
+                } else if (--loh->loh_numrec == 0 &&
+                           loghandle != llog_current_log(cathandle, 0, NULL)) {
                         int catindex = loghandle->lgh_cookie.lgc_index;
                         loff_t offset = 0;
 
+                        CDEBUG(D_HA, "log "LPX64":%x empty, closing\n",
+                               lgl->lgl_oid, lgl->lgl_ogener);
                         if (ext2_clear_bit(catindex, lch->lch_bitmap)) {
                                 CERROR("catalog index %u already clear?\n",
                                         catindex);
