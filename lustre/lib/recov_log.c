@@ -327,6 +327,9 @@ int llog_add_record(struct llog_handle *cathandle, struct llog_trans_hdr *rec,
                 GOTO(out, rc < 0 ? rc : -EIO);
         }
 
+        CDEBUG(D_HA, "added cookie "LPX64":%x+%u, %u bytes\n",
+               loghandle->lgh_cookie.lgc_lgl.lgl_oid,
+               loghandle->lgh_cookie.lgc_lgl.lgl_ogen, index, rec->lth_len);
         *logcookies = loghandle->lgh_cookie;
         logcookies->lgc_index = index;
 
