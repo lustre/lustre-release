@@ -6,8 +6,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#define T1 "write before unlink\n"
-#define T2 "write after unlink\n"
+#define T1 "write data before unlink\n"
+#define T2 "write data after unlink\n"
 char buf[128];
 
 int main(int argc, char **argv)
@@ -67,6 +67,13 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 	} else {
+		fprintf(stderr, "resetting fd offset\n");
+		rc = lseek(fd, 0, SEEK_SET);
+		if (rc) {
+			fprintf(stderr, "seek %s\n", strerror(errno));
+			exit(1);
+		}
+
 		printf("unlink %s and press enter\n", fname);
 		getc(stdin);
 	}
