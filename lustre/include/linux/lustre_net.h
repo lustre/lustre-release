@@ -231,6 +231,7 @@ void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 /* rpc/client.c */
 void ptlrpc_init_client(struct recovd_obd *, int req_portal, int rep_portal,
                         struct ptlrpc_client *);
+__u8 *ptlrpc_req_to_uuid(struct ptlrpc_request *req);
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid);
 int ptlrpc_queue_wait(struct ptlrpc_request *req);
 struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,

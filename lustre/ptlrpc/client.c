@@ -42,6 +42,11 @@ void ptlrpc_init_client(struct recovd_obd *recovd, int req_portal,
         sema_init(&cl->cli_rpc_sem, 32);
 }
 
+__u8 *ptlrpc_req_to_uuid(struct ptlrpc_request *req)
+{
+        return req->rq_connection->c_remote_uuid;
+}
+
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid)
 {
         struct ptlrpc_connection *c;
