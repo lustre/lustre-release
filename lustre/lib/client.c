@@ -95,7 +95,6 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_import.imp_obd = obddev;
 
         cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
-        cli->cl_max_ost_easize = sizeof(struct lov_stripe_md);
 
         MOD_INC_USE_COUNT;
         RETURN(0);
