@@ -86,8 +86,8 @@ setup() {
 
 cleanup() {
  	umount_client $MOUNT || return 200
-	stop_mds  || return 201
-	stop_ost || return 202
+	stop_mds $FORCE || return 201
+	stop_ost $FORCE || return 202
 	# catch case where these return just fine, but modules are still not unloaded
 	/sbin/lsmod | grep -q portals
 	if [ 1 -ne $? ]; then
