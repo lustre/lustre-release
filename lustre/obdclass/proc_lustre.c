@@ -76,7 +76,7 @@ static int read_lustre_status(char *page, char **start, off_t offset,
 	
 	if (obddev->obd_refcnt==0) { 
 		/* obd is unused */
-		p += sprintf(&page[p], "open but unused\n\0");
+		p += sprintf(&page[p], "open but unused\n");
 	}
 	else {	/* obd in use */
 		p += sprintf(&page[p], "refcnt(%d)", obddev->obd_refcnt);
@@ -121,7 +121,7 @@ static int read_lustre_status(char *page, char **start, off_t offset,
 			}
 		}
 		
-		p += sprintf(&page[p], "\n\0");
+		p += sprintf(&page[p], "\n");
 	}
 
 	/* Compute eof and return value */
