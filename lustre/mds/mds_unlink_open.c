@@ -199,7 +199,12 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                 handle = NULL;
                 GOTO(out_free_msg, rc);
         }
-        rc = vfs_unlink(pending_dir, dchild);
+
+        if (S_ISDIR(inode->i_mode)) {
+                rc = vfs_rmdir(pending_dir, dchild);
+        } else {
+                rc = vfs_unlink(pending_dir, dchild);
+        }
         if (rc) 
                 CERROR("error %d unlinking orphan %*s from PENDING directory\n",
                        rc, dchild->d_name.len, dchild->d_name.name);

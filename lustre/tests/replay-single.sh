@@ -653,8 +653,7 @@ test_34() {
     fail_abort mds
     kill -USR1 $pid
     [ -e $DIR/$tfile ] && return 1
-    sleep 3
-    # wait for commitment of removal
+    sync
     return 0
 }
 run_test 34 "abort recovery before client does replay (test mds_cleanup_orphans)"
@@ -686,6 +685,27 @@ test_36() {
     fi
 }
 run_test 36 "don't resend cancel"
+
+# b=2368
+# directory orphans can't be unlinked from PENDING directory
+test_37() {
+    rmdir $DIR/$tfile 2>/dev/null
+    multiop $DIR/$tfile dD_c &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+    rmdir $DIR/$tfile
+
+    replay_barrier mds
+    # clear the dmesg buffer so we only see errors from this recovery
+    dmesg -c >/dev/null
+    fail_abort mds
+    kill -USR1 $pid
+    dmesg | grep  "mds_unlink_orphan.*error .* unlinking orphan" && return 1
+    sync
+    return 0
+}
+run_test 37 "abort recovery before client does replay (test mds_cleanup_orphans for directories)"
 
 equals_msg test complete, cleaning up
 $CLEANUP

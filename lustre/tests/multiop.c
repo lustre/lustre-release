@@ -1,3 +1,4 @@
+#define _GNU_SOURCE /* pull in O_DIRECTORY in bits/fcntl.h */
 #include <stdio.h>
 #include <fcntl.h>
 #include <string.h>
@@ -17,6 +18,7 @@ char usage[] =
 "Usage: %s filename command-sequence\n"
 "    command-sequence items:\n"
 "        d  mkdir\n"
+"        D  open(O_DIRECTORY)\n"
 "        o  open(O_RDONLY)\n"
 "        O  open(O_CREAT|O_RDWR)\n"
 "        u  unlink\n"
@@ -74,6 +76,12 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
+		case 'D':
+			if (open(fname, O_DIRECTORY) == -1) {
+				perror("open(O_DIRECTORY)");
+				exit(1);
+			}
+			break;
                 case 'm':
                         if (mknod(fname, S_IFREG | 0644, 0) == -1) {
                                 perror("mknod(S_IFREG|0644, 0)");
