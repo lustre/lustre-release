@@ -401,11 +401,10 @@ EXPORT_SYMBOL(mdc_enqueue);
  * Else, if DISP_LOOKUP_EXECD then d.lustre.it_status is the rc of the
  * child lookup.
  */
-int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt, 
-                   struct ll_fid *pfid,
-		   const char *name, int len, struct ll_fid *cfid,
-                   struct lookup_intent *it, int flags,
-                    struct ptlrpc_request **reqp, 
+int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
+                    struct ll_fid *pfid, const char *name, int len,
+                    struct ll_fid *cfid, struct lookup_intent *it, int flags,
+                    struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking)
 {
         struct lustre_handle lockh;
@@ -433,13 +432,13 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
 
                 mode = LCK_PR;
                 rc = ldlm_lock_match(exp->exp_obd->obd_namespace, flags,
-                                     &res_id, LDLM_PLAIN, NULL, 0, LCK_PR, NULL,
+                                     &res_id, LDLM_PLAIN, NULL, 0, LCK_PR,
                                      &lockh);
                 if (!rc) {
                         mode = LCK_PW;
                         rc = ldlm_lock_match(exp->exp_obd->obd_namespace, flags,
                                              &res_id, LDLM_PLAIN, NULL, 0,
-                                             LCK_PW, NULL, &lockh);
+                                             LCK_PW, &lockh);
                 }
                 if (rc) {
                         memcpy(&it->d.lustre.it_lock_handle, &lockh, 
@@ -537,8 +536,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 LDLM_LOCK_PUT(lock);
                 memcpy(&old_lock, &lockh, sizeof(lockh));
                 if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
-                                    LDLM_PLAIN, NULL, 0, LCK_NL, NULL,
-                                    &old_lock)) {
+                                    LDLM_PLAIN, NULL, 0, LCK_NL, &old_lock)) {
                         ldlm_lock_decref_and_cancel(&lockh,
                                                     it->d.lustre.it_lock_mode);
                         memcpy(&lockh, &old_lock, sizeof(old_lock));
