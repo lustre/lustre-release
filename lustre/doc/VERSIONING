@@ -6,6 +6,16 @@ Lustre versioning
 
 This document describes versioning of source and binaries for Lustre.
 
+Packages
+========
+
+Lustre packaged versions will have 3 digit release.  These are the first 3
+digits of the CVS tags below. 
+
+For example, CVS tags 0.1.0.{1,2,3,4,....} will lead to a software release
+                      0.1.1 
+when the code is sufficiently stable.
+
 CVS
 ===
 
