@@ -923,8 +923,8 @@
 -			 */
 -			dir->i_mtime = dir->i_ctime = CURRENT_TIME;
 -			dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
--			ext3_mark_inode_dirty(handle, dir);
 -			dir->i_version = ++event;
+-			ext3_mark_inode_dirty(handle, dir);
 -			BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
 -			ext3_journal_dirty_metadata(handle, bh);
 +			nlen = EXT3_DIR_REC_LEN(de->name_len);
