@@ -87,7 +87,7 @@ int obd_self_statfs(struct obd_device *obd, struct statfs *sfs)
                 statfs_unpack(sfs, &osfs);
 
         if (my_export)
-                class_destroy_export(my_export);
+                class_unlink_export(my_export);
         RETURN(rc);
 }
 
