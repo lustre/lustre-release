@@ -54,12 +54,11 @@ static int ldlm_handle_enqueue(struct obd_device *obddev, struct ptlrpc_service 
                 }
         }
 
-        lock = ldlm_local_lock_create(obddev->obd_namespace,
-                                     &dlm_req->lock_handle2,
-                                     dlm_req->lock_desc.l_resource.lr_name,
-                                     dlm_req->lock_desc.l_resource.lr_type,
-                                     dlm_req->lock_desc.l_req_mode,
-                                     NULL, 0);
+        lock = ldlm_lock_create(obddev->obd_namespace,
+                                &dlm_req->lock_handle2,
+                                dlm_req->lock_desc.l_resource.lr_name,
+                                dlm_req->lock_desc.l_resource.lr_type,
+                                dlm_req->lock_desc.l_req_mode, NULL, 0);
         if (!lock)
                 GOTO(out, -ENOMEM);
 
@@ -69,7 +68,7 @@ static int ldlm_handle_enqueue(struct obd_device *obddev, struct ptlrpc_service 
 
         flags = dlm_req->lock_flags;
         err = ldlm_lock_enqueue(lock, cookie, cookielen, &flags,
-                                      ldlm_cli_callback, ldlm_cli_callback);
+                                ldlm_cli_callback, ldlm_cli_callback);
         if (err != ELDLM_OK)
                 GOTO(out, err);
 
@@ -127,8 +126,7 @@ static int ldlm_handle_convert(struct ptlrpc_service *svc, struct ptlrpc_request
                 req->rq_status = EINVAL;
         } else {         
                 LDLM_DEBUG(lock, "server-side convert handler START");
-                ldlm_lock_convert(&dlm_req->lock_handle1,
-                                  dlm_req->lock_desc.l_req_mode,
+                ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
                                   &dlm_rep->lock_flags);
                 req->rq_status = 0;
         }
@@ -161,7 +159,7 @@ static int ldlm_handle_cancel(struct ptlrpc_service *svc, struct ptlrpc_request 
                 req->rq_status = ESTALE;
         } else { 
                 LDLM_DEBUG(lock, "server-side cancel handler START");
-                ldlm_local_lock_cancel(lock);
+                ldlm_lock_cancel(lock);
                 req->rq_status = 0;
         }
 
@@ -252,7 +250,7 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
         }
 
         LDLM_DEBUG_NOLOCK("client %s callback handler END (lock: %p)",
-                   new == NULL ? "completion" : "blocked", lock);
+                          is_blocking_ast ? "blocked" : "completion", lock);
         RETURN(0);
 }
 
@@ -458,7 +456,7 @@ static void __exit ldlm_exit(void)
                 CERROR("couldn't free ldlm lock slab\n");
 }
 
-EXPORT_SYMBOL(ldlm_local_lock_match);
+EXPORT_SYMBOL(ldlm_lock_match);
 EXPORT_SYMBOL(ldlm_lock_addref);
 EXPORT_SYMBOL(ldlm_lock_decref);
 EXPORT_SYMBOL(ldlm_cli_convert);

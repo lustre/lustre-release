@@ -32,7 +32,7 @@ typedef enum {
 #define LDLM_FL_BLOCK_WAIT     (1 << 3)
 #define LDLM_FL_CBPENDING      (1 << 4)
 #define LDLM_FL_AST_SENT       (1 << 5)
-#define LDLM_FL_DESTROYED    (1 << 6)
+#define LDLM_FL_DESTROYED      (1 << 6)
 
 #define L2B(c) (1 << c)
 
@@ -203,15 +203,16 @@ int ldlm_extent_policy(struct ldlm_lock *, void *, ldlm_mode_t, void *);
 
 /* ldlm_lock.c */
 struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle);
+void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
 void ldlm_lock_put(struct ldlm_lock *lock);
 void ldlm_lock_free(struct ldlm_lock *lock);
 void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc);
 void ldlm_lock_addref(struct ldlm_lock *lock, __u32 mode);
 void ldlm_lock_decref(struct ldlm_lock *lock, __u32 mode);
 void ldlm_grant_lock(struct ldlm_lock *lock);
-int ldlm_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
-               void *cookie, int cookielen, ldlm_mode_t mode,
-               struct lustre_handle *lockh);
+int ldlm_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
+                    void *cookie, int cookielen, ldlm_mode_t mode,
+                    struct lustre_handle *lockh);
 struct ldlm_lock *
 ldlm_lock_create(struct ldlm_namespace *ns,
                  struct lustre_handle *parent_lock_handle,
@@ -262,11 +263,11 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl,
                      void *data,
                      __u32 data_len,
                      struct lustre_handle *lockh);
-int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
+int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
                       void *data, __u32 data_len, struct ptlrpc_request **reqp);
 int ldlm_cli_convert(struct ptlrpc_client *, struct lustre_handle *,
                      int new_mode, int *flags);
-int ldlm_cli_cancel(struct ptlrpc_client *, struct ldlm_lock *);
+int ldlm_cli_cancel(struct ptlrpc_client *, struct lustre_handle *);
 
 #endif /* __KERNEL__ */
 

@@ -34,8 +34,8 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         ENTRY;
 
         *flags = 0;
-        lock = ldlm_local_lock_create(ns, parent_lock_handle, res_id, type,
-                                      mode, data, data_len);
+        lock = ldlm_lock_create(ns, parent_lock_handle, res_id, type, mode,
+                                data, data_len);
         if (lock == NULL)
                 GOTO(out, rc = -ENOMEM);
 
@@ -139,7 +139,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         return rc;
 }
 
-int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
+int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
                       void *data, __u32 data_len, struct ptlrpc_request **reqp)
 {
         struct ldlm_request *body;
@@ -163,8 +163,7 @@ int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
                 ldlm_lock2desc(lock, &body->lock_desc);
         } else {
                 CDEBUG(D_NET, "Sending blocked AST\n");
-                ldlm_lock2desc(new, &body->lock_desc);
-                ldlm_object2handle(new, &body->lock_handle2);
+                memcpy(&body->lock_desc, new, sizeof(*new));
         }
 
         LDLM_DEBUG(lock, "server preparing %s AST",
@@ -224,7 +223,7 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
                 GOTO(out, rc);
 
         reply = lustre_msg_buf(req->rq_repmsg, 0);
-        res = ldlm_local_lock_convert(lockh, new_mode, &reply->lock_flags);
+        res = ldlm_lock_convert(lock, new_mode, &reply->lock_flags);
         if (res != NULL)
                 ldlm_reprocess_all(res);
         if (lock->l_req_mode != lock->l_granted_mode) {
@@ -236,7 +235,7 @@ int ldlm_cli_convert(struct ptlrpc_client *cl, struct lustre_handle *lockh,
                                          lock->l_granted_mode);
                 CDEBUG(D_NET, "waking up, the lock must be granted.\n");
         }
-        ldlm_put_lock(lock);
+        ldlm_lock_put(lock);
         EXIT;
  out:
         ptlrpc_free_req(req);

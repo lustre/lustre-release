@@ -128,11 +128,11 @@ int ldlm_test_extents(struct obd_device *obddev)
 
         /* Convert/cancel blocking locks */
         flags = 0;
-        res = ldlm_convert(lock1, LCK_NL, &flags);
+        res = ldlm_lock_convert(lock1, LCK_NL, &flags);
         if (res != NULL)
                 ldlm_reprocess_all(res);
 
-        res = ldlm_cancel(lock2);
+        ldlm_lock_cancel(lock2);
         if (res != NULL)
                 ldlm_reprocess_all(res);
 

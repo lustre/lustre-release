@@ -201,6 +201,7 @@ static int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
                             struct ptlrpc_request **reqp)
 {
         struct inode *inode = lock->l_data;
+        struct lustre_handle lockh;
         ENTRY;
 
         if (new == NULL) {
@@ -219,7 +220,8 @@ static int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
         invalidate_inode_pages(inode);
         up(&inode->i_sem);
 
-        if (ldlm_cli_cancel(lock->l_client, lock) < 0)
+        ldlm_lock2handle(lock, &lockh);
+        if (ldlm_cli_cancel(lock->l_client, &lockh) < 0)
                 LBUG();
         RETURN(0);
 }
