@@ -98,7 +98,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 struct dentry *mds_name2locked_dentry(struct mds_obd *mds, struct dentry *dir,
                                       struct vfsmount **mnt, char *name,
                                       int namelen, int lock_mode,
-                                      struct lustre_handle *lockh, 
+                                      struct lustre_handle *lockh,
                                       int dir_lock_mode)
 {
         struct dentry *dchild;
@@ -112,10 +112,11 @@ struct dentry *mds_name2locked_dentry(struct mds_obd *mds, struct dentry *dir,
                 CERROR("child lookup error %ld\n", PTR_ERR(dchild));
                 up(&dir->d_inode->i_sem);
                 LBUG();
+                RETURN(dchild);
         }
-        if (dir_lock_mode != LCK_EX && dir_lock_mode != LCK_PW) { 
+        if (dir_lock_mode != LCK_EX && dir_lock_mode != LCK_PW) {
                 up(&dir->d_inode->i_sem);
-                ldlm_lock_decref(lockh, dir_lock_mode); 
+                ldlm_lock_decref(lockh, dir_lock_mode);
         }
 
         if (lock_mode == 0 || !dchild->d_inode)
@@ -130,7 +131,8 @@ struct dentry *mds_name2locked_dentry(struct mds_obd *mds, struct dentry *dir,
                                    0, lockh);
         if (rc != ELDLM_OK) {
                 l_dput(dchild);
-                RETURN(NULL);
+                up(&dir->d_inode->i_sem);
+                RETURN(ERR_PTR(-ENOLCK)); /* XXX translate ldlm code */
         }
 
         RETURN(dchild);
@@ -157,7 +159,7 @@ struct dentry *mds_fid2locked_dentry(struct mds_obd *mds, struct ll_fid *fid,
                                    0, lockh);
         if (rc != ELDLM_OK) {
                 l_dput(de);
-                retval = NULL;
+                retval = ERR_PTR(-ENOLCK); /* XXX translate ldlm code */
         }
 
         RETURN(retval);

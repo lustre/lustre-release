@@ -449,20 +449,21 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
         de = mds_fid2locked_dentry(mds, rec->ur_fid1, NULL, lock_mode,
                                     &lockh);
-        if (!de || IS_ERR(de)) {
+        if (IS_ERR(de)) {
                 LBUG();
-                RETURN(-ESTALE);
+                RETURN(PTR_ERR(de));
         }
-        
+
+
         name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
         namelen = req->rq_reqmsg->buflens[offset + 1] - 1;
-        dchild = mds_name2locked_dentry(mds, de, NULL, name, namelen,
-                                    LCK_EX, &child_lockh, lock_mode);
 
-        if (!dchild || IS_ERR(dchild) 
-            || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK)) {
+        dchild = mds_name2locked_dentry(mds, de, NULL, name, namelen,
+                                        LCK_EX, &child_lockh, lock_mode);
+
+        if (IS_ERR(dchild) || OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK)) {
                 LBUG();
-                GOTO(out_unlink, rc = -ESTALE);
+                GOTO(out_unlink, rc = PTR_ERR(dchild));
         }
 
         dir = de->d_inode;
@@ -472,6 +473,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         if (!inode) {
                 CDEBUG(D_INODE, "child doesn't exist (dir %ld, name %s\n",
                        dir->i_ino, rec->ur_name);
+                /* XXX should be out_unlink_cancel, or do we keep child_lockh?*/
                 GOTO(out_unlink_dchild, rc = -ENOENT);
         } else if (offset) {
                 struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1); 
@@ -520,13 +522,16 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
  out_unlink_cancel:
         ldlm_lock_decref(&child_lockh, LCK_EX);
-        rc = ldlm_cli_cancel(&child_lockh);
-        if (rc < 0)
-                CERROR("failed to cancel child inode lock ino\n"); 
+        err = ldlm_cli_cancel(&child_lockh);
+        if (err < 0) {
+                CERROR("failed to cancel child inode lock: err = %d\n", err);
+                if (!rc)
+                        rc = -ENOLCK; /*XXX translate LDLM lock error */
+        }
 out_unlink_dchild:
         l_dput(dchild);
-out_unlink:
         up(&dir->i_sem);
+out_unlink:
         ldlm_lock_decref(&lockh, lock_mode);
         l_dput(de);
         req->rq_status = rc;
