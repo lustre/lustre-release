@@ -1,0 +1,8 @@
+arch/um/link.ld.in
+arch/um/kernel/process.c
+arch/um/kernel/skas/process.c
+arch/um/kernel/skas/syscall_kern.c
+arch/um/kernel/trap_user.c
+arch/um/kernel/tt/syscall_kern.c
+arch/um/kernel/tt/uaccess_user.c
+arch/um/kernel/uaccess_user.c
