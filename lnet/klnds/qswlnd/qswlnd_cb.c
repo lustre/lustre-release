@@ -290,21 +290,23 @@ void
 kqswnal_put_idle_tx (kqswnal_tx_t *ktx)
 {
         kpr_fwd_desc_t   *fwd = NULL;
-        struct list_head *idle = ktx->ktx_idle;
         unsigned long     flags;
 
-        kqswnal_unmap_tx (ktx);                /* release temporary mappings */
+        kqswnal_unmap_tx (ktx);                 /* release temporary mappings */
         ktx->ktx_state = KTX_IDLE;
 
         spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
 
-        list_add (&ktx->ktx_list, idle);
+        list_del (&ktx->ktx_list);              /* take off active list */
 
-        /* reserved for non-blocking tx */
-        if (idle == &kqswnal_data.kqn_nblk_idletxds) {
+        if (ktx->ktx_isnblk) {
+                /* reserved for non-blocking tx */
+                list_add (&ktx->ktx_list, &kqswnal_data.kqn_nblk_idletxds);
                 spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
                 return;
         }
+
+        list_add (&ktx->ktx_list, &kqswnal_data.kqn_idletxds);
 
         /* anything blocking for a tx descriptor? */
         if (!list_empty(&kqswnal_data.kqn_idletxd_fwdq)) /* forwarded packet? */
@@ -351,7 +353,6 @@ kqswnal_get_idle_tx (kpr_fwd_desc_t *fwd, int may_block)
                 if (!list_empty (&kqswnal_data.kqn_idletxds)) {
                         ktx = list_entry (kqswnal_data.kqn_idletxds.next,
                                           kqswnal_tx_t, ktx_list);
-                        list_del (&ktx->ktx_list);
                         break;
                 }
 
@@ -373,7 +374,6 @@ kqswnal_get_idle_tx (kpr_fwd_desc_t *fwd, int may_block)
 
                         ktx = list_entry (kqswnal_data.kqn_nblk_idletxds.next,
                                           kqswnal_tx_t, ktx_list);
-                        list_del (&ktx->ktx_list);
                         break;
                 }
 
@@ -384,6 +384,12 @@ kqswnal_get_idle_tx (kpr_fwd_desc_t *fwd, int may_block)
                 CDEBUG (D_NET, "blocking for tx desc\n");
                 wait_event (kqswnal_data.kqn_idletxd_waitq,
                             !list_empty (&kqswnal_data.kqn_idletxds));
+        }
+
+        if (ktx != NULL) {
+                list_del (&ktx->ktx_list);
+                list_add (&ktx->ktx_list, &kqswnal_data.kqn_activetxds);
+                ktx->ktx_launcher = current->pid;
         }
 
         spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
@@ -490,7 +496,7 @@ kqswnal_launch (kqswnal_tx_t *ktx)
 
         spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
 
-        list_add_tail (&ktx->ktx_list, &kqswnal_data.kqn_delayedtxds);
+        list_add_tail (&ktx->ktx_delayed_list, &kqswnal_data.kqn_delayedtxds);
         if (waitqueue_active (&kqswnal_data.kqn_sched_waitq))
                 wake_up (&kqswnal_data.kqn_sched_waitq);
 
@@ -648,7 +654,7 @@ kqswnal_dma_reply (kqswnal_tx_t *ktx, int nfrag,
         if (buffer + krx->krx_nob < (char *)(rmd + 1)) {
                 /* msg too small to discover rmd size */
                 CERROR ("Incoming message [%d] too small for RMD (%d needed)\n",
-                        krx->krx_nob, ((char *)(rmd + 1)) - buffer);
+                        krx->krx_nob, (int)(((char *)(rmd + 1)) - buffer));
                 return (-EINVAL);
         }
         
@@ -656,7 +662,7 @@ kqswnal_dma_reply (kqswnal_tx_t *ktx, int nfrag,
                 /* rmd doesn't fit in the incoming message */
                 CERROR ("Incoming message [%d] too small for RMD[%d] (%d needed)\n",
                         krx->krx_nob, rmd->kqrmd_neiov,
-                        ((char *)&rmd->kqrmd_eiov[rmd->kqrmd_neiov]) - buffer);
+                        (int)(((char *)&rmd->kqrmd_eiov[rmd->kqrmd_neiov]) - buffer));
                 return (-EINVAL);
         }
 
@@ -723,11 +729,6 @@ kqswnal_sendmsg (nal_cb_t     *nal,
         int                sumnob;
 #endif
         
-        /* NB, the return code from this procedure is ignored.
-         * If we can't send, we must still complete with lib_finalize().
-         * We'll have to wait for 3.2 to return an error event.
-         */
-
         CDEBUG(D_NET, "sending "LPSZ" bytes in %d frags to nid: "LPX64
                " pid %u\n", payload_nob, payload_niov, nid, pid);
 
@@ -742,8 +743,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
         if (payload_nob > KQSW_MAXPAYLOAD) {
                 CERROR ("request exceeds MTU size "LPSZ" (max %u).\n",
                         payload_nob, KQSW_MAXPAYLOAD);
-                lib_finalize (&kqswnal_lib, private, libmsg);
-                return (-1);
+                return (PTL_FAIL);
         }
 
         targetnid = nid;
@@ -752,14 +752,12 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                 if (rc != 0) {
                         CERROR("Can't route to "LPX64": router error %d\n",
                                nid, rc);
-                        lib_finalize (&kqswnal_lib, private, libmsg);
-                        return (-1);
+                        return (PTL_FAIL);
                 }
                 if (kqswnal_nid2elanid (targetnid) < 0) {
                         CERROR("Bad gateway "LPX64" for "LPX64"\n",
                                targetnid, nid);
-                        lib_finalize (&kqswnal_lib, private, libmsg);
-                        return (-1);
+                        return (PTL_FAIL);
                 }
         }
 
@@ -770,8 +768,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                                           in_interrupt()));
         if (ktx == NULL) {
                 kqswnal_cerror_hdr (hdr);
-                lib_finalize (&kqswnal_lib, private, libmsg);
-                return (-1);
+                return (PTL_NOSPACE);
         }
 
         ktx->ktx_args[0] = private;
@@ -789,12 +786,12 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                 
                 CERROR ("Can't DMA reply to "LPX64": %d\n", nid, rc);
                 kqswnal_put_idle_tx (ktx);
-                lib_finalize (&kqswnal_lib, private, libmsg);
-                return (-1);
+                return (PTL_FAIL);
         }
 #endif
 
         memcpy (ktx->ktx_buffer, hdr, sizeof (*hdr)); /* copy hdr from caller's stack */
+        ktx->ktx_wire_hdr = (ptl_hdr_t *)ktx->ktx_buffer;
 
 #if KQSW_CHECKSUM
         csum = kqsw_csum (0, (char *)hdr, sizeof (*hdr));
@@ -853,8 +850,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
 
                 if (rc < 0) {
                         kqswnal_put_idle_tx (ktx);
-                        lib_finalize (&kqswnal_lib, private, libmsg);
-                        return (-1);
+                        return (PTL_FAIL);
                 }
 
                 rmd->kqrmd_neiov = ktx->ktx_nfrag - 1;
@@ -864,9 +860,8 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                 ktx->ktx_nfrag = 1;
                 ktx->ktx_frags.iov[0].Len += offsetof (kqswnal_remotemd_t,
                                                        kqrmd_eiov[rmd->kqrmd_neiov]);
+                payload_nob = ktx->ktx_frags.iov[0].Len;
                 ktx->ktx_state = KTX_GETTING;
-                payload_nob = rc;
-
         } else 
 #endif
         if (payload_nob > 0) { /* got some payload (something more to do) */
@@ -890,8 +885,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                                                          payload_niov, payload_iov);
                         if (rc != 0) {
                                 kqswnal_put_idle_tx (ktx);
-                                lib_finalize (&kqswnal_lib, private, libmsg);
-                                return (-1);
+                                return (PTL_FAIL);
                         }
                 } 
         }
@@ -904,12 +898,11 @@ kqswnal_sendmsg (nal_cb_t     *nal,
         if (rc != 0) {                    /* failed? */
                 CERROR ("Failed to send packet to "LPX64": %d\n", targetnid, rc);
                 kqswnal_put_idle_tx (ktx);
-                lib_finalize (&kqswnal_lib, private, libmsg);
-                return (-1);
+                return (PTL_FAIL);
         }
 
         CDEBUG(D_NET, "send to "LPSZ" bytes to "LPX64"\n", payload_nob, targetnid);
-        return (0);
+        return (PTL_OK);
 }
 
 static int
@@ -995,6 +988,7 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
                 ktx->ktx_frags.iov[0].Base = ktx->ktx_ebuffer; /* already mapped */
                 ktx->ktx_frags.iov[0].Len = nob;
                 ktx->ktx_nfrag = 1;
+                ktx->ktx_wire_hdr = (ptl_hdr_t *)ktx->ktx_buffer;
         }
         else
         {
@@ -1003,6 +997,8 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
                 rc = kqswnal_map_tx_iov (ktx, nob, niov, iov);
                 if (rc != 0)
                         goto failed;
+
+                ktx->ktx_wire_hdr = (ptl_hdr_t *)iov[0].iov_base;
         }
 
         ktx->ktx_port    = (nob <= (sizeof (ptl_hdr_t) + KQSW_SMALLPAYLOAD)) ?
@@ -1482,7 +1478,7 @@ kqswnal_scheduler (void *arg)
                 {
                         ktx = list_entry(kqswnal_data.kqn_delayedtxds.next,
                                          kqswnal_tx_t, ktx_list);
-                        list_del (&ktx->ktx_list);
+                        list_del_init (&ktx->ktx_delayed_list);
                         spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
                                                flags);
 
