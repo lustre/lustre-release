@@ -63,6 +63,7 @@ setup() {
 
     insmod $SRCDIR/../../obd/class/obdclass.o || exit -1
     insmod $SRCDIR/../../obd/rpc/ptlrpc.o || exit -1
+    insmod $SRCDIR/../../obd/ldlm/ldlm.o || exit -1
     insmod $SRCDIR/../../obd/ext2obd/obdext2.o || exit -1
     insmod $SRCDIR/../../obd/ost/ost.o || exit -1
     insmod $SRCDIR/../../obd/osc/osc.o || exit -1

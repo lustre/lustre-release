@@ -370,6 +370,7 @@ struct ldlm_handle {
 struct ldlm_request {
         __u32 ns_id;
         __u64 res_id[RES_NAME_SIZE];
+        __u32 res_type;
         __u32 flags;
         struct ldlm_handle parent_res_handle;
         struct ldlm_handle parent_lock_handle;

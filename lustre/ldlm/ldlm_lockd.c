@@ -26,7 +26,7 @@ extern kmem_cache_t *ldlm_resource_slab;
 extern kmem_cache_t *ldlm_lock_slab;
 
 static int ldlm_client_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
-                                void *data)
+                                void *data, __u32 data_len)
 {
         LBUG();
         return 0;
@@ -55,14 +55,17 @@ static int ldlm_enqueue(struct ptlrpc_request *req)
 
         msg->xid = req_msg->xid;
 
-        err = ldlm_local_lock_enqueue(req->rq_obd, dlm_req->ns_id,
-                                      &dlm_req->parent_res_handle,
+        err = ldlm_local_lock_enqueue(req->rq_obd,
+                                      dlm_req->ns_id,
                                       &dlm_req->parent_lock_handle,
-                                      dlm_req->res_id, dlm_req->mode,
-                                      &dlm_req->flags, ldlm_client_callback,
+                                      dlm_req->res_id,
+                                      dlm_req->res_type,
+                                      dlm_req->mode,
+                                      &dlm_req->flags,
                                       ldlm_client_callback,
-                                      req_msg->buflens[1],
+                                      ldlm_client_callback,
                                       lustre_msg_buf(1, req_msg),
+                                      req_msg->buflens[1],
                                       &dlm_rep->lock_handle);
         msg->status = HTON__u32(err);
 
@@ -190,6 +193,8 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *data)
                                              LDLM_REQUEST_PORTAL,
                                              LDLM_REPLY_PORTAL,
                                              "self", ldlm_handle);
+        if (!ldlm->ldlm_service)
+                LBUG();
 
         err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
         if (err)
@@ -197,6 +202,45 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *data)
 
         MOD_INC_USE_COUNT;
         RETURN(0);
+}
+
+static int do_free_namespace(struct ldlm_namespace *ns)
+{
+        struct list_head *tmp, *pos;
+        int i, rc;
+
+        for (i = 0; i < RES_HASH_SIZE; i++) {
+                list_for_each_safe(tmp, pos, &(ns->ns_hash[i])) {
+                        struct ldlm_resource *res;
+                        res = list_entry(tmp, struct ldlm_resource, lr_hash);
+                        list_del_init(&res->lr_hash);
+
+                        rc = 0;
+                        while (rc == 0)
+                                rc = ldlm_resource_put(res);
+                }
+        }
+
+        return ldlm_namespace_free(ns);
+}
+
+static int ldlm_free_all(struct obd_device *obddev)
+{
+        struct list_head *tmp, *pos;
+        int rc = 0;
+
+        ldlm_lock(obddev);
+
+        list_for_each_safe(tmp, pos, &obddev->u.ldlm.ldlm_namespaces) { 
+                struct ldlm_namespace *ns;
+                ns = list_entry(tmp, struct ldlm_namespace, ns_link);
+
+                rc |= do_free_namespace(ns);
+        }
+
+        ldlm_unlock(obddev);
+
+        return rc;
 }
 
 static int ldlm_cleanup(struct obd_device *obddev)
@@ -212,8 +256,12 @@ static int ldlm_cleanup(struct obd_device *obddev)
                 CERROR("Request list not empty!\n");
         }
 
-        rpc_unregister_service(ldlm->ldlm_service);
         OBD_FREE(ldlm->ldlm_service, sizeof(*ldlm->ldlm_service));
+
+        if (ldlm_free_all(obddev)) {
+                CERROR("ldlm_free_all could not complete.\n");
+                RETURN(-1);
+        }
 
         MOD_DEC_USE_COUNT;
         RETURN(0);

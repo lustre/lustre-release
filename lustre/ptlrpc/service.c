@@ -41,33 +41,25 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
 
         spin_lock(&svc->srv_lock); 
         if (sigismember(&(current->pending.signal), SIGKILL) ||
-            sigismember(&(current->pending.signal), SIGSTOP) ||
-            sigismember(&(current->pending.signal), SIGCONT) ||
+            sigismember(&(current->pending.signal), SIGTERM) ||
             sigismember(&(current->pending.signal), SIGINT)) { 
                 svc->srv_flags |= SVC_KILLED;
-                EXIT;
-                rc = 1;
-                goto out;
+                GOTO(out, rc = 1);
         }
 
-        if ( svc->srv_flags & SVC_STOPPING ) {
-                EXIT;
-                rc = 1;
-                goto out;
-        }
+        if (svc->srv_flags & SVC_STOPPING)
+                GOTO(out, rc = 1);
 
         if (svc->srv_flags & SVC_EVENT)
                 LBUG();
 
-        if ( svc->srv_eq_h ) { 
+        if (svc->srv_eq_h) { 
                 int err;
                 err = PtlEQGet(svc->srv_eq_h, &svc->srv_ev);
 
                 if (err == PTL_OK) { 
                         svc->srv_flags |= SVC_EVENT;
-                        EXIT;
-                        rc = 1;
-                        goto out;
+                        GOTO(out, rc = 1);
                 }
 
                 if (err != PTL_EQ_EMPTY) {
@@ -75,16 +67,12 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
                         LBUG();
                 }
 
-                EXIT;
-                rc = 0;
-                goto out;
+                GOTO(out, rc = 0);
         }
 
         if (!list_empty(&svc->srv_reqs)) {
                 svc->srv_flags |= SVC_LIST;
-                EXIT;
-                rc = 1;
-                goto out;
+                GOTO(out, rc = 1);
         }
 
         EXIT;
@@ -192,14 +180,14 @@ static int ptlrpc_main(void *arg)
                 
                 spin_lock(&svc->srv_lock);
                 if (svc->srv_flags & SVC_SIGNAL) {
-                        EXIT;
                         spin_unlock(&svc->srv_lock);
+                        EXIT;
                         break;
                 }
 
                 if (svc->srv_flags & SVC_STOPPING) {
-                        EXIT;
                         spin_unlock(&svc->srv_lock);
+                        EXIT;
                         break;
                 }
 
@@ -246,6 +234,7 @@ static int ptlrpc_main(void *arg)
                 }
                 CERROR("unknown break in service"); 
                 spin_unlock(&svc->srv_lock);
+                EXIT;
                 break; 
         }
 
@@ -281,17 +270,14 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
         init_waitqueue_head(&svc->srv_ctl_waitq);
         rc = kernel_thread(ptlrpc_main, (void *) &d, 
                            CLONE_VM | CLONE_FS | CLONE_FILES);
-        if (rc < 0) { 
+        if (rc < 0) {
                 CERROR("cannot start thread\n"); 
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
         wait_event(svc->srv_ctl_waitq, svc->srv_flags & SVC_RUNNING);
 
-        EXIT;
-        return 0;
+        RETURN(0);
 }
-
-
 
 int rpc_unregister_service(struct ptlrpc_service *service)
 {

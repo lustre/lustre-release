@@ -536,7 +536,6 @@ static int mds_cleanup(struct obd_device * obddev)
                 CERROR("Request list not empty!\n");
         }
 
-        rpc_unregister_service(mds->mds_service);
         OBD_FREE(mds->mds_service, sizeof(*mds->mds_service));
 
         sb = mds->mds_sb;

@@ -3,10 +3,13 @@
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
-setup_ldlm
+NETWORK=tcp
+LOCALHOST=localhost
+SERVER=localhost
+PORT=1234
 
-mknod /dev/obd c 10 241
-echo 0xffffffff > /proc/sys/portals/debug
+setup
+setup_portals
 
 $OBDCTL <<EOF
 device 0

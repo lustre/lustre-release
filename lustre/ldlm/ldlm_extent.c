@@ -34,12 +34,12 @@ int ldlm_extent_compat(struct ldlm_resource *child, struct ldlm_resource *new)
 {
         struct ldlm_extent *child_ex, *new_ex;
 
-	child_ex = ldlm_res2extent(child);
-	new_ex = ldlm_res2extent(new);
+        child_ex = ldlm_res2extent(child);
+        new_ex = ldlm_res2extent(new);
 
-	if (MAX(child_ex->start, new_ex->start) >
-	    MIN(child_ex->end, new_ex->end))
-		return 0;
+        if (MAX(child_ex->start, new_ex->start) <=
+            MIN(child_ex->end, new_ex->end))
+                return 0;
 
         return 1;
 }
@@ -53,11 +53,12 @@ int ldlm_extent_compat(struct ldlm_resource *child, struct ldlm_resource *new)
  *
  * To reconstruct our formulas, take a deep breath. */
 int ldlm_extent_policy(struct ldlm_resource *parent,
-		       __u64 *res_id_in, __u64 *res_id_out,
-		       ldlm_mode_t mode, void *data)
+                       __u64 *res_id_in, __u64 *res_id_out,
+                       ldlm_mode_t mode, void *data)
 {
         struct ldlm_extent *new_ex, *req_ex;
         struct list_head *tmp;
+        int rc = 0;
 
         req_ex = (struct ldlm_extent *)res_id_in;
 
@@ -67,27 +68,32 @@ int ldlm_extent_policy(struct ldlm_resource *parent,
 
         list_for_each(tmp, &parent->lr_children) {
                 struct ldlm_resource *res;
-                struct ldlm_extent *res_ex;
+                struct ldlm_extent *exist_ex;
                 res = list_entry(tmp, struct ldlm_resource, lr_childof);
 
-                res_ex = ldlm_res2extent(res);
+                exist_ex = ldlm_res2extent(res);
 
-                if (res_ex->end < req_ex->start)
-                        new_ex->start = MIN(res_ex->end, new_ex->start);
+                if (exist_ex->end < req_ex->start)
+                        new_ex->start = MIN(exist_ex->end, new_ex->start);
                 else {
-                        if (res_ex->start < req_ex->start)
+                        if (exist_ex->start < req_ex->start &&
+                            !lockmode_compat(res->lr_most_restr, mode))
                                 /* Policy: minimize conflict overlap */
                                 new_ex->start = req_ex->start;
                 }
-                if (res_ex->start > req_ex->end)
-                        new_ex->end = MAX(res_ex->start, new_ex->end);
+                if (exist_ex->start > req_ex->end)
+                        new_ex->end = MAX(exist_ex->start, new_ex->end);
                 else {
-                        if (res_ex->end > req_ex->end)
+                        if (exist_ex->end > req_ex->end &&
+                            !lockmode_compat(res->lr_most_restr, mode))
                                 /* Policy: minimize conflict overlap */
                                 new_ex->end = req_ex->end;
                 }
         }
 
-	return 0;
+        if (new_ex->end != req_ex->end || new_ex->start != req_ex->start)
+                rc = ELDLM_RES_CHANGED;
+
+        return rc;
 }
 

@@ -31,8 +31,6 @@ struct ldlm_namespace *ldlm_namespace_find(struct obd_device *obddev, __u32 id)
         struct list_head *tmp;
         struct ldlm_namespace *res;
 
-        ldlm_lock(obddev);
-
         res = NULL;
         list_for_each(tmp, &obddev->u.ldlm.ldlm_namespaces) { 
                 struct ldlm_namespace *chk;
@@ -43,8 +41,6 @@ struct ldlm_namespace *ldlm_namespace_find(struct obd_device *obddev, __u32 id)
                         break;
                 }
         }
-
-        ldlm_unlock(obddev);
 
         return res;
 }
@@ -62,10 +58,9 @@ static void res_hash_init(struct ldlm_namespace *ns)
         if (!res_hash)
                 LBUG();
 
-        for (bucket = res_hash + RES_HASH_SIZE-1 ; bucket >= res_hash ;
-             bucket--) {
+        for (bucket = res_hash + RES_HASH_SIZE - 1; bucket >= res_hash;
+             bucket--)
                 INIT_LIST_HEAD(bucket);
-        }
 
         ns->ns_hash = res_hash;
 }
@@ -73,8 +68,6 @@ static void res_hash_init(struct ldlm_namespace *ns)
 struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obddev, __u32 id)
 {
         struct ldlm_namespace *ns;
-
-        ldlm_lock(obddev);
 
         if (ldlm_namespace_find(obddev, id))
                 LBUG();
@@ -89,10 +82,21 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obddev, __u32 id)
         list_add(&ns->ns_link, &obddev->u.ldlm.ldlm_namespaces);
 
         res_hash_init(ns); 
-
-        ldlm_unlock(obddev);
+        atomic_set(&ns->ns_refcount, 0);
 
         return ns;
+}
+
+int ldlm_namespace_free(struct ldlm_namespace *ns)
+{
+        if (atomic_read(&ns->ns_refcount))
+                return -EBUSY;
+
+        list_del(&ns->ns_link);
+        OBD_FREE(ns->ns_hash, sizeof(struct list_head) * RES_HASH_SIZE);
+        OBD_FREE(ns, sizeof(*ns));
+
+        return 0;
 }
 
 static __u32 ldlm_hash_fn(struct ldlm_resource *parent, __u64 *name)
@@ -100,9 +104,8 @@ static __u32 ldlm_hash_fn(struct ldlm_resource *parent, __u64 *name)
         __u32 hash = 0;
         int i;
 
-        for (i = 0; i < RES_NAME_SIZE; i++) {
+        for (i = 0; i < RES_NAME_SIZE; i++)
                 hash += name[i];
-        }
 
         hash += (__u32)((unsigned long)parent >> 4);
 
@@ -119,6 +122,7 @@ static struct ldlm_resource *ldlm_resource_new(void)
         memset(res, 0, sizeof(*res));
 
         INIT_LIST_HEAD(&res->lr_children);
+        INIT_LIST_HEAD(&res->lr_childof);
         INIT_LIST_HEAD(&res->lr_granted);
         INIT_LIST_HEAD(&res->lr_converting);
         INIT_LIST_HEAD(&res->lr_waiting);
@@ -133,7 +137,7 @@ static struct ldlm_resource *ldlm_resource_new(void)
 /* ldlm_lock(obddev) must be taken before calling resource_add */
 static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
                                                struct ldlm_resource *parent,
-                                               __u64 *name)
+                                               __u64 *name, __u32 type)
 {
         struct list_head *bucket;
         struct ldlm_resource *res;
@@ -146,7 +150,13 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
 
         memcpy(res->lr_name, name, RES_NAME_SIZE * sizeof(__u32));
         res->lr_namespace = ns;
+        if (type < 0 || type > LDLM_MAX_TYPE) 
+                LBUG();
+
+        res->lr_type = type; 
+        res->lr_most_restr = LCK_NL;
         list_add(&res->lr_hash, bucket);
+        atomic_inc(&ns->ns_refcount);
         if (parent == NULL) {
                 res->lr_parent = res;
                 list_add(&res->lr_rootlink, &ns->ns_root_list);
@@ -160,7 +170,7 @@ static struct ldlm_resource *ldlm_resource_add(struct ldlm_namespace *ns,
 
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
-                                        __u64 *name, int create)
+                                        __u64 *name, __u32 type, int create)
 {
         struct list_head *bucket;
         struct list_head *tmp = bucket;
@@ -171,8 +181,6 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
         if (ns->ns_hash == NULL)
                 RETURN(NULL);
         bucket = ns->ns_hash + ldlm_hash_fn(parent, name);
-
-        ldlm_lock(ns->ns_obddev);
 
         res = NULL;
         list_for_each(tmp, bucket) {
@@ -188,9 +196,7 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
         }
 
         if (res == NULL && create)
-                res = ldlm_resource_add(ns, parent, name);
-
-        ldlm_unlock(ns->ns_obddev);
+                res = ldlm_resource_add(ns, parent, name, type);
 
         RETURN(res);
 }
@@ -198,7 +204,9 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
 int ldlm_resource_put(struct ldlm_resource *res)
 {
         int rc = 0; 
-        ldlm_lock(res->lr_namespace->ns_obddev);
+
+        if (atomic_read(&res->lr_refcount) <= 0)
+                LBUG();
 
         if (atomic_dec_and_test(&res->lr_refcount)) {
                 if (!list_empty(&res->lr_granted))
@@ -210,6 +218,7 @@ int ldlm_resource_put(struct ldlm_resource *res)
                 if (!list_empty(&res->lr_waiting))
                         LBUG();
 
+                atomic_dec(&res->lr_namespace->ns_refcount);
                 list_del(&res->lr_hash);
                 list_del(&res->lr_rootlink);
                 list_del(&res->lr_childof);
@@ -217,8 +226,21 @@ int ldlm_resource_put(struct ldlm_resource *res)
                 kmem_cache_free(ldlm_resource_slab, res);
                 rc = 1;
         }
-        ldlm_unlock(res->lr_namespace->ns_obddev);
+
         return rc; 
+}
+
+void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
+                            struct ldlm_lock *lock)
+{
+        list_add(&lock->l_res_link, head);
+        atomic_inc(&res->lr_refcount);
+}
+
+void ldlm_resource_del_lock(struct ldlm_lock *lock)
+{
+        list_del(&lock->l_res_link);
+        atomic_dec(&lock->l_resource->lr_refcount);
 }
 
 int ldlm_get_resource_handle(struct ldlm_resource *res, struct ldlm_handle *h)

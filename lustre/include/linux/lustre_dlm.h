@@ -78,6 +78,7 @@ struct ldlm_namespace {
         struct list_head      ns_link;      /* in the list of ns's */
         __u32                 ns_id;        /* identifier of ns */
         struct list_head     *ns_hash;      /* hash table for ns */
+        atomic_t              ns_refcount;  /* count of resources in the hash */
         struct list_head      ns_root_list; /* all root resources in ns */
         struct obd_device    *ns_obddev;
 };
@@ -95,7 +96,7 @@ struct ldlm_namespace {
 struct ldlm_lock;
 
 typedef int (*ldlm_lock_callback)(struct ldlm_lock *lock, struct ldlm_lock *new,
-                                  void *data); 
+                                  void *data, __u32 data_len);
 
 struct ldlm_lock {
         struct ldlm_resource *l_resource;
@@ -108,6 +109,8 @@ struct ldlm_lock {
         ldlm_lock_callback    l_completion_ast;
         ldlm_lock_callback    l_blocking_ast;
         struct lustre_peer   *l_peer;
+        void                 *l_data;
+        __u32                 l_data_len;
         //void                 *l_event;
         //XXX cluster_host    l_holder;
         __u32                 l_version[RES_VERSION_SIZE];
@@ -122,6 +125,7 @@ typedef int (*ldlm_res_policy)(struct ldlm_resource *parent, __u64 *res_id_in,
 #define LDLM_EXTENT      0x1
 #define LDLM_MDSINTENT   0x2
 
+#define LDLM_MAX_TYPE    0x2
 extern ldlm_res_compat ldlm_res_compat_table []; 
 extern ldlm_res_policy ldlm_res_policy_table []; 
 
@@ -144,8 +148,6 @@ struct ldlm_resource {
         __u32                  lr_version[RES_VERSION_SIZE];
         __u32                  lr_type; /* PLAIN, EXTENT, or MDSINTENT */
         spinlock_t             lr_lock;
-
-        void (*lr_blocking)(struct ldlm_lock *lock, struct ldlm_lock *new);
 };
 
 struct ldlm_extent {
@@ -160,7 +162,9 @@ static inline struct ldlm_extent *ldlm_res2extent(struct ldlm_resource *res)
 
 static inline void *ldlm_handle2object(struct ldlm_handle *handle)
 {
-        return (void *)(unsigned long)(handle->addr);
+        if (handle) 
+                return (void *)(unsigned long)(handle->addr);
+        return NULL; 
 }
 
 static inline void ldlm_object2handle(void *object, struct ldlm_handle *handle)
@@ -188,29 +192,38 @@ int ldlm_extent_policy(struct ldlm_resource *, __u64 *, __u64 *,
 /* ldlm_lock.c */
 ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev,
                                      __u32 ns_id,
-                                     struct ldlm_handle *parent_res_handle,
                                      struct ldlm_handle *parent_lock_handle,
                                      __u64 *res_id,
+                                     __u32 type,
                                      ldlm_mode_t mode,
                                      int *flags,
                                      ldlm_lock_callback completion,
                                      ldlm_lock_callback blocking,
-                                     __u32 data_len,
                                      void *data,
+                                     __u32 data_len,
                                      struct ldlm_handle *lockh);
+ldlm_error_t ldlm_local_lock_convert(struct obd_device *obddev,
+                                     struct ldlm_handle *lockh,
+                                     int new_mode, int *flags);
+ldlm_error_t ldlm_local_lock_cancel(struct obd_device *obddev,
+                                    struct ldlm_handle *lockh);
 void ldlm_lock_dump(struct ldlm_lock *lock);
 
 /* ldlm_test.c */
 int ldlm_test(struct obd_device *device);
 
 /* resource.c */
-struct ldlm_namespace *ldlm_namespace_find(struct obd_device *obddev, __u32 id);
-struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obddev, __u32 id);
+struct ldlm_namespace *ldlm_namespace_find(struct obd_device *, __u32 id);
+struct ldlm_namespace *ldlm_namespace_new(struct obd_device *, __u32 id);
+int ldlm_namespace_free(struct ldlm_namespace *ns);
 void ldlm_resource_dump(struct ldlm_resource *res);
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
-                                        __u64 *name, int create);
+                                        __u64 *name, __u32 type, int create);
 int ldlm_resource_put(struct ldlm_resource *res);
+void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
+                            struct ldlm_lock *lock);
+void ldlm_resource_del_lock(struct ldlm_lock *lock);
 
 #endif /* __KERNEL__ */
 
