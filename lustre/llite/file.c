@@ -206,7 +206,7 @@ int ll_file_size(struct inode *inode, struct lov_stripe_md *lsm)
 
         oa.o_id = lsm->lsm_object_id;
         oa.o_mode = S_IFREG;
-        oa.o_valid = OBD_MD_FLID|OBD_MD_FLMODE|OBD_MD_FLSIZE|OBD_MD_FLBLOCKS;
+        oa.o_valid = OBD_MD_FLID|OBD_MD_FLSIZE|OBD_MD_FLBLOCKS;
         rc = obd_getattr(&sbi->ll_osc_conn, &oa, lsm);
         if (!rc)
                 obdo_to_inode(inode, &oa, oa.o_valid);

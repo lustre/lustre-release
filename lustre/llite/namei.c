@@ -87,9 +87,13 @@ static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 static int ll_find_inode(struct inode *inode, unsigned long ino, void *opaque)
 {
         struct ll_read_inode2_cookie *lic = opaque;
+        struct mds_body *body = lic->lic_body;
 
         if (inode->i_generation != lic->lic_body->generation)
                 return 0;
+
+        /* Apply the attributes in 'opaque' to this inode */
+        ll_update_inode(inode, body);
 
         return 1;
 }

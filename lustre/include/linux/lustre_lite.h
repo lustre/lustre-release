@@ -2,10 +2,10 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * lustre lite cluster file system
- * 
+ *
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
- * 
+ *
  * Copyright (C) 2002 Cluster File Systems, Inc. <info@clusterfs.com>
  */
 
@@ -62,7 +62,7 @@ struct ll_sb_info {
         struct lustre_handle      ll_mdc_conn;
         struct lustre_handle      ll_osc_conn;
         obd_id                    ll_rootino; /* number of root inode */
-        
+
         int                       ll_flags;
         wait_queue_head_t         ll_commitcbd_waitq;
         wait_queue_head_t         ll_commitcbd_ctl_waitq;
@@ -157,8 +157,11 @@ int ll_file_size(struct inode *inode, struct lov_stripe_md *md);
 
 /* rw.c */
 struct page *ll_getpage(struct inode *inode, unsigned long offset,
-                           int create, int locked);
+                        int create, int locked);
 void ll_truncate(struct inode *inode);
+
+/* super.c */
+void ll_update_inode(struct inode *, struct mds_body *);
 
 /* symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;

@@ -413,16 +413,8 @@ out:
         RETURN(rc);
 }
 
-static void ll_read_inode2(struct inode *inode, void *opaque)
+void ll_update_inode(struct inode *inode, struct mds_body *body)
 {
-        struct ll_read_inode2_cookie *lic = opaque;
-        struct mds_body *body = lic->lic_body;
-        struct ll_inode_info *lli = ll_i2info(inode);
-        ENTRY;
-
-        sema_init(&lli->lli_open_sem, 1);
-
-        /* core attributes first */
         if (body->valid & OBD_MD_FLID)
                 inode->i_ino = body->ino;
         if (body->valid & OBD_MD_FLATIME)
@@ -447,6 +439,19 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                 inode->i_rdev = body->extra;
         if (body->valid & OBD_MD_FLSIZE)
                 inode->i_size = body->size;
+}
+
+static void ll_read_inode2(struct inode *inode, void *opaque)
+{
+        struct ll_read_inode2_cookie *lic = opaque;
+        struct mds_body *body = lic->lic_body;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        ENTRY;
+
+        sema_init(&lli->lli_open_sem, 1);
+
+        /* core attributes first */
+        ll_update_inode(inode, body);
 
         //if (body->valid & OBD_MD_FLEASIZE)
         if (lic && lic->lic_lmm) {
@@ -500,8 +505,6 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
                 init_special_inode(inode, inode->i_mode, inode->i_rdev);
                 EXIT;
         }
-
-        return;
 }
 
 /* exported operations */
