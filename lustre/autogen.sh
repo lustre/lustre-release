@@ -19,26 +19,38 @@ compare_versions() {
 }
 
 error_msg() {
-	cat >&2 <<EOF
-$cmd is $1.  version $required is required to build Lustre.
+	echo "$cmd is $1.  version $required is required to build Lustre."
 
-CFS provides RPMs which can be installed alongside your existing autoconf/make
-RPMs, if you are nervous about upgrading.  See
+	if [ -e /usr/lib/autolustre/bin/$cmd ]; then
+		cat >&2 <<-EOF
+		You apparently already have Lustre-specific autoconf/make RPMs
+		installed on your system at /usr/lib/autolustre/share/$cmd.
+		Please set your PATH to point to those versions:
 
-ftp://ftp.lustre.org/pub/other/autolustre/README.autolustre
+		export PATH="/usr/lib/autolustre/bin:\$PATH"
+		EOF
+	else
+		cat >&2 <<-EOF
+		CFS provides RPMs which can be installed alongside your
+		existing autoconf/make RPMs, if you are nervous about
+		upgrading.  See
 
-You may be able to download a new version from:
-http://ftp.gnu.org/gnu/$cmd/$cmd-$required.tar.gz
-EOF
+		ftp://ftp.lustre.org/pub/other/autolustre/README.autolustre
+
+		You may be able to download newer version from:
+
+		http://ftp.gnu.org/gnu/$cmd/$cmd-$required.tar.gz
+		EOF
+	fi
 	[ "$cmd" = "autoconf" -a "$required" = "2.57" ] && cat >&2 <<EOF
 
-or
+or for RH9 systems you can use:
 
 ftp://fr2.rpmfind.net/linux/redhat/9/en/os/i386/RedHat/RPMS/autoconf-2.57-3.noarch.rpm
 EOF
 	[ "$cmd" = "automake" -a "$required" = "1.7.8" ] && cat >&2 <<EOF
 
-or
+or for RH9 systems you can use:
 
 ftp://fr2.rpmfind.net/linux/fedora/core/1/i386/os/Fedora/RPMS/automake-1.7.8-1.noarch.rpm
 EOF
