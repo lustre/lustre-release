@@ -517,7 +517,6 @@ static int llu_iop_setattr(struct pnode *pno,
 static int llu_mkdir2(struct inode *dir, const char *name, int len, int mode)
 {
         struct ptlrpc_request *request = NULL;
-        time_t curtime = CURRENT_TIME;
         struct llu_sb_info *sbi = llu_i2sbi(dir);
         struct llu_inode_info *lli = llu_i2info(dir);
         struct mdc_op_data op_data;
@@ -535,8 +534,7 @@ static int llu_mkdir2(struct inode *dir, const char *name, int len, int mode)
         mode |= S_IFDIR;
         llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
         err = mdc_create(&sbi->ll_mdc_conn, &op_data, NULL, 0, mode,
-                         current->fsuid, current->fsgid,
-                         curtime, 0, &request);
+                         current->fsuid, current->fsgid, 0, &request);
         ptlrpc_req_finished(request);
         RETURN(err);
 }
@@ -579,7 +577,7 @@ static int llu_symlink2(struct inode *dir, const char *name, int len,
         llu_prepare_mdc_op_data(&op_data, dir, NULL, name, len, 0);
         err = mdc_create(&sbi->ll_mdc_conn, &op_data,
                          tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
-                         current->fsuid, current->fsgid, curtime, 0, &request);
+                         current->fsuid, current->fsgid, 0, &request);
         ptlrpc_req_finished(request);
         RETURN(err);
 }

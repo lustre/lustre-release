@@ -52,13 +52,9 @@ void it_set_disposition(struct lookup_intent *it, int flag)
 }
 EXPORT_SYMBOL(it_set_disposition);
 
-static void mdc_fid2mdc_op_data(struct mdc_op_data *data,
-                            struct ll_uctxt *ctxt,
-                            struct ll_fid *f1,
-                            struct ll_fid *f2,
-                            const char *name,
-                            int namelen,
-                            int mode)
+static void mdc_fid2mdc_op_data(struct mdc_op_data *data, struct ll_uctxt *ctxt,
+                                struct ll_fid *f1, struct ll_fid *f2,
+                                const char *name, int namelen, int mode)
 {
         LASSERT(data);
         LASSERT(ctxt);
@@ -68,11 +64,12 @@ static void mdc_fid2mdc_op_data(struct mdc_op_data *data,
         data->fid1 = *f1;
         if (f2)
                 data->fid2 = *f2;
-        else 
+        else
                 memset(&data->fid2, 0, sizeof(data->fid2));
         data->name = name;
         data->namelen = namelen;
         data->create_mode = mode;
+        data->mod_time = LTIME_S(CURRENT_TIME);
 }
 
 static int it_to_lock_mode(struct lookup_intent *it)
@@ -232,8 +229,7 @@ int mdc_enqueue(struct obd_export *exp,
                 lit->opc = (__u64)it->it_op;
 
                 /* pack the intended request */
-                mdc_open_pack(req, 2, data, it->it_create_mode, 0, 
-                              LTIME_S(CURRENT_TIME),
+                mdc_open_pack(req, 2, data, it->it_create_mode, 0,
                               it->it_flags, lmm, lmmsize);
                 /* get ready for the reply */
                 reply_buffers = 3;

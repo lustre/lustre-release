@@ -68,6 +68,7 @@ void llu_prepare_mdc_op_data(struct mdc_op_data *data,
         data->name = name;
         data->namelen = namelen;
         data->mode = mode;
+        data->mod_time = CURRENT_TIME;
 }
 
 static struct inode *llu_create_node(struct inode *dir, const char *name,
@@ -103,7 +104,7 @@ static struct inode *llu_create_node(struct inode *dir, const char *name,
                 llu_prepare_mdc_op_data(&op_data, dir, NULL, name, namelen, 0);
                 rc = mdc_create(&sbi->ll_mdc_conn, &op_data,
                                 data, datalen, mode, current->fsuid, gid,
-                                time, extra, &request);
+                                extra, &request);
                 if (rc) {
                         inode = (struct inode*)rc;
                         goto out;

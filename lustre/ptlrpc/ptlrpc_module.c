@@ -203,7 +203,6 @@ EXPORT_SYMBOL(lustre_swab_ost_body);
 EXPORT_SYMBOL(lustre_swab_ost_last_id);
 EXPORT_SYMBOL(lustre_swab_ll_fid);
 EXPORT_SYMBOL(lustre_swab_mds_status_req);
-EXPORT_SYMBOL(lustre_swab_mds_fileh_body);
 EXPORT_SYMBOL(lustre_swab_mds_body);
 EXPORT_SYMBOL(lustre_swab_mds_rec_setattr);
 EXPORT_SYMBOL(lustre_swab_mds_rec_create);
