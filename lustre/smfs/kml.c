@@ -270,6 +270,9 @@ int smfs_rec_md(struct inode *inode, void * lmm, int lmm_size)
         int  rc = 0;
         ENTRY;
 
+        if (!SMFS_DO_REC(S2SMI(inode->i_sb)))
+                RETURN(0);
+
         if (lmm) {
                 OBD_ALLOC(set_lmm, lmm_size + sizeof(lmm_size));
                 if (!set_lmm)
