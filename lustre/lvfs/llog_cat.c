@@ -262,7 +262,7 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
                         up_write(&cathandle->lgh_lock);
                         RETURN(loghandle);
                 } else {
-                        down_write(&loghandle->lgh_lock);
+                        up_write(&loghandle->lgh_lock);
                 }
         }
 
