@@ -1,10 +1,13 @@
+
+
+
  drivers/block/blkpg.c  |   35 +++++++++++++++++++++++++++++++++++
  drivers/block/loop.c   |    3 +++
- drivers/ide/ide-disk.c |    4 ++++
- 3 files changed, 42 insertions(+)
+ drivers/ide/ide-disk.c |    5 ++++-
+ 3 files changed, 42 insertions(+), 1 deletion(-)
 
---- linux-rh-2.4.20-6/drivers/block/blkpg.c~dev_read_only_2.4.20	Mon Mar 31 23:41:44 2003
-+++ linux-rh-2.4.20-6-braam/drivers/block/blkpg.c	Mon Mar 31 23:41:44 2003
+--- rh-2.4.20/drivers/block/blkpg.c~dev_read_only_2.4.20	2003-04-11 14:05:03.000000000 +0800
++++ rh-2.4.20-root/drivers/block/blkpg.c	2003-04-12 13:11:31.000000000 +0800
 @@ -297,3 +297,38 @@ int blk_ioctl(kdev_t dev, unsigned int c
  }
  
@@ -44,8 +47,8 @@
 +EXPORT_SYMBOL(dev_set_rdonly);
 +EXPORT_SYMBOL(dev_check_rdonly);
 +EXPORT_SYMBOL(dev_clear_rdonly);
---- linux-rh-2.4.20-6/drivers/block/loop.c~dev_read_only_2.4.20	Mon Mar 31 23:41:44 2003
-+++ linux-rh-2.4.20-6-braam/drivers/block/loop.c	Mon Mar 31 23:41:44 2003
+--- rh-2.4.20/drivers/block/loop.c~dev_read_only_2.4.20	2003-04-11 14:05:08.000000000 +0800
++++ rh-2.4.20-root/drivers/block/loop.c	2003-04-12 13:11:31.000000000 +0800
 @@ -491,6 +491,9 @@ static int loop_make_request(request_que
  	spin_unlock_irq(&lo->lo_lock);
  
@@ -56,18 +59,19 @@
  		if (lo->lo_flags & LO_FLAGS_READ_ONLY)
  			goto err;
  	} else if (rw == READA) {
---- linux-rh-2.4.20-6/drivers/ide/ide-disk.c~dev_read_only_2.4.20	Mon Mar 31 23:41:44 2003
-+++ linux-rh-2.4.20-6-braam/drivers/ide/ide-disk.c	Mon Mar 31 23:43:28 2003
-@@ -551,6 +551,10 @@ static ide_startstop_t lba_48_rw_disk(id
-  */
- static ide_startstop_t do_rw_disk (ide_drive_t *drive, struct request *rq, unsigned long block)
- {
+--- rh-2.4.20/drivers/ide/ide-disk.c~dev_read_only_2.4.20	2003-04-11 14:04:53.000000000 +0800
++++ rh-2.4.20-root/drivers/ide/ide-disk.c	2003-04-12 13:14:48.000000000 +0800
+@@ -381,7 +381,10 @@ static ide_startstop_t do_rw_disk (ide_d
+ 	if (IS_PDC4030_DRIVE)
+ 		return promise_rw_disk(drive, rq, block);
+ #endif /* CONFIG_BLK_DEV_PDC4030 */
+-
 + 	if (rq->cmd == WRITE && dev_check_rdonly(rq->rq_dev)) {
 + 		ide_end_request(1, HWGROUP(drive));
 + 		return ide_stopped;
 + 	}
- 	if (!blk_fs_request(rq)) {
- 		printk(KERN_ERR "%s: bad command: %d\n", drive->name, rq->cmd);
- 		idedisk_end_request(drive, 0);
+ 	if (IDE_CONTROL_REG)
+ 		hwif->OUTB(drive->ctl, IDE_CONTROL_REG);
+ 
 
 _
