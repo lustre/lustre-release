@@ -411,29 +411,36 @@ out_destroy:
 static int ll_mknod(struct inode *dir, struct dentry *dentry, int mode,
                     int rdev)
 {
-        struct inode * inode = ll_create_node(dir, dentry->d_name.name,
-                                              dentry->d_name.len, NULL, 0,
-                                              mode, rdev, dentry->d_it, NULL);
-        int err = PTR_ERR(inode);
-        if (!IS_ERR(inode))
+        struct inode *inode;
+        int err = 0;
+
+        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
+                               NULL, 0, mode, rdev, dentry->d_it, NULL);
+
+        if (IS_ERR(inode))
+                RETURN(PTR_ERR(inode));
+
+        /* no directory data updates when intents rule */
+        if (dentry->d_it->it_disposition == 0)
                 err = ext2_add_nondir(dentry, inode);
+        else
+                d_instantiate(dentry, inode);
+
         return err;
 }
 
 static int ll_symlink(struct inode *dir, struct dentry *dentry,
                       const char *symname)
 {
-        int err = -ENAMETOOLONG;
         unsigned l = strlen(symname);
-        struct inode * inode;
+        struct inode *inode;
         struct ll_inode_info *oinfo;
 
-        inode = ll_create_node(dir, dentry->d_name.name,
-                               dentry->d_name.len, symname, l,
-                               S_IFLNK | S_IRWXUGO, 0, dentry->d_it, NULL);
-        err = PTR_ERR(inode);
+        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
+                               symname, l, S_IFLNK | S_IRWXUGO, 0,
+                               dentry->d_it, NULL);
         if (IS_ERR(inode))
-                return err;
+                RETURN(PTR_ERR(inode));
 
         oinfo = ll_i2info(inode);
 
@@ -441,16 +448,13 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         memcpy(oinfo->lli_symlink_name, symname, l + 1);
         inode->i_size = l;
 
-        err = ext2_add_nondir(dentry, inode);
+        ext2_inc_count(inode);
+        atomic_inc(&inode->i_count);
 
-        if (err) {
-                ext2_dec_count(inode);
-                iput (inode);
-        }
-        return err;
+        return ext2_add_nondir(dentry, inode);
 }
 
-static int ll_link(struct dentry * old_dentry, struct inode * dir,
+static int ll_link(struct dentry *old_dentry, struct inode * dir,
                    struct dentry *dentry)
 {
         int err;
@@ -464,10 +468,8 @@ static int ll_link(struct dentry * old_dentry, struct inode * dir,
 
         err = ll_mdc_link(old_dentry, dir,
                           dentry->d_name.name, dentry->d_name.len);
-        if (err) {
-                EXIT;
-                return err;
-        }
+        if (err)
+                RETURN(err);
 
         inode->i_ctime = CURRENT_TIME;
         ext2_inc_count(inode);
@@ -494,7 +496,6 @@ static int ll_mkdir(struct inode * dir, struct dentry * dentry, int mode)
         if (IS_ERR(inode))
                 goto out_dir;
 
-        inode->i_nlink = 1;
         ext2_inc_count(inode);
 
         err = ext2_make_empty(inode, dir);
