@@ -1,5 +1,4 @@
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
-aaa
        * version 1.2.x
        * bug fixes
 	- don't dereference NULL peer_ni in ldlm_handle_ast_error (3258)
