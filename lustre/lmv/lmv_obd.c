@@ -33,6 +33,7 @@
 #else
 #include <liblustre.h>
 #endif
+#include <linux/ext2_fs.h>
 
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
@@ -457,7 +458,8 @@ int lmv_create(struct obd_export *exp, struct mdc_op_data *op_data,
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mea *mea = op_data->mea1;
         struct mds_body *mds_body;
-        int rc, i, free_mea = 0;
+        int rc, i, mds, free_mea = 0;
+        struct lmv_obj *obj;
         ENTRY;
         lmv_connect(obd);
         /* TODO: where to create new directories?
@@ -465,17 +467,21 @@ int lmv_create(struct obd_export *exp, struct mdc_op_data *op_data,
          * but we lookup by name may forward any request in slave
          */
 repeat:
-        i = mea_name2idx(mea, (char *) op_data->name, op_data->namelen);
-        if (mea)
-                op_data->fid1 = mea->mea_fids[i];
+        obj = lmv_grab_obj(obd, &op_data->fid1, 0);
+        if (obj) {
+                mds = raw_name2idx(obj->objcount, op_data->name,
+                                        op_data->namelen - 1);
+                op_data->fid1 = obj->objs[mds].fid;
+                lmv_put_obj(obj);
+        }
 
         CDEBUG(D_OTHER, "CREATE '%*s' on %lu/%lu/%lu (mea 0x%p)\n",
                         op_data->namelen, op_data->name,
                         (unsigned long) op_data->fid1.mds,
                         (unsigned long) op_data->fid1.id,
                         (unsigned long) op_data->fid1.generation, mea);
-        rc = md_create(lmv->tgts[i].exp, op_data, data, datalen,
-                            mode, uid, gid, rdev, request);
+        rc = md_create(lmv->tgts[op_data->fid1.mds].exp, op_data, data,
+                       datalen, mode, uid, gid, rdev, request);
         if (rc == 0) {
                 if (*request == NULL)
                      RETURN(rc);
@@ -484,13 +490,16 @@ repeat:
                 LASSERT(mds_body != NULL);
                 CDEBUG(D_OTHER, "created. id = %lu, generation = %lu, mds = %d\n",
                        (unsigned long) mds_body->fid1.id,
-                       (unsigned long) mds_body->fid1.generation, i);
-                LASSERT(mds_body->mds == i);
+                       (unsigned long) mds_body->fid1.generation,
+                       op_data->fid1.mds);
+                LASSERT(mds_body->valid & OBD_MD_MDS ||
+                                mds_body->mds == op_data->fid1.mds);
         } else if (rc == -ESTALE) {
                 struct ptlrpc_request *req = NULL;
                 struct lustre_md md;
                 int mealen;
                 
+                LBUG(); /* FIXME ASAP */
                 CDEBUG(D_OTHER, "it seems MDS splitted dir\n");
                 LASSERT(mea == NULL);
 
@@ -597,30 +606,33 @@ int lmv_link(struct obd_export *exp, struct mdc_op_data *data,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct mea *mea = data->mea2;
-        int rc, i;
+        struct lmv_obj *obj;
+        int rc;
         ENTRY;
         lmv_connect(obd);
         if (data->namelen != 0) {
                 /* usual link request */
-                i = mea_name2idx(mea, (char *) data->name, data->namelen);
-                if (mea)
-                        data->fid2 = mea->mea_fids[i];
-                CDEBUG(D_OTHER,"link %u/%u/%u:%*s to %u/%u/%u mds %d mea %p\n",
+                obj = lmv_grab_obj(obd, &data->fid1, 0);
+                if (obj) {
+                        rc = raw_name2idx(obj->objcount, data->name,
+                                         data->namelen);
+                        data->fid1 = obj->objs[rc].fid;
+                        lmv_put_obj(obj);
+                }
+                CDEBUG(D_OTHER,"link %u/%u/%u:%*s to %u/%u/%u mds %d\n",
                        (unsigned) data->fid2.mds, (unsigned) data->fid2.id,
                        (unsigned) data->fid2.generation, data->namelen,
                        data->name, (unsigned) data->fid1.mds,
                        (unsigned) data->fid1.id,
-                       (unsigned) data->fid1.generation, i, mea);
+                       (unsigned) data->fid1.generation, data->fid1.mds);
         } else {
                 /* request from MDS to acquire i_links for inode by fid1 */
-                i = data->fid1.mds;
                 CDEBUG(D_OTHER, "inc i_nlinks for %u/%u/%u\n",
                        (unsigned) data->fid1.mds, (unsigned) data->fid1.id,
                        (unsigned) data->fid1.generation);
         }
                         
-        rc = md_link(lmv->tgts[i].exp, data, request);
+        rc = md_link(lmv->tgts[data->fid1.mds].exp, data, request);
         RETURN(rc);
 }
 
@@ -791,6 +803,23 @@ int lmv_dirobj_blocking_ast(struct ldlm_lock *lock,
         RETURN(0);
 }
 
+void lmv_remove_dots(struct page *page)
+{
+        char *kaddr = page_address(page);
+        unsigned limit = PAGE_CACHE_SIZE;
+        unsigned offs, rec_len;
+        struct ext2_dir_entry_2 *p;
+
+        for (offs = 0; offs <= limit - EXT2_DIR_REC_LEN(1); offs += rec_len) {
+                p = (struct ext2_dir_entry_2 *)(kaddr + offs);
+                rec_len = le16_to_cpu(p->rec_len);
+
+                if ((p->name_len == 1 && p->name[0] == '.') ||
+                    (p->name_len == 2 && p->name[0] == '.' && p->name[1] == '.'))
+                        p->inode = 0;
+        }
+}
+
 int lmv_readpage(struct obd_export *exp, struct ll_fid *mdc_fid,
                  __u64 offset, struct page *page,
                  struct ptlrpc_request **request)
@@ -826,10 +855,14 @@ int lmv_readpage(struct obd_export *exp, struct ll_fid *mdc_fid,
                        (unsigned long) offset);
         }
         rc = md_readpage(lmv->tgts[rfid.mds].exp, &rfid, offset, page, request);
+        if (rc == 0 && !fid_equal(&rfid, mdc_fid)) {
+                /* this page isn't from master object. to avoid
+                 * ./.. duplication in directory, we have to remove them
+                 * from all slave objects */
+                lmv_remove_dots(page);
+        }
       
         lmv_put_obj(obj);
-
-#warning "we need fix for duplicate . and .. from slaves"
 
         RETURN(rc);
 }
@@ -839,27 +872,30 @@ int lmv_unlink(struct obd_export *exp, struct mdc_op_data *data,
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct mea *mea = data->mea1;
         int rc, i = 0;
         ENTRY;
         lmv_connect(obd);
         if (data->namelen != 0) {
-                i = mea_name2idx(mea, (char *) data->name, data->namelen);
-                if (mea)
-                        data->fid1 = mea->mea_fids[i];
+                struct lmv_obj *obj;
+                obj = lmv_grab_obj(obd, &data->fid1, 0);
+                if (obj) {
+                        i = raw_name2idx(obj->objcount, data->name,
+                                         data->namelen);
+                        data->fid1 = obj->objs[i].fid;
+                        lmv_put_obj(obj);
+                }
                 CDEBUG(D_OTHER, "unlink '%*s' in %lu/%lu/%lu -> %u\n",
                        data->namelen, data->name,
                        (unsigned long) data->fid1.mds,
                        (unsigned long) data->fid1.id,
                        (unsigned long) data->fid1.generation, i);
         } else {
-                i = data->fid1.mds;
                 CDEBUG(D_OTHER, "drop i_nlink on %lu/%lu/%lu\n",
                        (unsigned long) data->fid1.mds,
                        (unsigned long) data->fid1.id,
                        (unsigned long) data->fid1.generation);
         }
-        rc = md_unlink(lmv->tgts[i].exp, data, request); 
+        rc = md_unlink(lmv->tgts[data->fid1.mds].exp, data, request); 
         RETURN(rc);
 }
 
@@ -902,6 +938,26 @@ int lmv_init_ea_size(struct obd_export *exp, int easize, int cookiesize)
         RETURN(rc);
 }
 
+int lmv_obd_create_single(struct obd_export *exp, struct obdo *oa,
+                          struct lov_stripe_md **ea, struct obd_trans_info *oti)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct lov_stripe_md obj_md;
+        struct lov_stripe_md *obj_mdp = &obj_md;
+        int rc = 0;
+        ENTRY;
+        lmv_connect(obd);
+
+        LASSERT(ea == NULL);
+        LASSERT(oa->o_mds < lmv->count);
+
+        rc = obd_create(lmv->tgts[oa->o_mds].exp, oa, &obj_mdp, oti);
+        LASSERT(rc == 0);
+
+        RETURN(rc);
+}
+
 /*
  * to be called from MDS only
  */
@@ -916,8 +972,12 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
         ENTRY;
         lmv_connect(obd);
 
-        LASSERT(ea != NULL);
         LASSERT(oa != NULL);
+        
+        if (ea == NULL) {
+                rc = lmv_obd_create_single(exp, oa, NULL, oti);
+                RETURN(rc);
+        }
 
         if (*ea == NULL) {
                 rc = obd_alloc_diskmd(exp, (struct lov_mds_md **) ea);

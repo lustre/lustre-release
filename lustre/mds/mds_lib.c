@@ -83,7 +83,13 @@ void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
         b->flags = inode->i_flags;
         b->rdev = inode->i_rdev;
         /* Return the correct link count for orphan inodes */
-        b->nlink = mds_inode_is_orphan(inode) ? 0 : inode->i_nlink;
+        if (mds_inode_is_orphan(inode)) {
+                b->nlink = 0;
+        } else if (S_ISDIR(inode->i_mode)) {
+                b->nlink = 1;
+        } else {
+                b->nlink = inode->i_nlink;
+        }
         b->generation = inode->i_generation;
         b->suppgid = -1;
         b->mds = obd->u.mds.mds_num;

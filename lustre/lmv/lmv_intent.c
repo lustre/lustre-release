@@ -72,6 +72,12 @@ int lmv_handle_remote_inode(struct obd_export *exp, struct ll_uctxt *uctxt,
                 struct lustre_handle plock;
                 int pmode;
 
+                if (it->it_op == IT_LOOKUP) {
+                        /* unfortunately, we have to lie to MDC/MDS to
+                         * retrieve attributes llite needs */
+                        it->it_op = IT_GETATTR;
+                }
+
                 /* we got LOOKUP lock, but we really need attrs */
                 pmode = it->d.lustre.it_lock_mode;
                 if (pmode) {
@@ -171,10 +177,10 @@ int lmv_intent_open(struct obd_export *exp, struct ll_uctxt *uctxt,
                 rc = lmv_revalidate_slaves(exp, reqp, cfid,
                                 it, 1, cb_blocking);
         } else if (S_ISDIR(body->mode)) {
-                CWARN("hmmm, %lu/%lu/%lu has not lmv obj?!\n",
+                /*CWARN("hmmm, %lu/%lu/%lu has not lmv obj?!\n",
                                 (unsigned long) cfid->mds,
                                 (unsigned long) cfid->id,
-                                (unsigned long) cfid->generation);
+                                (unsigned long) cfid->generation);*/
         }
         lmv_put_obj(obj);
         RETURN(rc);
@@ -433,17 +439,25 @@ int lmv_intent_lookup(struct obd_export *exp, struct ll_uctxt *uctxt,
          * cfid != NULL specifies revalidation */
 
         if (cfid) {
-                /* this is revalidation  during revalidation it's
-                 * enough to return 1 if we think attrs are uptodate
-                 * it may return updated attrs, though */
-                mds = cfid->mds;
+                /* this is revalidation: we have to check is LOOKUP
+                 * lock still valid for given fid. very important
+                 * part is that we have to choose right mds because
+                 * namespace is per mds */
+                rpfid = *pfid;
+                obj = lmv_grab_obj(obd, pfid, 0);
+                if (obj) {
+                        mds = raw_name2idx(obj->objcount, (char *) name, len);
+                        rpfid = obj->objs[mds].fid;
+                        lmv_put_obj(obj);
+                }
+                mds = rpfid.mds;
+                CDEBUG(D_OTHER, "revalidate lookup for %lu/%lu/%lu to %d MDS\n",
+                       (unsigned long) cfid->mds,
+                       (unsigned long) cfid->id,
+                       (unsigned long) cfid->generation, mds);
                 rc = md_intent_lock(lmv->tgts[mds].exp, uctxt, pfid, name,
                                     len, lmm, lmmsize, cfid, it, flags,
                                     reqp, cb_blocking);
-                CDEBUG(D_OTHER, "revalidate lookup for %lu/%lu/%lu = %d\n",
-                       (unsigned long) cfid->mds,
-                       (unsigned long) cfid->id,
-                       (unsigned long) cfid->generation, rc);
                 RETURN(rc);
         }
 

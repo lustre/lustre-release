@@ -925,7 +925,7 @@ static int fsfilt_ext3_add_dir_entry(struct obd_device *obd,
         
         l_dput(dentry);
 
-        return err;
+        RETURN(err);
 #else
 #error "rebuild kernel and lustre with ext3-mds-num patch!"
         LASSERT(0);

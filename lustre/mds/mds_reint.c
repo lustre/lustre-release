@@ -625,24 +625,74 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         }
         case S_IFDIR:{
                 int nstripes = 0;
-                handle = fsfilt_start(obd, dir, FSFILT_OP_MKDIR, NULL);
-                if (IS_ERR(handle))
-                        GOTO(cleanup, rc = PTR_ERR(handle));
+                int i;
+                
+                /* as Peter asked, mkdir() should distribute new directories
+                 * over the whole cluster in order to distribute namespace
+                 * processing load. first, we calculate which MDS to use to
+                 * put new directory's inode in */
+                i = mds_choose_mdsnum(obd, rec->ur_name, rec->ur_namelen - 1);
+                if (i == mds->mds_num) {
+                        /* inode will be created locally */
 
-                rc = vfs_mkdir(dir, dchild, rec->ur_mode);
+                        handle = fsfilt_start(obd, dir, FSFILT_OP_MKDIR, NULL);
+                        if (IS_ERR(handle))
+                                GOTO(cleanup, rc = PTR_ERR(handle));
 
-                if (rec->ur_eadata)
-                        nstripes = *(u16 *)rec->ur_eadata;
+                        rc = vfs_mkdir(dir, dchild, rec->ur_mode);
+
+                        if (rec->ur_eadata)
+                                nstripes = *(u16 *)rec->ur_eadata;
 
 #if 1
-                /* this is for current testing yet. after the testing
-                 * directory will split if size reaches some limite -bzzz */
-                if (rc == 0) {
+                        /* this is for current testing yet. after the testing
+                         * directory will split if size reaches some limite -bzzz */
+                        if (rc == 0) {
 #else
-                if (rc == 0 && nstripes) {
+                        if (rc == 0 && nstripes) {
 #endif
-                        /* FIXME: error handling here */
-                        mds_try_to_split_dir(obd, dchild, NULL, nstripes);
+                                /* FIXME: error handling here */
+                                mds_try_to_split_dir(obd, dchild, NULL, nstripes);
+                        }
+                } else if (!DENTRY_VALID(dchild)) {
+                        /* inode will be created on another MDS */
+                        struct obdo *oa = NULL;
+                        struct mds_body *body;
+                        
+                        /* first, create that inode */
+                        oa = obdo_alloc();
+                        LASSERT(oa != NULL);
+                        oa->o_mds = i;
+                        obdo_from_inode(oa, dir, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                        OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+                                        OBD_MD_FLUID | OBD_MD_FLGID);
+                        oa->o_mode = dir->i_mode;
+                        CDEBUG(D_OTHER, "%s: create dir on MDS %u\n",
+                                        obd->obd_name, i);
+                        rc = obd_create(mds->mds_lmv_exp, oa, NULL, NULL);
+	                LASSERT(rc == 0);
+                        
+                        /* now, add new dir entry for it */
+                        handle = fsfilt_start(obd, dir, FSFILT_OP_MKDIR, NULL);
+                        if (IS_ERR(handle))
+                                GOTO(cleanup, rc = PTR_ERR(handle));
+                        rc = fsfilt_add_dir_entry(obd, dparent, rec->ur_name,
+                                                  rec->ur_namelen - 1,
+                                                  oa->o_id, oa->o_generation,
+                                                  i);
+                        LASSERT(rc == 0);
+
+                        /* fill reply */
+                        body = lustre_msg_buf(req->rq_repmsg,
+                                              offset, sizeof (*body));
+                        body->valid |= OBD_MD_FLID | OBD_MD_MDS;
+                        body->fid1.id = oa->o_id;
+                        body->fid1.mds = i;
+                        body->fid1.generation = oa->o_generation;
+	                obdo_free(oa);
+                } else {
+                        /* requested name exists in the directory */
+                        rc = -EEXIST;
                 }
                 EXIT;
                 break;
@@ -683,7 +733,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         if (rc) {
                 CDEBUG(D_INODE, "error during create: %d\n", rc);
                 GOTO(cleanup, rc);
-        } else {
+        } else if (dchild->d_inode) {
                 struct iattr iattr;
                 struct inode *inode = dchild->d_inode;
                 struct mds_body *body;
@@ -1249,7 +1299,6 @@ int mds_create_local_dentry(struct mds_update_record *rec,
         char *fidname = rec->ur_name;
         struct dentry *child = NULL;
         struct lustre_handle lockh;
-        unsigned mode;
         void *handle;
         ENTRY;
 
@@ -1301,8 +1350,13 @@ int mds_create_local_dentry(struct mds_update_record *rec,
                 CERROR("error linking orphan %lu/%lu to FIDS: rc = %d\n",
                        (unsigned long) child->d_inode->i_ino,
                        (unsigned long) child->d_inode->i_generation, rc);
-        else
+        else {
+                if (S_ISDIR(child->d_inode->i_mode)) {
+                        fids_dir->i_nlink++;
+                        mark_inode_dirty(fids_dir);
+                }
                 mark_inode_dirty(child->d_inode);
+        }
         fsfilt_commit(obd, fids_dir, handle, 0);
 
         rec->ur_fid1->id = fids_dir->i_ino;
@@ -1325,7 +1379,6 @@ cleanup:
 static int mds_copy_unlink_reply(struct ptlrpc_request *master,
                                         struct ptlrpc_request *slave)
 {
-        struct lov_mds_md *eadata;
         void *cookie, *cookie2;
         struct mds_body *body2;
         struct mds_body *body;
@@ -1339,7 +1392,6 @@ static int mds_copy_unlink_reply(struct ptlrpc_request *master,
         LASSERT(body2 != NULL);
 
         if (!(body->valid & (OBD_MD_FLID | OBD_MD_FLGENER))) {
-                CWARN("empty reply\n");
                 RETURN(0);
         }
 
@@ -1395,8 +1447,6 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec, int offset,
 
         LASSERT(offset == 0 || offset == 2);
 
-        DEBUG_REQ(D_INODE, req, "parent ino "LPU64"/%u, child %s",
-                  rec->ur_fid1->id, rec->ur_fid1->generation, rec->ur_name);
         DEBUG_REQ(D_INODE, req, "unlink %*s (remote inode %u/%u/%u)\n",
                   rec->ur_namelen - 1, rec->ur_name, (unsigned)dchild->d_mdsnum,
                   (unsigned) dchild->d_inum, (unsigned) dchild->d_generation);
@@ -1480,7 +1530,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                 LASSERT(unlink_by_fid == 0);
                 LASSERT(dchild->d_mdsnum != mds->mds_num);
                 mds_reint_unlink_remote(rec, offset, req, parent_lockh,
-                                        dparent, &child_lockh, dchild);
+                                             dparent, &child_lockh, dchild);
                 RETURN(0);
         }
 
@@ -2143,14 +2193,18 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
         cleanup_phase = 3; /* original name dentry */
 
         inode = (*de_oldp)->d_inode;
-        if (inode != NULL)
+        if (inode != NULL) {
                 inode = igrab(inode);
-        if (inode == NULL)
-                GOTO(cleanup, rc = -ENOENT);
+                if (inode == NULL)
+                        GOTO(cleanup, rc = -ENOENT);
 
-        c1_res_id.name[0] = inode->i_ino;
-        c1_res_id.name[1] = inode->i_generation;
-        iput(inode);
+                c1_res_id.name[0] = inode->i_ino;
+                c1_res_id.name[1] = inode->i_generation;
+                iput(inode);
+        } else if ((*de_oldp)->d_flags & DCACHE_CROSS_REF) {
+                c1_res_id.name[0] = (*de_oldp)->d_inum;
+                c1_res_id.name[1] = (*de_oldp)->d_generation;
+        }
 
         /* Step 4: Lookup the target child entry */
         *de_newp = ll_lookup_one_len(new_name, *de_tgtdirp, new_len - 1);
@@ -2164,15 +2218,18 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
         cleanup_phase = 4; /* target dentry */
 
         inode = (*de_newp)->d_inode;
-        if (inode != NULL)
+        if (inode != NULL) {
                 inode = igrab(inode);
-        if (inode == NULL)
-                goto retry_locks;
+                if (inode == NULL)
+                        goto retry_locks;
 
-        c2_res_id.name[0] = inode->i_ino;
-        c2_res_id.name[1] = inode->i_generation;
-
-        iput(inode);
+                c2_res_id.name[0] = inode->i_ino;
+                c2_res_id.name[1] = inode->i_generation;
+                iput(inode);
+        } else if ((*de_newp)->d_flags & DCACHE_CROSS_REF) {
+                c2_res_id.name[0] = (*de_newp)->d_inum;
+                c2_res_id.name[1] = (*de_newp)->d_generation;
+        }
 
 retry_locks:
         /* Step 5: Take locks on the parents and child(ren) */
@@ -2213,7 +2270,7 @@ retry_locks:
                 GOTO(cleanup, rc);
         }
 
-        if ((*de_oldp)->d_inode == NULL)
+        if (!DENTRY_VALID(*de_oldp))
                 GOTO(cleanup, rc = -ENOENT);
 
         /* Step 6b: Re-lookup target child to verify it hasn't changed */

@@ -439,7 +439,6 @@ EXPORT_SYMBOL(class_detach);
 
 /* mea.c */
 EXPORT_SYMBOL(mea_name2idx);
-int raw_name2idx(int count, char *name, int namelen);
 EXPORT_SYMBOL(raw_name2idx);
 
 #ifdef LPROCFS

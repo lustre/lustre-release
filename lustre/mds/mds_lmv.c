@@ -117,7 +117,8 @@ int mds_lmv_postsetup(struct obd_device *obd)
         struct mds_obd *mds = &obd->u.mds;
         ENTRY;
         if (mds->mds_lmv_exp)
-                obd_init_ea_size(mds->mds_lmv_exp, mds->mds_max_mdsize, 0);
+                obd_init_ea_size(mds->mds_lmv_exp, mds->mds_max_mdsize,
+                                 mds->mds_max_cookiesize);
         RETURN(0);
 }
 
@@ -396,7 +397,7 @@ int scan_and_distribute(struct obd_device *obd, struct dentry *dentry,
         return 0;
 }
 
-#define MAX_DIR_SIZE    (32 * 1024)
+#define MAX_DIR_SIZE    (64 * 1024)
 
 /*
  * must not be called on already splitted directories
@@ -404,15 +405,11 @@ int scan_and_distribute(struct obd_device *obd, struct dentry *dentry,
 int mds_try_to_split_dir(struct obd_device *obd,
                          struct dentry *dentry, struct mea **mea, int nstripes)
 {
-        ldlm_policy_data_t policy = { .l_inodebits = {MDS_INODELOCK_UPDATE}};
-        struct ldlm_res_id res_id = { .name = {0} };
         struct inode *dir = dentry->d_inode;
         struct mds_obd *mds = &obd->u.mds;
-        struct lustre_handle lockh;
         struct mea *tmea = NULL;
         struct obdo *oa = NULL;
-	int rc, flags = 0;
-	int mea_size = 0;
+	int rc, mea_size = 0;
 	void *handle;
 	ENTRY;
 
@@ -424,7 +421,7 @@ int mds_try_to_split_dir(struct obd_device *obd,
         if (dentry->d_inode->i_ino == mds->mds_rootfid.id)
                 RETURN(0);
 
-#if 0
+#if 1
         if (dir->i_size < MAX_DIR_SIZE)
                 RETURN(0);
 #endif
@@ -445,23 +442,13 @@ int mds_try_to_split_dir(struct obd_device *obd,
            necessary amount of stripes, but on the other hand with this approach
            of allocating maximal possible amount of MDS slots, it would be
            easier to split the dir over more MDSes */
-        rc = obd_alloc_diskmd(mds->mds_lmv_exp, mea);
+        rc = obd_alloc_diskmd(mds->mds_lmv_exp, (void *) mea);
         if (!(*mea))
                 RETURN(-ENOMEM);
         (*mea)->mea_count = nstripes;
+       
+#warning "we have to take EX lock on a dir for splitting"
         
-        /* convert lock on the dir in order tox
-         * invalidate client's attributes -bzzz */
-        res_id.name[0] = dir->i_ino;
-        res_id.name[1] = dir->i_generation;
-        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
-                              LDLM_IBITS, &policy, LCK_PW, &flags,
-                              mds_blocking_ast, ldlm_completion_ast, NULL, NULL,
-                              NULL, 0, NULL, &lockh);
-        if (rc != ELDLM_OK) {
-                CERROR("error: rc = %d\n", rc);
-        }
-
 	/* 1) create directory objects on slave MDS'es */
 	/* FIXME: should this be OBD method? */
         oa = obdo_alloc();
@@ -495,8 +482,6 @@ int mds_try_to_split_dir(struct obd_device *obd,
         LASSERT(rc == 0);
 	up(&dir->i_sem);
 	obdo_free(oa);
-
-        ldlm_lock_decref(&lockh, LCK_PW);
 
 	/* 3) read through the dir and distribute it over objects */
         scan_and_distribute(obd, dentry, *mea);
@@ -639,5 +624,15 @@ int mds_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
         f_dput(res->dentry);
 
         RETURN(rc);
+}
+
+int mds_choose_mdsnum(struct obd_device *obd, const char *name, int len)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct lmv_obd *lmv = &mds->mds_lmv_exp->exp_obd->u.lmv;
+        int i;
+
+        i = raw_name2idx(lmv->count, name, len);
+        RETURN(i);
 }
 

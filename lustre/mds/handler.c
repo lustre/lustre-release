@@ -723,9 +723,6 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
         return(rc);
 }
 
-#define DENTRY_VALID(dentry)    \
-        ((dentry)->d_inode || ((dentry)->d_flags & DCACHE_CROSS_REF))
-
 static int mds_getattr_name(int offset, struct ptlrpc_request *req,
                             struct lustre_handle *child_lockh, int child_part)
 {
@@ -1182,9 +1179,9 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         char fidname[LL_FID_NAMELEN];
         struct inode *parent_inode;
         struct obd_run_ctxt saved;
-        struct dentry *new_child;
         int err, namelen, mealen;
         struct obd_ucred uc;
+        struct dentry *new;
         struct mea *mea;
         void *handle;
         ENTRY;
@@ -1205,13 +1202,49 @@ static int mdt_obj_create(struct ptlrpc_request *req)
                 RETURN(rc);
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
+
+        if (!(body->oa.o_valid & OBD_MD_FLID)) {
+                /* this is request from another MDS to create remove dir inode */
+                unsigned int tmpname = ll_insecure_random_int();
+
+                handle = fsfilt_start(obd, parent_inode, FSFILT_OP_MKDIR, NULL);
+                LASSERT(!IS_ERR(handle));
+
+                sprintf(fidname, "%u", tmpname);
+                new = simple_mkdir(mds->mds_objects_dir, fidname,
+                                        body->oa.o_mode, 1);
+                LASSERT(!IS_ERR(new));
+                LASSERT(new->d_inode != NULL);
+
+                obdo_from_inode(&repbody->oa, new->d_inode, FILTER_VALID_FLAGS);
+                repbody->oa.o_id = new->d_inode->i_ino;
+                repbody->oa.o_generation = new->d_inode->i_generation;
+                repbody->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGENER;
+
+                rc = fsfilt_del_dir_entry(obd, new);
+                LASSERT(rc == 0);
+
+                rc = fsfilt_commit(obd, parent_inode, handle, 0);
+                LASSERT(rc == 0);
+
+                CDEBUG(D_OTHER, "created dirobj: %lu/%lu mode %o\n",
+                       (unsigned long) new->d_inode->i_ino,
+                       (unsigned long) new->d_inode->i_generation,
+                       (unsigned) new->d_inode->i_mode);
+
+                l_dput(new);
+                pop_ctxt(&saved, &obd->obd_ctxt, &uc);
+                RETURN(0);
+        }
+
+        repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
        
         namelen = ll_fid2str(fidname, body->oa.o_id, body->oa.o_generation);
         
         down(&parent_inode->i_sem);
-        new_child = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
-        if (new_child->d_inode != NULL) {
+        new = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
+        if (new->d_inode != NULL) {
                 CERROR("impossible non-negative obj dentry " LPU64":%u!\n",
                        repbody->oa.o_id, repbody->oa.o_generation);
                 LBUG();
@@ -1221,7 +1254,7 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         /* FIXME: error handling here */
         LASSERT(!IS_ERR(handle));
 
-        rc = vfs_mkdir(parent_inode, new_child, body->oa.o_mode);
+        rc = vfs_mkdir(parent_inode, new, body->oa.o_mode);
         up(&parent_inode->i_sem);
         /* FIXME: error handling here */
         if (rc)
@@ -1233,14 +1266,14 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         OBD_ALLOC(mea, mealen);
         LASSERT(mea != NULL);
         mea->mea_count = 0;
-        down(&new_child->d_inode->i_sem);
-        handle = fsfilt_start(obd, new_child->d_inode, FSFILT_OP_SETATTR, NULL);
+        down(&new->d_inode->i_sem);
+        handle = fsfilt_start(obd, new->d_inode, FSFILT_OP_SETATTR, NULL);
         LASSERT(!IS_ERR(handle));
-	rc = fsfilt_set_md(obd, new_child->d_inode, handle, mea, mealen);
+	rc = fsfilt_set_md(obd, new->d_inode, handle, mea, mealen);
         LASSERT(rc == 0);
-        fsfilt_commit(obd, new_child->d_inode, handle, 0);
+        fsfilt_commit(obd, new->d_inode, handle, 0);
         LASSERT(rc == 0);
-	up(&new_child->d_inode->i_sem);
+	up(&new->d_inode->i_sem);
         OBD_FREE(mea, mealen);
 
         err = fsfilt_commit(exp->exp_obd, mds->mds_objects_dir->d_inode,
@@ -1248,16 +1281,16 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         /* FIXME: error handling here */
         LASSERT(err == 0);
 
-        obdo_from_inode(&repbody->oa, new_child->d_inode, FILTER_VALID_FLAGS);
-        repbody->oa.o_id = new_child->d_inode->i_ino;
-        repbody->oa.o_generation = new_child->d_inode->i_generation;
+        obdo_from_inode(&repbody->oa, new->d_inode, FILTER_VALID_FLAGS);
+        repbody->oa.o_id = new->d_inode->i_ino;
+        repbody->oa.o_generation = new->d_inode->i_generation;
         CDEBUG(D_OTHER, "created dirobj: %lu, %lu mode %o, uid %u, gid %u\n",
                         (unsigned long) repbody->oa.o_id,
-                        (unsigned long) new_child->d_inode->i_ino,
-                        (unsigned) new_child->d_inode->i_mode,
-                        (unsigned) new_child->d_inode->i_uid,
-                        (unsigned) new_child->d_inode->i_gid);
-        dput(new_child);
+                        (unsigned long) new->d_inode->i_ino,
+                        (unsigned) new->d_inode->i_mode,
+                        (unsigned) new->d_inode->i_uid,
+                        (unsigned) new->d_inode->i_gid);
+        dput(new);
         pop_ctxt(&saved, &obd->obd_ctxt, &uc);
         RETURN(0);
 }
@@ -1322,6 +1355,7 @@ static int mds_set_info(struct obd_export *exp, __u32 keylen,
 {
         struct obd_device *obd;
         struct mds_obd *mds;
+        int rc;
         ENTRY;
 
         obd = class_exp2obd(exp);
@@ -1342,6 +1376,8 @@ static int mds_set_info(struct obd_export *exp, __u32 keylen,
                                         atomic_read(&mds->mds_real_clients));
                         exp->exp_flags |= OBD_OPT_REAL_CLIENT;
                 }
+                rc = mds_lmv_connect(obd, mds->mds_lmv_name);
+                LASSERT(rc == 0);
                 RETURN(0);
         }
 

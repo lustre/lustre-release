@@ -12,6 +12,8 @@ struct mds_filter_data {
 };
 
 #define MDS_FILTERDATA(inode) ((struct mds_filter_data *)(inode)->i_filterdata)
+#define DENTRY_VALID(dentry)    \
+        ((dentry)->d_inode || ((dentry)->d_flags & DCACHE_CROSS_REF))
 
 static inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req)
 {
@@ -116,5 +118,6 @@ int mds_lmv_disconnect(struct obd_device *obd, int flags);
 int mds_try_to_split_dir(struct obd_device *, struct dentry *, struct mea **,
                          int);
 int mds_get_lmv_attr(struct obd_device *, struct inode *, struct mea **, int *);
+int mds_choose_mdsnum(struct obd_device *, const char *, int);
 
 #endif /* _MDS_INTERNAL_H */

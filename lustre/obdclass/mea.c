@@ -54,7 +54,7 @@ int mea_name2idx(struct mea *mea, char *name, int namelen)
         return c;
 }
 
-int raw_name2idx(int count, char *name, int namelen)
+int raw_name2idx(int count, const char *name, int namelen)
 {
         unsigned int c;
 

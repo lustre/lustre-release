@@ -354,7 +354,9 @@ int ldlm_cli_enqueue(struct obd_export *exp,
                 }
 
                 if (reply->lock_desc.l_resource.lr_name.name[0] !=
-                    lock->l_resource->lr_name.name[0]) {
+                    lock->l_resource->lr_name.name[0] ||
+                   reply->lock_desc.l_resource.lr_name.name[1] !=
+                    lock->l_resource->lr_name.name[1]) {
                         CDEBUG(D_INFO, "remote intent success, locking %ld "
                                "instead of %ld\n",
                               (long)reply->lock_desc.l_resource.lr_name.name[0],

@@ -1350,6 +1350,7 @@ void class_init_uuidlist(void);
 void class_exit_uuidlist(void);
 
 /* mea.c */
-int mea_name2idx(struct mea *mea, char *name, int namelen);
+int mea_name2idx(struct mea *, char *, int);
+int raw_name2idx(int, const char *, int);
 
 #endif /* __LINUX_OBD_CLASS_H */
