@@ -1,3 +1,21 @@
+2002-09-18  Andreas Dilger  <adilger@clusterfs.com>
+	* version 0_5_8
+	* documentation updates
+	  - add man pages for config tools
+	  - update tests/README to describe testing with new config tools
+	  - finish metadata API descriptions
+	* bug fixes and cleanups
+	  - statfs workaround for 16TB limit
+	  - LOV stripe allocation improved, can stripe on subset of OSTs
+	  - LOV file size/IO offset was wrong for files > 4GB in size
+	  - object EA data was being dropped, caused files to be unreadable
+	  - memory overflow with non-LOV OST caused memory corruption
+	  - fixed regression tests to work with new config tools, obdfilter
+	  - fixed bug when directory size became larger than 1 block
+	  - fixed bug (for single client case) when PWD was deleted
+	  - invalidate local directory pages when doing intent-based ops
+	  - avoid LDLM oops when lock callback contained bad data
+
 2002-09-09  Andreas Dilger  <adilger@clusterfs.com>
 	* version 0_5_7
 	* documentation updates
