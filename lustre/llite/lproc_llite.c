@@ -24,6 +24,7 @@
 #include <linux/lustre_lite.h>
 #include <linux/lprocfs_status.h>
 
+__u64 mnt_instance = 0;
 
 int rd_path(char* page, char **start, off_t off, int count, int *eof, 
             void *data)
@@ -160,15 +161,15 @@ int rd_dev_uuid(char* page, char **start, off_t off, int count, int *eof,
 
 
 struct lprocfs_vars status_var_nm_1[] = {
-        {"status/uuid", rd_uuid, 0, 0},
-        {"status/mntpt_path", rd_path, 0, 0},
-        {"status/fstype", rd_fstype, 0, 0},
-        {"status/blocksize",rd_blksize, 0, 0},
-        {"status/kbytestotal",rd_kbytestotal, 0, 0},
-        {"status/kbytesfree", rd_kbytesfree, 0, 0},
-        {"status/filestotal", rd_filestotal, 0, 0},
-        {"status/filesfree", rd_filesfree, 0, 0},
-        {"status/filegroups", rd_filegroups, 0, 0},
+        {"uuid", rd_uuid, 0, 0},
+        {"mntpt_path", rd_path, 0, 0},
+        {"fstype", rd_fstype, 0, 0},
+        {"blocksize",rd_blksize, 0, 0},
+        {"kbytestotal",rd_kbytestotal, 0, 0},
+        {"kbytesfree", rd_kbytesfree, 0, 0},
+        {"filestotal", rd_filestotal, 0, 0},
+        {"filesfree", rd_filesfree, 0, 0},
+        {"filegroups", rd_filegroups, 0, 0},
         {0}
 };
 
@@ -188,9 +189,9 @@ void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
         struct obd_device* obd;
         int err;
 
-        
         /* Register this mount instance with LProcFS */
-        snprintf(mnt_name, MAX_STRING_SIZE, "mount_%s", sbi->ll_sb_uuid);
+        snprintf(mnt_name, MAX_STRING_SIZE, "fs"LPU64, mnt_instance);
+        mnt_instance++;
         mnt_name[MAX_STRING_SIZE] = '\0';
         sbi->ll_proc_root = lprocfs_reg_mnt(mnt_name);
         if (sbi->ll_proc_root == NULL) {
@@ -205,14 +206,14 @@ void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
         }
         /* MDC */
         obd = class_uuid2obd(mdc);
-        snprintf(mnt_name, MAX_STRING_SIZE, "status/%s/common_name", 
+        snprintf(mnt_name, MAX_STRING_SIZE, "%s/common_name", 
                  obd->obd_type->typ_name);
         mnt_name[MAX_STRING_SIZE] = '\0';
         memset(d_vars, 0, sizeof(d_vars));
         d_vars[0].read_fptr = rd_dev_name;
         d_vars[0].write_fptr = NULL;
         d_vars[0].name = mnt_name;
-        snprintf(uuid_name, MAX_STRING_SIZE, "status/%s/uuid",
+        snprintf(uuid_name, MAX_STRING_SIZE, "%s/uuid",
                  obd->obd_type->typ_name);
         uuid_name[MAX_STRING_SIZE] = '\0';
         d_vars[1].read_fptr = rd_dev_uuid;
@@ -229,14 +230,14 @@ void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
 
         /* Reuse mnt_name */
         snprintf(mnt_name, MAX_STRING_SIZE, 
-                 "status/%s/common_name", obd->obd_type->typ_name);
+                 "%s/common_name", obd->obd_type->typ_name);
         mnt_name[MAX_STRING_SIZE] = '\0';
         memset(d_vars, 0, sizeof(d_vars));
         d_vars[0].read_fptr = rd_dev_name;
         d_vars[0].write_fptr = NULL;
         d_vars[0].name = mnt_name;
 
-        snprintf(uuid_name, MAX_STRING_SIZE, "status/%s/uuid",
+        snprintf(uuid_name, MAX_STRING_SIZE, "%s/uuid",
                  obd->obd_type->typ_name);
         uuid_name[MAX_STRING_SIZE] = '\0';
         d_vars[1].read_fptr = rd_dev_uuid;

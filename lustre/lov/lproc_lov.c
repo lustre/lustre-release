@@ -171,21 +171,21 @@ int rd_mdc(char* page, char **start, off_t off, int count, int *eof, void *data)
 }
 
 struct lprocfs_vars status_var_nm_1[] = {
-        {"status/uuid", rd_uuid, 0, 0},
-        {"status/stripesize",rd_stripesize, 0, 0},
-        {"status/stripeoffset",rd_stripeoffset, 0, 0},
-        {"status/stripecount",rd_stripecount, 0, 0},
-        {"status/stripetype", rd_stripetype, 0, 0},
-        {"status/numobd",rd_numobd, 0, 0},
-        {"status/activeobd", rd_activeobd, 0, 0},
-        {"status/filestotal", rd_filestotal, 0, 0},
-        {"status/filesfree", rd_filesfree, 0, 0},
-        {"status/filegroups", rd_filegroups, 0, 0},
-        {"status/blocksize", rd_blksize, 0, 0},
-        {"status/kbytestotal", rd_kbtotal, 0, 0},
-        {"status/kbytesfree", rd_kbfree, 0, 0},
-        {"status/target_obd", rd_target, 0, 0},
-        {"status/target_mdc", rd_mdc, 0, 0},
+        {"uuid", rd_uuid, 0, 0},
+        {"stripesize",rd_stripesize, 0, 0},
+        {"stripeoffset",rd_stripeoffset, 0, 0},
+        {"stripecount",rd_stripecount, 0, 0},
+        {"stripetype", rd_stripetype, 0, 0},
+        {"numobd",rd_numobd, 0, 0},
+        {"activeobd", rd_activeobd, 0, 0},
+        {"filestotal", rd_filestotal, 0, 0},
+        {"filesfree", rd_filesfree, 0, 0},
+        {"filegroups", rd_filegroups, 0, 0},
+        {"blocksize", rd_blksize, 0, 0},
+        {"kbytestotal", rd_kbtotal, 0, 0},
+        {"kbytesfree", rd_kbfree, 0, 0},
+        {"target_obd", rd_target, 0, 0},
+        {"target_mdc", rd_mdc, 0, 0},
        
         {0}
 };
@@ -199,6 +199,6 @@ int rd_numrefs(char* page, char **start, off_t off, int count, int *eof,
 }
 
 struct lprocfs_vars status_class_var[]={
-        {"status/num_refs", rd_numrefs, 0, 0},
+        {"num_refs", rd_numrefs, 0, 0},
         {0}
 };

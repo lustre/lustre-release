@@ -50,7 +50,6 @@ extern struct proc_dir_entry proc_root; /* Defined in proc/root.c */
  * Globals
  */
 struct proc_dir_entry *proc_lustre_root;
-struct proc_dir_entry *proc_lustre_dev_root;
 struct proc_dir_entry *proc_lustre_fs_root;
 
 struct proc_dir_entry* lprocfs_mkdir(const char* dname,
@@ -165,9 +164,9 @@ int lprocfs_new_vars(struct proc_dir_entry* root,
                 new_leaf->read_proc = list->read_fptr;
                 new_leaf->write_proc = list->write_fptr;
                 if (data)
-                        new_leaf->data=data;
+                        new_leaf->data = data;
                 else
-                        new_leaf->data=list->data;
+                        new_leaf->data = list->data;
                 list++;
         }
         return 0;
@@ -250,7 +249,7 @@ int lprocfs_reg_class(struct obd_type* type, struct lprocfs_vars* list,
         
         struct proc_dir_entry* root;
         int retval;
-        root = lprocfs_mkdir(type->typ_name, proc_lustre_dev_root);
+        root = lprocfs_mkdir(type->typ_name, proc_lustre_root);
         lprocfs_add_vars(root, list, data);
         type->typ_procroot = root;
         retval = lprocfs_add_vars(root, list, data);
@@ -275,21 +274,13 @@ int lprocfs_reg_main()
         proc_lustre_root = lprocfs_mkdir("lustre", &proc_root);
         if (proc_lustre_root == NULL) {
                 CERROR(" !! Cannot create /proc/lustre !! \n");
-                return -EINVAL;
+                return -ENOMEM;
         }
-
-        proc_lustre_dev_root = lprocfs_mkdir("devices", proc_lustre_root);
-        if (proc_lustre_dev_root == NULL) {
-                CERROR(" !! Cannot create /proc/lustre/devices !! \n");
-                return -EINVAL;
-        }
-        proc_lustre_fs_root = lprocfs_mkdir("mnt_pnt", proc_lustre_root);
-
+        proc_lustre_fs_root = lprocfs_mkdir("llite", proc_lustre_root);
         if (proc_lustre_fs_root == NULL) {
-                CERROR(" !! Cannot create /proc/lustre/mnt_pnt !! \n");
-                return -EINVAL;
+                CERROR(" !! Cannot create /proc/lustre/llite !! \n");
+                return -ENOMEM;
         }
-
         return 0;
 }
 
@@ -297,7 +288,6 @@ int lprocfs_dereg_main()
 {
         lprocfs_remove_all(proc_lustre_root);
         proc_lustre_root = NULL;
-        proc_lustre_dev_root = NULL;
         proc_lustre_fs_root = NULL;
         return 0;
 }
