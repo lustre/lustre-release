@@ -675,7 +675,7 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
                 CERROR("destroying inode with nlink = %d\n", inode->i_nlink);
                 inode->i_nlink = 1;
         }
-        inode->i_mode = 010000;
+        inode->i_mode = S_IFREG;
 
         push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
         rc = vfs_unlink(dir_dentry->d_inode, object_dentry);
