@@ -60,6 +60,8 @@
                 printf("-------------------\n");                        \
         } while (0)
 
+#define MAX_PATH_LENGTH 4096
+
 void t1()
 {
         char *path="/mnt/lustre/test_t1";
@@ -100,108 +102,6 @@ void t4()
         t_check_stat(path, NULL);
         t_rmdir(path);
         LEAVE();
-}
-
-#define PAGE_SIZE (4096)
-#define _npages (2048)
-
-#define MAX_PATH_LENGTH 4096
-
-static int _buffer[_npages][PAGE_SIZE/sizeof(int)];
-
-/* pos:   i/o start from
- * xfer:  npages per transfer
- */
-static void pages_io(int xfer, loff_t pos)
-{
-        char *path="/mnt/lustre/test_t5";
-        int check_sum[_npages] = {0,};
-        int fd, rc, i, j;
-
-        memset(_buffer, 0, sizeof(_buffer));
-
-        /* create sample data */
-        for (i = 0; i < _npages; i++) {
-                for (j = 0; j < PAGE_SIZE/sizeof(int); j++) {
-                        _buffer[i][j] = rand();
-                }
-        }
-
-        /* compute checksum */
-        for (i = 0; i < _npages; i++) {
-                for (j = 0; j < PAGE_SIZE/sizeof(int); j++) {
-                        check_sum[i] += _buffer[i][j];
-                }
-        }
-
-        t_touch(path);
-
-	fd = t_open(path);
-
-        /* write */
-	lseek(fd, pos, SEEK_SET);
-	for (i = 0; i < _npages; i += xfer) {
-		rc = write(fd, _buffer[i], PAGE_SIZE * xfer);
-                if (rc != PAGE_SIZE * xfer) {
-                        printf("write error %d (i = %d)\n", rc, i);
-                        exit(1);
-                }
-	}
-        printf("succefully write %d pages(%d per xfer)\n", _npages, xfer);
-        memset(_buffer, 0, sizeof(_buffer));
-
-        /* read */
-	lseek(fd, pos, SEEK_SET);
-	for (i = 0; i < _npages; i += xfer) {
-		rc = read(fd, _buffer[i], PAGE_SIZE * xfer);
-                if (rc != PAGE_SIZE * xfer) {
-                        printf("read error %d (i = %d)\n", rc, i);
-                        exit(1);
-                }
-	}
-        printf("succefully read %d pages(%d per xfer)\n", _npages, xfer);
-
-        /* compute checksum */
-        for (i = 0; i < _npages; i++) {
-                int sum = 0;
-                for (j = 0; j < PAGE_SIZE/sizeof(int); j++) {
-                        sum += _buffer[i][j];
-                }
-                if (sum != check_sum[i]) {
-                        printf("chunk %d checksum error: expected 0x%x, get 0x%x\n",
-                                i, check_sum[i], sum);
-                }
-        }
-        printf("checksum verified OK!\n");
-
-	t_close(fd);
-        t_unlink(path);
-}
-
-void t5()
-{
-        char text[256];
-        loff_t off_array[] = {1, 4, 17, 255, 258, 4095, 4097, 8191, 1024*1024*1024};
-        int np = 1, i;
-        loff_t offset = 0;
-
-        while (np <= _npages) {
-                sprintf(text, "pages_io: %d per transfer, offset %lld",
-                        np, offset);
-                ENTRY(text);
-                pages_io(np, offset);
-                LEAVE();
-                np += np;
-        }
-
-        for (i = 0; i < sizeof(off_array)/sizeof(loff_t); i++) {
-                offset = off_array[i];
-                sprintf(text, "pages_io: 16 per transfer, offset %lld",
-                        offset);
-                ENTRY(text);
-                pages_io(16, offset);
-                LEAVE();
-        }
 }
 
 void t6()
@@ -402,6 +302,118 @@ void t15()
         LEAVE();
 }
 
+void t16()
+{
+        char *file = "/mnt/lustre/test_t16_file";
+        int fd;
+        ENTRY("small-write-read");
+
+        t_echo_create(file, "aaaaaaaaaaaaaaaaaaaaaa");
+        t_grep(file, "aaaaaaaaaaaaaaaaaaaaaa");
+        t_unlink(file);
+        LEAVE();
+}
+
+#define PAGE_SIZE (4096)
+#define _npages (2048)
+
+static int _buffer[_npages][PAGE_SIZE/sizeof(int)];
+
+/* pos:   i/o start from
+ * xfer:  npages per transfer
+ */
+static void pages_io(int xfer, loff_t pos)
+{
+        char *path="/mnt/lustre/test_t50";
+        int check_sum[_npages] = {0,};
+        int fd, rc, i, j;
+
+        memset(_buffer, 0, sizeof(_buffer));
+
+        /* create sample data */
+        for (i = 0; i < _npages; i++) {
+                for (j = 0; j < PAGE_SIZE/sizeof(int); j++) {
+                        _buffer[i][j] = rand();
+                }
+        }
+
+        /* compute checksum */
+        for (i = 0; i < _npages; i++) {
+                for (j = 0; j < PAGE_SIZE/sizeof(int); j++) {
+                        check_sum[i] += _buffer[i][j];
+                }
+        }
+
+        t_touch(path);
+
+	fd = t_open(path);
+
+        /* write */
+	lseek(fd, pos, SEEK_SET);
+	for (i = 0; i < _npages; i += xfer) {
+		rc = write(fd, _buffer[i], PAGE_SIZE * xfer);
+                if (rc != PAGE_SIZE * xfer) {
+                        printf("write error %d (i = %d)\n", rc, i);
+                        exit(1);
+                }
+	}
+        printf("succefully write %d pages(%d per xfer)\n", _npages, xfer);
+        memset(_buffer, 0, sizeof(_buffer));
+
+        /* read */
+	lseek(fd, pos, SEEK_SET);
+	for (i = 0; i < _npages; i += xfer) {
+		rc = read(fd, _buffer[i], PAGE_SIZE * xfer);
+                if (rc != PAGE_SIZE * xfer) {
+                        printf("read error %d (i = %d)\n", rc, i);
+                        exit(1);
+                }
+	}
+        printf("succefully read %d pages(%d per xfer)\n", _npages, xfer);
+
+        /* compute checksum */
+        for (i = 0; i < _npages; i++) {
+                int sum = 0;
+                for (j = 0; j < PAGE_SIZE/sizeof(int); j++) {
+                        sum += _buffer[i][j];
+                }
+                if (sum != check_sum[i]) {
+                        printf("chunk %d checksum error: expected 0x%x, get 0x%x\n",
+                                i, check_sum[i], sum);
+                }
+        }
+        printf("checksum verified OK!\n");
+
+	t_close(fd);
+        t_unlink(path);
+}
+
+void t50()
+{
+        char text[256];
+        loff_t off_array[] = {1, 4, 17, 255, 258, 4095, 4097, 8191, 1024*1024*1024};
+        int np = 1, i;
+        loff_t offset = 0;
+
+        while (np <= _npages) {
+                sprintf(text, "pages_io: %d per transfer, offset %lld",
+                        np, offset);
+                ENTRY(text);
+                pages_io(np, offset);
+                LEAVE();
+                np += np;
+        }
+
+        for (i = 0; i < sizeof(off_array)/sizeof(loff_t); i++) {
+                offset = off_array[i];
+                sprintf(text, "pages_io: 16 per transfer, offset %lld",
+                        offset);
+                ENTRY(text);
+                pages_io(16, offset);
+                LEAVE();
+        }
+}
+
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);
 
@@ -453,7 +465,6 @@ int main(int argc, char * const argv[])
         t2();
         t3();
         t4();
-        t5();
         t6();
         t7();
         t8();
@@ -464,6 +475,8 @@ int main(int argc, char * const argv[])
         t13();
         t14();
         t15();
+        t16();
+        t50();
 #endif
 
 	printf("liblustre is about shutdown\n");
