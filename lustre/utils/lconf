@@ -307,12 +307,21 @@ class LCTLInterface:
   quit """ % (net, uuid, tgt, gw, tgt)
         self.run(cmds)
 
+    # add a route to a range
+    def del_route_host(self, net, uuid, gw, tgt):
+        cmds =  """
+  network %s
+  del_uuid %s
+  del_route %s
+  quit  """ % (net, uuid, tgt)
+        self.run(cmds)
+
     # disconnect one connection
     def disconnect(self, net, nid, port, servuuid):
         cmds =  """
   network %s
-  disconnect %s 
   del_uuid %s
+  disconnect %s 
   quit""" % (net, nid, servuuid)
         self.run(cmds)
 
@@ -960,6 +969,17 @@ class OSC(Module):
         lctl.newdev(attach="osc %s %s" % (self.name, self.uuid),
                     setup ="%s %s" %(self.obd_uuid, srv.uuid))
 
+    def cleanup(self):
+        srv = self.get_server()
+        if local_net(srv):
+            Module.cleanup(self)
+        else:
+            self.info(self.obd_uuid, self.ost_uuid)
+            r =  find_route(srv)
+            if r:
+                lctl.del_route_host(r[0], srv.uuid, r[1], r[2])
+            Module.cleanup(self)
+            
 
 class Mountpoint(Module):
     def __init__(self,dom_node):
