@@ -30,9 +30,13 @@
 
 command_t list[] = {
         {"network", jt_ptl_network, 0,"setup the NAL (args: nal name)"},
-        {"connect", jt_ptl_connect, 0, "connect to a remote nid (args: <hostname port> | <id> for tcp/elan respectively)"},
-        {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid (args: [hostname]"},
-        {"push", jt_ptl_push_connection, 0, "flush connection to a remote nid (args: [hostname]"},
+        {"print_autoconns", jt_ptl_print_autoconnects, 0, "print autoconnect entries (no args)"},
+        {"add_autoconn", jt_ptl_add_autoconnect, 0, "add autoconnect entry (args: nid host [ixs])"},
+        {"del_autoconn", jt_ptl_del_autoconnect, 0, "delete autoconnect entry (args: [nid] [host] [ks])"},
+        {"print_conns", jt_ptl_print_connections, 0, "print connections (no args)"},
+        {"connect", jt_ptl_connect, 0, "connect to a remote nid (args: host port [xi])"},
+        {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid (args: [nid] [host]"},
+        {"push", jt_ptl_push_connection, 0, "flush connection to a remote nid (args: [nid]"},
         {"ping", jt_ptl_ping, 0, "do a ping test (args: nid [count] [size] [timeout])"},
         {"shownid", jt_ptl_shownid, 0, "print the local NID"},
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local NID (args: [hostname])"},

@@ -65,14 +65,22 @@ command_t cmdlist[] = {
         {"==== network config ====", jt_noop, 0, "network config"},
         {"network", jt_ptl_network, 0, "commands that follow apply to net\n"
          "usage: network <tcp/elan/myrinet/scimac>"},
+        {"autoconn_list", jt_ptl_print_autoconnects, 0, "print autoconnect entries\n"
+         "usage: print_autoconns"},
+        {"add_autoconn", jt_ptl_add_autoconnect, 0, "add an autoconnect entry\n"
+         "usage: add_autoconn <nid> <host> <port> [ixs]"},
+        {"del_autoconn", jt_ptl_del_autoconnect, 0, "remove an autoconnect entry\n"
+         "usage: del_autoconn [<nid>] [<host>] [ks]"},
+        {"conn_list", jt_ptl_print_connections, 0, "connect to a remote nid\n"
+         "usage: print_conns"},
         {"connect", jt_ptl_connect, 0, "connect to a remote nid\n"
-         "usage: connect [[<hostname> <port>] | <elan id>]"},
+         "usage: connect <host> <port> [ix]"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
-         "usage: disconnect <nid>"},
+         "usage: disconnect [<nid>]"},
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local nid. "
          "The nid defaults to hostname for tcp networks and is automatically "
          "setup for elan/myrinet/scimac networks.\n"
-         "usage: mynid [nid]"},
+         "usage: mynid [<nid>]"},
         {"shownid", jt_ptl_shownid, 0, "print the local NID\n"
          "usage: shownid"},
         {"add_uuid", jt_obd_add_uuid, 0, "associate a UUID with a nid\n"
@@ -102,7 +110,7 @@ command_t cmdlist[] = {
          "Omitting the count means indefinitely, 0 means restore, "
          "otherwise fail 'count' messages.\n"
          "usage: fail nid|_all_ [count]"},
-                
+
         /* Device selection commands */
         {"=== device selection ===", jt_noop, 0, "device selection"},
         {"newdev", jt_obd_newdev, 0, "create a new device\n"

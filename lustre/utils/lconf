@@ -394,7 +394,7 @@ class LCTLInterface:
     def connect(self, srv):
         cmds =  "\n  add_uuid %s %s %s" % (srv.uuid, srv.nid, srv.net_type)
         if srv.net_type  in ('tcp', 'toe') and not config.lctl_dump:
-            flags = ''
+            flags = 's'
             if srv.irq_affinity:
                 flags = flags + 'i'
             if srv.nid_exchange:
@@ -403,10 +403,10 @@ class LCTLInterface:
   network %s
   send_mem %d
   recv_mem %d
-  connect %s %d %s""" % (cmds, srv.net_type,
+  add_autoconn %s %s %d %s""" % (cmds, srv.net_type,
              srv.send_mem,
              srv.recv_mem,
-             srv.hostaddr, srv.port, flags )
+             srv.nid, srv.hostaddr, srv.port, flags )
 
         cmds = cmds + "\n  quit"
         self.run(cmds)
@@ -466,13 +466,13 @@ class LCTLInterface:
         self.run(cmds)
 
     # disconnect one connection
-    def disconnect(self, net, nid, port, servuuid):
+    def disconnect(self, srv):
         cmds =  """
   ignore_errors
   network %s
-  disconnect %s 
+  del_autoconn %s %s s
   del_uuid %s
-  quit""" % (net, nid, servuuid)
+  quit""" % (srv.net_type, srv.nid, srv.hostaddr, srv.uuid)
         self.run(cmds)
 
     def del_uuid(self, servuuid):
@@ -989,8 +989,6 @@ class Network(Module):
     def connect_peer_gateways(self):
         for router in self.db.lookup_class('node'):
             if router.get_val_int('router', 0):
-                # if this is a peer with a nid less than mine,
-                # then connect.
                 for netuuid in router.get_networks():
                     net = self.db.lookup(netuuid)
                     gw = Network(net)
@@ -1005,14 +1003,12 @@ class Network(Module):
                         except ValueError, e:
                             gw_nid = gw.nid
                             self_nid = self.nid
-                        if gw_nid < self_nid:
+                        if gw_nid != self_nid:
                             lctl.connect(gw)
 
     def disconnect_peer_gateways(self):
         for router in self.db.lookup_class('node'):
             if router.get_val_int('router', 0):
-                # if this is a peer with a nid less than mine,
-                # then connect.
                 for netuuid in router.get_networks():
                     net = self.db.lookup(netuuid)
                     gw = Network(net)
@@ -1027,12 +1023,11 @@ class Network(Module):
                         except ValueError, e:
                             gw_nid = gw.nid
                             self_nid = self.nid
-                        if gw_nid < self_nid:
+                        if gw_nid != self_nid:
                             try:
-                                lctl.disconnect(gw.net_type, gw.nid, gw.port,
-                                                gw.uuid)
+                                lctl.disconnect(gw)
                             except CommandError, e:
-                                print "disconnectAll failed: ", self.name
+                                print "disconnect failed: ", self.name
                                 e.dump()
                                 cleanup_error(e.rc)
 
@@ -1045,12 +1040,16 @@ class Network(Module):
             stop_acceptor(self.port)
         if  node_is_router():
             self.disconnect_peer_gateways()
-        try:
-            lctl.disconnectAll(self.net_type)
-        except CommandError, e:
-            print "disconnectAll failed: ", self.name
-            e.dump()
-            cleanup_error(e.rc)
+#
+# This commented out so connections not created by this
+# config are not disturbed
+#
+#        try:
+#            lctl.disconnectAll(self.net_type)
+#        except CommandError, e:
+#            print "disconnectAll failed: ", self.name
+#            e.dump()
+#            cleanup_error(e.rc)
 
 class RouteTable(Module):
     def __init__(self,db):
@@ -1061,7 +1060,7 @@ class RouteTable(Module):
         self.info()
         for net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi in self.db.get_route_tbl():
             lctl.add_route(net_type, gw, lo, hi)
-            if net_type in ('tcp', 'toe') and local_net_type(net_type) and lo == hi:
+            if net_type in ('tcp', 'toe') and local_net_type(net_type, tgt_cluster_id) and lo == hi:
                 srvdb = self.db.nid2server(lo, net_type)
                 if not srvdb:
                     panic("no server for nid", lo)
@@ -1077,14 +1076,14 @@ class RouteTable(Module):
             # the network is still being used, don't clean it up
             return
         for net_type, gw, gw_cluster_id, tgt_cluster_id, lo, hi in self.db.get_route_tbl():
-            if net_type in ('tcp', 'toe') and local_net_type(net_type) and hi == '':
+            if net_type in ('tcp', 'toe') and local_net_type(net_type, tgt_cluster_id) and lo == hi:
                 srvdb = self.db.nid2server(lo, net_type)
                 if not srvdb:
                     panic("no server for nid", lo)
                 else:
                     srv = Network(srvdb)
                     try:
-                        lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
+                        lctl.disconnect(srv)
                     except CommandError, e:
                         print "disconnect failed: ", self.name
                         e.dump()
@@ -1523,7 +1522,7 @@ class Client(Module):
             try:
                 srv = choose_local_server(self.get_servers())
                 if srv:
-                    lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
+                    lctl.disconnect(srv)
                 else:
                     srv, r =  find_route(self.get_servers())
                     if srv:
@@ -1865,12 +1864,12 @@ def find_local_routes(lustre):
 
 def choose_local_server(srv_list):
     for srv in srv_list:
-        if local_net_type(srv.net_type):
+        if local_net_type(srv.net_type, srv.cluster_id):
             return srv
 
-def local_net_type(net_type):
+def local_net_type(net_type, cluster_id):
     for cluster in local_clusters:
-        if net_type == cluster[0]:
+        if net_type == cluster[0] and cluster_id == cluster[1]:
             return 1
     return 0
 
