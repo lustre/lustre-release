@@ -129,6 +129,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         err = connmgr_connect(ptlrpc_connmgr, sbi->ll_mds_conn);
         if (err) {
                 CERROR("cannot connect to MDS\n");
+                ptlrpc_put_connection(sbi->ll_mds_conn);
                 GOTO(out_disc, sb = NULL);
         }
 
@@ -294,8 +295,8 @@ static int ll_statfs(struct super_block *sb, struct statfs *buf)
         int err;
         ENTRY;
 
-        err = obd_statfs(ID(sb), &tmp);
-        if ( err ) { 
+        err = obd_statfs(&ll_s2sbi(sb)->ll_conn, &tmp);
+        if (err) {
                 CERROR("obd_statfs fails (%d)\n", err);
                 RETURN(err);
         }
