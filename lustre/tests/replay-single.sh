@@ -11,21 +11,19 @@ init_test_env
 # 3 - bug 1852
 ALWAYS_EXCEPT="3"
 
-
 # XXX I wish all this stuff was in some default-config.sh somewhere
 MOUNT=${MOUNT:-/mnt/lustre}
 DIR=${DIR:-$MOUNT}
 MDSDEV=${MDSDEV:-/tmp/mds-`hostname`}
-MDSSIZE=${MDSSIZE:-100000}
+MDSSIZE=${MDSSIZE:-10000}
 OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
-OSTSIZE=${OSTSIZE:-100000}
+OSTSIZE=${OSTSIZE:-10000}
 UPCALL=${UPCALL:-$PWD/replay-single-upcall.sh}
 FSTYPE=${FSTYPE:-ext3}
 TIMEOUT=${TIMEOUT:-5}
 
 STRIPE_BYTES=65536
 STRIPES_PER_OBJ=1
-
 
 gen_config() {
     rm -f replay-single.xml
@@ -39,13 +37,28 @@ gen_config() {
     do_lmc --add mtpt --node client_facet --path $MOUNT --mds mds1 --ost lov1
 }
 
-
 build_test_filter
 
+cleanup() {
+    [ "$DAEMONFILE" ] && lctl debug_daemon stop
+    stop client ${FORCE:=--force} $CLIENTLCONFARGS
+    stop mds ${FORCE} $MDSLCONFARGS --dump cleanup.log
+    stop ost ${FORCE}
+}
+
+if [ "$ONLY" == "cleanup" ]; then
+    sysctl -w portals.debug=0
+    cleanup
+    exit
+fi
+
 gen_config
-start mds --reformat $MDSLCONFARGS
+
 start ost --reformat $OSTLCONFARGS
+start mds --reformat $MDSLCONFARGS
 start client --gdb $CLIENTLCONFARGS
+
+[ "$DAEMONFILE" ] && lctl debug_daemon start $DAEMONFILE $DAEMONSIZE
 
 mkdir -p $DIR
 
@@ -353,7 +366,4 @@ test_19() {
 run_test 19 "|X| mcreate, open, write, rename "
 
 equals_msg test complete, cleaning up
-stop client ${FORCE:=--force} $CLIENTLCONFARGS
-stop ost ${FORCE}
-stop mds ${FORCE} $MDSLCONFARGS --dump cleanup.log
-
+cleanup
