@@ -937,7 +937,7 @@ fi
 %endif
 
 %if %{buildpseries64}
-%files bigsmp -f kernelpseries64.files
+%files pseries64 -f kernelpseries64.files
 %endif
 
 %if %{buildbigmem}
