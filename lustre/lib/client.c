@@ -27,7 +27,12 @@
 #define EXPORT_SYMTAB
 #define DEBUG_SUBSYSTEM S_OST /* XXX WRONG */
 
+#ifdef __KERNEL__
 #include <linux/module.h>
+#else 
+#include <liblustre.h>
+#endif
+
 #include <linux/obd_ost.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_dlm.h>
@@ -119,9 +124,137 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         imp->imp_obd = obddev;
 
         cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        cli->cl_sandev = 0;
+#else
+        cli->cl_sandev.value = 0;
+#endif
 
         RETURN(0);
 }
+
+#ifdef __KERNEL__
+/* convert a pathname into a kdev_t */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static kdev_t path2dev(char *path)
+{
+        struct dentry *dentry;
+        struct nameidata nd;
+        kdev_t dev = 0;
+
+        if (!path_init(path, LOOKUP_FOLLOW, &nd))
+                return 0;
+
+        if (path_walk(path, &nd))
+                return 0;
+
+        dentry = nd.dentry;
+        if (dentry->d_inode && !is_bad_inode(dentry->d_inode) &&
+            S_ISBLK(dentry->d_inode->i_mode))
+                dev = dentry->d_inode->i_rdev;
+        path_release(&nd);
+
+        return dev;
+}
+#else
+static int path2dev(char *path)
+{
+        struct dentry *dentry;
+        struct nameidata nd;
+        int dev = 0;
+
+        if (!path_init(path, LOOKUP_FOLLOW, &nd))
+                return 0;
+
+        if (path_walk(path, &nd))
+                return 0;
+
+        dentry = nd.dentry;
+        if (dentry->d_inode && !is_bad_inode(dentry->d_inode) &&
+            S_ISBLK(dentry->d_inode->i_mode))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+                dev = dentry->d_inode->i_rdev;
+#else
+                dev = dentry->d_inode->i_rdev.value;
+#endif
+        path_release(&nd);
+
+        return dev;
+}
+#endif
+
+int client_sanobd_setup(struct obd_device *obddev, obd_count len, void *buf)
+{
+        struct obd_ioctl_data* data = buf;
+        struct client_obd *cli = &obddev->u.cli;
+        struct obd_import *imp = &cli->cl_import;
+        struct obd_uuid server_uuid;
+        ENTRY;
+
+        if (data->ioc_inllen1 < 1) {
+                CERROR("requires a TARGET UUID\n");
+                RETURN(-EINVAL);
+        }
+
+        if (data->ioc_inllen1 > 37) {
+                CERROR("client UUID must be less than 38 characters\n");
+                RETURN(-EINVAL);
+        }
+
+        if (data->ioc_inllen2 < 1) {
+                CERROR("setup requires a SERVER UUID\n");
+                RETURN(-EINVAL);
+        }
+
+        if (data->ioc_inllen2 > 37) {
+                CERROR("target UUID must be less than 38 characters\n");
+                RETURN(-EINVAL);
+        }
+
+        if (data->ioc_inllen3 < 1) {
+                CERROR("setup requires a SAN device pathname\n");
+                RETURN(-EINVAL);
+        }
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        cli->cl_sandev = path2dev(data->ioc_inlbuf3);
+        if (!cli->cl_sandev) {
+                CERROR("%s seems not a valid SAN device\n", data->ioc_inlbuf3);
+                RETURN(-EINVAL);
+        }
+#else
+        cli->cl_sandev.value = path2dev(data->ioc_inlbuf3);
+        if (!cli->cl_sandev.value) {
+                CERROR("%s seems not a valid SAN device\n", data->ioc_inlbuf3);
+                RETURN(-EINVAL);
+        }
+#endif
+
+        sema_init(&cli->cl_sem, 1);
+        cli->cl_conn_count = 0;
+        memcpy(cli->cl_target_uuid.uuid, data->ioc_inlbuf1, data->ioc_inllen1);
+        memcpy(server_uuid.uuid, data->ioc_inlbuf2, MIN(data->ioc_inllen2,
+                                                   sizeof(server_uuid)));
+
+        imp->imp_connection = ptlrpc_uuid_to_connection(&server_uuid);
+        if (!imp->imp_connection)
+                RETURN(-ENOENT);
+        
+        INIT_LIST_HEAD(&imp->imp_replay_list);
+        INIT_LIST_HEAD(&imp->imp_sending_list);
+        INIT_LIST_HEAD(&imp->imp_delayed_list);
+        spin_lock_init(&imp->imp_lock);
+
+        ptlrpc_init_client(OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
+                           "sanosc", &obddev->obd_ldlm_client);
+        imp->imp_client = &obddev->obd_ldlm_client;
+        imp->imp_obd = obddev;
+
+        cli->cl_max_mds_easize = sizeof(struct lov_mds_md);
+
+        RETURN(0);
+}
+#endif
 
 int client_obd_cleanup(struct obd_device * obddev)
 {
@@ -165,7 +298,6 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                 GOTO(out_disco, rc = -ENOMEM);
 
         INIT_LIST_HEAD(&imp->imp_chain);
-        imp->imp_last_xid = 0;
         imp->imp_max_transno = 0;
         imp->imp_peer_committed_transno = 0;
 
@@ -203,20 +335,9 @@ out_req:
 out_ldlm:
                 ldlm_namespace_free(obd->obd_namespace);
                 obd->obd_namespace = NULL;
-                if (rq_opc == MDS_CONNECT) {
-                        /* Don't class_disconnect OSCs, because the LOV
-                         * cares about them even if they can't connect to the
-                         * OST.
-                         *
-                         * This is leak-bait, but without either a way to
-                         * operate on the osc without an export or separate
-                         * methods for connect-to-osc and connect-osc-to-ost
-                         * it's not clear what else to do.
-                         */
 out_disco:
-                        cli->cl_conn_count--;
-                        class_disconnect(conn);
-                }
+                cli->cl_conn_count--;
+                class_disconnect(conn);
         }
 out_sem:
         up(&cli->cl_sem);
