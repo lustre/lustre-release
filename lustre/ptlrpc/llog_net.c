@@ -159,6 +159,12 @@ int llog_initiator_connect(struct llog_ctxt *ctxt)
 }
 EXPORT_SYMBOL(llog_initiator_connect);
 #else /* !__KERNEL__ */
+int llog_origin_connect(struct llog_ctxt *ctxt, int count,
+                        struct llog_logid *logid,
+                        struct llog_ctxt_gen *gen)
+{
+        return 0;
+}
 
 int llog_initiator_connect(struct llog_ctxt *ctxt)
 {
