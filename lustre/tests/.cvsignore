@@ -5,7 +5,7 @@ configure
 Makefile
 Makefile.in
 .deps
-tags
 TAGS
+openunlink
 testreq
 truncate
