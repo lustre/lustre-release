@@ -162,18 +162,23 @@ static int getdata(int len, void **data)
 
 
 static int obd_devicename_from_path(obd_devicename* whoami, 
-				    char* user_string) 
+				    uint32_t klen,
+				    char* kname)
 {
-  struct nameidata nd;
-  int err;
+	whoami->len = klen;
+	whoami->name = kname;
 
-  err = user_path_walk(user_string, &nd);
-  if (!err) { 
-    whoami->dentry = nd.dentry;
-    path_release(&nd);
-  }
-  return err;
+/* 	err = user_path_walk(user_string, &nd); */
+/* 	if (!err) {  */
+/* 		whoami->dentry = nd.dentry; */
+/* 		path_release(&nd); */
+/* 	} */
+/* 	return err; */
+
+	return 0;
 }
+
+
 
 /* to control /dev/obdNNN */
 static int obd_class_ioctl (struct inode * inode, struct file * filp, 
@@ -332,7 +337,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         case OBD_IOC_SETUP: {
                 struct ioc_setup {
                         int setup_datalen;
-                        char *setup_data;
+                        void *setup_data;
                 } *setup;
 
                 setup = tmp_buf;
@@ -363,8 +368,16 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		  return err;
 		}
 		
+                /* get the attach data */
+                err = getdata(setup->setup_datalen, &setup->setup_data);
+                if ( err ) {
+                        EXIT;
+                        return err;
+                }
+
 		err = obd_devicename_from_path(&(obddev->obd_fsname),
-						(char*) setup->setup_data);
+					       setup->setup_datalen,
+					       (char*) setup->setup_data);
 		if (err) {
 		  memset(&(obddev->obd_fsname), 0, sizeof(obd_devicename));
 		  EXIT;

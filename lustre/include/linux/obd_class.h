@@ -99,7 +99,9 @@ struct obd_conn {
         uint32_t oc_id;
 };
 
-typedef union {
+typedef struct {
+	uint32_t len;
+	char *   name;
         struct dentry *dentry;   /* file system obd device names */
         __u8           _uuid[16]; /* uuid obd device names */
 } obd_devicename;
