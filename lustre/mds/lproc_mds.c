@@ -26,8 +26,11 @@
 #include <linux/lprocfs_status.h>
 
 #ifndef LPROCFS
-struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
-struct lprocfs_vars lprocfs_module_vars[] = { {0} };
+struct lprocfs_vars lprocfs_mds_obd_vars[]  = { {0} };
+struct lprocfs_vars lprocfs_mds_module_vars[] = { {0} };
+struct lprocfs_vars lprocfs_mdt_obd_vars[] = { {0} };
+struct lprocfs_vars lprocfs_mdt_module_vars[] = { {0} };
+
 #else
 
 static inline
@@ -54,7 +57,7 @@ int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
 }
 
 
-struct lprocfs_vars lprocfs_obd_vars[] = {
+struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",       lprocfs_rd_uuid, 0, 0 },
         { "blocksize",  rd_blksize,      0, 0 },
         { "bytestotal", rd_kbytestotal,  0, 0 },
@@ -66,9 +69,27 @@ struct lprocfs_vars lprocfs_obd_vars[] = {
         { 0 }
 };
 
-struct lprocfs_vars lprocfs_module_vars[] = {
+struct lprocfs_vars lprocfs_mds_module_vars[] = {
         { "num_refs",   lprocfs_rd_numrefs, 0, 0 },
         { 0 }
 };
+
+struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
+        { "uuid",       lprocfs_rd_uuid, 0, 0 },
+        { 0 }
+};
+
+struct lprocfs_vars lprocfs_mdt_module_vars[] = {
+        { "num_refs",   lprocfs_rd_numrefs, 0, 0 },
+        { 0 }
+};
+
 #endif
-LPROCFS_INIT_VARS(lprocfs_module_vars, lprocfs_obd_vars)
+struct lprocfs_static_vars lprocfs_array_vars[] = { {lprocfs_mds_module_vars,
+                                                     lprocfs_mds_obd_vars},
+                                                    {lprocfs_mdt_module_vars,
+                                                     lprocfs_mdt_obd_vars}};
+
+LPROCFS_INIT_MULTI_VARS(lprocfs_array_vars,
+                        (sizeof(lprocfs_array_vars)/
+                         sizeof(struct lprocfs_static_vars))) 
