@@ -74,11 +74,15 @@ int op_create_file(char *name, long stripe_size, int stripe_offset,
         lum.lmm_stripe_count = stripe_count;
 
         fd = open(name, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644);
+        if (errno == EISDIR) 
+                fd = open(name, O_DIRECTORY | O_RDONLY);
+
         if (fd < 0) {
                 err_msg("unable to open '%s'",name);
                 rc = -errno;
                 return rc;
         }
+
         if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, &lum)) {
                 char *errmsg = "stripe already set";
                 if (errno != EEXIST && errno != EALREADY)
@@ -93,35 +97,6 @@ int op_create_file(char *name, long stripe_size, int stripe_offset,
                 if (rc == 0)
                         rc = -errno;
         }
-        return rc;
-}
-
-int op_setstripe_dir(char *path, long stripe_size, int stripe_offset,
-                     int stripe_count)
-{
-        struct lov_user_md lum = { 0 };
-        int rc = 0;
-        DIR * dir;
-
-        /*  Initialize IOCTL striping pattern structure  */
-        lum.lmm_magic = LOV_USER_MAGIC;
-        lum.lmm_stripe_size = stripe_size;
-        lum.lmm_stripe_offset = stripe_offset;
-        lum.lmm_stripe_count = stripe_count;
-
-        dir = opendir(path);
-        if (dir == NULL) {
-                err_msg("\"%.40s\" opendir failed", path);
-                rc = -errno;
-        } else {
-                if (ioctl(dirfd(dir), LL_IOC_LOV_SETSTRIPE, &lum)) {
-                        fprintf(stderr, "error on ioctl for '%s': %s\n",
-                                path, strerror(errno));
-                        rc = -errno;
-                }
-                closedir(dir);
-        }
-
         return rc;
 }
 
