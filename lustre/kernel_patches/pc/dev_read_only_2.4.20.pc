@@ -1,0 +1,3 @@
+drivers/block/blkpg.c
+drivers/block/loop.c
+drivers/ide/ide-disk.c
