@@ -910,7 +910,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                 int i;
                 i = mea_name2idx(mea, rec->ur_name, rec->ur_namelen - 1);
                 if (mea->mea_master != mea->mea_fids[i].mds) {
-                        CERROR("%s: inapropriate MDS(%d) for %lu/%u:%s."
+                        CDEBUG(D_OTHER,
+                               "%s: inapropriate MDS(%d) for %lu/%u:%s."
                                " should be %d(%d)\n", obd->obd_name,
                                mea->mea_master, dparent->d_inode->i_ino,
                                dparent->d_inode->i_generation, rec->ur_name,
@@ -976,19 +977,16 @@ got_child:
                 unsigned long ino = rec->ur_fid2->id;
                 struct iattr iattr;
                 struct inode *inode;
-
-                if ((rc = mds_try_to_split_dir(obd, dparent, &mea,
-                                               0, update_mode))) {
-                        if (rc > 0) {
-                                /* dir got splitted */
-                                CERROR("%s: splitted %lu/%u - %d\n", obd->obd_name,
-                                        dparent->d_inode->i_ino,
-                                        dparent->d_inode->i_generation, rc);
-                                GOTO(cleanup, rc = -ERESTART);
-                        } else {
-                                /* error happened during spitting */
-                                GOTO(cleanup, rc);
-                        }
+                rc = mds_try_to_split_dir(obd, dparent, &mea, 0, update_mode);
+                CDEBUG(D_OTHER, "%s: splitted %lu/%u - %d\n",
+                       obd->obd_name, dparent->d_inode->i_ino,
+                       dparent->d_inode->i_generation, rc);
+                if (rc > 0) {
+                        /* dir got splitted */
+                        GOTO(cleanup, rc = -ERESTART);
+                } else if (rc < 0) {
+                        /* error happened during spitting */
+                        GOTO(cleanup, rc);
                 }
 
                 if (!(rec->ur_flags & MDS_OPEN_CREAT)) {

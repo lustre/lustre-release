@@ -828,7 +828,8 @@ int mds_check_mds_num(struct obd_device *obd, struct inode* inode,
                 int i;
                 i = mea_name2idx(mea, name, namelen - 1);
                 if (mea->mea_master != mea->mea_fids[i].mds) {
-                        CERROR("inapropriate MDS(%d) for %s. should be %d(%d)\n",
+                        CDEBUG(D_OTHER,
+                               "inapropriate MDS(%d) for %s. should be %d(%d)\n",
                                mea->mea_master, name, mea->mea_fids[i].mds, i);
                         rc = -ERESTART;
                 }
@@ -1324,7 +1325,7 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         unsigned int tmpname;
         struct lvfs_ucred uc;
         struct mea *mea;
-        void *handle;
+        void *handle = NULL;
         ENTRY;
        
         DEBUG_REQ(D_HA, req, "create remote object");

@@ -603,7 +603,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 int i;
                 i = mea_name2idx(mea, rec->ur_name, rec->ur_namelen - 1);
                 if (mea->mea_master != mea->mea_fids[i].mds) {
-                        CERROR("inapropriate MDS(%d) for %lu/%u:%s."
+                        CDEBUG(D_OTHER, "inapropriate MDS(%d) for %lu/%u:%s."
                                " should be %d(%d)\n",
                                mea->mea_master, dparent->d_inode->i_ino,
                                dparent->d_inode->i_generation, rec->ur_name,
@@ -624,21 +624,16 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_CREATE_WRITE, dir->i_sb);
 
         if (type == S_IFREG || type == S_IFDIR) {
-                if ((rc = mds_try_to_split_dir(obd, dparent, &mea, 
-                                               0, parent_mode))) {
-                        if (rc > 0) {
-                                /* dir got splitted */
-                                CERROR("%s: splitted %lu/%u - %d/%d\n",
-                                       obd->obd_name, dparent->d_inode->i_ino,
-                                       dparent->d_inode->i_generation, rc,
-                                       parent_mode);
-                                CERROR("  creation %*s was requested\n",
-                                       rec->ur_namelen - 1, rec->ur_name);
-                                GOTO(cleanup, rc = -ERESTART);
-                        } else {
-                                /* error happened during spitting. */
-                                GOTO(cleanup, rc);
-                        }
+                rc = mds_try_to_split_dir(obd, dparent, &mea, 0, parent_mode);
+                CDEBUG(D_OTHER, "%s: splitted %lu/%u - %d/%d\n",
+                       obd->obd_name, dparent->d_inode->i_ino,
+                       dparent->d_inode->i_generation, rc, parent_mode);
+                if (rc > 0) {
+                        /* dir got splitted */
+                        GOTO(cleanup, rc = -ERESTART);
+                } else if (rc < 0) {
+                        /* error happened during spitting. */
+                        GOTO(cleanup, rc);
                 }
         }
 
@@ -686,21 +681,16 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                                  * signalthat we have exclusive access
                                  * to the directory. simple because
                                  * nobody knows it already exists -bzzz */
-                                if ((rc = mds_try_to_split_dir(obd, dchild,
-                                                               NULL, nstripes,
-                                                               LCK_EX))) {
-                                        if (rc > 0) {
-                                                /* dir got splitted */
-                                        CERROR("%s: splitted %lu/%u - %d\n",
-                                               obd->obd_name,
-                                               dchild->d_inode->i_ino,
-                                               dchild->d_inode->i_generation, rc);
-                                                rc = 0;
-                                        } else {
-                                                /* an error occured during
-                                                 * splitting. */
-                                                GOTO(cleanup, rc);
-                                        }
+                                rc = mds_try_to_split_dir(obd, dchild,
+                                                          NULL, nstripes,
+                                                          LCK_EX);
+                                if (rc > 0) {
+                                        /* dir got splitted */
+                                        rc = 0;
+                                } else if (rc < 0) {
+                                        /* an error occured during
+                                         * splitting. */
+                                        GOTO(cleanup, rc);
                                 }
                         }
                 } else if (!DENTRY_VALID(dchild)) {
