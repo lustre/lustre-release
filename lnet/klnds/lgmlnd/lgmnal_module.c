@@ -18,8 +18,12 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
+
 #include "lgmnal.h"
 
+
+int lgmnal_small_msg_size = 525312;
+int lgmnal_debug_level = 1;
 
 ptl_handle_ni_t	lgmnal_ni;
 
@@ -70,8 +74,6 @@ lgmnal_cmd(struct portal_ioctl_data *data, void *private)
 	return(0);
 }
 
-int lgmnal_small_msg_size = 81920;
-int lgmnal_debug_level = 1;
 
 int
 init_module()
@@ -130,8 +132,8 @@ EXPORT_SYMBOL(lgmnal_debug_level);
 MODULE_PARM(lgmnal_small_msg_size, "i");
 MODULE_PARM(lgmnal_debug_level, "i");
 
-MODULE_AUTHOR("Morgan Doyle. morgan.doyle@hp.com");
+MODULE_AUTHOR("Morgan Doyle");
 
-MODULE_DESCRIPTION("A Portals kernel NAL for Myrinet GM2. [0<lgmnal_debug_level<4]");
+MODULE_DESCRIPTION("A Portals kernel NAL for Myrinet GM. [0<lgmnal_debug_level<4. Increase debug_level to get more debugs]");
 
 MODULE_LICENSE("GPL");

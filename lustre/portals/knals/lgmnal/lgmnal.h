@@ -19,6 +19,8 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+
+
 /*
  *	Portals GM kernel NAL header file
  *	This file makes all declaration and prototypes 
@@ -64,8 +66,6 @@
  *	Defines for the API NAL
  */
 
-
-
 /*
  *	Small message size is configurable
  *	insmod can set small_msg_size
@@ -77,15 +77,15 @@
 #define LGMNAL_LARGE_MESSAGE_FINI	1081
 
 extern  int lgmnal_small_msg_size;
-#define LGMNAL_SMALL_MSG_SIZE(a)	a->small_msg_size
+#define LGMNAL_SMALL_MSG_SIZE(a)		a->small_msg_size
 #define LGMNAL_IS_SMALL_MESSAGE(n,a,b,c)	lgmnal_is_small_message(n, a, b, c)
-#define LGMNAL_MAGIC	0x1234abcd
+#define LGMNAL_MAGIC				0x1234abcd
 
 typedef struct _lgmnal_hash {
-		void *key;
-		void *data;
-		struct _lgmnal_hash	*next;
-	} lgmnal_hash_t;
+	void 			*key;
+	void 			*data;
+	struct _lgmnal_hash	*next;
+} lgmnal_hash_t;
 
 /*
  *	Small Transmit Descriptor
@@ -96,14 +96,18 @@ typedef struct _lgmnal_hash {
  *	allows us to go the other way.
  */
 typedef struct _lgmnal_stxd_t {
-	void 	*buffer;		/* Address of small wired buffer this decriptor uses */
-	int	size;			/* size (in bytes) of the tx buffer this descripto uses */
-	gm_size_t	gmsize;		/* gmsize of the tx buffer this descripto uses */
-	int	type;			/* large or small message */
-	struct _lgmnal_data_t *nal_data;
-	lib_msg_t	*cookie;	/* the cookie the portals library gave us */
-	int	niov;
-	struct iovec	iov[PTL_MD_MAX_IOV];
+	void 			*buffer;		/* Address of small wired buffer this decriptor uses */
+	int			buffer_size;		/* size (in bytes) of the tx buffer this descripto uses */
+	gm_size_t		gm_size;		/* gmsize of the tx buffer this descripto uses */
+	int			msg_size;		/* size of the message being send */
+	int			gm_target_node;
+	int			gm_priority;
+	int			type;			/* large or small message */
+	struct _lgmnal_data_t 	*nal_data;
+	lib_msg_t		*cookie;	/* the cookie the portals library gave us */
+	int			niov;
+	struct iovec		iov[PTL_MD_MAX_IOV];
+	struct	_lgmnal_srxd_t  *srxd;	/* for gm_gets */
 	struct _lgmnal_stxd_t	*next;
 } lgmnal_stxd_t;
 
@@ -111,21 +115,32 @@ typedef struct _lgmnal_stxd_t {
  *	as for lgmnal_stxd_t 
  */
 typedef struct _lgmnal_srxd_t {
-	void 	*buffer;
-	int	size;
-	gm_size_t	gmsize;
-	int	type;
+	void 			*buffer;
+	int			size;
+	gm_size_t		gmsize;
+	unsigned int		gm_source_node;
+	lgmnal_stxd_t		*source_stxd;
+	int			type;
+	int			nsiov;			/* size of iovec sent in LGMNAL_LARGE_MESSAGE_INIT */
+	int			nriov;			/* size of iovec used to receive data in LARGE_MESSAGE */
+	struct iovec 		*riov;			/* the iovec used to receive data. callback needs it to dergister memory */
+	int			ncallbacks;		/* number of gm_get callbacks that have competed */
+	spinlock_t		callback_lock;		/* lock provided for ncallbacks */
+	int			callback_status;	/* or'd together status of gm_gets */
+	lib_msg_t		*cookie;
 	struct _lgmnal_srxd_t	*next;
+	struct _lgmnal_data_t	*nal_data;
 } lgmnal_srxd_t;
 
 /*
  *	Header which lmgnal puts at the start of each message
  */
 typedef struct	_lgmnal_msghdr {
-	int	magic;
-	int 	type;
+	int		magic;
+	int 		type;
 	unsigned int	sender_node_id;
 	lgmnal_stxd_t	*stxd;
+	int		niov;
 	} lgmnal_msghdr_t;
 #define LGMNAL_MSGHDR_SIZE	sizeof(lgmnal_msghdr_t)
 
@@ -136,11 +151,6 @@ typedef struct	_lgmnal_msghdr {
 
 typedef struct _lgmnal_data_t {
 	int	refcnt;
-#ifdef LGMNAL_API_LOCK_SPIN
-	spinlock_t	api_lock;	/* lock provided for api->lock function */
-#else
-	struct semaphore api_lock;
-#endif
 	spinlock_t	cb_lock;	/* lock provided for cb_cli function */
 	char		_cb_file[128];
 	char		_cb_function[128];
@@ -148,19 +158,11 @@ typedef struct _lgmnal_data_t {
 	spinlock_t 	stxd_lock;	/* lock to add or remove stxd to/from free list */
 	struct semaphore stxd_token;	/* Don't try to access the list until get a token */
 	lgmnal_stxd_t	*stxd;		/* list of free stxd's */
-#ifdef LGMNAL_USE_GM_HASH
 	struct gm_hash	*stxd_hash;	/* hash to translate txbuffer to stxd. Created in stxd_alloc */
-#else
-	lgmnal_hash_t	*stxd_hash;	/* hash to translate txbuffer to stxd. Created in stxd_alloc */
-#endif
 	spinlock_t 	srxd_lock;
 	struct semaphore srxd_token;
 	lgmnal_srxd_t	*srxd;
-#ifdef LGMNAL_USE_GM_HASH
 	struct gm_hash	*srxd_hash;
-#else
-	lgmnal_hash_t	*srxd_hash;
-#endif
 	nal_t		*nal;		/* our API NAL */
 	nal_cb_t	*nal_cb;	/* our CB nal */
 	struct gm_port	*gm_port;	/* the gm port structure we open in lgmnal_init */
@@ -188,26 +190,9 @@ typedef struct _lgmnal_data_t {
 
 #define LGMNAL_NUM_IF 	1
 
-#if 0
-/*
- *	A global structre to maintain 1 nal_data structure for each 
- *	myrinet card that the user initialises (only tested for 1)
- *	To add or remove any nal_data structures from the ifs arrary the 
- *	init_lock must be acquired. This is the only time this lock is acquired
- */
-typedef struct _lgmnal_global_t {
-	int 	debug_level;
-	struct	semaphore	init_lock;
-	lgmnal_data_t		*ifs[LGMNAL_NUM_IF];
-} lgmnal_global_t;
-
-extern lgmnal_data_t	global_nal_data;
-#define LGMNAL_DEBUG_LEVEL	lgmnal_global.debug_level
-#else
 extern lgmnal_data_t	*global_nal_data;
 extern int	lgmnal_debug_level;
 #define LGMNAL_DEBUG_LEVEL	lgmnal_debug_level
-#endif
 
 /*
  *	The gm_port to use for lgmnal
@@ -231,10 +216,10 @@ extern int	lgmnal_debug_level;
 #define LGMNAL_PRINT(level, args)
 #endif
 
-#define LGMNAL_DEBUG_ERR 1	/* only report errors */
-#define LGMNAL_DEBUG_TRACE 2	/* on entering function */
-#define LGMNAL_DEBUG_V 3	/* debug */
-#define LGMNAL_DEBUG_VV 4	/* more debug */
+#define LGMNAL_DEBUG_ERR 	1	/* only report errors */
+#define LGMNAL_DEBUG_TRACE 	2	/* on entering function */
+#define LGMNAL_DEBUG_V 		3	/* debug */
+#define LGMNAL_DEBUG_VV 	4	/* more debug */
 
 /*
  *	Return codes
@@ -251,35 +236,6 @@ extern int	lgmnal_debug_level;
 /*
  *	Locking macros
  */
-
-/*
- *	To access the global structure
- *	to add or remove interface (lgmnal_init) or shutdown only
- */
-#define LGMNAL_GLOBAL_LOCK_INIT	sema_init(&(lgmnal_global.init_lock), 1)
-#define LGMNAL_GLOBAL_LOCK	do {	\
-				LGMNAL_PRINT(1, ("Acquiring global mutex\n")); \
-				down(&(lgmnal_global.init_lock)); \
-				LGMNAL_PRINT(1, ("Got global lock\n")); \
-				} while (0)
-#define LGMNAL_GLOBAL_UNLOCK	do {		\
-				LGMNAL_PRINT(1, ("Releasing global mutex\n")); \
-				up(&(lgmnal_global.init_lock)); \
-				LGMNAL_PRINT(1, ("Release global mutex\n")); \
-				} while (0)
-
-/*
- *	For the API lock function
- */
-#ifdef LGMNAL_API_LOCK_SPIN
-#define LGMNAL_API_LOCK_INIT(a)		spin_lock_init(&a->api_lock)
-#define LGMNAL_API_LOCK(a)		spin_lock(&a->api_lock)
-#define LGMNAL_API_UNLOCK(a)		spin_unlock(&a->api_lock)
-#else
-#define LGMNAL_API_LOCK_INIT(a)		sema_init(&a->api_lock, 1)
-#define LGMNAL_API_LOCK(a)		down(&a->api_lock)
-#define LGMNAL_API_UNLOCK(a)		up(&a->api_lock)
-#endif
 
 /*
  *	For the Small tx and rx descriptor lists
@@ -322,6 +278,10 @@ extern int	lgmnal_debug_level;
 
 #define LGMNAL_CB_LOCK_INIT(a)			spin_lock_init(&a->cb_lock);
 
+
+/*
+ *	Memory Allocator
+ */
 
 /*
  *	API NAL
@@ -415,50 +375,73 @@ void  lgmnal_fini(void);
 				a->nal_data = NULL; \
 				} while (0)
 
-/*
- *	lgmnal utilities
- */
-
-void lgmnal_print(const char *, ...);
 
 /*
  *	Small Transmit and Receive Descriptor Functions
  */
-int  lgmnal_alloc_stxd(lgmnal_data_t *);
-void lgmnal_free_stxd(lgmnal_data_t *);
-lgmnal_stxd_t* lgmnal_get_stxd(lgmnal_data_t *, int);
-void lgmnal_return_stxd(lgmnal_data_t *, lgmnal_stxd_t *);
+int  		lgmnal_alloc_stxd(lgmnal_data_t *);
+void 		lgmnal_free_stxd(lgmnal_data_t *);
+lgmnal_stxd_t* 	lgmnal_get_stxd(lgmnal_data_t *, int);
+void 		lgmnal_return_stxd(lgmnal_data_t *, lgmnal_stxd_t *);
 
-int  lgmnal_alloc_srxd(lgmnal_data_t *);
-void lgmnal_free_srxd(lgmnal_data_t *);
-lgmnal_srxd_t* lgmnal_get_srxd(lgmnal_data_t *, int);
-void lgmnal_return_srxd(lgmnal_data_t *, lgmnal_srxd_t *);
+int  		lgmnal_alloc_srxd(lgmnal_data_t *);
+void 		lgmnal_free_srxd(lgmnal_data_t *);
+lgmnal_srxd_t* 	lgmnal_get_srxd(lgmnal_data_t *, int);
+void 		lgmnal_return_srxd(lgmnal_data_t *, lgmnal_srxd_t *);
 
 /*
  *	general utility functions
  */
+void 		lgmnal_print(const char *, ...);
 lgmnal_srxd_t	*lgmnal_rxbuffer_to_srxd(lgmnal_data_t *, void*);
 lgmnal_stxd_t	*lgmnal_txbuffer_to_stxd(lgmnal_data_t *, void*);
-void	lgmnal_stop_rxthread(lgmnal_data_t *);
-void	lgmnal_small_tx_done(gm_port_t *, void *, gm_status_t);
-char	*lgmnal_gm_error(gm_status_t);
-char	*lgmnal_rxevent(gm_recv_event_t*);
-int	lgmnal_is_small_message(lgmnal_data_t*, int, struct iovec*, int);
+void		lgmnal_stop_rxthread(lgmnal_data_t *);
+void		lgmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
+void		lgmnal_drop_sends_callback(gm_port_t *, void *, gm_status_t);
+char		*lgmnal_gm_error(gm_status_t);
+char		*lgmnal_rxevent(gm_recv_event_t*);
+int		lgmnal_is_small_message(lgmnal_data_t*, int, struct iovec*, int);
+void 		*lgmnal_hash_find(lgmnal_hash_t *, void*);
+int 		lgmnal_hash_add(struct gm_hash **, void*, void*);
+void 		lgmnal_hash_free(lgmnal_hash_t**);
+void 		lgmnal_yield(int);
 
-void *lgmnal_hash_find(lgmnal_hash_t *, void*);
-int lgmnal_hash_add(lgmnal_hash_t**, void*, void*);
-void lgmnal_hash_free(lgmnal_hash_t**);
 
 /*
  *	Communication functions
  */
-int lgmnal_receive_thread(void *);
-int
-lgmnal_small_transmit(nal_cb_t *, void *, lib_msg_t *, ptl_hdr_t *, int, ptl_nid_t, ptl_pid_t, unsigned int, struct iovec*, int);
 
-int
-lgmnal_small_receive2(nal_cb_t *, void *, lib_msg_t *, unsigned int, struct iovec *, size_t, size_t);
+/*
+ *	Receive threads
+ */
+int 		lgmnal_rx_thread(void *);
+int 		lgmnal_pre_receive(lgmnal_data_t*, gm_recv_t*, int);
+int		lgmnal_rx_bad(lgmnal_data_t *, gm_recv_t *, lgmnal_srxd_t *);
+int		lgmnal_rx_requeue_buffer(lgmnal_data_t *, lgmnal_srxd_t *);
 
-void lgmnal_yield(int);
+
+/*
+ *	Small messages
+ */
+int 		lgmnal_small_rx(nal_cb_t *, void *, lib_msg_t *, unsigned int, struct iovec *, size_t, size_t);
+int 		lgmnal_small_tx(nal_cb_t *, void *, lib_msg_t *, ptl_hdr_t *, int, ptl_nid_t, ptl_pid_t, 
+				unsigned int, struct iovec*, int);
+void 		lgmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
+
+
+
+/*
+ *	Large messages
+ */
+int 		lgmnal_large_rx(nal_cb_t *, void *, lib_msg_t *, unsigned int, struct iovec *, size_t, size_t);
+int 		lgmnal_large_tx(nal_cb_t *, void *, lib_msg_t *, ptl_hdr_t *, int, ptl_nid_t, ptl_pid_t, 
+				unsigned int, struct iovec*, int);
+void 		lgmnal_large_tx_callback(gm_port_t *, void *, gm_status_t);
+int 		lgmnal_remote_get(lgmnal_srxd_t *, int, struct iovec*, int, struct iovec*);
+void		lgmnal_remote_get_callback(gm_port_t *, void *, gm_status_t);
+int 		lgmnal_copyiov(int, lgmnal_srxd_t *, int, struct iovec*, int, struct iovec*);
+void 		lgmnal_large_tx_ack(lgmnal_data_t *, lgmnal_srxd_t *);
+void 		lgmnal_large_tx_ack_callback(gm_port_t *, void *, gm_status_t);
+void 		lgmnal_large_tx_ack_received(lgmnal_data_t *, lgmnal_srxd_t *);
 
 #endif /*__INCLUDE_LGMNAL_H__*/

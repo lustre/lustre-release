@@ -18,6 +18,8 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
+
+
 /*
  *	This file implements the nal cb functions
  */
@@ -29,20 +31,25 @@ int lgmnal_cb_recv(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, unsigned 
 {
 	lgmnal_srxd_t	*srxd = (lgmnal_srxd_t*)private;
 	int		status = PTL_OK;
-	lgmnal_data_t	*nal_data = nal_cb->nal_data;
 
 
 	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_cb_recv nal_cb [%p],private[%p], cookie[%p], niov[%d], iov [%p], mlen[%d], rlen[%d]\n", nal_cb, private, cookie, niov, iov, mlen, rlen));
 
-	if (srxd->type == LGMNAL_SMALL_MESSAGE) {
-		if (!LGMNAL_IS_SMALL_MESSAGE(nal_data, niov, iov, mlen)) {
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("lgmnal_cb_recv. This is not a small message\n"));
-		}
-		status = lgmnal_small_receive2(nal_cb, private, cookie, niov, iov, mlen, rlen);
+	if (niov == 0) {
+		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("lgmnal_cb_recv Context [%p] nriov os ZERO\n"));
+	}
+	switch(srxd->type) {
+	case(LGMNAL_SMALL_MESSAGE):
+		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("lgmnal_cb_recv got small message\n"));
+		status = lgmnal_small_rx(nal_cb, private, cookie, niov, iov, mlen, rlen);
+	break;
+	case(LGMNAL_LARGE_MESSAGE_INIT):
+		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("lgmnal_cb_recv got large message init\n"));
+		status = lgmnal_large_rx(nal_cb, private, cookie, niov, iov, mlen, rlen);
 	}
 		
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("lgmnal_return status [%d]\n", status));
+	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("lgmnal_cb_recv lgmnal_return status [%d]\n", status));
 	return(status);
 }
 
@@ -75,8 +82,8 @@ int lgmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, uns
 			LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Calling iov_base is [%p]", iovec->iov_base));
 			iovec->iov_len = kiov->kiov_len;
 		}
-		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("calling lgmnal_small_receive2\n"));
-		status = lgmnal_small_receive2(nal_cb, private, cookie, kniov, iovec, mlen, rlen);
+		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("calling lgmnal_small_rx\n"));
+		status = lgmnal_small_rx(nal_cb, private, cookie, kniov, iovec, mlen, rlen);
 		PORTAL_FREE(iovec, sizeof(struct iovec)*kniov);
 	}
 		
@@ -93,18 +100,17 @@ int lgmnal_cb_send(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl_hdr_t
 	lgmnal_data_t	*nal_data;
 
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_cb_sendnid [%lu] niov[%d] len[%d]\n", nid, niov, len));
+	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_cb_send niov[%d] len[%d] nid[%lu]\n", niov, len, nid));
 	nal_data = nal_cb->nal_data;
 	
 	if (LGMNAL_IS_SMALL_MESSAGE(nal_data, niov, iov, len)) {
 		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("This is a small message send\n"));
-		lgmnal_small_transmit(nal_cb, private, cookie, hdr, type, nid, pid, niov, iov, len);
+		lgmnal_small_tx(nal_cb, private, cookie, hdr, type, nid, pid, niov, iov, len);
 	} else {
 		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("This is a large message send it is not supported yet\n"));
-/*
-		lgmnal_large_transmit1(nal_cb, private, cookie, hdr, type, nid, pid, niov, iov, len);
-*/
-		return(LGMNAL_STATUS_FAIL);
+		lib_finalize(nal_cb, private, cookie);
+		return(PTL_FAIL);
+		lgmnal_large_tx(nal_cb, private, cookie, hdr, type, nid, pid, niov, iov, len);
 	}
 	return(PTL_OK);
 }
@@ -119,10 +125,9 @@ int lgmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl
 
 	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_cb_send_pages nid [%lu] niov[%d] len[%d]\n", nid, kniov, len));
 	nal_data = nal_cb->nal_data;
+	PORTAL_ALLOC(iovec, kniov*sizeof(struct iovec));
 	if (LGMNAL_IS_SMALL_MESSAGE(nal_data, 0, NULL, len)) {
-		/* TO DO fix small message for send pages */
 		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("This is a small message send\n"));
-		PORTAL_ALLOC(iovec, kniov*sizeof(struct iovec));
 		
 		for (i=0; i<kniov; i++) {
 			LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("processing kniov [%d] [%p]\n", i, kiov));
@@ -131,15 +136,20 @@ int lgmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl
 			iovec->iov_base = kmap(kiov->kiov_page) + kiov->kiov_offset;
 			iovec->iov_len = kiov->kiov_len;
 		}
-		lgmnal_small_transmit(nal_cb, private, cookie, hdr, type, nid, pid, kniov, iovec, len);
-		PORTAL_FREE(iovec, kniov*sizeof(struct iovec));
+		lgmnal_small_tx(nal_cb, private, cookie, hdr, type, nid, pid, kniov, iovec, len);
 	} else {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("This is a large message send it is not supported yet\n"));
-/*
-		lgmnal_large_transmit1(nal_cb, private, cookie, hdr, type, nid, pid, niov, iov, len);
-*/
-		return(LGMNAL_STATUS_FAIL);
+		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("lgmnal_cb_send_pages This is a large message send it is not supported yet\n"));
+		return(PTL_FAIL);
+		for (i=0; i<kniov; i++) {
+			LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("processing kniov [%d] [%p]\n", i, kiov));
+			LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("kniov page [%p] len [%d] offset[%d]\n", kiov->kiov_page, kiov->kiov_len, kiov->kiov_offset));
+			iovec->iov_len = kiov->kiov_len;
+			iovec->iov_base = kmap(kiov->kiov_page) + kiov->kiov_offset;
+			iovec->iov_len = kiov->kiov_len;
+		}
+		lgmnal_large_tx(nal_cb, private, cookie, hdr, type, nid, pid, kniov, iovec, len);
 	}
+	PORTAL_FREE(iovec, kniov*sizeof(struct iovec));
 	return(PTL_OK);
 }
 
@@ -208,11 +218,11 @@ void lgmnal_cb_cli(nal_cb_t *nal_cb, unsigned long *flags)
 	lgmnal_data_t	*nal_data = (lgmnal_data_t*)nal_cb->nal_data;
 	spinlock_t	cb_lock = nal_data->cb_lock;
 	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_cb_cli\n"));
-/*
-	local_irq_save(*flags);
+
 	spin_lock_irqsave(&cb_lock, *flags);
-*/
+/*
 	spin_lock(&cb_lock);
+*/
 	return;
 }
 
@@ -221,12 +231,11 @@ void lgmnal_cb_sti(nal_cb_t *nal_cb, unsigned long *flags)
 	lgmnal_data_t	*nal_data = (lgmnal_data_t*)nal_cb->nal_data;
 	spinlock_t	cb_lock = nal_data->cb_lock;
 
-/*
-	local_irq_restore(*flags);
 	spin_unlock_irqrestore(&cb_lock, *flags);
-*/
+/*
 	spin_unlock(&cb_lock);
 	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_cb_sti\n"));
+*/
 	return;
 }
 

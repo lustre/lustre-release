@@ -119,10 +119,6 @@ lgmnal_api_shutdown(nal_t *nal, int interface)
 
 	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_api_shutdown: nal_data [%p]\n", nal_data));
 
-	/*
- 	 *	TO DO	lgmnal_api_shutdown what is to be done?
- 	 */
-
 	return(PTL_OK);
 }
 
@@ -176,9 +172,6 @@ lgmnal_api_lock(nal_t *nal, unsigned long *flags)
 	nal_cb = nal_data->nal_cb;
 
 	nal_cb->cb_cli(nal_cb, flags);
-/*
-	LGMNAL_API_LOCK(nal_data);
-*/
 
 	return;
 }
@@ -195,18 +188,9 @@ lgmnal_api_unlock(nal_t *nal, unsigned long *flags)
 	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_api_lock : nal [%p], flags [%p]\n", nal, flags));
 
 	nal_data = nal->nal_data;
-	if (!nal_data) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("lgmnal_api_unlock bad nal, no nal_data\n"));
-	}
 	nal_cb = nal_data->nal_cb;
-	if (!nal_cb) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("lgmnal_api_unlock bad nal_data, no nal_cb\n"));
-	}
 
 	nal_cb->cb_sti(nal_cb, flags);
-/*
-	LGMNAL_API_UNLOCK(nal_data);
-*/
 
 	return;
 }
@@ -280,7 +264,6 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	nal_data->nal = nal;
 	nal_data->nal_cb = nal_cb;
 
-	LGMNAL_API_LOCK_INIT(nal_data);
 	LGMNAL_CB_LOCK_INIT(nal_data);
 	LGMNAL_GM_LOCK_INIT(nal_data);
 
@@ -393,7 +376,7 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 
 
 	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Starting receive thread\n"));
-	nal_data->rxthread_pid = kernel_thread(lgmnal_receive_thread, (void*)nal_data, 0);
+	nal_data->rxthread_pid = kernel_thread(lgmnal_rx_thread, (void*)nal_data, 0);
 	if (nal_data->rxthread_pid <= 0) {
 		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("Receive thread failed to start\n"));
 		lgmnal_free_stxd(nal_data);
@@ -409,7 +392,7 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	}
 	while (nal_data->rxthread_flag != LGMNAL_THREAD_STARTED) {
 		set_current_state(TASK_INTERRUPTIBLE);
-		schedule_timeout(1024);
+		schedule_timeout(128);
 		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Waiting for receive thread signs of life\n"));
 	}
 	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("receive thread seems to have started\n"));

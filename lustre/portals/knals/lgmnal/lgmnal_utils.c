@@ -18,7 +18,6 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
-
 /*
  *	All utilities required by lgmanl
  */
@@ -97,15 +96,11 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Allocated [%d] send tokens to small messages\n", nstx));
 
 
-#ifdef LGMNAL_USE_GM_HASH
-	nal_data->stxd_hash = gm_create_hash(gm_hash_compare_ptrs, gm_hash_hash_ptr, 0, sizeof(void*), nstx, 0);
+	nal_data->stxd_hash = gm_create_hash(gm_hash_compare_ptrs, gm_hash_hash_ptr, 0, 0, nstx, 0);
 	if (!nal_data->srxd_hash) {
 			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("Failed to create hash table\n\n"));
 			return(LGMNAL_STATUS_NOMEM);
 	}
-#else
-	nal_data->stxd_hash = NULL;
-#endif
 
 	/*
 	 * A semaphore is initialised with the 
@@ -170,11 +165,11 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 #endif
 		
 		txd->buffer = txbuffer;
-		txd->size = LGMNAL_SMALL_MSG_SIZE(nal_data);
-		txd->gmsize = gm_min_size_for_length(txd->size);
+		txd->buffer_size = LGMNAL_SMALL_MSG_SIZE(nal_data);
+		txd->gm_size = gm_min_size_for_length(txd->buffer_size);
 		txd->nal_data = (struct _lgmnal_data_t*)nal_data;
 
-		if (lgmnal_hash_add(&nal_data->stxd_hash, (void*)txbuffer, (void*)txd)) {
+		if (gm_hash_insert(nal_data->stxd_hash, (void*)txbuffer, (void*)txd)) {
 			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("failed to create hash entry\n"));
 			return(LGMNAL_STATUS_FAIL);
 		}
@@ -182,7 +177,7 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 
 		txd->next = nal_data->stxd;
 		nal_data->stxd = txd;
-		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Registered txd [%p] with buffer [%p], size [%d]\n", txd, txd->buffer, txd->size));
+		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Registered txd [%p] with buffer [%p], size [%d]\n", txd, txd->buffer, txd->buffer_size));
 	}
 
 	return(LGMNAL_STATUS_OK);
@@ -201,7 +196,7 @@ lgmnal_free_stxd(lgmnal_data_t *nal_data)
 	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_free_small tx\n"));
 
 	while(txd) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Freeing txd [%p] with buffer [%p], size [%d]\n", txd, txd->buffer, txd->size));
+		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Freeing txd [%p] with buffer [%p], size [%d]\n", txd, txd->buffer, txd->buffer_size));
 		_txd = txd;
 		txd = txd->next;
 #if 0
@@ -296,17 +291,13 @@ lgmnal_alloc_srxd(lgmnal_data_t *nal_data)
 	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Allocated [%d] receive tokens to small messages\n", nsrx));
 
 
-#ifdef LGMNAL_USE_GM_HASH
 	LGMNAL_GM_LOCK(nal_data);
-	nal_data->srxd_hash = gm_create_hash(gm_hash_compare_ptrs, gm_hash_hash_ptr, 0, sizeof(void*), nsrx, 0);
+	nal_data->srxd_hash = gm_create_hash(gm_hash_compare_ptrs, gm_hash_hash_ptr, 0, 0, nsrx, 0);
 	LGMNAL_GM_UNLOCK(nal_data);
 	if (!nal_data->srxd_hash) {
 			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("Failed to create hash table\n"));
 			return(LGMNAL_STATUS_NOMEM);
 	}
-#else
-	nal_data->srxd_hash = NULL;
-#endif
 
 	LGMNAL_RXD_TOKEN_INIT(nal_data, nsrx);
 	LGMNAL_RXD_LOCK_INIT(nal_data);
@@ -363,7 +354,7 @@ lgmnal_alloc_srxd(lgmnal_data_t *nal_data)
 		rxd->size = LGMNAL_SMALL_MSG_SIZE(nal_data);
 		rxd->gmsize = gm_min_size_for_length(rxd->size);
 
-		if (lgmnal_hash_add(&nal_data->srxd_hash, (void*)rxbuffer, (void*)rxd) != GM_SUCCESS) {
+		if (gm_hash_insert(nal_data->srxd_hash, (void*)rxbuffer, (void*)rxd)) {
 			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("failed to create hash entry rxd[%p] for rxbuffer[%p]\n", rxd, rxbuffer));
 			return(LGMNAL_STATUS_FAIL);
 		}
@@ -468,11 +459,7 @@ lgmnal_rxbuffer_to_srxd(lgmnal_data_t *nal_data, void *rxbuffer)
 {
 	lgmnal_srxd_t	*srxd = NULL;
 	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_rxbuffer_to_srxd nal_data [%p], rxbuffer [%p]\n", nal_data, rxbuffer));
-#ifdef LGMNAL_USE_GM_HASH
 	srxd = gm_hash_find(nal_data->srxd_hash, rxbuffer);
-#else
-	srxd = lgmnal_hash_find(nal_data->srxd_hash, rxbuffer);
-#endif
 	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("srxd is [%p]\n", srxd));
 	return(srxd);
 }
@@ -499,7 +486,7 @@ lgmnal_stop_rxthread(lgmnal_data_t *nal_data)
 	while(nal_data->rxthread_flag == LGMNAL_THREAD_STOP && delay--) {
 		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("lgmnal_stop_rxthread sleeping\n"));
 		current->state = TASK_INTERRUPTIBLE;
-		schedule_timeout(1024);
+		schedule_timeout(128);
 	}
 
 	if (nal_data->rxthread_flag == LGMNAL_THREAD_STOP) {
@@ -771,80 +758,19 @@ int
 lgmnal_is_small_message(lgmnal_data_t *nal_data, int niov, struct iovec *iov, int len)
 {
 
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_is_small_message len is [%d]\n", len));
-	if (len < LGMNAL_SMALL_MSG_SIZE(nal_data)) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Yep, small message]\n"));
+	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_is_small_message len [%d] limit[%d]\n", len, LGMNAL_SMALL_MSG_SIZE(nal_data)));
+	if ((len + sizeof(ptl_hdr_t) + sizeof(lgmnal_msghdr_t)) < LGMNAL_SMALL_MSG_SIZE(nal_data)) {
+		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Yep, small message\n"));
 		return(1);
 	} else {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("No, not small message]\n"));
+		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("No, not small message\n"));
+		/*
+		 *	could be made up of lots of little ones !
+		 */
 		return(0);
 	}
+
 }
-
-void *
-lgmnal_hash_find(lgmnal_hash_t *hash, void *key)
-{
-	void 	*data = NULL;
-	int	count = 0;
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_hash_find hash [%p] key [%p]\n", hash, key));
-
-	while (hash) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("lgmnal_hash_find Stepping [%d]\n", count++));
-		if (hash->key == key) {
-			data = hash->data;
-			LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("lgmnal_hash_find hash got data[%p]\n", data));
-			return(data);
-		} else
-			hash = hash->next;
-	}
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("lgmnal_hash_find data not found\n"));
-	return(NULL);
-}
-
-/* 
- *	TO DO hash. figure out why getting bad stuff from gm_hash and thne use it.
- */
-
-int
-lgmnal_hash_add(lgmnal_hash_t **hash, void *key, void *data)
-{
-	
-#ifdef LGMNAL_USE_GM_HASH
-	return(gm_hash_insert(*hash, (void*)key, (void*)data);
-#else
-	lgmnal_hash_t	*new = NULL;
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_hash_add hash [%p]\n", *hash));
-	PORTAL_ALLOC(new, sizeof(lgmnal_hash_t));
-	memset(new, 0, sizeof(lgmnal_hash_t));
-	if (!new) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("lgmnal_hash_add :: can't get memory\n"));
-		return(-1);
-	}
-	new->data = data;
-	new->key = key;
-	new->next = *hash;
-	*hash = new;
-	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("lgmnal_hash_add hash head [%p]\n", *hash));
-	return(0);
-#endif
-}
-
-void
-lgmnal_hash_free(lgmnal_hash_t **hash)
-{
-	
-	lgmnal_hash_t	*_hash = NULL;
-	LGMNAL_PRINT(LGMNAL_DEBUG_TRACE, ("lgmnal_hash_free hash [p%]\n", *hash));
-	
-	while (*hash) {
-		LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("lgmnal_hash_free freeing hash [p%]\n", _hash));
-		_hash = *hash;
-		*hash = _hash->next;
-		PORTAL_FREE(_hash, sizeof(lgmnal_hash_t));
-	}
-	return;
-}
-
 
 EXPORT_SYMBOL(lgmnal_yield);
 EXPORT_SYMBOL(lgmnal_print);
