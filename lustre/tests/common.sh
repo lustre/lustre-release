@@ -22,6 +22,16 @@ else
   fi
 fi
 
+next_loop_dev() {
+	NEXT=
+	while [ -b ${LOOP}${LOOPNUM} ]; do
+		LOOPDEV=${LOOP}${LOOPNUM}
+		losetup ${LOOPDEV} > /dev/null 2>&1 || NEXT=${LOOPDEV}
+		LOOPNUM=`expr ${LOOPNUM} + 1`
+		[ "$NEXT" ] && echo ${NEXT} && break
+	done
+}
+
 list_mods() {
     $DEBCTL modules > $R/tmp/ogdb
     echo "The GDB module script is in /tmp/ogdb.  Press enter to continue"
@@ -31,16 +41,14 @@ list_mods() {
 new_fs () {
     dd if=/dev/zero of=$2 bs=1k count=$3 1>&2 || exit -1
     mkfs.$1 -b 4096 -F $2 1>&2 || exit -1
-    LOOPDEV=${LOOP}${LOOPNUM}
+    LOOPDEV=`next_loop_dev`
     losetup ${LOOPDEV} $2 1>&2 || exit -1
-    LOOPNUM=`expr ${LOOPNUM} + 1`
 }
 
 old_fs () {
     [ -e $2 ] || exit -1
-    LOOPDEV=${LOOP}${LOOPNUM}
+    LOOPDEV=`next_loop_dev`
     losetup ${LOOPDEV} $2 1>&2 || exit -1
-    LOOPNUM=`expr ${LOOPNUM} + 1`
 }
 
 setup() {
