@@ -422,7 +422,6 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 		OBP(obddev, disconnect)(&conn);
 		return 0;
 
-		/* XXX sync needs to be done */
 	case OBD_IOC_SYNC: {
 		struct oic_range_s *range = karg;
 
@@ -430,11 +429,27 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
 			return -ENODEV;
 
 		err = copy_from_user(range, (const void *)arg,  sizeof(*range));
-		if (err) {
+
+		if ( err ) {
+			EXIT;
+			return err;
+		}
+			
+		if ( !OBT(obddev) || !OBP(obddev, sync) ) {
+			err = -EOPNOTSUPP;
 			EXIT;
 			return err;
 		}
 
+		/* XXX sync needs to be tested/verified */
+		err = OBP(obddev, sync)(&conn, &range->obdo, range->count,
+					range->offset);
+
+		if ( err ) {
+			EXIT;
+			return err;
+		}
+			
 		return put_user(err, (int *) arg);
 	}
 	case OBD_IOC_CREATE: {
@@ -913,8 +928,8 @@ void cleanup_module(void)
 		} 
 	}
 
-	obd_sysctl_clean();
 	obd_cleanup_obdo_cache();
+	obd_sysctl_clean();
 	obd_init_magic = 0;
 	EXIT;
 }

@@ -353,7 +353,7 @@ static struct page *obdfs_add_entry (struct inode * dir,
 }
 
 /*
- * ext2_delete_entry deletes a directory entry by merging it with the
+ * obdfs_delete_entry deletes a directory entry by merging it with the
  * previous entry
  */
 static int obdfs_delete_entry (struct ext2_dir_entry_2 * dir,
@@ -448,8 +448,10 @@ struct inode *obdfs_new_inode(struct inode *dir)
 	struct obdo *obdo;
 	struct inode *inode;
 	struct obdfs_inode_info *oinfo;
+	ino_t ino;
 	int err;
 
+	ENTRY;
 	obdo = obdo_alloc();
 	if (!obdo) {
 		EXIT;
@@ -457,27 +459,29 @@ struct inode *obdfs_new_inode(struct inode *dir)
 	}
 
 	err = IOPS(dir, create)(IID(dir), obdo);
-	if ( err ) 
-		return ERR_PTR(err);
+	ino = (ino_t)obdo->o_id;
+	obdo_free(obdo);
 
-	inode = iget(dir->i_sb, (unsigned long)obdo->o_id);
+	if ( err ) {
+		EXIT;
+		return ERR_PTR(err);
+	}
+
+	inode = iget(dir->i_sb, ino);
+
 	if (!inode) {
-		obdo_free(obdo);
 		EXIT;
 		return ERR_PTR(-EIO);
 	}
 
 	if (!list_empty(&inode->i_dentry)) {
-		CDEBUG(D_INODE, "New inode (%ld) has aliases!\n", 
-		       inode->i_ino);
+		CDEBUG(D_INODE, "New inode (%ld) has aliases!\n", inode->i_ino);
 		iput(inode);
 		EXIT;
 		return ERR_PTR(-EIO);
 	}
 
-	obdo_free(obdo);
-
-	oinfo = inode->u.generic_ip;
+	oinfo = OBD_INFO(inode);
 	INIT_LIST_HEAD(&oinfo->oi_list);
 	EXIT;
 	return inode;
@@ -500,7 +504,6 @@ int obdfs_create (struct inode * dir, struct dentry * dentry, int mode)
 	int err = -EIO;
 
         ENTRY;
-
 	inode = obdfs_new_inode(dir);
 	if ( IS_ERR(inode) ) {
 		EXIT;
@@ -846,7 +849,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 
         ENTRY;
 	inode = obdfs_new_inode(dir);
-	oinfo = inode->u.generic_ip;
+	oinfo = OBD_INFO(inode);
 	if ( IS_ERR(inode) ) {
 		EXIT;
 		return PTR_ERR(inode);

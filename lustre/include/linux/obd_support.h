@@ -60,7 +60,7 @@ extern int obd_print_entry;
 #define CMD(cmd) (( cmd == READ ) ? "read" : "write")
 
 #define IDEBUG(inode) { \
-		printk("]]%s line %d[[  ino %ld, blocks %ld, size %Ld, atm %ld, ctim %ld, mtm %ld, mode %o, uid %d, gid %d\n", \
+		printk("]]%s line %d[[  ino %ld, blocks %ld, size %Ld, atm %ld, ctm %ld, mtm %ld, mode %o, uid %d, gid %d\n", \
 		       __FUNCTION__ , __LINE__, \
 		       inode->i_ino, inode->i_blocks, inode->i_size,\
 		       inode->i_atime, inode->i_ctime, inode->i_mtime,\

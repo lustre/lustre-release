@@ -21,4 +21,5 @@ setup $BASEDEV
 quit
 EOF
 
+[ ! -d "$MNTOBD" ] &&  mkdir $MNTOBD
 plog mount -t obdfs -odevice=/dev/obd0 none $MNTOBD

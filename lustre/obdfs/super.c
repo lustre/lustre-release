@@ -294,17 +294,17 @@ static void obdfs_put_super(struct super_block *sb)
 
 inline int obdfs_has_inline(struct inode *inode)
 {
-	struct obdfs_inode_info *oinfo = inode->u.generic_ip;
+	struct obdfs_inode_info *oinfo = OBD_INFO(inode);
 	
 	return (oinfo->oi_flags & OBD_FL_INLINEDATA);
 }
 
 void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
 {
-	struct obdfs_inode_info *oinfo = inode->u.generic_ip;
-
 	obdo_from_inode(oa, inode);
 	if (obdfs_has_inline(inode)) {
+		struct obdfs_inode_info *oinfo = OBD_INFO(inode);
+
 		memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
 		oa->o_flags |= OBD_FL_INLINEDATA;
 	}
@@ -312,10 +312,10 @@ void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
 
 void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
 {
-	struct obdfs_inode_info *oinfo = inode->u.generic_ip;
-
 	obdo_to_inode(inode, oa);
 	if (obdo_has_inline(oa)) {
+		struct obdfs_inode_info *oinfo = OBD_INFO(inode);
+
 		memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
 		oinfo->oi_flags |= OBD_FL_INLINEDATA;
 	}
@@ -366,6 +366,7 @@ static void obdfs_write_inode(struct inode *inode)
 	struct obdo *oa;
 	int err;
 	
+	ENTRY;
 	oa = obdo_alloc();
 	oa->o_valid = OBD_MD_FLALL;
 	obdfs_from_inode(oa, inode);
@@ -375,10 +376,11 @@ static void obdfs_write_inode(struct inode *inode)
 
 	if (err) {
 		printk("obdfs_write_inode: obd_setattr fails (%d)\n", err);
+		EXIT;
 		return;
 	}
 	
-	return;
+	EXIT;
 }
 
 static void obdfs_delete_inode(struct inode *inode)
@@ -489,8 +491,8 @@ void cleanup_module(void)
 {
         ENTRY;
 
-	obdfs_sysctl_clean();
 	obdfs_cleanup_wreqcache();
+	obdfs_sysctl_clean();
 	unregister_filesystem(&obdfs_fs_type);
 }
 

@@ -67,5 +67,7 @@ EOF
 # one where changes are made, while $MNTSNAP will contain the original
 # files at the point when the snapshot was taken.
 
+[ ! -d "$MNTOBD" ] &&  mkdir $MNTOBD
+[ ! -d "$MNTSNAP" ] &&  mkdir $MNTSNAP
 plog mount -t obdfs -odevice=/dev/obd1 none $MNTOBD
 plog mount -t obdfs -oro,device=/dev/obd2 none $MNTSNAP

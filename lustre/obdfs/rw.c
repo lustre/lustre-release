@@ -69,7 +69,7 @@ int obdfs_readpage(struct dentry *dentry, struct page *page)
 	struct inode *inode = dentry->d_inode;
 	int rc;
 
-        ENTRY;
+	ENTRY;
 	PDEBUG(page, "READ");
 	rc =  obdfs_brw(READ, inode, page, 0);
 	if (!rc) {
@@ -158,7 +158,7 @@ obdfs_remove_from_page_cache(struct obdfs_wreq *wreq)
 	 *     ext2 also does the same thing - discard write even if error?
 	 */
 	put_page(page);
-        list_del(&wreq->wb_list);
+	list_del(&wreq->wb_list);
 	kmem_cache_free(obdfs_wreq_cachep, wreq);
 
 	EXIT;
@@ -186,20 +186,34 @@ obdfs_add_to_page_cache(struct inode *inode, struct page *page)
 	wreq->wb_page = page;
 	wreq->wb_inode = inode;
 
+	CDEBUG(D_INODE, "getting page %p\n", wreq->wb_page);
 	get_page(wreq->wb_page);
+	CDEBUG(D_INODE, "adding wreq %p to inode %p\n", wreq, inode);
+	{ struct obdfs_inode_info *oinfo = OBD_INFO(inode);
+		CDEBUG(D_INODE, "generic is %p\n", inode->u.generic_ip);
+		CDEBUG(D_INODE, "oinfo is %p\n", oinfo);
+	}
+	CDEBUG(D_INODE, "wreq_list %p\n", &wreq->wb_list);
+	return -EIO;
+	CDEBUG(D_INODE, "inode_list: next %p, prev %p\n", OBD_LIST(inode).next,
+	       OBD_LIST(inode).prev);
+	CDEBUG(D_INODE, "inode_list_addr: %p\n", &OBD_LIST(inode));
+
 	list_add(&wreq->wb_list, &OBD_LIST(inode));
 
 	/* For testing purposes, we write out the page here.
 	 * In the future, a flush daemon will write out the page.
 	 */
+	printk(KERN_INFO "finding page in cache for write\n");
 	wreq = obdfs_find_in_page_cache(inode, page);
 	if (!wreq) {
 		CDEBUG(D_INODE, "XXXX Can't find page after adding it!!!\n");
+		EXIT;
 		return -EINVAL;
-	} else
-		return obdfs_remove_from_page_cache(wreq);
+	}
 
-	return 0;
+	EXIT;
+	return obdfs_remove_from_page_cache(wreq);
 }
 
 
@@ -207,7 +221,7 @@ int obdfs_do_writepage(struct inode *inode, struct page *page, int sync)
 {
 	int rc;
 
-        ENTRY;
+	ENTRY;
 	PDEBUG(page, "WRITEPAGE");
 	if ( sync ) {
 		rc = obdfs_brw(WRITE, inode, page, 1);
@@ -240,7 +254,7 @@ int obdfs_writepage(struct dentry *dentry, struct page *page)
 int obdfs_write_one_page(struct file *file, struct page *page, unsigned long offset, unsigned long bytes, const char * buf)
 {
 	long status;
-        struct inode *inode = file->f_dentry->d_inode;
+	struct inode *inode = file->f_dentry->d_inode;
 
 	ENTRY;
 	if ( !Page_Uptodate(page) ) {
@@ -281,7 +295,7 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 	struct page * page;
 	int rc;
 
-        ENTRY;
+	ENTRY;
 
 	offset = offset & PAGE_CACHE_MASK;
 	CDEBUG(D_INODE, "\n");

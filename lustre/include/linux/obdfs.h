@@ -76,9 +76,13 @@ struct obdfs_inode_info {
 	char 		*oi_inline;
 };
 
-#define WB_NEXT(req)	((struct obdfs_wreq *) ((req)->wb_list.next))
-/* XXX page list should go on each inode instead of supberblock */
+#define OBD_INFO(inode) ((struct obdfs_inode_info *)(&(inode)->u.generic_ip))
+
+/* this was used when the list was in the superblock
 #define OBD_LIST(inode)	(((struct obdfs_sb_info *)(&(inode)->i_sb->u.generic_sbp))->osi_list)
+*/
+#define OBD_LIST(inode)	(OBD_INFO(inode)->oi_list)
+#define WB_NEXT(req)	((struct obdfs_wreq *) ((req)->wb_list.next))
 #define WREQ(entry)	(list_entry(entry, struct obdfs_wreq, wb_list))
 
 void obdfs_sysctl_init(void);

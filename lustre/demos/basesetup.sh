@@ -5,11 +5,6 @@ OBDDIR="`dirname $0`/.."
 # source config info
 . $OBDDIR/demos/config.sh
 
-[ ! -d $MNTOBD ] &&  mkdir $MNTOBD
-[ ! -d $MNTSNAP ] &&  mkdir $MNTSNAP
-[ ! -d $MNTSNAP2 ] &&  mkdir $MNTSNAP2
-
-
 # temp file
 if [ "$TMPFILE" -a -f $TMPFILE ]; then 
     echo "$TMPFILE exists; I'm unwilling to overwrite it.  Remove [N/y]?" 1>&2

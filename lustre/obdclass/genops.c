@@ -44,10 +44,8 @@ int obd_init_obdo_cache(void)
 		return 0;
 	}
 
-	obdo_cachep = kmem_cache_create("obdo_cache",
-					      sizeof(struct obdo),
-					      0, SLAB_HWCACHE_ALIGN,
-					      NULL, NULL);
+	obdo_cachep = kmem_cache_create("obdo_cache", sizeof(struct obdo),
+					0, SLAB_HWCACHE_ALIGN, NULL, NULL);
 	if (obdo_cachep == NULL) {
 		EXIT;
 		return -ENOMEM;
@@ -86,7 +84,6 @@ struct obd_client *gen_client(struct obd_conn *conn)
 } /* obd_client */
 
 
-
 /* a connection defines a context in which preallocation can be managed. */ 
 int gen_connect (struct obd_conn *conn)
 {
@@ -100,7 +97,7 @@ int gen_connect (struct obd_conn *conn)
 	}
 
 	INIT_LIST_HEAD(&cli->cli_prealloc_inodes);
-	/* this should probably spinlocked? */
+	/* XXX this should probably spinlocked? */
 	cli->cli_id = ++conn->oc_dev->obd_gen_last_id;
 	cli->cli_prealloc_quota = 0;
 	cli->cli_obd = conn->oc_dev;
@@ -286,6 +283,7 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 	}
 	dst->o_size = src->o_size;
 	dst->o_blocks = src->o_blocks;
+	dst->o_valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
 	UnlockPage(page);
 	__free_page(page);
 

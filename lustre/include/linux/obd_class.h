@@ -82,9 +82,9 @@ struct obdo {
  */
 
 
-#define OBD_PSDEV_MAJOR 186
-#define MAX_OBD_DEVICES 8
-#define MAX_MULTI 16
+#define OBD_PSDEV_MAJOR	186
+#define MAX_OBD_DEVICES	8
+#define MAX_MULTI	16
 
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
@@ -124,30 +124,41 @@ struct obd_device {
 
 
 struct obd_ops {
-	int (*o_iocontrol)(int cmd, struct obd_conn *, int len, void *karg, void *uarg);
-	int (*o_get_info)(struct obd_conn *, obd_count keylen, void *key, obd_count *vallen, void **val);
-	int (*o_set_info)(struct obd_conn *, obd_count keylen, void *key, obd_count vallen, void *val);
-	int (*o_attach)(struct obd_device *, obd_count len, void *);
-	int (*o_detach)(struct obd_device *);
+	int (*o_iocontrol)(int cmd, struct obd_conn *, int len, void *karg,
+			   void *uarg);
+	int (*o_get_info)(struct obd_conn *, obd_count keylen, void *key,
+			  obd_count *vallen, void **val);
+	int (*o_set_info)(struct obd_conn *, obd_count keylen, void *key,
+			  obd_count vallen, void *val);
+	int (*o_attach)(struct obd_device *dev, obd_count len, void *data);
+	int (*o_detach)(struct obd_device *dev);
 	int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
 	int (*o_cleanup)(struct obd_device *dev);
 	int (*o_connect)(struct obd_conn *conn);
-	int (*o_disconnect)(struct obd_conn *);
-	int (*o_statfs)(struct obd_conn *, struct statfs *statfs);
+	int (*o_disconnect)(struct obd_conn *conn);
+	int (*o_statfs)(struct obd_conn *conn, struct statfs *statfs);
 	int (*o_preallocate)(struct obd_conn *, obd_count *req, obd_id *ids);
-	int (*o_create)(struct obd_conn *,  struct obdo *oa);
-	int (*o_destroy)(struct obd_conn *, struct obdo *oa);
-	int (*o_setattr)(struct obd_conn *, struct obdo *oa);
-	int (*o_getattr)(struct obd_conn *, struct obdo *oa);
-	int (*o_read)(struct obd_conn *, struct obdo *oa, char *buf, obd_size *count, obd_off offset);
-	int (*o_write)(struct obd_conn *, struct obdo *oa, char *buf, obd_size *count, obd_off offset);
-	int (*o_brw)(int rw, struct obd_conn * conn, struct obdo *oa, char *buf, obd_size count, obd_off offset, obd_flag flags);
-	int (*o_punch)(struct obd_conn *, struct obdo *tgt, obd_size count, obd_off offset);
-	int (*o_sync)(struct obd_conn *, struct obdo *tgt, obd_size count, obd_off offset);
-	int (*o_migrate)(struct obd_conn *, struct obdo *dst, struct obdo *src, obd_size count, obd_off offset);
-	int (*o_copy)(struct obd_conn *dstconn, struct obdo *dst, struct obd_conn *srconn, struct obdo *src, obd_size count, obd_off offset);
-	int (*o_iterate)(struct obd_conn *, int (*)(obd_id, void *), obd_id start, void *);
-
+	int (*o_create)(struct obd_conn *conn,  struct obdo *oa);
+	int (*o_destroy)(struct obd_conn *conn, struct obdo *oa);
+	int (*o_setattr)(struct obd_conn *conn, struct obdo *oa);
+	int (*o_getattr)(struct obd_conn *conn, struct obdo *oa);
+	int (*o_read)(struct obd_conn *conn, struct obdo *oa, char *buf,
+		      obd_size *count, obd_off offset);
+	int (*o_write)(struct obd_conn *conn, struct obdo *oa, char *buf,
+		       obd_size *count, obd_off offset);
+	int (*o_brw)(int rw, struct obd_conn *conn, struct obdo *oa,
+		     char *buf, obd_size count, obd_off offset, obd_flag flags);
+	int (*o_punch)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
+		       obd_off offset);
+	int (*o_sync)(struct obd_conn *conn, struct obdo *tgt, obd_size count,
+		      obd_off offset);
+	int (*o_migrate)(struct obd_conn *conn, struct obdo *dst,
+			 struct obdo *src, obd_size count, obd_off offset);
+	int (*o_copy)(struct obd_conn *dstconn, struct obdo *dst,
+		      struct obd_conn *srconn, struct obdo *src,
+		      obd_size count, obd_off offset);
+	int (*o_iterate)(struct obd_conn *conn, int (*)(obd_id, obd_gr, void *),
+			 obd_id *startid, obd_gr group, void *data);
 };
 
 #define OBT(dev)	dev->obd_type->typ_ops
@@ -428,9 +439,9 @@ struct oic_generic {
 struct oic_prealloc_s {
 	uint32_t cli_id;
 	uint32_t alloc; /* user sets it to the number of inodes
-			  * requesting to be preallocated.  kernel
-			  * sets it to the actual number * of
-			  * succesfully preallocated inodes */
+			 * requesting to be preallocated.  kernel
+			 * sets it to the actual number of
+			 * succesfully preallocated inodes */
 	obd_id  ids[32]; /* actual inode numbers */
 };
 
