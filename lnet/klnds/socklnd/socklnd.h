@@ -78,7 +78,16 @@
 
 #define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */
 
-#define SOCKNAL_TX_LOW_WATER(sk) (((sk)->sndbuf*8)/10)
+#define SOCKNAL_TX_LOW_WATER(sk) (((sk)->sk_sndbuf*8)/10)
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,72))
+# define sk_data_ready	data_ready
+# define sk_write_space write_space
+# define sk_user_data   user_data
+# define sk_prot        prot
+# define sk_sndbuf      sndbuf
+# define sk_socket      socket
+#endif
 
 typedef struct                                  /* pool of forwarding buffers */
 {

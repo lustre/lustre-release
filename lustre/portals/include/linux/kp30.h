@@ -13,10 +13,6 @@
 
 #define LOWEST_BIT_SET(x)	((x) & ~((x) - 1))
 
-#ifndef CONFIG_SMP
-# define smp_processor_id() 0
-#endif
-
 /*
  *  Debugging
  */
@@ -104,7 +100,7 @@ extern unsigned int portal_printk;
         } while (0)
 #else
 #define CHECK_STACK(stack) do{}while(0)
-#define CDEBUG_STACK(var) (0)
+#define CDEBUG_STACK(var) (0L)
 #endif
 
 #if 1

@@ -1467,10 +1467,10 @@ ksocknal_data_ready (struct sock *sk, int n)
         /* interleave correctly with closing sockets... */
         read_lock (&ksocknal_data.ksnd_socklist_lock);
 
-        conn = sk->user_data;
+        conn = sk->sk_user_data;
         if (conn == NULL) {             /* raced with ksocknal_close_sock */
-                LASSERT (sk->data_ready != &ksocknal_data_ready);
-                sk->data_ready (sk, n);
+                LASSERT (sk->sk_data_ready != &ksocknal_data_ready);
+                sk->sk_data_ready (sk, n);
         } else if (!conn->ksnc_rx_ready) {        /* new news */
                 /* Set ASAP in case of concurrent calls to me */
                 conn->ksnc_rx_ready = 1;
@@ -1511,7 +1511,7 @@ ksocknal_write_space (struct sock *sk)
         /* interleave correctly with closing sockets... */
         read_lock (&ksocknal_data.ksnd_socklist_lock);
 
-        conn = sk->user_data;
+        conn = sk->sk_user_data;
 
         CDEBUG(D_NET, "sk %p wspace %d low water %d conn %p%s%s%s\n",
                sk, tcp_wspace(sk), SOCKNAL_TX_LOW_WATER(sk), conn,
@@ -1523,10 +1523,10 @@ ksocknal_write_space (struct sock *sk)
                                       " empty" : " queued"));
 
         if (conn == NULL) {             /* raced with ksocknal_close_sock */
-                LASSERT (sk->write_space != &ksocknal_write_space);
-                sk->write_space (sk);
+                LASSERT (sk->sk_write_space != &ksocknal_write_space);
+                sk->sk_write_space (sk);
         } else if (tcp_wspace(sk) >= SOCKNAL_TX_LOW_WATER(sk)) { /* got enough space */
-                clear_bit (SOCK_NOSPACE, &sk->socket->flags);
+                clear_bit (SOCK_NOSPACE, &sk->sk_socket->flags);
 
                 if (!conn->ksnc_tx_ready) {      /* new news */
                         /* Set ASAP in case of concurrent calls to me */
