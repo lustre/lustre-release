@@ -118,7 +118,7 @@ do {                                                                          \
              portal_subsystem_debug & (1 << (DEBUG_SUBSYSTEM >> 24))))        \
                 portals_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
                                   __FILE__, __FUNCTION__, __LINE__,           \
-                                  CDEBUG_STACK(), format , ## a);             \
+                                  CDEBUG_STACK(), format, ## a);              \
 } while (0)
 
 #define CWARN(format, a...) CDEBUG(D_WARNING, format, ## a)

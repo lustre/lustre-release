@@ -1,6 +1,3 @@
-/*
-*/
-
 #ifndef MYRNAL_H
 #define MYRNAL_H
 

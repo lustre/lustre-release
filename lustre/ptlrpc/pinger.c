@@ -47,12 +47,12 @@ void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 
 int ptlrpc_pinger_add_import(struct obd_import *imp)
 {
+#ifndef ENABLE_PINGER
+        return 0;
+#else
         int rc;
         ENTRY;
 
-#ifndef ENABLE_PINGER
-        RETURN(0);
-#else
         if (!list_empty(&imp->imp_pinger_chain))
                 RETURN(-EALREADY);
 
@@ -77,12 +77,12 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
 
 int ptlrpc_pinger_del_import(struct obd_import *imp)
 {
+#ifndef ENABLE_PINGER
+        return 0;
+#else
         int rc;
         ENTRY;
 
-#ifndef ENABLE_PINGER
-        RETURN(0);
-#else
         if (list_empty(&imp->imp_pinger_chain))
                 RETURN(-ENOENT);
 
@@ -118,14 +118,7 @@ static int ptlrpc_pinger_main(void *arg)
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
 
-#if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
-        sprintf(current->comm, "%s|%d", data->name,current->thread.extern_pid);
-#elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        sprintf(current->comm, "%s|%d", data->name,
-                current->thread.mode.tt.extern_pid);
-#else
-        strcpy(current->comm, data->name);
-#endif
+        THREAD_NAME(current->comm, "%s", data->name);
         unlock_kernel();
 
         /* Record that the thread is running */
