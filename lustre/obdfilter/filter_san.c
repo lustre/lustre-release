@@ -75,7 +75,11 @@ int filter_san_preprw(int cmd, struct lustre_handle *conn, int objcount,
         for (i = 0; i < objcount; i++, o++) {
                 struct dentry *dentry;
                 struct inode *inode;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+                sector_t (*fs_bmap)(struct address_space *, sector_t);
+#else
                 int (*fs_bmap)(struct address_space *, long);
+#endif
                 int j;
 
                 dentry = filter_fid2dentry(obd, NULL, o->ioo_type, o->ioo_id);
