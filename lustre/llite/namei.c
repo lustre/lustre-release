@@ -358,9 +358,7 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                        it->it_status);
         }
 
-        if (rc < 0 || 
-            it->it_op == IT_LOOKUP
-            )
+        if (rc < 0 || it->it_op == IT_LOOKUP)
                 ll_intent_release(dentry, it);
 
         return rc;
