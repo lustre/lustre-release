@@ -643,7 +643,7 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         de = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
         if (de == NULL || de->d_inode == NULL) {
                 CERROR("destroying non-existent object "LPU64"\n", oa->o_id);
-                GOTO(out, rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT);
+                GOTO(out_dput, rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT);
         }
 
         handle = fsfilt_start(obd, mds->mds_objects_dir->d_inode,
@@ -661,8 +661,8 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
         if (err && !rc)
                 rc = err;
 out_dput:
-        l_dput(de);
-out:
+        if (de != NULL)
+                l_dput(de);
         up(&parent_inode->i_sem);
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
         RETURN(rc);

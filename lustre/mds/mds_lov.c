@@ -385,6 +385,27 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(rc);
         }
 
+        case OBD_IOC_CLEAR_LOG: {
+                char *name = data->ioc_inlbuf1;
+                if (mds->mds_cfg_llh)
+                        RETURN(-EBUSY);
+
+                push_ctxt(&saved, &obd->obd_ctxt, NULL);
+                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT), 
+                                 &mds->mds_cfg_llh, NULL, name);
+                if (rc == 0) {
+                        llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN,
+                                         NULL);
+
+                        rc = llog_destroy(mds->mds_cfg_llh);
+                        llog_free_handle(mds->mds_cfg_llh);
+                }
+                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+
+                mds->mds_cfg_llh = NULL;
+                RETURN(rc);
+        }
+
         case OBD_IOC_DORECORD: {
                 char *cfg_buf;
                 struct llog_rec_hdr rec;

@@ -1765,6 +1765,29 @@ int jt_cfg_dump_log(int argc, char **argv)
         return rc;
 }
 
+int jt_cfg_clear_log(int argc, char **argv)
+{
+        struct obd_ioctl_data data;
+        int rc;
+
+        IOC_INIT(data);
+
+        if (argc != 2)
+                return CMD_HELP;
+
+        data.ioc_inllen1 = strlen(argv[1]) + 1;
+        data.ioc_inlbuf1 = argv[1];
+
+        IOC_PACK(argv[0], data);
+        rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CLEAR_LOG, buf);
+        if (rc < 0)
+                fprintf(stderr, "OBD_IOC_CLEAR_LOG failed: %s\n",
+                        strerror(errno));
+
+        return rc;
+}
+
+
 
 int jt_cfg_endrecord(int argc, char **argv)
 {
