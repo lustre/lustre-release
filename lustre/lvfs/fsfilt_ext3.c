@@ -376,11 +376,12 @@ static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
         return rc;
 }
 
+/* Must be called with i_sem held */
 static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
 {
         int rc;
 
-        down(&inode->i_sem);
+        LASSERT(down_trylock(&inode->i_sem) != 0);
         lock_kernel();
         /* Keep support for reading "inline EAs" until we convert
          * users over to new format entirely.  See bug 841/2097. */
@@ -422,7 +423,6 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
                         rc = PTR_ERR(handle);
                 }
 #endif
-                up(&inode->i_sem);
                 unlock_kernel();
                 return size;
         }
@@ -430,7 +430,6 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
         rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_LUSTRE,
                             XATTR_LUSTRE_MDS_OBJID, lmm, lmm_size);
         unlock_kernel();
-        up(&inode->i_sem);
 
         /* This gives us the MD size */
         if (lmm == NULL)
