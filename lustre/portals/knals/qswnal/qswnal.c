@@ -32,6 +32,7 @@ kpr_nal_interface_t kqswnal_router_interface = {
 	kprni_nalid:	QSWNAL,
 	kprni_arg:	NULL,
 	kprni_fwd:	kqswnal_fwd_packet,
+	kprni_notify:   NULL,			/* we're connectionless */
 };
 
 

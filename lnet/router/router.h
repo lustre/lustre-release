@@ -70,6 +70,7 @@ typedef struct
 extern int kpr_register_nal (kpr_nal_interface_t *nalif, void **argp);
 extern int kpr_lookup_target (void *arg, ptl_nid_t target_nid, int nob, 
                               ptl_nid_t *gateway_nidp);
+extern kpr_nal_entry_t *kpr_find_nal_entry_locked (int nal_id);
 extern void kpr_forward_packet (void *arg, kpr_fwd_desc_t *fwd);
 extern void kpr_complete_packet (void *arg, kpr_fwd_desc_t *fwd, int error);
 extern void kpr_nal_notify (void *arg, ptl_nid_t peer,
