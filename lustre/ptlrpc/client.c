@@ -89,17 +89,18 @@ void ptlrpc_readdress_connection(struct ptlrpc_connection *conn, char *uuid)
 
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *conn)
 {
-        struct ptlrpc_bulk_desc *bulk;
+        struct ptlrpc_bulk_desc *desc;
 
-        OBD_ALLOC(bulk, sizeof(*bulk));
-        if (bulk != NULL) {
+        OBD_ALLOC(desc, sizeof(*desc));
+        if (desc != NULL) {
                 bulk->b_connection = ptlrpc_connection_addref(conn);
-                atomic_set(&bulk->b_pages_remaining, 0);
-                init_waitqueue_head(&bulk->b_waitq);
-                INIT_LIST_HEAD(&bulk->b_page_list);
+                atomic_set(&desc->b_pages_remaining, 0);
+                atomic_set(&desc->b_refcount, 1);
+                init_waitqueue_head(&desc->b_waitq);
+                INIT_LIST_HEAD(&desc->b_page_list);
         }
 
-        return bulk;
+        return desc;
 }
 
 struct ptlrpc_bulk_page *ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc)
