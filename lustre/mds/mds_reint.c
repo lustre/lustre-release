@@ -36,11 +36,17 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 
+int mds_update_last_rcvd(struct mds_obd *mds, struct ptlrpc_request *req)
+{
+        return 0;
+}
+
 static int mds_reint_setattr(struct mds_update_record *rec,
                              struct ptlrpc_request *req)
 {
         struct mds_obd *mds = &req->rq_obd->u.mds;
         struct dentry *de;
+        void *handle;
         int rc = 0;
 
         de = mds_fid2dentry(mds, rec->ur_fid1, NULL);
@@ -53,10 +59,19 @@ static int mds_reint_setattr(struct mds_update_record *rec,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_SETATTR_WRITE,
                        de->d_inode->i_sb->s_dev);
 
-        rc = mds_fs_setattr(mds, de, NULL, &rec->ur_iattr);
+        handle = mds_fs_start(mds, de->d_inode, MDS_FSOP_SETATTR);
+        if (!handle)
+                GOTO(out_setattr_de, rc = PTR_ERR(handle));
+        rc = mds_fs_setattr(mds, de, handle, &rec->ur_iattr);
+
+        if (!rc)
+                rc = mds_update_last_rcvd(mds, req);
 
         EXIT;
 
+        /* FIXME: keep rc intact */
+        rc = mds_fs_commit(mds, de->d_inode, handle);
+out_setattr_de:
         l_dput(de);
 out_setattr:
         req->rq_status = rc;
@@ -174,6 +189,9 @@ static int mds_reint_create(struct mds_update_record *rec,
                 body->generation = inode->i_generation;
         }
 
+        if (!rc)
+                rc = mds_update_last_rcvd(mds, req);
+
 out_create_commit:
         /* FIXME: keep rc intact */
         rc = mds_fs_commit(mds, dir, handle);
@@ -193,6 +211,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
         struct dentry *dchild = NULL;
         struct mds_obd *mds = &req->rq_obd->u.mds;
         struct inode *dir, *inode;
+        void *handle;
         int rc = 0;
         ENTRY;
 
@@ -237,14 +256,23 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 
         switch (dchild->d_inode->i_mode & S_IFMT) {
         case S_IFDIR:
+                handle = mds_fs_start(mds, dir, MDS_FSOP_RMDIR);
+                if (!handle)
+                        GOTO(out_unlink_dchild, rc = PTR_ERR(handle));
                 rc = vfs_rmdir(dir, dchild);
-                EXIT;
                 break;
         default:
+                handle = mds_fs_start(mds, dir, MDS_FSOP_UNLINK);
+                if (!handle)
+                        GOTO(out_unlink_dchild, rc = PTR_ERR(handle));
                 rc = vfs_unlink(dir, dchild);
-                EXIT;
                 break;
         }
+
+        if (!rc)
+                rc = mds_update_last_rcvd(mds, req);
+        /* FIXME: keep rc intact */
+        rc = mds_fs_commit(mds, dir, handle);
 
         EXIT;
 out_unlink_dchild:
@@ -264,6 +292,7 @@ static int mds_reint_link(struct mds_update_record *rec,
         struct dentry *de_tgt_dir = NULL;
         struct dentry *dchild = NULL;
         struct mds_obd *mds = &req->rq_obd->u.mds;
+        void *handle;
         int rc = 0;
 
         ENTRY;
@@ -293,7 +322,17 @@ static int mds_reint_link(struct mds_update_record *rec,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_LINK_WRITE,
                        dchild->d_inode->i_sb->s_dev);
 
+        handle = mds_fs_start(mds, de_tgt_dir->d_inode, MDS_FSOP_LINK);
+        if (!handle)
+                GOTO(out_link_dchild, rc = PTR_ERR(handle));
+
         rc = vfs_link(de_src, de_tgt_dir->d_inode, dchild);
+
+        if (!rc)
+                rc = mds_update_last_rcvd(mds, req);
+
+        /* FIXME: keep rc intact */
+        rc = mds_fs_commit(mds, de_tgt_dir->d_inode, handle);
         EXIT;
 
 out_link_dchild:
@@ -316,6 +355,7 @@ static int mds_reint_rename(struct mds_update_record *rec,
         struct dentry *de_old = NULL;
         struct dentry *de_new = NULL;
         struct mds_obd *mds = &req->rq_obd->u.mds;
+        void *handle;
         int rc = 0;
         ENTRY;
 
@@ -344,9 +384,19 @@ static int mds_reint_rename(struct mds_update_record *rec,
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_RENAME_WRITE,
                        de_srcdir->d_inode->i_sb->s_dev);
 
+        handle = mds_fs_start(mds, de_tgtdir->d_inode, MDS_FSOP_RENAME);
+        if (!handle)
+                GOTO(out_rename_denew, rc = PTR_ERR(handle));
         rc = vfs_rename(de_srcdir->d_inode, de_old, de_tgtdir->d_inode, de_new);
+
+        if (!rc)
+                rc = mds_update_last_rcvd(mds, req);
+
+        /* FIXME: keep rc intact */
+        rc = mds_fs_commit(mds, de_tgtdir->d_inode, handle);
         EXIT;
 
+out_rename_denew:
         l_dput(de_new);
 out_rename_deold:
         l_dput(de_old);
