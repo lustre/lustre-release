@@ -16,6 +16,7 @@ bin_SCRIPTS = lfind lstripe
 lib_LIBRARIES = liblustreapi.a
 liblustreapi_a_SOURCES = liblustreapi.c
 wirecheck_SOURCES = wirecheck.c
+wiretest_SOURCES = wiretest.c
 lctl_SOURCES = parser.c obd.c lustre_cfg.c lctl.c parser.h obdctl.h
 lload_SOURCES = lload.c 
 obdio_SOURCES = obdio.c obdiolib.c obdiolib.h
