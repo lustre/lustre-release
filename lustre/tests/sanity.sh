@@ -2299,26 +2299,23 @@ test_69() {
 run_test 69 "verify oa2dentry return -ENOENT doesn't LBUG ======"
 
 test_71() {
+	DBENCH_LIB=${DBENCH_LIB:-/usr/lib/dbench}
+	PATH=${PATH}:$DBENCH_LIB
 	cp `which dbench` $DIR
 
 	[ ! -f $DIR/dbench ] && echo "dbench not installed, skip this test" && return 0
 
 	TGT=$DIR/client.txt
-	SRC=${SRC:-/usr/lib/dbench/client.txt}
+	SRC=${SRC:-$DBENCH_LIB/client.txt}
 	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
-	SRC=/usr/lib/dbench/client_plain.txt
+	SRC=$DBENCH_LIB/client_plain.txt
 	[ ! -e $TGT -a -e $SRC ] && echo "copying $SRC to $TGT" && cp $SRC $TGT
 
 	echo "copying necessary lib to $DIR"
-	if [ -d /lib64 ]; then
-		mkdir $DIR/lib64
-		cp /lib64/libc* $DIR/lib64
-		cp /lib64/ld-* $DIR/lib64
-	else 
-		mkdir $DIR/lib
-		cp /lib/libc* $DIR/lib
-		cp /lib/ld-* $DIR/lib
-	fi
+	[ -d /lib64 ] && LIB71=/lib64 || LIB71=/lib
+	mkdir $DIR$LIB71 || error "can't create $DIR$LIB71"
+	cp $LIB71/libc* $DIR$LIB71 || error "can't copy $LIB71/libc*"
+	cp $LIB71/ld-* $DIR$LIB71 || error "can't create $LIB71/ld-*"
 	
 	echo "chroot $DIR /dbench -c client.txt 2"
 	chroot $DIR /dbench -c client.txt 2
@@ -2326,15 +2323,14 @@ test_71() {
 
 	rm -f $DIR/dbench
 	rm -f $TGT
-	rm -fr $DIR/lib
-	rm -fr $DIR/lib64
+	rm -fr $DIR$LIB71
 
 	return $RC
 }
 run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
 test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
-        check_kernel_version 40 || return 0
+        check_kernel_version 43 || return 0
 	[ "$RUNAS_ID" = "$UID" ] && echo "skipping test 72" && return
 	touch $DIR/f72
 	chmod 777 $DIR/f72
