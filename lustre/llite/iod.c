@@ -334,7 +334,7 @@ static int bulk_flush_pages(
 	
 	set->brw_callback = ll_brw_sync_wait;
 	rc = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode),
-                     ll_i2info(inode)->lli_smd, npgs, pgs, set);
+                     ll_i2info(inode)->lli_smd, npgs, pgs, set, NULL);
 	if (rc) {
 		CERROR("error from obd_brw: rc = %d\n", rc);
 	} else {
