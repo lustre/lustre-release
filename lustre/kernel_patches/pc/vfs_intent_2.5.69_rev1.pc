@@ -1,6 +1,7 @@
 fs/sysfs/inode.c
 fs/dcache.c
 fs/exec.c
+fs/xattr.c
 fs/namei.c
 fs/namespace.c
 fs/open.c
