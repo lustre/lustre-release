@@ -1373,16 +1373,8 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         LASSERT(ops != NULL);
         ops->ap_fill_obdo(caller_data, cmd, oa);
 
-        sort_brw_pages(pga, page_count);
-        rc = osc_brw_prep_request(cmd, cli->cl_import, oa, NULL, page_count,
-                                  pga, &requested_nob, &nio_count, &req);
-        if (rc != 0) {
-                CERROR("prep_req failed: %d\n", rc);
-                GOTO(out, req = ERR_PTR(rc));
-        }
-
         /* To enforce quota on oss, we need pass the client's user credit
-         * information to ost. We chose to store the fsuid and fsgid in 
+         * information to ost. We chose to store the fsuid and fsgid in
          * oa->o_uid and oa->o_gid since the two fields haven't been used
          * at present. And we chose one page's user credit information as
          * the whole rpc's credit information. FIXME */
@@ -1391,6 +1383,14 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
                 ops->ap_get_ucred(caller_data, &ouc);
                 oa->o_uid = ouc.ouc_fsuid;
                 oa->o_gid = ouc.ouc_fsgid;
+        }
+
+        sort_brw_pages(pga, page_count);
+        rc = osc_brw_prep_request(cmd, cli->cl_import, oa, NULL, page_count,
+                                  pga, &requested_nob, &nio_count, &req);
+        if (rc != 0) {
+                CERROR("prep_req failed: %d\n", rc);
+                GOTO(out, req = ERR_PTR(rc));
         }
 
         LASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));

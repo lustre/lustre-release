@@ -87,7 +87,7 @@ static inline struct osc_quota_info *find_qinfo(struct client_obd *cli,
         for (head = qinfo_hash[hashent].next;
              head != qinfo_hash+hashent; head = head->next) {
                 oqi = list_entry(head, struct osc_quota_info, oqi_hash);
-                LASSERT(oqi->oqi_flag = NO_QUOTA);
+                LASSERT(oqi->oqi_flag == NO_QUOTA);
                 if (oqi->oqi_cli == cli &&
                     oqi->oqi_id == id && oqi->oqi_type == type)
                         return oqi;
