@@ -297,6 +297,28 @@ AC_SUBST(with_gm)
 AC_SUBST(GMNAL)
 
 
+#fixme: where are the default IB includes?
+default_ib_include_dir=/usr/local/ib/include
+an_ib_include_file=vapi.h
+
+AC_ARG_WITH(ib, [ --with-ib=[yes/no/path] Path to IB includes], with_ib=$withval, with_ib=$default_ib)
+AC_MSG_CHECKING(if IB headers are present)
+if test "$with_ib" = yes; then
+    with_ib=$default_ib_include_dir
+fi
+if test "$with_ib" != no -a -f ${with_ib}/${an_ib_include_file}; then
+    AC_MSG_RESULT(yes)
+    IBNAL="ibnal"
+    with_ib="-I${with_ib}"
+else
+    AC_MSG_RESULT(no)
+    IBNAL=""
+    with_ib=""
+fi
+AC_SUBST(IBNAL)
+AC_SUBST(with_ib)
+
+
 def_scamac=/opt/scali/include
 AC_ARG_WITH(scamac, [  --with-scamac=[yes/no/path] Path to ScaMAC includes (default=/opt/scali/include)], with_scamac=$withval, with_scamac=$def_scamac)
 AC_MSG_CHECKING(if ScaMAC headers are present)
@@ -317,7 +339,7 @@ AC_SUBST(with_scamac)
 AC_SUBST(SCIMACNAL)
 
 CFLAGS="$KCFLAGS"
-CPPFLAGS="$KINCFLAGS $KCPPFLAGS $MFLAGS $enable_zerocopy $enable_affinity $with_quadrics $with_gm $with_scamac "
+CPPFLAGS="$KINCFLAGS $KCPPFLAGS $MFLAGS $enable_zerocopy $enable_affinity $with_quadrics $with_gm $with_scamac $with_ib"
 
 AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 AC_SUBST(MOD_LINK)

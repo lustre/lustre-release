@@ -210,6 +210,84 @@ kportal_get_route(int index, __u32 *gateway_nalidp, ptl_nid_t *gateway_nidp,
         return (rc);
 }
 
+static int 
+kportal_router_cmd(struct portals_cfg *pcfg, void * private)
+{
+        int err;
+        ENTRY;
+
+        switch(pcfg->pcfg_command) {
+        case IOC_PORTAL_ADD_ROUTE:
+                CDEBUG(D_IOCTL, "Adding route: [%d] "LPU64" : "LPU64" - "LPU64"\n",
+                       pcfg->pcfg_nal, pcfg->pcfg_nid, 
+                       pcfg->pcfg_nid2, pcfg->pcfg_nid3);
+                err = kportal_add_route(pcfg->pcfg_nal, pcfg->pcfg_nid,
+                                        pcfg->pcfg_nid2, pcfg->pcfg_nid3);
+                break;
+
+        case IOC_PORTAL_DEL_ROUTE:
+                CDEBUG (D_IOCTL, "Removing routes via [%d] "LPU64" : "LPU64" - "LPU64"\n",
+                        pcfg->pcfg_nal, pcfg->pcfg_nid, 
+                        pcfg->pcfg_nid2, pcfg->pcfg_nid3);
+                err = kportal_del_route (pcfg->pcfg_nal, pcfg->pcfg_nid,
+                                         pcfg->pcfg_nid2, pcfg->pcfg_nid3);
+                break;
+
+        case IOC_PORTAL_NOTIFY_ROUTER: {
+                CDEBUG (D_IOCTL, "Notifying peer [%d] "LPU64" %s @ %ld\n",
+                        pcfg->pcfg_nal, pcfg->pcfg_nid,
+                        pcfg->pcfg_flags ? "Enabling" : "Disabling",
+                        (time_t)pcfg->pcfg_nid3);
+                
+                err = kportal_notify_router (pcfg->pcfg_nal, pcfg->pcfg_nid,
+                                             pcfg->pcfg_flags, 
+                                             (time_t)pcfg->pcfg_nid3);
+                break;
+        }
+                
+        case IOC_PORTAL_GET_ROUTE:
+                CDEBUG (D_IOCTL, "Getting route [%d]\n", pcfg->pcfg_count);
+                err = kportal_get_route(pcfg->pcfg_count, &pcfg->pcfg_nal,
+                                        &pcfg->pcfg_nid, 
+                                        &pcfg->pcfg_nid2, &pcfg->pcfg_nid3,
+                                        &pcfg->pcfg_flags);
+                break;
+        }
+        RETURN(err);
+}
+
+static int
+kportal_register_router (void)
+{
+        int rc;
+        kpr_control_interface_t *ci;
+
+        ci = (kpr_control_interface_t *)PORTAL_SYMBOL_GET(kpr_control_interface);
+        if (ci == NULL)
+                return (0);
+
+        rc = kportal_nal_register(ROUTER, kportal_router_cmd, NULL);
+
+        PORTAL_SYMBOL_PUT(kpr_control_interface);
+        return (rc);
+}
+
+static int
+kportal_unregister_router (void)
+{
+        int rc;
+        kpr_control_interface_t *ci;
+
+        ci = (kpr_control_interface_t *)PORTAL_SYMBOL_GET(kpr_control_interface);
+        if (ci == NULL)
+                return (0);
+
+        rc = kportal_nal_unregister(ROUTER);
+
+        PORTAL_SYMBOL_PUT(kpr_control_interface);
+        return (rc);
+}
+
 int
 kportal_nal_cmd(struct portals_cfg *pcfg)
 {
@@ -242,6 +320,8 @@ kportal_get_ni (int nal)
                 return  (PORTAL_SYMBOL_GET(ktoenal_ni));
         case GMNAL:
                 return  (PORTAL_SYMBOL_GET(kgmnal_ni));
+        case IBNAL:
+                return  (PORTAL_SYMBOL_GET(kibnal_ni));
         case TCPNAL:
                 /* userspace NAL */
                 return (NULL);
@@ -271,6 +351,9 @@ kportal_put_ni (int nal)
                 break;
         case GMNAL:
                 PORTAL_SYMBOL_PUT(kgmnal_ni);
+                break;
+        case IBNAL:
+                PORTAL_SYMBOL_PUT(kibnal_ni);
                 break;
         case TCPNAL:
                 /* A lesson to a malicious caller */
@@ -326,6 +409,7 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
         int err = 0;
         char buf[1024];
         struct portal_ioctl_data *data;
+        char str[PTL_NALFMT_SIZE];
 
         ENTRY;
 
@@ -379,8 +463,9 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
         case IOC_PORTAL_PING: {
                 void (*ping)(struct portal_ioctl_data *);
 
-                CDEBUG(D_IOCTL, "doing %d pings to nid "LPU64"\n",
-                       data->ioc_count, data->ioc_nid);
+                CDEBUG(D_IOCTL, "doing %d pings to nid "LPX64" (%s)\n",
+                       data->ioc_count, data->ioc_nid,
+                       portals_nid2str(data->ioc_nal, data->ioc_nid, str));
                 ping = PORTAL_SYMBOL_GET(kping_client);
                 if (!ping)
                         CERROR("PORTAL_SYMBOL_GET failed\n");
@@ -391,50 +476,11 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                 RETURN(0);
         }
 
-        case IOC_PORTAL_ADD_ROUTE:
-                CDEBUG(D_IOCTL, "Adding route: [%d] "LPU64" : "LPU64" - "LPU64"\n",
-                       data->ioc_nal, data->ioc_nid, 
-                       data->ioc_nid2, data->ioc_nid3);
-                err = kportal_add_route(data->ioc_nal, data->ioc_nid,
-                                        data->ioc_nid2, data->ioc_nid3);
-                break;
-
-        case IOC_PORTAL_DEL_ROUTE:
-                CDEBUG (D_IOCTL, "Removing routes via [%d] "LPU64" : "LPU64" - "LPU64"\n",
-                        data->ioc_nal, data->ioc_nid, 
-                        data->ioc_nid2, data->ioc_nid3);
-                err = kportal_del_route (data->ioc_nal, data->ioc_nid,
-                                         data->ioc_nid2, data->ioc_nid3);
-                break;
-
-        case IOC_PORTAL_NOTIFY_ROUTER: {
-                CDEBUG (D_IOCTL, "Notifying peer [%d] "LPU64" %s @ %ld\n",
-                        data->ioc_nal, data->ioc_nid,
-                        data->ioc_flags ? "Enabling" : "Disabling",
-                        (time_t)data->ioc_nid3);
-                
-                err = kportal_notify_router (data->ioc_nal, data->ioc_nid,
-                                             data->ioc_flags, 
-                                             (time_t)data->ioc_nid3);
-                break;
-        }
-                
-        case IOC_PORTAL_GET_ROUTE:
-                CDEBUG (D_IOCTL, "Getting route [%d]\n", data->ioc_count);
-                err = kportal_get_route(data->ioc_count, &data->ioc_nal,
-                                        &data->ioc_nid, 
-                                        &data->ioc_nid2, &data->ioc_nid3,
-                                        &data->ioc_flags);
-                if (err == 0)
-                        if (copy_to_user((char *)arg, data, sizeof (*data)))
-                                err = -EFAULT;
-                break;
-
         case IOC_PORTAL_GET_NID: {
                 const ptl_handle_ni_t *nip;
                 ptl_process_id_t       pid;
 
-                CDEBUG (D_IOCTL, "Getting nid [%d]\n", data->ioc_nal);
+                CDEBUG (D_IOCTL, "Getting nid for nal [%d]\n", data->ioc_nal);
 
                 nip = kportal_get_ni (data->ioc_nal);
                 if (nip == NULL)
@@ -573,9 +619,17 @@ static int init_kportals_module(void)
                 goto cleanup_fini;
         }
 
+        rc = kportal_register_router();
+        if (rc) {
+                CERROR("kportals_register_router: error %d\n", rc);
+                goto cleanup_proc;
+        }
+
         CDEBUG (D_OTHER, "portals setup OK\n");
         return (0);
 
+ cleanup_proc:
+        remove_proc();
  cleanup_fini:
         PtlFini();
  cleanup_deregister:
@@ -593,6 +647,7 @@ static void exit_kportals_module(void)
 {
         int rc;
 
+        kportal_unregister_router();
         remove_proc();
         PtlFini();
 

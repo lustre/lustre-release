@@ -19,6 +19,7 @@
 #include <portals/api-support.h>
 #include <portals/list.h>
 #include <portals/lib-types.h>
+#include <portals/socknal.h>
 
 /* should get this from autoconf somehow */
 #ifndef PIDFILE_DIR
@@ -100,7 +101,7 @@ parse_size (int *sizep, char *str)
 }
 
 void
-show_connection (int fd, __u32 net_ip, ptl_nid_t nid)
+show_connection (int fd, __u32 net_ip)
 {
         struct hostent *h = gethostbyaddr ((char *)&net_ip, sizeof net_ip, AF_INET);
         __u32 host_ip = ntohl (net_ip);
@@ -128,136 +129,8 @@ show_connection (int fd, __u32 net_ip, ptl_nid_t nid)
         else
                 snprintf (host, sizeof(host), "%s", h->h_name);
                 
-        syslog (LOG_INFO, "Accepted host: %s NID: "LPX64" snd: %d rcv %d nagle: %s\n", 
-                 host, nid, txmem, rxmem, nonagle ? "disabled" : "enabled");
-}
-
-int
-sock_write (int cfd, void *buffer, int nob)
-{
-        while (nob > 0)
-        {
-                int rc = write (cfd, buffer, nob);
-
-                if (rc < 0)
-                {
-                        if (errno == EINTR)
-                                continue;
-                        
-                        return (rc);
-                }
-
-                if (rc == 0)
-                {
-                        fprintf (stderr, "Unexpected zero sock_write\n");
-                        abort();
-                }
-
-                nob -= rc;
-                buffer = (char *)buffer + nob;
-        }
-        
-        return (0);
-}
-
-int
-sock_read (int cfd, void *buffer, int nob)
-{
-        while (nob > 0)
-        {
-                int rc = read (cfd, buffer, nob);
-                
-                if (rc < 0)
-                {
-                        if (errno == EINTR)
-                                continue;
-                        
-                        return (rc);
-                }
-                
-                if (rc == 0)                    /* EOF */
-                {
-                        errno = ECONNABORTED;
-                        return (-1);
-                }
-                
-                nob -= rc;
-                buffer = (char *)buffer + nob;
-        }
-        
-        return (0);
-}
-
-int
-exchange_nids (int cfd, ptl_nid_t my_nid, ptl_nid_t *peer_nid)
-{
-        int                      rc;
-        ptl_hdr_t                hdr;
-        ptl_magicversion_t      *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
-
-        LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
-
-        memset (&hdr, 0, sizeof (hdr));
-        
-        hmv->magic          = __cpu_to_le32 (PORTALS_PROTO_MAGIC);
-        hmv->version_major  = __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR);
-        hmv->version_minor  = __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR);
-
-        hdr.src_nid = __cpu_to_le64 (my_nid);
-        hdr.type = __cpu_to_le32 (PTL_MSG_HELLO);
-        
-        /* Assume there's sufficient socket buffering for a portals HELLO header */
-        rc = sock_write (cfd, &hdr, sizeof (hdr));
-        if (rc != 0) {
-                perror ("Can't send initial HELLO");
-                return (-1);
-        }
-
-        /* First few bytes down the wire are the portals protocol magic and
-         * version, no matter what protocol version we're running. */
-
-        rc = sock_read (cfd, hmv, sizeof (*hmv));
-        if (rc != 0) {
-                perror ("Can't read from peer");
-                return (-1);
-        }
-
-        if (__cpu_to_le32 (hmv->magic) != PORTALS_PROTO_MAGIC) {
-                fprintf (stderr, "Bad magic %#08x (%#08x expected)\n", 
-                         __cpu_to_le32 (hmv->magic), PORTALS_PROTO_MAGIC);
-                return (-1);
-        }
-
-        if (__cpu_to_le16 (hmv->version_major) != PORTALS_PROTO_VERSION_MAJOR ||
-            __cpu_to_le16 (hmv->version_minor) != PORTALS_PROTO_VERSION_MINOR) {
-                fprintf (stderr, "Incompatible protocol version %d.%d (%d.%d expected)\n",
-                         __cpu_to_le16 (hmv->version_major),
-                         __cpu_to_le16 (hmv->version_minor),
-                         PORTALS_PROTO_VERSION_MAJOR,
-                         PORTALS_PROTO_VERSION_MINOR);
-        }
-
-        /* version 0 sends magic/version as the dest_nid of a 'hello' header,
-         * so read the rest of it in now... */
-        LASSERT (PORTALS_PROTO_VERSION_MAJOR == 0);
-        rc = sock_read (cfd, hmv + 1, sizeof (hdr) - sizeof (*hmv));
-        if (rc != 0) {
-                perror ("Can't read rest of HELLO hdr");
-                return (-1);
-        }
-
-        /* ...and check we got what we expected */
-        if (__cpu_to_le32 (hdr.type) != PTL_MSG_HELLO ||
-            __cpu_to_le32 (PTL_HDR_LENGTH (&hdr)) != 0) {
-                fprintf (stderr, "Expecting a HELLO hdr with 0 payload,"
-                         " but got type %d with %d payload\n",
-                         __cpu_to_le32 (hdr.type),
-                         __cpu_to_le32 (PTL_HDR_LENGTH (&hdr)));
-                return (-1);
-        }
-        
-        *peer_nid = __le64_to_cpu (hdr.src_nid);
-        return (0);
+        syslog (LOG_INFO, "Accepted host: %s snd: %d rcv %d nagle: %s\n", 
+                host, txmem, rxmem, nonagle ? "disabled" : "enabled");
 }
 
 void
@@ -277,10 +150,9 @@ int main(int argc, char **argv)
         int noclose = 0;
         int nonagle = 1;
         int nal = SOCKNAL;
-        int xchg_nids = 0;
         int bind_irq = 0;
         
-        while ((c = getopt (argc, argv, "N:r:s:nlxi")) != -1)
+        while ((c = getopt (argc, argv, "N:r:s:nli")) != -1)
                 switch (c)
                 {
                 case 'r':
@@ -299,10 +171,6 @@ int main(int argc, char **argv)
 
                 case 'l':
                         noclose = 1;
-                        break;
-
-                case 'x':
-                        xchg_nids = 1;
                         break;
 
                 case 'i':
@@ -410,7 +278,6 @@ int main(int argc, char **argv)
                 int cfd;
                 struct portal_ioctl_data data;
                 struct portals_cfg pcfg;
-                ptl_nid_t peer_nid;
                 
                 cfd = accept(fd, (struct sockaddr *)&clntaddr, &len);
                 if ( cfd < 0 ) {
@@ -419,43 +286,20 @@ int main(int argc, char **argv)
                         continue;
                 }
 
-                if (!xchg_nids)
-                        peer_nid = ntohl (clntaddr.sin_addr.s_addr); /* HOST byte order */
-                else
-                {
-                        PORTAL_IOC_INIT (data);
-                        data.ioc_nal = nal;
-                        rc = ioctl (pfd, IOC_PORTAL_GET_NID, &data);
-                        if (rc < 0)
-                        {
-                                perror ("Can't get my NID");
-                                close (cfd);
-                                continue;
-                        }
-                        
-                        rc = exchange_nids (cfd, data.ioc_nid, &peer_nid);
-                        if (rc != 0)
-                        {
-                                close (cfd);
-                                continue;
-                        }
-                }
-
-                show_connection (cfd, clntaddr.sin_addr.s_addr, peer_nid);
+                show_connection (cfd, clntaddr.sin_addr.s_addr);
 
                 PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
                 pcfg.pcfg_nal = nal;
                 pcfg.pcfg_fd = cfd;
-                pcfg.pcfg_nid = peer_nid;
                 pcfg.pcfg_flags = bind_irq;
-
+                pcfg.pcfg_misc = SOCKNAL_CONN_NONE; /* == incoming connection */
+                
                 PORTAL_IOC_INIT(data);
                 data.ioc_pbuf1 = (char*)&pcfg;
                 data.ioc_plen1 = sizeof(pcfg);
                 
                 if (ioctl(pfd, IOC_PORTAL_NAL_CMD, &data) < 0) {
                         perror("ioctl failed");
-
                 } else {
                         printf("client registered\n");
                 }

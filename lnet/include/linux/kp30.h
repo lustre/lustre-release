@@ -43,6 +43,7 @@ extern unsigned int portal_cerror;
 #define S_GMNAL       (1 << 19)
 #define S_PTLROUTER   (1 << 20)
 #define S_COBD        (1 << 21)
+#define S_IBNAL       (1 << 22)
 
 /* If you change these values, please keep portals/utils/debug.c
  * up to date! */
@@ -76,6 +77,8 @@ extern unsigned int portal_cerror;
 #else
 # define THREAD_SIZE 8192
 #endif
+
+#define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)
 
 #ifdef __KERNEL__
 # ifdef  __ia64__
@@ -595,6 +598,10 @@ extern struct prof_ent prof_ents[MAX_PROFS];
 #endif /* PORTALS_PROFILING */
 
 /* debug.c */
+extern spinlock_t stack_backtrace_lock;
+
+char *portals_debug_dumpstack(void);
+char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
 void portals_run_upcall(char **argv);
 void portals_run_lbug_upcall(char * file, const char *fn, const int line);
 void portals_debug_dumplog(void);
@@ -1034,6 +1041,8 @@ enum {
         TOENAL,
         TCPNAL,
         SCIMACNAL,
+        ROUTER,
+        IBNAL,
         NAL_ENUM_END_MARKER
 };
 
@@ -1042,8 +1051,11 @@ extern ptl_handle_ni_t  kqswnal_ni;
 extern ptl_handle_ni_t  ksocknal_ni;
 extern ptl_handle_ni_t  ktoenal_ni;
 extern ptl_handle_ni_t  kgmnal_ni;
+extern ptl_handle_ni_t  kibnal_ni;
 extern ptl_handle_ni_t  kscimacnal_ni;
 #endif
+
+#define PTL_NALFMT_SIZE         16
 
 #define NAL_MAX_NR (NAL_ENUM_END_MARKER - 1)
 

@@ -111,11 +111,15 @@ pingcli_start(struct portal_ioctl_data *args)
         unsigned ping_bulk_magic = PING_BULK_MAGIC;
         int rc;
         struct timeval tv1, tv2;
+        char str[PTL_NALFMT_SIZE];
+        
         client->tsk = current;
         client->args = args;
-        CDEBUG (D_OTHER, "pingcli_setup args: nid "LPX64",  \
+        CDEBUG (D_OTHER, "pingcli_setup args: nid "LPX64" (%s),  \
                         nal %d, size %u, count: %u, timeout: %u\n",
-                        args->ioc_nid, args->ioc_nal, args->ioc_size,
+                        args->ioc_nid,
+                        portals_nid2str(args->ioc_nal, args->ioc_nid, str),
+                        args->ioc_nal, args->ioc_size,
                         args->ioc_count, args->ioc_timeout);
 
 

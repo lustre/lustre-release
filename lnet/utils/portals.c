@@ -55,6 +55,7 @@
 #include <portals/ptlctl.h>
 #include <portals/list.h>
 #include <portals/lib-types.h>
+#include <portals/socknal.h>
 #include "parser.h"
 
 unsigned int portal_debug;
@@ -80,6 +81,7 @@ static name2num_t nalnames[] = {
         {"toe",		TOENAL},
         {"elan",	QSWNAL},
         {"gm",	        GMNAL},
+        {"ib",	        IBNAL},
         {"scimac",      SCIMACNAL},
         {NULL,		-1}
 };
@@ -453,14 +455,13 @@ jt_ptl_print_autoconnects (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                printf (LPX64"@%s:%d #%d buffer %d nonagle %s xchg %s "
-                        "affinity %s eager %s share %d\n",
+                printf (LPX64"@%s:%d #%d buffer %d "
+                        "nonagle %s affinity %s eager %s share %d\n",
                         pcfg.pcfg_nid, ptl_ipaddr_2_str (pcfg.pcfg_id, buffer),
                         pcfg.pcfg_misc, pcfg.pcfg_count, pcfg.pcfg_size, 
                         (pcfg.pcfg_flags & 1) ? "on" : "off",
                         (pcfg.pcfg_flags & 2) ? "on" : "off",
                         (pcfg.pcfg_flags & 4) ? "on" : "off",
-                        (pcfg.pcfg_flags & 8) ? "on" : "off",
                         pcfg.pcfg_wait);
         }
 
@@ -476,14 +477,13 @@ jt_ptl_add_autoconnect (int argc, char **argv)
         ptl_nid_t                nid;
         __u32                    ip;
         int                      port;
-        int                      xchange_nids = 0;
         int                      irq_affinity = 0;
         int                      share = 0;
         int                      eager = 0;
         int                      rc;
 
         if (argc < 4 || argc > 5) {
-                fprintf (stderr, "usage: %s nid ipaddr port [ixse]\n", argv[0]);
+                fprintf (stderr, "usage: %s nid ipaddr port [ise]\n", argv[0]);
                 return 0;
         }
 
@@ -511,9 +511,6 @@ jt_ptl_add_autoconnect (int argc, char **argv)
                 
                 while (*opts != 0)
                         switch (*opts++) {
-                        case 'x':
-                                xchange_nids = 1;
-                                break;
                         case 'i':
                                 irq_affinity = 1;
                                 break;
@@ -537,10 +534,9 @@ jt_ptl_add_autoconnect (int argc, char **argv)
         /* only passing one buffer size! */
         pcfg.pcfg_size    = MAX (g_socket_rxmem, g_socket_txmem);
         pcfg.pcfg_flags   = (g_socket_nonagle ? 0x01 : 0) |
-                           (xchange_nids     ? 0x02 : 0) |
-                           (irq_affinity     ? 0x04 : 0) |
-                           (share            ? 0x08 : 0) |
-                           (eager            ? 0x10 : 0);
+                            (irq_affinity     ? 0x02 : 0) |
+                            (share            ? 0x04 : 0) |
+                            (eager            ? 0x08 : 0);
 
         rc = pcfg_ioctl (&pcfg);
         if (rc != 0) {
@@ -636,10 +632,14 @@ jt_ptl_print_connections (int argc, char **argv)
                 if (rc != 0)
                         break;
 
-                printf (LPX64"@%s:%d\n",
+                printf (LPX64"@%s:%d:%s\n",
                         pcfg.pcfg_nid, 
                         ptl_ipaddr_2_str (pcfg.pcfg_id, buffer),
-                        pcfg.pcfg_misc);
+                        pcfg.pcfg_misc,
+                        (pcfg.pcfg_flags == SOCKNAL_CONN_ANY) ? "A" :
+                        (pcfg.pcfg_flags == SOCKNAL_CONN_CONTROL) ? "C" :
+                        (pcfg.pcfg_flags == SOCKNAL_CONN_BULK_IN) ? "I" :
+                        (pcfg.pcfg_flags == SOCKNAL_CONN_BULK_OUT) ? "O" : "?");
         }
 
         if (index == 0)
@@ -647,82 +647,8 @@ jt_ptl_print_connections (int argc, char **argv)
         return 0;
 }
 
-int
-exchange_nids (int cfd, ptl_nid_t my_nid, ptl_nid_t *peer_nid)
-{
-        int                      rc;
-        ptl_hdr_t                hdr;
-        ptl_magicversion_t      *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
-
-        LASSERT (sizeof (*hmv) == sizeof (hdr.dest_nid));
-
-        memset (&hdr, 0, sizeof (hdr));
-        
-        hmv->magic          = __cpu_to_le32 (PORTALS_PROTO_MAGIC);
-        hmv->version_major  = __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR);
-        hmv->version_minor  = __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR);
-
-        hdr.src_nid = __cpu_to_le64 (my_nid);
-        hdr.type = __cpu_to_le32 (PTL_MSG_HELLO);
-        
-        /* Assume there's sufficient socket buffering for a portals HELLO header */
-        rc = sock_write (cfd, &hdr, sizeof (hdr));
-        if (rc != 0) {
-                perror ("Can't send initial HELLO");
-                return (-1);
-        }
-
-        /* First few bytes down the wire are the portals protocol magic and
-         * version, no matter what protocol version we're running. */
-
-        rc = sock_read (cfd, hmv, sizeof (*hmv));
-        if (rc != 0) {
-                perror ("Can't read from peer");
-                return (-1);
-        }
-
-        if (hmv->magic != __cpu_to_le32 (PORTALS_PROTO_MAGIC)) {
-                fprintf (stderr, "Bad magic %#08x (%#08x expected)\n", 
-                         __le32_to_cpu (hmv->magic), PORTALS_PROTO_MAGIC);
-                return (-1);
-        }
-
-        if (hmv->version_major != __cpu_to_le16 (PORTALS_PROTO_VERSION_MAJOR) ||
-            hmv->version_minor != __cpu_to_le16 (PORTALS_PROTO_VERSION_MINOR)) {
-                fprintf (stderr, "Incompatible protocol version %d.%d (%d.%d expected)\n",
-                         __le16_to_cpu (hmv->version_major),
-                         __le16_to_cpu (hmv->version_minor),
-                         PORTALS_PROTO_VERSION_MAJOR,
-                         PORTALS_PROTO_VERSION_MINOR);
-        }
-
-        /* version 0 sends magic/version as the dest_nid of a 'hello' header,
-         * so read the rest of it in now... */
-        LASSERT (PORTALS_PROTO_VERSION_MAJOR == 0);
-        rc = sock_read (cfd, hmv + 1, sizeof (hdr) - sizeof (*hmv));
-        if (rc != 0) {
-                perror ("Can't read rest of HELLO hdr");
-                return (-1);
-        }
-
-        /* ...and check we got what we expected */
-        if (hdr.type != __cpu_to_le32 (PTL_MSG_HELLO) ||
-            PTL_HDR_LENGTH (&hdr) != __cpu_to_le32 (0)) {
-                fprintf (stderr, "Expecting a HELLO hdr with 0 payload,"
-                         " but got type %d with %d payload\n",
-                         __le32_to_cpu (hdr.type),
-                         __le32_to_cpu (PTL_HDR_LENGTH (&hdr)));
-                return (-1);
-        }
-        
-        *peer_nid = __le64_to_cpu (hdr.src_nid);
-        return (0);
-}
-
 int jt_ptl_connect(int argc, char **argv)
 {
-        ptl_nid_t peer_nid;
-        struct portal_ioctl_data data;
         struct portals_cfg pcfg;
         struct sockaddr_in srvaddr;
         __u32 ipaddr;
@@ -732,13 +658,13 @@ int jt_ptl_connect(int argc, char **argv)
         int rxmem = 0;
         int txmem = 0;
         int bind_irq = 0;
-        int xchange_nids = 0;
+        int type = SOCKNAL_CONN_ANY;
         int port;
         int o;
         int olen;
 
         if (argc < 3) {
-                fprintf(stderr, "usage: %s ip port [xi]\n", argv[0]);
+                fprintf(stderr, "usage: %s ip port [xibctr]\n", argv[0]);
                 return 0;
         }
 
@@ -764,8 +690,28 @@ int jt_ptl_connect(int argc, char **argv)
                                 bind_irq = 1;
                                 break;
                                 
-                        case 'x':
-                                xchange_nids = 1;
+                        case 'I':
+                                if (type != SOCKNAL_CONN_ANY) {
+                                        fprintf(stderr, "Can't flag type twice\n");
+                                        return -1;
+                                }
+                                type = SOCKNAL_CONN_BULK_IN;
+                                break;
+
+                        case 'O':
+                                if (type != SOCKNAL_CONN_ANY) {
+                                        fprintf(stderr, "Can't flag type twice\n");
+                                        return -1;
+                                }
+                                type = SOCKNAL_CONN_BULK_OUT;
+                                break;
+
+                        case 'C':
+                                if (type != SOCKNAL_CONN_ANY) {
+                                        fprintf(stderr, "Can't flag type twice\n");
+                                        return -1;
+                                }
+                                type = SOCKNAL_CONN_CONTROL;
                                 break;
                                 
                         default:
@@ -826,33 +772,19 @@ int jt_ptl_connect(int argc, char **argv)
         if (getsockopt (fd, IPPROTO_TCP, TCP_NODELAY, &nonagle, &olen) != 0)
                 fprintf (stderr, "Can't get nagle: %s\n", strerror (errno));
 
-        if (!xchange_nids) 
-                peer_nid = ipaddr;
-        else {
-                PORTAL_IOC_INIT (data);
-                data.ioc_nal = g_nal;
-                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_NID, &data);
-                if (rc != 0) {
-                        fprintf (stderr, "failed to get my nid: %s\n",
-                                 strerror (errno));
-                        close (fd);
-                        return (-1);
-                }
-
-                rc = exchange_nids (fd, data.ioc_nid, &peer_nid);
-                if (rc != 0) {
-                        close (fd);
-                        return (-1);
-                }
-        } 
-        printf("Connected host: %s NID "LPX64" snd: %d rcv: %d nagle: %s\n", argv[1],
-               peer_nid, txmem, rxmem, nonagle ? "Disabled" : "Enabled");
+        printf("Connected host: %s snd: %d rcv: %d nagle: %s type: %s\n", 
+               argv[1], txmem, rxmem, nonagle ? "Disabled" : "Enabled",
+               (type == SOCKNAL_CONN_ANY) ? "A" :
+               (type == SOCKNAL_CONN_CONTROL) ? "C" :
+               (type == SOCKNAL_CONN_BULK_IN) ? "I" :
+               (type == SOCKNAL_CONN_BULK_OUT) ? "O" : "?");
 
         PCFG_INIT(pcfg, NAL_CMD_REGISTER_PEER_FD);
+        pcfg.pcfg_nal = g_nal;
         pcfg.pcfg_fd = fd;
-        pcfg.pcfg_nid = peer_nid;
         pcfg.pcfg_flags = bind_irq;
-
+        pcfg.pcfg_misc = type;
+        
         rc = pcfg_ioctl(&pcfg);
         if (rc) {
                 fprintf(stderr, "failed to register fd with portals: %s\n", 
@@ -861,7 +793,7 @@ int jt_ptl_connect(int argc, char **argv)
                 return -1;
         }
 
-        printf("Connection to "LPX64" registered with socknal\n", peer_nid);
+        printf("Connection to %s registered with socknal\n", argv[1]);
 
         rc = close(fd);
         if (rc)
@@ -1219,7 +1151,7 @@ jt_ptl_nagle (int argc, char **argv)
 int
 jt_ptl_add_route (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg       pcfg;
         ptl_nid_t                nid1;
         ptl_nid_t                nid2;
         ptl_nid_t                gateway_nid;
@@ -1254,13 +1186,13 @@ jt_ptl_add_route (int argc, char **argv)
                 return (-1);
         }
 
-        PORTAL_IOC_INIT(data);
-        data.ioc_nid = gateway_nid;
-        data.ioc_nal = g_nal;
-        data.ioc_nid2 = MIN (nid1, nid2);
-        data.ioc_nid3 = MAX (nid1, nid2);
+        PCFG_INIT(pcfg, IOC_PORTAL_ADD_ROUTE);
+        pcfg.pcfg_nid = gateway_nid;
+        pcfg.pcfg_nal = g_nal;
+        pcfg.pcfg_nid2 = MIN (nid1, nid2);
+        pcfg.pcfg_nid3 = MAX (nid1, nid2);
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_ADD_ROUTE, &data);
+        rc = pcfg_ioctl(&pcfg);
         if (rc != 0) 
         {
                 fprintf (stderr, "IOC_PORTAL_ADD_ROUTE failed: %s\n", strerror (errno));
@@ -1273,7 +1205,7 @@ jt_ptl_add_route (int argc, char **argv)
 int
 jt_ptl_del_route (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg       pcfg;
         ptl_nid_t                nid;
         ptl_nid_t                nid1 = PTL_NID_ANY;
         ptl_nid_t                nid2 = PTL_NID_ANY;
@@ -1317,13 +1249,13 @@ jt_ptl_del_route (int argc, char **argv)
                 }
         }
         
-        PORTAL_IOC_INIT(data);
-        data.ioc_nal = g_nal;
-        data.ioc_nid = nid;
-        data.ioc_nid2 = nid1;
-        data.ioc_nid3 = nid2;
+        PCFG_INIT(pcfg, IOC_PORTAL_DEL_ROUTE);
+        pcfg.pcfg_nal = g_nal;
+        pcfg.pcfg_nid = nid;
+        pcfg.pcfg_nid2 = nid1;
+        pcfg.pcfg_nid3 = nid2;
 
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_DEL_ROUTE, &data);
+        rc = pcfg_ioctl(&pcfg);
         if (rc != 0) 
         {
                 fprintf (stderr, "IOC_PORTAL_DEL_ROUTE ("LPX64") failed: %s\n", nid, strerror (errno));
@@ -1336,7 +1268,7 @@ jt_ptl_del_route (int argc, char **argv)
 int
 jt_ptl_notify_router (int argc, char **argv)
 {
-        struct portal_ioctl_data data;
+        struct portals_cfg       pcfg;
         int                      enable;
         ptl_nid_t                nid;
         int                      rc;
@@ -1376,14 +1308,14 @@ jt_ptl_notify_router (int argc, char **argv)
                 return (-1);
         }
 
-        PORTAL_IOC_INIT(data);
-        data.ioc_nal = g_nal;
-        data.ioc_nid = nid;
-        data.ioc_flags = enable;
+        PCFG_INIT(pcfg, IOC_PORTAL_NOTIFY_ROUTER);
+        pcfg.pcfg_nal = g_nal;
+        pcfg.pcfg_nid = nid;
+        pcfg.pcfg_flags = enable;
         /* Yeuch; 'cept I need a __u64 on 64 bit machines... */
-        data.ioc_nid3 = (__u64)when;
+        pcfg.pcfg_nid3 = (__u64)when;
         
-        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NOTIFY_ROUTER, &data);
+        rc = pcfg_ioctl(&pcfg);
         if (rc != 0) 
         {
                 fprintf (stderr, "IOC_PORTAL_NOTIFY_ROUTER ("LPX64") failed: %s\n",
@@ -1398,7 +1330,7 @@ int
 jt_ptl_print_routes (int argc, char **argv)
 {
         char                      buffer[3][128];
-        struct portal_ioctl_data  data;
+        struct portals_cfg        pcfg;
         int                       rc;
         int                       index;
         int			  gateway_nal;
@@ -1409,18 +1341,18 @@ jt_ptl_print_routes (int argc, char **argv)
 
         for (index = 0;;index++)
         {
-                PORTAL_IOC_INIT(data);
-                data.ioc_count = index;
+                PCFG_INIT(pcfg, IOC_PORTAL_GET_ROUTE);
+                pcfg.pcfg_count = index;
                 
-                rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_ROUTE, &data);
+                rc = pcfg_ioctl(&pcfg);
                 if (rc != 0)
                         break;
 
-                gateway_nal = data.ioc_nal;
-                gateway_nid = data.ioc_nid;
-                nid1 = data.ioc_nid2;
-                nid2 = data.ioc_nid3;
-                alive = data.ioc_flags;
+                gateway_nal = pcfg.pcfg_nal;
+                gateway_nid = pcfg.pcfg_nid;
+                nid1 = pcfg.pcfg_nid2;
+                nid2 = pcfg.pcfg_nid3;
+                alive = pcfg.pcfg_flags;
 
                 printf ("%8s %18s : %s - %s, %s\n", 
                         nal2name (gateway_nal), 
