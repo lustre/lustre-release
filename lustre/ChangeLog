@@ -2,6 +2,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.x
        * bug fixes
  	- clear page cache after eviction (2766)
+	- zero nameidata in detach_mnt (3118)
 
 tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.2
