@@ -120,7 +120,10 @@ static void filter_grant_incoming(struct obd_export *exp, struct obdo *oa)
 
         fed = &exp->exp_filter_data;
 
-        CDEBUG(oa->o_grant > fed->fed_grant ? D_ERROR : D_CACHE,
+        /* Add some margin, since there is a small race if other RPCs arrive
+         * out-or-order and have already consumed some grant.  We want to
+         * leave this here in case there is a large error in accounting. */
+        CDEBUG(oa->o_grant > fed->fed_grant + 2084 * 1024 ? D_ERROR : D_CACHE,
                "%s: cli %p reports granted: "LPU64" dropped: %u, local: %lu\n",
                obd->obd_name, exp, oa->o_grant,
                oa->o_dropped, fed->fed_grant);
