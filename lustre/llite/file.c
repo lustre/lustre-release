@@ -32,7 +32,8 @@
 int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
 
-static int ll_create_objects(struct inode *inode, struct ll_inode_info *lli)
+int ll_create_objects(struct super_block *sb, obd_id id, uid_t uid, gid_t gid,
+                             struct lov_stripe_md **lsmp)
 {
         struct obdo *oa;
         int rc;
@@ -43,15 +44,17 @@ static int ll_create_objects(struct inode *inode, struct ll_inode_info *lli)
                 RETURN(-ENOMEM);
 
         oa->o_mode = S_IFREG | 0600;
-        oa->o_easize = ll_mds_easize(inode->i_sb);
-        oa->o_id = inode->i_ino;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
-                OBD_MD_FLMODE | OBD_MD_FLEASIZE;
-        rc = obd_create(ll_i2obdconn(inode), oa, &lli->lli_smd);
+        oa->o_easize = ll_mds_easize(sb);
+        oa->o_id = id;
+        oa->o_uid = uid;
+        oa->o_gid = gid;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                OBD_MD_FLEASIZE | OBD_MD_FLUID | OBD_MD_FLGID;
+        rc = obd_create(ll_s2obdconn(sb), oa, lsmp);
         obdo_free(oa);
 
         if (!rc)
-                LASSERT(lli->lli_smd->lsm_object_id);
+                LASSERT((*lsmp)->lsm_object_id);
         RETURN(rc);
 }
 
@@ -83,7 +86,8 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 down(&lli->lli_open_sem);
                 /* Check to see if we lost the race */
                 if (!lli->lli_smd)
-                        rc = ll_create_objects(inode, lli);
+                        rc = ll_create_objects(inode->i_sb, inode->i_ino, 0, 0,
+                                               &lli->lli_smd);
                 up(&lli->lli_open_sem);
                 if (rc)
                         RETURN(rc);
@@ -121,8 +125,10 @@ static int ll_file_open(struct inode *inode, struct file *file)
 
         oa->o_id = lsm->lsm_object_id;
         oa->o_mode = S_IFREG;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
+                OBD_MD_FLBLOCKS;
         rc = obd_open(ll_i2obdconn(inode), oa, lsm);
+        obdo_to_inode(inode, oa, oa->o_valid & (OBD_MD_FLSIZE|OBD_MD_FLBLOCKS));
 
         obd_oa2handle(&fd->fd_osthandle, oa);
         obdo_free(oa);
@@ -509,8 +515,8 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
                 obdo_free(oa);
         }
 
-        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) ||
-            sbi->ll_flags & LL_SBI_NOLCK) {
+        if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) &&
+            !(sbi->ll_flags & LL_SBI_NOLCK)) {
                 OBD_ALLOC(lockhs, lsm->lsm_stripe_count * sizeof(*lockhs));
                 if (!lockhs)
                         GOTO(out_eof, retval = -ENOMEM);
@@ -589,7 +595,7 @@ static int ll_lov_setstripe(struct inode *inode, struct file *file,
         lsm->lsm_mds_easize = size;
 
         file->f_flags &= ~O_LOV_DELAY_CREATE;
-        rc = ll_create_objects(inode, lli);
+        rc = ll_create_objects(inode->i_sb, inode->i_ino, 0, 0, &lsm);
         if (rc)
                 OBD_FREE(lli->lli_smd, size);
         else

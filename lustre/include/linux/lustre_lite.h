@@ -167,6 +167,8 @@ int ll_size_lock(struct inode *, struct lov_stripe_md *, obd_off start,
 int ll_size_unlock(struct inode *, struct lov_stripe_md *, int mode,
                    struct lustre_handle *);
 int ll_file_size(struct inode *inode, struct lov_stripe_md *md);
+int ll_create_objects(struct super_block *sb, obd_id id, uid_t uid,
+                      gid_t gid, struct lov_stripe_md **lsmp);
 
 /* rw.c */
 struct page *ll_getpage(struct inode *inode, unsigned long offset,

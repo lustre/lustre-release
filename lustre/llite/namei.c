@@ -341,8 +341,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
                 }
                 body = lustre_msg_buf(request->rq_repmsg, 0);
                 if (lsm != NULL) {
-                        mds_md_size = ll_mds_easize(dir->i_sb);
-                        OBD_ALLOC(lmm, mds_md_size);
+                        OBD_ALLOC(lmm, lsm->lsm_mds_easize);
                         lov_packmd(lmm, lsm);
                         lic.lic_lmm = lmm;
                 } else
@@ -449,10 +448,9 @@ int ll_mdc_rename(struct inode *src, struct inode *tgt,
  * with d_instantiate().
  */
 
-static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
+static int ll_create(struct inode *dir, struct dentry *dentry, int mode)
 {
         int err, rc = 0;
-        struct obdo *oa = NULL;
         struct inode *inode;
         struct lov_stripe_md *lsm = NULL;
         struct ll_inode_info *lli = NULL;
@@ -461,31 +459,22 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         CHECK_MOUNT_EPOCH(dir);
 
         if (dentry->d_it->it_disposition == 0) {
-                int gid = current->fsgid;
-
-                if (dir->i_mode & S_ISGID)
-                        gid = dir->i_gid;
-
-                oa = obdo_alloc();
-                if (!oa)
-                        RETURN(-ENOMEM);
-
-                oa->o_mode = S_IFREG | 0600;
                 /* FIXME: we set the UID/GID fields to 0 for now, because it
                  *        fixes a bug on the BA OSTs.  We should really set
                  *        them properly, and this needs to be revisited when
                  *        we do proper credentials checking on the OST, and
                  *        set the attributes on the OST in ll_inode_setattr().
-                oa->o_uid = current->fsuid;
-                oa->o_gid = gid;
-                 */
-                oa->o_uid = 0;
-                oa->o_gid = 0;
-                oa->o_valid = OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLUID |
-                        OBD_MD_FLGID;
-                rc = obd_create(ll_i2obdconn(dir), oa, &lsm);
-                CDEBUG(D_DENTRY, "name %s mode %o o_id "LPX64": rc = %d\n",
-                       dentry->d_name.name, mode, oa->o_id, rc);
+                 *        See also ll_file_open() and ll_lov_setstripe().
+                gid_t gid = current->fsgid;
+
+                if (dir->i_mode & S_ISGID)
+                        gid = dir->i_gid;
+                rc = ll_create_objects(ll_i2obdconn(dir), 0, current->fsuid,
+                                       gid, &lsm);
+                */
+                rc = ll_create_objects(dir->i_sb, 0, 0, 0, &lsm);
+                CDEBUG(D_DENTRY, "name %*s mode %o: rc = %d\n",
+                       dentry->d_name.len, dentry->d_name.name, mode, rc);
                 if (rc)
                         GOTO(out_free, rc);
         }
@@ -495,8 +484,8 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
 
         if (IS_ERR(inode)) {
                 rc = PTR_ERR(inode);
-                CERROR("error creating MDS object for id "LPX64": rc = %d\n",
-                       oa->o_id, rc);
+                CERROR("error creating MDS object for %*s: rc = %d\n",
+                       dentry->d_name.len, dentry->d_name.name, rc);
                 GOTO(out_destroy, rc);
         }
 
@@ -512,22 +501,24 @@ static int ll_create(struct inode * dir, struct dentry * dentry, int mode)
         }
 
 out_free:
-        obdo_free(oa);
         RETURN(rc);
 
 out_destroy:
         if (lsm) {
-                if (!oa)
-                        oa = obdo_alloc();
-                if (!oa)
-                        RETURN(-ENOMEM);
-
-                oa->o_easize = ll_mds_easize(inode->i_sb);
-                oa->o_valid |= OBD_MD_FLEASIZE;
-                err = obd_destroy(ll_i2obdconn(dir), oa, lsm);
+                struct obdo *oa;
+                oa = obdo_alloc();
+                if (oa) {
+                        oa->o_easize = lsm->lsm_mds_easize;
+                        oa->o_id = lsm->lsm_object_id;
+                        oa->o_valid |= OBD_MD_FLID | OBD_MD_FLEASIZE;
+                        err = obd_destroy(ll_i2obdconn(dir), oa, lsm);
+                        obdo_free(oa);
+                } else
+                        err = -ENOMEM;
                 if (err)
                         CERROR("error uncreating objid "LPX64": err %d\n",
-                               oa->o_id, err);
+                               lsm->lsm_object_id, err);
+                OBD_FREE(lsm, ll_ost_easize(dir->i_sb));
         }
 
         goto out_free;
