@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.31 2002/09/04 16:29:14 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.31 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.32 2002/09/04 16:30:40 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.32 $"
 
 #define EXPORT_SYMTAB
 
@@ -46,11 +46,9 @@ static atomic_t echo_getattrs;
 int echo_proc_read(char *page, char **start, off_t off, int count, int *eof,
                    void *data)
 {
-        struct obd_device *obd;
         long long attrs = atomic_read(&echo_getattrs);
         long long pages = atomic_read(&echo_page_rws);
         int len;
-        int i;
 
         *eof = 1;
         if (off != 0)
