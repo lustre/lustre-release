@@ -27,7 +27,7 @@ CONFIG=
 VERSION=
 EXTRA_VERSION=
 
-BASE_ARCH=
+BASE_ARCHS=
 BIGMEM_ARCHS=
 BOOT_ARCHS=
 JENSEN_ARCHS=
@@ -40,7 +40,6 @@ TARGET_FILE=
 KERNEL_FILE=
 SERIES_FILE=
 CONFIG_FILE=
-CC=${CC:-gcc}
 
 canon()
 {
@@ -194,7 +193,8 @@ load_target()
     . "$TARGET_FILE"
 
     [ "$KERNEL" ] || fatal 1 "Target $TARGET did not specify a kernel."
-    [ "$SERIES" ] || fatal 1 "Target $TARGET did not specify a patch series."
+# Suse 2.6 has our patches in already
+#    [ "$SERIES" ] || fatal 1 "Target $TARGET did not specify a patch series."
 #    [ "$CONFIG" ] || fatal 1 "Target $TARGET did not specify a kernel config."
     [ "$VERSION" ] || fatal 1 "Target $TARGET did not specify the kernel version."
     
@@ -204,9 +204,11 @@ load_target()
 	    fatal 1 "Target $TARGET's kernel file $KERNEL not found in kernel directory $KERNELDIR."
     fi
 
-    SERIES_FILE="$TOPDIR/kernel_patches/series/$SERIES"
-    [ -r "$SERIES_FILE" ] || \
-	fatal 1 "Target $TARGET's series $SERIES missing from $TOPDIR/kernel_patches/series."
+    if [ "$SERIES" ]; then
+        SERIES_FILE="$TOPDIR/kernel_patches/series/$SERIES"
+        [ -r "$SERIES_FILE" ] || \
+	    fatal 1 "Target $TARGET's series $SERIES missing from $TOPDIR/kernel_patches/series."
+    fi
 
     TARGET_ARCH=${TARGET_ARCH:-$BASE_ARCHS}
     CONFIG_TARGET="$TARGET-${TARGET_ARCH}${TARGET_CONFIG:+-$TARGET_CONFIG}"
@@ -262,6 +264,7 @@ extract_kernel()
 patch_kernel()
 {
     (( $UNPACK_KERNEL )) || return 0
+    [ "$SERIES" ] || return 0
     pushd "$TOPDIR/linux" >/dev/null
     echo -n "Applying patch"
     for patch in $(<"$SERIES_FILE") ; do
@@ -277,15 +280,18 @@ patch_kernel()
 
 set_make()
 {
-    MAKE="make -s CC=$CC"
+    MAKE="make -s"
+    if [ "$CC" ] ; then
+	MAKE="$MAKE CC=$CC"
+    fi
     if [ "$ARCH" ] ; then
-	MAKE="$MAKE ARCH=$ARCH"
+	MAKE_ARCH="$MAKE ARCH=$ARCH"
     else
 	case $TARGET_ARCH in
 	    i?86)
                 ;;
             *)
-	        MAKE="$MAKE ARCH=$TARGET_ARCH"
+	        MAKE_ARCH="$MAKE ARCH=$TARGET_ARCH"
 		;;
         esac
     fi
@@ -326,13 +332,14 @@ depend_kernel()
 build_kernel()
 {
     (( $BUILD_KERNEL )) || return 0
-    # we need to override $CC at make time, since there is no
-    # configure
     set_make
     echo "Building kernel in $PWD..."
     case "$TARGET_ARCH" in
 	i386 | i586 | i686 | athlon | x86_64)
 	    $MAKE_J bzImage || fatal 1 "Error making bzImage."
+	    ;;
+        ppc | ppc64)
+	    $MAKE_J vmlinux || fatal 1 "Error making vmlinux."
 	    ;;
 	*)
 	    $MAKE_J boot || fatal 1 "Error making boot."
@@ -366,6 +373,7 @@ build_lustre()
 install_kernel()
 {
     (( $INSTALL_KERNEL )) || return 0
+    set_make
     FULL_VERSION="${VERSION}-${EXTRA_VERSION}${TARGET_CONFIG}"
     pushd "$TOPDIR/linux" >/dev/null
     mkdir -p "$DESTDIR/boot"
@@ -377,7 +385,7 @@ install_kernel()
     mkdir -p "$DESTDIR/dev/shm"
     mkdir -p "$DESTDIR/lib/modules/${FULL_VERSION}"
 
-    make CC="$CC" INSTALL_MOD_PATH="$DESTDIR" KERNELRELEASE="$FULL_VERSION" \
+    $MAKE INSTALL_MOD_PATH="$DESTDIR" KERNELRELEASE="$FULL_VERSION" \
 	-s modules_install || \
 	fatal 1 "Error installing modules."
 
@@ -392,12 +400,16 @@ install_kernel()
 	    cp vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/"
 	    ln -sf "../lib/modules/${FULL_VERSION}/vmlinux" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
 	    ;;
+        ppc | ppc64)
+	    cp vmlinux "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
+	    ln -sf "$DESTDIR/boot/vmlinux-${FULL_VERSION}" "../lib/modules/${FULL_VERSION}/vmlinux" 
+	    ;;
 	ia64)
 	    gzip -cfv vmlinux > vmlinuz
 	    mkdir -p "$DESTDIR/boot/efi/redhat"
 	    install -m 755 vmlinux "$DESTDIR/lib/modules/${FULL_VERSION}/"
 	    install -m 755 vmlinuz "$DESTDIR/boot/efi/redhat/vmlinuz-${FULL_VERSION}"
-	    ln -sf "../lib/modules/${FULL_VERSION}/vmlinux" "$DESTDIR/boot/efi/redhat/vmlinux-${FULL_VERSION}"
+	    ln -sf "../../../lib/modules/${FULL_VERSION}/vmlinux" "$DESTDIR/boot/efi/redhat/vmlinux-${FULL_VERSION}"
 	    ln -sf "efi/redhat/vmlinux-${FULL_VERSION}" "$DESTDIR/boot/vmlinux-${FULL_VERSION}"
 	    ln -sf "efi/redhat/vmlinuz-${FULL_VERSION}" "$DESTDIR/boot/vmlinuz-${FULL_VERSION}"
 	    ;;

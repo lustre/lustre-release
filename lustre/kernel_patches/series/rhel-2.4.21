@@ -41,5 +41,7 @@ blkdev_tunables-2.4.21-chaos.patch
 small_scatterlist-2.4.21-rhel.patch
 ext3-nlinks-2.4.21-chaos.patch
 sd_iostats-2.4.21-chaos.patch
+llnl-frame-pointer-walk-2.4.21-rhel.patch
+llnl-frame-pointer-walk-fix-2.4.21-rhel.patch
 export-show_task-2.4-rhel.patch 
 compile-fixes-2.4.21-rhel.patch 

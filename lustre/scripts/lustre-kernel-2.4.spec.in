@@ -134,7 +134,7 @@ Release: %{release}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
 %define KVERREL %{PACKAGE_VERSION}-%{kextraver}%{?targetboard:%{targetboard}}%{?debuglevel_1:.dbg}
 License: GPL
 Group: System Environment/Kernel
-ExclusiveArch: %{all_x86} x86_64 ia64
+ExclusiveArch: %{all_x86} x86_64 ia64 ppc
 ExclusiveOS: Linux
 Obsoletes: kernel-modules, kernel-sparc
 Provides: kernel = %{version}
@@ -312,6 +312,7 @@ pushd lustre >/dev/null
 sh -x ./scripts/lmake \
 	--unpack-kernel \
 	--target @LUSTRE_TARGET@ \
+	--target-arch %{_target_cpu} \
 	--kerneldir $RPM_SOURCE_DIR
 popd >/dev/null
 
@@ -389,6 +390,7 @@ SaveHeaders()
   sh -x ./scripts/lmake \
 	--save-headers \
 	--target @LUSTRE_TARGET@ \
+	--target-arch %{_target_cpu} \
 	--extraversion %{kextraver} \
 	--destdir $RPM_BUILD_ROOT
 }
@@ -622,8 +624,10 @@ fi
 if [ ! -e /dev/portals ]; then
    mknod /dev/portals c 10 240
 fi
-/sbin/chkconfig --add lustre
-/sbin/chkconfig --add lustrefs
+if [ -f /etc/init.d/lustre ] ; then
+	/sbin/chkconfig --add lustre
+	/sbin/chkconfig --add lustrefs
+fi
 
 # Allow clean removal of modules directory
 %preun 
@@ -705,9 +709,9 @@ fi
 exit 0
 
 %preun -n lustre-lite-utils
-if [ $1 = 0 ]; then
-  /sbin/chkconfig --del lustre
-  /sbin/chkconfig --del lustrefs
+if [ $1 = 0 -a -f /etc/init.d/lustre ]; then
+	/sbin/chkconfig --del lustre
+	/sbin/chkconfig --del lustrefs
 fi
 
 ###
@@ -790,8 +794,8 @@ fi
 /usr/sbin/*
 /usr/bin/*
 /usr/lib/lustre/python
-/etc/init.d/lustre
-/etc/init.d/lustrefs
+@ENABLE_INIT_SCRIPTS@/etc/init.d/lustre
+@ENABLE_INIT_SCRIPTS@/etc/init.d/lustrefs
 /usr/include/lustre/*
 /usr/include/portals/*
 /usr/include/linux/*

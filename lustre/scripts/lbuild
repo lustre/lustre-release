@@ -24,7 +24,7 @@ RHBUILD=0
 LINUX26=0
 SUSEBUILD=0
 
-BASE_ARCH=
+BASE_ARCHS=
 BIGMEM_ARCHS=
 BOOT_ARCHS=
 JENSEN_ARCHS=
@@ -170,7 +170,7 @@ load_target()
     . "$TARGET_FILE"
 
     [ "$KERNEL"  ] || fatal 1 "Target $TARGET did not specify a kernel."
-    [ "$SERIES"  ] || fatal 1 "Target $TARGET did not specify a kernel patch series."
+#    [ "$SERIES"  ] || fatal 1 "Target $TARGET did not specify a kernel patch series."
 #    [ "$CONFIG"  ] || fatal 1 "Target $TARGET did not specify a kernel config."
     [ "$VERSION" ] || fatal 1 "Target $TARGET did not specify a kernel version."
 
@@ -180,9 +180,11 @@ load_target()
 	    fatal 1 "Target $TARGET's kernel file $KERNEL not found in kernel directory $KERNELDIR."
     fi
 
-    SERIES_FILE="$TOPDIR/lustre/kernel_patches/series/$SERIES"
-    [ -r "$SERIES_FILE" ] || \
-	fatal 1 "Target $TARGET's series $SERIES missing from $TOPDIR/lustre/kernel_patches/series."
+    if [ "$SERIES" ] ; then
+        SERIES_FILE="$TOPDIR/lustre/kernel_patches/series/$SERIES"
+        [ -r "$SERIES_FILE" ] || \
+	    fatal 1 "Target $TARGET's series $SERIES missing from $TOPDIR/lustre/kernel_patches/series."
+    fi
 
     CONFIG_FILE="$TOPDIR/lustre/kernel_patches/kernel_configs/$CONFIG"
     [ -r "$CONFIG_FILE" ] || \
@@ -257,6 +259,7 @@ unpack_linux()
 
 patch_linux()
 {
+    [ "$SERIES" ] || return 0
     FULL_PATCH="$PWD/lustre-kernel-${TARGET}-${EXTRA_VERSION}.patch"
     [ -f "$FULL_PATCH" ] && rm -f "$FULL_PATCH"
     pushd linux >/dev/null
@@ -302,6 +305,11 @@ clean_linux()
 prep_build()
 {
     # make .spec file
+    if [ -f /etc/init.d/functions -a -f /etc/sysconfig/network ] ; then
+        ENABLE_INIT_SCRIPTS=""
+    else
+        ENABLE_INIT_SCRIPTS="# "
+    fi
     sed -e "s/@KERNEL_VERSION@/$VERSION/g" \
 	-e "s/@KERNEL_EXTRA_VERSION@/$EXTRA_VERSION/g" \
 	-e "s^@KERNEL_RELEASE@^${EXTRA_VERSION//-/_}^g" \
@@ -318,6 +326,7 @@ prep_build()
 	-e "s/@RHBUILD@/$RHBUILD/g" \
 	-e "s/@LINUX26@/$LINUX26/g" \
 	-e "s/@SUSEBUILD@/$SUSEBUILD/g" \
+	-e "s/@ENABLE_INIT_SCRIPTS@/$ENABLE_INIT_SCRIPTS/g" \
 	< $TOPDIR/lustre/scripts/lustre-kernel-2.4.spec.in \
 	> lustre-kernel-2.4.spec
     [ -d SRPMS ] || mkdir SRPMS

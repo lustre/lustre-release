@@ -8,8 +8,8 @@
 
 Index: linux-stage/fs/ext3/Makefile
 ===================================================================
---- linux-stage.orig/fs/ext3/Makefile	2004-05-11 17:21:20.000000000 -0400
-+++ linux-stage/fs/ext3/Makefile	2004-05-11 17:21:21.000000000 -0400
+--- linux-stage.orig/fs/ext3/Makefile	2004-11-03 14:41:24.747805262 -0500
++++ linux-stage/fs/ext3/Makefile	2004-11-03 14:41:25.123696274 -0500
 @@ -4,7 +4,7 @@
  
  obj-$(CONFIG_EXT3_FS) += ext3.o
@@ -21,8 +21,8 @@ Index: linux-stage/fs/ext3/Makefile
  ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
 Index: linux-stage/fs/ext3/inode.c
 ===================================================================
---- linux-stage.orig/fs/ext3/inode.c	2004-05-11 17:21:21.000000000 -0400
-+++ linux-stage/fs/ext3/inode.c	2004-05-11 17:21:21.000000000 -0400
+--- linux-stage.orig/fs/ext3/inode.c	2004-11-03 14:41:25.040720333 -0500
++++ linux-stage/fs/ext3/inode.c	2004-11-03 14:46:08.458515670 -0500
 @@ -37,6 +37,7 @@
  #include <linux/mpage.h>
  #include <linux/uio.h>
@@ -31,20 +31,20 @@ Index: linux-stage/fs/ext3/inode.c
  #include "acl.h"
  
  /*
-@@ -2472,6 +2473,9 @@
- 	ei->i_acl = EXT3_ACL_NOT_CACHED;
+@@ -2401,6 +2402,9 @@
  	ei->i_default_acl = EXT3_ACL_NOT_CACHED;
  #endif
-+	if (ext3_iopen_get_inode(inode))
-+		return;
-+
+ 	ei->i_rsv_window.rsv_end = EXT3_RESERVE_WINDOW_NOT_ALLOCATED;
++    
++    if (ext3_iopen_get_inode(inode))
++        return;
+ 
  	if (ext3_get_inode_loc(inode, &iloc, 0))
  		goto bad_inode;
- 	bh = iloc.bh;
 Index: linux-stage/fs/ext3/iopen.c
 ===================================================================
 --- linux-stage.orig/fs/ext3/iopen.c	1969-12-31 19:00:00.000000000 -0500
-+++ linux-stage/fs/ext3/iopen.c	2004-05-11 17:21:21.000000000 -0400
++++ linux-stage/fs/ext3/iopen.c	2004-11-03 14:41:25.125695694 -0500
 @@ -0,0 +1,272 @@
 +/*
 + * linux/fs/ext3/iopen.c
@@ -321,7 +321,7 @@ Index: linux-stage/fs/ext3/iopen.c
 Index: linux-stage/fs/ext3/iopen.h
 ===================================================================
 --- linux-stage.orig/fs/ext3/iopen.h	1969-12-31 19:00:00.000000000 -0500
-+++ linux-stage/fs/ext3/iopen.h	2004-05-11 17:21:21.000000000 -0400
++++ linux-stage/fs/ext3/iopen.h	2004-11-03 14:41:25.126695404 -0500
 @@ -0,0 +1,15 @@
 +/*
 + * iopen.h
@@ -340,8 +340,8 @@ Index: linux-stage/fs/ext3/iopen.h
 +					   struct inode *inode, int rehash);
 Index: linux-stage/fs/ext3/namei.c
 ===================================================================
---- linux-stage.orig/fs/ext3/namei.c	2004-05-11 17:21:20.000000000 -0400
-+++ linux-stage/fs/ext3/namei.c	2004-05-11 17:21:21.000000000 -0400
+--- linux-stage.orig/fs/ext3/namei.c	2004-11-03 14:41:24.957744391 -0500
++++ linux-stage/fs/ext3/namei.c	2004-11-03 14:41:25.127695114 -0500
 @@ -37,6 +37,7 @@
  #include <linux/buffer_head.h>
  #include <linux/smp_lock.h>
@@ -373,7 +373,7 @@ Index: linux-stage/fs/ext3/namei.c
  }
  
  
-@@ -2019,10 +2021,6 @@
+@@ -2029,10 +2031,6 @@
  			      inode->i_nlink);
  	inode->i_version++;
  	inode->i_nlink = 0;
@@ -384,7 +384,7 @@ Index: linux-stage/fs/ext3/namei.c
  	ext3_orphan_add(handle, inode);
  	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
  	ext3_mark_inode_dirty(handle, inode);
-@@ -2139,6 +2137,23 @@
+@@ -2152,6 +2150,23 @@
  	return err;
  }
  
@@ -408,7 +408,7 @@ Index: linux-stage/fs/ext3/namei.c
  static int ext3_link (struct dentry * old_dentry,
  		struct inode * dir, struct dentry *dentry)
  {
-@@ -2161,7 +2176,8 @@
+@@ -2175,7 +2190,8 @@
  	ext3_inc_count(handle, inode);
  	atomic_inc(&inode->i_count);
  
@@ -416,14 +416,14 @@ Index: linux-stage/fs/ext3/namei.c
 +	err = ext3_add_link(handle, dentry, inode);
 +	ext3_orphan_del(handle,inode);
  	ext3_journal_stop(handle);
- 	return err;
- }
+ 	if (err == -ENOSPC && ext3_should_retry_alloc(dir->i_sb, &retries))
+ 		goto retry;
 Index: linux-stage/fs/ext3/super.c
 ===================================================================
---- linux-stage.orig/fs/ext3/super.c	2004-05-11 17:21:21.000000000 -0400
-+++ linux-stage/fs/ext3/super.c	2004-05-11 17:44:53.000000000 -0400
-@@ -536,7 +536,7 @@
- 	Opt_user_xattr, Opt_nouser_xattr, Opt_acl, Opt_noacl, Opt_noload,
+--- linux-stage.orig/fs/ext3/super.c	2004-11-03 14:41:25.043719463 -0500
++++ linux-stage/fs/ext3/super.c	2004-11-03 14:41:25.129694535 -0500
+@@ -534,7 +534,7 @@
+ 	Opt_reservation, Opt_noreservation, Opt_noload,
  	Opt_commit, Opt_journal_update, Opt_journal_inum,
  	Opt_abort, Opt_data_journal, Opt_data_ordered, Opt_data_writeback,
 -	Opt_ignore, Opt_barrier,
@@ -441,7 +441,7 @@ Index: linux-stage/fs/ext3/super.c
  	{Opt_err, NULL}
  };
  
-@@ -772,6 +775,18 @@
+@@ -778,6 +781,18 @@
  			else
  				clear_opt(sbi->s_mount_opt, BARRIER);
  			break;
@@ -462,12 +462,12 @@ Index: linux-stage/fs/ext3/super.c
  		default:
 Index: linux-stage/include/linux/ext3_fs.h
 ===================================================================
---- linux-stage.orig/include/linux/ext3_fs.h	2004-05-11 17:21:20.000000000 -0400
-+++ linux-stage/include/linux/ext3_fs.h	2004-05-11 17:21:21.000000000 -0400
-@@ -326,6 +326,8 @@
- #define EXT3_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */
- #define EXT3_MOUNT_POSIX_ACL		0x8000	/* POSIX Access Control Lists */
- #define EXT3_MOUNT_BARRIER		0x10000 /* Use block barriers */
+--- linux-stage.orig/include/linux/ext3_fs.h	2004-11-03 14:41:24.958744101 -0500
++++ linux-stage/include/linux/ext3_fs.h	2004-11-03 14:41:25.129694535 -0500
+@@ -329,6 +329,8 @@
+ #define EXT3_MOUNT_POSIX_ACL		0x08000	/* POSIX Access Control Lists */
+ #define EXT3_MOUNT_RESERVATION		0x10000	/* Preallocation */
+ #define EXT3_MOUNT_BARRIER		0x20000 /* Use block barriers */
 +#define EXT3_MOUNT_IOPEN		0x40000	/* Allow access via iopen */
 +#define EXT3_MOUNT_IOPEN_NOPRIV		0x80000	/* Make iopen world-readable */
  

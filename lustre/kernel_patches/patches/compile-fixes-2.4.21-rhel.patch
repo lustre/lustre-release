@@ -1,7 +1,7 @@
 Index: linux-2.4.21/drivers/i2c/i2c-ali1535.c
 ===================================================================
 --- linux-2.4.21.orig/drivers/i2c/i2c-ali1535.c	2004-09-11 10:16:33.000000000 -0400
-+++ linux-2.4.21/drivers/i2c/i2c-ali1535.c	2004-11-01 18:12:53.000000000 -0500
++++ linux-2.4.21/drivers/i2c/i2c-ali1535.c	2004-11-03 17:40:31.000000000 -0500
 @@ -672,8 +672,8 @@
  #ifdef MODULE
  
@@ -16,7 +16,7 @@ Index: linux-2.4.21/drivers/i2c/i2c-ali1535.c
 Index: linux-2.4.21/drivers/sensors/lm87.c
 ===================================================================
 --- linux-2.4.21.orig/drivers/sensors/lm87.c	2004-09-11 10:16:33.000000000 -0400
-+++ linux-2.4.21/drivers/sensors/lm87.c	2004-11-01 18:16:08.000000000 -0500
++++ linux-2.4.21/drivers/sensors/lm87.c	2004-11-03 17:40:31.000000000 -0500
 @@ -1060,10 +1060,10 @@
  #endif
  
@@ -34,8 +34,8 @@ Index: linux-2.4.21/drivers/sensors/lm87.c
  
 Index: linux-2.4.21/drivers/net/wan/sbni.c
 ===================================================================
---- linux-2.4.21.orig/drivers/net/wan/sbni.c	2004-11-01 18:27:56.000000000 -0500
-+++ linux-2.4.21/drivers/net/wan/sbni.c	2004-11-01 18:28:16.000000000 -0500
+--- linux-2.4.21.orig/drivers/net/wan/sbni.c	2002-11-28 18:53:14.000000000 -0500
++++ linux-2.4.21/drivers/net/wan/sbni.c	2004-11-03 17:40:31.000000000 -0500
 @@ -1552,13 +1552,13 @@
  static u32
  calc_crc32( u32  crc,  u8  *p,  u32  len )
@@ -77,8 +77,8 @@ Index: linux-2.4.21/drivers/net/wan/sbni.c
  	return  _crc;
 Index: linux-2.4.21/drivers/net/pcmcia/wvlan_cs.c
 ===================================================================
---- linux-2.4.21.orig/drivers/net/pcmcia/wvlan_cs.c	2004-11-01 18:28:53.000000000 -0500
-+++ linux-2.4.21/drivers/net/pcmcia/wvlan_cs.c	2004-11-01 18:29:11.000000000 -0500
+--- linux-2.4.21.orig/drivers/net/pcmcia/wvlan_cs.c	2004-09-11 10:16:39.000000000 -0400
++++ linux-2.4.21/drivers/net/pcmcia/wvlan_cs.c	2004-11-03 17:40:31.000000000 -0500
 @@ -1084,9 +1084,9 @@
   			/* This is a PrismII card. It is is *very* similar
   			 * to the Lucent, and the driver work 95%,
@@ -92,3 +92,16 @@ Index: linux-2.4.21/drivers/net/pcmcia/wvlan_cs.c
   			local->has_port3  = 1;
   			local->has_ibssid = 0;
   			local->has_mwo    = 0;
+Index: linux-2.4.21/Makefile
+===================================================================
+--- linux-2.4.21.orig/Makefile	2004-09-11 10:16:39.000000000 -0400
++++ linux-2.4.21/Makefile	2004-11-03 17:41:35.000000000 -0500
+@@ -539,7 +539,7 @@
+ ifdef CONFIG_MODVERSIONS
+ 	$(MAKE) update-modverfile
+ endif
+-	scripts/mkdep -- `find $(FINDHPATH) \( -name SCCS -o -name .svn \) -prune -o -follow -name \*.h ! -name modversions.h -print` > .hdepend
++	find $(FINDHPATH) \( -name SCCS -o -name .svn \) -prune -o -follow -name \*.h ! -name modversions.h -print | xargs scripts/mkdep --  > .hdepend
+ 	scripts/mkdep -- init/*.c > .depend
+ 	(find $(TOPDIR) \( -name .depend -o -name .hdepend \) -print | xargs $(AWK) -f scripts/include_deps) > tmp_include_depends
+ 	sed -ne 's/^\([^ ].*\):.*/  \1 \\/p' tmp_include_depends > tmp_include_depends_1

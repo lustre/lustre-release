@@ -843,3 +843,17 @@ echo "LLCPPFLAGS: $LLCPPFLAGS"
 echo "CFLAGS: $CFLAGS"
 echo "EXTRA_KCFLAGS: $EXTRA_KCFLAGS"
 echo "LLCFLAGS: $LLCFLAGS"
+
+ENABLE_INIT_SCRIPTS=0
+if test x$enable_utils = xyes ; then
+        AC_MSG_CHECKING([whether to install init scripts])
+        # our scripts only work on red hat systems
+        if test -f /etc/init.d/functions -a -f /etc/sysconfig/network ; then
+                ENABLE_INIT_SCRIPTS=1
+                AC_MSG_RESULT([yes])
+        else
+                AC_MSG_RESULT([no])
+        fi
+fi
+AM_CONDITIONAL(INIT_SCRIPTS, test x$ENABLE_INIT_SCRIPTS = "x1")
+AC_SUBST(ENABLE_INIT_SCRIPTS)

@@ -40,6 +40,7 @@
 #include <linux/obd_ost.h>
 #include <linux/obd_class.h>
 #include <linux/obd_lov.h> /* for IOC_LOV_SET_OSC_ACTIVE */
+#include <portals/list.h>
 
 #include "ptlrpc_internal.h"
 
