@@ -36,7 +36,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
-#ifdef _UWIN
+#if defined(_UWIN) || defined(__linux__)
 # include <sys/param.h>
 # include <limits.h>
 # include <time.h>
