@@ -20,3 +20,7 @@ extN-2.4.18-ino_sb_fixup.patch
 ext3-map_inode_page_2.4.18.patch
 ext3-error-export.patch
 iopen-2.4.18.patch
+jbd-dont-account-blocks-twice.patch
+jbd-commit-tricks.patch
+ext3-o_direct-1-2.4.18-chaos.patch
+ext3-no-write-super.patch

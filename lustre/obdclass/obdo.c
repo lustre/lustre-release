@@ -25,7 +25,9 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#define EXPORT_SYMTAB
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
 
 #include <linux/module.h>
 #include <linux/obd_class.h>
