@@ -269,7 +269,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
 	char *tmp1, *tmp2, *end2;
 	char *res = NULL;
 	int cmd;
-	struct niobuf *nb, *src;
+	struct niobuf *nb, *src, *dst;
 	struct obd_ioobj *ioo;
 	struct ost_req *r = req->rq_req.ost;
 
@@ -329,9 +329,9 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
                         goto out;
                 }
 
-                src = &((struct niobuf *)tmp2)[i];
-
-                bulk->b_xid = src->xid;
+                src = &((struct niobuf *)res)[i];
+                dst = &((struct niobuf *)tmp2)[i];
+                bulk->b_xid = dst->xid;
                 bulk->b_buf = (void *)(unsigned long)src->addr;
                 bulk->b_buflen = PAGE_SIZE;
                 rc = ptlrpc_send_bulk(bulk, OST_BULK_PORTAL);

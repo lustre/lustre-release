@@ -428,7 +428,7 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 	}
 
         OBD_ALLOC(src, size2);
-        if (src) { 
+        if (!src) { 
                 CERROR("no src memory\n");
                 return -ENOMEM;
         }
@@ -479,7 +479,7 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 			n++;
 		}
 	}
-
+        OBD_FREE(src); 
  out:
 	if (request->rq_rephdr)
 		OBD_FREE(request->rq_rephdr, request->rq_replen);
