@@ -133,8 +133,9 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd)
 {
         struct client_obd *cli = &obd->u.cli;
         struct ptlrpc_request *request;
-        int rc, size = sizeof(cli->cl_target_uuid);
-        char *tmp = cli->cl_target_uuid;
+        int rc, size[] = {sizeof(cli->cl_target_uuid), 
+                          sizeof(obd->obd_uuid) };
+        char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid};
         int rq_opc = (obd->obd_type->typ_ops->o_getattr) ? OST_CONNECT : MDS_CONNECT;
 
         ENTRY;
@@ -161,16 +162,16 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd)
                 RETURN(-ENOMEM);
         }
 
-        request = ptlrpc_prep_req(cli->cl_client, cli->cl_conn, rq_opc, 1, &size, &tmp);
+        request = ptlrpc_prep_req(cli->cl_client, cli->cl_conn, rq_opc, 2, size, tmp);
         if (!request)
                 GOTO(out_disco, -ENOMEM);
 
         request->rq_level = LUSTRE_CONN_NEW;
         request->rq_replen = lustre_msg_size(0, NULL);
-        /* Sending our local connection info breaks for local connections
-        request->rq_reqmsg->addr = conn->addr;
-        request->rq_reqmsg->cookie = conn->cookie;
-         */
+        //   This handle may be important if a callback needs
+        //   to find the mdc/osc
+        //        request->rq_reqmsg->addr = conn->addr;
+        //        request->rq_reqmsg->cookie = conn->cookie;
 
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
@@ -238,18 +239,25 @@ int target_handle_connect(struct ptlrpc_request *req)
         struct obd_device *target;
         struct obd_export *export;
         struct lustre_handle conn;
-        char *uuid;
+        char *tgtuuid, *cluuid;
         int rc, i;
         ENTRY;
 
-        uuid = lustre_msg_buf(req->rq_reqmsg, 0);
+        tgtuuid = lustre_msg_buf(req->rq_reqmsg, 0);
         if (req->rq_reqmsg->buflens[0] > 37) {
                 /* Invalid UUID */
                 req->rq_status = -EINVAL;
                 RETURN(-EINVAL);
         }
 
-        i = class_uuid2dev(uuid);
+        cluuid =  lustre_msg_buf(req->rq_reqmsg, 1);
+        if (req->rq_reqmsg->buflens[1] > 37) {
+                /* Invalid UUID */
+                req->rq_status = -EINVAL;
+                RETURN(-EINVAL);
+        }
+
+        i = class_uuid2dev(tgtuuid);
         if (i == -1) {
                 req->rq_status = -ENODEV;
                 RETURN(-ENODEV);
