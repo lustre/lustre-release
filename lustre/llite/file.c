@@ -454,6 +454,14 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
                 }
         }
 
+        /* If we don't refresh the file size, generic_file_read may not even
+         * call us */
+        retval = ll_file_size(inode, lsm);
+        if (retval < 0) {
+                CERROR("ll_file_size: %d\n", retval);
+                RETURN(retval);
+        }
+
         CDEBUG(D_INFO, "Reading inode %ld, %d bytes, offset %Ld\n",
                inode->i_ino, count, *ppos);
         retval = generic_file_read(filp, buf, count, ppos);
