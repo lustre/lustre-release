@@ -29,6 +29,7 @@
 # include <asm/types.h>
 # include <linux/types.h>
 # include <linux/list.h>
+# include <linux/string.h> /* for strncpy, below */
 #else
 # define __KERNEL__
 # include <asm/types.h>
@@ -53,8 +54,8 @@ struct obd_uuid {
 
 static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
 {
-        strncpy(uuid->uuid, tmp, sizeof(uuid->uuid));
-        uuid->uuid[sizeof(uuid->uuid) - 1] = '\0';
+        strncpy(uuid->uuid, tmp, sizeof(*uuid));
+        uuid->uuid[sizeof(*uuid) - 1] = '\0';
 }
 
 /* FOO_REQUEST_PORTAL is for incoming requests on the FOO
@@ -64,17 +65,17 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
 
 #define CONNMGR_REQUEST_PORTAL  1
 #define CONNMGR_REPLY_PORTAL    2
-#define OSC_REQUEST_PORTAL      3
+//#define OSC_REQUEST_PORTAL      3
 #define OSC_REPLY_PORTAL        4
 #define OSC_BULK_PORTAL         5
 #define OST_REQUEST_PORTAL      6
-#define OST_REPLY_PORTAL        7
+//#define OST_REPLY_PORTAL        7
 #define OST_BULK_PORTAL         8
-#define MDC_REQUEST_PORTAL      9
+//#define MDC_REQUEST_PORTAL      9
 #define MDC_REPLY_PORTAL        10
-#define MDC_BULK_PORTAL         11
+//#define MDC_BULK_PORTAL         11
 #define MDS_REQUEST_PORTAL      12
-#define MDS_REPLY_PORTAL        13
+//#define MDS_REPLY_PORTAL        13
 #define MDS_BULK_PORTAL         14
 #define LDLM_CB_REQUEST_PORTAL     15
 #define LDLM_CB_REPLY_PORTAL       16
@@ -83,7 +84,8 @@ static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)
 #define PTLBD_REQUEST_PORTAL           19
 #define PTLBD_REPLY_PORTAL             20
 #define PTLBD_BULK_PORTAL              21
-#define MDS_GETATTR_PORTAL      22
+#define MDS_SETATTR_PORTAL      22
+#define MDS_READPAGE_PORTAL     23
 
 #define SVC_KILLED               1
 #define SVC_EVENT                2
@@ -201,6 +203,9 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define OST_OPEN       11
 #define OST_CLOSE      12
 #define OST_STATFS     13
+#define OST_SAN_READ   14
+#define OST_SAN_WRITE  15
+#define OST_SYNCFS     16
 
 
 typedef uint64_t        obd_id;
@@ -221,6 +226,10 @@ typedef uint32_t        obd_count;
 #define OBD_FL_OBDMDEXISTS      (0x00000002)
 
 #define OBD_INLINESZ    60
+#define FD_OSTDATA_SIZE 32
+#if (FD_OSTDATA_SIZE > OBD_INLINESZ)
+# error FD_OSTDATA_SIZE must be smaller than OBD_INLINESZ
+#endif
 
 /* Note: 64-bit types are 64-bit aligned in structure */
 struct obdo {
@@ -282,8 +291,9 @@ struct lov_mds_md {
 #define OBD_MD_FLEASIZE (0x00020000)    /* extended attribute data */
 #define OBD_MD_LINKNAME (0x00040000)    /* symbolic link target */
 #define OBD_MD_FLHANDLE (0x00080000)    /* file handle */
+#define OBD_MD_FLCKSUM  (0x00100000)    /* bulk data checksum */
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS | OBD_MD_LINKNAME|\
-                           OBD_MD_FLEASIZE | OBD_MD_FLHANDLE))
+                           OBD_MD_FLEASIZE | OBD_MD_FLHANDLE | OBD_MD_FLCKSUM))
 
 struct obd_statfs {
         __u64           os_type;
@@ -319,7 +329,7 @@ struct niobuf_remote {
         __u32 len;
         __u32 xid;
         __u32 flags;
-};
+} __attribute__((packed));
 
 /* request structure for OST's */
 
@@ -334,16 +344,19 @@ struct ost_body {
  */
 
 /* opcodes */
-#define MDS_GETATTR      1
-#define MDS_GETATTR_NAME 2
-#define MDS_CLOSE        3
-#define MDS_REINT        4
-#define MDS_READPAGE     6
-#define MDS_CONNECT      7
-#define MDS_DISCONNECT   8
-#define MDS_GETSTATUS    9
-#define MDS_STATFS       10
-#define MDS_GETLOVINFO   11
+#define MDS_GETATTR      33
+#define MDS_GETATTR_NAME 34
+#define MDS_CLOSE        35
+#define MDS_REINT        36
+#define MDS_READPAGE     37
+#define MDS_CONNECT      38
+#define MDS_DISCONNECT   39
+#define MDS_GETSTATUS    40
+#define MDS_STATFS       41
+#define MDS_GETLOVINFO   42
+/*
+ * Do not exceed 63 
+ */
 
 #define REINT_SETATTR  1
 #define REINT_CREATE   2
@@ -359,8 +372,6 @@ struct ost_body {
 #define IT_OPEN_POS     (1 << 3)
 #define IT_OPEN_CREATE  (1 << 4)
 #define IT_OPEN_OPEN    (1 << 5)
-
-#define IT_UNLINK (1<<8)
 
 #define REINT_OPCODE_MASK 0xff /* opcodes must fit into this mask */
 #define REINT_REPLAYING 0x1000 /* masked into the opcode to indicate replay */
@@ -489,6 +500,8 @@ struct mds_rec_rename {
         __u32           rn_fsuid;
         __u32           rn_fsgid;
         __u32           rn_cap;
+        __u32           rn_suppgid1;
+        __u32           rn_suppgid2;
         struct ll_fid   rn_fid1;
         struct ll_fid   rn_fid2;
 };

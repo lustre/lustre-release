@@ -30,8 +30,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_mds.h>
 
-extern struct semaphore mdc_sem;
-
+/* mdc_setattr does its own semaphore handling */
 static int mdc_reint(struct ptlrpc_request *request, int level)
 {
         int rc;
@@ -41,7 +40,6 @@ static int mdc_reint(struct ptlrpc_request *request, int level)
 
         if (!(*opcodeptr == REINT_SETATTR))
                 mdc_get_rpc_lock(&mdc_rpc_lock, NULL);
-
         rc = ptlrpc_queue_wait(request);
         if (!(*opcodeptr == REINT_SETATTR))
                 mdc_put_rpc_lock(&mdc_rpc_lock, NULL);
@@ -55,14 +53,23 @@ static int mdc_reint(struct ptlrpc_request *request, int level)
         return rc;
 }
 
+/* If mdc_setattr is called with an 'iattr', then it is a normal RPC that
+ * should take the normal semaphore and go to the normal portal.
+ *
+ * If it is called with iattr->ia_valid & ATTR_FROM_OPEN, then it is a
+ * magic open-path setattr that should take the setattr semaphore and
+ * go to the setattr portal. */
 int mdc_setattr(struct lustre_handle *conn, struct inode *inode,
                 struct iattr *iattr, void *ea, int ealen,
                 struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_rec_setattr *rec;
+        struct mdc_rpc_lock *rpc_lock;
         int rc, bufcount = 1, size[2] = {sizeof(*rec), ealen};
         ENTRY;
+
+        LASSERT(iattr != NULL);
 
         if (ealen > 0)
                 bufcount = 2;
@@ -72,15 +79,21 @@ int mdc_setattr(struct lustre_handle *conn, struct inode *inode,
         if (!req)
                 RETURN(-ENOMEM);
 
-        /* XXX FIXME bug 249 */
-        req->rq_request_portal = MDS_GETATTR_PORTAL;
+        if (iattr->ia_valid & ATTR_FROM_OPEN) {
+                req->rq_request_portal = MDS_SETATTR_PORTAL; //XXX FIXME bug 249
+                rpc_lock = &mdc_setattr_lock;
+        } else
+                rpc_lock = &mdc_rpc_lock;
 
         mds_setattr_pack(req, inode, iattr, ea, ealen);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
 
+        mdc_get_rpc_lock(rpc_lock, NULL);
         rc = mdc_reint(req, LUSTRE_CONN_FULL);
+        mdc_put_rpc_lock(rpc_lock, NULL);
+
         *request = req;
         if (rc == -ERESTARTSYS)
                 rc = 0;

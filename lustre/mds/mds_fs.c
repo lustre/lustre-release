@@ -28,6 +28,10 @@
 
 #include <linux/module.h>
 #include <linux/kmod.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#include <linux/mount.h>
+#endif
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 #include <linux/obd_support.h>
@@ -142,10 +146,6 @@ int mds_client_free(struct obd_export *exp)
                        med->med_mcd->mcd_uuid, med->med_off);
         }
 
-        if (med->med_last_reply) {
-                OBD_FREE(med->med_last_reply, med->med_last_replen);
-                med->med_last_reply = NULL;
-        }
         OBD_FREE(med->med_mcd, sizeof(*med->med_mcd));
 
         return 0;
@@ -167,7 +167,7 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
         loff_t off = 0;
         int cl_off;
         unsigned long last_rcvd_size = f->f_dentry->d_inode->i_size;
-        __u64 last_rcvd = 0;
+        __u64 last_transno = 0;
         __u64 last_mount;
         int rc = 0;
 
@@ -193,13 +193,13 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                last_rcvd_size, (last_rcvd_size - MDS_LR_CLIENT)/MDS_LR_SIZE);
 
         /*
-         * When we do a clean MDS shutdown, we save the last_rcvd into
-         * the header.  If we find clients with higher last_rcvd values
-         * then those clients may need recovery done.
+         * When we do a clean MDS shutdown, we save the last_transno into
+         * the header.
          */
-        last_rcvd = le64_to_cpu(msd->msd_last_rcvd);
-        mds->mds_last_rcvd = last_rcvd;
-        CDEBUG(D_INODE, "got "LPU64" for server last_rcvd value\n", last_rcvd);
+        last_transno = le64_to_cpu(msd->msd_last_transno);
+        mds->mds_last_transno = last_transno;
+        CDEBUG(D_INODE, "got "LPU64" for server last_rcvd value\n",
+               last_transno);
 
         last_mount = le64_to_cpu(msd->msd_mount_count);
         mds->mds_mount_count = last_mount;
@@ -230,7 +230,7 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                         continue;
                 }
 
-                last_rcvd = le64_to_cpu(mcd->mcd_last_rcvd);
+                last_transno = le64_to_cpu(mcd->mcd_last_transno);
 
                 /* These exports are cleaned up by mds_disconnect(), so they
                  * need to be set up like real exports as mds_connect() does.
@@ -255,7 +255,7 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                         spin_lock_init(&med->med_open_lock);
 
                         mcd = NULL;
-                        mds->mds_recoverable_clients++;
+                        obddev->obd_recoverable_clients++;
                 } else {
                         CDEBUG(D_INFO,
                                "discarded client %d, UUID '%s', count %Ld\n",
@@ -264,17 +264,19 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
                 }
 
                 CDEBUG(D_OTHER, "client at offset %d has last_rcvd = %Lu\n",
-                       cl_off, (unsigned long long)last_rcvd);
+                       cl_off, (unsigned long long)last_transno);
 
-                if (last_rcvd > mds->mds_last_rcvd)
-                        mds->mds_last_rcvd = last_rcvd;
+                if (last_transno > mds->mds_last_transno)
+                        mds->mds_last_transno = last_transno;
         }
 
-        obddev->obd_last_committed = mds->mds_last_rcvd;
-        if (mds->mds_recoverable_clients) {
-                CERROR("RECOVERY: %d recoverable clients, last_rcvd "LPU64"\n",
-                       mds->mds_recoverable_clients, mds->mds_last_rcvd);
-                mds->mds_next_recovery_transno = obddev->obd_last_committed + 1;
+        obddev->obd_last_committed = mds->mds_last_transno;
+        if (obddev->obd_recoverable_clients) {
+                CERROR("RECOVERY: %d recoverable clients, last_transno "
+                       LPU64"\n",
+                       obddev->obd_recoverable_clients, mds->mds_last_transno);
+                obddev->obd_next_recovery_transno = obddev->obd_last_committed
+                        + 1;
                 obddev->obd_flags |= OBD_RECOVERING;
         }
 

@@ -27,8 +27,8 @@
 #define _LUSTRE_MDS_H
 
 #ifdef __KERNEL__
-
 #include <linux/fs.h>
+#endif
 #include <linux/kp30.h>
 #include <linux/lustre_idl.h>
 
@@ -45,11 +45,12 @@ struct ll_file_data;
 #define LUSTRE_MDT_NAME "mdt"
 #define LUSTRE_MDC_NAME "mdc"
 
-struct mdc_rpc_lock { 
+struct mdc_rpc_lock {
         struct semaphore rpcl_sem;
         struct lookup_intent *rpcl_it;
 };
 extern struct mdc_rpc_lock mdc_rpc_lock;
+extern struct mdc_rpc_lock mdc_setattr_lock;
 
 static inline void mdc_init_rpc_lock(struct mdc_rpc_lock *lck)
 {
@@ -108,7 +109,8 @@ struct mds_update_record {
         __u32 ur_gid;
         __u64 ur_time;
         __u32 ur_flags;
-        __u32 ur_suppgid;
+        __u32 ur_suppgid1;
+        __u32 ur_suppgid2;
 };
 
 #define MDS_LR_CLIENT  8192
@@ -117,13 +119,12 @@ struct mds_update_record {
 #define MDS_CLIENT_SLOTS 17
 
 #define MDS_MOUNT_RECOV 2
-#define MDS_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order. */
 struct mds_server_data {
         __u8 msd_uuid[37];      /* server UUID */
         __u8 uuid_padding[3];   /* unused */
-        __u64 msd_last_rcvd;    /* last completed transaction ID */
+        __u64 msd_last_transno; /* last completed transaction ID */
         __u64 msd_mount_count;  /* MDS incarnation number */
         __u8 padding[512 - 56];
 };
@@ -132,10 +133,12 @@ struct mds_server_data {
 struct mds_client_data {
         __u8 mcd_uuid[37];      /* client UUID */
         __u8 uuid_padding[3];   /* unused */
-        __u64 mcd_last_rcvd;    /* last completed transaction ID */
         __u64 mcd_mount_count;  /* MDS incarnation number */
-        __u64 mcd_last_xid;     /* client RPC xid for the last transaction */
-        __u8 padding[MDS_LR_SIZE - 64];
+        __u64 mcd_last_transno; /* last completed transaction ID */
+        __u64 mcd_last_xid;     /* xid for the last transaction */
+        __u32 mcd_last_result;  /* result from last RPC */
+        __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
+        __u8 padding[MDS_LR_SIZE - 58];
 };
 
 /* In-memory access to client data from MDS struct */
@@ -144,15 +147,14 @@ struct mds_export_data {
         spinlock_t              med_open_lock;
         struct mds_client_data *med_mcd;
         int                     med_off;
-        __u64                   med_last_xid;
-        struct lustre_msg      *med_last_reply;
-        int                     med_last_replen;
+        struct ptlrpc_request  *med_outstanding_reply;
 };
 
 /* file data for open files on MDS */
 struct mds_file_data {
         struct list_head     mfd_list;
         __u64                mfd_servercookie;
+        __u64                mfd_xid;
         struct file         *mfd_file;
 };
 
@@ -212,6 +214,8 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 int mds_reint(struct ptlrpc_request *req, int offset, struct lustre_handle *);
 int mds_pack_md(struct obd_device *mds, struct lustre_msg *msg,
                 int offset, struct mds_body *body, struct inode *inode);
+void mds_steal_ack_locks(struct mds_export_data *med,
+                         struct ptlrpc_request *req);
 
 /* mds/mds_fs.c */
 int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt);
@@ -268,7 +272,6 @@ int mds_client_add(struct mds_obd *mds, struct mds_export_data *med,
                    int cl_off);
 int mds_client_free(struct obd_export *exp);
 
-#endif /* __KERNEL__ */
 
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'
@@ -281,5 +284,19 @@ int mds_client_free(struct obd_export *exp);
 #define IOC_REQUEST_OPEN                _IOWR('f', 34, long)
 #define IOC_REQUEST_CLOSE               _IOWR('f', 35, long)
 #define IOC_REQUEST_MAX_NR               35
+
+#define MDS_CHECK_RESENT(req, reconstruct)                                     \
+{                                                                              \
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {               \
+                struct mds_client_data *mcd =                                  \
+                        req->rq_export->exp_mds_data.med_mcd;                  \
+                if (mcd->mcd_last_xid == req->rq_xid) {                        \
+                        reconstruct;                                           \
+                        RETURN(0);                                             \
+                }                                                              \
+                DEBUG_REQ(D_HA, req, "no reply for RESENT req (have "LPD64")", \
+                          mcd->mcd_last_xid);                                  \
+        }                                                                      \
+}
 
 #endif

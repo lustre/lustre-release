@@ -38,6 +38,8 @@ struct lov_stripe_md {
 #ifdef __KERNEL__
 # include <linux/fs.h>
 # include <linux/list.h>
+# include <linux/sched.h> /* for struct task_struct, for current.h */
+# include <asm/current.h> /* for smp_lock.h */
 # include <linux/smp_lock.h>
 # include <linux/proc_fs.h>
 
@@ -45,6 +47,7 @@ struct lov_stripe_md {
 # include <linux/lustre_idl.h>
 # include <linux/lustre_mds.h>
 # include <linux/lustre_export.h>
+#endif
 
 struct obd_type {
         struct list_head typ_chain;
@@ -72,7 +75,8 @@ struct obd_ucred {
         __u32 ouc_fsuid;
         __u32 ouc_fsgid;
         __u32 ouc_cap;
-        __u32 ouc_suppgid;
+        __u32 ouc_suppgid1;
+        __u32 ouc_suppgid2;
 };
 
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
@@ -98,6 +102,12 @@ struct obd_run_ctxt {
 
 struct ost_server_data;
 
+#define FILTER_TRANSNO_SEM
+
+#ifndef OST_RECOVERY
+#undef FILTER_TRANSNO_SEM
+#endif
+
 struct filter_obd {
         char *fo_fstype;
         struct super_block *fo_sb;
@@ -105,18 +115,23 @@ struct filter_obd {
         struct obd_run_ctxt fo_ctxt;
         struct dentry *fo_dentry_O;
         struct dentry *fo_dentry_O_mode[16];
+        struct dentry **fo_dentry_O_sub;
         spinlock_t fo_objidlock;        /* protects fo_lastobjid increment */
+#ifdef FILTER_TRANSNO_SEM
         struct semaphore fo_transno_sem;
+#else
+        spinlock_t fo_translock;        /* protects fsd_last_rcvd increment */
+#endif
         struct file *fo_rcvd_filp;
         struct filter_server_data *fo_fsd;
+        unsigned long *fo_last_rcvd_slots;
 
-        __u64 fo_next_recovery_transno;
-        int   fo_recoverable_clients;
         struct file_operations *fo_fop;
         struct inode_operations *fo_iop;
         struct address_space_operations *fo_aops;
         struct list_head fo_export_list;
         spinlock_t fo_fddlock;          /* protects setting dentry->d_fsdata */
+        int fo_subdir_count;
 };
 
 struct mds_server_data;
@@ -130,11 +145,13 @@ struct client_obd {
          * call obd_size_wiremd() all the time. */
         int                  cl_max_mds_easize;
         struct obd_device   *cl_containing_lov;
+        kdev_t               cl_sandev;
 };
 
 struct mds_obd {
         struct ptlrpc_service           *mds_service;
-        struct ptlrpc_service           *mds_getattr_service;
+        struct ptlrpc_service           *mds_setattr_service;
+        struct ptlrpc_service           *mds_readpage_service;
 
         struct super_block              *mds_sb;
         struct vfsmount                 *mds_vfsmnt;
@@ -145,21 +162,12 @@ struct mds_obd {
 
         int                              mds_max_mdsize;
         struct file                     *mds_rcvd_filp;
-        struct semaphore                 mds_transno_sem;
-        __u64                            mds_last_rcvd;
+        spinlock_t                       mds_transno_lock;
+        __u64                            mds_last_transno;
         __u64                            mds_mount_count;
         struct ll_fid                    mds_rootfid;
         struct mds_server_data          *mds_server_data;
 
-        wait_queue_head_t                mds_next_transno_waitq;
-        __u64                            mds_next_recovery_transno;
-        int                              mds_recoverable_clients;
-        struct list_head                 mds_recovery_queue;
-        struct list_head                 mds_delayed_reply_queue;
-        spinlock_t                       mds_processing_task_lock;
-        pid_t                            mds_processing_task;
-        struct timer_list                mds_recovery_timer;
-        
         int                              mds_has_lov_desc;
         struct lov_desc                  mds_lov_desc;
 };
@@ -267,11 +275,12 @@ struct niobuf_local {
         struct dentry *dentry;
 };
 
+/* Don't conflict with on-wire flags OBD_BRW_WRITE, etc */
+#define N_LOCAL_TEMP_PAGE 0x10000000
+
 struct obd_trans_info {
         __u64     oti_transno;
 };
-
-#define N_LOCAL_TEMP_PAGE 0x00000001
 
 /* corresponds to one of the obd's */
 struct obd_device {
@@ -292,6 +301,18 @@ struct obd_device {
         spinlock_t obd_dev_lock;
         __u64                  obd_last_committed;
         struct fsfilt_operations *obd_fsops;
+
+        /* XXX encapsulate all this recovery data into one struct */
+        svc_handler_t                    obd_recovery_handler;
+        int                              obd_recoverable_clients;
+        spinlock_t                       obd_processing_task_lock;
+        pid_t                            obd_processing_task;
+        __u64                            obd_next_recovery_transno;
+        wait_queue_head_t                obd_next_transno_waitq;
+        struct timer_list                obd_recovery_timer;
+        struct list_head                 obd_recovery_queue;
+        struct list_head                 obd_delayed_reply_queue;
+
         union {
                 struct ext2_obd ext2;
                 struct filter_obd filter;
@@ -334,6 +355,7 @@ struct obd_ops {
 
 
         int (*o_statfs)(struct lustre_handle *conn, struct obd_statfs *osfs);
+        int (*o_syncfs)(struct lustre_handle *conn);
         int (*o_packmd)(struct lustre_handle *, struct lov_mds_md **wire_tgt,
                         struct lov_stripe_md *mem_src);
         int (*o_unpackmd)(struct lustre_handle *,
@@ -355,7 +377,7 @@ struct obd_ops {
                        struct lov_stripe_md *ea, struct obd_trans_info *oti);
         int (*o_brw)(int rw, struct lustre_handle *conn,
                      struct lov_stripe_md *ea, obd_count oa_bufs,
-                     struct brw_page *pgarr, struct obd_brw_set *, 
+                     struct brw_page *pgarr, struct obd_brw_set *,
                      struct obd_trans_info *oti);
         int (*o_punch)(struct lustre_handle *conn, struct obdo *tgt,
                        struct lov_stripe_md *ea, obd_size count,
@@ -388,6 +410,8 @@ struct obd_ops {
                         __u32 mode, struct lustre_handle *);
         int (*o_cancel_unused)(struct lustre_handle *, struct lov_stripe_md *,
                                int local_only);
+        int (*o_san_preprw)(int cmd, struct lustre_handle *conn,
+                            int objcount, struct obd_ioobj *obj,
+                            int niocount, struct niobuf_remote *remote);
 };
-#endif /* __KERNEL */
 #endif /* __OBD_H */

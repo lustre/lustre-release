@@ -28,6 +28,7 @@
 #include <linux/string.h>
 #include <linux/stat.h>
 #include <linux/errno.h>
+#include <linux/version.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/locks.h>   // for wait_on_buffer
 #else
@@ -58,17 +59,28 @@ void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode)
         fid->f_type = HTON__u32(S_IFMT & inode->i_mode);
 }
 
-
 void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
 {
         b->valid = OBD_MD_FLID | OBD_MD_FLATIME | OBD_MD_FLMTIME |
                 OBD_MD_FLCTIME | OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                 OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLTYPE | OBD_MD_FLMODE |
                 OBD_MD_FLNLINK | OBD_MD_FLGENER;
+
+        /* The MDS file size isn't authoritative for regular files, so don't
+         * even pretend. */
+        if (S_ISREG(inode->i_mode))
+                b->valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
+
         b->ino = HTON__u32(inode->i_ino);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         b->atime = HTON__u32(inode->i_atime);
         b->mtime = HTON__u32(inode->i_mtime);
         b->ctime = HTON__u32(inode->i_ctime);
+#else
+        b->atime = HTON__u32(inode->i_atime.tv_sec);
+        b->mtime = HTON__u32(inode->i_mtime.tv_sec);
+        b->ctime = HTON__u32(inode->i_ctime.tv_sec);
+#endif
         b->mode = HTON__u32(inode->i_mode);
         b->size = HTON__u64(inode->i_size);
         b->blocks = HTON__u64(inode->i_blocks);
@@ -192,6 +204,10 @@ void mds_create_pack(struct ptlrpc_request *req, int offset, struct inode *dir,
         rec->cr_uid = HTON__u32(uid);
         rec->cr_gid = HTON__u32(gid);
         rec->cr_time = HTON__u64(time);
+        if (in_group_p(dir->i_gid))
+                rec->cr_suppgid = HTON__u32(dir->i_gid);
+        else
+                rec->cr_suppgid = HTON__u32(-1);
 
         tmp = lustre_msg_buf(req->rq_reqmsg, offset + 1);
         LOGL0(name, namelen, tmp);
@@ -257,9 +273,15 @@ void mds_setattr_pack(struct ptlrpc_request *req,
                 rec->sa_uid = HTON__u32(iattr->ia_uid);
                 rec->sa_gid = HTON__u32(iattr->ia_gid);
                 rec->sa_size = HTON__u64(iattr->ia_size);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 rec->sa_atime = HTON__u64(iattr->ia_atime);
                 rec->sa_mtime = HTON__u64(iattr->ia_mtime);
                 rec->sa_ctime = HTON__u64(iattr->ia_ctime);
+#else
+                rec->sa_atime = HTON__u64(iattr->ia_atime.tv_sec);
+                rec->sa_mtime = HTON__u64(iattr->ia_mtime.tv_sec);
+                rec->sa_ctime = HTON__u64(iattr->ia_ctime.tv_sec);
+#endif
                 rec->sa_attr_flags = HTON__u32(iattr->ia_attr_flags);
 
                 if ((iattr->ia_valid & ATTR_GID) && in_group_p(iattr->ia_gid))
@@ -339,6 +361,14 @@ void mds_rename_pack(struct ptlrpc_request *req, int offset,
         rec->rn_fsuid = HTON__u32(current->fsuid);
         rec->rn_fsgid = HTON__u32(current->fsgid);
         rec->rn_cap = HTON__u32(current->cap_effective);
+        if (in_group_p(srcdir->i_gid))
+                rec->rn_suppgid1 = HTON__u32(srcdir->i_gid);
+        else
+                rec->rn_suppgid1 = HTON__u32(-1);
+        if (in_group_p(tgtdir->i_gid))
+                rec->rn_suppgid2 = HTON__u32(tgtdir->i_gid);
+        else
+                rec->rn_suppgid2 = HTON__u32(-1);
         ll_inode2fid(&rec->rn_fid1, srcdir);
         ll_inode2fid(&rec->rn_fid2, tgtdir);
 
@@ -400,16 +430,23 @@ static int mds_setattr_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fsuid = NTOH__u32(rec->sa_fsuid);
         r->ur_fsgid = NTOH__u32(rec->sa_fsgid);
         r->ur_cap = NTOH__u32(rec->sa_cap);
-        r->ur_suppgid = NTOH__u32(rec->sa_suppgid);
+        r->ur_suppgid1 = NTOH__u32(rec->sa_suppgid);
+        r->ur_suppgid2 = NTOH__u32(-1);
         r->ur_fid1 = &rec->sa_fid;
         attr->ia_valid = NTOH__u32(rec->sa_valid);
         attr->ia_mode = NTOH__u32(rec->sa_mode);
         attr->ia_uid = NTOH__u32(rec->sa_uid);
         attr->ia_gid = NTOH__u32(rec->sa_gid);
         attr->ia_size = NTOH__u64(rec->sa_size);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         attr->ia_atime = NTOH__u64(rec->sa_atime);
         attr->ia_mtime = NTOH__u64(rec->sa_mtime);
         attr->ia_ctime = NTOH__u64(rec->sa_ctime);
+#else
+        attr->ia_atime.tv_sec = NTOH__u64(rec->sa_atime);
+        attr->ia_mtime.tv_sec = NTOH__u64(rec->sa_mtime);
+        attr->ia_ctime.tv_sec = NTOH__u64(rec->sa_ctime);
+#endif
         attr->ia_attr_flags = NTOH__u32(rec->sa_attr_flags);
 
         if (req->rq_reqmsg->bufcount == offset + 2) {
@@ -443,7 +480,8 @@ static int mds_create_unpack(struct ptlrpc_request *req, int offset,
         r->ur_gid = NTOH__u32(rec->cr_gid);
         r->ur_time = NTOH__u64(rec->cr_time);
         r->ur_flags = NTOH__u32(rec->cr_flags);
-        r->ur_suppgid = NTOH__u32(rec->cr_suppgid);
+        r->ur_suppgid1 = NTOH__u32(rec->cr_suppgid);
+        r->ur_suppgid2 = NTOH__u32(-1);
 
         r->ur_name = lustre_msg_buf(req->rq_reqmsg, offset + 1);
         r->ur_namelen = req->rq_reqmsg->buflens[offset + 1];
@@ -471,7 +509,8 @@ static int mds_link_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fsuid = NTOH__u32(rec->lk_fsuid);
         r->ur_fsgid = NTOH__u32(rec->lk_fsgid);
         r->ur_cap = NTOH__u32(rec->lk_cap);
-        r->ur_suppgid = NTOH__u32(rec->lk_suppgid);
+        r->ur_suppgid1 = NTOH__u32(rec->lk_suppgid);
+        r->ur_suppgid2 = NTOH__u32(-1);
         r->ur_fid1 = &rec->lk_fid1;
         r->ur_fid2 = &rec->lk_fid2;
 
@@ -494,7 +533,8 @@ static int mds_unlink_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fsgid = NTOH__u32(rec->ul_fsgid);
         r->ur_cap = NTOH__u32(rec->ul_cap);
         r->ur_mode = NTOH__u32(rec->ul_mode);
-        r->ur_suppgid = NTOH__u32(rec->ul_suppgid);
+        r->ur_suppgid1 = NTOH__u32(rec->ul_suppgid);
+        r->ur_suppgid2 = NTOH__u32(-1);
         r->ur_fid1 = &rec->ul_fid1;
         r->ur_fid2 = &rec->ul_fid2;
 
@@ -516,6 +556,8 @@ static int mds_rename_unpack(struct ptlrpc_request *req, int offset,
         r->ur_fsuid = NTOH__u32(rec->rn_fsuid);
         r->ur_fsgid = NTOH__u32(rec->rn_fsgid);
         r->ur_cap = NTOH__u32(rec->rn_cap);
+        r->ur_suppgid1 = NTOH__u32(rec->rn_suppgid1);
+        r->ur_suppgid2 = NTOH__u32(rec->rn_suppgid2);
         r->ur_fid1 = &rec->rn_fid1;
         r->ur_fid2 = &rec->rn_fid2;
 

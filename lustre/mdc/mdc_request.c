@@ -35,6 +35,7 @@
 
 extern int mds_queue_req(struct ptlrpc_request *);
 struct mdc_rpc_lock mdc_rpc_lock;
+struct mdc_rpc_lock mdc_setattr_lock;
 EXPORT_SYMBOL(mdc_rpc_lock);
 
 /* Helper that implements most of mdc_getstatus and signal_completed_replay. */
@@ -131,9 +132,6 @@ int mdc_getattr(struct lustre_handle *conn,
                               NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
-
-        /* XXX FIXME bug 249 */
-        req->rq_request_portal = MDS_GETATTR_PORTAL;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
         ll_ino2fid(&body->fid1, ino, 0, type);
@@ -247,10 +245,9 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 /* XXX what tells us that 'data' is a valid inode at all?
                  *     we should probably validate the lock handle first?
                  */
-
                 inode = igrab(inode);
 
-                if (inode == NULL)      /* inode->i_state & I_FREEING */
+                if (inode == NULL) /* inode->i_state & I_FREEING */
                         break;
 
                 if (S_ISDIR(inode->i_mode)) {
@@ -260,7 +257,8 @@ static int mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                         ll_invalidate_inode_pages(inode);
                 }
 
-                if (inode != inode->i_sb->s_root->d_inode)
+                if (inode->i_sb->s_root && 
+                    inode != inode->i_sb->s_root->d_inode)
                         d_unhash_aliases(inode);
 
                 iput(inode);
@@ -319,9 +317,15 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 lit->opc = NTOH__u64((__u64)it->it_op);
 
                 /* pack the intended request */
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 mds_open_pack(req, 2, dir, it->it_mode, 0, current->fsuid,
                               current->fsgid, CURRENT_TIME, it->it_flags,
                               de->d_name.name, de->d_name.len, tgt, tgtlen);
+#else
+                mds_open_pack(req, 2, dir, it->it_mode, 0, current->fsuid,
+                              current->fsgid, CURRENT_TIME.tv_sec, it->it_flags,
+                              de->d_name.name, de->d_name.len, tgt, tgtlen);
+#endif
                 req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op & IT_UNLINK) {
                 size[2] = sizeof(struct mds_rec_unlink);
@@ -340,7 +344,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                                 d->unl_de, d->unl_mode,
                                 d->unl_name, d->unl_len);
                 req->rq_replen = lustre_msg_size(3, repsize);
-        } else if (it->it_op & (IT_GETATTR| IT_SETATTR | IT_LOOKUP)) {
+        } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
                 int valid = OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE;
                 size[2] = sizeof(struct mds_body);
                 size[3] = de->d_name.len + 1;
@@ -377,6 +381,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                               lock_type, NULL, 0, lock_mode, &flags,
                               ldlm_completion_ast, mdc_blocking_ast, dir, NULL,
                               lockh);
+        mdc_put_rpc_lock(&mdc_rpc_lock, it);
 
         /* If we successfully created, mark the request so that replay will
          * do the right thing */
@@ -390,8 +395,6 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 lockreq = lustre_msg_buf(req->rq_reqmsg, 0);
                 lockreq->lock_flags |= LDLM_FL_INTENT_ONLY;
         }
-
-        dlm_rep = lustre_msg_buf(req->rq_repmsg, 0);
 
         /* This can go when we're sure that this can never happen */
         LASSERT(rc != -ENOENT);
@@ -417,7 +420,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 /* The server almost certainly gave us a lock other than the
                  * one that we asked for.  If we already have a matching lock,
                  * then cancel this one--we don't need two. */
-                LDLM_DEBUG0(lock, "matching against this");
+                LDLM_DEBUG(lock, "matching against this");
 
                 memcpy(&lockh2, lockh, sizeof(lockh2));
                 if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
@@ -429,6 +432,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 LDLM_LOCK_PUT(lock);
         }
 
+        dlm_rep = lustre_msg_buf(req->rq_repmsg, 0);
         it->it_disposition = (int) dlm_rep->lock_policy_res1;
         it->it_status = (int) dlm_rep->lock_policy_res2;
         it->it_lock_mode = lock_mode;
@@ -487,6 +491,11 @@ static void mdc_replay_open(struct ptlrpc_request *req)
 
 void mdc_set_open_replay_data(struct ll_file_data *fd)
 {
+        struct ptlrpc_request *req = fd->fd_req;
+        struct mds_rec_create *rec = lustre_msg_buf(req->rq_reqmsg, 2);
+        struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1);
+
+        memcpy(&rec->cr_replayfid, &body->fid1, sizeof rec->cr_replayfid);
         fd->fd_req->rq_replay_cb = mdc_replay_open;
         fd->fd_req->rq_replay_data = &fd->fd_mdshandle;
 }
@@ -510,7 +519,9 @@ int mdc_close(struct lustre_handle *conn, obd_id ino, int type,
 
         req->rq_replen = lustre_msg_size(0, NULL);
 
+        mdc_get_rpc_lock(&mdc_rpc_lock, NULL);
         rc = ptlrpc_queue_wait(req);
+        mdc_put_rpc_lock(&mdc_rpc_lock, NULL);
 
         EXIT;
  out:
@@ -528,7 +539,6 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
         struct ptlrpc_bulk_desc *desc = NULL;
         struct ptlrpc_bulk_page *bulk = NULL;
         struct mds_body *body;
-        unsigned long flags;
         int rc, size = sizeof(*body);
         ENTRY;
 
@@ -542,13 +552,14 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
         if (!req)
                 GOTO(out2, rc = -ENOMEM);
 
+        /* XXX FIXME bug 249 */
+        req->rq_request_portal = MDS_READPAGE_PORTAL;
+
         bulk = ptlrpc_prep_bulk_page(desc);
         if (bulk == NULL)
                 GOTO(out2, rc = -ENOMEM);
 
-        spin_lock_irqsave(&imp->imp_lock, flags);
-        bulk->bp_xid = ++imp->imp_last_bulk_xid;
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        bulk->bp_xid = ptlrpc_next_xid();
         bulk->bp_buflen = PAGE_CACHE_SIZE;
         bulk->bp_buf = addr;
 
@@ -684,10 +695,10 @@ static int mdc_recover(struct obd_import *imp, int phase)
                         if (rc)
                                 GOTO(check_rc, rc);
                 } else if (flags & MSG_CONNECT_RECONNECT) {
-                        DEBUG_REQ(D_HA, req, "reconnecting to MDS\n");
+                        DEBUG_REQ(D_HA, req, "reconnecting to MDS");
                         /* Nothing else to do here. */
                 } else {
-                        DEBUG_REQ(D_HA, req, "evicted: invalidating\n");
+                        DEBUG_REQ(D_HA, req, "evicted: invalidating");
                         /* Otherwise, clean everything up. */
                         ldlm_namespace_cleanup(ns, 1);
                         ptlrpc_abort_inflight(imp, 0);
@@ -696,7 +707,6 @@ static int mdc_recover(struct obd_import *imp, int phase)
                 ptlrpc_req_finished(req);
                 spin_lock_irqsave(&imp->imp_lock, flags);
                 imp->imp_level = LUSTRE_CONN_FULL;
-                imp->imp_flags &= ~IMP_INVALID;
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
 
                 ptlrpc_wake_delayed(imp);
@@ -743,6 +753,7 @@ static int __init ptlrpc_request_init(void)
 {
         struct lprocfs_static_vars lvars;
         mdc_init_rpc_lock(&mdc_rpc_lock);
+        mdc_init_rpc_lock(&mdc_setattr_lock);
         lprocfs_init_vars(&lvars);
         return class_register_type(&mdc_obd_ops, lvars.module_vars,
                                    LUSTRE_MDC_NAME);

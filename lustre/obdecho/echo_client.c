@@ -19,14 +19,20 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#define DEBUG_SUBSYSTEM S_ECHO
+#ifdef __KERNEL__
 #include <linux/version.h>
 #include <linux/module.h>
 #include <linux/fs.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/iobuf.h>
+#endif
 #include <asm/div64.h>
+#else
+#include <liblustre.h>
+#endif
 
-#define DEBUG_SUBSYSTEM S_ECHO
-
+#include <linux/obd.h>
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/obd_echo.h>
@@ -120,11 +126,11 @@ echo_copyin_lsm (struct obd_device *obd, struct lov_stripe_md *lsm,
 }
 
 static struct ec_object *
-echo_allocate_object (struct obd_device *obd) 
+echo_allocate_object (struct obd_device *obd)
 {
         struct echo_client_obd *ec = &obd->u.echo_client;
         struct ec_object       *eco;
-        
+
         OBD_ALLOC (eco, sizeof (*eco));
         if (eco == NULL)
                 return (NULL);
@@ -134,7 +140,7 @@ echo_allocate_object (struct obd_device *obd)
                 OBD_FREE (eco, sizeof (*eco));
                 return (NULL);
         }
-        
+
         eco->eco_device = obd;
         eco->eco_deleted = 0;
         eco->eco_refcount = 0;
@@ -145,7 +151,7 @@ echo_allocate_object (struct obd_device *obd)
 }
 
 static void
-echo_free_object (struct ec_object *eco) 
+echo_free_object (struct ec_object *eco)
 {
         struct obd_device      *obd = eco->eco_device;
         struct echo_client_obd *ec = &obd->u.echo_client;
@@ -165,7 +171,7 @@ echo_create_object (struct obd_device *obd, int on_target, struct obdo *oa,
         struct lov_stripe_md   *lsm;
         int                     rc;
         int                     i;
-        
+
         if ((oa->o_valid & OBD_MD_FLID) == 0 && /* no obj id */
             (on_target ||                       /* set_stripe */
              ec->ec_nstripes != 0)) {           /* LOV */
@@ -176,7 +182,7 @@ echo_create_object (struct obd_device *obd, int on_target, struct obdo *oa,
         eco = echo_allocate_object (obd);
         if (eco == NULL)
                 return (-ENOMEM);
-        
+
         lsm = eco->eco_lsm;
 
         if (ulsm != NULL) {
@@ -184,11 +190,11 @@ echo_create_object (struct obd_device *obd, int on_target, struct obdo *oa,
                 if (rc != 0)
                         goto failed;
         }
-        
+
         /* setup object ID here for !on_target and LOV hint */
         if ((oa->o_valid & OBD_MD_FLID) != 0)
                 eco->eco_id = lsm->lsm_object_id = oa->o_id;
-        
+
         /* defaults -> actual values */
         if (lsm->lsm_stripe_offset == 0xffffffff)
                 lsm->lsm_stripe_offset = 0;
@@ -207,33 +213,33 @@ echo_create_object (struct obd_device *obd, int on_target, struct obdo *oa,
                 lsm->lsm_oinfo[i].loi_ost_idx =
                         (lsm->lsm_stripe_offset + i) % ec->ec_nstripes;
         }
-        
+
         if (on_target) {
                 rc = obd_create (&ec->ec_conn, oa, &lsm, NULL);
                 if (rc != 0)
                         goto failed;
-                
+
                 /* See what object ID we were given */
                 LASSERT ((oa->o_valid & OBD_MD_FLID) != 0);
                 eco->eco_id = lsm->lsm_object_id = oa->o_id;
         }
-        
+
         spin_lock (&ec->ec_lock);
 
         eco2 = echo_find_object_locked (obd, oa->o_id);
         if (eco2 != NULL) {                     /* conflict */
                 spin_unlock (&ec->ec_lock);
-                
-                CERROR ("Can't create object id "LPX64": id already exists%s\n", 
+
+                CERROR ("Can't create object id "LPX64": id already exists%s\n",
                         oa->o_id, on_target ? " (undoing create)" : "");
-                
+
                 if (on_target)
                         obd_destroy (&ec->ec_conn, oa, lsm, NULL);
-                
+
                 rc = -EEXIST;
                 goto failed;
         }
-        
+
         list_add (&eco->eco_obj_chain, &ec->ec_objects);
         spin_unlock (&ec->ec_lock);
         CDEBUG (D_INFO,
@@ -251,25 +257,26 @@ echo_create_object (struct obd_device *obd, int on_target, struct obdo *oa,
 }
 
 static int
-echo_get_object (struct ec_object **ecop, struct obd_device *obd, struct obdo *oa)
+echo_get_object (struct ec_object **ecop, struct obd_device *obd,
+                 struct obdo *oa)
 {
         struct echo_client_obd *ec = &obd->u.echo_client;
         struct ec_object       *eco;
         struct ec_object       *eco2;
         int                     rc;
 
-        if ((oa->o_valid & OBD_MD_FLID) == 0) 
+        if ((oa->o_valid & OBD_MD_FLID) == 0)
         {
                 CERROR ("No valid oid\n");
                 return (-EINVAL);
         }
-        
+
         spin_lock (&ec->ec_lock);
         eco = echo_find_object_locked (obd, oa->o_id);
         if (eco != NULL) {
                 if (eco->eco_deleted)           /* being deleted */
                         return (-EAGAIN);       /* (see comment in cleanup) */
-                
+
                 eco->eco_refcount++;
                 spin_unlock (&ec->ec_lock);
                 *ecop = eco;
@@ -328,7 +335,7 @@ echo_get_object (struct ec_object **ecop, struct obd_device *obd, struct obdo *o
         }
 
         spin_unlock (&ec->ec_lock);
-        
+
         echo_free_object (eco);
         return (rc);
 }
@@ -361,12 +368,12 @@ echo_put_object (struct ec_object *eco)
          * sure there will be no more lock callbacks.
          */
         obd_cancel_unused (&ec->ec_conn, eco->eco_lsm, 0);
-        
+
         /* now we can let it go */
         spin_lock (&ec->ec_lock);
         list_del (&eco->eco_obj_chain);
         spin_unlock (&ec->ec_lock);
-        
+
         LASSERT (eco->eco_refcount == 0);
 
         echo_free_object (eco);
@@ -501,7 +508,7 @@ echo_client_kbrw (struct obd_device *obd, int rw,
                                                stripe_off, stripe_id);
                         if (vrc != 0 && rc == 0)
                                 rc = vrc;
-                        
+
                         kunmap(pgp->pg);
                 }
                 __free_pages(pgp->pg, 0);
@@ -512,10 +519,11 @@ echo_client_kbrw (struct obd_device *obd, int rw,
         return (rc);
 }
 
-static int
-echo_client_ubrw (struct obd_device *obd, int rw,
-                  struct obdo *oa, struct lov_stripe_md *lsm,
-                  obd_off offset, obd_size count, char *buffer)
+#ifdef __KERNEL__
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static int echo_client_ubrw(struct obd_device *obd, int rw,
+                            struct obdo *oa, struct lov_stripe_md *lsm,
+                            obd_off offset, obd_size count, char *buffer)
 {
         struct echo_client_obd *ec = &obd->u.echo_client;
         struct obd_brw_set     *set;
@@ -589,6 +597,16 @@ echo_client_ubrw (struct obd_device *obd, int rw,
         obd_brw_set_free(set);
         return (rc);
 }
+#else
+static int echo_client_ubrw(struct obd_device *obd, int rw,
+                            struct obdo *oa, struct lov_stripe_md *lsm,
+                            obd_off offset, obd_size count, char *buffer)
+{
+        LBUG();
+        return 0;
+}
+#endif
+#endif
 
 static int
 echo_open (struct obd_export *exp, struct obdo *oa)
@@ -599,11 +617,11 @@ echo_open (struct obd_export *exp, struct obdo *oa)
         struct ec_open_object  *ecoo;
         struct ec_object       *eco;
         int                     rc;
-        
+
         rc = echo_get_object (&eco, obd, oa);
         if (rc != 0)
                 return (rc);
-        
+
         rc = -ENOMEM;
         OBD_ALLOC (ecoo, sizeof (*ecoo));
         if (ecoo == NULL)
@@ -612,22 +630,21 @@ echo_open (struct obd_export *exp, struct obdo *oa)
         rc = obd_open (&ec->ec_conn, oa, eco->eco_lsm, NULL);
         if (rc != 0)
                 goto failed_1;
-        
+
         memcpy (&ecoo->ecoo_oa, oa, sizeof (*oa));
         ecoo->ecoo_object = eco;
         /* ecoo takes ref from echo_get_object() above */
 
         spin_lock (&ec->ec_lock);
 
-        list_add (&ecoo->ecoo_exp_chain,
-                  &exp->exp_ec_data.eced_open_head);
-        
+        list_add (&ecoo->ecoo_exp_chain, &exp->exp_ec_data.eced_open_head);
+
         ufh->addr = (__u64)((long) ecoo);
         ufh->cookie = ecoo->ecoo_cookie = ec->ec_unique++;
-        
+
         spin_unlock (&ec->ec_lock);
         return (0);
-        
+
  failed_1:
         OBD_FREE (ecoo, sizeof (*ecoo));
  failed_0:
@@ -645,10 +662,10 @@ echo_close (struct obd_export *exp, struct obdo *oa)
         int                     found = 0;
         struct list_head       *el;
         int                     rc;
-        
+
         if ((oa->o_valid & OBD_MD_FLHANDLE) == 0)
                 return (-EINVAL);
-        
+
         spin_lock (&ec->ec_lock);
 
         list_for_each (el, &exp->exp_ec_data.eced_open_head) {
@@ -662,13 +679,13 @@ echo_close (struct obd_export *exp, struct obdo *oa)
         }
 
         spin_unlock (&ec->ec_lock);
-        
+
         if (!found)
                 return (-EINVAL);
 
         rc = obd_close (&ec->ec_conn, &ecoo->ecoo_oa,
                         ecoo->ecoo_object->eco_lsm, NULL);
-        
+
         echo_put_object (ecoo->ecoo_object);
         OBD_FREE (ecoo, sizeof (*ecoo));
 
@@ -691,25 +708,26 @@ echo_ldlm_callback (struct ldlm_lock *lock, struct ldlm_lock_desc *new,
         /* #ifdef this out if we're not feeling paranoid */
         spin_lock (&ec->ec_lock);
         list_for_each (el, &ec->ec_objects) {
-                found = (eco == list_entry (el, struct ec_object, eco_obj_chain));
+                found = (eco == list_entry(el, struct ec_object,
+                                           eco_obj_chain));
                 if (found)
                         break;
         }
         spin_unlock (&ec->ec_lock);
         LASSERT (found);
-        
+
         switch (flag) {
         case LDLM_CB_BLOCKING:
-                CDEBUG (D_INFO, "blocking callback on "LPX64", handle "LPX64"."LPX64"\n", 
-                        eco->eco_id, lockh.addr, lockh.cookie);
+                CDEBUG (D_INFO, "blocking callback on "LPX64", handle "LPX64"."
+                        LPX64"\n", eco->eco_id, lockh.addr, lockh.cookie);
                 rc = ldlm_cli_cancel (&lockh);
                 if (rc != ELDLM_OK)
                         CERROR ("ldlm_cli_cancel failed: %d\n", rc);
                 break;
 
         case LDLM_CB_CANCELING:
-                CDEBUG (D_INFO, "canceling callback on "LPX64", handle "LPX64"."LPX64"\n", 
-                        eco->eco_id, lockh.addr, lockh.cookie);
+                CDEBUG (D_INFO, "canceling callback on "LPX64", handle "LPX64"."
+                        LPX64"\n", eco->eco_id, lockh.addr, lockh.cookie);
                 break;
 
         default:
@@ -751,11 +769,11 @@ echo_enqueue (struct obd_export *exp, struct obdo *oa,
         ecl->ecl_object = eco;
         ecl->ecl_extent.start = offset;
         ecl->ecl_extent.end = (nob == 0) ? ((obd_off)-1) : (offset + nob - 1);
-        
+
         flags = 0;
-        rc = obd_enqueue (&ec->ec_conn, eco->eco_lsm, NULL,
-                          LDLM_EXTENT, &ecl->ecl_extent, sizeof (ecl->ecl_extent),
-                          mode, &flags, echo_ldlm_callback, eco, sizeof (*eco),
+        rc = obd_enqueue (&ec->ec_conn, eco->eco_lsm, NULL, LDLM_EXTENT,
+                          &ecl->ecl_extent,sizeof(ecl->ecl_extent), mode,
+                          &flags, echo_ldlm_callback, eco, sizeof (*eco),
                           &ecl->ecl_handle);
         if (rc != 0)
                 goto failed_1;
@@ -771,7 +789,7 @@ echo_enqueue (struct obd_export *exp, struct obdo *oa,
 
         ulh->addr = (__u64)((long)ecl);
         ulh->cookie = ecl->ecl_cookie = ec->ec_unique++;
-        
+
         spin_unlock (&ec->ec_lock);
 
         oa->o_valid |= OBD_MD_FLHANDLE;
@@ -797,12 +815,12 @@ echo_cancel (struct obd_export *exp, struct obdo *oa)
 
         if ((oa->o_valid & OBD_MD_FLHANDLE) == 0)
                 return (-EINVAL);
-        
+
         spin_lock (&ec->ec_lock);
-        
+
         list_for_each (el, &exp->exp_ec_data.eced_locks) {
                 ecl = list_entry (el, struct ec_lock, ecl_exp_chain);
-                
+
                 if ((__u64)((long)ecl) == ulh->addr) {
                         found = (ecl->ecl_cookie == ulh->cookie);
                         if (found)
@@ -810,20 +828,20 @@ echo_cancel (struct obd_export *exp, struct obdo *oa)
                         break;
                 }
         }
-        
+
         spin_unlock (&ec->ec_lock);
-        
+
         if (!found)
                 return (-ENOENT);
-        
-        rc = obd_cancel (&ec->ec_conn, 
+
+        rc = obd_cancel (&ec->ec_conn,
                          ecl->ecl_object->eco_lsm,
                          ecl->ecl_mode,
                          &ecl->ecl_handle);
-        
+
         echo_put_object (ecl->ecl_object);
         OBD_FREE (ecl, sizeof (*ecl));
-        
+
         return (rc);
 }
 
@@ -851,7 +869,7 @@ static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn,
         case OBD_IOC_CREATE:                    /* may create echo object */
                 if (!capable (CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
-                
+
                 rc = echo_create_object (obd, 1, &data->ioc_obdo1,
                                          data->ioc_pbuf1, data->ioc_plen1);
                 GOTO(out, rc);
@@ -859,7 +877,7 @@ static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn,
         case OBD_IOC_DESTROY:
                 if (!capable (CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
-       
+
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
                 if (rc == 0) {
                         rc = obd_destroy(&ec->ec_conn, &data->ioc_obdo1,
@@ -882,7 +900,7 @@ static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn,
         case OBD_IOC_SETATTR:
                 if (!capable (CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
-       
+
                 rc = echo_get_object (&eco, obd, &data->ioc_obdo1);
                 if (rc == 0) {
                         rc = obd_setattr(&ec->ec_conn, &data->ioc_obdo1,
@@ -902,7 +920,7 @@ static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn,
         case OBD_IOC_BRW_WRITE:
                 if (!capable (CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
-       
+
                 rw = OBD_BRW_WRITE;
                 /* fall through */
         case OBD_IOC_BRW_READ:
@@ -914,11 +932,13 @@ static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn,
                                                       data->ioc_offset,
                                                       data->ioc_count);
                         else
+#ifdef __KERNEL__
                                 rc = echo_client_ubrw(obd, rw, &data->ioc_obdo1,
                                                       eco->eco_lsm,
                                                       data->ioc_offset,
                                                       data->ioc_count,
                                                       data->ioc_pbuf2);
+#endif
                         echo_put_object(eco);
                 }
                 GOTO(out, rc);
@@ -944,17 +964,18 @@ static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn,
                         }
                 } else {
                         rc = echo_create_object(obd, 0, &data->ioc_obdo1,
-                                                data->ioc_pbuf1, data->ioc_plen1);
+                                                data->ioc_pbuf1,
+                                                data->ioc_plen1);
                 }
                 GOTO (out, rc);
 
         case ECHO_IOC_ENQUEUE:
                 if (!capable (CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
-       
-                rc = echo_enqueue (exp, &data->ioc_obdo1, 
+
+                rc = echo_enqueue (exp, &data->ioc_obdo1,
                                    data->ioc_conn1, /* lock mode */
-                                   data->ioc_offset, data->ioc_count); /* extent */
+                                   data->ioc_offset, data->ioc_count);/*extent*/
                 GOTO (out, rc);
 
         case ECHO_IOC_CANCEL:
@@ -1090,13 +1111,13 @@ static int echo_disconnect(struct lustre_handle *conn)
                 ecl = list_entry (exp->exp_ec_data.eced_locks.next,
                                   struct ec_lock, ecl_exp_chain);
                 list_del (&ecl->ecl_exp_chain);
-                
+
                 rc = obd_cancel (&ec->ec_conn, ecl->ecl_object->eco_lsm,
                                  ecl->ecl_mode, &ecl->ecl_handle);
 
                 CERROR ("Cancel lock on object "LPX64" on disconnect (%d)\n",
                         ecl->ecl_object->eco_id, rc);
-                
+
                 echo_put_object (ecl->ecl_object);
                 OBD_FREE (ecl, sizeof (*ecl));
         }

@@ -11,7 +11,12 @@ fail() {
 	exit $RC
 }
 
-export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
+log() {
+	echo "$*"
+	lctl mark "$*"
+}
+
+export PATH=/sbin:/usr/sbin:$SRCDIR:$SRCDIR/../utils:$PATH
 
 ERROR=
 SRC=/etc
@@ -20,6 +25,7 @@ SRC=/etc
 [ "$LCONF" ] || LCONF=$SRCDIR/../utils/lconf
 
 [ "$MCREATE" ] || MCREATE=$SRCDIR/../tests/mcreate
+
 [ "$MKDIRMANY" ] || MKDIRMANY=$SRCDIR/../tests/mkdirmany
 
 while [ "$1" ]; do
@@ -42,41 +48,41 @@ USED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
 USED=`expr $USED + 16`	# Some space for the status file
 
 # let's start slowly here...
-echo "touching $OSCMT"
+log "touching $OSCMT"
 touch $OSCMT || fail "can't touch $OSCMT" 2
 HOSTS=$OSCMT/hosts.$$
 
 # this will cause the following cp to trigger bug #620096
-echo "create an empty file $HOSTS"
-$MCREATE $HOSTS
+log "create an empty file $HOSTS"
+mcreate $HOSTS
 
-echo "copying /etc/hosts to $HOSTS"
+log "copying /etc/hosts to $HOSTS"
 cp /etc/hosts $HOSTS || fail "can't cp /etc/hosts to $HOSTS" 3
-echo "comparing /etc/hosts and $HOSTS"
+log "comparing /etc/hosts and $HOSTS"
 diff -u /etc/hosts $HOSTS || fail "$HOSTS different" 4
-echo "renaming $HOSTS to $HOSTS.ren"
+log "renaming $HOSTS to $HOSTS.ren"
 mv $HOSTS $HOSTS.ren || fail "can't rename $HOSTS to $HOSTS.ren" 5
-echo "copying /etc/hosts to $HOSTS again"
+log "copying /etc/hosts to $HOSTS again"
 cp /etc/hosts $HOSTS || fail "can't cp /etc/hosts to $HOSTS again" 6
-echo "truncating $HOSTS"
+log "truncating $HOSTS"
 > $HOSTS || fail "can't truncate $HOSTS" 8
-echo "removing $HOSTS"
+log "removing $HOSTS"
 rm $HOSTS || fail "can't remove $HOSTS" 9
 
 DST=$OSCMT/runtest.$$
 # let's start slowly here...
-echo "creating $DST"
+log "creating $DST"
 mkdir $DST || fail "can't mkdir $DST" 10
 
 # ok, that hopefully worked, so let's do a little more, with files that
 # haven't changed in the last day (hopefully they don't change during test)
 FILES=`find $SRC -type f -mtime +1 -ctime +1 | head -$COUNT`
-echo "copying files from $SRC to $DST$SRC"
+log "copying files from $SRC to $DST$SRC"
 tar cf - $FILES | tar xvf - -C $DST || fail "copying $SRC" 11
 
-echo "comparing newly copied files"
+log "comparing newly copied files"
 for f in $FILES; do
-	[ $V ] && echo "verifying $DST/$f"
+	[ $V ] && log "verifying $DST/$f"
 	diff -q $f $DST/$f || ERROR=11
 done
 
@@ -85,9 +91,9 @@ done
 sh llmountcleanup.sh || exit 19
 sh llrmount.sh || exit 20
 
-echo "comparing previously copied files"
+log "comparing previously copied files"
 for f in $FILES; do
-	[ $V ] && echo "verifying $DST/$f"
+	[ $V ] && log "verifying $DST/$f"
 	diff -q $f $DST/$f || ERROR=22
 done
 
@@ -96,20 +102,22 @@ done
 sh llmountcleanup.sh || exit 19
 sh llrmount.sh || exit 20
 
-echo "renaming $HOSTS.ren to $HOSTS"
+log "renaming $HOSTS.ren to $HOSTS"
 mv $HOSTS.ren $HOSTS || fail "can't rename $HOSTS.ren to $HOSTS" 32
-echo "truncating $HOSTS"
+log "truncating $HOSTS"
 > $HOSTS || fail "can't truncate $HOSTS" 34
-echo "removing $HOSTS"
+log "removing $HOSTS"
 rm $HOSTS || fail "can't remove $HOSTS again" 36
-echo "removing $DST"
+log "removing $DST"
 rm -r $V $DST || fail "can't remove $DST" 37
 
 # mkdirmany test (bug 589)
-echo "running mkdirmany $OSCMT/base$$ 100"
+log "running mkdirmany $OSCMT/base$$ 100"
 $MKDIRMANY $OSCMT/base$$ 100 || fail "mkdirmany failed"
-echo "removing mkdirmany directories"
+log "removing mkdirmany directories"
 rmdir $OSCMT/base$$* || fail "mkdirmany cleanup failed"
+
+log "done"
 
 NOWUSED=`df | awk "/$OSCTMP/ { print \\$3 }" | tail -1`
 if [ $NOWUSED -gt $USED ]; then

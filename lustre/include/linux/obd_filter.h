@@ -32,6 +32,8 @@
 #define FILTER_LR_CLIENT_START   8192
 #define FILTER_LR_CLIENT_SIZE    128
 
+#define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
+
 #define FILTER_MOUNT_RECOV 2
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
@@ -39,10 +41,17 @@
 struct filter_server_data {
         __u8  fsd_uuid[37];        /* server UUID */
         __u8  fsd_uuid_padding[3]; /* unused */
-        __u64 fsd_last_objid;      /* last completed transaction ID */
+        __u64 fsd_last_objid;      /* last created object ID */
         __u64 fsd_last_rcvd;       /* last completed transaction ID */
         __u64 fsd_mount_count;     /* FILTER incarnation number */
-        __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 64]; /*  */
+        __u32 fsd_feature_compat;  /* compatible feature flags */
+        __u32 fsd_feature_rocompat;/* read-only compatible feature flags */
+        __u32 fsd_feature_incompat;/* incompatible feature flags */
+        __u32 fsd_server_size;     /* size of server data area */
+        __u32 fsd_client_start;    /* start of per-client data area */
+        __u16 fsd_client_size;     /* size of per-client data area */
+        __u16 fsd_subdir_count;    /* number of subdirectories for objects */
+        __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 88];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
@@ -52,15 +61,20 @@ struct filter_client_data {
         __u64 fcd_last_rcvd;       /* last completed transaction ID */
         __u64 fcd_mount_count;     /* FILTER incarnation number */
         __u64 fcd_last_xid;        /* client RPC xid for the last transaction */
-        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 64]; 
+        __u8  fcd_padding[FILTER_LR_CLIENT_SIZE - 64];
 };
+
+#ifndef OBD_FILTER_SAN_DEVICENAME
+#define OBD_FILTER_SAN_DEVICENAME "sanobdfilter"
+#endif
 
 /* In-memory access to client data from OST struct */
 struct filter_export_data {
         struct list_head  fed_open_head; /* files to close on disconnect */
         spinlock_t        fed_lock;      /* protects fed_open_head */
         struct filter_client_data  *fed_fcd;
-        int               fed_lr_off;
+        loff_t            fed_lr_off;
+        int               fed_lr_idx;
 };
 
 /* file data for open files on OST */
@@ -71,6 +85,7 @@ struct filter_file_data {
 };
 
 struct filter_dentry_data {
+        obd_id           fdd_objid;
         atomic_t         fdd_open_count;
         int              fdd_flags;
 };

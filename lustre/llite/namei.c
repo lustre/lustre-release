@@ -151,7 +151,7 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 static int ll_intent_to_lock_mode(struct lookup_intent *it)
 {
         /* CREAT needs to be tested before open (both could be set) */
-        if (it->it_op & (IT_CREAT | IT_SETATTR))
+        if (it->it_op & IT_CREAT)
                 return LCK_PW;
         else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP))
                 return LCK_PR;
@@ -201,6 +201,10 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
         obd_id ino = 0;
         ENTRY;
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        if (it && it->it_op == 0)
+                *it = lookup_it;
+#endif
         if (it == NULL)
                 it = &lookup_it;
 
@@ -294,6 +298,8 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
 
                         if (it->it_disposition & IT_OPEN_CREATE)
                                 ptlrpc_request_addref(request);
+                        if (it->it_disposition & IT_OPEN_OPEN)
+                                ptlrpc_request_addref(request);
 
                         if (it->it_disposition & IT_OPEN_NEG)
                                 flag = LL_LOOKUP_NEGATIVE;
@@ -313,7 +319,7 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                                 flag = LL_LOOKUP_NEGATIVE;
                         else
                                 flag = LL_LOOKUP_POSITIVE;
-                } else if (it->it_op & (IT_GETATTR | IT_SETATTR | IT_LOOKUP)) {
+                } else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
                         /* For check ops, we want the lookup to succeed */
                         it->it_data = NULL;
                         if (it->it_status)
@@ -420,8 +426,8 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                         list_del_init(&dentry->d_lru);
 
                 list_del_init(&dentry->d_hash);
+                __d_rehash(dentry, 0); /* avoid taking dcache_lock inside */
                 spin_unlock(&dcache_lock);
-                d_rehash(dentry);
                 atomic_inc(&dentry->d_count);
                 iput(inode);
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
@@ -491,9 +497,7 @@ static struct dentry *ll_lookup2(struct inode *parent, struct dentry *dentry,
         int rc;
         ENTRY;
 
-        if (it && it->it_op == IT_TRUNC)
-                it->it_op = IT_SETATTR;
-
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         rc = ll_intent_lock(parent, &dentry, it, lookup2_finish);
         if (rc < 0) {
                 CDEBUG(D_INFO, "ll_intent_lock: %d\n", rc);
@@ -515,7 +519,11 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         struct inode *inode;
         struct ptlrpc_request *request = NULL;
         struct mds_body *body;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        time_t time = CURRENT_TIME.tv_sec;
+#else
         time_t time = CURRENT_TIME;
+#endif
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         struct ll_read_inode2_cookie lic = { .lic_lmm = NULL, };
         ENTRY;
@@ -600,7 +608,6 @@ static int ll_mdc_unlink(struct inode *dir, struct inode *child, __u32 mode,
 
         err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_PLAIN, &it, LCK_EX, dir,
                          NULL, &lockh, NULL, 0, &data, sizeof(data));
-        mdc_put_rpc_lock(&mdc_rpc_lock, &it); 
         request = (struct ptlrpc_request *)it.it_data;
         if (err < 0)
                 GOTO(out, err);
@@ -663,6 +670,7 @@ static int ll_create(struct inode *dir, struct dentry *dentry, int mode)
         int rc = 0;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         it = dentry->d_it;
 
         rc = ll_it_open_error(IT_OPEN_CREATE, it);
@@ -694,11 +702,16 @@ static int ll_mknod2(struct inode *dir, const char *name, int len, int mode,
                      int rdev)
 {
         struct ptlrpc_request *request = NULL;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        time_t time = CURRENT_TIME.tv_sec;
+#else
         time_t time = CURRENT_TIME;
+#endif
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         int err = -EMLINK;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         if (dir->i_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
@@ -730,6 +743,7 @@ static int ll_mknod(struct inode *dir, struct dentry *dentry, int mode,
         struct inode *inode;
         int rc = 0;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         LL_GET_INTENT(dentry, it);
 
         if ((mode & S_IFMT) == 0)
@@ -753,11 +767,16 @@ static int ll_symlink2(struct inode *dir, const char *name, int len,
                        const char *tgt)
 {
         struct ptlrpc_request *request = NULL;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        time_t time = CURRENT_TIME.tv_sec;
+#else
         time_t time = CURRENT_TIME;
+#endif
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         int err = -EMLINK;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         if (dir->i_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
@@ -778,6 +797,7 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         int err = 0;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         LL_GET_INTENT(dentry, it);
 
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
@@ -815,6 +835,7 @@ static int ll_link2(struct inode *src, struct inode *dir,
 
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         err = mdc_link(&sbi->ll_mdc_conn, src, dir, name, len, &request);
         ptlrpc_req_finished(request);
 
@@ -828,12 +849,17 @@ static int ll_link(struct dentry *old_dentry, struct inode * dir,
         struct inode *inode = old_dentry->d_inode;
         int rc;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         LL_GET_INTENT(dentry, it);
 
         if (it && it->it_disposition) {
                 if (it->it_status)
                         RETURN(it->it_status);
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+                inode->i_ctime.tv_sec = CURRENT_TIME.tv_sec;
+#else
                 inode->i_ctime = CURRENT_TIME;
+#endif
                 ext2_inc_count(inode);
                 atomic_inc(&inode->i_count);
                 d_instantiate(dentry, inode);
@@ -852,7 +878,11 @@ static int ll_link(struct dentry *old_dentry, struct inode * dir,
         if (rc)
                 RETURN(rc);
 
-        inode->i_ctime = CURRENT_TIME;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+                inode->i_ctime.tv_sec = CURRENT_TIME.tv_sec;
+#else
+                inode->i_ctime = CURRENT_TIME;
+#endif
         ext2_inc_count(inode);
         atomic_inc(&inode->i_count);
 
@@ -862,11 +892,16 @@ static int ll_link(struct dentry *old_dentry, struct inode * dir,
 static int ll_mkdir2(struct inode *dir, const char *name, int len, int mode)
 {
         struct ptlrpc_request *request = NULL;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        time_t time = CURRENT_TIME.tv_sec;
+#else
         time_t time = CURRENT_TIME;
+#endif
         struct ll_sb_info *sbi = ll_i2sbi(dir);
         int err = -EMLINK;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         if (dir->i_nlink >= EXT2_LINK_MAX)
                 RETURN(err);
 
@@ -886,6 +921,7 @@ static int ll_mkdir(struct inode *dir, struct dentry *dentry, int mode)
         int err = -EMLINK;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         LL_GET_INTENT(dentry, it);
 
         if (dir->i_nlink >= EXT2_LINK_MAX)
@@ -932,6 +968,7 @@ static int ll_rmdir2(struct inode *dir, const char *name, int len)
         int rc;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         rc = ll_mdc_unlink(dir, NULL, S_IFDIR, name, len);
         RETURN(rc);
 }
@@ -941,6 +978,7 @@ static int ll_unlink2(struct inode *dir, const char *name, int len)
         int rc;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         rc = ll_mdc_unlink(dir, NULL, S_IFREG, name, len);
         RETURN(rc);
 }
@@ -992,6 +1030,7 @@ static int ll_unlink(struct inode *dir, struct dentry *dentry)
         struct lookup_intent * it;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         LL_GET_INTENT(dentry, it);
 
         RETURN(ll_common_unlink(dir, dentry, it, S_IFREG));
@@ -1003,7 +1042,8 @@ static int ll_rmdir(struct inode *dir, struct dentry *dentry)
         struct lookup_intent *it;
         int rc;
         ENTRY;
-
+        
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         LL_GET_INTENT(dentry, it);
 
         if ((!it || !it->it_disposition) && !ext2_empty_dir(inode))
@@ -1027,7 +1067,8 @@ static int ll_rename2(struct inode *src, struct inode *tgt,
         struct ll_sb_info *sbi = ll_i2sbi(src);
         int err;
         ENTRY;
-
+        
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         err = mdc_rename(&sbi->ll_mdc_conn, src, tgt,
                          oldname, oldlen, newname, newlen, &request);
         ptlrpc_req_finished(request);
@@ -1049,6 +1090,7 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
         struct page * old_page;
         int err;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         LL_GET_INTENT(new_dentry, it);
 
         if (it && it->it_disposition) {
@@ -1152,5 +1194,8 @@ struct inode_operations ll_dir_inode_operations = {
         rename:          ll_rename,
         rename2:         ll_rename2,
         setattr:         ll_setattr,
+        setattr_raw:     ll_setattr_raw,
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         revalidate:      ll_inode_revalidate,
+#endif
 };

@@ -37,6 +37,11 @@
 #include <linux/slab.h>
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#include <linux/init.h>
+#include <asm/statfs.h>
+#endif
 #include <linux/kp30.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>

@@ -22,8 +22,12 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
-
+#ifdef __KERNEL__
 #include <linux/lustre_dlm.h>
+#else
+#include <liblustre.h>
+#endif
+
 #include <linux/obd_class.h>
 
 kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
@@ -37,6 +41,7 @@ int ldlm_proc_setup(struct obd_device *obd)
         int rc;
         ENTRY;
         LASSERT(ldlm_ns_proc_dir == NULL);
+        LASSERT(obd != NULL);
         rc = lprocfs_obd_attach(obd, 0);
         if (rc) {
                 CERROR("LProcFS failed in ldlm-init\n");
@@ -54,6 +59,7 @@ void ldlm_proc_cleanup(struct obd_device *obd)
         }
 }
 
+#ifdef __KERNEL__
 static int lprocfs_uint_rd(char *page, char **start, off_t off,
                            int count, int *eof, void *data)
 {
@@ -61,11 +67,15 @@ static int lprocfs_uint_rd(char *page, char **start, off_t off,
         return snprintf(page, count, "%u\n", *temp);
 }
 
+
 #define MAX_STRING_SIZE 128
 void ldlm_proc_namespace(struct ldlm_namespace *ns)
 {
         struct lprocfs_vars lock_vars[2];
         char lock_name[MAX_STRING_SIZE + 1];
+
+        LASSERT(ns != NULL);
+        LASSERT(ns->ns_name != NULL);
 
         lock_name[MAX_STRING_SIZE] = '\0';
 
@@ -80,6 +90,7 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
         snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_count", ns->ns_name);
+
         lock_vars[0].data = &ns->ns_locks;
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
@@ -89,6 +100,7 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
         lock_vars[0].read_fptr = lprocfs_uint_rd;
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 }
+#endif
 #undef MAX_STRING_SIZE
 
 #define LDLM_MAX_UNUSED 20
@@ -133,11 +145,13 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         spin_lock(&ldlm_namespace_lock);
         list_add(&ns->ns_list_chain, &ldlm_namespace_list);
         spin_unlock(&ldlm_namespace_lock);
+#ifdef __KERNEL__
         ldlm_proc_namespace(ns);
+#endif
         RETURN(ns);
 
 out_hash:
-        memset(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
+        POISON(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         vfree(ns->ns_hash);
         atomic_sub(sizeof(*ns->ns_hash) * RES_HASH_SIZE, &obd_memory);
 out_ns:
@@ -193,8 +207,8 @@ static void cleanup_resource(struct ldlm_resource *res, struct list_head *q,
                         if (local_only || rc != ELDLM_OK)
                                 ldlm_lock_cancel(lock);
                 } else {
-                        LDLM_DEBUG0(lock, "Freeing a lock still held by a "
-                                    "client node");
+                        LDLM_DEBUG(lock, "Freeing a lock still held by a "
+                                   "client node");
 
                         ldlm_resource_unlink_lock(lock);
                         ldlm_lock_destroy(lock);
@@ -257,7 +271,7 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
 
         ldlm_namespace_cleanup(ns, 0);
 
-        memset(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
+        POISON(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         vfree(ns->ns_hash /* , sizeof(*ns->ns_hash) * RES_HASH_SIZE */);
         atomic_sub(sizeof(*ns->ns_hash) * RES_HASH_SIZE, &obd_memory);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
@@ -447,7 +461,7 @@ int ldlm_resource_putref(struct ldlm_resource *res)
                 list_del_init(&res->lr_hash);
                 list_del_init(&res->lr_childof);
 
-                memset(res, 0x5a, sizeof(*res));
+                POISON(res, 0x5a, sizeof(*res));
                 kmem_cache_free(ldlm_resource_slab, res);
                 l_unlock(&ns->ns_lock);
 

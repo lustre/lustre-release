@@ -21,7 +21,7 @@ h2elan () {
     echo $1 | sed 's/[^0-9]*//g'
 }
 
-h2ip () {
+h2tcp () {
     echo "${1}"
 }
 
@@ -30,7 +30,7 @@ h2ip () {
 # Client node
 ${LMC} --add net --node client --nid '*' --nettype elan || exit 1
 # Router node
-${LMC} --add net --router --node $ROUTER --tcpbuf $TCPBUF --nid `h2ip $ROUTER`  --nettype tcp || exit 1
+${LMC} --add net --router --node $ROUTER --tcpbuf $TCPBUF --nid `h2tcp $ROUTER`  --nettype tcp || exit 1
 ${LMC} --add net --node $ROUTER --nid `h2elan $ROUTER` --nettype elan|| exit 1
 ${LMC} --add route --node $ROUTER --gw `h2elan $ROUTER` --lo `h2elan $CLIENT_LO` --hi `h2elan $CLIENT_HI` --nettype elan || exit 2
 
@@ -45,7 +45,7 @@ for s in $SERVERS
    # server node
    ${LMC} --add net --node $s --tcpbuf $TCPBUF --nid $s --nettype tcp || exit 1
    # route to server
-   ${LMC} --add route --node $ROUTER --nettype tcp --gw `h2ip $ROUTER` --lo $s || exit 2
+   ${LMC} --add route --node $ROUTER --nettype tcp --gw `h2tcp $ROUTER` --lo $s || exit 2
    # the device on the server
    #${LMC} --format --lov lov1 --node $s --ost bluearc || exit 3
    ${LMC} --add ost  --lov lov1 --node $s --dev bluearc --format || exit 3

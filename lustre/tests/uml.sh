@@ -59,9 +59,9 @@ h2elan () {
 
 # create nodes
 echo -n "adding NET for:"
-for NODE in `echo $MDSNODE $OSTNODES $CLIENTS | sort -u`; do
+for NODE in `echo $MDSNODE $OSTNODES $CLIENTS | tr -s " " "\n" | sort -u`; do
 	echo -n " $NODE"
-	${LMC} -m $config --add net --node $NODE --nid `h2$NETTYPE $NODE` --nettype elan || exit 1
+	${LMC} -m $config --add net --node $NODE --nid `h2$NETTYPE $NODE` --nettype $NETTYPE || exit 1
 done
 
 # configure mds server

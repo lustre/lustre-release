@@ -76,8 +76,8 @@ devpath: <value-of select="devpath"/>
 <if test="devsize">
 devsize: <value-of select="devsize"/>
 </if>
-networkRef: <value-of select="network_ref/@uuidref"/>
-mdsRef: <value-of select="mds_ref/@uuidref"/>
+nodeRef: <value-of select="node_ref/@uuidref"/>
+targetRef: <value-of select="target_ref/@uuidref"/>
 <text>
 </text>
 </template>
@@ -104,13 +104,14 @@ uuid: <value-of select="@uuid"/><apply-templates/>
 </text>
 </template>
 
-<template match="obd">
+<template match="osd">
 dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
-objectClass: OBD
+objectClass: OSD
 lustreName: <value-of select="@name"/>
 uuid: <value-of select="@uuid"/>
-activeRef: <value-of select="active_ref/@uuidref"/>
-obdtype: <value-of select="@obdtype"/>
+nodeRef: <value-of select="node_ref/@uuidref"/>
+targetRef: <value-of select="target_ref/@uuidref"/>
+osdtype: <value-of select="@osdtype"/>
 <if test="fstype">
 fstype: <value-of select="fstype"/>
 </if>
@@ -163,13 +164,29 @@ uuid: <value-of select="@uuid"/>
 </text>
 </template>
 
+<template match="ptlrpc">
+dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
+objectClass: PTLRPC
+lustreName: <value-of select="@name"/>
+uuid: <value-of select="@uuid"/>
+<text>
+</text>
+</template>
 
 <template match="ldlm_ref">
 ldlmRef: <value-of select="@uuidref"/>
 </template>
 
+<template match="ptlrpc_ref">
+ptlrpcRef: <value-of select="@uuidref"/>
+</template>
+
 <template match="obd_ref">
 obdRef: <value-of select="@uuidref"/>
+</template>
+
+<template match="osd_ref">
+osdRef: <value-of select="@uuidref"/>
 </template>
 
 <template match="ost_ref">

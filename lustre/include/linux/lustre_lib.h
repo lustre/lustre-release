@@ -47,30 +47,41 @@
 #endif
 #endif
 
-#ifdef __KERNEL__
-/* l_net.c */
+/* target.c */
 struct ptlrpc_request;
 struct obd_device;
 struct recovd_data;
 struct recovd_obd;
 struct obd_export;
 #include <linux/lustre_ha.h>
+#include <linux/lustre_net.h>
 
-int target_handle_connect(struct ptlrpc_request *req);
+
+int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler);
 int target_handle_disconnect(struct ptlrpc_request *req);
 int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
                             struct obd_uuid *cluuid);
+int target_revoke_connection(struct recovd_data *rd, int phase);
+
+#define OBD_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
+void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler);
+void target_abort_recovery(void *data);
+int target_queue_recovery_request(struct ptlrpc_request *req,
+                                  struct obd_device *obd);
+int target_queue_final_reply(struct ptlrpc_request *req, int rc);
+
+/* client.c */
 int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid, struct recovd_obd *recovd,
                        ptlrpc_recovery_cb_t recover);
 int client_obd_disconnect(struct lustre_handle *conn);
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
+int client_sanobd_setup(struct obd_device *obddev, obd_count len, void *buf);
 int client_obd_cleanup(struct obd_device * obddev);
 struct client_obd *client_conn2cli(struct lustre_handle *conn);
 struct obd_device *client_tgtuuid2obd(struct obd_uuid *tgtuuid);
 
-int target_revoke_connection(struct recovd_data *rd, int phase);
-
+/* statfs_pack.c */
 int obd_self_statfs(struct obd_device *dev, struct statfs *sfs);
 
 /* l_lock.c */
@@ -113,6 +124,8 @@ int lustre_fread(struct file *file, char *str, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off);
 int lustre_fsync(struct file *file);
 
+#ifdef __KERNEL__
+
 static inline void l_dput(struct dentry *de)
 {
         if (!de || IS_ERR(de))
@@ -148,7 +161,7 @@ static inline void ldlm_object2handle(void *object, struct lustre_handle *handle
 /*
  *   OBD IOCTLS
  */
-#define OBD_IOCTL_VERSION 0x00010001
+#define OBD_IOCTL_VERSION 0x00010002
 
 struct obd_ioctl_data {
         uint32_t ioc_len;
@@ -165,7 +178,10 @@ struct obd_ioctl_data {
         obd_size         ioc_count;
         obd_off          ioc_offset;
         uint32_t         ioc_dev;
-        uint32_t         ____padding;
+        uint32_t         ioc_command;
+
+        uint64_t ioc_nid;
+        uint32_t ioc_nal;
 
         /* buffers the kernel will treat as user pointers */
         uint32_t ioc_plen1;
@@ -260,8 +276,9 @@ static inline int obd_ioctl_is_invalid(struct obd_ioctl_data *data)
                 printk("OBD ioctl: plen2 set but NULL pointer\n");
                 return 1;
         }
-        if (obd_ioctl_packlen(data) != data->ioc_len ) {
-                printk("OBD ioctl: packlen exceeds ioc_len\n");
+        if (obd_ioctl_packlen(data) != data->ioc_len) {
+                printk("OBD ioctl: packlen exceeds ioc_len (%d != %d)\n",
+                       obd_ioctl_packlen(data), data->ioc_len);
                 return 1;
         }
 #if 0
@@ -344,7 +361,7 @@ static inline int obd_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf,
 
         return 0;
 }
-#else
+#endif
 
 #include <linux/obd_support.h>
 
@@ -415,7 +432,6 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
         EXIT;
         return 0;
 }
-#endif
 
 #define OBD_IOC_CREATE                 _IOR ('f', 101, long)
 #define OBD_IOC_SETUP                  _IOW ('f', 102, long)
@@ -464,11 +480,33 @@ static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 
 #define OBD_GET_VERSION                _IOWR ('f', 144, long)
 
+#define OBD_IOC_ADD_UUID               _IOWR ('f', 145, long)
+#define OBD_IOC_DEL_UUID               _IOWR ('f', 146, long)
+#define OBD_IOC_CLOSE_UUID             _IOWR ('f', 147, long)
+
 #define ECHO_IOC_GET_STRIPE            _IOWR('f', 200, long)
 #define ECHO_IOC_SET_STRIPE            _IOWR('f', 201, long)
 #define ECHO_IOC_ENQUEUE               _IOWR('f', 202, long)
 #define ECHO_IOC_CANCEL                _IOWR('f', 203, long)
 
+
+#define CHECKSUM_BULK 0
+
+#if CHECKSUM_BULK
+static inline void ost_checksum(__u64 *cksum, void *addr, int len)
+{
+        unsigned char *ptr = (unsigned char *)addr;
+        __u64          sum = 0;
+
+        /* very stupid, but means I don't have to think about byte order */
+        while (len-- > 0)
+                sum += *ptr++;
+
+        *cksum = (*cksum << 2) + sum;
+}
+#else
+#define ost_checksum(cksum, addr, len) do {} while (0)
+#endif
 
 /*
  * l_wait_event is a flexible sleeping function, permitting simple caller
@@ -537,11 +575,17 @@ struct l_wait_info {
         lwi_cb_data:    data                                                   \
 })
 
+#ifdef __KERNEL__
+#define l_sigismember sigismember
+#else
+#define l_sigismember(a,b) (*(a) & b)
+#endif
+
 /* XXX this should be one mask-check */
 #define l_killable_pending(task)                                               \
-(sigismember(&(task->pending.signal), SIGKILL) ||                              \
- sigismember(&(task->pending.signal), SIGINT) ||                               \
- sigismember(&(task->pending.signal), SIGTERM))
+(l_sigismember(&(task->pending.signal), SIGKILL) ||                              \
+ l_sigismember(&(task->pending.signal), SIGINT) ||                               \
+ l_sigismember(&(task->pending.signal), SIGTERM))
 
 #define __l_wait_event(wq, condition, info, ret)                               \
 do {                                                                           \

@@ -23,7 +23,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#error "FIXME: this needs to be updated to match fsfilt_extN.c"
+//#error "FIXME: this needs to be updated to match fsfilt_extN.c"
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
@@ -33,14 +33,19 @@
 #include <linux/init.h>
 #include <linux/ext3_fs.h>
 #include <linux/ext3_jbd.h>
-#include <linux/ext3_xattr.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+# include <linux/ext3_xattr.h>
+#else
+# include <asm/statfs.h>
+#endif
 #include <linux/kp30.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>
 #include <linux/module.h>
 
 static kmem_cache_t *fcb_cache;
-static int fcb_cache_count;
+static atomic_t fcb_cache_count = ATOMIC_INIT(0);
 
 struct fsfilt_cb_data {
         struct journal_callback cb_jcb; /* data private to jbd */
@@ -206,7 +211,7 @@ static void fsfilt_ext3_cb_func(struct journal_callback *jcb, int error)
         fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, error);
 
         kmem_cache_free(fcb_cache, fcb);
-        --fcb_cache_count;
+        atomic_dec(&fcb_cache_count);
 }
 
 static int fsfilt_ext3_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
@@ -219,7 +224,7 @@ static int fsfilt_ext3_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
         if (!fcb)
                 RETURN(-ENOMEM);
 
-        ++fcb_cache_count;
+        atomic_inc(&fcb_cache_count);
         fcb->cb_func = cb_func;
         fcb->cb_obd = obd;
         fcb->cb_last_rcvd = last_rcvd;
@@ -304,7 +309,7 @@ static int __init fsfilt_ext3_init(void)
                 GOTO(out, rc = -ENOMEM);
         }
 
-        rc = fsfilt_register_ops(&fsfilt_ext3_fs_ops);
+        rc = fsfilt_register_ops(&fsfilt_ext3_ops);
 
         if (rc)
                 kmem_cache_destroy(fcb_cache);
@@ -316,12 +321,12 @@ static void __exit fsfilt_ext3_exit(void)
 {
         int rc;
 
-        fsfilt_unregister_ops(&fsfilt_ext3_fs_ops);
+        fsfilt_unregister_ops(&fsfilt_ext3_ops);
         rc = kmem_cache_destroy(fcb_cache);
 
-        if (rc || fcb_cache_count) {
+        if (rc || atomic_read(&fcb_cache_count)) {
                 CERROR("can't free fsfilt callback cache: count %d, rc = %d\n",
-                       fcb_cache_count, rc);
+                       atomic_read(&fcb_cache_count), rc);
         }
 
         //rc = ext3_xattr_unregister();

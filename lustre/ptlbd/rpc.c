@@ -42,7 +42,6 @@ int ptlbd_send_req(struct ptlbd_obd *ptlbd, ptlbd_cmd_t cmd,
         struct ptlrpc_request *req;
         struct ptlrpc_bulk_desc *desc;
         struct buffer_head *bh;
-        unsigned long flags;
         unsigned int page_count;
         int rc, rep_size, size[2];
         __u32 xid;
@@ -76,9 +75,7 @@ int ptlbd_send_req(struct ptlbd_obd *ptlbd, ptlbd_cmd_t cmd,
         desc->bd_portal = PTLBD_BULK_PORTAL;
         desc->bd_ptl_ev_hdlr = NULL;
 
-        spin_lock_irqsave(&imp->imp_lock, flags);
-        xid = ++imp->imp_last_xid;
-        spin_unlock_irqrestore(&imp->imp_lock, flags);
+        xid = ptlrpc_next_xid();
 
         for ( niob = niobs, bh = first_bh ; bh ; bh = bh->b_next, niob++ ) {
                 struct ptlrpc_bulk_page *bulk = ptlrpc_prep_bulk_page(desc);

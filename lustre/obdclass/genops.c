@@ -23,11 +23,17 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
+#ifdef __KERNEL__
 #include <linux/kmod.h>   /* for request_module() */
 #include <linux/module.h>
 #include <linux/obd_class.h>
 #include <linux/random.h>
 #include <linux/slab.h>
+#else 
+#include <liblustre.h>
+#include <linux/obd_class.h>
+#include <linux/obd.h>
+#endif
 #include <linux/lprocfs_status.h>
 
 extern struct list_head obd_types;
@@ -115,7 +121,7 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
 
         type->typ_procroot = lprocfs_register(type->typ_name, proc_lustre_root,
                                               vars, type);
-        if (IS_ERR(type->typ_procroot)) {
+        if (type->typ_procroot && IS_ERR(type->typ_procroot)) {
                 rc = PTR_ERR(type->typ_procroot);
                 type->typ_procroot = NULL;
                 list_del(&type->typ_chain);
@@ -344,9 +350,10 @@ struct obd_export *class_new_export(struct obd_device *obddev)
 
 void class_destroy_export(struct obd_export *exp)
 {
-        ENTRY;
-
         LASSERT(exp->exp_cookie != DEAD_HANDLE_MAGIC);
+
+        CDEBUG(D_IOCTL, "destroying export %p/%s\n", exp,
+               exp->exp_client_uuid.uuid);
 
         spin_lock(&exp->exp_obd->obd_dev_lock);
         list_del(&exp->exp_obd_chain);
@@ -369,17 +376,15 @@ void class_destroy_export(struct obd_export *exp)
 
         exp->exp_cookie = DEAD_HANDLE_MAGIC;
         kmem_cache_free(export_cachep, exp);
-
-        EXIT;
 }
 
 /* a connection defines an export context in which preallocation can
    be managed. */
-int class_connect(struct lustre_handle *conn, struct obd_device *obd,
+int class_connect(struct lustre_handle *exporth, struct obd_device *obd,
                   struct obd_uuid *cluuid)
 {
         struct obd_export * export;
-        if (conn == NULL) {
+        if (exporth == NULL) {
                 LBUG();
                 return -EINVAL;
         }
@@ -398,12 +403,12 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (!export)
                 return -ENOMEM;
 
-        conn->addr = (__u64) (unsigned long)export;
-        conn->cookie = export->exp_cookie;
+        exporth->addr = (__u64) (unsigned long)export;
+        exporth->cookie = export->exp_cookie;
         memcpy(&export->exp_client_uuid, cluuid, sizeof(export->exp_client_uuid));
 
         CDEBUG(D_IOCTL, "connect: addr %Lx cookie %Lx\n",
-               (long long)conn->addr, (long long)conn->cookie);
+               (long long)exporth->addr, (long long)exporth->cookie);
         return 0;
 }
 

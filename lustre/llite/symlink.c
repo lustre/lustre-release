@@ -23,6 +23,10 @@
 #include <linux/mm.h>
 #include <linux/stat.h>
 #include <linux/smp_lock.h>
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#include <asm/statfs.h>
+#endif
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/lustre_lite.h>
@@ -69,6 +73,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         int rc;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         /* on symlinks lli_open_sem protects lli_symlink_name allocation/data */
         down(&lli->lli_open_sem);
         rc = ll_readlink_internal(inode, &request, &symname);
@@ -83,6 +88,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         RETURN(rc);
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
                           struct lookup_intent *it)
 {
@@ -93,6 +99,7 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
         char *symname;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         if (it != NULL) {
                 op = it->it_op;
                 mode = it->it_mode;
@@ -117,12 +124,47 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
 
         RETURN(rc);
 }
+#else
+static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
+{
+        struct inode *inode = dentry->d_inode;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct ptlrpc_request *request;
+        int op = 0, mode = 0, rc;
+        char *symname;
+        ENTRY;
+
+        op = nd->it.it_op;
+        mode = nd->it.it_mode;
+
+        ll_intent_release(dentry, &nd->it);
+
+        down(&lli->lli_open_sem);
+
+        rc = ll_readlink_internal(inode, &request, &symname);
+        if (rc)
+                GOTO(out, rc);
+
+        nd->it.it_op = op;
+        nd->it.it_mode = mode;
+
+        rc = vfs_follow_link(nd, symname);
+ out:
+        up(&lli->lli_open_sem);
+        ptlrpc_req_finished(request);
+
+        RETURN(rc);
+}
+#endif
 
 extern int ll_inode_revalidate(struct dentry *dentry);
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
 struct inode_operations ll_fast_symlink_inode_operations = {
         readlink:       ll_readlink,
         setattr:        ll_setattr,
+        setattr_raw:    ll_setattr_raw,
         follow_link2:   ll_follow_link,
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         revalidate:     ll_inode_revalidate
+#endif
 };

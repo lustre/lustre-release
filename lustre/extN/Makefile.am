@@ -15,9 +15,9 @@ EXTRA_PROGRAMS = extN
 #       (or other RH < 12.5 kernels) use the "chaos22" patch instead.
 EXTN_FIXES = patch-2.4.18-chaos22
 #EXTN_FIXES = ext3-2.4.18-fixes.diff
-EXTNP = htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
+EXTNP = htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff ext3-2.4-ino_t.diff
 EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff extN-noread.diff
-EXTNP+= extN-wantedi.diff
+EXTNP+= extN-wantedi.diff extN-san.diff extN-2.4.18-ino_sb_fixup.diff
 #EXTNP+= extN-iget-debug.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c
@@ -27,8 +27,8 @@ EXTN_EXTRA += include/linux/quotaops.h
 extN_SOURCES = $(EXTNC) xattr.c # punch.c
 extN_DEPENDENCIES = patch-stamp
 EXTRA_DIST = $(EXTNP) $(EXTN_FIXES) \
-	extN-2.4.18-ino_sb_fixup.diff extN-2.4.18-exports.diff \
-	$(wildcard extN.patch-*)
+	ext3-largefile.diff extN-2.4.18-exports.diff \
+	ext3-use-after-free.diff ext3-unmount_sync.diff $(wildcard extN.patch-*)
 DISTCLEANFILES = -r $(extN_SOURCES) sed-stamp patch-stamp *.orig *.rej
 SUB=-e "s/ext3/extN/g" -e "s/EXT3/EXTN/g" -e "s/extern __inline__/static inline/"
 
@@ -80,14 +80,14 @@ sed-stamp:
 	rm -rf $(extN_orig) $(extN_include_orig)
 	mkdir $(extN_orig) $(extN_include_orig)
 	list='$(EXTNC)'; for f in $$list; do                                  \
-          echo "creating $(extN_orig)/$$f";				\
-          sed $(SUB) $(LINUX)/fs/ext3/$$f > $(extN_orig)/$$f; \
-        done
+          echo "creating $(extN_orig)/$$f";                                   \
+          sed $(SUB) $(LINUX)/fs/ext3/$$f > $(extN_orig)/$$f;                 \
+	done
 	list='$(EXTNI)'; for i in $$list; do                                  \
           s=`echo $$i | sed "s/extN/ext3/"`;                                  \
-          echo "creating $(extN_include_orig)/$$i"; \
-          sed $(SUB) $(LINUX)/include/linux/$$s > $(extN_include_orig)/$$i; \
-        done
+          echo "creating $(extN_include_orig)/$$i";                           \
+          sed $(SUB) $(LINUX)/include/linux/$$s > $(extN_include_orig)/$$i;   \
+	done
 	echo timestamp > $@
 
 
@@ -117,18 +117,15 @@ patch-stamp: sed-stamp $(EXTNP)
 	    grep -q extN_mark_inode_dirty && list="$(EXTN_FIXES) $$list";     \
 	  grep -q "if (do_sync_supers)" $(extN_orig)/super.c &&               \
 	    list="ext3-unmount_sync.diff $$list";                             \
+	  grep -q "ext3_journal_start(inode, 2)" $(extN_orig)/inode.c ||      \
+	    list="ext3-largefile.diff $$list";                                \
+	  grep -q "EXPORT_SYMBOL(extN_bread)" $(extN_orig)/super.c ||         \
+	    list="$$list extN-2.4.18-exports.diff";                           \
 	  for p in $$list; do                                                 \
 	    echo "applying patch $$p";                                        \
 	    sed $(SUB) $(srcdir)/$$p |                                        \
 	      (cd $(top_builddir) && patch -p1) || exit $$?;                  \
 	  done;                                                               \
-	  echo "It is OK if the next patch says it is skipping this patch";   \
-	  echo "applying patch $(srcdir)/extN-2.4.18-exports.diff";           \
-	  (cd $(top_builddir) &&                                              \
-	    patch -N -p1) < $(srcdir)/extN-2.4.18-exports.diff;               \
-	  echo "applying patch $(srcdir)/extN-2.4.18-ino_sb_fix.diff";        \
-	  (cd $(top_builddir) &&                                              \
-	    patch -p1) < $(srcdir)/extN-2.4.18-ino_sb_fixup.diff || exit $$?; \
 	fi
 	echo timestamp > $@
 

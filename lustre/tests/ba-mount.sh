@@ -21,7 +21,7 @@ MDS=`hostname`
  
 UUIDLIST=${UUIDLIST:-/usr/local/admin/ba-ost/UUID.txt}
 
-h2ip () {
+h2tcp () {
     echo "${1}"
 }
 BATCH=/tmp/lmc-batch.$$
@@ -35,19 +35,19 @@ save_cmd() {
 ${LMC} --add net --node $MDS --tcpbuf $TCPBUF --nid $MDS --nettype tcp
 ${LMC} --add mds --node $MDS --mds mds1 --dev /tmp/mds1 --size 50000
 
-OBD_UUID=`awk "/$OST / { print \\$3 }" $UUIDLIST`
-[ "$OBD_UUID" ] && OBD_UUID="--obduuid $OBD_UUID" || echo "$OST: no UUID"
+OST_UUID=`awk "/$OST / { print \\$3 }" $UUIDLIST`
+[ "$OST_UUID" ] && OST_UUID="--ostuuid $OST_UUID" || echo "$OST: no UUID"
 
 # server node
 ${LMC} --add net --node $OST --tcpbuf $TCPBUF --nid $OST --nettype tcp
-${LMC} --add ost --node $OST --obd obd1 $OBD_UUID --dev bluearc
+${LMC} --add ost --node $OST --ost ost1 $OST_UUID --dev bluearc
 
 # mount point on the MDS/client
-${LMC} --add mtpt --node $MDS --path /mnt/lustre --mds mds1 --lov obd1
+${LMC} --add mtpt --node $MDS --path /mnt/lustre --mds mds1 --lov ost1
 
 # other clients
 ${LMC} --add net --node client --tcpbuf $TCPBUF --nid '*' --nettype tcp
-${LMC} --add mtpt --node client --path /mnt/lustre --mds mds1 --lov obd1
+${LMC} --add mtpt --node client --path /mnt/lustre --mds mds1 --lov ost1
 
 $LMC_REAL --batch $BATCH
 rm -f $BATCH

@@ -21,7 +21,10 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-
+#ifndef __KERNEL__
+#include <liblustre.h>
+#include <linux/kp30.h>
+#endif
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
@@ -31,6 +34,9 @@ extern int request_in_callback(ptl_event_t *ev);
 static int ptlrpc_check_event(struct ptlrpc_service *svc,
                               struct ptlrpc_thread *thread, ptl_event_t *event)
 {
+        struct ptlrpc_srv_ni *srv_ni;
+        int i;
+        int idx;
         int rc;
         ENTRY;
 
@@ -40,22 +46,32 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc,
                 GOTO(out, rc = 1);
 
         LASSERT ((thread->t_flags & SVC_EVENT) == 0);
-        LASSERT (ptl_is_valid_handle (&svc->srv_eq_h));
+        LASSERT (ptlrpc_ninterfaces > 0);
 
-        rc = PtlEQGet(svc->srv_eq_h, event);
-        switch (rc)
-        {
-        case PTL_OK:
-                thread->t_flags |= SVC_EVENT;
-                GOTO(out, rc = 1);
+        for (i = 0; i < ptlrpc_ninterfaces; i++) {
+                idx = (svc->srv_interface_rover + i) % ptlrpc_ninterfaces;
+                srv_ni = &svc->srv_interfaces[idx];
 
-        case PTL_EQ_EMPTY:
-                GOTO(out, rc = 0);
+                LASSERT (ptl_is_valid_handle (&srv_ni->sni_eq_h));
 
-        default:
-                CERROR("BUG: PtlEQGet returned %d\n", rc);
-                LBUG();
+                rc = PtlEQGet(srv_ni->sni_eq_h, event);
+                switch (rc)
+                {
+                case PTL_OK:
+                        /* next time start with the next interface */
+                        svc->srv_interface_rover = (idx+1) % ptlrpc_ninterfaces;
+                        thread->t_flags |= SVC_EVENT;
+                        GOTO(out, rc = 1);
+
+                case PTL_EQ_EMPTY:
+                        continue;
+
+                default:
+                        CERROR("BUG: PtlEQGet returned %d\n", rc);
+                        LBUG();
+                }
         }
+        rc = 0;
  out:
         spin_unlock(&svc->srv_lock);
         return rc;
@@ -65,15 +81,22 @@ struct ptlrpc_service *
 ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
                 __u32 bufsize, __u32 max_req_size,
                 int req_portal, int rep_portal,
-                struct obd_uuid *uuid, svc_handler_t handler, char *name)
+                svc_handler_t handler, char *name)
 {
-        int err;
-        int rc, i;
+        int ssize;
+        int rc;
+        int i;
+        int j;
         struct ptlrpc_service *service;
+        struct ptlrpc_srv_ni  *srv_ni;
         ENTRY;
 
-        OBD_ALLOC(service, sizeof(*service));
-        if (!service)
+        LASSERT (ptlrpc_ninterfaces > 0);
+
+        ssize = offsetof (struct ptlrpc_service,
+                          srv_interfaces[ptlrpc_ninterfaces]);
+        OBD_ALLOC(service, ssize);
+        if (service == NULL)
                 RETURN(NULL);
 
         service->srv_name = name;
@@ -83,54 +106,73 @@ ptlrpc_init_svc(__u32 nevents, __u32 nbufs,
 
         service->srv_max_req_size = max_req_size;
         service->srv_buf_size = bufsize;
-        INIT_LIST_HEAD(&service->srv_rqbds);
-        service->srv_nrqbds = 0;
-        atomic_set(&service->srv_nrqbds_receiving, 0);
 
         service->srv_rep_portal = rep_portal;
         service->srv_req_portal = req_portal;
         service->srv_handler = handler;
+        service->srv_interface_rover = 0;
 
-        err = kportal_uuid_to_peer(uuid->uuid, &service->srv_self);
-        if (err) {
-                CERROR("%s: cannot get peer for uuid '%s'\n", name, 
-                       uuid->uuid);
-                OBD_FREE(service, sizeof(*service));
-                RETURN(NULL);
+        /* First initialise enough for early teardown */
+        for (i = 0; i < ptlrpc_ninterfaces; i++) {
+                srv_ni = &service->srv_interfaces[i];
+
+                srv_ni->sni_service = service;
+                srv_ni->sni_ni = &ptlrpc_interfaces[i];
+                ptl_set_inv_handle (&srv_ni->sni_eq_h);
+                INIT_LIST_HEAD(&srv_ni->sni_rqbds);
+                srv_ni->sni_nrqbds = 0;
+                atomic_set(&srv_ni->sni_nrqbds_receiving, 0);
         }
 
-        rc = PtlEQAlloc(service->srv_self.peer_ni, nevents,
-                        request_in_callback, &(service->srv_eq_h));
+        /* Now allocate the event queue and request buffers, assuming all
+         * interfaces require the same level of buffering. */
+        for (i = 0; i < ptlrpc_ninterfaces; i++) {
+                srv_ni = &service->srv_interfaces[i];
+                CDEBUG (D_NET, "%s: initialising interface %s\n", name,
+                        srv_ni->sni_ni->pni_name);
 
-        if (rc != PTL_OK) {
-                CERROR("%s: PtlEQAlloc failed: %d\n", name, rc);
-                OBD_FREE(service, sizeof(*service));
-                RETURN(NULL);
-        }
-
-        for (i = 0; i < nbufs; i++) {
-                struct ptlrpc_request_buffer_desc *rqbd;
-
-                OBD_ALLOC(rqbd, sizeof(*rqbd));
-                if (rqbd == NULL)
-                        GOTO(failed, NULL);
-
-                rqbd->rqbd_service = service;
-                ptl_set_inv_handle(&rqbd->rqbd_me_h);
-                atomic_set(&rqbd->rqbd_refcount, 0);
-                OBD_ALLOC(rqbd->rqbd_buffer, service->srv_buf_size);
-                if (rqbd->rqbd_buffer == NULL) {
-                        OBD_FREE(rqbd, sizeof(*rqbd));
-                        GOTO(failed, NULL);
+                rc = PtlEQAlloc(srv_ni->sni_ni->pni_ni_h, nevents,
+                                request_in_callback, &(srv_ni->sni_eq_h));
+                if (rc != PTL_OK) {
+                        CERROR("%s.%d: PtlEQAlloc on %s failed: %d\n",
+                               name, i, srv_ni->sni_ni->pni_name, rc);
+                        GOTO (failed, NULL);
                 }
-                list_add(&rqbd->rqbd_list, &service->srv_rqbds);
-                service->srv_nrqbds++;
 
-                ptlrpc_link_svc_me(rqbd);
+                for (j = 0; j < nbufs; j++) {
+                        struct ptlrpc_request_buffer_desc *rqbd;
+
+                        OBD_ALLOC(rqbd, sizeof(*rqbd));
+                        if (rqbd == NULL) {
+                                CERROR ("%s.%d: Can't allocate request "
+                                        "descriptor %d on %s\n",
+                                        name, i, srv_ni->sni_nrqbds,
+                                        srv_ni->sni_ni->pni_name);
+                                GOTO(failed, NULL);
+                        }
+
+                        rqbd->rqbd_srv_ni = srv_ni;
+                        ptl_set_inv_handle(&rqbd->rqbd_me_h);
+                        atomic_set(&rqbd->rqbd_refcount, 0);
+
+                        OBD_ALLOC(rqbd->rqbd_buffer, service->srv_buf_size);
+                        if (rqbd->rqbd_buffer == NULL) {
+                                CERROR ("%s.%d: Can't allocate request "
+                                        "buffer %d on %s\n",
+                                        name, i, srv_ni->sni_nrqbds,
+                                        srv_ni->sni_ni->pni_name);
+                                OBD_FREE(rqbd, sizeof(*rqbd));
+                                GOTO(failed, NULL);
+                        }
+                        list_add(&rqbd->rqbd_list, &srv_ni->sni_rqbds);
+                        srv_ni->sni_nrqbds++;
+
+                        ptlrpc_link_svc_me(rqbd);
+                }
         }
 
-        CDEBUG(D_NET, "Starting service listening on portal %d (eq: %lu)\n",
-               service->srv_req_portal, service->srv_eq_h.handle_idx);
+        CDEBUG(D_NET, "%s: Started on %d interfaces, listening on portal %d\n",
+               service->srv_name, ptlrpc_ninterfaces, service->srv_req_portal);
 
         RETURN(service);
 failed:
@@ -151,11 +193,12 @@ static int handle_incoming_request(struct obd_device *obddev,
 
         LASSERT (atomic_read (&rqbd->rqbd_refcount) > 0);
         LASSERT ((event->mem_desc.options & PTL_MD_IOV) == 0);
-        LASSERT (rqbd->rqbd_service == svc);
+        LASSERT (rqbd->rqbd_srv_ni->sni_service == svc);
         LASSERT (rqbd->rqbd_buffer == event->mem_desc.start);
         LASSERT (event->offset + event->mlength <= svc->srv_buf_size);
 
         memset(request, 0, sizeof(*request));
+        INIT_LIST_HEAD(&request->rq_list);
         request->rq_svc = svc;
         request->rq_obd = obddev;
         request->rq_xid = event->match_bits;
@@ -172,11 +215,10 @@ static int handle_incoming_request(struct obd_device *obddev,
                 goto out;
         }
 
-        CDEBUG(D_RPCTRACE, "Handling RPC pid:xid:nid:opc %d:"LPU64":"LPX64":%d\n",
-               NTOH__u32(request->rq_reqmsg->status),
-               request->rq_xid,
-               event->initiator.nid,
-               NTOH__u32(request->rq_reqmsg->opc));
+        CDEBUG(D_RPCTRACE, "Handling RPC ni:pid:xid:nid:opc %d:%d:"LPU64":"
+               LPX64":%d\n", rqbd->rqbd_srv_ni - &svc->srv_interfaces[0],
+               NTOH__u32(request->rq_reqmsg->status), request->rq_xid,
+               event->initiator.nid, NTOH__u32(request->rq_reqmsg->opc));
 
         if (NTOH__u32(request->rq_reqmsg->type) != PTL_RPC_MSG_REQUEST) {
                 CERROR("wrong packet type received (type=%u)\n",
@@ -204,9 +246,7 @@ static int handle_incoming_request(struct obd_device *obddev,
                event->mem_desc.start, event->offset);
 
         request->rq_peer.peer_nid = event->initiator.nid;
-        /* FIXME: this NI should be the incoming NI.
-         * We don't know how to find that from here. */
-        request->rq_peer.peer_ni = svc->srv_self.peer_ni;
+        request->rq_peer.peer_ni = rqbd->rqbd_srv_ni->sni_ni;
 
         request->rq_export = class_conn2export((struct lustre_handle *)
                                                request->rq_reqmsg);
@@ -271,7 +311,9 @@ static int ptlrpc_main(void *arg)
 #endif
 
 #ifdef __arch_um__
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         sprintf(current->comm, "%s|%d", data->name,current->thread.extern_pid);
+#endif
 #else
         strcpy(current->comm, data->name);
 #endif
@@ -399,7 +441,9 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
 
 int ptlrpc_unregister_service(struct ptlrpc_service *service)
 {
+        int i;
         int rc;
+        struct ptlrpc_srv_ni *srv_ni;
 
         LASSERT (list_empty (&service->srv_threads));
 
@@ -408,39 +452,50 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
          * freeing them.
          */
 
-        while (!list_empty (&service->srv_rqbds)) {
-                struct ptlrpc_request_buffer_desc *rqbd =
-                        list_entry (service->srv_rqbds.next,
-                                    struct ptlrpc_request_buffer_desc,
-                                    rqbd_list);
+        for (i = 0; i < ptlrpc_ninterfaces; i++) {
+                srv_ni = &service->srv_interfaces[i];
+                CDEBUG (D_NET, "%s: tearing down interface %s\n",
+                        service->srv_name, srv_ni->sni_ni->pni_name);
 
-                list_del (&rqbd->rqbd_list);
+                while (!list_empty (&srv_ni->sni_rqbds)) {
+                        struct ptlrpc_request_buffer_desc *rqbd =
+                                list_entry (srv_ni->sni_rqbds.next,
+                                            struct ptlrpc_request_buffer_desc,
+                                            rqbd_list);
 
-                LASSERT (atomic_read (&rqbd->rqbd_refcount) > 0);
-                /* refcount could be anything; it's possible for the
-                 * buffers to continued to get filled after all the server
-                 * threads exited.  But we know they _have_ exited.
-                 */
+                        list_del (&rqbd->rqbd_list);
 
-                (void) PtlMEUnlink(rqbd->rqbd_me_h);
-                /* The callback handler could have unlinked this ME already
-                 * (we're racing with her) but it's safe to ensure it _has_
-                 * been unlinked.
-                 */
+                        LASSERT (atomic_read (&rqbd->rqbd_refcount) > 0);
+                        /* refcount could be anything; it's possible for
+                         * the buffers to continued to get filled after all
+                         * the server threads exited.  But we know they
+                         * _have_ exited.
+                         */
 
-                OBD_FREE (rqbd->rqbd_buffer, service->srv_buf_size);
-                OBD_FREE (rqbd, sizeof (*rqbd));
-                service->srv_nrqbds--;
+                        (void) PtlMEUnlink(rqbd->rqbd_me_h);
+                        /* The callback handler could have unlinked this ME
+                         * already (we're racing with her) but it's safe to
+                         * ensure it _has_ been unlinked.
+                         */
+
+                        OBD_FREE (rqbd->rqbd_buffer, service->srv_buf_size);
+                        OBD_FREE (rqbd, sizeof (*rqbd));
+                        srv_ni->sni_nrqbds--;
+                }
+
+                LASSERT (srv_ni->sni_nrqbds == 0);
+
+                if (ptl_is_valid_handle (&srv_ni->sni_eq_h)) {
+                        rc = PtlEQFree(srv_ni->sni_eq_h);
+                        if (rc)
+                                CERROR("%s.%d: PtlEQFree failed on %s: %d\n",
+                                       service->srv_name, i,
+                                       srv_ni->sni_ni->pni_name, rc);
+                }
         }
 
-        LASSERT (service->srv_nrqbds == 0);
-
-        rc = PtlEQFree(service->srv_eq_h);
-        if (rc)
-                CERROR("PtlEQFree failed: %d\n", rc);
-
-        OBD_FREE(service, sizeof(*service));
-        if (rc)
-                LBUG();
-        return rc;
+        OBD_FREE(service,
+                 offsetof (struct ptlrpc_service,
+                           srv_interfaces[ptlrpc_ninterfaces]));
+        return 0;
 }

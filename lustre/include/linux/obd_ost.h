@@ -31,6 +31,8 @@
 
 #define LUSTRE_OST_NAME "ost"
 #define LUSTRE_OSC_NAME "osc"
+#define LUSTRE_SANOSC_NAME "sanosc"
+#define LUSTRE_SANOST_NAME "sanost"
 
 /* ost/ost_pack.c */
 void ost_pack_niobuf(void **tmp, __u64 offset, __u32 len, __u32 flags,

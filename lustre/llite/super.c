@@ -40,7 +40,7 @@ extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
 
 /* /proc/lustre/llite root that tracks llite mount points */
-struct proc_dir_entry *proc_lustre_fs_root;
+struct proc_dir_entry *proc_lustre_fs_root = NULL;
 /* lproc_llite.c */
 extern int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                        struct super_block *sb,
@@ -131,6 +131,7 @@ static struct super_block *ll_read_super(struct super_block *sb,
 
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         OBD_ALLOC(sbi, sizeof(*sbi));
         if (!sbi)
                 RETURN(NULL);
@@ -271,6 +272,7 @@ static void ll_put_super(struct super_block *sb)
         struct ll_fid rootfid;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         list_del(&sbi->ll_conn_chain);
         ll_commitcbd_cleanup(sbi);
         obd_disconnect(&sbi->ll_osc_conn);
@@ -309,6 +311,7 @@ static void ll_clear_inode(struct inode *inode)
         int rc;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         rc = mdc_cancel_unused(&sbi->ll_mdc_conn, inode, LDLM_FL_NO_CALLBACK);
         if (rc < 0) {
                 CERROR("mdc_cancel_unused: %d\n", rc);
@@ -343,6 +346,7 @@ static void ll_clear_inode(struct inode *inode)
 static void ll_delete_inode(struct inode *inode)
 {
         ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         if (S_ISREG(inode->i_mode)) {
                 int err;
                 struct obdo *oa;
@@ -454,10 +458,59 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
         RETURN(err);
 }
 
+int ll_setattr_raw(struct inode *inode, struct iattr *attr)
+{
+        struct ptlrpc_request *request = NULL;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+        int err = 0;
+        ENTRY;
+
+        if ((attr->ia_valid & ATTR_SIZE)) {
+                err = vmtruncate(inode, attr->ia_size);
+                if (err)
+                        RETURN(err);
+        }
+
+        /* Don't send size changes to MDS to avoid "fast EA" problems, and
+         * also avoid a pointless RPC (we get file size from OST anyways).
+         */
+        attr->ia_valid &= ~ATTR_SIZE;
+        if (!attr->ia_valid)
+                RETURN(0);
+
+        err = mdc_setattr(&sbi->ll_mdc_conn, inode, attr, NULL, 0,
+                          &request);
+        if (err)
+                CERROR("mdc_setattr fails: err = %d\n", err);
+
+        ptlrpc_req_finished(request);
+
+        if (S_ISREG(inode->i_mode) && attr->ia_valid & ATTR_MTIME_SET) {
+                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+                struct obdo oa;
+                int err2;
+
+                CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
+                       inode->i_ino, attr->ia_mtime);
+                oa.o_id = lsm->lsm_object_id;
+                oa.o_mode = S_IFREG;
+                oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMTIME;
+                oa.o_mtime = attr->ia_mtime;
+                err2 = obd_setattr(&sbi->ll_osc_conn, &oa, lsm, NULL);
+                if (err2) {
+                        CERROR("obd_setattr fails: rc=%d\n", err);
+                        if (!err)
+                                err = err2;
+                }
+        }
+        RETURN(err);
+}
+
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
         int rc = inode_change_ok(de->d_inode, attr);
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         if (rc)
                 return rc;
 
@@ -471,6 +524,7 @@ static int ll_statfs(struct super_block *sb, struct statfs *sfs)
         int rc;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         memset(sfs, 0, sizeof(*sfs));
         rc = obd_statfs(&sbi->ll_mdc_conn, &osfs);
         statfs_unpack(sfs, &osfs);
@@ -557,8 +611,8 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         sema_init(&lli->lli_open_sem, 1);
-        atomic_set(&lli->lli_open_count, 0);
 
         LASSERT(!lli->lli_smd);
 
@@ -620,6 +674,7 @@ void ll_umount_begin(struct super_block *sb)
         struct list_head *ctmp;
 
         ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
 
         list_for_each(ctmp, &sbi->ll_conn_chain) {
                 struct ptlrpc_connection *conn;

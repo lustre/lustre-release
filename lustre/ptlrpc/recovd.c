@@ -15,8 +15,14 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-
+#ifndef __KERNEL__
+#include <liblustre.h>
+#include <linux/obd.h>
+#include <linux/obd_class.h>
+#else 
 #include <linux/lustre_lite.h>
+#endif
+
 #include <linux/lustre_ha.h>
 #include <linux/obd_support.h>
 
@@ -122,9 +128,9 @@ void recovd_conn_fail(struct ptlrpc_connection *conn)
                 return;
         }
 
-        CERROR("connection %p to %s (%08x %08lx %08lx) failed\n", conn,
+        CERROR("connection %p to %s nid "LPX64" on %s failed\n", conn,
                conn->c_remote_uuid.uuid, conn->c_peer.peer_nid,
-               conn->c_peer.peer_ni.nal_idx, conn->c_peer.peer_ni.handle_idx);
+               conn->c_peer.peer_ni->pni_name);
         list_del(&rd->rd_managed_chain);
         list_add_tail(&rd->rd_managed_chain, &recovd->recovd_troubled_items);
         if (rd->rd_phase != RD_IDLE) {
@@ -272,6 +278,7 @@ static int recovd_handle_event(struct recovd_obd *recovd)
         RETURN(0);
 }
 
+#ifdef __KERNEL__
 static int recovd_main(void *arg)
 {
         struct recovd_obd *recovd = (struct recovd_obd *)arg;
@@ -316,7 +323,7 @@ static int recovd_main(void *arg)
 
 int recovd_setup(struct recovd_obd *recovd)
 {
-        int rc;
+        int rc = 0; /* initialize for Liblustre */
 
         ENTRY;
 
@@ -342,6 +349,12 @@ int recovd_setup(struct recovd_obd *recovd)
 
         RETURN(0);
 }
+#else 
+int recovd_setup(struct recovd_obd *recovd)
+{
+        return 0;
+}
+#endif
 
 int recovd_cleanup(struct recovd_obd *recovd)
 {

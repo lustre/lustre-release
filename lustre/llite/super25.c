@@ -34,13 +34,14 @@
 #include <linux/lprocfs_status.h>
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#include <asm/statfs.h>
 kmem_cache_t *ll_file_data_slab;
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
 
 /* /proc/lustre/llite root that tracks llite mount points */
-struct proc_dir_entry *proc_lustre_fs_root;
+struct proc_dir_entry *proc_lustre_fs_root = NULL;
 /* lproc_llite.c */
 extern int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
                                        struct super_block *sb,
@@ -53,7 +54,7 @@ extern int ll_commitcbd_setup(struct ll_sb_info *);
 extern int ll_commitcbd_cleanup(struct ll_sb_info *);
 int ll_read_inode2(struct inode *inode, void *opaque);
 
-extern int ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
+extern int ll_proc_namespace(struct super_block* sb, char* osc, char* mdc);
 
 static char *ll_read_opt(const char *opt, char *data)
 {
@@ -131,6 +132,7 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct ptlrpc_connection *mdc_conn;
         struct ll_read_inode2_cookie lic;
         class_uuid_t uuid;
+        struct obd_uuid param_uuid;
 
         ENTRY;
 
@@ -139,8 +141,9 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
                 RETURN(-ENOMEM);
 
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
+        INIT_LIST_HEAD(&sbi->ll_orphan_dentry_list);
         generate_random_uuid(uuid);
-        class_uuid_unparse(uuid, sbi->ll_sb_uuid);
+        class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
 
         sb->s_fs_info = sbi;
 
@@ -156,13 +159,14 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_free, sb = NULL);
         }
 
-        obd = class_uuid2obd(mdc);
+        strncpy(param_uuid.uuid, mdc, sizeof(param_uuid.uuid));
+        obd = class_uuid2obd(&param_uuid);
         if (!obd) {
                 CERROR("MDC %s: not setup or attached\n", mdc);
                 GOTO(out_free, sb = NULL);
         }
 
-        err = obd_connect(&sbi->ll_mdc_conn, obd, sbi->ll_sb_uuid,
+        err = obd_connect(&sbi->ll_mdc_conn, obd, &sbi->ll_sb_uuid,
                           ptlrpc_recovd, ll_recover);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);
@@ -178,7 +182,7 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_mdc, sb = NULL);
         }
 
-        err = obd_connect(&sbi->ll_osc_conn, obd, sbi->ll_sb_uuid,
+        err = obd_connect(&sbi->ll_osc_conn, obd, &sbi->ll_sb_uuid,
                           ptlrpc_recovd, ll_recover);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", osc, err);
@@ -194,7 +198,7 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
         sbi->ll_rootino = rootfid.id;
 
         memset(&osfs, 0, sizeof(osfs));
-        err = mdc_statfs(&sbi->ll_mdc_conn, &osfs);
+        err = obd_statfs(&sbi->ll_mdc_conn, &osfs);
         sb->s_blocksize = osfs.os_bsize;
         sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
@@ -228,6 +232,7 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
 
         if (root) {
                 sb->s_root = d_alloc_root(root);
+                root->i_state &= ~(I_LOCK | I_NEW);
         } else {
                 CERROR("lustre_lite: bad iget4 for root\n");
                 GOTO(out_cdb, sb = NULL);
@@ -273,6 +278,7 @@ struct super_block * ll_get_sb(struct file_system_type *fs_type,
 static void ll_put_super(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
+        struct list_head *tmp, *next;
         struct ll_fid rootfid;
         ENTRY;
 
@@ -294,6 +300,14 @@ static void ll_put_super(struct super_block *sb)
         }
 
         obd_disconnect(&sbi->ll_mdc_conn);
+
+        spin_lock(&dcache_lock);
+        list_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list){
+                struct dentry *dentry = list_entry(tmp, struct dentry, d_hash);
+                shrink_dcache_parent(dentry);
+        }
+        spin_unlock(&dcache_lock);
+
         OBD_FREE(sbi, sizeof(*sbi));
 
         EXIT;
@@ -338,6 +352,7 @@ static void ll_clear_inode(struct inode *inode)
         EXIT;
 }
 
+#if 0
 static void ll_delete_inode(struct inode *inode)
 {
         ENTRY;
@@ -374,6 +389,7 @@ out:
         clear_inode(inode);
         EXIT;
 }
+#endif
 
 /* like inode_setattr, but doesn't mark the inode dirty */
 static int ll_attr2inode(struct inode * inode, struct iattr * attr, int trunc)
@@ -423,7 +439,8 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
          */
         attr->ia_valid &= ~ATTR_SIZE;
         if (attr->ia_valid) {
-                err = mdc_setattr(&sbi->ll_mdc_conn, inode, attr, &request);
+                err = mdc_setattr(&sbi->ll_mdc_conn, inode, attr, NULL, 0,
+                                  &request);
                 if (err)
                         CERROR("mdc_setattr fails: err = %d\n", err);
 
@@ -431,18 +448,18 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
                 if (S_ISREG(inode->i_mode) && attr->ia_valid & ATTR_MTIME_SET) {
                         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
                         struct obdo oa;
-                        int err;
+                        int err2;
 
                         CDEBUG(D_ERROR, "setting mtime on OST\n");
                         oa.o_id = lsm->lsm_object_id;
                         oa.o_mode = S_IFREG;
                         oa.o_valid = OBD_MD_FLID |OBD_MD_FLTYPE |OBD_MD_FLMTIME;
-                        oa.o_mtime = attr->ia_mtime;
-                        err = obd_setattr(&sbi->ll_osc_conn, &oa, lsm);
-                        if (err) {
+                        oa.o_mtime = attr->ia_mtime.tv_sec;
+                        err2 = obd_setattr(&sbi->ll_osc_conn, &oa, lsm, NULL);
+                        if (err2) {
                                 CERROR("obd_setattr fails: rc=%d\n", err);
-                                if (!rc)
-                                        rc = err;
+                                if (!err)
+                                        err = err2;
                         }
                 }
         }
@@ -519,11 +536,11 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
         if (body->valid & OBD_MD_FLID)
                 inode->i_ino = body->ino;
         if (body->valid & OBD_MD_FLATIME)
-                inode->i_atime = body->atime;
+                inode->i_atime.tv_sec = body->atime;
         if (body->valid & OBD_MD_FLMTIME)
-                inode->i_mtime = body->mtime;
+                inode->i_mtime.tv_sec = body->mtime;
         if (body->valid & OBD_MD_FLCTIME)
-                inode->i_ctime = body->ctime;
+                inode->i_ctime.tv_sec = body->ctime;
         if (body->valid & OBD_MD_FLMODE)
                 inode->i_mode = (inode->i_mode & S_IFMT)|(body->mode & ~S_IFMT);
         if (body->valid & OBD_MD_FLTYPE)
@@ -624,7 +641,7 @@ void ll_umount_begin(struct super_block *sb)
 
                 spin_lock(&conn->c_lock);
                 conn->c_flags |= CONN_INVALID;
-                invalidate_request_list(&conn->c_sending_head);
+                /*invalidate_request_list(&conn->c_sending_head);*/
                 invalidate_request_list(&conn->c_delayed_head);
                 spin_unlock(&conn->c_lock);
         }
@@ -687,17 +704,18 @@ struct super_operations ll_super_operations =
         alloc_inode: ll_alloc_inode,
         destroy_inode: ll_destroy_inode,
         clear_inode: ll_clear_inode,
-        delete_inode: ll_delete_inode,
+//        delete_inode: ll_delete_inode,
         put_super: ll_put_super,
         statfs: ll_statfs,
         umount_begin: ll_umount_begin
 };
 
+
 struct file_system_type lustre_lite_fs_type = {
         .owner  = THIS_MODULE,
         .name =   "lustre_lite",
         .get_sb = ll_get_sb,
-        .kill_sb = kill_litter_super,
+        .kill_sb = kill_anon_super,
 };
 
 static int __init init_lustre_lite(void)

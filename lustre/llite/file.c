@@ -91,8 +91,8 @@ static int ll_mdc_close(struct lustre_handle *mdc_conn, struct inode *inode,
         } else {
                 /* No transno means that we can just drop our ref. */
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
-                ptlrpc_req_finished(fd->fd_req);
         }
+        ptlrpc_req_finished(fd->fd_req);
 
         /* Do this after the fd_req->rq_transno check, because we don't want
          * to bounce off zero references. */
@@ -129,28 +129,19 @@ static int ll_file_release(struct inode *inode, struct file *file)
                 oa.o_id = lsm->lsm_object_id;
                 oa.o_mode = S_IFREG;
                 oa.o_valid = OBD_MD_FLTYPE | OBD_MD_FLID;
-                obd_handle2oa(&oa, &fd->fd_osthandle);
+
+                memcpy(&oa.o_inline, fd->fd_ostdata, FD_OSTDATA_SIZE);
+                oa.o_valid |= OBD_MD_FLHANDLE;
+
                 rc = obd_close(&sbi->ll_osc_conn, &oa, lsm, NULL);
                 if (rc)
                         CERROR("inode %lu object close failed: rc = %d\n",
                                inode->i_ino, rc);
         }
 
-        mdc_get_rpc_lock(&mdc_rpc_lock, NULL);
         rc2 = ll_mdc_close(&sbi->ll_mdc_conn, inode, file);
-        mdc_put_rpc_lock(&mdc_rpc_lock, NULL);
         if (rc2 && !rc)
                 rc = rc2;
-
-        if (atomic_dec_and_test(&lli->lli_open_count)) {
-                CDEBUG(D_INFO, "last close, cancelling unused locks\n");
-                rc2 = obd_cancel_unused(&sbi->ll_osc_conn, lsm, 0);
-                if (rc2 && !rc) {
-                        rc = rc2;
-                        CERROR("obd_cancel_unused: %d\n", rc);
-                }
-        } else
-                CDEBUG(D_INFO, "not last close, not cancelling unused locks\n");
 
         RETURN(rc);
 }
@@ -191,22 +182,23 @@ static int ll_osc_open(struct lustre_handle *conn, struct inode *inode,
                 RETURN(-ENOMEM);
         oa->o_id = lsm->lsm_object_id;
         oa->o_mode = S_IFREG;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
-                OBD_MD_FLBLOCKS | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
+        oa->o_valid = (OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
+                       OBD_MD_FLBLOCKS | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
         rc = obd_open(conn, oa, lsm, NULL);
         if (rc)
                 GOTO(out, rc);
 
         file->f_flags &= ~O_LOV_DELAY_CREATE;
-        obdo_to_inode(inode, oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                                OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        obdo_to_inode(inode, oa, (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                                  OBD_MD_FLMTIME | OBD_MD_FLCTIME));
 
-        obd_oa2handle(&fd->fd_osthandle, oa);
+        if (oa->o_valid |= OBD_MD_FLHANDLE)
+                memcpy(fd->fd_ostdata, obdo_handle(oa), FD_OSTDATA_SIZE);
 
-        atomic_inc(&ll_i2info(inode)->lli_open_count);
+        EXIT;
 out:
         obdo_free(oa);
-        RETURN(rc);
+        return rc;
 }
 
 /* Caller must hold lli_open_sem to protect lli->lli_smd from changing and
@@ -220,9 +212,9 @@ static int ll_create_obj(struct lustre_handle *conn, struct inode *inode,
         struct ptlrpc_request *req = NULL;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_mds_md *lmm = NULL;
-        int lmm_size = 0;
         struct obdo *oa;
-        int rc, err;
+        struct iattr iattr;
+        int rc, err, lmm_size = 0;;
         ENTRY;
 
         oa = obdo_alloc();
@@ -259,7 +251,9 @@ static int ll_create_obj(struct lustre_handle *conn, struct inode *inode,
         lmm_size = rc;
 
         /* Save the stripe MD with this file on the MDS */
-        rc = mdc_setattr(&ll_i2sbi(inode)->ll_mdc_conn, inode, NULL,
+        memset(&iattr, 0, sizeof(iattr));
+        iattr.ia_valid = ATTR_FROM_OPEN;
+        rc = mdc_setattr(&ll_i2sbi(inode)->ll_mdc_conn, inode, &iattr,
                          lmm, lmm_size, &req);
         ptlrpc_req_finished(req);
 
@@ -298,8 +292,8 @@ out_destroy:
  * lli_open_sem to ensure no other process will create objects, send the
  * stripe MD to the MDS, or try to destroy the objects if that fails.
  *
- * If we already have the stripe MD locally, we don't request it in
- * mdc_open() by passing a lmm_size = 0.
+ * If we already have the stripe MD locally then we don't request it in
+ * mdc_open(), by passing a lmm_size = 0.
  *
  * It is up to the application to ensure no other processes open this file
  * in the O_LOV_DELAY_CREATE case, or the default striping pattern will be
@@ -319,6 +313,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
         int rc = 0;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         LL_GET_INTENT(file->f_dentry, it);
         rc = ll_it_open_error(IT_OPEN_OPEN, it);
         if (rc)
@@ -411,8 +406,7 @@ int ll_size_unlock(struct inode *inode, struct lov_stripe_md *lsm, int mode,
  *     keeps an atomic flag in the inode which indicates whether the size
  *     has been updated (see bug 280).
  */
-int ll_file_size(struct inode *inode, struct lov_stripe_md *lsm,
-                 struct lustre_handle *handle)
+int ll_file_size(struct inode *inode, struct lov_stripe_md *lsm, char *ostdata)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct obdo oa;
@@ -427,12 +421,17 @@ int ll_file_size(struct inode *inode, struct lov_stripe_md *lsm,
         oa.o_mode = S_IFREG;
         oa.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE |
                 OBD_MD_FLBLOCKS | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
-        obd_handle2oa(&oa, handle);
+
+        if (ostdata != NULL) {
+                memcpy(&oa.o_inline, ostdata, FD_OSTDATA_SIZE);
+                oa.o_valid |= OBD_MD_FLHANDLE;
+        }
+
         rc = obd_getattr(&sbi->ll_osc_conn, &oa, lsm);
         if (!rc) {
                 obdo_to_inode(inode, &oa, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                         OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-                CDEBUG(D_INODE, "objid "LPX64" size %Lu/%Lu\n",
+                CDEBUG(D_INODE, "objid "LPX64" size %Lu/%Lx\n",
                        lsm->lsm_object_id, inode->i_size, inode->i_size);
         }
 
@@ -459,7 +458,11 @@ static void ll_update_atime(struct inode *inode)
 #ifdef USE_ATIME
         struct iattr attr;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         attr.ia_atime = CURRENT_TIME;
+#else
+        attr.ia_atime = CURRENT_TIME.tv_sec;
+#endif
         attr.ia_valid = ATTR_ATIME;
 
         if (inode->i_atime == attr.ia_atime) return;
@@ -481,6 +484,7 @@ int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
         struct lustre_handle lockh = { 0, 0 };
         int rc;
         ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
 
         if (inode == NULL)
                 LBUG();
@@ -519,11 +523,12 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         ssize_t retval;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK) &&
             !(sbi->ll_flags & LL_SBI_NOLCK)) {
                 struct ldlm_extent extent;
                 extent.start = *ppos;
-                extent.end = *ppos + count;
+                extent.end = *ppos + count - 1;
                 CDEBUG(D_INFO, "Locking inode %lu, start "LPU64" end "LPU64"\n",
                        inode->i_ino, extent.start, extent.end);
 
@@ -538,8 +543,8 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         }
 
         /* If we don't refresh the file size, generic_file_read may not even
-         * call us */
-        retval = ll_file_size(inode, lsm, &fd->fd_osthandle);
+         * call ll_readpage */
+        retval = ll_file_size(inode, lsm, fd->fd_ostdata);
         if (retval < 0) {
                 CERROR("ll_file_size: "LPSZ"\n", retval);
                 RETURN(retval);
@@ -580,13 +585,18 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         ssize_t retval;
         ENTRY;
 
+        /* POSIX, but surprised the VFS doesn't check this already */
+        if (count == 0)
+                return 0;
+
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         if (!S_ISBLK(inode->i_mode) && file->f_flags & O_APPEND) {
                 err = ll_size_lock(inode, lsm, 0, LCK_PW, &eof_lockh);
                 if (err)
                         RETURN(err);
 
                 /* Get size here so we know extent to enqueue write lock on. */
-                retval = ll_file_size(inode, lsm, &fd->fd_osthandle);
+                retval = ll_file_size(inode, lsm, fd->fd_ostdata);
                 if (retval)
                         GOTO(out_eof, retval);
 
@@ -597,7 +607,7 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
             !(sbi->ll_flags & LL_SBI_NOLCK)) {
                 struct ldlm_extent extent;
                 extent.start = *ppos;
-                extent.end = *ppos + count;
+                extent.end = *ppos + count - 1;
                 CDEBUG(D_INFO, "Locking inode %lu, start "LPU64" end "LPU64"\n",
                        inode->i_ino, extent.start, extent.end);
 
@@ -692,9 +702,12 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         struct lustre_handle *conn;
         int flags;
 
-        switch(cmd) {
-        case TCGETS:
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
+
+        if ((cmd & 0xffffff00) == ((int)'T') << 8) /* tty ioctls */
                 return -ENOTTY;
+
+        switch(cmd) {
         case LL_IOC_GETFLAGS:
                 /* Get the current value of the file flags */
                 return put_user(fd->fd_flags, (int *)arg);
@@ -739,12 +752,13 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         long long retval;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         switch (origin) {
         case 2: {
                 struct ll_inode_info *lli = ll_i2info(inode);
                 struct ll_file_data *fd = file->private_data;
 
-                retval = ll_file_size(inode, lli->lli_smd, &fd->fd_osthandle);
+                retval = ll_file_size(inode, lli->lli_smd, fd->fd_ostdata);
                 if (retval)
                         RETURN(retval);
 
@@ -760,8 +774,8 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
                         file->f_pos = offset;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                         file->f_reada = 0;
-#endif
                         file->f_version = ++event;
+#endif
                 }
                 retval = offset;
         }
@@ -781,6 +795,7 @@ int ll_inode_revalidate(struct dentry *dentry)
         struct lov_stripe_md *lsm;
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         if (!inode) {
                 CERROR("REPORT THIS LINE TO PETER\n");
                 RETURN(0);
@@ -814,6 +829,13 @@ int ll_inode_revalidate(struct dentry *dentry)
                 }
 
                 body = lustre_msg_buf(req->rq_repmsg, 0);
+
+                if (S_ISREG(inode->i_mode) &&
+                    body->valid & (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS)) {
+                        CERROR("MDS sent back size for regular file\n");
+                        body->valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
+                }
+
                 if (body->valid & OBD_MD_FLEASIZE)
                         ll_update_inode(inode, body,
                                         lustre_msg_buf(req->rq_repmsg, 1));
@@ -836,7 +858,26 @@ int ll_inode_revalidate(struct dentry *dentry)
 static int ll_getattr(struct vfsmount *mnt, struct dentry *de,
                       struct kstat *stat)
 {
-        return ll_inode_revalidate(de);
+        int res = 0;
+        struct inode *inode = de->d_inode;
+
+        res = ll_inode_revalidate(de);
+        if (res)
+                return res;
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        stat->dev = inode->i_dev;
+#endif
+        stat->ino = inode->i_ino;
+        stat->mode = inode->i_mode;
+        stat->nlink = inode->i_nlink;
+        stat->uid = inode->i_uid;
+        stat->gid = inode->i_gid;
+        stat->rdev = kdev_t_to_nr(inode->i_rdev);
+        stat->atime = inode->i_atime;
+        stat->mtime = inode->i_mtime;
+        stat->ctime = inode->i_ctime;
+        stat->size = inode->i_size;
+        return 0;
 }
 #endif
 
@@ -852,6 +893,7 @@ struct file_operations ll_file_operations = {
 };
 
 struct inode_operations ll_file_inode_operations = {
+        setattr_raw:    ll_setattr_raw,
         setattr:    ll_setattr,
         truncate:   ll_truncate,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
@@ -862,6 +904,7 @@ struct inode_operations ll_file_inode_operations = {
 };
 
 struct inode_operations ll_special_inode_operations = {
+        setattr_raw:    ll_setattr_raw,
         setattr:    ll_setattr,
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         getattr:    ll_getattr,

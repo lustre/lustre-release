@@ -23,18 +23,34 @@
 #define EXPORT_SYMTAB
 #define DEBUG_SUBSYSTEM S_RPC
 
-#include <linux/module.h>
+#ifdef __KERNEL__
+# include <linux/module.h>
+# include <linux/init.h>
+#else
+# include <liblustre.h>
+#endif
+#include <linux/obd.h>
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_ha.h>
 #include <linux/lustre_net.h>
-#include <linux/init.h>
 #include <linux/lprocfs_status.h>
 
 extern int ptlrpc_init_portals(void);
 extern void ptlrpc_exit_portals(void);
 
+static __u32 ptlrpc_last_xid = 0;
+static spinlock_t ptlrpc_last_xid_lock = SPIN_LOCK_UNLOCKED;
+
+__u32 ptlrpc_next_xid(void)
+{
+        __u32 tmp;
+        spin_lock(&ptlrpc_last_xid_lock);
+        tmp = ++ptlrpc_last_xid;
+        spin_unlock(&ptlrpc_last_xid_lock);
+        return tmp;
+}
 
 int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
@@ -96,7 +112,8 @@ int connmgr_iocontrol(unsigned int cmd, struct lustre_handle *hdl, int len,
                         LASSERT(conn->c_recovd_data.rd_recovd == recovd);
 
 #warning check buffer overflow in next line
-                        if (!strcmp(conn->c_remote_uuid.uuid, data->ioc_inlbuf1))
+                        if (!strcmp(conn->c_remote_uuid.uuid,
+                                    data->ioc_inlbuf1))
                                 break;
                         conn = NULL;
                 }
@@ -154,9 +171,11 @@ static int connmgr_connect(struct lustre_handle *conn, struct obd_device *src,
 int connmgr_attach(struct obd_device *dev, obd_count len, void *data)
 {
         struct lprocfs_static_vars lvars;
+        int rc = 0;
 
         lprocfs_init_vars(&lvars);
-        return lprocfs_obd_attach(dev, lvars.obd_vars);
+        rc = lprocfs_obd_attach(dev, lvars.obd_vars);
+        return rc;
 }
 
 int conmgr_detach(struct obd_device *dev)
@@ -176,7 +195,9 @@ static struct obd_ops recovd_obd_ops = {
         o_disconnect:   class_disconnect
 };
 
-static int __init ptlrpc_init(void)
+
+
+__init int ptlrpc_init(void)
 {
         struct lprocfs_static_vars lvars;
         int rc;
@@ -203,6 +224,9 @@ static void __exit ptlrpc_exit(void)
         ptlrpc_exit_portals();
         ptlrpc_cleanup_connection();
 }
+
+/* rpc.c */
+EXPORT_SYMBOL(ptlrpc_next_xid);
 
 /* recovd.c */
 EXPORT_SYMBOL(ptlrpc_recovd);
@@ -234,6 +258,7 @@ EXPORT_SYMBOL(ptlrpc_link_svc_me);
 EXPORT_SYMBOL(obd_brw_set_free);
 EXPORT_SYMBOL(obd_brw_set_new);
 EXPORT_SYMBOL(obd_brw_set_add);
+EXPORT_SYMBOL(obd_brw_set_del);
 
 /* client.c */
 EXPORT_SYMBOL(ptlrpc_init_client);
@@ -246,6 +271,7 @@ EXPORT_SYMBOL(ptlrpc_replay_req);
 EXPORT_SYMBOL(ptlrpc_restart_req);
 EXPORT_SYMBOL(ptlrpc_prep_req);
 EXPORT_SYMBOL(ptlrpc_free_req);
+EXPORT_SYMBOL(ptlrpc_abort);
 EXPORT_SYMBOL(ptlrpc_req_finished);
 EXPORT_SYMBOL(ptlrpc_request_addref);
 EXPORT_SYMBOL(ptlrpc_prep_bulk);
@@ -275,9 +301,11 @@ EXPORT_SYMBOL(ptlrpc_replay);
 EXPORT_SYMBOL(ptlrpc_resend);
 EXPORT_SYMBOL(ptlrpc_wake_delayed);
 
+#ifdef __KERNEL__
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Request Processor");
 MODULE_LICENSE("GPL");
 
 module_init(ptlrpc_init);
 module_exit(ptlrpc_exit);
+#endif

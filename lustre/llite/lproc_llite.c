@@ -21,6 +21,10 @@
  */
 #define DEBUG_SUBSYSTEM S_LLITE
 
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#include <asm/statfs.h>
+#endif
 #include <linux/lustre_lite.h>
 #include <linux/lprocfs_status.h>
 
@@ -34,20 +38,27 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
 }
 #else
 
-long long mnt_instance;
-
-static inline int lprocfs_llite_statfs(void *data, struct statfs *sfs)
-{
-        struct super_block *sb = (struct super_block*)data;
-        return (sb->s_op->statfs)(sb, sfs);
+#define LPROC_LLITE_STAT_FCT(fct_name, get_statfs_fct)                    \
+int fct_name(char *page, char **start, off_t off,                         \
+             int count, int *eof, void *data)                             \
+{                                                                         \
+        struct statfs sfs;                                                \
+        int rc;                                                           \
+        LASSERT(data != NULL);                                            \
+        rc = get_statfs_fct((struct super_block*)data, &sfs);             \
+        return (rc==0                                                     \
+                ? lprocfs_##fct_name (page, start, off, count, eof, &sfs) \
+                : rc);                                                    \
 }
 
-DEFINE_LPROCFS_STATFS_FCT(rd_blksize,     lprocfs_llite_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_kbytestotal, lprocfs_llite_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_kbytesfree,  lprocfs_llite_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_filestotal,  lprocfs_llite_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_filesfree,   lprocfs_llite_statfs);
-DEFINE_LPROCFS_STATFS_FCT(rd_filegroups,  lprocfs_llite_statfs);
+long long mnt_instance;
+
+LPROC_LLITE_STAT_FCT(rd_blksize,     vfs_statfs);
+LPROC_LLITE_STAT_FCT(rd_kbytestotal, vfs_statfs);
+LPROC_LLITE_STAT_FCT(rd_kbytesfree,  vfs_statfs);
+LPROC_LLITE_STAT_FCT(rd_filestotal,  vfs_statfs);
+LPROC_LLITE_STAT_FCT(rd_filesfree,   vfs_statfs);
+LPROC_LLITE_STAT_FCT(rd_filegroups,  vfs_statfs);
 
 int rd_path(char *page, char **start, off_t off, int count, int *eof,
             void *data)
@@ -60,6 +71,7 @@ int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
 {
         struct super_block *sb = (struct super_block*)data;
 
+        LASSERT(sb != NULL);
         *eof = 1;
         return snprintf(page, count, "%s\n", sb->s_type->name);
 }
@@ -69,6 +81,7 @@ int rd_sb_uuid(char *page, char **start, off_t off, int count, int *eof,
 {
         struct super_block *sb = (struct super_block *)data;
 
+        LASSERT(sb != NULL);
         *eof = 1;
         return snprintf(page, count, "%s\n", ll_s2sbi(sb)->ll_sb_uuid.uuid);
 }
@@ -103,14 +116,20 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         name[MAX_STRING_SIZE] = '\0';
         lvars[0].name = name;
 
+        LASSERT(sbi != NULL);
+        LASSERT(mdc != NULL);
+        LASSERT(osc != NULL);
+
         /* Mount info */
         snprintf(name, MAX_STRING_SIZE, "fs%llu", mnt_instance);
 
         mnt_instance++;
         sbi->ll_proc_root = lprocfs_register(name, parent, NULL, NULL);
-        if (IS_ERR(sbi->ll_proc_root))
-                RETURN(err = PTR_ERR(sbi->ll_proc_root));
-
+        if (IS_ERR(sbi->ll_proc_root)) {
+                err = PTR_ERR(sbi->ll_proc_root);
+                sbi->ll_proc_root = NULL;
+                RETURN(err);
+        }
         /* Static configuration info */
         err = lprocfs_add_vars(sbi->ll_proc_root, lprocfs_obd_vars, sb);
         if (err)
@@ -119,6 +138,11 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         /* MDC info */
         strncpy(uuid.uuid, mdc, sizeof(uuid.uuid));
         obd = class_uuid2obd(&uuid);
+
+        LASSERT(obd != NULL);
+        LASSERT(obd->obd_type != NULL);
+        LASSERT(obd->obd_type->typ_name != NULL);
+
         snprintf(name, MAX_STRING_SIZE, "%s/common_name",
                  obd->obd_type->typ_name);
         lvars[0].read_fptr = lprocfs_rd_name;
@@ -135,6 +159,10 @@ int lprocfs_register_mountpoint(struct proc_dir_entry *parent,
         /* OSC */
         strncpy(uuid.uuid, osc, sizeof(uuid.uuid));
         obd = class_uuid2obd(&uuid);
+
+        LASSERT(obd != NULL);
+        LASSERT(obd->obd_type != NULL);
+        LASSERT(obd->obd_type->typ_name != NULL);
 
         snprintf(name, MAX_STRING_SIZE, "%s/common_name",
                  obd->obd_type->typ_name);

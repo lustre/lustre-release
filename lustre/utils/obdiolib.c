@@ -30,6 +30,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
+#include <liblustre.h>
 #include "obdiolib.h"
 
 void

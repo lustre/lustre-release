@@ -26,6 +26,7 @@
 
 #include <stdlib.h>
 #include <stdio.h>
+#include <portals/api-support.h>
 #include <portals/ptlctl.h>
 #include "obdctl.h"
 #include "parser.h"
@@ -58,6 +59,7 @@ command_t cmdlist[] = {
         {"ignore_errors", jt_opt_ignore_errors, 0,
          "ignore errors that occur during script processing\n"
          "ignore_errors"},
+        {"dump", jt_ioc_dump, 0, "usage: dump file, save ioctl buffer to file"},
 
         /* Network configuration commands */
         {"==== network config ====", jt_noop, 0, "network config"},
@@ -71,11 +73,11 @@ command_t cmdlist[] = {
          "The nid defaults to hostname for tcp networks and is automatically "
          "setup for elan/myrinet networks.\n"
          "usage: mynid [nid]"},
-        {"add_uuid", jt_ptl_add_uuid, 0, "associate a UUID with a nid\n"
-         "usage: add_uuid <uuid> <nid>"},
-        {"close_uuid", jt_ptl_close_uuid, 0, "disconnect a UUID\n"
+        {"add_uuid", jt_obd_add_uuid, 0, "associate a UUID with a nid\n"
+         "usage: add_uuid <uuid> <nid> <net_type>"},
+        {"close_uuid", jt_obd_close_uuid, 0, "disconnect a UUID\n"
          "usage: close_uuid <uuid>)"},
-        {"del_uuid", jt_ptl_del_uuid, 0, "delete a UUID association\n"
+        {"del_uuid", jt_obd_del_uuid, 0, "delete a UUID association\n"
          "usage: del_uuid <uuid>"},
         {"add_route", jt_ptl_add_route, 0,
          "add an entry to the routing table\n"
@@ -152,7 +154,7 @@ command_t cmdlist[] = {
         {"setattr", jt_obd_setattr, 0,
          "set mode attribute for OST object <objid>\n"
          "usage: setattr <objid> <mode>"},
-        {"create", jt_obd_create, 0,
+         {"create", jt_obd_create, 0,
          "create <num> OST objects (with <mode>)\n"
          "usage: create [num [mode [verbose]]]"},
         {"destroy", jt_obd_destroy, 0,

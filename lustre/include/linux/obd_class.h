@@ -34,15 +34,18 @@
 #include <linux/types.h>
 #include <linux/fs.h>
 #include <linux/time.h>
+#endif 
 
 #include <linux/obd_support.h>
+#include <linux/lustre_import.h>
+#include <linux/lustre_net.h>
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
 #include <linux/lprocfs_status.h>
-#endif
+
 
 /* OBD Device Declarations */
 #define MAX_OBD_DEVICES 128
@@ -56,8 +59,9 @@ extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 #define OBD_NO_TRANSNO     0x20 /* XXX needs better name */
 
 /* OBD Operations Declarations */
+extern struct obd_device *class_conn2obd(struct lustre_handle *);
+extern struct obd_export *class_conn2export(struct lustre_handle *);
 
-#ifdef __KERNEL__
 static inline int obd_check_conn(struct lustre_handle *conn)
 {
         struct obd_device *obd;
@@ -65,6 +69,7 @@ static inline int obd_check_conn(struct lustre_handle *conn)
                 CERROR("NULL conn\n");
                 RETURN(-ENOTCONN);
         }
+
         obd = class_conn2obd(conn);
         if (!obd) {
                 CERROR("NULL obd\n");
@@ -408,6 +413,19 @@ static inline int obd_statfs(struct lustre_handle *conn,struct obd_statfs *osfs)
         RETURN(rc);
 }
 
+static inline int obd_syncfs(struct lustre_handle *conn)
+{
+        struct obd_export *exp;
+        int rc;
+        ENTRY;
+
+        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_OP(exp->exp_obd, syncfs);
+
+        rc = OBP(exp->exp_obd, syncfs)(conn);
+        RETURN(rc);
+}
+
 static inline int obd_punch(struct lustre_handle *conn, struct obdo *oa,
                             struct lov_stripe_md *ea, obd_size start,
                             obd_size end, struct obd_trans_info *oti)
@@ -542,7 +560,21 @@ static inline int obd_cancel_unused(struct lustre_handle *conn,
         RETURN(rc);
 }
 
-#endif
+static inline int obd_san_preprw(int cmd, struct lustre_handle *conn,
+                                 int objcount, struct obd_ioobj *obj,
+                                 int niocount, struct niobuf_remote *remote)
+{
+        struct obd_export *exp;
+        int rc;
+
+        OBD_CHECK_SETUP(conn, exp);
+        OBD_CHECK_OP(exp->exp_obd, preprw);
+
+        rc = OBP(exp->exp_obd, san_preprw)(cmd, conn, objcount, obj,
+                                           niocount, remote);
+        RETURN(rc);
+}
+
 
 /* OBD Metadata Support */
 
@@ -554,24 +586,6 @@ static inline struct lustre_handle *obdo_handle(struct obdo *oa)
         return (struct lustre_handle *)&oa->o_inline;
 }
 
-static inline void obd_oa2handle(struct lustre_handle *handle, struct obdo *oa)
-{
-        if (oa->o_valid |= OBD_MD_FLHANDLE) {
-                struct lustre_handle *oa_handle = obdo_handle(oa);
-                memcpy(handle, oa_handle, sizeof(*handle));
-        }
-}
-
-static inline void obd_handle2oa(struct obdo *oa, struct lustre_handle *handle)
-{
-        if (handle && handle->addr) {
-                struct lustre_handle *oa_handle = obdo_handle(oa);
-                memcpy(oa_handle, handle, sizeof(*handle));
-                oa->o_valid |= OBD_MD_FLHANDLE;
-        }
-}
-
-#ifdef __KERNEL__
 /* support routines */
 extern kmem_cache_t *obdo_cachep;
 static inline struct obdo *obdo_alloc(void)
@@ -593,10 +607,12 @@ static inline void obdo_free(struct obdo *oa)
         kmem_cache_free(obdo_cachep, oa);
 }
 
+#ifdef __KERNEL__
 static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
 {
         unsigned int ia_valid = attr->ia_valid;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (ia_valid & ATTR_ATIME) {
                 oa->o_atime = attr->ia_atime;
                 oa->o_valid |= OBD_MD_FLATIME;
@@ -609,6 +625,21 @@ static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
                 oa->o_ctime = attr->ia_ctime;
                 oa->o_valid |= OBD_MD_FLCTIME;
         }
+#else
+        if (ia_valid & ATTR_ATIME) {
+                oa->o_atime = attr->ia_atime.tv_sec;
+                oa->o_valid |= OBD_MD_FLATIME;
+        }
+        if (ia_valid & ATTR_MTIME) {
+                oa->o_mtime = attr->ia_mtime.tv_sec;
+                oa->o_valid |= OBD_MD_FLMTIME;
+        }
+        if (ia_valid & ATTR_CTIME) {
+                oa->o_ctime = attr->ia_ctime.tv_sec;
+                oa->o_valid |= OBD_MD_FLCTIME;
+        }
+#endif
+
         if (ia_valid & ATTR_SIZE) {
                 oa->o_size = attr->ia_size;
                 oa->o_valid |= OBD_MD_FLSIZE;
@@ -634,6 +665,7 @@ static inline void iattr_from_obdo(struct iattr *attr, struct obdo *oa,
                                    obd_flag valid)
 {
         memset(attr, 0, sizeof(*attr));
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (valid & OBD_MD_FLATIME) {
                 attr->ia_atime = oa->o_atime;
                 attr->ia_valid |= ATTR_ATIME;
@@ -646,6 +678,20 @@ static inline void iattr_from_obdo(struct iattr *attr, struct obdo *oa,
                 attr->ia_ctime = oa->o_ctime;
                 attr->ia_valid |= ATTR_CTIME;
         }
+#else
+        if (valid & OBD_MD_FLATIME) {
+                attr->ia_atime.tv_sec = oa->o_atime;
+                attr->ia_valid |= ATTR_ATIME;
+        }
+        if (valid & OBD_MD_FLMTIME) {
+                attr->ia_mtime.tv_sec = oa->o_mtime;
+                attr->ia_valid |= ATTR_MTIME;
+        }
+        if (valid & OBD_MD_FLCTIME) {
+                attr->ia_ctime.tv_sec = oa->o_ctime;
+                attr->ia_valid |= ATTR_CTIME;
+        }
+#endif
         if (valid & OBD_MD_FLSIZE) {
                 attr->ia_size = oa->o_size;
                 attr->ia_valid |= ATTR_SIZE;
@@ -683,12 +729,21 @@ static inline void iattr_from_obdo(struct iattr *attr, struct obdo *oa,
 static inline void obdo_from_inode(struct obdo *dst, struct inode *src,
                                    obd_flag valid)
 {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (valid & OBD_MD_FLATIME)
                 dst->o_atime = src->i_atime;
         if (valid & OBD_MD_FLMTIME)
                 dst->o_mtime = src->i_mtime;
         if (valid & OBD_MD_FLCTIME)
                 dst->o_ctime = src->i_ctime;
+#else
+        if (valid & OBD_MD_FLATIME)
+                dst->o_atime = src->i_atime.tv_sec;
+        if (valid & OBD_MD_FLMTIME)
+                dst->o_mtime = src->i_mtime.tv_sec;
+        if (valid & OBD_MD_FLCTIME)
+                dst->o_ctime = src->i_ctime.tv_sec;
+#endif
         if (valid & OBD_MD_FLSIZE)
                 dst->o_size = src->i_size;
         if (valid & OBD_MD_FLBLOCKS)   /* allocation of space */
@@ -720,12 +775,21 @@ static inline void obdo_to_inode(struct inode *dst, struct obdo *src,
 {
         valid &= src->o_valid;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (valid & OBD_MD_FLATIME)
                 dst->i_atime = src->o_atime;
         if (valid & OBD_MD_FLMTIME)
                 dst->i_mtime = src->o_mtime;
         if (valid & OBD_MD_FLCTIME && src->o_ctime > dst->i_ctime)
                 dst->i_ctime = src->o_ctime;
+#else
+        if (valid & OBD_MD_FLATIME)
+                dst->i_atime.tv_sec = src->o_atime;
+        if (valid & OBD_MD_FLMTIME)
+                dst->i_mtime.tv_sec = src->o_mtime;
+        if (valid & OBD_MD_FLCTIME && src->o_ctime > dst->i_ctime.tv_sec)
+                dst->i_ctime.tv_sec = src->o_ctime;
+#endif
         if (valid & OBD_MD_FLSIZE)
                 dst->i_size = src->o_size;
         if (valid & OBD_MD_FLBLOCKS) /* allocation of space */
@@ -841,7 +905,6 @@ static inline int obdo_cmp_md(struct obdo *dst, struct obdo *src,
 }
 
 
-#ifdef __KERNEL__
 /* I'm as embarrassed about this as you are.
  *
  * <shaver> // XXX do not look into _superhack with remaining eye
@@ -895,7 +958,6 @@ struct obd_class_user_conn {
         struct lustre_handle   ocuc_conn;
 };
 
-#endif
 
 /* sysctl.c */
 extern void obd_sysctl_init (void);
@@ -905,4 +967,12 @@ extern void obd_sysctl_clean (void);
 typedef __u8 class_uuid_t[16];
 //int class_uuid_parse(struct obd_uuid in, class_uuid_t out);
 void class_uuid_unparse(class_uuid_t in, struct obd_uuid *out);
+
+/* lustre_peer.c    */
+int lustre_uuid_to_peer(char *uuid, struct lustre_peer *peer);
+int class_add_uuid(char *uuid, __u64 nid, __u32 nal);
+int class_del_uuid (char *uuid);
+void class_init_uuidlist(void);
+void class_exit_uuidlist(void);
+
 #endif /* __LINUX_OBD_CLASS_H */

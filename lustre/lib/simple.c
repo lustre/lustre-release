@@ -55,10 +55,14 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
         OBD_SET_CTXT_MAGIC(save);
 
         /*
-        CDEBUG(D_INFO, "== push %p->%p == cur fs %p pwd %p (%*s), pwdmnt %p\n",
+        CDEBUG(D_INFO,
+               "= push %p->%p = cur fs %p pwd %p:d%d:i%d (%*s), pwdmnt %p:%d\n",
                save, current, current->fs, current->fs->pwd,
+               atomic_read(&current->fs->pwd->d_count),
+               atomic_read(&current->fs->pwd->d_inode->i_count),
                current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
-               current->fs->pwdmnt);
+               current->fs->pwdmnt,
+               atomic_read(&current->fs->pwdmnt->mnt_count));
         */
 
         save->fs = get_fs();
@@ -80,17 +84,23 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
                 current->fsuid = uc->ouc_fsuid;
                 current->fsgid = uc->ouc_fsgid;
                 current->cap_effective = uc->ouc_cap;
-                if (uc->ouc_suppgid != -1)
-                        current->groups[current->ngroups++] = uc->ouc_suppgid;
+                if (uc->ouc_suppgid1 != -1)
+                        current->groups[current->ngroups++] = uc->ouc_suppgid1;
+                if (uc->ouc_suppgid2 != -1)
+                        current->groups[current->ngroups++] = uc->ouc_suppgid2;
         }
         set_fs(new_ctx->fs);
         set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
 
         /*
-        CDEBUG(D_INFO, "== push %p==%p == cur fs %p pwd %p (%*s), pwdmnt %p\n",
+        CDEBUG(D_INFO,
+               "= push %p->%p = cur fs %p pwd %p:d%d:i%d (%*s), pwdmnt %p:%d\n",
                new_ctx, current, current->fs, current->fs->pwd,
+               atomic_read(&current->fs->pwd->d_count),
+               atomic_read(&current->fs->pwd->d_inode->i_count),
                current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
-               current->fs->pwdmnt);
+               current->fs->pwdmnt,
+               atomic_read(&current->fs->pwdmnt->mnt_count));
         */
 }
 
@@ -103,39 +113,44 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
         ASSERT_KERNEL_CTXT("popping non-kernel context!\n");
 
         /*
-        CDEBUG(D_INFO, " == pop  %p==%p == cur %p pwd %p (%*s), pwdmnt %p\n",
+        CDEBUG(D_INFO,
+               " = pop  %p==%p = cur %p pwd %p:d%d:i%d (%*s), pwdmnt %p:%d\n",
                new_ctx, current, current->fs, current->fs->pwd,
+               atomic_read(&current->fs->pwd->d_count),
+               atomic_read(&current->fs->pwd->d_inode->i_count),
                current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
-               current->fs->pwdmnt);
+               current->fs->pwdmnt,
+               atomic_read(&current->fs->pwdmnt->mnt_count));
         */
 
         LASSERT(current->fs->pwd == new_ctx->pwd);
         LASSERT(current->fs->pwdmnt == new_ctx->pwdmnt);
 
-        //printk("pc2");
         set_fs(saved->fs);
-        //printk("pc3\n");
         set_fs_pwd(current->fs, saved->pwdmnt, saved->pwd);
-        //printk("pc4");
 
         dput(saved->pwd);
-        //printk("pc5");
         mntput(saved->pwdmnt);
-        //printk("pc6\n");
         if (uc) {
                 current->fsuid = saved->fsuid;
                 current->fsgid = saved->fsgid;
                 current->cap_effective = saved->cap;
 
-                if (uc->ouc_suppgid != -1)
+                if (uc->ouc_suppgid1 != -1)
+                        current->ngroups--;
+                if (uc->ouc_suppgid2 != -1)
                         current->ngroups--;
         }
 
         /*
-        CDEBUG(D_INFO, "== pop  %p->%p == cur fs %p pwd %p (%*s), pwdmnt %p\n",
+        CDEBUG(D_INFO,
+               "= pop  %p->%p = cur fs %p pwd %p:d%d:i%d (%*s), pwdmnt %p:%d\n",
                saved, current, current->fs, current->fs->pwd,
+               atomic_read(&current->fs->pwd->d_count),
+               atomic_read(&current->fs->pwd->d_inode->i_count),
                current->fs->pwd->d_name.len, current->fs->pwd->d_name.name,
-               current->fs->pwdmnt);
+               current->fs->pwdmnt,
+               atomic_read(&current->fs->pwdmnt->mnt_count));
         */
 }
 

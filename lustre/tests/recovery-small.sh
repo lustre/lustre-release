@@ -10,9 +10,9 @@ PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
 PDSH='pdsh -S -w'
 
 # XXX I wish all this stuff was in some default-config.sh somewhere
-MDSNODE=${MDSNODE:-dev2}
-OSTNODE=${OSTNODE:-dev3}
-CLIENT=${CLIENTNODE:-dev4}
+MDSNODE=${MDSNODE:-mdev6}
+OSTNODE=${OSTNODE:-mdev7}
+CLIENT=${CLIENTNODE:-mdev8}
 NETWORKTYPE=${NETWORKTYPE:-tcp}
 MOUNTPT=${MOUNTPT:-/mnt/lustre}
 CONFIG=recovery-small.xml
@@ -85,31 +85,28 @@ unmount_client() {
 
 setup() {
     make_config
-    start_mds --reformat
-    start_ost --reformat
+    start_mds ${REFORMAT:---reformat}
+    start_ost ${REFORMAT:---reformat}
     # XXX we should write our own upcall, when we move this somewhere better.
-    mount_client --timeout=10 \
+    mount_client --timeout=${TIMEOUT:-5} \
         --recovery_upcall=$PWD/../../ltest/functional/llite/09/client-upcall.sh
 }
 
 cleanup() {
-    unmount_client || true
-    shutdown_mds || true
-    shutdown_ost || true
+    do_mds "echo 0 > /proc/sys/lustre/fail_loc"
+    unmount_client $@ || true
+    shutdown_mds $@ || true
+    shutdown_ost $@ || true
 }
 
 replay() {
-    if [ $# -gt 1 ]; then
-        do_client "$1"
-        shift
-    fi
     do_mds "sync"
     do_mds 'echo -e "device \$mds1\\nprobe\\nnotransno\\nreadonly" | lctl'
     do_client "$1" &
     shutdown_mds -f
     start_mds
     wait
-    do_client "ls $MOUNPT" # trigger failover, if we haven't already
+    do_client "df -h $MOUNTPT" # trigger failover, if we haven't already
 }
 
 if [ ! -z "$ONLY" ]; then
@@ -120,5 +117,28 @@ fi
 setup
 drop_request "mcreate /mnt/lustre/1"
 drop_reply "mcreate /mnt/lustre/2"
-replay "mcreate /mnt/lustre/3"
+# replay "mcreate /mnt/lustre/3"
+
+drop_request "tchmod 111 /mnt/lustre/2"
+drop_reply "tchmod 666 /mnt/lustre/2"
+# replay "tchmod 444 /mnt/lustre/2"
+
+drop_request "statone /mnt/lustre/2"
+drop_reply "statone /mnt/lustre/2"
+# replay "statone /mnt/lustre/2"
+
+do_client "cp /etc/resolv.conf /mnt/lustre/resolv.conf"
+drop_request "cat /mnt/lustre/resolv.conf > /dev/null"
+drop_reply "cat /mnt/lustre/resolv.conf > /dev/null"
+
+drop_request "mv /mnt/lustre/resolv.conf /mnt/lustre/renamed"
+drop_reply "mv /mnt/lustre/renamed /mnt/lustre/renamed-again"
+
+drop_request "mlink /mnt/lustre/renamed-again /mnt/lustre/link1"
+drop_reply "mlink /mnt/lustre/renamed-again /mnt/lustre/link2"
+
+drop_request "munlink /mnt/lustre/link1"
+drop_reply "munlink /mnt/lustre/link2"
+
+
 cleanup

@@ -21,10 +21,13 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-
+#ifdef __KERNEL__
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
+#else
+#include <liblustre.h>
+#endif
 
 static spinlock_t conn_lock;
 static struct list_head conn_list;
@@ -32,32 +35,34 @@ static struct list_head conn_unused_list;
 
 /* If UUID is NULL, c->c_remote_uuid must be all zeroes
  * If UUID is non-NULL, c->c_remote_uuid must match. */
-static int match_connection_uuid(struct ptlrpc_connection *c, struct obd_uuid *uuid)
+static int match_connection_uuid(struct ptlrpc_connection *c,
+                                 struct obd_uuid *uuid)
 {
         struct obd_uuid zero_uuid;
         memset(&zero_uuid, 0, sizeof(zero_uuid));
 
         if (uuid)
-                return memcmp(c->c_remote_uuid.uuid, uuid->uuid, 
+                return memcmp(c->c_remote_uuid.uuid, uuid->uuid,
                               sizeof(uuid->uuid));
 
         return memcmp(c->c_remote_uuid.uuid, &zero_uuid, sizeof(zero_uuid));
 }
 
-struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
+struct ptlrpc_connection *ptlrpc_get_connection(struct ptlrpc_peer *peer,
                                                 struct obd_uuid *uuid)
 {
         struct list_head *tmp, *pos;
         struct ptlrpc_connection *c;
         ENTRY;
 
-        CDEBUG(D_INFO, "peer is %08x %08lx %08lx\n",
-               peer->peer_nid, peer->peer_ni.nal_idx, peer->peer_ni.handle_idx);
+        CDEBUG(D_INFO, "peer is "LPX64" on %s\n",
+               peer->peer_nid, peer->peer_ni->pni_name);
 
         spin_lock(&conn_lock);
         list_for_each(tmp, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
+                if (peer->peer_nid == c->c_peer.peer_nid &&
+                    peer->peer_ni == c->c_peer.peer_ni &&
                     !match_connection_uuid(c, uuid)) {
                         ptlrpc_connection_addref(c);
                         GOTO(out, c);
@@ -66,7 +71,8 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
 
         list_for_each_safe(tmp, pos, &conn_unused_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                if (memcmp(peer, &c->c_peer, sizeof(*peer)) == 0 &&
+                if (peer->peer_nid == c->c_peer.peer_nid &&
+                    peer->peer_ni == c->c_peer.peer_ni &&
                     !match_connection_uuid(c, uuid)) {
                         ptlrpc_connection_addref(c);
                         list_del(&c->c_link);
@@ -93,10 +99,11 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer,
         INIT_LIST_HEAD(&c->c_recovd_data.rd_managed_chain);
         INIT_LIST_HEAD(&c->c_delayed_head);
         atomic_set(&c->c_refcount, 0);
-        ptlrpc_connection_addref(c);
+        memcpy(&c->c_peer, peer, sizeof(c->c_peer));
         spin_lock_init(&c->c_lock);
 
-        memcpy(&c->c_peer, peer, sizeof(c->c_peer));
+        ptlrpc_connection_addref(c);
+
         list_add(&c->c_link, &conn_list);
 
         EXIT;
@@ -115,8 +122,10 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
                 RETURN(0);
         }
 
-        CDEBUG(D_INFO, "connection=%p refcount %d\n",
-               c, atomic_read(&c->c_refcount) - 1);
+        CDEBUG (D_INFO, "connection=%p refcount %d to "LPX64" on %s\n",
+                c, atomic_read(&c->c_refcount), c->c_peer.peer_nid,
+                c->c_peer.peer_ni->pni_name);
+
         if (atomic_dec_and_test(&c->c_refcount)) {
                 recovd_conn_unmanage(c);
                 spin_lock(&conn_lock);
@@ -135,9 +144,10 @@ int ptlrpc_put_connection(struct ptlrpc_connection *c)
 struct ptlrpc_connection *ptlrpc_connection_addref(struct ptlrpc_connection *c)
 {
         ENTRY;
-        CDEBUG(D_INFO, "connection=%p refcount %d\n",
-               c, atomic_read(&c->c_refcount) + 1);
         atomic_inc(&c->c_refcount);
+        CDEBUG (D_INFO, "connection=%p refcount %d to "LPX64" on %s\n",
+                c, atomic_read(&c->c_refcount), c->c_peer.peer_nid,
+                c->c_peer.peer_ni->pni_name);
         RETURN(c);
 }
 
@@ -161,9 +171,9 @@ void ptlrpc_cleanup_connection(void)
         }
         list_for_each_safe(tmp, pos, &conn_list) {
                 c = list_entry(tmp, struct ptlrpc_connection, c_link);
-                CERROR("Connection %p/%s has refcount %d (nid=%lu)\n",
+                CERROR("Connection %p/%s has refcount %d (nid="LPX64" on %s)\n",
                        c, c->c_remote_uuid.uuid, atomic_read(&c->c_refcount),
-                       (unsigned long)c->c_peer.peer_nid);
+                       c->c_peer.peer_nid, c->c_peer.peer_ni->pni_name);
                 list_del(&c->c_link);
                 OBD_FREE(c, sizeof(*c));
         }

@@ -1,17 +1,17 @@
 #!/bin/sh
 [ -z "$SIZE" ] && SIZE=5g
-[ -z "$LOOPS" ] && LOOPS=9999
+[ -z "$COUNT" ] && COUNT=100
 [ -z "$VERIFY" ] && VERIFY="-+d"
 [ -z "$ODIR" ] && ODIR="-I"
 [ -z "$REC" ] && REC=64
 [ -z "$FILE" ] && FILE=/mnt/lustre/iozone.$$
 [ $1 ] && SIZE=$1
-COUNT=0
+LOOP=0
 rm -f endiozone
 echo 0 > /proc/sys/portals/debug
 while date; do
-	echo "Test #$COUNT"
+	LOOP=`expr $LOOP + 1`
+	echo "Test #$LOOP"
 	iozone $VERIFY $ODIR -r $REC -i 0 -i 1 -f $FILE -s $SIZE 2>&1 || exit $?
-	COUNT=`expr $COUNT + 1`
-	[ -f endiozone -o $COUNT -ge $LOOPS ] && rm -f endiozone && exit 0
+	[ -f endiozone -o $LOOP -ge $COUNT ] && rm -f endiozone && exit 0
 done | tee /tmp/iozone.log

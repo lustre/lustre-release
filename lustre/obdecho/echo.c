@@ -63,6 +63,7 @@ struct xprocfs_io_stat {
         __u64    st_create_reqs;
         __u64    st_destroy_reqs;
         __u64    st_statfs_reqs;
+        __u64    st_sync_reqs;
         __u64    st_open_reqs;
         __u64    st_close_reqs;
         __u64    st_punch_reqs;
@@ -87,7 +88,7 @@ xprocfs_sum_##field (void)                              \
                 stat += xprocfs_iostats[i].field;       \
         return (stat);                                  \
 }
-
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 DECLARE_XPROCFS_SUM_STAT (st_read_bytes)
 DECLARE_XPROCFS_SUM_STAT (st_read_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_write_bytes)
@@ -97,9 +98,11 @@ DECLARE_XPROCFS_SUM_STAT (st_setattr_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_create_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_destroy_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_statfs_reqs)
+DECLARE_XPROCFS_SUM_STAT (st_sync_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_open_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_close_reqs)
 DECLARE_XPROCFS_SUM_STAT (st_punch_reqs)
+#endif
 
 static int
 xprocfs_rd_stat (char *page, char **start, off_t off, int count,
@@ -107,7 +110,7 @@ xprocfs_rd_stat (char *page, char **start, off_t off, int count,
 {
         long long (*fn)(void) = (long long(*)(void))data;
         int         len;
-        
+
         *eof = 1;
         if (off != 0)
                 return (0);
@@ -116,7 +119,7 @@ xprocfs_rd_stat (char *page, char **start, off_t off, int count,
         *start = page;
         return (len);
 }
-        
+
 
 static void
 xprocfs_add_stat(char *name, long long (*fn)(void))
@@ -138,7 +141,7 @@ static void
 xprocfs_init (char *name)
 {
         char  dirname[64];
-        
+
         snprintf (dirname, sizeof (dirname), "sys/%s", name);
 
         xprocfs_dir = proc_mkdir (dirname, NULL);
@@ -147,6 +150,7 @@ xprocfs_init (char *name)
                 return;
         }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         xprocfs_add_stat ("read_bytes",   xprocfs_sum_st_read_bytes);
         xprocfs_add_stat ("read_reqs",    xprocfs_sum_st_read_reqs);
         xprocfs_add_stat ("write_bytes",  xprocfs_sum_st_write_bytes);
@@ -156,9 +160,11 @@ xprocfs_init (char *name)
         xprocfs_add_stat ("create_reqs",  xprocfs_sum_st_create_reqs);
         xprocfs_add_stat ("destroy_reqs", xprocfs_sum_st_destroy_reqs);
         xprocfs_add_stat ("statfs_reqs",  xprocfs_sum_st_statfs_reqs);
+        xprocfs_add_stat ("sync_reqs",    xprocfs_sum_st_sync_reqs);
         xprocfs_add_stat ("open_reqs",    xprocfs_sum_st_open_reqs);
         xprocfs_add_stat ("close_reqs",   xprocfs_sum_st_close_reqs);
         xprocfs_add_stat ("punch_reqs",   xprocfs_sum_st_punch_reqs);
+#endif
 }
 
 void xprocfs_fini (void)
@@ -175,6 +181,7 @@ void xprocfs_fini (void)
         remove_proc_entry ("create_reqs",  xprocfs_dir);
         remove_proc_entry ("destroy_reqs", xprocfs_dir);
         remove_proc_entry ("statfs_reqs",  xprocfs_dir);
+        remove_proc_entry ("sync_reqs",    xprocfs_dir);
         remove_proc_entry ("open_reqs",    xprocfs_dir);
         remove_proc_entry ("close_reqs",   xprocfs_dir);
         remove_proc_entry ("punch_reqs",   xprocfs_dir);
@@ -193,9 +200,9 @@ static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
 static int echo_disconnect(struct lustre_handle *conn)
 {
         struct obd_export *exp = class_conn2export(conn);
-        
+
         LASSERT (exp != NULL);
-        
+
         ldlm_cancel_locks_for_export (exp);
         return (class_disconnect (conn));
 }
@@ -287,7 +294,7 @@ static int echo_open(struct lustre_handle *conn, struct obdo *oa,
 
         fh->addr = oa->o_id;
         fh->cookie = ECHO_HANDLE_MAGIC;
-        
+
         oa->o_valid |= OBD_MD_FLHANDLE;
         return 0;
 }
@@ -314,7 +321,7 @@ static int echo_close(struct lustre_handle *conn, struct obdo *oa,
                 CERROR ("invalid file handle on close: "LPX64"\n", fh->cookie);
                 return (-EINVAL);
         }
-        
+
         return 0;
 }
 
@@ -325,7 +332,7 @@ static int echo_getattr(struct lustre_handle *conn, struct obdo *oa,
         obd_id id = oa->o_id;
 
         XPROCFS_BUMP_MYCPU_IOSTAT (st_getattr_reqs, 1);
-        
+
         if (!obd) {
                 CERROR("invalid client "LPX64"\n", conn->addr);
                 RETURN(-EINVAL);
@@ -348,7 +355,7 @@ static int echo_setattr(struct lustre_handle *conn, struct obdo *oa,
         struct obd_device *obd = class_conn2obd(conn);
 
         XPROCFS_BUMP_MYCPU_IOSTAT (st_setattr_reqs, 1);
-        
+
         if (!obd) {
                 CERROR("invalid client "LPX64"\n", conn->addr);
                 RETURN(-EINVAL);
@@ -371,7 +378,8 @@ static int echo_setattr(struct lustre_handle *conn, struct obdo *oa,
 
 int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                 struct obd_ioobj *obj, int niocount, struct niobuf_remote *nb,
-                struct niobuf_local *res, void **desc_private, struct obd_trans_info *oti)
+                struct niobuf_local *res, void **desc_private,
+                struct obd_trans_info *oti)
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;
@@ -409,13 +417,15 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
 
                         if (isobj0 &&
                             (nb->offset >> PAGE_SHIFT) < ECHO_OBJECT0_NPAGES) {
-                                r->page = echo_object0_pages[nb->offset >> PAGE_SHIFT];
+                                r->page = echo_object0_pages[nb->offset >>
+                                                             PAGE_SHIFT];
                                 /* Take extra ref so __free_pages() can be called OK */
                                 get_page (r->page);
                         } else {
                                 r->page = alloc_pages(gfp_mask, 0);
                                 if (r->page == NULL) {
-                                        CERROR("can't get page %d/%d for id "LPU64"\n",
+                                        CERROR("can't get page %u/%u for id "
+                                               LPU64"\n",
                                                j, obj->ioo_bufcnt, obj->ioo_id);
                                         GOTO(preprw_cleanup, rc = -ENOMEM);
                                 }
@@ -431,12 +441,13 @@ int echo_preprw(int cmd, struct lustre_handle *conn, int objcount,
                                r->page, r->addr, r->offset);
 
                         if (cmd == OBD_BRW_READ) {
-                                XPROCFS_BUMP_MYCPU_IOSTAT (st_read_bytes, r->len);
+                                XPROCFS_BUMP_MYCPU_IOSTAT(st_read_bytes,r->len);
                                 if (verify)
-                                        page_debug_setup(r->addr, r->len, r->offset,
-                                                         obj->ioo_id);
+                                        page_debug_setup(r->addr, r->len,
+                                                         r->offset,obj->ioo_id);
                         } else {
-                                XPROCFS_BUMP_MYCPU_IOSTAT (st_write_bytes, r->len);
+                                XPROCFS_BUMP_MYCPU_IOSTAT(st_write_bytes,
+                                                          r->len);
                                 if (verify)
                                         page_debug_setup(r->addr, r->len,
                                                          0xecc0ecc0ecc0ecc0,
@@ -527,7 +538,7 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
                                 if (vrc != 0 && rc == 0)
                                         rc = vrc;
                         }
-                        
+
                         kunmap(page);
                         /* NB see comment above regarding object0 pages */
                         obd_kmap_put(1);
@@ -619,11 +630,11 @@ extern int echo_client_init(void);
 extern void echo_client_cleanup(void);
 
 static void
-echo_object0_pages_fini (void) 
+echo_object0_pages_fini (void)
 {
         int     i;
-        
-        for (i = 0; i < ECHO_OBJECT0_NPAGES; i++) 
+
+        for (i = 0; i < ECHO_OBJECT0_NPAGES; i++)
                 if (echo_object0_pages[i] != NULL) {
                         __free_pages (echo_object0_pages[i], 0);
                         echo_object0_pages[i] = NULL;
@@ -635,22 +646,23 @@ echo_object0_pages_init (void)
 {
         struct page *pg;
         int          i;
-        
+
         for (i = 0; i < ECHO_OBJECT0_NPAGES; i++) {
-                int gfp_mask = (i < ECHO_OBJECT0_NPAGES/2) ? GFP_KERNEL : GFP_HIGHUSER;
-                
+                int gfp_mask = (i < ECHO_OBJECT0_NPAGES/2) ?
+                        GFP_KERNEL : GFP_HIGHUSER;
+
                 pg = alloc_pages (gfp_mask, 0);
                 if (pg == NULL) {
                         echo_object0_pages_fini ();
                         return (-ENOMEM);
                 }
-                
+
                 memset (kmap (pg), 0, PAGE_SIZE);
                 kunmap (pg);
 
                 echo_object0_pages[i] = pg;
         }
-        
+
         return (0);
 }
 
@@ -668,7 +680,7 @@ static int __init obdecho_init(void)
         rc = echo_object0_pages_init ();
         if (rc != 0)
                 goto failed_0;
-        
+
         rc = class_register_type(&echo_obd_ops, lvars.module_vars,
                                  OBD_ECHO_DEVICENAME);
         if (rc != 0)
@@ -683,7 +695,7 @@ static int __init obdecho_init(void)
         echo_object0_pages_fini ();
  failed_0:
         xprocfs_fini ();
-        
+
         RETURN(rc);
 }
 

@@ -33,16 +33,20 @@ static int rd_target(char *page, char **start, off_t off, int count,
                      int *eof, void *data)
 {
         struct obd_device    *dev = (struct obd_device*)data;
-	struct lustre_handle *conn = &dev->u.cobd.cobd_target;
+	struct lustre_handle *conn;
 	struct obd_export    *exp;
 	int    rc;
+
+        LASSERT(dev != NULL);
+        conn = &dev->u.cobd.cobd_target;
 
 	if ((dev->obd_flags & OBD_SET_UP) == 0)
 		rc = snprintf (page, count, "not set up\n");
 	else {
 		exp = class_conn2export (conn);
 		LASSERT(exp != NULL);
-		rc = snprintf(page, count, "%s\n", exp->exp_obd->obd_uuid.uuid);
+		rc = snprintf(page, count, "%s\n", 
+                              exp->exp_obd->obd_uuid.uuid);
 	}
 	return (rc);
 }
@@ -51,16 +55,20 @@ static int rd_cache(char *page, char **start, off_t off, int count,
                     int *eof, void *data)
 {
         struct obd_device    *dev = (struct obd_device*)data;
-	struct lustre_handle *conn = &dev->u.cobd.cobd_cache;
+	struct lustre_handle *conn;
 	struct obd_export    *exp;
 	int    rc;
+
+        LASSERT(dev != NULL);
+        conn = &dev->u.cobd.cobd_cache;
 
 	if ((dev->obd_flags & OBD_SET_UP) == 0)
 		rc = snprintf (page, count, "not set up\n");
 	else {
 		exp = class_conn2export (conn);
 		LASSERT (exp != NULL);
-		rc = snprintf(page, count, "%s\n", exp->exp_obd->obd_uuid.uuid);
+		rc = snprintf(page, count, "%s\n", 
+                              exp->exp_obd->obd_uuid.uuid);
 	}
 	return (rc);
 }

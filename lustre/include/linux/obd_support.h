@@ -23,10 +23,14 @@
 #ifndef _OBD_SUPPORT
 #define _OBD_SUPPORT
 
+#ifdef __KERNEL__
 #include <linux/config.h>
 #include <linux/autoconf.h>
 #include <linux/slab.h>
 #include <linux/highmem.h>
+#else
+
+#endif
 #include <linux/kp30.h>
 
 /* global variables */
@@ -88,6 +92,7 @@ extern unsigned long obd_sync_filter;
 #define OBD_FAIL_OST_HANDLE_UNPACK       0x20d
 #define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
 #define OBD_FAIL_OST_BRW_READ_BULK       0x20f
+#define OBD_FAIL_OST_SYNCFS_NET          0x210
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -102,6 +107,9 @@ extern unsigned long obd_sync_filter;
 #define OBD_FAIL_OSC_BRW_WRITE_BULK      0x402
 #define OBD_FAIL_OSC_LOCK_BL_AST         0x403
 #define OBD_FAIL_OSC_LOCK_CP_AST         0x404
+
+#define OBD_FAIL_PTLRPC                  0x500
+#define OBD_FAIL_PTLRPC_ACK              0x501
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
@@ -127,10 +135,12 @@ do {                                                                         \
         }                                                                    \
 } while(0)
 
+#define fixme() CDEBUG(D_OTHER, "FIXME\n");
+
+#ifdef __KERNEL__
 #include <linux/types.h>
 #include <linux/blkdev.h>
 
-#define fixme() CDEBUG(D_OTHER, "FIXME\n");
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #define ll_bdevname(a) __bdevname((a))
@@ -140,9 +150,11 @@ do {                                                                         \
 #define ll_bdevname(a) bdevname((a))
 #endif
 
+
 static inline void OBD_FAIL_WRITE(int id, kdev_t dev)
 {
         if (OBD_FAIL_CHECK(id)) {
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #ifdef CONFIG_DEV_RDONLY
                 CERROR("obd_fail_loc=%x, fail write operation on %s\n",
                        id, ll_bdevname(dev));
@@ -151,10 +163,22 @@ static inline void OBD_FAIL_WRITE(int id, kdev_t dev)
                 CERROR("obd_fail_loc=%x, can't fail write operation on %s\n",
                        id, ll_bdevname(dev));
 #endif
+#else
+#ifdef CONFIG_DEV_RDONLY
+                CERROR("obd_fail_loc=%x, fail write operation on %s\n",
+                       id, ll_bdevname(dev.value));
+                dev_set_rdonly(dev, 2);
+#else
+                CERROR("obd_fail_loc=%x, can't fail write operation on %s\n",
+                       id, ll_bdevname(dev.value));
+#endif
+#endif
                 /* We set FAIL_ONCE because we never "un-fail" a device */
                 obd_fail_loc |= OBD_FAILED | OBD_FAIL_ONCE;
         }
 }
+
+#endif  /* __KERNEL__ */
 
 #define OBD_ALLOC(ptr, size)                                            \
 do {                                                                    \
@@ -177,9 +201,9 @@ do {                                                                    \
 } while (0)
 
 #ifdef CONFIG_DEBUG_SLAB
-#define POISON(lptr, s) do {} while (0)
+#define POISON(lptr, c, s) do {} while (0)
 #else
-#define POISON(lptr, s) memset(lptr, 0x5a, s)
+#define POISON(lptr, c, s) memset(lptr, c, s)
 #endif
 
 #define OBD_FREE(ptr, size)                                             \
@@ -187,7 +211,7 @@ do {                                                                    \
         void *lptr = (ptr);                                             \
         int s = (size);                                                 \
         LASSERT(lptr);                                                  \
-        POISON(lptr, s);                                                \
+        POISON(lptr, 0x5a, s);                                          \
         kfree(lptr);                                                    \
         atomic_sub(s, &obd_memory);                                     \
         CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %d).\n",     \

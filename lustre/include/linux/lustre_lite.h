@@ -25,11 +25,12 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_ha.h>
 
+
 extern kmem_cache_t *ll_file_data_slab;
 struct ll_file_data {
         struct lustre_handle fd_mdshandle;
-        struct lustre_handle fd_osthandle;
         struct ptlrpc_request *fd_req;
+        char fd_ostdata[FD_OSTDATA_SIZE];
         __u32 fd_flags;
 };
 
@@ -51,12 +52,10 @@ struct ll_read_inode2_cookie {
         struct lov_mds_md *lic_lmm;
 };
 
-#define LL_INLINESZ      60
 struct ll_inode_info {
         struct lov_stripe_md *lli_smd;
         char                 *lli_symlink_name;
         struct semaphore      lli_open_sem;
-        atomic_t              lli_open_count; /* see ll_file_release */
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode          lli_vfs_inode;
 #endif
@@ -245,13 +244,13 @@ extern struct file_operations ll_file_operations;
 extern struct inode_operations ll_file_inode_operations;
 extern struct inode_operations ll_special_inode_operations;
 struct ldlm_lock;
-int ll_lock_callback(struct ldlm_lock *, struct ldlm_lock_desc *, void *data, int flag);
+int ll_lock_callback(struct ldlm_lock *, struct ldlm_lock_desc *, void *data,
+                     int flag);
 int ll_size_lock(struct inode *, struct lov_stripe_md *, obd_off start,
                  int mode, struct lustre_handle *);
 int ll_size_unlock(struct inode *, struct lov_stripe_md *, int mode,
                    struct lustre_handle *);
-int ll_file_size(struct inode *inode, struct lov_stripe_md *md,
-                 struct lustre_handle *);
+int ll_file_size(struct inode *inode, struct lov_stripe_md *md, char *ostdata);
 int ll_create_objects(struct super_block *sb, obd_id id, uid_t uid,
                       gid_t gid, struct lov_stripe_md **lsmp);
 
@@ -262,6 +261,7 @@ void ll_truncate(struct inode *inode);
 
 /* super.c */
 void ll_update_inode(struct inode *, struct mds_body *, struct lov_mds_md *);
+int ll_setattr_raw(struct inode *inode, struct iattr *attr);
 
 /* symlink.c */
 extern struct inode_operations ll_fast_symlink_inode_operations;

@@ -6,14 +6,20 @@
 AUTOMAKE_OPTIONS = foreign
 
 if LINUX25
-DIRS24 = mds
+DIRS24 = 
 else
-DIRS24 = extN mds
+DIRS24 = extN ptlbd
 endif
 
-# NOTE: keep extN before mds and obdfilter
-SUBDIRS = $(DIRS24) obdclass utils ptlrpc ldlm lib obdfilter mdc osc ost llite
-SUBDIRS+= obdecho lov cobd ptlbd tests doc scripts conf
+if LIBLUSTRE
+SUBDIRS = lov obdclass ptlrpc obdecho ldlm osc liblustre utils
+else
+# NOTE: keep extN before obdclass, mds, and obdfilter.  Keep obdclass as early
+# as possible, to have the best chance at stopping with "wrong kernel version"
+# instead of some related build failure.
+SUBDIRS = $(DIRS24) obdclass mds utils ptlrpc ldlm lib obdfilter mdc osc ost
+SUBDIRS+= llite obdecho lov cobd tests doc scripts conf
+endif
 
 DIST_SUBDIRS = $(SUBDIRS)
 EXTRA_DIST = BUGS FDL Rules include archdep.m4 kernel_patches

@@ -243,7 +243,9 @@ int mds_iocontrol(unsigned int cmd, struct lustre_handle *conn,
             case OBD_IOC_SET_READONLY:
                 CERROR("setting device %s read-only\n",
                        ll_bdevname(obd->u.mds.mds_sb->s_dev));
+#ifdef CONFIG_DEV_RDONLY
                 dev_set_rdonly(obd->u.mds.mds_sb->s_dev, 2);
+#endif
                 RETURN(0);
 
         default:

@@ -10,6 +10,7 @@
 #  name_SOURCES = my.c files.c
 #  include $(top_srcdir)/Rules
 
+
 $(MODULE).o: $($(MODULE)_OBJECTS)
 	$(LD) -m "`$(LD) --help | awk '/supported emulations/ {print $$4}'`" -r -o $(MODULE).o $($(MODULE)_OBJECTS)
 

@@ -35,7 +35,6 @@ else:
     from fcntl import F_GETFL, F_SETFL
 
 # Global parameters
-TCP_ACCEPTOR = ''
 MAXTCPBUF = 1048576
 DEFAULT_TCPBUF = 1048576
 #
@@ -124,6 +123,7 @@ class Config:
         self._ldapurl = ''
         self._config_name = ''
         self._select = {}
+        self._lctl_dump = ''
 
     def verbose(self, flag = None):
         if flag: self._verbose = flag
@@ -220,6 +220,10 @@ class Config:
             return self._select[srv]
         return None
 
+    def lctl_dump(self, val = None):
+        if val: self._lctl_dump = val
+        return self._lctl_dump
+
 
 config = Config()
 
@@ -280,6 +284,104 @@ class LconfError (exceptions.Exception):
 
 
 # ============================================================
+# handle daemons, like the acceptor
+class DaemonHandler:
+    """ Manage starting and stopping a daemon. Assumes daemon manages
+    it's own pid file. """
+
+    def __init__(self, cmd):
+        self.command = cmd
+        self.path =""
+
+    def start(self):
+        if self.running():
+            log(self.command, "already running.")
+        if not self.path:
+            self.path = find_prog(self.command)
+            if not self.path:
+                panic(self.command, "not found.")
+        ret, out = runcmd(self.path +' '+ self.command_line())
+        if ret:
+            raise CommandError(self.path, out, ret)
+
+    def stop(self):
+        if self.running():
+            pid = self.read_pidfile()
+            try:
+                log ("killing process", pid)
+                os.kill(pid, 15)
+                #time.sleep(1) # let daemon die
+            except OSError, e:
+                log("unable to kill", self.command, e)
+            if self.running():
+                log("unable to kill", self.command)
+
+    def running(self):
+        pid = self.read_pidfile()
+        if pid:
+            try:
+                os.kill(pid, 0)
+            except OSError:
+                self.clean_pidfile()
+            else:
+                return 1
+        return 0
+
+    def read_pidfile(self):
+        try:
+            fp = open(self.pidfile(), 'r')
+            pid = int(fp.read())
+            fp.close()
+            return pid
+        except IOError:
+            return 0
+        
+    def clean_pidfile(self):
+        """ Remove a stale pidfile """
+        log("removing stale pidfile:", self.pidfile())
+        try:
+            os.unlink(self.pidfile())
+        except OSError, e:
+            log(self.pidfile(), e)
+            
+class AcceptorHandler(DaemonHandler):
+    def __init__(self, port, net_type, send_mem, recv_mem, irq_aff, nid_xchg):
+        DaemonHandler.__init__(self, "acceptor")
+        self.port = port
+        self.flags = ''
+        self.send_mem = send_mem
+        self.recv_mem = recv_mem
+
+        if net_type == 'toe':
+            self.flags = self.flags + ' -N 4'
+        if irq_aff:
+            self.flags = self.flags + ' -i'
+        if nid_xchg:
+            self.flags = self.flags + ' -x'
+
+    def pidfile(self):
+        return "/var/run/%s-%d.pid" % (self.command, self.port)
+
+    def command_line(self):
+        return string.join(map(str,('-s', self.send_mem, '-r', self.recv_mem, self.flags, self.port)))
+    
+acceptors = {}
+
+# start the acceptors
+def run_acceptors():
+    for port in acceptors.keys():
+        daemon = acceptors[port]
+        if not daemon.running():
+            daemon.start()
+
+def stop_acceptor(port):
+    if acceptors.has_key(port):
+        daemon = acceptors[port]
+        if daemon.running():
+            daemon.stop()
+        
+
+# ============================================================
 # handle lctl interface
 class LCTLInterface:
     """
@@ -291,6 +393,7 @@ class LCTLInterface:
         Initialize close by finding the lctl binary.
         """
         self.lctl = find_prog(cmd)
+        self.save_file = ''
         if not self.lctl:
             if config.noexec():
                 debug('! lctl not found')
@@ -298,6 +401,9 @@ class LCTLInterface:
             else:
                 raise CommandError('lctl', "unable to find lctl binary.")
 
+    def use_save_file(self, file):
+        self.save_file = file
+        
     def set_nonblock(self, fd):
         fl = fcntl.fcntl(fd, F_GETFL)
         fcntl.fcntl(fd, F_SETFL, fl | os.O_NDELAY)
@@ -311,10 +417,14 @@ class LCTLInterface:
         should modify command line to accept multiple commands, or
         create complex command line options
         """
-        debug("+", self.lctl, cmds)
+        cmd_line = self.lctl
+        if self.save_file:
+            cmds = '\n  dump ' + self.save_file + cmds
+
+        debug("+", cmd_line, cmds)
         if config.noexec(): return (0, [])
 
-        child = popen2.Popen3(self.lctl, 1) # Capture stdout and stderr from command
+        child = popen2.Popen3(cmd_line, 1) # Capture stdout and stderr from command
         child.tochild.write(cmds + "\n")
         child.tochild.close()
 
@@ -370,33 +480,28 @@ class LCTLInterface:
             cmds =  """
   network %s
   mynid %s
-  add_uuid self %s
-  quit""" % (net, nid, nid)
-        else:
-            cmds =  """
-  network %s
-  add_uuid self %s
-  quit""" % (net, nid)
-            
-        self.run(cmds)
+  quit """ % (net, nid)
+            self.run(cmds)
 
     # create a new connection
-    def connect(self, net, nid, port, servuuid, send_mem, recv_mem):
-        if net  in ('tcp', 'toe'):
-            cmds =  """
+    def connect(self, srv):
+        cmds =  "\n  add_uuid %s %s %s" % (srv.uuid, srv.nid, srv.net_type)
+        if srv.net_type  in ('tcp', 'toe') and not config.lctl_dump():
+            flags = ''
+            if srv.irq_affinity:
+                flags = flags + 'i'
+            if srv.nid_exchange:
+                flags = flags + 'x'
+            cmds =  """%s          
   network %s
-  add_uuid %s %s
   send_mem %d
   recv_mem %d
-  connect %s %d
-  quit""" % (net, servuuid, nid, send_mem, recv_mem, nid, port,  )
-        else:
-            cmds =  """
-  network %s
-  add_uuid %s %s
-  connect %s %d
-  quit""" % (net, servuuid, nid, nid, port,  )
-            
+  connect %s %d %s""" % (cmds, srv.net_type,
+             srv.send_mem,
+             srv.recv_mem,
+             srv.hostaddr, srv.port, flags )
+
+        cmds = cmds + "\n  quit"
         self.run(cmds)
                 
     # add a route to a range
@@ -404,7 +509,8 @@ class LCTLInterface:
         cmds =  """
   network %s
   add_route %s %s %s
-  quit  """ % (net, gw, lo, hi)
+  quit  """ % (net,
+               gw, lo, hi)
         self.run(cmds)
 
                 
@@ -420,9 +526,11 @@ class LCTLInterface:
     def add_route_host(self, net, uuid, gw, tgt):
         cmds =  """
   network %s
-  add_uuid %s %s
+  add_uuid %s %s %s
   add_route %s %s
-  quit """ % (net, uuid, tgt, gw, tgt)
+  quit """ % (net,
+              uuid, tgt, net,
+              gw, tgt)
         self.run(cmds)
 
     # add a route to a range
@@ -450,7 +558,6 @@ class LCTLInterface:
         cmds =  """
   ignore_errors
   network %s
-  del_uuid self
   disconnect
   quit""" % (net)
         self.run(cmds)
@@ -507,8 +614,7 @@ class LCTLInterface:
 # Run a command and return the output and status.
 # stderr is sent to /dev/null, could use popen3 to
 # save it if necessary
-def run(*args):
-    cmd = string.join(map(str,args))
+def runcmd(cmd):
     debug ("+", cmd)
     if config.noexec(): return (0, [])
     f = os.popen(cmd + ' 2>&1')
@@ -519,6 +625,10 @@ def run(*args):
     else:
         ret = 0
     return (ret, out)
+
+def run(*args):
+    cmd = string.join(map(str,args))
+    return runcmd(cmd)
 
 # Run a command in the background.
 def run_daemon(*args):
@@ -540,7 +650,7 @@ def find_prog(cmd):
     cmdpath = os.path.dirname(sys.argv[0])
     syspath.insert(0, cmdpath);
     if config.portals_dir():
-        syspath.insert(0, os.path.join(cmdpath, config.portals_dir()+'/linux/utils/'))
+        syspath.insert(0, os.path.join(config.portals_dir()+'/linux/utils/'))
     for d in syspath:
         prog = os.path.join(d,cmd)
         if os.access(prog, os.X_OK):
@@ -696,6 +806,16 @@ def if2addr(iface):
     ip = string.split(addr, ':')[1]
     return ip
 
+def get_local_nid(net_type, wildcard):
+    """Return the local nid. First look for an elan interface,
+      then use the local address. """
+    local = ""
+    if os.access('/proc/elan/device0/position', os.R_OK):
+        local = get_local_address('elan', '*')
+    else:
+        local = get_local_address(net_type, wildcard)
+    return local
+        
 def get_local_address(net_type, wildcard):
     """Return the local address for the network type."""
     local = ""
@@ -730,6 +850,8 @@ def is_prepared(uuid):
     """Return true if a device exists for the uuid"""
     # expect this format:
     # 1 UP ldlm ldlm ldlm_UUID 2
+    if config.lctl_dump():
+        return 0
     try:
         out = lctl.device_list()
         for s in out:
@@ -738,6 +860,21 @@ def is_prepared(uuid):
     except CommandError, e:
         e.dump()
     return 0
+
+def is_network_prepared():
+    """If the  PTLRPC device exists, then assumet that all networking
+       has been configured"""
+    if config.lctl_dump():
+        return 0
+    try:
+        out = lctl.device_list()
+        for s in out:
+            if 'RPCDEV_UUID' == string.split(s)[4]:
+                return 1
+    except CommandError, e:
+        e.dump()
+    return 0
+    
     
 def fs_is_mounted(path):
     """Return true if path is a mounted lustre filesystem"""
@@ -774,34 +911,16 @@ class Module:
         msg = string.join(map(str,args))
         print self.module_name + ":", self.name, self.uuid, msg
 
-    def lookup_server(self, srv_uuid):
-        """ Lookup a server's network information """
-        net = self.db.get_ost_net(srv_uuid)
-        if not net:
-            panic ("Unable to find a server for:", srv_uuid)
-        self._server = Network(net)
-
-    def get_server(self):
-        return self._server
-
     def cleanup(self):
         """ default cleanup, used for most modules """
         self.info()
-        srv = self.get_server()
-        if srv and local_net(srv):
-            try:
-                lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
-            except CommandError, e:
-                log(self.module_name, "disconnect failed: ", self.name)
-                e.dump()
-                cleanup_error(e.rc)
         try:
             lctl.cleanup(self.name, self.uuid)
         except CommandError, e:
             log(self.module_name, "cleanup failed: ", self.name)
             e.dump()
             cleanup_error(e.rc)
-
+            
     def add_portals_module(self, dev_dir, modname):
         """Append a module to list of modules to load."""
         self.kmodule_list.append((config.portals_dir(), dev_dir, modname))
@@ -857,20 +976,31 @@ class Module:
                 log('! unable to unload module:', mod)
                 logall(out)
         
-
 class Network(Module):
     def __init__(self,db):
         Module.__init__(self, 'NETWORK', db)
         self.net_type = self.db.get_val('nettype')
         self.nid = self.db.get_val('nid', '*')
         self.port = self.db.get_val_int('port', 0)
-        self.send_mem = self.db.get_val_int('send_mem', DEFAULT_TCPBUF)
-        self.recv_mem = self.db.get_val_int('recv_mem', DEFAULT_TCPBUF)
+        self.send_mem = self.db.get_val_int('sendmem', DEFAULT_TCPBUF)
+        self.recv_mem = self.db.get_val_int('recvmem', DEFAULT_TCPBUF)
+        self.irq_affinity = self.db.get_val_int('irqaffinity', 0)
+        self.nid_exchange = self.db.get_val_int('nidexchange', 0)
+
         if '*' in self.nid:
-            self.nid = get_local_address(self.net_type, self.nid)
+            self.nid = get_local_nid(self.net_type, self.nid)
             if not self.nid:
                 panic("unable to set nid for", self.net_type, self.nid)
             debug("nid:", self.nid)
+
+        self.hostaddr = self.db.get_val('hostaddr', self.nid)
+        if '*' in self.hostaddr:
+            self.hostaddr = get_local_address(self.net_type, self.hostaddr)
+            if not self.nid:
+                panic("unable to set nid for", self.net_type, self.hostaddr)
+            debug("hostaddr:", self.hostaddr)
+        # debug ( "hostaddr ", self.hostaddr, "net_type", self.net_type)
+
         self.add_portals_module("linux/oslib", 'portals')
         if node_needs_router():
             self.add_portals_module("linux/router", 'kptlrouter')
@@ -883,37 +1013,45 @@ class Network(Module):
         if self.net_type == 'gm':
             self.add_portals_module("/linux/gmnal", 'kgmnal')
         self.add_lustre_module('obdclass', 'obdclass')
-        self.add_lustre_module('ptlrpc', 'ptlrpc')
 
     def prepare(self):
+        if is_network_prepared():
+            return
+        self.info(self.net_type, self.nid, self.port)
+        lctl.network(self.net_type, self.nid)
+
+    def cleanup(self):
         self.info(self.net_type, self.nid, self.port)
         if self.net_type in ('tcp', 'toe'):
-            nal_id = '' # default is socknal
-            if self.net_type == 'toe':
-                nal_id = '-N 4'
-            ret, out = run(TCP_ACCEPTOR, '-s', self.send_mem, '-r', self.recv_mem, nal_id, self.port)
-            if ret:
-                raise CommandError(TCP_ACCEPTOR, out, ret)
+            stop_acceptor(self.port)
+        try:
+            lctl.disconnectAll(self.net_type)
+        except CommandError, e:
+            print "disconnectAll failed: ", self.name
+            e.dump()
+            cleanup_error(e.rc)
+
+class Router(Module):
+    def __init__(self,db):
+        Module.__init__(self, 'ROUTER', db)
+    def prepare(self):
+        if is_network_prepared():
+            return
+        self.info()
         for net_type, gw, lo, hi in self.db.get_route_tbl():
             lctl.add_route(net_type, gw, lo, hi)
-            if net_type in ('tcp', 'toe') and net_type == self.net_type and hi == '':
-                srvdb = self.db.nid2server(lo)
+            if net_type in ('tcp', 'toe') and local_net_type(net_type) and hi == '':
+                srvdb = self.db.nid2server(lo, net_type)
+
                 if not srvdb:
                     panic("no server for nid", lo)
                 else:
                     srv = Network(srvdb)
-                    lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
-
-            
-        lctl.network(self.net_type, self.nid)
-        if not is_prepared("RPCDEV_UUID"):
-            lctl.newdev(attach = "ptlrpc RPCDEV RPCDEV_UUID")
-
+                    lctl.connect(srv)
     def cleanup(self):
-        self.info(self.net_type, self.nid, self.port)
         for net_type, gw, lo, hi in self.db.get_route_tbl():
-            if self.net_type in ('tcp', 'toe') and hi == '':
-                srvdb = self.db.nid2server(lo)
+            if net_type in ('tcp', 'toe') and local_net_type(net_type) and hi == '':
+                srvdb = self.db.nid2server(lo, net_type)
                 if not srvdb:
                     panic("no server for nid", lo)
                 else:
@@ -925,28 +1063,11 @@ class Network(Module):
                         e.dump()
                         cleanup_error(e.rc)
             try:
-                lctl.del_route(self.net_type, self.nid, lo, hi)
+                lctl.del_route(net_type, gw, lo, hi)
             except CommandError, e:
                 print "del_route failed: ", self.name
                 e.dump()
                 cleanup_error(e.rc)
-              
-        try:
-            if is_prepared("RPCDEV_UUID"):
-                lctl.cleanup("RPCDEV", "RPCDEV_UUID")
-        except CommandError, e:
-            print "cleanup failed: RPCDEV"
-            e.dump()
-            cleanup_error(e.rc)
-        try:
-            lctl.disconnectAll(self.net_type)
-        except CommandError, e:
-            print "disconnectAll failed: ", self.name
-            e.dump()
-            cleanup_error(e.rc)
-        if self.net_type in ('tcp', 'toe'):
-            # yikes, this ugly! need to save pid in /var/something
-            run("killall acceptor")
 
 class LDLM(Module):
     def __init__(self,db):
@@ -956,8 +1077,23 @@ class LDLM(Module):
         if is_prepared(self.uuid):
             return
         self.info()
-        lctl.newdev(attach="ldlm %s %s" % (self.name, self.uuid),
-                    setup ="")
+        lctl.newdev(attach="ldlm %s %s" % (self.name, self.uuid))
+    def cleanup(self):
+        if is_prepared(self.uuid):
+            Module.cleanup(self)
+
+class PTLRPC(Module):
+    def __init__(self,db):
+        Module.__init__(self, 'PTLRPC', db)
+        self.add_lustre_module('ptlrpc', 'ptlrpc') 
+    def prepare(self):
+        if is_prepared(self.uuid):
+            return
+        self.info()
+        lctl.newdev(attach="ptlrpc %s %s" % (self.name, self.uuid))
+    def cleanup(self):
+        if is_prepared(self.uuid):
+            Module.cleanup(self)
 
 class LOV(Module):
     def __init__(self,db):
@@ -973,6 +1109,7 @@ class LOV(Module):
         self.devlist = self.db.get_refs('obd')
         self.stripe_cnt = self.db.get_val_int('stripecount', len(self.devlist))
         self.osclist = []
+        self.mdc_uudi = ''
         for obd_uuid in self.devlist:
             obd = self.db.lookup(obd_uuid)
             osc = get_osc(obd, self.name)
@@ -1039,27 +1176,46 @@ class LOVConfig(Module):
 class MDSDEV(Module):
     def __init__(self,db):
         Module.__init__(self, 'MDSDEV', db)
-        self.devname = self.db.get_val('devpath','')
+        self.devpath = self.db.get_val('devpath','')
         self.size = self.db.get_val_int('devsize', 0)
         self.fstype = self.db.get_val('fstype', '')
         # overwrite the orignal MDSDEV name and uuid with the MDS name and uuid
-        self.uuid = self.db.get_first_ref('target')
-        mds = self.db.lookup(self.uuid)
+        target_uuid = self.db.get_first_ref('target')
+        mds = self.db.lookup(target_uuid)
         self.name = mds.getName()
         self.lovconfig_uuids = mds.get_refs('lovconfig')
         # FIXME: if fstype not set, then determine based on kernel version
         self.format = self.db.get_val('autoformat', "no")
+
+        active_uuid = mds.get_active_target()
+        if not active_uuid:
+            panic("No target device found:", target_uuid)
+        if active_uuid == self.uuid:
+            self.active = 1
+        else:
+            self.active = 0
+        self.target_dev_uuid = self.uuid
+        self.uuid = target_uuid
+        # modules
         if self.fstype == 'extN':
             self.add_lustre_module('extN', 'extN') 
         self.add_lustre_module('mds', 'mds')
         if self.fstype:
             self.add_lustre_module('obdclass', 'fsfilt_%s' % (self.fstype))
+
+    def load_module(self):
+        if self.active:
+            Module.load_module(self)
             
     def prepare(self):
         if is_prepared(self.uuid):
             return
-        self.info(self.devname, self.fstype, self.format)
-        blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
+        if not self.active:
+            debug(self.uuid, "not active")
+            return
+        self.info(self.devpath, self.fstype, self.format)
+        run_acceptors()
+        blkdev = block_dev(self.devpath, self.size, self.fstype, self.format)
         if not is_prepared('MDT_UUID'):
             lctl.newdev(attach="mdt %s %s" % ('MDT', 'MDT_UUID'),
                         setup ="")
@@ -1080,26 +1236,41 @@ class MDSDEV(Module):
                 cleanup_error(e.rc)
         if is_prepared(self.uuid):
             Module.cleanup(self)
-        clean_loop(self.devname)
+        clean_loop(self.devpath)
 
 class OSD(Module):
     def __init__(self, db):
         Module.__init__(self, 'OSD', db)
         self.osdtype = self.db.get_val('osdtype')
-        self.devname = self.db.get_val('devpath', '')
+        self.devpath = self.db.get_val('devpath', '')
         self.size = self.db.get_val_int('devsize', 0)
         self.fstype = self.db.get_val('fstype', '')
-        self.uuid = self.db.get_first_ref('target')
-        ost = self.db.lookup(self.uuid)
+        target_uuid = self.db.get_first_ref('target')
+        ost = self.db.lookup(target_uuid)
         self.name = ost.getName()
         # FIXME: if fstype not set, then determine based on kernel version
         self.format = self.db.get_val('autoformat', 'yes')
         if self.fstype == 'extN':
             self.add_lustre_module('extN', 'extN') 
+
+        active_uuid = ost.get_active_target()
+        if not active_uuid:
+            panic("No target device found:", target_uuid)
+        if active_uuid == self.uuid:
+            self.active = 1
+        else:
+            self.active = 0
+        self.target_dev_uuid = self.uuid
+        self.uuid = target_uuid
+        # modules
         self.add_lustre_module('ost', 'ost')
         self.add_lustre_module(self.osdtype, self.osdtype)
         if self.fstype:
             self.add_lustre_module('obdclass' , 'fsfilt_%s' % (self.fstype))
+
+    def load_module(self):
+        if self.active:
+            Module.load_module(self)
 
     # need to check /proc/mounts and /etc/mtab before
     # formatting anything.
@@ -1107,11 +1278,15 @@ class OSD(Module):
     def prepare(self):
         if is_prepared(self.uuid):
             return
-        self.info(self.osdtype, self.devname, self.size, self.fstype, self.format)
+        if not self.active:
+            debug(self.uuid, "not active")
+            return
+        self.info(self.osdtype, self.devpath, self.size, self.fstype, self.format)
+        run_acceptors()
         if self.osdtype == 'obdecho':
             blkdev = ''
         else:
-            blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
+            blkdev = block_dev(self.devpath, self.size, self.fstype, self.format)
         lctl.newdev(attach="%s %s %s" % (self.osdtype, self.name, self.uuid),
                     setup ="%s %s" %(blkdev, self.fstype))
         if not is_prepared('OSS_UUID'):
@@ -1129,81 +1304,94 @@ class OSD(Module):
         if is_prepared(self.uuid):
             Module.cleanup(self)
         if not self.osdtype == 'obdecho':
-            clean_loop(self.devname)
+            clean_loop(self.devpath)
 
 # Generic client module, used by OSC and MDC
 class Client(Module):
-    def __init__(self, db, module, owner, target_name, target_uuid):
-        self.target_name = target_name
-        self.target_uuid = target_uuid
-        self.db = db
-        node_name =  config.select(target_name)
-        if node_name:
-            self.tgt_dev_uuid = self.db.get_target_device(node_name, target_uuid)
-        else:
-            self.tgt_dev_uuid = db.get_first_ref('active')
+    def __init__(self, tgtdb, module, owner):
+        self.target_name = tgtdb.getName()
+        self.target_uuid = tgtdb.getUUID()
+        self.db = tgtdb
+
+        self.tgt_dev_uuid = tgtdb.get_active_target()
         if not self.tgt_dev_uuid:
-            panic("No target device found for target:", target_name)
+            panic("No target device found for target:", self.target_name)
+            
         self.kmodule_list = []
         self._server = None
         self._connected = 0
 
         self.module = module
         self.module_name = string.upper(module)
-        self.name = '%s_%s_%s' % (self.module_name, owner, target_name)
-        self.uuid = '%05x_%s_%05x' % (int(random.random() * 1048576), self.name,
-                                      int(random.random() * 1048576))
+        self.name = '%s_%s_%s' % (self.module_name, owner, self.target_name)
+        self.uuid = '%05x%05x_%.14s_%05x%05x' % (int(random.random() * 1048576),
+                                              int(random.random() * 1048576),self.name,
+                                              int(random.random() * 1048576),
+                                              int(random.random() * 1048576))
         self.uuid = self.uuid[0:36]
         self.lookup_server(self.tgt_dev_uuid)
         self.add_lustre_module(module, module)
+
+    def lookup_server(self, srv_uuid):
+        """ Lookup a server's network information """
+        self._server_nets = self.db.get_ost_net(srv_uuid)
+        if len(self._server_nets) == 0:
+            panic ("Unable to find a server for:", srv_uuid)
+
+    def get_servers(self):
+        return self._server_nets
 
     def prepare(self, ignore_connect_failure = 0):
         if is_prepared(self.uuid):
             return
         self.info(self.target_uuid)
-        srv = self.get_server()
         try:
-            if local_net(srv):
-                #debug("LOCAL NET")
-                lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
+            srv = local_net(self.get_servers())
+            if srv:
+                lctl.connect(srv)
             else:
-                #debug("NOT LOCAL NET")
-                r =  find_route(srv)
-                if r:
+                srv, r =  find_route(self.get_servers())
+                if srv:
                     lctl.add_route_host(r[0], srv.uuid, r[1], r[2])
                 else:
-                    panic ("no route to",  srv.nid)
+                    panic ("no route to",  self.target_uuid)
         except CommandError:
             if (ignore_connect_failure == 0):
                 pass
-        lctl.newdev(attach="%s %s %s" % (self.module, self.name, self.uuid),
+        if srv:
+            lctl.newdev(attach="%s %s %s" % (self.module, self.name, self.uuid),
                         setup ="%s %s" %(self.target_uuid, srv.uuid))
 
     def cleanup(self):
-        srv = self.get_server()
-        if local_net(srv):
-            Module.cleanup(self)
+        Module.cleanup(self)
+        srv = local_net(self.get_servers())
+        if srv:
+            try:
+                lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
+            except CommandError, e:
+                log(self.module_name, "disconnect failed: ", self.name)
+                e.dump()
+                cleanup_error(e.rc)
         else:
-            self.info(self.targt_uuid)
-            r =  find_route(srv)
-            if r:
+            self.info(self.target_uuid)
+            srv, r =  find_route(self.get_servers())
+            if srv:
                 try:
                     lctl.del_route_host(r[0], srv.uuid, r[1], r[2])
                 except CommandError, e:
                     print "del_route failed: ", self.name
                     e.dump()
                     cleanup_error(e.rc)
-            Module.cleanup(self)
 
 
 
 class MDC(Client):
-    def __init__(self, db, owner, target_name, target_uuid):
-         Client.__init__(self, db, 'mdc', owner, target_name, target_uuid)
+    def __init__(self, db, owner):
+         Client.__init__(self, db, 'mdc', owner)
 
 class OSC(Client):
-    def __init__(self, db, owner, target_name, target_uuid):
-         Client.__init__(self, db, 'osc', owner, target_name, target_uuid)
+    def __init__(self, db, owner):
+         Client.__init__(self, db, 'osc', owner)
 
             
 class COBD(Module):
@@ -1299,6 +1487,8 @@ class Mountpoint(Module):
             mdc_uuid = prepare_mdc(self.db, self.name,  self.mds_uuid)
         else:
             mdc_uuid = self.vosc.get_mdc_uuid()
+        if not mdc_uuid:
+            panic("Unable to determine MDC UUID. Probably need to cleanup before re-mounting.")
         self.info(self.path, self.mds_uuid, self.obd_uuid)
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
               (self.vosc.get_uuid(), mdc_uuid, self.path)
@@ -1387,17 +1577,25 @@ class LustreDB:
         uuids = self._get_all_refs()
         return uuids
 
-    def get_ost_net(self, uuid):
-        ost = self.lookup(uuid)
-        uuid = ost.get_first_ref('network')
-        if not uuid:
-            return None
-        return ost.lookup(uuid)
+    def get_ost_net(self, osd_uuid):
+        srv_list = []
+        if not osd_uuid:
+            return srv_list
+        osd = self.lookup(osd_uuid)
+        node_uuid = osd.get_first_ref('node')
+        node = self.lookup(node_uuid)
+        if not node:
+            panic("unable to find node for osd_uuid:", osd_uuid,
+                  " node_ref:", node_uuid)
+        for net_uuid in node.get_networks():
+            db = node.lookup(net_uuid)
+            srv_list.append(Network(db))
+        return srv_list
 
-    def nid2server(self, nid):
+    def nid2server(self, nid, net_type):
         netlist = self.lookup_class('network')
         for net_db in netlist:
-            if net_db.get_val('nid') == nid: 
+            if net_db.get_val('nid') == nid and net_db.get_val('nettype') == net_type: 
                 return net_db
         return None
     
@@ -1411,7 +1609,11 @@ class LustreDB:
         type = self.get_class()
         ret=0;
         if type in ('network',):
-            ret = 10
+            ret = 5
+        elif type in ('routetbl',):
+            ret = 6
+        elif type in ('ptlrpc',):
+            ret = 7
         elif type in ('device', 'ldlm'):
             ret = 20
         elif type in ('osd', 'mdd', 'cobd'):
@@ -1448,7 +1650,7 @@ class LustreDB:
 
     # Find the target_device for target on a node
     # node->profiles->device_refs->target
-    def get_target_device(self, node_name, target_uuid):
+    def get_target_device(self, target_uuid, node_name):
         node_db = self.lookup_name(node_name)
         if not node_db:
             return None
@@ -1462,6 +1664,17 @@ class LustreDB:
                     return ref[1]
         return None
 
+    def get_active_target(self):
+        target_uuid = self.getUUID()
+        target_name = self.getName()
+        node_name = config.select(target_name)
+        if node_name:
+            tgt_dev_uuid = self.get_target_device(target_uuid, node_name)
+        else:
+            tgt_dev_uuid = self.get_first_ref('active')
+        return tgt_dev_uuid
+        
+
     # get all network uuids for this node
     def get_networks(self):
         ret = []
@@ -1469,7 +1682,7 @@ class LustreDB:
         for prof_uuid in prof_list:
             prof_db = self.lookup(prof_uuid)
             net_list = prof_db.get_refs('network')
-            debug("get_networks():", prof_uuid, net_list)
+            #debug("get_networks():", prof_uuid, net_list)
             for net_uuid in net_list:
                 ret.append(net_uuid)
         return ret
@@ -1589,21 +1802,21 @@ class LustreDB_XML(LustreDB):
         for t in tbl:
             routes = t.getElementsByTagName('route')
             for r in routes:
-                lo = self.xmlattr(r, 'lo')
-                hi = self.xmlattr(r, 'hi')
-                res.append((type, gw, lo, hi))
+                net_type = self.xmlattr(r, 'type')
+                if type != net_type:
+                    lo = self.xmlattr(r, 'lo')
+                    hi = self.xmlattr(r, 'hi')
+                    res.append((type, gw, lo, hi))
         return res
 
     def get_route_tbl(self):
         ret = []
-        tbls = self.dom_node.getElementsByTagName('routetbl')
-        for tbl in tbls:
-            for r in tbl.getElementsByTagName('route'):
-                net_type = self.xmlattr(r, 'type')
-                gw = self.xmlattr(r, 'gw')
-                lo = self.xmlattr(r, 'lo')
-                hi = self.xmlattr(r, 'hi')
-                ret.append((net_type, gw, lo, hi))
+        for r in self.dom_node.getElementsByTagName('route'):
+            net_type = self.xmlattr(r, 'type')
+            gw = self.xmlattr(r, 'gw')
+            lo = self.xmlattr(r, 'lo')
+            hi = self.xmlattr(r, 'hi')
+            ret.append((net_type, gw, lo, hi))
         return ret
 
 
@@ -1738,14 +1951,14 @@ class LustreDB_LDAP(LustreDB):
 # OSC is no longer in the xml, so we have to fake it.
 # this is getting ugly and begging for another refactoring
 def get_osc(ost_db, owner):
-    osc = OSC(ost_db, owner, ost_db.getName(), ost_db.getUUID())
+    osc = OSC(ost_db, owner)
     return osc
 
 def get_mdc(db, owner, mds_uuid):
     mds_db = db.lookup(mds_uuid);
     if not mds_db:
         panic("no mds:", mds_uuid)
-    mdc = MDC(mds_db, owner, mds_db.getName(), mds_uuid)
+    mdc = MDC(mds_db, owner)
     return mdc
 
 def prepare_mdc(db, owner, mds_uuid):
@@ -1767,11 +1980,18 @@ router_flag = 0
 
 def add_local_interfaces(node_db):
     global local_node
-    debug("add_local")
     for netuuid in node_db.get_networks():
         net = node_db.lookup(netuuid)
+        srv = Network(net)
         debug("add_local", netuuid)
-        local_node.append((net.get_val('nettype'), net.get_val('nid')))
+        local_node.append((srv.net_type, srv.nid))
+        if acceptors.has_key(srv.port):
+            panic("duplicate port:", srv.port)
+        if srv.net_type in ('tcp', 'toe'):
+            acceptors[srv.port] = AcceptorHandler(srv.port, srv.net_type,
+                                                  srv.send_mem, srv.recv_mem,
+                                                  srv.irq_affinity,
+                                                  srv.nid_exchange)
 
 def node_needs_router():
     return router_flag
@@ -1797,34 +2017,40 @@ def init_route_config(lustre):
                 #debug("init_route_config: gw is", gw)
                 if not gw:
                     continue
-                for netuuid in node_db.get_networks():
-                    db = node_db.lookup(netuuid)
-                    #debug("init_route_config: tbl: ", db.get_route_tbl())
-                    if local_type != db.get_val('nettype'):
-                        for route in db.get_routes(local_type, gw):
-                            routes.append(route)
-    #debug("init_route_config routes:", routes)
+                for route in node_db.get_routes(local_type, gw):
+                    routes.append(route)
+    debug("init_route_config routes:", routes)
 
 
-def local_net(net):
+def local_net(srv_list):
     global local_node
     for iface in local_node:
-        #debug("local_net a:", net.net_type, "b:", iface[0])
-        if net.net_type == iface[0]:
+        for srv in srv_list:
+            #debug("local_net a:", srv.net_type, "b:", iface[0])
+            if srv.net_type == iface[0]:
+                return srv
+    return None
+
+def local_net_type(net_type):
+    global local_node
+    for iface in local_node:
+        if net_type == iface[0]:
             return 1
     return 0
 
-def find_route(net):
+def find_route(srv_list):
     global local_node, routes
     frm_type = local_node[0][0]
-    to_type = net.net_type
-    to = net.nid
-    debug ('looking for route to', to_type,to)
-    for r in routes:
-        #debug("find_route: ", r)
-        if  r[2] == to:
-            return r
-    return None
+    for srv in srv_list:
+        #debug("find_route: srv:", srv.hostaddr, "type: ", srv.net_type)
+        to_type = srv.net_type
+        to = srv.hostaddr
+        #debug ('looking for route to', to_type, to)
+        for r in routes:
+            #debug("find_route: ", r)
+            if  r[2] == to:
+                return srv, r
+    return None,None
            
 
 ############################################################
@@ -1836,10 +2062,14 @@ def newService(db):
     n = None
     if type == 'ldlm':
         n = LDLM(db)
+    elif type == 'ptlrpc':
+        n = PTLRPC(db)
     elif type == 'lov':
         n = LOV(db)
     elif type == 'network':
         n = Network(db)
+    elif type == 'routetbl':
+        n = Router(db)
     elif type == 'osd':
         n = OSD(db)
     elif type == 'cobd':
@@ -1871,22 +2101,30 @@ def for_each_profile(db, prof_list, operation):
         operation(services)
         
 def doSetup(services):
+    if config.nosetup():
+        return
     for s in services:
         n = newService(s[1])
         n.prepare()
     
 def doModules(services):
+    if config.nomod():
+        return
     for s in services:
         n = newService(s[1])
         n.load_module()
 
 def doCleanup(services):
+    if config.nosetup():
+        return
     services.reverse()
     for s in services:
         n = newService(s[1])
         n.cleanup()
 
 def doUnloadModules(services):
+    if config.nomod():
+        return
     services.reverse()
     for s in services:
         n = newService(s[1])
@@ -1910,8 +2148,8 @@ def doHost(lustreDB, hosts):
     recovery_upcall = node_db.get_val('recovery_upcall', '')
     timeout = node_db.get_val_int('timeout', 0)
 
+    add_local_interfaces(node_db)
     if not router_flag:
-        add_local_interfaces(node_db)
         init_route_config(lustreDB)
 
     # Two step process: (1) load modules, (2) setup lustre
@@ -1922,6 +2160,11 @@ def doHost(lustreDB, hosts):
         if config.force():
             # the command line can override this value
             timeout = 5
+        # ugly hack, only need to run lctl commands for --dump
+        if config.lctl_dump():
+            for_each_profile(node_db, prof_list, doCleanup)
+            return
+
         sys_set_timeout(timeout)
         sys_set_recovery_upcall(recovery_upcall)
 
@@ -1929,6 +2172,11 @@ def doHost(lustreDB, hosts):
         for_each_profile(node_db, prof_list, doUnloadModules)
 
     else:
+        # ugly hack, only need to run lctl commands for --dump
+        if config.lctl_dump():
+            for_each_profile(node_db, prof_list, doSetup)
+            return
+
         for_each_profile(node_db, prof_list, doModules)
 
         sys_set_debug_path()
@@ -1954,7 +2202,7 @@ def parse_cmdline(argv):
                  "help", "node=", "nomod", "nosetup",
                  "dump=", "force", "minlevel=", "maxlevel=",
                  "timeout=", "recovery_upcall=",
-                 "ldapurl=", "config=", "select="]
+                 "ldapurl=", "config=", "select=", "lctl_dump="]
     opts = []
     args = []
 
@@ -1973,7 +2221,6 @@ def parse_cmdline(argv):
             config.verbose(1)
         if o in ("-n", "--noexec"):
             config.noexec(1)
-            config.verbose(1)
         if o == "--portals":
             config.portals_dir(a)
         if o == "--lustre":
@@ -2006,6 +2253,8 @@ def parse_cmdline(argv):
                 config.config_name(a)
         if o == "--select":
                 config.init_select(a)
+        if o == "--lctl_dump":
+            config.lctl_dump(a)
 
     return args
 
@@ -2115,7 +2364,7 @@ def sanitise_path():
 # Shutdown does steps in reverse
 #
 def main():
-    global TCP_ACCEPTOR, lctl, MAXTCPBUF
+    global  lctl, MAXTCPBUF
 
     host = socket.gethostname()
 
@@ -2165,19 +2414,13 @@ def main():
 
     setupModulePath(sys.argv[0])
 
-    TCP_ACCEPTOR = find_prog('acceptor')
-    if not TCP_ACCEPTOR:
-        if config.noexec():
-            TCP_ACCEPTOR = 'acceptor'
-            debug('! acceptor not found')
-        else:
-            panic('acceptor not found')
-
     lctl = LCTLInterface('lctl')
-
-    sys_make_devices()
-    sys_set_netmem_max('/proc/sys/net/core/rmem_max', MAXTCPBUF)
-    sys_set_netmem_max('/proc/sys/net/core/wmem_max', MAXTCPBUF)
+    if config.lctl_dump():
+        lctl.use_save_file(config.lctl_dump())
+    else:
+        sys_make_devices()
+        sys_set_netmem_max('/proc/sys/net/core/rmem_max', MAXTCPBUF)
+        sys_set_netmem_max('/proc/sys/net/core/wmem_max', MAXTCPBUF)
 
     doHost(db, node_list)
 
@@ -2192,4 +2435,4 @@ if __name__ == "__main__":
 
     if first_cleanup_error:
         sys.exit(first_cleanup_error)
-
+        

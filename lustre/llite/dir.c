@@ -55,8 +55,10 @@ typedef struct ext2_dir_entry_2 ext2_dirent;
 #define SetPageChecked(page)     set_bit(PG_checked, &(page)->flags)
 
 
-static int ll_dir_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
+static int ll_dir_prepare_write(struct file *file, struct page *page,
+                                unsigned from, unsigned to)
 {
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         return 0;
 }
 
@@ -75,6 +77,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         if ((inode->i_size + PAGE_CACHE_SIZE - 1) >> PAGE_SHIFT <= page->index){
                 /* XXX why do we need this exactly, and why do we think that
                  *     an all-zero directory page is useful?
@@ -124,11 +127,10 @@ static int ll_dir_readpage(struct file *file, struct page *page)
 
         unlock_page(page);
         ll_unlock(LCK_PR, &lockh);
-        mdc_put_rpc_lock(&mdc_rpc_lock, &it);
         if (rc != ELDLM_OK)
                 CERROR("ll_unlock: err: %d\n", rc);
         return rc;
-} /* ll_dir_readpage */
+}
 
 struct address_space_operations ll_dir_aops = {
         readpage: ll_dir_readpage,
@@ -185,7 +187,9 @@ static int ext2_commit_chunk(struct page *page, unsigned from, unsigned to)
         loff_t new_size = (page->index << PAGE_CACHE_SHIFT) + to;
         int err = 0;
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         dir->i_version = ++event;
+#endif
         if (new_size > dir->i_size)
                 dir->i_size = new_size;
         SetPageUptodate(page);
@@ -394,6 +398,7 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
         int need_revalidate = (filp->f_version != inode->i_version);
         ENTRY;
 
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
         if (pos > inode->i_size - EXT2_DIR_REC_LEN(1))
                 GOTO(done, 0);
 
@@ -759,6 +764,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct obd_ioctl_data *data;
         ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op\n");
 
         switch(cmd) {
         case IOC_MDC_LOOKUP: {

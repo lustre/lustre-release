@@ -24,6 +24,9 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LLITE
+#ifndef __KERNEL__
+#include <liblustre.h>
+#endif
 
 #include <linux/lustre_net.h>
 #include <linux/obd.h>
@@ -260,7 +263,9 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
                        lmm.lmm_magic, LOV_MAGIC);
                 RETURN(-EINVAL);
         }
-        if (lmm.lmm_stripe_count > lov->desc.ld_tgt_count) {
+#if 0   /* the stripe_count/offset is "advisory", and it gets fixed later */
+        if (lmm.lmm_stripe_count > lov->desc.ld_tgt_count &&
+            lmm.lmm_stripe_count != 0xffffffff) {
                 CERROR("stripe count %u more than OST count %d\n",
                        lmm.lmm_stripe_count, lov->desc.ld_tgt_count);
                 RETURN(-EINVAL);
@@ -271,18 +276,19 @@ int lov_setstripe(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
                        lmm.lmm_stripe_offset, lov->desc.ld_tgt_count);
                 RETURN(-EINVAL);
         }
+#endif
         if (lmm.lmm_stripe_size & (PAGE_SIZE - 1)) {
                 CERROR("stripe size %u not multiple of %lu\n",
                        lmm.lmm_stripe_size, PAGE_SIZE);
                 RETURN(-EINVAL);
         }
-        if ((__u64)lmm.lmm_stripe_size * lmm.lmm_stripe_count > ~0UL) {
+        stripe_count = lov_get_stripecnt(lov, lmm.lmm_stripe_count);
+
+        if ((__u64)lmm.lmm_stripe_size * stripe_count > ~0UL) {
                 CERROR("stripe width %ux%u > %lu on 32-bit system\n",
                        lmm.lmm_stripe_size, (int)lmm.lmm_stripe_count, ~0UL);
                 RETURN(-EINVAL);
         }
-
-        stripe_count = lov_get_stripecnt(lov, lmm.lmm_stripe_count);
 
         /* XXX LOV STACKING call into osc for sizes */
         OBD_ALLOC(lsm, lov_stripe_md_size(stripe_count));

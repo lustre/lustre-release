@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <string.h>
 
+#include <liblustre.h>
 #include "obdiolib.h"
 
 int

@@ -1,8 +1,25 @@
 TBD
-	* version v0_5_21
-	* bug fixes
-	 - workaround for gcc 3.2, which has macro-argument issues (850)
-	 - lmc/lconf syntax change for OST UUIDs
+       * version v0_5_21
+       * bug fixes
+	- LDLM_DEBUG macro fix, for gcc 3.2 (850)
+	- failed open()s could cause deadlock; fixed (867, 869)
+	- stop cancelling OST locks when files are closed (481)
+	- overlapping XID spaces caused network corruption (851, 853)
+	- fix unsafe fsfilt counter arithmetic; change to atomic_t
+	- setattr_raw added, to do single-RPC, server-side setattrs
+	- lmc/lconf syntax change for OST UUIDs
+	- fix crashy race condition between ptlrpc_free_req and osc_close
+	- don't use request in mdc_enqueue if we hit a timeout (889)
+	- don't set the inode i_size for regular files from the MDS (896)
+	- handle out of order completion AST (842)
+	- don't LBUG if a lock request times out after receiving AST (913)
+	- avoid d_rehash race in ll_find_alias by rehashing inside dcache_lock
+	- if a bad lock AST arrives, send an error instead of dropping entirely
+	- return 0 from revalidate2 if ll_intent_lock returns -EINTR (912)
+	- fix leak in bulk IO when only partially completed (899, 900, 926)
+       * protocol changes
+	- READPAGE and SETATTRs which don't take server-side locks get
+	  their own portal
 
 2003-02-11  Phil Schwan  <phil@clusterfs.com>
 	* version v0_5_20
@@ -31,7 +48,7 @@ TBD
 	 - client verifies file size before zeroing page past EOF (445)
 	 - OST now writes last allocated objid to disk with allocation (108)
 	 - LOV on echo now works (409)
-	 * protocol changes
+	* protocol changes
 	 - mds_reint_unlink sends a new buffer, with the EA included.  this
 	   buffer is only valid if body->valid & OBD_MD_FLEASIZE, which is only
 	   set if a regular file was being unlinked, and it was the last link

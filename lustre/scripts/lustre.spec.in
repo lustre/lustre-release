@@ -4,7 +4,7 @@
 %define linuxdir @LINUX@
 %define portalsdir @PORTALS@
 %define portalslibdir @PORTALSLIB@
-Release: 0301070810ltutor3
+Release: 0302240920chaos
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -51,20 +51,40 @@ Requires: openldap-servers, openldap-clients, python-ldap, 4Suite
 %description -n lustre-ldap
 Configures openldap server for LDAP Lustre config database
 
+
+%package -n liblustre
+Summary: Lustre Lib
+Group: Development/Kernel
+
+%description -n liblustre
+Lustre lib binary package.
+
+
 %prep
 %setup -qn lustre-%{version}
+%setup -c -n lustre-%{version}-lib
 
 %build
 rm -rf $RPM_BUILD_ROOT
 
 # Set an explicit path to our Linux tree, if we can.
+cd $RPM_BUILD_DIR/lustre-%{version}
 ./configure --with-linux='%{linuxdir}' --with-portals='%{portalsdir}' --with-portalslib='%{portalslibdir}'
+make
+cd $RPM_BUILD_DIR/lustre-%{version}-lib/lustre-%{version}
+./configure --with-lib --with-portals='%{portalsdir}' --with-portalslib='%{portalslibdir}'
 make
 
 %install
+cd $RPM_BUILD_DIR/lustre-%{version}
 make install prefix=$RPM_BUILD_ROOT
 
+cd $RPM_BUILD_DIR/lustre-%{version}-lib/lustre-%{version}
+make install prefix=$RPM_BUILD_ROOT
+
+
 # Create the pristine source directory.
+cd $RPM_BUILD_DIR/lustre-%{version}
 mkdir -p $RPM_BUILD_ROOT/usr/src
 rm -f lustre-source
 ln -s $RPM_BUILD_ROOT/usr/src lustre-source
@@ -119,6 +139,26 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 
 %files -n lustre-source
 %attr(-, root, root) /usr/src/lustre-%{version}
+
+%files -n liblustre
+%attr(-, root, root) /lib/lustre
+%attr(-, root, root) /lib/lustre/liblov.a
+%attr(-, root, root) /lib/lustre/liblustreclass.a
+%attr(-, root, root) /lib/lustre/libptlrpc.a
+%attr(-, root, root) /lib/lustre/libobdecho.a
+%attr(-, root, root) /lib/lustre/libldlm.a
+%attr(-, root, root) /lib/lustre/libosc.a
+%attr(-, root, root) /usr/sbin/lctl
+%attr(-, root, root) /usr/sbin/lfind
+%attr(-, root, root) /usr/sbin/lstripe
+%attr(-, root, root) /usr/sbin/obdio
+%attr(-, root, root) /usr/sbin/obdbarrier
+%attr(-, root, root) /usr/sbin/obdstat
+%attr(-, root, root) /usr/sbin/lload
+%attr(-, root, root) /usr/sbin/lconf
+%attr(-, root, root) /usr/sbin/lmc
+%attr(-, root, root) /usr/sbin/llanalyze
+
 
 %files -n lustre-ldap
 %attr(-, root, root) /etc/openldap/slapd-lustre.conf

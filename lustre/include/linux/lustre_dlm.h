@@ -7,12 +7,13 @@
 #define _LUSTRE_DLM_H__
 
 #ifdef __KERNEL__
-
 #include <linux/proc_fs.h>
+#endif 
+
 #include <linux/lustre_lib.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_import.h>
-#include <linux/handles.h>
+#include <linux/lustre_handles.h>
 
 struct obd_ops;
 struct obd_device;
@@ -197,9 +198,6 @@ typedef int (*ldlm_res_policy)(struct ldlm_namespace *, struct ldlm_lock **,
 #define LDLM_MIN_TYPE 10
 #define LDLM_MAX_TYPE 11
 
-extern ldlm_res_compat ldlm_res_compat_table [];
-extern ldlm_res_policy ldlm_res_policy_table [];
-
 struct ldlm_resource {
         struct ldlm_namespace *lr_namespace;
         struct list_head       lr_hash;
@@ -235,8 +233,8 @@ struct ldlm_ast_work {
 
 /* Per-export ldlm state. */
 struct ldlm_export_data {
-        struct list_head        led_held_locks;
-        struct obd_import       led_import;
+        struct list_head       led_held_locks; /* protected by namespace lock */
+        struct obd_import      led_import;
 };
 
 extern struct obd_ops ldlm_obd_ops;
@@ -295,11 +293,9 @@ do {                                                                          \
         }                                                                     \
 } while (0)
 
-/* I hate hate hate hate hate this.  This cannot stay.  bug 850. -phil */
-#define LDLM_DEBUG0(lock, format) __LDLM_DEBUG(D_DLMTRACE, lock, format"%s","")
-
-#define LDLM_DEBUG(lock, format, a...) __LDLM_DEBUG(D_DLMTRACE, lock, format, a)
-#define LDLM_ERROR(lock, format, a...) __LDLM_DEBUG(D_ERROR, lock, format, a)
+#define LDLM_DEBUG(lock, format, a...) __LDLM_DEBUG(D_DLMTRACE, lock, \
+                                                    format, ## a)
+#define LDLM_ERROR(lock, format, a...) __LDLM_DEBUG(D_ERROR, lock, format, ## a)
 
 #define LDLM_DEBUG_NOLOCK(format, a...)                 \
         CDEBUG(D_DLMTRACE, "### " format "\n" , ## a)
@@ -473,7 +469,6 @@ int ldlm_cancel_lru(struct ldlm_namespace *ns);
 int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                      void *data, int flag);
 
-#endif /* __KERNEL__ */
 
 /* ioctls for trying requests */
 #define IOC_LDLM_TYPE                   'f'

@@ -21,6 +21,10 @@
  */
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/version.h>
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#include <asm/statfs.h>
+#endif
 #include <linux/lustre_lite.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/lprocfs_status.h>
@@ -37,7 +41,10 @@ static inline
 int lprocfs_mds_statfs(void *data, struct statfs *sfs)
 {
         struct obd_device* dev = (struct obd_device*) data;
-        struct mds_obd *mds = &dev->u.mds;
+        struct mds_obd *mds;
+
+        LASSERT(dev != NULL);
+        mds = &dev->u.mds;
         return vfs_statfs(mds->mds_sb, sfs);
 }
 
@@ -53,6 +60,9 @@ int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
 {
         struct obd_device *obd = (struct obd_device *)data;
 
+        LASSERT(obd != NULL);
+        LASSERT(obd->obd_fsops != NULL);
+        LASSERT(obd->obd_fsops->fs_type != NULL);
         return snprintf(page, count, "%s\n", obd->obd_fsops->fs_type);
 }
 

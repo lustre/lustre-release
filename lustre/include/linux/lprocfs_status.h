@@ -24,8 +24,10 @@
 #ifndef _LPROCFS_SNMP_H
 #define _LPROCFS_SNMP_H
 
+#ifdef __KERNEL__
 #include <linux/autoconf.h>
 #include <linux/proc_fs.h>
+#endif
 
 #ifndef LPROCFS
 #ifdef  CONFIG_PROC_FS  /* Ensure that /proc is configured */
@@ -48,9 +50,6 @@ struct lprocfs_static_vars {
 /* class_obd.c */
 extern struct proc_dir_entry *proc_lustre_root;
 
-extern void lprocfs_init_vars(struct lprocfs_static_vars *var);
-extern void lprocfs_init_multi_vars(unsigned int idx, 
-                                    struct lprocfs_static_vars *var);
 
 #define LPROCFS_INIT_MULTI_VARS(array, size)                              \
 void lprocfs_init_multi_vars(unsigned int idx,                            \
@@ -63,6 +62,7 @@ void lprocfs_init_multi_vars(unsigned int idx,                            \
    x->obd_vars = glob[idx].obd_vars;                                      \
 }                                                                         \
 
+#ifdef LPROCFS
 #define LPROCFS_INIT_VARS(vclass, vinstance)           \
 void lprocfs_init_vars(struct lprocfs_static_vars *x)  \
 {                                                      \
@@ -70,7 +70,9 @@ void lprocfs_init_vars(struct lprocfs_static_vars *x)  \
         x->obd_vars = vinstance;                       \
 }                                                      \
 
-#ifdef LPROCFS
+extern void lprocfs_init_vars(struct lprocfs_static_vars *var);
+extern void lprocfs_init_multi_vars(unsigned int idx, 
+                                    struct lprocfs_static_vars *var);
 /* lprocfs_status.c */
 extern int lprocfs_add_vars(struct proc_dir_entry *root,
                             struct lprocfs_vars *var,
@@ -133,6 +135,7 @@ int fct_name(char *page, char **start, off_t off,                \
 static inline struct proc_dir_entry *
 lprocfs_register(const char *name, struct proc_dir_entry *parent,
                  struct lprocfs_vars *list, void *data) { return NULL; }
+static inline void lprocfs_init_vars(struct lprocfs_static_vars *x) { return; }
 static inline int lprocfs_add_vars(struct proc_dir_entry *root,
                                    struct lprocfs_vars *var,
                                    void *data) { return 0; }

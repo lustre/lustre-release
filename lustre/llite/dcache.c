@@ -62,14 +62,10 @@ void ll_intent_release(struct dentry *de, struct lookup_intent *it)
         ENTRY;
 
         LASSERT(ll_d2d(de) != NULL);
-        mdc_put_rpc_lock(&mdc_rpc_lock, it);
 
         if (it->it_lock_mode) {
                 handle = (struct lustre_handle *)it->it_lock_handle;
-                if (it->it_op == IT_SETATTR)
-                        ldlm_lock_decref_and_cancel(handle, it->it_lock_mode);
-                else
-                        ldlm_lock_decref(handle, it->it_lock_mode);
+                ldlm_lock_decref(handle, it->it_lock_mode);
 
                 /* intent_release may be called multiple times, from
                    this thread and we don't want to double-decref this
@@ -159,9 +155,6 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
                 RETURN(0);
         }
 
-        if (it && it->it_op == IT_TRUNC)
-                it->it_op = IT_SETATTR;
-
         if (it == NULL || it->it_op == IT_GETATTR) {
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate2 if we already have a lock, let's
@@ -209,9 +202,7 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
         }
 
         rc = ll_intent_lock(de->d_parent->d_inode, &de, it, revalidate2_finish);
-        if (rc == -ESTALE)
-                RETURN(0);
-        if (rc < 0 && it->it_status) {
+        if (rc < 0) {
                 CERROR("ll_intent_lock: rc %d : it->it_status %d\n", rc,
                        it->it_status);
                 RETURN(0);

@@ -15,8 +15,12 @@ if [ "$LUSTRE" ]; then
   lustre_opt="--lustre=$LUSTRE"
 fi
 
+if [ "$1" = "-v" ]; then
+  verbose="-v"
+fi
+
 [ -x $LCONF ] || chmod a+rx $LCONF
 
 sh $mkconfig $config || exit 1
 
-${LCONF} $portals_opt $lustre_opt --reformat --gdb $config || exit 2
+${LCONF} $portals_opt $lustre_opt --reformat --gdb $verbose $config  || exit 2

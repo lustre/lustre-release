@@ -5,12 +5,18 @@
 
 DEFS=
 
+
+if LIBLUSTRE
+lib_LIBRARIES = libosc.a
+LINX= obd_pack.c client.c
+libosc_a_SOURCES = osc_request.c  $(LINX)
+else
 MODULE = osc
 modulefs_DATA = osc.o
 EXTRA_PROGRAMS = osc
-
 LINX= obd_pack.c client.c
 osc_SOURCES = osc_request.c lproc_osc.c $(LINX)
+endif
 
 obd_pack.c: 
 	test -e obd_pack.c || ln -sf $(top_srcdir)/lib/obd_pack.c
