@@ -53,8 +53,6 @@ void inode_update_time(struct inode *inode, int ctime_too)
         mark_inode_dirty_sync(inode);
 }
 
-int ext3_map_inode_page(struct inode *inode, struct page *page,
-                        unsigned long *blocks, int *created, int create);
 /* Must be called with i_sem taken; this will drop it */
 static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
                             struct obd_export *exp, struct iattr *attr,
@@ -87,7 +85,7 @@ static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
         for (i = 0, cr = created, b = iobuf->blocks; i < iobuf->nr_pages; i++){
                 page = iobuf->maplist[i];
 
-                rc = ext3_map_inode_page(inode, page, b, cr, create);
+                rc = fsfilt_map_inode_page(obd, inode, page, b, cr, create);
                 if (rc) {
                         CERROR("ino %lu, blk %lu cr %u create %d: rc %d\n",
                                inode->i_ino, *b, *cr, create, rc);
