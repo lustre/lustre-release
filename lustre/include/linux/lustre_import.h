@@ -32,13 +32,14 @@ struct obd_import {
         struct obd_device        *imp_obd;
         int                       imp_level;
         int                       imp_generation;
+        __u32                     imp_conn_cnt;
         __u64                     imp_max_transno;
         __u64                     imp_peer_committed_transno;
         struct obd_uuid           imp_target_uuid; /* XXX -> lustre_name */
         struct lustre_handle      imp_remote_handle;
         unsigned long             imp_next_ping;
         
-        /* Protects flags, level, generation, *_list */
+        /* Protects flags, level, generation, conn_cnt, *_list */
         spinlock_t                imp_lock;
 
         /* flags */
