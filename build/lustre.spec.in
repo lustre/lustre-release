@@ -203,8 +203,8 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %files -n lustre-ldap
 %attr(-, root, root) /etc/openldap/slapd-lustre.conf
 %attr(-, root, root) /etc/openldap/schema/lustre.schema
-%attr(-, root, root) /usr/lib/lustre/lustre2ldif.xsl
-%attr(-, root, root) /usr/lib/lustre/top.ldif
+%attr(-, root, root) /usr/share/lustre/lustre2ldif.xsl
+%attr(-, root, root) /usr/share/lustre/top.ldif
 #%dir /var/lib/ldap/lustre
 %attr(700, ldap, ldap) /var/lib/ldap/lustre
 
