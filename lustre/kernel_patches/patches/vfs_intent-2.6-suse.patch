@@ -136,7 +136,7 @@ Index: linux-2.6.5-12.1/fs/namei.c
  			dput(next.dentry);
  			mntput(next.mnt);
  			if (err)
-@@ -703,14 +749,24 @@
+@@ -703,14 +749,26 @@
  				inode = nd->dentry->d_inode;
  				/* fallthrough */
  			case 1:
@@ -145,8 +145,10 @@ Index: linux-2.6.5-12.1/fs/namei.c
 + 				nd->flags &= ~LOOKUP_LAST;
 +				if (!nd->dentry->d_inode)
 +					err = -ENOENT;
-+				if (err)
++				if (err) {
++					path_release(nd);
 + 					goto return_err;
++				}
  				goto return_reval;
  		}
 +
