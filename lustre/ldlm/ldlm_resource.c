@@ -79,7 +79,6 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
         strcpy(ns->ns_name, name);
 
         INIT_LIST_HEAD(&ns->ns_root_list);
-        l_lock_init(&ns->ns_lock);
         ns->ns_refcount = 0;
         ns->ns_client = client;
         spin_lock_init(&ns->ns_counter_lock);
@@ -159,7 +158,7 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only)
 {
         int i;
 
-        l_lock(&ns->ns_lock);
+        l_lock(&ldlm_everything_lock);
         for (i = 0; i < RES_HASH_SIZE; i++) {
                 struct list_head *tmp, *pos;
                 list_for_each_safe(tmp, pos, &(ns->ns_hash[i])) {
@@ -171,6 +170,11 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only)
                         cleanup_resource(res, &res->lr_converting, local_only);
                         cleanup_resource(res, &res->lr_waiting, local_only);
 
+                        /* XXX this is a bit counter-intuitive and should
+                         * probably be cleaner: don't force cleanup if we're
+                         * local_only (which is only used by recovery).  We
+                         * probably still have outstanding lock refs which
+                         * reference these resources. -phil */
                         if (!ldlm_resource_put(res) && !local_only) {
                                 CERROR("Resource refcount nonzero (%d) after "
                                        "lock cleanup; forcing cleanup.\n",
@@ -181,7 +185,7 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int local_only)
                         }
                 }
         }
-        l_unlock(&ns->ns_lock);
+        l_unlock(&ldlm_everything_lock);
 
         return ELDLM_OK;
 }
@@ -313,7 +317,7 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                 RETURN(NULL);
         }
 
-        l_lock(&ns->ns_lock);
+        l_lock(&ldlm_everything_lock);
         bucket = ns->ns_hash + ldlm_hash_fn(parent, name);
 
         list_for_each(tmp, bucket) {
@@ -330,7 +334,7 @@ struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
 
         if (res == NULL && create)
                 res = ldlm_resource_add(ns, parent, name, type);
-        l_unlock(&ns->ns_lock);
+        l_unlock(&ldlm_everything_lock);
 
         RETURN(res);
 }
@@ -350,11 +354,11 @@ int ldlm_resource_put(struct ldlm_resource *res)
                 struct ldlm_namespace *ns = res->lr_namespace;
                 ENTRY;
 
-                l_lock(&ns->ns_lock);
+                l_lock(&ldlm_everything_lock);
 
                 if (atomic_read(&res->lr_refcount) != 0) {
                         /* We lost the race. */
-                        l_unlock(&ns->ns_lock);
+                        l_unlock(&ldlm_everything_lock);
                         goto out;
                 }
 
@@ -375,7 +379,7 @@ int ldlm_resource_put(struct ldlm_resource *res)
                 list_del(&res->lr_childof);
 
                 kmem_cache_free(ldlm_resource_slab, res);
-                l_unlock(&ns->ns_lock);
+                l_unlock(&ldlm_everything_lock);
 
                 spin_lock(&ns->ns_counter_lock);
                 ns->ns_resources--;
@@ -395,7 +399,7 @@ int ldlm_resource_put(struct ldlm_resource *res)
 void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock)
 {
-        l_lock(&res->lr_namespace->ns_lock);
+        l_lock(&ldlm_everything_lock);
 
         ldlm_resource_dump(res);
         ldlm_lock_dump(lock);
@@ -404,14 +408,14 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                 LBUG();
 
         list_add(&lock->l_res_link, head);
-        l_unlock(&res->lr_namespace->ns_lock);
+        l_unlock(&ldlm_everything_lock);
 }
 
 void ldlm_resource_unlink_lock(struct ldlm_lock *lock)
 {
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        l_lock(&ldlm_everything_lock);
         list_del_init(&lock->l_res_link);
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        l_unlock(&ldlm_everything_lock);
 }
 
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
@@ -440,7 +444,7 @@ void ldlm_namespace_dump(struct ldlm_namespace *ns)
 {
         struct list_head *tmp;
 
-        l_lock(&ns->ns_lock);
+        l_lock(&ldlm_everything_lock);
         CDEBUG(D_OTHER, "--- Namespace: %s (rc: %d, client: %d)\n", ns->ns_name,
                ns->ns_refcount, ns->ns_client);
 
@@ -452,7 +456,7 @@ void ldlm_namespace_dump(struct ldlm_namespace *ns)
                  * them recursively. */
                 ldlm_resource_dump(res);
         }
-        l_unlock(&ns->ns_lock);
+        l_unlock(&ldlm_everything_lock);
 }
 
 void ldlm_resource_dump(struct ldlm_resource *res)

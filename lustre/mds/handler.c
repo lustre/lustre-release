@@ -443,10 +443,12 @@ int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 RETURN(0);
         }
 
-        l_lock(&lock->l_resource->lr_namespace->ns_lock);
+        /* XXX layering violation!  When this goes, so can the
+         * EXPORT_SYMBOL(ldlm_everything_lock) in ldlm/ldlm_lockd.c -phil*/
+        l_lock(&ldlm_everything_lock);
         lock->l_flags |= LDLM_FL_CBPENDING;
         do_ast = (!lock->l_readers && !lock->l_writers);
-        l_unlock(&lock->l_resource->lr_namespace->ns_lock);
+        l_unlock(&ldlm_everything_lock);
 
         if (do_ast) {
                 struct lustre_handle lockh;

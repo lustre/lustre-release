@@ -93,7 +93,6 @@ struct ldlm_namespace {
         struct list_head      *ns_hash; /* hash table for ns */
         __u32                  ns_refcount; /* count of resources in the hash */
         struct list_head       ns_root_list; /* all root resources in ns */
-        struct lustre_lock     ns_lock; /* protects hash, refcount, list */
         struct list_head       ns_list_chain; /* position in global NS list */
         struct proc_dir_entry *ns_proc_dir;
 
@@ -266,6 +265,9 @@ do {                                                                          \
 #define LDLM_DEBUG_NOLOCK(format, a...)                 \
         CDEBUG(D_DLMTRACE, "### " format "\n" , ## a)
 
+/* For internal LDLM use */
+extern struct lustre_lock ldlm_everything_lock;
+
 /* ldlm_extent.c */
 int ldlm_extent_compat(struct ldlm_lock *, struct ldlm_lock *);
 int ldlm_extent_policy(struct ldlm_lock *, void *, ldlm_mode_t, void *);
@@ -281,9 +283,14 @@ void ldlm_register_intent(int (*arg)(struct ldlm_lock *lock, void *req_cookie,
                                      ldlm_mode_t mode, void *data));
 void ldlm_unregister_intent(void);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
-struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle);
+struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int strict);
 void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
 void ldlm_cancel_callback(struct ldlm_lock *lock);
+
+static inline struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *h)
+{
+        return __ldlm_handle2lock(h, 1);
+}
 
 #define LDLM_LOCK_PUT(lock)                     \
 do {                                            \

@@ -79,11 +79,11 @@ int ldlm_extent_policy(struct ldlm_lock *lock, void *req_cookie,
         if (!res)
                 LBUG();
 
-        l_lock(&res->lr_namespace->ns_lock);
+        l_lock(&ldlm_everything_lock);
         policy_internal(&res->lr_granted, req_ex, &new_ex, mode);
         policy_internal(&res->lr_converting, req_ex, &new_ex, mode);
         policy_internal(&res->lr_waiting, req_ex, &new_ex, mode);
-        l_unlock(&res->lr_namespace->ns_lock);
+        l_unlock(&ldlm_everything_lock);
 
         memcpy(&lock->l_extent, &new_ex, sizeof(new_ex));
 
