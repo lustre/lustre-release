@@ -153,20 +153,6 @@ struct ext2_super_block {
 #define EXT2_HAS_INCOMPAT_FEATURE(sb,mask)                      \
         ( EXT2_SB(sb)->s_es->s_feature_incompat & cpu_to_le32(mask) )
 
-
-struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry);
-int obdfs_create (struct inode * dir, struct dentry * dentry, int mode);
-int obdfs_mkdir(struct inode *dir, struct dentry *dentry, int mode);
-int obdfs_rmdir(struct inode *dir, struct dentry *dentry);
-int obdfs_unlink(struct inode *dir, struct dentry *dentry);
-int obdfs_mknod(struct inode *dir, struct dentry *dentry, int mode, int rdev);
-int obdfs_symlink(struct inode *dir, struct dentry *dentry,
-                  const char *symname);
-int obdfs_link(struct dentry *old_dentry, struct inode *dir,
-               struct dentry *dentry);
-int obdfs_rename(struct inode *old_dir, struct dentry *old_dentry,
-                 struct inode *new_dir, struct dentry *new_dentry);
-
 /* rw.c */
 int obdfs_do_writepage(struct page *, int sync);
 int obdfs_init_pgrqcache(void);
