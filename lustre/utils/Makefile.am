@@ -9,6 +9,6 @@ obdctl_LDADD := $(LIBREADLINE)
 lctl_LDADD := $(LIBREADLINE) -lptlctl
 sbin_PROGRAMS = lctl obdctl
 obdctl_SOURCES = parser.c obdctl.c obd.c parser.h obdctl.h
-lctl_SOURCES = parser.c obd.c lctl.c lctl.h parser.h
+lctl_SOURCES = parser.c obd.c lctl.c parser.h
 
 include $(top_srcdir)/Rules
