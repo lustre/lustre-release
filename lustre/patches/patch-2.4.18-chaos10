@@ -1039,13 +1039,11 @@
  	struct nameidata oldnd, newnd;
  
  	error = path_lookup(oldname, LOOKUP_PARENT, &oldnd);
-@@ -1883,7 +2001,9 @@
+@@ -1883,7 +2001,7 @@
  
  	double_lock(new_dir, old_dir);
  
 -	old_dentry = lookup_hash(&oldnd.last, old_dir);
-+	it.it_op = IT_RENAME;
-+	it.it_mode = 0;
 +	old_dentry = lookup_hash_it(&oldnd.last, old_dir, &it);
  	error = PTR_ERR(old_dentry);
  	if (IS_ERR(old_dentry))
@@ -1068,14 +1066,6 @@
  	unlock_kernel();
  
  	dput(new_dentry);
-@@ -1927,6 +2048,7 @@
- 	int error;
- 	char * from;
- 	char * to;
-+	struct lookup_intent it = { IT_RENAME, 0 };
- 
- 	from = getname(oldname);
- 	if(IS_ERR(from))
 --- linux-2.4.18-chaos5-pristine/fs/open.c	Sat Jun 29 23:07:56 2002
 +++ linux-2.4.18-chaos5/fs/open.c	Sat Jun 29 23:09:04 2002
 @@ -19,6 +19,8 @@
