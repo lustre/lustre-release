@@ -164,7 +164,7 @@ int target_handle_reconnect(struct lustre_handle *conn, struct obd_export *exp,
 {
         if (exp->exp_connection) {
                 struct lustre_handle *hdl;
-                hdl = &exp->exp_ldlm_data.led_import->imp_remote_handle;
+                hdl = &exp->exp_imp_reverse->imp_remote_handle;
                 /* Might be a re-connect after a partition. */
                 if (!memcmp(&conn->cookie, &hdl->cookie, sizeof conn->cookie)) {
                         CERROR("%s reconnecting\n", cluuid->uuid);
@@ -197,7 +197,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 {
         struct obd_device *target;
         struct obd_export *export = NULL;
-        struct obd_import *dlmimp;
+        struct obd_import *revimp;
         struct lustre_handle conn;
         struct obd_uuid tgtuuid;
         struct obd_uuid cluuid;
@@ -339,16 +339,16 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         memcpy(&conn, lustre_msg_buf(req->rq_reqmsg, 2, sizeof conn),
                sizeof conn);
 
-        if (export->exp_ldlm_data.led_import != NULL)
-                class_destroy_import(export->exp_ldlm_data.led_import);
-        dlmimp = export->exp_ldlm_data.led_import = class_new_import();
-        dlmimp->imp_connection = ptlrpc_connection_addref(req->rq_connection);
-        dlmimp->imp_client = &export->exp_obd->obd_ldlm_client;
-        dlmimp->imp_remote_handle = conn;
-        dlmimp->imp_obd = target;
-        dlmimp->imp_dlm_fake = 1;
-        dlmimp->imp_state = LUSTRE_IMP_FULL;
-        class_import_put(dlmimp);
+        if (export->exp_imp_reverse != NULL)
+                class_destroy_import(export->exp_imp_reverse);
+        revimp = export->exp_imp_reverse = class_new_import();
+        revimp->imp_connection = ptlrpc_connection_addref(req->rq_connection);
+        revimp->imp_client = &export->exp_obd->obd_ldlm_client;
+        revimp->imp_remote_handle = conn;
+        revimp->imp_obd = target;
+        revimp->imp_dlm_fake = 1;
+        revimp->imp_state = LUSTRE_IMP_FULL;
+        class_import_put(revimp);
 out:
         if (rc)
                 req->rq_status = rc;
@@ -373,8 +373,8 @@ void target_destroy_export(struct obd_export *exp)
 {
         /* exports created from last_rcvd data, and "fake"
            exports created by lctl don't have an import */
-        if (exp->exp_ldlm_data.led_import != NULL)
-                class_destroy_import(exp->exp_ldlm_data.led_import);
+        if (exp->exp_imp_reverse != NULL)
+                class_destroy_import(exp->exp_imp_reverse);
 }
 
 /*
@@ -430,6 +430,7 @@ static void abort_recovery_queue(struct obd_device *obd)
 void target_abort_recovery(void *data)
 {
         struct obd_device *obd = data;
+        int rc;
 
         CERROR("disconnecting clients and aborting recovery\n");
         spin_lock_bh(&obd->obd_processing_task_lock);
@@ -449,6 +450,12 @@ void target_abort_recovery(void *data)
            should be protected, somehow. */
         if (OBT(obd) && OBP(obd, postsetup))
                 OBP(obd, postsetup)(obd);
+
+        /* when recovery was abort, cleanup orphans for mds */
+        if (OBT(obd) && OBP(obd, postcleanup)) {
+                rc = OBP(obd, postcleanup)(obd);
+                CERROR("Cleanup %d orphans after recovery was abort!\n", rc);
+        }
 
         class_disconnect_exports(obd, 0);
         abort_delayed_replies(obd);
@@ -475,7 +482,8 @@ static void reset_recovery_timer(struct obd_device *obd)
 
         if (!recovering)
                 return;
-        CERROR("timer will expire in %d seconds\n", OBD_RECOVERY_TIMEOUT / HZ);
+        CDEBUG(D_HA, "timer will expire in %u seconds\n",
+               OBD_RECOVERY_TIMEOUT / HZ);
         mod_timer(&obd->obd_recovery_timer, jiffies + OBD_RECOVERY_TIMEOUT);
 }
 
@@ -488,7 +496,8 @@ void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler)
                 spin_unlock_bh(&obd->obd_processing_task_lock);
                 return;
         }
-        CERROR("%s: starting recovery timer\n", obd->obd_name);
+        CERROR("%s: starting recovery timer (%us)\n", obd->obd_name,
+               OBD_RECOVERY_TIMEOUT / HZ);
         obd->obd_recovery_handler = handler;
         obd->obd_recovery_timer.function = target_recovery_expired;
         obd->obd_recovery_timer.data = (unsigned long)obd;
@@ -693,6 +702,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         struct ptlrpc_request *saved_req;
         struct lustre_msg *reqmsg;
         int recovery_done = 0;
+        int rc2;
 
         LASSERT ((rc == 0) == (req->rq_reply_state != NULL));
 
@@ -731,6 +741,14 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                 CERROR("%s: all clients recovered, sending delayed replies\n",
                        obd->obd_name);
                 obd->obd_recovering = 0;
+
+                /* when recovering finished, cleanup orphans for mds       */
+                /* there should be no orphan cleaned up for this condition */
+                if (OBT(obd) && OBP(obd, postcleanup)) {
+                        CERROR("cleanup orphans after all clients recovered\n");
+                        rc2 = OBP(obd, postcleanup)(obd);
+                        LASSERT(rc2 == 0);
+                }
 
                 if (OBT(obd) && OBP(obd, postsetup))
                         OBP(obd, postsetup)(obd);
@@ -897,5 +915,4 @@ int target_handle_ping(struct ptlrpc_request *req)
 {
         return lustre_pack_reply (req, 0, NULL, NULL);
 }
-
 

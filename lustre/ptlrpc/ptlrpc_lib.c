@@ -38,7 +38,7 @@
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct ptlrpc_connection *conn;
-        struct obd_ioctl_data* data = buf;
+        struct lustre_cfg* lcfg = buf;
         struct client_obd *cli = &obddev->u.cli;
         struct obd_import *imp;
         struct obd_uuid server_uuid;
@@ -66,29 +66,29 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
-        if (data->ioc_inllen1 < 1) {
+        if (lcfg->lcfg_inllen1 < 1) {
                 CERROR("requires a TARGET UUID\n");
                 RETURN(-EINVAL);
         }
 
-        if (data->ioc_inllen1 > 37) {
+        if (lcfg->lcfg_inllen1 > 37) {
                 CERROR("client UUID must be less than 38 characters\n");
                 RETURN(-EINVAL);
         }
 
-        if (data->ioc_inllen2 < 1) {
+        if (lcfg->lcfg_inllen2 < 1) {
                 CERROR("setup requires a SERVER UUID\n");
                 RETURN(-EINVAL);
         }
 
-        if (data->ioc_inllen2 > 37) {
+        if (lcfg->lcfg_inllen2 > 37) {
                 CERROR("target UUID must be less than 38 characters\n");
                 RETURN(-EINVAL);
         }
 
         sema_init(&cli->cl_sem, 1);
         cli->cl_conn_count = 0;
-        memcpy(server_uuid.uuid, data->ioc_inlbuf2, MIN(data->ioc_inllen2,
+        memcpy(server_uuid.uuid, lcfg->lcfg_inlbuf2, MIN(lcfg->lcfg_inllen2,
                                                         sizeof(server_uuid)));
 
         init_MUTEX(&cli->cl_dirty_sem);
@@ -124,7 +124,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         imp->imp_connect_op = connect_op;
         imp->imp_generation = 0;
         INIT_LIST_HEAD(&imp->imp_pinger_chain);
-        memcpy(imp->imp_target_uuid.uuid, data->ioc_inlbuf1, data->ioc_inllen1);
+        memcpy(imp->imp_target_uuid.uuid, lcfg->lcfg_inlbuf1, lcfg->lcfg_inllen1);
         class_import_put(imp);
 
         cli->cl_import = imp;
@@ -133,8 +133,8 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_sandev = to_kdev_t(0);
 
         /* Register with management client if we need to. */
-        if (data->ioc_inllen3 > 0) {
-                char *mgmt_name = data->ioc_inlbuf3;
+        if (lcfg->lcfg_inllen3 > 0) {
+                char *mgmt_name = lcfg->lcfg_inlbuf3;
                 int rc;
                 struct obd_device *mgmt_obd;
                 mgmtcli_register_for_events_t register_f;

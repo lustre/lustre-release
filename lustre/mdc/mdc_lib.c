@@ -269,3 +269,4 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
                 LOGL0(data->name, data->namelen, tmp);
         }
 }
+
