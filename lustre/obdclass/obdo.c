@@ -358,3 +358,14 @@ int obdo_cmp_md(struct obdo *dst, struct obdo *src, obd_flag compare)
         return res;
 }
 EXPORT_SYMBOL(obdo_cmp_md);
+
+void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj)
+{
+        ioobj->ioo_id = oa->o_id;
+        if (oa->o_valid & OBD_MD_FLGROUP)
+                ioobj->ioo_gr = oa->o_gr;
+        else 
+                ioobj->ioo_gr = 0;
+        ioobj->ioo_type = oa->o_mode;
+}
+EXPORT_SYMBOL(obdo_to_ioobj);

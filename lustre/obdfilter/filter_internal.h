@@ -39,7 +39,7 @@
 #define FILTER_LR_MAX_CLIENT_WORDS (FILTER_LR_MAX_CLIENTS/sizeof(unsigned long))
 
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
-#define FILTER_GROUPS 2 /* must be at least 3; not dynamic yet */
+#define FILTER_GROUPS 3 /* must be at least 3; not dynamic yet */
 
 #define FILTER_MOUNT_RECOV 2
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
@@ -104,7 +104,7 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
 __u64 filter_next_id(struct filter_obd *, struct obdo *);
-int filter_update_server_data(struct obd_device *, struct file *,
+int filter_update_server_data(struct obd_device *, struct file *, obd_gr,
                               struct filter_server_data *, int force_sync);
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,
