@@ -1,0 +1,246 @@
+#!@PERL@ -w
+
+#  This script is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+#
+#  See the COPYING and AUTHORS files for more details.
+
+use FileHandle;
+use Getopt::Long;
+use strict;
+
+# Prototypes
+sub files_in($$);
+sub parse($$);
+sub help();
+
+sub slashme($) {
+    my ($dir) = @_;
+    $dir =~ s#([^/])$#$&/#; # append a slash if necessary
+    if ($dir eq './') {
+	return '';
+    } else {
+	return $dir;
+    }
+}
+
+# Generate a list of files in a directory
+#
+sub files_in($$) {
+    my ($dir, $path) = @_;
+    my $dh = new FileHandle;
+    my (@files, $file);
+
+
+    opendir $dh, length("$dir$path") ? "$dir$path" : '.'
+	or die "$dir$path: $!\n";
+    while ($file = readdir($dh)) {
+	next if $file =~ /^(\.|\.\.|\.#.*|CVS)$/;
+	if (-d "$dir$path$file") {
+		@files = (@files, files_in($dir, "$path$file/"));
+	} else {
+		#print "[$path$file]\n";
+		push @files, "$path$file";
+	}
+    }
+    closedir $dh;
+    return @files;
+}
+
+# Parse a configuration file
+# Callback called with ($patch, @guards) arguments
+#
+sub parse($$) {
+    my ($fh, $callback) = @_;
+
+    my $mode = 0;
+
+    while (<$fh>) {
+        my @guards = ();
+	s/(^|\s+)#.*//;
+	foreach my $token (split) {
+	    if ($token =~ /^[-+]/) {
+		if ($mode == 1) {
+		    @guards = ();
+		    $mode = 0;
+		}
+		push @guards, $token;
+	    } else {
+		$mode = 1;
+		#print "[" . join(",", @guards) . "] $patch\n";
+		&$callback($token, @guards);
+	    }
+	}
+    }
+}
+
+# Command line options
+#
+my ($dir, $config, $default, $check) = ('', '-', 1, 0);
+my @path;
+
+# Help text
+#
+sub help() {
+    print "$0 - select from a list of files guarded by conditions\n";
+    print "SYNOPSIS: $0 [--prefix=dir] [--path=dir1:dir2:...]\n" .
+	"	[--default=0|1] [--check] [--config=file] symbol ...\n\n" .
+	"	(Default values: --path='" . join(':', @path) . "', " .
+		"--default=$default)\n";
+    exit 0;
+}
+
+# Parse command line options
+#
+Getopt::Long::Configure ("bundling");
+eval {
+    unless (GetOptions (
+	'd|prefix=s' => \$dir,
+	'c|config=s' => \$config,
+	'C|check' => \$check,
+	'p|path=s' => \@path,
+	'D|default=i' => \$default,
+	'h|help' => sub { help(); exit 0; })) {
+	help();
+	exit 1;
+    }
+};
+if ($@) {
+    print "$@";
+    help();
+    exit 1;
+}
+
+@path = ('.')
+    unless (@path);
+@path = split(/:/, join(':', @path));
+
+my $fh = ($config eq '-') ? \*STDIN : new FileHandle($config)
+    or die "$config: $!\n";
+
+$dir = slashme($dir);
+
+if ($check) {
+    # Check for duplicate files, or for files that are not referenced by
+    # the specification.
+
+    my $problems = 0;
+    my @files;
+
+    foreach (@path) {
+	@files = (@files, files_in($dir, slashme($_)));
+    }
+    my %files = map { $_ => 0 } @files;
+
+    parse($fh, sub {
+	my ($patch, @guards) = @_;
+	if (exists $files{$patch}) {
+	    $files{$patch}++;
+	} else {
+	    print "Not found: $dir$patch\n";
+	    $problems++;
+	}});
+
+    $fh->close();
+
+    my ($file, $ref);
+    while (($file, $ref) = each %files) {
+	next if $ref == 1;
+
+	print "Unused: $file\n" if $ref == 0;
+	print "Multiple uses: $file\n" if $ref > 1;
+        $problems++;
+    }
+    exit $problems ? 1 : 0;
+
+} else {
+    # Generate a list of patches to apply.
+
+    my %symbols = map { $_ => 1 } @ARGV;
+
+    parse($fh, sub {
+	my ($patch, @guards) = @_;
+
+	my $selected;
+	if (@guards) {
+	    # If the first guard is -xxx, the patch is included by default;
+	    # if it is -xxx, the patch is excluded by default.
+	    $selected = ($guards[0] =~ /^-/);
+
+	    foreach (@guards) {
+		/^([-+])(!?)(.*)?/
+		    or die "Bad guard '$_'\n";
+
+		# Check if the guard matches
+		if (($2 eq '!' && !exists $symbols{$3}) ||
+		    ($2 eq ''  && ( $3 eq '' || exists $symbols{$3}))) {
+		    # Include or exclude
+		    $selected = ($1 eq '+');
+		}
+	    }
+	} else {
+	    # If there are no guards, use the specified default result.
+	    $selected = $default;
+	}
+
+	print "$dir$patch\n"
+	    if $selected;
+	});
+
+    $fh->close();
+
+    exit 0;
+}
+
+__END__
+
+=head1 NAME
+
+guards - select from a list of files guarded by conditions
+
+=head1 SYNOPSIS
+
+F<guards> [--prefix=F<dir>] [--path=F<dir2:dir2:...>]
+	  [--default=I<0>|I<1>] [--check] [--config=F<file>]
+	  I<symbol> ...
+
+=head1 DESCRIPTION
+
+The script reads a configuration file that may contain so-called guards, file
+names, and comments, and writes those file names that satisfy all guards to
+standard output. The script takes a list of symbols as its arguments. Each line
+in the ocnfiguration file is processed separately. Lines may start with a
+number of guards. The following guards are defined:
+
+=over
+
++I<xxx> Include the file(s) on this line if the symbol I<xxx> is defined.
+
+-I<xxx> Exclude the file(s) on this line if the symbol I<xxx> is defined.
+
++!I<xxx> Include the file(s) on this line if the symbol I<xxx> is not defined.
+
+-!I<xxx> Exclude the file(s) on this line if the symbol I<xxx> is not defined.
+
+- Exclude this file. Used to avoid spurious I<--check> messages.
+
+=back
+
+The guards are processed left to right. The last guard that matches determines
+if the file is included. If no guard is specified, the I<--default>
+setting determines if the file is included.
+
+If no configuration file is specified, the script reads from standard input.
+
+The I<--check> option is used to compare the specification file against the
+file system. If files are referenced in the specification that do not exist, or
+if files are not enlisted in the specification file warnings are printed. The
+I<--path> option can be used to specify which directory or directories to scan.
+Multiple directories are eparated by a colon (C<:>) character. The
+I<--prefix> option specifies the location of the files.
+
+=head1 AUTHOR
+
+Andreas Gruenbacher <agruen@suse.de> (SuSE Linux AG)
+

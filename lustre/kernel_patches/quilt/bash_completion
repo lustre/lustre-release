@@ -1,0 +1,157 @@
+#-*- mode: shell-script;-*-
+
+# Programmed completion for bash to use quilt
+# Copyright 2003 Martin Quinson <martin.quinson@tuxfamily.org>
+
+# This file is part of the distribution of quilt, and is distributed under
+# the same licence than quilt itself
+
+have quilt &&
+_quilt()
+{
+    if [ "$(type -t patch_file_name)" != function ]
+    then
+        if ! [ -r /usr/share/quilt/scripts/patchfns ]
+	then
+	  # Cannot read library /usr/share/quilt/scripts/patchfns
+	  return 0
+	fi
+	. /usr/share/quilt/scripts/patchfns
+    fi
+				
+    local i cur prev cmds patches pcount patch_nums
+
+    COMPREPLY=()
+    cur=${COMP_WORDS[COMP_CWORD]}
+    prev=${COMP_WORDS[COMP_CWORD-1]}
+
+    # commands (added to patches)
+    cmds='add applied delete diff files import new next patches pop \
+          previous push refresh remove series setup top unapplied'
+
+    patches=`cat_series`
+    pcount=`cat_series | wc -l`
+    patch_nums=`i=0; while [[ ++i -le $pcount ]] ; do echo $i; done `
+
+    if [[ $COMP_CWORD -eq 1 ]] ; then
+        # if no command were given, complete on commands
+	COMPREPLY=( $( compgen -W "$cmds -h" -- $cur ) )
+	return 0
+    else
+	# if we're completing for 'quilt -h', then just 
+        # complete on any valid command
+	if [ ${COMP_WORDS[1]} == -h ] ; then
+	    COMPREPLY=( $( compgen -W "$cmds" -- $cur ) )
+            return 0
+	fi
+    fi
+    
+    # Complete depending on options
+    case ${COMP_WORDS[1]} in
+	add)
+	   case $prev in
+	     -p)
+ 	        COMPREPLY=( $( compgen -W "$patches" -- $cur ) )
+		;;
+	     *)
+	        _filedir 
+	        COMPREPLY=( ${COMPREPLY[@]:-} $( compgen -W "-p -h" -- $cur ) )
+	        ;;
+	   esac
+	   ;;
+	applied) 
+	   COMPREPLY=( $( compgen -W "-n -h $patches" -- $cur ) )
+	   ;;
+	delete) 
+	   COMPREPLY=( $( compgen -W "$patches" -- $cur ) )
+	   ;;
+	diff) 
+	   case $prev in
+	     -p)
+ 	        COMPREPLY=( $( compgen -W "0 1" -- $cur ) )
+		;;
+	     -P|-c)
+	     	COMPREPLY=( $( compgen -W "$patches" -- $cur ) )
+		;;
+	     *)
+	        _filedir 
+	        COMPREPLY=( ${COMPREPLY[@]:-} $( compgen -W "-p -P -c -R -z -h" -- $cur ) )
+	        ;;
+	   esac
+	   ;;
+	files)
+	   COMPREPLY=( $( compgen -W "-v $patches" -- $cur ) )
+	   ;;
+	import)
+	   case $prev in
+	     -p)
+ 	        COMPREPLY=( $( compgen -W "0 1 2 3 4 5 6 7 8 9 10" -- $cur ) )
+		;;
+	     -n)
+		;;
+	     *)
+	        _filedir 
+	        COMPREPLY=( ${COMPREPLY[@]:-} $( compgen -W "-p -n -f -h" -- $cur ) )
+	        ;;
+	   esac
+	   ;;
+	new)
+	   ;;
+	next|previous)
+	   COMPREPLY=( $( compgen -W "-n $patches" -- $cur ) )
+	   ;;
+	patches)
+	   _filedir 
+	   COMPREPLY=( ${COMPREPLY[@]:-} $( compgen -W "-v -n -h" -- $cur ) )
+	   ;;
+	pop)
+	   COMPREPLY=( $( compgen -W "-a -f -R -q -v -h $patches $patch_nums" -- $cur ) )
+	   ;;
+	push)
+	   COMPREPLY=( $( compgen -W "-a -f -R -q -v -h --leave-rejects --interactive $patches $patch_nums" -- $cur ) )
+	   ;;
+	refresh)
+	   case $prev in
+	     -p)
+ 	        COMPREPLY=( $( compgen -W "0 1" -- $cur ) )
+		;;
+	     *)
+	     	COMPREPLY=( $( compgen -W "-p -f -h $patches" -- $cur ) )
+		;;
+	   esac
+	   ;;
+	remove)
+	   case $prev in
+	     -p)
+ 	        COMPREPLY=( $( compgen -W "$patches" -- $cur ) )
+		;;
+	     *)
+	        _filedir 
+	        COMPREPLY=( ${COMPREPLY[@]:-} $( compgen -W "-p -h" -- $cur ) )
+		;;
+	   esac
+	   ;;
+	 series)
+	   COMPREPLY=( $( compgen -W "-n -v -h" -- $cur ) )
+	   ;;
+	 setup)
+	   case $prev in
+	     -d)
+	     	_filedir -d
+		;;
+	     *)
+	        _filedir 
+	        COMPREPLY=( ${COMPREPLY[@]:-} $( compgen -W "-d -h" -- $cur ) )
+		;;
+	   esac
+	   ;;
+	 top)
+	   ;;
+	 unapplied)
+	   COMPREPLY=( $( compgen -W "-n -h $patches" -- $cur ) )
+	   ;;
+    esac
+    return 0
+}
+[ "$have" ] && complete -F _quilt $filenames quilt
+

@@ -1,0 +1,32 @@
+At the begining was the void. Then Andrew Morton <akpm@digeo.com> begun
+a collection of small scripts for patch management. The contributions
+came from Stephen Cameron <steve.cameron@hp.com>, Matt Reppert
+<arashi@arashi.yi.org> and Jeremy Fitzhardinge <jeremy@digeo.com>.
+
+Then, Andreas Gruenbacher <agruen@suse.de> came to cleanup, reorganize,
+document and speed up the code. He did also package it to rpm.
+
+Finally, Martin Quinson <Martin.Quinson@tuxfamily.org> did a debian
+package and came with several little patches.
+
+
+Andrew Morton <akpm@digeo.com>
+	Collection of scripts for patch management (patch-scripts).
+	
+Stephen Cameron <steve.cameron@hp.com>
+	Contributed pstatus.
+
+Matt Reppert <arashi@arashi.yi.org>
+Jeremy Fitzhardinge <jeremy@digeo.com>
+	Contributions to Andrew's scripts.
+
+Andreas Gruenbacher <agruen@suse.de>
+	Clean up, reorganize, speedups, documentation.
+	Package up as RPM.
+
+Gerd Knorr <kraxel@suse.de>
+	Contributed spec2series.
+
+Martin Quinson <Martin.Quinson@tuxfamily.org>
+	Several little patches.
+	Package up for Debian.

@@ -1,0 +1,186 @@
+#! @BASH@
+
+#  This script is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+#
+#  See the COPYING and AUTHORS files for more details.
+
+# Read in library functions
+if [ "$(type -t patch_file_name)" != function ]
+then
+	if ! [ -r @SCRIPTS@/patchfns ]
+	then
+		echo "Cannot read library @SCRIPTS@/patchfns" >&2
+		exit 1
+	fi
+	. @SCRIPTS@/patchfns
+fi
+
+usage()
+{
+	echo $"Usage: quilt pop [-afRqv] [num|patch]"
+	if [ x$1 = x-h ]
+	then
+		echo $"
+
+Remove patch(es) from the current stack. A number of patches to remove,
+or a patch name can be specified. If a patch name is given, remove all
+patches applied on top of the named patch. If neither a number nor a
+patch name is specified, remove the next patch from the series file.
+
+-a	Remove all applied patches.
+
+-f	Force remove. The state before the patch(es) were applied will
+	be restored from backup files.
+
+-R	Remove the patch with \`patch -R' and check if the patch reverts
+	all changes properly.
+
+-q	Quiet operation.
+
+-v	Verbose operation.
+
+"
+		exit 0
+	else
+		exit 1
+	fi
+}
+
+list_patches()
+{
+	local n=0 patch
+	applied_patches \
+	| tac \
+	| if [ -n "$opt_all" ]
+	then
+		cat
+	else
+		while read patch
+		do
+			if [ -n "$number" ]
+			then
+				if [ $n -eq $number ]
+				then
+					break
+				fi
+				n=$[$n+1]
+			fi
+			if [ $patch = "$stop_at_patch" ]
+			then
+				break
+			fi
+			echo $patch
+		done
+	fi
+}
+
+options=`getopt -o fRqvah -- "$@"`
+
+if [ $? -ne 0 ]
+then
+        usage
+fi
+
+eval set -- "$options"
+
+while true
+do
+        case "$1" in
+        -f)
+                opt_force=1
+		unset opt_remove
+		shift ;;
+	-R)
+		opt_remove=1	# remove with patch -R; no tricks
+		unset opt_force
+		shift ;;
+        -q)
+                opt_quiet=1
+		shift ;;
+        -v)
+                opt_verbose=1
+		shift ;;
+	-a)
+		opt_all=1
+		shift ;;
+	-h)
+		usage -h ;;
+        --)
+                shift
+		break ;;
+        esac
+done
+
+if [ $# -gt 1 -o \( -n "$opt_all" -a $# -ne 0 \) ]
+then
+        usage
+fi
+
+if [ $# -eq 1 ]
+then
+	if is_numeric $1
+	then
+		number=$1
+	else
+		stop_at_patch=$(stripit $1)
+	fi
+else
+	[ -n "$opt_all" ] || number=1
+fi
+
+[ -n "$opt_force" ] &&
+	rpatch_options="$rpatch_options -f"
+[ -n "$opt_remove" ] &&
+	rpatch_options="$rpatch_options -R"
+[ -n "$opt_quiet" ] &&
+	rpatch_options="$rpatch_options -q"
+[ -n "$opt_verbose" ] &&
+	rpatch_options="$rpatch_options -v"
+
+if [ -n "$stop_at_patch" ]
+then
+	if ! is_applied $stop_at_patch
+	then
+		echo $"Patch $stop_at_patch is not applied."
+		exit 1
+	fi
+fi
+
+if ! patches=$(list_patches) 2>&1
+then
+	exit 1
+elif [ -z "$patches" ]
+then
+        echo $"No patch removed"
+	exit 0
+fi
+
+trap "interrupted=1" SIGINT
+
+for patch in $patches
+do
+	if ! @SCRIPTS@/rpatch $rpatch_options $patch
+	then
+		exit 1
+	fi
+	if [ -n "$interrupted" ]
+	then
+		echo $"Interrupted by user"
+		exit 1
+	fi
+	[ -z "$opt_quiet" ] && echo
+done
+
+patch="$(top_patch)"
+if [ -z "$patch" ]
+then
+	echo $"No patches applied"
+else
+	echo $"Now at patch $patch"
+fi
+### Local Variables:
+### mode: shell-script
+### End:
+# vim:filetype=sh

@@ -1,0 +1,98 @@
+#! @BASH@
+
+#  This script is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+#
+#  See the COPYING and AUTHORS files for more details.
+
+# Read in library functions
+if [ "$(type -t patch_file_name)" != function ]
+then
+	if ! [ -r @SCRIPTS@/patchfns ]
+	then
+		echo "Cannot read library @SCRIPTS@/patchfns" >&2
+		exit 1
+	fi
+	. @SCRIPTS@/patchfns
+fi
+
+usage()
+{
+	echo $"Usage: quilt fork {new_patchname}"
+	if [ x$1 = x-h ]
+	then
+		echo $"
+ Fork the next patch in the series
+"
+		exit 0
+	else
+		exit 1
+	fi
+}
+
+options=`getopt -o h -- "$@"`
+
+if [ $? -ne 0 ]
+then
+	usage
+fi
+
+eval set -- "$options"
+
+while true
+do
+	case "$1" in
+	-h)
+		usage -h ;;
+	--)
+		shift
+		break ;;
+	esac
+done
+
+if [ $# -ne 1 ]
+then
+	usage
+fi
+
+patch_file=$(echo $1 | @SED@ -e 's/^'"$(quote_bre $P)"'patches\///')
+patch=$(stripit $patch_file)
+
+if patch_in_series $patch
+then
+	echo $"Patch $patch exists already, please change a new_name"
+	exit 1
+fi
+
+mkdir -p $(dirname $(pc_file_name $patch))
+rm -f $(pc_file_name $patch)
+
+next_patch=$(patches_after $(top_patch) | head -n 1)
+#copy the original patch to the cloned patch
+
+next_patch_file=$(patch_file_name $next_patch)
+next_pc=$(pc_file_name $next_patch)
+
+cp -f ${next_patch_file} patches/${patch_file}.patch
+
+#remove the original patch
+if [ -z next_patch ]  
+then
+	echo $"patch ended at $(top_patch)"
+	exit 1
+else
+	remove_from_series $next_patch
+fi
+
+#add the cloned patch to series
+if ! insert_in_series ${patch_file}.patch 
+then
+	echo $"Failed to fork patch $patch"
+	exit 1
+fi
+echo $"cloned $next_patch to $patch_file"
+### Local Variables:
+### mode: shell-script
+### End:
+# vim:filetype=sh

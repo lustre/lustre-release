@@ -1,0 +1,95 @@
+#! @BASH@
+
+#  This script is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+#
+#  See the COPYING and AUTHORS files for more details.
+
+# Read in library functions
+if [ "$(type -t patch_file_name)" != function ]
+then
+	if ! [ -r @SCRIPTS@/patchfns ]
+	then
+		echo "Cannot read library @SCRIPTS@/patchfns" >&2
+		exit 1
+	fi
+	. @SCRIPTS@/patchfns
+fi
+
+usage()
+{
+	echo $"Usage: quilt delete [patch]"
+	if [ x$1 = x-h ]
+	then
+		echo $"
+
+Remove the specified or topmost patch from the series file.  If the
+patch is applied, quilt will attempt to remove it first. (Only the
+topmost patch can be removed right now.)"
+
+		exit 0
+	else
+		exit 1
+	fi
+}
+
+options=`getopt -o h -- "$@"`
+
+if [ $? -ne 0 ]
+then
+	usage
+fi
+
+eval set -- "$options"
+
+while true
+do
+	case "$1" in
+	-h)
+		usage -h ;;
+	--)
+		shift
+		break ;;
+	esac
+done
+
+if [ $# -gt 1 ]
+then
+	usage
+fi
+
+patch=$(stripit $1)
+
+if [ -z "$patch" ]
+then
+	patch="$(top_patch)"
+	if [ -z "$patch" ]
+	then
+		echo $"No patch applied"
+		exit 1
+	fi
+else
+	if ! patch_in_series $patch
+	then
+		echo $"Patch $patch does not exist"
+		exit 1
+	fi
+fi
+if is_applied $patch
+then
+	if [ "$patch" != "$(top_patch)" ] || \
+	   ! @SCRIPTS@/rpatch -fq "$patch"
+	then
+		echo $"Patch $patch is currently applied"
+		exit 1
+	fi
+fi
+if ! remove_from_series $patch
+then
+	echo $"Failed to remove patch $patch"
+fi
+### Local Variables:
+### mode: shell-script
+### End:
+# vim:filetype=sh

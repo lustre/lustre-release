@@ -1,0 +1,129 @@
+#!@PERL@ -w
+
+#  This script is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+#
+#  See the COPYING and AUTHORS files for more details.
+
+# Extract or update a section from a combined patch + documentation +
+# meta information file.
+
+use FileHandle;
+use Getopt::Long;
+use File::Temp qw(tempfile);
+use strict;
+
+my $select;
+my $update;
+
+if (!GetOptions("s|select=s" => \$select,
+		"u|update=s" => \$update) ||
+    (!defined $select && !defined $update)) {
+	print STDERR "USAGE: $0 {-s|-u} section file [< replacement]\n";
+	exit 1;
+}
+
+foreach my $arg (@ARGV) {
+	my $fh;
+
+	if (! -e $arg) {
+		$fh = new FileHandle("/dev/null");
+	} elsif ($arg =~ /\.gz$/) {
+		$fh = new FileHandle("gzip -cd $arg |");
+	} elsif ($arg =~ /\.bz2$/) {
+		$fh = new FileHandle("bzip2 -cd $arg |");
+	} else {
+		$fh = new FileHandle("< $arg");
+	}
+
+	unless ($fh) {
+		print STDERR "$arg: $!\n";
+		next;
+	}
+
+	if (defined $select) {
+		my $section = "head";
+		my $newline = "";
+		while (<$fh>) {
+			if (/^%(.*)/) {
+				last if $section eq $select;
+				$section = $1;
+				next;
+			}
+			if ($section eq $select) {
+				print $newline;
+				if ($_ eq "\n") {
+					$newline = $_;
+				} else {
+					$newline="";
+					print;
+				}
+			}
+		}
+	} elsif (defined $update) {
+		my ($fh2, $tempname) = tempfile("$arg.XXXXXX");
+		if ($arg =~ /\.gz$/) {
+			$fh2->close();
+			if (! -e $tempname) {
+				die "File $tempname disappeared!\n";
+			}
+			$fh2 = new FileHandle("| gzip -c > $tempname");
+		} elsif ($arg =~ /\.bz2$/) {
+			$fh2->close();
+			if (! -e $tempname) {
+				die "File $tempname disappeared!\n";
+			}
+			$fh2 = new FileHandle("| bzip2 -c > $tempname");
+		}
+		unless ($fh2) {
+			die "$tempname: $!\n";
+		}
+
+		# Copy things before updated section
+		my $last_was_newline=1; # start first section in first line
+		while (<$fh>) {
+			if (/^%(.*)/ && $1 eq $update) {
+				last;
+			}
+			$last_was_newline = ($_ eq "\n");
+			print $fh2 $_;
+		}
+		print $fh2 "\n"
+			unless ($last_was_newline);
+
+		# Create/replace updated section
+		print $fh2 "%$update\n";
+		while (<STDIN>) {
+			print $fh2 $_;
+		}
+		print $fh2 "\n";
+
+		# Skip obsolete section
+		while (<$fh>) {
+			if (/^%(.*)/) {
+				print $fh2 $_;
+				last;
+			}
+		}
+		# Copy things after updated section
+		while (<$fh>) {
+			print $fh2 $_;
+		}
+		unless (close $fh2) {
+			die "$arg.patch: $!\n";
+		}
+
+		if (-e $arg) {
+			unlink "$arg~";
+			unless (rename $arg, "$arg~") {
+				die "Failed to rename $arg to $arg~: $!\n";
+			}
+		}
+		unless (rename $tempname, $arg) {
+			rename("$arg~", $arg);
+			die "Failed to rename $arg.parse to $arg: $!\n";
+		}
+	}
+	close $fh;
+}

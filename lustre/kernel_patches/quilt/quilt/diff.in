@@ -1,0 +1,307 @@
+#! @BASH@
+
+#  This script is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+#
+#  See the COPYING and AUTHORS files for more details.
+
+# Read in library functions
+if [ "$(type -t patch_file_name)" != function ]
+then
+	if ! [ -r @SCRIPTS@/patchfns ]
+	then
+		echo "Cannot read library @SCRIPTS@/patchfns" >&2
+		exit 1
+	fi
+	. @SCRIPTS@/patchfns
+fi
+
+usage()
+{
+	local redirect
+	if [ x$1 != x-h ]
+	then
+		redirect='>&2'
+	fi
+	echo $"Usage: quilt diff [-p n] [-c patch|-z] [-R] [-P patch] [file ...]" $redirect
+	
+	if [ x$1 = x-h ]
+	then
+		echo $"
+
+Produces a diff of the specified file(s) in the topmost or specified
+patch.  If no files are specified, all files that are modified are
+included.
+
+-p n	Create a -p n style patch (-p0 or -p1 are supported).
+
+-P patch
+	Create a diff for the specified patch.  (Defaults to the topmost
+	patch.)
+
+-c patch
+	Create a combined diff for all patches between this patch and
+	the patch specified with -P. A patch name of \"-\" is equivalent
+	to specifying the first applied patch.
+
+-R	Create a reverse diff.
+
+-z	Write to standard output the changes that have been made
+	relative to the topmost or specified patch.
+
+"
+		exit 0
+	else
+		exit 1
+	fi
+}
+
+do_diff()
+{
+	local file=$1 old_file=$2 new_file=$3
+
+	if [ -n "$opt_reverse" ]
+	then
+		local f=$new_file
+		new_file=$old_file
+		old_file=$f
+	fi
+	
+	if [ -n "$opt_diff" ]
+	then
+		if ! @DIFF@ -qN $old_file $new_file >/dev/null
+		then
+			$opt_diff $old_file $new_file
+			true
+		fi
+	else
+		diff_file $file $old_file $new_file
+	fi
+}
+
+die ()
+{
+	local status=$1
+	[ -n "$workdir" ] && rm -rf $workdir
+	exit $status
+}
+
+options=`getopt -o p:P:c:Rzh --long diff: -- "$@"`
+
+if [ $? -ne 0 ]
+then
+	usage
+fi
+
+eval set -- "$options"
+
+while true
+do
+	case "$1" in
+	-p)
+		opt_strip_level=$2
+		shift 2 ;;
+	-P)
+		last_patch=$(stripit $2)
+		shift 2 ;;
+	-c)
+		opt_combine=$(stripit $2)
+		shift 2 ;;
+	-R)
+		opt_reverse=1
+		shift ;;
+	-z)
+		opt_relative=1
+		shift ;;
+	-h)
+		usage -h ;;
+	--diff)
+		opt_diff=$2
+		shift 2 ;;
+	--)
+		shift
+		break ;;
+	esac
+done
+
+opt_files=( "$@" )
+
+if [ -n "$opt_combine" -a -n "$opt_relative" ]
+then
+	echo $"Options \`-c patch' and \`-z' cannot be combined."
+	die 1
+fi
+
+if [ -z "$last_patch" ]
+then
+	last_patch=$(top_patch)
+	if [ -z "$last_patch" ]
+	then
+		echo $"No patch seem to be applied" >&2
+		die 1
+	fi
+fi
+
+if ! is_applied "$last_patch"
+then
+	echo $"Patch $last_patch is not applied" >&2
+	die 1
+fi
+
+if [ -z "$opt_strip_level" ]
+then
+	opt_strip_level=$(patch_strip_level $last_patch)
+fi
+if [ "$opt_strip_level" != 0 -a "$opt_strip_level" != 1 ]
+then
+	echo $"Cannot diff patches with -p$opt_strip_level, please specify -p0 or -p1 instead" >&2
+	die 1
+fi
+
+if [ -n "$opt_combine" ]
+then
+	if ! refresh_patches_per_file
+	then
+		echo $"refresh_patches_per_file failed."
+		die 1
+	fi
+	
+	set -- $(patches_before $last_patch) $last_patch
+	if [ "x$opt_combine" != "x-" ]
+	then
+		while [ $# -ge 1 -a "$1" != "$opt_combine" ]
+		do
+			shift
+		done
+		if [ $# -eq 0 ]
+		then
+			echo $"Patch $opt_combine not applied before $last_patch."
+			die 1
+		fi
+	fi
+	
+	while read file first garbage
+	do
+		if [ ${#opt_files[@]} -gt 0 ] && \
+		   ! in_array "$file" "${opt_files[@]}"
+		then
+			continue
+		fi
+		patches[${#patches[@]}]="$first"
+		files[${#files[@]}]="$file"
+	done \
+	< <(modified_files -- "$@")
+else
+	for file in $(files_in_patch $last_patch)
+	do
+		if [ ${#opt_files[@]} -gt 0 ] && \
+		   ! in_array "$file" "${opt_files[@]}"
+		then
+			continue
+		fi
+		files[${#files[@]}]="$file"
+	done
+fi
+
+if [ ${#opt_files[@]} -gt 0 ]
+then
+	for file in "${opt_files[@]}"
+	do
+		if ! in_array "$file" "${files[@]}"
+		then
+			echo $"File $file is not being modified."
+		fi
+	done
+fi
+
+trap "die 1" SIGTERM
+
+if [ -n "$opt_relative" ]
+then
+	patch_file=$(patch_file_name $last_patch)
+	pc_file=$(pc_file_name $last_patch)
+	patch_args=$(patch_args $last_patch)
+	workdir=$(gen_tempfile -d $PWD/quilt)
+	pwd=$PWD
+
+	if ! cd .pc/$last_patch
+	then
+		echo $"Cannot change into .pc/$last_patch"
+		die 1
+	fi
+	if ! cp -l --parents "${files[@]}" $workdir/
+	then
+		echo $"Failed to copy files to temporary directory"
+		die 1
+	fi
+	if ! cd $workdir
+	then
+		echo $"Cannot change to temporary directory"
+		die 1
+	fi
+	
+	if [ -s $pwd/$patch_file ]
+	then
+		if ! cat_file $pwd/$patch_file \
+		     | @PATCH@ $patch_args --no-backup-if-mismatch \
+			     -E >/dev/null 2>/dev/null
+		then
+			# If a patch was force applied (and therefore needs
+			# refreshing), we know that patching the temporary
+			# files won't succeed, either. So, ignore the error
+			# in that particular case.
+			
+			if ! [ -e $pwd/$pc_file~refresh ]
+			then
+				echo $"Failed to patch temporary files"
+				die 1
+			fi
+		fi
+	fi
+	if ! cd $pwd
+	then
+		echo $"Cannot change to source directory"
+		die 1
+	fi
+fi
+
+for ((i=0; i<${#files[@]}; i++))
+do
+	file="${files[$i]}"
+	first_patch=${patches[$i]:-$last_patch}
+
+	next_patch=$(next_patch_for_file $last_patch $file)
+	if [ -z "$next_patch" ]
+	then
+		new_file="$file"
+	else
+		new_file="$(backup_file_name $next_patch $file)"
+		files_were_shadowed=1
+	fi
+
+	if [ -z "$opt_relative" ]
+	then
+		old_file=$(backup_file_name $first_patch $file)
+		do_diff $file $old_file $new_file
+	else
+		do_diff $file "$workdir/$file" $new_file
+	fi
+
+	if [ $? -ne 0 ]
+	then
+		echo $"Diff failed, aborting." >&2
+		die 1
+	fi
+done
+
+if [ -n "$files_were_shadowed" ]
+then
+	echo $"More recent patches modify files in $last_patch."
+	die 1
+fi
+die 0
+### Local Variables:
+### mode: shell-script
+### End:
+# vim:filetype=sh

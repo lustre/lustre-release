@@ -1,0 +1,113 @@
+#! @BASH@
+
+#  This script is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+#
+#  See the COPYING and AUTHORS files for more details.
+
+# Read in library functions
+if [ "$(type -t patch_file_name)" != function ]
+then
+	if ! [ -r @SCRIPTS@/patchfns ]
+	then
+		echo "Cannot read library @SCRIPTS@/patchfns" >&2
+		exit 1
+	fi
+	. @SCRIPTS@/patchfns
+fi
+
+usage()
+{
+	echo $"Usage: quilt patches {file}"
+	if [ x$1 = x-h ]
+	then
+		echo $"
+
+Print the list of patches that modify the specified file.
+
+-n	Print the patch file names instead of the patch names.
+
+-v	Verbose, more user friendly output.
+
+"
+		exit 0
+	else
+		exit 1
+	fi
+}
+
+scan_patches()
+{
+	local prefix=$1 file=$2
+	shift 2
+	local patch
+
+	for patch in $(modified_files $file -- "$@" \
+		       | cut -d $'\t' -f2)
+	do
+		[ -n "$opt_filenames" ] && patch=$(patch_file_name $patch)
+		
+		echo "$prefix$patch"
+	done
+}
+
+options=`getopt -o nvh -- "$@"`
+
+if [ $? -ne 0 ]
+then
+	usage
+fi
+
+eval set -- "$options"
+
+while true
+do
+	case "$1" in
+	-n)
+		opt_filenames=1
+		shift ;;
+	-v)
+		opt_verbose=1
+		shift ;;
+	-h)
+		usage -h ;;
+	--)
+		shift
+		break ;;
+	esac
+done
+
+if [ $# -ne 1 ]
+then
+	usage
+fi
+opt_file=$1
+
+if ! refresh_patches_per_file
+then
+	exit 1
+fi
+
+if [ -n "$opt_verbose" ]
+then
+	top=$(top_patch)
+	if [ -n "$top" ]
+	then
+		patches_before="$(patches_before $top)"
+		[ -n "$patches_before" ] &&
+			scan_patches "+ " $opt_file $patches_before
+		scan_patches "= " $opt_file $top
+		patches_after="$(patches_after $top)"
+		[ -n "$patches_after" ] &&
+			scan_patches "  " $opt_file $(patches_after $top)
+	else
+		scan_patches "  " $opt_file
+	fi
+else
+	scan_patches "" $opt_file
+fi
+### Local Variables:
+### mode: shell-script
+### End:
+# vim:filetype=sh

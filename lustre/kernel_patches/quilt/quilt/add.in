@@ -1,0 +1,130 @@
+#! @BASH@
+
+#  This script is free software; you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License version 2 as
+#  published by the Free Software Foundation.
+#
+#  See the COPYING and AUTHORS files for more details.
+
+# Read in library functions
+if [ "$(type -t patch_file_name)" != function ]
+then
+	if ! [ -r @SCRIPTS@/patchfns ]
+	then
+		echo "Cannot read library @SCRIPTS@/patchfns" >&2
+		exit 1
+	fi
+	. @SCRIPTS@/patchfns
+fi
+
+usage()
+{
+	echo $"Usage: quilt add [-p patch] {file} ..."
+	if [ x$1 = x-h ]
+	then
+		echo $"
+
+Add one or more files to the topmost or named patch.  Files must be
+added to the patch before being modified.  Files that are modified by
+patches on top of the specified patch cannot be added.
+
+-p patch
+	Patch to add files to."
+
+		exit 0
+	else
+		exit 1
+	fi
+}
+
+options=`getopt -o p:h -- "$@"`
+
+if [ $? -ne 0 ]
+then
+	usage
+fi
+
+eval set -- "$options"
+
+while true
+do
+	case "$1" in
+	-p)
+		opt_patch=$2
+		shift 2 ;;
+	-h)
+		usage -h ;;
+	--)
+		shift
+		break ;;
+	esac
+done
+
+if [ $# -lt 1 ]
+then
+	usage
+fi
+
+patch=$(stripit $opt_patch)
+if [ -z "$patch" ]
+then
+	patch=$(top_patch)
+fi
+if [ -z "$patch" ]
+then
+	echo $"No patch applied"
+fi
+
+if ! is_applied $patch
+then
+	echo $"Patch $patch is not applied"
+	exit 1
+fi
+
+status=0
+for file in $*
+do
+	if file_in_patch $file $patch
+	then
+		echo $"File $file is already in patch $patch"
+		status=1
+		continue
+	fi
+	next_patch=$(next_patch_for_file $patch $file)
+	if [ -n "$next_patch" ]
+	then
+		echo $"File $file modified by patch $next_patch"
+		status=1
+		continue
+	fi
+
+	if ! @LIB@/backup-files -s -B .pc/$patch/ $file || \
+	   ! echo $file >> $(pc_file_name $patch)
+	then
+		echo $"Failed to back up file $file" >&2
+		status=1
+		continue
+	fi
+
+	if [ -e $file ]
+	then
+		if [ "$(ls -dl $file | @AWK@ '{print $2}')" -gt 1 ]
+		then
+			# We have a file with several hard links.
+			# As the file may likely be modified by hand
+			# now, create a copy to make sure nothing
+			# happens to the original file.
+			tmpfile=$(gen_tempfile $file) &&
+			cp -fp $file $tmpfile &&
+			mv -f $tmpfile $file
+			rm -f $tmpfile
+		fi
+	fi
+
+	echo $"File $file added to patch $patch"
+done
+exit $status
+### Local Variables:
+### mode: shell-script
+### End:
+# vim:filetype=sh

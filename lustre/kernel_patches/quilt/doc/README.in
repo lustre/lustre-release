@@ -1,0 +1,115 @@
+The scripts in this package simplify working with a series of patches.
+The usual tasks like applying, refreshing and reversing are supported.
+
+docco.txt contains Adrew Morton's description of his suite of patch
+scripts. These scripts are based on Andrew's scripts, but include many
+changes. Please keep this in mind when reading Andrew's documentation.
+
+
+Concepts
+========
+
+(Please see docco.txt.)
+
+The scripts maintain a stack of patches, on top of which additional
+patches can be applied, and from with patches can be removed. The list of
+patches is kept in a file (searched for in this order in
+.pc/series, series, patches/series).
+
+The scripts keep meta information in the .pc/ directory. The .pc/
+directory contains:
+
+	.pc/applied-patches
+		The list of currently applied patches.
+
+	.pc/patch/.pc (for each applied patch)
+		A list of files modified by the patch.
+
+	.pc/patch/ (for each applied patch)
+		Copies of the files that the patch modifies,
+		before modifying. The original versions of
+		the files are needed for refreshing patches,
+		and for ensuring that removing a patch does
+		recreate the original file contents.
+
+
+Operation
+=========
+
+Patches to be applied must be listed in the series file.
+
+Patches are applied with pushpatch, and are removed with poppatch.
+
+Refpatch refreshes a patch.
+
+New patches can be added at the current position in the patch sequence
+with newpatch.
+
+Additional files to be modified can be added to a patch with patchadd.
+
+
+Installation
+============
+
+To start using the scripts the working directory must contain:
+
+	patches/
+		Patches to work with.
+
+	series (or patches/series)
+		List of patches in order of applying.
+
+The scripts will create the .pc/ directory that contains the meta
+information needed for managing the patches automatically.
+
+
+Series file
+===========
+
+The patches that are relevant for a project must be listed in the file
+series, which is searched for in .pc/, ./ and patches/ in this order.
+The patches will be applied in the order given. The series file has
+the following format:
+
+	# Comment
+	subdir/patch-file-name.patch [-pN]
+
+The location of patches is specified relative to the patches/ directory.
+Optionally a strip level (-p0, -p1, etc.) can be specified. When
+refreshing a patch, only levels 0 and 1 are supported.
+
+
+Command reference
+=================
+@REFERENCE@
+
+guards [--prefix=dir] [--path=dir1:dir2:...] [--default=0|1]
+       [--check] [--config=file] symbol ...
+
+  Convert a series file with conditional statements into a series
+  file as expected; see the guards(1) manual page.
+
+
+Helper files/scripts
+====================
+
+patchfns
+	A collection of functions.
+
+apatch
+	Add a patch. Used by pushpatch.
+
+rpatch
+	Remove a patch. Used by poppatch.
+
+parse-patch {-s|-u} section file [< replacement]
+	Select a %section from a patch (-s) or replace a
+	%section with the text from standard input (-u).
+
+touched-by-patch filename
+	Print a list of files modified by a patch file.
+
+backup-files
+	A simple utility that creates / restores / removes
+	backup files; this works around a patch bug (see BUGS).
+
