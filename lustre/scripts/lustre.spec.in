@@ -3,7 +3,7 @@
 %define kversion @RELEASE@
 %define linuxdir @LINUX@
 %define portalsdir @PORTALS@
-Release: 0208192051
+Release: 0208280933uml
 
 Summary: Lustre Lite File System
 Name: lustre-lite
