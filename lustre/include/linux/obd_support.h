@@ -164,10 +164,12 @@ do {                                                                    \
 #define OBD_FREE(ptr, size)                                             \
 do {                                                                    \
         int s = (size);                                                 \
+        LASSERT(ptr);                                                   \
         kfree((ptr));                                                   \
         obd_memory -= s;                                                \
         CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %ld).\n",    \
                s, (ptr), obd_memory);                                   \
+        (ptr) = (void *)0xdeadbeef;                                     \
 } while (0)
 
 #endif
