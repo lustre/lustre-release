@@ -582,15 +582,15 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         }
 
         /* We mark all of the fields "set" so MDS/OST does not re-set them */
-        if (attr->ia_valid & ATTR_CTIME) {
+        if (ia_valid & ATTR_CTIME) {
                 attr->ia_ctime = now;
                 attr->ia_valid |= ATTR_CTIME_SET;
         }
-        if (!(ia_valid & ATTR_ATIME_SET) && (attr->ia_valid & ATTR_ATIME)) {
+        if (!(ia_valid & ATTR_ATIME_SET) && (ia_valid & ATTR_ATIME)) {
                 attr->ia_atime = now;
                 attr->ia_valid |= ATTR_ATIME_SET;
         }
-        if (!(ia_valid & ATTR_MTIME_SET) && (attr->ia_valid & ATTR_MTIME)) {
+        if (!(ia_valid & ATTR_MTIME_SET) && (ia_valid & ATTR_MTIME)) {
                 attr->ia_mtime = now;
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
@@ -922,16 +922,11 @@ void ll_umount_begin(struct super_block *sb)
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
         struct obd_ioctl_data ioc_data = { 0 };
+
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:\n");
 
         obd = class_conn2obd(&sbi->ll_mdc_conn);
-        if (obd == NULL) {
-                CERROR("Invalid MDC connection handle "LPX64"\n",
-                       sbi->ll_mdc_conn.cookie);
-                EXIT;
-                return;
-        }
         obd->obd_no_recov = 1;
         obd_iocontrol(IOC_OSC_SET_ACTIVE, &sbi->ll_mdc_conn, sizeof ioc_data,
                       &ioc_data, NULL);

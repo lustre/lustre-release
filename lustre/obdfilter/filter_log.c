@@ -234,7 +234,7 @@ out_ctxt:
 }
 
 /* This is called from filter_setup() and should be single threaded */
-struct llog_handle *filter_get_catalog(struct obd_device *obd)
+static struct llog_handle *filter_get_catalog(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
         struct filter_server_data *fsd = filter->fo_fsd;
@@ -292,7 +292,7 @@ out_handle:
         goto out;
 }
 
-void filter_put_catalog(struct llog_handle *cathandle)
+static void filter_put_catalog(struct llog_handle *cathandle)
 {
         struct llog_handle *loghandle, *n;
         int rc;
