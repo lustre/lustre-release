@@ -45,6 +45,7 @@ void pop_ctxt(struct obd_run_ctxt *saved);
 int simple_mkdir(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, char *str, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off);
+int lustre_fsync(struct file *file);
 #endif
 
 #include <linux/portals_lib.h>

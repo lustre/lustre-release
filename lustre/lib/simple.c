@@ -71,18 +71,26 @@ out:
 int lustre_fread(struct file *file, char *str, int len, loff_t *off)
 {
 	if (!file || !file->f_op || !file->f_op->read || !off)
-		RETURN(-EINVAL);
+		RETURN(-ENOSYS);
 
 	return file->f_op->read(file, str, len, off);
 }
 
 int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off)
 {
-	if (!file || !file->f_op || !file->f_op->write || !off)
-		RETURN(-EINVAL);
+	if (!file || !file->f_op || !off)
+		RETURN(-ENOSYS);
 
 	if (!file->f_op->write)
 		RETURN(-EROFS);
 
 	return file->f_op->write(file, str, len, off);
+}
+
+int lustre_fsync(struct file *file)
+{
+	if (!file || !file->f_op || !file->f_op->fsync)
+		RETURN(-ENOSYS);
+
+	return file->f_op->fsync(file, file->f_dentry, 0);
 }
