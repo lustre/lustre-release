@@ -518,6 +518,13 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
 
         for (mapped = 0; mapped < page_count; mapped++) {
                 local[mapped].addr = kmap(pga[mapped].pg);
+
+                CDEBUG(D_INFO, "kmap(pg) = %p ; pg->flags = %lx ; pg->count = "
+                       "%d ; pg->virtual = %p ; page %d of %d\n",
+                       local[mapped].addr, pga[mapped].pg->flags,
+                       page_count(pga[mapped].pg), pga[mapped].pg->virtual,
+                       mapped, page_count - 1);
+
                 local[mapped].offset = pga[mapped].off;
                 local[mapped].len = pga[mapped].count;
                 ost_pack_niobuf(&nioptr, pga[mapped].off, pga[mapped].count,

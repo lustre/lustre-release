@@ -37,6 +37,8 @@ static int ptl_send_buf(struct ptlrpc_request *request,
         ptl_process_id_t remote_id;
         ptl_handle_md_t md_h;
 
+        LASSERT(conn);
+
         request->rq_req_md.user_ptr = request;
 
         switch (request->rq_type) {
@@ -46,6 +48,7 @@ static int ptl_send_buf(struct ptlrpc_request *request,
                 request->rq_req_md.length = request->rq_reqlen;
                 request->rq_req_md.eventq = request_out_eq;
                 break;
+        case PTL_RPC_MSG_ERR:
         case PTL_RPC_MSG_REPLY:
                 request->rq_repmsg->type = HTON__u32(request->rq_type);
                 request->rq_req_md.start = request->rq_repmsg;
@@ -78,8 +81,8 @@ static int ptl_send_buf(struct ptlrpc_request *request,
         rc = PtlPut(md_h, PTL_NOACK_REQ, remote_id, portal, 0, request->rq_xid,
                     0, 0);
         if (rc != PTL_OK) {
-                CERROR("PtlPut("LPU64", %d, "LPD64") failed: %d\n", remote_id.nid,
-                       portal, request->rq_xid, rc);
+                CERROR("PtlPut("LPU64", %d, "LPD64") failed: %d\n",
+                       remote_id.nid, portal, request->rq_xid, rc);
                 PtlMDUnlink(md_h);
         }
 
@@ -132,7 +135,7 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
         desc->bd_md.user_ptr = desc;
 
         atomic_set (&desc->bd_source_callback_count, 2);
-        
+
         list_for_each_safe(tmp, next, &desc->bd_page_list) {
                 struct ptlrpc_bulk_page *bulk;
                 bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
@@ -299,7 +302,7 @@ int ptlrpc_error(struct ptlrpc_service *svc, struct ptlrpc_request *req)
         if (rc)
                 RETURN(rc);
 
-        req->rq_repmsg->type = HTON__u32(PTL_RPC_MSG_ERR);
+        req->rq_type = PTL_RPC_MSG_ERR;
 
         rc = ptlrpc_reply(svc, req);
         RETURN(rc);
@@ -392,7 +395,7 @@ void ptlrpc_link_svc_me(struct ptlrpc_request_buffer_desc *rqbd)
 
         /* Attach the leading ME on which we build the ring */
         rc = PtlMEAttach(service->srv_self.peer_ni, service->srv_req_portal,
-                         match_id, 0, ~0, 
+                         match_id, 0, ~0,
                          PTL_UNLINK, PTL_INS_AFTER, &rqbd->rqbd_me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);

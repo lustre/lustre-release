@@ -25,8 +25,6 @@
 #include <linux/obd_lov.h>
 #include <linux/init.h>
 
-extern struct obd_device obd_dev[MAX_OBD_DEVICES];
-
 /* obd methods */
 static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                        char *cluuid)
@@ -466,7 +464,7 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
 #endif
 
 /* compute offset in stripe i corresponding to offset "in" */
-__u64 lov_offset(struct lov_stripe_md *md, __u64 in, int i)
+static __u64 lov_offset(struct lov_stripe_md *md, __u64 in, int i)
 {
         __u32 ssz = md->lmd_stripe_size;
         /* full stripes across all * stripe size */
@@ -487,21 +485,7 @@ __u64 lov_offset(struct lov_stripe_md *md, __u64 in, int i)
         return (__u64) out;
 }
 
-/* compute offset in stripe i corresponding to offset "in" */
-__u64 lov_stripe(struct lov_stripe_md *md, __u64 in, int *j)
-{
-        __u32 ssz = md->lmd_stripe_size;
-        __u32 off, out;
-        /* full stripes across all * stripe size */
-        *j = (((__u32) in)/ssz) % md->lmd_stripe_count;
-        off =  (__u32)in % (md->lmd_stripe_count * ssz);
-        out = ( ((__u32)in) / (md->lmd_stripe_count * ssz)) * ssz +
-                (off - ((*j) * ssz)) % ssz;;
-
-        return (__u64) out;
-}
-
-int lov_stripe_which(struct lov_stripe_md *md, __u64 in)
+static int lov_stripe_which(struct lov_stripe_md *md, __u64 in)
 {
         __u32 ssz = md->lmd_stripe_size;
         int j;
@@ -572,8 +556,7 @@ static int lov_osc_brw_callback(struct io_cb_data *cbd, int err, int phase)
 }
 
 static inline int lov_brw(int cmd, struct lustre_handle *conn,
-                          struct lov_stripe_md *md,
-                          obd_count oa_bufs,
+                          struct lov_stripe_md *md, obd_count oa_bufs,
                           struct brw_page *pga,
                           brw_callback_t callback, struct io_cb_data *cbd)
 {

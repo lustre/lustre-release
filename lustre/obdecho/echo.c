@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.35 2002/09/08 09:56:57 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.35 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.36 2002/09/08 20:05:15 pschwan Exp $";
+#define OBDECHO_VERSION "$Revision: 1.36 $"
 
 #define EXPORT_SYMTAB
 
@@ -35,8 +35,6 @@ static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.35 2002/09/08 09:5
 #include <linux/obd_echo.h>
 #include <linux/lustre_debug.h>
 #include <linux/lustre_dlm.h>
-
-extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
 static atomic_t echo_page_rws;
 static atomic_t echo_getattrs;

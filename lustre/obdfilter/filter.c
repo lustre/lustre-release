@@ -22,7 +22,6 @@
 #include <linux/quotaops.h>
 #include <linux/init.h>
 
-extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 long filter_memory;
 
 #define FILTER_ROOTINO 2
