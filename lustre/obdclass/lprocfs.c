@@ -786,8 +786,8 @@ int lprocfs_dereg_dev(struct obd_device* device)
         struct proc_dir_entry* temp;
 
         if (!device) {
-                CERROR("!! Null pointer passed !!\n");
-                return LPROCFS_FAILURE;
+                CDEBUG(D_OTHER, "! LProcfs:  Null pointer !\n");
+                return LPROCFS_SUCCESS;
         }
 
         if (!(device->obd_name)) {
