@@ -49,14 +49,22 @@ int init_filter_info_cache()
 
 
 void init_filter_data(struct inode *inode, 
-			     struct snapshot_operations *snapops, 
 			     int flag)
 {
 	struct filter_inode_info *i;
+        struct snap_cache *cache;
+	struct snapshot_operations *snapops; 
 
-	if (inode->i_filterdata){
+	if (inode->i_filterdata || inode->i_ino & 0xF0000000)
                 return;
-        }
+	cache = snap_find_cache(inode->i_dev);
+	if (!cache) {
+		CERROR("currentfs_read_inode: cannot find cache\n");
+		make_bad_inode(inode);
+		return;
+	}
+	snapops = filter_c2csnapops(cache->cache_filter);
+	
 	inode->i_filterdata = (struct filter_inode_info *) \
 			      kmem_cache_alloc(filter_info_cache, SLAB_KERNEL);
 	i = inode->i_filterdata;
@@ -118,7 +126,7 @@ static void currentfs_read_inode(struct inode *inode)
 	}
 	/*init filter_data struct 
 	 * FIXME flag should be set future*/
-	init_filter_data(inode, snapops, 0); 
+	init_filter_data(inode, 0); 
 	return; 
 }
 

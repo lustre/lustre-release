@@ -108,6 +108,7 @@ static void clonefs_read_inode(struct inode *inode)
 			inode->i_mapping->a_ops = &clonefs_file_address_ops;
 	} else if (S_ISDIR(inode->i_mode)) {
 		inode->i_op = &clonefs_dir_inode_ops;
+		inode->i_fop = &clonefs_dir_file_ops;
 	} else if (S_ISLNK(inode->i_mode)) {
 		inode->i_op = &clonefs_symlink_inode_ops;
 	} else {

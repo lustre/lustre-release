@@ -253,6 +253,8 @@ extern int currentfs_is_under_dotsnap(struct dentry *de);
 /* cache.c */
 inline void snap_free_cache(struct snap_cache *cache);
 struct snap_cache *snap_find_cache(kdev_t dev);
+typedef int (*snap_cache_cb_t)(struct snap_cache*, void *in, unsigned long *out);
+int snap_cache_process(snap_cache_cb_t cb, void* in, unsigned long* out);
 
 /* snaptable.c */
 extern struct snap_table snap_tables[SNAP_MAX_TABLES];
@@ -280,8 +282,7 @@ int snap_set_indirect(struct inode *pri, ino_t ind_ino,
 extern struct super_operations currentfs_super_ops;
 void cleanup_filter_info_cache(void);
 int init_filter_info_cache(void);
-void init_filter_data(struct inode *inode, struct snapshot_operations *snapops,
-		     int flag);
+extern void init_filter_data(struct inode *inode, int flag);
 
 /* dir.c */
 extern struct inode_operations currentfs_dir_iops;

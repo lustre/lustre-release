@@ -76,7 +76,7 @@ struct inode *snap_redirect(struct inode *cache_inode,
 	if (!redirected) {
 		int index;
 		clone_slot = snap_index2slot(table, clone_info->clone_index);
-		for (slot = table->tbl_count; slot >= clone_slot; slot --) {
+		for (slot = table->tbl_count-1; slot >= clone_slot; slot --) {
 			my_table[slot-clone_slot+1] = table->snap_items[slot].index;
 		}
 		index = table->tbl_count - clone_slot + 1;
@@ -113,7 +113,7 @@ int snap_do_cow(struct inode *inode, ino_t parent_ino, int del)
 	}
 
 	snap_last(cache, &snap);
-	ind = snapops->create_indirect(inode, snap.index, 0, parent_ino, del);
+	ind = snapops->create_indirect(inode, snap.index, snap.gen, parent_ino, del);
 	if(!ind)
 		RETURN(-EINVAL);		
 	iput(ind);
