@@ -31,8 +31,8 @@
 command_t list[] = {
         {"network", jt_ptl_network, 0,"setup the NAL (args: nal name)"},
         {"print_autoconns", jt_ptl_print_autoconnects, 0, "print autoconnect entries (no args)"},
-        {"add_autoconn", jt_ptl_add_autoconnect, 0, "add autoconnect entry (args: nid host [i])"},
-        {"del_autoconn", jt_ptl_del_autoconnect, 0, "delete autoconnect entry (args: [nid] [host])"},
+        {"add_autoconn", jt_ptl_add_autoconnect, 0, "add autoconnect entry (args: nid host [ixs])"},
+        {"del_autoconn", jt_ptl_del_autoconnect, 0, "delete autoconnect entry (args: [nid] [host] [ks])"},
         {"print_conns", jt_ptl_print_connections, 0, "print connections (no args)"},
         {"connect", jt_ptl_connect, 0, "connect to a remote nid (args: host port [xi])"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid (args: [nid] [host]"},
