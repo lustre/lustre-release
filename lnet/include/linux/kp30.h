@@ -8,7 +8,7 @@
 #define PORTAL_DEBUG
 
 #ifndef offsetof
-# define offsetof(typ,memb)     ((int)((char *)&(((typ *)0)->memb)))
+# define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))
 #endif
 
 #define LOWEST_BIT_SET(x)       ((x) & ~((x) - 1))
@@ -647,7 +647,7 @@ enum {
         NAL_ENUM_END_MARKER
 };
 
-#define PTL_NALFMT_SIZE         16
+#define PTL_NALFMT_SIZE               26 /* %u:%u.%u.%u.%u (10+4+4+4+3+1) */
 
 #define NAL_MAX_NR (NAL_ENUM_END_MARKER - 1)
 
