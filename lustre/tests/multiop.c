@@ -22,7 +22,7 @@ char usage[] =
 "        u  unlink\n"
 "        U  munmap\n"
 "        m  mknod\n"
-"        M  mmap to EOF (must open and stat prior)\n"
+"        M  rw mmap to EOF (must open and stat prior)\n"
 "        c  close\n"
 "        _  wait for signal\n"
 "        R  reference entire mmap-ed region\n"
@@ -32,6 +32,7 @@ char usage[] =
 "        t  fchmod\n"
 "        T  ftruncate to zero\n"
 "        w  write\n"
+"        W  write entire mmap-ed region\n"
 "        z  seek to zero\n";
 
 void null_handler(int unused) { }
@@ -79,8 +80,8 @@ int main(int argc, char **argv)
                         break;
 		case 'M':
 			mmap_len = st.st_size;
-			mmap_ptr = mmap(NULL, mmap_len, PROT_READ, MAP_SHARED, 
-					fd, 0);
+			mmap_ptr = mmap(NULL, mmap_len, PROT_WRITE | PROT_READ,
+					MAP_SHARED, fd, 0);
 			if (mmap_ptr == MAP_FAILED) {
 				perror("mmap");
 				exit(1);
@@ -152,6 +153,10 @@ int main(int argc, char **argv)
 				perror("write");
 				exit(1);
 			}
+			break;
+		case 'W':
+			for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
+				mmap_ptr[i] += junk++;
 			break;
 		case 'z':
 			if (lseek(fd, 0, SEEK_SET) == -1) {
