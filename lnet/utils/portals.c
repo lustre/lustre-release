@@ -317,8 +317,7 @@ ptl_parse_ipaddr (__u32 *ipaddrp, char *str)
         struct hostent *he;
 #endif
 
-        if (!strcmp (str, "_all_")) 
-        {
+        if (!strcmp (str, "_all_")) {
                 *ipaddrp = 0;
                 return (0);
         }
@@ -326,11 +325,10 @@ ptl_parse_ipaddr (__u32 *ipaddrp, char *str)
         if (ptl_parse_ipquad(ipaddrp, str) == 0)
                 return (0);
 
-#if HAVE_GETHOSTBYNAME        
+#ifdef HAVE_GETHOSTBYNAME
         if ((('a' <= str[0] && str[0] <= 'z') ||
              ('A' <= str[0] && str[0] <= 'Z')) &&
-             (he = ptl_gethostbyname (str)) != NULL)
-        {
+             (he = ptl_gethostbyname (str)) != NULL) {
                 __u32 addr = *(__u32 *)he->h_addr;
 
                 *ipaddrp = ntohl(addr);         /* HOST byte order */
@@ -423,7 +421,7 @@ ptl_nid2str (char *buffer, ptl_nid_t nid)
         if (nid & 0xff000000) {
                 __u32 addr = htonl((__u32)nid); /* back to NETWORK byte order */
 
-                he = gethostbyaddr ((const char *)&addr, sizeof (addr), AF_INET);
+                he = gethostbyaddr((const char *)&addr, sizeof(addr), AF_INET);
         }
 
         if (he != NULL)
