@@ -140,14 +140,14 @@ int lprocfs_new_vars(struct proc_dir_entry* root,
         struct proc_dir_entry *new_parent;
         char temp_string[MAX_STRING_SIZE];
 
-        if (!list)
+        if (list == NULL)
                 return 0;
 
         while (list->name) {
                 temp_root = lprocfs_new_dir(root, list->name, tok);
                 if (temp_root == NULL) {
                         CDEBUG(D_OTHER, "!LProcFS: Mods: No root!");
-                        return PTR_ERR(temp_root);
+                        return -EINVAL;
                 }
 
                 /* Convert the last element into a leaf-node */
@@ -175,14 +175,14 @@ int lprocfs_new_vars(struct proc_dir_entry* root,
 int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *var,
                      void *data)
 {
-        return lprocfs_new_vars(root, var, (const char*) tok, data);
+        return lprocfs_new_vars(root, var, tok, data);
 }
 
 int lprocfs_reg_obd(struct obd_device *device, struct lprocfs_vars *list,
                     void *data)
 {
-        struct proc_dir_entry* this_dev_root = NULL;
-        int retval = 0;
+        struct proc_dir_entry* this_dev_root;
+        int retval;
         
         if(lprocfs_srch(device->obd_type->typ_procroot, device->obd_name)){
                 CDEBUG(D_OTHER, "Device with name [%s] exists!", 
@@ -204,16 +204,16 @@ int lprocfs_dereg_obd(struct obd_device* device)
 {
         CDEBUG(D_OTHER, "LPROCFS removing device = %s\n", device->obd_name);
 
-        if (!device) {
+        if (device == NULL) {
                 CDEBUG(D_OTHER, "! LProcfs:  Null pointer !\n");
                 return 0;
         }
-        if (!device->obd_proc_entry) {
+        if (device->obd_proc_entry == NULL) {
                 CDEBUG(D_OTHER, "! Proc entry non-existent !");
                 return 0;
         }
         lprocfs_remove_all(device->obd_proc_entry);
-        device->obd_proc_entry = 0;
+        device->obd_proc_entry = NULL;
         if (device->counters)
                 OBD_FREE(device->counters, device->cntr_mem_size);
 
@@ -254,13 +254,13 @@ int lprocfs_reg_class(struct obd_type* type, struct lprocfs_vars* list,
 
 int lprocfs_dereg_class(struct obd_type* class)
 {
-        if(!class){
+        if(class == NULL){
                 CDEBUG(D_OTHER, "Non-existent class",
                        class->typ_name);
                 return 0;
         }
         lprocfs_remove_all(class->typ_procroot);
-        class->typ_procroot = 0;
+        class->typ_procroot = NULL;
         CDEBUG(D_OTHER, "LPROCFS removed = %s\n", class->typ_name);
         return 0;
 
@@ -291,10 +291,9 @@ int lprocfs_reg_main()
 int lprocfs_dereg_main()
 {
         lprocfs_remove_all(proc_lustre_root);
-        proc_lustre_root = 0;
-        proc_lustre_dev_root = 0;
-        proc_lustre_fs_root = 0;
-
+        proc_lustre_root = NULL;
+        proc_lustre_dev_root = NULL;
+        proc_lustre_fs_root = NULL;
         return 0;
 }
 

@@ -661,8 +661,7 @@ static int ost_cleanup(struct obd_device * obddev)
         MOD_DEC_USE_COUNT;
         RETURN(0);
 }
-int ost_attach(struct obd_device *dev, 
-                   obd_count len, void *data)
+int ost_attach(struct obd_device *dev, obd_count len, void *data)
 {
         return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }

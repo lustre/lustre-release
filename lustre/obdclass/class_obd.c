@@ -816,7 +816,7 @@ static int __init init_obdclass(void)
                 return err;
         obd_sysctl_init();
 
-        err=lprocfs_reg_main();
+        err = lprocfs_reg_main();
 
         return 0;
 }

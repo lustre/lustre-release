@@ -637,8 +637,7 @@ out:
 
         return rc;
 }
-int mdc_attach(struct obd_device *dev, 
-                   obd_count len, void *data)
+int mdc_attach(struct obd_device *dev, obd_count len, void *data)
 {
         return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }

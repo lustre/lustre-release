@@ -166,8 +166,7 @@ static int connmgr_connect(struct lustre_handle *conn, struct obd_device *src,
 {
         return class_connect(conn, src, cluuid);
 }
-int connmgr_attach(struct obd_device *dev, 
-                   obd_count len, void *data)
+int connmgr_attach(struct obd_device *dev, obd_count len, void *data)
 {
         return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }
@@ -194,8 +193,7 @@ static int __init ptlrpc_init(void)
         if (rc) 
                 RETURN(rc);
         ptlrpc_init_connection();
-        rc = class_register_type(&recovd_obd_ops, 
-                                 status_class_var,
+        rc = class_register_type(&recovd_obd_ops, status_class_var,
                                  LUSTRE_HA_NAME);
         if (rc) 
                 RETURN(rc);

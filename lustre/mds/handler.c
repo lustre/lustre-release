@@ -1451,8 +1451,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
         RETURN(rc);
 }
 
-int mds_attach(struct obd_device *dev,
-               obd_count len, void *data)
+int mds_attach(struct obd_device *dev, obd_count len, void *data)
 {
         return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }

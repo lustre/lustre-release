@@ -162,7 +162,7 @@ int rd_dev_uuid(char* page, char **start, off_t off, int count, int *eof,
 struct lprocfs_vars status_var_nm_1[] = {
         {"status/uuid", rd_uuid, 0, 0},
         {"status/mntpt_path", rd_path, 0, 0},
-        {"status/fs_type", rd_fstype, 0, 0},
+        {"status/fstype", rd_fstype, 0, 0},
         {"status/blocksize",rd_blksize, 0, 0},
         {"status/kbytestotal",rd_kbytestotal, 0, 0},
         {"status/kbytesfree", rd_kbytesfree, 0, 0},

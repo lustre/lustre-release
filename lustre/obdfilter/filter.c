@@ -1764,8 +1764,7 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
 
         RETURN(err);
 }
-int filter_attach(struct obd_device *dev, 
-                   obd_count len, void *data)
+int filter_attach(struct obd_device *dev, obd_count len, void *data)
 {
         return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }

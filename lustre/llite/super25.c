@@ -270,7 +270,7 @@ static void ll_put_super(struct super_block *sb)
         mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
 
         lprocfs_dereg_mnt(sbi->ll_proc_root);
-        sbi->ll_proc_root=0;
+        sbi->ll_proc_root = NULL;
 
         obd_disconnect(&sbi->ll_mdc_conn);
         OBD_FREE(sbi, sizeof(*sbi));

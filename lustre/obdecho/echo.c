@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.47 2002/11/13 02:46:41 thantry Exp $";
-#define OBDECHO_VERSION "$Revision: 1.47 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.48 2002/11/13 04:45:21 thantry Exp $";
+#define OBDECHO_VERSION "$Revision: 1.48 $"
 
 #define EXPORT_SYMTAB
 
@@ -434,8 +434,7 @@ static int echo_cleanup(struct obd_device *obddev)
         RETURN(0);
 }
 
-int echo_attach(struct obd_device *dev, 
-                   obd_count len, void *data)
+int echo_attach(struct obd_device *dev, obd_count len, void *data)
 {
         return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }

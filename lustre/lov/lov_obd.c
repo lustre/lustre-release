@@ -1356,8 +1356,7 @@ static int lov_iocontrol(long cmd, struct lustre_handle *conn, int len,
         RETURN(rc);
 }
 
-int lov_attach(struct obd_device *dev,
-               obd_count len, void *data)
+int lov_attach(struct obd_device *dev, obd_count len, void *data)
 {
         return lprocfs_reg_obd(dev, status_var_nm_1, dev);
 }
