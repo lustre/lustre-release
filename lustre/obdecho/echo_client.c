@@ -784,8 +784,8 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                 eas.eas_next_offset += PAGE_SIZE;
                 eap->eap_off = eas.eas_next_offset;
 
-                rc = obd_prep_async_page(exp, lsm, NULL, eap->eap_page, 
-                                         eap->eap_off, &ec_async_page_ops, 
+                rc = obd_prep_async_page(exp, lsm, NULL, eap->eap_page,
+                                         eap->eap_off, &ec_async_page_ops,
                                          eap, &eap->eap_cookie);
                 if (rc) {
                         spin_lock_irqsave(&eas.eas_lock, flags);
@@ -794,8 +794,8 @@ static int echo_client_async_page(struct obd_export *exp, int rw,
                 }
 
                 /* always asserts urgent, which isn't quite right */
-                rc = obd_queue_async_io(exp, lsm, NULL, eap->eap_cookie, 
-                                        rw, 0, PAGE_SIZE, 0, 
+                rc = obd_queue_async_io(exp, lsm, NULL, eap->eap_cookie,
+                                        rw, 0, PAGE_SIZE, 0,
                                         ASYNC_READY | ASYNC_URGENT |
                                         ASYNC_COUNT_STABLE);
                 spin_lock_irqsave(&eas.eas_lock, flags);
