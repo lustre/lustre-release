@@ -14,8 +14,8 @@ simple.c:
 page.c:
 	test -e page.c || ln -sf $(top_srcdir)/lib/page.c
 
-EXT2C = filter.c
-obdfilter_SOURCES = filter.c $(LINX)
+FILTERC = filter.c
+obdfilter_SOURCES = $(FILTERC) $(LINX)
 
 dist-hook:
 	list='$(LINX)'; for f in $$list; do rm -f $(distdir)/$$f; done

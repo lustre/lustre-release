@@ -168,8 +168,9 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
         oa->o_valid = (__u32)OBD_MD_FLNOTOBD;
         obdfs_from_inode(oa, inode);
 
-        err = obd_brw(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
-                       &page, &count, &offset, &flags, NULL);
+        err = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ, IID(inode),
+		      num_obdo, &oa, &bufs_per_obdo, &page, &count, &offset,
+		      &flags, NULL);
         //if ( !err )
         //      obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
 
@@ -204,8 +205,8 @@ static int obdfs_commit_page(struct page *page, int create, int from, int to)
         CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n",
                from, to, (unsigned long long)count);
 
-        err = obd_brw(WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
-                               &page, &count, &offset, &flags, NULL);
+        err = obd_brw(OBD_BRW_WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
+		      &page, &count, &offset, &flags, NULL);
         if ( !err ) {
                 SetPageUptodate(page);
                 set_page_clean(page);
@@ -270,7 +271,7 @@ int obdfs_readpage(struct file *file, struct page *page)
                 goto readpage_out;
         }
 
-        rc = obdfs_brw(READ, inode, page, 0);
+        rc = obdfs_brw(OBD_BRW_READ, inode, page, 0);
         if ( rc ) {
                 EXIT; 
                 return rc;
@@ -300,11 +301,11 @@ int obdfs_prepare_write(struct file *file, struct page *page, unsigned from, uns
                 EXIT;
                 return 0;
         }
-        
-        rc = obdfs_brw(READ, inode, page, 0);
+
+        rc = obdfs_brw(OBD_BRW_READ, inode, page, 0);
         if ( !rc ) {
                 SetPageUptodate(page);
-        } 
+        }
 
  prepare_done:
         set_page_dirty(page);
@@ -436,16 +437,14 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
 
         CDEBUG(D_INFO, "BRW done\n");
         /* release the pages from the page cache */
-        while ( num_io > 0 ) {
-                --num_io;
+        while (num_io-- > 0) {
                 CDEBUG(D_INFO, "calling put_page for %p, index %ld\n",
                        pages[num_io], pages[num_io]->index);
                 put_page(pages[num_io]);
         }
         CDEBUG(D_INFO, "put_page done\n");
 
-        while ( num_obdos > 0) {
-                --num_obdos;
+        while (num_obdos-- > 0) {
                 CDEBUG(D_INFO, "free obdo %ld\n",(long)obdos[num_obdos]->o_id);
                 /* copy o_blocks to i_blocks */
                 obdfs_set_size (inodes[num_obdos], obdos[num_obdos]->o_size);
@@ -611,8 +610,8 @@ int obdfs_write_one_page(struct file *file, struct page *page,
         /* We check for complete page writes here, as we then don't have to
          * get the page before writing over everything anyways.
          */
-        if ( !Page_Uptodate(page) && (offset != 0 || bytes != PAGE_SIZE) ) {
-                err = obdfs_brw(READ, inode, page, 0);
+        if (!Page_Uptodate(page) && (offset != 0 || bytes != PAGE_SIZE)) {
+                err = obdfs_brw(OBD_BRW_READ, inode, page, 0);
                 if ( err )
                         return err;
                 SetPageUptodate(page);
@@ -669,9 +668,9 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
                 }
                 EXIT;
                 return page;
-        } 
+        }
 
-        err = obdfs_brw(READ, inode, page, create);
+        err = obdfs_brw(OBD_BRW_READ, inode, page, create);
 
         if ( err ) {
                 SetPageError(page);
