@@ -186,7 +186,7 @@ static struct llog_handle *filter_log_create(struct obd_device *obd)
                 goto retry;
         }
 
-        rc = vfs_create(dparent->d_inode, dchild, S_IFREG);
+        rc = ll_vfs_create(dparent->d_inode, dchild, S_IFREG, NULL);
         if (rc) {
                 CERROR("log create failed rc = %d\n", rc);
                 GOTO(out_child, rc);
@@ -234,7 +234,7 @@ out_ctxt:
 }
 
 /* This is called from filter_setup() and should be single threaded */
-static struct llog_handle *filter_get_catalog(struct obd_device *obd)
+struct llog_handle *filter_get_catalog(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
         struct filter_server_data *fsd = filter->fo_fsd;
@@ -292,7 +292,7 @@ out_handle:
         goto out;
 }
 
-static void filter_put_catalog(struct llog_handle *cathandle)
+void filter_put_catalog(struct llog_handle *cathandle)
 {
         struct llog_handle *loghandle, *n;
         int rc;
