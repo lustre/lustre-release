@@ -94,6 +94,7 @@ int client_import_connect(struct lustre_handle *dlm_handle,
                 imp->imp_replayable = 1;
                 CDEBUG(D_HA, "connected to replayable target: %s\n",
                        imp->imp_target_uuid.uuid);
+                ptlrpc_pinger_add_import(imp);
         }
         imp->imp_level = LUSTRE_CONN_FULL;
         imp->imp_remote_handle = request->rq_repmsg->handle;
@@ -153,7 +154,7 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
 
         /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
         if (obd->obd_no_recov) {
-                ptlrpc_abort_inflight(imp);
+                ptlrpc_set_import_active(imp, 0);
         } else {
                 request = ptlrpc_prep_req(imp, rq_opc, 0, NULL, NULL);
                 if (!request)
@@ -161,13 +162,13 @@ int client_import_disconnect(struct lustre_handle *dlm_handle, int failover)
 
                 request->rq_replen = lustre_msg_size(0, NULL);
 
-                /* Process disconnects even if we're waiting for recovery. */
-                request->rq_level = LUSTRE_CONN_RECOVD;
-
                 rc = ptlrpc_queue_wait(request);
                 if (rc)
                         GOTO(out_req, rc);
         }
+        if (imp->imp_replayable)
+                ptlrpc_pinger_del_import(imp);
+
         EXIT;
  out_req:
         if (request)
@@ -465,6 +466,7 @@ void target_abort_recovery(void *data)
         class_disconnect_exports(obd, 0);
         abort_delayed_replies(obd);
         abort_recovery_queue(obd);
+        ptlrpc_run_recovery_over_upcall(obd);
 }
 
 static void target_recovery_expired(unsigned long castmeharder)
