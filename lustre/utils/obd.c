@@ -1059,6 +1059,8 @@ int jt_obd_test_brw(int argc, char **argv)
 
         IOCINIT(data);
         data.ioc_obdo1.o_id = objid;
+        data.ioc_obdo1.o_mode = S_IFREG;
+        data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLMODE;
         data.ioc_count = len;
         data.ioc_offset = 0;
 
@@ -1070,6 +1072,12 @@ int jt_obd_test_brw(int argc, char **argv)
                 printf("%s: %s %dx%d pages (testing only): %s",
                        cmdname(argv[0]), write ? "writing" : "reading",
                        count, pages, ctime(&start.tv_sec));
+
+        rc = ioctl(fd, OBD_IOC_OPEN, &data);
+        if (rc) {
+                fprintf(stderr, "error: brw_open: %s\n", strerror(rc = errno));
+                return rc;
+        }
 
         rw = write ? OBD_IOC_BRW_WRITE : OBD_IOC_BRW_READ;
         for (i = 1, next_count = verbose; i <= count; i++) {
@@ -1103,6 +1111,13 @@ int jt_obd_test_brw(int argc, char **argv)
                                i, pages, diff, (double)i * pages / diff,
                                ctime(&end.tv_sec));
         }
+        rw = ioctl(fd, OBD_IOC_CLOSE, &data);
+        if (rw) {
+                fprintf(stderr, "error: brw_close: %s\n", strerror(rw = errno));
+                if (!rc)
+                        rc = rw;
+        }
+
         return rc;
 }
 
