@@ -193,6 +193,7 @@ do {                                                                           \
         LASSERT(ll_d2d(de) != NULL);                                           \
                                                                                \
         down(&ll_d2d(de)->lld_it_sem);                                         \
+        LASSERT(de->d_it == NULL);                               \
         de->d_it = it;                                                         \
         CDEBUG(D_DENTRY, "D_IT DOWN dentry %p fsdata %p intent: %s sem %d\n",  \
                de, ll_d2d(de), ldlm_it2str(de->d_it->it_op),                   \
