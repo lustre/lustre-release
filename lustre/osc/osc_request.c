@@ -526,7 +526,7 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
                 CDEBUG(D_INFO, "kmap(pg) = %p ; pg->flags = %lx ; pg->count = "
                        "%d ; page %d of %d\n",
                        local[mapped].addr, pga[mapped].pg->flags,
-                       page_count(pga[mapped].pg), 
+                       page_count(pga[mapped].pg),
                        mapped, page_count - 1);
 
                 local[mapped].offset = pga[mapped].off;
@@ -621,7 +621,7 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
         struct obd_device *obddev = class_conn2obd(connh);
         struct ldlm_extent *extent = extentp;
         int rc;
-        __u32 mode2;
+        ENTRY;
 
         /* Filesystem locks are given a bit of special treatment: first we
          * fixup the lock to start and end on page boundaries. */
@@ -629,48 +629,42 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *lsm,
         extent->end = (extent->end + PAGE_SIZE - 1) & PAGE_MASK;
 
         /* Next, search for already existing extent locks that will cover us */
-        //osc_con2dlmcl(conn, &cl, &connection, &rconn);
         rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
                              sizeof(extent), mode, lockh);
-        if (rc == 1) {
-                /* We already have a lock, and it's referenced */
-                return 0;
+        if (rc == 1)
+                RETURN(0); /* We already have a lock, and it's referenced */
+
+        /* If we're trying to read, we also search for an existing PW lock.  The
+         * VFS and page cache already protect us locally, so lots of readers/
+         * writers can share a single PW lock.
+         *
+         * There are problems with conversion deadlocks, so instead of
+         * converting a read lock to a write lock, we'll just enqueue a new
+         * one.
+         *
+         * At some point we should cancel the read lock instead of making them
+         * send us a blocking callback, but there are problems with canceling
+         * locks out from other users right now, too. */
+
+        if (mode == LCK_PR) {
+                rc = ldlm_lock_match(obddev->obd_namespace, res_id, type,
+                                     extent, sizeof(extent), LCK_PW, lockh);
+                if (rc == 1) {
+                        /* FIXME: This is not incredibly elegant, but it might
+                         * be more elegant than adding another parameter to
+                         * lock_match.  I want a second opinion. */
+                        ldlm_lock_addref(lockh, LCK_PR);
+                        ldlm_lock_decref(lockh, LCK_PW);
+
+                        RETURN(0);
+                }
         }
 
-        /* Next, search for locks that we can upgrade (if we're trying to write)
-         * or are more than we need (if we're trying to read).  Because the VFS
-         * and page cache already protect us locally, lots of readers/writers
-         * can share a single PW lock. */
-        if (mode == LCK_PW)
-                mode2 = LCK_PR;
-        else
-                mode2 = LCK_PW;
-
-        rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
-                             sizeof(extent), mode2, lockh);
-        if (rc == 1) {
-                int flags;
-                /* FIXME: This is not incredibly elegant, but it might
-                 * be more elegant than adding another parameter to
-                 * lock_match.  I want a second opinion. */
-                ldlm_lock_addref(lockh, mode);
-                ldlm_lock_decref(lockh, mode2);
-
-                if (mode == LCK_PR)
-                        return 0;
-
-                rc = ldlm_cli_convert(lockh, mode, &flags);
-                if (rc)
-                        LBUG();
-
-                return rc;
-        }
-
-        rc = ldlm_cli_enqueue(connh, NULL, obddev->obd_namespace,
-                              parent_lock, res_id, type, extent,
-                              sizeof(extent), mode, flags, ldlm_completion_ast,
-                              callback, data, datalen, lockh);
-        return rc;
+        rc = ldlm_cli_enqueue(connh, NULL, obddev->obd_namespace, parent_lock,
+                              res_id, type, extent, sizeof(extent), mode, flags,
+                              ldlm_completion_ast, callback, data, datalen,
+                              lockh);
+        RETURN(rc);
 }
 
 static int osc_cancel(struct lustre_handle *oconn, struct lov_stripe_md *md,
