@@ -375,6 +375,10 @@ void target_destroy_export(struct obd_export *exp)
            exports created by lctl don't have an import */
         if (exp->exp_imp_reverse != NULL)
                 class_destroy_import(exp->exp_imp_reverse);
+
+        /* We cancel locks at disconnect time, but this will catch any locks
+         * granted in a race with recovery-induced disconnect. */
+        ldlm_cancel_locks_for_export(exp);
 }
 
 /*
