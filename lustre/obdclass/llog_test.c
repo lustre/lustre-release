@@ -62,9 +62,9 @@ static int verify_handle(char *test, struct llog_handle *llh, int num_recs)
                 RETURN(-ERANGE);
         }
 
-        if (le32_to_cpu(llh->lgh_hdr->llh_count) != num_recs) {
+        if (llh->lgh_hdr->llh_count != num_recs) {
                 CERROR("%s: handle->count is %d, expected %d after write\n",
-                       test, le32_to_cpu(llh->lgh_hdr->llh_count), num_recs);
+                       test, llh->lgh_hdr->llh_count, num_recs);
                 RETURN(-ERANGE);
         }
 
@@ -168,8 +168,8 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         int num_recs = 1;       /* 1 for the header */
         ENTRY;
 
-        lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = cpu_to_le32(sizeof(lcr));
-        lcr.lcr_hdr.lrh_type = cpu_to_le32(OST_SZ_REC);
+        lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = sizeof(lcr);
+        lcr.lcr_hdr.lrh_type = OST_SZ_REC;
 
         CWARN("3a: write one create_rec\n");
         rc = llog_write_rec(llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
@@ -186,8 +186,8 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         for (i = 0; i < 10; i++) {
                 struct llog_rec_hdr hdr;
                 char buf[8];
-                hdr.lrh_len = cpu_to_le32(8);
-                hdr.lrh_type = cpu_to_le32(OBD_CFG_REC);
+                hdr.lrh_len = 8;
+                hdr.lrh_type = OBD_CFG_REC;
                 memset(buf, 0, sizeof buf);
                 rc = llog_write_rec(llh, &hdr, NULL, 0, buf, -1);
                 if (rc) {
@@ -237,9 +237,8 @@ static int llog_test_4(struct obd_device *obd)
 
         ENTRY;
 
-        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len =
-                cpu_to_le32(LLOG_MIN_REC_SIZE);
-        lmr.lmr_hdr.lrh_type = cpu_to_le32(0xf00f00);
+        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
+        lmr.lmr_hdr.lrh_type = 0xf00f00;
 
         sprintf(name, "%x", llog_test_rand+1);
         CWARN("4a: create a catalog log with name: %s\n", name);
@@ -294,8 +293,8 @@ static int llog_test_4(struct obd_device *obd)
         if (buf == NULL)
                 GOTO(out, rc = -ENOMEM);
         for (i = 0; i < 5; i++) {
-                rec.lrh_len = cpu_to_le32(buflen);
-                rec.lrh_type = cpu_to_le32(OBD_CFG_REC);
+                rec.lrh_len = buflen;
+                rec.lrh_type = OBD_CFG_REC;
                 rc = llog_cat_add_rec(cath, &rec, NULL, buf);
                 if (rc) {
                         CERROR("4e: write 5 records failed at #%d: %d\n",
@@ -320,13 +319,13 @@ static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
 {
         struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
 
-        if (le32_to_cpu(rec->lrh_type) != LLOG_LOGID_MAGIC) {
+        if (rec->lrh_type != LLOG_LOGID_MAGIC) {
                 CERROR("invalid record in catalog\n");
                 RETURN(-EINVAL);
         }
 
         CWARN("seeing record at index %d - "LPX64":%x in log "LPX64"\n",
-               le32_to_cpu(rec->lrh_index), lir->lid_id.lgl_oid,
+               rec->lrh_index, lir->lid_id.lgl_oid,
                lir->lid_id.lgl_ogen, llh->lgh_id.lgl_oid);
         RETURN(0);
 }
@@ -334,13 +333,13 @@ static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
 static int plain_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
                           void *data)
 {
-        if (!(le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
+        if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
 
         CWARN("seeing record at index %d in log "LPX64"\n",
-               le32_to_cpu(rec->lrh_index), llh->lgh_id.lgl_oid);
+               rec->lrh_index, llh->lgh_id.lgl_oid);
         RETURN(0);
 }
 
@@ -350,13 +349,13 @@ static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         struct llog_cookie cookie;
         static int i = 0;
 
-        if (!(le32_to_cpu(llh->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)) {
+        if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
                 RETURN(-EINVAL);
         }
 
         cookie.lgc_lgl = llh->lgh_id;
-        cookie.lgc_index = le32_to_cpu(rec->lrh_index);
+        cookie.lgc_index = rec->lrh_index;
 
         llog_cat_cancel_records(llh->u.phd.phd_cat_handle, 1, &cookie);
         i++;
@@ -378,9 +377,8 @@ static int llog_test_5(struct obd_device *obd)
 
         ENTRY;
 
-        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len =
-                cpu_to_le32(LLOG_MIN_REC_SIZE);
-        lmr.lmr_hdr.lrh_type = cpu_to_le32(0xf00f00);
+        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
+        lmr.lmr_hdr.lrh_type = 0xf00f00;
 
         CWARN("5a: re-open catalog by id\n");
         rc = llog_create(ctxt, &llh, &cat_logid, NULL);
@@ -548,7 +546,7 @@ static int llog_run_tests(struct obd_device *obd)
 
 
 static int llog_test_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                               int count, struct llog_logid *logid)
+                               int count, struct llog_catid *logid)
 {
         int rc;
         ENTRY;

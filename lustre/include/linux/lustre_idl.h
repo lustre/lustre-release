@@ -458,7 +458,10 @@ extern void lustre_swab_ost_last_id(obd_id *id);
 
 struct ost_lvb {
         __u64 lvb_size;
-        __u64 lvb_time;
+        __u64 lvb_mtime;
+        __u64 lvb_atime;
+        __u64 lvb_ctime;
+        __u64 lvb_blocks;
 };
 
 extern void lustre_swab_ost_lvb(struct ost_lvb *);
@@ -716,11 +719,11 @@ extern void lustre_swab_ldlm_res_id (struct ldlm_res_id *id);
 /* lock types */
 typedef enum {
         LCK_EX = 1,
-        LCK_PW,
-        LCK_PR,
-        LCK_CW,
-        LCK_CR,
-        LCK_NL
+        LCK_PW = 2,
+        LCK_PR = 4,
+        LCK_CW = 8,
+        LCK_CR = 16,
+        LCK_NL = 32
 } ldlm_mode_t;
 
 struct ldlm_extent {
@@ -759,7 +762,7 @@ struct ldlm_resource_desc {
         __u32 lr_type;
         __u32 lr_padding;
         struct ldlm_res_id lr_name;
-} __attribute__((packed));
+};
 
 extern void lustre_swab_ldlm_resource_desc (struct ldlm_resource_desc *r);
 
@@ -768,7 +771,7 @@ struct ldlm_lock_desc {
         ldlm_mode_t l_req_mode;
         ldlm_mode_t l_granted_mode;
         ldlm_policy_data_t l_policy_data;
-} __attribute__((packed));
+};
 
 extern void lustre_swab_ldlm_lock_desc (struct ldlm_lock_desc *l);
 
@@ -778,12 +781,13 @@ struct ldlm_request {
         struct ldlm_lock_desc lock_desc;
         struct lustre_handle lock_handle1;
         struct lustre_handle lock_handle2;
-} __attribute__((packed));
+};
 
 extern void lustre_swab_ldlm_request (struct ldlm_request *rq);
 
 struct ldlm_reply {
         __u32 lock_flags;
+        __u32 lock_padding;
         struct ldlm_lock_desc lock_desc;
         struct lustre_handle lock_handle;
         __u64  lock_policy_res1;
@@ -863,6 +867,13 @@ struct llog_logid {
         __u32                   lgl_ogen;
 } __attribute__((packed));
 
+/* Records written to the CATALOGS list */
+#define CATLIST "CATALOGS"
+struct llog_catid {
+        struct llog_logid       lci_logid;
+        __u32                   lci_padding[3];
+} __attribute__((packed));
+
 /* Log data record types - there is no specific reason that these need to
  * be related to the RPC opcodes, but no reason not to (may be handy later?)
  */
@@ -874,7 +885,7 @@ typedef enum {
         PTL_CFG_REC      = 0x10630000,
         LLOG_GEN_REC     = 0x10640000,
         LLOG_HDR_MAGIC   = 0x10645539,
-        LLOG_LOGID_MAGIC = 0x1064553a,
+        LLOG_LOGID_MAGIC = 0x1064553b,
 } llog_op_type;
 
 /* Log record header - stored in little endian order.
@@ -896,7 +907,7 @@ struct llog_rec_tail {
 struct llog_logid_rec {
         struct llog_rec_hdr     lid_hdr;
         struct llog_logid       lid_id;
-        __u32                   padding;
+        __u32                   padding[5];
         struct llog_rec_tail    lid_tail;
 } __attribute__((packed));
 

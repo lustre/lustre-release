@@ -674,3 +674,23 @@ do {                                                                           \
 })
 
 #endif /* _LUSTRE_LIB_H */
+
+#define LMD_MAGIC 0xbdacbdac
+
+#define lmd_bad_magic(LMDP)                                             \
+({                                                                      \
+        struct lustre_mount_data *_lmd__ = (LMDP);                      \
+        int _ret__ = 0;                                                 \
+        if (!_lmd__) {                                                  \
+                CERROR("Missing mount data: "                           \
+                       "check that /sbin/mount.lustre is installed.\n");\
+                _ret__ = 1;                                             \
+        } else if (_lmd__->lmd_magic != LMD_MAGIC) {                    \
+                CERROR("Invalid mount data (%#x != %#x): "              \
+                       "check that /sbin/mount.lustre is installed\n",  \
+                       _lmd__->lmd_magic, LMD_MAGIC);                   \
+                _ret__ = 1;                                             \
+        }                                                               \
+        _ret__;                                                         \
+})
+

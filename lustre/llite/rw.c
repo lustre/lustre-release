@@ -250,7 +250,7 @@ static int ll_ap_make_ready(void *data, int cmd)
         if (TryLockPage(page))
                 RETURN(-EAGAIN);
 
-        LL_CDEBUG_PAGE(page, "made ready\n");
+        LL_CDEBUG_PAGE(D_PAGE, page, "made ready\n");
         page_cache_get(page);
 
         /* if we left PageDirty we might get another writepage call
@@ -439,7 +439,7 @@ free_oig:
                         oig_release(oig);
                         GOTO(out, rc);
                 }
-                LL_CDEBUG_PAGE(page, "write queued\n");
+                LL_CDEBUG_PAGE(D_PAGE, page, "write queued\n");
                 //llap_write_pending(inode, llap);
         } else {
                 lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
@@ -483,7 +483,7 @@ void ll_removepage(struct page *page)
                 return;
         }
 
-        LL_CDEBUG_PAGE(page, "being evicted\n");
+        LL_CDEBUG_PAGE(D_PAGE, page, "being evicted\n");
 
         exp = ll_i2obdexp(inode);
         if (exp == NULL) {
@@ -530,18 +530,14 @@ static int ll_page_matches(struct page *page)
         page_extent.l_extent.start = (__u64)page->index << PAGE_CACHE_SHIFT;
         page_extent.l_extent.end =
                 page_extent.l_extent.start + PAGE_CACHE_SIZE - 1;
-        flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
+        flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED | LDLM_FL_TEST_LOCK;
         matches = obd_match(ll_i2sbi(inode)->ll_osc_exp,
                             ll_i2info(inode)->lli_smd, LDLM_EXTENT,
-                            &page_extent, LCK_PR, &flags, inode, &match_lockh);
-        if (matches < 0) {
-                LL_CDEBUG_PAGE(page, "lock match failed\n");
-                RETURN(matches);
-        }
-        if (matches) {
-                obd_cancel(ll_i2sbi(inode)->ll_osc_exp,
-                           ll_i2info(inode)->lli_smd, LCK_PR, &match_lockh);
-        }
+                            &page_extent, LCK_PR | LCK_PW, &flags, inode,
+                            &match_lockh);
+        if (matches < 0)
+                LL_CDEBUG_PAGE(D_ERROR, page, "lock match failed: rc %d\n",
+                               matches);
         RETURN(matches);
 }
 
@@ -558,14 +554,15 @@ static int ll_issue_page_read(struct obd_export *exp,
                                 NULL, oig, llap->llap_cookie, OBD_BRW_READ, 0,
                                 PAGE_SIZE, 0, ASYNC_COUNT_STABLE);
         if (rc) {
-                LL_CDEBUG_PAGE(page, "read queueing failed\n");
+                LL_CDEBUG_PAGE(D_ERROR, page, "read queue failed: rc %d\n", rc);
                 page_cache_release(page);
         }
         RETURN(rc);
 }
 
 #define LL_RA_MIN(inode) ((unsigned long)PTL_MD_MAX_PAGES / 2)
-#define LL_RA_MAX(inode) (inode->i_blksize * 3)
+#define LL_RA_MAX(inode) ((ll_i2info(inode)->lli_smd->lsm_xfersize * 3) >> \
+                          PAGE_CACHE_SHIFT)
 
 static void ll_readahead(struct ll_readahead_state *ras,
                          struct obd_export *exp, struct address_space *mapping,
@@ -624,10 +621,10 @@ static void ll_readahead(struct ll_readahead_state *ras,
 
                 rc = ll_issue_page_read(exp, llap, oig, 1);
                 if (rc == 0)
-                        LL_CDEBUG_PAGE(page, "started read-ahead\n");
+                        LL_CDEBUG_PAGE(D_PAGE, page, "started read-ahead\n");
                 if (rc) {
         next_page:
-                        LL_CDEBUG_PAGE(page, "skipping read-ahead\n");
+                        LL_CDEBUG_PAGE(D_PAGE, page, "skipping read-ahead\n");
 
                         unlock_page(page);
                 }
@@ -767,7 +764,7 @@ int ll_readpage(struct file *filp, struct page *page)
                 ll_readahead(&fd->fd_ras, exp, page->mapping, oig);
                 obd_trigger_group_io(exp, ll_i2info(inode)->lli_smd, NULL,
                                      oig);
-                LL_CDEBUG_PAGE(page, "marking uptodate from defer\n");
+                LL_CDEBUG_PAGE(D_PAGE, page, "marking uptodate from defer\n");
                 SetPageUptodate(page);
                 unlock_page(page);
                 GOTO(out_oig, rc = 0);
@@ -781,11 +778,20 @@ int ll_readpage(struct file *filp, struct page *page)
 
         if (rc == 0) {
                 static unsigned long next_print;
-                CDEBUG(D_INODE, "didn't match a lock\n");
+                CDEBUG(D_INODE, "ino %lu page %lu (%llu) didn't match a lock\n",
+                       inode->i_ino, page->index,
+                       (long long)page->index << PAGE_CACHE_SHIFT);
                 if (time_after(jiffies, next_print)) {
+                        CERROR("ino %lu page %lu (%llu) not covered by "
+                               "a lock (mmap?).  check debug logs.\n",
+                               inode->i_ino, page->index,
+                               (long long)page->index << PAGE_CACHE_SHIFT);
+                        ldlm_dump_all_namespaces();
+                        if (next_print == 0) {
+                                CERROR("%s\n", portals_debug_dumpstack());
+                                portals_debug_dumplog();
+                        }
                         next_print = jiffies + 30 * HZ;
-                        CERROR("not covered by a lock (mmap?).  check debug "
-                               "logs.\n");
                 }
         }
 
@@ -793,7 +799,7 @@ int ll_readpage(struct file *filp, struct page *page)
         if (rc)
                 GOTO(out, rc);
 
-        LL_CDEBUG_PAGE(page, "queued readpage\n");
+        LL_CDEBUG_PAGE(D_PAGE, page, "queued readpage\n");
         if ((ll_i2sbi(inode)->ll_flags & LL_SBI_READAHEAD))
                 ll_readahead(&fd->fd_ras, exp, page->mapping, oig);
 
@@ -834,7 +840,7 @@ int ll_sync_page(struct page *page)
         if (IS_ERR(llap))
                 RETURN(PTR_ERR(llap));
 
-        LL_CDEBUG_PAGE(page, "setting ready|urgent\n");
+        LL_CDEBUG_PAGE(D_PAGE, page, "setting ready|urgent\n");
 
         rc = obd_set_async_flags(exp, ll_i2info(page->mapping->host)->lli_smd,
                                  NULL, llap->llap_cookie,

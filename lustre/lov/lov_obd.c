@@ -2201,8 +2201,11 @@ static int lov_match(struct obd_export *exp, struct lov_stripe_md *lsm,
                         break;
         }
         if (rc == 1) {
-                if (lsm->lsm_stripe_count > 1)
+                if (lsm->lsm_stripe_count > 1) {
+                        if (*flags & LDLM_FL_TEST_LOCK)
+                                lov_llh_destroy(lov_lockh);
                         lov_llh_put(lov_lockh);
+                }
                 RETURN(1);
         }
 
@@ -2640,7 +2643,10 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 int er;
 
-                if (!lov->tgts[i].active)
+                if (val && !obd_uuid_equals(val, &lov->tgts[i].uuid)) 
+                        continue;
+
+                if (!val && !lov->tgts[i].active)
                         continue;
 
                 er = obd_set_info(lov->tgts[i].ltd_exp, keylen, key, vallen,

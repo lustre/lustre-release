@@ -383,7 +383,8 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
                 *status = -EIO;
         } 
         else if (req->rq_send_state != imp->imp_state) {
-                if (imp->imp_obd->obd_no_recov || imp->imp_dlm_fake) 
+                if (imp->imp_obd->obd_no_recov || imp->imp_dlm_fake 
+                    || req->rq_no_delay) 
                         *status = -EWOULDBLOCK;
                 else
                         delay = 1;
@@ -546,9 +547,13 @@ static int ptlrpc_send_new_req(struct ptlrpc_request *req)
                 req->rq_waiting = 1;
                 spin_unlock (&req->rq_lock);
 
+                DEBUG_REQ(D_HA, req, "req from PID %d waiting for recovery: "
+                          "(%s != %s)",
+                          req->rq_reqmsg->status, 
+                          ptlrpc_import_state_name(req->rq_send_state),
+                          ptlrpc_import_state_name(imp->imp_state));
                 LASSERT(list_empty (&req->rq_list));
 
-                // list_del(&req->rq_list);
                 list_add_tail(&req->rq_list, &imp->imp_delayed_list);
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
                 RETURN(0);
@@ -1055,9 +1060,7 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
 static int __ptlrpc_req_finished(struct ptlrpc_request *request, int locked);
 void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request)
 {
-#ifdef CONFIG_SMP
-        LASSERT(spin_is_locked(&request->rq_import->imp_lock));
-#endif
+        LASSERT_SPIN_LOCKED(&request->rq_import->imp_lock);
         (void)__ptlrpc_req_finished(request, 1);
 }
 
@@ -1142,9 +1145,7 @@ void ptlrpc_free_committed(struct obd_import *imp)
 
         LASSERT(imp != NULL);
 
-#ifdef CONFIG_SMP
-        LASSERT(spin_is_locked(&imp->imp_lock));
-#endif
+        LASSERT_SPIN_LOCKED(&imp->imp_lock);
 
         CDEBUG(D_HA, "%s: committing for last_committed "LPU64"\n",
                imp->imp_obd->obd_name, imp->imp_peer_committed_transno);
@@ -1213,7 +1214,6 @@ void ptlrpc_resend_req(struct ptlrpc_request *req)
         }
         ptlrpc_wake_client_req(req);
         spin_unlock_irqrestore (&req->rq_lock, flags);
-
 }
 
 /* XXX: this function and rq_status are currently unused */
@@ -1262,9 +1262,7 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
 {
         struct list_head *tmp;
 
-#ifdef CONFIG_SMP
-        LASSERT(spin_is_locked(&imp->imp_lock));
-#endif
+        LASSERT_SPIN_LOCKED(&imp->imp_lock);
 
         /* don't re-add requests that have been replayed */
         if (!list_empty(&req->rq_replay_list))

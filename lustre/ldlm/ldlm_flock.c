@@ -150,6 +150,8 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                         }
                 }
         } else {
+                lockmode_verify(mode);
+
                 /* This loop determines if there are existing locks
                  * that conflict with the new lock request. */
                 list_for_each(tmp, &res->lr_granted) {
@@ -164,7 +166,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                         /* locks are compatible, overlap doesn't matter */
                         if (lockmode_compat(lock->l_granted_mode, mode))
                                 continue;
-                        
+
                         if (!ldlm_flocks_overlap(lock, req))
                                 continue;
 

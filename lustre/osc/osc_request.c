@@ -340,8 +340,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
                 LASSERT((oa->o_valid & OBD_MD_FLFLAGS) &&
                         oa->o_flags == OBD_FL_DELORPHAN);
                 DEBUG_REQ(D_HA, request,
-                          "delorphan from OST integration; level == RECOVER");
-                request->rq_send_state = LUSTRE_IMP_RECOVER;
+                          "delorphan from OST integration");
         }
 
         rc = ptlrpc_queue_wait(request);
@@ -1995,9 +1994,6 @@ static int osc_trigger_group_io(struct obd_export *exp,
         struct client_obd *cli = &exp->exp_obd->u.cli;
         ENTRY;
 
-        if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
-                RETURN(-EIO);
-
         if (loi == NULL)
                 loi = &lsm->lsm_oinfo[0];
 
@@ -2432,8 +2428,10 @@ static int osc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                               policy, mode, flags, bl_cb, cp_cb, gl_cb, data,
                               &lvb, sizeof(lvb), lustre_swab_ost_lvb, lockh);
 
-        if ((*flags & LDLM_FL_HAS_INTENT && rc == ELDLM_LOCK_ABORTED) || !rc)
+        if ((*flags & LDLM_FL_HAS_INTENT && rc == ELDLM_LOCK_ABORTED) || !rc) {
+                CDEBUG(D_INODE, "received kms == "LPU64"\n", lvb.lvb_size);
                 lsm->lsm_oinfo->loi_rss = lvb.lvb_size;
+        }
 
         RETURN(rc);
 }
@@ -2467,7 +2465,7 @@ static int osc_match(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (mode == LCK_PR) {
                 rc = ldlm_lock_match(obd->obd_namespace, *flags, &res_id, type,
                                      policy, LCK_PW, lockh);
-                if (rc == 1) {
+                if (rc == 1 && !(*flags & LDLM_FL_TEST_LOCK)) {
                         /* FIXME: This is not incredibly elegant, but it might
                          * be more elegant than adding another parameter to
                          * lock_match.  I want a second opinion. */
@@ -2708,6 +2706,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                         void *key, obd_count vallen, void *val)
 {
         struct ptlrpc_request *req;
+        struct obd_device  *obd = exp->exp_obd;
         struct obd_import *imp = class_exp2cliimp(exp);
         struct llog_ctxt *ctxt;
         int rc, size = keylen;
@@ -2718,10 +2717,10 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
             memcmp(key, "next_id", strlen("next_id")) == 0) {
                 if (vallen != sizeof(obd_id))
                         RETURN(-EINVAL);
-		exp->u.eu_osc_data.oed_oscc.oscc_next_id = *((obd_id*)val) + 1;
+		obd->u.cli.cl_oscc.oscc_next_id = *((obd_id*)val) + 1;
                 CDEBUG(D_INODE, "%s: set oscc_next_id = "LPU64"\n",
                        exp->exp_obd->obd_name,
-                       exp->u.eu_osc_data.oed_oscc.oscc_next_id);
+                       obd->u.cli.cl_oscc.oscc_next_id);
 
                 RETURN(0);
         }
@@ -2730,13 +2729,13 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
             memcmp(key, "growth_count", strlen("growth_count")) == 0) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
-		exp->u.eu_osc_data.oed_oscc.oscc_grow_count = *((int*)val);
+		obd->u.cli.cl_oscc.oscc_grow_count = *((int*)val);
                 RETURN(0);
         }
 
         if (keylen == strlen("unlinked") &&
             memcmp(key, "unlinked", keylen) == 0) {
-                struct osc_creator *oscc = &exp->u.eu_osc_data.oed_oscc;
+                struct osc_creator *oscc = &obd->u.cli.cl_oscc;
                 spin_lock(&oscc->oscc_lock);
                 oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
                 spin_unlock(&oscc->oscc_lock);
@@ -2778,7 +2777,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
 
         imp->imp_server_timeout = 1;
         CDEBUG(D_HA, "pinging OST %s\n", imp->imp_target_uuid.uuid);
-        ptlrpc_pinger_add_import(imp);
+        imp->imp_pingable = 1;
 
         RETURN(rc);
 }
@@ -2790,7 +2789,7 @@ static struct llog_operations osc_size_repl_logops = {
 
 static struct llog_operations osc_unlink_orig_logops;
 static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                        int count, struct llog_logid *logid)
+                        int count, struct llog_catid *catid)
 {
         int rc;
         ENTRY;
@@ -2801,8 +2800,8 @@ static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
         osc_unlink_orig_logops.lop_add = llog_obd_origin_add;
         osc_unlink_orig_logops.lop_connect = llog_origin_connect;
 
-        rc = llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, count, logid,
-                        &osc_unlink_orig_logops);
+        rc = llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, count,
+                        &catid->lci_logid, &osc_unlink_orig_logops);
         if (rc)
                 RETURN(rc);
 
@@ -2829,14 +2828,8 @@ static int osc_connect(struct lustre_handle *exph,
                        struct obd_device *obd, struct obd_uuid *cluuid)
 {
         int rc;
-        struct obd_export *exp;
 
         rc = client_connect_import(exph, obd, cluuid);
-
-        if (obd->u.cli.cl_conn_count == 1) {
-                exp = class_conn2export(exph);
-                oscc_init(exp);
-        }
 
         return rc;
 }
@@ -2847,36 +2840,66 @@ static int osc_disconnect(struct obd_export *exp, int flags)
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
         int rc;
 
-        if (obd->u.cli.cl_conn_count == 1) {
+        if (obd->u.cli.cl_conn_count == 1)
                 /* flush any remaining cancel messages out to the target */
                 llog_sync(ctxt, exp);
-
-                /* balance the conn2export for oscc in osc_connect */
-                class_export_put(exp);
-        }
 
         rc = client_disconnect_export(exp, flags);
         return rc;
 }
 
-static int osc_invalidate_import(struct obd_device *obd,
-                                 struct obd_import *imp)
+static int osc_import_event(struct obd_device *obd,
+                            struct obd_import *imp, 
+                            enum obd_import_event event)
 {
         struct client_obd *cli;
+        int rc = 0;
+
         LASSERT(imp->imp_obd == obd);
-        /* this used to try and tear down queued pages, but it was
-         * not correctly implemented.  We'll have to do it again once
-         * we call obd_invalidate_import() agian */
-        /* XXX And we still need to do this */
 
-        /* Reset grants, too */
-        cli = &obd->u.cli;
-        spin_lock(&cli->cl_loi_list_lock);
-        cli->cl_avail_grant = 0;
-        cli->cl_lost_grant = 0;
-        spin_unlock(&cli->cl_loi_list_lock);
+        switch (event) {
+        case IMP_EVENT_DISCON: {
+                /* Only do this on the MDS OSC's */
+                if (imp->imp_server_timeout) {
+                        struct osc_creator *oscc = &obd->u.cli.cl_oscc;
+                        
+                        spin_lock(&oscc->oscc_lock);
+                        oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
+                        spin_unlock(&oscc->oscc_lock);
+                }
+                break;
+        }
+        case IMP_EVENT_INVALIDATE: {
+                struct ldlm_namespace *ns = obd->obd_namespace;
 
-        RETURN(0);
+                /* this used to try and tear down queued pages, but it was
+                 * not correctly implemented.  We'll have to do it again once
+                 * we call obd_invalidate_import() agian */
+                /* XXX And we still need to do this */
+
+                /* Reset grants, too */
+                cli = &obd->u.cli;
+                spin_lock(&cli->cl_loi_list_lock);
+                cli->cl_avail_grant = 0;
+                cli->cl_lost_grant = 0;
+                spin_unlock(&cli->cl_loi_list_lock);
+                
+                ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
+
+                if (obd->obd_observer)
+                        rc = obd_notify(obd->obd_observer, obd, 0);
+                break;
+        }
+        case IMP_EVENT_ACTIVE: {
+                if (obd->obd_observer)
+                        rc = obd_notify(obd->obd_observer, obd, 1);
+                break;
+        }
+        default:
+                CERROR("Unknown import event %d\n", event);
+                LBUG();
+        }
+        RETURN(rc);
 }
 
 int osc_setup(struct obd_device *obd, obd_count len, void *buf)
@@ -2890,6 +2913,9 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
         rc = client_obd_setup(obd, len, buf);
         if (rc)
                 ptlrpcd_decref();
+        else
+                oscc_init(obd);
+
         RETURN(rc);
 }
 
@@ -2937,7 +2963,7 @@ struct obd_ops osc_obd_ops = {
         o_iocontrol:    osc_iocontrol,
         o_get_info:     osc_get_info,
         o_set_info:     osc_set_info,
-        o_invalidate_import: osc_invalidate_import,
+        o_import_event: osc_import_event,
         o_llog_init:    osc_llog_init,
         o_llog_finish:  osc_llog_finish,
 };
@@ -2968,7 +2994,7 @@ struct obd_ops sanosc_obd_ops = {
         o_cancel:       osc_cancel,
         o_cancel_unused:osc_cancel_unused,
         o_iocontrol:    osc_iocontrol,
-        o_invalidate_import: osc_invalidate_import,
+        o_import_event: osc_import_event,
         o_llog_init:    osc_llog_init,
         o_llog_finish:  osc_llog_finish,
 };

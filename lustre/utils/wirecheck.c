@@ -22,12 +22,16 @@ do {                                                            \
 
 #define CHECK_DEFINE(a)                                         \
 do {                                                            \
-        printf("        LASSERT("#a" == "STRINGIFY(a)");\n");   \
+        printf("        LASSERTF("#a" == "STRINGIFY(a)          \
+               ",\" found %%lld\\n\",\n                 "       \
+               "(long long)"#a");\n");   \
 } while(0)
 
 #define CHECK_VALUE(a)                                          \
 do {                                                            \
-        printf("        LASSERT("#a" == %d);\n", a);            \
+        printf("        LASSERTF("#a                            \
+               " == %d, \" found %%lld\\n\",\n                 "\
+               "(long long)"#a");\n",a);\
 } while(0)
 
 #define CHECK_MEMBER_OFFSET(s,m)                                \
@@ -468,6 +472,18 @@ check_ldlm_reply(void)
 }
 
 void
+check_ldlm_lvb(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(ost_lvb);
+        CHECK_MEMBER(ost_lvb, lvb_size);
+        CHECK_MEMBER(ost_lvb, lvb_mtime);
+        CHECK_MEMBER(ost_lvb, lvb_atime);
+        CHECK_MEMBER(ost_lvb, lvb_ctime);
+        CHECK_MEMBER(ost_lvb, lvb_blocks);
+}
+
+void
 check_ptlbd_op(void)
 {
         BLANK_LINE();
@@ -516,6 +532,14 @@ check_llog_logid(void)
         CHECK_VALUE(LLOG_GEN_REC);
         CHECK_VALUE(LLOG_HDR_MAGIC);
         CHECK_VALUE(LLOG_LOGID_MAGIC);
+}
+
+void
+check_llog_catid(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_catid);
+        CHECK_MEMBER(llog_catid, lci_logid);
 }
 
 void
@@ -870,10 +894,12 @@ main(int argc, char **argv)
         check_ldlm_lock_desc();
         check_ldlm_request();
         check_ldlm_reply();
+        check_ldlm_lvb();
         check_ptlbd_op();
         check_ptlbd_niob();
         check_ptlbd_rsp();
         check_llog_logid();
+        check_llog_catid();
         check_llog_rec_hdr();
         check_llog_rec_tail();
         check_llog_logid_rec();

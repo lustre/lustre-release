@@ -255,6 +255,7 @@ int client_connect_import(struct lustre_handle *dlm_handle,
                 GOTO(out_ldlm, rc);
         }
 
+        ptlrpc_pinger_add_import(imp);
         EXIT;
 
         if (rc) {
@@ -312,7 +313,7 @@ int client_disconnect_export(struct obd_export *exp, int failover)
 
         /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
         if (obd->obd_no_recov)
-                ptlrpc_set_import_active(imp, 0);
+                ptlrpc_invalidate_import(imp);
         else
                 rc = ptlrpc_disconnect_import(imp);
 

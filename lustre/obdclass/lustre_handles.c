@@ -144,8 +144,8 @@ static void cleanup_all_handles(void)
                         struct portals_handle *h;
                         h = list_entry(tmp, struct portals_handle, h_link);
 
-                        CERROR("forcing cleanup for handle "LPX64"\n",
-                               h->h_cookie);
+                        CERROR("force clean handle "LPX64" addr %p addref %p\n",
+                               h->h_cookie, h, h->h_addref);
 
                         class_handle_unhash_nolock(h);
                 }

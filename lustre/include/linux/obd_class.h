@@ -828,16 +828,15 @@ static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
 static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                                int objcount, struct obd_ioobj *obj,
                                int niocount, struct niobuf_local *local,
-                               struct obd_trans_info *oti)
+                               struct obd_trans_info *oti, int rc)
 {
-        int rc;
         ENTRY;
 
         OBD_CHECK_OP(exp->exp_obd, commitrw, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(exp->exp_obd, commitrw);
 
         rc = OBP(exp->exp_obd, commitrw)(cmd, exp, oa, objcount, obj, niocount,
-                                         local, oti);
+                                         local, oti, rc);
         RETURN(rc);
 }
 
@@ -970,12 +969,14 @@ static inline int obd_unpin(struct obd_export *exp,
         return(rc);
 }
 
-static inline void obd_invalidate_import(struct obd_device *obd,
-                                         struct obd_import *imp)
+
+static inline void obd_import_event(struct obd_device *obd,
+                                    struct obd_import *imp,
+                                    enum obd_import_event event)
 {
-        if (obd->obd_set_up && OBP(obd, invalidate_import)) {
-                OBD_COUNTER_INCREMENT(obd, invalidate_import);
-                OBP(obd, invalidate_import)(obd, imp);
+        if (obd->obd_set_up && OBP(obd, import_event)) {
+                OBD_COUNTER_INCREMENT(obd, import_event);
+                OBP(obd, import_event)(obd, imp, event);
         }
 }
 

@@ -170,28 +170,21 @@ int osc_rd_create_low_wm(char *page, char **start, off_t off, int count,
                          int *eof, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *exp;
 
-        if (obd == NULL || list_empty(&obd->obd_exports))
+        if (obd == NULL)
                 return 0;
 
-        spin_lock(&obd->obd_dev_lock);
-        exp = list_entry(obd->obd_exports.next, struct obd_export,
-                         exp_obd_chain);
-        spin_unlock(&obd->obd_dev_lock);
-
         return snprintf(page, count, "%d\n",
-                        exp->exp_osc_data.oed_oscc.oscc_kick_barrier);
+                        obd->u.cli.cl_oscc.oscc_kick_barrier);
 }
 
 int osc_wr_create_low_wm(struct file *file, const char *buffer,
                          unsigned long count, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *exp;
         int val, rc;
 
-        if (obd == NULL || list_empty(&obd->obd_exports))
+        if (obd == NULL)
                 return 0;
 
         rc = lprocfs_write_helper(buffer, count, &val);
@@ -202,9 +195,7 @@ int osc_wr_create_low_wm(struct file *file, const char *buffer,
                 return -ERANGE;
 
         spin_lock(&obd->obd_dev_lock);
-        exp = list_entry(obd->obd_exports.next, struct obd_export,
-                         exp_obd_chain);
-        exp->exp_osc_data.oed_oscc.oscc_kick_barrier = val;
+        obd->u.cli.cl_oscc.oscc_kick_barrier = val;
         spin_unlock(&obd->obd_dev_lock);
 
         return count;
@@ -214,28 +205,21 @@ int osc_rd_create_count(char *page, char **start, off_t off, int count,
                         int *eof, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *exp;
 
-        if (obd == NULL || list_empty(&obd->obd_exports))
+        if (obd == NULL)
                 return 0;
 
-        spin_lock(&obd->obd_dev_lock);
-        exp = list_entry(obd->obd_exports.next, struct obd_export,
-                         exp_obd_chain);
-        spin_unlock(&obd->obd_dev_lock);
-
         return snprintf(page, count, "%d\n",
-                        exp->exp_osc_data.oed_oscc.oscc_grow_count);
+                        obd->u.cli.cl_oscc.oscc_grow_count);
 }
 
 int osc_wr_create_count(struct file *file, const char *buffer,
                         unsigned long count, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *exp;
         int val, rc;
 
-        if (obd == NULL || list_empty(&obd->obd_exports))
+        if (obd == NULL)
                 return 0;
 
         rc = lprocfs_write_helper(buffer, count, &val);
@@ -245,11 +229,7 @@ int osc_wr_create_count(struct file *file, const char *buffer,
         if (val < 0)
                 return -ERANGE;
 
-        spin_lock(&obd->obd_dev_lock);
-        exp = list_entry(obd->obd_exports.next, struct obd_export,
-                         exp_obd_chain);
-        exp->exp_osc_data.oed_oscc.oscc_grow_count = val;
-        spin_unlock(&obd->obd_dev_lock);
+        obd->u.cli.cl_oscc.oscc_grow_count = val;
 
         return count;
 }
@@ -258,36 +238,24 @@ int osc_rd_prealloc_next_id(char *page, char **start, off_t off, int count,
                             int *eof, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *exp;
 
-        if (obd == NULL || list_empty(&obd->obd_exports))
+        if (obd == NULL)
                 return 0;
 
-        spin_lock(&obd->obd_dev_lock);
-        exp = list_entry(obd->obd_exports.next, struct obd_export,
-                         exp_obd_chain);
-        spin_unlock(&obd->obd_dev_lock);
-
         return snprintf(page, count, LPU64"\n",
-                        exp->exp_osc_data.oed_oscc.oscc_next_id);
+                        obd->u.cli.cl_oscc.oscc_next_id);
 }
 
 int osc_rd_prealloc_last_id(char *page, char **start, off_t off, int count,
                             int *eof, void *data)
 {
         struct obd_device *obd = data;
-        struct obd_export *exp;
 
-        if (obd == NULL || list_empty(&obd->obd_exports))
+        if (obd == NULL)
                 return 0;
 
-        spin_lock(&obd->obd_dev_lock);
-        exp = list_entry(obd->obd_exports.next, struct obd_export,
-                         exp_obd_chain);
-        spin_unlock(&obd->obd_dev_lock);
-
         return snprintf(page, count, LPU64"\n",
-                        exp->exp_osc_data.oed_oscc.oscc_last_id);
+                        obd->u.cli.cl_oscc.oscc_last_id);
 }
 
 static struct lprocfs_vars lprocfs_obd_vars[] = {

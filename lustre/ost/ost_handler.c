@@ -442,7 +442,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 if (page_rc != 0) {             /* some data! */
                         LASSERT (local_nb[i].page != NULL);
                         ptlrpc_prep_bulk_page(desc, local_nb[i].page,
-                                              pp_rnb[i].offset & (PAGE_SIZE - 1),
+                                              pp_rnb[i].offset & (PAGE_SIZE-1),
                                               page_rc);
                 }
 
@@ -468,9 +468,9 @@ static int ost_brw_read(struct ptlrpc_request *req)
                         } else if (!desc->bd_success ||
                                    desc->bd_nob_transferred != desc->bd_nob) {
                                 DEBUG_REQ(D_ERROR, req, "%s bulk PUT %d(%d)",
-                                          desc->bd_success ? 
+                                          desc->bd_success ?
                                           "truncated" : "network error on",
-                                          desc->bd_nob_transferred, 
+                                          desc->bd_nob_transferred,
                                           desc->bd_nob);
                                 /* XXX should this be a different errno? */
                                 rc = -ETIMEDOUT;
@@ -483,7 +483,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
 
         /* Must commit after prep above in all cases */
         rc = obd_commitrw(OBD_BRW_READ, req->rq_export, &body->oa, 1,
-                          ioo, npages, local_nb, &oti);
+                          ioo, npages, local_nb, &oti, rc);
 
         if (rc == 0) {
                 repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
@@ -553,7 +553,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         int                      size[2] = { sizeof(*body) };
         int                      objcount, niocount, npages;
         int                      comms_error = 0;
-        int                      rc, rc2, swab, i, j;
+        int                      rc, swab, i, j;
         char                     str[PTL_NALFMT_SIZE];
         ENTRY;
 
@@ -685,8 +685,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         }
 #endif
         /* Must commit after prep above in all cases */
-        rc2 = obd_commitrw(OBD_BRW_WRITE, req->rq_export, &repbody->oa,
-                           objcount, ioo, npages, local_nb, oti);
+        rc = obd_commitrw(OBD_BRW_WRITE, req->rq_export, &repbody->oa,
+                           objcount, ioo, npages, local_nb, oti, rc);
 
         if (rc == 0) {
                 /* set per-requested niobuf return codes */
@@ -705,8 +705,6 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 }
                 LASSERT(j == npages);
         }
-        if (rc == 0)
-                rc = rc2;
 
  out_bulk:
         ptlrpc_free_bulk(desc);

@@ -243,8 +243,9 @@ struct ptlrpc_request {
         spinlock_t rq_lock;
         /* client-side flags */
         unsigned int rq_intr:1, rq_replied:1, rq_err:1,
-            rq_timedout:1, rq_resend:1, rq_restart:1, rq_replay:1,
-            rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1;
+                rq_timedout:1, rq_resend:1, rq_restart:1, rq_replay:1,
+                rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
+                rq_no_delay:1;
         int rq_phase;
         /* client-side refcount for SENT race */
         atomic_t rq_refcount;
@@ -404,7 +405,6 @@ struct ptlrpc_request_buffer_desc {
         struct ptlrpc_srv_ni  *rqbd_srv_ni;
         ptl_handle_md_t        rqbd_md_h;
         int                    rqbd_refcount;
-        int                    rqbd_eventcount;
         char                  *rqbd_buffer;
         struct ptlrpc_cb_id    rqbd_cbid;
         struct ptlrpc_request  rqbd_req;
@@ -425,7 +425,7 @@ struct ptlrpc_srv_ni {
         /* Interface-specific service state */
         struct ptlrpc_service  *sni_service;    /* owning service */
         struct ptlrpc_ni       *sni_ni;         /* network interface */
-        struct list_head        sni_rqbds;      /* all the request buffers */
+        struct list_head        sni_active_rqbds;   /* req buffers receiving */
         struct list_head        sni_active_replies; /* all the active replies */
         int                     sni_nrqbd_receiving; /* # posted request buffers */
 };
@@ -440,12 +440,15 @@ struct ptlrpc_service {
         int              srv_nthreads;          /* # running threads */
         int              srv_n_difficult_replies; /* # 'difficult' replies */
         int              srv_n_active_reqs;     /* # reqs being served */
+        int              srv_rqbd_timeout;      /* timeout before re-posting reqs */
         
         __u32 srv_req_portal;
         __u32 srv_rep_portal;
 
         int               srv_n_queued_reqs;    /* # reqs waiting to be served */
         struct list_head  srv_request_queue;    /* reqs waiting for service */
+
+        struct list_head  srv_idle_rqbds;       /* request buffers to be reposted */
 
         atomic_t          srv_outstanding_replies;
         struct list_head  srv_reply_queue;      /* replies waiting for service */
@@ -509,7 +512,7 @@ int ptlrpc_reply(struct ptlrpc_request *req);
 int ptlrpc_error(struct ptlrpc_request *req);
 void ptlrpc_resend_req(struct ptlrpc_request *request);
 int ptl_send_rpc(struct ptlrpc_request *request);
-void ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd);
+int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd);
 
 /* ptlrpc/client.c */
 void ptlrpc_init_client(int req_portal, int rep_portal, char *name,

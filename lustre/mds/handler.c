@@ -355,34 +355,39 @@ static int mds_destroy_export(struct obd_export *export)
         RETURN(rc);
 }
 
-static int mds_disconnect(struct obd_export *export, int flags)
+static int mds_disconnect(struct obd_export *exp, int flags)
 {
         unsigned long irqflags;
         int rc;
         ENTRY;
 
-        ldlm_cancel_locks_for_export(export);
+        LASSERT(exp);
+        class_export_get(exp);
+
+        spin_lock_irqsave(&exp->exp_lock, irqflags);
+        exp->exp_flags = flags;
+        spin_unlock_irqrestore(&exp->exp_lock, irqflags);
+
+        /* Disconnect early so that clients can't keep using export */
+        rc = class_disconnect(exp, flags);
+        ldlm_cancel_locks_for_export(exp);
 
         /* complete all outstanding replies */
-        spin_lock_irqsave (&export->exp_lock, irqflags);
-        while (!list_empty (&export->exp_outstanding_replies)) {
+        spin_lock_irqsave(&exp->exp_lock, irqflags);
+        while (!list_empty(&exp->exp_outstanding_replies)) {
                 struct ptlrpc_reply_state *rs =
-                        list_entry (export->exp_outstanding_replies.next, 
-                                    struct ptlrpc_reply_state, rs_exp_list);
+                        list_entry(exp->exp_outstanding_replies.next,
+                                   struct ptlrpc_reply_state, rs_exp_list);
                 struct ptlrpc_service *svc = rs->rs_srv_ni->sni_service;
 
-                spin_lock (&svc->srv_lock);
-                list_del_init (&rs->rs_exp_list);
-                ptlrpc_schedule_difficult_reply (rs);
-                spin_unlock (&svc->srv_lock);
+                spin_lock(&svc->srv_lock);
+                list_del_init(&rs->rs_exp_list);
+                ptlrpc_schedule_difficult_reply(rs);
+                spin_unlock(&svc->srv_lock);
         }
-        spin_unlock_irqrestore (&export->exp_lock, irqflags);
+        spin_unlock_irqrestore(&exp->exp_lock, irqflags);
 
-        spin_lock_irqsave(&export->exp_lock, irqflags);
-        export->exp_flags = flags;
-        spin_unlock_irqrestore(&export->exp_lock, irqflags);
-
-        rc = class_disconnect(export, flags);
+        class_export_put(exp);
         RETURN(rc);
 }
 
@@ -1480,7 +1485,8 @@ static int mds_postrecov(struct obd_device *obd)
         LASSERT(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT) != NULL);
 
         rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
-                          obd->u.mds.mds_lov_desc.ld_tgt_count, NULL, NULL);
+                          obd->u.mds.mds_lov_desc.ld_tgt_count,
+                          NULL, NULL, NULL);
         if (rc != 0) {
                 CERROR("faild at llog_origin_connect: %d\n", rc);
         }

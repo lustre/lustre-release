@@ -59,7 +59,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 	       struct lov_stripe_md **ea, struct obd_trans_info *oti);
 int osc_real_create(struct obd_export *exp, struct obdo *oa,
 	       struct lov_stripe_md **ea, struct obd_trans_info *oti);
-void oscc_init(struct obd_export *exp);
+void oscc_init(struct obd_device *obd);
 void osc_wake_cache_waiters(struct client_obd *cli);
 
 #ifdef __KERNEL__

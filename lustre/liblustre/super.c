@@ -355,6 +355,7 @@ static int llu_have_md_lock(struct inode *inode)
 
         CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id.name[0]);
 
+        /* FIXME use LDLM_FL_TEST_LOCK instead */
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
         if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
                             NULL, LCK_PR, &lockh)) {

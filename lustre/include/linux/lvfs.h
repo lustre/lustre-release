@@ -56,8 +56,8 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
 
 #ifdef __KERNEL__
 
-struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode);
-struct dentry *simple_mknod(struct dentry *dir, char *name, int mode);
+struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode, int fix);
+struct dentry *simple_mknod(struct dentry *dir, char *name, int mode, int fix);
 int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
 int lustre_fsync(struct file *file);

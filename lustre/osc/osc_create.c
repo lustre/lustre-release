@@ -110,7 +110,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
         oscc->oscc_flags |= OSCC_FLAG_CREATING;
         spin_unlock(&oscc->oscc_lock);
 
-        request = ptlrpc_prep_req(class_exp2cliimp(oscc->oscc_exp), OST_CREATE,
+        request = ptlrpc_prep_req(oscc->oscc_obd->u.cli.cl_import, OST_CREATE,
                                   1, &size, NULL);
         if (request == NULL) {
                 spin_lock(&oscc->oscc_lock);
@@ -163,8 +163,8 @@ static int oscc_wait_for_objects(struct osc_creator *oscc, int count)
         ost_full = (oscc->oscc_flags & OSCC_FLAG_NOSPC);
         spin_unlock(&oscc->oscc_lock);
 
-        osc_invalid = class_exp2cliimp(oscc->oscc_exp)->imp_invalid;
-
+        osc_invalid = oscc->oscc_obd->u.cli.cl_import->imp_invalid;
+                      
         return have_objs || ost_full || osc_invalid;
 }
 
@@ -186,7 +186,7 @@ static int oscc_precreate(struct osc_creator *oscc, int wait)
         if (!oscc_has_objects(oscc, 1) && (oscc->oscc_flags & OSCC_FLAG_NOSPC))
                 rc = -ENOSPC;
 
-        if (class_exp2cliimp(oscc->oscc_exp)->imp_invalid)
+        if (oscc->oscc_obd->u.cli.cl_import->imp_invalid)
                 rc = -EIO;
 
         RETURN(rc);
@@ -207,7 +207,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct lov_stripe_md *lsm;
-        struct osc_creator *oscc = &exp->u.eu_osc_data.oed_oscc;
+        struct osc_creator *oscc = &exp->exp_obd->u.cli.cl_oscc;
         int try_again = 1, rc = 0;
         ENTRY;
         LASSERT(oa);
@@ -236,7 +236,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 oa->o_valid |= OBD_MD_FLID;
                 oa->o_id = oscc->oscc_next_id - 1;
 
-                rc = osc_real_create(oscc->oscc_exp, oa, ea, NULL);
+                rc = osc_real_create(exp, oa, ea, NULL);
 
                 spin_lock(&oscc->oscc_lock);
                 if (rc == -ENOSPC)
@@ -262,8 +262,10 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 rc = l_wait_event(oscc->oscc_waitq, !oscc_recovering(oscc),
                                   &lwi);
                 LASSERT(rc == 0 || rc == -ETIMEDOUT);
-                if (rc == -ETIMEDOUT)
+                if (rc == -ETIMEDOUT) {
+                        CDEBUG(D_HA, "%p: timed out waiting for recovery\n", oscc);
                         RETURN(rc);
+                }
                 CDEBUG(D_HA, "%p: oscc recovery over, waking up\n", oscc);
         }
         
@@ -295,26 +297,27 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
         RETURN(rc);
 }
 
-void oscc_init(struct obd_export *exp)
+void oscc_init(struct obd_device *obd)
 {
-        struct osc_export_data *oed;
+        struct osc_creator *oscc;
 
-        if (exp == NULL)
+        if (obd == NULL)
                 return;
 
-        oed = &exp->exp_osc_data;
-        memset(oed, 0, sizeof(*oed));
-        INIT_LIST_HEAD(&oed->oed_oscc.oscc_list);
-        init_waitqueue_head(&oed->oed_oscc.oscc_waitq);
-        spin_lock_init(&oed->oed_oscc.oscc_lock);
-        oed->oed_oscc.oscc_exp = exp;
-        oed->oed_oscc.oscc_kick_barrier = 100;
-        oed->oed_oscc.oscc_grow_count = 2000;
-        oed->oed_oscc.oscc_initial_create_count = 2000;
+        oscc = &obd->u.cli.cl_oscc;
 
-        oed->oed_oscc.oscc_next_id = 2;
-        oed->oed_oscc.oscc_last_id = 1;
-        oed->oed_oscc.oscc_flags |= OSCC_FLAG_RECOVERING;
+        memset(oscc, 0, sizeof(*oscc));
+        INIT_LIST_HEAD(&oscc->oscc_list);
+        init_waitqueue_head(&oscc->oscc_waitq);
+        spin_lock_init(&oscc->oscc_lock);
+        oscc->oscc_obd = obd;
+        oscc->oscc_kick_barrier = 100;
+        oscc->oscc_grow_count = 2000;
+        oscc->oscc_initial_create_count = 2000;
+
+        oscc->oscc_next_id = 2;
+        oscc->oscc_last_id = 1;
+        oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
         /* XXX the export handle should give the oscc the last object */
         /* oed->oed_oscc.oscc_last_id = exph->....; */
 }

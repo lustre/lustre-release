@@ -26,7 +26,7 @@ struct mds_export_data {
 struct osc_creator {
         spinlock_t              oscc_lock;
         struct list_head        oscc_list;
-        struct obd_export      *oscc_exp;
+        struct obd_device       *oscc_obd;
         obd_id                  oscc_last_id;//last available pre-created object
         obd_id                  oscc_next_id;// what object id to give out next
         int                     oscc_initial_create_count;
@@ -36,10 +36,6 @@ struct osc_creator {
         struct obdo             oscc_oa;
         int                     oscc_flags;
         wait_queue_head_t       oscc_waitq; /* creating procs wait on this */
-};
-
-struct osc_export_data {
-        struct osc_creator      oed_oscc;
 };
 
 struct ldlm_export_data {
@@ -83,14 +79,12 @@ struct obd_export {
                 struct mds_export_data    eu_mds_data;
                 struct filter_export_data eu_filter_data;
                 struct ec_export_data     eu_ec_data;
-                struct osc_export_data    eu_osc_data;
         } u;
 };
 
 #define exp_mds_data    u.eu_mds_data
 #define exp_lov_data    u.eu_lov_data
 #define exp_filter_data u.eu_filter_data
-#define exp_osc_data    u.eu_osc_data
 #define exp_ec_data     u.eu_ec_data
 
 extern struct obd_export *class_conn2export(struct lustre_handle *conn);

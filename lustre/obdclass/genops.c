@@ -393,7 +393,6 @@ struct obd_import *class_conn2cliimp(struct lustre_handle *conn)
         return obd->u.cli.cl_import;
 }
 
-
 /* Export management functions */
 static void export_handle_addref(void *export)
 {
@@ -588,8 +587,7 @@ int class_disconnect(struct obd_export *export, int flags)
 
         if (export == NULL) {
                 fixme();
-                CDEBUG(D_IOCTL, "disconnect: attempting to free "
-                       "null export %p\n", export);
+                CDEBUG(D_IOCTL, "attempting to free NULL export %p\n", export);
                 RETURN(-EINVAL);
         }
 

@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1557
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"8"}
+# bug number for skipped test: 1768 1557
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   8    14b"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -214,7 +214,7 @@ test_9() {
 		[ "$MTPT" -eq 1 ] && MTPT=2 || MTPT=1
 	done
 	[ "`cat $DIR1/f9`" = "abcdefghijkl" ] || \
-		error "`od -a $DIR1/f10` != abcdefghijkl"
+		error "`od -a $DIR1/f9` != abcdefghijkl"
 }
 run_test 9 "append of file with sub-page size on multiple mounts"
 

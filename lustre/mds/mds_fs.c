@@ -388,7 +388,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         /* setup the directory tree */
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
-        dentry = simple_mkdir(current->fs->pwd, "ROOT", 0755);
+        dentry = simple_mkdir(current->fs->pwd, "ROOT", 0755, 0);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create ROOT directory: rc = %d\n", rc);
@@ -410,7 +410,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         }
         mds->mds_fid_de = dentry;
 
-        dentry = simple_mkdir(current->fs->pwd, "PENDING", 0777);
+        dentry = simple_mkdir(current->fs->pwd, "PENDING", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create PENDING directory: rc = %d\n", rc);
@@ -418,7 +418,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         }
         mds->mds_pending_dir = dentry;
 
-        dentry = simple_mkdir(current->fs->pwd, "LOGS", 0777);
+        dentry = simple_mkdir(current->fs->pwd, "LOGS", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create LOGS directory: rc = %d\n", rc);
@@ -426,7 +426,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
         }
         mds->mds_logs_dir = dentry;
 
-        dentry = simple_mkdir(current->fs->pwd, "OBJECTS", 0777);
+        dentry = simple_mkdir(current->fs->pwd, "OBJECTS", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create OBJECTS directory: rc = %d\n", rc);

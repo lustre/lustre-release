@@ -1,4 +1,4 @@
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+2004-03-04  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0
        * bug fixes
 	- account for cache space usage on clients to avoid data loss (974)
@@ -19,6 +19,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- ptlrpc cleanup bug (2710)
 	- mds timeout on local locks (2588)
 	- namespace lock held during RPCs (2431)
+	- handle interrupted sync write properly (2503)
 	- don't try to handle a message that hasn't been replied to (2699)
 	- client assert failure during cleanup after abort recovery (2701)
 	- leak mdc device after failed mount (2712)
@@ -37,8 +38,27 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't delete objects on OST if given a bogus objid from MDS (2751)
 	- handle large client PAGE_SIZE readdir on small PAGE_SIZE MDS (2777)
 	- if rq_no_resend, then timeout request after recovery (2432)
+	- fix MDS llog_logid record size, 64-bit array alignment (2733)
+	- don't call usermode_helper from ptlrpcd, DEFAULT upcall (2773)
+	- put magic in mount.lustre data, check for bad/NULL mount data (2529)
+	- MDS recovery shouldn't delete objects that it has given out (2730)
+	- if enqueue arrives after completion, don't clobber LVB (2819)
+	- don't unlock pages twice when trigger_group_io returns error (2814)
+	- don't deref NULL rq_repmsg if ldlm_handle_enqueue failed (2822)
+	- don't write pages to disk if there was an error (1450)
+	- don't ping imports that have recovery disabled (2676)
+	- take buffered bytes into account when balancing socknal conn (2817)
+	- hold a DLM lock over readdir always, use truncate_inode_pages (2706)
+	- reconnect unlink llog connection after MDS reconnects to OST (2816)
+	- remove little-endian swabbing of llog records (1987)
+	- set/limit i_blksize to LL_MAX_BLKSIZE on client (2884)
+	- retry reposting request buffers if they fail (1191)
+	- grow extent at grant time to avoid granting a revoked lock (2809)
+	- lock revoke doesn't evict page if covered by a second lock (2765)
+	- disable VM readahead to avoid reading outside lock extents (2805)
        * miscellania
 	- return LL_SUPER_MAGIC from statfs for the filesystem type (1972)
+	- updated kernel patches for hp-2.4.20 kernel (2681)
 
 2004-02-07  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.4

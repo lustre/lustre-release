@@ -454,6 +454,7 @@ cancel_lru_locks() {
 # Test interface 
 error() {
     echo "${TESTSUITE}: **** FAIL:" $@
+    log "FAIL: $@"
     exit 1
 }
 
@@ -514,6 +515,11 @@ equals_msg() {
    printf '===== %s %.*s\n' "$msg" $suffixlen $EQUALS
 }
 
+log() {
+	echo "$*"
+	lctl mark "$*" 2> /dev/null || true
+}
+
 run_one() {
     testnum=$1
     message=$2
@@ -523,6 +529,7 @@ run_one() {
     # Pretty tests run faster.
     equals_msg $testnum: $message
 
+    log "== test $1: $2"
     test_${testnum} || error "test_$testnum failed with $?"
 }
 

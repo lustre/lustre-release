@@ -85,7 +85,7 @@ int proc_version;
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_fail_loc;
 unsigned int obd_timeout = 100;
-char obd_lustre_upcall[128] = "/usr/lib/lustre/lustre_upcall";
+char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
 unsigned int obd_sync_filter; /* = 0, don't sync by default */
 
 #ifdef __KERNEL__

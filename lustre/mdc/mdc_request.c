@@ -405,13 +405,23 @@ static int mdc_close_interpret(struct ptlrpc_request *req, void *data, int rc)
 {
         union ptlrpc_async_args *aa = data;
         struct mdc_rpc_lock *rpc_lock = aa->pointer_arg[0];
-        
-        mdc_put_rpc_lock(rpc_lock, NULL);
+        struct obd_device *obd = aa->pointer_arg[1];
+
+        if (rpc_lock == NULL) {
+                CERROR("called with NULL rpc_lock\n");
+        } else {
+                mdc_put_rpc_lock(rpc_lock, NULL);
+                LASSERTF(req->rq_async_args.pointer_arg[0] ==
+                         obd->u.cli.cl_rpc_lock, "%p != %p\n",
+                         req->rq_async_args.pointer_arg[0],
+                         obd->u.cli.cl_rpc_lock);
+                aa->pointer_arg[0] = NULL;
+        }
         wake_up(&req->rq_reply_waitq);
         RETURN(rc);
 }
 
-/* We can't use ptlrpc_check_reply, because we don't want to wake up for 
+/* We can't use ptlrpc_check_reply, because we don't want to wake up for
  * anything but a reply or an error. */
 static int mdc_close_check_reply(struct ptlrpc_request *req)
 {
@@ -443,7 +453,6 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
         struct ptlrpc_request *req;
         struct mdc_open_data *mod;
         struct l_wait_info lwi;
-        struct mdc_rpc_lock *rpc_lock = obd->u.cli.cl_rpc_lock;
         ENTRY;
 
         req = ptlrpc_prep_req(class_exp2cliimp(exp), MDS_CLOSE, 1, &reqsize,
@@ -478,9 +487,10 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
         /* We hand a ref to the rpcd here, so we need another one of our own. */
         ptlrpc_request_addref(req);
 
-        mdc_get_rpc_lock(rpc_lock, NULL);
+        mdc_get_rpc_lock(obd->u.cli.cl_rpc_lock, NULL);
         req->rq_interpret_reply = mdc_close_interpret;
-        req->rq_async_args.pointer_arg[0] = rpc_lock;
+        req->rq_async_args.pointer_arg[0] = obd->u.cli.cl_rpc_lock;
+        req->rq_async_args.pointer_arg[1] = obd;
         ptlrpcd_add_req(req);
         lwi = LWI_TIMEOUT_INTR(MAX(req->rq_timeout * HZ, 1), go_back_to_sleep,
                                NULL, NULL);
@@ -497,6 +507,11 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
                         CERROR("Unexpected: can't find mdc_open_data, but the "
                                "close succeeded.  Please tell CFS.\n");
                 }
+        }
+        if (req->rq_async_args.pointer_arg[0] != NULL) {
+                CERROR("returned without dropping rpc_lock: rc %d\n", rc);
+                mdc_close_interpret(req, &req->rq_async_args, rc);
+                portals_debug_dumplog();
         }
 
         EXIT;
@@ -812,6 +827,39 @@ static int mdc_detach(struct obd_device *dev)
         return lprocfs_obd_detach(dev);
 }
 
+static int mdc_import_event(struct obd_device *obd,
+                            struct obd_import *imp, 
+                            enum obd_import_event event)
+{
+        int rc = 0;
+
+        LASSERT(imp->imp_obd == obd);
+
+        switch (event) {
+        case IMP_EVENT_DISCON: {
+                break;
+        }
+        case IMP_EVENT_INVALIDATE: {
+                struct ldlm_namespace *ns = obd->obd_namespace;
+                
+                ldlm_namespace_cleanup(ns, LDLM_FL_LOCAL_ONLY);
+
+                if (obd->obd_observer)
+                        rc = obd_notify(obd->obd_observer, obd, 0);
+                break;
+        }
+        case IMP_EVENT_ACTIVE: {
+                if (obd->obd_observer)
+                        rc = obd_notify(obd->obd_observer, obd, 1);
+                break;
+        }
+        default:
+                CERROR("Unknown import event %d\n", event);
+                LBUG();
+        }
+        RETURN(rc);
+}
+
 static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
 {
         struct client_obd *cli = &obd->u.cli;
@@ -906,7 +954,7 @@ static int mdc_cleanup(struct obd_device *obd, int flags)
 
 
 static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
-                         int count, struct llog_logid *logid)
+                         int count, struct llog_catid *logid)
 {
         struct llog_ctxt *ctxt;
         int rc;
@@ -916,7 +964,7 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
                         &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-                ctxt->loc_imp = obd->u.cli.cl_import; 
+                ctxt->loc_imp = obd->u.cli.cl_import;
         }
 
         RETURN(rc);
@@ -945,6 +993,7 @@ struct obd_ops mdc_obd_ops = {
         o_statfs:      mdc_statfs,
         o_pin:         mdc_pin,
         o_unpin:       mdc_unpin,
+        o_import_event: mdc_import_event,
         o_llog_init:   mdc_llog_init,
         o_llog_finish: mdc_llog_finish,
 };

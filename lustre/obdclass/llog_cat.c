@@ -51,7 +51,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
 {
         struct llog_handle *loghandle;
         struct llog_log_hdr *llh;
-        struct llog_logid_rec rec;
+        struct llog_logid_rec rec = { { 0 }, };
         int rc, index, bitmap_size;
         ENTRY;
 
@@ -61,7 +61,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
         index = (cathandle->lgh_last_idx + 1) % bitmap_size;
 
         /* maximum number of available slots in catlog is bitmap_size - 2 */
-        if (llh->llh_cat_idx == cpu_to_le32(index)) {
+        if (llh->llh_cat_idx == index) {
                 CERROR("no free catalog slots for log...\n");
                 RETURN(ERR_PTR(-ENOSPC));
         } else {
@@ -73,8 +73,8 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                         LBUG(); /* should never happen */
                 }
                 cathandle->lgh_last_idx = index;
-                llh->llh_count = cpu_to_le32(le32_to_cpu(llh->llh_count) + 1);
-                llh->llh_tail.lrt_index = cpu_to_le32(index);
+                llh->llh_count++;
+                llh->llh_tail.lrt_index = index;
         }
 
         rc = llog_create(cathandle->lgh_ctxt, &loghandle, NULL, NULL);
@@ -91,12 +91,12 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                LPX64"\n", loghandle->lgh_id.lgl_oid, loghandle->lgh_id.lgl_ogen,
                index, cathandle->lgh_id.lgl_oid);
         /* build the record for this log in the catalog */
-        rec.lid_hdr.lrh_len = cpu_to_le32(sizeof(rec));
-        rec.lid_hdr.lrh_index = cpu_to_le32(index);
-        rec.lid_hdr.lrh_type = cpu_to_le32(LLOG_LOGID_MAGIC);
+        rec.lid_hdr.lrh_len = sizeof(rec);
+        rec.lid_hdr.lrh_index = index;
+        rec.lid_hdr.lrh_type = LLOG_LOGID_MAGIC;
         rec.lid_id = loghandle->lgh_id;
-        rec.lid_tail.lrt_len = cpu_to_le32(sizeof(rec));
-        rec.lid_tail.lrt_index = cpu_to_le32(index);
+        rec.lid_tail.lrt_len = sizeof(rec);
+        rec.lid_tail.lrt_index = index;
 
         /* update the catalog: header and record */
         rc = llog_write_rec(cathandle, &rec.lid_hdr,
@@ -105,7 +105,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                 GOTO(out_destroy, rc);
         }
 
-        loghandle->lgh_hdr->llh_cat_idx = cpu_to_le32(index);
+        loghandle->lgh_hdr->llh_cat_idx = index;
         cathandle->u.chd.chd_current_log = loghandle;
         LASSERT(list_empty(&loghandle->u.phd.phd_entry));
         list_add_tail(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
@@ -163,8 +163,8 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
         if (!rc) {
                 loghandle->u.phd.phd_cat_handle = cathandle;
                 loghandle->u.phd.phd_cookie.lgc_lgl = cathandle->lgh_id;
-                loghandle->u.phd.phd_cookie.lgc_index =
-                        le32_to_cpu(loghandle->lgh_hdr->llh_cat_idx);
+                loghandle->u.phd.phd_cookie.lgc_index = 
+                        loghandle->lgh_hdr->llh_cat_idx;
         }
 
 out:
@@ -257,13 +257,21 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
         int rc;
         ENTRY;
 
-        LASSERT(le32_to_cpu(rec->lrh_len) <= LLOG_CHUNK_SIZE);
+        LASSERT(rec->lrh_len <= LLOG_CHUNK_SIZE);
         loghandle = llog_cat_current_log(cathandle, 1);
         if (IS_ERR(loghandle))
                 RETURN(PTR_ERR(loghandle));
         /* loghandle is already locked by llog_cat_current_log() for us */
         rc = llog_write_rec(loghandle, rec, reccookie, 1, buf, -1);
         up_write(&loghandle->lgh_lock);
+        if (rc == -ENOSPC) {
+                /* to create a new plain log */
+                loghandle = llog_cat_current_log(cathandle, 1);
+                if (IS_ERR(loghandle))
+                        RETURN(PTR_ERR(loghandle));
+                rc = llog_write_rec(loghandle, rec, reccookie, 1, buf, -1);
+                up_write(&loghandle->lgh_lock);
+        }
 
         RETURN(rc);
 }
@@ -328,13 +336,13 @@ int llog_cat_process_cb(struct llog_handle *cat_llh, struct llog_rec_hdr *rec,
         struct llog_handle *llh;
         int rc;
 
-        if (le32_to_cpu(rec->lrh_type) != LLOG_LOGID_MAGIC) {
+        if (rec->lrh_type != LLOG_LOGID_MAGIC) {
                 CERROR("invalid record in catalog\n");
                 RETURN(-EINVAL);
         }
         CWARN("processing log "LPX64":%x at index %u of catalog "LPX64"\n",
                lir->lid_id.lgl_oid, lir->lid_id.lgl_ogen,
-               le32_to_cpu(rec->lrh_index), cat_llh->lgh_id.lgl_oid);
+               rec->lrh_index, cat_llh->lgh_id.lgl_oid);
 
         rc = llog_cat_id2handle(cat_llh, &llh, &lir->lid_id);
         if (rc) {
@@ -355,7 +363,7 @@ int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data)
         int rc;
         ENTRY;
 
-        LASSERT(llh->llh_flags &cpu_to_le32(LLOG_F_IS_CAT));
+        LASSERT(llh->llh_flags & LLOG_F_IS_CAT);
         d.lpd_data = data;
         d.lpd_cb = cb;
 
@@ -363,7 +371,7 @@ int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data)
                 CWARN("catlog "LPX64" crosses index zero\n",
                       cat_llh->lgh_id.lgl_oid);
 
-                cd.first_idx = le32_to_cpu(llh->llh_cat_idx);
+                cd.first_idx = llh->llh_cat_idx;
                 cd.last_idx = 0;
                 rc = llog_process(cat_llh, llog_cat_process_cb, &d, &cd);
                 if (rc != 0)
@@ -387,17 +395,17 @@ int llog_cat_set_first_idx(struct llog_handle *cathandle, int index)
         ENTRY;
 
         bitmap_size = sizeof(llh->llh_bitmap) * 8;
-        if (llh->llh_cat_idx == cpu_to_le32(index - 1)) {
-                idx = le32_to_cpu(llh->llh_cat_idx) + 1;
-                llh->llh_cat_idx = cpu_to_le32(idx);
+        if (llh->llh_cat_idx == (index - 1)) {
+                idx = llh->llh_cat_idx + 1;
+                llh->llh_cat_idx = idx;
                 if (idx == cathandle->lgh_last_idx)
                         goto out;
                 for (i = (index + 1) % bitmap_size;
                      i != cathandle->lgh_last_idx;
                      i = (i + 1) % bitmap_size) {
                         if (!ext2_test_bit(i, llh->llh_bitmap)) {
-                                idx = le32_to_cpu(llh->llh_cat_idx) + 1;
-                                llh->llh_cat_idx = cpu_to_le32(idx);
+                                idx = llh->llh_cat_idx + 1;
+                                llh->llh_cat_idx = idx;
                         } else if (i == 0) {
                                 llh->llh_cat_idx = 0;
                         } else {
@@ -406,7 +414,7 @@ int llog_cat_set_first_idx(struct llog_handle *cathandle, int index)
                 }
 out:
                 CDEBUG(D_HA, "set catlog "LPX64" first idx %u\n",
-                       cathandle->lgh_id.lgl_oid,le32_to_cpu(llh->llh_cat_idx));
+                       cathandle->lgh_id.lgl_oid, llh->llh_cat_idx);
         }
 
         RETURN(0);

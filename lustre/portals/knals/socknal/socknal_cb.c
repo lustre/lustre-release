@@ -760,19 +760,19 @@ ksocknal_find_target_peer_locked (ksock_tx_t *tx, ptl_nid_t nid)
 }
 
 ksock_conn_t *
-ksocknal_find_conn_locked (ksock_tx_t *tx, ksock_peer_t *peer) 
+ksocknal_find_conn_locked (ksock_tx_t *tx, ksock_peer_t *peer)
 {
         struct list_head *tmp;
         ksock_conn_t     *typed = NULL;
         int               tnob  = 0;
         ksock_conn_t     *fallback = NULL;
         int               fnob     = 0;
-        
+
         /* Find the conn with the shortest tx queue */
         list_for_each (tmp, &peer->ksnp_conns) {
                 ksock_conn_t *c = list_entry(tmp, ksock_conn_t, ksnc_list);
                 int           nob = atomic_read(&c->ksnc_tx_nob) +
-                                    c->ksnc_sock->sk->sk_wmem_queued;
+                                        c->ksnc_sock->sk->sk_wmem_queued;
 
                 LASSERT (!c->ksnc_closing);
 

@@ -21,57 +21,57 @@ extern unsigned int portal_debug;
 extern unsigned int portal_printk;
 extern unsigned int portal_cerror;
 /* Debugging subsystems (32 bits, non-overlapping) */
-#define S_UNDEFINED    (1 << 0)
-#define S_MDC          (1 << 1)
-#define S_MDS          (1 << 2)
-#define S_OSC          (1 << 3)
-#define S_OST          (1 << 4)
-#define S_CLASS        (1 << 5)
-#define S_LOG          (1 << 6)
-#define S_LLITE        (1 << 7)
-#define S_RPC          (1 << 8)
-#define S_MGMT         (1 << 9)
-#define S_PORTALS     (1 << 10)
-#define S_SOCKNAL     (1 << 11)
-#define S_QSWNAL      (1 << 12)
-#define S_PINGER      (1 << 13)
-#define S_FILTER      (1 << 14)
-#define S_PTLBD       (1 << 15)
-#define S_ECHO        (1 << 16)
-#define S_LDLM        (1 << 17)
-#define S_LOV         (1 << 18)
-#define S_GMNAL       (1 << 19)
-#define S_PTLROUTER   (1 << 20)
-#define S_COBD        (1 << 21)
-#define S_IBNAL       (1 << 22)
+#define S_UNDEFINED   0x00000001
+#define S_MDC         0x00000002
+#define S_MDS         0x00000004
+#define S_OSC         0x00000008
+#define S_OST         0x00000010
+#define S_CLASS       0x00000020
+#define S_LOG         0x00000040
+#define S_LLITE       0x00000080
+#define S_RPC         0x00000100
+#define S_MGMT        0x00000200
+#define S_PORTALS     0x00000400
+#define S_SOCKNAL     0x00000800
+#define S_QSWNAL      0x00001000
+#define S_PINGER      0x00002000
+#define S_FILTER      0x00004000
+#define S_PTLBD       0x00008000
+#define S_ECHO        0x00010000
+#define S_LDLM        0x00020000
+#define S_LOV         0x00040000
+#define S_GMNAL       0x00080000
+#define S_PTLROUTER   0x00100000
+#define S_COBD        0x00200000
+#define S_IBNAL       0x00400000
 
 /* If you change these values, please keep portals/utils/debug.c
  * up to date! */
 
 /* Debugging masks (32 bits, non-overlapping) */
-#define D_TRACE     (1 << 0) /* ENTRY/EXIT markers */
-#define D_INODE     (1 << 1)
-#define D_SUPER     (1 << 2)
-#define D_EXT2      (1 << 3) /* anything from ext2_debug */
-#define D_MALLOC    (1 << 4) /* print malloc, free information */
-#define D_CACHE     (1 << 5) /* cache-related items */
-#define D_INFO      (1 << 6) /* general information */
-#define D_IOCTL     (1 << 7) /* ioctl related information */
-#define D_BLOCKS    (1 << 8) /* ext2 block allocation */
-#define D_NET       (1 << 9) /* network communications */
-#define D_WARNING   (1 << 10) /* CWARN(...) == CDEBUG (D_WARNING, ...) */
-#define D_BUFFS     (1 << 11)
-#define D_OTHER     (1 << 12)
-#define D_DENTRY    (1 << 13)
-#define D_PORTALS   (1 << 14) /* ENTRY/EXIT markers */
-#define D_PAGE      (1 << 15) /* bulk page handling */
-#define D_DLMTRACE  (1 << 16)
-#define D_ERROR     (1 << 17) /* CERROR(...) == CDEBUG (D_ERROR, ...) */
-#define D_EMERG     (1 << 18) /* CEMERG(...) == CDEBUG (D_EMERG, ...) */
-#define D_HA        (1 << 19) /* recovery and failover */
-#define D_RPCTRACE  (1 << 20) /* for distributed debugging */
-#define D_VFSTRACE  (1 << 21)
-#define D_READA     (1 << 22) /* read-ahead */
+#define D_TRACE       0x00000001 /* ENTRY/EXIT markers */
+#define D_INODE       0x00000002
+#define D_SUPER       0x00000004
+#define D_EXT2        0x00000008 /* anything from ext2_debug */
+#define D_MALLOC      0x00000010 /* print malloc, free information */
+#define D_CACHE       0x00000020 /* cache-related items */
+#define D_INFO        0x00000040 /* general information */
+#define D_IOCTL       0x00000080 /* ioctl related information */
+#define D_BLOCKS      0x00000100 /* ext2 block allocation */
+#define D_NET         0x00000200 /* network communications */
+#define D_WARNING     0x00000400 /* CWARN(...) == CDEBUG (D_WARNING, ...) */
+#define D_BUFFS       0x00000800
+#define D_OTHER       0x00001000
+#define D_DENTRY      0x00002000
+#define D_PORTALS     0x00004000 /* ENTRY/EXIT markers */
+#define D_PAGE        0x00008000 /* bulk page handling */
+#define D_DLMTRACE    0x00010000
+#define D_ERROR       0x00020000 /* CERROR(...) == CDEBUG (D_ERROR, ...) */
+#define D_EMERG       0x00040000 /* CEMERG(...) == CDEBUG (D_EMERG, ...) */
+#define D_HA          0x00080000 /* recovery and failover */
+#define D_RPCTRACE    0x00100000 /* for distributed debugging */
+#define D_VFSTRACE    0x00200000
+#define D_READA       0x00400000 /* read-ahead */
 
 #ifdef __KERNEL__
 # include <linux/sched.h> /* THREAD_SIZE */
@@ -232,6 +232,12 @@ extern void kportal_assertion_failed(char *expr, char *file, const char *func,
 #else
 #define LASSERT(e)
 #define LASSERTF(cond, fmt...) do { } while (0)
+#endif
+
+#ifdef CONFIG_SMP
+#define LASSERT_SPIN_LOCKED(lock) LASSERT(spin_is_locked(lock))
+#else
+#define LASSERT_SPIN_LOCKED(lock) do {} while(0)
 #endif
 
 #ifdef __arch_um__

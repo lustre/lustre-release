@@ -248,6 +248,7 @@ static inline void lustre_cfg_freedata(char *buf, int len)
 
 /* Passed by mount */
 struct lustre_mount_data {
+        uint32_t lmd_magic;
         uint32_t lmd_version;
         uint64_t lmd_local_nid;
         uint64_t lmd_server_nid;

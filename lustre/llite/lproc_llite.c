@@ -25,6 +25,7 @@
 #include <linux/lustre_lite.h>
 #include <linux/lprocfs_status.h>
 #include <linux/seq_file.h>
+#include <linux/obd_support.h>
 
 #include "llite_internal.h"
 
@@ -562,16 +563,16 @@ static int llite_dump_pgcache_seq_open(struct inode *inode, struct file *file)
         struct ll_sb_info *sbi = dp->data;
         int rc;
 
-        llap = kmalloc(sizeof(*llap), GFP_KERNEL);
+        OBD_ALLOC_GFP(llap, sizeof(*llap), GFP_KERNEL);
         if (llap == NULL)
                 return -ENOMEM;
         llap->llap_page = NULL;
         llap->llap_cookie = sbi;
         llap->llap_magic = 0;
- 
+
         rc = seq_open(file, &llite_dump_pgcache_seq_sops);
         if (rc) {
-                kfree(llap);
+                OBD_FREE(llap, sizeof(*llap));
                 return rc;
         }
         seq = file->private_data;
@@ -584,7 +585,7 @@ static int llite_dump_pgcache_seq_open(struct inode *inode, struct file *file)
         return 0;
 }
 
-static int llite_dump_pgcache_seq_release(struct inode *inode, 
+static int llite_dump_pgcache_seq_release(struct inode *inode,
                                           struct file *file)
 {
         struct seq_file *seq = file->private_data;
@@ -595,7 +596,7 @@ static int llite_dump_pgcache_seq_release(struct inode *inode,
         if (!list_empty(&llap->llap_proc_item))
                 list_del_init(&llap->llap_proc_item);
         spin_unlock(&sbi->ll_pglist_lock);
-        kfree(llap);
+        OBD_FREE(llap, sizeof(*llap));
 
         return seq_release(inode, file);
 }
@@ -603,7 +604,7 @@ static int llite_dump_pgcache_seq_release(struct inode *inode,
 struct file_operations llite_dump_pgcache_fops = {
         .open    = llite_dump_pgcache_seq_open,
         .read    = seq_read,
-        .release    = llite_dump_pgcache_seq_release,
+        .release = llite_dump_pgcache_seq_release,
 };
 
 #endif /* LPROCFS */

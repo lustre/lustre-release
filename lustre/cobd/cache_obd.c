@@ -188,10 +188,9 @@ static int cobd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
 static int cobd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                          int objcount, struct obd_ioobj *obj,
                          int niocount, struct niobuf_local *local,
-                         struct obd_trans_info *oti)
+                         struct obd_trans_info *oti, int rc)
 {
         struct obd_export *cobd_exp;
-        int rc;
 
         if (exp->exp_obd == NULL)
                 return -EINVAL;
@@ -200,7 +199,8 @@ static int cobd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                 return -EOPNOTSUPP;
 
         cobd_exp = exp->exp_obd->u.cobd.cobd_target_exp;
-        rc = obd_commitrw(cmd, cobd_exp, oa, objcount, obj,niocount,local,oti);
+        rc = obd_commitrw(cmd, cobd_exp, oa, objcount, obj, niocount, local,
+                          oti, rc);
         return rc;
 }
 
@@ -212,7 +212,7 @@ static int cobd_brw(int cmd, struct obd_export *exp, struct obdo *oa,
         struct cache_obd  *cobd;
 
         if (obd == NULL) {
-                CERROR("invalid client cookie "LPX64"\n", 
+                CERROR("invalid client cookie "LPX64"\n",
                        exp->exp_handle.h_cookie);
                 return -EINVAL;
         }

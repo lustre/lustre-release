@@ -76,7 +76,8 @@ struct lov_stripe_md {
         /* Public members. */
         __u64 lsm_object_id;        /* lov object id */
         __u64 lsm_object_gr;        /* lov object id */
-        __u64 lsm_maxbytes;
+        __u64 lsm_maxbytes;         /* maximum possible file size */
+        unsigned long lsm_xfersize; /* optimal transfer size */
 
         /* LOV-private members start here -- only for use in lov/. */
         __u32 lsm_magic;
@@ -174,6 +175,7 @@ struct filter_obd {
 
         struct list_head     fo_export_list;
         int                  fo_subdir_count;
+
         obd_size             fo_tot_dirty;      /* protected by obd_osfs_lock */
         obd_size             fo_tot_granted;    /* all values in bytes */
         obd_size             fo_tot_pending;
@@ -248,6 +250,7 @@ struct client_obd {
 
         struct mdc_rpc_lock     *cl_rpc_lock;
         struct mdc_rpc_lock     *cl_setattr_lock;
+        struct osc_creator      cl_oscc;
 };
 
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we
@@ -614,7 +617,7 @@ struct obd_ops {
         int (*o_commitrw)(int cmd, struct obd_export *exp, struct obdo *oa,
                           int objcount, struct obd_ioobj *obj,
                           int niocount, struct niobuf_local *local,
-                          struct obd_trans_info *oti);
+                          struct obd_trans_info *oti, int rc);
         int (*o_enqueue)(struct obd_export *, struct lov_stripe_md *,
                          __u32 type, ldlm_policy_data_t *, __u32 mode,
                          int *flags, void *bl_cb, void *cp_cb, void *gl_cb,
@@ -638,7 +641,7 @@ struct obd_ops {
 
         /* llog related obd_methods */
         int (*o_llog_init)(struct obd_device *obd, struct obd_device *disk_obd,
-                           int count, struct llog_logid *logid);
+                           int count, struct llog_catid *logid);
         int (*o_llog_finish)(struct obd_device *obd, int count);
 
         /* metadata-only methods */
@@ -646,7 +649,8 @@ struct obd_ops {
                      struct obd_client_handle *, int flag);
         int (*o_unpin)(struct obd_export *, struct obd_client_handle *, int);
 
-        int (*o_invalidate_import)(struct obd_device *, struct obd_import *);
+        int (*o_import_event)(struct obd_device *, struct obd_import *,
+                              enum obd_import_event);
 
         int (*o_notify)(struct obd_device *obd, struct obd_device *watched,
                         int active);

@@ -362,16 +362,19 @@ preprw_cleanup:
 
 int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
                   int objcount, struct obd_ioobj *obj, int niocount,
-                  struct niobuf_local *res, struct obd_trans_info *oti)
+                  struct niobuf_local *res, struct obd_trans_info *oti, int rc)
 {
         struct obd_device *obd;
         struct niobuf_local *r = res;
-        int i, vrc = 0, rc = 0;
+        int i, vrc = 0;
         ENTRY;
 
         obd = export->exp_obd;
         if (obd == NULL)
                 RETURN(-EINVAL);
+
+        if (rc)
+                GOTO(commitrw_cleanup, rc);
 
         if ((cmd & OBD_BRW_RWMASK) == OBD_BRW_READ) {
                 CDEBUG(D_PAGE, "reading %d obdos with %d IOs\n",

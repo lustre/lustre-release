@@ -313,17 +313,18 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
         size_lock.end = OBD_OBJECT_EOF;
 
         /* XXX I bet we should be checking the lock ignore flags.. */
+        /* FIXME use LDLM_FL_TEST_LOCK instead */
         flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED;
         matched = obd_match(exp, lsm, LDLM_EXTENT, &size_lock,
                             sizeof(size_lock), LCK_PR, &flags, inode,
                             &match_lockh);
 
-        /* hey, alright, we hold a size lock that covers the size we 
+        /* hey, alright, we hold a size lock that covers the size we
          * just found, its not going to change for a while.. */
         if (matched == 1) {
                 set_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags);
                 obd_cancel(exp, lsm, LCK_PR, &match_lockh);
-        } 
+        }
 
         RETURN(0);
 }

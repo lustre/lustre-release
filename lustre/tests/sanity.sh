@@ -697,7 +697,7 @@ run_test 26e "unlink multiple component recursive symlink ======"
 test_27a() {
 	echo '== stripe sanity =============================================='
 	mkdir $DIR/d27
-	$LSTRIPE $DIR/d27/f0 8192 0 1 || error
+	$LSTRIPE $DIR/d27/f0 65536 0 1 || error
 	$CHECKSTAT -t file $DIR/d27/f0 || error
 	pass
 	log "== test_27b: write to one stripe file ========================="
@@ -710,7 +710,7 @@ test_27c() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$LSTRIPE $DIR/d27/f01 8192 0 2 || error
+	$LSTRIPE $DIR/d27/f01 65536 0 2 || error
 	[ `$LFIND $DIR/d27/f01 | grep -A 10 obdidx | wc -l` -eq 4 ] ||
 		error "two-stripe file doesn't have two stripes"
 	pass
@@ -733,8 +733,8 @@ test_27e() {
 	if [ ! -d $DIR/d27 ]; then
 		mkdir $DIR/d27
 	fi
-	$LSTRIPE $DIR/d27/f12 8192 0 2 || error
-	$LSTRIPE $DIR/d27/f12 8192 0 2 && error
+	$LSTRIPE $DIR/d27/f12 65536 0 2 || error
+	$LSTRIPE $DIR/d27/f12 65536 0 2 && error
 	$CHECKSTAT -t file $DIR/d27/f12 || error
 }
 run_test 27e "lstripe existing file (should return error) ======"
@@ -768,9 +768,22 @@ test_27j() {
         if [ ! -d $DIR/d27 ]; then
                 mkdir $DIR/d27
         fi
-        $LSTRIPE $DIR/d27/f27j 8192 $STRIPECOUNT 1 && error || true
+        $LSTRIPE $DIR/d27/f27j 65536 $STRIPECOUNT 1 && error || true
 }
 run_test 27j "lstripe with bad stripe offset (should return error)"
+
+test_27k() { # bug 2844
+	FILE=$DIR/d27/f27k
+	LL_MAX_BLKSIZE=$((4 * 1024 * 1024))
+	[ ! -d $DIR/d27 ] && mkdir -p $DIR/d27
+	$LSTRIPE $FILE 67108864 -1 0 || error "lstripe failed"
+	BLKSIZE=`stat $FILE | awk '/IO Block:/ { print $7 }'`
+	[ $BLKSIZE -le $LL_MAX_BLKSIZE ] || error "$BLKSIZE > $LL_MAX_BLKSIZE"
+	dd if=/dev/zero of=$FILE bs=4k count=1
+	BLKSIZE=`stat $FILE | awk '/IO Block:/ { print $7 }'`
+	[ $BLKSIZE -le $LL_MAX_BLKSIZE ] || error "$BLKSIZE > $LL_MAX_BLKSIZE"
+}
+run_test 27k "limit i_blksize for broken user apps ============="
 
 test_28() {
 	mkdir $DIR/d28

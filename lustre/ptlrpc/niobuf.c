@@ -438,10 +438,8 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         LASSERT (request->rq_replen != 0);
         if (request->rq_repmsg == NULL)
                 OBD_ALLOC(request->rq_repmsg, request->rq_replen);
-        if (request->rq_repmsg == NULL) {
-                LBUG();
+        if (request->rq_repmsg == NULL)
                 GOTO(cleanup_bulk, rc = -ENOMEM);
-        }
 
         rc = PtlMEAttach(connection->c_peer.peer_ni->pni_ni_h,
                          request->rq_reply_portal, /* XXX FIXME bug 249 */
@@ -450,7 +448,6 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
                 LASSERT (rc == PTL_NOSPACE);
-                LBUG();
                 GOTO(cleanup_repmsg, rc = -ENOMEM);
         }
 
@@ -477,7 +474,6 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
                 LASSERT (rc == PTL_NOSPACE);
-                LBUG();
                 GOTO(cleanup_me, rc -ENOMEM);
         }
 
@@ -524,7 +520,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         return rc;
 }
 
-void ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
+int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
 {
         struct ptlrpc_srv_ni    *srv_ni = rqbd->rqbd_srv_ni;
         struct ptlrpc_service   *service = srv_ni->sni_service;
@@ -532,18 +528,20 @@ void ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
         int                      rc;
         ptl_md_t                 md;
         ptl_handle_me_t          me_h;
-        unsigned long            flags;
 
         CDEBUG(D_NET, "PtlMEAttach: portal %d on %s h %lx."LPX64"\n",
                service->srv_req_portal, srv_ni->sni_ni->pni_name,
                srv_ni->sni_ni->pni_ni_h.nal_idx,
                srv_ni->sni_ni->pni_ni_h.cookie);
 
+        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_PTLRPC_RQBD))
+                return (-ENOMEM);
+
         rc = PtlMEAttach(srv_ni->sni_ni->pni_ni_h, service->srv_req_portal,
                          match_id, 0, ~0, PTL_UNLINK, PTL_INS_AFTER, &me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
-                GOTO (failed, NULL);
+                return (-ENOMEM);
         }
 
         LASSERT(rqbd->rqbd_refcount == 0);
@@ -557,32 +555,15 @@ void ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
         md.user_ptr   = &rqbd->rqbd_cbid;
         md.eventq     = srv_ni->sni_ni->pni_eq_h;
         
-        spin_lock_irqsave (&service->srv_lock, flags);
-        srv_ni->sni_nrqbd_receiving++;
-        spin_unlock_irqrestore (&service->srv_lock, flags);
-
         rc = PtlMDAttach(me_h, md, PTL_UNLINK, &rqbd->rqbd_md_h);
         if (rc == PTL_OK)
-                return;
-        
-        CERROR("PtlMDAttach failed: %d\n", rc);
+                return (0);
+
+        CERROR("PtlMDAttach failed: %d; \n", rc);
         LASSERT (rc == PTL_NOSPACE);
         rc = PtlMEUnlink (me_h);
         LASSERT (rc == PTL_OK);
-
-        spin_lock_irqsave (&service->srv_lock, flags);
-        srv_ni->sni_nrqbd_receiving--;
-        if (srv_ni->sni_nrqbd_receiving == 0) {
-                /* This service is off-air on this interface because all
-                 * its request buffers are busy.  Portals will have started
-                 * dropping incoming requests until more buffers get
-                 * posted */
-                CERROR("All %s %s request buffers busy\n",
-                       service->srv_name, srv_ni->sni_ni->pni_name);
-        }
-        spin_unlock_irqrestore (&service->srv_lock, flags);
-
- failed:
-        LBUG();                /* BUG 1191 */
-        /* put req on a retry list? */
+        rqbd->rqbd_refcount = 0;
+        
+        return (-ENOMEM);
 }

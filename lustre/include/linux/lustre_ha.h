@@ -19,6 +19,7 @@ void ptlrpc_free_committed(struct obd_import *imp);
 void ptlrpc_wake_delayed(struct obd_import *imp);
 int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid);
 int ptlrpc_set_import_active(struct obd_import *imp, int active);
+void ptlrpc_invalidate_import(struct obd_import *imp);
 void ptlrpc_fail_import(struct obd_import *imp, int generation);
 void ptlrpc_fail_export(struct obd_export *exp);
 

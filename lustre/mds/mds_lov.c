@@ -280,7 +280,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         if (!obd->obd_recovering) {
                 rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
                                   obd->u.mds.mds_lov_desc.ld_tgt_count, NULL,
-                                  NULL);
+                                  NULL, NULL);
                 if (rc != 0)
                         CERROR("faild at llog_origin_connect: %d\n", rc);
 
@@ -497,6 +497,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched, int active)
 {
         struct obd_uuid *uuid;
         int rc = 0;
+        ENTRY;
 
         if (!active)
                 RETURN(0);
@@ -512,6 +513,21 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched, int active)
                 CWARN("MDS %s: in recovery, not resetting orphans on %s\n",
                       obd->obd_name, uuid->uuid);
         } else {
+                LASSERT(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT) != NULL);
+
+                rc = obd_set_info(obd->u.mds.mds_osc_exp, strlen("mds_conn"), "mds_conn",
+                                  0, uuid);
+                if (rc != 0)
+                        RETURN(rc);
+
+                rc = llog_connect(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT),
+                                  obd->u.mds.mds_lov_desc.ld_tgt_count,
+                                  NULL, NULL, uuid);
+                if (rc != 0) {
+                        CERROR("faild at llog_origin_connect: %d\n", rc);
+                        RETURN(rc);
+                }
+
                 CWARN("MDS %s: %s now active, resetting orphans\n",
                       obd->obd_name, uuid->uuid);
                 rc = mds_lov_clearorphans(&obd->u.mds, uuid);

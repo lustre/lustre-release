@@ -122,6 +122,7 @@ extern unsigned int obd_sync_filter;
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501
+#define OBD_FAIL_PTLRPC_RQBD             0x502
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 #define OBD_FAIL_OBD_LOG_CANCEL_NET      0x601
