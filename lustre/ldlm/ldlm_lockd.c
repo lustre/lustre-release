@@ -546,15 +546,16 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         ENTRY;
 
         MOD_INC_USE_COUNT;
+        /*
         rc = ldlm_proc_setup(obddev);
         if (rc != 0)
                 GOTO(out_dec, rc);
-
+        */
         ldlm->ldlm_service = ptlrpc_init_svc(1024, 640, LDLM_REQUEST_PORTAL,
                                              LDLM_REPLY_PORTAL, "self",
                                              ldlm_callback_handler, "ldlm");
         if (!ldlm->ldlm_service)
-                GOTO(out_proc, rc = -ENOMEM);
+                GOTO(out_dec, rc = -ENOMEM);
 
         for (i = 0; i < LDLM_NUM_THREADS; i++) {
                 char name[32];
@@ -578,8 +579,11 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
  out_thread:
         ptlrpc_stop_all_threads(ldlm->ldlm_service);
         ptlrpc_unregister_service(ldlm->ldlm_service);
+        /* 
  out_proc:
-        ldlm_proc_cleanup(obddev);
+        
+         ldlm_proc_cleanup(obddev); 
+        */
  out_dec:
         MOD_DEC_USE_COUNT;
         return rc;
@@ -597,7 +601,7 @@ static int ldlm_cleanup(struct obd_device *obddev)
 
         ptlrpc_stop_all_threads(ldlm->ldlm_service);
         ptlrpc_unregister_service(ldlm->ldlm_service);
-        ldlm_proc_cleanup(obddev);
+        /* ldlm_proc_cleanup(obddev); */
 
         MOD_DEC_USE_COUNT;
         RETURN(0);
