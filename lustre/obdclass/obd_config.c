@@ -121,7 +121,7 @@ int class_attach(struct lustre_cfg *lcfg)
         spin_lock_init(&obd->obd_dev_lock);
         init_waitqueue_head(&obd->obd_refcount_waitq);
         
-        /* XXX belong ins setup not attach  */
+        /* XXX belongs in setup not attach  */
         /* recovery data */
         spin_lock_init(&obd->obd_processing_task_lock);
         init_waitqueue_head(&obd->obd_next_transno_waitq);
@@ -143,9 +143,7 @@ int class_attach(struct lustre_cfg *lcfg)
         if (len >= sizeof(obd->obd_uuid)) {
                 CERROR("uuid must be < "LPSZ" bytes long\n",
                        sizeof(obd->obd_uuid));
-                if (obd->obd_name)
-                        OBD_FREE(obd->obd_name,
-                                 strlen(obd->obd_name) + 1);
+                OBD_FREE(obd->obd_name, strlen(obd->obd_name) + 1);
                 class_put_type(obd->obd_type);
                 obd->obd_type = NULL;
                 RETURN(-EINVAL);
@@ -157,14 +155,11 @@ int class_attach(struct lustre_cfg *lcfg)
                 err = OBP(obd,attach)(obd, sizeof *lcfg, lcfg);
 
         if (err) {
-                if(name)
-                        OBD_FREE(obd->obd_name,
-                                 strlen(obd->obd_name) + 1);
+                OBD_FREE(obd->obd_name, strlen(obd->obd_name) + 1);
                 class_put_type(obd->obd_type);
                 obd->obd_type = NULL;
         } else {
                 obd->obd_attached = 1;
-                
                 type->typ_refcnt++;
                 CDEBUG(D_IOCTL, "OBD: dev %d attached type %s\n",
                        obd->obd_minor, typename);
@@ -191,10 +186,8 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         }
 
         atomic_set(&obd->obd_refcount, 0);
-        
-        if (OBT(obd) && OBP(obd, setup))
-                err = obd_setup(obd, sizeof(*lcfg), lcfg);
 
+        err = obd_setup(obd, sizeof(*lcfg), lcfg);
         if (!err) {
                 obd->obd_type->typ_refcnt++;
                 obd->obd_set_up = 1;
@@ -222,7 +215,8 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (obd->obd_name) {
                 OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
                 obd->obd_name = NULL;
-        }
+        } else 
+                CERROR("device %d: no name at detach\n", obd->obd_minor);
 
         obd->obd_attached = 0;
         obd->obd_type->typ_refcnt--;
@@ -271,11 +265,9 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                         }
         }
 
-        if (OBT(obd) && OBP(obd, precleanup)) {
-                err = obd_precleanup(obd, flags);
-                if (err) 
-                        RETURN(err);
-        }
+        err = obd_precleanup(obd, flags);
+        if (err) 
+                RETURN(err);
         
         if (atomic_read(&obd->obd_refcount) == 1 ||
             flags & OBD_OPT_FORCE) {
@@ -315,9 +307,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                        obd->obd_name);
         }
 
-        if (OBT(obd) && OBP(obd, cleanup))
-                err = obd_cleanup(obd, flags);
-
+        err = obd_cleanup(obd, flags);
         if (!err) {
                 obd->obd_set_up = obd->obd_stopping = 0;
                 obd->obd_type->typ_refcnt--;

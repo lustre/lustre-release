@@ -394,19 +394,8 @@ int llogd_client_close(struct llog_handle *handle)
         RETURN(rc);
 }
 
-int llogd_client_write_rec(struct llog_handle *loghandle,
-                          struct llog_rec_hdr *rec, 
-                          struct llog_cookie *logcookies, 
-                          int numcookies, 
-                          void *buf,
-                          int idx)
-{
-        int rc = 0;
-        RETURN(rc);
-}
 
 struct llog_operations llogd_client_ops = {
-//        lob_write_rec:   llogd_client_write_rec,
         lop_next_block:  llogd_client_next_block,
         lop_read_header: llogd_client_read_header,
         lop_create:      llogd_client_create,
