@@ -3,7 +3,7 @@ The various .xml configs in the tests/ directory are built by running the
 corresponding .sh script.  The .sh script runs a series of lmc (Lustre make
 config) commands in order to build up an XML file.  It is much easier to
 simply edit a .sh script and rebuild your XML config file than trying to
-edit the XML directly.  For example, the above configurations are:
+edit the XML directly.
 
 For a loopback setup with a mounted filesystem, you could do something like:
 
@@ -30,11 +30,10 @@ This configuration could be run on any 3 systems with the following commands:
     system3# ../utils/lconf --node uml3 uml.xml
 
 The "--node <name>" parameter tells lconf to use the configuration for
-the node "name" in the XML configuration file.  The internals of lconf
-and portals handle the configuration details for setting up netowrking.
-
-A variety of tests can be run or environments set up.  The most common way
-to build XML configuration
+the node "name" in the XML configuration file.  If the hostnames were
+already "uml1", "uml2", and "uml3", then the "--node" parameter would
+not need to be given.  The internals of lconf and portals handle the
+configuration details for setting up netowrking.
 
 2. runregression-net.sh and runregression-brw.sh
 
@@ -80,4 +79,7 @@ can just use runtests directly.  If this is only a client machine, the
     sh runtests [--reformat] <conf>.xml
 
 This creates a few simple files and directories first, and then untars
-a copy of the /etc filesystem into the Lustre filesystem.
+a copy of the /etc filesystem into the Lustre filesystem.  It then does
+data verification both before and after the filesystem is remounted, and
+finally deletes all of the files and verifies that the amount of space
+left in the filesystem is (nearly) the same as it was before the test.
