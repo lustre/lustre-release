@@ -404,7 +404,7 @@ struct seq_operations osc_rpc_stats_seq_sops = {
 
 static int osc_rpc_stats_seq_open(struct inode *inode, struct file *file)
 {
-        struct proc_dir_entry *dp = inode->u.generic_ip;
+        struct proc_dir_entry *dp = PDE(inode);
         struct seq_file *seq;
         int rc;
  
