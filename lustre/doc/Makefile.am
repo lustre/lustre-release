@@ -17,7 +17,7 @@ LYXFILES= master.lyx evolution.lyx  llocks.lyx mgmt.lyx uncertain.lyx\
 MAINTAINERCLEANFILES =  $(IMAGES) $(DOCS) lustre-HOWTO.lyx
 CLEANFILES = *.lyxT
 
-EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES) DOCVERSION
+EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES) DOCVERSION master.bib
 
 all: $(DOCS)
 
@@ -53,7 +53,7 @@ lustre.lyx: master.lyx $(IMAGES) DOCVERSION
 	(ver="`cat DOCVERSION`" ;\
 	echo "version for $< is $$ver";\
 	sed "s/VERSION/version $$ver/" < $< > lustre.lyx.tmp ;\
-	thedate=`date +%x` ; sed "s/DATE/$$thedate, /" < lustre.lyx.tmp > lustre.lyx ;\
+	thedate=`date +%x` ; sed "s:DATE:$$thedate , :" < lustre.lyx.tmp > lustre.lyx ;\
 	)
 
 syncweb: lustre.pdf
