@@ -92,13 +92,15 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
         struct mds_obd *mds = &obd->u.mds;
         struct lov_stripe_md *lsm = NULL;
         struct llog_ctxt *ctxt;
-        struct llog_create_locks *lcl; 
-        int rc, size, offset = offsetof(struct llog_create_locks, lcl_locks);
+        struct llog_create_locks *lcl = NULL;
+        int rc, size = 0,offset = offsetof(struct llog_create_locks, lcl_locks);
         int lock_count = 0;
         ENTRY;
 
         if (IS_ERR(mds->mds_osc_obd))
                 RETURN(PTR_ERR(mds->mds_osc_obd));
+
+        RETURN(0);
 
         rc = obd_unpackmd(mds->mds_osc_exp, &lsm,
                           lmm, lmm_size);
