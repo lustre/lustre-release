@@ -6,3 +6,4 @@ uml_check_get_page.patch
 uml_no_panic.patch
 vfs_intent-2.4.18-18.patch
 uml_compile_fixes.patch
+iod-rmap-exports.patch
