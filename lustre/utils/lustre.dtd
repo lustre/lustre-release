@@ -11,14 +11,15 @@
   uuid CDATA #REQUIRED">
 
 <!-- main elements -->
-<!ELEMENT lustre (node | profile | mountpoint | ldlm |
+<!ELEMENT lustre (node | mountpoint | ldlm |
                   mds | mdc | obd | ost | osc | lov | router)*>
 
-<!ELEMENT profile (service_ref)*>
-<!ATTLIST profile %tag.attr;>
+<!ELEMENT profile (ldlm_ref | network_ref | obd_ref | ost_ref | osc_ref |
+                   mds_ref | mdc_ref | lov_ref | mountpoint_ref)*>
+<!ATTLIST profile >
 <!ELEMENT mountpoint (path | fileset | mdc_ref | osc_ref)*>
 <!ATTLIST mountpoint %tag.attr;>
-<!ELEMENT node (network*, profile_ref)>
+<!ELEMENT node (network | profile)*>
 <!ATTLIST node %tag.attr;>
 <!ELEMENT ldlm EMPTY>
 <!ATTLIST ldlm %tag.attr;>
@@ -27,14 +28,15 @@
 <!ATTLIST obd %tag.attr; type (obdfilter | obdext2 | obdecho) 'obdfilter'>
 <!ELEMENT ost (network_ref | obd_ref | failover_ref)*>
 <!ATTLIST ost %tag.attr;>
-<!ELEMENT mds (network_ref | fstype | device | autoformat | server_ref | failover_ref)*>
+<!ELEMENT mds (network_ref | fstype | device | autoformat | 
+               server_ref | failover_ref | node_ref )*>
 <!ATTLIST mds %tag.attr;>
 
-<!ELEMENT osc (network_ref | obd_ref)*>
+<!ELEMENT osc (ost_ref | obd_ref)*>
 <!ATTLIST osc %tag.attr;>
 <!ELEMENT mdc (network_ref | mds_ref)*>
 <!ATTLIST mdc %tag.attr;>
-<!ELEMENT lov (devices | mdc_ref)*>
+<!ELEMENT lov (devices | mds_ref)*>
 <!ATTLIST lov %tag.attr;>
 <!ELEMENT devices (osc_ref)+>
 <!ATTLIST devices stripesize CDATA #REQUIRED
@@ -60,6 +62,8 @@
 <!-- id tag elements -->
 <!ELEMENT network_ref    %tag.content;>
 <!ATTLIST network_ref    %tag.ref;>
+<!ELEMENT node_ref       %tag.content;>
+<!ATTLIST node_ref       %tag.ref;>
 <!ELEMENT profile_ref    %tag.content;>
 <!ATTLIST profile_ref    %tag.ref;>
 <!ELEMENT obd_ref        %tag.content;>
@@ -68,16 +72,17 @@
 <!ATTLIST mds_ref        %tag.ref;>
 <!ELEMENT osc_ref        %tag.content;>
 <!ATTLIST osc_ref        %tag.ref;>
+<!ELEMENT ost_ref        %tag.content;>
+<!ATTLIST ost_ref        %tag.ref;>
 <!ELEMENT lov_ref        %tag.content;>
 <!ATTLIST lov_ref        %tag.ref;>
 <!ELEMENT mdc_ref        %tag.content;>
 <!ATTLIST mdc_ref        %tag.ref;>
 <!ELEMENT mountpoint_ref %tag.content;>
 <!ATTLIST mountpoint_ref %tag.ref;>
-<!ELEMENT service_ref    %tag.content;>
-<!ATTLIST service_ref    %tag.ref;>
 <!ELEMENT server_ref     %tag.content;>
 <!ATTLIST server_ref     %tag.ref;>
 <!ELEMENT failover_ref   %tag.content;>
 <!ATTLIST failover_ref   %tag.ref;>
-
+<!ELEMENT ldlm_ref   %tag.content;>
+<!ATTLIST ldlm_ref   %tag.ref;>
