@@ -168,6 +168,11 @@ static int handle_incoming_request(struct obd_device *obddev,
 
         CDEBUG(D_NET, "got req %d\n", request.rq_reqmsg->xid);
 
+        peer.peer_nid = svc->srv_ev.initiator.nid;
+        /* FIXME: this NI should be the incoming NI.
+         * We don't know how to find that from here. */
+        peer.peer_ni = svc->srv_self.peer_ni;
+
         /* FIXME: rq_reqmsg->conn should be, if nonzero, the local connection
          * structure.  Until we have the HA connect messages that we talked
          * about, however, we don't have a way to exchange that address/token
@@ -183,11 +188,6 @@ static int handle_incoming_request(struct obd_device *obddev,
                 if (!request.rq_connection)
                         LBUG();
         }
-
-        peer.peer_nid = svc->srv_ev.initiator.nid;
-        /* FIXME: this NI should be the incoming NI.
-         * We don't know how to find that from here. */
-        peer.peer_ni = svc->srv_self.peer_ni;
 
         svc->srv_flags &= ~SVC_EVENT;
 
