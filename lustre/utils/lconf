@@ -2609,8 +2609,8 @@ def main():
     init_select(config.select)
 
     if len(args) > 0:
-        # allow config to be fetched via HTTP
-        if args[0].startswith('http://'):
+        # allow config to be fetched via HTTP, but only with python2
+        if sys.version[0] != '1' and args[0].startswith('http://'):
             import urllib2
             try:
                 config_file = urllib2.urlopen(args[0])
