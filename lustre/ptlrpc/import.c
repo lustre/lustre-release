@@ -331,7 +331,6 @@ static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
                 }
                 imp->imp_remote_handle = request->rq_repmsg->handle;
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
-                ptlrpc_pinger_add_import(imp);
                 GOTO(finish, rc = 0);
         }
 
@@ -499,11 +498,11 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
 
-                ptlrpc_validate_import(imp);
                 rc = ptlrpc_resend(imp);
                 if (rc)
                         GOTO(out, rc);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
+                ptlrpc_validate_import(imp);
         } 
 
         if (imp->imp_state == LUSTRE_IMP_FULL) {
