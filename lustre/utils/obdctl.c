@@ -269,6 +269,7 @@ static int xml_command(char *cmd, ...) {
         return Parser_execarg(i, cmds, cmdlist);
 }
 
+#if 0
 static network_t *xml_network(xmlDocPtr doc, xmlNodePtr root) {
         xmlNodePtr cur = root->xmlChildrenNode;
         network_t *net;
@@ -303,6 +304,7 @@ static network_t *xml_network(xmlDocPtr doc, xmlNodePtr root) {
         
         return net;
 }
+#endif
 
 static int xml_mds(xmlDocPtr doc, xmlNodePtr root, 
                    char *serv_name, char *serv_uuid) {
