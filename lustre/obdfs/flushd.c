@@ -47,8 +47,7 @@ struct {
 	int interval; /* jiffies delay between pupdate flushes */
 	int age_buffer;  /* Time for normal buffer to age before we flush it */
 	int age_super;  /* Time for superblock to age before we flush it */
-/* } pupd_prm = {40, 500, 64, 256, 2*HZ, 30*HZ, 5*HZ }; */
-} pupd_prm = {40, 500, 64, 256, 10*HZ, 30*HZ, 5*HZ };
+} pupd_prm = {40, 500, 64, 256, 3*HZ, 30*HZ, 5*HZ };
 
 /* Called with the superblock list lock */
 static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
@@ -74,7 +73,7 @@ static int obdfs_enqueue_pages(struct inode *inode, struct obdo **obdo,
 		
 		if (check_time && 
 		    (jiffies - req->rq_jiffies) < pupd_prm.age_buffer)
-			continue;	/* FIXME break; (pages are in order) */
+			break;		/* pages are in chronological order */
 
 		/* Only allocate the obdo if we will actually do I/O here */
 		if ( !*obdo ) {
@@ -187,6 +186,15 @@ int obdfs_flush_reqs(struct list_head *inode_list, int check_time)
 			CDEBUG(D_CACHE, "FLUSH inode %ld, pages flushed: %d\n",
 			       inode->i_ino, res);
 			if ( res < 0 ) {
+				CDEBUG(D_INODE,
+				       "fatal: unable to enqueue inode %ld (err %d)\n",
+				       inode->i_ino, err);
+				/* XXX Move bad inode to end of list so we can
+				 * continue with flushing list.  This is a
+				 * temporary measure to avoid machine lockups.
+				 */
+				list_del(tmp);
+				list_add(tmp, inode_list);
 				err = res;
 				EXIT;
 				goto BREAK;
@@ -204,6 +212,8 @@ int obdfs_flush_reqs(struct list_head *inode_list, int check_time)
 						      pages, bufs, counts,
 						      offsets, flags);
 				if ( err ) {
+					CDEBUG(D_INODE,
+						"fatal: unable to do vec_wr (err %d)\n", err);
 					EXIT;
 					goto ERR;
 				}
@@ -221,6 +231,8 @@ BREAK:
 		err = obdfs_do_vec_wr(inodes, num_io, num_obdos, obdos,
 				      bufs_per_obdo, pages, bufs, counts,
 				      offsets, flags);
+		if (err)
+			CDEBUG(D_INODE, "fatal: unable to do vec_wr (err %d)\n", err);
 		num_io = 0;
 		num_obdos = 0;
 	}

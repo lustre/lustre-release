@@ -143,7 +143,7 @@ static int obdfs_readdir(struct file * filp, void * dirent, filldir_t filldir)
 
 	OIDEBUG(inode);
 	while (!error && !stored && filp->f_pos < inode->i_size) {
-		page = obdfs_getpage(inode, offset, 0, LOCKED);
+		page = obdfs_getpage(inode, filp->f_pos, 0, LOCKED);
 		PDEBUG(page, "readdir");
 		if (!page) {
 			ext2_error (sb, "ext2_readdir",
