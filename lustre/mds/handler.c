@@ -516,7 +516,7 @@ static int mds_prep(struct obd_device *obddev)
                 CERROR("cannot open/create last_rcvd file\n");
                 GOTO(err_svc, rc = PTR_ERR(f));
         }
-        mds->mds_last_rcvd = f;
+        mds->mds_rcvd_filp = f;
         pop_ctxt(&saved);
 
         /*
@@ -630,9 +630,9 @@ static int mds_cleanup(struct obd_device * obddev)
         if (!mds->mds_sb)
                 RETURN(0);
 
-        if (mds->mds_last_rcvd) {
-                int rc = filp_close(mds->mds_last_rcvd, 0);
-                mds->mds_last_rcvd = NULL;
+        if (mds->mds_rcvd_filp) {
+                int rc = filp_close(mds->mds_rcvd_filp, 0);
+                mds->mds_rcvd_filp = NULL;
 
                 if (rc)
                         CERROR("last_rcvd file won't close, rc=%d\n", rc);

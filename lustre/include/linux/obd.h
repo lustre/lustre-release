@@ -64,6 +64,9 @@ struct filter_obd {
         struct address_space_operations *fo_aops;
 };
 
+struct mds_client_info;
+struct mds_server_data;
+
 struct mds_obd {
         struct ptlrpc_service *mds_service;
 
@@ -75,9 +78,13 @@ struct mds_obd {
         struct inode_operations *mds_iop;
         struct address_space_operations *mds_aops;
         struct mds_fs_operations *mds_fsops;
-        struct file *mds_last_rcvd;
+        struct file *mds_rcvd_filp;
+        __u64 mds_last_rcvd;
         __u64 mds_mount_count;
         struct ll_fid mds_rootfid;
+        int mds_client_count;
+        struct mds_client_info *mds_client_info;
+        struct mds_server_data *mds_server_data;
 };
 
 struct ldlm_obd {

@@ -58,15 +58,17 @@ struct mds_update_record {
         __u64 ur_time;
 }; 
 
-#define MDS_LR_CLIENT  1024
+#define MDS_LR_CLIENT  8192
 #define MDS_LR_SIZE     128
+
+#define MDS_CLIENT_SLOTS 17
 
 #define MDS_MOUNT_RECOV 2
 
 /* Data stored per server at the head of the last_rcvd file */
 struct mds_server_data {
         __u8 msd_uuid[37];      /* server UUID */
-        __u8 uuid_padding[3];   /* in case we decide to store UUIDs as ASCII */
+        __u8 uuid_padding[3];
         __u64 msd_last_rcvd;    /* last completed transaction ID */
         __u64 msd_mount_count;  /* MDS incarnation number */
         __u8 padding[512 - 56];
@@ -79,6 +81,13 @@ struct mds_client_data {
         __u64 mcd_last_rcvd;    /* last completed transaction ID */
         __u64 mcd_mount_count;  /* MDS incarnation number */
         __u8 padding[MDS_LR_SIZE - 56];
+};
+
+/* In-memory access to client data from MDS struct */
+struct mds_client_info {
+        struct list_head mci_list;
+        struct mds_client_data *mci_mcd;
+        int mci_off;
 };
 
 /* mds/mds_reint.c  */
