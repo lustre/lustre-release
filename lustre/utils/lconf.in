@@ -984,7 +984,7 @@ class MDS(Module):
         if self.fstype == 'extN':
             self.add_module(config.src_dir()+'extN', 'extN') 
         self.add_module(config.src_dir()+'mds', 'mds')
-        self.add_module(config.src_dir()+'mds' , 'fsfilt_%s' % (self.fstype))
+        self.add_module(config.src_dir()+'obdclass', 'fsfilt_%s'%(self.fstype))
             
     def prepare(self):
         if is_prepared(self.uuid):
@@ -1075,6 +1075,7 @@ class OST(Module):
         Module.__init__(self, 'OST', dom_node)
         self.obd_uuid = get_first_ref(dom_node, 'obd')
         self.add_module(config.src_dir()+'ost', 'ost')
+        self.add_module(config.src_dir()+'obdclass', 'fsfilt_%s'%(self.fstype))
 
     def prepare(self):
         if is_prepared(self.uuid):
