@@ -7,23 +7,20 @@
  *  Copyright (c) 2001-2003 Cluster File Systems, Inc.
  *  Copyright (c) 2001-2002 Sandia National Laboratories
  *
- *   This file is part of Portals, http://www.sf.net/projects/sandiaportals/
+ *   This file is part of Lustre, http://www.sf.net/projects/lustre/
  *
- *   Portals is free software; you can redistribute it and/or
- *   modify it under the terms of version 2.1 of the GNU Lesser General
- *   Public License as published by the Free Software Foundation.
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
  *
- *   Portals is distributed in the hope that it will be useful,
+ *   Lustre is distributed in the hope that it will be useful,
  *   but WITHOUT ANY WARRANTY; without even the implied warranty of
  *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- *   GNU Lesser General Public License for more details.
+ *   GNU General Public License for more details.
  *
- *   You should have received a copy of the GNU Lesser General Public
- *   License along with Portals; if not, write to the Free Software
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
- *
- * PtlMDUpdate is here so that it can access the per-eventq
- * structures.
  */
 
 #include <portals/api-support.h>

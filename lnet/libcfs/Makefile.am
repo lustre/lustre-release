@@ -8,8 +8,8 @@ MODULE = portals
 modulenet_DATA = portals.o
 EXTRA_PROGRAMS = portals
 
-LIBLINKS := lib-dispatch.c lib-eq.c lib-init.c lib-md.c lib-me.c lib-move.c lib-msg.c lib-ni.c lib-not-impl.c lib-pid.c
-APILINKS := api-eq.c api-errno.c api-init.c api-md.c api-me.c api-ni.c api-wrap.c
+LIBLINKS := lib-dispatch.c lib-eq.c lib-init.c lib-md.c lib-me.c lib-move.c lib-msg.c lib-ni.c lib-pid.c
+APILINKS := api-eq.c api-errno.c api-init.c api-me.c api-ni.c api-wrap.c
 LINKS = $(APILINKS) $(LIBLINKS) 
 DISTCLEANFILES = $(LINKS) link-stamp *.orig *.rej
 

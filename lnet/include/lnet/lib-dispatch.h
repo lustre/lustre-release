@@ -37,7 +37,6 @@ extern int do_PtlEQAlloc_internal(nal_cb_t * nal, void *private, void *args,
                                   void *ret);
 extern int do_PtlEQFree_internal(nal_cb_t * nal, void *private, void *args,
                                  void *ret);
-extern int do_PtlACEntry(nal_cb_t * nal, void *private, void *args, void *ret);
 extern int do_PtlPut(nal_cb_t * nal, void *private, void *args, void *ret);
 extern int do_PtlGet(nal_cb_t * nal, void *private, void *args, void *ret);
 extern int do_PtlFailNid (nal_cb_t *nal, void *private, void *args, void *ret);
