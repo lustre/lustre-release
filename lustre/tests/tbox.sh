@@ -74,8 +74,13 @@ tbox_exit() {
 
 # Run a subprogram, but stop it from sending its own tinderbox
 # messages.
-tbox_dont_start_log() {
-  eval 'TBOX_LOG= '"$@"
+tbox_absorb_log() {
+  # This probably doesn't do what you think it does... it only prepends
+  # TBOX_LOG= to our arguments.
+  set TBOX_LOG= "$@"
+
+  # Now evaluate the command.
+  eval "$@"
 }
 
 # Start the log for a given tree.
