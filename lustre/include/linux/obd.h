@@ -92,12 +92,13 @@ struct filter_obd {
         struct obd_run_ctxt fo_ctxt;
         struct dentry *fo_dentry_O;
         struct dentry *fo_dentry_O_mode[16];
-        spinlock_t fo_lock;
-        __u64 fo_lastino;
+        spinlock_t fo_objidlock;        /* protects fo_lastobjid increment */
+        __u64 fo_lastobjid;
         struct file_operations *fo_fop;
         struct inode_operations *fo_iop;
         struct address_space_operations *fo_aops;
         struct list_head fo_export_list;
+        spinlock_t fo_fddlock;          /* protects setting dentry->d_fsdata */
 };
 
 struct mds_server_data;
@@ -198,7 +199,7 @@ struct lov_tgt_desc {
 struct lov_obd {
         spinlock_t lov_lock;
         struct obd_device *mdcobd;
- struct lov_desc desc;
+        struct lov_desc desc;
         int bufsize;
         int refcount;
         struct lov_tgt_desc *tgts;

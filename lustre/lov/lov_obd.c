@@ -24,7 +24,18 @@
 #include <linux/obd_class.h>
 #include <linux/obd_lov.h>
 #include <linux/init.h>
+#include <linux/random.h>
+#include <linux/slab.h>
 #include <asm/div64.h>
+
+static kmem_cache_t *lov_file_cache;
+
+struct lov_file_handles {
+        struct list_head lfh_list;
+        __u64 lfh_cookie;
+        int lfh_count;
+        struct lustre_handle *lfh_handles;
+};
 
 /* obd methods */
 static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
@@ -35,6 +46,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct lov_obd *lov = &obd->u.lov;
         struct client_obd *mdc = &lov->mdcobd->u.cli;
         struct lov_desc *desc = &lov->desc;
+        struct obd_export *exp;
         struct lustre_handle mdc_conn;
         obd_uuid_t *uuidarray;
         int rc, rc2, i;
@@ -51,6 +63,9 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         lov->refcount++;
         if (lov->refcount > 1)
                 RETURN(0);
+
+        exp = class_conn2export(conn);
+        INIT_LIST_HEAD(&exp->exp_lov_data.led_open_head);
 
         /* retrieve LOV metadata from MDS */
         rc = obd_connect(&mdc_conn, lov->mdcobd, NULL, recovd, recover);
@@ -128,14 +143,17 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         for (i = 0; i < desc->ld_tgt_count; i++) {
                 struct obd_device *tgt = class_uuid2obd(uuidarray[i]);
+
                 if (!tgt) {
                         CERROR("Target %s not attached\n", uuidarray[i]);
                         GOTO(out_disc, rc = -EINVAL);
                 }
+
                 if (!(tgt->obd_flags & OBD_SET_UP)) {
                         CERROR("Target %s not set up\n", uuidarray[i]);
                         GOTO(out_disc, rc = -EINVAL);
                 }
+
                 rc = obd_connect(&lov->tgts[i].conn, tgt, NULL, recovd,
                                  recover);
                 if (rc) {
@@ -177,12 +195,14 @@ static int lov_disconnect(struct lustre_handle *conn)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct lov_obd *lov = &obd->u.lov;
+        struct obd_export *exp;
+        struct list_head *p, *n;
         int rc, i;
 
         if (!lov->tgts)
                 goto out_local;
 
-        /* Only disconnect the underlying laters on the final disconnect. */
+        /* Only disconnect the underlying layers on the final disconnect. */
         lov->refcount--;
         if (lov->refcount != 0)
                 goto out_local;
@@ -206,6 +226,19 @@ static int lov_disconnect(struct lustre_handle *conn)
         OBD_FREE(lov->tgts, lov->bufsize);
         lov->bufsize = 0;
         lov->tgts = NULL;
+
+        exp = class_conn2export(conn);
+        list_for_each_safe(p, n, &exp->exp_lov_data.led_open_head) {
+                /* XXX close these, instead of just discarding them? */
+                struct lov_file_handles *lfh;
+                lfh = list_entry(p, typeof(*lfh), lfh_list);
+                CERROR("discarding open LOV handle %p:"LPX64"\n",
+                       lfh, lfh->lfh_cookie);
+                list_del(&lfh->lfh_list);
+                OBD_FREE(lfh->lfh_handles,
+                         lfh->lfh_count * sizeof(*lfh->lfh_handles));
+                kmem_cache_free(lov_file_cache, lfh);
+        }
 
  out_local:
         rc = class_disconnect(conn);
@@ -299,6 +332,22 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(rc);
 }
 
+static struct lov_file_handles *lov_handle2lfh(struct lustre_handle *handle)
+{
+        struct lov_file_handles *lfh = NULL;
+
+        if (!handle || !handle->addr)
+                RETURN(NULL);
+
+        lfh = (struct lov_file_handles *)(unsigned long)(handle->addr);
+        if (!kmem_cache_validate(lov_file_cache, lfh))
+                RETURN(NULL);
+
+        if (lfh->lfh_cookie != handle->cookie)
+                RETURN(NULL);
+
+        return lfh;
+}
 
 /* the LOV expects oa->o_id to be set to the LOV object id */
 static int lov_create(struct lustre_handle *conn, struct obdo *oa,
@@ -444,6 +493,7 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
         struct lov_oinfo *loi;
+        struct lov_file_handles *lfh = NULL;
         int rc = 0, i;
         ENTRY;
 
@@ -461,11 +511,18 @@ static int lov_destroy(struct lustre_handle *conn, struct obdo *oa,
         if (!export || !export->exp_obd)
                 RETURN(-ENODEV);
 
+        if (oa->o_valid & OBD_MD_FLHANDLE)
+                lfh = lov_handle2lfh(obdo_handle(oa));
+
         lov = &export->exp_obd->u.lov;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
-                /* create data objects with "parent" OA */
                 memcpy(&tmp, oa, sizeof(tmp));
                 tmp.o_id = loi->loi_id;
+                if (lfh)
+                        memcpy(obdo_handle(&tmp), &lfh->lfh_handles[i],
+                               sizeof(lfh->lfh_handles[i]));
+                else
+                        tmp.o_valid &= ~OBD_MD_FLHANDLE;
                 rc = obd_destroy(&lov->tgts[loi->loi_ost_idx].conn, &tmp, NULL);
                 if (rc)
                         CERROR("Error destroying objid "LPX64" subobj "LPX64
@@ -531,6 +588,7 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
         struct lov_oinfo *loi;
+        struct lov_file_handles *lfh = NULL;
         int rc = 0, i;
         int new = 1;
         ENTRY;
@@ -550,8 +608,10 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(-ENODEV);
 
         lov = &export->exp_obd->u.lov;
-        oa->o_size = 0;
-        oa->o_blocks = 0;
+
+        if (oa->o_valid & OBD_MD_FLHANDLE)
+                lfh = lov_handle2lfh(obdo_handle(oa));
+
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 int err;
 
@@ -563,6 +623,11 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
                 /* create data objects with "parent" OA */
                 memcpy(&tmp, oa, sizeof(tmp));
                 tmp.o_id = loi->loi_id;
+                if (lfh)
+                        memcpy(obdo_handle(&tmp), &lfh->lfh_handles[i],
+                               sizeof(lfh->lfh_handles[i]));
+                else
+                        tmp.o_valid &= ~OBD_MD_FLHANDLE;
 
                 err = obd_getattr(&lov->tgts[loi->loi_ost_idx].conn, &tmp,NULL);
                 if (err) {
@@ -581,10 +646,11 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
 static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
                        struct lov_stripe_md *lsm)
 {
-        struct obdo tmp;
+        struct obdo *tmp;
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
         struct lov_oinfo *loi;
+        struct lov_file_handles *lfh = NULL;
         int rc = 0, i;
         ENTRY;
 
@@ -610,15 +676,28 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
         /* size changes should go through punch and not setattr */
         LASSERT(!(oa->o_valid & OBD_MD_FLSIZE));
 
+        tmp = obdo_alloc();
+        if (!tmp)
+                RETURN(-ENOMEM);
+
+        if (oa->o_valid & OBD_MD_FLHANDLE)
+                lfh = lov_handle2lfh(obdo_handle(oa));
+
         lov = &export->exp_obd->u.lov;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 int err;
 
-                /* create data objects with "parent" OA */
-                memcpy(&tmp, oa, sizeof(tmp));
-                tmp.o_id = loi->loi_id;
+                obdo_cpy_md(tmp, oa, oa->o_valid);
 
-                err = obd_setattr(&lov->tgts[loi->loi_ost_idx].conn, &tmp,NULL);
+                if (lfh)
+                        memcpy(obdo_handle(tmp), &lfh->lfh_handles[i],
+                                sizeof(lfh->lfh_handles[i]));
+                else
+                        tmp->o_valid &= ~OBD_MD_FLHANDLE;
+
+                tmp->o_id = loi->loi_id;
+
+                err = obd_setattr(&lov->tgts[loi->loi_ost_idx].conn, tmp, NULL);
                 if (err) {
                         CERROR("Error setattr objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n",
@@ -627,6 +706,7 @@ static int lov_setattr(struct lustre_handle *conn, struct obdo *oa,
                                 rc = err;
                 }
         }
+        obdo_free(tmp);
         RETURN(rc);
 }
 
@@ -637,6 +717,7 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
         struct lov_oinfo *loi;
+        struct lov_file_handles *lfh = NULL;
         int new = 1;
         int rc = 0, i;
         ENTRY;
@@ -659,6 +740,14 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
         if (!tmp)
                 RETURN(-ENOMEM);
 
+        lfh = kmem_cache_alloc(lov_file_cache, GFP_KERNEL);
+        if (!lfh)
+                GOTO(out_tmp, rc = -ENOMEM);
+        OBD_ALLOC(lfh->lfh_handles,
+                  lsm->lsm_stripe_count * sizeof(*lfh->lfh_handles));
+        if (!lfh->lfh_handles)
+                GOTO(out_lfh, rc = -ENOMEM);
+
         lov = &export->exp_obd->u.lov;
         oa->o_size = 0;
         oa->o_blocks = 0;
@@ -680,7 +769,25 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
                 }
 
                 lov_merge_attrs(oa, tmp, tmp->o_valid, lsm, i, &new);
+
+                if (tmp->o_valid & OBD_MD_FLHANDLE)
+                        memcpy(&lfh->lfh_handles[i], obdo_handle(tmp),
+                               sizeof(lfh->lfh_handles[i]));
         }
+
+        if (tmp->o_valid & OBD_MD_FLHANDLE) {
+                struct lustre_handle *handle = obdo_handle(oa);
+
+                lfh->lfh_count = lsm->lsm_stripe_count;
+                get_random_bytes(&lfh->lfh_cookie, sizeof(lfh->lfh_cookie));
+
+                handle->addr = (__u64)(unsigned long)lfh;
+                handle->cookie = lfh->lfh_cookie;
+                oa->o_valid |= OBD_MD_FLHANDLE;
+                list_add(&lfh->lfh_list, &export->exp_lov_data.led_open_head);
+        } else
+                goto out_handles;
+
         /* FIXME: returning an error, but having opened some objects is a bad
          *        idea, since they will likely never be closed.  We either
          *        need to not return an error if _some_ objects could be
@@ -688,8 +795,17 @@ static int lov_open(struct lustre_handle *conn, struct obdo *oa,
          *        hopefully partial error status) or close all opened objects
          *        and return an error.  I think the former is preferred.
          */
+out_tmp:
         obdo_free(tmp);
         RETURN(rc);
+
+out_handles:
+        OBD_FREE(lfh->lfh_handles,
+                 lsm->lsm_stripe_count * sizeof(*lfh->lfh_handles));
+out_lfh:
+        lfh->lfh_cookie = DEAD_HANDLE_MAGIC;
+        kmem_cache_free(lov_file_cache, lfh);
+        goto out_tmp;
 }
 
 static int lov_close(struct lustre_handle *conn, struct obdo *oa,
@@ -699,6 +815,7 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
         struct lov_oinfo *loi;
+        struct lov_file_handles *lfh = NULL;
         int rc = 0, i;
         ENTRY;
 
@@ -716,6 +833,9 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
         if (!export || !export->exp_obd)
                 RETURN(-ENODEV);
 
+        if (oa->o_valid & OBD_MD_FLHANDLE)
+                lfh = lov_handle2lfh(obdo_handle(oa));
+
         lov = &export->exp_obd->u.lov;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 int err;
@@ -723,6 +843,11 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
                 /* create data objects with "parent" OA */
                 memcpy(&tmp, oa, sizeof(tmp));
                 tmp.o_id = loi->loi_id;
+                if (lfh)
+                        memcpy(obdo_handle(&tmp), &lfh->lfh_handles[i],
+                               sizeof(lfh->lfh_handles[i]));
+                else
+                        tmp.o_valid &= ~OBD_MD_FLHANDLE;
 
                 err = obd_close(&lov->tgts[loi->loi_ost_idx].conn, &tmp, NULL);
                 if (err) {
@@ -733,6 +858,14 @@ static int lov_close(struct lustre_handle *conn, struct obdo *oa,
                                 rc = err;
                 }
         }
+        if (lfh) {
+                list_del(&lfh->lfh_list);
+                OBD_FREE(lfh->lfh_handles,
+                         lsm->lsm_stripe_count * sizeof(*lfh->lfh_handles));
+                lfh->lfh_cookie = DEAD_HANDLE_MAGIC;
+                kmem_cache_free(lov_file_cache, lfh);
+        }
+
         RETURN(rc);
 }
 
@@ -794,6 +927,7 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
         struct obd_export *export = class_conn2export(conn);
         struct lov_obd *lov;
         struct lov_oinfo *loi;
+        struct lov_file_handles *lfh = NULL;
         int rc = 0, i;
         ENTRY;
 
@@ -811,6 +945,9 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
         if (!export || !export->exp_obd)
                 RETURN(-ENODEV);
 
+        if (oa->o_valid & OBD_MD_FLHANDLE)
+                lfh = lov_handle2lfh(obdo_handle(oa));
+
         lov = &export->exp_obd->u.lov;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 obd_off starti = lov_stripe_offset(lsm, start, i);
@@ -822,6 +959,11 @@ static int lov_punch(struct lustre_handle *conn, struct obdo *oa,
                 /* create data objects with "parent" OA */
                 memcpy(&tmp, oa, sizeof(tmp));
                 tmp.o_id = loi->loi_id;
+                if (lfh)
+                        memcpy(obdo_handle(&tmp), &lfh->lfh_handles[i],
+                               sizeof(lfh->lfh_handles[i]));
+                else
+                        tmp.o_valid &= ~OBD_MD_FLHANDLE;
 
                 err = obd_punch(&lov->tgts[loi->loi_ost_idx].conn, &tmp, NULL,
                                 starti, endi);
@@ -1197,16 +1339,24 @@ static int __init lov_init(void)
 {
         printk(KERN_INFO "Lustre Logical Object Volume driver " LOV_VERSION
                ", info@clusterfs.com\n");
+        lov_file_cache = kmem_cache_create("ll_lov_file_data",
+                                           sizeof(struct lov_file_handles),
+                                           0, 0, NULL, NULL);
+        if (!lov_file_cache)
+                RETURN(-ENOMEM);
+
         return class_register_type(&lov_obd_ops, OBD_LOV_DEVICENAME);
 }
 
 static void __exit lov_exit(void)
 {
         class_unregister_type(OBD_LOV_DEVICENAME);
+        if (kmem_cache_destroy(lov_file_cache))
+                CERROR("couldn't free LOV open cache\n");
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
-MODULE_DESCRIPTION("Lustre Logical Object Volume OBD driver v0.1");
+MODULE_DESCRIPTION("Lustre Logical Object Volume OBD driver " LOV_VERSION);
 MODULE_LICENSE("GPL");
 
 module_init(lov_init);

@@ -276,6 +276,7 @@ static int ll_file_release(struct inode *inode, struct file *file)
 
         /* If this fails and we goto out_fd, the file size on the MDS is out of
          * date.  Is that a big deal? */
+#warning "FIXME: don't do this if the file is unlinked already"
         if (file->f_mode & FMODE_WRITE) {
                 struct lustre_handle *lockhs;
 

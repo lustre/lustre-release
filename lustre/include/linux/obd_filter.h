@@ -30,19 +30,18 @@
 /* In-memory access to client data from OST struct */
 struct filter_export_data {
         struct list_head  fed_open_head; /* files to close on disconnect */
-        spinlock_t        fed_lock;
+        spinlock_t        fed_lock;      /* protects fed_open_head */
 };
 
 /* file data for open files on OST */
 struct filter_file_data {
-        struct list_head  ffd_dentry_list;  /* dentry open list */
-        struct list_head  ffd_export_list;  /* export open list */
+        struct list_head  ffd_export_list;  /* export open list - fed_lock */
         struct file      *ffd_file;         /* file handle */
         __u64             ffd_servercookie; /* cookie for lustre handle */
 };
 
 struct filter_dentry_data {
-        struct list_head fdd_open_head; /* files that have this dentry open */
+        atomic_t         fdd_open_count;
         int              fdd_flags;
 };
 
