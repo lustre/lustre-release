@@ -665,7 +665,7 @@
  	 * Create - we need to know the parent.
  	 */
 + 	if (it) {
-+ 		it->it_mode = mode;
++ 		it->it_create_mode = mode;
 + 		it->it_op |= IT_CREAT;
 + 	}
  	error = path_lookup(pathname, LOOKUP_PARENT, nd);
@@ -684,7 +684,7 @@
  		goto exit;
  	}
  
-+	it->it_mode = mode;
++	it->it_create_mode = mode;
  	/* Negative dentry, just create the file */
  	if (!dentry->d_inode) {
  		if (!IS_POSIXACL(dir->d_inode))
