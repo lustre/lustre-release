@@ -85,6 +85,7 @@ class Config:
         self._url = None
         self._gdb_script = '/tmp/ogdb'
         self._debug_path = '/tmp/lustre-log'
+        self._dump_file = None
         self._src_dir = None
 
     def verbose(self, flag = None):
@@ -136,8 +137,12 @@ class Config:
             return self._debug_path
 
     def src_dir(self, val = None):
-        if val: self._url = val
-        return self._url
+        if val: self._src_dir = val
+        return self._src_dir
+
+    def dump_file(self, val = None):
+        if val: self._dump_file = val
+        return self._dump_file
 
 config = Config()
 
@@ -344,6 +349,13 @@ class LCTLInterface:
   probe
   lovconfig %s %d %d %d %s %s
   quit""" % (mdsuuid, uuid, stripe_cnt, stripe_sz, stripe_off, pattern, devlist)
+        self.run(cmds)
+
+    # cleanup a device
+    def dump(self, dump_file):
+        cmds = """
+  debug_kernel %s 1
+  quit""" % (dump_file)
         self.run(cmds)
 
 # ============================================================
@@ -632,6 +644,9 @@ class Module:
         for dev_dir, mod in rev:
             if not self.mod_loaded(mod):
                 continue
+            # debug hack
+            if mod == 'portals' and config.dump_file():
+                lctl.dump(config.dump_file())
             log('unloading module:', mod)
             if config.noexec():
                 continue
@@ -906,6 +921,7 @@ class Mountpoint(Module):
                     n.cleanup()
                 else:
                     panic('osc not found:', osc_uuid)
+            lov.cleanup()
         else:
             osc = OSC(l)
             osc.cleanup()
@@ -1263,7 +1279,8 @@ def parse_cmdline(argv):
     short_opts = "hdnv"
     long_opts = ["ldap", "reformat", "lustre=", "verbose", "gdb",
                  "portals=", "makeldiff", "cleanup", "noexec",
-                 "help", "node=", "get=", "nomod", "nosetup"]
+                 "help", "node=", "get=", "nomod", "nosetup",
+                 "dump="]
     opts = []
     args = []
     try:
@@ -1298,6 +1315,8 @@ def parse_cmdline(argv):
             config.nomod(1)
         if o  == "--nosetup":
             config.nosetup(1)
+        if o  == "--dump":
+            config.dump_file(a)
     return args
 
 def fetch(url):
