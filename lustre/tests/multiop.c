@@ -40,9 +40,8 @@ int main(int argc, char **argv)
         signal(SIGUSR1, null_handler);
 
         fname = argv[1];
-        commands = argv[2];
 
-        while (*commands) {
+        for (commands = argv[2]; *commands; commands++) {
                 switch (*commands) {
                 case 'o':
                         fd = open(fname, O_RDONLY);
@@ -96,8 +95,6 @@ int main(int argc, char **argv)
                         fprintf(stderr, usage, argv[0]);
                         exit(1);
                 }
-
-                commands++;
         }
         
         return 0;
