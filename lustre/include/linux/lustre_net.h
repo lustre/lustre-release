@@ -62,8 +62,8 @@
 #define OST_BUFSIZE	(64 * 1024)
 #define OST_MAXREQSIZE	(8 * 1024)
 #else
-#define OST_NEVENTS	4096
-#define OST_NBUFS	40
+#define OST_NEVENTS	32768
+#define OST_NBUFS	160
 #define OST_BUFSIZE	(128 * 1024)
 #define OST_MAXREQSIZE	(8 * 1024)
 #endif

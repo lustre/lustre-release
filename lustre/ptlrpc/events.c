@@ -126,13 +126,13 @@ int request_in_callback(ptl_event_t *ev)
                  * thread servicing this event is effectively taking over
                  * portals' reference.
                  */
-                LASSERT (!memcmp (&ev->unlinked_me, &rqbd->rqbd_me_h, 
-                                  sizeof (ev->unlinked_me)));
+#warning ev->unlinked_me.nal_idx is not set properly in a callback
+                LASSERT (ev->unlinked_me.handle_idx == rqbd->rqbd_me_h.handle_idx);
 
                 if (atomic_dec_and_test (&service->srv_nrqbds_receiving)) /* we're off-air */
                 {
                         CERROR ("All request buffers busy\n");
-                        LBUG();
+                        /* we'll probably start dropping packets in portals soon */
                 }
         }
         else

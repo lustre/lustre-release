@@ -239,8 +239,6 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
                          desc->bd_portal, source_id, xid, 0,
                          PTL_UNLINK, PTL_INS_AFTER, &desc->bd_me_h);
 
-        ptlrpc_put_bulk_iov (desc, iov);
-
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
                 LBUG();
@@ -255,6 +253,8 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
                 GOTO(cleanup, rc);
         }
 
+        ptlrpc_put_bulk_iov (desc, iov);
+
         CDEBUG(D_NET, "Setup bulk sink buffers: %u pages %u bytes, xid %u, "
                "portal %u\n", desc->bd_md.niov, desc->bd_md.length,
                xid, desc->bd_portal);
@@ -262,6 +262,7 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
         RETURN(0);
 
  cleanup:
+        ptlrpc_put_bulk_iov (desc, iov);
         ptlrpc_abort_bulk(desc);
 
         return rc;
