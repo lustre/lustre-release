@@ -25,6 +25,8 @@
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
+#include <linux/init.h>
+#include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/jbd.h>
 #include <linux/slab.h>
@@ -43,7 +45,6 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>
 #include <linux/obd_class.h>
-#include <linux/module.h>
 
 static kmem_cache_t *fcb_cache;
 static atomic_t fcb_cache_count = ATOMIC_INIT(0);

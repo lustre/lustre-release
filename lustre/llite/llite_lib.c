@@ -192,8 +192,12 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_root, err);
         }
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+#warning "Please fix this"
+#else
         /* bug 2805 - set VM readahead to zero */
         vm_max_readahead = vm_min_readahead = 0;
+#endif
         sb->s_root = d_alloc_root(root);
         RETURN(err);
 

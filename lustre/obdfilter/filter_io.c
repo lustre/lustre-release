@@ -235,10 +235,13 @@ long filter_grant(struct obd_export *exp, obd_size current_grant,
          * avoid overgranting in face of multiple RPCs in flight).  This
          * essentially will be able to control the OSC_MAX_RIF for a client.
          *
-         * If we do have a large disparity and multiple RPCs in flight we
-         * might grant "too much" but that's OK because it means we are
-         * dirtying a lot on the client and will likely use it up quickly. */
+         * If we do have a large disparity between what the client thinks it
+         * has and what we think it has, don't grant very much and let the
+         * client consume its grant first.  Either it just has lots of RPCs
+         * in flight, or it was evicted and its grants will soon be used up. */
         if (current_grant < want) {
+                if (current_grant > fed->fed_grant + FILTER_GRANT_CHUNK)
+                        want = 65536;
                 grant = min((want >> blockbits) / 2,
                             (fs_space_left >> blockbits) / 8);
                 grant <<= blockbits;

@@ -6,7 +6,14 @@
 MODULE = obdfilter
 modulefs_DATA = obdfilter.o
 EXTRA_PROGRAMS = obdfilter
-obdfilter_SOURCES = filter.c filter_io.c filter_log.c filter_san.c \
-	filter_io_24.c lproc_obdfilter.c filter_internal.h filter_lvb.c
+
+COMMON_SRC = filter.c filter_io.c filter_log.c filter_san.c lproc_obdfilter.c \
+             filter_internal.h filter_lvb.c
+
+if LINUX25
+obdfilter_SOURCES = $(COMMON_SRC) filter_io_26.c
+else
+obdfilter_SOURCES = $(COMMON_SRC) filter_io_24.c
+endif
 
 include $(top_srcdir)/Rules

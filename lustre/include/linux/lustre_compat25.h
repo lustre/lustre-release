@@ -85,6 +85,21 @@ static inline void lustre_daemonize_helper(void)
         current->tty = NULL;
 }
 
+static inline int cleanup_group_info(void)
+{
+        struct group_info *ginfo;
+
+        ginfo = groups_alloc(2);
+        if (!ginfo)
+                return -ENOMEM;
+
+        ginfo->ngroups = 0;
+        set_current_groups(ginfo);
+        put_group_info(ginfo);
+
+        return 0;
+}
+
 #define smp_num_cpus    NR_CPUS
 
 #ifndef conditional_schedule
@@ -158,6 +173,14 @@ static inline void lustre_daemonize_helper(void)
         current->session = 1;
         current->pgrp = 1;
         current->tty = NULL;
+}
+
+static inline int cleanup_group_info(void)
+{
+        /* Get rid of unneeded supplementary groups */
+        current->ngroups = 0;
+        memset(current->groups, 0, sizeof(current->groups));
+        return 0;
 }
 
 #ifndef conditional_schedule

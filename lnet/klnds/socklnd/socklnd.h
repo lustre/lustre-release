@@ -60,6 +60,7 @@
 #define DEBUG_SUBSYSTEM S_SOCKNAL
 
 #include <linux/kp30.h>
+#include <linux/portals_compat25.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 #include <portals/socknal.h>

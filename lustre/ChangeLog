@@ -18,6 +18,8 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- hold dentry reference for closed log files for unlink (2325)
 	- reserve space for all logs during transactions (2059)
 	- don't evict page beyond end of stripe extent (2925)
+	- don't oops on a deleted current working directory (2399)
+	- handle hard links to targets without a parent properly (2517)
 
 2004-03-04  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0

@@ -65,6 +65,14 @@ int obd_memmax;
 # define ASSERT_KERNEL_CTXT(msg) do {} while(0)
 #endif
 
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0))
+#define current_ngroups current->group_info->ngroups
+#define current_groups current->group_info->small_block
+#else
+#define current_ngroups current->ngroups
+#define current_groups current->groups
+#endif
+
 /* push / pop to root of obd store */
 void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
                struct obd_ucred *uc)
@@ -89,7 +97,7 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
         LASSERT(atomic_read(&new_ctx->pwd->d_count));
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
-        save->ngroups = current->ngroups;
+        save->ngroups = current_ngroups;
 
         LASSERT(save->pwd);
         LASSERT(save->pwdmnt);
@@ -100,18 +108,18 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
                 save->ouc.ouc_fsuid = current->fsuid;
                 save->ouc.ouc_fsgid = current->fsgid;
                 save->ouc.ouc_cap = current->cap_effective;
-                save->ouc.ouc_suppgid1 = current->groups[0];
-                save->ouc.ouc_suppgid2 = current->groups[1];
+                save->ouc.ouc_suppgid1 = current_groups[0];
+                save->ouc.ouc_suppgid2 = current_groups[1];
 
                 current->fsuid = uc->ouc_fsuid;
                 current->fsgid = uc->ouc_fsgid;
                 current->cap_effective = uc->ouc_cap;
-                current->ngroups = 0;
+                current_ngroups = 0;
 
                 if (uc->ouc_suppgid1 != -1)
-                        current->groups[current->ngroups++] = uc->ouc_suppgid1;
+                        current_groups[current_ngroups++] = uc->ouc_suppgid1;
                 if (uc->ouc_suppgid2 != -1)
-                        current->groups[current->ngroups++] = uc->ouc_suppgid2;
+                        current_groups[current_ngroups++] = uc->ouc_suppgid2;
         }
         set_fs(new_ctx->fs);
         set_fs_pwd(current->fs, new_ctx->pwdmnt, new_ctx->pwd);
@@ -160,9 +168,9 @@ void pop_ctxt(struct obd_run_ctxt *saved, struct obd_run_ctxt *new_ctx,
                 current->fsuid = saved->ouc.ouc_fsuid;
                 current->fsgid = saved->ouc.ouc_fsgid;
                 current->cap_effective = saved->ouc.ouc_cap;
-                current->ngroups = saved->ngroups;
-                current->groups[0] = saved->ouc.ouc_suppgid1;
-                current->groups[1] = saved->ouc.ouc_suppgid2;
+                current_ngroups = saved->ngroups;
+                current_groups[0] = saved->ouc.ouc_suppgid1;
+                current_groups[1] = saved->ouc.ouc_suppgid2;
         }
 
         /*

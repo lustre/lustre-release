@@ -196,7 +196,7 @@ ksocknal_bind_irq (unsigned int irq)
         /* FIXME: Find a better method of setting IRQ affinity...
          */
 
-        call_usermodehelper (argv[0], argv, envp);
+        USERMODEHELPER(argv[0], argv, envp);
 #endif
 }
 

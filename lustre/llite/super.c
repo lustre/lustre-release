@@ -34,7 +34,6 @@
 #include <linux/lprocfs_status.h>
 #include "llite_internal.h"
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 
@@ -141,4 +140,3 @@ MODULE_LICENSE("GPL");
 
 module_init(init_lustre_lite);
 module_exit(exit_lustre_lite);
-#endif
