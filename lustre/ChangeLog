@@ -21,6 +21,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- initialize RPC timeout timer earlier for 2.6 (3219)
 	- don't dereference NULL reply buffer if mdc_close was never sent (2410)
 	- print nal/nid for unknown nid (3258)
+	- additional checks for oscc recovery before doing precreate (3284)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
 	- increase maximum number of MDS request buffers for large systems

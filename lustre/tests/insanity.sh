@@ -156,7 +156,7 @@ client_touch() {
     file=$1
     for c in $LIVE_CLIENT $FAIL_CLIENTS;  do
 	if echo $DOWN_CLIENTS | grep -q $c; then continue; fi
-	$PDSH $c touch $MOUNT/${c}_$file
+	$PDSH $c touch $MOUNT/${c}_$file || return 1
     done
 }
 

@@ -2707,7 +2707,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
                 if (vallen != sizeof(obd_id))
                         RETURN(-EINVAL);
 		obd->u.cli.cl_oscc.oscc_next_id = *((obd_id*)val) + 1;
-                CDEBUG(D_INODE, "%s: set oscc_next_id = "LPU64"\n",
+                CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",
                        exp->exp_obd->obd_name,
                        obd->u.cli.cl_oscc.oscc_next_id);
 

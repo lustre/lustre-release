@@ -320,8 +320,8 @@ int filter_update_last_objid(struct obd_device *obd, obd_gr group,
         int rc;
         ENTRY;
 
-        CDEBUG(D_INODE, "server last_objid for group "LPU64": "LPU64"\n",
-               group, filter->fo_last_objids[group]);
+        CDEBUG(D_INODE, "%s: server last_objid for group "LPU64": "LPU64"\n",
+               obd->obd_name, group, filter->fo_last_objids[group]);
 
         tmp = cpu_to_le64(filter->fo_last_objids[group]);
         rc = fsfilt_write_record(obd, filter->fo_last_objid_files[group],
@@ -696,7 +696,7 @@ static int filter_prep_groups(struct obd_device *obd)
                 }
                 filter->fo_last_objids[i] =
                         le64_to_cpu(filter->fo_last_objids[i]);
-                CDEBUG(D_INODE, "%s: server last_objid group %d: "LPU64"\n",
+                CDEBUG(D_HA, "%s: server last_objid group %d: "LPU64"\n",
                        obd->obd_name, i, filter->fo_last_objids[i]);
         }
 
@@ -1755,12 +1755,16 @@ static void filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
         doa.o_mode = S_IFREG;
 
         last = filter_last_id(filter, &doa);
-        CWARN("deleting orphan objects from "LPU64" to "LPU64"\n",
-               oa->o_id + 1, last);
+        CWARN("%s: deleting orphan objects from "LPU64" to "LPU64"\n",
+               exp->exp_obd->obd_name, oa->o_id + 1, last);
         for (id = oa->o_id + 1; id <= last; id++) {
                 doa.o_id = id;
                 filter_destroy(exp, &doa, NULL, NULL);
         }
+
+        CDEBUG(D_HA, "%s: after destroy: set last_objids[%d] = "LPU64"\n", 
+               exp->exp_obd->obd_name, doa.o_gr, oa->o_id);
+
         spin_lock(&filter->fo_objidlock);
         filter->fo_last_objids[doa.o_gr] = oa->o_id;
         spin_unlock(&filter->fo_objidlock);
@@ -1836,6 +1840,8 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 recreate_obj = 1;
         }
 
+        CDEBUG(D_HA, "%s: precreating %d objects\n", obd->obd_name, *num); 
+
         for (i = 0; i < *num && err == 0; i++) {
                 int cleanup_phase = 0;
 
@@ -1870,13 +1876,17 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                          * already exists
                          */
                         if (recreate_obj) {
-                                CERROR("Serious error: recreating obj %*s but "
-                                       "obj already exists \n",
-                                       dchild->d_name.len, dchild->d_name.name);
+                                CERROR("%s: Serious error: recreating obj %*s "
+                                       "but obj already exists \n",
+                                       obd->obd_name, dchild->d_name.len, 
+                                       dchild->d_name.name);
+                                LBUG();
                         } else {
-                                CERROR("Serious error: objid %*s already "
+                                CERROR("%s: Serious error: objid %*s already "
                                        "exists; is this filesystem corrupt?\n",
-                                       dchild->d_name.len, dchild->d_name.name);
+                                       obd->obd_name, dchild->d_name.len, 
+                                       dchild->d_name.name);
+                                LBUG();
                         }
                         GOTO(cleanup, rc = -EEXIST);
                 }
@@ -1923,7 +1933,11 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         }
         *num = i;
 
-        CDEBUG(D_INFO, "filter_precreate() created %d objects\n", i);
+        CDEBUG(D_HA, "%s: server last_objid for group "LPU64": "LPU64"\n",
+               obd->obd_name, group, filter->fo_last_objids[group]);
+
+        CDEBUG(D_HA, "%s: filter_precreate() created %d objects\n", 
+               obd->obd_name, i);
         RETURN(rc);
 }
 

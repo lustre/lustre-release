@@ -79,6 +79,15 @@ test_0() {
 }
 run_test 0 "empty replay"
 
+test_0b() {
+    # this test attempts to trigger a race in the precreation code, 
+    # and must run before any other objects are created on the filesystem
+    fail ost
+    createmany -o $DIR/$tfile 20 || return 1
+    unlinkmany $DIR/$tfile 20 || return 2
+}
+run_test 0b "ensure object created after recover exists. (3284)"
+
 test_1() {
     replay_barrier mds
     mcreate $DIR/$tfile
