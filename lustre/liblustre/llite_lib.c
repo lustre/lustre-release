@@ -72,7 +72,7 @@ static int lllib_init(void)
 
         return _sysio_fssw_register("llite", &llu_fssw_ops);
 }
- 
+
 int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
 {
         struct lustre_cfg lcfg;
@@ -131,7 +131,7 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
         err = class_process_config(&lcfg);
         if (err < 0)
                 GOTO(out_detach, err);
-        
+
         obd = class_name2obd(name);
         if (obd == NULL)
                 GOTO(out_cleanup, err = -EINVAL);
@@ -147,9 +147,9 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
                         g_zconf_mdsname, err);
                 GOTO(out_cleanup, err);
         }
-        
+
         exp = class_conn2export(&mdc_conn);
-        
+
         ctxt = exp->exp_obd->obd_llog_ctxt[LLOG_CONFIG_REPL_CTXT];
         rc = class_config_parse_llog(ctxt, g_zconf_profile, cfg);
         if (rc) {
@@ -179,7 +179,7 @@ out_del_uuid:
 out:
         if (rc == 0)
                 rc = err;
-        
+
         RETURN(rc);
 }
 
@@ -196,7 +196,7 @@ int ll_parse_mount_target(const char *target, char **mdsnid,
         if ((s = strchr(buf, ':'))) {
                 *mdsnid = buf;
                 *s = '\0';
-                                                                                                                        
+
                 while (*++s == '/')
                         ;
                 *mdsname = s;
@@ -220,7 +220,7 @@ int ll_parse_mount_target(const char *target, char **mdsnid,
  * or in the apps themselves.  The NAMESPACE_STRING specifying
  * the initial set of fs ops (creates, mounts, etc.) is passed
  * as an environment variable.
- * 
+ *
  *      _sysio_init();
  *      _sysio_incore_init();
  *      _sysio_native_init();
@@ -249,7 +249,7 @@ int _sysio_lustre_init(void)
         err = lllib_init();
         if (err) {
                 perror("init llite driver");
-        }       
+        }
         return err;
 }
 
@@ -326,13 +326,13 @@ void __liblustre_setup_(void)
                 exit(1);
         }
         _sysio_native_init();
-                
+
         err = _sysio_mount_root(root_path, root_driver, mntflgs, NULL);
         if (err) {
                 perror(root_driver);
                 exit(1);
         }
-        
+
         if (_sysio_lustre_init())
                 exit(1);
 #endif /* INIT_SYSIO */
@@ -344,7 +344,7 @@ void __liblustre_setup_(void)
                 exit(1);
         }
 }
-        
+
 void __liblustre_cleanup_(void)
 {
         /* user app might chdir to a lustre directory, and leave busy pnode
