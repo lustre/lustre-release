@@ -1,3 +1,26 @@
+2002-07-18  Phil Schwan  <phil@clusterfs.com>
+        * version v0_4_5
+        * delivered as Lustre Light Alpha
+        * fixed a crash after handling invalid MDS requests
+        * fixed directory pages for architectures with non-4k pages sizes
+
+2002-07-11  Andreas Dilger  <adilger@clusterfs.com>
+        * release version v0_4_4
+        * Moves TCP acceptor to be on port 2432 (unused Coda port) instead
+          of 1234.
+        * Fixes a number of interruption problems with OST operations.
+        * Update documentation for portals header changes
+        * Move all wire protocol structs/defines to lustre_idl.h
+        * Fixes symlink length bug.
+        * Add tcpdump to repository.
+
+2002-07-05  Andreas Dilger  <adilger@clusterfs.com>
+        * release version v0_4_3
+        * Fixes statfs for inodes on extN.
+        * Fixes bug in runtests which would delete /etc/hosts.
+        * Use 64-bit object IDs wherever possible (not into VFS though)
+          Remove ost_get_info, which is unused by lustre, and out of date.
+
 2002-07-03  Peter Braam  <braam@clusterfs.com>
         * release version v0_4_2   Fixes a lookup error (type not passed)
 	* move forward to head of Portals
