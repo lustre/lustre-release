@@ -266,54 +266,47 @@ static int fsfilt_smfs_get_md(struct inode *inode, void *lmm, int lmm_size)
 	struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
         struct inode *cache_inode = NULL;
         int    rc = -EIO;
-  
-        if (!cache_fsfilt) 
+
+        if (!cache_fsfilt)
                 RETURN(-EINVAL);
-        
+
         cache_inode = I2CI(inode);
-       
+
         if (!cache_inode)
                 RETURN(-ENOENT);
-       
-        pre_smfs_inode(inode, cache_inode); 
-        
+
+        pre_smfs_inode(inode, cache_inode);
+
         if (!cache_fsfilt->fs_get_md)
 		RETURN(-ENOSYS);
-		
+
 	down(&cache_inode->i_sem);
-	
-	rc = cache_fsfilt->fs_get_md(cache_inode, lmm, 
-				     lmm_size); 
-				     
-	up(&cache_inode->i_sem);
-        
-        post_smfs_inode(inode, cache_inode); 
-       
-        RETURN(rc); 
+
+	rc = cache_fsfilt->fs_get_md(cache_inode, lmm, lmm_size);
+
+        up(&cache_inode->i_sem);
+
+        post_smfs_inode(inode, cache_inode);
+
+        RETURN(rc);
 }
 
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-static int fsfilt_smfs_send_bio(struct inode *inode, 
-				struct bio *bio)
-#else
-static int fsfilt_smfs_send_bio(int rw, struct inode *inode, 
-				struct kiobuf *bio)
-#endif
+static int fsfilt_smfs_send_bio(int rw, struct inode *inode, struct kiobuf *bio)
 {
         struct inode *cache_inode;
 	struct fsfilt_operations *cache_fsfilt;
-	
+
         cache_fsfilt = I2FOPS(inode);
-        if (!cache_fsfilt) 
+        if (!cache_fsfilt)
                 RETURN(-EINVAL);
-        
+
         cache_inode = I2CI(inode);
         if (!cache_inode)
                 RETURN(-EINVAL);
-        
+
 	if (!cache_fsfilt->fs_send_bio)
 		RETURN(-ENOSYS);
-		
+
 	return cache_fsfilt->fs_send_bio(rw, cache_inode, bio);
 }
 
