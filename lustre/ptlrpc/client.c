@@ -93,7 +93,7 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *conn)
 
         OBD_ALLOC(desc, sizeof(*desc));
         if (desc != NULL) {
-                bulk->b_connection = ptlrpc_connection_addref(conn);
+                desc->b_connection = ptlrpc_connection_addref(conn);
                 atomic_set(&desc->b_pages_remaining, 0);
                 atomic_set(&desc->b_refcount, 1);
                 init_waitqueue_head(&desc->b_waitq);
