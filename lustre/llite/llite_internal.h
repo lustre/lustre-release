@@ -43,6 +43,18 @@ struct ll_sb_info {
         struct list_head          ll_pglist;
 };
 
+struct ll_readahead_state {
+        spinlock_t      ras_lock;
+        unsigned long   ras_last, ras_window, ras_next_index;
+};
+
+extern kmem_cache_t *ll_file_data_slab;
+struct ll_file_data {
+        struct obd_client_handle fd_mds_och;
+        struct ll_readahead_state fd_ras;
+        __u32 fd_flags;
+};
+
 struct lustre_handle;
 struct lov_stripe_md;
 
@@ -95,9 +107,11 @@ struct it_cb_data {
 struct ll_async_page {
         int             llap_magic;
         void            *llap_cookie;
-        int             llap_queued;
         struct page     *llap_page;
         struct list_head llap_pending_write;
+         /* only trust these if the page lock is providing exclusion */
+         int             llap_write_queued:1,
+                         llap_defer_uptodate:1;
         struct list_head llap_proc_item;
 };
 
@@ -142,9 +156,11 @@ int ll_ocp_update_obdo(struct obd_client_page *ocp, int cmd, struct obdo *oa);
 int ll_ocp_set_io_ready(struct obd_client_page *ocp, int cmd);
 int ll_ocp_update_io_args(struct obd_client_page *ocp, int cmd);
 void ll_removepage(struct page *page);
+int ll_sync_page(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
 struct ll_async_page *llap_from_cookie(void *cookie);
 struct ll_async_page *llap_from_page(struct page *page);
+void ll_readahead_init(struct ll_readahead_state *ras);
 
 void ll_truncate(struct inode *inode);
 

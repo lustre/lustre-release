@@ -71,6 +71,7 @@ extern unsigned int portal_cerror;
 #define D_HA        (1 << 19) /* recovery and failover */
 #define D_RPCTRACE  (1 << 20) /* for distributed debugging */
 #define D_VFSTRACE  (1 << 21)
+#define D_READA     (1 << 22) /* read-ahead */
 
 #ifdef __KERNEL__
 # include <linux/sched.h> /* THREAD_SIZE */

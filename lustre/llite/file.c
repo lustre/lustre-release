@@ -159,6 +159,7 @@ static int ll_local_open(struct file *file, struct lookup_intent *it)
         memcpy(&fd->fd_mds_och.och_fh, &body->handle, sizeof(body->handle));
         fd->fd_mds_och.och_magic = OBD_CLIENT_HANDLE_MAGIC;
         file->private_data = fd;
+        ll_readahead_init(&fd->fd_ras);
 
         lli->lli_io_epoch = body->io_epoch;
 
@@ -598,10 +599,13 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         if (err != ELDLM_OK)
                 RETURN(err);
 
+
         CDEBUG(D_INFO, "Reading inode %lu, "LPSZ" bytes, offset %Ld\n",
                inode->i_ino, count, *ppos);
+
+        /* turn off the kernel's read-ahead */
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        filp->f_ramax = 0; /* turn off generic_file_readahead() */
+        filp->f_ramax = 0;
 #else
         filp->f_ra.ra_pages = 0;
 #endif

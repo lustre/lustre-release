@@ -40,11 +40,6 @@
 /* careful, this is easy to screw up */
 #define PAGE_CACHE_MAXBYTES ((__u64)(~0UL) << PAGE_CACHE_SHIFT)
 
-extern kmem_cache_t *ll_file_data_slab;
-struct ll_file_data {
-        struct obd_client_handle fd_mds_och;
-        __u32 fd_flags;
-};
 
 /*
 struct lustre_intent_data {

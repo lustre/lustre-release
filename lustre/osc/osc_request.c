@@ -1266,13 +1266,39 @@ static int osc_send_oap_rpc(struct client_obd *cli, int cmd,
                  * will still be on the dirty list).  we could call in
                  * at the end of ll_file_write to process the queue again. */
                 if (!(oap->oap_async_flags & ASYNC_READY)) {
-                        if (ops->ap_make_ready(oap->oap_caller_data, cmd)) {
-                                CDEBUG(D_INODE, "oap at page_count %d not "
-                                                "ready\n", page_count);
+                        int rc = ops->ap_make_ready(oap->oap_caller_data, cmd);
+                        if (rc < 0)
+                                CDEBUG(D_INODE, "oap %p page %p returned %d "
+                                                "instead of ready\n", oap, 
+                                                oap->oap_page, rc);
+                        switch (rc) {
+                        case -EAGAIN:
+                                /* llite is telling us that the page is still
+                                 * in commit_write and that we should try
+                                 * and put it in an rpc again later.  we 
+                                 * break out of the loop so we don't create
+                                 * a whole in the sequence of pages in 
+                                 * the rpc stream.*/
+                                pos = NULL;
+                                break;
+                        case -EINTR:
+                                /* the io isn't needed.. tell the checks
+                                 * below to complete the rpc with EINTR */
+                                oap->oap_async_flags |= ASYNC_COUNT_STABLE;
+                                oap->oap_count = -EINTR;
+                                break;
+                        case 0:
+                                oap->oap_async_flags |= ASYNC_READY;
+                                break;
+                        default:
+                                LASSERTF(0, "oap %p page %p returned %d "
+                                            "from make_ready\n", oap, 
+                                            oap->oap_page, rc);
                                 break;
                         }
-                        oap->oap_async_flags |= ASYNC_READY;
                 }
+                if (pos == NULL)
+                        break;
 
                 /* take the page out of our book-keeping */
                 list_del_init(&oap->oap_pending_item);
@@ -1723,7 +1749,10 @@ static int osc_set_async_flags(struct obd_export *exp,
 
         spin_lock(&cli->cl_loi_list_lock);
 
-        if (oap->oap_async_flags == async_flags)
+        if (list_empty(&oap->oap_pending_item))
+                GOTO(out, rc = -EINVAL);
+
+        if ((oap->oap_async_flags & async_flags) == async_flags)
                 GOTO(out, rc = 0);
 
         if (SETTING(oap->oap_async_flags, async_flags, ASYNC_READY))

@@ -69,7 +69,7 @@ static const char *portal_debug_masks[] =
         {"trace", "inode", "super", "ext2", "malloc", "cache", "info", "ioctl",
          "blocks", "net", "warning", "buffs", "other", "dentry", "portals",
          "page", "dlmtrace", "error", "emerg", "ha", "rpctrace", "vfstrace",
-         NULL};
+         "reada", NULL};
 
 struct debug_daemon_cmd {
         char *cmd;

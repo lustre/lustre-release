@@ -61,14 +61,16 @@ void ll_ap_completion_24(void *data, int cmd, int rc)
                 return;
         }
 
-        llap->llap_queued = 0;
         page = llap->llap_page;
-
         LASSERT(PageLocked(page));
 
         if (rc == 0)  {
-                if (cmd == OBD_BRW_READ)
-                        SetPageUptodate(page);
+                if (cmd == OBD_BRW_READ) {
+                        if (!llap->llap_defer_uptodate)
+                                SetPageUptodate(page);
+                } else {
+                        llap->llap_write_queued = 0;
+                }
         } else { 
                 SetPageError(page);
         }
@@ -105,20 +107,21 @@ static int ll_writepage_24(struct page *page)
                 GOTO(out, rc = PTR_ERR(llap));
 
         page_cache_get(page);
-        if (llap->llap_queued) {
+        if (llap->llap_write_queued) {
                 LL_CDEBUG_PAGE(page, "marking urgent\n");
                 rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL, 
                                          llap->llap_cookie, ASYNC_READY | 
                                          ASYNC_URGENT);
         } else {
+                llap->llap_write_queued = 1;
                 rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL, 
                                         llap->llap_cookie, OBD_BRW_WRITE, 0, 0, 
                                         OBD_BRW_CREATE, ASYNC_READY | 
                                         ASYNC_URGENT);
-                if (rc == 0) {
+                if (rc == 0)
                         LL_CDEBUG_PAGE(page, "mmap write queued\n");
-                        llap->llap_queued = 1;
-                }
+                else 
+                        llap->llap_write_queued = 0;
         }
         if (rc)
                 page_cache_release(page);
@@ -210,5 +213,6 @@ struct address_space_operations ll_aops = {
         prepare_write: ll_prepare_write,
         commit_write: ll_commit_write,
         removepage: ll_removepage,
+        sync_page: ll_sync_page,
         bmap: NULL
 };
