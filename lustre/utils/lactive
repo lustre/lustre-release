@@ -57,7 +57,8 @@ if not config.config:
     fatal("Missing config")
     
 base = "config=%s,fs=lustre" % (config.config,)
-db = Lustre.LustreDB_LDAP('', {}, base=base, url = config.ldapurl)
+db = Lustre.LustreDB_LDAP('', {}, base=base, pw = "secret",
+                          url = config.ldapurl)
 
 active_node = db.lookup_name(config.active)
 if not active_node:

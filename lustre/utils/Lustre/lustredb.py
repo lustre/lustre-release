@@ -274,7 +274,7 @@ class LustreDB_LDAP(LustreDB):
                  parent = None,
                  url  = "ldap://localhost",
                  user = "cn=Manager, fs=lustre",
-                 pw   = "secret"
+                 pw   = ""
                  ):
         self._name = name
         self._attrs = attrs
