@@ -28,10 +28,10 @@
 #include <linux/param.h>
 /* #include <linux/msr.h> */
 
-typedef enum lprocfs_profilers {
+typedef enum lprofilers {
         e_generic=0,
         e_specific
-}lprocfs_profilers_e;
+}lprofilers_e;
         
 
 typedef struct lprocfs_vars{
@@ -43,14 +43,14 @@ typedef struct lprocfs_vars{
  typedef struct lprocfs_group {
         char** dir_namespace;
         lprocfs_vars_t* count_func_namespace;
-        lprocfs_profilers_e prof_type;
+        lprofilers_e prof_type;
 }lprocfs_group_t;
 
-typedef struct lprocfs_obd_namespace {
-        char* obd_classname;
-        lprocfs_group_t* obd_namespace;
-        unsigned int cntr_blk_size;
-}lprocfs_obd_namespace_t;
+typedef struct lprocfs_obd_nm {
+        char* obd_clname;
+        lprocfs_group_t* obd_names;
+        unsigned int cntr_blk_sz;
+}lprocfs_obd_nm_t;
 
 
 
@@ -63,11 +63,11 @@ typedef struct lprocfs_obd_namespace {
  * one signature.
  */
  
-struct lprocfs_profiler_gen {
-        unsigned long long min_time;
-        unsigned long long max_time; 
-        unsigned long long sum_time;
-        unsigned long long num_ops;
+struct lprofiler_gen {
+        __u64 min_time;
+        __u64 max_time; 
+        __u64 sum_time;
+        __u64 num_ops;
         /*
          * Default, used for storing intermediate
          * value
@@ -76,42 +76,42 @@ struct lprocfs_profiler_gen {
         
 };
 
-struct lprocfs_profiler_ldlm {
+struct lprofiler_ldlm {
 
-        unsigned long long min_time;
-        unsigned long long max_time;
-        unsigned long long sum_time;
-        unsigned long long num_ops;
-        unsigned long long start_time;
+        __u64 min_time;
+        __u64 max_time;
+        __u64 sum_time;
+        __u64 num_ops;
+        __u64 start_time;
 
-        unsigned long long num_total;
-        unsigned long long num_zerolatency;
-        unsigned long long num_zerolatency_inflight;
-        unsigned long long num_zerolatency_done;
-        unsigned long long non_zero_mintime;
-        unsigned long long non_zero_maxtime;
-        unsigned long long non_zero_sumtime;
+        __u64 num_total;
+        __u64 num_zerolatency;
+        __u64 num_zerolatency_inflight;
+        __u64 num_zerolatency_done;
+        __u64 non_zero_mintime;
+        __u64 non_zero_maxtime;
+        __u64 non_zero_sumtime;
 };
 
-struct lprocfs_profiler_ptlrpc {
-        unsigned long long min_time;
-        unsigned long long max_time; 
-        unsigned long long sum_time;
-        unsigned long long num_ops;
+struct lprofiler_ptlrpc {
+        __u64 min_time;
+        __u64 max_time; 
+        __u64 sum_time;
+        __u64 num_ops;
         /*
          * Default, used for storing intermediate
          * value
          */
-        unsigned long long start_time;
-        unsigned long long msgs_alloc;
+        __u64 start_time;
+        __u64 msgs_alloc;
 
-        unsigned long long msgs_max;
-        unsigned long long recv_count;
+        __u64 msgs_max;
+        __u64 recv_count;
         
-        unsigned long long recv_length;
-        unsigned long long send_count;
-        unsigned long long send_length;
-        unsigned long long portal_kmemory;
+        __u64 recv_length;
+        __u64 send_count;
+        __u64 send_length;
+        __u64 portal_kmemory;
 
 
 };
@@ -148,7 +148,7 @@ struct lprocfs_conn_namespace{
         e_varType type;
         union{
                 char* string_val;
-                unsigned long long cntr_val;
+                __u64 cntr_val;
         }x;
 
 };
@@ -167,10 +167,10 @@ static inline unsigned long lprocfs_util_gettime(void)
         return 0;
         /*
         struct timeval myTime;
-        unsigned long long temp;
+        __u64 temp;
         do_gettimeofday(&myTime);
-        temp=((unsigned long long)(myTime.tv_usec))&0xFFFFFFFF;
-        temp|=(((unsigned long long)(myTime.tv_sec))<<(8*sizeof(unsigned long)));
+        temp=((__u64)(myTime.tv_usec))&0xFFFFFFFF;
+        temp|=(((__u64)(myTime.tv_sec))<<(8*sizeof(unsigned long)));
         return temp;
         */
 
@@ -180,8 +180,8 @@ static inline unsigned long lprocfs_util_getdiff(unsigned long x,
 {
         return ((x>y)?(x-y):(y-x));
         /*
-        unsigned long long tempSec=0;
-        unsigned long long tempuSec=0;
+        __u64 tempSec=0;
+        __u64 tempuSec=0;
         tempSec=((y>>8*sizeof(unsigned long))-(x>>8*sizeof(unsigned long)));
         if(tempSec<0)tempSec=-tempSec;
         tempuSec=((y&0xFFFFFFFF)-(x&0xFFFFFFFF));
@@ -194,23 +194,23 @@ static inline unsigned long lprocfs_util_getdiff(unsigned long x,
 #define LPROCFS_NAMESPACE_ENUM(CLASS, NAME) e_ ##CLASS## _##NAME
 
 
-#define DEV_PROF_START(DEV_CLASS, OBD, PROF_CLASS, ATTRIBUTE)                 \
-do {                                                                          \
-        struct lprocfs_profiler_##PROF_CLASS *x;                              \
-        int index=LPROCFS_NAMESPACE_ENUM(DEV_CLASS, ATTRIBUTE);               \
-        x=(struct lprocfs_profiler_##PROF_CLASS *)((OBD)->counters);          \
-        x+=index;                                                             \
-        /* rdtscl(x->start_time); */                                          \
-        x->start_time=lprocfs_util_gettime();                                 \
-}while(0)                                                                     \
+#define DEV_PROF_START(DEV_CLASS, OBD, PROF_CLASS, ATTRIBUTE)         \
+do {                                                                  \
+        struct lprofiler_##PROF_CLASS *x;                             \
+        int index=LPROCFS_NAMESPACE_ENUM(DEV_CLASS, ATTRIBUTE);       \
+        x=(struct lprofiler_##PROF_CLASS *)((OBD)->counters);         \
+        x+=index;                                                     \
+        /* rdtscl(x->start_time); */                                  \
+        x->start_time=lprocfs_util_gettime();                         \
+}while(0)                                                             \
 
 
 #define DEV_PROF_END(DEV_CLASS, OBD, PROF_CLASS, ATTRIBUTE)                   \
 do{                                                                           \
         unsigned long end_time, delta;                                        \
         int index=LPROCFS_NAMESPACE_ENUM(DEV_CLASS, ATTRIBUTE);               \
-        struct lprocfs_profiler_##PROF_CLASS *x=                              \
-                (struct lprocfs_profiler_##PROF_CLASS*)((OBD)->counters);     \
+        struct lprofiler_##PROF_CLASS *x=                                     \
+                (struct lprofiler_##PROF_CLASS*)((OBD)->counters);            \
         x+=index;                                                             \
         end_time=lprocfs_util_gettime();                                      \
         delta=lprocfs_util_getdiff(x->start_time, end_time);                  \
@@ -223,10 +223,10 @@ do{                                                                           \
 /*
 #define DEV_PROF_END(DEV_CLASS, OBD, PROF_CLASS, ATTRIBUTE)                   \
 do{                                                                           \
-        unsigned long long end_time, delta;                                   \
+        __u64 end_time, delta;                                   \
         int index=LPROCFS_NAMESPACE_ENUM(DEV_CLASS, ATTRIBUTE);               \
-        struct lprocfs_profiler_##PROF_CLASS *x=                              \
-                (struct lprocfs_profiler_##PROF_CLASS*)((OBD)->counters);     \
+        struct lprofiler_##PROF_CLASS *x=                              \
+                (struct lprofiler_##PROF_CLASS*)((OBD)->counters);     \
         x+=index;                                                             \
         end_time=lprocfs_util_gettime();                                      \
         delta=lprocfs_util_getdiff(x->start_time, end_time);                  \
@@ -240,8 +240,8 @@ do{                                                                           \
 #define DEV_PRINT_CNTR(DEV_CLASS, OBD, PROF_CLASS, ATTRIBUTE)                 \
 do{                                                                           \
         int index=LPROCFS_NAMESPACE_ENUM(DEV_CLASS, ATTRIBUTE);               \
-        struct lprocfs_profiler_##PROF_CLASS *x=                              \
-                (struct lprocfs_profiler_##PROF_CLASS *)&((OBD)->counters);   \
+        struct lprofiler_##PROF_CLASS *x=                              \
+                (struct lprofiler_##PROF_CLASS *)&((OBD)->counters);   \
         x+=index;                                                             \
         printk("Max_time=%lld(usec)\n", x->max_time);                         \
         printk("Min_time=%lld(usec)\n", x->min_time);                         \
@@ -410,7 +410,8 @@ enum {
        
 };
 
-#define LPROCFS_DIR_INDEX(CLASS, DIR) [LPROCFS_NAMESPACE_ENUM(CLASS, DIR)]={#DIR}
+#define LPROCFS_DIR_INDEX(CLASS, DIR) \
+                         [LPROCFS_NAMESPACE_ENUM(CLASS, DIR)]={#DIR}
 
 /*
  * Similar rule for profiling counters
@@ -422,7 +423,7 @@ enum {
         LPROCFS_NAMESPACE_ENUM(mdc, max_time),
         LPROCFS_NAMESPACE_ENUM(mdc, sum_time),
         LPROCFS_NAMESPACE_ENUM(mdc, num_ops),
-        LPROCFS_PROF_MDC_MAX
+        LPROF_MDC_MAX
 
 
 };
@@ -431,7 +432,7 @@ enum {
         LPROCFS_NAMESPACE_ENUM(mds, max_time),
         LPROCFS_NAMESPACE_ENUM(mds, sum_time),
         LPROCFS_NAMESPACE_ENUM(mds, num_ops),
-        LPROCFS_PROF_MDS_MAX
+        LPROF_MDS_MAX
 
 
 };
@@ -440,7 +441,7 @@ enum {
         LPROCFS_NAMESPACE_ENUM(osc, max_time),
         LPROCFS_NAMESPACE_ENUM(osc, sum_time),
         LPROCFS_NAMESPACE_ENUM(osc, num_ops),
-        LPROCFS_PROF_OSC_MAX
+        LPROF_OSC_MAX
 
 
 };
@@ -450,7 +451,7 @@ enum {
         LPROCFS_NAMESPACE_ENUM(ost, max_time),
         LPROCFS_NAMESPACE_ENUM(ost, sum_time),
         LPROCFS_NAMESPACE_ENUM(ost, num_ops),
-        LPROCFS_PROF_MAX
+        LPROF_OST_MAX
 
 
 };
@@ -459,7 +460,7 @@ enum {
         LPROCFS_NAMESPACE_ENUM(lov, max_time),
         LPROCFS_NAMESPACE_ENUM(lov, sum_time),
         LPROCFS_NAMESPACE_ENUM(lov, num_ops),
-        LPROCFS_PROF_LOV_MAX
+        LPROF_LOV_MAX
 
 
 };
@@ -468,7 +469,7 @@ enum {
         LPROCFS_NAMESPACE_ENUM(obdfilter, max_time),
         LPROCFS_NAMESPACE_ENUM(obdfilter, sum_time),
         LPROCFS_NAMESPACE_ENUM(obdfilter, num_ops),
-        LPROCFS_PROF_OBDFILTER_MAX
+        LPROF_OBDFILTER_MAX
 
 
 };
@@ -486,7 +487,7 @@ enum {
         LPROCFS_NAMESPACE_ENUM(ldlm, nonzero_mintime),
         LPROCFS_NAMESPACE_ENUM(ldlm, nonzero_maxtime),
         LPROCFS_NAMESPACE_ENUM(ldlm, nonzero_sumtime),
-        LPROCFS_PROF_LDLM_MAX
+        LPROF_LDLM_MAX
 };
 
 enum {
@@ -503,7 +504,7 @@ enum {
         LPROCFS_NAMESPACE_ENUM(ptlrpc, send_count),
         LPROCFS_NAMESPACE_ENUM(ptlrpc, send_length),
         LPROCFS_NAMESPACE_ENUM(ptlrpc, portal_kmemory),
-        LPROCFS_PROF_PTLRPC_MAX
+        LPROF_PTLRPC_MAX
 
 };
 
@@ -528,15 +529,17 @@ enum {
 
 };
  
-#define LPROCFS_CNTR_INDEX(CLASS, NAME) [LPROCFS_NAMESPACE_ENUM(CLASS, NAME)]={#NAME}
+#define LPROCFS_CNTR_INDEX(CLASS, NAME) \
+                   [LPROCFS_NAMESPACE_ENUM(CLASS, NAME)]={#NAME}
 
-#define LPROCFS_GROUP_CREATE(CLASS) [LPROCFS_ENUM(CLASS)]={#CLASS, dir_##CLASS##_index, prof_##CLASS##_index}
+#define LPROCFS_GROUP_CREATE(CLASS) \
+      [LPROCFS_ENUM(CLASS)]={#CLASS, dir_##CLASS##_index, prof_##CLASS##_index}
 
 /*
  * OBD Namespace API: Obtain the namespace group index, given a name
  */
-int lprocfs_get_namespace(char* name, 
-                          lprocfs_obd_namespace_t* collection);
+int lprocfs_get_nm(char* name, 
+                   lprocfs_obd_nm_t* collection);
 
 
 
@@ -544,18 +547,18 @@ int lprocfs_get_namespace(char* name,
  * OBD device APIs
  */
 
-int lprocfs_register_dev(struct obd_device* device, 
+int lprocfs_reg_dev(struct obd_device* device, 
                          lprocfs_group_t* namespace, 
                          unsigned int cnt_struct_size);
 
-int lprocfs_deregister_dev(struct obd_device* device);
+int lprocfs_dereg_dev(struct obd_device* device);
 
 /*
  * Connections API
  */
-int lprocfs_register_conn(unsigned int conn_number, 
+int lprocfs_reg_conn(unsigned int conn_number, 
 			  struct lprocfs_conn_namespace* namespace);
-int lprocfs_deregister_conn(unsigned int conn_number);
+int lprocfs_dereg_conn(unsigned int conn_number);
 
 /*
  * Import/Export APIs
@@ -573,21 +576,21 @@ int lprocfs_remove_import(unsigned int conn_number,
  * Utility functions
  */
 
-struct proc_dir_entry* lprocfs_util_add_dir_node(struct proc_dir_entry* root, 
-                                                 const char* name,            
-                                                 const char* tok,             
-                                                 unsigned int* escape);
+struct proc_dir_entry* lprocfs_add_dir(struct proc_dir_entry* root, 
+                                       const char* name,            
+                                       const char* tok,             
+                                       unsigned int* escape);
 
 
-struct proc_dir_entry* lprocfs_util_mkdir(const char* dname, 
-                                          struct proc_dir_entry *parent);
+struct proc_dir_entry* lprocfs_mkdir(const char* dname, 
+                                     struct proc_dir_entry *parent);
 
 
-struct proc_dir_entry* lprocfs_bfs_search(struct proc_dir_entry* root, 
+struct proc_dir_entry* lprocfs_bfs_srch(struct proc_dir_entry* root, 
                                           const char* name);
  
-struct proc_dir_entry* lprocfs_search(struct proc_dir_entry* head, 
-                                      const char* name);
+struct proc_dir_entry* lprocfs_srch(struct proc_dir_entry* head, 
+                                    const char* name);
 
 int lprocfs_link_dir_counters(struct obd_device* device, 
                               struct proc_dir_entry* this_dev_root, 
@@ -599,16 +602,17 @@ int lprocfs_create_dir_namespace(struct proc_dir_entry* this_dev_root,
                                  lprocfs_group_t* namespace, 
                                  unsigned int *num_dirs);
 
-int lprocfs_util_getclass_idx(struct groupspace_index* group, const char* classname);
+int lprocfs_getclass_idx(struct groupspace_index* group, 
+                         const char* classname);
 struct proc_dir_entry* lprocfs_mkinitdir(struct obd_device* device);
-int lprocfs_util_get_index(struct namespace_index* class, const char* dir_name);
-unsigned int lprocfs_util_add_var_node(struct obd_device* device, 
-                                       struct proc_dir_entry* root, 
-                                       lprocfs_vars_t* variable, 
-                                       int dir_arr_index, 
-                                       int cnt_arr_index, 
-                                       unsigned int cnt_arr_size, 
-                                       lprocfs_profilers_e type);
+int lprocfs_get_idx(struct namespace_index* class, const char* dir_name);
+unsigned int lprocfs_add_var(struct obd_device* device, 
+                             struct proc_dir_entry* root, 
+                             lprocfs_vars_t* variable, 
+                             int dir_arr_index, 
+                             int cnt_arr_index, 
+                             unsigned int cnt_arr_size, 
+                             lprofilers_e type);
 
 
 void lprocfs_remove_all(struct proc_dir_entry* root);
@@ -625,20 +629,20 @@ void lprocfs_remove_all(struct proc_dir_entry* root);
  * 
  */
 
-int lprocfs_longlong_read(char* page, char **start, off_t off,
+int lprocfs_ll_rd(char* page, char **start, off_t off,
 		 int count, int *eof, void *data);
-int lprocfs_longlong_write(struct file* file, const char *buffer,
+int lprocfs_ll_wr(struct file* file, const char *buffer,
 		  unsigned long count, void *data);
 
-int read_other(char* page, char **start, off_t off,
-               int count, int *eof, void *data);
-int write_other(struct file* file, const char *buffer,
-                unsigned long count, void *data);
+int rd_other(char* page, char **start, off_t off,
+             int count, int *eof, void *data);
+int wr_other(struct file* file, const char *buffer,
+             unsigned long count, void *data);
 
-int read_string(char* page, char **start, off_t off,
-		 int count, int *eof, void *data);
-int write_string(struct file* file, const char *buffer,
-                 unsigned long count, void *data);
+int rd_string(char* page, char **start, off_t off,
+              int count, int *eof, void *data);
+int wr_string(struct file* file, const char *buffer,
+              unsigned long count, void *data);
 
 
 
@@ -649,27 +653,27 @@ int write_string(struct file* file, const char *buffer,
 #define DEV_PROF_END(DEV_CLASS, OBD, PROF_CLASS, ATTRIBUTE) 0
 #define DEV_PRINT_CNTR(DEV_CLASS, OBD, PROF_CLASS, ATTRIBUTE) 0
 
-static inline int lprocfs_get_namespace(char* name,
-                                        lprocfs_obd_namespace_t* collection)
+static inline int lprocfs_get_nm(char* name,
+                                 lprocfs_obd_nm_t* collection)
  { 
          return -1; 
  }
-static inline int lprocfs_register_dev(struct obd_device* device, 
-                                       lprocfs_group_t* namespace, 
-                                       unsigned int cnt_struct_size) 
+static inline int lprocfs_reg_dev(struct obd_device* device, 
+                                  lprocfs_group_t* namespace, 
+                                  unsigned int cnt_struct_size) 
 { 
         return 0; 
 }
-static inline int lprocfs_deregister_dev(struct obd_device* device) 
+static inline int lprocfs_dereg_dev(struct obd_device* device) 
 { 
         return LPROCFS_SUCCESS; 
 }
-static inline int lprocfs_register_conn(unsigned int conn_number, 
-                                        struct lprocfs_conn_namespace* namespace) 
+static inline int lprocfs_reg_conn(unsigned int conn_number, 
+                                   struct lprocfs_conn_namespace* nm) 
 { 
         return 0; 
 }
-static inline int lprocfs_deregister_conn(unsigned int conn_number) 
+static inline int lprocfs_dereg_conn(unsigned int conn_number) 
 { 
         return 0; 
 }
