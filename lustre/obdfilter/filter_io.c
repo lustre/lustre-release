@@ -537,7 +537,6 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         if (dentry->d_inode == NULL) {
                 CERROR("trying to BRW to non-existent file "LPU64"\n",
                        obj->ioo_id);
-                f_dput(dentry);
                 GOTO(cleanup, rc = -ENOENT);
         }
 
