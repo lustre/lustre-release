@@ -3,7 +3,11 @@
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
-umount /mnt/lustre || fail "cannot unmount"
+$DEBCTL get_debug > /tmp/debug
+
+if [ "`mount | grep '/mnt/lustre'`" ]; then
+	umount /mnt/lustre || fail "cannot unmount"
+fi
 
 killall acceptor
 rmmod llite
@@ -22,7 +26,7 @@ detach
 name2dev OSTDEV
 cleanup
 detach
-name2dev FILTERDEV
+name2dev OBDDEV
 cleanup
 detach
 name2dev MDSDEV

@@ -112,6 +112,10 @@ setup_opts() {
 		echo "error: no config file on command-line and no $DEF" 1>&2
 		exit -1
 	fi
+	
+	[ -z "$MDS_RSH" ] && MDS_RSH="eval"
+	[ -z "$OST_RSH" ] && OST_RSH="eval"
+	[ -z "$OSC_RSH" ] && OSC_RSH="eval"
 }
 
 setup_portals() {
@@ -205,7 +209,8 @@ setup_mds() {
 		return -1
 	fi
 
-	if [ "$1" != "new_fs" -a "$1" != "old_fs" ]; then
+	[ "$1" ] && DO_FS=$1
+	if [ "$DO_FS" != "new_fs" -a "$DO_FS" != "old_fs" ]; then
 		echo "usage: setup_mds {new_fs|old_fs}" 1>&2
 		return -1
 	fi
@@ -268,7 +273,7 @@ setup_ost() {
 
 	$OBDCTL <<- EOF
 	device ${OBD_DEVNO}
-	attach ${OSTTYPE} OSTDEV
+	attach ${OSTTYPE} OBDDEV
 	setup ${OBD} ${OBDARG}
 	device ${OST_DEVNO}
 	attach ost OSTDEV
@@ -284,8 +289,12 @@ setup_server() {
 setup_osc() {
 	[ "$SETUP_OSC" != "y" ] && return 0
 
+	RPC_DEVNO=$DEVNO; DEVNO=`expr $DEVNO + 1`
 	OSC_DEVNO=$DEVNO; DEVNO=`expr $DEVNO + 1`
 	$OBDCTL <<- EOF || return $rc
+	device ${RPC_DEVNO}
+	attach ptlrpc RPCDEV
+	setup
 	device ${OSC_DEVNO}
 	attach osc OSCDEV
 	setup -1
@@ -313,27 +322,21 @@ DEBUG_ON="echo 0xffffffff > /proc/sys/portals/debug"
 DEBUG_OFF="echo 0 > /proc/sys/portals/debug"
 
 debug_server_off() {
-	if [ "$SERVER" != "$LOCALHOST" ]; then
-		$RSH $SERVER "$DEBUG_OFF"
-	else
-		$DEBUG_OFF
-	fi
+	[ "$MDS_RSH" ] && echo "Turn OFF debug on MDS" && $MDS_RSH "$DEBUG_OFF"
+	[ "$OST_RSH" ] && echo "Turn OFF debug on OST" && $OST_RSH "$DEBUG_OFF"
 }
 
 debug_server_on() {
-	if [ "$SERVER" != "$LOCALHOST" ]; then
-		$RSH $SERVER "$DEBUG_ON"
-	else
-		$DEBUG_ON
-	fi
+	[ "$MDS_RSH" ] && echo "Turn ON debug on MDS" && $MDS_RSH "$DEBUG_ON"
+	[ "$OST_RSH" ] && echo "Turn ON debug on OST" && $OST_RSH "$DEBUG_ON"
 }
 
 debug_client_off() {
-	$DEBUG_OFF
+	echo "Tuning OFF debug on client" && $OSC_RSH "$DEBUG_OFF"
 }
 
 debug_client_on() {
-	$DEBUG_ON
+	echo "Tuning ON debug on client" && $OSC_RSH "$DEBUG_ON"
 }
 
 cleanup_portals() {
@@ -354,23 +357,6 @@ cleanup_portals() {
 
 cleanup_lustre() {
 	killall acceptor
-
-	$OBDCTL <<- EOF
-	device 3
-	cleanup
-	detach
-	device 2
-	cleanup
-	detach
-	device 1
-	cleanup
-	detach
-	device 0
-	cleanup
-	detach
-	quit
-	EOF
-
 
 	losetup -d ${LOOP}0
 	losetup -d ${LOOP}1
@@ -397,7 +383,7 @@ cleanup_mds() {
 	[ "$SETUP" ] || MDS_DEVNO=0
 
 	$OBDCTL <<- EOF
-	device ${MDS_DEVNO}
+	name2dev MDSDEV
 	cleanup
 	detach
 	quit
@@ -407,16 +393,11 @@ cleanup_mds() {
 cleanup_ost() {
 	[ "$SETUP" -a -z "$SETUP_OST" ] && return 0
 
-	if [ -z "$SETUP" ]; then
-		OST_DEVNO=2
-		OBD_DEVNO=1
-	fi
-
 	$OBDCTL <<- EOF
-	device ${OST_DEVNO}
+	name2dev OSTDEV
 	cleanup
 	detach
-	device ${OBD_DEVNO}
+	name2dev OBDDEV
 	cleanup
 	detach
 	quit
@@ -424,7 +405,7 @@ cleanup_ost() {
 }
 
 cleanup_server() {
-	cleanup_mds && cleanup_ost
+	cleanup_ost && cleanup_mds
 	DEVNO=0
 }
 
@@ -432,7 +413,7 @@ cleanup_mount() {
 	[ "$SETUP" -a -z "$SETUP_MOUNT" ] && return 0
 
 	[ "$OSCMT" ] || OSCMT=/mnt/lustre
-	umount $OSCMT
+	umount $OSCMT || fail "unable to unmount $OSCMT"
 }
 
 cleanup_osc() {
@@ -441,7 +422,7 @@ cleanup_osc() {
 	[ "$SETUP" ] || OSC_DEVNO=3
 
 	$OBDCTL <<- EOF
-	device ${OSC_DEVNO}
+	name2dev OSCDEV
 	cleanup
 	detach
 	quit
@@ -454,6 +435,7 @@ cleanup_client() {
 }
 
 fail() { 
-    echo $1
-    exit 1
+    echo "ERROR: $1" 1>&2
+    [ $2 ] && RC=$2 || RC=1
+    exit $RC
 }

@@ -24,18 +24,21 @@ device 0
 attach mds MDSDEV
 setup ${MDS} ${MDSFS}
 device 1
-attach obdext2 OBDEXT2DEV
-setup ${OST}
+attach obdfilter OBDDEV
+setup ${OST} ext2
 device 2
 attach ost OSTDEV
 setup 1
 device 3
-attach osc OSCDEV
-setup -1
-device 4
 attach ptlrpc RPCDEV
 setup
+device 4
+attach ldlm LDLMDEV
+setup
+device 5
+attach osc OSCDEV
+setup -1
 quit
 EOF
 
-mount -t lustre_lite -o device=3 none /mnt/lustre
+mount -t lustre_lite -o device=`$OBDCTL name2dev OSCDEV` none /mnt/lustre

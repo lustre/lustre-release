@@ -21,22 +21,28 @@ echo 0xffffffff > /proc/sys/portals/debug
 
 $OBDCTL <<EOF
 device 0
-attach mds
+attach mds MDSDEV
 setup ${MDS} ${MDSFS}
 device 1
-attach obdext2
+attach obdfilter OBDDEV
 setup ${OST}
 device 2
-attach ost
+attach ost OSTDEV
 setup 1
 device 3
-attach osc
+attach ptlrpc RPCDEV
+setup
+device 4
+attach ldlm LDLMDEV
+setup
+device 5
+attach osc OSCDEV
 setup -1
 quit
 EOF
 
-MOUNT='mount -t lustre_lite -o device=3 none /mnt/lustre'
-$MOUNT
+MNT='mount -t lustre_lite -o device=`$OBDCTL name2dev OSCDEV` none /mnt/lustre'
+$MNT
 
 test_fail() {
 	echo $1 > /proc/sys/lustre/fail_loc
@@ -45,7 +51,7 @@ test_fail() {
 	$* 
 
 	echo "Cleaning up and restarting MDS"
-	umount /mnt/lustre
+	umount /mnt/lustre || fail "unable to unmount"
 	$OBDCTL <<- EOF
 	device 0
 	cleanup
@@ -61,7 +67,7 @@ test_fail() {
 	setup ${MDS} ${MDSFS}
 	quit
 	EOF
-	$MOUNT
+	$MNT
 }
 
 #set -vx
@@ -73,22 +79,22 @@ sync
 # OBD_FAIL_MDS_REINT_SETATTR_WRITE - MDS will discard data from setattr
 test_fail 0x10a chmod 000 /mnt/lustre/foo
 ls -l /mnt/lustre/foo
-[ ! -x /mnt/lustre/foo ] && echo "/mnt/lustre/foo is not executable!" 1>&2 && exit -1
+[ ! -x /mnt/lustre/foo ] && fail "/mnt/lustre/foo is not executable!"
 
 # OBD_FAIL_MDS_REINT_CREATE_WRITE - MDS will not create the file
 test_fail 0x10c touch /mnt/lustre/bar
 ls /mnt/lustre/bar
-[ $? -eq 0 ] && echo "/mnt/lustre/bar was created!" 1>&2 && exit -1
+[ $? -eq 0 ] && fail "/mnt/lustre/bar was created!"
 
 # OBD_FAIL_MDS_REINT_UNLINK_WRITE - MDS will discard data from unlink
 test_fail 0x10e rm /mnt/lustre/foo
 ls /mnt/lustre/foo
-[ $? -eq 1 ] && echo "/mnt/lustre/foo has been removed!" 1>&2 && exit -1
+[ $? -eq 1 ] && fail "/mnt/lustre/foo has been removed!"
 
 # OBD_FAIL_MDS_REINT_RENAME_WRITE - MDS will discard data from rename
 test_fail 0x112 mv /mnt/lustre/foo /mnt/lustre/bar
 ls /mnt/lustre/foo /mnt/lustre/bar
 [ ! -f /mnt/lustre/foo -o -f /mnt/lustre/bar ] && \
-	echo "/mnt/lustre/foo has been renamed to bar!" 1>&2 && exit -1
+	fail "/mnt/lustre/foo has been renamed to bar!"
 
 echo "Done."
