@@ -400,8 +400,9 @@ debug_client_on() {
 }
 
 cleanup_portals() {
+	[ -z "$NETWORK" ] && NETWORK=tcp
 	$PTLCTL <<- EOF
-	setup tcp
+	setup $NETWORK
 	disconnect
 	del_uuid self
 	del_uuid mds
