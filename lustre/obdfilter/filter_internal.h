@@ -44,11 +44,17 @@
 #define FILTER_MOUNT_RECOV 2
 #define FILTER_RECOVERY_TIMEOUT (obd_timeout * 5 * HZ / 2) /* *waves hands* */
 
-/* Data stored per server at the head of the last_rcvd file.  In le32 order. */
+#define FILTER_ROCOMPAT_SUPP   (0)
+
+#define FILTER_INCOMPAT_GROUPS 0x00000001
+#define FILTER_INCOMPAT_SUPP   (FILTER_INCOMPAT_GROUPS)
+
+/* Data stored per server at the head of the last_rcvd file.  In le32 order.
+ * Try to keep this the same as mds_server_data so we might one day merge. */
 struct filter_server_data {
         __u8  fsd_uuid[37];        /* server UUID */
         __u8  fsd_uuid_padding[3]; /* unused */
-        __u64 fsd_unused;
+        __u64 fsd_unused;          /* was fsd_last_objid - don't use for now */
         __u64 fsd_last_transno;    /* last completed transaction ID */
         __u64 fsd_mount_count;     /* FILTER incarnation number */
         __u32 fsd_feature_compat;  /* compatible feature flags */
@@ -58,13 +64,11 @@ struct filter_server_data {
         __u32 fsd_client_start;    /* start of per-client data area */
         __u16 fsd_client_size;     /* size of per-client data area */
         __u16 fsd_subdir_count;    /* number of subdirectories for objects */
-        //__u64 fsd_catalog_oid;     /* recovery catalog object id */
-        //__u32 fsd_catalog_ogen;    /* recovery catalog inode generation */
-        //__u64 fsd_catalog_ogr;    /* recovery catalog inode group */
+        __u64 fsd_catalog_oid;     /* recovery catalog object id */
+        __u32 fsd_catalog_ogen;    /* recovery catalog inode generation */
         __u8  fsd_peeruuid[37];    /* UUID of MDS associated with this OST */
         __u8  peer_padding[3];     /* unused */
-        //__u8  fsd_padding[FILTER_LR_SERVER_SIZE - 140];
-        __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 128];
+        __u8  fsd_padding[FILTER_LR_SERVER_SIZE - 140];
 };
 
 /* Data stored per client in the last_rcvd file.  In le32 order. */
@@ -103,8 +107,9 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
 #define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__)
 
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
+__u64 filter_next_id(struct filter_obd *, struct obdo *);
 __u64 filter_last_id(struct filter_obd *, struct obdo *);
-int filter_update_server_data(struct obd_device *, struct file *, obd_gr,
+int filter_update_server_data(struct obd_device *, struct file *,
                               struct filter_server_data *, int force_sync);
 int filter_update_last_objid(struct obd_device *, obd_gr, int force_sync);
 int filter_common_setup(struct obd_device *, obd_count len, void *buf,

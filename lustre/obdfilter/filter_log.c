@@ -77,7 +77,7 @@ int filter_get_catalog(struct obd_device *obd)
                 logid = cathandle->lgh_id;
                 fsd->fsd_catalog_oid = cpu_to_le64(logid.lgl_oid);
                 fsd->fsd_catalog_ogr = cpu_to_le64(logid.lgl_ogr);
-                rc = filter_update_server_data(obd, filter->fo_rcvd_filp, 1,
+                rc = filter_update_server_data(obd, filter->fo_rcvd_filp,
                                                fsd, 0);
                 if (rc) {
                         CERROR("error writing new catalog to disk: rc %d\n",rc);
