@@ -74,6 +74,7 @@ struct mds_obd {
 
         char *mds_fstype;
         struct super_block *mds_sb;
+        struct super_operations *mds_sop;
         struct vfsmount *mds_vfsmnt;
         struct obd_run_ctxt mds_ctxt;
         struct file_operations *mds_fop;
