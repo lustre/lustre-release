@@ -235,7 +235,7 @@ pingcli_start(struct portal_ioctl_data *args)
 
 
 /* called by the portals_ioctl for ping requests */
-static int kping_client(struct portal_ioctl_data *args)
+int kping_client(struct portal_ioctl_data *args)
 {
 
         PORTAL_ALLOC (client, sizeof(struct pingcli_data));

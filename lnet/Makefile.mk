@@ -1,4 +1,4 @@
-include $(obj)/Kernelenv
+include $(src)/Kernelenv
 
 # The ordering of these determines the order that each subsystem's 
 # module_init() functions are called in.  if these are changed make sure
@@ -8,3 +8,5 @@ obj-y += portals/
 obj-y += router/
 obj-y += knals/
 obj-y += tests/
+
+obj-m += utils/

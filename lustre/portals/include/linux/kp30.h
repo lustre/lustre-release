@@ -80,7 +80,9 @@ extern unsigned int portal_printk;
 #define D_RPCTRACE  (1 << 20) /* for distributed debugging */
 #define D_VFSTRACE  (1 << 21)
 
-#include <linux/sched.h> /* THREAD_SIZE */
+#ifdef __KERNEL__
+# include <linux/sched.h> /* THREAD_SIZE */
+
 #ifdef  __arch_ia64__
 #define CDEBUG_STACK(var) (&var & (THREAD_SIZE - 1))
 #else
@@ -89,7 +91,6 @@ extern unsigned int portal_printk;
                             (THREAD_SIZE - 1)))
 #endif
 
-#ifdef __KERNEL__
 #define CHECK_STACK(stack)                                                    \
         do {                                                                  \
                 if ((stack) > 3*THREAD_SIZE/4 && (stack) > portal_stack)      \
@@ -101,6 +102,7 @@ extern unsigned int portal_printk;
         } while (0)
 #else
 #define CHECK_STACK(stack) do{}while(0)
+#define CDEBUG_STACK(var) (0)
 #endif
 
 #define CDEBUG(mask, format, a...)                                            \

@@ -3,7 +3,7 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-include $(obj)/../Kernelenv
+include $(src)/../Kernelenv
 
 obj-y += portals.o
 portals-objs    := 	lib-dispatch.o lib-eq.o lib-init.o lib-md.o lib-me.o \
