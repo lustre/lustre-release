@@ -148,7 +148,7 @@ lmc_options = [
     ('route', "Add a new route for the cluster.", PARAM),
     ('router', "Optional flag to mark a node as router."),
     ('gw', "Specify the nid of the gateway for a route.", PARAM),
-    ('gw_cluster_id', "", PARAM, "0"),
+    ('gateway_cluster_id', "", PARAM, "0"),
     ('target_cluster_id', "", PARAM, "0"),
     ('lo', "For a range route, this is the low value nid.", PARAM),
     ('hi', "For a range route, this is a hi value nid.", PARAM,""),
@@ -624,7 +624,7 @@ def add_route(gen, lustre, options):
     node_name = get_option(options, 'node')
     gw_net_type = get_option(options, 'nettype')
     gw = get_option(options, 'gw')
-    gw_cluster_id = get_option(options, 'gw_cluster_id')
+    gw_cluster_id = get_option(options, 'gateway_cluster_id')
     tgt_cluster_id = get_option(options, 'target_cluster_id')
     lo = get_option(options, 'lo')
     hi = get_option(options, 'hi')

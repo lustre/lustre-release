@@ -115,7 +115,7 @@ do {                                                                          \
         if (portal_cerror == 0)                                               \
                 break;                                                        \
         CHECK_STACK(CDEBUG_STACK);                                            \
-        if (!(mask) || ((mask) & (D_ERROR | D_EMERG)) ||                      \
+        if (!(mask) || ((mask) & (D_ERROR | D_EMERG | D_WARNING)) ||          \
             (portal_debug & (mask) &&                                         \
              portal_subsystem_debug & DEBUG_SUBSYSTEM))                       \
                 portals_debug_msg(DEBUG_SUBSYSTEM, mask,                      \
@@ -283,23 +283,31 @@ do {                                                                          \
 #define GFP_MEMALLOC 0
 #endif
 
-#define PORTAL_ALLOC(ptr, size)                                           \
+#define PORTAL_ALLOC_GFP(ptr, size, mask)                                 \
 do {                                                                      \
         LASSERT (!in_interrupt());                                        \
         if ((size) > PORTAL_VMALLOC_SIZE)                                 \
                 (ptr) = vmalloc(size);                                    \
         else                                                              \
-                (ptr) = kmalloc((size), (GFP_KERNEL | GFP_MEMALLOC));     \
-        if ((ptr) == NULL)                                                \
+                (ptr) = kmalloc((size), (mask));                          \
+        if ((ptr) == NULL) {                                              \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc '"\
                        #ptr "' = %d)\n", __FILE__, __LINE__, (int)(size));\
-        else {                                                            \
+                CERROR("PORTALS: %d total bytes allocated by portals\n",  \
+                       atomic_read(&portal_kmemory));                     \
+        } else {                                                          \
                 portal_kmem_inc((ptr), (size));                           \
                 memset((ptr), 0, (size));                                 \
         }                                                                 \
         CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
                (int)(size), (ptr), atomic_read (&portal_kmemory));        \
 } while (0)
+
+#define PORTAL_ALLOC(ptr, size) \
+        PORTAL_ALLOC_GFP(ptr, size, (GFP_KERNEL | GFP_MEMALLOC))
+
+#define PORTAL_ALLOC_ATOMIC(ptr, size) \
+        PORTAL_ALLOC_GFP(ptr, size, (GFP_ATOMIC | GFP_MEMALLOC))
 
 #define PORTAL_FREE(ptr, size)                                          \
 do {                                                                    \
@@ -330,11 +338,13 @@ do {                                                                      \
                 CERROR("PORTALS: out of memory at %s:%d (tried to alloc"  \
                        " '" #ptr "' from slab '" #slab "')\n", __FILE__,  \
                        __LINE__);                                         \
+                CERROR("PORTALS: %d total bytes allocated by portals\n",  \
+                       atomic_read(&portal_kmemory));                     \
         } else {                                                          \
                 portal_kmem_inc((ptr), (size));                           \
                 memset((ptr), 0, (size));                                 \
         }                                                                 \
-        CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %ld at %p (tot %d).\n",   \
+        CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p (tot %d).\n",    \
                (int)(size), (ptr), atomic_read(&portal_kmemory));         \
 } while (0)
 
@@ -690,7 +700,10 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
 /******************************************************************************/
 /* Light-weight trace 
  * Support for temporary event tracing with minimal Heisenberg effect. */
-#define LWT_SUPPORT  1
+#define LWT_SUPPORT  0
+
+#define LWT_MEMORY   (64<<20)
+#define LWT_MAX_CPUS 4
 
 typedef struct {
         cycles_t    lwte_when;
@@ -728,7 +741,7 @@ extern void lwt_fini (void);
 extern int  lwt_lookup_string (int *size, char *knlptr,
                                char *usrptr, int usrsize);
 extern int  lwt_control (int enable, int clear);
-extern int  lwt_snapshot (int *ncpu, int *total_size,
+extern int  lwt_snapshot (cycles_t *now, int *ncpu, int *total_size,
                           void *user_ptr, int user_size);
 
 /* Note that we _don't_ define LWT_EVENT at all if LWT_SUPPORT isn't set.
@@ -775,6 +788,11 @@ do {                                                                    \
 #endif /* __KERNEL__ */
 #endif /* LWT_SUPPORT */
 
+struct portals_device_userstate
+{
+        int          pdu_memhog_pages;
+        struct page *pdu_memhog_root_page;
+};
 
 #include <linux/portals_lib.h>
 
@@ -1044,7 +1062,8 @@ static inline int portal_ioctl_getdata(char *buf, char *end, void *arg)
 #define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 39, long)
 #define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 40, long)
 #define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 41, long)
-#define IOC_PORTAL_MAX_NR                             41
+#define IOC_PORTAL_MEMHOG                  _IOWR('e', 42, long)
+#define IOC_PORTAL_MAX_NR                             42
 
 enum {
         QSWNAL  =  1,

@@ -285,6 +285,9 @@ command_t cmdlist[] = {
          "light-weight tracing\n"
          "usage: lwt start\n"
          "       lwt stop [file]"},
+        {"memhog", jt_ptl_memhog, 0,
+         "memory pressure testing\n"
+         "usage: memhog <page count> [<gfp flags>]"},
                 
         /* User interface commands */
         {"======= control ========", jt_noop, 0, "control commands"},

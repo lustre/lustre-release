@@ -1006,7 +1006,7 @@ static void ptlrpc_abort_reply (struct ptlrpc_request *req)
                  * has finished.  Note that if the ACK does arrive, its
                  * callback wakes us in short order. --eeb */
                 lwi = LWI_TIMEOUT (HZ/4, NULL, NULL);
-                rc = l_wait_event(req->rq_wait_for_rep, !req->rq_want_ack,
+                rc = l_wait_event(req->rq_reply_waitq, !req->rq_want_ack,
                                   &lwi);
                 CDEBUG (D_HA, "Retrying req %p: %d\n", req, rc);
                 /* NB go back and test rq_want_ack with locking, to ensure
@@ -1062,7 +1062,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
                         OBD_FREE(req->rq_repmsg, req->rq_replen);
                         req->rq_repmsg = NULL;
                 }
-                init_waitqueue_head(&req->rq_wait_for_rep);
+                init_waitqueue_head(&req->rq_reply_waitq);
                 netrc = 0;
         }
 
@@ -1076,7 +1076,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
         init_waitqueue_entry(&commit_wait, current);
         add_wait_queue(&obd->obd_commit_waitq, &commit_wait);
-        rc = l_wait_event(req->rq_wait_for_rep,
+        rc = l_wait_event(req->rq_reply_waitq,
                           !req->rq_want_ack || req->rq_resent ||
                           req->rq_transno <= obd->obd_last_committed, &lwi);
         remove_wait_queue(&obd->obd_commit_waitq, &commit_wait);

@@ -250,7 +250,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
 
         spin_lock_init(&request->rq_lock);
         INIT_LIST_HEAD(&request->rq_list);
-        init_waitqueue_head(&request->rq_wait_for_rep);
+        init_waitqueue_head(&request->rq_reply_waitq);
         request->rq_xid = ptlrpc_next_xid();
         atomic_set(&request->rq_refcount, 1);
 
@@ -1127,7 +1127,7 @@ void ptlrpc_unregister_reply (struct ptlrpc_request *request)
                          * the timeout lets us CERROR for visibility */
                         struct l_wait_info lwi = LWI_TIMEOUT(10*HZ, NULL, NULL);
 
-                        rc = l_wait_event (request->rq_wait_for_rep,
+                        rc = l_wait_event (request->rq_reply_waitq,
                                            request->rq_replied, &lwi);
                         LASSERT(rc == 0 || rc == -ETIMEDOUT);
                         if (rc == 0) {
@@ -1228,7 +1228,7 @@ void ptlrpc_resend_req(struct ptlrpc_request *req)
         if (req->rq_set != NULL)
                 wake_up (&req->rq_set->set_waitq);
         else
-                wake_up(&req->rq_wait_for_rep);
+                wake_up(&req->rq_reply_waitq);
         spin_unlock_irqrestore (&req->rq_lock, flags);
 }
 
@@ -1246,7 +1246,7 @@ void ptlrpc_restart_req(struct ptlrpc_request *req)
         if (req->rq_set != NULL)
                 wake_up (&req->rq_set->set_waitq);
         else
-                wake_up(&req->rq_wait_for_rep);
+                wake_up(&req->rq_reply_waitq);
         spin_unlock_irqrestore (&req->rq_lock, flags);
 }
 
@@ -1354,7 +1354,7 @@ restart:
                 DEBUG_REQ(D_HA, req, "\"%s\" waiting for recovery: (%d > %d)",
                           current->comm, req->rq_send_state, imp->imp_state);
                 lwi = LWI_INTR(interrupted_request, req);
-                rc = l_wait_event(req->rq_wait_for_rep,
+                rc = l_wait_event(req->rq_reply_waitq,
                                   (req->rq_send_state == imp->imp_state ||
                                    req->rq_err),
                                   &lwi);
@@ -1398,7 +1398,7 @@ restart:
         }
         lwi = LWI_TIMEOUT_INTR(timeout, expired_request, interrupted_request,
                                req);
-        l_wait_event(req->rq_wait_for_rep, ptlrpc_check_reply(req), &lwi);
+        l_wait_event(req->rq_reply_waitq, ptlrpc_check_reply(req), &lwi);
         DEBUG_REQ(D_NET, req, "-- done sleeping");
 
         CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:ni:nid:opc "
@@ -1472,7 +1472,7 @@ restart:
         if (req->rq_bulk != NULL) {
                 if (rc >= 0) {                  /* success so far */
                         lwi = LWI_TIMEOUT(timeout, NULL, NULL);
-                        brc = l_wait_event(req->rq_wait_for_rep,
+                        brc = l_wait_event(req->rq_reply_waitq,
                                            ptlrpc_bulk_complete(req->rq_bulk),
                                            &lwi);
                         if (brc != 0) {
@@ -1535,7 +1535,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
 
         CDEBUG(D_OTHER, "-- sleeping\n");
         lwi = LWI_INTR(NULL, NULL); /* XXX needs timeout, nested recovery */
-        l_wait_event(req->rq_wait_for_rep, ptlrpc_check_reply(req), &lwi);
+        l_wait_event(req->rq_reply_waitq, ptlrpc_check_reply(req), &lwi);
         CDEBUG(D_OTHER, "-- done\n");
 
         // up(&cli->cli_rpc_sem);
@@ -1626,7 +1626,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
                         if (req->rq_set != NULL)
                                 wake_up(&req->rq_set->set_waitq);
                         else
-                                wake_up(&req->rq_wait_for_rep);
+                                wake_up(&req->rq_reply_waitq);
                 }
                 spin_unlock (&req->rq_lock);
         }
@@ -1643,7 +1643,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
                         if (req->rq_set != NULL)
                                 wake_up(&req->rq_set->set_waitq);
                         else
-                                wake_up(&req->rq_wait_for_rep);
+                                wake_up(&req->rq_reply_waitq);
                 }
                 spin_unlock (&req->rq_lock);
         }

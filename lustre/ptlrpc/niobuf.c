@@ -529,7 +529,7 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
                         if (desc->bd_req->rq_set != NULL)
                                 wq = &req->rq_set->set_waitq;
                         else
-                                wq = &req->rq_wait_for_rep;
+                                wq = &req->rq_reply_waitq;
                         lwi = LWI_TIMEOUT (10 * HZ, NULL, NULL);
                         rc = l_wait_event(*wq, ptlrpc_bulk_complete(desc), &lwi);
                         LASSERT (rc == 0 || rc == -ETIMEDOUT);
@@ -565,7 +565,7 @@ int ptlrpc_reply(struct ptlrpc_request *req)
         req->rq_repmsg->status = req->rq_status;
         req->rq_repmsg->opc = req->rq_reqmsg->opc;
 
-        init_waitqueue_head(&req->rq_wait_for_rep);
+        init_waitqueue_head(&req->rq_reply_waitq);
         rc = ptl_send_buf(req, req->rq_connection, req->rq_svc->srv_rep_portal);
         if (rc != 0) {
                 /* Do what the callback handler would have done */

@@ -208,7 +208,7 @@ void ptlrpc_wake_delayed(struct obd_import *imp)
                         wake_up(&req->rq_set->set_waitq);
                 } else {
                         DEBUG_REQ(D_HA, req, "waking:");
-                        wake_up(&req->rq_wait_for_rep);
+                        wake_up(&req->rq_reply_waitq);
                 }
         }
         spin_unlock_irqrestore(&imp->imp_lock, flags);

@@ -405,7 +405,6 @@ static int ost_brw_read(struct ptlrpc_request *req)
                         lustre_swab_niobuf_remote (&remote_nb[i]);
         }
 
-        size[0] = sizeof(*body);
         rc = lustre_pack_reply(req, 1, size, NULL);
         if (rc)
                 GOTO(out, rc);
@@ -943,9 +942,6 @@ static int ost_handle(struct ptlrpc_request *req)
                                 RETURN(rc);
                 }
         }
-
-        if (strcmp(req->rq_obd->obd_type->typ_name, "ost") != 0)
-                GOTO(out, rc = -EINVAL);
 
         oti_init(oti, req);
 

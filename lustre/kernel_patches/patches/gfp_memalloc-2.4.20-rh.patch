@@ -32,6 +32,17 @@ Index: linux-2.4.20-rh-20.9/mm/page_alloc.c
  		/*
  		 * Are we dealing with a higher order allocation?
  		 *
+@@ -583,7 +583,9 @@
+ 
+ 		/* XXX: is pages_min/4 a good amount to reserve for this? */
+ 		min += z->pages_min / 4;
+-		if (z->free_pages > min || ((current->flags & PF_MEMALLOC) && !in_interrupt())) {
++		if (z->free_pages > min ||
++		    (((current->flags & PF_MEMALLOC) || (gfp_mask & __GFP_MEMALLOC))
++		     && !in_interrupt())) {
+ 			page = rmqueue(z, order);
+ 			if (page)
+ 				return page;
 Index: linux-2.4.20-rh-20.9/include/linux/slab.h
 ===================================================================
 --- linux-2.4.20-rh-20.9.orig/include/linux/slab.h	2003-11-13 17:35:48.000000000 +0300

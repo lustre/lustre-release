@@ -201,7 +201,6 @@ struct ptlrpc_bulk_desc;
 struct ptlrpc_request {
         int rq_type; /* one of PTL_RPC_MSG_* */
         struct list_head rq_list;
-        struct obd_device *rq_obd;
         int rq_status;
         spinlock_t rq_lock;
         unsigned int rq_intr:1, rq_replied:1, rq_want_ack:1, rq_err:1,
@@ -230,7 +229,7 @@ struct ptlrpc_request {
 
         int rq_import_generation;
         enum lustre_imp_state rq_send_state;
-        wait_queue_head_t rq_wait_for_rep; /* XXX also _for_ack */
+        wait_queue_head_t rq_reply_waitq; /* XXX also _for_ack */
 
         /* incoming reply */
         ptl_md_t rq_reply_md;
@@ -413,8 +412,8 @@ struct ptlrpc_service {
         struct list_head srv_threads;
         int (*srv_handler)(struct ptlrpc_request *req);
         char *srv_name;  /* only statically allocated strings here; we don't clean them */
-        struct proc_dir_entry *svc_procroot;
-        struct lprocfs_stats  *svc_stats;
+        struct proc_dir_entry *srv_procroot;
+        struct lprocfs_stats  *srv_stats;
 
         int                  srv_interface_rover;
         struct ptlrpc_srv_ni srv_interfaces[0];

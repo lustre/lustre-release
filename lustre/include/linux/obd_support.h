@@ -28,8 +28,6 @@
 #include <linux/autoconf.h>
 #include <linux/slab.h>
 #include <linux/highmem.h>
-#else
-
 #endif
 #include <linux/kp30.h>
 #include <linux/lustre_compat25.h>
@@ -173,23 +171,23 @@ do {                                                                         \
 #define fixme() CDEBUG(D_OTHER, "FIXME\n");
 
 #ifdef __KERNEL__
-#include <linux/types.h>
-#include <linux/blkdev.h>
+# include <linux/types.h>
+# include <linux/blkdev.h>
 
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#define BDEVNAME_DECLARE_STORAGE(foo) char foo[BDEVNAME_SIZE]
-#define ll_bdevname(SB, STORAGE) __bdevname(kdev_t_to_nr(SB->s_dev), STORAGE)
-#define ll_lock_kernel lock_kernel()
-#define ll_sbdev(SB)    ((SB)->s_bdev)
+# if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+#  define BDEVNAME_DECLARE_STORAGE(foo) char foo[BDEVNAME_SIZE]
+#  define ll_bdevname(SB, STORAGE) __bdevname(kdev_t_to_nr(SB->s_dev), STORAGE)
+#  define ll_lock_kernel lock_kernel()
+#  define ll_sbdev(SB)    ((SB)->s_bdev)
 void dev_set_rdonly(struct block_device *, int);
-#else
-#define BDEVNAME_DECLARE_STORAGE(foo) char __unused_##foo
-#define ll_sbdev(SB)    (kdev_t_to_nr((SB)->s_dev))
-#define ll_bdevname(SB,STORAGE) ((void)__unused_##STORAGE,bdevname(ll_sbdev(SB)))
-#define ll_lock_kernel
+# else
+#  define BDEVNAME_DECLARE_STORAGE(foo) char __unused_##foo
+#  define ll_sbdev(SB)    (kdev_t_to_nr((SB)->s_dev))
+#  define ll_bdevname(SB,STORAGE) ((void)__unused_##STORAGE,bdevname(ll_sbdev(SB)))
+#  define ll_lock_kernel
 void dev_set_rdonly(kdev_t, int);
-#endif
+# endif
 
 void dev_clear_rdonly(int);
 
@@ -205,16 +203,18 @@ static inline void OBD_FAIL_WRITE(int id, struct super_block *sb)
         }
 }
 #else /* !__KERNEL__ */
-#define LTIME_S(time) (time)
+# define LTIME_S(time) (time)
 /* for obd_class.h */
-#ifndef ERR_PTR
-# define ERR_PTR(a) ((void *)(a))
-#endif
+# ifndef ERR_PTR
+#  define ERR_PTR(a) ((void *)(a))
+# endif
 #endif  /* __KERNEL__ */
 
 #ifndef GFP_MEMALLOC
 #define GFP_MEMALLOC 0
 #endif
+
+extern atomic_t portal_kmemory;
 
 #define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
 do {                                                                          \
@@ -222,6 +222,8 @@ do {                                                                          \
         if ((ptr) == NULL) {                                                  \
                 CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
                        (int)(size), __FILE__, __LINE__);                      \
+                CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
+                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));\
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 atomic_add(size, &obd_memory);                                \
@@ -248,6 +250,8 @@ do {                                                                          \
         if ((ptr) == NULL) {                                                  \
                 CERROR("vmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
                        (int)(size), __FILE__, __LINE__);                      \
+                CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
+                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));\
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 atomic_add(size, &obd_memory);                                \
@@ -312,6 +316,8 @@ do {                                                                          \
         if ((ptr) == NULL) {                                                  \
                 CERROR("slab-alloc of '"#ptr"' (%d bytes) failed at %s:%d\n", \
                        (int)(size), __FILE__, __LINE__);                      \
+                CERROR("%d total bytes allocated by Lustre, %d by Portals\n", \
+                       atomic_read(&obd_memory), atomic_read(&portal_kmemory));\
         } else {                                                              \
                 memset(ptr, 0, size);                                         \
                 atomic_add(size, &obd_memory);                                \

@@ -82,9 +82,6 @@
 
 #define SOCKNAL_PEER_HASH_SIZE   101            /* # peer lists */
 
-#define SOCKNAL_NLTXS           128             /* # normal transmit messages */
-#define SOCKNAL_NNBLK_LTXS	128             /* # transmit messages reserved if can't block */
-
 #define SOCKNAL_SMALL_FWD_NMSGS	128             /* # small messages I can be forwarding at any time */
 #define SOCKNAL_LARGE_FWD_NMSGS 64              /* # large messages I can be forwarding at any time */
 
@@ -113,8 +110,9 @@
 typedef struct                                  /* pool of forwarding buffers */
 {
         spinlock_t        fmp_lock;             /* serialise */
-        struct list_head  fmp_idle_fmbs;        /* buffers waiting for a connection */
+        struct list_head  fmp_idle_fmbs;        /* free buffers */
         struct list_head  fmp_blocked_conns;    /* connections waiting for a buffer */
+        int               fmp_nactive_fmbs;     /* # buffers in use */
 } ksock_fmb_pool_t;
 
 
@@ -164,16 +162,10 @@ typedef struct {
 
         kpr_router_t      ksnd_router;          /* THE router */
 
-        void             *ksnd_fmbs;            /* all the pre-allocated FMBs */
         ksock_fmb_pool_t  ksnd_small_fmp;       /* small message forwarding buffers */
         ksock_fmb_pool_t  ksnd_large_fmp;       /* large message forwarding buffers */
 
-        void             *ksnd_ltxs;            /* all the pre-allocated LTXs */
-        spinlock_t        ksnd_idle_ltx_lock;   /* serialise ltx alloc/free */
-        struct list_head  ksnd_idle_ltx_list;   /* where to get an idle LTX */
-        struct list_head  ksnd_idle_nblk_ltx_list; /* where to get an idle LTX if you can't block */
-        wait_queue_head_t ksnd_idle_ltx_waitq;  /* where to block for an idle LTX */
-        int               ksnd_active_ltxs;     /* #active ltxs */
+        atomic_t          ksnd_nactive_ltxs;    /* #active ltxs */
 
         struct list_head  ksnd_deathrow_conns;  /* conns to be closed */
         struct list_head  ksnd_zombie_conns;    /* conns to be freed */
@@ -233,25 +225,15 @@ typedef struct                                  /* transmit packet */
 #define KSOCK_ZCCD_2_TX(ptr)	list_entry (ptr, ksock_tx_t, tx_zccd)
 /* network zero copy callback descriptor embedded in ksock_tx_t */
 
-/* space for the tx frag descriptors: hdr is always 1 iovec
- * and payload is PTL_MD_MAX of either type. */
-typedef struct
-{
-        struct iovec            hdr;
-        union {
-                struct iovec    iov[PTL_MD_MAX_IOV];
-                ptl_kiov_t      kiov[PTL_MD_MAX_IOV];
-        }                       payload;
-} ksock_txiovspace_t;
-
 typedef struct                                  /* locally transmitted packet */
 {
         ksock_tx_t              ltx_tx;         /* send info */
-        struct list_head       *ltx_idle;       /* where to put when idle */
         void                   *ltx_private;    /* lib_finalize() callback arg */
         void                   *ltx_cookie;     /* lib_finalize() callback arg */
-        ksock_txiovspace_t      ltx_iov_space;  /* where to stash frag descriptors */
         ptl_hdr_t               ltx_hdr;        /* buffer for packet header */
+        int                     ltx_desc_size;  /* bytes allocated for this desc */
+        struct iovec            ltx_iov[1];     /* iov for hdr + payload */
+        ptl_kiov_t              ltx_kiov[0];    /* kiov for payload */
 } ksock_ltx_t;
 
 #define KSOCK_TX_2_KPR_FWD_DESC(ptr)    list_entry ((kprfd_scratch_t *)ptr, kpr_fwd_desc_t, kprfd_scratch)

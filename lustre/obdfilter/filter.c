@@ -522,16 +522,6 @@ static int filter_cleanup_groups(struct obd_device *obd)
         int i;
         ENTRY;
 
-        if (filter->fo_subdir_count) {
-                for (i = 0; i < filter->fo_subdir_count; i++) {
-                        struct dentry *dentry = filter->fo_dentry_O_sub[i];
-                        f_dput(dentry);
-                        filter->fo_dentry_O_sub[i] = NULL;
-                }
-                OBD_FREE(filter->fo_dentry_O_sub,
-                         filter->fo_subdir_count *
-                         sizeof(*filter->fo_dentry_O_sub));
-        }
         if (filter->fo_dentry_O_groups != NULL &&
             filter->fo_last_objids != NULL &&
             filter->fo_last_objid_files != NULL) {
@@ -547,6 +537,18 @@ static int filter_cleanup_groups(struct obd_device *obd)
                                 filter->fo_last_objid_files[i] = NULL;
                         }
                 }
+        }
+        if (filter->fo_dentry_O_sub != NULL && filter->fo_subdir_count) {
+                for (i = 0; i < filter->fo_subdir_count; i++) {
+                        struct dentry *dentry = filter->fo_dentry_O_sub[i];
+                        if (dentry != NULL) {
+                                f_dput(dentry);
+                                filter->fo_dentry_O_sub[i] = NULL;
+                        }
+                }
+                OBD_FREE(filter->fo_dentry_O_sub,
+                         filter->fo_subdir_count *
+                         sizeof(*filter->fo_dentry_O_sub));
         }
         if (filter->fo_dentry_O_groups != NULL)
                 OBD_FREE(filter->fo_dentry_O_groups,
@@ -648,7 +650,8 @@ static int filter_prep_groups(struct obd_device *obd)
                 CDEBUG(D_INODE, "got/created O/%s: %p\n", name, dentry);
                 if (IS_ERR(dentry)) {
                         rc = PTR_ERR(dentry);
-                        CERROR("cannot create O/%s: rc = %d\n", name, rc);
+                        CERROR("cannot lookup/create O/%s: rc = %d\n",
+                               name, rc);
                         GOTO(cleanup, rc);
                 }
                 filter->fo_dentry_O_groups[i] = dentry;
@@ -706,7 +709,8 @@ static int filter_prep_groups(struct obd_device *obd)
                         CDEBUG(D_INODE, "got/created O/0/%s: %p\n", dir,dentry);
                         if (IS_ERR(dentry)) {
                                 rc = PTR_ERR(dentry);
-                                CERROR("can't create O/0/%s: rc = %d\n",dir,rc);
+                                CERROR("can't lookup/create O/0/%s: rc = %d\n",
+                                       dir, rc);
                                 GOTO(cleanup, rc);
                         }
                         filter->fo_dentry_O_sub[i] = dentry;
@@ -1858,14 +1862,14 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         filter = &exp->exp_obd->u.filter;
 
         /* an objid of zero is taken to mean "sync whole filesystem" */
-        if (!oa || !oa->o_valid & OBD_MD_FLID) {
+        if (!oa || !(oa->o_valid & OBD_MD_FLID)) {
                 rc = fsfilt_sync(exp->exp_obd, filter->fo_sb);
-                GOTO(out_exp, rc);
+                RETURN(rc);
         }
 
         dentry = filter_oa2dentry(exp->exp_obd, oa);
         if (IS_ERR(dentry))
-                GOTO(out_exp, rc = PTR_ERR(dentry));
+                RETURN(PTR_ERR(dentry));
 
         push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
 
@@ -1890,7 +1894,6 @@ static int filter_sync(struct obd_export *exp, struct obdo *oa,
         pop_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
 
         f_dput(dentry);
-out_exp:
         RETURN(rc);
 }
 

@@ -206,7 +206,6 @@ static int handle_incoming_request(struct obd_device *obddev,
         spin_lock_init (&request->rq_lock);
         INIT_LIST_HEAD(&request->rq_list);
         request->rq_svc = svc;
-        request->rq_obd = obddev;
         request->rq_xid = event->match_bits;
         request->rq_reqmsg = event->mem_desc.start + event->offset;
         request->rq_reqlen = event->mlength;
@@ -375,15 +374,15 @@ static int ptlrpc_main(void *arg)
 
                 do_gettimeofday(&start_time);
                 total = timeval_sub(&start_time, &event->arrival_time);
-                if (svc->svc_stats != NULL) {
-                        lprocfs_counter_add(svc->svc_stats, PTLRPC_REQWAIT_CNTR,
+                if (svc->srv_stats != NULL) {
+                        lprocfs_counter_add(svc->srv_stats, PTLRPC_REQWAIT_CNTR,
                                             total);
-                        lprocfs_counter_add(svc->svc_stats,
+                        lprocfs_counter_add(svc->srv_stats,
                                             PTLRPC_SVCIDLETIME_CNTR,
                                             timeval_sub(&start_time,
                                                         &finish_time));
 #if 0 /* Wait for b_eq branch */
-                        lprocfs_counter_add(svc->svc_stats,
+                        lprocfs_counter_add(svc->srv_stats,
                                             PTLRPC_SVCEQDEPTH_CNTR, 0);
 #endif
                 }
@@ -406,11 +405,11 @@ static int ptlrpc_main(void *arg)
                        "(%ldus total)\n", request->rq_xid, event->initiator.nid,
                        total, timeval_sub(&finish_time, &event->arrival_time));
 
-                if (svc->svc_stats != NULL) {
+                if (svc->srv_stats != NULL) {
                         int opc = opcode_offset(request->rq_reqmsg->opc);
                         if (opc > 0) {
                                 LASSERT(opc < LUSTRE_MAX_OPCODES);
-                                lprocfs_counter_add(svc->svc_stats,
+                                lprocfs_counter_add(svc->srv_stats,
                                                     opc + PTLRPC_LAST_CNTR,
                                                     total);
                         }

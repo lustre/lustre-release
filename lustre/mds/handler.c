@@ -1015,7 +1015,7 @@ void mds_steal_ack_locks(struct obd_export *exp,
                sizeof req->rq_ack_locks);
         spin_lock_irqsave (&req->rq_lock, flags);
         oldrep->rq_resent = 1;
-        wake_up(&oldrep->rq_wait_for_rep);
+        wake_up(&oldrep->rq_reply_waitq);
         spin_unlock_irqrestore (&req->rq_lock, flags);
         DEBUG_REQ(D_HA, oldrep, "stole locks from");
         DEBUG_REQ(D_HA, req, "stole locks for");
@@ -1030,8 +1030,6 @@ int mds_handle(struct ptlrpc_request *req)
         ENTRY;
 
         OBD_FAIL_RETURN(OBD_FAIL_MDS_ALL_REQUEST_NET | OBD_FAIL_ONCE, 0);
-
-        LASSERT(!strcmp(req->rq_obd->obd_type->typ_name, LUSTRE_MDT_NAME));
 
         LASSERT(current->journal_info == NULL);
         /* XXX identical to OST */

@@ -76,7 +76,7 @@ static int reply_out_callback(ptl_event_t *ev)
                 LASSERT(req->rq_want_ack);
                 spin_lock_irqsave(&req->rq_lock, flags);
                 req->rq_want_ack = 0;
-                wake_up(&req->rq_wait_for_rep);
+                wake_up(&req->rq_reply_waitq);
                 spin_unlock_irqrestore(&req->rq_lock, flags);
         } else {
                 // XXX make sure we understand all events
@@ -122,7 +122,7 @@ int reply_in_callback(ptl_event_t *ev)
                 if (req->rq_set != NULL)
                         wake_up(&req->rq_set->set_waitq);
                 else
-                        wake_up(&req->rq_wait_for_rep);
+                        wake_up(&req->rq_reply_waitq);
                 spin_unlock_irqrestore (&req->rq_lock, flags);
         } else {
                 // XXX make sure we understand all events, including ACKs
@@ -254,7 +254,7 @@ static int bulk_put_sink_callback(ptl_event_t *ev)
         if (desc->bd_req->rq_set != NULL)
                 wake_up (&desc->bd_req->rq_set->set_waitq);
         else
-                wake_up (&desc->bd_req->rq_wait_for_rep);
+                wake_up (&desc->bd_req->rq_reply_waitq);
         spin_unlock_irqrestore (&desc->bd_lock, flags);
 
         RETURN(1);
@@ -304,7 +304,7 @@ static int bulk_get_source_callback(ptl_event_t *ev)
         if (desc->bd_req->rq_set != NULL)
                 wake_up (&desc->bd_req->rq_set->set_waitq);
         else
-                wake_up (&desc->bd_req->rq_wait_for_rep);
+                wake_up (&desc->bd_req->rq_reply_waitq);
         spin_unlock_irqrestore (&desc->bd_lock, flags);
 
         RETURN(1);

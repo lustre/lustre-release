@@ -1,3 +1,24 @@
+tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.0.1
+       * bug fixes
+	- remove now-unused request->rq_obd (278)
+	- if an allocation fails, print out how much memory we've used (1933)
+	- use PORTAL_SLAB_ALLOC for structures, to get GFP_MEMALLOC (1933)
+	- add the "configurable stack size" patch to most series files (1256)
+	- ability to write large log records, for 100+ OST configs (2306)
+	- fix NULL deref when filter_prep fails (2314)
+	- fix operator precedence error in filter_sync
+	- dynamic allocation of socknal TX descriptors (2315)
+	- fix a missed case in the GFP_MEMALLOC patch, can cause deadlock (2310)
+	- fix gcc 2.96 compilation problem in xattr kernel patch (2294)
+	- ensure that CWARN messages in Portals always get to the syslog
+	- __init/__exit are not for prototype decls (ldlm_init/exit)
+	- x86-64 compile warning fixes
+	- fix gateway LMC keyword conflict (2318)
+       * miscellania
+	- allow configurable automake binary, for testing new versions
+	- small update to the lfs documentation
+
 2003-12-03  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.0
        * fix negative export reference count in fsfilt_sync (2312)

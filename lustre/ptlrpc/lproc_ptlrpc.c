@@ -159,8 +159,8 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
         ptlrpc_lprocfs_register(entry, svc->srv_name,
-                                "stats", &svc->svc_procroot, 
-                                &svc->svc_stats);
+                                "stats", &svc->srv_procroot, 
+                                &svc->srv_stats);
 }
 
 void ptlrpc_lprocfs_register_obd(struct obd_device *obddev)
@@ -184,13 +184,13 @@ void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req)
 
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc)
 {
-        if (svc->svc_procroot) {
-                lprocfs_remove(svc->svc_procroot);
-                svc->svc_procroot = NULL;
+        if (svc->srv_procroot != NULL) {
+                lprocfs_remove(svc->srv_procroot);
+                svc->srv_procroot = NULL;
         }
-        if (svc->svc_stats) {
-                lprocfs_free_stats(svc->svc_stats);
-                svc->svc_stats = NULL;
+        if (svc->srv_stats) {
+                lprocfs_free_stats(svc->srv_stats);
+                svc->srv_stats = NULL;
         }
 }
 void ptlrpc_lprocfs_unregister_obd(struct obd_device *obd)

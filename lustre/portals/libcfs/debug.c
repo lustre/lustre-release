@@ -974,18 +974,14 @@ char *portals_debug_dumpstack(void)
         return buf;
 }
 
-#elif defined(CONFIG_X86)
+#elif defined(__i386__)
 
 extern int is_kernel_text_address(unsigned long addr);
 extern int lookup_symbol(unsigned long address, char *buf, int buflen);
 
 char *portals_debug_dumpstack(void)
 {
-#if defined(__x86_64__)
-        unsigned long esp = current->thread.rsp;
-#else
         unsigned long esp = current->thread.esp;
-#endif
         unsigned long *stack = (unsigned long *)&esp;
         int size;
         unsigned long addr;
