@@ -44,7 +44,7 @@ lmc - lustre configurtion data  manager
 import sys, getopt, string
 import xml.dom.minidom
 from xml.dom.ext import PrettyPrint
-from xml.xpath import Evaluate
+
 
 DEFAULT_PORT = 888 # XXX What is the right default acceptor port to use?
 
@@ -123,13 +123,17 @@ def new_lustre(dom):
 
 names = {}
 uuids = {}
-def init_names(lustre):
+
+def init_names(doc):
     """initialize auto-name generation tables"""
     global names, uuids
     # get all elements that contain a name attribute
-    for n in Evaluate("//@name/..", lustre):
-        names[n.getAttribute("name")] = 1
-        uuids[n.getAttribute("uuid")] = 1
+    for n in doc.childNodes:
+        if n.nodeType == n.ELEMENT_NODE:
+            if getName(n):
+                names[getName(n)] = 1
+                uuids[getUUID(n)] = 1
+            init_names(n)
 
 class GenConfig:
     doc = None
@@ -215,7 +219,8 @@ class GenConfig:
         devs.setAttribute("pattern", pattern)
         return lov
 
-    def mds(self, name, uuid, fs, devname, format, net_uuid, failover_uuid = "", dev_size=0 ):
+    def mds(self, name, uuid, fs, devname, format, net_uuid, node_uuid,
+            failover_uuid = "", dev_size=0 ):
         mds = self.newService("mds", name, uuid)
         self.addElement(mds, "fstype", fs)
         dev = self.addElement(mds, "device", devname)
@@ -223,6 +228,7 @@ class GenConfig:
             dev.setAttribute("size", "%s" % (dev_size))
         self.addElement(mds, "autoformat", format)
         mds.appendChild(self.ref("network", net_uuid))
+        mds.appendChild(self.ref("node", node_uuid))
         if failover_uuid:
             mds.appendChild(self.ref("failover", failover_uuid))
         return mds
@@ -242,6 +248,10 @@ class GenConfig:
 def getName(n):
     return n.getAttribute('name')
 
+def getUUID(node):
+    return node.getAttribute('uuid')
+
+
 def findByName(lustre, name, tag = ""):
     for n in lustre.childNodes:
         if n.nodeType == n.ELEMENT_NODE:
@@ -254,19 +264,34 @@ def findByName(lustre, name, tag = ""):
                 if n: return n
     return None
 
+def lookup(node, uuid):
+    for n in node.childNodes:
+        if n.nodeType == n.ELEMENT_NODE:
+            if getUUID(n) == uuid:
+                return n
+            else:
+                n = lookup(n, uuid)
+                if n: return n
+    return None
+            
 
 def mds2node(lustre, mds_name):
     """ Find the node a MDS is configured on """
-    msd = findByName(lustre, mds_name, 'mds')
-    ref = Evaluate('./network_ref', msd)
+    mds = findByName(lustre, mds_name, 'mds')
+    ref = mds.getElementsByTagName('node_ref')
     if not ref:
-        error("no network found for:", mds_name)
-    net_uuid = ref[0].getAttribute('uuidref')
-    path = '//node/network[@uuid="%s"]/..' % (net_uuid)
-    node = Evaluate(path, lustre)
+        error("no node found for:", mds_name)
+    node_uuid = ref[0].getAttribute('uuidref')
+    node = lookup(lustre, node_uuid)
     if not node:
         error("no node found for :", mds_name)
-    return node[0]
+    return node
+
+def name2uuid(lustre, name, tag="",  fatal=1):
+    ret = findByName(lustre, name, tag)
+    if not ret and fatal:
+        error('name2uuid:', name, "not found.")
+    return getUUID(ret)
     
 # XXX: assumes only one network element per node. will fix this
 # as soon as support for routers is added
@@ -275,9 +300,9 @@ def get_net_uuid(lustre, node_name):
     node = findByName(lustre, node_name, "node")
     if not node:
         error ("node not found:", node_name)
-    net = Evaluate("./network", node)
+    net = node.getElementsByTagName('network')
     if net:
-        return net[0].getAttribute("uuid")
+        return getUUID(net[0])
     return None
 
 def lov_add_osc(gen, lov, osc_uuid):
@@ -413,10 +438,7 @@ def add_lov(gen, lustre, options, args):
     if ret:
         error("LOV: ", name, " already exists.")
 
-    ret = findByName(lustre, mds_name, "mds")
-    if not ret:
-        error(mds_name, "not found.")
-    mds_uuid = ret.getAttribute("uuid")
+    mds_uuid = name2uuid(lustre, mds_name)
 
     node = mds2node(lustre, mds_name)
     node_add_profile(gen, node, "lov", uuid)
@@ -444,17 +466,8 @@ def add_mtpt(gen, lustre, options, args):
     if ret:
         error("MOUNTPOINT: ", name, " already exists.")
 
-    ret = findByName(lustre, lov_name, "lov")
-    if not ret:
-        ret = findByName(lustre, lov_name, "osc")
-        if not ret:
-            error(lov_name, "not found.")
-    lov_uuid = ret.getAttribute("uuid")
-
-    ret = findByName(lustre, mdc_name, "mdc")
-    if not ret:
-        error("MDC: ", mdc_name, "not found.")
-    mdc_uuid = ret.getAttribute("uuid")
+    lov_uuid = name2uuid(lustre, lov_name)
+    mdc_uuid = name2uuid(lustre, mdc_name)
 
     uuid = get_uuid(name)
     mtpt = gen.mountpoint(name, uuid, mdc_uuid, lov_uuid, path)
@@ -476,11 +489,7 @@ def add_mdc(gen, lustre, options, args):
         error("--mdc requires a --node argument")
 
     mdc_name = args[0]
-
-    ret = findByName(lustre, mdc_name, "mdc")
-    if not ret:
-        error("MDC: ", mdc_name, "not found.")
-    mdc_uuid = ret.getAttribute("uuid")
+    mdc_uuid = name2uuid(lustre, mdc_name)
 
     node = findByName(lustre, node_name, "node")
     if not node:
@@ -507,17 +516,16 @@ def add_mds(gen, lustre, options, args):
     mds_uuid = get_uuid(mds_name)
     mdc_uuid = get_uuid(mdc_name)
 
-    node = findByName(lustre, node_name, "node")
-    if not node:
-        error('node:', node_name, 'not found')
-    node_add_profile(gen, node, "mds", mds_uuid)
+    node_uuid = name2uuid(lustre, node_name)
 
+    node = findByName(lustre, node_name, "node")
+    node_add_profile(gen, node, "mds", mds_uuid)
     net_uuid = get_net_uuid(lustre, node_name)
     if not net_uuid:
         error("NODE: ", node_name, "not found")
 
 
-    mds = gen.mds(mds_name, mds_uuid, "extN", devname, "no", net_uuid, dev_size=size)
+    mds = gen.mds(mds_name, mds_uuid, "extN", devname, "no", net_uuid, node_uuid, dev_size=size)
     mdc = gen.mdc(mdc_name, mdc_uuid, mds_uuid)
     lustre.appendChild(mds)
     lustre.appendChild(mdc)
@@ -571,6 +579,26 @@ def parse_cmdline(argv):
             
     return options, args
 
+
+import time
+class chrono:
+    def __init__(self):
+        self._start = 0
+    def start(self):
+        self._stop = 0
+        self._start = time.time()
+    def stop(self, msg=''):
+        self._stop = time.time()
+        if msg:
+            self.display(msg)
+    def dur(self):
+        return self._stop - self._start
+    def display(self, msg):
+        d = self.dur()
+        str = '%s: %g secs' % (msg, d)
+        print str
+
+
 def main():
     options, args = parse_cmdline(sys.argv[1:])
     outFile = '-'
@@ -588,7 +616,6 @@ def main():
 
     lustre = doc.documentElement
     init_names(lustre)
-    lustre = doc.documentElement
     if lustre.tagName != "lustre":
         print "Existing config not valid."
         sys.exit(1)
@@ -616,6 +643,7 @@ def main():
         PrettyPrint(doc)
     else:
         PrettyPrint(doc, open(outFile,"w"))
+
 if __name__ == "__main__":
     main()
 
