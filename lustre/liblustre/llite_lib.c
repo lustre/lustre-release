@@ -48,6 +48,8 @@
 
 #include "llite_lib.h"
 
+unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
+                                            S_GMNAL | S_IBNAL);
 
 ptl_handle_ni_t         tcpnal_ni;
 struct task_struct     *current;
@@ -139,10 +141,11 @@ ptl_nid_t tcpnal_mynid;
 
 int init_lib_portals()
 {
+        int max_interfaces;
         int rc;
         ENTRY;
 
-        PtlInit();
+        PtlInit(&max_interfaces);
         rc = PtlNIInit(procbridge_interface, 0, 0, 0, &tcpnal_ni);
         if (rc != 0) {
                 CERROR("TCPNAL: PtlNIInit failed: error %d\n", rc);
