@@ -93,7 +93,7 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
 void mdc_open_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *op_data,
                    __u32 mode, __u64 rdev, __u64 time,
-                   __u32 flags, const void *data, int datalen)
+                   __u32 flags, const void *lmm, int lmmlen)
 {
         struct mds_rec_create *rec;
         char *tmp;
@@ -119,9 +119,10 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
                 LOGL0(op_data->name, op_data->namelen, tmp);
         }
 
-        if (data) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, datalen);
-                memcpy (tmp, data, datalen);
+        if (lmm) {
+                rec->cr_flags |= MDS_OPEN_HAS_EA;
+                tmp = lustre_msg_buf(req->rq_reqmsg, offset + 2, lmmlen);
+                memcpy (tmp, lmm, lmmlen);
         }
 }
 
