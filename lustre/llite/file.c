@@ -32,11 +32,34 @@
 int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
 
+static int ll_create_objects(struct inode *inode, struct ll_inode_info *lli)
+{
+        struct obdo *oa;
+        int rc;
+        ENTRY;
+
+        oa = obdo_alloc();
+        if (!oa)
+                RETURN(-ENOMEM);
+
+        oa->o_mode = S_IFREG | 0600;
+        oa->o_easize = ll_mds_easize(inode->i_sb);
+        oa->o_id = inode->i_ino;
+        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
+                OBD_MD_FLMODE | OBD_MD_FLEASIZE;
+        rc = obd_create(ll_i2obdconn(inode), oa, &lli->lli_smd);
+        obdo_free(oa);
+
+        if (!rc)
+                LASSERT(lli->lli_smd->lsm_object_id);
+        RETURN(rc);
+}
+
 static int ll_file_open(struct inode *inode, struct file *file)
 {
         struct ptlrpc_request *req = NULL;
         struct ll_file_data *fd;
-        struct obdo *oa = NULL;
+        struct obdo *oa;
         struct lov_stripe_md *lsm = NULL;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -53,32 +76,18 @@ static int ll_file_open(struct inode *inode, struct file *file)
         /*  XXX object needs to be cleaned up if mdc_open fails */
         /*  XXX error handling appropriate here? */
         if (lsm == NULL) {
-                struct inode *inode = file->f_dentry->d_inode;
-
+                if (file->f_flags & O_LOV_DELAY_CREATE) {
+                        CDEBUG(D_INODE, "delaying object creation\n");
+                        RETURN(0);
+                }
                 down(&lli->lli_open_sem);
                 /* Check to see if we lost the race */
-                if (lli->lli_smd == NULL) {
-                        oa = obdo_alloc();
-                        if (!oa) {
-                                up(&lli->lli_open_sem);
-                                RETURN(-ENOMEM);
-                        }
-                        oa->o_mode = S_IFREG | 0600;
-                        oa->o_easize = ll_mds_easize(inode->i_sb);
-                        oa->o_id = inode->i_ino;
-                        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE |
-                                OBD_MD_FLMODE | OBD_MD_FLEASIZE;
-                        rc = obd_create(ll_i2obdconn(inode), oa, &lli->lli_smd);
-
-                        if (rc) {
-                                obdo_free(oa);
-                                up(&lli->lli_open_sem);
-                                RETURN(rc);
-                        }
-                }
-                if (lli->lli_smd->lsm_object_id == 0)
-                        LBUG();
+                if (!lli->lli_smd)
+                        rc = ll_create_objects(inode, lli);
                 up(&lli->lli_open_sem);
+                if (rc)
+                        RETURN(rc);
+
                 lsm = lli->lli_smd;
         }
 
@@ -102,8 +111,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
                 /* XXX handle this how, abort or is it non-fatal? */
         }
 
-        if (!oa)
-                oa = obdo_alloc();
+        oa = obdo_alloc();
         if (!oa)
                 GOTO(out_mdc, rc = -EINVAL);
 
@@ -111,12 +119,12 @@ static int ll_file_open(struct inode *inode, struct file *file)
         oa->o_mode = S_IFREG;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLSIZE;
         rc = obd_open(ll_i2obdconn(inode), oa, lsm);
+
         obd_oa2handle(&fd->fd_osthandle, oa);
+        obdo_free(oa);
 
         if (rc)
                 GOTO(out_mdc, rc = -abs(rc));
-
-        obdo_free(oa);
 
         file->private_data = fd;
 
@@ -127,9 +135,7 @@ out_mdc:
 out_req:
         ptlrpc_free_req(req);
 //out_fd:
-        obdo_free(oa);
         kmem_cache_free(ll_file_data_slab, fd);
-        file->private_data = NULL;
 out:
         return rc;
 }
@@ -542,6 +548,47 @@ ll_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
         return retval;
 }
 
+static int ll_lov_setstripe(struct inode *inode, struct file *file,
+                            struct lov_user_md *lum)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm;
+        int size = ll_mds_easize(inode->i_sb);
+        int rc;
+
+        rc = verify_area(VERIFY_READ, lum, sizeof(*lum));
+        if (rc)
+                RETURN(rc);
+
+        down(&lli->lli_open_sem);
+        if (lli->lli_smd) {
+                CERROR("striping data already set for %d\n", inode->i_ino);
+                GOTO(out_lov_up, rc = -EPERM);
+        }
+
+        OBD_ALLOC(lli->lli_smd, size);
+        if (!lli->lli_smd)
+                GOTO(out_lov_up, rc = -ENOMEM);
+
+        lsm = lli->lli_smd;
+        lsm->lsm_magic = LOV_MAGIC;
+        lsm->lsm_stripe_size = lum->lum_stripe_size;
+        lsm->lsm_stripe_pattern = lum->lum_stripe_pattern;
+        lsm->lsm_stripe_offset = lum->lum_stripe_offset;
+        lsm->lsm_stripe_count = lum->lum_stripe_count;
+        lsm->lsm_mds_easize = size;
+
+        file->f_flags &= ~O_LOV_DELAY_CREATE;
+        rc = ll_create_objects(inode, lli);
+        if (rc)
+                OBD_FREE(lli->lli_smd, size);
+        else
+                rc = ll_file_open(inode, file);
+out_lov_up:
+        up(&lli->lli_open_sem);
+        return rc;
+}
+
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)
 {
@@ -566,6 +613,8 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 else
                         fd->fd_flags &= ~flags;
                 return 0;
+        case LL_IOC_LOV_SETSTRIPE:
+                return ll_lov_setstripe(inode, file, (struct lov_user_md *)arg);
 
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly

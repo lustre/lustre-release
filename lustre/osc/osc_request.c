@@ -169,30 +169,26 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
 {
         struct ptlrpc_request *request;
         struct ost_body *body;
+        struct lov_stripe_md *lsm;
         int rc, size = sizeof(*body);
         ENTRY;
 
-        if (!oa) {
-                CERROR("oa NULL\n");
-                RETURN(-EINVAL);
-        }
+        LASSERT(oa);
+        LASSERT(ea);
 
-        if (!ea) {
-                LBUG();
-        }
-
-        if (!*ea) {
+        lsm = *ea;
+        if (!lsm) {
                 // XXX check oa->o_valid & OBD_MD_FLEASIZE first...
-                OBD_ALLOC(*ea, oa->o_easize);
-                if (!*ea)
+                OBD_ALLOC(lsm, oa->o_easize);
+                if (!lsm)
                         RETURN(-ENOMEM);
-                (*ea)->lsm_mds_easize = oa->o_easize;
+                lsm->lsm_mds_easize = oa->o_easize;
         }
 
         request = ptlrpc_prep_req(class_conn2cliimp(conn), OST_CREATE, 1, &size,
                                   NULL);
         if (!request)
-                RETURN(-ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         memcpy(&body->oa, oa, sizeof(*oa));
@@ -202,16 +198,20 @@ static int osc_create(struct lustre_handle *conn, struct obdo *oa,
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
         if (rc)
-                GOTO(out, rc);
+                GOTO(out_req, rc);
 
         body = lustre_msg_buf(request->rq_repmsg, 0);
         memcpy(oa, &body->oa, sizeof(*oa));
 
-        (*ea)->lsm_object_id = oa->o_id;
-        (*ea)->lsm_stripe_count = 0;
+        lsm->lsm_object_id = oa->o_id;
+        lsm->lsm_stripe_count = 0;
+        *ea = lsm;
         EXIT;
- out:
+out_req:
         ptlrpc_free_req(request);
+out:
+        if (rc && !*ea)
+                OBD_FREE(lsm, oa->o_easize);
         return rc;
 }
 
