@@ -416,7 +416,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         ENTRY;
 
         /* a name was supplied by the client; fid1 is the directory */
-        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
+        lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_PW : LCK_PW;
         de = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, lock_mode, &lockh);
         if (IS_ERR(de)) {
                 LBUG();

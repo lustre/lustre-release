@@ -611,8 +611,10 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,
                             __u32 mode)
 {
         struct inode * inode = dentry->d_inode;
+#if 0
         struct ext2_dir_entry_2 * de;
         struct page * page;
+#endif
         int err = -ENOENT;
 
         if (dentry->d_it && dentry->d_it->it_disposition) {
@@ -621,18 +623,22 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,
                 GOTO(out, err);
         }
 
+#if 0
         de = ext2_find_entry(dir, dentry, &page);
         if (!de)
                 goto out;
-
+#endif
         err = ll_mdc_unlink(dir, dentry->d_inode, mode,
                             dentry->d_name.name, dentry->d_name.len);
         if (err)
                 goto out;
 
+#if 0
         err = ext2_delete_entry(de, page);
         if (err)
                 goto out;
+#endif
+        invalidate_inode_pages(dir);
 
         inode->i_ctime = dir->i_ctime;
 out:
