@@ -133,6 +133,8 @@ command_t cmdlist[] = {
          "usage: test_brw <count> [write [verbose [pages [obdos]]]]"},
         {"test_ldlm", jt_obd_test_ldlm, 0, "perform lock manager test\n"
          "usage: test_ldlm"},
+        {"dump_ldlm", jt_obd_dump_ldlm, 0,
+         "dump all lock manager state (no args)"},
 
 #if 0
         {"create", jt_create, 0, "create [count [mode [verbose]]]"},
