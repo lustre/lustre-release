@@ -2082,8 +2082,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         GOTO(cleanup, rc);
 
                 if (!(body->valid & OBD_MD_FLEASIZE)) {
-                        body->valid |=(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
-                                       OBD_MD_FLATIME | OBD_MD_FLMTIME);
+                        body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                                        OBD_MD_FLATIME | OBD_MD_FLMTIME);
                 } else if (mds_log_op_unlink(obd, child_inode,
                                 lustre_msg_buf(req->rq_repmsg, offset + 1, 0),
                                         req->rq_repmsg->buflens[offset + 1],

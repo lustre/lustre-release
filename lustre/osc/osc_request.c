@@ -516,7 +516,7 @@ static int osc_destroy(struct obd_export *exp, struct obdo *oa,
 static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
                                 long writing_bytes)
 {
-        obd_flag bits = OBD_MD_FLBLOCKS|OBD_MD_FLGRANT;
+        obd_valid bits = OBD_MD_FLBLOCKS|OBD_MD_FLGRANT;
 
         LASSERT(!(oa->o_valid & bits));
 
@@ -1829,7 +1829,7 @@ struct osc_async_page *oap_from_cookie(void *cookie)
 static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                               struct lov_oinfo *loi, void *cookie,
                               int cmd, obd_off off, int count,
-                              obd_flag brw_flags, enum async_flags async_flags)
+                              obd_flags brw_flags, enum async_flags async_flags)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
         struct osc_async_page *oap;
@@ -1893,7 +1893,7 @@ static int osc_queue_async_io(struct obd_export *exp, struct lov_stripe_md *lsm,
 static int osc_set_async_flags(struct obd_export *exp,
                                struct lov_stripe_md *lsm,
                                struct lov_oinfo *loi, void *cookie,
-                               obd_flag async_flags)
+                               obd_flags async_flags)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
         struct loi_oap_pages *lop;
@@ -1947,8 +1947,8 @@ static int osc_queue_group_io(struct obd_export *exp, struct lov_stripe_md *lsm,
                              struct lov_oinfo *loi,
                              struct obd_io_group *oig, void *cookie,
                              int cmd, obd_off off, int count,
-                             obd_flag brw_flags,
-                             obd_flag async_flags)
+                             obd_flags brw_flags,
+                             obd_flags async_flags)
 {
         struct client_obd *cli = &exp->exp_obd->u.cli;
         struct osc_async_page *oap;
@@ -2954,7 +2954,7 @@ static int osc_connect(struct lustre_handle *exph,
         RETURN(rc);
 }
 
-static int osc_disconnect(struct obd_export *exp, int flags)
+static int osc_disconnect(struct obd_export *exp, unsigned long flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct llog_ctxt *ctxt;

@@ -298,7 +298,7 @@ lmv_create_obj(struct obd_export *exp, struct lustre_id *id, struct mea *mea)
                OLID4(id));
 
         if (!mea) {
-                unsigned long valid;
+                __u64 valid;
                 
                 CDEBUG(D_OTHER, "mea isn't passed in, get it now\n");
                 mealen = MEA_SIZE_LMV(lmv);

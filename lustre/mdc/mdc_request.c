@@ -204,7 +204,7 @@ int mdc_getattr_common(struct obd_export *exp, unsigned int ea_size,
 }
 
 int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
-                unsigned long valid, unsigned int ea_size,
+                __u64 valid, unsigned int ea_size,
                 struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
@@ -241,7 +241,7 @@ int mdc_getattr(struct obd_export *exp, struct lustre_id *id,
 }
 
 int mdc_getattr_lock(struct obd_export *exp, struct lustre_id *id,
-                     char *filename, int namelen, unsigned long valid,
+                     char *filename, int namelen, __u64 valid,
                      unsigned int ea_size, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;

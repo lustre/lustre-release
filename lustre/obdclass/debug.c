@@ -62,9 +62,9 @@ int dump_rniobuf(struct niobuf_remote *nb)
 
 int dump_obdo(struct obdo *oa)
 {
-        __u32 valid = oa->o_valid;
+        __u64 valid = oa->o_valid;
 
-        CERROR("obdo: o_valid = %08x\n", valid);
+        CERROR("obdo: o_valid = "LPX64"\n", valid);
         if (valid & OBD_MD_FLID)
                 CERROR("obdo: o_id = "LPD64"\n", oa->o_id);
         if (valid & OBD_MD_FLATIME)
@@ -88,7 +88,7 @@ int dump_obdo(struct obdo *oa)
         if (valid & OBD_MD_FLGID)
                 CERROR("obdo: o_gid = %u\n", oa->o_gid);
         if (valid & OBD_MD_FLFLAGS)
-                CERROR("obdo: o_flags = %x\n", oa->o_flags);
+                CERROR("obdo: o_flags = 0x%x\n", oa->o_flags);
         if (valid & OBD_MD_FLNLINK)
                 CERROR("obdo: o_nlink = %u\n", oa->o_nlink);
         if (valid & OBD_MD_FLGENER)

@@ -178,7 +178,7 @@ void llu_update_inode(struct inode *inode, struct mds_body *body,
                 lli->lli_st_blocks = body->blocks;
 }
 
-void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
+void obdo_to_inode(struct inode *dst, struct obdo *src, obd_valid valid)
 {
         struct llu_inode_info *lli = llu_i2info(dst);
 
@@ -219,10 +219,10 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 #define S_IRWXUGO       (S_IRWXU|S_IRWXG|S_IRWXO)
 #define S_IALLUGO       (S_ISUID|S_ISGID|S_ISVTX|S_IRWXUGO)
 
-void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
+void obdo_from_inode(struct obdo *dst, struct inode *src, obd_valid valid)
 {
         struct llu_inode_info *lli = llu_i2info(src);
-        obd_flag newvalid = 0;
+        obd_valid newvalid = 0;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
                 CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
@@ -290,7 +290,7 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
         struct obd_export *exp = llu_i2obdexp(inode);
         struct ptlrpc_request_set *set;
         struct obdo oa;
-        obd_flag refresh_valid;
+        obd_valid refresh_valid;
         int rc;
         ENTRY;
 
@@ -432,7 +432,7 @@ static int llu_inode_revalidate(struct inode *inode)
                 struct ptlrpc_request *req = NULL;
                 struct llu_sb_info *sbi = llu_i2sbi(inode);
                 struct lustre_id id;
-                unsigned long valid = 0;
+                __u64 valid = 0;
                 int rc, ealen = 0;
 
                 /* Why don't we update all valid MDS fields here, if we're doing

@@ -23,7 +23,7 @@ struct osc_async_page {
         obd_off                 oap_obj_off;
         obd_off                 oap_page_off;
         int                     oap_count;
-        obd_flag                oap_brw_flags;
+        obd_flags                oap_brw_flags;
         enum async_flags        oap_async_flags;
 
         unsigned long           oap_interrupted:1;

@@ -76,12 +76,12 @@ void obdo_from_iattr(struct obdo *oa, struct iattr *attr, unsigned int ia_valid)
 }
 EXPORT_SYMBOL(obdo_from_iattr);
 
-void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid)
+void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_valid valid)
 {
         valid &= oa->o_valid;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
+                CDEBUG(D_INODE, "valid "LPX64", new time %lu/%lu\n",
                        oa->o_valid, (long)oa->o_mtime, (long)oa->o_ctime);
 
         attr->ia_valid = 0;
@@ -130,14 +130,13 @@ EXPORT_SYMBOL(iattr_from_obdo);
 
 /* WARNING: the file systems must take care not to tinker with
    attributes they don't manage (such as blocks). */
-void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
+void obdo_from_inode(struct obdo *dst, struct inode *src, obd_valid valid)
 {
-        obd_flag newvalid = 0;
+        obd_valid newvalid = 0;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, new time %lu/%lu\n",
-                       valid, LTIME_S(src->i_mtime), 
-                       LTIME_S(src->i_ctime));
+                CDEBUG(D_INODE, "valid "LPX64", new time %lu/%lu\n",
+                       valid, LTIME_S(src->i_mtime), LTIME_S(src->i_ctime));
 
         if (valid & OBD_MD_FLATIME) {
                 dst->o_atime = LTIME_S(src->i_atime);
@@ -192,12 +191,12 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
 }
 EXPORT_SYMBOL(obdo_from_inode);
 
-void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
+void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_valid valid)
 {
         valid &= src->o_valid;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, cur time %lu/%lu, new %lu/%lu\n",
+                CDEBUG(D_INODE, "valid "LPX64", cur time %lu/%lu, new %lu/%lu\n",
                        src->o_valid, LTIME_S(dst->i_mtime), 
                        LTIME_S(dst->i_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);
@@ -221,12 +220,12 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 }
 EXPORT_SYMBOL(obdo_refresh_inode);
 
-void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
+void obdo_to_inode(struct inode *dst, struct obdo *src, obd_valid valid)
 {
         valid &= src->o_valid;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, cur time %lu/%lu, new %lu/%lu\n",
+                CDEBUG(D_INODE, "valid "LPX64", cur time %lu/%lu, new %lu/%lu\n",
                        src->o_valid, 
                        LTIME_S(dst->i_mtime), LTIME_S(dst->i_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);
@@ -259,10 +258,10 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 EXPORT_SYMBOL(obdo_to_inode);
 #endif
 
-void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid)
+void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_valid valid)
 {
 #ifdef __KERNEL__
-        CDEBUG(D_INODE, "src obdo "LPX64" valid 0x%x, dst obdo "LPX64"\n",
+        CDEBUG(D_INODE, "src obdo "LPX64" valid "LPX64", dst obdo "LPX64"\n",
                src->o_id, src->o_valid, dst->o_id);
 #endif
         if (valid & OBD_MD_FLATIME)
@@ -297,7 +296,7 @@ void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid)
 EXPORT_SYMBOL(obdo_cpy_md);
 
 /* returns FALSE if comparison (by flags) is same, TRUE if changed */
-int obdo_cmp_md(struct obdo *dst, struct obdo *src, obd_flag compare)
+int obdo_cmp_md(struct obdo *dst, struct obdo *src, obd_valid compare)
 {
         int res = 0;
 

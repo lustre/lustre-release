@@ -155,9 +155,9 @@ struct obd_type *class_get_type(char *name);
 void class_put_type(struct obd_type *type);
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   struct obd_uuid *cluuid);
-int class_disconnect(struct obd_export *exp, int flags);
-void class_disconnect_exports(struct obd_device *obddev, int flags);
-void class_disconnect_stale_exports(struct obd_device *obddev, int flags);
+int class_disconnect(struct obd_export *exp, unsigned long flags);
+void class_disconnect_exports(struct obd_device *obddev, unsigned long flags);
+void class_disconnect_stale_exports(struct obd_device *obddev, unsigned long flags);
 
 /* generic operations shared by various OBD types */
 int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data);
@@ -166,13 +166,13 @@ int class_multi_cleanup(struct obd_device *obddev);
 /* obdo.c */
 #ifdef __KERNEL__
 void obdo_from_iattr(struct obdo *oa, struct iattr *attr, unsigned ia_valid);
-void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_flag valid);
-void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
-void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid);
-void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
+void iattr_from_obdo(struct iattr *attr, struct obdo *oa, obd_valid valid);
+void obdo_from_inode(struct obdo *dst, struct inode *src, obd_valid valid);
+void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_valid valid);
+void obdo_to_inode(struct inode *dst, struct obdo *src, obd_valid valid);
 #endif
-void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid);
-int obdo_cmp_md(struct obdo *dst, struct obdo *src, obd_flag compare);
+void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_valid valid);
+int obdo_cmp_md(struct obdo *dst, struct obdo *src, obd_valid compare);
 void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj);
 
 static inline int obd_check_conn(struct lustre_handle *conn)
@@ -688,7 +688,7 @@ static inline int obd_connect_post(struct obd_export *exp, unsigned long flags)
         RETURN(rc);
 }
 
-static inline int obd_disconnect(struct obd_export *exp, int flags)
+static inline int obd_disconnect(struct obd_export *exp, unsigned long flags)
 {
         int rc;
         ENTRY;
@@ -870,7 +870,7 @@ static inline int obd_queue_async_io(struct obd_export *exp,
                                      struct lov_stripe_md *lsm,
                                      struct lov_oinfo *loi, void *cookie,
                                      int cmd, obd_off off, int count,
-                                     obd_flag brw_flags, obd_flag async_flags)
+                                     obd_flags brw_flags, obd_flags async_flags)
 {
         int rc;
         ENTRY;
@@ -887,7 +887,7 @@ static inline int obd_queue_async_io(struct obd_export *exp,
 static inline int obd_set_async_flags(struct obd_export *exp,
                                       struct lov_stripe_md *lsm,
                                       struct lov_oinfo *loi, void *cookie,
-                                      obd_flag async_flags)
+                                      obd_flags async_flags)
 {
         int rc;
         ENTRY;
@@ -905,8 +905,8 @@ static inline int obd_queue_group_io(struct obd_export *exp,
                                      struct lov_oinfo *loi,
                                      struct obd_io_group *oig,
                                      void *cookie, int cmd, obd_off off,
-                                     int count, obd_flag brw_flags,
-                                     obd_flag async_flags)
+                                     int count, obd_flags brw_flags,
+                                     obd_flags async_flags)
 {
         int rc;
         ENTRY;
@@ -1228,7 +1228,7 @@ static inline int md_delete_inode(struct obd_export *exp,
 }
 
 static inline int md_getattr(struct obd_export *exp, struct lustre_id *id,
-                             unsigned long valid, unsigned int ea_size,
+                             __u64 valid, unsigned int ea_size,
                              struct ptlrpc_request **request)
 {
         int rc;
@@ -1327,7 +1327,7 @@ static inline int md_enqueue(struct obd_export *exp, int lock_type,
 
 static inline int md_getattr_lock(struct obd_export *exp, struct lustre_id *id,
                                   char *filename, int namelen,
-                                  unsigned long valid, unsigned int ea_size,
+                                  __u64 valid, unsigned int ea_size,
                                   struct ptlrpc_request **request)
 {
         int rc;

@@ -499,7 +499,7 @@ out:
         return rc;
 }
 
-static int mds_disconnect(struct obd_export *exp, int flags)
+static int mds_disconnect(struct obd_export *exp, unsigned long flags)
 {
         unsigned long irqflags;
         struct obd_device *obd;
@@ -757,13 +757,14 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
 
         if (dentry->d_flags & DCACHE_CROSS_REF) {
                 mds_pack_dentry2body(obd, body, dentry,
-                                     (reqbody->valid & OBD_MD_FID));
+                                     (reqbody->valid & OBD_MD_FID) ? 1 : 0);
                 CDEBUG(D_OTHER, "cross reference: "DLID4"\n",
                        OLID4(&body->id1));
                 RETURN(0);
         }
         
-        mds_pack_inode2body(obd, body, inode, (reqbody->valid & OBD_MD_FID));
+        mds_pack_inode2body(obd, body, inode, 
+			    (reqbody->valid & OBD_MD_FID) ? 1 : 0);
 
         if ((S_ISREG(inode->i_mode) && (reqbody->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(inode->i_mode) && (reqbody->valid & OBD_MD_FLDIREA))) {
@@ -829,7 +830,8 @@ out:
         return rc;
 }
 
-static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
+static int mds_getattr_pack_msg(struct ptlrpc_request *req, 
+				struct inode *inode,
                                 int offset)
 {
         struct mds_obd *mds = mds_req2mds(req);

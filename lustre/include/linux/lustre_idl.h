@@ -256,16 +256,17 @@ typedef uint32_t        obd_blksize;
 typedef uint32_t        obd_mode;
 typedef uint32_t        obd_uid;
 typedef uint32_t        obd_gid;
-typedef uint32_t        obd_flag;
+typedef uint32_t        obd_flags;
+typedef uint64_t        obd_valid;
 typedef uint32_t        obd_count;
 
-#define OBD_FL_INLINEDATA   (0x00000001)
-#define OBD_FL_OBDMDEXISTS  (0x00000002)
-#define OBD_FL_DELORPHAN    (0x00000004) /* if set in o_flags delete orphans */
-#define OBD_FL_NORPC        (0x00000008) // if set in o_flags set in OSC not OST
-#define OBD_FL_IDONLY       (0x00000010) // if set in o_flags only adjust obj id
+#define OBD_FL_INLINEDATA    (0x00000001)
+#define OBD_FL_OBDMDEXISTS   (0x00000002)
+#define OBD_FL_DELORPHAN     (0x00000004) /* if set in o_flags delete orphans */
+#define OBD_FL_NORPC         (0x00000008) // if set in o_flags set in OSC not OST
+#define OBD_FL_IDONLY        (0x00000010) // if set in o_flags only adjust obj id
 #define OBD_FL_RECREATE_OBJS (0x00000020) // recreate missing obj
-#define OBD_FL_DEBUG_CHECK  (0x00000040) /* echo client/server debug check */
+#define OBD_FL_DEBUG_CHECK   (0x00000040) /* echo client/server debug check */
 
 /* this should be sizeof(struct lustre_handle) + sizeof(struct llog_cookie) +
  * sizeof(struct lustre_id). */
@@ -285,11 +286,11 @@ struct obdo {
         obd_mode                o_mode;         /* brw: cli sent cache remain */
         obd_uid                 o_uid;
         obd_gid                 o_gid;
-        obd_flag                o_flags;
+        obd_flags               o_flags;
         obd_count               o_nlink;        /* brw: checksum */
         obd_count               o_generation;
-        obd_flag                o_valid;        /* hot fields in this obdo */
-        obd_count               o_misc;          /* brw: o_dropped */
+        obd_valid               o_valid;        /* hot fields in this obdo */
+        obd_count               o_misc;         /* brw: o_dropped */
         __u32                   o_easize;       /* epoch in ost writes */
         __u32                   o_mds;
         __u64                   o_fid;
@@ -347,41 +348,43 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
         struct lov_ost_data_v0 lmm_objects[0];
 } __attribute__((packed));
 
-#define OBD_MD_FLALL    (0xffffffff)
-#define OBD_MD_FLID     (0x00000001)    /* object ID */
-#define OBD_MD_FLATIME  (0x00000002)    /* access time */
-#define OBD_MD_FLMTIME  (0x00000004)    /* data modification time */
-#define OBD_MD_FLCTIME  (0x00000008)    /* change time */
-#define OBD_MD_FLSIZE   (0x00000010)    /* size */
-#define OBD_MD_FLBLOCKS (0x00000020)    /* allocated blocks count */
-#define OBD_MD_FLBLKSZ  (0x00000040)    /* block size */
-#define OBD_MD_FLMODE   (0x00000080)    /* access bits (mode & ~S_IFMT) */
-#define OBD_MD_FLTYPE   (0x00000100)    /* object type (mode & S_IFMT) */
-#define OBD_MD_FLUID    (0x00000200)    /* user ID */
-#define OBD_MD_FLGID    (0x00000400)    /* group ID */
-#define OBD_MD_FLFLAGS  (0x00000800)    /* flags word */
-#define OBD_MD_FLNLINK  (0x00002000)    /* link count */
-#define OBD_MD_FLGENER  (0x00004000)    /* generation number */
-#define OBD_MD_FLINLINE (0x00008000)    /* inline data */
-#define OBD_MD_FLRDEV   (0x00010000)    /* device number */
-#define OBD_MD_FLEASIZE (0x00020000)    /* extended attribute data */
-#define OBD_MD_LINKNAME (0x00040000)    /* symbolic link target */
-#define OBD_MD_FLHANDLE (0x00080000)    /* file handle */
-#define OBD_MD_FLCKSUM  (0x00100000)    /* bulk data checksum */
-#define OBD_MD_FLQOS    (0x00200000)    /* quality of service stats */
-#define OBD_MD_FLOSCOPQ (0x00400000)    /* osc opaque data */
-#define OBD_MD_FLCOOKIE (0x00800000)    /* log cancellation cookie */
-#define OBD_MD_FLGROUP  (0x01000000)    /* group */
-#define OBD_MD_FLIFID   (0x02000000)    /* ->ost write inline fid */
-#define OBD_MD_FLEPOCH  (0x04000000)    /* ->ost write easize is epoch */
-#define OBD_MD_FLGRANT  (0x08000000)    /* ost preallocation space grant */
-#define OBD_MD_MDS      (0x10000000)    /* where an inode lives on */
-#define OBD_MD_FLDIREA  (0x20000000)    /* dir's extended attribute data */
-#define OBD_MD_REINT    (0x40000000)    /* reintegrate oa */
-#define OBD_MD_FID      (0x80000000)    /* take care about fid component */
+#define OBD_MD_FLALL    (0xffffffffffffffff)
+#define OBD_MD_FLID     (0x0000000000000001)    /* object ID */
+#define OBD_MD_FLATIME  (0x0000000000000002)    /* access time */
+#define OBD_MD_FLMTIME  (0x0000000000000004)    /* data modification time */
+#define OBD_MD_FLCTIME  (0x0000000000000008)    /* change time */
+#define OBD_MD_FLSIZE   (0x0000000000000010)    /* size */
+#define OBD_MD_FLBLOCKS (0x0000000000000020)    /* allocated blocks count */
+#define OBD_MD_FLBLKSZ  (0x0000000000000040)    /* block size */
+#define OBD_MD_FLMODE   (0x0000000000000080)    /* access bits (mode & ~S_IFMT) */
+#define OBD_MD_FLTYPE   (0x0000000000000100)    /* object type (mode & S_IFMT) */
+#define OBD_MD_FLUID    (0x0000000000000200)    /* user ID */
+#define OBD_MD_FLGID    (0x0000000000000400)    /* group ID */
+#define OBD_MD_FLFLAGS  (0x0000000000000800)    /* flags word */
+#define OBD_MD_FLNLINK  (0x0000000000002000)    /* link count */
+#define OBD_MD_FLGENER  (0x0000000000004000)    /* generation number */
+#define OBD_MD_FLINLINE (0x0000000000008000)    /* inline data */
+#define OBD_MD_FLRDEV   (0x0000000000010000)    /* device number */
+#define OBD_MD_FLEASIZE (0x0000000000020000)    /* extended attribute data */
+#define OBD_MD_LINKNAME (0x0000000000040000)    /* symbolic link target */
+#define OBD_MD_FLHANDLE (0x0000000000080000)    /* file handle */
+#define OBD_MD_FLCKSUM  (0x0000000000100000)    /* bulk data checksum */
+#define OBD_MD_FLQOS    (0x0000000000200000)    /* quality of service stats */
+#define OBD_MD_FLOSCOPQ (0x0000000000400000)    /* osc opaque data */
+#define OBD_MD_FLCOOKIE (0x0000000000800000)    /* log cancellation cookie */
+#define OBD_MD_FLGROUP  (0x0000000001000000)    /* group */
+#define OBD_MD_FLIFID   (0x0000000002000000)    /* ->ost write inline fid */
+#define OBD_MD_FLEPOCH  (0x0000000004000000)    /* ->ost write easize is epoch */
+#define OBD_MD_FLGRANT  (0x0000000008000000)    /* ost preallocation space grant */
+#define OBD_MD_MDS      (0x0000000010000000)    /* where an inode lives on */
+#define OBD_MD_FLDIREA  (0x0000000020000000)    /* dir's extended attribute data */
+#define OBD_MD_REINT    (0x0000000040000000)    /* reintegrate oa */
+#define OBD_MD_FID      (0x0000000080000000)    /* take care about fid component */
+
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME |          \
-                           OBD_MD_FLEASIZE | OBD_MD_FLHANDLE | OBD_MD_FLCKSUM | \
-                           OBD_MD_FLQOS | OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE| \
+                           OBD_MD_FLEASIZE | OBD_MD_FLHANDLE |          \
+                           OBD_MD_FLCKSUM | OBD_MD_FLQOS |              \
+                           OBD_MD_FLOSCOPQ | OBD_MD_FLCOOKIE |          \
                            OBD_MD_MDS))
 
 static inline struct lustre_handle *obdo_handle(struct obdo *oa)
@@ -613,7 +616,7 @@ struct mds_body {
         __u64          size;   /* Offset, in the case of MDS_READPAGE */
         __u64          blocks; /* XID, in the case of MDS_READPAGE */
         __u64          io_epoch;
-        __u32          valid;
+        __u64          valid;
         __u32          mode;
         __u32          uid;
         __u32          gid;
@@ -637,13 +640,13 @@ struct lustre_md {
 struct mdc_op_data {
         struct lustre_id id1;
         struct lustre_id id2;
-        __u64 mod_time;
-        const char *name;
-        int namelen;
-        __u32 create_mode;
-        struct mea *mea1;       /* mea of inode1 */
-        struct mea *mea2;       /* mea of inode2 */
-        __u32 valid;
+        __u64            mod_time;
+        const char      *name;
+        int              namelen;
+        __u32            create_mode;
+        struct mea      *mea1;       /* mea of inode1 */
+        struct mea      *mea2;       /* mea of inode2 */
+        __u64            valid;
 };
 
 #define MDS_MODE_DONT_LOCK      (1 << 30)

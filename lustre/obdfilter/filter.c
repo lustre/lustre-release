@@ -1945,7 +1945,7 @@ static void filter_sync_llogs(struct obd_device *obd, struct obd_export *dexp)
 }
 
 /* also incredibly similar to mds_disconnect */
-static int filter_disconnect(struct obd_export *exp, int flags)
+static int filter_disconnect(struct obd_export *exp, unsigned long flags)
 {
         struct obd_device *obd = exp->exp_obd;
         unsigned long irqflags;
@@ -2647,7 +2647,7 @@ static int filter_truncate(struct obd_export *exp, struct obdo *oa,
                 CERROR("PUNCH not supported, only truncate: end = "LPX64"\n",
                        end);
 
-        CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = %x, "
+        CDEBUG(D_INODE, "calling truncate for object "LPU64", valid = "LPU64", "
                "o_size = "LPD64"\n", oa->o_id, oa->o_valid, start);
         oa->o_size = start;
         error = filter_setattr(exp, oa, NULL, oti);

@@ -436,7 +436,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 char *buf = NULL;
                 char *filename;
                 int namelen, rc, len = 0;
-                unsigned long valid;
+                __u64 valid;
 
                 rc = obd_ioctl_getdata(&buf, &len, (void *)arg);
                 if (rc)
@@ -508,7 +508,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 struct lov_mds_md *lmm;
                 struct lustre_id id;
                 struct mds_body *body;
-                unsigned long valid = 0;
+                __u64 valid = 0;
                 int rc, lmmsize;
 
                 valid |= OBD_MD_FLDIREA;

@@ -1404,7 +1404,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
         switch(cmd) {
         case EXT3_IOC_GETFLAGS: {
                 struct lustre_id id;
-                unsigned long valid = OBD_MD_FLFLAGS;
+                __u64 valid = OBD_MD_FLFLAGS;
                 struct mds_body *body;
 
                 ll_inode2id(&id, inode);
@@ -1572,7 +1572,7 @@ int ll_get_fid(struct obd_export *exp, struct lustre_id *idp,
 {
         struct ptlrpc_request *request = NULL;
         struct mds_body *body;
-        int valid = 0;
+        __u64 valid = 0;
         int rc;
 
         valid |= OBD_MD_FID;

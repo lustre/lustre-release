@@ -194,9 +194,9 @@ cobd_connect(struct lustre_handle *conn, struct obd_device *obd,
         return class_connect(conn, obd, cluuid);
 }
 
-static int cobd_disconnect(struct obd_export *exp, int flags)
+static int cobd_disconnect(struct obd_export *exp, unsigned long flags)
 {
-        return class_disconnect(exp, 0);
+        return class_disconnect(exp, flags);
 }
 
 static int cobd_get_info(struct obd_export *exp, obd_count keylen,
@@ -435,7 +435,7 @@ static int cobd_queue_async_io(struct obd_export *exp,
                                struct lov_stripe_md *lsm,
                                struct lov_oinfo *loi, void *cookie,
                                int cmd, obd_off off, int count,
-                               obd_flag brw_flags, obd_flag async_flags)
+                               obd_flags brw_flags, obd_flags async_flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -453,7 +453,7 @@ static int cobd_queue_async_io(struct obd_export *exp,
 static int cobd_set_async_flags(struct obd_export *exp,
                                struct lov_stripe_md *lsm,
                                struct lov_oinfo *loi, void *cookie,
-                               obd_flag async_flags)
+                               obd_flags async_flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -472,8 +472,8 @@ static int cobd_queue_group_io(struct obd_export *exp,
                                struct lov_oinfo *loi, 
                                struct obd_io_group *oig, 
                                void *cookie, int cmd, obd_off off, 
-                               int count, obd_flag brw_flags,
-                               obd_flag async_flags)
+                               int count, obd_flags brw_flags,
+                               obd_flags async_flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct obd_export *cobd_exp;
@@ -833,7 +833,7 @@ static int  cobd_import_event(struct obd_device *obd,
 }
 
 static int cobd_md_getattr(struct obd_export *exp, struct lustre_id *id,
-                           unsigned long valid, unsigned int ea_size,
+                           __u64 valid, unsigned int ea_size,
                            struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);
@@ -880,7 +880,7 @@ static int cobd_md_change_cbdata(struct obd_export *exp, struct lustre_id *id,
 }
 
 static int cobd_md_getattr_lock(struct obd_export *exp, struct lustre_id *id,
-                                char *filename, int namelen, unsigned long valid,
+                                char *filename, int namelen, __u64 valid,
                                 unsigned int ea_size, struct ptlrpc_request **request)
 {
         struct obd_device *obd = class_exp2obd(exp);

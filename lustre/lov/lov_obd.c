@@ -280,8 +280,9 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         RETURN (rc);
 }
 
-static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
-                              int flags)
+static int lov_disconnect_obd(struct obd_device *obd, 
+			      struct lov_tgt_desc *tgt,
+                              unsigned long flags)
 {
 #ifdef __KERNEL__
         struct proc_dir_entry *lov_proc_dir;
@@ -335,7 +336,7 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         RETURN(0);
 }
 
-static int lov_disconnect(struct obd_export *exp, int flags)
+static int lov_disconnect(struct obd_export *exp, unsigned long flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
 #ifdef __KERNEL__
@@ -730,7 +731,7 @@ static obd_size lov_stripe_size(struct lov_stripe_md *lsm, obd_size ost_size,
         return lov_size;
 }
 
-static void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_flag valid,
+static void lov_merge_attrs(struct obdo *tgt, struct obdo *src, obd_valid valid,
                             struct lov_stripe_md *lsm, int stripeno, int *set)
 {
         valid &= src->o_valid;
@@ -2263,7 +2264,7 @@ static int lov_queue_async_io(struct obd_export *exp,
                               struct lov_stripe_md *lsm,
                               struct lov_oinfo *loi, void *cookie,
                               int cmd, obd_off off, int count,
-                              obd_flag brw_flags, obd_flag async_flags)
+                              obd_flags brw_flags, obd_flags async_flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         struct lov_async_page *lap;
@@ -2289,7 +2290,7 @@ static int lov_queue_async_io(struct obd_export *exp,
 static int lov_set_async_flags(struct obd_export *exp,
                                struct lov_stripe_md *lsm,
                                struct lov_oinfo *loi, void *cookie,
-                               obd_flag async_flags)
+                               obd_flags async_flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         struct lov_async_page *lap;
@@ -2316,7 +2317,7 @@ static int lov_queue_group_io(struct obd_export *exp,
                               struct lov_oinfo *loi,
                               struct obd_io_group *oig, void *cookie,
                               int cmd, obd_off off, int count,
-                              obd_flag brw_flags, obd_flag async_flags)
+                              obd_flags brw_flags, obd_flags async_flags)
 {
         struct lov_obd *lov = &exp->exp_obd->u.lov;
         struct lov_async_page *lap;

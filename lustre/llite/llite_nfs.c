@@ -37,15 +37,15 @@ __u32 get_uuid2int(const char *name, int len)
         return (key0 << 1);
 }
 
-static struct inode * search_inode_for_lustre(struct super_block *sb,
-                                              unsigned long ino,
-                                              unsigned long generation,
-                                              int mode)
+static struct inode *search_inode_for_lustre(struct super_block *sb,
+                                             unsigned long ino,
+                                             unsigned long generation,
+                                             int mode)
 {
         struct ptlrpc_request *req = NULL;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct lustre_id id;
-        unsigned long valid = 0;
+        __u64 valid = 0;
         int eadatalen = 0, rc;
         struct inode *inode = NULL;
 
@@ -57,9 +57,9 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
                 eadatalen = obd_size_diskmd(sbi->ll_lov_exp, NULL);
                 valid |= OBD_MD_FLEASIZE;
         }
-        id.li_stc.u.e3s.l3s_type = mode;
-        id.li_stc.u.e3s.l3s_ino = (__u64)ino;
-        id.li_stc.u.e3s.l3s_gen = generation;
+        id_type(&id) = mode;
+        id_ino(&id) = (__u64)ino;
+        id_gen(&id) = generation;
 
         rc = md_getattr(sbi->ll_lmv_exp, &id, valid, eadatalen, &req);
         if (rc) {

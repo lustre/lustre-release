@@ -64,7 +64,7 @@ static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
         return class_connect(conn, obd, cluuid);
 }
 
-static int echo_disconnect(struct obd_export *exp, int flags)
+static int echo_disconnect(struct obd_export *exp, unsigned long flags)
 {
         unsigned long irqflags;
 
@@ -129,7 +129,7 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
         }
 
         if (!(oa->o_valid & OBD_MD_FLTYPE)) {
-                CERROR("invalid o_valid %08x\n", oa->o_valid);
+                CERROR("invalid o_valid "LPX64"\n", oa->o_valid);
                 return -EINVAL;
         }
 
@@ -151,7 +151,7 @@ int echo_destroy(struct obd_export *exp, struct obdo *oa,
         }
 
         if (!(oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: %08x\n", oa->o_valid);
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", oa->o_valid);
                 RETURN(-EINVAL);
         }
 
@@ -177,7 +177,7 @@ static int echo_getattr(struct obd_export *exp, struct obdo *oa,
         }
 
         if (!(oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: %08x\n", oa->o_valid);
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", oa->o_valid);
                 RETURN(-EINVAL);
         }
 
@@ -199,7 +199,7 @@ static int echo_setattr(struct obd_export *exp, struct obdo *oa,
         }
 
         if (!(oa->o_valid & OBD_MD_FLID)) {
-                CERROR("obdo missing FLID valid flag: %08x\n", oa->o_valid);
+                CERROR("obdo missing FLID valid flag: "LPX64"\n", oa->o_valid);
                 RETURN(-EINVAL);
         }
 

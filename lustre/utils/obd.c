@@ -182,7 +182,7 @@ char *obdo_print(struct obdo *obd)
         sprintf(buf, "id: "LPX64"\ngrp: "LPX64"\natime: "LPU64"\nmtime: "LPU64
                 "\nctime: "LPU64"\nsize: "LPU64"\nblocks: "LPU64
                 "\nblksize: %u\nmode: %o\nuid: %d\ngid: %d\nflags: %x\n"
-                "misc: %x\nnlink: %d,\nvalid %x\n",
+                "misc: %x\nnlink: %d,\nvalid "LPX64"\n",
                 obd->o_id, obd->o_gr, obd->o_atime, obd->o_mtime, obd->o_ctime,
                 obd->o_size, obd->o_blocks, obd->o_blksize, obd->o_mode,
                 obd->o_uid, obd->o_gid, obd->o_flags, obd->o_misc,
@@ -1194,7 +1194,7 @@ int jt_obd_create(int argc, char **argv)
                         break;
                 }
                 if (!(data.ioc_obdo1.o_valid & OBD_MD_FLID)) {
-                        fprintf(stderr, "error: %s: objid not valid #%d:%08x\n",
+                        fprintf(stderr, "error: %s: objid not valid #%d:"LPX64"\n",
                                 jt_cmdname(argv[0]), i, data.ioc_obdo1.o_valid);
                         rc = EINVAL;
                         break;
@@ -1473,7 +1473,7 @@ int jt_obd_test_getattr(int argc, char **argv)
         for (i = 1, next_count = verbose; i <= count; i++) {
                 data.ioc_obdo1.o_id = objid;
                 data.ioc_obdo1.o_mode = S_IFREG;
-                data.ioc_obdo1.o_valid = 0xffffffff;
+                data.ioc_obdo1.o_valid = 0xffffffffffffffff;
                 IOC_PACK(argv[0], data);
                 rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_GETATTR, &data);
                 shmem_bump();

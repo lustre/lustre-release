@@ -304,7 +304,7 @@ static int ll_ap_refresh_count(void *data, int cmd)
 void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
 {
         struct lov_stripe_md *lsm;
-        obd_flag valid_flags;
+        obd_valid valid_flags;
 
         lsm = ll_i2info(inode)->lli_smd;
 
@@ -406,7 +406,7 @@ static int queue_or_sync_write(struct obd_export *exp,
                                struct lov_stripe_md *lsm,
                                struct ll_async_page *llap,
                                unsigned to,
-                               obd_flag async_flags)
+                               obd_flags async_flags)
 {
         struct obd_io_group *oig;
         int rc;

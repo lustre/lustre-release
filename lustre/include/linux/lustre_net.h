@@ -803,7 +803,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
 int client_obd_cleanup(struct obd_device * obddev, int flags);
 int client_connect_import(struct lustre_handle *conn, struct obd_device *obd,
                           struct obd_uuid *cluuid, unsigned long);
-int client_disconnect_export(struct obd_export *exp, int failover);
+int client_disconnect_export(struct obd_export *exp, unsigned long);
 
 int client_import_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
                            int priority);

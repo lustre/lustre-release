@@ -61,13 +61,13 @@ void llu_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
 
 void obdo_refresh_inode(struct inode *dst,
                         struct obdo *src,
-                        obd_flag valid)
+                        obd_valid valid)
 {
         struct llu_inode_info *lli = llu_i2info(dst);
         valid &= src->o_valid;
 
         if (valid & (OBD_MD_FLCTIME | OBD_MD_FLMTIME))
-                CDEBUG(D_INODE, "valid %x, cur time %lu/%lu, new %lu/%lu\n",
+                CDEBUG(D_INODE, "valid "LPX64", cur time %lu/%lu, new %lu/%lu\n",
                        src->o_valid, LTIME_S(lli->lli_st_mtime), 
                        LTIME_S(lli->lli_st_ctime),
                        (long)src->o_mtime, (long)src->o_ctime);

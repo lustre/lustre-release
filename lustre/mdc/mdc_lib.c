@@ -97,8 +97,8 @@ void mdc_open_pack(struct lustre_msg *msg, int offset,
         }
 }
 
-void mdc_getattr_pack(struct lustre_msg *msg, int offset, int valid,
-                      int flags, struct mdc_op_data *data)
+void mdc_getattr_pack(struct lustre_msg *msg, int offset,
+                      __u64 valid, int flags, struct mdc_op_data *data)
 {
         struct mds_body *b;
         b = lustre_msg_buf(msg, offset, sizeof (*b));
@@ -117,7 +117,7 @@ void mdc_getattr_pack(struct lustre_msg *msg, int offset, int valid,
 }
 
 void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
-                    int valid, struct obd_client_handle *och)
+                    __u64 valid, struct obd_client_handle *och)
 {
         struct mds_body *body;
 

@@ -92,7 +92,7 @@ static int cmobd_ap_refresh_count(void *data, int cmd)
 static void cmobd_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
 {
         struct cmobd_async_page *cmap = (struct cmobd_async_page *)data;
-        obd_flag valid_flags;
+        obd_valid valid_flags;
         struct inode *inode;
         ENTRY;
 

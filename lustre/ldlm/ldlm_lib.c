@@ -417,7 +417,7 @@ out_sem:
         return rc;
 }
 
-int client_disconnect_export(struct obd_export *exp, int flags)
+int client_disconnect_export(struct obd_export *exp, unsigned long flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct client_obd *cli = &obd->u.cli;

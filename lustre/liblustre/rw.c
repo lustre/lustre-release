@@ -321,7 +321,7 @@ static void llu_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         struct ll_async_page *llap;
         struct inode *inode;
         struct lov_stripe_md *lsm;
-        obd_flag valid_flags;
+        obd_valid valid_flags;
         ENTRY;
 
         llap = llap_from_cookie(data);

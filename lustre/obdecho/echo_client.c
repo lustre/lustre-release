@@ -1393,8 +1393,9 @@ static int echo_client_cleanup(struct obd_device *obddev, int flags)
 }
 
 static int echo_client_connect(struct lustre_handle *conn,
-                               struct obd_device *src, struct obd_uuid *cluuid,
-                               unsigned long connect_flags)
+                               struct obd_device *src, 
+			       struct obd_uuid *cluuid,
+                               unsigned long flags)
 {
         struct obd_export *exp;
         int                rc;
@@ -1409,7 +1410,8 @@ static int echo_client_connect(struct lustre_handle *conn,
         RETURN (rc);
 }
 
-static int echo_client_disconnect(struct obd_export *exp, int flags)
+static int echo_client_disconnect(struct obd_export *exp, 
+				  unsigned long flags)
 {
         struct obd_device      *obd;
         struct echo_client_obd *ec;

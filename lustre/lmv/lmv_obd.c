@@ -307,7 +307,7 @@ int lmv_check_connect(struct obd_device *obd)
                 tgt_obd = class_find_client_obd(&tgts->uuid, LUSTRE_MDC_NAME, 
                                                 &obd->obd_uuid);
                 if (!tgt_obd) {
-                        CERROR("Target %s not attached\n", tgts->uuid.uuid);
+                        CERROR("target %s not attached\n", tgts->uuid.uuid);
                         GOTO(out_disc, rc = -EINVAL);
                 }
 
@@ -325,14 +325,14 @@ int lmv_check_connect(struct obd_device *obd)
                         cluuid->uuid);
 
                 if (!tgt_obd->obd_set_up) {
-                        CERROR("Target %s not set up\n", tgts->uuid.uuid);
+                        CERROR("target %s not set up\n", tgts->uuid.uuid);
                         GOTO(out_disc, rc = -EINVAL);
                 }
                 
                 rc = obd_connect(&conn, tgt_obd, &lmv_mdc_uuid,
                                  lmv->connect_flags);
                 if (rc) {
-                        CERROR("Target %s connect error %d\n",
+                        CERROR("target %s connect error %d\n",
                                 tgts->uuid.uuid, rc);
                         GOTO(out_disc, rc);
                 }
@@ -343,7 +343,7 @@ int lmv_check_connect(struct obd_device *obd)
 
                 rc = obd_register_observer(tgt_obd, obd);
                 if (rc) {
-                        CERROR("Target %s register_observer error %d\n",
+                        CERROR("target %s register_observer error %d\n",
                                tgts->uuid.uuid, rc);
                         obd_disconnect(tgts->ltd_exp, 0);
                         GOTO(out_disc, rc);
@@ -408,7 +408,7 @@ int lmv_check_connect(struct obd_device *obd)
         RETURN (rc);
 }
 
-static int lmv_disconnect(struct obd_export *exp, int flags)
+static int lmv_disconnect(struct obd_export *exp, unsigned long flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lmv_obd *lmv = &obd->u.lmv;
@@ -665,7 +665,7 @@ static int lmv_getstatus(struct obd_export *exp, struct lustre_id *id)
 }
 
 static int lmv_getattr(struct obd_export *exp, struct lustre_id *id,
-                       unsigned long valid, unsigned int ea_size,
+                       __u64 valid, unsigned int ea_size,
                        struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
@@ -839,7 +839,7 @@ int lmv_get_mea_and_update_object(struct obd_export *exp,
         struct ptlrpc_request *req = NULL;
         struct lmv_obj *obj;
         struct lustre_md md;
-        unsigned long valid;
+        __u64 valid;
         int mealen, rc;
 
         md.mea = NULL;
@@ -1045,7 +1045,7 @@ int lmv_enqueue(struct obd_export *exp, int lock_type,
 }
 
 int lmv_getattr_lock(struct obd_export *exp, struct lustre_id *id,
-                     char *filename, int namelen, unsigned long valid,
+                     char *filename, int namelen, __u64 valid,
                      unsigned int ea_size, struct ptlrpc_request **request)
 {
         int rc, mds = id_group(id), loop = 0;
@@ -1054,7 +1054,7 @@ int lmv_getattr_lock(struct obd_export *exp, struct lustre_id *id,
         struct lustre_id rid = *id;
         struct mds_body *body;
         struct lmv_obj *obj;
-        int old_valid;
+        __u64 old_valid;
         ENTRY;
         
         rc = lmv_check_connect(obd);
@@ -1440,7 +1440,7 @@ int lmv_unlink_slaves(struct obd_export *exp, struct mdc_op_data *data,
         struct lmv_obd *lmv = &obd->u.lmv;
         struct mea *mea = data->mea1;
         struct mdc_op_data data2;
-        int i, rc = 0, mds;
+        int i, rc = 0;
         ENTRY;
 
         LASSERT(mea != NULL);
@@ -1449,28 +1449,34 @@ int lmv_unlink_slaves(struct obd_export *exp, struct mdc_op_data *data,
                 data2.id1 = mea->mea_ids[i];
                 data2.create_mode = MDS_MODE_DONT_LOCK | S_IFDIR;
                 
-                mds = id_group(&data2.id1);
-
-                if (lmv->tgts[mds].ltd_exp == NULL)
+                if (lmv->tgts[id_group(&data2.id1)].ltd_exp == NULL)
                         continue;
 
-                rc = md_unlink(lmv->tgts[mds].ltd_exp, &data2, req);
+                rc = md_unlink(lmv->tgts[id_group(&data2.id1)].ltd_exp,
+                               &data2, req);
+                
                 CDEBUG(D_OTHER, "unlink slave "DLID4" -> %d\n",
                        OLID4(&mea->mea_ids[i]), rc);
+                
                 if (*req) {
                         ptlrpc_req_finished(*req);
                         *req = NULL;
                 }
                 if (rc)
-                        break;
+                        RETURN(rc);
         }
         RETURN(rc);
 }
 
 int lmv_delete_inode(struct obd_export *exp, struct lustre_id *id)
 {
+        LASSERT(exp && id);
+        
         ENTRY;
-        lmv_delete_obj(exp, id);
+        if (lmv_delete_obj(exp, id)) {
+                CDEBUG(D_OTHER, "lmv object "DLID4" is destroyed.\n",
+                       OLID4(id));
+        }
         RETURN(0);
 }
 
@@ -1510,7 +1516,7 @@ int lmv_unlink(struct obd_export *exp, struct mdc_op_data *data,
                        OLID4(&data->id1));
         }
         rc = md_unlink(lmv->tgts[id_group(&data->id1)].ltd_exp, 
-                       data, request); 
+                       data, request);
         RETURN(rc);
 }
 

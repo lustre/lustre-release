@@ -166,7 +166,7 @@ out_disco:
 
 
 /* modelled after ptlrpc_import_disconnect() */
-int ptlbd_cl_disconnect(struct obd_export *exp, int failover)
+int ptlbd_cl_disconnect(struct obd_export *exp, unsigned long flags)
 {
         struct obd_device *obd = exp->exp_obd;
         struct ptlbd_obd *ptlbd = &obd->u.ptlbd;
@@ -178,7 +178,8 @@ int ptlbd_cl_disconnect(struct obd_export *exp, int failover)
         if (!obd)
                 RETURN(-EINVAL);
 
-        request = ptlrpc_prep_req(imp, LUSTRE_PBD_VERSION, PTLBD_DISCONNECT,
+        request = ptlrpc_prep_req(imp, LUSTRE_PBD_VERSION, 
+				  PTLBD_DISCONNECT,
                                   0, NULL, NULL);
         if (!request)
                 GOTO(out_req, rc = -ENOMEM);

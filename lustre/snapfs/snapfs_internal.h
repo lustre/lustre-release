@@ -324,7 +324,7 @@ int clonefs_mounted(struct snap_cache *cache, int index);
 #define FILTER_DID_JOURNAL_OPS	0x100
 
 struct filter_fs {
-	int o_flags;
+	unsigned long o_flags;
 	struct filter_ops o_fops;
 	struct cache_ops  o_caops;
 	struct journal_ops *o_trops;

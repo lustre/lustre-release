@@ -377,7 +377,7 @@ void lustre_swab_obdo (struct obdo  *o)
         __swab32s (&o->o_flags);
         __swab32s (&o->o_nlink);
         __swab32s (&o->o_generation);
-        __swab32s (&o->o_valid);
+        __swab64s (&o->o_valid);
         __swab32s (&o->o_misc);
         __swab32s (&o->o_easize);
         __swab32s (&o->o_mds);
@@ -640,7 +640,7 @@ void lustre_swab_mds_body (struct mds_body *b)
         /* handle is opaque */
         __swab64s (&b->size);
         __swab64s (&b->blocks);
-        __swab32s (&b->valid);
+        __swab64s (&b->valid);
         __swab32s (&b->mode);
         __swab32s (&b->uid);
         __swab32s (&b->gid);

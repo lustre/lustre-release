@@ -641,7 +641,7 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
  * hash entry and one for the export pointer passed in.  The export
  * pointer passed to this function is destroyed should not be used
  * again. */
-int class_disconnect(struct obd_export *export, int flags)
+int class_disconnect(struct obd_export *export, unsigned long flags)
 {
         ENTRY;
 
@@ -669,7 +669,7 @@ int class_disconnect(struct obd_export *export, int flags)
         RETURN(0);
 }
 
-static void  class_disconnect_export_list(struct list_head *list, int flags)
+static void class_disconnect_export_list(struct list_head *list, unsigned long flags)
 {
         struct obd_export *fake_exp, *exp;
         struct lustre_handle fake_conn;
@@ -716,7 +716,7 @@ static void  class_disconnect_export_list(struct list_head *list, int flags)
         EXIT;
 }
 
-void class_disconnect_exports(struct obd_device *obd, int flags)
+void class_disconnect_exports(struct obd_device *obd, unsigned long flags)
 {
         struct list_head work_list;
         ENTRY;
@@ -735,7 +735,7 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
 
 /* Remove exports that have not completed recovery.
  */
-void class_disconnect_stale_exports(struct obd_device *obd, int flags)
+void class_disconnect_stale_exports(struct obd_device *obd, unsigned long flags)
 {
         struct list_head work_list;
         struct list_head *pos, *n;

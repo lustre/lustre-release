@@ -211,8 +211,8 @@ extern struct mount_option_s mount_option;
 /* super.c */
 void llu_update_inode(struct inode *inode, struct mds_body *body,
                       struct lov_stripe_md *lmm);
-void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid);
-void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
+void obdo_to_inode(struct inode *dst, struct obdo *src, obd_valid valid);
+void obdo_from_inode(struct obdo *dst, struct inode *src, obd_valid valid);
 int ll_it_open_error(int phase, struct lookup_intent *it);
 struct inode *llu_iget(struct filesys *fs, struct lustre_md *md);
 int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm);
@@ -231,7 +231,7 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode);
 int llu_iop_close(struct inode *inode);
 _SYSIO_OFF_T llu_iop_pos(struct inode *ino, _SYSIO_OFF_T off);
 int llu_vmtruncate(struct inode * inode, loff_t offset);
-void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid);
+void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_valid valid);
 int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir);
 
 /* rw.c */

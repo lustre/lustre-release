@@ -243,7 +243,7 @@ int mdc_enqueue(struct obd_export *exp,
                 reply_buffers = 3;
                 req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op & (IT_GETATTR | IT_LOOKUP | IT_CHDIR)) {
-                int valid = data->valid | OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE;
+                __u64 valid = data->valid | OBD_MD_FLNOTOBD | OBD_MD_FLEASIZE;
 
                 reqsize[req_buffers++] = sizeof(struct mds_body);
                 reqsize[req_buffers++] = data->namelen + 1;

@@ -123,7 +123,7 @@ struct brw_page {
         obd_off page_offset; /* modulo PAGE_SIZE (obviously) */
         struct page *pg;
         int count;
-        obd_flag flag;
+        obd_flags flag;
 };
 
 enum async_flags {
@@ -687,9 +687,9 @@ struct obd_ops {
                           int priority);
         int (*o_del_conn)(struct obd_import *imp, struct obd_uuid *uuid);
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
-                         struct obd_uuid *cluuid, unsigned long connect_flags);
-        int (*o_connect_post)(struct obd_export *exp, unsigned long connect_flags);
-        int (*o_disconnect)(struct obd_export *exp, int flags);
+                         struct obd_uuid *cluuid, unsigned long flags);
+        int (*o_connect_post)(struct obd_export *exp, unsigned long flags);
+        int (*o_disconnect)(struct obd_export *exp, unsigned long flags);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
                         unsigned long max_age);
@@ -730,13 +730,13 @@ struct obd_ops {
                                 struct lov_stripe_md *lsm, 
                                 struct lov_oinfo *loi, void *cookie, 
                                 int cmd, obd_off off, int count, 
-                                obd_flag brw_flags, obd_flag async_flags);
+                                obd_flags brw_flags, obd_flags async_flags);
         int (*o_queue_group_io)(struct obd_export *exp, 
                                 struct lov_stripe_md *lsm, 
                                 struct lov_oinfo *loi, 
                                 struct obd_io_group *oig, 
                                 void *cookie, int cmd, obd_off off, int count, 
-                                obd_flag brw_flags, obd_flag async_flags);
+                                obd_flags brw_flags, obd_flags async_flags);
         int (*o_trigger_group_io)(struct obd_export *exp, 
                                   struct lov_stripe_md *lsm, 
                                   struct lov_oinfo *loi, 
@@ -744,7 +744,7 @@ struct obd_ops {
         int (*o_set_async_flags)(struct obd_export *exp,
                                 struct lov_stripe_md *lsm,
                                 struct lov_oinfo *loi, void *cookie,
-                                obd_flag async_flags);
+                                obd_flags async_flags);
         int (*o_teardown_async_page)(struct obd_export *exp,
                                      struct lov_stripe_md *lsm,
                                      struct lov_oinfo *loi, void *cookie);
@@ -846,10 +846,10 @@ struct md_ops {
                          void *, int, ldlm_completion_callback,
                          ldlm_blocking_callback, void *);
         int (*m_getattr)(struct obd_export *, struct lustre_id *,
-                         unsigned long, unsigned int,
+                         __u64, unsigned int,
                          struct ptlrpc_request **);
         int (*m_getattr_lock)(struct obd_export *, struct lustre_id *,
-                              char *, int, unsigned long,
+                              char *, int, __u64,
                               unsigned int, struct ptlrpc_request **);
         int (*m_intent_lock)(struct obd_export *,
                              struct lustre_id *, const char *, int,
