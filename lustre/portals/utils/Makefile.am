@@ -8,7 +8,7 @@ LINK = $(CC) -o $@
 
 if LIBLUSTRE
 
-lib_LIBRARIES = libuptlctl.a
+noinst_LIBRARIES = libuptlctl.a
 libuptlctl_a_SOURCES = portals.c debug.c l_ioctl.c parser.c parser.h
 libuptlctl_a_CFLAGS = -fPIC
 
