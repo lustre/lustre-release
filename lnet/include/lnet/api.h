@@ -35,7 +35,7 @@ int PtlNIHandle(ptl_handle_any_t handle_in, ptl_handle_ni_t * interface_out);
 
 
 /* 
- * PtlNIFailNid
+ * PtlFailNid
  *
  * Not an official Portals 3 API call.  It provides a way of simulating
  * communications failures to all (nid == PTL_NID_ANY), or specific peers
@@ -44,6 +44,14 @@ int PtlNIHandle(ptl_handle_any_t handle_in, ptl_handle_ni_t * interface_out);
  * the given peer.
  */
 int PtlFailNid (ptl_handle_ni_t ni, ptl_nid_t nid, unsigned int threshold);
+
+/* 
+ * PtlLoopback
+ *
+ * Not an official Portals 3 API call.  It provides a way of enabling or
+ * disabling loopback optimisation, or getting its current state.
+ */
+int PtlLoopback (ptl_handle_ni_t ni, int set, int *enabled);
 
 /*
  * PtlSnprintHandle: 

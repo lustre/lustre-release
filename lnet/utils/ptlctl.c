@@ -53,6 +53,7 @@ command_t list[] = {
         {"print_routes", jt_ptl_print_routes, 0, "print the routing table (args: none)"},
         {"dump", jt_ioc_dump, 0, "usage: dump file, save ioctl buffer to file"},
         {"fail", jt_ptl_fail_nid, 0, "usage: fail nid|_all_ [count]"},
+        {"loopback", jt_ptl_loopback, 0, "usage: loopback [on|off]"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},

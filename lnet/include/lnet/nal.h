@@ -32,6 +32,7 @@ struct nal_t {
 	int (*nal_ni_status) (nal_t *nal, ptl_sr_index_t register, ptl_sr_value_t *status);
 	int (*nal_ni_dist) (nal_t *nal, ptl_process_id_t *id, unsigned long *distance);
 	int (*nal_fail_nid) (nal_t *nal, ptl_nid_t nid, unsigned int threshold);
+	int (*nal_loopback) (nal_t *nal, int set, int *enabled);
 
 	int (*nal_me_attach) (nal_t *nal, ptl_pt_index_t portal,
 			      ptl_process_id_t match_id, 

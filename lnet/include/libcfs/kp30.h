@@ -400,7 +400,7 @@ extern int portal_ioctl_getdata(char *buf, char *end, void *arg);
 #define IOC_PORTAL_NAL_CMD                 _IOWR('e', 35, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_GET_NID                 _IOWR('e', 36, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_FAIL_NID                _IOWR('e', 37, IOCTL_PORTAL_TYPE)
-
+#define IOC_PORTAL_LOOPBACK                _IOWR('e', 38, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_LWT_CONTROL             _IOWR('e', 39, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_LWT_SNAPSHOT            _IOWR('e', 40, IOCTL_PORTAL_TYPE)
 #define IOC_PORTAL_LWT_LOOKUP_STRING       _IOWR('e', 41, IOCTL_PORTAL_TYPE)

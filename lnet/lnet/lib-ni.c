@@ -19,5 +19,11 @@ int lib_api_ni_dist (nal_t *apinal, ptl_process_id_t *pid, unsigned long *dist)
 {
         lib_nal_t *nal = apinal->nal_data;
 
+        if (nal->libnal_ni.ni_loopback &&
+            pid->nid == nal->libnal_ni.ni_pid.nid) {
+                *dist = 0;
+                return PTL_OK;
+        }
+        
         return (nal->libnal_dist(nal, pid->nid, dist));
 }

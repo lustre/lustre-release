@@ -86,6 +86,20 @@ int PtlFailNid (ptl_handle_ni_t interface, ptl_nid_t nid, unsigned int threshold
         return nal->nal_fail_nid(nal, nid, threshold);
 }
 
+int PtlLoopback (ptl_handle_ni_t interface, int set, int *enabled)
+{
+        nal_t     *nal;
+
+        if (!ptl_init)
+                return PTL_NO_INIT;
+        
+        nal = ptl_hndl2nal(&interface);
+        if (nal == NULL)
+                return PTL_NI_INVALID;
+        
+        return nal->nal_loopback(nal, set, enabled);
+}
+
 int PtlNIStatus(ptl_handle_ni_t interface_in, ptl_sr_index_t register_in,
                 ptl_sr_value_t *status_out)
 {

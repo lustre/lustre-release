@@ -259,6 +259,7 @@ typedef struct lib_ni
         __u64             ni_interface_cookie;  /* uniquely identifies this ni in this epoch */
         
         struct list_head  ni_test_peers;
+        int               ni_loopback;          /* loopback shortcircuits NAL */
         
 #ifdef PTL_USE_LIB_FREELIST
         lib_freelist_t    ni_free_mes;
@@ -357,5 +358,20 @@ typedef struct lib_nal
 	/* Calculate a network "distance" to given node */
 	int (*libnal_dist) (struct lib_nal *nal, ptl_nid_t nid, unsigned long *dist);
 } lib_nal_t;
+
+typedef struct                                  /* loopback descriptor */
+{
+        unsigned int     lod_type;
+        unsigned int     lod_niov;
+        size_t           lod_offset;
+        size_t           lod_nob;
+        union {
+                struct iovec  *iov;
+                ptl_kiov_t    *kiov;
+        }                lod_iov;
+} lo_desc_t;
+
+#define LOD_IOV     0xeb105
+#define LOD_KIOV    0xeb106
 
 #endif

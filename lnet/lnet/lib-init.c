@@ -281,6 +281,7 @@ lib_init(lib_nal_t *libnal, nal_t *apinal,
         apinal->nal_ni_status = lib_api_ni_status;
         apinal->nal_ni_dist   = lib_api_ni_dist;
         apinal->nal_fail_nid  = lib_api_fail_nid;
+        apinal->nal_loopback  = lib_api_loopback;
         apinal->nal_me_attach = lib_api_me_attach;
         apinal->nal_me_insert = lib_api_me_insert;
         apinal->nal_me_unlink = lib_api_me_unlink;
@@ -355,6 +356,9 @@ lib_init(lib_nal_t *libnal, nal_t *apinal,
 
         if (actual_limits != NULL)
                 *actual_limits = ni->ni_actual_limits;
+
+        /* disable loopback optimisation by default */
+        ni->ni_loopback = 0;
 
  out:
         if (rc != PTL_OK) {

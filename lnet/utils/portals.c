@@ -1319,6 +1319,46 @@ jt_ptl_fail_nid (int argc, char **argv)
 }
 
 int
+jt_ptl_loopback (int argc, char **argv)
+{
+        int                      rc;
+        ptl_nid_t                nid;
+        unsigned int             threshold;
+        int                      set;
+        int                      enable;
+        struct portal_ioctl_data data;
+
+        if (argc > 2)
+        {
+                fprintf (stderr, "usage: %s [on|off]\n", argv[0]);
+                return (0);
+        }
+        
+        if (!g_nal_is_set())
+                return (-1);
+
+        set = argc > 1;
+        if (set && ptl_parse_bool (&enable, argv[1]) != 0) {
+                fprintf (stderr, "Can't parse boolean %s\n", argv[1]);
+                return (-1);
+        }
+
+        PORTAL_IOC_INIT (data);
+        data.ioc_nal = g_nal;
+        data.ioc_flags = enable;
+        data.ioc_misc = set;
+        
+        rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_LOOPBACK, &data);
+        if (rc < 0)
+                fprintf (stderr, "IOC_PORTAL_FAIL_NID failed: %s\n",
+                         strerror (errno));
+        else
+                printf ("loopback %s\n", data.ioc_flags ? "enabled" : "disabled");
+        
+        return (0);
+}
+
+int
 jt_ptl_add_route (int argc, char **argv)
 {
         struct portals_cfg       pcfg;

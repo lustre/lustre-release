@@ -102,6 +102,41 @@ static int kportal_ioctl(struct portal_ioctl_data *data,
                 PtlNIFini(nih);
                 RETURN (err);
         }
+
+        case IOC_PORTAL_LOOPBACK: {
+                ptl_handle_ni_t  nih;
+                int              enabled = data->ioc_flags;
+                int              set = data->ioc_misc;
+
+                CDEBUG (D_IOCTL, "loopback: [%d] %d %d\n",
+                        data->ioc_nal, enabled, set);
+
+                err = PtlNIInit(data->ioc_nal, LUSTRE_SRV_PTL_PID, NULL,
+                                NULL, &nih);
+                if (!(err == PTL_OK || err == PTL_IFACE_DUP))
+                        return (-EINVAL);
+
+                if (err == PTL_OK) {
+                        /* There's no point in failing an interface that
+                         * came into existance just for this */
+                        err = -EINVAL;
+                } else {
+                        err = PtlLoopback (nih, set, &enabled);
+                        if (err != PTL_OK) {
+                                err = -EINVAL;
+                        } else {
+                                data->ioc_flags = enabled;
+                                if (copy_to_user ((char *)arg, data, 
+                                                  sizeof (*data)))
+                                        err = -EFAULT;
+                                else
+                                        err = 0;
+                        }
+                }
+
+                PtlNIFini(nih);
+                RETURN (err);
+        }
         default:
                 RETURN(-EINVAL);
         }

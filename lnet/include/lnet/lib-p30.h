@@ -461,5 +461,6 @@ extern int lib_api_put(nal_t *apinal, ptl_handle_md_t *mdh,
                        ptl_match_bits_t match_bits, 
                        ptl_size_t offset, ptl_hdr_data_t hdr_data);
 extern int lib_api_fail_nid(nal_t *apinal, ptl_nid_t nid, unsigned int threshold);
+extern int lib_api_loopback(nal_t *apinal, int set, int *enabled);
 
 #endif
