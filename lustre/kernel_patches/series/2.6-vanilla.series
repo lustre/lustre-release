@@ -17,3 +17,4 @@ dcache-mds-num-2.6.7.patch
 dynamic-locks-2.6.7.patch
 vfs-pdirops-2.6.7.patch
 dcache-fid-2.6.7.patch
+jbd-static-wbuf-2.6.7
