@@ -2316,12 +2316,8 @@
  #
  # Note! Dependencies are done automagically by 'make dep', which also
  # removes any old dependencies. DON'T put your own dependencies here
-@@ -9,10 +9,14 @@
- 
- O_TARGET := ext3.o
- 
--export-objs :=	super.o inode.o
-+export-objs :=	super.o inode.o xattr.o
+@@ -12,8 +12,11 @@
+ export-objs :=	super.o inode.o
  
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
 -		ioctl.o namei.o super.o symlink.o hash.o
