@@ -1625,7 +1625,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         struct dentry *dparent;
         int err = 0, rc = 0, i;
         __u64 next_id;
-        void *handle;
+        void *handle = NULL;
         ENTRY;
 
         filter = &obd->u.filter;
