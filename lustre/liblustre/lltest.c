@@ -70,6 +70,9 @@ char	*root_path = "/";
 unsigned mntflgs = 0;
 struct mount root_mount;
 
+extern int portal_debug;
+extern int portal_subsystem_debug;
+
 char* files[] = {"/dir1", "/dir1/file1", "/dir1/file2", "/dir1/dir2", "/dir1/dir2/file3"};
 int
 main(int argc, char * const argv[])
@@ -77,6 +80,7 @@ main(int argc, char * const argv[])
 	struct stat statbuf;
 	int	err, i, fd, written, read;
 	char pgbuf[4096], readbuf[4096];
+	int npages;
 
 	if (_sysio_init() != 0) {
 		perror("init sysio");
@@ -105,18 +109,29 @@ main(int argc, char * const argv[])
 	}
 #endif
 #if 1
-	fd = fixme_open("/newfile7", O_RDWR|O_CREAT|O_TRUNC, 00664);
+	portal_debug = 0;
+	portal_subsystem_debug = 0;
+	npages = 1024;
+
+	fd = fixme_open("/newfile3", O_RDWR|O_CREAT|O_TRUNC, 00664);
 	printf("***************** open return %d ****************\n", fd);
 
-	memset(pgbuf, 'A', 4096);
-	written = fixme_write(fd, pgbuf, 4096);
-	printf("+++++++++++++++++ %d bytes written ++++++++++++++\n", written);
+	printf("***************** begin write pages ****************\n");
+	for (i = 0; i < npages; i++ ) {
+		memset(pgbuf, ('A'+ i%10), 4096);
+		written = fixme_write(fd, pgbuf, 4096);
+		printf(">>> page %d: %d bytes written\n", i, written);
+	}
 
+	printf("***************** begin read pages ****************\n");
 	fixme_lseek(fd, 0, SEEK_SET);
 
-	memset(readbuf, 'a', 4096);
-	read = fixme_read(fd, readbuf, 4096);
-	printf("----------------- %d bytes read --------------\n", read);
+	for (i = 0; i < npages; i++ ) {
+		memset(readbuf, '8', 4096);
+		read = fixme_read(fd, readbuf, 4096);
+		readbuf[10] = 0;
+		printf("<<< page %d: %d bytes (%s)", i, read, readbuf);
+	}
 #endif
 	printf("sysio is about shutdown\n");
 	/*
