@@ -688,7 +688,7 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 inode->i_rdev = body->rdev;
 #else
-                inode->i_rdev = to_kdev_t(body->rdev);
+                inode->i_rdev = old_encode_dev(body->rdev);
 #endif
         if (body->valid & OBD_MD_FLSIZE)
                 inode->i_size = body->size;
