@@ -240,7 +240,7 @@ diff -uprN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
  
 diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 --- linux/fs/nfsd/vfs.c	2002-11-29 05:23:15.000000000 +0530
-+++ linux-2.4.20/fs/nfsd/vfs.c	2003-09-17 16:03:09.000000000 +0530
++++ linux-2.4.20/fs/nfsd/vfs.c	2003-09-18 00:21:26.000000000 +0530
 @@ -77,6 +77,133 @@ struct raparms {
  static struct raparms *		raparml;
  static struct raparms *		raparm_cache;
@@ -392,7 +392,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	}
  
 +	struct lookup_intent it;
-+	intent_init(&it, IT_OPEN, filp->f_flags|filp->f_mode);
++	intent_init(&it, IT_OPEN, (filp->f_flags & ~O_ACCMODE) | filp->f_mode);
 +
 +	err = revalidate_it(dentry, &it);
 +	if (err)
@@ -424,7 +424,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  
  	err = nfserr_perm;
  	if (!flen)
-@@ -834,8 +977,24 @@ nfsd_create(struct svc_rqst *rqstp, stru
+@@ -834,20 +977,44 @@ nfsd_create(struct svc_rqst *rqstp, stru
  	dentry = fhp->fh_dentry;
  	dirp = dentry->d_inode;
  
@@ -437,8 +437,12 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 +			case S_IFBLK:
 +			case S_IFIFO:
 +			case S_IFSOCK:
-+			    if (dirp->i_op->mknod_raw)
++			case S_IFREG:
++			    if (dirp->i_op->mknod_raw) {
++					if (type == S_IFREG)
++						rdev = 0;
 +					error = mknod_raw(dentry, fname, flen, iap->ia_mode, rdev);
++				}
 +				break;
 +				default:
 +	                printk("nfsd: bad file type %o in nfsd_create\n", type);
@@ -450,7 +454,26 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  		goto out;
  	/*
  	 * Check whether the response file handle has been verified yet.
-@@ -868,10 +1027,12 @@ nfsd_create(struct svc_rqst *rqstp, stru
+ 	 * If it has, the parent directory should already be locked.
+ 	 */
+-	if (!resfhp->fh_dentry) {
+-		/* called from nfsd_proc_mkdir, or possibly nfsd3_proc_create */
+-		fh_lock(fhp);
++	if (!resfhp->fh_dentry || dirp->i_op->lookup_it) {
++		/* called from nfsd_proc_mkdir, or possibly nfsd3_proc_create
++		   and nfsd_proc_create in case of lustre
++		*/
++		if (!resfhp->fh_dentry)
++			fh_lock(fhp);
+ 		dchild = lookup_one_len(fname, dentry, flen);
+ 		err = PTR_ERR(dchild);
+ 		if (IS_ERR(dchild))
+ 			goto out_nfserr;
++		resfhp->fh_dentry = NULL;
+ 		err = fh_compose(resfhp, fhp->fh_export, dchild, fhp);
+ 		if (err)
+ 			goto out;
+@@ -868,10 +1035,12 @@ nfsd_create(struct svc_rqst *rqstp, stru
  	 * Make sure the child dentry is still negative ...
  	 */
  	err = nfserr_exist;
@@ -467,8 +490,13 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	}
  
  	if (!(iap->ia_valid & ATTR_MODE))
-@@ -887,13 +1048,15 @@ nfsd_create(struct svc_rqst *rqstp, stru
- 		err = vfs_create(dirp, dchild, iap->ia_mode);
+@@ -884,16 +1053,19 @@ nfsd_create(struct svc_rqst *rqstp, stru
+ 	err = nfserr_perm;
+ 	switch (type) {
+ 	case S_IFREG:
+-		err = vfs_create(dirp, dchild, iap->ia_mode);
++		if (error == -EOPNOTSUPP)
++			err = vfs_create(dirp, dchild, iap->ia_mode);
  		break;
  	case S_IFDIR:
 -		err = vfs_mkdir(dirp, dchild, iap->ia_mode);
@@ -485,19 +513,22 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  		break;
  	default:
  	        printk("nfsd: bad file type %o in nfsd_create\n", type);
-@@ -962,7 +1125,10 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
+@@ -962,7 +1134,13 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
  	/* Get all the sanity checks out of the way before
  	 * we lock the parent. */
  	err = nfserr_notdir;
 -	if(!dirp->i_op || !dirp->i_op->lookup)
-+	if (dirp->i_op->mknod_raw)
++	if (dirp->i_op->mknod_raw) {
 +		err = mknod_raw(dentry, fname, flen, iap->ia_mode, 0);
++		if (err && err != -EOPNOTSUPP)
++			goto out;
++	}
 +
 +	if(!dirp->i_op ||  !(dirp->i_op->lookup || dirp->i_op->lookup_it))
  		goto out;
  	fh_lock(fhp);
  
-@@ -1013,6 +1179,8 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
+@@ -1013,6 +1191,8 @@ nfsd_create_v3(struct svc_rqst *rqstp, s
  		case NFS3_CREATE_GUARDED:
  			err = nfserr_exist;
  		}
@@ -506,7 +537,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  		goto out;
  	}
  
-@@ -1119,7 +1287,7 @@ nfsd_symlink(struct svc_rqst *rqstp, str
+@@ -1119,7 +1299,7 @@ nfsd_symlink(struct svc_rqst *rqstp, str
  				struct iattr *iap)
  {
  	struct dentry	*dentry, *dnew;
@@ -515,7 +546,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  
  	err = nfserr_noent;
  	if (!flen || !plen)
-@@ -1133,12 +1301,18 @@ nfsd_symlink(struct svc_rqst *rqstp, str
+@@ -1133,12 +1313,18 @@ nfsd_symlink(struct svc_rqst *rqstp, str
  		goto out;
  	fh_lock(fhp);
  	dentry = fhp->fh_dentry;
@@ -535,7 +566,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	if (!err) {
  		if (EX_ISSYNC(fhp->fh_export))
  			nfsd_sync_dir(dentry);
-@@ -1148,7 +1322,10 @@ nfsd_symlink(struct svc_rqst *rqstp, str
+@@ -1148,7 +1334,10 @@ nfsd_symlink(struct svc_rqst *rqstp, str
  				iap->ia_valid |= ATTR_CTIME;
  				iap->ia_mode = (iap->ia_mode&S_IALLUGO)
  					| S_IFLNK;
@@ -547,7 +578,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  				if (!err && EX_ISSYNC(fhp->fh_export))
  					write_inode_now(dentry->d_inode, 1);
  		       }
-@@ -1206,7 +1383,10 @@ nfsd_link(struct svc_rqst *rqstp, struct
+@@ -1206,7 +1395,10 @@ nfsd_link(struct svc_rqst *rqstp, struct
  	dold = tfhp->fh_dentry;
  	dest = dold->d_inode;
  
@@ -559,7 +590,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	if (!err) {
  		if (EX_ISSYNC(ffhp->fh_export)) {
  			nfsd_sync_dir(ddir);
-@@ -1291,7 +1471,10 @@ nfsd_rename(struct svc_rqst *rqstp, stru
+@@ -1291,7 +1483,10 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  	} else
  #endif
@@ -571,7 +602,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
-@@ -1312,7 +1495,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
+@@ -1312,7 +1507,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  	fill_post_wcc(tfhp);
  	double_up(&tdir->i_sem, &fdir->i_sem);
  	ffhp->fh_locked = tfhp->fh_locked = 0;
@@ -580,7 +611,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  out:
  	return err;
  }
-@@ -1358,9 +1541,15 @@ nfsd_unlink(struct svc_rqst *rqstp, stru
+@@ -1358,9 +1553,15 @@ nfsd_unlink(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  		} else
  #endif
