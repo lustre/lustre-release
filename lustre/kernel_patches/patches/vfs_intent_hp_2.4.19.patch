@@ -519,7 +519,7 @@
 +		error = dentry->d_inode->i_op->follow_link(dentry, nd);
 +	if (error) {
 +		intent_release(dentry, it);
-+	}else if (it != NULL && !(it->it_int_flags & IT_FL_FOLLOWED)) {
++	} else if (it != NULL && !(it->it_int_flags & IT_FL_FOLLOWED)) {
 +		/* vfs_follow_link was never called */
 +		intent_release(dentry, it);
 +		path_release(nd);
