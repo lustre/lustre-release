@@ -22,27 +22,6 @@ After extracting the linux-2.4.18.tar.gz package, apply this patch as follows:
 	cd linux
 	patch -p1 < ../linux-2.4.18ea-0.8.26.patch
 
-diff -Nur linux-2.4.18/fs/ext3/file.c linux-2.4.18ea/fs/ext3/file.c
---- linux-2.4.18/fs/ext3/file.c	Thu Nov 15 22:37:55 2001
-+++ linux-2.4.18ea/fs/ext3/file.c	Sun Feb 24 04:34:43 2002
-@@ -23,6 +23,7 @@
- #include <linux/locks.h>
- #include <linux/jbd.h>
- #include <linux/ext3_fs.h>
-+#include <linux/ext3_xattr.h>
- #include <linux/ext3_jbd.h>
- #include <linux/smp_lock.h>
- 
-@@ -90,5 +91,9 @@
- struct inode_operations ext3_file_inode_operations = {
- 	truncate:	ext3_truncate,		/* BKL held */
- 	setattr:	ext3_setattr,		/* BKL held */
-+	setxattr:	ext3_setxattr,		/* BKL held */
-+	getxattr:	ext3_getxattr,		/* BKL held */
-+	listxattr:	ext3_listxattr,		/* BKL held */
-+	removexattr:	ext3_removexattr,	/* BKL held */
- };
- 
 diff -Nur linux-2.4.18/fs/ext3/ialloc.c linux-2.4.18ea/fs/ext3/ialloc.c
 --- linux-2.4.18/fs/ext3/ialloc.c	Sun Feb 24 04:42:59 2002
 +++ linux-2.4.18ea/fs/ext3/ialloc.c	Sun Feb 24 04:34:43 2002
@@ -134,7 +113,7 @@ diff -Nur linux-2.4.18/fs/ext3/inode.c linux-2.4.18ea/fs/ext3/inode.c
  		inode->i_op = &ext3_file_inode_operations;
  		inode->i_fop = &ext3_file_operations;
  		inode->i_mapping->a_ops = &ext3_aops;
-@@ -2131,13 +2138,15 @@
+@@ -2131,7 +2138,7 @@
  		inode->i_op = &ext3_dir_inode_operations;
  		inode->i_fop = &ext3_dir_operations;
  	} else if (S_ISLNK(inode->i_mode)) {
@@ -142,17 +121,7 @@ diff -Nur linux-2.4.18/fs/ext3/inode.c linux-2.4.18ea/fs/ext3/inode.c
 +		if (ext3_inode_is_fast_symlink(inode))
  			inode->i_op = &ext3_fast_symlink_inode_operations;
  		else {
--			inode->i_op = &page_symlink_inode_operations;
-+			inode->i_op = &ext3_symlink_inode_operations;
- 			inode->i_mapping->a_ops = &ext3_aops;
- 		}
--	} else 
-+	} else {
-+		inode->i_op = &ext3_special_inode_operations;
- 		init_special_inode(inode, inode->i_mode,
- 				   le32_to_cpu(iloc.raw_inode->i_block[0]));
-+	}
- 	/* inode->i_attr_flags = 0;				unused */
+ 			inode->i_op = &page_symlink_inode_operations;
 diff -Nur linux-2.4.18/fs/ext3/namei.c linux-2.4.18ea/fs/ext3/namei.c
 --- linux-2.4.18/fs/ext3/namei.c	Fri Nov  9 23:25:04 2001
 +++ linux-2.4.18ea/fs/ext3/namei.c	Mon Mar 11 03:27:00 2002
@@ -218,33 +187,13 @@ diff -Nur linux-2.4.18/fs/ext3/namei.c linux-2.4.18ea/fs/ext3/namei.c
  	inode->i_nlink = 0;
  	ext3_mark_inode_dirty(handle, inode);
  	iput (inode);
-@@ -917,7 +919,7 @@
+@@ -917,5 +919,5 @@
  		goto out_stop;
  
 -	if (l > sizeof (inode->u.ext3_i.i_data)) {
--		inode->i_op = &page_symlink_inode_operations;
 +	if (l > sizeof(EXT3_I(inode)->i_data)) {
-+		inode->i_op = &ext3_symlink_inode_operations;
+ 		inode->i_op = &page_symlink_inode_operations;
  		inode->i_mapping->a_ops = &ext3_aops;
- 		/*
- 		 * block_symlink() calls back into ext3_prepare/commit_write.
-@@ -1122,4 +1124,16 @@
- 	rmdir:		ext3_rmdir,		/* BKL held */
- 	mknod:		ext3_mknod,		/* BKL held */
- 	rename:		ext3_rename,		/* BKL held */
-+	setxattr:	ext3_setxattr,		/* BKL held */
-+	getxattr:	ext3_getxattr,		/* BKL held */
-+	listxattr:	ext3_listxattr,		/* BKL held */
-+	removexattr:	ext3_removexattr,	/* BKL held */
- };
-+
-+struct inode_operations ext3_special_inode_operations = {
-+	setxattr:	ext3_setxattr,		/* BKL held */
-+	getxattr:	ext3_getxattr,		/* BKL held */
-+	listxattr:	ext3_listxattr,		/* BKL held */
-+	removexattr:	ext3_removexattr,	/* BKL held */
-+};
-+
 diff -Nur linux-2.4.18/fs/ext3/super.c linux-2.4.18ea/fs/ext3/super.c
 --- linux-2.4.18/fs/ext3/super.c	Sun Feb 24 04:42:59 2002
 +++ linux-2.4.18ea/fs/ext3/super.c	Thu Apr  4 21:41:05 2002
@@ -294,42 +243,10 @@ diff -Nur linux-2.4.18/fs/ext3/super.c linux-2.4.18ea/fs/ext3/super.c
  }
  
  EXPORT_NO_SYMBOLS;
-diff -Nur linux-2.4.18/fs/ext3/symlink.c linux-2.4.18ea/fs/ext3/symlink.c
---- linux-2.4.18/fs/ext3/symlink.c	Fri Nov  9 23:25:04 2001
-+++ linux-2.4.18ea/fs/ext3/symlink.c	Mon Mar 11 03:27:00 2002
-@@ -20,6 +20,7 @@
- #include <linux/fs.h>
- #include <linux/jbd.h>
- #include <linux/ext3_fs.h>
-+#include <linux/ext3_xattr.h>
- 
- static int ext3_readlink(struct dentry *dentry, char *buffer, int buflen)
- {
-@@ -33,7 +34,20 @@
- 	return vfs_follow_link(nd, s);
- }
- 
-+struct inode_operations ext3_symlink_inode_operations = {
-+	readlink:	page_readlink,		/* BKL not held.  Don't need */
-+	follow_link:	page_follow_link,	/* BKL not held.  Don't need */
-+	setxattr:	ext3_setxattr,		/* BKL held */
-+	getxattr:	ext3_getxattr,		/* BKL held */
-+	listxattr:	ext3_listxattr,		/* BKL held */
-+	removexattr:	ext3_removexattr,	/* BKL held */
-+};
-+
- struct inode_operations ext3_fast_symlink_inode_operations = {
- 	readlink:	ext3_readlink,		/* BKL not held.  Don't need */
- 	follow_link:	ext3_follow_link,	/* BKL not held.  Don't need */
-+	setxattr:	ext3_setxattr,		/* BKL held */
-+	getxattr:	ext3_getxattr,		/* BKL held */
-+	listxattr:	ext3_listxattr,		/* BKL held */
-+	removexattr:	ext3_removexattr,	/* BKL held */
- };
 diff -Nur linux-2.4.18/fs/ext3/xattr.c linux-2.4.18ea/fs/ext3/xattr.c
 --- linux-2.4.18/fs/ext3/xattr.c	Thu Jan  1 01:00:00 1970
 +++ linux-2.4.18ea/fs/ext3/xattr.c	Wed Apr  3 13:19:05 2002
-@@ -0,0 +1,1241 @@
+@@ -0,0 +1,1247 @@
 +/*
 + * linux/fs/ext3/xattr.c
 + *
@@ -400,8 +317,14 @@ diff -Nur linux-2.4.18/fs/ext3/xattr.c linux-2.4.18ea/fs/ext3/xattr.c
 +#include <linux/quotaops.h>
 +#include <asm/semaphore.h>
 +#include <linux/compatmac.h>
++#include <linux/module.h>
 +
-+#define EXT3_EA_USER "user."
++/* These symbols may be needed by a module. */
++EXPORT_SYMBOL(extN_xattr_register);
++EXPORT_SYMBOL(extN_xattr_unregister);
++EXPORT_SYMBOL(extN_xattr_get);
++EXPORT_SYMBOL(extN_xattr_list);
++EXPORT_SYMBOL(extN_xattr_set);
 +
 +#if LINUX_VERSION_CODE < KERNEL_VERSION(2,4,0)
 +# define mark_buffer_dirty(bh) mark_buffer_dirty(bh, 1)
@@ -1659,17 +1582,6 @@ diff -Nur linux-2.4.18/include/linux/ext3_fs.h linux-2.4.18ea/include/linux/ext3
 +extern int ext3_forget(handle_t *, int, struct inode *, struct buffer_head *, int);
  extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
  extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
- 
-@@ -694,8 +670,10 @@
- 
- /* namei.c */
- extern struct inode_operations ext3_dir_inode_operations;
-+extern struct inode_operations ext3_special_inode_operations;
- 
- /* symlink.c */
-+extern struct inode_operations ext3_symlink_inode_operations;
- extern struct inode_operations ext3_fast_symlink_inode_operations;
- 
  
 diff -Nur linux-2.4.18/include/linux/ext3_jbd.h linux-2.4.18ea/include/linux/ext3_jbd.h
 --- linux-2.4.18/include/linux/ext3_jbd.h	Fri Dec 21 18:42:03 2001
