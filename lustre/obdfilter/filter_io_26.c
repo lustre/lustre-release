@@ -173,7 +173,7 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
         }
 
 	/* time to wait for I/O completion */
-        wait_event(dreq->wait, atomic_read(&dreq->numreqs) == 1);
+        wait_event(dreq->wait, atomic_read(&dreq->numreqs) == 0);
 
         /* free all bios */
         while (dreq->bio_list) {
