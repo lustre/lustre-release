@@ -39,7 +39,7 @@ sysio_tmp=$CWD/sysio_tmp_`date +%s`
 build_sysio_obj_list() {
   _objs=`$AR -t $1`
   mkdir -p $sysio_tmp
-  $AR $1
+  $AR -x $1
   mv $_objs $sysio_tmp
   for _lib in $_objs; do
     ALL_OBJS=$ALL_OBJS"$sysio_tmp/$_lib ";
