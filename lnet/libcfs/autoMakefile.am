@@ -17,4 +17,4 @@ sources:
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
 CLEANFILES = sources lib-*.c api-*.c
-DIST_SOURCES = $(libcfs-objs:%.o=%.c)
+DIST_SOURCES = $(portals-objs:%.o=%.c)
