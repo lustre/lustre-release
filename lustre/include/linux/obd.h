@@ -311,16 +311,6 @@ struct obd_ops {
         int (*o_cancel)(struct lustre_handle *, struct lov_stripe_md *md, __u32 mode, struct lustre_handle *);
 };
 
-#if BITS_PER_LONG > 32
-#define LPU64 "%lu"
-#define LPD64 "%ld"
-#define LPX64 "%#lx"
-#else
-#define LPU64 "%Lu"
-#define LPD64 "%Ld"
-#define LPX64 "%#Lx"
-#endif
-
 static inline void *mds_fs_start(struct mds_obd *mds, struct inode *inode,
                                  int op)
 {

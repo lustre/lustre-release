@@ -34,6 +34,16 @@
 #include <linux/portals_lib.h>
 #include <linux/lustre_idl.h>
 
+#if BITS_PER_LONG > 32
+#define LPU64 "%lu"
+#define LPD64 "%ld"
+#define LPX64 "%#lx"
+#else
+#define LPU64 "%Lu"
+#define LPD64 "%Ld"
+#define LPX64 "%#Lx"
+#endif
+
 #ifdef __KERNEL__
 /* l_net.c */
 struct ptlrpc_request;
