@@ -336,9 +336,9 @@ static int mds_read_last_rcvd(struct obd_device *obd, struct file *file)
 
         obd->obd_last_committed = mds->mds_last_transno;
         if (obd->obd_recoverable_clients) {
-                CWARN("RECOVERY: %d recoverable clients, last_transno "
-                       LPU64"\n", obd->obd_recoverable_clients,
-                       mds->mds_last_transno);
+                CWARN("RECOVERY: service %s, %d recoverable clients, "
+                      "last_transno "LPU64"\n", obd->obd_name,
+                      obd->obd_recoverable_clients, mds->mds_last_transno);
                 obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                 obd->obd_recovering = 1;
         }
