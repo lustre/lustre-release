@@ -282,7 +282,7 @@
  
 --- linux/fs/ext3/inode.c~ext3-delete_thread-2.4.20	Thu Jul 10 14:11:29 2003
 +++ linux-mmonroe/fs/ext3/inode.c	Thu Jul 10 14:11:33 2003
-@@ -2013,6 +2013,122 @@ out_stop:
+@@ -2013,6 +2013,118 @@ out_stop:
  	ext3_journal_stop(handle, inode);
  }
  
@@ -295,11 +295,6 @@
 + * If we defer it, we also mark how many blocks it would free, so that we
 + * can keep the statfs data correct, and we know if we should sleep on the
 + * delete thread when we run out of space.
-+ *
-+ * During normal filesystem usage, we are always called here with a
-+ * transaction already started.  The only time ext3_truncate is called
-+ * without a started transaction is from ext3_orphan_cleanup(), and we
-+ * currently just do a direct truncate in that case.
 + */
 +void ext3_truncate_thread(struct inode *old_inode)
 +{
@@ -352,15 +347,6 @@
 +		goto out_journal;
 +	}
 +
-+	if (ext3_orphan_add(handle, new_inode) < 0)
-+		goto out_journal;
-+
-+	if (ext3_orphan_del(handle, old_inode) < 0) {
-+		ext3_orphan_del(handle, new_inode);
-+		iput(new_inode);
-+		goto out_journal;
-+	}
-+
 +	nei = EXT3_I(new_inode);
 +
 +	down_write(&oei->truncate_sem);
@@ -372,6 +358,7 @@
 +
 +	/* FIXME when we do arbitrary truncates */
 +	old_inode->i_blocks = oei->i_file_acl ? old_inode->i_blksize / 512 : 0;
++	old_inode->i_mtime = old_inode->i_ctime = CURRENT_TIME;
 +
 +	memcpy(nei->i_data, oei->i_data, sizeof(nei->i_data));
 +	memset(oei->i_data, 0, sizeof(oei->i_data));
@@ -379,6 +366,15 @@
 +	nei->i_disksize = oei->i_disksize;
 +	nei->i_state |= EXT3_STATE_DELETE;
 +	up_write(&oei->truncate_sem);
++
++	if (ext3_orphan_add(handle, new_inode) < 0)
++		goto out_journal;
++
++	if (ext3_orphan_del(handle, old_inode) < 0) {
++		ext3_orphan_del(handle, new_inode);
++		iput(new_inode);
++		goto out_journal;
++	}
 +
 +	ext3_journal_stop(handle, old_inode);
 +
