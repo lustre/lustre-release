@@ -189,7 +189,8 @@ static void ll_writeback( struct inode *inode,
         for ( i = 0 ; i < llwp->npgs ; i++) {
                 struct page *page = llwp->pga[i].pg;
 
-                CDEBUG(D_CACHE, "cleaning page %p\n", page);
+                CDEBUG(D_CACHE, "finished page %p at index %lu\n", page,
+                       page->index);
                 LASSERT(PageLocked(page));
                 ll_remove_dirty(inode, page->index, page->index);
                 unlock_page(page);
