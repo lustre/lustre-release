@@ -442,9 +442,26 @@ static inline int obd_cancel_unused(struct lustre_handle *conn,
 extern int obd_init_caches(void);
 extern void obd_cleanup_caches(void);
 
-static inline struct lustre_handle *obd_oa2handle(struct obdo *oa)
+static inline struct lustre_handle *obdo_handle(struct obdo *oa)
 {
         return (struct lustre_handle *)&oa->o_inline;
+}
+
+static inline void obd_oa2handle(struct lustre_handle *handle, struct obdo *oa)
+{
+        if (oa->o_valid |= OBD_MD_FLHANDLE) {
+                struct lustre_handle *oa_handle = obdo_handle(oa);
+                memcpy(handle, oa_handle, sizeof(*handle));
+        }
+}
+
+static inline void obd_handle2oa(struct obdo *oa, struct lustre_handle *handle)
+{
+        if (handle->addr) {
+                struct lustre_handle *oa_handle = obdo_handle(oa);
+                memcpy(oa_handle, handle, sizeof(*handle));
+                oa->o_valid |= OBD_MD_FLHANDLE;
+        }
 }
 
 #ifdef __KERNEL__
