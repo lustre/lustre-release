@@ -286,15 +286,21 @@ void processPath(char *path)
 		int ost = lmm->lmm_stripe_offset;
 		int header = 1;
 
+		/* FIXME: temporary fix for bug 1612 */
+		if (lmm->lmm_ost_count == 0) {
+			oid = lmm->lmm_object_id;
+			printf("\tobdidx\t         objid\t       objid\n"
+			       "\t%6u\t%14llu\t%12llx\n", 0, oid, oid);
+		} else
 		for (i = 0; i < lmm->lmm_ost_count; i++, ost++) {
 			ost %= lmm->lmm_ost_count;
 			if ((oid = lmm->lmm_objects[ost].l_object_id)) {
 				if (header) {
-					printf("\tobdidx\t   objid\n");
+					printf("\tobdidx\t   objid\t   objid\n");
 					header = 0;
 				}
-				printf("\t%6u\t%8llu%s\n",
-				       ost, oid, obdindex == ost ? " *" : "");
+				printf("\t%6u\t%14llu\t%12llx%s\n",
+				       ost, oid, oid, obdindex == ost ? " *" : "");
 			}
 		}
 		printf("\n");
