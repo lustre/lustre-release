@@ -465,7 +465,7 @@ class LCTLInterface:
     
     def connect(self, srv):
         self.add_uuid(srv.net_type, srv.nid_uuid, srv.nid)
-        if srv.net_type  in ('tcp','openib','iib','vib') and not config.lctl_dump:
+        if srv.net_type  in ('tcp','openib','iib','vib','ra') and not config.lctl_dump:
             if srv.hostaddr[0]:
                 hostaddr = string.split(srv.hostaddr[0], '/')[0]
             self.add_peer(srv.net_type, srv.nid, hostaddr, srv.port)
