@@ -41,3 +41,5 @@ jbd-2.4.19-pre1-jcberr.patch
 seq-private-2.4.19-pre1.patch 
 kdev-2.4.19-pre1.patch 
 resched-2.4.19-pre1.patch
+ext3-xattr-ptr-arith-fix.patch
+gfp_memalloc-2.4.22.patch

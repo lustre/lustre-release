@@ -34,3 +34,5 @@ nfs_export_kernel-2.4.20-hp.patch
 ext3-ea-in-inode-2.4.20.patch
 listman-2.4.20.patch
 ext3-trusted_ea-2.4.20.patch
+gfp_memalloc-2.4.22.patch
+ext3-xattr-ptr-arith-fix.patch

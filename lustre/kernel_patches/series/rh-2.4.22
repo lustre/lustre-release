@@ -25,3 +25,4 @@ ext3-ea-in-inode-2.4.22-rh.patch
 listman-2.4.20.patch
 ext3-trusted_ea-2.4.20.patch
 gfp_memalloc-2.4.22.patch
+ext3-xattr-ptr-arith-fix.patch
