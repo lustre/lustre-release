@@ -436,6 +436,16 @@ if test x$enable_modules != xno ; then
 			AC_MSG_RESULT([no])
 		])
 
+	# --------- zap_page_range(vma) --------------------------------
+	AC_MSG_CHECKING([if zap_pag_range with vma parameter])
+	ZAP_PAGE_RANGE_VMA="`grep -c 'zap_page_range.*struct vm_area_struct' $LINUX/include/linux/mm.h`"
+	if test "$ZAP_PAGE_RANGE_VMA" != 0 ; then
+		AC_DEFINE(ZAP_PAGE_RANGE_VMA, 1, [zap_page_range with vma parameter])
+		AC_MSG_RESULT([yes])
+	else
+		AC_MSG_RESULT([no])
+	fi
+
 	# ---------- Red Hat 2.4.20 backports some 2.5 bits --------
 	# This needs to run after we've defined the KCPPFLAGS
 

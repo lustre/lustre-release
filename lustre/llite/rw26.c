@@ -51,51 +51,6 @@
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
-static int ll_writepage_26(struct page *page, struct writeback_control *wbc)
-{
-        struct inode *inode = page->mapping->host;
-        struct obd_export *exp;
-        struct ll_async_page *llap;
-        int rc;
-        ENTRY;
-
-        LASSERT(!PageDirty(page));
-        LASSERT(PageLocked(page));
-
-        exp = ll_i2obdexp(inode);
-        if (exp == NULL)
-                GOTO(out, rc = -EINVAL);
-
-        llap = llap_from_page(page);
-        if (IS_ERR(llap))
-                GOTO(out, rc = PTR_ERR(llap));
-
-        page_cache_get(page);
-        if (llap->llap_write_queued) {
-                LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
-                rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL,
-                                         llap->llap_cookie,
-                                         ASYNC_READY | ASYNC_URGENT);
-        } else {
-                llap->llap_write_queued = 1;
-                rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL,
-                                        llap->llap_cookie, OBD_BRW_WRITE, 0, 0,
-                                        0, ASYNC_READY | ASYNC_URGENT);
-                if (rc == 0)
-                        LL_CDEBUG_PAGE(D_PAGE, page, "mmap write queued\n");
-                else
-                        llap->llap_write_queued = 0;
-        }
-        if (rc)
-                page_cache_release(page);
-out:
-        if (rc)
-                unlock_page(page);
-        else
-                set_page_writeback(page);
-        RETURN(rc);
-}
-
 /* It is safe to not check anything in invalidatepage/releasepage below
    because they are run with page locked and all our io is happening with
    locked page too */
@@ -117,7 +72,7 @@ struct address_space_operations ll_aops = {
         .readpage       = ll_readpage,
 //        .readpages      = ll_readpages,
 //        .direct_IO      = ll_direct_IO_26,
-        .writepage      = ll_writepage_26,
+        .writepage      = ll_writepage,
         .writepages     = generic_writepages,
         .set_page_dirty = __set_page_dirty_nobuffers,
         .sync_page      = NULL,
