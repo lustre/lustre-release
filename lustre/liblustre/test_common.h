@@ -5,6 +5,7 @@ extern int exit_on_err;
 
 void t_touch(const char *path);
 void t_create(const char *path);
+void t_link(const char *src, const char *dst);
 void t_unlink(const char *path);
 void t_mkdir(const char *path);
 void t_rmdir(const char *path);

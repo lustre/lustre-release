@@ -62,6 +62,17 @@ void t_create(const char *path)
 #endif
 }
 
+void t_link(const char *src, const char *dst)
+{
+	int rc;
+
+	rc = link(src, dst);
+	if (rc) {
+		printf("link(%s -> %s) error: %s\n", src, dst);
+		EXIT(1);
+	}
+}
+
 void t_unlink(const char *path)
 {
         int rc;
