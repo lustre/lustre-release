@@ -13,7 +13,7 @@ EXTRA_PROGRAMS = extN
 #       You can either apply it as part of the extN build by uncommenting the
 #       line below, or apply it to the source kernel tree and fix ext3 also.
 # EXTNP = ext3-2.4.18-fixes.diff
-EXTNP+= htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
+EXTNP = htree-ext3-2.4.18.diff linux-2.4.18ea-0.8.26.diff
 EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c
