@@ -287,15 +287,13 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
         dentry->d_op = &ll_d_ops;
         d_add(dentry, inode);
 
-        if (ll_d2d(dentry) == NULL) {
+        if (ll_d2d(dentry) == NULL)
                 ll_set_dd(dentry);
-        }
-        down(&ll_d2d(dentry)->lld_it_sem);
+        // down(&ll_d2d(dentry)->lld_it_sem);
         // dentry->d_it = it;        
 
         if (it->it_op == IT_LOOKUP)
                 ll_intent_release(dentry);
-
 
         return NULL;
 
@@ -726,7 +724,7 @@ static int ll_rmdir(struct inode *dir, struct dentry *dentry)
 
         if (!dentry->d_it || dentry->d_it->it_disposition == 0) {
                 if (!ext2_empty_dir(inode))
-                        LBUG();
+                        RETURN(-ENOTEMPTY);
                 err = ll_common_unlink(dir, dentry, S_IFDIR);
         } else
                 err = dentry->d_it->it_status;
