@@ -10,9 +10,9 @@ PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
 PDSH='pdsh -S -w'
 
 # XXX I wish all this stuff was in some default-config.sh somewhere
-MDSNODE=${MDSNODE:-dev2}
-OSTNODE=${OSTNODE:-dev3}
-CLIENT=${CLIENTNODE:-dev4}
+MDSNODE=${MDSNODE:-mdev6}
+OSTNODE=${OSTNODE:-mdev7}
+CLIENT=${CLIENTNODE:-mdev8}
 NETWORKTYPE=${NETWORKTYPE:-tcp}
 MOUNTPT=${MOUNTPT:-/mnt/lustre}
 CONFIG=recovery-small.xml
@@ -120,5 +120,7 @@ fi
 setup
 drop_request "mcreate /mnt/lustre/1"
 drop_reply "mcreate /mnt/lustre/2"
-replay "mcreate /mnt/lustre/3"
+# replay "mcreate /mnt/lustre/3"
+drop_request "tchmod 111 /mnt/lustre/2"
+drop_reply "tchmod 666 /mnt/lustre/2"
 cleanup
