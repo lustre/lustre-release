@@ -83,6 +83,9 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                         bufcount = 2;
                         size[1] = sizeof(struct obdo); 
                         break;
+                case IT_RMDIR:
+                        bufcount = 1;
+                        break;
                 default:
                         LBUG();
                 }
@@ -107,6 +110,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 case IT_MKNOD:
                 case IT_LINK:
                 case IT_UNLINK:
+                case IT_RMDIR:
                 case IT_RENAME2:
                         if (mds_reint_p == NULL)
                                 mds_reint_p =
