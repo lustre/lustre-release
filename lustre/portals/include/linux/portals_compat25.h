@@ -19,5 +19,6 @@
 # define THREAD_NAME(comm, fmt, a...)					\
         sprintf(comm, fmt "|%d", ## a, current->thread.mode.tt.extern_pid)
 #else
-# define THREAD_NAME(comm, fmt, a...) strcpy(comm, base, ## a)
+# define THREAD_NAME(comm, fmt, a...)                                   \
+	sprintf(comm, fmt, ## a)
 #endif
