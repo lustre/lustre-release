@@ -57,20 +57,21 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
         int stripe_count = ost_count;
         int lmm_size;
         int i;
+        ENTRY;
 
         if (lsm)
                 stripe_count = lsm->lsm_stripe_count;
 
         /* XXX LOV STACKING call into osc for sizes */
-        lmm_size = lov_mds_md_size(stripe_count);
+        lmm_size = lov_mds_md_size(ost_count);
 
         if (!lmmp)
                 RETURN(lmm_size);
 
         if (*lmmp && !lsm) {
                 /* endianness */
-                stripe_count = ((*lmmp)->lmm_stripe_count);
-                OBD_FREE(*lmmp, lov_mds_md_size(stripe_count));
+                ost_count = ((*lmmp)->lmm_ost_count);
+                OBD_FREE(*lmmp, lov_mds_md_size(ost_count));
                 *lmmp = NULL;
                 RETURN(0);
         }
@@ -92,6 +93,7 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
         lmm->lmm_stripe_size = (lsm->lsm_stripe_size);
         lmm->lmm_stripe_pattern = (lsm->lsm_stripe_pattern);
         lmm->lmm_stripe_offset = (lsm->lsm_stripe_offset);
+        lmm->lmm_ost_count = (lov->desc.ld_tgt_count);
 
         /* Only fill in the object ids which we are actually using.
          * Assumes lmm_objects is otherwise zero-filled. */
@@ -99,7 +101,7 @@ int lov_packmd(struct lustre_handle *conn, struct lov_mds_md **lmmp,
                 /* XXX call down to osc_packmd() to do the packing */
                 lmm->lmm_objects[loi->loi_ost_idx].l_object_id = (loi->loi_id);
 
-        return lmm_size;
+        RETURN(lmm_size);
 }
 
 int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
@@ -114,6 +116,7 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
         int stripe_count = 0;
         int lsm_size;
         int i;
+        ENTRY;
 
         if (lmm)
                 /* endianness */
@@ -169,5 +172,5 @@ int lov_unpackmd(struct lustre_handle *conn, struct lov_stripe_md **lsmp,
                 loi++;
         }
 
-        return lsm_size;
+        RETURN(lsm_size);
 }
