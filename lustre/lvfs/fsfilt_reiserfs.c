@@ -167,7 +167,7 @@ static int fsfilt_reiserfs_statfs(struct super_block *sb, struct obd_statfs *osf
 
 static int fsfilt_reiserfs_sync(struct super_block *sb)
 {
-        return fsync_super(sb);
+        return fsync_dev(sb->s_dev);
 }
 
 static struct fsfilt_operations fsfilt_reiserfs_ops = {
