@@ -921,7 +921,9 @@ static int fsfilt_ext3_add_dir_entry(struct obd_device *obd,
         dentry->d_inum = ino;
         dentry->d_mdsnum = mds;
         dentry->d_generation = generation;
+        lock_kernel();
         err = ext3_add_dir_entry(dentry);
+        unlock_kernel();
         
         l_dput(dentry);
 
@@ -937,7 +939,9 @@ static int fsfilt_ext3_del_dir_entry(struct obd_device *obd,
 {
 #ifdef EXT3_FEATURE_INCOMPAT_MDSNUM
         int err;
+        lock_kernel();
         err = ext3_del_dir_entry(dentry);
+        unlock_kernel();
         if (err == 0)
                 d_drop(dentry);
         return err;
