@@ -56,6 +56,7 @@ int mds_open(struct mds_update_record *rec, int offset,
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct obd_device *obd = req->rq_export->exp_obd;
+        struct ldlm_reply *rep = lustre_msg_buf(req->rq_repmsg, 0);
         struct obd_ucred uc;
         struct obd_run_ctxt saved;
         struct lustre_handle lockh;
@@ -107,7 +108,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 RETURN(rc);
         }
         dir = parent->d_inode;
-        body->flags |= IT_OPEN_LOOKUP;
+        rep->lock_policy_res1 |= IT_OPEN_LOOKUP;
 
         down(&dir->i_sem);
         dchild = lookup_one_len(lustre_msg_buf(req->rq_reqmsg, 3),
@@ -118,16 +119,16 @@ int mds_open(struct mds_update_record *rec, int offset,
         }
 
         if (dchild->d_inode) 
-                body->flags |= IT_OPEN_POS;
+                rep->lock_policy_res1 |= IT_OPEN_POS;
         else 
-                body->flags |= IT_OPEN_NEG;
+                rep->lock_policy_res1 |= IT_OPEN_NEG;
 
         /* Negative dentry, just create the file */
         if ((rec->ur_flags & O_CREAT) && !dchild->d_inode) {
                 int err;
                 void *handle;
                 mds_start_transno(mds);
-                body->flags |= IT_OPEN_CREATE;
+                rep->lock_policy_res1 |= IT_OPEN_CREATE;
                 handle = fsfilt_start(obd, dir, FSFILT_OP_CREATE);
                 if (IS_ERR(handle)) {
                         rc = PTR_ERR(handle);
@@ -162,7 +163,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         if (!S_ISREG(dchild->d_inode->i_mode))
                 GOTO(out_ldput, rc = 0);
 
-        body->flags |= IT_OPEN_OPEN;
+        rep->lock_policy_res1 |= IT_OPEN_OPEN;
         mfd = kmem_cache_alloc(mds_file_cache, GFP_KERNEL);
         if (!mfd) {
                 CERROR("mds: out of memory\n");
