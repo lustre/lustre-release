@@ -481,27 +481,31 @@ static int ll_create(struct inode *dir, struct dentry *dentry, int mode)
 static int ll_mknod(struct inode *dir, struct dentry *dentry, int mode,
                     int rdev)
 {
+        struct lookup_intent *it;
         struct inode *inode;
-        int err = 0;
+        int rc = 0;
+
+        it = dentry->d_it;
 
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
-                               NULL, 0, mode, rdev, dentry->d_it, NULL);
+                               NULL, 0, mode, rdev, it, NULL);
 
         if (IS_ERR(inode))
                 RETURN(PTR_ERR(inode));
 
         /* no directory data updates when intents rule */
-        if (dentry->d_it && dentry->d_it->it_disposition)
+        if (it && it->it_disposition)
                 d_instantiate(dentry, inode);
         else
-                err = ext2_add_nondir(dentry, inode);
+                rc = ext2_add_nondir(dentry, inode);
 
-        return err;
+        return rc;
 }
 
 static int ll_symlink(struct inode *dir, struct dentry *dentry,
                       const char *symname)
 {
+        struct lookup_intent *it;
         unsigned l = strlen(symname);
         struct inode *inode;
         struct ll_inode_info *lli;
@@ -510,9 +514,11 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
 
         CHECK_MOUNT_EPOCH(dir);
 
+        it = dentry->d_it;
+
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
                                symname, l, S_IFLNK | S_IRWXUGO, 0,
-                               dentry->d_it, NULL);
+                               it, NULL);
         if (IS_ERR(inode))
                 RETURN(PTR_ERR(inode));
 
@@ -529,7 +535,7 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         inode->i_size = l;
 
         /* no directory data updates when intents rule */
-        if (dentry->d_it && dentry->d_it->it_disposition)
+        if (it && it->it_disposition)
                 d_instantiate(dentry, inode);
         else
                 err = ext2_add_nondir(dentry, inode);
@@ -540,9 +546,11 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
 static int ll_link(struct dentry *old_dentry, struct inode * dir,
                    struct dentry *dentry)
 {
+        struct lookup_intent *it;
         struct inode *inode = old_dentry->d_inode;
-        struct lookup_intent *it = dentry->d_it;
         int rc;
+
+        it = dentry->d_it;
 
         if (it && it->it_disposition) {
                 if (it->it_status)
@@ -575,6 +583,7 @@ static int ll_link(struct dentry *old_dentry, struct inode * dir,
 
 static int ll_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 {
+        struct lookup_intent *it;
         struct inode * inode;
         int err = -EMLINK;
         ENTRY;
@@ -584,8 +593,10 @@ static int ll_mkdir(struct inode *dir, struct dentry *dentry, int mode)
 
         ext2_inc_count(dir);
 
+        it = dentry->d_it;
+
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
-                               NULL, 0, S_IFDIR | mode, 0, dentry->d_it, NULL);
+                               NULL, 0, S_IFDIR | mode, 0, it, NULL);
         err = PTR_ERR(inode);
         if (IS_ERR(inode))
                 goto out_dir;
@@ -597,7 +608,7 @@ static int ll_mkdir(struct inode *dir, struct dentry *dentry, int mode)
                 goto out_fail;
 
         /* no directory data updates when intents rule */
-        if (dentry->d_it->it_disposition == 0) {
+        if (!it || !it->it_disposition) {
                 err = ll_add_link(dentry, inode);
                 if (err)
                         goto out_fail;
@@ -619,9 +630,9 @@ out_dir:
         goto out;
 }
 
-static int ll_common_unlink(struct inode *dir, struct dentry *dentry,__u32 mode)
+static int ll_common_unlink(struct inode *dir, struct dentry *dentry,
+                            struct lookup_intent *it, __u32 mode)
 {
-        struct lookup_intent *it = dentry->d_it;
         struct inode *inode = dentry->d_inode;
         struct ext2_dir_entry_2 * de;
         struct page * page;
@@ -639,7 +650,7 @@ static int ll_common_unlink(struct inode *dir, struct dentry *dentry,__u32 mode)
         if (!de)
                 GOTO(out, rc = -ENOENT);
         rc = ll_mdc_unlink(dir, dentry->d_inode, mode,
-                            dentry->d_name.name, dentry->d_name.len);
+                           dentry->d_name.name, dentry->d_name.len);
         if (rc)
                 GOTO(out, rc);
 
@@ -661,20 +672,26 @@ out:
 
 static int ll_unlink(struct inode *dir, struct dentry *dentry)
 {
-        return ll_common_unlink(dir, dentry, S_IFREG);
+        struct lookup_intent *it;
+
+        it = dentry->d_it;
+
+        return ll_common_unlink(dir, dentry, it, S_IFREG);
 }
 
 static int ll_rmdir(struct inode *dir, struct dentry *dentry)
 {
         struct inode * inode = dentry->d_inode;
-        struct lookup_intent *it = dentry->d_it;
-        int rc = 0;
+        struct lookup_intent *it;
+        int rc;
         ENTRY;
+
+        it = dentry->d_it;
 
         if ((!it || !it->it_disposition) && !ext2_empty_dir(inode))
                 RETURN(-ENOTEMPTY);
 
-        rc = ll_common_unlink(dir, dentry, S_IFDIR);
+        rc = ll_common_unlink(dir, dentry, it, S_IFDIR);
         if (!rc) {
                 inode->i_size = 0;
                 ext2_dec_count(inode);
@@ -687,7 +704,7 @@ static int ll_rmdir(struct inode *dir, struct dentry *dentry)
 static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
                      struct inode * new_dir, struct dentry * new_dentry)
 {
-        struct lookup_intent *it = new_dentry->d_it;
+        struct lookup_intent *it;
         struct inode * old_inode = old_dentry->d_inode;
         struct inode * tgt_inode = new_dentry->d_inode;
         struct page * dir_page = NULL;
@@ -695,6 +712,8 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
         struct ext2_dir_entry_2 * old_de;
         struct page * old_page;
         int err;
+
+        it = new_dentry->d_it;
 
         if (it && it->it_disposition) {
                 if (tgt_inode) {

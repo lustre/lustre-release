@@ -41,28 +41,30 @@ void ll_release(struct dentry *de)
 
 void ll_intent_release(struct dentry *de)
 {
+        struct lookup_intent *it;
         struct lustre_handle *handle;
         ENTRY;
 
-        if (de->d_it == NULL) {
+        it = de->d_it;
+        if (it == NULL) {
                 EXIT;
                 return;
         }
 
         LASSERT(ll_d2d(de) != NULL);
 
-        if (de->d_it->it_lock_mode) {
-                handle = (struct lustre_handle *)de->d_it->it_lock_handle;
-                if (de->d_it->it_op == IT_SETATTR) {
+        if (it->it_lock_mode) {
+                handle = (struct lustre_handle *)it->it_lock_handle;
+                if (it->it_op == IT_SETATTR) {
                         int rc;
-                        ldlm_lock_decref(handle, de->d_it->it_lock_mode);
+                        ldlm_lock_decref(handle, it->it_lock_mode);
                         rc = ldlm_cli_cancel(handle);
                         if (rc < 0)
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
                 } else
-                        ldlm_lock_decref(handle, de->d_it->it_lock_mode);
+                        ldlm_lock_decref(handle, it->it_lock_mode);
         }
-        // de->d_it = NULL;
+        de->d_it = NULL;
         //up(&ll_d2d(de)->lld_it_sem);
         EXIT;
 }
