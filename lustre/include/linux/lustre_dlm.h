@@ -17,6 +17,7 @@ typedef enum {
 
         ELDLM_LOCK_CHANGED = 300,
         ELDLM_LOCK_ABORTED = 301,
+        ELDLM_RESOURCE_FREED = 302,
 
         ELDLM_NAMESPACE_EXISTS = 400,
         ELDLM_BAD_NAMESPACE    = 401
@@ -30,6 +31,7 @@ typedef enum {
 #define LDLM_FL_BLOCK_CONV     (1 << 2)
 #define LDLM_FL_BLOCK_WAIT     (1 << 3)
 #define LDLM_FL_DYING          (1 << 4)
+#define LDLM_FL_AST_SENT       (1 << 5)
 
 #define L2B(c) (1 << c)
 
@@ -115,7 +117,7 @@ struct ldlm_lock {
         struct ptlrpc_connection *l_connection;
         struct ptlrpc_client *l_client;
         __u32                 l_flags;
-        struct ldlm_handle    l_remote_handle;
+        struct lustre_handle    l_remote_handle;
         void                 *l_data;
         __u32                 l_data_len;
         void                 *l_cookie;
@@ -171,18 +173,6 @@ static inline struct ldlm_extent *ldlm_res2extent(struct ldlm_resource *res)
         return (struct ldlm_extent *)(res->lr_name);
 }
 
-static inline void *ldlm_handle2object(struct ldlm_handle *handle)
-{
-        if (handle) 
-                return (void *)(unsigned long)(handle->addr);
-        return NULL; 
-}
-
-static inline void ldlm_object2handle(void *object, struct ldlm_handle *handle)
-{
-        handle->addr = (__u64)(unsigned long)object;
-}
-
 extern struct obd_ops ldlm_obd_ops;
 
 /* ldlm_extent.c */
@@ -197,20 +187,20 @@ void ldlm_lock_decref(struct ldlm_lock *lock, __u32 mode);
 void ldlm_grant_lock(struct ldlm_resource *res, struct ldlm_lock *lock);
 int ldlm_local_lock_match(struct ldlm_namespace *ns, __u64 *res_id, __u32 type,
                           void *cookie, int cookielen, ldlm_mode_t mode,
-                          struct ldlm_handle *lockh);
+                          struct lustre_handle *lockh);
 ldlm_error_t ldlm_local_lock_create(struct ldlm_namespace *ns,
-                                    struct ldlm_handle *parent_lock_handle,
+                                    struct lustre_handle *parent_lock_handle,
                                     __u64 *res_id, __u32 type,
                                      ldlm_mode_t mode,
                                     void *data,
                                     __u32 data_len,
-                                    struct ldlm_handle *lockh);
-ldlm_error_t ldlm_local_lock_enqueue(struct ldlm_handle *lockh,
+                                    struct lustre_handle *lockh);
+ldlm_error_t ldlm_local_lock_enqueue(struct lustre_handle *lockh,
                                      void *cookie, int cookie_len,
                                      int *flags,
                                      ldlm_lock_callback completion,
                                      ldlm_lock_callback blocking);
-struct ldlm_resource *ldlm_local_lock_convert(struct ldlm_handle *lockh,
+struct ldlm_resource *ldlm_local_lock_convert(struct lustre_handle *lockh,
                                               int new_mode, int *flags);
 struct ldlm_resource *ldlm_local_lock_cancel(struct ldlm_lock *lock);
 void ldlm_reprocess_all(struct ldlm_resource *res);
@@ -239,7 +229,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl,
                      struct ptlrpc_connection *peer,
                      struct ptlrpc_request *req,
                      struct ldlm_namespace *ns,
-                     struct ldlm_handle *parent_lock_handle,
+                     struct lustre_handle *parent_lock_handle,
                      __u64 *res_id,
                      __u32 type,
                      void *cookie, int cookielen,
@@ -248,10 +238,10 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl,
                      ldlm_lock_callback callback,
                      void *data,
                      __u32 data_len,
-                     struct ldlm_handle *lockh);
+                     struct lustre_handle *lockh);
 int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
                       void *data, __u32 data_len);
-int ldlm_cli_convert(struct ptlrpc_client *, struct ldlm_handle *,
+int ldlm_cli_convert(struct ptlrpc_client *, struct lustre_handle *,
                      int new_mode, int *flags);
 int ldlm_cli_cancel(struct ptlrpc_client *, struct ldlm_lock *);
 

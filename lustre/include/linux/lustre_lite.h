@@ -40,6 +40,7 @@ struct ll_inode_info {
         int              lli_flags;
         __u64            lli_objid; 
         char             lli_inline[LL_INLINESZ];
+        struct lustre_handle lli_intent_lock_handle;
 };
 
 #define LL_SUPER_MAGIC 0x0BD00BD0
@@ -116,8 +117,8 @@ static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
 
 /* namei.c */
 int ll_lock(struct inode *dir, struct dentry *dentry,
-            struct lookup_intent *it, struct ldlm_handle *lockh);
-int ll_unlock(__u32 mode, struct ldlm_handle *lockh);
+            struct lookup_intent *it, struct lustre_handle *lockh);
+int ll_unlock(__u32 mode, struct lustre_handle *lockh);
 
 
 
