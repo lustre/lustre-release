@@ -138,7 +138,6 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
         }
 
         memset(request, 0, sizeof(*request));
-        //spin_lock_init(&request->rq_lock);
 
         spin_lock(&cl->cli_lock);
         request->rq_xid = cl->cli_xid++;
@@ -227,12 +226,10 @@ int ptlrpc_abort(struct ptlrpc_request *request)
 {
         /* First remove the ME for the reply; in theory, this means
          * that we can tear down the buffer safely. */
-        //spin_lock(&request->rq_lock);
         PtlMEUnlink(request->rq_reply_me_h);
-        OBD_FREE(request->rq_repbuf, request->rq_replen);
+        OBD_FREE(request->rq_reply_md.start, request->rq_replen);
         request->rq_repbuf = NULL;
         request->rq_replen = 0;
-        //spin_unlock(&request->rq_lock);
 
         return 0;
 }

@@ -50,8 +50,7 @@ static int sent_packet_callback(ptl_event_t *ev, void *data)
                 LBUG();
         }
 
-        EXIT;
-        return 1;
+        RETURN(1);
 }
 
 /*
@@ -72,8 +71,7 @@ static int rcvd_reply_callback(ptl_event_t *ev, void *data)
                 LBUG();
         }
 
-        EXIT;
-        return 1;
+        RETURN(1);
 }
 
 int server_request_callback(ptl_event_t *ev, void *data)

@@ -201,6 +201,7 @@ int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *);
 int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *, int portal);
 int ptl_send_buf(struct ptlrpc_request *, struct lustre_peer *, int portal);
 int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *);
+int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *bulk);
 int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_service *svc,
                  struct ptlrpc_request *req);
 int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,

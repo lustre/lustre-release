@@ -60,8 +60,8 @@ void mds_create_pack(struct mds_rec_create *rec, struct inode *inode,
         }
 }
 
-
-void mds_setattr_pack(struct mds_rec_setattr *rec, struct inode *inode, struct iattr *iattr)
+void mds_setattr_pack(struct mds_rec_setattr *rec, struct inode *inode,
+                      struct iattr *iattr)
 {
         rec->sa_reclen = HTON__u32(sizeof(*rec));
         rec->sa_opcode = HTON__u32(REINT_SETATTR);

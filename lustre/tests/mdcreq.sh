@@ -3,19 +3,16 @@
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
-setup
+NETWORK=tcp
+LOCALHOST=localhost
+SERVER=localhost
+PORT=1234
 
-$PTLCTL <<EOF
-mynid localhost
-setup tcp
-connect localhost 1234
-add_uuid self
-add_uuid mds
-quit
-EOF
+setup
+setup_portals
 
 MDSFS=ext2
-new_fs ${MDSFS} /tmp/mds 10000
+new_fs ${MDSFS} /tmp/mds 1000
 MDS=$LOOPDEV
 
 echo 0xffffffff > /proc/sys/portals/debug
@@ -28,4 +25,12 @@ quit
 EOF
 
 mknod /dev/request c 10 244
-# $R/usr/src/obd/tests/testreq
+
+./testreq --getattr
+./testreq --setattr
+./testreq --readpage
+./testreq --open
+./testreq --close junk_file_handle
+./testreq --create
+
+echo "Done."

@@ -39,8 +39,6 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         int rc = 0;
         mm_segment_t oldfs = get_fs();
 
-        OBD_FAIL_RETURN(OBD_FAIL_MDS_SENDPAGE, -EIO);
-
         if (req->rq_peer.peer_nid == 0) {
                 /* dst->addr is a user address, but in a different task! */
                 char *buf = (char *)(long)dst->addr;
@@ -87,6 +85,12 @@ int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 bulk->b_buflen = PAGE_SIZE;
 
                 rc = ptlrpc_send_bulk(bulk, MDS_BULK_PORTAL);
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE)) {
+                        CERROR("obd_fail_loc=%x, fail operation rc=%d\n",
+                               OBD_FAIL_MDS_SENDPAGE, rc);
+                        PtlMDUnlink(bulk->b_md_h);
+                        GOTO(cleanup_buf, rc);
+                }
                 wait_event_interruptible(bulk->b_waitq,
                                          ptlrpc_check_bulk_sent(bulk));
 
@@ -279,7 +283,6 @@ int mds_close(struct ptlrpc_request *req)
         return 0;
 }
 
-
 int mds_readpage(struct ptlrpc_request *req)
 {
         struct vfsmount *mnt;
@@ -385,6 +388,9 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                 CDEBUG(D_INODE, "readpage\n");
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_READPAGE_NET, 0);
                 rc = mds_readpage(req);
+
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
+                        return 0;
                 break;
 
         case MDS_REINT:

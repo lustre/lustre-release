@@ -119,7 +119,6 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *bulk, int portal)
 {
         int rc;
         ptl_process_id_t remote_id;
-        ptl_handle_md_t md_h;
 
         bulk->b_md.start = bulk->b_buf;
         bulk->b_md.length = bulk->b_buflen;
@@ -128,7 +127,7 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *bulk, int portal)
         bulk->b_md.options = PTL_MD_OP_PUT;
         bulk->b_md.user_ptr = bulk;
 
-        rc = PtlMDBind(bulk->b_peer.peer_ni, bulk->b_md, &md_h);
+        rc = PtlMDBind(bulk->b_peer.peer_ni, bulk->b_md, &bulk->b_md_h);
         if (rc != 0) {
                 CERROR("PtlMDBind failed: %d\n", rc);
                 LBUG();
@@ -141,11 +140,12 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *bulk, int portal)
         CDEBUG(D_NET, "Sending %d bytes to portal %d, xid %d\n",
                bulk->b_md.length, portal, bulk->b_xid);
 
-        rc = PtlPut(md_h, PTL_ACK_REQ, remote_id, portal, 0, bulk->b_xid, 0, 0);
+        rc = PtlPut(bulk->b_md_h, PTL_ACK_REQ, remote_id, portal, 0,
+                    bulk->b_xid, 0, 0);
         if (rc != PTL_OK) {
                 CERROR("PtlPut(%d, %d, %d) failed: %d\n", remote_id.nid,
                        portal, bulk->b_xid, rc);
-                PtlMDUnlink(md_h);
+                PtlMDUnlink(bulk->b_md_h);
                 LBUG();
         }
 
@@ -164,8 +164,7 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *bulk)
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
                 LBUG();
-                EXIT;
-                goto cleanup1;
+                GOTO(cleanup, rc);
         }
 
         bulk->b_md.start = bulk->b_buf;
@@ -180,20 +179,27 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *bulk)
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
                 LBUG();
-                EXIT;
-                goto cleanup2;
+                GOTO(cleanup, rc);
         }
 
         CDEBUG(D_NET, "Setup bulk sink buffer: %u bytes, xid %u, portal %u\n",
                bulk->b_buflen, bulk->b_xid, bulk->b_portal);
-        EXIT;
-        return 0;
+        RETURN(0);
 
         // XXX Confirm that this is safe!
- cleanup2:
-        PtlMDUnlink(bulk->b_md_h);
- cleanup1:
+ cleanup:
         PtlMEUnlink(bulk->b_me_h);
+        return rc;
+}
+
+int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *bulk)
+{
+        int rc;
+
+        rc = PtlMEUnlink(bulk->b_me_h);
+        if (rc != PTL_OK)
+                CERROR("PtlMEUnlink failed: %d\n", rc);
+
         return rc;
 }
 
@@ -275,20 +281,18 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl)
         if (NTOH__u32(hdr->type) != PTL_RPC_REQUEST) {
                 CERROR("wrong packet type sent %d\n", NTOH__u32(hdr->type));
                 LBUG();
+                RETURN(-EINVAL);
         }
         if (request->rq_replen == 0) {
                 CERROR("request->rq_replen is 0!\n");
-                EXIT;
-                return -EINVAL;
+                RETURN(-EINVAL);
         }
 
         /* request->rq_repbuf is set only when the reply comes in, in
          * client_packet_callback() */
         OBD_ALLOC(repbuf, request->rq_replen);
-        if (!repbuf) { 
-                EXIT;
-                return -ENOMEM;
-        }
+        if (!repbuf)
+                RETURN(-ENOMEM);
 
         local_id.nid = PTL_ID_ANY;
         local_id.pid = PTL_ID_ANY;
@@ -301,8 +305,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl)
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
                 LBUG();
-                EXIT;
-                goto cleanup;
+                GOTO(cleanup, rc);
         }
 
         request->rq_type = PTL_RPC_REQUEST;
@@ -318,14 +321,14 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl)
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
                 LBUG();
-                EXIT;
-                goto cleanup2;
+                GOTO(cleanup2, rc);
         }
 
         CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid %u, portal %u\n",
                request->rq_replen, request->rq_xid, request->rq_reply_portal);
 
-        return ptl_send_buf(request, &cl->cli_server, request->rq_req_portal);
+        rc = ptl_send_buf(request, &cl->cli_server, request->rq_req_portal);
+        RETURN(rc);
 
  cleanup2:
         PtlMEUnlink(request->rq_reply_me_h);

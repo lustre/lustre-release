@@ -140,11 +140,11 @@ static struct super_block * ll_read_super(struct super_block *sb,
         connected = 1;
 
         /* the first parameter should become an mds device no */
-        err = ptlrpc_connect_client(-1, "mds", 
+        err = ptlrpc_connect_client(-1, "mds",
                                     MDS_REQUEST_PORTAL,
                                     MDC_REPLY_PORTAL,
                                     mds_pack_req,
-                                    mds_unpack_rep, 
+                                    mds_unpack_rep,
                                     &sbi->ll_mds_client);
         
         if (err) {

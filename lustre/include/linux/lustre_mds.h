@@ -26,6 +26,8 @@
 #ifndef _LUSTRE_MDS_H
 #define _LUSTRE_MDS_H
 
+#ifdef __KERNEL__
+
 #include <linux/obd_class.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_net.h>
@@ -161,6 +163,8 @@ static inline ssize_t mds_fs_readpage(struct mds_obd *mds, struct file *file,
 extern struct mds_fs_operations mds_ext2_fs_ops;
 extern struct mds_fs_operations mds_ext3_fs_ops;
 
+#endif /* __KERNEL__ */
+
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'
 #define IOC_REQUEST_MIN_NR                 30
@@ -169,6 +173,8 @@ extern struct mds_fs_operations mds_ext3_fs_ops;
 #define IOC_REQUEST_READPAGE            _IOWR('f', 31, long)
 #define IOC_REQUEST_SETATTR             _IOWR('f', 32, long)
 #define IOC_REQUEST_CREATE              _IOWR('f', 33, long)
-#define IOC_REQUEST_MAX_NR               33
+#define IOC_REQUEST_OPEN                _IOWR('f', 34, long)
+#define IOC_REQUEST_CLOSE               _IOWR('f', 35, long)
+#define IOC_REQUEST_MAX_NR               35
 
 #endif

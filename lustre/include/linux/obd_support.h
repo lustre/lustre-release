@@ -31,51 +31,48 @@
 extern unsigned long obd_memory;
 extern unsigned long obd_fail_loc;
 
-enum {
-        OBD_FAIL_MDS = 0x100,
-        OBD_FAIL_MDS_HANDLE_UNPACK,
-        OBD_FAIL_MDS_GETATTR_NET,
-        OBD_FAIL_MDS_GETATTR_PACK,
-        OBD_FAIL_MDS_READPAGE_NET,
-        OBD_FAIL_MDS_READPAGE_PACK,
-        OBD_FAIL_MDS_SENDPAGE,
-        OBD_FAIL_MDS_REINT_NET,
-        OBD_FAIL_MDS_REINT_UNPACK,
-        OBD_FAIL_MDS_REINT_SETATTR,
-        OBD_FAIL_MDS_REINT_SETATTR_WRITE,
-        OBD_FAIL_MDS_REINT_CREATE,
-        OBD_FAIL_MDS_REINT_CREATE_WRITE,
-        OBD_FAIL_MDS_REINT_UNLINK,
-        OBD_FAIL_MDS_REINT_UNLINK_WRITE,
-        OBD_FAIL_MDS_REINT_LINK,
-        OBD_FAIL_MDS_REINT_LINK_WRITE,
-        OBD_FAIL_MDS_REINT_RENAME,
-        OBD_FAIL_MDS_REINT_RENAME_WRITE,
-        OBD_FAIL_MDS_OPEN_NET,
-        OBD_FAIL_MDS_OPEN_PACK,
-        OBD_FAIL_MDS_CLOSE_NET,
-        OBD_FAIL_MDS_CLOSE_PACK,
+#define OBD_FAIL_MDS                     0x100
+#define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
+#define OBD_FAIL_MDS_GETATTR_NET         0x102
+#define OBD_FAIL_MDS_GETATTR_PACK        0x103
+#define OBD_FAIL_MDS_READPAGE_NET        0x104
+#define OBD_FAIL_MDS_READPAGE_PACK       0x105
+#define OBD_FAIL_MDS_SENDPAGE            0x106
+#define OBD_FAIL_MDS_REINT_NET           0x107
+#define OBD_FAIL_MDS_REINT_UNPACK        0x108
+#define OBD_FAIL_MDS_REINT_SETATTR       0x109
+#define OBD_FAIL_MDS_REINT_SETATTR_WRITE 0x10a
+#define OBD_FAIL_MDS_REINT_CREATE        0x10b
+#define OBD_FAIL_MDS_REINT_CREATE_WRITE  0x10c
+#define OBD_FAIL_MDS_REINT_UNLINK        0x10d
+#define OBD_FAIL_MDS_REINT_UNLINK_WRITE  0x10e
+#define OBD_FAIL_MDS_REINT_LINK          0x10f
+#define OBD_FAIL_MDS_REINT_LINK_WRITE    0x110
+#define OBD_FAIL_MDS_REINT_RENAME        0x111
+#define OBD_FAIL_MDS_REINT_RENAME_WRITE  0x112
+#define OBD_FAIL_MDS_OPEN_NET            0x113
+#define OBD_FAIL_MDS_OPEN_PACK           0x114
+#define OBD_FAIL_MDS_CLOSE_NET           0x115
+#define OBD_FAIL_MDS_CLOSE_PACK          0x116
 
-        OBD_FAIL_OST = 0x200,
-        OBD_FAIL_OST_CONNECT_NET,
-        OBD_FAIL_OST_DISCONNECT_NET,
-        OBD_FAIL_OST_GET_INFO_NET,
-        OBD_FAIL_OST_CREATE_NET,
-        OBD_FAIL_OST_DESTROY_NET,
-        OBD_FAIL_OST_GETATTR_NET,
-        OBD_FAIL_OST_SETATTR_NET,
-        OBD_FAIL_OST_OPEN_NET,
-        OBD_FAIL_OST_CLOSE_NET,
-        OBD_FAIL_OST_BRW_NET,
-        OBD_FAIL_OST_PUNCH_NET,
+#define OBD_FAIL_OST                     0x200
+#define OBD_FAIL_OST_CONNECT_NET         0x201
+#define OBD_FAIL_OST_DISCONNECT_NET      0x202
+#define OBD_FAIL_OST_GET_INFO_NET        0x203
+#define OBD_FAIL_OST_CREATE_NET          0x204
+#define OBD_FAIL_OST_DESTROY_NET         0x205
+#define OBD_FAIL_OST_GETATTR_NET         0x206
+#define OBD_FAIL_OST_SETATTR_NET         0x207
+#define OBD_FAIL_OST_OPEN_NET            0x208
+#define OBD_FAIL_OST_CLOSE_NET           0x209
+#define OBD_FAIL_OST_BRW_NET             0x20a
+#define OBD_FAIL_OST_PUNCH_NET           0x20b
 
-        OBB_FAIL_LDLM = 0x300,
-        OBD_FAIL_LDLM_ENQUEUE,
-        OBD_FAIL_LDLM_CONVERT,
-        OBD_FAIL_LDLM_CANCEL,
-        OBD_FAIL_LDLM_CALLBACK,
-
-};
+#define OBB_FAIL_LDLM                    0x300
+#define OBD_FAIL_LDLM_ENQUEUE            0x301
+#define OBD_FAIL_LDLM_CONVERT            0x302
+#define OBD_FAIL_LDLM_CANCEL             0x303
+#define OBD_FAIL_LDLM_CALLBACK           0x304
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
