@@ -3,7 +3,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	* Bug fixes
  	- clear page cache after eviction  (2766)
 
-tbd  Cluster File Systems, Inc. <info@clusterfs.com>
+2004-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.1
        * bug fixes
 	- fixes for glimpse AST timeouts / incorrectly 0-sized files (2818)
@@ -25,6 +25,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- don't evict page beyond end of stripe extent (2925)
 	- don't oops on a deleted current working directory (2399)
 	- handle hard links to targets without a parent properly (2517)
+	- don't dereference NULL lock when racing during eviction (2867)
 
 2004-03-04  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.0

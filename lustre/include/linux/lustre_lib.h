@@ -48,10 +48,12 @@
 #define LPU64 "%lu"
 #define LPD64 "%ld"
 #define LPX64 "%#lx"
+#define LP_POISON ((void *)0x5a5a5a5a5a5a5a5a)
 #else
 #define LPU64 "%Lu"
 #define LPD64 "%Ld"
 #define LPX64 "%#Lx"
+#define LP_POISON ((void *)0x5a5a5a5a)
 #endif
 #endif
 

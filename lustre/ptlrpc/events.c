@@ -325,7 +325,7 @@ static int ptlrpc_master_callback(ptl_event_t *ev)
         void (*callback)(ptl_event_t *ev) = cbid->cbid_fn;
 
         /* Honestly, it's best to find out early. */
-        LASSERT (cbid->cbid_arg != (void *)0x5a5a5a5a5a5a5a5a);
+        LASSERT (cbid->cbid_arg != LP_POISON);
         LASSERT (callback == request_out_callback ||
                  callback == reply_in_callback ||
                  callback == client_bulk_callback ||
