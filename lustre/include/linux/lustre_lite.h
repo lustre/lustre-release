@@ -92,6 +92,9 @@ struct ll_inode_info {
 
         struct list_head        lli_close_item;
 
+        /* for writepage() only to communicate to fsync */
+        int                     lli_async_rc;
+
         struct file_operations *ll_save_ifop;
         struct file_operations *ll_save_ffop;
         struct file_operations *ll_save_wfop;

@@ -363,4 +363,19 @@ test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 }
 run_test 20b "ldlm_handle_enqueue error (should return error)"
 
+test_21() {	# bug 3267 - eviction fails writeback but app doesn't see it
+	mkdir -p $DIR/$tdir
+	cancel_lru_locks OSC
+	multiop $DIR/$tdir/$tfile Owyw_yc &
+	MULTI_PID=$!
+	usleep 500
+# OBD_FAIL_PTLRPC_BULK_PUT_NET|OBD_FAIL_ONCE
+	sysctl -w lustre.fail_loc=0x80000503
+	kill -USR1 $MULTI_PID
+	wait $MULTI_PID
+	rc=$?
+	[ $rc -eq 0 ] && error "multiop didn't fail fsync: rc $rc" || true
+}
+run_test 21 "fsync error (should return error)" 
+
 $CLEANUP

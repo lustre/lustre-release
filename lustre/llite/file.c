@@ -78,6 +78,8 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
         RETURN(rc);
 }
 
+int lov_test_and_clear_async_rc(struct lov_stripe_md *lsm);
+
 /* While this returns an error code, fput() the caller does not, so we need
  * to make every effort to clean up all of our state here.  Also, applications
  * rarely check close errors and even if an error is returned they will not
@@ -87,6 +89,8 @@ int ll_file_release(struct inode *inode, struct file *file)
 {
         struct ll_file_data *fd;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
         int rc;
 
         ENTRY;
@@ -100,6 +104,10 @@ int ll_file_release(struct inode *inode, struct file *file)
         lprocfs_counter_incr(sbi->ll_stats, LPROC_LL_RELEASE);
         fd = (struct ll_file_data *)file->private_data;
         LASSERT(fd != NULL);
+
+        if (lsm)
+                lov_test_and_clear_async_rc(lsm);
+        lli->lli_async_rc = 0;
 
         rc = ll_mdc_close(sbi->ll_mdc_exp, inode, file);
         RETURN(rc);
@@ -1138,7 +1146,8 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 int ll_fsync(struct file *file, struct dentry *dentry, int data)
 {
         struct inode *inode = dentry->d_inode;
-        struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
         struct ll_fid fid;
         struct ptlrpc_request *req;
         int rc, err;
@@ -1151,6 +1160,18 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         /* fsync's caller has already called _fdata{sync,write}, we want
          * that IO to finish before calling the osc and mdc sync methods */
         rc = filemap_fdatawait(inode->i_mapping);
+
+        /* catch async errors that were recorded back when async writeback
+         * failed for pages in this mapping. */
+        err = lli->lli_async_rc;
+        lli->lli_async_rc = 0;
+        if (rc == 0)
+                rc = err;
+        if (lsm) {
+                err = lov_test_and_clear_async_rc(lsm);
+                if (rc == 0)
+                        rc = err;
+        }
 
         ll_inode2fid(&fid, inode);
         err = mdc_sync(ll_i2sbi(inode)->ll_mdc_exp, &fid, &req);

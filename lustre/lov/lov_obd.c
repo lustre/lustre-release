@@ -1662,6 +1662,22 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
 #undef KEY_IS
 }
 
+int lov_test_and_clear_async_rc(struct lov_stripe_md *lsm)
+{
+        struct lov_oinfo *loi;
+        int i, rc = 0;
+        ENTRY;
+
+        for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
+             i++, loi++) {
+                if (loi->loi_ar.ar_rc && !rc)
+                        rc = loi->loi_ar.ar_rc;
+                loi->loi_ar.ar_rc = 0;
+        }
+        RETURN(rc);
+}
+EXPORT_SYMBOL(lov_test_and_clear_async_rc);
+
 #if 0
 struct lov_multi_wait {
         struct ldlm_lock *lock;

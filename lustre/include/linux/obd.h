@@ -44,6 +44,12 @@ struct loi_oap_pages {
         struct list_head        lop_pending_group;
 };
 
+struct osc_async_rc {
+        int     ar_rc;
+        int     ar_force_sync;
+        int     ar_min_xid;
+};
+
 struct lov_oinfo {                 /* per-stripe data structure */
         __u64 loi_id;              /* object ID on the target OST */
         __u64 loi_gr;              /* object group on the target OST */
@@ -63,6 +69,8 @@ struct lov_oinfo {                 /* per-stripe data structure */
         __u64 loi_rss;             /* recently seen size */
         __u64 loi_mtime;           /* recently seen mtime */
         __u64 loi_blocks;          /* recently seen blocks */
+
+        struct osc_async_rc     loi_ar;
 };
 
 static inline void loi_init(struct lov_oinfo *loi)
@@ -263,6 +271,9 @@ struct client_obd {
         struct mdc_rpc_lock     *cl_rpc_lock;
         struct mdc_rpc_lock     *cl_setattr_lock;
         struct osc_creator      cl_oscc;
+
+        /* also protected by the poorly named _loi_list_lock lock above */
+        struct osc_async_rc      cl_ar;
 };
 
 /* Like a client, with some hangers-on.  Keep mc_client_obd first so that we

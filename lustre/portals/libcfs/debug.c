@@ -297,13 +297,12 @@ char *portals_id2str(int nal, ptl_process_id_t id, char *str)
 
 #ifdef __KERNEL__
 
-
 void portals_debug_dumpstack(struct task_struct *tsk)
 {
 #if defined(__arch_um__)
         if (tsk != NULL)
-                CWARN("stack dump for process %d requested; I'll wake up gdb.\n",
-                      tsk->pid);
+                CWARN("stack dump for pid %d (%d) requested; wake up gdb.\n",
+                      tsk->pid, UML_PID(tsk));
         asm("int $3");
 #elif defined(HAVE_SHOW_TASK)
         /* this is exported by lustre kernel version 42 */

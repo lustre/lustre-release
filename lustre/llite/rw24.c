@@ -52,6 +52,7 @@
 static int ll_writepage_24(struct page *page)
 {
         struct inode *inode = page->mapping->host;
+        struct ll_inode_info *lli = ll_i2info(inode);
         struct obd_export *exp;
         struct ll_async_page *llap;
         int rc = 0;
@@ -71,12 +72,12 @@ static int ll_writepage_24(struct page *page)
         page_cache_get(page);
         if (llap->llap_write_queued) {
                 LL_CDEBUG_PAGE(D_PAGE, page, "marking urgent\n");
-                rc = obd_set_async_flags(exp, ll_i2info(inode)->lli_smd, NULL,
+                rc = obd_set_async_flags(exp, lli->lli_smd, NULL,
                                          llap->llap_cookie,
                                          ASYNC_READY | ASYNC_URGENT);
         } else {
                 llap->llap_write_queued = 1;
-                rc = obd_queue_async_io(exp, ll_i2info(inode)->lli_smd, NULL,
+                rc = obd_queue_async_io(exp, lli->lli_smd, NULL,
                                         llap->llap_cookie, OBD_BRW_WRITE, 0, 0,
                                         0, ASYNC_READY | ASYNC_URGENT);
                 if (rc == 0)
@@ -87,8 +88,11 @@ static int ll_writepage_24(struct page *page)
         if (rc)
                 page_cache_release(page);
 out:
-        if (rc)
+        if (rc) {
+                if (!lli->lli_async_rc)
+                        lli->lli_async_rc = rc;
                 unlock_page(page);
+        }
         RETURN(rc);
 }
 

@@ -1180,6 +1180,28 @@ unlock:
         spin_unlock(&oap->oap_cli->cl_loi_list_lock);
 }
 
+/* this is trying to propogate async writeback errors back up to the
+ * application.  As an async write fails we record the error code for later if
+ * the app does an fsync.  as long as errors persist we force future rpcs to be
+ * sync so that the app can get a sync error and break the cycle of queueing
+ * pages for which writeback will fail. */
+static void osc_process_ar(struct osc_async_rc *ar, struct ptlrpc_request *req,
+                           int rc)
+{
+        if (rc) {
+                if (!ar->ar_rc)
+                        ar->ar_rc = rc;
+
+                ar->ar_force_sync = 1;
+                ar->ar_min_xid = ptlrpc_sample_next_xid();
+                return;
+
+        } 
+        
+        if (ar->ar_force_sync && (ptlrpc_req_xid(req) >= ar->ar_min_xid))
+                ar->ar_force_sync = 0;
+}
+
 /* this must be called holding the loi list lock to give coverage to exit_cache,
  * async_flag maintenance, and oap_request */
 static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
@@ -1190,6 +1212,12 @@ static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
         oap->oap_interrupted = 0;
 
         if (oap->oap_request != NULL) {
+                if (sent && oap->oap_cmd == OBD_BRW_WRITE) {
+                        osc_process_ar(&cli->cl_ar, oap->oap_request, rc);
+                        osc_process_ar(&oap->oap_loi->loi_ar, 
+                                        oap->oap_request, rc);
+                }
+
                 ptlrpc_req_finished(oap->oap_request);
                 oap->oap_request = NULL;
         }
@@ -1220,7 +1248,6 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
         struct list_head *pos, *n;
         ENTRY;
 
-
         rc = osc_brw_fini_request(request, aa->aa_oa, aa->aa_requested_nob,
                                   aa->aa_nio_count, aa->aa_page_count,
                                   aa->aa_pga, rc);
@@ -1228,15 +1255,6 @@ static int brw_interpret_oap(struct ptlrpc_request *request,
         CDEBUG(D_INODE, "request %p aa %p rc %d\n", request, aa, rc);
 
         cli = aa->aa_cli;
-        /* in failout recovery we ignore writeback failure and want
-         * to just tell llite to unlock the page and continue */
-        if (request->rq_reqmsg->opc == OST_WRITE && 
-            (cli->cl_import == NULL || cli->cl_import->imp_invalid)) {
-                CDEBUG(D_INODE, "flipping to rc 0 imp %p inv %d\n", 
-                       cli->cl_import, 
-                       cli->cl_import ? cli->cl_import->imp_invalid : -1);
-                rc = 0;
-        }
 
         spin_lock(&cli->cl_loi_list_lock);
 
@@ -1725,7 +1743,10 @@ static int osc_enter_cache(struct client_obd *cli, struct lov_oinfo *loi,
                cli->cl_dirty, cli->cl_dirty_max, cli->cl_lost_grant,
                cli->cl_avail_grant);
 
-        if (cli->cl_dirty_max < PAGE_SIZE)
+        /* force the caller to try sync io.  this can jump the list
+         * of queued writes and create a discontiguous rpc stream */
+        if (cli->cl_dirty_max < PAGE_SIZE || cli->cl_ar.ar_force_sync ||
+            loi->loi_ar.ar_force_sync)
                 return(-EDQUOT);
 
         /* Hopefully normal case - cache space and write credits available */

@@ -1,8 +1,13 @@
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.3.4
        * bug fixes
+	- flock/lockf fixes
+	- don't use EXT3 constants in llite code (5094)
+	- return async write errors to application if possible (2248)
        * miscellania
 	- reorganization of lov code
+	- single portals codebase
+	- Infiniband NAL
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.8
@@ -27,6 +32,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- add software watchdogs to catch hung threads quickly (4941)
 	- make lustrefs init script start after nfs is mounted
 	- fix CWARN/ERROR duplication (4930)
+	- add /proc/sys/portal/memused (bytes allocated by PORTALS_ALLOC)
 	- print NAL number in %x format (4645)
 
 2004-10-07  Cluster File Systems, Inc. <info@clusterfs.com>

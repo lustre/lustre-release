@@ -60,11 +60,16 @@
 #endif
 
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
-# define THREAD_NAME(comm, len, fmt, a...)                              \
-        snprintf(comm, len, fmt "|%d", ## a, current->thread.extern_pid)
+#define UML_PID(tsk) ((tsk)->thread.extern_pid)
 #elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#define UML_PID(tsk) ((tsk)->thread.mode.tt.extern_pid)
+#else
+#define UML_PID(tsk) ((tsk)->pid)
+#endif
+
+#if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 # define THREAD_NAME(comm, len, fmt, a...)                              \
-        snprintf(comm, len,fmt"|%d", ## a,current->thread.mode.tt.extern_pid)
+        snprintf(comm, len,fmt"|%d", ## a, UML_PID(current))
 #else
 # define THREAD_NAME(comm, len, fmt, a...)                              \
         snprintf(comm, len, fmt, ## a)

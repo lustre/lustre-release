@@ -638,6 +638,8 @@ void ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
                                       struct obd_import *imp);
 __u64 ptlrpc_next_xid(void);
+__u64 ptlrpc_sample_next_xid(void);
+__u64 ptlrpc_req_xid(struct ptlrpc_request *request);
 
 /* ptlrpc/service.c */
 void ptlrpc_save_lock (struct ptlrpc_request *req, 

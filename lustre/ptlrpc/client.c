@@ -1097,6 +1097,12 @@ void ptlrpc_req_finished(struct ptlrpc_request *request)
         __ptlrpc_req_finished(request, 0);
 }
 
+__u64 ptlrpc_req_xid(struct ptlrpc_request *request)
+{
+        return request->rq_xid;
+}
+EXPORT_SYMBOL(ptlrpc_req_xid);
+
 /* Disengage the client's reply buffer from the network
  * NB does _NOT_ unregister any client-side bulk.
  * IDEMPOTENT, but _not_ safe against concurrent callers.
@@ -1664,4 +1670,12 @@ __u64 ptlrpc_next_xid(void)
         return tmp;
 }
 
-
+__u64 ptlrpc_sample_next_xid(void)
+{
+        __u64 tmp;
+        spin_lock(&ptlrpc_last_xid_lock);
+        tmp = ptlrpc_last_xid + 1;
+        spin_unlock(&ptlrpc_last_xid_lock);
+        return tmp;
+}
+EXPORT_SYMBOL(ptlrpc_sample_next_xid);
