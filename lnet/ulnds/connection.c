@@ -207,6 +207,7 @@ int
 tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
 {
         int                 rc;
+        int                 nob;
         ptl_hdr_t           hdr;
         ptl_magicversion_t *hmv = (ptl_magicversion_t *)&hdr.dest_nid;
 
@@ -222,6 +223,8 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
 
         hdr.msg.hello.type = cpu_to_le32(type);
         hdr.msg.hello.incarnation = cpu_to_le64(incarnation);
+
+        /* I don't send any interface info */
 
         /* Assume sufficient socket buffering for this message */
         rc = syscall(SYS_write, sockfd, &hdr, sizeof(hdr));
@@ -254,10 +257,10 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
                 return (-EPROTO);
         }
 
-#if (PORTALS_PROTO_VERSION_MAJOR != 0)
-# error "This code only understands protocol version 0.x"
+#if (PORTALS_PROTO_VERSION_MAJOR != 1)
+# error "This code only understands protocol version 1.x"
 #endif
-        /* version 0 sends magic/version as the dest_nid of a 'hello' header,
+        /* version 1 sends magic/version as the dest_nid of a 'hello' header,
          * so read the rest of it in now... */
 
         rc = syscall(SYS_read, sockfd, hmv + 1, sizeof(hdr) - sizeof(*hmv));
@@ -268,9 +271,8 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
         }
 
         /* ...and check we got what we expected */
-        if (hdr.type != cpu_to_le32 (PTL_MSG_HELLO) ||
-            hdr.payload_length != cpu_to_le32 (0)) {
-                CERROR ("Expecting a HELLO hdr with 0 payload,"
+        if (hdr.type != cpu_to_le32 (PTL_MSG_HELLO)) {
+                CERROR ("Expecting a HELLO hdr "
                         " but got type %d with %d payload from "LPX64"\n",
                         le32_to_cpu (hdr.type),
                         le32_to_cpu (hdr.payload_length), *nid);
@@ -288,6 +290,29 @@ tcpnal_hello (int sockfd, ptl_nid_t *nid, int type, __u64 incarnation)
                 CERROR ("Connected to nid "LPX64", but expecting "LPX64"\n",
                         le64_to_cpu (hdr.src_nid), *nid);
                 return (-EPROTO);
+        }
+
+        /* Ignore any interface info in the payload */
+        nob = le32_to_cpu(hdr.payload_length);
+        if (nob > getpagesize()) {
+                CERROR("Unexpected HELLO payload %d from "LPX64"\n",
+                       nob, *nid);
+                return (-EPROTO);
+        }
+        if (nob > 0) {
+                char *space = (char *)malloc(nob);
+                
+                if (space == NULL) {
+                        CERROR("Can't allocate scratch buffer %d\n", nob);
+                        return (-ENOMEM);
+                }
+                
+                rc = syscall(SYS_read, sockfd, space, nob);
+                if (rc <= 0) {
+                        CERROR("Error %d skipping HELLO payload from "
+                               LPX64"\n", rc, *nid);
+                        return (rc);
+                }
         }
 
         return (0);
