@@ -40,7 +40,7 @@
 #include <linux/module.h>
 
 static kmem_cache_t *fcb_cache;
-static int fcb_cache_count;
+static atomic_t fcb_cache_count = ATOMIC_INIT(0);
 
 struct fsfilt_cb_data {
         struct journal_callback cb_jcb; /* data private to jbd */
@@ -418,7 +418,7 @@ static void fsfilt_extN_cb_func(struct journal_callback *jcb, int error)
         fcb->cb_func(fcb->cb_obd, fcb->cb_last_rcvd, error);
 
         kmem_cache_free(fcb_cache, fcb);
-        --fcb_cache_count;
+        atomic_dec(&fcb_cache_count);
 }
 
 static int fsfilt_extN_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
@@ -430,7 +430,7 @@ static int fsfilt_extN_set_last_rcvd(struct obd_device *obd, __u64 last_rcvd,
         if (!fcb)
                 RETURN(-ENOMEM);
 
-        ++fcb_cache_count;
+        atomic_inc(&fcb_cache_count);
         fcb->cb_func = cb_func;
         fcb->cb_obd = obd;
         fcb->cb_last_rcvd = last_rcvd;
@@ -478,6 +478,14 @@ static int fsfilt_extN_sync(struct super_block *sb)
         return extN_force_commit(sb);
 }
 
+extern int extN_prep_san_write(struct inode *inode, long *blocks,
+			       int nblocks, loff_t newsize);
+static int fsfilt_extN_prep_san_write(struct inode *inode, long *blocks,
+                                      int nblocks, loff_t newsize)
+{
+        return extN_prep_san_write(inode, blocks, nblocks, newsize);
+}
+
 static struct fsfilt_operations fsfilt_extN_ops = {
         fs_type:                "extN",
         fs_owner:               THIS_MODULE,
@@ -492,6 +500,7 @@ static struct fsfilt_operations fsfilt_extN_ops = {
         fs_set_last_rcvd:       fsfilt_extN_set_last_rcvd,
         fs_statfs:              fsfilt_extN_statfs,
         fs_sync:                fsfilt_extN_sync,
+        fs_prep_san_write:      fsfilt_extN_prep_san_write,
 };
 
 static int __init fsfilt_extN_init(void)
@@ -522,9 +531,9 @@ static void __exit fsfilt_extN_exit(void)
         fsfilt_unregister_ops(&fsfilt_extN_ops);
         rc = kmem_cache_destroy(fcb_cache);
 
-        if (rc || fcb_cache_count) {
+        if (rc || atomic_read(&fcb_cache_count)) {
                 CERROR("can't free fsfilt callback cache: count %d, rc = %d\n",
-                       fcb_cache_count, rc);
+                       atomic_read(&fcb_cache_count), rc);
         }
 
         //rc = extN_xattr_unregister();

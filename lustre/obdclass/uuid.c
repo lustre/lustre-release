@@ -10,10 +10,14 @@
  * Library General Public License.
  * %End-Header%
  */
+#define DEBUG_SUBSYSTEM S_CLASS
+
+#ifdef __KERNEL__
 #include <linux/ctype.h>
 #include <linux/kernel.h>
-
-#define DEBUG_SUBSYSTEM S_CLASS
+#else 
+#include <liblustre.h>
+#endif
 
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
