@@ -38,6 +38,7 @@
 <!ATTLIST lov %tag.attr;>
 <!ELEMENT devices (osc_ref)+>
 <!ATTLIST devices stripesize CDATA #REQUIRED
+                  stripeoffset CDATA #REQUIRED
                   pattern    CDATA #REQUIRED>
 <!ELEMENT router (misc)*>
 <!ATTLIST router %tag.attr;>
