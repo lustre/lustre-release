@@ -160,6 +160,12 @@ EXPORT_SYMBOL(ptlrpc_abort_inflight);
 EXPORT_SYMBOL(ptlrpc_retain_replayable_request);
 EXPORT_SYMBOL(ptlrpc_next_xid);
 
+EXPORT_SYMBOL(ptlrpc_prep_set);
+EXPORT_SYMBOL(ptlrpc_drop_set);
+EXPORT_SYMBOL(ptlrpc_set_add_req);
+EXPORT_SYMBOL(ptlrpc_req_completed);
+EXPORT_SYMBOL(ptlrpc_req_result);
+
 /* service.c */
 EXPORT_SYMBOL(ptlrpc_init_svc);
 EXPORT_SYMBOL(ptlrpc_stop_all_threads);

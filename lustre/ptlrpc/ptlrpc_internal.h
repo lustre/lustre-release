@@ -37,6 +37,7 @@ extern int (*ptlrpc_ldlm_replay_locks)(struct obd_import *);
 
 int ptlrpc_get_ldlm_hooks(void);
 void ptlrpc_put_ldlm_hooks(void);
+void ptlrpc_daemonize(void);
 
 int ptlrpc_import_handle_eviction(struct obd_import *);
 
