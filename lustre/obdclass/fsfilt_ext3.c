@@ -524,8 +524,8 @@ static int fsfilt_ext3_read_record(struct file * file, char *buf,
 
         boffs = (unsigned)*offs % bh->b_size;
         if (boffs + size > bh->b_size) {
-                CERROR("request crosses block's border. offset %lu, size %lu\n",
-                       (unsigned long)*offs, (unsigned long)size);
+                CERROR("request crosses block's border. offset %llu, size %u\n",
+                       *offs, size);
                 brelse(bh);
                 return -EIO;
         }
@@ -578,8 +578,8 @@ static int fsfilt_ext3_write_record(struct file * file, char *buf,
 
         boffs = (unsigned)*offs % bh->b_size;
         if (boffs + size > bh->b_size) {
-                CERROR("request crosses block's border. offset %lu, size %lu\n",
-                       (unsigned long)*offs, (unsigned long)size);
+                CERROR("request crosses block's border. offset %llu, size %u\n",
+                       *offs, size);
                 err = -EIO;
                 goto out;
         }
