@@ -1,14 +1,14 @@
- fs/dcache.c            |   15 ++++++--
- fs/namei.c             |   86 ++++++++++++++++++++++++++++++++++++++-----------
+ fs/dcache.c            |   15 ++++++-
+ fs/namei.c             |   97 +++++++++++++++++++++++++++++++++++++------------
  fs/namespace.c         |    1 
- fs/open.c              |   24 ++++++++++---
+ fs/open.c              |   24 +++++++++---
  fs/sysfs/inode.c       |    2 -
- include/linux/dcache.h |   28 +++++++++++++++
- include/linux/fs.h     |    8 ++++
+ include/linux/dcache.h |   28 ++++++++++++++
+ include/linux/fs.h     |    9 ++++
  include/linux/namei.h  |    3 +
  kernel/ksyms.c         |    7 +++
  net/unix/af_unix.c     |    2 -
- 10 files changed, 145 insertions(+), 31 deletions(-)
+ 10 files changed, 154 insertions(+), 34 deletions(-)
 
 --- uml-2.5/fs/sysfs/inode.c~vfs_intent_2.5.69_rev1	2003-05-25 20:47:10.000000000 -0600
 +++ uml-2.5-braam/fs/sysfs/inode.c	2003-05-29 01:54:37.000000000 -0600
@@ -22,7 +22,7 @@
  
  void sysfs_hash_and_remove(struct dentry * dir, const char * name)
 --- uml-2.5/fs/namei.c~vfs_intent_2.5.69_rev1	2003-05-25 20:46:58.000000000 -0600
-+++ uml-2.5-braam/fs/namei.c	2003-05-29 01:54:37.000000000 -0600
++++ uml-2.5-braam/fs/namei.c	2003-05-29 08:30:20.000000000 -0600
 @@ -263,8 +263,15 @@ int deny_write_access(struct file * file
  	return 0;
  }
@@ -217,7 +217,37 @@
  /*
   *	namei()
   *
-@@ -1232,6 +1276,9 @@ int open_namei(const char * pathname, in
+@@ -1093,7 +1137,7 @@ void unlock_rename(struct dentry *p1, st
+ 	}
+ }
+ 
+-int vfs_create(struct inode *dir, struct dentry *dentry, int mode)
++int vfs_create_it(struct inode *dir, struct dentry *dentry, int mode, struct nameidata *nd)
+ {
+ 	int error = may_create(dir, dentry);
+ 
+@@ -1108,7 +1152,7 @@ int vfs_create(struct inode *dir, struct
+ 	if (error)
+ 		return error;
+ 	DQUOT_INIT(dir);
+-	error = dir->i_op->create(dir, dentry, mode);
++	error = dir->i_op->create_it(dir, dentry, mode, nd);
+ 	if (!error) {
+ 		inode_dir_notify(dir, DN_CREATE);
+ 		security_inode_post_create(dir, dentry, mode);
+@@ -1116,6 +1160,11 @@ int vfs_create(struct inode *dir, struct
+ 	return error;
+ }
+ 
++int vfs_create(struct inode *dir, struct dentry *dentry, int mode)
++{
++        return vfs_create_it(dir, dentry, mode, NULL);
++}
++
+ int may_open(struct nameidata *nd, int acc_mode, int flag)
+ {
+ 	struct dentry *dentry = nd->dentry;
+@@ -1232,6 +1281,9 @@ int open_namei(const char * pathname, in
  	/*
  	 * Create - we need to know the parent.
  	 */
@@ -227,7 +257,7 @@
  	error = path_lookup(pathname, LOOKUP_PARENT, nd);
  	if (error)
  		return error;
-@@ -1247,7 +1294,7 @@ int open_namei(const char * pathname, in
+@@ -1247,7 +1299,7 @@ int open_namei(const char * pathname, in
  
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -236,7 +266,7 @@
  
  do_last:
  	error = PTR_ERR(dentry);
-@@ -1255,7 +1302,8 @@ do_last:
+@@ -1255,12 +1307,13 @@ do_last:
  		up(&dir->d_inode->i_sem);
  		goto exit;
  	}
@@ -246,7 +276,13 @@
  	/* Negative dentry, just create the file */
  	if (!dentry->d_inode) {
  		if (!IS_POSIXACL(dir->d_inode))
-@@ -1285,7 +1333,7 @@ do_last:
+ 			mode &= ~current->fs->umask;
+-		error = vfs_create(dir->d_inode, dentry, mode);
++		error = vfs_create_it(dir->d_inode, dentry, mode, nd);
+ 		up(&dir->d_inode->i_sem);
+ 		dput(nd->dentry);
+ 		nd->dentry = dentry;
+@@ -1285,7 +1338,7 @@ do_last:
  		error = -ELOOP;
  		if (flag & O_NOFOLLOW)
  			goto exit_dput;
@@ -255,7 +291,7 @@
  	}
  	error = -ENOENT;
  	if (!dentry->d_inode)
-@@ -1328,7 +1376,7 @@ do_link:
+@@ -1328,7 +1381,7 @@ do_link:
  	if (error)
  		goto exit_dput;
  	UPDATE_ATIME(dentry->d_inode);
@@ -264,7 +300,7 @@
  	dput(dentry);
  	if (error)
  		return error;
-@@ -1350,7 +1398,7 @@ do_link:
+@@ -1350,7 +1403,7 @@ do_link:
  	}
  	dir = nd->dentry;
  	down(&dir->d_inode->i_sem);
@@ -273,7 +309,7 @@
  	putname(nd->last.name);
  	goto do_last;
  }
-@@ -1364,7 +1412,7 @@ static struct dentry *lookup_create(stru
+@@ -1364,7 +1417,7 @@ static struct dentry *lookup_create(stru
  	dentry = ERR_PTR(-EEXIST);
  	if (nd->last_type != LAST_NORM)
  		goto fail;
@@ -322,7 +358,7 @@
  static void chroot_fs_refs(struct nameidata *old_nd, struct nameidata *new_nd)
  {
 --- uml-2.5/fs/open.c~vfs_intent_2.5.69_rev1	2003-05-25 20:46:58.000000000 -0600
-+++ uml-2.5-braam/fs/open.c	2003-05-29 01:54:37.000000000 -0600
++++ uml-2.5-braam/fs/open.c	2003-05-29 08:30:20.000000000 -0600
 @@ -97,7 +97,8 @@ static inline long do_sys_truncate(const
  	struct nameidata nd;
  	struct inode * inode;
@@ -477,7 +513,7 @@
  extern spinlock_t dcache_lock;
  
 --- uml-2.5/include/linux/fs.h~vfs_intent_2.5.69_rev1	2003-05-25 20:47:22.000000000 -0600
-+++ uml-2.5-braam/include/linux/fs.h	2003-05-29 01:54:37.000000000 -0600
++++ uml-2.5-braam/include/linux/fs.h	2003-05-29 08:30:20.000000000 -0600
 @@ -237,6 +237,9 @@ typedef int (get_blocks_t)(struct inode 
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
@@ -488,16 +524,18 @@
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
-@@ -730,6 +733,8 @@ struct file_operations {
+@@ -729,7 +732,10 @@ struct file_operations {
+ 
  struct inode_operations {
  	int (*create) (struct inode *,struct dentry *,int);
++	int (*create_it) (struct inode *,struct dentry *,int, struct nameidata *);
  	struct dentry * (*lookup) (struct inode *,struct dentry *);
 +	struct dentry * (*lookup_it) (struct inode *,struct dentry *,
 +					struct lookup_intent *);
  	int (*link) (struct dentry *,struct inode *,struct dentry *);
  	int (*unlink) (struct inode *,struct dentry *);
  	int (*symlink) (struct inode *,struct dentry *,const char *);
-@@ -743,6 +748,7 @@ struct inode_operations {
+@@ -743,6 +749,7 @@ struct inode_operations {
  	void (*truncate) (struct inode *);
  	int (*permission) (struct inode *, int);
  	int (*setattr) (struct dentry *, struct iattr *);
@@ -505,7 +543,7 @@
  	int (*getattr) (struct vfsmount *mnt, struct dentry *, struct kstat *);
  	int (*setxattr) (struct dentry *, const char *,const void *,size_t,int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
-@@ -956,6 +962,7 @@ extern int register_filesystem(struct fi
+@@ -956,6 +963,7 @@ extern int register_filesystem(struct fi
  extern int unregister_filesystem(struct file_system_type *);
  extern struct vfsmount *kern_mount(struct file_system_type *);
  extern int may_umount(struct vfsmount *);
@@ -513,7 +551,7 @@
  extern long do_mount(char *, char *, char *, unsigned long, void *);
  
  extern int vfs_statfs(struct super_block *, struct statfs *);
-@@ -1116,6 +1123,7 @@ extern void sync_filesystems(int wait);
+@@ -1116,6 +1124,7 @@ extern void sync_filesystems(int wait);
  extern sector_t bmap(struct inode *, sector_t);
  extern int setattr_mask(unsigned int);
  extern int notify_change(struct dentry *, struct iattr *);
