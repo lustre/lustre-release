@@ -46,7 +46,7 @@
 /* Identifier for a single log object */
 struct llog_logid {
         __u64                   lgl_oid;
-        __u64                   lgl_bootcount;
+//      __u64                   lgl_bootcount;
 };
 
 /* On-disk header structure of catalog of available log object (internal) */
@@ -150,6 +150,7 @@ extern int llog_clear_record(struct lustre_handle *conn, __u32 recno);
 extern int llog_delete(struct lustre_handle *conn, struct llog_logid *id);
 
 /* internal api */
+extern int llog_init_catalog(struct lustre_handle *conn);
 extern struct llog_handle *llog_id2handle(struct lustre_handle *conn,
                                           struct llog_logid *logid);
 
