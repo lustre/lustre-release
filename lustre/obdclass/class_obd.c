@@ -93,8 +93,8 @@ inline void obd_conn2data(struct obd_ioctl_data *data, struct lustre_handle *con
 static int obd_class_ioctl (struct inode * inode, struct file * filp,
                             unsigned int cmd, unsigned long arg)
 {
-        char *buf;
-        int len;
+        char *buf = NULL;
+        int len = 0;
         struct obd_ioctl_data *data;
         struct obd_device *obd = filp->private_data;
         struct lustre_handle conn;
@@ -422,9 +422,11 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_CREATE: {
+                void *ea;
                 obd_data2conn(&conn, data);
 
-                err = obd_create(&conn, &data->ioc_obdo1);
+
+                err = obd_create(&conn, &data->ioc_obdo1, &ea);
                 if (err)
                         GOTO(out, err);
 
@@ -454,9 +456,10 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
         case OBD_IOC_DESTROY: {
+                void *ea;
                 obd_data2conn(&conn, data);
 
-                err = obd_destroy(&conn, &data->ioc_obdo1);
+                err = obd_destroy(&conn, &data->ioc_obdo1, ea);
                 if (err)
                         GOTO(out, err);
 
@@ -562,7 +565,8 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
         }
 
  out: 
-        OBD_FREE(buf, len); 
+        if (buf) 
+                OBD_FREE(buf, len); 
         up(&obd_conf_sem); 
         RETURN(err); 
 } /* obd_class_ioctl */
