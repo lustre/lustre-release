@@ -497,25 +497,23 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         }
 
         parent = mds_fid2dentry(mds, rec->ur_fid1, NULL);
-        LASSERT(!IS_ERR(parent));
+        LASSERTF(!IS_ERR(parent), "fid "LPU64"/%u rc %ld\n", rec->ur_fid1->id,
+                 rec->ur_fid1->generation, PTR_ERR(parent));
 
         child = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
-        LASSERT(!IS_ERR(child));
+        LASSERTF(!IS_ERR(child), "parent "LPU64"/%u child %s rc %ld\n",
+                 rec->ur_fid1->id, rec->ur_fid1->generation, rec->ur_name,
+                 PTR_ERR(child));
 
-        if (!child->d_inode) {
+        if (!child->d_inode)
                 GOTO(out_dput, 0); /* child not present to open */
-        }
 
         /* At this point, we know we have a child. We'll send
-         * it back _unless_ it not created and open failed.
-         */
+         * it back _unless_ it not created and open failed.  */
         if (intent_disposition(rep, DISP_OPEN_OPEN) &&
             !intent_disposition(rep, DISP_OPEN_CREATE) &&
-            req->rq_status) {
+            req->rq_status)
                 GOTO(out_dput, 0);
-        }
-
-        /* get lock (write for O_CREAT, read otherwise) */
 
         mds_pack_inode2fid(obd, &body->fid1, child->d_inode);
         mds_pack_inode2body(obd, body, child->d_inode);
@@ -1054,11 +1052,10 @@ got_child:
                 rc = fsfilt_setattr(obd, dparent, handle, &iattr, 0);
                 if (rc)
                         CERROR("error on parent setattr: rc = %d\n", rc);
+                else
+                        MDS_UPDATE_COUNTER(mds, MDS_CREATE_COUNT);
 
                 acc_mode = 0;           /* Don't check for permissions */
-                if (rc == 0) {
-                        MDS_UPDATE_COUNTER(mds, MDS_CREATE_COUNT);
-                }
         }
 
         LASSERT(!mds_inode_is_orphan(dchild->d_inode));

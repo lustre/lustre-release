@@ -867,10 +867,9 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
 
         LASSERT(!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME));
 
-        /* Swab now, before anyone looks inside the request */
-
         MDS_UPDATE_COUNTER((&obd->u.mds), MDS_GETATTR_NAME_COUNT);
 
+        /* Swab now, before anyone looks inside the request */
         body = lustre_swab_reqbuf(req, offset, sizeof(*body),
                                   lustre_swab_mds_body);
         if (body == NULL) {

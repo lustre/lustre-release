@@ -875,13 +875,12 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 rc = fsfilt_setattr(obd, dparent, handle, &iattr, 0);
                 if (rc)
                         CERROR("error on parent setattr: rc = %d\n", rc);
+                else
+                        MDS_UPDATE_COUNTER(mds, MDS_CREATE_COUNT);
 
                 body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
                 mds_pack_inode2fid(obd, &body->fid1, inode);
                 mds_pack_inode2body(obd, body, inode);
-                if (rc == 0) {
-                        MDS_UPDATE_COUNTER(mds, MDS_CREATE_COUNT);
-                }
         }
         EXIT;
 
@@ -1654,7 +1653,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         MDS_UPDATE_COUNTER(mds, MDS_UNLINK_COUNT);
 
-
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_UNLINK))
                 GOTO(cleanup, rc = -ENOENT);
 
@@ -2108,7 +2106,6 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         MDS_CHECK_RESENT(req, mds_reconstruct_generic(req));
         
         MDS_UPDATE_COUNTER(mds, MDS_LINK_COUNT);
-
         
 //      memset(tgt_dir_lockh, 0, 2*sizeof(tgt_dir_lockh[0]));
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_REINT_LINK))

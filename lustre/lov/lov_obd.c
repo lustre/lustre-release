@@ -210,8 +210,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
         struct obd_export *exp;
-        int rc, rc2, i;
         struct proc_dir_entry *lov_proc_dir;
+        int rc, rc2, i;
         ENTRY;
 
         rc = class_connect(conn, obd, cluuid);
@@ -226,6 +226,14 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (lov->refcount > 1) {
                 class_export_put(exp);
                 RETURN(0);
+        }
+
+        lov_proc_dir = lprocfs_register("target_obds", obd->obd_proc_entry,
+                                        NULL, NULL);
+        if (IS_ERR(lov_proc_dir)) {
+                CERROR("could not register /proc/fs/lustre/%s/%s/target_obds.",
+                       obd->obd_type->typ_name, obd->obd_name);
+                lov_proc_dir = NULL;
         }
 
         /* connect_flags is the MDS number, save for use in lov_add_obd */
@@ -329,14 +337,6 @@ static int lov_disconnect(struct obd_export *exp, int flags)
         lov->refcount--;
         if (lov->refcount != 0)
                 goto out_local;
-
-        lov_proc_dir = lprocfs_register("target_obds", obd->obd_proc_entry,
-                                        NULL, NULL);
-        if (IS_ERR(lov_proc_dir)) {
-                CERROR("could not register /proc/fs/lustre/%s/%s/target_obds.",
-                       obd->obd_type->typ_name, obd->obd_name);
-                lov_proc_dir = NULL;
-        }
 
         for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
                 if (tgt->ltd_exp)
