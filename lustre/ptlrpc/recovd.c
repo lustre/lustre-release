@@ -32,7 +32,8 @@ void recovd_conn_manage(struct ptlrpc_connection *conn,
         rd->rd_next_phase = RD_TROUBLED;
 
         spin_lock(&recovd->recovd_lock);
-        list_add(&rd->rd_managed_chain, &recovd->recovd_managed_items);
+        INIT_LIST_HEAD(&rd->rd_managed_chain);
+        list_add(&recovd->recovd_managed_items, &rd->rd_managed_chain);
         spin_unlock(&recovd->recovd_lock);
 
         EXIT;
