@@ -74,7 +74,7 @@ start ost --reformat $OSTLCONFARGS
 PINGER=`cat /proc/fs/lustre/pinger`
 
 if [ "$PINGER" != "on" ]; then
-    echo "ERROR: Lustre must be built with --enable-pinger for replay-dual"
+    echo "ERROR: Lustre must be built with --enable-pinger for this test."
     stop ost
     exit 1
 fi
