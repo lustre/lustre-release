@@ -14,7 +14,7 @@ pkgexampledir = '${exec_prefix}/usr/lib/$(PACKAGE)/examples'
 pkgexample_SCRIPTS = llmount.sh llmountcleanup.sh llecho.sh local.sh uml.sh lov.sh
 noinst_SCRIPTS = llsetup.sh llrsetup.sh llcleanup.sh
 noinst_DATA = ext2_10000.gz ext2_25000.gz ext3_10000.gz lov.xml lustre.cfg
-noinst_SCRIPTS = fs.sh intent-test.sh intent-test2.sh leak_finder.pl \
+noinst_SCRIPTS += fs.sh intent-test.sh intent-test2.sh leak_finder.pl \
 	lldlm.sh llecho.sh llext3.sh llmodules.sh llmount-client.sh \
 	llmount-server.sh llmount.sh llmountcleanup.sh llrext3.sh \
 	llrmount.sh llsimple.sh  mdcreq.sh mdcreqcleanup.sh \
