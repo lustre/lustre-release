@@ -169,7 +169,6 @@ int verify(char *filename, unsigned int *offsets, int O_number)
         unsigned int size;
         int fd;
         struct stat Fstat;
-        int focus = 0;
 
         status = stat(filename, &Fstat);
         if (status == -1) {
