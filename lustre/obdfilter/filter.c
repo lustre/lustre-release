@@ -1615,7 +1615,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 dparent = filter_parent_lock(obd, group, next_id, LCK_PW,
                                              &parent_lockh);
                 if (IS_ERR(dparent))
-                        GOTO(cleanup,  PTR_ERR(dparent));
+                        GOTO(cleanup, rc = PTR_ERR(dparent));
                 cleanup_phase = 1;
 
                 dchild = filter_fid2dentry(obd, dparent, group, next_id);
