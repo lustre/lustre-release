@@ -33,7 +33,7 @@ int lgmnal_cb_recv(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, unsigned 
 	int		status = PTL_OK;
 
 
-	CDEBUG(D_TRACE, "lgmnal_cb_recv nal_cb [%p], private[%p], cookie[%p], niov[%d], iov [%p], mlen[%u], rlen[%u]\n", nal_cb, private, cookie, niov, iov, mlen, rlen);
+	CDEBUG(D_TRACE, "lgmnal_cb_recv nal_cb [%p], private[%p], cookie[%p], niov[%d], iov [%p], mlen["LPSZ"], rlen["LPSZ"]\n", nal_cb, private, cookie, niov, iov, mlen, rlen);
 
 	if (niov == 0) {
 		CDEBUG(D_INFO, "lgmnal_cb_recv Context [%p] nriov is ZERO\n", private);
@@ -61,7 +61,7 @@ int lgmnal_cb_recv_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, uns
 	int		i = 0;
 
 
-	CDEBUG(D_TRACE, "lgmnal_cb_recv_pages nal_cb [%p],private[%p], cookie[%p], kniov[%d], kiov [%p], mlen[%u], rlen[%u]\n", nal_cb, private, cookie, kniov, kiov, mlen, rlen);
+	CDEBUG(D_TRACE, "lgmnal_cb_recv_pages nal_cb [%p],private[%p], cookie[%p], kniov[%d], kiov [%p], mlen["LPSZ"], rlen["LPSZ"]\n", nal_cb, private, cookie, kniov, kiov, mlen, rlen);
 
 	if (srxd->type == LGMNAL_SMALL_MESSAGE) {
 		PORTAL_ALLOC(iovec, sizeof(struct iovec)*kniov);
@@ -102,7 +102,7 @@ int lgmnal_cb_send(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl_hdr_t
 	lgmnal_data_t	*nal_data;
 
 
-	CDEBUG(D_TRACE, "lgmnal_cb_send niov[%d] len[%u] nid["LPU64"]\n", niov, len, nid);
+	CDEBUG(D_TRACE, "lgmnal_cb_send niov[%d] len["LPSZ"] nid["LPU64"]\n", niov, len, nid);
 	nal_data = nal_cb->nal_data;
 	
 	if (LGMNAL_IS_SMALL_MESSAGE(nal_data, niov, iov, len)) {
@@ -125,7 +125,7 @@ int lgmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl
 	lgmnal_data_t	*nal_data;
 	struct	iovec 	*iovec = NULL, *iovec_dup = NULL;
 
-	CDEBUG(D_TRACE, "lgmnal_cb_send_pages nid ["LPU64"] niov[%d] len[%u]\n", nid, kniov, len);
+	CDEBUG(D_TRACE, "lgmnal_cb_send_pages nid ["LPU64"] niov[%d] len["LPSZ"]\n", nid, kniov, len);
 	nal_data = nal_cb->nal_data;
 	PORTAL_ALLOC(iovec, kniov*sizeof(struct iovec));
         iovec_dup = iovec;
@@ -162,14 +162,14 @@ int lgmnal_cb_send_pages(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl
 
 int lgmnal_cb_read(nal_cb_t *nal_cb, void *private, void *dst, user_ptr src, size_t len)
 {
-	CDEBUG(D_TRACE, "lgmnal_cb_read dst [%p] src [%p] len[%u]\n", dst, src, len);
+	CDEBUG(D_TRACE, "lgmnal_cb_read dst [%p] src [%p] len["LPSZ"]\n", dst, src, len);
 	gm_bcopy(src, dst, len);
 	return(PTL_OK);
 }
 
 int lgmnal_cb_write(nal_cb_t *nal_cb, void *private, user_ptr dst, void *src, size_t len)
 {
-	CDEBUG(D_TRACE, "lgmnal_cb_write :: dst [%p] src [%p] len[%u]\n", dst, src, len);
+	CDEBUG(D_TRACE, "lgmnal_cb_write :: dst [%p] src [%p] len["LPSZ"]\n", dst, src, len);
 	gm_bcopy(src, dst, len);
 	return(PTL_OK);
 }
@@ -189,14 +189,14 @@ int lgmnal_cb_callback(nal_cb_t *nal_cb, void *private, lib_eq_t *eq, ptl_event_
 void *lgmnal_cb_malloc(nal_cb_t *nal_cb, size_t len)
 {
 	void *ptr = NULL;
-	CDEBUG(D_TRACE, "lgmnal_cb_malloc len[%u]\n", len);
+	CDEBUG(D_TRACE, "lgmnal_cb_malloc len["LPSZ"]\n", len);
 	PORTAL_ALLOC(ptr, len);
 	return(ptr);
 }
 
 void lgmnal_cb_free(nal_cb_t *nal_cb, void *buf, size_t len)
 {
-	CDEBUG(D_TRACE, "lgmnal_cb_free :: buf[%p] len[%u]\n", buf, len);
+	CDEBUG(D_TRACE, "lgmnal_cb_free :: buf[%p] len["LPSZ"]\n", buf, len);
 	PORTAL_FREE(buf, len);
 	return;
 }

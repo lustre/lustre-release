@@ -167,7 +167,7 @@ int lgmnal_rx_thread(void *arg)
 
 	spin_lock(&nal_data->rxthread_flag_lock);
 	nal_data->rxthread_flag/=2;
-	CDEBUG(D_INFO, "rxthread flag is [%d]\n", nal_data->rxthread_flag);
+	CDEBUG(D_INFO, "rxthread flag is [%ld]\n", nal_data->rxthread_flag);
 	spin_unlock(&nal_data->rxthread_flag_lock);
 	CDEBUG(D_ERROR, "RXTHREAD:: The lgmnal_receive_thread nal_data [%p] is exiting\n", nal_data);
 	return(LGMNAL_STATUS_OK);
@@ -312,7 +312,7 @@ lgmnal_small_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, unsigned int
 	lgmnal_data_t	*nal_data = (lgmnal_data_t*)nal_cb->nal_data;
 
 
-	CDEBUG(D_TRACE, "lgmnal_small_rx niov [%d] mlen[%u]\n", niov, mlen);
+	CDEBUG(D_TRACE, "lgmnal_small_rx niov [%d] mlen["LPSZ"]\n", niov, mlen);
 
 	if (!private) {
 		CDEBUG(D_ERROR, "lgmnal_small_rx no context\n");
@@ -326,7 +326,7 @@ lgmnal_small_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, unsigned int
 	buffer += sizeof(ptl_hdr_t);
 
 	while(niov--) {
-		CDEBUG(D_INFO, "processing [%p] len [%u]\n", iov, iov->iov_len);
+		CDEBUG(D_INFO, "processing [%p] len ["LPSZ"]\n", iov, iov->iov_len);
 		gm_bcopy(buffer, iov->iov_base, iov->iov_len);			
 		buffer += iov->iov_len;
 		iov++;
@@ -411,7 +411,7 @@ lgmnal_small_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl_hdr_t *h
 	CDEBUG(D_INFO, "processing msghdr at [%p]\n", buffer);
 
 	buffer += sizeof(lgmnal_msghdr_t);
-	CDEBUG(D_INFO, "Advancing buffer pointer by [%u] to [%p]\n", sizeof(lgmnal_msghdr_t), buffer);
+	CDEBUG(D_INFO, "Advancing buffer pointer by ["LPSZ"] to [%p]\n", sizeof(lgmnal_msghdr_t), buffer);
 
 	CDEBUG(D_INFO, "processing  portals hdr at [%p]\n", buffer);
 	gm_bcopy(hdr, buffer, sizeof(ptl_hdr_t));
@@ -419,7 +419,7 @@ lgmnal_small_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl_hdr_t *h
 	buffer += sizeof(ptl_hdr_t);
 
 	while(niov--) {
-		CDEBUG(D_INFO, "processing iov [%p] len [%u] to [%p]\n", iov, iov->iov_len, buffer);
+		CDEBUG(D_INFO, "processing iov [%p] len ["LPSZ"] to [%p]\n", iov, iov->iov_len, buffer);
 		gm_bcopy(iov->iov_base, buffer, iov->iov_len);
 		buffer+= iov->iov_len;
 		iov++;
@@ -672,12 +672,12 @@ lgmnal_large_tx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, ptl_hdr_t *h
 	iov_dup = iov;
 	niov_dup = niov;
 	while(niov--) {
-		CDEBUG(D_INFO, "Registering memory [%p] len [%u] \n", iov->iov_base, iov->iov_len);
+		CDEBUG(D_INFO, "Registering memory [%p] len ["LPSZ"] \n", iov->iov_base, iov->iov_len);
 		LGMNAL_GM_LOCK(nal_data);
 		gm_status = gm_register_memory(nal_data->gm_port, iov->iov_base, iov->iov_len);
 		if (gm_status != GM_SUCCESS) {
 			LGMNAL_GM_UNLOCK(nal_data);
-			CDEBUG(D_ERROR, "gm_register_memory returns [%d][%s] for memory [%p] len [%u]\n", 
+			CDEBUG(D_ERROR, "gm_register_memory returns [%d][%s] for memory [%p] len ["LPSZ"]\n", 
 						gm_status, lgmnal_gm_error(gm_status), iov->iov_base, iov->iov_len);
 			LGMNAL_GM_LOCK(nal_data);
 			while (iov_dup != iov) {
@@ -745,7 +745,7 @@ lgmnal_large_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, unsigned int
 	lgmnal_msghdr_t	*msghdr = NULL;
 	gm_status_t	gm_status;
 
-	CDEBUG(D_TRACE, "lgmnal_large_rx :: nal_cb[%p], private[%p], cookie[%p], niov[%d], iov[%p], mlen[%u], rlen[%u]\n",
+	CDEBUG(D_TRACE, "lgmnal_large_rx :: nal_cb[%p], private[%p], cookie[%p], niov[%d], iov[%p], mlen["LPSZ"], rlen["LPSZ"]\n",
 						nal_cb, private, cookie, nriov, riov, mlen, rlen);
 
 	if (!srxd) {
@@ -775,12 +775,12 @@ lgmnal_large_rx(nal_cb_t *nal_cb, void *private, lib_msg_t *cookie, unsigned int
 	nriov_dup = nriov;
 	riov_dup = riov;
 	while(nriov--) {
-		CDEBUG(D_INFO, "Registering memory [%p] len [%u] \n", riov->iov_base, riov->iov_len);
+		CDEBUG(D_INFO, "Registering memory [%p] len ["LPSZ"] \n", riov->iov_base, riov->iov_len);
 		LGMNAL_GM_LOCK(nal_data);
 		gm_status = gm_register_memory(nal_data->gm_port, riov->iov_base, riov->iov_len);
 		if (gm_status != GM_SUCCESS) {
 			LGMNAL_GM_UNLOCK(nal_data);
-			CDEBUG(D_ERROR, "gm_register_memory returns [%d][%s] for memory [%p] len [%u]\n", 
+			CDEBUG(D_ERROR, "gm_register_memory returns [%d][%s] for memory [%p] len ["LPSZ"]\n", 
 						gm_status, lgmnal_gm_error(gm_status), riov->iov_base, riov->iov_len);
 			LGMNAL_GM_LOCK(nal_data);
 			while (riov_dup != riov) {
@@ -866,7 +866,9 @@ lgmnal_copyiov(int do_copy, lgmnal_srxd_t *srxd, int nsiov, struct iovec *siov, 
 
 	int	ncalls = 0;
 	int	slen = siov->iov_len, rlen = riov->iov_len;
-	char	*sbuf = siov->iov_base, *rbuf = riov->iov_base;	
+	char			*sbuf = siov->iov_base, *rbuf = riov->iov_base;	
+	unsigned long	sbuf_long;
+	gm_remote_ptr_t	remote_ptr = 0;
 	unsigned int	source_node;
 	lgmnal_stxd_t	*stxd = NULL;
 	lgmnal_data_t	*nal_data = srxd->nal_data;
@@ -909,7 +911,10 @@ lgmnal_copyiov(int do_copy, lgmnal_srxd_t *srxd, int nsiov, struct iovec *siov, 
 /*
 				CDEBUG(D_INFO, "Calling gm_get with port[%p] sbuf[%lu] rbuf[%p], len[%d], priority[%d], source_node[%d], stxd[%p]\n", nal_data->gm_port, (gm_remote_ptr_t)sbuf, rbuf, rlen, GM_LOW_PRIORITY, source_node, stxd);
 */
-				gm_get(nal_data->gm_port, (gm_remote_ptr_t)sbuf, rbuf, rlen, GM_LOW_PRIORITY,
+				/* funny business to get rid of compiler warning */
+				sbuf_long = (unsigned long) sbuf;
+				remote_ptr = (gm_remote_ptr_t)sbuf_long;
+				gm_get(nal_data->gm_port, remote_ptr, rbuf, rlen, GM_LOW_PRIORITY,
 						source_node, LGMNAL_GM_PORT, lgmnal_remote_get_callback, stxd);
 				LGMNAL_GM_UNLOCK(nal_data);
 			}
@@ -930,7 +935,9 @@ lgmnal_copyiov(int do_copy, lgmnal_srxd_t *srxd, int nsiov, struct iovec *siov, 
 /*
 				CDEBUG(D_INFO, "Calling gm_get with port[%p] sbuf[%lu], rbuf[%p], len[%d], priority[%d], source_node[%d], stxd[%p]\n", nal_data->gm_port, (gm_remote_ptr_t)sbuf, rbuf, rlen, GM_LOW_PRIORITY, source_node, stxd);
 */
-				gm_get(srxd->nal_data->gm_port, (gm_remote_ptr_t)sbuf, rbuf, slen, GM_LOW_PRIORITY,
+				sbuf_long = (unsigned long) sbuf;
+				remote_ptr = (gm_remote_ptr_t)sbuf_long;
+				gm_get(srxd->nal_data->gm_port, remote_ptr, rbuf, slen, GM_LOW_PRIORITY,
 						source_node, LGMNAL_GM_PORT, lgmnal_remote_get_callback, stxd);
 				LGMNAL_GM_UNLOCK(nal_data);
 			}
@@ -951,7 +958,9 @@ lgmnal_copyiov(int do_copy, lgmnal_srxd_t *srxd, int nsiov, struct iovec *siov, 
 				CDEBUG(D_INFO, "Calling gm_get with port[%p] sbuf[%lu], rbuf[%p], len[%d], priority[%d], source_node[%d], stxd[%p]\n", 
 				nal_data->gm_port, (gm_remote_ptr_t)sbuf, rbuf, rlen, GM_LOW_PRIORITY, source_node, stxd);
 */
-				gm_get(srxd->nal_data->gm_port, (gm_remote_ptr_t)sbuf, rbuf, rlen, GM_LOW_PRIORITY,
+				sbuf_long = (unsigned long) sbuf;
+				remote_ptr = (gm_remote_ptr_t)sbuf_long;
+				gm_get(srxd->nal_data->gm_port, remote_ptr, rbuf, rlen, GM_LOW_PRIORITY,
 						source_node, LGMNAL_GM_PORT, lgmnal_remote_get_callback, stxd);
 				LGMNAL_GM_UNLOCK(nal_data);
 			}
@@ -1178,7 +1187,7 @@ lgmnal_large_tx_ack_received(lgmnal_data_t *nal_data, lgmnal_srxd_t *srxd)
 	 */
 	iov = stxd->iov;
 	while(stxd->niov--) {
-		CDEBUG(D_INFO, "lgmnal_large_tx_ack deregister memory [%p] size [%u]\n",
+		CDEBUG(D_INFO, "lgmnal_large_tx_ack deregister memory [%p] size ["LPSZ"]\n",
 				iov->iov_base, iov->iov_len);
 		LGMNAL_GM_LOCK(nal_data);
 		gm_deregister_memory(nal_data->gm_port, iov->iov_base, iov->iov_len);

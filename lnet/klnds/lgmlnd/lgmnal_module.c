@@ -78,8 +78,8 @@ lgmnal_cmd(struct portal_ioctl_data *data, void *private)
 }
 
 
-int
-init_module()
+static int __init
+lgmnal_load(void)
 {
 	int	status;
 	CDEBUG(D_TRACE, "This is the lgmnal module initialisation routine\n");
@@ -114,7 +114,8 @@ init_module()
 }
 
 
-void cleanup_module()
+static void __exit
+lgmnal_unload(void)
 {
 
 	kportal_nal_unregister(LGMNAL);
@@ -124,6 +125,10 @@ void cleanup_module()
 	return;
 }
 
+
+module_init(lgmnal_load);
+
+module_exit(lgmnal_unload);
 
 EXPORT_SYMBOL(lgmnal_ni);
 

@@ -56,7 +56,7 @@ lgmnal_api_forward(nal_t *nal, int index, void *args, size_t arg_len,
 
 
 
-	CDEBUG(D_INFO, "lgmnal_api_forward: nal [%p], index [%d], args [%p], arglen [%u], ret [%p], retlen [%u]\n", nal, index, args, arg_len, ret, ret_len);
+	CDEBUG(D_INFO, "lgmnal_api_forward: nal [%p], index [%d], args [%p], arglen ["LPSZ"], ret [%p], retlen ["LPSZ"]\n", nal, index, args, arg_len, ret, ret_len);
 
 	if (!nal || !args || (index < 0) || (arg_len < 0)) {
 			CDEBUG(D_ERROR, "Bad args to lgmnal_api_forward\n");
@@ -195,20 +195,10 @@ lgmnal_init(int interface, ptl_pt_index_t ptl_size, ptl_ac_index_t ac_size, ptl_
 	unsigned int	local_nid = 0, global_nid = 0;
 	ptl_nid_t	portals_nid;
 	ptl_pid_t	portals_pid = 0;
-	int		threads;
 
 
 	CDEBUG(D_TRACE, "lgmnal_init : interface [%d], ptl_size [%d], ac_size[%d]\n",
 			interface, ptl_size, ac_size);
-
-	if ((interface < 0) || (interface > LGMNAL_NUM_IF) || (ptl_size <= 0) || (ac_size <= 0) ) {
-		CDEBUG(D_ERROR, "bad args\n");
-		return(NULL);
-	} else {
-		CDEBUG(D_INFO, "parameters check out ok\n");
-	}
-
-	CDEBUG(D_INFO, "Acquired global lock\n");
 
 
 	PORTAL_ALLOC(nal_data, sizeof(lgmnal_data_t));

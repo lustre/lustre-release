@@ -88,30 +88,34 @@ extern  int num_rx_threads;
  *	A structre to keep track of a small transmit operation
  *	This structure has a one-to-one relationship with a small
  *	transmit buffer (both create by lgmnal_stxd_alloc). 
- *	stxd has pointer to txbuffer and the hash table in nal_data
- *	allows us to go the other way.
+ *	stxd has pointer to txbuffer
+ *	There are two free list of stxd. One for use by clients of the NAL
+ *	and the other by the NAL rxthreads when doing sends. This helps prevent
+ *	deadlock caused by stxd starvation.
  */
 typedef struct _lgmnal_stxd_t {
 	void 			*buffer;		/* Address of small wired buffer this decriptor uses */
 	int			buffer_size;		/* size (in bytes) of the tx buffer this descripto uses */
 	gm_size_t		gm_size;		/* gmsize of the tx buffer this descripto uses */
-	int			msg_size;		/* size of the message being send */
+	int			msg_size;		/* size of the message being sent */
 	int			gm_target_node;
 	int			gm_priority;
 	int			type;			/* large or small message */
 	struct _lgmnal_data_t 	*nal_data;
-	lib_msg_t		*cookie;	/* the cookie the portals library gave us */
+	lib_msg_t		*cookie;		/* the cookie the portals library gave us */
 	int			niov;
 	struct iovec		iov[PTL_MD_MAX_IOV];
-	struct	_lgmnal_srxd_t  *srxd;	/* for gm_gets */
+	struct	_lgmnal_srxd_t  *srxd;			/* for gm_gets */
 	struct _lgmnal_stxd_t	*next;
-        int                     rxt;    /* this txd for use by rx thread only */
+        int                     rxt;    		/* this txd for use by rx thread only */
         int                     kniov;
         struct iovec            *iovec_dup;
 } lgmnal_stxd_t;
 
 /*
  *	as for lgmnal_stxd_t 
+ *	a hash table in nal_data find srxds from
+ *	the rx buffer address. hash table populated at init time
  */
 typedef struct _lgmnal_srxd_t {
 	void 			*buffer;
@@ -143,21 +147,29 @@ typedef struct	_lgmnal_msghdr {
 	} lgmnal_msghdr_t;
 #define LGMNAL_MSGHDR_SIZE	sizeof(lgmnal_msghdr_t)
 
-/* rxthread work entry */
+/*
+ *	the caretaker thread (ct_thread) gets receive events
+ *	(and other events) from the myrinet device via the GM2 API.
+ *	caretaker thread populates one work entry for each receive event,
+ *	puts it on a Q in nal_data and wakes a receive thread to  process the receive.
+ *	Processing a portals receive can involve a transmit operation. Because of
+ *	this the caretaker thread cannot process receives as it may get deadlocked when
+ *	supply of transmit descriptors is exhausted (as caretaker thread is responsible
+ *	for replacing transmit descriptors on the free list)
+ */
 typedef struct _lgmnal_rxtwe {
 	gm_recv_event_t *rx;
 	struct _lgmnal_rxtwe	*next;
 } lgmnal_rxtwe_t;
 
-/* 
- *	There's one of these for each interface that is initialised
- *	There's a maximum of LGMNAL_NUM_IF lgmnal_data_t
+/*
+ *	1 receive thread started on each CPU
  */
 #define NRXTHREADS 10 /* max number of receiver threads */
 
 typedef struct _lgmnal_data_t {
-	int	refcnt;
-	spinlock_t	cb_lock;	/* lock provided for cb_cli function */
+	int		refcnt;
+	spinlock_t	cb_lock;	/* lock provided for cb_cli function. this is also the api_lock  */
 	spinlock_t 	stxd_lock;	/* lock to add or remove stxd to/from free list */
 	struct semaphore stxd_token;	/* Don't try to access the list until get a token */
 	lgmnal_stxd_t	*stxd;		/* list of free stxd's */
@@ -167,40 +179,38 @@ typedef struct _lgmnal_data_t {
 	spinlock_t 	srxd_lock;
 	struct semaphore srxd_token;
 	lgmnal_srxd_t	*srxd;
-	struct gm_hash	*srxd_hash;
+	struct gm_hash	*srxd_hash;	/* hash table to get from an rxbuffer to its srxd */
 	nal_t		*nal;		/* our API NAL */
 	nal_cb_t	*nal_cb;	/* our CB nal */
 	struct gm_port	*gm_port;	/* the gm port structure we open in lgmnal_init */
 	unsigned int	gm_local_nid;	/* our gm local node id */
 	unsigned int	gm_global_nid;	/* our gm global node id */
-	spinlock_t 	gm_lock;	/* GM is not threadsage */
+	spinlock_t 	gm_lock;	/* GM is not threadsafe */
 	long		rxthread_pid[NRXTHREADS];	/* pid of our receiver thread */
-	spinlock_t	rxthread_flag_lock;
-	int		rxthread_stop_flag;
+	int		rxthread_stop_flag;	/* bit mask flag of started rxthreads */
+	spinlock_t	rxthread_flag_lock;	/* for the stop_flag */
 	long		rxthread_flag;	/* stop the receiver thread */
 	long		ctthread_pid;	/* pid of our caretaker thread */
 	int		ctthread_flag;	/* stop the thread flag	*/
-	gm_alarm_t	ctthread_alarm;	/* used to wake sleeping ct thread */
-	int		small_msg_size;
-	int		small_msg_gmsize;
-	spinlock_t	rxtwe_lock;
-	struct	semaphore rxtwe_wait;
-	lgmnal_rxtwe_t	*rxtwe_head;
+	gm_alarm_t	ctthread_alarm;	/* used to wake ct thread sleeping in gm_unknown */
+	int		small_msg_size;	/* the largest message (bytes) that can be processed in small msg path */
+	int		small_msg_gmsize;	/* gm_size of small_msg_size see GM docs */
+	lgmnal_rxtwe_t	*rxtwe_head;	/* list of receives pending processing by the rx threads */
 	lgmnal_rxtwe_t	*rxtwe_tail;
-	char		_file[128];
-	char		_function[128];
-	int		_line;
+	spinlock_t	rxtwe_lock;	/* lock for ct thread to add entries and rx threads to remove */ 
+	struct	semaphore rxtwe_wait;	/* rxthreads wait here for work */
 } lgmnal_data_t;
 
 /*
- *	For nal_data->ctthread_flag
+ *	Flags to start/stop and check status of threads
+ *	each rxthread sets 1 bit (any bit) of the flag on startup
+ *	and clears 1 bit when exiting
  */
 #define LGMNAL_THREAD_RESET	0
 #define LGMNAL_THREAD_STOP	666
 #define LGMNAL_CTTHREAD_STARTED	333
 #define LGMNAL_RXTHREADS_STARTED ( (1<<num_rx_threads)-1)
 
-#define LGMNAL_NUM_IF 	1
 
 extern lgmnal_data_t	*global_nal_data;
 
@@ -407,6 +417,7 @@ char		*lgmnal_gm_error(gm_status_t);
 char		*lgmnal_rxevent(gm_recv_event_t*);
 int		lgmnal_is_small_message(lgmnal_data_t*, int, struct iovec*, int);
 void 		lgmnal_yield(int);
+int		lgmnal_start_kernel_threads(lgmnal_data_t *);
 
 
 /*

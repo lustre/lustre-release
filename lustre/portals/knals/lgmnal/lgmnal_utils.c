@@ -624,7 +624,6 @@ char *
 lgmnal_rxevent(gm_recv_event_t	*ev)
 {
 	short	event;
-	char	msg[24];
 	event = GM_RECV_EVENT_TYPE(ev);
 	switch(event) {
   		case(GM_NO_RECV_EVENT):
@@ -750,8 +749,7 @@ lgmnal_rxevent(gm_recv_event_t	*ev)
   		case(GM_NEW_ETHERNET_RECV_EVENT):
 			return("GM_NEW_ETHERNET_RECV_EVENT");
 		default:
-			snprintf(msg, 24,  "Unknown Recv event [%d]", event);
-			return(msg);
+			return("Unknown Recv event");
 #if 0
   		case(/* _GM_PUT_NOTIFICATION_EVENT */
   		case(/* GM_FREE_SEND_TOKEN_EVENT */
@@ -942,7 +940,7 @@ lgmnal_start_kernel_threads(lgmnal_data_t *nal_data)
 		}
 		spin_unlock(&nal_data->rxthread_flag_lock);
 		lgmnal_yield(1);
-		CDEBUG(D_INFO, "Waiting for receive thread signs of life is [%d] e[%d]\n", nal_data->rxthread_flag, LGMNAL_RXTHREADS_STARTED);
+		CDEBUG(D_INFO, "Waiting for receive thread signs of life is [%ld] e[%d]\n", nal_data->rxthread_flag, LGMNAL_RXTHREADS_STARTED);
 	}
 
 	CDEBUG(D_INFO, "receive threads seem to have started\n");
