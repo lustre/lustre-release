@@ -485,7 +485,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         case S_IFDIR:
                 handle = mds_fs_start(mds, dir, MDS_FSOP_RMDIR);
                 if (!handle)
-                        GOTO(out_unlink_dchild, rc = PTR_ERR(handle));
+                        GOTO(out_unlink_cancel, rc = PTR_ERR(handle));
                 rc = vfs_rmdir(dir, dchild);
                 break;
         case S_IFREG:
@@ -502,7 +502,7 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         default:
                 handle = mds_fs_start(mds, dir, MDS_FSOP_UNLINK);
                 if (!handle)
-                        GOTO(out_unlink_dchild, rc = PTR_ERR(handle));
+                        GOTO(out_unlink_cancel, rc = PTR_ERR(handle));
                 rc = vfs_unlink(dir, dchild);
                 break;
         }
@@ -518,12 +518,13 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         EXIT;
 
-out_unlink_dchild:
-        l_dput(dchild);
+ out_unlink_cancel:
         ldlm_lock_decref(&child_lockh, LCK_EX);
         rc = ldlm_cli_cancel(&child_lockh);
         if (rc < 0)
                 CERROR("failed to cancel child inode lock ino\n"); 
+out_unlink_dchild:
+        l_dput(dchild);
 out_unlink:
         up(&dir->i_sem);
         ldlm_lock_decref(&lockh, lock_mode);
