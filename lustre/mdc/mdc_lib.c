@@ -21,12 +21,20 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 #ifndef __KERNEL__
+# include <fcntl.h>
 # include <liblustre.h>
 #endif
 #include <linux/lustre_idl.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_mds.h>
 #include "mdc_internal.h"
+
+#ifndef __KERNEL__
+/* some liblustre hackings here */
+#ifndef O_DIRECTORY
+#define O_DIRECTORY     0
+#endif
+#endif
 
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
                       struct ll_fid *mdc_fid)
