@@ -214,6 +214,7 @@ static __inline__ struct obdo *obdo_fromid(struct obd_conn *conn, obd_id id,
 	struct obdo *oa;
 	int err;
 
+	ENTRY;
 	oa = obdo_alloc();
 	if ( !oa ) {
 		EXIT;

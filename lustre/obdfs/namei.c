@@ -233,8 +233,9 @@ static struct page *obdfs_add_entry (struct inode * dir,
 	 */
 	if (dir->i_size == 0)
 	{
-		EXIT;
+		OIDEBUG(dir);
 		*err = -ENOENT;
+		EXIT;
 		return NULL;
 	}
 	page = obdfs_getpage(dir, 0, 0, LOCKED);

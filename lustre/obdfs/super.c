@@ -306,18 +306,21 @@ void obdfs_read_inode(struct inode *inode)
 	obdo_free(oa);
 	OIDEBUG(inode);
 
-	if (S_ISREG(inode->i_mode))
+	if (S_ISREG(inode->i_mode)) {
 		inode->i_op = &obdfs_file_inode_operations;
-	else if (S_ISDIR(inode->i_mode))
+		EXIT;
+	} else if (S_ISDIR(inode->i_mode)) {
 		inode->i_op = &obdfs_dir_inode_operations;
-	else if (S_ISLNK(inode->i_mode))
+		EXIT;
+	} else if (S_ISLNK(inode->i_mode)) {
 		inode->i_op = &obdfs_symlink_inode_operations;
-	else
+		EXIT;
+	} else {
 		init_special_inode(inode, inode->i_mode,
 				   /* XXX need to fill in the ext2 side */
 				   ((long *)OBDFS_INFO(inode)->oi_inline)[0]);
+	}
 
-	EXIT;
 	return;
 } /* obdfs_read_inode */
 

@@ -123,6 +123,7 @@ static void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
 
 	CDEBUG(D_INODE, "inode %ld (%p)\n", inode->i_ino, inode);
 	obdo_to_inode(inode, oa);
+
 	if (obdo_has_inline(oa)) {
 		CDEBUG(D_INODE, "obdo has inline data\n");
 		memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
