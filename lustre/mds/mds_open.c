@@ -834,11 +834,16 @@ int mds_open(struct mds_update_record *rec, int offset,
         acc_mode = accmode(rec->ur_flags);
 
         /* Step 1: Find and lock the parent */
-        if (rec->ur_flags & O_CREAT)
+        if (rec->ur_flags & O_CREAT) {
+                /* XXX Well, in fact we only need this lock mode change if
+                   in addition to O_CREAT, the file does not exist.
+                   But we do not know if it exists or not yet */
                 parent_mode = LCK_PW;
+        }
         dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
                                         &parent_lockh, rec->ur_name,
-                                        rec->ur_namelen - 1);
+                                        rec->ur_namelen - 1,
+                                        MDS_INODELOCK_UPDATE);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
                 CERROR("parent lookup error %d\n", rc);

@@ -62,6 +62,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct obd_device *obddev = class_exp2obd(sbi->ll_mdc_exp);
         struct ldlm_res_id res_id =
                 { .name = {lli->lli_st_ino, (__u64)lli->lli_st_generation} };
+        ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         ENTRY;
 
         if ((lli->lli_st_size + PAGE_CACHE_SIZE - 1) >> PAGE_SHIFT <= page->index) {
@@ -75,11 +76,11 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
 
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
-                             &res_id, LDLM_PLAIN, NULL, LCK_PR, &lockh);
+                             &res_id, LDLM_IBITS, &policy, LCK_PR, &lockh);
         if (!rc) {
                 llu_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
 
-                rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, &it, LCK_PR,
+                rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_IBITS, &it, LCK_PR,
                                  &data, &lockh, NULL, 0,
                                  ldlm_completion_ast, llu_mdc_blocking_ast,
                                  inode);

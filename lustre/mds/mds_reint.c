@@ -78,11 +78,10 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                        rc);
         } else {
                 ///* XXX 0 normally, SENDNOW for debug */);
-                ctxt = llog_get_context(obd, mlcd->mlcd_cookies[0].lgc_subsys + 1);
-                rc = llog_cancel(ctxt, lsm,
-                                         mlcd->mlcd_cookielen /
-                                         sizeof(*mlcd->mlcd_cookies),
-                                         mlcd->mlcd_cookies, OBD_LLOG_FL_SENDNOW);
+                ctxt = llog_get_context(obd,mlcd->mlcd_cookies[0].lgc_subsys+1);
+                rc = llog_cancel(ctxt, lsm, mlcd->mlcd_cookielen /
+                                                sizeof(*mlcd->mlcd_cookies),
+                                 mlcd->mlcd_cookies, OBD_LLOG_FL_SENDNOW);
                 if (rc)
                         CERROR("error cancelling %d log cookies: rc %d\n",
                                (int)(mlcd->mlcd_cookielen /
@@ -394,14 +393,18 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 if (IS_ERR(de))
                         GOTO(cleanup, rc = PTR_ERR(de));
         } else {
+                __u64 lockpart = MDS_INODELOCK_UPDATE;
+                if (rec->ur_iattr.ia_valid & (ATTR_MODE|ATTR_UID|ATTR_GID) )
+                        lockpart |= MDS_INODELOCK_LOOKUP;
                 de = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, LCK_PW,
-                                           &lockh, NULL, 0);
+                                           &lockh, NULL, 0, lockpart);
                 if (IS_ERR(de))
                         GOTO(cleanup, rc = PTR_ERR(de));
                 locked = 1;
         }
 
         cleanup_phase = 1;
+
         inode = de->d_inode;
         LASSERT(inode);
         if ((S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) && 
@@ -563,7 +566,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc = -ESTALE);
 
         dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, LCK_PW, &lockh,
-                                        rec->ur_name, rec->ur_namelen - 1);
+                                        rec->ur_name, rec->ur_namelen - 1,
+                                        MDS_INODELOCK_UPDATE);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
                 CERROR("parent lookup error %d\n", rc);
@@ -751,7 +755,8 @@ cleanup:
         return 0;
 }
 
-int res_gt(struct ldlm_res_id *res1, struct ldlm_res_id *res2)
+static int res_gt(struct ldlm_res_id *res1, struct ldlm_res_id *res2,
+           ldlm_policy_data_t *p1, ldlm_policy_data_t *p2)
 {
         int i;
 
@@ -768,6 +773,13 @@ int res_gt(struct ldlm_res_id *res1, struct ldlm_res_id *res2)
                 if (res1->name[i] < res2->name[i])
                         return 0;
         }
+
+        if (!p1 || !p2)
+                return 0;
+
+        if (memcmp(p1, p2, sizeof(*p1)) < 0)
+                return 1;
+
         return 0;
 }
 
@@ -779,27 +791,32 @@ int res_gt(struct ldlm_res_id *res1, struct ldlm_res_id *res2)
  * no lock is taken for that res_id.  Must be at least one non-zero res_id. */
 int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
                           struct lustre_handle *p1_lockh, int p1_lock_mode,
+                          ldlm_policy_data_t *p1_policy,
                           struct ldlm_res_id *p2_res_id,
-                          struct lustre_handle *p2_lockh, int p2_lock_mode)
+                          struct lustre_handle *p2_lockh, int p2_lock_mode,
+                          ldlm_policy_data_t *p2_policy)
 {
         struct ldlm_res_id *res_id[2] = { p1_res_id, p2_res_id };
         struct lustre_handle *handles[2] = { p1_lockh, p2_lockh };
         int lock_modes[2] = { p1_lock_mode, p2_lock_mode };
+        ldlm_policy_data_t *policies[2] = { p1_policy, p2_policy };
         int rc, flags;
         ENTRY;
 
         LASSERT(p1_res_id != NULL && p2_res_id != NULL);
 
-        CDEBUG(D_INFO, "locks before: "LPU64"/"LPU64"\n",
-               res_id[0]->name[0], res_id[1]->name[0]);
+        CDEBUG(D_INFO, "locks before: "LPU64"/"LPU64"\n", res_id[0]->name[0],
+               res_id[1]->name[0]);
 
-        if (res_gt(p1_res_id, p2_res_id)) {
+        if (res_gt(p1_res_id, p2_res_id, p1_policy, p2_policy)) {
                 handles[1] = p1_lockh;
                 handles[0] = p2_lockh;
                 res_id[1] = p1_res_id;
                 res_id[0] = p2_res_id;
                 lock_modes[1] = p1_lock_mode;
                 lock_modes[0] = p2_lock_mode;
+                policies[1] = p1_policy;
+                policies[0] = p2_policy;
         }
 
         CDEBUG(D_DLMTRACE, "lock order: "LPU64"/"LPU64"\n",
@@ -807,20 +824,21 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
 
         flags = LDLM_FL_LOCAL_ONLY;
         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, *res_id[0],
-                              LDLM_PLAIN, NULL, lock_modes[0], &flags,
+                              LDLM_IBITS, policies[0], lock_modes[0], &flags,
                               mds_blocking_ast, ldlm_completion_ast, NULL, NULL,
                               NULL, 0, NULL, handles[0]);
         if (rc != ELDLM_OK)
                 RETURN(-EIO);
         ldlm_lock_dump_handle(D_OTHER, handles[0]);
 
-        if (memcmp(res_id[0], res_id[1], sizeof(*res_id[0])) == 0) {
+        if (!memcmp(res_id[0], res_id[1], sizeof(*res_id[0])) &&
+            (policies[0]->l_inodebits.bits & policies[1]->l_inodebits.bits)) {
                 memcpy(handles[1], handles[0], sizeof(*(handles[1])));
                 ldlm_lock_addref(handles[1], lock_modes[1]);
         } else if (res_id[1]->name[0] != 0) {
                 flags = LDLM_FL_LOCAL_ONLY;
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
-                                      *res_id[1], LDLM_PLAIN, NULL,
+                                      *res_id[1], LDLM_IBITS, policies[1],
                                       lock_modes[1], &flags, mds_blocking_ast,
                                       ldlm_completion_ast, NULL, NULL, NULL, 0,
                                       NULL, handles[1]);
@@ -836,12 +854,16 @@ int enqueue_ordered_locks(struct obd_device *obd, struct ldlm_res_id *p1_res_id,
 
 int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
                            struct lustre_handle *p1_lockh, int p1_lock_mode,
+                           ldlm_policy_data_t *p1_policy,
                            struct ldlm_res_id *p2_res_id,
                            struct lustre_handle *p2_lockh, int p2_lock_mode,
+                           ldlm_policy_data_t *p2_policy,
                            struct ldlm_res_id *c1_res_id,
                            struct lustre_handle *c1_lockh, int c1_lock_mode,
+                           ldlm_policy_data_t *c1_policy,
                            struct ldlm_res_id *c2_res_id,
-                           struct lustre_handle *c2_lockh, int c2_lock_mode)
+                           struct lustre_handle *c2_lockh, int c2_lock_mode,
+                           ldlm_policy_data_t *c2_policy)
 {
         struct ldlm_res_id *res_id[5] = { p1_res_id, p2_res_id,
                                           c1_res_id, c2_res_id };
@@ -849,10 +871,13 @@ int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
                                                  c1_lockh, c2_lockh };
         int lock_modes[5] = { p1_lock_mode, p2_lock_mode,
                               c1_lock_mode, c2_lock_mode };
+        ldlm_policy_data_t *policies[5] = { p1_policy, p2_policy,
+                                            c1_policy, c2_policy};
         int rc, i, j, sorted, flags;
         ENTRY;
 
-        CDEBUG(D_DLMTRACE, "locks before: "LPU64"/"LPU64"/"LPU64"/"LPU64"\n",
+        CDEBUG(D_DLMTRACE,
+               "locks before: "LPU64"/"LPU64"/"LPU64"/"LPU64"\n",
                res_id[0]->name[0], res_id[1]->name[0], res_id[2]->name[0],
                res_id[3]->name[0]);
 
@@ -862,13 +887,16 @@ int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
                 dlm_handles[4] = dlm_handles[i];
                 res_id[4] = res_id[i];
                 lock_modes[4] = lock_modes[i];
+                policies[4] = policies[i];
 
                 sorted = 0;
                 do {
-                        if (res_gt(res_id[j], res_id[4])) {
+                        if (res_gt(res_id[j], res_id[4], policies[j],
+                                   policies[4])) {
                                 dlm_handles[j + 1] = dlm_handles[j];
                                 res_id[j + 1] = res_id[j];
                                 lock_modes[j + 1] = lock_modes[j];
+                                policies[j + 1] = policies[j];
                                 j--;
                         } else {
                                 sorted = 1;
@@ -878,9 +906,11 @@ int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
                 dlm_handles[j + 1] = dlm_handles[4];
                 res_id[j + 1] = res_id[4];
                 lock_modes[j + 1] = lock_modes[4];
+                policies[j + 1] = policies[4];
         }
 
-        CDEBUG(D_DLMTRACE, "lock order: "LPU64"/"LPU64"/"LPU64"/"LPU64"\n",
+        CDEBUG(D_DLMTRACE,
+               "lock order: "LPU64"/"LPU64"/"LPU64"/"LPU64"\n",
                res_id[0]->name[0], res_id[1]->name[0], res_id[2]->name[0],
                res_id[3]->name[0]);
 
@@ -890,13 +920,16 @@ int enqueue_4ordered_locks(struct obd_device *obd,struct ldlm_res_id *p1_res_id,
                 if (res_id[i]->name[0] == 0)
                         break;
                 if (i != 0 &&
-                    memcmp(res_id[i], res_id[i-1], sizeof(*res_id[i])) == 0) {
+                    !memcmp(res_id[i], res_id[i-1], sizeof(*res_id[i])) &&
+                    (policies[i]->l_inodebits.bits &
+                     policies[i-1]->l_inodebits.bits) ) {
                         memcpy(dlm_handles[i], dlm_handles[i-1],
                                sizeof(*(dlm_handles[i])));
                         ldlm_lock_addref(dlm_handles[i], lock_modes[i]);
                 } else {
                         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
-                                              *res_id[i], LDLM_PLAIN, NULL,
+                                              *res_id[i], LDLM_IBITS,
+                                              policies[i],
                                               lock_modes[i], &flags,
                                               mds_blocking_ast,
                                               ldlm_completion_ast, NULL, NULL,
@@ -934,6 +967,7 @@ static int mds_verify_child(struct obd_device *obd,
                             struct ldlm_res_id *child_res_id,
                             struct lustre_handle *child_lockh,
                             struct dentry **dchildp, int child_mode,
+                            ldlm_policy_data_t *child_policy,
                             const char *name, int namelen,
                             struct ldlm_res_id *maxres)
 {
@@ -973,8 +1007,8 @@ static int mds_verify_child(struct obd_device *obd,
                 child_res_id->name[0] = dchild->d_inode->i_ino;
                 child_res_id->name[1] = dchild->d_inode->i_generation;
 
-                if (res_gt(parent_res_id, child_res_id) ||
-                    res_gt(maxres, child_res_id)) {
+                if (res_gt(parent_res_id, child_res_id, NULL, NULL) ||
+                    res_gt(maxres, child_res_id, NULL, NULL)) {
                         CDEBUG(D_DLMTRACE, "relock "LPU64"<("LPU64"|"LPU64")\n",
                                child_res_id->name[0], parent_res_id->name[0],
                                maxres->name[0]);
@@ -982,12 +1016,13 @@ static int mds_verify_child(struct obd_device *obd,
                 }
 
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
-                                      *child_res_id, LDLM_PLAIN, NULL,
+                                      *child_res_id, LDLM_IBITS, child_policy,
                                       child_mode, &flags, mds_blocking_ast,
                                       ldlm_completion_ast, NULL, NULL, NULL, 0,
                                       NULL, child_lockh);
                 if (rc != ELDLM_OK)
                         GOTO(cleanup, rc = -EIO);
+
         } else {
                 memset(child_res_id, 0, sizeof(*child_res_id));
         }
@@ -1010,12 +1045,16 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
                                 struct ll_fid *fid,
                                 struct lustre_handle *parent_lockh,
                                 struct dentry **dparentp, int parent_mode,
+                                __u64 parent_lockpart,
                                 char *name, int namelen,
                                 struct lustre_handle *child_lockh,
-                                struct dentry **dchildp, int child_mode)
+                                struct dentry **dchildp, int child_mode,
+                                __u64 child_lockpart)
 {
         struct ldlm_res_id child_res_id = { .name = {0} };
         struct ldlm_res_id parent_res_id = { .name = {0} };
+        ldlm_policy_data_t parent_policy = {.l_inodebits = { parent_lockpart }};
+        ldlm_policy_data_t child_policy = {.l_inodebits = { child_lockpart }};
         struct inode *inode;
         int rc = 0, cleanup_phase = 0;
         ENTRY;
@@ -1050,6 +1089,7 @@ int mds_get_parent_child_locked(struct obd_device *obd, struct mds_obd *mds,
 
         child_res_id.name[0] = inode->i_ino;
         child_res_id.name[1] = inode->i_generation;
+
         iput(inode);
 
 retry_locks:
@@ -1057,8 +1097,10 @@ retry_locks:
 
         /* Step 3: Lock parent and child in resource order.  If child doesn't
          *         exist, we still have to lock the parent and re-lookup. */
-        rc = enqueue_ordered_locks(obd, &parent_res_id,parent_lockh,parent_mode,
-                                   &child_res_id, child_lockh, child_mode);
+        rc = enqueue_ordered_locks(obd,&parent_res_id,parent_lockh,parent_mode,
+                                   &parent_policy,
+                                   &child_res_id, child_lockh, child_mode,
+                                   &child_policy);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -1069,8 +1111,9 @@ retry_locks:
 
         /* Step 4: Re-lookup child to verify it hasn't changed since locking */
         rc = mds_verify_child(obd, &parent_res_id, parent_lockh, *dparentp,
-                              parent_mode, &child_res_id, child_lockh, dchildp,
-                              child_mode, name, namelen, &parent_res_id);
+                              parent_mode, &child_res_id, child_lockh, 
+                              dchildp, child_mode, &child_policy,
+                              name, namelen, &parent_res_id);
         if (rc > 0)
                 goto retry_locks;
         if (rc < 0) {
@@ -1128,8 +1171,10 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
 
         rc = mds_get_parent_child_locked(obd, mds, rec->ur_fid1,
                                          &parent_lockh, &dparent, LCK_PW,
+                                         MDS_INODELOCK_UPDATE,
                                          rec->ur_name, rec->ur_namelen,
-                                         &child_lockh, &dchild, LCK_EX);
+                                         &child_lockh, &dchild, LCK_EX,
+                                         MDS_INODELOCK_LOOKUP|MDS_INODELOCK_UPDATE);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -1316,6 +1361,10 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         struct lustre_handle *handle = NULL, tgt_dir_lockh, src_lockh;
         struct ldlm_res_id src_res_id = { .name = {0} };
         struct ldlm_res_id tgt_dir_res_id = { .name = {0} };
+        ldlm_policy_data_t src_policy ={.l_inodebits = {MDS_INODELOCK_UPDATE}};
+        ldlm_policy_data_t tgt_dir_policy =
+                                       {.l_inodebits = {MDS_INODELOCK_UPDATE}};
+
         int rc = 0, cleanup_phase = 0;
         ENTRY;
 
@@ -1354,7 +1403,9 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
         tgt_dir_res_id.name[1] = de_tgt_dir->d_inode->i_generation;
 
         rc = enqueue_ordered_locks(obd, &src_res_id, &src_lockh, LCK_EX,
-                                   &tgt_dir_res_id, &tgt_dir_lockh, LCK_EX);
+                                   &src_policy,
+                                   &tgt_dir_res_id, &tgt_dir_lockh, LCK_EX,
+                                   &tgt_dir_policy);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -1510,6 +1561,14 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
         struct ldlm_res_id p2_res_id = { .name = {0} };
         struct ldlm_res_id c1_res_id = { .name = {0} };
         struct ldlm_res_id c2_res_id = { .name = {0} };
+        ldlm_policy_data_t p_policy = {.l_inodebits = {MDS_INODELOCK_UPDATE}};
+        /* Only dentry should change, but the inode itself would be
+           intact otherwise */
+        ldlm_policy_data_t c1_policy = {.l_inodebits = {MDS_INODELOCK_LOOKUP}};
+        /* If something is going to be replaced, both dentry and inode locks are
+           needed */
+        ldlm_policy_data_t c2_policy = {.l_inodebits = {MDS_INODELOCK_LOOKUP|
+                                                        MDS_INODELOCK_UPDATE}};
         struct ldlm_res_id *maxres_src, *maxres_tgt;
         struct inode *inode;
         int rc = 0, cleanup_phase = 0;
@@ -1579,6 +1638,7 @@ static int mds_get_parents_children_locked(struct obd_device *obd,
 
         c2_res_id.name[0] = inode->i_ino;
         c2_res_id.name[1] = inode->i_generation;
+
         iput(inode);
 
 retry_locks:
@@ -1587,15 +1647,19 @@ retry_locks:
         maxres_tgt = &p2_res_id;
         cleanup_phase = 4; /* target dentry */
 
-        if (c1_res_id.name[0] != 0 && res_gt(&c1_res_id, &p1_res_id))
+        if (c1_res_id.name[0] != 0 && res_gt(&c1_res_id, &p1_res_id, NULL,NULL))
                 maxres_src = &c1_res_id;
-        if (c2_res_id.name[0] != 0 && res_gt(&c2_res_id, &p2_res_id))
+        if (c2_res_id.name[0] != 0 && res_gt(&c2_res_id, &p2_res_id, NULL,NULL))
                 maxres_tgt = &c2_res_id;
 
         rc = enqueue_4ordered_locks(obd, &p1_res_id,&dlm_handles[0],parent_mode,
+                                    &p_policy,
                                     &p2_res_id, &dlm_handles[1], parent_mode,
+                                    &p_policy,
                                     &c1_res_id, &dlm_handles[2], child_mode,
-                                    &c2_res_id, &dlm_handles[3], child_mode);
+                                    &c1_policy,
+                                    &c2_res_id, &dlm_handles[3], child_mode,
+                                    &c2_policy);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -1603,8 +1667,9 @@ retry_locks:
 
         /* Step 6a: Re-lookup source child to verify it hasn't changed */
         rc = mds_verify_child(obd, &p1_res_id, &dlm_handles[0], *de_srcdirp,
-                              parent_mode, &c1_res_id, &dlm_handles[2], de_oldp,
-                              child_mode, old_name, old_len, maxres_tgt);
+                              parent_mode, &c1_res_id, &dlm_handles[2],
+                              de_oldp, child_mode, &c1_policy, old_name,old_len,
+                              maxres_tgt);
         if (rc) {
                 if (c2_res_id.name[0] != 0)
                         ldlm_lock_decref(&dlm_handles[3], child_mode);
@@ -1620,8 +1685,9 @@ retry_locks:
 
         /* Step 6b: Re-lookup target child to verify it hasn't changed */
         rc = mds_verify_child(obd, &p2_res_id, &dlm_handles[1], *de_tgtdirp,
-                              parent_mode, &c2_res_id, &dlm_handles[3], de_newp,
-                              child_mode, new_name, new_len, maxres_src);
+                              parent_mode, &c2_res_id, &dlm_handles[3],
+                              de_newp, child_mode, &c2_policy, new_name,
+                              new_len, maxres_src);
         if (rc) {
                 ldlm_lock_decref(&dlm_handles[2], child_mode);
                 ldlm_lock_decref(&dlm_handles[0], parent_mode);
@@ -1770,8 +1836,7 @@ cleanup:
                         ldlm_lock_decref(&(dlm_handles[0]), LCK_PW);
                 } else {
                         if (lock_count == 4)
-                                ptlrpc_save_lock(req,
-                                              &(dlm_handles[3]), LCK_EX);
+                                ptlrpc_save_lock(req,&(dlm_handles[3]), LCK_EX);
                         ptlrpc_save_lock(req, &(dlm_handles[2]), LCK_EX);
                         ptlrpc_save_lock(req, &(dlm_handles[1]), LCK_PW);
                         ptlrpc_save_lock(req, &(dlm_handles[0]), LCK_PW);

@@ -52,6 +52,7 @@ char *ldlm_typename[] = {
         [LDLM_PLAIN] "PLN",
         [LDLM_EXTENT] "EXT",
         [LDLM_FLOCK] "FLK",
+        [LDLM_IBITS] "IBT",
 };
 
 char *ldlm_it2str(int it)
@@ -88,6 +89,7 @@ static ldlm_processing_policy ldlm_processing_policy_table[] = {
 #ifdef __KERNEL__
         [LDLM_FLOCK] ldlm_process_flock_lock,
 #endif
+        [LDLM_IBITS] ldlm_process_inodebits_lock,
 };
 
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res)
@@ -595,6 +597,14 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
                 if (lock->l_resource->lr_type == LDLM_EXTENT &&
                     mode == LCK_GROUP &&
                     lock->l_policy_data.l_extent.gid != policy->l_extent.gid)
+                        continue;
+
+                /* We match if we have existing lock with same or wider set
+                   of bits. */
+                if (lock->l_resource->lr_type == LDLM_IBITS &&
+                     ((lock->l_policy_data.l_inodebits.bits &
+                      policy->l_inodebits.bits) !=
+                      policy->l_inodebits.bits))
                         continue;
 
                 if (lock->l_destroyed)
@@ -1191,6 +1201,9 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                        lock->l_policy_data.l_flock.pid,
                        lock->l_policy_data.l_flock.start,
                        lock->l_policy_data.l_flock.end);
+        else if (lock->l_resource->lr_type == LDLM_IBITS)
+                CDEBUG(level, " Bits: "LPX64"\n",
+                       lock->l_policy_data.l_inodebits.bits);
 }
 
 void ldlm_lock_dump_handle(int level, struct lustre_handle *lockh)

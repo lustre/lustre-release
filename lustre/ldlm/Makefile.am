@@ -10,4 +10,4 @@
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
 DIST_SOURCES = ldlm_extent.c ldlm_flock.c ldlm_internal.h ldlm_lib.c \
 	ldlm_lock.c ldlm_lockd.c ldlm_plain.c ldlm_request.c	     \
-	ldlm_resource.c ldlm_test.c l_lock.c
+	ldlm_resource.c ldlm_test.c l_lock.c ldlm_inodebits.c

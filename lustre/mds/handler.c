@@ -158,12 +158,14 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
                                      struct vfsmount **mnt, int lock_mode,
                                      struct lustre_handle *lockh,
-                                     char *name, int namelen)
+                                     char *name, int namelen, __u64 lockpart)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct dentry *de = mds_fid2dentry(mds, fid, mnt), *retval = de;
         struct ldlm_res_id res_id = { .name = {0} };
         int flags = 0, rc;
+        ldlm_policy_data_t policy = { .l_inodebits = { lockpart } };
+
         ENTRY;
 
         if (IS_ERR(de))
@@ -172,7 +174,7 @@ struct dentry *mds_fid2locked_dentry(struct obd_device *obd, struct ll_fid *fid,
         res_id.name[0] = de->d_inode->i_ino;
         res_id.name[1] = de->d_inode->i_generation;
         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace, res_id,
-                              LDLM_PLAIN, NULL, lock_mode, &flags,
+                              LDLM_IBITS, &policy, lock_mode, &flags,
                               mds_blocking_ast, ldlm_completion_ast, NULL, NULL,
                               NULL, 0, NULL, lockh);
         if (rc != ELDLM_OK) {
@@ -652,7 +654,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
 }
 
 static int mds_getattr_name(int offset, struct ptlrpc_request *req,
-                            struct lustre_handle *child_lockh)
+                            struct lustre_handle *child_lockh, int child_part)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
         struct ldlm_reply *rep = NULL;
@@ -732,8 +734,10 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         if (resent_req == 0) {
                 rc = mds_get_parent_child_locked(obd, &obd->u.mds, &body->fid1,
                                                  &parent_lockh, &dparent,
-                                                 LCK_PR, name, namesize,
-                                                 child_lockh, &dchild, LCK_PR);
+                                                 LCK_PR, MDS_INODELOCK_UPDATE,
+                                                 name, namesize,
+                                                 child_lockh, &dchild, LCK_PR,
+                                                 child_part);
                 if (rc)
                         GOTO(cleanup, rc);
         } else {
@@ -1136,7 +1140,7 @@ int mds_handle(struct ptlrpc_request *req)
                  * want to cancel.
                  */
                 lockh.cookie = 0;
-                rc = mds_getattr_name(0, req, &lockh);
+                rc = mds_getattr_name(0, req, &lockh, MDS_INODELOCK_UPDATE);
                 /* this non-intent call (from an ioctl) is special */
                 req->rq_status = rc;
                 if (rc == 0 && lockh.cookie)
@@ -1675,6 +1679,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         struct ldlm_reply *rep;
         struct lustre_handle lockh = { 0 };
         struct ldlm_lock *new_lock;
+        int getattr_part = MDS_INODELOCK_UPDATE;
         int rc, offset = 2, repsize[4] = {sizeof(struct ldlm_reply),
                                           sizeof(struct mds_body),
                                           mds->mds_max_mdsize,
@@ -1726,10 +1731,13 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
 #endif 
                         RETURN(ELDLM_LOCK_ABORTED);
                 break;
-        case IT_GETATTR:
         case IT_LOOKUP:
+                getattr_part = MDS_INODELOCK_LOOKUP;
+        case IT_GETATTR:
+                getattr_part |= MDS_INODELOCK_LOOKUP;
         case IT_READDIR:
-                rep->lock_policy_res2 = mds_getattr_name(offset, req, &lockh);
+                rep->lock_policy_res2 = mds_getattr_name(offset, req, &lockh,
+                                                         getattr_part);
                 /* FIXME: LDLM can set req->rq_status. MDS sets
                    policy_res{1,2} with disposition and status.
                    - replay: returns 0 & req->status is old status 

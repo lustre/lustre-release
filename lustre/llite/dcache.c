@@ -228,6 +228,29 @@ int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
 
         ll_i2uctxt(&ctxt, de->d_parent->d_inode, de->d_inode);
 
+        if (it->it_op == IT_GETATTR) { /* We need to check for LOOKUP lock
+                                          as well */
+                rc = mdc_intent_lock(exp, &ctxt, &pfid, de->d_name.name,
+                                     de->d_name.len, NULL, 0, &cfid, &lookup_it,
+                                     flags, &req, ll_mdc_blocking_ast);
+                /* If there was no lookup lock, no point in even checking for
+                   UPDATE lock */
+                if (!rc) {
+                        it = &lookup_it;
+                        GOTO(out, rc);
+                }
+                if (it_disposition(&lookup_it, DISP_LOOKUP_NEG)) {
+                        ll_intent_release(&lookup_it);
+                        it = &lookup_it;
+                        GOTO(out, rc = 0);
+                }
+                        
+                if (req)
+                        ptlrpc_req_finished(req);
+                req = NULL;
+                ll_lookup_finish_locks(&lookup_it, de);
+        }
+
         rc = mdc_intent_lock(exp, &ctxt, &pfid, de->d_name.name, de->d_name.len,
                              NULL, 0,
                              &cfid, it, flags, &req, ll_mdc_blocking_ast);

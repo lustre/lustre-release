@@ -212,10 +212,11 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
         struct obd_device *obddev = class_exp2obd(ll_i2sbi(dir)->ll_mdc_exp);
         struct address_space *mapping = dir->i_mapping;
         struct page *page;
+        ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         int rc;
 
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
-                             &res_id, LDLM_PLAIN, NULL, LCK_PR, &lockh);
+                             &res_id, LDLM_IBITS, &policy, LCK_PR, &lockh);
         if (!rc) {
                 struct lookup_intent it = { .it_op = IT_READDIR };
                 struct ptlrpc_request *request;
@@ -223,7 +224,7 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 
                 ll_prepare_mdc_op_data(&data, dir, NULL, NULL, 0, 0);
 
-                rc = mdc_enqueue(ll_i2sbi(dir)->ll_mdc_exp, LDLM_PLAIN, &it,
+                rc = mdc_enqueue(ll_i2sbi(dir)->ll_mdc_exp, LDLM_IBITS, &it,
                                  LCK_PR, &data, &lockh, NULL, 0,
                                  ldlm_completion_ast, ll_mdc_blocking_ast, dir);
 

@@ -140,6 +140,7 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
         case LDLM_CB_CANCELING: {
                 struct inode *inode = llu_inode_from_lock(lock);
                 struct llu_inode_info *lli;
+                __u64 bits = lock->l_policy_data.l_inodebits.bits;
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
@@ -147,14 +148,16 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
 
                 lli =  llu_i2info(inode);
 
-                clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
+                if (bits & MDS_INODELOCK_UPDATE)
+                        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 
                 if (lock->l_resource->lr_name.name[0] != lli->lli_st_ino ||
                     lock->l_resource->lr_name.name[1] != lli->lli_st_generation) {
                         LDLM_ERROR(lock, "data mismatch with ino %lu/%lu",
                                    lli->lli_st_ino, lli->lli_st_generation);
                 }
-                if (S_ISDIR(lli->lli_st_mode)) {
+                if (S_ISDIR(lli->lli_st_mode) &&
+                    (bits & MDS_INODELOCK_UPDATE)) {
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                lli->lli_st_ino);
 

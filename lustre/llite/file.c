@@ -131,7 +131,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         ll_prepare_mdc_op_data(&data, parent->d_inode, NULL, name, len, O_RDWR);
 
-        rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_PLAIN, itp, LCK_PW, &data,
+        rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_IBITS, itp, LCK_PW, &data,
                          &lockh, lmm, lmmsize, ldlm_completion_ast,
                          ll_mdc_blocking_ast, parent->d_inode);
         if (rc < 0)
@@ -1297,13 +1297,14 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         RETURN(rc);
 }
 
-static int ll_have_md_lock(struct dentry *de)
+static int ll_have_md_lock(struct dentry *de, __u64 lockpart)
 {
         struct ll_sb_info *sbi = ll_s2sbi(de->d_sb);
         struct lustre_handle lockh;
         struct ldlm_res_id res_id = { .name = {0} };
         struct obd_device *obddev;
         int flags;
+        ldlm_policy_data_t policy = { .l_inodebits = { lockpart } };
         ENTRY;
 
         if (!de->d_inode)
@@ -1317,14 +1318,14 @@ static int ll_have_md_lock(struct dentry *de)
 
         /* FIXME use LDLM_FL_TEST_LOCK instead */
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
-        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
-                            NULL, LCK_PR, &lockh)) {
+        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
+                            &policy, LCK_PR, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PR);
                 RETURN(1);
         }
 
-        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_PLAIN,
-                            NULL, LCK_PW, &lockh)) {
+        if (ldlm_lock_match(obddev->obd_namespace, flags, &res_id, LDLM_IBITS,
+                            &policy, LCK_PW, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PW);
                 RETURN(1);
         }
@@ -1350,7 +1351,7 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it)
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_REVALIDATE);
 #endif
 
-        if (!ll_have_md_lock(dentry)) {
+        if (!ll_have_md_lock(dentry, MDS_INODELOCK_UPDATE)) {
                 struct ptlrpc_request *req = NULL;
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 struct ll_fid fid;

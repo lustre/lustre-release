@@ -511,6 +511,12 @@ typedef enum {
 #define DISP_OPEN_OPEN    (1 << 5)
 #define DISP_ENQ_COMPLETE (1<<6)
 
+/* INODE LOCK PARTS */
+#define MDS_INODELOCK_LOOKUP 0x000001       /* dentry, mode, owner, group */
+#define MDS_INODELOCK_UPDATE 0x000002       /* size, links, timestamps */
+//#define MDS_INODELOCK_MAXSHIFT 1
+//#define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
+
 struct ll_fid {
         __u64 id;
         __u32 generation;
@@ -733,6 +739,9 @@ struct ldlm_extent {
         __u64 end;
         __u64 gid;
 };
+struct ldlm_inodebits {
+        __u64 bits;
+};
 
 struct ldlm_flock {
         __u64 start;
@@ -751,6 +760,7 @@ struct ldlm_flock {
 typedef union {
         struct ldlm_extent l_extent;
         struct ldlm_flock  l_flock;
+        struct ldlm_inodebits l_inodebits;
 } ldlm_policy_data_t;
 
 extern void lustre_swab_ldlm_policy_data (ldlm_policy_data_t *d);

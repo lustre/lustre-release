@@ -166,6 +166,7 @@ int mdc_change_cbdata(struct obd_export *exp, struct ll_fid *fid,
 
         ldlm_change_cbdata(class_exp2obd(exp)->obd_namespace, &res_id, it, 
                            data);
+
         EXIT;
         return 0;
 }
@@ -190,6 +191,7 @@ int mdc_enqueue(struct obd_export *exp,
         struct obd_device *obddev = class_exp2obd(exp);
         struct ldlm_res_id res_id =
                 { .name = {data->fid1.id, data->fid1.generation} };
+        ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
         int size[6] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
         int rc, flags = LDLM_FL_HAS_INTENT;
         int repsize[4] = {sizeof(struct ldlm_reply),
@@ -255,6 +257,9 @@ int mdc_enqueue(struct obd_export *exp,
                 size[2] = sizeof(struct mds_body);
                 size[3] = data->namelen + 1;
 
+                if (it->it_op & IT_GETATTR)
+                        policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
+
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 4,
                                       size, NULL);
                 if (!req)
@@ -270,6 +275,7 @@ int mdc_enqueue(struct obd_export *exp,
                 reply_buffers = 3;
                 req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op == IT_READDIR) {
+               policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
                 req = ptlrpc_prep_req(class_exp2cliimp(exp), LDLM_ENQUEUE, 1,
                                       size, NULL);
                 if (!req)
@@ -282,10 +288,9 @@ int mdc_enqueue(struct obd_export *exp,
                 LBUG();
                 RETURN(-EINVAL);
         }
-
         mdc_get_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
         rc = ldlm_cli_enqueue(exp, req, obddev->obd_namespace, res_id,
-                              lock_type, NULL, lock_mode, &flags, cb_blocking,
+                              lock_type, &policy, lock_mode, &flags,cb_blocking,
                               cb_completion, NULL, cb_data, NULL, 0, NULL,
                               lockh);
         mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
@@ -430,16 +435,26 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 struct ldlm_res_id res_id ={.name = {cfid->id,
                                                      cfid->generation}};
                 struct lustre_handle lockh;
+                ldlm_policy_data_t policy;
                 int mode = LCK_PR;
 
+                /* For the GETATTR case, ll_revalidate_it issues two separate
+                   queries - for LOOKUP and for UPDATE lock because if cannot
+                   check them together - we might have those two bits to be
+                   present in two separate granted locks */
+                policy.l_inodebits.bits = 
+                                 (it->it_op == IT_GETATTR)?MDS_INODELOCK_UPDATE:
+                                                           MDS_INODELOCK_LOOKUP;
+                mode = LCK_PR;
                 rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                      LDLM_FL_BLOCK_GRANTED, &res_id,
-                                     LDLM_PLAIN, NULL, LCK_PR, &lockh);
+                                     LDLM_IBITS, &policy, LCK_PR, &lockh);
                 if (!rc) {
                         mode = LCK_PW;
                         rc = ldlm_lock_match(exp->exp_obd->obd_namespace,
                                              LDLM_FL_BLOCK_GRANTED, &res_id,
-                                             LDLM_PLAIN, NULL, LCK_PW, &lockh);
+                                             LDLM_IBITS, &policy, LCK_PW,
+                                             &lockh);
                 }
                 if (rc) {
                         memcpy(&it->d.lustre.it_lock_handle, &lockh,
@@ -461,7 +476,7 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 struct mdc_op_data op_data;
                 mdc_fid2mdc_op_data(&op_data, uctxt, pfid, cfid, name, len, 0);
 
-                rc = mdc_enqueue(exp, LDLM_PLAIN, it, it_to_lock_mode(it),
+                rc = mdc_enqueue(exp, LDLM_IBITS, it, it_to_lock_mode(it),
                                  &op_data, &lockh, lmm, lmmsize,
                                  ldlm_completion_ast, cb_blocking, NULL);
                 if (rc < 0)
@@ -537,11 +552,12 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
          * intent_finish has performed the iget().) */
         lock = ldlm_handle2lock(&lockh);
         if (lock) {
+                ldlm_policy_data_t policy = lock->l_policy_data;
                 LDLM_DEBUG(lock, "matching against this");
                 LDLM_LOCK_PUT(lock);
                 memcpy(&old_lock, &lockh, sizeof(lockh));
                 if (ldlm_lock_match(NULL, LDLM_FL_BLOCK_GRANTED, NULL,
-                                    LDLM_PLAIN, NULL, LCK_NL, &old_lock)) {
+                                    LDLM_IBITS, &policy, LCK_NL, &old_lock)) {
                         ldlm_lock_decref_and_cancel(&lockh,
                                                     it->d.lustre.it_lock_mode);
                         memcpy(&lockh, &old_lock, sizeof(old_lock));

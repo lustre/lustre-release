@@ -154,20 +154,33 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 break;
         case LDLM_CB_CANCELING: {
                 struct inode *inode = ll_inode_from_lock(lock);
+                __u64 bits = lock->l_policy_data.l_inodebits.bits;
 
-                /* Invalidate all dentries associated with this inode */
+                /* For lookup locks: Invalidate all dentries associated with
+                   this inode, for UPDATE locks - invalidate directory pages */
                 if (inode == NULL)
                         break;
 
-                clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
-                          &(ll_i2info(inode)->lli_flags));
+                if (bits & MDS_INODELOCK_UPDATE)
+                        clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK,
+                                  &(ll_i2info(inode)->lli_flags));
+
 
                 if (lock->l_resource->lr_name.name[0] != inode->i_ino ||
                     lock->l_resource->lr_name.name[1] != inode->i_generation) {
                         LDLM_ERROR(lock, "data mismatch with ino %lu/%u",
                                    inode->i_ino, inode->i_generation);
                 }
-                if (S_ISDIR(inode->i_mode)) {
+
+                /* If lookup lock is cancelled, we just drop the dentry and
+                   this will cause us to reget data from MDS when we'd want to
+                   access this dentry/inode again. If this is lock on
+                   other parts of inode that is cancelled, we do not need to do
+                   much (but need to discard data from readdir, if any), since
+                   abscence of lock will cause ll_revalidate_it (called from
+                   stat() and similar functions) to renew the data anyway */
+                if (S_ISDIR(inode->i_mode) &&
+                    (bits & MDS_INODELOCK_UPDATE)) {
                         CDEBUG(D_INODE, "invalidating inode %lu\n",
                                inode->i_ino);
 
@@ -175,7 +188,8 @@ int ll_mdc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 }
 
                 if (inode->i_sb->s_root &&
-                    inode != inode->i_sb->s_root->d_inode)
+                    inode != inode->i_sb->s_root->d_inode &&
+                    (bits & MDS_INODELOCK_LOOKUP))
                         ll_unhash_aliases(inode);
                 iput(inode);
                 break;
@@ -194,6 +208,7 @@ int ll_mdc_cancel_unused(struct lustre_handle *conn, struct inode *inode,
                 { .name = {inode->i_ino, inode->i_generation} };
         struct obd_device *obddev = class_conn2obd(conn);
         ENTRY;
+        
         RETURN(ldlm_cli_cancel_unused(obddev->obd_namespace, &res_id, flags,
                                       opaque));
 }
@@ -313,8 +328,9 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         dentry->d_op = &ll_d_ops;
         ll_set_dd(dentry);
 
-        if (dentry == saved)
+        if (dentry == saved) {
                 d_add(dentry, inode);
+        }
 
         RETURN(0);
 }
