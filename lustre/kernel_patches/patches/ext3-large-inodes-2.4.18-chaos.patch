@@ -1,0 +1,20 @@
+ fs/ext3/super.c |    6 ------
+ 1 files changed, 6 deletions(-)
+
+--- linux-2.4.18-chaos-uml/fs/ext3/super.c~ext3-large-inodes-2.4.18-chaos	2003-09-10 23:43:06.000000000 +0400
++++ linux-2.4.18-chaos-uml-alexey/fs/ext3/super.c	2003-09-10 23:44:22.000000000 +0400
+@@ -1292,12 +1292,6 @@ struct super_block * ext3_read_super (st
+ 	} else {
+ 		sbi->s_inode_size = le16_to_cpu(es->s_inode_size);
+ 		sbi->s_first_ino = le32_to_cpu(es->s_first_ino);
+-		if (sbi->s_inode_size != EXT3_GOOD_OLD_INODE_SIZE) {
+-			printk (KERN_ERR
+-				"EXT3-fs: unsupported inode size: %d\n",
+-				sbi->s_inode_size);
+-			goto failed_mount;
+-		}
+ 	}
+ 	sbi->s_frag_size = EXT3_MIN_FRAG_SIZE <<
+ 				   le32_to_cpu(es->s_log_frag_size);
+
+_
