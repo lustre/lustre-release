@@ -820,7 +820,6 @@ static int mds_getattr_pack_msg_cf(struct ptlrpc_request *req,
 
         rc = lustre_pack_reply(req, 1, size, NULL);
         if (rc) {
-                req->rq_status = rc;
                 CERROR("lustre_pack_reply failed: rc %d\n", rc);
                 GOTO(out, req->rq_status = rc);
         }
