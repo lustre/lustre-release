@@ -376,8 +376,6 @@ void ll_clear_inode(struct inode *inode)
  * I don't believe it is possible to get e.g. ATTR_MTIME_SET and ATTR_SIZE
  * at the same time.
  */
-#define OST_ATTR (ATTR_MTIME | ATTR_MTIME_SET | ATTR_CTIME | \
-                  ATTR_ATIME | ATTR_ATIME_SET | ATTR_SIZE)
 int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 {
         struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
@@ -399,6 +397,12 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                 }
 
                 attr->ia_valid |= ATTR_MTIME | ATTR_CTIME;
+        }
+
+        /* POSIX: check before ATTR_*TIME_SET set (from inode_change_ok) */
+        if (ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET)) {
+                if (current->fsuid != inode->i_uid && !capable(CAP_FOWNER))
+                        RETURN(-EPERM);
         }
 
         /* We mark all of the fields "set" so MDS/OST does not re-set them */
@@ -425,7 +429,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         /* If only OST attributes being set on objects, don't do MDS RPC.
          * In that case, we need to check permissions and update the local
          * inode ourselves so we can call obdo_from_inode() always. */
-        if (ia_valid & (lsm ? ~(OST_ATTR | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
+        if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
                 struct lustre_md md;
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
@@ -444,10 +448,14 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         ptlrpc_req_finished(request);
                         RETURN(rc);
                 }
+
+                /* Won't invoke vmtruncate as we already cleared ATTR_SIZE,
+                 * but needed to set timestamps backwards on utime. */
+                inode_setattr(inode, attr);
                 ll_update_inode(inode, md.body, md.lsm);
                 ptlrpc_req_finished(request);
 
-                if (!md.lsm || !S_ISREG(inode->i_mode)) {
+                if (!lsm || !S_ISREG(inode->i_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
                         RETURN(0);
                 }
@@ -661,8 +669,12 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
                 inode->i_ino = body->ino;
         if (body->valid & OBD_MD_FLATIME)
                 LTIME_S(inode->i_atime) = body->atime;
-        if (body->valid & OBD_MD_FLMTIME)
+        if (body->valid & OBD_MD_FLMTIME &&
+            body->mtime > LTIME_S(inode->i_mtime)) {
+                CDEBUG(D_INODE, "setting ino %lu mtime from %lu to %u\n",
+                       inode->i_ino, LTIME_S(inode->i_mtime), body->mtime);
                 LTIME_S(inode->i_mtime) = body->mtime;
+        }
         if (body->valid & OBD_MD_FLCTIME &&
             body->ctime > LTIME_S(inode->i_ctime))
                 LTIME_S(inode->i_ctime) = body->ctime;
