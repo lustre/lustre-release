@@ -210,8 +210,10 @@ static int mds_ext3_set_last_rcvd(struct mds_obd *mds, void *handle)
         return 0;
 }
 
-static int mds_ext3_journal_data(struct inode *inode, struct file *filp)
+static int mds_ext3_journal_data(struct file *filp)
 {
+        struct inode *inode = filp->f_dentry->d_inode;
+
         EXT3_I(inode)->i_flags |= EXT3_JOURNAL_DATA_FL;
 
         return 0;

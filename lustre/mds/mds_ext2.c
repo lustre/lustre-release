@@ -99,7 +99,7 @@ static int mds_ext2_set_last_rcvd(struct mds_obd *mds, void *handle)
         return 0;
 }
 
-static int mds_ext2_journal_data(struct inode *inode, struct file *filp)
+static int mds_ext2_journal_data(struct file *filp)
 {
         return 0;
 }

@@ -113,8 +113,8 @@ void mds_rename_pack(struct mds_rec_rename *, struct inode *srcdir,
 /* mds/handler.c */
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);
 
-/* llight/request.c */
-int mdc_connect(struct ptlrpc_client *, struct ptlrpc_connection *, 
+/* mdc/mdc_request.c */
+int mdc_connect(struct ptlrpc_client *, struct ptlrpc_connection *,
                 struct ll_fid *rootfid, struct ptlrpc_request **);
 int mdc_getattr(struct ptlrpc_client *, struct ptlrpc_connection *, ino_t ino,
                 int type, unsigned long valid, struct ptlrpc_request **);
@@ -154,7 +154,7 @@ struct mds_fs_operations {
                                 loff_t *offset);
         void    (* fs_delete_inode)(struct inode *inode);
         void    (* cl_delete_inode)(struct inode *inode);
-        int     (* fs_journal_data)(struct inode *inode, struct file *file);
+        int     (* fs_journal_data)(struct file *file);
         int     (* fs_set_last_rcvd)(struct mds_obd *mds, void *handle);
 };
 
@@ -211,16 +211,19 @@ static inline ssize_t mds_fs_readpage(struct mds_obd *mds, struct file *file,
         return mds->mds_fsops->fs_readpage(file, buf, count, offset);
 }
 
+/* Set up callback to update mds->mds_last_committed with the current
+ * value of mds->mds_last_recieved when this transaction is on disk.
+ */
 static inline int mds_fs_set_last_rcvd(struct mds_obd *mds, void *handle)
 {
         return mds->mds_fsops->fs_set_last_rcvd(mds, handle);
 }
 
+/* Enable data journaling on the given file */
 static inline ssize_t mds_fs_journal_data(struct mds_obd *mds,
-                                          struct inode *inode,
                                           struct file *file)
 {
-        return mds->mds_fsops->fs_journal_data(inode, file);
+        return mds->mds_fsops->fs_journal_data(file);
 }
 
 extern struct mds_fs_operations mds_ext2_fs_ops;
