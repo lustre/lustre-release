@@ -61,13 +61,16 @@ def main():
 	myCon.open()
 
 	connId=myCon.id
+	# initilize the new network object class
 	lustreNet=LustreNet()
+	# brings the failed network object class from LDAP the query is
 	lustreNet.getEntry_from_ldap(connId,base,FailedNetUUID)
 	
 	nodename=socket.gethostname()
 
 	nodename=lustreNet.id
 	failoverNetUUID=lustreNet.fnetUUID
+	#Query the failover network information
 	lustreNet=LustreNet()
 	lustreNet.getEntry_from_ldap(connId,base,failoverNetUUID)
 	
