@@ -39,7 +39,7 @@ int mds_pin(struct ptlrpc_request *req);
 /* mds/mds_fs.c */
 int mds_client_add(struct obd_device *obd, struct mds_obd *mds,
 		   struct mds_export_data *med, int cl_off);
-int mds_client_free(struct obd_export *exp);
+int mds_client_free(struct obd_export *exp, int clear_client);
 
 #ifdef __KERNEL__
 void mds_pack_inode2fid(struct ll_fid *fid, struct inode *inode);
