@@ -244,6 +244,7 @@ void ll_complete_writepage_24(struct obd_client_page *ocp, int rc)
         ocp_free(page);
 
         unlock_page(page);
+        page_cache_release(page);
 }
 
 int ll_ocp_write_count(struct inode *inode, struct page *page)
@@ -276,12 +277,14 @@ static int ll_writepage_24(struct page *page)
         ocp->ocp_flag = OBD_BRW_CREATE|OBD_BRW_FROM_GRANT;
 
         obd_brw_plug(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, NULL);
+        page_cache_get(page);
         rc = ll_start_ocp_io(page);
         if (rc == 0) {
                 ll_page_acct(0, 1);
                 ll_start_io_from_dirty(inode, ll_complete_writepage_24);
         } else {
                 ocp_free(page);
+                page_cache_release(page);
         }
 
         obd_brw_unplug(OBD_BRW_WRITE, exp, ll_i2info(inode)->lli_smd, NULL);
@@ -371,7 +374,7 @@ struct address_space_operations ll_aops = {
         readpage: ll_readpage_24,
         direct_IO: ll_direct_IO_24,
         writepage: ll_writepage_24,
-        sync_page: block_sync_page, /* XXX what's this? */
+        sync_page: block_sync_page, /* XXX good gravy, we could be smart. */
         prepare_write: ll_prepare_write,
         commit_write: ll_commit_write,
         bmap: NULL
