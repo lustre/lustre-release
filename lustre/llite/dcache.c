@@ -123,14 +123,14 @@ int ll_revalidate2(struct dentry *de, int flags, struct lookup_intent *it)
 
         CDEBUG(D_INFO, "trying to match res "LPU64"\n", res_id[0]);
 
-        if (ldlm_lock_match(obddev->obd_namespace, res_id, LDLM_MDSINTENT,
-                            NULL, 0, LCK_PR, &lockh)) {
+        if (ldlm_lock_match(obddev->obd_namespace, res_id, LDLM_PLAIN, NULL, 0,
+                            LCK_PR, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PR);
                 GOTO(out, rc = 1);
         }
 
-        if (ldlm_lock_match(obddev->obd_namespace, res_id, LDLM_MDSINTENT,
-                            NULL, 0, LCK_PW, &lockh)) {
+        if (ldlm_lock_match(obddev->obd_namespace, res_id, LDLM_PLAIN, NULL, 0,
+                            LCK_PW, &lockh)) {
                 ldlm_lock_decref(&lockh, LCK_PW);
                 GOTO(out, rc = 1);
         }

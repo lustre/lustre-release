@@ -284,7 +284,8 @@ static void fixup_req_for_recreate(struct ptlrpc_request *fixreq,
         if (fixreq->rq_reqmsg->opc == LDLM_ENQUEUE) {
                 lockreq = lustre_msg_buf(fixreq->rq_reqmsg, 0);
 
-                if (lockreq->lock_desc.l_resource.lr_type != LDLM_MDSINTENT) {
+                if (lockreq->lock_desc.l_resource.lr_type != LDLM_PLAIN &&
+                    !(lockreq->lock_flags & LDLM_FL_HAS_INTENT)) {
                         DEBUG_REQ(D_HA, fixreq, "non-intent lock, skipping");
                         return;
                 }
@@ -408,7 +409,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         struct obd_device *obddev = class_conn2obd(conn);
         __u64 res_id[RES_NAME_SIZE] = {dir->i_ino, (__u64)dir->i_generation};
         int size[6] = {sizeof(struct ldlm_request), sizeof(struct ldlm_intent)};
-        int rc, flags = 0;
+        int rc, flags = LDLM_FL_HAS_INTENT;
         int repsize[3] = {sizeof(struct ldlm_reply),
                           sizeof(struct mds_body),
                           obddev->u.cli.cl_max_mds_easize};

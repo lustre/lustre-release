@@ -213,7 +213,9 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
         LDLM_DEBUG_NOLOCK("server-side enqueue handler START");
 
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
-        if (dlm_req->lock_desc.l_resource.lr_type == LDLM_MDSINTENT) {
+        flags = dlm_req->lock_flags;
+        if (dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN &&
+            (flags & LDLM_FL_HAS_INTENT)) {
                 /* In this case, the reply buffer is allocated deep in
                  * local_lock_enqueue by the policy function. */
                 cookie = req;
@@ -245,7 +247,6 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req)
                sizeof(lock->l_remote_handle));
         LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
 
-        flags = dlm_req->lock_flags;
         err = ldlm_lock_enqueue(lock, cookie, cookielen, &flags,
                                 ldlm_server_completion_ast,
                                 ldlm_server_blocking_ast);

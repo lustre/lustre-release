@@ -43,6 +43,7 @@ typedef enum {
 #define LDLM_FL_INTENT_ONLY    (1 << 10) /* don't grant lock, just do intent */
 #define LDLM_FL_LOCAL_ONLY     (1 << 11) /* see ldlm_cli_cancel_unused */
 #define LDLM_FL_NO_CALLBACK    (1 << 12) /* see ldlm_cli_cancel_unused */
+#define LDLM_FL_HAS_INTENT     (1 << 13) /* lock request has intent */
 
 #define LDLM_CB_BLOCKING    1
 #define LDLM_CB_CANCELING   2
@@ -166,10 +167,9 @@ typedef int (*ldlm_res_policy)(struct ldlm_lock *lock, void *req_cookie,
 
 #define LDLM_PLAIN       10
 #define LDLM_EXTENT      11
-#define LDLM_MDSINTENT   12
 
 #define LDLM_MIN_TYPE 10
-#define LDLM_MAX_TYPE 12
+#define LDLM_MAX_TYPE 11
 
 extern ldlm_res_compat ldlm_res_compat_table [];
 extern ldlm_res_policy ldlm_res_policy_table [];

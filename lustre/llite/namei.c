@@ -197,9 +197,8 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                 it->it_data = NULL;
         }
 
-        rc = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT, it, lock_mode,
-                         parent, dentry, &lockh, tgt, tgtlen, parent,
-                         sizeof(*parent));
+        rc = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_PLAIN, it, lock_mode, parent,
+                         dentry, &lockh, tgt, tgtlen, parent, sizeof(*parent));
         if (rc < 0)
                 RETURN(rc);
         memcpy(it->it_lock_handle, &lockh, sizeof(lockh));
@@ -426,8 +425,7 @@ lookup2_finish(int flag, struct ptlrpc_request *request, struct dentry **de,
         dentry->d_op = &ll_d_ops;
         if (ll_d2d(dentry) == NULL) {
                 ll_set_dd(dentry);
-        } else
-                CERROR("NOT allocating fsdata - already set\n");
+        }
 
         if (dentry == saved)
                 d_add(dentry, inode);

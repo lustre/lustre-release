@@ -69,33 +69,26 @@ static void abort_inflight_for_import(struct obd_import *imp)
         }
 }
 
-static void prepare_osc(struct obd_import *imp)
+static void set_osc_active(struct obd_import *imp, int active)
 {
-        int rc;
-        struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
         struct obd_device *notify_obd = imp->imp_obd->u.cli.cl_containing_lov;
-
-        CDEBUG(D_HA, "invalidating all locks for OST imp %p (to %s):\n",
-               imp, imp->imp_connection->c_remote_uuid);
-        ldlm_namespace_dump(ns);
-        ldlm_namespace_cleanup(ns, 1 /* no network ops */);
-
-        abort_inflight_for_import(imp);
 
         if (notify_obd == NULL)
                 return;
 
         /* How gross is _this_? */
         if (!list_empty(&notify_obd->obd_exports)) {
+                int rc;
                 struct lustre_handle fakeconn;
                 struct obd_ioctl_data ioc_data;
                 struct obd_export *exp =
                         list_entry(notify_obd->obd_exports.next,
                                    struct obd_export, exp_obd_chain);
+
                 fakeconn.addr = (__u64)(unsigned long)exp;
                 fakeconn.cookie = exp->exp_cookie;
                 ioc_data.ioc_inlbuf1 = imp->imp_obd->obd_uuid;
-                ioc_data.ioc_offset = 0; /* inactive */
+                ioc_data.ioc_offset = active;
                 rc = obd_iocontrol(IOC_LOV_SET_OSC_ACTIVE, &fakeconn,
                                    sizeof ioc_data, &ioc_data, NULL);
                 if (rc)
@@ -107,6 +100,20 @@ static void prepare_osc(struct obd_import *imp)
                        "%p\n", notify_obd, notify_obd->obd_uuid,
                        imp->imp_obd->obd_uuid);
         }
+}
+
+static void prepare_osc(struct obd_import *imp)
+{
+        struct ldlm_namespace *ns = imp->imp_obd->obd_namespace;
+
+        CDEBUG(D_HA, "invalidating all locks for OST imp %p (to %s):\n",
+               imp, imp->imp_connection->c_remote_uuid);
+        ldlm_namespace_dump(ns);
+        ldlm_namespace_cleanup(ns, 1 /* no network ops */);
+
+        abort_inflight_for_import(imp);
+
+        set_osc_active(imp, 0 /* inactive */);
 }
 
 static void prepare_mdc(struct obd_import *imp)
@@ -134,7 +141,12 @@ static int ll_prepare_recovery(struct ptlrpc_connection *conn)
 
 static void reconnect_osc(struct obd_import *imp)
 {
-        (void)ptlrpc_reconnect_import(imp, OST_CONNECT);
+        int rc = ptlrpc_reconnect_import(imp, OST_CONNECT);
+        if (rc == 0)
+                set_osc_active(imp, 1 /* active */);
+        else
+                CDEBUG(D_HA, "reconnection failed, not reactivating OSC %s\n",
+                       imp->imp_obd->obd_uuid);
 }
 
 static int reconnect_mdc(struct obd_import *imp)

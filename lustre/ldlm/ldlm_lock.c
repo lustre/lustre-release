@@ -45,7 +45,6 @@ char *ldlm_lockname[] = {
 char *ldlm_typename[] = {
         [LDLM_PLAIN] "PLN",
         [LDLM_EXTENT] "EXT",
-        [LDLM_MDSINTENT] "INT"
 };
 
 char *ldlm_it2str(int it)
@@ -98,24 +97,34 @@ static int ldlm_plain_compat(struct ldlm_lock *a, struct ldlm_lock *b);
 ldlm_res_compat ldlm_res_compat_table[] = {
         [LDLM_PLAIN] ldlm_plain_compat,
         [LDLM_EXTENT] ldlm_extent_compat,
-        [LDLM_MDSINTENT] ldlm_plain_compat
 };
+
+static ldlm_res_policy ldlm_intent_policy_func;
+
+static int ldlm_plain_policy(struct ldlm_lock *lock, void *req_cookie,
+                             ldlm_mode_t mode, int flags, void *data)
+{
+        if ((flags & LDLM_FL_HAS_INTENT) && ldlm_intent_policy_func) {
+                return ldlm_intent_policy_func(lock, req_cookie, mode, flags, 
+                                               data);
+        }
+
+        return ELDLM_OK;
+}
 
 ldlm_res_policy ldlm_res_policy_table[] = {
-        [LDLM_PLAIN] NULL,
+        [LDLM_PLAIN] ldlm_plain_policy,
         [LDLM_EXTENT] ldlm_extent_policy,
-        [LDLM_MDSINTENT] NULL
 };
 
-void ldlm_register_intent(int (*arg) (struct ldlm_lock * lock, void *req_cookie,
-                                      ldlm_mode_t mode, int flags, void *data))
+void ldlm_register_intent(ldlm_res_policy arg)
 {
-        ldlm_res_policy_table[LDLM_MDSINTENT] = arg;
+        ldlm_intent_policy_func = arg;
 }
 
 void ldlm_unregister_intent(void)
 {
-        ldlm_res_policy_table[LDLM_MDSINTENT] = NULL;
+        ldlm_intent_policy_func = NULL;
 }
 
 /*

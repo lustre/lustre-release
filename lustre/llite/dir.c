@@ -81,8 +81,8 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                 GOTO(readpage_out, rc);
         }
 
-        rc = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT, &it, LCK_PR,
-                         inode, NULL, &lockh, NULL, 0, inode, sizeof(*inode));
+        rc = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_PLAIN, &it, LCK_PR, inode,
+                         NULL, &lockh, NULL, 0, inode, sizeof(*inode));
         request = (struct ptlrpc_request *)it.it_data;
         if (request)
                 ptlrpc_req_finished(request);
