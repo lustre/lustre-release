@@ -72,7 +72,8 @@ struct osc_created {
         spinlock_t osccd_lock;
         int osccd_flags;
         struct task_struct *osccd_thread;
-        struct list_head osccd_list_head;
+        struct list_head osccd_queue_list_head;
+        struct list_head osccd_work_list_head;
 };
 
 
@@ -85,32 +86,45 @@ struct osc_created {
 
 static struct osc_created osc_created;
 
-static int osc_precreate(struct osc_creator *oscc, struct osc_created *osccd, int wait)
+static int oscc_has_objects(struct osc_creator *oscc, int count)
+{
+	int rc;
+	spin_lock(&oscc->oscc_lock);
+	rc = (oscc->oscc_last_id - oscc->oscc_next_id >= count);
+	spin_unlock(&oscc->oscc_lock);
+	return rc;
+}
+
+static int oscc_precreate(struct osc_creator *oscc, struct osc_created *osccd, int wait)
 {
         int rc = 0;
         struct l_wait_info lwi = { 0 };
 
-        if (oscc->oscc_last_id  - oscc->oscc_next_id >=
-            oscc->oscc_kick_barrier)
+	if (oscc_has_objects(oscc, oscc->oscc_grow_count))
                 RETURN(0);
 
         spin_lock(&osccd->osccd_lock);
-        if (!(osccd->osccd_flags & OSCCD_KICKED)) {
-                osccd->osccd_flags |= OSCCD_KICKED;
-                list_add(&oscc->oscc_list, &osccd->osccd_list_head);
+        spin_lock(&oscc->oscc_lock);
+        if (list_empty(&oscc->oscc_list)) {
+                list_add(&oscc->oscc_list, &osccd->osccd_queue_list_head);
+		osccd->osccd_flags |= OSCCD_KICKED;
                 wake_up(&osccd->osccd_waitq);
         }
+        spin_unlock(&oscc->oscc_lock);
         spin_unlock(&osccd->osccd_lock);
         
         /* an MDS using this call may time out on this. This is a
          *  recovery style wait.
          */
         if (wait)
-                rc =l_wait_event(oscc->oscc_waitq, 
-                                 oscc->oscc_last_id - oscc->oscc_next_id > 0,
-                                 &lwi);
-                
-        RETURN(rc);
+                rc = l_wait_event(oscc->oscc_waitq, oscc_has_objects(oscc, 1), &lwi);
+	if (rc || !wait)
+		RETURN(rc);
+
+	spin_lock(&oscc->oscc_lock);
+	rc = oscc->oscc_status;
+	spin_unlock(&oscc->oscc_lock);
+	RETURN(rc);
 }
 
 int osc_create(struct lustre_handle *exph, struct obdo *oa,
@@ -124,6 +138,7 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
         int try_again = 1;
         ENTRY;
 
+	class_export_put(export);
         LASSERT(oa);
         LASSERT(ea);
 
@@ -145,7 +160,7 @@ int osc_create(struct lustre_handle *exph, struct obdo *oa,
                         try_again = 0;
                 } 
                 spin_unlock(&oscc->oscc_lock);
-                rc = osc_precreate(oscc, osccd, try_again);
+                rc = oscc_precreate(oscc, osccd, try_again);
         }
 
         if (rc && !*ea)
@@ -159,23 +174,30 @@ void osccd_do_create(struct osc_created *osccd)
 
  next:
         spin_lock(&osccd->osccd_lock);
-        list_for_each (tmp, &osccd->osccd_list_head) {
+        list_for_each (tmp, &osccd->osccd_queue_list_head) {
+		int rc;
                 struct osc_creator *oscc = list_entry(tmp, struct osc_creator, 
                                                       oscc_list);
-                list_del(&oscc->oscc_list);
+                list_del_init(&oscc->oscc_list);
+		list_add(&oscc->oscc_list, &osccd->osccd_work_list_head);
                 spin_unlock(&osccd->osccd_lock);
                 
-                oscc->oscc_status = osc_real_create(oscc->oscc_exph, 
-                                                    &oscc->oscc_oa,
-                                                    &oscc->oscc_ea,
-                                                    NULL);
+                rc =  osc_real_create(oscc->oscc_exph, 
+				      &oscc->oscc_oa,
+				      &oscc->oscc_ea,
+				      NULL);
+                spin_lock(&osccd->osccd_lock);
+		spin_lock(&oscc->oscc_lock);
+                list_del_init(&oscc->oscc_list);
+		oscc->oscc_status = rc;
                 oscc->oscc_last_id = oscc->oscc_oa.o_id;
-		osccd->osccd_flags &= ~OSCCD_KICKED;
+		spin_unlock(&oscc->oscc_lock);
+                spin_unlock(&osccd->osccd_lock);
                 wake_up(&oscc->oscc_waitq);
                 goto next;
         }
+	spin_unlock(&osccd->osccd_lock);
 }
-
 
 static int osccd_main(void *arg)
 {
@@ -209,9 +231,8 @@ static int osccd_main(void *arg)
                         spin_unlock(&osccd->osccd_lock);
                         EXIT;
                         break;
-                }
-
-                if (osccd->osccd_flags & OSCCD_KICKED) {
+                } else {
+			osccd->osccd_flags &= ~OSCCD_KICKED;
                         spin_unlock(&osccd->osccd_lock);
                         osccd_do_create(osccd);
                 }
@@ -230,12 +251,25 @@ void oscc_init(struct lustre_handle *exph)
 {
         struct obd_export *exp = class_conn2export(exph);
         struct osc_export_data *oed = &exp->exp_osc_data;
+	int saved_grow_count;
 
         memset(oed, 0, sizeof(*oed));
+	INIT_LIST_HEAD(&oed->oed_oscc.oscc_list);
         init_waitqueue_head(&oed->oed_oscc.oscc_waitq);
         oed->oed_oscc.oscc_exph = exph;
         oed->oed_oscc.oscc_osccd = &osc_created;
         oed->oed_oscc.oscc_kick_barrier = 1;
+        oed->oed_oscc.oscc_grow_count = 1;
+        oed->oed_oscc.oscc_initial_create_count = 1;
+
+	/* XXX the export handle should give the oscc the last object */
+	/* oed->oed_oscc.oscc_last_id = exph->....; */
+	saved_grow_count =  oed->oed_oscc.oscc_grow_count;
+        oed->oed_oscc.oscc_grow_count = oed->oed_oscc.oscc_initial_create_count;
+	oscc_precreate(&oed->oed_oscc, oed->oed_oscc.oscc_osccd, 0);
+	oed->oed_oscc.oscc_grow_count = saved_grow_count;
+
+	class_export_put(exp);
 }
 
 int osccd_setup(void)
@@ -245,7 +279,8 @@ int osccd_setup(void)
         struct l_wait_info lwi = { 0 };
         ENTRY;
 
-        INIT_LIST_HEAD(&osccd->osccd_list_head);
+        INIT_LIST_HEAD(&osccd->osccd_queue_list_head);
+        INIT_LIST_HEAD(&osccd->osccd_work_list_head);
         init_waitqueue_head(&osccd->osccd_ctl_waitq);
         init_waitqueue_head(&osccd->osccd_waitq);
         rc = kernel_thread(osccd_main, osccd,
