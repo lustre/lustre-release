@@ -40,14 +40,14 @@ runthreads() {
 	$OBDCTL --threads $THR v '$OSCDEV' $DO $CNT $RW $V $PGS $OID || exit 1
 }
 
+setup_server || exit -1
+setup_client || exit -1
+
 OID=`$OBDCTL --device '$OSCDEV' create 1 | awk '/is object id/ { print $6 }'`
 
 # TODO: obdctl needs to check on the progress of each forked thread
 #       (IPC SHM, sockets?) to see if it hangs.
 for CMD in test_getattr test_brw_write test_brw_read; do
-	setup_server || exit -1
-	setup_client || exit -1
-
 	case $CMD in
 	test_getattr)
 		PG=
