@@ -67,11 +67,6 @@
 #include <portals/nal.h>
 #include <portals/socknal.h>
 
-#if CONFIG_SMP
-# define SOCKNAL_N_SCHED       num_online_cpus() /* # socknal schedulers */
-#else
-# define SOCKNAL_N_SCHED        1               /* # socknal schedulers */
-#endif
 #define SOCKNAL_N_AUTOCONNECTD  4               /* # socknal autoconnect daemons */
 
 #define SOCKNAL_MIN_RECONNECT_INTERVAL	HZ      /* first failed connection retry... */
@@ -83,7 +78,12 @@
 #define SOCKNAL_TYPED_CONNS      1              /* unidirectional large, bidirectional small? */
 #define SOCKNAL_ZC_MIN_FRAG     (2<<10)         /* default smallest zerocopy fragment */
 #define SOCKNAL_MIN_BULK        (1<<10)         /* smallest "large" message */
-#define SOCKNAL_USE_KEEPALIVES   0              /* use tcp/ip keepalive? */
+#define SOCKNAL_BUFFER_SIZE     (8<<20)         /* default socket buffer size */
+#define SOCKNAL_NAGLE            0              /* enable/disable NAGLE? */
+#define SOCKNAL_IRQ_AFFINITY     1              /* enable/disable IRQ affinity? */
+#define SOCKNAL_KEEPALIVE_IDLE   0              /* # seconds idle before 1st probe */
+#define SOCKNAL_KEEPALIVE_COUNT  10             /* # unanswered probes to determine peer death */
+#define SOCKNAL_KEEPALIVE_INTVL  1              /* seconds between probes */
 
 #define SOCKNAL_PEER_HASH_SIZE   101            /* # peer lists */
 
@@ -98,9 +98,14 @@
 #define SOCKNAL_RESCHED         100             /* # scheduler loops before reschedule */
 #define SOCKNAL_ENOMEM_RETRY    1               /* jiffies between retries */
 
+#define SOCKNAL_MAX_INTERFACES  16              /* Largest number of interfaces we bind */
+
+#define SOCKNAL_ROUND_ROBIN     0               /* round robin / load balance */
+
 #define SOCKNAL_TX_LOW_WATER(sk) (((sk)->sk_sndbuf*8)/10)
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,72))
+# define sk_allocation  allocation
 # define sk_data_ready	data_ready
 # define sk_write_space write_space
 # define sk_user_data   user_data
@@ -135,24 +140,41 @@ typedef struct                                  /* per scheduler state */
         int               kss_nconns;           /* # connections assigned to this scheduler */
 } ksock_sched_t;
 
-typedef struct {
+typedef struct
+{
         int               ksni_valid:1;         /* been set yet? */
         int               ksni_bound:1;         /* bound to a cpu yet? */
         int               ksni_sched:6;         /* which scheduler (assumes < 64) */
 } ksock_irqinfo_t;
 
-typedef struct {
+typedef struct
+{
+        __u32             ksni_ipaddr;          /* interface's IP address */
+        __u32             ksni_netmask;         /* interface's network mask */
+        int               ksni_nroutes;         /* # routes using (active) */
+        int               ksni_npeers;          /* # peers using (passive) */
+} ksock_interface_t;
+
+typedef struct
+{
         int               ksnd_io_timeout;      /* "stuck" socket timeout (seconds) */
         int               ksnd_eager_ack;       /* make TCP ack eagerly? */
         int               ksnd_typed_conns;     /* drive sockets by type? */
         int               ksnd_min_bulk;        /* smallest "large" message */
+        int               ksnd_buffer_size;     /* socket buffer size */
+        int               ksnd_nagle;           /* enable NAGLE? */
+        int               ksnd_irq_affinity;    /* enable IRQ affinity? */
+        int               ksnd_keepalive_idle;  /* # idle secs before 1st probe */
+        int               ksnd_keepalive_count; /* # probes */
+        int               ksnd_keepalive_intvl; /* time between probes */
 #if SOCKNAL_ZC
         unsigned int      ksnd_zc_min_frag;     /* minimum zero copy frag size */
 #endif
         struct ctl_table_header *ksnd_sysctl;   /* sysctl interface */
 } ksock_tunables_t;
 
-typedef struct {
+typedef struct
+{
         int               ksnd_init;            /* initialisation state */
         __u64             ksnd_incarnation;     /* my epoch */
         
@@ -160,9 +182,10 @@ typedef struct {
         struct list_head *ksnd_peers;           /* hash table of all my known peers */
         int               ksnd_peer_hash_size;  /* size of ksnd_peers */
 
-        atomic_t          ksnd_nthreads;        /* # live threads */
+        int               ksnd_nthreads;        /* # live threads */
         int               ksnd_shuttingdown;    /* tell threads to exit */
-        ksock_sched_t    *ksnd_schedulers;      /* scheduler state */
+        int               ksnd_nschedulers;     /* # schedulers */
+        ksock_sched_t    *ksnd_schedulers;      /* their state */
 
         atomic_t          ksnd_npeers;          /* total # peers extant */
         atomic_t          ksnd_nclosing_conns;  /* # closed conns extant */
@@ -190,6 +213,9 @@ typedef struct {
         spinlock_t        ksnd_autoconnectd_lock; /* serialise */
 
         ksock_irqinfo_t   ksnd_irqinfo[NR_IRQS];/* irq->scheduler lookup */
+
+        int               ksnd_ninterfaces;
+        ksock_interface_t ksnd_interfaces[SOCKNAL_MAX_INTERFACES]; /* published interfaces */
 } ksock_nal_data_t;
 
 #define SOCKNAL_INIT_NOTHING    0
@@ -290,6 +316,7 @@ typedef struct ksock_conn
         void               *ksnc_saved_write_space; /* socket's original write_space() callback */
         atomic_t            ksnc_refcount;      /* # users */
         ksock_sched_t	   *ksnc_scheduler;     /* who schedules this connection */
+        __u32               ksnc_myipaddr;      /* my IP */
         __u32               ksnc_ipaddr;        /* peer's IP */
         int                 ksnc_port;          /* peer's port */
         int                 ksnc_closing;       /* being shut down */
@@ -333,17 +360,15 @@ typedef struct ksock_route
         struct list_head    ksnr_connect_list;  /* chain on autoconnect list */
         struct ksock_peer  *ksnr_peer;          /* owning peer */
         atomic_t            ksnr_refcount;      /* # users */
-        int                 ksnr_sharecount;    /* lconf usage counter */
         unsigned long       ksnr_timeout;       /* when (in jiffies) reconnection can happen next */
         unsigned int        ksnr_retry_interval; /* how long between retries */
-        __u32               ksnr_ipaddr;        /* an IP address for this peer */
+        __u32               ksnr_myipaddr;      /* my IP */
+        __u32               ksnr_ipaddr;        /* IP address to connect to */
         int                 ksnr_port;          /* port to connect to */
-        int                 ksnr_buffer_size;   /* size of socket buffers */
-        unsigned int        ksnr_irq_affinity:1; /* set affinity? */
-        unsigned int        ksnr_eager:1;       /* connect eagery? */
         unsigned int        ksnr_connecting:4;  /* autoconnects in progress by type */
         unsigned int        ksnr_connected:4;   /* connections established by type */
         unsigned int        ksnr_deleted:1;     /* been removed from peer? */
+        unsigned int        ksnr_share_count;   /* created explicitly? */
         int                 ksnr_conn_count;    /* # conns established by this route */
 } ksock_route_t;
 
@@ -352,12 +377,15 @@ typedef struct ksock_peer
         struct list_head    ksnp_list;          /* stash on global peer list */
         ptl_nid_t           ksnp_nid;           /* who's on the other end(s) */
         atomic_t            ksnp_refcount;      /* # users */
+        int                 ksnp_sharecount;    /* lconf usage counter */
         int                 ksnp_closing;       /* being closed */
         int                 ksnp_error;         /* errno on closing last conn */
         struct list_head    ksnp_conns;         /* all active connections */
         struct list_head    ksnp_routes;        /* routes */
         struct list_head    ksnp_tx_queue;      /* waiting packets */
         unsigned long       ksnp_last_alive;    /* when (in jiffies) I was last alive */
+        int                 ksnp_n_passive_ips; /* # of... */
+        __u32               ksnp_passive_ips[SOCKNAL_MAX_INTERFACES]; /* preferred local interfaces */
 } ksock_peer_t;
 
 
@@ -366,18 +394,18 @@ extern ksock_nal_data_t ksocknal_data;
 extern ksock_tunables_t ksocknal_tunables;
 
 static inline struct list_head *
-ksocknal_nid2peerlist (ptl_nid_t nid) 
+ksocknal_nid2peerlist (ptl_nid_t nid)
 {
         unsigned int hash = ((unsigned int)nid) % ksocknal_data.ksnd_peer_hash_size;
-        
+
         return (&ksocknal_data.ksnd_peers [hash]);
 }
 
 static inline int
-ksocknal_getconnsock (ksock_conn_t *conn) 
+ksocknal_getconnsock (ksock_conn_t *conn)
 {
         int   rc = -ESHUTDOWN;
-        
+
         read_lock (&ksocknal_data.ksnd_global_lock);
         if (!conn->ksnc_closing) {
                 rc = 0;
@@ -394,6 +422,61 @@ ksocknal_putconnsock (ksock_conn_t *conn)
         fput (conn->ksnc_sock->file);
 }
 
+#ifndef CONFIG_SMP
+static inline
+int ksocknal_nsched(void)
+{
+        return 1;
+}
+#else
+#include <linux/lustre_version.h>
+# if !(defined(CONFIG_X86) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,21))) || defined(CONFIG_X86_64) || (LUSTRE_KERNEL_VERSION < 39)
+static inline int
+ksocknal_nsched(void)
+{
+        return num_online_cpus();
+}
+
+static inline int
+ksocknal_sched2cpu(int i)
+{
+        return i;
+}
+
+static inline int
+ksocknal_irqsched2cpu(int i)
+{
+        return i;
+}
+# else
+static inline int
+ksocknal_nsched(void)
+{
+        if (smp_num_siblings == 1)
+                return (num_online_cpus());
+
+        /* We need to know if this assumption is crap */
+        LASSERT (smp_num_siblings == 2);
+        return (num_online_cpus()/2);
+}
+
+static inline int
+ksocknal_sched2cpu(int i)
+{
+        if (smp_num_siblings == 1)
+                return i;
+
+        return (i * 2);
+}
+
+static inline int
+ksocknal_irqsched2cpu(int i)
+{
+        return (ksocknal_sched2cpu(i) + 1);
+}
+# endif
+#endif
+
 extern void ksocknal_put_route (ksock_route_t *route);
 extern void ksocknal_put_peer (ksock_peer_t *peer);
 extern ksock_peer_t *ksocknal_find_peer_locked (ptl_nid_t nid);
@@ -401,7 +484,7 @@ extern ksock_peer_t *ksocknal_get_peer (ptl_nid_t nid);
 extern int ksocknal_del_route (ptl_nid_t nid, __u32 ipaddr,
                                int single, int keep_conn);
 extern int ksocknal_create_conn (ksock_route_t *route,
-                                 struct socket *sock, int bind_irq, int type);
+                                 struct socket *sock, int type);
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
 extern void ksocknal_terminate_conn (ksock_conn_t *conn);
 extern void ksocknal_destroy_conn (ksock_conn_t *conn);
@@ -422,6 +505,9 @@ extern void ksocknal_data_ready(struct sock *sk, int n);
 extern void ksocknal_write_space(struct sock *sk);
 extern int ksocknal_autoconnectd (void *arg);
 extern int ksocknal_reaper (void *arg);
+extern int ksocknal_get_conn_tunables (ksock_conn_t *conn, int *txmem, 
+                                       int *rxmem, int *nagle);
 extern int ksocknal_setup_sock (struct socket *sock);
-extern int ksocknal_hello (struct socket *sock, 
-                           ptl_nid_t *nid, int *type, __u64 *incarnation);
+extern int ksocknal_send_hello (ksock_conn_t *conn, __u32 *ipaddrs, int nipaddrs);
+extern int ksocknal_recv_hello (ksock_conn_t *conn,
+                                ptl_nid_t *nid, __u64 *incarnation, __u32 *ipaddrs);
