@@ -411,6 +411,9 @@ class LustreDB_LDAP(LustreDB):
     def get_route_tbl(self):
         return []
 
+    def get_hostaddr(self):
+        return self._get_refs('hostaddr')
+
     def _update_active(self, tgtuuid, newuuid):
         """Return list of uuids matching the filter."""
         import ldap
