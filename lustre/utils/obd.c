@@ -1082,9 +1082,6 @@ int jt_obd_lov_config(int argc, char **argv)
         int rc, size, i;
         IOCINIT(data);
 
-        printf("WARNING: obdctl lovconfig NOT MAINTAINED\n");
-        return -1;
-
         if (argc <= 6)
                 return CMD_HELP;
 
