@@ -100,7 +100,8 @@ struct obd_ops {
 
 };
 
-#define OBP(dev,op) dev->obd_type->typ_ops->o_ ## op
+#define OBT(dev)	dev->obd_type->typ_ops
+#define OBP(dev,op)	dev->obd_type->typ_ops->o_ ## op
 
 int obd_register_type(struct obd_ops *ops, char *nm);
 int obd_unregister_type(char *nm);
