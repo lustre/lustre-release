@@ -1,18 +1,28 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/mds/handler.c
- *
+ *  lustre/mds/handler.c
  *  Lustre Metadata Server (mds) request handler
  *
- *  Copyright (C) 2001, 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2001, 2002 Cluster File Systems, Inc.
+ *   Author: Peter Braam <braam@clusterfs.com>
+ *   Author: Andreas Dilger <adilger@clusterfs.com>
+ *   Author: Phil Schwan <phil@clusterfs.com>
  *
- *  This code is issued under the GNU General Public License.
- *  See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- *  by Peter Braam <braam@clusterfs.com> &
- *     Andreas Dilger <braam@clusterfs.com>
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
  *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define EXPORT_SYMTAB
@@ -41,7 +51,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                         __u64 offset)
 {
         int rc = 0;
-        struct mds_obd *mds = mds_req2mds(req); 
+        struct mds_obd *mds = mds_req2mds(req);
         struct ptlrpc_bulk_desc *desc;
         struct ptlrpc_bulk_page *bulk;
         char *buf;
@@ -241,29 +251,29 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
 {
         struct obd_export *exp;
         struct mds_client_data *mcd;
+        struct list_head *p;
         int rc;
+        ENTRY;
+
+        if (!cluuid)
+                RETURN(-EINVAL);
 
         MOD_INC_USE_COUNT;
-        if (cluuid) {
-                struct list_head *p;
-                list_for_each(p, &obd->obd_exports) {
-                        exp = list_entry(p, struct obd_export, exp_chain);
-                        mcd = exp->exp_mds_data.med_mcd;
-                        if (mcd && !memcmp(cluuid, mcd->mcd_uuid,
-                                           sizeof(mcd->mcd_uuid))) {
-                                CDEBUG(D_INFO,
-                                       "existing export for UUID '%s' at %p\n",
-                                       cluuid, exp);
-                                LASSERT(exp->exp_obd == obd);
-                                exp->exp_rconnh.addr = conn->addr;
-                                exp->exp_rconnh.cookie = conn->cookie;
-                                conn->addr = (__u64) (unsigned long)exp;
-                                conn->cookie = exp->exp_cookie;
-                                CDEBUG(D_IOCTL,"connect: addr %Lx cookie %Lx\n",
-                                       (long long)conn->addr,
-                                       (long long)conn->cookie);
-                                RETURN(0);
-                        }
+        list_for_each(p, &obd->obd_exports) {
+                exp = list_entry(p, struct obd_export, exp_chain);
+                mcd = exp->exp_mds_data.med_mcd;
+                if (mcd && !memcmp(cluuid, mcd->mcd_uuid,
+                                   sizeof(mcd->mcd_uuid))) {
+                        CDEBUG(D_INFO, "existing export for UUID '%s' at %p\n",
+                               cluuid, exp);
+                        LASSERT(exp->exp_obd == obd);
+                        exp->exp_rconnh.addr = conn->addr;
+                        exp->exp_rconnh.cookie = conn->cookie;
+                        conn->addr = (__u64) (unsigned long)exp;
+                        conn->cookie = exp->exp_cookie;
+                        CDEBUG(D_IOCTL,"connect: addr %Lx cookie %Lx\n",
+                               (long long)conn->addr, (long long)conn->cookie);
+                        RETURN(0);
                 }
         }
 #warning shaver: we might need a real cluuid here
@@ -284,7 +294,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (rc)
                 GOTO(out_mdc, rc);
 
-        return 0;
+        RETURN(0);
 
 out_mdc:
         OBD_FREE(mcd, sizeof(*mcd));
@@ -293,7 +303,7 @@ out_export:
 out_dec:
         MOD_DEC_USE_COUNT;
 
-        RETURN(rc);
+        return rc;
 }
 
 static int mds_disconnect(struct lustre_handle *conn)
@@ -356,21 +366,21 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
         int rc, size[2] = {sizeof(*desc)};
         ENTRY;
 
-        streq = lustre_msg_buf(req->rq_reqmsg, 0); 
-        streq->flags = NTOH__u32(streq->flags); 
-        streq->repbuf = NTOH__u32(streq->repbuf); 
+        streq = lustre_msg_buf(req->rq_reqmsg, 0);
+        streq->flags = NTOH__u32(streq->flags);
+        streq->repbuf = NTOH__u32(streq->repbuf);
         size[1] = streq->repbuf;
 
         rc = lustre_pack_msg(2, size, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc) { 
+        if (rc) {
                 CERROR("mds: out of memory for message: size=%d\n", size[1]);
                 req->rq_status = -ENOMEM;
                 RETURN(0);
         }
 
-        desc = lustre_msg_buf(req->rq_repmsg, 0); 
+        desc = lustre_msg_buf(req->rq_repmsg, 0);
         rc = mds_get_lovdesc(req->rq_obd, desc);
-        if (rc != 0 ) { 
+        if (rc != 0 ) {
                 CERROR("mds_get_lovdesc error %d", rc);
                 req->rq_status = rc;
                 RETURN(0);
@@ -484,6 +494,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
                         struct lov_stripe_md *md;
                         md = lustre_msg_buf(req->rq_repmsg, offset + 1);
                         md->lmd_easize = mds->mds_max_mdsize;
+                        /* FIXME: why don't we check (or use) rc of get_md? */
                         mds_fs_get_md(mds, inode, md);
                 }
                 /* now a normal case for intent locking */
@@ -567,7 +578,7 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
 
         if (S_ISREG(inode->i_mode)) {
                 rc = mds_fs_get_md(mds, inode,
-                                     lustre_msg_buf(req->rq_repmsg, 1));
+                                   lustre_msg_buf(req->rq_repmsg, 1));
                 if (rc < 0) {
                         CERROR("mds_fs_get_md failed: %d\n", rc);
                         GOTO(out, rc);
@@ -949,7 +960,7 @@ int mds_handle(struct ptlrpc_request *req)
 
         EXIT;
 
-        if (!rc) { 
+        if (!rc) {
                 struct mds_obd *mds = mds_req2mds(req);
                 req->rq_repmsg->last_xid = HTON__u64(mds->mds_last_rcvd);
                 req->rq_repmsg->last_committed =
@@ -1274,13 +1285,25 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
 
                 rep->lock_policy_res2 = req->rq_status;
                 mds_rep = lustre_msg_buf(req->rq_repmsg, 1);
+
+                /* If the client is about to open a file that doesn't have an MD
+                 * stripe record, it's going to need a write lock. */
+                if (it->opc & IT_OPEN) {
+                        struct lov_stripe_md *md =
+                                lustre_msg_buf(req->rq_repmsg, 2);
+                        if (md->lmd_easize == 0) {
+                                LDLM_DEBUG(lock, "open with no EA; returning PW"
+                                           " lock");
+                                lock->l_req_mode = LCK_PW;
+                        }
+                }
+
+                /* Give the client a lock on the child object, instead of the
+                 * parent that it requested. */
                 new_resid[0] = NTOH__u32(mds_rep->ino);
                 if (new_resid[0] == 0)
                         LBUG();
                 old_res = lock->l_resource->lr_name[0];
-
-                CDEBUG(D_INFO, "remote intent: locking %d instead of"
-                       "%ld\n", mds_rep->ino, (long)old_res);
 
                 ldlm_lock_change_resource(lock, new_resid);
                 if (lock->l_resource == NULL) {
@@ -1295,7 +1318,6 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen,
                                      &req->rq_repmsg);
                 if (rc) {
-                        CERROR("out of memory\n");
                         LBUG();
                         RETURN(-ENOMEM);
                 }
@@ -1304,7 +1326,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
 }
 
 
-extern int mds_iocontrol(long cmd, struct lustre_handle *conn, 
+extern int mds_iocontrol(long cmd, struct lustre_handle *conn,
                          int len, void *karg, void *uarg);
 
 /* use obd ops to offer management infrastructure */

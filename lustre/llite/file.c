@@ -82,8 +82,8 @@ static int ll_file_open(struct inode *inode, struct file *file)
         memset(fd, 0, sizeof(*fd));
 
         rc = mdc_open(&sbi->ll_mdc_conn, inode->i_ino, S_IFREG | inode->i_mode,
-                      file->f_flags, md,
-                      (__u64)(unsigned long)file, &fd->fd_mdshandle, &req);
+                      file->f_flags, md, (__u64)(unsigned long)file,
+                      &fd->fd_mdshandle, &req);
         fd->fd_req = req;
         ptlrpc_req_finished(req);
         if (rc)
@@ -262,8 +262,6 @@ static ssize_t ll_file_read(struct file *filp, char *buf, size_t count,
         ldlm_error_t err;
         ssize_t retval;
         ENTRY;
-
-
 
         if (!(fd->fd_flags & LL_FILE_IGNORE_LOCK)) {
                 OBD_ALLOC(lockhs, md->lmd_stripe_count * sizeof(*lockhs));

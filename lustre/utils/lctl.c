@@ -186,8 +186,7 @@ int main(int argc, char **argv)
 
         setlinebuf(stdout);
 
-        if (ptl_initialize(argc, argv) < 0)
-                exit(1);
+        ptl_initialize(argc, argv);
         if (obd_initialize(argc, argv) < 0)
                 exit(2);
         if (dbg_initialize(argc, argv) < 0)

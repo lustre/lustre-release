@@ -249,14 +249,14 @@ void ldlm_lock2handle(struct ldlm_lock *lock, struct lustre_handle *lockh);
 
 #define LDLM_LOCK_PUT(lock)                     \
 do {                                            \
-        LDLM_DEBUG(lock, "put");                \
+        /*LDLM_DEBUG(lock, "put");*/            \
         ldlm_lock_put(lock);                    \
 } while (0)
 
 #define LDLM_LOCK_GET(lock)                     \
 ({                                              \
         ldlm_lock_get(lock);                    \
-        LDLM_DEBUG(lock, "get");                \
+        /*LDLM_DEBUG(lock, "get");*/            \
         lock;                                   \
 })
 

@@ -1,16 +1,26 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  linux/mds/mds_extN.c
- *
+ *  lustre/mds/mds_extN.c
  *  Lustre Metadata Server (mds) journal abstraction routines
  *
- *  Copyright (C) 2002  Cluster File Systems, Inc.
- *  author: Andreas Dilger <adilger@clusterfs.com>
+ *  Copyright (c) 2002 Cluster File Systems, Inc.
+ *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
- *  This code is issued under the GNU General Public License.
- *  See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_MDS
@@ -107,10 +117,10 @@ static int mds_extN_set_md(struct inode *inode, void *handle,
         if (md == NULL)
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
                                     XATTR_LUSTRE_MDS_OBJID, NULL, 0, 0);
-        else { 
+        else {
                 md->lmd_magic = cpu_to_le32(XATTR_MDS_MO_MAGIC);
                 rc = extN_xattr_set(handle, inode, EXTN_XATTR_INDEX_LUSTRE,
-                                    XATTR_LUSTRE_MDS_OBJID, md, 
+                                    XATTR_LUSTRE_MDS_OBJID, md,
                                     md->lmd_easize, XATTR_CREATE);
         }
         up(&inode->i_sem);
@@ -140,8 +150,12 @@ static int mds_extN_get_md(struct inode *inode, struct lov_stripe_md *md)
         if (rc < 0) {
                 CDEBUG(D_INFO, "error getting EA %s from MDS inode %ld: "
                        "rc = %d\n", XATTR_LUSTRE_MDS_OBJID, inode->i_ino, rc);
-                memset(md, 0, size); 
-        } else if (md->lmd_magic != cpu_to_le32(XATTR_MDS_MO_MAGIC)) {
+                memset(md, 0, size);
+                return rc;
+        } else if (md == NULL)
+                return rc;
+
+        if (md->lmd_magic != cpu_to_le32(XATTR_MDS_MO_MAGIC)) {
                 CERROR("MDS striping md for ino %ld has bad magic\n",
                        inode->i_ino);
                 rc = -EINVAL;

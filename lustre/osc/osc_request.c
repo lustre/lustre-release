@@ -587,7 +587,7 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
                        int *flags, void *callback, void *data, int datalen,
                        struct lustre_handle *lockh)
 {
-        __u64 res_id = { md->lmd_object_id };
+        __u64 res_id[RES_NAME_SIZE] = { md->lmd_object_id };
         struct obd_device *obddev = class_conn2obd(connh);
         struct ldlm_extent *extent = extentp;
         int rc;
@@ -600,7 +600,7 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
 
         /* Next, search for already existing extent locks that will cover us */
         //osc_con2dlmcl(conn, &cl, &connection, &rconn);
-        rc = ldlm_lock_match(obddev->obd_namespace, &res_id, type, extent,
+        rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
                              sizeof(extent), mode, lockh);
         if (rc == 1) {
                 /* We already have a lock, and it's referenced */
@@ -616,7 +616,7 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
         else
                 mode2 = LCK_PW;
 
-        rc = ldlm_lock_match(obddev->obd_namespace, &res_id, type, extent,
+        rc = ldlm_lock_match(obddev->obd_namespace, res_id, type, extent,
                              sizeof(extent), mode2, lockh);
         if (rc == 1) {
                 int flags;
@@ -637,7 +637,7 @@ static int osc_enqueue(struct lustre_handle *connh, struct lov_stripe_md *md,
         }
 
         rc = ldlm_cli_enqueue(connh, NULL,obddev->obd_namespace,
-                              parent_lock, &res_id, type, extent,
+                              parent_lock, res_id, type, extent,
                               sizeof(extent), mode, flags, ldlm_completion_ast,
                               callback, data, datalen, lockh);
         return rc;

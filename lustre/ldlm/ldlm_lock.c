@@ -1,14 +1,24 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * Copyright (C) 2002 Cluster File Systems, Inc.
+ *  Copyright (c) 2002 Cluster File Systems, Inc.
+ *   Author: Peter Braam <braam@clusterfs.com>
+ *   Author: Phil Schwan <phil@clusterfs.com>
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- * by Cluster File Systems, Inc.
- * authors, Peter Braam <braam@clusterfs.com> &
- * Phil Schwan <phil@clusterfs.com>
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define DEBUG_SUBSYSTEM S_LDLM
@@ -98,7 +108,7 @@ void ldlm_register_intent(int (*arg) (struct ldlm_lock * lock, void *req_cookie,
         ldlm_res_policy_table[LDLM_MDSINTENT] = arg;
 }
 
-void ldlm_unregister_intent()
+void ldlm_unregister_intent(void)
 {
         ldlm_res_policy_table[LDLM_MDSINTENT] = NULL;
 }
@@ -130,7 +140,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
         l_lock(nslock);
         lock->l_refc--;
-        LDLM_DEBUG(lock, "after refc--");
+        //LDLM_DEBUG(lock, "after refc--");
         if (lock->l_refc < 0)
                 LBUG();
 
@@ -520,7 +530,7 @@ static struct ldlm_lock *search_queue(struct list_head *queue, ldlm_mode_t mode,
 /* Must be called with no resource or lock locks held.
  *
  * Returns 1 if it finds an already-existing lock that is compatible; in this
- * case, lockh is filled in with a addref()ed lock 
+ * case, lockh is filled in with a addref()ed lock
 */
 int ldlm_lock_match(struct ldlm_namespace *ns, __u64 * res_id, __u32 type,
                     void *cookie, int cookielen, ldlm_mode_t mode,

@@ -2,11 +2,23 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  * Copyright (C) 2002 Cluster File Systems, Inc.
+ *   Author: Peter Braam <braam@clusterfs.com>
+ *   Author: Phil Schwan <phil@clusterfs.com>
  *
- * This code is issued under the GNU General Public License.
- * See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
- * by Cluster File Systems, Inc.
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
 #define EXPORT_SYMTAB
@@ -228,8 +240,9 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
 
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
         if (!lock) {
-                LDLM_DEBUG_NOLOCK("server-side cancel handler stale lock (lock %p)",
-                                  (void *)(unsigned long) dlm_req->lock_handle1.addr);
+                LDLM_DEBUG_NOLOCK("server-side cancel handler stale lock (lock "
+                                  "%p)", (void *)(unsigned long)
+                                  dlm_req->lock_handle1.addr);
                 req->rq_status = ESTALE;
         } else {
                 LDLM_DEBUG(lock, "server-side cancel handler START");
@@ -322,10 +335,13 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req)
         LDLM_DEBUG(lock, "client completion callback handler START");
 
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
-        lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
 
         /* If we receive the completion AST before the actual enqueue returned,
-         * then we might need to switch resources. */
+         * then we might need to switch resources or lock modes. */
+        if (dlm_req->lock_desc.l_granted_mode != lock->l_req_mode) {
+                lock->l_req_mode = dlm_req->lock_desc.l_granted_mode;
+                LDLM_DEBUG(lock, "completion AST, new lock mode");
+        }
         ldlm_resource_unlink_lock(lock);
         if (memcmp(dlm_req->lock_desc.l_resource.lr_name,
                    lock->l_resource->lr_name,
