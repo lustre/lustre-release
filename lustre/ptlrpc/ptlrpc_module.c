@@ -203,6 +203,7 @@ EXPORT_SYMBOL(llog_origin_handle_next_block);
 EXPORT_SYMBOL(llog_origin_handle_read_header);
 EXPORT_SYMBOL(llog_origin_handle_close);
 EXPORT_SYMBOL(llog_client_ops);
+EXPORT_SYMBOL(llog_catinfo);
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Request Processor and Lock Management");

@@ -170,6 +170,9 @@ struct llog_operations {
         /* XXX add 2 more: commit callbacks and llog recovery functions */
 };
 
+/* llog_lvfs.c */
+int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
+                      char *name, int count, struct llog_logid *idarray);
 extern struct llog_operations llog_lvfs_ops;
 
 

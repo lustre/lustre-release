@@ -1184,6 +1184,11 @@ int mds_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
                 rc = llog_origin_handle_close(req);
                 break;
+        case LLOG_CATINFO:
+                DEBUG_REQ(D_INODE, req, "llog catinfo");
+                OBD_FAIL_RETURN(OBD_FAIL_OBD_LOGD_NET, 0);
+                rc = llog_catinfo(req);
+                break;
         default:
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(req);

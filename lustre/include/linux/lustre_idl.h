@@ -957,6 +957,7 @@ enum llogd_rpc_ops {
         LLOG_ORIGIN_HANDLE_WRITE_REC    = 504,
         LLOG_ORIGIN_HANDLE_CLOSE        = 505,
         LLOG_ORIGIN_CONNECT             = 506,
+        LLOG_CATINFO                    = 507,  /* for lfs catinfo */
 };
 
 struct llogd_body {

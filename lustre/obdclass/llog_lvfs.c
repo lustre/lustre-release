@@ -594,6 +594,7 @@ int llog_get_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
                 rc = filp_close(file, 0);
         RETURN(rc);
 }
+EXPORT_SYMBOL(llog_get_cat_list);
 
 /* writes the cat list */
 int llog_put_cat_list(struct obd_device *obd, struct obd_device *disk_obd,
