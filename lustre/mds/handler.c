@@ -1205,7 +1205,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 struct mds_body *mds_rep;
                 struct ldlm_reply *rep;
                 __u64 new_resid[3] = {0, 0, 0}, old_res;
-                int bufcount = -1, rc, size[3] = {sizeof(struct ldlm_reply),
+                int rc, size[3] = {sizeof(struct ldlm_reply),
                                                   sizeof(struct mds_body),
                                                   mds->mds_max_mdsize};
 
@@ -1214,34 +1214,7 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 LDLM_DEBUG(lock, "intent policy, opc: %s",
                            ldlm_it2str(it->opc));
 
-                /* prepare reply */
-                switch((long)it->opc) {
-                case IT_GETATTR:
-                        /* Note that in the negative case you may be returning
-                         * a file and its obdo */
-                case IT_CREAT:
-                case IT_CREAT|IT_OPEN:
-                case IT_LINK:
-                case IT_LOOKUP:
-                case IT_MKDIR:
-                case IT_MKNOD:
-                case IT_OPEN:
-                case IT_READLINK:
-                case IT_RENAME:
-                case IT_RMDIR:
-                case IT_SETATTR:
-                case IT_SYMLINK:
-                case IT_UNLINK:
-                        bufcount = 3;
-                        break;
-                case IT_RENAME2:
-                        bufcount = 1;
-                        break;
-                default:
-                        LBUG();
-                }
-
-                rc = lustre_pack_msg(bufcount, size, NULL, &req->rq_replen,
+                rc = lustre_pack_msg(3, size, NULL, &req->rq_replen,
                                      &req->rq_repmsg);
                 if (rc) {
                         rc = req->rq_status = -ENOMEM;

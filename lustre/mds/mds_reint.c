@@ -637,6 +637,30 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
                        rec->ur_tgtlen - 1, rec->ur_tgt, PTR_ERR(de_new));
                 GOTO(out_rename_deold, rc = -ENOENT);
         }
+        
+        /* in intent case ship back attributes to client */
+        if (offset) { 
+                struct mds_body *body = lustre_msg_buf(req->rq_repmsg, 1);
+                struct inode *inode = de_new->d_inode;
+
+                if (!inode) {
+                        body->valid = 0; 
+                } else {
+                        mds_pack_inode2fid(&body->fid1, inode);
+                        mds_pack_inode2body(body, inode);
+                        if (S_ISREG(inode->i_mode)) { 
+                                struct lov_mds_md *md;
+                                
+                                md = lustre_msg_buf(req->rq_repmsg, 2);
+                                md->lmd_easize = mds->mds_max_mdsize;
+                                if ((rc = mds_fs_get_md(mds, inode, md)) < 0) {
+                                        CDEBUG(D_INFO,"No md for %ld: rc %d\n",
+                                               inode->i_ino, rc);
+                                        memset(md, 0, md->lmd_easize);
+                                }
+                        }
+                }
+        }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_RENAME_WRITE,
                        de_srcdir->d_inode->i_sb->s_dev);

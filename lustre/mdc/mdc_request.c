@@ -281,7 +281,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 mds_rename_pack(req, 2, old_de->d_parent->d_inode, dir,
                                 old_de->d_name.name, old_de->d_name.len,
                                 de->d_name.name, de->d_name.len);
-                req->rq_replen = lustre_msg_size(1, repsize);
+                req->rq_replen = lustre_msg_size(3, repsize);
         } else if (it->it_op == IT_UNLINK || it->it_op == IT_RMDIR) {
                 size[2] = sizeof(struct mds_rec_unlink);
                 size[3] = de->d_name.len + 1;

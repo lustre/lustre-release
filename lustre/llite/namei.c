@@ -155,12 +155,6 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         if (dentry->d_name.len > EXT2_NAME_LEN)
                 RETURN(ERR_PTR(-ENAMETOOLONG));
 
-        if (it->it_op == IT_RENAME2) {
-                /* Set below to be the old dentry from the IT_RENAME intent */
-                inode = ((struct dentry *)(it->it_data))->d_inode;
-                LASSERT(inode);
-        }
-
         err = ll_lock(dir, dentry, it, &lockh);
         if (err < 0)
                 RETURN(ERR_PTR(err));
@@ -190,11 +184,12 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                         if (it->it_status && it->it_status != -EEXIST)
                                 GOTO(neg_req, NULL);
                 } else if (it->it_op == IT_RENAME2) {
-                        /* FIXME: make old_de negative, and drop
-                         *        new_de->d_inode if needed.
-                         */
+                        struct mds_body *body = 
+                                lustre_msg_buf(request->rq_repmsg, offset);
                         it->it_data = NULL;
-                        GOTO(out_req, NULL);
+                        if (body->valid == 0) 
+                                GOTO(neg_req, NULL);
+                        GOTO(iget, NULL);
                 }
 
                 /* Do a getattr now that we have the lock */
@@ -249,7 +244,6 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         /* No rpc's happen during iget4, -ENOMEM's are possible */
         inode = iget4(dir->i_sb, ino, ll_find_inode, &md);
 
- out_req:
         LASSERT(!IS_ERR(inode));
         if (!inode) {
                 ptlrpc_free_req(request);
@@ -643,12 +637,18 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
         struct inode * new_inode = new_dentry->d_inode;
         struct page * dir_page = NULL;
         struct ext2_dir_entry_2 * dir_de = NULL;
-        struct page * old_page;
         struct ext2_dir_entry_2 * old_de;
+        struct page * old_page;
         int err = -ENOENT;
 
-        if (new_dentry->d_it && new_dentry->d_it->it_disposition)
+        if (new_dentry->d_it && new_dentry->d_it->it_disposition) { 
+		if (new_inode) {
+			new_inode->i_ctime = CURRENT_TIME;
+			new_inode->i_nlink--;
+			dput(new_dentry);
+		}
                 GOTO(out, err = new_dentry->d_it->it_status);
+        }
 
         err = ll_mdc_rename(old_dir, new_dir, old_dentry, new_dentry);
         if (err)
