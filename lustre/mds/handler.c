@@ -790,7 +790,7 @@ static int mds_readpage(struct ptlrpc_request *req)
         struct vfsmount *mnt;
         struct dentry *de;
         struct file *file;
-        struct mds_body *body;
+        struct mds_body *body, *repbody;
         struct obd_run_ctxt saved;
         int rc, size = sizeof(*body);
         ENTRY;
@@ -813,10 +813,15 @@ static int mds_readpage(struct ptlrpc_request *req)
         /* note: in case of an error, dentry_open puts dentry */
         if (IS_ERR(file))
                 GOTO(out_pop, rc = PTR_ERR(file));
+        
+        repbody = lustre_msg_buf(req->rq_repmsg, 0);
+        repbody->size = file->f_dentry->d_inode->i_size;
+        repbody->valid = OBD_MD_FLSIZE;
 
         /* to make this asynchronous make sure that the handling function
            doesn't send a reply when this function completes. Instead a
            callback function would send the reply */
+        /* note: in case of an error, dentry_open puts dentry */
         rc = mds_sendpage(req, file, body->size);
 
         filp_close(file, 0);

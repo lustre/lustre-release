@@ -64,6 +64,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         int rc = 0;
         struct ptlrpc_request *request;
         struct lustre_handle lockh;
+        struct mds_body *body;
         struct lookup_intent it = {IT_READDIR};
 
         ENTRY;
@@ -94,6 +95,11 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         rc = mdc_readpage(&sbi->ll_mdc_conn, inode->i_ino,
                           S_IFDIR, offset, buf, &request);
         kunmap(page);
+        body = lustre_msg_buf(request->rq_repmsg, 0); 
+        if (!body) 
+                rc = -EINVAL;
+        if (body) 
+                inode->i_size = body->size;
         ptlrpc_free_req(request);
         EXIT;
 
@@ -373,6 +379,9 @@ int ll_readdir(struct file * filp, void * dirent, filldir_t filldir)
                 char *kaddr, *limit;
                 ext2_dirent *de;
                 struct page *page = ext2_get_page(inode, n);
+
+                /* size might have been updated by mdc_readpage */
+                npages = dir_pages(inode);
 
                 if (IS_ERR(page))
                         continue;
