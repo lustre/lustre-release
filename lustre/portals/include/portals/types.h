@@ -10,7 +10,9 @@ typedef u_int32_t __u32;
 typedef u_int64_t __u64;
 #endif
 
-#ifndef __KERNEL__
+#ifdef __KERNEL__
+# include <linux/time.h>
+#else
 # include <sys/time.h>
 # define do_gettimeofday(tv) gettimeofday(tv, NULL)
 #endif
