@@ -675,6 +675,9 @@ static int fsfilt_smfs_setup(struct obd_device *obd, struct super_block *sb)
         csb = S2CSB(sb);
         if (cache_fsfilt->fs_setup) 
                 rc = cache_fsfilt->fs_setup(obd, csb);
+        
+        duplicate_sb(sb, csb);
+        
         RETURN(rc);
 }
 

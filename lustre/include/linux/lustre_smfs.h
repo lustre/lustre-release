@@ -339,6 +339,7 @@ static inline void duplicate_sb(struct super_block *dst_sb,
         dst_sb->s_magic = src_sb->s_magic;
         dst_sb->s_blocksize_bits = src_sb->s_blocksize_bits;
         dst_sb->s_maxbytes = src_sb->s_maxbytes;
+        dst_sb->s_flags = src_sb->s_flags;
 }
 
 static inline void d_unalloc(struct dentry *dentry)

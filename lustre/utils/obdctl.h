@@ -90,6 +90,7 @@ int jt_llog_check(int argc, char **argv);
 int jt_obd_reint_sync(int argc, char **argv);
 int jt_obd_cache_on(int argc, char **argv);
 int jt_obd_cache_off(int argc, char **argv);
+int jt_obd_snap_add(int argc, char **argv);
 
 int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg);
 int parse_devname(char *func, char *name);
