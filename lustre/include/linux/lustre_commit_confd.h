@@ -40,7 +40,7 @@ struct llog_commit_master {
         struct list_head        lcm_thread_idle;  /* list of idle daemons */
         spinlock_t              lcm_thread_lock;  /* protects thread_list */
         atomic_t                lcm_thread_numidle;/* number of idle threads */
-        int                     lcm_thread_total; /* total number of threads */
+        atomic_t                lcm_thread_total; /* total number of threads */
         int                     lcm_thread_max;   /* <= num_osts normally */
 
         int                     lcm_flags;

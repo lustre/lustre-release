@@ -571,22 +571,26 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats, LPROC_LL_SETATTR);
 #endif
 
-        if ((ia_valid & ATTR_SIZE) && attr->ia_size > ll_file_maxbytes(inode)){
-                CDEBUG(D_INODE, "file too large %llu > "LPU64"\n",
-                       attr->ia_size, ll_file_maxbytes(inode));
-                RETURN(-EFBIG);
+        if (ia_valid & ATTR_SIZE) {
+                if (attr->ia_size > ll_file_maxbytes(inode)) {
+                        CDEBUG(D_INODE, "file too large %llu > "LPU64"\n",
+                               attr->ia_size, ll_file_maxbytes(inode));
+                        RETURN(-EFBIG);
+                }
+
+                attr->ia_valid |= ATTR_MTIME | ATTR_CTIME;
         }
 
-        /* We mark all of the fields "set" so the MDS does not re-set them */
-        if (ia_valid & ATTR_CTIME) {
+        /* We mark all of the fields "set" so MDS/OST does not re-set them */
+        if (attr->ia_valid & ATTR_CTIME) {
                 attr->ia_ctime = now;
                 attr->ia_valid |= ATTR_CTIME_SET;
         }
-        if (!(ia_valid & ATTR_ATIME_SET) && (ia_valid & ATTR_ATIME)) {
+        if (!(ia_valid & ATTR_ATIME_SET) && (attr->ia_valid & ATTR_ATIME)) {
                 attr->ia_atime = now;
                 attr->ia_valid |= ATTR_ATIME_SET;
         }
-        if (!(ia_valid & ATTR_MTIME_SET) && (ia_valid & ATTR_MTIME)) {
+        if (!(ia_valid & ATTR_MTIME_SET) && (attr->ia_valid & ATTR_MTIME)) {
                 attr->ia_mtime = now;
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
@@ -609,15 +613,14 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
                 if (rc) {
                         ptlrpc_req_finished(request);
-                        if (rc != -EPERM)
-                                CERROR("mdc_setattr fails: err = %d\n", rc);
+                        if (rc != -EPERM && rc != -EACCES)
+                                CERROR("mdc_setattr fails: rc = %d\n", rc);
                         RETURN(rc);
                 }
 
                 rc = mdc_req2lustre_md(request, 0, &sbi->ll_osc_conn, &md);
-                if (rc && rc != -EPERM) {
+                if (rc) {
                         ptlrpc_req_finished(request);
-                        CERROR("mdc_setattr fails: err = %d\n", rc);
                         RETURN(rc);
                 }
                 ll_update_inode(inode, md.body, md.lsm);
@@ -638,10 +641,12 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                                 if (current->fsuid != inode->i_uid &&
                                     (rc = permission(inode, MAY_WRITE)) != 0)
                                         RETURN(rc);
+                        } else {
+				/* from inode_change_ok() */
+				if (current->fsuid != inode->i_uid &&
+				    !capable(CAP_FOWNER))
+					RETURN(-EPERM);
                         }
-
-                        if ((rc = inode_change_ok(inode, attr)))
-                                RETURN(rc);
                 }
 
                 /* Won't invoke vmtruncate, as we already cleared ATTR_SIZE */
@@ -665,7 +670,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                  * nodes through dirtying and writeback of final cached
                  * pages.  This last one is especially bad for racing
                  * o_append users on other nodes. */
-                rc = ll_extent_lock_no_validate(NULL, inode, lsm, LCK_PW, 
+                rc = ll_extent_lock_no_validate(NULL, inode, lsm, LCK_PW,
                                                  &extent, &lockh);
                 if (rc != ELDLM_OK) {
                         if (rc > 0)
@@ -675,10 +680,10 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
 
                 rc = vmtruncate(inode, attr->ia_size);
                 if (rc == 0)
-                        set_bit(LLI_F_HAVE_SIZE_LOCK, 
+                        set_bit(LLI_F_HAVE_SIZE_LOCK,
                                 &ll_i2info(inode)->lli_flags);
 
-                /* unlock now as we don't mind others file lockers racing with 
+                /* unlock now as we don't mind others file lockers racing with
                  * the mds updates below? */
                 err = ll_extent_unlock(NULL, inode, lsm, LCK_PW, &lockh);
                 if (err) {
@@ -686,7 +691,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         if (!rc)
                                 rc = err;
                 }
-        } else if (ia_valid & ATTR_MTIME_SET) {
+        } else if (ia_valid & (ATTR_MTIME | ATTR_MTIME_SET)) {
                 struct obdo oa;
 
                 CDEBUG(D_INODE, "set mtime on OST inode %lu to %lu\n",
@@ -917,11 +922,16 @@ void ll_umount_begin(struct super_block *sb)
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
         struct obd_ioctl_data ioc_data = { 0 };
-
         ENTRY;
         CDEBUG(D_VFSTRACE, "VFS Op:\n");
 
         obd = class_conn2obd(&sbi->ll_mdc_conn);
+        if (obd == NULL) {
+                CERROR("Invalid MDC connection handle "LPX64"\n",
+                       sbi->ll_mdc_conn.cookie);
+                EXIT;
+                return;
+        }
         obd->obd_no_recov = 1;
         obd_iocontrol(IOC_OSC_SET_ACTIVE, &sbi->ll_mdc_conn, sizeof ioc_data,
                       &ioc_data, NULL);
