@@ -3,9 +3,11 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 LYX2PDF = lyx --export pdf
+LYX2PS = lyx --export ps
+LYX2TEX = lyx --export latex
 LYX2TXT = lyx --export text
 LYX2HTML = lyx --export html
-SUFFIXES = .lin .lyx .pdf .sgml .html .txt .fig .eps
+SUFFIXES = .lin .lyx .pdf .ps .sgml .html .txt .tex .fig .eps
 
 DOCS = lustre.pdf lustre-HOWTO.txt
 IMAGES =  cache1.eps cache2.eps intermezzocache.eps intermezzofilesys.eps meta.eps metadata1.eps networklayer.eps bigpicture.eps intermezzo.eps mds.eps portals.eps client.eps layering.eps metadata.eps sb.eps cow.eps lockacq.eps obdfs.eps snapsetup.eps dirbodyapi.eps loraid.eps ost.eps updates.eps hotmigrate.eps lustreclusters.eps osthw.eps portals-lib.eps lockqueues.eps lockexample1.eps lockexample2.eps lockexample3.eps lockexample4.eps lockseverity.eps
@@ -17,7 +19,7 @@ LYXFILES= lustre.lin evolution.lyx  llocks.lyx mgmt.lyx uncertain.lyx\
 MAINTAINERCLEANFILES =  $(IMAGES) $(DOCS) $(GENERATED)
 GENERATED = lustre-HOWTO.lyx lustre.lyx
 
-EXTRA_DIST = $(DOCS) $(IMAGES) $(LYXFILES) lustre.bib
+EXTRA_DIST = lyxchbar.sh chbar.sh $(DOCS) $(IMAGES) $(LYXFILES) lustre.bib
 
 all: $(DOCS)
 
@@ -34,6 +36,12 @@ $(GENERATED) : %.lyx: %.lin Makefile
 .lyx.pdf:
 	@$(LYX2PDF) $< || printf "\n*** Warning: not creating PDF docs; install lyx to rectify this\n"
 
+.lyx.ps:
+	@$(LYX2PS) $< || printf "\n*** Warning: not creating PostScript docs; install lyx to rectify this\n"
+
+.lyx.tex:
+	@$(LYX2TEX) $< || printf "\n*** Warning: not creating LaTeX docs; install lyx to rectify this\n"
+
 .lyx.txt:
 	@$(LYX2TXT) $< || printf "\n*** Warning: not creating text docs; install lyx to rectify this\n"
 
@@ -47,6 +55,21 @@ lustre.pdf lustre.txt lustre.html: $(IMAGES) lustre-HOWTO.lyx
 syncweb: lustre.pdf
 	cp lustre.pdf /usr/src/www/content/lustre/docs/lustre.pdf
 	( cd /usr/src/www ; make lustre ; make synclustre )
+.PHONY: syncweb chbar
+
+# Build a changebar document from the files in doc.old and this directory.
+chbar: lustre-chbar.pdf
+lustre-chbar.pdf: lyxchbar.sh chbar.sh lustre.bib
+lustre-chbar.pdf: $(addprefix doc.old/,$(LYXFILES)) $(LYXFILES)
+	rm -rf doc.chbar
+	mkdir doc.chbar
+	for f in $(LYXFILES); do \
+	  $(SHELL) $(srcdir)/lyxchbar.sh doc.old/$$f $$f > doc.chbar/$$f; \
+	done
+	(cd doc.chbar && ln -s ../lustre.bib lustre.bib)
+	(cd doc.chbar && make -f ../Makefile top_srcdir=../.. top_builddir=../.. srcdir=.. VPATH=.. lustre.pdf)
+	cp -p doc.chbar/lustre.pdf lustre-chbar.pdf
+	#rm -rf doc.chbar
 
 dist-hook:
 	rm -rf $(distdir)/figs/CVS
