@@ -152,7 +152,7 @@ start_acceptor() {
 	elan)   [ "$PORT" ] && fail "$0: NETWORK is elan but PORT is set"
 		;;
 	tcp)    [ "$PORT" ] || fail "$0: NETWORK is tcp but PORT is not set"
-		$ACCEPTOR $PORT
+		$ACCEPTOR -r 1048576 -s 1048576 $PORT
 		;;
 	*) 	fail "$0: unknown NETWORK '$NETWORK'" ;;
 	esac
@@ -204,7 +204,7 @@ setup_portals() {
 		exit -1
 	fi
 
-	if [ -z "$OSTNODE" -o -z "$MDSNODE" -o -z "$DLM" ]; then
+	if [ -z "$OSTNODE" -a -z "$MDSNODE" -a -z "$DLM" ]; then
 		echo "$0: SERVER (or OSTNODE and MDSNODE and DLM) not set" 1>&2
 		exit -1
 	fi
@@ -217,9 +217,13 @@ setup_portals() {
 	case $NETWORK in
 	elan)  do_insmod $PORTALS/linux/rqswnal/kqswnal.o || exit -1
                 MYNID=
+		RECV_MEM=
+		SEND_MEM=
 		    ;;
 	tcp)   do_insmod $PORTALS/linux/socknal/ksocknal.o || exit -1
                 MYNID="mynid $LOCALHOST"
+		RECV_MEM="recv_mem 1048576"
+		SEND_MEM="send_mem 1048576"
 		   ;;
 	*) 	fail "$0: unknown NETWORK '$NETWORK'" ;;
 	esac
@@ -228,6 +232,8 @@ setup_portals() {
 
 	$PTLCTL <<- EOF
 	network $NETWORK
+	$SEND_MEM
+	$RECV_MEM
 	$MYNID
 	connect $DLM $PORT
 	add_uuid $DLM $DLM
