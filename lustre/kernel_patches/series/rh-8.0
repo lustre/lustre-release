@@ -6,3 +6,4 @@ uml_check_get_page.patch
 uml_no_panic.patch
 vfs_intent.patch
 uml_compile_fixes.patch
+invalidate-show.patch
