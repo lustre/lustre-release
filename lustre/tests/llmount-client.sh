@@ -12,7 +12,7 @@ insmod $R/usr/src/portals/linux/oslib/portals.o
 # insmod $R/usr/src/portals/linux/socknal/ksocknal.o
 insmod $R/usr/src/portals/linux/qswnal/kqswnal.o
 
-$R/usr/src/portals/linux/utils/ptlctl <<EOF
+$PTLCTL <<EOF
 mynid
 setup elan 
 connect 5
@@ -29,16 +29,15 @@ insmod $R/usr/src/obd/mds/mds.o
 insmod $R/usr/src/obd/mdc/mdc.o
 insmod $R/usr/src/obd/llight/llight.o
 
-dd if=/dev/zero of=/tmp/ost bs=1024 count=10000
-mke2fs -b 4096 -F /tmp/ost
-losetup ${LOOP}0 /tmp/ost
+tmp_fs ext2 /tmp/ost 10000
+OST=${LOOPDEV}
 
 mknod /dev/obd c 10 241
 
-$R/usr/src/obd/utils/obdctl <<EOF
+$OBDCTL <<EOF
 device 1
 attach obdext2
-setup ${LOOP}0
+setup ${OST}
 device 2
 attach ost
 setup 1

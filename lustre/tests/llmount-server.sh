@@ -13,7 +13,7 @@ insmod $R/usr/src/portals/linux/qswnal/kqswnal.o
 
 # $R/usr/src/portals/linux/utils/acceptor 1234 &
 
-$R/usr/src/portals/linux/utils/ptlctl <<EOF
+$PTLCTL <<EOF
 mynid
 setup elan
 connect 5
@@ -26,23 +26,21 @@ insmod $R/usr/src/obd/ext2obd/obdext2.o
 insmod $R/usr/src/obd/ost/ost.o
 insmod $R/usr/src/obd/mds/mds.o
 
-dd if=/dev/zero of=/tmp/ost bs=1024 count=10000
-mke2fs -b 4096 -F /tmp/ost
-losetup ${LOOP}0 /tmp/ost
-
-dd if=/dev/zero of=/tmp/mds bs=1024 count=10000
-mke2fs -b 4096 -F /tmp/mds
-losetup ${LOOP}1 /tmp/mds
+tmp_fs ext2 /tmp/ost 10000
+OST=${LOOPDEV}
+MDSFS=ext2
+tmp_fs ${MDSFS} /tmp/mds 10000
+MDS=${LOOPDEV}
 
 mknod /dev/obd c 10 241
 
-$R/usr/src/obd/utils/obdctl <<EOF
+$OBDCTL <<EOF
 device 0
 attach mds
-setup ${LOOP}1 ext2
+setup ${MDS} ${MDSFS}
 device 1
 attach obdext2
-setup ${LOOP}0
+setup ${OBD}
 device 2
 attach ost
 setup 1
