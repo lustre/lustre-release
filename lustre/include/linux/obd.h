@@ -450,6 +450,7 @@ struct lmv_obd {
         int                     max_cookiesize;
         int                     server_timeout;
         int                     connect_flags;
+        struct semaphore        init_sem;
 };
 
 struct niobuf_local {

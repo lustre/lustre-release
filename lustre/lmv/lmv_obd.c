@@ -197,6 +197,7 @@ static int lmv_connect(struct lustre_handle *conn, struct obd_device *obd,
         lmv->connect_flags = connect_flags;
         lmv->connected = 0;
         lmv->exp = exp;
+        sema_init(&lmv->init_sem, 1);
 
         RETURN(0);
 }
@@ -233,7 +234,13 @@ int lmv_check_connect(struct obd_device *obd)
 
         if (lmv->connected)
                 return 0;
-      
+
+        down(&lmv->init_sem);
+        if (lmv->connected) {
+                up(&lmv->init_sem);
+                return 0;
+        }
+
         lmv->connected = 1;
         cluuid = &lmv->cluuid;
         exp = lmv->exp;
@@ -302,6 +309,7 @@ int lmv_check_connect(struct obd_device *obd)
 
         lmv_set_timeouts(obd);
         class_export_put(exp);
+        up(&lmv->init_sem);
         return 0;
 
  out_disc:
@@ -318,6 +326,7 @@ int lmv_check_connect(struct obd_device *obd)
                                "error %d\n", uuid.uuid, i, rc2);
         }
         class_disconnect(exp, 0);
+        up(&lmv->init_sem);
         RETURN (rc);
 }
 
