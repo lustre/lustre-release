@@ -25,18 +25,18 @@
 #include <linux/lprocfs_status.h>
 
 #ifndef LPROCFS
-struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
-struct lprocfs_vars lprocfs_module_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
+static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 #else
-struct lprocfs_vars lprocfs_obd_vars[] = {
-        { "uuid",        lprocfs_rd_uuid,   0, 0 },
+static struct lprocfs_vars lprocfs_obd_vars[] = {
+        { "uuid",            lprocfs_rd_uuid,   0, 0 },
         { 0 }
 };
 
-struct lprocfs_vars lprocfs_module_vars[] = {
-        { "num_refs",   lprocfs_rd_numrefs, 0, 0 },
+static struct lprocfs_vars lprocfs_module_vars[] = {
+        { "num_refs",       lprocfs_rd_numrefs, 0, 0 },
         { 0 }
 };
 
 #endif /* LPROCFS */
-LPROCFS_INIT_VARS(lprocfs_module_vars, lprocfs_obd_vars)
+LPROCFS_INIT_VARS(ost, lprocfs_module_vars, lprocfs_obd_vars)
