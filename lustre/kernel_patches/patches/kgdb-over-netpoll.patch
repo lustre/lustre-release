@@ -10,8 +10,8 @@
 
 Index: linux-2.6.0-test6/drivers/net/kgdb_eth.c
 ===================================================================
---- linux-2.6.0-test6.orig/drivers/net/kgdb_eth.c	2003-10-07 16:08:39.000000000 +0800
-+++ linux-2.6.0-test6/drivers/net/kgdb_eth.c	2003-10-09 19:57:12.000000000 +0800
+--- linux-2.6.0-test6.orig/drivers/net/kgdb_eth.c	2003-10-12 13:12:22.000000000 +0800
++++ linux-2.6.0-test6/drivers/net/kgdb_eth.c	2003-10-12 13:12:25.000000000 +0800
 @@ -7,36 +7,26 @@
   *
   * Twiddled for 2.6 by Robert Walsh <rjwalsh@durables.org>
@@ -581,8 +581,8 @@ Index: linux-2.6.0-test6/drivers/net/kgdb_eth.c
 +module_init(init_kgdboe);
 Index: linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c
 ===================================================================
---- linux-2.6.0-test6.orig/arch/i386/kernel/kgdb_stub.c	2003-10-07 16:08:34.000000000 +0800
-+++ linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c	2003-10-09 20:26:15.220623832 +0800
+--- linux-2.6.0-test6.orig/arch/i386/kernel/kgdb_stub.c	2003-10-12 13:12:22.000000000 +0800
++++ linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c	2003-10-12 18:57:21.625083056 +0800
 @@ -120,6 +120,7 @@
  #include <asm/desc.h>
  #include <linux/inet.h>
@@ -602,15 +602,6 @@ Index: linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c
  
  /************************************************************************/
  /* BUFMAX defines the maximum number of characters in inbound/outbound buffers*/
-@@ -192,7 +189,7 @@
-  * The called_from is the return address so he can tell how we entered kgdb.
-  * This will allow him to seperate out the various possible entries.
-  */
--#define REMOTE_DEBUG 0		/* set != to turn on printing (also available in info) */
-+#define REMOTE_DEBUG 1		/* set != to turn on printing (also available in info) */
- 
- #define PID_MAX PID_MAX_DEFAULT
- 
 @@ -281,13 +278,13 @@
  
  /*
@@ -645,16 +636,91 @@ Index: linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c
  		tty_flushDebugChar();
  	} else {
  		eth_flushDebugChar();
-@@ -494,7 +491,7 @@
+@@ -494,66 +491,24 @@
  
  	/*  $<packet info>#<checksum>. */
  
 -	if (kgdb_eth == -1) {
-+	if (!kgdboe) {
- 		do {
- 			if (remote_debug)
- 				printk("T:%s\n", buffer);
-@@ -1142,9 +1139,9 @@
+-		do {
+-			if (remote_debug)
+-				printk("T:%s\n", buffer);
+-			putDebugChar('$');
+-			checksum = 0;
+-			count = 0;
+-
+-			while ((ch = buffer[count])) {
+-				putDebugChar(ch);
+-				checksum += ch;
+-				count += 1;
+-			}
+-
+-			putDebugChar('#');
+-			putDebugChar(hexchars[checksum >> 4]);
+-			putDebugChar(hexchars[checksum % 16]);
+-			flushDebugChar();
+-
+-		} while ((getDebugChar() & 0x7f) != '+');
+-	} else {
+-		/*
+-		 * For udp, we can not transfer too much bytes once.
+-		 * We only transfer MAX_SEND_COUNT size bytes each time
+-		 */
+-
+-#define MAX_SEND_COUNT 30
+-
+-		int send_count = 0, i = 0;
+-		char send_buf[MAX_SEND_COUNT];
++	do {
++		if (remote_debug)
++			printk("T:%s\n", buffer);
++		putDebugChar('$');
++		checksum = 0;
++		count = 0;
++		while ((ch = buffer[count])) {
++			putDebugChar(ch);
++			checksum += ch;
++			count += 1;
++		}
++		
++		putDebugChar('#');
++		putDebugChar(hexchars[checksum >> 4]);
++		putDebugChar(hexchars[checksum % 16]);
++		flushDebugChar();
+ 
+-		do {
+-			if (remote_debug)
+-				printk("T:%s\n", buffer);
+-			putDebugChar('$');
+-			checksum = 0;
+-			count = 0;
+-			send_count = 0;
+-			while ((ch = buffer[count])) {
+-				if (send_count >= MAX_SEND_COUNT) {
+-					for(i = 0; i < MAX_SEND_COUNT; i++) {
+-						putDebugChar(send_buf[i]);
+-					}
+-					flushDebugChar();
+-					send_count = 0;
+-				} else {
+-					send_buf[send_count] = ch;
+-					checksum += ch;
+-					count ++;
+-					send_count++;
+-				}
+-			}
+-			for(i = 0; i < send_count; i++)
+-				putDebugChar(send_buf[i]);
+-			putDebugChar('#');
+-			putDebugChar(hexchars[checksum >> 4]);
+-			putDebugChar(hexchars[checksum % 16]);
+-			flushDebugChar();
+-		} while ((getDebugChar() & 0x7f) != '+');
+-	}
++	} while ((getDebugChar() & 0x7f) != '+');
+ }
+ 
+ static char remcomInBuffer[BUFMAX];
+@@ -1142,9 +1097,9 @@
  	 */
  	in_kgdb_entry_log[cpu]++;
  	in_kgdb_here_log[cpu] = regs;
@@ -666,7 +732,7 @@ Index: linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c
  	/*
  	 * For protection of the initilization of the spin locks by kgdb
  	 * it locks the kgdb spinlock before it gets the wait locks set
-@@ -1153,16 +1150,18 @@
+@@ -1153,16 +1108,18 @@
  	 * sequence where the wait lock is removed prior to the kgdb lock
  	 * so if kgdb gets unlocked, we just exit.
  	 */
@@ -687,7 +753,7 @@ Index: linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c
  	/*
  	 * log departure of this cpu
  	 */
-@@ -1281,9 +1280,8 @@
+@@ -1281,9 +1238,8 @@
  
  	__asm__("movl %%cr2,%0":"=r" (address));
  
@@ -699,7 +765,7 @@ Index: linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c
  
  	kgdb_local_irq_save(flags);
  
-@@ -1338,10 +1336,12 @@
+@@ -1338,10 +1294,12 @@
  		if (num_online_cpus() > 1) {
  			int me_in_kgdb = in_kgdb_entry_log[smp_processor_id()];
  			smp_send_nmi_allbutself();
@@ -712,7 +778,7 @@ Index: linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c
  					    !cpu_logged_in[j]) {
  						i++;
  						cpu_logged_in[j] = 1;
-@@ -1526,13 +1526,8 @@
+@@ -1526,13 +1484,8 @@
  	remcomOutBuffer[2] = hexchars[signo % 16];
  	remcomOutBuffer[3] = 0;
  
@@ -727,7 +793,7 @@ Index: linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c
  	while (1 == 1) {
  		error = 0;
  		remcomOutBuffer[0] = 0;
-@@ -1689,10 +1684,6 @@
+@@ -1689,10 +1642,6 @@
  
  			newPC = regs.eip;
  
@@ -738,7 +804,7 @@ Index: linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c
  			/* clear the trace bit */
  			regs.eflags &= 0xfffffeff;
  
-@@ -1724,6 +1715,10 @@
+@@ -1724,6 +1673,10 @@
  					}
  				}
  			}
@@ -749,7 +815,7 @@ Index: linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c
  			correct_hw_break();
  			asm volatile ("movl %0, %%db6\n"::"r" (0));
  			goto exit_kgdb;
-@@ -2430,63 +2425,3 @@
+@@ -2430,63 +2383,3 @@
  			   int signo, int err_code, struct pt_regs *linux_regs);
  gdb_debug_hook *linux_debug_hook = &kgdb_handle_exception;	/* histerical reasons... */
  
@@ -815,8 +881,8 @@ Index: linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c
 -
 Index: linux-2.6.0-test6/arch/i386/lib/kgdb_serial.c
 ===================================================================
---- linux-2.6.0-test6.orig/arch/i386/lib/kgdb_serial.c	2003-10-07 16:08:34.000000000 +0800
-+++ linux-2.6.0-test6/arch/i386/lib/kgdb_serial.c	2003-10-07 16:08:52.000000000 +0800
+--- linux-2.6.0-test6.orig/arch/i386/lib/kgdb_serial.c	2003-10-12 13:12:22.000000000 +0800
++++ linux-2.6.0-test6/arch/i386/lib/kgdb_serial.c	2003-10-12 13:12:25.000000000 +0800
 @@ -386,7 +386,7 @@
  static int __init
  kgdb_enable_ints(void)
@@ -828,8 +894,8 @@ Index: linux-2.6.0-test6/arch/i386/lib/kgdb_serial.c
  	if (gdb_async_info == NULL) {
 Index: linux-2.6.0-test6/drivers/net/Makefile
 ===================================================================
---- linux-2.6.0-test6.orig/drivers/net/Makefile	2003-10-07 16:08:39.000000000 +0800
-+++ linux-2.6.0-test6/drivers/net/Makefile	2003-10-07 16:08:52.000000000 +0800
+--- linux-2.6.0-test6.orig/drivers/net/Makefile	2003-10-12 13:12:22.000000000 +0800
++++ linux-2.6.0-test6/drivers/net/Makefile	2003-10-12 13:12:25.000000000 +0800
 @@ -32,8 +32,6 @@
  
  obj-$(CONFIG_OAKNET) += oaknet.o 8390.o
@@ -850,8 +916,8 @@ Index: linux-2.6.0-test6/drivers/net/Makefile
  obj-$(CONFIG_DE600) += de600.o
 Index: linux-2.6.0-test6/include/asm-i386/kgdb.h
 ===================================================================
---- linux-2.6.0-test6.orig/include/asm-i386/kgdb.h	2003-10-07 16:08:41.000000000 +0800
-+++ linux-2.6.0-test6/include/asm-i386/kgdb.h	2003-10-07 16:08:52.000000000 +0800
+--- linux-2.6.0-test6.orig/include/asm-i386/kgdb.h	2003-10-12 13:12:23.000000000 +0800
++++ linux-2.6.0-test6/include/asm-i386/kgdb.h	2003-10-12 13:12:25.000000000 +0800
 @@ -21,17 +21,13 @@
  
  struct sk_buff;
@@ -875,8 +941,8 @@ Index: linux-2.6.0-test6/include/asm-i386/kgdb.h
   * GDB debug stub (or any debug stub) can point the 'linux_debug_hook'
 Index: linux-2.6.0-test6/Documentation/i386/kgdb/kgdbeth.txt
 ===================================================================
---- linux-2.6.0-test6.orig/Documentation/i386/kgdb/kgdbeth.txt	2003-10-07 16:08:34.000000000 +0800
-+++ linux-2.6.0-test6/Documentation/i386/kgdb/kgdbeth.txt	2003-10-09 20:32:46.453147448 +0800
+--- linux-2.6.0-test6.orig/Documentation/i386/kgdb/kgdbeth.txt	2003-10-12 13:12:22.000000000 +0800
++++ linux-2.6.0-test6/Documentation/i386/kgdb/kgdbeth.txt	2003-10-12 13:12:25.000000000 +0800
 @@ -6,16 +6,20 @@
  
  Robert Walsh <rjwalsh@durables.org>  (2.6 port)

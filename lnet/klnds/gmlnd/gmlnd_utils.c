@@ -40,35 +40,53 @@ gmnal_is_rxthread(gmnal_data_t *nal_data)
 
 
 /*
+ *	Allocate tx descriptors/tokens (large and small)
  *	allocate a number of small tx buffers and register with GM
  *	so they are wired and set up for DMA. This is a costly operation.
  *	Also allocate a corrosponding descriptor to keep track of 
  *	the buffer.
- *	Put all descriptors on singly linked list to be available to send 
+ *	Put all small descriptors on singly linked list to be available to send 
  *	function.
+ *	Allocate the rest of the available tx tokens for large messages. These will be
+ *	used to do gm_gets in gmnal_copyiov	
  */
 int
-gmnal_alloc_stxd(gmnal_data_t *nal_data)
+gmnal_alloc_txd(gmnal_data_t *nal_data)
 {
-	int ntx = 0, nstx = 0, i = 0, nrxt_stx = 10;
+	int ntx= 0, nstx= 0, nrxt_stx= 0,
+	    nltx= 0, i = 0;
 	gmnal_stxd_t	*txd = NULL;
+	gmnal_ltxd_t	*ltxd = NULL;
 	void	*txbuffer = NULL;
 
 	CDEBUG(D_TRACE, "gmnal_alloc_small tx\n");
 
 	GMNAL_GM_LOCK(nal_data);
+	/*
+	 *	total number of transmit tokens
+	 */
 	ntx = gm_num_send_tokens(nal_data->gm_port);
 	GMNAL_GM_UNLOCK(nal_data);
 	CDEBUG(D_INFO, "total number of send tokens available is [%d]\n", ntx);
 	
-	nstx = ntx/2;
 	/*
-	 * num_stxds from gmnal_module.c
+ 	 *	allocate a number for small sends
+	 * 	num_stxds from gmnal_module.c
 	 */
 	nstx = num_stxds;
+	/*
+	 *	give that number plus 1 to the receive threads
+	 */
         nrxt_stx = nstx + 1;
 
-	CDEBUG(D_INFO, "Allocated [%d] send tokens to small messages\n", nstx);
+	/*
+	 *	give the rest for gm_gets
+	 */
+	nltx = ntx - (nrxt_stx + nstx);
+	if (nltx < 1) {
+		CDEBUG(D_ERROR, "No tokens available for large messages\n");
+		return(GMNAL_STATUS_FAIL);
+	}
 
 
 	/*
@@ -85,6 +103,8 @@ gmnal_alloc_stxd(gmnal_data_t *nal_data)
 	GMNAL_TXD_LOCK_INIT(nal_data);
 	GMNAL_RXT_TXD_TOKEN_INIT(nal_data, nrxt_stx);
 	GMNAL_RXT_TXD_LOCK_INIT(nal_data);
+	GMNAL_LTXD_TOKEN_INIT(nal_data, nltx);
+	GMNAL_LTXD_LOCK_INIT(nal_data);
 	
 	for (i=0; i<=nstx; i++) {
 		PORTAL_ALLOC(txd, sizeof(gmnal_stxd_t));
@@ -144,6 +164,14 @@ gmnal_alloc_stxd(gmnal_data_t *nal_data)
 		       size [%d]\n", txd, txd->buffer, txd->buffer_size);
 	}
 
+	/*
+	 *	string together large tokens
+	 */
+	for (i=0; i<=nltx ; i++) {
+		PORTAL_ALLOC(ltxd, sizeof(gmnal_ltxd_t));
+		ltxd->next = nal_data->ltxd;
+		nal_data->ltxd = ltxd;
+	}
 	return(GMNAL_STATUS_OK);
 }
 
@@ -151,9 +179,10 @@ gmnal_alloc_stxd(gmnal_data_t *nal_data)
  *	the tx descriptors that go along with them.
  */
 void
-gmnal_free_stxd(gmnal_data_t *nal_data)
+gmnal_free_txd(gmnal_data_t *nal_data)
 {
 	gmnal_stxd_t *txd = nal_data->stxd, *_txd = NULL;
+	gmnal_ltxd_t *ltxd = NULL, *_ltxd = NULL;
 
 	CDEBUG(D_TRACE, "gmnal_free_small tx\n");
 
@@ -178,6 +207,13 @@ gmnal_free_stxd(gmnal_data_t *nal_data)
 		GMNAL_GM_UNLOCK(nal_data);
 		PORTAL_FREE(_txd, sizeof(gmnal_stxd_t));
 	}
+	ltxd = nal_data->ltxd;
+	while(txd) {
+		_ltxd = ltxd;
+		ltxd = ltxd->next;
+		PORTAL_FREE(_ltxd, sizeof(gmnal_ltxd_t));
+	}
+	
 	return;
 }
 
@@ -203,8 +239,7 @@ gmnal_get_stxd(gmnal_data_t *nal_data, int block)
 		GMNAL_RXT_TXD_GETTOKEN(nal_data);
 	        GMNAL_RXT_TXD_LOCK(nal_data);
 	        txd = nal_data->rxt_stxd;
-	        if (txd)
-		        nal_data->rxt_stxd = txd->next;
+		nal_data->rxt_stxd = txd->next;
 	        GMNAL_RXT_TXD_UNLOCK(nal_data);
 	        CDEBUG(D_INFO, "RXTHREAD got [%p], head is [%p]\n", 
 		       txd, nal_data->rxt_stxd);
@@ -223,8 +258,7 @@ gmnal_get_stxd(gmnal_data_t *nal_data, int block)
 	        }
 	        GMNAL_TXD_LOCK(nal_data);
 	        txd = nal_data->stxd;
-	        if (txd)
-		        nal_data->stxd = txd->next;
+		nal_data->stxd = txd->next;
 	        GMNAL_TXD_UNLOCK(nal_data);
 	        CDEBUG(D_INFO, "got [%p], head is [%p]\n", txd, 
 		       nal_data->stxd);
@@ -265,6 +299,43 @@ gmnal_return_stxd(gmnal_data_t *nal_data, gmnal_stxd_t *txd)
 }
 
 
+/*
+ *	Get a large transmit descriptor from the free list
+ *	This implicitly gets us a transmit  token .
+ *	always wait for one.
+ */
+gmnal_ltxd_t *
+gmnal_get_ltxd(gmnal_data_t *nal_data)
+{
+
+	gmnal_ltxd_t	*ltxd = NULL;
+
+	CDEBUG(D_TRACE, "nal_data [%p]\n", nal_data);
+
+	GMNAL_LTXD_GETTOKEN(nal_data);
+	GMNAL_LTXD_LOCK(nal_data);
+	ltxd = nal_data->ltxd;
+	nal_data->ltxd = ltxd->next;
+	GMNAL_LTXD_UNLOCK(nal_data);
+	CDEBUG(D_INFO, "got [%p], head is [%p]\n", ltxd, nal_data->ltxd);
+	return(ltxd);
+}
+
+/*
+ *	Return an ltxd to the list
+ */
+void
+gmnal_return_ltxd(gmnal_data_t *nal_data, gmnal_ltxd_t *ltxd)
+{
+	CDEBUG(D_TRACE, "nal_data [%p], ltxd[%p]\n", nal_data, ltxd);
+
+	GMNAL_LTXD_LOCK(nal_data);
+	ltxd->next = nal_data->ltxd;
+	nal_data->ltxd = ltxd;
+	GMNAL_LTXD_UNLOCK(nal_data);
+	GMNAL_LTXD_RETURNTOKEN(nal_data);
+	return;
+}
 /*
  *	allocate a number of small rx buffers and register with GM
  *	so they are wired and set up for DMA. This is a costly operation.
@@ -1006,10 +1077,10 @@ EXPORT_SYMBOL(gmnal_alloc_srxd);
 EXPORT_SYMBOL(gmnal_get_srxd);
 EXPORT_SYMBOL(gmnal_return_srxd);
 EXPORT_SYMBOL(gmnal_free_srxd);
-EXPORT_SYMBOL(gmnal_alloc_stxd);
+EXPORT_SYMBOL(gmnal_alloc_txd);
 EXPORT_SYMBOL(gmnal_get_stxd);
 EXPORT_SYMBOL(gmnal_return_stxd);
-EXPORT_SYMBOL(gmnal_free_stxd);
+EXPORT_SYMBOL(gmnal_free_txd);
 EXPORT_SYMBOL(gmnal_rxbuffer_to_srxd);
 EXPORT_SYMBOL(gmnal_rxevent);
 EXPORT_SYMBOL(gmnal_gm_error);

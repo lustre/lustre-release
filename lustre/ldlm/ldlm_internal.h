@@ -16,6 +16,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *, __u32 mode);
 void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
                             void *data, int datalen);
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue);
+int ldlm_run_ast_work(struct ldlm_namespace *, struct list_head *rpc_list);
 
 typedef int (*ldlm_processing_policy)(struct ldlm_lock *lock, int *flags,
                                       int first_enq, ldlm_error_t *err);
