@@ -18,6 +18,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
+hex2float() {
+	echo "ibase=16;scale=2;$*/FF" | bc
+}
+make_color() {
+	local md5=`echo "$*" | md5sum - | awk '{print $1}' | \
+			tr '[a-z]' '[A-Z]'`;
+	local r=`echo $md5 | cut -b 1,2`
+	local g=`echo $md5 | cut -b 3,4`
+	local b=`echo $md5 | cut -b 5,6`
+	echo "rgb(`hex2float $r`,`hex2float $g`,`hex2float $b`)"
+}
+
 rpc_name() {
 	case "$1" in
 		0) echo "OST_REPLY" ;;
@@ -233,12 +245,6 @@ sort -n $tmpdir/data >> $pl_script || die "sorting failed"
 # jeez. without another newline at the end pl doesn't read the last data row.
 echo >> $pl_script
 
-# could be smarter here
-# http://ploticus.sourceforge.net/doc/color.html
-colors=("red" "orange" "green" "blue" "purple" "pink" "powderblue" "yellow" \
-	"brown")
-num_colors=9
-
 legend_index=0
 legend_pane=0
 ops_per_pane=$(((NUM_OP_CODES  + 2)/ 3))
@@ -247,8 +253,6 @@ i=0
 for op in $OP_CODES; do
 	name=`rpc_name $op`
 	[ $name == "unknown" ] && die "unknown op code $op"
-
-	[ $i == $num_colors ] && die "ran out of colors"
 
 	label="$name "`pct ${rpc_count[$op]} $TOTAL_RPCS`
 	label="$label, "`pct ${rpc_total_time[$op]} $TOTAL_RPC_TIME`
@@ -260,7 +264,7 @@ for op in $OP_CODES; do
 	to_pl "#proc legendentry
 		sampletype: color
 		label: $label
-		details: ${colors[$i]}
+		details: `make_color $name`
 		tag: $op"
 
 	# ploticus makes you construct seperage legends stacked next to each
@@ -303,7 +307,7 @@ done
 
 to_pl	"
 #proc areadef
-	rectangle: 1 1 9.5 8
+	rectangle: 1 2 9.5 8
 	xautorange datafields=2,3
 	   xrange:    $MIN $MAX
 	yscaletype: categories
