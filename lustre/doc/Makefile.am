@@ -14,11 +14,10 @@ TEXEXPAND = texexpand
 SUFFIXES = .lin .lyx .pdf .ps .sgml .html .txt .tex .fig .eps .dvi
 
 DOCS = lustre.pdf lustre-HOWTO.txt
-IMAGES =  sys_stat.eps sys_odirect.eps sys_open.eps sys_write.eps sys_mount.eps cache1.eps cache2.eps intermezzocache.eps intermezzofilesys.eps meta.eps metadata1.eps networklayer.eps bigpicture.eps intermezzo.eps mds.eps portals.eps client.eps layering.eps metadata.eps sb.eps cow.eps lockacq.eps obdfs.eps snapsetup.eps dirbodyapi.eps loraid.eps ost.eps updates.eps hotmigrate.eps lustreclusters.eps osthw.eps portals-lib.eps lockqueues.eps lockexample1.eps lockexample2.eps lockexample3.eps lockexample4.eps lockseverity.eps gssapi.eps lovextents.eps cpsd.eps setup-accept.eps authenticate.eps login.eps
-LYXFILES= lustre.lin evolution.lyx  llocks.lyx mgmt.lyx uncertain.lyx\
-	fs.lyx         lustre-HOWTO.lin      namespace.lyx\
-	glossary.lyx   lustre-debugging.lyx  network.lyx\
-	intro.lyx      obdspec.lyx recovery.lyx
+IMAGES := $(patsubst %.fig,%.eps,$(wildcard *.fig))
+#IMAGES =  sys_stat.eps sys_odirect.eps sys_open.eps sys_write.eps sys_mount.eps cache1.eps cache2.eps intermezzocache.eps intermezzofilesys.eps meta.eps metadata1.eps networklayer.eps bigpicture.eps intermezzo.eps mds.eps portals.eps client.eps layering.eps metadata.eps sb.eps cow.eps lockacq.eps obdfs.eps snapsetup.eps dirbodyapi.eps loraid.eps ost.eps updates.eps hotmigrate.eps lustreclusters.eps osthw.eps portals-lib.eps lockqueues.eps lockexample1.eps lockexample2.eps lockexample3.eps lockexample4.eps lockseverity.eps gssapi.eps lovextents.eps cpsd.eps setup-accept.eps authenticate.eps login.eps
+
+LYXFILES= $(wildcard *.lin) $(wildcard *.lyx)
 
 MAINTAINERCLEANFILES =  $(IMAGES) $(DOCS) $(VERSIONED)
 CLEANFILES = *.aux *.tex doc.old/*.aux doc.old/*.tex *.eps
@@ -69,7 +68,7 @@ $(VERSIONED) : %.lyx: %.lin Makefile
 .ps.pdf:
 	$(PS2PDF) $< $@
 
-lustre.tex lustre.pdf lustre.txt lustre.html: $(IMAGES) lustre-HOWTO.lyx
+lustre.tex lustre.pdf lustre.txt lustre.html: $(IMAGES) $(LYXFILES)
 .fig.eps:
 	-fig2dev -L eps $< > $@
 
