@@ -287,6 +287,40 @@ static inline int obd_disconnect(struct obd_conn *conn)
 	return rc;
 }
 
+static inline int obd_statfs(struct obd_conn *conn, struct statfs *buf)
+{
+	int rc;
+	OBD_CHECK_OP(conn,statfs);
+	
+	rc = OBP(conn->oc_dev, statfs)(conn, buf);
+	EXIT;
+	return rc;
+}
+
+static inline int obd_punch(struct obd_conn *conn, struct obdo *tgt, obd_size count, obd_off offset)
+{
+	int rc;
+	OBD_CHECK_OP(conn,punch);
+	
+	rc = OBP(conn->oc_dev, punch)(conn, tgt, count, offset);
+	EXIT;
+	return rc;
+}
+
+static inline int obd_brw(int rw, struct obd_conn *conn, obd_count num_oa,
+                     struct obdo **oa, obd_count *oa_bufs, struct page **buf,
+                     obd_size *count, obd_off *offset, obd_flag *flags)
+{
+	int rc;
+	OBD_CHECK_OP(conn,brw);
+	
+	rc = OBP(conn->oc_dev, brw)(rw, conn, num_oa, oa, oa_bufs, buf,
+				    count, offset, flags);
+	EXIT;
+	return rc;
+}
+
+
 #endif 
 
 /* This value is not arbitrarily chosen.  KIO_STATIC_PAGES from linux/iobuf.h */

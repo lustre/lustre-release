@@ -108,11 +108,6 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
         int              err;
 
         ENTRY;
-        if (IOPS(inode, brw) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no brw method!\n");
-                EXIT;
-                return -EIO;
-        }
 
         oa = obdo_alloc();
         if ( !oa ) {
@@ -122,8 +117,8 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 	oa->o_valid = OBD_MD_FLNOTOBD;
         obdfs_from_inode(oa, inode);
 
-        err = IOPS(inode, brw)(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
-                               &page, &count, &offset, &flags);
+        err = obd_brw(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
+		       &page, &count, &offset, &flags);
         //if ( !err )
 	//      obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
 
@@ -147,12 +142,6 @@ static int obdfs_commit_page(struct page *page, int create, int from, int to)
         int              err;
 
         ENTRY;
-        if (IOPS(inode, brw) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no brw method!\n");
-                EXIT;
-                return -EIO;
-        }
-
         oa = obdo_alloc();
         if ( !oa ) {
                 EXIT;
@@ -164,7 +153,7 @@ static int obdfs_commit_page(struct page *page, int create, int from, int to)
 	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
 	       from, to, count);
 
-        err = IOPS(inode, brw)(WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
+        err = obd_brw(WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);
         if ( !err ) {
                 SetPageUptodate(page);
@@ -379,12 +368,6 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
         int err;
 
         ENTRY;
-        if (IOPS(inodes[0], brw) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no brw method!\n");
-                EXIT;
-                return -EIO;
-        }
-
         CDEBUG(D_INFO, "writing %d page(s), %d obdo(s) in vector\n",
                num_io, num_obdos);
         if (obd_debug_level & D_INFO) { /* DEBUGGING */
@@ -399,7 +382,7 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
                 printk("\n");
         }
 
-        err = IOPS(inodes[0], brw)(WRITE, IID(inodes[0]), num_obdos, obdos,
+        err = obd_brw(WRITE, IID(inodes[0]), num_obdos, obdos,
                                   oa_bufs, pages, counts, offsets, flags);
 
         CDEBUG(D_INFO, "BRW done\n");
@@ -670,33 +653,17 @@ void obdfs_truncate(struct inode *inode)
         ENTRY;
 
         //obdfs_dequeue_pages(inode);
-
-        if (IOPS(inode, punch) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no punch method!\n");
-                EXIT;
-                return;
-        }
-
         oa = obdo_alloc();
         if ( !oa ) {
-                /* XXX This would give an inconsistent FS, so deal with it as
-                 * best we can for now - an obdo on the stack is not pretty.
-                 */
-                struct obdo obdo;
-
-                printk(__FUNCTION__ ": obdo_alloc failed - using stack!\n");
-
-                obdo.o_valid = OBD_MD_FLNOTOBD;
-                obdfs_from_inode(&obdo, inode);
-
-                err = IOPS(inode, punch)(IID(inode), &obdo, 0, obdo.o_size);
+		err = -ENOMEM;
+                printk(__FUNCTION__ ": obdo_alloc failed!\n");
         } else {
                 oa->o_valid = OBD_MD_FLNOTOBD;
                 obdfs_from_inode(oa, inode);
 
                 CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
                        (long)oa->o_id, oa->o_size);
-                err = IOPS(inode, punch)(IID(inode), oa, oa->o_size, 0);
+                err = obd_punch(IID(inode), oa, oa->o_size, 0);
 
                 obdo_free(oa);
         }

@@ -125,28 +125,19 @@ static struct super_block * obdfs_read_super(struct super_block *sb,
         } 
 
         CDEBUG(D_INFO, "\n"); 
+
         obddev = &obd_dev[devno];
-
-        CDEBUG(D_INFO, "\n"); 
-        if ( ! (obddev->obd_flags & OBD_ATTACHED) || 
-             ! (obddev->obd_flags & OBD_SET_UP) ){
-                printk("device %s not attached or not set up (%d)\n", 
-                       device, MINOR(devno));
-                EXIT;
-                goto ERR;;
-        } 
-
-        CDEBUG(D_INFO, "\n"); 
         sbi->osi_obd = obddev;
         sbi->osi_ops = sbi->osi_obd->obd_type->typ_ops;
-        
         sbi->osi_conn.oc_dev = obddev;
+
         err = obd_connect(&sbi->osi_conn);
         if ( err ) {
                 printk("OBDFS: cannot connect to %s\n", device);
                 EXIT;
                 goto ERR;
         }
+
 	connected = 1;
         CDEBUG(D_INFO, "\n"); 
         /* list of dirty inodes, and a mutex to hold while modifying it */
@@ -260,7 +251,7 @@ static void obdfs_put_super(struct super_block *sb)
         sbi = (struct obdfs_sb_info *) &sb->u.generic_sbp;
         //obdfs_flush_reqs(&sbi->osi_inodes, ~0UL);
 
-        OPS(sb,disconnect)(ID(sb));
+        obd_disconnect(ID(sb));
         list_del(&sbi->osi_list);
         
         printk(KERN_INFO "OBDFS: Bye bye.\n");
@@ -276,11 +267,6 @@ void obdfs_do_change_inode(struct inode *inode, int valid)
         int err;
         
         ENTRY;
-        if (IOPS(inode, setattr) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no setattr method!\n");
-                EXIT;
-                return;
-        }
         oa = obdo_alloc();
         if ( !oa ) {
                 printk(__FUNCTION__ ": obdo_alloc failed\n");
@@ -291,7 +277,7 @@ void obdfs_do_change_inode(struct inode *inode, int valid)
         oa->o_valid = OBD_MD_FLNOTOBD & (valid | OBD_MD_FLID);
         obdfs_from_inode(oa, inode);
 	oa->o_mode = inode->i_mode;
-        err = IOPS(inode, setattr)(IID(inode), oa);
+        err = obd_setattr(IID(inode), oa);
 
         if ( err )
                 printk(__FUNCTION__ ": obd_setattr fails (%d)\n", err);
@@ -337,12 +323,6 @@ static void obdfs_delete_inode(struct inode *inode)
         int err;
 
         ENTRY;
-        if (IOPS(inode, destroy) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no destroy method!\n");
-                EXIT;
-                return;
-        }
-
         oa = obdo_alloc();
         if ( !oa ) {
                 printk(__FUNCTION__ ": obdo_alloc failed\n");
@@ -355,7 +335,7 @@ static void obdfs_delete_inode(struct inode *inode)
 	/* XXX how do we know that this inode is now clean? */
 	printk("delete_inode ------> link %d\n", inode->i_nlink);
         ODEBUG(oa);
-        err = IOPS(inode, destroy)(IID(inode), oa);
+        err = obd_destroy(IID(inode), oa);
         obdo_free(oa);
         clear_inode(inode);
         if (err) {
@@ -406,11 +386,6 @@ int obdfs_setattr(struct dentry *de, struct iattr *attr)
         int err;
 
         ENTRY;
-        if (IOPS(inode, setattr) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no setattr method!\n");
-                EXIT;
-                return -EIO;
-        }
         oa = obdo_alloc();
         if ( !oa ) {
                 printk(__FUNCTION__ ": obdo_alloc failed\n");
@@ -421,7 +396,7 @@ int obdfs_setattr(struct dentry *de, struct iattr *attr)
         oa->o_id = inode->i_ino;
 	oa->o_mode = inode->i_mode;
         obdo_from_iattr(oa, attr);
-        err = IOPS(inode, setattr)(IID(inode), oa);
+        err = obd_setattr(IID(inode), oa);
 
         if ( err )
                 printk(__FUNCTION__ ": obd_setattr fails (%d)\n", err);
@@ -440,7 +415,7 @@ static int obdfs_statfs(struct super_block *sb, struct statfs *buf)
 
         ENTRY;
 
-        err = OPS(sb,statfs)(ID(sb), &tmp);
+        err = obd_statfs(ID(sb), &tmp);
         if ( err ) { 
                 printk(__FUNCTION__ ": obd_statfs fails (%d)\n", err);
                 return err;

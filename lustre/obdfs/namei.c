@@ -166,7 +166,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 
         if (!inode) {
                 printk("new_inode -fatal:  %ld\n", (long)oa->o_id);
-                IOPS(dir, destroy)(IID(dir), oa);
+                obd_destroy(IID(dir), oa);
                 EXIT;
                 return ERR_PTR(-EIO);
         }
@@ -176,7 +176,7 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 		       (long)oa->o_id,
 		       atomic_read(&inode->i_count), 
 		       inode->i_nlink);
-                IOPS(dir, destroy)(IID(dir), oa);
+                obd_destroy(IID(dir), oa);
                 iput(inode);
                 EXIT;
                 return ERR_PTR(-EIO);
