@@ -167,7 +167,7 @@ int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         }
 
         LDLM_DEBUG(lock, "server preparing %s AST",
-                   desc->l_req_mode = 0 ? "completion" : "blocked");
+                   desc->l_req_mode == 0 ? "completion" : "blocked");
 
         req->rq_replen = lustre_msg_size(0, NULL);
 

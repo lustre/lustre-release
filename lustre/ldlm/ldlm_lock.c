@@ -359,7 +359,6 @@ static int ldlm_send_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock *new)
 {
         struct ldlm_lock_desc desc;
         struct ptlrpc_request *req = NULL;
-        struct ldlm_lock_desc desc;
         ENTRY;
 
 
