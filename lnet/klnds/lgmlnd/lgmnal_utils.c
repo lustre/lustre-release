@@ -96,12 +96,6 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 	LGMNAL_PRINT(LGMNAL_DEBUG_VV, ("Allocated [%d] send tokens to small messages\n", nstx));
 
 
-	nal_data->stxd_hash = gm_create_hash(gm_hash_compare_ptrs, gm_hash_hash_ptr, 0, 0, nstx, 0);
-	if (!nal_data->srxd_hash) {
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("Failed to create hash table\n\n"));
-			return(LGMNAL_STATUS_NOMEM);
-	}
-
 	/*
 	 * A semaphore is initialised with the 
 	 * number of transmit tokens available.
@@ -168,12 +162,6 @@ lgmnal_alloc_stxd(lgmnal_data_t *nal_data)
 		txd->buffer_size = LGMNAL_SMALL_MSG_SIZE(nal_data);
 		txd->gm_size = gm_min_size_for_length(txd->buffer_size);
 		txd->nal_data = (struct _lgmnal_data_t*)nal_data;
-
-		if (gm_hash_insert(nal_data->stxd_hash, (void*)txbuffer, (void*)txd)) {
-			LGMNAL_PRINT(LGMNAL_DEBUG_ERR, ("failed to create hash entry\n"));
-			return(LGMNAL_STATUS_FAIL);
-		}
-		
 
 		txd->next = nal_data->stxd;
 		nal_data->stxd = txd;

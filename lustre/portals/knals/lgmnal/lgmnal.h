@@ -81,11 +81,6 @@ extern  int lgmnal_small_msg_size;
 #define LGMNAL_IS_SMALL_MESSAGE(n,a,b,c)	lgmnal_is_small_message(n, a, b, c)
 #define LGMNAL_MAGIC				0x1234abcd
 
-typedef struct _lgmnal_hash {
-	void 			*key;
-	void 			*data;
-	struct _lgmnal_hash	*next;
-} lgmnal_hash_t;
 
 /*
  *	Small Transmit Descriptor
@@ -158,7 +153,6 @@ typedef struct _lgmnal_data_t {
 	spinlock_t 	stxd_lock;	/* lock to add or remove stxd to/from free list */
 	struct semaphore stxd_token;	/* Don't try to access the list until get a token */
 	lgmnal_stxd_t	*stxd;		/* list of free stxd's */
-	struct gm_hash	*stxd_hash;	/* hash to translate txbuffer to stxd. Created in stxd_alloc */
 	spinlock_t 	srxd_lock;
 	struct semaphore srxd_token;
 	lgmnal_srxd_t	*srxd;
@@ -394,16 +388,12 @@ void 		lgmnal_return_srxd(lgmnal_data_t *, lgmnal_srxd_t *);
  */
 void 		lgmnal_print(const char *, ...);
 lgmnal_srxd_t	*lgmnal_rxbuffer_to_srxd(lgmnal_data_t *, void*);
-lgmnal_stxd_t	*lgmnal_txbuffer_to_stxd(lgmnal_data_t *, void*);
 void		lgmnal_stop_rxthread(lgmnal_data_t *);
 void		lgmnal_small_tx_callback(gm_port_t *, void *, gm_status_t);
 void		lgmnal_drop_sends_callback(gm_port_t *, void *, gm_status_t);
 char		*lgmnal_gm_error(gm_status_t);
 char		*lgmnal_rxevent(gm_recv_event_t*);
 int		lgmnal_is_small_message(lgmnal_data_t*, int, struct iovec*, int);
-void 		*lgmnal_hash_find(lgmnal_hash_t *, void*);
-int 		lgmnal_hash_add(struct gm_hash **, void*, void*);
-void 		lgmnal_hash_free(lgmnal_hash_t**);
 void 		lgmnal_yield(int);
 
 
