@@ -50,7 +50,6 @@ static struct super_block *smfs_get_sb_by_path(char *path, int len)
 {
         struct super_block *sb;
         struct nameidata nd;
-        int error = 0;
 
         ENTRY;
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))

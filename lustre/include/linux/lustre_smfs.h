@@ -412,15 +412,11 @@ static inline void smfs_free_dentry_name(struct qstr *str)
 
 static inline struct dentry *pre_smfs_dentry(struct dentry *parent_dentry,
                                              struct inode *cache_inode,
-                                             struct dentry *dentry,
-                                             int           *index)
+                                             struct dentry *dentry)
 {
         struct dentry *cache_dentry = NULL;
-        struct qstr   name; 
         
-        smfs_get_dentry_name_index(dentry, &name, index);       
-        cache_dentry = d_alloc(parent_dentry, &name);
-        smfs_free_dentry_name(&name);
+        cache_dentry = d_alloc(parent_dentry, &dentry->d_name);
         if (!cache_dentry)
                 RETURN(NULL);
         if (!parent_dentry)

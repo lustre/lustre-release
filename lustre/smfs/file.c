@@ -242,7 +242,7 @@ static int smfs_init_cache_file(struct inode *inode, struct file *filp)
 
         sfi->magic = SMFS_FILE_MAGIC;
 
-        cache_dentry = pre_smfs_dentry(NULL, I2CI(inode), filp->f_dentry, NULL);
+        cache_dentry = pre_smfs_dentry(NULL, I2CI(inode), filp->f_dentry);
         if (!cache_dentry)
                 GOTO(err_exit, rc = -ENOMEM);
 
@@ -350,7 +350,7 @@ int smfs_fsync(struct file *file, struct dentry *dentry, int datasync)
         if (!cache_inode)
                 RETURN(-ENOENT);
         
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry, NULL);
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
         if (!cache_dentry)
                 RETURN(-ENOMEM);
 
@@ -418,7 +418,7 @@ int smfs_setattr(struct dentry *dentry, struct iattr *attr)
         if (!cache_inode)
                 RETURN(-ENOENT);
 
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry, NULL);
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
         if (!cache_dentry)
                 RETURN(-ENOMEM);
 
@@ -454,7 +454,7 @@ int smfs_setxattr(struct dentry *dentry, const char *name, const void *value,
         if (!cache_inode)
                 RETURN(-ENOENT);
 
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry, NULL);
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
         if (!cache_dentry)
                 RETURN(-ENOMEM);
 
@@ -481,7 +481,7 @@ int smfs_getxattr(struct dentry *dentry, const char *name, void *buffer,
         if (!cache_inode)
                 RETURN(-ENOENT);
 
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry, NULL);
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
         if (!cache_dentry)
                 RETURN(-ENOMEM);
 
@@ -507,7 +507,7 @@ ssize_t smfs_listxattr(struct dentry *dentry, char *buffer, size_t size)
         if (!cache_inode)
                 RETURN(-ENOENT);
 
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry, NULL);
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
         if (!cache_dentry)
                 RETURN(-ENOMEM);
 
@@ -532,7 +532,7 @@ int smfs_removexattr(struct dentry *dentry, const char *name)
         if (!cache_inode)
                 RETURN(-ENOENT);
 
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry, NULL);
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
         if (!cache_dentry)
                 RETURN(-ENOMEM);
 

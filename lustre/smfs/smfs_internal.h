@@ -322,10 +322,10 @@ do {                                                                           \
                 GOTO(label, rc);                                               \
 } while(0)                                                                     \
 
-#define SMFS_GET_INODE(sb, cache_inode, dir, index, inode, rc, label)   \
+#define SMFS_GET_INODE(sb, cache_inode, dir, inode, rc, label)          \
 do {                                                                    \
         LASSERT(cache_inode);                                           \
-        inode = smfs_get_inode(sb, cache_inode->i_ino, dir, index);     \
+        inode = smfs_get_inode(sb, cache_inode->i_ino, dir, 0);         \
         iput(cache_inode);                                              \
         if (!inode)                                                     \
                 GOTO(label, rc = -ENOENT);                              \
@@ -335,7 +335,6 @@ do {                                                                    \
 #if CONFIG_SNAPFS
 int smfs_cow_init(struct super_block *sb);
 int smfs_cow_cleanup(struct smfs_super_info *smb);
-int smfs_init_snap_inode_info(struct inode *inode, struct smfs_iget_args *args); 
 int smfs_snap_test_inode(struct inode *inode, void *args);
 #else
 #define SMFS_PRE_COW(dir, dentry, new_dir, new_dentry, op, name, rc, label)                 

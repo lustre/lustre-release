@@ -42,10 +42,7 @@ static void smfs_init_inode_info (struct inode *inode, void *opaque)
         struct smfs_iget_args *sargs = (struct smfs_iget_args*)opaque;
         struct inode *cache_inode = NULL;
         
-        if (sargs) 
-                cache_inode = iget(S2CSB(inode->i_sb), sargs->s_ino);
-        else
-                cache_inode = iget(S2CSB(inode->i_sb), inode->i_ino);
+        cache_inode = iget(S2CSB(inode->i_sb), inode->i_ino);
                  
         OBD_ALLOC(I2SMI(inode), sizeof(struct smfs_inode_info));
         LASSERT(I2SMI(inode));
@@ -60,11 +57,6 @@ static void smfs_init_inode_info (struct inode *inode, void *opaque)
                
                 if (dir)
                         I2SMI(inode)->smi_flags = I2SMI(dir)->smi_flags;
-#if CONFIG_SNAPFS
-                if (SMFS_DO_COW(S2SMI(inode->i_sb))) {
-                        smfs_init_snap_inode_info(inode, sargs);
-                }
-#endif
           }
 }
 
@@ -101,8 +93,15 @@ static int smfs_test_inode(struct inode *inode, unsigned long ino,
 static int smfs_test_inode(struct inode *inode, void *opaque)
 #endif
 {
-        if (!opaque)
+        struct smfs_iget_args *sargs = (struct smfs_iget_args*)opaque;
+
+        LASSERT(sargs);
+        if (!sargs)
                 return 1;
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        if (inode->i_ino != sargs->s_ino)
+                return 0; 
+#endif       
 #ifdef CONFIG_SNAPFS        
         if (SMFS_DO_COW(S2SMI(inode->i_sb)) && 
             !smfs_snap_test_inode(inode, opaque))
@@ -131,8 +130,6 @@ struct inode *smfs_iget(struct super_block *sb, ino_t hash,
                         unlock_new_inode(inode);
                 CDEBUG(D_VFSTRACE, "inode: %lu/%u(%p)\n", inode->i_ino,
                        inode->i_generation, inode);
-                
-                inode->i_ino = hash;
         }
         return inode;
 }

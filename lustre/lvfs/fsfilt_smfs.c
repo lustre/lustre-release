@@ -76,8 +76,7 @@ static void *fsfilt_smfs_brw_start(int objcount, struct fsfilt_objinfo *fso,
                 return NULL;
 
         cache_inode = I2CI(fso->fso_dentry->d_inode);
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, fso->fso_dentry, 
-                                       NULL);
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, fso->fso_dentry);
 
         if (!cache_dentry)
                 GOTO(exit, rc = ERR_PTR(-ENOMEM));
@@ -171,7 +170,7 @@ static int fsfilt_smfs_setattr(struct dentry *dentry, void *handle,
 
         cache_inode = I2CI(dentry->d_inode);
 
-        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry, NULL);
+        cache_dentry = pre_smfs_dentry(NULL, cache_inode, dentry);
         if (!cache_dentry)
                 GOTO(exit, rc = -ENOMEM);
 

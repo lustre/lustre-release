@@ -176,7 +176,7 @@ static struct inode *fsfilt_ext3_get_indirect(struct inode *primary, int *table,
 	struct snap_ea *snaps;
 	ino_t ino;
 	struct inode *inode = NULL;
-	int rc = 0, index = 0;
+	int rc = 0;
 
         ENTRY;
 
@@ -197,16 +197,14 @@ static struct inode *fsfilt_ext3_get_indirect(struct inode *primary, int *table,
 
 	/* if table is NULL and there is a slot */
 	if( !table && slot >= 0) {
-		index = slot;
-		ino = le32_to_cpu(snaps->ino[index]);
+		ino = le32_to_cpu(snaps->ino[slot]);
 		if(ino)	
                         inode = iget(primary->i_sb, ino);
 		GOTO(err_free, rc);
 	}
 	/* if table is not NULL */
-	while (!inode && slot >= 0 && table) {
-		index = table[slot];
-		ino = le32_to_cpu(snaps->ino[index]);
+	while (!inode && slot >= 0 ) {
+		ino = le32_to_cpu(snaps->ino[slot]);
 
 		CDEBUG(D_INODE, "snap inode at slot %d is %lu\n", slot, ino);
 		if (!ino) {
@@ -216,7 +214,7 @@ static struct inode *fsfilt_ext3_get_indirect(struct inode *primary, int *table,
 		inode = iget(primary->i_sb, ino);
 		GOTO(err_free, rc);
 	}
-	if( slot == -1 && table ) {
+	if( slot == -1) {
 		CDEBUG(D_INODE, "redirector not found, using primary\n");
 		inode = iget(primary->i_sb, primary->i_ino);
 	}

@@ -68,31 +68,29 @@ int smfs_rec_init(struct super_block *sb)
 
         SMFS_SET_REC(smfs_info);
 
-        ost_rec_pack_init(sb);
-        mds_rec_pack_init(sb);
+        ost_rec_pack_init(smfs_info);
+        mds_rec_pack_init(smfs_info);
 
         rec_hops = smfs_alloc_hook_ops(KML_HOOK, NULL, smfs_rec_post_hook);
         if (!rec_hops) {
                 RETURN(-ENOMEM);
         }
- 
-        rc = smfs_register_hook_ops(sb, rec_hops);      
-
+        rc = smfs_register_hook_ops(smfs_info, rec_hops);
         if (rc && rec_hops) {
-                smfs_unregister_hook_ops(sb, rec_hops->smh_name);
+                smfs_unregister_hook_ops(smfs_info, rec_hops->smh_name);
                 smfs_free_hook_ops(rec_hops);
         } 
         RETURN(rc);
 }
 
-int smfs_rec_cleanup(struct super_block *sb)
+int smfs_rec_cleanup(struct smfs_super_info *smfs_info)
 {
         struct smfs_hook_ops *rec_hops; 
         int rc = 0;
 
-        rec_hops = smfs_unregister_hook_ops(sb, KML_HOOK);
+        rec_hops = smfs_unregister_hook_ops(smfs_info, KML_HOOK);
         smfs_free_hook_ops(rec_hops);
-        SMFS_CLEAN_REC(S2SMI(sb));
+        SMFS_CLEAN_REC(smfs_info);
         
         RETURN(rc);
 }

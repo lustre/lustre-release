@@ -50,7 +50,6 @@ static char *smfs_options(char *data, char **devstr, char **namestr,
 {
         struct option *opt_value = NULL;
         char   *pos;
-        int    opt_len = 0;
         
         LASSERT(opts && flags);
 

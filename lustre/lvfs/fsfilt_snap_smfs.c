@@ -371,11 +371,11 @@ static int fsfilt_smfs_get_snap_info(struct inode *inode, void *key,
 static int fsfilt_smfs_read_dotsnap_dir_page(struct file *file, char *buf,
                                              size_t count, loff_t *off)
 {
+#if 0
         struct inode *inode = file->f_dentry->d_inode;
         struct fsfilt_operations *snap_cops = I2SNAPCOPS(inode);
         int    i = 0, size = 0, off_count = 0, buf_off = 0, rc = 0;
         ENTRY;
-#if 0
         /*Get the offset of dir ent*/
         //struct snap_table *stbl = S2SNAPI(inode->i_sb)->sni_table;
         while (size < *off && off_count < stbl->sntbl_count) {
@@ -400,7 +400,7 @@ static int fsfilt_smfs_read_dotsnap_dir_page(struct file *file, char *buf,
 #else
 #warning "still not implement read .snap dir page for fsfilt Wangdi"
 #endif
-        RETURN(rc); 
+        RETURN(0); 
 }
 
 struct fsfilt_operations fsfilt_smfs_snap_ops = {
