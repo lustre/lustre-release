@@ -16,10 +16,17 @@
 # define OBD_FILTER_SAN_DEVICENAME "sanobdfilter"
 #endif
 
+#define LAST_RCVD "last_rcvd"
+#define INIT_OBJID 2
+
 #define FILTER_LR_SERVER_SIZE    512
 
 #define FILTER_LR_CLIENT_START   8192
 #define FILTER_LR_CLIENT_SIZE    128
+
+/* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
+#define FILTER_LR_MAX_CLIENTS (PAGE_SIZE * 8)
+#define FILTER_LR_MAX_CLIENT_WORDS (FILTER_LR_MAX_CLIENTS/sizeof(unsigned long))
 
 #define FILTER_SUBDIR_COUNT      32            /* set to zero for no subdirs */
 
@@ -90,6 +97,10 @@ struct dentry *filter_parent_lock(struct obd_device *, obd_mode mode,
 void f_dput(struct dentry *);
 struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
                                  obd_mode mode, obd_id id);
+struct dentry *__filter_oa2dentry(struct lustre_handle *conn,
+				  struct obdo *oa, char *what);
+#define filter_oa2dentry(conn, oa) __filter_oa2dentry(conn, oa, __FUNCTION__)
+
 int filter_finish_transno(struct obd_export *, struct obd_trans_info *, int rc);
 __u64 filter_next_id(struct filter_obd *);
 int filter_update_server_data(struct file *, struct filter_server_data *);
