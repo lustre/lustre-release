@@ -5,6 +5,8 @@
 	- fix for HPUX NFS client breakage when NFS exporting Lustre (5781)
        * miscellania
 	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
+	- init scripts are now turned off by default; run chkconfig --on
+	  lustre and chkconfig --on lustrefs to use them
 
 2005-03-18  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1

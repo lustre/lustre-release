@@ -2,8 +2,8 @@
 #
 # lustre   This shell script takes care of starting and stopping Lustre
 #
-# chkconfig: 345 99 1
-# description: Lustre Lite network File System.                              \
+# chkconfig: - 99 1
+# description: Lustre Lite network File System.
 #              This starts both Lustre client and server functions.
 # processname: lconf
 # config: /etc/lustre/config.xml
@@ -14,7 +14,7 @@
 # Required-Stop: 
 # Should-Start: scance
 # Should-Stop: scance
-# Default-Start: 3 4 5
+# Default-Start: 
 # Default-Stop: 0 1 2 6
 # Short-Description: Lustre Lite network File System.
 # Description: This starts both Lustre client and server functions.
