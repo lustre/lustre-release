@@ -145,6 +145,7 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (obd->obd_namespace == NULL)
                 GOTO(out_disco, rc = -ENOMEM);
 
+        INIT_LIST_HEAD(&imp->imp_chain);
         imp->imp_last_xid = 0;
         imp->imp_max_transno = 0;
         imp->imp_peer_last_xid = 0;
@@ -181,9 +182,21 @@ out_req:
 out_ldlm:
                 ldlm_namespace_free(obd->obd_namespace);
                 obd->obd_namespace = NULL;
+                if (rq_opc == MDS_CONNECT) {
+                        /* Don't class_disconnect OSCs, because the LOV
+                         * cares about them even if they can't connect to the
+                         * OST.
+                         *
+                         * This is leak-bait, but without either a way to
+                         * operate on the osc without an export or separate
+                         * methods for connect-to-osc and connect-osc-to-ost
+                         * it's not clear what else to do.
+                         */
 out_disco:
-                class_disconnect(conn);
-                MOD_DEC_USE_COUNT;
+                        cli->cl_conn_count--;
+                        class_disconnect(conn);
+                        MOD_DEC_USE_COUNT;
+                }
         }
 out_sem:
         up(&cli->cl_sem);
@@ -220,12 +233,16 @@ int client_obd_disconnect(struct lustre_handle *conn)
 
         ldlm_namespace_free(obd->obd_namespace);
         obd->obd_namespace = NULL;
-        request = ptlrpc_prep_req(&cli->cl_import, rq_opc, 0, NULL, NULL);
+        request = ptlrpc_prep_req(&cli->cl_import, rq_opc, 0, NULL,
+                                  NULL);
         if (!request)
                 GOTO(out_disco, rc = -ENOMEM);
-
+        
         request->rq_replen = lustre_msg_size(0, NULL);
 
+        /* Process disconnects even if we're waiting for recovery. */
+        request->rq_level = LUSTRE_CONN_RECOVD;
+        
         rc = ptlrpc_queue_wait(request);
         if (rc)
                 GOTO(out_req, rc);
