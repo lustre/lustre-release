@@ -1,0 +1,37 @@
+#!/bin/sh
+
+set -vx
+
+run() {
+	echo $1 > /proc/sys/lustre/fail_loc
+	shift
+	$* &
+	sleep 1
+	kill $!
+}
+
+# GETATTR_NET - ls will hang on the getattr
+run 0x102 ls /mnt/obd/lost+found
+
+# READPAGE_NET - ls will hang reading in new pages (lost+found is not in cache)
+run 0x104 ls /mnt/obd/lost+found
+
+# REINT_NET - touch will hang on setattr
+run 0x107 touch /mnt/obd
+
+# REINT_NET - touch will hang on create
+run 0x107 touch /mnt/obd/tt
+
+# REINT_NET - mv will hang on rename
+run 0x107 mv /mnt/obd/lost+found /mnt/obd/lost
+
+# REINT_NET - rm will hang on unlink
+run 0x107 rmdir /mnt/obd/lost+found
+
+# OPEN_NET - ls will hang on open
+run 0x107 ls /mnt/obd/lost+found
+
+# CLOSE_NET - ls will hang on close
+run 0x107 ls /mnt/obd/lost+found
+
+run 0 ls -a /mnt/obd/lost+found
