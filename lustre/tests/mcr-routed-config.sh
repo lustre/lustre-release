@@ -44,14 +44,14 @@ gw2node() {
 
 [ -f $config ] && rm $config
 
-${LMC} --node $MDS --net `h2elan $MDS` elan || exit 1
-${LMC} --node $MDS --mds mds1 /tmp/mds1 100000 || exit 1
-${LMC} --lov lov1 mds1 65536 1 0
+${LMC} --add net --node $MDS --nid `h2elan $MDS` --nettype elan || exit 1
+${LMC} --add mds --node $MDS --mds mds1 --dev /tmp/mds1 --size 100000 || exit 1
+${LMC} --add lov --lov lov1 --mds mds1 --stripe_sz 65536 --stripe_cnt 1 --stripe_pattern 0
 
 # Client node
-#${LMC} --node client --tcpbuf $TCPBUF --net '*' tcp || exit 1
-${LMC} --node client --net '*' elan || exit 1
-${LMC} --node client --mtpt /mnt/lustre mds1 lov1
+#${LMC} --add net --node client --tcpbuf $TCPBUF --nid '*' --nettype tcp || exit 1
+${LMC} --add net --node client --nid '*' --nettype elan || exit 1
+${LMC} --add mtpt --node client --path /mnt/lustre --mds mds1 --lov lov1
 
 # this is crude, but effective
 let server_per_gw=($SERVER_CNT / $GW_CNT )
@@ -65,9 +65,9 @@ while (( $gw < $GW_CNT + GW_START ));
 do 
    gwnode=$BASE`gw2node $gw`
    echo "Router: $gwnode"
-   ${LMC} --router --node $gwnode --tcpbuf $TCPBUF --net `h2ip $gwnode`  tcp || exit 1
-   ${LMC} --node $gwnode --net `h2elan $gwnode` elan|| exit 1
-   ${LMC} --node $gwnode --route elan `h2elan $gwnode` `h2elan $CLIENT_LO` `h2elan $CLIENT_HI` || exit 2
+   ${LMC} --add net --router --node $gwnode --tcpbuf $TCPBUF --nid `h2ip $gwnode`  --nettype tcp || exit 1
+   ${LMC} --add net --node $gwnode --nid `h2elan $gwnode` --nettype elan || exit 1
+   ${LMC} --add route --node $gwnode --nettype elan --gw `h2elan $gwnode` --lo `h2elan $CLIENT_LO` --hi `h2elan $CLIENT_HI` || exit 2
 
    let  i=0
    while (( $i < $server_per_gw ));
@@ -77,11 +77,11 @@ do
       OBD_UUID=`awk "/$OST / { print \\$3 }" $UUIDLIST`
       [ "$OBD_UUID" ] && OBD_UUID="--obduuid=$OBD_UUID" || echo "$OST: no UUID"
       # server node
-      ${LMC} --node $OST --tcpbuf $TCPBUF --net $OST tcp || exit 1
+      ${LMC} --add net --node $OST --tcpbuf $TCPBUF --nid $OST --nettype tcp || exit 1
       # the device on the server
-      ${LMC} --lov lov1 --node $OST $OBD_UUID --ost bluearc || exit 3
+      ${LMC} --add ost --lov lov1 --node $OST --obduuid $OBD_UUID --dev bluearc || exit 3
       # route to server
-      ${LMC} --node $gwnode --route tcp `h2ip $gwnode` $OST || exit 2
+      ${LMC} --add route --node $gwnode --nettype tcp --gw `h2ip $gwnode` --lo $OST || exit 2
       let server=$server+1 
       let i=$i+1
    done
