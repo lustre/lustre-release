@@ -33,7 +33,7 @@ include $(top_srcdir)/Rules
 # XXX I'm sure there's some automake mv-if-different helper for this.
 lustre_build_version:
 	perl $(top_srcdir)/scripts/version_tag.pl $(top_srcdir) $(top_builddir) > tmpver
-	cmp -z $(top_builddir)/include/linux/lustre_build_version.h tmpver \
+	cmp -s $(top_builddir)/include/linux/lustre_build_version.h tmpver \
 		2> /dev/null &&                                            \
 		$(RM) tmpver ||                                            \
 		mv tmpver $(top_builddir)/include/linux/lustre_build_version.h
