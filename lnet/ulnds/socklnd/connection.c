@@ -360,6 +360,7 @@ connection force_tcp_connection(manager m,
         if (connect(fd, (struct sockaddr *)&addr,
                     sizeof(struct sockaddr_in))) {
             perror("tcpnal connect");
+            pthread_mutex_unlock(&m->conn_lock);
             return(0);
         }
 

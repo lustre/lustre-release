@@ -41,6 +41,16 @@ cleanup() {
     umount $MOUNT2 || true
     umount $MOUNT  || true
     rmmod llite
+
+    # b=3941
+    # In mds recovery, the mds will clear orphans in ost by 
+    # mds_lov_clear_orphan, which will sent the request to ost and waiting for
+    # the reply, if we stop mds at this time, we will got the obd_refcount > 1 
+    # errors, because mds_lov_clear_orphan grab a export of mds, 
+    # so the obd_refcount of mds will not be zero. So, wait a while before
+    # stop mds. This bug needs further work.
+    sleep 5
+
     stop mds ${FORCE}
     stop ost2 ${FORCE}
     stop ost ${FORCE}  --dump cleanup-dual.log

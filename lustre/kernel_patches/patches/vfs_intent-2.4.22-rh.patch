@@ -288,7 +288,7 @@
  				break;
  		}
  		goto return_base;
-@@ -635,6 +672,25 @@ return_reval:
+@@ -635,6 +672,32 @@ return_reval:
  		 * Check the cached dentry for staleness.
  		 */
  		dentry = nd->dentry;
@@ -309,6 +309,13 @@
 +				d_invalidate(dentry);
 +				dput(dentry);
 +				nd->dentry = new;
++			}
++			if (lookup_flags & LOOKUP_DIRECTORY) {
++				err = -ENOTDIR; 
++				if (!nd->dentry->d_inode->i_op ||
++				    (!nd->dentry->d_inode->i_op->lookup &&
++				     !nd->dentry->d_inode->i_op->lookup_it))
++					break;
 +			}
 +		} else
  		if (dentry && dentry->d_sb
