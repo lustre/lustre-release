@@ -920,8 +920,19 @@ def find_assigned_loop(file):
                 m = re.search(r'\((.*)\)', out[0])
                 if m and file == m.group(1):
                     return dev
-        else:
-            break
+    return ''
+
+# find free loop device
+def find_free_loop(file):
+    loop = loop_base()
+    
+    # find next free loop
+    for n in xrange(0, MAX_LOOP_DEVICES):
+        dev = loop + str(n)
+        if os.access(dev, os.R_OK):
+            (stat, out) = run('losetup', dev)
+            if stat:
+                return dev
     return ''
 
 # create file if necessary and assign the first free loop device
@@ -940,32 +951,22 @@ def init_loop(file, size, fstype, journal_size, inode_size,
             
     dev = find_assigned_loop(realfile)
     if dev:
-        print 'WARNING: file ', realfile, 'already mapped to', dev
-        return dev
+        print 'WARNING: file', realfile, 'already mapped to', dev
+	return dev
             
     if reformat or not os.access(realfile, os.R_OK | os.W_OK):
-        if size < 8000:
-            panic("size of loopback file '%s' must be larger than 8MB, but is set to %s" % (realfile, size))
         (ret, out) = run("dd if=/dev/zero bs=1k count=0 seek=%d of=%s" %(size, realfile))
         if ret:
             panic("Unable to create backing store:", realfile)
-            
         mkfs(realfile, size, realfstype, journal_size, inode_size, 
              mkfsoptions, isblock=0)
 
-    loop = loop_base()
-    # find next free loop
-    for n in xrange(0, MAX_LOOP_DEVICES):
-        dev = loop + str(n)
-        if os.access(dev, os.R_OK):
-            (stat, out) = run('losetup', dev)
-            if stat:
-		print "attach " + realfile + " <-> " + dev		    
-                run('losetup', dev, realfile)
-                return dev
-        else:
-            print "out of loop devices"
-            return ''
+    dev = find_free_loop(realfile)
+    if dev:
+	print "attach " + realfile + " <-> " + dev		    
+        run('losetup', dev, realfile)
+        return dev
+
     print "out of loop devices"
     return ''
 
