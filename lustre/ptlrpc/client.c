@@ -112,24 +112,24 @@ struct ptlrpc_bulk_page *ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc)
         return bulk;
 }
 
-void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk)
+void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 {
         struct list_head *tmp, *next;
         ENTRY;
-        if (bulk == NULL) {
+        if (desc == NULL) {
                 EXIT;
                 return;
         }
 
-        list_for_each_safe(tmp, next, &bulk->b_page_list) {
+        list_for_each_safe(tmp, next, &desc->b_page_list) {
                 struct ptlrpc_bulk_page *bulk;
                 bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
                 ptlrpc_free_bulk_page(bulk);
         }
 
-        ptlrpc_put_connection(bulk->b_connection);
+        ptlrpc_put_connection(desc->b_connection);
 
-        OBD_FREE(bulk, sizeof(*bulk));
+        OBD_FREE(desc, sizeof(*desc));
         EXIT;
 }
 
@@ -526,7 +526,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         ENTRY;
 
         init_waitqueue_head(&req->rq_wait_for_rep);
-        CERROR("req %Ld opc %d level %d, conn level %d\n", 
+        CDEBUG(D_NET, "req %Ld opc %d level %d, conn level %d\n",
                req->rq_xid, req->rq_reqmsg->opc, req->rq_level,
                req->rq_connection->c_level);
 
