@@ -70,7 +70,7 @@ check_version() {
     if ! $cmd --version >/dev/null ; then
 	error_msg "missing"
     fi
-    version=$($cmd --version | awk "BEGIN { IGNORECASE=1 } /$tool \(GNU $tool\)/ { print \$4 }")
+    version=$($cmd --version | awk "/$tool \(GNU/ { print \$4 }")
     echo "found $version"
     if ! compare_versions "$required" "$version" ; then
 	error_msg "too old"
