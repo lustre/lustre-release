@@ -142,11 +142,18 @@ static inline int mds_fs_commit(struct mds_obd *mds, struct inode *inode,
 static inline int mds_fs_setattr(struct mds_obd *mds, struct dentry *dentry,
                                  void *handle, struct iattr *iattr)
 {
+        /*
+         * NOTE: we probably don't need to take i_sem here when changing
+         *       ATTR_SIZE because the MDS never needs to truncate a file.
+         *       The ext2/ext3 code never truncates a directory, and files
+         *       stored on the MDS are entirely sparse (no data blocks).
+         *       If we do need to get it, we can do it here.
+         */
         return mds->mds_fsops->fs_setattr(dentry, handle, iattr);
 }
 
 static inline int mds_fs_set_objid(struct mds_obd *mds, struct inode *inode,
-                                   void *handle,  __u64 id)
+                                   void *handle, __u64 id)
 {
         return mds->mds_fsops->fs_set_objid(inode, handle, id);
 }

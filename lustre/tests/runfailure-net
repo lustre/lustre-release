@@ -14,9 +14,9 @@ test_fail() {
         mount -t lustre_lite -o device=3 none /mnt/lustre
 }
 
-mknod /dev/request c 10 244
+[ -c /dev/request ] || mknod /dev/request c 10 244
 
-sh llmount.sh
+echo | sh llmount.sh || exit -1
 
 # GETATTR_NET - ls will hang on the getattr
 test_fail 0x102 ls -l /mnt/lustre

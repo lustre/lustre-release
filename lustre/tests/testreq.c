@@ -54,7 +54,7 @@ int main(int argc, char **argv)
 {
         int fd, rc, c, cmd = 0;
         unsigned long arg;
-        char *short_opts = "h", *name;
+        char *short_opts = "h", *name = argv[0];
         static struct option long_opts[] = {
 #define OPT_GETATTR -2
                 {"getattr", no_argument, NULL, OPT_GETATTR},
@@ -111,8 +111,8 @@ int main(int argc, char **argv)
                         arg = strtoul(optarg, NULL, 0);
                         break;
                 case '?':
+                default:
                         usage(argv[0], 1);
-                        break;
                 }
         } while (c != -1);
 

@@ -530,7 +530,7 @@ int osc_brw_write(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
  out:
         for (pages = 0, i = 0; i < num_oa; i++)
                 for (j = 0; j < oa_bufs[i]; j++, pages++)
-                        kunmap(buf[n]);
+                        kunmap(buf[pages]);
 
         ptlrpc_free_req(request);
         return 0;

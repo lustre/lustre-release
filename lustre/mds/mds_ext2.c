@@ -38,7 +38,7 @@ static int mds_ext2_setattr(struct dentry *dentry, void *handle,
            in the block pointers; this data is the object id
            this will go into an extended attribute at some point.
         */
-        if (iattr->ia_valid & ATTR_SIZE ) {
+        if (iattr->ia_valid & ATTR_SIZE) {
                 /* ATTR_SIZE would invoke truncate: clear it */
                 iattr->ia_valid &= ~ATTR_SIZE;
                 inode->i_size = iattr->ia_size;
