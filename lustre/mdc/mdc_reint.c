@@ -113,7 +113,7 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
 
 int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                const void *data, int datalen, int mode, __u32 uid, __u32 gid,
-               __u64 time, __u64 rdev, struct ptlrpc_request **request)
+               __u64 rdev, struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
@@ -133,7 +133,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
 
         /* mdc_create_pack fills msg->bufs[1] with name
          * and msg->bufs[2] with tgt, for symlinks or lov MD data */
-        mdc_create_pack(req, 0, op_data, mode, rdev, time, data, datalen);
+        mdc_create_pack(req, 0, op_data, mode, rdev, data, datalen);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
