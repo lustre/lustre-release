@@ -10,22 +10,27 @@ Release: 0
 %define bdir $RPM_BUILD_DIR/obd-%{version}-%{knamever}
 
 Summary: Object-Based Disk storage drivers for Linux %{kuname}
-Name: obd
+Name: lustre-modules
 Version: %{version}
-Requires: kernel-intermezzo = %{knamever}_%{izolevel}
 Copyright: GPL
 Group: Development/Kernel
+Requires: kernel-intermezzo = %{knamever}_%{izolevel}
 BuildRoot: /var/tmp/obd-%{version}-root
-
-#
-# Sources
-Source0: ftp://ftp.lustre.com/pub/lustre/obd-%{version}.tar.gz
+Source: ftp://ftp.lustre.com/pub/lustre/obd-%{version}.tar.gz
 
 %description
 Object-Based Disk storage drivers for Linux %{kuname}.
 
+%package -n lustre-tools
+Summary: Object-Based Disk utility programs
+Group: Utilities/System
+Requires: lustre-modules
+
+%description -n lustre-tools
+Object-Based Disk utilities and demonstration scripts.
+
 %prep
-%setup
+%setup -n obd-%{version}
 
 %build
 rm -rf $RPM_BUILD_ROOT
@@ -41,7 +46,10 @@ make
 make install PREFIX=$RPM_BUILD_ROOT
 
 %files
+%doc COPYING
 /lib/modules/%{kuname}/fs/obd*.o
+
+%files -n lustre-tools
 /usr/bin/obdcontrol
 %doc COPYING FDL
 %doc doc/API.txt doc/OBD-HOWTO.sgml doc/obdspec.sgml
