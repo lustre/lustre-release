@@ -518,6 +518,11 @@ static int filter_setattr(struct lustre_handle *conn, struct obdo *oa,
                 RETURN(PTR_ERR(dentry));
 
         inode = dentry->d_inode;
+        if (!inode) {
+                CERROR("setattr on non-existent object: "LPU64"\n", oa->o_id);
+                GOTO(out_setattr, rc = -ENOENT);
+        }
+
         lock_kernel();
         if (iattr.ia_valid & ATTR_SIZE)
                 down(&inode->i_sem);
@@ -534,6 +539,7 @@ static int filter_setattr(struct lustre_handle *conn, struct obdo *oa,
         }
         unlock_kernel();
 
+out_setattr:
         f_dput(dentry);
         RETURN(rc);
 }
@@ -541,22 +547,25 @@ static int filter_setattr(struct lustre_handle *conn, struct obdo *oa,
 static int filter_open(struct lustre_handle *conn, struct obdo *oa,
                           struct lov_stripe_md *ea)
 {
+        struct obd_export *export;
         struct obd_device *obd;
         struct dentry *dentry;
         /* ENTRY; */
 
-        if (!class_conn2export(conn)) {
+        export = class_conn2export(conn);
+        if (!export) {
                 CDEBUG(D_IOCTL, "fatal: invalid client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
-        obd = class_conn2obd(conn);
+        obd = export->exp_obd;
         dentry = filter_fid2dentry(obd, filter_parent(obd, oa->o_mode),
                                    oa->o_id, oa->o_mode);
         if (IS_ERR(dentry))
                 RETURN(PTR_ERR(dentry));
 
-        oa->o_size = dentry->d_inode->i_size;
+        filter_from_inode(oa, dentry->d_inode, OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                          OBD_MD_FLMTIME | OBD_MD_FLCTIME);
 
         return 0;
 } /* filter_open */
@@ -1067,8 +1076,12 @@ static int filter_preprw(int cmd, struct lustre_handle *conn,
         int i;
         ENTRY;
 
-        memset(res, 0, sizeof(*res) * niocount);
         obd = class_conn2obd(conn);
+        if (!obd) {
+                CDEBUG(D_IOCTL, "invalid client "LPX64"\n", conn->addr);
+                RETURN(-EINVAL);
+        }
+        memset(res, 0, sizeof(*res) * niocount);
 
         push_ctxt(&saved, &obd->u.filter.fo_ctxt);
 
@@ -1252,7 +1265,7 @@ static int filter_commitrw(int cmd, struct lustre_handle *conn,
 
 out_ctxt:
         pop_ctxt(&saved);
-        RETURN(0);
+        RETURN(rc);
 }
 
 static int filter_statfs(struct lustre_handle *conn, struct statfs *statfs)
