@@ -627,7 +627,7 @@ echo_open (struct obd_export *exp, struct obdo *oa)
         if (ecoo == NULL)
                 goto failed_0;
 
-        rc = obd_open (&ec->ec_conn, oa, eco->eco_lsm, NULL);
+        rc = obd_open (&ec->ec_conn, oa, eco->eco_lsm, NULL, NULL);
         if (rc != 0)
                 goto failed_1;
 
@@ -988,6 +988,7 @@ static int echo_iocontrol(unsigned int cmd, struct lustre_handle *obdconn,
         }
 
  out:
+        class_export_put(exp);
         RETURN(rc);
 }
 
@@ -1013,8 +1014,7 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         obd_str2uuid(&uuid, data->ioc_inlbuf1);
         tgt = class_uuid2obd(&uuid);
-        if (!tgt || !(tgt->obd_flags & OBD_ATTACHED) ||
-            !(tgt->obd_flags & OBD_SET_UP)) {
+        if (!tgt || !tgt->obd_attached || !tgt->obd_set_up) {
                 CERROR("device not attached or not set up (%d)\n",
                        data->ioc_dev);
                 RETURN(rc = -EINVAL);
@@ -1024,7 +1024,7 @@ static int echo_setup(struct obd_device *obddev, obd_count len, void *buf)
         INIT_LIST_HEAD (&ec->ec_objects);
         ec->ec_unique = 0;
 
-        rc = obd_connect(&ec->ec_conn, tgt, &echo_uuid, NULL, NULL);
+        rc = obd_connect(&ec->ec_conn, tgt, &echo_uuid);
         if (rc) {
                 CERROR("fail to connect to device %d\n", data->ioc_dev);
                 return (rc);
@@ -1075,8 +1075,7 @@ static int echo_cleanup(struct obd_device * obddev)
 }
 
 static int echo_connect(struct lustre_handle *conn, struct obd_device *src,
-                        struct obd_uuid *cluuid, struct recovd_obd *recovd,
-                        ptlrpc_recovery_cb_t recover)
+                        struct obd_uuid *cluuid)
 {
         struct obd_export *exp;
         int                rc;
@@ -1084,8 +1083,9 @@ static int echo_connect(struct lustre_handle *conn, struct obd_device *src,
         rc = class_connect(conn, src, cluuid);
         if (rc == 0) {
                 exp = class_conn2export (conn);
-                INIT_LIST_HEAD (&exp->exp_ec_data.eced_open_head);
-                INIT_LIST_HEAD (&exp->exp_ec_data.eced_locks);
+                INIT_LIST_HEAD(&exp->exp_ec_data.eced_open_head);
+                INIT_LIST_HEAD(&exp->exp_ec_data.eced_locks);
+                class_export_put(exp);
         }
 
         RETURN (rc);
@@ -1101,7 +1101,7 @@ static int echo_disconnect(struct lustre_handle *conn)
         int                     rc;
 
         if (exp == NULL)
-                return (-EINVAL);
+                GOTO(out, rc = -EINVAL);
 
         obd = exp->exp_obd;
         ec = &obd->u.echo_client;
@@ -1139,7 +1139,10 @@ static int echo_disconnect(struct lustre_handle *conn)
         }
 
         rc = class_disconnect (conn);
-        RETURN (rc);
+        GOTO(out, rc);
+ out:
+        class_export_put(exp);
+        return rc;
 }
 
 static struct obd_ops echo_obd_ops = {
