@@ -646,7 +646,6 @@ static inline void del_timer(struct timer_list *l)
 
 #define time_after(a, b)                                        \
 ({                                                              \
-        printf("Error: inapproiate call time_after()\n");       \
         1;                                                      \
 })
 

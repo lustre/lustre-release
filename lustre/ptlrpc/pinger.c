@@ -463,7 +463,6 @@ int ptlrpc_start_pinger(void)
         pinger_callback =
                 liblustre_register_wait_callback(&pinger_check_rpcs, &pinger_args);
 #endif
-        obd_timeout = 10;
         return 0;
 }
 
