@@ -2,7 +2,7 @@
 Index: linux-2.4.20-8/fs/ext3/snap.c
 ===================================================================
 --- linux-2.4.20-8.orig/fs/ext3/snap.c	2003-01-30 18:24:37.000000000 +0800
-+++ linux-2.4.20-8/fs/ext3/snap.c	2004-01-04 13:37:21.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/snap.c	2004-01-05 10:54:25.000000000 +0800
 @@ -0,0 +1,2650 @@
 +/* fs/ext3/snap.c
 + *
@@ -2656,8 +2656,8 @@ Index: linux-2.4.20-8/fs/ext3/snap.c
 +
 Index: linux-2.4.20-8/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.4.20-8.orig/fs/ext3/ioctl.c	2003-12-08 19:49:18.000000000 +0800
-+++ linux-2.4.20-8/fs/ext3/ioctl.c	2004-01-04 13:37:21.000000000 +0800
+--- linux-2.4.20-8.orig/fs/ext3/ioctl.c	2004-01-05 10:54:00.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/ioctl.c	2004-01-05 10:54:25.000000000 +0800
 @@ -13,6 +13,12 @@
  #include <linux/ext3_jbd.h>
  #include <linux/sched.h>
@@ -2777,8 +2777,8 @@ Index: linux-2.4.20-8/fs/ext3/ioctl.c
  	}
 Index: linux-2.4.20-8/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.20-8.orig/fs/ext3/Makefile	2003-11-07 14:29:03.000000000 +0800
-+++ linux-2.4.20-8/fs/ext3/Makefile	2004-01-04 13:37:21.000000000 +0800
+--- linux-2.4.20-8.orig/fs/ext3/Makefile	2004-01-05 10:54:03.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/Makefile	2004-01-05 10:54:25.000000000 +0800
 @@ -13,7 +13,7 @@
  
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -2790,8 +2790,8 @@ Index: linux-2.4.20-8/fs/ext3/Makefile
  export-objs += xattr.o
 Index: linux-2.4.20-8/fs/ext3/inode.c
 ===================================================================
---- linux-2.4.20-8.orig/fs/ext3/inode.c	2003-12-08 16:46:04.000000000 +0800
-+++ linux-2.4.20-8/fs/ext3/inode.c	2004-01-04 13:37:21.000000000 +0800
+--- linux-2.4.20-8.orig/fs/ext3/inode.c	2004-01-05 10:54:03.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/inode.c	2004-01-05 10:54:25.000000000 +0800
 @@ -1191,7 +1191,7 @@
   * So, if we see any bmap calls here on a modified, data-journaled file,
   * take extra steps to flush any blocks which might be in the cache. 
@@ -2803,9 +2803,9 @@ Index: linux-2.4.20-8/fs/ext3/inode.c
  	journal_t *journal;
 Index: linux-2.4.20-8/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.4.20-8.orig/fs/ext3/ialloc.c	2003-11-07 14:29:03.000000000 +0800
-+++ linux-2.4.20-8/fs/ext3/ialloc.c	2004-01-04 13:37:21.000000000 +0800
-@@ -81,7 +81,6 @@
+--- linux-2.4.20-8.orig/fs/ext3/ialloc.c	2004-01-05 10:54:03.000000000 +0800
++++ linux-2.4.20-8/fs/ext3/ialloc.c	2004-01-05 10:54:25.000000000 +0800
+@@ -78,7 +78,6 @@
  	sb->u.ext3_sb.s_inode_bitmap[bitmap_nr] = bh;
  	return retval;
  }
@@ -2813,7 +2813,7 @@ Index: linux-2.4.20-8/fs/ext3/ialloc.c
  /*
   * load_inode_bitmap loads the inode bitmap for a blocks group
   *
-@@ -163,6 +162,13 @@
+@@ -160,6 +159,13 @@
  	return retval;
  }
  
@@ -2830,7 +2830,7 @@ Index: linux-2.4.20-8/fs/ext3/ialloc.c
 Index: linux-2.4.20-8/include/linux/snap.h
 ===================================================================
 --- linux-2.4.20-8.orig/include/linux/snap.h	2003-01-30 18:24:37.000000000 +0800
-+++ linux-2.4.20-8/include/linux/snap.h	2004-01-04 13:37:21.000000000 +0800
++++ linux-2.4.20-8/include/linux/snap.h	2004-01-05 10:54:25.000000000 +0800
 @@ -0,0 +1,266 @@
 +/*
 + * Copyright (c) 2002 Cluster File Systems, Inc. <info@clusterfs.com>
@@ -3100,8 +3100,8 @@ Index: linux-2.4.20-8/include/linux/snap.h
 +#endif
 Index: linux-2.4.20-8/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.20-8.orig/include/linux/ext3_fs.h	2003-11-07 14:31:25.000000000 +0800
-+++ linux-2.4.20-8/include/linux/ext3_fs.h	2004-01-04 13:37:21.000000000 +0800
+--- linux-2.4.20-8.orig/include/linux/ext3_fs.h	2004-01-05 10:54:03.000000000 +0800
++++ linux-2.4.20-8/include/linux/ext3_fs.h	2004-01-05 10:54:25.000000000 +0800
 @@ -183,7 +183,13 @@
  #define EXT3_INDEX_FL			0x00001000 /* hash-indexed directory */
  #define EXT3_IMAGIC_FL			0x00002000 /* AFS directory */
@@ -3172,8 +3172,8 @@ Index: linux-2.4.20-8/include/linux/ext3_fs.h
  					 EXT3_FEATURE_INCOMPAT_RECOVER)
 Index: linux-2.4.20-8/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.4.20-8.orig/include/linux/ext3_fs_sb.h	2003-12-09 12:14:02.000000000 +0800
-+++ linux-2.4.20-8/include/linux/ext3_fs_sb.h	2004-01-04 13:37:21.000000000 +0800
+--- linux-2.4.20-8.orig/include/linux/ext3_fs_sb.h	2004-01-05 10:54:00.000000000 +0800
++++ linux-2.4.20-8/include/linux/ext3_fs_sb.h	2004-01-05 10:54:25.000000000 +0800
 @@ -86,6 +86,13 @@
  	wait_queue_head_t s_delete_thread_queue;
  	wait_queue_head_t s_delete_waiter_queue;
@@ -3190,8 +3190,8 @@ Index: linux-2.4.20-8/include/linux/ext3_fs_sb.h
  #endif	/* _LINUX_EXT3_FS_SB */
 Index: linux-2.4.20-8/include/linux/ext3_jbd.h
 ===================================================================
---- linux-2.4.20-8.orig/include/linux/ext3_jbd.h	2003-11-07 14:31:25.000000000 +0800
-+++ linux-2.4.20-8/include/linux/ext3_jbd.h	2004-01-04 13:37:21.000000000 +0800
+--- linux-2.4.20-8.orig/include/linux/ext3_jbd.h	2004-01-05 10:53:59.000000000 +0800
++++ linux-2.4.20-8/include/linux/ext3_jbd.h	2004-01-05 10:54:25.000000000 +0800
 @@ -71,6 +71,33 @@
  
  #define EXT3_INDEX_EXTRA_TRANS_BLOCKS	8
@@ -3226,20 +3226,6 @@ Index: linux-2.4.20-8/include/linux/ext3_jbd.h
  int
  ext3_mark_iloc_dirty(handle_t *handle, 
  		     struct inode *inode,
-Index: linux-2.4.20-8/include/linux/fs.h
-===================================================================
---- linux-2.4.20-8.orig/include/linux/fs.h	2004-01-04 13:37:06.000000000 +0800
-+++ linux-2.4.20-8/include/linux/fs.h	2004-01-04 13:38:26.000000000 +0800
-@@ -479,7 +479,8 @@
- 	struct pipe_inode_info	*i_pipe;
- 	struct block_device	*i_bdev;
- 	struct char_device	*i_cdev;
--
-+  	void			*i_filterdata;
-+	
- 	unsigned long		i_dnotify_mask; /* Directory notify events */
- 	struct dnotify_struct	*i_dnotify; /* for directory notifications */
- 
 
 %diffstat
  fs/ext3/Makefile           |    2 
@@ -3250,7 +3236,6 @@ Index: linux-2.4.20-8/include/linux/fs.h
  include/linux/ext3_fs.h    |   37 
  include/linux/ext3_fs_sb.h |    7 
  include/linux/ext3_jbd.h   |   27 
- include/linux/fs.h         |    3 
  include/linux/snap.h       |  266 ++++
- 10 files changed, 3098 insertions(+), 7 deletions(-)
+ 9 files changed, 3096 insertions(+), 6 deletions(-)
 
