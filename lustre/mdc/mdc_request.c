@@ -499,7 +499,7 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
         if (req->rq_repmsg == NULL) {
                 CDEBUG(D_HA, "request failed to send: %p, %d\n", req,
                        req->rq_status);
-                rc = req->rq_status;
+                rc = req->rq_status ? req->rq_status : -EIO;
         } else if (rc == 0) {
                 rc = req->rq_repmsg->status;
                 if (req->rq_repmsg->type == PTL_RPC_MSG_ERR) {
