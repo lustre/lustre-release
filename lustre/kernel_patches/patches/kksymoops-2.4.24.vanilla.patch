@@ -1,7 +1,7 @@
 Index: linux-2.4.24/arch/i386/kernel/process.c
 ===================================================================
 --- linux-2.4.24.orig/arch/i386/kernel/process.c	2004-06-24 09:06:29.000000000 +0400
-+++ linux-2.4.24/arch/i386/kernel/process.c	2004-07-18 16:02:08.000000000 +0400
++++ linux-2.4.24/arch/i386/kernel/process.c	2004-07-18 16:28:19.000000000 +0400
 @@ -33,6 +33,7 @@
  #include <linux/reboot.h>
  #include <linux/init.h>
@@ -28,7 +28,7 @@ Index: linux-2.4.24/arch/i386/kernel/process.c
 Index: linux-2.4.24/arch/i386/kernel/traps.c
 ===================================================================
 --- linux-2.4.24.orig/arch/i386/kernel/traps.c	2004-07-14 18:14:26.000000000 +0400
-+++ linux-2.4.24/arch/i386/kernel/traps.c	2004-07-18 16:02:08.000000000 +0400
++++ linux-2.4.24/arch/i386/kernel/traps.c	2004-07-18 16:28:19.000000000 +0400
 @@ -24,6 +24,7 @@
  #include <linux/spinlock.h>
  #include <linux/interrupt.h>
@@ -101,7 +101,7 @@ Index: linux-2.4.24/arch/i386/kernel/traps.c
 Index: linux-2.4.24/arch/i386/config.in
 ===================================================================
 --- linux-2.4.24.orig/arch/i386/config.in	2004-07-14 18:14:27.000000000 +0400
-+++ linux-2.4.24/arch/i386/config.in	2004-07-18 16:02:08.000000000 +0400
++++ linux-2.4.24/arch/i386/config.in	2004-07-18 16:28:19.000000000 +0400
 @@ -8,6 +8,7 @@
  define_bool CONFIG_SBUS n
  
@@ -113,7 +113,7 @@ Index: linux-2.4.24/arch/i386/config.in
 Index: linux-2.4.24/arch/i386/vmlinux.lds.S
 ===================================================================
 --- linux-2.4.24.orig/arch/i386/vmlinux.lds.S	2004-07-14 18:14:27.000000000 +0400
-+++ linux-2.4.24/arch/i386/vmlinux.lds.S	2004-07-18 16:02:08.000000000 +0400
++++ linux-2.4.24/arch/i386/vmlinux.lds.S	2004-07-18 16:28:19.000000000 +0400
 @@ -28,6 +28,11 @@
    __ksymtab : { *(__ksymtab) }
    __stop___ksymtab = .;
@@ -129,7 +129,7 @@ Index: linux-2.4.24/arch/i386/vmlinux.lds.S
 Index: linux-2.4.24/include/linux/kernel.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/kernel.h	2004-07-13 11:07:11.000000000 +0400
-+++ linux-2.4.24/include/linux/kernel.h	2004-07-18 16:02:08.000000000 +0400
++++ linux-2.4.24/include/linux/kernel.h	2004-07-18 16:28:19.000000000 +0400
 @@ -110,6 +110,8 @@
  
  extern void dump_stack(void);
@@ -142,7 +142,7 @@ Index: linux-2.4.24/include/linux/kernel.h
 Index: linux-2.4.24/include/linux/kallsyms.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/kallsyms.h	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/include/linux/kallsyms.h	2004-07-18 16:08:12.000000000 +0400
++++ linux-2.4.24/include/linux/kallsyms.h	2004-07-18 16:28:19.000000000 +0400
 @@ -0,0 +1,164 @@
 +/* kallsyms headers
 +   Copyright 2000 Keith Owens <kaos@ocs.com.au>
@@ -170,7 +170,7 @@ Index: linux-2.4.24/include/linux/kallsyms.h
 +   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 + */
 +
-+#ident "$Id: kksymoops-2.4.24.vanilla.patch,v 1.5 2004/07/18 12:29:24 alex Exp $"
++#ident "$Id: kksymoops-2.4.24.vanilla.patch,v 1.6 2004/07/18 12:32:35 alex Exp $"
 +
 +#ifndef MODUTILS_KALLSYMS_H
 +#define MODUTILS_KALLSYMS_H 1
@@ -311,7 +311,7 @@ Index: linux-2.4.24/include/linux/kallsyms.h
 Index: linux-2.4.24/kernel/kksymoops.c
 ===================================================================
 --- linux-2.4.24.orig/kernel/kksymoops.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/kernel/kksymoops.c	2004-07-18 16:08:58.000000000 +0400
++++ linux-2.4.24/kernel/kksymoops.c	2004-07-18 16:28:19.000000000 +0400
 @@ -0,0 +1,82 @@
 +#include <linux/module.h>
 +#include <linux/string.h>
@@ -398,26 +398,28 @@ Index: linux-2.4.24/kernel/kksymoops.c
 Index: linux-2.4.24/kernel/Makefile
 ===================================================================
 --- linux-2.4.24.orig/kernel/Makefile	2001-09-17 08:22:40.000000000 +0400
-+++ linux-2.4.24/kernel/Makefile	2004-07-18 16:02:08.000000000 +0400
-@@ -14,11 +14,13 @@
- obj-y     = sched.o dma.o fork.o exec_domain.o panic.o printk.o \
++++ linux-2.4.24/kernel/Makefile	2004-07-18 16:28:19.000000000 +0400
+@@ -11,7 +11,7 @@
+ 
+ export-objs = signal.o sys.o kmod.o context.o ksyms.o pm.o exec_domain.o printk.o
+ 
+-obj-y     = sched.o dma.o fork.o exec_domain.o panic.o printk.o \
++obj-y     = sched.o dma.o fork.o exec_domain.o panic.o printk.o kksymoops.o kallsyms.o \
  	    module.o exit.o itimer.o info.o time.o softirq.o resource.o \
  	    sysctl.o acct.o capability.o ptrace.o timer.o user.o \
--	    signal.o sys.o kmod.o context.o
-+	    signal.o sys.o kmod.o context.o kksymoops.o kallsyms.o
+ 	    signal.o sys.o kmod.o context.o
+@@ -29,4 +29,7 @@
+ CFLAGS_sched.o := $(PROFILING) -fno-omit-frame-pointer
+ endif
  
- obj-$(CONFIG_UID16) += uid16.o
- obj-$(CONFIG_MODULES) += ksyms.o
- obj-$(CONFIG_PM) += pm.o
 +obj-$(CONFIG_KALLSYMS) += kksymoops.o
 +obj-$(CONFIG_KALLSYMS) += kallsyms.o
- 
- ifneq ($(CONFIG_IA64),y)
- # According to Alan Modra <alan@linuxcare.com.au>, the -fno-omit-frame-pointer is
++
+ include $(TOPDIR)/Rules.make
 Index: linux-2.4.24/kernel/kallsyms.c
 ===================================================================
 --- linux-2.4.24.orig/kernel/kallsyms.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/kernel/kallsyms.c	2004-07-18 16:02:08.000000000 +0400
++++ linux-2.4.24/kernel/kallsyms.c	2004-07-18 16:28:19.000000000 +0400
 @@ -0,0 +1,227 @@
 +/*
 + * kksymoops.c: in-kernel printing of symbolic oopses and stack traces.
@@ -649,7 +651,7 @@ Index: linux-2.4.24/kernel/kallsyms.c
 Index: linux-2.4.24/Makefile
 ===================================================================
 --- linux-2.4.24.orig/Makefile	2004-07-13 11:07:12.000000000 +0400
-+++ linux-2.4.24/Makefile	2004-07-18 16:02:09.000000000 +0400
++++ linux-2.4.24/Makefile	2004-07-18 16:28:19.000000000 +0400
 @@ -45,6 +45,7 @@
  MAKEFILES	= $(TOPDIR)/.config
  GENKSYMS	= /sbin/genksyms
