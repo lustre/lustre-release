@@ -24,7 +24,7 @@ int dump_ioo(struct obd_ioobj *ioo)
 
 int dump_lniobuf(struct niobuf_local *nb)
 {
-        CERROR("niobuf_local: addr=%Ld, offset=%Ld, len=%d, xid=%d\n",
+        CERROR("niobuf_local: addr=%p, offset=%Ld, len=%d, xid=%d\n",
                nb->addr, nb->offset, nb->len, nb->xid);
         CERROR("nb->page: index = %ld\n", ((struct page *)nb->page)->index);
 
