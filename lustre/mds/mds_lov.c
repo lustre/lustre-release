@@ -79,9 +79,8 @@ out:
         RETURN(rc);
 }
 
-int mds_get_lovdesc(struct obd_device *obd, struct lov_desc *desc)
+int mds_get_lovdesc(struct mds_obd *mds, struct lov_desc *desc)
 {
-        struct mds_obd *mds = &obd->u.mds;
         struct obd_run_ctxt saved;
         struct file *f;
         int rc;
@@ -108,9 +107,8 @@ int mds_get_lovdesc(struct obd_device *obd, struct lov_desc *desc)
         RETURN(0);
 }
 
-int mds_get_lovtgts(struct obd_device *obd, int tgt_count,obd_uuid_t *uuidarray)
+int mds_get_lovtgts(struct mds_obd *mds, int tgt_count,obd_uuid_t *uuidarray)
 {
-        struct mds_obd *mds = &obd->u.mds;
         struct obd_run_ctxt saved;
         struct file *f;
         int rc;

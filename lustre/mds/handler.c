@@ -40,9 +40,9 @@
 
 static kmem_cache_t *mds_file_cache;
 
-extern int mds_get_lovtgts(struct obd_device *obd, int tgt_count,
+extern int mds_get_lovtgts(struct mds_obd *obd, int tgt_count,
                            obd_uuid_t *uuidarray);
-extern int mds_get_lovdesc(struct obd_device *obd, struct lov_desc *desc);
+extern int mds_get_lovdesc(struct mds_obd  *obd, struct lov_desc *desc);
 extern int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                                 struct ptlrpc_request *req);
 static int mds_cleanup(struct obd_device * obddev);
@@ -442,7 +442,7 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
         }
 
         desc = lustre_msg_buf(req->rq_repmsg, 0);
-        rc = mds_get_lovdesc(req->rq_obd, desc);
+        rc = mds_get_lovdesc(mds, desc);
         if (rc) {
                 CERROR("mds_get_lovdesc error %d", rc);
                 req->rq_status = rc;
@@ -458,7 +458,7 @@ static int mds_getlovinfo(struct ptlrpc_request *req)
 
         mds->mds_max_mdsize = sizeof(struct lov_mds_md) +
                 tgt_count * sizeof(struct lov_object_id);
-        rc = mds_get_lovtgts(req->rq_obd, tgt_count,
+        rc = mds_get_lovtgts(mds, tgt_count,
                              lustre_msg_buf(req->rq_repmsg, 1));
         if (rc) {
                 CERROR("get_lovtgts error %d\n", rc);
@@ -1205,7 +1205,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 CERROR("MDS filesystem method init failed: rc = %d\n", rc);
                 GOTO(err_put, rc);
         }
-
+#warning move this to module init
         mds->mds_service = ptlrpc_init_svc(MDS_NEVENTS, MDS_NBUFS,
                                            MDS_BUFSIZE, MDS_MAXREQSIZE,
                                            MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
