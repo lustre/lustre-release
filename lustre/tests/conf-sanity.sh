@@ -575,4 +575,59 @@ test_15() {
 }
 run_test 15 "zconf-mount without /sbin/mount.lustre (should return error)"
 
+test_16() {
+        TMPMTPT="/mnt/conf16"
+                                                                                                                             
+        if [ ! -f "$MDSDEV" ]; then
+            echo "no $MDSDEV existing, so mount Lustre to create one"
+            start_ost
+            start_mds
+            mount_client $MOUNT
+            check_mount || return 41
+            cleanup || return $?
+         fi
+                                                                                                                             
+        echo "change the mode of $MDSDEV/OBJECTS,LOGS,PENDING to 555"
+        [ -d $TMPMTPT ] || mkdir -p $TMPMTPT
+        mount -o loop -t ext3 $MDSDEV $TMPMTPT || return $?
+        chmod 555 $TMPMTPT/OBJECTS || return $?
+        chmod 555 $TMPMTPT/LOGS || return $?
+        chmod 555 $TMPMTPT/PENDING || return $?
+        umount $TMPMTPT || return $?
+                                                                                                                             
+        echo "mount Lustre to change the mode of OBJECTS/LOGS/PENDING, then umount Lustre"
+        start_ost
+        start_mds
+        mount_client $MOUNT
+        check_mount || return 41
+        cleanup || return $?
+                                                                                                                             
+        echo "read the mode of OBJECTS/LOGS/PENDING and check if they has been changed properly"
+        EXPECTEDOBJECTSMODE=`debugfs -R "stat OBJECTS" $MDSDEV 2> /dev/null | awk '/Mode: /{print $6}'`
+        EXPECTEDLOGSMODE=`debugfs -R "stat LOGS" $MDSDEV 2> /dev/null | awk '/Mode: /{print $6}'`
+        EXPECTEDPENDINGMODE=`debugfs -R "stat PENDING" $MDSDEV 2> /dev/null | awk '/Mode: /{print $6}'`
+
+        if [ $EXPECTEDOBJECTSMODE = "0777" ]; then
+                echo "Success:Lustre change the mode of OBJECTS correctly"
+        else
+                echo "Error: Lustre does not change the mode of OBJECTS properly"
+                return 1
+        fi
+                                                                                                                             
+        if [ $EXPECTEDLOGSMODE = "0777" ]; then
+                echo "Success:Lustre change the mode of LOGS correctly"
+        else
+                echo "Error: Lustre does not change the mode of LOGS properly"
+                return 1
+        fi
+                                                                                                                             
+        if [ $EXPECTEDPENDINGMODE = "0777" ]; then
+                echo "Success:Lustre change the mode of PENDING correctly"
+        else
+                echo "Error: Lustre does not change the mode of PENDING properly"
+                return 1
+        fi
+}
+run_test 16 "verify that lustre will correct the mode of OBJECTS/LOGS/PENDING"
+
 equals_msg "Done"
