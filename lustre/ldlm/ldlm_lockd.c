@@ -18,54 +18,149 @@
 
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#include <linux/obd_class.h>
 #include <linux/lustre_dlm.h>
-#include <linux/lustre_net.h>
 
 extern kmem_cache_t *ldlm_resource_slab;
 extern kmem_cache_t *ldlm_lock_slab;
 
-static int ldlm_client_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
-                                void *data, __u32 data_len)
+static int _ldlm_namespace_new(struct obd_device *obddev,
+                               struct ptlrpc_request *req)
 {
-        LBUG();
-        return 0;
-}
-
-static int ldlm_enqueue(struct ptlrpc_request *req)
-{
-        struct ldlm_reply *dlm_rep;
         struct ldlm_request *dlm_req;
+        struct ldlm_namespace *ns;
+        int rc;
         ldlm_error_t err;
-        int rc, bufsize = sizeof(*dlm_rep);
-        
-        rc = lustre_pack_msg(1, &bufsize, NULL, &req->rq_replen,
-                             &req->rq_repbuf);
+        ENTRY;
+
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
         if (rc) {
                 CERROR("out of memory\n");
                 req->rq_status = -ENOMEM;
                 RETURN(0);
         }
+        dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
+
+        err = ldlm_namespace_new(obddev, dlm_req->lock_desc.l_resource.lr_ns_id,
+                                 &ns);
+        req->rq_status = err;
+
+        CERROR("err = %d\n", err);
+
+        RETURN(0);
+}
+
+static int _ldlm_enqueue(struct ptlrpc_request *req)
+{
+        struct ldlm_reply *dlm_rep;
+        struct ldlm_request *dlm_req;
+        int rc, size = sizeof(*dlm_rep);
+        ldlm_error_t err;
+        ENTRY;
+
+        rc = lustre_pack_msg(1, &size, NULL, &req->rq_replen, &req->rq_repbuf);
         req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc) {
+                CERROR("out of memory\n");
+                req->rq_status = -ENOMEM;
+                RETURN(0);
+        }
         dlm_rep = lustre_msg_buf(req->rq_repmsg, 0);
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
 
+        memcpy(&dlm_rep->lock_extent, &dlm_req->lock_desc.l_extent,
+               sizeof(dlm_rep->lock_extent));
+
         err = ldlm_local_lock_enqueue(req->rq_obd,
-                                      dlm_req->ns_id,
-                                      &dlm_req->parent_lock_handle,
-                                      dlm_req->res_id,
-                                      dlm_req->res_type,
-                                      &dlm_req->lock_extent,
-                                      dlm_req->mode,
+                                      dlm_req->lock_desc.l_resource.lr_ns_id,
+                                      &dlm_req->lock_handle2,
+                                      dlm_req->lock_desc.l_resource.lr_name,
+                                      dlm_req->lock_desc.l_resource.lr_type,
+                                      &dlm_rep->lock_extent,
+                                      dlm_req->lock_desc.l_req_mode,
                                       &dlm_req->flags,
-                                      ldlm_client_callback,
-                                      ldlm_client_callback,
+                                      //ldlm_cli_callback,
+                                      NULL,
+                                      ldlm_cli_callback,
                                       lustre_msg_buf(req->rq_reqmsg, 1),
                                       req->rq_reqmsg->buflens[1],
                                       &dlm_rep->lock_handle);
+        if (err != -ENOMEM && err != -ELDLM_BAD_NAMESPACE) {
+                struct ldlm_lock *lock;
+                lock = ldlm_handle2object(&dlm_rep->lock_handle);
+                memcpy(&lock->l_peer, &req->rq_peer, sizeof(lock->l_peer));
+                memcpy(&lock->l_remote_handle, &dlm_req->lock_handle1,
+                       sizeof(lock->l_remote_handle));
+        }
         req->rq_status = err;
 
-        CERROR("local_lock_enqueue: %d\n", err);
+        CERROR("err = %d\n", err);
+
+        RETURN(0);
+}
+
+static int _ldlm_convert(struct ptlrpc_request *req)
+{
+        struct ldlm_request *dlm_req;
+        int rc;
+        ENTRY;
+
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc) {
+                CERROR("out of memory\n");
+                req->rq_status = -ENOMEM;
+                RETURN(0);
+        }
+        dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
+
+        req->rq_status =
+                ldlm_local_lock_convert(req->rq_obd, &dlm_req->lock_handle1,
+                                        dlm_req->lock_desc.l_req_mode,
+                                        &dlm_req->flags);
+        RETURN(0);
+}
+
+static int _ldlm_cancel(struct ptlrpc_request *req)
+{
+        struct ldlm_request *dlm_req;
+        int rc;
+        ENTRY;
+
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc) {
+                CERROR("out of memory\n");
+                req->rq_status = -ENOMEM;
+                RETURN(0);
+        }
+        dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
+
+        req->rq_status =
+                ldlm_local_lock_cancel(req->rq_obd, &dlm_req->lock_handle1);
+        RETURN(0);
+}
+
+static int _ldlm_callback(struct ptlrpc_request *req)
+{
+        struct ldlm_request *dlm_req;
+        struct ldlm_lock *lock;
+        int rc;
+        ENTRY;
+
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repbuf);
+        req->rq_repmsg = (struct lustre_msg *)req->rq_repbuf;
+        if (rc) {
+                CERROR("out of memory\n");
+                req->rq_status = -ENOMEM;
+                RETURN(0);
+        }
+        dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
+
+        lock = ldlm_handle2object(&dlm_req->lock_handle1);
+        ldlm_lock_dump(lock);
+
+        req->rq_status = 0;
 
         RETURN(0);
 }
@@ -90,75 +185,59 @@ static int ldlm_handle(struct obd_device *dev, struct ptlrpc_service *svc,
         }
 
         switch (req->rq_reqmsg->opc) {
+        case LDLM_NAMESPACE_NEW:
+                CDEBUG(D_INODE, "namespace_new\n");
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_NAMESPACE_NEW, 0);
+                rc = _ldlm_namespace_new(dev, req);
+                break;
+
         case LDLM_ENQUEUE:
                 CDEBUG(D_INODE, "enqueue\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_ENQUEUE, 0);
-                rc = ldlm_enqueue(req);
+                rc = _ldlm_enqueue(req);
                 break;
-#if 0
+
         case LDLM_CONVERT:
                 CDEBUG(D_INODE, "convert\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CONVERT, 0);
-                rc = ldlm_convert(req);
+                rc = _ldlm_convert(req);
                 break;
 
         case LDLM_CANCEL:
                 CDEBUG(D_INODE, "cancel\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
-                rc = ldlm_cancel(req);
+                rc = _ldlm_cancel(req);
                 break;
 
         case LDLM_CALLBACK:
                 CDEBUG(D_INODE, "callback\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CALLBACK, 0);
-                rc = ldlm_callback(req);
+                rc = _ldlm_callback(req);
                 break;
-#endif
 
         default:
-                rc = ptlrpc_error(dev, svc, req);
+                rc = ptlrpc_error(svc, req);
                 RETURN(rc);
         }
 
-        EXIT;
 out:
-        if (rc) {
-                CERROR("no header\n");
-                return 0;
-        }
-
-        if( req->rq_status) {
-                ptlrpc_error(dev, svc, req);
-        } else {
-                CDEBUG(D_NET, "sending reply\n");
-                ptlrpc_reply(dev, svc, req);
-        }
-
-        return 0;
+        if (rc)
+                RETURN(ptlrpc_error(svc, req));
+        else
+                RETURN(ptlrpc_reply(svc, req));
 }
 
 static int ldlm_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg,
                           void *uarg)
 {
         struct obd_device *obddev = conn->oc_dev;
-        struct ptlrpc_client cl;
         int err;
-
         ENTRY;
 
-        if ( _IOC_TYPE(cmd) != IOC_LDLM_TYPE ||
-             _IOC_NR(cmd) < IOC_LDLM_MIN_NR  ||
-             _IOC_NR(cmd) > IOC_LDLM_MAX_NR ) {
+        if (_IOC_TYPE(cmd) != IOC_LDLM_TYPE || _IOC_NR(cmd) < IOC_LDLM_MIN_NR ||
+            _IOC_NR(cmd) > IOC_LDLM_MAX_NR) {
                 CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
-                                _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
-                EXIT;
-                return -EINVAL;
-        }
-
-        ptlrpc_init_client(-1, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL, &cl);
-        err = ptlrpc_connect_client(-1, "ldlm", &cl);
-        if (err) {
-                CERROR("cannot create client\n");
+                       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
                 RETURN(-EINVAL);
         }
 
@@ -166,15 +245,13 @@ static int ldlm_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg,
         case IOC_LDLM_TEST: {
                 err = ldlm_test(obddev);
                 CERROR("-- done err %d\n", err);
-                EXIT;
-                break;
+                GOTO(out, err);
         }
         default:
-                err = -EINVAL;
-                EXIT;
-                break;
+                GOTO(out, err = -EINVAL);
         }
 
+ out:
         return err;
 }
 
@@ -195,8 +272,23 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *data)
                 LBUG();
 
         err = ptlrpc_start_thread(obddev, ldlm->ldlm_service, "lustre_dlm");
-        if (err)
+        if (err) {
                 CERROR("cannot start thread\n");
+                LBUG();
+        }
+
+        OBD_ALLOC(ldlm->ldlm_client, sizeof(*ldlm->ldlm_client));
+        if (ldlm->ldlm_client == NULL)
+                LBUG();
+
+        ptlrpc_init_client(-1, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+                           ldlm->ldlm_client);
+        err = ptlrpc_connect_client("ldlm", ldlm->ldlm_client,
+                                    &ldlm->ldlm_server_peer);
+        if (err) {
+                CERROR("cannot create client\n");
+                LBUG();
+        }
 
         MOD_INC_USE_COUNT;
         RETURN(0);
@@ -257,7 +349,7 @@ static int ldlm_free_all(struct obd_device *obddev)
 
         ldlm_lock(obddev);
 
-        list_for_each_safe(tmp, pos, &obddev->u.ldlm.ldlm_namespaces) { 
+        list_for_each_safe(tmp, pos, &obddev->u.ldlm.ldlm_namespaces) {
                 struct ldlm_namespace *ns;
                 ns = list_entry(tmp, struct ldlm_namespace, ns_link);
 
@@ -282,6 +374,7 @@ static int ldlm_cleanup(struct obd_device *obddev)
                 CERROR("Request list not empty!\n");
         }
 
+        OBD_FREE(ldlm->ldlm_client, sizeof(*ldlm->ldlm_client));
         OBD_FREE(ldlm->ldlm_service, sizeof(*ldlm->ldlm_service));
 
         if (ldlm_free_all(obddev)) {
@@ -334,7 +427,7 @@ static void __exit ldlm_exit(void)
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Lock Management Module v0.1");
-MODULE_LICENSE("GPL"); 
+MODULE_LICENSE("GPL");
 
 module_init(ldlm_init);
 module_exit(ldlm_exit);

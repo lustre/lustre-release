@@ -403,17 +403,17 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
                 break;
 
         default:
-                rc = ptlrpc_error(dev, svc, req);
+                rc = ptlrpc_error(svc, req);
                 RETURN(rc);
         }
 
         EXIT;
 out:
         if (rc) {
-                ptlrpc_error(dev, svc, req);
+                ptlrpc_error(svc, req);
         } else {
                 CDEBUG(D_NET, "sending reply\n");
-                ptlrpc_reply(dev, svc, req);
+                ptlrpc_reply(svc, req);
         }
 
         return 0;

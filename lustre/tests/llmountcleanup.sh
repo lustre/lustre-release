@@ -41,6 +41,7 @@ disconnect
 del_uuid self
 del_uuid mds
 del_uuid ost
+del_uuid ldlm
 quit
 EOF
 

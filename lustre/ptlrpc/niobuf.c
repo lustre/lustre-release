@@ -209,43 +209,17 @@ int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *bulk)
         return rc;
 }
 
-int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_service *svc,
-                 struct ptlrpc_request *req)
+int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req)
 {
-        struct ptlrpc_request *clnt_req = req->rq_reply_handle;
-        ENTRY;
-
-        if (req->rq_reply_handle == NULL) {
-                /* This is a request that came from the network via portals. */
-
-                /* FIXME: we need to increment the count of handled events */
-                req->rq_type = PTL_RPC_REPLY;
-                req->rq_repmsg->xid = HTON__u32(req->rq_reqmsg->xid);
-                req->rq_repmsg->status = HTON__u32(req->rq_status);
-                req->rq_reqmsg->type = HTON__u32(req->rq_type);
-                ptl_send_buf(req, &req->rq_peer, svc->srv_rep_portal);
-        } else {
-                /* This is a local request that came from another thread. */
-
-                /* move the reply to the client */ 
-                clnt_req->rq_replen = req->rq_replen;
-                clnt_req->rq_repbuf = req->rq_repbuf;
-                req->rq_repbuf = NULL;
-                req->rq_replen = 0;
-
-                /* free the request buffer */
-                OBD_FREE(req->rq_reqbuf, req->rq_reqlen);
-                req->rq_reqbuf = NULL;
-
-                /* wake up the client */ 
-                wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
-        }
-
-        RETURN(0);
+        /* FIXME: we need to increment the count of handled events */
+        req->rq_type = PTL_RPC_REPLY;
+        req->rq_repmsg->xid = HTON__u32(req->rq_reqmsg->xid);
+        req->rq_repmsg->status = HTON__u32(req->rq_status);
+        req->rq_reqmsg->type = HTON__u32(req->rq_type);
+        return ptl_send_buf(req, &req->rq_peer, svc->srv_rep_portal);
 }
 
-int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,
-                 struct ptlrpc_request *req)
+int ptlrpc_error(struct ptlrpc_service *svc, struct ptlrpc_request *req)
 {
         int rc;
         ENTRY;
@@ -262,7 +236,7 @@ int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,
 
         req->rq_repmsg->type = HTON__u32(PTL_RPC_ERR);
 
-        rc = ptlrpc_reply(obddev, svc, req);
+        rc = ptlrpc_reply(svc, req);
         RETURN(rc);
 }
 
@@ -296,7 +270,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl)
 
         down(&cl->cli_rpc_sem);
 
-        rc = PtlMEAttach(cl->cli_server.peer_ni, request->rq_reply_portal,
+        rc = PtlMEAttach(request->rq_peer.peer_ni, request->rq_reply_portal,
                          local_id, request->rq_xid, 0, PTL_UNLINK,
                          PTL_INS_AFTER, &request->rq_reply_me_h);
         if (rc != PTL_OK) {
@@ -325,7 +299,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl)
                request->rq_replen, request->rq_xid, request->rq_reply_portal);
 
         list_add(&request->rq_list, &cl->cli_sending_head);
-        rc = ptl_send_buf(request, &cl->cli_server, request->rq_req_portal);
+        rc = ptl_send_buf(request, &request->rq_peer, request->rq_req_portal);
         RETURN(rc);
 
  cleanup2:

@@ -50,22 +50,23 @@
 #define MDS_REPLY_PORTAL   11
 #define MDS_BULK_PORTAL    12
 
-#define LDLM_REQUEST_PORTAL 13
-#define LDLM_REPLY_PORTAL   14
+#define LDLM_REQUEST_PORTAL     13
+#define LDLM_REPLY_PORTAL       14
+#define LDLM_CLI_REQUEST_PORTAL 15
+#define LDLM_CLI_REPLY_PORTAL   16
 
 /* default rpc ring length */
 #define RPC_RING_LENGTH    2
 
 #define SVC_STOPPING 1
-#define SVC_RUNNING 2
-#define SVC_STOPPED 4
-#define SVC_KILLED  8
-#define SVC_EVENT  16
-#define SVC_LIST   32
-#define SVC_SIGNAL 64
+#define SVC_RUNNING  2
+#define SVC_STOPPED  4
+#define SVC_KILLED   8
+#define SVC_EVENT   16
+#define SVC_LIST    32
+#define SVC_SIGNAL  64
 
 struct ptlrpc_client {
-        struct lustre_peer cli_server;
         struct obd_device *cli_obd;
         struct list_head cli_sending_head;
         struct list_head cli_sent_head;
@@ -192,20 +193,20 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *, int portal);
 int ptl_send_buf(struct ptlrpc_request *, struct lustre_peer *, int portal);
 int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *);
 int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *bulk);
-int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_service *svc,
-                 struct ptlrpc_request *req);
-int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,
-                 struct ptlrpc_request *req);
+int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req);
+int ptlrpc_error(struct ptlrpc_service *svc, struct ptlrpc_request *req);
 int ptl_send_rpc(struct ptlrpc_request *request, struct ptlrpc_client *cl);
 void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 
 /* rpc/client.c */
 void ptlrpc_init_client(int dev, int req_portal, int rep_portal,
-                       struct ptlrpc_client *cl);
-int ptlrpc_connect_client(int dev, char *uuid, struct ptlrpc_client *cl);
+                        struct ptlrpc_client *cl);
+int ptlrpc_connect_client(char *uuid, struct ptlrpc_client *cl,
+                          struct lustre_peer *peer);
 int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req);
 int ptlrpc_queue_req(struct ptlrpc_client *peer, struct ptlrpc_request *req);
-struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl, int opcode,
+struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
+                                       struct lustre_peer *peer, int opcode,
                                        int count, int *lengths, char **bufs);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct lustre_peer *);

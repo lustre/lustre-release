@@ -136,7 +136,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
         /* the first parameter should become an mds device no */
         ptlrpc_init_client(-1, MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
                            &sbi->ll_mds_client);
-        err = ptlrpc_connect_client(-1, "mds", &sbi->ll_mds_client);
+        err = ptlrpc_connect_client("mds", &sbi->ll_mds_client,
+                                    &sbi->ll_mds_peer);
         if (err) {
                 CERROR("cannot find MDS\n");
                 GOTO(out_disc, sb = NULL);
@@ -152,7 +153,8 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sb->s_op = &ll_super_operations;
 
         /* make root inode */
-        err = mdc_getattr(&sbi->ll_mds_client, sbi->ll_rootino, S_IFDIR,
+        err = mdc_getattr(&sbi->ll_mds_client, &sbi->ll_mds_peer,
+                          sbi->ll_rootino, S_IFDIR,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root %d\n", err);
@@ -260,7 +262,8 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
         /* change incore inode */
         ll_attr2inode(inode, attr, do_trunc);
 
-        err = mdc_setattr(&sbi->ll_mds_client, inode, attr, &request);
+        err = mdc_setattr(&sbi->ll_mds_client, &sbi->ll_mds_peer, inode, attr,
+                          &request);
         if (err)
                 CERROR("mdc_setattr fails (%d)\n", err);
 

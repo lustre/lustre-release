@@ -66,18 +66,20 @@ static void res_hash_init(struct ldlm_namespace *ns)
         ns->ns_hash = res_hash;
 }
 
-struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obddev, __u32 id)
+ldlm_error_t ldlm_namespace_new(struct obd_device *obddev, __u32 id,
+                                struct ldlm_namespace **ns_out)
 {
         struct ldlm_namespace *ns;
 
         if (ldlm_namespace_find(obddev, id))
-                LBUG();
+                return -ELDLM_NAMESPACE_EXISTS;
 
         OBD_ALLOC(ns, sizeof(*ns));
         if (!ns)
                 LBUG();
 
         ns->ns_id = id;
+        ns->ns_obddev = obddev;
         INIT_LIST_HEAD(&ns->ns_root_list);
 
         list_add(&ns->ns_link, &obddev->u.ldlm.ldlm_namespaces);
@@ -85,7 +87,8 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obddev, __u32 id)
         res_hash_init(ns); 
         atomic_set(&ns->ns_refcount, 0);
 
-        return ns;
+        *ns_out = ns;
+        return ELDLM_OK;
 }
 
 int ldlm_namespace_free(struct ldlm_namespace *ns)
@@ -247,6 +250,14 @@ int ldlm_get_resource_handle(struct ldlm_resource *res, struct ldlm_handle *h)
 {
         LBUG();
         return 0;
+}
+
+void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
+{
+        desc->lr_ns_id = res->lr_namespace->ns_id;
+        desc->lr_type = res->lr_type;
+        memcpy(desc->lr_name, res->lr_name, sizeof(desc->lr_name));
+        memcpy(desc->lr_version, res->lr_version, sizeof(desc->lr_version));
 }
 
 void ldlm_resource_dump(struct ldlm_resource *res)

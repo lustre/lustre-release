@@ -84,6 +84,15 @@ void ldlm_lock_free(struct ldlm_lock *lock)
         kmem_cache_free(ldlm_lock_slab, lock);
 }
 
+void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
+{
+        ldlm_res2desc(lock->l_resource, &desc->l_resource);
+        desc->l_req_mode = lock->l_req_mode;
+        desc->l_granted_mode = lock->l_granted_mode;
+        memcpy(&desc->l_extent, &lock->l_extent, sizeof(desc->l_extent));
+        memcpy(desc->l_version, lock->l_version, sizeof(desc->l_version));
+}
+
 static int ldlm_lock_compat(struct ldlm_lock *lock)
 {
         struct list_head *tmp;
@@ -119,7 +128,8 @@ static void ldlm_grant_lock(struct ldlm_resource *res, struct ldlm_lock *lock)
                 res->lr_most_restr = lock->l_granted_mode;
 
         if (lock->l_completion_ast)
-                lock->l_completion_ast(lock, NULL, NULL, 0);
+                lock->l_completion_ast(lock, NULL,
+                                       lock->l_data, lock->l_data_len);
 }
 
 /* XXX: Revisit the error handling; we do not, for example, do
@@ -181,10 +191,8 @@ ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev,
                 memcpy(&lock->l_extent, req_ex, sizeof(*req_ex));
         lock->l_data = data;
         lock->l_data_len = data_len;
-        if ((*flags) & LDLM_FL_COMPLETION_AST)
-                lock->l_completion_ast = completion;
-        if ((*flags) & LDLM_FL_BLOCKING_AST)
-                lock->l_blocking_ast = blocking;
+        lock->l_completion_ast = completion;
+        lock->l_blocking_ast = blocking;
         ldlm_object2handle(lock, lockh);
         spin_lock(&res->lr_lock);
 
@@ -192,25 +200,27 @@ ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev,
 
         if (!list_empty(&res->lr_converting)) {
                 ldlm_resource_add_lock(res, res->lr_waiting.prev, lock);
-                GOTO(out, rc = -ELDLM_BLOCK_CONV);
+                *flags |= LDLM_FL_BLOCK_CONV;
+                GOTO(out, ELDLM_OK);
         }
         if (!list_empty(&res->lr_waiting)) {
                 ldlm_resource_add_lock(res, res->lr_waiting.prev, lock);
-                GOTO(out, rc = -ELDLM_BLOCK_WAIT);
+                *flags |= LDLM_FL_BLOCK_WAIT;
+                GOTO(out, ELDLM_OK);
         }
 
         incompat = ldlm_lock_compat(lock);
         if (incompat) {
                 ldlm_resource_add_lock(res, res->lr_waiting.prev, lock);
-                GOTO(out, rc = -ELDLM_BLOCK_GRANTED);
+                *flags |= LDLM_FL_BLOCK_GRANTED;
+                GOTO(out, ELDLM_OK);
         }
 
         ldlm_grant_lock(res, lock);
-        GOTO(out, rc = ELDLM_OK);
-
+        EXIT;
  out:
         spin_unlock(&res->lr_lock);
-        return rc;
+        return ELDLM_OK;
 }
 
 static int ldlm_reprocess_queue(struct ldlm_resource *res,

@@ -107,7 +107,7 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
         if (!ino)
                 goto negative;
 
-        err = mdc_getattr(&sbi->ll_mds_client, ino, type,
+        err = mdc_getattr(&sbi->ll_mds_client, &sbi->ll_mds_peer, ino, type,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &request);
         if (err) {
                 CERROR("failure %d inode %ld\n", err, ino);
@@ -141,8 +141,9 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 
         ENTRY;
 
-        err = mdc_create(&sbi->ll_mds_client, dir, name, namelen, tgt, tgtlen,
-                         mode, id,  current->uid, current->gid, time, &request);
+        err = mdc_create(&sbi->ll_mds_client, &sbi->ll_mds_peer, dir, name,
+                         namelen, tgt, tgtlen, mode, id,  current->uid,
+                         current->gid, time, &request);
         if (err) { 
                 inode = ERR_PTR(err);
                 GOTO(out, err);
@@ -190,7 +191,8 @@ int ll_mdc_unlink(struct inode *dir, struct inode *child,
 
         ENTRY;
 
-        err = mdc_unlink(&sbi->ll_mds_client, dir, child, name, len, &request);
+        err = mdc_unlink(&sbi->ll_mds_client, &sbi->ll_mds_peer, dir, child,
+                         name, len, &request);
         ptlrpc_free_req(request);
 
         EXIT;
@@ -206,7 +208,8 @@ int ll_mdc_link(struct dentry *src, struct inode *dir,
 
         ENTRY;
 
-        err = mdc_link(&sbi->ll_mds_client, src, dir, name, len, &request);
+        err = mdc_link(&sbi->ll_mds_client, &sbi->ll_mds_peer, src, dir, name,
+                       len, &request);
         ptlrpc_free_req(request);
 
         EXIT;
@@ -222,7 +225,7 @@ int ll_mdc_rename(struct inode *src, struct inode *tgt,
 
         ENTRY;
 
-        err = mdc_rename(&sbi->ll_mds_client, src, tgt, 
+        err = mdc_rename(&sbi->ll_mds_client, &sbi->ll_mds_peer, src, tgt, 
                          old->d_name.name, old->d_name.len, 
                          new->d_name.name, new->d_name.len, &request);
         ptlrpc_free_req(request);

@@ -79,6 +79,8 @@ struct mds_obd {
 
 struct ldlm_obd {
         struct ptlrpc_service *ldlm_service;
+        struct ptlrpc_client *ldlm_client;
+        struct lustre_peer ldlm_server_peer;
 
         struct list_head ldlm_namespaces;
         spinlock_t       ldlm_lock;
@@ -126,6 +128,7 @@ struct ost_obd {
 struct osc_obd {
         struct obd_device *osc_tgt;
         struct ptlrpc_client *osc_client;
+        struct lustre_peer osc_peer;
 };
 
 /* corresponds to one of the obd's */

@@ -563,7 +563,7 @@ static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
                 break;
         default:
                 req->rq_status = -ENOTSUPP;
-                rc = ptlrpc_error(obddev, svc, req);
+                rc = ptlrpc_error(svc, req);
                 RETURN(rc);
         }
 
@@ -572,10 +572,10 @@ out:
         //req->rq_status = rc;
         if (rc) {
                 CERROR("ost: processing error %d\n", rc);
-                ptlrpc_error(obddev, svc, req);
+                ptlrpc_error(svc, req);
         } else {
                 CDEBUG(D_INODE, "sending reply\n");
-                ptlrpc_reply(obddev, svc, req);
+                ptlrpc_reply(svc, req);
         }
 
         return 0;

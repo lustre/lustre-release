@@ -5,30 +5,29 @@
 #ifndef _LUSTRE_DLM_H__
 #define _LUSTRE_DLM_H__
 
-#include <linux/kp30.h>
-#include <linux/list.h>
+#ifdef __KERNEL__
 
 #include <linux/obd_class.h>
-
-#ifdef __KERNEL__
+#include <linux/lustre_net.h>
 
 #define OBD_LDLM_DEVICENAME  "ldlm"
 
-typedef  int cluster_host;
-typedef  int cluster_pid;
+typedef int cluster_host;
+typedef int cluster_pid;
 
 typedef enum {
         ELDLM_OK = 0,
-        ELDLM_BLOCK_GRANTED = 600,
-        ELDLM_BLOCK_CONV,
-        ELDLM_BLOCK_WAIT,
-        ELDLM_BAD_NAMESPACE,
-        ELDLM_LOCK_CHANGED
+
+        ELDLM_LOCK_CHANGED = 300,
+
+        ELDLM_NAMESPACE_EXISTS = 400,
+        ELDLM_BAD_NAMESPACE    = 401
 } ldlm_error_t;
 
 #define LDLM_FL_LOCK_CHANGED   (1 << 0)
-#define LDLM_FL_COMPLETION_AST (1 << 1)
-#define LDLM_FL_BLOCKING_AST   (1 << 2)
+#define LDLM_FL_BLOCK_GRANTED  (1 << 1)
+#define LDLM_FL_BLOCK_CONV     (1 << 2)
+#define LDLM_FL_BLOCK_WAIT     (1 << 3)
 
 #define L2B(c) (1 << c)
 
@@ -108,10 +107,11 @@ struct ldlm_lock {
         ldlm_mode_t           l_granted_mode;
         ldlm_lock_callback    l_completion_ast;
         ldlm_lock_callback    l_blocking_ast;
-        struct lustre_peer   *l_peer;
+        struct lustre_peer    l_peer;
         void                 *l_data;
         __u32                 l_data_len;
         struct ldlm_extent    l_extent;
+        struct ldlm_handle    l_remote_handle;
         //void                 *l_event;
         //XXX cluster_host    l_holder;
         __u32                 l_version[RES_VERSION_SIZE];
@@ -188,6 +188,7 @@ int ldlm_extent_policy(struct ldlm_resource *, struct ldlm_extent *,
 
 /* ldlm_lock.c */
 void ldlm_lock_free(struct ldlm_lock *lock);
+void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc);
 ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev,
                                      __u32 ns_id,
                                      struct ldlm_handle *parent_lock_handle,
@@ -213,9 +214,9 @@ int ldlm_test(struct obd_device *device);
 
 /* resource.c */
 struct ldlm_namespace *ldlm_namespace_find(struct obd_device *, __u32 id);
-struct ldlm_namespace *ldlm_namespace_new(struct obd_device *, __u32 id);
+ldlm_error_t ldlm_namespace_new(struct obd_device *, __u32 id,
+                                struct ldlm_namespace **);
 int ldlm_namespace_free(struct ldlm_namespace *ns);
-void ldlm_resource_dump(struct ldlm_resource *res);
 struct ldlm_resource *ldlm_resource_get(struct ldlm_namespace *ns,
                                         struct ldlm_resource *parent,
                                         __u64 *name, __u32 type, int create);
@@ -223,6 +224,27 @@ int ldlm_resource_put(struct ldlm_resource *res);
 void ldlm_resource_add_lock(struct ldlm_resource *res, struct list_head *head,
                             struct ldlm_lock *lock);
 void ldlm_resource_del_lock(struct ldlm_lock *lock);
+void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc);
+void ldlm_resource_dump(struct ldlm_resource *res);
+
+/* ldlm_request.c */
+int ldlm_cli_namespace_new(struct ptlrpc_client *, struct lustre_peer *,
+                           __u32 ns_id, struct ptlrpc_request **);
+int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct lustre_peer *peer,
+                     __u32 ns_id,
+                     struct ldlm_handle *parent_lock_handle,
+                     __u64 *res_id,
+                     __u32 type,
+                     struct ldlm_extent *req_ex,
+                     ldlm_mode_t mode,
+                     int *flags,
+                     void *data,
+                     __u32 data_len,
+                     struct ldlm_handle *lockh,
+                     struct ptlrpc_request **request);
+int ldlm_cli_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
+                      void *data, __u32 data_len);
+
 
 #endif /* __KERNEL__ */
 

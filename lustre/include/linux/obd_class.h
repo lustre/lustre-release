@@ -24,10 +24,10 @@
 #define __LINUX_CLASS_OBD_H
 
 #ifndef __KERNEL__
-#include <stdint.h>
-#define __KERNEL__
-#include <linux/list.h>
-#undef __KERNEL__
+# include <stdint.h>
+# define __KERNEL__
+# include <linux/list.h>
+# undef __KERNEL__
 #else 
 #include <asm/segment.h>
 #include <asm/uaccess.h>

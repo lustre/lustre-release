@@ -69,10 +69,11 @@ extern unsigned long obd_fail_loc;
 #define OBD_FAIL_OST_PUNCH_NET           0x20b
 
 #define OBB_FAIL_LDLM                    0x300
-#define OBD_FAIL_LDLM_ENQUEUE            0x301
-#define OBD_FAIL_LDLM_CONVERT            0x302
-#define OBD_FAIL_LDLM_CANCEL             0x303
-#define OBD_FAIL_LDLM_CALLBACK           0x304
+#define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
+#define OBD_FAIL_LDLM_ENQUEUE            0x302
+#define OBD_FAIL_LDLM_CONVERT            0x303
+#define OBD_FAIL_LDLM_CANCEL             0x304
+#define OBD_FAIL_LDLM_CALLBACK           0x305
 
 /* preparation for a more advanced failure testbed (not functional yet) */
 #define OBD_FAIL_MASK_SYS    0x0000FF00
@@ -95,6 +96,7 @@ do {                                                                         \
         }                                                                    \
 } while(0)
 
+#include <linux/types.h>
 #include <linux/blkdev.h>
 
 static inline void OBD_FAIL_WRITE(int id, kdev_t dev)

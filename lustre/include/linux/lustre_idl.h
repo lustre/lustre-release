@@ -155,6 +155,7 @@ struct obd_ioobj {
  *   MDS REQ RECORDS
  */
 
+/* opcodes */
 #define MDS_GETATTR   1
 #define MDS_OPEN      2
 #define MDS_CLOSE     3
@@ -274,10 +275,11 @@ static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
  */
 
 /* opcodes */
-#define LDLM_ENQUEUE   1
-#define LDLM_CONVERT   2
-#define LDLM_CANCEL    3
-#define LDLM_CALLBACK  4
+#define LDLM_NAMESPACE_NEW 1
+#define LDLM_ENQUEUE       2
+#define LDLM_CONVERT       3
+#define LDLM_CANCEL        4
+#define LDLM_CALLBACK      5
 
 #define RES_NAME_SIZE 3
 #define RES_VERSION_SIZE 4
@@ -302,19 +304,31 @@ struct ldlm_extent {
         __u64 end;
 };
 
+struct ldlm_resource_desc {
+        __u32 lr_ns_id;
+        __u32 lr_type;
+        __u64 lr_name[RES_NAME_SIZE];
+        __u64 lr_version[RES_VERSION_SIZE];
+};
+
+struct ldlm_lock_desc {
+        struct ldlm_resource_desc l_resource;
+        ldlm_mode_t l_req_mode;
+        ldlm_mode_t l_granted_mode;
+        struct ldlm_extent l_extent;
+        __u32 l_version[RES_VERSION_SIZE];
+};
+
 struct ldlm_request {
-        __u32 ns_id;
-        __u64 res_id[RES_NAME_SIZE];
-        __u32 res_type;
         __u32 flags;
-        struct ldlm_extent lock_extent;
-        struct ldlm_handle parent_res_handle;
-        struct ldlm_handle parent_lock_handle;
-        ldlm_mode_t mode;
+        struct ldlm_lock_desc lock_desc;
+        struct ldlm_handle lock_handle1;
+        struct ldlm_handle lock_handle2;
 };
 
 struct ldlm_reply {
         struct ldlm_handle lock_handle;
+        struct ldlm_extent lock_extent;
 };
 
 /*

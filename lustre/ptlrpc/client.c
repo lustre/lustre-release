@@ -34,7 +34,7 @@
 #include <linux/lustre_net.h>
 
 void ptlrpc_init_client(int dev, int req_portal, int rep_portal,
-                          struct ptlrpc_client *cl)
+                        struct ptlrpc_client *cl)
 {
         memset(cl, 0, sizeof(*cl));
         spin_lock_init(&cl->cli_lock);
@@ -50,12 +50,13 @@ void ptlrpc_init_client(int dev, int req_portal, int rep_portal,
         sema_init(&cl->cli_rpc_sem, 32);
 }
 
-int ptlrpc_connect_client(int dev, char *uuid, struct ptlrpc_client *cl)
+int ptlrpc_connect_client(char *uuid, struct ptlrpc_client *cl,
+                          struct lustre_peer *peer)
 {
         int err;
 
         cl->cli_epoch++;
-        err = kportal_uuid_to_peer(uuid, &cl->cli_server);
+        err = kportal_uuid_to_peer(uuid, peer);
         if (err != 0)
                 CERROR("cannot find peer %s!\n", uuid);
 
@@ -75,7 +76,8 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct lustre_peer *peer)
         return bulk;
 }
 
-struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl, int opcode,
+struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
+                                       struct lustre_peer *peer, int opcode,
                                        int count, int *lengths, char **bufs)
 {
         struct ptlrpc_request *request;
@@ -99,6 +101,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl, int opcode,
                 RETURN(NULL);
         }
         request->rq_type = PTL_RPC_REQUEST;
+        memcpy(&request->rq_peer, peer, sizeof(*peer));
         request->rq_reqmsg = (struct lustre_msg *)request->rq_reqbuf;
         request->rq_reqmsg->opc = HTON__u32(opcode);
         request->rq_reqmsg->xid = HTON__u32(request->rq_xid);

@@ -134,6 +134,7 @@ setup_portals() {
 	add_uuid self
 	add_uuid mds
 	add_uuid ost
+	add_uuid ldlm
 	quit
 	EOF
 }
@@ -167,4 +168,6 @@ setup_ldlm() {
 	insmod $LUSTRE/ldlm/ldlm.o || exit -1
 
 	list_mods
+        echo "Press Enter to continue"
+        read
 }
