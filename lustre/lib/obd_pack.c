@@ -243,9 +243,6 @@ void ost_pack_niobuf(void **tmp, void *addr, __u64 offset, __u32 len,
         struct niobuf *ioo = *tmp;
         char *c = *tmp;
 
-        if ((offset >> 32) != 0)
-                BUG();
-
         ioo->addr = HTON__u64((__u64)(unsigned long)addr); 
         ioo->offset = HTON__u64(offset); 
         ioo->len = HTON__u32(len); 
