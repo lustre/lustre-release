@@ -86,11 +86,12 @@ int do_stat(char *path)
                 exit(1);
         }
         if (opt_verbose)
-                printf("stat %s = inode %lu\n", path, mystat.st_ino);
+                printf("stat %s = inode %lu\n", path,
+                       (unsigned long)mystat.st_ino);
 
         if (opt_trace) {
                 snprintf(mark_buf, PATH_MAX, "stat %s = inode %lu",
-                         path, mystat.st_ino);
+                         path, (unsigned long)mystat.st_ino);
                 ltrace_mark(0, mark_buf);
         }
 
