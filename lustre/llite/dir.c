@@ -33,6 +33,8 @@
 #include <linux/version.h>
 #include <linux/smp_lock.h>
 #include <asm/uaccess.h>
+#include <linux/file.h>
+#include <linux/kmod.h>
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 # include <linux/locks.h>   // for wait_on_buffer
 #else
@@ -467,6 +469,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
         }
         case LL_IOC_MDC_MKDIRSTRIPE:
                 RETURN(ll_mkdir_stripe(inode, arg));
+        case IOC_MDC_FINISH_GNS:
+                RETURN(ll_finish_gns(sbi));
         case LL_IOC_LOV_SETSTRIPE: {
                 struct ptlrpc_request *request = NULL;
                 struct mdc_op_data op_data;

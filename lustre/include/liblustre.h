@@ -466,6 +466,7 @@ struct iattr {
 #define IT_GETXATTR 0x0040
 #define IT_EXEC     0x0080
 #define IT_PIN      0x0100
+#define IT_CHDIR    0x0200
 
 #define IT_FL_LOCKED   0x0001
 #define IT_FL_FOLLOWED 0x0002 /* set by vfs_follow_link */

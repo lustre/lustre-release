@@ -163,7 +163,7 @@
 +static struct dentry *lookup_it(struct inode *inode, struct dentry * dentry)
 +{
 +	if (inode->i_op->lookup_it)
-+	    return inode->i_op->lookup_it(inode, dentry, NULL, 0);
++	    return inode->i_op->lookup_it(inode, dentry, NULL, NULL, 0);
 +	else
 +	    return inode->i_op->lookup(inode, dentry);
 +		
@@ -403,7 +403,7 @@
 +	int err = 0;
 +
 +	if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
-+		if (!dentry->d_op->d_revalidate_it(dentry, 0, it) &&
++		if (!dentry->d_op->d_revalidate_it(dentry, 0, NULL, it) &&
 +			!d_invalidate(dentry)) {
 +			dput(dentry);
 +			err = -EINVAL;

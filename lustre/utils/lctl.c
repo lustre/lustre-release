@@ -221,6 +221,7 @@ command_t cmdlist[] = {
         {"deactivate", jt_obd_deactivate, 0, "deactivate an import\n"},
         {"recover", jt_obd_recover, 0, "usage: recover [<connection UUID>]"},
         {"lookup", jt_obd_mdc_lookup, 0, "usage: lookup <directory> <file>"},
+        {"finish_gns", jt_obd_finish_gns, 0, "usage: finish_gns <directory>"},
         {"notransno", jt_obd_no_transno, 0,
          "disable sending of committed-transno updates\n"},
         {"readonly", jt_obd_set_readonly, 0,

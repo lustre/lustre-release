@@ -148,7 +148,7 @@ Index: linux-2.4.19.SuSE/fs/namei.c
  	struct dentry * dentry = d_lookup(parent, name);
  
 +	if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
-+		if (!dentry->d_op->d_revalidate_it(dentry, flags, it) &&
++		if (!dentry->d_op->d_revalidate_it(dentry, flags, NULL, it) &&
 +		    !d_invalidate(dentry)) {
 +			dput(dentry);
 +			dentry = NULL;
@@ -180,7 +180,7 @@ Index: linux-2.4.19.SuSE/fs/namei.c
  		if (dentry) {
  			lock_kernel();
 +			if (dir->i_op->lookup_it)
-+				result = dir->i_op->lookup_it(dir, dentry, it, flags);
++				result = dir->i_op->lookup_it(dir, dentry, NULL, it, flags);
 +			else
  			result = dir->i_op->lookup(dir, dentry);
  			unlock_kernel();
@@ -190,7 +190,7 @@ Index: linux-2.4.19.SuSE/fs/namei.c
  			result = ERR_PTR(-ENOENT);
  		}
 +	} else if (result->d_op && result->d_op->d_revalidate_it) {
-+		if (!result->d_op->d_revalidate_it(result, flags, it) &&
++		if (!result->d_op->d_revalidate_it(result, flags, NULL, it) &&
 +		    !d_invalidate(result)) {
 +			dput(result);
 +			if (counter > 10)
@@ -308,7 +308,7 @@ Index: linux-2.4.19.SuSE/fs/namei.c
  		dentry = nd->dentry;
 +		if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
 +			err = -ESTALE;
-+			if (!dentry->d_op->d_revalidate_it(dentry, 0, it)) {
++			if (!dentry->d_op->d_revalidate_it(dentry, 0, NULL, it)) {
 +				struct dentry *new;
 +				err = permission(dentry->d_parent->d_inode,
 +						 MAY_EXEC);
@@ -391,7 +391,7 @@ Index: linux-2.4.19.SuSE/fs/namei.c
  			goto out;
  		lock_kernel();
 +		if (inode->i_op->lookup_it)
-+			dentry = inode->i_op->lookup_it(inode, new, it, 0);
++			dentry = inode->i_op->lookup_it(inode, new, NULL, it, 0);
 +		else
  		dentry = inode->i_op->lookup(inode, new);
  		unlock_kernel();
@@ -592,7 +592,7 @@ Index: linux-2.4.19.SuSE/fs/namei.c
 +
  /* SMP-safe */
 -static struct dentry *lookup_create(struct nameidata *nd, int is_dir)
-+static struct dentry *lookup_create(struct nameidata *nd, int is_dir,
++struct dentry *lookup_create(struct nameidata *nd, int is_dir,
 +				    struct lookup_intent *it)
  {
  	struct dentry *dentry;
@@ -879,6 +879,15 @@ Index: linux-2.4.19.SuSE/fs/namespace.c
  	list_add(&mnt->mnt_hash, mount_hashtable+hash(nd->mnt, nd->dentry));
  	list_add(&mnt->mnt_child, &nd->mnt->mnt_mounts);
  	nd->dentry->d_mounted++;
+@@ -286,7 +293,7 @@
+ 	}
+ }
+ 
+-static int do_umount(struct vfsmount *mnt, int flags)
++int do_umount(struct vfsmount *mnt, int flags)
+ {
+ 	struct super_block * sb = mnt->mnt_sb;
+ 	int retval = 0;
 @@ -491,15 +493,18 @@
  {
  	struct nameidata old_nd;
@@ -1556,7 +1565,7 @@ Index: linux-2.4.19.SuSE/include/linux/dcache.h
 ===================================================================
 --- linux-2.4.19.SuSE.orig/include/linux/dcache.h	Mon Jan 27 05:13:15 2003
 +++ linux-2.4.19.SuSE/include/linux/dcache.h	Sat Nov 15 17:35:46 2003
-@@ -5,6 +5,51 @@
+@@ -5,6 +5,52 @@
  
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -1571,6 +1580,7 @@ Index: linux-2.4.19.SuSE/include/linux/dcache.h
 +#define IT_GETXATTR 0x0040
 +#define IT_EXEC     0x0080
 +#define IT_PIN      0x0100
++#define IT_CHDIR    0x0200
 +
 +#define IT_FL_LOCKED   0x0001
 +#define IT_FL_FOLLOWED 0x0002 /* set by vfs_follow_link */
@@ -1608,11 +1618,20 @@ Index: linux-2.4.19.SuSE/include/linux/dcache.h
  
  /*
   * linux/include/linux/dcache.h
+@@ -84,6 +130,8 @@
+ 	unsigned char d_iname[DNAME_INLINE_LEN]; /* small names */
+ };
+ 
++struct nameidata;
++
+ struct dentry_operations {
+ 	int (*d_revalidate)(struct dentry *, int);
+ 	int (*d_hash) (struct dentry *, struct qstr *);
 @@ -92,8 +137,22 @@
  	int (*d_delete)(struct dentry *);
  	void (*d_release)(struct dentry *);
  	void (*d_iput)(struct dentry *, struct inode *);
-+	int (*d_revalidate_it)(struct dentry *, int, struct lookup_intent *);
++	int (*d_revalidate_it)(struct dentry *, int, struct nameidata *, struct lookup_intent *);
 +	void (*d_pin)(struct dentry *, struct vfsmount * , int);
 +	void (*d_unpin)(struct dentry *, struct vfsmount *, int);
  };
@@ -1701,7 +1720,7 @@ Index: linux-2.4.19.SuSE/include/linux/fs.h
  	int (*create) (struct inode *,struct dentry *,int);
 +	int (*create_it) (struct inode *,struct dentry *,int, struct lookup_intent *);
  	struct dentry * (*lookup) (struct inode *,struct dentry *);
-+	struct dentry * (*lookup_it) (struct inode *,struct dentry *, struct lookup_intent *, int flags);
++	struct dentry * (*lookup_it) (struct inode *,struct dentry *, struct nameidata *, struct lookup_intent *, int flags);
  	int (*link) (struct dentry *,struct inode *,struct dentry *);
 +	int (*link_raw) (struct nameidata *,struct nameidata *);
  	int (*unlink) (struct inode *,struct dentry *);
@@ -1728,12 +1747,22 @@ Index: linux-2.4.19.SuSE/include/linux/fs.h
  	int (*getattr) (struct dentry *, struct iattr *);
  	int (*setxattr) (struct dentry *, const char *, const void *, size_t, int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
-@@ -1244,10 +1263,14 @@
+@@ -938,6 +957,7 @@
+ 	int (*remount_fs) (struct super_block *, int *, char *);
+ 	void (*clear_inode) (struct inode *);
+ 	void (*umount_begin) (struct super_block *);
++	void (*umount_lustre) (struct super_block *);
+ 
+ 	/* Following are for knfsd to interact with "interesting" filesystems
+ 	 * Currently just reiserfs, but possibly FAT and others later
+@@ -1244,10 +1263,16 @@
  
  asmlinkage long sys_open(const char *, int, int);
  asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
 -extern int do_truncate(struct dentry *, loff_t start);
 +extern int do_truncate(struct dentry *, loff_t start, int called_from_open);
++struct dentry *lookup_create(struct nameidata *nd, int is_dir,
++				    struct lookup_intent *it);
  
  extern struct file *filp_open(const char *, int, int);
  extern struct file * dentry_open(struct dentry *, struct vfsmount *, int);
@@ -1841,11 +1870,33 @@ Index: linux-2.4.19.SuSE/kernel/ksyms.c
 ===================================================================
 --- linux-2.4.19.SuSE.orig/kernel/ksyms.c	Sat Nov 15 17:24:46 2003
 +++ linux-2.4.19.SuSE/kernel/ksyms.c	Sat Nov 15 17:29:03 2003
-@@ -315,6 +315,7 @@
+@@ -315,6 +315,9 @@
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
  EXPORT_SYMBOL(vfs_follow_link);
 +EXPORT_SYMBOL(vfs_follow_link_it);
++EXPORT_SYMBOL(do_umount);
++EXPORT_SYMBOL(lookup_create);
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
+===== include/linux/mount.h 1.7 vs edited =====
+--- linux-2.4.19.SuSE.orig/include/linux/mount.h	Tue Feb  5 09:49:35 2002
++++ linux-2.4.19.SuSE/include/linux/mount.h	Tue May  4 19:23:48 2004
+@@ -29,6 +29,8 @@
+ 	int mnt_flags;
+ 	char *mnt_devname;		/* Name of device e.g. /dev/dsk/hda1 */
+ 	struct list_head mnt_list;
++	struct list_head mnt_lustre_list; /* GNS mount list */
++	unsigned long mnt_last_used;      /* for GNS auto-umount (jiffies) */
+ };
+ 
+ static inline struct vfsmount *mntget(struct vfsmount *mnt)
+@@ -39,6 +39,7 @@
+ }
+ 
+ extern void __mntput(struct vfsmount *mnt);
++extern int do_umount(struct vfsmount *mnt, int flags);
+ 
+ static inline void mntput(struct vfsmount *mnt)
+ {

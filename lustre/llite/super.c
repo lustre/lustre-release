@@ -60,6 +60,13 @@ static struct super_block *lustre_read_super(struct super_block *sb,
         RETURN(sb);
 }
 
+static void ll_umount_lustre(struct super_block *sb)
+{
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+
+        ll_gns_umount_all(sbi, 0);
+}
+
 static struct file_system_type lustre_lite_fs_type = {
         .owner          = THIS_MODULE,
         .name           = "lustre_lite",
@@ -76,6 +83,7 @@ struct super_operations lustre_super_operations =
         .put_super      = lustre_put_super,
         .statfs         = ll_statfs,
         .umount_begin   = ll_umount_begin,
+        .umount_lustre  = ll_umount_lustre,
         .fh_to_dentry   = ll_fh_to_dentry,
         .dentry_to_fh   = ll_dentry_to_fh
 };
@@ -89,7 +97,7 @@ static struct file_system_type lustre_fs_type = {
 
 static int __init init_lustre_lite(void)
 {
-        int rc;
+        int rc, cleanup = 0;
 
         printk(KERN_INFO "Lustre: Lustre Lite Client File System; "
                "info@clusterfs.com\n");
@@ -102,10 +110,29 @@ static int __init init_lustre_lite(void)
         proc_lustre_fs_root = proc_lustre_root ? proc_mkdir("llite", proc_lustre_root) : NULL;
 
         rc = register_filesystem(&lustre_lite_fs_type);
-        if (rc == 0)
-                rc = register_filesystem(&lustre_fs_type);
         if (rc)
+                goto out;
+        cleanup = 1;
+
+        rc = register_filesystem(&lustre_fs_type);
+        if (rc)
+                goto out;
+        cleanup = 2;
+
+        rc = ll_gns_start_thread();
+        if (rc)
+                goto out;
+        return 0;
+
+ out:
+        switch (cleanup) {
+        case 2:
+                unregister_filesystem(&lustre_fs_type);
+        case 1:
                 unregister_filesystem(&lustre_lite_fs_type);
+        case 0:
+                kmem_cache_destroy(ll_file_data_slab);
+        }
         return rc;
 }
 
@@ -113,6 +140,8 @@ static void __exit exit_lustre_lite(void)
 {
         unregister_filesystem(&lustre_lite_fs_type);
         unregister_filesystem(&lustre_fs_type);
+
+        ll_gns_stop_thread();
 
         kmem_cache_destroy(ll_file_data_slab);
 

@@ -119,8 +119,8 @@ diff -uprN linux/fs/namei.c linux-2.4.20/fs/namei.c
  	}
  	this.hash = end_name_hash(hash);
  
--	return lookup_hash_it(&this, base, NULL);
-+	return lookup_hash_it(&this, base, it);
+-	return lookup_hash_it(&this, base, NULL, NULL);
++	return lookup_hash_it(&this, base, NULL, it);
  access:
  	return ERR_PTR(-EACCES);
  }
@@ -158,7 +158,7 @@ diff -uprN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
 +static struct dentry *lookup_it(struct inode *inode, struct dentry * dentry)
 +{
 +	if (inode->i_op->lookup_it)
-+	    return inode->i_op->lookup_it(inode, dentry, NULL, 0);
++	    return inode->i_op->lookup_it(inode, dentry, NULL, NULL, 0);
 +	else
 +	    return inode->i_op->lookup(inode, dentry);
 +		
@@ -399,7 +399,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 +	int err = 0;
 +
 +	if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
-+		if (!dentry->d_op->d_revalidate_it(dentry, 0, it) &&
++		if (!dentry->d_op->d_revalidate_it(dentry, 0, NULL, it) &&
 +			!d_invalidate(dentry)) {
 +			dput(dentry);
 +			err = -EINVAL;
@@ -704,7 +704,7 @@ diff -uprN linux/include/linux/fs.h linux-2.4.20/include/linux/fs.h
  extern struct dentry * lookup_one_len(const char *, struct dentry *, int);
 +extern struct dentry * lookup_one_len_it(const char *, struct dentry *, int,
 +                                         struct lookup_intent *);
- extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
+ extern struct dentry * lookup_hash(struct qstr *, struct dentry *, struct nameidata *);
  #define user_path_walk(name,nd)	 __user_walk(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, nd)
  #define user_path_walk_link(name,nd) __user_walk(name, LOOKUP_POSITIVE, nd)
 @@ -1382,6 +1390,8 @@ extern ino_t iunique(struct super_block 

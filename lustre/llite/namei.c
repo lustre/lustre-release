@@ -330,6 +330,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
 
 static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
+                                   struct nameidata *nd,
                                    struct lookup_intent *it, int flags)
 {
         struct dentry *save = dentry, *retval;
@@ -351,6 +352,9 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (d_mountpoint(dentry))
                 CERROR("Tell Peter, lookup on mtpt, it %s\n", LL_IT2STR(it));
 
+        if (nd != NULL)
+                nd->mnt->mnt_last_used = jiffies;
+
         ll_frob_intent(&it, &lookup_it);
 
         icbd.icbd_childp = &dentry;
@@ -371,6 +375,11 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         }
 
         ll_lookup_finish_locks(it, dentry);
+
+        if (nd &&
+            dentry->d_inode != NULL && dentry->d_inode->i_mode & S_ISUID &&
+            (flags & LOOKUP_CONTINUE || (it->it_op & (IT_CHDIR | IT_OPEN))))
+                ll_dir_process_mount_object(dentry, nd->mnt);
 
         if (dentry == save)
                 GOTO(out, retval = NULL);
@@ -404,9 +413,9 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
         ENTRY;
 
         if (nd && nd->flags & LOOKUP_LAST && !(nd->flags & LOOKUP_LINK_NOTLAST))
-                de = ll_lookup_it(parent, dentry, &nd->intent, nd->flags);
+                de = ll_lookup_it(parent, dentry, nd, &nd->intent, nd->flags);
         else
-                de = ll_lookup_it(parent, dentry, NULL, 0);
+                de = ll_lookup_it(parent, dentry, nd, NULL, 0);
 
         RETURN(de);
 }

@@ -1044,8 +1044,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 
         lock = ldlm_handle2lock_ns(ns, &dlm_req->lock_handle1);
         if (!lock) {
-                CDEBUG(D_INODE, "callback on lock "LPX64" - lock disappeared\n",
-                       dlm_req->lock_handle1.cookie);
+                LDLM_DEBUG_NOLOCK("callback on lock "LPX64" - lock "
+                                  "disappeared\n",dlm_req->lock_handle1.cookie);
                 ldlm_callback_reply(req, -EINVAL);
                 RETURN(0);
         }

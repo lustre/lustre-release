@@ -72,6 +72,7 @@ int jt_obd_activate(int argc, char **argv);
 int jt_obd_deactivate(int argc, char **argv);
 int jt_obd_recover(int argc, char **argv);
 int jt_obd_mdc_lookup(int argc, char **argv);
+int jt_obd_finish_gns(int argc, char **argv);
 int jt_get_version(int argc, char **argv);
 int jt_obd_close_uuid(int argc, char **argv);
 int jt_cfg_record(int argc, char **argv);

@@ -59,6 +59,15 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         sbi->ll_max_read_ahead_pages = SBI_DEFAULT_RA_MAX;
         INIT_LIST_HEAD(&sbi->ll_conn_chain);
         INIT_HLIST_HEAD(&sbi->ll_orphan_dentry_list);
+        INIT_LIST_HEAD(&sbi->ll_mnt_list);
+        sema_init(&sbi->ll_gns_sem, 1);
+        init_completion(&sbi->ll_gns_completion);
+        sbi->ll_gns_state = LL_GNS_STATE_IDLE;
+        sbi->ll_gns_timer.data = (unsigned long)sbi;
+        sbi->ll_gns_timer.function = ll_gns_timer_callback;
+        init_timer(&sbi->ll_gns_timer);
+        INIT_LIST_HEAD(&sbi->ll_gns_sbi_head);
+
         ll_set_sbi(sb, sbi);
 
         generate_random_uuid(uuid);
@@ -71,8 +80,11 @@ void lustre_free_sbi(struct super_block *sb)
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         ENTRY;
 
-        if (sbi != NULL)
+        if (sbi != NULL) {
+                list_del(&sbi->ll_gns_sbi_head);
+                del_timer(&sbi->ll_gns_timer);
                 OBD_FREE(sbi, sizeof(*sbi));
+        }
         ll_set_sbi(sb, NULL);
         EXIT;
 }
@@ -218,6 +230,8 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
                 GOTO(out_root, err);
         }
 
+        ll_gns_add_timer(sbi);
+
         /* making vm readahead 0 for 2.4.x. In the case of 2.6.x,
            backing dev info assigned to inode mapping is used for
            determining maximal readahead. */
@@ -246,6 +260,8 @@ void lustre_common_put_super(struct super_block *sb)
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct hlist_node *tmp, *next;
         ENTRY;
+
+        ll_gns_del_timer(sbi);
 
         ll_close_thread_shutdown(sbi->ll_lcq);
 

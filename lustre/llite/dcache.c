@@ -219,7 +219,8 @@ void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
         it->it_op_release = ll_intent_release;
 }
 
-int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
+int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
+                     struct lookup_intent *it)
 {
         int rc;
         struct ll_fid pfid, cfid;
@@ -252,6 +253,9 @@ int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
          * Attributes will be fixed up in ll_inode_revalidate_it */
         if (d_mountpoint(de))
                 RETURN(1);
+
+        if (nd != NULL)
+                nd->mnt->mnt_last_used = jiffies;
 
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it);
@@ -311,22 +315,28 @@ int ll_revalidate_it(struct dentry *de, int flags, struct lookup_intent *it)
         __d_rehash(de, 0);
         spin_unlock(&dcache_lock);
 
+        GOTO(out, rc);
  out:
         if (req != NULL && rc == 1)
                 ptlrpc_req_finished(req);
         if (rc == 0) {
                 ll_unhash_aliases(de->d_inode);
-                /* done in ll_unhash_aliases()
-                de->d_flags |= DCACHE_LUSTRE_INVALID; */
-        } else {
-                CDEBUG(D_DENTRY, "revalidated dentry %*s (%p) parent %p "
-                               "inode %p refc %d\n", de->d_name.len,
-                               de->d_name.name, de, de->d_parent, de->d_inode,
-                               atomic_read(&de->d_count));
-                ll_lookup_finish_locks(it, de);
-                de->d_flags &= ~DCACHE_LUSTRE_INVALID;
+                return rc;
         }
-        RETURN(rc);
+
+        CDEBUG(D_DENTRY, "revalidated dentry %*s (%p) parent %p "
+               "inode %p refc %d\n", de->d_name.len,
+               de->d_name.name, de, de->d_parent, de->d_inode,
+               atomic_read(&de->d_count));
+        ll_lookup_finish_locks(it, de);
+        de->d_flags &= ~DCACHE_LUSTRE_INVALID;
+        if (!(de->d_inode->i_mode & S_ISUID) ||
+            !(flags & LOOKUP_CONTINUE || (it->it_op & (IT_CHDIR | IT_OPEN))))
+                return rc;
+
+        if (nd)
+                (void)ll_dir_process_mount_object(de, nd->mnt);
+        return rc;
 }
 
 /*static*/ void ll_pin(struct dentry *de, struct vfsmount *mnt, int flag)
@@ -420,9 +430,9 @@ static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
         ENTRY;
 
         if (nd && nd->flags & LOOKUP_LAST && !(nd->flags & LOOKUP_LINK_NOTLAST))
-                rc = ll_revalidate_it(dentry, nd->flags, &nd->intent);
+                rc = ll_revalidate_it(dentry, nd->flags, nd, &nd->intent);
         else
-                rc = ll_revalidate_it(dentry, 0, NULL);
+                rc = ll_revalidate_it(dentry, 0, nd, NULL);
 
         RETURN(rc);
 }

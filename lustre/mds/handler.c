@@ -2391,6 +2391,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                 break;
         case IT_LOOKUP:
                 getattr_part = MDS_INODELOCK_LOOKUP;
+        case IT_CHDIR:
         case IT_GETATTR:
                 getattr_part |= MDS_INODELOCK_LOOKUP;
         case IT_READDIR:
