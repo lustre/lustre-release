@@ -40,3 +40,5 @@ liblustre.a : $(LUSTRE_LIBS) $(PTL_LIBS) $(SYSIO_LIBS)
 	$(srcdir)/genlib.sh $(SYSIO) $(CRAY_PORTALS_PATH)
 
 EXTRA_DIST = genlib.sh
+
+CLEANFILES := liblsupport.a liblustre.so
