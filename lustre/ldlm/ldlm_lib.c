@@ -502,16 +502,16 @@ void target_start_recovery_timer(struct obd_device *obd, svc_handler_t handler)
 static int check_for_next_transno(struct obd_device *obd)
 {
         struct ptlrpc_request *req;
-        int wake_up = 0, connected, completed, queue_len;
+        int wake_up = 0, connected, completed, queue_len, max;
         __u64 next_transno, req_transno;
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         req = list_entry(obd->obd_recovery_queue.next,
                          struct ptlrpc_request, rq_list);
+        max = obd->obd_max_recoverable_clients;
         req_transno = req->rq_reqmsg->transno;
         connected = obd->obd_connected_clients;
-        completed = obd->obd_max_recoverable_clients - 
-                obd->obd_recoverable_clients;
+        completed = max - obd->obd_recoverable_clients;
         queue_len = obd->obd_requests_queued_for_recovery;
         next_transno = obd->obd_next_recovery_transno;
 
@@ -524,12 +524,11 @@ static int check_for_next_transno(struct obd_device *obd)
         } else if (req_transno == next_transno) {
                 CDEBUG(D_HA, "waking for next ("LPD64")\n", next_transno);
                 wake_up = 1;
-        } else if (queue_len + completed == connected) {
-                CDEBUG(D_HA,
+        } else if (queue_len + completed == max) {
+                CDEBUG(D_ERROR,
                        "waking for skipped transno (skip: "LPD64
                        ", ql: %d, comp: %d, conn: %d, next: "LPD64")\n",
-                       next_transno, queue_len, completed, connected,
-                       req_transno);
+                       next_transno, queue_len, completed, max, req_transno);
                 obd->obd_next_recovery_transno = req_transno;
                 wake_up = 1;
         }
