@@ -246,6 +246,7 @@ _
 
 _
  fs/dcache.c            |   20 ++
+ fs/exec.c              |   16 +-
  fs/namei.c             |  350 +++++++++++++++++++++++++++++++++++++++++--------
  fs/nfsd/vfs.c          |    2 
  fs/open.c              |  126 +++++++++++++++--
@@ -253,10 +254,10 @@ _
  include/linux/dcache.h |   28 +++
  include/linux/fs.h     |   31 ++++
  kernel/ksyms.c         |    1 
- 8 files changed, 495 insertions(+), 87 deletions(-)
+ 9 files changed, 504 insertions(+), 94 deletions(-)
 
---- linux-2.4.20-hp4_pnnl1/fs/dcache.c~vfs_intent_hp	Wed Apr  2 01:35:57 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/dcache.c	Wed Apr  2 01:35:57 2003
+--- linux/fs/dcache.c~vfs_intent_hp	2002-11-29 07:53:15.000000000 +0800
++++ linux-root/fs/dcache.c	2003-04-23 18:42:28.000000000 +0800
 @@ -181,6 +181,13 @@ int d_invalidate(struct dentry * dentry)
  		spin_unlock(&dcache_lock);
  		return 0;
@@ -302,8 +303,8 @@ _
  }
  
  #define do_switch(x,y) do { \
---- linux-2.4.20-hp4_pnnl1/fs/namei.c~vfs_intent_hp	Wed Apr  2 01:35:57 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/namei.c	Wed Apr  2 02:04:59 2003
+--- linux/fs/namei.c~vfs_intent_hp	2003-04-11 14:24:34.000000000 +0800
++++ linux-root/fs/namei.c	2003-04-23 18:42:28.000000000 +0800
 @@ -94,6 +94,13 @@
   * XEmacs seems to be relying on it...
   */
@@ -1100,8 +1101,8 @@ _
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
---- linux-2.4.20-hp4_pnnl1/fs/nfsd/vfs.c~vfs_intent_hp	Wed Apr  2 01:35:57 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/nfsd/vfs.c	Wed Apr  2 01:35:57 2003
+--- linux/fs/nfsd/vfs.c~vfs_intent_hp	2002-11-29 07:53:15.000000000 +0800
++++ linux-root/fs/nfsd/vfs.c	2003-04-23 18:42:28.000000000 +0800
 @@ -1291,7 +1291,7 @@ nfsd_rename(struct svc_rqst *rqstp, stru
  			err = nfserr_perm;
  	} else
@@ -1111,8 +1112,8 @@ _
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
---- linux-2.4.20-hp4_pnnl1/fs/open.c~vfs_intent_hp	Wed Apr  2 01:35:57 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/open.c	Wed Apr  2 01:35:57 2003
+--- linux/fs/open.c~vfs_intent_hp	2002-11-29 07:53:15.000000000 +0800
++++ linux-root/fs/open.c	2003-04-23 18:42:28.000000000 +0800
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1437,8 +1438,8 @@ _
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- linux-2.4.20-hp4_pnnl1/fs/stat.c~vfs_intent_hp	Wed Apr  2 01:35:57 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/stat.c	Wed Apr  2 01:35:57 2003
+--- linux/fs/stat.c~vfs_intent_hp	2001-09-14 07:04:43.000000000 +0800
++++ linux-root/fs/stat.c	2003-04-23 18:42:28.000000000 +0800
 @@ -135,13 +135,15 @@ static int cp_new_stat(struct inode * in
  asmlinkage long sys_stat(char * filename, struct __old_kernel_stat * statbuf)
  {
@@ -1539,8 +1540,8 @@ _
  		path_release(&nd);
  	}
  	return error;
---- linux-2.4.20-hp4_pnnl1/include/linux/dcache.h~vfs_intent_hp	Wed Apr  2 01:35:57 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/include/linux/dcache.h	Wed Apr  2 01:35:57 2003
+--- linux/include/linux/dcache.h~vfs_intent_hp	2002-11-29 07:53:15.000000000 +0800
++++ linux-root/include/linux/dcache.h	2003-04-23 18:42:28.000000000 +0800
 @@ -7,6 +7,25 @@
  #include <linux/mount.h>
  #include <linux/kernel.h>
@@ -1599,8 +1600,8 @@ _
  
  extern spinlock_t dcache_lock;
  
---- linux-2.4.20-hp4_pnnl1/include/linux/fs.h~vfs_intent_hp	Wed Apr  2 01:35:57 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/include/linux/fs.h	Wed Apr  2 02:05:25 2003
+--- linux/include/linux/fs.h~vfs_intent_hp	2003-04-15 13:30:17.000000000 +0800
++++ linux-root/include/linux/fs.h	2003-04-23 18:42:28.000000000 +0800
 @@ -340,6 +340,8 @@ extern void set_bh_page(struct buffer_he
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
@@ -1705,8 +1706,8 @@ _
  extern int page_readlink(struct dentry *, char *, int);
  extern int page_follow_link(struct dentry *, struct nameidata *);
  extern struct inode_operations page_symlink_inode_operations;
---- linux-2.4.20-hp4_pnnl1/kernel/ksyms.c~vfs_intent_hp	Wed Apr  2 01:35:57 2003
-+++ linux-2.4.20-hp4_pnnl1-braam/kernel/ksyms.c	Wed Apr  2 01:35:57 2003
+--- linux/kernel/ksyms.c~vfs_intent_hp	2003-04-15 13:30:18.000000000 +0800
++++ linux-root/kernel/ksyms.c	2003-04-23 18:42:28.000000000 +0800
 @@ -293,6 +293,7 @@ EXPORT_SYMBOL(read_cache_page);
  EXPORT_SYMBOL(set_page_dirty);
  EXPORT_SYMBOL(vfs_readlink);
@@ -1715,19 +1716,73 @@ _
  EXPORT_SYMBOL(page_readlink);
  EXPORT_SYMBOL(page_follow_link);
  EXPORT_SYMBOL(page_symlink_inode_operations);
+--- linux/fs/exec.c~vfs_intent_hp	2003-04-11 14:24:38.000000000 +0800
++++ linux-root/fs/exec.c	2003-04-23 18:46:41.000000000 +0800
+@@ -116,8 +116,9 @@ asmlinkage long sys_uselib(const char * 
+ 	struct file * file;
+ 	struct nameidata nd;
+ 	int error;
+-
+-	error = user_path_walk(library, &nd);
++        struct lookup_intent it = { .it_op = IT_OPEN, .it_flags = O_RDONLY };
++                                                                                                                                             
++        error = user_path_walk_it(library, &nd, &it);
+ 	if (error)
+ 		goto out;
+ 
+@@ -129,7 +130,7 @@ asmlinkage long sys_uselib(const char * 
+ 	if (error)
+ 		goto exit;
+ 
+-	file = dentry_open(nd.dentry, nd.mnt, O_RDONLY);
++	file = dentry_open_it(nd.dentry, nd.mnt, O_RDONLY, &it);
+ 	error = PTR_ERR(file);
+ 	if (IS_ERR(file))
+ 		goto out;
+@@ -372,8 +373,9 @@ struct file *open_exec(const char *name)
+ 	struct inode *inode;
+ 	struct file *file;
+ 	int err = 0;
+-
+-	err = path_lookup(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd);
++        struct lookup_intent it = { .it_op = IT_OPEN, .it_flags = O_RDONLY };
++                                                                                                                                             
++        err = path_lookup_it(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd, &it);
+ 	file = ERR_PTR(err);
+ 	if (!err) {
+ 		inode = nd.dentry->d_inode;
+@@ -385,7 +387,7 @@ struct file *open_exec(const char *name)
+ 				err = -EACCES;
+ 			file = ERR_PTR(err);
+ 			if (!err) {
+-				file = dentry_open(nd.dentry, nd.mnt, O_RDONLY);
++                                file = dentry_open_it(nd.dentry, nd.mnt, O_RDONLY, &it);
+ 				if (!IS_ERR(file)) {
+ 					err = deny_write_access(file);
+ 					if (err) {
+@@ -1128,7 +1130,7 @@ int do_coredump(long signr, struct pt_re
+ 		goto close_fail;
+ 	if (!file->f_op->write)
+ 		goto close_fail;
+-	if (do_truncate(file->f_dentry, 0) != 0)
++	if (do_truncate(file->f_dentry, 0, 0) != 0)
+ 		goto close_fail;
+ 
+ 	retval = binfmt->core_dump(signr, regs, file);
 
 _
 
 
 
  fs/inode.c         |   21 ++++++++++++++-------
+ fs/smbfs/inode.c   |    2 +-
  fs/super.c         |    4 ++--
  include/linux/fs.h |    2 +-
- 3 files changed, 17 insertions(+), 10 deletions(-)
+ 4 files changed, 18 insertions(+), 11 deletions(-)
 
---- linux-2.4.20/fs/inode.c~invalidate_show	2003-04-08 23:34:36.000000000 -0600
-+++ linux-2.4.20-braam/fs/inode.c	2003-04-08 23:34:36.000000000 -0600
-@@ -553,7 +553,8 @@ static void dispose_list(struct list_hea
+--- linux-rh-2.4.20-8/fs/inode.c~invalidate_show	2003-04-11 14:04:56.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/inode.c	2003-04-16 20:59:35.000000000 +0800
+@@ -604,7 +604,8 @@ static void dispose_list(struct list_hea
  /*
   * Invalidate all inodes for a device.
   */
@@ -1737,7 +1792,7 @@ _
  {
  	struct list_head *next;
  	int busy = 0, count = 0;
-@@ -578,6 +579,11 @@ static int invalidate_list(struct list_h
+@@ -629,6 +630,11 @@ static int invalidate_list(struct list_h
  			count++;
  			continue;
  		}
@@ -1749,7 +1804,7 @@ _
  		busy = 1;
  	}
  	/* only unused inodes may be cached with i_count zero */
-@@ -596,22 +602,23 @@ static int invalidate_list(struct list_h
+@@ -647,22 +653,23 @@ static int invalidate_list(struct list_h
  /**
   *	invalidate_inodes	- discard the inodes on a device
   *	@sb: superblock
@@ -1778,7 +1833,7 @@ _
  	spin_unlock(&inode_lock);
  
  	dispose_list(&throw_away);
-@@ -637,7 +644,7 @@ int invalidate_device(kdev_t dev, int do
+@@ -688,7 +695,7 @@ int invalidate_device(kdev_t dev, int do
  		 * hold).
  		 */
  		shrink_dcache_sb(sb);
@@ -1787,9 +1842,9 @@ _
  		drop_super(sb);
  	}
  	invalidate_buffers(dev);
---- linux-2.4.20/fs/super.c~invalidate_show	2003-04-08 23:34:36.000000000 -0600
-+++ linux-2.4.20-braam/fs/super.c	2003-04-08 23:34:36.000000000 -0600
-@@ -835,7 +835,7 @@ void kill_super(struct super_block *sb)
+--- linux-rh-2.4.20-8/fs/super.c~invalidate_show	2003-04-11 14:04:57.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/super.c	2003-04-16 20:59:35.000000000 +0800
+@@ -943,7 +943,7 @@ void kill_super(struct super_block *sb)
  	lock_super(sb);
  	lock_kernel();
  	sb->s_flags &= ~MS_ACTIVE;
@@ -1798,7 +1853,7 @@ _
  	if (sop) {
  		if (sop->write_super && sb->s_dirt)
  			sop->write_super(sb);
-@@ -844,7 +844,7 @@ void kill_super(struct super_block *sb)
+@@ -952,7 +952,7 @@ void kill_super(struct super_block *sb)
  	}
  
  	/* Forget any remaining inodes */
@@ -1807,9 +1862,9 @@ _
  		printk(KERN_ERR "VFS: Busy inodes after unmount. "
  			"Self-destruct in 5 seconds.  Have a nice day...\n");
  	}
---- linux-2.4.20/include/linux/fs.h~invalidate_show	2003-04-08 23:34:36.000000000 -0600
-+++ linux-2.4.20-braam/include/linux/fs.h	2003-04-08 23:34:36.000000000 -0600
-@@ -1237,7 +1237,7 @@ static inline void mark_buffer_dirty_ino
+--- linux-rh-2.4.20-8/include/linux/fs.h~invalidate_show	2003-04-16 20:55:35.000000000 +0800
++++ linux-rh-2.4.20-8-root/include/linux/fs.h	2003-04-16 20:59:35.000000000 +0800
+@@ -1283,7 +1283,7 @@ static inline void mark_buffer_dirty_ino
  extern void set_buffer_flushtime(struct buffer_head *);
  extern void balance_dirty(void);
  extern int check_disk_change(kdev_t);
@@ -1818,6 +1873,17 @@ _
  extern int invalidate_device(kdev_t, int);
  extern void invalidate_inode_pages(struct inode *);
  extern void invalidate_inode_pages2(struct address_space *);
+--- linux-rh-2.4.20-8/fs/smbfs/inode.c~invalidate_show	2003-04-16 20:59:48.000000000 +0800
++++ linux-rh-2.4.20-8-root/fs/smbfs/inode.c	2003-04-16 21:00:43.000000000 +0800
+@@ -167,7 +167,7 @@ smb_invalidate_inodes(struct smb_sb_info
+ {
+ 	VERBOSE("\n");
+ 	shrink_dcache_sb(SB_of(server));
+-	invalidate_inodes(SB_of(server));
++	invalidate_inodes(SB_of(server), 0);
+ }
+ 
+ /*
 
 _
  include/linux/mm.h |    1 +
@@ -4671,8 +4737,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  mm/vmscan.c                   |   35 +
  61 files changed, 4336 insertions(+), 177 deletions(-)
 
---- linux-2.4.20-hp4_pnnl1/Documentation/Configure.help~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/Documentation/Configure.help	2003-04-09 17:20:57.000000000 -0600
+--- linux/Documentation/Configure.help~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:16 2003
++++ linux-mmonroe/Documentation/Configure.help	Fri Apr 25 11:45:15 2003
 @@ -15309,6 +15309,39 @@ CONFIG_EXT2_FS
    be compiled as a module, and so this could be dangerous.  Most
    everyone wants to say Y here.
@@ -4753,8 +4819,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  Journal Block Device support (JBD for ext3) (EXPERIMENTAL)
  CONFIG_JBD
    This is a generic journalling layer for block devices.  It is
---- linux-2.4.20-hp4_pnnl1/arch/alpha/defconfig~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/alpha/defconfig	2003-04-09 17:20:57.000000000 -0600
+--- linux/arch/alpha/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:58 2003
++++ linux-mmonroe/arch/alpha/defconfig	Fri Apr 25 11:45:15 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -4769,8 +4835,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  CONFIG_ALPHA=y
  # CONFIG_UID16 is not set
  # CONFIG_RWSEM_GENERIC_SPINLOCK is not set
---- linux-2.4.20-hp4_pnnl1/arch/alpha/kernel/entry.S~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/alpha/kernel/entry.S	2003-04-09 17:20:57.000000000 -0600
+--- linux/arch/alpha/kernel/entry.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:59 2003
++++ linux-mmonroe/arch/alpha/kernel/entry.S	Fri Apr 25 11:45:15 2003
 @@ -1154,6 +1154,18 @@ sys_call_table:
  	.quad sys_readahead
  	.quad sys_ni_syscall			/* 380, sys_security */
@@ -4790,8 +4856,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  /* Remember to update everything, kids.  */
  .ifne (. - sys_call_table) - (NR_SYSCALLS * 8)
---- linux-2.4.20-hp4_pnnl1/arch/arm/defconfig~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/arm/defconfig	2003-04-09 17:20:57.000000000 -0600
+--- linux/arch/arm/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:09 2003
++++ linux-mmonroe/arch/arm/defconfig	Fri Apr 25 11:45:15 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -4806,8 +4872,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  CONFIG_ARM=y
  # CONFIG_EISA is not set
  # CONFIG_SBUS is not set
---- linux-2.4.20-hp4_pnnl1/arch/arm/kernel/calls.S~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/arm/kernel/calls.S	2003-04-09 17:20:57.000000000 -0600
+--- linux/arch/arm/kernel/calls.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:09 2003
++++ linux-mmonroe/arch/arm/kernel/calls.S	Fri Apr 25 11:45:15 2003
 @@ -240,18 +240,18 @@ __syscall_start:
  		.long	SYMBOL_NAME(sys_ni_syscall) /* Security */
  		.long	SYMBOL_NAME(sys_gettid)
@@ -4839,8 +4905,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  		.long	SYMBOL_NAME(sys_tkill)
  		/*
  		 * Please check 2.5 _before_ adding calls here,
---- linux-2.4.20-hp4_pnnl1/arch/i386/defconfig~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/i386/defconfig	2003-04-09 17:20:57.000000000 -0600
+--- linux/arch/i386/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:57 2003
++++ linux-mmonroe/arch/i386/defconfig	Fri Apr 25 11:45:15 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -4855,8 +4921,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  CONFIG_X86=y
  CONFIG_ISA=y
  # CONFIG_SBUS is not set
---- linux-2.4.20-hp4_pnnl1/arch/ia64/defconfig~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/ia64/defconfig	2003-04-09 17:20:57.000000000 -0600
+--- linux/arch/ia64/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:12 2003
++++ linux-mmonroe/arch/ia64/defconfig	Fri Apr 25 11:45:15 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -4871,8 +4937,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  #
  # Code maturity level options
---- linux-2.4.20-hp4_pnnl1/arch/m68k/defconfig~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/m68k/defconfig	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/m68k/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:06 2003
++++ linux-mmonroe/arch/m68k/defconfig	Fri Apr 25 11:45:15 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -4887,8 +4953,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  CONFIG_UID16=y
  
  #
---- linux-2.4.20-hp4_pnnl1/arch/mips/defconfig~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/mips/defconfig	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/mips/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:01 2003
++++ linux-mmonroe/arch/mips/defconfig	Fri Apr 25 11:45:15 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -4903,8 +4969,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  CONFIG_MIPS=y
  CONFIG_MIPS32=y
  # CONFIG_MIPS64 is not set
---- linux-2.4.20-hp4_pnnl1/arch/mips64/defconfig~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/mips64/defconfig	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/mips64/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:13 2003
++++ linux-mmonroe/arch/mips64/defconfig	Fri Apr 25 11:45:15 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -4919,8 +4985,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  CONFIG_MIPS=y
  # CONFIG_MIPS32 is not set
  CONFIG_MIPS64=y
---- linux-2.4.20-hp4_pnnl1/arch/ppc/defconfig~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/ppc/defconfig	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/ppc/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:05 2003
++++ linux-mmonroe/arch/ppc/defconfig	Fri Apr 25 11:45:15 2003
 @@ -1,6 +1,20 @@
  #
  # Automatically generated make config: don't edit
@@ -4942,8 +5008,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  # CONFIG_UID16 is not set
  # CONFIG_RWSEM_GENERIC_SPINLOCK is not set
  CONFIG_RWSEM_XCHGADD_ALGORITHM=y
---- linux-2.4.20-hp4_pnnl1/arch/ppc64/kernel/misc.S~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/ppc64/kernel/misc.S	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/ppc64/kernel/misc.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:57 2003
++++ linux-mmonroe/arch/ppc64/kernel/misc.S	Fri Apr 25 11:45:15 2003
 @@ -731,6 +731,7 @@ _GLOBAL(sys_call_table32)
  	.llong .sys_gettid		/* 207 */
  #if 0 /* Reserved syscalls */
@@ -4960,8 +5026,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	.llong .sys_futex
  #endif
  	.llong .sys_perfmonctl   /* Put this here for now ... */
---- linux-2.4.20-hp4_pnnl1/arch/s390/defconfig~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/s390/defconfig	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/s390/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:14 2003
++++ linux-mmonroe/arch/s390/defconfig	Fri Apr 25 11:45:15 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -4976,8 +5042,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  # CONFIG_ISA is not set
  # CONFIG_EISA is not set
  # CONFIG_MCA is not set
---- linux-2.4.20-hp4_pnnl1/arch/s390/kernel/entry.S~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/s390/kernel/entry.S	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/s390/kernel/entry.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:14 2003
++++ linux-mmonroe/arch/s390/kernel/entry.S	Fri Apr 25 11:45:15 2003
 @@ -558,18 +558,18 @@ sys_call_table:
          .long  sys_fcntl64 
  	.long  sys_ni_syscall
@@ -5009,8 +5075,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	.long  sys_gettid
  	.long  sys_tkill
  	.rept  255-237
---- linux-2.4.20-hp4_pnnl1/arch/s390x/defconfig~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/s390x/defconfig	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/s390x/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:16 2003
++++ linux-mmonroe/arch/s390x/defconfig	Fri Apr 25 11:45:15 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -5025,8 +5091,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  # CONFIG_ISA is not set
  # CONFIG_EISA is not set
  # CONFIG_MCA is not set
---- linux-2.4.20-hp4_pnnl1/arch/s390x/kernel/entry.S~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/s390x/kernel/entry.S	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/s390x/kernel/entry.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:16 2003
++++ linux-mmonroe/arch/s390x/kernel/entry.S	Fri Apr 25 11:45:15 2003
 @@ -591,18 +591,18 @@ sys_call_table:
  	.long  SYSCALL(sys_ni_syscall,sys32_fcntl64_wrapper)
  	.long  SYSCALL(sys_ni_syscall,sys_ni_syscall)
@@ -5058,8 +5124,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	.long  SYSCALL(sys_gettid,sys_gettid)
  	.long  SYSCALL(sys_tkill,sys_tkill)
  	.rept  255-237
---- linux-2.4.20-hp4_pnnl1/arch/s390x/kernel/wrapper32.S~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/s390x/kernel/wrapper32.S	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/s390x/kernel/wrapper32.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:16 2003
++++ linux-mmonroe/arch/s390x/kernel/wrapper32.S	Fri Apr 25 11:45:15 2003
 @@ -1091,3 +1091,95 @@ sys32_fstat64_wrapper:
  	llgtr	%r3,%r3			# struct stat64 *
  	llgfr	%r4,%r4			# long
@@ -5156,8 +5222,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +	jg	sys_fremovexattr
 +
 +
---- linux-2.4.20-hp4_pnnl1/arch/sparc/defconfig~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/sparc/defconfig	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/sparc/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:59 2003
++++ linux-mmonroe/arch/sparc/defconfig	Fri Apr 25 11:45:15 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -5172,8 +5238,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  CONFIG_UID16=y
  CONFIG_HIGHMEM=y
  
---- linux-2.4.20-hp4_pnnl1/arch/sparc/kernel/systbls.S~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/sparc/kernel/systbls.S	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/sparc/kernel/systbls.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:59 2003
++++ linux-mmonroe/arch/sparc/kernel/systbls.S	Fri Apr 25 11:45:15 2003
 @@ -51,11 +51,11 @@ sys_call_table:
  /*150*/	.long sys_nis_syscall, sys_nis_syscall, sys_nis_syscall, sys_poll, sys_getdents64
  /*155*/	.long sys_fcntl64, sys_nis_syscall, sys_statfs, sys_fstatfs, sys_oldumount
@@ -5191,8 +5257,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  /*190*/	.long sys_init_module, sys_personality, sys_nis_syscall, sys_nis_syscall, sys_nis_syscall
  /*195*/	.long sys_nis_syscall, sys_nis_syscall, sys_getppid, sparc_sigaction, sys_sgetmask
  /*200*/	.long sys_ssetmask, sys_sigsuspend, sys_newlstat, sys_uselib, old_readdir
---- linux-2.4.20-hp4_pnnl1/arch/sparc64/defconfig~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/sparc64/defconfig	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/sparc64/defconfig~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:08 2003
++++ linux-mmonroe/arch/sparc64/defconfig	Fri Apr 25 11:45:15 2003
 @@ -1,6 +1,13 @@
  #
  # Automatically generated make config: don't edit
@@ -5207,8 +5273,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  #
  # Code maturity level options
---- linux-2.4.20-hp4_pnnl1/arch/sparc64/kernel/systbls.S~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/arch/sparc64/kernel/systbls.S	2003-04-09 17:21:01.000000000 -0600
+--- linux/arch/sparc64/kernel/systbls.S~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:56:08 2003
++++ linux-mmonroe/arch/sparc64/kernel/systbls.S	Fri Apr 25 11:45:15 2003
 @@ -52,11 +52,11 @@ sys_call_table32:
  /*150*/	.word sys_nis_syscall, sys_nis_syscall, sys_nis_syscall, sys_poll, sys_getdents64
  	.word sys32_fcntl64, sys_nis_syscall, sys32_statfs, sys32_fstatfs, sys_oldumount
@@ -5243,8 +5309,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  /*190*/	.word sys_init_module, sparc64_personality, sys_nis_syscall, sys_nis_syscall, sys_nis_syscall
  	.word sys_nis_syscall, sys_nis_syscall, sys_getppid, sys_nis_syscall, sys_sgetmask
  /*200*/	.word sys_ssetmask, sys_nis_syscall, sys_newlstat, sys_uselib, sys_nis_syscall
---- linux-2.4.20-hp4_pnnl1/fs/Config.in~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/Config.in	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/Config.in~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
++++ linux-mmonroe/fs/Config.in	Fri Apr 25 11:45:15 2003
 @@ -35,6 +35,11 @@ dep_mbool '  Debug Befs' CONFIG_BEFS_DEB
  dep_tristate 'BFS file system support (EXPERIMENTAL)' CONFIG_BFS_FS $CONFIG_EXPERIMENTAL
  
@@ -5280,8 +5346,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  mainmenu_option next_comment
  comment 'Partition Types'
  source fs/partitions/Config.in
---- linux-2.4.20-hp4_pnnl1/fs/Makefile~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/Makefile	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/Makefile~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
++++ linux-mmonroe/fs/Makefile	Fri Apr 25 11:45:15 2003
 @@ -80,6 +80,9 @@ obj-y				+= binfmt_script.o
  
  obj-$(CONFIG_BINFMT_ELF)	+= binfmt_elf.o
@@ -5292,8 +5358,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  # persistent filesystems
  obj-y += $(join $(subdir-y),$(subdir-y:%=/%.o))
  
---- linux-2.4.20-hp4_pnnl1/fs/ext2/Makefile~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext2/Makefile	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext2/Makefile~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
++++ linux-mmonroe/fs/ext2/Makefile	Fri Apr 25 11:45:15 2003
 @@ -13,4 +13,8 @@ obj-y    := balloc.o bitmap.o dir.o file
  		ioctl.o namei.o super.o symlink.o
  obj-m    := $(O_TARGET)
@@ -5303,8 +5369,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +obj-$(CONFIG_EXT2_FS_XATTR_USER) += xattr_user.o
 +
  include $(TOPDIR)/Rules.make
---- linux-2.4.20-hp4_pnnl1/fs/ext2/file.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext2/file.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext2/file.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
++++ linux-mmonroe/fs/ext2/file.c	Fri Apr 25 11:45:15 2003
 @@ -20,6 +20,7 @@
  
  #include <linux/fs.h>
@@ -5322,8 +5388,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +	listxattr:	ext2_listxattr,
 +	removexattr:	ext2_removexattr,
  };
---- linux-2.4.20-hp4_pnnl1/fs/ext2/ialloc.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext2/ialloc.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext2/ialloc.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
++++ linux-mmonroe/fs/ext2/ialloc.c	Fri Apr 25 11:45:15 2003
 @@ -15,6 +15,7 @@
  #include <linux/config.h>
  #include <linux/fs.h>
@@ -5340,8 +5406,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	    	DQUOT_FREE_INODE(inode);
  		DQUOT_DROP(inode);
  	}
---- linux-2.4.20-hp4_pnnl1/fs/ext2/inode.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext2/inode.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext2/inode.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
++++ linux-mmonroe/fs/ext2/inode.c	Fri Apr 25 11:45:15 2003
 @@ -39,6 +39,18 @@ MODULE_LICENSE("GPL");
  static int ext2_update_inode(struct inode * inode, int do_sync);
  
@@ -5424,8 +5490,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	brelse (bh);
  	inode->i_attr_flags = 0;
  	if (inode->u.ext2_i.i_flags & EXT2_SYNC_FL) {
---- linux-2.4.20-hp4_pnnl1/fs/ext2/namei.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext2/namei.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext2/namei.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
++++ linux-mmonroe/fs/ext2/namei.c	Fri Apr 25 11:45:15 2003
 @@ -31,6 +31,7 @@
  
  #include <linux/fs.h>
@@ -5459,8 +5525,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +	listxattr:	ext2_listxattr,
 +	removexattr:	ext2_removexattr,
  };
---- linux-2.4.20-hp4_pnnl1/fs/ext2/super.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext2/super.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext2/super.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
++++ linux-mmonroe/fs/ext2/super.c	Fri Apr 25 11:45:15 2003
 @@ -21,6 +21,7 @@
  #include <linux/string.h>
  #include <linux/fs.h>
@@ -5530,8 +5596,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  }
  
  EXPORT_NO_SYMBOLS;
---- linux-2.4.20-hp4_pnnl1/fs/ext2/symlink.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext2/symlink.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext2/symlink.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:52 2003
++++ linux-mmonroe/fs/ext2/symlink.c	Fri Apr 25 11:45:15 2003
 @@ -19,6 +19,7 @@
  
  #include <linux/fs.h>
@@ -5561,8 +5627,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +	listxattr:	ext2_listxattr,
 +	removexattr:	ext2_removexattr,
  };
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext2/xattr.c	2003-04-09 17:21:01.000000000 -0600
+--- /dev/null	Mon May 20 21:11:23 2002
++++ linux-mmonroe/fs/ext2/xattr.c	Fri Apr 25 11:45:15 2003
 @@ -0,0 +1,1212 @@
 +/*
 + * linux/fs/ext2/xattr.c
@@ -6776,8 +6842,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +}
 +
 +#endif  /* CONFIG_EXT2_FS_XATTR_SHARING */
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext2/xattr_user.c	2003-04-09 17:21:01.000000000 -0600
+--- /dev/null	Mon May 20 21:11:23 2002
++++ linux-mmonroe/fs/ext2/xattr_user.c	Fri Apr 25 11:45:15 2003
 @@ -0,0 +1,103 @@
 +/*
 + * linux/fs/ext2/xattr_user.c
@@ -6882,8 +6948,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +	ext2_xattr_unregister(EXT2_XATTR_INDEX_USER,
 +			      &ext2_xattr_user_handler);
 +}
---- linux-2.4.20-hp4_pnnl1/fs/ext3/Makefile~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext3/Makefile	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext3/Makefile~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
++++ linux-mmonroe/fs/ext3/Makefile	Fri Apr 25 11:45:15 2003
 @@ -1,5 +1,5 @@
  #
 -# Makefile for the linux ext2-filesystem routines.
@@ -6900,8 +6966,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +obj-$(CONFIG_EXT3_FS_XATTR_USER) += xattr_user.o
 +
  include $(TOPDIR)/Rules.make
---- linux-2.4.20-hp4_pnnl1/fs/ext3/file.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext3/file.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext3/file.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
++++ linux-mmonroe/fs/ext3/file.c	Fri Apr 25 11:45:15 2003
 @@ -23,6 +23,7 @@
  #include <linux/locks.h>
  #include <linux/jbd.h>
@@ -6920,8 +6986,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +	removexattr:	ext3_removexattr,	/* BKL held */
  };
  
---- linux-2.4.20-hp4_pnnl1/fs/ext3/ialloc.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext3/ialloc.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext3/ialloc.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
++++ linux-mmonroe/fs/ext3/ialloc.c	Fri Apr 25 11:45:15 2003
 @@ -17,6 +17,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -6938,8 +7004,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	DQUOT_FREE_INODE(inode);
  	DQUOT_DROP(inode);
  
---- linux-2.4.20-hp4_pnnl1/fs/ext3/inode.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:23.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext3/inode.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext3/inode.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
++++ linux-mmonroe/fs/ext3/inode.c	Fri Apr 25 11:45:15 2003
 @@ -39,6 +39,18 @@
   */
  #undef SEARCH_FROM_ZERO
@@ -7030,8 +7096,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	/* inode->i_attr_flags = 0;				unused */
  	if (inode->u.ext3_i.i_flags & EXT3_SYNC_FL) {
  		/* inode->i_attr_flags |= ATTR_FLAG_SYNCRONOUS; unused */
---- linux-2.4.20-hp4_pnnl1/fs/ext3/namei.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:46.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext3/namei.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext3/namei.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
++++ linux-mmonroe/fs/ext3/namei.c	Fri Apr 25 11:45:15 2003
 @@ -29,6 +29,7 @@
  #include <linux/sched.h>
  #include <linux/ext3_fs.h>
@@ -7093,8 +7159,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +	removexattr:	ext3_removexattr,	/* BKL held */
 +};
 +
---- linux-2.4.20-hp4_pnnl1/fs/ext3/super.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext3/super.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext3/super.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
++++ linux-mmonroe/fs/ext3/super.c	Fri Apr 25 11:45:15 2003
 @@ -24,6 +24,7 @@
  #include <linux/jbd.h>
  #include <linux/ext3_fs.h>
@@ -7103,7 +7169,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  #include <linux/slab.h>
  #include <linux/init.h>
  #include <linux/locks.h>
-@@ -404,6 +405,7 @@ void ext3_put_super (struct super_block 
+@@ -406,6 +407,7 @@ void ext3_put_super (struct super_block 
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
  
@@ -7111,7 +7177,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
  		EXT3_CLEAR_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_RECOVER);
-@@ -499,6 +501,7 @@ static int parse_options (char * options
+@@ -502,6 +504,7 @@ static int parse_options (char * options
  			  int is_remount)
  {
  	unsigned long *mount_options = &sbi->s_mount_opt;
@@ -7119,7 +7185,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	uid_t *resuid = &sbi->s_resuid;
  	gid_t *resgid = &sbi->s_resgid;
  	char * this_char;
-@@ -511,6 +514,13 @@ static int parse_options (char * options
+@@ -514,6 +517,13 @@ static int parse_options (char * options
  	     this_char = strtok (NULL, ",")) {
  		if ((value = strchr (this_char, '=')) != NULL)
  			*value++ = 0;
@@ -7133,7 +7199,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  		if (!strcmp (this_char, "bsddf"))
  			clear_opt (*mount_options, MINIX_DF);
  		else if (!strcmp (this_char, "nouid32")) {
-@@ -928,6 +938,12 @@ struct super_block * ext3_read_super (st
+@@ -931,6 +941,12 @@ struct super_block * ext3_read_super (st
  	sbi->s_mount_opt = 0;
  	sbi->s_resuid = EXT3_DEF_RESUID;
  	sbi->s_resgid = EXT3_DEF_RESGID;
@@ -7146,7 +7212,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	if (!parse_options ((char *) data, &sb_block, sbi, &journal_inum, 0)) {
  		sb->s_dev = 0;
  		goto out_fail;
-@@ -1767,12 +1783,27 @@ static DECLARE_FSTYPE_DEV(ext3_fs_type, 
+@@ -1768,12 +1784,27 @@ static DECLARE_FSTYPE_DEV(ext3_fs_type, 
  
  static int __init init_ext3_fs(void)
  {
@@ -7175,8 +7241,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  }
  
  EXPORT_SYMBOL(ext3_force_commit);
---- linux-2.4.20-hp4_pnnl1/fs/ext3/symlink.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext3/symlink.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/ext3/symlink.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:56 2003
++++ linux-mmonroe/fs/ext3/symlink.c	Fri Apr 25 11:45:15 2003
 @@ -20,6 +20,7 @@
  #include <linux/fs.h>
  #include <linux/jbd.h>
@@ -7206,8 +7272,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +	listxattr:	ext3_listxattr,		/* BKL held */
 +	removexattr:	ext3_removexattr,	/* BKL held */
  };
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext3/xattr.c	2003-04-09 17:21:01.000000000 -0600
+--- /dev/null	Mon May 20 21:11:23 2002
++++ linux-mmonroe/fs/ext3/xattr.c	Fri Apr 25 11:45:15 2003
 @@ -0,0 +1,1232 @@
 +/*
 + * linux/fs/ext3/xattr.c
@@ -8441,8 +8507,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +}
 +
 +#endif  /* CONFIG_EXT3_FS_XATTR_SHARING */
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/ext3/xattr_user.c	2003-04-09 17:21:01.000000000 -0600
+--- /dev/null	Mon May 20 21:11:23 2002
++++ linux-mmonroe/fs/ext3/xattr_user.c	Fri Apr 25 11:45:15 2003
 @@ -0,0 +1,111 @@
 +/*
 + * linux/fs/ext3/xattr_user.c
@@ -8555,8 +8621,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +	ext3_xattr_unregister(EXT3_XATTR_INDEX_USER,
 +			      &ext3_xattr_user_handler);
 +}
---- linux-2.4.20-hp4_pnnl1/fs/jfs/jfs_xattr.h~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/jfs/jfs_xattr.h	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/jfs/jfs_xattr.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:51 2003
++++ linux-mmonroe/fs/jfs/jfs_xattr.h	Fri Apr 25 11:45:15 2003
 @@ -52,8 +52,10 @@ struct jfs_ea_list {
  #define	END_EALIST(ealist) \
  	((struct jfs_ea *) (((char *) (ealist)) + EALIST_SIZE(ealist)))
@@ -8570,8 +8636,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  extern ssize_t __jfs_getxattr(struct inode *, const char *, void *, size_t);
  extern ssize_t jfs_getxattr(struct dentry *, const char *, void *, size_t);
  extern ssize_t jfs_listxattr(struct dentry *, char *, size_t);
---- linux-2.4.20-hp4_pnnl1/fs/jfs/xattr.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/jfs/xattr.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/fs/jfs/xattr.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:51 2003
++++ linux-mmonroe/fs/jfs/xattr.c	Fri Apr 25 11:45:15 2003
 @@ -641,7 +641,7 @@ static int ea_put(struct inode *inode, s
  }
  
@@ -8599,8 +8665,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  		 size_t value_len, int flags)
  {
  	if (value == NULL) {	/* empty EA, do not remove */
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-hp4_pnnl1-braam/fs/mbcache.c	2003-04-09 17:21:01.000000000 -0600
+--- /dev/null	Mon May 20 21:11:23 2002
++++ linux-mmonroe/fs/mbcache.c	Fri Apr 25 11:45:15 2003
 @@ -0,0 +1,648 @@
 +/*
 + * linux/fs/mbcache.c
@@ -9250,8 +9316,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +module_init(init_mbcache)
 +module_exit(exit_mbcache)
 +
---- linux-2.4.20-hp4_pnnl1/include/asm-arm/unistd.h~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/include/asm-arm/unistd.h	2003-04-09 17:21:01.000000000 -0600
+--- linux/include/asm-arm/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:12 2003
++++ linux-mmonroe/include/asm-arm/unistd.h	Fri Apr 25 11:45:15 2003
 @@ -244,7 +244,6 @@
  #define __NR_security			(__NR_SYSCALL_BASE+223)
  #define __NR_gettid			(__NR_SYSCALL_BASE+224)
@@ -9268,8 +9334,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  #define __NR_tkill			(__NR_SYSCALL_BASE+238)
  /*
   * Please check 2.5 _before_ adding calls here,
---- linux-2.4.20-hp4_pnnl1/include/asm-ppc64/unistd.h~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/include/asm-ppc64/unistd.h	2003-04-09 17:21:01.000000000 -0600
+--- linux/include/asm-ppc64/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:59 2003
++++ linux-mmonroe/include/asm-ppc64/unistd.h	Fri Apr 25 11:45:15 2003
 @@ -218,6 +218,7 @@
  #define __NR_gettid		207
  #if 0 /* Reserved syscalls */
@@ -9286,8 +9352,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  #define __NR_futex		221
  #endif
  
---- linux-2.4.20-hp4_pnnl1/include/asm-s390/unistd.h~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/include/asm-s390/unistd.h	2003-04-09 17:21:01.000000000 -0600
+--- linux/include/asm-s390/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:19 2003
++++ linux-mmonroe/include/asm-s390/unistd.h	Fri Apr 25 11:45:15 2003
 @@ -212,9 +212,18 @@
  #define __NR_madvise            219
  #define __NR_getdents64		220
@@ -9310,8 +9376,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  #define __NR_gettid		236
  #define __NR_tkill		237
  
---- linux-2.4.20-hp4_pnnl1/include/asm-s390x/unistd.h~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/include/asm-s390x/unistd.h	2003-04-09 17:21:01.000000000 -0600
+--- linux/include/asm-s390x/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:21 2003
++++ linux-mmonroe/include/asm-s390x/unistd.h	Fri Apr 25 11:45:15 2003
 @@ -180,9 +180,18 @@
  #define __NR_pivot_root         217
  #define __NR_mincore            218
@@ -9334,8 +9400,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  #define __NR_gettid		236
  #define __NR_tkill		237
  
---- linux-2.4.20-hp4_pnnl1/include/asm-sparc/unistd.h~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/include/asm-sparc/unistd.h	2003-04-09 17:21:01.000000000 -0600
+--- linux/include/asm-sparc/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:09 2003
++++ linux-mmonroe/include/asm-sparc/unistd.h	Fri Apr 25 11:45:15 2003
 @@ -184,24 +184,24 @@
  /* #define __NR_exportfs        166    SunOS Specific                              */
  #define __NR_mount              167 /* Common                                      */
@@ -9373,8 +9439,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  #define __NR_tkill              187 /* SunOS: fpathconf                            */
  /* #define __NR_sysconf         188    SunOS Specific                              */
  #define __NR_uname              189 /* Linux Specific                              */
---- linux-2.4.20-hp4_pnnl1/include/asm-sparc64/unistd.h~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/include/asm-sparc64/unistd.h	2003-04-09 17:21:01.000000000 -0600
+--- linux/include/asm-sparc64/unistd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:11 2003
++++ linux-mmonroe/include/asm-sparc64/unistd.h	Fri Apr 25 11:45:15 2003
 @@ -184,24 +184,24 @@
  /* #define __NR_exportfs        166    SunOS Specific                              */
  #define __NR_mount              167 /* Common                                      */
@@ -9412,8 +9478,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  #define __NR_tkill              187 /* SunOS: fpathconf                            */
  /* #define __NR_sysconf         188    SunOS Specific                              */
  #define __NR_uname              189 /* Linux Specific                              */
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-hp4_pnnl1-braam/include/linux/cache_def.h	2003-04-09 17:21:01.000000000 -0600
+--- /dev/null	Mon May 20 21:11:23 2002
++++ linux-mmonroe/include/linux/cache_def.h	Fri Apr 25 11:45:15 2003
 @@ -0,0 +1,15 @@
 +/*
 + * linux/cache_def.h
@@ -9430,8 +9496,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +
 +extern void register_cache(struct cache_definition *);
 +extern void unregister_cache(struct cache_definition *);
---- linux-2.4.20-hp4_pnnl1/include/linux/errno.h~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/include/linux/errno.h	2003-04-09 17:21:01.000000000 -0600
+--- linux/include/linux/errno.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:01 2003
++++ linux-mmonroe/include/linux/errno.h	Fri Apr 25 11:45:15 2003
 @@ -23,4 +23,8 @@
  
  #endif
@@ -9441,8 +9507,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +#define ENOTSUP EOPNOTSUPP	/* Operation not supported */
 +
  #endif
---- linux-2.4.20-hp4_pnnl1/include/linux/ext2_fs.h~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/include/linux/ext2_fs.h	2003-04-09 17:21:01.000000000 -0600
+--- linux/include/linux/ext2_fs.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:02 2003
++++ linux-mmonroe/include/linux/ext2_fs.h	Fri Apr 25 11:45:15 2003
 @@ -57,8 +57,6 @@
   */
  #define	EXT2_BAD_INO		 1	/* Bad blocks inode */
@@ -9525,8 +9591,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  extern struct inode_operations ext2_fast_symlink_inode_operations;
  
  #endif	/* __KERNEL__ */
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-hp4_pnnl1-braam/include/linux/ext2_xattr.h	2003-04-09 17:21:01.000000000 -0600
+--- /dev/null	Mon May 20 21:11:23 2002
++++ linux-mmonroe/include/linux/ext2_xattr.h	Fri Apr 25 11:45:15 2003
 @@ -0,0 +1,157 @@
 +/*
 +  File: linux/ext2_xattr.h
@@ -9685,8 +9751,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +
 +#endif  /* __KERNEL__ */
 +
---- linux-2.4.20-hp4_pnnl1/include/linux/ext3_fs.h~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/include/linux/ext3_fs.h	2003-04-09 17:21:01.000000000 -0600
+--- linux/include/linux/ext3_fs.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:01 2003
++++ linux-mmonroe/include/linux/ext3_fs.h	Fri Apr 25 11:45:15 2003
 @@ -63,8 +63,6 @@
   */
  #define	EXT3_BAD_INO		 1	/* Bad blocks inode */
@@ -9769,8 +9835,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  extern struct inode_operations ext3_fast_symlink_inode_operations;
  
  
---- linux-2.4.20-hp4_pnnl1/include/linux/ext3_jbd.h~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/include/linux/ext3_jbd.h	2003-04-09 17:21:01.000000000 -0600
+--- linux/include/linux/ext3_jbd.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:04 2003
++++ linux-mmonroe/include/linux/ext3_jbd.h	Fri Apr 25 11:45:15 2003
 @@ -30,13 +30,19 @@
  
  #define EXT3_SINGLEDATA_TRANS_BLOCKS	8
@@ -9792,8 +9858,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  
  extern int ext3_writepage_trans_blocks(struct inode *inode);
  
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-hp4_pnnl1-braam/include/linux/ext3_xattr.h	2003-04-09 17:21:01.000000000 -0600
+--- /dev/null	Mon May 20 21:11:23 2002
++++ linux-mmonroe/include/linux/ext3_xattr.h	Fri Apr 25 11:45:15 2003
 @@ -0,0 +1,157 @@
 +/*
 +  File: linux/ext3_xattr.h
@@ -9952,8 +10018,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +
 +#endif  /* __KERNEL__ */
 +
---- linux-2.4.20-hp4_pnnl1/include/linux/fs.h~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/include/linux/fs.h	2003-04-09 17:21:01.000000000 -0600
+--- linux/include/linux/fs.h~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:55:01 2003
++++ linux-mmonroe/include/linux/fs.h	Fri Apr 25 11:45:15 2003
 @@ -909,7 +909,7 @@ struct inode_operations {
  	int (*setattr) (struct dentry *, struct iattr *);
  	int (*setattr_raw) (struct inode *, struct iattr *);
@@ -9963,8 +10029,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
  	ssize_t (*listxattr) (struct dentry *, char *, size_t);
  	int (*removexattr) (struct dentry *, const char *);
---- /dev/null	2003-01-30 03:24:37.000000000 -0700
-+++ linux-2.4.20-hp4_pnnl1-braam/include/linux/mbcache.h	2003-04-09 17:21:01.000000000 -0600
+--- /dev/null	Mon May 20 21:11:23 2002
++++ linux-mmonroe/include/linux/mbcache.h	Fri Apr 25 11:45:15 2003
 @@ -0,0 +1,69 @@
 +/*
 +  File: linux/mbcache.h
@@ -10035,8 +10101,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
 +struct mb_cache_entry *mb_cache_entry_find_next(struct mb_cache_entry *, int,
 +						kdev_t, unsigned int);
 +#endif
---- linux-2.4.20-hp4_pnnl1/kernel/ksyms.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/kernel/ksyms.c	2003-04-09 17:22:19.000000000 -0600
+--- linux/kernel/ksyms.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:58 2003
++++ linux-mmonroe/kernel/ksyms.c	Fri Apr 25 11:45:37 2003
 @@ -11,6 +11,7 @@
  
  #include <linux/config.h>
@@ -10050,7 +10116,7 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  EXPORT_SYMBOL(exit_fs);
  EXPORT_SYMBOL(exit_sighand);
 +EXPORT_SYMBOL(copy_fs_struct);
- EXPORT_SYMBOL(make_pages_present);
+ EXPORT_SYMBOL_GPL(make_pages_present);
  
  /* internal kernel memory management */
 @@ -123,6 +125,8 @@ EXPORT_SYMBOL(kmem_cache_validate);
@@ -10062,8 +10128,8 @@ diff -Nru a/fs/ext3/namei.c b/fs/ext3/namei.c
  EXPORT_SYMBOL(kmalloc);
  EXPORT_SYMBOL(kfree);
  EXPORT_SYMBOL(vfree);
---- linux-2.4.20-hp4_pnnl1/mm/vmscan.c~linux-2.4.20-xattr-0.8.54-hp	2003-04-09 17:20:37.000000000 -0600
-+++ linux-2.4.20-hp4_pnnl1-braam/mm/vmscan.c	2003-04-09 17:21:01.000000000 -0600
+--- linux/mm/vmscan.c~linux-2.4.20-xattr-0.8.54-hp	Fri Apr 25 10:54:58 2003
++++ linux-mmonroe/mm/vmscan.c	Fri Apr 25 11:45:15 2003
 @@ -18,6 +18,7 @@
  #include <linux/kernel_stat.h>
  #include <linux/swap.h>
@@ -10492,27 +10558,6 @@ _
  }
  
  /*
- fs/ext3/super.c |    7 ++++++-
- 1 files changed, 6 insertions(+), 1 deletion(-)
-
---- linux-2.4.20/fs/ext3/super.c~ext3-unmount_sync	2003-04-08 23:35:44.000000000 -0600
-+++ linux-2.4.20-braam/fs/ext3/super.c	2003-04-08 23:35:44.000000000 -0600
-@@ -1612,7 +1612,12 @@ void ext3_write_super (struct super_bloc
- 	sb->s_dirt = 0;
- 	target = log_start_commit(EXT3_SB(sb)->s_journal, NULL);
- 
--	if (do_sync_supers) {
-+	/*
-+	 * Tricky --- if we are unmounting, the write really does need
-+	 * to be synchronous.  We can detect that by looking for NULL in
-+	 * sb->s_root.
-+	 */
-+	if (do_sync_supers || !sb->s_root) {
- 		unlock_super(sb);
- 		log_wait_commit(EXT3_SB(sb)->s_journal, target);
- 		lock_super(sb);
-
-_
  ./fs/ext3/namei.c |   11 +++++------
  1 files changed, 5 insertions(+), 6 deletions(-)
 
@@ -10622,7 +10667,7 @@ _
  struct inode * ext3_new_inode (handle_t *handle,
 -				const struct inode * dir, int mode)
 +				const struct inode * dir, int mode,
-+                               unsigned long goal)
++				unsigned long goal)
  {
  	struct super_block * sb;
  	struct buffer_head * bh;
@@ -10632,38 +10677,38 @@ _
  	lock_super (sb);
 -	es = sb->u.ext3_sb.s_es;
 +	es = EXT3_SB(sb)->s_es;
-+ 
-+ 	if (goal) {
-+ 		i = (goal - 1) / EXT3_INODES_PER_GROUP(sb);
-+ 		j = (goal - 1) % EXT3_INODES_PER_GROUP(sb);
-+ 		gdp = ext3_get_group_desc(sb, i, &bh2);
-+ 
-+ 		bitmap_nr = load_inode_bitmap (sb, i);
-+ 		if (bitmap_nr < 0)
-+ 			goto fail;
-+ 
-+ 		bh = EXT3_SB(sb)->s_inode_bitmap[bitmap_nr];
-+ 
-+ 		BUFFER_TRACE(bh, "get_write_access");
-+ 		err = ext3_journal_get_write_access(handle, bh);
-+ 		if (err) goto fail;
-+ 
-+ 		if (ext3_set_bit(j, bh->b_data)) {
-+ 			printk(KERN_ERR "goal inode %lu unavailable\n", goal);
-+ 			/* Oh well, we tried. */
-+ 			goto repeat;
-+ 		}
-+ 
-+ 		BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
-+ 		err = ext3_journal_dirty_metadata(handle, bh);
-+ 		if (err) goto fail;
-+ 
-+ 		/* We've shortcircuited the allocation system successfully,
-+ 		 * now finish filling in the inode.
-+ 		 */
-+ 		goto have_bit_and_group;
-+ 	}
-+ 
++
++	if (goal) {
++		i = (goal - 1) / EXT3_INODES_PER_GROUP(sb);
++		j = (goal - 1) % EXT3_INODES_PER_GROUP(sb);
++		gdp = ext3_get_group_desc(sb, i, &bh2);
++
++		bitmap_nr = load_inode_bitmap (sb, i);
++		if (bitmap_nr < 0)
++			goto fail;
++
++		bh = EXT3_SB(sb)->s_inode_bitmap[bitmap_nr];
++
++		BUFFER_TRACE(bh, "get_write_access");
++		err = ext3_journal_get_write_access(handle, bh);
++		if (err) goto fail;
++
++		if (ext3_set_bit(j, bh->b_data)) {
++			printk(KERN_ERR "goal inode %lu unavailable\n", goal);
++			/* Oh well, we tried. */
++			goto repeat;
++		}
++
++		BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
++		err = ext3_journal_dirty_metadata(handle, bh);
++		if (err) goto fail;
++
++		/* We've shortcircuited the allocation system successfully,
++		 * now finish filling in the inode.
++		 */
++		goto have_bit_and_group;
++	}
++
  repeat:
  	gdp = NULL;
  	i = 0;
@@ -10681,31 +10726,31 @@ _
  	ext3_debug ("cmd = %u, arg = %lu\n", cmd, arg);
  
  	switch (cmd) {
-+ 	case EXT3_IOC_CREATE_INUM: {
-+ 		char name[32];
-+ 		struct dentry *dchild, *dparent;
-+ 		int rc = 0;
-+ 
-+ 		dparent = list_entry(inode->i_dentry.next, struct dentry,
-+ 				     d_alias);
-+ 		snprintf(name, sizeof name, "%lu", arg);
-+ 		dchild = lookup_one_len(name, dparent, strlen(name));
-+ 		if (dchild->d_inode) {
-+ 			printk(KERN_ERR "%*s/%lu already exists (ino %lu)\n",
-+ 			       dparent->d_name.len, dparent->d_name.name, arg,
-+ 			       dchild->d_inode->i_ino);
-+ 			rc = -EEXIST;
-+ 		} else {
-+ 			dchild->d_fsdata = (void *)arg;
-+ 			rc = vfs_create(inode, dchild, 0644);
-+ 			if (rc)
-+ 				printk(KERN_ERR "vfs_create: %d\n", rc);
-+ 			else if (dchild->d_inode->i_ino != arg)
-+ 				rc = -EEXIST;
-+ 		}
-+ 		dput(dchild);
-+ 		return rc;
-+ 	}
++	case EXT3_IOC_CREATE_INUM: {
++		char name[32];
++		struct dentry *dchild, *dparent;
++		int rc = 0;
++
++		dparent = list_entry(inode->i_dentry.next, struct dentry,
++				     d_alias);
++		snprintf(name, sizeof name, "%lu", arg);
++		dchild = lookup_one_len(name, dparent, strlen(name));
++		if (dchild->d_inode) {
++			printk(KERN_ERR "%*s/%lu already exists (ino %lu)\n",
++			       dparent->d_name.len, dparent->d_name.name, arg,
++			       dchild->d_inode->i_ino);
++			rc = -EEXIST;
++		} else {
++			dchild->d_fsdata = (void *)arg;
++			rc = vfs_create(inode, dchild, 0644);
++			if (rc)
++				printk(KERN_ERR "vfs_create: %d\n", rc);
++			else if (dchild->d_inode->i_ino != arg)
++				rc = -EEXIST;
++		}
++		dput(dchild);
++		return rc;
++	}
  	case EXT3_IOC_GETFLAGS:
  		flags = inode->u.ext3_i.i_flags & EXT3_FL_USER_VISIBLE;
  		return put_user(flags, (int *) arg);
@@ -10725,7 +10770,7 @@ _
  /* ialloc.c */
 -extern struct inode * ext3_new_inode (handle_t *, const struct inode *, int);
 +extern struct inode * ext3_new_inode (handle_t *, const struct inode *, int,
-+ 				      unsigned long);
++				      unsigned long);
  extern void ext3_free_inode (handle_t *, struct inode *);
  extern struct inode * ext3_orphan_get (struct super_block *, unsigned long);
  extern unsigned long ext3_count_free_inodes (struct super_block *);
@@ -10735,5 +10780,98 @@ _
  
 +#define EXT3_IOC_CREATE_INUM			_IOW('f', 5, long)
  #endif	/* _LINUX_EXT3_FS_H */
+
+_
+ fs/ext3/inode.c |   82 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 files changed, 82 insertions(+)
+
+--- linux-2.4.20/fs/ext3/inode.c~extN-san	2003-04-08 23:35:59.000000000 -0600
++++ linux-2.4.20-braam/fs/ext3/inode.c	2003-04-08 23:35:59.000000000 -0600
+@@ -2734,3 +2734,85 @@ int ext3_change_inode_journal_flag(struc
+  * here, in ext3_aops_journal_start() to ensure that the forthcoming "see if we
+  * need to extend" test in ext3_prepare_write() succeeds.  
+  */
++
++/* for each block: 1 ind + 1 dind + 1 tind
++ * for each block: 3 bitmap blocks
++ * for each block: 3 group descriptor blocks
++ * i inode block
++ * 1 superblock
++ * 2 * EXT3_SINGLEDATA_TRANS_BLOCKS for the quote files
++ * ((1+1+1) * 3 * nblocks) + 1 + 1 + 2 * EXT3_SINGLEDATA_TRANS_BLOCKS
++ *
++ * XXX assuming:
++ * (1) fs logic block size == page size
++ * (2) ext3 in writeback mode
++ */
++static inline int ext3_san_write_trans_blocks(int nblocks)
++{
++	int ret;
++	
++	ret = (1 + 1 + 1) * 3 * nblocks + 1 + 1;
++
++#ifdef CONFIG_QUOTA
++	ret += 2 * EXT3_SINGLEDATA_TRANS_BLOCKS;
++#endif
++
++	return ret;
++}
++
++/* Alloc blocks for an inode, while don't create any buffer/page
++ * for data I/O; set the inode size if file is extended.
++ *
++ * @inode:    target inode
++ * @blocks:   array of logic block number
++ * @nblocks:  how many blocks need be alloced
++ * @newsize:  new filesize we should set
++ *
++ * return:    0 success, otherwise failed
++ *            (*blocks) contains physical block number alloced
++ *
++ * XXX this assume the fs block size == page size
++ */
++int ext3_prep_san_write(struct inode *inode, long *blocks,
++			int nblocks, loff_t newsize)
++{
++	handle_t *handle;
++	struct buffer_head bh_tmp;
++	int needed_blocks;
++	int i, ret = 0, ret2;
++
++	needed_blocks = ext3_san_write_trans_blocks(nblocks);
++
++	lock_kernel();
++	handle = ext3_journal_start(inode, needed_blocks);
++	if (IS_ERR(handle)) {
++		unlock_kernel();
++		return PTR_ERR(handle);
++	}
++	unlock_kernel();
++
++	/* alloc blocks one by one */
++	for (i = 0; i < nblocks; i++) {
++		ret = ext3_get_block_handle(handle, inode, blocks[i],
++						&bh_tmp, 1);
++		if (ret)
++			break;
++
++		blocks[i] = bh_tmp.b_blocknr;
++	}
++
++	/* set inode size if needed */
++	if (!ret && (newsize > inode->i_size)) {
++		inode->i_size = newsize;
++		ext3_mark_inode_dirty(handle, inode);
++	}
++
++	lock_kernel();
++	ret2 = ext3_journal_stop(handle, inode);
++	unlock_kernel();
++
++	if (!ret)
++		ret = ret2;
++	return ret;
++}
++EXPORT_SYMBOL(ext3_prep_san_write);
 
 _
