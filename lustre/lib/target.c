@@ -100,6 +100,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         dlmimp->imp_handle.addr = req->rq_reqmsg->addr;
         dlmimp->imp_handle.cookie = req->rq_reqmsg->cookie;
         dlmimp->imp_obd = /* LDLM! */ NULL;
+        spin_lock_init(&dlmimp->imp_lock);
         
         req->rq_connection->c_level = LUSTRE_CONN_FULL;
 out:
