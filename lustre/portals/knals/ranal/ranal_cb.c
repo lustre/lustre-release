@@ -42,6 +42,7 @@ kranal_device_callback(RAP_INT32 devid)
 {
         kra_device_t *dev;
         int           i;
+        unsigned long flags;
         
         for (i = 0; i < kranal_data.kra_ndevs; i++) {
 
@@ -157,7 +158,7 @@ kranal_tx_done (kra_tx_t *tx, int completion)
 
         case RANAL_BUF_PHYS_MAPPED:
                 LASSERT (tx->tx_conn != NULL);
-                dev = tx->tx_con->rac_device;
+                dev = tx->tx_conn->rac_device;
                 rrc = RapkDeregisterMemory(dev->rad_handle, NULL,
                                            dev->rad_ptag, &tx->tx_map_key);
                 LASSERT (rrc == RAP_SUCCESS);
@@ -165,8 +166,8 @@ kranal_tx_done (kra_tx_t *tx, int completion)
 
         case RANAL_BUF_VIRT_MAPPED:
                 LASSERT (tx->tx_conn != NULL);
-                dev = tx->tx_con->rac_device;
-                rrc = RapkDeregisterMemory(dev->rad_handle, tx->tx_buffer
+                dev = tx->tx_conn->rac_device;
+                rrc = RapkDeregisterMemory(dev->rad_handle, tx->tx_buffer,
                                            dev->rad_ptag, &tx->tx_map_key);
                 LASSERT (rrc == RAP_SUCCESS);
                 break;
@@ -261,7 +262,7 @@ kranal_init_msg(kra_msg_t *msg, int type)
         /* ram_incarnation gets set when FMA is sent */
 }
 
-kra_tx_t
+kra_tx_t *
 kranal_new_tx_msg (int may_block, int type)
 {
         kra_tx_t *tx = kranal_get_idle_tx(may_block);
@@ -294,7 +295,7 @@ kranal_setup_immediate_buffer (kra_tx_t *tx, int niov, struct iovec *iov,
                 return -EMSGSIZE;
         }
 
-        tx->tx_bufftype = RANAL_BUF_IMMEDIATE;
+        tx->tx_buftype = RANAL_BUF_IMMEDIATE;
         tx->tx_nob = nob;
         tx->tx_buffer = (void *)(((unsigned long)iov->iov_base) + offset);
         return 0;
@@ -321,7 +322,7 @@ kranal_setup_virt_buffer (kra_tx_t *tx, int niov, struct iovec *iov,
                 return -EMSGSIZE;
         }
 
-        tx->tx_bufftype = RANAL_BUF_VIRT_UNMAPPED;
+        tx->tx_buftype = RANAL_BUF_VIRT_UNMAPPED;
         tx->tx_nob = nob;
         tx->tx_buffer = (void *)(((unsigned long)iov->iov_base) + offset);
         return 0;
@@ -347,10 +348,9 @@ kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, ptl_kiov_t *kiov,
                 LASSERT (nkiov > 0);
         }
 
-        tx->tx_bufftype = RANAL_BUF_PHYS_UNMAPPED;
+        tx->tx_buftype = RANAL_BUF_PHYS_UNMAPPED;
         tx->tx_nob = nob;
-        tx->tx_buffer = NULL;
-        tx->tx_phys_offset = kiov->kiov_offset + offset;
+        tx->tx_buffer = (void *)((unsigned long)(kiov->kiov_offset + offset));
         
         phys->Address = kranal_page2phys(kiov->kiov_page);
         phys->Length  = PAGE_SIZE;
@@ -368,15 +368,9 @@ kranal_setup_phys_buffer (kra_tx_t *tx, int nkiov, ptl_kiov_t *kiov,
                         int i;
                         /* Can't have gaps */
                         CERROR("Can't make payload contiguous in I/O VM:"
-                               "page %d, offset %d, len %d \n", nphys, 
-                               kiov->kiov_offset, kiov->kiov_len);
-
-                        for (i = -nphys; i < nkiov; i++) {
-                                CERROR("kiov[%d] %p +%d for %d\n",
-                                       i, kiov[i].kiov_page, 
-                                       kiov[i].kiov_offset, kiov[i].kiov_len);
-                        }
-                        
+                               "page %d, offset %d, len %d \n", 
+                               phys - tx->tx_phys, 
+                               kiov->kiov_offset, kiov->kiov_len);                        
                         return -EINVAL;
                 }
 
@@ -406,7 +400,7 @@ kranal_setup_buffer (kra_tx_t *tx, int niov,
         if (kiov != NULL)
                 return kranal_setup_phys_buffer(tx, niov, kiov, offset, nob);
         
-        return kranal_setup_virt_buffer(tx, niov, kiov, offset, nob);
+        return kranal_setup_virt_buffer(tx, niov, iov, offset, nob);
 }
 
 void
@@ -414,6 +408,7 @@ kranal_map_buffer (kra_tx_t *tx)
 {
         kra_conn_t     *conn = tx->tx_conn;
         kra_device_t   *dev = conn->rac_device;
+        RAP_RETURN      rrc;
 
         switch (tx->tx_buftype) {
         default:
@@ -503,7 +498,7 @@ kranal_launch_tx (kra_tx_t *tx, ptl_nid_t nid)
         peer = kranal_find_peer_locked(nid);
         if (peer == NULL) {
                 write_unlock_irqrestore(g_lock, flags);
-                kranal_tx_done(tx -EHOSTUNREACH);
+                kranal_tx_done(tx, -EHOSTUNREACH);
                 return;
         }
 
@@ -547,8 +542,9 @@ static void
 kranal_rdma(kra_tx_t *tx, int type, 
             kra_rdma_desc_t *rard, int nob, __u64 cookie)
 {
-        kra_conn_t *conn = tx->tx_conn;
-        RAP_RETURN  rrc;
+        kra_conn_t   *conn = tx->tx_conn;
+        RAP_RETURN    rrc;
+        unsigned long flags;
 
         /* prep final completion message */
         kranal_init_msg(&tx->tx_msg, type);
@@ -559,7 +555,7 @@ kranal_rdma(kra_tx_t *tx, int type,
         LASSERT (nob <= rard->rard_nob);
 
         memset(&tx->tx_rdma_desc, 0, sizeof(tx->tx_rdma_desc));
-        tx->tx_rdma_desc.SrcPtr = tx->tx_buffer;
+        tx->tx_rdma_desc.SrcPtr.AddressBits = (__u64)((unsigned long)tx->tx_buffer);
         tx->tx_rdma_desc.SrcKey = tx->tx_map_key;
         tx->tx_rdma_desc.DstPtr = rard->rard_addr;
         tx->tx_rdma_desc.DstKey = rard->rard_key;
@@ -619,6 +615,7 @@ kranal_do_send (lib_nal_t    *nal,
 {
         kra_conn_t *conn;
         kra_tx_t   *tx;
+        int         rc;
 
         /* NB 'private' is different depending on what we're sending.... */
 
@@ -672,8 +669,8 @@ kranal_do_send (lib_nal_t    *nal,
 
                 kranal_map_buffer(tx);
                 kranal_rdma(tx, RANAL_MSG_GET_DONE,
-                            &conn->rac_rxmsg->ram_u.getreq.ragm_desc, nob,
-                            &conn->rac_rxmsg->ram_u.getreq.ragm_cookie);
+                            &conn->rac_rxmsg->ram_u.get.ragm_desc, nob,
+                            conn->rac_rxmsg->ram_u.get.ragm_cookie);
                 return PTL_OK;
         }
 
@@ -704,7 +701,7 @@ kranal_do_send (lib_nal_t    *nal,
                 tx->tx_msg.ram_u.get.ragm_hdr = *hdr;
                 /* rest of tx_msg is setup just before it is sent */
                 kranal_launch_tx(tx, nid);
-                return PTL_OK
+                return PTL_OK;
 
         case PTL_MSG_ACK:
                 LASSERT (nob == 0);
@@ -716,7 +713,7 @@ kranal_do_send (lib_nal_t    *nal,
                     nob <= kranal_tunables.kra_max_immediate)
                         break;                  /* send IMMEDIATE */
                 
-                tx = kranal_new_tx_msg(!in_interrupt(), RANA_MSG_PUT_REQ);
+                tx = kranal_new_tx_msg(!in_interrupt(), RANAL_MSG_PUT_REQ);
                 if (tx == NULL)
                         return PTL_NO_SPACE;
 
@@ -786,6 +783,7 @@ kranal_recvmsg (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
 {
         kra_conn_t  *conn = private;
         kra_msg_t   *rxmsg = conn->rac_rxmsg;
+        kra_tx_t    *tx;
         void        *buffer;
         int          rc;
         
@@ -834,7 +832,7 @@ kranal_recvmsg (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
 
         case RANAL_MSG_PUT_REQ:
                 if (libmsg == NULL) {           /* PUT didn't match... */
-                        lib_finalize(null, NULL, libmsg, PTL_OK);
+                        lib_finalize(nal, NULL, libmsg, PTL_OK);
                         return PTL_OK;
                 }
                 
@@ -853,9 +851,10 @@ kranal_recvmsg (lib_nal_t *nal, void *private, lib_msg_t *libmsg,
                 tx->tx_msg.ram_u.putack.rapam_src_cookie = 
                         conn->rac_rxmsg->ram_u.putreq.raprm_cookie;
                 tx->tx_msg.ram_u.putack.rapam_dst_cookie = tx->tx_cookie;
-                tx->tx_msg.ram_u.putack.rapam_dst.desc.rard_key = tx->tx_map_key;
-                tx->tx_msg.ram_u.putack.rapam_dst.desc.rard_addr = tx->tx_buffer;
-                tx->tx_msg.ram_u.putack.rapam_dst.desc.rard_nob = mlen;
+                tx->tx_msg.ram_u.putack.rapam_desc.rard_key = tx->tx_map_key;
+                tx->tx_msg.ram_u.putack.rapam_desc.rard_addr.AddressBits = 
+                        (__u64)((unsigned long)tx->tx_buffer);
+                tx->tx_msg.ram_u.putack.rapam_desc.rard_nob = mlen;
 
                 tx->tx_libmsg[0] = libmsg; /* finalize this on RDMA_DONE */
 
@@ -913,7 +912,7 @@ kranal_check_conn (kra_conn_t *conn)
         unsigned long      now = jiffies;
 
         if (!conn->rac_closing &&
-            time_after_eq(now, conn->rac_last_sent + conn->rac_keepalive * HZ)) {
+            time_after_eq(now, conn->rac_last_tx + conn->rac_keepalive * HZ)) {
                 /* not sent in a while; schedule conn so scheduler sends a keepalive */
                 kranal_schedule_conn(conn);
         }
@@ -923,7 +922,7 @@ kranal_check_conn (kra_conn_t *conn)
 
         if (!conn->rac_close_recvd &&
             time_after_eq(now, conn->rac_last_rx + timeout)) {
-                CERROR("Nothing received from "LPX64" within %d seconds\n",
+                CERROR("Nothing received from "LPX64" within %lu seconds\n",
                        conn->rac_peer->rap_nid, (now - conn->rac_last_rx)/HZ);
                 return -ETIMEDOUT;
         }
@@ -942,8 +941,8 @@ kranal_check_conn (kra_conn_t *conn)
                 
                 if (time_after_eq(now, tx->tx_qtime + timeout)) {
                         spin_unlock_irqrestore(&conn->rac_lock, flags);
-                        CERROR("tx on fmaq for "LPX64" blocked %d seconds\n",
-                               conn->rac_perr->rap_nid, (now - tx->tx_qtime)/HZ);
+                        CERROR("tx on fmaq for "LPX64" blocked %lu seconds\n",
+                               conn->rac_peer->rap_nid, (now - tx->tx_qtime)/HZ);
                         return -ETIMEDOUT;
                 }
         }
@@ -953,8 +952,8 @@ kranal_check_conn (kra_conn_t *conn)
                 
                 if (time_after_eq(now, tx->tx_qtime + timeout)) {
                         spin_unlock_irqrestore(&conn->rac_lock, flags);
-                        CERROR("tx on rdmaq for "LPX64" blocked %d seconds\n",
-                               conn->rac_perr->rap_nid, (now - tx->tx_qtime)/HZ);
+                        CERROR("tx on rdmaq for "LPX64" blocked %lu seconds\n",
+                               conn->rac_peer->rap_nid, (now - tx->tx_qtime)/HZ);
                         return -ETIMEDOUT;
                 }
         }
@@ -964,8 +963,8 @@ kranal_check_conn (kra_conn_t *conn)
                 
                 if (time_after_eq(now, tx->tx_qtime + timeout)) {
                         spin_unlock_irqrestore(&conn->rac_lock, flags);
-                        CERROR("tx on replyq for "LPX64" blocked %d seconds\n",
-                               conn->rac_perr->rap_nid, (now - tx->tx_qtime)/HZ);
+                        CERROR("tx on replyq for "LPX64" blocked %lu seconds\n",
+                               conn->rac_peer->rap_nid, (now - tx->tx_qtime)/HZ);
                         return -ETIMEDOUT;
                 }
         }
@@ -980,6 +979,8 @@ kranal_check_conns (int idx, unsigned long *min_timeoutp)
         struct list_head  *conns = &kranal_data.kra_conns[idx];
         struct list_head  *ctmp;
         kra_conn_t        *conn;
+        unsigned long      flags;
+        int                rc;
 
  again:
         /* NB. We expect to check all the conns and not find any problems, so
@@ -987,7 +988,7 @@ kranal_check_conns (int idx, unsigned long *min_timeoutp)
         read_lock(&kranal_data.kra_global_lock);
 
         list_for_each (ctmp, conns) {
-                conn = list_entry(ptmp, kra_conn_t, rac_hashlist);
+                conn = list_entry(ctmp, kra_conn_t, rac_hashlist);
 
                 if (conn->rac_timeout < *min_timeoutp )
                         *min_timeoutp = conn->rac_timeout;
@@ -1004,13 +1005,15 @@ kranal_check_conns (int idx, unsigned long *min_timeoutp)
                 CERROR("Check on conn to "LPX64"failed: %d\n",
                        conn->rac_peer->rap_nid, rc);
 
-                write_lock_irqsave(&kranal_data.kra_global_lock);
+                write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
                 if (!conn->rac_closing)
                         kranal_close_conn_locked(conn, -ETIMEDOUT);
                 else
                         kranal_terminate_conn_locked(conn);
                         
+                write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+
                 kranal_conn_decref(conn);
 
                 /* start again now I've dropped the lock */
@@ -1048,7 +1051,7 @@ kranal_connd (void *arg)
                         spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
 
                         kranal_connect(peer);
-                        kranal_put_peer(peer);
+                        kranal_peer_decref(peer);
 
                         spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
 			continue;
@@ -1095,7 +1098,6 @@ kranal_reaper (void *arg)
         unsigned long      flags;
         kra_conn_t        *conn;
         kra_peer_t        *peer;
-        unsigned long      flags;
         long               timeout;
         int                i;
         int                conn_entries = kranal_data.kra_conn_hash_size;
@@ -1197,7 +1199,6 @@ kranal_reaper (void *arg)
 
                 spin_unlock_irqrestore(&kranal_data.kra_reaper_lock, flags);
 
-                busy_loops = 0;
                 schedule_timeout(timeout);
 
                 spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
@@ -1230,12 +1231,12 @@ kranal_process_rdmaq (__u32 cqid)
         spin_lock_irqsave(&conn->rac_lock, flags);
 
         LASSERT (!list_empty(&conn->rac_rdmaq));
-        tx = list_entry(con->rac_rdmaq.next, kra_tx_t, tx_list);
+        tx = list_entry(conn->rac_rdmaq.next, kra_tx_t, tx_list);
         list_del(&tx->tx_list);
 
         LASSERT(desc->AppPtr == (void *)tx);
-        LASSERT(desc->tx_msg.ram_type == RANAL_MSG_PUT_DONE ||
-                desc->tx_msg.ram_type == RANAL_MSG_GET_DONE);
+        LASSERT(tx->tx_msg.ram_type == RANAL_MSG_PUT_DONE ||
+                tx->tx_msg.ram_type == RANAL_MSG_GET_DONE);
 
         list_add_tail(&tx->tx_list, &conn->rac_fmaq);
         tx->tx_qtime = jiffies;
@@ -1252,26 +1253,30 @@ int
 kranal_sendmsg(kra_conn_t *conn, kra_msg_t *msg,
                void *immediate, int immediatenob)
 {
-        int   sync = (msg->ram_type & RANAL_MSG_FENCE) != 0;
-
+        int        sync = (msg->ram_type & RANAL_MSG_FENCE) != 0;
+        RAP_RETURN rrc;
+        
         LASSERT (sizeof(*msg) <= RANAL_FMA_PREFIX_LEN);
         LASSERT ((msg->ram_type == RANAL_MSG_IMMEDIATE) ?
                  immediatenob <= RANAL_FMA_MAX_DATA_LEN :
                  immediatenob == 0);
 
-        msg->ram_incarnation = conn->rac_incarnation;
+        msg->ram_incarnation = conn->rac_my_incarnation;
         msg->ram_seq = conn->rac_tx_seq;
 
         if (sync)
-                rrc = RapkFmaSyncSend(conn->rac_device.rad_handle,
+                rrc = RapkFmaSyncSend(conn->rac_device->rad_handle,
                                       immediate, immediatenob,
                                       msg, sizeof(*msg));
         else
-                rrc = RapkFmaSend(conn->rac_device.rad_handle,
+                rrc = RapkFmaSend(conn->rac_device->rad_handle,
                                   immediate, immediatenob,
                                   msg, sizeof(*msg));
 
         switch (rrc) {
+        default:
+                LBUG();
+
         case RAP_SUCCESS:
                 conn->rac_last_tx = jiffies;
                 conn->rac_tx_seq++;
@@ -1279,9 +1284,6 @@ kranal_sendmsg(kra_conn_t *conn, kra_msg_t *msg,
                 
         case RAP_NOT_DONE:
                 return -EAGAIN;
-
-        default:
-                LBUG();
         }
 }
 
@@ -1323,7 +1325,8 @@ kranal_process_fmaq (kra_conn_t *conn)
 
                 spin_unlock_irqrestore(&conn->rac_lock, flags);
 
-                if (time_after_eq(conn->rac_last_tx + conn->rac_keepalive)) {
+                if (time_after_eq(jiffies, 
+                                  conn->rac_last_tx + conn->rac_keepalive)) {
                         kranal_init_msg(&conn->rac_msg, RANAL_MSG_NOOP);
                         kranal_sendmsg(conn, &conn->rac_msg, NULL, 0);
                 }
@@ -1367,7 +1370,8 @@ kranal_process_fmaq (kra_conn_t *conn)
                 kranal_map_buffer(tx);
                 tx->tx_msg.ram_u.get.ragm_cookie = tx->tx_cookie;
                 tx->tx_msg.ram_u.get.ragm_desc.rard_key = tx->tx_map_key;
-                tx->tx_msg.ram_u.get.ragm_desc.rard_addr = tx->tx_buffer;
+                tx->tx_msg.ram_u.get.ragm_desc.rard_addr.AddressBits = 
+                        (__u64)((unsigned long)tx->tx_buffer);
                 tx->tx_msg.ram_u.get.ragm_desc.rard_nob = tx->tx_nob;
                 rc = kranal_sendmsg(conn, &tx->tx_msg, NULL, 0);
                 expect_reply = 1;
@@ -1404,7 +1408,7 @@ kranal_swab_rdma_desc (kra_rdma_desc_t *d)
         __swab16s(&d->rard_key.Cookie);
         __swab16s(&d->rard_key.MdHandle);
         __swab32s(&d->rard_key.Flags);
-        __swab64s(&d->rard_addr);
+        __swab64s(&d->rard_addr.AddressBits);
         __swab32s(&d->rard_nob);
 }
 
@@ -1440,8 +1444,10 @@ kranal_process_receives(kra_conn_t *conn)
         unsigned long flags;
         __u32         seq;
         __u32         nob;
+        kra_tx_t     *tx;
         kra_msg_t    *msg;
-        RAP_RETURN    rrc = RapkFmaGetPrefix(conn->rac_rihandle, &msg);
+        void         *prefix;
+        RAP_RETURN    rrc = RapkFmaGetPrefix(conn->rac_rihandle, &prefix);
         kra_peer_t   *peer = conn->rac_peer;
 
         if (rrc == RAP_NOT_DONE)
@@ -1449,7 +1455,8 @@ kranal_process_receives(kra_conn_t *conn)
         
         LASSERT (rrc == RAP_SUCCESS);
         conn->rac_last_rx = jiffies;
-        seq = conn->rac_seq++;
+        seq = conn->rac_rx_seq++;
+        msg = (kra_msg_t *)prefix;
 
         if (msg->ram_magic != RANAL_MSG_MAGIC) {
                 if (__swab32(msg->ram_magic) != RANAL_MSG_MAGIC) {
@@ -1492,10 +1499,10 @@ kranal_process_receives(kra_conn_t *conn)
                 goto out;
         }
         
-        if (msg->ram_incarnation != conn->rac_incarnation) {
+        if (msg->ram_incarnation != conn->rac_peer_incarnation) {
                 CERROR("Unexpected incarnation "LPX64"("LPX64
                        " expected) from "LPX64"\n",
-                       msg->ram_incarnation, conn->rac_incarnation,
+                       msg->ram_incarnation, conn->rac_peer_incarnation,
                        peer->rap_nid);
                 goto out;
         }
@@ -1514,13 +1521,14 @@ kranal_process_receives(kra_conn_t *conn)
  
         if (msg->ram_type == RANAL_MSG_CLOSE) {
                 conn->rac_close_recvd = 1;
-                write_lock_irqsave(&kranal_data.kra_global_lock);
+                write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
                 if (!conn->rac_closing)
                         kranal_close_conn_locked(conn, -ETIMEDOUT);
                 else if (conn->rac_close_sent)
                         kranal_terminate_conn_locked(conn);
-                
+
+                write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
                 goto out;
         }
 
@@ -1548,7 +1556,8 @@ kranal_process_receives(kra_conn_t *conn)
                 if (tx == NULL)
                         break;
                 
-                tx->tx_msg.ram_u.racm_cookie = msg->msg_u.putreq.raprm_cookie;
+                tx->tx_msg.ram_u.completion.racm_cookie = 
+                        msg->ram_u.putreq.raprm_cookie;
                 kranal_post_fma(conn, tx);
                 break;
 
@@ -1571,7 +1580,7 @@ kranal_process_receives(kra_conn_t *conn)
 
                 kranal_rdma(tx, RANAL_MSG_PUT_DONE,
                             &msg->ram_u.putack.rapam_desc, 
-                            msg->msg_u.putack.rapam_desc.rard_nob,
+                            msg->ram_u.putack.rapam_desc.rard_nob,
                             msg->ram_u.putack.rapam_dst_cookie);
                 break;
 
@@ -1587,7 +1596,7 @@ kranal_process_receives(kra_conn_t *conn)
                 break;
 
         case RANAL_MSG_GET_REQ:
-                lib_parse(&kranal_lib, &msg->ram_u.getreq.ragm_hdr, conn);
+                lib_parse(&kranal_lib, &msg->ram_u.get.ragm_hdr, conn);
                 
                 if (conn->rac_rxmsg == NULL)    /* lib_parse matched something */
                         break;
@@ -1596,7 +1605,7 @@ kranal_process_receives(kra_conn_t *conn)
                 if (tx == NULL)
                         break;
 
-                tx->tx_msg.ram_u.racm_cookie = msg->msg_u.getreq.ragm_cookie;
+                tx->tx_msg.ram_u.completion.racm_cookie = msg->ram_u.get.ragm_cookie;
                 kranal_post_fma(conn, tx);
                 break;
                 
@@ -1624,7 +1633,7 @@ kranal_process_receives(kra_conn_t *conn)
         }
 
  out:
-        if (conn->rac_msg != NULL)
+        if (conn->rac_rxmsg != NULL)
                 kranal_consume_rxmsg(conn, NULL, 0);
 
         return 1;
@@ -1638,13 +1647,16 @@ kranal_scheduler (void *arg)
         char            name[16];
         kra_conn_t     *conn;
         unsigned long   flags;
+        RAP_RETURN      rrc;
         int             rc;
+        int             resched;
         int             i;
         __u32           cqid;
+        __u32           event_type;
         int             did_something;
         int             busy_loops = 0;
 
-        snprintf(name, sizeof(name), "kranal_sd_%02ld", dev->rad_idx);
+        snprintf(name, sizeof(name), "kranal_sd_%02d", dev->rad_idx);
         kportal_daemonize(name);
         kportal_blockallsigs();
 
