@@ -27,6 +27,12 @@
 
 int ptl_init;
 
+int __p30_initialized;
+int __p30_myr_initialized;
+int __p30_ip_initialized;
+ptl_handle_ni_t __myr_ni_handle;
+ptl_handle_ni_t __ip_ni_handle;
+
 int PtlInit(int *max_interfaces)
 {
         if (max_interfaces != NULL)
