@@ -10,16 +10,7 @@
  */
 
 #define EXPORT_SYMTAB
-
-#include <linux/version.h>
-#include <linux/module.h>
-#include <linux/slab.h>
-#include <asm/unistd.h>
-
 #define DEBUG_SUBSYSTEM S_LDLM
-
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
 
 #include <linux/lustre_dlm.h>
 
@@ -141,7 +132,8 @@ int ldlm_test_extents(struct obd_device *obddev)
         return 0;
 }
 
-static int ldlm_test_network(struct obd_device *obddev)
+static int ldlm_test_network(struct obd_device *obddev,
+                             struct ptlrpc_connection *conn)
 {
         struct ldlm_obd *ldlm = &obddev->u.ldlm;
         struct ptlrpc_request *request;
@@ -152,23 +144,22 @@ static int ldlm_test_network(struct obd_device *obddev)
         int flags = 0;
         ldlm_error_t err;
 
-        err = ldlm_cli_namespace_new(obddev, ldlm->ldlm_client,
-                                     ldlm->ldlm_server_conn, 3, &request);
+        err = ldlm_cli_namespace_new(obddev, ldlm->ldlm_client, conn, 3);
         ptlrpc_free_req(request);
         CERROR("ldlm_cli_namespace_new: %d\n", err);
         if (err != ELDLM_OK)
                 GOTO(out, err);
 
-        err = ldlm_cli_enqueue(ldlm->ldlm_client, ldlm->ldlm_server_conn, 3,
+        err = ldlm_cli_enqueue(ldlm->ldlm_client, conn, 3,
                                NULL, res_id, LDLM_EXTENT, &ext, LCK_PR, &flags,
-                               NULL, 0, &lockh1, &request);
+                               NULL, NULL, NULL, 0, &lockh1, &request);
         ptlrpc_free_req(request);
         CERROR("ldlm_cli_enqueue: %d\n", err);
 
         flags = 0;
-        err = ldlm_cli_enqueue(ldlm->ldlm_client, ldlm->ldlm_server_conn, 3,
+        err = ldlm_cli_enqueue(ldlm->ldlm_client, conn, 3,
                                NULL, res_id, LDLM_EXTENT, &ext, LCK_EX, &flags,
-                               NULL, 0, &lockh2, &request);
+                               NULL, NULL, NULL, 0, &lockh2, &request);
         ptlrpc_free_req(request);
         CERROR("ldlm_cli_enqueue: %d\n", err);
 
@@ -177,7 +168,7 @@ static int ldlm_test_network(struct obd_device *obddev)
         return err;
 }
 
-int ldlm_test(struct obd_device *obddev)
+int ldlm_test(struct obd_device *obddev, struct ptlrpc_connection *conn)
 {
         int rc;
         rc = ldlm_test_basics(obddev);
@@ -188,6 +179,6 @@ int ldlm_test(struct obd_device *obddev)
         if (rc)
                 RETURN(rc);
 
-        rc = ldlm_test_network(obddev);
+        rc = ldlm_test_network(obddev, conn);
         RETURN(rc);
 }

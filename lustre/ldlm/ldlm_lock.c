@@ -12,17 +12,9 @@
  */
 
 #define EXPORT_SYMTAB
-
-#include <linux/version.h>
-#include <linux/module.h>
-#include <linux/slab.h>
-#include <asm/unistd.h>
-
 #define DEBUG_SUBSYSTEM S_LDLM
 
-#include <linux/obd_support.h>
-#include <linux/obd_class.h>
-
+#include <linux/slab.h>
 #include <linux/lustre_dlm.h>
 
 extern kmem_cache_t *ldlm_lock_slab;
@@ -53,6 +45,7 @@ static int ldlm_intent_compat(struct ldlm_lock *a, struct ldlm_lock *b)
         return 0;
 }
 
+/* Caller should do ldlm_resource_get() on this resource first. */
 static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
                                        struct ldlm_resource *resource)
 {
@@ -68,6 +61,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         memset(lock, 0, sizeof(*lock));
         lock->l_resource = resource;
         INIT_LIST_HEAD(&lock->l_children);
+        init_waitqueue_head(&lock->l_waitq);
 
         if (parent != NULL) {
                 lock->l_parent = parent;
@@ -77,8 +71,13 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
         return lock;
 }
 
+/* Caller must do its own ldlm_resource_put() on lock->l_resource */
 void ldlm_lock_free(struct ldlm_lock *lock)
 {
+        if (!list_empty(&lock->l_children)) {
+                CERROR("lock still has children!\n");
+                LBUG();
+        }
         kmem_cache_free(ldlm_lock_slab, lock);
 }
 
@@ -132,8 +131,7 @@ static void ldlm_grant_lock(struct ldlm_resource *res, struct ldlm_lock *lock)
 
 ldlm_error_t ldlm_local_lock_create(__u32 ns_id,
                                     struct ldlm_handle *parent_lock_handle,
-                                    __u64 *res_id,
-                                    __u32 type,
+                                    __u64 *res_id, __u32 type,
                                     struct ldlm_handle *lockh)
 {
         struct ldlm_namespace *ns;
@@ -196,7 +194,6 @@ ldlm_error_t ldlm_local_lock_enqueue(struct ldlm_handle *lockh,
         lock->l_req_mode = mode;
         lock->l_data = data;
         lock->l_data_len = data_len;
-        lock->l_completion_ast = completion;
         lock->l_blocking_ast = blocking;
         spin_lock(&lock->l_resource->lr_lock);
 
@@ -226,6 +223,9 @@ ldlm_error_t ldlm_local_lock_enqueue(struct ldlm_handle *lockh,
         ldlm_grant_lock(lock->l_resource, lock);
         EXIT;
  out:
+        /* Don't set 'completion_ast' until here so that if the lock is granted
+         * immediately we don't do an unnecessary completion call. */
+        lock->l_completion_ast = completion;
         spin_unlock(&lock->l_resource->lr_lock);
         return ELDLM_OK;
 }

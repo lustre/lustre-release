@@ -115,6 +115,7 @@ struct ldlm_lock {
         //void                 *l_event;
         //XXX cluster_host    l_holder;
         __u32                 l_version[RES_VERSION_SIZE];
+        wait_queue_head_t     l_waitq;
 };
 
 typedef int (*ldlm_res_compat)(struct ldlm_lock *child, struct ldlm_lock *new);
@@ -211,7 +212,7 @@ ldlm_error_t ldlm_local_lock_cancel(struct ldlm_handle *lockh);
 void ldlm_lock_dump(struct ldlm_lock *lock);
 
 /* ldlm_test.c */
-int ldlm_test(struct obd_device *device);
+int ldlm_test(struct obd_device *device, struct ptlrpc_connection *conn);
 
 /* resource.c */
 struct ldlm_namespace *ldlm_namespace_find(__u32 id);
@@ -230,8 +231,7 @@ void ldlm_resource_dump(struct ldlm_resource *res);
 
 /* ldlm_request.c */
 int ldlm_cli_namespace_new(struct obd_device *, struct ptlrpc_client *,
-                           struct ptlrpc_connection *,
-                           __u32 ns_id, struct ptlrpc_request **);
+                           struct ptlrpc_connection *, __u32 ns_id);
 int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *peer,
                      __u32 ns_id,
                      struct ldlm_handle *parent_lock_handle,
@@ -240,6 +240,8 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *peer,
                      struct ldlm_extent *req_ex,
                      ldlm_mode_t mode,
                      int *flags,
+                     ldlm_lock_callback completion,
+                     ldlm_lock_callback blocking,
                      void *data,
                      __u32 data_len,
                      struct ldlm_handle *lockh,

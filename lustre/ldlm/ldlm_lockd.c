@@ -83,7 +83,7 @@ static int _ldlm_enqueue(struct ptlrpc_request *req)
                                       dlm_req->lock_desc.l_req_mode,
                                       &dlm_rep->lock_extent,
                                       &dlm_rep->flags,
-                                      NULL, //ldlm_cli_callback,
+                                      ldlm_cli_callback,
                                       ldlm_cli_callback,
                                       lustre_msg_buf(req->rq_reqmsg, 1),
                                       req->rq_reqmsg->buflens[1]);
@@ -158,6 +158,14 @@ static int _ldlm_callback(struct ptlrpc_request *req)
 
         lock = ldlm_handle2object(&dlm_req->lock_handle1);
         ldlm_lock_dump(lock);
+        if (dlm_req->lock_handle2.addr) {
+                CERROR("Got blocked callback for lock %p.\n", lock);
+                /* FIXME: do something impressive. */
+        } else {
+                CERROR("Got granted callback for lock %p.\n", lock);
+                lock->l_granted_mode = lock->l_req_mode;
+                wake_up(&lock->l_waitq);
+        }
 
         req->rq_status = 0;
 
@@ -229,31 +237,26 @@ static int ldlm_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg,
                           void *uarg)
 {
         struct obd_device *obddev = conn->oc_dev;
+        struct ptlrpc_connection *connection;
         int err;
         ENTRY;
 
         if (_IOC_TYPE(cmd) != IOC_LDLM_TYPE || _IOC_NR(cmd) < IOC_LDLM_MIN_NR ||
             _IOC_NR(cmd) > IOC_LDLM_MAX_NR) {
                 CDEBUG(D_IOCTL, "invalid ioctl ( type %d, nr %d, size %d )\n",
-                                _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
-                EXIT;
-                return -EINVAL;
-        }
-
-#if 0
-        /* XX phil -- put the peer back in */
-
-        ptlrpc_init_client(NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL, &cl);
-        err = ptlrpc_connect_client("ldlm", &cl, NULL);
-#endif
-        if (err) {
-                CERROR("cannot create client\n");
+                       _IOC_TYPE(cmd), _IOC_NR(cmd), _IOC_SIZE(cmd));
                 RETURN(-EINVAL);
         }
 
+        ptlrpc_init_client(NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+                           obddev->u.ldlm.ldlm_client);
+        connection = ptlrpc_uuid_to_connection("ldlm");
+        if (!connection)
+                CERROR("No LDLM UUID found: assuming ldlm is local.\n");
+
         switch (cmd) {
         case IOC_LDLM_TEST: {
-                err = ldlm_test(obddev);
+                err = ldlm_test(obddev, connection);
                 CERROR("-- done err %d\n", err);
                 GOTO(out, err);
         }
@@ -262,6 +265,7 @@ static int ldlm_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg,
         }
 
  out:
+        ptlrpc_put_connection(connection);
         return err;
 }
 
@@ -274,10 +278,9 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *data)
         INIT_LIST_HEAD(&ldlm_namespaces);
         ldlm_spinlock = SPIN_LOCK_UNLOCKED;
 
-        ldlm->ldlm_service = ptlrpc_init_svc(64 * 1024,
-                                             LDLM_REQUEST_PORTAL,
-                                             LDLM_REPLY_PORTAL,
-                                             "self", ldlm_handle);
+        ldlm->ldlm_service =
+                ptlrpc_init_svc(64 * 1024, LDLM_REQUEST_PORTAL,
+                                LDLM_REPLY_PORTAL, "self", ldlm_handle);
         if (!ldlm->ldlm_service)
                 LBUG();
 
@@ -290,14 +293,8 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *data)
         OBD_ALLOC(ldlm->ldlm_client, sizeof(*ldlm->ldlm_client));
         if (ldlm->ldlm_client == NULL)
                 LBUG();
-
         ptlrpc_init_client(NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
                            ldlm->ldlm_client);
-        ldlm->ldlm_server_conn = ptlrpc_uuid_to_connection("ldlm");
-        if (!ldlm->ldlm_server_conn) {
-                CERROR("cannot create client\n");
-                LBUG();
-        }
 
         MOD_INC_USE_COUNT;
         RETURN(0);
@@ -385,7 +382,6 @@ static int ldlm_cleanup(struct obd_device *obddev)
 
         OBD_FREE(ldlm->ldlm_client, sizeof(*ldlm->ldlm_client));
         OBD_FREE(ldlm->ldlm_service, sizeof(*ldlm->ldlm_service));
-        ptlrpc_put_connection(ldlm->ldlm_server_conn);
 
         if (ldlm_free_all(obddev)) {
                 CERROR("ldlm_free_all could not complete.\n");

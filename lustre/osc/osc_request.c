@@ -17,31 +17,11 @@
  */
 
 #define EXPORT_SYMTAB
-
-#include <linux/config.h>
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/locks.h>
-#include <linux/unistd.h>
-
-#include <asm/system.h>
-#include <asm/uaccess.h>
-
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <asm/segment.h>
-#include <linux/miscdevice.h>
-
 #define DEBUG_SUBSYSTEM S_OSC
 
-#include <linux/obd_class.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_net.h>
+#include <linux/module.h>
+#include <linux/random.h>
+#include <linux/lustre_dlm.h>
 #include <linux/obd_ost.h>
 
 static void osc_con2cl(struct obd_conn *conn, struct ptlrpc_client **cl,
@@ -575,25 +555,48 @@ int osc_brw(int rw, struct obd_conn *conn, obd_count num_oa,
                                      offset, flags);
 }
 
-/* mount the file system (secretly) */
 static int osc_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct osc_obd *osc = &obddev->u.osc;
+        __u32 ns_id;
+        int rc;
         ENTRY;
-
-        OBD_ALLOC(osc->osc_client, sizeof(*osc->osc_client));
-        if (osc->osc_client == NULL)
-                RETURN(-ENOMEM);
-
-        ptlrpc_init_client(NULL, OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
-                           osc->osc_client);
 
         osc->osc_conn = ptlrpc_uuid_to_connection("ost");
         if (!osc->osc_conn)
                 RETURN(-EINVAL);
 
+        OBD_ALLOC(osc->osc_client, sizeof(*osc->osc_client));
+        if (osc->osc_client == NULL)
+                GOTO(out_conn, rc = -ENOMEM);
+
+        OBD_ALLOC(osc->osc_ldlm_client, sizeof(*osc->osc_ldlm_client));
+        if (osc->osc_ldlm_client == NULL)
+                GOTO(out_client, rc = -ENOMEM);
+
+        ptlrpc_init_client(NULL, OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
+                           osc->osc_client);
+        ptlrpc_init_client(NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+                           osc->osc_ldlm_client);
+
+        get_random_bytes(&ns_id, sizeof(ns_id));
+        rc = ldlm_cli_namespace_new(obddev, osc->osc_ldlm_client, osc->osc_conn,
+                                    ns_id);
+        if (rc) {
+                CERROR("Couldn't create new namespace %u: %d\n", ns_id, rc);
+                GOTO(out_ldlm_client, rc);
+        }
+
         MOD_INC_USE_COUNT;
         RETURN(0);
+
+ out_ldlm_client:
+        OBD_FREE(osc->osc_ldlm_client, sizeof(*osc->osc_ldlm_client));
+ out_client:
+        OBD_FREE(osc->osc_client, sizeof(*osc->osc_client));
+ out_conn:
+        ptlrpc_put_connection(osc->osc_conn);
+        return rc;
 }
 
 static int osc_cleanup(struct obd_device * obddev)
@@ -601,6 +604,7 @@ static int osc_cleanup(struct obd_device * obddev)
         struct osc_obd *osc = &obddev->u.osc;
 
         OBD_FREE(osc->osc_client, sizeof(*osc->osc_client));
+        OBD_FREE(osc->osc_ldlm_client, sizeof(*osc->osc_ldlm_client));
         ptlrpc_put_connection(osc->osc_conn);
 
         MOD_DEC_USE_COUNT;
