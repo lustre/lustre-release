@@ -64,7 +64,7 @@ void refile_clean_page(struct page *page)
         if (PageActive(page)) {
                 __del_page_from_active_list(page);
                 __add_page_to_inactive_clean_list(page);
-        } else if (PageInactiveClean(page)) {
+        } else if (PageInactiveDirty(page)) {
                 __del_page_from_inactive_dirty_list(page);
                 __add_page_to_inactive_clean_list(page);
         }
@@ -479,7 +479,7 @@ void ll_balance_dirty_pages(struct super_block *sb)
 		return;
 
 	if (flush > 0) {
-		int n = 0, flush;
+		int flush;
 
 		if (!down_trylock(&sbi->ll_iod.io_sem)) {
 			do {
@@ -498,6 +498,55 @@ void ll_balance_dirty_pages(struct super_block *sb)
 
 	/* FIXME we need a way to wake up liods on *all* llite fs */
 	liod_wakeup(&sbi->ll_iod);
+}
+
+/* called by ll_writepage()
+ * return 0: we'v gained the lock and do the flushing once
+ *        1: can't gain lock, do nothing
+ */
+int ll_bulk_write_pages(struct inode *inode, struct page *page)
+{
+	struct super_block *sb = inode->i_sb;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct ll_io_daemon *iod;
+	struct obd_brw_set *set;
+	struct brw_page *pgs;
+	int npgs, ret;
+
+	/* if can't got the lock, somebody must be doing bulk
+	 * flushing. so just return */
+	if (down_trylock(&sbi->ll_iod.io_sem))
+		return 1;
+
+	iod = &ll_s2sbi(sb)->ll_iod;
+	set = &iod->io_set;
+	pgs = iod->io_pgs;
+
+	/* init set */
+	init_waitqueue_head(&set->brw_waitq);
+	INIT_LIST_HEAD(&set->brw_desc_head);
+	atomic_set(&set->brw_refcount, 0);
+
+	/* set the page passed in as the first selected page */
+	LASSERT(PageLocked(page));
+	page_cache_get(page);
+	select_one_page(pgs, inode, page);
+
+	/* select other pages */
+	npgs = LIOD_FLUSH_NR - 1;
+	ret = select_inode_pages(inode, &pgs[1], &npgs);
+	if (!ret) {
+		/* move inode to the end of list */
+		spin_lock(&inode_lock);
+		list_del(&inode->i_list);
+		list_add(&inode->i_list, &sb->s_dirty);
+		spin_unlock(&inode_lock);
+	}
+
+	bulk_flush_pages(inode, npgs+1, pgs, set);
+
+	up(&sbi->ll_iod.io_sem);
+	return 0;
 }
 
 void liod_stop(struct super_block *sb)
