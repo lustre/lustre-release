@@ -126,7 +126,7 @@ void mds_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
         }
 }
 
-void mds_readdir_pack(struct ptlrpc_request *req, __u64 offset,
+void mds_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
                       obd_id ino, int type, __u64 xid)
 {
         struct mds_body *b;
@@ -137,9 +137,10 @@ void mds_readdir_pack(struct ptlrpc_request *req, __u64 offset,
         b->capability = current->cap_effective;
         b->fid1.id = ino;
         b->fid1.f_type = type;
-        b->size = offset;
+        b->size = offset;                       /* !! */
         b->suppgid = -1;
-        b->blocks = xid;
+        b->blocks = xid;                        /* !! */
+        b->nlink = size;                        /* !! */
 }
 
 
