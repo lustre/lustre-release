@@ -5,6 +5,9 @@
 
 #define MAX_RAID1 16
 
+#ifndef OBD_RAID1_DEVICENAME
+#define OBD_RAID1_DEVICENAME "obdraid1"
+#endif
 
 struct raid1_obd {
 	unsigned int raid1_count; /* how many replicas */

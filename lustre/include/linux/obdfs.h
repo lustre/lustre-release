@@ -14,69 +14,13 @@
 #include <linux/obd_class.h>
 #include <linux/list.h>
 
-/* super.c */
-void obdfs_read_inode(struct inode *inode);
-
-/* flush.c */
-int obdfs_flushd_init(void);
-int obdfs_flushd_cleanup(void);
-int obdfs_flush_reqs(struct list_head *inode_list, int check_time);
-void obdfs_flush_dirty_pages(int check_time);
-
-/* rw.c */
-int obdfs_do_writepage(struct inode *, struct page *, int sync);
-int obdfs_init_pgrqcache(void);
-void obdfs_cleanup_pgrqcache(void);
-int obdfs_readpage(struct dentry *dentry, struct page *page);
-int obdfs_writepage(struct dentry *dentry, struct page *page);
-struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
-			   int create, int locked);
-int obdfs_write_one_page(struct file *file, struct page *page,
-			 unsigned long offset, unsigned long bytes,
-			 const char * buf);
-void obdfs_dequeue_reqs(struct inode *inode);
-
-/* namei.c */
-struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry);
-int obdfs_create (struct inode * dir, struct dentry * dentry, int mode);
-int obdfs_mkdir(struct inode *dir, struct dentry *dentry, int mode);
-int obdfs_rmdir(struct inode *dir, struct dentry *dentry);
-int obdfs_unlink(struct inode *dir, struct dentry *dentry);
-int obdfs_mknod(struct inode *dir, struct dentry *dentry, int mode, int rdev);
-int obdfs_symlink(struct inode *dir, struct dentry *dentry,
-		  const char *symname);
-int obdfs_link(struct dentry *old_dentry, struct inode *dir,
-	       struct dentry *dentry);
-int obdfs_rename(struct inode *old_dir, struct dentry *old_dentry,
-		 struct inode *new_dir, struct dentry *new_dentry);
-
-/* dir.c */
-int obdfs_check_dir_entry (const char * function, struct inode * dir,
-			  struct ext2_dir_entry_2 * de, struct page * page,
-			  unsigned long offset);
-
-/* symlink.c */
-int obdfs_readlink (struct dentry *, char *, int);
-struct dentry *obdfs_follow_link(struct dentry *, struct dentry *,
-				 unsigned int); 
-
-
-/* list of all OBDFS super blocks  */
-struct list_head obdfs_super_list;
-
 struct obdfs_pgrq {
 	struct list_head	 rq_plist;	/* linked list of req's */
 	unsigned long            rq_jiffies;
 	struct page 		*rq_page;	/* page to be written */
 };
 
-
-inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq);
-int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io, obd_count num_oa,
-		    struct obdo **obdos, obd_count *oa_bufs,
-		    struct page **pages, char **bufs, obd_size *counts,
-		    obd_off *offsets, obd_flag *flags);
-
+struct list_head obdfs_super_list;	 /* list of all OBDFS superblocks */
 
 struct obdfs_sb_info {
 	struct list_head	 osi_list;	/* list of supers */
@@ -96,6 +40,64 @@ struct obdfs_inode_info {
 	struct list_head oi_pages;
 	char 		 oi_inline[OBD_INLINESZ];
 };
+
+/* dir.c */
+int obdfs_check_dir_entry (const char * function, struct inode * dir,
+			  struct ext2_dir_entry_2 * de, struct page * page,
+			  unsigned long offset);
+extern struct file_operations obdfs_dir_operations;
+extern struct inode_operations obdfs_dir_inode_operations;
+
+/* file.c */
+extern struct file_operations obdfs_file_operations;
+extern struct inode_operations obdfs_file_inode_operations;
+
+/* flush.c */
+int obdfs_flushd_init(void);
+int obdfs_flushd_cleanup(void);
+int obdfs_flush_reqs(struct list_head *inode_list, int check_time);
+void obdfs_flush_dirty_pages(int check_time);
+
+/* namei.c */
+struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry);
+int obdfs_create (struct inode * dir, struct dentry * dentry, int mode);
+int obdfs_mkdir(struct inode *dir, struct dentry *dentry, int mode);
+int obdfs_rmdir(struct inode *dir, struct dentry *dentry);
+int obdfs_unlink(struct inode *dir, struct dentry *dentry);
+int obdfs_mknod(struct inode *dir, struct dentry *dentry, int mode, int rdev);
+int obdfs_symlink(struct inode *dir, struct dentry *dentry,
+		  const char *symname);
+int obdfs_link(struct dentry *old_dentry, struct inode *dir,
+	       struct dentry *dentry);
+int obdfs_rename(struct inode *old_dir, struct dentry *old_dentry,
+		 struct inode *new_dir, struct dentry *new_dentry);
+
+/* rw.c */
+int obdfs_do_writepage(struct inode *, struct page *, int sync);
+int obdfs_init_pgrqcache(void);
+void obdfs_cleanup_pgrqcache(void);
+inline void obdfs_pgrq_del(struct obdfs_pgrq *pgrq);
+int obdfs_readpage(struct dentry *dentry, struct page *page);
+int obdfs_writepage(struct dentry *dentry, struct page *page);
+struct page *obdfs_getpage(struct inode *inode, unsigned long offset,
+			   int create, int locked);
+int obdfs_write_one_page(struct file *file, struct page *page,
+			 unsigned long offset, unsigned long bytes,
+			 const char * buf);
+int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io, obd_count num_oa,
+		    struct obdo **obdos, obd_count *oa_bufs,
+		    struct page **pages, char **bufs, obd_size *counts,
+		    obd_off *offsets, obd_flag *flags);
+
+/* super.c */
+
+/* symlink.c */
+extern struct inode_operations obdfs_symlink_inode_operations;
+
+/* sysctl.c */
+void obdfs_sysctl_init(void);
+void obdfs_sysctl_clean(void);
+
 
 static inline struct obdfs_inode_info *obdfs_i2info(struct inode *inode)
 {
@@ -160,14 +162,6 @@ static inline void obdfs_print_plist(struct inode *inode)
 	printk("\n");
 	/* obd_up(&obdfs_i2sbi(inode)->osi_list_mutex); */
 }
-
-void obdfs_sysctl_init(void);
-void obdfs_sysctl_clean(void);
-
-extern struct file_operations obdfs_file_operations;
-extern struct inode_operations obdfs_file_inode_operations;
-extern struct inode_operations obdfs_dir_inode_operations;
-extern struct inode_operations obdfs_symlink_inode_operations;
 
 static inline int obdfs_has_inline(struct inode *inode)
 {

@@ -5,6 +5,10 @@
 
 #include <linux/iobuf.h>
 
+#ifndef OBD_EXT2_DEVICENAME
+#define OBD_EXT2_DEVICENAME "obdext2"
+#endif
+
 struct ext2_obd {
 	struct super_block * ext2_sb;
 };
@@ -30,6 +34,13 @@ struct ext2_group_desc * ext2_get_group_desc(struct super_block * sb,
 
 /* bitmap.c */
 unsigned long ext2_count_free(struct buffer_head * map, unsigned int numchars);
+
+/* dir.c */
+extern struct inode_operations ext2_dir_inode_operations;
+
+/* file.c */
+extern struct file_operations ext2_file_operations;
+extern struct inode_operations ext2_file_inode_operations;
 
 /* fsync.c */
 int ext2_sync_file(struct file * file, struct dentry *dentry);
@@ -57,29 +68,18 @@ inline long ext2_block_map (struct inode * inode, long block);
 #else
 #  undef ext2_debug
 #  define ext2_debug(format, a...) {}
-#  define ext2_error(sb, func, format, a...) printk(KERN_ERR "%s: " format, func, ## a);
-#  define ext2_panic(sb, func, format, a...) printk(KERN_CRIT "%s: " format, func, ## a);
-#  define ext2_warning(sb, func, format, a...) printk(KERN_WARNING "%s: " format, func, ## a);
+#  define ext2_error(sb, func, format, a...) printk(KERN_ERR "%s: " format, func, ## a)
+#  define ext2_panic(sb, func, format, a...) printk(KERN_CRIT "%s: " format, func, ## a)
+#  define ext2_warning(sb, func, format, a...) printk(KERN_WARNING "%s: " format, func, ## a)
 #endif
 
-
+extern struct super_operations ext2_sops;
 int obd_remount (struct super_block * sb, int * flags, char * data);
 struct super_block * ext2_read_super (struct super_block * sb, void * data,
 				      int silent);
 
 /* truncate.c */
 void obd_truncate (struct inode * inode);
-
-/* operations */
-/* dir.c */
-extern struct inode_operations ext2_dir_inode_operations;
-
-/* file.c */
-extern struct file_operations ext2_file_operations;
-extern struct inode_operations ext2_file_inode_operations;
-
-/* super.c */
-extern struct super_operations ext2_sops;
 
 static inline struct page *addr_to_page(char *buf)
 {
@@ -95,6 +95,5 @@ static inline struct page *addr_to_page(char *buf)
 	else 
 		return 0;
 }
-
 
 #endif

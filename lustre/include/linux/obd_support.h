@@ -4,7 +4,7 @@
 #include <linux/malloc.h>
 #include <linux/vmalloc.h>
 
-#define EXT2_OBD_DEBUG
+#undef EXT2_OBD_DEBUG
 
 
 #define MIN(a,b) (((a)<(b)) ? (a): (b))

@@ -3,6 +3,10 @@
 
 #define OBD_SNAP_MAGIC 0xfffffff3   /* an unlikely block number */
 
+#ifndef OBD_SNAP_DEVICENAME
+#define OBD_SNAP_DEVICENAME "obdsnap"
+#endif
+
 /* ioctls for manipulating snapshots 40 - 60 */
 #define OBD_SNAP_SETTABLE	_IOWR('f', 40, long)
 #define OBD_SNAP_PRINTTABLE	_IOWR('f', 41, long)
