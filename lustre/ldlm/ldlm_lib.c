@@ -99,7 +99,6 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         cli->cl_dirty = 0;
         cli->cl_avail_grant = 0;
         cli->cl_dirty_max = OSC_MAX_DIRTY_DEFAULT * 1024 * 1024;
-        cli->cl_ost_can_grant = 1;
         INIT_LIST_HEAD(&cli->cl_cache_waiters);
         INIT_LIST_HEAD(&cli->cl_loi_ready_list);
         INIT_LIST_HEAD(&cli->cl_loi_write_list);
@@ -382,8 +381,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         struct obd_uuid remote_uuid;
         struct list_head *p;
         char *str, *tmp;
-        struct ptlrpc_connect_rep *repmsg;
-        int rc = 0, abort_recovery, size = sizeof(*repmsg);
+        int rc = 0, abort_recovery;
         ENTRY;
 
         LASSERT_REQSWAB (req, 0);
@@ -429,10 +427,9 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
 
         memcpy(&conn, tmp, sizeof conn);
 
-        rc = lustre_pack_reply(req, 1, &size, NULL);
+        rc = lustre_pack_reply(req, 0, NULL, NULL);
         if (rc)
                 GOTO(out, rc);
-        repmsg = lustre_msg_buf(req->rq_repmsg, 1, size);
 
         /* lctl gets a backstage, all-access pass. */
         if (obd_uuid_equals(&cluuid, &target->obd_uuid))
@@ -479,7 +476,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
                         rc = -EBUSY;
                 } else {
  dont_check_exports:
-                        rc = obd_connect(&conn, target, &cluuid, size, repmsg);
+                        rc = obd_connect(&conn, target, &cluuid);
                 }
         }
 
