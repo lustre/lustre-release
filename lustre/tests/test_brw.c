@@ -21,7 +21,7 @@
 
 #ifndef LPU64
 #define LPU64 "%Lu"
-#define LPX64 "%Lx"
+#define LPX64 "%#Lx"
 #endif
 
 #define READ  1
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
 		}
 	}
 
-        printf("%s: %s on %s(objid 0x"LPX64") for "LPU64"x%ld pages \n",
+        printf("%s: %s on %s(objid "LPX64") for "LPU64"x%ld pages \n",
 	       argv[0], flags & O_DIRECT ? "directio" : "i/o",
 	       argv[1], objid, count, pg_vec);
 

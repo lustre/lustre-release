@@ -668,7 +668,7 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
 
         inode = object_dentry->d_inode;
         if (inode == NULL) {
-                CERROR("trying to destroy negative inode "LPD64"!\n", oa->o_id);
+                CERROR("trying to destroy negative inode "LPX64"!\n", oa->o_id);
                 GOTO(out, rc = -ENOENT);
         }
 

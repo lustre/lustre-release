@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.36 2002/09/08 20:05:15 pschwan Exp $";
-#define OBDECHO_VERSION "$Revision: 1.36 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.37 2002/09/11 05:17:03 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.37 $"
 
 #define EXPORT_SYMTAB
 
@@ -169,7 +169,7 @@ int echo_destroy(struct lustre_handle *conn, struct obdo *oa,
         }
 
         if (oa->o_id > obd->u.echo.eo_lastino || oa->o_id < ECHO_INIT_OBJID) {
-                CERROR("bad destroy objid: 0x"LPX64"\n", oa->o_id);
+                CERROR("bad destroy objid: "LPX64"\n", oa->o_id);
                 RETURN(-EINVAL);
         }
 

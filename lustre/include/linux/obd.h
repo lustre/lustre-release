@@ -314,11 +314,11 @@ struct obd_ops {
 #if BITS_PER_LONG > 32
 #define LPU64 "%lu"
 #define LPD64 "%ld"
-#define LPX64 "%lx"
+#define LPX64 "%#lx"
 #else
 #define LPU64 "%Lu"
 #define LPD64 "%Ld"
-#define LPX64 "%Lx"
+#define LPX64 "%#Lx"
 #endif
 
 static inline void *mds_fs_start(struct mds_obd *mds, struct inode *inode,

@@ -826,7 +826,7 @@ static int obd_class_ioctl (struct inode * inode, struct file * filp,
                 pages = data->ioc_count / PAGE_SIZE;
                 off = data->ioc_offset;
 
-                CDEBUG(D_INODE, "BRW %s with %d pages @ 0x"LPX64"\n",
+                CDEBUG(D_INODE, "BRW %s with %d pages @ "LPX64"\n",
                        rw == OBD_BRW_READ ? "read" : "write", pages, off);
                 OBD_ALLOC(pga, pages * sizeof(*pga));
                 if (!pga) {
