@@ -21,6 +21,8 @@ int ldlm_run_ast_work(struct ldlm_namespace *, struct list_head *rpc_list);
 typedef int (*ldlm_processing_policy)(struct ldlm_lock *lock, int *flags,
                                       int first_enq, ldlm_error_t *err);
 
+struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
+
 /* ldlm_plain.c */
 int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err);
@@ -32,3 +34,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
 /* ldlm_flock.c */
 int ldlm_process_flock_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                             ldlm_error_t *err);
+
+/* ldlm_lockd.c */
+int ldlm_get_ref(void);
+void ldlm_put_ref(void);
