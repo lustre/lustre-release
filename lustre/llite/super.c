@@ -35,12 +35,9 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_light.h>
 
-//struct list_head ll_super_list;
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
-long ll_cache_count = 0;
-long ll_mutex_start = 0;
 long obd_memory = 0;
 
 static char *ll_read_opt(const char *opt, char *data)
@@ -112,8 +109,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
 
         memset(sbi, 0, sizeof(*sbi));
 
-	printk(__FUNCTION__ "line %d\n", __LINE__); 
-
         ll_options(data, &device, &version);
 	printk(__FUNCTION__ "line %d\n", __LINE__); 
         if ( !device ) {
@@ -121,7 +116,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
 		sb = NULL; 
                 goto ERR;
         }
-	printk(__FUNCTION__ "line %d\n", __LINE__); 
 
 	devno = simple_strtoul(device, NULL, 0);
         if ( devno >= MAX_OBD_DEVICES ) {
@@ -129,7 +123,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
 		sb = NULL; 
                 goto ERR;
         } 
-	printk(__FUNCTION__ "line %d\n", __LINE__); 
 
         sbi->ll_conn.oc_dev = &obd_dev[devno];
         err = obd_connect(&sbi->ll_conn);
@@ -138,14 +131,11 @@ static struct super_block * ll_read_super(struct super_block *sb,
 		sb = NULL; 
                 goto ERR;
         }
-	printk(__FUNCTION__ "line %d\n", __LINE__); 
 	connected = 1;
 
-	printk(__FUNCTION__ "line %d\n", __LINE__); 
 	err = kportal_uuid_to_peer("mds", &sbi->ll_peer);
 	if (err == 0)
 		sbi->ll_peer_ptr = &sbi->ll_peer;
-	printk(__FUNCTION__ "line %d\n", __LINE__); 
 
         sbi->ll_super = sb;
 	sbi->ll_rootino = 2;
@@ -161,13 +151,11 @@ static struct super_block * ll_read_super(struct super_block *sb,
 	err = mdc_getattr(sbi->ll_peer_ptr, sbi->ll_rootino, S_IFDIR, 
 			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 
 			  &rep, &hdr);
-	printk(__FUNCTION__ "line %d\n", __LINE__); 
         if (err) {
                 printk(__FUNCTION__ ": mds_getattr failed for root %d\n", err);
 		sb = NULL; 
                 goto ERR;
         }
-	printk(__FUNCTION__ "line %d\n", __LINE__); 
                          
         root = iget4(sb, sbi->ll_rootino, NULL, rep);
         if (root) {
@@ -177,7 +165,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
 	    sb = NULL; 
             goto ERR;
         } 
-	printk(__FUNCTION__ "line %d\n", __LINE__); 
         
 ERR:
 	if (hdr)
@@ -210,32 +197,34 @@ static void ll_put_super(struct super_block *sb)
 } /* ll_put_super */
 
 
-extern void write_inode_pages(struct inode *);
-/* This routine is called from iput() (for each unlink on the inode).
- * We can't put this call into delete_inode() since that is called only
- * when i_count == 0, and we need to keep a reference on the inode while
- * it is in the page cache, which means i_count > 0.  Catch 22.
- */
-static void ll_put_inode(struct inode *inode)
+extern inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid);
+static void ll_delete_inode(struct inode *inode)
 {
-        ENTRY;
-        if (inode->i_nlink && (atomic_read(&inode->i_count) == 1)) {
-		write_inode_pages(inode);
-                EXIT;
-                return;
-        }
 
-        //ll_dequeue_pages(inode);
-        EXIT;
-} /* ll_put_inode */
+	if (S_ISREG(inode->i_mode)) { 
+		int err; 
+		struct obdo *oa; 
+		oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
+		if (!oa) { 
+			printk(__FUNCTION__ ": no memory\n"); 
+		}
+
+		err = obd_destroy(IID(inode), oa); 
+		printk(__FUNCTION__  ": obd destroy of %Ld error %d\n", 
+		       oa->o_id, err);
+		obdo_free(oa);
+	}
+
+	clear_inode(inode); 
+}
 
 /* like inode_setattr, but doesn't mark the inode dirty */ 
-static int ll_attr2inode(struct inode * inode, struct iattr * attr)
+static int ll_attr2inode(struct inode * inode, struct iattr * attr, int trunc)
 {
 	unsigned int ia_valid = attr->ia_valid;
 	int error = 0;
 
-	if ((ia_valid & ATTR_SIZE) && attr->ia_size < inode->i_size ) {
+	if ((ia_valid & ATTR_SIZE) && trunc ) {
 		error = vmtruncate(inode, attr->ia_size);
 		if (error)
 			goto out;
@@ -262,17 +251,16 @@ out:
 	return error;
 }
 
-int ll_inode_setattr(struct inode *inode, struct iattr *attr)
+int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc)
 {
 	struct ptlrep_hdr *hdr = NULL;
-        struct ll_sb_info *sbi =
-		(struct ll_sb_info *)(&inode->i_sb->u.generic_sbp);
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
 	int err;
 
         ENTRY;
 
 	/* change incore inode */
-	ll_attr2inode(inode, attr);
+	ll_attr2inode(inode, attr, do_trunc);
 
 	err = mdc_setattr(sbi->ll_peer_ptr, inode, attr, NULL, &hdr); 
         if ( err )
@@ -284,7 +272,7 @@ int ll_inode_setattr(struct inode *inode, struct iattr *attr)
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
 {
-	return ll_inode_setattr(de->d_inode, attr);
+	return ll_inode_setattr(de->d_inode, attr, 1);
 }
 
 static int ll_statfs(struct super_block *sb, struct statfs *buf)
@@ -376,12 +364,7 @@ static inline void ll_read_inode2(struct inode *inode, void *opaque)
                 inode->i_mapping->a_ops = &ll_dir_aops;
                 EXIT;
         } else if (S_ISLNK(inode->i_mode)) {
-                if (inode->i_blocks) { 
-                        inode->i_op = &ll_symlink_inode_operations;
-                        inode->i_mapping->a_ops = &ll_aops;
-                }else {
-                        inode->i_op = &ll_fast_symlink_inode_operations;
-                }
+		inode->i_op = &ll_fast_symlink_inode_operations;
                 EXIT;
         } else {
                 init_special_inode(inode, inode->i_mode,
@@ -396,8 +379,7 @@ static inline void ll_read_inode2(struct inode *inode, void *opaque)
 struct super_operations ll_super_operations =
 {
 	read_inode2: ll_read_inode2,
-	// put_inode: ll_put_inode,
-        // delete_inode: ll_delete_inode,
+        delete_inode: ll_delete_inode,
         put_super: ll_put_super,
         // statfs: ll_statfs
 };

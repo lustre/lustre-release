@@ -10,7 +10,7 @@ modulefs_DATA = llight.o
 EXTRA_PROGRAMS = llight
 
 page.c: 
-	ln -s ../lib/page.c
+	-ln -s ../lib/page.c
 
 
 llight_SOURCES =  page.c super.c rw.c file.c dir.c sysctl.c namei.c symlink.c

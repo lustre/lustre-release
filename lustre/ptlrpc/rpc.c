@@ -330,12 +330,12 @@ static int req_init_portals(void)
         return rc;
 }
 
-static int  init_module(void)
+static int __init ptlrpc_init(void)
 {
         return req_init_portals();
 }
 
-static void cleanup_module(void)
+static void __exit ptlrpc_exit(void)
 {
         PtlEQFree(req_eq);
 
@@ -347,4 +347,7 @@ static void cleanup_module(void)
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Lustre Request Processor v1.0");
 MODULE_LICENSE("GPL"); 
+
+module_init(ptlrpc_init);
+module_exit(ptlrpc_exit);
 

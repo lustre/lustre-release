@@ -28,6 +28,8 @@
 #include <linux/obd_support.h> /* for ENTRY and EXIT only */
 #include <linux/lustre_light.h>
 
+
+
 static int ll_fast_readlink(struct dentry *dentry, char *buffer, int buflen)
 {
         char *s = ll_i2info(dentry->d_inode)->lli_inline;
@@ -47,48 +49,3 @@ struct inode_operations ll_fast_symlink_inode_operations = {
 	setattr:        ll_setattr
 };
 
-static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
-{
-        struct page *page = NULL;
-        int res;
-
-        ENTRY;
-        OIDEBUG(dentry->d_inode);
-        page = ll_getpage(dentry->d_inode, 0, 0, 0);
-        /* PDEBUG(page, "readlink"); */
-        if (!page) {
-                EXIT;
-                return 0;
-        }
-        res = vfs_readlink(dentry, buffer, buflen, (char *)page_address(page));
-        page_cache_release(page);
-        EXIT;
-        return res;
-} /* ll_readlink */
-
-static int ll_follow_link(struct dentry * dentry,
-                             struct nameidata *nd)
-{
-        struct page *page = NULL;
-        int res;
-
-        ENTRY;
-        OIDEBUG(dentry->d_inode);
-        page = ll_getpage(dentry->d_inode, 0, 0, 0);
-        /* PDEBUG(page, "follow_link"); */
-        if (!page) {
-                dput(nd->dentry);
-                EXIT;
-                return -EIO;
-        }
-        res = vfs_follow_link(nd, (char *)page_address(page));
-        page_cache_release(page);
-        EXIT;
-        return res;
-}
-
-struct inode_operations ll_symlink_inode_operations = {
-        readlink:       ll_readlink,
-        follow_link:    ll_follow_link,
-	setattr:        ll_setattr
-};

@@ -31,11 +31,75 @@
 #include <linux/mm.h>
 #include <linux/obd_support.h>
 #include <linux/locks.h>
+#include <asm/uaccess.h>
+#include <linux/lustre_lib.h>
+#include <linux/lustre_idl.h>
+#include <linux/lustre_mds.h>
+#include <linux/lustre_light.h>
 
 typedef struct ext2_dir_entry_2 ext2_dirent;
 
 #define PageChecked(page)        test_bit(PG_checked, &(page)->flags)
 #define SetPageChecked(page)     set_bit(PG_checked, &(page)->flags)
+
+
+static int ll_dir_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
+{
+	return 0;
+}
+
+/* returns the page unlocked, but with a reference */
+static int ll_dir_readpage(struct file *file, struct page *page)
+{
+	struct inode *inode = page->mapping->host;
+        struct ll_sb_info *sbi = ll_i2sbi(inode);
+	char *buf;
+	__u64 offset;
+        int rc = 0;
+	struct ptlrep_hdr *hdr;
+
+        ENTRY;
+
+	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT) 
+	     <= page->index) {
+		memset(kmap(page), 0, PAGE_CACHE_SIZE);
+		kunmap(page);
+		goto readpage_out;
+	}
+
+	if (Page_Uptodate(page)) {
+		EXIT;
+		goto readpage_out;
+	}
+
+	offset = page->index << PAGE_SHIFT; 
+	buf = kmap(page);
+        rc = mdc_readpage(sbi->ll_peer_ptr, inode->i_ino, S_IFDIR, offset, buf,
+			  NULL, &hdr);
+	kunmap(page); 
+        if ( rc ) {
+		EXIT; 
+		goto readpage_out;
+        } 
+
+	if ((rc = hdr->status)) {
+		EXIT;
+		goto readpage_out;
+	}
+
+        /* PDEBUG(page, "READ"); */
+
+	SetPageUptodate(page);
+ readpage_out:
+	obd_unlock_page(page);
+        EXIT;
+        return rc;
+} /* ll_dir_readpage */
+
+struct address_space_operations ll_dir_aops = {
+        readpage: ll_dir_readpage,
+        prepare_write: ll_dir_prepare_write
+};
 
 int waitfor_one_page(struct page *page)
 {
@@ -479,9 +543,9 @@ got_it:
 	from = (char*)de - (char*)page_address(page);
 	to = from + rec_len;
 	lock_page(page);
-	//err = page->mapping->a_ops->prepare_write(NULL, page, from, to);
-	//if (err)
-	//	goto out_unlock;
+	err = page->mapping->a_ops->prepare_write(NULL, page, from, to);
+	if (err)
+		goto out_unlock;
 	if (de->inode) {
 		ext2_dirent *de1 = (ext2_dirent *) ((char *) de + name_len);
 		de1->rec_len = cpu_to_le16(rec_len - name_len);

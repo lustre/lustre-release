@@ -45,6 +45,22 @@ static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_reques
 	}
 
 	printk("mds_setattr: ino %ld\n", de->d_inode->i_ino);
+
+	/* a _really_ horrible hack to avoid removing the data stored
+	   in the block pointers; this data is the object id 
+           this will go into an extended attribute at some point.
+	*/
+	if ( rec->ur_iattr.ia_valid & ATTR_SIZE ) { 
+		/* ATTR_SIZE would invoke truncate: clear it */ 
+		rec->ur_iattr.ia_valid &= ~ATTR_SIZE;
+		de->d_inode->i_size = rec->ur_iattr.ia_size;
+		/* make sure _something_ gets set - so new inode
+		   goes to disk (probably won't work over XFS */
+		if (!rec->ur_iattr.ia_valid & ATTR_MODE) { 
+			rec->ur_iattr.ia_valid |= ATTR_MODE;
+			rec->ur_iattr.ia_mode = de->d_inode->i_mode;
+		}
+	}
 	if ( de->d_inode->i_op->setattr ) {
 		req->rq_rephdr->status =
 			de->d_inode->i_op->setattr(de, &rec->ur_iattr);
@@ -188,7 +204,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 		return 0;
 	}
 
-	switch (de->d_inode->i_mode & S_IFMT) {
+	switch (dchild->d_inode->i_mode & S_IFMT) {
 	case S_IFDIR:
 		rc = vfs_rmdir(de->d_inode, dchild);
 		EXIT;

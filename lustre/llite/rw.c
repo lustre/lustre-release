@@ -31,7 +31,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_light.h>
 
-int ll_inode_setattr(struct inode *inode, struct iattr *attr);
+int ll_inode_setattr(struct inode *inode, struct iattr *attr, int do_trunc);
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,10))
 /*
@@ -79,9 +79,15 @@ void set_page_dirty(struct page *page)
 }
 #endif
 
-static void inline ll_oa_from_inode(struct obdo *oa, struct inode *inode)
+inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid)
 {
         struct ll_inode_info *oinfo = ll_i2info(inode);
+	struct obdo *oa = obdo_alloc();
+        if ( !oa ) {
+		printk(__FUNCTION__ ": no memory to allocate obdo!\n"); 
+                return NULL;
+        }
+	oa->o_valid = valid;
 
         if ( oa->o_valid & OBD_MD_FLID )
                 oa->o_id = oinfo->lli_objid;
@@ -123,6 +129,7 @@ static void inline ll_oa_from_inode(struct obdo *oa, struct inode *inode)
                 oa->o_obdflags |= OBD_FL_INLINEDATA;
                 oa->o_valid |= OBD_MD_FLINLINE;
         }
+	return oa;
 } /* ll_oa_from_inode */
 
 
@@ -149,7 +156,7 @@ void __set_page_clean(struct page *page)
 	EXIT;
 }
 
-/* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
+/* SYNCHRONOUS I/O to object storage for an inode */
 static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
 {
         obd_count        num_obdo = 1;
@@ -162,18 +169,12 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
 
         ENTRY;
 
-        oa = obdo_alloc();
-        if ( !oa ) {
-                EXIT;
-                return -ENOMEM;
-        }
-	oa->o_valid = OBD_MD_FLNOTOBD;
-        ll_oa_from_inode(oa, inode);
-
+        oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
+	if (!oa) { 
+		return -ENOMEM;
+	}
         err = obd_brw(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);
-        //if ( !err )
-	//      ll_to_inode(inode, oa); /* copy o_blocks to i_blocks */
 
         obdo_free(oa);
         EXIT;
@@ -182,57 +183,6 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
 
 extern void set_page_clean(struct page *);
 
-/* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
-static int ll_commit_page(struct page *page, int create, int from, int to)
-{
-	struct inode *inode = page->mapping->host;
-        obd_count        num_obdo = 1;
-        obd_count        bufs_per_obdo = 1;
-        struct obdo     *oa;
-        obd_size         count = to;
-        obd_off          offset = (((obd_off)page->index) << PAGE_SHIFT) + to;
-        obd_flag         flags = create ? OBD_BRW_CREATE : 0;
-        int              err;
-	struct iattr     iattr;
-
-        ENTRY;
-        oa = obdo_alloc();
-        if ( !oa ) {
-                EXIT;
-                return -ENOMEM;
-        }
-	oa->o_valid = OBD_MD_FLNOTOBD;
-        ll_oa_from_inode(oa, inode);
-
-	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
-	       from, to, count);
-
-        err = obd_brw(OBD_BRW_WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
-		      &page, &count, &offset, &flags);
-        if ( !err ) {
-                SetPageUptodate(page);
-		set_page_clean(page);
-	}
-
-	if (offset > inode->i_size) {
-		iattr.ia_valid = ATTR_SIZE;
-		iattr.ia_size = offset;
-		err = ll_inode_setattr(inode, &iattr);
-		if (err) {
-			printk("mds_inode_setattr failed; do something dramatic.\n");
-			obdo_free(oa);
-			EXIT;
-			return -EIO;
-		}
-	}
-
-        //if ( !err )
-	//      ll_to_inode(inode, oa); /* copy o_blocks to i_blocks */
-
-        obdo_free(oa);
-        EXIT;
-        return err;
-} /* ll_brw */
 
 
 /* returns the page unlocked, but with a reference */
@@ -255,12 +205,11 @@ int ll_readpage(struct file *file, struct page *page)
 		goto readpage_out;
 	}
 
-        rc = ll_brw(READ, inode, page, 0);
+        rc = ll_brw(OBD_BRW_READ, inode, page, 0);
         if ( rc ) {
 		EXIT; 
 		return rc;
         } 
-        /* PDEBUG(page, "READ"); */
 
  readpage_out:
 	SetPageUptodate(page);
@@ -269,59 +218,6 @@ int ll_readpage(struct file *file, struct page *page)
         return 0;
 } /* ll_readpage */
 
-
-int ll_dir_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
-{
-	return 0;
-}
-/* returns the page unlocked, but with a reference */
-int ll_dir_readpage(struct file *file, struct page *page)
-{
-	struct inode *inode = page->mapping->host;
-        struct ll_sb_info *sbi =
-		(struct ll_sb_info *)(&inode->i_sb->u.generic_sbp);
-	char *buf;
-	__u64 offset;
-        int rc = 0;
-	struct ptlrep_hdr *hdr;
-
-        ENTRY;
-
-	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT) 
-	     <= page->index) {
-		memset(kmap(page), 0, PAGE_CACHE_SIZE);
-		kunmap(page);
-		goto readpage_out;
-	}
-
-	if (Page_Uptodate(page)) {
-		EXIT;
-		goto readpage_out;
-	}
-
-	offset = page->index << PAGE_SHIFT; 
-	buf = kmap(page);
-        rc = mdc_readpage(sbi->ll_peer_ptr, inode->i_ino, S_IFDIR, offset, buf,
-			  NULL, &hdr);
-	kunmap(page); 
-        if ( rc ) {
-		EXIT; 
-		goto readpage_out;
-        } 
-
-	if ((rc = hdr->status)) {
-		EXIT;
-		goto readpage_out;
-	}
-
-        /* PDEBUG(page, "READ"); */
-
-	SetPageUptodate(page);
- readpage_out:
-	obd_unlock_page(page);
-        EXIT;
-        return rc;
-} /* ll_dir_readpage */
 
 int ll_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
 {
@@ -341,192 +237,84 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from, unsign
                 return 0;
         }
         
-        rc = ll_brw(READ, inode, page, 0);
+        rc = ll_brw(OBD_BRW_READ, inode, page, 0);
         if ( !rc ) {
                 SetPageUptodate(page);
         } 
 
  prepare_done:
 	set_page_dirty(page);
-	//SetPageDirty(page);
         EXIT;
         return rc;
 }
-
-
-/* select between SYNC and ASYNC I/O methods */
-int ll_do_writepage(struct page *page, int sync)
-{
-        struct inode *inode = page->mapping->host;
-        int err;
-
-        ENTRY;
-        /* PDEBUG(page, "WRITEPAGE"); */
-	/* XXX everything is synchronous now */
-	err = ll_brw(OBD_BRW_WRITE, inode, page, 1);
-
-        if ( !err ) {
-                SetPageUptodate(page);
-		set_page_clean(page);
-	}
-        /* PDEBUG(page,"WRITEPAGE"); */
-        EXIT;
-        return err;
-} /* ll_do_writepage */
-
-
 
 /* returns the page unlocked, but with a reference */
 int ll_writepage(struct page *page)
 {
-	int rc;
-	struct inode *inode = page->mapping->host;
+        struct inode *inode = page->mapping->host;
+        int err;
         ENTRY;
-	printk("---> writepage called ino %ld!\n", inode->i_ino);
-        rc = ll_do_writepage(page, 1);
-	if ( !rc ) {
+
+	err = ll_brw(OBD_BRW_WRITE, inode, page, 1);
+        if ( !err ) {
+                SetPageUptodate(page);
 		set_page_clean(page);
 	} else {
-		CDEBUG(D_INODE, "--> GRR %d\n", rc);
+		printk(__FUNCTION__ ": ll_brw failure %d\n", err);
 	}
         EXIT;
-	return rc;
+	return err;
 }
 
-void write_inode_pages(struct inode *inode)
+/* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
+int ll_commit_write(struct file *file, struct page *page, 
+		    unsigned from, unsigned to)
 {
-	struct list_head *tmp = &inode->i_mapping->dirty_pages;
-	
-	while ( (tmp = tmp->next) != &inode->i_mapping->dirty_pages) { 
-		struct page *page;
-		page = list_entry(tmp, struct page, list);
-		ll_writepage(page);
-	}
-}
-
-
-int ll_commit_write(struct file *file, struct page *page, unsigned from, unsigned to)
-{
-        struct inode *inode = page->mapping->host;
-	int rc = 0;
-        loff_t len = ((loff_t)page->index << PAGE_CACHE_SHIFT) + to;
-	ENTRY;
-	CDEBUG(D_INODE, "commit write ino %ld (end at %Ld) from %d to %d ,ind %ld\n",
-	       inode->i_ino, len, from, to, page->index);
-
-	rc = ll_commit_page(page, 1, from, to);
-
-        if (len > inode->i_size) {
-		ll_set_size(inode, len);
-        }
-
-        kunmap(page);
-	EXIT;
-        return rc;
-}
-
-
-/*
- * This does the "real" work of the write. The generic routine has
- * allocated the page, locked it, done all the page alignment stuff
- * calculations etc. Now we should just copy the data from user
- * space and write it back to the real medium..
- *
- * If the writer ends up delaying the write, the writer needs to
- * increment the page use counts until he is done with the page.
- *
- * Return value is the number of bytes written.
- */
-int ll_write_one_page(struct file *file, struct page *page,
-                         unsigned long offset, unsigned long bytes,
-                         const char * buf)
-{
-        struct inode *inode = file->f_dentry->d_inode;
-        int err;
+	int create = 1;
+	struct inode *inode = page->mapping->host;
+        obd_count        num_obdo = 1;
+        obd_count        bufs_per_obdo = 1;
+        struct obdo     *oa;
+        obd_size         count = to;
+        obd_off          offset = (((obd_off)page->index) << PAGE_SHIFT) + to;
+        obd_flag         flags = create ? OBD_BRW_CREATE : 0;
+        int              err;
+	struct iattr     iattr;
 
         ENTRY;
-        /* We check for complete page writes here, as we then don't have to
-         * get the page before writing over everything anyways.
-         */
-        if ( !Page_Uptodate(page) && (offset != 0 || bytes != PAGE_SIZE) ) {
-                err = ll_brw(READ, inode, page, 0);
-                if ( err )
-                        return err;
+        oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
+	if (! oa ) { 
+		return -ENOMEM;
+	}
+
+	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
+	       from, to, count);
+
+        err = obd_brw(OBD_BRW_WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
+		      &page, &count, &offset, &flags);
+        if ( !err ) {
                 SetPageUptodate(page);
-        }
+		set_page_clean(page);
+	}
+        kunmap(page);
 
-        if (copy_from_user((u8*)page_address(page) + offset, buf, bytes))
-                return -EFAULT;
+	if (offset > inode->i_size) {
+		iattr.ia_valid = ATTR_SIZE;
+		iattr.ia_size = offset;
+		/* do NOT truncate */
+		err = ll_inode_setattr(inode, &iattr, 0);
+		if (err) {
+			printk(__FUNCTION__ ": failed - %d.\n", err);
+			obdo_free(oa);
+			EXIT;
+			return -EIO;
+		}
+	}
 
-        lock_kernel();
-        err = ll_writepage(page);
-        unlock_kernel();
-
-        return (err < 0 ? err : bytes);
-} /* ll_write_one_page */
-
-/* 
- * return an up to date page:
- *  - if locked is true then is returned locked
- *  - if create is true the corresponding disk blocks are created 
- *  - page is held, i.e. caller must release the page
- *
- * modeled on NFS code.
- */
-struct page *ll_getpage(struct inode *inode, unsigned long offset,
-                           int create, int locked)
-{
-        struct page * page;
-        int index;
-        int err;
-
-        ENTRY;
-
-        offset = offset & PAGE_CACHE_MASK;
-        CDEBUG(D_INFO, "ino: %ld, offset %ld, create %d, locked %d\n",
-               inode->i_ino, offset, create, locked);
-        index = offset >> PAGE_CACHE_SHIFT;
-
-        page = grab_cache_page(&inode->i_data, index);
-
-        /* Yuck, no page */
-        if (! page) {
-            printk(KERN_WARNING " grab_cache_page says no dice ...\n");
-            EXIT;
-            return NULL;
-        }
-
-        /* PDEBUG(page, "GETPAGE: got page - before reading\n"); */
-        /* now check if the data in the page is up to date */
-        if ( Page_Uptodate(page)) { 
-                if (!locked) {
-                        if (PageLocked(page))
-                                obd_unlock_page(page);
-                } else {
-                        printk("file %s, line %d: expecting locked page\n",
-                               __FILE__, __LINE__); 
-                }
-                EXIT;
-                return page;
-        } 
-
-        err = ll_brw(READ, inode, page, create);
-
-        if ( err ) {
-                SetPageError(page);
-                obd_unlock_page(page);
-                EXIT;
-                return page;
-        }
-
-        if ( !locked )
-                obd_unlock_page(page);
-        SetPageUptodate(page);
-        /* PDEBUG(page,"GETPAGE - after reading"); */
+        obdo_free(oa);
         EXIT;
-        return page;
-} /* ll_getpage */
-
+        return err;
+} /* ll_brw */
 
 void ll_truncate(struct inode *inode)
 {
@@ -534,38 +322,22 @@ void ll_truncate(struct inode *inode)
         int err;
         ENTRY;
 
-        //ll_dequeue_pages(inode);
-
-        oa = obdo_alloc();
+	oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
         if ( !oa ) {
-                /* XXX This would give an inconsistent FS, so deal with it as
-                 * best we can for now - an obdo on the stack is not pretty.
-                 */
-                struct obdo obdo;
-
-                printk(__FUNCTION__ ": obdo_alloc failed - using stack!\n");
-
-                obdo.o_valid = OBD_MD_FLNOTOBD;
-                ll_oa_from_inode(&obdo, inode);
-
-                err = obd_punch(IID(inode), &obdo, 0, obdo.o_size);
-        } else {
-                oa->o_valid = OBD_MD_FLNOTOBD;
-                ll_oa_from_inode(oa, inode);
-
-                CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
-                       (long)oa->o_id, oa->o_size);
-                err = obd_punch(IID(inode), oa, oa->o_size, 0);
-
-                obdo_free(oa);
-        }
+                printk(__FUNCTION__ ": no memory to allocate obdo!\n");
+		return; 
+        } 
+	
+	CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
+	       (long)oa->o_id, oa->o_size);
+	err = obd_punch(IID(inode), oa, oa->o_size, 0);
+	obdo_free(oa);
 
         if (err) {
                 printk(__FUNCTION__ ": obd_truncate fails (%d)\n", err);
-                EXIT;
-                return;
         }
         EXIT;
+	return; 
 } /* ll_truncate */
 
 struct address_space_operations ll_aops = {
@@ -577,8 +349,3 @@ struct address_space_operations ll_aops = {
         bmap: NULL
 };
 
-
-struct address_space_operations ll_dir_aops = {
-        readpage: ll_dir_readpage,
-        prepare_write: ll_dir_prepare_write
-};

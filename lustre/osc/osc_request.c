@@ -130,12 +130,12 @@ extern int osc_queue_wait(struct obd_conn *conn, struct ptlrpc_request *req)
 	return 0;
 }
 
-void osc_free_req(struct ptlrpc_request *request)
+static void osc_free_req(struct ptlrpc_request *request)
 {
 	kfree(request);
 }
 
-int osc_connect(struct obd_conn *conn)
+static int osc_connect(struct obd_conn *conn)
 {
 	struct ptlrpc_request *request;
 	int rc; 
@@ -165,7 +165,7 @@ int osc_connect(struct obd_conn *conn)
 	return rc;
 }
 
-int osc_disconnect(struct obd_conn *conn)
+static int osc_disconnect(struct obd_conn *conn)
 {
 	struct ptlrpc_request *request;
 	int rc; 
@@ -192,7 +192,7 @@ int osc_disconnect(struct obd_conn *conn)
 }
 
 
-int osc_getattr(struct obd_conn *conn, struct obdo *oa)
+static int osc_getattr(struct obd_conn *conn, struct obdo *oa)
 {
 	struct ptlrpc_request *request;
 	int rc; 
@@ -224,7 +224,7 @@ int osc_getattr(struct obd_conn *conn, struct obdo *oa)
 	return 0;
 }
 
-int osc_setattr(struct obd_conn *conn, struct obdo *oa)
+static int osc_setattr(struct obd_conn *conn, struct obdo *oa)
 {
 	struct ptlrpc_request *request;
 	int rc; 
@@ -250,7 +250,7 @@ int osc_setattr(struct obd_conn *conn, struct obdo *oa)
 	return 0;
 }
 
-int osc_create(struct obd_conn *conn, struct obdo *oa)
+static int osc_create(struct obd_conn *conn, struct obdo *oa)
 {
 	struct ptlrpc_request *request;
 	int rc; 
@@ -259,6 +259,37 @@ int osc_create(struct obd_conn *conn, struct obdo *oa)
 		printk(__FUNCTION__ ": oa NULL\n"); 
 	}
 	request = ost_prep_req(OST_CREATE, 0, NULL, 0, NULL);
+	if (!request) { 
+		printk("osc_connect: cannot pack req!\n"); 
+		return -ENOMEM;
+	}
+	
+	memcpy(&request->rq_req.ost->oa, oa, sizeof(*oa));
+	request->rq_req.ost->oa.o_valid = ~0;
+	request->rq_replen = 
+		sizeof(struct ptlrep_hdr) + sizeof(struct ost_rep);
+	
+	rc = osc_queue_wait(conn, request);
+	if (rc) { 
+		EXIT;
+		goto out;
+	}
+	memcpy(oa, &request->rq_rep.ost->oa, sizeof(*oa));
+
+ out:
+	osc_free_req(request);
+	return 0;
+}
+
+static int osc_destroy(struct obd_conn *conn, struct obdo *oa)
+{
+	struct ptlrpc_request *request;
+	int rc; 
+
+	if (!oa) { 
+		printk(__FUNCTION__ ": oa NULL\n"); 
+	}
+	request = ost_prep_req(OST_DESTROY, 0, NULL, 0, NULL);
 	if (!request) { 
 		printk("osc_connect: cannot pack req!\n"); 
 		return -ENOMEM;
@@ -423,6 +454,7 @@ struct obd_ops osc_obd_ops = {
 	o_setup:   osc_setup,
 	o_cleanup: osc_cleanup, 
 	o_create: osc_create,
+	o_destroy: osc_destroy,
 	o_getattr: osc_getattr,
 	o_setattr: osc_setattr,
 	o_connect: osc_connect,

@@ -171,39 +171,5 @@ static inline struct list_head *ll_slist(struct inode *inode)
         return &sbi->ll_inodes;
 }
 
-static void inline ll_set_size (struct inode *inode, obd_size size)
-{  
-       inode->i_size = size;
-       inode->i_blocks = (inode->i_size + inode->i_sb->s_blocksize - 1) >>
-               inode->i_sb->s_blocksize_bits;
-} /* ll_set_size */
-
-
-
-#define obd_down(mutex) {                                               \
-        /* CDEBUG(D_INFO, "get lock\n"); */                             \
-        ll_mutex_start = jiffies;                                    \
-        down(mutex);                                                    \
-        if (jiffies - ll_mutex_start)                                \
-                CDEBUG(D_CACHE, "waited on mutex %ld jiffies\n",        \
-                       jiffies - ll_mutex_start);                    \
-}
-
-#define obd_up(mutex) {                                                 \
-        up(mutex);                                                      \
-        if (jiffies - ll_mutex_start > 1)                            \
-                CDEBUG(D_CACHE, "held mutex for %ld jiffies\n",         \
-                       jiffies - ll_mutex_start);                    \
-        /* CDEBUG(D_INFO, "free lock\n"); */                            \
-}
-
-/* We track if a page has been added to the OBD page cache by stting a
- * flag on the page.  We have chosen a bit that will hopefully not be
- * used for a while.
- */
-#define PG_obdcache 29
-#define OBDAddCachePage(page)   test_and_set_bit(PG_obdcache, &(page)->flags)
-#define OBDClearCachePage(page) clear_bit(PG_obdcache, &(page)->flags)
-
 #endif
 

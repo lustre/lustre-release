@@ -43,9 +43,18 @@ static char * obd_type_by_mode[S_IFMT >> S_SHIFT] = {
 
 static void filter_id(char *buf, obd_id id, obd_mode mode)
 {
-	sprintf(buf, "O/%s/%Ld", 
-		obd_type_by_mode[(mode & S_IFMT) >> S_SHIFT],
+	sprintf(buf, "O/%s/%Ld", obd_type_by_mode[(mode & S_IFMT) >> S_SHIFT],
 		id);
+}
+
+static struct file *filter_parent(obd_id id, obd_mode mode)
+{
+	char path[64];
+	struct file *file;
+	sprintf(path, "O/%s", obd_type_by_mode[(mode & S_IFMT) >> S_SHIFT]);
+
+	file = filp_open(path, O_RDONLY, 0); 
+	return file;
 }
 
 void push_ctxt(struct run_ctxt *save, struct run_ctxt *new)
@@ -67,29 +76,84 @@ void pop_ctxt(struct run_ctxt *saved)
 	mntput(saved->pwdmnt);
 }
 
+static int simple_mkdir(struct dentry *dir, char *name, int mode)
+{
+	struct dentry *dchild; 
+	int err;
+	ENTRY;
+	
+	dchild = lookup_one_len(name, dir, strlen(name));
+	if (IS_ERR(dchild)) { 
+		EXIT;
+		return PTR_ERR(dchild); 
+	}
+
+	if (dchild->d_inode) { 
+		dput(dchild);
+		EXIT;
+		return -EEXIST;
+	}
+
+	err = vfs_mkdir(dir->d_inode, dchild, mode);
+	dput(dchild);
+	
+	EXIT;
+	return err;
+}
+
+static int simple_unlink(struct dentry *dir, char *name)
+{
+	struct dentry *dchild; 
+	int err;
+	ENTRY;
+	
+	dchild = lookup_one_len(name, dir, strlen(name));
+	if (IS_ERR(dchild)) { 
+		EXIT;
+		return PTR_ERR(dchild); 
+	}
+
+	if (!dchild->d_inode) { 
+		dput(dchild);
+		EXIT;
+		return -ENOENT;
+	}
+
+	err = vfs_unlink(dir->d_inode, dchild);
+	dput(dchild);
+	
+	EXIT;
+	return err;
+}
+
 static void filter_prep(struct obd_device *obddev)
 {
 	struct run_ctxt saved;
 	struct file *file;
 	struct inode *inode;
+	loff_t off;
 	long rc;
-	int fd;
 	char rootid[128];
-	struct stat64 buf;
 	__u64 lastino = 2;
 
 	push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
-	rc = sys_mkdir("O", 0700);
-	rc = sys_mkdir("P", 0700);
-	rc = sys_mkdir("D", 0700);
-	rc = sys_mkdir("O/R", 0700);  /* regular */
-	rc = sys_mkdir("O/D", 0700);  /* directory */
-	rc = sys_mkdir("O/L", 0700);  /* symbolic links */
-	rc = sys_mkdir("O/C", 0700);  /* character devices */
-	rc = sys_mkdir("O/B", 0700);  /* block devices */
-	rc = sys_mkdir("O/F", 0700);  /* fifo's */
-	rc = sys_mkdir("O/S", 0700);  /* sockets */
-	
+	rc = simple_mkdir(current->fs->pwd, "O", 0700);
+	rc = simple_mkdir(current->fs->pwd, "P", 0700);
+	rc = simple_mkdir(current->fs->pwd, "D", 0700);
+	file  = filp_open("O", O_RDONLY, 0); 
+	if (!file || IS_ERR(file)) { 
+		printk(__FUNCTION__ ": cannot open O\n"); 
+		goto out;
+	}
+	rc = simple_mkdir(file->f_dentry, "R", 0700);  /* regular */
+	rc = simple_mkdir(file->f_dentry, "D", 0700);  /* directory */
+	rc = simple_mkdir(file->f_dentry, "L", 0700);  /* symbolic links */
+	rc = simple_mkdir(file->f_dentry, "C", 0700);  /* character devices */
+	rc = simple_mkdir(file->f_dentry, "B", 0700);  /* block devices */
+	rc = simple_mkdir(file->f_dentry, "F", 0700);  /* fifo's */
+	rc = simple_mkdir(file->f_dentry, "S", 0700);  /* sockets */
+	filp_close(file, NULL); 
+
 	filter_id(rootid, FILTER_ROOTINO, S_IFDIR);
 	file = filp_open(rootid, O_RDWR | O_CREAT, 00755);
 	if (IS_ERR(file)) {
@@ -97,47 +161,38 @@ static void filter_prep(struct obd_device *obddev)
 		goto out;
 	}
 	filp_close(file, 0);
-	rc = sys_mkdir(rootid, 0755);
-	if ( (fd = sys_open("D/status", O_RDWR | O_CREAT, 0700)) == -1 ) {
-		printk("OBD filter: cannot create status file\n");
+	rc = simple_mkdir(current->fs->pwd, rootid, 0755);
+
+	file = filp_open("D/status", O_RDWR | O_CREAT, 0700);
+	if ( !file || IS_ERR(file) ) {
+		printk("OBD filter: cannot open/create status file\n");
 		goto out;
 	}
-	if ( (rc = sys_fstat64(fd, &buf, 0)) ) { 
-		printk("OBD filter: cannot stat status file\n");
-		goto out_close;
-	}
-	if (buf.st_size == 0) { 
-		rc = sys_write(fd, (char *)&lastino, sizeof(lastino));
-		if (rc != sizeof(lastino)) { 
-			printk("OBD filter: error writing lastino\n");
-			goto out_close;
-		}
-	} else { 
-		rc = sys_read(fd, (char *)&lastino, sizeof(lastino));
-		if (rc != sizeof(lastino)) { 
-			printk("OBD filter: error reading lastino\n");
-			goto out_close;
-		}
-	}
-	obddev->u.filter.fo_lastino = lastino;
 
-	/* this is also the moment to steal operations */
-	file = filp_open("D/status", O_RDONLY | O_LARGEFILE, 0);
-	if (!file || IS_ERR(file)) { 
-		EXIT;
-		goto out_close;
-	}
+	/* steal operations */
 	inode = file->f_dentry->d_inode;
 	obddev->u.filter.fo_fop = file->f_op;
 	obddev->u.filter.fo_iop = inode->i_op;
 	obddev->u.filter.fo_aops = inode->i_mapping->a_ops;
-	filp_close(file, 0);
-	
- out_close:
-	rc = sys_close(fd);
-	if (rc) { 
-		printk("OBD filter: cannot close status file\n");
+
+	off = 0;
+	if (inode->i_size == 0) { 
+		rc = file->f_op->write(file, (char *)&lastino, 
+				       sizeof(lastino), &off);
+		if (rc != sizeof(lastino)) { 
+			printk("OBD filter: error writing lastino\n");
+			goto out;
+		}
+	} else { 
+		rc = file->f_op->read(file, (char *)&lastino, sizeof(lastino), 
+				      &off);
+		if (rc != sizeof(lastino)) { 
+			printk("OBD filter: error reading lastino\n");
+			goto out;
+		}
 	}
+	obddev->u.filter.fo_lastino = lastino;
+
  out:
 	pop_ctxt(&saved);
 }
@@ -146,20 +201,22 @@ static void filter_post(struct obd_device *obddev)
 {
 	struct run_ctxt saved;
 	long rc;
-	int fd;
+	struct file *file;
+	loff_t off = 0; 
 
 	push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
-	if ( (fd = sys_open("D/status", O_RDWR | O_CREAT, 0700)) == -1 ) {
+	file = filp_open("D/status", O_RDWR | O_CREAT, 0700);
+	if ( !file || IS_ERR(file)) { 
 		printk("OBD filter: cannot create status file\n");
 		goto out;
 	}
-	rc = sys_write(fd, (char *)&obddev->u.filter.fo_lastino, 
-		       sizeof(obddev->u.filter.fo_lastino));
+	rc = file->f_op->write(file, (char *)&obddev->u.filter.fo_lastino, 
+		       sizeof(obddev->u.filter.fo_lastino), &off);
 	if (rc != sizeof(sizeof(obddev->u.filter.fo_lastino)) ) { 
 		printk("OBD filter: error writing lastino\n");
 	}
 
-	rc = sys_close(fd);
+	rc = filp_close(file, NULL); 
 	if (rc) { 
 		printk("OBD filter: cannot close status file\n");
 	}
@@ -465,6 +522,8 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
         struct obd_device * obddev;
         struct obd_client * cli;
         struct inode * inode;
+	struct file *dir;
+	int rc;
 	struct run_ctxt saved;
 	char id[128];
 
@@ -488,15 +547,18 @@ static int filter_destroy(struct obd_conn *conn, struct obdo *oa)
 
 	filter_id(id, oa->o_id, oa->o_mode);
 	push_ctxt(&saved, &obddev->u.filter.fo_ctxt);
-	if (sys_unlink(id)) { 
-		EXIT;
-		pop_ctxt(&saved);
-		return -EPERM;
+	dir = filter_parent(oa->o_id, oa->o_mode); 
+	if (!dir || IS_ERR(dir)) { 
+		goto out;
 	}
-	pop_ctxt(&saved);
 
+	rc = simple_unlink(dir->f_dentry, id);
+	
+ out:
+	filp_close(dir, 0); 
+	pop_ctxt(&saved);
 	EXIT;
-        return 0;
+        return rc;
 }
 
 static int filter_truncate(struct obd_conn *conn, struct obdo *oa, obd_size count,
@@ -762,18 +824,20 @@ struct obd_ops filter_obd_ops = {
 };
 
 
-#ifdef MODULE
-
-void init_module(void)
+static int __init obdfilter_init(void)
 {
         printk(KERN_INFO "Filtering OBD driver  v0.001, braam@clusterfs.com\n");
-        obd_register_type(&filter_obd_ops, OBD_FILTER_DEVICENAME);
+        return obd_register_type(&filter_obd_ops, OBD_FILTER_DEVICENAME);
 }
 
-void cleanup_module(void)
+static void __exit obdfilter_exit(void)
 {
         obd_unregister_type(OBD_FILTER_DEVICENAME);
-        CDEBUG(D_MALLOC, "FILTER mem used %ld\n", filter_memory);
 }
 
-#endif
+MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
+MODULE_DESCRIPTION("Lustre Filtering OBD driver v1.0");
+MODULE_LICENSE("GPL"); 
+
+module_init(obdfilter_init);
+module_exit(obdfilter_exit);

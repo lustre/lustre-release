@@ -162,14 +162,15 @@ static struct inode *obdfs_new_inode(struct inode *dir, int mode)
 
         inode = iget4(dir->i_sb, (ino_t)oa->o_id, NULL, oa);
 	CDEBUG(D_INODE, "\n");
-        obdo_free(oa);
 
         if (!inode) {
                 printk("new_inode -fatal:  %ld\n", (long)oa->o_id);
                 obd_destroy(IID(dir), oa);
+		obdo_free(oa);
                 EXIT;
                 return ERR_PTR(-EIO);
         }
+        obdo_free(oa);
 
         if (!list_empty(&inode->i_dentry)) {
                 printk("new_inode -fatal: aliases %ld, ct %d lnk %d\n", 

@@ -1,35 +1,24 @@
 diff -u -r linux-2.4.17-stock/include/linux/fs.h linux-2.4.17/include/linux/fs.h
 --- linux-2.4.17-stock/include/linux/fs.h	Fri Dec 21 09:42:03 2001
 +++ linux-2.4.17/include/linux/fs.h	Wed Feb 20 13:39:51 2002
-@@ -984,6 +984,8 @@
+@@ -984,6 +984,7 @@
  extern int may_umount(struct vfsmount *);
  extern long do_mount(char *, char *, char *, unsigned long, void *);
  
 +struct vfsmount *do_kern_mount(char *type, int flags, char *name, void *data);
-+int do_umount(struct vfsmount *mnt, int flags);
  #define kern_umount mntput
  
  extern int vfs_statfs(struct super_block *, struct statfs *);
-@@ -1042,6 +1044,15 @@
+@@ -1042,6 +1045,6 @@
  		return __get_lease(inode, mode);
  	return 0;
  }
-+
-+/* fs/namei.c */ 
-+asmlinkage long sys_mkdir(const char * pathname, int mode);
-+asmlinkage long sys_rmdir(const char * pathname);
-+asmlinkage long sys_unlink(const char * pathname);
-+asmlinkage long sys_open(const char * filename, int flags, int mode);
-+asmlinkage long sys_fstat64(unsigned long fd, struct stat64 * statbuf, long flags);
-+asmlinkage ssize_t sys_read(unsigned int fd, char * buf, size_t count);
-+asmlinkage ssize_t sys_write(unsigned int fd, const char * buf, size_t count);
  
  /* fs/open.c */
  
-diff -u -r linux-2.4.17-stock/kernel/ksyms.c linux-2.4.17/kernel/ksyms.c
 --- linux-2.4.17-stock/kernel/ksyms.c	Fri Dec 21 09:42:04 2001
 +++ linux-2.4.17/kernel/ksyms.c	Wed Feb 20 12:57:32 2002
-@@ -280,6 +280,18 @@
+@@ -280,7 +290,11 @@
  EXPORT_SYMBOL(lock_page);
  EXPORT_SYMBOL(unlock_page);
  
@@ -37,21 +26,13 @@ diff -u -r linux-2.4.17-stock/kernel/ksyms.c linux-2.4.17/kernel/ksyms.c
 +EXPORT_SYMBOL(pagecache_lock);
 +EXPORT_SYMBOL(do_kern_mount);
 +EXPORT_SYMBOL(module_list);
-+EXPORT_SYMBOL(sys_mkdir);
-+EXPORT_SYMBOL(sys_rmdir);
-+EXPORT_SYMBOL(sys_unlink);
-+EXPORT_SYMBOL(sys_open);
-+EXPORT_SYMBOL(sys_fstat64);
-+EXPORT_SYMBOL(sys_read);
-+EXPORT_SYMBOL(sys_write);
-+
+ 
  /* device registration */
  EXPORT_SYMBOL(register_chrdev);
  EXPORT_SYMBOL(unregister_chrdev);
-diff -u -r linux-2.4.17-stock/mm/filemap.c linux-2.4.17/mm/filemap.c
 --- linux-2.4.17-stock/mm/filemap.c	Fri Dec 21 09:42:04 2001
 +++ linux-2.4.17/mm/filemap.c	Wed Feb 20 15:18:17 2002
-@@ -2862,8 +2862,10 @@
+@@ -2862,8 +2880,10 @@
  	if ((ssize_t) count < 0)
  		return -EINVAL;
  
@@ -62,7 +43,7 @@ diff -u -r linux-2.4.17-stock/mm/filemap.c linux-2.4.17/mm/filemap.c
  
  	cached_page = NULL;
  
-@@ -2987,10 +2989,12 @@
+@@ -2987,10 +3007,12 @@
  		 * same page as we're writing to, without it being marked
  		 * up-to-date.
  		 */

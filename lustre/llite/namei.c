@@ -82,7 +82,7 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 	struct mds_rep *rep; 
 	struct ptlrep_hdr *hdr = NULL; 
 	struct inode * inode = NULL;
-        struct ll_sb_info *sbi;
+        struct ll_sb_info *sbi = ll_i2sbi(dir);
 	int err;
 	int type;
 	ino_t ino;
@@ -94,8 +94,6 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 	ino = ll_inode_by_name(dir, dentry, &type);
 	if (!ino)
 		goto negative;
-
-        sbi = (struct ll_sb_info *)(&dir->i_sb->u.generic_sbp);
 
 	err = mdc_getattr(sbi->ll_peer_ptr, ino, type,
 			  OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, &rep, &hdr);
@@ -142,8 +140,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
 	struct ptlrep_hdr *hdr;
         int err;
 	time_t time = CURRENT_TIME;
-        struct ll_sb_info *sbi =
-		(struct ll_sb_info *)(&dir->i_sb->u.generic_sbp);
+        struct ll_sb_info *sbi = ll_i2sbi(dir);
 
         ENTRY;
 
@@ -193,8 +190,7 @@ int ll_mdc_unlink(struct inode *dir, const char *name, int len)
 	struct mds_rep *rep;
 	struct ptlrep_hdr *hdr;
         int err;
-        struct ll_sb_info *sbi =
-		(struct ll_sb_info *)(&dir->i_sb->u.generic_sbp);
+        struct ll_sb_info *sbi = ll_i2sbi(dir);
 
         ENTRY;
 
@@ -219,8 +215,7 @@ int ll_mdc_link(struct dentry *src, struct inode *dir,
 	struct mds_rep *rep;
 	struct ptlrep_hdr *hdr;
         int err;
-        struct ll_sb_info *sbi =
-		(struct ll_sb_info *)(&dir->i_sb->u.generic_sbp);
+        struct ll_sb_info *sbi = ll_i2sbi(dir);
 
         ENTRY;
 
@@ -245,8 +240,7 @@ int ll_mdc_rename(struct inode *src, struct inode *tgt,
 	struct mds_rep *rep;
 	struct ptlrep_hdr *hdr;
         int err;
-        struct ll_sb_info *sbi =
-		(struct ll_sb_info *)(&src->i_sb->u.generic_sbp);
+        struct ll_sb_info *sbi = ll_i2sbi(src);
 
         ENTRY;
 
@@ -322,21 +316,20 @@ static int ll_mknod (struct inode * dir, struct dentry *dentry, int mode, int rd
 static int ll_symlink (struct inode * dir, struct dentry * dentry,
 	const char * symname)
 {
-	struct super_block * sb = dir->i_sb;
 	int err = -ENAMETOOLONG;
 	unsigned l = strlen(symname);
 	struct inode * inode;
         struct ll_inode_info *oinfo;
 
-	if (l > sb->s_blocksize)
-		goto out;
+	if (l > LL_INLINESZ)
+		return err;
 
 	inode = ll_create_node(dir, dentry->d_name.name, 
 			       dentry->d_name.len, symname, l,
 			       S_IFLNK | S_IRWXUGO, 0);
 	err = PTR_ERR(inode);
 	if (IS_ERR(inode))
-		goto out;
+		return err;
 
         oinfo = ll_i2info(inode);
 	
@@ -345,13 +338,12 @@ static int ll_symlink (struct inode * dir, struct dentry * dentry,
 	inode->i_size = l-1;
 
 	err = ext2_add_nondir(dentry, inode);
-out:
-	return err;
 
-out_fail:
-	ext2_dec_count(inode);
-	iput (inode);
-	goto out;
+	if (err) { 
+		ext2_dec_count(inode);
+		iput (inode);
+	}
+	return err;
 }
 
 static int ll_link (struct dentry * old_dentry, struct inode * dir,
