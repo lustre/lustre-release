@@ -35,11 +35,11 @@ if sys.version[0] == '1':
 else:
     from fcntl import F_GETFL, F_SETFL
 
-PYMOD_DIR = "/usr/lib/lustre/python"
+PYMOD_DIR = "@PYMOD_DIR@"
 
 def development_mode():
     base = os.path.dirname(sys.argv[0])
-    if os.access(base+"/Makefile.am", os.R_OK):
+    if os.access(base+"/Makefile", os.R_OK):
         return 1
     return 0
 
@@ -699,13 +699,14 @@ def do_find_file(base, mod):
                 return module
 
 def find_module(src_dir, dev_dir, modname):
-    mod = '%s.o' % (modname)
-    module = src_dir +'/'+ dev_dir +'/'+ mod
-    try: 
-       if os.access(module, os.R_OK):
-            return module
-    except OSError:
-        pass
+    modbase = src_dir +'/'+ dev_dir +'/'+ modname
+    for modext in '.ko', '.o':
+        module = modbase + modext
+        try: 
+            if os.access(module, os.R_OK):
+                return module
+        except OSError:
+            pass
     return None
 
 # is the path a block device?
@@ -2352,6 +2353,7 @@ def setupModulePath(cmd, portals_dir = PORTALS_DIR):
     base = os.path.dirname(cmd)
     if development_mode():
         if not config.lustre:
+            debug('using objdir module paths')            
             config.lustre = (os.path.join(base, ".."))
         # normalize the portals dir, using command line arg if set
         if config.portals:
