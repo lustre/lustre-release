@@ -14,6 +14,7 @@
 #if 0
 #include <linux/extN_fs.h>
 #endif
+#include <liblustre.h>
 #include <linux/lustre_lib.h>
 #include <linux/obd.h>
 
