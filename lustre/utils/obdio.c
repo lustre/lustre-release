@@ -183,7 +183,7 @@ obdio_open (struct obdio_conn *conn, uint64_t oid, struct lustre_handle *fh)
         rc = obdio_ioctl (conn, OBD_IOC_OPEN);
         
         if (rc == 0)
-                obd_oa2handle (fh, &conn->oc_data.ioc_obdo1);
+                memcpy (fh, obdo_handle(&conn->oc_data.ioc_obdo1), sizeof (*fh));
 
         return (rc);
 }
@@ -196,7 +196,7 @@ obdio_close (struct obdio_conn *conn, uint64_t oid, struct lustre_handle *fh)
 
         conn->oc_data.ioc_obdo1.o_id = oid;
         conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
-        obd_handle2oa (&conn->oc_data.ioc_obdo1, fh);
+        memcpy (obdo_handle (&conn->oc_data.ioc_obdo1), fh, sizeof (*fh));
         conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | 
                                           OBD_MD_FLMODE | OBD_MD_FLHANDLE;
         
@@ -239,37 +239,98 @@ obdio_pwrite (struct obdio_conn *conn, uint64_t oid,
         return (obdio_ioctl (conn, OBD_IOC_BRW_WRITE));
 }
 
-void
-obdio_test_extent (struct obdio_conn *conn, uint32_t myid, int reps,
-                   uint64_t oid, uint64_t offset, uint32_t size)
+int
+obdio_enqueue (struct obdio_conn *conn, uint64_t oid,
+               int mode, uint64_t offset, uint32_t count,
+               struct lustre_handle *lh)
 {
-        char     *space;
-        char     *buffer = obdio_alloc_aligned_buffer (&space, size);
-        uint32_t *ibuf;
-        int       i;
-        int       j;
-        int       rc;
+        int   rc;
         
-        if (buffer == NULL) {
-                fprintf (stderr, "Can't allocate buffer size %d\n", size);
-                abort ();
+        obdio_iocinit (conn);
+        
+        conn->oc_data.ioc_obdo1.o_id = oid;
+        conn->oc_data.ioc_obdo1.o_mode = S_IFREG;
+        conn->oc_data.ioc_obdo1.o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLMODE;
+
+        conn->oc_data.ioc_conn1 = mode;
+        conn->oc_data.ioc_count = count;
+        conn->oc_data.ioc_offset = offset;
+        
+        rc = obdio_ioctl (conn, ECHO_IOC_ENQUEUE);
+        
+        if (rc == 0)
+                memcpy (lh, obdo_handle (&conn->oc_data.ioc_obdo1), sizeof (*lh));
+        
+        return (rc);
+}
+
+int
+obdio_cancel (struct obdio_conn *conn, struct lustre_handle *lh)
+{
+        obdio_iocinit (conn);
+
+        memcpy (obdo_handle (&conn->oc_data.ioc_obdo1), lh, sizeof (*lh));
+        
+        return (obdio_ioctl (conn, ECHO_IOC_CANCEL));
+}
+
+int
+obdio_test_fixed_extent (struct obdio_conn *conn, 
+                         uint32_t myhid, uint32_t mypid, 
+                         int reps, int locked, uint64_t oid, 
+                         uint64_t offset, uint32_t size)
+{
+        struct lustre_handle fh;
+        struct lustre_handle lh;
+        char                *space;
+        char                *buffer;
+        uint32_t            *ibuf;
+        int                  i;
+        int                  j;
+        int                  rc;
+        int                  rc2;
+        
+        rc = obdio_open (conn, oid, &fh);
+        if (rc != 0) {
+                fprintf (stderr, "Failed to open object "LPX64": %s\n",
+                         oid, strerror (errno));
+                return (rc);
         }
 
+        buffer = obdio_alloc_aligned_buffer (&space, size);
+        if (buffer == NULL) {
+                fprintf (stderr, "Can't allocate buffer size %d\n", size);
+                rc = -1;
+                goto out_0;
+        }
+        
         for (i = 0; i < reps; i++) {
                 ibuf = (uint32_t *) buffer;
                 for (j = 0; j < size / (4 * sizeof (*ibuf)); j++) {
-                        ibuf[0] = myid;
-                        ibuf[1] = i;
-                        ibuf[2] = j;
-                        ibuf[3] = myid;
+                        ibuf[0] = myhid;
+                        ibuf[1] = mypid;
+                        ibuf[2] = i;
+                        ibuf[3] = j;
                         ibuf += 4;
+                }
+
+                if (locked) {
+                        rc = obdio_enqueue (conn, oid, LCK_PW, offset, size, &lh);
+                        if (rc != 0) {
+                                fprintf (stderr, "Error on enqueue "LPX64" @ "LPU64" for %u: %s\n",
+                                         oid, offset, size, strerror (errno));
+                                goto out_1;
+                        }
                 }
                 
                 rc = obdio_pwrite (conn, oid, buffer, size, offset);
                 if (rc != 0) {
                         fprintf (stderr, "Error writing "LPX64" @ "LPU64" for %u: %s\n",
                                  oid, offset, size, strerror (errno));
-                        abort ();
+                        if (locked)
+                                obdio_cancel (conn, &lh);
+                        rc = -1;
+                        goto out_1;
                 }
                 
                 memset (buffer, 0xbb, size);
@@ -278,24 +339,46 @@ obdio_test_extent (struct obdio_conn *conn, uint32_t myid, int reps,
                 if (rc != 0) {
                         fprintf (stderr, "Error reading "LPX64" @ "LPU64" for %u: %s\n",
                                  oid, offset, size, strerror (errno));
-                        abort ();
+                        if (locked)
+                                obdio_cancel (conn, &lh);
+                        rc = -1;
+                        goto out_1;
+                }
+
+                if (locked) {
+                        rc = obdio_cancel (conn, &lh);
+                        if (rc != 0) {
+                                fprintf (stderr, "Error on cancel "LPX64" @ "LPU64" for %u: %s\n",
+                                         oid, offset, size, strerror (errno));
+                                rc = -1;
+                                goto out_1;
+                        }
                 }
                 
                 ibuf = (uint32_t *) buffer;
                 for (j = 0; j < size / (4 * sizeof (*ibuf)); j++) {
-                        if (ibuf[0] != myid ||
-                            ibuf[1] != i ||
-                            ibuf[2] != j ||
-                            ibuf[3] != myid) {
-                                fprintf (stderr, "Error checking "LPX64" @ "LPU64" for %u, chunk %d: %s\n",
-                                         oid, offset, size, j, strerror (errno));
+                        if (ibuf[0] != myhid ||
+                            ibuf[1] != mypid ||
+                            ibuf[2] != i ||
+                            ibuf[3] != j) {
+                                fprintf (stderr, "Error checking "LPX64" @ "LPU64" for %u, chunk %d\n",
+                                         oid, offset, size, j);
                                 fprintf (stderr, "Expected [%x,%x,%x,%x], got [%x,%x,%x,%x]\n",
-                                         myid, i, j, myid, ibuf[0], ibuf[1], ibuf[2], ibuf[3]);
-                                abort ();
+                                         myhid, mypid, i, j, ibuf[0], ibuf[1], ibuf[2], ibuf[3]);
+                                rc = -1;
+                                goto out_1;
                         }
                         ibuf += 4;
                 }
         }
+ out_1:
+        free (space);
+ out_0:
+        rc2 = obdio_close (conn, oid, &fh);
+        if (rc2 != 0)
+                fprintf (stderr, "Error closing object "LPX64": %s\n",
+                         oid, strerror (errno));
+        return (rc);
 }
 
 int
@@ -347,43 +430,51 @@ usage (char *cmdname, int help)
                 name = cmdname;
         
         fprintf (help ? stdout : stderr,
-                 "usage: %s -d device -s size -o offset [-i id][-n reps] oid\n",
+                 "usage: %s -d device -s size -o offset [-i id][-n reps][-l] oid\n",
                  name);
 }
 
 int
 main (int argc, char **argv) 
 {
-        struct lustre_handle fh;
-        uint32_t           myid = getpid ();
+        uint32_t           mypid = getpid ();
+        uint32_t           myhid = gethostid ();
         uint64_t           oid;
         uint64_t           base_offset = 0;
-        int                set_base = 0;
         uint32_t           size = 0;
         int                set_size = 0;
         int                device = 0;
         int                set_device = 0;
         int                reps = 1;
+        int                locked = 0;
         char              *end;
         struct obdio_conn *conn;
         uint64_t           val;
+        int                v1;
+        int                v2;
         int                rc;
         int                c;
 
-        while ((c = getopt (argc, argv, "hi:s:b:d:n:")) != -1)
+        while ((c = getopt (argc, argv, "hi:s:o:d:n:l")) != -1)
                 switch (c) {
                 case 'h':
                         usage (argv[0], 1);
                         return (0);
                         
                 case 'i':
-                        myid = strtol (optarg, &end, 0);
-                        if (end == optarg || *end != 0) {
+                        switch (sscanf (optarg, "%i.%i", &v1, &v2)) {
+                        case 1:
+                                mypid = v1;
+                                break;
+                        case 2:
+                                myhid = v1;
+                                mypid = v2;
+                                break;
+                        default:
                                 fprintf (stderr, "Can't parse id %s\n",
                                          optarg);
                                 return (1);
                         }
-                        myid = (uint32_t)val;
                         break;
                         
                 case 's':
@@ -396,14 +487,13 @@ main (int argc, char **argv)
                         set_size++;
                         break;
                         
-                case 'b':
+                case 'o':
                         if (parse_kmg (&val, optarg) != 0) {
-                                fprintf (stderr, "Can't parse base offset %s\n",
+                                fprintf (stderr, "Can't parse offset %s\n",
                                          optarg);
                                 return (1);
                         }
                         base_offset = val;
-                        set_base++;
                         break;
 
                 case 'd':
@@ -423,19 +513,19 @@ main (int argc, char **argv)
                         }
                         reps = (int)val;
                         break;
-                        
+                case 'l':
+                        locked = 1;
+                        break;
                 default:
                         usage (argv[0], 0);
                         return (1);
         }
 
         if (!set_size ||
-            !set_base ||
             !set_device ||
             optind == argc) {
                 fprintf (stderr, "No %s specified\n",
                          !set_size ? "size" :
-                         !set_base ? "base offset" :
                          !set_device ? "device" : "object id");
                 return (1);
         }
@@ -451,24 +541,12 @@ main (int argc, char **argv)
         if (conn == NULL)
                 return (1);
         
-        rc = obdio_open (conn, oid, &fh);
-        if (rc != 0) {
-                fprintf (stderr, "Failed to open object "LPX64": %s\n",
-                         oid, strerror (errno));
-                return (1);
-        }
+        rc = obdio_test_fixed_extent (conn, myhid, mypid, reps, locked, 
+                                      oid, base_offset, size);
         
-        obdio_test_extent (conn, myid, reps, oid, base_offset, size);
-        
-        rc = obdio_close (conn, oid, &fh);
-        if (rc != 0) {
-                fprintf (stderr, "Error closing object "LPX64": %s\n",
-                         oid, strerror (errno));
-                return (1);
-        }
-
         obdio_disconnect (conn);
-        return (0);
+
+        return (rc == 0 ? 0 : 1);
 }
 
 

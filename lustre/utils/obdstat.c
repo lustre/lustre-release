@@ -120,14 +120,15 @@ do_stat (void)
 	} else {
 		t = now - last;
 
-		printf ("R %7Ld (%6d/s %7.2fMb/s) W %7Ld (%6d/s %7.2fMb/s)",
+		printf ("R %6Ld (%5d %6.2fMb)/s W %6Ld (%5d %6.2fMb)/s",
 			read_reqs->delta, (int)(read_reqs->delta / t),
 			read_bytes->delta / ((1<<20) * t),
 			write_reqs->delta, (int)(write_reqs->delta / t),
 			write_bytes->delta / ((1<<20) * t));
 		
 		if (getattr_reqs->delta != 0)
-			printf (" ga:%Ld", getattr_reqs->delta);
+			printf (" ga:%Ld,%d/s", getattr_reqs->delta,
+				(int)(getattr_reqs->delta / t));
 		
 		if (setattr_reqs->delta != 0)
 			printf (" sa:%Ld", setattr_reqs->delta);
@@ -158,11 +159,18 @@ do_stat (void)
 
 int main (int argc, char **argv)
 {
-	char *basedir = "/proc/sys/obdfilter";
+        char basedir[128];
 	int  interval = 0;
+
+	if (argc < 2) {
+	   fprintf (stderr, "obd type not specified\n");
+	   return (1);
+	}
+	
+	snprintf (basedir, sizeof (basedir), "/proc/sys/%s", argv[1]);
    
-	if (argc > 1)
-		interval = atoi (argv[1]);
+	if (argc > 2)
+		interval = atoi (argv[2]);
 
 	read_bytes = init_one_stat (basedir, "read_bytes");
 	read_reqs = init_one_stat (basedir, "read_reqs");
