@@ -1554,6 +1554,55 @@ test_55() {
 }
 run_test 55 "check iopen_connect_dentry()======================="
 
+test_56() {
+        rm -rf $DIR/d56
+        mkdir $DIR/d56
+        mkdir $DIR/d56/dir
+        for i in `seq 1 3` ; do
+                touch $DIR/d56/file$i
+                touch $DIR/d56/dir/file$i
+        done
+
+        # test lfs find with --recursive
+        FILENUM=`$LFIND --recursive $DIR/d56 | grep obdidx | wc -l`
+        [ $FILENUM -eq 6 ] || error \
+                "lfs find --recursive $DIR/d56 wrong: found $FILENUM, expected 6"
+        FILENUM=`$LFIND $DIR/d56 | grep obdidx | wc -l`
+        [ $FILENUM -eq 3 ] || error \
+                "lfs find $DIR/d56 without --recursive wrong: found $FILENUM, expected 3"
+        echo "lfs find --recursive passed."
+
+        # test lfs find with file instead of dir
+        FILENUM=`$LFIND $DIR/d56/file1 | grep obdidx | wc -l`
+        [ $FILENUM  -eq 1 ] || error \
+                 "lfs find $DIR/d56/file1 wrong:found $FILENUM, expected 1"
+        echo "lfs find file passed."
+
+        #test lfs find with --verbose
+        [ `$LFIND --verbose $DIR/d56 | grep lmm_magic | wc -l` -eq 3 ] ||\
+                error "lfs find --verbose $DIR/d56 wrong: should find 3 lmm_magic info"
+        [ `$LFIND $DIR/d56 | grep lmm_magic | wc -l` -eq 0 ] || error \
+                "lfs find $DIR/d56 without --verbose wrong: should not show lmm_magic info"
+        echo "lfs find --verbose passed."
+
+        #test lfs find with --obd
+        $LFIND --obd wrong_uuid $DIR/d56 2>&1 | grep -q "unknown obduuid" || \
+                error "lfs find --obd wrong_uuid should return error information"
+
+        [  "$STRIPECOUNT" -lt 2 ] && \
+                echo "skipping other lfs find --obd test" && return
+        FILENUM=`$LFIND --recursive $DIR/d56 | sed -n '/^[\t ]*1[\t ]/p' | wc -l`
+        OBDUUID=`$LFIND --recursive $DIR/d56 | sed -n '/^[\t ]*1:/p' | awk '{print $2}'`
+        FOUND=`$LFIND -r --obd $OBDUUID $DIR/d56 | wc -l`
+        [ $FOUND -eq $FILENUM ] ||\
+                error "lfs find --obd wrong: found $FOUND, expected $FILENUM"
+        [ `$LFIND -r -v --obd $OBDUUID $DIR/d56 | sed '/^[\t ]*1[\t ]/d' | \
+                sed -n '/^[\t ]*[0-9][0-9]*[\t ]/p' | wc -l` -eq 0 ] || \
+                error "lfs find --obd wrong: should not show file on other obd"
+        echo "lfs find --obd passed."
+}
+run_test 56 "check lfs find====================================="
+
 test_59() {
 	echo "touch 130 files"
 	for i in `seq 1 130` ; do
