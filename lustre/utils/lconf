@@ -457,24 +457,31 @@ class LCTLInterface:
         self.run(cmds)
 
     def add_peer(self, net_type, nid, hostaddr, port):
-        if net_type  in ('tcp','ra') and not config.lctl_dump:
+        if net_type  in ('tcp','openib','ra') and not config.lctl_dump:
             cmds =  """
   network %s
   add_peer %s %s %d
   quit""" % (net_type,
              nid, hostaddr, port )
             self.run(cmds)
-        elif net_type in ('openib','iib',) and not config.lctl_dump:
+        elif net_type in ('iib',) and not config.lctl_dump:
             cmds =  """
   network %s
   add_peer %s
   quit""" % (net_type,
              nid )
             self.run(cmds)
+        elif net_type in ('vib',) and not config.lctl_dump:
+            cmds =  """
+  network %s
+  add_peer %s %s
+  quit""" % (net_type,
+             nid, hostaddr )
+            self.run(cmds)
     
     def connect(self, srv):
         self.add_uuid(srv.net_type, srv.nid_uuid, srv.nid)
-        if srv.net_type  in ('tcp','openib','iib','ra') and not config.lctl_dump:
+        if srv.net_type  in ('tcp','openib','iib','vib','ra') and not config.lctl_dump:
             if srv.hostaddr[0]:
                 hostaddr = string.split(srv.hostaddr[0], '/')[0]
             self.add_peer(srv.net_type, srv.nid, hostaddr, srv.port)
@@ -541,7 +548,7 @@ class LCTLInterface:
   quit""" % (net_type,
              nid, hostaddr)
                 self.run(cmds)
-        elif net_type  in ('openib','iib','ra') and not config.lctl_dump:
+        elif net_type  in ('openib','iib','vib','ra') and not config.lctl_dump:
                 cmds =  """
   ignore_errors
   network %s
@@ -553,7 +560,7 @@ class LCTLInterface:
     # disconnect one connection
     def disconnect(self, srv):
         self.del_uuid(srv.nid_uuid)
-        if srv.net_type  in ('tcp','openib','iib','ra') and not config.lctl_dump:
+        if srv.net_type  in ('tcp','openib','iib','vib','ra') and not config.lctl_dump:
             if srv.hostaddr[0]:
                 hostaddr = string.split(srv.hostaddr[0], '/')[0]
             self.del_peer(srv.net_type, srv.nid, hostaddr)
@@ -1045,7 +1052,7 @@ def sys_get_local_nid(net_type, wildcard, cluster_id):
 def sys_get_local_address(net_type, wildcard, cluster_id):
     """Return the local address for the network type."""
     local = ""
-    if net_type in ('tcp','openib','iib','ra'):
+    if net_type in ('tcp','openib','iib','vib','ra'):
         if  ':' in wildcard:
             iface, star = string.split(wildcard, ':')
             local = if2addr(iface)
@@ -1364,6 +1371,8 @@ class Network(Module):
             manager.add_portals_module("knals/openibnal", 'kopenibnal')
         if self.net_type == 'iib':
             manager.add_portals_module("knals/iibnal", 'kiibnal')
+        if self.net_type == 'vib':
+            self.add_portals_module("knals/vibnal", 'kvibnal')
         if self.net_type == 'lo':
             manager.add_portals_module("knals/lonal", 'klonal')
         if self.net_type == 'ra':
@@ -1445,7 +1454,7 @@ class RouteTable(Module):
                          lo, hi):
         # only setup connections for tcp, openib, and iib NALs
         srvdb = None
-        if not net_type in ('tcp','openib','iib','ra'):
+        if not net_type in ('tcp','openib','iib','vib','ra'):
             return None
 
         # connect to target if route is to single node and this node is the gw

@@ -446,14 +446,15 @@ static int lustre_process_log(struct lustre_mount_data *lmd, char *profile,
         }
 
         if (lmd->lmd_nal == SOCKNAL ||
-              lmd->lmd_nal == OPENIBNAL) {
+            lmd->lmd_nal == OPENIBNAL ||
+            lmd->lmd_nal == IIBNAL ||
+            lmd->lmd_nal == VIBNAL ||
+            lmd->lmd_nal == RANAL) {
                 PCFG_INIT(pcfg, NAL_CMD_ADD_PEER);
                 pcfg.pcfg_nal     = lmd->lmd_nal;
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
                 pcfg.pcfg_id      = lmd->lmd_server_ipaddr;
                 pcfg.pcfg_misc    = lmd->lmd_port;
-                pcfg.pcfg_size    = 8388608;
-                pcfg.pcfg_flags   = 0x4; /*share*/
                 err = libcfs_nal_cmd(&pcfg);
                 if (err <0)
                         GOTO(out, err);
@@ -533,7 +534,10 @@ out_del_uuid:
 
 out_del_conn:
         if (lmd->lmd_nal == SOCKNAL ||
-            lmd->lmd_nal == OPENIBNAL) {
+            lmd->lmd_nal == OPENIBNAL ||
+            lmd->lmd_nal == IIBNAL ||
+            lmd->lmd_nal == VIBNAL ||
+            lmd->lmd_nal == RANAL) {
                 PCFG_INIT(pcfg, NAL_CMD_DEL_PEER);
                 pcfg.pcfg_nal     = lmd->lmd_nal;
                 pcfg.pcfg_nid     = lmd->lmd_server_nid;
