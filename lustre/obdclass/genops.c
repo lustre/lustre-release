@@ -29,9 +29,15 @@ kmem_cache_t *import_cachep = NULL;
 static int sync_io_timeout(void *data)
 {
         struct io_cb_data *cbd = data;
-        struct ptlrpc_bulk_desc *desc = cbd->desc;
-
+        struct ptlrpc_bulk_desc *desc;
         ENTRY;
+
+        LASSERT(cbd);
+        desc = cbd->desc;
+
+        LASSERT(desc);
+        LASSERT(desc->bd_connection);
+
         desc->bd_connection->c_level = LUSTRE_CONN_RECOVD;
         desc->bd_flags |= PTL_RPC_FL_TIMEOUT;
         if (desc->bd_connection && class_signal_connection_failure) {
