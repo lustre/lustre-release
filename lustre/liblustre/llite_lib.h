@@ -12,7 +12,6 @@
 
 struct ll_file_data {
         struct obd_client_handle fd_mds_och;
-        struct obd_client_handle fd_ost_och;
         __u32 fd_flags;
 };
 
