@@ -3,9 +3,11 @@
  drivers/ide/ide-disk.c |    5 +++++
  3 files changed, 43 insertions(+)
 
---- kernel-2.4.20-6chaos_18_7/drivers/block/blkpg.c~dev_read_only_2.4.20-rh	2003-05-15 21:12:48.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/drivers/block/blkpg.c	2003-07-12 15:10:31.000000000 -0600
-@@ -297,3 +297,38 @@ int blk_ioctl(kdev_t dev, unsigned int c
+Index: linux-2.4.20-rh-20.9/drivers/block/blkpg.c
+===================================================================
+--- linux-2.4.20-rh-20.9.orig/drivers/block/blkpg.c	2003-11-13 17:19:32.000000000 +0300
++++ linux-2.4.20-rh-20.9/drivers/block/blkpg.c	2003-11-13 17:20:28.000000000 +0300
+@@ -297,3 +297,38 @@
  }
  
  EXPORT_SYMBOL(blk_ioctl);
@@ -44,9 +46,11 @@
 +EXPORT_SYMBOL(dev_set_rdonly);
 +EXPORT_SYMBOL(dev_check_rdonly);
 +EXPORT_SYMBOL(dev_clear_rdonly);
---- kernel-2.4.20-6chaos_18_7/drivers/block/loop.c~dev_read_only_2.4.20-rh	2003-05-15 21:12:50.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/drivers/block/loop.c	2003-07-12 15:10:31.000000000 -0600
-@@ -491,6 +491,9 @@ static int loop_make_request(request_que
+Index: linux-2.4.20-rh-20.9/drivers/block/loop.c
+===================================================================
+--- linux-2.4.20-rh-20.9.orig/drivers/block/loop.c	2003-11-13 17:19:32.000000000 +0300
++++ linux-2.4.20-rh-20.9/drivers/block/loop.c	2003-11-13 17:20:28.000000000 +0300
+@@ -491,6 +491,9 @@
  	spin_unlock_irq(&lo->lo_lock);
  
  	if (rw == WRITE) {
@@ -56,19 +60,19 @@
  		if (lo->lo_flags & LO_FLAGS_READ_ONLY)
  			goto err;
  	} else if (rw == READA) {
---- kernel-2.4.20-6chaos_18_7/drivers/ide/ide-disk.c~dev_read_only_2.4.20-rh	2003-05-15 21:13:09.000000000 -0600
-+++ kernel-2.4.20-6chaos_18_7-braam/drivers/ide/ide-disk.c	2003-07-12 15:12:03.000000000 -0600
-@@ -371,6 +371,11 @@ ide_startstop_t __ide_do_rw_disk (ide_dr
+Index: linux-2.4.20-rh-20.9/drivers/ide/ide-disk.c
+===================================================================
+--- linux-2.4.20-rh-20.9.orig/drivers/ide/ide-disk.c	2003-11-13 17:19:32.000000000 +0300
++++ linux-2.4.20-rh-20.9/drivers/ide/ide-disk.c	2003-11-13 18:13:46.000000000 +0300
+@@ -371,6 +371,11 @@
  	if (driver_blocked)
  		panic("Request while ide driver is blocked?");
  
 +  	if (rq->cmd == WRITE && dev_check_rdonly(rq->rq_dev)) {
-+  		ide_end_request(1, HWGROUP(drive));
++  		ide_end_request(drive, 1);
 +  		return ide_stopped;
 +  	}
 +
  	if (IDE_CONTROL_REG)
  		hwif->OUTB(drive->ctl, IDE_CONTROL_REG);
  
-
-_

@@ -245,6 +245,7 @@ check_mds_body(void)
         CHECK_MEMBER(mds_body, handle);
         CHECK_MEMBER(mds_body, size);
         CHECK_MEMBER(mds_body, blocks);
+        CHECK_MEMBER(mds_body, io_epoch);
         CHECK_MEMBER(mds_body, ino);
         CHECK_MEMBER(mds_body, valid);
         CHECK_MEMBER(mds_body, fsuid);
@@ -262,6 +263,17 @@ check_mds_body(void)
         CHECK_MEMBER(mds_body, generation);
         CHECK_MEMBER(mds_body, suppgid);
         CHECK_MEMBER(mds_body, eadatasize);
+
+        CHECK_VALUE(FMODE_READ);
+        CHECK_VALUE(FMODE_WRITE);
+        CHECK_VALUE(FMODE_EXEC);
+        CHECK_VALUE(MDS_OPEN_CREAT);
+        CHECK_VALUE(MDS_OPEN_EXCL);
+        CHECK_VALUE(MDS_OPEN_APPEND);
+        CHECK_VALUE(MDS_OPEN_SYNC);
+        CHECK_VALUE(MDS_OPEN_DIRECTORY);
+        CHECK_VALUE(MDS_OPEN_DELAY_CREATE);
+        CHECK_VALUE(MDS_OPEN_HAS_EA);
 }
 
 void
@@ -490,6 +502,14 @@ check_llog_logid(void)
         CHECK_MEMBER(llog_logid, lgl_oid);
         CHECK_MEMBER(llog_logid, lgl_ogr);
         CHECK_MEMBER(llog_logid, lgl_ogen);
+
+        CHECK_VALUE(OST_SZ_REC);
+        CHECK_VALUE(OST_RAID1_REC);
+        CHECK_VALUE(MDS_UNLINK_REC);
+        CHECK_VALUE(OBD_CFG_REC);
+        CHECK_VALUE(PTL_CFG_REC);
+        CHECK_VALUE(LLOG_HDR_MAGIC);
+        CHECK_VALUE(LLOG_LOGID_MAGIC);
 }
 
 void
@@ -545,9 +565,11 @@ check_llogd_body(void)
         BLANK_LINE();
         CHECK_STRUCT(llogd_body);
         CHECK_MEMBER(llogd_body, lgd_logid);
-        CHECK_MEMBER(llogd_body, lgd_len);
+        CHECK_MEMBER(llogd_body, lgd_ctxt_idx);
+        CHECK_MEMBER(llogd_body, lgd_llh_flags);
         CHECK_MEMBER(llogd_body, lgd_index);
         CHECK_MEMBER(llogd_body, lgd_saved_index);
+        CHECK_MEMBER(llogd_body, lgd_len);
         CHECK_MEMBER(llogd_body, lgd_cur_offset);
 
         CHECK_VALUE(LLOG_ORIGIN_HANDLE_CREATE);
@@ -555,6 +577,25 @@ check_llogd_body(void)
         CHECK_VALUE(LLOG_ORIGIN_HANDLE_READ_HEADER);
         CHECK_VALUE(LLOG_ORIGIN_HANDLE_WRITE_REC);
         CHECK_VALUE(LLOG_ORIGIN_HANDLE_CLOSE);
+}
+
+void
+check_llog_ctxt_gen(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llog_ctxt_gen);
+        CHECK_MEMBER(llog_ctxt_gen, mnt_cnt);
+        CHECK_MEMBER(llog_ctxt_gen, conn_cnt);
+}
+
+void
+check_llogd_conn_body(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(llogd_conn_body);
+        CHECK_MEMBER(llogd_conn_body, lgdc_gen);
+        CHECK_MEMBER(llogd_conn_body, lgdc_logid);
+        CHECK_MEMBER(llogd_conn_body, lgdc_ctxt_idx);
 }
 
 int
@@ -695,6 +736,7 @@ main(int argc, char **argv)
         check_llog_log_hdr();
         check_llog_cookie();
         check_llogd_body();
+        check_llogd_conn_body();
 
         printf("}\n\n");
 

@@ -26,7 +26,6 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_mds.h>
-#include <linux/lustre_lite.h>
 #include "mdc_internal.h"
 
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 offset, __u32 size,
@@ -88,6 +87,20 @@ void mdc_create_pack(struct ptlrpc_request *req, int offset,
         }
 }
 
+static __u32 mds_pack_open_flags(__u32 flags)
+{
+        return
+                (flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC |
+                          MDS_OPEN_DELAY_CREATE | MDS_OPEN_HAS_EA)) |
+                ((flags & O_CREAT) ? MDS_OPEN_CREAT : 0) |
+                ((flags & O_EXCL) ? MDS_OPEN_EXCL : 0) |
+                ((flags & O_TRUNC) ? MDS_OPEN_TRUNC : 0) |
+                ((flags & O_APPEND) ? MDS_OPEN_APPEND : 0) |
+                ((flags & O_SYNC) ? MDS_OPEN_SYNC : 0) |
+                ((flags & O_DIRECTORY) ? MDS_OPEN_DIRECTORY : 0) |
+                0;
+}
+
 /* packing of MDS records */
 void mdc_open_pack(struct ptlrpc_request *req, int offset,
                    struct mdc_op_data *op_data, __u32 mode, __u64 rdev,
@@ -106,7 +119,7 @@ void mdc_open_pack(struct ptlrpc_request *req, int offset,
                 rec->cr_fid = op_data->fid1;
         memset(&rec->cr_replayfid, 0, sizeof(rec->cr_replayfid));
         rec->cr_mode = mode;
-        rec->cr_flags = flags;
+        rec->cr_flags = mds_pack_open_flags(flags);
         rec->cr_rdev = rdev;
         rec->cr_time = op_data->mod_time;
         rec->cr_suppgid = op_data->ctxt.gid1;

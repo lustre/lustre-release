@@ -3,7 +3,6 @@ uml-2.4.20-do_mmap_pgoff-fix.patch
 uml-2.4.20-fixes-1.patch
 dev_read_only_2.4.20.patch
 exports_2.4.20.patch
-kmem_cache_validate_2.4.20.patch
 lustre_version.patch
 vfs_intent-2.4.20-vanilla.patch
 invalidate_show.patch
@@ -46,3 +45,4 @@ ext3-ea-in-inode-2.4.20.patch
 listman-2.4.20.patch
 ext3-trusted_ea-2.4.20.patch
 kernel_text_address-2.4.20-vanilla.patch 
+ext3-xattr-ptr-arith-fix.patch 
