@@ -428,8 +428,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         else                                            /* setattr */
                 rc = fsfilt_setattr(obd, de, handle, &rec->ur_iattr, 0);
 
-        if (rc == 0 && (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode))
-            && rec->ur_eadata != NULL) {
+        if (rc == 0 && (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
+            rec->ur_eadata != NULL) {
                 struct lov_stripe_md *lsm = NULL;
 
                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,

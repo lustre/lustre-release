@@ -65,9 +65,9 @@ static int debug_mask = ~0;
 
 static const char *portal_debug_subsystems[] =
         {"undefined", "mdc", "mds", "osc", "ost", "class", "log", "llite",
-         "rpc", "mgmt", "portals", "socknal", "qswnal", "pinger", "filter",
-         "ptlbd", "echo", "ldlm", "lov", "gmnal", "router", "cobd", "ibnal",
-         NULL};
+         "rpc", "mgmt", "portals", "libcfs", "socknal", "qswnal", "pinger",
+         "filter", "ptlbd", "echo", "ldlm", "lov", "gmnal", "router", "cobd",
+         "ibnal", NULL};
 static const char *portal_debug_masks[] =
         {"trace", "inode", "super", "ext2", "malloc", "cache", "info", "ioctl",
          "blocks", "net", "warning", "buffs", "other", "dentry", "portals",
@@ -527,7 +527,8 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
 static struct mod_paths {
         char *name, *path;
 } mod_paths[] = {
-        {"portals", "lustre/portals/libcfs"},
+        {"libcfs", "lustre/portals/libcfs"},
+        {"portals", "lustre/portals/portals"},
         {"ksocknal", "lustre/portals/knals/socknal"},
         {"kptlrouter", "lustre/portals/router"},
         {"lvfs", "lustre/lvfs"},

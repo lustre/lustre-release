@@ -555,7 +555,7 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         mds_pack_inode2body(body, inode);
 
         if ((S_ISREG(inode->i_mode) && (reqbody->valid & OBD_MD_FLEASIZE)) ||
-           (S_ISDIR(inode->i_mode) && (reqbody->valid & OBD_MD_FLDIREA))){
+            (S_ISDIR(inode->i_mode) && (reqbody->valid & OBD_MD_FLDIREA))) {
                 rc = mds_pack_md(obd, req->rq_repmsg, reply_off + 1, body,
                                  inode, 1);
 
@@ -604,7 +604,7 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
         LASSERT_REQSWABBED(req, offset);       /* swabbed by caller */
 
         if ((S_ISREG(inode->i_mode) && (body->valid & OBD_MD_FLEASIZE)) ||
-            (S_ISDIR(inode->i_mode) && (body->valid & OBD_MD_FLDIREA))){
+            (S_ISDIR(inode->i_mode) && (body->valid & OBD_MD_FLDIREA))) {
                 int rc;
                 down(&inode->i_sem);
                 rc = fsfilt_get_md(req->rq_export->exp_obd, inode, NULL, 0);
