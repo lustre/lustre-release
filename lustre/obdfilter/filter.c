@@ -54,13 +54,13 @@ static void filter_id(char *buf, obd_id id, obd_mode mode)
 }
 
 /* setup the object store with correct subdirectories */
-static void filter_prep(struct obd_device *obddev)
+static int filter_prep(struct obd_device *obddev)
 {
         struct obd_run_ctxt saved;
         struct file *file;
         struct inode *inode;
         loff_t off;
-        long rc;
+        int rc = 0;
         char rootid[128];
         __u64 lastino = 2;
 
@@ -68,10 +68,10 @@ static void filter_prep(struct obd_device *obddev)
         rc = simple_mkdir(current->fs->pwd, "O", 0700);
         rc = simple_mkdir(current->fs->pwd, "P", 0700);
         rc = simple_mkdir(current->fs->pwd, "D", 0700);
-        file  = filp_open("O", O_RDONLY, 0); 
-        if (!file || IS_ERR(file)) { 
-                CERROR("cannot open O\n"); 
-                goto out;
+        file = filp_open("O", O_RDONLY, 0);
+        if (IS_ERR(file)) {
+                CERROR("cannot open O\n");
+                GOTO(out, rc = PTR_ERR(file));
         }
         rc = simple_mkdir(file->f_dentry, "R", 0700);  /* regular */
         rc = simple_mkdir(file->f_dentry, "D", 0700);  /* directory */
@@ -80,13 +80,13 @@ static void filter_prep(struct obd_device *obddev)
         rc = simple_mkdir(file->f_dentry, "B", 0700);  /* block devices */
         rc = simple_mkdir(file->f_dentry, "F", 0700);  /* fifo's */
         rc = simple_mkdir(file->f_dentry, "S", 0700);  /* sockets */
-        filp_close(file, NULL); 
+        filp_close(file, NULL);
 
         filter_id(rootid, FILTER_ROOTINO, S_IFDIR);
         file = filp_open(rootid, O_RDWR | O_CREAT, 00755);
         if (IS_ERR(file)) {
                 CERROR("OBD filter: cannot make root directory"); 
-                goto out;
+                GOTO(out, rc = PTR_ERR(file));
         }
         filp_close(file, 0);
         rc = simple_mkdir(current->fs->pwd, rootid, 0755);
@@ -94,7 +94,7 @@ static void filter_prep(struct obd_device *obddev)
         file = filp_open("D/status", O_RDWR | O_CREAT, 0700);
         if ( !file || IS_ERR(file) ) {
                 CERROR("OBD filter: cannot open/create status file\n");
-                goto out;
+                GOTO(out, rc = PTR_ERR(file));
         }
 
         /* steal operations */
@@ -104,19 +104,19 @@ static void filter_prep(struct obd_device *obddev)
         obddev->u.filter.fo_aops = inode->i_mapping->a_ops;
 
         off = 0;
-        if (inode->i_size == 0) { 
-                rc = file->f_op->write(file, (char *)&lastino, 
-                                       sizeof(lastino), &off);
-                if (rc != sizeof(lastino)) { 
+        if (inode->i_size == 0) {
+                ssize_t retval = file->f_op->write(file, (char *)&lastino,
+                                                   sizeof(lastino), &off);
+                if (retval != sizeof(lastino)) {
                         CERROR("OBD filter: error writing lastino\n");
-                        goto out;
+                        GOTO(out, rc = -EIO);
                 }
-        } else { 
-                rc = file->f_op->read(file, (char *)&lastino, sizeof(lastino), 
-                                      &off);
-                if (rc != sizeof(lastino)) { 
+        } else {
+                ssize_t retval = file->f_op->read(file, (char *)&lastino,
+                                                  sizeof(lastino), &off);
+                if (retval != sizeof(lastino)) {
                         CERROR("OBD filter: error reading lastino\n");
-                        goto out;
+                        GOTO(out, rc = -EIO);
                 }
         }
         obddev->u.filter.fo_lastino = lastino;
@@ -124,6 +124,8 @@ static void filter_prep(struct obd_device *obddev)
 
  out:
         pop_ctxt(&saved);
+
+        return(rc);
 }
 
 /* cleanup the filter: write last used object id to status file */
@@ -259,29 +261,23 @@ static int filter_disconnect(struct obd_conn *conn)
 }
 
 /* mount the file system (secretly) */
-static int filter_setup(struct obd_device *obddev, obd_count len,
-                        void *buf)
-                        
+static int filter_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct obd_ioctl_data* data = buf;
         struct vfsmount *mnt;
-        int err; 
+        int err = 0;
         ENTRY;
-        
-        
-        mnt = do_kern_mount(data->ioc_inlbuf2, 0, 
-                            data->ioc_inlbuf1, NULL); 
-        err = PTR_ERR(mnt);
-        if (IS_ERR(mnt)) { 
-                EXIT;
-                return err;
-        }
 
+        MOD_INC_USE_COUNT;
+        mnt = do_kern_mount(data->ioc_inlbuf2, 0, data->ioc_inlbuf1, NULL);
+        err = PTR_ERR(mnt);
+        if (IS_ERR(mnt))
+                GOTO(err_dec, err);
+
+        /* XXX is this even possible if do_kern_mount succeeded? */
         obddev->u.filter.fo_sb = mnt->mnt_root->d_inode->i_sb;
-        if (!obddev->u.filter.fo_sb) {
-                EXIT;
-                return -ENODEV;
-        }
+        if (!obddev->u.filter.fo_sb)
+                GOTO(err_put, err = -ENODEV);
 
         obddev->u.filter.fo_vfsmnt = mnt;
         obddev->u.filter.fo_fstype = strdup(data->ioc_inlbuf2);
@@ -290,13 +286,25 @@ static int filter_setup(struct obd_device *obddev, obd_count len,
         obddev->u.filter.fo_ctxt.pwd = mnt->mnt_root;
         obddev->u.filter.fo_ctxt.fs = KERNEL_DS;
 
-        filter_prep(obddev);
+        err = filter_prep(obddev);
+        if (err)
+                GOTO(err_kfree, err);
         spin_lock_init(&obddev->u.filter.fo_lock);
 
-        MOD_INC_USE_COUNT;
-        EXIT; 
-        return 0;
-} 
+        RETURN(0);
+
+err_kfree:
+        kfree(obddev->u.filter.fo_fstype);
+err_put:
+        unlock_kernel();
+        mntput(obddev->u.filter.fo_vfsmnt);
+        obddev->u.filter.fo_sb = 0;
+        lock_kernel();
+
+err_dec:
+        MOD_DEC_USE_COUNT;
+        return err;
+}
 
 
 static int filter_cleanup(struct obd_device * obddev)
@@ -305,22 +313,18 @@ static int filter_cleanup(struct obd_device * obddev)
 
         ENTRY;
 
-        if ( !(obddev->obd_flags & OBD_SET_UP) ) {
-                EXIT;
-                return 0;
-        }
+        if ( !(obddev->obd_flags & OBD_SET_UP) )
+                RETURN(0);
 
         if ( !list_empty(&obddev->obd_gen_clients) ) {
                 CERROR("still has clients!\n");
-                EXIT;
-                return -EBUSY;
+                RETURN(-EBUSY);
         }
 
         sb = obddev->u.filter.fo_sb;
-        if (!obddev->u.filter.fo_sb){
-                EXIT;
-                return 0;
-        }
+        if (!obddev->u.filter.fo_sb)
+                RETURN(0);
+
         filter_post(obddev);
 
         unlock_kernel();
@@ -331,8 +335,7 @@ static int filter_cleanup(struct obd_device * obddev)
         lock_kernel();
 
         MOD_DEC_USE_COUNT;
-        EXIT;
-        return 0;
+        RETURN(0);
 }
 
 
