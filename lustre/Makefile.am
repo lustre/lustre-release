@@ -12,7 +12,8 @@ DIRS24 = extN ptlbd
 endif
 
 if LIBLUSTRE
-SUBDIRS = lov obdclass ptlrpc obdecho ldlm osc liblustre utils
+#SUBDIRS = lov obdclass ptlrpc obdecho ldlm osc liblustre utils
+SUBDIRS = lov obdclass ptlrpc obdecho ldlm osc utils
 else
 # NOTE: keep extN before obdclass, mds, and obdfilter.  Keep obdclass as early
 # as possible, to have the best chance at stopping with "wrong kernel version"
