@@ -396,18 +396,6 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (rc)
                 GOTO(out, rc);
        
-        if (!(connect_flags & OBD_OPT_MDS_CONNECTION)) {
-                struct mds_obd *mds = &obd->u.mds;
-                if (!(exp->exp_flags & OBD_OPT_REAL_CLIENT)) {
-                        atomic_inc(&mds->mds_real_clients);
-                        CDEBUG(D_OTHER,"%s: peer from %s is real client (%d)\n",
-                               obd->obd_name, exp->exp_client_uuid.uuid,
-                               atomic_read(&mds->mds_real_clients));
-                        exp->exp_flags |= OBD_OPT_REAL_CLIENT;
-                }
-                if (mds->mds_lmv_name)
-                        rc = mds_lmv_connect(obd, mds->mds_lmv_name);
-        }
         EXIT;
 out:
         if (rc) {
@@ -419,6 +407,26 @@ out:
         return rc;
 }
 
+static int mds_connect_post(struct obd_export *exp, unsigned long connect_flags)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct mds_obd *mds = &obd->u.mds;
+        int rc = 0;
+        ENTRY;
+
+        if (!(connect_flags & OBD_OPT_MDS_CONNECTION)) {
+                if (!(exp->exp_flags & OBD_OPT_REAL_CLIENT)) {
+                        atomic_inc(&mds->mds_real_clients);
+                        CDEBUG(D_OTHER,"%s: peer from %s is real client (%d)\n",
+                               obd->obd_name, exp->exp_client_uuid.uuid,
+                               atomic_read(&mds->mds_real_clients));
+                        exp->exp_flags |= OBD_OPT_REAL_CLIENT;
+                }
+                if (mds->mds_lmv_name)
+                        rc = mds_lmv_connect(obd, mds->mds_lmv_name);
+        }
+        RETURN(rc);
+}
 static int mds_init_export(struct obd_export *exp)
 {
         struct mds_export_data *med = &exp->exp_mds_data;
@@ -2976,6 +2984,7 @@ static struct obd_ops mds_obd_ops = {
         .o_attach          = mds_attach,
         .o_detach          = mds_detach,
         .o_connect         = mds_connect,
+        .o_connect_post    = mds_connect_post,
         .o_init_export     = mds_init_export,
         .o_destroy_export  = mds_destroy_export,
         .o_disconnect      = mds_disconnect,

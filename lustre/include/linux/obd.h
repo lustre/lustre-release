@@ -680,7 +680,7 @@ struct obd_ops {
         int (*o_del_conn)(struct obd_import *imp, struct obd_uuid *uuid);
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
                          struct obd_uuid *cluuid, unsigned long connect_flags);
-        int (*o_connect_post)(struct obd_export *exp);
+        int (*o_connect_post)(struct obd_export *exp, unsigned long connect_flags);
         int (*o_disconnect)(struct obd_export *exp, int flags);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
