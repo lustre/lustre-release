@@ -52,12 +52,23 @@ static int mds_reint_setattr(struct mds_update_record *rec, struct mds_request *
 	return 0;
 }
 
+/* 
+   XXX nasty hack: store the object id in the first two
+   direct block spots 
+*/
+static inline void mds_store_objid(struct inode *inode, __u64 *id)
+{
+	memcpy(&inode->u.ext2_i.i_data, id, sizeof(*id));
+}
+
+
 static int mds_reint_create(struct mds_update_record *rec, 
 			    struct mds_request *req)
 {
 	struct vfsmount *mnt;
 	int type = rec->ur_mode & S_IFMT;
 	struct dentry *de;
+	struct mds_rep *rep = req->rq_rep;
 	struct dentry *dchild; 
 	int rc;
 
@@ -88,6 +99,16 @@ static int mds_reint_create(struct mds_update_record *rec,
 	switch (type) {
 	case S_IFREG: { 
 		rc = vfs_create(de->d_inode, dchild, rec->ur_mode);
+		
+		if (!rc) { 
+			mds_store_objid(dchild->d_inode, &rec->ur_id); 
+			dchild->d_inode->i_atime = rec->ur_time;
+			dchild->d_inode->i_ctime = rec->ur_time;
+			dchild->d_inode->i_mtime = rec->ur_time;
+			dchild->d_inode->i_uid = rec->ur_uid;
+			dchild->d_inode->i_gid = rec->ur_gid;
+			rep->ino = dchild->d_inode->i_ino;
+		}
 		break;
 	}
 	case S_IFDIR: { 

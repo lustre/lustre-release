@@ -2,8 +2,6 @@
 
 R=/r
 
-
-insmod /lib/modules/2.4.17/kernel/drivers/block/loop.o
 insmod $R/usr/src/obd/class/obdclass.o 
 insmod $R/usr/src/obd/ext2obd/obdext2.o
 insmod $R/usr/src/obd/ost/ost.o

@@ -137,6 +137,7 @@ struct obdo {
 #define OBD_MD_FLGENER  (0x00004000UL)
 #define OBD_MD_FLINLINE (0x00008000UL)
 #define OBD_MD_FLOBDMD  (0x00010000UL)
+#define OBD_MD_FLOBJID  (0x00020000UL)
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLOBDMD | OBD_MD_FLOBDFLG | OBD_MD_FLBLOCKS))
 
 /* request structure for OST's */
@@ -246,6 +247,7 @@ struct mds_req_packed {
         __u32                       ino;
         __u32                       nlink;
         __u32                       generation;
+        __u64                       objid;
 };
 
 struct mds_rep_packed {
@@ -267,6 +269,7 @@ struct mds_rep_packed {
         __u32                       ino;
         __u32                       nlink;
         __u32                       generation;
+        __u64                       objid;
 };
 
 

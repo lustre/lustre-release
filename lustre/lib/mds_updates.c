@@ -35,12 +35,12 @@
 
 /* packing of MDS records */
 
-void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, char *name, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time)
+void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, const char *name, int namelen, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time)
 {
 	char *tmp = (char *)rec + sizeof(*rec); 
 	/* XXX do something about time, uid, gid */
 	rec->cr_reclen = 
-		HTON__u32(sizeof(*rec)) + size_round(strlen(name) + 1);
+		HTON__u32(sizeof(*rec) + size_round(namelen + 1));
 	rec->cr_opcode = HTON__u32(REINT_CREATE);
 
 	ll_inode2fid(&rec->cr_fid, inode); 
@@ -49,8 +49,9 @@ void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, char *name
 	rec->cr_uid = HTON__u32(uid);
 	rec->cr_gid = HTON__u32(gid);
 	rec->cr_time = HTON__u64(time);
-	rec->cr_namelen = strlen(name);
-	LOGL(name, rec->cr_namelen + 1, tmp); 
+	rec->cr_namelen = namelen;
+	LOGL(name, namelen, tmp); 
+	*tmp = '\0';
 }
 
 
@@ -79,7 +80,7 @@ static int mds_update_hdr_unpack(char *buf, int len, struct mds_update_record *r
 	
 	r->ur_reclen = NTOH__u32(hdr->ur_reclen);
 	if (len < sizeof(*hdr) || len != r->ur_reclen) { 
-		printk(__FUNCTION__ "invalid buffer length\n"); 
+		printk(__FUNCTION__ ": invalid buffer length\n"); 
 		return -EFAULT;
 	}
 	r->ur_opcode = NTOH__u32(hdr->ur_opcode); 

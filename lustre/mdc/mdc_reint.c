@@ -64,8 +64,8 @@ int mdc_setattr(struct inode *inode, struct iattr *iattr,
 	return rc;
 }
 
-int mdc_create(struct inode *dir, char *name, int mode, __u64 id, 
-	       __u32 uid, __u32 gid, __u64 time, 
+int mdc_create(struct inode *dir, const char *name, int namelen, 
+	       int mode, __u64 id, __u32 uid, __u32 gid, __u64 time, 
 		struct mds_rep **rep, struct mds_rep_hdr **hdr)
 {
 	int rc; 
@@ -73,7 +73,7 @@ int mdc_create(struct inode *dir, char *name, int mode, __u64 id,
 	struct mds_rec_create *rec;
 
 	request = mds_prep_req(MDS_REINT, 0, NULL, 
-			       sizeof(*rec) + size_round(strlen(name)), 
+			       sizeof(*rec) + size_round(namelen + 1), 
 			       NULL);
 	if (!request) { 
 		printk("mdc_create: cannot pack\n");
@@ -81,7 +81,7 @@ int mdc_create(struct inode *dir, char *name, int mode, __u64 id,
 	}
 
 	rec = mds_req_tgt(request->rq_req);
-	mds_create_pack(rec, dir, name, mode, id, uid, gid, time); 
+	mds_create_pack(rec, dir, name, namelen, mode, id, uid, gid, time); 
 
 	rc = mdc_reint(request);
 

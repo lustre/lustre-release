@@ -75,9 +75,12 @@ int mds_sendpage(struct mds_request *req, struct file *file,
 		    __u64 offset, struct niobuf *dst)
 {
 	int rc; 
-
+	mm_segment_t oldfs = get_fs();
+	/* dst->addr is a user address, but in a different task! */
+	set_fs(KERNEL_DS); 
 	rc = generic_file_read(file, (char *)(long)dst->addr, 
 			      PAGE_SIZE, &offset); 
+	set_fs(oldfs);
 
 	if (rc != PAGE_SIZE) 
 		return -EIO;
@@ -193,6 +196,11 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vf
 	return result;
 }
 
+static inline void mds_get_objid(struct inode *inode, __u64 *id)
+{
+	memcpy(id, &inode->u.ext2_i.i_data, sizeof(*id));
+}
+
 int mds_getattr(struct mds_request *req)
 {
 	struct dentry *de = mds_fid2dentry(req->rq_obd, &req->rq_req->fid1, 
@@ -228,8 +236,9 @@ int mds_getattr(struct mds_request *req)
 	rep->gid = inode->i_gid;
 	rep->size = inode->i_size;
 	rep->mode = inode->i_mode;
+	rep->nlink = inode->i_nlink;
 	rep->valid = ~0;
-
+	mds_get_objid(inode, &rep->objid);
 	dput(de); 
 	return 0;
 }

@@ -274,15 +274,62 @@ static int ll_statfs(struct super_block *sb, struct statfs *buf)
         return err; 
 }
 
+static void inline ll_to_inode(struct inode *dst, struct mds_rep *rep)
+{
+	struct ll_inode_info *ii = 
+		(struct ll_inode_info *) &dst->u.generic_ip;
+
+	/* core attributes first */
+        if ( rep->valid & OBD_MD_FLID )
+                dst->i_ino = rep->ino;
+        if ( rep->valid & OBD_MD_FLATIME ) 
+                dst->i_atime = rep->atime;
+        if ( rep->valid & OBD_MD_FLMTIME ) 
+                dst->i_mtime = rep->mtime;
+        if ( rep->valid & OBD_MD_FLCTIME ) 
+                dst->i_ctime = rep->ctime;
+        if ( rep->valid & OBD_MD_FLSIZE ) 
+                dst->i_size = rep->size;
+        if ( rep->valid & OBD_MD_FLMODE ) 
+                dst->i_mode = rep->mode;
+        if ( rep->valid & OBD_MD_FLUID ) 
+                dst->i_uid = rep->uid;
+        if ( rep->valid & OBD_MD_FLGID ) 
+                dst->i_gid = rep->gid;
+        if ( rep->valid & OBD_MD_FLFLAGS ) 
+                dst->i_flags = rep->flags;
+        if ( rep->valid & OBD_MD_FLNLINK )
+                dst->i_nlink = rep->nlink;
+        if ( rep->valid & OBD_MD_FLGENER )
+                dst->i_generation = rep->generation;
+
+	/* this will become more elaborate for striping etc */ 
+	if (rep->valid & OBD_MD_FLOBJID) 
+		ii->lli_objid = rep->objid;
+#if 0
+
+        if (obdo_has_inline(oa)) {
+		if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) ||
+		    S_ISFIFO(inode->i_mode)) {
+			obd_rdev rdev = *((obd_rdev *)oa->o_inline);
+			CDEBUG(D_INODE,
+			       "copying device %x from obdo to inode\n", rdev);
+			init_special_inode(inode, inode->i_mode, rdev);
+		} else {
+			CDEBUG(D_INFO, "copying inline from obdo to inode\n");
+			memcpy(oinfo->lli_inline, oa->o_inline, OBD_INLINESZ);
+		}
+                oinfo->lli_flags |= OBD_FL_INLINEDATA;
+        }
+#endif 
+} /* ll_to_inode */
+
 static inline void ll_read_inode2(struct inode *inode, void *opaque)
 {
 	struct mds_rep *rep = opaque; 
 	
 	ENTRY;
 	ll_to_inode(inode, rep); 
-
-        INIT_LIST_HEAD(ll_iplist(inode)); /* list of dirty pages on inode */
-        INIT_LIST_HEAD(ll_islist(inode)); /* list of inodes in superblock */
 
         /* OIDEBUG(inode); */
 

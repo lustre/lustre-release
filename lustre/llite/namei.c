@@ -38,7 +38,7 @@ extern void ll_change_inode(struct inode *inode);
 extern int ll_setattr(struct dentry *de, struct iattr *attr);
 
 /* from dir.c */
-extern int ext2_add_link (struct dentry *dentry, struct inode *inode);
+extern int ll_add_link (struct dentry *dentry, struct inode *inode);
 ino_t ll_inode_by_name(struct inode * dir, struct dentry *dentry, int *typ);
 int ext2_make_empty(struct inode *inode, struct inode *parent);
 struct ext2_dir_entry_2 * ext2_find_entry (struct inode * dir,
@@ -66,7 +66,7 @@ static inline void ext2_dec_count(struct inode *inode)
 static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 {
 	int err;
-	err = ext2_add_link(dentry, inode);
+	err = ll_add_link(dentry, inode);
 	if (!err) {
 		d_instantiate(dentry, inode);
 		return 0;
@@ -130,52 +130,47 @@ static inline int ext2_match (int len, const char * const name,
         return !memcmp(name, de->name, len);
 }
 
-static struct inode *ll_new_inode(struct inode *dir, int mode)
+static struct inode *ll_create_node(struct inode *dir, const char *name, 
+				    int namelen, int mode, __u64 id)
 {
-        struct obdo *oa;
         struct inode *inode;
+	struct mds_rep *rep;
+	struct mds_rep_hdr *hdr;
         int err;
 
         ENTRY;
 
-        oa = obdo_alloc();
-        if (!oa) {
+     	err = mdc_create(dir, name, namelen, mode, id,
+			 current->uid, current->gid, CURRENT_TIME, 
+			 &rep, &hdr); 
+	if (err) { 
                 EXIT;
-                return ERR_PTR(-ENOMEM);
-        }
+		return ERR_PTR(err);
+	}
+	if ( hdr->status) {
+		EXIT;
+		return ERR_PTR(hdr->status);
+	}
+	rep->valid = OBD_MD_FLNOTOBD;
 
-        /* Send a hint to the create method on the type of file to create */
-        oa->o_mode = mode;
-        oa->o_valid |= OBD_MD_FLMODE;
-	CDEBUG(D_INODE, "\n");
-        err = obd_create(IID(dir), oa);
-	CDEBUG(D_INODE, "\n");
+	rep->objid = id; 
+	rep->nlink = 1;
+	rep->mode = mode;
+	printk("-- new_inode: objid %lld, ino %d, mode %o\n", 
+	       rep->objid, rep->ino, rep->mode); 
 
-        if ( err ) {
-                printk("new_inode - fatal: err %d\n", err);
-                obdo_free(oa);
-                EXIT;
-                return ERR_PTR(err);
-        }
-	CDEBUG(D_INODE, "obdo mode %o\n", oa->o_mode);
-
-        inode = iget4(dir->i_sb, (ino_t)oa->o_id, NULL, oa);
-	CDEBUG(D_INODE, "\n");
-        obdo_free(oa);
-
-        if (!inode) {
-                printk("new_inode -fatal:  %ld\n", (long)oa->o_id);
-                obd_destroy(IID(dir), oa);
+        inode = iget4(dir->i_sb, rep->ino, NULL, rep);
+        if (IS_ERR(inode)) {
+                printk(__FUNCTION__ ": new_inode -fatal:  %ld\n", 
+		       PTR_ERR(inode));
                 EXIT;
                 return ERR_PTR(-EIO);
         }
 
         if (!list_empty(&inode->i_dentry)) {
-                printk("new_inode -fatal: aliases %ld, ct %d lnk %d\n", 
-		       (long)oa->o_id,
-		       atomic_read(&inode->i_count), 
+                printk("new_inode -fatal: aliases %d, ct %d lnk %d\n", 
+		       rep->ino, atomic_read(&inode->i_count), 
 		       inode->i_nlink);
-                obd_destroy(IID(dir), oa);
                 iput(inode);
                 EXIT;
                 return ERR_PTR(-EIO);
@@ -196,21 +191,38 @@ static struct inode *ll_new_inode(struct inode *dir, int mode)
  */
 static int ll_create (struct inode * dir, struct dentry * dentry, int mode)
 {
-	struct inode * inode = ll_new_inode (dir, mode);
-	int err = PTR_ERR(inode);
+	int err; 
+	struct obdo oa;
+	struct inode * inode;
+
+	err = obd_create(IID(dir), &oa);  
+	if (err) { 
+		EXIT; 
+		return err;
+	}
+
+	mode = mode | S_IFREG;
+	printk("ll_create: name %s mode %o\n", dentry->d_name.name, mode);
+	inode = ll_create_node(dir, dentry->d_name.name, 
+			       dentry->d_name.len, 
+			       mode, oa.o_id);
+	err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
+		// XXX clean up the object
 		inode->i_op = &ll_file_inode_operations;
 		inode->i_fop = &ll_file_operations;
 		inode->i_mapping->a_ops = &ll_aops;
 		err = ext2_add_nondir(dentry, inode);
 	}
+	EXIT;
 	return err;
 } /* ll_create */
 
 
 static int ll_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
 {
-	struct inode * inode = ll_new_inode (dir, mode);
+	struct inode * inode = ll_create_node(dir, dentry->d_name.name, 
+					      dentry->d_name.len, mode, 0);
 	int err = PTR_ERR(inode);
 	if (!IS_ERR(inode)) {
 		init_special_inode(inode, mode, rdev);
@@ -231,7 +243,9 @@ static int ll_symlink (struct inode * dir, struct dentry * dentry,
 	if (l > sb->s_blocksize)
 		goto out;
 
-	inode = ll_new_inode (dir, S_IFLNK | S_IRWXUGO);
+	inode = ll_create_node(dir, dentry->d_name.name, 
+			       dentry->d_name.len, 
+			       S_IFLNK | S_IRWXUGO, 0);
 	err = PTR_ERR(inode);
 	if (IS_ERR(inode))
 		goto out;
@@ -293,7 +307,9 @@ static int ll_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 
 	ext2_inc_count(dir);
 
-	inode = ll_new_inode (dir, S_IFDIR | mode);
+	inode = ll_create_node (dir, dentry->d_name.name, 
+				dentry->d_name.len,
+				S_IFDIR | mode, 0);
 	err = PTR_ERR(inode);
 	if (IS_ERR(inode))
 		goto out_dir;
@@ -308,7 +324,7 @@ static int ll_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	if (err)
 		goto out_fail;
 
-	err = ext2_add_link(dentry, inode);
+	err = ll_add_link(dentry, inode);
 	if (err)
 		goto out_fail;
 
@@ -414,7 +430,7 @@ static int ll_rename (struct inode * old_dir, struct dentry * old_dentry,
 				goto out_dir;
 		}
 		ext2_inc_count(old_inode);
-		err = ext2_add_link(new_dentry, old_inode);
+		err = ll_add_link(new_dentry, old_inode);
 		if (err) {
 			ext2_dec_count(old_inode);
 			goto out_dir;

@@ -128,6 +128,30 @@ int osc_connect(struct obd_conn *conn)
 	return rc;
 }
 
+int osc_disconnect(struct obd_conn *conn)
+{
+	struct ost_request *request;
+	int rc; 
+	ENTRY;
+	
+	request = osc_prep_req(sizeof(*request), OST_DISCONNECT);
+	if (!request) { 
+		printk("osc_connect: cannot pack req!\n"); 
+		return -ENOMEM;
+	}
+
+	rc = osc_queue_wait(conn, request);
+	if (rc) { 
+		EXIT;
+		goto out;
+	}
+ out:
+	osc_free_req(request);
+	EXIT;
+	return rc;
+}
+
+
 int osc_getattr(struct obd_conn *conn, struct obdo *oa)
 {
 	struct ost_request *request;
@@ -152,6 +176,35 @@ int osc_getattr(struct obd_conn *conn, struct obdo *oa)
 	if (oa) { 
 		memcpy(oa, &request->rq_rep->oa, sizeof(*oa));
 	}
+
+ out:
+	osc_free_req(request);
+	return 0;
+}
+
+int osc_create(struct obd_conn *conn, struct obdo *oa)
+{
+	struct ost_request *request;
+	int rc; 
+
+	if (!oa) { 
+		printk(__FUNCTION__ ": oa NULL\n"); 
+	}
+	request = osc_prep_req(sizeof(*request), OST_CREATE);
+	if (!request) { 
+		printk("osc_connect: cannot pack req!\n"); 
+		return -ENOMEM;
+	}
+	
+	memcpy(&request->rq_req->oa, oa, sizeof(*oa));
+	request->rq_req->oa.o_valid = ~0;
+	
+	rc = osc_queue_wait(conn, request);
+	if (rc) { 
+		EXIT;
+		goto out;
+	}
+	memcpy(oa, &request->rq_rep->oa, sizeof(*oa));
 
  out:
 	osc_free_req(request);
@@ -207,8 +260,10 @@ static int osc_cleanup(struct obd_device * obddev)
 struct obd_ops osc_obd_ops = { 
 	o_setup:   osc_setup,
 	o_cleanup: osc_cleanup, 
+	o_create: osc_create,
 	o_getattr: osc_getattr,
-	o_connect: osc_connect
+	o_connect: osc_connect,
+	o_disconnect: osc_disconnect
 };
 
 static int __init osc_init(void)

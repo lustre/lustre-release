@@ -1,5 +1,4 @@
 /*
- *  linux/fs/ext2/dir.c
  *
  * Copyright (C) 1992, 1993, 1994, 1995
  * Remy Card (card@masi.ibp.fr)
@@ -9,6 +8,7 @@
  *  from
  *
  *  linux/fs/minix/dir.c
+ *  linux/fs/ext2/dir.c
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
  *
@@ -17,13 +17,18 @@
  *  Big-endian to little-endian byte-swapping/bitmaps by
  *        David S. Miller (davem@caip.rutgers.edu), 1995
  *
- * All code that works with directory layout had been switched to pagecache
- * and moved here. AV
+ *  All code that works with directory layout had been switched to pagecache
+ *  and moved here. AV
+ *   
+ *  Adapted for Lustre Light
+ *  Copyright (C) 2002, Cluster File Systems, Inc.
+ * 
  */
 
 #include <linux/fs.h>
 #include <linux/ext2_fs.h>
 #include <linux/pagemap.h>
+#include <linux/mm.h>
 #include <linux/obd_support.h>
 #include <linux/locks.h>
 
@@ -31,9 +36,6 @@ typedef struct ext2_dir_entry_2 ext2_dirent;
 
 #define PageChecked(page)        test_bit(PG_checked, &(page)->flags)
 #define SetPageChecked(page)     set_bit(PG_checked, &(page)->flags)
-
-
-
 
 int waitfor_one_page(struct page *page)
 {
@@ -70,14 +72,19 @@ static inline unsigned long dir_pages(struct inode *inode)
 	return (inode->i_size+PAGE_CACHE_SIZE-1)>>PAGE_CACHE_SHIFT;
 }
 
+extern void set_page_clean(struct page *page); 
+
 static int ext2_commit_chunk(struct page *page, unsigned from, unsigned to)
 {
 	struct inode *dir = page->mapping->host;
 	int err = 0;
 	dir->i_version = ++event;
-	page->mapping->a_ops->commit_write(NULL, page, from, to);
-	if (IS_SYNC(dir))
-		err = waitfor_one_page(page);
+	SetPageUptodate(page);
+	set_page_clean(page);
+
+	//page->mapping->a_ops->commit_write(NULL, page, from, to);
+	//if (IS_SYNC(dir))
+	//	err = waitfor_one_page(page);
 	return err;
 }
 
@@ -421,7 +428,7 @@ void ext2_set_link(struct inode *dir, struct ext2_dir_entry_2 *de,
 /*
  *	Parent is locked.
  */
-int ext2_add_link (struct dentry *dentry, struct inode *inode)
+int ll_add_link (struct dentry *dentry, struct inode *inode)
 {
 	struct inode *dir = dentry->d_parent->d_inode;
 	const char *name = dentry->d_name.name;
@@ -470,9 +477,9 @@ got_it:
 	from = (char*)de - (char*)page_address(page);
 	to = from + rec_len;
 	lock_page(page);
-	err = page->mapping->a_ops->prepare_write(NULL, page, from, to);
-	if (err)
-		goto out_unlock;
+	//err = page->mapping->a_ops->prepare_write(NULL, page, from, to);
+	//if (err)
+	//	goto out_unlock;
 	if (de->inode) {
 		ext2_dirent *de1 = (ext2_dirent *) ((char *) de + name_len);
 		de1->rec_len = cpu_to_le16(rec_len - name_len);

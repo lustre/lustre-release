@@ -276,7 +276,8 @@ static int request_ioctl(struct inode *inode, struct file *file,
 		iattr.ia_atime = 0;
 		iattr.ia_valid = ATTR_MODE | ATTR_ATIME;
 
-		err = mdc_create(&inode, "foofile", 0100707, 47114711, 
+		err = mdc_create(&inode, "foofile", strlen("foofile"), 
+				 0100707, 47114711, 
 				 11, 47, 0, NULL, &hdr);
 		printk("-- done err %d\n", err);
 		if (!err) { 

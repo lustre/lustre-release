@@ -99,6 +99,7 @@ struct mds_req {
         __u32                       ino;
         __u32                       nlink;
         __u32                       generation;
+        __u64                       objid;
 };
 
 /* more or less identical to the packed structure, except for the pointers */
@@ -121,6 +122,7 @@ struct mds_rep {
         __u32                       ino;
         __u32                       nlink;
         __u32                       generation;
+        __u64                       objid;
 };
 
 struct mds_update_record { 
@@ -154,11 +156,10 @@ int mds_reint_rec(struct mds_update_record *r, struct mds_request *req);
 int mds_update_unpack(char *buf, int len, struct mds_update_record *r); 
 
 void mds_setattr_pack(struct mds_rec_setattr *rec, struct inode *inode, struct iattr *iattr);
-void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, char *name, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time);
+void mds_create_pack(struct mds_rec_create *rec, struct inode *inode, const char *name, int namelen, __u32 mode, __u64 id, __u32 uid, __u32 gid, __u64 time);
 
 /* mds/handler.c */
 struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid, struct vfsmount **mnt);
-
 
 /* llight/request.c */
 int mdc_getattr(ino_t ino, int type, int valid, 
@@ -167,11 +168,10 @@ int mdc_setattr(struct inode *inode, struct iattr *iattr,
 		struct mds_rep  **mds_reply, struct mds_rep_hdr **hdr);
 int mdc_readpage(ino_t ino, int type, __u64 offset, char *addr, 
                  struct mds_rep  **rep, struct mds_rep_hdr **hdr);
-int mdc_create(struct inode *dir, char *name, int mode, __u64 id, 
-               __u32 uid, __u32 gid, __u64 time, 
+int mdc_create(struct inode *dir, const char *name, 
+               int namelen, int mode, __u64 id, __u32 uid, 
+               __u32 gid, __u64 time, 
                struct mds_rep **rep, struct mds_rep_hdr **hdr);
-
-
 
 /* ioctls for trying requests */
 #define IOC_REQUEST_TYPE                   'f'

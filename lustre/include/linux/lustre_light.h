@@ -19,8 +19,7 @@
 
 struct ll_inode_info {
         int              lli_flags;
-        struct list_head lli_inodes;
-        struct list_head lli_pages;
+	__u64            lli_objid; 
         char             lli_inline[OBD_INLINESZ];
 };
 
@@ -69,56 +68,7 @@ static void inline ll_from_inode(struct obdo *oa, struct inode *inode)
         }
 } /* ll_from_inode */
 
-static __inline__ void mds_rep_to_inode(struct inode *dst, struct mds_rep *rep)
-{
 
-        if ( rep->valid & OBD_MD_FLID )
-                dst->i_ino = rep->ino;
-        if ( rep->valid & OBD_MD_FLATIME ) 
-                dst->i_atime = rep->atime;
-        if ( rep->valid & OBD_MD_FLMTIME ) 
-                dst->i_mtime = rep->mtime;
-        if ( rep->valid & OBD_MD_FLCTIME ) 
-                dst->i_ctime = rep->ctime;
-        if ( rep->valid & OBD_MD_FLSIZE ) 
-                dst->i_size = rep->size;
-        if ( rep->valid & OBD_MD_FLMODE ) 
-                dst->i_mode = rep->mode;
-        if ( rep->valid & OBD_MD_FLUID ) 
-                dst->i_uid = rep->uid;
-        if ( rep->valid & OBD_MD_FLGID ) 
-                dst->i_gid = rep->gid;
-        if ( rep->valid & OBD_MD_FLFLAGS ) 
-                dst->i_flags = rep->flags;
-        if ( rep->valid & OBD_MD_FLNLINK )
-                dst->i_nlink = rep->nlink;
-        if ( rep->valid & OBD_MD_FLGENER )
-                dst->i_generation = rep->generation;
-}
-
-static void inline ll_to_inode(struct inode *inode, struct mds_rep *rep)
-{
-        CDEBUG(D_INFO, "src obdo %d valid 0x%08x, dst inode %ld\n",
-               rep->ino, rep->valid, inode->i_ino);
-
-        mds_rep_to_inode(inode, rep);
-
-#if 0
-        if (obdo_has_inline(oa)) {
-		if (S_ISCHR(inode->i_mode) || S_ISBLK(inode->i_mode) ||
-		    S_ISFIFO(inode->i_mode)) {
-			obd_rdev rdev = *((obd_rdev *)oa->o_inline);
-			CDEBUG(D_INODE,
-			       "copying device %x from obdo to inode\n", rdev);
-			init_special_inode(inode, inode->i_mode, rdev);
-		} else {
-			CDEBUG(D_INFO, "copying inline from obdo to inode\n");
-			memcpy(oinfo->lli_inline, oa->o_inline, OBD_INLINESZ);
-		}
-                oinfo->lli_flags |= OBD_FL_INLINEDATA;
-        }
-#endif 
-} /* ll_to_inode */
 
 
 
@@ -229,19 +179,6 @@ static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
         return (struct ll_sb_info *) &(inode->i_sb->u.generic_sbp);
 }
 
-static inline struct list_head *ll_iplist(struct inode *inode) 
-{
-        struct ll_inode_info *info = ll_i2info(inode);
-
-        return &info->lli_pages;
-}
-
-static inline struct list_head *ll_islist(struct inode *inode) 
-{
-        struct ll_inode_info *info = ll_i2info(inode);
-
-        return &info->lli_inodes;
-}
 
 static inline struct list_head *ll_slist(struct inode *inode) 
 {
@@ -283,30 +220,6 @@ static void inline ll_set_size (struct inode *inode, obd_size size)
 #define PG_obdcache 29
 #define OBDAddCachePage(page)   test_and_set_bit(PG_obdcache, &(page)->flags)
 #define OBDClearCachePage(page) clear_bit(PG_obdcache, &(page)->flags)
-
-static inline void ll_print_plist(struct inode *inode) 
-{
-        struct list_head *page_list = ll_iplist(inode);
-        struct list_head *tmp;
-
-        CDEBUG(D_INFO, "inode %ld: page", inode->i_ino);
-        /* obd_down(&ll_i2sbi(inode)->ll_list_mutex); */
-        if (list_empty(page_list)) {
-                CDEBUG(D_INFO, " list empty\n");
-                obd_up(&ll_i2sbi(inode)->ll_list_mutex);
-                return;
-        }
-
-        tmp = page_list;
-        while ( (tmp = tmp->next) != page_list) {
-                struct ll_pgrq *pgrq;
-                pgrq = list_entry(tmp, struct ll_pgrq, rq_plist);
-                CDEBUG(D_INFO, " %p", pgrq->rq_page);
-        }
-        CDEBUG(D_INFO, "\n");
-        /* obd_up(&ll_i2sbi(inode)->ll_list_mutex); */
-}
-#include <linux/obdo.h>
 
 #endif
 

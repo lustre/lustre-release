@@ -1,5 +1,6 @@
 /*
- *  linux/mds/handler.c
+ *  ost/ost_handler.c
+ *  Storage Target Handling functions
  *  
  *  Lustre Object Server Module (OST)
  * 
