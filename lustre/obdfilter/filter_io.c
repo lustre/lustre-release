@@ -420,7 +420,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
         struct filter_export_data *fed = &exp->exp_filter_data;
         int blocksize = exp->exp_obd->u.filter.fo_sb->s_blocksize;
         long used = 0, ungranted = 0;
-        int i, rc = -ENOSPC, obj, n = 0;
+        int i, rc = -ENOSPC, obj, n = 0, mask = D_CACHE;
 
         for (obj = 0; obj < objcount; obj++) {
                 for (i = 0; i < fso[obj].fso_bufcnt; i++, n++) {
@@ -435,11 +435,13 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
 
                         if (rnb[n].flags & OBD_BRW_FROM_GRANT) {
                                 if (fed->fed_grant < used + bytes) {
-                                        CERROR("%s: cli %s claims %ld+%d GRANT,"
+                                        CDEBUG(D_CACHE,
+                                               "%s: cli %s claims %ld+%d GRANT,"
                                                " no such grant %ld, idx %d\n",
                                                exp->exp_obd->obd_name,
                                                exp->exp_client_uuid.uuid,
                                                used, bytes, fed->fed_grant, n);
+                                        mask = D_ERROR;
                                 } else {
                                         used += bytes;
                                         rnb[n].flags |= OBD_BRW_GRANTED;
@@ -483,7 +485,7 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
         fed->fed_pending += used;
         exp->exp_obd->u.filter.fo_tot_pending += used;
 
-        CDEBUG(D_CACHE,
+        CDEBUG(mask,
                "%s: cli %s used: %ld ungranted: %ld grant: %ld dirty: %ld\n",
                exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, used,
                ungranted, fed->fed_grant, fed->fed_dirty);
