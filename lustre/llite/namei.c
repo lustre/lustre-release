@@ -160,12 +160,23 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         memcpy(it->it_lock_handle, &lockh, sizeof(lockh));
 
         if ((it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) &&
-            it->it_disposition && !it->it_status)
+            it->it_disposition && !it->it_status) {
+#if 0
+                if (it->it_data)
+                        CERROR("leaking request %p\n", it->it_data);
+#endif
                 GOTO(negative, NULL);
+        }
 
         if ((it->it_op & (IT_RENAME | IT_GETATTR | IT_UNLINK | IT_RMDIR)) &&
-            it->it_disposition && it->it_status)
+            it->it_disposition && it->it_status) {
+#if 0
+                if (it->it_data)
+                        CERROR("request: %p, status: %d\n", it->it_data,
+                               it->it_status);
+#endif
                 GOTO(negative, NULL);
+        }
 
         request = (struct ptlrpc_request *)it->it_data;
         if (!it->it_disposition) {

@@ -302,8 +302,9 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
         } else if (it->it_op == IT_SETATTR) {
                 size[2] = sizeof(struct mds_rec_setattr);
                 size[3] = de->d_name.len + 1;
+
                 req = ptlrpc_prep_req2(mdc->mdc_ldlm_client, mdc->mdc_conn,
-                                       &mdc->mdc_connh, LDLM_ENQUEUE, 5, size,
+                                       &mdc->mdc_connh, LDLM_ENQUEUE, 4, size,
                                        NULL);
                 if (!req)
                         RETURN(-ENOMEM);
@@ -314,7 +315,7 @@ int mdc_enqueue(struct lustre_handle *conn, int lock_type,
                 if (!it->it_iattr) 
                         LBUG();
 
-                mds_setattr_pack(req, 2, dir, it->it_iattr, 
+                mds_setattr_pack(req, 2, dir, it->it_iattr,
                                 de->d_name.name, de->d_name.len);
                 size[0] = sizeof(struct ldlm_reply);
                 size[1] = sizeof(struct mds_body);

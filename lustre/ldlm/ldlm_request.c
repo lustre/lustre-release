@@ -107,7 +107,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         /* If enqueue returned a blocked lock but the completion handler has
          * already run, then it fixed up the resource and we don't need to do it
          * again. */
-        if (*flags & LDLM_FL_LOCK_CHANGED &&
+        if ((*flags) & LDLM_FL_LOCK_CHANGED &&
             lock->l_req_mode != lock->l_granted_mode) {
                 CDEBUG(D_INFO, "remote intent success, locking %ld instead of"
                        "%ld\n", (long)reply->lock_resource_name[0],
@@ -260,8 +260,15 @@ int ldlm_cli_cancel(struct lustre_handle *lockh,
         ENTRY;
 
         lock = ldlm_handle2lock(lockh); 
-        if (!lock)
-                LBUG();
+        if (!lock) {
+                /* It's possible that the decref that we did just before this
+                 * cancel was the last reader/writer, and caused a cancel before
+                 * we could call this function.  If we want to make this
+                 * impossible (by adding a dec_and_cancel() or similar), then
+                 * we can put the LBUG back. */
+                //LBUG();
+                RETURN(-EINVAL);
+        }
 
         LDLM_DEBUG(lock, "client-side cancel");
         req = ptlrpc_prep_req(lock->l_client, lock->l_connection,

@@ -597,10 +597,15 @@ cleanup_server() {
 }
 
 cleanup_mount() {
-	[ "$SETUP" -a -z "$SETUP_MOUNT" ] && return 0
+	set -vx
+	[ "$SETUP_MOUNT" != "y" ] && return 0
+        [ "$MDC_NAMES" ] || MDC_NAMES=MDCDEV
+        [ "$OSC_NAMES" ] || OSC_NAMES=OSCDEV
+	[ -z "$MOUNT_LIST" -a "$OSCMT" ] && MOUNT_LIST="MT" && MT="$OSCMT OSCDEV MDCDEV"
 
-	[ "$OSCMT" ] || OSCMT=/mnt/lustre
-	for THEMOUNT in $OSCMT; do
+	[ "$MOUNT_LIST" ] || fail "error: $0: MOUNT_LIST unset"
+
+	for THEMOUNT in $MOUNT_LIST; do
 	    if [ "`mount | grep $THEMOUNT`" ]; then
 		umount $THEMOUNT || fail "unable to unmount $THEMOUNT"
 	    fi

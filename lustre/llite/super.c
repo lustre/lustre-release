@@ -167,6 +167,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sb->s_blocksize_bits = log2(sfs.f_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_maxbytes = (1ULL << (32 + 9)) - sfs.f_bsize;
+        ptlrpc_req_finished(request);
 
         sb->s_op = &ll_super_operations;
 

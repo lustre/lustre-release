@@ -83,7 +83,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
         l_lock(nslock);
         lock->l_refc--;
-        LDLM_DEBUG(lock, "after refc--");
+        //LDLM_DEBUG(lock, "after refc--");
         if (lock->l_refc < 0)
                 LBUG();
 

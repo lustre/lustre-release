@@ -98,7 +98,7 @@ static int ldlm_handle_enqueue(struct ptlrpc_request *req)
 
         if (!err)
                 ldlm_reprocess_all(lock->l_resource);
-        LDLM_DEBUG_NOLOCK("server-side enqueue handler END");
+        LDLM_DEBUG_NOLOCK("server-side enqueue handler END (lock %p)", lock);
 
         return 0;
 }
@@ -121,9 +121,9 @@ static int ldlm_handle_convert(struct ptlrpc_request *req)
         dlm_rep->lock_flags = dlm_req->lock_flags;
 
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
-        if (!lock) { 
+        if (!lock) {
                 req->rq_status = EINVAL;
-        } else {         
+        } else {
                 LDLM_DEBUG(lock, "server-side convert handler START");
                 ldlm_lock_convert(lock, dlm_req->lock_desc.l_req_mode,
                                   &dlm_rep->lock_flags);
@@ -132,9 +132,12 @@ static int ldlm_handle_convert(struct ptlrpc_request *req)
         if (ptlrpc_reply(req->rq_svc, req) != 0)
                 LBUG();
 
-        ldlm_reprocess_all(lock->l_resource);
-        ldlm_lock_put(lock); 
-        LDLM_DEBUG(lock, "server-side convert handler END");
+        if (lock) {
+                ldlm_reprocess_all(lock->l_resource);
+                ldlm_lock_put(lock);
+                LDLM_DEBUG(lock, "server-side convert handler END");
+        } else
+                LDLM_DEBUG_NOLOCK("server-side convert handler END");
 
         RETURN(0);
 }
@@ -144,6 +147,7 @@ static int ldlm_handle_cancel(struct ptlrpc_request *req)
         struct ldlm_request *dlm_req;
         struct ldlm_lock *lock;
         int rc;
+        char *ns_name;
         ENTRY;
 
         rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
@@ -154,10 +158,11 @@ static int ldlm_handle_cancel(struct ptlrpc_request *req)
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
 
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
-        if (!lock) { 
+        if (!lock) {
                 req->rq_status = ESTALE;
-        } else { 
+        } else {
                 LDLM_DEBUG(lock, "server-side cancel handler START");
+                ns_name = lock->l_resource->lr_namespace->ns_name;
                 ldlm_lock_cancel(lock);
                 req->rq_status = 0;
         }
@@ -165,9 +170,14 @@ static int ldlm_handle_cancel(struct ptlrpc_request *req)
         if (ptlrpc_reply(req->rq_svc, req) != 0)
                 LBUG();
 
-        ldlm_reprocess_all(lock->l_resource);
-        ldlm_lock_put(lock);
-        LDLM_DEBUG_NOLOCK("server-side cancel handler END");
+        if (lock) {
+                ldlm_reprocess_all(lock->l_resource);
+                ldlm_lock_put(lock);
+                LDLM_DEBUG_NOLOCK("server-side cancel handler END (%s: lock "
+                                  "%p)", ns_name, lock);
+        } else
+                LDLM_DEBUG_NOLOCK("server-side cancel handler END (lock %p)",
+                                  lock);
 
         RETURN(0);
 }
@@ -175,7 +185,7 @@ static int ldlm_handle_cancel(struct ptlrpc_request *req)
 static int ldlm_handle_callback(struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
-        struct ldlm_lock_desc *descp = NULL; 
+        struct ldlm_lock_desc *descp = NULL;
         struct ldlm_lock *lock;
         __u64 is_blocking_ast = 0;
         int rc;
@@ -193,15 +203,15 @@ static int ldlm_handle_callback(struct ptlrpc_request *req)
         rc = ptlrpc_reply(req->rq_svc, req);
         if (rc != 0)
                 RETURN(rc);
-        
+
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
-        if (!lock) { 
-                CERROR("callback on lock %Lx - lock disappeared\n", 
+        if (!lock) {
+                CERROR("callback on lock %Lx - lock disappeared\n",
                        dlm_req->lock_handle1.addr);
                 RETURN(0);
         }
 
-        /* check if this is a blocking AST */ 
+        /* check if this is a blocking AST */
         if (dlm_req->lock_desc.l_req_mode !=
             dlm_req->lock_desc.l_granted_mode) {
                 descp = &dlm_req->lock_desc;
@@ -212,12 +222,12 @@ static int ldlm_handle_callback(struct ptlrpc_request *req)
                    is_blocking_ast ? "blocked" : "completion");
 
         if (descp) {
-                int do_ast; 
+                int do_ast;
                 l_lock(&lock->l_resource->lr_namespace->ns_lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
-                do_ast = (!lock->l_readers && !lock->l_writers); 
+                do_ast = (!lock->l_readers && !lock->l_writers);
                 l_unlock(&lock->l_resource->lr_namespace->ns_lock);
-                
+
                 if (do_ast) {
                         LDLM_DEBUG(lock, "already unused, calling "
                                    "callback (%p)", lock->l_blocking_ast);
@@ -232,7 +242,7 @@ static int ldlm_handle_callback(struct ptlrpc_request *req)
                         LDLM_DEBUG(lock, "Lock still has references, will be"
                                " cancelled later");
                 }
-                ldlm_lock_put(lock); 
+                ldlm_lock_put(lock);
         } else {
                 struct list_head rpc_list = LIST_HEAD_INIT(rpc_list);
 
@@ -259,7 +269,7 @@ static int ldlm_handle_callback(struct ptlrpc_request *req)
                 ldlm_run_ast_work(&rpc_list);
         }
 
-        LDLM_DEBUG_NOLOCK("client %s callback handler END (lock: %p)",
+        LDLM_DEBUG_NOLOCK("client %s callback handler END (lock %p)",
                           is_blocking_ast ? "blocked" : "completion", lock);
         RETURN(0);
 }
@@ -281,11 +291,11 @@ static int ldlm_handle(struct ptlrpc_request *req)
                 GOTO(out, rc = -EINVAL);
         }
 
-        if (!req->rq_export && 
-            req->rq_reqmsg->opc == LDLM_ENQUEUE) { 
+        if (!req->rq_export && req->rq_reqmsg->opc == LDLM_ENQUEUE) {
                 CERROR("No export handle for enqueue request.\n");
                 GOTO(out, rc = -ENOTCONN);
         }
+
         switch (req->rq_reqmsg->opc) {
         case LDLM_ENQUEUE:
                 CDEBUG(D_INODE, "enqueue\n");
@@ -323,8 +333,8 @@ out:
         return 0;
 }
 
-static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len, void *karg,
-                          void *uarg)
+static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len,
+                          void *karg, void *uarg)
 {
         struct obd_device *obddev = class_conn2obd(conn);
         struct ptlrpc_connection *connection;
