@@ -213,6 +213,10 @@ typedef struct
         wait_queue_head_t ksnd_autoconnectd_waitq; /* autoconnectds sleep here */
         spinlock_t        ksnd_autoconnectd_lock; /* serialise */
 
+        int               ksnd_privileged_port[SOCKNAL_CONN_NTYPES]; 
+                                                /* privileged port */
+        spinlock_t        ksnd_privileged_lock; /* privileged port lock */
+
         ksock_irqinfo_t   ksnd_irqinfo[NR_IRQS];/* irq->scheduler lookup */
 
         int               ksnd_ninterfaces;
@@ -366,6 +370,7 @@ typedef struct ksock_route
         __u32               ksnr_myipaddr;      /* my IP */
         __u32               ksnr_ipaddr;        /* IP address to connect to */
         int                 ksnr_port;          /* port to connect to */
+        unsigned int        ksnr_privileged:1;  /* need to use privileged port? */
         unsigned int        ksnr_connecting:4;  /* autoconnects in progress by type */
         unsigned int        ksnr_connected:4;   /* connections established by type */
         unsigned int        ksnr_deleted:1;     /* been removed from peer? */
@@ -485,7 +490,7 @@ extern ksock_peer_t *ksocknal_get_peer (ptl_nid_t nid);
 extern int ksocknal_del_route (ptl_nid_t nid, __u32 ipaddr,
                                int single, int keep_conn);
 extern int ksocknal_create_conn (ksock_route_t *route,
-                                 struct socket *sock, int type);
+                                 struct socket *sock, int type, int privileged);
 extern void ksocknal_close_conn_locked (ksock_conn_t *conn, int why);
 extern void ksocknal_terminate_conn (ksock_conn_t *conn);
 extern void ksocknal_destroy_conn (ksock_conn_t *conn);
