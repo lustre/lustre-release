@@ -151,6 +151,13 @@ int ll_it_open_error(int phase, struct lookup_intent *it)
                 else
                         return 0;
         }
+
+        if (it_disposition(it, DISP_IT_EXECD)) {
+                if (phase == DISP_IT_EXECD)
+                        return it->it_status;
+                else
+                        return 0;
+        }
         CERROR("it disp: %X, status: %d\n", it->it_disposition, it->it_status);
         LBUG();
         return 0;
@@ -332,6 +339,9 @@ int ll_intent_lock(struct inode *parent, struct dentry **de,
                 LASSERT(it->it_status != 0);
                 GOTO(drop_req, rc = it->it_status);
         }
+        rc = ll_it_open_error(DISP_IT_EXECD, it);
+        if (rc)
+                GOTO(drop_req, rc);
 
         mds_body = lustre_msg_buf(request->rq_repmsg, 1, sizeof(*mds_body));
         LASSERT(mds_body != NULL);           /* mdc_enqueue checked */
