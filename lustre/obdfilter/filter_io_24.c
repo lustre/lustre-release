@@ -93,7 +93,8 @@ static int filter_direct_io(int rw, struct inode *inode, struct kiobuf *iobuf,
         cleanup_phase = 3;
 
         rc = fsfilt_commit_async(obd, inode, &oti->oti_handle);
-        GOTO(cleanup, rc);
+        if (rc)
+                GOTO(cleanup, rc);
 
         rc = brw_kiovec(WRITE, 1, &iobuf, inode->i_dev, iobuf->blocks,
                         1 << inode->i_blkbits);
