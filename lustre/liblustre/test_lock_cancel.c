@@ -37,6 +37,8 @@
 #include <sysio.h>
 #include <mount.h>
 
+#include <test_common.h>
+
 #include <mpi.h>
 
 /******************************************************************************/
@@ -69,16 +71,52 @@ int		numTasks     = 0,	/* MPI variables */
 
 static char *test_file_name = "/mnt/lustre/test_lock_cancel";
 
-extern int portal_debug;
-extern int portal_subsystem_debug;
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);
 
+void usage(char *cmd)
+{
+        printf("Usage: \t%s --target mdsnid:/mdsname/profile\n", cmd);
+        printf("       \t%s --dumpfile dumpfile\n", cmd);
+        exit(-1);
+}
+
 int main(int argc, char *argv[])
 {
+        int opt_index, c;
+        static struct option long_opts[] = {
+                {"target", 1, 0, 0},
+                {"dumpfile", 1, 0, 0},
+                {0, 0, 0, 0}
+        };
 	int fd;
         long time1, time2;
         struct stat statbuf;
+
+        if (argc < 3)
+                usage(argv[0]);
+
+        while ((c = getopt_long(argc, argv, "", long_opts, &opt_index)) != -1) {
+                switch (c) {
+                case 0: {
+                        if (!optarg[0])
+                                usage(argv[0]);
+
+                        if (!strcmp(long_opts[opt_index].name, "target")) {
+                                setenv(ENV_LUSTRE_MNTTGT, optarg, 1);
+                        } else if (!strcmp(long_opts[opt_index].name, "dumpfile")) {
+                                setenv(ENV_LUSTRE_DUMPFILE, optarg, 1);
+                        } else
+                                usage(argv[0]);
+                        break;
+                }
+                default:
+                        usage(argv[0]);
+                }
+        }
+
+        if (optind != argc)
+                usage(argv[0]);
 
         __liblustre_setup_();
 
@@ -90,11 +128,6 @@ int main(int argc, char *argv[])
                 printf("this demo can't run on single node!\n");
                 goto cleanup;
         }
-
-#if 1
-	portal_debug = 0;
-	portal_subsystem_debug = 0;
-#endif
 
         if (rank == 0) {
                 unlink(test_file_name);
