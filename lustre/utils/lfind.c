@@ -11,12 +11,11 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
-#define	printk printf
 #include <linux/lustre_lib.h>
 #include <linux/lustre_lite.h>
 #include <linux/obd_lov.h>
 
-#warning Max obds per lov currently hardcoded to 1000 in lov/lov_obd.c
+/* XXX Max obds per lov currently hardcoded to 1000 in lov/lov_obd.c */
 #define MAX_LOV_UUID_COUNT	1000
 #define OBD_NOT_FOUND		((__u32)-1)
 
@@ -34,14 +33,14 @@ char *		shortOpts = "ho:qv";
 char *		usageMsg = "[ --obd <obd uuid> | --query ] <dir|file> ...";
 
 int		max_ost_count = MAX_LOV_UUID_COUNT;
-obd_uuid_t *	obduuid;
+struct obd_uuid *	obduuid;
 __u32		obdcount;
 __u32		obdindex;
 char *		buf;
 int		buflen;
 struct obd_ioctl_data data;
 struct lov_desc desc;
-obd_uuid_t *	uuids;
+struct obd_uuid *	uuids;
 int		uuidslen;
 int		cfglen;
 struct lov_mds_md *lmm;
@@ -74,7 +73,7 @@ main (int argc, char **argv) {
 				exit(1);
 			}
 
-			obduuid = (obd_uuid_t *)optarg;
+			obduuid = (struct obd_uuid *)optarg;
 			break;
 		case 'h':
 			usage(stdout);
@@ -128,7 +127,7 @@ init()
 	else
 		buflen = lmmlen;
 
-#warning max ioctl buffer size currently hardcoded to 8192
+	/* XXX max ioctl buffer size currently hardcoded to 8192 */
 	if (buflen > 8192) {
 		int nuuids, remaining, nluoinfos;
 
@@ -155,7 +154,7 @@ init()
 	}
 
 	lmm = (struct lov_mds_md *)buf;
-	uuids = (obd_uuid_t *)buf;
+	uuids = (struct obd_uuid *)buf;
 }
 
 void
@@ -194,12 +193,12 @@ processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
 	if (flag != FTW_F)
 		return 0;
 
-	if ((obdcount == 0) && (getobdindex(path) == OBD_NOT_FOUND)) {
+	if (getobdindex(path) == OBD_NOT_FOUND && obdcount == 0) {
 		/* terminate nftw walking this tree */
 		return(1);
 	}
 
-	if ((fd = open(path, O_RDONLY)) < 0) {
+	if ((fd = open(path, O_RDONLY | O_LOV_DELAY_CREATE)) < 0) {
 		errMsg("open \"%.20s\" failed.", path);
 		perror("open");
 		exit(1);
@@ -212,21 +211,24 @@ processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
 	if ((rc = ioctl(fd, LL_IOC_LOV_GETSTRIPE, (void *)lmm)) < 0) {
 		errMsg("LL_IOC_LOV_GETSTRIPE ioctl failed.");
 		perror("ioctl");
-		exit(1);
+		return 0;
 	}
 
 	close(fd);
 
-	if (query || verbose || lmm->lmm_objects[obdindex].l_object_id)
+	if (query || verbose ||
+	    (obdindex != OBD_NOT_FOUND &&
+	     lmm->lmm_objects[obdindex].l_object_id))
 		printf("%s\n", path);
 
 	if (verbose) {
 		printf("lmm_magic:          0x%x\n", lmm->lmm_magic);
 		printf("lmm_object_id:      "LPX64"\n", lmm->lmm_object_id);
-		printf("lmm_stripe_offset:  %d\n", lmm->lmm_stripe_offset);
-		printf("lmm_stripe_count:   %d\n", lmm->lmm_stripe_count);
-		printf("lmm_ost_count:      %d\n", lmm->lmm_ost_count);
-		printf("lmm_stripe_pattern: %d\n", lmm->lmm_stripe_pattern);
+		printf("lmm_stripe_offset:  %u\n", (int)lmm->lmm_stripe_offset);
+		printf("lmm_stripe_count:   %u\n", (int)lmm->lmm_stripe_count);
+		printf("lmm_stripe_size:    %u\n", (int)lmm->lmm_stripe_size);
+		printf("lmm_ost_count:      %u\n", lmm->lmm_ost_count);
+		printf("lmm_stripe_pattern: %d\n", lmm->lmm_magic & 0xf);
 	}
 
 	count = lmm->lmm_ost_count;
@@ -258,7 +260,7 @@ processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
 __u32
 getobdindex(const char *path)
 {
-	obd_uuid_t *uuidp;
+	struct obd_uuid *uuidp;
 	int fd;
 	int rc;
 	int i;
