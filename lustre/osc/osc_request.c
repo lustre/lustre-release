@@ -757,6 +757,43 @@ static int osc_cleanup(struct obd_device * obddev)
         return 0;
 }
 
+#if 0
+static int osc_statfs(struct obd_conn *conn, struct statfs *statfs);
+{
+        struct ptlrpc_request *request;
+        struct ptlrpc_client *cl;
+        struct ptlrpc_connection *connection;
+        struct ost_body *body;
+        int rc, size = sizeof(*body);
+        ENTRY;
+
+        osc_con2cl(conn, &cl, &connection);
+        request = ptlrpc_prep_req(cl, connection, OST_STATFS, 1, &size, NULL);
+        if (!request)
+                RETURN(-ENOMEM);
+
+        body = lustre_msg_buf(request->rq_reqmsg, 0);
+        memcpy(&body->oa, oa, sizeof(*oa));
+        body->oa.o_valid = ~0;
+        body->connid = conn->oc_id;
+
+        request->rq_replen = lustre_msg_size(1, &size);
+
+        rc = ptlrpc_queue_wait(request);
+        rc = ptlrpc_check_status(request, rc);
+        if (rc)
+                GOTO(out, rc);
+
+        body = lustre_msg_buf(request->rq_repmsg, 0);
+        memcpy(oa, &body->oa, sizeof(*oa));
+
+        EXIT;
+ out:
+        ptlrpc_free_req(request);
+        return 0;
+}
+#endif
+
 struct obd_ops osc_obd_ops = {
         o_setup:   osc_setup,
         o_cleanup: osc_cleanup,
