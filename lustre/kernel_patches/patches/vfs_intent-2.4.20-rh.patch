@@ -135,7 +135,7 @@ Index: linux-2.4.20-rh/fs/namei.c
  	UPDATE_ATIME(dentry->d_inode);
 +	nd->intent = it;
  	err = dentry->d_inode->i_op->follow_link(dentry, nd);
-+	if (!err && it != NULL && !(it->it_int_flags & IT_FL_FOLLOWED)) {
++	if (!err && it != NULL && !(it->d.lustre.it_int_flags & IT_FL_FOLLOWED)) {
 +		/* vfs_follow_link was never called */
 +		intent_release(it);
 +		path_release(nd);
@@ -566,7 +566,7 @@ Index: linux-2.4.20-rh/fs/namei.c
  	error = dentry->d_inode->i_op->follow_link(dentry, nd);
 +	if (error) {
 +		intent_release(it);
-+	} else if (it != NULL && !(it->it_int_flags & IT_FL_FOLLOWED)) {
++	} else if (it != NULL && !(it->d.lustre.it_int_flags & IT_FL_FOLLOWED)) {
 +		/* vfs_follow_link was never called */
 +		intent_release(it);
 +		path_release(nd);
@@ -809,7 +809,7 @@ Index: linux-2.4.20-rh/fs/namei.c
 +	else if (it != nd->intent)
 +		printk("it != nd->intent: tell phil@clusterfs.com\n");
 +	if (it != NULL)
-+		it->it_int_flags |= IT_FL_FOLLOWED;
++		it->d.lustre.it_int_flags |= IT_FL_FOLLOWED;
 +
  	if (*link == '/') {
  		path_release(nd);
