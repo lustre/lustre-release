@@ -49,8 +49,8 @@ struct client_obd *client_conn2cli(struct lustre_handle *conn)
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
         struct obd_ioctl_data* data = buf;
-        int rq_portal = (obddev->obd_type->typ_ops->o_getattr) ? OST_REQUEST_PORTAL : MDS_REQUEST_PORTAL;
-        int rp_portal = (obddev->obd_type->typ_ops->o_getattr) ? OSC_REPLY_PORTAL : MDC_REPLY_PORTAL;
+        int rq_portal = (obddev->obd_type->typ_ops->o_brw) ? OST_REQUEST_PORTAL : MDS_REQUEST_PORTAL;
+        int rp_portal = (obddev->obd_type->typ_ops->o_brw) ? OSC_REPLY_PORTAL : MDC_REPLY_PORTAL;
         struct client_obd *mdc = &obddev->u.cli;
         char server_uuid[37];
         int rc;
@@ -68,7 +68,7 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         if (data->ioc_inllen2 < 1) {
                 CERROR("setup requires a SERVER UUID\n");
-               RETURN(-EINVAL);
+                RETURN(-EINVAL);
         }
 
         if (data->ioc_inllen2 > 37) {
@@ -133,7 +133,7 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         int rc, size[] = {sizeof(cli->cl_target_uuid),
                           sizeof(obd->obd_uuid) };
         char *tmp[] = {cli->cl_target_uuid, obd->obd_uuid};
-        int rq_opc = (obd->obd_type->typ_ops->o_getattr) ? OST_CONNECT : MDS_CONNECT;
+        int rq_opc = (obd->obd_type->typ_ops->o_brw) ? OST_CONNECT :MDS_CONNECT;
 
         ENTRY;
         down(&cli->cl_sem);
@@ -192,7 +192,7 @@ int client_obd_disconnect(struct lustre_handle *conn)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct client_obd *cli = &obd->u.cli;
-        int rq_opc = (obd->obd_type->typ_ops->o_getattr) ? OST_DISCONNECT : MDS_DISCONNECT;
+        int rq_opc = (obd->obd_type->typ_ops->o_brw) ? OST_DISCONNECT : MDS_DISCONNECT;
         struct ptlrpc_request *request = NULL;
         int rc, err;
         ENTRY;
@@ -268,8 +268,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         conn.addr = req->rq_reqmsg->addr;
         conn.cookie = req->rq_reqmsg->cookie;
 
-        rc = lustre_pack_msg(0, 
-                             NULL, NULL, &req->rq_replen, &req->rq_repmsg);
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc)
                 GOTO(out, rc);
 
@@ -287,7 +286,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
                            &export->exp_ldlm_data.led_client,
                            export->exp_connection);
-                                   
+
 #warning Peter: is this the right place to upgrade the server connection level?
         req->rq_connection->c_level = LUSTRE_CONN_FULL;
 out:
