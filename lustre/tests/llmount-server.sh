@@ -10,8 +10,8 @@ LOCALHOST=dev4
 SERVER=dev4
 PORT=1234
 
-setup
 setup_portals
+setup_lustre
 
 new_fs ext2 /tmp/ost 6000000
 OST=${LOOPDEV}

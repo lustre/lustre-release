@@ -4,18 +4,20 @@ SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
 SERVER=localhost
+PORT=1234
 
-setup
+$ACCEPTOR $PORT
 
 $PTLCTL <<EOF
 mynid localhost
 setup tcp
-connect $SERVER 1234
+connect $SERVER $PORT
 add_uuid self
 add_uuid ost
 quit
 EOF
 
+setup_lustre
 
 tmp_fs ext2 /tmp/fs 10000
 OBD=${LOOPDEV}

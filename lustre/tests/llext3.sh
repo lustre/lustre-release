@@ -8,8 +8,8 @@ LOCALHOST=localhost
 SERVER=localhost
 PORT=1234
 
-setup
 setup_portals
+setup_lustre
 
 new_fs ext2 /tmp/ost 10000
 OST=$LOOPDEV

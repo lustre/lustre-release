@@ -9,8 +9,8 @@ LOCALHOST=dev5
 SERVER=dev4
 PORT=1234
 
-setup
 setup_portals
+setup_lustre
 
 $OBDCTL <<EOF
 device 0

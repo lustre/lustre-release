@@ -8,8 +8,8 @@ LOCALHOST=localhost
 SERVER=localhost
 PORT=1234
 
-setup
 setup_portals
+setup_lustre
 
 MDSFS=ext2
 new_fs ${MDSFS} /tmp/mds 1000

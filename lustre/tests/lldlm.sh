@@ -8,8 +8,8 @@ LOCALHOST=localhost
 SERVER=localhost
 PORT=1234
 
-setup
 setup_portals
+setup_lustre
 
 $OBDCTL <<EOF
 device 0
