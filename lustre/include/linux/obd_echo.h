@@ -27,7 +27,7 @@ struct ec_lock {
         struct ec_object      *ecl_object;
         __u64                  ecl_cookie;
         struct lustre_handle   ecl_lock_handle;
-        struct ldlm_extent     ecl_extent;
+        ldlm_policy_data_t     ecl_policy;
         __u32                  ecl_mode;
 };
 
