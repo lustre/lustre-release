@@ -10,6 +10,7 @@ dn: <value-of select="$basedn"/>
 uuid: CONFIG_UUID
 objectClass: LUSTRECONFIG
 config: <value-of select="$config"/>
+version: <value-of select="@version"/>
 <text>
 </text><apply-templates/>
 </template>
