@@ -128,7 +128,7 @@ int local_send_rpc(struct ptlrpc_request *req)
         req->rq_timedout = 0;
         req->rq_resend = 0;
         req->rq_restart = 0;
-        spin_unlock_irqrestore (&request->rq_lock, flags);
+        spin_unlock_irqrestore (&req->rq_lock, flags);
                 
         req->rq_sent = LTIME_S(CURRENT_TIME);
         ptlrpc_pinger_sending_on_import(req->rq_import);
