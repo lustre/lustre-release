@@ -31,6 +31,17 @@
 import sys, getopt, types
 import string, os
 import ldap
+PYMOD_DIR = "/usr/lib/lustre/python"
+
+def development_mode():
+    base = os.path.dirname(sys.argv[0])
+    if os.access(base+"/Makefile.am", os.R_OK):
+        return 1
+    return 0
+
+if not development_mode():
+    sys.path.append(PYMOD_DIR)
+
 import Lustre
 
 lactive_options = [
