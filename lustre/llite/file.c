@@ -1415,7 +1415,7 @@ struct file_operations ll_file_operations = {
         .sendfile       = generic_file_sendfile,
 #endif
         .fsync          = ll_fsync,
-//        .lock           = ll_file_flock
+        /* .lock           = ll_file_flock */
 };
 
 struct inode_operations ll_file_inode_operations = {
