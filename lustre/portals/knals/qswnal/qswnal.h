@@ -28,12 +28,7 @@
 # define EXPORT_SYMTAB
 #endif
 
-#ifdef PROPRIETARY_ELAN
-# include <qsw/kernel.h>
-#else
-# include <qsnet/kernel.h>
-#endif
-
+#include <qsnet/kernel.h>
 #undef printf                                   /* nasty QSW #define */
 
 #include <linux/config.h>

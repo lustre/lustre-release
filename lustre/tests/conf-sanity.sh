@@ -314,4 +314,157 @@ test_11() {
 }
 run_test 11 "use default lov configuration (should return error)"
 
+test_12() {
+        OLDXMLCONFIG=$XMLCONFIG
+        XMLCONFIG="batch.xml"
+        BATCHFILE="batchfile"
+
+        # test double quote
+        [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
+        [ -f "$BATCHFILE" ] && rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions \"-I 128\"" >> $BATCHFILE
+        # --mkfsoptions "-I 128"
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE || return $?
+        if [ `sed -n '/>-I 128</p' $XMLCONFIG | wc -l` -eq 1 ]; then
+                echo "matched double quote success"
+        else
+                echo "matched double quote fail"
+                return 1
+        fi 
+        rm -f $XMLCONFIG
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions \"-I 128" >> $BATCHFILE
+        # --mkfsoptions "-I 128
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE && return $?
+        echo "unmatched double quote should return error"
+
+        # test single quote
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions '-I 128'" >> $BATCHFILE
+        # --mkfsoptions '-I 128'
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE || return $?
+        if [ `sed -n '/>-I 128</p' $XMLCONFIG | wc -l` -eq 1 ]; then
+                echo "matched single quote success"
+        else
+                echo "matched single quote fail"
+                return 1
+        fi
+        rm -f $XMLCONFIG
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions '-I 128" >> $BATCHFILE
+        # --mkfsoptions '-I 128
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE && return $?
+        echo "unmatched single quote should return error"
+
+        # test backslash
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions \-\I\ \128" >> $BATCHFILE
+        # --mkfsoptions \-\I\ \128
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE || return $?
+        if [ `sed -n '/>-I 128</p' $XMLCONFIG | wc -l` -eq 1 ]; then
+                echo "backslash followed by a whitespace/letter success"
+        else
+                echo "backslash followed by a whitespace/letter fail"
+                return 1
+        fi
+        rm -f $XMLCONFIG
+        rm -f $BATCHFILE
+        echo "--add net --node  localhost --nid localhost.localdomain --nettype tcp" > $BATCHFILE
+        echo "--add mds --node localhost --mds mds1 --mkfsoptions -I\ 128\\" >> $BATCHFILE
+        # --mkfsoptions -I\ 128\
+        do_lmc -m $XMLCONFIG --batch $BATCHFILE && return $?
+        echo "backslash followed by nothing should return error"
+
+        rm -f $BATCHFILE
+        XMLCONFIG=$OLDXMLCONFIG
+}
+run_test 12 "lmc --batch, with single/double quote, backslash in batchfile"
+
+test_13() {
+        OLDXMLCONFIG=$XMLCONFIG
+        XMLCONFIG="conf13-1.xml"
+        SECONDXMLCONFIG="conf13-2.xml"
+
+        # check long uuid will be truncated properly and uniquely
+        echo "To generate XML configuration file(with long ost name): $XMLCONFIG"
+        [ -f "$XMLCONFIG" ] && rm -f $XMLCONFIG
+        do_lmc --add net --node localhost --nid localhost.localdomain --nettype tcp
+        do_lmc --add mds --node localhost --mds mds1_name_longer_than_31characters
+        do_lmc --add mds --node localhost --mds mds2_name_longer_than_31characters
+        if [ ! -f "$XMLCONFIG" ]; then
+                echo "Error:no file $XMLCONFIG created!"
+                return 1
+        fi
+        EXPECTEDMDS1UUID="e_longer_than_31characters_UUID"
+        EXPECTEDMDS2UUID="longer_than_31characters_UUID_2"
+        FOUNDMDS1UUID=`awk -F"'" '/<mds uuid=/{print $2}' $XMLCONFIG | sed -n '1p'`
+        FOUNDMDS2UUID=`awk -F"'" '/<mds uuid=/{print $2}' $XMLCONFIG | sed -n '2p'`
+        if [ $EXPECTEDMDS1UUID != $FOUNDMDS1UUID ]; then
+                echo "Error:expected uuid for mds1: $EXPECTEDMDS1UUID; found: $FOUNDMDS1UUID"
+                return 1
+        fi
+        if [ $EXPECTEDMDS2UUID != $FOUNDMDS2UUID ]; then
+                echo "Error:expected uuid for mds2: $EXPECTEDMDS2UUID; found: $FOUNDMDS2UUID"
+                return 1
+        fi
+        echo "Success:long uuid truncated successfully and being unique."
+
+        # check multiple invocations for lmc generate same XML configuration file
+        rm -f $XMLCONFIG
+        echo "Generate the first XML configuration file"
+        gen_config
+        echo "mv $XMLCONFIG to $SECONDXMLCONFIG"
+        mv $XMLCONFIG $SECONDXMLCONFIG || return $?
+        echo "Generate the second XML configuration file"
+        gen_config
+        if [ `diff $XMLCONFIG $SECONDXMLCONFIG | wc -l` -eq 0 ]; then
+                echo "Success:multiple invocations for lmc generate same XML file"
+        else
+                echo "Error: multiple invocations for lmc generate different XML file"
+                return 1
+        fi
+
+        rm -f $XMLCONFIG
+        rm -f $SECONDXMLCONFIG
+        XMLCONFIG=$OLDXMLCONFIG
+}
+run_test 13 "check new_uuid of lmc operating correctly"
+
+test_14() {
+        rm -f $XMLCONFIG
+
+        # create xml file with --mkfsoptions for ost
+        echo "create xml file with --mkfsoptions for ost"
+        add_mds mds --dev $MDSDEV --size $MDSSIZE
+        add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+            --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
+        add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE \
+            --mkfsoptions -V
+        add_client client mds --lov lov1 --path $MOUNT
+
+        FOUNDSTRING=`awk -F"<" '/<mkfsoptions>/{print $2}' $XMLCONFIG`
+        EXPECTEDSTRING="mkfsoptions>-V"
+        if [ $EXPECTEDSTRING != $FOUNDSTRING ]; then
+                echo "Error:expected string: $EXPECTEDSTRING; found: $FOUNDSTRING"
+                return 1
+        fi
+        echo "Success:mkfsoptions for ost written to xml file correctly."
+
+        # mount lustre to test lconf mkfsoptions-parsing
+        echo "mount lustre"
+        start_ost
+        start_mds
+        mount_client $MOUNT || return $?
+        cleanup
+        echo "lconf mkfsoptions-parsing for ost success"
+
+        gen_config
+}
+run_test 14 "test mkfsoptions of ost for lmc and lconf"
+
 equals_msg "Done"

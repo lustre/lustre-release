@@ -136,7 +136,7 @@ check_options()
     [ -d "$KERNELDIR" ] || \
 	usage 1 "$KERNELDIR is not a directory."
 
-    if [ "$RELEASE" = "no" ] ; then
+    if ! (( $RELEASE )) ; then
 	[ "$TAG" ] || \
 	    usage 1 "When building a snapshot, a tag name must be used."
     fi
@@ -186,10 +186,10 @@ load_target()
 
     if [ "$EXTRA_VERSION_save" ] ; then
 	EXTRA_VERSION="$EXTRA_VERSION_save"
-    else
-	EXTRA_VERSION="${EXTRA_VERSION}_${TAG//_/}.${TIMESTAMP}"
+    elif ! (( $RELEASE )) ; then
+	EXTRA_VERSION="${EXTRA_VERSION}-${TAG//_/}.${TIMESTAMP}"
     fi
-    EXTRA_VERSION=${EXTRA_VERSION//-/_/}
+    # EXTRA_VERSION=${EXTRA_VERSION//-/_}
 
     ALL_ARCHS="$BASE_ARCHS $BIGMEM_ARCHS $BOOT_ARCHS $JENSEN_ARCHS $SMP_ARCHS $UP_ARCHS"
 
@@ -253,7 +253,7 @@ unpack_linux()
 
 patch_linux()
 {
-    FULL_PATCH="$PWD/lustre-kernel-${target}-${EXTRA_VERSION}.patch"
+    FULL_PATCH="$PWD/lustre-kernel-${TARGET}-${EXTRA_VERSION}.patch"
     [ -f "$FULL_PATCH" ] && rm -f "$FULL_PATCH"
     pushd linux >/dev/null
     echo -n "Applying patches:"
@@ -295,24 +295,26 @@ clean_linux()
 prep_build()
 {
     # make .spec file
-    sed -e s/@KERNEL_VERSION@/$VERSION/g \
-	-e s/@KERNEL_RELEASE@/$EXTRA_VERSION/g \
-	-e s/@KERNEL_SOURCE@/$KERNEL/g \
-	-e s/@LUSTRE_SOURCE@/${LUSTRE##*/}/g \
-	-e s/@LUSTRE_TARGET@/$TARGET/g \
-	-e s/@CONFIGURE_FLAGS@/$CONFIGURE_FLAGS/g \
-	-e s/@BASE_ARCHS@/$BASE_ARCHS/g \
-	-e s/@BIGMEM_ARCHS@/$BIGMEM_ARCHS/g \
-	-e s/@BOOT_ARCHS@/$BOOT_ARCHS/g \
-	-e s/@JENSEN_ARCHS@/$BOOT_ARCHS/g \
-	-e s/@SMP_ARCHS@/$SMP_ARCHS/g \
-	-e s/@UP_ARCHS@/$UP_ARCHS/g \
+    sed -e "s/@KERNEL_VERSION@/$VERSION/g" \
+	-e "s/@KERNEL_EXTRA_VERSION@/$EXTRA_VERSION/g" \
+	-e "s^@KERNEL_RELEASE@^${EXTRA_VERSION//-/_}^g" \
+	-e "s/@KERNEL_SOURCE@/$KERNEL/g" \
+	-e "s/@LUSTRE_SOURCE@/${LUSTRE##*/}/g" \
+	-e "s/@LUSTRE_TARGET@/$TARGET/g" \
+	-e "s/@CONFIGURE_FLAGS@/$CONFIGURE_FLAGS/g" \
+	-e "s/@BASE_ARCHS@/$BASE_ARCHS/g" \
+	-e "s/@BIGMEM_ARCHS@/$BIGMEM_ARCHS/g" \
+	-e "s/@BOOT_ARCHS@/$BOOT_ARCHS/g" \
+	-e "s/@JENSEN_ARCHS@/$BOOT_ARCHS/g" \
+	-e "s/@SMP_ARCHS@/$SMP_ARCHS/g" \
+	-e "s/@UP_ARCHS@/$UP_ARCHS/g" \
 	< $TOPDIR/lustre/scripts/lustre-kernel-2.4.spec.in \
 	> lustre-kernel-2.4.spec
     [ -d SRPMS ] || mkdir SRPMS
     [ -d RPMS ] || mkdir RPMS
     [ -d BUILD ] || mkdir BUILD
     [ -d SOURCES ] || mkdir SOURCES
+    cp $TOPDIR/lustre/scripts/linux-rhconfig.h SOURCES
     cp $TOPDIR/lustre/scripts/linux-merge-config.awk SOURCES
     cp $TOPDIR/lustre/scripts/linux-merge-modules.awk SOURCES
     cp "$LUSTRE" "$KERNEL_FILE" SOURCES

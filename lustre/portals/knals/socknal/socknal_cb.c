@@ -2264,7 +2264,7 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
                 goto out;
         }
 
-        if (route->ksnr_nonagel) {
+        {
                 int  option = 1;
                 
                 set_fs (KERNEL_DS);
@@ -2272,7 +2272,7 @@ ksocknal_connect_peer (ksock_route_t *route, int type)
                                             (char *)&option, sizeof (option));
                 set_fs (oldmm);
                 if (rc != 0) {
-                        CERROR ("Can't disable nagel: %d\n", rc);
+                        CERROR ("Can't disable nagle: %d\n", rc);
                         goto out;
                 }
         }
