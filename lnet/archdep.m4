@@ -52,6 +52,8 @@ case ${host_cpu} in
 	AC_MSG_RESULT($host_cpu)
 	KCFLAGS='-g -Wall '
 	KCPPFLAGS='-D__arch_lib__ '
+	AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
+   	libdir='${exec_prefix}/lib/lustre'
         MOD_LINK=elf_i386
 ;;
 	um )
