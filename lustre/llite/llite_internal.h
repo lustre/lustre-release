@@ -60,6 +60,7 @@ struct ll_sb_info {
         struct list_head          ll_pglist;
 
         struct ll_ra_info         ll_ra_info;
+        unsigned int              ll_namelen;
 };
 
 struct ll_readahead_state {

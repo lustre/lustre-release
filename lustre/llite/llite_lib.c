@@ -127,6 +127,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
+        sbi->ll_namelen = osfs.os_namelen;
 
         devno = get_uuid2int(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid,
                              strlen(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid));
