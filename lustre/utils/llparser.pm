@@ -609,15 +609,17 @@ sub parse_file
     my $nodlm = shift;
     my $noclass = shift;
     my $nonet = shift;
+    my $sline = shift;
+    my $eline = shift;
     my $htmfile = shift;
 
-    $backref = 0;
-    $treeparent = 0;
-    $numchildren = 0;
-    $youngestchild = 0;
-    $next = 0;
-    $pidhead = 0;
-    $marked = 0;
+    my $backref = 0;
+    my $treeparent = 0;
+    my $numchildren = 0;
+    my $youngestchild = 0;
+    my $next = 0;
+    my $pidhead = 0;
+    my $marked = 0;
     my $numfiles = 0;
     foreach $file (@$input_files) {
 	my $linecnt = 0;
@@ -628,15 +630,16 @@ sub parse_file
 	# Initialize the starting time to be zero
 	open(FILEHANDLE, $file) or die "Can't open file: $file\n";
 	# Insert beginning of file marker, an all zero pattern
-	$fileline = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-	$new_file = join('_', split(/[\/, \.]/, $file)); 
+	my $fileline = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+	my $new_file = join('_', split(/[\/, \.]/, $file)); 
 	$fileline->[$e_fmtstr] = $new_file;
-	$start = times();
+	my $start = times();
 	push @{$array_parsed->[$numfiles]}, $fileline;
 	while(<FILEHANDLE>) {
 	    $linecnt++;
-	    @parsed_line = get_parsed_line($file, $linecnt, $_);
+	    my @parsed_line = get_parsed_line($file, $linecnt, $_, $sline);
 	    next if ($#parsed_line == 0);
+	    last if ($linecnt > $eline);
 	    next if (ignore_conditions(\@parsed_line, $pid, 
 				      $rpctrace, $trace, $nodlm,
 				      $noclass, $nonet));
@@ -999,6 +1002,10 @@ sub get_parsed_line()
     my $file = shift;
     my $linecnt = shift;
     my $in_line = shift;
+    my $sline = shift;
+    if ($linecnt < $sline) {
+	return 0;
+    }
     if ($in_line =~ /$REGEX/) {
 	my $tagged_pid = "${8}:${file}";
 	my $display_str = "${5}:{6}";
