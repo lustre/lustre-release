@@ -1533,10 +1533,6 @@ int lmv_obd_create_single(struct obd_export *exp, struct obdo *oa,
         int rc = 0;
         ENTRY;
 
-        rc = lmv_check_connect(obd);
-	if (rc)
-		RETURN(rc);
-
         LASSERT(ea == NULL);
         LASSERT(oa->o_mds < lmv->desc.ld_tgt_count);
 

@@ -193,7 +193,7 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                                            name);
                 if (osc_symlink == NULL) {
                         CERROR("could not register LOV target "
-                               "/proc/fs/lustre/%s/%s/target_obds/%s.",
+                               "/proc/fs/lustre/%s/%s/target_obds/%s\n",
                                obd->obd_type->typ_name, obd->obd_name,
                                osc_obd->obd_name);
                         lprocfs_remove(lov_proc_dir);
@@ -286,7 +286,7 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                 if (osc_symlink) {
                         lprocfs_remove(osc_symlink);
                 } else {
-                        CERROR("/proc/fs/lustre/%s/%s/target_obds/%s missing.",
+                        CERROR("/proc/fs/lustre/%s/%s/target_obds/%s missing\n",
                                obd->obd_type->typ_name, obd->obd_name,
                                osc_obd->obd_name);
                 }
