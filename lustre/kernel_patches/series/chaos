@@ -5,3 +5,4 @@ lustre_version.patch
 vfs_intent-2.4.18-18.patch
 invalidate_show.patch
 iod-rmap-exports.patch
+export-truncate.patch
