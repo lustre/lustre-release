@@ -9,6 +9,9 @@ TMP=${TMP:-/tmp}
 
 MDSDEV=${MDSDEV:-$TMP/mds1-`hostname`}
 MDSDEV2=${MDSDEV:-$TMP/mds2-`hostname`}
+MOUNT=${MOUNT:-/mnt/lustre}
+MOUNT1=${MOUNT1:-$MOUNT}
+MOUNT2=${MOUNT2:-${MOUNT}2}
 MDSSIZE=50000
 FSTYPE=${FSTYPE:-ext3}
 
@@ -36,5 +39,5 @@ ${LMC} -m $config --add ost --node $OSTNODE --lov lov1 --fstype $FSTYPE --dev $O
 ${LMC} -m $config --add ost --node $OSTNODE --lov lov2 --fstype $FSTYPE --dev $OSTDEV2 --size $OSTSIZE || exit 22
 
 # create client config
-${LMC} -m $config --add mtpt --node $CLIENT --path /mnt/lustre --mds mds1 --lov lov1 || exit 30
-${LMC} -m $config --add mtpt --node $CLIENT --path /mnt/lustre2 --mds mds2 --lov lov2 || exit 30
+${LMC} -m $config --add mtpt --node $CLIENT --path ${MOUNT1} --mds mds1 --lov lov1 || exit 30
+${LMC} -m $config --add mtpt --node $CLIENT --path ${MOUNT2} --mds mds2 --lov lov2 || exit 30
