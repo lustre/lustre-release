@@ -753,6 +753,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
         lock->l_blocking_ast = blocking;
         lock->l_completion_ast = completion;
         lock->l_glimpse_ast = glimpse;
+        lock->l_pid = current->pid;
 
         if (lvb_len) {
                 lock->l_lvb_len = lvb_len;
@@ -1140,9 +1141,9 @@ void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
                 return;
         }
 
-        CDEBUG(level, "  -- Lock dump: %p/"LPX64" (rc: %d) (pos: %d)\n",
+        CDEBUG(level, "  -- Lock dump: %p/"LPX64" (rc: %d) (pos: %d) (pid: %d)\n",
                lock, lock->l_handle.h_cookie, atomic_read(&lock->l_refc),
-               pos);
+               pos, lock->l_pid);
         if (lock->l_conn_export != NULL)
                 obd = lock->l_conn_export->exp_obd;
         if (lock->l_export && lock->l_export->exp_connection) {

@@ -8,6 +8,7 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- reorganization of lov code
 	- single portals codebase
 	- Infiniband NAL
+	- add pid to ldlm debugging output (4922)
 
 tbd         Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.8
