@@ -44,6 +44,8 @@ int PtlInit(void)
         if (ptl_init)
                 return PTL_OK;
 
+        LASSERT(!strcmp(ptl_err_str[PTL_MAX_ERRNO], "PTL_MAX_ERRNO"));
+
         ptl_ni_init();
         ptl_me_init();
         ptl_eq_init();

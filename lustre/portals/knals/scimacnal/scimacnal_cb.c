@@ -245,7 +245,7 @@ kscimacnal_sendmsg(nal_cb_t        *nal,
         /* save transaction info for later finalize and cleanup */
         PORTAL_ALLOC(ktx, (sizeof(kscimacnal_tx_t)));
         if (!ktx) {
-                return PTL_NOSPACE;
+                return PTL_NO_SPACE;
         }
 
         ktx->ktx_nmapped = 0; /* Start with no mapped pages :) */
@@ -260,7 +260,7 @@ kscimacnal_sendmsg(nal_cb_t        *nal,
                         kscimacnal_txrelease, ktx);
         if (!msg) {
                 PORTAL_FREE(ktx, (sizeof(kscimacnal_tx_t)));
-                return PTL_NOSPACE;
+                return PTL_NO_SPACE;
         }
         mac_put_mblk(msg, sizeof(ptl_hdr_t));
         lastblk=msg;
@@ -297,7 +297,7 @@ kscimacnal_sendmsg(nal_cb_t        *nal,
                 if(!newblk) {
                         mac_free_msg(msg);
                         PORTAL_FREE(ktx, (sizeof(kscimacnal_tx_t)));
-                        return PTL_NOSPACE;
+                        return PTL_NO_SPACE;
                 }
                 mac_put_mblk(newblk, nob);
                 mac_link_mblk(lastblk, newblk);

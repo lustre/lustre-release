@@ -92,27 +92,27 @@ static int lib_md_build(nal_cb_t *nal, lib_md_t *new, void *private,
          * otherwise caller may only lib_md_free() it.
          */
 
-        if (!PtlHandleEqual (*eqh, PTL_EQ_NONE)) {
+        if (!PtlHandleIsEqual (*eqh, PTL_EQ_NONE)) {
                 eq = ptl_handle2eq(eqh, nal);
                 if (eq == NULL)
-                        return PTL_INV_EQ;
+                        return PTL_EQ_INVALID;
         }
 
         /* Must check this _before_ allocation.  Also, note that non-iov
          * MDs must set md_niov to 0. */
-        LASSERT((md->options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0 ||
+        LASSERT((md->options & (PTL_MD_IOVEC | PTL_MD_KIOV)) == 0 ||
                 md->niov <= PTL_MD_MAX_IOV);
 
         /* This implementation doesn't know how to create START events or
          * disable END events.  Best to LASSERT our caller is compliant so
          * we find out quickly...  */
-        LASSERT (PtlHandleEqual (*eqh, PTL_EQ_NONE) ||
+        LASSERT (PtlHandleIsEqual (*eqh, PTL_EQ_NONE) ||
                  ((md->options & PTL_MD_EVENT_START_DISABLE) != 0 &&
                   (md->options & PTL_MD_EVENT_END_DISABLE) == 0));
 
         if ((md->options & PTL_MD_MAX_SIZE) != 0 && /* max size used */
             (md->max_size < 0 || md->max_size > md->length)) // illegal max_size
-                return PTL_INV_MD;
+                return PTL_MD_INVALID;
 
         new->me = NULL;
         new->start = md->start;
@@ -126,11 +126,11 @@ static int lib_md_build(nal_cb_t *nal, lib_md_t *new, void *private,
         new->pending = 0;
         new->md_flags = (unlink == PTL_UNLINK) ? PTL_MD_FLAG_AUTO_UNLINK : 0;
 
-        if ((md->options & PTL_MD_IOV) != 0) {
+        if ((md->options & PTL_MD_IOVEC) != 0) {
                 int total_length = 0;
 
                 if ((md->options & PTL_MD_KIOV) != 0) /* Can't specify both */
-                        return PTL_INV_MD; 
+                        return PTL_MD_INVALID; 
 
                 new->md_niov = md->niov;
                 
@@ -157,14 +157,14 @@ static int lib_md_build(nal_cb_t *nal, lib_md_t *new, void *private,
                 }
         } else if ((md->options & PTL_MD_KIOV) != 0) {
 #ifndef __KERNEL__
-                return PTL_INV_MD;
+                return PTL_MD_INVALID;
 #else
                 int total_length = 0;
                 
                 /* Trap attempt to use paged I/O if unsupported early. */
                 if (nal->cb_send_pages == NULL ||
                     nal->cb_recv_pages == NULL)
-                        return PTL_INV_MD;
+                        return PTL_MD_INVALID;
 
                 new->md_niov = md->niov;
 
@@ -229,7 +229,7 @@ void lib_md_deconstruct(nal_cb_t * nal, lib_md_t * md, ptl_md_t * new)
         new->options = md->options;
         new->user_ptr = md->user_ptr;
         ptl_eq2handle(&new->eventq, md->eq);
-        new->niov = ((md->options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0) ? 0 : md->md_niov;
+        new->niov = ((md->options & (PTL_MD_IOVEC | PTL_MD_KIOV)) == 0) ? 0 : md->md_niov;
 }
 
 int do_PtlMDAttach(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
@@ -250,21 +250,21 @@ int do_PtlMDAttach(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         lib_md_t *md;
         unsigned long flags;
 
-        if ((args->md_in.options & (PTL_MD_KIOV | PTL_MD_IOV)) != 0 &&
+        if ((args->md_in.options & (PTL_MD_KIOV | PTL_MD_IOVEC)) != 0 &&
             args->md_in.niov > PTL_MD_MAX_IOV) /* too many fragments */
                 return (ret->rc = PTL_IOV_TOO_MANY);
 
         md = lib_md_alloc(nal, &args->md_in);
         if (md == NULL)
-                return (ret->rc = PTL_NOSPACE);
+                return (ret->rc = PTL_NO_SPACE);
 
         state_lock(nal, &flags);
 
         me = ptl_handle2me(&args->me_in, nal);
         if (me == NULL) {
-                ret->rc = PTL_INV_ME;
+                ret->rc = PTL_ME_INVALID;
         } else if (me->md != NULL) {
-                ret->rc = PTL_INUSE;
+                ret->rc = PTL_ME_IN_USE;
         } else {
                 ret->rc = lib_md_build(nal, md, private, &args->md_in,
                                        &args->eq_in, args->unlink_in);
@@ -302,13 +302,13 @@ int do_PtlMDBind(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         lib_md_t *md;
         unsigned long flags;
 
-        if ((args->md_in.options & (PTL_MD_KIOV | PTL_MD_IOV)) != 0 &&
+        if ((args->md_in.options & (PTL_MD_KIOV | PTL_MD_IOVEC)) != 0 &&
             args->md_in.niov > PTL_MD_MAX_IOV) /* too many fragments */
                 return (ret->rc = PTL_IOV_TOO_MANY);
 
         md = lib_md_alloc(nal, &args->md_in);
         if (md == NULL)
-                return (ret->rc = PTL_NOSPACE);
+                return (ret->rc = PTL_NO_SPACE);
 
         state_lock(nal, &flags);
 
@@ -341,7 +341,7 @@ int do_PtlMDUnlink(nal_cb_t * nal, void *private, void *v_args, void *v_ret)
         md = ptl_handle2md(&args->md_in, nal);
         if (md == NULL) {
                 state_unlock(nal, &flags);
-                return (ret->rc = PTL_INV_MD);
+                return (ret->rc = PTL_MD_INVALID);
         }
 
         /* If the MD is busy, lib_md_unlink just marks it for deletion, and
@@ -395,7 +395,7 @@ int do_PtlMDUpdate_internal(nal_cb_t * nal, void *private, void *v_args,
 
         md = ptl_handle2md(&args->md_in, nal);
         if (md == NULL) {
-                 ret->rc = PTL_INV_MD;
+                 ret->rc = PTL_MD_INVALID;
                  goto out;
         }
 
@@ -409,8 +409,8 @@ int do_PtlMDUpdate_internal(nal_cb_t * nal, void *private, void *v_args,
 
         /* XXX fttb, the new MD must be the same type wrt fragmentation */
         if (((new->options ^ md->options) & 
-             (PTL_MD_IOV | PTL_MD_KIOV)) != 0) {
-                ret->rc = PTL_INV_MD;
+             (PTL_MD_IOVEC | PTL_MD_KIOV)) != 0) {
+                ret->rc = PTL_MD_INVALID;
                 goto out;
         }
 
@@ -424,16 +424,16 @@ int do_PtlMDUpdate_internal(nal_cb_t * nal, void *private, void *v_args,
                 goto out;
         }
 
-        if (!PtlHandleEqual (args->testq_in, PTL_EQ_NONE)) {
+        if (!PtlHandleIsEqual (args->testq_in, PTL_EQ_NONE)) {
                 test_eq = ptl_handle2eq(&args->testq_in, nal);
                 if (test_eq == NULL) {
-                        ret->rc = PTL_INV_EQ;
+                        ret->rc = PTL_EQ_INVALID;
                         goto out;
                 }
         }
 
         if (md->pending != 0) {
-                        ret->rc = PTL_NOUPDATE;
+                        ret->rc = PTL_MD_NO_UPDATE;
                         goto out;
         }
 
@@ -449,7 +449,7 @@ int do_PtlMDUpdate_internal(nal_cb_t * nal, void *private, void *v_args,
 
                 md->me = me;
         } else {
-                ret->rc = PTL_NOUPDATE;
+                ret->rc = PTL_MD_NO_UPDATE;
         }
 
  out:

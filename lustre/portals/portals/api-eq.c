@@ -98,14 +98,14 @@ int PtlEQPoll(ptl_handle_eq_t *eventqs_in, int neq_in, int timeout,
         unsigned long flags;
         
         if (!ptl_init)
-                RETURN(PTL_NOINIT);
+                RETURN(PTL_NO_INIT);
 
         if (neq_in < 1)
-                RETURN(PTL_INV_EQ);
+                RETURN(PTL_EQ_INVALID);
         
         nal = ptl_hndl2nal(&eventqs_in[0]);
         if (nal == NULL)
-                RETURN(PTL_INV_EQ);
+                RETURN(PTL_EQ_INVALID);
 
         nal->lock(nal, &flags);
 
@@ -116,7 +116,7 @@ int PtlEQPoll(ptl_handle_eq_t *eventqs_in, int neq_in, int timeout,
                         if (i > 0 &&
                             ptl_hndl2nal(&eventqs_in[i]) != nal) {
                                 nal->unlock(nal, &flags);
-                                RETURN (PTL_INV_EQ);
+                                RETURN (PTL_EQ_INVALID);
                         }
 
                         /* size must be a power of 2 to handle a wrapped sequence # */
