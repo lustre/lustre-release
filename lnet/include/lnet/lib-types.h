@@ -31,6 +31,8 @@ typedef struct lib_me_t lib_me_t;
 typedef struct lib_md_t lib_md_t;
 typedef struct lib_eq_t lib_eq_t;
 
+#define WIRE_ATTR	__attribute__((packed))
+
 /* The wire handle's interface cookie only matches one network interface in
  * one epoch (i.e. new cookie when the interface restarts or the node
  * reboots).  The object cookie only matches one object on that interface
@@ -38,7 +40,7 @@ typedef struct lib_eq_t lib_eq_t;
 typedef struct {
         __u64 wh_interface_cookie;
         __u64 wh_object_cookie;
-} ptl_handle_wire_t;
+} WIRE_ATTR ptl_handle_wire_t;
 
 /* byte-flip insensitive! */
 #define PTL_WIRE_HANDLE_NONE \
@@ -63,7 +65,7 @@ typedef struct ptl_ack {
         ptl_handle_wire_t dst_wmd;
         ptl_match_bits_t match_bits;
         ptl_size_t length;                      /* common length (0 for acks) moving out RSN */
-} ptl_ack_t;
+} WIRE_ATTR ptl_ack_t;
 
 typedef struct ptl_put {
         ptl_pt_index_t ptl_index;
@@ -72,7 +74,7 @@ typedef struct ptl_put {
         ptl_size_t length;                      /* common length moving out RSN */
         ptl_size_t offset;
         ptl_hdr_data_t hdr_data;
-} ptl_put_t;
+} WIRE_ATTR ptl_put_t;
 
 typedef struct ptl_get {
         ptl_pt_index_t ptl_index;
@@ -82,7 +84,7 @@ typedef struct ptl_get {
         ptl_size_t src_offset;
         ptl_size_t return_offset;               /* unused: going RSN */
         ptl_size_t sink_length;
-} ptl_get_t;
+} WIRE_ATTR ptl_get_t;
 
 typedef struct ptl_reply {
         __u32 unused1;                          /* unused fields going RSN */
@@ -90,7 +92,7 @@ typedef struct ptl_reply {
         ptl_size_t dst_offset;                  /* unused: going RSN */
         __u32 unused2;
         ptl_size_t length;                      /* common length moving out RSN */
-} ptl_reply_t;
+} WIRE_ATTR ptl_reply_t;
 
 typedef struct {
         ptl_nid_t dest_nid;
@@ -104,7 +106,7 @@ typedef struct {
                 ptl_get_t get;
                 ptl_reply_t reply;
         } msg;
-} ptl_hdr_t;
+} WIRE_ATTR ptl_hdr_t;
 
 /* All length fields in individual unions at same offset */
 /* LASSERT for same in lib-move.c */
@@ -122,7 +124,7 @@ typedef struct {
         __u32	magic;                          /* PORTALS_PROTO_MAGIC */
         __u16   version_major;                  /* increment on incompatible change */
         __u16   version_minor;                  /* increment on compatible change */
-} ptl_magicversion_t;
+} WIRE_ATTR ptl_magicversion_t;
 
 #define PORTALS_PROTO_MAGIC                0xeebc0ded
 
@@ -240,6 +242,13 @@ typedef struct {
         ptl_nid_t         tp_nid;              /* matching nid */
         unsigned int      tp_threshold;        /* # failures to simulate */
 } lib_test_peer_t;
+
+#define PTL_COOKIE_TYPE_MD    1
+#define PTL_COOKIE_TYPE_ME    2
+#define PTL_COOKIE_TYPE_EQ    3
+#define PTL_COOKIE_TYPES      4
+/* PTL_COOKIE_TYPES must be a power of 2, so the cookie type can be
+ * extracted by masking with (PTL_COOKIE_TYPES - 1) */
 
 typedef struct {
         int up;

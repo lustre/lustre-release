@@ -25,7 +25,11 @@
 
 #include <portals/api-support.h>
 
-#define MAX_NIS 8
+/* Put some magic in the NI handle so uninitialised/zeroed handles are easy
+ * to spot */
+#define NI_HANDLE_MAGIC  0xebc0de00
+#define NI_HANDLE_MASK   0x000000ff
+#define MAX_NIS          8         
 static nal_t *ptl_interfaces[MAX_NIS];
 int ptl_num_interfaces = 0;
 
@@ -37,7 +41,11 @@ nal_t *ptl_hndl2nal(ptl_handle_any_t *handle)
          * setup/teardown.  That ensures her NI handle can't get
          * invalidated out from under her (or worse, swapped for a
          * completely different interface!) */
-        
+
+        if (((idx ^ NI_HANDLE_MAGIC) & ~NI_HANDLE_MASK) != 0)
+                return NULL;
+
+        idx &= NI_HANDLE_MASK;
         if (idx < MAX_NIS)
                 return ptl_interfaces[idx];
 
@@ -48,6 +56,8 @@ int ptl_ni_init(void)
 {
         int i;
 
+        LASSERT (MAX_NIS <= (NI_HANDLE_MASK + 1));
+        
         for (i = 0; i < MAX_NIS; i++)
                 ptl_interfaces[i] = NULL;
 
@@ -114,7 +124,7 @@ int PtlNIInit(ptl_interface_t interface, ptl_pt_index_t ptl_size,
         for (i = 0; i < ptl_num_interfaces; i++) {
                 if (ptl_interfaces[i] == nal) {
                         nal->refct++;
-                        handle->nal_idx = i;
+                        handle->nal_idx = (NI_HANDLE_MAGIC & ~NI_HANDLE_MASK) | i;
                         fprintf(stderr, "Returning existing NAL (%d)\n", i);
                         ptl_ni_init_mutex_exit ();
                         return PTL_OK;
@@ -122,7 +132,6 @@ int PtlNIInit(ptl_interface_t interface, ptl_pt_index_t ptl_size,
         }
         nal->refct = 1;
 
-        handle->nal_idx = ptl_num_interfaces;
         if (ptl_num_interfaces >= MAX_NIS) {
                 if (nal->shutdown)
                         nal->shutdown (nal, ptl_num_interfaces);
@@ -130,6 +139,7 @@ int PtlNIInit(ptl_interface_t interface, ptl_pt_index_t ptl_size,
                 return PTL_NOSPACE;
         }
 
+        handle->nal_idx = (NI_HANDLE_MAGIC & ~NI_HANDLE_MASK) | ptl_num_interfaces;
         ptl_interfaces[ptl_num_interfaces++] = nal;
 
         ptl_eq_ni_init(nal);
@@ -143,6 +153,7 @@ int PtlNIInit(ptl_interface_t interface, ptl_pt_index_t ptl_size,
 int PtlNIFini(ptl_handle_ni_t ni)
 {
         nal_t *nal;
+        int idx;
         int rc;
 
         if (!ptl_init)
@@ -156,6 +167,8 @@ int PtlNIFini(ptl_handle_ni_t ni)
                 return PTL_INV_HANDLE;
         }
 
+        idx = ni.nal_idx & NI_HANDLE_MASK;
+
         nal->refct--;
         if (nal->refct > 0) {
                 ptl_ni_init_mutex_exit ();
@@ -167,9 +180,9 @@ int PtlNIFini(ptl_handle_ni_t ni)
 
         rc = PTL_OK;
         if (nal->shutdown)
-                rc = nal->shutdown(nal, ni.nal_idx);
+                rc = nal->shutdown(nal, idx);
 
-        ptl_interfaces[ni.nal_idx] = NULL;
+        ptl_interfaces[idx] = NULL;
         ptl_num_interfaces--;
 
         ptl_ni_init_mutex_exit ();

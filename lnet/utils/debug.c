@@ -319,8 +319,6 @@ int jt_dbg_debug_kernel(int argc, char **argv)
         newdata = (struct portal_ioctl_data *)buf;
         if (newdata->ioc_size > 0)
                 dump_buffer(fd, databuf, newdata->ioc_size, raw);
-        else
-                fprintf(stderr, "No data in the debug buffer.\n");
 
  out:
         if (databuf)
@@ -532,8 +530,8 @@ int jt_dbg_modules(int argc, char **argv)
         struct mod_paths {
                 char *name, *path;
         } *mp, mod_paths[] = {
-                {"portals", "portals/linux/oslib"},
-                {"ksocknal", "portals/linux/socknal"},
+                {"portals", "lustre/portals/libcfs"},
+                {"ksocknal", "lustre/portals/knals/socknal"},
                 {"obdclass", "lustre/obdclass"},
                 {"ptlrpc", "lustre/ptlrpc"},
                 {"obdext2", "lustre/obdext2"},
