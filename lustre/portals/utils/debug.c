@@ -41,14 +41,12 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
-#ifdef __KERNEL__
 #define BUG()                            /* workaround for module.h includes */
 #include <linux/version.h>
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 #include <linux/module.h>
 #endif
-#endif /* __KERNEL__ */
 
 #include <portals/api-support.h>
 #include <portals/ptlctl.h>
@@ -524,8 +522,6 @@ int jt_dbg_mark_debug_buf(int argc, char **argv)
         return 0;
 }
 
-#ifdef __KERNEL__
-
 int jt_dbg_modules(int argc, char **argv)
 {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
@@ -595,13 +591,6 @@ int jt_dbg_modules(int argc, char **argv)
         return 0;
 #endif /* linux 2.5 */
 }
-
-#else
-int jt_dbg_modules(int argc, char **argv)
-{
-        return -1;
-}
-#endif /* __KERNEL__ */
 
 int jt_dbg_panic(int argc, char **argv)
 {
