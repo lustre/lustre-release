@@ -75,17 +75,26 @@ static int ldlm_do_convert(void);
  */
 static int ldlm_test_blocking_ast(struct ldlm_lock *lock,
                                   struct ldlm_lock_desc *new,
-                                  void *data, __u32 data_len)
+                                  void *data, __u32 data_len, int flag)
 {
         int rc;
         struct lustre_handle lockh;
         ENTRY;
 
-        LDLM_DEBUG(lock, "We're blocking. Cancelling lock");
-        ldlm_lock2handle(lock, &lockh);
-        rc = ldlm_cli_cancel(&lockh);
-        if (rc < 0) {
-                CERROR("ldlm_cli_cancel: %d\n", rc);
+        switch (flag) {
+        case LDLM_CB_BLOCKING:
+                LDLM_DEBUG(lock, "We're blocking. Cancelling lock");
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc < 0) {
+                        CERROR("ldlm_cli_cancel: %d\n", rc);
+                        LBUG();
+                }
+                break;
+        case LDLM_CB_DYING:
+                LDLM_DEBUG(lock, "this lock is being freed");
+                break;
+        default:
                 LBUG();
         }
 
@@ -95,10 +104,11 @@ static int ldlm_test_blocking_ast(struct ldlm_lock *lock,
 /* blocking ast for basic tests. noop */
 static int ldlm_blocking_ast(struct ldlm_lock *lock,
                              struct ldlm_lock_desc *new,
-                             void *data, __u32 data_len)
+                             void *data, __u32 data_len, int flag)
 {
         ENTRY;
-        CERROR("ldlm_blocking_ast: lock=%p, new=%p\n", lock, new);
+        CERROR("ldlm_blocking_ast: lock=%p, new=%p, flag=%d\n", lock, new,
+               flag);
         RETURN(0);
 }
 
@@ -111,13 +121,12 @@ static int ldlm_test_completion_ast(struct ldlm_lock *lock, int flags)
         ENTRY;
 
         if (flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
-                      LDLM_FL_BLOCK_CONV)) {
-
+                     LDLM_FL_BLOCK_CONV)) {
                 LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock");
                 RETURN(0);
-        } 
+        }
 
-        if (lock->l_granted_mode != lock->l_req_mode) 
+        if (lock->l_granted_mode != lock->l_req_mode)
                 CERROR("completion ast called with non-granted lock\n");
 
         /* add to list of granted locks */
@@ -302,21 +311,21 @@ static int ldlm_do_decrement(void)
         struct ldlm_lock *lock;
         int rc = 0;
         ENTRY;
- 
+
         spin_lock(&ctl_lock);
         if(list_empty(&lock_list)) {
                 CERROR("lock_list is empty\n");
                 spin_unlock(&ctl_lock);
-                RETURN(0); 
-        } 
-                
+                RETURN(0);
+        }
+
         /* delete from list */
-        lock_info = list_entry(lock_list.next, 
+        lock_info = list_entry(lock_list.next,
                         struct ldlm_test_lock, l_link);
         list_del(lock_list.next);
         num_locks--;
         spin_unlock(&ctl_lock);
- 
+
         /* decrement and free the info */
         lock = ldlm_handle2lock(&lock_info->l_lockh);
         ldlm_lock_decref(&lock_info->l_lockh, lock->l_granted_mode);
@@ -328,7 +337,7 @@ static int ldlm_do_decrement(void)
 }
 
 static int ldlm_do_enqueue(struct ldlm_test_thread *thread)
-{                
+{
         struct lustre_handle lockh;
         __u64 res_id[3] = {0};
         __u32 lock_mode;
@@ -349,23 +358,19 @@ static int ldlm_do_enqueue(struct ldlm_test_thread *thread)
         get_random_bytes(&random, sizeof(random));
         ext.start = random % num_extents;
         get_random_bytes(&random, sizeof(random));
-        ext.end = random % 
+        ext.end = random %
                 (num_extents - (int)ext.start) + ext.start;
 
-        LDLM_DEBUG_NOLOCK("about to enqueue with resource %d, mode %d,"
-                          " extent %d -> %d",
-                          (int)res_id[0], 
-                          lock_mode, 
-                          (int)ext.start, 
-                          (int)ext.end);
+        LDLM_DEBUG_NOLOCK("about to enqueue with resource "LPX64", mode %d,"
+                          " extent "LPX64" -> "LPX64, res_id[0], lock_mode,
+                          ext.start, ext.end);
 
-        rc = ldlm_match_or_enqueue(&regress_connh, 
-                                   NULL, 
-                                   thread->obddev->obd_namespace, 
-                                   NULL, res_id, LDLM_EXTENT, &ext, 
-                                   sizeof(ext), lock_mode, &flags, 
-                                   ldlm_test_completion_ast, 
-                                   ldlm_test_blocking_ast, 
+        rc = ldlm_match_or_enqueue(&regress_connh, NULL,
+                                   thread->obddev->obd_namespace,
+                                   NULL, res_id, LDLM_EXTENT, &ext,
+                                   sizeof(ext), lock_mode, &flags,
+                                   ldlm_test_completion_ast,
+                                   ldlm_test_blocking_ast,
                                    NULL, 0, &lockh);
 
         atomic_inc(&locks_requested);
@@ -379,7 +384,7 @@ static int ldlm_do_enqueue(struct ldlm_test_thread *thread)
 }
 
 static int ldlm_do_convert(void)
-{                
+{
         __u32 lock_mode;
         unsigned char random;
         int flags = 0, rc = 0;
@@ -408,7 +413,7 @@ static int ldlm_do_convert(void)
         }
 
         /*
-         *  Adjust reference counts. 
+         *  Adjust reference counts.
          *  FIXME: This is technically a bit... wrong,
          *  since we don't know when/if the convert succeeded
          */
@@ -454,7 +459,7 @@ static int ldlm_test_main(void *data)
                  */
                 dec_chance = chance_left * num_locks / max_locks;
                 chance_left -= dec_chance;
- 
+
                 /* FIXME: conversions temporarily disabled
                  * until they are working correctly.
                  */
@@ -483,11 +488,11 @@ static int ldlm_test_main(void *data)
                                   atomic_read(&locks_matched));
 
                 spin_lock(&ctl_lock);
-                LDLM_DEBUG_NOLOCK("lock references currently held: %d, ", 
+                LDLM_DEBUG_NOLOCK("lock references currently held: %d, ",
                                   num_locks);
                 spin_unlock(&ctl_lock);
 
-                /* 
+                /*
                  * We don't sleep after a lock being blocked, so let's
                  * make sure other things can run.
                  */
@@ -531,10 +536,10 @@ static int ldlm_start_thread(struct obd_device *obddev,
         RETURN(0);
 }
 
-int ldlm_regression_start(struct obd_device *obddev, 
-                          struct lustre_handle *connh, 
-                          unsigned int threads, unsigned int max_locks_in, 
-                          unsigned int num_resources_in, 
+int ldlm_regression_start(struct obd_device *obddev,
+                          struct lustre_handle *connh,
+                          unsigned int threads, unsigned int max_locks_in,
+                          unsigned int num_resources_in,
                           unsigned int num_extents_in)
 {
         int i, rc = 0;
@@ -549,7 +554,7 @@ int ldlm_regression_start(struct obd_device *obddev,
         regression_running = 1;
         spin_unlock(&ctl_lock);
 
-        regress_connh = *connh; 
+        regress_connh = *connh;
         max_locks = max_locks_in;
         num_resources = num_resources_in;
         num_extents = num_extents_in;
@@ -601,8 +606,8 @@ int ldlm_regression_stop(void)
         /* decrement all held locks */
         while (!list_empty(&lock_list)) {
                 struct ldlm_lock *lock;
-                struct ldlm_test_lock *lock_info = 
-                       list_entry(lock_list.next, struct ldlm_test_lock, 
+                struct ldlm_test_lock *lock_info =
+                       list_entry(lock_list.next, struct ldlm_test_lock,
                                    l_link);
                 list_del(lock_list.next);
                 num_locks--;

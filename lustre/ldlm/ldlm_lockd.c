@@ -115,12 +115,17 @@ static int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 
 static int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                                     struct ldlm_lock_desc *desc,
-                                    void *data, __u32 data_len)
+                                    void *data, __u32 data_len, int flag)
 {
         struct ldlm_request *body;
         struct ptlrpc_request *req;
         int rc = 0, size = sizeof(*body);
         ENTRY;
+
+        if (flag == LDLM_CB_DYING) {
+                /* Don't need to do anything when the lock is freed. */
+                RETURN(0);
+        }
 
         req = ptlrpc_prep_req(&lock->l_export->exp_ldlm_data.led_import,
                               LDLM_BL_CALLBACK, 1, &size, NULL);
@@ -391,7 +396,8 @@ static int ldlm_handle_bl_callback(struct ptlrpc_request *req)
                            "callback (%p)", lock->l_blocking_ast);
                 if (lock->l_blocking_ast != NULL) {
                         lock->l_blocking_ast(lock, &dlm_req->lock_desc,
-                                             lock->l_data, lock->l_data_len);
+                                             lock->l_data, lock->l_data_len,
+                                             LDLM_CB_BLOCKING);
                 }
         } else
                 LDLM_DEBUG(lock, "Lock still has references, will be"

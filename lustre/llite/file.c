@@ -339,7 +339,7 @@ static void ll_update_atime(struct inode *inode)
 }
 
 int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
-                     void *data, __u32 data_len)
+                     void *data, __u32 data_len, int flag)
 {
         struct inode *inode = data;
         struct lustre_handle lockh;
@@ -351,16 +351,25 @@ int ll_lock_callback(struct ldlm_lock *lock, struct ldlm_lock_desc *new,
 
         if (inode == NULL)
                 LBUG();
-        down(&inode->i_sem);
-        CDEBUG(D_INODE, "invalidating obdo/inode %ld\n", inode->i_ino);
-        /* FIXME: do something better than throwing away everything */
-        invalidate_inode_pages(inode);
-        up(&inode->i_sem);
 
-        ldlm_lock2handle(lock, &lockh);
-        rc = ldlm_cli_cancel(&lockh);
-        if (rc != ELDLM_OK)
-                CERROR("ldlm_cli_cancel failed: %d\n", rc);
+        switch (flag) {
+        case LDLM_CB_BLOCKING:
+                ldlm_lock2handle(lock, &lockh);
+                rc = ldlm_cli_cancel(&lockh);
+                if (rc != ELDLM_OK)
+                        CERROR("ldlm_cli_cancel failed: %d\n", rc);
+                break;
+        case LDLM_CB_DYING:
+                down(&inode->i_sem);
+                CDEBUG(D_INODE, "invalidating obdo/inode %ld\n", inode->i_ino);
+                /* FIXME: do something better than throwing away everything */
+                invalidate_inode_pages(inode);
+                up(&inode->i_sem);
+                break;
+        default:
+                LBUG();
+        }
+
         RETURN(0);
 }
 
@@ -584,6 +593,17 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         return 0;
 }
 
+static int ll_inode_revalidate(struct dentry *dentry)
+{
+        struct inode *inode = dentry->d_inode;
+        ENTRY;
+
+        if (!inode)
+                RETURN(0);
+
+        RETURN(ll_file_size(inode, ll_i2info(inode)->lli_smd));
+}
+
 struct file_operations ll_file_operations = {
         read:           ll_file_read,
         write:          ll_file_write,
@@ -596,6 +616,7 @@ struct file_operations ll_file_operations = {
 };
 
 struct inode_operations ll_file_inode_operations = {
-        truncate: ll_truncate,
-        setattr: ll_setattr
+        truncate:   ll_truncate,
+        setattr:    ll_setattr,
+        revalidate: ll_inode_revalidate
 };

@@ -39,6 +39,9 @@ typedef enum {
 #define LDLM_FL_DESTROYED      (1 << 6)
 #define LDLM_FL_WAIT_NOREPROC  (1 << 7)
 
+#define LDLM_CB_BLOCKING    1
+#define LDLM_CB_DYING       2
+
 #define L2B(c) (1 << c)
 
 /* compatibility matrix */
@@ -112,7 +115,7 @@ struct ldlm_lock;
 
 typedef int (*ldlm_blocking_callback)(struct ldlm_lock *lock,
                                       struct ldlm_lock_desc *new, void *data,
-                                      __u32 data_len);
+                                      __u32 data_len, int flag);
 
 typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags); 
 
@@ -370,7 +373,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns, __u64 *res_id);
 /* mds/handler.c */
 /* This has to be here because recurisve inclusion sucks. */
 int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
-                     void *data, __u32 data_len);
+                     void *data, __u32 data_len, int flag);
 
 #endif /* __KERNEL__ */
 
