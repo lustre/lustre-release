@@ -1,20 +1,21 @@
 Index: linux-2.6.5-12.1/fs/exec.c
 ===================================================================
---- linux-2.6.5-12.1.orig/fs/exec.c	2004-05-10 12:21:56.000000000 -0400
-+++ linux-2.6.5-12.1/fs/exec.c	2004-05-11 15:41:54.000000000 -0400
-@@ -124,9 +124,9 @@
- 	struct file * file;
+--- linux-2.6.5-12.1.orig/fs/exec.c	2004-05-10 19:21:56.000000000 +0300
++++ linux-2.6.5-12.1/fs/exec.c	2004-05-25 17:32:14.038494200 +0300
+@@ -125,9 +125,10 @@
  	struct nameidata nd;
  	int error;
-+	intent_init(&nd.intent, IT_OPEN);
  
 -	nd.intent.open.flags = FMODE_READ;
--
-+	nd.intent.it_flags = O_RDONLY;
- 	FSHOOK_BEGIN_USER_WALK(open,
++	intent_init(&nd.intent, IT_OPEN);
+ 
+-	FSHOOK_BEGIN_USER_WALK(open,
++	nd.intent.it_flags = FMODE_READ;
++	FSHOOK_BEGIN_USER_WALK_IT(open,
  		error,
  		library,
-@@ -144,7 +144,7 @@
+ 		LOOKUP_FOLLOW|LOOKUP_OPEN,
+@@ -144,7 +145,7 @@
  		goto out;
  	}
  
@@ -23,19 +24,19 @@ Index: linux-2.6.5-12.1/fs/exec.c
  	error = PTR_ERR(file);
  	if (IS_ERR(file))
  		goto out;
-@@ -495,8 +495,9 @@
+@@ -495,8 +496,9 @@
  
  	FSHOOK_BEGIN(open, err, .filename = name, .flags = O_RDONLY)
  
 -	nd.intent.open.flags = FMODE_READ;
 -	err = path_lookup(name, LOOKUP_FOLLOW|LOOKUP_OPEN, &nd);
 +	intent_init(&nd.intent, IT_OPEN);
-+	nd.intent.it_flags = O_RDONLY;
++	nd.intent.it_flags = FMODE_READ;
 +	err = path_lookup(name, LOOKUP_FOLLOW, &nd);
  	file = ERR_PTR(err);
  
  	if (!err) {
-@@ -509,7 +510,7 @@
+@@ -509,7 +511,7 @@
  				err = -EACCES;
  			file = ERR_PTR(err);
  			if (!err) {
@@ -46,8 +47,8 @@ Index: linux-2.6.5-12.1/fs/exec.c
  					if (err) {
 Index: linux-2.6.5-12.1/fs/namei.c
 ===================================================================
---- linux-2.6.5-12.1.orig/fs/namei.c	2004-05-10 12:21:56.000000000 -0400
-+++ linux-2.6.5-12.1/fs/namei.c	2004-05-11 15:41:54.000000000 -0400
+--- linux-2.6.5-12.1.orig/fs/namei.c	2004-05-10 19:21:56.000000000 +0300
++++ linux-2.6.5-12.1/fs/namei.c	2004-05-25 17:32:14.040493896 +0300
 @@ -270,8 +270,19 @@
  	return 0;
  }
@@ -278,8 +279,8 @@ Index: linux-2.6.5-12.1/fs/namei.c
  	if (current->link_count || res || nd->last_type!=LAST_NORM)
 Index: linux-2.6.5-12.1/fs/namespace.c
 ===================================================================
---- linux-2.6.5-12.1.orig/fs/namespace.c	2004-05-10 12:21:56.000000000 -0400
-+++ linux-2.6.5-12.1/fs/namespace.c	2004-05-11 15:41:54.000000000 -0400
+--- linux-2.6.5-12.1.orig/fs/namespace.c	2004-05-10 19:21:56.000000000 +0300
++++ linux-2.6.5-12.1/fs/namespace.c	2004-05-25 17:33:44.385759328 +0300
 @@ -108,6 +108,7 @@
  
  static void detach_mnt(struct vfsmount *mnt, struct nameidata *old_nd)
@@ -288,7 +289,24 @@ Index: linux-2.6.5-12.1/fs/namespace.c
  	old_nd->dentry = mnt->mnt_mountpoint;
  	old_nd->mnt = mnt->mnt_parent;
  	mnt->mnt_parent = mnt;
-@@ -750,6 +751,7 @@
+@@ -533,6 +534,8 @@
+ 		return err;
+ 	if (!old_name || !*old_name)
+ 		return -EINVAL;
++
++	intent_init(&old_nd.intent, IT_LOOKUP);
+ 	err = path_lookup(old_name, LOOKUP_FOLLOW, &old_nd);
+ 	if (err)
+ 		return err;
+@@ -601,6 +604,7 @@
+ 		return -EPERM;
+ 	if (!old_name || !*old_name)
+ 		return -EINVAL;
++	intent_init(&old_nd.intent, IT_LOOKUP);
+ 	err = path_lookup(old_name, LOOKUP_FOLLOW, &old_nd);
+ 	if (err)
+ 		return err;
+@@ -750,6 +754,7 @@
  	int retval = 0;
  	int mnt_flags = 0;
  
@@ -298,9 +316,9 @@ Index: linux-2.6.5-12.1/fs/namespace.c
  		flags &= ~MS_MGC_MSK;
 Index: linux-2.6.5-12.1/fs/open.c
 ===================================================================
---- linux-2.6.5-12.1.orig/fs/open.c	2004-05-10 12:21:56.000000000 -0400
-+++ linux-2.6.5-12.1/fs/open.c	2004-05-11 16:16:16.000000000 -0400
-@@ -227,7 +227,7 @@
+--- linux-2.6.5-12.1.orig/fs/open.c	2004-05-10 19:21:56.000000000 +0300
++++ linux-2.6.5-12.1/fs/open.c	2004-05-25 17:32:14.042493592 +0300
+@@ -227,12 +227,12 @@
  	struct nameidata nd;
  	struct inode * inode;
  	int error;
@@ -309,6 +327,12 @@ Index: linux-2.6.5-12.1/fs/open.c
  	error = -EINVAL;
  	if (length < 0)	/* sorry, but loff_t says... */
  		goto out;
+ 
+-	FSHOOK_BEGIN_USER_PATH_WALK(truncate, error, path, nd, filename, .length = length)
++	FSHOOK_BEGIN_USER_PATH_WALK_IT(truncate, error, path, nd, filename, .length = length)
+ 
+ 	inode = nd.dentry->d_inode;
+ 
 @@ -466,6 +466,7 @@
  	int old_fsuid, old_fsgid;
  	kernel_cap_t old_cap;
@@ -317,6 +341,15 @@ Index: linux-2.6.5-12.1/fs/open.c
  
  	if (mode & ~S_IRWXO)	/* where's F_OK, X_OK, W_OK, R_OK? */
  		return -EINVAL;
+@@ -490,7 +491,7 @@
+ 	else
+ 		current->cap_effective = current->cap_permitted;
+ 
+-	FSHOOK_BEGIN_USER_WALK(access,
++	FSHOOK_BEGIN_USER_WALK_IT(access,
+ 		res,
+ 		filename,
+ 		LOOKUP_FOLLOW|LOOKUP_ACCESS,
 @@ -506,6 +507,7 @@
  		if(!res && (mode & S_IWOTH) && IS_RDONLY(nd.dentry->d_inode)
  		   && !special_file(nd.dentry->d_inode->i_mode))
@@ -339,14 +372,17 @@ Index: linux-2.6.5-12.1/fs/open.c
  
  	FSHOOK_BEGIN(fchdir, error, .fd = fd)
  
-@@ -582,6 +586,7 @@
+@@ -582,8 +586,9 @@
  {
  	struct nameidata nd;
  	int error;
 +	intent_init(&nd.intent, IT_GETATTR);
  
- 	FSHOOK_BEGIN_USER_WALK(chroot,
+-	FSHOOK_BEGIN_USER_WALK(chroot,
++	FSHOOK_BEGIN_USER_WALK_IT(chroot,
  		error,
+ 		filename,
+ 		LOOKUP_FOLLOW | LOOKUP_DIRECTORY | LOOKUP_NOALT,
 @@ -670,7 +675,7 @@
  	error = -EROFS;
  	if (IS_RDONLY(inode))
@@ -449,8 +485,8 @@ Index: linux-2.6.5-12.1/fs/open.c
   */
 Index: linux-2.6.5-12.1/fs/stat.c
 ===================================================================
---- linux-2.6.5-12.1.orig/fs/stat.c	2004-05-10 12:21:56.000000000 -0400
-+++ linux-2.6.5-12.1/fs/stat.c	2004-05-11 15:41:54.000000000 -0400
+--- linux-2.6.5-12.1.orig/fs/stat.c	2004-05-10 19:21:56.000000000 +0300
++++ linux-2.6.5-12.1/fs/stat.c	2004-05-25 17:32:14.042493592 +0300
 @@ -37,7 +37,7 @@
  
  EXPORT_SYMBOL(generic_fillattr);
@@ -484,10 +520,11 @@ Index: linux-2.6.5-12.1/fs/stat.c
  	int error;
 +	intent_init(&nd.intent, IT_GETATTR);
  
- 	FSHOOK_BEGIN_USER_PATH_WALK(stat, error, name, nd, path, .link = false)
+-	FSHOOK_BEGIN_USER_PATH_WALK(stat, error, name, nd, path, .link = false)
++	FSHOOK_BEGIN_USER_PATH_WALK_IT(stat, error, name, nd, path, .link = false)
  
 -		error = vfs_getattr(nd.mnt, nd.dentry, stat);
-+	  error = vfs_getattr_it(nd.mnt, nd.dentry, &nd.intent, stat);
++		error = vfs_getattr_it(nd.mnt, nd.dentry, &nd.intent, stat);
  		path_release(&nd);
  
  	FSHOOK_END_USER_WALK(stat, error, path)
@@ -497,7 +534,8 @@ Index: linux-2.6.5-12.1/fs/stat.c
  	int error;
 +	intent_init(&nd.intent, IT_GETATTR);
  
- 	FSHOOK_BEGIN_USER_PATH_WALK_LINK(stat, error, name, nd, path, .link = true)
+-	FSHOOK_BEGIN_USER_PATH_WALK_LINK(stat, error, name, nd, path, .link = true)
++	FSHOOK_BEGIN_USER_PATH_WALK_LINK_IT(stat, error, name, nd, path, .link = true)
  
 -		error = vfs_getattr(nd.mnt, nd.dentry, stat);
 +		error = vfs_getattr_it(nd.mnt, nd.dentry, &nd.intent, stat);
@@ -525,8 +563,8 @@ Index: linux-2.6.5-12.1/fs/stat.c
  
 Index: linux-2.6.5-12.1/fs/nfs/dir.c
 ===================================================================
---- linux-2.6.5-12.1.orig/fs/nfs/dir.c	2004-05-10 12:21:53.000000000 -0400
-+++ linux-2.6.5-12.1/fs/nfs/dir.c	2004-05-11 15:41:54.000000000 -0400
+--- linux-2.6.5-12.1.orig/fs/nfs/dir.c	2004-05-10 19:21:53.000000000 +0300
++++ linux-2.6.5-12.1/fs/nfs/dir.c	2004-05-25 17:32:14.043493440 +0300
 @@ -709,7 +709,7 @@
  		return 0;
  	if (!nd || (nd->flags & LOOKUP_CONTINUE) || !(nd->flags & LOOKUP_CREATE))
@@ -547,8 +585,8 @@ Index: linux-2.6.5-12.1/fs/nfs/dir.c
  	 * The 0 argument passed into the create function should one day
 Index: linux-2.6.5-12.1/fs/inode.c
 ===================================================================
---- linux-2.6.5-12.1.orig/fs/inode.c	2004-05-10 12:21:56.000000000 -0400
-+++ linux-2.6.5-12.1/fs/inode.c	2004-05-11 15:41:54.000000000 -0400
+--- linux-2.6.5-12.1.orig/fs/inode.c	2004-05-10 19:21:56.000000000 +0300
++++ linux-2.6.5-12.1/fs/inode.c	2004-05-25 17:32:14.044493288 +0300
 @@ -221,6 +221,7 @@
  	inodes_stat.nr_unused--;
  }
@@ -559,8 +597,8 @@ Index: linux-2.6.5-12.1/fs/inode.c
   * @inode: inode to clear
 Index: linux-2.6.5-12.1/fs/super.c
 ===================================================================
---- linux-2.6.5-12.1.orig/fs/super.c	2004-05-10 12:21:56.000000000 -0400
-+++ linux-2.6.5-12.1/fs/super.c	2004-05-11 15:41:54.000000000 -0400
+--- linux-2.6.5-12.1.orig/fs/super.c	2004-05-10 19:21:56.000000000 +0300
++++ linux-2.6.5-12.1/fs/super.c	2004-05-25 17:32:14.045493136 +0300
 @@ -789,6 +789,8 @@
  	return (struct vfsmount *)sb;
  }
@@ -572,8 +610,8 @@ Index: linux-2.6.5-12.1/fs/super.c
  	return do_kern_mount(type->name, 0, type->name, NULL);
 Index: linux-2.6.5-12.1/include/linux/dcache.h
 ===================================================================
---- linux-2.6.5-12.1.orig/include/linux/dcache.h	2004-04-03 22:38:24.000000000 -0500
-+++ linux-2.6.5-12.1/include/linux/dcache.h	2004-05-11 15:41:54.000000000 -0400
+--- linux-2.6.5-12.1.orig/include/linux/dcache.h	2004-04-04 06:38:24.000000000 +0300
++++ linux-2.6.5-12.1/include/linux/dcache.h	2004-05-25 17:32:14.045493136 +0300
 @@ -4,6 +4,7 @@
  #ifdef __KERNEL__
  
@@ -593,8 +631,8 @@ Index: linux-2.6.5-12.1/include/linux/dcache.h
  	int nr_unused;
 Index: linux-2.6.5-12.1/include/linux/fs.h
 ===================================================================
---- linux-2.6.5-12.1.orig/include/linux/fs.h	2004-05-10 12:21:56.000000000 -0400
-+++ linux-2.6.5-12.1/include/linux/fs.h	2004-05-11 15:41:54.000000000 -0400
+--- linux-2.6.5-12.1.orig/include/linux/fs.h	2004-05-10 19:21:56.000000000 +0300
++++ linux-2.6.5-12.1/include/linux/fs.h	2004-05-25 17:32:14.046492984 +0300
 @@ -250,6 +250,8 @@
  #define ATTR_ATTR_FLAG	1024
  #define ATTR_KILL_SUID	2048
@@ -648,8 +686,8 @@ Index: linux-2.6.5-12.1/include/linux/fs.h
  
 Index: linux-2.6.5-12.1/include/linux/namei.h
 ===================================================================
---- linux-2.6.5-12.1.orig/include/linux/namei.h	2004-05-10 12:21:56.000000000 -0400
-+++ linux-2.6.5-12.1/include/linux/namei.h	2004-05-11 15:41:54.000000000 -0400
+--- linux-2.6.5-12.1.orig/include/linux/namei.h	2004-05-10 19:21:56.000000000 +0300
++++ linux-2.6.5-12.1/include/linux/namei.h	2004-05-25 17:32:14.047492832 +0300
 @@ -2,25 +2,55 @@
  #define _LINUX_NAMEI_H
  
@@ -747,8 +785,8 @@ Index: linux-2.6.5-12.1/include/linux/namei.h
  
 Index: linux-2.6.5-12.1/kernel/exit.c
 ===================================================================
---- linux-2.6.5-12.1.orig/kernel/exit.c	2004-05-10 12:21:56.000000000 -0400
-+++ linux-2.6.5-12.1/kernel/exit.c	2004-05-11 15:41:54.000000000 -0400
+--- linux-2.6.5-12.1.orig/kernel/exit.c	2004-05-10 19:21:56.000000000 +0300
++++ linux-2.6.5-12.1/kernel/exit.c	2004-05-25 17:32:14.047492832 +0300
 @@ -260,6 +260,8 @@
  	write_unlock_irq(&tasklist_lock);
  }
@@ -767,3 +805,57 @@ Index: linux-2.6.5-12.1/kernel/exit.c
  static inline void __put_fs_struct(struct fs_struct *fs)
  {
  	/* No need to hold fs->lock if we are killing it */
+Index: linux-2.6.5-12.1/include/linux/fshooks.h
+===================================================================
+--- linux-2.6.5-12.1.orig/include/linux/fshooks.h	2004-05-10 19:21:56.000000000 +0300
++++ linux-2.6.5-12.1/include/linux/fshooks.h	2004-05-25 17:32:14.048492680 +0300
+@@ -90,12 +90,18 @@
+ 
+ #define FSHOOK_BEGIN_USER_WALK(type, err, path, flags, nd, field, args...) \
+ 		FSHOOK_BEGIN_USER_WALK_COMMON(type, err, __user_walk(path, flags, &nd, &info.field), nd, args)
++#define FSHOOK_BEGIN_USER_WALK_IT(type, err, path, flags, nd, field, args...) \
++		FSHOOK_BEGIN_USER_WALK_COMMON(type, err, __user_walk_it(path, flags, &nd, &info.field), nd, args)
+ 
+ #define FSHOOK_BEGIN_USER_PATH_WALK(type, err, path, nd, field, args...) \
+ 		FSHOOK_BEGIN_USER_WALK_COMMON(type, err, __user_walk(path, LOOKUP_FOLLOW, &nd, &info.field), nd, args)
++#define FSHOOK_BEGIN_USER_PATH_WALK_IT(type, err, path, nd, field, args...) \
++		FSHOOK_BEGIN_USER_WALK_COMMON(type, err, __user_walk_it(path, LOOKUP_FOLLOW, &nd, &info.field), nd, args)
+ 
+ #define FSHOOK_BEGIN_USER_PATH_WALK_LINK(type, err, path, nd, field, args...) \
+ 		FSHOOK_BEGIN_USER_WALK_COMMON(type, err, __user_walk(path, 0, &nd, &info.field), nd, args)
++#define FSHOOK_BEGIN_USER_PATH_WALK_LINK_IT(type, err, path, nd, field, args...) \
++		FSHOOK_BEGIN_USER_WALK_COMMON(type, err, __user_walk_it(path, 0, &nd, &info.field), nd, args)
+ 
+ #define FSHOOK_END_USER_WALK(type, err, field) \
+ 				(void)(&info != (struct fshook_##type##_info *)-1L); \
+@@ -126,12 +132,18 @@
+ 
+ #define FSHOOK_BEGIN_USER_WALK(type, err, path, flags, nd, field, args...) \
+ 	if (!(err = __user_walk(path, flags, &nd, 0))) {
++#define FSHOOK_BEGIN_USER_WALK_IT(type, err, path, flags, nd, field, args...) \
++	if (!(err = __user_walk_it(path, flags, &nd, 0))) {
+ 
+ #define FSHOOK_BEGIN_USER_PATH_WALK(type, err, path, nd, field, args...) \
+ 	if (!(err = user_path_walk(path, &nd))) {
++#define FSHOOK_BEGIN_USER_PATH_WALK_IT(type, err, path, nd, field, args...) \
++	if (!(err = user_path_walk_it(path, &nd))) {
+ 
+ #define FSHOOK_BEGIN_USER_PATH_WALK_LINK(type, err, path, nd, field, args...) \
+ 	if (!(err = user_path_walk_link(path, &nd))) {
++#define FSHOOK_BEGIN_USER_PATH_WALK_LINK_IT(type, err, path, nd, field, args...) \
++	if (!(err = user_path_walk_link_it(path, &nd))) {
+ 
+ #define FSHOOK_END_USER_WALK(type, err, field) ((void)0);}
+ 
+Index: linux-2.6.5-12.1/fs/block_dev.c
+===================================================================
+--- linux-2.6.5-12.1.orig/fs/block_dev.c	2004-05-10 19:21:55.000000000 +0300
++++ linux-2.6.5-12.1/fs/block_dev.c	2004-05-25 17:32:39.517620784 +0300
+@@ -834,6 +834,7 @@
+ 	if (!path || !*path)
+ 		return ERR_PTR(-EINVAL);
+ 
++	intent_init(&nd.intent, IT_LOOKUP);
+ 	error = path_lookup(path, LOOKUP_FOLLOW, &nd);
+ 	if (error)
+ 		return ERR_PTR(error);
