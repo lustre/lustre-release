@@ -23,14 +23,7 @@
 #include <linux/obd_class.h>
 #include <linux/obd_support.h>
 #include <linux/lustre_lib.h>
-
-LIST_HEAD(mds_fs_types);
-
-struct mds_fs_type {
-        struct list_head                 mft_list;
-        struct mds_fs_operations        *mft_ops;
-        char                            *mft_name;
-};
+#include <linux/lustre_fsfilt.h>
 
 /* This limit is arbitrary, but for now we fit it in 1 page (32k clients) */
 #define MDS_MAX_CLIENTS (PAGE_SIZE * 8)
@@ -322,7 +315,7 @@ static int mds_fs_prep(struct obd_device *obddev)
                 GOTO(err_pop, rc = -ENOENT);
         }
 
-        rc = mds_fs_journal_data(mds, f);
+        rc = fsfilt_journal_data(obddev, f);
         if (rc) {
                 CERROR("cannot journal data on %s: rc = %d\n", LAST_RCVD, rc);
                 GOTO(err_filp, rc);
@@ -347,113 +340,10 @@ err_filp:
         goto err_pop;
 }
 
-static struct mds_fs_operations *mds_search_fs_type(const char *name)
-{
-        struct list_head *p;
-        struct mds_fs_type *type;
-
-        /* lock mds_fs_types list */
-        list_for_each(p, &mds_fs_types) {
-                type = list_entry(p, struct mds_fs_type, mft_list);
-                if (!strcmp(type->mft_name, name)) {
-                        /* unlock mds_fs_types list */
-                        return type->mft_ops;
-                }
-        }
-        /* unlock mds_fs_types list */
-        return NULL;
-}
-
-int mds_register_fs_type(struct mds_fs_operations *ops, const char *name)
-{
-        struct mds_fs_operations *found;
-        struct mds_fs_type *type;
-
-        if ((found = mds_search_fs_type(name))) {
-                if (found != ops) {
-                        CERROR("different operations for type %s\n", name);
-                        RETURN(-EEXIST);
-                }
-                return 0;
-        }
-        OBD_ALLOC(type, sizeof(*type));
-        if (!type)
-                RETURN(-ENOMEM);
-
-        INIT_LIST_HEAD(&type->mft_list);
-        type->mft_ops = ops;
-        type->mft_name = strdup(name);
-        if (!type->mft_name) {
-                OBD_FREE(type, sizeof(*type));
-                RETURN(-ENOMEM);
-        }
-        MOD_INC_USE_COUNT;
-        list_add(&type->mft_list, &mds_fs_types);
-
-        return 0;
-}
-
-void mds_unregister_fs_type(const char *name)
-{
-        struct list_head *p;
-
-        /* lock mds_fs_types list */
-        list_for_each(p, &mds_fs_types) {
-                struct mds_fs_type *type;
-
-                type = list_entry(p, struct mds_fs_type, mft_list);
-                if (!strcmp(type->mft_name, name)) {
-                        list_del(p);
-                        kfree(type->mft_name);
-                        OBD_FREE(type, sizeof(*type));
-                        MOD_DEC_USE_COUNT;
-                        break;
-                }
-        }
-        /* unlock mds_fs_types list */
-}
-
-struct mds_fs_operations *mds_fs_get_ops(char *fstype)
-{
-        struct mds_fs_operations *fs_ops;
-
-        if (!(fs_ops = mds_search_fs_type(fstype))) {
-                char name[32];
-                int rc;
-
-                snprintf(name, sizeof(name) - 1, "mds_%s", fstype);
-                name[sizeof(name) - 1] = '\0';
-
-                if ((rc = request_module(name))) {
-                        fs_ops = mds_search_fs_type(fstype);
-                        CDEBUG(D_INFO, "Loaded module '%s'\n", name);
-                        if (!fs_ops)
-                                rc = -ENOENT;
-                }
-
-                if (rc) {
-                        CERROR("Can't find MDS fs interface '%s'\n", name);
-                        RETURN(ERR_PTR(rc));
-                }
-        }
-        __MOD_INC_USE_COUNT(fs_ops->fs_owner);
-
-        return fs_ops;
-}
-
-void mds_fs_put_ops(struct mds_fs_operations *fs_ops)
-{
-        __MOD_DEC_USE_COUNT(fs_ops->fs_owner);
-}
-
 int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt)
 {
         struct mds_obd *mds = &obddev->u.mds;
-        int rc;
-
-        mds->mds_fsops = mds_fs_get_ops(mds->mds_fstype);
-        if (IS_ERR(mds->mds_fsops))
-                RETURN(PTR_ERR(mds->mds_fsops));
+        ENTRY;
 
         mds->mds_vfsmnt = mnt;
 
@@ -462,40 +352,7 @@ int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt)
         mds->mds_ctxt.pwd = mnt->mnt_root;
         mds->mds_ctxt.fs = get_ds();
 
-        /*
-         * Replace the client filesystem delete_inode method with our own,
-         * so that we can clear the object ID before the inode is deleted.
-         * The fs_delete_inode method will call cl_delete_inode for us.
-         * We need to do this for the MDS superblock only, hence we install
-         * a modified copy of the original superblock method table.
-         *
-         * We still assume that there is only a single MDS client filesystem
-         * type, as we don't have access to the mds struct in delete_inode
-         * and store the client delete_inode method in a global table.  This
-         * will only become a problem if/when multiple MDSs are running on a
-         * single host with different underlying filesystems.
-         */
-        OBD_ALLOC(mds->mds_sop, sizeof(*mds->mds_sop));
-        if (!mds->mds_sop)
-                GOTO(out_dec, rc = -ENOMEM);
-
-        memcpy(mds->mds_sop, mds->mds_sb->s_op, sizeof(*mds->mds_sop));
-        mds->mds_fsops->cl_delete_inode = mds->mds_sop->delete_inode;
-        mds->mds_sop->delete_inode = mds->mds_fsops->fs_delete_inode;
-        mds->mds_sb->s_op = mds->mds_sop;
-
-        rc = mds_fs_prep(obddev);
-
-        if (rc)
-                GOTO(out_free, rc);
-
-        return 0;
-
-out_free:
-        OBD_FREE(mds->mds_sop, sizeof(*mds->mds_sop));
-out_dec:
-        mds_fs_put_ops(mds->mds_fsops);
-        return rc;
+        RETURN(mds_fs_prep(obddev));
 }
 
 void mds_fs_cleanup(struct obd_device *obddev)
@@ -504,10 +361,4 @@ void mds_fs_cleanup(struct obd_device *obddev)
 
         class_disconnect_all(obddev); /* this cleans up client info too */
         mds_server_free_data(mds);
-
-        OBD_FREE(mds->mds_sop, sizeof(*mds->mds_sop));
-        mds_fs_put_ops(mds->mds_fsops);
 }
-
-EXPORT_SYMBOL(mds_register_fs_type);
-EXPORT_SYMBOL(mds_unregister_fs_type);
