@@ -830,7 +830,7 @@
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
 -		new_dentry = lookup_create(&nd, 0);
-+                it.it_op = IT_LINK2;
++		it.it_op = IT_LINK2;
 +		new_dentry = lookup_create(&nd, 0, &it);
  		error = PTR_ERR(new_dentry);
  		if (!IS_ERR(new_dentry)) {
@@ -1185,11 +1185,10 @@
 + 	error = open_namei_it(filename, namei_flags, mode, &nd, &it);
 + 	if (error)
 + 		return ERR_PTR(error);
-+  
++
 + 	return dentry_open_it(nd.dentry, nd.mnt, flags, &it);
  }
--
-+  
+ 
  extern ssize_t do_readahead(struct file *file, unsigned long index, unsigned long nr);
  /* for files over a certains size it doesn't pay to do readahead on open */
  #define READAHEAD_CUTOFF 48000

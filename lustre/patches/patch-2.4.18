@@ -989,11 +989,21 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1648,10 +1755,12 @@
+@@ -1639,7 +1745,7 @@
+ 
+ 		error = 0;
+ 		if (path_init(from, LOOKUP_POSITIVE, &old_nd))
+-			error = path_walk(from, &old_nd);
++			error = path_walk_it(from, &old_nd, &it);
+ 		if (error)
+ 			goto exit;
+ 		if (path_init(to, LOOKUP_PARENT, &nd))
+@@ -1648,10 +1755,13 @@
  		error = -EXDEV;
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
 -		new_dentry = lookup_create(&nd, 0);
++		it.it_op = IT_LINK2;
 +		new_dentry = lookup_create(&nd, 0, &it);
  		error = PTR_ERR(new_dentry);
  		if (!IS_ERR(new_dentry)) {
