@@ -350,9 +350,9 @@ int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         return -EPROTO;
 }
 
-static int filter_commitrw_read(struct obd_export *exp, int objcount,
-                                struct obd_ioobj *obj, int niocount,
-                                struct niobuf_local *res,
+static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
+                                int objcount, struct obd_ioobj *obj,
+                                int niocount, struct niobuf_local *res,
                                 struct obd_trans_info *oti)
 {
         struct obd_ioobj *o;
@@ -420,10 +420,10 @@ int filter_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                     struct niobuf_local *res, struct obd_trans_info *oti)
 {
         if (cmd == OBD_BRW_WRITE)
-                return filter_commitrw_write(exp, objcount, obj, niocount,
+                return filter_commitrw_write(exp, oa, objcount, obj, niocount,
                                              res, oti);
         if (cmd == OBD_BRW_READ)
-                return filter_commitrw_read(exp, objcount, obj, niocount,
+                return filter_commitrw_read(exp, oa, objcount, obj, niocount,
                                             res, oti);
         LBUG();
         return -EPROTO;
