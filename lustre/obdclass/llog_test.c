@@ -158,7 +158,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         int num_recs = 1;       /* 1 for the header */
         ENTRY;
 
-        lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = cpu_to_le16(sizeof(lcr));
+        lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = cpu_to_le32(sizeof(lcr));
         lcr.lcr_hdr.lrh_type = cpu_to_le32(OST_SZ_REC);
 
         CERROR("3a: write one create_rec\n");
@@ -172,11 +172,11 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         if ((rc = verify_handle("3a", llh, num_recs)))
                 RETURN(rc);
 
-        CERROR("3b: write 10 cfg log records with 16 byte bufs\n");
+        CERROR("3b: write 10 cfg log records with 12 byte bufs\n");
         for (i = 0; i < 10; i++) {
                 struct llog_rec_hdr hdr;
-                char buf[16];
-                hdr.lrh_len = cpu_to_le16(16);
+                char buf[12];
+                hdr.lrh_len = cpu_to_le32(12);
                 hdr.lrh_type = cpu_to_le32(OBD_CFG_REC);
                 memset(buf, 0, sizeof buf);
                 rc = llog_write_rec(llh, &hdr, NULL, 0, buf, -1);
@@ -226,7 +226,7 @@ static int llog_test_4(struct obd_device *obd)
 
         ENTRY;
 
-        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = cpu_to_le16(LLOG_MIN_REC_SIZE);
+        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = cpu_to_le32(LLOG_MIN_REC_SIZE);
         lmr.lmr_hdr.lrh_type = cpu_to_le32(0xf00f00);
 
         sprintf(name, "%x", llog_test_rand+1);
@@ -276,12 +276,13 @@ static int llog_test_4(struct obd_device *obd)
         }
 
         CERROR("4e: add 5 large records, one record per block\n");
-        buflen = LLOG_CHUNK_SIZE - LLOG_MIN_REC_SIZE;
+        buflen = LLOG_CHUNK_SIZE - sizeof(struct llog_rec_hdr)
+                        - sizeof(struct llog_rec_tail);
         OBD_ALLOC(buf, buflen);
         if (buf == NULL)
                 GOTO(out, rc = -ENOMEM);
         for (i = 0; i < 5; i++) {
-                rec.lrh_len = cpu_to_le16(buflen);
+                rec.lrh_len = cpu_to_le32(buflen);
                 rec.lrh_type = cpu_to_le32(OBD_CFG_REC);
                 rc = llog_cat_add_rec(cath, &rec, NULL, buf);
                 if (rc) {
@@ -311,7 +312,7 @@ static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, void 
                 RETURN(-EINVAL);
         }
 
-        CERROR("seeing record at index %d in log "LPX64"\n", le16_to_cpu(rec->lrh_index), 
+        CERROR("seeing record at index %d in log "LPX64"\n", le32_to_cpu(rec->lrh_index), 
                lir->lid_id.lgl_oid);
         RETURN(0);
 }
@@ -324,7 +325,7 @@ static int plain_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec, voi
         }
 
         CERROR("seeing record at index %d in log "LPX64"\n", 
-               le16_to_cpu(rec->lrh_index), llh->lgh_id.lgl_oid);
+               le32_to_cpu(rec->lrh_index), llh->lgh_id.lgl_oid);
         RETURN(0);
 }
 
@@ -339,7 +340,7 @@ static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         }
 
         cookie.lgc_lgl = llh->lgh_id;
-        cookie.lgc_index = le16_to_cpu(rec->lrh_index);
+        cookie.lgc_index = le32_to_cpu(rec->lrh_index);
         
         llog_cat_cancel_records(llh->u.phd.phd_cat_handle, 1, &cookie);
         i++;
@@ -356,12 +357,12 @@ static int llog_test_5(struct obd_device *obd)
         struct llog_handle *llh = NULL;
         char name[10];
         int rc;
-        struct llog_rec_hdr rec;
+        struct llog_mini_rec lmr;
 
         ENTRY;
 
-        rec.lrh_len = cpu_to_le16(LLOG_MIN_REC_SIZE);
-        rec.lrh_type = cpu_to_le32(0xf00f00);
+        lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = cpu_to_le32(LLOG_MIN_REC_SIZE);
+        lmr.lmr_hdr.lrh_type = cpu_to_le32(0xf00f00);
 
         CERROR("5a: re-open catalog by id\n");
         rc = llog_create(obd, &llh, &cat_logid, NULL);
@@ -386,7 +387,7 @@ static int llog_test_5(struct obd_device *obd)
         }
 
         CERROR("5d: add 1 record to the log with many canceled empty pages\n");
-        rc = llog_cat_add_rec(llh, &rec, NULL, NULL);
+        rc = llog_cat_add_rec(llh, &lmr.lmr_hdr, NULL, NULL);
         if (rc) {
                 CERROR("5d: add record to the log with many canceled empty\
                        pages failed\n");
