@@ -7,10 +7,22 @@ AC_CANONICAL_SYSTEM
 # See the file COPYING in this distribution
 
 # Automake variables.  Steal the version number from lustre.spec.in.
-AM_INIT_AUTOMAKE(obd, builtin([esyscmd], [sed -ne '/^%define version /{ s/.*version //; p; q; }' scripts/lustre.spec.in]))
+AM_INIT_AUTOMAKE(lustre, builtin([esyscmd], [sed -ne '/^%define version /{ s/.*version //; p; q; }' scripts/lustre.spec.in]))
 #AM_MAINTAINER_MODE
 AC_PROG_CC
 AC_PROG_RANLIB
+
+# 
+# Check for required packages
+
+AC_PATH_PROG([XML2_CONFIG], [xml2-config], [],)
+if test -z "$XML2_CONFIG"; then
+	AC_MSG_ERROR([xml2-config not found; libxml2-dev libraries must be installed.])
+fi
+XML2_CFLAGS=$($XML2_CONFIG --cflags)
+XML2_LIBS=$($XML2_CONFIG --libs)
+AC_SUBST(XML2_CFLAGS)
+AC_SUBST(XML2_LIBS)
 
 # Kernel build environment.
 ac_default_prefix=
@@ -59,7 +71,7 @@ EXTRAVERSION="`sed -ne 's/^EXTRAVERSION[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
 changequote([, ])
 
 RELEASE="$LVERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
-moduledir='$(libdir)/modules/'$RELEASE
+moduledir='$(libdir)/modules/'$RELEASE/kernel
 AC_SUBST(moduledir)
 AC_SUBST(EXTRAVERSION)
 
@@ -76,7 +88,8 @@ AC_SUBST(docdir)
 demodir='$(docdir)/demo'
 AC_SUBST(demodir)
 
-AC_OUTPUT(Makefile lib/Makefile ldlm/Makefile obdecho/Makefile ptlrpc/Makefile \
+AC_OUTPUT(Makefile lib/Makefile ldlm/Makefile \
+         obdecho/Makefile ptlrpc/Makefile \
 	osc/Makefile mdc/Makefile mds/Makefile ost/Makefile utils/Makefile \
 	tests/Makefile obdfilter/Makefile obdclass/Makefile \
 	llite/Makefile obdfs/Makefile demos/Makefile \
