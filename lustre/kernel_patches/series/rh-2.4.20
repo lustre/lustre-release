@@ -5,7 +5,7 @@ exports_2.4.20-rh-hp.patch
 kmem_cache_validate_2.4.20-rh.patch
 lustre_version.patch
 vfs_intent-2.4.20-rh.patch
-invalidate_show.patch
+invalidate_show-2.4.20-rh.patch
 iod-rmap-exports-2.4.20.patch
 export-truncate.patch
 ext-2.4-patch-1-chaos.patch
