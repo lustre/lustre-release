@@ -74,7 +74,7 @@
 +		if (err) goto fail;
 +
 +		if (extN_set_bit(j, bh->b_data)) {
-+			printk(KERN_ERR "goal inode %lu unavailable", goal);
++			printk(KERN_ERR "goal inode %lu unavailable\n", goal);
 +			/* Oh well, we tried. */
 +			goto repeat;
 +		}
