@@ -3,7 +3,7 @@
  *
  * Lustre Light block IO
  *
- *  Copyright (c) 2002, 2003 Cluster File Systems, Inc.
+ *  Copyright (c) 2002-2004 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -32,12 +32,16 @@
 #include <fcntl.h>
 #include <sys/uio.h>
 
+#ifdef HAVE_XTIO_H
+#include <xtio.h>
+#endif
 #include <sysio.h>
 #include <fs.h>
 #include <mount.h>
 #include <inode.h>
+#ifdef HAVE_FILE_H
 #include <file.h>
-#include <xtio.h>
+#endif
 
 #undef LIST_HEAD
 
@@ -228,8 +232,10 @@ int llu_glimpse_size(struct inode *inode)
                          LCK_PR, &flags, llu_extent_lock_callback,
                          ldlm_completion_ast, llu_glimpse_callback, inode,
                          sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
-        if (rc > 0)
-                RETURN(-EIO);
+        if (rc) {
+                CERROR("obd_enqueue returned rc %d, returning -EIO\n", rc);
+                RETURN(rc > 0 ? -EIO : rc);
+        }
 
         lli->lli_st_size = lov_merge_size(lli->lli_smd, 0);
         lli->lli_st_blocks = lov_merge_blocks(lli->lli_smd);
@@ -526,9 +532,13 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
         int astflag = (lli->lli_open_flags & O_NONBLOCK) ?
                        LDLM_FL_BLOCK_NOWAIT : 0;
         __u64 kms;
-        ldlm_error_t err;
-        int is_read, lock_mode, iovidx, ret;
+        int err, is_read, lock_mode, iovidx, ret;
         ENTRY;
+
+        /* in a large iov read/write we'll be repeatedly called.
+         * so give a chance to answer cancel ast here
+         */
+        liblustre_wait_event(0);
 
         exp = llu_i2obdexp(inode);
         if (exp == NULL)
@@ -546,8 +556,14 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
 
         is_read = session->lis_cmd == OBD_BRW_READ;
         lock_mode = is_read ? LCK_PR : LCK_PW;
-        policy.l_extent.start = pos;
-        policy.l_extent.end = pos + len - 1;
+
+        if (!is_read && (lli->lli_open_flags & O_APPEND)) {
+                policy.l_extent.start = 0;
+                policy.l_extent.end = OBD_OBJECT_EOF;
+        } else {
+                policy.l_extent.start = pos;
+                policy.l_extent.end = pos + len - 1;
+        }
 
         err = llu_extent_lock(fd, inode, lsm, lock_mode, &policy,
                               &lockh, astflag);
@@ -568,6 +584,9 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                 } else {
                         lli->lli_st_size = kms;
                 }
+        } else {
+                if (lli->lli_open_flags & O_APPEND)
+                        pos = lli->lli_st_size;
         }
 
         for (iovidx = 0; iovidx < iovlen; iovidx++) {
@@ -578,9 +597,23 @@ ssize_t llu_file_prwv(const struct iovec *iovec, int iovlen,
                         continue;
                 if (len < count)
                         count = len;
+                if (IS_BAD_PTR(buf) || IS_BAD_PTR(buf + count)) {
+                        llu_extent_unlock(fd, inode, lsm, lock_mode, &lockh);
+                        GOTO(err_put, err = -EFAULT);
+                }
 
-                if (is_read && pos >= lli->lli_st_size)
-                        break;
+                if (is_read) {
+                        if (pos >= lli->lli_st_size)
+                                break;
+                } else {
+                        if (pos >= lli->lli_maxbytes) {
+                                llu_extent_unlock(fd, inode, lsm, lock_mode,
+                                                  &lockh);
+                                GOTO(err_put, err = -EFBIG);
+                        }
+                        if (pos + count >= lli->lli_maxbytes)
+                                count = lli->lli_maxbytes - pos;
+                }
 
                 ret = llu_queue_pio(session->lis_cmd, iogroup, buf, count, pos);
                 if (ret < 0) {
