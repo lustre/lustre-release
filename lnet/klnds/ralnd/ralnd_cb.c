@@ -77,7 +77,7 @@ kranal_schedule_conn(kra_conn_t *conn)
         if (!conn->rac_scheduled) {
                 kranal_conn_addref(conn);       /* +1 ref for scheduler */
                 conn->rac_scheduled = 1;
-                list_add_tail(&conn->rac_schedlist, &dev->rad_connq);
+                list_add_tail(&conn->rac_schedlist, &dev->rad_ready_conns);
                 wake_up(&dev->rad_waitq);
         }
 
@@ -1863,14 +1863,42 @@ kranal_complete_closed_conn (kra_conn_t *conn)
 }
 
 int
+kranal_process_new_conn (kra_conn_t *conn)
+{
+        RAP_RETURN   rrc;
+        
+        rrc = RapkCompleteSync(conn->rac_rihandle, 1);
+        if (rrc == RAP_SUCCESS)
+                return 0;
+
+        LASSERT (rrc == RAP_NOT_DONE);
+        if (!time_after_eq(jiffies, conn->rac_last_tx + 
+                           conn->rac_timeout * HZ))
+                return -EAGAIN;
+
+        /* Too late */
+        rrc = RapkCompleteSync(conn->rac_rihandle, 0);
+        LASSERT (rrc == RAP_SUCCESS);
+        return -ETIMEDOUT;
+}
+
+int
 kranal_scheduler (void *arg)
 {
-        kra_device_t   *dev = (kra_device_t *)arg;
-        wait_queue_t    wait;
-        char            name[16];
-        kra_conn_t     *conn;
-        unsigned long   flags;
-        int             busy_loops = 0;
+        kra_device_t     *dev = (kra_device_t *)arg;
+        wait_queue_t      wait;
+        char              name[16];
+        kra_conn_t       *conn;
+        unsigned long     flags;
+        unsigned long     deadline;
+        unsigned long     soonest;
+        int               nsoonest;
+        long              timeout;
+        struct list_head *tmp;
+        struct list_head *nxt;
+        int               rc;
+        int               dropped_lock;
+        int               busy_loops = 0;
 
         snprintf(name, sizeof(name), "kranal_sd_%02d", dev->rad_idx);
         kportal_daemonize(name);
@@ -1878,9 +1906,6 @@ kranal_scheduler (void *arg)
 
         dev->rad_scheduler = current;
         init_waitqueue_entry(&wait, current);
-
-        /* prevent connd from doing setri until requested */
-        down(&dev->rad_setri_mutex);
 
         spin_lock_irqsave(&dev->rad_lock, flags);
 
@@ -1896,23 +1921,13 @@ kranal_scheduler (void *arg)
                         spin_lock_irqsave(&dev->rad_lock, flags);
                 }
 
-                /* Ghastly hack to ensure RapkSetRiParams() serialises with
-                 * other comms */
-                if (dev->rad_setri_please != 0) {
-                        spin_unlock_irqrestore(&dev->rad_lock, flags);
-                        up(&dev->rad_setri_mutex);
-                        
-                        wait_event_interruptible(dev->rad_waitq,
-                                                 dev->rad_setri_please == 0);
-                        
-                        down(&dev->rad_setri_mutex);
-                        spin_lock_irqsave(&dev->rad_lock, flags);
-                }
-                
+                dropped_lock = 0;
+
                 if (dev->rad_ready) {
                         /* Device callback fired since I last checked it */
                         dev->rad_ready = 0;
                         spin_unlock_irqrestore(&dev->rad_lock, flags);
+                        dropped_lock = 1;
 
                         kranal_check_rdma_cq(dev);
                         kranal_check_fma_cq(dev);
@@ -1920,14 +1935,14 @@ kranal_scheduler (void *arg)
                         spin_lock_irqsave(&dev->rad_lock, flags);
                 }
 
-                if (!list_empty(&dev->rad_connq)) {
-                        /* Connection needs attention */
-                        conn = list_entry(dev->rad_connq.next,
-                                          kra_conn_t, rac_schedlist);
+                list_for_each_safe(tmp, nxt, &dev->rad_ready_conns) {
+                        conn = list_entry(tmp, kra_conn_t, rac_schedlist);
+
                         list_del_init(&conn->rac_schedlist);
                         LASSERT (conn->rac_scheduled);
                         conn->rac_scheduled = 0;
                         spin_unlock_irqrestore(&dev->rad_lock, flags);
+                        dropped_lock = 1;
 
                         kranal_check_fma_rx(conn);
                         kranal_process_fmaq(conn);
@@ -1936,31 +1951,75 @@ kranal_scheduler (void *arg)
                                 kranal_complete_closed_conn(conn);
 
                         kranal_conn_decref(conn);
-
                         spin_lock_irqsave(&dev->rad_lock, flags);
-                        continue;
                 }
 
-                /* recheck device callback fired before sleeping */
-                if (dev->rad_ready)
+                nsoonest = 0;
+                soonest = jiffies;
+
+                list_for_each_safe(tmp, nxt, &dev->rad_new_conns) {
+                        conn = list_entry(tmp, kra_conn_t, rac_schedlist);
+                        
+                        deadline = conn->rac_last_tx + conn->rac_keepalive;
+                        if (time_after_eq(jiffies, deadline)) {
+                                /* Time to process this new conn */
+                                spin_unlock_irqrestore(&dev->rad_lock, flags);
+                                dropped_lock = 1;
+
+                                rc = kranal_process_new_conn(conn);
+                                if (rc != -EAGAIN) {
+                                        /* All done with this conn */
+                                        spin_lock_irqsave(&dev->rad_lock, flags);
+                                        list_del(&conn->rac_schedlist);
+                                        spin_unlock_irqrestore(&dev->rad_lock, flags);
+
+                                        kranal_conn_decref(conn);
+                                        spin_lock_irqsave(&dev->rad_lock, flags);
+                                        continue;
+                                }
+
+                                /* retry with exponential backoff until HZ */
+                                if (conn->rac_keepalive == 0)
+                                        conn->rac_keepalive = 1;
+                                else if (conn->rac_keepalive <= HZ)
+                                        conn->rac_keepalive *= 2;
+                                else
+                                        conn->rac_keepalive += HZ;
+                                
+                                deadline = conn->rac_last_tx + conn->rac_keepalive;
+                                spin_lock_irqsave(&dev->rad_lock, flags);
+                        }
+
+                        /* Does this conn need attention soonest? */
+                        if (nsoonest++ == 0 ||
+                            !time_after_eq(deadline, soonest))
+                                soonest = deadline;
+                }
+
+                if (dropped_lock)               /* may sleep iff I didn't drop the lock */
                         continue;
 
-                add_wait_queue(&dev->rad_waitq, &wait);
                 set_current_state(TASK_INTERRUPTIBLE);
-
+                add_wait_queue(&dev->rad_waitq, &wait);
                 spin_unlock_irqrestore(&dev->rad_lock, flags);
 
-                busy_loops = 0;
-                schedule();
+                if (nsoonest == 0) {
+                        busy_loops = 0;
+                        schedule();
+                } else {
+                        timeout = (long)(soonest - jiffies);
+                        if (timeout > 0) {
+                                busy_loops = 0;
+                                schedule_timeout(timeout);
+                        }
+                }
 
-                set_current_state(TASK_RUNNING);
                 remove_wait_queue(&dev->rad_waitq, &wait);
-
+                set_current_state(TASK_RUNNING);
                 spin_lock_irqsave(&dev->rad_lock, flags);
         }
 
         spin_unlock_irqrestore(&dev->rad_lock, flags);
-        up(&dev->rad_setri_mutex);
 
         dev->rad_scheduler = NULL;
         kranal_thread_fini();

@@ -539,29 +539,28 @@ kranal_set_conn_params(kra_conn_t *conn, kra_connreq_t *connreq,
         unsigned long  flags;
         RAP_RETURN     rrc;
 
-        /* tell scheduler to release the setri_mutex... */
+        /* CAVEAT EMPTOR: we're really overloading rac_last_tx + rac_keepalive
+         * to do RapkCompleteSync() timekeeping (see kibnal_scheduler). */
+        conn->rac_last_tx = jiffies;
+        conn->rac_keepalive = 0;
+
+        /* Schedule conn on rad_new_conns */
+        kranal_conn_addref(conn);
         spin_lock_irqsave(&dev->rad_lock, flags);
-        dev->rad_setri_please++;
+        list_add_tail(&conn->rac_schedlist, &dev->rad_new_conns);
         wake_up(&dev->rad_waitq);
         spin_unlock_irqrestore(&dev->rad_lock, flags);
-        /* ...and grab it */
-        down(&dev->rad_setri_mutex);
 
         rrc = RapkSetRiParams(conn->rac_rihandle, &connreq->racr_riparams);
         if (rrc != RAP_SUCCESS) {
                 CERROR("Error setting riparams from %u.%u.%u.%u/%d: %d\n",
                        HIPQUAD(peer_ip), peer_port, rrc);
-                return -EPROTO;
+                return -ECONNABORTED;
         }
 
-        /* release the setri_mutex... */
-        up(&dev->rad_setri_mutex);
-        /* ...and tell scheduler we're all done */
-        spin_lock_irqsave(&dev->rad_lock, flags);
-        dev->rad_setri_please--;
-        wake_up(&dev->rad_waitq);
-        spin_unlock_irqrestore(&dev->rad_lock, flags);
-        
+        /* Scheduler doesn't touch conn apart from to deschedule and decref it
+         * after RapkCompleteSync() return success, so conn is all mine */
+
         conn->rac_peerstamp = connreq->racr_peerstamp;
         conn->rac_peer_connstamp = connreq->racr_connstamp;
         conn->rac_keepalive = RANAL_TIMEOUT2KEEPALIVE(connreq->racr_timeout);
@@ -1743,11 +1742,6 @@ kranal_device_init(int id, kra_device_t *dev)
         const int         total_ntx = RANAL_NTX + RANAL_NTX_NBLK;
         RAP_RETURN        rrc;
 
-        /* The awful serialise RapkSetRiParams with the device scheduler
-         * work-around! */
-        dev->rad_setri_please = 0;
-        init_MUTEX(&dev->rad_setri_mutex);
-
         dev->rad_id = id;
         rrc = RapkGetDeviceByIndex(id, kranal_device_callback,
                                    &dev->rad_handle);
@@ -1851,13 +1845,19 @@ kranal_api_shutdown (nal_t *nal)
                 break;
         }
 
+        /* Conn/Peer state all cleaned up BEFORE setting shutdown, so threads
+         * don't have to worry about shutdown races */
+        LASSERT (atomic_read(&kranal_data.kra_nconns) == 0);
+        LASSERT (atomic_read(&kranal_data.kra_npeers) == 0);
+        
         /* flag threads to terminate; wake and wait for them to die */
         kranal_data.kra_shutdown = 1;
 
         for (i = 0; i < kranal_data.kra_ndevs; i++) {
                 kra_device_t *dev = &kranal_data.kra_devices[i];
 
-                LASSERT (list_empty(&dev->rad_connq));
+                LASSERT (list_empty(&dev->rad_ready_conns));
+                LASSERT (list_empty(&dev->rad_new_conns));
 
                 spin_lock_irqsave(&dev->rad_lock, flags);
                 wake_up(&dev->rad_waitq);
@@ -1961,7 +1961,8 @@ kranal_api_startup (nal_t *nal, ptl_pid_t requested_pid,
                 kra_device_t  *dev = &kranal_data.kra_devices[i];
 
                 dev->rad_idx = i;
-                INIT_LIST_HEAD(&dev->rad_connq);
+                INIT_LIST_HEAD(&dev->rad_ready_conns);
+                INIT_LIST_HEAD(&dev->rad_new_conns);
                 init_waitqueue_head(&dev->rad_waitq);
                 spin_lock_init(&dev->rad_lock);
         }

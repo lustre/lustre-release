@@ -110,12 +110,11 @@ typedef struct
         int                     rad_id;         /* device id */
         int                     rad_idx;        /* index in kra_devices */
         int                     rad_ready;      /* set by device callback */
-        struct list_head        rad_connq;      /* connections requiring attention */
+        struct list_head        rad_ready_conns;/* connections ready to tx/rx */
+        struct list_head        rad_new_conns;  /* new connections to complete */
         wait_queue_head_t       rad_waitq;      /* scheduler waits here */
         spinlock_t              rad_lock;       /* serialise */
         void                   *rad_scheduler;  /* scheduling thread */
-        int                     rad_setri_please; /* ++ when connd wants to setri */
-        struct semaphore        rad_setri_mutex; /* serialise setri */
 } kra_device_t;
 
 typedef struct
@@ -310,7 +309,7 @@ typedef struct kra_conn
         struct kra_peer    *rac_peer;           /* owning peer */
         struct list_head    rac_list;           /* stash on peer's conn list */
         struct list_head    rac_hashlist;       /* stash in connection hash table */
-        struct list_head    rac_schedlist;      /* schedule (on rad_connq) for attention */
+        struct list_head    rac_schedlist;      /* schedule (on rad_???_conns) for attention */
         struct list_head    rac_fmaq;           /* txs queued for FMA */
         struct list_head    rac_rdmaq;          /* txs awaiting RDMA completion */
         struct list_head    rac_replyq;         /* txs awaiting replies */
