@@ -122,22 +122,22 @@ do {                                                            \
         long s = (size);                                        \
         (ptr) = kmalloc(s, GFP_KERNEL);                         \
         if ((ptr) == NULL) {                                    \
-                CERROR("kernel malloc of %ld bytes failed at "  \
-                       "%s:%d\n", s, __FILE__, __LINE__);       \
+                CERROR("kmalloc of '" #ptr "' (%ld bytes) failed " \
+                       "at %s:%d\n", s, __FILE__, __LINE__);    \
         } else {                                                \
                 memset((ptr), 0, s);                            \
                 obd_memory += s;                                \
+                CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %ld at "\
+                       "%p (tot %ld).\n", s, (ptr), obd_memory);\
         }                                                       \
-        CDEBUG(D_MALLOC, "kmalloced: %ld at %x (tot %ld).\n",   \
-               s, (int)(ptr), obd_memory);                      \
 } while (0)
 
 #define OBD_FREE(ptr, size)                                     \
 do {                                                            \
         int s = (size);                                         \
         kfree((ptr));                                           \
-        CDEBUG(D_MALLOC, "kfreed: %d at %x (tot %ld).\n",       \
-               s, (int)(ptr), obd_memory);                      \
+        CDEBUG(D_MALLOC, "kfreed '" #ptr "': %d at %p (tot %ld).\n",       \
+               s, (ptr), obd_memory);                      \
         obd_memory -= s;                                        \
 } while (0)
 
