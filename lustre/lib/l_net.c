@@ -284,7 +284,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         export->exp_connection = ptlrpc_get_connection(&req->rq_peer, cluuid);
         if (req->rq_connection != NULL)
                 ptlrpc_put_connection(req->rq_connection);
-        req->rq_connection = export->exp_connection;
+        req->rq_connection = ptlrpc_connection_addref(export->exp_connection);
 
         spin_lock(&export->exp_connection->c_lock);
         list_add(&export->exp_conn_chain, &export->exp_connection->c_exports);

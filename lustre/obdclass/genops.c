@@ -379,9 +379,13 @@ void class_destroy_export(struct obd_export *exp)
         spin_unlock(&exp->exp_obd->obd_dev_lock);
 
         /* XXXshaver no connection here... */
-        if (exp->exp_connection) spin_lock(&exp->exp_connection->c_lock);
+        if (exp->exp_connection)
+                spin_lock(&exp->exp_connection->c_lock);
         list_del(&exp->exp_conn_chain);
-        if (exp->exp_connection) spin_unlock(&exp->exp_connection->c_lock);
+        if (exp->exp_connection) {
+                spin_unlock(&exp->exp_connection->c_lock);
+                ptlrpc_put_connection(exp->exp_connection);
+        }
 
         kmem_cache_free(export_cachep, exp);
 

@@ -135,6 +135,7 @@ int ll_size_lock(struct inode *inode, struct lov_stripe_md *lsm, __u64 start,
         struct ldlm_extent extent;
         struct lustre_handle *lockhs = NULL;
         int rc, flags = 0, stripe_count;
+        ENTRY;
 
         if (sbi->ll_flags & LL_SBI_NOLCK) {
                 *lockhs_p = NULL;
@@ -168,6 +169,7 @@ int ll_size_unlock(struct inode *inode, struct lov_stripe_md *lsm, int mode,
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         int rc, stripe_count;
+        ENTRY;
 
         if (sbi->ll_flags & LL_SBI_NOLCK)
                 RETURN(0);
@@ -197,6 +199,10 @@ int ll_file_size(struct inode *inode, struct lov_stripe_md *lsm)
         struct lustre_handle *lockhs;
         struct obdo oa;
         int err, rc;
+        ENTRY;
+
+        LASSERT(lsm);
+        LASSERT(sbi);
 
         rc = ll_size_lock(inode, lsm, 0, LCK_PR, &lockhs);
         if (rc != ELDLM_OK) {
