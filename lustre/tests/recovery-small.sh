@@ -70,12 +70,6 @@ if [ "$ONLY" == "cleanup" ]; then
     exit
 fi
 
-if [ "$ONLY" == "cleanup" ]; then
-    sysctl -w portals.debug=0 || true
-    cleanup
-    exit
-fi
-
 REFORMAT=--reformat $SETUP
 unset REFORMAT
 
