@@ -1,3 +1,0 @@
-include/linux/dynlocks.h
-lib/dynlocks.c
-lib/Makefile
