@@ -301,7 +301,7 @@ long latency while truncating very large files.
  
 --- linux-2.4.18-18.8.0-l15/fs/ext3/inode.c~ext3-delete_thread-2.4.18	Wed Jul  2 23:13:58 2003
 +++ linux-2.4.18-18.8.0-l15-adilger/fs/ext3/inode.c	Wed Jul  2 23:50:29 2003
-@@ -2004,6 +2004,117 @@ out_stop:
+@@ -2004,6 +2004,118 @@ out_stop:
  	ext3_journal_stop(handle, inode);
  }
  
@@ -366,15 +366,6 @@ long latency while truncating very large files.
 +		goto out_journal;
 +	}
 +
-+	if (ext3_orphan_add(handle, new_inode) < 0)
-+		goto out_journal;
-+
-+	if (ext3_orphan_del(handle, old_inode) < 0) {
-+		ext3_orphan_del(handle, new_inode);
-+		iput(new_inode);
-+		goto out_journal;
-+	}
-+
 +	nei = EXT3_I(new_inode);
 +
 +	down_write(&oei->truncate_sem);
@@ -386,6 +377,7 @@ long latency while truncating very large files.
 +
 +	/* FIXME when we do arbitrary truncates */
 +	old_inode->i_blocks = oei->i_file_acl ? old_inode->i_blksize / 512 : 0;
++	old_inode->i_mtime = old_inode->i_ctime = CURRENT_TIME;
 +
 +	memcpy(nei->i_data, oei->i_data, sizeof(nei->i_data));
 +	memset(oei->i_data, 0, sizeof(oei->i_data));
@@ -393,6 +385,15 @@ long latency while truncating very large files.
 +	nei->i_disksize = oei->i_disksize;
 +	nei->i_state |= EXT3_STATE_DELETE;
 +	up_write(&oei->truncate_sem);
++
++	if (ext3_orphan_add(handle, new_inode) < 0)
++		goto out_journal;
++
++	if (ext3_orphan_del(handle, old_inode) < 0) {
++		ext3_orphan_del(handle, new_inode);
++		iput(new_inode);
++		goto out_journal;
++	}
 +
 +	ext3_journal_stop(handle, old_inode);
 +
