@@ -39,15 +39,20 @@ static int mdc_reint(struct ptlrpc_request *request,
                      struct mdc_rpc_lock *rpc_lock, int level)
 {
         int rc;
+        
 
         request->rq_level = level;
 
         mdc_get_rpc_lock(rpc_lock, NULL);
         rc = ptlrpc_queue_wait(request);
         mdc_put_rpc_lock(rpc_lock, NULL);
-
         if (rc)
                 CDEBUG(D_INFO, "error in handling %d\n", rc);
+        else if (!lustre_swab_repbuf(request, 0, sizeof(struct mds_body),
+                                     lustre_swab_mds_body)) {
+                CERROR ("Can't unpack mds_body\n");
+                rc = -EPROTO;
+        }
         return rc;
 }
 
@@ -96,7 +101,6 @@ int mdc_setattr(struct lustre_handle *conn, struct mdc_op_data *data,
         req->rq_replen = lustre_msg_size(1, size);
 
         rc = mdc_reint(req, rpc_lock, LUSTRE_CONN_FULL);
-
         *request = req;
         if (rc == -ERESTARTSYS)
                 rc = 0;
