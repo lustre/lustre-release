@@ -36,7 +36,7 @@
 #include <linux/iobuf.h>
 
 #include <linux/obd_support.h>
-#include "obdfs.h"
+#include <linux/obdfs.h>
 
 /*
  * define how far ahead to read directories while searching them.

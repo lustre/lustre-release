@@ -31,7 +31,7 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/obd_sim.h>  /* XXX for development/debugging only */
-#include <obdfs.h>
+#include <linux/obdfs.h>
 
 /* VFS super_block ops */
 static struct super_block *obdfs_read_super(struct super_block *, void *, int);

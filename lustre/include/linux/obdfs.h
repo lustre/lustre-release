@@ -11,7 +11,7 @@
 
 #ifndef _OBDFS_H
 #define OBDFS_H
-#include <../obd/linux/obd_class.h>
+#include <linux/obd_class.h>
 
 /* super.c */
 void obdfs_read_inode(struct inode *inode);

@@ -38,7 +38,7 @@
 #include <linux/locks.h>
 #include <linux/quotaops.h>
 #include <linux/iobuf.h>
-#include "obdfs.h"
+#include <linux/obdfs.h>
 #include <linux/obd_support.h>
 
 #if 0

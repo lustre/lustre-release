@@ -33,7 +33,7 @@
 #include <linux/smp_lock.h>
 
 #include <linux/obd_support.h>
-#include "obdfs.h"
+#include <linux/obdfs.h>
 
 static inline void remove_suid(struct inode *inode)
 {

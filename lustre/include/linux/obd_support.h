@@ -30,6 +30,7 @@ extern int obd_print_entry;
 #define D_INFO      512 /* general information, especially from interface.c */
 #define D_IOCTL    1024 /* ioctl related information */
 #define D_BLOCKS   2048 /* ext2 block allocation */
+#define D_RPC      4096 /* ext2 block allocation */
  
 #ifdef SIM_OBD_DEBUG
 #define CDEBUG(mask, format, a...)					\

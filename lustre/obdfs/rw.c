@@ -28,9 +28,9 @@
 #include <linux/pagemap.h>
 #include <linux/smp_lock.h>
 
-#include <../obd/linux/obd_support.h>
-#include <../obd/linux/obd_sim.h>
-#include <obdfs.h>
+#include <linux/obd_support.h>
+#include <linux/obd_sim.h>
+#include <linux/obdfs.h>
 
 int console_loglevel;
 

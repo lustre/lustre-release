@@ -31,32 +31,7 @@ enum obd_stat {
 };
 
 
-
-#define OBD_PROGRAM		100003
-#define OBD_VERSION		2
-#define OBDPROC_NULL		0
-#define OBDPROC_GETATTR		1
-#define OBDPROC_SETATTR		2
-#define OBDPROC_ROOT		3
-#define OBDPROC_LOOKUP		4
-#define OBDPROC_READLINK	5
-#define OBDPROC_READ		6
-#define OBDPROC_WRITECACHE	7
-#define OBDPROC_WRITE		8
-#define OBDPROC_CREATE		9
-#define OBDPROC_REMOVE		10
-#define OBDPROC_RENAME		11
-#define OBDPROC_LINK		12
-#define OBDPROC_SYMLINK		13
-#define OBDPROC_MKDIR		14
-
-
-
 extern struct rpc_program obd_program;
-
-
-
-
 
 
 struct obd_target {
@@ -71,14 +46,38 @@ struct obd_target {
 
 
 struct rpc_obd {
-	struct rpc_clnt *	client;		/* RPC client handle */
-	struct sockaddr_in     addr;
+	struct rpc_clnt *	handle;		/* RPC client handle */
+	struct sockaddr_in      addr;
 	int			flags;		/* various flags */
+	int                     timeo;
+	int                     retrans;
 	int			rsize;		/* read size */
 	int			wsize;		/* write size */
 	unsigned int	 	bsize;		/* server block size */
 	char *			hostname;	/* remote hostname */
 };
+
+
+#define OBD_PROGRAM		300001
+#define OBD_VERSION		1
+#define OBDPROC_NULL		0
+#define OBDPROC_ECHOINT		1
+
+#ifdef  OBD_NEED_XDR_TYPES
+
+struct obd_echoint_in {
+	__u32			in;
+};
+
+struct obd_echoint_out {
+	__u32			out;
+};
+
+
+#endif /* OBD_NEED_XDR_TYPES */
+
+
+int obd_proc_echoint(struct rpc_obd *target, __u32 in, __u32 *out);
 
 
 #endif
