@@ -174,10 +174,6 @@ void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
         LASSERT(it);
         LASSERT(pnode);
 
-        /* drop IT_LOOKUP locks */
-        if (it->it_op == IT_LOOKUP)
-                ll_intent_release(it);
-
         if (it && pnode->p_base->pb_ino != NULL) {
                 struct inode *inode = pnode->p_base->pb_ino;
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%lu)\n",
@@ -185,6 +181,11 @@ void llu_lookup_finish_locks(struct lookup_intent *it, struct pnode *pnode)
                        llu_i2info(inode)->lli_st_generation);
                 mdc_set_lock_data(&it->d.lustre.it_lock_handle, inode);
         }
+
+        /* drop IT_LOOKUP locks */
+        if (it->it_op == IT_LOOKUP)
+                ll_intent_release(it);
+
 }
 
 static inline void ll_invalidate_inode_pages(struct inode * inode)
