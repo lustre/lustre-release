@@ -21,7 +21,6 @@ extern struct address_space_operations ll_aops;
 
 void ll_intent_release(struct dentry *de)
 {
-        struct ldlm_lock *lock;
         struct lustre_handle *handle;
         ENTRY;
 
@@ -32,10 +31,7 @@ void ll_intent_release(struct dentry *de)
 
         if (de->d_it->it_lock_mode) {
                 handle = (struct lustre_handle *)de->d_it->it_lock_handle;
-                lock = lustre_handle2object(handle);
-                LDLM_DEBUG(lock, "calling ldlm_lock_decref(%d)",
-                           de->d_it->it_lock_mode);
-                ldlm_lock_decref(lock, de->d_it->it_lock_mode);
+                ldlm_lock_decref(handle, de->d_it->it_lock_mode);
         }
         de->d_it = NULL;
         EXIT;

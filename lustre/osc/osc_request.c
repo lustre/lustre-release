@@ -683,12 +683,11 @@ static int osc_enqueue(struct obd_conn *oconn,
                              sizeof(extent), mode2, lockh);
         if (rc == 1) {
                 int flags;
-                struct ldlm_lock *lock = lustre_handle2object(lockh);
                 /* FIXME: This is not incredibly elegant, but it might
                  * be more elegant than adding another parameter to
                  * lock_match.  I want a second opinion. */
-                ldlm_lock_addref(lock, mode);
-                ldlm_lock_decref(lock, mode2);
+                ldlm_lock_addref(lockh, mode);
+                ldlm_lock_decref(lockh, mode2);
 
                 if (mode == LCK_PR)
                         return 0;
@@ -709,11 +708,9 @@ static int osc_enqueue(struct obd_conn *oconn,
 static int osc_cancel(struct obd_conn *oconn, __u32 mode,
                       struct lustre_handle *lockh)
 {
-        struct ldlm_lock *lock;
         ENTRY;
 
-        lock = lustre_handle2object(lockh);
-        ldlm_lock_decref(lock, mode);
+        ldlm_lock_decref(lockh, mode);
 
         RETURN(0);
 }

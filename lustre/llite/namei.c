@@ -120,11 +120,9 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
 
 int ll_unlock(__u32 mode, struct lustre_handle *lockh)
 {
-        struct ldlm_lock *lock;
         ENTRY;
 
-        lock = lustre_handle2object(lockh);
-        ldlm_lock_decref(lock, mode);
+        ldlm_lock_decref(lockh, mode);
 
         RETURN(0);
 }

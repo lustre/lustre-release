@@ -68,7 +68,7 @@ static int ldlm_handle_enqueue(struct obd_device *obddev, struct ptlrpc_service 
 
         flags = dlm_req->lock_flags;
         err = ldlm_lock_enqueue(lock, cookie, cookielen, &flags,
-                                ldlm_cli_callback, ldlm_cli_callback);
+                                ldlm_server_ast, ldlm_server_ast);
         if (err != ELDLM_OK)
                 GOTO(out, err);
 
@@ -226,7 +226,7 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
                                 ldlm_lock2handle(lock, &lockh);
                                 lock->l_blocking_ast(&lockh, descp,
                                                      lock->l_data,
-                                                     lock->l_data_len, NULL);
+                                                     lock->l_data_len);
                         }
                 } else {
                         LDLM_DEBUG(lock, "Lock still has references, will be"

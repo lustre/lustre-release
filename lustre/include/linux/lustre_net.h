@@ -101,6 +101,7 @@ struct ptlrpc_client {
         struct obd_device *cli_obd;
         __u32 cli_request_portal;
         __u32 cli_reply_portal;
+
         __u64 cli_last_rcvd;
         __u64 cli_last_committed;
         __u32 cli_target_devno;

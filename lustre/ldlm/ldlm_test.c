@@ -26,8 +26,7 @@ static int regression_running = 0;
 
 static int ldlm_test_callback(struct lustre_handle *lockh,
                               struct ldlm_lock_desc *new,
-                              void *data, __u32 data_len,
-                              struct ptlrpc_request **reqp)
+                              void *data, __u32 data_len)
 {
         printk("ldlm_test_callback: lock=%Lu, new=%p\n", lockh->addr, new);
         return 0;

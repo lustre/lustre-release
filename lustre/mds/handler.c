@@ -279,7 +279,6 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
         struct mds_body *body;
         struct dentry *de = NULL, *dchild = NULL;
         struct inode *dir;
-        struct ldlm_lock *lock;
         struct lustre_handle lockh;
         char *name;
         int namelen, flags, lock_mode, rc = 0;
@@ -327,9 +326,6 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
                         CERROR("lock enqueue: err: %d\n", rc);
                         GOTO(out_create_de, rc = -EIO);
                 }
-        } else {
-                lock = lustre_handle2object(&lockh);
-                LDLM_DEBUG(lock, "matched");
         }
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);
 
@@ -366,8 +362,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req)
 out_create_dchild:
         l_dput(dchild);
         up(&dir->i_sem);
-        lock = lustre_handle2object(&lockh);
-        ldlm_lock_decref(lock, lock_mode);
+        ldlm_lock_decref(&lockh, lock_mode);
 out_create_de:
         l_dput(de);
 out_pre_de:

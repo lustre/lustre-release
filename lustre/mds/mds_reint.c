@@ -190,7 +190,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         struct dentry *dchild = NULL;
         struct inode *dir;
         void *handle;
-        struct ldlm_lock *lock;
         struct lustre_handle lockh;
         int rc = 0, err, flags, lock_mode, type = rec->ur_mode & S_IFMT;
         __u64 res_id[3] = {0,0,0};
@@ -228,9 +227,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         CERROR("lock enqueue: err: %d\n", rc);
                         GOTO(out_create_de, rc = -EIO);
                 }
-        } else {
-                lock = ldlm_handle2lock(&lockh);
-                LDLM_DEBUG(lock, "matched");
         }
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);
 
@@ -370,8 +366,7 @@ out_create_commit:
 out_create_dchild:
         l_dput(dchild);
         up(&dir->i_sem);
-        lock = lustre_handle2object(&lockh);
-        ldlm_lock_decref(lock, lock_mode);
+        ldlm_lock_decref(&lockh, lock_mode);
 out_create_de:
         l_dput(de);
         req->rq_status = rc;
@@ -408,7 +403,6 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
         int lock_mode, flags;
         __u64 res_id[3] = {0};
         struct lustre_handle lockh;
-        struct ldlm_lock *lock;
         void *handle;
         int rc = 0;
         int err;
@@ -438,10 +432,8 @@ static int mds_reint_unlink(struct mds_update_record *rec, int offset,
                         CERROR("lock enqueue: err: %d\n", rc);
                         GOTO(out_unlink_de, rc = -EIO);
                 }
-        } else {
-                lock = lustre_handle2object(&lockh);
-                LDLM_DEBUG(lock, "matched");
-        }
+        } else
+
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);
 
         down(&dir->i_sem);
@@ -515,8 +507,8 @@ out_unlink_dchild:
         l_dput(dchild);
 out_unlink_de:
         up(&dir->i_sem);
-        lock = lustre_handle2object(&lockh);
-        ldlm_lock_decref(lock, lock_mode);
+        ldlm_lock_decref(&lockh
+, lock_mode);
         if (!rc) { 
                 /* Take an exclusive lock on the resource that we're
                  * about to free, to force everyone to drop their
@@ -537,8 +529,7 @@ out_unlink_de:
         l_dput(de);
 
         if (!rc) { 
-                lock = lustre_handle2object(&lockh);
-                ldlm_lock_decref(lock, LCK_EX);
+                ldlm_lock_decref(&lockh, LCK_EX);
                 rc = ldlm_cli_cancel(&lockh);
                 if (rc < 0)
                         CERROR("failed to cancel child inode lock ino "

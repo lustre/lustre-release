@@ -39,7 +39,7 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         if (lock == NULL)
                 GOTO(out, rc = -ENOMEM);
         /* for the local lock, add the reference */
-        ldlm_lock_addref(lock, mode);
+        ldlm_lock_addref_internal(lock, mode);
         ldlm_lock2handle(lock, lockh);
 
         LDLM_DEBUG(lock, "client-side enqueue START");
@@ -140,21 +140,20 @@ int ldlm_cli_enqueue(struct ptlrpc_client *cl, struct ptlrpc_connection *conn,
         return rc;
 }
 
-int ldlm_cli_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
-                      void *data, __u32 data_len, struct ptlrpc_request **reqp)
+int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
+                      void *data, __u32 data_len)
 {
         struct ldlm_lock *lock;
         struct ldlm_request *body;
         struct ptlrpc_request *req;
-        struct ptlrpc_client *cl =
-                &lock->l_resource->lr_namespace->ns_rpc_client;
+        struct ptlrpc_client *cl;
         int rc = 0, size = sizeof(*body);
         ENTRY;
 
         lock = ldlm_handle2lock(lockh);
         if (lock == NULL)
                 LBUG();
-
+        cl = &lock->l_resource->lr_namespace->ns_rpc_client;
         req = ptlrpc_prep_req(cl, lock->l_connection, LDLM_CALLBACK, 1,
                               &size, NULL);
         if (!req)
@@ -177,14 +176,9 @@ int ldlm_cli_callback(struct lustre_handle *lockh, struct ldlm_lock_desc *desc,
 
         req->rq_replen = lustre_msg_size(0, NULL);
 
-        if (reqp == NULL) {
-                LBUG();
-                rc = ptlrpc_queue_wait(req);
-                rc = ptlrpc_check_status(req, rc);
-                ptlrpc_free_req(req);
-        } else
-                *reqp = req;
-
+        rc = ptlrpc_queue_wait(req);
+        rc = ptlrpc_check_status(req, rc);
+        ptlrpc_free_req(req);
 
         EXIT;
  out:
@@ -281,7 +275,6 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 GOTO(out, rc);
 
         ldlm_lock_cancel(lock);
-        ldlm_reprocess_all(lock->l_resource);
         ldlm_lock_put(lock); 
         EXIT;
  out:
