@@ -120,7 +120,7 @@ static void ll_get_dirty_pages(struct inode *inode,
         struct list_head *pos, *n;
         ENTRY;
 
-        spin_lock(&pagecache_lock);
+        PGCACHE_WRLOCK(mapping);
 
         list_for_each_prev_safe(pos, n, &mapping->dirty_pages) {
                 page = list_entry(pos, struct page, list);
@@ -141,7 +141,7 @@ static void ll_get_dirty_pages(struct inode *inode,
                         break;
         }
 
-        spin_unlock(&pagecache_lock);
+        PGCACHE_WRUNLOCK(mapping);
         EXIT;
 }
 
@@ -193,10 +193,13 @@ static void ll_writeback(struct inode *inode, struct ll_writeback_pages *llwp)
         EXIT;
 }
 
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+
 #ifndef PG_inactive_clean
 #ifdef CONFIG_DISCONTIGMEM
 #error "sorry, we don't support DISCONTIGMEM yet"
 #endif
+
 /*
  * __alloc_pages marks a zone as needing balancing if an allocation is
  * performed when the zone has fewer free pages than its 'low' water
@@ -238,29 +241,6 @@ static int should_writeback(void)
 #endif
                 return 1;
         return 0;
-}
-
-static int ll_alloc_brw(struct lustre_handle *conn,
-                        struct ll_writeback_pages *llwp)
-{
-        static char key[] = "brw_size";
-        __u32 brw_size;
-        __u32 vallen = sizeof(brw_size);
-        int rc;
-        ENTRY;
-
-        memset(llwp, 0, sizeof(struct ll_writeback_pages));
-
-        rc = obd_get_info(conn, sizeof(key) - 1, key, &vallen, &brw_size);
-        if (rc != 0)
-                RETURN(rc);
-        LASSERT(brw_size >= PAGE_SIZE);
-
-        llwp->max = brw_size >> PAGE_SHIFT;
-        llwp->pga = kmalloc(llwp->max * sizeof(struct brw_page), GFP_ATOMIC);
-        if ( llwp->pga == NULL )
-                RETURN(-ENOMEM);
-        RETURN(0);
 }
 
 int ll_check_dirty( struct super_block *sb)
@@ -370,7 +350,31 @@ cleanup:
 
         RETURN(rc);
 }
+#endif /* linux 2.5 */
 
+
+static int ll_alloc_brw(struct lustre_handle *conn,
+                        struct ll_writeback_pages *llwp)
+{
+        static char key[] = "brw_size";
+        __u32 brw_size;
+        __u32 vallen = sizeof(brw_size);
+        int rc;
+        ENTRY;
+
+        memset(llwp, 0, sizeof(struct ll_writeback_pages));
+
+        rc = obd_get_info(conn, sizeof(key) - 1, key, &vallen, &brw_size);
+        if (rc != 0)
+                RETURN(rc);
+        LASSERT(brw_size >= PAGE_SIZE);
+
+        llwp->max = brw_size >> PAGE_SHIFT;
+        llwp->pga = kmalloc(llwp->max * sizeof(struct brw_page), GFP_ATOMIC);
+        if ( llwp->pga == NULL )
+                RETURN(-ENOMEM);
+        RETURN(0);
+}
 int ll_batch_writepage( struct inode *inode, struct page *page )
 {
         unsigned long old_flags; /* hack? */
@@ -639,8 +643,10 @@ static int ll_pgcache_seq_show(struct seq_file *seq, void *v)
 
         seq_printf(seq, "snapshot_time:            %lu:%lu (secs:usecs)\n",
                    now.tv_sec, now.tv_usec);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         seq_printf(seq, "VM_under_pressure:        %s\n",
                    should_writeback() ? "yes" : "no");
+#endif        
         seq_printf(seq, "dirty_pages:              "LPU64"\n",
                    sbi->ll_iostats.fis_dirty_pages);
         seq_printf(seq, "dirty_page_hits:          "LPU64"\n",
