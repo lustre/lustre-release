@@ -144,6 +144,15 @@ static void __exit ptlrpc_exit(void)
         ptlrpc_cleanup_connection();
 }
 
+/* connmgr.c */
+EXPORT_SYMBOL(connmgr_connect);
+EXPORT_SYMBOL(connmgr_handle);
+EXPORT_SYMBOL(recovd_cli_fail);
+EXPORT_SYMBOL(recovd_cli_manage);
+EXPORT_SYMBOL(recovd_cli_fixed);
+EXPORT_SYMBOL(recovd_setup);
+EXPORT_SYMBOL(recovd_cleanup);
+
 /* connection.c */
 EXPORT_SYMBOL(ptlrpc_readdress_connection);
 EXPORT_SYMBOL(ptlrpc_get_connection);
