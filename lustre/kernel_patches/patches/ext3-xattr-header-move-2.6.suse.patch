@@ -1,0 +1,506 @@
+diff -rupN linux-2.6.4-51.0.orig/fs/ext3/acl.c linux-2.6.4-51.0/fs/ext3/acl.c
+--- linux-2.6.4-51.0.orig/fs/ext3/acl.c	2004-04-05 19:41:59.000000000 +0300
++++ linux-2.6.4-51.0/fs/ext3/acl.c	2004-04-07 11:06:33.000000000 +0300
+@@ -10,7 +10,7 @@
+ #include <linux/fs.h>
+ #include <linux/ext3_jbd.h>
+ #include <linux/ext3_fs.h>
+-#include "xattr.h"
++#include <linux/ext3_xattr.h>
+ #include "acl.h"
+ 
+ /*
+diff -rupN linux-2.6.4-51.0.orig/fs/ext3/file.c linux-2.6.4-51.0/fs/ext3/file.c
+--- linux-2.6.4-51.0.orig/fs/ext3/file.c	2004-04-05 19:41:59.000000000 +0300
++++ linux-2.6.4-51.0/fs/ext3/file.c	2004-04-07 11:06:39.000000000 +0300
+@@ -23,7 +23,7 @@
+ #include <linux/jbd.h>
+ #include <linux/ext3_fs.h>
+ #include <linux/ext3_jbd.h>
+-#include "xattr.h"
++#include <linux/ext3_xattr.h>
+ #include "acl.h"
+ 
+ /*
+diff -rupN linux-2.6.4-51.0.orig/fs/ext3/ialloc.c linux-2.6.4-51.0/fs/ext3/ialloc.c
+--- linux-2.6.4-51.0.orig/fs/ext3/ialloc.c	2004-04-06 22:17:15.000000000 +0300
++++ linux-2.6.4-51.0/fs/ext3/ialloc.c	2004-04-07 11:06:46.000000000 +0300
+@@ -26,7 +26,7 @@
+ #include <asm/bitops.h>
+ #include <asm/byteorder.h>
+ 
+-#include "xattr.h"
++#include <linux/ext3_xattr.h>
+ #include "acl.h"
+ 
+ /*
+diff -rupN linux-2.6.4-51.0.orig/fs/ext3/inode.c linux-2.6.4-51.0/fs/ext3/inode.c
+--- linux-2.6.4-51.0.orig/fs/ext3/inode.c	2004-04-06 22:17:15.000000000 +0300
++++ linux-2.6.4-51.0/fs/ext3/inode.c	2004-04-07 11:25:05.000000000 +0300
+@@ -36,7 +36,7 @@
+ #include <linux/writeback.h>
+ #include <linux/mpage.h>
+ #include <linux/uio.h>
+-#include "xattr.h"
++#include <linux/ext3_xattr.h>
+ #include "iopen.h"
+ #include "acl.h"
+ 
+@@ -2340,7 +2340,7 @@ static unsigned long ext3_get_inode_bloc
+  * performed.
+  */
+ int ext3_get_inode_loc(struct inode *inode,
+-				struct ext3_iloc *iloc, int in_mem)
++		       struct ext3_iloc *iloc, int in_mem)
+ {
+ 	unsigned long block;
+ 	struct buffer_head *bh;
+diff -rupN linux-2.6.4-51.0.orig/fs/ext3/namei.c linux-2.6.4-51.0/fs/ext3/namei.c
+--- linux-2.6.4-51.0.orig/fs/ext3/namei.c	2004-04-06 22:17:15.000000000 +0300
++++ linux-2.6.4-51.0/fs/ext3/namei.c	2004-04-07 11:06:57.000000000 +0300
+@@ -36,7 +36,7 @@
+ #include <linux/quotaops.h>
+ #include <linux/buffer_head.h>
+ #include <linux/smp_lock.h>
+-#include "xattr.h"
++#include <linux/ext3_xattr.h>
+ #include "iopen.h"
+ #include "acl.h"
+ 
+diff -rupN linux-2.6.4-51.0.orig/fs/ext3/super.c linux-2.6.4-51.0/fs/ext3/super.c
+--- linux-2.6.4-51.0.orig/fs/ext3/super.c	2004-04-06 22:17:15.000000000 +0300
++++ linux-2.6.4-51.0/fs/ext3/super.c	2004-04-07 11:07:05.000000000 +0300
+@@ -33,7 +33,7 @@
+ #include <linux/vfs.h>
+ #include <linux/random.h>
+ #include <asm/uaccess.h>
+-#include "xattr.h"
++#include <linux/ext3_xattr.h>
+ #include "acl.h"
+ 
+ static int ext3_load_journal(struct super_block *, struct ext3_super_block *);
+diff -rupN linux-2.6.4-51.0.orig/fs/ext3/symlink.c linux-2.6.4-51.0/fs/ext3/symlink.c
+--- linux-2.6.4-51.0.orig/fs/ext3/symlink.c	2004-04-05 19:41:59.000000000 +0300
++++ linux-2.6.4-51.0/fs/ext3/symlink.c	2004-04-07 11:07:16.000000000 +0300
+@@ -20,7 +20,7 @@
+ #include <linux/fs.h>
+ #include <linux/jbd.h>
+ #include <linux/ext3_fs.h>
+-#include "xattr.h"
++#include <linux/ext3_xattr.h>
+ 
+ static int
+ ext3_readlink(struct dentry *dentry, char __user *buffer, int buflen)
+diff -rupN linux-2.6.4-51.0.orig/fs/ext3/xattr.c linux-2.6.4-51.0/fs/ext3/xattr.c
+--- linux-2.6.4-51.0.orig/fs/ext3/xattr.c	2004-04-06 22:17:15.000000000 +0300
++++ linux-2.6.4-51.0/fs/ext3/xattr.c	2004-04-07 11:22:34.000000000 +0300
+@@ -59,7 +59,7 @@
+ #include <linux/mbcache.h>
+ #include <linux/quotaops.h>
+ #include <linux/rwsem.h>
+-#include "xattr.h"
++#include <linux/ext3_xattr.h>
+ #include "acl.h"
+ 
+ #define HDR(bh) ((struct ext3_xattr_header *)((bh)->b_data))
+@@ -348,7 +348,7 @@ cleanup:
+  */
+ int
+ ext3_xattr_ibody_get(struct inode *inode, int name_index, const char *name,
+-	       void *buffer, size_t buffer_size)
++	    	     void *buffer, size_t buffer_size)
+ {
+ 	int size, name_len = strlen(name), storage_size;
+ 	struct ext3_xattr_entry *last;
+@@ -360,7 +360,7 @@ ext3_xattr_ibody_get(struct inode *inode
+ 	if (EXT3_SB(inode->i_sb)->s_inode_size <= EXT3_GOOD_OLD_INODE_SIZE)
+ 		return -ENOENT;
+ 
+-	ret = ext3_get_inode_loc(inode, &iloc);
++	ret = ext3_get_inode_loc(inode, &iloc, 1);
+ 	if (ret)
+ 		return ret;
+ 	raw_inode = ext3_raw_inode(&iloc);
+@@ -542,7 +542,7 @@ ext3_xattr_ibody_list(struct inode *inod
+ 	if (EXT3_SB(inode->i_sb)->s_inode_size <= EXT3_GOOD_OLD_INODE_SIZE)
+ 		return 0;
+ 
+-	ret = ext3_get_inode_loc(inode, &iloc);
++	ret = ext3_get_inode_loc(inode, &iloc, 1);
+ 	if (ret)
+ 		return ret;
+ 	raw_inode = ext3_raw_inode(&iloc);
+@@ -693,7 +693,7 @@ ext3_xattr_ibody_find(struct inode *inod
+ 	if (EXT3_SB(inode->i_sb)->s_inode_size <= EXT3_GOOD_OLD_INODE_SIZE)
+ 		return ret;
+ 
+-	err = ext3_get_inode_loc(inode, &iloc);
++	err = ext3_get_inode_loc(inode, &iloc, 1);
+ 	if (err)
+ 		return -EIO;
+ 	raw_inode = ext3_raw_inode(&iloc);
+@@ -824,7 +824,7 @@ ext3_xattr_ibody_set(handle_t *handle, s
+ 	if (EXT3_SB(inode->i_sb)->s_inode_size <= EXT3_GOOD_OLD_INODE_SIZE)
+ 		return -ENOSPC;
+ 
+-	err = ext3_get_inode_loc(inode, &iloc);
++	err = ext3_get_inode_loc(inode, &iloc, 1);
+ 	if (err)
+ 		return err;
+ 	raw_inode = ext3_raw_inode(&iloc);
+diff -rupN linux-2.6.4-51.0.orig/fs/ext3/xattr.h linux-2.6.4-51.0/fs/ext3/xattr.h
+--- linux-2.6.4-51.0.orig/fs/ext3/xattr.h	2004-04-06 22:17:15.000000000 +0300
++++ linux-2.6.4-51.0/fs/ext3/xattr.h	1970-01-01 03:00:00.000000000 +0300
+@@ -1,147 +0,0 @@
+-/*
+-  File: fs/ext3/xattr.h
+-
+-  On-disk format of extended attributes for the ext3 filesystem.
+-
+-  (C) 2001 Andreas Gruenbacher, <a.gruenbacher@computer.org>
+-*/
+-
+-#include <linux/config.h>
+-#include <linux/xattr.h>
+-
+-/* Magic value in attribute blocks */
+-#define EXT3_XATTR_MAGIC		0xEA020000
+-
+-/* Maximum number of references to one attribute block */
+-#define EXT3_XATTR_REFCOUNT_MAX		1024
+-
+-/* Name indexes */
+-#define EXT3_XATTR_INDEX_MAX			10
+-#define EXT3_XATTR_INDEX_USER			1
+-#define EXT3_XATTR_INDEX_POSIX_ACL_ACCESS	2
+-#define EXT3_XATTR_INDEX_POSIX_ACL_DEFAULT	3
+-#define EXT3_XATTR_INDEX_TRUSTED		4
+-#define	EXT3_XATTR_INDEX_LUSTRE			5
+-#define EXT3_XATTR_INDEX_SECURITY	        6
+-
+-struct ext3_xattr_header {
+-	__u32	h_magic;	/* magic number for identification */
+-	__u32	h_refcount;	/* reference count */
+-	__u32	h_blocks;	/* number of disk blocks used */
+-	__u32	h_hash;		/* hash value of all attributes */
+-	__u32	h_reserved[4];	/* zero right now */
+-};
+-
+-struct ext3_xattr_entry {
+-	__u8	e_name_len;	/* length of name */
+-	__u8	e_name_index;	/* attribute name index */
+-	__u16	e_value_offs;	/* offset in disk block of value */
+-	__u32	e_value_block;	/* disk block attribute is stored on (n/i) */
+-	__u32	e_value_size;	/* size of attribute value */
+-	__u32	e_hash;		/* hash value of name and value */
+-	char	e_name[0];	/* attribute name */
+-};
+-
+-#define EXT3_XATTR_PAD_BITS		2
+-#define EXT3_XATTR_PAD		(1<<EXT3_XATTR_PAD_BITS)
+-#define EXT3_XATTR_ROUND		(EXT3_XATTR_PAD-1)
+-#define EXT3_XATTR_LEN(name_len) \
+-	(((name_len) + EXT3_XATTR_ROUND + \
+-	sizeof(struct ext3_xattr_entry)) & ~EXT3_XATTR_ROUND)
+-#define EXT3_XATTR_NEXT(entry) \
+-	( (struct ext3_xattr_entry *)( \
+-	  (char *)(entry) + EXT3_XATTR_LEN((entry)->e_name_len)) )
+-#define EXT3_XATTR_SIZE(size) \
+-	(((size) + EXT3_XATTR_ROUND) & ~EXT3_XATTR_ROUND)
+-
+-# ifdef CONFIG_EXT3_FS_XATTR
+-
+-struct ext3_xattr_handler {
+-	char *prefix;
+-	size_t (*list)(char *list, struct inode *inode, const char *name,
+-		       int name_len);
+-	int (*get)(struct inode *inode, const char *name, void *buffer,
+-		   size_t size);
+-	int (*set)(struct inode *inode, const char *name, const void *buffer,
+-		   size_t size, int flags);
+-};
+-
+-extern int ext3_xattr_register(int, struct ext3_xattr_handler *);
+-extern void ext3_xattr_unregister(int, struct ext3_xattr_handler *);
+-
+-extern int ext3_setxattr(struct dentry *, const char *, const void *, size_t, int);
+-extern ssize_t ext3_getxattr(struct dentry *, const char *, void *, size_t);
+-extern ssize_t ext3_listxattr(struct dentry *, char *, size_t);
+-extern int ext3_removexattr(struct dentry *, const char *);
+-
+-extern int ext3_xattr_get(struct inode *, int, const char *, void *, size_t);
+-extern int ext3_xattr_list(struct inode *, char *, size_t);
+-extern int ext3_xattr_set(struct inode *, int, const char *, const void *, size_t, int);
+-extern int ext3_xattr_set_handle(handle_t *, struct inode *, int, const char *,const void *,size_t,int);
+-extern int ext3_xattr_block_set(handle_t *, struct inode *, int, const char *,const void *,size_t,int);
+-
+-extern void ext3_xattr_delete_inode(handle_t *, struct inode *);
+-extern void ext3_xattr_put_super(struct super_block *);
+-
+-extern int init_ext3_xattr(void);
+-extern void exit_ext3_xattr(void);
+-
+-# else  /* CONFIG_EXT3_FS_XATTR */
+-#  define ext3_setxattr		NULL
+-#  define ext3_getxattr		NULL
+-#  define ext3_listxattr	NULL
+-#  define ext3_removexattr	NULL
+-
+-static inline int
+-ext3_xattr_get(struct inode *inode, int name_index, const char *name,
+-	       void *buffer, size_t size, int flags)
+-{
+-	return -EOPNOTSUPP;
+-}
+-
+-static inline int
+-ext3_xattr_list(struct inode *inode, void *buffer, size_t size)
+-{
+-	return -EOPNOTSUPP;
+-}
+-
+-static inline int
+-ext3_xattr_set(struct inode *inode, int name_index, const char *name,
+-	       const void *value, size_t size, int flags)
+-{
+-	return -EOPNOTSUPP;
+-}
+-
+-static inline int
+-ext3_xattr_set_handle(handle_t *handle, struct inode *inode, int name_index,
+-	       const char *name, const void *value, size_t size, int flags)
+-{
+-	return -EOPNOTSUPP;
+-}
+-
+-static inline void
+-ext3_xattr_delete_inode(handle_t *handle, struct inode *inode)
+-{
+-}
+-
+-static inline void
+-ext3_xattr_put_super(struct super_block *sb)
+-{
+-}
+-
+-static inline int
+-init_ext3_xattr(void)
+-{
+-	return 0;
+-}
+-
+-static inline void
+-exit_ext3_xattr(void)
+-{
+-}
+-
+-# endif  /* CONFIG_EXT3_FS_XATTR */
+-
+-extern struct ext3_xattr_handler ext3_xattr_user_handler;
+-extern struct ext3_xattr_handler ext3_xattr_trusted_handler;
+-extern struct ext3_xattr_handler ext3_xattr_security_handler;
+diff -rupN linux-2.6.4-51.0.orig/fs/ext3/xattr_security.c linux-2.6.4-51.0/fs/ext3/xattr_security.c
+--- linux-2.6.4-51.0.orig/fs/ext3/xattr_security.c	2004-04-05 19:41:59.000000000 +0300
++++ linux-2.6.4-51.0/fs/ext3/xattr_security.c	2004-04-07 11:06:22.000000000 +0300
+@@ -9,7 +9,7 @@
+ #include <linux/smp_lock.h>
+ #include <linux/ext3_jbd.h>
+ #include <linux/ext3_fs.h>
+-#include "xattr.h"
++#include <linux/ext3_xattr.h>
+ 
+ static size_t
+ ext3_xattr_security_list(char *list, struct inode *inode,
+diff -rupN linux-2.6.4-51.0.orig/fs/ext3/xattr_trusted.c linux-2.6.4-51.0/fs/ext3/xattr_trusted.c
+--- linux-2.6.4-51.0.orig/fs/ext3/xattr_trusted.c	2004-04-05 19:41:59.000000000 +0300
++++ linux-2.6.4-51.0/fs/ext3/xattr_trusted.c	2004-04-07 11:07:41.000000000 +0300
+@@ -11,7 +11,7 @@
+ #include <linux/smp_lock.h>
+ #include <linux/ext3_jbd.h>
+ #include <linux/ext3_fs.h>
+-#include "xattr.h"
++#include <linux/ext3_xattr.h>
+ 
+ #define XATTR_TRUSTED_PREFIX "trusted."
+ 
+diff -rupN linux-2.6.4-51.0.orig/fs/ext3/xattr_user.c linux-2.6.4-51.0/fs/ext3/xattr_user.c
+--- linux-2.6.4-51.0.orig/fs/ext3/xattr_user.c	2004-04-05 19:41:59.000000000 +0300
++++ linux-2.6.4-51.0/fs/ext3/xattr_user.c	2004-04-07 11:07:47.000000000 +0300
+@@ -11,7 +11,7 @@
+ #include <linux/smp_lock.h>
+ #include <linux/ext3_jbd.h>
+ #include <linux/ext3_fs.h>
+-#include "xattr.h"
++#include <linux/ext3_xattr.h>
+ 
+ #define XATTR_USER_PREFIX "user."
+ 
+diff -rupN linux-2.6.4-51.0.orig/include/linux/ext3_fs.h linux-2.6.4-51.0/include/linux/ext3_fs.h
+--- linux-2.6.4-51.0.orig/include/linux/ext3_fs.h	2004-04-06 22:17:15.000000000 +0300
++++ linux-2.6.4-51.0/include/linux/ext3_fs.h	2004-04-07 11:13:26.000000000 +0300
+@@ -741,6 +741,9 @@ extern void ext3_truncate (struct inode 
+ extern void ext3_set_inode_flags(struct inode *);
+ extern void ext3_set_aops(struct inode *inode);
+ 
++extern int ext3_get_inode_loc(struct inode *inode,
++		    	      struct ext3_iloc *iloc, int in_mem);
++
+ /* ioctl.c */
+ extern int ext3_ioctl (struct inode *, struct file *, unsigned int,
+ 		       unsigned long);
+diff -rupN linux-2.6.4-51.0.orig/include/linux/ext3_xattr.h linux-2.6.4-51.0/include/linux/ext3_xattr.h
+--- linux-2.6.4-51.0.orig/include/linux/ext3_xattr.h	1970-01-01 03:00:00.000000000 +0300
++++ linux-2.6.4-51.0/include/linux/ext3_xattr.h	2004-04-07 11:08:34.000000000 +0300
+@@ -0,0 +1,152 @@
++/*
++  File: linux/include/linux/ext3_xattr.h
++
++  On-disk format of extended attributes for the ext3 filesystem.
++
++  (C) 2001 Andreas Gruenbacher, <a.gruenbacher@computer.org>
++*/
++
++#ifndef _LINUX_EXT3_XATTR_H
++#define _LINUX_EXT3_XATTR_H
++
++#include <linux/config.h>
++#include <linux/xattr.h>
++
++/* Magic value in attribute blocks */
++#define EXT3_XATTR_MAGIC		0xEA020000
++
++/* Maximum number of references to one attribute block */
++#define EXT3_XATTR_REFCOUNT_MAX		1024
++
++/* Name indexes */
++#define EXT3_XATTR_INDEX_MAX			10
++#define EXT3_XATTR_INDEX_USER			1
++#define EXT3_XATTR_INDEX_POSIX_ACL_ACCESS	2
++#define EXT3_XATTR_INDEX_POSIX_ACL_DEFAULT	3
++#define EXT3_XATTR_INDEX_TRUSTED		4
++#define	EXT3_XATTR_INDEX_LUSTRE			5
++#define EXT3_XATTR_INDEX_SECURITY	        6
++
++struct ext3_xattr_header {
++	__u32	h_magic;	/* magic number for identification */
++	__u32	h_refcount;	/* reference count */
++	__u32	h_blocks;	/* number of disk blocks used */
++	__u32	h_hash;		/* hash value of all attributes */
++	__u32	h_reserved[4];	/* zero right now */
++};
++
++struct ext3_xattr_entry {
++	__u8	e_name_len;	/* length of name */
++	__u8	e_name_index;	/* attribute name index */
++	__u16	e_value_offs;	/* offset in disk block of value */
++	__u32	e_value_block;	/* disk block attribute is stored on (n/i) */
++	__u32	e_value_size;	/* size of attribute value */
++	__u32	e_hash;		/* hash value of name and value */
++	char	e_name[0];	/* attribute name */
++};
++
++#define EXT3_XATTR_PAD_BITS		2
++#define EXT3_XATTR_PAD		(1<<EXT3_XATTR_PAD_BITS)
++#define EXT3_XATTR_ROUND		(EXT3_XATTR_PAD-1)
++#define EXT3_XATTR_LEN(name_len) \
++	(((name_len) + EXT3_XATTR_ROUND + \
++	sizeof(struct ext3_xattr_entry)) & ~EXT3_XATTR_ROUND)
++#define EXT3_XATTR_NEXT(entry) \
++	( (struct ext3_xattr_entry *)( \
++	  (char *)(entry) + EXT3_XATTR_LEN((entry)->e_name_len)) )
++#define EXT3_XATTR_SIZE(size) \
++	(((size) + EXT3_XATTR_ROUND) & ~EXT3_XATTR_ROUND)
++
++# ifdef CONFIG_EXT3_FS_XATTR
++
++struct ext3_xattr_handler {
++	char *prefix;
++	size_t (*list)(char *list, struct inode *inode, const char *name,
++		       int name_len);
++	int (*get)(struct inode *inode, const char *name, void *buffer,
++		   size_t size);
++	int (*set)(struct inode *inode, const char *name, const void *buffer,
++		   size_t size, int flags);
++};
++
++extern int ext3_xattr_register(int, struct ext3_xattr_handler *);
++extern void ext3_xattr_unregister(int, struct ext3_xattr_handler *);
++
++extern int ext3_setxattr(struct dentry *, const char *, const void *, size_t, int);
++extern ssize_t ext3_getxattr(struct dentry *, const char *, void *, size_t);
++extern ssize_t ext3_listxattr(struct dentry *, char *, size_t);
++extern int ext3_removexattr(struct dentry *, const char *);
++
++extern int ext3_xattr_get(struct inode *, int, const char *, void *, size_t);
++extern int ext3_xattr_list(struct inode *, char *, size_t);
++extern int ext3_xattr_set(struct inode *, int, const char *, const void *, size_t, int);
++extern int ext3_xattr_set_handle(handle_t *, struct inode *, int, const char *,const void *,size_t,int);
++extern int ext3_xattr_block_set(handle_t *, struct inode *, int, const char *,const void *,size_t,int);
++
++extern void ext3_xattr_delete_inode(handle_t *, struct inode *);
++extern void ext3_xattr_put_super(struct super_block *);
++
++extern int init_ext3_xattr(void);
++extern void exit_ext3_xattr(void);
++
++# else  /* CONFIG_EXT3_FS_XATTR */
++#  define ext3_setxattr		NULL
++#  define ext3_getxattr		NULL
++#  define ext3_listxattr	NULL
++#  define ext3_removexattr	NULL
++
++static inline int
++ext3_xattr_get(struct inode *inode, int name_index, const char *name,
++	       void *buffer, size_t size, int flags)
++{
++	return -EOPNOTSUPP;
++}
++
++static inline int
++ext3_xattr_list(struct inode *inode, void *buffer, size_t size)
++{
++	return -EOPNOTSUPP;
++}
++
++static inline int
++ext3_xattr_set(struct inode *inode, int name_index, const char *name,
++	       const void *value, size_t size, int flags)
++{
++	return -EOPNOTSUPP;
++}
++
++static inline int
++ext3_xattr_set_handle(handle_t *handle, struct inode *inode, int name_index,
++	       const char *name, const void *value, size_t size, int flags)
++{
++	return -EOPNOTSUPP;
++}
++
++static inline void
++ext3_xattr_delete_inode(handle_t *handle, struct inode *inode)
++{
++}
++
++static inline void
++ext3_xattr_put_super(struct super_block *sb)
++{
++}
++
++static inline int
++init_ext3_xattr(void)
++{
++	return 0;
++}
++
++static inline void
++exit_ext3_xattr(void)
++{
++}
++
++# endif  /* CONFIG_EXT3_FS_XATTR */
++
++extern struct ext3_xattr_handler ext3_xattr_user_handler;
++extern struct ext3_xattr_handler ext3_xattr_trusted_handler;
++extern struct ext3_xattr_handler ext3_xattr_security_handler;
++
++#endif
