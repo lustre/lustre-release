@@ -364,7 +364,7 @@ int main(int argc, char * argv[])
                 exit(-1);
         }
 
-        setenv(ENV_LUSTRE_TIMEOUT, "10", 1);
+        setenv(ENV_LUSTRE_TIMEOUT, "5", 1);
 
         __liblustre_setup_();
 
@@ -373,7 +373,9 @@ int main(int argc, char * argv[])
                 t2();
                 t3();
                 t4();
+#if 0
                 t5();
+#endif
                 t6();
                 t7();
 

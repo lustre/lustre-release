@@ -316,9 +316,9 @@ extern void __liblustre_cleanup_(void);
 void usage(const char *cmd)
 {
         printf("Usage: \t%s --target mdsnid:/mdsname/profile -s mds_hostname "
-                "-b \"barrier cmd\" -f \"failover cmd\" --ssh \"ssh_cmd\"\n", cmd);
+                "-b \"barrier cmd\" -f \"failover cmd\" [--rsh \"rsh_cmd\"]\n", cmd);
         printf("       \t%s --dumpfile dumpfile -s mds_hostname -b \"barrier cmd\" "
-                "-f \"failover cmd\" --ssh \"ssh_cmd\"\n", cmd);
+                "-f \"failover cmd\" [--rsh \"rsh_cmd\"]\n", cmd);
         exit(-1);
 }
 
