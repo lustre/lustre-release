@@ -260,6 +260,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 
         *desc = *mdesc;
 
+        /* XXX We need a separate LOV 'service' UUID from the client device
+         *     UUID so that we can mount more than once on a client */
         if (!obd_uuid_equals(&obd->obd_uuid, &desc->ld_uuid)) {
                 CERROR("LOV desc: uuid %s not on mds device (%s)\n",
                        obd->obd_uuid.uuid, desc->ld_uuid.uuid);
@@ -742,6 +744,12 @@ static int lov_create(struct lustre_handle *conn, struct obdo *src_oa,
                         GOTO(out_done, rc = 0);
         }
 
+        if (obj_alloc == 0) {
+                if (rc == 0)
+                        rc = -EIO;
+                GOTO(out_cleanup, rc);
+        }
+
         /* If we were passed specific striping params, then a failure to
          * meet those requirements is an error, since we can't reallocate
          * that memory (it might be part of a larger array or something).
@@ -774,7 +782,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *src_oa,
                 }
 
                 CERROR("reallocating LSM for objid "LPX64": old %u new %u\n",
-                       lsm->lsm_object_id, obj_alloc, lsm->lsm_stripe_count);
+                       lsm->lsm_object_id, lsm->lsm_stripe_count, obj_alloc);
                 oldsize = lov_stripe_md_size(lsm->lsm_stripe_count);
                 newsize = lov_stripe_md_size(obj_alloc);
                 OBD_ALLOC(lsm_new, newsize);
@@ -788,6 +796,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *src_oa,
                 }
                 rc = 0;
         }
+        EXIT;
  out_done:
         *ea = lsm;
         if (src_oa->o_valid & OBD_MD_FLSIZE &&
@@ -1961,7 +1970,7 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                                        LPX64" on OST idx %d: rc = %d\n",
                                        lsm->lsm_object_id, loi->loi_id,
                                        loi->loi_ost_idx, rc);
-                                goto out_locks;
+                                GOTO(out_locks, rc);
                         }
                 }
         }
@@ -1995,7 +2004,7 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         }
  out_exp:
         class_export_put(export);
-        RETURN(rc);
+        return(rc);
 }
 
 static int lov_match(struct lustre_handle *conn, struct lov_stripe_md *lsm,
