@@ -28,12 +28,9 @@
 
 #ifdef OBD_CTXT_DEBUG
 /* Debugging check only needed during development */
-#define ASSERT_CTXT_MAGIC(magic) do { if ((magic) != OBD_RUN_CTXT_MAGIC) { \
-                                CERROR("bad ctxt magic\n"); LBUG(); } } while(0)
-#define ASSERT_NOT_KERNEL_CTXT(msg) do { if (segment_eq(get_fs(), get_ds())) { \
-                                        CERROR(msg); LBUG(); } } while(0)
-#define ASSERT_KERNEL_CTXT(msg) do { if (!segment_eq(get_fs(), get_ds())) { \
-                                        CERROR(msg); LBUG(); } } while(0)
+#define ASSERT_CTXT_MAGIC(magic) LASSERT((magic) == OBD_RUN_CTXT_MAGIC)
+#define ASSERT_NOT_KERNEL_CTXT(msg) LASSERT(!segment_eq(get_fs(), get_ds()))
+#define ASSERT_KERNEL_CTXT(msg) LASSERT(segment_eq(get_fs(), get_ds()))
 #else
 #define ASSERT_CTXT_MAGIC(magic) do {} while(0)
 #define ASSERT_NOT_KERNEL_CTXT(msg) do {} while(0)
@@ -56,6 +53,8 @@ void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new_ctx,
         */
 
         save->fs = get_fs();
+        LASSERT(atomic_read(&current->fs->pwd->d_count));
+        LASSERT(atomic_read(&new_ctx->pwd->d_count));
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
 
@@ -218,14 +217,19 @@ int lustre_fread(struct file *file, char *str, int len, loff_t *off)
  */
 int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off)
 {
+        ENTRY;
         ASSERT_KERNEL_CTXT("kernel doing write outside kernel context\n");
-        if (!file || !file->f_op || !off)
+        if (!file)
+                RETURN(-ENOENT);
+        if (!file->f_op)
                 RETURN(-ENOSYS);
+        if (!off)
+                RETURN(-EINVAL);
 
         if (!file->f_op->write)
                 RETURN(-EROFS);
 
-        return file->f_op->write(file, str, len, off);
+        RETURN(file->f_op->write(file, str, len, off));
 }
 
 /*
@@ -234,9 +238,10 @@ int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off)
  */
 int lustre_fsync(struct file *file)
 {
+        ENTRY;
         ASSERT_KERNEL_CTXT("kernel doing sync outside kernel context\n");
         if (!file || !file->f_op || !file->f_op->fsync)
                 RETURN(-ENOSYS);
 
-        return file->f_op->fsync(file, file->f_dentry, 0);
+        RETURN(file->f_op->fsync(file, file->f_dentry, 0));
 }
