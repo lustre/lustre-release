@@ -1,9 +1,9 @@
 # lustre.spec
-%define version 0.3.2.1
+%define version 0.4.4
 %define kversion @RELEASE@
 %define linuxdir @LINUX@
 %define portalsdir @PORTALS@
-Release: 2
+Release: 3
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -34,14 +34,13 @@ Group: Development/Kernel
 Lustre Lite Source for further development
 
 %prep
-%setup -n lustre-%{version}
+%setup -qn lustre-%{version}
 
 %build
 rm -rf $RPM_BUILD_ROOT
 
 # Set an explicit path to our Linux tree, if we can.
 ./configure --enable-linuxdir=%{linuxdir} --enable-portalsdir=%{portalsdir}
-make clean
 make
 
 %install
@@ -89,12 +88,14 @@ if [ ! -e /dev/obd ]; then
 fi
 depmod -ae || exit 0
 
-#
-# Modify /etc/modules.conf to add lusre rules
-# lustre_lite depends on llite.o
-# /dev/obd obdclass.o
-# obdclass depends on portals
-#  the rest should be loaded by kerneld automatically
+grep -q obdclass /etc/modules.conf || \
+	echo 'alias char-major-10-241 obdclass' >> /etc/modules.conf
+
+grep -q '/dev/obd' /etc/modules.conf || \
+	echo 'alias /dev/obd obdclass' >> /etc/modules.conf
+
+grep -q '/dev/lustre' /etc/modules.conf || \
+	echo 'alias /dev/lustre obdclass' >> /etc/modules.conf
 
 %postun
 depmod -ae || exit 0
