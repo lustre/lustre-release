@@ -1,4 +1,5 @@
 configurable-x86-stack-2.4.21-suse2.patch
+configurable-x86_64-2.4.21.patch
 dev_read_only_2.4.20-rh.patch
 exports_2.4.20-rh-hp.patch
 lustre_version.patch
@@ -15,7 +16,7 @@ extN-wantedi-2.4.21-suse2.patch
 ext3-san-2.4.20.patch
 ext3-map_inode_page-2.4.21-suse2.patch 
 ext3-error-export.patch
-iopen-2.4.19-suse.patch
+iopen-2.4.21-sles8sp3.patch
 tcp-zero-copy-2.4.21-suse2.patch 
 jbd-dont-account-blocks-twice.patch
 jbd-commit-tricks.patch
@@ -25,10 +26,11 @@ nfs_export_kernel-2.4.21-suse2.patch
 ext3-raw-lookup.patch
 ext3-ea-in-inode-2.4.21-suse2.patch
 listman-2.4.20.patch
-gfp_memalloc-2.4.24.patch 
 ext3-xattr-ptr-arith-fix.patch
 kernel_text_address-2.4.20-vanilla.patch 
 procfs-ndynamic-2.4.21-suse2.patch 
 ext3-truncate-buffer-head.patch
-qlogic-suse-2.4.21-2.patch
 loop-sync-2.4.21-suse.patch
+ext3-extents-2.4.21-suse2.patch 
+ext3-extents-asyncdel-2.4.24.patch
+ext3-mballoc-2.4.21-suse2.patch 

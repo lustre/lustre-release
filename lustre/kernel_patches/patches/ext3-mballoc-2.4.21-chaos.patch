@@ -1,7 +1,7 @@
-Index: linux-2.4.21-rs-2/fs/ext3/balloc.c
+Index: 57chaos/fs/ext3/balloc.c
 ===================================================================
---- linux-2.4.21-rs-2.orig/fs/ext3/balloc.c	2003-06-13 07:51:37.000000000 -0700
-+++ linux-2.4.21-rs-2/fs/ext3/balloc.c	2004-05-18 14:16:35.000000000 -0700
+--- 57chaos.orig/fs/ext3/balloc.c	2004-06-21 14:00:07.000000000 -0700
++++ 57chaos/fs/ext3/balloc.c	2004-06-21 14:19:56.000000000 -0700
 @@ -11,6 +11,7 @@
   *        David S. Miller (davem@caip.rutgers.edu), 1995
   */
@@ -10,7 +10,7 @@ Index: linux-2.4.21-rs-2/fs/ext3/balloc.c
  #include <linux/config.h>
  #include <linux/sched.h>
  #include <linux/fs.h>
-@@ -1007,3 +1008,303 @@
+@@ -1005,3 +1006,303 @@ void ext3_check_blocks_bitmap (struct su
  			bitmap_count);
  }
  #endif
@@ -314,12 +314,12 @@ Index: linux-2.4.21-rs-2/fs/ext3/balloc.c
 +
 +EXPORT_SYMBOL(ext3_new_blocks);
 +
-Index: linux-2.4.21-rs-2/fs/ext3/file.c
+Index: 57chaos/fs/ext3/file.c
 ===================================================================
---- linux-2.4.21-rs-2.orig/fs/ext3/file.c	2004-05-18 14:06:02.000000000 -0700
-+++ linux-2.4.21-rs-2/fs/ext3/file.c	2004-05-18 14:16:35.000000000 -0700
-@@ -70,6 +70,18 @@
- 	int ret, err;
+--- 57chaos.orig/fs/ext3/file.c	2004-06-21 14:00:07.000000000 -0700
++++ 57chaos/fs/ext3/file.c	2004-06-21 14:19:56.000000000 -0700
+@@ -71,6 +71,18 @@ ext3_file_write(struct file *file, const
+ 	ssize_t ret;
  	struct inode *inode = file->f_dentry->d_inode;
  
 +#if 0
@@ -337,24 +337,29 @@ Index: linux-2.4.21-rs-2/fs/ext3/file.c
  	ret = generic_file_write(file, buf, count, ppos);
  
  	/* Skip file flushing code if there was an error, or if nothing
-Index: linux-2.4.21-rs-2/fs/ext3/Makefile
+Index: 57chaos/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.21-rs-2.orig/fs/ext3/Makefile	2004-05-18 14:12:56.000000000 -0700
-+++ linux-2.4.21-rs-2/fs/ext3/Makefile	2004-05-18 14:16:46.000000000 -0700
-@@ -14,7 +14,7 @@
+--- 57chaos.orig/fs/ext3/Makefile	2004-06-21 14:17:11.000000000 -0700
++++ 57chaos/fs/ext3/Makefile	2004-06-21 14:20:30.000000000 -0700
+@@ -9,11 +9,11 @@
+ 
+ O_TARGET := ext3.o
+ 
+-export-objs := ext3-exports.o extents.o
++export-objs := ext3-exports.o extents.o balloc.o
+ 
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
  		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o \
- 		extents.o
--export-objs += extents.o
-+export-objs += extents.o balloc.o
- 
+-		extents.o
++		extents.o 
  obj-m    := $(O_TARGET)
  
-Index: linux-2.4.21-rs-2/include/linux/ext3_fs.h
+ export-objs += xattr.o
+Index: 57chaos/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.21-rs-2.orig/include/linux/ext3_fs.h	2004-05-18 14:13:24.000000000 -0700
-+++ linux-2.4.21-rs-2/include/linux/ext3_fs.h	2004-05-18 14:16:35.000000000 -0700
-@@ -58,6 +58,8 @@
+--- 57chaos.orig/include/linux/ext3_fs.h	2004-06-21 14:17:43.000000000 -0700
++++ 57chaos/include/linux/ext3_fs.h	2004-06-21 14:19:56.000000000 -0700
+@@ -60,6 +60,8 @@
  #define ext3_debug(f, a...)	do {} while (0)
  #endif
  
@@ -363,7 +368,7 @@ Index: linux-2.4.21-rs-2/include/linux/ext3_fs.h
  /*
   * Special inodes numbers
   */
-@@ -668,6 +670,7 @@
+@@ -668,6 +670,7 @@ extern void ext3_check_blocks_bitmap (st
  extern struct ext3_group_desc * ext3_get_group_desc(struct super_block * sb,
  						    unsigned int block_group,
  						    struct buffer_head ** bh);

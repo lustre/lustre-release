@@ -1,7 +1,7 @@
-Index: linux-2.4.19.SuSE/fs/ext3/namei.c
+Index: linux-2.4.19/fs/ext3/namei.c
 ===================================================================
---- linux-2.4.19.SuSE.orig/fs/ext3/namei.c	Sun Nov 16 01:14:50 2003
-+++ linux-2.4.19.SuSE/fs/ext3/namei.c	Sun Nov 16 01:18:04 2003
+--- linux-2.4.19.orig/fs/ext3/namei.c	2004-04-23 22:36:03.000000000 -0400
++++ linux-2.4.19/fs/ext3/namei.c	2004-04-23 22:37:37.000000000 -0400
 @@ -1751,8 +1751,8 @@
  	struct super_block *sb = inode->i_sb;
  	struct ext3_iloc iloc;
@@ -59,11 +59,11 @@ Index: linux-2.4.19.SuSE/fs/ext3/namei.c
  	return err;
  
  out_brelse:
-Index: linux-2.4.19.SuSE/fs/ext3/super.c
+Index: linux-2.4.19/fs/ext3/super.c
 ===================================================================
---- linux-2.4.19.SuSE.orig/fs/ext3/super.c	Sun Nov 16 00:40:59 2003
-+++ linux-2.4.19.SuSE/fs/ext3/super.c	Sun Nov 16 01:18:04 2003
-@@ -1182,6 +1182,7 @@
+--- linux-2.4.19.orig/fs/ext3/super.c	2004-04-23 22:30:41.000000000 -0400
++++ linux-2.4.19/fs/ext3/super.c	2004-04-23 22:36:22.000000000 -0400
+@@ -1179,6 +1179,7 @@
  	 */
  	sb->s_op = &ext3_sops;
  	INIT_LIST_HEAD(&sbi->s_orphan); /* unlinked but open files */
@@ -71,10 +71,10 @@ Index: linux-2.4.19.SuSE/fs/ext3/super.c
  
  	sb->s_root = 0;
  
-Index: linux-2.4.19.SuSE/include/linux/ext3_fs_sb.h
+Index: linux-2.4.19/include/linux/ext3_fs_sb.h
 ===================================================================
---- linux-2.4.19.SuSE.orig/include/linux/ext3_fs_sb.h	Sat Nov 15 23:58:28 2003
-+++ linux-2.4.19.SuSE/include/linux/ext3_fs_sb.h	Sun Nov 16 01:18:41 2003
+--- linux-2.4.19.orig/include/linux/ext3_fs_sb.h	2004-04-23 18:26:27.000000000 -0400
++++ linux-2.4.19/include/linux/ext3_fs_sb.h	2004-04-23 22:36:22.000000000 -0400
 @@ -69,6 +69,7 @@
  	struct inode * s_journal_inode;
  	struct journal_s * s_journal;

@@ -1,8 +1,8 @@
-Index: 69chaos/fs/ext3/namei.c
+Index: linux/fs/ext3/namei.c
 ===================================================================
---- 69chaos.orig/fs/ext3/namei.c	2004-08-24 23:56:04.000000000 -0700
-+++ 69chaos/fs/ext3/namei.c	2004-08-24 23:57:20.000000000 -0700
-@@ -1542,11 +1542,17 @@
+--- linux.orig/fs/ext3/namei.c	Wed Aug 25 11:34:25 2004
++++ linux/fs/ext3/namei.c	Wed Aug 25 13:16:03 2004
+@@ -1541,11 +1541,17 @@
  static inline void ext3_inc_count(handle_t *handle, struct inode *inode)
  {
  	inode->i_nlink++;
@@ -21,7 +21,7 @@ Index: 69chaos/fs/ext3/namei.c
  }
  
  static int ext3_add_nondir(handle_t *handle,
-@@ -1650,7 +1655,7 @@
+@@ -1646,7 +1651,7 @@
  	struct ext3_dir_entry_2 * de;
  	int err;
  
@@ -30,7 +30,7 @@ Index: 69chaos/fs/ext3/namei.c
  		return -EMLINK;
  
  	handle = ext3_journal_start(dir, EXT3_DATA_TRANS_BLOCKS +
-@@ -1672,7 +1677,7 @@
+@@ -1668,7 +1673,7 @@
  	inode->i_size = EXT3_I(inode)->i_disksize = inode->i_sb->s_blocksize;
  	dir_block = ext3_bread (handle, inode, 0, 1, &err);
  	if (!dir_block) {
@@ -39,7 +39,7 @@ Index: 69chaos/fs/ext3/namei.c
  		ext3_mark_inode_dirty(handle, inode);
  		iput (inode);
  		goto out_stop;
-@@ -1704,7 +1709,7 @@
+@@ -1700,7 +1705,7 @@
  		iput (inode);
  		goto out_stop;
  	}
@@ -48,7 +48,7 @@ Index: 69chaos/fs/ext3/namei.c
  	ext3_update_dx_flag(dir);
  	ext3_mark_inode_dirty(handle, dir);
  	d_instantiate(dentry, inode);
-@@ -1765,10 +1770,11 @@
+@@ -1761,10 +1766,11 @@
  			}
  			de = (struct ext3_dir_entry_2 *) bh->b_data;
  		}
@@ -64,7 +64,7 @@ Index: 69chaos/fs/ext3/namei.c
  		}
  		if (le32_to_cpu(de->inode)) {
  			brelse (bh);
-@@ -1960,14 +1966,14 @@
+@@ -1957,14 +1963,14 @@
  	retval = ext3_delete_entry(handle, dir, de, bh);
  	if (retval)
  		goto end_rmdir;
@@ -84,7 +84,7 @@ Index: 69chaos/fs/ext3/namei.c
  	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
  	ext3_mark_inode_dirty(handle, inode);
  	ext3_update_dx_flag(dir);
-@@ -2019,7 +2025,7 @@
+@@ -2016,7 +2022,7 @@
  	dir->i_ctime = dir->i_mtime = CURRENT_TIME;
  	ext3_update_dx_flag(dir);
  	ext3_mark_inode_dirty(handle, dir);
@@ -93,7 +93,7 @@ Index: 69chaos/fs/ext3/namei.c
  	if (!inode->i_nlink)
  		ext3_orphan_add(handle, inode);
  	inode->i_ctime = dir->i_ctime;
-@@ -2111,9 +2117,8 @@
+@@ -2108,9 +2114,8 @@
  	if (S_ISDIR(inode->i_mode))
  		return -EPERM;
  
@@ -104,7 +104,7 @@ Index: 69chaos/fs/ext3/namei.c
  
  	handle = ext3_journal_start(dir, EXT3_DATA_TRANS_BLOCKS +
  					EXT3_INDEX_EXTRA_TRANS_BLOCKS);
-@@ -2197,8 +2202,8 @@
+@@ -2194,8 +2199,8 @@
  		if (le32_to_cpu(PARENT_INO(dir_bh->b_data)) != old_dir->i_ino)
  			goto end_rename;
  		retval = -EMLINK;
@@ -115,7 +115,7 @@ Index: 69chaos/fs/ext3/namei.c
  			goto end_rename;
  	}
  	if (!new_bh) {
-@@ -2256,7 +2261,7 @@
+@@ -2253,7 +2258,7 @@
  	}
  
  	if (new_inode) {
@@ -124,7 +124,7 @@ Index: 69chaos/fs/ext3/namei.c
  		new_inode->i_ctime = CURRENT_TIME;
  	}
  	old_dir->i_ctime = old_dir->i_mtime = CURRENT_TIME;
-@@ -2267,11 +2272,11 @@
+@@ -2264,11 +2269,11 @@
  		PARENT_INO(dir_bh->b_data) = le32_to_cpu(new_dir->i_ino);
  		BUFFER_TRACE(dir_bh, "call ext3_journal_dirty_metadata");
  		ext3_journal_dirty_metadata(handle, dir_bh);
@@ -139,11 +139,11 @@ Index: 69chaos/fs/ext3/namei.c
  			ext3_update_dx_flag(new_dir);
  			ext3_mark_inode_dirty(handle, new_dir);
  		}
-Index: 69chaos/include/linux/ext3_fs.h
+Index: linux/include/linux/ext3_fs.h
 ===================================================================
---- 69chaos.orig/include/linux/ext3_fs.h	2004-08-24 23:55:45.000000000 -0700
-+++ 69chaos/include/linux/ext3_fs.h	2004-08-24 23:56:47.000000000 -0700
-@@ -44,7 +44,7 @@
+--- linux.orig/include/linux/ext3_fs.h	Wed Aug 25 11:34:27 2004
++++ linux/include/linux/ext3_fs.h	Wed Aug 25 13:14:48 2004
+@@ -42,7 +42,7 @@
  /*
   * Always enable hashed directories
   */
@@ -161,7 +161,7 @@ Index: 69chaos/include/linux/ext3_fs.h
  
  /*
   * Macro-instructions used to manage several block sizes
-@@ -582,14 +582,15 @@
+@@ -580,14 +580,15 @@
   */
  
  #ifdef CONFIG_EXT3_INDEX

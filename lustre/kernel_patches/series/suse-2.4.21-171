@@ -25,6 +25,5 @@ nfs_export_kernel-2.4.21-suse2.patch
 ext3-raw-lookup.patch
 ext3-ea-in-inode-2.4.21-suse2.patch
 listman-2.4.20.patch
-gfp_memalloc-2.4.24.patch 
 kernel_text_address-2.4.20-vanilla.patch 
 ext3-truncate-buffer-head.patch

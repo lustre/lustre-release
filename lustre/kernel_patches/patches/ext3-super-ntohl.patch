@@ -1,0 +1,16 @@
+diff -rupN linux-2.6.6.old/fs/ext3/super.c linux-2.6.6.new/fs/ext3/super.c
+--- linux-2.6.6.old/fs/ext3/super.c	Mon May 10 05:33:19 2004
++++ linux-2.6.6.new/fs/ext3/super.c	Thu Jun 24 12:28:24 2004
+@@ -1719,10 +1719,10 @@ static journal_t *ext3_get_dev_journal(s
+ 		printk(KERN_ERR "EXT3-fs: I/O error on journal device\n");
+ 		goto out_journal;
+ 	}
+-	if (ntohl(journal->j_superblock->s_nr_users) != 1) {
++	if (be32_to_cpu(journal->j_superblock->s_nr_users) != 1) {
+ 		printk(KERN_ERR "EXT3-fs: External journal has more than one "
+ 					"user (unsupported) - %d\n",
+-			ntohl(journal->j_superblock->s_nr_users));
++			be32_to_cpu(journal->j_superblock->s_nr_users));
+ 		goto out_journal;
+ 	}
+ 	EXT3_SB(sb)->journal_bdev = bdev;

@@ -1,8 +1,8 @@
-Index: linux-2.4.24/fs/ext3/extents.c
+Index: linux-2.4.21-15.EL/fs/ext3/extents.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/fs/ext3/extents.c	2004-09-12 19:57:09.000000000 +0400
-@@ -0,0 +1,2262 @@
+--- linux-2.4.21-15.EL.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.21-15.EL/fs/ext3/extents.c	2004-09-12 20:22:35.000000000 +0400
+@@ -0,0 +1,2271 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -39,13 +39,13 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +#include <linux/time.h>
 +#include <linux/ext3_jbd.h>
 +#include <linux/jbd.h>
-+#include <linux/locks.h>
 +#include <linux/smp_lock.h>
 +#include <linux/highuid.h>
 +#include <linux/pagemap.h>
 +#include <linux/quotaops.h>
 +#include <linux/string.h>
 +#include <linux/slab.h>
++#include <linux/locks.h>
 +#include <linux/ext3_extents.h>
 +#include <asm/uaccess.h>
 +
@@ -2068,7 +2068,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	return err;	
 +}
 +
-+void ext3_ext_truncate(struct inode * inode)
++void ext3_ext_truncate(struct inode * inode, struct page *page)
 +{
 +	struct address_space *mapping = inode->i_mapping;
 +	struct super_block *sb = inode->i_sb;
@@ -2085,9 +2085,11 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	err = ext3_writepage_trans_blocks(inode) + 3;
 +	handle = ext3_journal_start(inode, err);
 +	if (IS_ERR(handle))
-+		return;
++		goto out_unlock;
 +
-+	ext3_block_truncate_page(handle, mapping, inode->i_size);
++	if (page)
++		ext3_block_truncate_page(handle, mapping, inode->i_size, page, 
++					inode->i_sb->s_blocksize);
 +
 +	down_write(&EXT3_I(inode)->truncate_sem);
 +	ext3_ext_invalidate_cache(&tree);
@@ -2126,6 +2128,13 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +	up_write(&EXT3_I(inode)->truncate_sem);
 +	ext3_journal_stop(handle, inode);
++	return;
++	
++out_unlock:
++	if (page) {
++		UnlockPage(page);
++		page_cache_release(page);
++	}
 +}
 +
 +/*
@@ -2265,20 +2274,20 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +EXPORT_SYMBOL(ext3_ext_find_goal);
 +EXPORT_SYMBOL(ext3_ext_calc_credits_for_insert);
 +
-Index: linux-2.4.24/fs/ext3/ialloc.c
+Index: linux-2.4.21-15.EL/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/ialloc.c	2004-09-12 19:57:08.000000000 +0400
-+++ linux-2.4.24/fs/ext3/ialloc.c	2004-09-12 19:57:45.000000000 +0400
-@@ -592,10 +592,21 @@
+--- linux-2.4.21-15.EL.orig/fs/ext3/ialloc.c	2004-09-12 20:22:15.000000000 +0400
++++ linux-2.4.21-15.EL/fs/ext3/ialloc.c	2004-09-12 20:24:20.000000000 +0400
+@@ -596,9 +596,21 @@
  		iloc.bh = NULL;
  		goto fail;
  	}
 -	err = ext3_mark_iloc_dirty(handle, inode, &iloc);
 -	if (err) goto fail;
- 
-+ 	if (test_opt(sb, EXTENTS)) {
-+ 		EXT3_I(inode)->i_flags |= EXT3_EXTENTS_FL;
-+ 		ext3_extents_initialize_blockmap(handle, inode);
+  
++  	if (test_opt(sb, EXTENTS)) {
++  		EXT3_I(inode)->i_flags |= EXT3_EXTENTS_FL;
++  		ext3_extents_initialize_blockmap(handle, inode);
 +		if (!EXT3_HAS_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_EXTENTS)) {
 +			err = ext3_journal_get_write_access(handle, EXT3_SB(sb)->s_sbh);
 +			if (err) goto fail;
@@ -2286,71 +2295,72 @@ Index: linux-2.4.24/fs/ext3/ialloc.c
 +			BUFFER_TRACE(EXT3_SB(sb)->s_sbh, "call ext3_journal_dirty_metadata");
 +			err = ext3_journal_dirty_metadata(handle, EXT3_SB(sb)->s_sbh);
 +		}
-+ 	}
++  	}
++  
++ 	err = ext3_mark_iloc_dirty(handle, inode, &iloc);
++ 	if (err) goto fail;
  
-+	err = ext3_mark_iloc_dirty(handle, inode, &iloc);
-+	if (err) goto fail;
- 	
- 	unlock_super (sb);
- 	if(DQUOT_ALLOC_INODE(inode)) {
-Index: linux-2.4.24/fs/ext3/inode.c
+ 
+ #ifdef CONFIG_EXT3_FS_XATTR
+Index: linux-2.4.21-15.EL/fs/ext3/inode.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/inode.c	2004-09-12 19:57:09.000000000 +0400
-+++ linux-2.4.24/fs/ext3/inode.c	2004-09-12 19:57:09.000000000 +0400
-@@ -848,6 +848,15 @@
+--- linux-2.4.21-15.EL.orig/fs/ext3/inode.c	2004-09-12 20:22:29.000000000 +0400
++++ linux-2.4.21-15.EL/fs/ext3/inode.c	2004-09-12 20:22:35.000000000 +0400
+@@ -859,6 +859,16 @@
  	goto reread;
  }
  
 +static inline int
 +ext3_get_block_wrap(handle_t *handle, struct inode *inode, long block,
-+		struct buffer_head *bh, int create)
++		struct buffer_head *bh, int create, int extend_disksize)
 +{
 +	if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL)
 +		return ext3_ext_get_block(handle, inode, block, bh, create);
-+	return ext3_get_block_handle(handle, inode, block, bh, create);
++	return ext3_get_block_handle(handle, inode, block, bh, create,
++					extend_disksize);
 +}
 +
  /*
   * The BKL is not held on entry here.
   */
-@@ -861,7 +870,7 @@
+@@ -872,7 +882,7 @@
  		handle = ext3_journal_current_handle();
  		J_ASSERT(handle != 0);
  	}
--	ret = ext3_get_block_handle(handle, inode, iblock, bh_result, create);
-+	ret = ext3_get_block_wrap(handle, inode, iblock, bh_result, create);
+-	ret = ext3_get_block_handle(handle, inode, iblock,
++	ret = ext3_get_block_wrap(handle, inode, iblock,
+ 				bh_result, create, 1);
  	return ret;
  }
- 
-@@ -879,7 +888,7 @@
+@@ -921,7 +931,7 @@
  	dummy.b_state = 0;
  	dummy.b_blocknr = -1000;
  	buffer_trace_init(&dummy.b_history);
--	*errp = ext3_get_block_handle(handle, inode, block, &dummy, create);
-+	*errp = ext3_get_block_wrap(handle, inode, block, &dummy, create);
+-	*errp = ext3_get_block_handle(handle, inode, block, &dummy, create, 1);
++	*errp = ext3_get_block_wrap(handle, inode, block, &dummy, create, 1);
  	if (!*errp && buffer_mapped(&dummy)) {
  		struct buffer_head *bh;
  		bh = sb_getblk(inode->i_sb, dummy.b_blocknr);
-@@ -1403,7 +1412,7 @@
+@@ -1564,7 +1574,7 @@
   * This required during truncate. We need to physically zero the tail end
   * of that block so it doesn't yield old data if the file is later grown.
   */
 -static int ext3_block_truncate_page(handle_t *handle,
 +int ext3_block_truncate_page(handle_t *handle,
- 		struct address_space *mapping, loff_t from)
+ 				    struct address_space *mapping, loff_t from,
+ 				    struct page *page, unsigned blocksize)
  {
- 	unsigned long index = from >> PAGE_CACHE_SHIFT;
-@@ -1889,6 +1898,9 @@
- 
- 	ext3_discard_prealloc(inode);
- 
-+	if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL)
-+		return ext3_ext_truncate(inode);
+@@ -2049,6 +2059,9 @@
+ 		(inode->i_mapping, inode->i_size, blocksize);
+ 	if (IS_ERR(page))
+ 		return;
 +
++ 	if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL)
++ 		return ext3_ext_truncate(inode, page);
+ 	
  	handle = start_transaction(inode);
  	if (IS_ERR(handle))
- 		return;		/* AKPM: return what? */
-@@ -2537,6 +2549,9 @@
+@@ -2842,6 +2855,9 @@
  	int indirects = (EXT3_NDIR_BLOCKS % bpp) ? 5 : 3;
  	int ret;
  	
@@ -2360,52 +2370,55 @@ Index: linux-2.4.24/fs/ext3/inode.c
  	if (ext3_should_journal_data(inode))
  		ret = 3 * (bpp + indirects) + 2;
  	else
-@@ -2973,7 +2988,7 @@
+@@ -3166,7 +3182,7 @@
  
  	/* alloc blocks one by one */
  	for (i = 0; i < nblocks; i++) {
 -		ret = ext3_get_block_handle(handle, inode, blocks[i],
 +		ret = ext3_get_block_wrap(handle, inode, blocks[i],
- 						&bh_tmp, 1);
+ 						&bh_tmp, 1, 1);
  		if (ret)
  			break;
-@@ -3049,7 +3064,7 @@
+@@ -3242,7 +3258,7 @@
                  if (blocks[i] != 0)
                          continue;
  
--                rc = ext3_get_block_handle(handle, inode, iblock, &bh, 1);
-+                rc = ext3_get_block_wrap(handle, inode, iblock, &bh, 1);
+-                rc = ext3_get_block_handle(handle, inode, iblock, &bh, 1, 1);
++                rc = ext3_get_block_wrap(handle, inode, iblock, &bh, 1, 1);
                  if (rc) {
                          printk(KERN_INFO "ext3_map_inode_page: error %d "
                                 "allocating block %ld\n", rc, iblock);
-Index: linux-2.4.24/fs/ext3/Makefile
+Index: linux-2.4.21-15.EL/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/Makefile	2004-09-12 19:57:08.000000000 +0400
-+++ linux-2.4.24/fs/ext3/Makefile	2004-09-12 19:57:09.000000000 +0400
-@@ -13,7 +13,9 @@
+--- linux-2.4.21-15.EL.orig/fs/ext3/Makefile	2004-09-12 20:22:01.000000000 +0400
++++ linux-2.4.21-15.EL/fs/ext3/Makefile	2004-09-12 20:22:35.000000000 +0400
+@@ -9,10 +9,11 @@
+ 
+ O_TARGET := ext3.o
+ 
+-export-objs := ext3-exports.o
++export-objs := ext3-exports.o extents.o
  
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
- 		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o \
--		xattr_trusted.o
-+		xattr_trusted.o extents.o
-+export-objs += extents.o
-+
+-		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o
++		ioctl.o namei.o super.o symlink.o hash.o ext3-exports.o \
++		extents.o
  obj-m    := $(O_TARGET)
  
  export-objs += xattr.o
-Index: linux-2.4.24/fs/ext3/super.c
+Index: linux-2.4.21-15.EL/fs/ext3/super.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/super.c	2004-09-12 19:57:08.000000000 +0400
-+++ linux-2.4.24/fs/ext3/super.c	2004-09-12 19:57:09.000000000 +0400
-@@ -532,6 +532,7 @@
- #ifdef EXT3_DELETE_THREAD
-        J_ASSERT(sbi->s_delete_inodes == 0);
- #endif
+--- linux-2.4.21-15.EL.orig/fs/ext3/super.c	2004-09-12 20:22:15.000000000 +0400
++++ linux-2.4.21-15.EL/fs/ext3/super.c	2004-09-12 20:22:35.000000000 +0400
+@@ -648,6 +648,7 @@
+ 	int i;
+ 
+ 	J_ASSERT(sbi->s_delete_inodes == 0);
 +	ext3_ext_release(sb);
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -704,6 +705,10 @@
+@@ -851,6 +852,10 @@
  				return 0;
  			}
  		}
@@ -2416,7 +2429,7 @@ Index: linux-2.4.24/fs/ext3/super.c
  		else if (!strcmp (this_char, "grpid") ||
  			 !strcmp (this_char, "bsdgroups"))
  			set_opt (*mount_options, GRPID);
-@@ -1395,6 +1400,8 @@
+@@ -1546,6 +1551,8 @@
  		test_opt(sb,DATA_FLAGS) == EXT3_MOUNT_ORDERED_DATA ? "ordered":
  		"writeback");
  
@@ -2425,11 +2438,11 @@ Index: linux-2.4.24/fs/ext3/super.c
  	return sb;
  
  failed_mount3:
-Index: linux-2.4.24/fs/ext3/ioctl.c
+Index: linux-2.4.21-15.EL/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/ioctl.c	2004-09-12 19:57:07.000000000 +0400
-+++ linux-2.4.24/fs/ext3/ioctl.c	2004-09-12 19:57:09.000000000 +0400
-@@ -174,6 +174,10 @@
+--- linux-2.4.21-15.EL.orig/fs/ext3/ioctl.c	2004-09-12 20:21:53.000000000 +0400
++++ linux-2.4.21-15.EL/fs/ext3/ioctl.c	2004-09-12 20:22:35.000000000 +0400
+@@ -173,6 +173,10 @@
  			return ret;
  		}
  #endif
@@ -2440,11 +2453,11 @@ Index: linux-2.4.24/fs/ext3/ioctl.c
  	default:
  		return -ENOTTY;
  	}
-Index: linux-2.4.24/include/linux/ext3_fs.h
+Index: linux-2.4.21-15.EL/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-09-12 19:57:08.000000000 +0400
-+++ linux-2.4.24/include/linux/ext3_fs.h	2004-09-12 19:57:45.000000000 +0400
-@@ -184,6 +184,7 @@
+--- linux-2.4.21-15.EL.orig/include/linux/ext3_fs.h	2004-09-12 20:22:15.000000000 +0400
++++ linux-2.4.21-15.EL/include/linux/ext3_fs.h	2004-09-12 20:23:38.000000000 +0400
+@@ -188,6 +188,7 @@
  #define EXT3_IMAGIC_FL			0x00002000 /* AFS directory */
  #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
  #define EXT3_RESERVED_FL		0x80000000 /* reserved for ext3 lib */
@@ -2452,7 +2465,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
  
  #define EXT3_FL_USER_VISIBLE		0x00005FFF /* User visible flags */
  #define EXT3_FL_USER_MODIFIABLE		0x000000FF /* User modifiable flags */
-@@ -208,6 +209,9 @@
+@@ -212,6 +213,9 @@
  #ifdef CONFIG_JBD_DEBUG
  #define EXT3_IOC_WAIT_FOR_READONLY	_IOR('f', 99, long)
  #endif
@@ -2462,7 +2475,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
  
  /*
   * Structure of an inode on the disk
-@@ -327,6 +331,8 @@
+@@ -332,6 +336,8 @@
  #define EXT3_MOUNT_ASYNCDEL		0x20000 /* Delayed deletion */
  #define EXT3_MOUNT_IOPEN		0x40000	/* Allow access via iopen */
  #define EXT3_MOUNT_IOPEN_NOPRIV		0x80000	/* Make iopen world-readable */
@@ -2471,7 +2484,7 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
-@@ -503,10 +509,12 @@
+@@ -504,10 +510,12 @@
  #define EXT3_FEATURE_INCOMPAT_FILETYPE		0x0002
  #define EXT3_FEATURE_INCOMPAT_RECOVER		0x0004 /* Needs recovery */
  #define EXT3_FEATURE_INCOMPAT_JOURNAL_DEV	0x0008 /* Journal device */
@@ -2485,15 +2498,16 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
  #define EXT3_FEATURE_RO_COMPAT_SUPP	(EXT3_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT3_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT3_FEATURE_RO_COMPAT_BTREE_DIR)
-@@ -688,6 +696,7 @@
+@@ -689,6 +697,8 @@
  extern unsigned long ext3_count_free (struct buffer_head *, unsigned);
  
  /* inode.c */
-+extern int ext3_block_truncate_page(handle_t *, struct address_space *, loff_t);
++int ext3_block_truncate_page(handle_t *, struct address_space *, loff_t,
++				    struct page *, unsigned);
  extern int ext3_forget(handle_t *, int, struct inode *, struct buffer_head *, int);
  extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
  extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
-@@ -769,6 +778,14 @@
+@@ -770,6 +780,14 @@
  extern struct inode_operations ext3_symlink_inode_operations;
  extern struct inode_operations ext3_fast_symlink_inode_operations;
  
@@ -2501,17 +2515,17 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
 +extern int ext3_ext_writepage_trans_blocks(struct inode *, int);
 +extern int ext3_ext_get_block(handle_t *, struct inode *, long,
 +				struct buffer_head *, int);
-+extern void ext3_ext_truncate(struct inode *);
++extern void ext3_ext_truncate(struct inode *, struct page *);
 +extern void ext3_ext_init(struct super_block *);
 +extern void ext3_ext_release(struct super_block *);
 +extern void ext3_extents_initialize_blockmap(handle_t *, struct inode *);
  
  #endif	/* __KERNEL__ */
  
-Index: linux-2.4.24/include/linux/ext3_extents.h
+Index: linux-2.4.21-15.EL/include/linux/ext3_extents.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/include/linux/ext3_extents.h	2004-09-12 19:57:09.000000000 +0400
+--- linux-2.4.21-15.EL.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.21-15.EL/include/linux/ext3_extents.h	2004-09-12 20:22:35.000000000 +0400
 @@ -0,0 +1,237 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
@@ -2750,11 +2764,11 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 +
 +#endif /* _LINUX_EXT3_EXTENTS */
 +
-Index: linux-2.4.24/include/linux/ext3_fs_i.h
+Index: linux-2.4.21-15.EL/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/ext3_fs_i.h	2004-09-12 19:57:08.000000000 +0400
-+++ linux-2.4.24/include/linux/ext3_fs_i.h	2004-09-12 19:57:09.000000000 +0400
-@@ -76,6 +76,8 @@
+--- linux-2.4.21-15.EL.orig/include/linux/ext3_fs_i.h	2004-09-12 20:22:15.000000000 +0400
++++ linux-2.4.21-15.EL/include/linux/ext3_fs_i.h	2004-09-12 20:22:35.000000000 +0400
+@@ -90,6 +90,8 @@
  	 * by other means, so we have truncate_sem.
  	 */
  	struct rw_semaphore truncate_sem;

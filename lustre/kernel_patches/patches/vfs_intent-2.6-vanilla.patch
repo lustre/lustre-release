@@ -136,18 +136,26 @@ Index: linux-2.6.6-vanilla/fs/namei.c
  			dput(next.dentry);
  			mntput(next.mnt);
  			if (err)
-@@ -705,14 +751,26 @@
+@@ -705,14 +751,34 @@
  				inode = nd->dentry->d_inode;
  				/* fallthrough */
  			case 1:
-+ 				nd->flags |= LOOKUP_LAST;
-+ 				err = revalidate_special(nd);
-+ 				nd->flags &= ~LOOKUP_LAST;
++				nd->flags |= LOOKUP_LAST;
++				err = revalidate_special(nd);
++				nd->flags &= ~LOOKUP_LAST;
 +				if (!nd->dentry->d_inode)
 +					err = -ENOENT;
 +				if (err) {
-+ 					path_release(nd);
++					path_release(nd);
 +					goto return_err;
++				}
++				if (lookup_flags & LOOKUP_DIRECTORY) {
++					err = -ENOTDIR;
++					if(!nd->dentry->d_inode->i_op ||
++					  !nd->dentry->d_inode->i_op->lookup) {
++						path_release(nd);
++						goto return_err;
++					}
 +				}
  				goto return_reval;
  		}
@@ -638,7 +646,7 @@ Index: linux-2.6.6-vanilla/include/linux/fs.h
  	spinlock_t		f_ep_lock;
  #endif /* #ifdef CONFIG_EPOLL */
  	struct address_space	*f_mapping;
-+ 	struct lookup_intent    *f_it;
++	struct lookup_intent    *f_it;
  };
  extern spinlock_t files_lock;
  #define file_list_lock() spin_lock(&files_lock);

@@ -113,7 +113,7 @@ Index: linux-2.6.0/fs/ext3/xattr.c
 +	if (EXT3_SB(inode->i_sb)->s_inode_size <= EXT3_GOOD_OLD_INODE_SIZE)
 +		return -ENOENT;
 +
-+	ret = ext3_get_inode_loc(inode, &iloc);
++	ret = ext3_get_inode_loc(inode, &iloc, 1);
 +	if (ret)
 +		return ret;
 +	raw_inode = ext3_raw_inode(&iloc);
@@ -215,15 +215,6 @@ Index: linux-2.6.0/fs/ext3/xattr.c
  	error = 0;
  	if (!EXT3_I(inode)->i_file_acl)
  		goto cleanup;
-@@ -380,7 +469,7 @@
- 	if (!bh)
- 		goto cleanup;
- 	ea_bdebug(bh, "b_count=%d, refcount=%d",
--		atomic_read(&(bh->b_count)), le32_to_cpu(HDR(bh)->h_refcount));
-+		(int) atomic_read(&(bh->b_count)), (int) le32_to_cpu(HDR(bh)->h_refcount));
- 	end = bh->b_data + bh->b_size;
- 	if (HDR(bh)->h_magic != cpu_to_le32(EXT3_XATTR_MAGIC) ||
- 	    HDR(bh)->h_blocks != cpu_to_le32(1)) {
 @@ -431,11 +520,138 @@
  
  cleanup:
@@ -251,7 +242,7 @@ Index: linux-2.6.0/fs/ext3/xattr.c
 +	if (EXT3_SB(inode->i_sb)->s_inode_size <= EXT3_GOOD_OLD_INODE_SIZE)
 +		return 0;
 +
-+	ret = ext3_get_inode_loc(inode, &iloc);
++	ret = ext3_get_inode_loc(inode, &iloc, 1);
 +	if (ret)
 +		return ret;
 +	raw_inode = ext3_raw_inode(&iloc);
@@ -388,7 +379,7 @@ Index: linux-2.6.0/fs/ext3/xattr.c
 +	if (EXT3_SB(inode->i_sb)->s_inode_size <= EXT3_GOOD_OLD_INODE_SIZE)
 +		return ret;
 +
-+	err = ext3_get_inode_loc(inode, &iloc);
++	err = ext3_get_inode_loc(inode, &iloc, 1);
 +	if (err)
 +		return -EIO;
 +	raw_inode = ext3_raw_inode(&iloc);
@@ -519,7 +510,7 @@ Index: linux-2.6.0/fs/ext3/xattr.c
 +	if (EXT3_SB(inode->i_sb)->s_inode_size <= EXT3_GOOD_OLD_INODE_SIZE)
 +		return -ENOSPC;
 +
-+	err = ext3_get_inode_loc(inode, &iloc);
++	err = ext3_get_inode_loc(inode, &iloc, 1);
 +	if (err)
 +		return err;
 +	raw_inode = ext3_raw_inode(&iloc);
@@ -807,6 +798,14 @@ Index: linux-2.6.0/include/linux/ext3_fs.h
  };
  
  #define i_size_high	i_dir_acl
+@@ -721,6 +723,7 @@
+ extern int ext3_forget(handle_t *, int, struct inode *, struct buffer_head *, int);
+ extern struct buffer_head * ext3_getblk (handle_t *, struct inode *, long, int, int *);
+ extern struct buffer_head * ext3_bread (handle_t *, struct inode *, int, int, int *);
++int ext3_get_inode_loc(struct inode *inode, struct ext3_iloc *iloc, int in_mem);
+ 
+ extern void ext3_read_inode (struct inode *);
+ extern void ext3_write_inode (struct inode *, int);
 Index: linux-2.6.0/include/linux/ext3_fs_i.h
 ===================================================================
 --- linux-2.6.0.orig/include/linux/ext3_fs_i.h	2003-12-30 08:32:44.000000000 +0300

@@ -263,7 +263,7 @@ Index: linux-2.4.20/fs/namei.c
  int follow_down(struct vfsmount **mnt, struct dentry **dentry)
  {
 -	return __follow_down(mnt,dentry);
-+	return __follow_down(mnt,dentry,NULL);
++	return __follow_down(mnt, dentry, NULL);
  }
   
  static inline void follow_dotdot(struct nameidata *nd)
@@ -286,7 +286,7 @@ Index: linux-2.4.20/fs/namei.c
  {
  	struct dentry *dentry;
  	struct inode *inode;
-@@ -526,19 +579,18 @@
+@@ -526,18 +579,18 @@
  				break;
  		}
  		/* This does the actual lookups.. */
@@ -304,11 +304,10 @@ Index: linux-2.4.20/fs/namei.c
  		}
  		/* Check mountpoints.. */
 -		while (d_mountpoint(dentry) && __follow_down(&nd->mnt, &dentry))
--			;
-+		while (d_mountpoint(dentry) && __follow_down(&nd->mnt, &dentry, NULL));
++		while (d_mountpoint(dentry) && __follow_down(&nd->mnt, &dentry, NULL))
+ 			;
  
  		err = -ENOENT;
- 		inode = dentry->d_inode;
 @@ -549,7 +601,7 @@
  			goto out_dput;
  

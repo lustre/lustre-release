@@ -12,6 +12,47 @@
  kernel/ksyms.c            |    1 
  12 files changed, 558 insertions(+), 128 deletions(-)
 
+Index: linux-2.4.24/fs/dcache.c
+===================================================================
+--- linux-2.4.24.orig/fs/dcache.c	Fri Jun 13 07:51:37 2003
++++ linux-2.4.24/fs/dcache.c	Wed Mar 17 17:36:14 2004
+@@ -181,6 +181,13 @@ int d_invalidate(struct dentry * dentry)
+ 		spin_unlock(&dcache_lock);
+ 		return 0;
+ 	}
++
++	/* network invalidation by Lustre */
++	if (dentry->d_flags & DCACHE_LUSTRE_INVALID) {
++		spin_unlock(&dcache_lock);
++		return 0;
++	}
++
+ 	/*
+ 	 * Check whether to do a partial shrink_dcache
+ 	 * to get rid of unused child entries.
+@@ -830,13 +837,19 @@ void d_delete(struct dentry * dentry)
+  * Adds a dentry to the hash according to its name.
+  */
+  
+-void d_rehash(struct dentry * entry)
++void __d_rehash(struct dentry * entry, int lock)
+ {
+ 	struct list_head *list = d_hash(entry->d_parent, entry->d_name.hash);
+ 	if (!list_empty(&entry->d_hash)) BUG();
+-	spin_lock(&dcache_lock);
++	if (lock) spin_lock(&dcache_lock);
+ 	list_add(&entry->d_hash, list);
+-	spin_unlock(&dcache_lock);
++	if (lock) spin_unlock(&dcache_lock);
++}
++EXPORT_SYMBOL(__d_rehash);
++
++void d_rehash(struct dentry * entry)
++{
++	__d_rehash(entry, 1);
+ }
+ 
+ #define do_switch(x,y) do { \
 Index: linux-2.4.24/fs/exec.c
 ===================================================================
 --- linux-2.4.24.orig/fs/exec.c	Fri Nov 28 10:26:21 2003
@@ -77,164 +118,6 @@ Index: linux-2.4.24/fs/exec.c
  		goto close_fail;
  
  	retval = binfmt->core_dump(signr, regs, file);
-Index: linux-2.4.24/fs/dcache.c
-===================================================================
---- linux-2.4.24.orig/fs/dcache.c	Fri Jun 13 07:51:37 2003
-+++ linux-2.4.24/fs/dcache.c	Wed Mar 17 17:36:14 2004
-@@ -181,6 +181,13 @@ int d_invalidate(struct dentry * dentry)
- 		spin_unlock(&dcache_lock);
- 		return 0;
- 	}
-+
-+	/* network invalidation by Lustre */
-+	if (dentry->d_flags & DCACHE_LUSTRE_INVALID) {
-+		spin_unlock(&dcache_lock);
-+		return 0;
-+	}
-+
- 	/*
- 	 * Check whether to do a partial shrink_dcache
- 	 * to get rid of unused child entries.
-@@ -830,13 +837,19 @@ void d_delete(struct dentry * dentry)
-  * Adds a dentry to the hash according to its name.
-  */
-  
--void d_rehash(struct dentry * entry)
-+void __d_rehash(struct dentry * entry, int lock)
- {
- 	struct list_head *list = d_hash(entry->d_parent, entry->d_name.hash);
- 	if (!list_empty(&entry->d_hash)) BUG();
--	spin_lock(&dcache_lock);
-+	if (lock) spin_lock(&dcache_lock);
- 	list_add(&entry->d_hash, list);
--	spin_unlock(&dcache_lock);
-+	if (lock) spin_unlock(&dcache_lock);
-+}
-+EXPORT_SYMBOL(__d_rehash);
-+
-+void d_rehash(struct dentry * entry)
-+{
-+	__d_rehash(entry, 1);
- }
- 
- #define do_switch(x,y) do { \
-Index: linux-2.4.24/fs/namespace.c
-===================================================================
---- linux-2.4.24.orig/fs/namespace.c	Fri Nov 28 10:26:21 2003
-+++ linux-2.4.24/fs/namespace.c	Wed Mar 17 17:36:14 2004
-@@ -98,6 +98,7 @@ static void detach_mnt(struct vfsmount *
- {
- 	old_nd->dentry = mnt->mnt_mountpoint;
- 	old_nd->mnt = mnt->mnt_parent;
-+	UNPIN(old_nd->dentry, old_nd->mnt, 1);
- 	mnt->mnt_parent = mnt;
- 	mnt->mnt_mountpoint = mnt->mnt_root;
- 	list_del_init(&mnt->mnt_child);
-@@ -109,6 +110,7 @@ static void attach_mnt(struct vfsmount *
- {
- 	mnt->mnt_parent = mntget(nd->mnt);
- 	mnt->mnt_mountpoint = dget(nd->dentry);
-+	PIN(nd->dentry, nd->mnt, 1);
- 	list_add(&mnt->mnt_hash, mount_hashtable+hash(nd->mnt, nd->dentry));
- 	list_add_tail(&mnt->mnt_child, &nd->mnt->mnt_mounts);
- 	nd->dentry->d_mounted++;
-@@ -488,14 +490,17 @@ static int do_loopback(struct nameidata 
- {
- 	struct nameidata old_nd;
- 	struct vfsmount *mnt = NULL;
-+	struct lookup_intent it = { .it_op = IT_GETATTR };
- 	int err = mount_is_safe(nd);
- 	if (err)
- 		return err;
- 	if (!old_name || !*old_name)
- 		return -EINVAL;
--	err = path_lookup(old_name, LOOKUP_POSITIVE|LOOKUP_FOLLOW, &old_nd);
--	if (err)
-+	err = path_lookup_it(old_name, LOOKUP_POSITIVE|LOOKUP_FOLLOW, &old_nd, &it);
-+	if (err) {
-+		intent_release(&it);
- 		return err;
-+	}
- 
- 	down_write(&current->namespace->sem);
- 	err = -EINVAL;
-@@ -518,6 +523,7 @@ static int do_loopback(struct nameidata 
- 	}
- 
- 	up_write(&current->namespace->sem);
-+	intent_release(&it);
- 	path_release(&old_nd);
- 	return err;
- }
-@@ -701,6 +707,7 @@ long do_mount(char * dev_name, char * di
- 		  unsigned long flags, void *data_page)
- {
- 	struct nameidata nd;
-+	struct lookup_intent it = { .it_op = IT_GETATTR };
- 	int retval = 0;
- 	int mnt_flags = 0;
- 
-@@ -725,10 +732,11 @@ long do_mount(char * dev_name, char * di
- 	flags &= ~(MS_NOSUID|MS_NOEXEC|MS_NODEV);
- 
- 	/* ... and get the mountpoint */
--	retval = path_lookup(dir_name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd);
--	if (retval)
-+	retval = path_lookup_it(dir_name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd, &it);
-+	if (retval) {
-+		intent_release(&it);
- 		return retval;
--
-+	}
- 	if (flags & MS_REMOUNT)
- 		retval = do_remount(&nd, flags & ~MS_REMOUNT, mnt_flags,
- 				    data_page);
-@@ -739,6 +747,8 @@ long do_mount(char * dev_name, char * di
- 	else
- 		retval = do_add_mount(&nd, type_page, flags, mnt_flags,
- 				      dev_name, data_page);
-+
-+	intent_release(&it);
- 	path_release(&nd);
- 	return retval;
- }
-@@ -904,6 +914,8 @@ asmlinkage long sys_pivot_root(const cha
- {
- 	struct vfsmount *tmp;
- 	struct nameidata new_nd, old_nd, parent_nd, root_parent, user_nd;
-+	struct lookup_intent new_it = { .it_op = IT_GETATTR };
-+	struct lookup_intent old_it = { .it_op = IT_GETATTR };
- 	int error;
- 
- 	if (!capable(CAP_SYS_ADMIN))
-@@ -911,14 +923,14 @@ asmlinkage long sys_pivot_root(const cha
- 
- 	lock_kernel();
- 
--	error = __user_walk(new_root, LOOKUP_POSITIVE|LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &new_nd);
-+	error = __user_walk_it(new_root, LOOKUP_POSITIVE|LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &new_nd, &new_it);
- 	if (error)
- 		goto out0;
- 	error = -EINVAL;
- 	if (!check_mnt(new_nd.mnt))
- 		goto out1;
- 
--	error = __user_walk(put_old, LOOKUP_POSITIVE|LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &old_nd);
-+	error = __user_walk_it(put_old, LOOKUP_POSITIVE|LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &old_nd, &old_it);
- 	if (error)
- 		goto out1;
- 
-@@ -973,8 +985,10 @@ out2:
- 	up(&old_nd.dentry->d_inode->i_zombie);
- 	up_write(&current->namespace->sem);
- 	path_release(&user_nd);
-+	intent_release(&old_it);
- 	path_release(&old_nd);
- out1:
-+	intent_release(&new_it);
- 	path_release(&new_nd);
- out0:
- 	unlock_kernel();
 Index: linux-2.4.24/fs/namei.c
 ===================================================================
 --- linux-2.4.24.orig/fs/namei.c	Mon Aug 25 04:44:43 2003
@@ -992,6 +875,123 @@ Index: linux-2.4.24/fs/namei.c
  	if (page) {
  		kunmap(page);
  		page_cache_release(page);
+Index: linux-2.4.24/fs/namespace.c
+===================================================================
+--- linux-2.4.24.orig/fs/namespace.c	Fri Nov 28 10:26:21 2003
++++ linux-2.4.24/fs/namespace.c	Wed Mar 17 17:36:14 2004
+@@ -98,6 +98,7 @@ static void detach_mnt(struct vfsmount *
+ {
+ 	old_nd->dentry = mnt->mnt_mountpoint;
+ 	old_nd->mnt = mnt->mnt_parent;
++	UNPIN(old_nd->dentry, old_nd->mnt, 1);
+ 	mnt->mnt_parent = mnt;
+ 	mnt->mnt_mountpoint = mnt->mnt_root;
+ 	list_del_init(&mnt->mnt_child);
+@@ -109,6 +110,7 @@ static void attach_mnt(struct vfsmount *
+ {
+ 	mnt->mnt_parent = mntget(nd->mnt);
+ 	mnt->mnt_mountpoint = dget(nd->dentry);
++	PIN(nd->dentry, nd->mnt, 1);
+ 	list_add(&mnt->mnt_hash, mount_hashtable+hash(nd->mnt, nd->dentry));
+ 	list_add_tail(&mnt->mnt_child, &nd->mnt->mnt_mounts);
+ 	nd->dentry->d_mounted++;
+@@ -488,14 +490,17 @@ static int do_loopback(struct nameidata 
+ {
+ 	struct nameidata old_nd;
+ 	struct vfsmount *mnt = NULL;
++	struct lookup_intent it = { .it_op = IT_GETATTR };
+ 	int err = mount_is_safe(nd);
+ 	if (err)
+ 		return err;
+ 	if (!old_name || !*old_name)
+ 		return -EINVAL;
+-	err = path_lookup(old_name, LOOKUP_POSITIVE|LOOKUP_FOLLOW, &old_nd);
+-	if (err)
++	err = path_lookup_it(old_name, LOOKUP_POSITIVE|LOOKUP_FOLLOW, &old_nd, &it);
++	if (err) {
++		intent_release(&it);
+ 		return err;
++	}
+ 
+ 	down_write(&current->namespace->sem);
+ 	err = -EINVAL;
+@@ -518,6 +523,7 @@ static int do_loopback(struct nameidata 
+ 	}
+ 
+ 	up_write(&current->namespace->sem);
++	intent_release(&it);
+ 	path_release(&old_nd);
+ 	return err;
+ }
+@@ -701,6 +707,7 @@ long do_mount(char * dev_name, char * di
+ 		  unsigned long flags, void *data_page)
+ {
+ 	struct nameidata nd;
++	struct lookup_intent it = { .it_op = IT_GETATTR };
+ 	int retval = 0;
+ 	int mnt_flags = 0;
+ 
+@@ -725,10 +732,11 @@ long do_mount(char * dev_name, char * di
+ 	flags &= ~(MS_NOSUID|MS_NOEXEC|MS_NODEV);
+ 
+ 	/* ... and get the mountpoint */
+-	retval = path_lookup(dir_name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd);
+-	if (retval)
++	retval = path_lookup_it(dir_name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, &nd, &it);
++	if (retval) {
++		intent_release(&it);
+ 		return retval;
+-
++	}
+ 	if (flags & MS_REMOUNT)
+ 		retval = do_remount(&nd, flags & ~MS_REMOUNT, mnt_flags,
+ 				    data_page);
+@@ -739,6 +747,8 @@ long do_mount(char * dev_name, char * di
+ 	else
+ 		retval = do_add_mount(&nd, type_page, flags, mnt_flags,
+ 				      dev_name, data_page);
++
++	intent_release(&it);
+ 	path_release(&nd);
+ 	return retval;
+ }
+@@ -904,6 +914,8 @@ asmlinkage long sys_pivot_root(const cha
+ {
+ 	struct vfsmount *tmp;
+ 	struct nameidata new_nd, old_nd, parent_nd, root_parent, user_nd;
++	struct lookup_intent new_it = { .it_op = IT_GETATTR };
++	struct lookup_intent old_it = { .it_op = IT_GETATTR };
+ 	int error;
+ 
+ 	if (!capable(CAP_SYS_ADMIN))
+@@ -911,14 +923,14 @@ asmlinkage long sys_pivot_root(const cha
+ 
+ 	lock_kernel();
+ 
+-	error = __user_walk(new_root, LOOKUP_POSITIVE|LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &new_nd);
++	error = __user_walk_it(new_root, LOOKUP_POSITIVE|LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &new_nd, &new_it);
+ 	if (error)
+ 		goto out0;
+ 	error = -EINVAL;
+ 	if (!check_mnt(new_nd.mnt))
+ 		goto out1;
+ 
+-	error = __user_walk(put_old, LOOKUP_POSITIVE|LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &old_nd);
++	error = __user_walk_it(put_old, LOOKUP_POSITIVE|LOOKUP_FOLLOW|LOOKUP_DIRECTORY, &old_nd, &old_it);
+ 	if (error)
+ 		goto out1;
+ 
+@@ -973,8 +985,10 @@ out2:
+ 	up(&old_nd.dentry->d_inode->i_zombie);
+ 	up_write(&current->namespace->sem);
+ 	path_release(&user_nd);
++	intent_release(&old_it);
+ 	path_release(&old_nd);
+ out1:
++	intent_release(&new_it);
+ 	path_release(&new_nd);
+ out0:
+ 	unlock_kernel();
 Index: linux-2.4.24/fs/open.c
 ===================================================================
 --- linux-2.4.24.orig/fs/open.c	Mon Aug 25 04:44:43 2003
@@ -1803,36 +1803,6 @@ Index: linux-2.4.24/include/linux/fs_struct.h
  		dput(old_pwd);
  		mntput(old_pwdmnt);
  	}
-Index: linux-2.4.24/kernel/ksyms.c
-===================================================================
---- linux-2.4.24.orig/kernel/ksyms.c	Wed Mar 17 17:36:14 2004
-+++ linux-2.4.24/kernel/ksyms.c	Wed Mar 17 17:36:14 2004
-@@ -275,6 +275,7 @@ EXPORT_SYMBOL(set_page_dirty);
- EXPORT_SYMBOL(mark_page_accessed);
- EXPORT_SYMBOL(vfs_readlink);
- EXPORT_SYMBOL(vfs_follow_link);
-+EXPORT_SYMBOL(vfs_follow_link_it);
- EXPORT_SYMBOL(page_readlink);
- EXPORT_SYMBOL(page_follow_link);
- EXPORT_SYMBOL(page_symlink_inode_operations);
-Index: linux-2.4.24/kernel/fork.c
-===================================================================
---- linux-2.4.24.orig/kernel/fork.c	Fri Nov 28 10:26:21 2003
-+++ linux-2.4.24/kernel/fork.c	Wed Mar 17 17:36:14 2004
-@@ -386,10 +386,13 @@ static inline struct fs_struct *__copy_f
- 		fs->umask = old->umask;
- 		read_lock(&old->lock);
- 		fs->rootmnt = mntget(old->rootmnt);
-+		PIN(old->pwd, old->pwdmnt, 0);
-+		PIN(old->root, old->rootmnt, 1);
- 		fs->root = dget(old->root);
- 		fs->pwdmnt = mntget(old->pwdmnt);
- 		fs->pwd = dget(old->pwd);
- 		if (old->altroot) {
-+			PIN(old->altroot, old->altrootmnt, 1);
- 			fs->altrootmnt = mntget(old->altrootmnt);
- 			fs->altroot = dget(old->altroot);
- 		} else {
 Index: linux-2.4.24/kernel/exit.c
 ===================================================================
 --- linux-2.4.24.orig/kernel/exit.c	Thu Nov 28 15:53:15 2002
@@ -1852,3 +1822,33 @@ Index: linux-2.4.24/kernel/exit.c
  			dput(fs->altroot);
  			mntput(fs->altrootmnt);
  		}
+Index: linux-2.4.24/kernel/fork.c
+===================================================================
+--- linux-2.4.24.orig/kernel/fork.c	Fri Nov 28 10:26:21 2003
++++ linux-2.4.24/kernel/fork.c	Wed Mar 17 17:36:14 2004
+@@ -386,10 +386,13 @@ static inline struct fs_struct *__copy_f
+ 		fs->umask = old->umask;
+ 		read_lock(&old->lock);
+ 		fs->rootmnt = mntget(old->rootmnt);
++		PIN(old->pwd, old->pwdmnt, 0);
++		PIN(old->root, old->rootmnt, 1);
+ 		fs->root = dget(old->root);
+ 		fs->pwdmnt = mntget(old->pwdmnt);
+ 		fs->pwd = dget(old->pwd);
+ 		if (old->altroot) {
++			PIN(old->altroot, old->altrootmnt, 1);
+ 			fs->altrootmnt = mntget(old->altrootmnt);
+ 			fs->altroot = dget(old->altroot);
+ 		} else {
+Index: linux-2.4.24/kernel/ksyms.c
+===================================================================
+--- linux-2.4.24.orig/kernel/ksyms.c	Wed Mar 17 17:36:14 2004
++++ linux-2.4.24/kernel/ksyms.c	Wed Mar 17 17:36:14 2004
+@@ -275,6 +275,7 @@ EXPORT_SYMBOL(set_page_dirty);
+ EXPORT_SYMBOL(mark_page_accessed);
+ EXPORT_SYMBOL(vfs_readlink);
+ EXPORT_SYMBOL(vfs_follow_link);
++EXPORT_SYMBOL(vfs_follow_link_it);
+ EXPORT_SYMBOL(page_readlink);
+ EXPORT_SYMBOL(page_follow_link);
+ EXPORT_SYMBOL(page_symlink_inode_operations);

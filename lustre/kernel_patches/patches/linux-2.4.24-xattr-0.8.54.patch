@@ -1738,7 +1738,7 @@ Index: linux-2.4.24-vanilla/fs/ext2/xattr.c
 +		} else if (old_bh && header == HDR(old_bh)) {
 +			/* Keep this block. */
 +			new_bh = old_bh;
-+			ext2_xattr_cache_insert(new_bh);
++			(void)ext2_xattr_cache_insert(new_bh);
 +		} else {
 +			/* We need to allocate a new block */
 +			int force = EXT2_I(inode)->i_file_acl != 0;
@@ -1757,7 +1757,7 @@ Index: linux-2.4.24-vanilla/fs/ext2/xattr.c
 +			memcpy(new_bh->b_data, header, new_bh->b_size);
 +			mark_buffer_uptodate(new_bh, 1);
 +			unlock_buffer(new_bh);
-+			ext2_xattr_cache_insert(new_bh);
++			(void)ext2_xattr_cache_insert(new_bh);
 +			
 +			ext2_xattr_update_super_block(sb);
 +		}
@@ -3426,7 +3426,7 @@ Index: linux-2.4.24-vanilla/fs/ext3/xattr.c
 +		} else if (old_bh && header == HDR(old_bh)) {
 +			/* Keep this block. */
 +			new_bh = old_bh;
-+			ext3_xattr_cache_insert(new_bh);
++			(void)ext3_xattr_cache_insert(new_bh);
 +		} else {
 +			/* We need to allocate a new block */
 +			int force = EXT3_I(inode)->i_file_acl != 0;
@@ -3451,7 +3451,7 @@ Index: linux-2.4.24-vanilla/fs/ext3/xattr.c
 +			memcpy(new_bh->b_data, header, new_bh->b_size);
 +			mark_buffer_uptodate(new_bh, 1);
 +			unlock_buffer(new_bh);
-+			ext3_xattr_cache_insert(new_bh);
++			(void)ext3_xattr_cache_insert(new_bh);
 +			
 +			ext3_xattr_update_super_block(handle, sb);
 +		}
