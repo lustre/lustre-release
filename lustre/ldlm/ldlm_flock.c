@@ -128,7 +128,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
         int overlaps = 0;
         ENTRY;
 
-        CDEBUG(D_DLMTRACE, "flags: 0x%x pid: %d mode: %d start: %llu end: %llu"
+        CDEBUG(D_DLMTRACE, "flags %#x pid %u mode %u start "LPU64" end "LPU64
                "\n", *flags, new->l_policy_data.l_flock.pid, mode,
                req->l_policy_data.l_flock.start,
                req->l_policy_data.l_flock.end);
