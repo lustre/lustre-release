@@ -6,3 +6,16 @@ vfs_intent_hp.patch
 invalidate_show.patch
 export-truncate.patch
 iod-stock-24-exports_hp.patch
+ext-2.4-patch-1.patch
+ext-2.4-patch-2.patch
+ext-2.4-patch-3.patch
+ext-2.4-patch-4.patch
+linux-2.4.20-xattr-0.8.54-hp.patch
+ext3-2.4.20-fixes.patch
+ext3-2.4-ino_t.patch
+ext3-largefile.patch
+ext3-truncate_blocks.patch
+ext3-unmount_sync.patch
+ext3-use-after-free.patch
+extN-wantedi.patch
+extN-san.patch
