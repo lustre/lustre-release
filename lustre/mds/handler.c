@@ -51,7 +51,7 @@ static int mds_bulk_timeout(void *data)
         struct ptlrpc_bulk_desc *desc = data;
         
         ENTRY;
-        CERROR("(not yet) starting recovery of client %p\n", desc->b_client);
+        CERROR("(not yet) starting recovery of client %p\n", desc->bd_client);
         RETURN(1);
 }
 
@@ -84,10 +84,10 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         if (rc != PAGE_SIZE)
                 GOTO(cleanup_buf, rc = -EIO);
 
-        bulk->b_xid = req->rq_xid;
-        bulk->b_buf = buf;
-        bulk->b_buflen = PAGE_SIZE;
-        desc->b_portal = MDS_BULK_PORTAL;
+        bulk->bp_xid = req->rq_xid;
+        bulk->bp_buf = buf;
+        bulk->bp_buflen = PAGE_SIZE;
+        desc->bd_portal = MDS_BULK_PORTAL;
 
         rc = ptlrpc_send_bulk(desc);
         if (rc)
@@ -101,7 +101,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         }
 
         lwi = LWI_TIMEOUT(obd_timeout * HZ, mds_bulk_timeout, desc);
-        rc = l_wait_event(desc->b_waitq, desc->b_flags & PTL_BULK_FL_SENT, &lwi);
+        rc = l_wait_event(desc->bd_waitq, desc->bd_flags & PTL_BULK_FL_SENT, &lwi);
         if (rc) {
                 if (rc != -ETIMEDOUT)
                         LBUG();

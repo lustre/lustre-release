@@ -311,11 +311,11 @@ static void unmap_and_decref_bulk_desc(void *data)
         ENTRY;
 
         /* This feels wrong to me. */
-        list_for_each(tmp, &desc->b_page_list) {
+        list_for_each(tmp, &desc->bd_page_list) {
                 struct ptlrpc_bulk_page *bulk;
-                bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
+                bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
 
-                kunmap(bulk->b_page);
+                kunmap(bulk->bp_page);
         }
 
         ptlrpc_bulk_decref(desc);
@@ -328,8 +328,8 @@ static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
         int err = 0;
         ENTRY;
 
-        if (desc->b_flags & PTL_RPC_FL_TIMEOUT) {
-                err = (desc->b_flags & PTL_RPC_FL_INTR ? -ERESTARTSYS : 
+        if (desc->bd_flags & PTL_RPC_FL_TIMEOUT) {
+                err = (desc->bd_flags & PTL_RPC_FL_INTR ? -ERESTARTSYS : 
                        -ETIMEDOUT);
         }
 
@@ -341,9 +341,9 @@ static void brw_finish(struct ptlrpc_bulk_desc *desc, void *data)
 
         /* We can't kunmap the desc from interrupt context, so we do it from
          * the bottom half above. */
-        INIT_TQUEUE(&desc->b_queue, 0, 0);
-        PREPARE_TQUEUE(&desc->b_queue, unmap_and_decref_bulk_desc, desc);
-        schedule_task(&desc->b_queue);
+        INIT_TQUEUE(&desc->bd_queue, 0, 0);
+        PREPARE_TQUEUE(&desc->bd_queue, unmap_and_decref_bulk_desc, desc);
+        schedule_task(&desc->bd_queue);
 
         EXIT;
 }
@@ -377,8 +377,8 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
         desc = ptlrpc_prep_bulk(connection);
         if (!desc)
                 GOTO(out_req, rc = -ENOMEM);
-        desc->b_portal = OST_BULK_PORTAL;
-        desc->b_cb = brw_finish;
+        desc->bd_portal = OST_BULK_PORTAL;
+        desc->bd_cb = brw_finish;
         OBD_ALLOC(cb_data, sizeof(*cb_data));
         if (!cb_data)
                 GOTO(out_desc, rc = -ENOMEM);
@@ -386,7 +386,7 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
         cb_data->callback = callback;
         cb_data->cb_data = data;
         data->desc = desc;
-        desc->b_cb_data = cb_data;
+        desc->bd_cb_data = cb_data;
 
         iooptr = lustre_msg_buf(request->rq_reqmsg, 1);
         nioptr = lustre_msg_buf(request->rq_reqmsg, 2);
@@ -402,13 +402,13 @@ static int osc_brw_read(struct lustre_handle *conn, struct lov_stripe_md *md,
                 if (bulk == NULL)
                         GOTO(out_unmap, rc = -ENOMEM);
 
-                bulk->b_xid = xid;           /* single xid for all pages */
+                bulk->bp_xid = xid;           /* single xid for all pages */
 
-                bulk->b_buf = kmap(pga[mapped].pg);
-                bulk->b_page = pga[mapped].pg;
-                bulk->b_buflen = PAGE_SIZE;
+                bulk->bp_buf = kmap(pga[mapped].pg);
+                bulk->bp_page = pga[mapped].pg;
+                bulk->bp_buflen = PAGE_SIZE;
                 ost_pack_niobuf(&nioptr, pga[mapped].off, pga[mapped].count,
-                                pga[mapped].flag, bulk->b_xid);
+                                pga[mapped].flag, bulk->bp_xid);
         }
 
         /*
@@ -494,8 +494,8 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
         desc = ptlrpc_prep_bulk(connection);
         if (!desc)
                 GOTO(out_req, rc = -ENOMEM);
-        desc->b_portal = OSC_BULK_PORTAL;
-        desc->b_cb = brw_finish;
+        desc->bd_portal = OSC_BULK_PORTAL;
+        desc->bd_cb = brw_finish;
         OBD_ALLOC(cb_data, sizeof(*cb_data));
         if (!cb_data)
                 GOTO(out_desc, rc = -ENOMEM);
@@ -503,7 +503,7 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
         cb_data->callback = callback;
         cb_data->cb_data = data;
         data->desc = desc;
-        desc->b_cb_data = cb_data;
+        desc->bd_cb_data = cb_data;
 
         iooptr = lustre_msg_buf(request->rq_reqmsg, 1);
         nioptr = lustre_msg_buf(request->rq_reqmsg, 2);
@@ -551,13 +551,13 @@ static int osc_brw_write(struct lustre_handle *conn, struct lov_stripe_md *md,
                 if (!bulk)
                         GOTO(out_unmap, rc = -ENOMEM);
 
-                bulk->b_buf = (void *)(unsigned long)local[j].addr;
-                bulk->b_buflen = local[j].len;
-                bulk->b_xid = remote->xid;
-                bulk->b_page = pga[j].pg;
+                bulk->bp_buf = (void *)(unsigned long)local[j].addr;
+                bulk->bp_buflen = local[j].len;
+                bulk->bp_xid = remote->xid;
+                bulk->bp_page = pga[j].pg;
         }
 
-        if (desc->b_page_count != page_count)
+        if (desc->bd_page_count != page_count)
                 LBUG();
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OSC_BRW_WRITE_BULK))

@@ -92,10 +92,10 @@ ptlrpc_get_bulk_iov (struct ptlrpc_bulk_desc *desc)
 {
         struct iovec *iov;
         
-        if (desc->b_page_count <= sizeof (desc->b_iov)/sizeof (struct iovec))
-                return (desc->b_iov);
+        if (desc->bd_page_count <= sizeof (desc->bd_iov)/sizeof (struct iovec))
+                return (desc->bd_iov);
         
-        OBD_ALLOC (iov, desc->b_page_count * sizeof (struct iovec));
+        OBD_ALLOC (iov, desc->bd_page_count * sizeof (struct iovec));
         if (iov == NULL)
                 LBUG();
         
@@ -105,10 +105,10 @@ ptlrpc_get_bulk_iov (struct ptlrpc_bulk_desc *desc)
 static inline void
 ptlrpc_put_bulk_iov (struct ptlrpc_bulk_desc *desc, struct iovec *iov)
 {
-        if (desc->b_page_count <= sizeof (desc->b_iov)/sizeof (struct iovec))
+        if (desc->bd_page_count <= sizeof (desc->bd_iov)/sizeof (struct iovec))
                 return;
 
-        OBD_FREE (iov, desc->b_page_count * sizeof (struct iovec));
+        OBD_FREE (iov, desc->bd_page_count * sizeof (struct iovec));
 }
 
 int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
@@ -124,35 +124,35 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
         if (iov == NULL)
                 RETURN (-ENOMEM);
 
-        desc->b_md.start = iov;
-        desc->b_md.niov = 0;
-        desc->b_md.length = 0;
-        desc->b_md.eventq = bulk_source_eq;
-        desc->b_md.threshold = 2; /* SENT and ACK */
-        desc->b_md.options = PTL_MD_OP_PUT | PTL_MD_IOV;
-        desc->b_md.user_ptr = desc;
+        desc->bd_md.start = iov;
+        desc->bd_md.niov = 0;
+        desc->bd_md.length = 0;
+        desc->bd_md.eventq = bulk_source_eq;
+        desc->bd_md.threshold = 2; /* SENT and ACK */
+        desc->bd_md.options = PTL_MD_OP_PUT | PTL_MD_IOV;
+        desc->bd_md.user_ptr = desc;
 
-        list_for_each_safe(tmp, next, &desc->b_page_list) {
+        list_for_each_safe(tmp, next, &desc->bd_page_list) {
                 struct ptlrpc_bulk_page *bulk;
-                bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
+                bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
 
-                LASSERT (desc->b_md.niov < desc->b_page_count);
+                LASSERT (desc->bd_md.niov < desc->bd_page_count);
 
-                if (desc->b_md.niov == 0)
-                        xid = bulk->b_xid;
-                LASSERT (xid == bulk->b_xid);   /* should all be the same */
+                if (desc->bd_md.niov == 0)
+                        xid = bulk->bp_xid;
+                LASSERT (xid == bulk->bp_xid);   /* should all be the same */
                 
-                iov[desc->b_md.niov].iov_base = bulk->b_buf;
-                iov[desc->b_md.niov].iov_len = bulk->b_buflen;
-                desc->b_md.niov++;
-                desc->b_md.length += bulk->b_buflen;
+                iov[desc->bd_md.niov].iov_base = bulk->bp_buf;
+                iov[desc->bd_md.niov].iov_len = bulk->bp_buflen;
+                desc->bd_md.niov++;
+                desc->bd_md.length += bulk->bp_buflen;
         }
         
-        LASSERT (desc->b_md.niov == desc->b_page_count);
-        LASSERT (desc->b_md.niov != 0);
+        LASSERT (desc->bd_md.niov == desc->bd_page_count);
+        LASSERT (desc->bd_md.niov != 0);
         
-        rc = PtlMDBind(desc->b_connection->c_peer.peer_ni, desc->b_md,
-                       &desc->b_md_h);
+        rc = PtlMDBind(desc->bd_connection->c_peer.peer_ni, desc->bd_md,
+                       &desc->bd_md_h);
 
         ptlrpc_put_bulk_iov (desc, iov);        /* move down to reduce latency to send */
 
@@ -162,19 +162,19 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *desc)
                 RETURN(rc);
         }
         
-        remote_id.nid = desc->b_connection->c_peer.peer_nid;
+        remote_id.nid = desc->bd_connection->c_peer.peer_nid;
         remote_id.pid = 0;
         
         CDEBUG(D_NET, "Sending %u pages %u bytes to portal %d nid %Lx pid %d xid %d\n",
-               desc->b_md.niov, desc->b_md.length, 
-               desc->b_portal, remote_id.nid, remote_id.pid, xid);
+               desc->bd_md.niov, desc->bd_md.length, 
+               desc->bd_portal, remote_id.nid, remote_id.pid, xid);
         
-        rc = PtlPut(desc->b_md_h, PTL_ACK_REQ, remote_id,
-                    desc->b_portal, 0, xid, 0, 0);
+        rc = PtlPut(desc->bd_md_h, PTL_ACK_REQ, remote_id,
+                    desc->bd_portal, 0, xid, 0, 0);
         if (rc != PTL_OK) {
                 CERROR("PtlPut(%Lu, %d, %d) failed: %d\n",
-                       remote_id.nid, desc->b_portal, xid, rc);
-                PtlMDUnlink(desc->b_md_h);
+                       remote_id.nid, desc->bd_portal, xid, rc);
+                PtlMDUnlink(desc->bd_md_h);
                 LBUG();
                 RETURN(rc);
         }
@@ -194,36 +194,36 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
         if (iov == NULL)
                 return (-ENOMEM);
 
-        desc->b_md.start = iov;
-        desc->b_md.niov = 0;
-        desc->b_md.length = 0;
-        desc->b_md.threshold = 1;
-        desc->b_md.options = PTL_MD_OP_PUT | PTL_MD_IOV;
-        desc->b_md.user_ptr = desc;
-        desc->b_md.eventq = bulk_sink_eq;
+        desc->bd_md.start = iov;
+        desc->bd_md.niov = 0;
+        desc->bd_md.length = 0;
+        desc->bd_md.threshold = 1;
+        desc->bd_md.options = PTL_MD_OP_PUT | PTL_MD_IOV;
+        desc->bd_md.user_ptr = desc;
+        desc->bd_md.eventq = bulk_sink_eq;
 
-        list_for_each_safe(tmp, next, &desc->b_page_list) {
+        list_for_each_safe(tmp, next, &desc->bd_page_list) {
                 struct ptlrpc_bulk_page *bulk;
-                bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
+                bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
 
-                LASSERT (desc->b_md.niov < desc->b_page_count);
+                LASSERT (desc->bd_md.niov < desc->bd_page_count);
 
-                if (desc->b_md.niov == 0)
-                        xid = bulk->b_xid;
-                LASSERT (xid == bulk->b_xid);   /* should all be the same */
+                if (desc->bd_md.niov == 0)
+                        xid = bulk->bp_xid;
+                LASSERT (xid == bulk->bp_xid);   /* should all be the same */
                 
-                iov[desc->b_md.niov].iov_base = bulk->b_buf;
-                iov[desc->b_md.niov].iov_len = bulk->b_buflen;
-                desc->b_md.niov++;
-                desc->b_md.length += bulk->b_buflen;
+                iov[desc->bd_md.niov].iov_base = bulk->bp_buf;
+                iov[desc->bd_md.niov].iov_len = bulk->bp_buflen;
+                desc->bd_md.niov++;
+                desc->bd_md.length += bulk->bp_buflen;
         }
 
-        LASSERT (desc->b_md.niov == desc->b_page_count);
-        LASSERT (desc->b_md.niov != 0);
+        LASSERT (desc->bd_md.niov == desc->bd_page_count);
+        LASSERT (desc->bd_md.niov != 0);
         
-        rc = PtlMEAttach(desc->b_connection->c_peer.peer_ni,
-                         desc->b_portal, local_id, xid, 0,
-                         PTL_UNLINK, PTL_INS_AFTER, &desc->b_me_h);
+        rc = PtlMEAttach(desc->bd_connection->c_peer.peer_ni,
+                         desc->bd_portal, local_id, xid, 0,
+                         PTL_UNLINK, PTL_INS_AFTER, &desc->bd_me_h);
 
         ptlrpc_put_bulk_iov (desc, iov);
 
@@ -233,8 +233,8 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
                 GOTO(cleanup, rc);
         }
         
-        rc = PtlMDAttach(desc->b_me_h, desc->b_md, PTL_UNLINK,
-                         &desc->b_md_h);
+        rc = PtlMDAttach(desc->bd_me_h, desc->bd_md, PTL_UNLINK,
+                         &desc->bd_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
                 LBUG();
@@ -242,8 +242,8 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *desc)
         }
         
         CDEBUG(D_NET, "Setup bulk sink buffers: %u pages %u bytes, xid %u, "
-               "portal %u\n", desc->b_md.niov, desc->b_md.length, 
-               xid, desc->b_portal);
+               "portal %u\n", desc->bd_md.niov, desc->bd_md.length, 
+               xid, desc->bd_portal);
 
         RETURN(0);
 
@@ -257,8 +257,8 @@ int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 {
         /* This should be safe: these handles are initialized to be
          * invalid in ptlrpc_prep_bulk() */
-        PtlMDUnlink(desc->b_md_h);
-        PtlMEUnlink(desc->b_me_h);
+        PtlMDUnlink(desc->bd_md_h);
+        PtlMEUnlink(desc->bd_me_h);
 
         return 0;
 }

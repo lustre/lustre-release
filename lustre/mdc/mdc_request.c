@@ -441,10 +441,10 @@ int mdc_readpage(struct lustre_handle *conn, obd_id ino, int type, __u64 offset,
                 GOTO(out2, rc = -ENOMEM);
 
         bulk = ptlrpc_prep_bulk_page(desc);
-        bulk->b_buflen = PAGE_SIZE;
-        bulk->b_buf = addr;
-        bulk->b_xid = req->rq_xid;
-        desc->b_portal = MDS_BULK_PORTAL;
+        bulk->bp_buflen = PAGE_SIZE;
+        bulk->bp_buf = addr;
+        bulk->bp_xid = req->rq_xid;
+        desc->bd_portal = MDS_BULK_PORTAL;
 
         rc = ptlrpc_register_bulk(desc);
         if (rc) {

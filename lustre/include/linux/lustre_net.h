@@ -137,38 +137,38 @@ struct ptlrpc_request {
 };
 
 struct ptlrpc_bulk_page {
-        struct ptlrpc_bulk_desc *b_desc;
-        struct list_head b_link;
-        void *b_buf;
-        int b_buflen;
-        struct page *b_page;
-        __u32 b_xid;
-        __u32 b_flags;
-        struct dentry *b_dentry;
-        int (*b_cb)(struct ptlrpc_bulk_page *);
+        struct ptlrpc_bulk_desc *bp_desc;
+        struct list_head bp_link;
+        void *bp_buf;
+        int bp_buflen;
+        struct page *bp_page;
+        __u32 bp_xid;
+        __u32 bp_flags;
+        struct dentry *bp_dentry;
+        int (*bp_cb)(struct ptlrpc_bulk_page *);
 };
 
 struct ptlrpc_bulk_desc {
-        int b_flags;
-        struct ptlrpc_connection *b_connection;
-        struct ptlrpc_client *b_client;
-        __u32 b_portal;
-        struct lustre_handle b_conn;
-        void (*b_cb)(struct ptlrpc_bulk_desc *, void *);
-        void *b_cb_data;
+        int bd_flags;
+        struct ptlrpc_connection *bd_connection;
+        struct ptlrpc_client *bd_client;
+        __u32 bd_portal;
+        struct lustre_handle bd_conn;
+        void (*bd_cb)(struct ptlrpc_bulk_desc *, void *);
+        void *bd_cb_data;
 
-        wait_queue_head_t b_waitq;
-        struct list_head b_page_list;
-        __u32 b_page_count;
-        atomic_t b_refcount;
-        void *b_desc_private;
-        struct tq_struct b_queue;
+        wait_queue_head_t bd_waitq;
+        struct list_head bd_page_list;
+        __u32 bd_page_count;
+        atomic_t bd_refcount;
+        void *bd_desc_private;
+        struct tq_struct bd_queue;
 
-        ptl_md_t b_md;
-        ptl_handle_md_t b_md_h;
-        ptl_handle_me_t b_me_h;
+        ptl_md_t bd_md;
+        ptl_handle_md_t bd_md_h;
+        ptl_handle_me_t bd_me_h;
 
-        struct iovec b_iov[16];    /* self-sized pre-allocated iov */
+        struct iovec bd_iov[16];    /* self-sized pre-allocated iov */
 };
 
 struct ptlrpc_thread {
@@ -286,20 +286,20 @@ void *lustre_msg_buf(struct lustre_msg *m, int n);
 
 static inline void ptlrpc_bulk_decref(struct ptlrpc_bulk_desc *desc)
 {
-        if (atomic_dec_and_test(&desc->b_refcount)) {
+        if (atomic_dec_and_test(&desc->bd_refcount)) {
                 CDEBUG(D_PAGE, "Released last ref on %p, freeing\n", desc);
                 ptlrpc_free_bulk(desc);
         } else {
                 CDEBUG(D_PAGE, "%p -> %d\n", desc,
-                       atomic_read(&desc->b_refcount));
+                       atomic_read(&desc->bd_refcount));
         }
 }
 
 static inline void ptlrpc_bulk_addref(struct ptlrpc_bulk_desc *desc)
 {
-        atomic_inc(&desc->b_refcount);
+        atomic_inc(&desc->bd_refcount);
         CDEBUG(D_PAGE, "Set refcount of %p to %d\n", desc,
-               atomic_read(&desc->b_refcount));
+               atomic_read(&desc->bd_refcount));
 }
 
 #endif

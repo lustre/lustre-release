@@ -201,7 +201,7 @@ static int ost_bulk_timeout(void *data)
         struct ptlrpc_bulk_desc *desc = data;
 
         ENTRY;
-        CERROR("(not yet) starting recovery of client %p\n", desc->b_client);
+        CERROR("(not yet) starting recovery of client %p\n", desc->bd_client);
         RETURN(1);
 }
 
@@ -256,16 +256,16 @@ static int ost_brw_read(struct ptlrpc_request *req)
         desc = ptlrpc_prep_bulk(req->rq_connection);
         if (desc == NULL)
                 GOTO(out_local, rc = -ENOMEM);
-        desc->b_portal = OST_BULK_PORTAL;
+        desc->bd_portal = OST_BULK_PORTAL;
 
         for (i = 0; i < niocount; i++) {
                 struct ptlrpc_bulk_page *bulk = ptlrpc_prep_bulk_page(desc);
 
                 if (bulk == NULL)
                         GOTO(out_bulk, rc = -ENOMEM);
-                bulk->b_xid = remote_nb[i].xid;
-                bulk->b_buf = local_nb[i].addr;
-                bulk->b_buflen = remote_nb[i].len;
+                bulk->bp_xid = remote_nb[i].xid;
+                bulk->bp_buf = local_nb[i].addr;
+                bulk->bp_buflen = remote_nb[i].len;
         }
 
         rc = ptlrpc_send_bulk(desc);
@@ -273,7 +273,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
                 GOTO(out_bulk, rc);
 
         lwi = LWI_TIMEOUT(obd_timeout * HZ, ost_bulk_timeout, desc);
-        rc = l_wait_event(desc->b_waitq, desc->b_flags &PTL_BULK_FL_SENT, &lwi);
+        rc = l_wait_event(desc->bd_waitq, desc->bd_flags &PTL_BULK_FL_SENT, &lwi);
         if (rc) {
                 LASSERT(rc == -ETIMEDOUT);
                 GOTO(out_bulk, rc);
@@ -355,10 +355,10 @@ static int ost_brw_write(struct ptlrpc_request *req)
         desc = ptlrpc_prep_bulk(req->rq_connection);
         if (desc == NULL)
                 GOTO(fail_preprw, rc = -ENOMEM);
-        desc->b_cb = NULL;
-        desc->b_portal = OSC_BULK_PORTAL;
-        desc->b_desc_private = desc_priv;
-        memcpy(&(desc->b_conn), &conn, sizeof(conn));
+        desc->bd_cb = NULL;
+        desc->bd_portal = OSC_BULK_PORTAL;
+        desc->bd_desc_private = desc_priv;
+        memcpy(&(desc->bd_conn), &conn, sizeof(conn));
 
         srv = req->rq_obd->u.ost.ost_service;
         spin_lock(&srv->srv_lock);
@@ -372,18 +372,18 @@ static int ost_brw_write(struct ptlrpc_request *req)
                 if (bulk == NULL)
                         GOTO(fail_bulk, rc = -ENOMEM);
 
-                bulk->b_xid = xid;              /* single xid for all pages */
+                bulk->bp_xid = xid;              /* single xid for all pages */
 
-                bulk->b_buf = lnb->addr;
-                bulk->b_page = lnb->page;
-                bulk->b_flags = lnb->flags;
-                bulk->b_dentry = lnb->dentry;
-                bulk->b_buflen = lnb->len;
-                bulk->b_cb = NULL;
+                bulk->bp_buf = lnb->addr;
+                bulk->bp_page = lnb->page;
+                bulk->bp_flags = lnb->flags;
+                bulk->bp_dentry = lnb->dentry;
+                bulk->bp_buflen = lnb->len;
+                bulk->bp_cb = NULL;
 
                 /* this advances remote_nb */
                 ost_pack_niobuf((void **)&remote_nb, lnb->offset, lnb->len, 0,
-                                bulk->b_xid);
+                                bulk->bp_xid);
         }
 
         rc = ptlrpc_register_bulk(desc);
@@ -394,7 +394,7 @@ static int ost_brw_write(struct ptlrpc_request *req)
         ptlrpc_reply(req->rq_svc, req);
 
         lwi = LWI_TIMEOUT(obd_timeout * HZ, ost_bulk_timeout, desc);
-        rc = l_wait_event(desc->b_waitq, desc->b_flags & PTL_BULK_FL_RCVD, &lwi);
+        rc = l_wait_event(desc->bd_waitq, desc->bd_flags & PTL_BULK_FL_RCVD, &lwi);
         if (rc) {
                 if (rc != -ETIMEDOUT)
                         LBUG();
@@ -402,7 +402,7 @@ static int ost_brw_write(struct ptlrpc_request *req)
         }
 
         rc = obd_commitrw(cmd, conn, objcount, tmp1, niocount, local_nb,
-                          desc->b_desc_private);
+                          desc->bd_desc_private);
         ptlrpc_free_bulk(desc);
         EXIT;
 out_free:

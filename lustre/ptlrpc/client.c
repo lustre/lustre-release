@@ -85,12 +85,12 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *conn)
 
         OBD_ALLOC(desc, sizeof(*desc));
         if (desc != NULL) {
-                desc->b_connection = ptlrpc_connection_addref(conn);
-                atomic_set(&desc->b_refcount, 1);
-                init_waitqueue_head(&desc->b_waitq);
-                INIT_LIST_HEAD(&desc->b_page_list);
-                ptl_set_inv_handle(&desc->b_md_h);
-                ptl_set_inv_handle(&desc->b_me_h);
+                desc->bd_connection = ptlrpc_connection_addref(conn);
+                atomic_set(&desc->bd_refcount, 1);
+                init_waitqueue_head(&desc->bd_waitq);
+                INIT_LIST_HEAD(&desc->bd_page_list);
+                ptl_set_inv_handle(&desc->bd_md_h);
+                ptl_set_inv_handle(&desc->bd_me_h);
         }
 
         return desc;
@@ -102,9 +102,9 @@ struct ptlrpc_bulk_page *ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc)
 
         OBD_ALLOC(bulk, sizeof(*bulk));
         if (bulk != NULL) {
-                bulk->b_desc = desc;
-                list_add_tail(&bulk->b_link, &desc->b_page_list);
-                desc->b_page_count++;
+                bulk->bp_desc = desc;
+                list_add_tail(&bulk->bp_link, &desc->bd_page_list);
+                desc->bd_page_count++;
         }
         return bulk;
 }
@@ -118,13 +118,13 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
                 return;
         }
 
-        list_for_each_safe(tmp, next, &desc->b_page_list) {
+        list_for_each_safe(tmp, next, &desc->bd_page_list) {
                 struct ptlrpc_bulk_page *bulk;
-                bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
+                bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
                 ptlrpc_free_bulk_page(bulk);
         }
 
-        ptlrpc_put_connection(desc->b_connection);
+        ptlrpc_put_connection(desc->bd_connection);
 
         OBD_FREE(desc, sizeof(*desc));
         EXIT;
@@ -138,8 +138,8 @@ void ptlrpc_free_bulk_page(struct ptlrpc_bulk_page *bulk)
                 return;
         }
 
-        list_del(&bulk->b_link);
-        bulk->b_desc->b_page_count--;
+        list_del(&bulk->bp_link);
+        bulk->bp_desc->bd_page_count--;
         OBD_FREE(bulk, sizeof(*bulk));
         EXIT;
 }

@@ -56,14 +56,15 @@ static int sync_io_timeout(void *data)
         struct ptlrpc_bulk_desc *desc = cbd->desc;
 
         ENTRY;
-        desc->b_connection->c_level = LUSTRE_CONN_RECOVD;
-        desc->b_flags |= PTL_RPC_FL_TIMEOUT;
-        if (desc->b_connection && class_signal_connection_failure) {
+        desc->bd_connection->c_level = LUSTRE_CONN_RECOVD;
+        desc->bd_flags |= PTL_RPC_FL_TIMEOUT;
+        if (desc->bd_connection && class_signal_connection_failure) {
+
                 /* XXXshaver Do we need a resend strategy, or do we just
                  * XXXshaver return -ERESTARTSYS and punt it?
                  */
-                CERROR("signalling failure of conn %p\n", desc->b_connection);
-                class_signal_connection_failure(desc->b_connection);
+                CERROR("signalling failure of conn %p\n", desc->bd_connection);
+                class_signal_connection_failure(desc->bd_connection);
 
                 /* We go back to sleep, until we're resumed or interrupted. */
                 RETURN(0);
@@ -79,7 +80,7 @@ static int sync_io_intr(void *data)
         struct ptlrpc_bulk_desc *desc = cbd->desc;
 
         ENTRY;
-        desc->b_flags |= PTL_RPC_FL_INTR;
+        desc->bd_flags |= PTL_RPC_FL_INTR;
         RETURN(1); /* ignored, as of this writing */
 }
 
