@@ -249,6 +249,8 @@ extern int lprocfs_rd_kbytestotal(char *page, char **start, off_t off,
                                   int count, int *eof, void *data);
 extern int lprocfs_rd_kbytesfree(char *page, char **start, off_t off,
                                  int count, int *eof, void *data);
+extern int lprocfs_rd_kbytesavail(char *page, char **start, off_t off,
+                                 int count, int *eof, void *data);
 extern int lprocfs_rd_filestotal(char *page, char **start, off_t off,
                                  int count, int *eof, void *data);
 extern int lprocfs_rd_filesfree(char *page, char **start, off_t off,
@@ -256,9 +258,11 @@ extern int lprocfs_rd_filesfree(char *page, char **start, off_t off,
 extern int lprocfs_rd_filegroups(char *page, char **start, off_t off,
                                  int count, int *eof, void *data);
 
-extern int lprocfs_write_helper(const char *buffer, unsigned long count, 
+extern int lprocfs_write_helper(const char *buffer, unsigned long count,
                                 int *val);
-int lprocfs_obd_seq_create(struct obd_device *dev, char *name, mode_t mode, 
+extern int lprocfs_write_u64_helper(const char *buffer, unsigned long count,
+                                    __u64 *val);
+int lprocfs_obd_seq_create(struct obd_device *dev, char *name, mode_t mode,
                            struct file_operations *seq_fops, void *data);
 struct obd_histogram;
 void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value);
@@ -337,6 +341,9 @@ int lprocfs_rd_kbytestotal(char *page, char **start, off_t off,
 static inline
 int lprocfs_rd_kbytesfree(char *page, char **start, off_t off,
                           int count, int *eof, void *data) { return 0; }
+static inline
+int lprocfs_rd_kbytesavail(char *page, char **start, off_t off,
+                           int count, int *eof, void *data) { return 0; }
 static inline
 int lprocfs_rd_filestotal(char *page, char **start, off_t off,
                           int count, int *eof, void *data) { return 0; }
