@@ -45,6 +45,7 @@ struct recovd_data {
 void recovd_conn_fail(struct ptlrpc_connection *conn);
 void recovd_conn_manage(struct ptlrpc_connection *conn, struct recovd_obd *mgr,
                         ptlrpc_recovery_cb_t recover);
+void recovd_conn_unmanage(struct ptlrpc_connection *conn);
 void recovd_conn_fixed(struct ptlrpc_connection *conn);
 int recovd_setup(struct recovd_obd *mgr);
 int recovd_cleanup(struct recovd_obd *mgr);
