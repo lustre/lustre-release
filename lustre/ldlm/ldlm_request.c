@@ -44,9 +44,8 @@ static int expired_completion_wait(void *data)
                 CERROR("lock %p has NULL obd\n", lock);
         else if (!(conn = obd->u.cli.cl_import.imp_connection))
                 CERROR("lock %p has NULL connection\n", lock);
-        else {
+        else
                 class_signal_connection_failure(conn);
-        }
         RETURN(0);
 }
 
@@ -75,16 +74,17 @@ int ldlm_completion_ast(struct ldlm_lock *lock, int flags)
         int rc = 0;
         ENTRY;
 
+        if (flags == LDLM_FL_WAIT_NOREPROC)
+                goto noreproc;
+
         if (flags == 0) {
                 wake_up(&lock->l_waitq);
                 RETURN(0);
         }
 
-        if (flags == LDLM_FL_WAIT_NOREPROC)
-                goto noreproc;
-
-        LASSERT(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
-                         LDLM_FL_BLOCK_CONV));
+        if (!(flags & (LDLM_FL_BLOCK_WAIT | LDLM_FL_BLOCK_GRANTED |
+                       LDLM_FL_BLOCK_CONV)))
+                RETURN(0);
 
         LDLM_DEBUG(lock, "client-side enqueue returned a blocked lock, "
                    "sleeping");

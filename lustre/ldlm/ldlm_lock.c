@@ -211,7 +211,7 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         lock->l_flags |= LDLM_FL_DESTROYED;
 
         /* Wake anyone waiting for this lock */
-        if (lock->l_completion_ast)
+        if (lock->l_export && lock->l_completion_ast)
                 lock->l_completion_ast(lock, 0);
 
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
