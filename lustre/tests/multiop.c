@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/mman.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -18,9 +19,12 @@ char usage[] =
 "        o  open(O_RDONLY)\n"
 "        O  open(O_CREAT|O_RDWR)\n"
 "        u  unlink\n"
+"        U  munmap\n"
 "        m  mknod\n"
+"        M  mmap to EOF (must open and stat prior)\n"
 "        c  close\n"
 "        _  wait for signal\n"
+"        R  reference entire mmap-ed region\n"
 "        s  stat\n"
 "        S  fstat\n";
 
@@ -30,6 +34,8 @@ int main(int argc, char **argv)
 {
         char *fname, *commands;
         struct stat st;
+	size_t mmap_len, i;
+	unsigned char *mmap_ptr = NULL, junk = 0;
         int fd;
 
         if (argc != 3) {
@@ -63,6 +69,15 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
+		case 'M':
+			mmap_len = st.st_size;
+			mmap_ptr = mmap(NULL, mmap_len, PROT_READ, MAP_SHARED, 
+					fd, 0);
+			if (mmap_ptr == MAP_FAILED) {
+				perror("mmap");
+				exit(1);
+			}
+			break;
                 case 'u':
                         if (unlink(fname) == -1) {
                                 perror("unlink");
@@ -78,6 +93,10 @@ int main(int argc, char **argv)
                 case '_':
                         pause();
                         break;
+		case 'R':
+			for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
+				junk += mmap_ptr[i];
+			break;
                 case 's':
                         if (stat(fname, &st) == -1) {
                                 perror("stat");
@@ -90,6 +109,12 @@ int main(int argc, char **argv)
                                 exit(1);
                         }
                         break;
+		case 'U':
+			if (munmap(mmap_ptr, mmap_len)) {
+				perror("munmap");
+				exit(1);
+			}
+			break;
                 default:
                         fprintf(stderr, "unknown command \"%c\"\n", *commands);
                         fprintf(stderr, usage, argv[0]);
