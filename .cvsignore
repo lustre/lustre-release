@@ -31,3 +31,4 @@ install-sh
 config.h
 config.h.in
 stamp-h1
+INSTALL

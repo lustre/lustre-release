@@ -187,6 +187,41 @@ AC_SUBST(IIBNAL)
 ])
 
 #
+# LP_CONFIG_RANAL
+#
+# check whether to use the RapidArray nal
+#
+AC_DEFUN([LP_CONFIG_RANAL],
+[#### Rapid Array
+AC_MSG_CHECKING([if RapidArray kernel headers are present])
+# placeholder
+RACPPFLAGS="-I/tmp"
+EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS $RACPPFLAGS"
+LB_LINUX_TRY_COMPILE([
+	#include <linux/types.h>
+	#include <rapl.h>
+],[
+        RAP_RETURN          rc;
+	RAP_PVOID           dev_handle;
+
+        rc = RapkGetDeviceByIndex(0, NULL, &dev_handle);
+
+	return rc == RAP_SUCCESS ? 0 : 1;
+],[
+	AC_MSG_RESULT([yes])
+	RANAL="ranal"
+],[
+	AC_MSG_RESULT([no])
+	RANAL=""
+	RACPPFLAGS=""
+])
+EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+AC_SUBST(RACPPFLAGS)
+AC_SUBST(RANAL)
+])
+
+#
 # LP_STRUCT_PAGE_LIST
 #
 # 2.6.4 no longer has page->list
@@ -301,6 +336,7 @@ if test $linux25 = 'no' ; then
 	LP_CONFIG_OPENIB
 fi
 LP_CONFIG_IIB
+LP_CONFIG_RANAL
 
 LP_STRUCT_PAGE_LIST
 LP_STRUCT_SIGHAND
@@ -438,6 +474,7 @@ AC_DEFUN([LP_CONDITIONALS],
 AM_CONDITIONAL(BUILD_GMNAL, test x$GMNAL = "xgmnal")
 AM_CONDITIONAL(BUILD_OPENIBNAL, test x$OPENIBNAL = "xopenibnal")
 AM_CONDITIONAL(BUILD_IIBNAL, test x$IIBNAL = "xiibnal")
+AM_CONDITIONAL(BUILD_RANAL, test x$RANAL = "xranal")
 ])
 
 #
@@ -461,14 +498,16 @@ portals/knals/gmnal/Makefile
 portals/knals/gmnal/autoMakefile
 portals/knals/iibnal/Makefile
 portals/knals/iibnal/autoMakefile
+portals/knals/lonal/Makefile
+portals/knals/lonal/autoMakefile
 portals/knals/openibnal/Makefile
 portals/knals/openibnal/autoMakefile
 portals/knals/qswnal/Makefile
 portals/knals/qswnal/autoMakefile
+portals/knals/ranal/Makefile
+portals/knals/ranal/autoMakefile
 portals/knals/socknal/Makefile
 portals/knals/socknal/autoMakefile
-portals/knals/lonal/Makefile
-portals/knals/lonal/autoMakefile
 portals/libcfs/Makefile
 portals/libcfs/autoMakefile
 portals/portals/Makefile

@@ -1,3 +1,5 @@
+AUTOMAKE_OPTIONS = foreign
+
 SUBDIRS := . build @LIBSYSIO_SUBDIR@ portals lustre
 DIST_SUBDIRS := build @LIBSYSIO_SUBDIR@ portals lustre
 
