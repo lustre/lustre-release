@@ -202,7 +202,7 @@ struct client_obd {
 
         /* keep track of objects that have lois that contain pages which
          * have been queued for async brw.  this lock also protects the
-         * lists of obd_client_pages that hang off of the loi */
+         * lists of osc_client_pages that hang off of the loi */
         spinlock_t               cl_loi_list_lock;
         struct list_head         cl_loi_ready_list;
         int                      cl_brw_in_flight;

@@ -1035,10 +1035,6 @@ static inline int obd_register_observer(struct obd_device *obd,
 extern int obd_init_caches(void);
 extern void obd_cleanup_caches(void);
 
-/* async page pushing io helpers */
-struct obd_client_page *ocp_alloc(struct page *page);
-void ocp_free(struct page *page);
-
 /* support routines */
 extern kmem_cache_t *obdo_cachep;
 static inline struct obdo *obdo_alloc(void)

@@ -152,9 +152,6 @@ void ll_ap_completion_24(void *data, int cmd, int rc);
 #define ll_ap_completion ll_ap_completion_26
 void ll_ap_completion_26(void *data, int cmd, int rc);
 #endif
-int ll_ocp_update_obdo(struct obd_client_page *ocp, int cmd, struct obdo *oa);
-int ll_ocp_set_io_ready(struct obd_client_page *ocp, int cmd);
-int ll_ocp_update_io_args(struct obd_client_page *ocp, int cmd);
 void ll_removepage(struct page *page);
 int ll_sync_page(struct page *page);
 int ll_readpage(struct file *file, struct page *page);
