@@ -18,7 +18,7 @@ mknod /dev/obd c 10 241
 
 $R/usr/src/obd/utils/obdctl <<EOF
 device 0
-attach obdext2
+attach obdext2 OBDEXT2DEV
 setup /dev/loop/0
 quit
 EOF
