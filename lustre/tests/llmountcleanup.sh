@@ -8,7 +8,7 @@ umount /mnt/obd
 rmmod llight
 rmmod mdc
 
-$R/usr/src/obd/utils/obdctl <<EOF
+$OBDCTL <<EOF
 device 3
 cleanup
 detach
@@ -32,7 +32,7 @@ rmmod obdext2
 rmmod ptlrpc
 rmmod obdclass
 
-$R/usr/src/portals/linux/utils/ptlctl <<EOF
+$PTLCTL <<EOF
 setup tcp
 disconnect localhost
 del_uuid self
@@ -47,3 +47,4 @@ rmmod portals
 
 losetup -d ${LOOP}0
 losetup -d ${LOOP}1
+losetup -d ${LOOP}2
