@@ -140,7 +140,7 @@ static int llwp_consume_page(struct ll_writeback_pages *llwp,
          */
         LASSERT(pg->count >= 0);
 
-        CDEBUG(D_CACHE, "brw_page %p: off %lld cnt %d, page %p: ind %ld\n",
+        CDEBUG(D_CACHE, "brw_page %p: off "LPU64" cnt %d, page %p: ind %ld\n",
                         pg, pg->off, pg->count, page, page->index);
 
         if ( llwp->num_frags == 3 || llwp->num_pages == LLWP_MAX_PAGES )
@@ -232,7 +232,7 @@ static void ll_brw_pages_unlock( struct inode *inode,
         EXIT;
 }
 
-#ifndef PG_lru
+#ifndef ALL_ZONES
 #ifdef CONFIG_DISCONTIGMEM
 #error "sorry, we don't support DISCONTIGMEM yet"
 #endif
@@ -270,7 +270,7 @@ static int zones_need_balancing(void)
  */
 static int should_writeback(void) 
 {
-#ifdef PG_lru
+#ifdef ALL_ZONES
         if (free_high(ALL_ZONES) > 0 || free_low(ANY_ZONE) > 0)
 #else
         if ( zones_need_balancing() )
