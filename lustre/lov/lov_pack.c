@@ -340,8 +340,10 @@ int lov_getstripe(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         rc = lov_packmd(conn, &lmmk, lsm);
         if (rc < 0)
                 RETURN(rc);
+#ifdef __KERNEL__
 #if __BIG_ENDIAN
 #error FIXME: convert lmmk to big-endian before copy to userspace
+#endif
 #endif
         lmm_size = rc;
         rc = 0;
