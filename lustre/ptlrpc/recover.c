@@ -159,7 +159,7 @@ int ptlrpc_replay(struct obd_import *imp)
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
         struct ptlrpc_connection *conn = imp->imp_connection;
-        int committed = imp->imp_peer_committed_xid;
+        int committed = imp->imp_peer_committed_transno;
         ENTRY;
 
         spin_lock(&imp->imp_lock);
@@ -183,7 +183,7 @@ int ptlrpc_replay(struct obd_import *imp)
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 state = replay_state(req, committed);
 
-                if (req->rq_list.next == &imp->imp_request_list) {
+                if (req->rq_transno == imp->imp_max_transno) {
                         req->rq_reqmsg->flags |= MSG_LAST_REPLAY;
                         DEBUG_REQ(D_HA, req, "last for replay");
                         LASSERT(state != REPLAY_COMMITTED);
