@@ -76,7 +76,7 @@ static int ll_dir_readpage(struct file *file, struct page *page)
                     id_fid(&ll_i2info(inode)->lli_id));
 
         offset = page->index << PAGE_SHIFT;
-        rc = md_readpage(ll_i2sbi(inode)->ll_lmv_exp, &id, offset,
+        rc = md_readpage(ll_i2sbi(inode)->ll_md_exp, &id, offset,
                          page, &request);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
@@ -212,13 +212,13 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
         struct ldlm_res_id res_id =
                 { .name = { id_fid(&li->lli_id), id_group(&li->lli_id)} };
         struct lustre_handle lockh;
-        struct obd_device *obddev = class_exp2obd(ll_i2sbi(dir)->ll_lmv_exp);
+        struct obd_device *obddev = class_exp2obd(ll_i2sbi(dir)->ll_md_exp);
         struct address_space *mapping = dir->i_mapping;
         struct page *page;
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         int rc;
 
-        obddev = md_get_real_obd(ll_i2sbi(dir)->ll_lmv_exp, NULL, 0);
+        obddev = md_get_real_obd(ll_i2sbi(dir)->ll_md_exp, NULL, 0);
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
                              &res_id, LDLM_IBITS, &policy, LCK_PR, &lockh);
         if (!rc) {
@@ -232,7 +232,7 @@ static struct page *ll_get_dir_page(struct inode *dir, unsigned long n)
 
                 ll_prepare_mdc_data(op_data, dir, NULL, NULL, 0, 0);
 
-                rc = md_enqueue(ll_i2sbi(dir)->ll_lmv_exp, LDLM_IBITS, &it,
+                rc = md_enqueue(ll_i2sbi(dir)->ll_md_exp, LDLM_IBITS, &it,
                                 LCK_PR, op_data, &lockh, NULL, 0,
                                 ldlm_completion_ast, ll_mdc_blocking_ast, dir);
                 OBD_FREE(op_data, sizeof(*op_data));
@@ -412,7 +412,7 @@ static int ll_mkdir_stripe(struct inode *inode, unsigned long arg)
         if (op_data == NULL)
                 GOTO(out, err = -ENOMEM);
         ll_prepare_mdc_data(op_data, inode, NULL, name,lums.lums_namelen,0);
-        err = md_create(sbi->ll_lmv_exp, op_data, &nstripes, sizeof(nstripes),
+        err = md_create(sbi->ll_md_exp, op_data, &nstripes, sizeof(nstripes),
                         mode, current->fsuid, current->fsgid, 0, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         ptlrpc_req_finished(request);
@@ -463,7 +463,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 valid = OBD_MD_FLID;
                 ll_inode2id(&id, inode);
-                rc = md_getattr_lock(sbi->ll_lmv_exp, &id,
+                rc = md_getattr_lock(sbi->ll_md_exp, &id,
                                      filename, namelen, valid, 0, &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "md_getattr_lock: %d\n", rc);
@@ -504,7 +504,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 
                 ll_prepare_mdc_data(op_data, inode, NULL, NULL, 0, 0);
 
-                rc = md_setattr(sbi->ll_lmv_exp, op_data, &attr, &lum,
+                rc = md_setattr(sbi->ll_md_exp, op_data, &attr, &lum,
                                 sizeof(lum), NULL, 0, &request);
                 OBD_FREE(op_data, sizeof(*op_data));
                 ptlrpc_req_finished(request);
@@ -527,8 +527,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 valid |= OBD_MD_FLDIREA;
 
                 ll_inode2id(&id, inode);
-                rc = md_getattr(sbi->ll_lmv_exp, &id, valid,
-                                obd_size_diskmd(sbi->ll_lov_exp, NULL),
+                rc = md_getattr(sbi->ll_md_exp, &id, valid,
+                                obd_size_diskmd(sbi->ll_dt_exp, NULL),
                                 &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "md_getattr failed: rc = %d\n", rc);
@@ -567,7 +567,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 ll_inode2id(&id, inode);
 
-                rc = ll_get_fid(sbi->ll_lmv_exp, &id, filename, &id);
+                rc = ll_get_fid(sbi->ll_md_exp, &id, filename, &id);
                 if (rc < 0)
                         GOTO(out_filename, rc);
 
@@ -594,9 +594,9 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         RETURN(PTR_ERR(filename));
 
                 ll_inode2id(&id, inode);
-                rc = md_getattr_lock(sbi->ll_lmv_exp, &id, filename,
+                rc = md_getattr_lock(sbi->ll_md_exp, &id, filename,
                                      strlen(filename) + 1, OBD_MD_FLEASIZE,
-                                     obd_size_diskmd(sbi->ll_lov_exp, NULL),
+                                     obd_size_diskmd(sbi->ll_dt_exp, NULL),
                                      &request);
                 if (rc < 0) {
                         CDEBUG(D_INFO, "md_getattr_lock failed on %s: rc %d\n",
@@ -699,7 +699,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                         bufs[1] = NULL;
                 }
                 size = data->ioc_plen1;
-                req = ptlrpc_prep_req(sbi2lmv(sbi)->cl_import,
+                req = ptlrpc_prep_req(sbi2md(sbi)->cl_import,
                                       LUSTRE_LOG_VERSION, LLOG_CATINFO,
                                       2, lens, bufs);
                 if (!req)
@@ -718,7 +718,7 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
                 RETURN(rc);
         }
         default:
-                return obd_iocontrol(cmd, sbi->ll_lov_exp, 0,
+                return obd_iocontrol(cmd, sbi->ll_dt_exp, 0,
                                      NULL, (void *)arg);
         }
 }

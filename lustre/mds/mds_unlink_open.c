@@ -56,7 +56,7 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
         if (lmm_size == 0)
                 RETURN(0);
 
-        rc = obd_unpackmd(mds->mds_lov_exp, &lsm, lmm, lmm_size);
+        rc = obd_unpackmd(mds->mds_dt_exp, &lsm, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p\n", lmm);
                 RETURN(rc);
@@ -78,13 +78,13 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
                 oti.oti_logcookies = logcookies;
         }
 
-        rc = obd_destroy(mds->mds_lov_exp, oa, lsm, &oti);
+        rc = obd_destroy(mds->mds_dt_exp, oa, lsm, &oti);
         obdo_free(oa);
         if (rc)
                 CDEBUG(D_INODE, "destroy orphan objid 0x"LPX64" on ost error "
                        "%d\n", lsm->lsm_object_id, rc);
 out_free_memmd:
-        obd_free_memmd(mds->mds_lov_exp, &lsm);
+        obd_free_memmd(mds->mds_dt_exp, &lsm);
         RETURN(rc);
 }
 
@@ -99,7 +99,7 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
         int rc, err;
         ENTRY;
 
-        LASSERT(mds->mds_lov_obd != NULL);
+        LASSERT(mds->mds_dt_obd != NULL);
 
         OBD_ALLOC(lmm, mds->mds_max_mdsize);
         if (lmm == NULL)

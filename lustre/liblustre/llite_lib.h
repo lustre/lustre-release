@@ -45,8 +45,8 @@ struct ll_file_data {
 struct llu_sb_info
 {
         struct obd_uuid         ll_sb_uuid;
-        struct obd_export      *ll_lmv_exp;
-        struct obd_export      *ll_lov_exp;
+        struct obd_export      *ll_md_exp;
+        struct obd_export      *ll_dt_exp;
         obd_id                  ll_rootino;
         int                     ll_flags;
         struct list_head        ll_conn_chain;
@@ -123,14 +123,14 @@ static inline struct llu_sb_info *llu_i2sbi(struct inode *inode)
         return llu_i2info(inode)->lli_sbi;
 }
 
-static inline struct obd_export *llu_i2obdexp(struct inode *inode)
+static inline struct obd_export *llu_i2dtexp(struct inode *inode)
 {
-        return llu_i2info(inode)->lli_sbi->ll_lov_exp;
+        return llu_i2info(inode)->lli_sbi->ll_dt_exp;
 }
 
-static inline struct obd_export *llu_i2mdcexp(struct inode *inode)
+static inline struct obd_export *llu_i2mdexp(struct inode *inode)
 {
-        return llu_i2info(inode)->lli_sbi->ll_lmv_exp;
+        return llu_i2info(inode)->lli_sbi->ll_md_exp;
 }
 
 static inline int llu_is_root_inode(struct inode *inode)

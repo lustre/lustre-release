@@ -498,7 +498,7 @@ static int llog_catinfo_deletions(struct obd_device *obd, char *buf,
         if (ctxt == NULL || mds == NULL)
                 RETURN(-EOPNOTSUPP);
 
-        count = mds->mds_lov_desc.ld_tgt_count;
+        count = mds->mds_dt_desc.ld_tgt_count;
         size = sizeof(*idarray) * count;
 
         OBD_ALLOC(idarray, size);

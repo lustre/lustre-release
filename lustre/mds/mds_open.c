@@ -330,7 +330,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         if (body->valid & OBD_MD_FLEASIZE)
                 RETURN(0);
 
-        OBD_ALLOC(*ids, mds->mds_lov_desc.ld_tgt_count * sizeof(**ids));
+        OBD_ALLOC(*ids, mds->mds_dt_desc.ld_tgt_count * sizeof(**ids));
         if (*ids == NULL)
                 RETURN(-ENOMEM);
         oti.oti_objid = *ids;
@@ -351,7 +351,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         GOTO(out_oa, rc);
                 }
 
-                mds_objids_from_lmm(*ids, lmm, &mds->mds_lov_desc);
+                mds_objids_from_lmm(*ids, lmm, &mds->mds_dt_desc);
 
                 lmm_buf = lustre_msg_buf(req->rq_repmsg, offset, 0);
                 lmm_bufsize = req->rq_repmsg->buflens[offset];
@@ -387,7 +387,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 /* check if things like lfs setstripe are sending us the ea */
                 if (rec->ur_flags & MDS_OPEN_HAS_EA) {
                         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                           mds->mds_lov_exp,
+                                           mds->mds_dt_exp,
                                            0, &lsm, rec->ur_eadata);
                         if (rc)
                                 GOTO(out_oa, rc);
@@ -397,7 +397,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                          * striping for CMD. -p */
                 } 
                 LASSERT(oa->o_gr >= FILTER_GROUP_FIRST_MDS);
-                rc = obd_create(mds->mds_lov_exp, oa, &lsm, &oti);
+                rc = obd_create(mds->mds_dt_exp, oa, &lsm, &oti);
                 if (rc) {
                         int level = D_ERROR;
                         if (rc == -ENOSPC)
@@ -413,7 +413,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         GOTO(out_oa, rc);
                 }
         } else {
-                rc = obd_iocontrol(OBD_IOC_LOV_SETEA, mds->mds_lov_exp,
+                rc = obd_iocontrol(OBD_IOC_LOV_SETEA, mds->mds_dt_exp,
                                    0, &lsm, rec->ur_eadata);
                 if (rc) {
                         GOTO(out_oa, rc);
@@ -425,7 +425,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 oa->o_size = inode->i_size;
                 obdo_from_inode(oa, inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|
                                 OBD_MD_FLMTIME| OBD_MD_FLCTIME| OBD_MD_FLSIZE);
-                rc = obd_setattr(mds->mds_lov_exp, oa, lsm, &oti);
+                rc = obd_setattr(mds->mds_dt_exp, oa, lsm, &oti);
                 if (rc) {
                         CERROR("error setting attrs for inode %lu: rc %d\n",
                                inode->i_ino, rc);
@@ -442,9 +442,9 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
         LASSERT(lsm && lsm->lsm_object_id);
         lmm = NULL;
-        rc = obd_packmd(mds->mds_lov_exp, &lmm, lsm);
+        rc = obd_packmd(mds->mds_dt_exp, &lmm, lsm);
         if (!id_ino(rec->ur_id2))
-                obd_free_memmd(mds->mds_lov_exp, &lsm);
+                obd_free_memmd(mds->mds_dt_exp, &lsm);
         LASSERT(rc >= 0);
         lmm_size = rc;
         body->eadatasize = rc;
@@ -464,13 +464,13 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         LASSERT(lmm_bufsize >= lmm_size);
 
         memcpy(lmm_buf, lmm, lmm_size);
-        obd_free_diskmd(mds->mds_lov_exp, &lmm);
+        obd_free_diskmd(mds->mds_dt_exp, &lmm);
  out_oa:
         oti_free_cookies(&oti);
         obdo_free(oa);
  out_ids:
         if (rc) {
-                OBD_FREE(*ids, mds->mds_lov_desc.ld_tgt_count * sizeof(**ids));
+                OBD_FREE(*ids, mds->mds_dt_desc.ld_tgt_count * sizeof(**ids));
                 *ids = NULL;
         }
         RETURN(rc);
@@ -682,8 +682,8 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         CDEBUG(D_INODE, "mfd %p, cookie "LPX64"\n", mfd,
                mfd->mfd_handle.h_cookie);
         if (ids != NULL) {
-                mds_lov_update_objids(obd, ids);
-                OBD_FREE(ids, sizeof(*ids) * mds->mds_lov_desc.ld_tgt_count);
+                mds_dt_update_objids(obd, ids);
+                OBD_FREE(ids, sizeof(*ids) * mds->mds_dt_desc.ld_tgt_count);
         }
         //if (rc)
         //        mds_mfd_destroy(mfd);
@@ -937,7 +937,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         cleanup_phase = 1; /* parent dentry and lock */
 
         /* try to retrieve MEA data for this dir */
-        rc = mds_get_lmv_attr(obd, dparent->d_inode, &mea, &mea_size);
+        rc = mds_md_get_attr(obd, dparent->d_inode, &mea, &mea_size);
         if (rc)
                 GOTO(cleanup, rc);
        
@@ -1133,7 +1133,6 @@ got_child:
                  * we do not read fid from EA here, because it is already
                  * updated and thus we avoid not needed IO, locking, etc.
                  */
-                body->valid |= OBD_MD_FID;
                 mds_pack_inode2body(obd, body, dchild->d_inode, 0);
         } else {
                 mds_pack_inode2body(obd, body, dchild->d_inode, 1);

@@ -788,7 +788,7 @@ int mds_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
                 CERROR("cannot open/create %s file: rc = %d\n", LOV_OBJID, rc);
                 GOTO(err_last_fid, rc = PTR_ERR(file));
         }
-        mds->mds_lov_objid_filp = file;
+        mds->mds_dt_objid_filp = file;
         if (!S_ISREG(file->f_dentry->d_inode->i_mode)) {
                 CERROR("%s is not a regular file!: mode = %o\n", LOV_OBJID,
                        file->f_dentry->d_inode->i_mode);
@@ -804,7 +804,7 @@ err_pop:
         return rc;
 
 err_lov_objid:
-        if (mds->mds_lov_objid_filp && filp_close(mds->mds_lov_objid_filp, 0))
+        if (mds->mds_dt_objid_filp && filp_close(mds->mds_dt_objid_filp, 0))
                 CERROR("can't close %s after error\n", LOV_OBJID);
 err_virtid_fid:
         if (mds->mds_virtid_filp && filp_close(mds->mds_virtid_filp, 0))
@@ -872,9 +872,9 @@ int mds_fs_cleanup(struct obd_device *obd, int flags)
                 if (rc)
                         CERROR("%s file won't close, rc = %d\n", LAST_RCVD, rc);
         }
-        if (mds->mds_lov_objid_filp) {
-                rc = filp_close(mds->mds_lov_objid_filp, 0);
-                mds->mds_lov_objid_filp = NULL;
+        if (mds->mds_dt_objid_filp) {
+                rc = filp_close(mds->mds_dt_objid_filp, 0);
+                mds->mds_dt_objid_filp = NULL;
                 if (rc)
                         CERROR("%s file won't close, rc=%d\n", LOV_OBJID, rc);
         }

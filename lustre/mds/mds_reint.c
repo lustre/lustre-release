@@ -66,7 +66,7 @@ static void mds_cancel_cookies_cb(struct obd_device *obd,
         CDEBUG(D_HA, "cancelling %d cookies\n",
                (int)(mlcd->mlcd_cookielen / sizeof(*mlcd->mlcd_cookies)));
 
-        rc = obd_unpackmd(obd->u.mds.mds_lov_exp, &lsm, mlcd->mlcd_lmm,
+        rc = obd_unpackmd(obd->u.mds.mds_dt_exp, &lsm, mlcd->mlcd_lmm,
                           mlcd->mlcd_eadatalen);
         if (rc < 0) {
                 CERROR("bad LSM cancelling %d log cookies: rc %d\n",
@@ -165,7 +165,7 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
                         rc = err;
         }
                 
-        err = mds_lov_write_objids(obd);
+        err = mds_dt_write_objids(obd);
         if (err) {
                 log_pri = D_ERROR;
                 if (rc == 0)
@@ -451,12 +451,12 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
                 if (rc < 0)
                         GOTO(cleanup, rc);
 
-                rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, mds->mds_lov_exp,
+                rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE, mds->mds_dt_exp,
                                    0, &lsm, rec->ur_eadata);
                 if (rc)
                         GOTO(cleanup, rc);
 
-                obd_free_memmd(mds->mds_lov_exp, &lsm);
+                obd_free_memmd(mds->mds_dt_exp, &lsm);
 
                 rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
                                    rec->ur_eadatalen);
@@ -476,7 +476,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         if (rec->ur_iattr.ia_valid & (ATTR_ATIME | ATTR_ATIME_SET))
                 body->valid |= OBD_MD_FLATIME;
 
-        if (rc == 0 && rec->ur_cookielen && !IS_ERR(mds->mds_lov_obd)) {
+        if (rc == 0 && rec->ur_cookielen && !IS_ERR(mds->mds_dt_obd)) {
                 OBD_ALLOC(mlcd, sizeof(*mlcd) + rec->ur_cookielen +
                           rec->ur_eadatalen);
                 if (mlcd) {
@@ -614,7 +614,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         ldlm_lock_dump_handle(D_OTHER, lockh);
 
         /* try to retrieve MEA data for this dir */
-        rc = mds_get_lmv_attr(obd, dparent->d_inode, &mea, &mea_size);
+        rc = mds_md_get_attr(obd, dparent->d_inode, &mea, &mea_size);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -810,7 +810,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                          * before obd_create() is called, o_fid is not known if
                          * this is not recovery of cause.
                          */
-                        rc = obd_create(mds->mds_lmv_exp, oa, NULL, NULL);
+                        rc = obd_create(mds->mds_md_exp, oa, NULL, NULL);
                         if (rc) {
                                 CERROR("can't create remote inode: %d\n", rc);
                                 DEBUG_REQ(D_ERROR, req, "parent "LPU64"/%u name %s mode %o",
@@ -844,8 +844,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         /* fill reply */
                         body = lustre_msg_buf(req->rq_repmsg,
                                               0, sizeof(*body));
-                        body->valid |= OBD_MD_FLID | OBD_MD_MDS |
-                                OBD_MD_FID;
+                        body->valid |= OBD_MD_FLID | OBD_MD_MDS;
 
                         obdo2id(&body->id1, oa);
 	                obdo_free(oa);
@@ -1836,7 +1835,7 @@ static int mds_reint_unlink_remote(struct mds_update_record *rec,
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
                 op_data->create_mode |= MDS_MODE_REPLAY;
         
-        rc = md_unlink(mds->mds_lmv_exp, op_data, &request);
+        rc = md_unlink(mds->mds_md_exp, op_data, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         cleanup_phase = 2;
 
@@ -2123,7 +2122,7 @@ cleanup:
         rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
                                 handle, req, rc, 0);
         if (!rc)
-                (void)obd_set_info(mds->mds_lov_exp, strlen("unlinked"),
+                (void)obd_set_info(mds->mds_dt_exp, strlen("unlinked"),
                                    "unlinked", 0, NULL);
         switch(cleanup_phase) {
         case 5: /* pending_dir semaphore */
@@ -2282,7 +2281,7 @@ static int mds_reint_link_to_remote(struct mds_update_record *rec,
         op_data->id1 = *(rec->ur_id1);
         op_data->namelen = 0;
         op_data->name = NULL;
-        rc = md_link(mds->mds_lmv_exp, op_data, &request);
+        rc = md_link(mds->mds_md_exp, op_data, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         if (rc)
                 GOTO(cleanup, rc);
@@ -2832,7 +2831,7 @@ static int mds_check_for_rename(struct obd_device *obd,
                 mds_pack_dentry2id(obd, &op_data->id1, dentry, 1);
 
                 it.it_op = IT_UNLINK;
-                rc = md_enqueue(mds->mds_lmv_exp, LDLM_IBITS, &it, LCK_EX,
+                rc = md_enqueue(mds->mds_md_exp, LDLM_IBITS, &it, LCK_EX,
                                 op_data, rlockh, NULL, 0, ldlm_completion_ast,
                                 mds_blocking_ast, NULL);
                 OBD_FREE(op_data, sizeof(*op_data));
@@ -3098,7 +3097,7 @@ static int mds_reint_rename_to_remote(struct mds_update_record *rec, int offset,
         }
 
         op_data->id2 = *rec->ur_id2;
-        rc = md_rename(mds->mds_lmv_exp, op_data, NULL, 0,
+        rc = md_rename(mds->mds_md_exp, op_data, NULL, 0,
                        rec->ur_tgt, rec->ur_tgtlen - 1, &req2);
         OBD_FREE(op_data, sizeof(*op_data));
        

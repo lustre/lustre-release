@@ -107,7 +107,7 @@ static int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
 
         OBD_ALLOC(fd, sizeof(*fd));
         /* We can't handle this well without reorganizing ll_file_open and
-         * ll_mdc_close, so don't even try right now. */
+         * ll_md_close(), so don't even try right now. */
         LASSERT(fd != NULL);
 
         memcpy(&fd->fd_mds_och.och_fh, &body->handle, sizeof(body->handle));
@@ -225,7 +225,7 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 GOTO(out, rc = -EPROTO);
         }
 
-        rc = obd_unpackmd(llu_i2obdexp(dir), &lsm, eadata, body->eadatasize);
+        rc = obd_unpackmd(llu_i2dtexp(dir), &lsm, eadata, body->eadatasize);
         if (rc < 0) {
                 CERROR("obd_unpackmd: %d\n", rc);
                 GOTO(out, rc);
@@ -252,13 +252,13 @@ int llu_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                 }
         }
 
-        rc = obd_destroy(llu_i2obdexp(dir), oa, lsm, &oti);
+        rc = obd_destroy(llu_i2dtexp(dir), oa, lsm, &oti);
         obdo_free(oa);
         if (rc)
                 CERROR("obd destroy objid 0x"LPX64" error %d\n",
                        lsm->lsm_object_id, rc);
  out_free_memmd:
-        obd_free_memmd(llu_i2obdexp(dir), &lsm);
+        obd_free_memmd(llu_i2dtexp(dir), &lsm);
  out:
         return rc;
 }
@@ -340,7 +340,7 @@ int llu_file_release(struct inode *inode)
         if (!fd) /* no process opened the file after an mcreate */
                 RETURN(0);
 
-        rc2 = llu_mdc_close(sbi->ll_lmv_exp, inode);
+        rc2 = llu_mdc_close(sbi->ll_md_exp, inode);
         if (rc2 && !rc)
                 rc = rc2;
 
@@ -405,7 +405,7 @@ static void llu_truncate(struct inode *inode)
                oa.o_id, lli->lli_st_size);
 
         /* truncate == punch from new size to absolute end of file */
-        err = obd_punch(llu_i2obdexp(inode), &oa, lsm, lli->lli_st_size,
+        err = obd_punch(llu_i2dtexp(inode), &oa, lsm, lli->lli_st_size,
                         OBD_OBJECT_EOF, NULL);
         if (err)
                 CERROR("obd_truncate fails (%d) ino %lu\n", err, lli->lli_st_ino);

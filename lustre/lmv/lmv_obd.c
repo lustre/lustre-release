@@ -1074,7 +1074,6 @@ int lmv_getattr_lock(struct obd_export *exp, struct lustre_id *id,
         struct lustre_id rid = *id;
         struct mds_body *body;
         struct lmv_obj *obj;
-        __u64 old_valid;
         ENTRY;
         
         rc = lmv_check_connect(obd);
@@ -1094,16 +1093,6 @@ repeat:
         CDEBUG(D_OTHER, "getattr_lock for %*s on "DLID4" -> "DLID4"\n",
                namelen, filename, OLID4(id), OLID4(&rid));
 
-	old_valid = valid;
-
-        /*
-         * here should be applied OBD_MD_FID to ->valid, because otherwise,
-         * mds_getattr_lock() will not fetch fid component of lustre_id and
-         * thus, next call to md_getattr_lock() will be performed to wrong mds.
-         */
-        if (!(old_valid & OBD_MD_FID))
-                valid |= OBD_MD_FID;
-        
         rc = md_getattr_lock(lmv->tgts[id_group(&rid)].ltd_exp, 
                              &rid, filename, namelen, valid,
                              ea_size, request);
@@ -1121,14 +1110,6 @@ repeat:
                         rid = body->id1;
                         CDEBUG(D_OTHER, "request attrs for "DLID4"\n", OLID4(&rid));
 
-                        /* 
-                         * turning OBD_MD_FID fetching off, as we already have
-                         * full lustre_id and do need to fetch fid component
-                         * again. This will help to make thing slightly faster.
-                         */
-                        if (!(old_valid & OBD_MD_FID))
-                                valid &= ~OBD_MD_FID;
-                        
                         rc = md_getattr_lock(lmv->tgts[id_group(&rid)].ltd_exp, 
                                              &rid, NULL, 1, valid, ea_size, &req);
                         ptlrpc_req_finished(*request);

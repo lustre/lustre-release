@@ -94,7 +94,7 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         else
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_BRW_READ, pg.count);
-        rc = obd_brw(cmd, ll_i2obdexp(inode), oa, lsm, 1, &pg, NULL);
+        rc = obd_brw(cmd, ll_i2dtexp(inode), oa, lsm, 1, &pg, NULL);
         if (rc == 0)
                 obdo_to_inode(inode, oa, OBD_MD_FLBLOCKS);
         else if (rc != -EIO)
@@ -143,7 +143,7 @@ void ll_truncate(struct inode *inode)
 
         /* truncate == punch from new size to absolute end of file */
         /* NB: obd_punch must be called with i_sem held!  It updates the kms! */
-        rc = obd_punch(ll_i2obdexp(inode), oa, lsm, inode->i_size,
+        rc = obd_punch(ll_i2dtexp(inode), oa, lsm, inode->i_size,
                        OBD_OBJECT_EOF, NULL);
         if (rc)
                 CERROR("obd_truncate fails (%d) ino %lu\n", rc, inode->i_ino);
@@ -189,7 +189,7 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLMODE |
                 OBD_MD_FLTYPE | OBD_MD_FLGROUP;
 
-        rc = obd_brw(OBD_BRW_CHECK, ll_i2obdexp(inode), oa, lsm,
+        rc = obd_brw(OBD_BRW_CHECK, ll_i2dtexp(inode), oa, lsm,
                      1, &pga, NULL);
         if (rc)
                 GOTO(out_free_oa, rc);
@@ -386,7 +386,7 @@ struct ll_async_page *llap_from_page(struct page *page)
         if (llap != NULL)
                 RETURN(llap);
 
-        exp = ll_i2obdexp(page->mapping->host);
+        exp = ll_i2dtexp(page->mapping->host);
         if (exp == NULL)
                 RETURN(ERR_PTR(-EINVAL));
 
@@ -502,7 +502,7 @@ int ll_commit_write(struct file *file, struct page *page, unsigned from,
                 lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
                                      LPROC_LL_DIRTY_MISSES);
 
-                exp = ll_i2obdexp(inode);
+                exp = ll_i2dtexp(inode);
                 if (exp == NULL)
                         RETURN(-EINVAL);
 
@@ -543,7 +543,7 @@ int ll_writepage(struct page *page)
         LASSERT(!PageDirty(page));
         LASSERT(PageLocked(page));
 
-        exp = ll_i2obdexp(inode);
+        exp = ll_i2dtexp(inode);
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
 
@@ -669,7 +669,7 @@ void ll_removepage(struct page *page)
 
         LL_CDEBUG_PAGE(D_PAGE, page, "being evicted\n");
 
-        exp = ll_i2obdexp(inode);
+        exp = ll_i2dtexp(inode);
         if (exp == NULL) {
                 CERROR("page %p ind %lu gave null export\n", page, page->index);
                 EXIT;
@@ -718,7 +718,7 @@ static int ll_page_matches(struct page *page, int fd_flags)
         page_extent.l_extent.end =
                 page_extent.l_extent.start + PAGE_CACHE_SIZE - 1;
         flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED | LDLM_FL_TEST_LOCK;
-        matches = obd_match(ll_i2sbi(inode)->ll_lov_exp,
+        matches = obd_match(ll_i2sbi(inode)->ll_dt_exp,
                             ll_i2info(inode)->lli_smd, LDLM_EXTENT,
                             &page_extent, LCK_PR | LCK_PW, &flags, inode,
                             &match_lockh);
@@ -1020,7 +1020,7 @@ int ll_readpage(struct file *filp, struct page *page)
         if (rc < 0)
                 GOTO(out, rc);
 
-        exp = ll_i2obdexp(inode);
+        exp = ll_i2dtexp(inode);
         if (exp == NULL)
                 GOTO(out, rc = -EINVAL);
 

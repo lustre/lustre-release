@@ -40,10 +40,9 @@ struct ll_sb_info {
         spinlock_t                ll_lock;
         
         struct obd_uuid           ll_sb_uuid;
-        struct obd_export        *ll_lmv_exp;
-        struct lmv_desc           ll_lmv_desc;
-        struct obd_export        *ll_lov_exp;
-        struct lov_desc           ll_lov_desc;
+        struct obd_export        *ll_md_exp;
+        struct obd_export        *ll_dt_exp;
+        struct lov_desc           ll_dt_desc;
         struct proc_dir_entry    *ll_proc_root;
         struct lustre_id          ll_rootid;     /* root lustre id */
 
@@ -206,7 +205,7 @@ int ll_file_release(struct inode *inode, struct file *file);
 int ll_lsm_getattr(struct obd_export *, struct lov_stripe_md *, struct obdo *);
 int ll_glimpse_size(struct inode *inode);
 int ll_local_open(struct file *file, struct lookup_intent *it);
-int ll_mdc_close(struct obd_export *lmv_exp, struct inode *inode,
+int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                  struct file *file);
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 int ll_getattr(struct vfsmount *mnt, struct dentry *de,
@@ -352,20 +351,20 @@ static inline __u64 ll_ts2u64(time_t *time)
 #endif
 
 /* don't need an addref as the sb_info should be holding one */
-static inline struct obd_export *ll_s2obdexp(struct super_block *sb)
+static inline struct obd_export *ll_s2dtexp(struct super_block *sb)
 {
-        return ll_s2sbi(sb)->ll_lov_exp;
+        return ll_s2sbi(sb)->ll_dt_exp;
 }
 
 /* don't need an addref as the sb_info should be holding one */
-static inline struct obd_export *ll_s2lmvexp(struct super_block *sb)
+static inline struct obd_export *ll_s2mdexp(struct super_block *sb)
 {
-        return ll_s2sbi(sb)->ll_lmv_exp;
+        return ll_s2sbi(sb)->ll_md_exp;
 }
 
-static inline struct client_obd *sbi2lmv(struct ll_sb_info *sbi)
+static inline struct client_obd *sbi2md(struct ll_sb_info *sbi)
 {
-        struct obd_device *obd = sbi->ll_lmv_exp->exp_obd;
+        struct obd_device *obd = sbi->ll_md_exp->exp_obd;
         if (obd == NULL)
                 LBUG();
         return &obd->u.cli;
@@ -377,19 +376,19 @@ static inline struct ll_sb_info *ll_i2sbi(struct inode *inode)
         return ll_s2sbi(inode->i_sb);
 }
 
-static inline struct obd_export *ll_i2obdexp(struct inode *inode)
+static inline struct obd_export *ll_i2dtexp(struct inode *inode)
 {
-        return ll_s2obdexp(inode->i_sb);
+        return ll_s2dtexp(inode->i_sb);
 }
 
-static inline struct obd_export *ll_i2lmvexp(struct inode *inode)
+static inline struct obd_export *ll_i2mdexp(struct inode *inode)
 {
-        return ll_s2lmvexp(inode->i_sb);
+        return ll_s2mdexp(inode->i_sb);
 }
 
 static inline int ll_mds_max_easize(struct super_block *sb)
 {
-        return sbi2lmv(ll_s2sbi(sb))->cl_max_mds_easize;
+        return sbi2md(ll_s2sbi(sb))->cl_max_mds_easize;
 }
 
 static inline __u64 ll_file_maxbytes(struct inode *inode)

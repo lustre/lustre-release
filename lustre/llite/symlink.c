@@ -49,7 +49,7 @@ static int ll_readlink_internal(struct inode *inode,
         }
 
         ll_inode2id(&id, inode);
-        rc = md_getattr(sbi->ll_lmv_exp, &id, OBD_MD_LINKNAME, symlen,
+        rc = md_getattr(sbi->ll_md_exp, &id, OBD_MD_LINKNAME, symlen,
                         request);
         if (rc) {
                 if (rc != -ENOENT)

@@ -93,7 +93,7 @@ static int lprocfs_mds_wr_config_update(struct file *file, const char *buffer,
         struct obd_device *obd = data;
         ENTRY;
 
-        RETURN(mds_lov_update_config(obd, 0));
+        RETURN(mds_dt_update_config(obd, 0));
 }
 
 static int lprocfs_rd_last_fid(char *page, char **start, off_t off,

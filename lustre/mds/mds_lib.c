@@ -180,9 +180,6 @@ void mds_pack_dentry2body(struct obd_device *obd,
         b->valid |= OBD_MD_FLID | OBD_MD_FLGENER |
                 OBD_MD_MDS;
 
-        if (read_fid)
-                b->valid |= OBD_MD_FID;
-        
         mds_pack_dentry2id(obd, &b->id1, dentry,
                            read_fid);
 }
@@ -245,8 +242,6 @@ void mds_pack_inode2body(struct obd_device *obd, struct mds_body *b,
         } else {
                 b->nlink = inode->i_nlink;
         }
-        if (read_fid)
-                b->valid |= OBD_MD_FID;
         mds_pack_inode2id(obd, &b->id1, inode, read_fid);
 }
 

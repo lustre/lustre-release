@@ -59,7 +59,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct mds_body *body;
         struct lookup_intent it = { .it_op = IT_READDIR };
         struct mdc_op_data data;
-        struct obd_device *obddev = class_exp2obd(sbi->ll_lmv_exp);
+        struct obd_device *obddev = class_exp2obd(sbi->ll_md_exp);
         struct ldlm_res_id res_id =
                 { .name = {id_fid(&lli->lli_id), id_group(&lli->lli_id)} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
@@ -70,7 +70,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         if (!rc) {
                 llu_prepare_mdc_data(&data, inode, NULL, NULL, 0, 0);
 
-                rc = mdc_enqueue(sbi->ll_lmv_exp, LDLM_IBITS, &it, LCK_PR,
+                rc = mdc_enqueue(sbi->ll_md_exp, LDLM_IBITS, &it, LCK_PR,
                                  &data, &lockh, NULL, 0,
                                  ldlm_completion_ast, llu_mdc_blocking_ast,
                                  inode);
@@ -89,7 +89,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
                     S_IFDIR, 0, 0);
 
         offset = page->index << PAGE_SHIFT;
-        rc = mdc_readpage(sbi->ll_lmv_exp, &id, offset, page, &request);
+        rc = mdc_readpage(sbi->ll_md_exp, &id, offset, page, &request);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
                 LASSERT (body != NULL);         /* checked by mdc_readpage() */

@@ -514,15 +514,6 @@ int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid,
 
                 mdc_id2mdc_data(op_data, pid, cid, name, len, 0);
 
-                /* 
-                 * if we get inode by name (ll_lookup_it() case), we
-                 * always should ask for fid, as we will not be able to
-                 * take locks, revalidate dentry, etc. later with
-                 * invalid fid in inode.
-                 */
-                if (cid == NULL && name != NULL)
-                        op_data->valid |= OBD_MD_FID;
-
                 rc = mdc_enqueue(exp, LDLM_IBITS, it, it_to_lock_mode(it),
                                  op_data, &lockh, lmm, lmmsize,
                                  ldlm_completion_ast, cb_blocking, NULL);

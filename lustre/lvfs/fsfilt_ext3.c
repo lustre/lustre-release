@@ -1183,7 +1183,7 @@ static int fsfilt_ext3_setup(struct obd_device *obd, struct super_block *sb)
 #endif
         /* setup mdsnum in underlying fs */
 #ifdef EXT3_FEATURE_INCOMPAT_MDSNUM
-        if (mds->mds_lmv_obd) {
+        if (mds->mds_md_obd) {
                 struct ext3_sb_info *sbi = EXT3_SB(sb);
                 struct ext3_super_block *es = sbi->s_es;
                 handle_t *handle;

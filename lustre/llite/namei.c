@@ -286,7 +286,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         if (!it_disposition(it, DISP_LOOKUP_NEG)) {
                 ENTRY;
 
-                rc = ll_prep_inode(sbi->ll_lov_exp, sbi->ll_lmv_exp,
+                rc = ll_prep_inode(sbi->ll_dt_exp, sbi->ll_md_exp,
                                    &inode, request, offset, dentry->d_sb);
                 if (rc)
                         RETURN(rc);
@@ -359,7 +359,7 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         icbd.icbd_parent = parent;
         ll_inode2id(&pid, parent);
 
-        rc = md_intent_lock(ll_i2lmvexp(parent), &pid,
+        rc = md_intent_lock(ll_i2mdexp(parent), &pid,
                             dentry->d_name.name, dentry->d_name.len, NULL, 0,
                             NULL, it, flags, &req, ll_mdc_blocking_ast);
         if (rc < 0)
@@ -434,7 +434,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         LASSERT(it && it->d.lustre.it_disposition);
 
         request = it->d.lustre.it_data;
-        rc = ll_prep_inode(sbi->ll_lov_exp, sbi->ll_lmv_exp,
+        rc = ll_prep_inode(sbi->ll_dt_exp, sbi->ll_md_exp,
                            &inode, request, 1, dir->i_sb);
         if (rc)
                 GOTO(out, inode = ERR_PTR(rc));
@@ -472,7 +472,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
 {
         struct inode *inode;
         struct ptlrpc_request *request = it->d.lustre.it_data;
-        struct obd_export *lmv_exp = ll_i2lmvexp(dir); 
+        struct obd_export *md_exp = ll_i2mdexp(dir); 
         int rc = 0;
         ENTRY;
 
@@ -484,7 +484,7 @@ static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
         if (rc)
                 RETURN(rc);
 
-        mdc_store_inode_generation(lmv_exp, request, MDS_REQ_INTENT_REC_OFF, 1);
+        mdc_store_inode_generation(md_exp, request, MDS_REQ_INTENT_REC_OFF, 1);
         inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
                                NULL, 0, mode, 0, it);
         if (IS_ERR(inode))
@@ -550,7 +550,7 @@ static int ll_mknod_raw(struct nameidata *nd, int mode, dev_t rdev)
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
                 ll_prepare_mdc_data(op_data, dir, NULL, name, len, 0);
-                err = md_create(sbi->ll_lmv_exp, op_data, NULL, 0, mode,
+                err = md_create(sbi->ll_md_exp, op_data, NULL, 0, mode,
                                 current->fsuid, current->fsgid, rdev,
                                 &request);
                 OBD_FREE(op_data, sizeof(*op_data));
@@ -599,7 +599,7 @@ static int ll_mknod(struct inode *dir, struct dentry *child,
                 if (op_data == NULL)
                         RETURN(-ENOMEM);
                 ll_prepare_mdc_data(op_data, dir, NULL, name, len, 0);
-                err = md_create(sbi->ll_lmv_exp, op_data, NULL, 0, mode,
+                err = md_create(sbi->ll_md_exp, op_data, NULL, 0, mode,
                                 current->fsuid, current->fsgid, rdev,
                                 &request);
                 OBD_FREE(op_data, sizeof(*op_data));
@@ -608,7 +608,7 @@ static int ll_mknod(struct inode *dir, struct dentry *child,
 
                 ll_update_times(request, 0, dir);
                 
-                err = ll_prep_inode(sbi->ll_lov_exp, sbi->ll_lmv_exp,
+                err = ll_prep_inode(sbi->ll_dt_exp, sbi->ll_md_exp,
                                     &inode, request, 0, child->d_sb);
                 if (err)
                         GOTO(out_err, err);
@@ -648,7 +648,7 @@ static int ll_symlink_raw(struct nameidata *nd, const char *tgt)
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         ll_prepare_mdc_data(op_data, dir, NULL, name, len, 0);
-        err = md_create(sbi->ll_lmv_exp, op_data,
+        err = md_create(sbi->ll_md_exp, op_data,
                         tgt, strlen(tgt) + 1, S_IFLNK | S_IRWXUGO,
                         current->fsuid, current->fsgid, 0, &request);
         OBD_FREE(op_data, sizeof(*op_data));
@@ -679,7 +679,7 @@ static int ll_link_raw(struct nameidata *srcnd, struct nameidata *tgtnd)
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         ll_prepare_mdc_data(op_data, src, dir, name, len, 0);
-        err = md_link(sbi->ll_lmv_exp, op_data, &request);
+        err = md_link(sbi->ll_md_exp, op_data, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         if (err == 0)
                 ll_update_times(request, 0, dir);
@@ -706,7 +706,7 @@ static int ll_mkdir_raw(struct nameidata *nd, int mode)
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         ll_prepare_mdc_data(op_data, dir, NULL, name, len, 0);
-        err = md_create(sbi->ll_lmv_exp, op_data, NULL, 0, mode,
+        err = md_create(sbi->ll_md_exp, op_data, NULL, 0, mode,
                         current->fsuid, current->fsgid, 0, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         if (err == 0)
@@ -731,7 +731,7 @@ static int ll_rmdir_raw(struct nameidata *nd)
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         ll_prepare_mdc_data(op_data, dir, NULL, name, len, S_IFDIR);
-        rc = md_unlink(ll_i2sbi(dir)->ll_lmv_exp, op_data, &request);
+        rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         if (rc == 0)
                 ll_update_times(request, 0, dir);
@@ -772,7 +772,7 @@ int ll_objects_destroy(struct ptlrpc_request *request,
                 GOTO(out, rc = -EPROTO);
         }
 
-        rc = obd_unpackmd(ll_i2obdexp(dir), &lsm, eadata, body->eadatasize);
+        rc = obd_unpackmd(ll_i2dtexp(dir), &lsm, eadata, body->eadatasize);
         if (rc < 0) {
                 CERROR("obd_unpackmd: %d\n", rc);
                 GOTO(out, rc);
@@ -808,14 +808,14 @@ int ll_objects_destroy(struct ptlrpc_request *request,
                 }
         }
 
-        rc = obd_destroy(ll_i2obdexp(dir), oa, lsm, &oti);
+        rc = obd_destroy(ll_i2dtexp(dir), oa, lsm, &oti);
         obdo_free(oa);
         if (rc)
                 CERROR("obd destroy objid "LPX64" error %d\n",
                        lsm->lsm_object_id, rc);
         EXIT;
  out_free_memmd:
-        obd_free_memmd(ll_i2obdexp(dir), &lsm);
+        obd_free_memmd(ll_i2dtexp(dir), &lsm);
  out:
         return rc;
 }
@@ -836,7 +836,7 @@ static int ll_unlink_raw(struct nameidata *nd)
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         ll_prepare_mdc_data(op_data, dir, NULL, name, len, 0);
-        rc = md_unlink(ll_i2sbi(dir)->ll_lmv_exp, op_data, &request);
+        rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         if (rc)
                 GOTO(out, rc);
@@ -870,7 +870,7 @@ static int ll_rename_raw(struct nameidata *oldnd, struct nameidata *newnd)
         if (op_data == NULL)
                 RETURN(-ENOMEM);
         ll_prepare_mdc_data(op_data, src, tgt, NULL, 0, 0);
-        err = md_rename(sbi->ll_lmv_exp, op_data, oldname, oldlen,
+        err = md_rename(sbi->ll_md_exp, op_data, oldname, oldlen,
                         newname, newlen, &request);
         OBD_FREE(op_data, sizeof(*op_data));
         if (!err) {

@@ -169,7 +169,7 @@ int revalidate_it_finish(struct ptlrpc_request *request, int offset,
                 RETURN(-ENOENT);
 
         sbi = ll_i2sbi(de->d_inode);
-        rc = ll_prep_inode(sbi->ll_lov_exp, sbi->ll_lmv_exp,
+        rc = ll_prep_inode(sbi->ll_dt_exp, sbi->ll_md_exp,
                            &de->d_inode, request, offset, NULL);
 
         RETURN(rc);
@@ -244,7 +244,7 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                (unsigned long) de->d_inode->i_ino,
                (unsigned long) de->d_inode->i_generation);
 
-        exp = ll_i2lmvexp(de->d_inode);
+        exp = ll_i2mdexp(de->d_inode);
         ll_inode2id(&pid, de->d_parent->d_inode);
         ll_inode2id(&cid, de->d_inode);
         LASSERT(id_fid(&cid) != 0);
@@ -372,7 +372,7 @@ out:
         unlock_kernel();
 
         handle = (flag) ? &ldd->lld_mnt_och : &ldd->lld_cwd_och;
-        rc = obd_pin(sbi->ll_lmv_exp, inode->i_ino, inode->i_generation,
+        rc = obd_pin(sbi->ll_md_exp, inode->i_ino, inode->i_generation,
                      inode->i_mode & S_IFMT, handle, flag);
 
         if (rc) {
@@ -422,7 +422,7 @@ out:
                 return;
         }
 
-        rc = obd_unpin(sbi->ll_lmv_exp, &handle, flag);
+        rc = obd_unpin(sbi->ll_md_exp, &handle, flag);
         EXIT;
 }
 
@@ -450,7 +450,7 @@ static void ll_dentry_iput(struct dentry *dentry, struct inode *inode)
         LASSERT(dentry->d_parent && dentry->d_parent->d_inode);
         ll_inode2id(&parent, dentry->d_parent->d_inode);
         ll_inode2id(&child, inode);
-        md_change_cbdata_name(sbi->ll_lmv_exp, &parent,
+        md_change_cbdata_name(sbi->ll_md_exp, &parent,
                               (char *)dentry->d_name.name, 
                               dentry->d_name.len, &child, 
                               null_if_equal, inode);
@@ -465,7 +465,7 @@ static void ll_dentry_iput(struct dentry *dentry, struct inode *inode)
         LASSERT(dentry->d_parent && dentry->d_parent->d_inode);
         ll_inode2id(&parent, dentry->d_parent->d_inode);
         ll_inode2id(&child, inode);
-        md_change_cbdata_name(sbi->ll_lmv_exp, &parent,
+        md_change_cbdata_name(sbi->ll_md_exp, &parent,
                               (char *)dentry->d_name.name, 
                               dentry->d_name.len, &child, 
                               null_if_equal, inode);

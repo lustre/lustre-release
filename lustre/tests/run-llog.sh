@@ -5,7 +5,9 @@ TMP=${TMP:-/tmp}
 MDS=`find /proc/fs/lustre/mds/* -type d | head -n1 | sed 's/.*\///'`
 [ -z "$MDS" ] && echo "no MDS available, skipping llog test" && exit 0
 
-insmod ../obdclass/llog_test.o || exit 1
+test "x$(uname -r | grep -o "2.6")" = "x2.6" && MODEXT=ko || MODEXT=o
+
+insmod ../obdclass/llog_test.$MODEXT || exit 1
 lctl modules > $TMP/ogdb-`hostname`
 
 # take care of UML developers

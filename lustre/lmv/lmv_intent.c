@@ -157,8 +157,7 @@ repeat:
         }
 
         rc = md_intent_lock(lmv->tgts[id_group(&rpid)].ltd_exp, &rpid, name,
-                            len, lmm, lmmsize, cid, it, flags, reqp,
-                            cb_blocking);
+                            len, lmm, lmmsize, cid, it, flags, reqp, cb_blocking);
         if (rc == -ERESTART) {
                 /* directory got splitted. time to update local object and
                  * repeat the request with proper MDS */
@@ -272,9 +271,11 @@ int lmv_intent_getattr(struct obd_export *exp, struct lustre_id *pid,
                                mds, OLID4(&rpid));
                 }
         }
+
+        /* the same about fid returning. */
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &rpid, name,
-                            len, lmm, lmmsize, cid, it, flags, reqp,
-                            cb_blocking);
+                            len, lmm, lmmsize, cid, it, flags,
+                            reqp, cb_blocking);
         if (rc < 0)
                 RETURN(rc);
        
@@ -326,7 +327,8 @@ int lmv_intent_getattr(struct obd_export *exp, struct lustre_id *pid,
                 CDEBUG(D_OTHER, "attrs from slaves for "DLID4", rc %d\n",
                        OLID4(cid), rc);
                 
-                rc = lmv_revalidate_slaves(exp, reqp, cid, it, 1, cb_blocking);
+                rc = lmv_revalidate_slaves(exp, reqp, cid, it, 1,
+                                           cb_blocking);
                 lmv_put_obj(obj2);
         }
         RETURN(rc);
@@ -496,8 +498,8 @@ repeat:
                 }
         }
         rc = md_intent_lock(lmv->tgts[mds].ltd_exp, &rpid, name,
-                            len, lmm, lmmsize, cid, it, flags, reqp, 
-                            cb_blocking);
+                            len, lmm, lmmsize, cid, it, flags,
+                            reqp, cb_blocking);
         if (rc > 0) {
                 LASSERT(cid != 0);
                 RETURN(rc);
@@ -537,8 +539,8 @@ repeat:
 
         /* okay, MDS has returned success. Probably name has been resolved in
          * remote inode. */
-        rc = lmv_handle_remote_inode(exp, lmm, lmmsize, it, flags,
-                                     reqp, cb_blocking);
+        rc = lmv_handle_remote_inode(exp, lmm, lmmsize, it,
+                                     flags, reqp, cb_blocking);
 
         if (rc == 0 && (mea = lmv_splitted_dir_body(*reqp, 1))) {
                 /* wow! this is splitted dir, we'd like to handle it */

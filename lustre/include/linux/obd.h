@@ -354,37 +354,37 @@ struct mds_obd {
         struct dentry                   *mds_logs_dir;
         struct dentry                   *mds_objects_dir;
         struct llog_handle              *mds_cfg_llh;
-        struct obd_device               *mds_lov_obd;
-        struct obd_uuid                  mds_lov_uuid;
         char                            *mds_profile;
-        struct obd_export               *mds_lov_exp;
-        int                              mds_has_lov_desc;
-        struct lov_desc                  mds_lov_desc;
-        obd_id                          *mds_lov_objids;
-        int                              mds_lov_objids_valid;
-        int                              mds_lov_nextid_set;
-        struct file                     *mds_lov_objid_filp;
-        spinlock_t                       mds_lov_lock;
+        struct obd_device               *mds_dt_obd;
+        struct obd_uuid                  mds_dt_uuid;
+        struct obd_export               *mds_dt_exp;
+        int                              mds_has_dt_desc;
+        struct lov_desc                  mds_dt_desc;
+        obd_id                          *mds_dt_objids;
+        int                              mds_dt_objids_valid;
+        int                              mds_dt_nextid_set;
+        struct file                     *mds_dt_objid_filp;
+        spinlock_t                       mds_dt_lock;
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
         
         int                              mds_num;
         int                              mds_config_version;
 
-        char                            *mds_lmv_name;
-        struct obd_device               *mds_lmv_obd;
-        struct obd_export               *mds_lmv_exp;
+        char                            *mds_md_name;
+        struct obd_device               *mds_md_obd;
+        struct obd_export               *mds_md_exp;
+        struct semaphore                 mds_md_sem;
+        struct obd_uuid                  mds_md_uuid;
+        int                              mds_md_connected;
 
         struct ptlrpc_service           *mds_create_service;
-        struct semaphore                 mds_lmv_sem;
         uid_t                            mds_squash_uid;
         gid_t                            mds_squash_gid;
         ptl_nid_t                        mds_nosquash_nid;
         atomic_t                         mds_real_clients;
-        struct obd_uuid                  mds_lmv_uuid;
         struct dentry                   *mds_id_dir;
         int                              mds_obd_type;
-        int                              mds_lmv_connected;
         struct dentry                   *mds_unnamed_dir; /* for mdt_obd_create only */
 };
 

@@ -148,7 +148,7 @@ static void ll_close_done_writing(struct inode *inode)
                 GOTO(out, rc);
         }
 
-        rc = ll_lsm_getattr(ll_i2obdexp(inode), lli->lli_smd, obdo);
+        rc = ll_lsm_getattr(ll_i2dtexp(inode), lli->lli_smd, obdo);
         if (rc) {
                 CERROR("inode_getattr failed (%d): unable to send DONE_WRITING "
                        "for inode %lu/%u\n", rc, inode->i_ino,

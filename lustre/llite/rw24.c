@@ -114,7 +114,7 @@ static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
                 lprocfs_counter_add(ll_i2sbi(inode)->ll_stats,
                                     LPROC_LL_DIRECT_READ, iobuf->length);
         rc = obd_brw_async(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
-                           ll_i2obdexp(inode), oa, lsm, iobuf->nr_pages, pga,
+                           ll_i2dtexp(inode), oa, lsm, iobuf->nr_pages, pga,
                            set, NULL);
         if (rc) {
                 CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
@@ -129,7 +129,7 @@ static int ll_direct_IO_24(int rw, struct inode *inode, struct kiobuf *iobuf,
                 void lov_increase_kms(struct obd_export *,
                                       struct lov_stripe_md *, obd_off size);
                 obd_off size = offset + length;
-                lov_increase_kms(ll_i2obdexp(inode), lsm, size);
+                lov_increase_kms(ll_i2dtexp(inode), lsm, size);
                 if (size > inode->i_size)
                         inode->i_size = size;
         }

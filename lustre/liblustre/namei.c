@@ -194,8 +194,8 @@ static int pnode_revalidate_finish(struct ptlrpc_request *req,
         if (it_disposition(it, DISP_LOOKUP_NEG))
                 RETURN(-ENOENT);
 
-        rc = mdc_req2lustre_md(llu_i2sbi(inode)->ll_lmv_exp, req, offset, 
-                               llu_i2sbi(inode)->ll_lov_exp, &md);
+        rc = mdc_req2lustre_md(llu_i2sbi(inode)->ll_md_exp, req, offset, 
+                               llu_i2sbi(inode)->ll_dt_exp, &md);
         if (rc)
                 RETURN(rc);
 
@@ -242,7 +242,7 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 }
         }
 
-        exp = llu_i2mdcexp(pb->pb_ino);
+        exp = llu_i2mdexp(pb->pb_ino);
         ll_inode2id(&pid, pnode->p_parent->p_base->pb_ino);
         ll_inode2id(&cid, pb->pb_ino);
         icbd.icbd_parent = pnode->p_parent->p_base->pb_ino;
@@ -330,8 +330,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 struct llu_inode_info *lli;
                 ENTRY;
 
-                rc = mdc_req2lustre_md(sbi->ll_lmv_exp, request, offset, 
-                                       sbi->ll_lov_exp, &md);
+                rc = mdc_req2lustre_md(sbi->ll_md_exp, request, offset, 
+                                       sbi->ll_dt_exp, &md);
                 if (rc)
                         RETURN(rc);
 
@@ -339,11 +339,11 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 if (!inode || IS_ERR(inode)) {
                         /* free the lsm if we allocated one above */
                         if (md.lsm != NULL)
-                                obd_free_memmd(sbi->ll_lov_exp, &md.lsm);
+                                obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
                         RETURN(inode ? PTR_ERR(inode) : -ENOMEM);
                 } else if (md.lsm != NULL &&
                            llu_i2info(inode)->lli_smd != md.lsm) {
-                        obd_free_memmd(sbi->ll_lov_exp, &md.lsm);
+                        obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
                 }
 
                 lli = llu_i2info(inode);
@@ -415,7 +415,7 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         icbd.icbd_child = pnode;
         ll_inode2id(&pid, parent);
 
-        rc = mdc_intent_lock(llu_i2mdcexp(parent), &pid,
+        rc = mdc_intent_lock(llu_i2mdexp(parent), &pid,
                              pnode->p_base->pb_name.name,
                              pnode->p_base->pb_name.len,
                              NULL, 0, NULL, it, flags, &req,

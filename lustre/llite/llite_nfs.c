@@ -54,20 +54,20 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
         if (inode)
                 return inode;
         if (S_ISREG(mode)) {
-                eadatalen = obd_size_diskmd(sbi->ll_lov_exp, NULL);
+                eadatalen = obd_size_diskmd(sbi->ll_dt_exp, NULL);
                 valid |= OBD_MD_FLEASIZE;
         }
         id_type(&id) = mode;
         id_ino(&id) = (__u64)ino;
         id_gen(&id) = generation;
 
-        rc = md_getattr(sbi->ll_lmv_exp, &id, valid, eadatalen, &req);
+        rc = md_getattr(sbi->ll_md_exp, &id, valid, eadatalen, &req);
         if (rc) {
                 CERROR("failure %d inode %lu\n", rc, ino);
                 return ERR_PTR(rc);
         }
 
-        rc = ll_prep_inode(sbi->ll_lov_exp, sbi->ll_lmv_exp,
+        rc = ll_prep_inode(sbi->ll_dt_exp, sbi->ll_md_exp,
                            &inode, req, 0, sb);
         if (rc) {
                 ptlrpc_req_finished(req);

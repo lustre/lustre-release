@@ -432,8 +432,8 @@ static int mds_connect_post(struct obd_export *exp, unsigned long flags)
                                atomic_read(&mds->mds_real_clients));
                         exp->exp_flags |= OBD_OPT_REAL_CLIENT;
                 }
-                if (mds->mds_lmv_name)
-                        rc = mds_lmv_connect(obd, mds->mds_lmv_name);
+                if (mds->mds_md_name)
+                        rc = mds_md_connect(obd, mds->mds_md_name);
         }
         RETURN(rc);
 }
@@ -529,7 +529,7 @@ static int mds_disconnect(struct obd_export *exp, unsigned long flags)
         if (!(exp->exp_flags & OBD_OPT_REAL_CLIENT)
             && !atomic_read(&mds->mds_real_clients)) {
                 /* there was no client at all */
-                mds_lmv_disconnect(obd, flags);
+                mds_md_disconnect(obd, flags);
         }
 
         if ((exp->exp_flags & OBD_OPT_REAL_CLIENT)
@@ -538,7 +538,7 @@ static int mds_disconnect(struct obd_export *exp, unsigned long flags)
                 CDEBUG(D_OTHER, "%s: last real client %s disconnected.  "
                        "Disconnnect from LMV now\n",
                        obd->obd_name, exp->exp_client_uuid.uuid);
-                mds_lmv_disconnect(obd, flags);
+                mds_md_disconnect(obd, flags);
         }
 
         spin_lock_irqsave(&exp->exp_lock, irqflags);
@@ -583,8 +583,6 @@ static int mds_getstatus(struct ptlrpc_request *req)
         }
 
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
-        
-        body->valid |= OBD_MD_FID;
         memcpy(&body->id1, &mds->mds_rootid, sizeof(body->id1));
 
         /*
@@ -758,15 +756,13 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         LASSERT(body != NULL);                 /* caller prepped reply */
 
         if (dentry->d_flags & DCACHE_CROSS_REF) {
-                mds_pack_dentry2body(obd, body, dentry,
-                                     (reqbody->valid & OBD_MD_FID) ? 1 : 0);
+                mds_pack_dentry2body(obd, body, dentry, 1);
                 CDEBUG(D_OTHER, "cross reference: "DLID4"\n",
                        OLID4(&body->id1));
                 RETURN(0);
         }
         
-        mds_pack_inode2body(obd, body, inode, 
-			    (reqbody->valid & OBD_MD_FID) ? 1 : 0);
+        mds_pack_inode2body(obd, body, inode, 1);
 
         if ((S_ISREG(inode->i_mode) && (reqbody->valid & OBD_MD_FLEASIZE)) ||
             (S_ISDIR(inode->i_mode) && (reqbody->valid & OBD_MD_FLDIREA))) {
@@ -900,7 +896,7 @@ int mds_check_mds_num(struct obd_device *obd, struct inode *inode,
         int mea_size, rc = 0;
         ENTRY;
         
-        rc = mds_get_lmv_attr(obd, inode, &mea, &mea_size);
+        rc = mds_md_get_attr(obd, inode, &mea, &mea_size);
         if (rc)
                 RETURN(rc);
         if (mea != NULL) {
@@ -1768,7 +1764,7 @@ repeat:
                 obdo_from_inode(&repbody->oa, new->d_inode, FILTER_VALID_FLAGS);
                 repbody->oa.o_id = new->d_inode->i_ino;
                 repbody->oa.o_generation = new->d_inode->i_generation;
-                repbody->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGENER | OBD_MD_FID;
+                repbody->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGENER;
 
                 if ((body->oa.o_flags & OBD_FL_RECREATE_OBJS) ||
                     lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
@@ -1831,7 +1827,7 @@ repeat:
         if (body->oa.o_valid & OBD_MD_FLID) {
                 /* this is new object for splitted dir. We have to prevent
                  * recursive splitting on it -bzzz */
-                mealen = obd_size_diskmd(mds->mds_lmv_exp, NULL);
+                mealen = obd_size_diskmd(mds->mds_md_exp, NULL);
 
                 OBD_ALLOC(mea, mealen);
                 if (mea == NULL)
@@ -1956,7 +1952,7 @@ static int mds_set_info(struct obd_export *exp, __u32 keylen,
                 
                 /* mds number has been changed, so the corresponding obdfilter
                  * exp need to be changed too. */
-                rc = obd_set_info(mds->mds_lov_exp, strlen("mds_conn"),
+                rc = obd_set_info(mds->mds_dt_exp, strlen("mds_conn"),
                                   "mds_conn", valsize, &group);
                 RETURN(rc);
         }
@@ -2686,9 +2682,9 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                         lcfg->lcfg_inlbuf4);
 
         /* we have to know mdsnum before touching underlying fs -bzzz */
-        sema_init(&mds->mds_lmv_sem, 1);
-        mds->mds_lmv_connected = 0;
-        mds->mds_lmv_name = NULL;
+        sema_init(&mds->mds_md_sem, 1);
+        mds->mds_md_connected = 0;
+        mds->mds_md_name = NULL;
         
         if (lcfg->lcfg_inllen5 > 0 && lcfg->lcfg_inlbuf5 && 
             strncmp(lcfg->lcfg_inlbuf5, "dumb", lcfg->lcfg_inllen5)) {
@@ -2698,18 +2694,18 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                        obd->obd_name, lcfg->lcfg_inlbuf5);
 
                 generate_random_uuid(uuid);
-                class_uuid_unparse(uuid, &mds->mds_lmv_uuid);
+                class_uuid_unparse(uuid, &mds->mds_md_uuid);
 
-                OBD_ALLOC(mds->mds_lmv_name, lcfg->lcfg_inllen5);
-                if (mds->mds_lmv_name == NULL) 
+                OBD_ALLOC(mds->mds_md_name, lcfg->lcfg_inllen5);
+                if (mds->mds_md_name == NULL) 
                         RETURN(rc = -ENOMEM);
 
-                memcpy(mds->mds_lmv_name, lcfg->lcfg_inlbuf5,
+                memcpy(mds->mds_md_name, lcfg->lcfg_inlbuf5,
                        lcfg->lcfg_inllen5);
                 
-                rc = mds_lmv_connect(obd, mds->mds_lmv_name);
+                rc = mds_md_connect(obd, mds->mds_md_name);
                 if (rc) {
-                        OBD_FREE(mds->mds_lmv_name, lcfg->lcfg_inllen5);
+                        OBD_FREE(mds->mds_md_name, lcfg->lcfg_inllen5);
                         GOTO(err_ops, rc);
                 }
         }
@@ -2768,7 +2764,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
                 class_uuid_t uuid;
 
                 generate_random_uuid(uuid);
-                class_uuid_unparse(uuid, &mds->mds_lov_uuid);
+                class_uuid_unparse(uuid, &mds->mds_dt_uuid);
 
                 OBD_ALLOC(mds->mds_profile, lcfg->lcfg_inllen3);
                 if (mds->mds_profile == NULL)
@@ -2782,8 +2778,8 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
          * setup root dir and files ID dir if lmv already connected, or there is
          * not lmv at all.
          */
-        if (mds->mds_lmv_exp || (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3 &&
-                                 strncmp(lcfg->lcfg_inlbuf3, "dumb", lcfg->lcfg_inllen3)))
+        if (mds->mds_md_exp || (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3 &&
+                                strncmp(lcfg->lcfg_inlbuf3, "dumb", lcfg->lcfg_inllen3)))
         {
                 rc = mds_fs_setup_rootid(obd);
                 if (rc)
@@ -2838,7 +2834,7 @@ static int mds_postsetup(struct obd_device *obd)
                 struct config_llog_instance cfg;
 
                 cfg.cfg_instance = NULL;
-                cfg.cfg_uuid = mds->mds_lov_uuid;
+                cfg.cfg_uuid = mds->mds_dt_uuid;
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
                 lgctxt = llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT);
@@ -2858,18 +2854,18 @@ static int mds_postsetup(struct obd_device *obd)
                         CERROR("No profile found: %s\n", mds->mds_profile);
                         GOTO(err_cleanup, rc = -ENOENT);
                 }
-                rc = mds_lov_connect(obd, lprof->lp_lov);
+                rc = mds_dt_connect(obd, lprof->lp_lov);
                 if (rc)
                         GOTO(err_cleanup, rc);
 
-                rc = mds_lmv_postsetup(obd);
+                rc = mds_md_postsetup(obd);
                 if (rc)
                         GOTO(err_cleanup, rc);
         }
 
         RETURN(rc);
 err_cleanup:
-        mds_lov_clean(obd);
+        mds_dt_clean(obd);
 err_llog:
         obd_llog_cleanup(llog_get_context(&obd->obd_llogs,
                                           LLOG_CONFIG_ORIG_CTXT));
@@ -2889,9 +2885,9 @@ int mds_postrecov(struct obd_device *obd)
         LASSERT(ctxt != NULL);
 
         /* set nextid first, so we are sure it happens */
-        rc = mds_lov_set_nextid(obd);
+        rc = mds_dt_set_nextid(obd);
         if (rc) {
-                CERROR("%s: mds_lov_set_nextid failed\n", obd->obd_name);
+                CERROR("%s: mds_dt_set_nextid() failed\n", obd->obd_name);
                 GOTO(out, rc);
         }
 
@@ -2903,12 +2899,12 @@ int mds_postrecov(struct obd_device *obd)
 
         group = FILTER_GROUP_FIRST_MDS + mds->mds_num;
         valsize = sizeof(group);
-        rc = obd_set_info(mds->mds_lov_exp, strlen("mds_conn"), "mds_conn",
+        rc = obd_set_info(mds->mds_dt_exp, strlen("mds_conn"), "mds_conn",
                           valsize, &group);
         if (rc)
                 GOTO(out, rc);
 
-        rc = llog_connect(ctxt, obd->u.mds.mds_lov_desc.ld_tgt_count,
+        rc = llog_connect(ctxt, obd->u.mds.mds_dt_desc.ld_tgt_count,
                           NULL, NULL, NULL);
         if (rc) {
                 CERROR("%s: failed at llog_origin_connect: %d\n", 
@@ -2917,7 +2913,7 @@ int mds_postrecov(struct obd_device *obd)
         }
 
         /* remove the orphaned precreated objects */
-        rc = mds_lov_clearorphans(mds, NULL /* all OSTs */);
+        rc = mds_dt_clearorphans(mds, NULL /* all OSTs */);
         if (rc)
                 GOTO(err_llog, rc);
 
@@ -2927,14 +2923,14 @@ out:
 err_llog:
         /* cleanup all llogging subsystems */
         rc = obd_llog_finish(obd, &obd->obd_llogs,
-                             mds->mds_lov_desc.ld_tgt_count);
+                             mds->mds_dt_desc.ld_tgt_count);
         if (rc)
                 CERROR("%s: failed to cleanup llogging subsystems\n",
                         obd->obd_name);
         goto out;
 }
 
-int mds_lov_clean(struct obd_device *obd)
+int mds_dt_clean(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         ENTRY;
@@ -2950,7 +2946,7 @@ int mds_lov_clean(struct obd_device *obd)
                 sprintf(cln_prof, "%s-clean", mds->mds_profile);
 
                 cfg.cfg_instance = NULL;
-                cfg.cfg_uuid = mds->mds_lov_uuid;
+                cfg.cfg_uuid = mds->mds_dt_uuid;
 
                 push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 llctx = llog_get_context(&obd->obd_llogs,
@@ -2965,14 +2961,14 @@ int mds_lov_clean(struct obd_device *obd)
         RETURN(0);
 }
 
-int mds_lmv_clean(struct obd_device *obd)
+int mds_md_clean(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         ENTRY;
 
-        if (mds->mds_lmv_name) {
-                OBD_FREE(mds->mds_lmv_name, strlen(mds->mds_lmv_name) + 1);
-                mds->mds_lmv_name = NULL;
+        if (mds->mds_md_name) {
+                OBD_FREE(mds->mds_md_name, strlen(mds->mds_md_name) + 1);
+                mds->mds_md_name = NULL;
         }
         RETURN(0);
 }
@@ -2982,9 +2978,9 @@ static int mds_precleanup(struct obd_device *obd, int flags)
         int rc = 0;
         ENTRY;
 
-        mds_lmv_clean(obd);
-        mds_lov_disconnect(obd, flags);
-        mds_lov_clean(obd);
+        mds_md_clean(obd);
+        mds_dt_disconnect(obd, flags);
+        mds_dt_clean(obd);
         obd_llog_cleanup(llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT));
         RETURN(rc);
 }
@@ -3000,10 +2996,10 @@ static int mds_cleanup(struct obd_device *obd, int flags)
         mds_update_server_data(obd, 1);
         mds_update_last_fid(obd, NULL, 1);
         
-        if (mds->mds_lov_objids != NULL) {
-                int size = mds->mds_lov_desc.ld_tgt_count *
+        if (mds->mds_dt_objids != NULL) {
+                int size = mds->mds_dt_desc.ld_tgt_count *
                         sizeof(obd_id);
-                OBD_FREE(mds->mds_lov_objids, size);
+                OBD_FREE(mds->mds_dt_objids, size);
         }
         mds_fs_cleanup(obd, flags);
 

@@ -379,7 +379,6 @@ struct lov_mds_md_v0 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_MDS      (0x0000000010000000)    /* where an inode lives on */
 #define OBD_MD_FLDIREA  (0x0000000020000000)    /* dir's extended attribute data */
 #define OBD_MD_REINT    (0x0000000040000000)    /* reintegrate oa */
-#define OBD_MD_FID      (0x0000000080000000)    /* take care about fid component */
 
 #define OBD_MD_FLNOTOBD (~(OBD_MD_FLBLOCKS | OBD_MD_LINKNAME |          \
                            OBD_MD_FLEASIZE | OBD_MD_FLHANDLE |          \
