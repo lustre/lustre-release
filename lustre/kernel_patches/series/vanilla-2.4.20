@@ -1,4 +1,4 @@
-uml-patch-2.4.20-3.patch
+uml-patch-2.4.20-4.patch
 dev_read_only_hp.patch
 exports_hp.patch
 kmem_cache_validate_hp.patch
@@ -22,4 +22,3 @@ ext3-unmount_sync.patch
 ext3-use-after-free.patch
 extN-wantedi.patch
 extN-san.patch
-uml-patch-2.4.20-tmp
