@@ -37,12 +37,12 @@ static int cobd_attach(struct obd_device *dev, obd_count len, void *data)
         struct lprocfs_static_vars lvars;
 
         lprocfs_init_vars(cobd, &lvars);
-	return lprocfs_obd_attach(dev, lvars.obd_vars);
+        return lprocfs_obd_attach(dev, lvars.obd_vars);
 }
 
 static int cobd_detach(struct obd_device *dev)
 {
-	return lprocfs_obd_detach(dev);
+        return lprocfs_obd_detach(dev);
 }
 
 static int
@@ -117,10 +117,10 @@ cobd_connect (struct lustre_handle *conn, struct obd_device *obd,
 
 static int cobd_disconnect(struct lustre_handle *conn, int flags)
 {
-	int rc = class_disconnect(conn, flags);
+        int rc = class_disconnect(conn, flags);
 
         CERROR ("rc %d\n", rc);
-	return (rc);
+        return (rc);
 }
 
 static int
@@ -142,23 +142,15 @@ cobd_get_info(struct lustre_handle *conn, obd_count keylen,
         return obd_get_info(&cobd->cobd_target, keylen, key, vallen, val);
 }
 
-static int cobd_statfs(struct obd_export *exp, struct obd_statfs *osfs)
+static int cobd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
+                       unsigned long max_age)
 {
-        struct obd_export *cobd_exp;
-        int rc;
-
-        if (exp->exp_obd == NULL)
-                return -EINVAL;
-
-        cobd_exp = class_conn2export(&exp->exp_obd->u.cobd.cobd_target);
-        rc = obd_statfs(cobd_exp, osfs);
-        class_export_put(cobd_exp);
-        return rc;
+        return obd_statfs(class_conn2obd(&obd->u.cobd.cobd_target), osfs,
+                          max_age);
 }
 
-static int
-cobd_getattr(struct lustre_handle *conn, struct obdo *oa,
-             struct lov_stripe_md *lsm)
+static int cobd_getattr(struct lustre_handle *conn, struct obdo *oa,
+                        struct lov_stripe_md *lsm)
 {
         struct obd_device *obd = class_conn2obd(conn);
         struct cache_obd  *cobd;
@@ -311,7 +303,7 @@ static int __init cobd_init(void)
         struct lprocfs_static_vars lvars;
         ENTRY;
 
-	printk(KERN_INFO "Lustre Caching OBD driver; info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre Caching OBD driver; info@clusterfs.com\n");
 
         lprocfs_init_vars(cobd, &lvars);
         RETURN(class_register_type(&cobd_ops, lvars.module_vars,
@@ -320,7 +312,7 @@ static int __init cobd_init(void)
 
 static void /*__exit*/ cobd_exit(void)
 {
-	class_unregister_type(OBD_CACHE_DEVICENAME);
+        class_unregister_type(OBD_CACHE_DEVICENAME);
 }
 
 MODULE_AUTHOR("Cluster File Systems, Inc. <info@clusterfs.com>");
