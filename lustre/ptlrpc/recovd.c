@@ -21,37 +21,39 @@
 #include <linux/lustre_ha.h>
 #include <linux/obd_support.h>
 
-struct recovd_obd *ptlrpc_connmgr;
-
-void recovd_cli_manage(struct recovd_obd *recovd, struct ptlrpc_client *cli)
+void recovd_conn_manage(struct recovd_obd *recovd,
+                        struct ptlrpc_connection *conn)
 {
         ENTRY;
-        cli->cli_recovd = recovd;
+        conn->c_recovd = recovd;
         spin_lock(&recovd->recovd_lock);
-        list_add(&cli->cli_ha_item, &recovd->recovd_clients_lh);
+        list_add(&conn->c_recovd_data.rd_managed_chain,
+                 &recovd->recovd_managed_items);
         spin_unlock(&recovd->recovd_lock);
         EXIT;
 }
 
-void recovd_cli_fail(struct ptlrpc_client *cli)
+void recovd_conn_fail(struct ptlrpc_connection *conn)
 {
         ENTRY;
-        spin_lock(&cli->cli_recovd->recovd_lock);
-        cli->cli_recovd->recovd_flags |= RECOVD_FAIL;
-        cli->cli_recovd->recovd_wakeup_flag = 1;
-        list_del(&cli->cli_ha_item);
-        list_add(&cli->cli_ha_item, &cli->cli_recovd->recovd_troubled_lh);
-        spin_unlock(&cli->cli_recovd->recovd_lock);
-        wake_up(&cli->cli_recovd->recovd_waitq);
+        spin_lock(&conn->c_recovd->recovd_lock);
+        conn->c_recovd->recovd_flags |= RECOVD_FAIL;
+        conn->c_recovd->recovd_wakeup_flag = 1;
+        list_del(&conn->c_recovd_data.rd_managed_chain);
+        list_add(&conn->c_recovd_data.rd_managed_chain, 
+                 &conn->c_recovd->recovd_troubled_items);
+        spin_unlock(&conn->c_recovd->recovd_lock);
+        wake_up(&conn->c_recovd->recovd_waitq);
         EXIT;
 }
 
-/* this function must be called with cli->cli_lock held */
-void recovd_cli_fixed(struct ptlrpc_client *cli)
+/* this function must be called with conn->c_lock held */
+void recovd_conn_fixed(struct ptlrpc_connection *conn)
 {
         ENTRY;
-        list_del(&cli->cli_ha_item);
-        list_add(&cli->cli_ha_item, &cli->cli_recovd->recovd_clients_lh);
+        list_del(&conn->c_recovd_data.rd_managed_chain);
+        list_add(&conn->c_recovd_data.rd_managed_chain,
+                 &conn->c_recovd->recovd_managed_items);
         EXIT;
 }
 
@@ -129,15 +131,15 @@ static int recovd_handle_event(struct recovd_obd *recovd)
         if (recovd->recovd_flags & RECOVD_UPCALL_ANSWER) { 
                 CERROR("UPCALL_WAITING: upcall answer\n");
 
-                while (!list_empty(&recovd->recovd_troubled_lh)) {
-                        struct ptlrpc_client *cli =
-                                list_entry(recovd->recovd_troubled_lh.next,
-                                           struct ptlrpc_client, cli_ha_item);
+                while (!list_empty(&recovd->recovd_troubled_items)) {
+                        struct recovd_data *rd =
+                                list_entry(recovd->recovd_troubled_items.next,
+                                           struct recovd_data, rd_managed_chain);
 
-                        list_del(&cli->cli_ha_item); 
-                        if (cli->cli_recover) {
+                        list_del(&rd->rd_managed_chain);
+                        if (rd->rd_recover) {
                                 spin_unlock(&recovd->recovd_lock);
-                                cli->cli_recover(cli); 
+                                rd->rd_recover(rd);
                                 spin_lock(&recovd->recovd_lock);
                         }
                 }
@@ -195,12 +197,13 @@ static int recovd_main(void *arg)
 int recovd_setup(struct recovd_obd *recovd)
 {
         int rc;
-        extern void (*class_signal_client_failure)(struct ptlrpc_client *);
+        extern void (*class_signal_connection_failure)
+                (struct ptlrpc_connection *);
 
         ENTRY;
 
-        INIT_LIST_HEAD(&recovd->recovd_clients_lh);
-        INIT_LIST_HEAD(&recovd->recovd_troubled_lh);
+        INIT_LIST_HEAD(&recovd->recovd_managed_items);
+        INIT_LIST_HEAD(&recovd->recovd_troubled_items);
         spin_lock_init(&recovd->recovd_lock);
 
         init_waitqueue_head(&recovd->recovd_waitq);
@@ -216,7 +219,7 @@ int recovd_setup(struct recovd_obd *recovd)
         wait_event(recovd->recovd_ctl_waitq, recovd->recovd_flags & RECOVD_IDLE);
 
         /* exported and called by obdclass timeout handlers */
-        class_signal_client_failure = recovd_cli_fail;
+        class_signal_connection_failure = recovd_conn_fail;
 
         RETURN(0);
 }

@@ -1,8 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
-*
- *  linux/fs/ext2_obd/sim_obd.c
- * Copyright (C) 2001  Cluster File Systems, Inc.
+ *
+ * lustre/obdclass/genops.c
+ * Copyright (C) 2001-2002  Cluster File Systems, Inc.
  *
  * This code is issued under the GNU General Public License.
  * See the file COPYING in this distribution
@@ -281,6 +281,33 @@ struct obd_export *class_new_export(struct obd_device *obddev)
         return export;
 }
 
+void class_destroy_export(struct obd_export *exp)
+{
+        int rc;
+        ENTRY;
+
+        spin_lock(&exp->exp_connection->c_lock);
+        list_del(&exp->exp_chain);
+        spin_unlock(&exp->exp_connection->c_lock);
+
+        /* XXXshaver these bits want to be hung off the export, instead of
+         * XXXshaver hard-coded here.
+         */
+        if (mds_destroy_export) {
+                rc = mds_destroy_export(exp);
+                if (rc)
+                        CERROR("error freeing mds client data: rc = %d\n", rc);
+        }
+        if (ldlm_destroy_export) {
+                rc = ldlm_destroy_export(exp);
+                if (rc)
+                        CERROR("error freeing dlm client data: rc = %d\n", rc);
+        }
+        kmem_cache_free(export_cachep, exp);
+
+        EXIT;
+}
+
 /* a connection defines an export context in which preallocation can
    be managed. */
 int class_connect (struct lustre_handle *conn, struct obd_device *obd,
@@ -337,8 +364,8 @@ int class_disconnect(struct lustre_handle *conn)
         } else
                 CDEBUG(D_IOCTL, "disconnect: addr %Lx cookie %Lx\n",
                        (long long)conn->addr, (long long)conn->cookie);
-        list_del(&export->exp_chain);
-        kmem_cache_free(export_cachep, export);
+
+        class_destroy_export(export);
 
         RETURN(0);
 }

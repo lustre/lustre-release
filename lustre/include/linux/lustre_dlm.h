@@ -198,7 +198,8 @@ struct ldlm_ast_work {
 
 /* Per-export ldlm state. */
 struct ldlm_export_data {
-        struct list_head led_held_locks;
+        struct list_head        led_held_locks;
+        struct ptlrpc_client    led_client;     /* cached client for locks  */
 };
         
 static inline struct ldlm_extent *ldlm_res2extent(struct ldlm_resource *res)

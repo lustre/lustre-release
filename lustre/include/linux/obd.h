@@ -151,13 +151,11 @@ struct echo_obd {
 struct recovd_obd {
         time_t                recovd_waketime;
         time_t                recovd_timeout;
-        struct ptlrpc_service *recovd_service;
-        struct ptlrpc_client  *recovd_client;
-        __u32                  recovd_flags; 
-        __u32                  recovd_wakeup_flag; 
-        spinlock_t             recovd_lock;
-        struct list_head      recovd_clients_lh; /* clients managed  */
-        struct list_head      recovd_troubled_lh; /* clients in trouble */
+        __u32                 recovd_flags; 
+        __u32                 recovd_wakeup_flag; 
+        spinlock_t            recovd_lock;
+        struct list_head      recovd_managed_items; /* items managed  */
+        struct list_head      recovd_troubled_items; /* items in trouble */
         wait_queue_head_t     recovd_recovery_waitq;
         wait_queue_head_t     recovd_ctl_waitq;
         wait_queue_head_t     recovd_waitq;

@@ -64,11 +64,6 @@ extern void proc_lustre_remove_obd_entry(const char* name,
  */
 
 #ifdef __KERNEL__
-extern struct obd_export *class_conn2export(struct lustre_handle *conn);
-extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
-extern int class_rconn2export(struct lustre_handle *conn,
-                              struct lustre_handle *rconn);
-
 struct obd_export {
         __u64 exp_cookie;
         struct lustre_handle      exp_rconnh;     /* remote connection handle */
@@ -86,6 +81,11 @@ struct obd_export {
         char                     *exp_desc;
         uuid_t                    exp_uuid;
 };
+
+extern struct obd_export *class_conn2export(struct lustre_handle *conn);
+extern struct obd_device *class_conn2obd(struct lustre_handle *conn);
+extern int class_rconn2export(struct lustre_handle *conn,
+                              struct lustre_handle *rconn);
 
 struct obd_import {
         __u64 imp_cookie;
@@ -711,6 +711,7 @@ int class_name2dev(char *name);
 int class_uuid2dev(char *name);
 struct obd_device *class_uuid2obd(char *name);
 struct obd_export *class_new_export(struct obd_device *obddev);
+void class_destroy_export(struct obd_export *exp);
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   char *cluuid);
 int class_disconnect(struct lustre_handle *conn);
@@ -721,7 +722,12 @@ struct obd_export *class_conn2export(struct lustre_handle *);
 int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data);
 int class_multi_cleanup(struct obd_device *obddev);
 
-extern void (*class_signal_client_failure)(struct ptlrpc_client *);
+extern void (*class_signal_connection_failure)(struct ptlrpc_connection *);
+
+/* == mds_client_free if MDS running here */
+extern int (*mds_destroy_export)(struct obd_export *exp);
+/* == ldlm_client_free if(?) DLM running here */
+extern int (*ldlm_destroy_export)(struct obd_export *exp);
 
 #endif
 

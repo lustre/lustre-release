@@ -28,52 +28,59 @@
 #include <linux/obd.h>
 #include <portals/p30.h>
 #include <linux/lustre_idl.h>
+#include <linux/lustre_ha.h>
 
 /* default rpc ring length */
 #define RPC_RING_LENGTH    10
 
 struct ptlrpc_connection {
-        struct list_head c_link;
-        struct lustre_peer c_peer;
-        __u8 c_local_uuid[37];  /* XXX do we need this? */
-        __u8 c_remote_uuid[37]; 
+        struct list_head        c_link;
+        struct lustre_peer      c_peer;
+        __u8                    c_local_uuid[37];  /* XXX do we need this? */
+        __u8                    c_remote_uuid[37]; 
 
-        int c_level;
-        __u32 c_generation;  /* changes upon new connection */
-        __u32 c_epoch;       /* changes when peer changes */
-        __u32 c_bootcount;   /* peer's boot count */ 
+        int                     c_level;
+        __u32                   c_generation;  /* changes upon new connection */
+        __u32                   c_epoch;       /* changes when peer changes */
+        __u32                   c_bootcount;   /* peer's boot count */ 
 
-        spinlock_t c_lock;
-        __u32 c_xid_in;
-        __u32 c_xid_out;
+        spinlock_t              c_lock;
+        __u32                   c_xid_in;
+        __u32                   c_xid_out;
 
-        atomic_t c_refcount;
-        __u64 c_token;
-        __u64 c_remote_conn;
-        __u64 c_remote_token;
+        atomic_t                c_refcount;
+        __u64                   c_token;
+        __u64                   c_remote_conn;
+        __u64                   c_remote_token;
+
+        __u64                   c_last_xid;
+        __u64                   c_last_committed;
+        struct list_head        c_delayed_head; /* delayed until post-recovery */
+        struct list_head        c_sending_head;
+        struct list_head        c_dying_head;
+        struct recovd_data      c_recovd_data;
+
+        struct list_head        c_clients; /* XXXshaver will be c_imports */
+        struct list_head        c_exports;
+
+        /* should this be in recovd_data? */
+        struct recovd_obd      *c_recovd;
 };
 
 struct ptlrpc_client {
-        struct obd_device *cli_obd;
-        __u32 cli_request_portal;
-        __u32 cli_reply_portal;
+        struct obd_device        *cli_obd;
+        __u32                     cli_request_portal;
+        __u32                     cli_reply_portal;
 
-        __u64 cli_last_xid;
-        __u64 cli_last_committed;
-        __u32 cli_target_devno;
+        __u32                     cli_target_devno;
 
-        void *cli_data;
-        struct semaphore cli_rpc_sem; /* limits outstanding requests */
-
-        spinlock_t cli_lock; /* protects lists */
-        struct list_head cli_delayed_head; /* delayed until after recovery */
-        struct list_head cli_sending_head;
-        struct list_head cli_dying_head;
-        struct list_head cli_ha_item;
-        int (*cli_recover)(struct ptlrpc_client *); 
-
-        struct recovd_obd *cli_recovd;
-        char *cli_name;
+        struct ptlrpc_connection *cli_connection;
+        
+        void                     *cli_data;
+        struct semaphore          cli_rpc_sem; /* limits outstanding requests */
+        
+        struct list_head          cli_client_chain;
+        char                     *cli_name;
 };
 
 /* state flags of requests */
@@ -240,10 +247,8 @@ int ptl_send_rpc(struct ptlrpc_request *request);
 void ptlrpc_link_svc_me(struct ptlrpc_service *service, int i);
 
 /* rpc/client.c */
-void ptlrpc_init_client(struct recovd_obd *, 
-                        int (*recover)(struct ptlrpc_client *),
-                        int req_portal, int rep_portal,
-                        struct ptlrpc_client *);
+void ptlrpc_init_client(int req_portal, int rep_portal, struct ptlrpc_client *,
+                        struct ptlrpc_connection *);
 void ptlrpc_cleanup_client(struct ptlrpc_client *cli);
 __u8 *ptlrpc_req_to_uuid(struct ptlrpc_request *req);
 struct ptlrpc_connection *ptlrpc_uuid_to_connection(char *uuid);
@@ -253,8 +258,7 @@ void ptlrpc_continue_req(struct ptlrpc_request *req);
 int ptlrpc_replay_req(struct ptlrpc_request *req);
 void ptlrpc_restart_req(struct ptlrpc_request *req);
 
-struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
-                                       struct ptlrpc_connection *u, int opcode,
+struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl, int opcode,
                                        int count, int *lengths, char **bufs);
 void ptlrpc_free_req(struct ptlrpc_request *request);
 void ptlrpc_req_finished(struct ptlrpc_request *request);

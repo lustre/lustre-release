@@ -42,47 +42,13 @@ int connmgr_setup(struct obd_device *obddev, obd_count len, void *buf)
         MOD_INC_USE_COUNT;
         memset(recovd, 0, sizeof(*recovd));
 
-        OBD_ALLOC(recovd->recovd_client, sizeof(*recovd->recovd_client));
-        if (!recovd)
-                GOTO(err_dec, err = -ENOMEM);
-
         err = recovd_setup(recovd);
-        if (err)
-                GOTO(err_free, err);
-
-        recovd->recovd_service = ptlrpc_init_svc(16* 1024,
-                                                 CONNMGR_REQUEST_PORTAL,
-                                                 CONNMGR_REPLY_PORTAL,
-                                                 "self", connmgr_handle, 
-                                                 "connmgr");
-        if (!recovd->recovd_service) {
-                CERROR("failed to start service\n");
-                GOTO(err_recovd, err = -ENOMEM);
-        }
-
-        ptlrpc_init_client(NULL, NULL, CONNMGR_REQUEST_PORTAL,
-                           CONNMGR_REPLY_PORTAL, recovd->recovd_client);
-        recovd->recovd_client->cli_name = "connmgr";
-
-        err = ptlrpc_start_thread(obddev, recovd->recovd_service,
-                                  "lustre_connmgr");
         if (err) {
-                CERROR("cannot start thread\n");
-                GOTO(err_svc, err);
+                MOD_DEC_USE_COUNT;
+                RETURN(err);
         }
 
-        ptlrpc_connmgr = recovd;
         RETURN(0);
-
-err_svc:
-        ptlrpc_unregister_service(recovd->recovd_service);
-err_recovd:
-        recovd_cleanup(recovd);
-err_free:
-        OBD_FREE(recovd->recovd_client, sizeof(*recovd->recovd_client));
-err_dec:
-        MOD_DEC_USE_COUNT;
-        RETURN(err);
 }
 
 int connmgr_cleanup(struct obd_device *dev)
@@ -94,10 +60,6 @@ int connmgr_cleanup(struct obd_device *dev)
         if (err)
                 LBUG();
 
-        ptlrpc_stop_all_threads(recovd->recovd_service);
-        ptlrpc_unregister_service(recovd->recovd_service);
-        ptlrpc_cleanup_client(recovd->recovd_client);
-        OBD_FREE(recovd->recovd_client, sizeof(*recovd->recovd_client));
         MOD_DEC_USE_COUNT;
         RETURN(0);
 }
@@ -126,7 +88,7 @@ int connmgr_iocontrol(long cmd, struct lustre_handle *conn, int len, void *karg,
 static struct obd_ops recovd_obd_ops = {
         o_setup:       connmgr_setup,
         o_cleanup:     connmgr_cleanup,
-        o_iocontrol:     connmgr_iocontrol,
+        o_iocontrol:   connmgr_iocontrol,
 };
 
 static int __init ptlrpc_init(void)
@@ -148,12 +110,9 @@ static void __exit ptlrpc_exit(void)
 }
 
 /* connmgr.c */
-EXPORT_SYMBOL(ptlrpc_connmgr);
-EXPORT_SYMBOL(connmgr_connect);
-EXPORT_SYMBOL(connmgr_handle);
-EXPORT_SYMBOL(recovd_cli_fail);
-EXPORT_SYMBOL(recovd_cli_manage);
-EXPORT_SYMBOL(recovd_cli_fixed);
+EXPORT_SYMBOL(recovd_conn_fail);
+EXPORT_SYMBOL(recovd_conn_manage);
+EXPORT_SYMBOL(recovd_conn_fixed);
 EXPORT_SYMBOL(recovd_setup);
 EXPORT_SYMBOL(recovd_cleanup);
 

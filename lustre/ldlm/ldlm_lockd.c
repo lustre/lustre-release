@@ -119,12 +119,10 @@ static int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 {
         struct ldlm_request *body;
         struct ptlrpc_request *req;
-        struct ptlrpc_client *cl;
         int rc = 0, size = sizeof(*body);
         ENTRY;
 
-        cl = &lock->l_resource->lr_namespace->ns_rpc_client;
-        req = ptlrpc_prep_req(cl, lock->l_export->exp_connection,
+        req = ptlrpc_prep_req(&lock->l_export->exp_ldlm_data.led_client,
                               LDLM_BL_CALLBACK, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
@@ -149,7 +147,6 @@ static int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags)
 {
         struct ldlm_request *body;
         struct ptlrpc_request *req;
-        struct ptlrpc_client *cl;
         int rc = 0, size = sizeof(*body);
         ENTRY;
 
@@ -158,8 +155,7 @@ static int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags)
                 RETURN(-EINVAL);
         }
 
-        cl = &lock->l_resource->lr_namespace->ns_rpc_client;
-        req = ptlrpc_prep_req(cl, lock->l_export->exp_connection,
+        req = ptlrpc_prep_req(&lock->l_export->exp_ldlm_data.led_client,
                               LDLM_CP_CALLBACK, 1, &size, NULL);
         if (!req)
                 RETURN(-ENOMEM);
@@ -517,12 +513,12 @@ static int ldlm_iocontrol(long cmd, struct lustre_handle *conn, int len,
 
         OBD_ALLOC(obddev->u.ldlm.ldlm_client,
                   sizeof(*obddev->u.ldlm.ldlm_client));
-        ptlrpc_init_client(NULL, NULL,
-                           LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
-                           obddev->u.ldlm.ldlm_client);
         connection = ptlrpc_uuid_to_connection("ldlm");
         if (!connection)
                 CERROR("No LDLM UUID found: assuming ldlm is local.\n");
+
+        ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+                           obddev->u.ldlm.ldlm_client, connection);
 
         switch (cmd) {
         case IOC_LDLM_TEST:
@@ -579,7 +575,7 @@ static int ldlm_setup(struct obd_device *obddev, obd_count len, void *buf)
         waiting_locks_timer.function = waiting_locks_callback;
         waiting_locks_timer.data = 0;
         init_timer(&waiting_locks_timer);
-        
+
         RETURN(0);
 
  out_thread:

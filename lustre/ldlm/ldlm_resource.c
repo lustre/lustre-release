@@ -12,6 +12,7 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #include <linux/lustre_dlm.h>
+#include <linux/obd_class.h>
 
 kmem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 
@@ -63,9 +64,6 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
                 GOTO(out, ns);
         }
         strcpy(ns->ns_name, name);
-
-        ptlrpc_init_client(NULL, NULL, LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
-                           &ns->ns_rpc_client);
 
         INIT_LIST_HEAD(&ns->ns_root_list);
         l_lock_init(&ns->ns_lock);
@@ -170,11 +168,17 @@ int ldlm_namespace_free(struct ldlm_namespace *ns)
 
         vfree(ns->ns_hash /* , sizeof(*ns->ns_hash) * RES_HASH_SIZE */);
         obd_memory -= sizeof(*ns->ns_hash) * RES_HASH_SIZE;
-        ptlrpc_cleanup_client(&ns->ns_rpc_client);
         OBD_FREE(ns->ns_name, strlen(ns->ns_name) + 1);
         OBD_FREE(ns, sizeof(*ns));
 
         return ELDLM_OK;
+}
+
+int ldlm_client_free(struct obd_export *exp)
+{
+        struct ldlm_export_data *led = &exp->exp_ldlm_data;
+        ptlrpc_cleanup_client(&led->led_client);
+        RETURN(0);
 }
 
 static __u32 ldlm_hash_fn(struct ldlm_resource *parent, __u64 *name)

@@ -45,7 +45,6 @@ struct client_obd *client_conn2cli(struct lustre_handle *conn)
                 LBUG();
         return &export->exp_obd->u.cli;
 }
-extern struct recovd_obd *ptlrpc_connmgr;
 
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
 {
@@ -95,14 +94,9 @@ int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf)
         if (mdc->cl_ldlm_client == NULL)
                 GOTO(out_client, rc = -ENOMEM);
 
-        /* XXX get recovery hooked in here again */
-        //ptlrpc_init_client(ptlrpc_connmgr, ll_recover,...
-
-        ptlrpc_init_client(ptlrpc_connmgr, NULL, rq_portal, rp_portal,
-                           mdc->cl_client);
-        /* XXXshaver Should the LDLM have its own recover function? Probably. */
-        ptlrpc_init_client(ptlrpc_connmgr, NULL, LDLM_REQUEST_PORTAL,
-                           LDLM_REPLY_PORTAL, mdc->cl_ldlm_client);
+        ptlrpc_init_client(rq_portal, rp_portal, mdc->cl_client, mdc->cl_conn);
+        ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+                           mdc->cl_ldlm_client, mdc->cl_conn);
         mdc->cl_client->cli_name = "mdc";
         mdc->cl_ldlm_client->cli_name = "ldlm";
         mdc->cl_max_mdsize = sizeof(struct lov_mds_md);
@@ -159,8 +153,7 @@ int client_obd_connect(struct lustre_handle *conn, struct obd_device *obd,
         if (obd->obd_namespace == NULL)
                 GOTO(out_disco, rc = -ENOMEM);
 
-        request = ptlrpc_prep_req(cli->cl_client, cli->cl_conn, rq_opc, 2, size,
-                                  tmp);
+        request = ptlrpc_prep_req(cli->cl_client, rq_opc, 2, size, tmp);
         if (!request)
                 GOTO(out_ldlm, rc = -ENOMEM);
 
@@ -291,6 +284,10 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         req->rq_export = export;
         export->exp_connection = req->rq_connection;
+        ptlrpc_init_client(LDLM_REQUEST_PORTAL, LDLM_REPLY_PORTAL,
+                           &export->exp_ldlm_data.led_client,
+                           export->exp_connection);
+                                   
 #warning Peter: is this the right place to upgrade the server connection level?
         req->rq_connection->c_level = LUSTRE_CONN_FULL;
 out:

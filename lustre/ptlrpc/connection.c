@@ -66,6 +66,11 @@ struct ptlrpc_connection *ptlrpc_get_connection(struct lustre_peer *peer)
         c->c_generation = 1;
         c->c_epoch = 1;
         c->c_bootcount = 0;
+        INIT_LIST_HEAD(&c->c_delayed_head);
+        INIT_LIST_HEAD(&c->c_sending_head);
+        INIT_LIST_HEAD(&c->c_dying_head);
+        INIT_LIST_HEAD(&c->c_clients);
+        INIT_LIST_HEAD(&c->c_exports);
         atomic_set(&c->c_refcount, 0);
         ptlrpc_connection_addref(c);
         spin_lock_init(&c->c_lock);

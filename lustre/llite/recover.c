@@ -22,7 +22,6 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
 
-
 static int ll_reconnect(struct ll_sb_info *sbi)
 {
         struct ll_fid rootfid;
@@ -33,24 +32,16 @@ static int ll_reconnect(struct ll_sb_info *sbi)
 
         ptlrpc_readdress_connection(sbi2mdc(sbi)->cl_conn, "mds");
 
-        err = connmgr_connect(ptlrpc_connmgr, sbi2mdc(sbi)->cl_conn);
-        if (err) {
-                CERROR("cannot connect to MDS: rc = %d\n", err);
-                ptlrpc_put_connection(sbi2mdc(sbi)->cl_conn);
-                GOTO(out_disc, err = -ENOTCONN);
-        }
         sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_CON;
 
         /* XXX: need to store the last_* values somewhere */
-        err = mdc_getstatus(&sbi->ll_mdc_conn,
-                          &rootfid, &last_committed, 
-                          &last_xid,
-                          &request);
+        err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed, 
+                            &last_xid, &request);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_disc, err = -ENOTCONN);
         }
-        sbi2mdc(sbi)->cl_client->cli_last_xid = last_xid;
+        sbi2mdc(sbi)->cl_conn->c_last_xid = last_xid;
         sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_RECOVD;
 
  out_disc:
@@ -59,9 +50,14 @@ static int ll_reconnect(struct ll_sb_info *sbi)
 
 int ll_recover(struct ptlrpc_client *cli)
 {
+        RETURN(-ENOSYS);
+#if 0
+        /* XXXshaver this code needs to know about connection-driven recovery! */
+
         struct ptlrpc_request *req;
         struct list_head *tmp, *pos;
         struct ll_sb_info *sbi = cli->cli_data;
+        struct ptlrpc_connection *conn = cli->cli_connection;
         int rc = 0;
         ENTRY;
 
@@ -69,17 +65,17 @@ int ll_recover(struct ptlrpc_client *cli)
         ll_reconnect(sbi);
         
         /* 2. walk the request list */
-        spin_lock(&cli->cli_lock);
-        list_for_each_safe(tmp, pos, &cli->cli_sending_head) { 
+        spin_lock(&conn->c_lock);
+        list_for_each_safe(tmp, pos, &conn->c_sending_head) { 
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 
                 /* replay what needs to be replayed */
                 if (req->rq_flags & PTL_RPC_FL_REPLAY) {
-                        CDEBUG(D_INODE, "req %Ld needs replay [last rcvd %Ld]\n", 
-                               req->rq_xid, cli->cli_last_xid);
+                        CDEBUG(D_INODE, "req %Ld needs replay [last rcvd %Ld]\n",
+                               req->rq_xid, conn->c_last_xid);
                         rc = ptlrpc_replay_req(req); 
                         if (rc) { 
-                                CERROR("recovery replay error %d for request %Ld\n", 
+                                CERROR("recovery replay error %d for req %Ld\n", 
                                        rc, req->rq_xid); 
                                 GOTO(out, rc);
                         }
@@ -87,20 +83,21 @@ int ll_recover(struct ptlrpc_client *cli)
 
                 /* server has seen req, we have reply: skip */
                 if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
-                    req->rq_xid <= cli->cli_last_xid) { 
-                        CDEBUG(D_INODE, "req %Ld was complete: skip [last rcvd %Ld]\n", 
-                               req->rq_xid, cli->cli_last_xid);
+                    req->rq_xid <= conn->c_last_xid) { 
+                        CDEBUG(D_INODE,
+                               "req %Ld was complete: skip [last rcvd %Ld]\n", 
+                               req->rq_xid, conn->c_last_xid);
                         continue;
                 }
 
                 /* server has lost req, we have reply: resend, ign reply */
                 if ((req->rq_flags & PTL_RPC_FL_REPLIED)  &&
-                    req->rq_xid > cli->cli_last_xid) { 
-                        CDEBUG(D_INODE, "lost req %Ld have rep: replay [last rcvd %Ld]\n", 
-                               req->rq_xid, cli->cli_last_xid);
+                    req->rq_xid > conn->c_last_xid) { 
+                        CDEBUG(D_INODE, "lost req %Ld have rep: replay [last "
+                               "rcvd %Ld]\n", req->rq_xid, conn->c_last_xid);
                         rc = ptlrpc_replay_req(req); 
                         if (rc) {
-                                CERROR("request resend error %d for request %Ld\n", 
+                                CERROR("request resend error %d for req %Ld\n", 
                                        rc, req->rq_xid); 
                                 GOTO(out, rc);
                         }
@@ -108,33 +105,36 @@ int ll_recover(struct ptlrpc_client *cli)
 
                 /* server has seen req, we have lost reply: -ERESTARTSYS */
                 if ( !(req->rq_flags & PTL_RPC_FL_REPLIED)  &&
-                     req->rq_xid <= cli->cli_last_xid) { 
-                        CDEBUG(D_INODE, "lost rep %Ld srv did req: restart [last rcvd %Ld]\n", 
-                               req->rq_xid, cli->cli_last_xid);
+                     req->rq_xid <= conn->c_last_xid) { 
+                        CDEBUG(D_INODE, "lost rep %Ld srv did req: restart "
+                               "[last rcvd %Ld]\n", 
+                               req->rq_xid, conn->c_last_xid);
                         ptlrpc_restart_req(req);
                 }
 
                 /* service has not seen req, no reply: resend */
                 if ( !(req->rq_flags & PTL_RPC_FL_REPLIED)  &&
-                     req->rq_xid > cli->cli_last_xid) {
-                        CDEBUG(D_INODE, "lost rep/req %Ld: resend [last rcvd %Ld]\n", 
-                               req->rq_xid, cli->cli_last_xid);
+                     req->rq_xid > conn->c_last_xid) {
+                        CDEBUG(D_INODE,
+                               "lost rep/req %Ld: resend [last rcvd %Ld]\n", 
+                               req->rq_xid, conn->c_last_xid);
                         ptlrpc_resend_req(req);
                 }
 
         }
 
         sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_FULL;
-        recovd_cli_fixed(cli);
+        recovd_conn_fixed(conn);
 
         /* Finally, continue what we delayed since recovery started */
-        list_for_each_safe(tmp, pos, &cli->cli_delayed_head) { 
+        list_for_each_safe(tmp, pos, &conn->c_delayed_head) { 
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
                 ptlrpc_continue_req(req);
         }
 
         EXIT;
  out:
-        spin_unlock(&cli->cli_lock);
+        spin_unlock(&conn->c_lock);
         return rc;
+#endif
 }

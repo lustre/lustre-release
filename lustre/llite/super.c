@@ -126,14 +126,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 GOTO(out_free, sb = NULL);
         }
 
-#if 0
-        err = connmgr_connect(ptlrpc_connmgr, sbi->ll_mdc_conn);
-        if (err) {
-                CERROR("cannot connect to MDC: rc = %d\n", err);
-                GOTO(out_rpc, sb = NULL);
-        }
-#endif 
-
         err = obd_connect(&sbi->ll_mdc_conn, obd, sbi->ll_sb_uuid);
         if (err) {
                 CERROR("cannot connect to %s: rc = %d\n", mdc, err);

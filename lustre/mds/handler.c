@@ -329,10 +329,6 @@ static int mds_disconnect(struct lustre_handle *conn)
         if (!exp)
                 RETURN(-EINVAL);
 
-        rc = mds_client_free(&exp->exp_mds_data);
-        if (rc)
-                CERROR("error freeing client data: rc = %d\n", rc);
-
         rc = class_disconnect(conn);
         if (!rc)
                 MOD_DEC_USE_COUNT;
@@ -1125,6 +1121,8 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         rc = mds_recover(obddev);
         if (rc)
                 GOTO(err_thread, rc);
+        
+        mds_destroy_export = mds_client_free;
 
         RETURN(0);
 

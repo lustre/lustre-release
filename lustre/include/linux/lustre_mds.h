@@ -183,7 +183,7 @@ int mdc_rename(struct lustre_handle *conn,
 int mdc_create_client(char *uuid, struct ptlrpc_client *cl);
 
 extern int mds_client_add(struct mds_export_data *med, int cl_off);
-extern int mds_client_free(struct mds_export_data *med);
+extern int mds_client_free(struct obd_export *exp);
 
 /* mds/mds_fs.c */
 struct mds_fs_operations {

@@ -79,10 +79,14 @@ int mds_client_add(struct mds_export_data *med, int cl_off)
         return 0;
 }
 
-int mds_client_free(struct mds_export_data *med)
+int mds_client_free(struct obd_export *exp)
 {
+        struct mds_export_data *med = &exp->exp_mds_data;
         unsigned long *word;
         int bit;
+
+        if (!med->med_mcd)
+                RETURN(0);
 
         CDEBUG(D_INFO, "freeing client at offset %d with UUID '%s'\n",
                med->med_off, med->med_mcd->mcd_uuid);
