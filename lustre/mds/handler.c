@@ -160,7 +160,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 int mds_lock_mode_for_dir(struct obd_device *obd,
                           struct dentry *dentry, int mode)
 {
-        int ret_mode, split;
+        int ret_mode = 0, split;
 
         /* any dir access needs couple locks:
          * 1) on part of dir we gonna lookup/modify in
@@ -192,21 +192,21 @@ int mds_lock_mode_for_dir(struct obd_device *obd,
                  * this inode won't be splitted. so we need not to protect from
                  * just flush client's cache on modification.
                  */
-                ret_mode = 0;
                 if (mode == LCK_PW)
                         ret_mode = LCK_CW;
+                else
+                        ret_mode = 0;
         } else {
-                if (mode == LCK_EX)
-                        return LCK_EX;
-                
-                if (mode == LCK_PR) {
+                if (mode == LCK_EX) {
+                        ret_mode = LCK_EX;
+                } else if (mode == LCK_PR) {
                         ret_mode = LCK_CR;
                 } else if (mode == LCK_PW) {
                         /*
-                         * caller gonna modify directory.we use concurrent write
-                         * lock here to retract client's cache for readdir.
+                         * caller gonna modify directory. We use concurrent
+                         * write lock here to retract client's cache for
+                         * readdir.
                          */
-                        ret_mode = LCK_CW;
                         if (split == MDS_EXPECT_SPLIT) {
                                 /*
                                  * splitting possible. serialize any access the
@@ -221,6 +221,8 @@ int mds_lock_mode_for_dir(struct obd_device *obd,
                                        (unsigned long)dentry->d_inode->i_ino,
                                        (unsigned long)dentry->d_inode->i_generation);
                                 ret_mode = LCK_EX;
+                        } else {
+                                ret_mode = LCK_CW;
                         }
                 }
         }
