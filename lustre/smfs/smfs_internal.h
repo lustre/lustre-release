@@ -58,9 +58,10 @@ void sm_set_sb_ops(struct super_block *cache_sb, struct super_block *sb);
 void init_smfs_cache(void);
 void cleanup_smfs_cache(void);
 /*super.c*/
-int init_smfs(void);
-int cleanup_smfs(void);
-void smfs_put_super(struct super_block *sb);
+extern int init_smfs(void);
+extern int cleanup_smfs(void);
+extern void smfs_put_super(struct super_block *sb);
+extern void duplicate_sb(struct super_block *csb, struct super_block *sb);
 /*sysctl.c*/
 extern int sm_debug_level;
 extern int sm_inodes;
@@ -71,4 +72,21 @@ extern struct inode_operations smfs_dir_iops;
 extern struct file_operations smfs_dir_fops; 
 /*inode.c*/
 extern void duplicate_inode(struct inode *cache_inode, struct inode *inode);
+/*file.c*/
+extern void smfs_prepare_cachefile(struct inode *inode,
+			           struct file *file, 
+			           struct inode *cache_inode,
+			    	   struct file *cache_file,
+			    	   struct dentry *cache_dentry);
+extern int smfs_ioctl(struct inode * inode, struct file * filp,  unsigned int cmd,
+                      unsigned long arg);
+extern int smfs_fsync(struct file * file, struct dentry *dentry, int datasync);
+extern int smfs_setattr(struct dentry *dentry, struct iattr *attr); 
+extern int smfs_setxattr(struct dentry *dentry, const char *name,
+              	         const void *value, size_t size, int flags);
+extern int smfs_getxattr(struct dentry *dentry, const char *name,
+              	         void *buffer, size_t size);
+extern ssize_t smfs_listxattr(struct dentry *dentry, char *buffer, size_t size);
+extern int smfs_removexattr(struct dentry *dentry, const char *name);
+extern void smfs_update_file(struct file *file, struct file *cache_file);
 #endif /* __LINUX_SMFS_H */

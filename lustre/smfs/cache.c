@@ -224,7 +224,6 @@ static void setup_sm_file_ops(struct inode *cache_inode,
 		              struct file_operations *cache_fops,
 		              struct address_space_operations *cache_aops)
 {
-	
 	struct smfs_super_info *smb;
 	struct inode_operations *iops;
 	struct file_operations *fops;
@@ -347,8 +346,6 @@ static void setup_sm_sb_ops(struct super_block *cache_sb,
 			sops->statfs = smfs_sops->statfs;
 		if (cache_sb->s_op->remount_fs)
 			sops->remount_fs = smfs_sops->remount_fs;
-		if (cache_sb->s_op->clear_inode)
-			sops->clear_inode = smfs_sops->clear_inode;
 		if (cache_sb->s_op->umount_begin)
 			sops->umount_begin = smfs_sops->umount_begin;
 		if (cache_sb->s_op->fh_to_dentry)
@@ -357,6 +354,8 @@ static void setup_sm_sb_ops(struct super_block *cache_sb,
 			sops->dentry_to_fh = smfs_sops->dentry_to_fh;
 		if (cache_sb->s_op->show_options)
 			sops->show_options = smfs_sops->show_options;
+		/*FIXME we need this method to clear the cache inode */
+		sops->clear_inode = smfs_sops->clear_inode;
 	}
 					
 	return;
