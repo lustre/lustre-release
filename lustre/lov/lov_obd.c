@@ -302,7 +302,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         struct lov_stripe_md *lsm;
         struct lov_oinfo *loi;
         struct obdo *tmp;
-        int ost_count, ost_idx, i, rc = 0;
+        int ost_count, ost_idx = 1, i, rc = 0;
         ENTRY;
 
         LASSERT(ea);
@@ -327,11 +327,12 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                         spin_unlock(&lov->lov_lock);
                         GOTO(out_tmp, rc = -ENOMEM);
                 }
+                lsm->lsm_magic = LOV_MAGIC;
+                lsm->lsm_mds_easize = lov_mds_md_size(ost_count);
+                ost_idx = 0; /* if lsm->lsm_stripe_offset is set yet */
         }
 
         LASSERT(oa->o_valid & OBD_MD_FLID);
-        lsm->lsm_magic = LOV_MAGIC;
-        lsm->lsm_mds_easize = lov_mds_md_size(ost_count);
         lsm->lsm_object_id = oa->o_id;
         if (!lsm->lsm_stripe_count)
                 lsm->lsm_stripe_count = lov->desc.ld_default_stripe_count;
@@ -355,7 +356,7 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
         }
 
         lsm->lsm_ost_count = ost_count;
-        if (!lsm->lsm_stripe_offset) {
+        if (!ost_idx || lsm->lsm_stripe_offset >= ost_count) {
                 int mult = lsm->lsm_object_id * lsm->lsm_stripe_count;
                 int stripe_offset = mult % ost_count;
                 int sub_offset = (mult / ost_count) % lsm->lsm_stripe_count;
@@ -363,15 +364,18 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                 lsm->lsm_stripe_offset = stripe_offset + sub_offset;
         }
 
+        while (!lov->tgts[lsm->lsm_stripe_offset].active)
+                lsm->lsm_stripe_offset = (lsm->lsm_stripe_offset+1) % ost_count;
+
         /* Pick the OSTs before we release the lock */
         ost_idx = lsm->lsm_stripe_offset;
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
+                CDEBUG(D_INODE, "objid "LPX64"[%d] is ost_idx %d (uuid %s)\n",
+                       lsm->lsm_object_id, i, ost_idx, lov->tgts[ost_idx].uuid);
+                loi->loi_ost_idx = ost_idx;
                 do {
                         ost_idx = (ost_idx + 1) % ost_count;
                 } while (!lov->tgts[ost_idx].active);
-                CDEBUG(D_INFO, "Using ost_idx %d (uuid %s)\n", ost_idx,
-                       lov->tgts[ost_idx].uuid);
-                loi->loi_ost_idx = ost_idx;
         }
 
         spin_unlock(&lov->lov_lock);
@@ -547,6 +551,8 @@ static int lov_getattr(struct lustre_handle *conn, struct obdo *oa,
                 if (loi->loi_id == 0)
                         continue;
 
+                CERROR("objid "LPX64"[%d] has subobj "LPX64" at idx %u\n",
+                       oa->o_id, i, loi->loi_id, loi->loi_ost_idx);
                 /* create data objects with "parent" OA */
                 memcpy(&tmp, oa, sizeof(tmp));
                 tmp.o_id = loi->loi_id;
