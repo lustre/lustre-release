@@ -2,18 +2,28 @@
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
  *  linux/mds/mds_reint.c
- *
  *  Lustre Metadata Server (mds) reintegration routines
  *
- *  Copyright (C) 2002  Cluster File Systems, Inc.
- *  author: Peter Braam <braam@clusterfs.com>
+ *  Copyright (C) 2002 Cluster File Systems, Inc.
  *
- *  This code is issued under the GNU General Public License.
- *  See the file COPYING in this distribution
+ *   This file is part of Lustre, http://www.lustre.org.
  *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
+ *  Author: Peter Braam <braam@clusterfs.com>
+ *  Author: Andreas Dilger <adilger@clusterfs.com>
  */
-
-// XXX - add transaction sequence numbers
 
 #define EXPORT_SYMTAB
 #define DEBUG_SUBSYSTEM S_MDS
