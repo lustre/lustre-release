@@ -251,7 +251,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                 GOTO(cleanup, rc);
         cleanup_phase = 1;
 
-#if (LINUX_VERSION_CODE == KERNEL_VERSION(2,4,18))
+#ifdef HAVE_KIOBUF_DOVARY
         iobuf->dovary = 0; /* this prevents corruption, not present in 2.4.20 */
 #endif
         rc = expand_kiobuf(iobuf, obj->ioo_bufcnt);

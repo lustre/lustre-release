@@ -545,7 +545,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
         int rc = 0;
-
+        ENTRY;
         if (rec->lrh_type == OBD_CFG_REC) {
                 char *buf;
                 struct lustre_cfg *lcfg;
@@ -641,7 +641,7 @@ static int class_config_dump_handler(struct llog_handle * handle,
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
         int rc = 0;
-
+        ENTRY;
         if (rec->lrh_type == OBD_CFG_REC) {
                 char *buf;
                 struct lustre_cfg *lcfg;
@@ -702,6 +702,9 @@ static int class_config_dump_handler(struct llog_handle * handle,
                 if (pcfg->pcfg_flags)
                         CDEBUG(D_INFO, "       flags: %x\n",
                                pcfg->pcfg_flags);
+        } else {
+                CERROR("unhandled lrh_type: %#x\n", rec->lrh_type);
+                rc = -EINVAL;
         }
 out:
         RETURN(rc);

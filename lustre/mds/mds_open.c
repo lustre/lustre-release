@@ -28,6 +28,7 @@
 #endif
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/version.h>

@@ -1,21 +1,20 @@
 #ifndef _P30_TYPES_H_
 #define _P30_TYPES_H_
 
-#ifdef __linux__
-# include <asm/types.h>
-# include <asm/timex.h>
-#else
-# include <sys/types.h>
-typedef u_int32_t __u32;
-typedef u_int64_t __u64;
-#endif
-
 #ifdef __KERNEL__
 # include <linux/time.h>
-#else
+# include <asm/types.h>
+# include <asm/timex.h>
+#else /* !__KERNEL__ */
+# include <sys/types.h>
 # include <sys/time.h>
+typedef u_int32_t __u32;
+typedef u_int64_t __u64;
 # define do_gettimeofday(tv) gettimeofday(tv, NULL)
-#endif
+# ifndef cycles_t
+typedef unsigned long cycles_t;
+# endif
+#endif /* !__KERNEL__ */
 
 #include <portals/errno.h>
 
@@ -129,7 +128,7 @@ typedef struct {
         struct timeval     arrival_time;
 
         volatile ptl_seq_t sequence;
-} ptl_event_t;
+} __attribute__((packed)) ptl_event_t;
 #ifdef __CYGWIN__
 #pragma pop
 #endif

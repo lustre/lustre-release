@@ -462,7 +462,14 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         exp = class_conn2export(&mdc_conn);
 
         ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
+#if 1
         rc = class_config_parse_llog(ctxt, profile, cfg);
+#else
+        /*
+         * For debugging, it's useful to just dump the log
+         */
+        rc = class_config_dump_llog(ctxt, profile, cfg);
+#endif
         if (rc) {
                 CERROR("class_config_parse_llog failed: rc = %d\n", rc);
         }
