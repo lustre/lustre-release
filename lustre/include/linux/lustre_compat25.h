@@ -130,12 +130,6 @@ static inline int cleanup_group_info(void)
 #define DCACHE_DISCONNECTED                 DCACHE_NFSD_DISCONNECTED
 #define ll_dev_t                            int
 
-static inline void clear_page_dirty(struct page *page)
-{
-        if (PageDirty(page))
-                ClearPageDirty(page); 
-}
-
 /* 2.5 uses hlists for some things, like the d_hash.  we'll treat them
  * as 2.5 and let macros drop back.. */
 #ifndef HLIST_HEAD /* until we get a kernel newer than l28 */
@@ -175,6 +169,27 @@ typedef long sector_t;
                                (inode)->i_mapping->a_ops->writepage(page)
 #define ll_invalidate_inode_pages(inode) invalidate_inode_pages(inode)
 #define ll_truncate_complete_page(page) truncate_complete_page(page)
+
+static inline void clear_page_dirty(struct page *page)
+{
+        if (PageDirty(page))
+                ClearPageDirty(page); 
+}
+
+static inline int clear_page_dirty_for_io(struct page *page)
+{
+        struct address_space *mapping = page->mapping;
+
+        if (page->mapping && PageDirty(page)) {
+                ClearPageDirty(page);
+                ll_pgcache_lock(mapping);
+                list_del(&page->list);
+                list_add(&page->list, &mapping->locked_pages);
+                ll_pgcache_unlock(mapping);
+                return 1;
+        }
+        return 0;
+}
 
 static inline void __d_drop(struct dentry *dentry)
 {
@@ -249,21 +264,6 @@ static inline int mapping_has_pages(struct address_space *mapping)
         ll_pgcache_unlock(mapping);
 
         return rc;
-}
-
-static inline int clear_page_dirty_for_io(struct page *page)
-{
-        struct address_space *mapping = page->mapping;
-
-        if (page->mapping && PageDirty(page)) {
-                ClearPageDirty(page);
-                ll_pgcache_lock(mapping);
-                list_del(&page->list);
-                list_add(&page->list, &mapping->locked_pages);
-                ll_pgcache_unlock(mapping);
-                return 1;
-        }
-        return 0;
 }
 #else
 static inline int mapping_has_pages(struct address_space *mapping)

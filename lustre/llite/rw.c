@@ -732,7 +732,7 @@ void ll_ap_completion(void *data, int cmd, struct obdo *oa, int rc)
                 if (cmd == OBD_BRW_READ) {
                         llap->llap_defer_uptodate = 0;
                 } else {
-                        SetPageDirty(page);
+                        set_page_dirty(page);
                         ClearPageLaunder(page);
                 }
                 SetPageError(page);
@@ -1135,7 +1135,7 @@ out:
                 if (!lli->lli_async_rc)
                         lli->lli_async_rc = rc;
                 /* re-dirty page on error so it retries write */
-                SetPageDirty(page);
+                set_page_dirty(page);
                 ClearPageLaunder(page); 
                 unlock_page(page);
         }
