@@ -317,7 +317,7 @@ kpr_deregister_nal (void *arg)
 int
 kpr_ge_isbetter (kpr_gateway_entry_t *ge1, kpr_gateway_entry_t *ge2)
 {
-        const int significant_bits = 0x0fffffff;
+        const int significant_bits = 0x00ffffff;
         /* We use atomic_t to record/compare route weights for
          * load-balancing.  Here we limit ourselves to only using
          * 'significant_bits' when we do an 'after' comparison */
