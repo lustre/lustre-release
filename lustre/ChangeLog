@@ -23,6 +23,8 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix ia64 OOPS in llog_test (2255)
 	- zero end of page at obdfilter for partial page writes (2648)
 	- don't leave stale dentries around after renames (bug 2428)
+	- fix timeouts when evicting a client with a single lock held (2642)
+	- set deadline for the initial HELLO message to drain (2634)
 
 2004-01-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.0.3

@@ -182,6 +182,17 @@ static void waiting_locks_callback(unsigned long unused)
                 wake_up(&expired_lock_thread.elt_waitq);
         }
 
+        /*
+         * Make sure the timer will fire again if we have any locks
+         * left.
+         */
+        if (!list_empty(&waiting_locks_list)) {
+                unsigned long timeout_rounded;
+                lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
+                                  l_pending_chain);
+                timeout_rounded = round_timeout(lock->l_callback_timeout);
+                mod_timer(&waiting_locks_timer, timeout_rounded);
+        }
         spin_unlock_bh(&waiting_locks_spinlock);
 }
 
@@ -253,7 +264,11 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
                                   round_timeout(next->l_callback_timeout));
                 }
         }
+
+        spin_lock_bh(&expired_lock_thread.elt_lock);
         list_del_init(&lock->l_pending_chain);
+        spin_unlock_bh(&expired_lock_thread.elt_lock);
+
         spin_unlock_bh(&waiting_locks_spinlock);
         LDLM_DEBUG(lock, "removed");
         return 1;
