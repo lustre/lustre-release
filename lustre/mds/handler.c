@@ -161,7 +161,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
 }
 
 int mds_lock_mode_for_dir(struct obd_device *obd,
-                              struct dentry *dentry, int mode)
+                          struct dentry *dentry, int mode)
 {
         int ret_mode, split;
 
@@ -180,13 +180,24 @@ int mds_lock_mode_for_dir(struct obd_device *obd,
          *    type of access (lookup/modify/split) - LCK_EX -bzzz */
 
         split = mds_splitting_expected(obd, dentry);
-        if (split == MDS_NO_SPLITTABLE || split == MDS_NO_SPLIT_EXPECTED) {
+        
+        /* it is important to check here only for MDS_NO_SPLITTABLE.
+         * The reason is that MDS_NO_SPLITTABLE means dir is not splittable
+         * in principle and another thread will not split it on the quiet. 
+         * But if we have MDS_NO_SPLIT_EXPECTED, this means, that dir may be 
+         * splitted anytime, but not now (forcurrent thread) and we should 
+         * consider that it can  happen soon and go that branch which can yield 
+         * LCK_EX to protect from possible splitting. */
+        if (split == MDS_NO_SPLITTABLE) {
                 /* this inode won't be splitted. so we need not to protect from
                  * just flush client's cache on modification */
                 ret_mode = 0;
                 if (mode == LCK_PW)
                         ret_mode = LCK_CW;
         } else {
+                if (mode == LCK_EX)
+                        return LCK_EX;
+                
                 if (mode == LCK_PR) {
                         ret_mode = LCK_CR;
                 } else if (mode == LCK_PW) {
@@ -206,9 +217,6 @@ int mds_lock_mode_for_dir(struct obd_device *obd,
                                        (unsigned) dentry->d_inode->i_generation);
                                 ret_mode = LCK_EX;
                         }
-                } else {
-                        CWARN("unexpected lock mode %d\n", mode);
-                        ret_mode = LCK_EX;
                 }
         }
         return ret_mode;
