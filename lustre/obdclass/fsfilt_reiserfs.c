@@ -55,13 +55,12 @@ static void *fsfilt_reiserfs_start(struct inode *inode, int op,
 }
 
 static void *fsfilt_reiserfs_brw_start(int objcount, struct fsfilt_objinfo *fso,
-                                       int niocount, struct niobuf_remote *nb,
-                                       void *desc_private)
+                                       int niocount, void *desc_private)
 {
         return (void *)0xf00f00be;
 }
 
-static int fsfilt_reiserfs_commit(struct inode *inode, void *handle, 
+static int fsfilt_reiserfs_commit(struct inode *inode, void *handle,
                                   int force_sync)
 {
         if (handle != (void *)0xf00f00be) {

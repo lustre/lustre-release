@@ -197,8 +197,7 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso)
  * the pages have been written.
  */
 static void *fsfilt_ext3_brw_start(int objcount, struct fsfilt_objinfo *fso,
-                                   int niocount, struct niobuf_remote *nb,
-                                   void *desc_private)
+                                   int niocount, void *desc_private)
 {
         journal_t *journal;
         handle_t *handle;
@@ -264,16 +263,14 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
          * in the block pointers; this is really the "small" stripe MD data.
          * We can avoid further hackery by virtue of the MDS file size being
          * zero all the time (which doesn't invoke block truncate at unlink
-         * time), so we assert we never change the MDS file size from zero.
-         */
+         * time), so we assert we never change the MDS file size from zero. */
         if (iattr->ia_valid & ATTR_SIZE && !do_trunc) {
                 /* ATTR_SIZE would invoke truncate: clear it */
                 iattr->ia_valid &= ~ATTR_SIZE;
                 inode->i_size = iattr->ia_size;
 
                 /* make sure _something_ gets set - so new inode
-                 * goes to disk (probably won't work over XFS
-                 */
+                 * goes to disk (probably won't work over XFS */
                 if (!iattr->ia_valid & ATTR_MODE) {
                         iattr->ia_valid |= ATTR_MODE;
                         iattr->ia_mode = inode->i_mode;

@@ -44,8 +44,7 @@ struct fsfilt_operations {
         char   *fs_type;
         void   *(* fs_start)(struct inode *inode, int op, void *desc_private);
         void   *(* fs_brw_start)(int objcount, struct fsfilt_objinfo *fso,
-                                 int niocount, struct niobuf_remote *nb,
-                                 void *desc_private);
+                                 int niocount, void *desc_private);
         int     (* fs_commit)(struct inode *inode, void *handle,int force_sync);
         int     (* fs_setattr)(struct dentry *dentry, void *handle,
                                struct iattr *iattr, int do_trunc);
@@ -105,14 +104,13 @@ static inline void *fsfilt_start(struct obd_device *obd, struct inode *inode,
 
 static inline void *fsfilt_brw_start(struct obd_device *obd, int objcount,
                                      struct fsfilt_objinfo *fso, int niocount,
-                                     struct niobuf_remote *nb,
                                      struct obd_trans_info *oti)
 {
         unsigned long now = jiffies;
         void *parent_handle = oti ? oti->oti_handle : NULL;
         void *handle;
 
-        handle = obd->obd_fsops->fs_brw_start(objcount, fso, niocount, nb,
+        handle = obd->obd_fsops->fs_brw_start(objcount, fso, niocount,
                                               parent_handle);
         CDEBUG(D_HA, "started handle %p (%p)\n", handle, parent_handle);
 
