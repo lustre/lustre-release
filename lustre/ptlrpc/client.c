@@ -1372,12 +1372,8 @@ restart:
         /* Resend if we need to, unless we were interrupted. */
         if (req->rq_resend && !req->rq_intr) {
                 /* ...unless we were specifically told otherwise. */
-                if (req->rq_no_resend) {
-                        spin_lock_irqsave (&req->rq_lock, flags);
-                        req->rq_no_resend = 0;
-                        spin_unlock_irqrestore (&req->rq_lock, flags);
+                if (req->rq_no_resend)
                         GOTO(out, rc = -ETIMEDOUT);
-                }
                 spin_lock_irqsave (&req->rq_lock, flags);
                 req->rq_resend = 0;
                 spin_unlock_irqrestore (&req->rq_lock, flags);
@@ -1433,12 +1429,8 @@ restart:
                                 rc = brc;
                         }
                 }
-                if (rc < 0) {
-                        /* MDS blocks for put ACKs before replying */
-                        /* OSC sets rq_no_resend for the time being */
-                        LASSERT(req->rq_no_resend);
+                if (rc < 0)
                         ptlrpc_unregister_bulk (req);
-                }
         }
 
         LASSERT(!req->rq_receiving_reply);
