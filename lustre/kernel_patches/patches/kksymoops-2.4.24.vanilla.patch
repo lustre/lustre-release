@@ -1,6 +1,7 @@
-diff -urNp linux-700/arch/i386/kernel/process.c linux-720/arch/i386/kernel/process.c
---- linux-700/arch/i386/kernel/process.c	
-+++ linux-720/arch/i386/kernel/process.c	
+Index: linux-2.4.24/arch/i386/kernel/process.c
+===================================================================
+--- linux-2.4.24.orig/arch/i386/kernel/process.c	2004-06-24 09:06:29.000000000 +0400
++++ linux-2.4.24/arch/i386/kernel/process.c	2004-07-18 16:02:08.000000000 +0400
 @@ -33,6 +33,7 @@
  #include <linux/reboot.h>
  #include <linux/init.h>
@@ -9,7 +10,7 @@ diff -urNp linux-700/arch/i386/kernel/process.c linux-720/arch/i386/kernel/proce
  
  #include <asm/uaccess.h>
  #include <asm/pgtable.h>
-@@ -437,10 +438,14 @@ extern void show_trace(unsigned long* es
+@@ -447,10 +448,14 @@
  void show_regs(struct pt_regs * regs)
  {
  	unsigned long cr0 = 0L, cr2 = 0L, cr3 = 0L, cr4 = 0L;
@@ -24,9 +25,10 @@ diff -urNp linux-700/arch/i386/kernel/process.c linux-720/arch/i386/kernel/proce
  	if (regs->xcs & 3)
  		printk(" ESP: %04x:%08lx",0xffff & regs->xss,regs->esp);
  	printk(" EFLAGS: %08lx    %s\n",regs->eflags, print_tainted());
-diff -urNp linux-700/arch/i386/kernel/traps.c linux-720/arch/i386/kernel/traps.c
---- linux-700/arch/i386/kernel/traps.c	
-+++ linux-720/arch/i386/kernel/traps.c	
+Index: linux-2.4.24/arch/i386/kernel/traps.c
+===================================================================
+--- linux-2.4.24.orig/arch/i386/kernel/traps.c	2004-07-14 18:14:26.000000000 +0400
++++ linux-2.4.24/arch/i386/kernel/traps.c	2004-07-18 16:02:08.000000000 +0400
 @@ -24,6 +24,7 @@
  #include <linux/spinlock.h>
  #include <linux/interrupt.h>
@@ -35,7 +37,7 @@ diff -urNp linux-700/arch/i386/kernel/traps.c linux-720/arch/i386/kernel/traps.c
  
  #ifdef CONFIG_MCA
  #include <linux/mca.h>
-@@ -135,6 +136,8 @@ void show_trace(unsigned long * stack)
+@@ -135,6 +136,8 @@
  {
  	int i;
  	unsigned long addr;
@@ -44,7 +46,7 @@ diff -urNp linux-700/arch/i386/kernel/traps.c linux-720/arch/i386/kernel/traps.c
  
  	if (!stack)
  		stack = (unsigned long*)&stack;
-@@ -144,9 +147,8 @@ void show_trace(unsigned long * stack)
+@@ -144,9 +147,8 @@
  	while (((long) stack & (THREAD_SIZE-1)) != 0) {
  		addr = *stack++;
  		if (kernel_text_address(addr)) {
@@ -56,7 +58,7 @@ diff -urNp linux-700/arch/i386/kernel/traps.c linux-720/arch/i386/kernel/traps.c
  			i++;
  		}
  	}
-@@ -194,12 +196,17 @@ void dump_stack(void)
+@@ -194,12 +196,17 @@
  	show_stack(0);
  }
  
@@ -74,7 +76,7 @@ diff -urNp linux-700/arch/i386/kernel/traps.c linux-720/arch/i386/kernel/traps.c
  
  	esp = (unsigned long) (&regs->esp);
  	ss = __KERNEL_DS;
-@@ -208,8 +215,12 @@ void show_registers(struct pt_regs *regs
+@@ -208,8 +215,12 @@
  		esp = regs->esp;
  		ss = regs->xss & 0xffff;
  	}
@@ -87,7 +89,7 @@ diff -urNp linux-700/arch/i386/kernel/traps.c linux-720/arch/i386/kernel/traps.c
  	printk("eax: %08lx   ebx: %08lx   ecx: %08lx   edx: %08lx\n",
  		regs->eax, regs->ebx, regs->ecx, regs->edx);
  	printk("esi: %08lx   edi: %08lx   ebp: %08lx   esp: %08lx\n",
-@@ -269,7 +280,7 @@ static void handle_BUG(struct pt_regs *r
+@@ -269,7 +280,7 @@
  	if (__get_user(file, (char **)(eip + 4)) ||
  		(unsigned long)file < PAGE_OFFSET || __get_user(c, file))
  		file = "<bad filename>";
@@ -96,125 +98,10 @@ diff -urNp linux-700/arch/i386/kernel/traps.c linux-720/arch/i386/kernel/traps.c
  	printk("kernel BUG at %s:%d!\n", file, line);
  
  no_bug:
-diff -urNp linux-700/include/linux/kernel.h linux-720/include/linux/kernel.h
---- linux-700/include/linux/kernel.h	
-+++ linux-720/include/linux/kernel.h	
-@@ -110,6 +110,8 @@ extern const char *print_tainted(void);
- 
- extern void dump_stack(void);
- 
-+extern int lookup_symbol(unsigned long address, char *buffer, int buflen);
-+
- #if DEBUG
- #define pr_debug(fmt,arg...) \
- 	printk(KERN_DEBUG fmt,##arg)
-diff -urNp linux-700/kernel/kksymoops.c linux-720/kernel/kksymoops.c
---- linux-700/kernel/kksymoops.c	1970-01-01 01:00:00.000000000 +0100
-+++ linux-720/kernel/kksymoops.c	
-@@ -0,0 +1,82 @@
-+#include <linux/module.h>
-+#include <linux/string.h>
-+#include <linux/errno.h>
-+#include <linux/kernel.h>
-+#include <linux/config.h>
-+#ifdef CONFIG_KALLSYMS
-+#include <linux/kallsyms.h>
-+#endif
-+
-+
-+
-+int lookup_symbol(unsigned long address, char *buffer, int buflen)
-+{
-+	struct module *this_mod;
-+	unsigned long bestsofar;
-+
-+	const char *mod_name = NULL, *sec_name = NULL, *sym_name = NULL;
-+	unsigned long mod_start,mod_end,sec_start,sec_end,sym_start,sym_end;
-+	
-+	if (!buffer)
-+		return -EFAULT;
-+	
-+	if (buflen<256)
-+		return -ENOMEM;
-+	
-+	memset(buffer,0,buflen);
-+
-+#ifdef CONFIG_KALLSYMS
-+	if (!kallsyms_address_to_symbol(address,&mod_name,&mod_start,&mod_end,&sec_name,
-+		&sec_start, &sec_end, &sym_name, &sym_start, &sym_end)) {
-+		/* kallsyms doesn't have a clue; lets try harder */
-+		bestsofar = 0;
-+		snprintf(buffer,buflen-1,"[unresolved]");
-+		
-+		this_mod = module_list;
-+
-+		while (this_mod != NULL) {
-+			int i;
-+			/* walk the symbol list of this module. Only symbols
-+			   who's address is smaller than the searched for address
-+			   are relevant; and only if it's better than the best so far */
-+			for (i=0; i< this_mod->nsyms; i++)
-+				if ((this_mod->syms[i].value<=address) &&
-+					(bestsofar<this_mod->syms[i].value)) {
-+					snprintf(buffer,buflen-1,"%s [%s] 0x%x",
-+						this_mod->syms[i].name,
-+						this_mod->name,
-+						(unsigned int)(address - this_mod->syms[i].value));
-+					bestsofar = this_mod->syms[i].value;
-+				}
-+			this_mod = this_mod->next;
-+		}
-+
-+	} else { /* kallsyms success */
-+		snprintf(buffer,buflen-1,"%s [%s] 0x%x",sym_name,mod_name,(unsigned int)(address-sym_start));
-+	}
-+#endif
-+	return strlen(buffer);
-+}
-+
-+static char modlist[4096];
-+/* this function isn't smp safe but that's not really a problem; it's called from
-+ * oops context only and any locking could actually prevent the oops from going out;
-+ * the line that is generated is informational only and should NEVER prevent the real oops
-+ * from going out. 
-+ */
-+void print_modules(void)
-+{
-+	struct module *this_mod;
-+	int pos = 0, i;
-+	memset(modlist,0,4096);
-+
-+#ifdef CONFIG_KALLSYMS
-+	this_mod = module_list;
-+	while (this_mod != NULL) {
-+		if (this_mod->name != NULL)
-+			pos +=snprintf(modlist+pos,160-pos-1,"%s ",this_mod->name);
-+		this_mod = this_mod->next;
-+	}
-+	printk("%s\n",modlist);
-+#endif
-+}
-diff -urNp linux-700/kernel/Makefile linux-720/kernel/Makefile
---- linux-700/kernel/Makefile	2001-09-17 06:22:40.000000000 +0800
-+++ linux-720/kernel/Makefile	
-@@ -14,11 +14,13 @@ export-objs = signal.o sys.o kmod.o cont
- obj-y     = sched.o dma.o fork.o exec_domain.o panic.o printk.o \
- 	    module.o exit.o itimer.o info.o time.o softirq.o resource.o \
- 	    sysctl.o acct.o capability.o ptrace.o timer.o user.o \
--	    signal.o sys.o kmod.o context.o
-+	    signal.o sys.o kmod.o context.o kksymoops.o kallsyms.o
- 
- obj-$(CONFIG_UID16) += uid16.o
- obj-$(CONFIG_MODULES) += ksyms.o
- obj-$(CONFIG_PM) += pm.o
-+obj-$(CONFIG_KALLSYMS) += kksymoops.o
-+obj-$(CONFIG_KALLSYMS) += kallsyms.o
-
- ifneq ($(CONFIG_IA64),y)
- # According to Alan Modra <alan@linuxcare.com.au>, the -fno-omit-frame-pointer is
-diff -urNp arch/i386/config.in linux-720/arch/i386/config.in
---- /arch/i386/config.in	2004-06-15 16:58:41.000000000 +0800
-+++ /linux-720/arch/i386/config.in	
+Index: linux-2.4.24/arch/i386/config.in
+===================================================================
+--- linux-2.4.24.orig/arch/i386/config.in	2004-07-14 18:14:27.000000000 +0400
++++ linux-2.4.24/arch/i386/config.in	2004-07-18 16:02:08.000000000 +0400
 @@ -8,6 +8,7 @@
  define_bool CONFIG_SBUS n
  
@@ -223,10 +110,40 @@ diff -urNp arch/i386/config.in linux-720/arch/i386/config.in
  
  mainmenu_option next_comment
  comment 'Code maturity level options'
-diff -urNp include/linux/kallsyms.h linux-700/include/linux/kallsyms.h.orig
---- /include/linux/kallsyms.h	Thu Sep 26 15:27:16 2002
-+++ /linux-700/include/linux/kallsyms.h.orig	Thu Sep 26 15:27:16 2002
-@@ -0,0 +1,163 @@
+Index: linux-2.4.24/arch/i386/vmlinux.lds.S
+===================================================================
+--- linux-2.4.24.orig/arch/i386/vmlinux.lds.S	2004-07-14 18:14:27.000000000 +0400
++++ linux-2.4.24/arch/i386/vmlinux.lds.S	2004-07-18 16:02:08.000000000 +0400
+@@ -28,6 +28,11 @@
+   __ksymtab : { *(__ksymtab) }
+   __stop___ksymtab = .;
+ 
++  __start___kallsyms = .;      /* All kernel symbols */
++  __kallsyms : { *(__kallsyms) }
++  __stop___kallsyms = .;
++
++
+   .data : {			/* Data */
+ 	*(.data)
+ 	CONSTRUCTORS
+Index: linux-2.4.24/include/linux/kernel.h
+===================================================================
+--- linux-2.4.24.orig/include/linux/kernel.h	2004-07-13 11:07:11.000000000 +0400
++++ linux-2.4.24/include/linux/kernel.h	2004-07-18 16:02:08.000000000 +0400
+@@ -110,6 +110,8 @@
+ 
+ extern void dump_stack(void);
+ 
++extern int lookup_symbol(unsigned long address, char *buffer, int buflen);
++
+ #if DEBUG
+ #define pr_debug(fmt,arg...) \
+ 	printk(KERN_DEBUG fmt,##arg)
+Index: linux-2.4.24/include/linux/kallsyms.h
+===================================================================
+--- linux-2.4.24.orig/include/linux/kallsyms.h	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.24/include/linux/kallsyms.h	2004-07-18 16:08:12.000000000 +0400
+@@ -0,0 +1,164 @@
 +/* kallsyms headers
 +   Copyright 2000 Keith Owens <kaos@ocs.com.au>
 +
@@ -253,7 +170,7 @@ diff -urNp include/linux/kallsyms.h linux-700/include/linux/kallsyms.h.orig
 +   Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
 + */
 +
-+#ident "$Id: kksymoops-2.4.24.vanilla.patch,v 1.3 2004/06/24 03:58:32 houfeng Exp $"
++#ident "$Id: kksymoops-2.4.24.vanilla.patch,v 1.5 2004/07/18 12:29:24 alex Exp $"
 +
 +#ifndef MODUTILS_KALLSYMS_H
 +#define MODUTILS_KALLSYMS_H 1
@@ -390,8 +307,117 @@ diff -urNp include/linux/kallsyms.h linux-700/include/linux/kallsyms.h.orig
 +#endif
 +
 +#endif /* kallsyms.h */
---- linux/kernel/kallsyms.c.orig	Thu Sep 26 15:27:16 2002
-+++ linux/kernel/kallsyms.c	Thu Sep 26 15:27:16 2002
++
+Index: linux-2.4.24/kernel/kksymoops.c
+===================================================================
+--- linux-2.4.24.orig/kernel/kksymoops.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.24/kernel/kksymoops.c	2004-07-18 16:08:58.000000000 +0400
+@@ -0,0 +1,82 @@
++#include <linux/module.h>
++#include <linux/string.h>
++#include <linux/errno.h>
++#include <linux/kernel.h>
++#include <linux/config.h>
++#ifdef CONFIG_KALLSYMS
++#include <linux/kallsyms.h>
++#endif
++
++
++
++int lookup_symbol(unsigned long address, char *buffer, int buflen)
++{
++	struct module *this_mod;
++	unsigned long bestsofar;
++
++	const char *mod_name = NULL, *sec_name = NULL, *sym_name = NULL;
++	unsigned long mod_start,mod_end,sec_start,sec_end,sym_start,sym_end;
++	
++	if (!buffer)
++		return -EFAULT;
++	
++	if (buflen<256)
++		return -ENOMEM;
++	
++	memset(buffer,0,buflen);
++
++#ifdef CONFIG_KALLSYMS
++	if (!kallsyms_address_to_symbol(address,&mod_name,&mod_start,&mod_end,&sec_name,
++		&sec_start, &sec_end, &sym_name, &sym_start, &sym_end)) {
++		/* kallsyms doesn't have a clue; lets try harder */
++		bestsofar = 0;
++		snprintf(buffer,buflen-1,"[unresolved]");
++		
++		this_mod = module_list;
++
++		while (this_mod != NULL) {
++			int i;
++			/* walk the symbol list of this module. Only symbols
++			   who's address is smaller than the searched for address
++			   are relevant; and only if it's better than the best so far */
++			for (i=0; i< this_mod->nsyms; i++)
++				if ((this_mod->syms[i].value<=address) &&
++					(bestsofar<this_mod->syms[i].value)) {
++					snprintf(buffer,buflen-1,"%s [%s] 0x%x",
++						this_mod->syms[i].name,
++						this_mod->name,
++						(unsigned int)(address - this_mod->syms[i].value));
++					bestsofar = this_mod->syms[i].value;
++				}
++			this_mod = this_mod->next;
++		}
++
++	} else { /* kallsyms success */
++		snprintf(buffer,buflen-1,"%s [%s] 0x%x",sym_name,mod_name,(unsigned int)(address-sym_start));
++	}
++#endif
++	return strlen(buffer);
++}
++
++static char modlist[4096];
++/* this function isn't smp safe but that's not really a problem; it's called from
++ * oops context only and any locking could actually prevent the oops from going out;
++ * the line that is generated is informational only and should NEVER prevent the real oops
++ * from going out. 
++ */
++void print_modules(void)
++{
++	struct module *this_mod;
++	int pos = 0;
++	memset(modlist,0,4096);
++
++#ifdef CONFIG_KALLSYMS
++	this_mod = module_list;
++	while (this_mod != NULL) {
++		if (this_mod->name != NULL)
++			pos +=snprintf(modlist+pos,160-pos-1,"%s ",this_mod->name);
++		this_mod = this_mod->next;
++	}
++	printk("%s\n",modlist);
++#endif
++}
+Index: linux-2.4.24/kernel/Makefile
+===================================================================
+--- linux-2.4.24.orig/kernel/Makefile	2001-09-17 08:22:40.000000000 +0400
++++ linux-2.4.24/kernel/Makefile	2004-07-18 16:02:08.000000000 +0400
+@@ -14,11 +14,13 @@
+ obj-y     = sched.o dma.o fork.o exec_domain.o panic.o printk.o \
+ 	    module.o exit.o itimer.o info.o time.o softirq.o resource.o \
+ 	    sysctl.o acct.o capability.o ptrace.o timer.o user.o \
+-	    signal.o sys.o kmod.o context.o
++	    signal.o sys.o kmod.o context.o kksymoops.o kallsyms.o
+ 
+ obj-$(CONFIG_UID16) += uid16.o
+ obj-$(CONFIG_MODULES) += ksyms.o
+ obj-$(CONFIG_PM) += pm.o
++obj-$(CONFIG_KALLSYMS) += kksymoops.o
++obj-$(CONFIG_KALLSYMS) += kallsyms.o
+ 
+ ifneq ($(CONFIG_IA64),y)
+ # According to Alan Modra <alan@linuxcare.com.au>, the -fno-omit-frame-pointer is
+Index: linux-2.4.24/kernel/kallsyms.c
+===================================================================
+--- linux-2.4.24.orig/kernel/kallsyms.c	2003-01-30 13:24:37.000000000 +0300
++++ linux-2.4.24/kernel/kallsyms.c	2004-07-18 16:02:08.000000000 +0400
 @@ -0,0 +1,227 @@
 +/*
 + * kksymoops.c: in-kernel printing of symbolic oopses and stack traces.
@@ -620,8 +646,10 @@ diff -urNp include/linux/kallsyms.h linux-700/include/linux/kallsyms.h.orig
 +	}
 +	return(1);
 +}
---- linux/Makefile	2004-06-16 19:25:21.000000000 +0800
-+++ linux/Makefile.bak	2004-06-22 11:25:02.000000000 +0800
+Index: linux-2.4.24/Makefile
+===================================================================
+--- linux-2.4.24.orig/Makefile	2004-07-13 11:07:12.000000000 +0400
++++ linux-2.4.24/Makefile	2004-07-18 16:02:09.000000000 +0400
 @@ -45,6 +45,7 @@
  MAKEFILES	= $(TOPDIR)/.config
  GENKSYMS	= /sbin/genksyms
@@ -690,17 +718,3 @@ diff -urNp include/linux/kallsyms.h linux-700/include/linux/kallsyms.h.orig
  
  symlinks:
  	rm -f include/asm
---- linux/arch/i386/vmlinux.lds.S	2004-06-16 19:25:26.000000000 +0800
-+++ linux/arch/i386/vmlinux.lds.S.bak	2004-06-22 11:23:53.000000000 +0800
-@@ -28,6 +28,11 @@
-   __ksymtab : { *(__ksymtab) }
-   __stop___ksymtab = .;
- 
-+  __start___kallsyms = .;      /* All kernel symbols */
-+  __kallsyms : { *(__kallsyms) }
-+  __stop___kallsyms = .;
-+
-+
-   .data : {			/* Data */
- 	*(.data)
- 	CONSTRUCTORS
