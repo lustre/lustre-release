@@ -1014,7 +1014,7 @@
  		kunmap(page);
  		page_cache_release(page);
 --- linux/fs/open.c~vfs_intent-2.4.20-hp	2003-06-09 23:07:04.000000000 +0800
-+++ linux-root/fs/open.c	2003-08-08 15:58:57.000000000 +0800
++++ linux-root/fs/open.c	2003-08-08 17:09:13.000000000 +0800
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1226,7 +1226,7 @@
  	if (error)
  		goto out;
  
-@@ -454,6 +502,7 @@ asmlinkage long sys_chroot(const char * 
+@@ -454,39 +502,56 @@ asmlinkage long sys_chroot(const char * 
  	set_fs_altroot();
  	error = 0;
  dput_and_out:
@@ -1234,26 +1234,102 @@
  	path_release(&nd);
  out:
  	return error;
-@@ -508,6 +557,18 @@ asmlinkage long sys_chmod(const char * f
- 	if (IS_RDONLY(inode))
- 		goto dput_and_out;
+ }
  
+-asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
++int chmod_common(struct dentry *dentry, mode_t mode)
+ {
+-	struct inode * inode;
+-	struct dentry * dentry;
+-	struct file * file;
+-	int err = -EBADF;
++	struct inode *inode = dentry->d_inode;
+ 	struct iattr newattrs;
++	int err = -EROFS;
+ 
+-	file = fget(fd);
+-	if (!file)
++	if (IS_RDONLY(inode))
+ 		goto out;
+ 
+-	dentry = file->f_dentry;
+-	inode = dentry->d_inode;
 +	if (inode->i_op->setattr_raw) {
-+		struct inode_operations *op = nd.dentry->d_inode->i_op;
-+
 +		newattrs.ia_mode = mode;
 +		newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
 +		newattrs.ia_valid |= ATTR_RAW;
-+		error = op->setattr_raw(inode, &newattrs);
++		err = inode->i_op->setattr_raw(inode, &newattrs);
 +		/* the file system wants to use normal vfs path now */
-+		if (error != -EOPNOTSUPP)
-+			goto dput_and_out;
++		if (err != -EOPNOTSUPP)
++			goto out;
 +	}
-+
- 	error = -EPERM;
+ 
+-	err = -EROFS;
+-	if (IS_RDONLY(inode))
+-		goto out_putf;
+ 	err = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
- 		goto dput_and_out;
-@@ -538,6 +599,20 @@ static int chown_common(struct dentry * 
+-		goto out_putf;
++		goto out;
++
+ 	if (mode == (mode_t) -1)
+ 		mode = inode->i_mode;
+ 	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
+ 	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
+ 	err = notify_change(dentry, &newattrs);
+ 
+-out_putf:
++out:
++	return err;
++}
++
++asmlinkage long sys_fchmod(unsigned int fd, mode_t mode)
++{
++	struct file * file;
++	int err = -EBADF;
++
++	file = fget(fd);
++	if (!file)
++		goto out;
++
++	err = chmod_common(file->f_dentry, mode);
++
+ 	fput(file);
+ out:
+ 	return err;
+@@ -495,30 +560,14 @@ out:
+ asmlinkage long sys_chmod(const char * filename, mode_t mode)
+ {
+ 	struct nameidata nd;
+-	struct inode * inode;
+ 	int error;
+-	struct iattr newattrs;
+ 
+ 	error = user_path_walk(filename, &nd);
+ 	if (error)
+ 		goto out;
+-	inode = nd.dentry->d_inode;
+-
+-	error = -EROFS;
+-	if (IS_RDONLY(inode))
+-		goto dput_and_out;
+-
+-	error = -EPERM;
+-	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
+-		goto dput_and_out;
+ 
+-	if (mode == (mode_t) -1)
+-		mode = inode->i_mode;
+-	newattrs.ia_mode = (mode & S_IALLUGO) | (inode->i_mode & ~S_IALLUGO);
+-	newattrs.ia_valid = ATTR_MODE | ATTR_CTIME;
+-	error = notify_change(nd.dentry, &newattrs);
++	error = chmod_common(nd.dentry, mode);
+ 
+-dput_and_out:
+ 	path_release(&nd);
+ out:
+ 	return error;
+@@ -538,6 +587,20 @@ static int chown_common(struct dentry * 
  	error = -EROFS;
  	if (IS_RDONLY(inode))
  		goto out;
@@ -1274,7 +1350,7 @@
  	error = -EPERM;
  	if (IS_IMMUTABLE(inode) || IS_APPEND(inode))
  		goto out;
-@@ -638,10 +713,12 @@ asmlinkage long sys_fchown(unsigned int 
+@@ -638,10 +701,12 @@ asmlinkage long sys_fchown(unsigned int 
   * for the internal routines (ie open_namei()/follow_link() etc). 00 is
   * used by symlinks.
   */
@@ -1287,7 +1363,7 @@
  
  	namei_flags = flags;
  	if ((namei_flags+1) & O_ACCMODE)
-@@ -649,14 +726,15 @@ struct file *filp_open(const char * file
+@@ -649,14 +714,15 @@ struct file *filp_open(const char * file
  	if (namei_flags & O_TRUNC)
  		namei_flags |= 2;
  
@@ -1308,7 +1384,7 @@
  {
  	struct file * f;
  	struct inode *inode;
-@@ -693,12 +771,15 @@ struct file *dentry_open(struct dentry *
+@@ -693,12 +759,15 @@ struct file *dentry_open(struct dentry *
  	}
  
  	if (f->f_op && f->f_op->open) {
@@ -1324,7 +1400,7 @@
  	return f;
  
  cleanup_all:
-@@ -713,11 +794,17 @@ cleanup_all:
+@@ -713,11 +782,17 @@ cleanup_all:
  cleanup_file:
  	put_filp(f);
  cleanup_dentry:
@@ -1601,8 +1677,16 @@
  extern spinlock_t dcache_lock;
  
 --- linux/include/linux/fs.h~vfs_intent-2.4.20-hp	2003-08-08 15:58:54.000000000 +0800
-+++ linux-root/include/linux/fs.h	2003-08-08 15:58:57.000000000 +0800
-@@ -340,6 +340,9 @@ extern void set_bh_page(struct buffer_he
++++ linux-root/include/linux/fs.h	2003-08-08 17:16:15.000000000 +0800
+@@ -73,6 +73,7 @@ extern int leases_enable, dir_notify_ena
+ 
+ #define FMODE_READ 1
+ #define FMODE_WRITE 2
++#define FMODE_EXEC 4
+ 
+ #define READ 0
+ #define WRITE 1
+@@ -340,6 +341,9 @@ extern void set_bh_page(struct buffer_he
  #define ATTR_MTIME_SET	256
  #define ATTR_FORCE	512	/* Not a change, but a change it */
  #define ATTR_ATTR_FLAG	1024
@@ -1612,7 +1696,7 @@
  
  /*
   * This is the Inode Attributes structure, used for notify_change().  It
-@@ -576,6 +579,7 @@ struct file {
+@@ -576,6 +580,7 @@ struct file {
  
  	/* needed for tty driver, and maybe others */
  	void			*private_data;
@@ -1620,7 +1704,7 @@
  
  	/* preallocated helper kiobuf to speedup O_DIRECT */
  	struct kiobuf		*f_iobuf;
-@@ -697,6 +701,7 @@ struct nameidata {
+@@ -697,6 +702,7 @@ struct nameidata {
  	struct qstr last;
  	unsigned int flags;
  	int last_type;
@@ -1628,7 +1712,7 @@
  };
  
  /*
-@@ -817,7 +822,8 @@ extern int vfs_symlink(struct inode *, s
+@@ -817,7 +823,8 @@ extern int vfs_symlink(struct inode *, s
  extern int vfs_link(struct dentry *, struct inode *, struct dentry *);
  extern int vfs_rmdir(struct inode *, struct dentry *);
  extern int vfs_unlink(struct inode *, struct dentry *);
@@ -1638,7 +1722,7 @@
  
  /*
   * File types
-@@ -877,21 +883,32 @@ struct file_operations {
+@@ -877,21 +884,32 @@ struct file_operations {
  
  struct inode_operations {
  	int (*create) (struct inode *,struct dentry *,int);
@@ -1671,7 +1755,7 @@
  	int (*getattr) (struct dentry *, struct iattr *);
  	int (*setxattr) (struct dentry *, const char *, void *, size_t, int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
-@@ -1088,10 +1105,14 @@ static inline int get_lease(struct inode
+@@ -1088,10 +1106,14 @@ static inline int get_lease(struct inode
  
  asmlinkage long sys_open(const char *, int, int);
  asmlinkage long sys_close(unsigned int);	/* yes, it's really unsigned */
@@ -1687,7 +1771,7 @@
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char *);
  
-@@ -1353,6 +1374,7 @@ typedef int (*read_actor_t)(read_descrip
+@@ -1353,6 +1375,7 @@ typedef int (*read_actor_t)(read_descrip
  extern loff_t default_llseek(struct file *file, loff_t offset, int origin);
  
  extern int FASTCALL(__user_walk(const char *, unsigned, struct nameidata *));
@@ -1695,7 +1779,7 @@
  extern int FASTCALL(path_init(const char *, unsigned, struct nameidata *));
  extern int FASTCALL(path_walk(const char *, struct nameidata *));
  extern int FASTCALL(path_lookup(const char *, unsigned, struct nameidata *));
-@@ -1364,6 +1386,8 @@ extern struct dentry * lookup_one_len(co
+@@ -1364,6 +1387,8 @@ extern struct dentry * lookup_one_len(co
  extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
  #define user_path_walk(name,nd)	 __user_walk(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, nd)
  #define user_path_walk_link(name,nd) __user_walk(name, LOOKUP_POSITIVE, nd)
@@ -1704,7 +1788,7 @@
  
  extern void inode_init_once(struct inode *);
  extern void iput(struct inode *);
-@@ -1499,6 +1523,8 @@ extern struct file_operations generic_ro
+@@ -1499,6 +1524,8 @@ extern struct file_operations generic_ro
  
  extern int vfs_readlink(struct dentry *, char *, int, const char *);
  extern int vfs_follow_link(struct nameidata *, const char *);
