@@ -381,21 +381,26 @@ class LCTLInterface:
         self.run(cmds)
 
     # create a new connection
-    def connect(self, net, nid, port, servuuid, send_mem, recv_mem):
-        if net  in ('tcp', 'toe'):
+    def connect(self, srv):
+        if srv.net_type  in ('tcp', 'toe'):
+            flags = ''
+            if srv.irq_affinity:
+                flags = flags + 'i'
+            if srv.nid_exchange:
+                flags = flags + 'x'
             cmds =  """
   network %s
   add_uuid %s %s
   send_mem %d
   recv_mem %d
-  connect %s %d
-  quit""" % (net, servuuid, nid, send_mem, recv_mem, nid, port,  )
+  connect %s %d %s
+  quit""" % (srv.net_type, srv.uuid, srv.nid, srv.send_mem, srv.recv_mem, srv.nid, srv.port, flags )
         else:
             cmds =  """
   network %s
   add_uuid %s %s
   connect %s %d
-  quit""" % (net, servuuid, nid, nid, port,  )
+  quit""" % (net, srv.uuid, srv.nid, srv.nid, srv.port,  )
             
         self.run(cmds)
                 
@@ -864,8 +869,10 @@ class Network(Module):
         self.net_type = self.db.get_val('nettype')
         self.nid = self.db.get_val('nid', '*')
         self.port = self.db.get_val_int('port', 0)
-        self.send_mem = self.db.get_val_int('send_mem', DEFAULT_TCPBUF)
-        self.recv_mem = self.db.get_val_int('recv_mem', DEFAULT_TCPBUF)
+        self.send_mem = self.db.get_val_int('sendmem', DEFAULT_TCPBUF)
+        self.recv_mem = self.db.get_val_int('recvmem', DEFAULT_TCPBUF)
+        self.irq_affinity = self.db.get_val_int('irqaffinity', 1)
+        self.nid_exchange = self.db.get_val_int('nidexchange', 0)
         if '*' in self.nid:
             self.nid = get_local_address(self.net_type, self.nid)
             if not self.nid:
@@ -883,15 +890,18 @@ class Network(Module):
         if self.net_type == 'gm':
             self.add_portals_module("/linux/gmnal", 'kgmnal')
         self.add_lustre_module('obdclass', 'obdclass')
-        self.add_lustre_module('ptlrpc', 'ptlrpc')
 
     def prepare(self):
         self.info(self.net_type, self.nid, self.port)
         if self.net_type in ('tcp', 'toe'):
-            nal_id = '' # default is socknal
+            flags = ""
             if self.net_type == 'toe':
-                nal_id = '-N 4'
-            ret, out = run(TCP_ACCEPTOR, '-s', self.send_mem, '-r', self.recv_mem, nal_id, self.port)
+                flags = flags + ' -N 4'
+            if self.irq_affinity:
+                flags = flags + ' -i'
+            if self.nid_exchange:
+                flags = flags + ' -x'
+            ret, out = run(TCP_ACCEPTOR, '-s', self.send_mem, '-r', self.recv_mem, flags, self.port)
             if ret:
                 raise CommandError(TCP_ACCEPTOR, out, ret)
         for net_type, gw, lo, hi in self.db.get_route_tbl():
@@ -902,12 +912,8 @@ class Network(Module):
                     panic("no server for nid", lo)
                 else:
                     srv = Network(srvdb)
-                    lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
-
-            
+                    lctl.connect(srv)
         lctl.network(self.net_type, self.nid)
-        if not is_prepared("RPCDEV_UUID"):
-            lctl.newdev(attach = "ptlrpc RPCDEV RPCDEV_UUID")
 
     def cleanup(self):
         self.info(self.net_type, self.nid, self.port)
@@ -956,8 +962,17 @@ class LDLM(Module):
         if is_prepared(self.uuid):
             return
         self.info()
-        lctl.newdev(attach="ldlm %s %s" % (self.name, self.uuid),
-                    setup ="")
+        lctl.newdev(attach="ldlm %s %s" % (self.name, self.uuid))
+
+class PTLRPC(Module):
+    def __init__(self,db):
+        Module.__init__(self, 'PTLRPC', db)
+        self.add_lustre_module('ptlrpc', 'ptlrpc') 
+    def prepare(self):
+        if is_prepared(self.uuid):
+            return
+        self.info()
+        lctl.newdev(attach="ptlrpc %s %s" % (self.name, self.uuid))
 
 class LOV(Module):
     def __init__(self,db):
@@ -1165,7 +1180,7 @@ class Client(Module):
         try:
             if local_net(srv):
                 #debug("LOCAL NET")
-                lctl.connect(srv.net_type, srv.nid, srv.port, srv.uuid, srv.send_mem, srv.recv_mem)
+                lctl.connect(srv)
             else:
                 #debug("NOT LOCAL NET")
                 r =  find_route(srv)
@@ -1412,6 +1427,8 @@ class LustreDB:
         ret=0;
         if type in ('network',):
             ret = 10
+        elif type in ('ptlrpc',):
+            ret = 15
         elif type in ('device', 'ldlm'):
             ret = 20
         elif type in ('osd', 'mdd', 'cobd'):
@@ -1836,6 +1853,8 @@ def newService(db):
     n = None
     if type == 'ldlm':
         n = LDLM(db)
+    elif type == 'ptlrpc':
+        n = PTLRPC(db)
     elif type == 'lov':
         n = LOV(db)
     elif type == 'network':
@@ -1973,7 +1992,6 @@ def parse_cmdline(argv):
             config.verbose(1)
         if o in ("-n", "--noexec"):
             config.noexec(1)
-            config.verbose(1)
         if o == "--portals":
             config.portals_dir(a)
         if o == "--lustre":
