@@ -39356,16 +39356,3 @@ diff -Naur -X ../exclude-files orig/mm/slab.c um/mm/slab.c
  
  	seq_printf(m, "%-17s %6lu %6lu %6u %4lu %4lu %4u",
  		name, active_objs, num_objs, cachep->objsize,
-diff -puNr origin/arch/i386/kernel/sys_i386.c linux/arch/i386/kernel/sys_i386.c
---- origin/arch/i386/kernel/sys_i386.c	2001-03-19 23:35:09.000000000 +0300
-+++ linux/arch/i386/kernel/sys_i386.c	2003-05-04 11:44:54.000000000 +0400
-@@ -56,7 +56,7 @@ static inline long do_mmap2(
- 	}
- 
- 	down_write(&current->mm->mmap_sem);
--	error = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
-+	error = do_mmap_pgoff(current->mm, file, addr, len, prot, flags, pgoff);
- 	up_write(&current->mm->mmap_sem);
- 
- 	if (file)
-
