@@ -2,8 +2,8 @@
 #
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
-LYX2PDF = $(srcdir)/tex2pdf -overwrite
-TEX2PDF = $(srcdir)/tex2pdf -overwrite
+LYX2PDF = GS_OPTIONS=-dCompatibilityLevel=1.1 $(srcdir)/tex2pdf -overwrite
+TEX2PDF = GS_OPTIONS=-dCompatibilityLevel=1.1 $(srcdir)/tex2pdf -overwrite
 LYX2PS = lyx --export ps
 LYX2TEX = lyx --export latex
 LYX2TXT = lyx --export text
