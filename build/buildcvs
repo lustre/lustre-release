@@ -27,6 +27,11 @@ case "$lustretag" in
     b_port_step)
         portalstag="b_port_step"
 	;;
+
+    b_port_ahead)
+        portalstag="b_port_ahead"
+	;;
+
     b_port_netid)
         portalstag="b_port_netid"
 	;;
