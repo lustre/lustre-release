@@ -1,3 +1,29 @@
+--- linux/mm/filemap.c.obd-orig	Mon Nov 26 06:29:17 2001
++++ linux/mm/filemap.c	Tue Dec 11 14:29:50 2001
+@@ -2862,8 +2861,10 @@
+ 	if ((ssize_t) count < 0)
+ 		return -EINVAL;
+ 
++#if 0
+ 	if (!access_ok(VERIFY_READ, buf, count))
+ 		return -EFAULT;
++#endif
+ 
+ 	cached_page = NULL;
+ 
+@@ -2987,10 +2988,12 @@
+ 		 * same page as we're writing to, without it being marked
+ 		 * up-to-date.
+ 		 */
++#if 0
+ 		{ volatile unsigned char dummy;
+ 			__get_user(dummy, buf);
+ 			__get_user(dummy, buf+bytes-1);
+ 		}
++#endif
+ 
+ 		status = -ENOMEM;	/* we'll assign it later anyway */
+ 		page = __grab_cache_page(mapping, index, &cached_page);
 --- linux/kernel/ksyms.c.lustre-orig	Sun Jan 20 17:47:43 2002
 +++ linux/kernel/ksyms.c	Sun Jan 20 18:21:30 2002
 @@ -280,6 +280,13 @@

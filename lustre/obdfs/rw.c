@@ -224,7 +224,6 @@ int obdfs_readpage(struct file *file, struct page *page)
 		EXIT; 
 		return rc;
         } 
-        /* PDEBUG(page, "READ"); */
 
  readpage_out:
 	SetPageUptodate(page);
