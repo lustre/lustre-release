@@ -7,6 +7,7 @@
 #include <linux/kmod.h>
 #include <linux/pagemap.h>
 #include <linux/low-latency.h>
+#include <linux/mm_inline.h>
 #include <asm/unistd.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
@@ -15,26 +16,62 @@
 /* wakeup every 30s */
 #define LIOD_WAKEUP_CYCLE	(30)
 
-/* FIXME  temporary!!!, export this from kernel later */
+/* FIXME tempororily copy from mm_inline.h */
+static inline void madd_page_to_inactive_clean_list(struct page * page)
+{
+	struct zone_struct * zone = page_zone(page);
+	DEBUG_LRU_PAGE(page);
+	SetPageInactiveClean(page);
+	list_add(&page->lru, &zone->inactive_clean_list);
+	zone->inactive_clean_pages++;
+//	nr_inactive_clean_pages++;
+}
+
+static inline void mdel_page_from_active_list(struct page * page)
+{
+	struct zone_struct * zone = page_zone(page);
+	list_del(&page->lru);
+	ClearPageActive(page);
+//	nr_active_pages--;
+	zone->active_pages--;
+	DEBUG_LRU_PAGE(page);
+}
+
+static inline void mdel_page_from_inactive_dirty_list(struct page * page)
+{
+	struct zone_struct * zone = page_zone(page);
+	list_del(&page->lru);
+	ClearPageInactiveDirty(page);
+//	nr_inactive_dirty_pages--;
+	zone->inactive_dirty_pages--;
+	DEBUG_LRU_PAGE(page);
+}
+
 /* return value:
  * -1: no need to flush
  * 0:  need async flush
  * 1:  need sync flush
+ *
+ * Note: here we are more sensitive than kswapd, hope we could
+ * do more flush work by ourselves, not resort to kswapd
  */
-static int balance_dirty_state(void)
+static inline int balance_dirty_state(void)
 {
-	static int arr[3] = {-1, 0, 1};
-	static int index = 0;
-
-	index++;
-	index = index % 3;
-	return arr[index];
+	if (free_high(ALL_ZONES) > 0) {
+		printk("memory low, sync flush\n");
+		return 1;
+	}
+	if (free_plenty(ALL_ZONES) > 0) {
+		printk("memory high, async flush\n");
+		return 0;
+	}
+	else
+		return -1;
 }
 
-/* FIXME  temporary!!!, export this from kernel later */
-static spinlock_t inode_lock = SPIN_LOCK_UNLOCKED;
+extern spinlock_t inode_lock;
 
-static void flush_some_pages(struct super_block *sb);
+static int flush_some_pages(struct super_block *sb);
 
 /* the main liod loop */
 static int liod_main(void *arg)
@@ -65,6 +102,7 @@ static int liod_main(void *arg)
 
         CDEBUG(D_CACHE, "liod(%d) started\n", current->pid);
         while (1) {
+		int flushed;
 		int t;
 
 		/* check the stop command */
@@ -73,14 +111,20 @@ static int liod_main(void *arg)
 
 		t = interruptible_sleep_on_timeout(&iod->io_sleepq,
 					       LIOD_WAKEUP_CYCLE*HZ);
-		CDEBUG(D_NET, "liod(%d) active due to %s\n",
+		CDEBUG(D_NET, "liod(%d) active due to %s\n", current->pid,
+				(t ? "wakeup" : "timeout"));
+
+		printk("liod(%d) active due to %s\n", current->pid,
 				(t ? "wakeup" : "timeout"));
 
 		do {
-			flush_some_pages(sb);
+			int times=0;
+
+			flushed = flush_some_pages(sb);
 			conditional_schedule();
-		} while (balance_dirty_state() >= 0);
-        }
+			printk("iod: loop %d times\n", ++times);
+		} while (flushed && (balance_dirty_state() >= 0));
+	}
 
 	clear_bit(LIOD_FLAG_ALIVE, &iod->io_flag);
         wake_up(&iod->io_waitq);
@@ -142,7 +186,7 @@ static inline void select_one_page(struct brw_page *pg,
  * need add multiple inode flush later.
  */
 #define FLUSH_NR (32)
-static void flush_some_pages(struct super_block *sb)
+static int flush_some_pages(struct super_block *sb)
 {
 	struct brw_page *pgs;
 	struct obd_brw_set *set;
@@ -151,11 +195,12 @@ static void flush_some_pages(struct super_block *sb)
 	struct address_space *mapping;
 	struct page *page;
 	int cnt, rc;
+	int a_c = 0, id_c = 0;
 
 	set = obd_brw_set_new();
 	if (!set) {
 		CERROR("can't alloc obd_brw_set!\n");
-		return;
+		return 0;
 	}
 
 	OBD_ALLOC(pgs, FLUSH_NR * sizeof(struct brw_page));
@@ -165,6 +210,16 @@ static void flush_some_pages(struct super_block *sb)
 	/* FIXME simutanously gain inode_lock and pagecache_lock could
 	 * cause busy spin forever? Check this */
 	spin_lock(&inode_lock);
+
+	{
+		int n = 0;
+		tmp = sb->s_dirty.prev;
+		while (tmp != &sb->s_dirty) {
+			n++;
+			tmp = tmp->prev;
+		}
+		printk("dirty inode length %d\n", n);
+	}
 
 	/* sync dirty inodes from tail, since we try to sync
 	 * from the oldest one */
@@ -233,6 +288,8 @@ next_page:
 				list_add(&page->list, &mapping->clean_pages);
 				UnlockPage(page);
 			}
+		} else {
+			printk("skip page locked by others\n");
 		}
 
 		list = next;
@@ -241,6 +298,12 @@ next_page:
 
 	spin_unlock(&inode_lock);
 
+	if (cnt)
+		printk("got %d pages of inode %lu to flush\n",
+			cnt, inode->i_ino);
+	else
+		printk("didn't found dirty pages\n");
+
 	if (!cnt)
 		goto out_free_pgs;
 
@@ -248,7 +311,7 @@ next_page:
 		LBUG();
 
 	CDEBUG(D_CACHE, "got %d pages of inode %lu to flush\n",
-			inode->i_ino, cnt);
+			cnt, inode->i_ino);
 
 	set->brw_callback = ll_brw_sync_wait;
 	rc = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode),
@@ -262,39 +325,61 @@ next_page:
 	}
 
 	/* finish the page status here */
-	spin_lock(&pagecache_lock);
 
 	while (--cnt >= 0) {
 		page = pgs[cnt].pg;
 
-		if (!PageLocked(page))
-			LBUG();
+		LASSERT(PageLocked(page));
 
 		if (!rc) {
-			/* move pages to clean list */
 			ClearPageDirty(page);
+
+			/* move pages to clean list */
+			spin_lock(&pagecache_lock);
 			list_del(&page->list);
 			list_add(&page->list, &inode->i_mapping->clean_pages);
+			spin_unlock(&pagecache_lock);
+#if 1
+			//spin_lock(pagemap_lru_lock);
+			pte_chain_lock(page);
+			if (PageActive(page)) {
+				mdel_page_from_active_list(page);
+				madd_page_to_inactive_clean_list(page);
+				a_c++;
+			} else if (PageInactiveDirty(page)) {
+				mdel_page_from_inactive_dirty_list(page);
+				madd_page_to_inactive_clean_list(page);
+				id_c++;
+			}
+			pte_chain_unlock(page);
+			//spin_lunock(pagemap_lru_lock);
+#endif
 		} else {
-			/* add back to dirty list */
 			SetPageDirty(page);
+
+			/* add back to dirty list */
+			spin_lock(&pagecache_lock);
 			list_del(&page->list);
 			list_add(&page->list, &inode->i_mapping->dirty_pages);
+			spin_unlock(&pagecache_lock);
 		}
 		UnlockPage(page);
+
 		page_cache_release(page);
 	}
 
+	printk("active-ic: %d, inactive_dirty-ic %d\n", a_c, id_c);
+	spin_lock(&pagecache_lock);
 	if (list_empty(&inode->i_mapping->dirty_pages))
 		inode->i_state &= ~I_DIRTY_PAGES;
-
 	spin_unlock(&pagecache_lock);
+
 
 out_free_pgs:
 	OBD_FREE(pgs, FLUSH_NR * sizeof(struct brw_page));
 out_free_set:
 	obd_brw_set_free(set);
-	return;
+	return (a_c+id_c);
 }
 
 void ll_balance_dirty_pages(struct super_block *sb)
@@ -306,8 +391,14 @@ void ll_balance_dirty_pages(struct super_block *sb)
 	if (flush < 0)
 		return;
 
-	if (flush > 0)
-		flush_some_pages(sb);
+	if (flush > 0) {
+		int n, flush;
+		do {
+			n = 0;
+			flush = flush_some_pages(sb);
+			printk("ll_balance_dirty: loop %d times\n", ++n);
+		} while (flush && (balance_dirty_state() > 0));
+	}
 
 	/* FIXME we need a way to wake up liods on *all* llite fs */
 	liod_wakeup(&sbi->ll_iod);
