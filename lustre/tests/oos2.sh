@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -e
-set -vx
 
 export PATH=`dirname $0`/../utils:$PATH
 LFS=${LFS:-lfs}
