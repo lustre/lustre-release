@@ -74,7 +74,7 @@ cvs_cmd ()
 	( cd "$dir" && cvs up -dP $uptag )
     else
 	echo "$progname: Checking out $dir from $tag"
-	cvs co $cotag -d "$dir" "$module"
+	cvs co -P $cotag -d "$dir" "$module"
     fi
 }
 
