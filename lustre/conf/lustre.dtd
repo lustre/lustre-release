@@ -30,7 +30,7 @@
                 hi CDATA #IMPLIED >
 
 <!ELEMENT profile (ldlm_ref | network_ref | obd_ref | ost_ref |
-                   echoclient_ref | mds_ref | lov_ref |
+                   echoclient_ref | mdsdev_ref | lov_ref |
                    lovconfig_ref| mountpoint_ref)*>
 <!ATTLIST profile %object.attr;>
 
@@ -43,16 +43,19 @@
 <!ELEMENT ldlm EMPTY>
 <!ATTLIST ldlm %object.attr;>
 
-<!ELEMENT obd (fstype | devpath | devsize | autoformat | activetarget)*>
+<!ELEMENT obd (fstype | devpath | devsize | autoformat | active_ref)*>
 <!ATTLIST obd %object.attr; 
               obdtype (obdfilter | obdecho) 'obdfilter'>
 
 <!ELEMENT ost (network_ref | obd_ref | failover_ref)*>
 <!ATTLIST ost %object.attr;>
 
-<!ELEMENT mds (network_ref | fstype | devpath | devsize | autoformat | 
-               server_ref | failover_ref | node_ref )*>
+<!ELEMENT mds (active_ref)*>
 <!ATTLIST mds %object.attr;>
+
+<!ELEMENT mdsdev (fstype | devpath | devsize | autoformat | 
+                  mds_ref | network_ref )*>
+<!ATTLIST mdsdev %object.attr;>
 
 <!ELEMENT lov (mds_ref |(obd_ref)+)*>
 <!ATTLIST lov %object.attr;
@@ -88,6 +91,8 @@
 <!ATTLIST obd_ref         %objref.attr;>
 <!ELEMENT mds_ref         %objref.content;>
 <!ATTLIST mds_ref         %objref.attr;>
+<!ELEMENT mdsdev_ref      %objref.content;>
+<!ATTLIST mdsdev_ref      %objref.attr;>
 <!ELEMENT ost_ref         %objref.content;>
 <!ATTLIST ost_ref         %objref.attr;>
 <!ELEMENT lov_ref         %objref.content;>

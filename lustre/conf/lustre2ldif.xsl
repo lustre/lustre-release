@@ -54,6 +54,15 @@ port: <value-of select="port"/>
 dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
 objectClass: MDS
 lustreName: <value-of select="@name"/>
+uuid: <value-of select="@uuid"/><apply-templates/>
+<text>
+</text>
+</template>
+
+<template match="mdsdev">
+dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
+objectClass: MDSDEV
+lustreName: <value-of select="@name"/>
 uuid: <value-of select="@uuid"/>
 <if test="fstype">
 fstype: <value-of select="fstype"/>
@@ -68,7 +77,7 @@ devpath: <value-of select="devpath"/>
 devsize: <value-of select="devsize"/>
 </if>
 networkRef: <value-of select="network_ref/@uuidref"/>
-nodeRef: <value-of select="node_ref/@uuidref"/>
+mdsRef: <value-of select="mds_ref/@uuidref"/>
 <text>
 </text>
 </template>
@@ -86,7 +95,6 @@ stripecount: <value-of select="@stripecount"/><apply-templates/>
 </text>
 </template>
 
-
 <template match="lovconfig">
 dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
 objectClass: LOVCONFIG
@@ -101,7 +109,7 @@ dn: uuid=<value-of select="@uuid"/>,<value-of select="$basedn"/>
 objectClass: OBD
 lustreName: <value-of select="@name"/>
 uuid: <value-of select="@uuid"/>
-activetarget: <value-of select="activetarget"/>
+activeRef: <value-of select="active_ref/@uuidref"/>
 obdtype: <value-of select="@obdtype"/>
 <if test="fstype">
 fstype: <value-of select="fstype"/>
@@ -168,7 +176,6 @@ obdRef: <value-of select="@uuidref"/>
 ostRef: <value-of select="@uuidref"/>
 </template>
 
-
 <template match="network_ref">
 networkRef: <value-of select="@uuidref"/>
 </template>
@@ -197,6 +204,9 @@ lovconfigRef: <value-of select="@uuidref"/>
 path: <value-of select="."/>
 </template>
 
+<template match="active_ref">
+activeRef: <value-of select="@uuidref"/>
+</template>
 </stylesheet>
 
 
