@@ -66,6 +66,9 @@ for NAME in $CONFIGS; do
 		sh llrmount.sh
 	fi
 	IOZONE_OPTS="-i 0 -i 1 -i 2 -+d -r $RSIZE -s $SIZE"
+	if [ "$O_DIRECT" -a  "$O_DIRECT" != "no" ]; then
+	    IOZONE_OPTS="-I $IOZONE_OPTS"
+	fi
 	IOZONE_FILE="-f $MOUNT/iozone"
 	if [ "$IOZONE" != "no" ]; then
 		mount | grep $MOUNT || sh llmount.sh
@@ -82,7 +85,7 @@ for NAME in $CONFIGS; do
 		[ $THREADS -lt $IOZ_THREADS ] && IOZ_THREADS=$THREADS
 
 		$DEBUG_OFF
-		iozone -I $IOZONE_OPTS $IOZONE_FILE.odir
+		iozone $IOZONE_OPTS $IOZONE_FILE.odir
 		IOZVER=`iozone -v | awk '/Revision:/ { print $3 }' | tr -d '.'`
 		$DEBUG_ON
 		sh llmountcleanup.sh
@@ -95,7 +98,7 @@ for NAME in $CONFIGS; do
 				IOZONE_FILE="$IOZONE_FILE $MOUNT/iozone.$THREAD"
 				THREAD=`expr $THREAD + 1`
 			done
-			iozone -I $IOZONE_OPTS -t $IOZ_THREADS $IOZONE_FILE
+			iozone $IOZONE_OPTS -t $IOZ_THREADS $IOZONE_FILE
 			$DEBUG_ON
 			sh llmountcleanup.sh
 			sh llrmount.sh
