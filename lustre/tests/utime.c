@@ -30,7 +30,14 @@ int main(int argc, char *argv[])
 	if (argc != 2)
 		usage(argv[0]);
 
-	before_mknod = time(0);
+	/* Adjust the before time back one second, because the kernel's
+	 * CURRENT_TIME (lockless clock reading, used to set inode times)
+	 * may drift against the do_gettimeofday() time (TSC-corrected and
+	 * locked clock reading, used to return timestamps to user space).
+	 * This means that the mknod time could be a second older than the
+	 * before time, even for a local filesystem such as ext3.
+	 */
+	before_mknod = time(0) - 1;
 	rc = mknod(filename, 0700, S_IFREG);
 	after_mknod = time(0);
 	if (rc && errno != EEXIST) {
@@ -52,13 +59,15 @@ int main(int argc, char *argv[])
 			return 4;
 		}
 
-		printf("%s: good mknod times %lu <= %lu <= %lu\n",
-		       prog, before_mknod, st.st_mtime, after_mknod);
+		printf("%s: good mknod times %lu%s <= %lu <= %lu\n",
+		       prog, before_mknod, before_mknod == st.st_mtime ? "*":"",
+		       st.st_mtime, after_mknod);
 
 		sleep(5);
 	}
 
-	before_utime = time(0);
+	/* See above */
+	before_utime = time(0) - 1;
 	rc = utime(filename, NULL);
 	after_utime = time(0);
 	if (rc) {
@@ -80,8 +89,9 @@ int main(int argc, char *argv[])
 		return 7;
 	}
 
-	printf("%s: good utime times %lu <= %lu <= %lu\n",
-	       prog, before_utime, st.st_mtime, after_utime);
+	printf("%s: good utime times %lu%s <= %lu <= %lu\n",
+	       prog, before_utime, before_utime == st.st_mtime ? "*" : "",
+	       st.st_mtime, after_utime);
 
 	return 0;
 }
