@@ -142,6 +142,10 @@ setup_portals() {
 		exit -1
 	fi
 
+	if [ -z "$OSTNODE" ]; then 
+	        OSTNODE=$SERVER
+        fi 
+
 	if [ "$LOCALHOST" == "$SERVER" ]; then
 		DLM=localhost
 	else
@@ -169,6 +173,7 @@ setup_portals() {
 	connect $SERVER $PORT
 	add_uuid self
 	add_uuid mds
+	connect $OSTNODE $PORT
 	add_uuid ost
 	connect $DLM $PORT
 	add_uuid ldlm

@@ -19,7 +19,7 @@ echo "- please supply a new mds"
 setup tcp
 close_uuid mds
 del_uuid mds
-connect localhost 1234
+connect dev5 1234
 add_uuid mds
 quit
 EOF3

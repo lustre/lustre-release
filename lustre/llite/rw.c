@@ -407,7 +407,9 @@ int ll_direct_IO(int rw, struct inode * inode, struct kiobuf * iobuf, unsigned l
 struct address_space_operations ll_aops = {
         readpage: ll_readpage,
         writepage: ll_writepage,
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,4,17))
         direct_IO: ll_direct_IO,
+#endif
         sync_page: block_sync_page,
         prepare_write: ll_prepare_write, 
         commit_write: ll_commit_write,

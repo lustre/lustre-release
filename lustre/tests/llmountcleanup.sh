@@ -64,3 +64,4 @@ rmmod portals
 losetup -d ${LOOP}0
 losetup -d ${LOOP}1
 losetup -d ${LOOP}2
+exit 0
