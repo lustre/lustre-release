@@ -108,9 +108,8 @@ int main(int argc, char *argv[])
 			if (end && *end == '\0') {
 				seed = i;
 			} else {
-				fprintf(stderr, "bad seed '%s'\n", optarg);
-				usage(argv[0]);
-				return 1;
+				seed = random();
+				fprintf(stderr, "using random seed %u\n", seed);
 			}
 			break;
 		case 'v':
