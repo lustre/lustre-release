@@ -112,7 +112,6 @@ int class_attach(struct lustre_cfg *lcfg)
         spin_lock_init(&obd->obd_dev_lock);
         spin_lock_init(&obd->obd_osfs_lock);
         obd->obd_osfs_age = jiffies - 1000 * HZ;
-        init_waitqueue_head(&obd->obd_refcount_waitq);
 
         /* XXX belongs in setup not attach  */
         /* recovery data */
@@ -139,6 +138,9 @@ int class_attach(struct lustre_cfg *lcfg)
                 if (rc)
                         GOTO(out, rc = -EINVAL);
         }
+
+        /* The attach is our first obd reference */
+        atomic_set(&obd->obd_refcount, 1);
 
         obd->obd_attached = 1;
         type->typ_refcnt++;
@@ -190,8 +192,6 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_starting = 1;  
         spin_unlock(&obd->obd_dev_lock);
 
-        atomic_set(&obd->obd_refcount, 0);
-
         exp = class_new_export(obd);
         if (exp == NULL)
                 RETURN(err);
@@ -206,19 +206,42 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         obd->obd_type->typ_refcnt++;
         obd->obd_set_up = 1;
-
+        CDEBUG(D_IOCTL, "finished setup of obd %s (uuid %s)\n",
+               obd->obd_name, obd->obd_uuid.uuid);
+        
         RETURN(0);
 
 err_exp:
         class_unlink_export(obd->obd_self_export);
         obd->obd_self_export = NULL;
+        obd->obd_starting = 0;
         RETURN(err);
+}
+
+static int __class_detach(struct obd_device *obd)
+{
+        int err = 0;
+
+        if (OBP(obd, detach)) 
+                err = OBP(obd,detach)(obd);
+        
+        if (obd->obd_name) {
+                OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
+                obd->obd_name = NULL;
+        } else {
+                CERROR("device %d: no name at detach\n", obd->obd_minor);
+        }
+        
+        LASSERT(OBT(obd));
+        /* Attach took type refcount */
+        obd->obd_type->typ_refcnt--;
+        class_put_type(obd->obd_type);
+        class_release_dev(obd);
+        return (err);
 }
 
 int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-        int err = 0;
-
         ENTRY;
         if (obd->obd_set_up) {
                 CERROR("OBD device %d still set up\n", obd->obd_minor);
@@ -234,21 +257,11 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
         obd->obd_attached = 0;
         spin_unlock(&obd->obd_dev_lock);
         
-        if (OBP(obd, detach))
-                err = OBP(obd,detach)(obd);
+        CDEBUG(D_IOCTL, "detach on obd %s (uuid %s)\n",
+               obd->obd_name, obd->obd_uuid.uuid);
 
-        if (obd->obd_name) {
-                OBD_FREE(obd->obd_name, strlen(obd->obd_name)+1);
-                obd->obd_name = NULL;
-        } else {
-                CERROR("device %d: no name at detach\n", obd->obd_minor);
-        }
-
-        LASSERT(OBT(obd));
-        obd->obd_type->typ_refcnt--;
-        class_put_type(obd->obd_type);
-        class_release_dev(obd);
-        RETURN(err);
+        class_decref(obd);
+        RETURN(0);
 }
 
 static void dump_exports(struct obd_device *obd)
@@ -267,7 +280,7 @@ static void dump_exports(struct obd_device *obd)
                         nreplies++;
                 }
 
-                CERROR("%s: %p %s %d %d %d: %p %s\n",
+                CDEBUG(D_IOCTL, "%s: %p %s %d %d %d: %p %s\n",
                        obd->obd_name, exp, exp->exp_client_uuid.uuid,
                        atomic_read(&exp->exp_refcount),
                        exp->exp_failed, nreplies, first_reply,
@@ -277,11 +290,12 @@ static void dump_exports(struct obd_device *obd)
 
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-        int flags = 0;
         int err = 0;
         char *flag;
 
         ENTRY;
+        OBD_RACE(OBD_FAIL_LDLM_RECOV_CLIENTS);
+
         if (!obd->obd_set_up) {
                 CERROR("Device %d not setup\n", obd->obd_minor);
                 RETURN(-ENODEV);
@@ -301,77 +315,82 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 for (flag = lcfg->lcfg_inlbuf1; *flag != 0; flag++)
                         switch (*flag) {
                         case 'F':
-                                flags |= OBD_OPT_FORCE;
+                                obd->obd_force = 1;
                                 break;
                         case 'A':
-                                flags |= OBD_OPT_FAILOVER;
+                                obd->obd_fail = 1;
+                                obd->obd_no_transno = 1;
+                                LCONSOLE_WARN("Failing %s by user command\n",
+                                       obd->obd_name);
+                                /* Set the obd readonly if we can */
+                                if (OBP(obd, iocontrol))
+                                        obd_iocontrol(OBD_IOC_SET_READONLY,
+                                                      obd->obd_self_export,
+                                                      0, NULL, NULL);
                                 break;
                         default:
                                 CERROR("unrecognised flag '%c'\n",
                                        *flag);
                         }
         }
-
-        /* The one reference that should be remaining is the
-         * obd_self_export */
-        if (atomic_read(&obd->obd_refcount) > 1) {
-                struct l_wait_info lwi = LWI_TIMEOUT_INTR(1 * HZ, NULL,
-                                                          NULL, NULL);
-                int rc;
-
-                if (!(flags & OBD_OPT_FORCE)) {
-                        CERROR("OBD device %d (%p) has refcount %d\n",
-                               obd->obd_minor, obd,
-                               atomic_read(&obd->obd_refcount));
+        
+        /* The two references that should be remaining are the
+         * obd_self_export and the attach reference. */
+        if (atomic_read(&obd->obd_refcount) > 2) {
+                if (!(obd->obd_fail || obd->obd_force)) {
+                        CERROR("OBD %s is still busy with %d references\n"
+                               "You should stop active file system users,"
+                               " or use the --force option to cleanup.\n",  
+                               obd->obd_name, atomic_read(&obd->obd_refcount));
                         dump_exports(obd);
                         GOTO(out, err = -EBUSY);
                 }
-                class_disconnect_exports(obd, flags);
-                CDEBUG(D_IOCTL,
-                       "%s: waiting for obd refs to go away: %d\n",
+                CDEBUG(D_IOCTL, "%s: forcing exports to disconnect: %d\n",
                        obd->obd_name, atomic_read(&obd->obd_refcount));
-
-                rc = l_wait_event(obd->obd_refcount_waitq,
-                                  atomic_read(&obd->obd_refcount) < 2, &lwi);
-                if (rc == 0) {
-                        LASSERT(atomic_read(&obd->obd_refcount) == 1);
-                } else {
-                        CERROR("wait cancelled cleaning anyway. "
-                               "refcount: %d\n",
-                               atomic_read(&obd->obd_refcount));
-                        dump_exports(obd);
-                }
-                CDEBUG(D_IOCTL, "%s: awake, now finishing cleanup\n",
-                       obd->obd_name);
+                dump_exports(obd);
+                class_disconnect_exports(obd);
         }
 
+        LASSERT(obd->obd_self_export);
         if (obd->obd_self_export) {
-                err = obd_precleanup(obd, flags);
-                if (err)
-                        GOTO(out, err);
-                class_unlink_export(obd->obd_self_export);
-                obd->obd_self_export = NULL;
+               /* mds_precleanup will clean up the lov (and osc's)*/
+               err = obd_precleanup(obd);
+               if (err)
+                       GOTO(out, err);
+               obd->obd_self_export->exp_flags |= 
+                       (obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
+                       (obd->obd_force ? OBD_OPT_FORCE : 0);
+               class_unlink_export(obd->obd_self_export);
+               obd->obd_self_export = NULL;
         }
 
-        err = obd_cleanup(obd, flags);
+        obd->obd_set_up = 0;
+        obd->obd_type->typ_refcnt--;
+        RETURN(0);
 out:
-        if (!err) {
-                obd->obd_set_up = 0;
-                obd->obd_type->typ_refcnt--;
-                /* XXX this should be an LASSERT */
-                if (atomic_read(&obd->obd_refcount) > 0)
-                        CERROR("%s still has refcount %d after "
-                               "cleanup.\n", obd->obd_name,
-                               atomic_read(&obd->obd_refcount));
-        } else {
-                /* Allow a failed cleanup to try again.  Note this may be
-                   unsafe, since we don't know where this one died. */
-                obd->obd_stopping = 0;
-        }
-
+        /* Allow a failed cleanup to try again. */
+        obd->obd_stopping = 0;
         RETURN(err);
-
 }
+
+void class_decref(struct obd_device *obd)
+{            
+        if (atomic_dec_and_test(&obd->obd_refcount)) {
+                int err;
+                CDEBUG(D_IOCTL, "finishing cleanup of obd %s (%s)\n",
+                       obd->obd_name, obd->obd_uuid.uuid);
+                LASSERT(!obd->obd_attached);
+                if (obd->obd_stopping) {
+                        /* If we're not stopping, we never set up */
+                        err = obd_cleanup(obd);
+                        if (err) 
+                                CERROR("Cleanup returned %d\n", err);
+                }
+                err = __class_detach(obd);
+                if (err) 
+                        CERROR("Detach returned %d\n", err);
+        }
+}               
 
 LIST_HEAD(lustre_profile_list);
 

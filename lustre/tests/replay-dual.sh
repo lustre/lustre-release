@@ -11,6 +11,7 @@ init_test_env $@
 
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
+FORCE=${FORCE:-"--force"}
 
 gen_config() {
     rm -f $XMLCONFIG
@@ -40,7 +41,7 @@ cleanup() {
 
     umount $MOUNT2 || true
     umount $MOUNT  || true
-    rmmod llite
+    rmmod llite || true
     stop mds ${FORCE}
     stop ost2 ${FORCE}
     stop ost ${FORCE}  --dump $TMP/replay-dual-`hostname`.log

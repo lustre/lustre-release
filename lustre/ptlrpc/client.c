@@ -210,7 +210,8 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
         request->rq_send_state = LUSTRE_IMP_FULL;
         request->rq_type = PTL_RPC_MSG_REQUEST;
         request->rq_import = class_import_get(imp);
-
+        request->rq_export = NULL;
+        
         request->rq_req_cbid.cbid_fn  = request_out_callback;
         request->rq_req_cbid.cbid_arg = request;
 
@@ -486,7 +487,7 @@ static int after_reply(struct ptlrpc_request *req)
         /* Either we've been evicted, or the server has failed for
          * some reason. Try to reconnect, and if that fails, punt to the
          * upcall. */
-        if (rc == -ENOTCONN) {
+        if ((rc == -ENOTCONN) || (rc == -ENODEV)) {
                 if (req->rq_send_state != LUSTRE_IMP_FULL ||
                     imp->imp_obd->obd_no_recov || imp->imp_dlm_fake) {
                         RETURN(-ENOTCONN);

@@ -322,8 +322,17 @@ int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
         LASSERT (req->rq_repmsg == &rs->rs_msg);
         LASSERT (rs->rs_cb_id.cbid_fn == reply_out_callback);
         LASSERT (rs->rs_cb_id.cbid_arg == rs);
-
         LASSERT (req->rq_repmsg != NULL);
+
+        if (req->rq_export && req->rq_export->exp_obd &&
+            req->rq_export->exp_obd->obd_fail) {
+                /* Failed obd's only send ENODEV */
+                req->rq_type = PTL_RPC_MSG_ERR;
+                req->rq_status = -ENODEV;
+                CDEBUG(D_HA, "sending ENODEV from failed obd %d\n",
+                       req->rq_export->exp_obd->obd_minor);
+        }
+
         if (req->rq_type != PTL_RPC_MSG_ERR)
                 req->rq_type = PTL_RPC_MSG_REPLY;
 
@@ -388,6 +397,15 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         /* If this is a re-transmit, we're required to have disengaged
          * cleanly from the previous attempt */
         LASSERT (!request->rq_receiving_reply);
+
+        if (request->rq_import->imp_obd &&
+            request->rq_import->imp_obd->obd_fail) {
+                CDEBUG(D_HA, "muting rpc for failed imp obd %s\n",
+                       request->rq_import->imp_obd->obd_name);
+                /* this prevents us from waiting in ptlrpc_queue_wait */
+                request->rq_err = 1;
+                RETURN(-ENODEV);
+        }
 
         connection = request->rq_import->imp_connection;
 

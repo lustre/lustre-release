@@ -86,10 +86,12 @@ done
 
 # configure mds server
 echo; echo "adding MDS on: $MDSNODE"
-${LMC} -m $config --add mds --format --node $MDSNODE --mds mds1 --fstype $FSTYPE --dev $MDSDEV --size $MDSSIZE ||exit 10
+${LMC} -m $config --add mds --node $MDSNODE --mds mds1 --fstype $FSTYPE \
+	--dev $MDSDEV --size $MDSSIZE $MDSOPT || exit 10
 
 # configure ost
-${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPECNT --stripe_pattern 0 || exit 20
+${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \
+	--stripe_cnt $STRIPECNT --stripe_pattern 0 $LOVOPT || exit 20
 COUNT=1
 echo -n "adding OST on:"
 for NODE in $OSTNODES; do
@@ -104,7 +106,8 @@ for NODE in $OSTNODES; do
 			OSTARGS="--osdtype=obdecho"
 			;;
 	esac
-        ${LMC} -m $config --add ost --node $NODE --lov lov1 $OSTARGS $OSTFAILOVER || exit 21
+        ${LMC} -m $config --add ost --node $NODE --lov lov1 $OSTARGS \
+		$OSTFAILOVER $OSTOPT || exit 21
 	COUNT=`expr $COUNT + 1`
 done
 
@@ -112,6 +115,7 @@ done
 echo; echo -n "adding CLIENT on:"
 for NODE in $CLIENTS; do
 	echo -n " $NODE"
-	${LMC} -m $config --add mtpt --node $NODE --path $MOUNT --mds mds1 --lov lov1 || exit 30
+	${LMC} -m $config --add mtpt --node $NODE --path $MOUNT --mds mds1 \
+		--lov lov1 $CLIENTOPT || exit 30
 done
 echo

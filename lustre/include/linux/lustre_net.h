@@ -297,7 +297,7 @@ struct ptlrpc_request {
         int rq_reqlen;
         struct lustre_msg *rq_reqmsg;
 
-        int rq_timeout;
+        int rq_timeout;                         /* seconds */
         int rq_replen;
         struct lustre_msg *rq_repmsg;
         __u64 rq_transno;
@@ -336,7 +336,7 @@ struct ptlrpc_request {
         void  *rq_cb_data;
 
         struct ptlrpc_bulk_desc *rq_bulk;       /* client side bulk */
-        time_t rq_sent;                         /* when the request was sent */
+        time_t rq_sent;                         /* when request sent, seconds */
 
         /* Multi-rpc bits */
         struct list_head rq_set_chain;
@@ -738,10 +738,10 @@ ptlrpc_rs_decref(struct ptlrpc_reply_state *rs)
 
 /* ldlm/ldlm_lib.c */
 int client_obd_setup(struct obd_device *obddev, obd_count len, void *buf);
-int client_obd_cleanup(struct obd_device * obddev, int flags);
+int client_obd_cleanup(struct obd_device * obddev);
 int client_connect_import(struct lustre_handle *conn, struct obd_device *obd,
                           struct obd_uuid *cluuid);
-int client_disconnect_export(struct obd_export *exp, int failover);
+int client_disconnect_export(struct obd_export *exp);
 
 /* ptlrpc/pinger.c */
 int ptlrpc_pinger_add_import(struct obd_import *imp);

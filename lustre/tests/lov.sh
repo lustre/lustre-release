@@ -39,10 +39,12 @@ ${LMC} --add net --node  localhost --nid `hostname` --nettype $NETTYPE || exit 1
 ${LMC} --add net --node client --nid '*' --nettype $NETTYPE || exit 12
 
 # configure mds server
-${LMC} --format --add mds --node localhost --mds mds1 --fstype $FSTYPE --dev $MDSDEV --size $MDSSIZE || exit 20
+${LMC} --format --add mds --node localhost --mds mds1 --fstype $FSTYPE \
+	--dev $MDSDEV --size $MDSSIZE $MDSOPT || exit 20
 
 # configure ost
-${LMC} --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0 || exit 20
+${LMC} --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \
+	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0 $LOVOPT || exit 20
 
 for num in `seq $OSTCOUNT`; do
     OST=ost$num
@@ -50,14 +52,18 @@ for num in `seq $OSTCOUNT`; do
     eval $DEVPTR=${!DEVPTR:=$TMP/$OST-`hostname`}
     # only specify "--mkfsoptions='-i 8192'" here because test fs is so small,
     # on a real fs this is not needed unless all files tiny with many stripes
-    ${LMC} --add ost --node localhost --lov lov1 --ost $OST --fstype $FSTYPE --dev ${!DEVPTR} --size $OSTSIZE --mkfsoptions="-i 8192"  $JARG || exit 30
+    ${LMC} --add ost --node localhost --lov lov1 --ost $OST --fstype $FSTYPE \
+	--dev ${!DEVPTR} --size $OSTSIZE --mkfsoptions="-i 8192" \
+	$JARG $OSTOPT || exit 30
 done
 
 
 if [ -z "$ECHO_CLIENT" ]; then
 	# create client config
-	${LMC} --add mtpt --node localhost --path $MOUNT --mds mds1 --lov lov1 || exit 40
-	${LMC} --add mtpt --node client --path $MOUNT2 --mds mds1 --lov lov1 || exit 41
+	${LMC} --add mtpt --node localhost --path $MOUNT --mds mds1 --lov lov1 \
+		$CLIENTOPT || exit 40
+	${LMC} --add mtpt --node client --path $MOUNT2 --mds mds1 --lov lov1 \
+		$CLIENTOPT || exit 41
 else
 	${LMC} --add echo_client --node localhost --ost lov1 || exit 42
 fi

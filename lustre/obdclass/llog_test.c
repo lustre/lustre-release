@@ -482,7 +482,7 @@ parse_out:
                 CERROR("6: llog_close failed: rc = %d\n", rc);
         }
 
-        rc = obd_disconnect(exp, 0);
+        rc = obd_disconnect(exp);
 
         RETURN(rc);
 }
@@ -602,7 +602,7 @@ static int llog_test_llog_finish(struct obd_device *obd, int count)
         RETURN(rc);
 }
 
-static int llog_test_cleanup(struct obd_device *obd, int flags)
+static int llog_test_cleanup(struct obd_device *obd)
 {
         int rc = obd_llog_finish(obd, 0);
         if (rc)
@@ -641,7 +641,7 @@ static int llog_test_setup(struct obd_device *obd, obd_count len, void *buf)
 
         rc = llog_run_tests(obd);
         if (rc)
-                llog_test_cleanup(obd, 0);
+                llog_test_cleanup(obd);
 
         lprocfs_init_vars(llog_test, &lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);

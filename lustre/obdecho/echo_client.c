@@ -1355,7 +1355,7 @@ echo_client_setup(struct obd_device *obddev, obd_count len, void *buf)
         RETURN(rc);
 }
 
-static int echo_client_cleanup(struct obd_device *obddev, int flags)
+static int echo_client_cleanup(struct obd_device *obddev)
 {
         struct list_head       *el;
         struct ec_object       *eco;
@@ -1379,7 +1379,7 @@ static int echo_client_cleanup(struct obd_device *obddev, int flags)
                 echo_put_object(eco);
         }
 
-        rc = obd_disconnect(ec->ec_exp, 0);
+        rc = obd_disconnect(ec->ec_exp);
         if (rc != 0)
                 CERROR("fail to disconnect device: %d\n", rc);
 
@@ -1402,7 +1402,7 @@ static int echo_client_connect(struct lustre_handle *conn,
         RETURN (rc);
 }
 
-static int echo_client_disconnect(struct obd_export *exp, int flags)
+static int echo_client_disconnect(struct obd_export *exp)
 {
         struct obd_device      *obd;
         struct echo_client_obd *ec;
@@ -1432,7 +1432,7 @@ static int echo_client_disconnect(struct obd_export *exp, int flags)
                 OBD_FREE (ecl, sizeof (*ecl));
         }
 
-        rc = class_disconnect(exp, 0);
+        rc = class_disconnect(exp);
         GOTO(out, rc);
  out:
         return rc;

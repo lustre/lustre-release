@@ -7,6 +7,83 @@
 
 #include <linux/lustre_debug.h>
 
+/*
+struct lustre_intent_data {
+        __u64 it_lock_handle[2];
+        __u32 it_disposition;
+        __u32 it_status;
+        __u32 it_lock_mode;
+        }; */
+
+#define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
+
+static inline struct lookup_intent *ll_nd2it(struct nameidata *nd)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        return &nd->intent;
+#else
+        return nd->intent;
+#endif
+}
+
+struct ll_dentry_data {
+        int                      lld_cwd_count;
+        int                      lld_mnt_count;
+        struct obd_client_handle lld_cwd_och;
+        struct obd_client_handle lld_mnt_och;
+};
+
+#define ll_d2d(de) ((struct ll_dentry_data*) de->d_fsdata)
+
+extern struct file_operations ll_pgcache_seq_fops;
+
+#define LLI_INODE_MAGIC                 0x111d0de5
+#define LLI_INODE_DEAD                  0xdeadd00d
+#define LLI_F_HAVE_OST_SIZE_LOCK        0
+#define LLI_F_HAVE_MDS_SIZE_LOCK        1
+struct ll_inode_info {
+        int                     lli_inode_magic;
+        int                     lli_size_pid;
+        struct semaphore        lli_size_sem;
+        struct semaphore        lli_open_sem;
+        struct lov_stripe_md   *lli_smd;
+        char                   *lli_symlink_name;
+        __u64                   lli_maxbytes;
+        __u64                   lli_io_epoch;
+        unsigned long           lli_flags;
+
+        /* this lock protects s_d_w and p_w_ll and mmap_cnt */
+        spinlock_t              lli_lock;
+        struct list_head        lli_pending_write_llaps;
+        int                     lli_send_done_writing;
+        atomic_t                lli_mmap_cnt;
+
+        struct list_head        lli_close_item;
+
+        /* for writepage() only to communicate to fsync */
+        int                     lli_async_rc;
+
+        struct file_operations *ll_save_ifop;
+        struct file_operations *ll_save_ffop;
+        struct file_operations *ll_save_wfop;
+        struct file_operations *ll_save_wrfop;
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        struct inode            lli_vfs_inode;
+#endif
+};
+
+// FIXME: replace the name of this with LL_I to conform to kernel stuff
+// static inline struct ll_inode_info *LL_I(struct inode *inode)
+static inline struct ll_inode_info *ll_i2info(struct inode *inode)
+{
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
+        return container_of(inode, struct ll_inode_info, lli_vfs_inode);
+#else
+        return (struct ll_inode_info *)&(inode->u.generic_ip);
+#endif
+}
+
+
 /* default to about 40meg of readahead on a given system.  That much tied
  * up in 512k readahead requests serviced at 40ms each is about 1GB/s. */
 #define SBI_DEFAULT_READAHEAD_MAX (40UL << (20 - PAGE_CACHE_SHIFT))

@@ -364,7 +364,7 @@ static int mds_init_server_data(struct obd_device *obd, struct file *file)
         RETURN(0);
 
 err_client:
-        class_disconnect_exports(obd, 0);
+        class_disconnect_exports(obd);
 err_msd:
         mds_server_free_data(mds);
         RETURN(rc);
@@ -490,7 +490,7 @@ err_lov_objid:
         if (mds->mds_lov_objid_filp && filp_close(mds->mds_lov_objid_filp, 0))
                 CERROR("can't close %s after error\n", LOV_OBJID);
 err_client:
-        class_disconnect_exports(obd, 0);
+        class_disconnect_exports(obd);
 err_last_rcvd:
         if (mds->mds_rcvd_filp && filp_close(mds->mds_rcvd_filp, 0))
                 CERROR("can't close %s after error\n", LAST_RCVD);
@@ -506,18 +506,17 @@ err_fid:
 }
 
 
-int mds_fs_cleanup(struct obd_device *obd, int flags)
+int mds_fs_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct obd_run_ctxt saved;
         int rc = 0;
 
-        if (flags & OBD_OPT_FAILOVER)
+        if (obd->obd_fail)
                 CERROR("%s: shutting down for failover; client state will"
                        " be preserved.\n", obd->obd_name);
 
-        class_disconnect_exports(obd, flags); /* cleans up client info too */
-        target_cleanup_recovery(obd);
+        class_disconnect_exports(obd); /* cleans up client info too */
         mds_server_free_data(mds);
 
         push_ctxt(&saved, &obd->obd_ctxt, NULL);
@@ -656,11 +655,17 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
 
         down(&parent_inode->i_sem);
         de = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
-        if (IS_ERR(de) || de->d_inode == NULL) {
-                rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT;
+        if (IS_ERR(de)) {
+                rc = IS_ERR(de);
+                de = NULL;
+                CERROR("error looking up object "LPU64" %s: rc %d\n",
+                       oa->o_id, fidname, rc);
+                GOTO(out_dput, rc);
+        }
+        if (de->d_inode == NULL) {
                 CERROR("destroying non-existent object "LPU64" %s\n",
                        oa->o_id, fidname);
-                GOTO(out_dput, rc = IS_ERR(de) ? PTR_ERR(de) : -ENOENT);
+                GOTO(out_dput, rc = -ENOENT);
         }
 
         /* Stripe count is 1 here since this is some MDS specific stuff

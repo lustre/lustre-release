@@ -258,37 +258,59 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
 err_reg:
         obd_register_observer(mds->mds_osc_obd, NULL);
 err_discon:
-        obd_disconnect(mds->mds_osc_exp, 0);
+        obd_disconnect(mds->mds_osc_exp);
         mds->mds_osc_exp = NULL;
         mds->mds_osc_obd = ERR_PTR(rc);
         RETURN(rc);
 }
 
-int mds_lov_disconnect(struct obd_device *obd, int flags)
+int mds_lov_disconnect(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         int rc = 0;
         ENTRY;
 
         if (!IS_ERR(mds->mds_osc_obd) && mds->mds_osc_exp != NULL) {
-                /* cleanup all llogging subsystems */
-                rc = obd_llog_finish(obd, mds->mds_lov_desc.ld_tgt_count);
-                if (rc)
-                        CERROR("failed to cleanup llogging subsystems\n");
-
                 obd_register_observer(mds->mds_osc_obd, NULL);
 
-                rc = obd_disconnect(mds->mds_osc_exp, flags);
-                /* if obd_disconnect fails (probably because the
-                 * export was disconnected by class_disconnect_exports)
-                 * then we just need to drop our ref. */
-                if (rc != 0)
-                        class_export_put(mds->mds_osc_exp);
-                mds->mds_osc_exp = NULL;
-                mds->mds_osc_obd = NULL;
+                /* The actual disconnect of the mds_lov will be called from
+                 * class_disconnect_exports from mds_lov_clean. So we have to
+                 * ensure that class_cleanup doesn't fail due to the extra ref
+                 * we're holding now. The mechanism to do that already exists -
+                 * the obd_force flag. We'll drop the final ref to the
+                 * mds_osc_exp in mds_cleanup. */
+                mds->mds_osc_obd->obd_force = 1;
         }
 
         RETURN(rc);
+}
+
+/* for consistency, let's make the lov and the lov's
+ * osc's see the same cleanup flags as our mds */
+void mds_lov_set_cleanup_flags(struct obd_device *obd)
+{
+        struct mds_obd *mds = &obd->u.mds;
+        struct lov_obd *lov;
+
+        if (IS_ERR(mds->mds_osc_obd) || (mds->mds_osc_exp == NULL))
+                return;
+
+        lov = &mds->mds_osc_obd->u.lov;
+        mds->mds_osc_obd->obd_force = obd->obd_force;
+        mds->mds_osc_obd->obd_fail = obd->obd_fail;
+        if (lov->tgts) {
+                struct obd_export *osc_exp;
+                int i;
+                spin_lock(&lov->lov_lock);
+                for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                        if (lov->tgts[i].ltd_exp != NULL) {
+                                osc_exp = lov->tgts[i].ltd_exp;
+                                osc_exp->exp_obd->obd_force = obd->obd_force;
+                                osc_exp->exp_obd->obd_fail = obd->obd_fail;
+                        }
+                }
+                spin_unlock(&lov->lov_lock);
+        }
 }
 
 int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
@@ -338,7 +360,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         RETURN(-EBUSY);
 
                 push_ctxt(&saved, &obd->obd_ctxt, NULL);
-                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT), 
+                rc = llog_create(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT),
                                  &mds->mds_cfg_llh, NULL, name);
                 if (rc == 0) {
                         llog_init_handle(mds->mds_cfg_llh, LLOG_F_IS_PLAIN,
@@ -412,6 +434,12 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 RETURN(rc);
         }
 
+        case OBD_IOC_SYNC: {
+                CDEBUG(D_HA, "syncing mds %s\n", obd->obd_name);
+                rc = fsfilt_sync(obd, obd->u.mds.mds_sb);
+                RETURN(rc);
+        }
+
         case OBD_IOC_SET_READONLY: {
                 void *handle;
                 struct inode *inode = obd->u.mds.mds_sb->s_root->d_inode;
@@ -420,10 +448,13 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                        ll_bdevname(obd->u.mds.mds_sb, tmp));
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
-                LASSERT(handle);
-                rc = fsfilt_commit(obd, inode, handle, 1);
+                if (!IS_ERR(handle))
+                        rc = fsfilt_commit(obd, inode, handle, 1);
 
-                dev_set_rdonly(ll_sbdev(obd->u.mds.mds_sb), 2);
+                CDEBUG(D_HA, "syncing mds %s\n", obd->obd_name);
+                rc = fsfilt_sync(obd, obd->u.mds.mds_sb);
+
+                ll_set_rdonly(ll_sbdev(obd->u.mds.mds_sb));
                 RETURN(0);
         }
 
@@ -504,7 +535,7 @@ int mds_lov_synchronize(void *data)
         LASSERT(obd != NULL);
         LASSERT(uuid != NULL);
 
-        rc = obd_set_info(obd->u.mds.mds_osc_exp, strlen("mds_conn"), 
+        rc = obd_set_info(obd->u.mds.mds_osc_exp, strlen("mds_conn"),
                           "mds_conn", 0, uuid);
         if (rc != 0)
                 RETURN(rc);
@@ -513,7 +544,7 @@ int mds_lov_synchronize(void *data)
                           obd->u.mds.mds_lov_desc.ld_tgt_count,
                           NULL, NULL, uuid);
         if (rc != 0) {
-                CERROR("%s: failed at llog_origin_connect: %d\n", 
+                CERROR("%s: failed at llog_origin_connect: %d\n",
                        obd->obd_name, rc);
                 RETURN(rc);
         }
@@ -522,7 +553,7 @@ int mds_lov_synchronize(void *data)
               obd->obd_name, uuid->uuid);
         rc = mds_lov_clearorphans(&obd->u.mds, uuid);
         if (rc != 0) {
-                CERROR("%s: failed at mds_lov_clearorphans: %d\n", 
+                CERROR("%s: failed at mds_lov_clearorphans: %d\n",
                        obd->obd_name, rc);
                 RETURN(rc);
         }
@@ -546,10 +577,10 @@ int mds_lov_start_synchronize(struct obd_device *obd, struct obd_uuid *uuid)
 
         rc = kernel_thread(mds_lov_synchronize, mlsi, CLONE_VM | CLONE_FILES);
         if (rc < 0)
-                CERROR("%s: error starting mds_lov_synchronize: %d\n", 
+                CERROR("%s: error starting mds_lov_synchronize: %d\n",
                        obd->obd_name, rc);
         else {
-                CDEBUG(D_HA, "%s: mds_lov_synchronize thread: %d\n", 
+                CDEBUG(D_HA, "%s: mds_lov_synchronize thread: %d\n",
                        obd->obd_name, rc);
                 rc = 0;
         }

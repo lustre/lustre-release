@@ -1725,17 +1725,19 @@ class MDSDEV(Module):
             Module.cleanup(self)
         clean_loop(self.devpath)
 
-    def msd_remaining(self):
+    def mds_remaining(self):
         out = lctl.device_list()
         for s in out:
             if string.split(s)[2] in ('mds',):
+                if string.split(s)[1] in ('ST',):
+                    return 0
                 return 1
 
     def safe_to_clean(self):
         return self.active
 
     def safe_to_clean_modules(self):
-        return not self.msd_remaining()
+        return not self.mds_remaining()
 
     def cleanup(self):
         if not self.active:
@@ -1751,7 +1753,7 @@ class MDSDEV(Module):
                 e.dump()
                 cleanup_error(e.rc)
                 Module.cleanup(self)
-        if not self.msd_remaining() and is_prepared('MDT'):
+        if not self.mds_remaining() and is_prepared('MDT'):
             try:
                 lctl.cleanup("MDT", "MDT_UUID", config.force,
                              config.failover)

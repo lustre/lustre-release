@@ -112,7 +112,12 @@ static inline void *fsfilt_start_log(struct obd_device *obd,
 {
         unsigned long now = jiffies;
         void *parent_handle = oti ? oti->oti_handle : NULL;
-        void *handle = obd->obd_fsops->fs_start(inode, op, parent_handle, logs);
+        void *handle;
+        
+        if (obd->obd_fail)
+                return ERR_PTR(-EROFS);
+
+        handle = obd->obd_fsops->fs_start(inode, op, parent_handle, logs);
         CDEBUG(D_INFO, "started handle %p (%p)\n", handle, parent_handle);
 
         if (oti != NULL) {
@@ -142,8 +147,13 @@ static inline void *fsfilt_brw_start_log(struct obd_device *obd,
 {
         unsigned long now = jiffies;
         void *parent_handle = oti ? oti->oti_handle : NULL;
-        void *handle = obd->obd_fsops->fs_brw_start(objcount, fso, niocount, nb,
-                                                    parent_handle, logs);
+        void *handle;
+
+        if (obd->obd_fail)
+                return ERR_PTR(-EROFS);
+
+        handle = obd->obd_fsops->fs_brw_start(objcount, fso, niocount, nb,
+                                              parent_handle, logs);
         CDEBUG(D_INFO, "started handle %p (%p)\n", handle, parent_handle);
 
         if (oti != NULL) {
@@ -236,11 +246,10 @@ static inline int fsfilt_send_bio(int rw, struct obd_device *obd,
                                   struct inode *inode, void *bio)
 {
         LASSERTF(rw == OBD_BRW_WRITE || rw == OBD_BRW_READ, "%x\n", rw);
-
+        
         if (rw == OBD_BRW_READ)
                 return obd->obd_fsops->fs_send_bio(READ, inode, bio);
-        else
-                return obd->obd_fsops->fs_send_bio(WRITE, inode, bio);
+        return obd->obd_fsops->fs_send_bio(WRITE, inode, bio);
 }
 
 static inline ssize_t fsfilt_readpage(struct obd_device *obd,

@@ -516,6 +516,16 @@ ptlrpc_server_handle_request (struct ptlrpc_service *svc)
                                   request->rq_export->exp_conn_cnt);
                         goto put_conn;
                 }
+                if (request->rq_export->exp_obd
+                    && request->rq_export->exp_obd->obd_fail) {
+                        /* Failing over, don't handle any more reqs, send
+                           error response instead. */
+                        CDEBUG(D_HA, "Dropping req %p for failed obd %s\n",
+                               request, request->rq_export->exp_obd->obd_name);
+                        request->rq_status = -ENODEV;
+                        ptlrpc_error(request);
+                        goto put_conn;
+                }
 
                 request->rq_export->exp_last_request_time = CURRENT_SECONDS;
         }

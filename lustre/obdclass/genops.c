@@ -213,9 +213,10 @@ void class_release_dev(struct obd_device *obd)
         int minor = obd->obd_minor;
 
         spin_lock(&obd_dev_lock);
+        memset(obd, 0x5a, sizeof(*obd));
         obd->obd_type = NULL;
-        //memset(obd, 0, sizeof(*obd));
         obd->obd_minor = minor;
+        obd->obd_name = NULL;
         spin_unlock(&obd_dev_lock);
 }
 
@@ -460,10 +461,7 @@ void __class_export_put(struct obd_export *exp)
                 obd_destroy_export(exp);
 
                 OBD_FREE(exp, sizeof(*exp));
-                if (obd->obd_set_up) {
-                        atomic_dec(&obd->obd_refcount);
-                        wake_up(&obd->obd_refcount_waitq);
-                }
+                class_decref(obd);
         }
 }
 
@@ -625,7 +623,7 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
  * hash entry and one for the export pointer passed in.  The export
  * pointer passed to this function is destroyed should not be used
  * again. */
-int class_disconnect(struct obd_export *export, int flags)
+int class_disconnect(struct obd_export *export)
 {
         ENTRY;
 
@@ -661,6 +659,7 @@ static void  class_disconnect_export_list(struct list_head *list, int flags)
         while(!list_empty(list)) {
                 exp = list_entry(list->next, struct obd_export, exp_obd_chain);
                 class_export_get(exp);
+                exp->exp_flags = flags;
 
                 if (obd_uuid_equals(&exp->exp_client_uuid,
                                     &exp->exp_obd->obd_uuid)) {
@@ -680,7 +679,8 @@ static void  class_disconnect_export_list(struct list_head *list, int flags)
                         class_export_put(exp);
                         continue;
                 }
-                rc = obd_disconnect(fake_exp, flags);
+                fake_exp->exp_flags = flags;
+                rc = obd_disconnect(fake_exp);
                 class_export_put(exp);
                 if (rc) {
                         CDEBUG(D_HA, "disconnecting export %p failed: %d\n",
@@ -692,7 +692,13 @@ static void  class_disconnect_export_list(struct list_head *list, int flags)
         EXIT;
 }
 
-void class_disconnect_exports(struct obd_device *obd, int flags)
+static inline int get_exp_flags_from_obd(struct obd_device *obd)
+{
+        return ((obd->obd_fail ? OBD_OPT_FAILOVER : 0) |
+                (obd->obd_force ? OBD_OPT_FORCE : 0));
+}
+
+void class_disconnect_exports(struct obd_device *obd)
 {
         struct list_head work_list;
         ENTRY;
@@ -705,13 +711,13 @@ void class_disconnect_exports(struct obd_device *obd, int flags)
 
         CDEBUG(D_HA, "OBD device %d (%p) has exports, "
                "disconnecting them\n", obd->obd_minor, obd);
-        class_disconnect_export_list(&work_list, flags);
+        class_disconnect_export_list(&work_list, get_exp_flags_from_obd(obd));
         EXIT;
 }
 
 /* Remove exports that have not completed recovery.
  */
-void class_disconnect_stale_exports(struct obd_device *obd, int flags)
+void class_disconnect_stale_exports(struct obd_device *obd)
 {
         struct list_head work_list;
         struct list_head *pos, *n;
@@ -733,7 +739,7 @@ void class_disconnect_stale_exports(struct obd_device *obd, int flags)
 
         CDEBUG(D_ERROR, "%s: disconnecting %d stale clients\n", 
                obd->obd_name, cnt);
-        class_disconnect_export_list(&work_list, flags);
+        class_disconnect_export_list(&work_list, get_exp_flags_from_obd(obd));
         EXIT;
 }
 

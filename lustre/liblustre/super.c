@@ -55,7 +55,7 @@ static void llu_fsop_gone(struct filesys *fs)
         ENTRY;
 
         list_del(&sbi->ll_conn_chain);
-        obd_disconnect(sbi->ll_osc_exp, 0);
+        obd_disconnect(sbi->ll_osc_exp);
 
         /* NULL request to force sync on the MDS, and get the last_committed
          * value to flush remaining RPCs from the sending queue on client.
@@ -66,7 +66,7 @@ static void llu_fsop_gone(struct filesys *fs)
         if (!obd->obd_no_recov)
                 mdc_getstatus(sbi->ll_mdc_exp, &rootfid);
 
-        obd_disconnect(sbi->ll_mdc_exp, 0);
+        obd_disconnect(sbi->ll_mdc_exp);
 
         OBD_FREE(sbi, sizeof(*sbi));
 
@@ -1433,9 +1433,9 @@ out_inode:
 out_request:
         ptlrpc_req_finished(request);
 out_osc:
-        obd_disconnect(sbi->ll_osc_exp, 0);
+        obd_disconnect(sbi->ll_osc_exp);
 out_mdc:
-        obd_disconnect(sbi->ll_mdc_exp, 0);
+        obd_disconnect(sbi->ll_mdc_exp);
 out_free:
         OBD_FREE(sbi, sizeof(*sbi));
         return err;

@@ -159,7 +159,6 @@ static struct llog_operations lov_size_repl_logops = {
         lop_cancel: lov_llog_repl_cancel
 };
 
-
 int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
                   int count, struct llog_catid *logid)
 {
@@ -191,26 +190,21 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
 
 int lov_llog_finish(struct obd_device *obd, int count)
 {
-        struct lov_obd *lov = &obd->u.lov;
-        int i, rc = 0;
+        struct llog_ctxt *ctxt;
+        int rc = 0;
         ENTRY;
-        
-        rc = llog_cleanup(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT));
+
+        /* cleanup our llogs only if the ctxts have been setup
+         * (lov1 doesn't setup, lov_mds1 does). */
+        ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
+        if (ctxt)
+                rc = llog_cleanup(ctxt);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_SIZE_REPL_CTXT));
-        if (rc)
-                RETURN(rc);
+        ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
+        if (ctxt)
+                rc = llog_cleanup(ctxt);
 
-        LASSERT(lov->desc.ld_tgt_count  == count);
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
-                rc = obd_llog_finish(child, 1);
-                if (rc) {
-                        CERROR("error osc_llog_finish %d\n", i);
-                        break;
-                }
-        }
         RETURN(rc);
 }

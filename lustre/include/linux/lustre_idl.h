@@ -669,6 +669,15 @@ typedef enum {
         LCK_NL = 32
 } ldlm_mode_t;
 
+typedef enum {
+        LDLM_PLAIN     = 10,
+        LDLM_EXTENT    = 11,
+        LDLM_FLOCK     = 12,
+        LDLM_MAX_TYPE
+} ldlm_type_t;
+
+#define LDLM_MIN_TYPE LDLM_PLAIN
+
 struct ldlm_extent {
         __u64 start;
         __u64 end;
@@ -702,7 +711,7 @@ struct ldlm_intent {
 extern void lustre_swab_ldlm_intent (struct ldlm_intent *i);
 
 struct ldlm_resource_desc {
-        __u32 lr_type;
+        ldlm_type_t lr_type;
         __u32 lr_padding;
         struct ldlm_res_id lr_name;
 };

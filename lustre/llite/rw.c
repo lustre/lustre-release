@@ -118,11 +118,18 @@ void ll_truncate(struct inode *inode)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %llu\n", inode->i_ino,
                inode->i_generation, inode, inode->i_size);
 
+        if (lli->lli_size_pid != current->pid) {
+                EXIT;
+                return;
+        }
+
         if (!lsm) {
                 CDEBUG(D_INODE, "truncate on inode %lu with no objects\n",
                        inode->i_ino);
                 GOTO(out_unlock, 0);
         }
+
+        LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
 
         if (lov_merge_size(lsm, 0) == inode->i_size) {
                 CDEBUG(D_VFSTRACE, "skipping punch for "LPX64" (size = %llu)\n",
@@ -140,7 +147,7 @@ void ll_truncate(struct inode *inode)
 
         obd_adjust_kms(ll_i2obdexp(inode), lsm, inode->i_size, 1);
 
-        LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
+        lli->lli_size_pid = 0;
         up(&lli->lli_size_sem);
 
         rc = obd_punch(ll_i2obdexp(inode), &oa, lsm, inode->i_size,
@@ -156,7 +163,7 @@ void ll_truncate(struct inode *inode)
         return;
 
  out_unlock:
-        LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
+        lli->lli_size_pid = 0;
         up(&lli->lli_size_sem);
 } /* ll_truncate */
 

@@ -144,21 +144,19 @@ int mds_llog_init(struct obd_device *obd, struct obd_device *tgt,
 
 int mds_llog_finish(struct obd_device *obd, int count)
 {
-        struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
-        int rc;
+        struct llog_ctxt *ctxt;
+        int rc = 0;
         ENTRY;
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT));
+        ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
+        if (ctxt) 
+                rc = llog_cleanup(ctxt);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_SIZE_REPL_CTXT));
-        if (rc)
-                RETURN(rc);
-
-        rc = obd_llog_finish(lov_obd, count);
-        if (rc)
-                CERROR("error lov_llog_finish\n");
-
+        ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
+        if (ctxt)
+                rc = llog_cleanup(ctxt);
+        
         RETURN(rc);
 }

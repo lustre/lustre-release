@@ -41,7 +41,7 @@
 
 #define REQUEST_MINOR 244
 
-static int mdc_cleanup(struct obd_device *obd, int flags);
+static int mdc_cleanup(struct obd_device *obd);
 
 extern int mds_queue_req(struct ptlrpc_request *);
 /* Helper that implements most of mdc_getstatus and signal_completed_replay. */
@@ -899,7 +899,7 @@ static int mdc_setup(struct obd_device *obd, obd_count len, void *buf)
 
         rc = obd_llog_init(obd, obd, 0, NULL);
         if (rc) {
-                mdc_cleanup(obd, 0);
+                mdc_cleanup(obd);
                 CERROR("failed to setup llogging subsystems\n");
         }
 
@@ -944,7 +944,7 @@ int mdc_init_ea_size(struct obd_export *mdc_exp, struct obd_export *lov_exp)
         RETURN(0);
 }
 
-static int mdc_precleanup(struct obd_device *obd, int flags)
+static int mdc_precleanup(struct obd_device *obd)
 {
         int rc = 0;
 
@@ -955,7 +955,7 @@ static int mdc_precleanup(struct obd_device *obd, int flags)
         RETURN(rc);
 }
 
-static int mdc_cleanup(struct obd_device *obd, int flags)
+static int mdc_cleanup(struct obd_device *obd)
 {
         struct client_obd *cli = &obd->u.cli;
 
@@ -965,7 +965,7 @@ static int mdc_cleanup(struct obd_device *obd, int flags)
         lprocfs_obd_cleanup(obd);
         ptlrpcd_decref();
 
-        return client_obd_cleanup(obd, flags);
+        return client_obd_cleanup(obd);
 }
 
 

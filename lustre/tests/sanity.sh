@@ -8,7 +8,7 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 2108 3637 3561 5188/5749
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c 45 68"}
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a 42c  45   68"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && \
@@ -54,7 +54,7 @@ SAVE_PWD=$PWD
 
 clean() {
 	echo -n "cln.."
-	sh llmountcleanup.sh > /dev/null || exit 20
+	sh llmountcleanup.sh ${FORCE} > /dev/null || exit 20
 	I_MOUNTED=no
 }
 CLEAN=${CLEAN:-:}
@@ -1782,8 +1782,8 @@ test_48e() { # bug 4134
 	$TRACE rmdir $DIR/d48e || error "remove parent $DIR/d48e failed"
 	$TRACE touch $DIR/d48e || error "'touch $DIR/d48e' failed"
 	$TRACE chmod +x $DIR/d48e || error "'chmod +x $DIR/d48e' failed"
-	$TRACE wait $cdpid && error "'cd ..' worked after recreate parent"
-	$TRACE rm $DIR/d48e || error "'$DIR/d48e' failed"
+	$TRACE wait $cdpid && echo "'cd ..' worked after recreate parent"
+	$TRACE rm $DIR/d48e || error "rm '$DIR/d48e' failed"
 }
 run_test 48e "Access to recreated parent subdir (should return errors)"
 

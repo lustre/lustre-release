@@ -322,14 +322,18 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
         rc = 1;
 
         /* unfortunately ll_intent_lock may cause a callback and revoke our
-           dentry */
+         * dentry */
         spin_lock(&dcache_lock);
         hlist_del_init(&de->d_hash);
         __d_rehash(de, 0);
         spin_unlock(&dcache_lock);
 
  out:
-        if (req != NULL && rc == 1)
+        /* If we had succesful it lookup on mds, but it happened to be negative,
+           we do not free request as it will be reused during lookup (see
+           comment in mdc/mdc_locks.c::mdc_intent_lock(). But if
+           request was not completed, we need to free it. (bug 5154) */
+        if (req != NULL && (rc == 1 || !it_disposition(it, DISP_ENQ_COMPLETE)))
                 ptlrpc_req_finished(req);
         if (rc == 0) {
                 ll_unhash_aliases(de->d_inode);

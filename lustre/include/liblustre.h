@@ -620,6 +620,7 @@ static inline int schedule_timeout(signed long t)
 })
 #define time_after(a, b) ((long)(b) - (long)(a) < 0)
 #define time_before(a, b) time_after(b,a)
+#define time_after_eq(a,b)	((long)(a) - (long)(b) >= 0)
 
 struct timer_list {
         struct list_head tl_list;
@@ -630,7 +631,7 @@ struct timer_list {
 
 static inline int timer_pending(struct timer_list *l)
 {
-        if (l->expires > jiffies)
+        if (time_after(l->expires, jiffies))
                 return 1;
         else
                 return 0;

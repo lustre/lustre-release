@@ -60,7 +60,7 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                              struct ldlm_lock **lockp, void *req_cookie,
                              ldlm_mode_t mode, int flags, void *data);
 static int mds_postsetup(struct obd_device *obd);
-static int mds_cleanup(struct obd_device *obd, int flags);
+static int mds_cleanup(struct obd_device *obd);
 
 /* Assumes caller has already pushed into the kernel filesystem context */
 static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
@@ -295,7 +295,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd,
 out:
         if (rc) {
                 OBD_FREE(mcd, sizeof(*mcd));
-                class_disconnect(exp, 0);
+                class_disconnect(exp);
         }
         class_export_put(exp);
 
@@ -358,14 +358,13 @@ static int mds_destroy_export(struct obd_export *export)
         }
         spin_unlock(&med->med_open_lock);
         pop_ctxt(&saved, &obd->obd_ctxt, NULL);
-
 out:
         mds_client_free(export, !(export->exp_flags & OBD_OPT_FAILOVER));
 
         RETURN(rc);
 }
 
-static int mds_disconnect(struct obd_export *exp, int flags)
+static int mds_disconnect(struct obd_export *exp)
 {
         unsigned long irqflags;
         int rc;
@@ -374,12 +373,8 @@ static int mds_disconnect(struct obd_export *exp, int flags)
         LASSERT(exp);
         class_export_get(exp);
 
-        spin_lock_irqsave(&exp->exp_lock, irqflags);
-        exp->exp_flags = flags;
-        spin_unlock_irqrestore(&exp->exp_lock, irqflags);
-
         /* Disconnect early so that clients can't keep using export */
-        rc = class_disconnect(exp, flags);
+        rc = class_disconnect(exp);
         ldlm_cancel_locks_for_export(exp);
 
         /* complete all outstanding replies */
@@ -1391,8 +1386,6 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         int rc = 0;
         ENTRY;
 
-        dev_clear_rdonly(2);
-
         if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
                 RETURN(rc = -EINVAL);
 
@@ -1426,7 +1419,9 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         }
 
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lcfg->lcfg_inlbuf1, mnt);
-
+        
+        LASSERT(!ll_check_rdonly(ll_sbdev(mnt->mnt_sb)));
+        
         sema_init(&mds->mds_orphan_recovery_sem, 1);
         sema_init(&mds->mds_epoch_sem, 1);
         spin_lock_init(&mds->mds_transno_lock);
@@ -1436,7 +1431,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
         sprintf(ns_name, "mds-%s", obd->obd_uuid.uuid);
         obd->obd_namespace = ldlm_namespace_new(ns_name, LDLM_NAMESPACE_SERVER);
         if (obd->obd_namespace == NULL) {
-                mds_cleanup(obd, 0);
+                mds_cleanup(obd);
                 GOTO(err_put, rc = -ENOMEM);
         }
         ldlm_register_intent(obd->obd_namespace, mds_intent_policy);
@@ -1502,7 +1497,7 @@ static int mds_setup(struct obd_device *obd, obd_count len, void *buf)
 
 err_fs:
         /* No extra cleanup needed for llog_init_commit_thread() */
-        mds_fs_cleanup(obd, 0);
+        mds_fs_cleanup(obd);
 err_ns:
         ldlm_namespace_free(obd->obd_namespace, 0);
         obd->obd_namespace = NULL;
@@ -1538,8 +1533,22 @@ static int mds_postsetup(struct obd_device *obd)
                 rc = class_config_parse_llog(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT), 
                                              mds->mds_profile, &cfg);
                 pop_ctxt(&saved, &obd->obd_ctxt, NULL);
-                if (rc)
+                switch (rc) {
+                case 0:
+                        break;
+                case -EINVAL:
+                        LCONSOLE_ERROR("%s: the profile %s could not be read. "
+                                       "If you recently installed a new "
+                                       "version of Lustre, you may need to "
+                                       "re-run 'lconf --write_conf "
+                                       "<yourconfig>.xml' command line before "
+                                       "restarting the MDS.\n",
+                                       obd->obd_name, mds->mds_profile);
+                        /* fall through */
+                default:
                         GOTO(err_llog, rc);
+                        break;
+                }
 
                 lprof = class_get_profile(mds->mds_profile);
                 if (lprof == NULL) {
@@ -1644,24 +1653,33 @@ int mds_lov_clean(struct obd_device *obd)
         RETURN(0);
 }
 
-static int mds_precleanup(struct obd_device *obd, int flags)
+static int mds_precleanup(struct obd_device *obd)
 {
         int rc = 0;
         ENTRY;
 
-        mds_lov_disconnect(obd, flags);
+        mds_lov_set_cleanup_flags(obd);
+        target_cleanup_recovery(obd);
+        mds_lov_disconnect(obd);
         mds_lov_clean(obd);
         llog_cleanup(llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT));
         RETURN(rc);
 }
 
-static int mds_cleanup(struct obd_device *obd, int flags)
+static int mds_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
+        ll_sbdev_type save_dev;
         ENTRY;
 
         if (mds->mds_sb == NULL)
                 RETURN(0);
+        save_dev = ll_sbdev(mds->mds_sb);
+        
+        if (mds->mds_osc_exp)
+                /* lov export was disconnected by mds_lov_clean;
+                   we just need to drop our ref */
+                class_export_put(mds->mds_osc_exp);
 
         lprocfs_obd_cleanup(obd);
 
@@ -1670,7 +1688,7 @@ static int mds_cleanup(struct obd_device *obd, int flags)
                 OBD_FREE(mds->mds_lov_objids,
                          mds->mds_lov_desc.ld_tgt_count * sizeof(obd_id));
         }
-        mds_fs_cleanup(obd, flags);
+        mds_fs_cleanup(obd);
 
         unlock_kernel();
 
@@ -1681,10 +1699,9 @@ static int mds_cleanup(struct obd_device *obd, int flags)
                        atomic_read(&obd->u.mds.mds_vfsmnt->mnt_count));
 
         mntput(mds->mds_vfsmnt);
+        mds->mds_sb = NULL;
 
-        mds->mds_sb = 0;
-
-        ldlm_namespace_free(obd->obd_namespace, flags & OBD_OPT_FORCE);
+        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
 
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (obd->obd_recovering) {
@@ -1693,8 +1710,11 @@ static int mds_cleanup(struct obd_device *obd, int flags)
         }
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
+        obd_llog_finish(obd, 0);
+
+        ll_clear_rdonly(save_dev);
+        
         lock_kernel();
-        dev_clear_rdonly(2);
         fsfilt_put_ops(obd->obd_fsops);
 
         LCONSOLE_INFO("MDT %s has stopped.\n", obd->obd_name);
@@ -1983,7 +2003,7 @@ err_lprocfs:
         return rc;
 }
 
-static int mdt_cleanup(struct obd_device *obd, int flags)
+static int mdt_cleanup(struct obd_device *obd)
 {
         struct mds_obd *mds = &obd->u.mds;
         ENTRY;

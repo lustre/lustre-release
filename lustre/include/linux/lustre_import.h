@@ -68,8 +68,8 @@ struct obd_import {
         __u64                     imp_peer_committed_transno;
         struct obd_uuid           imp_target_uuid; /* XXX -> lustre_name */
         struct lustre_handle      imp_remote_handle;
-        unsigned long             imp_next_ping;
-        
+        unsigned long             imp_next_ping;   /* jiffies */
+
         /* Protects flags, level, generation, conn_cnt, *_list */
         spinlock_t                imp_lock;
 

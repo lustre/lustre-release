@@ -21,7 +21,7 @@ build_test_filter
 # setting SETUP=" " and CLEANUP=" "
 SETUP=${SETUP:-"setup"}
 CLEANUP=${CLEANUP:-"cleanup"}
-
+FORCE=${FORCE:-"--force"}
 
 make_config() {
     rm -f $XMLCONFIG
@@ -246,7 +246,6 @@ test_17() {
     sysctl -w lustre.fail_loc=0x80000503
     # need to write enough to ensure we send an RPC
     do_facet client dd if=/dev/zero of=$DIR/$tfile bs=1024k count=2
-
     sleep $TIMEOUT
     sysctl -w lustre.fail_loc=0
     do_facet client "df $DIR"
@@ -379,7 +378,7 @@ run_test 20b "ldlm_handle_enqueue error (should return error)"
 test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	mkdir -p $DIR/$tdir
 	cancel_lru_locks OSC
-	multiop $DIR/$tdir/$tfile Owyw_yc &
+	multiop $DIR/$tdir/$tfile Owy_wyc &
 	MULTI_PID=$!
 	usleep 500
 # OBD_FAIL_PTLRPC_BULK_PUT_NET|OBD_FAIL_ONCE
@@ -390,5 +389,89 @@ test_24() {	# bug 2248 - eviction fails writeback but app doesn't see it
 	[ $rc -eq 0 ] && error "multiop didn't fail fsync: rc $rc" || true
 }
 run_test 24 "fsync error (should return error)" 
+
+
+test_25a() {
+	mkdir -p $DIR/$tdir
+	# put a load of file creates/writes/deletes for 10 min.
+	do_facet client "writemany -q -a $DIR/$tdir/$tfile 600 5" &
+        CLIENT_PID=$!
+	echo writemany pid $CLIENT_PID
+	sleep 10
+	FAILURE_MODE="SOFT"
+	fail mds
+	# wait for client to reconnect to MDS
+	sleep 60
+	fail mds
+	sleep 60
+	fail mds
+	# client process should see no problems even though MDS went down
+	wait $CLIENT_PID 
+	rc=$?
+	echo writemany returned $rc
+	return $rc
+}
+run_test 25a "failover MDS under load"
+
+test_25b() {
+	mkdir -p $DIR/$tdir
+	# put a load of file creates/writes/deletes
+	do_facet client "writemany -q -a $DIR/$tdir/$tfile 300 5" &
+        CLIENT_PID=$!
+	echo writemany pid $CLIENT_PID
+	sleep 1
+	FAILURE_MODE="SOFT"
+	facet_failover mds
+	# failover at various points during recovery
+	sleep 1
+	facet_failover mds
+	sleep 5
+	facet_failover mds
+	sleep 10
+	facet_failover mds
+	sleep 20
+	facet_failover mds
+	# client process should see no problems even though MDS went down
+        # and recovery was interrupted
+	wait $CLIENT_PID 
+	rc=$?
+	echo writemany returned $rc
+	return $rc
+}
+run_test 25b "failover MDS during recovery"
+
+test_25c_guts() {
+	do_facet client "writemany -q $DIR/$tdir/$tfile 600 5" &
+        CLIENT_PID=$!
+	echo writemany pid $CLIENT_PID
+	sleep 10
+	FAILURE_MODE="SOFT"
+	fail ost
+	rc=0
+	wait $CLIENT_PID || rc=$?
+	# active client process should see an EIO for down OST
+	[ $rc -eq 5 ] && { echo "writemany correctly failed $rc" && return 0; }
+	# but timing or failover setup may allow success
+	[ $rc -eq 0 ] && { echo "writemany succeeded" && return 0; }
+	echo "writemany returned $rc"
+	return $rc
+}
+
+test_25c() {
+	mkdir -p $DIR/$tdir
+	test_25c_guts
+	rc=$?
+	[ $rc -ne 0 ] && { return $rc; }
+	# wait for client to reconnect to OST
+	sleep 30
+	test_25c_guts
+	rc=$?
+	[ $rc -ne 0 ] && { return $rc; }
+	sleep 30
+	test_25c_guts
+	rc=$?
+	return $rc
+}
+run_test 25c "failover OST under load"
 
 $CLEANUP

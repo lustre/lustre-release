@@ -137,8 +137,8 @@ int mds_llog_finish(struct obd_device *obd, int count);
 
 /* mds/mds_lov.c */
 int mds_lov_connect(struct obd_device *obd, char * lov_name);
-int mds_lov_disconnect(struct obd_device *obd, int flags);
-int mds_get_lovtgts(struct obd_device *, int tgt_count, struct obd_uuid *);
+int mds_lov_disconnect(struct obd_device *obd);
+void mds_lov_set_cleanup_flags(struct obd_device *);
 int mds_lov_write_objids(struct obd_device *obd);
 void mds_lov_update_objids(struct obd_device *obd, obd_id *ids);
 int mds_lov_set_growth(struct mds_obd *mds, int count);

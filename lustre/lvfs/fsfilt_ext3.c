@@ -116,11 +116,26 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 /* additional block + block bitmap + GDT for long symlink */
                 nblocks += 3;
                 /* no break */
-        case FSFILT_OP_CREATE:
+        case FSFILT_OP_CREATE: {
+#if defined(EXT3_EXTENTS_FL) && defined(EXT3_INDEX_FL)
+                static int warned;
+                if (!warned) {
+                        if (!test_opt(inode->i_sb, EXTENTS)) {
+                                warned = 1;
+                        } else if (((EXT3_I(inode)->i_flags &
+                              cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL)) ==
+                              cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL))) {
+                                CWARN("extent-mapped directory found - contact "
+                                      "CFS: support@clusterfs.com\n");
+                                warned = 1;
+                        }
+                }
+#endif
                 /* create/update logs for each stripe */
                 nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
                             EXT3_SINGLEDATA_TRANS_BLOCKS) * logs;
                 /* no break */
+        }
         case FSFILT_OP_MKDIR:
         case FSFILT_OP_MKNOD:
                 /* modify one inode + block bitmap + GDT */
@@ -635,9 +650,9 @@ static int fsfilt_ext3_sync(struct super_block *sb)
         return ext3_force_commit(sb);
 }
 
-#ifndef EXT3_EXT_CACHE_NO       /* we need this for struct ext3_ext_cache */
-#undef EXT3_MULTIBLOCK_ALLOCATOR
+#if defined(EXT3_MULTIBLOCK_ALLOCATOR) && (!defined(EXT3_EXT_CACHE_NO) || defined(EXT_CACHE_MARK))
 #warning "kernel code has old extents/mballoc patch, disabling"
+#undef EXT3_MULTIBLOCK_ALLOCATOR
 #endif
 
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
@@ -952,16 +967,13 @@ int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
                                 struct semaphore *optional_sem)
 {
         int rc;
-        if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL) {
 #ifdef EXT3_MULTIBLOCK_ALLOCATOR
+        if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL) {
                 rc = fsfilt_ext3_map_ext_inode_pages(inode, page, pages,
                                                      blocks, created, create);
-#else
-                CERROR("extent-mapped file with unsupported kernel\n");
-                rc = -EIO;
-#endif
                 return rc;
         }
+#endif
         if (optional_sem != NULL)
                 down(optional_sem);
         rc = fsfilt_ext3_map_bm_inode_pages(inode, page, pages, blocks,

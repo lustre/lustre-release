@@ -192,6 +192,15 @@ int lprocfs_rd_u64(char *page, char **start, off_t off,
         return snprintf(page, count, LPU64"\n", *(__u64 *)data);
 }
 
+int lprocfs_rd_atomic(char *page, char **start, off_t off,
+                   int count, int *eof, void *data)
+{
+        atomic_t *atom = (atomic_t *)data;
+        LASSERT(atom != NULL);
+        *eof = 1;
+        return snprintf(page, count, "%d\n", atomic_read(atom));
+}
+
 int lprocfs_rd_uuid(char *page, char **start, off_t off, int count,
                     int *eof, void *data)
 {
@@ -873,6 +882,7 @@ EXPORT_SYMBOL(lprocfs_alloc_obd_stats);
 EXPORT_SYMBOL(lprocfs_free_obd_stats);
 
 EXPORT_SYMBOL(lprocfs_rd_u64);
+EXPORT_SYMBOL(lprocfs_rd_atomic);
 EXPORT_SYMBOL(lprocfs_rd_uuid);
 EXPORT_SYMBOL(lprocfs_rd_name);
 EXPORT_SYMBOL(lprocfs_rd_fstype);

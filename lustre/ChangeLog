@@ -22,11 +22,18 @@
 	- fix several locking issues related to i_size (5492,5624,5654,5672)
 	- don't move pending lock onto export if it is already evicted (5683)
 	- fix kernel oops when creating .foo in unlinked directory (5548)
+	- fix deadlock in obdfilter statistics vs. object create (5811)
+	- use time_{before,after} to avoid timer jiffies wrap (5882)
+	- shutdown --force/--failover stability (3607,3651,4797,5203,4834)
+	- Do not leak request if server was not able to process it (5154)
+	- If mds_open unable to find parent dir, make that negative lookup(5154)
        * miscellania
 	- fix lustre/lustrefs init scripts for SuSE (patch from Scali, 5702)
 	- don't hold the pinger_sem in ptlrpc_pinger_sending_on_import
 	- change obd_increase_kms to obd_adjust_kms (up or down) (5654)
 	- lconf, lmc search both /usr/lib and /usr/lib64 for Python libs (5800)
+	- support for RHEL4 kernel on i686 (5773)
+	- provide error messages when incompatible logs are encountered (5898)
 
 2005-02-18  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0.10 (1.4.1 release candidate 1)

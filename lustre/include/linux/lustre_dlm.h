@@ -163,7 +163,8 @@ struct ldlm_namespace {
         char                  *ns_name;
         __u32                  ns_client; /* is this a client-side lock tree? */
         struct list_head      *ns_hash; /* hash table for ns */
-        __u32                  ns_refcount; /* count of resources in the hash */
+        wait_queue_head_t      ns_refcount_waitq; /* for cleanup */
+        atomic_t               ns_refcount; /* count of resources in the hash */
         struct list_head       ns_root_list; /* all root resources in ns */
         struct lustre_lock     ns_lock; /* protects hash, refcount, list */
         struct list_head       ns_list_chain; /* position in global NS list */
@@ -174,11 +175,10 @@ struct ldlm_namespace {
         struct list_head       ns_unused_list; /* all root resources in ns */
         int                    ns_nr_unused;
         unsigned int           ns_max_unused;
-        unsigned long          ns_next_dump;   /* next dump time */
+        unsigned long          ns_next_dump;   /* next debug dump, jiffies */
 
         spinlock_t             ns_counter_lock;
         __u64                  ns_locks;
-        __u64                  ns_resources;
         ldlm_res_policy        ns_policy;
         struct ldlm_valblock_ops *ns_lvbo;
         void                    *ns_lvbp;
@@ -248,17 +248,10 @@ struct ldlm_lock {
 
         /* Server-side-only members */
         struct list_head      l_pending_chain;  /* callbacks pending */
-        unsigned long         l_callback_timeout;
+        unsigned long         l_callback_timeout; /* jiffies */
 
         __u32                 l_pid;            /* pid which created this lock */
 };
-
-#define LDLM_PLAIN       10
-#define LDLM_EXTENT      11
-#define LDLM_FLOCK       12
-
-#define LDLM_MIN_TYPE 10
-#define LDLM_MAX_TYPE 12
 
 struct ldlm_resource {
         struct ldlm_namespace *lr_namespace;

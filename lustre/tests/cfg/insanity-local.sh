@@ -3,7 +3,7 @@ mdsfailover_HOST=${mdsfailover_HOST:-""}
 ost1_HOST=${ost1_HOST:-"`hostname`"}
 ost2_HOST=${ost2_HOST:-"`hostname`"}
 EXTRA_OSTS=${EXTRA_OSTS:-"`hostname`"}
-client_HOST="'*'"
+client_HOST=${client_HOST:-"'*'"}
 LIVE_CLIENT=${LIVE_CLIENT:-"`hostname`"}
 # This should always be a list, not a regexp
 FAIL_CLIENTS=${FAIL_CLIENTS:-""}

@@ -254,7 +254,7 @@ static int osc_setattr(struct obd_export *exp, struct obdo *oa,
         request = ptlrpc_prep_req(class_exp2cliimp(exp), OST_SETATTR, 1, &size,
                                   NULL);
         if (!request)
-		RETURN(-ENOMEM);
+                RETURN(-ENOMEM);
 
         body = lustre_msg_buf(request->rq_reqmsg, 0, sizeof(*body));
         memcpy(&body->oa, oa, sizeof(*oa));
@@ -2725,10 +2725,10 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         MOD_INC_USE_COUNT;
 #else
-	if (!try_module_get(THIS_MODULE)) {
-		CERROR("Can't get module. Is it alive?");
-		return -EINVAL;
-	}
+        if (!try_module_get(THIS_MODULE)) {
+                CERROR("Can't get module. Is it alive?");
+                return -EINVAL;
+        }
 #endif
         switch (cmd) {
         case OBD_IOC_LOV_GET_CONFIG: {
@@ -2796,7 +2796,7 @@ out:
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         MOD_DEC_USE_COUNT;
 #else
-	module_put(THIS_MODULE);
+        module_put(THIS_MODULE);
 #endif
         return err;
 }
@@ -2858,7 +2858,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
             memcmp(key, "next_id", strlen("next_id")) == 0) {
                 if (vallen != sizeof(obd_id))
                         RETURN(-EINVAL);
-		obd->u.cli.cl_oscc.oscc_next_id = *((obd_id*)val) + 1;
+                obd->u.cli.cl_oscc.oscc_next_id = *((obd_id*)val) + 1;
                 CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",
                        exp->exp_obd->obd_name,
                        obd->u.cli.cl_oscc.oscc_next_id);
@@ -2870,7 +2870,7 @@ static int osc_set_info(struct obd_export *exp, obd_count keylen,
             memcmp(key, "growth_count", strlen("growth_count")) == 0) {
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
-		obd->u.cli.cl_oscc.oscc_grow_count = *((int*)val);
+                obd->u.cli.cl_oscc.oscc_grow_count = *((int*)val);
                 RETURN(0);
         }
 
@@ -2955,14 +2955,20 @@ static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
 
 static int osc_llog_finish(struct obd_device *obd, int count)
 {
-        int rc;
+        struct llog_ctxt *ctxt;
+        int rc = 0;
         ENTRY;
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT));
+        ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
+        if (ctxt) 
+                rc = llog_cleanup(ctxt);
         if (rc)
                 RETURN(rc);
+        
+        ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
+        if (ctxt) 
+                rc = llog_cleanup(ctxt);
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_SIZE_REPL_CTXT));
         RETURN(rc);
 }
 
@@ -2977,7 +2983,7 @@ static int osc_connect(struct lustre_handle *exph,
         return rc;
 }
 
-static int osc_disconnect(struct obd_export *exp, int flags)
+static int osc_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct llog_ctxt *ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
@@ -2987,7 +2993,7 @@ static int osc_disconnect(struct obd_export *exp, int flags)
                 /* flush any remaining cancel messages out to the target */
                 llog_sync(ctxt, exp);
 
-        rc = client_disconnect_export(exp, flags);
+        rc = client_disconnect_export(exp);
         return rc;
 }
 
@@ -3080,7 +3086,7 @@ int osc_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(rc);
 }
 
-int osc_cleanup(struct obd_device *obd, int flags)
+int osc_cleanup(struct obd_device *obd)
 {
         struct osc_creator *oscc = &obd->u.cli.cl_oscc;
         int rc;
@@ -3093,8 +3099,9 @@ int osc_cleanup(struct obd_device *obd, int flags)
         oscc->oscc_flags |= OSCC_FLAG_EXITING;
         spin_unlock(&oscc->oscc_lock);
 
-        rc = client_obd_cleanup(obd, flags);
+        rc = client_obd_cleanup(obd);
         ptlrpcd_decref();
+        obd_llog_finish(obd, 0);
         RETURN(rc);
 }
 

@@ -24,7 +24,7 @@ noinst_PROGRAMS += wantedi statone runas openfile getdents o_directory
 noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
 noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify mkdirmany rmdirmany
 noinst_PROGRAMS += openfilleddirunlink rename_many memhog iopentest1 iopentest2
-noinst_PROGRAMS += mmap_sanity
+noinst_PROGRAMS += mmap_sanity writemany
 if MPITESTS
 noinst_PROGRAMS += write_append_truncate createmany_mpi
 endif

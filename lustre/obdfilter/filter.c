@@ -218,7 +218,7 @@ static int filter_client_add(struct obd_device *obd, struct filter_obd *filter,
         RETURN(0);
 }
 
-static int filter_client_free(struct obd_export *exp, int flags)
+static int filter_client_free(struct obd_export *exp)
 {
         struct filter_export_data *fed = &exp->exp_filter_data;
         struct filter_obd *filter = &exp->exp_obd->u.filter;
@@ -231,8 +231,8 @@ static int filter_client_free(struct obd_export *exp, int flags)
 
         if (fed->fed_fcd == NULL)
                 RETURN(0);
-
-        if (flags & OBD_OPT_FAILOVER)
+        
+        if (exp->exp_flags & OBD_OPT_FAILOVER)
                 GOTO(free, 0);
 
         /* XXX if fcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
@@ -517,7 +517,7 @@ out:
         RETURN(0);
 
 err_client:
-        class_disconnect_exports(obd, 0);
+        class_disconnect_exports(obd);
 err_fsd:
         filter_free_server_data(filter);
         RETURN(rc);
@@ -1190,8 +1190,6 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
         int rc = 0;
         ENTRY;
 
-        dev_clear_rdonly(2);
-
         if (!lcfg->lcfg_inlbuf1 || !lcfg->lcfg_inlbuf2)
                 RETURN(-EINVAL);
 
@@ -1200,10 +1198,12 @@ int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
                 RETURN(PTR_ERR(obd->obd_fsops));
 
         mnt = do_kern_mount(lcfg->lcfg_inlbuf2, MS_NOATIME | MS_NODIRATIME,
-                            lcfg->lcfg_inlbuf1, option);
+                            lcfg->lcfg_inlbuf1, (void *)option);
         rc = PTR_ERR(mnt);
         if (IS_ERR(mnt))
                 GOTO(err_ops, rc);
+
+        LASSERT(!ll_check_rdonly(ll_sbdev(mnt->mnt_sb)));
 
         if (lcfg->lcfg_inllen3 > 0 && lcfg->lcfg_inlbuf3) {
                 if (*lcfg->lcfg_inlbuf3 == 'f') {
@@ -1337,29 +1337,36 @@ static int filter_setup(struct obd_device *obd, obd_count len, void *buf)
         return rc;
 }
 
-static int filter_cleanup(struct obd_device *obd, int flags)
+static int filter_precleanup(struct obd_device *obd)
+{
+        target_cleanup_recovery(obd);
+        return (0);
+}
+
+static int filter_cleanup(struct obd_device *obd)
 {
         struct filter_obd *filter = &obd->u.filter;
+        ll_sbdev_type save_dev;
         ENTRY;
-
-        if (flags & OBD_OPT_FAILOVER)
+        
+        if (obd->obd_fail)
                 CERROR("%s: shutting down for failover; client state will"
                        " be preserved.\n", obd->obd_name);
 
         if (!list_empty(&obd->obd_exports)) {
                 CERROR("%s: still has clients!\n", obd->obd_name);
-                class_disconnect_exports(obd, flags);
+                class_disconnect_exports(obd);
                 if (!list_empty(&obd->obd_exports)) {
                         CERROR("still has exports after forced cleanup?\n");
                         RETURN(-EBUSY);
                 }
         }
-        target_cleanup_recovery(obd);
 
-        ldlm_namespace_free(obd->obd_namespace, flags & OBD_OPT_FORCE);
+        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
 
         if (filter->fo_sb == NULL)
                 RETURN(0);
+        save_dev = ll_sbdev(filter->fo_sb);
 
         lprocfs_free_obd_stats(obd);
         lprocfs_obd_cleanup(obd);
@@ -1367,7 +1374,6 @@ static int filter_cleanup(struct obd_device *obd, int flags)
         filter_post(obd);
 
         shrink_dcache_parent(filter->fo_sb->s_root);
-        filter->fo_sb = 0;
 
         if (atomic_read(&filter->fo_vfsmnt->mnt_count) > 1)
                 CERROR("%s: mount point %p busy, mnt_count: %d\n",
@@ -1378,13 +1384,16 @@ static int filter_cleanup(struct obd_device *obd, int flags)
         mntput(filter->fo_vfsmnt);
         //destroy_buffers(filter->fo_sb->s_dev);
         filter->fo_sb = NULL;
+        
+        obd_llog_finish(obd, 0);
+
+        ll_clear_rdonly(save_dev);
+        
         fsfilt_put_ops(obd->obd_fsops);
         lock_kernel();
 
-        dev_clear_rdonly(2);
-
         LCONSOLE_INFO("OST %s has stopped.\n", obd->obd_name);
-
+        
         RETURN(0);
 }
 
@@ -1430,23 +1439,11 @@ cleanup:
         if (rc) {
                 if (fcd)
                         OBD_FREE(fcd, sizeof(*fcd));
-                class_disconnect(exp, 0);
+                class_disconnect(exp);
         } else {
                 class_export_put(exp);
         }
         return rc;
-}
-
-static int filter_precleanup(struct obd_device *obd, int flags)
-{
-        int rc = 0;
-        ENTRY;
-
-        rc = obd_llog_finish(obd, 0);
-        if (rc)
-                CERROR("failed to cleanup llogging subsystem\n");
-
-        RETURN(rc);
 }
 
 /* Do extra sanity checks for grant accounting.  We do this at connect,
@@ -1567,9 +1564,10 @@ static int filter_destroy_export(struct obd_export *exp)
         target_destroy_export(exp);
 
         if (exp->exp_obd->obd_replayable)
-                filter_client_free(exp, exp->exp_flags);
+                filter_client_free(exp);
 
         filter_grant_discard(exp);
+        
         if (!(exp->exp_flags & OBD_OPT_FORCE))
                 filter_grant_sanity_check(exp->exp_obd, __FUNCTION__);
 
@@ -1577,10 +1575,9 @@ static int filter_destroy_export(struct obd_export *exp)
 }
 
 /* also incredibly similar to mds_disconnect */
-static int filter_disconnect(struct obd_export *exp, int flags)
+static int filter_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = exp->exp_obd;
-        unsigned long irqflags;
         struct llog_ctxt *ctxt;
         int rc, err;
         ENTRY;
@@ -1588,16 +1585,12 @@ static int filter_disconnect(struct obd_export *exp, int flags)
         LASSERT(exp);
         class_export_get(exp);
 
-        spin_lock_irqsave(&exp->exp_lock, irqflags);
-        exp->exp_flags = flags;
-        spin_unlock_irqrestore(&exp->exp_lock, irqflags);
-
-        if (!(flags & OBD_OPT_FORCE))
+        if (!(exp->exp_flags & OBD_OPT_FORCE))
                 filter_grant_sanity_check(obd, __FUNCTION__);
         filter_grant_discard(exp);
 
         /* Disconnect early so that clients can't keep using export */
-        rc = class_disconnect(exp, flags);
+        rc = class_disconnect(exp);
 
         ldlm_cancel_locks_for_export(exp);
 
@@ -2393,10 +2386,17 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
         int rc = 0;
 
         switch (cmd) {
-        case OBD_IOC_ABORT_RECOVERY:
+        case OBD_IOC_ABORT_RECOVERY: {
                 CERROR("aborting recovery for device %s\n", obd->obd_name);
                 target_abort_recovery(obd);
                 RETURN(0);
+        }
+
+        case OBD_IOC_SYNC: {
+                CDEBUG(D_HA, "syncing ost %s\n", obd->obd_name);
+                rc = fsfilt_sync(obd, obd->u.filter.fo_sb);
+                RETURN(rc);
+        }
 
         case OBD_IOC_SET_READONLY: {
                 void *handle;
@@ -2407,10 +2407,13 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                        ll_bdevname(sb, tmp));
 
                 handle = fsfilt_start(obd, inode, FSFILT_OP_MKNOD, NULL);
-                LASSERT(handle);
-                (void)fsfilt_commit(obd, inode, handle, 1);
+                if (!IS_ERR(handle)) 
+                        rc = fsfilt_commit(obd, inode, handle, 1);
+                
+                CDEBUG(D_HA, "syncing ost %s\n", obd->obd_name);
+                rc = fsfilt_sync(obd, obd->u.filter.fo_sb);
 
-                dev_set_rdonly(ll_sbdev(obd->u.filter.fo_sb), 2);
+                ll_set_rdonly(ll_sbdev(obd->u.filter.fo_sb));
                 RETURN(0);
         }
 

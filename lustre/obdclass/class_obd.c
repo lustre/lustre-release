@@ -88,8 +88,8 @@ int proc_version;
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_fail_loc;
 unsigned int obd_dump_on_timeout;
-unsigned int obd_timeout = 100;
-unsigned int ldlm_timeout = 6;
+unsigned int obd_timeout = 100; /* seconds */
+unsigned int ldlm_timeout = 6;  /* seconds */
 char obd_lustre_upcall[128] = "DEFAULT"; /* or NONE or /full/path/to/upcall  */
 unsigned int obd_sync_filter; /* = 0, don't sync by default */
 
@@ -646,7 +646,7 @@ static void cleanup_obdclass(void)
  * kernel patch */
 #include <linux/lustre_version.h>
 #define LUSTRE_MIN_VERSION 32
-#define LUSTRE_MAX_VERSION 44
+#define LUSTRE_MAX_VERSION 45
 #if (LUSTRE_KERNEL_VERSION < LUSTRE_MIN_VERSION)
 # error Cannot continue: Your Lustre kernel patch is older than the sources
 #elif (LUSTRE_KERNEL_VERSION > LUSTRE_MAX_VERSION)

@@ -261,6 +261,27 @@ fi
 ])
 
 #
+# LC_FUNC_DEV_SET_RDONLY
+#
+# check for the old-style dev_set_rdonly which took an extra "devno" param
+# and can only set a single device to discard writes at one time
+#
+AC_DEFUN([LC_FUNC_DEV_SET_RDONLY],
+[AC_MSG_CHECKING([if kernel has old single-device dev_set_rdonly])
+HAVE_OLD_DSR="`grep -c -s 'dev_set_rdonly.*no_write' $LINUX/drivers/block/ll_rw_blk.c`"
+if test x$HAVE_OLD_DSR != "x1" ; then
+	HAVE_OLD_DSR="`grep -c -s 'dev_set_rdonly.*no_write' $LINUX/drivers/block/blkpg.c`"
+fi
+if test x$HAVE_OLD_DSR = "x1" ; then
+        AC_DEFINE(HAVE_OLD_DEV_SET_RDONLY, 1,
+                [kernel has old single-device dev_set_rdonly])
+        AC_MSG_RESULT(yes)
+else
+        AC_MSG_RESULT(no)
+fi
+])
+
+#
 # LC_CONFIG_BACKINGFS
 #
 # whether to use extN or ldiskfs instead of ext3
@@ -319,8 +340,7 @@ case $BACKINGFS in
 		LC_FSHOOKS([
 			LDISKFS_SERIES="2.6-suse.series"
 		],[
-			AC_MSG_ERROR([Only SuSE 2.6 kernels (with fshooks) are supported at this time])
-			LDISKFS_SERIES="2.6-vanilla.series"
+			LDISKFS_SERIES="2.6-rhel4.series"
 		])
 		AC_SUBST(LDISKFS_SERIES)
 		;;
@@ -381,6 +401,7 @@ LC_HEADER_MM_INLINE
 LC_STRUCT_INODE
 LC_FUNC_REGISTER_CACHE
 LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
+LC_FUNC_DEV_SET_RDONLY
 ])
 
 #
@@ -460,6 +481,7 @@ lustre/include/linux/Makefile
 lustre/include/lustre/Makefile
 lustre/kernel_patches/targets/2.6-suse.target
 lustre/kernel_patches/targets/2.6-vanilla.target
+lustre/kernel_patches/targets/2.6-rhel4.target
 lustre/kernel_patches/targets/hp_pnnl-2.4.target
 lustre/kernel_patches/targets/rh-2.4.target
 lustre/kernel_patches/targets/rhel-2.4.target

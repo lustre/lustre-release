@@ -37,7 +37,7 @@ SAVE_PWD=$PWD
 
 clean() {
 	echo -n "cln.."
-	sh llmountcleanup.sh > /dev/null || exit 20
+	sh llmountcleanup.sh ${FORCE} > /dev/null || exit 20
 }
 CLEAN=${CLEAN:-}
 

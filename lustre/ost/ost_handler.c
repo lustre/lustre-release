@@ -1182,7 +1182,7 @@ out_lprocfs:
         RETURN(rc);
 }
 
-static int ost_cleanup(struct obd_device *obd, int flags)
+static int ost_cleanup(struct obd_device *obd)
 {
         struct ost_obd *ost = &obd->u.ost;
         int err = 0;

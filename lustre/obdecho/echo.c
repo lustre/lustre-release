@@ -64,17 +64,13 @@ static int echo_connect(struct lustre_handle *conn, struct obd_device *obd,
         return class_connect(conn, obd, cluuid);
 }
 
-static int echo_disconnect(struct obd_export *exp, int flags)
+static int echo_disconnect(struct obd_export *exp)
 {
         unsigned long irqflags;
 
         LASSERT (exp != NULL);
 
         ldlm_cancel_locks_for_export(exp);
-
-        spin_lock_irqsave(&exp->exp_lock, irqflags);
-        exp->exp_flags = flags;
-        spin_unlock_irqrestore(&exp->exp_lock, irqflags);
 
         /* complete all outstanding replies */
         spin_lock_irqsave(&exp->exp_lock, irqflags);
@@ -91,7 +87,7 @@ static int echo_disconnect(struct obd_export *exp, int flags)
         }
         spin_unlock_irqrestore(&exp->exp_lock, irqflags);
 
-        return class_disconnect(exp, flags);
+        return class_disconnect(exp);
 }
 
 static int echo_destroy_export(struct obd_export *exp)
@@ -502,7 +498,7 @@ static int echo_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(0);
 }
 
-static int echo_cleanup(struct obd_device *obd, int flags)
+static int echo_cleanup(struct obd_device *obd)
 {
         int leaked;
         ENTRY;
@@ -517,7 +513,7 @@ static int echo_cleanup(struct obd_device *obd, int flags)
         set_current_state (TASK_UNINTERRUPTIBLE);
         schedule_timeout (HZ);
         
-        ldlm_namespace_free(obd->obd_namespace, flags & OBD_OPT_FORCE);
+        ldlm_namespace_free(obd->obd_namespace, obd->obd_force);
 
         leaked = atomic_read(&obd->u.echo.eo_prep);
         if (leaked != 0)

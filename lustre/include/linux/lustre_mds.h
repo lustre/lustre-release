@@ -153,7 +153,7 @@ int mds_update_server_data(struct obd_device *, int force_sync);
 
 /* mds/mds_fs.c */
 int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt);
-int mds_fs_cleanup(struct obd_device *obddev, int failover);
+int mds_fs_cleanup(struct obd_device *obddev);
 #endif
 
 /* mds/mds_lov.c */

@@ -412,7 +412,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 
 #define OBD_IOC_STATFS                 _IOWR('f', 113, long)
-#define OBD_IOC_SYNC                   _IOR ('f', 114, long)
+#define OBD_IOC_SYNC                   _IOW ('f', 114, long)
 #define OBD_IOC_READ2                  _IOWR('f', 115, long)
 #define OBD_IOC_FORMAT                 _IOWR('f', 116, long)
 #define OBD_IOC_PARTITION              _IOWR('f', 117, long)

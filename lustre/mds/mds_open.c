@@ -326,7 +326,11 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
         /* replay case */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                LASSERT (rec->ur_fid2->id);
+                if (rec->ur_fid2->id == 0) {
+                        DEBUG_REQ(D_ERROR, req, "fid2 not set on open replay");
+                        RETURN(-EFAULT);
+                }
+
                 body->valid |= OBD_MD_FLBLKSZ | OBD_MD_FLEASIZE;
                 lmm_size = rec->ur_eadatalen;
                 lmm = rec->ur_eadata;
@@ -828,11 +832,17 @@ int mds_open(struct mds_update_record *rec, int offset,
                                      rec, rep);
                 if (rc != -ENOENT)
                         RETURN(rc);
+
                 /* We didn't find the correct inode on disk either, so we
                  * need to re-create it via a regular replay. */
-                LASSERT(rec->ur_flags & MDS_OPEN_CREAT);
-        } else {
-                LASSERT(!rec->ur_fid2->id);
+                if (!(rec->ur_flags & MDS_OPEN_CREAT)) {
+                        DEBUG_REQ(D_ERROR, req,"OPEN_CREAT not in open replay");
+                        RETURN(-EFAULT);
+                }
+        } else if (rec->ur_fid2->id) {
+                DEBUG_REQ(D_ERROR, req, "fid2 "LPU64"/%u on open non-replay",
+                          rec->ur_fid2->id, rec->ur_fid2->generation);
+                RETURN(-EFAULT);
         }
 
         LASSERT(offset == 2); /* If we got here, we must be called via intent */
@@ -851,8 +861,15 @@ int mds_open(struct mds_update_record *rec, int offset,
                                         rec->ur_namelen - 1);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
-                if (rc != -ENOENT)
-                        CERROR("parent lookup error %d\n", rc);
+                if (rc != -ENOENT) {
+                        CERROR("parent "LPU64"/%u lookup error %d\n",
+                               rec->ur_fid1->id, rec->ur_fid1->generation, rc);
+                } else {
+                        /* Just cannot find parent - make it look like
+                         * usual negative lookup to avoid extra MDS RPC */
+                        intent_set_disposition(rep, DISP_LOOKUP_EXECD);
+                        intent_set_disposition(rep, DISP_LOOKUP_NEG);
+                }
                 GOTO(cleanup, rc);
         }
         LASSERT(dparent->d_inode != NULL);

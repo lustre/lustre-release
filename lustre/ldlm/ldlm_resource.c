@@ -179,15 +179,16 @@ void ldlm_proc_namespace(struct ldlm_namespace *ns)
         lock_name[MAX_STRING_SIZE] = '\0';
 
         memset(lock_vars, 0, sizeof(lock_vars));
-        lock_vars[0].read_fptr = lprocfs_rd_u64;
         lock_vars[0].name = lock_name;
 
         snprintf(lock_name, MAX_STRING_SIZE, "%s/resource_count", ns->ns_name);
-        lock_vars[0].data = &ns->ns_resources;
+        lock_vars[0].data = &ns->ns_refcount;
+        lock_vars[0].read_fptr = lprocfs_rd_atomic;
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
         snprintf(lock_name, MAX_STRING_SIZE, "%s/lock_count", ns->ns_name);
         lock_vars[0].data = &ns->ns_locks;
+        lock_vars[0].read_fptr = lprocfs_rd_u64;
         lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
 
         if (ns->ns_client) {
@@ -237,11 +238,11 @@ struct ldlm_namespace *ldlm_namespace_new(char *name, __u32 client)
 
         INIT_LIST_HEAD(&ns->ns_root_list);
         l_lock_init(&ns->ns_lock);
-        ns->ns_refcount = 0;
+        init_waitqueue_head(&ns->ns_refcount_waitq);
+        atomic_set(&ns->ns_refcount, 0);
         ns->ns_client = client;
         spin_lock_init(&ns->ns_counter_lock);
         ns->ns_locks = 0;
-        ns->ns_resources = 0;
 
         for (bucket = ns->ns_hash + RES_HASH_SIZE - 1; bucket >= ns->ns_hash;
              bucket--)
@@ -353,19 +354,11 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
                         cleanup_resource(res, &res->lr_converting, flags);
                         cleanup_resource(res, &res->lr_waiting, flags);
 
-                        /* XXX what a mess: don't force cleanup if we're
-                         * local_only (which is only used by recovery).  In that
-                         * case, we probably still have outstanding lock refs
-                         * which reference these resources. -phil */
-                        if (!ldlm_resource_putref(res) &&
-                            !(flags & LDLM_FL_LOCAL_ONLY)) {
+                        if (!ldlm_resource_putref(res)) {
                                 CERROR("Namespace %s resource refcount %d "
-                                       "after lock cleanup; forcing cleanup.\n",
+                                       "after lock cleanup\n",
                                        ns->ns_name,
                                        atomic_read(&res->lr_refcount));
-                                ldlm_resource_dump(D_ERROR, res);
-                                atomic_set(&res->lr_refcount, 1);
-                                ldlm_resource_putref(res);
                         }
                 }
         }
@@ -399,6 +392,25 @@ int ldlm_namespace_free(struct ldlm_namespace *ns, int force)
                 }
         }
 #endif
+
+        if (atomic_read(&ns->ns_refcount) > 0) {
+                struct l_wait_info lwi = LWI_INTR(NULL, NULL);
+                int rc;
+                CDEBUG(D_DLMTRACE, 
+                       "dlm namespace %s free waiting on refcount %d\n", 
+                       ns->ns_name, atomic_read(&ns->ns_refcount));
+                rc = l_wait_event(ns->ns_refcount_waitq,
+                                  atomic_read(&ns->ns_refcount) == 0, &lwi);
+                if (atomic_read(&ns->ns_refcount)) {
+                        CERROR("Lock manager: waiting for the %s namespace "
+                               "was aborted with %d resources in use. (%d)\n"
+                               "I'm going to try to clean up anyway, but I "
+                               "might require a reboot of this node.\n",
+                               ns->ns_name, atomic_read(&ns->ns_refcount), rc);
+                }
+                CDEBUG(D_DLMTRACE, 
+                       "dlm namespace %s free done waiting\n", ns->ns_name);
+        }
 
         POISON(ns->ns_hash, 0x5a, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
         OBD_VFREE(ns->ns_hash, sizeof(*ns->ns_hash) * RES_HASH_SIZE);
@@ -448,27 +460,23 @@ static struct ldlm_resource *ldlm_resource_new(void)
  * Returns: newly-allocated, referenced, unlocked resource */
 static struct ldlm_resource *
 ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
-                  struct ldlm_res_id name, __u32 type)
+                  struct ldlm_res_id name, ldlm_type_t type)
 {
         struct list_head *bucket;
         struct ldlm_resource *res;
         ENTRY;
 
-        LASSERTF(type >= LDLM_MIN_TYPE && type <= LDLM_MAX_TYPE,
-                 "type: %d", type);
+        LASSERTF(type >= LDLM_MIN_TYPE && type < LDLM_MAX_TYPE,
+                 "type: %d\n", type);
 
         res = ldlm_resource_new();
         if (!res)
                 RETURN(NULL);
 
-        spin_lock(&ns->ns_counter_lock);
-        ns->ns_resources++;
-        spin_unlock(&ns->ns_counter_lock);
-
         l_lock(&ns->ns_lock);
         memcpy(&res->lr_name, &name, sizeof(res->lr_name));
         res->lr_namespace = ns;
-        ns->ns_refcount++;
+        atomic_inc(&ns->ns_refcount);
 
         res->lr_type = type;
         res->lr_most_restr = LCK_NL;
@@ -493,7 +501,7 @@ ldlm_resource_add(struct ldlm_namespace *ns, struct ldlm_resource *parent,
  * Returns: referenced, unlocked ldlm_resource or NULL */
 struct ldlm_resource *
 ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
-                  struct ldlm_res_id name, __u32 type, int create)
+                  struct ldlm_res_id name, ldlm_type_t type, int create)
 {
         struct list_head *bucket, *tmp;
         struct ldlm_resource *res = NULL;
@@ -552,7 +560,7 @@ struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
         LASSERT(res != NULL);
         LASSERT(res != LP_POISON);
         atomic_inc(&res->lr_refcount);
-        CDEBUG(D_INFO, "getref res: %p count: %d\n", res,
+        CDEBUG(D_DLMTRACE, "getref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount));
         return res;
 }
@@ -563,7 +571,7 @@ int ldlm_resource_putref(struct ldlm_resource *res)
         int rc = 0;
         ENTRY;
 
-        CDEBUG(D_INFO, "putref res: %p count: %d\n", res,
+        CDEBUG(D_DLMTRACE, "putref res: %p count: %d\n", res,
                atomic_read(&res->lr_refcount) - 1);
         LASSERT(atomic_read(&res->lr_refcount) > 0);
         LASSERT(atomic_read(&res->lr_refcount) < LI_POISON);
@@ -600,7 +608,6 @@ int ldlm_resource_putref(struct ldlm_resource *res)
                         LBUG();
                 }
 
-                ns->ns_refcount--;
                 list_del_init(&res->lr_hash);
                 list_del_init(&res->lr_childof);
                 if (res->lr_lvb_data)
@@ -609,9 +616,10 @@ int ldlm_resource_putref(struct ldlm_resource *res)
 
                 OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
 
-                spin_lock(&ns->ns_counter_lock);
-                ns->ns_resources--;
-                spin_unlock(&ns->ns_counter_lock);
+                if (atomic_dec_and_test(&ns->ns_refcount)) {
+                        CDEBUG(D_DLMTRACE, "last ref on ns %s\n", ns->ns_name);
+                        wake_up(&ns->ns_refcount_waitq);
+                }
 
                 rc = 1;
                 EXIT;
@@ -674,7 +682,7 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
         struct list_head *tmp;
 
         CDEBUG(level, "--- Namespace: %s (rc: %d, client: %d)\n", ns->ns_name,
-               ns->ns_refcount, ns->ns_client);
+               atomic_read(&ns->ns_refcount), ns->ns_client);
 
         l_lock(&ns->ns_lock);
         if (time_after(jiffies, ns->ns_next_dump)) {

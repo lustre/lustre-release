@@ -418,7 +418,7 @@ void ptlrpc_fail_export(struct obd_export *exp)
          * (request, for example) in addition to the one from the hash table.
          * We don't have such a reference here, so make one. */
         class_export_get(exp);
-        rc = obd_disconnect(exp, 0);
+        rc = obd_disconnect(exp);
         if (rc)
                 CERROR("disconnecting export %p failed: %d\n", exp, rc);
 }

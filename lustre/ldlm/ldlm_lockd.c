@@ -178,7 +178,7 @@ static void waiting_locks_callback(unsigned long unused)
                 lock = list_entry(waiting_locks_list.next, struct ldlm_lock,
                                   l_pending_chain);
 
-                if (lock->l_callback_timeout > jiffies)
+                if (time_after(lock->l_callback_timeout, jiffies))
                         break;
 
                 LDLM_ERROR(lock, "lock callback timer expired: evicting client "
@@ -245,7 +245,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 
         timeout_rounded = round_timeout(lock->l_callback_timeout);
 
-        if (timeout_rounded < waiting_locks_timer.expires ||
+        if (time_before(timeout_rounded, waiting_locks_timer.expires) ||
             !timer_pending(&waiting_locks_timer)) {
                 mod_timer(&waiting_locks_timer, timeout_rounded);
         }
@@ -620,6 +620,21 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
                                   lock->l_handle.h_cookie);
                         GOTO(existing_lock, rc = 0);
                 }
+        }
+
+        if (dlm_req->lock_desc.l_resource.lr_type < LDLM_MIN_TYPE ||
+            dlm_req->lock_desc.l_resource.lr_type >= LDLM_MAX_TYPE) {
+                DEBUG_REQ(D_ERROR, req, "invalid lock request type %d\n",
+                          dlm_req->lock_desc.l_resource.lr_type);
+                GOTO(out, rc = -EFAULT);
+        }
+
+        if (dlm_req->lock_desc.l_req_mode < LCK_EX ||
+            dlm_req->lock_desc.l_req_mode > LCK_NL ||
+            dlm_req->lock_desc.l_req_mode & (dlm_req->lock_desc.l_req_mode-1)) {
+                DEBUG_REQ(D_ERROR, req, "invalid lock request mode %d\n",
+                          dlm_req->lock_desc.l_req_mode);
+                GOTO(out, rc = -EFAULT);
         }
 
         /* The lock's callback data might be set in the policy function */

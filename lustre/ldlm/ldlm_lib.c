@@ -211,7 +211,7 @@ err:
 
 }
 
-int client_obd_cleanup(struct obd_device *obddev, int flags)
+int client_obd_cleanup(struct obd_device *obddev)
 {
         struct client_obd *cli = &obddev->u.cli;
 
@@ -227,7 +227,7 @@ int client_obd_cleanup(struct obd_device *obddev, int flags)
         class_destroy_import(cli->cl_import);
         cli->cl_import = NULL;
 
-        ldlm_put_ref(flags & OBD_OPT_FORCE);
+        ldlm_put_ref(obddev->obd_force);
 
         RETURN(0);
 }
@@ -280,7 +280,7 @@ out_ldlm:
                 obd->obd_namespace = NULL;
 out_disco:
                 cli->cl_conn_count--;
-                class_disconnect(exp, 0);
+                class_disconnect(exp);
         } else {
                 class_export_put(exp);
         }
@@ -289,7 +289,7 @@ out_sem:
         return rc;
 }
 
-int client_disconnect_export(struct obd_export *exp, int failover)
+int client_disconnect_export(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct client_obd *cli = &obd->u.cli;
@@ -335,7 +335,7 @@ int client_disconnect_export(struct obd_export *exp, int failover)
 
         EXIT;
  out_no_disconnect:
-        err = class_disconnect(exp, 0);
+        err = class_disconnect(exp);
         if (!rc && err)
                 rc = err;
  out_sem:
@@ -589,7 +589,7 @@ int target_handle_disconnect(struct ptlrpc_request *req)
 
         /* keep the rq_export around so we can send the reply */
         exp = class_export_get(req->rq_export);
-        req->rq_status = obd_disconnect(exp, 0);
+        req->rq_status = obd_disconnect(exp);
         RETURN(0);
 }
 
@@ -692,6 +692,8 @@ void target_cleanup_recovery(struct obd_device *obd)
         struct list_head *tmp, *n;
         struct ptlrpc_request *req;
 
+        LASSERT(obd->obd_stopping);
+
         spin_lock_bh(&obd->obd_processing_task_lock);
         if (!obd->obd_recovering) {
                 spin_unlock_bh(&obd->obd_processing_task_lock);
@@ -701,7 +703,6 @@ void target_cleanup_recovery(struct obd_device *obd)
         obd->obd_recovering = obd->obd_abort_recovery = 0;
         target_cancel_recovery_timer(obd);
         spin_unlock_bh(&obd->obd_processing_task_lock);
-
 
         list_for_each_safe(tmp, n, &obd->obd_delayed_reply_queue) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
@@ -732,7 +733,7 @@ void target_abort_recovery(void *data)
 
         CERROR("%s: recovery period over; disconnecting unfinished clients.\n",
                obd->obd_name);
-        class_disconnect_stale_exports(obd, 0);
+        class_disconnect_stale_exports(obd);
         abort_recovery_queue(obd);
 
         target_finish_recovery(obd);
@@ -1028,13 +1029,23 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                 LBUG();
         memcpy(saved_req, req, sizeof *saved_req);
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
+        
+        /* Don't race cleanup */
+        spin_lock_bh(&obd->obd_processing_task_lock);
+        if (obd->obd_stopping) {
+                spin_unlock_bh(&obd->obd_processing_task_lock);
+                OBD_FREE(reqmsg, req->rq_reqlen);
+                OBD_FREE(saved_req, sizeof *req);
+                req->rq_status = -ENOTCONN;
+                /* rv is ignored anyhow */
+                return -ENOTCONN;
+        }
         ptlrpc_rs_addref(req->rq_reply_state);  /* +1 ref for saved reply */
         req = saved_req;
         req->rq_reqmsg = reqmsg;
         class_export_get(req->rq_export);
         list_add(&req->rq_list, &obd->obd_delayed_reply_queue);
 
-        spin_lock_bh(&obd->obd_processing_task_lock);
         /* only count the first "replay over" request from each
            export */
         if (req->rq_export->exp_replay_needed) {
@@ -1044,6 +1055,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         recovery_done = (obd->obd_recoverable_clients == 0);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 
+        OBD_RACE(OBD_FAIL_LDLM_RECOV_CLIENTS);
         if (recovery_done) {
                 spin_lock_bh(&obd->obd_processing_task_lock);
                 obd->obd_recovering = obd->obd_abort_recovery = 0;

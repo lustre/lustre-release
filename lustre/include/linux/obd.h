@@ -485,7 +485,8 @@ struct obd_device {
         int obd_minor;
         unsigned int obd_attached:1, obd_set_up:1, obd_recovering:1,
                 obd_abort_recovery:1, obd_replayable:1, obd_no_transno:1,
-                obd_no_recov:1, obd_stopping:1, obd_starting:1;
+                obd_no_recov:1, obd_stopping:1, obd_starting:1, 
+                obd_force:1, obd_fail:1;
         atomic_t obd_refcount;
         wait_queue_head_t obd_refcount_waitq;
         struct proc_dir_entry *obd_proc_entry;
@@ -499,7 +500,7 @@ struct obd_device {
         struct fsfilt_operations *obd_fsops;
         spinlock_t              obd_osfs_lock;
         struct obd_statfs       obd_osfs;
-        unsigned long           obd_osfs_age;
+        unsigned long           obd_osfs_age;   /* jiffies */
         struct obd_run_ctxt     obd_ctxt;
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
         struct obd_device       *obd_observer;
@@ -560,12 +561,12 @@ struct obd_ops {
         int (*o_attach)(struct obd_device *dev, obd_count len, void *data);
         int (*o_detach)(struct obd_device *dev);
         int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
-        int (*o_precleanup)(struct obd_device *dev, int flags);
-        int (*o_cleanup)(struct obd_device *dev, int flags);
+        int (*o_precleanup)(struct obd_device *dev);
+        int (*o_cleanup)(struct obd_device *dev);
         int (*o_postrecov)(struct obd_device *dev);
         int (*o_connect)(struct lustre_handle *conn, struct obd_device *src,
                          struct obd_uuid *cluuid);
-        int (*o_disconnect)(struct obd_export *exp, int flags);
+        int (*o_disconnect)(struct obd_export *exp);
 
         int (*o_statfs)(struct obd_device *obd, struct obd_statfs *osfs,
                         unsigned long max_age);

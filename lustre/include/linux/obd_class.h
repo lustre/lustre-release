@@ -84,6 +84,7 @@ int class_attach(struct lustre_cfg *lcfg);
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg);
+void class_decref(struct obd_device *obd);
 
 /* Passed as data param to class_config_parse_llog */
 struct config_llog_instance {
@@ -137,9 +138,9 @@ struct obd_type *class_get_type(char *name);
 void class_put_type(struct obd_type *type);
 int class_connect(struct lustre_handle *conn, struct obd_device *obd,
                   struct obd_uuid *cluuid);
-int class_disconnect(struct obd_export *exp, int failover);
-void class_disconnect_exports(struct obd_device *obddev, int failover);
-void class_disconnect_stale_exports(struct obd_device *obddev, int failover);
+int class_disconnect(struct obd_export *exp);
+void class_disconnect_exports(struct obd_device *obddev);
+void class_disconnect_stale_exports(struct obd_device *obddev);
 /* generic operations shared by various OBD types */
 int class_multi_setup(struct obd_device *obddev, uint32_t len, void *data);
 int class_multi_cleanup(struct obd_device *obddev);
@@ -166,22 +167,6 @@ void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj);
 do {                                                            \
         if (!(obd)) {                                           \
                 CERROR("NULL device\n");                        \
-                RETURN(-ENODEV);                                \
-        }                                                       \
-} while (0)
-
-#define OBD_CHECK_DEV_STOPPING(obd)                             \
-do {                                                            \
-        OBD_CHECK_DEV(obd);                                     \
-        if (!(obd)->obd_set_up) {                               \
-                CERROR("Device %d not setup\n",                 \
-                       (obd)->obd_minor);                       \
-                RETURN(-ENODEV);                                \
-        }                                                       \
-                                                                \
-        if (!(obd)->obd_stopping) {                             \
-                CERROR("Device %d not stopping\n",              \
-                       (obd)->obd_minor);                       \
                 RETURN(-ENODEV);                                \
         }                                                       \
 } while (0)
@@ -292,7 +277,7 @@ static inline int obd_setup(struct obd_device *obd, int datalen, void *data)
         RETURN(rc);
 }
 
-static inline int obd_precleanup(struct obd_device *obd, int flags)
+static inline int obd_precleanup(struct obd_device *obd)
 {
         int rc;
         ENTRY;
@@ -300,20 +285,20 @@ static inline int obd_precleanup(struct obd_device *obd, int flags)
         OBD_CHECK_OP(obd, precleanup, 0);
         OBD_COUNTER_INCREMENT(obd, precleanup);
 
-        rc = OBP(obd, precleanup)(obd, flags);
+        rc = OBP(obd, precleanup)(obd);
         RETURN(rc);
 }
 
-static inline int obd_cleanup(struct obd_device *obd, int flags)
+static inline int obd_cleanup(struct obd_device *obd)
 {
         int rc;
         ENTRY;
-
-        OBD_CHECK_DEV_STOPPING(obd);
+        
+        OBD_CHECK_DEV(obd);                                     
         OBD_CHECK_OP(obd, cleanup, 0);
         OBD_COUNTER_INCREMENT(obd, cleanup);
 
-        rc = OBP(obd, cleanup)(obd, flags);
+        rc = OBP(obd, cleanup)(obd);
         RETURN(rc);
 }
 
@@ -483,7 +468,7 @@ static inline int obd_connect(struct lustre_handle *conn,
         RETURN(rc);
 }
 
-static inline int obd_disconnect(struct obd_export *exp, int flags)
+static inline int obd_disconnect(struct obd_export *exp)
 {
         int rc;
         ENTRY;
@@ -491,7 +476,7 @@ static inline int obd_disconnect(struct obd_export *exp, int flags)
         EXP_CHECK_OP(exp, disconnect);
         OBD_COUNTER_INCREMENT(exp->exp_obd, disconnect);
 
-        rc = OBP(exp->exp_obd, disconnect)(exp, flags);
+        rc = OBP(exp->exp_obd, disconnect)(exp);
         RETURN(rc);
 }
 

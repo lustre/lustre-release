@@ -42,15 +42,13 @@ int llog_setup(struct obd_device *obd, int index, struct obd_device *disk_obd,
 
         obd->obd_llog_ctxt[index] = ctxt;
         ctxt->loc_obd = obd;
-        ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
+        ctxt->loc_exp = disk_obd->obd_self_export;
         ctxt->loc_idx = index;
         ctxt->loc_logops = op;
         sema_init(&ctxt->loc_sem, 1);
 
         if (op->lop_setup)
                 rc = op->lop_setup(obd, index, disk_obd, count, logid);
-        if (ctxt && rc)
-                OBD_FREE(ctxt, sizeof(*ctxt));
 
         RETURN(rc);
 }
@@ -61,13 +59,15 @@ int llog_cleanup(struct llog_ctxt *ctxt)
         int rc = 0;
         ENTRY;
 
-        LASSERT(ctxt);
-
+        if (!ctxt) {
+                CERROR("No ctxt\n");
+                RETURN(-ENODEV);
+        }
+        
         if (CTXTP(ctxt, cleanup))
                 rc = CTXTP(ctxt, cleanup)(ctxt);
 
         ctxt->loc_obd->obd_llog_ctxt[ctxt->loc_idx] = NULL;
-        class_export_put(ctxt->loc_exp);
         ctxt->loc_exp = NULL;
         OBD_FREE(ctxt, sizeof(*ctxt));
 
@@ -97,7 +97,11 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         int rc;
         ENTRY;
 
-        LASSERT(ctxt);
+        if (!ctxt) {
+                CERROR("No ctxt\n");
+                RETURN(-ENODEV);
+        }
+        
         CTXT_CHECK_OP(ctxt, add, -EOPNOTSUPP);
 
         rc = CTXTP(ctxt, add)(ctxt, rec, lsm, logcookies, numcookies);
@@ -111,7 +115,11 @@ int llog_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
         int rc;
         ENTRY;
 
-        LASSERT(ctxt);
+        if (!ctxt) {
+                CERROR("No ctxt\n");
+                RETURN(-ENODEV);
+        }
+        
         CTXT_CHECK_OP(ctxt, cancel, -EOPNOTSUPP);
         rc = CTXTP(ctxt, cancel)(ctxt, lsm, count, cookies, flags);
         RETURN(rc);
@@ -149,7 +157,6 @@ static int cat_cancel_cb(struct llog_handle *cathandle,
                 rc = llog_destroy(loghandle);
                 if (rc)
                         CERROR("failure destroying log in postsetup: %d\n", rc);
-                LASSERT(rc == 0);
 
                 index = loghandle->u.phd.phd_cookie.lgc_index;
                 llog_free_handle(loghandle);
@@ -225,7 +232,7 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
         ENTRY;
 
         if (!ctxt)
-                return 0;
+                RETURN(0);
 
         cathandle = ctxt->loc_handle;
         if (cathandle) {
@@ -240,7 +247,6 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
                                 if (rc)
                                         CERROR("failure destroying log during "
                                                "cleanup: %d\n", rc);
-                                LASSERT(rc == 0);
 
                                 index = loghandle->u.phd.phd_cookie.lgc_index;
                                 llog_free_handle(loghandle);
@@ -256,7 +262,7 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
                 }
                 llog_cat_put(ctxt->loc_handle);
         }
-        return 0;
+        RETURN(0);
 }
 EXPORT_SYMBOL(llog_obd_origin_cleanup);
 

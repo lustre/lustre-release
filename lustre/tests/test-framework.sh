@@ -90,11 +90,14 @@ zconf_mount() {
     do_node $client mkdir $mnt 2> /dev/null || :
 
     if [ -x /sbin/mount.lustre ] ; then
-	do_node $client mount -t lustre -o nettype=$NETTYPE `facet_active_host mds`:/mds_svc/client_facet $mnt || return 1
+	do_node $client mount -t lustre -o nettype=$NETTYPE,$MOUNTOPT \
+		`facet_active_host mds`:/mds_svc/client_facet $mnt || return 1
     else
-       # this is so cheating
-       do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG  > /dev/null || return 2
-       do_node $client $LLMOUNT -o nettype=$NETTYPE `facet_active_host mds`:/mds_svc/client_facet $mnt || return 4
+	# this is so cheating
+	do_node $client $LCONF --nosetup --node client_facet $XMLCONFIG > \
+		/dev/null || return 2
+	do_node $client $LLMOUNT -o nettype=$NETTYPE,$MOUNTOPT \
+		`facet_active_host mds`:/mds_svc/client_facet $mnt || return 4
     fi
 
     [ -d /r ] && $LCTL modules > /r/tmp/ogdb-`hostname`
@@ -123,6 +126,8 @@ reboot_facet() {
     facet=$1
     if [ "$FAILURE_MODE" = HARD ]; then
        $POWER_UP `facet_active_host $facet`
+    else
+       sleep 10
     fi
 }
 
@@ -322,14 +327,16 @@ add_mds() {
     shift
     rm -f ${facet}active
     add_facet $facet
-    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc --fstype $FSTYPE $*
+    do_lmc --add mds --node ${facet}_facet --mds ${facet}_svc \
+    	--fstype $FSTYPE $* $MDSOPT
 }
 
 add_mdsfailover() {
     facet=$1
     shift
     add_facet ${facet}failover  --lustre_upcall $UPCALL
-    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc --fstype $FSTYPE $*
+    do_lmc --add mds  --node ${facet}failover_facet --mds ${facet}_svc \
+    	--fstype $FSTYPE $* $MDSOPT
 }
 
 add_ost() {
@@ -337,22 +344,23 @@ add_ost() {
     shift
     rm -f ${facet}active
     add_facet $facet
-    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc --fstype $FSTYPE $*
+    do_lmc --add ost --node ${facet}_facet --ost ${facet}_svc \
+    	--fstype $FSTYPE $* $OSTOPT
 }
 
 add_ostfailover() {
     facet=$1
     shift
     add_facet ${facet}failover
-    do_lmc --add ost --failover --node ${facet}failover_facet --ost ${facet}_svc --fstype $FSTYPE $*
+    do_lmc --add ost --failover --node ${facet}failover_facet \
+    	--ost ${facet}_svc --fstype $FSTYPE $* $OSTOPT
 }
 
 add_lov() {
     lov=$1
     mds_facet=$2
     shift; shift
-    do_lmc --add lov --mds ${mds_facet}_svc --lov $lov $*
-    
+    do_lmc --add lov --mds ${mds_facet}_svc --lov $lov $* $LOVOPT
 }
 
 add_client() {
@@ -360,8 +368,7 @@ add_client() {
     mds=$2
     shift; shift
     add_facet $facet --lustre_upcall $UPCALL
-    do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $*
-
+    do_lmc --add mtpt --node ${facet}_facet --mds ${mds}_svc $* $CLIENTOPT
 }
 
 

@@ -240,9 +240,9 @@ out_root:
         if (root)
                 iput(root);
 out_osc:
-        obd_disconnect(sbi->ll_osc_exp, 0);
+        obd_disconnect(sbi->ll_osc_exp);
 out_mdc:
-        obd_disconnect(sbi->ll_mdc_exp, 0);
+        obd_disconnect(sbi->ll_mdc_exp);
 out:
         lprocfs_unregister_mountpoint(sbi);
         RETURN(err);
@@ -275,11 +275,11 @@ void lustre_dump_dentry(struct dentry *dentry, int recur)
                 subdirs++;
 
         CERROR("dentry %p dump: name=%.*s parent=%.*s (%p), inode=%p, count=%u,"
-               " flags=0x%x, vfs_flags=0x%lx, fsdata=%p, %d subdirs\n", dentry,
+               " flags=0x%x, vfs_flags=0x%x, fsdata=%p, %d subdirs\n", dentry,
                dentry->d_name.len, dentry->d_name.name,
                dentry->d_parent->d_name.len, dentry->d_parent->d_name.name,
                dentry->d_parent, dentry->d_inode, atomic_read(&dentry->d_count),
-               dentry->d_flags, dentry->d_vfs_flags, dentry->d_fsdata, subdirs);
+               dentry->d_flags, dentry->d_flags, dentry->d_fsdata, subdirs);
         if (dentry->d_inode != NULL)
                 lustre_dump_inode(dentry->d_inode);
 
@@ -301,7 +301,7 @@ void lustre_common_put_super(struct super_block *sb)
         ll_close_thread_shutdown(sbi->ll_lcq);
 
         list_del(&sbi->ll_conn_chain);
-        obd_disconnect(sbi->ll_osc_exp, 0);
+        obd_disconnect(sbi->ll_osc_exp);
 
         lprocfs_unregister_mountpoint(sbi);
         if (sbi->ll_proc_root) {
@@ -309,7 +309,7 @@ void lustre_common_put_super(struct super_block *sb)
                 sbi->ll_proc_root = NULL;
         }
 
-        obd_disconnect(sbi->ll_mdc_exp, 0);
+        obd_disconnect(sbi->ll_mdc_exp);
 
         // We do this to get rid of orphaned dentries. That is not really trw.
         hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
@@ -398,6 +398,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 {
         sema_init(&lli->lli_open_sem, 1);
         sema_init(&lli->lli_size_sem, 1);
+        lli->lli_size_pid = 0;
         lli->lli_flags = 0;
         lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
         spin_lock_init(&lli->lli_lock);
@@ -546,11 +547,22 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
          */
         rc = class_config_dump_llog(ctxt, profile, cfg);
 #endif
-        if (rc) {
+        switch (rc) {
+        case 0:
+                break;
+        case -EINVAL:
+                LCONSOLE_ERROR("%s: The configuration '%s' could not be read "
+                               "from the MDS.  Make sure this client and the "
+                               "MDS are running compatible versions of "
+                               "Lustre.\n",
+                               obd->obd_name, profile);
+                /* fall through */
+        default:
                 CERROR("class_config_parse_llog failed: rc = %d\n", rc);
+                break;
         }
 
-        err = obd_disconnect(exp, 0);
+        err = obd_disconnect(exp);
 
 out_cleanup:
         LCFG_INIT(lcfg, LCFG_CLEANUP, name);
@@ -1036,10 +1048,12 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(rc);
 
                 down(&lli->lli_size_sem);
+                lli->lli_size_pid = current->pid;
                 rc = vmtruncate(inode, attr->ia_size);
                 // if vmtruncate returned 0, then ll_truncate dropped _size_sem
                 if (rc != 0) {
                         LASSERT(atomic_read(&lli->lli_size_sem.count) <= 0);
+                        lli->lli_size_pid = 0;
                         up(&lli->lli_size_sem);
                 }
 

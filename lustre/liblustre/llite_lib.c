@@ -43,7 +43,7 @@
 #undef LIST_HEAD
 
 #include <portals/api-support.h> /* needed for ptpctl.h */
-#include <portals/ptlctl.h>	/* needed for parse_dump */
+#include <portals/ptlctl.h>     /* needed for parse_dump */
 #include <procbridge.h>
 
 #include "llite_lib.h"
@@ -183,14 +183,14 @@ int lib_ioctl_nalcmd(int dev_id, int opc, void * ptr)
                 }
         }
 
-	return (0);
+        return (0);
 }
 
 int lib_ioctl(int dev_id, int opc, void * ptr)
 {
         int rc;
 
-	if (dev_id == OBD_DEV_ID) {
+        if (dev_id == OBD_DEV_ID) {
                 struct obd_ioctl_data *ioc = ptr;
 
                 //XXX hack!!!
@@ -204,8 +204,8 @@ int lib_ioctl(int dev_id, int opc, void * ptr)
 
                 if (rc)
                         return rc;
-	}
-	return (0);
+        }
+        return (0);
 }
 
 int lllib_init(char *dumpfile)
@@ -323,7 +323,7 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
                 CERROR("class_config_parse_llog failed: rc = %d\n", rc);
         }
 
-        err = obd_disconnect(exp, 0);
+        err = obd_disconnect(exp);
 
 out_cleanup:
         LCFG_INIT(lcfg, LCFG_CLEANUP, name);
@@ -410,7 +410,7 @@ void __liblustre_setup_(void)
         char *root_path = "/";
         unsigned mntflgs = 0;
 
-	int err;
+        int err;
 
         /* consider tha case of starting multiple liblustre instances
          * at a same time on single node.
@@ -419,10 +419,10 @@ void __liblustre_setup_(void)
 
         signal(SIGUSR1, sighandler_USR1);
 
-	lustre_path = getenv(ENV_LUSTRE_MNTPNT);
-	if (!lustre_path) {
+        lustre_path = getenv(ENV_LUSTRE_MNTPNT);
+        if (!lustre_path) {
                 lustre_path = "/mnt/lustre";
-	}
+        }
 
         target = getenv(ENV_LUSTRE_MNTTGT);
         if (!target) {
@@ -454,38 +454,38 @@ void __liblustre_setup_(void)
                         obd_timeout);
         }
 
-	if (_sysio_init() != 0) {
-		perror("init sysio");
-		exit(1);
-	}
+        if (_sysio_init() != 0) {
+                perror("init sysio");
+                exit(1);
+        }
 
         /* cygwin don't need native driver */
 #ifndef __CYGWIN__
         _sysio_native_init();
 #endif
 
-	err = _sysio_mount_root(root_path, root_driver, mntflgs, NULL);
-	if (err) {
-		perror(root_driver);
-		exit(1);
-	}
+        err = _sysio_mount_root(root_path, root_driver, mntflgs, NULL);
+        if (err) {
+                perror(root_driver);
+                exit(1);
+        }
 
 #if 1
-	portal_debug = 0;
-	portal_subsystem_debug = 0;
+        portal_debug = 0;
+        portal_subsystem_debug = 0;
 #endif
-	err = lllib_init(dumpfile);
-	if (err) {
-		perror("init llite driver");
-		exit(1);
-	}	
+        err = lllib_init(dumpfile);
+        if (err) {
+                perror("init llite driver");
+                exit(1);
+        }       
 
         err = mount("/", lustre_path, lustre_driver, mntflgs, NULL);
-	if (err) {
-		errno = -err;
-		perror(lustre_driver);
-		exit(1);
-	}
+        if (err) {
+                errno = -err;
+                perror(lustre_driver);
+                exit(1);
+        }
 
 #if 0
         __sysio_hook_sys_enter = llu_check_request;
@@ -495,6 +495,6 @@ void __liblustre_setup_(void)
 
 void __liblustre_cleanup_(void)
 {
-	_sysio_shutdown();
+        _sysio_shutdown();
         PtlFini();
 }

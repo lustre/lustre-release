@@ -123,7 +123,7 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 if (rc) {
                         CERROR("Target %s register_observer error %d\n",
                                tgt_uuid->uuid, rc);
-                        obd_disconnect(tgts->ltd_exp, 0);
+                        obd_disconnect(tgts->ltd_exp);
                         GOTO(out_disc, rc);
                 }
 
@@ -143,16 +143,16 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 tgts->active = 0;
                 /* save for CERROR below; (we know it's terminated) */
                 uuid = tgts->uuid;
-                rc2 = obd_disconnect(tgts->ltd_exp, 0);
+                rc2 = obd_disconnect(tgts->ltd_exp);
                 if (rc2)
                         CERROR("error: LOV target %s disconnect on OST idx %d: "
                                "rc = %d\n", uuid.uuid, i, rc2);
         }
-        class_disconnect(exp, 0);
+        class_disconnect(exp);
         RETURN (rc);
 }
 
-static int lov_disconnect(struct obd_export *exp, int flags)
+static int lov_disconnect(struct obd_export *exp)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
@@ -190,7 +190,7 @@ static int lov_disconnect(struct obd_export *exp, int flags)
                 obd_register_observer(osc_exp->exp_obd, NULL);
 
                 spin_unlock(&lov->lov_lock);
-                rc = obd_disconnect(osc_exp, flags);
+                rc = obd_disconnect(osc_exp);
                 spin_lock(&lov->lov_lock);
                 if (rc) {
                         if (lov->tgts[i].active) {
@@ -207,7 +207,7 @@ static int lov_disconnect(struct obd_export *exp, int flags)
         spin_unlock(&lov->lov_lock);
 
  out_local:
-        rc = class_disconnect(exp, 0);
+        rc = class_disconnect(exp);
         RETURN(rc);
 }
 
@@ -387,11 +387,12 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
         RETURN(0);
 }
 
-static int lov_cleanup(struct obd_device *obd, int flags)
+static int lov_cleanup(struct obd_device *obd)
 {
         struct lov_obd *lov = &obd->u.lov;
 
         lprocfs_obd_cleanup(obd);
+        obd_llog_finish(obd, 0);
         OBD_FREE(lov->tgts, lov->bufsize);
 
         RETURN(0);
@@ -1668,7 +1669,6 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                         RETURN(-EINVAL);
                 for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                         /* initialize all OSCs, even inactive ones */
-
                         err = obd_set_info(lov->tgts[i].ltd_exp,
                                           keylen, key, sizeof(obd_id),
                                           ((obd_id*)val) + i);
