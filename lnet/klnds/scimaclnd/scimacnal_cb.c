@@ -208,7 +208,7 @@ kscimacnal_sendmsg(nal_cb_t        *nal,
         unsigned long   physaddr;
         
 
-        CDEBUG(D_NET, "sending %d bytes from %p/%p to nid 0x%Lx niov: %d\n",
+        CDEBUG(D_NET, "sending %d bytes from %p/%p to nid "LPX64" niov: %d\n",
                payload_len, payload_iov, payload_kiov, nid, payload_niov);
 
         /* Basic sanity checks */

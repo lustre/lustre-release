@@ -595,6 +595,7 @@ extern struct prof_ent prof_ents[MAX_PROFS];
 #endif /* PORTALS_PROFILING */
 
 /* debug.c */
+char *portals_nid2str(int nal, ptl_nid_t nid, char *str);
 void portals_run_upcall(char **argv);
 void portals_run_lbug_upcall(char * file, const char *fn, const int line);
 void portals_debug_dumplog(void);
@@ -1042,6 +1043,8 @@ extern ptl_handle_ni_t  ktoenal_ni;
 extern ptl_handle_ni_t  kgmnal_ni;
 extern ptl_handle_ni_t  kscimacnal_ni;
 #endif
+
+#define PTL_NALFMT_SIZE         16
 
 #define NAL_MAX_NR (NAL_ENUM_END_MARKER - 1)
 

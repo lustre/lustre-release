@@ -29,7 +29,6 @@
 #include <linux/kmod.h>
 #include <linux/notifier.h>
 #include <linux/kernel.h>
-#include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/string.h>
 #include <linux/stat.h>
@@ -920,8 +919,30 @@ void portals_run_lbug_upcall(char *file, const char *fn, const int line)
         portals_run_upcall (argv);
 }
 
+char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
+{
+        switch(nal){
+        case TCPNAL:
+                /* userspace NAL */
+        case SOCKNAL:
+                sprintf(str, "%u:%d.%d.%d.%d", (__u32)(nid >> 32),
+                        HIPQUAD(nid));
+                break;
+        case QSWNAL:
+        case GMNAL:
+        case TOENAL:
+        case SCIMACNAL:
+                sprintf(str, "%u:%u", (__u32)(nid >> 32), (__u32)nid);
+                break;
+        default:
+                return NULL;
+        }
+        return str;
+}
+
 EXPORT_SYMBOL(portals_debug_dumplog);
 EXPORT_SYMBOL(portals_debug_msg);
 EXPORT_SYMBOL(portals_debug_set_level);
 EXPORT_SYMBOL(portals_run_upcall);
 EXPORT_SYMBOL(portals_run_lbug_upcall);
+EXPORT_SYMBOL(portals_nid2str);

@@ -123,7 +123,7 @@ static nal_t *kscimacnal_init(int interface, ptl_pt_index_t  ptl_size,
 {
         int     nnids = 512; /* FIXME: Need ScaMac funktion to get #nodes */
 
-        CDEBUG(D_NET, "calling lib_init with nid 0x%Lx nnids %d\n", kscimacnal_data.ksci_nid, nnids);
+        CDEBUG(D_NET, "calling lib_init with nid "LPX64" nnids %d\n", kscimacnal_data.ksci_nid, nnids);
         lib_init(&kscimacnal_lib, kscimacnal_data.ksci_nid, 0, nnids,ptl_size, ac_size); 
         return &kscimacnal_api;
 }

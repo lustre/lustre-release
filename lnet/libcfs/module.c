@@ -326,6 +326,7 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
         int err = 0;
         char buf[1024];
         struct portal_ioctl_data *data;
+        char str[PTL_NALFMT_SIZE];
 
         ENTRY;
 
@@ -379,8 +380,9 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
         case IOC_PORTAL_PING: {
                 void (*ping)(struct portal_ioctl_data *);
 
-                CDEBUG(D_IOCTL, "doing %d pings to nid "LPU64"\n",
-                       data->ioc_count, data->ioc_nid);
+                CDEBUG(D_IOCTL, "doing %d pings to nid "LPX64" (%s)\n",
+                       data->ioc_count, data->ioc_nid,
+                       portals_nid2str(data->ioc_nal, data->ioc_nid, str));
                 ping = PORTAL_SYMBOL_GET(kping_client);
                 if (!ping)
                         CERROR("PORTAL_SYMBOL_GET failed\n");
@@ -434,7 +436,7 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                 const ptl_handle_ni_t *nip;
                 ptl_process_id_t       pid;
 
-                CDEBUG (D_IOCTL, "Getting nid [%d]\n", data->ioc_nal);
+                CDEBUG (D_IOCTL, "Getting nid for nal [%d]\n", data->ioc_nal);
 
                 nip = kportal_get_ni (data->ioc_nal);
                 if (nip == NULL)
