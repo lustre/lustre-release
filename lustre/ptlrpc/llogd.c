@@ -5,7 +5,7 @@
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
- *
+n *
  *   Lustre is free software; you can redistribute it and/or
  *   modify it under the terms of version 2 of the GNU General Public
  *   License as published by the Free Software Foundation.
@@ -42,7 +42,7 @@
 
 #ifdef __KERNEL__
 
-int llogd_create(struct ptlrpc_request *req)
+int llog_origin_handle_create(struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
@@ -50,12 +50,11 @@ int llogd_create(struct ptlrpc_request *req)
         struct llogd_body *body;
         struct obd_run_ctxt saved;
         struct llog_logid *logid = NULL;
+        struct llog_obd_ctxt *ctxt;
 	char * name = NULL;
         int size = sizeof (*body);
 	int rc, rc2;
 	ENTRY;
-
-        LASSERT(obd->obd_log_exp != NULL);
 
         body = lustre_swab_reqbuf(req, 0, sizeof(*body),
                                  lustre_swab_llogd_body);
@@ -77,7 +76,8 @@ int llogd_create(struct ptlrpc_request *req)
 
 	push_ctxt(&saved, &obd->obd_ctxt, NULL);
         
-	rc = llog_create(obd, &loghandle, logid, name);
+        ctxt = obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT];
+	rc = llog_create(ctxt, &loghandle, logid, name);
 	if (rc)
 		GOTO(out_pop, rc);
 
@@ -98,21 +98,20 @@ out:
 	RETURN(rc);
 }
 
-int llogd_next_block(struct ptlrpc_request *req)
+int llog_origin_handle_next_block(struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
 	struct llog_handle  *loghandle;
         struct llogd_body *body;
         struct obd_run_ctxt saved;
+        struct llog_obd_ctxt *ctxt;
         __u8 *buf;
         void * ptr;
         int size[] = {sizeof (*body),
                       LLOG_CHUNK_SIZE};
 	int rc, rc2;
 	ENTRY;
-
-        LASSERT(obd->obd_log_exp != NULL);
 
 	body = lustre_swab_reqbuf(req, 0, sizeof(*body),
 				  lustre_swab_llogd_body);
@@ -127,7 +126,8 @@ int llogd_next_block(struct ptlrpc_request *req)
 
 	push_ctxt(&saved, &obd->obd_ctxt, NULL);
 
-	rc = llog_create(obd, &loghandle, &body->lgd_logid, NULL);
+        ctxt = obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT];
+	rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
 	if (rc)
 		GOTO(out_pop, rc);
 
@@ -165,7 +165,7 @@ out:
 	RETURN(rc);
 }
 
-int llogd_read_header(struct ptlrpc_request *req)
+int llog_origin_handle_read_header(struct ptlrpc_request *req)
 {
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
@@ -173,12 +173,11 @@ int llogd_read_header(struct ptlrpc_request *req)
         struct llogd_body *body;
         struct llog_log_hdr *hdr;
         struct obd_run_ctxt saved;
+        struct llog_obd_ctxt *ctxt;
         __u8 *buf;
         int size[] = {sizeof (*hdr)};
 	int rc, rc2;
 	ENTRY;
-
-        LASSERT(obd->obd_log_exp != NULL);
 
 	body = lustre_swab_reqbuf(req, 0, sizeof(*body),
 				  lustre_swab_llogd_body);
@@ -193,7 +192,8 @@ int llogd_read_header(struct ptlrpc_request *req)
 
 	push_ctxt(&saved, &obd->obd_ctxt, NULL);
 
-	rc = llog_create(obd, &loghandle, &body->lgd_logid, NULL);
+        ctxt = obd->obd_llog_ctxt[LLOG_CONFIG_ORIG_CTXT];
+	rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
 	if (rc)
 		GOTO(out_pop, rc);
 
@@ -223,7 +223,7 @@ out:
 	RETURN(rc);
 }
 
-int llogd_close(struct ptlrpc_request *req)
+int llog_origin_handle_close(struct ptlrpc_request *req)
 {
 	int rc;
 
@@ -235,9 +235,10 @@ int llogd_close(struct ptlrpc_request *req)
 
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
-int llogd_client_create(struct obd_device *obd, struct llog_handle **res,
+int llog_client_create(struct llog_obd_ctxt *ctxt, struct llog_handle **res,
                             struct llog_logid *logid, char *name)
 {
+        struct obd_device *obd = ctxt->loc_obd;
         struct client_obd *cli = &obd->u.cli;
         struct obd_import *imp = cli->cl_import;
         struct llogd_body req_body;
@@ -266,7 +267,7 @@ int llogd_client_create(struct obd_device *obd, struct llog_handle **res,
                 bufcount++;
         }
 
-        req = ptlrpc_prep_req(imp, LLOGD_CREATE, bufcount, size, tmp);
+        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_CREATE, bufcount, size, tmp);
         if (!req)
                 GOTO(err_free, rc = -ENOMEM);
 
@@ -284,11 +285,12 @@ int llogd_client_create(struct obd_device *obd, struct llog_handle **res,
 
         handle->lgh_id = body->lgd_logid;
         handle->lgh_obd = obd;
+        handle->lgh_ctxt = ctxt;
 
 out:
         if (req)
                 ptlrpc_req_finished(req);
-        RETURN(0);
+        RETURN(rc);
 
 err_free:
         llog_free_handle(handle);
@@ -302,7 +304,7 @@ struct obd_import *llog_lgh2imp(struct llog_handle *lgh)
         return cli->cl_import;
 }
 
-int llogd_client_next_block(struct llog_handle *loghandle, 
+int llog_client_next_block(struct llog_handle *loghandle, 
                                          int *cur_idx, int next_idx,
                                          __u64 *cur_offset, void *buf, int len)
 {
@@ -315,7 +317,7 @@ int llogd_client_next_block(struct llog_handle *loghandle,
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LLOGD_NEXT_BLOCK, 1, &size, NULL);
+        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_NEXT_BLOCK, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
         
@@ -357,7 +359,7 @@ out:
 }
 
 
-int llogd_client_read_header(struct llog_handle *handle)
+int llog_client_read_header(struct llog_handle *handle)
 {
         struct obd_import *imp = llog_lgh2imp(handle);
         struct ptlrpc_request *req = NULL;
@@ -368,7 +370,7 @@ int llogd_client_read_header(struct llog_handle *handle)
         int rc;
         ENTRY;
 
-        req = ptlrpc_prep_req(imp, LLOGD_READ_HEADER, 1, &size, NULL);
+        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_READ_HEADER, 1, &size, NULL);
         if (!req)
                 GOTO(out, rc = -ENOMEM);
         
@@ -394,7 +396,7 @@ out:
         RETURN(rc);
 }
 
-int llogd_client_close(struct llog_handle *handle)
+int llog_client_close(struct llog_handle *handle)
 {
         int rc = 0;
 
@@ -402,35 +404,39 @@ int llogd_client_close(struct llog_handle *handle)
 }
 
 
-struct llog_operations llogd_client_ops = {
-        lop_next_block:  llogd_client_next_block,
-        lop_read_header: llogd_client_read_header,
-        lop_create:      llogd_client_create,
-        lop_close:       llogd_client_close,
+struct llog_operations llog_client_ops = {
+        lop_next_block:  llog_client_next_block,
+        lop_read_header: llog_client_read_header,
+        lop_create:      llog_client_create,
+        lop_close:       llog_client_close,
 };
 
 #else /* !__KERNEL__ */
 
-int llogd_client_create(struct obd_device *obd, struct llog_handle **res,
-                            struct llog_logid *logid, char *name)
-{
-        return 0;
-}
-int llogd_client_close(struct llog_handle *handle)
-{
-        return 0;
-}
-int llogd_client_next_block(struct llog_handle *loghandle, 
+int llog_client_next_block(struct llog_handle *loghandle, 
                                          int *cur_idx, int next_idx,
                                          __u64 *cur_offset, void *buf, int len)
 {
         return 0;
 }
+int llog_client_read_header(struct llog_handle *handle)
+{
+        return 0;
+}
+int llog_client_create(struct llog_obd_ctxt *ctxt, struct llog_handle **res,
+                            struct llog_logid *logid, char *name)
+{
+        return 0;
+}
+int llog_client_close(struct llog_handle *handle)
+{
+        return 0;
+}
 
-struct llog_operations llogd_client_ops = {
-        lop_next_block:  llogd_client_next_block,
-        lop_read_header: NULL,
-        lop_create:      llogd_client_create,
-        lop_close:       llogd_client_close,
+struct llog_operations llog_client_ops = {
+        lop_next_block:  llog_client_next_block,
+        lop_read_header: llog_client_read_header,
+        lop_create:      llog_client_create,
+        lop_close:       llog_client_close,
 };
 #endif

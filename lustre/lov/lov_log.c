@@ -54,18 +54,17 @@
 
 #ifdef __KERNEL__
 
-int lov_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
-                   int index, int count ,struct llog_logid *logids)
+#if 0
+static int lov_logop_cleanup(struct llog_obd_ctxt *ctxt)
 {
-        struct lov_obd *lov = &obd->u.lov;
+        struct lov_obd *lov = &ctxt->loc_obd->u.lov;
         int i, rc = 0;
-        ENTRY;
 
-        LASSERT(lov->desc.ld_tgt_count  == count);
+        ENTRY;
         for (i = 0; i < lov->desc.ld_tgt_count; i++) {
                 struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
-                child->obd_log_exp = disk_obd->obd_log_exp;
-                rc = obd_llog_setup(child, disk_obd, index, 1, logids + i);
+                struct llog_obd_ctxt *cctxt = child->obd_llog_ctxt[ctxt->loc_idx];
+                rc = llog_cleanup(cctxt);
                 if (rc) {
                         CERROR("error lov_llog_open %d\n", i);
                         break;
@@ -73,34 +72,18 @@ int lov_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
         }
         RETURN(rc);
 }
-
-int lov_llog_cleanup(struct obd_device *obd)
-{
-        struct lov_obd *lov = &obd->u.lov;
-        int i, rc = 0;
-
-        ENTRY;
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
-                rc = obd_llog_cleanup(child);
-                CERROR("error lov_llog_open %d\n", i);
-                if (rc) 
-                        break;
-        }
-        RETURN(rc);
-}
+#endif
 
 /* Add log records for each OSC that this object is striped over, and return
  * cookies for each one.  We _would_ have nice abstraction here, except that
  * we need to keep cookies in stripe order, even if some are NULL, so that
  * the right cookies are passed back to the right OSTs at the client side.
  * Unset cookies should be all-zero (which will never occur naturally). */
-int lov_llog_origin_add(struct obd_export *exp,
-                        int index,
+static int lov_llog_origin_add(struct llog_obd_ctxt *ctxt,
                         struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
                         struct llog_cookie *logcookies, int numcookies)
 {
-        struct obd_device *obd = class_exp2obd(exp);
+        struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
         struct lov_oinfo *loi;
         int i, rc = 0;
@@ -109,18 +92,21 @@ int lov_llog_origin_add(struct obd_export *exp,
         LASSERT(logcookies && numcookies >= lsm->lsm_stripe_count);
 
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
-                rc += obd_llog_origin_add(lov->tgts[loi->loi_ost_idx].ltd_exp, index,
-                                          rec, NULL, logcookies + rc, numcookies - rc);
+                struct obd_device *child = lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd; 
+                struct llog_obd_ctxt *cctxt = child->obd_llog_ctxt[ctxt->loc_idx];
+                rc += llog_add(cctxt, rec, NULL, logcookies + rc, numcookies - rc);
+
         }
 
         RETURN(rc);
 }
 
 /* the replicators commit callback */
-int lov_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
+static int lov_llog_repl_cancel(struct llog_obd_ctxt *ctxt, struct lov_stripe_md *lsm,
                           int count, struct llog_cookie *cookies, int flags)
 {
         struct lov_obd *lov;
+        struct obd_device *obd = ctxt->loc_obd;
         struct lov_oinfo *loi;
         int rc = 0, i;
         ENTRY;
@@ -131,12 +117,12 @@ int lov_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
         loi = lsm->lsm_oinfo;
         lov = &obd->u.lov;
         for (i = 0; i < count; i++, cookies++, loi++) {
+                struct obd_device *child = lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd; 
+                struct llog_obd_ctxt *cctxt = child->obd_llog_ctxt[ctxt->loc_idx];
                 int err;
 
 
-                err = obd_llog_repl_cancel(lov->tgts[loi->loi_ost_idx].ltd_exp->exp_obd,
-                                          NULL, 1, cookies, flags);
-
+                err = llog_cancel(cctxt, NULL, 1, cookies, flags);
                 if (err && lov->tgts[loi->loi_ost_idx].active) {
                         CERROR("error: objid "LPX64" subobj "LPX64
                                " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
@@ -148,30 +134,80 @@ int lov_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
         RETURN(rc);
 }
 
+static struct llog_operations lov_unlink_orig_logops = {
+//        lop_cleanup: lov_logop_cleanup,
+        lop_add: lov_llog_origin_add,
+};
+
+static struct llog_operations lov_size_repl_logops = {
+//        lop_cleanup: lov_logop_cleanup,
+        lop_cancel: lov_llog_repl_cancel
+};
+
+
+int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                  int count, struct llog_logid *logid)
+{
+        struct lov_obd *lov = &obd->u.lov;
+        int i, rc = 0;
+        ENTRY;
+        
+        rc = llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, 0, NULL, 
+                        &lov_unlink_orig_logops);
+        if (rc)
+                RETURN(rc);
+
+        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, 0, NULL, 
+                        &lov_size_repl_logops);
+        if (rc)
+                RETURN(rc);
+
+        LASSERT(lov->desc.ld_tgt_count  == count);
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
+                rc = obd_llog_init(child, tgt, 1, logid + i);
+                if (rc) {
+                        CERROR("error osc_llog_init %d\n", i);
+                        break;
+                }
+        }
+        RETURN(rc);
+}
+
+int lov_llog_finish(struct obd_device *obd, int count)
+{
+        struct lov_obd *lov = &obd->u.lov;
+        int i, rc = 0;
+        ENTRY;
+        
+        rc = llog_cleanup(obd->obd_llog_ctxt[LLOG_UNLINK_ORIG_CTXT]);
+        if (rc)
+                RETURN(rc);
+
+        rc = llog_cleanup(obd->obd_llog_ctxt[LLOG_SIZE_REPL_CTXT]);
+        if (rc)
+                RETURN(rc);
+
+        LASSERT(lov->desc.ld_tgt_count  == count);
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
+                rc = obd_llog_finish(child, 1);
+                if (rc) {
+                        CERROR("error osc_llog_finish %d\n", i);
+                        break;
+                }
+        }
+        RETURN(rc);
+}
+
 #else /* !__KERNEL__ */
 
-int lov_llog_setup(struct obd_device *obd, struct obd_device *disk_obd,
-                   int index, int count ,struct llog_logid *logids)
+int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
+                  int count, struct llog_logid *logid)
 {
         return 0;
 }
-
-int lov_llog_cleanup(struct obd_device *obd)
-{
-        return 0;
-}
-
-int lov_llog_origin_add(struct obd_export *exp,
-                        int index,
-                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies)
-{
-        return 0;
-}
-
-/* the replicators commit callback */
-int lov_llog_repl_cancel(struct obd_device *obd, struct lov_stripe_md *lsm,
-                          int count, struct llog_cookie *cookies, int flags)
+int lov_llog_finish(struct obd_device *obd, int count)
 {
         return 0;
 }

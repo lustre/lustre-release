@@ -1,0 +1,187 @@
+Index: linux-2.4.22-ac1/fs/ext3/ialloc.c
+===================================================================
+--- linux-2.4.22-ac1.orig/fs/ext3/ialloc.c	2003-10-22 14:20:03.000000000 +0400
++++ linux-2.4.22-ac1/fs/ext3/ialloc.c	2003-10-29 22:32:28.000000000 +0300
+@@ -242,11 +242,16 @@
+ 
+ 	bh = sb->u.ext3_sb.s_inode_bitmap[bitmap_nr];
+ 
+-	BUFFER_TRACE(bh, "get_write_access");
+-	fatal = ext3_journal_get_write_access(handle, bh);
++	BUFFER_TRACE(bh, "get_undo_access");
++	fatal = ext3_journal_get_undo_access(handle, bh);
+ 	if (fatal)
+ 		goto error_return;
+ 
++	/* to prevent inode reusing within single transaction -bzzz */
++	BUFFER_TRACE(bh, "clear in b_committed_data");
++	J_ASSERT_BH(bh, bh2jh(bh)->b_committed_data != NULL);
++	ext3_set_bit(bit, bh2jh(bh)->b_committed_data);
++
+ 	/* Ok, now we can actually update the inode bitmaps.. */
+ 	if (!ext3_clear_bit (bit, bh->b_data))
+ 		ext3_error (sb, "ext3_free_inode",
+@@ -320,6 +325,43 @@
+ 	return 0;
+ }
+ 
++static int ext3_test_allocatable(int nr, struct buffer_head *bh)
++{
++	if (ext3_test_bit(nr, bh->b_data))
++		return 0;
++	if (!buffer_jbd(bh) || !bh2jh(bh)->b_committed_data)
++		return 1;
++#if 0
++	if (!ext3_test_bit(nr, bh2jh(bh)->b_committed_data))
++		printk("EXT3-fs: inode %d was used\n", nr);
++#endif
++	return !ext3_test_bit(nr, bh2jh(bh)->b_committed_data);
++}
++
++static int ext3_find_usable_inode(struct super_block *sb,
++					struct buffer_head *bh)
++{
++	int here, maxinodes, next;
++
++	maxinodes = EXT3_INODES_PER_GROUP(sb);
++	here = 0;	
++
++	while (here < maxinodes) {
++		next  = ext3_find_next_zero_bit((unsigned long *) bh->b_data, 
++						 maxinodes, here);
++		if (next >= maxinodes)
++			return -1;
++		if (ext3_test_allocatable(next, bh))
++			return next;
++
++		J_ASSERT_BH(bh, bh2jh(bh)->b_committed_data);
++		here = ext3_find_next_zero_bit
++			((unsigned long *) bh2jh(bh)->b_committed_data, 
++			 maxinodes, next);
++	}
++	return -1;
++}
++
+ /*
+  * There are two policies for allocating an inode.  If the new inode is
+  * a directory, then a forward search is made for a block group with both
+@@ -530,7 +572,7 @@
+ 	struct super_block * sb;
+ 	struct buffer_head * bh;
+ 	struct buffer_head * bh2;
+-	int group;
++	int group, k;
+ 	ino_t ino;
+ 	struct inode * inode;
+ 	int bitmap_nr;
+@@ -569,7 +611,8 @@
+ 		err = ext3_journal_get_write_access(handle, bh);
+ 		if (err) goto fail;
+ 
+-		if (ext3_set_bit(ino, bh->b_data)) {
++		if (!ext3_test_allocatable(ino, bh) ||
++				ext3_set_bit(ino, bh->b_data)) {
+ 			printk(KERN_ERR "goal inode %lu unavailable\n", goal);
+ 			/* Oh well, we tried. */
+ 			goto repeat;
+@@ -595,52 +638,63 @@
+ 		group = find_group_other(sb, dir);
+   
+ 	err = -ENOSPC;
+-	if (!group == -1)
++	if (group == -1)
+ 		goto out;
+ 
+ 	err = -EIO;
+-	bitmap_nr = load_inode_bitmap (sb, group);
++	bitmap_nr = load_inode_bitmap(sb, group);
+ 	if (bitmap_nr < 0)
+ 		goto fail;
+-
+ 	bh = sb->u.ext3_sb.s_inode_bitmap[bitmap_nr];
+-	gdp = ext3_get_group_desc (sb, group, &bh2);
+ 
+-	if ((ino = ext3_find_first_zero_bit ((unsigned long *) bh->b_data,
+-				      EXT3_INODES_PER_GROUP(sb))) <
+-	    EXT3_INODES_PER_GROUP(sb)) {
+-		BUFFER_TRACE(bh, "get_write_access");
+-		err = ext3_journal_get_write_access(handle, bh);
+-		if (err) goto fail;
+-		
+-		if (ext3_set_bit (ino, bh->b_data)) {
+-			ext3_error (sb, "ext3_new_inode",
+-				      "bit already set for inode %lu", ino);
+-			goto repeat;
+-		}
+-		BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
+-		err = ext3_journal_dirty_metadata(handle, bh);
+-		if (err) goto fail;
+-	} else {
+-		if (le16_to_cpu(gdp->bg_free_inodes_count) != 0) {
+-			ext3_error (sb, "ext3_new_inode",
+-				    "Free inodes count corrupted in group %d",
+-				    group);
+-			/* Is it really ENOSPC? */
+-			err = -ENOSPC;
+-			if (sb->s_flags & MS_RDONLY)
+-				goto fail;
+-
+-			BUFFER_TRACE(bh2, "get_write_access");
+-			err = ext3_journal_get_write_access(handle, bh2);
+-			if (err) goto fail;
+-			gdp->bg_free_inodes_count = 0;
+-			BUFFER_TRACE(bh2, "call ext3_journal_dirty_metadata");
+-			err = ext3_journal_dirty_metadata(handle, bh2);
+-			if (err) goto fail;
++	/* try to allocate in selected group */
++	if ((ino = ext3_find_usable_inode(sb, bh)) >= 0)
++		goto find_free;
++
++	/* can't allocate: try to allocate in ANY another groups */
++	k = group;
++	gdp = NULL;
++	err = -EIO;
++	for (group = group + 1; group != k; group++) {
++		struct ext3_group_desc *tmp;
++
++		if (group >= sb->u.ext3_sb.s_groups_count)
++			group = 0;
++		tmp = ext3_get_group_desc(sb, group, &bh2);
++		if (le16_to_cpu(tmp->bg_free_inodes_count) == 0)
++			continue;
++
++		bitmap_nr = load_inode_bitmap(sb, group);
++		if (bitmap_nr < 0)
++			goto fail;
++		bh = sb->u.ext3_sb.s_inode_bitmap[bitmap_nr];
++
++		/* try to allocate in selected group */
++		if ((ino = ext3_find_usable_inode(sb, bh)) >= 0) {
++			gdp = tmp;
++			break;
+ 		}
+-		goto repeat;
+ 	}
++	err = -ENOSPC;
++	if (!gdp)
++		goto out;
++
++find_free:
++	BUFFER_TRACE(bh, "get_undo_access");
++	err = ext3_journal_get_undo_access(handle, bh);
++	if (err)
++		goto fail;
++
++	if (ext3_set_bit(ino, bh->b_data)) {
++		ext3_error (sb, "ext3_new_inode",
++				"bit already set for inode %lu",
++				(unsigned long) ino);
++		goto fail; 
++	}
++	BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
++	err = ext3_journal_dirty_metadata(handle, bh);
++	if (err)
++		goto fail;
+ 
+ have_bit_and_group:
+ 	ino += group * EXT3_INODES_PER_GROUP(sb) + 1;

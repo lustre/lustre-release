@@ -30,11 +30,10 @@ enum lcfg_command_type {
         LCFG_DETACH         = 0x00cf002,
         LCFG_SETUP          = 0x00cf003,
         LCFG_CLEANUP        = 0x00cf004,
-        LCFG_LOV_SET_CONFIG = 0x00cf005,
-        LCFG_ADD_UUID       = 0x00cf006,
-        LCFG_DEL_UUID       = 0x00cf007,
-        LCFG_MOUNTOPT       = 0x00cf008,
-        LCFG_DEL_MOUNTOPT   = 0x00cf009,
+        LCFG_ADD_UUID       = 0x00cf005,
+        LCFG_DEL_UUID       = 0x00cf006,
+        LCFG_MOUNTOPT       = 0x00cf007,
+        LCFG_DEL_MOUNTOPT   = 0x00cf008,
 };
 
 struct lustre_cfg {
@@ -83,8 +82,7 @@ static inline int lustre_cfg_packlen(struct lustre_cfg *lcfg)
         len += size_round(lcfg->lcfg_inllen2);
         len += size_round(lcfg->lcfg_inllen3);
         len += size_round(lcfg->lcfg_inllen4);
-        return size_round16(len);
-
+        return size_round(len);
 }
 
 static inline int lustre_cfg_pack(struct lustre_cfg *data, char **pbuf,

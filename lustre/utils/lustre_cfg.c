@@ -146,6 +146,13 @@ int jt_lcfg_setup(int argc, char **argv)
         struct lustre_cfg lcfg;
         int rc;
 
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n", 
+                        jt_cmdname(argv[0])); 
+		return -EINVAL;
+        }
+
         LCFG_INIT(lcfg, LCFG_SETUP, lcfg_devname);
 
         if (argc > 5)
@@ -181,6 +188,13 @@ int jt_obd_detach(int argc, char **argv)
         struct lustre_cfg lcfg;
         int rc;
 
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n", 
+                        jt_cmdname(argv[0])); 
+		return -EINVAL;
+        }
+
         LCFG_INIT(lcfg, LCFG_DETACH, lcfg_devname);
 
         if (argc != 1)
@@ -202,6 +216,13 @@ int jt_obd_cleanup(int argc, char **argv)
         char flags[3];
         int flag_cnt = 0, n;
         int rc;
+
+        if (lcfg_devname == NULL) {
+                fprintf(stderr, "%s: please use 'cfg_device name' to set the "
+                        "device name for config commands.\n", 
+                        jt_cmdname(argv[0])); 
+		return -EINVAL;
+        }
 
         LCFG_INIT(lcfg, LCFG_CLEANUP, lcfg_devname);
 
@@ -305,7 +326,7 @@ int jt_lcfg_del_uuid(int argc, char **argv)
         return 0;
 }
 
-int jt_lcfg_lov_setconfig(int argc, char **argv)
+int jt_lcfg_lov_setup(int argc, char **argv)
 {
         struct lustre_cfg lcfg;
         struct lov_desc desc;
@@ -313,7 +334,7 @@ int jt_lcfg_lov_setconfig(int argc, char **argv)
         int rc, i;
         char *end;
 
-        LCFG_INIT(lcfg, LCFG_LOV_SET_CONFIG, lcfg_devname);
+        LCFG_INIT(lcfg, LCFG_SETUP, lcfg_devname);
 
         if (argc <= 6)
                 return CMD_HELP;
@@ -417,7 +438,7 @@ int jt_lcfg_mount_option(int argc, char **argv)
 
         LCFG_INIT(lcfg, LCFG_MOUNTOPT, lcfg_devname);
 
-        if (argc != 4)
+        if (argc < 3 || argc > 4)
                 return CMD_HELP;
 
         /* profile name */
@@ -426,10 +447,11 @@ int jt_lcfg_mount_option(int argc, char **argv)
         /* osc name */
         lcfg.lcfg_inllen2 = strlen(argv[2]) + 1;
         lcfg.lcfg_inlbuf2 = argv[2];
-        /* mdc name */
-        lcfg.lcfg_inllen3 = strlen(argv[3]) + 1;
-        lcfg.lcfg_inlbuf3 = argv[3];
-
+        if (argc == 4) {
+                /* mdc name */
+                lcfg.lcfg_inllen3 = strlen(argv[3]) + 1;
+                lcfg.lcfg_inlbuf3 = argv[3];
+        }
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);
         if (rc < 0) {
                 fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
