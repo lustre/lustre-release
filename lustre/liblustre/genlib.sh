@@ -21,6 +21,7 @@ LLLIBS="$LUS/liblustre/libllite.a \
 	$SYSIO/src/libsysio.a \
 	$SYSIO/dev/stdfd/libsysio_stdfd.a \
 	$SYSIO/drivers/native/libsysio_native.a \
+	$SYSIO/drivers/sockets/libsysio_sockets.a \
 	$LUS/lov/liblov.a \
 	$LUS/osc/libosc.a \
 	$LUS/ldlm/libldlm.a \
