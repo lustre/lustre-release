@@ -26,7 +26,7 @@ do_insmod() {
 	BASE=`echo $MODULE | sed -e "s^.*/^^" -e "s/\.o$//"`
 
 	[ "$MODULE" ] || fail "usage: $0 <module>"
-	[ -f $MODULE ] || fail "$0: module '$MODULE' not found"
+	[ -f $MODULE ] || echo "$0: module '$MODULE' not found" 1>&2
 	lsmod | grep -q "\<$BASE\>" && return 0
 	insmod $MODULE
 }
@@ -218,7 +218,7 @@ setup_lustre() {
 		return 0
 	fi
 
-	$OBDCTL <<- EOF || return $rc
+	$OBDCTL <<- EOF || return $?
 	newdev
 	attach ptlrpc RPCDEV
 	setup
@@ -233,7 +233,7 @@ setup_ldlm() {
 
 	[ -c /dev/portals ] || mknod /dev/portals c 10 240
 
-	$OBDCTL <<- EOF || return $rc
+	$OBDCTL <<- EOF || return $?
 	newdev
 	attach ldlm LDLMDEV
 	setup
@@ -273,7 +273,7 @@ setup_mds() {
 	$DO_FS ${MDSFS} ${MDSDEV} ${MDSSIZE}
 	MDS=${LOOPDEV}
 
-	$OBDCTL <<- EOF || return $rc
+	$OBDCTL <<- EOF || return $?
 	newdev
 	attach mds MDSDEV
 	setup ${MDS} ${MDSFS}
@@ -326,10 +326,13 @@ setup_ost() {
 		OBD=${LOOPDEV}
 	fi
 
-	$OBDCTL <<- EOF || return $rc
+	$OBDCTL <<- EOF || return $?
 	newdev
 	attach ${OSTTYPE} OBDDEV
 	setup ${OBD} ${OBDARG}
+	quit
+	EOF
+	$OBDCTL <<- EOF || return $?
 	newdev
 	attach ost OSTDEV
 	setup \$OBDDEV
@@ -349,7 +352,7 @@ setup_osc() {
 		return 0
 	fi
 
-	$OBDCTL <<- EOF || return $rc
+	$OBDCTL <<- EOF || return $?
 	newdev
 	attach osc OSCDEV
 	setup -1

@@ -5,9 +5,9 @@ SRCDIR="`dirname $0`/"
 
 setup_opts "$@"
 
-setup_portals
-setup_lustre
-setup_ldlm
+setup_portals || exit $?
+setup_lustre || exit $?
+setup_ldlm || exit $?
 
-setup_server new_fs
-setup_client
+setup_server new_fs || exit $?
+setup_client || exit $?
