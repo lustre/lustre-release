@@ -63,8 +63,7 @@ void mds_pack_inode2body(struct mds_body *b, struct inode *inode)
         b->uid = HTON__u32(inode->i_uid);
         b->gid = HTON__u32(inode->i_gid);
         b->flags = HTON__u32(inode->i_flags);
-        //b->major = HTON__u32(inode->i_major);
-        //b->minor = HTON__u32(inode->i_minor);
+        b->rdev = HTON__u32(b->rdev);
         b->nlink = HTON__u32(inode->i_nlink);
         b->generation = HTON__u32(inode->i_generation);
 }
@@ -133,7 +132,7 @@ void mds_pack_rep_body(struct ptlrpc_request *req)
 
 /* packing of MDS records */
 void mds_create_pack(struct ptlrpc_request *req, int offset,
-                     struct inode *inode, __u32 mode, __u64 rdev, __u32 uid,
+                     struct inode *dir, __u32 mode, __u64 rdev, __u32 uid,
                      __u32 gid, __u64 time, const char *name, int namelen,
                      const char *tgt, int tgtlen)
 {
@@ -145,7 +144,7 @@ void mds_create_pack(struct ptlrpc_request *req, int offset,
         rec->cr_opcode = HTON__u32(REINT_CREATE);
         rec->cr_fsuid = HTON__u32(current->fsuid);
         rec->cr_fsgid = HTON__u32(current->fsgid);
-        ll_inode2fid(&rec->cr_fid, inode);
+        ll_inode2fid(&rec->cr_fid, dir);
         rec->cr_mode = HTON__u32(mode);
         rec->cr_rdev = HTON__u64(rdev);
         rec->cr_uid = HTON__u32(uid);
