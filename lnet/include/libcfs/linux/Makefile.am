@@ -1,3 +1,3 @@
-EXTRA_DIST := linux-fs.h linux-prim.h portals_lib.h kp30.h		\
-	linux-lock.h lltrace.h portals_utils.h libcfs.h linux-mem.h	\
-	portals_compat25.h linux-time.h
+EXTRA_DIST := kp30.h libcfs.h linux-fs.h linux-lock.h linux-mem.h	\
+	linux-prim.h linux-time.h lltrace.h portals_compat25.h		\
+	portals_lib.h portals_utils.h
