@@ -328,10 +328,9 @@ int osc_brw_read(struct obd_conn *conn, obd_count num_oa, struct obdo **oa,
 
 	size1 = num_oa * sizeof(ioo); 
         pages = 0;
-	for (i = 0; i < num_oa; i++) { 
-		size2 += oa_bufs[i] * sizeof(src);
+        for (i = 0; i < num_oa; i++)
                 pages += oa_bufs[i];
-	}
+        size2 = pages * sizeof(src);
 
 	request = ptlrpc_prep_req(cl, OST_BRW, size1, NULL, size2, NULL);
 	if (!request) { 
