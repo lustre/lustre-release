@@ -1495,11 +1495,11 @@ int jt_obd_test_brw(int argc, char **argv)
                                 jt_cmdname(argv[0]), argv[6]);
                         return CMD_HELP;
                 }
-                data.ioc_plen1 *= PAGE_SIZE;
+                data.ioc_plen1 *= getpagesize();
         }
 
-        len = pages * PAGE_SIZE;
-        thr_offset = offset_pages * PAGE_SIZE;
+        len = pages * getpagesize();
+        thr_offset = offset_pages * getpagesize();
         stride = len;
         
         if (thread) {
@@ -1559,7 +1559,7 @@ int jt_obd_test_brw(int argc, char **argv)
                         printf("%s: %s number %d @ "LPD64":"LPU64" for %d\n",
                                jt_cmdname(argv[0]), write ? "write" : "read", i,
                                data.ioc_obdo1.o_id, data.ioc_offset,
-                               (int)(pages * PAGE_SIZE));
+                               (int)(pages * getpagesize()));
                         pthread_mutex_unlock (&shared_data->mutex);
                 }
                 

@@ -87,6 +87,7 @@ static int lfs_setstripe(int argc, char **argv)
         long st_size;
         int  st_offset, st_count;
         char *end;
+        int  page_size;
 
         if (argc != 5)
                 return CMD_HELP;
@@ -98,6 +99,12 @@ static int lfs_setstripe(int argc, char **argv)
                                 argv[0], argv[2]);
                 return CMD_HELP;
         }
+        page_size = getpagesize();
+        if (st_size % page_size)
+                fprintf(stderr, 
+                        "WARNING: stripe size %d is not an increment of page size %d\n", 
+                        st_size, page_size);
+
         // get the stripe offset
         st_offset = strtoul(argv[3], &end, 0);
         if (*end != '\0') {
