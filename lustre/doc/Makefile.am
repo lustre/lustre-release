@@ -7,7 +7,7 @@ LYX2TXT = lyx --export text
 LYX2HTML = lyx --export html
 SUFFIXES = .lyx .pdf .sgml .html .txt .fig .eps
 
-DOCS = master.pdf lustre-HOWTO.txt
+DOCS = lustre.pdf lustre-HOWTO.txt
 IMAGES =  cache1.eps cache2.eps intermezzocache.eps intermezzofilesys.eps meta.eps metadata1.eps networklayer.eps bigpicture.eps intermezzo.eps mds.eps portals.eps client.eps layering.eps metadata.eps sb.eps cow.eps lockacq.eps obdfs.eps snapsetup.eps dirbodyapi.eps loraid.eps ost.eps updates.eps hotmigrate.eps lustreclusters.eps osthw.eps portals-lib.eps lockqueues.eps lockexample1.eps lockexample2.eps lockexample3.eps lockexample4.eps lockseverity.eps
 LYXFILES= master.lyx evolution.lyx  llocks.lyx mgmt.lyx uncertain.lyx\
 	fs.lyx         lustre-HOWTO.lyx      namespace.lyx\
@@ -39,10 +39,8 @@ lustre.lyx: master.lyx $(IMAGES)
 	sed "s/version .*/version $$ver/" < $< > lustre.lyx;\
 	)
 
-master.pdf: $(LYXFILES) $(IMAGES)
-
-syncweb: master.pdf
-	cp master.pdf /usr/src/www/content/lustre/docs/master.pdf
+syncweb: lustre.pdf
+	cp lustre.pdf /usr/src/www/content/lustre/docs/lustre.pdf
 	( cd /usr/src/www ; make lustre ; make synclustre )
 
 dist-hook:
