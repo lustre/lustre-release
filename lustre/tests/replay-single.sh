@@ -643,8 +643,10 @@ test_32() {
     # give multiop a chance to open
     sleep 1
     mds_evict_client
+    df $MOUNT || df $MOUNT || return 1
     kill -USR1 $pid1
     kill -USR1 $pid2
+    sleep 1
     return 0
 }
 run_test 32 "close() notices client eviction; close() after client eviction"
