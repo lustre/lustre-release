@@ -167,10 +167,13 @@ pass() {
 	echo PASS $@
 }
 
-MOUNT="`cat /proc/mounts | grep "lustre" | awk '{print $2}'`"
+mounted_lustre_filesystems() {
+	awk '($3 ~ "lustre") { print $2 }' /proc/mounts
+}
+MOUNT="`mounted_lustre_filesystems`"
 if [ -z "$MOUNT" ]; then
 	sh llmount.sh
-	MOUNT="`cat /proc/mounts | grep "lustre" | awk '{print $2}'`"
+	MOUNT="`mounted_lustre_filesystems`"
 	[ -z "$MOUNT" ] && error "NAME=$NAME not mounted"
 	I_MOUNTED=yes
 fi
@@ -2184,7 +2187,7 @@ run_test 65a "directory with no stripe info ===================="
 
 test_65b() {
 	mkdir -p $DIR/d65
-       	$LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+	$LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
 	touch $DIR/d65/f2
 	$LVERIFY $DIR/d65 $DIR/d65/f2 || error "lverify failed"
 }
@@ -2195,8 +2198,8 @@ test_65c() {
 		mkdir -p $DIR/d65
     		$LSTRIPE $DIR/d65 $(($STRIPESIZE * 4)) 1 \
 			$(($OSTCOUNT - 1)) || error "setstripe"
-	        touch $DIR/d65/f3
-	        $LVERIFY $DIR/d65 $DIR/d65/f3 || error "lverify failed"
+		touch $DIR/d65/f3
+		$LVERIFY $DIR/d65 $DIR/d65/f3 || error "lverify failed"
 	fi
 }
 run_test 65c "directory setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
@@ -2315,7 +2318,7 @@ test_69() {
 	[ -z "`lsmod|grep obdfilter`" ] &&
 		echo "skipping test 69 (remote OST)" && return
 
-        f="$DIR/f69"
+	f="$DIR/f69"
 	touch $f
 
 	echo 0x217 > /proc/sys/lustre/fail_loc
@@ -2383,6 +2386,7 @@ test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
 }
 run_test 72 "Test that remove suid works properly (bug5695) ===="
 
+#b_cray run_test 73 "multiple MDC requests (should not deadlock)"
 
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
