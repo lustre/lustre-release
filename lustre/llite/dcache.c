@@ -32,6 +32,8 @@ void ll_intent_release(struct dentry *de)
 
         handle = (struct lustre_handle *)de->d_it->it_lock_handle;
         lock = lustre_handle2object(handle);
+        CDEBUG(D_INFO, "calling ldlm_lock_decref(%p, %d)\n", lock,
+               de->d_it->it_lock_mode);
         ldlm_lock_decref(lock, de->d_it->it_lock_mode);
         EXIT;
 }
