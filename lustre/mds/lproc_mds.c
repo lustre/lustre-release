@@ -52,7 +52,14 @@ static int lprocfs_mds_rd_recovery_status(char *page, char **start, off_t off,
                                           int count, int *eof, void *data)
 {
         struct obd_device *obd = data;
-        int len = 0, n;
+        int len = 0, n,
+                connected = obd->obd_connected_clients,
+                max_recoverable = obd->obd_max_recoverable_clients,
+                recoverable = obd->obd_recoverable_clients,
+                completed = recoverable - max_recoverable,
+                queue_len = obd->obd_requests_queued_for_recovery,
+                replayed = obd->obd_replayed_requests;
+        __u64 next_transno = obd->obd_next_recovery_transno;
 
         LASSERT(obd != NULL);
         *eof = 1;
@@ -68,13 +75,12 @@ static int lprocfs_mds_rd_recovery_status(char *page, char **start, off_t off,
                 n = snprintf(page, count, "COMPLETE\n");
                 page += n; len += n; count -= n;
                 n = snprintf(page, count, "recovered_clients: %d\n",
-                             obd->obd_max_recoverable_clients);
+                             max_recoverable);
                 page += n; len += n; count -= n;
                 n = snprintf(page, count, "last_transno: "LPD64"\n",
-                             obd->obd_next_recovery_transno);
+                             next_transno - 1);
                 page += n; len += n; count -= n;
-                n = snprintf(page, count, "reintegrated_requests: "LPD64"\n",
-                             obd->obd_reintegrated_requests);
+                n = snprintf(page, count, "replayed_requests: %d\n", replayed);
                 return len + n;
         }
 
@@ -87,19 +93,16 @@ static int lprocfs_mds_rd_recovery_status(char *page, char **start, off_t off,
         n = snprintf(page, count, "RECOVERING\n");
         page += n; len += n; count -= n;
         n = snprintf(page, count, "connected_clients: %d/%d\n",
-                     obd->obd_connected_clients,
-                     obd->obd_max_recoverable_clients);
+                     connected, max_recoverable);
         page += n; len += n; count -= n;
         n = snprintf(page, count, "completed_clients: %d/%d\n",
-                     (obd->obd_max_recoverable_clients - 
-                      obd->obd_recoverable_clients),
-                     obd->obd_max_recoverable_clients);
+                     completed, max_recoverable);
         page += n; len += n; count -= n;
-        n = snprintf(page, count, "reintegrated_requests: "LPD64"/??\n",
-                     obd->obd_reintegrated_requests);
+        n = snprintf(page, count, "replayed_requests: %d/??\n", replayed);
         page += n; len += n; count -= n;
-        n = snprintf(page, count, "next_transno: "LPD64"\n",
-                     obd->obd_next_recovery_transno);
+        n = snprintf(page, count, "queued_requests: %d\n", queue_len);
+        page += n; len += n; count -= n;
+        n = snprintf(page, count, "next_transno: "LPD64"\n", next_transno);
         return len + n;
 }
 
