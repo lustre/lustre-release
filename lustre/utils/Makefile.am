@@ -23,6 +23,6 @@ obdbarrier_SOURCES = obdbarrier.c obdiolib.c obdiolib.h
 lfs_SOURCES = lfs.c 
 llmount_SOURCES = llmount.c
 
-EXTRA_DIST = $(sbin_SCRIPTS)
+EXTRA_DIST = $(bin_SCRIPTS) $(sbin_SCRIPTS)
 
 include $(top_srcdir)/Rules
