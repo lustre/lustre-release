@@ -21,6 +21,7 @@
 #include <linux/lustre_dlm.h>
 #include <linux/obd_filter.h>
 #include <linux/ext3_jbd.h>
+#include <linux/extN_jbd.h>
 #include <linux/quotaops.h>
 #include <linux/init.h>
 
@@ -851,6 +852,7 @@ static int ext3_credits_needed(struct super_block *sb, int objcount,
                 needed += nindir;
         }
 
+        /* Assumes ext3 and extN have same sb_info layout at the start. */
         if (nbitmaps > EXT3_SB(sb)->s_groups_count)
                 nbitmaps = EXT3_SB(sb)->s_groups_count;
         if (ngdblocks > EXT3_SB(sb)->s_gdb_count)
@@ -891,10 +893,14 @@ static void *ext3_filter_journal_start(struct filter_obd *filter,
         handle_t *handle = NULL;
         int needed;
 
-        /* Assumes ext3 and extN have same sb_info layout, but avoids issues
-         * with having extN built properly before filterobd for now.
+        /* It appears that some kernels have different values for
+         * EXT*_MAX_GROUP_LOADED (either 8 or 32), so we cannot
+         * assume anything after s_inode_bitmap_number is the same.
          */
-        journal = EXT3_SB(filter->fo_sb)->s_journal;
+        if (!strcmp(filter->fo_fstype, "ext3"))
+                journal = EXT3_SB(filter->fo_sb)->s_journal;
+        else if (!strcmp(filter->fo_fstype, "extN"))
+                journal = EXTN_SB(filter->fo_sb)->s_journal;
         needed = ext3_credits_needed(filter->fo_sb, objcount, obj);
 
         /* The number of blocks we could _possibly_ dirty can very large.
