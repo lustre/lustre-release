@@ -85,11 +85,11 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
         struct dentry *result;
 
         if (ino == 0)
-                return ERR_PTR(-ESTALE);
+                RETURN(ERR_PTR(-ESTALE));
 
         inode = iget(sb, ino);
         if (inode == NULL)
-                return ERR_PTR(-ENOMEM);
+                RETURN(ERR_PTR(-ENOMEM));
 
         CDEBUG(D_DENTRY, "--> mds_fid2dentry: sb %p\n", inode->i_sb);
 
@@ -102,7 +102,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                        generation);
                 LBUG();
                 iput(inode);
-                return ERR_PTR(-ESTALE);
+                RETURN(ERR_PTR(-ESTALE));
         }
 
         /* now to find a dentry.
@@ -727,15 +727,19 @@ static int mds_prep(struct obd_device *obddev)
         struct obd_run_ctxt saved;
         struct mds_obd *mds = &obddev->u.mds;
         struct super_operations *s_ops;
+        struct dentry *dentry;
         struct file *f;
         int rc;
 
         push_ctxt(&saved, &mds->mds_ctxt);
-        rc = simple_mkdir(current->fs->pwd, "ROOT", 0700);
-        if (rc && rc != -EEXIST) {
+        dentry = simple_mkdir(current->fs->pwd, "ROOT", 0700);
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
                 CERROR("cannot create ROOT directory: rc = %d\n", rc);
                 GOTO(err_pop, rc);
         }
+        /* XXX probably want to hold on to this later... */
+        dput(dentry);
         f = filp_open("ROOT", O_RDONLY, 0);
         if (IS_ERR(f)) {
                 rc = PTR_ERR(f);
@@ -754,11 +758,14 @@ static int mds_prep(struct obd_device *obddev)
                 LBUG();
         }
 
-        rc = simple_mkdir(current->fs->pwd, "FH", 0700);
-        if (rc && rc != -EEXIST) {
+        dentry = simple_mkdir(current->fs->pwd, "FH", 0700);
+        if (IS_ERR(dentry)) {
+                rc = PTR_ERR(dentry);
                 CERROR("cannot create FH directory: rc = %d\n", rc);
                 GOTO(err_pop, rc);
         }
+        /* XXX probably want to hold on to this later... */
+        dput(dentry);
 
         rc = mds_init_client_data(mds);
         if (rc)

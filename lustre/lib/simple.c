@@ -1,4 +1,6 @@
-/*
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
+ *
  *  lib/simple.c
  *
  * Copyright (C) 2002  Cluster File Systems, Inc.
@@ -25,7 +27,7 @@
 
 /* push / pop to root of obd store */
 void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new)
-{ 
+{
         save->fs = get_fs();
         save->pwd = dget(current->fs->pwd);
         save->pwdmnt = mntget(current->fs->pwdmnt);
@@ -44,28 +46,33 @@ void pop_ctxt(struct obd_run_ctxt *saved)
 }
 
 /* utility to make a directory */
-int simple_mkdir(struct dentry *dir, char *name, int mode)
+struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode)
 {
         struct dentry *dchild;
         int err;
         ENTRY;
 
+	CDEBUG(D_INODE, "creating directory %*s\n", strlen(name), name);
         dchild = lookup_one_len(name, dir, strlen(name));
         if (IS_ERR(dchild))
-                RETURN(PTR_ERR(dchild));
+                RETURN(dchild);
 
         if (dchild->d_inode) {
 		if (!S_ISDIR(dchild->d_inode->i_mode))
 			GOTO(out, err = -ENOTDIR);
 
-                GOTO(out, err = -EEXIST);
+                RETURN(dchild);
 	}
 
         err = vfs_mkdir(dir->d_inode, dchild, mode);
+        EXIT;
 out:
-        l_dput(dchild);
+        if (err) {
+                dput(dchild);
+                RETURN(ERR_PTR(err));
+        }
 
-        RETURN(err);
+        RETURN(dchild);
 }
 
 int lustre_fread(struct file *file, char *str, int len, loff_t *off)

@@ -42,27 +42,18 @@ int lustre_commit_page(struct page *page, unsigned from, unsigned to);
 struct obd_run_ctxt;
 void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new);
 void pop_ctxt(struct obd_run_ctxt *saved);
-int simple_mkdir(struct dentry *dir, char *name, int mode);
+struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, char *str, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off);
 int lustre_fsync(struct file *file);
 
-#define ASSERT_MAX_SIZE_MB 50000ULL
-#define ASSERT_PAGE_INDEX(index, OP)                                    \
-do { if (index > ASSERT_MAX_SIZE_MB << (20 - PAGE_SHIFT)) {             \
-        CERROR("bad page index %lu > %Lu\n", index,                     \
-               ASSERT_MAX_SIZE_MB << (20 - PAGE_SHIFT));                \
-        portal_debug = ~0UL;                                            \
-        OP;                                                             \
-}} while(0)
-
-#define ASSERT_FILE_OFFSET(offset, OP)                                  \
-do { if (offset > ASSERT_MAX_SIZE_MB << 20) {                           \
-        CERROR("bad file offset %Lu > %Lu\n", offset,                   \
-               ASSERT_MAX_SIZE_MB << 20);                               \
-        portal_debug = ~0UL;                                            \
-        OP;                                                             \
-}} while(0)
+static inline void l_dput(struct dentry *de)
+{
+        if (!de || IS_ERR(de))
+                return;
+        shrink_dcache_parent(de);
+        dput(de);
+}
 
 static inline void ll_sleep(int t)
 {

@@ -32,14 +32,6 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_net.h>
 
-static inline void l_dput(struct dentry *de) 
-{
-        if (!de || IS_ERR(de)) 
-                return; 
-        shrink_dcache_parent(de); 
-        dput(de); 
-}
-
 #define LUSTRE_MDS_NAME "mds"
 
 struct mds_update_record { 

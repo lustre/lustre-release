@@ -57,6 +57,8 @@ struct filter_obd {
         struct super_block *fo_sb;
         struct vfsmount *fo_vfsmnt;
         struct obd_run_ctxt fo_ctxt;
+        struct dentry *fo_dentry_O;
+        struct dentry *fo_dentry_O_mode[16];
         spinlock_t fo_lock;
         __u64 fo_lastino;
         struct file_operations *fo_fop;
