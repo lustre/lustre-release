@@ -306,7 +306,7 @@ kibnal_send(nal_cb_t        *nal,
           if(buf_length > MAX_MSG_SIZE) { 
              CERROR("kibnal_send:request exceeds Transmit data size (%d).\n",
                       MAX_MSG_SIZE);
-             rc = -1;
+             rc = PTL_FAIL;
              return rc;
           }
           else {
@@ -363,7 +363,7 @@ kibnal_send(nal_cb_t        *nal,
 
         PROF_FINISH(kibnal_send); // time stapm of send operation 
 
-        rc = 1;
+        rc = PTL_OK;
 
         return rc; 
 }
@@ -386,7 +386,7 @@ int kibnal_send_pages(nal_cb_t * nal,
                       ptl_kiov_t *iov, 
                       size_t mlen)
 {
-   int rc = 1;
+   int rc = PTL_FAIL;
 
    CDEBUG(D_NET, "kibnal_send_pages\n");
 
@@ -420,7 +420,7 @@ void kibnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
 //
 // do you need this 
 //
-int kibnal_callback(nal_cb_t * nal, 
+void kibnal_callback(nal_cb_t * nal, 
                            void *private, 
                            lib_eq_t *eq,
                            ptl_event_t *ev)
@@ -507,7 +507,7 @@ kibnal_recv_pages(nal_cb_t * nal,
 {
 
   CDEBUG(D_NET, "recv_pages not implemented\n");
-  return PTL_OK;
+  return PTL_FAIL;
        
 }
 
@@ -526,10 +526,11 @@ kibnal_recv(nal_cb_t     *nal,
         CDEBUG(D_NET,"kibnal_recv: mlen=%d, rlen=%d\n", mlen, rlen);
 
         /* What was actually received must be >= what sender claims to
-         * have sent.  This is an LASSERT, since lib-move doesn't
-         * check cb return code yet. */
-        LASSERT (krx->krx_len >= sizeof (ptl_hdr_t) + rlen);
+         * have sent. */
         LASSERT (mlen <= rlen);
+
+        if (krx->krx_len < sizeof (ptl_hdr_t) + rlen)
+                return (PTL_FAIL);
 
         PROF_START(kibnal_recv);
 
@@ -542,12 +543,12 @@ kibnal_recv(nal_cb_t     *nal,
 
         PROF_START(lib_finalize);
         
-        lib_finalize(nal, private, cookie);
+        lib_finalize(nal, private, cookie, PTL_OK);
         
         PROF_FINISH(lib_finalize);
         PROF_FINISH(kibnal_recv);
 
-        return rlen;
+        return PTL_OK;
 }
 
 //

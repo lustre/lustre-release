@@ -14,8 +14,9 @@ endif
 
 
 if LIBLUSTRE
-lib_LIBRARIES = liblvfs.a
+noinst_LIBRARIES = liblvfs.a
 liblvfs_a_SOURCES = lvfs_userfs.c
+liblvfs_a_CFLAGS = -fPIC
 
 #if MYSQL
 #liblvfs_a_SOURCES += lvfs_user_mysql.c

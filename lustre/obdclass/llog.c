@@ -215,7 +215,6 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
         else
                 last_index = LLOG_BITMAP_BYTES * 8 - 1;
 
-
         while (rc == 0) {
                 struct llog_rec_hdr *rec;
 

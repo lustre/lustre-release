@@ -215,6 +215,10 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
         if (!request)
                 GOTO(out, rc = -ENOMEM);
 
+#ifndef __KERNEL__
+        lustre_msg_add_op_flags(request->rq_reqmsg, MSG_CONNECT_LIBCLIENT);
+#endif
+
         request->rq_send_state = LUSTRE_IMP_CONNECTING;
         request->rq_replen = lustre_msg_size(0, NULL);
         request->rq_interpret_reply = ptlrpc_connect_interpret;
@@ -229,6 +233,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 
         if (aa->pcaa_initial_connect)
                 imp->imp_replayable = 1;
+
         ptlrpcd_add_req(request);
         rc = 0;
 out:
@@ -349,8 +354,10 @@ finish:
  out:
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
-                if (aa->pcaa_initial_connect && !imp->imp_initial_recov)
+                if (aa->pcaa_initial_connect && !imp->imp_initial_recov) {
+                        ptlrpc_set_import_active(imp, 0);
                         GOTO(norecov, rc);
+                }
                 CDEBUG(D_ERROR, 
                        "recovery of %s on %s failed (%d); restarting\n",
                        imp->imp_target_uuid.uuid,
@@ -441,7 +448,9 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                        imp->imp_connection->c_remote_uuid.uuid);
 
                 ptlrpc_set_import_active(imp, 1);
-                ptlrpc_resend(imp);
+                rc = ptlrpc_resend(imp);
+                if (rc)
+                        GOTO(out, rc);
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
         } 
 

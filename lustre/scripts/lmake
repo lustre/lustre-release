@@ -328,7 +328,7 @@ build_lustre()
 {
     (( $BUILD_LUSTRE )) || return 0
     pushd "$TOPDIR" >/dev/null
-    make -j $JOBS -s
+    make -j $JOBS -s || fatal 1 "Error building Lustre."
     popd >/dev/null
 }
 

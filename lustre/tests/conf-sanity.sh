@@ -21,14 +21,6 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/local.sh}
 
-FORCE=${FORCE:-" --force"}
-
-if [ "$VERBOSE" == "true" ]; then
-	CMDVERBOSE=""
-else
-	CMDVERBOSE=" > /dev/null"
-fi
-
 gen_config() {
 	rm -f $XMLCONFIG
 
@@ -51,33 +43,33 @@ gen_second_config() {
 
 start_mds() {
 	echo "start mds service on `facet_active_host mds`"
-	start mds --reformat $MDSLCONFARGS $CMDVERBOSE || return 94
+	start mds --reformat $MDSLCONFARGS  || return 94
 }
 stop_mds() {
 	echo "stop mds service on `facet_active_host mds`"
-	stop mds $@ $CMDVERBOSE || return 97 
+	stop mds $@  || return 97 
 }
 
 start_ost() {
 	echo "start ost service on `facet_active_host ost`"
-	start ost --reformat $OSTLCONFARGS $CMDVERBOSE || return 95
+	start ost --reformat $OSTLCONFARGS  || return 95
 }
 
 stop_ost() {
 	echo "stop ost service on `facet_active_host ost`"
-	stop ost $@ $CMDVERBOSE || return 98 
+	stop ost $@  || return 98 
 }
 
 mount_client() {
 	local MOUNTPATH=$1
 	echo "mount lustre on ${MOUNTPATH}....."
-	zconf_mount `hostname`  $MOUNTPATH $CMDVERBOSE || return 96
+	zconf_mount `hostname`  $MOUNTPATH  || return 96
 }
 
 umount_client() {
 	local MOUNTPATH=$1
 	echo "umount lustre on ${MOUNTPATH}....."
-	zconf_umount $MOUNTPATH $CMDVERBOSE || return 97
+	zconf_umount `hostname`  $MOUNTPATH || return 97
 }
 
 manual_umount_client(){
@@ -136,7 +128,7 @@ run_test 0 "single mount setup"
 test_1() {
 	start_ost
 	echo "start ost second time..."
-	start ost --reformat $OSTLCONFARGS $CMDVERBOSE 
+	start ost --reformat $OSTLCONFARGS 
 	start_mds	
 	mount_client $MOUNT
 	check_mount || return 42
@@ -148,7 +140,7 @@ test_2() {
 	start_ost
 	start_mds	
 	echo "start mds second time.."
-	start mds --reformat $MDSLCONFARGS $CMDVERBOSE 
+	start mds --reformat $MDSLCONFARGS 
 	
 	mount_client $MOUNT  
 	check_mount || return 43
@@ -170,7 +162,7 @@ run_test 3 "mount client twice"
 test_4() {
 	setup
 	touch $DIR/$tfile || return 85
-	stop_ost ${FORCE}
+	stop_ost --force
 	cleanup 
 	eno=$?
 	# ok for ost to fail shutdown
@@ -184,16 +176,17 @@ run_test 4 "force cleanup ost, then cleanup"
 test_5() {
 	setup
 	touch $DIR/$tfile || return 1
-	stop_mds ${FORCE} || return 2
+	stop_mds --force || return 2
 
 	# cleanup may return an error from the failed 
 	# disconnects; for now I'll consider this successful 
 	# if all the modules have unloaded.
  	umount $MOUNT &
 	UMOUNT_PID=$!
-	sleep $TIMEOUT
+	sleep 2
 	echo "killing umount"
 	kill -TERM $UMOUNT_PID
+	echo "waiting for umount to finish"
 	wait $UMOUNT_PID 
 
 	# cleanup client modules
@@ -207,6 +200,48 @@ test_5() {
 	return 0
 }
 run_test 5 "force cleanup mds, then cleanup"
+
+test_5b() {
+	start_ost
+	start_mds
+	stop_mds
+
+	[ -d $MOUNT ] || mkdir -p $MOUNT
+	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	llmount $mds_HOST://mds_svc/client_facet $MOUNT  && exit 1
+
+	# cleanup client modules
+	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	
+	# stop_mds is a no-op here, and should not fail
+	stop_mds || return 2
+	stop_ost || return 3
+
+	lsmod | grep -q portals && return 3
+	return 0
+
+}
+run_test 5b "mds down, cleanup after failed mount (bug 2712)"
+
+test_5c() {
+	start_ost
+	start_mds
+
+	[ -d $MOUNT ] || mkdir -p $MOUNT
+	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	llmount $mds_HOST://wrong_mds_svc/client_facet $MOUNT  && exit 1
+
+	# cleanup client modules
+	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	
+	stop_mds || return 2
+	stop_ost || return 3
+
+	lsmod | grep -q portals && return 3
+	return 0
+
+}
+run_test 5c "cleanup after failed mount (bug 2712)"
 
 test_6() {
 	setup
@@ -472,13 +507,13 @@ test_14() {
         add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
             --stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
         add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE \
-            --mkfsoptions -V
+            --mkfsoptions "-Llabel_conf_15"
         add_client client mds --lov lov1 --path $MOUNT
 
         FOUNDSTRING=`awk -F"<" '/<mkfsoptions>/{print $2}' $XMLCONFIG`
-        EXPECTEDSTRING="mkfsoptions>-V"
+        EXPECTEDSTRING="mkfsoptions>-Llabel_conf_15"
         if [ $EXPECTEDSTRING != $FOUNDSTRING ]; then
-                echo "Error:expected string: $EXPECTEDSTRING; found: $FOUNDSTRING"
+                echo "Error: expected: $EXPECTEDSTRING; found: $FOUNDSTRING"
                 return 1
         fi
         echo "Success:mkfsoptions for ost written to xml file correctly."
@@ -488,8 +523,12 @@ test_14() {
         start_ost
         start_mds
         mount_client $MOUNT || return $?
+        if [ -z "`dumpe2fs -h $OSTDEV | grep label_conf_15`" ]; then
+                echo "Error: the mkoptions not applied to mke2fs of ost."
+                return 1
+        fi
         cleanup
-        echo "lconf mkfsoptions-parsing for ost success"
+        echo "lconf mkfsoptions for ost success"
 
         gen_config
 }
