@@ -102,9 +102,8 @@ void *class_handle2object(__u64 cookie)
                 h = list_entry(tmp, struct portals_handle, h_link);
 
                 if (h->h_cookie == cookie) {
+                        h->h_addref(h);
                         retval = h;
-                        if (h->h_addref)
-                                h->h_addref(h);
                         break;
                 }
         }
