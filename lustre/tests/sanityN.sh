@@ -19,6 +19,9 @@ error () {
     exit 1
 }
 
+mkdir -p /mnt/lustre2
+mount | grep /mnt/lustre2 || $START
+
 echo -n "test 1: check create on 2 mtpt's..."
 touch /mnt/lustre1/f1
 [ -f /mnt/lustre2/f1 ] || error "test 1 failure" 
@@ -49,15 +52,12 @@ echo "pass"
 
 echo -n "test 9: remove of open file on other node..."
 touch /mnt/lustre1/f9
-tail -f /mnt/lustre/f9 &
+tail -f /mnt/lustre1/f9 &
 rm /mnt/lustre2/f9
 kill %1
 cat /mnt/lustre1/f9 && error "test 9 fails"
 echo "pass"
 
 $CLEAN
-$START
-
-
 
 exit
