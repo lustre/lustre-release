@@ -104,12 +104,21 @@ typedef struct _gmnal_stxd_t {
 	lib_msg_t		*cookie;
 	int			niov;
 	struct iovec		iov[PTL_MD_MAX_IOV];
-	struct	_gmnal_srxd_t  *srxd;
 	struct _gmnal_stxd_t	*next;
         int                     rxt; 
         int                     kniov;
         struct iovec            *iovec_dup;
 } gmnal_stxd_t;
+
+/*
+ *	keeps a transmit token for large transmit (gm_get)
+ *	and a pointer to rxd that is used as context for large receive
+ */
+typedef struct _gmnal_ltxd_t {
+	struct _gmnal_ltxd_t	*next;
+	struct	_gmnal_srxd_t  *srxd;
+} gmnal_ltxd_t;
+
 
 /*
  *	as for gmnal_stxd_t 
@@ -181,6 +190,9 @@ typedef struct _gmnal_data_t {
 	spinlock_t 	rxt_stxd_lock;
 	struct semaphore rxt_stxd_token;
 	gmnal_stxd_t	*rxt_stxd;
+	spinlock_t 	ltxd_lock;
+	struct semaphore ltxd_token;
+	gmnal_ltxd_t	*ltxd;
 	spinlock_t 	srxd_lock;
 	struct semaphore srxd_token;
 	gmnal_srxd_t	*srxd;
@@ -263,6 +275,14 @@ extern gmnal_data_t	*global_nal_data;
 #define GMNAL_RXT_TXD_GETTOKEN(a)	down(&a->rxt_stxd_token);
 #define GMNAL_RXT_TXD_TRYGETTOKEN(a)	down_trylock(&a->rxt_stxd_token)
 #define GMNAL_RXT_TXD_RETURNTOKEN(a)	up(&a->rxt_stxd_token);
+
+#define GMNAL_LTXD_LOCK_INIT(a)		spin_lock_init(&a->ltxd_lock);
+#define GMNAL_LTXD_LOCK(a)		spin_lock(&a->ltxd_lock);
+#define GMNAL_LTXD_UNLOCK(a)		spin_unlock(&a->ltxd_lock);
+#define GMNAL_LTXD_TOKEN_INIT(a, n)	sema_init(&a->ltxd_token, n);
+#define GMNAL_LTXD_GETTOKEN(a)		down(&a->ltxd_token);
+#define GMNAL_LTXD_TRYGETTOKEN(a)	down_trylock(&a->ltxd_token)
+#define GMNAL_LTXD_RETURNTOKEN(a)	up(&a->ltxd_token);
 
 #define GMNAL_RXD_LOCK_INIT(a)		spin_lock_init(&a->srxd_lock);
 #define GMNAL_RXD_LOCK(a)		spin_lock(&a->srxd_lock);
@@ -376,12 +396,14 @@ void  gmnal_fini(void);
 
 
 /*
- *	Small Transmit and Receive Descriptor Functions
+ *	Small and Large Transmit and Receive Descriptor Functions
  */
-int  		gmnal_alloc_stxd(gmnal_data_t *);
-void 		gmnal_free_stxd(gmnal_data_t *);
+int  		gmnal_alloc_txd(gmnal_data_t *);
+void 		gmnal_free_txd(gmnal_data_t *);
 gmnal_stxd_t* 	gmnal_get_stxd(gmnal_data_t *, int);
 void 		gmnal_return_stxd(gmnal_data_t *, gmnal_stxd_t *);
+gmnal_ltxd_t* 	gmnal_get_ltxd(gmnal_data_t *);
+void 		gmnal_return_ltxd(gmnal_data_t *, gmnal_ltxd_t *);
 
 int  		gmnal_alloc_srxd(gmnal_data_t *);
 void 		gmnal_free_srxd(gmnal_data_t *);

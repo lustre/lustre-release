@@ -1,10 +1,10 @@
  fs/ext3/ialloc.c          |    6 
  fs/ext3/inode.c           |   12 
  fs/ext3/super.c           |    6 
- fs/ext3/xattr.c           |  600 +++++++++++++++++++++++++++++++++++++++++++++-
+ fs/ext3/xattr.c           |  597 +++++++++++++++++++++++++++++++++++++++++++++-
  include/linux/ext3_fs.h   |    2 
  include/linux/ext3_fs_i.h |    3 
- 6 files changed, 616 insertions(+), 13 deletions(-)
+ 6 files changed, 615 insertions(+), 11 deletions(-)
 
 --- linux-2.4.22-ac1/fs/ext3/ialloc.c~ext3-ea-in-inode-2.4.22-rh	2003-10-08 13:57:56.000000000 +0400
 +++ linux-2.4.22-ac1-alexey/fs/ext3/ialloc.c	2003-10-08 15:13:31.000000000 +0400
@@ -72,7 +72,7 @@
  				sbi->s_inode_size);
  			goto failed_mount;
 --- linux-2.4.22-ac1/fs/ext3/xattr.c~ext3-ea-in-inode-2.4.22-rh	2003-10-08 13:57:56.000000000 +0400
-+++ linux-2.4.22-ac1-alexey/fs/ext3/xattr.c	2003-10-08 15:13:31.000000000 +0400
++++ linux-2.4.22-ac1-alexey/fs/ext3/xattr.c	2003-10-12 16:36:07.000000000 +0400
 @@ -100,6 +100,9 @@
  static int ext3_xattr_set2(handle_t *, struct inode *, struct buffer_head *,
  			   struct ext3_xattr_header *);
@@ -620,7 +620,7 @@
   * ext3_xattr_set()
   *
   * Create, replace or remove an extended attribute for this inode. Buffer
-@@ -566,6 +1050,102 @@ static void ext3_xattr_update_super_bloc
+@@ -566,6 +1050,100 @@ static void ext3_xattr_update_super_bloc
   */
  int
  ext3_xattr_set(handle_t *handle, struct inode *inode, int name_index,
@@ -645,7 +645,6 @@
 +	name_len = strlen(name);
 +	if (name_len > 255 || value_len > inode->i_sb->s_blocksize)
 +		return -ERANGE;
-+	down(&ext3_xattr_sem);
 +
 +	/* try to find attribute in inode body */
 +	err = ext3_xattr_ibody_find(inode, name_index, name, &entry, &free1);
@@ -709,7 +708,6 @@
 +	}
 +
 +finish:	
-+	up(&ext3_xattr_sem);
 +	return err;
 +}
 +
@@ -723,22 +721,14 @@
  	       const char *name, const void *value, size_t value_len, int flags)
  {
  	struct super_block *sb = inode->i_sb;
-@@ -603,7 +1183,6 @@ ext3_xattr_set(handle_t *handle, struct 
+@@ -603,6 +1181,7 @@ ext3_xattr_set(handle_t *handle, struct 
  	name_len = strlen(name);
  	if (name_len > 255 || value_len > sb->s_blocksize)
  		return -ERANGE;
--	down(&ext3_xattr_sem);
++
+ 	down(&ext3_xattr_sem);
  
  	if (block) {
- 		/* The inode already has an extended attribute block. */
-@@ -801,7 +1380,6 @@ cleanup:
- 	brelse(bh);
- 	if (!(bh && header == HDR(bh)))
- 		kfree(header);
--	up(&ext3_xattr_sem);
- 
- 	return error;
- }
 --- linux-2.4.22-ac1/include/linux/ext3_fs.h~ext3-ea-in-inode-2.4.22-rh	2003-10-08 13:57:57.000000000 +0400
 +++ linux-2.4.22-ac1-alexey/include/linux/ext3_fs.h	2003-10-08 15:13:31.000000000 +0400
 @@ -265,6 +265,8 @@ struct ext3_inode {
