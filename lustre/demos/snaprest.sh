@@ -38,4 +38,4 @@ snapset 0 $SNAPTABLE
 EOF
 plog log "COMPLETE snaprestore"
 
-plog mount -t obdfs -odevice=/dev/obd1 /dev/obd1 $MNTOBD
+plog mount -t obdfs -odevice=/dev/obd2 /dev/obd2 $MNTOBD
