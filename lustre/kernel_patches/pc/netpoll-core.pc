@@ -1,0 +1,8 @@
+arch/i386/kernel/irq.c
+include/asm-i386/irq.h
+include/linux/netdevice.h
+include/linux/netpoll.h
+net/core/dev.c
+net/core/Makefile
+net/core/netpoll.c
+net/Kconfig
