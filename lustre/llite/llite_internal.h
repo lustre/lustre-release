@@ -18,12 +18,6 @@ struct lov_stripe_md;
 extern void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
 extern struct proc_dir_entry *proc_lustre_fs_root;
 
-struct ll_read_inode2_cookie {
-        struct mds_body      *lic_body;
-        struct lov_stripe_md *lic_lsm;
-};
-
-
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 # define hlist_del_init list_del_init
 #endif 
@@ -48,7 +42,7 @@ void lprocfs_unregister_mountpoint(struct ll_sb_info *sbi);
 
 /* llite/namei.c */
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
-                      struct ll_read_inode2_cookie *lic);
+                      struct lustre_md *lic);
 struct dentry *ll_find_alias(struct inode *, struct dentry *);
 int ll_it_open_error(int phase, struct lookup_intent *it);
 int ll_mdc_cancel_unused(struct lustre_handle *conn, struct inode *inode,
@@ -154,6 +148,8 @@ int ll_setattr(struct dentry *de, struct iattr *attr);
 int ll_statfs(struct super_block *sb, struct kstatfs *sfs);
 void ll_update_inode(struct inode *inode, struct mds_body *body,
                      struct lov_stripe_md *lsm);
+int it_disposition(struct lookup_intent *it, int flag);
+void it_set_disposition(struct lookup_intent *it, int flag);
 void ll_read_inode2(struct inode *inode, void *opaque);
 void ll_umount_begin(struct super_block *sb);
 
