@@ -212,7 +212,7 @@ void portals_debug_dumplog(void);
 # define portals_debug_msg(subsys, mask, file, fn, line, stack, format, a...) \
     printf("%02x:%06x (@%lu %s:%s,l. %d %d %lu): " format,                    \
            (subsys), (mask), (long)time(0), file, fn, line,                   \
-           getpid() , stack, ## a);
+           getpid(), (unsigned long)stack, ## a);
 
 #undef CWARN
 #undef CERROR
