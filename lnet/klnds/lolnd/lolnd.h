@@ -35,7 +35,7 @@
 #include <linux/uio.h>
 #include <linux/init.h>
 
-#define DEBUG_SUBSYSTEM S_LONAL
+#define DEBUG_SUBSYSTEM S_NAL
 
 #include <linux/kp30.h>
 #include <portals/p30.h>
