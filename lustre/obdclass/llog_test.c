@@ -326,8 +326,9 @@ static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
                 RETURN(-EINVAL);
         }
 
-        CERROR("seeing record at index %d in log "LPX64"\n",
-               le32_to_cpu(rec->lrh_index), lir->lid_id.lgl_oid);
+        CERROR("seeing record at index %d - "LPX64":%x in log "LPX64"\n",
+               le32_to_cpu(rec->lrh_index), lir->lid_id.lgl_oid,
+               lir->lid_id.lgl_ogen, llh->lgh_id.lgl_oid);
         RETURN(0);
 }
 
