@@ -24,7 +24,7 @@ char *		cmd;
 struct option	longOpts[] = {
 			{"help", 0, 0, 'h'},
 			{"obd", 1, 0, 'o'},
-			{"query", 0, 0, 'o'},
+			{"query", 0, 0, 'q'},
 			{"verbose", 0, 0, 'v'},
 			{0, 0, 0, 0}
 		};
@@ -217,8 +217,8 @@ processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
 
 	close(fd);
 
-	if (query || verbose)
-		printf("\n%s:\n", path);
+	if (query || verbose || lmm->lmm_objects[obdindex].l_object_id)
+		printf("%s\n", path);
 
 	if (verbose) {
 		printf("lmm_magic:          0x%x\n", lmm->lmm_magic);
@@ -232,23 +232,25 @@ processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
 	count = lmm->lmm_ost_count;
 
 	if (query || verbose) {
-		struct lov_object_id *loi;
-		__u64 oid;
+		long long oid;
+		int ost = lmm->lmm_stripe_offset;
+		int header = 1;
 
-		loi = lmm->lmm_objects;
-
-		printf("obdidx\tobjid\n");
-
-		for (i = 0; i < count; i++, loi++)
-			if ((oid = loi->l_object_id))
-				printf("%6d\t%5lld\n", i, (long long)oid);
+		for (i = 0; i < count; i++, ost++) {
+			ost %= lmm->lmm_ost_count;
+			if ((oid = lmm->lmm_objects[ost].l_object_id)) {
+				if (header) {
+					printf("\tobdidx\t   objid\n");
+					header = 0;
+				}
+				printf("\t%6u\t%8llu%s\n",
+				       ost, oid, obdindex == ost ? " *" : "");
+			}
+		}
 
 		if (query)
 			return(0);
 	}
-
-	if (lmm->lmm_objects[obdindex].l_object_id)
-		printf("%s\n", path);
 
 	return(0);
 }
@@ -297,7 +299,7 @@ getobdindex(const char *path)
 
         obdcount = desc.ld_tgt_count;
 
-	if (query) {
+	if (query || verbose) {
 		printf("OBDS:\n");
 		for (i = 0, uuidp = uuids; i < obdcount; i++, uuidp++)
 			printf("%4d: %s\n", i, (char *)uuidp);
