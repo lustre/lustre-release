@@ -458,11 +458,10 @@ Index: linux-2.4.18-p4smp/fs/namei.c
  				break;
  		}
  		goto return_base;
-@@ -645,7 +684,28 @@
+@@ -645,6 +684,27 @@
  		 * Check the cached dentry for staleness.
  		 */
  		dentry = nd->dentry;
--		if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
 +		if (dentry && dentry->d_op && dentry->d_op->d_revalidate_it) {
 +			err = -ESTALE;
 +			if (!dentry->d_op->d_revalidate_it(dentry, 0, it)) {
@@ -483,11 +482,10 @@ Index: linux-2.4.18-p4smp/fs/namei.c
 +			}
 +			if (!nd->dentry->d_inode)
 +				goto no_inode;
-+		}
-+		else if (dentry && dentry->d_op && dentry->d_op->d_revalidate){
++		} else
+ 		if (dentry && dentry->d_op && dentry->d_op->d_revalidate) {
  			err = -ESTALE;
  			if (!dentry->d_op->d_revalidate(dentry, 0)) {
- 				d_invalidate(dentry);
 @@ -658,15 +718,28 @@
  		dput(dentry);
  		break;
