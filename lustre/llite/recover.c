@@ -26,7 +26,7 @@ static int ll_reconnect(struct ll_sb_info *sbi)
 {
         struct ll_fid rootfid;
         __u64 last_committed;
-        __u32 last_xid;
+        __u64 last_xid;
         int err;
         struct ptlrpc_request *request; 
 
@@ -35,7 +35,7 @@ static int ll_reconnect(struct ll_sb_info *sbi)
         sbi2mdc(sbi)->cl_conn->c_level = LUSTRE_CONN_CON;
 
         /* XXX: need to store the last_* values somewhere */
-        err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed, 
+        err = mdc_getstatus(&sbi->ll_mdc_conn, &rootfid, &last_committed,
                             &last_xid, &request);
         if (err) {
                 CERROR("cannot mds_connect: rc = %d\n", err);

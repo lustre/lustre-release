@@ -89,7 +89,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         struct ll_fid rootfid;
         struct statfs sfs;
         __u64 last_committed;
-        __u32 last_xid;
+        __u64 last_xid;
         struct ptlrpc_request *request = NULL;
         struct ll_inode_md md;
         class_uuid_t uuid;

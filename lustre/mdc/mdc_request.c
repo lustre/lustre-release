@@ -56,7 +56,7 @@ int mdc_con2cl(struct lustre_handle *conn, struct ptlrpc_client **cl,
 }
 
 int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
-                  __u64 *last_committed, __u32 *last_xid,
+                  __u64 *last_committed, __u64 *last_xid,
                   struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
@@ -83,9 +83,10 @@ int mdc_getstatus(struct lustre_handle *conn, struct ll_fid *rootfid,
                 *last_committed = req->rq_repmsg->last_committed;
                 *last_xid = req->rq_repmsg->last_xid;
 
-                CDEBUG(D_NET, "root ino=%ld, last_committed=%Lu, last_xid=%d\n",
+                CDEBUG(D_NET,"root ino=%ld, last_committed=%Lu, last_xid=%Ld\n",
                        (unsigned long)rootfid->id,
-                       (unsigned long long)*last_committed, *last_xid);
+                       (unsigned long long)*last_committed,
+                       (unsigned long long)*last_xid);
         }
 
         EXIT;

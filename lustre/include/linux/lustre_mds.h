@@ -152,7 +152,7 @@ int mdc_getlovinfo(struct obd_device *obd, struct lustre_handle *mdc_connh,
                    uuid_t **uuids, struct ptlrpc_request **request);
 int mdc_getstatus(struct lustre_handle *conn,
                   struct ll_fid *rootfid, __u64 *last_committed,
-                  __u32 *last_xid, struct ptlrpc_request **);
+                  __u64 *last_xid, struct ptlrpc_request **);
 int mdc_getattr(struct lustre_handle *conn,
                 obd_id ino, int type, unsigned long valid, size_t ea_size,
                 struct ptlrpc_request **request);
