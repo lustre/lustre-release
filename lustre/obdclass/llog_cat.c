@@ -213,10 +213,11 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
                 up_read(&cathandle->lgh_lock);
                 RETURN(loghandle);
         }
+        up_read(&cathandle->lgh_lock);
 
         /* time to create new log */
 
-        /* first, we have to make sure the state hasn't change */
+        /* first, we have to make sure the state hasn't changed */
         down_write(&cathandle->lgh_lock);
         loghandle = cathandle->u.chd.chd_current_log;
         if (loghandle) {
