@@ -251,7 +251,7 @@ static struct dentry *ll_lookup2(struct inode *dir, struct dentry *dentry,
  iget:
         lic.lic_body = lustre_msg_buf(request->rq_repmsg, offset);
         if (S_ISREG(lic.lic_body->mode)) {
-                LASSERT(request->rq_repmsg->bufcount < offset + 1);
+                LASSERT(request->rq_repmsg->bufcount > offset);
                 lic.lic_lmm = lustre_msg_buf(request->rq_repmsg, offset + 1);
                 if (lic.lic_lmm->lmm_magic != LOV_MAGIC)
                         lic.lic_lmm = NULL;
