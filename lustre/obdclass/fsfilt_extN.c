@@ -390,6 +390,14 @@ static int fsfilt_extN_statfs(struct super_block *sb, struct obd_statfs *osfs)
         return rc;
 }
 
+extern int extN_prep_san_write(struct inode *inode, long *blocks,
+			       int nblocks, loff_t newsize);
+static int fsfilt_extN_prep_san_write(struct inode *inode, long *blocks,
+                                      int nblocks, loff_t newsize)
+{
+        return extN_prep_san_write(inode, blocks, nblocks, newsize);
+}
+
 static struct fsfilt_operations fsfilt_extN_ops = {
         fs_type:                "extN",
         fs_owner:               THIS_MODULE,
@@ -403,6 +411,7 @@ static struct fsfilt_operations fsfilt_extN_ops = {
         fs_journal_data:        fsfilt_extN_journal_data,
         fs_set_last_rcvd:       fsfilt_extN_set_last_rcvd,
         fs_statfs:              fsfilt_extN_statfs,
+        fs_prep_san_write:      fsfilt_extN_prep_san_write,
 };
 
 static int __init fsfilt_extN_init(void)
