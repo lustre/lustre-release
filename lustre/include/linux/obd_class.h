@@ -442,11 +442,10 @@ static inline int obd_cancel_unused(struct lustre_handle *conn,
 extern int obd_init_caches(void);
 extern void obd_cleanup_caches(void);
 
-static inline int obdo_has_inline(struct obdo *obdo)
+static inline struct lustre_handle *obd_oa2handle(struct obdo *oa)
 {
-        return (obdo->o_valid & OBD_MD_FLINLINE &&
-                obdo->o_obdflags & OBD_FL_INLINEDATA);
-};
+        return (struct lustre_handle *)&oa->o_inline;
+}
 
 #ifdef __KERNEL__
 /* support routines */
