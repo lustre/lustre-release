@@ -39,7 +39,7 @@ extern int (*ptlrpc_ldlm_replay_locks)(struct obd_import *);
 int ptlrpc_get_ldlm_hooks(void);
 void ptlrpc_daemonize(void);
 
-void ptlrpc_request_handle_eviction(struct ptlrpc_request *);
+void ptlrpc_request_handle_notconn(struct ptlrpc_request *);
 void lustre_assert_wire_constants(void);
 
 void ptlrpc_lprocfs_register_service(struct obd_device *obddev,
