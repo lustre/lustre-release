@@ -270,7 +270,7 @@ static int __init cobd_init(void)
         struct lprocfs_static_vars lvars;
         ENTRY;
 
-        printk(KERN_INFO "Lustre Caching OBD driver; info@clusterfs.com\n");
+        printk(KERN_INFO "Lustre: Caching OBD driver; info@clusterfs.com\n");
 
         lprocfs_init_vars(cobd, &lvars);
         RETURN(class_register_type(&cobd_ops, lvars.module_vars,
