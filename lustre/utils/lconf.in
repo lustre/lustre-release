@@ -75,14 +75,16 @@ config.xml          Lustre configuration in xml format.
                             50 - mdc, osc
                             60 - lov, lovconfig
                             70 - mountpoint, echo_client
+--lustre=src_dir    Base directory of lustre sources. This parameter will cause lconf
+                    to load modules from a source tree.
+--portals=src_dir   Portals source directory.  If this is a relative path, then it is
+                    assumed to be relative to lustre. 
+
 """
     TODO = """
 --ldap server       LDAP server with lustre config database
 --makeldiff         Translate xml source to LDIFF 
 This are perhaps not needed:
---lustre="src dir"  Base directory of lustre sources. Used to search
-                    for modules.
---portals=src       Portals source 
 """
     sys.exit()
 
@@ -106,9 +108,12 @@ class Config:
         self._gdb_script = '/tmp/ogdb'
         self._debug_path = '/tmp/lustre-log'
         self._dump_file = None
-        self._src_dir = None
+        self._lustre_dir = ''
+        self._portals_dir = ''
 	self._minlevel = 0
 	self._maxlevel = 100
+        self._timeout = -1
+        self._recovery_upcall = ''
 
     def verbose(self, flag = None):
         if flag: self._verbose = flag
@@ -162,10 +167,6 @@ class Config:
         else:
             return self._debug_path
 
-    def src_dir(self, val = None):
-        if val: self._src_dir = val
-        return self._src_dir
-
     def dump_file(self, val = None):
         if val: self._dump_file = val
         return self._dump_file
@@ -178,7 +179,21 @@ class Config:
         if val: self._maxlevel = int(val)
         return self._maxlevel
 
+    def portals_dir(self, val = None):
+        if val: self._portals_dir = val
+        return self._portals_dir
 
+    def lustre_dir(self, val = None):
+        if val: self._lustre_dir = val
+        return self._lustre_dir
+
+    def timeout(self, val = None):
+        if val: self._timeout = val
+        return self._timeout
+
+    def recovery_upcall(self, val = None):
+        if val: self._recovery_upcall = val
+        return self._recovery_upcall
 
 config = Config()
 
@@ -471,10 +486,10 @@ def find_prog(cmd):
     syspath = string.split(os.environ['PATH'], ':')
     cmdpath = os.path.dirname(sys.argv[0])
     syspath.insert(0, cmdpath);
-    syspath.insert(0, os.path.join(cmdpath, PORTALS_DIR+'/linux/utils/'))
+    if config.portals_dir():
+        syspath.insert(0, os.path.join(cmdpath, config.portals_dir()+'/linux/utils/'))
     for d in syspath:
         prog = os.path.join(d,cmd)
-	debug(prog)
         if os.access(prog, os.X_OK):
             return prog
     return ''
@@ -491,10 +506,9 @@ def do_find_file(base, mod):
             if module:
                 return module
 
-def find_module(dev_dir, modname):
+def find_module(src_dir, dev_dir, modname):
     mod = '%s.o' % (modname)
-
-    module = dev_dir +'/'+ mod
+    module = src_dir +'/'+ dev_dir +'/'+ mod
     try: 
        if os.access(module, os.R_OK):
             return module
@@ -572,6 +586,8 @@ def init_loop(file, size, fstype):
         print 'WARNING file:', file, 'already mapped to', dev
         return dev
     if config.reformat()  or not os.access(file, os.R_OK | os.W_OK):
+        if size < 8000:
+            error(file, "size must be larger than 8MB")
         run("dd if=/dev/zero bs=1k count=0 seek=%d of=%s" %(size,  file))
     loop = loop_base()
     # find next free loop
@@ -669,6 +685,20 @@ def is_prepared(uuid):
         e.dump()
     return 0
     
+def fs_is_mounted(path):
+    """Return true if path is a mounted lustre filesystem"""
+    try:
+        fp = open('/proc/mounts')
+        lines = fp.readlines()
+        fp.close()
+        for l in lines:
+            a = string.split(l)
+            if a[1] == path and a[2] == 'lustre_lite':
+                return 1
+    except IOError, e:
+        log(e)
+    return 0
+        
 
 # ============================================================
 # Classes to prepare and cleanup the various objects
@@ -719,9 +749,13 @@ class Module:
             e.dump()
             cleanup_error(e.rc)
 
-    def add_module(self, dev_dir, modname):
+    def add_portals_module(self, dev_dir, modname):
         """Append a module to list of modules to load."""
-        self.kmodule_list.append((dev_dir, modname))
+        self.kmodule_list.append((config.portals_dir(), dev_dir, modname))
+
+    def add_lustre_module(self, dev_dir, modname):
+        """Append a module to list of modules to load."""
+        self.kmodule_list.append((config.lustre_dir(), dev_dir, modname))
 
     def mod_loaded(self, modname):
         """Check if a module is already loaded. Look in /proc/modules for it."""
@@ -735,13 +769,13 @@ class Module:
 
     def load_module(self):
         """Load all the modules in the list in the order they appear."""
-        for dev_dir, mod in self.kmodule_list:
+        for src_dir, dev_dir, mod in self.kmodule_list:
             #  (rc, out) = run ('/sbin/lsmod | grep -s', mod)
             if self.mod_loaded(mod) and not config.noexec():
                 continue
             log ('loading module:', mod)
-            if config.src_dir():
-                module = find_module(dev_dir,  mod)
+            if src_dir:
+                module = find_module(src_dir, dev_dir,  mod)
                 if not module:
                     panic('module not found:', mod)
                 (rc, out)  = run('/sbin/insmod', module)
@@ -756,7 +790,7 @@ class Module:
         """Unload the modules in the list in reverse order."""
         rev = self.kmodule_list
         rev.reverse()
-        for dev_dir, mod in rev:
+        for src_dir, dev_dir, mod in rev:
             if not self.mod_loaded(mod):
                 continue
             # debug hack
@@ -785,19 +819,19 @@ class Network(Module):
                 panic("unable to set nid for", self.net_type, self.nid)
             debug("nid:", self.nid)
 
-        self.add_module(PORTALS_DIR+"/linux/oslib", 'portals')
+        self.add_portals_module("linux/oslib", 'portals')
         if node_needs_router():
-            self.add_module(PORTALS_DIR+"/linux/router", 'kptlrouter')
+            self.add_portals_module("linux/router", 'kptlrouter')
         if self.net_type == 'tcp':
-            self.add_module(PORTALS_DIR+"/linux/socknal", 'ksocknal')
+            self.add_portals_module("linux/socknal", 'ksocknal')
         if self.net_type == 'toe':
-            self.add_module(PORTALS_DIR+"/linux/toenal", 'ktoenal')
+            self.add_portals_odule("/linux/toenal", 'ktoenal')
         if self.net_type == 'elan':
-            self.add_module(PORTALS_DIR+"/linux/rqswnal", 'kqswnal')
+            self.add_portals_module("/linux/rqswnal", 'kqswnal')
         if self.net_type == 'gm':
-            self.add_module(PORTALS_DIR+"/linux/gmnal", 'kgmnal')
-        self.add_module(config.src_dir()+'obdclass', 'obdclass')
-        self.add_module(config.src_dir()+'ptlrpc', 'ptlrpc')
+            self.add_portals_module("/linux/gmnal", 'kgmnal')
+        self.add_lustre_module('obdclass', 'obdclass')
+        self.add_lustre_module('ptlrpc', 'ptlrpc')
 
     def prepare(self):
         self.info(self.net_type, self.nid, self.port)
@@ -871,7 +905,7 @@ class Network(Module):
 class LDLM(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'LDLM', dom_node)
-        self.add_module(config.src_dir()+'ldlm', 'ldlm') 
+        self.add_lustre_module('ldlm', 'ldlm') 
     def prepare(self):
         if is_prepared(self.uuid):
             return
@@ -891,22 +925,22 @@ class LOV(Module):
             self.stripe_sz = get_attr_int(dev_node, 'stripesize', 65536)
             self.stripe_off = get_attr_int(dev_node, 'stripeoffset', 0)
             self.pattern = get_attr_int(dev_node, 'pattern', 0)
-            self.devlist = get_all_refs(dev_node, 'osc')
+            self.devlist = get_all_refs(dev_node, 'obd')
             self.stripe_cnt = get_attr_int(dev_node, 'stripecount', len(self.devlist))
-        self.add_module(config.src_dir()+'mdc', 'mdc')
-        self.add_module(config.src_dir()+'lov', 'lov')
+        self.add_lustre_module('mdc', 'mdc')
+        self.add_lustre_module('lov', 'lov')
 
     def prepare(self):
         if is_prepared(self.uuid):
             return
-        for osc_uuid in self.devlist:
-            osc = lookup(self.dom_node.parentNode, osc_uuid)
+        for obd_uuid in self.devlist:
+            obd = lookup(self.dom_node.parentNode, obd_uuid)
+            osc = get_osc(obd)
             if osc:
-                n = OSC(osc)
                 try:
                     # Ignore connection failures, because the LOV will DTRT with
                     # an unconnected OSC.
-                    n.prepare(ignore_connect_failure=1)
+                    osc.prepare(ignore_connect_failure=1)
                 except CommandError:
                     print "Error preparing OSC %s (inactive)\n" % osc_uuid
             else:
@@ -920,11 +954,11 @@ class LOV(Module):
     def cleanup(self):
         if not is_prepared(self.uuid):
             return
-        for osc_uuid in self.devlist:
-            osc = lookup(self.dom_node.parentNode, osc_uuid)
+        for obd_uuid in self.devlist:
+            obd = lookup(self.dom_node.parentNode, obd_uuid)
+            osc = get_osc(obd)
             if osc:
-                n = OSC(osc)
-                n.cleanup()
+                osc.cleanup()
             else:
                 panic('osc not found:', osc_uuid)
         Module.cleanup(self)
@@ -932,11 +966,11 @@ class LOV(Module):
 
 
     def load_module(self):
-        for osc_uuid in self.devlist:
-            osc = lookup(self.dom_node.parentNode, osc_uuid)
+        for obd_uuid in self.devlist:
+            obd = lookup(self.dom_node.parentNode, obd_uuid)
+            osc = get_osc(obd)
             if osc:
-                n = OSC(osc)
-                n.load_module()
+                osc.load_module()
                 break
             else:
                 panic('osc not found:', osc_uuid)
@@ -945,11 +979,11 @@ class LOV(Module):
 
     def cleanup_module(self):
         Module.cleanup_module(self)
-        for osc_uuid in self.devlist:
-            osc = lookup(self.dom_node.parentNode, osc_uuid)
+        for obd_uuid in self.devlist:
+            obd = lookup(self.dom_node.parentNode, obd_uuid)
+            osc = get_osc(obd)
             if osc:
-                n = OSC(osc)
-                n.cleanup_module()
+                osc.cleanup_module()
                 break
             else:
                 panic('osc not found:', osc_uuid)
@@ -982,9 +1016,9 @@ class MDS(Module):
         # FIXME: if fstype not set, then determine based on kernel version
         self.format = get_text(dom_node, 'autoformat', "no")
         if self.fstype == 'extN':
-            self.add_module(config.src_dir()+'extN', 'extN') 
-        self.add_module(config.src_dir()+'mds', 'mds')
-        self.add_module(config.src_dir()+'obdclass', 'fsfilt_%s'%(self.fstype))
+            self.add_lustre_module('extN', 'extN') 
+        self.add_lustre_module('mds', 'mds')
+        self.add_lustre_module('obdclass', 'fsfilt_%s'%(self.fstype))
             
     def prepare(self):
         if is_prepared(self.uuid):
@@ -1026,7 +1060,7 @@ class MDC(Module):
                                       int(random.random() * 1048576))
 
         self.lookup_server(self.mds.uuid)
-        self.add_module(config.src_dir()+'mdc', 'mdc')
+        self.add_lustre_module('mdc', 'mdc')
 
     def prepare(self):
         if is_prepared(self.uuid):
@@ -1043,12 +1077,14 @@ class OBD(Module):
         self.obdtype = get_attr(dom_node, 'type')
         self.devname, self.size = get_device(dom_node)
         self.fstype = get_text(dom_node, 'fstype')
+        self.active_target = get_text(dom_node, 'active_target')
         # FIXME: if fstype not set, then determine based on kernel version
         self.format = get_text(dom_node, 'autoformat', 'yes')
         if self.fstype == 'extN':
-            self.add_module(config.src_dir()+'extN', 'extN') 
-        self.add_module(config.src_dir()+'' + self.obdtype, self.obdtype)
-        self.add_module(config.src_dir()+'obdclass' , 'fsfilt_%s' % (self.fstype))
+            self.add_lustre_module('extN', 'extN') 
+        self.add_lustre_module(self.obdtype, self.obdtype)
+        if self.fstype:
+            self.add_lustre_module('obdclass' , 'fsfilt_%s' % (self.fstype))
 
     # need to check /proc/mounts and /etc/mtab before
     # formatting anything.
@@ -1070,11 +1106,28 @@ class OBD(Module):
         if not self.obdtype == 'obdecho':
             clean_loop(self.devname)
 
+class COBD(Module):
+    def __init__(self, dom_node):
+        Module.__init__(self, 'COBD', dom_node)
+        self.real_uuid = get_first_ref(dom_node, 'real_obd')
+        self.cache_uuid = get_first_ref(dom_node, 'cache_obd')
+        self.add_lustre_module('cobd' , 'cobd')
+
+    # need to check /proc/mounts and /etc/mtab before
+    # formatting anything.
+    # FIXME: check if device is already formatted.
+    def prepare(self):
+        if is_prepared(self.uuid):
+            return
+        self.info(self.real_uuid, self.cache_uuid)
+        lctl.newdev(attach="cobd %s %s" % (self.name, self.uuid),
+                    setup ="%s %s" %(self.real_uuid, self.cache_uuid))
+
 class OST(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'OST', dom_node)
         self.obd_uuid = get_first_ref(dom_node, 'obd')
-        self.add_module(config.src_dir()+'ost', 'ost')
+        self.add_lustre_module('ost', 'ost')
 
     def prepare(self):
         if is_prepared(self.uuid):
@@ -1091,7 +1144,9 @@ class VOSC(Module):
         if dom_node.nodeName == 'lov':
             self.osc = LOV(dom_node)
         else:
-            self.osc = OSC(dom_node)
+            self.osc = get_osc(dom_node)
+    def get_uuid(self):
+        return self.osc.uuid
     def prepare(self):
         self.osc.prepare()
     def cleanup(self):
@@ -1103,12 +1158,19 @@ class VOSC(Module):
         
 
 class OSC(Module):
-    def __init__(self,dom_node):
-        Module.__init__(self, 'OSC', dom_node)
-        self.obd_uuid = get_first_ref(dom_node, 'obd')
-        self.ost_uuid = get_first_ref(dom_node, 'ost')
+    def __init__(self, dom_node, obd_name, obd_uuid, ost_uuid):
+        self.dom_node = dom_node
+        self.module_name = 'OSC'
+        self.name = 'OSC_%s' % (obd_name)
+        self.uuid = '%s_%05x' % (self.name, int(random.random() * 1048576))
+        self.kmodule_list = []
+        self._server = None
+        self._connected = 0
+
+        self.obd_uuid = obd_uuid
+        self.ost_uuid = ost_uuid
         self.lookup_server(self.ost_uuid)
-        self.add_module(config.src_dir()+'osc', 'osc')
+        self.add_lustre_module('osc', 'osc')
 
     def prepare(self, ignore_connect_failure = 0):
         if is_prepared(self.uuid):
@@ -1132,8 +1194,6 @@ class OSC(Module):
                     setup ="%s %s" %(self.obd_uuid, srv.uuid))
 
     def cleanup(self):
-        if not is_prepared(self.uuid):
-            return
         srv = self.get_server()
         if local_net(srv):
             Module.cleanup(self)
@@ -1153,19 +1213,19 @@ class OSC(Module):
 class ECHO_CLIENT(Module):
     def __init__(self,dom_node):
         Module.__init__(self, 'ECHO_CLIENT', dom_node)
-        self.add_module('lustre/obdecho', 'obdecho')
-        self.lov_uuid = get_first_ref(dom_node, 'osc')
-        l = lookup(self.dom_node.parentNode, self.lov_uuid)
-        self.osc = VOSC(l)
+        self.add_lustre_module('obdecho', 'obdecho')
+        self.obd_uuid = get_first_ref(dom_node, 'obd')
+        obd = lookup(self.dom_node.parentNode, self.obd_uuid)
+        self.osc = VOSC(obd)
 
     def prepare(self):
         if is_prepared(self.uuid):
             return
         self.osc.prepare() # XXX This is so cheating. -p
-        self.info(self.lov_uuid)
+        self.info(self.obd_uuid)
             
         lctl.newdev(attach="echo_client %s %s" % (self.name, self.uuid),
-                    setup = self.lov_uuid)
+                    setup = self.obd_uuid)
 
     def cleanup(self):
         if not is_prepared(self.uuid):
@@ -1185,32 +1245,37 @@ class Mountpoint(Module):
         Module.__init__(self, 'MTPT', dom_node)
         self.path = get_text(dom_node, 'path')
         self.mds_uuid = get_first_ref(dom_node, 'mds')
-        self.lov_uuid = get_first_ref(dom_node, 'osc')
-        self.add_module(config.src_dir()+'mdc', 'mdc')
-        self.add_module(config.src_dir()+'llite', 'llite')
-        l = lookup(self.dom_node.parentNode, self.lov_uuid)
-        self.osc = VOSC(l)
+        self.obd_uuid = get_first_ref(dom_node, 'obd')
+        self.add_lustre_module('mdc', 'mdc')
+        self.add_lustre_module('llite', 'llite')
+        obd = lookup(self.dom_node.parentNode, self.obd_uuid)
+        self.osc = VOSC(obd)
+
 
     def prepare(self):
         self.osc.prepare()
         mdc_uuid = prepare_mdc(self.dom_node.parentNode, self.mds_uuid)
-        self.info(self.path, self.mds_uuid, self.lov_uuid)
+        self.info(self.path, self.mds_uuid, self.obd_uuid)
         cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
-              (self.lov_uuid, mdc_uuid, self.path)
+              (self.osc.get_uuid(), mdc_uuid, self.path)
         run("mkdir", self.path)
         ret, val = run(cmd)
         if ret:
             panic("mount failed:", self.path)
 
     def cleanup(self):
-        self.info(self.path, self.mds_uuid,self.lov_uuid)
-        if config.force():
-            (rc, out) = run("umount -f", self.path)
-        else:
-            (rc, out) = run("umount", self.path)
-        if rc:
-            log("umount failed, cleanup will most likely not work.")
-        l = lookup(self.dom_node.parentNode, self.lov_uuid)
+        self.info(self.path, self.mds_uuid,self.obd_uuid)
+        if  fs_is_mounted(self.path):
+            if config.force():
+                (rc, out) = run("umount", "-f", self.path)
+            else:
+                (rc, out) = run("umount", self.path)
+            if rc:
+                raise CommandError('umount', out, rc)
+
+        if fs_is_mounted(self.path):
+            panic("fs is still mounted:", self.path)
+
         self.osc.cleanup()
         cleanup_mdc(self.dom_node.parentNode, self.mds_uuid)
 
@@ -1224,7 +1289,14 @@ class Mountpoint(Module):
 
 # ============================================================
 # XML processing and query
-# TODO: Change query funcs to use XPath, which is muc cleaner
+
+# OSC is no longer in the xml, so we have to fake it.
+# this is getting ugly and begging for another refactoring
+def get_osc(obd_dom):
+    obd = OBD(obd_dom)
+    osc = OSC(obd_dom, obd.name, obd.uuid, obd.active_target)
+    return osc
+
 
 def get_device(obd):
     list = obd.getElementsByTagName('device')
@@ -1350,7 +1422,7 @@ def getServiceLevel(dom_node):
         ret = 10
     elif type in ('device', 'ldlm'):
         ret = 20
-    elif type in ('obd', 'mdd'):
+    elif type in ('obd', 'mdd', 'cobd'):
         ret = 30
     elif type in ('mds','ost'):
         ret = 40
@@ -1370,7 +1442,7 @@ def getServiceLevel(dom_node):
 # [(level, dom_node),]
 def getServices(lustreNode, profileNode):
     list = []
-    for n in profileNode.childNodes:
+    for n in profileNode.childNodes: 
         if n.nodeType == n.ELEMENT_NODE:
             servNode = lookup(lustreNode, getRef(n))
             if not servNode:
@@ -1513,6 +1585,8 @@ def startService(dom_node, module_flag):
         n = Network(dom_node)
     elif type == 'obd':
         n = OBD(dom_node)
+    elif type == 'cobd':
+        n = COBD(dom_node)
     elif type == 'ost':
         n = OST(dom_node)
     elif type == 'mds':
@@ -1565,21 +1639,26 @@ def startProfile(lustreNode, profileNode, module_flag):
 # Load profile for 
 def doHost(lustreNode, hosts):
     global routes
+    global router_flag 
     dom_node = None
     for h in hosts:
         dom_node = getByName(lustreNode, h, 'node')
         if dom_node:
             break
     if not dom_node:
-        print 'lconf: No host entry found in '+sys.argv[1]
+        print 'No host entry found.'
         return
 
-    if not get_attr(dom_node, 'router'):
+    if get_attr(dom_node, 'router'):
+        router_flag = 1
+    else:
+        router_flag = 0
+    recovery_upcall = get_attr(dom_node, 'recovery_upcall')
+    timeout = get_attr_int(dom_node, 'timeout')
+
+    if not router_flag:
         init_node(dom_node)
         init_route_config(lustreNode)
-    else:
-        global router_flag 
-        router_flag = 1
 
     # Two step process: (1) load modules, (2) setup lustre
     # if not cleaning, load modules first.
@@ -1596,6 +1675,9 @@ def doHost(lustreNode, hosts):
             # dump /tmp/ogdb and sleep/pause here
             log ("The GDB module script is in", script)
             time.sleep(5)
+        sys_set_timeout(timeout)
+        sys_set_recovery_upcall(recovery_upcall)
+            
             
     module_flag = not module_flag
     for profile in reflist:
@@ -1609,15 +1691,17 @@ def parse_cmdline(argv):
     long_opts = ["ldap", "reformat", "lustre=", "verbose", "gdb",
                  "portals=", "makeldiff", "cleanup", "noexec",
                  "help", "node=", "nomod", "nosetup",
-                 "dump=", "force", "minlevel=", "maxlevel="]
+                 "dump=", "force", "minlevel=", "maxlevel=",
+                 "timeout=", "recovery_upcall="]
     opts = []
     args = []
+
     try:
         opts, args = getopt.getopt(argv, short_opts, long_opts)
     except getopt.error:
         print "invalid opt"
         usage()
-
+    
     for o, a in opts:
         if o in ("-h", "--help"):
             usage()
@@ -1629,9 +1713,9 @@ def parse_cmdline(argv):
             config.noexec(1)
             config.verbose(1)
         if o == "--portals":
-            config.portals = a
+            config.portals_dir(a)
         if o == "--lustre":
-            config.lustre = a
+            config.lustre_dir(a)
         if o == "--reformat":
             config.reformat(1)
         if o == "--node":
@@ -1650,7 +1734,10 @@ def parse_cmdline(argv):
 		config.minlevel(a)
         if o in ("--maxlevel",):
                 config.maxlevel(a)
-
+        if o in ("--timeout",):
+                config.timeout(a)
+        if o in ("--recovery_upcall",):
+                config.recovery_upcall(a)
     return args
 
 def fetch(url):
@@ -1663,27 +1750,61 @@ def fetch(url):
         usage()
     return data
 
-def setupModulePath(cmd):
-    global PORTALS_DIR
+def setupModulePath(cmd, portals_dir = PORTALS_DIR):
     base = os.path.dirname(cmd)
     if os.access(base+"/Makefile", os.R_OK):
-        config.src_dir(base + "/../")  
-    if PORTALS_DIR[0] != '/':
-	PORTALS_DIR= config.src_dir()+PORTALS_DIR
+        if not config.lustre_dir():
+            config.lustre_dir(os.path.join(base, ".."))
+        # normalize the portals dir, using command line arg if set
+        if config.portals_dir():
+            portals_dir = config.portals_dir()
+        dir = os.path.join(config.lustre_dir(), portals_dir)
+        config.portals_dir(dir)
+    elif config.lustre_dir() and config.portals_dir():
+        # production mode
+        # if --lustre and --portals, normalize portals 
+        # can ignore POTRALS_DIR here, since it is probly useless here
+        dir = config.portals_dir()
+        dir = os.path.join(config.lustre_dir(), dir)
+        config.portals_dir(dir)
 
-def sys_set_debug_path():
-    debug("debug path: ", config.debug_path())
+def sysctl(path, val):
     if config.noexec():
         return
     try:
-        fp = open('/proc/sys/portals/debug_path', 'w')
-        fp.write(config.debug_path())
+        fp = open(os.path.join('/proc/sys', path), 'w')
+        fp.write(str(val))
         fp.close()
     except IOError, e:
         print e
-             
-#/proc/sys/net/core/rmem_max
-#/proc/sys/net/core/wmem_max
+
+
+def sys_set_debug_path():
+    debug("debug path: ", config.debug_path())
+    sysctl('portals/debug_path', config.debug_path())
+
+def sys_set_recovery_upcall(upcall):
+    # the command overrides the value in the node config
+    if config.recovery_upcall():
+        upcall = config.recovery_upcall()
+    if upcall:
+        debug("setting recovery_upcall:", upcall)
+        sysctl('lustre/recovery_upcall', upcall)
+
+def sys_set_timeout(timeout):
+    # the command overrides the value in the node config
+    if config.timeout() >= 0:
+        timeout = config.timeout()
+    if timeout >= 0:
+        debug("setting timeout:", timeout)
+        sysctl('lustre/timeout', timeout)
+
+def sys_set_ptldebug(ptldebug):
+    # the command overrides the value in the node config
+    if config.ptldebug():
+        ptldebug = config.ptldebug()
+    sysctl('portals/debug', ptldebug)
+
 def sys_set_netmem_max(path, max):
     debug("setting", path, "to at least", max)
     if config.noexec():
@@ -1726,7 +1847,6 @@ def sanitise_path():
 #
 def main():
     global TCP_ACCEPTOR, lctl, MAXTCPBUF
-    setupModulePath(sys.argv[0])
 
     host = socket.gethostname()
 
@@ -1766,6 +1886,8 @@ def main():
     if len(host) > 0:
         config._debug_path = config._debug_path + '-' + host
         config._gdb_script = config._gdb_script + '-' + host
+
+    setupModulePath(sys.argv[0])
 
     TCP_ACCEPTOR = find_prog('acceptor')
     if not TCP_ACCEPTOR:
