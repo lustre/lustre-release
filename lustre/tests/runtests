@@ -5,6 +5,11 @@
 # In the future this can become more fancy, but it's OK for now.
 
 SRCDIR="`dirname $0`"
+fail() { 
+	echo "ERROR: $1" 1>&2
+	[ $2 ] && RC=$2 || RC=1
+	exit $RC
+}
 
 export PATH=/sbin:/usr/sbin:$SRCDIR:$PATH
 
@@ -18,8 +23,10 @@ SRC=/etc
 OSCMT="`mount | awk '/ lustre_lite / { print $3 }'`"
 if [ -z "$OSCMT" ]; then
 	$LCONF $REFORMAT $@ || exit 1
-	MTPT="`mount | awk '/ lustre_lite / { print $3 }'`"
+        trap "$LCONF --cleanup $@" 0
+	OSCMT="`mount | awk '/ lustre_lite / { print $3 }'`"
 	[ -z "$OSCMT" ] && echo "no lustre filesystem mounted" 2>&1 && exit 1
+	exit $RC
 fi
 
 # let's start slowly here...
