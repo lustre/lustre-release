@@ -1,7 +1,7 @@
 Index: linux-2.6.9-5.0.3.EL/drivers/scsi/Kconfig
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/drivers/scsi/Kconfig	2005-02-25 03:25:42.000000000 -0500
-+++ linux-2.6.9-5.0.3.EL/drivers/scsi/Kconfig	2005-03-03 16:10:10.000000000 -0500
+--- linux-2.6.9-5.0.3.EL.orig/drivers/scsi/Kconfig	2005-04-01 18:36:39.218039672 +0300
++++ linux-2.6.9-5.0.3.EL/drivers/scsi/Kconfig	2005-04-01 18:36:45.571073864 +0300
 @@ -61,6 +61,13 @@
  	help
  	   SCSI dump support
@@ -18,8 +18,8 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/Kconfig
  	depends on SCSI
 Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/drivers/scsi/sd.c	2005-02-25 03:25:40.000000000 -0500
-+++ linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c	2005-03-03 16:11:07.000000000 -0500
+--- linux-2.6.9-5.0.3.EL.orig/drivers/scsi/sd.c	2005-04-01 18:36:39.223038912 +0300
++++ linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c	2005-04-01 18:37:42.537413664 +0300
 @@ -63,6 +63,38 @@
  
  #include "scsi_logging.h"
@@ -51,9 +51,9 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
 +extern void sd_iostats_bump(int disk, unsigned int nsect, int iswrite);
 +#else
 +static inline void sd_iostats_init(void) {}
-+static inline void sd_iostats_init_disk(struct gendisk *) {}
++static inline void sd_iostats_init_disk(struct gendisk *disk) {}
 +static inline void sd_iostats_fini(void) {}
-+static inline void sd_iostats_bump(kdev_t dev, unsigned int nsect, int iswrite) {}
++static inline void sd_iostats_bump(int disk, unsigned int nsect, int iswrite) {}
 +#endif
 +
  /*
@@ -443,8 +443,8 @@ Index: linux-2.6.9-5.0.3.EL/drivers/scsi/sd.c
  		unregister_blkdev(sd_major(i), "sd");
 Index: linux-2.6.9-5.0.3.EL/drivers/scsi/scsi_proc.c
 ===================================================================
---- linux-2.6.9-5.0.3.EL.orig/drivers/scsi/scsi_proc.c	2004-10-18 17:53:11.000000000 -0400
-+++ linux-2.6.9-5.0.3.EL/drivers/scsi/scsi_proc.c	2005-03-03 16:10:10.000000000 -0500
+--- linux-2.6.9-5.0.3.EL.orig/drivers/scsi/scsi_proc.c	2005-04-01 18:36:39.234037240 +0300
++++ linux-2.6.9-5.0.3.EL/drivers/scsi/scsi_proc.c	2005-04-01 18:36:45.578072800 +0300
 @@ -38,7 +38,8 @@
  /* 4K page size, but our output routines, use some slack for overruns */
  #define PROC_BLOCK_SIZE (3*1024)
