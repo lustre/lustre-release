@@ -826,7 +826,7 @@ target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         struct ptlrpc_srv_ni      *sni;
         struct ptlrpc_service     *svc;
 
-        sni = req->rq_srv_ni;
+        sni = req->rq_rqbd->rqbd_srv_ni;
         svc = sni->sni_service;
         
         rs = req->rq_reply_state;
