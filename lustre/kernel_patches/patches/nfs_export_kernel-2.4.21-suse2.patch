@@ -630,6 +630,18 @@ Index: linux-2.4.21-chaos/fs/nfsd/vfs.c
  	if (!err) {
  		if (EX_ISSYNC(fhp->fh_export))
  			nfsd_sync_dir(dentry);
+@@ -1148,7 +1329,10 @@ nfsd_symlink(struct svc_rqst *rqstp, str
+ 				iap->ia_valid |= ATTR_CTIME;
+ 				iap->ia_mode = (iap->ia_mode&S_IALLUGO)
+ 					| S_IFLNK;
+-				err = notify_change(dnew, iap);
++				if (dnew->d_inode->i_op && dnew->d_inode->i_op->setattr_raw)
++					err = setattr_raw(dnew->d_inode, iap);
++				else
++					err = notify_change(dnew, iap);
+ 				if (err)
+ 					err = nfserrno(err);
+ 				else if (EX_ISSYNC(fhp->fh_export))
 @@ -1211,7 +1392,10 @@
  	dold = tfhp->fh_dentry;
  	dest = dold->d_inode;
