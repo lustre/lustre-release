@@ -169,7 +169,6 @@ int mds_get_lmv_attr(struct obd_device *obd, struct inode *inode,
 	if (rc <= 0) {
 		OBD_FREE(*mea, *mea_size);
 		*mea = NULL;
-                *mea_size = 0;
 	}
         if (rc > 0)
                 rc = 0;
@@ -358,8 +357,7 @@ int scan_and_distribute(struct obd_device *obd, struct dentry *dentry,
         OBD_ALLOC(file_name, nlen);
         if (!file_name)
                 RETURN(-ENOMEM);
-        i = sprintf(file_name, "__iopen__/%u",
-                        (unsigned) dentry->d_inode->i_ino);
+        i = sprintf(file_name, "__iopen__/0x%lx", dentry->d_inode->i_ino);
 
         file = filp_open(file_name, O_RDONLY, 0);
         if (IS_ERR(file)) {
@@ -421,27 +419,26 @@ int mds_try_to_split_dir(struct obd_device *obd,
         if (dentry->d_inode->i_ino == mds->mds_rootfid.id)
                 RETURN(0);
 
-#if 1
+        /* we want to split only large dirs. this may be already
+         * splitted dir or a slave dir created during splitting */
         if (dir->i_size < MAX_DIR_SIZE)
                 RETURN(0);
-#endif
 
         /* check is directory marked non-splittable */
         if (mea && *mea)
                 RETURN(0);
 
-        CDEBUG(D_OTHER, "%s: split directory %lu/%lu (mea 0x%p)\n",
-               obd->obd_name, dir->i_ino,
-               (unsigned long) dir->i_generation, mea);
+        CDEBUG(D_OTHER, "%s: split directory %lu/%lu\n",
+               obd->obd_name, dir->i_ino, (unsigned long) dir->i_generation);
 
         if (mea == NULL)
                 mea = &tmea;
         mea_size = obd_size_diskmd(mds->mds_lmv_exp, NULL);
 
         /* FIXME: Actually we may only want to allocate enough space for
-           necessary amount of stripes, but on the other hand with this approach
-           of allocating maximal possible amount of MDS slots, it would be
-           easier to split the dir over more MDSes */
+         * necessary amount of stripes, but on the other hand with this
+         * approach of allocating maximal possible amount of MDS slots,
+         * it would be easier to split the dir over more MDSes */
         rc = obd_alloc_diskmd(mds->mds_lmv_exp, (void *) mea);
         if (!(*mea))
                 RETURN(-ENOMEM);
@@ -460,7 +457,7 @@ int mds_try_to_split_dir(struct obd_device *obd,
 			OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                         OBD_MD_FLUID | OBD_MD_FLGID);
         oa->o_gr = FILTER_GROUP_FIRST_MDS + mds->mds_num;
-        oa->o_valid |= OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
+        oa->o_valid |= OBD_MD_FLID | OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
         oa->o_mode = dir->i_mode;
         CDEBUG(D_OTHER, "%s: create subdirs with mode %o, uid %u, gid %u\n",
                         obd->obd_name, dir->i_mode, dir->i_uid, dir->i_gid);

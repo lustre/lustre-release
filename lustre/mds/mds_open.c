@@ -874,7 +874,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 if (mea->mea_master != i) {
                         CERROR("inapropriate MDS(%d) for %s. should be %d\n",
                                 mea->mea_master, rec->ur_name, i);
-                        GOTO(cleanup, rc = -ESTALE);
+                        GOTO(cleanup, rc = -ERESTART);
                 }
         }
 
@@ -939,7 +939,7 @@ got_child:
                 if ((rc = mds_try_to_split_dir(obd, dparent, &mea, 0))) {
                         if (rc > 0) {
                                 /* dir got splitted */
-                                GOTO(cleanup, rc = -ESTALE);
+                                GOTO(cleanup, rc = -ERESTART);
                         } else {
                                 /* error happened during spitting */
                                 GOTO(cleanup, rc);

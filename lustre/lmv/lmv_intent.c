@@ -131,8 +131,9 @@ int lmv_intent_open(struct obd_export *exp, struct ll_uctxt *uctxt,
         /* IT_OPEN is intended to open (and create, possible) an object.
          * parent (pfid) may be splitted dir */
 
-        mds = pfid->mds;
-        obj = lmv_grab_obj(obd, pfid, 0);
+repeat:
+        mds = rpfid.mds;
+        obj = lmv_grab_obj(obd, &rpfid, 0);
         if (obj) {
                 /* directory is already splitted, so we have to forward
                  * request to the right MDS */
@@ -141,10 +142,20 @@ int lmv_intent_open(struct obd_export *exp, struct ll_uctxt *uctxt,
                 CDEBUG(D_OTHER, "forward to MDS #%u\n", mds);
         }
 
-        rc = md_intent_lock(lmv->tgts[mds].exp, uctxt, &rpfid, name, len,
-                            lmm, lmmsize, cfid, it, flags, reqp, cb_blocking);
-       
+        rc = md_intent_lock(lmv->tgts[mds].exp, uctxt, &rpfid, name,
+                            len, lmm, lmmsize, cfid, it, flags, reqp,
+                            cb_blocking);
         lmv_put_obj(obj);
+        if (rc == -ERESTART) {
+                /* directory got splitted. time to update local object
+                 * and repeat the request with proper MDS */
+                LASSERT(fid_equal(pfid, &rpfid));
+                rc = lmv_get_mea_and_update_object(exp, &rpfid);
+                if (rc == 0) {
+                        ptlrpc_req_finished(*reqp);
+                        goto repeat;
+                }
+        }
         if (rc != 0)
                 RETURN(rc);
 
@@ -498,7 +509,7 @@ repeat:
                 RETURN(rc);
         }
        
-        if (rc == -ESTALE) {
+        if (rc == -ERESTART) {
                 /* directory got splitted since last update. this shouldn't
                  * be becasue splitting causes lock revocation, so revalidate
                  * had to fail and lookup on dir had to return mea */

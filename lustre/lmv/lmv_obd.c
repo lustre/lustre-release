@@ -450,36 +450,62 @@ int lmv_close(struct obd_export *exp, struct obdo *obdo,
         RETURN(rc);
 }
 
+int lmv_get_mea_and_update_object(struct obd_export *exp, struct ll_fid *fid)
+{
+        struct obd_device *obd = exp->exp_obd;
+        struct lmv_obd *lmv = &obd->u.lmv;
+        struct ptlrpc_request *req = NULL;
+        struct lustre_md md;
+        int mealen, rc;
+
+        md.mea = NULL;
+        mealen = MEA_SIZE_LMV(lmv);
+
+        /* time to update mea of parent fid */
+        rc = md_getattr(lmv->tgts[fid->mds].exp, fid,
+                        OBD_MD_FLEASIZE, mealen, &req);
+        if (rc)
+                GOTO(cleanup, rc);
+        rc = mdc_req2lustre_md(req, 0, NULL, exp, &md);
+        if (rc)
+                GOTO(cleanup, rc);
+        if (md.mea == NULL)
+                GOTO(cleanup, rc = -ENODATA);
+        rc = lmv_create_obj_from_attrs(exp, fid, md.mea);
+        obd_free_memmd(exp, (struct lov_stripe_md **) &md.mea);
+
+cleanup:
+        if (req)
+                ptlrpc_req_finished(req);
+        RETURN(rc);
+}
+
 int lmv_create(struct obd_export *exp, struct mdc_op_data *op_data,
                    const void *data, int datalen, int mode, __u32 uid,
                    __u32 gid, __u64 rdev, struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct lmv_obd *lmv = &obd->u.lmv;
-        struct mea *mea = op_data->mea1;
         struct mds_body *mds_body;
-        int rc, i, mds, free_mea = 0;
         struct lmv_obj *obj;
+        int rc, mds;
         ENTRY;
+
         lmv_connect(obd);
-        /* TODO: where to create new directories?
-         * current design don't support directory on a slave MDS,
-         * but we lookup by name may forward any request in slave
-         */
 repeat:
         obj = lmv_grab_obj(obd, &op_data->fid1, 0);
         if (obj) {
                 mds = raw_name2idx(obj->objcount, op_data->name,
-                                        op_data->namelen - 1);
+                                        op_data->namelen);
                 op_data->fid1 = obj->objs[mds].fid;
                 lmv_put_obj(obj);
         }
 
-        CDEBUG(D_OTHER, "CREATE '%*s' on %lu/%lu/%lu (mea 0x%p)\n",
+        CDEBUG(D_OTHER, "CREATE '%*s' on %lu/%lu/%lu\n",
                         op_data->namelen, op_data->name,
                         (unsigned long) op_data->fid1.mds,
                         (unsigned long) op_data->fid1.id,
-                        (unsigned long) op_data->fid1.generation, mea);
+                        (unsigned long) op_data->fid1.generation);
         rc = md_create(lmv->tgts[op_data->fid1.mds].exp, op_data, data,
                        datalen, mode, uid, gid, rdev, request);
         if (rc == 0) {
@@ -494,33 +520,15 @@ repeat:
                        op_data->fid1.mds);
                 LASSERT(mds_body->valid & OBD_MD_MDS ||
                                 mds_body->mds == op_data->fid1.mds);
-        } else if (rc == -ESTALE) {
-                struct ptlrpc_request *req = NULL;
-                struct lustre_md md;
-                int mealen;
-                
-                LBUG(); /* FIXME ASAP */
-                CDEBUG(D_OTHER, "it seems MDS splitted dir\n");
-                LASSERT(mea == NULL);
-
-                mealen = sizeof(struct ll_fid)*lmv->count + sizeof(struct mea);
-                /* time to update mea of parent fid */
-                i = op_data->fid1.mds;
-                rc = md_getattr(lmv->tgts[i].exp, &op_data->fid1,
-                                        OBD_MD_FLEASIZE, mealen, &req);
-                LASSERT(rc == 0);
-                md.mea = NULL;
-                rc = mdc_req2lustre_md(req, 0, NULL, exp, &md);
-                LASSERT(rc == 0);
-                LASSERT(md.mea != NULL);
-                mea = md.mea;
-                ptlrpc_req_finished(req);
-                free_mea = 1;
-
-                goto repeat;
+        } else if (rc == -ERESTART) {
+                /* directory got splitted. time to update local object
+                 * and repeat the request with proper MDS */
+                rc = lmv_get_mea_and_update_object(exp, &op_data->fid1);
+                if (rc == 0) {
+                        ptlrpc_req_finished(*request);
+                        goto repeat;
+                }
         }
-        if (free_mea)
-                obd_free_memmd(exp, (struct lov_stripe_md**) &mea);
         RETURN(rc);
 }
 
@@ -582,12 +590,12 @@ int lmv_getattr_name(struct obd_export *exp, struct ll_fid *fid,
         ENTRY;
         lmv_connect(obd);
         CDEBUG(D_OTHER, "getattr_name for %*s on %lu/%lu/%lu\n",
-               namelen - 1, filename, (unsigned long) fid->mds,
+               namelen, filename, (unsigned long) fid->mds,
                (unsigned long) fid->id, (unsigned long) fid->generation);
         obj = lmv_grab_obj(obd, fid, 0);
         if (obj) {
                 /* directory is splitted. look for right mds for this name */
-                mds = raw_name2idx(obj->objcount, filename, namelen - 1);
+                mds = raw_name2idx(obj->objcount, filename, namelen);
                 rfid = obj->objs[mds].fid;
                 lmv_put_obj(obj);
         }
@@ -1014,7 +1022,7 @@ int lmv_obd_create(struct obd_export *exp, struct obdo *oa,
                         continue;
 
                 oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLTYPE | OBD_MD_FLMODE
-                                | OBD_MD_FLUID | OBD_MD_FLGID;
+                                | OBD_MD_FLUID | OBD_MD_FLGID | OBD_MD_FLID;
 
                 rc = obd_create(lmv->tgts[c].exp, oa, &obj_mdp, oti);
                 /* FIXME: error handling here */

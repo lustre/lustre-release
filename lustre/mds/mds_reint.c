@@ -578,7 +578,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if (mea->mea_master != i) {
                         CERROR("inapropriate MDS(%d) for %s. should be %d\n",
                                 mea->mea_master, rec->ur_name, i);
-                        GOTO(cleanup, rc = -ESTALE);
+                        GOTO(cleanup, rc = -ERESTART);
                 }
         }
 
@@ -597,7 +597,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 if ((rc = mds_try_to_split_dir(obd, dparent, &mea, 0))) {
                         if (rc > 0) {
                                 /* dir got splitted */
-                                GOTO(cleanup, rc = -ESTALE);
+                                GOTO(cleanup, rc = -ERESTART);
                         } else {
                                 /* error happened during spitting */
                                 GOTO(cleanup, rc);
@@ -644,15 +644,10 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                         if (rec->ur_eadata)
                                 nstripes = *(u16 *)rec->ur_eadata;
 
-#if 1
-                        /* this is for current testing yet. after the testing
-                         * directory will split if size reaches some limite -bzzz */
-                        if (rc == 0) {
-#else
                         if (rc == 0 && nstripes) {
-#endif
                                 /* FIXME: error handling here */
-                                mds_try_to_split_dir(obd, dchild, NULL, nstripes);
+                                mds_try_to_split_dir(obd, dchild,
+                                                        NULL, nstripes);
                         }
                 } else if (!DENTRY_VALID(dchild)) {
                         /* inode will be created on another MDS */

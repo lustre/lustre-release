@@ -1171,6 +1171,8 @@ static char *reint_names[] = {
 
 static int mdt_obj_create(struct ptlrpc_request *req)
 {
+        unsigned int tmpname = ll_insecure_random_int();
+        struct ldlm_res_id res_id = { .name = {0} };
         struct obd_export *exp = req->rq_export;
         struct obd_device *obd = exp->exp_obd;
         struct mds_obd *mds = &obd->u.mds;
@@ -1178,8 +1180,10 @@ static int mdt_obj_create(struct ptlrpc_request *req)
         int rc, size = sizeof(*repbody);
         char fidname[LL_FID_NAMELEN];
         struct inode *parent_inode;
+        struct lustre_handle lockh;
         struct obd_run_ctxt saved;
-        int err, namelen, mealen;
+        ldlm_policy_data_t policy;
+        int mealen, flags = 0;
         struct obd_ucred uc;
         struct dentry *new;
         struct mea *mea;
@@ -1203,95 +1207,63 @@ static int mdt_obj_create(struct ptlrpc_request *req)
 
         repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
 
-        if (!(body->oa.o_valid & OBD_MD_FLID)) {
-                /* this is request from another MDS to create remove dir inode */
-                unsigned int tmpname = ll_insecure_random_int();
+        handle = fsfilt_start(obd, parent_inode, FSFILT_OP_MKDIR, NULL);
+        LASSERT(!IS_ERR(handle));
 
-                handle = fsfilt_start(obd, parent_inode, FSFILT_OP_MKDIR, NULL);
+        sprintf(fidname, "%u", tmpname);
+        new = simple_mkdir(mds->mds_objects_dir, fidname,
+                        body->oa.o_mode, 1);
+        LASSERT(!IS_ERR(new));
+        LASSERT(new->d_inode != NULL);
+
+        if (body->oa.o_valid & OBD_MD_FLID) {
+                /* this is new object for splitted dir. we have to
+                 * prevent recursive splitting on it -bzzz */
+                mealen = obd_size_diskmd(mds->mds_lmv_exp, NULL);
+                OBD_ALLOC(mea, mealen);
+                LASSERT(mea != NULL);
+                mea->mea_count = 0;
+                down(&new->d_inode->i_sem);
+                handle = fsfilt_start(obd, new->d_inode, FSFILT_OP_SETATTR, NULL);
                 LASSERT(!IS_ERR(handle));
-
-                sprintf(fidname, "%u", tmpname);
-                new = simple_mkdir(mds->mds_objects_dir, fidname,
-                                        body->oa.o_mode, 1);
-                LASSERT(!IS_ERR(new));
-                LASSERT(new->d_inode != NULL);
-
-                obdo_from_inode(&repbody->oa, new->d_inode, FILTER_VALID_FLAGS);
-                repbody->oa.o_id = new->d_inode->i_ino;
-                repbody->oa.o_generation = new->d_inode->i_generation;
-                repbody->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGENER;
-
-                rc = fsfilt_del_dir_entry(obd, new);
+                rc = fsfilt_set_md(obd, new->d_inode, handle, mea, mealen);
                 LASSERT(rc == 0);
-
-                rc = fsfilt_commit(obd, parent_inode, handle, 0);
+                fsfilt_commit(obd, new->d_inode, handle, 0);
                 LASSERT(rc == 0);
-
-                CDEBUG(D_OTHER, "created dirobj: %lu/%lu mode %o\n",
-                       (unsigned long) new->d_inode->i_ino,
-                       (unsigned long) new->d_inode->i_generation,
-                       (unsigned) new->d_inode->i_mode);
-
-                l_dput(new);
-                pop_ctxt(&saved, &obd->obd_ctxt, &uc);
-                RETURN(0);
+                up(&new->d_inode->i_sem);
+                OBD_FREE(mea, mealen);
         }
-
-        repbody = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*repbody));
-        memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
-       
-        namelen = ll_fid2str(fidname, body->oa.o_id, body->oa.o_generation);
-        
-        down(&parent_inode->i_sem);
-        new = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
-        if (new->d_inode != NULL) {
-                CERROR("impossible non-negative obj dentry " LPU64":%u!\n",
-                       repbody->oa.o_id, repbody->oa.o_generation);
-                LBUG();
-        }
-        handle = fsfilt_start(exp->exp_obd, mds->mds_objects_dir->d_inode,
-                              FSFILT_OP_MKDIR, NULL);
-        /* FIXME: error handling here */
-        LASSERT(!IS_ERR(handle));
-
-        rc = vfs_mkdir(parent_inode, new, body->oa.o_mode);
-        up(&parent_inode->i_sem);
-        /* FIXME: error handling here */
-        if (rc)
-                CERROR("vfs_mkdir() returned %d\n", rc);
-        LASSERT(rc == 0);
-        
-	/* mark this object non-splittable */
-        mealen = obd_size_diskmd(mds->mds_lmv_exp, NULL);
-        OBD_ALLOC(mea, mealen);
-        LASSERT(mea != NULL);
-        mea->mea_count = 0;
-        down(&new->d_inode->i_sem);
-        handle = fsfilt_start(obd, new->d_inode, FSFILT_OP_SETATTR, NULL);
-        LASSERT(!IS_ERR(handle));
-	rc = fsfilt_set_md(obd, new->d_inode, handle, mea, mealen);
-        LASSERT(rc == 0);
-        fsfilt_commit(obd, new->d_inode, handle, 0);
-        LASSERT(rc == 0);
-	up(&new->d_inode->i_sem);
-        OBD_FREE(mea, mealen);
-
-        err = fsfilt_commit(exp->exp_obd, mds->mds_objects_dir->d_inode,
-                            handle, 0);
-        /* FIXME: error handling here */
-        LASSERT(err == 0);
-
         obdo_from_inode(&repbody->oa, new->d_inode, FILTER_VALID_FLAGS);
         repbody->oa.o_id = new->d_inode->i_ino;
         repbody->oa.o_generation = new->d_inode->i_generation;
-        CDEBUG(D_OTHER, "created dirobj: %lu, %lu mode %o, uid %u, gid %u\n",
-                        (unsigned long) repbody->oa.o_id,
+        repbody->oa.o_valid |= OBD_MD_FLID | OBD_MD_FLGENER;
+
+        down(&parent_inode->i_sem);
+        rc = fsfilt_del_dir_entry(obd, new);
+        up(&parent_inode->i_sem);
+        LASSERT(rc == 0);
+
+        rc = mds_finish_transno(mds, parent_inode, handle, req, rc, 0);
+        LASSERT(rc == 0);
+
+        res_id.name[0] = new->d_inode->i_ino;
+        res_id.name[1] = new->d_inode->i_generation;
+        policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
+        rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
+                        res_id, LDLM_IBITS, &policy,
+                        LCK_EX, &flags, mds_blocking_ast,
+                        ldlm_completion_ast, NULL, NULL,
+                        NULL, 0, NULL, &lockh);
+        LASSERT(rc == ELDLM_OK);
+
+        CDEBUG(D_OTHER, "created dirobj: %lu/%lu mode %o\n",
                         (unsigned long) new->d_inode->i_ino,
-                        (unsigned) new->d_inode->i_mode,
-                        (unsigned) new->d_inode->i_uid,
-                        (unsigned) new->d_inode->i_gid);
-        dput(new);
+                        (unsigned long) new->d_inode->i_generation,
+                        (unsigned) new->d_inode->i_mode);
+
+        l_dput(new);
         pop_ctxt(&saved, &obd->obd_ctxt, &uc);
+        ptlrpc_save_lock(req, &lockh, LCK_EX);
         RETURN(0);
 }
 

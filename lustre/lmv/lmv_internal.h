@@ -50,6 +50,7 @@ int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
                           struct ll_fid *, struct lookup_intent *, int,
 			  ldlm_blocking_callback cb_blocking);
 void lmv_cleanup_objs(struct obd_device *obd);
+int lmv_get_mea_and_update_object(struct obd_export *, struct ll_fid *);
 
 static inline struct mea * 
 is_body_of_splitted_dir(struct ptlrpc_request *req, int offset)
