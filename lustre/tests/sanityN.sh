@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 1557
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"8"}
+# bug number for skipped test: 1768 1557
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"4   8    14b"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -214,7 +214,7 @@ test_9() {
 		[ "$MTPT" -eq 1 ] && MTPT=2 || MTPT=1
 	done
 	[ "`cat $DIR1/f9`" = "abcdefghijkl" ] || \
-		error "`od -a $DIR1/f10` != abcdefghijkl"
+		error "`od -a $DIR1/f9` != abcdefghijkl"
 }
 run_test 9 "append of file with sub-page size on multiple mounts"
 
@@ -234,7 +234,6 @@ test_10a() {
 run_test 10a "write of file with sub-page size on multiple mounts "
 
 test_10b() {
-	set -vx
 	yes "R" | dd of=$DIR1/f10b bs=3k count=1 || error "dd $DIR1"
 
 	truncate $DIR1/f10b 4096 || error "truncate 4096"
@@ -318,10 +317,16 @@ test_14b() {
 run_test 14b "truncate of file being executed should return -ETXTBSY"
 
 test_15() {	# bug 974 - ENOSPC
-	env
+	echo $PATH
 	sh oos2.sh $MOUNT1 $MOUNT2
 }
 run_test 15 "test out-of-space with multiple writers ==========="
+
+test_16() {
+	./fsx -R -W -c 50 -p 100 -N 2500 \
+		$MOUNT1/fsxfile $MOUNT2/fsxfile
+}
+run_test 16 "2500 iterations of dual-mount fsx ================="
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true

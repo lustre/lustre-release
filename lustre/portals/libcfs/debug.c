@@ -45,18 +45,46 @@
 #include <asm/uaccess.h>
 #include <asm/segment.h>
 #include <linux/miscdevice.h>
+#include <linux/version.h>
 
 # define DEBUG_SUBSYSTEM S_PORTALS
 
 #include <linux/kp30.h>
 #include <linux/portals_compat25.h>
+#include <linux/libcfs.h>
+
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+#include <linux/kallsyms.h>
+#endif
+
+unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
+                                            S_GMNAL | S_IBNAL);
+EXPORT_SYMBOL(portal_subsystem_debug);
+
+unsigned int portal_debug = (D_WARNING | D_DLMTRACE | D_ERROR | D_EMERG | D_HA |
+                             D_RPCTRACE | D_VFSTRACE);
+EXPORT_SYMBOL(portal_debug);
+
+unsigned int portal_cerror = 1;
+EXPORT_SYMBOL(portal_cerror);
+
+unsigned int portal_printk;
+EXPORT_SYMBOL(portal_printk);
+
+unsigned int portal_stack;
+EXPORT_SYMBOL(portal_stack);
+
+#ifdef __KERNEL__
+atomic_t portal_kmemory = ATOMIC_INIT(0);
+EXPORT_SYMBOL(portal_kmemory);
+#endif
 
 #define DEBUG_OVERFLOW 1024
 static char *debug_buf = NULL;
 static unsigned long debug_size = 0;
 static atomic_t debug_off_a = ATOMIC_INIT(0);
 static int debug_wrapped;
-wait_queue_head_t debug_ctlwq;
+static DECLARE_WAIT_QUEUE_HEAD(debug_ctlwq);
 #define DAEMON_SND_SIZE      (64 << 10)
 
 /*
@@ -243,7 +271,7 @@ int portals_do_debug_dumplog(void *arg)
                        PTR_ERR(file));
                 GOTO(out, PTR_ERR(file));
         } else {
-                printk(KERN_ALERT "LustreError: dumping log to %s ... writing ...\n",
+                printk(KERN_ALERT "LustreError: dumping log to %s ...\n",
                        debug_file_name);
         }
 
@@ -416,18 +444,26 @@ void portals_debug_print(void)
 void portals_debug_dumplog(void)
 {
         int rc;
+        DECLARE_WAITQUEUE(wait, current);
         ENTRY;
 
-        init_waitqueue_head(&debug_ctlwq);
+        /* we're being careful to ensure that the kernel thread is
+         * able to set our state to running as it exits before we
+         * get to schedule() */
+        set_current_state(TASK_INTERRUPTIBLE);
+        add_wait_queue(&debug_ctlwq, &wait);
 
         rc = kernel_thread(portals_do_debug_dumplog,
                            NULL, CLONE_VM | CLONE_FS | CLONE_FILES);
-        if (rc < 0) {
+        if (rc < 0)
                 printk(KERN_ERR "LustreError: cannot start log dump thread: "
                        "%d\n", rc);
-                return;
-        }
-        sleep_on(&debug_ctlwq);
+        else
+                schedule();
+
+        /* be sure to teardown if kernel_thread() failed */
+        remove_wait_queue(&debug_ctlwq, &wait);
+        set_current_state(TASK_RUNNING);
 }
 
 int portals_debug_daemon_start(char *file, unsigned int size)
@@ -569,7 +605,7 @@ int portals_debug_init(unsigned long bufsize)
         debug_buf = vmalloc(bufsize + DEBUG_OVERFLOW);
         if (debug_buf == NULL)
                 return -ENOMEM;
-        memset(debug_buf, 0, debug_size);
+        memset(debug_buf, 0, bufsize + DEBUG_OVERFLOW);
         debug_wrapped = 0;
 
         //printk(KERN_INFO "Portals: allocated %lu byte debug buffer at %p.\n",
@@ -663,7 +699,7 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
                         rc = -ENOMEM;
                         goto cleanup;
                 }
-                list_add(&page->list, &my_pages);
+                list_add(&PAGE_LIST(page), &my_pages);
         }
 
         spin_lock_irqsave(&portals_debug_lock, flags);
@@ -688,7 +724,7 @@ __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
                 unsigned long to_copy;
                 void *addr;
 
-                page = list_entry(pos, struct page, list);
+                page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
                 to_copy = min(total - off, PAGE_SIZE);
                 if (to_copy == 0) {
                         off = 0;
@@ -717,7 +753,7 @@ finish_partial:
         off = 0;
         list_for_each(pos, &my_pages) {
                 unsigned long to_copy;
-                page = list_entry(pos, struct page, list);
+                page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
 
                 to_copy = min(copied - off, PAGE_SIZE);
                 rc = copy_to_user(buf + off, kmap(page), to_copy);
@@ -734,8 +770,8 @@ finish_partial:
 
 cleanup:
         list_for_each_safe(pos, n, &my_pages) {
-                page = list_entry(pos, struct page, list);
-                list_del(&page->list);
+                page = list_entry(pos, struct page, PAGE_LIST_ENTRY);
+                list_del(&PAGE_LIST(page));
                 __free_page(page);
         }
         return rc;
@@ -926,20 +962,24 @@ void portals_run_lbug_upcall(char *file, const char *fn, const int line)
 char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 {
         switch(nal){
+/* XXX this could be a nal method of some sort, 'cept it's config
+ * dependent whether (say) socknal NIDs are actually IP addresses... */
+#ifndef CRAY_PORTALS 
         case TCPNAL:
                 /* userspace NAL */
         case SOCKNAL:
-                sprintf(str, "%u:%d.%d.%d.%d", (__u32)(nid >> 32),
-                        HIPQUAD(nid));
+                snprintf(str, PTL_NALFMT_SIZE-1,
+                         "%u:%d.%d.%d.%d", (__u32)(nid >> 32), HIPQUAD(nid));
                 break;
         case QSWNAL:
         case GMNAL:
         case IBNAL:
         case SCIMACNAL:
-                sprintf(str, "%u:%u", (__u32)(nid >> 32), (__u32)nid);
+                snprintf(str, PTL_NALFMT_SIZE-1, LPD64, nid);
                 break;
+#endif
         default:
-                return NULL;
+                snprintf(str, PTL_NALFMT_SIZE-1, "(?%llx)", (long long)nid);
         }
         return str;
 }
@@ -950,8 +990,6 @@ spinlock_t stack_backtrace_lock = SPIN_LOCK_UNLOCKED;
 
 #if defined(__arch_um__)
 
-extern int is_kernel_text_address(unsigned long addr);
-
 char *portals_debug_dumpstack(void)
 {
         asm("int $3");
@@ -960,33 +998,45 @@ char *portals_debug_dumpstack(void)
 
 #elif defined(__i386__)
 
-extern int is_kernel_text_address(unsigned long addr);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
 extern int lookup_symbol(unsigned long address, char *buf, int buflen);
+const char *kallsyms_lookup(unsigned long addr,
+                            unsigned long *symbolsize,
+                            unsigned long *offset,
+                            char **modname, char *namebuf)
+{
+        int rc = lookup_symbol(addr, namebuf, 128);
+        if (rc == -ENOSYS)
+                return NULL;
+        return namebuf;
+}
+#endif
 
 char *portals_debug_dumpstack(void)
 {
-        unsigned long esp = current->thread.esp;
+        unsigned long esp = current->thread.esp, addr;
         unsigned long *stack = (unsigned long *)&esp;
+        char *buf = stack_backtrace, *pbuf = buf;
         int size;
-        unsigned long addr;
-        char *buf = stack_backtrace;
-        char *pbuf = buf;
-        static char buffer[512];
-        int rc = 0;
 
         /* User space on another CPU? */
-        if ((esp ^ (unsigned long)current) & (PAGE_MASK<<1)){
+        if ((esp ^ (unsigned long)current) & (PAGE_MASK << 1)){
                 buf[0] = '\0';
                 goto out;
         }
 
         size = sprintf(pbuf, " Call Trace: ");
         pbuf += size;
-        while (((long) stack & (THREAD_SIZE-1)) != 0) {
+        while (((long) stack & (THREAD_SIZE - 1)) != 0) {
                 addr = *stack++;
-                if (is_kernel_text_address(addr)) {
-                        rc = lookup_symbol(addr, buffer, 512);
-                        if (rc == -ENOSYS) {
+                if (kernel_text_address(addr)) {
+                        const char *sym_name;
+                        char *modname, buffer[128];
+                        unsigned long junk, offset;
+
+                        sym_name = kallsyms_lookup(addr, &junk, &offset,
+                                                   &modname, buffer);
+                        if (sym_name == NULL) {
                                 if (buf + LUSTRE_TRACE_SIZE <= pbuf + 12)
                                         break;
                                 size = sprintf(pbuf, "[<%08lx>] ", addr);
@@ -996,7 +1046,7 @@ char *portals_debug_dumpstack(void)
                                     <= pbuf + strlen(buffer) + 28 + 1)
                                         break;
                                 size = sprintf(pbuf, "([<%08lx>] %s (0x%p)) ",
-                                               addr, buffer, stack-1);
+                                               addr, buffer, stack - 1);
                         }
                         pbuf += size;
                 }
