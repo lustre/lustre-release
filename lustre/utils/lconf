@@ -1326,17 +1326,15 @@ def prepare_mdc(dom_node, mds_uuid):
     saved_mdc[mds_uuid] = mdc.uuid
     return mdc.uuid
 
-mdc_cleaned = None
 def cleanup_mdc(dom_node, mds_uuid):
-    global mdc_cleaned
+    global saved_mdc
     mds_node = lookup(dom_node, mds_uuid);
     if not mds_node:
         panic("no mds:", mds_uuid)
-    if not mdc_cleaned:
+    if not saved_mdc.has_key(mds_uuid):
         mdc = MDC(mds_node)
         mdc.cleanup()
-        mdc_uuid = None
-        mdc_cleaned = 'yes'
+        saved_mdc[mds_uuid] = mdc.uuid
         
 
 ############################################################
