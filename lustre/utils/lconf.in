@@ -1793,9 +1793,9 @@ def sys_set_recovery_upcall(upcall):
 
 def sys_set_timeout(timeout):
     # the command overrides the value in the node config
-    if config.timeout() >= 0:
+    if config.timeout() > 0:
         timeout = config.timeout()
-    if timeout >= 0:
+    if timeout > 0:
         debug("setting timeout:", timeout)
         sysctl('lustre/timeout', timeout)
 
