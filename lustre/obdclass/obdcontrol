@@ -102,12 +102,10 @@ my $arg;
 
 my %commands =
     ('device' => {func => "Device", doc => "device <dev>: open another OBD device"},
-     'filesystem' => {func => "Filesystem", doc => "filesystem <dev>: partition for direct OBD device"},
      'create' => {func => "Create", doc => "create: creates a new inode"},
-     'attach' => {func => "Attach", doc => "attach type [adapter bus tid lun]"},
+     'attach' => {func => "Attach", doc => "attach { ext2_obd | snap_obd snapdev snapidx tableno}"}, # | scsi_obd adapter bus tid lun |
      'detach' => {func => "Detach", doc => "detach this device"},
-     'testext2iterator' => {func => "TestExt2Iterator", doc => ""},
-     'snapattach' => {func => "SnapAttach", doc => "snapattach snapdev snapidx tableno"},
+     'testext2iterator' => {func => "TestExt2Iterator", doc => "test ext2 iterator function"},
      'snapset' => {func => "SnapSetTable", doc => "snapset tableno file" },
      'snapprint' => {func => "SnapPrint", doc => "snapprint tableno"},
      'snapdelete' => {func => "SnapDelete", doc => "snapdelete: delete connected snap obd"},
@@ -117,7 +115,7 @@ my %commands =
      'migrate' => {func => "Migrate", doc => "migrate srcid tgtid"},
      'format' => {func => "Format", doc => "format type adapter bus tid lun size"},
      'partition' => {func => "Partition", doc => "partition type adapter bus tid lun partition size"},
-     'setup' => {func => "Setup", doc => "setup [type]: link this OBD device to the underlying device (default type ext2_obd, filesystem /dev/loop0)"},
+     'setup' => {func => "Setup", doc => "setup [type]: link this OBD device to the underlying device (default type ext2_obd)"},
      'connect' => {func => "Connect", doc => "connect: allocates client ID for this session"},
      'disconnect' => {func => "Disconnect", doc => "disconnect [id]: frees client resources"},
      'sync' => {func => "Sync", doc => "sync: flushes buffers to disk"},
@@ -153,19 +151,19 @@ sub readl {
 	my $str = <STDIN>;
 	chop($str);
 	return $str;
-  } else {
-      return $term->readline(@_);
-  }
+    } else {
+        return $term->readline(@_);
+    }
 }
 
 
 
 if ( $file ) {
-	while ( <STDIN> ) {
-	    print $_;
-	    execute_line($_);
-	}
-	exit 0;
+    while ( <STDIN> ) {
+        print $_;
+        execute_line($_);
+    }
+    exit 0;
 } else {
     $term = new Term::ReadLine 'obdcontrol ';
     $attribs = $term->Attribs;
@@ -261,17 +259,43 @@ sub Attach {
     my $datalen = 0;
 
     if ( ! $type ) {
-	print "Usage \"attach type (ext2_obd)\"; 
+	print "error: missing type\n";
+usage:
+	print "usage: attach {ext2_obd | snap_obd}\n"; # XXX add scsi_obd later
+	return;
+    }
 
-    if ($type eq "obdscsi" ) {
+    if ($type eq "scsi_obd" ) {
 	my $adapter = shift;
 	my $bus = shift;
 	my $tid = shift;
 	my $lun = shift;
-	$data = pack("iiiii", $adapter, $bus, $tid, $lun, $size);
+
+	$data = pack("iiii", $adapter, $bus, $tid, $lun);
 	$datalen = 4 * 4;
+    } elsif ($type eq "snap_obd" ) {
+	my $snapdev = shift;
+	my $snapidx = shift;
+	my $tableno = shift;
+
+	$data = pack("iii", $snapdev, $snapidx, $tableno);
+	$datalen = 3 * 4;
+    } elsif ($type eq "ext2_obd") {
+    	my $basedev = shift;
+	# $basedev = "/dev/loop0" unless $basedev;
+
+	if (!defined($::st = stat($basedev))) {
+	    die "Unable to stat $basedev.\n";
+	}
+    } else {
+	print "error: unknown attach type $type\n";
+	goto usage;
     }
 
+    my $len = length($type);
+    my $cl = length($data);
+
+    print "type $type (len $len), datalen $datalen ($cl)\n";
     my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
 
     my $rc = ioctl(DEV_OBD, &OBD_IOC_ATTACH, $packed);
@@ -471,37 +495,6 @@ sub SnapSetTable {
 }
 
 
-sub SnapAttach {
-    my $err = 0;
-    my $type = "snap_obd";
-    my $snapdev = shift;
-    my $snapidx = shift;
-    my $tableno = shift;
-    my $snapcount;
-    my $data;
-    my $datalen = 0;
-
-    $data = pack("iii", $snapdev, $snapidx, $tableno);
-    $datalen = 3 * 4;
-
-    my $len = length($type);
-    my $cl = length($data);
-    my $add = pack("p", $data);
-    print "type $type (len $len), datalen $datalen ($cl)\n";
-    my $packed = pack("Lipip", $::client_id, length($type), $type, $datalen, $data);
-
-    my $rc = ioctl(DEV_OBD, &OBD_IOC_ATTACH, $packed);
-
-    if (!defined $rc) {
-	print STDERR "ioctl failed: $!\n";
-    } elsif ($rc eq "0 but true") {
-	print "Finished (success)\n";
-    } else {
-	print "ioctl returned error code $rc.\n";
-    }
-}
-
-
 sub SnapShotTable  {
 
     my $file = &readl("enter file name: ");
@@ -544,8 +537,8 @@ sub SnapShotTable  {
   done:
     my $ok = &readl("OK with new table? [Yn]: ");
     unless ( $ok eq "no" )  {
-      WriteSnapShotTable($file, $table);
-  }
+	WriteSnapShotTable($file, $table);
+    }
 }
 
 sub SnapFindTimeFromIdx {
@@ -687,8 +680,7 @@ sub Setup {
 
     if ( $type eq "ext2_obd" ) {
 	my $dev = shift;
-	my $st = stat($dev);
-	$dev = $st->rdev() unless $dev;
+	$dev = $::st->rdev() unless $dev;
 	$data = pack("i", $dev);
 	$datalen = 4;
     }
@@ -771,7 +763,7 @@ sub Create {
     my $rc;
     my $prealloc = 0;
 
-    if (defined($quiet) && !($quiet eq "quiet")) {
+    if (defined($quiet) && $quiet ne "quiet") {
 	print "syntax: create [number of objects [quiet]]\n";
 	return;
     }
@@ -791,7 +783,7 @@ sub Create {
 	for ($i = 0; $i < scalar($arg); $i++) {
 	    $rc = ioctl(DEV_OBD, &OBD_IOC_CREATE, $packed);
 	    my $ino = unpack("L", $packed);
-	    if (!($rc eq "0 but true")) {
+	    if ($rc ne "0 but true") {
 		last;
 		$packed = pack("IL", $::client_id, $prealloc);
 	    } elsif (!defined($quiet)) {
