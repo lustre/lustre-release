@@ -95,8 +95,8 @@ use IO::Handle;
 # this may be different on other architectures
 
 # we use 32-bit integers for all 64-bit quantities in this program
-# #define OBD_INLINESZ	64
-# #define OBD_OBDMDSZ	64
+# #define OBD_INLINESZ	60
+# #define OBD_OBDMDSZ	60
 # /* Note: 64-bit types are 64-bit aligned in structure */
 # struct obdo {
 # 	obd_id			o_id;
@@ -113,16 +113,17 @@ use IO::Handle;
 # 	obd_flag		o_flags;
 # 	obd_flag		o_obdflags;
 # 	obd_count		o_nlink;
+# 	obd_count		o_generation;
 # 	obd_flag		o_valid;	/* hot fields in this obdo */
-# 	char			o_inline[OBD_INLINESZ];
-# 	char			o_obdmd[OBD_OBDMDSZ];
+# 	char			o_inline[60];
+# 	char			o_obdmd[60];
 # 	struct list_head	o_list;
 # 	struct obd_ops		*o_op;
 # };
 
 sub obdo_pack {
     my $obdo = shift;
-    pack "LL LL LL LL LL LL LL L L L L L L L L a60 a64 L L L", 
+    pack "LL LL LL LL LL LL LL L L L L L L L L L a60 a60 L L L", 
     $obdo->{id}, 0, 
     $obdo->{gr}, 0, 
     $obdo->{atime}, 0, 
@@ -137,6 +138,7 @@ sub obdo_pack {
     $obdo->{flags},
     $obdo->{obdflags},
     $obdo->{nlink}, 	
+    $obdo->{generation}, 	
     $obdo->{valid},	
     $obdo->{inline},
     $obdo->{obdmd},
@@ -161,10 +163,11 @@ sub obdo_unpack {
     $obdo->{gid},
     $obdo->{flags},
     $obdo->{obdflags},
-    $obdo->{nlink}, 	
-    $obdo->{valid},	
+    $obdo->{nlink},
+    $obdo->{generation},
+    $obdo->{valid},
     $obdo->{inline},
-    $obdo->{obdmd}) = unpack "x${offset}Lx4 Lx4 Lx4 Lx4 Lx4 Lx4 Lx4 L L L L L L L L a60 a64", $buf;
+    $obdo->{obdmd}) = unpack "x${offset}Lx4 Lx4 Lx4 Lx4 Lx4 Lx4 Lx4 L L L L L L L L L a60 a60", $buf;
     $obdo;
 }
 
@@ -841,7 +844,7 @@ sub Setup {
     # XXX we need a getinfo ioctl to validate parameters 
     # by type here
 
-    if ($arg  && !defined($::st = stat($arg))) {
+    if ($arg && !defined($::st = stat($arg))) {
 	    print "$arg is not a valid device\n";
 	    return;
     }

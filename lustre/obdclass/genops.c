@@ -32,12 +32,18 @@
 
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
-kmem_cache_t *obdo_cachep;
+kmem_cache_t *obdo_cachep = NULL;
 
 int obd_init_obdo_cache(void)
 {
-	/* XXX need to free this somewhere? */
 	ENTRY;
+	if (obdo_cachep != NULL) {
+		printk(KERN_INFO "obdo_cache already exists\n");
+		EXIT;
+		/* XXX maybe this shoul be an error return? */
+		return 0;
+	}
+
 	obdo_cachep = kmem_cache_create("obdo_cache",
 					      sizeof(struct obdo),
 					      0, SLAB_HWCACHE_ALIGN,
@@ -48,6 +54,16 @@ int obd_init_obdo_cache(void)
 	}
 	EXIT;
 	return 0;
+}
+
+void obd_cleanup_obdo_cache(void)
+{
+	ENTRY;
+	if (obdo_cachep != NULL)
+		kmem_cache_destroy(obdo_cachep);
+
+	obdo_cachep = NULL;
+	EXIT;
 }
 
 

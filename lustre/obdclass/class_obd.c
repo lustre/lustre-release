@@ -844,6 +844,7 @@ static struct file_operations obd_psdev_fops = {
 
 int init_obd(void)
 {
+	int err;
 	int i;
 
 	printk(KERN_INFO "OBD class driver  v0.01, braam@stelias.com\n");
@@ -863,7 +864,9 @@ int init_obd(void)
 		INIT_LIST_HEAD(&obd_dev[i].obd_gen_clients);
 	}
 
-	obd_init_obdo_cache();
+	err = obd_init_obdo_cache();
+	if (err)
+		return err;
 	obd_sysctl_init();
 	obd_init_magic = 0x11223344;
 	return 0;
@@ -910,8 +913,9 @@ void cleanup_module(void)
 		} 
 	}
 
-
+	obd_cleanup_obdo_cache();
 	obd_sysctl_clean();
 	obd_init_magic = 0;
+	EXIT;
 }
 #endif

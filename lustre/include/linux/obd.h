@@ -13,6 +13,8 @@ struct obd_type {
 	int  typ_refcnt;
 };
 
+#define OBD_MAGIC	0xffff0000
+#define OBD_MAGIC_MASK	0xffff0000
 
 
 

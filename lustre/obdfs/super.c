@@ -440,7 +440,9 @@ int init_obdfs(void)
 	if (err)
 		return err;
 
+	/* XXX
 	flushd_init();
+	*/
 
 	return register_filesystem(&obdfs_fs_type);
 }

@@ -34,7 +34,7 @@ typedef uint32_t	obd_count;
 #define OBD_FL_OBDMDEXISTS	(1UL << 1)
 
 #define OBD_INLINESZ	60
-#define OBD_OBDMDSZ	64
+#define OBD_OBDMDSZ	60
 /* Note: 64-bit types are 64-bit aligned in structure */
 struct obdo {
 	obd_id			o_id;
@@ -51,6 +51,7 @@ struct obdo {
 	obd_flag		o_flags;
 	obd_flag		o_obdflags;
 	obd_count		o_nlink;
+	obd_count		o_generation;
 	obd_flag		o_valid;	/* hot fields in this obdo */
 	char			o_inline[OBD_INLINESZ];
 	char			o_obdmd[OBD_OBDMDSZ];
@@ -72,8 +73,9 @@ struct obdo {
 #define OBD_MD_FLFLAGS	(1UL<<10)
 #define OBD_MD_FLOBDFLG	(1UL<<11)
 #define OBD_MD_FLNLINK	(1UL<<12)
-#define OBD_MD_FLINLINE	(1UL<<13)
-#define OBD_MD_FLOBDMD	(1UL<<14)
+#define OBD_MD_FLGENER	(1UL<<13)
+#define OBD_MD_FLINLINE	(1UL<<14)
+#define OBD_MD_FLOBDMD	(1UL<<15)
 
 /*
  *  ======== OBD Device Declarations ===========
@@ -157,6 +159,7 @@ struct obd_ops {
  */
 
 extern int obd_init_obdo_cache(void);
+extern void obd_cleanup_obdo_cache(void);
 
 
 static inline int obdo_has_inline(struct obdo *obdo)
@@ -276,6 +279,8 @@ static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 		dst->o_obdflags = src->o_obdflags;
 	if ( src->o_valid & OBD_MD_FLNLINK ) 
 		dst->o_nlink = src->o_nlink;
+	if ( src->o_valid & OBD_MD_FLGENER ) 
+		dst->o_generation = src->o_generation;
 	if ( src->o_valid & OBD_MD_FLINLINE ) 
 		memcpy(dst->o_inline, src->o_inline, sizeof(src->o_inline));
 	if ( src->o_valid & OBD_MD_FLOBDMD ) 
@@ -309,6 +314,10 @@ static __inline__ void obdo_from_inode(struct obdo *dst, struct inode *src)
 		dst->o_gid = src->i_gid;
 	if ( dst->o_valid & OBD_MD_FLFLAGS )
 		dst->o_flags = src->i_flags;
+	if ( dst->o_valid & OBD_MD_FLNLINK )
+		dst->o_nlink = src->i_nlink;
+	if ( dst->o_valid & OBD_MD_FLGENER ) 
+		dst->o_generation = src->i_generation;
 }
 
 static __inline__ void obdo_to_inode(struct inode *dst, struct obdo *src)
@@ -323,6 +332,8 @@ static __inline__ void obdo_to_inode(struct inode *dst, struct obdo *src)
 		dst->i_mtime = src->o_mtime;
 	if ( src->o_valid & OBD_MD_FLCTIME ) 
 		dst->i_ctime = src->o_ctime;
+	if ( src->o_valid & OBD_MD_FLSIZE ) 
+		dst->i_size = src->o_size;
 	if ( src->o_valid & OBD_MD_FLBLOCKS ) /* allocation of space */
 		dst->i_blocks = src->o_blocks;
 	if ( src->o_valid & OBD_MD_FLBLKSZ )
@@ -333,10 +344,12 @@ static __inline__ void obdo_to_inode(struct inode *dst, struct obdo *src)
 		dst->i_uid = src->o_uid;
 	if ( src->o_valid & OBD_MD_FLGID ) 
 		dst->i_gid = src->o_gid;
-	if ( src->o_valid & OBD_MD_FLSIZE ) 
-		dst->i_size = src->o_size;
 	if ( src->o_valid & OBD_MD_FLFLAGS ) 
 		dst->i_flags = src->o_flags;
+	if ( src->o_valid & OBD_MD_FLNLINK )
+		dst->i_nlink = src->o_nlink;
+	if ( src->o_valid & OBD_MD_FLGENER )
+		dst->i_generation = src->o_generation;
 }
 
 static __inline__ int obdo_cmp_md(struct obdo *dst, struct obdo *src)
