@@ -183,7 +183,6 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                                 it->it_data = NULL;
                                 GOTO(neg_req, NULL);
                         }
-                        LASSERT(dentry->d_inode);
                         it->it_data = dentry;
                 } else if (it->it_op == IT_OPEN) {
                         it->it_data = NULL;
