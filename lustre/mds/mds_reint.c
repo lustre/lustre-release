@@ -2153,7 +2153,7 @@ static int mds_reint_link(struct mds_update_record *rec, int offset,
 #ifdef S_PDIROPS
         if (IS_PDIROPS(de_tgt_dir->d_inode)) {
                 int flags = 0;
-                update_mode = mds_lock_mode_for_dir(obd, de_tgt_dir, LCK_EX);
+                update_mode = mds_lock_mode_for_dir(obd, de_tgt_dir, LCK_PW);
                 if (update_mode) {
                         rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
                                               tgt_dir_res_id, LDLM_IBITS,
