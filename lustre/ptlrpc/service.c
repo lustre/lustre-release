@@ -21,7 +21,10 @@
  */
 
 #define DEBUG_SUBSYSTEM S_RPC
-
+#ifndef __KERNEL__
+#include <liblustre.h>
+#include <linux/kp30.h>
+#endif
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_net.h>
@@ -195,6 +198,7 @@ static int handle_incoming_request(struct obd_device *obddev,
         LASSERT (event->offset + event->mlength <= svc->srv_buf_size);
 
         memset(request, 0, sizeof(*request));
+        INIT_LIST_HEAD(&request->rq_list);
         request->rq_svc = svc;
         request->rq_obd = obddev;
         request->rq_xid = event->match_bits;
@@ -309,7 +313,9 @@ static int ptlrpc_main(void *arg)
 #endif
 
 #ifdef __arch_um__
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         sprintf(current->comm, "%s|%d", data->name,current->thread.extern_pid);
+#endif
 #else
         strcpy(current->comm, data->name);
 #endif
