@@ -95,16 +95,18 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         rc = mdc_readpage(&sbi->ll_mdc_conn, inode->i_ino,
                           S_IFDIR, offset, buf, &request);
         kunmap(page);
-        body = lustre_msg_buf(request->rq_repmsg, 0); 
-        if (!body) 
-                rc = -EINVAL;
-        if (body) 
-                inode->i_size = body->size;
+        if (!rc) {
+                body = lustre_msg_buf(request->rq_repmsg, 0);
+                if (!body)
+                        rc = -EINVAL;
+                else
+                        inode->i_size = body->size;
+        }
         ptlrpc_free_req(request);
         EXIT;
 
  readpage_out:
-        if ( !rc )
+        if (!rc)
                 SetPageUptodate(page);
 
         UnlockPage(page);
