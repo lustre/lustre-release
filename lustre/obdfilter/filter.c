@@ -53,7 +53,7 @@
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_log.h>
 #include <linux/lustre_commit_confd.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 
 #include "filter_internal.h"
 

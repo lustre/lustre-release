@@ -15,7 +15,7 @@
 # include <linux/dcache.h>
 #endif
 #include <linux/lustre_handles.h>
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_dlm.h>

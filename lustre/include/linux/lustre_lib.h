@@ -35,8 +35,8 @@
 # include <linux/signal.h>
 # include <linux/types.h>
 #endif
-#include <linux/portals_lib.h>
-#include <linux/kp30.h> /* XXX just for LASSERT! */
+#include <libcfs/portals_lib.h>
+#include <libcfs/kp30.h> /* XXX just for LASSERT! */
 #include <linux/lustre_idl.h>
 #include <linux/lustre_cfg.h>
 
@@ -125,8 +125,6 @@ void l_lock(struct lustre_lock *);
 void l_unlock(struct lustre_lock *);
 int l_has_lock(struct lustre_lock *);
 
-
-#include <linux/portals_lib.h>
 
 /*
  *   OBD IOCTLS
@@ -470,7 +468,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define ECHO_IOC_CANCEL                _IOWR('f', 203, long)
 
 /* XXX _IOWR('f', 250, long) has been defined in
- * portals/include/linux/kp30.h for debug, don't use it
+ * portals/include/libcfs/kp30.h for debug, don't use it
  */
 
 /* Until such time as we get_info the per-stripe maximum from the OST,

@@ -41,7 +41,7 @@
 #include <linux/init.h>
 #include <asm/statfs.h>
 #endif
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>
 #include <linux/obd_class.h>

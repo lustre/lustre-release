@@ -28,7 +28,7 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_lib.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 #else
 #include <liblustre.h>
 #endif

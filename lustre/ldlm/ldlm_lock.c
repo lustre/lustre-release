@@ -29,7 +29,7 @@
 # include <linux/lustre_dlm.h>
 #else
 # include <liblustre.h>
-# include <linux/kp30.h>
+# include <libcfs/kp30.h>
 #endif
 
 #include <linux/obd_class.h>

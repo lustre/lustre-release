@@ -24,7 +24,7 @@
 #ifndef __LVFS_H__
 #define __LVFS_H__
 
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 
 #define LL_FID_NAMELEN (16 + 1 + 8 + 1)
 

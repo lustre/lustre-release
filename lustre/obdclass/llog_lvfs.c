@@ -42,7 +42,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
 #include <linux/obd_ost.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include <linux/lvfs.h>
 #include <linux/lustre_fsfilt.h>
 #include "llog_internal.h"

@@ -15,7 +15,7 @@
 #include <linux/fs.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include "llog_internal.h"
 
 static int str2logid(struct llog_logid *logid, char *str, int len)

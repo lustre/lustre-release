@@ -40,7 +40,7 @@
 
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include <linux/lvfs.h>
 
 #ifdef __KERNEL__

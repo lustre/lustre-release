@@ -32,7 +32,7 @@
 #endif
 #endif
 
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 // #include <linux/obd.h>
 #include <portals/p30.h>
 #include <linux/lustre_idl.h>

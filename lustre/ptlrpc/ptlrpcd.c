@@ -42,7 +42,7 @@
 # include <ctype.h>
 #endif
 
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <linux/lustre_net.h>
 
 #include <linux/lustre_ha.h>

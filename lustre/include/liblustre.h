@@ -45,9 +45,9 @@
 #include <sys/stat.h>
 #include <sys/vfs.h>
 
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include <portals/p30.h>
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 
 /* definitions for liblustre */
 
@@ -360,28 +360,7 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
 #define PAGE_CACHE_SHIFT PAGE_SHIFT
 #define PAGE_CACHE_MASK  PAGE_MASK
 
-/* XXX
- * for this moment, liblusre will not rely OST for non-page-aligned write
- */
-#define LIBLUSTRE_HANDLE_UNALIGNED_PAGE
-
-struct page {
-        void   *addr;
-        unsigned long index;
-        struct list_head list;
-        unsigned long private;
-
-        /* internally used by liblustre file i/o */
-        int     _offset;
-        int     _count;
-#ifdef LIBLUSTRE_HANDLE_UNALIGNED_PAGE
-        int     _managed;
-#endif
-};
-
-/* 2.4 defines */
-#define PAGE_LIST_ENTRY list
-#define PAGE_LIST(page) ((page)->list)
+/* struct page decl moved out from here into portals/include/libcfs/user-prim.h */
 
 #define kmap(page) (page)->addr
 #define kunmap(a) do {} while (0)

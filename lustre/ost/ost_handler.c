@@ -44,7 +44,7 @@
 #include <linux/init.h>
 #include <linux/lprocfs_status.h>
 #include <linux/lustre_commit_confd.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include "ost_internal.h"
 
 void oti_init(struct obd_trans_info *oti, struct ptlrpc_request *req)

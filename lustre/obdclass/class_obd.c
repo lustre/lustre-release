@@ -67,7 +67,7 @@
 #include <linux/lustre_build_version.h>
 #include <linux/lustre_version.h>
 #endif
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include "llog_internal.h"
 
 #ifndef __KERNEL__

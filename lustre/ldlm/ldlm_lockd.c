@@ -37,7 +37,7 @@
 
 #include <linux/lustre_dlm.h>
 #include <linux/obd_class.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include "ldlm_internal.h"
 
 extern kmem_cache_t *ldlm_resource_slab;

@@ -40,7 +40,7 @@
 
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 
 /* Create a new log handle and add it to the open list.
  * This log handle will be closed when all of the records in it are removed.

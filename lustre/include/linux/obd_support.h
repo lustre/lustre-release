@@ -29,7 +29,7 @@
 #include <linux/slab.h>
 #include <linux/highmem.h>
 #endif
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <linux/lustre_compat25.h>
 
 /* global variables */

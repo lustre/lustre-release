@@ -21,7 +21,7 @@
 
 #include <linux/obd_class.h>
 #include <linux/lustre_log.h>
-#include <portals/list.h>
+#include <libcfs/list.h>
 #include "llog_internal.h"
 
 /* helper functions for calling the llog obd methods */

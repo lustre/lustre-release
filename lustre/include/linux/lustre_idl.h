@@ -44,6 +44,8 @@
 # include <asm/types.h>
 # include <stdint.h>
 #endif
+# include <libcfs/list.h>
+# include <string.h>
 #endif
 
 /* Defn's shared with user-space. */
