@@ -99,6 +99,7 @@ int obdfs_prepare_write(struct file *file, struct page *page, unsigned from, uns
         int rc;
         ENTRY; 
         
+	kmap(page);
         /* PDEBUG(page, "READ"); */
         if (Page_Uptodate(page)) { 
                 EXIT;
