@@ -426,7 +426,6 @@ int main(int argc, char * const argv[])
         while ((c = getopt_long(argc, argv, "", long_opts, &opt_index)) != -1) {
                 switch (c) {
                 case 0: {
-                        printf("optindex %d\n", opt_index);
                         if (!optarg[0])
                                 usage(argv[0]);
 

@@ -42,25 +42,31 @@
 
 #include "llite_lib.h"
 
-static void ll_intent_release(struct lookup_intent *it)
+static void ll_intent_drop_lock(struct lookup_intent *it)
 {
         struct lustre_handle *handle;
-        ENTRY;
 
-        if (it->d.lustre.it_lock_mode) {
+        if (it->it_op && it->d.lustre.it_lock_mode) {
                 handle = (struct lustre_handle *)&it->d.lustre.it_lock_handle;
                 CDEBUG(D_DLMTRACE, "releasing lock with cookie "LPX64
-                       " from it %p\n",
-                       handle->cookie, it);
+                       " from it %p\n", handle->cookie, it);
                 ldlm_lock_decref(handle, it->d.lustre.it_lock_mode);
 
-                /* intent_release may be called multiple times, from
-                   this thread and we don't want to double-decref this
-                   lock (see bug 494) */
+                /* bug 494: intent_release may be called multiple times, from
+                 * this thread and we don't want to double-decref this lock */
                 it->d.lustre.it_lock_mode = 0;
         }
+}
+
+static void ll_intent_release(struct lookup_intent *it)
+{
+        ENTRY;
+
+        ll_intent_drop_lock(it);
         it->it_magic = 0;
         it->it_op_release = 0;
+        it->d.lustre.it_disposition = 0;
+        it->d.lustre.it_data = NULL;
         EXIT;
 }
 
@@ -342,6 +348,9 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         ldlm_error_t rc;
 
                         LASSERT(lsm->lsm_object_id != 0);
+
+                        /* bug 2334: drop MDS lock before acquiring OST lock */
+                        ll_intent_drop_lock(it);
 
                         rc = llu_extent_lock(NULL, inode, lsm, LCK_PR, &extent,
                                             &lockh);
