@@ -43,7 +43,7 @@ extern struct super_operations ll_super_operations;
 #define log2(n) ffz(~(n))
 #endif
 
-struct ll_sb_info *lustre_init_sbi(struct super_block *sb) 
+struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
 {
         struct ll_sb_info *sbi = NULL;
         class_uuid_t uuid;
@@ -65,7 +65,7 @@ struct ll_sb_info *lustre_init_sbi(struct super_block *sb)
         RETURN(sbi);
 }
 
-void lustre_free_sbi(struct super_block *sb) 
+void lustre_free_sbi(struct super_block *sb)
 {
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         ENTRY;
@@ -126,8 +126,8 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
         sb->s_blocksize_bits = log2(osfs.os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
         sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
-        
-        devno = get_uuid2int(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid, 
+
+        devno = get_uuid2int(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid,
                              strlen(sbi2mdc(sbi)->cl_import->imp_target_uuid.uuid));
         sb->s_dev = devno;
 
@@ -159,7 +159,7 @@ int lustre_common_fill_super(struct super_block *sb, char *mdc, char *osc)
 
         sb->s_op = &lustre_super_operations;
 
-        /* make root inode 
+        /* make root inode
          * XXX: move this to after cbd setup? */
         err = mdc_getattr(sbi->ll_mdc_exp, &rootfid,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
@@ -436,14 +436,14 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
         err = class_process_config(&lcfg);
         if (err < 0)
                 GOTO(out_detach, err);
-        
+
         obd = class_name2obd(name);
         if (obd == NULL)
                 GOTO(out_cleanup, err = -EINVAL);
 
         /* Disable initial recovery on this import */
-        err = obd_set_info(obd->obd_self_export, 
-                           strlen("initial_recov"), "initial_recov", 
+        err = obd_set_info(obd->obd_self_export,
+                           strlen("initial_recov"), "initial_recov",
                            sizeof(allow_recov), &allow_recov);
         if (err)
                 GOTO(out_cleanup, err);
@@ -453,9 +453,9 @@ int lustre_process_log(struct lustre_mount_data *lmd, char * profile,
                 CERROR("cannot connect to %s: rc = %d\n", lmd->lmd_mds, err);
                 GOTO(out_cleanup, err);
         }
-        
+
         exp = class_conn2export(&mdc_conn);
-        
+
         ctxt = llog_get_context(exp->exp_obd, LLOG_CONFIG_REPL_CTXT);
         rc = class_config_parse_llog(ctxt, profile, cfg);
         if (rc) {
@@ -496,7 +496,7 @@ out_del_conn:
 out:
         if (rc == 0)
                 rc = err;
-        
+
         RETURN(rc);
 }
 
@@ -527,15 +527,15 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 }
 
                 OBD_ALLOC(sbi->ll_lmd, sizeof(*sbi->ll_lmd));
-                if (sbi->ll_lmd == NULL) 
+                if (sbi->ll_lmd == NULL)
                         GOTO(out_free, err = -ENOMEM);
                 memcpy(sbi->ll_lmd, lmd, sizeof(*lmd));
 
                 /* generate a string unique to this super, let's try
                  the address of the super itself.*/
-                len = (sizeof(sb) * 2) + 1; 
+                len = (sizeof(sb) * 2) + 1;
                 OBD_ALLOC(sbi->ll_instance, len);
-                if (sbi->ll_instance == NULL) 
+                if (sbi->ll_instance == NULL)
                         GOTO(out_free, err = -ENOMEM);
                 sprintf(sbi->ll_instance, "%p", sb);
 
@@ -556,13 +556,13 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 }
                 if (osc)
                         OBD_FREE(osc, strlen(osc) + 1);
-                OBD_ALLOC(osc, strlen(lprof->lp_osc) + 
+                OBD_ALLOC(osc, strlen(lprof->lp_osc) +
                           strlen(sbi->ll_instance) + 2);
                 sprintf(osc, "%s-%s", lprof->lp_osc, sbi->ll_instance);
 
                 if (mdc)
                         OBD_FREE(mdc, strlen(mdc) + 1);
-                OBD_ALLOC(mdc, strlen(lprof->lp_mdc) + 
+                OBD_ALLOC(mdc, strlen(lprof->lp_mdc) +
                           strlen(sbi->ll_instance) + 2);
                 sprintf(mdc, "%s-%s", lprof->lp_mdc, sbi->ll_instance);
         }
@@ -576,9 +576,9 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 CERROR("no mdc\n");
                 GOTO(out_free, err = -EINVAL);
         }
-        
+
         err = lustre_common_fill_super(sb, mdc, osc);
-        
+
         if (err)
                 GOTO(out_free, err);
 
@@ -605,9 +605,9 @@ out_free:
                         OBD_ALLOC(cln_prof, len);
                         sprintf(cln_prof, "%s-clean", sbi->ll_lmd->lmd_profile);
 
-                        err = lustre_process_log(sbi->ll_lmd, cln_prof, &cfg, 
+                        err = lustre_process_log(sbi->ll_lmd, cln_prof, &cfg,
                                                  0);
-                        if (err < 0) 
+                        if (err < 0)
                                 CERROR("Unable to process log: %s\n", cln_prof);
                         OBD_FREE(cln_prof, len);
                         OBD_FREE(sbi->ll_instance, strlen(sbi->ll_instance)+ 1);
@@ -619,11 +619,11 @@ out_free:
         goto out_dev;
 } /* lustre_fill_super */
 
-static void lustre_manual_cleanup(struct ll_sb_info *sbi) 
+static void lustre_manual_cleanup(struct ll_sb_info *sbi)
 {
         struct lustre_cfg lcfg;
         struct obd_device *obd;
-        int next = 0; 
+        int next = 0;
 
         while ((obd = class_devices_in_group(&sbi->ll_sb_uuid, &next)) != NULL)
         {
@@ -644,7 +644,7 @@ static void lustre_manual_cleanup(struct ll_sb_info *sbi)
                 }
         }
 
-        if (sbi->ll_lmd != NULL) 
+        if (sbi->ll_lmd != NULL)
                 class_del_profile(sbi->ll_lmd->lmd_profile);
 }
 
@@ -660,7 +660,7 @@ void lustre_put_super(struct super_block *sb)
         if (obd)
                 force_umount = obd->obd_no_recov;
         obd = NULL;
-        
+
         lustre_common_put_super(sb);
 
         if (sbi->ll_lmd != NULL) {
@@ -860,7 +860,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
                         /* from sys_utime() */
                         if (!(ia_valid & (ATTR_MTIME_SET | ATTR_ATIME_SET))) {
                                 if (current->fsuid != inode->i_uid &&
-                                    (rc = ll_permission(inode, MAY_WRITE, NULL)) != 0)
+                                    (rc=ll_permission(inode,MAY_WRITE,NULL))!=0)
                                         RETURN(rc);
                         } else {
 				/* from inode_change_ok() */
@@ -878,7 +878,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
          * If we don't we can race with other i_size updaters on our node, like
          * ll_file_read.  We can also race with i_size propogation to other
          * nodes through dirtying and writeback of final cached pages.  This
-         * last one is especially bad for racing o_append users on other 
+         * last one is especially bad for racing o_append users on other
          * nodes. */
         if (ia_valid & ATTR_SIZE) {
                 struct ldlm_extent extent = { .start = attr->ia_size,
@@ -950,6 +950,8 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
                 CERROR("mdc_statfs fails: rc = %d\n", rc);
                 RETURN(rc);
         }
+
+        osfs->os_type = sb->s_magic;
 
         CDEBUG(D_SUPER, "MDC blocks "LPU64"/"LPU64" objects "LPU64"/"LPU64"\n",
                osfs->os_bavail, osfs->os_blocks, osfs->os_ffree,osfs->os_files);
