@@ -26,6 +26,7 @@
 #include <asm/statfs.h>
 #endif
 #include <linux/obd.h>
+#include <linux/obd_class.h>
 #include <linux/lprocfs_status.h>
 
 #ifndef LPROCFS
@@ -106,6 +107,41 @@ static int lprocfs_mds_rd_recovery_status(char *page, char **start, off_t off,
         return len + n;
 }
 
+static int lprocfs_mds_wr_evict_client(struct file *file, const char *buffer,
+                                       unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct obd_export *doomed_exp = NULL;
+        struct obd_uuid doomed;
+        struct list_head *p;
+        char tmpbuf[37];
+
+        sscanf(buffer, "%37s", tmpbuf);
+        obd_str2uuid(&doomed, tmpbuf);
+        
+        spin_lock(&obd->obd_dev_lock);
+        list_for_each(p, &obd->obd_exports) {
+                doomed_exp = list_entry(p, struct obd_export, exp_obd_chain);
+                if (obd_uuid_equals(&doomed, &doomed_exp->exp_client_uuid)) {
+                        class_export_get(doomed_exp);
+                        break;
+                }
+                doomed_exp = NULL;
+        }
+        spin_unlock(&obd->obd_dev_lock);
+
+        if (doomed_exp == NULL) {
+                CERROR("can't disconnect %s: no export found\n",
+                       doomed.uuid);
+        } else {
+                CERROR("evicting %s at adminstrative request\n",
+                       doomed.uuid);
+                ptlrpc_fail_export(doomed_exp);
+                class_export_put(doomed_exp);
+        }
+        return count;
+}
+
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",         lprocfs_rd_uuid,        0, 0 },
         { "blocksize",    lprocfs_rd_blksize,     0, 0 },
@@ -117,6 +153,7 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         //{ "filegroups",   lprocfs_rd_filegroups,  0, 0 },
         { "mntdev",       lprocfs_mds_rd_mntdev,  0, 0 },
         { "recovery_status", lprocfs_mds_rd_recovery_status, 0, 0 },
+        { "evict_client", 0, lprocfs_mds_wr_evict_client, 0 },
         { 0 }
 };
 
