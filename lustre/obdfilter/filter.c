@@ -58,7 +58,6 @@ static int filter_prep(struct obd_device *obddev)
         struct dentry *dentry;
         struct file *file;
         struct inode *inode;
-        loff_t off;
         int rc = 0;
         char rootid[128];
         __u64 lastino = 2;
@@ -139,23 +138,27 @@ static int filter_prep(struct obd_device *obddev)
         filter->fo_iop = inode->i_op;
         filter->fo_aops = inode->i_mapping->a_ops;
 
-        off = 0;
         if (inode->i_size == 0) {
-                ssize_t retval = file->f_op->write(file, (char *)&lastino,
-                                                   sizeof(lastino), &off);
-                if (retval != sizeof(lastino)) {
+                __u64 disk_lastino = cpu_to_le64(lastino);
+                ssize_t retval = file->f_op->write(file, (char *)&disk_lastino,
+                                                   sizeof(disk_lastino),
+                                                   &file->f_pos);
+                if (retval != sizeof(disk_lastino)) {
                         CDEBUG(D_INODE, "OBD filter: error writing lastino\n");
                         filp_close(file, 0);
                         GOTO(out_O_mode, rc = -EIO);
                 }
         } else {
-                ssize_t retval = file->f_op->read(file, (char *)&lastino,
-                                                  sizeof(lastino), &off);
-                if (retval != sizeof(lastino)) {
+                __u64 disk_lastino;
+                ssize_t retval = file->f_op->read(file, (char *)&disk_lastino,
+                                                  sizeof(disk_lastino),
+                                                  &file->f_pos);
+                if (retval != sizeof(disk_lastino)) {
                         CDEBUG(D_INODE, "OBD filter: error reading lastino\n");
                         filp_close(file, 0);
                         GOTO(out_O_mode, rc = -EIO);
                 }
+                lastino = le64_to_cpu(disk_lastino);
         }
         filter->fo_lastino = lastino;
         filp_close(file, 0);
@@ -190,9 +193,9 @@ static void filter_post(struct obd_device *obddev)
 {
         struct obd_run_ctxt saved;
         struct filter_obd *filter = &obddev->u.filter;
+        __u64 disk_lastino;
         long rc;
         struct file *file;
-        loff_t off = 0;
         int mode;
 
         push_ctxt(&saved, &filter->fo_ctxt);
@@ -201,9 +204,12 @@ static void filter_post(struct obd_device *obddev)
                 CERROR("OBD filter: cannot create status file\n");
                 goto out;
         }
-        rc = file->f_op->write(file, (char *)&filter->fo_lastino,
-                       sizeof(filter->fo_lastino), &off);
-        if (rc != sizeof(filter->fo_lastino))
+
+        file->f_pos = 0;
+        disk_lastino = cpu_to_le64(filter->fo_lastino);
+        rc = file->f_op->write(file, (char *)&disk_lastino,
+                       sizeof(disk_lastino), &file->f_pos);
+        if (rc != sizeof(disk_lastino))
                 CERROR("OBD filter: error writing lastino: rc = %ld\n", rc);
 
         rc = filp_close(file, NULL);
@@ -231,10 +237,13 @@ out:
 static __u64 filter_next_id(struct obd_device *obddev)
 {
         __u64 id;
+
         spin_lock(&obddev->u.filter.fo_lock);
         obddev->u.filter.fo_lastino++;
-        id =    obddev->u.filter.fo_lastino;
+        id = obddev->u.filter.fo_lastino;
         spin_unlock(&obddev->u.filter.fo_lock);
+
+        /* FIXME: write the lastino to disk here */
         return id;
 }
 
@@ -586,12 +595,12 @@ static int filter_close(struct lustre_handle *conn, struct obdo *oa,
         struct dentry *dentry;
         /* ENTRY; */
 
-        if (!class_conn2export(conn)) {
+        obd = class_conn2obd(conn);
+        if (!obd) {
                 CDEBUG(D_IOCTL, "fatal: invalid client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
-        obd = class_conn2obd(conn);
         dentry = filter_fid2dentry(obd, filter_parent(obd, oa->o_mode),
                                    oa->o_id, oa->o_mode);
         if (IS_ERR(dentry))
@@ -617,7 +626,7 @@ static int filter_create(struct lustre_handle* conn, struct obdo *oa,
         struct iattr;
         ENTRY;
 
-        if (!class_conn2export(conn)) {
+        if (!obd) {
                 CERROR("invalid client %Lx\n", conn->addr);
                 return -EINVAL;
         }
@@ -654,19 +663,18 @@ static int filter_destroy(struct lustre_handle *conn, struct obdo *oa,
         struct obd_device *obd;
         struct filter_obd *filter;
         struct obd_run_ctxt saved;
-        struct obd_export *export;
         struct inode *inode;
         struct dentry *dir_dentry, *object_dentry;
         int rc;
         ENTRY;
 
-        if (!(export = class_conn2export(conn))) {
+        obd = class_conn2obd(conn);
+        if (!obd) {
                 CERROR("invalid client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         }
 
         CDEBUG(D_INODE, "destroying object %Ld\n", oa->o_id);
-        obd = class_conn2obd(conn);
 
         dir_dentry = filter_parent(obd, oa->o_mode);
         down(&dir_dentry->d_inode->i_sem);
@@ -712,9 +720,8 @@ static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
         int error;
         ENTRY;
 
-        if ( end != 0xffffffffffffffff ) { 
-                CERROR("PUNCH not supported, only truncate works\n"); 
-        }
+        if (end != 0xffffffffffffffff)
+                CERROR("PUNCH not supported, only truncate works\n");
 
         CDEBUG(D_INODE, "calling truncate for object #%Ld, valid = %x, "
                "o_size = %Ld\n", oa->o_id, oa->o_valid, start);
@@ -723,7 +730,7 @@ static int filter_truncate(struct lustre_handle *conn, struct obdo *oa,
         RETURN(error);
 }
 
-static int filter_pgcache_brw(int cmd, struct lustre_handle *conn, 
+static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
                               struct lov_stripe_md *md, obd_count oa_bufs,
                               struct brw_page *pga, brw_callback_t callback,
                               struct io_cb_data *data)
@@ -734,11 +741,11 @@ static int filter_pgcache_brw(int cmd, struct lustre_handle *conn,
         unsigned long            retval;
         int                      error;
         struct file             *file;
-        struct obd_device      *obd = class_conn2obd(conn);
+        struct obd_device       *obd = class_conn2obd(conn);
         int pg;
         ENTRY;
 
-        if (!class_conn2export(conn)) {
+        if (!obd) {
                 CDEBUG(D_IOCTL, "invalid client %Lx\n", conn->addr);
                 RETURN(-EINVAL);
         }
@@ -816,7 +823,7 @@ struct inode *ioobj_to_inode(struct lustre_handle *conn, struct obd_ioobj *o)
                 RETURN(NULL);
         }
 
-        if ( !o->ioo_id ) {
+        if (!o->ioo_id) {
                 CDEBUG(D_INODE, "fatal: invalid obdo %lu\n", (long)o->ioo_id);
                 RETURN(NULL);
         }
@@ -1017,7 +1024,10 @@ struct page *filter_get_page_write(struct inode *inode, unsigned long index,
         /* This page is currently locked, so get a temporary page instead */
         if (!page) {
                 unsigned long addr;
+                /* not a real error, just seeing if/when this really happens
                 CDEBUG(D_PAGE, "ino %ld page %ld locked\n", inode->i_ino,index);
+                */
+                CERROR("writing ino %ld page %ld locked\n", inode->i_ino,index);
                 addr = __get_free_pages(GFP_KERNEL, 0); /* locked page */
                 if (!addr) {
                         CERROR("no memory for a temp page\n");
@@ -1076,6 +1086,10 @@ static int filter_commit_write(struct page *page, unsigned from, unsigned to,
                 struct buffer_head *bh, *head = page->buffers;
                 unsigned blocksize = head->b_size;
                 void *addr = page_address(page);
+
+                /* not really an error, just seeing if this ever happens */
+                CERROR("called filter_commit_write for obj %ld:%ld on err %d\n",
+                       page->index, page->mapping->host->i_ino, err);
 
                 /* Currently one buffer per page, but in the future... */
                 for (bh = head, block_start = 0; bh != head || !block_start;
