@@ -2,6 +2,7 @@
 .*.flags
 *.ko
 *.c
+.*.o.d
 .tmp_versions
 Rules
 autoMakefile.in
