@@ -29,6 +29,7 @@ eval 'sub OBD_IOC_DESTROY () { &_IOC(1, ord(\'f\'), 6, 4);}' unless
   defined(&OBD_IOC_DESTROY);
 eval 'sub OBD_IOC_PREALLOCATE () { &_IOC(3, ord(\'f\'), 7, 4);}' unless
   defined(&OBD_IOC_PREALLOCATE);
+# FIXME: obsolete?
 eval 'sub OBD_IOC_DEC_USE_COUNT () { &_IOC(0, ord(\'f\'), 8, 0);}' unless
   defined(&OBD_IOC_DEC_USE_COUNT);
 eval 'sub OBD_IOC_SETATTR () { &_IOC(1, ord(\'f\'), 9, 4);}' unless
@@ -47,10 +48,13 @@ eval 'sub OBD_IOC_STATFS () { &_IOC(3, ord(\'f\'), 15, 4);}' unless
   defined(&OBD_IOC_STATFS);
 eval 'sub OBD_IOC_SYNC () { &_IOC(2, ord(\'f\'), 16, 4);}' unless
   defined(&OBD_IOC_SYNC);
+# FIXME: obsolete?
 eval 'sub OBD_IOC_READ2 () { &_IOC(3, ord(\'f\'), 17, 4);}' unless
   defined(&OBD_IOC_READ2);
+# FIXME: obsolete?
 eval 'sub OBD_IOC_FORMATOBD () { &_IOC(3, ord(\'f\'), 18, 4);}' unless
   defined(&OBD_IOC_FORMATOBD);
+# FIXME: obsolete?
 eval 'sub OBD_IOC_PARTITION () { &_IOC(3, ord(\'f\'), 19, 4);}' unless
   defined(&OBD_IOC_PARTITION);
 eval 'sub OBD_IOC_ATTACH () { &_IOC(3, ord(\'f\'), 20, 4);}' unless
@@ -232,7 +236,9 @@ my %commands =
      'snaptable' => {func => "SnapShotTable", doc => "snaptable: build a snapshot table (interactive)"},
      'copy' => {func => "Copy", doc => "copy <srcid> <tgtid>: copy objects"},
      'migrate' => {func => "Migrate", doc => "migrate <srcid> <tgtid>: migrate data from one object to another"},
+# FIXME: obsolete?
      'partition' => {func => "Partition", doc => "partition <type> <adapter> <bus> <tid> <lun> <partition> <size>: create a partition"},
+# FIXME: obsolete?
      'format' => {func => "Format", doc => "format <type> <adapter> <bus> <tid> <lun> <size>: format a partition"},
      'setup' => {func => "Setup", doc => "setup [type]: link this OBD device to the underlying device (default type obdext2)"},
      'connect' => {func => "Connect", doc => "connect: allocates client ID for this session"},
@@ -240,8 +246,10 @@ my %commands =
      'sync' => {func => "Sync", doc => "sync: flushes buffers to disk"},
      'destroy' => {func => "Destroy", doc => "destroy <id>: destroys an object"},
      'cleanup' => {func => "Cleanup", doc => "cleanup the minor obd device"},
+# FIXME: obsolete?
      'dec_use_count' => {func => "Decusecount", doc => "decreases the module use count so that the module can be removed following an oops"},
      'read' => {func => "Read", doc => "read <id> <count> [offset]: read data from object"},
+# FIXME: obsolete?
      'fsread' => {func => "Read2", doc => "read <id> <count> [offset]: read data from object"},
      'write' => {func => "Write", doc => "write <id> <offset> <text>: write data to object"},
      'punch' => {func => "Punch", doc => "punch <id> <start> <count>: punch a hole in object"},
