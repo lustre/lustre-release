@@ -11,3 +11,4 @@ obdctl
 lctl
 lfind
 lstripe
+lconf
