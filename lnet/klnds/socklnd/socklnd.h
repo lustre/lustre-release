@@ -80,9 +80,9 @@
 #define SOCKNAL_BUFFER_SIZE     (8<<20)         /* default socket buffer size */
 #define SOCKNAL_NAGLE            0              /* enable/disable NAGLE? */
 #define SOCKNAL_IRQ_AFFINITY     1              /* enable/disable IRQ affinity? */
-#define SOCKNAL_KEEPALIVE_IDLE   0              /* # seconds idle before 1st probe */
+#define SOCKNAL_KEEPALIVE_IDLE   30             /* # seconds idle before 1st probe */
 #define SOCKNAL_KEEPALIVE_COUNT  10             /* # unanswered probes to determine peer death */
-#define SOCKNAL_KEEPALIVE_INTVL  1              /* seconds between probes */
+#define SOCKNAL_KEEPALIVE_INTVL  2              /* seconds between probes */
 
 #define SOCKNAL_PEER_HASH_SIZE   101            /* # peer lists */
 
@@ -105,7 +105,7 @@
 
 #define SOCKNAL_SINGLE_FRAG_TX      0           /* disable multi-fragment sends */
 #define SOCKNAL_SINGLE_FRAG_RX      0           /* disable multi-fragment receives */
-#define SOCKNAL_RISK_KMAP_DEADLOCK  0           /* risk kmap deadlock on multi-frag I/O 
+#define SOCKNAL_RISK_KMAP_DEADLOCK  1           /* risk kmap deadlock on multi-frag I/O 
                                                  * (backs off to single-frag if disabled) */
                                                 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,72))
