@@ -170,6 +170,9 @@ static int mds_read_last_rcvd(struct obd_device *obddev, struct file *f)
         __u64 last_transno = 0;
         __u64 last_mount;
         int rc = 0;
+ 
+        LASSERT(sizeof(struct mds_client_data) == MDS_LR_SIZE);
+        LASSERT(sizeof(struct mds_server_data) <= MDS_LR_CLIENT);
 
         OBD_ALLOC(msd, sizeof(*msd));
         if (!msd)

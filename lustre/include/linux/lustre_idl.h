@@ -314,6 +314,7 @@ struct obd_statfs {
 #define OBD_BRW_WRITE	0x2
 #define OBD_BRW_RWMASK	(OBD_BRW_READ | OBD_BRW_WRITE)
 #define OBD_BRW_CREATE	0x4
+#define OBD_BRW_SYNC	0x8
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 
@@ -322,7 +323,7 @@ struct obd_ioobj {
         obd_gr               ioo_gr;
         __u32                ioo_type;
         __u32                ioo_bufcnt;
-};
+} __attribute__((packed));
 
 struct niobuf_remote {
         __u64 offset;

@@ -1958,7 +1958,7 @@ int jt_obd_close_uuid(int argc, char **argv)
         struct obd_ioctl_data data;
 
         if (argc != 3) {
-                fprintf(stderr, "usage: %s <uuid>\n", argv[0]);
+                fprintf(stderr, "usage: %s <uuid> <net-type>\n", argv[0]);
                 return 0;
         }
 

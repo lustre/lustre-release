@@ -146,7 +146,7 @@ $START
 
 log '== mkdir .../d7; mcreate .../d7/f2; echo foo > .../d7/f2 = test 7b'
 $MCREATE $DIR/d7/f2
-log -n foo > $DIR/d7/f2
+echo -n foo > $DIR/d7/f2
 [ "`cat $DIR/d7/f2`" = "foo" ] || error
 $CHECKSTAT -t file -s 3 $DIR/d7/f2 || error
 pass
@@ -311,6 +311,7 @@ $CHECKSTAT -u \#$RUNAS_ID $DIR/d22/etc || error
 pass
 $CLEAN
 $START
+
 
 log '== O_CREAT|O_EXCL in subdir ====================== test 23'
 mkdir $DIR/d23

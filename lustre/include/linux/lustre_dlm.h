@@ -26,9 +26,11 @@ typedef enum {
         ELDLM_LOCK_CHANGED = 300,
         ELDLM_LOCK_ABORTED = 301,
         ELDLM_LOCK_REPLACED = 302,
+        ELDLM_LOCK_MATCHED = 303,
 
         ELDLM_NAMESPACE_EXISTS = 400,
-        ELDLM_BAD_NAMESPACE    = 401
+        ELDLM_BAD_NAMESPACE    = 401,
+        ELDLM_GETATTR_ERROR    = 402
 } ldlm_error_t;
 
 #define LDLM_NAMESPACE_SERVER 0
@@ -135,7 +137,7 @@ struct ldlm_namespace {
  *
  */
 
-#define RES_HASH_BITS 14
+#define RES_HASH_BITS 10
 #define RES_HASH_SIZE (1UL << RES_HASH_BITS)
 #define RES_HASH_MASK (RES_HASH_SIZE - 1)
 
@@ -342,6 +344,8 @@ struct ldlm_lock *__ldlm_handle2lock(struct lustre_handle *, int flags);
 void ldlm_cancel_callback(struct ldlm_lock *);
 int ldlm_lock_set_data(struct lustre_handle *, void *data, void *cp_data);
 void ldlm_lock_remove_from_lru(struct ldlm_lock *);
+struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *,
+                                      struct lustre_handle *);
 
 static inline struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *h)
 {

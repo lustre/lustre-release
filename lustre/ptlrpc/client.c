@@ -243,12 +243,13 @@ int ll_brw_sync_wait(struct obd_brw_set *set, int phase)
         int rc = 0;
         ENTRY;
 
+        obd_brw_set_addref(set);
         switch(phase) {
         case CB_PHASE_START:
                 lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ, ll_sync_brw_timeout,
                                        ll_sync_brw_intr, set);
                 rc = l_wait_event(set->brw_waitq,
-                                  atomic_read(&set->brw_refcount) == 0, &lwi);
+                                  atomic_read(&set->brw_desc_count) == 0, &lwi);
 
                 list_for_each_safe(tmp, next, &set->brw_desc_head) {
                         struct ptlrpc_bulk_desc *desc =
@@ -259,12 +260,13 @@ int ll_brw_sync_wait(struct obd_brw_set *set, int phase)
                 }
                 break;
         case CB_PHASE_FINISH:
-                if (atomic_dec_and_test(&set->brw_refcount))
+                if (atomic_dec_and_test(&set->brw_desc_count))
                         wake_up(&set->brw_waitq);
                 break;
         default:
                 LBUG();
         }
+        obd_brw_set_decref(set);
 
         RETURN(rc);
 }
@@ -294,6 +296,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, int opcode,
                 RETURN(NULL);
         }
 
+        request->rq_timeout = obd_timeout;
         request->rq_level = LUSTRE_CONN_FULL;
         request->rq_type = PTL_RPC_MSG_REQUEST;
         request->rq_import = imp;
@@ -730,7 +733,7 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                                        interrupted_request, req);
         } else {
                 DEBUG_REQ(D_NET, req, "-- sleeping");
-                lwi = LWI_TIMEOUT_INTR(obd_timeout * HZ, expired_request,
+                lwi = LWI_TIMEOUT_INTR(req->rq_timeout * HZ, expired_request,
                                        interrupted_request, req);
         }
 #ifdef __KERNEL__
@@ -816,9 +819,11 @@ int ptlrpc_queue_wait(struct ptlrpc_request *req)
                 }
                 imp->imp_level = LUSTRE_CONN_RECOVD;
                 spin_unlock_irqrestore(&imp->imp_lock, flags);
-                rc = imp->imp_recover(imp, PTLRPC_RECOVD_PHASE_NOTCONN);
-                if (rc)
-                        LBUG();
+                if (imp->imp_recover != NULL) {
+                        rc = imp->imp_recover(imp, PTLRPC_RECOVD_PHASE_NOTCONN);
+                        if (rc)
+                                LBUG();
+                }
                 GOTO(out, rc = -EIO);
         }
 
@@ -917,6 +922,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp, int dying_import)
 {
         unsigned long flags;
         struct list_head *tmp, *n;
+        ENTRY;
 
         /* Make sure that no new requests get processed for this import.
          * ptlrpc_queue_wait must (and does) hold imp_lock while testing this
@@ -949,4 +955,5 @@ void ptlrpc_abort_inflight(struct obd_import *imp, int dying_import)
                         req->rq_import = NULL;
                 wake_up(&req->rq_wait_for_rep);
         }
+        EXIT;
 }

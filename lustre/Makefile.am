@@ -22,7 +22,7 @@ SUBDIRS = $(DIRS24) obdclass mds utils ptlrpc ldlm lib obdfilter mdc osc ost
 SUBDIRS+= llite obdecho lov cobd tests doc scripts conf
 endif
 
-DIST_SUBDIRS = $(SUBDIRS)
+DIST_SUBDIRS = $(SUBDIRS) liblustre
 EXTRA_DIST = BUGS FDL Rules include archdep.m4 kernel_patches
 
 # We get the version from the spec file.

@@ -3,7 +3,6 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-DEFS = $(ENABLE_OST_RECOVERY)
 MODULE = obdfilter
 modulefs_DATA = obdfilter.o
 EXTRA_PROGRAMS = obdfilter

@@ -138,7 +138,7 @@ struct mds_client_data {
         __u64 mcd_last_xid;     /* xid for the last transaction */
         __u32 mcd_last_result;  /* result from last RPC */
         __u32 mcd_last_data;    /* per-op data (disposition for open &c.) */
-        __u8 padding[MDS_LR_SIZE - 58];
+        __u8 padding[MDS_LR_SIZE - 74];
 };
 
 /* In-memory access to client data from MDS struct */

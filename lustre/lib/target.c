@@ -195,7 +195,7 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         dlmimp->imp_client = &export->exp_obd->obd_ldlm_client;
         dlmimp->imp_handle.addr = req->rq_reqmsg->addr;
         dlmimp->imp_handle.cookie = req->rq_reqmsg->cookie;
-        dlmimp->imp_obd = /* LDLM! */ NULL;
+        dlmimp->imp_obd = target;
         dlmimp->imp_recover = NULL;
         INIT_LIST_HEAD(&dlmimp->imp_replay_list);
         INIT_LIST_HEAD(&dlmimp->imp_sending_list);
@@ -373,13 +373,14 @@ static void process_recovery_queue(struct obd_device *obd)
                                  struct ptlrpc_request, rq_list);
 
                 if (req->rq_reqmsg->transno != obd->obd_next_recovery_transno) {
+                        struct l_wait_info lwi = { 0 };
                         spin_unlock_bh(&obd->obd_processing_task_lock);
                         CDEBUG(D_HA, "Waiting for transno "LPD64" (1st is "
                                LPD64")\n",
                                obd->obd_next_recovery_transno,
                                req->rq_reqmsg->transno);
-                        wait_event(obd->obd_next_transno_waitq,
-                                   check_for_next_transno(obd));
+                        l_wait_event(obd->obd_next_transno_waitq,
+                                     check_for_next_transno(obd), &lwi);
                         spin_lock_bh(&obd->obd_processing_task_lock);
                         if (obd->obd_flags & OBD_ABORT_RECOVERY) {
                                 target_abort_recovery(obd);

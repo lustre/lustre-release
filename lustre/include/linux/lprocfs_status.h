@@ -51,6 +51,7 @@ struct lprocfs_static_vars {
 extern struct proc_dir_entry *proc_lustre_root;
 
 
+#ifdef LPROCFS
 #define LPROCFS_INIT_MULTI_VARS(array, size)                              \
 void lprocfs_init_multi_vars(unsigned int idx,                            \
                              struct lprocfs_static_vars *x)               \
@@ -62,7 +63,6 @@ void lprocfs_init_multi_vars(unsigned int idx,                            \
    x->obd_vars = glob[idx].obd_vars;                                      \
 }                                                                         \
 
-#ifdef LPROCFS
 #define LPROCFS_INIT_VARS(vclass, vinstance)           \
 void lprocfs_init_vars(struct lprocfs_static_vars *x)  \
 {                                                      \
@@ -135,6 +135,10 @@ int fct_name(char *page, char **start, off_t off,                \
 static inline struct proc_dir_entry *
 lprocfs_register(const char *name, struct proc_dir_entry *parent,
                  struct lprocfs_vars *list, void *data) { return NULL; }
+#define LPROCFS_INIT_MULTI_VARS(array, size)
+static inline void lprocfs_init_multi_vars(unsigned int idx,
+                                           struct lprocfs_static_vars *x) { return; }
+#define LPROCFS_INIT_VARS(vclass, vinstance)
 static inline void lprocfs_init_vars(struct lprocfs_static_vars *x) { return; }
 static inline int lprocfs_add_vars(struct proc_dir_entry *root,
                                    struct lprocfs_vars *var,

@@ -32,6 +32,8 @@
 #include <linux/lprocfs_status.h>
 #include <linux/obd_ptlbd.h>
 
+#define BACKING_FILE    "/tmp/ptlbd-backing-file-la-la-la"
+
 static int ptlbd_sv_already_setup = 1;
 
 static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
@@ -40,8 +42,9 @@ static int ptlbd_sv_setup(struct obd_device *obddev, obd_count len, void *buf)
         int rc;
         ENTRY;
 
-        ptlbd->filp = filp_open("/tmp/ptlbd-backing-file-la-la-la", 
-                                        O_RDWR|O_CREAT, 0600);
+        ptlbd->filp = filp_open(BACKING_FILE,
+                                        O_RDWR|O_CREAT|O_LARGEFILE, 0600);
+
         if ( IS_ERR(ptlbd->filp) )
                 RETURN(PTR_ERR(ptlbd->filp));
 

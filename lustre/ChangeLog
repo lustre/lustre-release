@@ -1,5 +1,5 @@
-TBD
-       * version v0_5_21
+2003-03-11  Phil Schwan  <phil@clusterfs.com>
+       * version v0_6
        * bug fixes
 	- LDLM_DEBUG macro fix, for gcc 3.2 (850)
 	- failed open()s could cause deadlock; fixed (867, 869)
@@ -17,6 +17,11 @@ TBD
 	- if a bad lock AST arrives, send an error instead of dropping entirely
 	- return 0 from revalidate2 if ll_intent_lock returns -EINTR (912)
 	- fix leak in bulk IO when only partially completed (899, 900, 926)
+	- fix O_DIRECT for ia64 (55)
+        - (almost) eliminate Lustre-kernel-thread effects on load average (722)
+	- C-z after timeout could hang a process forever; fixed (977)
+       * Features
+	- client-side I/O cache (678, 924, 929, 941, 970)
        * protocol changes
 	- READPAGE and SETATTRs which don't take server-side locks get
 	  their own portal

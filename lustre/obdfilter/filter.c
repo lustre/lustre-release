@@ -296,7 +296,7 @@ int filter_finish_transno(struct obd_export *export, void *handle,
 #endif
         if (written == sizeof(*fcd))
                 RETURN(0);
-        CERROR("error writing to last_rcvd file: rc = %d\n", written);
+        CERROR("error writing to last_rcvd file: rc = %d\n", (int)written);
         if (written >= 0)
                 RETURN(-EIO);
 
@@ -506,7 +506,7 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp,
         struct filter_client_data *fcd = NULL;
         struct inode *inode = filp->f_dentry->d_inode;
         unsigned long last_rcvd_size = inode->i_size;
-        __u64 mount_count;
+        __u64 mount_count = 0;
         int cl_idx;
         loff_t off = 0;
         int rc;
@@ -545,8 +545,9 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp,
                 ssize_t retval = lustre_fread(filp, (char *)fsd, sizeof(*fsd),
                                               &off);
                 if (retval != sizeof(*fsd)) {
-                        CDEBUG(D_INODE,"OBD filter: error reading lastobjid\n");
-                        GOTO(out, rc = -EIO);
+                        CDEBUG(D_INODE,"OBD filter: error reading %s\n",
+                               LAST_RCVD);
+                        GOTO(err_fsd, rc = -EIO);
                 }
                 mount_count = le64_to_cpu(fsd->fsd_mount_count);
                 filter->fo_subdir_count = le16_to_cpu(fsd->fsd_subdir_count);
@@ -555,13 +556,13 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp,
         if (fsd->fsd_feature_incompat) {
                 CERROR("unsupported feature %x\n",
                        le32_to_cpu(fsd->fsd_feature_incompat));
-                RETURN(-EINVAL);
+                GOTO(err_fsd, rc = -EINVAL);
         }
         if (fsd->fsd_feature_rocompat) {
                 CERROR("read-only feature %x\n",
                        le32_to_cpu(fsd->fsd_feature_rocompat));
                 /* Do something like remount filesystem read-only */
-                RETURN(-EINVAL);
+                GOTO(err_fsd, rc = -EINVAL);
         }
 
         CDEBUG(D_INODE, "%s: server last_objid: "LPU64"\n",
@@ -584,86 +585,89 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp,
          * the header.  If we find clients with higher last_rcvd values
          * then those clients may need recovery done.
          */
-        if (obd->obd_flags & OBD_REPLAYABLE) {
-                for (cl_idx = 0; off < last_rcvd_size; cl_idx++) {
-                        __u64 last_rcvd;
-                        int mount_age;
+        if (!(obd->obd_flags & OBD_REPLAYABLE)) {
+                CERROR("%s: recovery support OFF\n", obd->obd_name);
+                GOTO(out, rc = 0);
+        }
 
-                        if (!fcd) {
-                                OBD_ALLOC(fcd, sizeof(*fcd));
-                                if (!fcd)
-                                        GOTO(err_fsd, rc = -ENOMEM);
-                        }
+        for (cl_idx = 0; off < last_rcvd_size; cl_idx++) {
+                __u64 last_rcvd;
+                int mount_age;
 
-                        /* Don't assume off is incremented properly, in case
-                         * sizeof(fsd) isn't the same as fsd->fsd_client_size.
-                         */
-                        off = le32_to_cpu(fsd->fsd_client_start) +
-                                cl_idx * le16_to_cpu(fsd->fsd_client_size);
-                        rc = lustre_fread(filp, (char *)fcd, sizeof(*fcd), &off);
-                        if (rc != sizeof(*fcd)) {
-                                CERROR("error reading FILTER %s offset %d: rc = %d\n",
-                                       LAST_RCVD, cl_idx, rc);
-                                if (rc > 0) /* XXX fatal error or just abort reading? */
-                                        rc = -EIO;
+                if (!fcd) {
+                        OBD_ALLOC(fcd, sizeof(*fcd));
+                        if (!fcd)
+                                GOTO(err_fsd, rc = -ENOMEM);
+                }
+
+                /* Don't assume off is incremented properly, in case
+                 * sizeof(fsd) isn't the same as fsd->fsd_client_size.
+                 */
+                off = le32_to_cpu(fsd->fsd_client_start) +
+                        cl_idx * le16_to_cpu(fsd->fsd_client_size);
+                rc = lustre_fread(filp, (char *)fcd, sizeof(*fcd), &off);
+                if (rc != sizeof(*fcd)) {
+                        CERROR("error reading FILTER %s offset %d: rc = %d\n",
+                               LAST_RCVD, cl_idx, rc);
+                        if (rc > 0) /* XXX fatal error or just abort reading? */
+                                rc = -EIO;
+                        break;
+                }
+
+                if (fcd->fcd_uuid[0] == '\0') {
+                        CDEBUG(D_INFO, "skipping zeroed client at offset %d\n",
+                               cl_idx);
+                        continue;
+                }
+
+                last_rcvd = le64_to_cpu(fcd->fcd_last_rcvd);
+
+                /* These exports are cleaned up by filter_disconnect(), so they
+                 * need to be set up like real exports as filter_connect() does.
+                 */
+                mount_age = mount_count - le64_to_cpu(fcd->fcd_mount_count);
+                if (mount_age < FILTER_MOUNT_RECOV) {
+                        struct obd_export *exp = class_new_export(obd);
+                        struct filter_export_data *fed;
+                        CERROR("RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
+                               " srv lr: "LPU64" mnt: "LPU64" last mount: "
+                               LPU64"\n", fcd->fcd_uuid, cl_idx,
+                               last_rcvd, le64_to_cpu(fsd->fsd_last_rcvd),
+                               le64_to_cpu(fcd->fcd_mount_count), mount_count);
+                        /* disabled until OST recovery is actually working */
+
+                        if (!exp) {
+                                rc = -ENOMEM;
                                 break;
                         }
+                        memcpy(&exp->exp_client_uuid.uuid, fcd->fcd_uuid,
+                               sizeof exp->exp_client_uuid.uuid);
+                        fed = &exp->exp_filter_data;
+                        fed->fed_fcd = fcd;
+                        filter_client_add(filter, fed, cl_idx);
+                        /* create helper if export init gets more complex */
+                        INIT_LIST_HEAD(&fed->fed_open_head);
+                        spin_lock_init(&fed->fed_lock);
 
-                        if (fcd->fcd_uuid[0] == '\0') {
-                                CDEBUG(D_INFO, "skipping zeroed client at offset %d\n",
-                                       cl_idx);
-                                continue;
-                        }
-
-                        last_rcvd = le64_to_cpu(fcd->fcd_last_rcvd);
-
-                        /* These exports are cleaned up by filter_disconnect(), so they
-                         * need to be set up like real exports as filter_connect() does.
-                         */
-                        mount_age = mount_count - le64_to_cpu(fcd->fcd_mount_count);
-                        if (mount_age < FILTER_MOUNT_RECOV) {
-                                struct obd_export *exp = class_new_export(obd);
-                                struct filter_export_data *fed;
-                                CERROR("RCVRNG CLIENT uuid: %s idx: %d lr: "LPU64
-                                       " srv lr: "LPU64" mnt: "LPU64" last mount: "
-                                       LPU64"\n", fcd->fcd_uuid, cl_idx,
-                                       last_rcvd, le64_to_cpu(fsd->fsd_last_rcvd),
-                                       le64_to_cpu(fcd->fcd_mount_count), mount_count);
-                                /* disabled until OST recovery is actually working */
-
-                                if (!exp) {
-                                        rc = -ENOMEM;
-                                        break;
-                                }
-                                memcpy(&exp->exp_client_uuid.uuid, fcd->fcd_uuid,
-                                       sizeof exp->exp_client_uuid.uuid);
-                                fed = &exp->exp_filter_data;
-                                fed->fed_fcd = fcd;
-                                filter_client_add(filter, fed, cl_idx);
-                                /* create helper if export init gets more complex */
-                                INIT_LIST_HEAD(&fed->fed_open_head);
-                                spin_lock_init(&fed->fed_lock);
-
-                                fcd = NULL;
-                                obd->obd_recoverable_clients++;
-                        } else {
-                                CDEBUG(D_INFO,
-                                       "discarded client %d UUID '%s' count "LPU64"\n",
-                                       cl_idx, fcd->fcd_uuid,
-                                       le64_to_cpu(fcd->fcd_mount_count));
-                        }
-
-                        CDEBUG(D_OTHER, "client at idx %d has last_rcvd = "LPU64"\n",
-                               cl_idx, last_rcvd);
-
-                        if (last_rcvd > le64_to_cpu(filter->fo_fsd->fsd_last_rcvd))
-                                filter->fo_fsd->fsd_last_rcvd = cpu_to_le64(last_rcvd);
+                        fcd = NULL;
+                        obd->obd_recoverable_clients++;
+                } else {
+                        CDEBUG(D_INFO,
+                               "discarded client %d UUID '%s' count "LPU64"\n",
+                               cl_idx, fcd->fcd_uuid,
+                               le64_to_cpu(fcd->fcd_mount_count));
                 }
+
+                CDEBUG(D_OTHER, "client at idx %d has last_rcvd = "LPU64"\n",
+                       cl_idx, last_rcvd);
+
+                if (last_rcvd > le64_to_cpu(filter->fo_fsd->fsd_last_rcvd))
+                        filter->fo_fsd->fsd_last_rcvd = cpu_to_le64(last_rcvd);
 
                 obd->obd_last_committed = le64_to_cpu(filter->fo_fsd->fsd_last_rcvd);
                 if (obd->obd_recoverable_clients) {
-                        CERROR("RECOVERY: %d recoverable clients, last_rcvd "LPU64"\n",
-                               obd->obd_recoverable_clients,
+                        CERROR("RECOVERY: %d recoverable clients, last_rcvd "
+                               LPU64"\n", obd->obd_recoverable_clients,
                                le64_to_cpu(filter->fo_fsd->fsd_last_rcvd));
                         obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
                         obd->obd_flags |= OBD_RECOVERING;
@@ -672,16 +676,14 @@ static int filter_init_server_data(struct obd_device *obd, struct file * filp,
                 if (fcd)
                         OBD_FREE(fcd, sizeof(*fcd));
 
-        } else {
-                CERROR("%s: recovery support OFF\n", obd->obd_name);
         }
 
+out:
         fsd->fsd_mount_count = cpu_to_le64(mount_count + 1);
 
         /* save it,so mount count and last_recvd is current */
         rc = filter_update_server_data(filp, filter->fo_fsd);
 
-out:
         RETURN(rc);
 
 err_fsd:
@@ -768,7 +770,7 @@ static int filter_prep(struct obd_device *obd)
         if (filter->fo_subdir_count) {
                 O_dentry = filter->fo_dentry_O_mode[S_IFREG >> S_SHIFT];
                 OBD_ALLOC(filter->fo_dentry_O_sub,
-                          FILTER_SUBDIR_COUNT * sizeof(dentry));
+                          filter->fo_subdir_count * sizeof(dentry));
                 if (!filter->fo_dentry_O_sub)
                         GOTO(err_client, rc = -ENOMEM);
 
@@ -1144,17 +1146,14 @@ static int filter_common_setup(struct obd_device *obd, obd_count len, void *buf,
 
         mnt = do_kern_mount(data->ioc_inlbuf2, 0, data->ioc_inlbuf1, option);
         rc = PTR_ERR(mnt);
-        if (IS_ERR(mnt)) {
-                CERROR("mount of %s as type %s failed: rc %d\n",
-                       data->ioc_inlbuf2, data->ioc_inlbuf1, rc);
+        if (IS_ERR(mnt))
                 GOTO(err_ops, rc);
-        }
 
 #if OST_RECOVERY
         obd->obd_flags |= OBD_REPLAYABLE;
 #endif
 
-        filter = &obd->u.filter;;
+        filter = &obd->u.filter;
         filter->fo_vfsmnt = mnt;
         filter->fo_fstype = strdup(data->ioc_inlbuf2);
         filter->fo_sb = mnt->mnt_root->d_inode->i_sb;
@@ -1293,7 +1292,14 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
                 RETURN(rc);
         exp = class_conn2export(conn);
         LASSERT(exp);
+
         fed = &exp->exp_filter_data;
+
+        INIT_LIST_HEAD(&exp->exp_filter_data.fed_open_head);
+        spin_lock_init(&exp->exp_filter_data.fed_lock);
+
+        if (!(obd->obd_flags & OBD_REPLAYABLE))
+                RETURN(0);
 
         OBD_ALLOC(fcd, sizeof(*fcd));
         if (!fcd) {
@@ -1305,14 +1311,9 @@ static int filter_connect(struct lustre_handle *conn, struct obd_device *obd,
         fed->fed_fcd = fcd;
         fcd->fcd_mount_count = cpu_to_le64(filter->fo_fsd->fsd_mount_count);
 
-        INIT_LIST_HEAD(&exp->exp_filter_data.fed_open_head);
-        spin_lock_init(&exp->exp_filter_data.fed_lock);
-
-        if (obd->obd_flags & OBD_REPLAYABLE) {
-                rc = filter_client_add(filter, fed, -1);
-                if (rc)
-                        GOTO(out_fcd, rc);
-        }
+        rc = filter_client_add(filter, fed, -1);
+        if (rc)
+                GOTO(out_fcd, rc);
 
         RETURN(rc);
 
@@ -1355,7 +1356,7 @@ static int filter_disconnect(struct lustre_handle *conn)
 
         ldlm_cancel_locks_for_export(exp);
 
-        if (exp->exp_obd->obd_flags & OBD_REPLAYABLE) 
+        if (exp->exp_obd->obd_flags & OBD_REPLAYABLE)
                 filter_client_free(exp);
 
         rc = class_disconnect(conn);
@@ -1638,7 +1639,7 @@ static int filter_create(struct lustre_handle *conn, struct obdo *oa,
 
                 /* This would only happen if lastobjid was bad on disk */
                 CERROR("objid %s already exists\n",
-                       filter_id(buf, filter, S_IFREG, oa->o_id));
+                       filter_id(buf, filter, oa->o_mode, oa->o_id));
                 LBUG();
                 GOTO(out, rc = -EEXIST);
         }
@@ -1912,14 +1913,6 @@ struct page *filter_get_page_write(struct inode *inode,
 
 
         /* This page is currently locked, so get a temporary page instead. */
-        /* XXX I believe this is a very dangerous thing to do - consider if
-         *     we had multiple writers for the same file (definitely the case
-         *     if we are using this codepath).  If writer A locks the page,
-         *     writer B writes to a copy (as here), writer A drops the page
-         *     lock, and writer C grabs the lock before B does, then B will
-         *     later overwrite the data from C, even if C had LDLM locked
-         *     and initiated the write after B did.
-         */
         if (!page) {
                 unsigned long addr;
                 CDEBUG(D_ERROR,"ino %lu page %ld locked\n", inode->i_ino,index);
@@ -2052,7 +2045,7 @@ static int filter_preprw(int cmd, struct lustre_handle *conn,
                                                               o->ioo_id),
                                            o->ioo_id, 0);
 
-                if (IS_ERR(dentry))
+                if (IS_ERR(dentry)) 
                         GOTO(out_objinfo, rc = PTR_ERR(dentry));
 
                 fso[i].fso_dentry = dentry;
@@ -2395,6 +2388,7 @@ static int filter_san_preprw(int cmd, struct lustre_handle *conn,
         for (i = 0; i < objcount; i++, o++) {
                 struct dentry *dentry;
                 struct inode *inode;
+                int (*fs_bmap)(struct address_space *, long);
                 int j;
 
                 dentry = filter_fid2dentry(obd, filter_parent(obd, S_IFREG,
@@ -2409,15 +2403,15 @@ static int filter_san_preprw(int cmd, struct lustre_handle *conn,
                         f_dput(dentry);
                         GOTO(out, rc = -ENOENT);
                 }
+                fs_bmap = inode->i_mapping->a_ops->bmap;
 
                 for (j = 0; j < o->ioo_bufcnt; j++, rnb++) {
                         long block;
 
-                        block = rnb->offset >> PAGE_SHIFT;
+                        block = rnb->offset >> inode->i_blkbits;
 
                         if (cmd == OBD_BRW_READ) {
-                                block = inode->i_mapping->a_ops->bmap(
-                                                inode->i_mapping, block);
+                                block = fs_bmap(inode->i_mapping, block);
                         } else {
                                 loff_t newsize = rnb->offset + rnb->len;
                                 /* fs_prep_san_write will also update inode
@@ -2496,6 +2490,8 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
         unsigned long index = 0;
         int err = 0;
 
+        LBUG(); /* THIS CODE IS NOT CORRECT -phil */
+
         memset(&srcmd, 0, sizeof(srcmd));
         memset(&dstmd, 0, sizeof(dstmd));
         srcmd.lsm_object_id = src->o_id;
@@ -2539,7 +2535,7 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
                 page->index = index;
                 set->brw_callback = ll_brw_sync_wait;
                 err = obd_brw(OBD_BRW_READ, src_conn, &srcmd, 1, &pg, set,NULL);
-                obd_brw_set_free(set);
+                obd_brw_set_decref(set);
                 if (err) {
                         EXIT;
                         break;
@@ -2556,7 +2552,7 @@ int filter_copy_data(struct lustre_handle *dst_conn, struct obdo *dst,
 
                 set->brw_callback = ll_brw_sync_wait;
                 err = obd_brw(OBD_BRW_WRITE, dst_conn, &dstmd, 1, &pg, set,oti);
-                obd_brw_set_free(set);
+                obd_brw_set_decref(set);
 
                 /* XXX should handle dst->o_size, dst->o_blocks here */
                 if (err) {

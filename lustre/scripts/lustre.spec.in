@@ -71,16 +71,21 @@ rm -rf $RPM_BUILD_ROOT
 cd $RPM_BUILD_DIR/lustre-%{version}
 ./configure --with-linux='%{linuxdir}' --with-portals='%{portalsdir}' --with-portalslib='%{portalslibdir}'
 make
+
+%ifarch i386
 cd $RPM_BUILD_DIR/lustre-%{version}-lib/lustre-%{version}
 ./configure --with-lib --with-portals='%{portalsdir}' --with-portalslib='%{portalslibdir}'
 make
+%endif
 
 %install
 cd $RPM_BUILD_DIR/lustre-%{version}
 make install prefix=$RPM_BUILD_ROOT
 
+%ifarch i386
 cd $RPM_BUILD_DIR/lustre-%{version}-lib/lustre-%{version}
 make install prefix=$RPM_BUILD_ROOT
+%endif
 
 
 # Create the pristine source directory.
@@ -140,6 +145,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %files -n lustre-source
 %attr(-, root, root) /usr/src/lustre-%{version}
 
+%ifarch i386
 %files -n liblustre
 %attr(-, root, root) /lib/lustre
 %attr(-, root, root) /lib/lustre/liblov.a
@@ -158,6 +164,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/sbin/lconf
 %attr(-, root, root) /usr/sbin/lmc
 %attr(-, root, root) /usr/sbin/llanalyze
+%endif
 
 
 %files -n lustre-ldap

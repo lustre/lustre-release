@@ -76,7 +76,7 @@ command_t cmdlist[] = {
         {"add_uuid", jt_obd_add_uuid, 0, "associate a UUID with a nid\n"
          "usage: add_uuid <uuid> <nid> <net_type>"},
         {"close_uuid", jt_obd_close_uuid, 0, "disconnect a UUID\n"
-         "usage: close_uuid <uuid>)"},
+         "usage: close_uuid <uuid> <net-type>)"},
         {"del_uuid", jt_obd_del_uuid, 0, "delete a UUID association\n"
          "usage: del_uuid <uuid>"},
         {"add_route", jt_ptl_add_route, 0,

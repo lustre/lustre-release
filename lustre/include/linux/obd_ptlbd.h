@@ -24,7 +24,7 @@ extern void ptlbd_sv_exit(void);
 
 extern void ptlbd_blk_register(struct ptlbd_obd *ptlbd);
 extern int ptlbd_send_req(struct ptlbd_obd *, ptlbd_cmd_t cmd, 
-		struct buffer_head *);
+		struct request *);
 extern int ptlbd_parse_req(struct ptlrpc_request *req);
 
 #endif

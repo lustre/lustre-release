@@ -93,7 +93,7 @@ static inline void *kmalloc(int size, int prot)
 #define kfree(a) free(a)
 #define GFP_KERNEL 1
 #define GFP_HIGHUSER 1
-#define IS_ERR(a) (abs((int)(a)) < 500 ? 1 : 0)
+#define IS_ERR(a) (((a) && abs((int)(a)) < 500) ? 1 : 0)
 #define PTR_ERR(a) ((int)(a))
 
 #define capable(foo) 1
@@ -258,7 +258,7 @@ static inline struct page *alloc_pages(mask,foo)
         if (!pg)
                 return NULL;
 #ifdef MAP_ANONYMOUS
-        pg->addr = mmap(0, PAGE_SIZE, PROT_WRITE, MAP_ANONYMOUS, 0, 0);
+        pg->addr = mmap(0, PAGE_SIZE, PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, 0, 0);
 #else
         pg->addr = malloc(PAGE_SIZE);
 #endif
@@ -347,7 +347,6 @@ extern struct task_struct *current;
 
 #define init_waitqueue_head(l) INIT_LIST_HEAD(&(l)->sleepers)
 #define wake_up(l) do { int a; a++; } while (0)
-#define wait_event(l,m) do { int a; a++; } while (0)
 #define TASK_INTERRUPTIBLE 0
 #define TASK_UNINTERRUPTIBLE 1
 #define TASK_RUNNING 2

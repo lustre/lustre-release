@@ -29,6 +29,8 @@
 # include <string.h>
 #else
 # include <asm/semaphore.h>
+# include <linux/sched.h>
+# include <linux/signal.h>
 #endif
 #include <linux/types.h>
 #include <linux/portals_lib.h>
@@ -106,6 +108,7 @@ struct obd_brw_set {
         struct list_head brw_desc_head; /* list of ptlrpc_bulk_desc */
         wait_queue_head_t brw_waitq;
         atomic_t brw_refcount;
+        atomic_t brw_desc_count;
         int brw_flags;
 
         int (*brw_callback)(struct obd_brw_set *, int phase);
@@ -575,35 +578,45 @@ struct l_wait_info {
         lwi_cb_data:    data                                                   \
 })
 
-#ifdef __KERNEL__
-#define l_sigismember sigismember
-#else
-#define l_sigismember(a,b) (*(a) & b)
-#endif
+#define LUSTRE_FATAL_SIGS (sigmask(SIGKILL) | sigmask(SIGINT) |                \
+                           sigmask(SIGTERM) | sigmask(SIGQUIT))
 
-/* XXX this should be one mask-check */
-#define l_killable_pending(task)                                               \
-(l_sigismember(&(task->pending.signal), SIGKILL) ||                              \
- l_sigismember(&(task->pending.signal), SIGINT) ||                               \
- l_sigismember(&(task->pending.signal), SIGTERM))
+#ifdef __KERNEL__
+static inline sigset_t l_w_e_set_sigs(int sigs)
+{
+        sigset_t old;
+        unsigned long irqflags;
+
+        spin_lock_irqsave(&current->sigmask_lock, irqflags);
+        old = current->blocked;
+        siginitsetinv(&current->blocked, sigs);
+        recalc_sigpending(current);
+        spin_unlock_irqrestore(&current->sigmask_lock, irqflags);
+
+        return old;
+}
 
 #define __l_wait_event(wq, condition, info, ret)                               \
 do {                                                                           \
         wait_queue_t __wait;                                                   \
-        long __state;                                                          \
         int __timed_out = 0;                                                   \
-        init_waitqueue_entry(&__wait, current);                                \
+        unsigned long irqflags;                                                \
+        sigset_t blocked;                                                      \
                                                                                \
+        init_waitqueue_entry(&__wait, current);                                \
         add_wait_queue(&wq, &__wait);                                          \
+                                                                               \
+        /* Block all signals (just the non-fatal ones if no timeout). */       \
         if (info->lwi_signals && !info->lwi_timeout)                           \
-            __state = TASK_INTERRUPTIBLE;                                      \
+            blocked = l_w_e_set_sigs(LUSTRE_FATAL_SIGS);                       \
         else                                                                   \
-            __state = TASK_UNINTERRUPTIBLE;                                    \
+            blocked = l_w_e_set_sigs(0);                                       \
+                                                                               \
         for (;;) {                                                             \
-            set_current_state(__state);                                        \
+            set_current_state(TASK_INTERRUPTIBLE);                             \
             if (condition)                                                     \
                     break;                                                     \
-            if (__state == TASK_INTERRUPTIBLE && l_killable_pending(current)) {\
+            if (signal_pending(current)) {                                     \
                 if (info->lwi_on_signal)                                       \
                         info->lwi_on_signal(info->lwi_cb_data);                \
                 ret = -EINTR;                                                  \
@@ -618,21 +631,19 @@ do {                                                                           \
                         break;                                                 \
                     }                                                          \
                     /* We'll take signals after a timeout. */                  \
-                    if (info->lwi_signals) {                                   \
-                        __state = TASK_INTERRUPTIBLE;                          \
-                        /* Check for a pending interrupt. */                   \
-                        if (info->lwi_signals && l_killable_pending(current)) {\
-                            if (info->lwi_on_signal)                           \
-                                info->lwi_on_signal(info->lwi_cb_data);        \
-                            ret = -EINTR;                                      \
-                            break;                                             \
-                        }                                                      \
-                    }                                                          \
+                    if (info->lwi_signals)                                     \
+                        (void)l_w_e_set_sigs(LUSTRE_FATAL_SIGS);               \
                 }                                                              \
             } else {                                                           \
                 schedule();                                                    \
             }                                                                  \
         }                                                                      \
+                                                                               \
+        spin_lock_irqsave(&current->sigmask_lock, irqflags);                   \
+        current->blocked = blocked;                                            \
+        recalc_sigpending(current);                                            \
+        spin_unlock_irqrestore(&current->sigmask_lock, irqflags);              \
+                                                                               \
         current->state = TASK_RUNNING;                                         \
         remove_wait_queue(&wq, &__wait);                                       \
 } while(0)
@@ -645,5 +656,6 @@ do {                                                                           \
                 __l_wait_event(wq, condition, __info, __ret);                  \
         __ret;                                                                 \
 })
+#endif /* __KERNEL__ */
 
 #endif /* _LUSTRE_LIB_H */

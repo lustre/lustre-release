@@ -34,7 +34,7 @@
 #include <linux/types.h>
 #include <linux/fs.h>
 #include <linux/time.h>
-#endif 
+#endif
 
 #include <linux/obd_support.h>
 #include <linux/lustre_import.h>
@@ -768,6 +768,33 @@ static inline void obdo_from_inode(struct obdo *dst, struct inode *src,
                 dst->o_rdev = (__u32)kdev_t_to_nr(src->i_rdev);
 
         dst->o_valid |= (valid & ~OBD_MD_FLID);
+}
+
+static inline void obdo_refresh_inode(struct inode *dst, struct obdo *src,
+                                      obd_flag valid)
+{
+        valid &= src->o_valid;
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        if (valid & OBD_MD_FLATIME && src->o_atime > dst->i_atime)
+                dst->i_atime = src->o_atime;
+        if (valid & OBD_MD_FLMTIME && src->o_mtime > dst->i_mtime)
+                dst->i_mtime = src->o_mtime;
+        if (valid & OBD_MD_FLCTIME && src->o_ctime > dst->i_ctime)
+                dst->i_ctime = src->o_ctime;
+#else
+        if (valid & OBD_MD_FLATIME && src->o_atime > dst->i_atime.tv_sec)
+                dst->i_atime.tv_sec = src->o_atime;
+        if (valid & OBD_MD_FLMTIME && src->o_mtime > dst->i_mtime.tv_sec)
+                dst->i_mtime.tv_sec = src->o_mtime;
+        if (valid & OBD_MD_FLCTIME && src->o_ctime > dst->i_ctime.tv_sec)
+                dst->i_ctime.tv_sec = src->o_ctime;
+#endif
+        if (valid & OBD_MD_FLSIZE && src->o_size > dst->i_size)
+                dst->i_size = src->o_size;
+        /* allocation of space */
+        if (valid & OBD_MD_FLBLOCKS && src->o_blocks > dst->i_blocks)
+                dst->i_blocks = src->o_blocks;
 }
 
 static inline void obdo_to_inode(struct inode *dst, struct obdo *src,

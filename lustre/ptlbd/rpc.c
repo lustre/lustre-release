@@ -32,9 +32,14 @@
 #include <linux/lprocfs_status.h>
 #include <linux/obd_ptlbd.h>
 
+#define RSP_OK       0
+#define RSP_NOTOK   -1
+#define RQ_OK        0
+
 int ptlbd_send_req(struct ptlbd_obd *ptlbd, ptlbd_cmd_t cmd, 
-                struct buffer_head *first_bh)
+                struct request *blkreq)
 {
+        struct buffer_head *first_bh = blkreq->bh;
         struct obd_import *imp = &ptlbd->bd_import;
         struct ptlbd_op *op;
         struct ptlbd_niob *niob, *niobs;
@@ -108,9 +113,13 @@ int ptlbd_send_req(struct ptlbd_obd *ptlbd, ptlbd_cmd_t cmd,
         req->rq_level = imp->imp_level;
         rc = ptlrpc_queue_wait(req);
 
-        if ( rc == 0 ) {
-                rsp = lustre_msg_buf(req->rq_repmsg, 0);
-                /* XXX do stuff */
+        if ( rc != 0 ) {
+                blkreq->errors++;
+                GOTO(out_desc, rc);
+        }
+        rsp = lustre_msg_buf(req->rq_repmsg, 0);
+        if (rsp->r_status != RSP_OK) {
+                blkreq->errors += rsp->r_error_cnt;
         }
 
 out_desc:
@@ -130,11 +139,12 @@ static int ptlbd_bulk_timeout(void *data)
         RETURN(1);
 }
 
-void ptlbd_do_filp(struct file *filp, int op, struct ptlbd_niob *niobs, 
+int ptlbd_do_filp(struct file *filp, int op, struct ptlbd_niob *niobs, 
                 int page_count, struct list_head *page_list)
 {
         mm_segment_t old_fs;
         struct list_head *pos;
+        int status = RSP_OK;
         ENTRY;
 
         old_fs = get_fs();
@@ -145,19 +155,23 @@ void ptlbd_do_filp(struct file *filp, int op, struct ptlbd_niob *niobs,
                 struct page *page = list_entry(pos, struct page, list);
                 loff_t offset = (niobs->n_block_nr << PAGE_SHIFT) + 
                         niobs->n_offset;
-
-                if ( op == PTLBD_READ )
-                        ret = filp->f_op->read(filp, page_address(page), 
-                                        niobs->n_length, &offset);
-                else
-                        ret = filp->f_op->write(filp, page_address(page), 
-                                        niobs->n_length, &offset);
+                if ( op == PTLBD_READ ) {
+                        if ((ret = filp->f_op->read(filp, page_address(page), 
+                             niobs->n_length, &offset)) != niobs->n_length)
+                                status = ret;
+                                goto out;             
+                } else {
+                        if ((ret = filp->f_op->write(filp, page_address(page), 
+                             niobs->n_length, &offset)) != niobs->n_length)
+                                status = ret;
+                                goto out;             
+                }               
 
                 niobs++;
         }
-
+out:
         set_fs(old_fs);
-        EXIT;
+        RETURN(status);
 }
 
 int ptlbd_parse_req(struct ptlrpc_request *req)
@@ -168,7 +182,8 @@ int ptlbd_parse_req(struct ptlrpc_request *req)
         struct ptlrpc_bulk_desc *desc;
         struct file *filp = req->rq_obd->u.ptlbd.filp;
         struct l_wait_info lwi;
-        int size[1], wait_flag, i, page_count, rc;
+        int size[1], wait_flag, i, page_count, rc, error_cnt = 0, 
+            status = RSP_OK;
         struct list_head *pos, *n;
         LIST_HEAD(tmp_pages);
         ENTRY;
@@ -199,16 +214,16 @@ int ptlbd_parse_req(struct ptlrpc_request *req)
                         GOTO(out_bulk, rc = -ENOMEM);
                 list_add(&bulk->bp_page->list, &tmp_pages);
 
-                /* 
-                 * XXX what about the block number? 
-                 */
                 bulk->bp_xid = niob->n_xid;
                 bulk->bp_buf = page_address(bulk->bp_page);
                 bulk->bp_buflen = niob->n_length;
         }
 
         if ( op->op_cmd == PTLBD_READ ) {
-                ptlbd_do_filp(filp, PTLBD_READ, niobs, page_count, &tmp_pages);
+                if ((status = ptlbd_do_filp(filp, PTLBD_READ, niobs, 
+                                          page_count, &tmp_pages)) < 0) {
+                        error_cnt++;
+                }
                 rc = ptlrpc_bulk_put(desc);
                 wait_flag = PTL_BULK_FL_SENT;
         } else {
@@ -232,12 +247,17 @@ int ptlbd_parse_req(struct ptlrpc_request *req)
         if ( rsp == NULL )
                 GOTO(out, rc = -EINVAL);
         
-        ptlbd_do_filp(filp, PTLBD_WRITE, niobs, page_count, &tmp_pages);
+        if ( op->op_cmd == PTLBD_WRITE ) {
+                if ((status = ptlbd_do_filp(filp, PTLBD_WRITE, niobs, 
+                                           page_count, &tmp_pages)) < 0) {
+                        error_cnt++;
+                }
+        }
 
-        rsp->r_error_cnt = 42;
-        rsp->r_status = 69;
+        rsp->r_error_cnt = error_cnt;
+        rsp->r_status = status;                         /* I/O status */
+        req->rq_status = RQ_OK ; /* XXX */              /* ptlbd req status */
 
-        req->rq_status = 0; /* XXX */
         ptlrpc_reply(req->rq_svc, req);
 
 out_bulk:

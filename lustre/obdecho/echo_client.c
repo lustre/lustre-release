@@ -515,7 +515,7 @@ echo_client_kbrw (struct obd_device *obd, int rw,
         }
         OBD_FREE(pga, npages * sizeof(*pga));
  out_0:
-        obd_brw_set_free(set);
+        obd_brw_set_decref(set);
         return (rc);
 }
 
@@ -594,7 +594,7 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
  out_1:
         OBD_FREE(pga, npages * sizeof(*pga));
  out_0:
-        obd_brw_set_free(set);
+        obd_brw_set_decref(set);
         return (rc);
 }
 #else

@@ -84,8 +84,9 @@ static int ll_commitcbd_main(void *arg)
 
         /* And now, loop forever on requests */
         while (1) {
-                wait_event(sbi->ll_commitcbd_waitq,
-                           ll_commitcbd_check_event(sbi));
+                struct l_wait_info lwi = { 0 };
+                l_wait_event(sbi->ll_commitcbd_waitq,
+                             ll_commitcbd_check_event(sbi), &lwi);
 
                 spin_lock(&sbi->ll_commitcbd_lock);
                 if (sbi->ll_commitcbd_flags & LL_COMMITCBD_STOPPING) {
@@ -112,6 +113,7 @@ static int ll_commitcbd_main(void *arg)
 int ll_commitcbd_setup(struct ll_sb_info *sbi)
 {
         int rc;
+        struct l_wait_info lwi = { 0 };
         ENTRY;
 
         rc = kernel_thread(ll_commitcbd_main, (void *) sbi,
@@ -120,18 +122,19 @@ int ll_commitcbd_setup(struct ll_sb_info *sbi)
                 CERROR("cannot start thread\n");
                 RETURN(rc);
         }
-        wait_event(sbi->ll_commitcbd_ctl_waitq,
-                   sbi->ll_commitcbd_flags & LL_COMMITCBD_RUNNING);
+        l_wait_event(sbi->ll_commitcbd_ctl_waitq,
+                     sbi->ll_commitcbd_flags & LL_COMMITCBD_RUNNING, &lwi);
         RETURN(0);
 }
 
 
 int ll_commitcbd_cleanup(struct ll_sb_info *sbi)
 {
+        struct l_wait_info lwi = { 0 };
         sbi->ll_commitcbd_flags = LL_COMMITCBD_STOPPING;
 
         wake_up(&sbi->ll_commitcbd_waitq);
-        wait_event(sbi->ll_commitcbd_ctl_waitq,
-                   sbi->ll_commitcbd_flags & LL_COMMITCBD_STOPPED);
+        l_wait_event(sbi->ll_commitcbd_ctl_waitq,
+                     sbi->ll_commitcbd_flags & LL_COMMITCBD_STOPPED, &lwi);
         RETURN(0);
 }

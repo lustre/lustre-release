@@ -63,14 +63,14 @@ static char *ll_read_opt(const char *opt, char *data)
         ENTRY;
 
         CDEBUG(D_SUPER, "option: %s, data %s\n", opt, data);
-        if ( strncmp(opt, data, strlen(opt)) )
+        if (strncmp(opt, data, strlen(opt)))
                 RETURN(NULL);
-        if ( (value = strchr(data, '=')) == NULL )
+        if ((value = strchr(data, '=')) == NULL)
                 RETURN(NULL);
 
         value++;
         OBD_ALLOC(retval, strlen(value) + 1);
-        if ( !retval ) {
+        if (!retval) {
                 CERROR("out of memory!\n");
                 RETURN(NULL);
         }
@@ -85,7 +85,7 @@ static int ll_set_opt(const char *opt, char *data, int fl)
         ENTRY;
 
         CDEBUG(D_SUPER, "option: %s, data %s\n", opt, data);
-        if ( strncmp(opt, data, strlen(opt)) )
+        if (strncmp(opt, data, strlen(opt)))
                 RETURN(0);
         else
                 RETURN(fl);
@@ -104,10 +104,11 @@ static void ll_options(char *options, char **ost, char **mds, int *flags)
 
         while ((this_char = strsep (&opt_ptr, ",")) != NULL) {
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
-                if ( (!*ost && (*ost = ll_read_opt("osc", this_char)))||
-                     (!*mds && (*mds = ll_read_opt("mdc", this_char)))||
-                     (!(*flags & LL_SBI_NOLCK) && ((*flags) = (*flags) |
-                      ll_set_opt("nolock", this_char, LL_SBI_NOLCK))) )
+                if ((!*ost && (*ost = ll_read_opt("osc", this_char)))||
+                    (!*mds && (*mds = ll_read_opt("mdc", this_char)))||
+                    (!(*flags & LL_SBI_NOLCK) &&
+                     ((*flags) = (*flags) |
+                      ll_set_opt("nolock", this_char, LL_SBI_NOLCK))))
                         continue;
         }
         EXIT;
@@ -572,6 +573,11 @@ int ll_read_inode2(struct inode *inode, void *opaque)
         ENTRY;
 
         sema_init(&lli->lli_open_sem, 1);
+        lli->flags = 0;
+        init_MUTEX(&lli->lli_getattr_sem);
+        /* these are 2.4 only, but putting them here for consistency.. */
+        spin_lock_init(&lli->lli_read_extent_lock);
+        INIT_LIST_HEAD(&lli->lli_read_extents);
 
         LASSERT(!lli->lli_smd);
 
@@ -580,12 +586,19 @@ int ll_read_inode2(struct inode *inode, void *opaque)
 
         /* Get the authoritative file size */
         if (lli->lli_smd && S_ISREG(inode->i_mode)) {
-                rc = ll_file_size(inode, lli->lli_smd, NULL);
-                if (rc) {
-                        CERROR("ll_file_size: %d\n", rc);
+                struct ll_file_data *fd = file->private_data;
+                struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
+                struct lustre_handle lockh = {0, 0};
+
+                LASSERT(lli->lli_smd->lsm_object_id != 0);
+
+                rc = ll_extent_lock(fd, inode, lsm, LCK_PR, &extent, &lockh);
+                if (err != ELDLM_OK && err != ELDLM_MATCHED) {
                         ll_clear_inode(inode);
                         make_bad_inode(inode);
-                        RETURN(rc);
+                } else {
+                        l_extent_unlock(fd, inode, lsm, LCK_PR, &extent,
+                                        &lockh);
                 }
         }
 
@@ -661,6 +674,7 @@ static struct inode *ll_alloc_inode(struct super_block *sb)
 
         memset(lli, 0, (char *)&lli->lli_vfs_inode - (char *)lli);
         sema_init(&lli->lli_open_sem, 1);
+        init_MUTEX(&lli->lli_size_valid_sem);
 
         return &lli->lli_vfs_inode;
 }

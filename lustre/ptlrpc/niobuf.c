@@ -401,12 +401,22 @@ int ptlrpc_register_bulk_put(struct ptlrpc_bulk_desc *desc)
 
 int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 {
+        int rc1, rc2;
         /* This should be safe: these handles are initialized to be
          * invalid in ptlrpc_prep_bulk() */
-        PtlMDUnlink(desc->bd_md_h);
-        PtlMEUnlink(desc->bd_me_h);
+        rc1 = PtlMDUnlink(desc->bd_md_h);
+        if (rc1 != PTL_OK)
+                CERROR("PtlMDUnlink: %d\n", rc1);
+        rc2 = PtlMEUnlink(desc->bd_me_h);
+        if (rc2 != PTL_OK)
+                CERROR("PtlMEUnlink: %d\n", rc2);
 
-        return 0;
+        return rc1 ? rc1 : rc2;
+}
+
+void obd_brw_set_addref(struct obd_brw_set *set)
+{
+        atomic_inc(&set->brw_refcount);
 }
 
 void obd_brw_set_add(struct obd_brw_set *set, struct ptlrpc_bulk_desc *desc)
@@ -414,14 +424,14 @@ void obd_brw_set_add(struct obd_brw_set *set, struct ptlrpc_bulk_desc *desc)
         LASSERT(list_empty(&desc->bd_set_chain));
 
         ptlrpc_bulk_addref(desc);
-        atomic_inc(&set->brw_refcount);
+        atomic_inc(&set->brw_desc_count);
         desc->bd_brw_set = set;
         list_add(&desc->bd_set_chain, &set->brw_desc_head);
 }
 
 void obd_brw_set_del(struct ptlrpc_bulk_desc *desc)
 {
-        atomic_dec(&desc->bd_brw_set->brw_refcount);
+        atomic_dec(&desc->bd_brw_set->brw_desc_count);
         list_del_init(&desc->bd_set_chain);
         ptlrpc_bulk_decref(desc);
 }
@@ -435,13 +445,14 @@ struct obd_brw_set *obd_brw_set_new(void)
         if (set != NULL) {
                 init_waitqueue_head(&set->brw_waitq);
                 INIT_LIST_HEAD(&set->brw_desc_head);
-                atomic_set(&set->brw_refcount, 0);
+                atomic_set(&set->brw_refcount, 1);
+                atomic_set(&set->brw_desc_count, 0);
         }
 
         return set;
 }
 
-void obd_brw_set_free(struct obd_brw_set *set)
+static void obd_brw_set_free(struct obd_brw_set *set)
 {
         struct list_head *tmp, *next;
         ENTRY;
@@ -457,6 +468,14 @@ void obd_brw_set_free(struct obd_brw_set *set)
         OBD_FREE(set, sizeof(*set));
         EXIT;
         return;
+}
+
+void obd_brw_set_decref(struct obd_brw_set *set)
+{
+        ENTRY;
+        if (atomic_dec_and_test(&set->brw_refcount))
+                obd_brw_set_free(set);
+        EXIT;
 }
 
 int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req)

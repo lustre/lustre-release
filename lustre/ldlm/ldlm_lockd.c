@@ -25,16 +25,15 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #ifdef __KERNEL__
-#include <linux/module.h>
-#include <linux/slab.h>
-#include <linux/init.h>
-#else 
-#include <liblustre.h>
+# include <linux/module.h>
+# include <linux/slab.h>
+# include <linux/init.h>
+#else
+# include <liblustre.h>
 #endif
 
 #include <linux/lustre_dlm.h>
 #include <linux/obd_class.h>
-
 
 extern kmem_cache_t *ldlm_resource_slab;
 extern kmem_cache_t *ldlm_lock_slab;
@@ -189,6 +188,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         l_unlock(&lock->l_resource->lr_namespace->ns_lock);
 
         req->rq_level = LUSTRE_CONN_RECOVD;
+        req->rq_timeout = 2;
         rc = ptlrpc_queue_wait(req);
         if (rc == -ETIMEDOUT || rc == -EINTR) {
                 ldlm_del_waiting_lock(lock);
@@ -236,6 +236,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         req->rq_replen = lustre_msg_size(0, NULL);
 
         req->rq_level = LUSTRE_CONN_RECOVD;
+        req->rq_timeout = 2;
         rc = ptlrpc_queue_wait(req);
         if (rc == -ETIMEDOUT || rc == -EINTR) {
                 ldlm_del_waiting_lock(lock);
@@ -434,28 +435,21 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
         RETURN(0);
 }
 
-struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *ns,
-                                      struct lustre_handle *handle);
-
-static int ldlm_handle_bl_callback(struct ptlrpc_request *req,
-                                   struct ldlm_namespace *ns)
+static void ldlm_handle_bl_callback(struct ptlrpc_request *req,
+                                    struct ldlm_namespace *ns,
+                                    struct ldlm_request *dlm_req,
+                                    struct ldlm_lock *lock)
 {
-        struct ldlm_request *dlm_req;
-        struct ldlm_lock *lock;
         int do_ast;
         ENTRY;
 
-        OBD_FAIL_RETURN(OBD_FAIL_OSC_LOCK_BL_AST, 0);
-
-        dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
-
-        lock = ldlm_handle2lock_ns(ns, &dlm_req->lock_handle1);
-        if (!lock) {
-                CDEBUG(D_INFO, "blocking callback on lock "LPX64
-                       " - lock disappeared\n", dlm_req->lock_handle1.cookie);
-                RETURN(-EINVAL);
-        }
-
+        /* Try to narrow down this damn iozone bug */
+        if (lock->l_resource == NULL)
+                CERROR("lock %p resource NULL\n", lock);
+        if (lock->l_resource->lr_type != LDLM_EXTENT)
+                if (lock->l_resource->lr_namespace != ns)
+                        CERROR("lock %p namespace %p != passed ns %p\n", lock,
+                               lock->l_resource->lr_namespace, ns);
         LDLM_DEBUG(lock, "client blocking AST callback handler START");
 
         l_lock(&ns->ns_lock);
@@ -476,27 +470,16 @@ static int ldlm_handle_bl_callback(struct ptlrpc_request *req,
 
         LDLM_DEBUG(lock, "client blocking callback handler END");
         LDLM_LOCK_PUT(lock);
-        RETURN(0);
+        EXIT;
 }
 
-static int ldlm_handle_cp_callback(struct ptlrpc_request *req,
-                                   struct ldlm_namespace *ns)
+static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
+                                    struct ldlm_namespace *ns,
+                                    struct ldlm_request *dlm_req,
+                                    struct ldlm_lock *lock)
 {
-        struct list_head ast_list = LIST_HEAD_INIT(ast_list);
-        struct ldlm_request *dlm_req;
-        struct ldlm_lock *lock;
+        LIST_HEAD(ast_list);
         ENTRY;
-
-        OBD_FAIL_RETURN(OBD_FAIL_OSC_LOCK_CP_AST, 0);
-
-        dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
-
-        lock = ldlm_handle2lock_ns(ns, &dlm_req->lock_handle1);
-        if (!lock) {
-                CERROR("completion callback on lock "LPX64" - lock "
-                       "disappeared\n", dlm_req->lock_handle1.cookie);
-                RETURN(-EINVAL);
-        }
 
         LDLM_DEBUG(lock, "client completion callback handler START");
 
@@ -530,12 +513,24 @@ static int ldlm_handle_cp_callback(struct ptlrpc_request *req,
 
         LDLM_DEBUG_NOLOCK("client completion callback handler END (lock %p)",
                           lock);
-        RETURN(0);
+        EXIT;
+}
+
+static int ldlm_callback_reply(struct ptlrpc_request *req, int rc)
+{
+        req->rq_status = rc;
+        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen,
+                             &req->rq_repmsg);
+        if (rc)
+                return rc;
+        return ptlrpc_reply(req->rq_svc, req);
 }
 
 static int ldlm_callback_handler(struct ptlrpc_request *req)
 {
         struct ldlm_namespace *ns;
+        struct ldlm_request *dlm_req;
+        struct ldlm_lock *lock;
         int rc;
         ENTRY;
 
@@ -556,8 +551,17 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
                 CERROR("--> lock addr: "LPX64", cookie: "LPX64"\n",
                        dlm_req->lock_handle1.addr,dlm_req->lock_handle1.cookie);
-                rc = -ENOTCONN;
-                goto out;
+                ldlm_callback_reply(req, -ENOTCONN);
+                RETURN(0);
+        }
+
+        if (req->rq_reqmsg->opc == LDLM_BL_CALLBACK) {
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
+        } else if (req->rq_reqmsg->opc == LDLM_CP_CALLBACK) {
+                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CP_CALLBACK, 0);
+        } else {
+                ldlm_callback_reply(req, -EIO);
+                RETURN(0);
         }
 
         LASSERT(req->rq_export != NULL);
@@ -565,27 +569,30 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         ns = req->rq_export->exp_obd->obd_namespace;
         LASSERT(ns != NULL);
 
+        dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
+        lock = ldlm_handle2lock_ns(ns, &dlm_req->lock_handle1);
+        if (!lock) {
+                CDEBUG(D_INODE, "callback on lock "LPX64" - lock disappeared\n",
+                       dlm_req->lock_handle1.cookie);
+                ldlm_callback_reply(req, -EINVAL);
+                RETURN(0);
+        }
+
+        /* we want the ost thread to get this reply so that it can respond
+         * to ost requests (write cache writeback) that might be triggered
+         * in the callback */
+        ldlm_callback_reply(req, 0);
+
         switch (req->rq_reqmsg->opc) {
         case LDLM_BL_CALLBACK:
                 CDEBUG(D_INODE, "blocking ast\n");
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_BL_CALLBACK, 0);
-                rc = ldlm_handle_bl_callback(req, ns);
+                ldlm_handle_bl_callback(req, ns, dlm_req, lock);
                 break;
         case LDLM_CP_CALLBACK:
                 CDEBUG(D_INODE, "completion ast\n");
-                OBD_FAIL_RETURN(OBD_FAIL_LDLM_CP_CALLBACK, 0);
-                rc = ldlm_handle_cp_callback(req, ns);
+                ldlm_handle_cp_callback(req, ns, dlm_req, lock);
                 break;
-        default:
-                CERROR("invalid opcode %d\n", req->rq_reqmsg->opc);
-                RETURN(-EINVAL);
         }
- out:
-        req->rq_status = rc;
-        rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
-        if (rc)
-                RETURN(rc);
-        ptlrpc_reply(req->rq_svc, req);
 
         RETURN(0);
 }
@@ -610,9 +617,7 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
                        req->rq_reqmsg->addr, req->rq_reqmsg->cookie);
                 dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
                 ldlm_lock_dump_handle(D_ERROR, &dlm_req->lock_handle1);
-                CERROR("--> ignoring this error as a temporary workaround!  "
-                       "beware!\n");
-                //RETURN(-ENOTCONN);
+                RETURN(-ENOTCONN);
         }
 
         switch (req->rq_reqmsg->opc) {

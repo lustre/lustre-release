@@ -5,6 +5,8 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 // not correctly in the headers yet!!
 //#define O_DIRECT 0
@@ -12,7 +14,6 @@
 #define O_DIRECT	 040000	/* direct disk access hint */
 #endif
 
-#define BLOCKSIZE 4096
 #define CERROR(fmt, arg...) fprintf(stderr, fmt, ## arg)
 #ifndef __u64
 #define __u64 long long
@@ -91,6 +92,7 @@ int main(int argc, char **argv)
 	long long count, last, offset;
 	long pg_vec, len;
 	long long objid = 3;
+	struct stat st;
 	int flags = 0;
 	int cmd = 0;
 	char *end;
@@ -131,8 +133,6 @@ int main(int argc, char **argv)
 			usage(argv[0]);
 		}
 	}
-	len = pg_vec * BLOCKSIZE;
-	last = (long long)count * len;
 
 	if (argc >= 6) {
 		objid = strtoull(argv[5], &end, 0);
@@ -147,13 +147,6 @@ int main(int argc, char **argv)
 	       argv[0], flags & O_DIRECT ? "directio" : "i/o",
 	       argv[1], objid, count, pg_vec);
 
-        buf = mmap(0, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, 0, 0);
-        if (!buf) {
-                fprintf(stderr, "%s: no buffer memory %s\n",
-			argv[0], strerror(errno));
-                return 2;
-        }
-
         fd = open(argv[1], flags | O_LARGEFILE);
         if (fd == -1) {
                 fprintf(stderr, "%s: cannot open %s:  %s\n", argv[0],
@@ -161,23 +154,41 @@ int main(int argc, char **argv)
                 return 3;
         }
 
+	rc = fstat(fd, &st);
+	if (rc < 0) {
+		fprintf(stderr, "%s: cannot stat %s: %s\n", argv[0],
+			argv[1], strerror(errno));
+		return 4;
+	}
+
+	len = pg_vec * st.st_blksize;
+	last = (long long)count * len;
+
+        buf = mmap(0, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, 0, 0);
+        if (!buf) {
+                fprintf(stderr, "%s: no buffer memory %s\n",
+			argv[0], strerror(errno));
+                return 2;
+        }
+
 	for (offset = 0; offset < last && cmd & WRITE; offset += len) {
 		int i;
 
-		for (i = 0; i < len; i += BLOCKSIZE)
-			page_debug_setup(buf + i, BLOCKSIZE, offset + i, objid);
+		for (i = 0; i < len; i += st.st_blksize)
+			page_debug_setup(buf + i, st.st_blksize, offset + i,
+					 objid);
 
 		rc = write(fd, buf, len);
 
-		for (i = 0; i < len; i += BLOCKSIZE) {
-			if (page_debug_check("write", buf + i, BLOCKSIZE,
+		for (i = 0; i < len; i += st.st_blksize) {
+			if (page_debug_check("write", buf + i, st.st_blksize,
 					     offset + i, objid))
 				return 10;
 		}
 
 		if (rc != len) {
-			fprintf(stderr, "%s: write error: %s, rc %d\n",
-				argv[0], strerror(errno), rc);
+			fprintf(stderr, "%s: write error: %s, rc %d != %ld\n",
+				argv[0], strerror(errno), rc, len);
 			return 4;
 		}
 	}
@@ -193,13 +204,13 @@ int main(int argc, char **argv)
 
 		rc = read(fd, buf, len);
 		if (rc != len) {
-			fprintf(stderr, "%s: read error: %s, rc %d\n",
-				argv[0], strerror(errno), rc);
+			fprintf(stderr, "%s: read error: %s, rc %d != %ld\n",
+				argv[0], strerror(errno), rc, len);
 			return 6;
 		}
 
-		for (i = 0; i < len; i += BLOCKSIZE) {
-			if (page_debug_check("read", buf + i, BLOCKSIZE,
+		for (i = 0; i < len; i += st.st_blksize) {
+			if (page_debug_check("read", buf + i, st.st_blksize,
 					     offset + i, objid))
 				return 11;
 		}

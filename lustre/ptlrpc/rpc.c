@@ -255,10 +255,11 @@ EXPORT_SYMBOL(ptlrpc_error);
 EXPORT_SYMBOL(ptlrpc_resend_req);
 EXPORT_SYMBOL(ptl_send_rpc);
 EXPORT_SYMBOL(ptlrpc_link_svc_me);
-EXPORT_SYMBOL(obd_brw_set_free);
 EXPORT_SYMBOL(obd_brw_set_new);
 EXPORT_SYMBOL(obd_brw_set_add);
 EXPORT_SYMBOL(obd_brw_set_del);
+EXPORT_SYMBOL(obd_brw_set_decref);
+EXPORT_SYMBOL(obd_brw_set_addref);
 
 /* client.c */
 EXPORT_SYMBOL(ptlrpc_init_client);

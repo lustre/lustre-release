@@ -177,6 +177,7 @@ struct ptlrpc_request {
         int rq_reqlen;
         struct lustre_msg *rq_reqmsg;
 
+        int rq_timeout;
         int rq_replen;
         struct lustre_msg *rq_repmsg;
         __u64 rq_transno;
@@ -368,7 +369,8 @@ int ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *bulk);
 struct obd_brw_set *obd_brw_set_new(void);
 void obd_brw_set_add(struct obd_brw_set *, struct ptlrpc_bulk_desc *);
 void obd_brw_set_del(struct ptlrpc_bulk_desc *);
-void obd_brw_set_free(struct obd_brw_set *);
+void obd_brw_set_decref(struct obd_brw_set *set);
+void obd_brw_set_addref(struct obd_brw_set *set);
 
 int ptlrpc_reply(struct ptlrpc_service *svc, struct ptlrpc_request *req);
 int ptlrpc_error(struct ptlrpc_service *svc, struct ptlrpc_request *req);

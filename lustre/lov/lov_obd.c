@@ -1267,7 +1267,8 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
         struct lov_obd *lov;
         struct lov_oinfo *loi;
         struct lov_stripe_md submd;
-        int rc = 0, i;
+        ldlm_error_t rc = ELDLM_LOCK_MATCHED, err;
+        int i;
         ENTRY;
 
         if (!lsm) {
@@ -1322,20 +1323,27 @@ static int lov_enqueue(struct lustre_handle *conn, struct lov_stripe_md *lsm,
                 submd.lsm_stripe_count = 0;
                 /* XXX submd is not fully initialized here */
                 *flags = 0;
-                rc = obd_enqueue(&(lov->tgts[loi->loi_ost_idx].conn), &submd,
-                                 parent_lock, type, &sub_ext, sizeof(sub_ext),
-                                 mode, flags, cb, data, datalen, lov_lockhp);
+                err = obd_enqueue(&(lov->tgts[loi->loi_ost_idx].conn), &submd,
+                                  parent_lock, type, &sub_ext, sizeof(sub_ext),
+                                  mode, flags, cb, data, datalen, lov_lockhp);
+
                 // XXX add a lock debug statement here
-                if (rc)
+                /* return _MATCHED only when all locks matched.. */
+                if (err == ELDLM_OK) {
+                        rc = ELDLM_OK;
+                } else if (err != ELDLM_LOCK_MATCHED) {
+                        rc = err;
                         memset(lov_lockhp, 0, sizeof(*lov_lockhp));
-                if (rc && lov->tgts[loi->loi_ost_idx].active) {
-                        CERROR("error: enqueue objid "LPX64" subobj "LPX64
-                               " on OST idx %d: rc = %d\n", lsm->lsm_object_id,
-                               loi->loi_id, loi->loi_ost_idx, rc);
-                        goto out_locks;
+                        if (lov->tgts[loi->loi_ost_idx].active) {
+                                CERROR("error: enqueue objid "LPX64" subobj "
+                                       LPX64" on OST idx %d: rc = %d\n",
+                                       lsm->lsm_object_id, loi->loi_id,
+                                       loi->loi_ost_idx, rc);
+                                goto out_locks;
+                        }
                 }
         }
-        RETURN(0);
+        RETURN(rc);
 
 out_locks:
         while (loi--, lov_lockhp--, i-- > 0) {
@@ -1408,7 +1416,7 @@ static int lov_cancel(struct lustre_handle *conn, struct lov_stripe_md *lsm,
 
         lov = &export->exp_obd->u.lov;
         for (i = 0, loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count;
-             i++, loi++, lov_lockhp++ ) {
+             i++, loi++, lov_lockhp++) {
                 struct lov_stripe_md submd;
                 int err;
 

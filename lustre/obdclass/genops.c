@@ -121,7 +121,7 @@ int class_register_type(struct obd_ops *ops, struct lprocfs_vars *vars,
 
         type->typ_procroot = lprocfs_register(type->typ_name, proc_lustre_root,
                                               vars, type);
-        if (type->typ_procroot && IS_ERR(type->typ_procroot)) {
+        if (IS_ERR(type->typ_procroot)) {
                 rc = PTR_ERR(type->typ_procroot);
                 type->typ_procroot = NULL;
                 list_del(&type->typ_chain);
@@ -328,15 +328,14 @@ struct obd_import *class_conn2ldlmimp(struct lustre_handle *conn)
 
 struct obd_export *class_new_export(struct obd_device *obddev)
 {
-        struct obd_export * export;
+        struct obd_export *export;
 
-        export = kmem_cache_alloc(export_cachep, GFP_KERNEL);
+        PORTAL_SLAB_ALLOC(export, export_cachep, sizeof(*export));
         if (!export) {
                 CERROR("no memory! (minor %d)\n", obddev->obd_minor);
                 return NULL;
         }
 
-        memset(export, 0, sizeof(*export));
         get_random_bytes(&export->exp_cookie, sizeof(export->exp_cookie));
         export->exp_obd = obddev;
         /* XXX this should be in LDLM init */
@@ -374,8 +373,7 @@ void class_destroy_export(struct obd_export *exp)
                 ptlrpc_abort_inflight_superhack(&exp->exp_ldlm_data.led_import,
                                                 1);
 
-        exp->exp_cookie = DEAD_HANDLE_MAGIC;
-        kmem_cache_free(export_cachep, exp);
+        PORTAL_SLAB_FREE(exp, export_cachep, sizeof(*exp));
 }
 
 /* a connection defines an export context in which preallocation can

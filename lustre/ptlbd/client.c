@@ -83,10 +83,17 @@ static int ptlbd_cl_setup(struct obd_device *obddev, obd_count len, void *buf)
 
 static int ptlbd_cl_cleanup(struct obd_device *obddev)
 {
-//        struct ptlbd_obd *ptlbd = &obddev->u.ptlbd;
+        struct ptlbd_obd *ptlbd = &obddev->u.ptlbd;
         ENTRY;
 
-        CERROR("I should be cleaning things up\n");
+        if (!ptlbd)
+                RETURN(-ENOENT);
+
+        if (!ptlbd->bd_import.imp_connection)
+                RETURN(-ENOENT);
+
+        ptlrpc_cleanup_client(&ptlbd->bd_import);
+        ptlrpc_put_connection(ptlbd->bd_import.imp_connection);
 
         RETURN(0);
 }

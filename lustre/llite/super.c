@@ -57,14 +57,14 @@ static char *ll_read_opt(const char *opt, char *data)
         ENTRY;
 
         CDEBUG(D_SUPER, "option: %s, data %s\n", opt, data);
-        if ( strncmp(opt, data, strlen(opt)) )
+        if (strncmp(opt, data, strlen(opt)))
                 RETURN(NULL);
-        if ( (value = strchr(data, '=')) == NULL )
+        if ((value = strchr(data, '=')) == NULL)
                 RETURN(NULL);
 
         value++;
         OBD_ALLOC(retval, strlen(value) + 1);
-        if ( !retval ) {
+        if (!retval) {
                 CERROR("out of memory!\n");
                 RETURN(NULL);
         }
@@ -79,7 +79,7 @@ static int ll_set_opt(const char *opt, char *data, int fl)
         ENTRY;
 
         CDEBUG(D_SUPER, "option: %s, data %s\n", opt, data);
-        if ( strncmp(opt, data, strlen(opt)) )
+        if (strncmp(opt, data, strlen(opt)))
                 RETURN(0);
         else
                 RETURN(fl);
@@ -99,10 +99,11 @@ static void ll_options(char *options, char **ost, char **mds, int *flags)
              this_char != NULL;
              this_char = strtok (NULL, ",")) {
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
-                if ( (!*ost && (*ost = ll_read_opt("osc", this_char)))||
-                     (!*mds && (*mds = ll_read_opt("mdc", this_char)))||
-                     (!(*flags & LL_SBI_NOLCK) && ((*flags) = (*flags) |
-                      ll_set_opt("nolock", this_char, LL_SBI_NOLCK))) )
+                if ((!*ost && (*ost = ll_read_opt("osc", this_char)))||
+                    (!*mds && (*mds = ll_read_opt("mdc", this_char)))||
+                    (!(*flags & LL_SBI_NOLCK) &&
+                     ((*flags) = (*flags) |
+                      ll_set_opt("nolock", this_char, LL_SBI_NOLCK))))
                         continue;
         }
         EXIT;
@@ -466,6 +467,20 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         ENTRY;
 
         if ((attr->ia_valid & ATTR_SIZE)) {
+                /* writeback uses inode->i_size to determine how far out
+                 * its cached pages go.  ll_truncate gets a PW lock, canceling
+                 * our lock, _after_ it has updated i_size.  this can confuse
+                 * us into zero extending the file to the newly truncated
+                 * size, and this has bad implications for a racing o_append.
+                 * if we're extending our size we need to flush the pages
+                 * with the correct i_size before vmtruncate stomps on
+                 * the new i_size.  again, this can only find pages to
+                 * purge if the PW lock that generated them is still held.
+                 */
+                if ( attr->ia_size > inode->i_size ) {
+                        filemap_fdatasync(inode->i_mapping);
+                        filemap_fdatawait(inode->i_mapping);
+                }
                 err = vmtruncate(inode, attr->ia_size);
                 if (err)
                         RETURN(err);
@@ -613,21 +628,32 @@ static void ll_read_inode2(struct inode *inode, void *opaque)
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
         sema_init(&lli->lli_open_sem, 1);
+        atomic_set(&lli->lli_open_count, 0);
+        lli->lli_flags = 0;
+        init_MUTEX(&lli->lli_getattr_sem);
+        spin_lock_init(&lli->lli_read_extent_lock);
+        INIT_LIST_HEAD(&lli->lli_read_extents);
 
         LASSERT(!lli->lli_smd);
 
-        /* core attributes first */
+        /* core attributes from the MDS first */
         ll_update_inode(inode, body, lic ? lic->lic_lmm : NULL);
 
         /* Get the authoritative file size */
         if (lli->lli_smd && (inode->i_mode & S_IFREG)) {
-                int rc;
+                struct ldlm_extent extent = {0, OBD_OBJECT_EOF};
+                struct lustre_handle lockh = {0, 0};
+                struct lov_stripe_md *lsm = ll_i2info(inode)->lli_smd;
+                ldlm_error_t rc;
+
                 LASSERT(lli->lli_smd->lsm_object_id != 0);
-                rc = ll_file_size(inode, lli->lli_smd, NULL);
-                if (rc) {
-                        CERROR("ll_file_size: %d\n", rc);
+
+                rc = ll_extent_lock(NULL, inode, lsm, LCK_PR, &extent, &lockh);
+                if (rc != ELDLM_OK && rc != ELDLM_LOCK_MATCHED) {
                         ll_clear_inode(inode);
                         make_bad_inode(inode);
+                } else {
+                        ll_extent_unlock(NULL, inode, lsm, LCK_PR, &lockh);
                 }
         }
 

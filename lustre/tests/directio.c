@@ -18,6 +18,7 @@ int main(int argc, char **argv)
         int fd;
         char *buf;
         int blocks;
+        long len;
         struct stat st;
         int rc;
 
@@ -41,15 +42,16 @@ int main(int argc, char **argv)
         printf("directio on %s for %dx%lu blocks \n", argv[1], blocks,
                st.st_blksize);
 
-        buf = mmap(0, blocks * st.st_blksize, PROT_READ|PROT_WRITE,
-                   MAP_PRIVATE|MAP_ANON, 0, 0);
+        len = blocks * st.st_blksize;
+        buf = mmap(0, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, 0, 0);
         if (!buf) {
                 printf("No memory %s\n", strerror(errno));
                 return 1;
         }
 
-        rc = write(fd, buf, blocks * st.st_blksize);
-        if (rc != blocks * st.st_blksize) {
+        memset(buf, 0xba, len);
+        rc = write(fd, buf, len);
+        if (rc != len) {
                 printf("Write error %s (rc = %d)\n", strerror(errno), rc);
                 return 1;
         }
@@ -59,8 +61,8 @@ int main(int argc, char **argv)
                 return 1;
         }
 
-        rc = read(fd, buf, blocks * st.st_blksize);
-        if (rc != blocks * st.st_blksize) {
+        rc = read(fd, buf, len);
+        if (rc != len) {
                 printf("Read error: %s (rc = %d)\n", strerror(errno), rc);
                 return 1;
         }

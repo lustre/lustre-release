@@ -56,10 +56,38 @@ struct ll_inode_info {
         struct lov_stripe_md *lli_smd;
         char                 *lli_symlink_name;
         struct semaphore      lli_open_sem;
+        atomic_t              lli_open_count; /* see ll_file_release */
+        /*
+         * the VALID flag and valid_sem are temporary measures to serialize
+         * the manual getattrs that we're doing at lock acquisition.  in
+         * the future the OST will always return its notion of the file
+         * size with the granted locks.
+         */
+        unsigned long         lli_flags;
+#define LLI_F_DID_GETATTR      0
+        struct semaphore      lli_getattr_sem;
+        struct list_head      lli_read_extents;
+        spinlock_t            lli_read_extent_lock;
+
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
         struct inode          lli_vfs_inode;
 #endif
 };
+
+/*
+ * this lets ll_file_read tell ll_readpages how far ahead it can read
+ * and still be covered by ll_file_read's lock.  2.5 won't need this, but
+ * we have the other problem of other readpage callers making sure that
+ * they're covered by a lock..  
+ */
+struct ll_read_extent {
+        struct list_head re_lli_item;
+        struct task_struct *re_task;
+        struct ldlm_extent re_extent;
+};
+
+int ll_check_dirty( struct super_block *sb );
+int ll_batch_writepage( struct inode *inode, struct page *page );
 
 /* interpet return codes from intent lookup */
 #define LL_LOOKUP_POSITIVE 1
@@ -246,11 +274,15 @@ extern struct inode_operations ll_special_inode_operations;
 struct ldlm_lock;
 int ll_lock_callback(struct ldlm_lock *, struct ldlm_lock_desc *, void *data,
                      int flag);
-int ll_size_lock(struct inode *, struct lov_stripe_md *, obd_off start,
-                 int mode, struct lustre_handle *);
-int ll_size_unlock(struct inode *, struct lov_stripe_md *, int mode,
-                   struct lustre_handle *);
-int ll_file_size(struct inode *inode, struct lov_stripe_md *md, char *ostdata);
+int ll_extent_lock_no_validate(struct ll_file_data *fd, struct inode *inode,
+                   struct lov_stripe_md *lsm, int mode,
+                   struct ldlm_extent *extent, struct lustre_handle *lockh);
+int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
+                   struct lov_stripe_md *lsm, int mode,
+                   struct ldlm_extent *extent, struct lustre_handle *lockh);
+int ll_extent_unlock(struct ll_file_data *fd, struct inode *inode,
+                     struct lov_stripe_md *lsm, int mode,
+                     struct lustre_handle *lockh);
 int ll_create_objects(struct super_block *sb, obd_id id, uid_t uid,
                       gid_t gid, struct lov_stripe_md **lsmp);
 

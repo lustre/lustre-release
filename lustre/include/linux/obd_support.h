@@ -124,13 +124,21 @@ extern unsigned long obd_sync_filter;
                               ((obd_fail_loc & (OBD_FAILED | OBD_FAIL_ONCE))!= \
                                 (OBD_FAILED | OBD_FAIL_ONCE)))
 
-#define OBD_FAIL_RETURN(id, ret)                                             \
-do {                                                                         \
+#define OBD_FAIL_CHECK_ONCE(id)                                              \
+({      int _ret_ = 0;                                                       \
         if (OBD_FAIL_CHECK(id)) {                                            \
-                CERROR("obd_fail_loc=%x, fail operation rc=%d\n", id, ret);  \
+                CERROR("obd_fail_loc=%x\n", id);                             \
                 obd_fail_loc |= OBD_FAILED;                                  \
                 if ((id) & OBD_FAIL_ONCE)                                    \
                         obd_fail_loc |= OBD_FAIL_ONCE;                       \
+                _ret_ = 1;                                                   \
+        }                                                                    \
+        _ret_;                                                               \
+})
+
+#define OBD_FAIL_RETURN(id, ret)                                             \
+do {                                                                         \
+        if (OBD_FAIL_CHECK_ONCE(id)) {                                       \
                 RETURN(ret);                                                 \
         }                                                                    \
 } while(0)

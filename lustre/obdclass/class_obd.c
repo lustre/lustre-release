@@ -86,12 +86,11 @@ static int obd_class_open(struct inode * inode, struct file * file)
         struct obd_class_user_state *ocus;
         ENTRY;
 
-        OBD_ALLOC (ocus, sizeof (*ocus));
+        OBD_ALLOC(ocus, sizeof(*ocus));
         if (ocus == NULL)
                 return (-ENOMEM);
 
-        INIT_LIST_HEAD (&ocus->ocus_conns);
-        ocus->ocus_current_obd = NULL;
+        INIT_LIST_HEAD(&ocus->ocus_conns);
         file->private_data = ocus;
 
         MOD_INC_USE_COUNT;
@@ -209,6 +208,9 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
         int err = 0, len = 0, serialised = 0;
         ENTRY;
 
+        if ((cmd & 0xffffff00) == ((int)'T') << 8) /* ignore all tty ioctls */
+                RETURN(err = -ENOTTY);
+
         switch (cmd) {
         case OBD_IOC_BRW_WRITE:
         case OBD_IOC_BRW_READ:
@@ -222,7 +224,8 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
                 break;
         }
 
-        if (!obd && cmd != OBD_IOC_DEVICE && cmd != TCGETS &&
+        CDEBUG(D_IOCTL, "cmd = %x, obd = %p\n", cmd, obd);
+        if (!obd && cmd != OBD_IOC_DEVICE &&
             cmd != OBD_IOC_LIST && cmd != OBD_GET_VERSION &&
             cmd != OBD_IOC_NAME2DEV && cmd != OBD_IOC_NEWDEV &&
             cmd != OBD_IOC_ADD_UUID && cmd != OBD_IOC_DEL_UUID  &&
@@ -237,8 +240,6 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
         data = (struct obd_ioctl_data *)buf;
 
         switch (cmd) {
-        case TCGETS:
-                GOTO(out, err=-EINVAL);
         case OBD_IOC_DEVICE: {
                 CDEBUG(D_IOCTL, "\n");
                 if (data->ioc_dev >= MAX_OBD_DEVICES || data->ioc_dev < 0) {
@@ -266,6 +267,7 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
                         int l;
                         char *status;
                         struct obd_device *obd = &obd_dev[i];
+
                         if (!obd->obd_type)
                                 continue;
                         if (obd->obd_flags & OBD_SET_UP)
@@ -663,17 +665,17 @@ int class_handle_ioctl(struct obd_class_user_state *ocus, unsigned int cmd,
 #define OBD_MINOR 241
 #ifdef __KERNEL__
 /* to control /dev/obd */
-static int obd_class_ioctl (struct inode * inode, struct file * filp,
-                     unsigned int cmd, unsigned long arg)
+static int obd_class_ioctl(struct inode *inode, struct file *filp,
+                           unsigned int cmd, unsigned long arg)
 {
         return class_handle_ioctl(filp->private_data, cmd, arg);
 }
 
 /* declare character device */
 static struct file_operations obd_psdev_fops = {
-        ioctl: obd_class_ioctl,      /* ioctl */
-        open: obd_class_open,        /* open */
-        release: obd_class_release,  /* release */
+        ioctl:   obd_class_ioctl,       /* ioctl */
+        open:    obd_class_open,        /* open */
+        release: obd_class_release,     /* release */
 };
 
 /* modules setup */
@@ -712,6 +714,7 @@ void obd_kmap_get(int count, int server)
         if (count == 1)
                 atomic_dec(&obd_kmap_count);
         else while (atomic_add_negative(-count, &obd_kmap_count)) {
+                struct l_wait_info lwi = { 0 };
                 static long next_show = 0;
                 static int skipped = 0;
 
@@ -729,8 +732,8 @@ void obd_kmap_get(int count, int server)
                         skipped = 0;
                 } else
                         skipped++;
-                wait_event(obd_kmap_waitq,
-                           atomic_read(&obd_kmap_count) >= count);
+                l_wait_event(obd_kmap_waitq,
+                             atomic_read(&obd_kmap_count) >= count, &lwi);
         }
 }
 

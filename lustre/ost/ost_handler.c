@@ -249,14 +249,13 @@ static int ost_brw_read(struct ptlrpc_request *req)
 {
         struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ptlrpc_bulk_desc *desc;
-        struct obd_ioobj *tmp1;
-        void *tmp2, *end2;
         struct niobuf_remote *remote_nb;
         struct niobuf_local *local_nb = NULL;
         struct obd_ioobj *ioo;
         struct ost_body *body;
         struct l_wait_info lwi;
         void *desc_priv = NULL;
+        void *end2;
         int cmd, i, j, objcount, niocount, size = sizeof(*body);
         int rc = 0;
 #if CHECKSUM_BULK
@@ -265,9 +264,9 @@ static int ost_brw_read(struct ptlrpc_request *req)
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
-        tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
-        tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
-        end2 = (char *)tmp2 + req->rq_reqmsg->buflens[2];
+        ioo = lustre_msg_buf(req->rq_reqmsg, 1);
+        remote_nb = lustre_msg_buf(req->rq_reqmsg, 2);
+        end2 = (char *)remote_nb + req->rq_reqmsg->buflens[2];
         objcount = req->rq_reqmsg->buflens[1] / sizeof(*ioo);
         niocount = req->rq_reqmsg->buflens[2] / sizeof(*remote_nb);
         cmd = OBD_BRW_READ;
@@ -282,15 +281,29 @@ static int ost_brw_read(struct ptlrpc_request *req)
         if (rc)
                 GOTO(out, req->rq_status = rc);
 
-        for (i = 0; i < objcount; i++) {
-                ost_unpack_ioo(&tmp1, &ioo);
-                if (tmp2 + ioo->ioo_bufcnt > end2) {
+        for (i = 0; i < objcount; i++, ioo++) {
+                ost_unpack_ioo(ioo, ioo);
+                if ((void *)(remote_nb + ioo->ioo_bufcnt) > end2) {
+                        CERROR("BRW: objid "LPX64" count %u larger than %u\n",
+                               ioo->ioo_id, ioo->ioo_bufcnt,
+                               (int)(end2 - (void *)remote_nb));
                         LBUG();
-                        GOTO(out, rc = -EFAULT);
+                        GOTO(out, rc = -EINVAL);
                 }
-                for (j = 0; j < ioo->ioo_bufcnt; j++) {
-                        /* XXX verify niobuf[j].offset > niobuf[j-1].offset */
-                        ost_unpack_niobuf(&tmp2, &remote_nb);
+                for (j = 0; j < ioo->ioo_bufcnt; j++, remote_nb++) {
+                        ost_unpack_niobuf(remote_nb, remote_nb);
+                        if (remote_nb->len == 0) {
+                                CERROR("zero len BRW: objid "LPX64" buf %u\n",
+                                       ioo->ioo_id, j);
+                                GOTO(out, rc = -EINVAL);
+                        }
+                        if (j && remote_nb->offset <= (remote_nb - 1)->offset) {
+                                CERROR("unordered BRW: objid "LPX64
+                                       " buf %u offset "LPX64" <= "LPX64"\n",
+                                       ioo->ioo_id, j, remote_nb->offset,
+                                       (remote_nb - 1)->offset);
+                                GOTO(out, rc = -EINVAL);
+                        }
                 }
         }
 
@@ -298,7 +311,7 @@ static int ost_brw_read(struct ptlrpc_request *req)
         if (local_nb == NULL)
                 GOTO(out, rc = -ENOMEM);
 
-        /* The unpackers move tmp1 and tmp2, so reset them before using */
+        /* The unpackers move ioo and remote_nb, so reset them before using */
         ioo = lustre_msg_buf(req->rq_reqmsg, 1);
         remote_nb = lustre_msg_buf(req->rq_reqmsg, 2);
         req->rq_status = obd_preprw(cmd, conn, objcount, ioo, niocount,
@@ -363,9 +376,8 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 {
         struct lustre_handle *conn = (struct lustre_handle *)req->rq_reqmsg;
         struct ptlrpc_bulk_desc *desc;
-        struct obd_ioobj *tmp1;
-        void *tmp2, *end2;
         struct niobuf_remote *remote_nb;
+        void *end2;
         struct niobuf_local *local_nb = NULL;
         struct obd_ioobj *ioo;
         struct ost_body *body;
@@ -376,9 +388,9 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
-        tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
-        tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
-        end2 = (char *)tmp2 + req->rq_reqmsg->buflens[2];
+        ioo = lustre_msg_buf(req->rq_reqmsg, 1);
+        remote_nb = lustre_msg_buf(req->rq_reqmsg, 2);
+        end2 = (void *)remote_nb + req->rq_reqmsg->buflens[2];
         objcount = req->rq_reqmsg->buflens[1] / sizeof(*ioo);
         niocount = req->rq_reqmsg->buflens[2] / sizeof(*remote_nb);
         cmd = OBD_BRW_WRITE;
@@ -386,15 +398,29 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_WRITE_BULK))
                 GOTO(out, req->rq_status = -EIO);
 
-        for (i = 0; i < objcount; i++) {
-                ost_unpack_ioo(&tmp1, &ioo);
-                if (tmp2 + ioo->ioo_bufcnt > end2) {
+        for (i = 0; i < objcount; i++, ioo++) {
+                ost_unpack_ioo(ioo, ioo);
+                if ((void *)(remote_nb + ioo->ioo_bufcnt) > end2) {
+                        CERROR("BRW: objid "LPX64" count %u larger than %u\n",
+                               ioo->ioo_id, ioo->ioo_bufcnt,
+                               (int)(end2 - (void *)remote_nb));
                         LBUG();
-                        GOTO(out, rc = -EFAULT);
+                        GOTO(out, rc = -EINVAL);
                 }
-                for (j = 0; j < ioo->ioo_bufcnt; j++) {
-                        /* XXX verify niobuf[j].offset > niobuf[j-1].offset */
-                        ost_unpack_niobuf(&tmp2, &remote_nb);
+                for (j = 0; j < ioo->ioo_bufcnt; j++, remote_nb++) {
+                        ost_unpack_niobuf(remote_nb, remote_nb);
+                        if (remote_nb->len == 0) {
+                                CERROR("zero len BRW: objid "LPX64" buf %u\n",
+                                       ioo->ioo_id, j);
+                                GOTO(out, rc = -EINVAL);
+                        }
+                        if (j && remote_nb->offset <= (remote_nb - 1)->offset) {
+                                CERROR("unordered BRW: objid "LPX64
+                                       " buf %u offset "LPX64" <= "LPX64"\n",
+                                       ioo->ioo_id, j, remote_nb->offset,
+                                       (remote_nb - 1)->offset);
+                                GOTO(out, rc = -EINVAL);
+                        }
                 }
         }
 
@@ -402,9 +428,10 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (local_nb == NULL)
                 GOTO(out, rc = -ENOMEM);
 
-        /* The unpackers move tmp1 and tmp2, so reset them before using */
+        /* The unpackers move ioo and remote_nb, so reset them before using */
         ioo = lustre_msg_buf(req->rq_reqmsg, 1);
         remote_nb = lustre_msg_buf(req->rq_reqmsg, 2);
+
         req->rq_status = obd_preprw(cmd, conn, objcount, ioo, niocount,
                                     remote_nb, local_nb, &desc_priv, oti);
 
@@ -505,26 +532,28 @@ static int ost_san_brw(struct ptlrpc_request *req, int alloc)
         struct obd_ioobj *ioo;
         struct ost_body *body;
         int cmd, rc, i, j, objcount, niocount, size[2] = {sizeof(*body)};
-        void *tmp1, *tmp2, *end2;
+        void *end2;
         ENTRY;
 
         body = lustre_msg_buf(req->rq_reqmsg, 0);
-        tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
-        tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
-        end2 = (char *)tmp2 + req->rq_reqmsg->buflens[2];
+        ioo = lustre_msg_buf(req->rq_reqmsg, 1);
+        remote_nb = lustre_msg_buf(req->rq_reqmsg, 2);
+        end2 = (void *)remote_nb + req->rq_reqmsg->buflens[2];
         objcount = req->rq_reqmsg->buflens[1] / sizeof(*ioo);
         niocount = req->rq_reqmsg->buflens[2] / sizeof(*remote_nb);
-        
+
         cmd = alloc ? OBD_BRW_WRITE : OBD_BRW_READ;
 
-        for (i = 0; i < objcount; i++) {
-                ost_unpack_ioo((void *)&tmp1, &ioo);
-                if (tmp2 + ioo->ioo_bufcnt > end2) {
-                        rc = -EFAULT;
-                        break;
+        for (i = 0; i < objcount; i++, ioo++) {
+                ost_unpack_ioo(ioo, ioo);
+                if ((void *)(remote_nb + ioo->ioo_bufcnt) > end2) {
+                        CERROR("BRW: objid "LPX64" count %u larger than %u\n",
+                               ioo->ioo_id, ioo->ioo_bufcnt,
+                               (int)(end2 - (void *)remote_nb));
+                        GOTO(out, rc = -EINVAL);
                 }
-                for (j = 0; j < ioo->ioo_bufcnt; j++)
-                        ost_unpack_niobuf((void *)&tmp2, &remote_nb);
+                for (j = 0; j < ioo->ioo_bufcnt; j++, remote_nb++)
+                        ost_unpack_niobuf(remote_nb, remote_nb);
         }
 
         size[1] = niocount * sizeof(*remote_nb);
@@ -532,12 +561,12 @@ static int ost_san_brw(struct ptlrpc_request *req, int alloc)
         if (rc)
                 GOTO(out, rc);
 
-        /* The unpackers move tmp1 and tmp2, so reset them before using */
-        tmp1 = lustre_msg_buf(req->rq_reqmsg, 1);
-        tmp2 = lustre_msg_buf(req->rq_reqmsg, 2);
+        /* The unpackers move ioo and remote_nb, so reset them before using */
+        ioo = lustre_msg_buf(req->rq_reqmsg, 1);
+        remote_nb = lustre_msg_buf(req->rq_reqmsg, 2);
 
-        req->rq_status = obd_san_preprw(cmd, conn, objcount, tmp1,
-                                        niocount, tmp2);
+        req->rq_status = obd_san_preprw(cmd, conn, objcount, ioo,
+                                        niocount, remote_nb);
 
         if (req->rq_status) {
                 rc = 0;
@@ -546,15 +575,9 @@ static int ost_san_brw(struct ptlrpc_request *req, int alloc)
 
         remote_nb = lustre_msg_buf(req->rq_repmsg, 1);
         res_nb = lustre_msg_buf(req->rq_reqmsg, 2);
-        for (i = 0; i < niocount; i++) {
-                /* this advances remote_nb */
-                ost_pack_niobuf((void **)&remote_nb,
-                                res_nb[i].offset,
-                                res_nb[i].len, /* 0 */
-                                res_nb[i].flags, /* 0 */
-                                res_nb[i].xid
-                                );
-        }
+        for (i = 0; i < niocount; i++, remote_nb++, res_nb++)
+                ost_pack_niobuf(remote_nb, res_nb->offset, res_nb->len,
+                                res_nb->flags, res_nb->xid);
 
         rc = 0;
 

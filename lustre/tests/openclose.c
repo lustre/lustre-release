@@ -62,9 +62,8 @@ int main(int argc, char *argv[])
                         pid_t ret;
 
                         ret = waitpid(0, &status, 0);
-                        if (ret == 0) {
+                        if (ret == 0)
                                 continue;
-                        }
 
                         if (ret < 0) {
                                 fprintf(stderr, "error: %s: wait - %s\n",
@@ -85,9 +84,8 @@ int main(int argc, char *argv[])
                                                 argv[0], ret, err);
                                 if (!rc)
                                         rc = err;
-
-                                live_threads--;
                         }
+                        live_threads--;
                 }
         } else {
                 if (threads)
@@ -115,7 +113,8 @@ int main(int argc, char *argv[])
                                 rc = errno;
                                 break;
                         }
-                        if (ioctl(fd, LL_IOC_SETFLAGS, &ioctl_flags) < 0) {
+                        if (ioctl(fd, LL_IOC_SETFLAGS, &ioctl_flags) < 0 &&
+                            errno != ENOTTY) {
                                 fprintf(stderr, "ioctl(): %s\n",
                                         strerror(errno));
                                 rc = errno;

@@ -216,7 +216,7 @@ static int handle_incoming_request(struct obd_device *obddev,
         }
 
         CDEBUG(D_RPCTRACE, "Handling RPC ni:pid:xid:nid:opc %d:%d:"LPU64":"
-               LPX64":%d\n", rqbd->rqbd_srv_ni - &svc->srv_interfaces[0],
+               LPX64":%d\n", (int)(rqbd->rqbd_srv_ni - svc->srv_interfaces),
                NTOH__u32(request->rq_reqmsg->status), request->rq_xid,
                event->initiator.nid, NTOH__u32(request->rq_reqmsg->opc));
 
@@ -334,8 +334,9 @@ static int ptlrpc_main(void *arg)
 
         /* And now, loop forever on requests */
         while (1) {
-                wait_event(svc->srv_waitq,
-                           ptlrpc_check_event(svc, thread, event));
+                struct l_wait_info lwi = { 0 };
+                l_wait_event(svc->srv_waitq,
+                             ptlrpc_check_event(svc, thread, event), &lwi);
 
                 if (thread->t_flags & SVC_STOPPING) {
                         spin_lock(&svc->srv_lock);
@@ -377,12 +378,15 @@ out:
 static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
                                struct ptlrpc_thread *thread)
 {
+        struct l_wait_info lwi = { 0 };
+
         spin_lock(&svc->srv_lock);
         thread->t_flags = SVC_STOPPING;
         spin_unlock(&svc->srv_lock);
 
         wake_up(&svc->srv_waitq);
-        wait_event(thread->t_ctl_waitq, (thread->t_flags & SVC_STOPPED));
+        l_wait_event(thread->t_ctl_waitq, (thread->t_flags & SVC_STOPPED),
+                     &lwi);
 }
 
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
@@ -404,6 +408,7 @@ void ptlrpc_stop_all_threads(struct ptlrpc_service *svc)
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name)
 {
+        struct l_wait_info lwi = { 0 };
         struct ptlrpc_svc_data d;
         struct ptlrpc_thread *thread;
         int rc;
@@ -434,7 +439,7 @@ int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                 OBD_FREE(thread, sizeof(*thread));
                 RETURN(rc);
         }
-        wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING);
+        l_wait_event(thread->t_ctl_waitq, thread->t_flags & SVC_RUNNING, &lwi);
 
         RETURN(0);
 }
