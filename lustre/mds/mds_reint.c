@@ -225,8 +225,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         if (offset)
                 offset = 1;
 
-        if (strcmp(req->rq_export->exp_obd->obd_type->typ_name, "mds") != 0)
-                LBUG();
+        LASSERT(!strcmp(req->rq_export->exp_obd->obd_type->typ_name, "mds"));
 
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
 

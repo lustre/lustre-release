@@ -79,23 +79,12 @@ int mdc_create(struct lustre_handle *conn,
                __u32 gid, __u64 time, __u64 rdev, struct lov_stripe_md *lsm,
                struct ptlrpc_request **request)
 {
-        struct mds_rec_create *rec;
         struct ptlrpc_request *req;
         int rc, size[3] = {sizeof(struct mds_rec_create), namelen + 1, 0};
-        char *tmp;
         int level, bufcount = 2;
         ENTRY;
 
-        if (S_ISREG(mode)) {
-                if (!lsm) {
-                        CERROR("File create, but no stripe md (%ld, %*s)\n",
-                               dir->i_ino, namelen, name);
-                        LBUG();
-                }
-                // size[2] = mdc->cl_max_mds_easize; soon...
-                size[2] = lsm->lsm_mds_easize;
-                bufcount = 3;
-        } else if (S_ISLNK(mode)) {
+        if (S_ISLNK(mode)) {
                 size[2] = tgtlen + 1;
                 bufcount = 3;
         }
@@ -105,17 +94,10 @@ int mdc_create(struct lustre_handle *conn,
         if (!req)
                 RETURN(-ENOMEM);
 
-        /* mds_create_pack fills msg->bufs[1] with name */
-        rec = lustre_msg_buf(req->rq_reqmsg, 0);
+        /* mds_create_pack fills msg->bufs[1] with name
+         * and msg->bufs[2] with tgt, for symlinks */
         mds_create_pack(req, 0, dir, mode, rdev, uid, gid, time,
-                        name, namelen, NULL, 0);
-
-        if (S_ISREG(mode)) {
-                lov_packmd(lustre_msg_buf(req->rq_reqmsg, 2), lsm);
-        } else if (S_ISLNK(mode)) {
-                tmp = lustre_msg_buf(req->rq_reqmsg, 2);
-                LOGL0(tgt, tgtlen, tmp);
-        }
+                        name, namelen, tgt, tgtlen);
 
         size[0] = sizeof(struct mds_body);
         req->rq_replen = lustre_msg_size(1, size);
@@ -124,11 +106,12 @@ int mdc_create(struct lustre_handle *conn,
  resend:
         rc = mdc_reint(req, level);
         if (rc == -ERESTARTSYS) {
-                __u32 *opcode = lustre_msg_buf(req->rq_reqmsg, 0);
+                struct mds_rec_create *rec = lustre_msg_buf(req->rq_reqmsg, 0);
+
                 level = LUSTRE_CONN_RECOVD;
                 CERROR("Lost reply: re-create rep.\n");
                 req->rq_flags = 0;
-                *opcode = NTOH__u32(REINT_RECREATE);
+                rec->cr_opcode = NTOH__u32(REINT_RECREATE);
                 goto resend;
         }
 
