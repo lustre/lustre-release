@@ -153,6 +153,8 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
                 ldlm_resource_putref(lock->l_resource);
                 lock->l_resource = NULL;
+                if (lock->l_export)
+                        class_export_put(lock->l_export);
 
                 if (lock->l_parent)
                         LDLM_LOCK_PUT(lock->l_parent);
@@ -220,6 +222,8 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         /* Wake anyone waiting for this lock */
         /* FIXME: I should probably add yet another flag, instead of using
          * l_export to only call this on clients */
+        if (lock->l_export)
+                class_export_put(lock->l_export);
         lock->l_export = NULL;
         if (lock->l_export && lock->l_completion_ast)
                 lock->l_completion_ast(lock, 0);

@@ -179,8 +179,6 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
         }
         list_add_tail(&lock->l_pending_chain, &waiting_locks_list); /* FIFO */
         spin_unlock_bh(&waiting_locks_spinlock);
-        /* We drop this ref when we get removed from the list. */
-        class_export_get(lock->l_export);
         return 1;
 }
 
@@ -223,8 +221,6 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
         }
         list_del_init(&lock->l_pending_chain);
         spin_unlock_bh(&waiting_locks_spinlock);
-        /* We got this ref when we were added to the list. */
-        class_export_put(lock->l_export);
         LDLM_DEBUG(lock, "removed");
         return 1;
 }
@@ -468,7 +464,7 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
         LDLM_DEBUG(lock, "server-side enqueue handler, new lock created");
 
         LASSERT(req->rq_export);
-        lock->l_export = req->rq_export;
+        lock->l_export = class_export_get(req->rq_export);
         l_lock(&lock->l_resource->lr_namespace->ns_lock);
         list_add(&lock->l_export_chain,
                  &lock->l_export->exp_ldlm_data.led_held_locks);
