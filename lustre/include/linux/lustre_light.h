@@ -28,8 +28,8 @@ struct ll_sb_info {
         struct list_head         ll_list;      /* list of supers */
         struct obd_conn          ll_conn;
         struct super_block      *ll_super;
-        struct obd_device       *ll_obd;
-        struct obd_ops          *ll_ops;
+	//        struct obd_device       *ll_obd;
+        //struct obd_ops          *ll_ops;
         ino_t                    ll_rootino;   /* number of root inode */
         int                      ll_minor;     /* minor of /dev/obdX */
         struct list_head         ll_inodes;    /* list of dirty inodes */

@@ -13,7 +13,7 @@ insmod $R/usr/src/obd/mdc/mdc.o
 insmod $R/usr/src/obd/llight/llight.o
 
 dd if=/dev/zero of=/tmp/fs bs=1024 count=10000
-mke2fs -F /tmp/fs
+mke2fs -b 4096 -F /tmp/fs
 losetup /dev/loop/0 /tmp/fs
 
 

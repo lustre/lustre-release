@@ -227,7 +227,7 @@ ERR:
         if (version)
                 OBD_FREE(version, strlen(version) + 1);
 	if (connected) 
-		sbi->osi_ops->o_disconnect(&sbi->osi_conn);
+		obd_disconnect(&sbi->osi_conn);
 
         if (sbi) {
                 sbi->osi_super = NULL;

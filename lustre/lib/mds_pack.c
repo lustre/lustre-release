@@ -83,7 +83,7 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 	} 
 
 	(*req)->tgtlen = NTOH__u32(tgtlen);
-	if (tgt) { 
+	if (tgt) {
                 preq->tgt_offset = (__u32)(ptr - (char *)preq);
 		LOGL(tgt, tgtlen, ptr);
 	}
@@ -110,7 +110,7 @@ int mds_unpack_req(char *buf, int len,
 
         *req = (struct mds_req *) (buf + sizeof(**hdr));
 	(*req)->namelen = NTOH__u32((*req)->namelen); 
-	(*req)->tgtlen = NTOH__u32((*req)->namelen); 
+	(*req)->tgtlen = NTOH__u32((*req)->tgtlen); 
 
 	if (len < sizeof(**hdr) + sizeof(**req) + (*req)->namelen + 
 	    (*req)->tgtlen ) { 

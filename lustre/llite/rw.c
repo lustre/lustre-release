@@ -33,6 +33,9 @@
 #include <linux/smp_lock.h>
 
 #include <linux/obd_support.h>
+#include <linux/lustre_lib.h>
+#include <linux/lustre_idl.h>
+#include <linux/lustre_mds.h>
 #include <linux/lustre_light.h>
 
 void ll_change_inode(struct inode *inode);
@@ -107,11 +110,6 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
         int              err;
 
         ENTRY;
-        if (IOPS(inode, brw) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no brw method!\n");
-                EXIT;
-                return -EIO;
-        }
 
         oa = obdo_alloc();
         if ( !oa ) {
@@ -121,7 +119,7 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
 	oa->o_valid = OBD_MD_FLNOTOBD;
         ll_from_inode(oa, inode);
 
-        err = IOPS(inode, brw)(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
+        err = obd_brw(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);
         //if ( !err )
 	//      ll_to_inode(inode, oa); /* copy o_blocks to i_blocks */
@@ -146,12 +144,6 @@ static int ll_commit_page(struct page *page, int create, int from, int to)
         int              err;
 
         ENTRY;
-        if (IOPS(inode, brw) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no brw method!\n");
-                EXIT;
-                return -EIO;
-        }
-
         oa = obdo_alloc();
         if ( !oa ) {
                 EXIT;
@@ -163,7 +155,7 @@ static int ll_commit_page(struct page *page, int create, int from, int to)
 	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
 	       from, to, count);
 
-        err = IOPS(inode, brw)(WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
+        err = obd_brw(WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);
         if ( !err ) {
                 SetPageUptodate(page);
@@ -212,6 +204,54 @@ int ll_readpage(struct file *file, struct page *page)
         EXIT;
         return 0;
 } /* ll_readpage */
+
+
+
+/* returns the page unlocked, but with a reference */
+int ll_dir_readpage(struct file *file, struct page *page)
+{
+	struct inode *inode = page->mapping->host;
+	char *buf;
+	__u64 offset;
+        int rc = 0;
+	struct mds_rep_hdr *hdr;
+
+        ENTRY;
+
+	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT) 
+	     <= page->index) {
+		memset(kmap(page), 0, PAGE_CACHE_SIZE);
+		kunmap(page);
+		goto readpage_out;
+	}
+
+	if (Page_Uptodate(page)) {
+		EXIT;
+		goto readpage_out;
+	}
+
+	offset = page->index << PAGE_SHIFT; 
+	buf = kmap(page);
+        rc = mdc_readpage(inode->i_ino, S_IFDIR, offset, buf, NULL, &hdr);
+	kunmap(buff); 
+        if ( rc ) {
+		EXIT; 
+		goto readpage_out;
+        } 
+
+	if ((rc = hdr->status)) {
+		EXIT;
+		goto readpage_out;
+	}
+
+        /* PDEBUG(page, "READ"); */
+
+	SetPageUptodate(page);
+ readpage_out:
+	unlock_page(page);
+        EXIT;
+        return rc;
+} /* ll_dir_readpage */
 
 int ll_prepare_write(struct file *file, struct page *page, unsigned from, unsigned to)
 {
@@ -348,11 +388,6 @@ int ll_do_vec_wr(struct inode **inodes, obd_count num_io,
         int err;
 
         ENTRY;
-        if (IOPS(inodes[0], brw) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no brw method!\n");
-                EXIT;
-                return -EIO;
-        }
 
         CDEBUG(D_INFO, "writing %d page(s), %d obdo(s) in vector\n",
                num_io, num_obdos);
@@ -368,7 +403,7 @@ int ll_do_vec_wr(struct inode **inodes, obd_count num_io,
                 printk("\n");
         }
 
-        err = IOPS(inodes[0], brw)(WRITE, IID(inodes[0]), num_obdos, obdos,
+        err = obd_brw(WRITE, IID(inodes[0]), num_obdos, obdos,
                                   oa_bufs, pages, counts, offsets, flags);
 
         CDEBUG(D_INFO, "BRW done\n");
@@ -673,12 +708,6 @@ void ll_truncate(struct inode *inode)
 
         //ll_dequeue_pages(inode);
 
-        if (IOPS(inode, punch) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no punch method!\n");
-                EXIT;
-                return;
-        }
-
         oa = obdo_alloc();
         if ( !oa ) {
                 /* XXX This would give an inconsistent FS, so deal with it as
@@ -691,14 +720,14 @@ void ll_truncate(struct inode *inode)
                 obdo.o_valid = OBD_MD_FLNOTOBD;
                 ll_from_inode(&obdo, inode);
 
-                err = IOPS(inode, punch)(IID(inode), &obdo, 0, obdo.o_size);
+                err = obd_punch(IID(inode), &obdo, 0, obdo.o_size);
         } else {
                 oa->o_valid = OBD_MD_FLNOTOBD;
                 ll_from_inode(oa, inode);
 
                 CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
                        (long)oa->o_id, oa->o_size);
-                err = IOPS(inode, punch)(IID(inode), oa, oa->o_size, 0);
+                err = obd_punch(IID(inode), oa, oa->o_size, 0);
 
                 obdo_free(oa);
         }
@@ -718,4 +747,9 @@ struct address_space_operations ll_aops = {
         prepare_write: ll_prepare_write, 
         commit_write: ll_commit_write,
         bmap: NULL
+};
+
+
+struct address_space_operations ll_dir_aops = {
+        readpage: ll_dir_readpage
 };

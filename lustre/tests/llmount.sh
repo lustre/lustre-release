@@ -12,11 +12,11 @@ insmod $R/usr/src/obd/mdc/mdc.o
 insmod $R/usr/src/obd/llight/llight.o
 
 dd if=/dev/zero of=/tmp/ost bs=1024 count=10000
-mke2fs -F /tmp/ost
+mke2fs -b 4096 -F /tmp/ost
 losetup /dev/loop/0 /tmp/ost
 
 dd if=/dev/zero of=/tmp/mds bs=1024 count=10000
-mke2fs -F /tmp/mds
+mke2fs -b 4096 -F /tmp/mds
 losetup /dev/loop/1 /tmp/mds
 
 mknod /dev/obd c 10 241
@@ -38,9 +38,7 @@ quit
 EOF
 
 mkdir /mnt/obd
-# mount -t lustre_light -o device=3 none /mnt/obd
+mount -t lustre_light -o device=3 none /mnt/obd
 
-mknod /dev/request c 10 244
-# $R/usr/src/obd/utils/testreq
 
 

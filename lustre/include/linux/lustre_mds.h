@@ -57,17 +57,6 @@ struct mds_obd {
 	struct address_space_operations *mds_aops;
 };
 
-#define MDS_GETATTR   1
-#define MDS_SETATTR  2
-#define MDS_OPEN     3
-#define MDS_CREATE   4
-#define MDS_LINK     5
-#define MDS_SYMLINK  6
-#define MDS_MKNOD    7
-#define MDS_MKDIR    8
-#define MDS_UNLINK   9
-#define MDS_RMDIR   10
-#define MDS_RENAME  11
 
 struct mds_request { 
 	struct list_head rq_list;
@@ -110,7 +99,7 @@ struct mds_req {
         __u32                       nlink;
         __u32                       generation;
         char 		           *name;
-        char                      *tgt;
+        char                       *tgt;
 };
 
 /* more or less identical to the packed structure, except for the pointers */
@@ -134,7 +123,7 @@ struct mds_rep {
         __u32                       nlink;
         __u32                       generation;
         char 		           *name;
-        char                      *tgt;
+        char                       *tgt;
 };
 
 
@@ -148,6 +137,8 @@ int mds_unpack_rep(char *buf, int len, struct mds_rep_hdr **hdr, struct mds_rep 
 /* llight/request.c */
 int mdc_getattr(ino_t ino, int type, int valid, 
 		struct mds_rep  **mds_reply, struct mds_rep_hdr **hdr);
+int mdc_readpage(ino_t ino, int type, __u64 offset, char *addr, 
+                 struct mds_rep  **rep, struct mds_rep_hdr **hdr);
 
 
 
@@ -156,7 +147,8 @@ int mdc_getattr(ino_t ino, int type, int valid,
 #define IOC_REQUEST_MIN_NR                 30
 
 #define IOC_REQUEST_GETATTR		_IOWR('f', 30, long)
-#define IOC_REQUEST_MAX_NR               30
+#define IOC_REQUEST_READPAGE		_IOWR('f', 31, long)
+#define IOC_REQUEST_MAX_NR               31
 
 #endif
 

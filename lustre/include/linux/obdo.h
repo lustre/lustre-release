@@ -19,7 +19,6 @@ struct obdfs_sb_info {
         struct obd_conn          osi_conn;
         struct super_block      *osi_super;
         struct obd_device       *osi_obd;
-        struct obd_ops          *osi_ops;
         ino_t                    osi_rootino;   /* number of root inode */
         int                      osi_minor;     /* minor of /dev/obdX */
         struct list_head         osi_inodes;    /* list of dirty inodes */

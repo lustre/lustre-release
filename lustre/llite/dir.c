@@ -32,6 +32,9 @@ typedef struct ext2_dir_entry_2 ext2_dirent;
 #define PageChecked(page)        test_bit(PG_checked, &(page)->flags)
 #define SetPageChecked(page)     set_bit(PG_checked, &(page)->flags)
 
+
+
+
 int waitfor_one_page(struct page *page)
 {
 	int error = 0;

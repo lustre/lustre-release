@@ -193,6 +193,18 @@ struct obd_bufref {
 #define MDS_TYPE_REP 2
 #define MDS_TYPE_ERR 3
 
+#define MDS_GETATTR   1
+#define MDS_SETATTR   2
+#define MDS_READPAGE  3
+#define MDS_CREATE    4
+#define MDS_LINK      5
+#define MDS_SYMLINK   6
+#define MDS_MKNOD     7
+#define MDS_MKDIR     8
+#define MDS_UNLINK    9
+#define MDS_RMDIR    10
+#define MDS_RENAME   11
+
 struct mds_req_hdr { 
 	__u32 opc;
 	__u64 seqno;
@@ -206,6 +218,9 @@ struct lustre_fid {
 	__u32 f_type;
 };
 
+struct niobuf { 
+        __u64 addr;
+};
 
 struct mds_rep_hdr { 
 	__u32 opc;

@@ -37,6 +37,7 @@
 
 //struct list_head ll_super_list;
 extern struct address_space_operations ll_aops;
+extern struct address_space_operations ll_dir_aops;
 struct super_operations ll_super_operations;
 long ll_cache_count = 0;
 long ll_mutex_start = 0;
@@ -123,8 +124,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
         CDEBUG(D_INFO, "\n"); 
 
         obddev = &obd_dev[devno];
-        sbi->ll_obd = obddev;
-        sbi->ll_ops = sbi->ll_obd->obd_type->typ_ops;
         sbi->ll_conn.oc_dev = obddev;
         CDEBUG(D_INFO, "\n"); 
 
@@ -137,16 +136,13 @@ static struct super_block * ll_read_super(struct super_block *sb,
         }
 	connected = 1;
 
-        CDEBUG(D_INFO, "\n"); 
         /* list of dirty inodes, and a mutex to hold while modifying it */
         INIT_LIST_HEAD(&sbi->ll_inodes);
         init_MUTEX (&sbi->ll_list_mutex);
 
-        CDEBUG(D_INFO, "\n"); 
         sbi->ll_super = sb;
 	sbi->ll_rootino = 2;
-        
-        CDEBUG(D_INFO, "\n"); 
+
 	sb->s_maxbytes = 1LL << 36;
 	printk("Max bytes: %Lx\n", sb->s_maxbytes);
         sb->s_blocksize = PAGE_SIZE;
@@ -155,25 +151,20 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sb->s_op = &ll_super_operations;
 
         /* make root inode */
-        CDEBUG(D_INFO, "\n"); 
 	err = mdc_getattr(root_ino, S_IFDIR, OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 
 			 &rep, &hdr);
         if (err) {
                 printk(__FUNCTION__ ": mds_getattr failed %d\n", err);
-		iput(root); 
 		if (rep)
 			kfree(rep);
                 EXIT;
                 goto ERR;
         }
                          
-        CDEBUG(D_INFO, "mode %o\n", rep->mode);
-        CDEBUG(D_INFO, "\n"); 
         root = iget4(sb, root_ino, NULL, rep);
 	kfree(hdr);
-        CDEBUG(D_INFO, "\n"); 
         if (!root) {
-            printk("OBDFS: bad iget4 for root\n");
+            printk("lustre_light: bad iget4 for root\n");
             sb->s_dev = 0;
             err = -ENOENT;
             EXIT;
@@ -181,7 +172,6 @@ static struct super_block * ll_read_super(struct super_block *sb,
         } 
         
         sb->s_root = d_alloc_root(root);
-	//        list_add(&sbi->ll_list, &ll_super_list);
         OBD_FREE(device, strlen(device) + 1);
         if (version)
                 OBD_FREE(version, strlen(version) + 1);
@@ -195,7 +185,7 @@ ERR:
         if (version)
                 OBD_FREE(version, strlen(version) + 1);
 	if (connected) 
-		sbi->ll_ops->o_disconnect(&sbi->ll_conn);
+		obd_disconnect(&sbi->ll_conn);
 
         if (sbi) {
                 sbi->ll_super = NULL;
@@ -216,10 +206,7 @@ static void ll_put_super(struct super_block *sb)
         sb->s_dev = 0;
         
         sbi = (struct ll_sb_info *) &sb->u.generic_sbp;
-        //ll_flush_reqs(&sbi->ll_inodes, ~0UL);
-
-        OPS(sb,disconnect)(ID(sb));
-        list_del(&sbi->ll_list);
+        obd_disconnect(ID(sb));
         
         printk(KERN_INFO "OBDFS: Bye bye.\n");
 
@@ -227,18 +214,13 @@ static void ll_put_super(struct super_block *sb)
         EXIT;
 } /* ll_put_super */
 
-
 void ll_do_change_inode(struct inode *inode, int valid)
 {
         struct obdo *oa;
         int err;
         
         ENTRY;
-        if (IOPS(inode, setattr) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no setattr method!\n");
-                EXIT;
-                return;
-        }
+
         oa = obdo_alloc();
         if ( !oa ) {
                 printk(__FUNCTION__ ": obdo_alloc failed\n");
@@ -249,7 +231,7 @@ void ll_do_change_inode(struct inode *inode, int valid)
         oa->o_valid = OBD_MD_FLNOTOBD & (valid | OBD_MD_FLID);
         ll_from_inode(oa, inode);
 	oa->o_mode = inode->i_mode;
-        err = IOPS(inode, setattr)(IID(inode), oa);
+        err = obd_setattr(IID(inode), oa);
 
         if ( err )
                 printk(__FUNCTION__ ": obd_setattr fails (%d)\n", err);
@@ -364,11 +346,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
         int err;
 
         ENTRY;
-        if (IOPS(inode, setattr) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no setattr method!\n");
-                EXIT;
-                return -EIO;
-        }
+
         oa = obdo_alloc();
         if ( !oa ) {
                 printk(__FUNCTION__ ": obdo_alloc failed\n");
@@ -379,7 +357,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
         oa->o_id = inode->i_ino;
 	oa->o_mode = inode->i_mode;
         obdo_from_iattr(oa, attr);
-        err = IOPS(inode, setattr)(IID(inode), oa);
+        err = obd_setattr(IID(inode), oa);
 
         if ( err )
                 printk(__FUNCTION__ ": obd_setattr fails (%d)\n", err);
@@ -398,7 +376,7 @@ static int ll_statfs(struct super_block *sb, struct statfs *buf)
 
         ENTRY;
 
-        err = OPS(sb,statfs)(ID(sb), &tmp);
+        err = obd_statfs(ID(sb), &tmp);
         if ( err ) { 
                 printk(__FUNCTION__ ": obd_statfs fails (%d)\n", err);
                 return err;
@@ -430,7 +408,7 @@ static inline void ll_read_inode2(struct inode *inode, void *opaque)
         } else if (S_ISDIR(inode->i_mode)) {
                 inode->i_op = &ll_dir_inode_operations;
                 inode->i_fop = &ll_dir_operations; 
-                inode->i_mapping->a_ops = &ll_aops;
+                inode->i_mapping->a_ops = &ll_dir_aops;
                 EXIT;
         } else if (S_ISLNK(inode->i_mode)) {
                 if (inode->i_blocks) { 
@@ -455,11 +433,9 @@ struct super_operations ll_super_operations =
 	read_inode2: ll_read_inode2,
 	// put_inode: ll_put_inode,
         // delete_inode: ll_delete_inode,
-        // put_super: ll_put_super,
+        put_super: ll_put_super,
         // statfs: ll_statfs
 };
-
-
 
 struct file_system_type lustre_light_fs_type = {
    "lustre_light", 0, ll_read_super, NULL

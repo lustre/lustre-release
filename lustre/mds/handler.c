@@ -70,6 +70,20 @@ static int mds_queue_req(struct mds_request *req)
 	return 0;
 }
 
+/* XXX do this over the net */
+int mds_sendpage(struct mds_request *req, struct file *file, 
+		    __u64 offset, struct niobuf *dst)
+{
+	int rc; 
+
+	rc = generic_file_read(file, (char *)(long)dst->addr, 
+			      PAGE_SIZE, &offset); 
+
+	if (rc != PAGE_SIZE) 
+		return -EIO;
+	return 0;
+}
+
 /* XXX replace with networking code */
 int mds_reply(struct mds_request *req)
 {
@@ -117,32 +131,78 @@ int mds_error(struct mds_request *req)
 	return mds_reply(req);
 }
 
-
-
-static struct dentry *mds_fid2dentry(struct mds_obd *mds, struct lustre_fid *fid)
+static struct dentry *mds_fid2dentry(struct mds_obd *mds, struct lustre_fid *fid, struct vfsmount **mnt)
 {
-	struct dentry *de;
+
+	/* iget isn't really right if the inode is currently unallocated!!
+	 * This should really all be done inside each filesystem
+	 *
+	 * ext2fs' read_inode has been strengthed to return a bad_inode if the inode
+	 *   had been deleted.
+	 *
+	 * Currently we don't know the generation for parent directory, so a generation
+	 * of 0 means "accept any"
+	 */
+	struct super_block *sb = mds->mds_sb; 
+	unsigned long ino = fid->id;
+	__u32 generation = fid->generation;
 	struct inode *inode;
+	struct list_head *lp;
+	struct dentry *result;
 
-	inode = iget(mds->mds_sb, fid->id);
-	if (!inode) { 
-		EXIT;
+	if (mnt) { 
+		*mnt = mntget(mds->mds_vfsmnt);
 	}
 
-	de = d_alloc_root(inode);
-	if (!de) { 
+	if (ino == 0)
+		return ERR_PTR(-ESTALE);
+	inode = iget(sb, ino);
+	if (inode == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	printk("--> mds_fid2dentry: sb %p\n", inode->i_sb); 
+
+	if (is_bad_inode(inode)
+	    || (generation && inode->i_generation != generation)
+		) {
+		/* we didn't find the right inode.. */
+		printk("mds_fid2dentry: Inode %lu, Bad count: %d %d or version  %u %u\n",
+			inode->i_ino,
+			inode->i_nlink, atomic_read(&inode->i_count),
+			inode->i_generation,
+			generation);
+
 		iput(inode);
-		EXIT;
-		return NULL;
+		return ERR_PTR(-ESTALE);
 	}
-
-	de->d_inode = inode;
-	return de;
+	/* now to find a dentry.
+	 * If possible, get a well-connected one
+	 */
+	spin_lock(&dcache_lock);
+	for (lp = inode->i_dentry.next; lp != &inode->i_dentry ; lp=lp->next) {
+		result = list_entry(lp,struct dentry, d_alias);
+		if (! (result->d_flags & DCACHE_NFSD_DISCONNECTED)) {
+			dget_locked(result);
+			result->d_vfs_flags |= DCACHE_REFERENCED;
+			spin_unlock(&dcache_lock);
+			iput(inode);
+			return result;
+		}
+	}
+	spin_unlock(&dcache_lock);
+	result = d_alloc_root(inode);
+	if (result == NULL) {
+		iput(inode);
+		return ERR_PTR(-ENOMEM);
+	}
+	result->d_flags |= DCACHE_NFSD_DISCONNECTED;
+	return result;
 }
 
 int mds_getattr(struct mds_request *req)
 {
-	struct dentry *de = mds_fid2dentry(req->rq_obd, &req->rq_req->fid1);
+	struct dentry *de = mds_fid2dentry(req->rq_obd, &req->rq_req->fid1, 
+					   NULL);
 	struct inode *inode;
 	struct mds_rep *rep;
 	int rc;
@@ -166,6 +226,7 @@ int mds_getattr(struct mds_request *req)
 	}
 
 	inode = de->d_inode;
+	rep->ino = inode->i_ino;
 	rep->atime = inode->i_atime;
 	rep->ctime = inode->i_ctime;
 	rep->mtime = inode->i_mtime;
@@ -178,6 +239,57 @@ int mds_getattr(struct mds_request *req)
 	dput(de); 
 	return 0;
 }
+
+int mds_readpage(struct mds_request *req)
+{
+	struct vfsmount *mnt;
+	struct dentry *de = mds_fid2dentry(req->rq_obd, &req->rq_req->fid1, 
+					   &mnt);
+	struct file *file; 
+	struct niobuf *niobuf; 
+	struct mds_rep *rep;
+	int rc;
+	
+	printk("mds_readpage: ino %ld\n", de->d_inode->i_ino);
+	rc = mds_pack_rep(NULL, 0, NULL, 0, &req->rq_rephdr, &req->rq_rep, 
+			  &req->rq_replen, &req->rq_repbuf);
+	if (rc) { 
+		EXIT;
+		printk("mds: out of memory\n");
+		req->rq_status = -ENOMEM;
+		return -ENOMEM;
+	}
+
+	req->rq_rephdr->seqno = req->rq_reqhdr->seqno;
+	rep = req->rq_rep;
+
+	if (IS_ERR(de)) { 
+		EXIT;
+		req->rq_rephdr->status = PTR_ERR(de); 
+		return 0;
+	}
+
+	file = dentry_open(de, mnt, O_RDONLY | O_LARGEFILE); 
+	/* note: in case of an error, dentry_open puts dentry */
+	if (IS_ERR(file)) { 
+		EXIT;
+		req->rq_rephdr->status = PTR_ERR(file);
+		return 0;
+	}
+		
+	niobuf = (struct niobuf *)req->rq_req->tgt;
+
+	/* to make this asynchronous make sure that the handling function 
+	   doesn't send a reply when this function completes. Instead a 
+	   callback function would send the reply */ 
+	rc = mds_sendpage(req, file, req->rq_req->size, niobuf); 
+
+	filp_close(file, 0);
+	req->rq_rephdr->status = rc;
+	EXIT;
+	return 0;
+}
+
 
 
 //int mds_handle(struct mds_conn *conn, int len, char *buf)
@@ -212,8 +324,10 @@ int mds_handle(struct mds_request *req)
 		rc = mds_getattr(req);
 		break;
 
-	case MDS_OPEN:
-		return mds_getattr(req);
+	case MDS_READPAGE:
+		CDEBUG(D_INODE, "readpage\n");
+		rc = mds_readpage(req);
+		break;
 
 	case MDS_SETATTR:
 		return mds_getattr(req);

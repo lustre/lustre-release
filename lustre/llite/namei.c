@@ -82,8 +82,10 @@ static inline int ext2_add_nondir(struct dentry *dentry, struct inode *inode)
 /* methods */
 static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 {
-        struct obdo *oa;
+	struct mds_rep *rep; 
+	struct mds_rep_hdr *hdr = NULL; 
 	struct inode * inode = NULL;
+	int err;
 	int type;
 	ino_t ino;
 	
@@ -95,16 +97,16 @@ static struct dentry *ll_lookup(struct inode * dir, struct dentry *dentry)
 	if (!ino)
 		goto negative;
 
-        oa = obdo_fromid(IID(dir), ino, type, 
-			 OBD_MD_FLNOTOBD | OBD_MD_FLBLOCKS);
-        if ( IS_ERR(oa) ) {
+	err = mdc_getattr(ino, type, OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 
+			 &rep, &hdr);
+        if ( err ) {
                 printk(__FUNCTION__ ": obdo_fromid failed\n");
                 EXIT;
                 return ERR_PTR(-EACCES); 
         }
 
-	inode = iget4(dir->i_sb, ino, NULL, oa);
-        obdo_free(oa);
+	inode = iget4(dir->i_sb, ino, NULL, rep);
+	kfree(hdr); 
 
 	if (!inode) 
 		return ERR_PTR(-EACCES);
@@ -138,11 +140,7 @@ static struct inode *ll_new_inode(struct inode *dir, int mode)
         int err;
 
         ENTRY;
-        if (IOPS(dir, create) == NULL) {
-                printk(KERN_ERR __FUNCTION__ ": no create method!\n");
-                EXIT;
-                return ERR_PTR(-EIO);
-        }
+
         oa = obdo_alloc();
         if (!oa) {
                 EXIT;
@@ -153,7 +151,7 @@ static struct inode *ll_new_inode(struct inode *dir, int mode)
         oa->o_mode = mode;
         oa->o_valid |= OBD_MD_FLMODE;
 	CDEBUG(D_INODE, "\n");
-        err = IOPS(dir, create)(IID(dir), oa);
+        err = obd_create(IID(dir), oa);
 	CDEBUG(D_INODE, "\n");
 
         if ( err ) {
@@ -170,7 +168,7 @@ static struct inode *ll_new_inode(struct inode *dir, int mode)
 
         if (!inode) {
                 printk("new_inode -fatal:  %ld\n", (long)oa->o_id);
-                IOPS(dir, destroy)(IID(dir), oa);
+                obd_destroy(IID(dir), oa);
                 EXIT;
                 return ERR_PTR(-EIO);
         }
@@ -180,7 +178,7 @@ static struct inode *ll_new_inode(struct inode *dir, int mode)
 		       (long)oa->o_id,
 		       atomic_read(&inode->i_count), 
 		       inode->i_nlink);
-                IOPS(dir, destroy)(IID(dir), oa);
+                obd_destroy(IID(dir), oa);
                 iput(inode);
                 EXIT;
                 return ERR_PTR(-EIO);
