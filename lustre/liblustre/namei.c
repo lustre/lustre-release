@@ -148,15 +148,15 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
                 if (inode == NULL)
                         break;
 
-                lli = llu_i2info(inode);
+                lli =  llu_i2info(inode);
 
                 if (bits & MDS_INODELOCK_UPDATE)
                         clear_bit(LLI_F_HAVE_MDS_SIZE_LOCK, &lli->lli_flags);
 
-                if (lock->l_resource->lr_name.name[0] != id_fid(&lli->lli_id) ||
-                    lock->l_resource->lr_name.name[1] != id_group(&lli->lli_id)) {
-                        LDLM_ERROR(lock, "data mismatch with object "DLID4,
-                                   OLID4(&lli->lli_id));
+                if (lock->l_resource->lr_name.name[0] != lli->lli_st_ino ||
+                    lock->l_resource->lr_name.name[1] != lli->lli_st_generation) {
+                        LDLM_ERROR(lock, "data mismatch with ino %lu/%lu",
+                                   lli->lli_st_ino, lli->lli_st_generation);
                 }
                 if (S_ISDIR(lli->lli_st_mode) &&
                     (bits & MDS_INODELOCK_UPDATE)) {
@@ -166,6 +166,11 @@ int llu_mdc_blocking_ast(struct ldlm_lock *lock,
                         llu_invalidate_inode_pages(inode);
                 }
 
+/*
+                if (inode->i_sb->s_root &&
+                    inode != inode->i_sb->s_root->d_inode)
+                        ll_unhash_aliases(inode);
+*/
                 I_RELE(inode);
                 break;
         }
@@ -194,8 +199,8 @@ static int pnode_revalidate_finish(struct ptlrpc_request *req,
         if (it_disposition(it, DISP_LOOKUP_NEG))
                 RETURN(-ENOENT);
 
-        rc = mdc_req2lustre_md(llu_i2sbi(inode)->ll_lmv_exp, req, offset, 
-                               llu_i2sbi(inode)->ll_lov_exp, &md);
+        rc = mdc_req2lustre_md(llu_i2sbi(inode)->ll_mdc_exp, req, offset, 
+                               llu_i2sbi(inode)->ll_osc_exp, &md);
         if (rc)
                 RETURN(rc);
 
@@ -207,8 +212,9 @@ static int pnode_revalidate_finish(struct ptlrpc_request *req,
 int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
 {
         struct pnode_base *pb = pnode->p_base;
-        struct lustre_id pid, cid;
+        struct ll_fid pfid, cfid;
         struct it_cb_data icbd;
+        struct ll_uctxt ctxt;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
         struct obd_export *exp;
@@ -243,8 +249,8 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
         }
 
         exp = llu_i2mdcexp(pb->pb_ino);
-        ll_inode2id(&pid, pnode->p_parent->p_base->pb_ino);
-        ll_inode2id(&cid, pb->pb_ino);
+        ll_inode2fid(&pfid, pnode->p_parent->p_base->pb_ino);
+        ll_inode2fid(&cfid, pb->pb_ino);
         icbd.icbd_parent = pnode->p_parent->p_base->pb_ino;
         icbd.icbd_child = pnode;
 
@@ -253,8 +259,12 @@ int llu_pb_revalidate(struct pnode *pnode, int flags, struct lookup_intent *it)
                 it->it_op_release = ll_intent_release;
         }
 
-        rc = mdc_intent_lock(exp, &pid, pb->pb_name.name, pb->pb_name.len,
-                             NULL, 0, &cid, it, flags, &req, llu_mdc_blocking_ast);
+        ll_i2uctxt(&ctxt, pnode->p_parent->p_base->pb_ino, pb->pb_ino);
+
+        rc = mdc_intent_lock(exp, &ctxt, &pfid,
+                             pb->pb_name.name, pb->pb_name.len,
+                             NULL, 0, &cfid, it, flags, &req,
+                             llu_mdc_blocking_ast);
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)
@@ -330,8 +340,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 struct llu_inode_info *lli;
                 ENTRY;
 
-                rc = mdc_req2lustre_md(sbi->ll_lmv_exp, request, offset, 
-                                       sbi->ll_lov_exp, &md);
+                rc = mdc_req2lustre_md(sbi->ll_mdc_exp, request, offset, 
+                                       sbi->ll_osc_exp, &md);
                 if (rc)
                         RETURN(rc);
 
@@ -339,11 +349,11 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                 if (!inode || IS_ERR(inode)) {
                         /* free the lsm if we allocated one above */
                         if (md.lsm != NULL)
-                                obd_free_memmd(sbi->ll_lov_exp, &md.lsm);
+                                obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
                         RETURN(inode ? PTR_ERR(inode) : -ENOMEM);
                 } else if (md.lsm != NULL &&
                            llu_i2info(inode)->lli_smd != md.lsm) {
-                        obd_free_memmd(sbi->ll_lov_exp, &md.lsm);
+                        obd_free_memmd(sbi->ll_osc_exp, &md.lsm);
                 }
 
                 lli = llu_i2info(inode);
@@ -396,7 +406,8 @@ struct inode *llu_inode_from_lock(struct ldlm_lock *lock)
 static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
                          struct lookup_intent *it, int flags)
 {
-        struct lustre_id pid;
+        struct ll_fid pfid;
+        struct ll_uctxt ctxt;
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -414,9 +425,10 @@ static int llu_lookup_it(struct inode *parent, struct pnode *pnode,
         icbd.icbd_child = pnode;
         icbd.icbd_parent = parent;
         icbd.icbd_child = pnode;
-        ll_inode2id(&pid, parent);
+        ll_inode2fid(&pfid, parent);
+        ll_i2uctxt(&ctxt, parent, NULL);
 
-        rc = mdc_intent_lock(llu_i2mdcexp(parent), &pid,
+        rc = mdc_intent_lock(llu_i2mdcexp(parent), &ctxt, &pfid,
                              pnode->p_base->pb_name.name,
                              pnode->p_base->pb_name.len,
                              NULL, 0, NULL, it, flags, &req,

@@ -48,7 +48,7 @@
 # include <liblustre.h>
 #endif
 
-#include <linux/lustre_dlm.h>
+# include <linux/lustre_dlm.h>
 #include <linux/kp30.h>
 #include <linux/lustre_net.h>
 #include <lustre/lustre_user.h>
@@ -2797,7 +2797,7 @@ static int osc_get_info(struct obd_export *exp, obd_count keylen,
                 ptlrpc_req_finished(req);
                 RETURN(rc);
         }
-        RETURN(-EPROTO);
+        RETURN(-EINVAL);
 }
 
 static int osc_set_info(struct obd_export *exp, obd_count keylen,
@@ -2926,9 +2926,10 @@ static int osc_connect(struct lustre_handle *exph,
                        unsigned long connect_flags)
 {
         int rc;
-        ENTRY;
+
         rc = client_connect_import(exph, obd, cluuid, connect_flags);
-        RETURN(rc);
+
+        return rc;
 }
 
 static int osc_disconnect(struct obd_export *exp, int flags)
@@ -2936,7 +2937,6 @@ static int osc_disconnect(struct obd_export *exp, int flags)
         struct obd_device *obd = class_exp2obd(exp);
         struct llog_ctxt *ctxt;
         int rc;
-        ENTRY;
 
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_SIZE_REPL_CTXT);
         if (obd->u.cli.cl_conn_count == 1)
@@ -2944,7 +2944,7 @@ static int osc_disconnect(struct obd_export *exp, int flags)
                 llog_sync(ctxt, exp);
 
         rc = client_disconnect_export(exp, flags);
-        RETURN(rc);
+        return rc;
 }
 
 static int osc_import_event(struct obd_device *obd,

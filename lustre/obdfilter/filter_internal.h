@@ -92,8 +92,8 @@ enum {
 
 /* filter.c */
 void f_dput(struct dentry *);
-struct dentry *filter_id2dentry(struct obd_device *, struct dentry *dir,
-                                obd_gr group, obd_id id);
+struct dentry *filter_fid2dentry(struct obd_device *, struct dentry *dir,
+                                 obd_gr group, obd_id id);
 struct dentry *__filter_oa2dentry(struct obd_device *obd, struct obdo *oa,
                                   const char *what);
 #define filter_oa2dentry(obd, oa) __filter_oa2dentry(obd, oa, __FUNCTION__)
@@ -154,9 +154,9 @@ int filter_direct_io(int rw, struct dentry *dchild, void *iobuf,
 struct ost_filterdata {
         __u32  ofd_epoch;
 };
-
 int filter_log_sz_change(struct llog_handle *cathandle,
-                         struct lustre_id *id, __u32 io_epoch,
+                         struct ll_fid *mds_fid,
+                         __u32 io_epoch,
                          struct llog_cookie *logcookie,
                          struct inode *inode);
 //int filter_get_catalog(struct obd_device *);

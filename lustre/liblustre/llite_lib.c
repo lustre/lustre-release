@@ -99,7 +99,7 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
                 CERROR("Can't parse NAL %s\n", LIBLUSTRE_NAL_NAME);
                 RETURN(-EINVAL);
         }
-        LCFG_INIT(lcfg, LCFG_ADD_UUID, name);
+        LCFG_INIT(lcfg, LCFG_ADD_UUID, NULL);
         lcfg.lcfg_nid = nid;
         lcfg.lcfg_inllen1 = strlen(peer) + 1;
         lcfg.lcfg_inlbuf1 = peer;
@@ -146,8 +146,9 @@ int liblustre_process_log(struct config_llog_instance *cfg, int allow_recov)
         
         ctxt = exp->exp_obd->obd_llog_ctxt[LLOG_CONFIG_REPL_CTXT];
         rc = class_config_process_llog(ctxt, g_zconf_profile, cfg);
-        if (rc)
-                CERROR("class_config_process_llog failed: rc = %d\n", rc);
+        if (rc) {
+                CERROR("class_config_parse_llog failed: rc = %d\n", rc);
+        }
 
         err = obd_disconnect(exp, 0);
 

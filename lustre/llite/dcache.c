@@ -169,7 +169,7 @@ int revalidate_it_finish(struct ptlrpc_request *request, int offset,
                 RETURN(-ENOENT);
 
         sbi = ll_i2sbi(de->d_inode);
-        rc = ll_prep_inode(sbi->ll_lov_exp, sbi->ll_lmv_exp,
+        rc = ll_prep_inode(sbi->ll_osc_exp, sbi->ll_mdc_exp,
                            &de->d_inode, request, offset, NULL);
 
         RETURN(rc);
@@ -203,7 +203,6 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft)
 {
         struct lookup_intent *it = *itp;
-        
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
         if (it) {
                 LASSERTF(it->it_magic == INTENT_MAGIC, "bad intent magic: %x\n",
@@ -221,8 +220,7 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                      struct lookup_intent *it)
 {
         int rc;
-        struct lustre_id pid;
-        struct lustre_id cid;
+        struct ll_fid pfid, cfid;
         struct it_cb_data icbd;
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -237,20 +235,18 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                 RETURN(0);
 
         CDEBUG(D_INODE, "revalidate 0x%p: %*s -> %lu/%lu\n",
-               de, de->d_name.len, de->d_name.name,
-               (unsigned long) de->d_inode->i_ino,
-               (unsigned long) de->d_inode->i_generation);
+                        de, de->d_name.len, de->d_name.name,
+                        (unsigned long) de->d_inode->i_ino,
+                        (unsigned long) de->d_inode->i_generation);
 
-        exp = ll_i2lmvexp(de->d_inode);
-        ll_inode2id(&pid, de->d_parent->d_inode);
-        ll_inode2id(&cid, de->d_inode);
+        exp = ll_i2mdcexp(de->d_inode);
+        ll_inode2fid(&pfid, de->d_parent->d_inode);
+        ll_inode2fid(&cfid, de->d_inode);
         icbd.icbd_parent = de->d_parent->d_inode;
         icbd.icbd_childp = &de;
 
-        /*
-         * never execute intents for mount points. Attributes will be fixed up
-         * in ll_inode_revalidate_it().
-         */
+        /* Never execute intents for mount points.
+         * Attributes will be fixed up in ll_inode_revalidate_it */
         if (d_mountpoint(de))
                 RETURN(1);
 
@@ -262,8 +258,8 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
 
         if (it->it_op == IT_GETATTR) { /* We need to check for LOOKUP lock
                                           as well */
-                rc = md_intent_lock(exp, &pid, de->d_name.name,
-                                    de->d_name.len, NULL, 0, &cid, &lookup_it,
+                rc = md_intent_lock(exp, &pfid, de->d_name.name,
+                                    de->d_name.len, NULL, 0, &cfid, &lookup_it,
                                     flags, &req, ll_mdc_blocking_ast);
                 /* If there was no lookup lock, no point in even checking for
                    UPDATE lock */
@@ -283,13 +279,9 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                 ll_lookup_finish_locks(&lookup_it, de);
         }
 
-        /* at this point fid should be valid. */
-        LASSERT(id_fid(&cid) != 0);
-        
-        rc = md_intent_lock(exp, &pid, de->d_name.name, de->d_name.len,
-                            NULL, 0, &cid, it, flags, &req,
+        rc = md_intent_lock(exp, &pfid, de->d_name.name, de->d_name.len,
+                            NULL, 0, &cfid, it, flags, &req,
                             ll_mdc_blocking_ast);
-        
         /* If req is NULL, then mdc_intent_lock only tried to do a lock match;
          * if all was well, it will return 1 if it found locks, 0 otherwise. */
         if (req == NULL && rc >= 0)
@@ -370,7 +362,7 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
         unlock_kernel();
 
         handle = (flag) ? &ldd->lld_mnt_och : &ldd->lld_cwd_och;
-        rc = obd_pin(sbi->ll_lmv_exp, inode->i_ino, inode->i_generation,
+        rc = obd_pin(sbi->ll_mdc_exp, inode->i_ino, inode->i_generation,
                      inode->i_mode & S_IFMT, handle, flag);
 
         if (rc) {
@@ -420,7 +412,7 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
                 return;
         }
 
-        rc = obd_unpin(sbi->ll_lmv_exp, &handle, flag);
+        rc = obd_unpin(sbi->ll_mdc_exp, &handle, flag);
         EXIT;
         return;
 }
@@ -444,12 +436,12 @@ static int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 static void ll_dentry_iput(struct dentry *dentry, struct inode *inode)
 {
         struct ll_sb_info *sbi = ll_i2sbi(inode);
-        struct lustre_id parent, child;
+        struct ll_fid parent, child;
 
         LASSERT(dentry->d_parent && dentry->d_parent->d_inode);
-        ll_inode2id(&parent, dentry->d_parent->d_inode);
-        ll_inode2id(&child, inode);
-        md_change_cbdata_name(sbi->ll_lmv_exp, &parent,
+        ll_inode2fid(&parent, dentry->d_parent->d_inode);
+        ll_inode2fid(&child, inode);
+        md_change_cbdata_name(sbi->ll_mdc_exp, &parent,
                               (char *)dentry->d_name.name, 
                               dentry->d_name.len, &child, 
                               null_if_equal, inode);

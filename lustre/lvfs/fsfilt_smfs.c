@@ -241,121 +241,64 @@ static int fsfilt_smfs_iocontrol(struct inode *inode, struct file *file,
         RETURN(rc);
 }
 
-typedef int (*set_ea_func_t) (struct inode *, void *, void *, int);
-typedef int (*get_ea_func_t) (struct inode *, void *, int);
-
-static int fsfilt_smfs_set_ea(struct inode *inode, void *handle,
-                              void *ea, int ea_size, 
-                              set_ea_func_t set_ea_func)
-{
-        struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
-        struct inode *cache_inode = NULL;
-        int    rc = -EIO;
-
-        if (!cache_fsfilt)
-                RETURN(-EINVAL);
-
-        cache_inode = I2CI(inode);
-
-        if (!cache_inode)
-                RETURN(-ENOENT);
-
-        if (!set_ea_func)
-                RETURN(-ENOSYS);
-
-        pre_smfs_inode(inode, cache_inode);
-
-        down(&cache_inode->i_sem);
-        rc = set_ea_func(cache_inode, handle, ea, ea_size);
-        up(&cache_inode->i_sem);
-
-        post_smfs_inode(inode, cache_inode);
-
-        RETURN(rc);
-}
-
-static int fsfilt_smfs_get_ea(struct inode *inode, void *ea, 
-                              int ea_size, get_ea_func_t get_ea_func)
-{
-        struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
-        struct inode *cache_inode = NULL;
-        int    rc = -EIO;
-
-        if (!cache_fsfilt)
-                RETURN(-EINVAL);
-
-        cache_inode = I2CI(inode);
-
-        if (!cache_inode)
-                RETURN(-ENOENT);
-
-        if (!get_ea_func)
-                RETURN(-ENOSYS);
-
-        pre_smfs_inode(inode, cache_inode);
-
-        down(&cache_inode->i_sem);
-        rc = get_ea_func(cache_inode, ea, ea_size);
-        up(&cache_inode->i_sem);
-
-        post_smfs_inode(inode, cache_inode);
-
-        RETURN(rc);
-}
-
 static int fsfilt_smfs_set_md(struct inode *inode, void *handle,
                               void *lmm, int lmm_size)
 {
-        int rc = 0;
         struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
-        
-        rc = fsfilt_smfs_set_ea(inode, handle, lmm, lmm_size,
-                                cache_fsfilt->fs_set_md);
-        if (rc)
-                return rc;
-                
+        struct inode *cache_inode = NULL;
+        int    rc = -EIO;
+
+        if (!cache_fsfilt)
+                RETURN(-EINVAL);
+
+        cache_inode = I2CI(inode);
+
+        if (!cache_inode)
+                RETURN(-ENOENT);
+
+        pre_smfs_inode(inode, cache_inode);
+
+        if (!cache_fsfilt->fs_set_md)
+                RETURN(-ENOSYS);
+
+        down(&cache_inode->i_sem);
+        rc = cache_fsfilt->fs_set_md(cache_inode, handle, lmm, lmm_size);
+        up(&cache_inode->i_sem);
+
+        post_smfs_inode(inode, cache_inode);
+
         smfs_rec_md(inode, lmm, lmm_size);
-        return rc;
+
+        RETURN(rc);
 }
 
-static int fsfilt_smfs_get_md(struct inode *inode, void *lmm, int
-                              lmm_size)
+/* Must be called with i_sem held */
+static int fsfilt_smfs_get_md(struct inode *inode, void *lmm, int lmm_size)
 {
         struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
-        return fsfilt_smfs_get_ea(inode, lmm, lmm_size,
-                                  cache_fsfilt->fs_get_md);
-}
+        struct inode *cache_inode = NULL;
+        int    rc = -EIO;
 
-static int fsfilt_smfs_set_mid(struct inode *inode, void *handle,
-                               void *mid, int mid_size)
-{
-        struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
-        return fsfilt_smfs_set_ea(inode, handle, mid, mid_size,
-                                  cache_fsfilt->fs_set_mid);
-}
+        if (!cache_fsfilt)
+                RETURN(-EINVAL);
 
-static int fsfilt_smfs_get_mid(struct inode *inode, void *mid,
-                               int mid_size)
-{
-        struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
-        return fsfilt_smfs_get_ea(inode, mid, mid_size,
-                                  cache_fsfilt->fs_get_mid);
-}
+        cache_inode = I2CI(inode);
 
-static int fsfilt_smfs_set_sid(struct inode *inode, void *handle,
-                               void *sid, int sid_size)
-{
-        struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
-        return fsfilt_smfs_set_ea(inode, handle, sid, sid_size,
-                                  cache_fsfilt->fs_set_sid);
-}
+        if (!cache_inode)
+                RETURN(-ENOENT);
 
-static int fsfilt_smfs_get_sid(struct inode *inode, void *sid,
-                               int sid_size)
-{
-        struct fsfilt_operations *cache_fsfilt = I2FOPS(inode);
-        return fsfilt_smfs_get_ea(inode, sid, sid_size,
-                                  cache_fsfilt->fs_get_sid);
+        pre_smfs_inode(inode, cache_inode);
+
+        if (!cache_fsfilt->fs_get_md)
+                RETURN(-ENOSYS);
+
+        down(&cache_inode->i_sem);
+        rc = cache_fsfilt->fs_get_md(cache_inode, lmm, lmm_size);
+        up(&cache_inode->i_sem);
+
+        post_smfs_inode(inode, cache_inode);
+
+        RETURN(rc);
 }
 
 static int fsfilt_smfs_send_bio(int rw, struct inode *inode, struct kiobuf *bio)
@@ -1061,10 +1004,6 @@ static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_iocontrol           = fsfilt_smfs_iocontrol,
         .fs_set_md              = fsfilt_smfs_set_md,
         .fs_get_md              = fsfilt_smfs_get_md,
-        .fs_set_mid             = fsfilt_smfs_set_mid,
-        .fs_get_mid             = fsfilt_smfs_get_mid,
-        .fs_set_sid             = fsfilt_smfs_set_sid,
-        .fs_get_sid             = fsfilt_smfs_get_sid,
         .fs_readpage            = fsfilt_smfs_readpage,
         .fs_getpage             = fsfilt_smfs_getpage,
         .fs_add_journal_cb      = fsfilt_smfs_add_journal_cb,
@@ -1077,9 +1016,9 @@ static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_setup               = fsfilt_smfs_setup,
         .fs_post_setup          = fsfilt_smfs_post_setup,
         .fs_post_cleanup        = fsfilt_smfs_post_cleanup,
-        .fs_set_fs_flags        = fsfilt_smfs_set_fs_flags,
-        .fs_clear_fs_flags      = fsfilt_smfs_clear_fs_flags,
-        .fs_get_fs_flags        = fsfilt_smfs_get_fs_flags,
+        .fs_set_fs_flags       = fsfilt_smfs_set_fs_flags,
+        .fs_clear_fs_flags     = fsfilt_smfs_clear_fs_flags,
+        .fs_get_fs_flags       = fsfilt_smfs_get_fs_flags,
         .fs_set_ost_flags       = fsfilt_smfs_set_ost_flags,
         .fs_set_mds_flags       = fsfilt_smfs_set_mds_flags,
         .fs_precreate_rec       = fsfilt_smfs_precreate_rec,
@@ -1095,6 +1034,8 @@ static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_write_extents       = fsfilt_smfs_write_extents,
         .fs_set_snap_item       = fsfilt_smfs_set_snap_item,
         .fs_do_write_cow        = fsfilt_smfs_do_write_cow,
+        /* FIXME-UMKA: probably fsfilt_smfs_get_op_len() should be
+         * put here too. */
 };
 
 static int __init fsfilt_smfs_init(void)

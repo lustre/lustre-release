@@ -544,10 +544,10 @@ int smfs_removexattr(struct dentry *dentry, const char *name)
 }
 
 struct inode_operations smfs_file_iops = {
-        .truncate       = smfs_truncate,          /* BKL held */
-        .setattr        = smfs_setattr,           /* BKL held */
-        .setxattr       = smfs_setxattr,          /* BKL held */
-        .getxattr       = smfs_getxattr,          /* BKL held */
-        .listxattr      = smfs_listxattr,         /* BKL held */
-        .removexattr    = smfs_removexattr,       /* BKL held */
+        truncate:       smfs_truncate,          /* BKL held */
+        setattr:        smfs_setattr,           /* BKL held */
+        setxattr:       smfs_setxattr,          /* BKL held */
+        getxattr:       smfs_getxattr,          /* BKL held */
+        listxattr:      smfs_listxattr,         /* BKL held */
+        removexattr:    smfs_removexattr,       /* BKL held */
 };

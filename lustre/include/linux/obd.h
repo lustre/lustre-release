@@ -216,8 +216,8 @@ struct filter_obd {
         struct semaphore     fo_init_lock;      /* group initialization lock */
         int                  fo_committed_group;
 
-        spinlock_t           fo_objidlock;      /* protect fo_lastobjid increment */
-        spinlock_t           fo_translock;      /* protect fsd_last_rcvd increment */
+        spinlock_t           fo_objidlock; /* protect fo_lastobjid increment */
+        spinlock_t           fo_translock; /* protect fsd_last_rcvd increment */
         struct file         *fo_rcvd_filp;
         struct filter_server_data *fo_fsd;
         unsigned long       *fo_last_rcvd_slots;
@@ -332,28 +332,26 @@ struct mds_obd {
         struct ptlrpc_service           *mds_readpage_service;
         struct super_block              *mds_sb;
         struct vfsmount                 *mds_vfsmnt;
-        struct dentry                   *mds_id_de;
+        struct dentry                   *mds_fid_de;
         int                              mds_max_mdsize;
         int                              mds_max_cookiesize;
         struct file                     *mds_rcvd_filp;
-        struct file                     *mds_fid_filp;
         spinlock_t                       mds_transno_lock;
         __u64                            mds_last_transno;
         __u64                            mds_mount_count;
         __u64                            mds_io_epoch;
-        spinlock_t                       mds_fid_lock;
-        __u64                            mds_last_fid;
         struct semaphore                 mds_epoch_sem;
-        struct lustre_id                 mds_rootid;
+        struct ll_fid                    mds_rootfid;
         struct mds_server_data          *mds_server_data;
         struct dentry                   *mds_pending_dir;
         struct dentry                   *mds_logs_dir;
         struct dentry                   *mds_objects_dir;
         struct llog_handle              *mds_cfg_llh;
-        struct obd_device               *mds_lov_obd;
+//      struct llog_handle              *mds_catalog;
+        struct obd_device               *mds_osc_obd; /* XXX lov_obd */
         struct obd_uuid                  mds_lov_uuid;
         char                            *mds_profile;
-        struct obd_export               *mds_lov_exp;
+        struct obd_export               *mds_osc_exp; /* XXX lov_exp */
         int                              mds_has_lov_desc;
         struct lov_desc                  mds_lov_desc;
         obd_id                          *mds_lov_objids;
@@ -363,15 +361,15 @@ struct mds_obd {
         spinlock_t                      mds_lov_lock;
         unsigned long                   *mds_client_bitmap;
         struct semaphore                 mds_orphan_recovery_sem;
-        
+        /*add mds num here for real mds and cache mds create
+          FIXME later will be totally fixed by b_cmd*/
         int                              mds_num;
         struct lprocfs_stats            *mds_counters;
         int                              mds_config_version;
 
         char                            *mds_lmv_name;
-        struct obd_device               *mds_lmv_obd;
-        struct obd_export               *mds_lmv_exp;
-
+        struct obd_device               *mds_lmv_obd; /* XXX lmv_obd */
+        struct obd_export               *mds_lmv_exp; /* XXX lov_exp */
         struct ptlrpc_service           *mds_create_service;
         struct semaphore                 mds_lmv_sem;
         uid_t                            mds_squash_uid;
@@ -379,8 +377,7 @@ struct mds_obd {
         ptl_nid_t                        mds_nosquash_nid;
         atomic_t                         mds_real_clients;
         struct obd_uuid                  mds_lmv_uuid;
-        struct dentry                   *mds_id_dir;
-        int                              mds_obd_type;
+        struct dentry                   *mds_fids_dir;
         int                              mds_lmv_connected;
         struct dentry                   *mds_unnamed_dir; /* for mdt_obd_create only */
 };
@@ -429,55 +426,54 @@ struct ost_obd {
 };
 
 struct echo_client_obd {
-        struct obd_export      *ec_exp;   /* the local connection to osc/lov */
-        spinlock_t              ec_lock;
-        struct list_head        ec_objects;
-        int                     ec_nstripes;
-        __u64                   ec_unique;
+        struct obd_export   *ec_exp;   /* the local connection to osc/lov */
+        spinlock_t           ec_lock;
+        struct list_head     ec_objects;
+        int                  ec_nstripes;
+        __u64                ec_unique;
 };
 
 struct cache_obd {
-        struct obd_export      *master_exp; /* local connection to master obd */
-        struct obd_export      *cache_exp;  /* local connection to cache obd */
-        char                   *master_name;
-        char                   *cache_name;
-        int                     refcount;
-        int                     cache_on;
+        struct obd_export *cobd_real_exp;/* local connection to target obd */
+        struct obd_export *cobd_cache_exp; /* local connection to cache obd */
+        char   *cobd_real_name;
+        char   *cobd_cache_name;
+        int    refcount;
+        int    cache_on;
 };
 
 struct lov_tgt_desc {
-        struct obd_uuid         uuid;
-        __u32                   ltd_gen;
-        struct obd_export      *ltd_exp;
-        int                     active;   /* is this target up for requests */
+        struct obd_uuid          uuid;
+        __u32                    ltd_gen;
+        struct obd_export       *ltd_exp;
+        int                      active; /* is this target up for requests */
 };
 
 struct lov_obd {
-        spinlock_t              lov_lock;
-        struct lov_desc         desc;
-        int                     bufsize;
-        int                     refcount;
-        int                     lo_catalog_loaded:1;
-        struct semaphore        lov_llog_sem;
-        unsigned long           lov_connect_flags;
-        struct lov_tgt_desc    *tgts;
+        spinlock_t lov_lock;
+        struct lov_desc desc;
+        struct semaphore lov_llog_sem;
+        int bufsize;
+        int refcount;
+        int lo_catalog_loaded:1;
+        unsigned long lov_connect_flags;
+        struct lov_tgt_desc *tgts;
 };
 
 struct lmv_tgt_desc {
         struct obd_uuid         uuid;
-        struct obd_export      *ltd_exp;
-        int                     active;   /* is this target up for requests */
+        struct obd_export       *ltd_exp;
+        int                      active; /* is this target up for requests */
 };
 
 struct lmv_obd {
-        int                     refcount;
         spinlock_t              lmv_lock;
         struct lmv_desc         desc;
+        int                     bufsize;
+        int                     refcount;
         struct lmv_tgt_desc     *tgts;
         struct obd_uuid         cluuid;
         struct obd_export       *exp;
-
-        int                     tgts_size;
         int                     connected;
         int                     max_easize;
         int                     max_cookiesize;
@@ -496,13 +492,13 @@ struct niobuf_local {
         int rc;
 };
 
-struct cm_obd {
-        struct obd_device      *master_obd;    /* master lov */
-        struct obd_export      *master_exp;
-        struct obd_device      *cache_obd;     /* cache obdfilter */
-        struct obd_export      *cache_exp;
-        int                     master_group;  /* master group*/
-        struct cmobd_write_service *write_srv;
+struct cache_manager_obd {
+        struct obd_device *cm_master_obd;       /* master lov */
+        struct obd_export *cm_master_exp;
+        struct obd_device *cm_cache_obd;        /* cache obdfilter */
+        struct obd_export *cm_cache_exp;
+        int    cm_master_group;                 /* master group*/        
+        struct cmobd_write_service   *cm_write_srv;
 };
         
 
@@ -632,35 +628,34 @@ struct obd_device {
 
 
         union {
-                struct filter_obd        filter;
-                struct mds_obd           mds;
-                struct client_obd        cli;
-                struct ost_obd           ost;
-                struct echo_client_obd   echo_client;
-                struct echo_obd          echo;
-                struct recovd_obd        recovd;
-                struct lov_obd           lov;
-                struct cache_obd         cobd;
-                struct ptlbd_obd         ptlbd;
-                struct mgmtcli_obd       mgmtcli;
-                struct lmv_obd           lmv;
-                struct cm_obd            cm;
+                struct filter_obd filter;
+                struct mds_obd mds;
+                struct client_obd cli;
+                struct ost_obd ost;
+                struct echo_client_obd echo_client;
+                struct echo_obd echo;
+                struct recovd_obd recovd;
+                struct lov_obd lov;
+                struct cache_obd cobd;
+                struct ptlbd_obd ptlbd;
+                struct mgmtcli_obd mgmtcli;
+                struct lmv_obd lmv;
+                struct cache_manager_obd cmobd;
         } u;
-        
-        /* fields used by LProcFS */
+       /* Fields used by LProcFS */
         unsigned int           obd_cntr_base;
         struct lprocfs_stats  *obd_stats;
         struct proc_dir_entry *obd_svc_procroot;
         struct lprocfs_stats  *obd_svc_stats;
 };
 
-#define OBD_OPT_FORCE             (1 << 0)
-#define OBD_OPT_FAILOVER          (1 << 1)
-#define OBD_OPT_REAL_CLIENT       (1 << 2)
-#define OBD_OPT_MDS_CONNECTION    (1 << 3)
+#define OBD_OPT_FORCE           0x0001
+#define OBD_OPT_FAILOVER        0x0002
+#define OBD_OPT_REAL_CLIENT     0x0004
+#define OBD_OPT_MDS_CONNECTION  0x0008
 
-#define OBD_LLOG_FL_SENDNOW       (1 << 0)
-#define OBD_LLOG_FL_CREATE        (1 << 1)
+#define OBD_LLOG_FL_SENDNOW     0x0001
+#define OBD_LLOG_FL_CREATE      0x0002
 
 struct mdc_op_data;
 
@@ -810,11 +805,6 @@ struct obd_ops {
 
         int (*o_notify)(struct obd_device *obd, struct obd_device *watched,
                         int active, void *data);
-
-        /* this method is needed for cmobd to make say to LMV "get ready" when
-         * master obd is LMV. This is needed, because LMV is initialized in
-         * "defered" manner to let all MDSs to be set up first. */
-        int (*o_getready)(struct obd_export *exp);
         int (*o_init_ea_size)(struct obd_export *, int, int);
 
         /* 
@@ -825,11 +815,11 @@ struct obd_ops {
 };
 
 struct md_ops {
-        int (*m_getstatus)(struct obd_export *, struct lustre_id *);
-        int (*m_change_cbdata)(struct obd_export *, struct lustre_id *,
+        int (*m_getstatus)(struct obd_export *, struct ll_fid *);
+        int (*m_change_cbdata)(struct obd_export *, struct ll_fid *,
                                ldlm_iterator_t, void *);
-        int (*m_change_cbdata_name)(struct obd_export *, struct lustre_id *,
-                                    char *, int, struct lustre_id *,
+        int (*m_change_cbdata_name)(struct obd_export *, struct ll_fid *,
+                                    char *, int, struct ll_fid *,
                                     ldlm_iterator_t, void *);
         int (*m_close)(struct obd_export *, struct obdo *,
                        struct obd_client_handle *,
@@ -842,15 +832,15 @@ struct md_ops {
                          int, struct mdc_op_data *, struct lustre_handle *,
                          void *, int, ldlm_completion_callback,
                          ldlm_blocking_callback, void *);
-        int (*m_getattr)(struct obd_export *, struct lustre_id *,
+        int (*m_getattr)(struct obd_export *, struct ll_fid *,
                          unsigned long, unsigned int,
                          struct ptlrpc_request **);
-        int (*m_getattr_name)(struct obd_export *, struct lustre_id *,
+        int (*m_getattr_name)(struct obd_export *, struct ll_fid *,
                               char *, int, unsigned long,
                               unsigned int, struct ptlrpc_request **);
         int (*m_intent_lock)(struct obd_export *,
-                             struct lustre_id *, const char *, int,
-                             void *, int, struct lustre_id *,
+                             struct ll_fid *, const char *, int,
+                             void *, int, struct ll_fid *,
                              struct lookup_intent *, int,
                              struct ptlrpc_request **,
                              ldlm_blocking_callback);
@@ -862,14 +852,13 @@ struct md_ops {
         int (*m_setattr)(struct obd_export *, struct mdc_op_data *,
                          struct iattr *, void *, int , void *, int,
                          struct ptlrpc_request **);
-        int (*m_sync)(struct obd_export *, struct lustre_id *,
+        int (*m_sync)(struct obd_export *, struct ll_fid *,
                       struct ptlrpc_request **);
-        int (*m_readpage)(struct obd_export *, struct lustre_id *,
+        int (*m_readpage)(struct obd_export *, struct ll_fid *,
                           __u64, struct page *, struct ptlrpc_request **);
         int (*m_unlink)(struct obd_export *, struct mdc_op_data *,
                         struct ptlrpc_request **);
-        int (*m_valid_attrs)(struct obd_export *, struct lustre_id *);
-        
+        int (*m_valid_attrs)(struct obd_export *, struct ll_fid *);
         struct obd_device * (*m_get_real_obd)(struct obd_export *,
                              char *name, int len);
         
@@ -886,26 +875,24 @@ struct md_ops {
                                         int repoff);
         int (*m_set_lock_data)(struct obd_export *exp, __u64 *l, void *data);
 
-        int (*m_delete_object)(struct obd_export *, struct lustre_id *);
-
-        /* NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line to
-         * lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c. Also, add a
-         * wrapper function in include/linux/obd_class.h.
+        int (*m_delete_object)(struct obd_export *, struct ll_fid *);
+        /* 
+         * NOTE: If adding ops, add another LPROCFS_OBD_OP_INIT() line
+         * to lprocfs_alloc_obd_stats() in obdclass/lprocfs_status.c.
+         * Also, add a wrapper function in include/linux/obd_class.h.
          */
 };
 
-static inline void obd_transno_commit_cb(struct obd_device *obd,
-                                         __u64 transno, int error)
+static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
+                                         int error)
 {
         if (error) {
                 CERROR("%s: transno "LPD64" commit error: %d\n",
                        obd->obd_name, transno, error);
                 return;
         }
-        
         CDEBUG(D_HA, "%s: transno "LPD64" committed\n",
                obd->obd_name, transno);
-
         if (transno > obd->obd_last_committed) {
                 obd->obd_last_committed = transno;
                 ptlrpc_commit_replies (obd);

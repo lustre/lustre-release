@@ -33,10 +33,6 @@ struct snap_inode_info {
         ino_t sn_root_ino;        /*the root ino of this snap*/
 };
 struct smfs_inode_info {
-        /* this first part of struct should be the same as in mds_info_info */
-        struct lustre_id smi_id;
-        
-        /* smfs part. */
         struct inode *smi_inode;
         __u32  smi_flags;
 	struct snap_inode_info sm_sninfo;
@@ -128,14 +124,11 @@ struct fs_extent{
 };
 
 #define I2SMI(inode)  ((struct smfs_inode_info *) ((inode->u.generic_ip)))
-#define I2FSI(inode)  (((inode->u.generic_ip)))
 
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#define S2FSI(sb)   (((sb->u.generic_sbp)))
 #define S2SMI(sb)   ((struct smfs_super_info *) ((sb->u.generic_sbp)))
 #define S2CSB(sb)   (((struct smfs_super_info *)((sb->u.generic_sbp)))->smsi_sb)
 #else
-#define S2FSI(sb)   ((sb->s_fs_info))
 #define S2SMI(sb)   ((struct smfs_super_info *) (sb->s_fs_info))
 #define S2CSB(sb)   (((struct smfs_super_info *) (sb->s_fs_info))->smsi_sb)
 #endif
@@ -320,10 +313,9 @@ static inline void post_smfs_inode(struct inode *inode,
 {
         if (inode && cache_inode) {
                 duplicate_inode(inode, cache_inode);
-                
-                /*
-                 * here we must release the cache_inode, otherwise we will have
-                 * no chance to do it later.
+                /*Here we must release the cache_inode,
+                 *Otherwise we will have no chance to
+                 *do it
                  */
                 cache_inode->i_state &=~I_LOCK;
                 inode->i_blocks = cache_inode->i_blocks;
@@ -441,11 +433,6 @@ static inline void post_smfs_dentry(struct dentry *cache_dentry)
 {
         if (!cache_dentry)
                 return;
-
-        /* 
-         * this is needed because d_unalloc() calls dput(), which in turn calls
-         * iput() on dentry inode.
-         */
         if (cache_dentry->d_inode)
                 igrab(cache_dentry->d_inode);
         d_unalloc(cache_dentry);

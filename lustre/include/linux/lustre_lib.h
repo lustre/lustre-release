@@ -64,15 +64,6 @@
 #endif
 #endif
 
-/* lustre_id output helper macros */
-#define DLID4   "%lu/%lu/%lu/%lu"
-
-#define OLID4(id)                                  \
-        (unsigned long)(id)->li_fid.lf_id,         \
-        (unsigned long)(id)->li_fid.lf_group,      \
-        (unsigned long)(id)->li_stc.u.e3s.l3s_ino, \
-        (unsigned long)(id)->li_stc.u.e3s.l3s_gen
-
 /* target.c */
 struct ptlrpc_request;
 struct recovd_data;

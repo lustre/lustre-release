@@ -168,11 +168,10 @@ static struct file_operations smfscontrol_fops = {
         .open    = smfs_psdev_open,       /* open */
         .release = smfs_psdev_release,    /* release */
 };
-
 static struct miscdevice smfscontrol_dev = {
-        .minor         = SMFS_MINOR,
-        .name          = "smfscontrol",
-        .fops          = &smfscontrol_fops
+        minor:        SMFS_MINOR,
+        name:        "smfscontrol",
+        fops:        &smfscontrol_fops
 };
 
 int init_smfs_psdev(void)

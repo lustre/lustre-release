@@ -81,12 +81,12 @@ exit:
 }
 
 struct inode_operations smfs_sym_iops = {
-        .readlink        = smfs_readlink,
-        .follow_link     = smfs_follow_link,
-        .setxattr        = smfs_setxattr,          /* BKL held */
-        .getxattr        = smfs_getxattr,          /* BKL held */
-        .listxattr       = smfs_listxattr,         /* BKL held */
-        .removexattr     = smfs_removexattr,       /* BKL held */
+        readlink:        smfs_readlink,
+        follow_link:        smfs_follow_link,
+        setxattr:       smfs_setxattr,          /* BKL held */
+        getxattr:       smfs_getxattr,          /* BKL held */
+        listxattr:      smfs_listxattr,         /* BKL held */
+        removexattr:    smfs_removexattr,       /* BKL held */
 };
 
 struct file_operations smfs_sym_fops = {

@@ -118,15 +118,12 @@ static void lov_llh_destroy(struct lov_lock_handles *llh)
 static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                            int activate, unsigned long connect_flags)
 {
-        struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
-        struct obd_uuid *tgt_uuid = &tgt->uuid;
-
-#ifdef __KERNEL__
-        struct proc_dir_entry *lov_proc_dir;
-#endif
         struct lov_obd *lov = &obd->u.lov;
-        struct lustre_handle conn = {0, };
+        struct obd_uuid *tgt_uuid = &tgt->uuid;
         struct obd_device *tgt_obd;
+        struct obd_uuid lov_osc_uuid = { "LOV_OSC_UUID" };
+        struct lustre_handle conn = {0, };
+        struct proc_dir_entry *lov_proc_dir;
         int rc;
         ENTRY;
 
@@ -179,7 +176,6 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         tgt->active = 1;
         lov->desc.ld_active_tgt_count++;
 
-#ifdef __KERNEL__
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lov_proc_dir) {
                 struct obd_device *osc_obd = class_conn2obd(&conn);
@@ -204,7 +200,6 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                         lov_proc_dir = NULL;
                 }
         }
-#endif
 
         RETURN(0);
 }
@@ -212,12 +207,10 @@ static int lov_connect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
 static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                        struct obd_uuid *cluuid, unsigned long connect_flags)
 {
-#ifdef __KERNEL__
-        struct proc_dir_entry *lov_proc_dir;
-#endif
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
         struct obd_export *exp;
+        struct proc_dir_entry *lov_proc_dir;
         int rc, rc2, i;
         ENTRY;
 
@@ -235,7 +228,6 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 RETURN(0);
         }
 
-#ifdef __KERNEL__
         lov_proc_dir = lprocfs_register("target_obds", obd->obd_proc_entry,
                                         NULL, NULL);
         if (IS_ERR(lov_proc_dir)) {
@@ -243,7 +235,6 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                        obd->obd_type->typ_name, obd->obd_name);
                 lov_proc_dir = NULL;
         }
-#endif
 
         /* connect_flags is the MDS number, save for use in lov_add_obd */
         lov->lov_connect_flags = connect_flags;
@@ -259,10 +250,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
         RETURN (0);
 
  out_disc:
-#ifdef __KERNEL__
         if (lov_proc_dir)
                 lprocfs_remove(lov_proc_dir);
-#endif
 
         while (i-- > 0) {
                 struct obd_uuid uuid;
@@ -283,15 +272,12 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
 static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                               int flags)
 {
-#ifdef __KERNEL__
         struct proc_dir_entry *lov_proc_dir;
-#endif
         struct obd_device *osc_obd = class_exp2obd(tgt->ltd_exp);
         struct lov_obd *lov = &obd->u.lov;
         int rc;
         ENTRY;
 
-#ifdef __KERNEL__
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lov_proc_dir) {
                 struct proc_dir_entry *osc_symlink;
@@ -305,8 +291,7 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
                                osc_obd->obd_name);
                 }
         }
-#endif
-        
+
         if (obd->obd_no_recov) {
                 /* Pass it on to our clients.
                  * XXX This should be an argument to disconnect,
@@ -317,6 +302,7 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
         }
 
         obd_register_observer(tgt->ltd_exp->exp_obd, NULL);
+
         rc = obd_disconnect(tgt->ltd_exp, flags);
         if (rc) {
                 if (tgt->active) {
@@ -338,11 +324,9 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt,
 static int lov_disconnect(struct obd_export *exp, int flags)
 {
         struct obd_device *obd = class_exp2obd(exp);
-#ifdef __KERNEL__
-        struct proc_dir_entry *lov_proc_dir;
-#endif
         struct lov_obd *lov = &obd->u.lov;
         struct lov_tgt_desc *tgt;
+        struct proc_dir_entry *lov_proc_dir;
         int rc, i;
         ENTRY;
 
@@ -358,8 +342,6 @@ static int lov_disconnect(struct obd_export *exp, int flags)
                 if (tgt->ltd_exp)
                         lov_disconnect_obd(obd, tgt, flags);
         }
-
-#ifdef __KERNEL__
         lov_proc_dir = lprocfs_srch(obd->obd_proc_entry, "target_obds");
         if (lov_proc_dir) {
                 lprocfs_remove(lov_proc_dir);
@@ -367,7 +349,7 @@ static int lov_disconnect(struct obd_export *exp, int flags)
                 CERROR("/proc/fs/lustre/%s/%s/target_obds missing.",
                        obd->obd_type->typ_name, obd->obd_name);
         }
-#endif
+
 
  out_local:
         rc = class_disconnect(exp, 0);

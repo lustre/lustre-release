@@ -6,6 +6,6 @@
 include $(src)/../portals/Kernelenv
 
 obj-y += cmobd.o
-cmobd-objs := cm_obd.o cm_reint.o cm_write.o \ 
-	      cm_oss_reint.o cm_mds_reint.o lproc_cm.o
+cmobd-objs := cache_manager_obd.o cmobd_reint.o cmobd_write.o \ 
+	      cmobd_oss_reint.o cmobd_mds_reint.o lproc_cm.o
 	

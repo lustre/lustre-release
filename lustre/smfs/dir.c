@@ -67,9 +67,8 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
                        RETURN(-ENOSPC);
         
         lock_kernel();
-        SMFS_HOOK(dir, dentry, NULL, NULL, HOOK_CREATE, handle,
-                  PRE_HOOK, rc, exit);
-        
+        SMFS_HOOK(dir, dentry, NULL, NULL, HOOK_CREATE, handle, PRE_HOOK, rc, 
+                  exit); 
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
 
@@ -77,7 +76,6 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
                 GOTO(exit, rc = -ENOMEM);
        
         pre_smfs_inode(dir, cache_dir);
-        
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
         if (cache_dir && cache_dir->i_op->create)
                 rc = cache_dir->i_op->create(cache_dir, cache_dentry,
@@ -90,14 +88,13 @@ static int smfs_create(struct inode *dir, struct dentry *dentry,
         if (rc)
                 GOTO(exit, rc);
         
-        SMFS_GET_INODE(dir->i_sb, cache_dentry->d_inode, dir, inode,
-                       rc, exit); 
+        SMFS_GET_INODE(dir->i_sb, cache_dentry->d_inode, dir, inode, rc, exit); 
 
         d_instantiate(dentry, inode);
         post_smfs_inode(dir, cache_dir);
         
-        SMFS_HOOK(dir, dentry, NULL, NULL, HOOK_CREATE, handle,
-                  POST_HOOK, rc,  exit); 
+        SMFS_HOOK(dir, dentry, NULL, NULL, HOOK_CREATE, handle, POST_HOOK, rc, 
+                  exit); 
 exit:
         unlock_kernel();
         post_smfs_dentry(cache_dentry);
@@ -171,19 +168,20 @@ exit:
         RETURN(rc);
 }
 
-static int smfs_link(struct dentry *old_dentry,
-                     struct inode *dir, struct dentry *dentry)
+static int smfs_link(struct dentry * old_dentry,
+                     struct inode * dir, struct dentry *dentry)
 {
-        struct inode *cache_old_inode = NULL;
-        struct inode *cache_dir = I2CI(dir);
-        struct inode *inode = NULL;
-        struct dentry *cache_dentry = NULL;
-        struct dentry *cache_old_dentry = NULL;
-        struct dentry *cache_parent = NULL;
-        void *handle = NULL;
-        int rc = 0;
+        struct        inode *cache_old_inode = NULL;
+        struct        inode *cache_dir = I2CI(dir);
+        struct        inode *inode = NULL;
+        struct  dentry *cache_dentry = NULL;
+        struct  dentry *cache_old_dentry = NULL;
+        struct  dentry *cache_parent = NULL;
+        void        *handle = NULL;
+        int        rc = 0;
 
         inode = old_dentry->d_inode;
+
         cache_old_inode = I2CI(inode);
 
         handle = smfs_trans_start(dir, FSFILT_OP_LINK, NULL);
@@ -191,8 +189,8 @@ static int smfs_link(struct dentry *old_dentry,
                  RETURN(-ENOSPC);
         
         lock_kernel();
-        SMFS_HOOK(dir, old_dentry, NULL, NULL, HOOK_LINK, handle,
-                  PRE_HOOK, rc, exit); 
+        SMFS_HOOK(dir, old_dentry, NULL, NULL, HOOK_LINK, handle, PRE_HOOK, rc, 
+                  exit); 
         
         cache_parent = pre_smfs_dentry(NULL, cache_dir, dentry);
         cache_dentry = pre_smfs_dentry(cache_parent, NULL, dentry);
@@ -200,8 +198,7 @@ static int smfs_link(struct dentry *old_dentry,
         if (!cache_parent || !cache_dentry)
                 GOTO(exit, rc = -ENOMEM);
 
-        cache_old_dentry = pre_smfs_dentry(NULL, cache_old_inode,
-                                           old_dentry);
+        cache_old_dentry = pre_smfs_dentry(NULL, cache_old_inode, old_dentry);
         if (!cache_old_dentry)
                 GOTO(exit, rc = -ENOMEM);
 
@@ -219,8 +216,8 @@ static int smfs_link(struct dentry *old_dentry,
         d_instantiate(dentry, inode);
         post_smfs_inode(dir, cache_dir);
 
-        SMFS_HOOK(dir, old_dentry, dentry, NULL, HOOK_LINK, handle,
-                  POST_HOOK, rc, exit); 
+        SMFS_HOOK(dir, old_dentry, dentry, NULL, HOOK_LINK, handle, POST_HOOK, 
+                  rc, exit); 
 exit:
         unlock_kernel();
         post_smfs_dentry(cache_dentry);
@@ -484,8 +481,8 @@ exit:
         RETURN(rc);
 }
 
-static int smfs_rename(struct inode *old_dir, struct dentry *old_dentry,
-                       struct inode *new_dir,struct dentry *new_dentry)
+static int smfs_rename(struct inode * old_dir, struct dentry *old_dentry,
+                       struct inode * new_dir,struct dentry *new_dentry)
 {
         struct inode *cache_old_dir = I2CI(old_dir);
         struct inode *cache_new_dir = I2CI(new_dir);
@@ -512,22 +509,18 @@ static int smfs_rename(struct inode *old_dir, struct dentry *old_dentry,
         lock_kernel();
 
         
-        SMFS_HOOK(old_dir, old_dentry, new_dir, new_dentry, HOOK_RENAME,
-                  handle, PRE_HOOK, rc, exit); 
+        SMFS_HOOK(old_dir, old_dentry, new_dir, new_dentry, HOOK_RENAME, handle, 
+                  PRE_HOOK, rc, exit); 
         
         cache_old_parent = pre_smfs_dentry(NULL, cache_old_dir, old_dentry);
-
         cache_old_dentry = pre_smfs_dentry(cache_old_parent, cache_old_inode,
                                            old_dentry);
-        
         if (!cache_old_parent || !cache_old_dentry)
                 GOTO(exit, rc = -ENOMEM);
 
         cache_new_parent = pre_smfs_dentry(NULL, cache_new_dir, new_dentry);
-        
         cache_new_dentry = pre_smfs_dentry(cache_new_parent, cache_new_inode,
                                            new_dentry);
-
         if (!cache_new_parent || !cache_new_dentry)
                 GOTO(exit, rc = -ENOMEM);
 
@@ -635,10 +628,10 @@ exit:
 }
 
 struct file_operations smfs_dir_fops = {
-        .read           = smfs_read_dir,
-        .readdir        = smfs_readdir,       /* BKL held */
-        .ioctl          = smfs_ioctl,         /* BKL held */
-        .fsync          = smfs_fsync,         /* BKL held */
-        .open           = smfs_open,
-        .release        = smfs_release,
+        read:           smfs_read_dir,
+        readdir:        smfs_readdir,           /* BKL held */
+        ioctl:          smfs_ioctl,             /* BKL held */
+        fsync:          smfs_fsync,         /* BKL held */
+        open:           smfs_open,
+        release:        smfs_release,
 };

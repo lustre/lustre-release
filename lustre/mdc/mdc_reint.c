@@ -36,10 +36,9 @@
 #include <linux/lustre_mds.h>
 #include "mdc_internal.h"
 
-/* this function actually sends request to desired target. */
-static int mdc_reint(struct ptlrpc_request *request,
-                     struct mdc_rpc_lock *rpc_lock,
-                     int level)
+/* mdc_setattr does its own semaphore handling */
+int mdc_reint(struct ptlrpc_request *request,
+              struct mdc_rpc_lock *rpc_lock, int level)
 {
         int rc;
 
@@ -61,16 +60,16 @@ static int mdc_reint(struct ptlrpc_request *request,
         }
         return rc;
 }
-
-/* If mdc_setattr is called with an 'iattr', then it is a normal RPC that should
- * take the normal semaphore and go to the normal portal.
+EXPORT_SYMBOL(mdc_reint);
+/* If mdc_setattr is called with an 'iattr', then it is a normal RPC that
+ * should take the normal semaphore and go to the normal portal.
  *
- * If it is called with iattr->ia_valid & ATTR_FROM_OPEN, then it is a magic
- * open-path setattr that should take the setattr semaphore and go to the
- * setattr portal. */
+ * If it is called with iattr->ia_valid & ATTR_FROM_OPEN, then it is a
+ * magic open-path setattr that should take the setattr semaphore and
+ * go to the setattr portal. */
 int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
-                struct iattr *iattr, void *ea, int ealen, void *ea2,
-                int ea2len, struct ptlrpc_request **request)
+                struct iattr *iattr, void *ea, int ealen, void *ea2, int ea2len,
+                struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         struct mds_rec_setattr *rec;
@@ -120,8 +119,8 @@ int mdc_setattr(struct obd_export *exp, struct mdc_op_data *data,
 }
 
 int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
-               const void *data, int datalen, int mode, __u32 uid,
-               __u32 gid, __u64 rdev, struct ptlrpc_request **request)
+               const void *data, int datalen, int mode, __u32 uid, __u32 gid,
+               __u64 rdev, struct ptlrpc_request **request)
 {
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
@@ -143,10 +142,8 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
 
         mdc_pack_secdesc(req, size[0]);
 
-        /*
-         * mdc_create_pack() fills msg->bufs[1] with name and msg->bufs[2] with
-         * tgt, for symlinks or lov MD data.
-         */
+        /* mdc_create_pack fills msg->bufs[1] with name
+         * and msg->bufs[2] with tgt, for symlinks or lov MD data */
         mdc_create_pack(req->rq_reqmsg, 1, op_data, mode, rdev, data, datalen);
 
         size[0] = sizeof(struct mds_body);
@@ -155,8 +152,7 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         level = LUSTRE_IMP_FULL;
  resend:
         rc = mdc_reint(req, obd->u.cli.cl_rpc_lock, level);
-
-        /* resend if we were told to. */
+        /* Resend if we were told to. */
         if (rc == -ERESTARTSYS) {
                 level = LUSTRE_IMP_RECOVER;
                 goto resend;

@@ -34,7 +34,7 @@
 #include <asm/div64.h>
 #include <linux/pagemap.h>
 
-#include "cm_internal.h"
+#include "cmobd_internal.h"
 
 extern kmem_cache_t *cmobd_extent_slab;
 
@@ -108,10 +108,8 @@ static void cmobd_ap_fill_obdo(void *data, int cmd, struct obdo *oa)
         valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
         if (cmd == OBD_BRW_WRITE) {
                 oa->o_valid |= OBD_MD_FLIFID;
-                
-                /* FIXME-UMKA: should be here some mds num and mds id? */
-                mdc_pack_id(obdo_id(oa), inode->i_ino, 0, 
-                            inode->i_mode, 0, 0);
+                mdc_pack_fid(obdo_fid(oa), inode->i_ino, 0, inode->i_mode);
+
                 valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
         }
 
@@ -171,8 +169,8 @@ static int cmobd_send_pages(struct obd_device *obd,
                             obd_count oa_bufs,
                             struct cmobd_extent_set *set)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
-        struct obd_export *exp = cmobd->master_exp;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
+        struct obd_export *exp = cmobd->cm_master_exp;
         struct cmobd_async_page *cmap = NULL;
         obd_count i;
         int rc = 0;
@@ -261,7 +259,7 @@ static int cmobd_write_extent(struct obd_device *obd,
                               struct cmobd_extent_info *ei)
 {
         struct cmobd_extent_set *set = ei->ei_set;
-        struct cm_obd *cmobd = &obd->u.cm;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
         unsigned long flags;
         struct obd_ioobj ioo;
         struct niobuf_local *lnb;
@@ -295,7 +293,7 @@ static int cmobd_write_extent(struct obd_device *obd,
         obdo_to_ioobj(oa, &ioo);
         ioo.ioo_bufcnt = oa_bufs;
 
-        ret = obd_preprw(OBD_BRW_READ, cmobd->cache_exp, oa, 1, &ioo, 
+        ret = obd_preprw(OBD_BRW_READ, cmobd->cm_cache_exp, oa, 1, &ioo, 
                          oa_bufs, rnb, lnb, NULL);
         if (ret)
                 GOTO(out, rc = ret);
@@ -304,7 +302,7 @@ static int cmobd_write_extent(struct obd_device *obd,
         if (rc)
                 CERROR("cmobd_send_pages failed %d\n", rc);
 
-        rc = obd_commitrw(OBD_BRW_READ, cmobd->cache_exp, oa, 1, &ioo,
+        rc = obd_commitrw(OBD_BRW_READ, cmobd->cm_cache_exp, oa, 1, &ioo,
                           oa_bufs, lnb, NULL, ret);
 
         /* countdown and wake up */
@@ -357,24 +355,16 @@ static int cmobd_write_main(void *arg)
         struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
         struct ptlrpc_thread   *thread = data->thread;
         struct obd_device *obd = data->dev;
-        struct cm_obd *cmobd = &obd->u.cm;
-        struct cmobd_write_service *ws = cmobd->write_srv;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
+        struct cmobd_write_service *ws = cmobd->cm_write_srv;
         struct cmobd_extent_info *extent = NULL;
         unsigned long flags;
         int rc;
         ENTRY;
 
         lock_kernel();
-        /* vv ptlrpc_daemonize(); vv */
-        exit_mm(current);
-
-        current->session = 1;
-        current->pgrp = 1;
-        current->tty = NULL;
-
-        exit_files(current);
-        reparent_to_init();
-        /* ^^ ptlrpc_daemonize(); ^^ */
+        
+        ptlrpc_daemonize();
 
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
@@ -426,8 +416,8 @@ static int cmobd_write_main(void *arg)
  * ptlrpc threads functions */
 static int cmobd_start_thread(struct obd_device *obd, char *name)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
-        struct cmobd_write_service *ws = cmobd->write_srv;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
+        struct cmobd_write_service *ws = cmobd->cm_write_srv;
         struct l_wait_info lwi = { 0 };
         struct ptlrpc_svc_data d;
         struct ptlrpc_thread *thread;
@@ -470,8 +460,8 @@ static int cmobd_start_thread(struct obd_device *obd, char *name)
 static void cmobd_stop_thread(struct obd_device *obd, 
                               struct ptlrpc_thread *thread)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
-        struct cmobd_write_service *ws = cmobd->write_srv;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
+        struct cmobd_write_service *ws = cmobd->cm_write_srv;
         struct l_wait_info lwi = { 0 };
         unsigned long flags;
         ENTRY;
@@ -492,8 +482,8 @@ static void cmobd_stop_thread(struct obd_device *obd,
 
 static void cmobd_stop_all_threads(struct obd_device *obd)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
-        struct cmobd_write_service *ws = cmobd->write_srv;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
+        struct cmobd_write_service *ws = cmobd->cm_write_srv;
         unsigned long flags;
         struct ptlrpc_thread *thread;
         ENTRY;
@@ -533,33 +523,33 @@ static int cmobd_start_n_threads(struct obd_device *obd, int num_threads,
 
 void cmobd_cleanup_write_srv(struct obd_device *obd)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
         struct list_head *pos, *n;
         struct cmobd_extent_info *ei;
         ENTRY;
         
         cmobd_stop_all_threads(obd);
         
-        list_for_each_safe(pos, n, &cmobd->write_srv->ws_extents) {
+        list_for_each_safe(pos, n, &cmobd->cm_write_srv->ws_extents) {
                 ei = list_entry(pos, struct cmobd_extent_info, ei_link);
                 list_del_init(&ei->ei_link);
                 OBD_FREE(ei, sizeof(*ei));
         }
-        OBD_FREE(cmobd->write_srv, sizeof(*cmobd->write_srv));
+        OBD_FREE(cmobd->cm_write_srv, sizeof(*cmobd->cm_write_srv));
         EXIT;
 }
 
 int cmobd_init_write_srv(struct obd_device *obd)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
         struct cmobd_write_service *ws;
         int rc;
         ENTRY;
 
-        OBD_ALLOC(cmobd->write_srv, sizeof(*cmobd->write_srv));
-        if (cmobd->write_srv == NULL)
+        OBD_ALLOC(cmobd->cm_write_srv, sizeof(*cmobd->cm_write_srv));
+        if (cmobd->cm_write_srv == NULL)
                 RETURN(-ENOMEM);
-        ws = cmobd->write_srv;
+        ws = cmobd->cm_write_srv;
         
         INIT_LIST_HEAD(&ws->ws_threads);
         spin_lock_init(&ws->ws_thread_lock);
@@ -593,8 +583,8 @@ static int extent_queue_full(struct cmobd_write_service *ws)
 static void cmobd_queue_extent(struct obd_device *obd, 
                                struct cmobd_extent_info *ex)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
-        struct cmobd_write_service *ws = cmobd->write_srv;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
+        struct cmobd_write_service *ws = cmobd->cm_write_srv;
         struct cmobd_extent_set *set = ex->ei_set;
         unsigned long flags;
         struct l_wait_info lwi = { 0 };
@@ -621,7 +611,7 @@ wait:
         EXIT;
 } 
 
-static obd_size cmobd_id2size(struct obd_export *exp, obd_id id, obd_gr grp)
+static obd_size cmobd_fid2size(struct obd_export *exp, obd_id id, obd_gr grp)
 {
         struct lvfs_run_ctxt saved;
         struct dentry *de = NULL;
@@ -630,7 +620,7 @@ static obd_size cmobd_id2size(struct obd_export *exp, obd_id id, obd_gr grp)
         
         push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         
-        de = obd_lvfs_id2dentry(exp, id, 0, grp);
+        de = obd_lvfs_fid2dentry(exp, id, 0, grp);
         LASSERT(de);
 
         size = de->d_inode->i_size;
@@ -659,8 +649,8 @@ static int extent_set_done(struct cmobd_extent_set *set, int phase)
 int cmobd_replay_write(struct obd_device *obd, struct obdo *oa, 
                        struct ldlm_extent *ext)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
-        struct lov_obd *lov = &cmobd->master_obd->u.lov;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
+        struct lov_obd *lov = &cmobd->cm_master_obd->u.lov;
         struct lov_stripe_md *lsm = NULL;
         struct cmobd_extent_set set;
         struct cmobd_extent_info *ex;
@@ -681,7 +671,7 @@ int cmobd_replay_write(struct obd_device *obd, struct obdo *oa,
         set.es_extent.start = ext->start;
         set.es_extent.end = ext->end;
         set.es_lsm = lsm;
-        set.es_exp = cmobd->master_exp;
+        set.es_exp = cmobd->cm_master_exp;
         set.es_ext_sz = CMOBD_MAX_EXTENT_SZ;
         set.es_count = 0;
         memcpy(&set.es_oa, oa, sizeof(*oa));
@@ -698,8 +688,8 @@ int cmobd_replay_write(struct obd_device *obd, struct obdo *oa,
         set.es_extent.start -= set.es_extent.start & ~PAGE_MASK;
         /* if the end of extent is EOF, set it as file size */
         if (set.es_extent.end == OBD_OBJECT_EOF) {
-                set.es_extent.end = cmobd_id2size(cmobd->cache_exp, 
-                                                  oa->o_id, oa->o_gr) - 1;
+                set.es_extent.end = cmobd_fid2size(cmobd->cm_cache_exp, 
+                                                   oa->o_id, oa->o_gr) - 1;
                 if (set.es_extent.end <= 0)
                         GOTO(out, rc = 0);
         }

@@ -40,56 +40,61 @@
 static int mds_rec_link_pack(char *buffer, struct dentry *dentry,
                              struct inode *dir, void *data1, void *data2)
 {
-        struct dentry *src = (struct dentry *)data1;
-        struct dentry *tgt = (struct dentry *)data2;
-        struct mds_kml_pack_info *mkpi;
-        struct lustre_msg *msg = NULL;
         struct mdc_op_data op_data;
-        void *tmp = NULL;
-        int rc = 0;
+        struct mds_kml_pack_info *mkpi;
+        struct dentry *tgt = (struct dentry *)data1;
+        struct dentry *src = (struct dentry *)data2;
+        void   *tmp = NULL;
+        struct lustre_msg *msg = NULL;
+        int    rc = 0;
 
-        mdc_prepare_mdc_data(&op_data, src->d_inode, dir,
-                             tgt->d_name.name, tgt->d_name.len, 0);
+        ll_prepare_mdc_op_data(&op_data, src->d_inode, dir, tgt->d_name.name,
+                               tgt->d_name.len, 0);
 
         PACK_KML_REC_INIT(buffer, MDS_REINT);
-        mkpi = (struct mds_kml_pack_info *)buffer;
+
+        mkpi = (struct mds_kml_pack_info*)buffer;
 
         mkpi->mpi_bufcount = 2;
         mkpi->mpi_size[0] = sizeof(struct mds_rec_link);
         mkpi->mpi_size[1] = op_data.namelen + 1;
 
-        /* the mds reint log format is: opcode + mkpi + request  */
+        /*the mds reint log format
+         *opcode + mkpi + request
+         */
         msg = (struct lustre_msg *)(buffer + sizeof(*mkpi));
         lustre_init_msg(msg, mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
 
         tmp = mdc_link_pack(msg, 0, &op_data);
-        mkpi->mpi_total_size = tmp - (void *)msg;
+        mkpi->mpi_total_size = tmp - (void*)msg;
         rc = mkpi->mpi_total_size + sizeof(*mkpi) + sizeof(int);
         return rc;
 }
 
-/* FIXME-WANGDI: did not think about EA situation. */
 static int mds_rec_setattr_pack(char *buffer, struct dentry *dentry,
                                 struct inode *dir, void *data1, void *data2)
 {
-        struct iattr *iattr = (struct iattr *)data1;
         struct mds_rec_setattr *rec = NULL;
-        struct mds_kml_pack_info *mkpi;
-        struct lustre_msg *msg = NULL;
         struct mdc_op_data op_data;
-        int rc = 0, ealen = 0;
-        char *ea = NULL;
-        void *tmp = NULL;
+        struct mds_kml_pack_info *mkpi;
+        struct iattr *iattr = (struct iattr *)data1;
+        struct lustre_msg *msg = NULL;
+        char   *ea = NULL;
+        void   *tmp = NULL;
+        int    rc = 0, ealen = 0;
 
-        mdc_prepare_mdc_data(&op_data, dir, NULL, NULL, 0, 0);
+        ll_prepare_mdc_op_data(&op_data, dir, NULL, NULL, 0, 0);
 
         PACK_KML_REC_INIT(buffer, MDS_REINT);
+
         mkpi = (struct mds_kml_pack_info*)buffer;
+
+        /*FIXME later, did not think about EA situation*/
 
         mkpi->mpi_bufcount = 1;
         mkpi->mpi_size[0] = sizeof(struct mds_rec_setattr);
         if (data2) {
-                mkpi->mpi_bufcount++;
+                mkpi->mpi_bufcount ++;
                 mkpi->mpi_size[1] = *(int *)data2;
                 ealen = *(int *)data2;
                 ea = data2 + sizeof(ealen);
@@ -100,8 +105,9 @@ static int mds_rec_setattr_pack(char *buffer, struct dentry *dentry,
 
         tmp = mdc_setattr_pack(msg, 0, &op_data, iattr, ea, ealen, NULL, 0);
 
-        /* FIXME-WANGDI: there are maybe some better ways to set the time
-         * attr. */
+        /*There are maybe some better ways
+         *to set the time attr FIXME WANGDI later
+         */
         rec = (struct mds_rec_setattr *)lustre_msg_buf(msg, 0, 0);
         if (rec->sa_valid & ATTR_CTIME)
                 rec->sa_valid |= ATTR_CTIME_SET;
@@ -110,41 +116,38 @@ static int mds_rec_setattr_pack(char *buffer, struct dentry *dentry,
         if (rec->sa_valid & ATTR_ATIME)
                 rec->sa_valid |= ATTR_ATIME_SET;
 
-        mkpi->mpi_total_size = tmp - (void *)msg;
+        mkpi->mpi_total_size = tmp - (void*)msg;
         rc = mkpi->mpi_total_size + sizeof(*mkpi) + sizeof(int);
 
         return rc;
 }
 
 static int mds_rec_create_pack(char *buffer, struct dentry *dentry,
-                               struct inode *dir, void *data1,
-                               void *data2)
+                               struct inode *dir, void *data1, void *data2)
 {
-        struct mds_kml_pack_info *mkpi;
         struct lustre_msg *msg = NULL;
         struct mdc_op_data op_data;
         struct mds_rec_create *rec;
-        int rc = 0, tgt_len = 0;
-        void *tmp = NULL;
+        struct mds_kml_pack_info *mkpi;
+        void   *tmp = NULL;
+        int    rc = 0, tgt_len = 0;
 
-        mdc_prepare_mdc_data(&op_data, dir, dentry->d_inode,
-                             dentry->d_name.name, dentry->d_name.len, 0);
-
+        ll_prepare_mdc_op_data(&op_data, dir, dentry->d_inode,
+                               dentry->d_name.name, dentry->d_name.len, 0);
         PACK_KML_REC_INIT(buffer, MDS_REINT);
-        mkpi = (struct mds_kml_pack_info *)buffer;
 
+        mkpi = (struct mds_kml_pack_info*)buffer;
         mkpi->mpi_bufcount = 2;
         mkpi->mpi_size[0] = sizeof(struct mds_rec_create);
         mkpi->mpi_size[1] = op_data.namelen + 1;
-
         if (data1 && data2) {
                 mkpi->mpi_size[2] = *(int *)data2;
                 mkpi->mpi_bufcount++;
         }
 
         if (data1) {
-                /* for symlink, data1 will be the tgt name. */
-                tgt_len = *(int *)data2;
+                /*for symlink, data1 will be the tgt name */
+                tgt_len = *(int*)data2;
         }
         msg = (struct lustre_msg *)(buffer + sizeof(*mkpi));
         lustre_init_msg(msg, mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
@@ -153,32 +156,31 @@ static int mds_rec_create_pack(char *buffer, struct dentry *dentry,
                               dentry->d_inode->i_mode, data1, tgt_len);
 
         rec = (struct mds_rec_create *)lustre_msg_buf(msg, 0, 0);
-        rec->cr_replayid = op_data.id2;
+        
+        rec->cr_replayfid = op_data.fid2;
         rec->cr_flags |= REC_REINT_CREATE; 
-        mkpi->mpi_total_size = tmp - (void *)msg;
+        mkpi->mpi_total_size = tmp - (void*)msg;
         rc = mkpi->mpi_total_size + sizeof(*mkpi) + sizeof(int);
 
         return rc;
 }
 
 static int mds_rec_unlink_pack(char *buffer, struct dentry *dentry,
-                               struct inode *dir, void *data1,
-                               void *data2)
+                               struct inode *dir, void *data1, void *data2)
 {
         struct lustre_msg *msg = NULL;
-        struct mds_kml_pack_info *mkpi;
         struct mdc_op_data op_data;
-        int mode = *(int*)data1;
-        void *tmp = NULL;
-        int rc = 0;
+        struct mds_kml_pack_info *mkpi;
+        int    mode = *(int*)data1;
+        void   *tmp = NULL;
+        int    rc = 0;
 
-        mdc_prepare_mdc_data(&op_data, dir, NULL,
-                             dentry->d_name.name,
-                             dentry->d_name.len, mode);
+        ll_prepare_mdc_op_data(&op_data, dir, NULL, dentry->d_name.name,
+                               dentry->d_name.len, mode);
 
         PACK_KML_REC_INIT(buffer, MDS_REINT);
-        mkpi = (struct mds_kml_pack_info*)buffer;
 
+        mkpi = (struct mds_kml_pack_info*)buffer;
         mkpi->mpi_bufcount = 2;
         mkpi->mpi_size[0] = sizeof(struct mds_rec_unlink);
         mkpi->mpi_size[1] = op_data.namelen + 1;
@@ -197,27 +199,26 @@ static int mds_rec_unlink_pack(char *buffer, struct dentry *dentry,
 static int mds_rec_rename_pack(char *buffer, struct dentry *dentry,
                                struct inode *dir, void *data1, void *data2)
 {
-        struct dentry *new_dentry = (struct dentry *)data2;
-        struct inode *new_dir = (struct inode *)data1;
-        struct mds_kml_pack_info *mkpi;
         struct lustre_msg *msg = NULL;
+        struct dentry *new_dir = (struct dentry *)data1;
+        struct dentry *new_dentry = (struct dentry *)data2;
         struct mdc_op_data op_data;
+        struct mds_kml_pack_info *mkpi;
         struct mds_rec_rename *rec;
-        void *tmp = NULL;
-        int rc = 0;
+        void   *tmp = NULL;
+        int    rc = 0;
 
-        mdc_prepare_mdc_data(&op_data, dir, new_dir, NULL, 0, 0);
+        ll_prepare_mdc_op_data(&op_data, dir, new_dir->d_inode, NULL, 0, 0);
 
         PACK_KML_REC_INIT(buffer, MDS_REINT);
-        mkpi = (struct mds_kml_pack_info*)buffer;
 
+        mkpi = (struct mds_kml_pack_info*)buffer;
         mkpi->mpi_bufcount = 3;
         mkpi->mpi_size[0] = sizeof(struct mds_rec_rename);
         mkpi->mpi_size[1] = dentry->d_name.len + 1;
         mkpi->mpi_size[2] = new_dentry->d_name.len + 1;
 
         rec = (struct mds_rec_rename *)(buffer + sizeof(*mkpi));
-
 
         msg = (struct lustre_msg *)(buffer + sizeof(*mkpi));
         lustre_init_msg(msg, mkpi->mpi_bufcount, mkpi->mpi_size, NULL);
@@ -233,7 +234,6 @@ static int mds_rec_rename_pack(char *buffer, struct dentry *dentry,
 
 typedef int (*mds_pack_rec_func)(char *buffer, struct dentry *dentry,
                                  struct inode *dir, void *data1, void *data2);
-
 static mds_pack_rec_func mds_kml_pack[REINT_MAX + 1] = {
         [REINT_LINK]    mds_rec_link_pack,
         [REINT_SETATTR] mds_rec_setattr_pack,
@@ -252,6 +252,7 @@ int mds_rec_pack_init(struct smfs_super_info *smsi)
 {
         
         smsi->smsi_pack_rec[PACK_MDS] = mds_rec_pack;
+
         return 0;
 }
 

@@ -51,7 +51,7 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
 {
         struct llu_inode_info *lli = llu_i2info(inode);
         struct llu_sb_info *sbi = llu_i2sbi(inode);
-        struct lustre_id id;
+        struct ll_fid mdc_fid;
         __u64 offset;
         int rc = 0;
         struct ptlrpc_request *request;
@@ -59,18 +59,18 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct mds_body *body;
         struct lookup_intent it = { .it_op = IT_READDIR };
         struct mdc_op_data data;
-        struct obd_device *obddev = class_exp2obd(sbi->ll_lmv_exp);
+        struct obd_device *obddev = class_exp2obd(sbi->ll_mdc_exp);
         struct ldlm_res_id res_id =
-                { .name = {id_fid(&lli->lli_id), id_group(&lli->lli_id)} };
+                { .name = {lli->lli_st_ino, (__u64)lli->lli_st_generation} };
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         ENTRY;
 
         rc = ldlm_lock_match(obddev->obd_namespace, LDLM_FL_BLOCK_GRANTED,
                              &res_id, LDLM_IBITS, &policy, LCK_PR, &lockh);
         if (!rc) {
-                llu_prepare_mdc_data(&data, inode, NULL, NULL, 0, 0);
+                llu_prepare_mdc_op_data(&data, inode, NULL, NULL, 0, 0);
 
-                rc = mdc_enqueue(sbi->ll_lmv_exp, LDLM_IBITS, &it, LCK_PR,
+                rc = mdc_enqueue(sbi->ll_mdc_exp, LDLM_IBITS, &it, LCK_PR,
                                  &data, &lockh, NULL, 0,
                                  ldlm_completion_ast, llu_mdc_blocking_ast,
                                  inode);
@@ -84,12 +84,11 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        /* FIXME-UMKA: should be here some mds num and mds id? */
-        mdc_pack_id(&id, lli->lli_st_ino, lli->lli_st_generation, 
-                    S_IFDIR, 0, 0);
+        mdc_pack_fid(&mdc_fid, lli->lli_st_ino, lli->lli_st_generation, S_IFDIR);
 
         offset = page->index << PAGE_SHIFT;
-        rc = mdc_readpage(sbi->ll_lmv_exp, &id, offset, page, &request);
+        rc = mdc_readpage(sbi->ll_mdc_exp, &mdc_fid,
+                          offset, page, &request);
         if (!rc) {
                 body = lustre_msg_buf(request->rq_repmsg, 0, sizeof (*body));
                 LASSERT (body != NULL);         /* checked by mdc_readpage() */

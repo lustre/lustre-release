@@ -394,7 +394,7 @@ out:
 }
 
 static int ptlrpc_connect_interpret(struct ptlrpc_request *request,
-                                    void *data, int rc)
+                                    void * data, int rc)
 {
         struct ptlrpc_connect_async_args *aa = data;
         struct obd_import *imp = request->rq_import;
@@ -515,6 +515,7 @@ finish:
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
                 if (aa->pcaa_initial_connect && !imp->imp_initial_recov)
                         ptlrpc_deactivate_import(imp);
+
                 CDEBUG(D_HA, "recovery of %s on %s failed (%d)\n",
                        imp->imp_target_uuid.uuid,
                        (char *)imp->imp_connection->c_remote_uuid.uuid, rc);
@@ -525,7 +526,7 @@ finish:
 }
 
 static int completed_replay_interpret(struct ptlrpc_request *req,
-                                      void *data, int rc)
+                                    void * data, int rc)
 {
         atomic_dec(&req->rq_import->imp_replay_inflight);
         if (req->rq_status == 0) {
@@ -648,7 +649,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp)
         switch (imp->imp_connect_op) {
         case OST_CONNECT: rq_opc = OST_DISCONNECT; break;
         case MDS_CONNECT: rq_opc = MDS_DISCONNECT; break;
-        case MGMT_CONNECT: rq_opc = MGMT_DISCONNECT; break;
+        case MGMT_CONNECT:rq_opc = MGMT_DISCONNECT;break;
         default:
                 CERROR("don't know how to disconnect from %s (connect_op %d)\n",
                        imp->imp_target_uuid.uuid, imp->imp_connect_op);

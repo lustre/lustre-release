@@ -45,8 +45,8 @@ struct ll_file_data {
 struct llu_sb_info
 {
         struct obd_uuid         ll_sb_uuid;
-        struct obd_export      *ll_lmv_exp;
-        struct obd_export      *ll_lov_exp;
+        struct obd_export      *ll_mdc_exp;
+        struct obd_export      *ll_osc_exp;
         obd_id                  ll_rootino;
         int                     ll_flags;
         struct list_head        ll_conn_chain;
@@ -65,7 +65,7 @@ struct llu_sb_info
 
 struct llu_inode_info {
         struct llu_sb_info     *lli_sbi;
-        struct lustre_id        lli_id;
+        struct ll_fid           lli_fid;
 
         struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
@@ -81,9 +81,10 @@ struct llu_inode_info {
         /* XXX workaround for libsysio readdir */
         loff_t                  lli_dir_pos;
 
-        /* in libsysio we have no chance to store data in file, so place it
-         * here. since it's possible that an file was opened several times
-         * without close, we track an open_count here */
+        /* in libsysio we have no chance to store data in file,
+         * so place it here. since it's possible that an file
+         * was opened several times without close, we track an
+         * open_count here */
         struct ll_file_data    *lli_file_data;
         int                     lli_open_flags;
         int                     lli_open_count;
@@ -125,17 +126,17 @@ static inline struct llu_sb_info *llu_i2sbi(struct inode *inode)
 
 static inline struct obd_export *llu_i2obdexp(struct inode *inode)
 {
-        return llu_i2info(inode)->lli_sbi->ll_lov_exp;
+        return llu_i2info(inode)->lli_sbi->ll_osc_exp;
 }
 
 static inline struct obd_export *llu_i2mdcexp(struct inode *inode)
 {
-        return llu_i2info(inode)->lli_sbi->ll_lmv_exp;
+        return llu_i2info(inode)->lli_sbi->ll_mdc_exp;
 }
 
 static inline int llu_is_root_inode(struct inode *inode)
 {
-        return (llu_i2info(inode)->lli_id.li_stc.u.e3s.l3s_ino ==
+        return (llu_i2info(inode)->lli_fid.id ==
                 llu_i2info(inode)->lli_sbi->ll_rootino);
 }
 
@@ -165,17 +166,16 @@ do {                                                                           \
 #define LL_LOOKUP_POSITIVE 1
 #define LL_LOOKUP_NEGATIVE 2
 
+static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
+{
+        *fid = llu_i2info(inode)->lli_fid;
+}
+
 struct it_cb_data {
         struct inode *icbd_parent;
         struct pnode *icbd_child;
         obd_id hash;
 };
-
-static inline void ll_inode2id(struct lustre_id *id,
-                               struct inode *inode)
-{
-        *id = llu_i2info(inode)->lli_id;
-}
 
 typedef int (*intent_finish_cb)(struct ptlrpc_request *,
                                 struct inode *parent, struct pnode *pnode, 
@@ -221,10 +221,12 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr);
 extern struct fssw_ops llu_fssw_ops;
 
 /* file.c */
-void llu_prepare_mdc_data(struct mdc_op_data *data, struct inode *i1,
-                          struct inode *i2, const char *name, int namelen,
-                          int mode);
-                          
+void llu_prepare_mdc_op_data(struct mdc_op_data *data,
+                             struct inode *i1,
+                             struct inode *i2,
+                             const char *name,
+                             int namelen,
+                             int mode);
 int llu_create(struct inode *dir, struct pnode_base *pnode, int mode);
 int llu_iop_open(struct pnode *pnode, int flags, mode_t mode);
 int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode);

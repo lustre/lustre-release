@@ -37,8 +37,10 @@
 #include <endian.h>
 
 #ifdef __CYGWIN__
+
 #include <netinet/in.h>
-#endif
+
+#endif /* __CYGWIN__ */
  
 #include <portals/api-support.h>
 #include <portals/ptlctl.h>
@@ -52,7 +54,12 @@ unsigned int portal_printk;
 
 static unsigned int g_nal = 0;
 
-typedef struct {
+static int g_socket_txmem = 0;
+static int g_socket_rxmem = 0;
+static int g_socket_nonagle = 1;
+
+typedef struct
+{
         char *name;
         int   num;
 } name2num_t;

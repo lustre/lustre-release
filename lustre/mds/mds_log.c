@@ -43,7 +43,7 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                                struct rw_semaphore **lock, int *lock_count)
 {
         struct obd_device *obd = ctxt->loc_obd;
-        struct obd_device *lov_obd = obd->u.mds.mds_lov_obd;
+        struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
         struct llog_ctxt *lctxt;
         int rc;
         ENTRY;
@@ -59,7 +59,7 @@ static int mds_llog_origin_connect(struct llog_ctxt *ctxt, int count,
                                    struct llog_gen *gen, struct obd_uuid *uuid)
 {
         struct obd_device *obd = ctxt->loc_obd;
-        struct obd_device *lov_obd = obd->u.mds.mds_lov_obd;
+        struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
         struct llog_ctxt *lctxt;
         int rc;
         ENTRY;
@@ -74,7 +74,7 @@ static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, int count,
                                 void *data)
 {
         struct obd_device *obd = ctxt->loc_obd;
-        struct obd_device *lov_obd = obd->u.mds.mds_lov_obd;
+        struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
         struct llog_ctxt *lctxt;
         int rc;
         ENTRY;
@@ -97,12 +97,13 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
         int lock_count = 0;
         ENTRY;
 
-        if (IS_ERR(mds->mds_lov_obd))
-                RETURN(PTR_ERR(mds->mds_lov_obd));
+        if (IS_ERR(mds->mds_osc_obd))
+                RETURN(PTR_ERR(mds->mds_osc_obd));
 
         RETURN(0);
 
-        rc = obd_unpackmd(mds->mds_lov_exp, &lsm, lmm, lmm_size);
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm,
+                          lmm, lmm_size);
         if (rc < 0)
                 RETURN(rc);
 
@@ -122,7 +123,7 @@ int mds_log_op_unlink(struct obd_device *obd, struct inode *inode,
                       cookies_size / sizeof(struct llog_cookie), NULL,
                       res ? &lcl->lcl_locks[0] : NULL, &lock_count);
 
-        obd_free_memmd(mds->mds_lov_exp, &lsm);
+        obd_free_memmd(mds->mds_osc_exp, &lsm);
 
         if (res && (rc <= 0 || lock_count == 0)) {
                 OBD_FREE(lcl, size);
@@ -144,7 +145,7 @@ static struct llog_operations mds_size_repl_logops = {
 int mds_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
                   struct obd_device *tgt, int count, struct llog_catid *logid)
 {
-        struct obd_device *lov_obd = obd->u.mds.mds_lov_obd;
+        struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
         int rc;
         ENTRY;
 
@@ -167,7 +168,7 @@ int mds_llog_init(struct obd_device *obd, struct obd_llogs *llogs,
 
 int mds_llog_finish(struct obd_device *obd, struct obd_llogs *llogs, int count)
 {
-        struct obd_device *lov_obd = obd->u.mds.mds_lov_obd;
+        struct obd_device *lov_obd = obd->u.mds.mds_osc_obd;
         int rc;
         ENTRY;
 

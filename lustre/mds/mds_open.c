@@ -337,7 +337,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
         /* replay case */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                LASSERT(id_ino(rec->ur_id2));
+                LASSERT (rec->ur_fid2->id);
                 body->valid |= OBD_MD_FLBLKSZ | OBD_MD_FLEASIZE;
                 lmm_size = rec->ur_eadatalen;
                 lmm = rec->ur_eadata;
@@ -387,7 +387,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 /* check if things like lfs setstripe are sending us the ea */
                 if (rec->ur_flags & MDS_OPEN_HAS_EA) {
                         rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                           mds->mds_lov_exp,
+                                           mds->mds_osc_exp,
                                            0, &lsm, rec->ur_eadata);
                         if (rc)
                                 GOTO(out_oa, rc);
@@ -397,7 +397,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                          * striping for CMD. -p */
                 } 
                 LASSERT(oa->o_gr >= FILTER_GROUP_FIRST_MDS);
-                rc = obd_create(mds->mds_lov_exp, oa, &lsm, &oti);
+                rc = obd_create(mds->mds_osc_exp, oa, &lsm, &oti);
                 if (rc) {
                         int level = D_ERROR;
                         if (rc == -ENOSPC)
@@ -413,7 +413,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                         GOTO(out_oa, rc);
                 }
         } else {
-                rc = obd_iocontrol(OBD_IOC_LOV_SETEA, mds->mds_lov_exp,
+                rc = obd_iocontrol(OBD_IOC_LOV_SETEA, mds->mds_osc_exp,
                                    0, &lsm, rec->ur_eadata);
                 if (rc) {
                         GOTO(out_oa, rc);
@@ -425,7 +425,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
                 oa->o_size = inode->i_size;
                 obdo_from_inode(oa, inode, OBD_MD_FLTYPE|OBD_MD_FLATIME|
                                 OBD_MD_FLMTIME| OBD_MD_FLCTIME| OBD_MD_FLSIZE);
-                rc = obd_setattr(mds->mds_lov_exp, oa, lsm, &oti);
+                rc = obd_setattr(mds->mds_osc_exp, oa, lsm, &oti);
                 if (rc) {
                         CERROR("error setting attrs for inode %lu: rc %d\n",
                                inode->i_ino, rc);
@@ -442,9 +442,9 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
 
         LASSERT(lsm && lsm->lsm_object_id);
         lmm = NULL;
-        rc = obd_packmd(mds->mds_lov_exp, &lmm, lsm);
-        if (!id_ino(rec->ur_id2))
-                obd_free_memmd(mds->mds_lov_exp, &lsm);
+        rc = obd_packmd(mds->mds_osc_exp, &lmm, lsm);
+        if (!rec->ur_fid2->id)
+                obd_free_memmd(mds->mds_osc_exp, &lsm);
         LASSERT(rc >= 0);
         lmm_size = rc;
         body->eadatasize = rc;
@@ -464,7 +464,7 @@ static int mds_create_objects(struct ptlrpc_request *req, int offset,
         LASSERT(lmm_bufsize >= lmm_size);
 
         memcpy(lmm_buf, lmm, lmm_size);
-        obd_free_diskmd(mds->mds_lov_exp, &lmm);
+        obd_free_diskmd(mds->mds_osc_exp, &lmm);
  out_oa:
         oti_free_cookies(&oti);
         obdo_free(oa);
@@ -488,9 +488,9 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
         struct dentry *parent, *dchild;
         struct ldlm_reply *rep;
         struct mds_body *body;
+        int rc;
         struct list_head *t;
         int put_child = 1;
-        int rc;
         ENTRY;
 
         LASSERT(offset == 3); /* only called via intent */
@@ -507,14 +507,14 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 return; /* error looking up parent or child */
         }
 
-        parent = mds_id2dentry(obd, rec->ur_id1, NULL);
-        LASSERTF(!IS_ERR(parent), "lid "DLID4" rc %ld\n", 
-                 OLID4(rec->ur_id1), PTR_ERR(parent));
+        parent = mds_fid2dentry(mds, rec->ur_fid1, NULL);
+        LASSERTF(!IS_ERR(parent), "fid "LPU64"/%u rc %ld\n", rec->ur_fid1->id,
+                 rec->ur_fid1->generation, PTR_ERR(parent));
 
-        dchild = ll_lookup_one_len(rec->ur_name, parent, 
-                                   rec->ur_namelen - 1);
-        LASSERTF(!IS_ERR(dchild), "parent "DLID4" child %s rc %ld\n",
-                 OLID4(rec->ur_id1), rec->ur_name, PTR_ERR(dchild));
+        dchild = ll_lookup_one_len(rec->ur_name, parent, rec->ur_namelen - 1);
+        LASSERTF(!IS_ERR(dchild), "parent "LPU64"/%u child %s rc %ld\n",
+                 rec->ur_fid1->id, rec->ur_fid1->generation, rec->ur_name,
+                 PTR_ERR(dchild));
 
         if (!dchild->d_inode)
                 GOTO(out_dput, 0); /* child not present to open */
@@ -526,8 +526,8 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
             req->rq_status)
                 GOTO(out_dput, 0);
 
-        /* get lock (write for O_CREAT, read otherwise) */
-        mds_pack_inode2body(obd, body, dchild->d_inode, 0);
+        mds_pack_inode2fid(obd, &body->fid1, dchild->d_inode);
+        mds_pack_inode2body(obd, body, dchild->d_inode);
         if (S_ISREG(dchild->d_inode->i_mode)) {
                 rc = mds_pack_md(obd, req->rq_repmsg, 2, body,
                                  dchild->d_inode, 1);
@@ -690,56 +690,50 @@ static int mds_finish_open(struct ptlrpc_request *req, struct dentry *dchild,
         RETURN(rc);
 }
 
-static int mds_open_by_id(struct ptlrpc_request *req,
-                          struct lustre_id *id,
-                          struct mds_body *body, int flags,
-                          struct mds_update_record *rec,
-                          struct ldlm_reply *rep)
+static int mds_open_by_fid(struct ptlrpc_request *req, struct ll_fid *fid,
+                           struct mds_body *body, int flags,
+                           struct mds_update_record *rec,struct ldlm_reply *rep)
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct inode *pending_dir = mds->mds_pending_dir->d_inode;
         struct dentry *dchild;
-        char idname[LL_ID_NAMELEN];
-        int idlen = 0, rc;
+        char fidname[LL_FID_NAMELEN];
+        int fidlen = 0, rc;
         void *handle = NULL;
         ENTRY;
 
         down(&pending_dir->i_sem);
-        
-        idlen = ll_id2str(idname, id_ino(id), id_gen(id));
-        
-        dchild = lookup_one_len(idname, mds->mds_pending_dir,
-                                idlen);
+        fidlen = ll_fid2str(fidname, fid->id, fid->generation);
+        dchild = lookup_one_len(fidname, mds->mds_pending_dir, fidlen);
         if (IS_ERR(dchild)) {
                 up(&pending_dir->i_sem);
                 rc = PTR_ERR(dchild);
-                CERROR("error looking up %s in PENDING: rc = %d\n", 
-                       idname, rc);
+                CERROR("error looking up %s in PENDING: rc = %d\n",fidname, rc);
                 RETURN(rc);
         }
 
         if (dchild->d_inode != NULL) {
                 up(&pending_dir->i_sem);
                 mds_inode_set_orphan(dchild->d_inode);
-                mds_pack_inode2body(req2obd(req), body, dchild->d_inode, 0);
+                mds_pack_inode2fid(req2obd(req), &body->fid1, dchild->d_inode);
+                mds_pack_inode2body(req2obd(req), body, dchild->d_inode);
                 intent_set_disposition(rep, DISP_LOOKUP_EXECD);
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
                 CWARN("Orphan %s found and opened in PENDING directory\n",
-                       idname);
+                       fidname);
                 goto open;
         }
         dput(dchild);
         up(&pending_dir->i_sem);
 
-        /*
-         * we didn't find it in PENDING so it isn't an orphan.  See if it was a
-         * regular inode that was previously created.
-         */
-        dchild = mds_id2dentry(req2obd(req), id, NULL);
+        /* We didn't find it in PENDING so it isn't an orphan.  See
+         * if it was a regular inode that was previously created. */
+        dchild = mds_fid2dentry(mds, fid, NULL);
         if (IS_ERR(dchild))
                 RETURN(PTR_ERR(dchild));
 
-        mds_pack_inode2body(req2obd(req), body, dchild->d_inode, 0);
+        mds_pack_inode2fid(req2obd(req), &body->fid1, dchild->d_inode);
+        mds_pack_inode2body(req2obd(req), body, dchild->d_inode);
         intent_set_disposition(rep, DISP_LOOKUP_EXECD);
         intent_set_disposition(rep, DISP_LOOKUP_POS);
 
@@ -770,14 +764,13 @@ int mds_pin(struct ptlrpc_request *req, int offset)
         reply_body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*reply_body));
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        rc = mds_open_by_id(req, &request_body->id1, reply_body,
-                            request_body->flags, NULL, NULL);
+        rc = mds_open_by_fid(req, &request_body->fid1, reply_body,
+                             request_body->flags, NULL, NULL);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
         RETURN(rc);
 }
 
-#if 0
 /*  Get a lock on the ino to sync with creation WRT inode reuse (bug 2029).
  *  If child_lockh is NULL we just get the lock as a barrier to wait for
  *  other holders of this lock, and drop it right away again. */
@@ -803,7 +796,6 @@ int mds_lock_new_child(struct obd_device *obd, struct inode *inode,
 
         RETURN(rc);
 }
-#endif
 
 static int is_mount_object(struct dentry *dparent)
 {
@@ -839,9 +831,9 @@ int mds_open(struct mds_update_record *rec, int offset,
         int mea_size, update_mode;
         ENTRY;
 
-        DEBUG_REQ(D_INODE, req, "parent "DLID4" name %*s mode %o",
-                  OLID4(rec->ur_id1), rec->ur_namelen - 1, rec->ur_name,
-                  rec->ur_mode);
+        DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u name %*s mode %o",
+                  rec->ur_fid1->id, rec->ur_fid1->generation,
+                  rec->ur_namelen - 1, rec->ur_name, rec->ur_mode);
 
         parent_lockh[0].cookie = 0;
         parent_lockh[1].cookie = 0;
@@ -857,30 +849,28 @@ int mds_open(struct mds_update_record *rec, int offset,
         }
 
         MDS_CHECK_RESENT(req, reconstruct_open(rec, offset, req, child_lockh));
+
         MDS_UPDATE_COUNTER(mds, MDS_OPEN_COUNT);
 
-        /*
-         * Step 0: If we are passed a id, then we assume the client already
-         * opened this file and is only replaying the RPC, so we open the inode
-         * by fid (at some large expense in security).
-         */
+        /* Step 0: If we are passed a fid, then we assume the client already
+         * opened this file and is only replaying the RPC, so we open the
+         * inode by fid (at some large expense in security). */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                CDEBUG(D_HA, "open obj "DLID4" name %*s mode %o\n",
-                       OLID4(rec->ur_id2), rec->ur_namelen - 1, 
-                       rec->ur_name, rec->ur_mode);
+                CDEBUG(D_HA, "open fid "LPU64"/%u name %*s mode %o\n",
+                          rec->ur_fid2->id, rec->ur_fid2->generation,
+                          rec->ur_namelen - 1, rec->ur_name, rec->ur_mode);
 
-                LASSERT(id_ino(rec->ur_id2));
+                LASSERT(rec->ur_fid2->id);
 
-                rc = mds_open_by_id(req, rec->ur_id2, body, rec->ur_flags,
-                                    rec, rep);
+                rc = mds_open_by_fid(req, rec->ur_fid2, body, rec->ur_flags,
+                                     rec, rep);
                 if (rc != -ENOENT)
                         RETURN(rc);
-
                 /* We didn't find the correct inode on disk either, so we
                  * need to re-create it via a regular replay. */
                 LASSERT(rec->ur_flags & MDS_OPEN_CREAT);
         } else {
-                LASSERT(!id_ino(rec->ur_id2));
+                LASSERT(!rec->ur_fid2->id);
         }
 
         LASSERT(offset == 3); /* If we got here, we must be called via intent */
@@ -902,20 +892,24 @@ int mds_open(struct mds_update_record *rec, int offset,
         }
         
         if (rec->ur_namelen == 1) {
-                /* client (LMV) wants to open the file by id */
-                CDEBUG(D_OTHER, "OPEN by id "DLID4"\n", OLID4(rec->ur_id1));
-                dchild = mds_id2dentry(obd, rec->ur_id1, NULL);
+                /* client (LMV) wants to open the file by fid */
+                CDEBUG(D_OTHER, "OPEN by fid %u/%u/%u\n",
+                                (unsigned) rec->ur_fid1->mds,
+                                (unsigned) rec->ur_fid1->id,
+                                (unsigned) rec->ur_fid1->generation);
+                dchild = mds_fid2dentry(mds, rec->ur_fid1, NULL);
                 if (IS_ERR(dchild)) {
                         rc = PTR_ERR(dparent);
-                        CERROR("child lookup by an id error %d\n", rc);
+                        CERROR("child lookup by a fid error %d\n", rc);
                         GOTO(cleanup, rc);
                 }
                 goto got_child;
         }
         
-        dparent = mds_id2locked_dentry(obd, rec->ur_id1, NULL, parent_mode,
-                                       parent_lockh, &update_mode, rec->ur_name,
-                                       rec->ur_namelen - 1, MDS_INODELOCK_UPDATE);
+        dparent = mds_fid2locked_dentry(obd, rec->ur_fid1, NULL, parent_mode,
+                                        parent_lockh, &update_mode, rec->ur_name,
+                                        rec->ur_namelen - 1,
+                                        MDS_INODELOCK_UPDATE);
         if (IS_ERR(dparent)) {
                 rc = PTR_ERR(dparent);
                 if (rc != -ENOENT)
@@ -932,19 +926,17 @@ int mds_open(struct mds_update_record *rec, int offset,
                 GOTO(cleanup, rc);
        
         if (mea != NULL) {
-                /*
-                 * dir is already splitted, check is requested filename should *
-                 * live at this MDS or at another one.
-                 */
+                /* dir is already splitted, check is requested filename
+                 * should live at this MDS or at another one */
                 int i;
                 i = mea_name2idx(mea, rec->ur_name, rec->ur_namelen - 1);
-                if (mea->mea_master != id_group(&mea->mea_ids[i])) {
+                if (mea->mea_master != mea->mea_fids[i].mds) {
                         CDEBUG(D_OTHER,
                                "%s: inapropriate MDS(%d) for %lu/%u:%s."
-                               " should be %lu(%d)\n", obd->obd_name,
+                               " should be %d(%d)\n", obd->obd_name,
                                mea->mea_master, dparent->d_inode->i_ino,
                                dparent->d_inode->i_generation, rec->ur_name,
-                               (unsigned long)id_group(&mea->mea_ids[i]), i);
+                               mea->mea_fids[i].mds, i);
                         GOTO(cleanup, rc = -ERESTART);
                 }
         }
@@ -966,20 +958,22 @@ got_child:
                 struct ldlm_res_id res_id = { . name = {0} };
                 ldlm_policy_data_t policy;
                 int flags = 0;
-
-                mds_pack_dentry2body(obd, body, dchild, 1);
+                CDEBUG(D_OTHER, "cross reference: %lu/%lu/%lu\n",
+                       (unsigned long) dchild->d_mdsnum,
+                       (unsigned long) dchild->d_inum,
+                       (unsigned long) dchild->d_generation);
+                body->valid |= OBD_MD_FLID | OBD_MD_MDS;
+                body->fid1.id = dchild->d_inum;
+                body->fid1.mds = dchild->d_mdsnum;
+                body->fid1.generation = dchild->d_generation;
                 intent_set_disposition(rep, DISP_LOOKUP_POS);
-
-                CDEBUG(D_OTHER, "cross reference: "DLID4"\n",
-                       OLID4(&body->id1));
-                
-                res_id.name[0] = dchild->d_fid;
-                res_id.name[1] = dchild->d_mdsnum;
-                
+                res_id.name[0] = dchild->d_inum;
+                res_id.name[1] = dchild->d_generation;
                 policy.l_inodebits.bits = MDS_INODELOCK_LOOKUP;
                 rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
                                       res_id, LDLM_IBITS, &policy,
-                                      LCK_PR, &flags, mds_blocking_ast,
+                                      LCK_PR, &flags,
+                                      mds_blocking_ast,
                                       ldlm_completion_ast, NULL, NULL,
                                       NULL, 0, NULL, child_lockh);
 #ifdef S_PDIROPS
@@ -999,21 +993,15 @@ got_child:
         else
                 intent_set_disposition(rep, DISP_LOOKUP_NEG);
 
-        /* Step 3: If the child was negative, and we're supposed to, create it.*/
+        /*Step 3: If the child was negative, and we're supposed to, create it.*/
         if (dchild->d_inode == NULL) {
-                unsigned long ino;
+                unsigned long ino = rec->ur_fid2->id;
                 struct iattr iattr;
                 struct inode *inode;
-                
-                ino = (unsigned long)id_ino(rec->ur_id2);
-                
-                rc = mds_try_to_split_dir(obd, dparent, &mea, 0,
-                                          update_mode);
-                
+                rc = mds_try_to_split_dir(obd, dparent, &mea, 0, update_mode);
                 CDEBUG(D_OTHER, "%s: splitted %lu/%u - %d\n",
                        obd->obd_name, dparent->d_inode->i_ino,
                        dparent->d_inode->i_generation, rc);
-
                 if (rc > 0) {
                         /* dir got splitted */
                         GOTO(cleanup, rc = -ERESTART);
@@ -1023,10 +1011,7 @@ got_child:
                 }
 
                 if (!(rec->ur_flags & MDS_OPEN_CREAT)) {
-                        /*
-                         * dentry is negative and we weren't supposed to create
-                         * object, get out of here.
-                         */
+                        /* It's negative and we weren't supposed to create it */
                         GOTO(cleanup, rc = -ENOENT);
                 }
 
@@ -1042,7 +1027,7 @@ got_child:
                 dp.p_ptr = req;
                 dp.p_inum = ino;
 
-                rc = ll_vfs_create(dparent->d_inode, dchild, rec->ur_mode, NULL);
+                rc = ll_vfs_create(dparent->d_inode, dchild, rec->ur_mode,NULL);
                 if (dchild->d_fsdata == (void *)(unsigned long)ino)
                         dchild->d_fsdata = NULL;
 
@@ -1053,23 +1038,22 @@ got_child:
                 inode = dchild->d_inode;
                 if (ino) {
                         LASSERT(ino == inode->i_ino);
-                        
-                        /* written as part of setattr */
-                        inode->i_generation = id_gen(rec->ur_id2);
+                        /* Written as part of setattr */
+                        inode->i_generation = rec->ur_fid2->generation;
                         CDEBUG(D_HA, "recreated ino %lu with gen %u\n",
                                inode->i_ino, inode->i_generation);
                 }
 
                 created = 1;
-                LTIME_S(iattr.ia_atime) = LTIME_S(rec->ur_time);
-                LTIME_S(iattr.ia_ctime) = LTIME_S(rec->ur_time);
-                LTIME_S(iattr.ia_mtime) = LTIME_S(rec->ur_time);
+                LTIME_S(iattr.ia_atime) = rec->ur_time;
+                LTIME_S(iattr.ia_ctime) = rec->ur_time;
+                LTIME_S(iattr.ia_mtime) = rec->ur_time;
 
-                iattr.ia_uid = rec->ur_fsuid;
+                iattr.ia_uid = rec->_ur_fsuid;
                 if (dparent->d_inode->i_mode & S_ISGID)
                         iattr.ia_gid = dparent->d_inode->i_gid;
                 else
-                        iattr.ia_gid = rec->ur_fsgid;
+                        iattr.ia_gid = rec->_ur_fsgid;
 
                 iattr.ia_valid = ATTR_UID | ATTR_GID | ATTR_ATIME |
                         ATTR_MTIME | ATTR_CTIME;
@@ -1086,30 +1070,6 @@ got_child:
                 else
                         MDS_UPDATE_COUNTER(mds, MDS_CREATE_COUNT);
 
-                down(&dchild->d_inode->i_sem);
-                if (ino) {
-                        rc = mds_update_inode_sid(obd, dchild->d_inode,
-                                                  handle, rec->ur_id2);
-                        if (rc) {
-                                CERROR("mds_update_inode_sid() failed, "
-                                       "rc = %d\n", rc);
-                        }
-                        spin_lock(&mds->mds_fid_lock);
-                        if (id_fid(rec->ur_id2) > mds->mds_last_fid)
-                                mds->mds_last_fid = id_fid(rec->ur_id2);
-                        spin_unlock(&mds->mds_fid_lock);
-                        
-                        id_assign_fid(&body->id1, rec->ur_id2);
-                } else {
-                        rc = mds_alloc_inode_sid(obd, dchild->d_inode,
-                                                 handle, &body->id1);
-                        if (rc) {
-                                CERROR("mds_alloc_inode_sid() failed, "
-                                       "rc = %d\n", rc);
-                        }
-                }
-                up(&dchild->d_inode->i_sem);
-                
                 if (!(rec->ur_flags & O_EXCL)) { /* bug 3313 */
                         rc = fsfilt_commit(obd, dchild->d_inode->i_sb,
                                            dchild->d_inode, handle, 0);
@@ -1117,19 +1077,13 @@ got_child:
                 }
 
                 acc_mode = 0;           /* Don't check for permissions */
-                
-                /* 
-                 * we do not read fid from EA here, because itis already updated
-                 * and thus we avoid not needed possible IO, locking, etc.
-                 */
-                body->valid |= OBD_MD_FID;
-                mds_pack_inode2body(obd, body, dchild->d_inode, 0);
-        } else {
-                mds_pack_inode2body(obd, body, dchild->d_inode, 1);
         }
         LASSERTF(!mds_inode_is_orphan(dchild->d_inode),
                  "dchild %*s (%p) inode %p\n", dchild->d_name.len,
                  dchild->d_name.name, dchild, dchild->d_inode);
+
+        mds_pack_inode2fid(obd, &body->fid1, dchild->d_inode);
+        mds_pack_inode2body(obd, body, dchild->d_inode);
 
         if (S_ISREG(dchild->d_inode->i_mode)) {
                 /* Check permissions etc */
@@ -1182,8 +1136,8 @@ got_child:
         }
 
         /* Step 5: mds_open it */
-        rc = mds_finish_open(req, dchild, body, rec->ur_flags, &handle,
-                             rec, rep);
+        rc = mds_finish_open(req, dchild, body, rec->ur_flags, &handle, rec,
+                             rep);
         GOTO(cleanup, rc);
 
  cleanup:
@@ -1238,8 +1192,8 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                   int unlink_orphan)
 {
         struct inode *inode = mfd->mfd_dentry->d_inode;
-        char idname[LL_ID_NAMELEN];
-        int last_orphan, idlen, rc = 0, cleanup_phase = 0;
+        char fidname[LL_FID_NAMELEN];
+        int last_orphan, fidlen, rc = 0, cleanup_phase = 0;
         struct dentry *pending_child = NULL;
         struct mds_obd *mds = &obd->u.mds;
         struct inode *pending_dir = mds->mds_pending_dir->d_inode;
@@ -1257,12 +1211,11 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                 reply_body = lustre_msg_buf(req->rq_repmsg, 0,
                                             sizeof(*reply_body));
 
-        idlen = ll_id2str(idname, inode->i_ino, inode->i_generation);
-        CDEBUG(D_INODE, "inode %p ino %s nlink %d orphan %d\n", inode, 
-               idname, inode->i_nlink, mds_orphan_open_count(inode));
-
+        fidlen = ll_fid2str(fidname, inode->i_ino, inode->i_generation);
+        CDEBUG(D_INODE, "inode %p ino %s nlink %d orphan %d\n", inode, fidname,
+               inode->i_nlink, mds_orphan_open_count(inode));
         last_orphan = mds_orphan_open_dec_test(inode) &&
-                mds_inode_is_orphan(inode);
+                      mds_inode_is_orphan(inode);
         UP_WRITE_I_ALLOC_SEM(inode);
 
         /* this is half of the actual "close" */
@@ -1280,26 +1233,24 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
 
                 if (obd->obd_recovering) {
                         CDEBUG(D_HA, "not remove orphan %s until recovery"
-                               " is over\n", idname);
+                               " is over\n", fidname);
                         GOTO(out, rc);
                 }
 
-                CDEBUG(D_HA, "destroying orphan object %s\n", idname);
+                CDEBUG(D_HA, "destroying orphan object %s\n", fidname);
                 
                 if ((S_ISREG(inode->i_mode) && inode->i_nlink != 1) ||
                     (S_ISDIR(inode->i_mode) && inode->i_nlink != 2))
                         CERROR("found \"orphan\" %s %s with link count %d\n",
                                S_ISREG(inode->i_mode) ? "file" : "dir",
-                               idname, inode->i_nlink);
-                /*
-                 * sadly, there is no easy way to save pending_child from
-                 * mds_reint_unlink() into mfd, so we need to re-lookup, but
-                 * normally it will still be in the dcache.
-                 */
+                               fidname, inode->i_nlink);
+                /* Sadly, there is no easy way to save pending_child from
+                 * mds_reint_unlink() into mfd, so we need to re-lookup,
+                 * but normally it will still be in the dcache. */
                 down(&pending_dir->i_sem);
-                cleanup_phase = 1; /* up(i_sem) when finished */
-                pending_child = lookup_one_len(idname, mds->mds_pending_dir,
-                                               idlen);
+                cleanup_phase = 1;  /* up(&pending_dir->i_sem) when finished */
+                pending_child = lookup_one_len(fidname, mds->mds_pending_dir,
+                                               fidlen);
                 if (IS_ERR(pending_child))
                         GOTO(cleanup, rc = PTR_ERR(pending_child));
                 LASSERT(pending_child->d_inode != NULL);
@@ -1326,8 +1277,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                 else
                         rc = vfs_unlink(pending_dir, pending_child);
                 if (rc)
-                        CERROR("error unlinking orphan %s: rc %d\n",
-                               idname, rc);
+                        CERROR("error unlinking orphan %s: rc %d\n",fidname,rc);
 
                 if (req != NULL && req->rq_repmsg != NULL &&
                     (reply_body->valid & OBD_MD_FLEASIZE) &&
@@ -1392,7 +1342,7 @@ int mds_mfd_close(struct ptlrpc_request *req, int offset,
                         GOTO(cleanup, rc = PTR_ERR(handle));
                 rc = fsfilt_setattr(obd, mfd->mfd_dentry, handle, &iattr, 0);
                 if (rc)
-                        CERROR("error in setattr(%s): rc %d\n", idname, rc);
+                        CERROR("error in setattr(%s): rc %d\n", fidname, rc);
         }
 out:
         /* If other clients have this file open for write, rc will be > 0 */
@@ -1469,8 +1419,7 @@ int mds_close(struct ptlrpc_request *req, int offset)
         mfd = mds_handle2mfd(&body->handle);
         if (mfd == NULL) {
                 DEBUG_REQ(D_ERROR, req, "no handle for file close ino "LPD64
-                          ": cookie "LPX64, body->id1.li_stc.u.e3s.l3s_ino,
-                          body->handle.cookie);
+                          ": cookie "LPX64, body->fid1.id, body->handle.cookie);
                 req->rq_status = -ESTALE;
                 RETURN(-ESTALE);
         }
@@ -1482,7 +1431,8 @@ int mds_close(struct ptlrpc_request *req, int offset)
                 body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
                 LASSERT(body != NULL);
 
-                mds_pack_inode2body(obd, body, inode, 0);
+                mds_pack_inode2fid(obd, &body->fid1, inode);
+                mds_pack_inode2body(obd, body, inode);
                 mds_pack_md(obd, req->rq_repmsg, 1, body, inode, MDS_PACK_MD_LOCK);
         }
         spin_lock(&med->med_open_lock);

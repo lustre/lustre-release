@@ -44,7 +44,7 @@
  *   - error handling is totally missed
  */
 
-int mds_lmv_connect(struct obd_device *obd, char *lmv_name)
+int mds_lmv_connect(struct obd_device *obd, char * lmv_name)
 {
         struct mds_obd *mds = &obd->u.mds;
         struct lustre_handle conn = {0};
@@ -71,8 +71,7 @@ int mds_lmv_connect(struct obd_device *obd, char *lmv_name)
                 GOTO(err_last, rc = -ENOTCONN);
         }
 
-        rc = obd_connect(&conn, mds->mds_lmv_obd,
-                         &obd->obd_uuid, OBD_OPT_MDS_CONNECTION);
+        rc = obd_connect(&conn, mds->mds_lmv_obd, &obd->obd_uuid, OBD_OPT_MDS_CONNECTION);
         if (rc) {
                 CERROR("MDS cannot connect to LMV %s (%d)\n",
                        lmv_name, rc);
@@ -91,8 +90,8 @@ int mds_lmv_connect(struct obd_device *obd, char *lmv_name)
         }
 
         /* retrieve size of EA */
-        rc = obd_get_info(mds->mds_lmv_exp, strlen("mdsize"),
-                          "mdsize", &valsize, &value);
+        rc = obd_get_info(mds->mds_lmv_exp, strlen("mdsize"), "mdsize", 
+                          &valsize, &value);
         if (rc) 
                 GOTO(err_reg, rc);
 
@@ -100,8 +99,8 @@ int mds_lmv_connect(struct obd_device *obd, char *lmv_name)
                 mds->mds_max_mdsize = value;
 
         /* find our number in LMV cluster */
-        rc = obd_get_info(mds->mds_lmv_exp, strlen("mdsnum"),
-                          "mdsnum", &valsize, &value);
+        rc = obd_get_info(mds->mds_lmv_exp, strlen("mdsnum"), "mdsnum", 
+                          &valsize, &value);
         if (rc) 
                 GOTO(err_reg, rc);
         
@@ -133,11 +132,9 @@ int mds_lmv_postsetup(struct obd_device *obd)
         int rc = 0;
         ENTRY;
 
-        if (mds->mds_lmv_exp) {
-                rc = obd_init_ea_size(mds->mds_lmv_exp,
-                                      mds->mds_max_mdsize,
+        if (mds->mds_lmv_exp)
+                rc = obd_init_ea_size(mds->mds_lmv_exp, mds->mds_max_mdsize,
                                       mds->mds_max_cookiesize);
-        }
         
         RETURN(rc);
 }
@@ -148,52 +145,24 @@ int mds_lmv_disconnect(struct obd_device *obd, int flags)
         int rc = 0;
         ENTRY;
 
-        if (!mds->mds_lmv_connected)
-                RETURN(0);
-
         down(&mds->mds_lmv_sem);
         if (!IS_ERR(mds->mds_lmv_obd) && mds->mds_lmv_exp != NULL) {
-                LASSERT(mds->mds_lmv_connected);
-                
+                LASSERT(mds->mds_lmv_connected != 0);
+                mds->mds_lmv_connected = 0;
                 obd_register_observer(mds->mds_lmv_obd, NULL);
 
-                if (flags & OBD_OPT_FORCE) {
-                        struct obd_device *lmv_obd;
-                        struct obd_ioctl_data ioc_data = { 0 };
-                        
-                        lmv_obd = class_exp2obd(mds->mds_lmv_exp);
-                        if (lmv_obd == NULL)
-                                GOTO(out, rc = 0);
-
-                        /* 
-                         * making disconnecting lmv stuff do not send anything
-                         * to all remote MDSs from LMV. This is needed to
-                         * prevent possible hanging with endless recovery, when
-                         * MDS sends disconnect to already disconnected
-                         * target. Probably this is wrong, but client does the
-                         * same in --force mode and I do not see why can't we do
-                         * it here. --umka.
-                         */
-                        lmv_obd->obd_no_recov = 1;
-                        obd_iocontrol(IOC_OSC_SET_ACTIVE, mds->mds_lmv_exp,
-                                      sizeof(ioc_data), &ioc_data, NULL);
-                }
-
-                /*
-                 * if obd_disconnect() fails (probably because the export was
-                 * disconnected by class_disconnect_exports()) then we just need
-                 * to drop our ref.
-                 */
-                mds->mds_lmv_connected = 0;
+                /* if obd_disconnect fails (probably because the export was
+                 * disconnected by class_disconnect_exports) then we just need
+                 * to drop our ref. */
                 rc = obd_disconnect(mds->mds_lmv_exp, flags);
                 if (rc)
                         class_export_put(mds->mds_lmv_exp);
-
-        out:
+                
                 mds->mds_lmv_exp = NULL;
                 mds->mds_lmv_obd = NULL;
         }
         up(&mds->mds_lmv_sem);
+
         RETURN(rc);
 }
 
@@ -231,13 +200,12 @@ struct dir_entry {
         __u16   mds;
         __u32   ino;
         __u32   generation;
-        __u32   fid;
         char    name[0];
 };
 
 #define DIR_PAD			4
 #define DIR_ROUND		(DIR_PAD - 1)
-#define DIR_REC_LEN(name_len)	(((name_len) + 16 + DIR_ROUND) & ~DIR_ROUND)
+#define DIR_REC_LEN(name_len)	(((name_len) + 12 + DIR_ROUND) & ~DIR_ROUND)
 
 /* this struct holds dir entries for particular MDS to be flushed */
 struct dir_cache {
@@ -281,43 +249,26 @@ static int retrieve_generation_numbers(struct dirsplit_control *dc, void *buf)
         struct mds_obd *mds = &dc->obd->u.mds;
         struct dir_entry *de;
         struct dentry *dentry;
-        char *end;
+        char * end;
         
         end = buf + PAGE_SIZE;
         de = (struct dir_entry *) buf;
         while ((char *) de < end && de->namelen) {
                 /* lookup an inode */
                 LASSERT(de->namelen <= 255);
-                dentry = ll_lookup_one_len(de->name, dc->dentry, 
-                                           de->namelen);
+                dentry = ll_lookup_one_len(de->name, dc->dentry, de->namelen);
                 if (IS_ERR(dentry)) {
                         CERROR("can't lookup %*s: %d\n", de->namelen,
                                de->name, (int) PTR_ERR(dentry));
                         goto next;
                 }
                 if (dentry->d_inode != NULL) {
-                        int rc;
-                        struct lustre_id sid;
-
-                        down(&dentry->d_inode->i_sem);
-                        rc = mds_read_inode_sid(dc->obd,
-                                                dentry->d_inode, &sid);
-                        up(&dentry->d_inode->i_sem);
-                        if (rc) {
-                                CERROR("Can't read inode self id, "
-                                       "inode %lu, rc %d\n",
-                                       dentry->d_inode->i_ino, rc);
-                                goto next;
-                        }
-
-                        de->fid = id_fid(&sid);
                         de->mds = mds->mds_num;
                         de->ino = dentry->d_inode->i_ino;
                         de->generation = dentry->d_inode->i_generation;
                 } else if (dentry->d_flags & DCACHE_CROSS_REF) {
-                        de->fid = dentry->d_fid;
-                        de->ino = dentry->d_inum;
                         de->mds = dentry->d_mdsnum;
+                        de->ino = dentry->d_inum;
                         de->generation = dentry->d_generation;
                 } else {
                         CERROR("can't lookup %*s\n", de->namelen, de->name);
@@ -392,11 +343,11 @@ static int remove_entries_from_orig_dir(struct dirsplit_control *dc, int mdsnum)
                         /* lookup an inode */
                         LASSERT(de->namelen <= 255);
 
-                        dentry = ll_lookup_one_len(de->name, dc->dentry, 
+                        dentry = ll_lookup_one_len(de->name, dc->dentry,
                                                    de->namelen);
                         if (IS_ERR(dentry)) {
                                 CERROR("can't lookup %*s: %d\n", de->namelen,
-                                       de->name, (int) PTR_ERR(dentry));
+                                                de->name, (int) PTR_ERR(dentry));
                                 goto next;
                         }
                         rc = fsfilt_del_dir_entry(dc->obd, dentry);
@@ -409,8 +360,8 @@ next:
         RETURN(0);
 }
 
-static int filldir(void * __buf, const char * name, int namlen,
-                   loff_t offset, ino_t ino, unsigned int d_type)
+static int filldir(void * __buf, const char * name, int namlen, loff_t offset,
+		   ino_t ino, unsigned int d_type)
 {
         struct dirsplit_control *dc = __buf;
         struct mds_obd *mds = &dc->obd->u.mds;
@@ -420,8 +371,8 @@ static int filldir(void * __buf, const char * name, int namlen,
         char *n;
         ENTRY;
 
-        if (name[0] == '.' &&
-            (namlen == 1 || (namlen == 2 && name[1] == '.'))) {
+        if (name[0] == '.' && (namlen == 1 ||
+                                (namlen == 2 && name[1] == '.'))) {
                 /* skip special entries */
                 RETURN(0);
         }
@@ -464,7 +415,7 @@ static int filldir(void * __buf, const char * name, int namlen,
 }
 
 int scan_and_distribute(struct obd_device *obd, struct dentry *dentry,
-                        struct mea *mea)
+                                struct mea *mea)
 {
         struct inode *dir = dentry->d_inode;
         struct dirsplit_control dc;
@@ -476,9 +427,7 @@ int scan_and_distribute(struct obd_device *obd, struct dentry *dentry,
         OBD_ALLOC(file_name, nlen);
         if (!file_name)
                 RETURN(-ENOMEM);
-        
-        i = sprintf(file_name, "__iopen__/0x%lx",
-                    dentry->d_inode->i_ino);
+        i = sprintf(file_name, "__iopen__/0x%lx", dentry->d_inode->i_ino);
 
         file = filp_open(file_name, O_RDONLY, 0);
         if (IS_ERR(file)) {
@@ -540,8 +489,9 @@ cleanup:
         RETURN(err);
 }
 
-#define MAX_DIR_SIZE      (64 * 1024)
-#define I_NON_SPLITTABLE  (256)
+#define MAX_DIR_SIZE    (64 * 1024)
+
+#define I_NON_SPLITTABLE        256
 
 int mds_splitting_expected(struct obd_device *obd, struct dentry *dentry)
 {
@@ -551,7 +501,7 @@ int mds_splitting_expected(struct obd_device *obd, struct dentry *dentry)
 
 	/* clustered MD ? */
 	if (!mds->mds_lmv_obd)
-		return MDS_NO_SPLITTABLE;
+		RETURN(MDS_NO_SPLITTABLE);
 
         /* inode exist? */
         if (dentry->d_inode == NULL)
@@ -566,7 +516,7 @@ int mds_splitting_expected(struct obd_device *obd, struct dentry *dentry)
                 return MDS_NO_SPLITTABLE;
 
         /* don't split root directory */
-        if (dentry->d_inode->i_ino == id_ino(&mds->mds_rootid))
+        if (dentry->d_inode->i_ino == mds->mds_rootfid.id)
                 return MDS_NO_SPLITTABLE;
 
         /* large enough to be splitted? */
@@ -579,13 +529,14 @@ int mds_splitting_expected(struct obd_device *obd, struct dentry *dentry)
                 rc = MDS_NO_SPLITTABLE;
                 /* mark to skip subsequent checks */
                 dentry->d_inode->i_flags |= I_NON_SPLITTABLE;
-                OBD_FREE(mea, size);
         } else {
                 /* may be splitted */
                 rc = MDS_EXPECT_SPLIT;
         }
 
-        return rc;
+        if (mea)
+                OBD_FREE(mea, size);
+        RETURN(rc);
 }
 
 /*
@@ -599,13 +550,11 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
         struct mea *tmea = NULL;
         struct obdo *oa = NULL;
 	int rc, mea_size = 0;
-        struct lustre_id id;
 	void *handle;
 	ENTRY;
 
         if (update_mode != LCK_EX)
                 return 0;
-        
         /* TODO: optimization possible - we already may have mea here */
         rc = mds_splitting_expected(obd, dentry);
         if (rc == MDS_NO_SPLITTABLE)
@@ -635,7 +584,7 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
                 RETURN(rc);
         }
         if (*mea == NULL)
-                RETURN(-ENOMEM);
+                RETURN(-EINVAL);
 
         (*mea)->mea_count = nstripes;
        
@@ -656,27 +605,14 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
         oa->o_valid |= OBD_MD_FLID | OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
         oa->o_mode = dir->i_mode;
 
-        down(&dir->i_sem);
-        rc = mds_read_inode_sid(obd, dir, &id);
-        up(&dir->i_sem);
-        if (rc) {
-                CERROR("Can't read inode self id, inode %lu, "
-                       "rc %d.\n", dir->i_ino, rc);
-                GOTO(err_oa, rc);
-        }
-        oa->o_fid = id_fid(&id);
-
         CDEBUG(D_OTHER, "%s: create subdirs with mode %o, uid %u, gid %u\n",
-               obd->obd_name, dir->i_mode, dir->i_uid, dir->i_gid);
+                        obd->obd_name, dir->i_mode, dir->i_uid, dir->i_gid);
                         
         rc = obd_create(mds->mds_lmv_exp, oa,
                         (struct lov_stripe_md **)mea, NULL);
-        if (rc) {
-                CERROR("Can't create remote inode, rc = %d\n", rc);
+        if (rc)
                 GOTO(err_oa, rc);
-        }
 
-        LASSERT(id_fid(&(*mea)->mea_ids[0]));
         CDEBUG(D_OTHER, "%d dirobjects created\n", (int)(*mea)->mea_count);
 
 	/* 2) update dir attribute */
@@ -688,7 +624,7 @@ int mds_try_to_split_dir(struct obd_device *obd, struct dentry *dentry,
                 CERROR("fsfilt_start() failed: %d\n", (int) PTR_ERR(handle));
                 GOTO(err_oa, rc = PTR_ERR(handle));
         }
-
+        
 	rc = fsfilt_set_md(obd, dir, handle, *mea, mea_size);
         if (rc) {
                 up(&dir->i_sem);
@@ -737,9 +673,9 @@ static int filter_start_page_write(struct inode *inode,
         return 0;
 }
 
-struct dentry *filter_id2dentry(struct obd_device *obd,
-                                struct dentry *dir_dentry,
-                                obd_gr group, obd_id id);
+struct dentry *filter_fid2dentry(struct obd_device *obd,
+                                 struct dentry *dir_dentry,
+                                 obd_gr group, obd_id id);
 
 int mds_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                 int objcount, struct obd_ioobj *obj,
@@ -747,28 +683,25 @@ int mds_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
                 struct niobuf_local *res,
                 struct obd_trans_info *oti)
 {
+        struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct niobuf_remote *rnb;
         struct niobuf_local *lnb = NULL;
         int rc = 0, i, tot_bytes = 0;
         unsigned long now = jiffies;
         struct dentry *dentry;
-        struct lustre_id id;
+        struct ll_fid fid;
         ENTRY;
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
 
         memset(res, 0, niocount * sizeof(*res));
 
-        id_fid(&id) = 0;
-        id_group(&id) = 0;
-        id_ino(&id) = obj->ioo_id;
-        id_gen(&id) = obj->ioo_gr;
-        
-        dentry = mds_id2dentry(exp->exp_obd, &id, NULL);
+        fid.id = obj->ioo_id;
+        fid.generation = obj->ioo_gr;
+        dentry = mds_fid2dentry(mds, &fid, NULL);
         if (IS_ERR(dentry)) {
                 CERROR("can't get dentry for "LPU64"/%u: %d\n",
-                       id.li_stc.u.e3s.l3s_ino, id.li_stc.u.e3s.l3s_gen,
-                       (int)PTR_ERR(dentry));
+                       fid.id, fid.generation, (int) PTR_ERR(dentry));
                 GOTO(cleanup, rc = (int) PTR_ERR(dentry));
         }
 
@@ -844,12 +777,12 @@ int mds_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
                 while ((char *) de < end && de->namelen) {
                         err = fsfilt_add_dir_entry(obd, res->dentry, de->name,
                                                    de->namelen, de->ino,
-                                                   de->generation, de->mds,
-                                                   de->fid);
+                                                   de->generation, de->mds);
                         if (err) {
                                 CERROR("can't add dir entry %*s->%u/%u/%u"
-                                       " to %lu/%u: %d\n", de->namelen,
-                                       de->name, de->mds, (unsigned)de->ino,
+                                       " to %lu/%u: %d\n",
+                                       de->namelen, de->name,
+                                       de->mds, (unsigned) de->ino,
                                        (unsigned) de->generation,
                                        res->dentry->d_inode->i_ino,
                                        res->dentry->d_inode->i_generation,
@@ -895,8 +828,6 @@ int mds_lock_slave_objs(struct obd_device *obd, struct dentry *dentry,
         struct lookup_intent it;
         struct mea *mea = NULL;
         int mea_size, rc;
-        int handle_size;
-        ENTRY;
 
         LASSERT(rlockh != NULL);
         LASSERT(dentry != NULL);
@@ -904,44 +835,38 @@ int mds_lock_slave_objs(struct obd_device *obd, struct dentry *dentry,
 
 	/* clustered MD ? */
 	if (!mds->mds_lmv_obd)
-	        RETURN(0);
+	        return 0;
 
         /* a dir can be splitted only */
         if (!S_ISDIR(dentry->d_inode->i_mode))
-                RETURN(0);
+                return 0;
 
-        rc = mds_get_lmv_attr(obd, dentry->d_inode,
-                              &mea, &mea_size);
+        rc = mds_get_lmv_attr(obd, dentry->d_inode, &mea, &mea_size);
         if (rc)
-                RETURN(rc);
+                return rc;
 
         if (mea == NULL)
-                RETURN(0);
-        
-        if (mea->mea_count == 0)
+                return 0;
+        if (mea->mea_count == 0) {
                 /* this is slave object */
                 GOTO(cleanup, rc = 0);
+        }
                 
-        CDEBUG(D_OTHER, "%s: lock slaves for %lu/%lu\n",
-               obd->obd_name, (unsigned long)dentry->d_inode->i_ino,
-               (unsigned long)dentry->d_inode->i_generation);
+        CDEBUG(D_OTHER, "%s: lock slaves for %lu/%lu\n", obd->obd_name,
+               (unsigned long) dentry->d_inode->i_ino,
+               (unsigned long) dentry->d_inode->i_generation);
 
-        handle_size = sizeof(struct lustre_handle) *
-                mea->mea_count;
-        
-        OBD_ALLOC(*rlockh, handle_size);
+        OBD_ALLOC(*rlockh, sizeof(struct lustre_handle) * mea->mea_count);
         if (*rlockh == NULL)
                 GOTO(cleanup, rc = -ENOMEM);
+        memset(*rlockh, 0, sizeof(struct lustre_handle) * mea->mea_count);
 
-        memset(*rlockh, 0, handle_size);
         memset(&op_data, 0, sizeof(op_data));
-
         op_data.mea1 = mea;
         it.it_op = IT_UNLINK;
-
-        rc = md_enqueue(mds->mds_lmv_exp, LDLM_IBITS, &it, LCK_EX,
-                        &op_data, *rlockh, NULL, 0, ldlm_completion_ast,
-                        mds_blocking_ast, NULL);
+        rc = md_enqueue(mds->mds_lmv_exp, LDLM_IBITS, &it, LCK_EX, &op_data,
+                        *rlockh, NULL, 0, ldlm_completion_ast, mds_blocking_ast,
+                        NULL);
 cleanup:
         OBD_FREE(mea, mea_size);
         RETURN(rc);
@@ -1110,12 +1035,12 @@ int mds_lock_and_check_slave(int offset, struct ptlrpc_request *req,
                 CERROR("Can't swab mds_body\n");
                 GOTO(cleanup, rc = -EFAULT);
         }
-        CDEBUG(D_OTHER, "%s: check slave "DLID4"\n", obd->obd_name,
-               OLID4(&body->id1));
-        
-        dentry = mds_id2locked_dentry(obd, &body->id1, NULL, LCK_EX,
-                                      lockh, &update_mode, NULL, 0,
-                                      MDS_INODELOCK_UPDATE);
+        CDEBUG(D_OTHER, "%s: check slave %lu/%lu\n", obd->obd_name,
+               (unsigned long) body->fid1.id,
+               (unsigned long) body->fid1.generation);
+        dentry = mds_fid2locked_dentry(obd, &body->fid1, NULL, LCK_EX, lockh,
+                                       &update_mode, NULL, 0,
+                                       MDS_INODELOCK_UPDATE);
         if (IS_ERR(dentry)) {
                 CERROR("can't find inode: %d\n", (int) PTR_ERR(dentry));
                 GOTO(cleanup, rc = PTR_ERR(dentry));
@@ -1166,10 +1091,7 @@ int mds_convert_mea_ea(struct obd_device *obd, struct inode *inode,
                 RETURN(0);
 
         old = (struct mea_old *) lmm;
-        
-        rc = sizeof(struct lustre_id) * old->mea_count + 
-                sizeof(struct mea_old);
-        
+        rc = sizeof(struct ll_fid) * old->mea_count + sizeof(struct mea_old);
         if (old->mea_count > 256 || old->mea_master > 256 || lmmsize < rc
                         || old->mea_master > old->mea_count) {
                 CWARN("unknown MEA format, dont convert it\n");
@@ -1179,12 +1101,9 @@ int mds_convert_mea_ea(struct obd_device *obd, struct inode *inode,
         }
                 
         CWARN("converting MEA EA on %lu/%u from V0 to V1 (%u/%u)\n",
-              inode->i_ino, inode->i_generation, old->mea_count, 
-              old->mea_master);
+              inode->i_ino, inode->i_generation, old->mea_count, old->mea_master);
 
-        size = sizeof(struct lustre_id) * old->mea_count + 
-                sizeof(struct mea);
-        
+        size = sizeof(struct ll_fid) * old->mea_count + sizeof(struct mea);
         OBD_ALLOC(new, size);
         if (new == NULL)
                 RETURN(-ENOMEM);
@@ -1193,7 +1112,7 @@ int mds_convert_mea_ea(struct obd_device *obd, struct inode *inode,
         new->mea_count = old->mea_count;
         new->mea_master = old->mea_master;
         for (i = 0; i < new->mea_count; i++)
-                new->mea_ids[i] = old->mea_ids[i];
+                new->mea_fids[i] = old->mea_fids[i];
 
         handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR, NULL);
         if (IS_ERR(handle)) {

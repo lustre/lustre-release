@@ -484,7 +484,6 @@ struct obd_export *class_new_export(struct obd_device *obd)
         atomic_set(&export->exp_refcount, 2);
         atomic_set(&export->exp_rpc_count, 0);
         export->exp_obd = obd;
-        export->exp_flags = 0;
         INIT_LIST_HEAD(&export->exp_outstanding_replies);
         /* XXX this should be in LDLM init */
         INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
@@ -657,7 +656,7 @@ int class_disconnect(struct obd_export *export, int flags)
         CDEBUG(D_IOCTL, "disconnect: cookie "LPX64"\n",
                export->exp_handle.h_cookie);
 
-        if (export->exp_handle.h_cookie == LL_POISON) {
+        if (export->exp_handle.h_cookie == 0x5a5a5a5a5a5a5a5a) {
                 CERROR("disconnecting freed export %p, ignoring\n", export);
         } else {
                 class_unlink_export(export);
@@ -668,9 +667,9 @@ int class_disconnect(struct obd_export *export, int flags)
 
 static void  class_disconnect_export_list(struct list_head *list, int flags)
 {
-        struct obd_export *fake_exp, *exp;
-        struct lustre_handle fake_conn;
         int rc;
+        struct lustre_handle fake_conn;
+        struct obd_export *fake_exp, *exp;
         ENTRY;
 
         /* Move all of the exports from obd_exports to a work list, en masse. */
@@ -685,10 +684,8 @@ static void  class_disconnect_export_list(struct list_head *list, int flags)
                         CDEBUG(D_HA,
                                "exp %p export uuid == obd uuid, don't discon\n",
                                exp);
-                        /*
-                         * need to delete this now so we don't end up pointing
-                         * to work_list later when this export is cleaned up.
-                         */
+                        /* Need to delete this now so we don't end up pointing
+                         * to work_list later when this export is cleaned up. */
                         list_del_init(&exp->exp_obd_chain);
                         class_export_put(exp);
                         continue;
@@ -700,7 +697,6 @@ static void  class_disconnect_export_list(struct list_head *list, int flags)
                         class_export_put(exp);
                         continue;
                 }
-                
                 rc = obd_disconnect(fake_exp, flags);
                 class_export_put(exp);
                 if (rc) {

@@ -314,11 +314,10 @@ void ll_inode_fill_obdo(struct inode *inode, int cmd, struct obdo *oa)
         valid_flags = OBD_MD_FLTYPE | OBD_MD_FLATIME;
         if (cmd == OBD_BRW_WRITE) {
                 oa->o_valid |= OBD_MD_FLIFID | OBD_MD_FLEPOCH;
-                mdc_pack_id(obdo_id(oa), inode->i_ino, 0, inode->i_mode, 
-                            id_group(&ll_i2info(inode)->lli_id),
-                            id_fid(&ll_i2info(inode)->lli_id));
-
+                mdc_pack_fid(obdo_fid(oa), inode->i_ino, 0, inode->i_mode);
+                obdo_fid(oa)->mds = ll_i2info(inode)->lli_mds;
                 oa->o_easize = ll_i2info(inode)->lli_io_epoch;
+
                 valid_flags |= OBD_MD_FLMTIME | OBD_MD_FLCTIME;
         }
 
@@ -701,7 +700,7 @@ static int ll_page_matches(struct page *page, int fd_flags)
         page_extent.l_extent.end =
                 page_extent.l_extent.start + PAGE_CACHE_SIZE - 1;
         flags = LDLM_FL_CBPENDING | LDLM_FL_BLOCK_GRANTED | LDLM_FL_TEST_LOCK;
-        matches = obd_match(ll_i2sbi(inode)->ll_lov_exp,
+        matches = obd_match(ll_i2sbi(inode)->ll_osc_exp,
                             ll_i2info(inode)->lli_smd, LDLM_EXTENT,
                             &page_extent, LCK_PR | LCK_PW, &flags, inode,
                             &match_lockh);

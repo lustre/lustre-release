@@ -53,7 +53,7 @@
 #include "parser.h"
 #include <stdio.h>
 
-static char *lcfg_devname;
+static char * lcfg_devname;
 
 void lcfg_set_devname(char *name)
 {

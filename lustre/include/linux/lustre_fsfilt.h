@@ -57,23 +57,9 @@ struct fsfilt_operations {
                                struct iattr *iattr, int do_trunc);
         int     (* fs_iocontrol)(struct inode *inode, struct file *file,
                                  unsigned int cmd, unsigned long arg);
-        
-        /* two methods for getting lov EA and setting it back to inode xattr. */
         int     (* fs_set_md)(struct inode *inode, void *handle, void *md,
                               int size);
         int     (* fs_get_md)(struct inode *inode, void *md, int size);
-
-        /* two methods for getting MID (master id) EA and setting it back to
-         * inode xattr. */
-        int     (* fs_set_mid)(struct inode *inode, void *handle, void *fid,
-                               int size);
-        int     (* fs_get_mid)(struct inode *inode, void *fid, int size);
-
-        /* two methods for getting self id EA and setting it back to inode
-         * xattr. */
-        int     (* fs_set_sid)(struct inode *inode, void *handle, void *sid,
-                               int size);
-        int     (* fs_get_sid)(struct inode *inode, void *sid, int size);
 
         /* this method is needed to make IO operation fsfilt nature depend. */
         int     (* fs_send_bio)(int rw, struct inode *inode,struct kiobuf *bio);
@@ -139,7 +125,7 @@ struct fsfilt_operations {
         int     (* fs_get_op_len)(int, struct fsfilt_objinfo *, int);
         int     (* fs_add_dir_entry)(struct obd_device *, struct dentry *,
                                      char *, int, unsigned long, unsigned long,
-                                     unsigned long, unsigned long);
+                                     unsigned);
         int     (* fs_del_dir_entry)(struct obd_device *, struct dentry *);
         /*snap operations*/
         int     (* fs_is_redirector)(struct inode *inode);
@@ -389,7 +375,6 @@ static inline int fsfilt_setup(struct obd_device *obd,
                 return obd->obd_fsops->fs_setup(obd, fs);
         return 0;
 }
-
 static inline int
 fsfilt_set_md(struct obd_device *obd, struct inode *inode,
               void *handle, void *md, int size)
@@ -402,34 +387,6 @@ fsfilt_get_md(struct obd_device *obd, struct inode *inode,
               void *md, int size)
 {
         return obd->obd_fsops->fs_get_md(inode, md, size);
-}
-
-static inline int
-fsfilt_set_mid(struct obd_device *obd, struct inode *inode,
-               void *handle, void *mid, int size)
-{
-        return obd->obd_fsops->fs_set_mid(inode, handle, mid, size);
-}
-
-static inline int
-fsfilt_get_mid(struct obd_device *obd, struct inode *inode,
-               void *mid, int size)
-{
-        return obd->obd_fsops->fs_get_mid(inode, mid, size);
-}
-
-static inline int
-fsfilt_set_sid(struct obd_device *obd, struct inode *inode,
-               void *handle, void *sid, int size)
-{
-        return obd->obd_fsops->fs_set_sid(inode, handle, sid, size);
-}
-
-static inline int
-fsfilt_get_sid(struct obd_device *obd, struct inode *inode,
-               void *sid, int size)
-{
-        return obd->obd_fsops->fs_get_sid(inode, sid, size);
 }
 
 static inline int fsfilt_send_bio(int rw, struct obd_device *obd,
@@ -502,10 +459,10 @@ fsfilt_readpage(struct obd_device *obd, struct file *file, char *buf,
 
 static inline int
 fsfilt_add_journal_cb(struct obd_device *obd, struct super_block *sb,
-                      __u64 last_num, void *handle, fsfilt_cb_t cb_func,
+                      __u64 last_rcvd, void *handle, fsfilt_cb_t cb_func,
                       void *cb_data)
 {
-        return obd->obd_fsops->fs_add_journal_cb(obd, sb, last_num, handle,
+        return obd->obd_fsops->fs_add_journal_cb(obd, sb, last_rcvd, handle,
                                                  cb_func, cb_data);
 }
 
@@ -701,15 +658,11 @@ fsfilt_set_mds_flags(struct obd_device *obd, struct super_block *sb)
 static inline int 
 fsfilt_add_dir_entry(struct obd_device *obd, struct dentry *dir,
                      char *name, int namelen, unsigned long ino,
-                     unsigned long generation, unsigned long mds,
-                     unsigned long fid)
+                     unsigned long generation, unsigned mds)
 {
         LASSERT(obd->obd_fsops->fs_add_dir_entry);
-        
         return obd->obd_fsops->fs_add_dir_entry(obd, dir, name,
-                                                namelen, ino,
-                                                generation, mds,
-                                                fid);
+                                                namelen, ino, generation, mds);
 }
 
 static inline int 

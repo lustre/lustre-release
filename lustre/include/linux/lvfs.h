@@ -3,7 +3,7 @@
 
 #include <linux/kp30.h>
 
-#define LL_ID_NAMELEN (16 + 1 + 8 + 1)
+#define LL_FID_NAMELEN	(16 + 1 + 8 + 1)
 
 #if defined __KERNEL__
 #include <linux/lustre_compat25.h>
@@ -28,8 +28,7 @@ struct lvfs_ucred {
 };
 
 struct lvfs_callback_ops {
-        struct dentry *(*l_id2dentry)(__u64 ino, __u32 gen, 
-                                      __u64 gr, void *data);
+        struct dentry *(*l_fid2dentry)(__u64 id_ino, __u32 gen, __u64 gr, void *data);
 };
 
 #define OBD_RUN_CTXT_MAGIC      0xC0FFEEAA
@@ -59,8 +58,7 @@ struct lvfs_run_ctxt {
 #endif
 
 /* lvfs_common.c */
-struct dentry *lvfs_id2dentry(struct lvfs_run_ctxt *, __u64, 
-                              __u32, __u64 ,void *data);
+struct dentry *lvfs_fid2dentry(struct lvfs_run_ctxt *, __u64, __u32, __u64 ,void *data);
 
 void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
                struct lvfs_ucred *cred);
@@ -91,25 +89,27 @@ void *lock_dir(struct inode *dir, struct qstr *name);
 void unlock_dir(struct inode *dir, void *lock);
 #endif
 
-/* We need to hold the inode semaphore over the dcache lookup itself, or we run
- * the risk of entering the filesystem lookup path concurrently on SMP systems,
- * and instantiating two inodes for the same entry.  We still protect against
- * concurrent addition/removal races with the DLM locking. */
-static inline struct dentry *
-ll_lookup_one_len(const char *name, struct dentry *dparent, int namelen)
+/* We need to hold the inode semaphore over the dcache lookup itself, or we
+ * run the risk of entering the filesystem lookup path concurrently on SMP
+ * systems, and instantiating two inodes for the same entry.  We still
+ * protect against concurrent addition/removal races with the DLM locking.
+ */
+static inline struct dentry *ll_lookup_one_len(const char *fid_name,
+                                               struct dentry *dparent,
+                                               int fid_namelen)
 {
         struct dentry *dchild;
 #ifdef S_PDIROPS
 	struct qstr qstr;
 	void *lock;
-	qstr.name = name;
-	qstr.len = namelen;
+	qstr.name = fid_name;
+	qstr.len = fid_namelen;
 	lock = lock_dir(dparent->d_inode, &qstr);
 #else
         down(&dparent->d_inode->i_sem);
 #endif
 
-        dchild = lookup_one_len(name, dparent, namelen);
+        dchild = lookup_one_len(fid_name, dparent, fid_namelen);
 
 #ifdef S_PDIROPS
 	unlock_dir(dparent->d_inode, lock);
@@ -127,10 +127,9 @@ static inline void ll_sleep(int t)
 }
 #endif
 
-static inline int ll_id2str(char *str, __u64 id, __u32 generation)
+static inline int ll_fid2str(char *str, __u64 id, __u32 generation)
 {
-        return sprintf(str, "%llx:%08x", (unsigned long long)id, 
-                       generation);
+        return sprintf(str, "%llx:%08x", (unsigned long long)id, generation);
 }
 
 #endif

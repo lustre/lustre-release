@@ -33,35 +33,33 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_smfs.h>
 
-#include "cm_internal.h"
+#include "cmobd_internal.h"
 
-#define OSS_REINT(opcode)      \
-({                             \
-    int _opcode = (opcode);    \
-                               \
-    (_opcode == OST_CREATE  || \
-     _opcode == OST_SETATTR || \
-     _opcode == OST_WRITE);    \
-})
-
-#define MDS_REINT(opcode)      \
-    ((opcode) == MDS_REINT)
-
-static int cmobd_reint_record(struct obd_device *obd, 
-                              void *record, int opcode)
+static int cmobd_reint_record(int opcode, struct obd_device *obd, char *record)
 {
-        if (OSS_REINT(opcode))
-                return cmobd_reint_oss(obd, record, opcode);
+        int rc = 0;
         
-        if (MDS_REINT(opcode))
-                return cmobd_reint_mds(obd, record, opcode);
-
-        CERROR("unrecognized reint opcode %d\n", opcode);
-        return -EINVAL;
-}
-
-static int cmobd_reint_cb(struct llog_handle *llh, 
-                          struct llog_rec_hdr *rec,
+        switch (opcode) {
+        case OST_CREATE:
+                rc = cmobd_reint_create(obd, record);
+                break;                       
+        case OST_SETATTR:
+                rc = cmobd_reint_setattr(obd, record);
+                break;                       
+        case OST_WRITE:
+                rc = cmobd_reint_write(obd, record);
+                break;                       
+        case MDS_REINT:
+                rc = cmobd_reint_mds(obd, record);
+                break;                       
+        default:
+                CERROR("unrecognized format %d\n", opcode);
+                rc = -EINVAL;
+                break; 
+        }
+        return rc;
+}  
+static int cmobd_reint_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
                           void *data)
 {
         struct obd_device *obd = (struct obd_device*)data;
@@ -74,7 +72,6 @@ static int cmobd_reint_cb(struct llog_handle *llh,
                 CERROR("log is not plain log\n");
                 RETURN(-EINVAL);
         }
-        
         if (rec->lrh_type != SMFS_UPDATE_REC)
 		RETURN(-EINVAL);
 
@@ -82,12 +79,10 @@ static int cmobd_reint_cb(struct llog_handle *llh,
         rc = smfs_rec_unpack(NULL, buf, &pbuf, &opcode);
         if (rc)
                 GOTO(out, rc);
-
-        rc = cmobd_reint_record(obd, pbuf, opcode); 
+        rc = cmobd_reint_record(opcode, obd, pbuf); 
         if (rc)
                 GOTO(out, rc);
-
-        /* delete this record. */
+        /*delete this record*/
         rc = LLOG_DEL_RECORD; 
 out:
         RETURN(rc);
@@ -95,7 +90,7 @@ out:
 
 int cmobd_reintegrate(struct obd_device *obd)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
         struct llog_ctxt *ctxt = NULL;
         struct llog_handle *llh;
         int val_size, rc = 0;
@@ -104,7 +99,7 @@ int cmobd_reintegrate(struct obd_device *obd)
         /* XXX just fetch the reintegration log context from
          * cache ost directly, use logid later ?? */
         val_size = sizeof(ctxt);
-        rc = obd_get_info(cmobd->cache_exp, strlen("reint_log") + 1,
+        rc = obd_get_info(cmobd->cm_cache_exp, strlen("reint_log") + 1,
                           "reint_log", &val_size, &ctxt);
         if (rc)
                 RETURN(rc);
@@ -120,3 +115,5 @@ int cmobd_reintegrate(struct obd_device *obd)
 
         RETURN(rc);
 }
+
+

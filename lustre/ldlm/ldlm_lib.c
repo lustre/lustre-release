@@ -417,7 +417,7 @@ out_sem:
         return rc;
 }
 
-int client_disconnect_export(struct obd_export *exp, int flags)
+int client_disconnect_export(struct obd_export *exp, int failover)
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct client_obd *cli = &obd->u.cli;
@@ -810,7 +810,6 @@ static void target_release_saved_req(struct ptlrpc_request *req)
         OBD_FREE(req, sizeof *req);
 }
 
-#ifdef __KERNEL__
 static void target_finish_recovery(struct obd_device *obd)
 {
         struct list_head *tmp, *n;
@@ -866,8 +865,6 @@ static void abort_recovery_queue(struct obd_device *obd)
                 target_release_saved_req(req);
         }
 }
-#endif
-
 /* Called from a cleanup function if the device is being cleaned up
    forcefully.  The exports should all have been disconnected already,
    the only thing left to do is
@@ -907,7 +904,6 @@ void target_cleanup_recovery(struct obd_device *obd)
          }
 }
 
-#ifdef __KERNEL__
 static void target_abort_recovery(void *data)
 {
         struct obd_device *obd = data;
@@ -923,7 +919,6 @@ static void target_abort_recovery(void *data)
         target_finish_recovery(obd);
         ptlrpc_run_recovery_over_upcall(obd);
 }
-#endif
 
 static void target_recovery_expired(unsigned long castmeharder)
 {
@@ -945,7 +940,6 @@ void target_cancel_recovery_timer(struct obd_device *obd)
         del_timer(&obd->obd_recovery_timer);
 }
 
-#ifdef __KERNEL__
 static void reset_recovery_timer(struct obd_device *obd)
 {
         spin_lock_bh(&obd->obd_processing_task_lock);
@@ -958,7 +952,7 @@ static void reset_recovery_timer(struct obd_device *obd)
         mod_timer(&obd->obd_recovery_timer, jiffies + OBD_RECOVERY_TIMEOUT);
         spin_unlock_bh(&obd->obd_processing_task_lock);
 }
-#endif
+
 
 /* Only start it the first time called */
 void target_start_recovery_timer(struct obd_device *obd)
@@ -976,7 +970,6 @@ void target_start_recovery_timer(struct obd_device *obd)
         spin_unlock_bh(&obd->obd_processing_task_lock);
 }
 
-#ifdef __KERNEL__
 static int check_for_next_transno(struct obd_device *obd)
 {
         struct ptlrpc_request *req = NULL;
@@ -1050,6 +1043,7 @@ target_next_replay_req(struct obd_device *obd)
         return req;
 }
 
+#ifdef __KERNEL__
 static int target_recovery_thread(void *arg)
 {
         struct obd_device *obd = arg;
@@ -1144,7 +1138,6 @@ void target_stop_recovery_thread(struct obd_device *obd)
         }
 }
 #endif
-
 int target_queue_recovery_request(struct ptlrpc_request *req,
                                   struct obd_device *obd)
 {

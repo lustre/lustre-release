@@ -8,4 +8,4 @@ modulefs_DATA = cmobd$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-DIST_SOURCES = $(cmobd-objs:%.o=%.c) cm_internal.h
+DIST_SOURCES = $(cmobd-objs:%.o=%.c) cmobd_internal.h

@@ -1,4 +1,5 @@
-export PATH="$PATH:./../utils:/r/sbin:/r/usr/bin"
+#export PATH=`dirname $0`/../utils:/r/sbin/:/r/usr/bin/:$PATH
+export PATH=./../utils:/r/sbin/:/r/usr/bin/:$PATH
 
 LCTL=${LCTL:-"lctl"}
 TMP=${TMP:-"/tmp"}
@@ -8,11 +9,11 @@ MNTPATH=${MNTPATH:-"/mnt/lustre"}
 TARCMD=${TARCMD:-"tar"}
 UNTARCMD=${UNTARCMD:-"tar -zxvf"}
 CPCMD=${CPCMD:-"cp -f"}
-CACHEMDS=${CACHEMDS:-$TMP/mds1-`hostname`}
-REALMDS=${REALMDS:-$TMP/mds3-`hostname`}
+CACHEMDS=${CACHEMDS:-$TMP/mds1-uml}
+REALMDS=${REALMDS:-$TMP/mds2-uml}
 
-CACHEOST=${CACHEOST:-$TMP/ost1-`hostname`}
-REALOST=${REALOST:-$TMP/ost3-`hostname`}
+CACHEOST=${CACHEOST:-$TMP/ost1-uml}
+REALOST=${REALOST:-$TMP/ost2-uml}
 
 MDS_CMOBD_INDEX=${MDS_CMOBD_INDEX:-12}
 OST_CMOBD_INDEX=${OST_CMOBD_INDEX:-14}
@@ -21,8 +22,8 @@ MDS_COBD_INDEX=${MDS_COBD_INDEX:-22}
 OST_COBD_INDEX=${OST_COBD_INDEX:-19}
 
 
-if ! [ -e "$TARBALL" ]; then
-	echo "$TARBALL does not exist"
+if ! [ -e "$TMP/$TARBALL" ]; then
+	echo "$TARBALL did not exist, please give a tar ball for test in your $TMP"
 fi
 
 show_filesystem() {
@@ -60,12 +61,14 @@ EOF
 }
 
 cobd_cache_on() {
+
 ${LCTL} << EOF
 device $OST_COBD_INDEX
 cache_on
 device $MDS_COBD_INDEX
 cache_on
 EOF
+
 }
 cobd_cache_on
 echo "before test ...."
@@ -73,9 +76,8 @@ show_filesystem $CACHEMDS $CACHEOST
 
 #first step cp the tar to cache dev and untar it
 echo "cp $TARBALL to lustre dir and untar ..."
-${CPCMD} ${TARBALL} ${MNTPATH}	|| exit 1
-${UNTARCMD} ${MNTPATH}/`basename ${TARBALL}` -C ${MNTPATH} > /dev/null || exit 2 
-
+${CPCMD} $TMP/${TARBALL} ${MNTPATH}	|| exit 1
+${UNTARCMD} ${MNTPATH}/${TARBALL} -C ${MNTPATH} > /dev/null || exit 2 
 #show status of the filesystem
 echo after cp show the filsystem....
 show_filesystem $CACHEMDS $CACHEOST  
@@ -90,7 +92,10 @@ echo .... done!
 
 #third step and write files to real dev
 mkdir -p $MNTPATH/new
-$CPCMD -f $TARBALL $MNTPATH/new	|| exit 1
-$UNTARCMD $MNTPATH/new/`basename $TARBALL` -C $MNTPATH/new > /dev/null || exit 2
+$CPCMD -f $TMP/$TARBALL $MNTPATH/new	|| exit 1
+$UNTARCMD $MNTPATH/new/$TARBALL -C $MNTPATH/new > /dev/null || exit 2
 show_filesystem $CACHEMDS $CACHEOST  
 echo .... done!
+
+
+

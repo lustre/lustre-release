@@ -44,7 +44,7 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
 {
         struct ptlrpc_request *req = NULL;
         struct ll_sb_info *sbi = ll_s2sbi(sb);
-        struct lustre_id id;
+        struct ll_fid fid;
         unsigned long valid = 0;
         int eadatalen = 0, rc;
         struct inode *inode = NULL;
@@ -54,20 +54,20 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         if (inode)
                 return inode;
         if (S_ISREG(mode)) {
-                eadatalen = obd_size_diskmd(sbi->ll_lov_exp, NULL);
+                eadatalen = obd_size_diskmd(sbi->ll_osc_exp, NULL);
                 valid |= OBD_MD_FLEASIZE;
         }
-        id.li_stc.u.e3s.l3s_type = mode;
-        id.li_stc.u.e3s.l3s_ino = (__u64)ino;
-        id.li_stc.u.e3s.l3s_gen = generation;
+        fid.id = (__u64)ino;
+        fid.generation = generation;
+        fid.f_type = mode;
 
-        rc = md_getattr(sbi->ll_lmv_exp, &id, valid, eadatalen, &req);
+        rc = md_getattr(sbi->ll_mdc_exp, &fid, valid, eadatalen, &req);
         if (rc) {
                 CERROR("failure %d inode %lu\n", rc, ino);
                 return ERR_PTR(rc);
         }
 
-        rc = ll_prep_inode(sbi->ll_lov_exp, sbi->ll_lmv_exp,
+        rc = ll_prep_inode(sbi->ll_osc_exp, sbi->ll_mdc_exp,
                            &inode, req, 0, sb);
         if (rc) {
                 ptlrpc_req_finished(req);

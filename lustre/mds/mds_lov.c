@@ -139,7 +139,7 @@ int mds_lov_clearorphans(struct mds_obd *mds, struct obd_uuid *ost_uuid)
                 memcpy(&oa.o_inline, ost_uuid, sizeof(*ost_uuid));
                 oa.o_valid |= OBD_MD_FLINLINE;
         }
-        rc = obd_create(mds->mds_lov_exp, &oa, &empty_ea, &oti);
+        rc = obd_create(mds->mds_osc_exp, &oa, &empty_ea, &oti);
 
         RETURN(rc);
 }
@@ -155,7 +155,7 @@ int mds_lov_set_nextid(struct obd_device *obd)
 
         LASSERT(mds->mds_lov_objids != NULL);
 
-        rc = obd_set_info(mds->mds_lov_exp, strlen("next_id"), "next_id",
+        rc = obd_set_info(mds->mds_osc_exp, strlen("next_id"), "next_id",
                           mds->mds_lov_desc.ld_tgt_count, mds->mds_lov_objids);
         RETURN(rc);
 }
@@ -166,7 +166,7 @@ int mds_lov_set_growth(struct mds_obd *mds, int count)
         int rc;
         ENTRY;
 
-        rc = obd_set_info(mds->mds_lov_exp, strlen("growth_count"),
+        rc = obd_set_info(mds->mds_osc_exp, strlen("growth_count"),
                           "growth_count", sizeof(count), &count);
 
         RETURN(rc);
@@ -221,40 +221,40 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         int rc, i;
         ENTRY;
 
-        if (IS_ERR(mds->mds_lov_obd))
-                RETURN(PTR_ERR(mds->mds_lov_obd));
+        if (IS_ERR(mds->mds_osc_obd))
+                RETURN(PTR_ERR(mds->mds_osc_obd));
 
-        if (mds->mds_lov_obd)
+        if (mds->mds_osc_obd)
                 RETURN(0);
 
         spin_lock_init(&mds->mds_lov_lock);
-        mds->mds_lov_obd = class_name2obd(lov_name);
-        if (!mds->mds_lov_obd) {
+        mds->mds_osc_obd = class_name2obd(lov_name);
+        if (!mds->mds_osc_obd) {
                 CERROR("MDS cannot locate LOV %s\n", lov_name);
-                mds->mds_lov_obd = ERR_PTR(-ENOTCONN);
+                mds->mds_osc_obd = ERR_PTR(-ENOTCONN);
                 RETURN(-ENOTCONN);
         }
 
         CDEBUG(D_HA, "obd: %s osc: %s lov_name: %s\n",
-               obd->obd_name, mds->mds_lov_obd->obd_name, lov_name);
+               obd->obd_name, mds->mds_osc_obd->obd_name, lov_name);
 
-        rc = obd_connect(&conn, mds->mds_lov_obd, &obd->obd_uuid,
+        rc = obd_connect(&conn, mds->mds_osc_obd, &obd->obd_uuid,
                          mds->mds_num + FILTER_GROUP_FIRST_MDS);
         if (rc) {
                 CERROR("MDS cannot connect to LOV %s (%d)\n", lov_name, rc);
-                mds->mds_lov_obd = ERR_PTR(rc);
+                mds->mds_osc_obd = ERR_PTR(rc);
                 RETURN(rc);
         }
-        mds->mds_lov_exp = class_conn2export(&conn);
+        mds->mds_osc_exp = class_conn2export(&conn);
 
-        rc = obd_register_observer(mds->mds_lov_obd, obd);
+        rc = obd_register_observer(mds->mds_osc_obd, obd);
         if (rc) {
                 CERROR("MDS cannot register as observer of LOV %s (%d)\n",
                        lov_name, rc);
                 GOTO(err_discon, rc);
         }
 
-        rc = mds_lov_update_desc(obd, mds->mds_lov_exp);
+        rc = mds_lov_update_desc(obd, mds->mds_osc_exp);
         if (rc)
                 GOTO(err_reg, rc);
 
@@ -275,7 +275,7 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
          * we need to populate the objids array from the real OST values */
         if (!mds->mds_lov_objids_valid) {
                 int size = sizeof(obd_id) * mds->mds_lov_desc.ld_tgt_count;
-                rc = obd_get_info(mds->mds_lov_exp, strlen("last_id"),
+                rc = obd_get_info(mds->mds_osc_exp, strlen("last_id"),
                                   "last_id", &size, mds->mds_lov_objids);
                 if (!rc) {
                         for (i = 0; i < mds->mds_lov_desc.ld_tgt_count; i++)
@@ -299,11 +299,11 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
         RETURN(rc);
 
 err_reg:
-        obd_register_observer(mds->mds_lov_obd, NULL);
+        obd_register_observer(mds->mds_osc_obd, NULL);
 err_discon:
-        obd_disconnect(mds->mds_lov_exp, 0);
-        mds->mds_lov_exp = NULL;
-        mds->mds_lov_obd = ERR_PTR(rc);
+        obd_disconnect(mds->mds_osc_exp, 0);
+        mds->mds_osc_exp = NULL;
+        mds->mds_osc_obd = ERR_PTR(rc);
         RETURN(rc);
 }
 
@@ -313,23 +313,23 @@ int mds_lov_disconnect(struct obd_device *obd, int flags)
         int rc = 0;
         ENTRY;
 
-        if (!IS_ERR(mds->mds_lov_obd) && mds->mds_lov_exp != NULL) {
+        if (!IS_ERR(mds->mds_osc_obd) && mds->mds_osc_exp != NULL) {
                 /* cleanup all llogging subsystems */
                 rc = obd_llog_finish(obd, &obd->obd_llogs,
                                      mds->mds_lov_desc.ld_tgt_count);
                 if (rc)
                         CERROR("failed to cleanup llogging subsystems\n");
 
-                obd_register_observer(mds->mds_lov_obd, NULL);
+                obd_register_observer(mds->mds_osc_obd, NULL);
 
-                rc = obd_disconnect(mds->mds_lov_exp, flags);
+                rc = obd_disconnect(mds->mds_osc_exp, flags);
                 /* if obd_disconnect fails (probably because the
                  * export was disconnected by class_disconnect_exports)
                  * then we just need to drop our ref. */
                 if (rc != 0)
-                        class_export_put(mds->mds_lov_exp);
-                mds->mds_lov_exp = NULL;
-                mds->mds_lov_obd = NULL;
+                        class_export_put(mds->mds_osc_exp);
+                mds->mds_osc_exp = NULL;
+                mds->mds_osc_obd = NULL;
         }
 
         RETURN(rc);
@@ -497,7 +497,7 @@ int mds_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                                         CATLIST);
                 group = FILTER_GROUP_FIRST_MDS + mds->mds_num;
                 valsize = sizeof(group);
-                rc2 = obd_set_info(mds->mds_lov_exp, strlen("mds_conn"),
+                rc2 = obd_set_info(mds->mds_osc_exp, strlen("mds_conn"),
                                    "mds_conn", valsize, &group);
                 if (!rc)
                         rc = rc2;
@@ -603,7 +603,7 @@ int mds_lov_synchronize(void *data)
 
         old_count = mds->mds_lov_desc.ld_tgt_count;
 
-        rc = mds_lov_update_desc(obd, mds->mds_lov_exp);
+        rc = mds_lov_update_desc(obd, mds->mds_osc_exp);
         if (rc)
                 RETURN(rc);
 
@@ -776,8 +776,9 @@ int mds_lov_update_config(struct obd_device *obd, int clean)
         ctxt = llog_get_context(&obd->obd_llogs, LLOG_CONFIG_ORIG_CTXT);
         rc = class_config_process_llog(ctxt, name, &cfg);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        if (rc == 0)
+        if (rc == 0) {
                 mds->mds_config_version = version;
+        }
         CWARN("Finished applying configuration log %s: %d\n", name, rc);
 
         OBD_FREE(name, namelen);
@@ -809,11 +810,11 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
 
         CDEBUG(D_INODE, "converting LOV EA on %lu/%u from V0 to V1\n",      
                 inode->i_ino, inode->i_generation);
-        rc = obd_unpackmd(obd->u.mds.mds_lov_exp, &lsm, lmm, lmm_size);
+        rc = obd_unpackmd(obd->u.mds.mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0)
                 GOTO(conv_end, rc);
 
-        rc = obd_packmd(obd->u.mds.mds_lov_exp, &lmm, lsm);
+        rc = obd_packmd(obd->u.mds.mds_osc_exp, &lmm, lsm);
         if (rc < 0)
                 GOTO(conv_free, rc);
         lmm_size = rc;
@@ -831,7 +832,7 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                 rc = err ? err : lmm_size;
         GOTO(conv_free, rc);
 conv_free:
-        obd_free_memmd(obd->u.mds.mds_lov_exp, &lsm);
+        obd_free_memmd(obd->u.mds.mds_osc_exp, &lsm);
 conv_end:
         return rc;
 }
@@ -841,7 +842,7 @@ int mds_revalidate_lov_ea(struct obd_device *obd, struct inode *inode,
                           struct lustre_msg *msg, int offset)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct obd_export *osc_exp = mds->mds_lov_exp;
+        struct obd_export *osc_exp = mds->mds_osc_exp;
         struct lov_mds_md *lmm= NULL;
         struct lov_stripe_md *lsm = NULL;
         struct obdo *oa;

@@ -33,15 +33,12 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/lustre_smfs.h>
 
-#include "cm_internal.h"
+#include "cmobd_internal.h"
 
+int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, int pattern);
 void lov_free_memmd(struct lov_stripe_md **lsmp);
-
-int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count, 
-                    int pattern);
-
-int smfs_rec_unpack(struct smfs_proc_args *args, char *record, 
-                    char **pbuf, int *opcode);
+int smfs_rec_unpack(struct smfs_proc_args *args, char *record, char **pbuf, 
+                    int *opcode);
 
 /* helper functions for cmobd to construct pseudo lsm */
 int cmobd_dummy_lsm(struct lov_stripe_md **lsmp, int stripe_cnt, 
@@ -75,11 +72,11 @@ void cmobd_free_lsm(struct lov_stripe_md **lsmp)
 }
 
 /* reintegration functions */
-static int cmobd_setattr_reint(struct obd_device *obd, void *rec)
+int cmobd_reint_setattr(struct obd_device *obd, void *rec)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
-        struct lov_obd *lov = &cmobd->master_obd->u.lov;
-        struct obd_export *exp = cmobd->master_exp;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
+        struct lov_obd *lov = &cmobd->cm_master_obd->u.lov;
+        struct obd_export *exp = cmobd->cm_master_exp;
         struct lov_stripe_md *lsm;
         struct obdo *oa = (struct obdo*)rec;
         int rc;
@@ -97,11 +94,11 @@ out:
         RETURN(rc);
 }
 
-static int cmobd_create_reint(struct obd_device *obd, void *rec)
+int cmobd_reint_create(struct obd_device *obd, void *rec)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
-        struct lov_obd *lov = &cmobd->master_obd->u.lov;
-        struct obd_export *exp = cmobd->master_exp;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
+        struct lov_obd *lov = &cmobd->cm_master_obd->u.lov;
+        struct obd_export *exp = cmobd->cm_master_exp;
         struct lov_stripe_md *lsm;
         struct obd_trans_info oti = { 0 };
         struct obdo *oa=(struct obdo*)rec;
@@ -112,14 +109,14 @@ static int cmobd_create_reint(struct obd_device *obd, void *rec)
                              (__u32)lov->desc.ld_default_stripe_size);
         if (rc)
                 GOTO(out, rc);
-        if (cmobd->master_group != oa->o_gr) {
+        if (cmobd->cm_master_group != oa->o_gr) {
                 int group = oa->o_gr;
                 int valsize = sizeof(group);
                 rc = obd_set_info(exp, strlen("mds_conn"), "mds_conn",
                                   valsize, &group);
                 if (rc)
                         GOTO(out, rc = -EINVAL);
-                cmobd->master_group = oa->o_gr;
+                cmobd->cm_master_group = oa->o_gr;
         }
         rc = obd_create(exp, oa, &lsm, &oti);
 
@@ -202,9 +199,9 @@ static int master_blocking_ast(struct ldlm_lock *lock,
 static int cmobd_write_extents(struct obd_device *obd, struct obdo *oa, 
                                struct ldlm_extent *extent)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
-        struct obd_device *cache = cmobd->cache_obd;
-        struct lov_obd *lov = &cmobd->master_obd->u.lov;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
+        struct obd_device *cache = cmobd->cm_cache_obd;
+        struct lov_obd *lov = &cmobd->cm_master_obd->u.lov;
         struct ldlm_res_id res_id;
         ldlm_policy_data_t policy;
         struct lustre_handle lockh_src = { 0 };
@@ -233,7 +230,7 @@ static int cmobd_write_extents(struct obd_device *obd, struct obdo *oa,
         if (rc)
                 GOTO(out_lock, rc);
         
-        rc = obd_enqueue(cmobd->master_exp, lsm, LDLM_EXTENT, &policy, 
+        rc = obd_enqueue(cmobd->cm_master_exp, lsm, LDLM_EXTENT, &policy, 
                          LCK_PW, &flags, master_blocking_ast, 
                          ldlm_completion_ast, NULL,
                          NULL, 0, NULL, &lockh_dst);
@@ -242,12 +239,12 @@ static int cmobd_write_extents(struct obd_device *obd, struct obdo *oa,
 
         err = cmobd_replay_write(obd, oa, &policy.l_extent);
         
-        rc = obd_cancel(cmobd->master_exp, lsm, LCK_PW, &lockh_dst);
+        rc = obd_cancel(cmobd->cm_master_exp, lsm, LCK_PW, &lockh_dst);
         if (rc)
                 GOTO(out_lsm, rc);
         /* XXX in fact, I just want to cancel the only lockh_dst 
          *     instantly. */
-        rc = obd_cancel_unused(cmobd->master_exp, lsm, 0, NULL);
+        rc = obd_cancel_unused(cmobd->cm_master_exp, lsm, 0, NULL);
         if (err)
                 rc = err;
 out_lsm:
@@ -256,11 +253,10 @@ out_lock:
         ldlm_lock_decref(&lockh_src, LCK_PR);
         RETURN(rc);
 }
-
-static int cmobd_write_reint(struct obd_device *obd, void *rec)
+int cmobd_reint_write(struct obd_device *obd, void *rec)
 {
-        struct cm_obd *cmobd = &obd->u.cm;
-        struct obd_device *cache = cmobd->cache_obd;
+        struct cache_manager_obd *cmobd = &obd->u.cmobd;
+        struct obd_device *cache = cmobd->cm_cache_obd;
         struct obdo *oa = (struct obdo *)rec;
         struct ldlm_extent *extent = NULL; 
         unsigned long csb, ino;
@@ -270,7 +266,7 @@ static int cmobd_write_reint(struct obd_device *obd, void *rec)
 
         size = sizeof(csb);
 
-        obd_get_info(cmobd->cache_exp, strlen("cache_sb") + 1,
+        obd_get_info(cmobd->cm_cache_exp, strlen("cache_sb") + 1,
                      "cache_sb", &size, &csb); 
  
         ino = *(int*)(&oa->o_inline[0]);
@@ -288,23 +284,8 @@ static int cmobd_write_reint(struct obd_device *obd, void *rec)
         }
 out:
         if (extents_buf)
-                fsfilt_free_write_extents(cache, (struct super_block *)csb, 
-                                          ino, extents_buf, ext_num); 
+                fsfilt_free_write_extents(cache, (struct super_block *)csb, ino, 
+                                          extents_buf, ext_num); 
         RETURN(rc);
 }
 
-int cmobd_reint_oss(struct obd_device *obd, void *record, int opcode)
-{
-        switch (opcode) {
-        case OST_CREATE:
-                return cmobd_create_reint(obd, record);
-        case OST_SETATTR:
-                return cmobd_setattr_reint(obd, record);
-        case OST_WRITE:
-                return cmobd_write_reint(obd, record);
-        default:
-                CERROR("unrecognized oss reint opcode %d\n", 
-                       opcode);
-                return -EINVAL;
-        }
-}

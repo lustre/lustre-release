@@ -32,8 +32,9 @@
 #include <fcntl.h>
 #include <sys/uio.h>
 
-#include <fs.h>
+#include <xtio.h>
 #include <sysio.h>
+#include <fs.h>
 #include <mount.h>
 #include <inode.h>
 #include <file.h>
@@ -223,7 +224,7 @@ int llu_glimpse_size(struct inode *inode)
 
         CDEBUG(D_DLMTRACE, "Glimpsing inode %lu\n", lli->lli_st_ino);
 
-        rc = obd_enqueue(sbi->ll_lov_exp, lli->lli_smd, LDLM_EXTENT, &policy,
+        rc = obd_enqueue(sbi->ll_osc_exp, lli->lli_smd, LDLM_EXTENT, &policy,
                          LCK_PR, &flags, llu_extent_lock_callback,
                          ldlm_completion_ast, llu_glimpse_callback, inode,
                          sizeof(struct ost_lvb), lustre_swab_ost_lvb, &lockh);
@@ -239,7 +240,7 @@ int llu_glimpse_size(struct inode *inode)
         CDEBUG(D_DLMTRACE, "glimpse: size: %llu, blocks: %lu\n",
                lli->lli_st_size, lli->lli_st_blocks);
 
-        obd_cancel(sbi->ll_lov_exp, lli->lli_smd, LCK_PR, &lockh);
+        obd_cancel(sbi->ll_osc_exp, lli->lli_smd, LCK_PR, &lockh);
 
         RETURN(rc);
 }
@@ -264,7 +265,7 @@ int llu_extent_lock(struct ll_file_data *fd, struct inode *inode,
         CDEBUG(D_DLMTRACE, "Locking inode %lu, start "LPU64" end "LPU64"\n",
                lli->lli_st_ino, policy->l_extent.start, policy->l_extent.end);
 
-        rc = obd_enqueue(sbi->ll_lov_exp, lsm, LDLM_EXTENT, policy, mode,
+        rc = obd_enqueue(sbi->ll_osc_exp, lsm, LDLM_EXTENT, policy, mode,
                          &ast_flags, llu_extent_lock_callback,
                          ldlm_completion_ast, llu_glimpse_callback, inode,
                          sizeof(struct ost_lvb), lustre_swab_ost_lvb, lockh);
@@ -293,7 +294,7 @@ int llu_extent_unlock(struct ll_file_data *fd, struct inode *inode,
             (sbi->ll_flags & LL_SBI_NOLCK))
                 RETURN(0);
 
-        rc = obd_cancel(sbi->ll_lov_exp, lsm, mode, lockh);
+        rc = obd_cancel(sbi->ll_osc_exp, lsm, mode, lockh);
 
         RETURN(rc);
 }
