@@ -24,3 +24,5 @@ jbd-dont-account-blocks-twice.patch
 jbd-commit-tricks.patch
 ext3-o_direct-1-2.4.18-chaos.patch
 ext3-no-write-super.patch
+jbd-ctx_switch.patch
+jbd-get_write_access.patch
