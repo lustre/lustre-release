@@ -28,6 +28,7 @@ runthreads() {
 	case $DO in
 	test_getattr)
 		RW=
+		;;
 
 	test_brw_write)
 		DO=test_brw
