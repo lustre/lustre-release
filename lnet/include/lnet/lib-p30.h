@@ -19,7 +19,6 @@
 #include <portals/types.h>
 #include <linux/kp30.h>
 #include <portals/p30.h>
-#include <portals/errno.h>
 #include <portals/lib-types.h>
 #include <portals/lib-nal.h>
 #include <portals/lib-dispatch.h>
@@ -42,7 +41,7 @@ do {                                                    \
         nal->cb_sti(nal, flagsp);                       \
 }
 
-#ifdef PTL_USE_DESC_LISTS
+#ifdef PTL_USE_LIB_FREELIST
 
 #define MAX_MES         2048
 #define MAX_MDS         2048
@@ -98,7 +97,7 @@ lib_eq_free (nal_cb_t *nal, lib_eq_t *eq)
 }
 
 static inline lib_md_t *
-lib_md_alloc (nal_cb_t *nal)
+lib_md_alloc (nal_cb_t *nal, ptl_md_t *umd)
 {
         /* NEVER called with statelock held */
         unsigned long  flags;
@@ -142,8 +141,20 @@ lib_me_free (nal_cb_t *nal, lib_me_t *me)
 static inline lib_msg_t *
 lib_msg_alloc (nal_cb_t *nal)
 {
-        /* ALWAYS called with statelock held */
-        return ((lib_msg_t *)lib_freelist_alloc (&nal->ni.ni_free_msgs));
+        /* NEVER called with statelock held */
+        unsigned long  flags;
+        lib_msg_t     *msg;
+        
+        state_lock (nal, &flags);
+        msg = (lib_msg_t *)lib_freelist_alloc (&nal->ni.ni_free_msgs);
+        state_unlock (nal, &flags);
+
+        if (msg != NULL) {
+                /* NULL pointers, clear flags etc */
+                memset (msg, 0, sizeof (*msg));
+                msg->ack_wmd = PTL_WIRE_HANDLE_NONE;
+        }
+        return(msg);
 }
 
 static inline void
@@ -155,22 +166,13 @@ lib_msg_free (nal_cb_t *nal, lib_msg_t *msg)
 
 #else
 
-extern atomic_t      md_in_use_count;
-extern atomic_t      msg_in_use_count;
-extern atomic_t      me_in_use_count;
-extern atomic_t      eq_in_use_count;
-
 static inline lib_eq_t *
 lib_eq_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
         lib_eq_t *eq;
+
         PORTAL_ALLOC(eq, sizeof(*eq));
-
-        if (eq == NULL)
-                return (NULL);
-
-        atomic_inc (&eq_in_use_count);
         return (eq);
 }
 
@@ -178,21 +180,34 @@ static inline void
 lib_eq_free (nal_cb_t *nal, lib_eq_t *eq)
 {
         /* ALWAYS called with statelock held */
-        atomic_dec (&eq_in_use_count);
         PORTAL_FREE(eq, sizeof(*eq));
 }
 
 static inline lib_md_t *
-lib_md_alloc (nal_cb_t *nal)
+lib_md_alloc (nal_cb_t *nal, ptl_md_t *umd)
 {
         /* NEVER called with statelock held */
         lib_md_t *md;
-        PORTAL_ALLOC(md, sizeof(*md));
+        int       size;
+        int       niov;
 
-        if (md == NULL)
-                return (NULL);
+        if ((umd->options & PTL_MD_KIOV) != 0) {
+                niov = umd->niov;
+                size = offsetof(lib_md_t, md_iov.kiov[niov]);
+        } else {
+                niov = ((umd->options & PTL_MD_IOV) != 0) ?
+                       umd->niov : 1;
+                size = offsetof(lib_md_t, md_iov.iov[niov]);
+        }
 
-        atomic_inc (&md_in_use_count);
+        PORTAL_ALLOC(md, size);
+
+        if (md != NULL) {
+                /* Set here in case of early free */
+                md->options = umd->options;
+                md->md_niov = niov;
+        }
+        
         return (md);
 }
 
@@ -200,8 +215,14 @@ static inline void
 lib_md_free (nal_cb_t *nal, lib_md_t *md)
 {
         /* ALWAYS called with statelock held */
-        atomic_dec (&md_in_use_count);
-        PORTAL_FREE(md, sizeof(*md));
+        int       size;
+
+        if ((md->options & PTL_MD_KIOV) != 0)
+                size = offsetof(lib_md_t, md_iov.kiov[md->md_niov]);
+        else
+                size = offsetof(lib_md_t, md_iov.iov[md->md_niov]);
+
+        PORTAL_FREE(md, size);
 }
 
 static inline lib_me_t *
@@ -209,12 +230,8 @@ lib_me_alloc (nal_cb_t *nal)
 {
         /* NEVER called with statelock held */
         lib_me_t *me;
+
         PORTAL_ALLOC(me, sizeof(*me));
-
-        if (me == NULL)
-                return (NULL);
-
-        atomic_inc (&me_in_use_count);
         return (me);
 }
 
@@ -222,21 +239,21 @@ static inline void
 lib_me_free(nal_cb_t *nal, lib_me_t *me)
 {
         /* ALWAYS called with statelock held */
-        atomic_dec (&me_in_use_count);
         PORTAL_FREE(me, sizeof(*me));
 }
 
 static inline lib_msg_t *
 lib_msg_alloc(nal_cb_t *nal)
 {
-        /* ALWAYS called with statelock held */
+        /* NEVER called with statelock held */
         lib_msg_t *msg;
-        PORTAL_ALLOC_ATOMIC(msg, sizeof(*msg));
 
-        if (msg == NULL)
-                return (NULL);
-        
-        atomic_inc (&msg_in_use_count);
+        PORTAL_ALLOC(msg, sizeof(*msg));
+        if (msg != NULL) {
+                /* NULL pointers, clear flags etc */
+                memset (msg, 0, sizeof (*msg));
+                msg->ack_wmd = PTL_WIRE_HANDLE_NONE;
+        }
         return (msg);
 }
 
@@ -244,7 +261,6 @@ static inline void
 lib_msg_free(nal_cb_t *nal, lib_msg_t *msg)
 {
         /* ALWAYS called with statelock held */
-        atomic_dec (&msg_in_use_count);
         PORTAL_FREE(msg, sizeof(*msg));
 }
 #endif
@@ -344,26 +360,41 @@ extern char *dispatch_name(int index);
  * Call backs will be made to write events, send acks or
  * replies and so on.
  */
-extern int lib_parse(nal_cb_t * nal, ptl_hdr_t * hdr, void *private);
-extern int lib_finalize(nal_cb_t * nal, void *private, lib_msg_t * msg);
+extern void lib_enq_event_locked (nal_cb_t *nal, void *private,
+                                  lib_eq_t *eq, ptl_event_t *ev);
+extern void lib_finalize (nal_cb_t *nal, void *private, lib_msg_t *msg, 
+                          ptl_err_t status);
+extern void lib_parse (nal_cb_t *nal, ptl_hdr_t *hdr, void *private);
 extern lib_msg_t *lib_fake_reply_msg (nal_cb_t *nal, ptl_nid_t peer_nid, 
                                       lib_md_t *getmd);
-extern void print_hdr(nal_cb_t * nal, ptl_hdr_t * hdr);
+extern void print_hdr (nal_cb_t * nal, ptl_hdr_t * hdr);
+
 
 extern ptl_size_t lib_iov_nob (int niov, struct iovec *iov);
-extern void lib_copy_iov2buf (char *dest, int niov, struct iovec *iov, ptl_size_t len);
-extern void lib_copy_buf2iov (int niov, struct iovec *iov, char *dest, ptl_size_t len);
+extern void lib_copy_iov2buf (char *dest, int niov, struct iovec *iov, 
+                              ptl_size_t offset, ptl_size_t len);
+extern void lib_copy_buf2iov (int niov, struct iovec *iov, ptl_size_t offset, 
+                              char *src, ptl_size_t len);
+extern int lib_extract_iov (int dst_niov, struct iovec *dst,
+                            int src_niov, struct iovec *src,
+                            ptl_size_t offset, ptl_size_t len);
 
 extern ptl_size_t lib_kiov_nob (int niov, ptl_kiov_t *iov);
-extern void lib_copy_kiov2buf (char *dest, int niov, ptl_kiov_t *iov, ptl_size_t len);
-extern void lib_copy_buf2kiov (int niov, ptl_kiov_t *iov, char *src, ptl_size_t len);
+extern void lib_copy_kiov2buf (char *dest, int niov, ptl_kiov_t *kiov, 
+                               ptl_size_t offset, ptl_size_t len);
+extern void lib_copy_buf2kiov (int niov, ptl_kiov_t *kiov, ptl_size_t offset,
+                               char *src, ptl_size_t len);
+extern int lib_extract_kiov (int dst_niov, ptl_kiov_t *dst, 
+                             int src_niov, ptl_kiov_t *src,
+                             ptl_size_t offset, ptl_size_t len);
+
 extern void lib_assert_wire_constants (void);
 
-extern void lib_recv (nal_cb_t *nal, void *private, lib_msg_t *msg, lib_md_t *md,
-                      ptl_size_t offset, ptl_size_t mlen, ptl_size_t rlen);
-extern int lib_send (nal_cb_t *nal, void *private, lib_msg_t *msg,
-                     ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
-                     lib_md_t *md, ptl_size_t offset, ptl_size_t len);
+extern ptl_err_t lib_recv (nal_cb_t *nal, void *private, lib_msg_t *msg, lib_md_t *md,
+                           ptl_size_t offset, ptl_size_t mlen, ptl_size_t rlen);
+extern ptl_err_t lib_send (nal_cb_t *nal, void *private, lib_msg_t *msg,
+                           ptl_hdr_t *hdr, int type, ptl_nid_t nid, ptl_pid_t pid,
+                           lib_md_t *md, ptl_size_t offset, ptl_size_t len);
 
 extern void lib_md_deconstruct(nal_cb_t * nal, lib_md_t * md_in,
                                ptl_md_t * md_out);

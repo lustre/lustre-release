@@ -133,7 +133,8 @@ int class_attach(struct lustre_cfg *lcfg)
         INIT_LIST_HEAD(&obd->obd_recovery_queue);
         INIT_LIST_HEAD(&obd->obd_delayed_reply_queue);
 
-        init_waitqueue_head(&obd->obd_commit_waitq);
+        spin_lock_init (&obd->obd_uncommitted_replies_lock);
+        INIT_LIST_HEAD (&obd->obd_uncommitted_replies);
 
         len = strlen(name) + 1;
         OBD_ALLOC(obd->obd_name, len);
@@ -257,10 +258,22 @@ static void dump_exports(struct obd_device *obd)
         struct obd_export *exp, *n;
 
         list_for_each_entry_safe(exp, n, &obd->obd_exports, exp_obd_chain) {
-                CERROR("%s: %p %s %d %d %p\n",
+                struct ptlrpc_reply_state *rs;
+                struct ptlrpc_reply_state *first_reply = NULL;
+                int                        nreplies = 0;
+
+                list_for_each_entry (rs, &exp->exp_outstanding_replies,
+                                     rs_exp_list) {
+                        if (nreplies == 0)
+                                first_reply = rs;
+                        nreplies++;
+                }
+
+                CERROR("%s: %p %s %d %d %d: %p %s\n",
                        obd->obd_name, exp, exp->exp_client_uuid.uuid,
                        atomic_read(&exp->exp_refcount),
-                       exp->exp_failed, exp->exp_outstanding_reply );
+                       exp->exp_failed, nreplies, first_reply,
+                       nreplies > 3 ? "..." : "");
         }
 }
 

@@ -180,7 +180,7 @@ static void pages_io(int xfer, loff_t pos)
 void t5()
 {
         char text[256];
-        loff_t off_array[] = {1, 17, 255, 257, 4095, 4097, 8191, 1024*1024*1024};
+        loff_t off_array[] = {1, 4, 17, 255, 258, 4095, 4097, 8191, 1024*1024*1024};
         int np = 1, i;
         loff_t offset = 0;
 
@@ -280,7 +280,7 @@ void t10()
         LEAVE();
 }
 
-void t100()
+void t11()
 {
         char *base="/mnt/lustre";
         char path[4096], path2[4096];
@@ -316,6 +316,91 @@ void t100()
         LEAVE();
 }
 
+void t12()
+{
+        char *dir="/mnt/lustre/test_t12_dir";
+        char buf[1024*128];
+        int fd;
+        ENTRY("empty directory readdir");
+
+        t_mkdir(dir);
+        fd = t_open(dir);
+        t_ls(fd, buf, sizeof(buf));
+        t_close(fd);
+        t_rmdir(dir);
+        LEAVE();
+}
+
+void t13()
+{
+        char *dir="/mnt/lustre/test_t13_dir/";
+        char name[1024];
+        char buf[1024];
+        const int nfiles = 20;
+        char *prefix = "test13_filename_prefix_";
+        int fd, i;
+        ENTRY("multiple entries directory readdir");
+
+        t_mkdir(dir);
+        printf("Creating %d files...\n", nfiles);
+        for (i = 0; i < nfiles; i++) {
+                sprintf(name, "%s%s%05d", dir, prefix, i);
+                t_touch(name);
+        }
+        fd = t_open(dir);
+        t_ls(fd, buf, sizeof(buf));
+        t_close(fd);
+        printf("Cleanup...\n");
+        for (i = 0; i < nfiles; i++) {
+                sprintf(name, "%s%s%05d", dir, prefix, i);
+                t_unlink(name);
+        }
+        t_rmdir(dir);
+        LEAVE();
+}
+
+void t14()
+{
+        char *dir="/mnt/lustre/test_t14_dir/";
+        char name[1024];
+        char buf[1024];
+        const int nfiles = 256;
+        char *prefix = "test14_filename_long_prefix_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA___";
+        int fd, i;
+        ENTRY(">1 block(4k) directory readdir");
+
+        t_mkdir(dir);
+        printf("Creating %d files...\n", nfiles);
+        for (i = 0; i < nfiles; i++) {
+                sprintf(name, "%s%s%05d", dir, prefix, i);
+                t_touch(name);
+        }
+        fd = t_open(dir);
+        t_ls(fd, buf, sizeof(buf));
+        t_close(fd);
+        printf("Cleanup...\n");
+        for (i = 0; i < nfiles; i++) {
+                sprintf(name, "%s%s%05d", dir, prefix, i);
+                t_unlink(name);
+        }
+        t_rmdir(dir);
+        LEAVE();
+}
+
+void t15()
+{
+        char *file = "/mnt/lustre/test_t15_file";
+        int fd;
+        ENTRY("open-stat-close");
+
+        t_touch(file);
+        fd = t_open(file);
+        t_check_stat(file, NULL);
+        t_close(fd);
+        t_unlink(file);
+        LEAVE();
+}
+
 extern void __liblustre_setup_(void);
 extern void __liblustre_cleanup_(void);
 
@@ -341,7 +426,6 @@ int main(int argc, char * const argv[])
         while ((c = getopt_long(argc, argv, "", long_opts, &opt_index)) != -1) {
                 switch (c) {
                 case 0: {
-                        printf("optindex %d\n", opt_index);
                         if (!optarg[0])
                                 usage(argv[0]);
 
@@ -374,8 +458,11 @@ int main(int argc, char * const argv[])
         t8();
         t9();
         t10();
-
-        t100();
+        t11();
+        t12();
+        t13();
+        t14();
+        t15();
 #endif
 
 	printf("liblustre is about shutdown\n");

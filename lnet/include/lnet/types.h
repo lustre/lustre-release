@@ -17,6 +17,8 @@ typedef u_int64_t __u64;
 # define do_gettimeofday(tv) gettimeofday(tv, NULL)
 #endif
 
+#include <portals/errno.h>
+
 typedef __u64 ptl_nid_t;
 typedef __u32 ptl_pid_t;
 typedef __u32 ptl_pt_index_t;
@@ -97,7 +99,8 @@ typedef enum {
         PTL_EVENT_PUT,
         PTL_EVENT_REPLY,
         PTL_EVENT_ACK,
-        PTL_EVENT_SENT
+        PTL_EVENT_SENT,
+	PTL_EVENT_UNLINK,
 } ptl_event_kind_t;
 
 #define PTL_SEQ_BASETYPE	long
@@ -112,15 +115,19 @@ typedef unsigned PTL_SEQ_BASETYPE ptl_seq_t;
 #pragma pack(push, 4)
 #endif
 typedef struct {
-        ptl_event_kind_t type;
-        ptl_process_id_t initiator;
-        ptl_pt_index_t portal;
-        ptl_match_bits_t match_bits;
-        ptl_size_t rlength, mlength, offset;
-        ptl_handle_me_t unlinked_me;
-        ptl_md_t mem_desc;
-        ptl_hdr_data_t hdr_data;
-        struct timeval arrival_time;
+        ptl_event_kind_t   type;
+	ptl_err_t          status;
+	int                unlinked;
+        ptl_process_id_t   initiator;
+        ptl_pt_index_t     portal;
+        ptl_match_bits_t   match_bits;
+        ptl_size_t         rlength;
+	ptl_size_t         mlength;
+	ptl_size_t         offset;
+        ptl_md_t           mem_desc;
+        ptl_hdr_data_t     hdr_data;
+        struct timeval     arrival_time;
+
         volatile ptl_seq_t sequence;
 } ptl_event_t;
 #ifdef __CYGWIN__

@@ -125,7 +125,7 @@ int PtlNIInit(ptl_interface_t interface, ptl_pt_index_t ptl_size,
                 if (ptl_interfaces[i] == nal) {
                         nal->refct++;
                         handle->nal_idx = (NI_HANDLE_MAGIC & ~NI_HANDLE_MASK) | i;
-                        fprintf(stderr, "Returning existing NAL (%d)\n", i);
+                        CDEBUG(D_OTHER, "Returning existing NAL (%d)\n", i);
                         ptl_ni_init_mutex_exit ();
                         return PTL_OK;
                 }

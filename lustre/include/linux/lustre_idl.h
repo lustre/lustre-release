@@ -226,6 +226,7 @@ static inline void lustre_msg_set_op_flags(struct lustre_msg *msg, int flags)
 #define MSG_CONNECT_RECONNECT   0x2
 #define MSG_CONNECT_REPLAYABLE  0x4
 //#define MSG_CONNECT_PEER        0x8
+#define MSG_CONNECT_LIBCLIENT   0x10
 
 /*
  *   OST requests: OBDO & OBD request records

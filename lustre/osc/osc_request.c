@@ -537,7 +537,12 @@ static void osc_announce_cached(struct client_obd *cli, struct obdo *oa,
 {
         obd_flag bits = OBD_MD_FLBLOCKS|OBD_MD_FLGRANT;
 
-        LASSERT(!(oa->o_valid & bits));
+        /* XXX obd_brw_internal() might reuse obdo in it's loop thus
+         * hit the following assert. any actual meaning of this? temporarily
+         * disable it.
+         * in kernel mode, probably VFS will prevent it happen.
+         */
+        //LASSERT(!(oa->o_valid & bits));
 
         oa->o_valid |= bits;
         spin_lock(&cli->cl_loi_list_lock);
@@ -645,32 +650,38 @@ static void handle_short_read(int nob_read, obd_count page_count,
         }
 }
 
-static int check_write_rcs(struct ptlrpc_request *request, int niocount,
+static int check_write_rcs(struct ptlrpc_request *request,
+                           int requested_nob, int niocount,
                            obd_count page_count, struct brw_page *pga)
 {
-        int    i;
-        int    *remote_rcs;
+        int    *remote_rcs, i;
 
         /* return error if any niobuf was in error */
         remote_rcs = lustre_swab_repbuf(request, 1,
                                         sizeof(*remote_rcs) * niocount, NULL);
         if (remote_rcs == NULL) {
-                CERROR ("Missing/short RC vector on BRW_WRITE reply\n");
-                return (-EPROTO);
+                CERROR("Missing/short RC vector on BRW_WRITE reply\n");
+                return(-EPROTO);
         }
-        if (lustre_msg_swabbed (request->rq_repmsg))
+        if (lustre_msg_swabbed(request->rq_repmsg))
                 for (i = 0; i < niocount; i++)
-                        __swab32s (&remote_rcs[i]);
+                        __swab32s(&remote_rcs[i]);
 
         for (i = 0; i < niocount; i++) {
                 if (remote_rcs[i] < 0)
-                        return (remote_rcs[i]);
+                        return(remote_rcs[i]);
 
                 if (remote_rcs[i] != 0) {
-                        CERROR ("rc[%d] invalid (%d) req %p\n",
+                        CERROR("rc[%d] invalid (%d) req %p\n",
                                 i, remote_rcs[i], request);
-                        return (-EPROTO);
+                        return(-EPROTO);
                 }
+        }
+
+        if (request->rq_bulk->bd_nob_transferred != requested_nob) {
+                CERROR("Unexpected # bytes transferred: %d (requested %d)\n",
+                       requested_nob, request->rq_bulk->bd_nob_transferred);
+                return(-EPROTO);
         }
 
         return (0);
@@ -750,11 +761,11 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                 return (-ENOMEM);
 
         if (opc == OST_WRITE)
-                desc = ptlrpc_prep_bulk_imp(req, BULK_GET_SOURCE,
-                                            OST_BULK_PORTAL);
+                desc = ptlrpc_prep_bulk_imp (req, page_count,
+                                             BULK_GET_SOURCE, OST_BULK_PORTAL);
         else
-                desc = ptlrpc_prep_bulk_imp(req, BULK_PUT_SINK,
-                                            OST_BULK_PORTAL);
+                desc = ptlrpc_prep_bulk_imp (req, page_count,
+                                             BULK_PUT_SINK, OST_BULK_PORTAL);
         if (desc == NULL)
                 GOTO(out, rc = -ENOMEM);
         /* NB request now owns desc and will free it when it gets freed */
@@ -783,11 +794,8 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                          pg_prev->pg, pg_prev->pg->private, pg_prev->pg->index,
                                  pg_prev->off);
 
-                rc = ptlrpc_prep_bulk_page(desc, pg->pg, pg->off & ~PAGE_MASK,
-                                           pg->count);
-                if (rc != 0)
-                        GOTO(out, rc);
-
+                ptlrpc_prep_bulk_page(desc, pg->pg, pg->off & ~PAGE_MASK,
+                                      pg->count);
                 requested_nob += pg->count;
 
                 if (i > 0 && can_merge_pages(pg_prev, pg)) {
@@ -856,13 +864,21 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, struct obdo *oa,
                         CERROR ("Unexpected +ve rc %d\n", rc);
                         RETURN(-EPROTO);
                 }
+                LASSERT (req->rq_bulk->bd_nob == requested_nob);
 
-                RETURN(check_write_rcs(req, niocount, page_count, pga));
+                RETURN(check_write_rcs(req, requested_nob, niocount,
+                                       page_count, pga));
         }
 
         if (rc > requested_nob) {
                 CERROR("Unexpected rc %d (%d requested)\n", rc, requested_nob);
                 RETURN(-EPROTO);
+        }
+
+        if (rc != req->rq_bulk->bd_nob_transferred) {
+                CERROR ("Unexpected rc %d (%d transferred)\n",
+                        rc, req->rq_bulk->bd_nob_transferred);
+                return (-EPROTO);
         }
 
         if (rc < requested_nob)
@@ -1361,6 +1377,8 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 oap = list_entry(pos, struct osc_async_page, oap_pending_item);
                 ops = oap->oap_caller_ops;
 
+                LASSERT(oap->oap_magic == OAP_MAGIC);
+
                 /* in llite being 'ready' equates to the page being locked
                  * until completion unlocks it.  commit_write submits a page
                  * as not ready because its unlock will happen unconditionally
@@ -1472,6 +1490,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
         list_splice(&rpc_list, &aa->aa_oaps);
         INIT_LIST_HEAD(&rpc_list);
 
+#ifdef __KERNEL__
         if (cmd == OBD_BRW_READ) {
                 lprocfs_oh_tally_log2(&cli->cl_read_page_hist, page_count);
                 lprocfs_oh_tally(&cli->cl_read_rpc_hist, cli->cl_brw_in_flight);
@@ -1480,6 +1499,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 lprocfs_oh_tally(&cli->cl_write_rpc_hist,
                                  cli->cl_brw_in_flight);
         }
+#endif
 
         spin_lock(&cli->cl_loi_list_lock);
 

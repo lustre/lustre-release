@@ -36,6 +36,21 @@
 #include <stdarg.h>
 #include <asm/byteorder.h>
 
+#ifdef __CYGWIN__
+
+#include <netinet/in.h>
+
+#warning assuming little endian
+
+#define __cpu_to_le64(x) ((__u64)(x))
+#define __le64_to_cpu(x) ((__u64)(x))
+#define __cpu_to_le32(x) ((__u32)(x))
+#define __le32_to_cpu(x) ((__u32)(x))
+#define __cpu_to_le16(x) ((__u16)(x))
+#define __le16_to_cpu(x) ((__u16)(x))
+
+#endif /* __CYGWIN__ */
+ 
 #include <portals/api-support.h>
 #include <portals/ptlctl.h>
 #include <portals/list.h>
@@ -94,6 +109,9 @@ pcfg_ioctl(struct portals_cfg *pcfg)
                 PORTAL_IOC_INIT (data);
                 data.ioc_pbuf1   = (char*)pcfg;
                 data.ioc_plen1   = sizeof(*pcfg);
+                /* XXX liblustre hack XXX */
+                data.ioc_nal_cmd = pcfg->pcfg_command;
+                data.ioc_nid = pcfg->pcfg_nid;
 
                 rc = l_ioctl (PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
         }

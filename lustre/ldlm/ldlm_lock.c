@@ -890,7 +890,28 @@ static int reprocess_one_queue(struct ldlm_resource *res, void *closure)
 
 void ldlm_reprocess_all_ns(struct ldlm_namespace *ns)
 {
-        (void)ldlm_namespace_foreach_res(ns, reprocess_one_queue, NULL);
+        int i, rc;
+
+        l_lock(&ns->ns_lock);
+        for (i = 0; i < RES_HASH_SIZE; i++) {
+                struct list_head *tmp, *next;
+                list_for_each_safe(tmp, next, &(ns->ns_hash[i])) {
+                        struct ldlm_resource *res =
+                                list_entry(tmp, struct ldlm_resource, lr_hash);
+
+                        ldlm_resource_getref(res);
+                        l_unlock(&ns->ns_lock);
+                        rc = reprocess_one_queue(res, NULL);
+                        l_lock(&ns->ns_lock);
+                        next = tmp->next;
+                        ldlm_resource_putref(res);
+                        if (rc == LDLM_ITER_STOP)
+                                GOTO(out, rc);
+                }
+        }
+ out:
+        l_unlock(&ns->ns_lock);
+        EXIT;
 }
 
 void ldlm_reprocess_all(struct ldlm_resource *res)

@@ -25,6 +25,9 @@ typedef struct procbridge {
     pthread_cond_t cond;
     pthread_mutex_t mutex;
 
+    /* socket pair used to notify nal thread */
+    int notifier[2];
+
     int nal_flags;
 
     pthread_mutex_t nal_cb_lock;
@@ -51,5 +54,6 @@ extern nal_t *procbridge_interface(int num_interface,
                                    ptl_pt_index_t ptl_size,
                                    ptl_ac_index_t acl_size,
                                    ptl_pid_t requested_pid);
+extern void procbridge_wakeup_nal(procbridge p);
 
 #endif

@@ -550,14 +550,12 @@ int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid, __u64 offset,
         /* XXX FIXME bug 249 */
         req->rq_request_portal = MDS_READPAGE_PORTAL;
 
-        desc = ptlrpc_prep_bulk_imp(req, BULK_PUT_SINK, MDS_BULK_PORTAL);
+        desc = ptlrpc_prep_bulk_imp(req, 1, BULK_PUT_SINK, MDS_BULK_PORTAL);
         if (desc == NULL)
                 GOTO(out, rc = -ENOMEM);
         /* NB req now owns desc and will free it when it gets freed */
 
-        rc = ptlrpc_prep_bulk_page(desc, page, 0, PAGE_CACHE_SIZE);
-        if (rc != 0)
-                GOTO(out, rc);
+        ptlrpc_prep_bulk_page(desc, page, 0, PAGE_CACHE_SIZE);
 
         mdc_readdir_pack(req, offset, PAGE_CACHE_SIZE, mdc_fid);
 
@@ -565,12 +563,19 @@ int mdc_readpage(struct obd_export *exp, struct ll_fid *mdc_fid, __u64 offset,
         rc = ptlrpc_queue_wait(req);
 
         if (rc == 0) {
-                LASSERT(desc->bd_page_count == 1);
-                body = lustre_swab_repbuf(req, 0, sizeof(*body),
+                body = lustre_swab_repbuf(req, 0, sizeof (*body),
                                           lustre_swab_mds_body);
                 if (body == NULL) {
                         CERROR("Can't unpack mds_body\n");
                         GOTO(out, rc = -EPROTO);
+                }
+
+                if (req->rq_bulk->bd_nob_transferred != PAGE_CACHE_SIZE) {
+                        CERROR ("Unexpected # bytes transferred: %d"
+                                " (%ld expected)\n",
+                                req->rq_bulk->bd_nob_transferred,
+                                PAGE_CACHE_SIZE);
+                        GOTO (out, rc = -EPROTO);
                 }
         }
 

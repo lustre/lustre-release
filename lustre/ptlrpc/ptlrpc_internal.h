@@ -99,9 +99,9 @@ static inline int opcode_offset(__u32 opc) {
                             (OBD_LAST_OPC - OBD_FIRST_OPC))
 
 enum {
-        PTLRPC_REQWAIT_CNTR     = 0,
-        PTLRPC_SVCIDLETIME_CNTR = 1,
-        //PTLRPC_SVCEQDEPTH_CNTR,
+        PTLRPC_REQWAIT_CNTR = 0,
+        PTLRPC_REQQDEPTH_CNTR,
+        PTLRPC_REQACTIVE_CNTR,
         PTLRPC_LAST_CNTR
 };
 

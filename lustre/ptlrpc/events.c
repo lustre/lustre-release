@@ -33,311 +33,308 @@
 struct ptlrpc_ni  ptlrpc_interfaces[NAL_MAX_NR];
 int               ptlrpc_ninterfaces;
 
-/*
- *  Free the packet when it has gone out
+/*  
+ *  Client's outgoing request callback
  */
-static int request_out_callback(ptl_event_t *ev)
+void request_out_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_request *req = ev->mem_desc.user_ptr;
+        struct ptlrpc_cb_id   *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_request *req = cbid->cbid_arg;
+        unsigned long          flags;
         ENTRY;
 
-        /* requests always contiguous */
-        LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0);
+        LASSERT (ev->type == PTL_EVENT_SENT ||
+                 ev->type == PTL_EVENT_UNLINK);
+        LASSERT (ev->unlinked);
 
-        if (ev->type != PTL_EVENT_SENT) {
-                // XXX make sure we understand all events, including ACK's
-                CERROR("Unknown event %d\n", ev->type);
-                LBUG();
+        DEBUG_REQ((ev->status == PTL_OK) ? D_NET : D_ERROR, req,
+                  "type %d, status %d", ev->type, ev->status);
+
+        if (ev->type == PTL_EVENT_UNLINK ||
+            ev->status != PTL_OK) {
+
+                /* Failed send: make it seem like the reply timed out, just
+                 * like failing sends in client.c does currently...  */
+
+                spin_lock_irqsave(&req->rq_lock, flags);
+                req->rq_timeout = 0;
+                spin_unlock_irqrestore(&req->rq_lock, flags);
+                
+                ptlrpc_wake_client_req(req);
         }
 
         /* this balances the atomic_inc in ptl_send_rpc() */
         ptlrpc_req_finished(req);
-        RETURN(1);
+        EXIT;
 }
 
 /*
- *  Free the packet when it has gone out
+ * Client's incoming reply callback
  */
-static int reply_out_callback(ptl_event_t *ev)
+void reply_in_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_request *req = ev->mem_desc.user_ptr;
-        unsigned long          flags;
-        ENTRY;
-
-        /* replies always contiguous */
-        LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0);
-
-        if (ev->type == PTL_EVENT_SENT) {
-                /* NB don't even know if this is the current reply! In fact
-                 * we can't touch any state in the request, since the
-                 * service handler zeros it on each incoming request. */
-                OBD_FREE(ev->mem_desc.start, ev->mem_desc.length);
-        } else if (ev->type == PTL_EVENT_ACK) {
-                LASSERT(req->rq_want_ack);
-                spin_lock_irqsave(&req->rq_lock, flags);
-                req->rq_want_ack = 0;
-                wake_up(&req->rq_reply_waitq);
-                spin_unlock_irqrestore(&req->rq_lock, flags);
-        } else {
-                // XXX make sure we understand all events
-                CERROR("Unknown event %d\n", ev->type);
-                LBUG();
-        }
-
-        RETURN(1);
-}
-
-/*
- * Wake up the thread waiting for the reply once it comes in.
- */
-int reply_in_callback(ptl_event_t *ev)
-{
-        struct ptlrpc_request *req = ev->mem_desc.user_ptr;
+        struct ptlrpc_cb_id   *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_request *req = cbid->cbid_arg;
         unsigned long flags;
         ENTRY;
 
-        /* replies always contiguous */
-        LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0);
+        LASSERT (ev->type == PTL_EVENT_PUT ||
+                 ev->type == PTL_EVENT_UNLINK);
+        LASSERT (ev->unlinked);
+        LASSERT (ev->mem_desc.start == req->rq_repmsg);
+        LASSERT (ev->offset == 0);
+        LASSERT (ev->mlength <= req->rq_replen);
+        
+        DEBUG_REQ((ev->status == PTL_OK) ? D_NET : D_ERROR, req,
+                  "type %d, status %d", ev->type, ev->status);
 
-        if (req->rq_xid == 0x5a5a5a5a5a5a5a5aULL) {
-                CERROR("Reply received for freed request!  Probably a missing "
-                       "ptlrpc_abort()\n");
-                LBUG();
-        }
+        spin_lock_irqsave (&req->rq_lock, flags);
 
-        if (req->rq_xid != ev->match_bits) {
-                CERROR("Reply packet for wrong request\n");
-                LBUG();
-        }
+        LASSERT (req->rq_receiving_reply);
+        req->rq_receiving_reply = 0;
 
-        if (ev->type == PTL_EVENT_PUT) {
-                /* Bug 1190: should handle non-zero offset as a protocol
-                 * error  */
-                LASSERT (ev->offset == 0);
-
-                spin_lock_irqsave (&req->rq_lock, flags);
-                LASSERT (req->rq_receiving_reply);
-                req->rq_receiving_reply = 0;
+        if (ev->type == PTL_EVENT_PUT &&
+            ev->status == PTL_OK) {
                 req->rq_replied = 1;
-                if (req->rq_set != NULL)
-                        wake_up(&req->rq_set->set_waitq);
-                else
-                        wake_up(&req->rq_reply_waitq);
-                spin_unlock_irqrestore (&req->rq_lock, flags);
-        } else {
-                // XXX make sure we understand all events, including ACKs
-                CERROR("Unknown event %d\n", ev->type);
-                LBUG();
+                req->rq_nob_received = ev->mlength;
         }
 
-        RETURN(1);
+        /* NB don't unlock till after wakeup; req can disappear under us
+         * since we don't have our own ref */
+        ptlrpc_wake_client_req(req);
+
+        spin_unlock_irqrestore (&req->rq_lock, flags);
+        EXIT;
 }
 
-int request_in_callback(ptl_event_t *ev)
+/* 
+ * Client's bulk has been written/read
+ */
+void client_bulk_callback (ptl_event_t *ev)
 {
-        struct ptlrpc_request_buffer_desc *rqbd = ev->mem_desc.user_ptr;
-        struct ptlrpc_srv_ni  *srv_ni = rqbd->rqbd_srv_ni;
-        struct ptlrpc_service *service = srv_ni->sni_service;
+        struct ptlrpc_cb_id     *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
+        unsigned long            flags;
+        ENTRY;
 
-        /* requests always contiguous */
-        LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) == 0);
-        /* we only enable puts */
-        LASSERT(ev->type == PTL_EVENT_PUT);
-        LASSERT(atomic_read(&srv_ni->sni_nrqbds_receiving) > 0);
-        LASSERT(atomic_read(&rqbd->rqbd_refcount) > 0);
+        LASSERT ((desc->bd_type == BULK_PUT_SINK && 
+                  ev->type == PTL_EVENT_PUT) ||
+                 (desc->bd_type == BULK_GET_SOURCE &&
+                  ev->type == PTL_EVENT_GET) ||
+                 ev->type == PTL_EVENT_UNLINK);
+        LASSERT (ev->unlinked);
 
-        if (ev->rlength != ev->mlength)
-                CERROR("Warning: Possibly truncated rpc (%d/%d)\n",
-                       ev->mlength, ev->rlength);
+        CDEBUG((ev->status == PTL_OK) ? D_NET : D_ERROR,
+               "event type %d, status %d, desc %p\n", 
+               ev->type, ev->status, desc);
 
-        if (!PtlHandleEqual (ev->unlinked_me, PTL_HANDLE_NONE)) {
-                /* This is the last request to be received into this
-                 * request buffer.  We don't bump the refcount, since the
-                 * thread servicing this event is effectively taking over
-                 * portals' reference.
-                 */
-                /* NB ev->unlinked_me.nal_idx is not set properly in a callback */
-                LASSERT(ev->unlinked_me.cookie==rqbd->rqbd_me_h.cookie);
+        spin_lock_irqsave (&desc->bd_lock, flags);
 
-                /* we're off the air */
-                /* we'll probably start dropping packets in portals soon */
-                if (atomic_dec_and_test(&srv_ni->sni_nrqbds_receiving))
-                        CERROR("All request buffers busy\n");
-        } else {
-                /* +1 ref for service thread */
-                atomic_inc(&rqbd->rqbd_refcount);
+        LASSERT(desc->bd_network_rw);
+        desc->bd_network_rw = 0;
+
+        if (ev->type != PTL_EVENT_UNLINK &&
+            ev->status == PTL_OK) {
+                desc->bd_success = 1;
+                desc->bd_nob_transferred = ev->mlength;
         }
 
+        /* NB don't unlock till after wakeup; desc can disappear under us
+         * otherwise */
+        ptlrpc_wake_client_req(desc->bd_req);
+
+        spin_unlock_irqrestore (&desc->bd_lock, flags);
+        EXIT;
+}
+
+/* 
+ * Server's incoming request callback
+ */
+void request_in_callback(ptl_event_t *ev)
+{
+        struct ptlrpc_cb_id               *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_request_buffer_desc *rqbd = cbid->cbid_arg;
+        struct ptlrpc_srv_ni              *srv_ni = rqbd->rqbd_srv_ni;
+        struct ptlrpc_service             *service = srv_ni->sni_service;
+        struct ptlrpc_request             *req;
+        long                               flags;
+        ENTRY;
+
+        LASSERT (ev->type == PTL_EVENT_PUT ||
+                 ev->type == PTL_EVENT_UNLINK);
+        LASSERT ((char *)ev->mem_desc.start >= rqbd->rqbd_buffer);
+        LASSERT ((char *)ev->mem_desc.start + ev->offset + ev->mlength <=
+                 rqbd->rqbd_buffer + service->srv_buf_size);
+
+        CDEBUG((ev->status == PTL_OK) ? D_NET : D_ERROR,
+               "event type %d, status %d, service %s\n", 
+               ev->type, ev->status, service->srv_name);
+
+        if (ev->unlinked) {
+                /* If this is the last request message to fit in the
+                 * request buffer we can use the request object embedded in
+                 * rqbd.  Note that if we failed to allocate a request,
+                 * we'd have to re-post the rqbd, which we can't do in this
+                 * context. */
+                req = &rqbd->rqbd_req;
+                memset(req, 0, sizeof (*req));
+        } else {
+                LASSERT (ev->type == PTL_EVENT_PUT);
+                if (ev->status != PTL_OK) {
+                        /* We moaned above already... */
+                        return;
+                }
+                OBD_ALLOC_GFP(req, sizeof(*req), GFP_ATOMIC);
+                if (req == NULL) {
+                        CERROR("Can't allocate incoming request descriptor: "
+                               "Dropping %s RPC from "LPX64"\n",
+                               service->srv_name, ev->initiator.nid);
+                        return;
+                }
+        }
+
+        /* NB we ABSOLUTELY RELY on req being zeroed, so pointers are NULL,
+         * flags are reset and scalars are zero.  We only set the message
+         * size to non-zero if this was a successful receive. */
+        req->rq_xid = ev->match_bits;
+        req->rq_reqmsg = ev->mem_desc.start + ev->offset;
+        if (ev->type == PTL_EVENT_PUT &&
+            ev->status == PTL_OK)
+                req->rq_reqlen = ev->mlength;
+        req->rq_arrival_time = ev->arrival_time;
+        req->rq_peer.peer_nid = ev->initiator.nid;
+        req->rq_peer.peer_ni = rqbd->rqbd_srv_ni->sni_ni;
+        req->rq_rqbd = rqbd;
+
+        spin_lock_irqsave (&service->srv_lock, flags);
+
+        if (ev->unlinked) {
+                srv_ni->sni_nrqbd_receiving--;
+                if (ev->type != PTL_EVENT_UNLINK &&
+                    srv_ni->sni_nrqbd_receiving == 0) {
+                        /* This service is off-air on this interface because
+                         * all its request buffers are busy.  Portals will
+                         * start dropping incoming requests until more buffers
+                         * get posted.  NB don't moan if it's because we're
+                         * tearing down the service. */
+                        CWARN("All %s %s request buffers busy\n",
+                              service->srv_name, srv_ni->sni_ni->pni_name);
+                }
+                /* req takes over the network's ref on rqbd */
+        } else {
+                /* req takes a ref on rqbd */
+                rqbd->rqbd_refcount++;
+        }
+
+        list_add_tail(&req->rq_list, &service->srv_request_queue);
+        service->srv_n_queued_reqs++;
+        rqbd->rqbd_eventcount++;
+
+        /* NB everything can disappear under us once the request
+         * has been queued and we unlock, so do the wake now... */
         wake_up(&service->srv_waitq);
 
-        return 0;
+        spin_unlock_irqrestore(&service->srv_lock, flags);
+        EXIT;
 }
 
-static int bulk_put_source_callback(ptl_event_t *ev)
+/*  
+ *  Server's outgoing reply callback
+ */
+void reply_out_callback(ptl_event_t *ev)
 {
-        unsigned long            flags;
-        struct ptlrpc_bulk_desc *desc = ev->mem_desc.user_ptr;
+        struct ptlrpc_cb_id       *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_reply_state *rs = cbid->cbid_arg;
+        struct ptlrpc_srv_ni      *sni = rs->rs_srv_ni;
+        struct ptlrpc_service     *svc = sni->sni_service;
+        unsigned long              flags;
         ENTRY;
 
-        CDEBUG(D_NET, "got %s event %d\n",
-               (ev->type == PTL_EVENT_SENT) ? "SENT" :
-               (ev->type == PTL_EVENT_ACK)  ? "ACK"  : "UNEXPECTED", ev->type);
+        LASSERT (ev->type == PTL_EVENT_SENT ||
+                 ev->type == PTL_EVENT_ACK ||
+                 ev->type == PTL_EVENT_UNLINK);
 
-        LASSERT(ev->type == PTL_EVENT_SENT || ev->type == PTL_EVENT_ACK);
+        if (!rs->rs_difficult) {
+                /* I'm totally responsible for freeing "easy" replies */
+                LASSERT (ev->unlinked);
+                lustre_free_reply_state (rs);
+                atomic_dec (&svc->srv_outstanding_replies);
+                EXIT;
+                return;
+        }
 
-        /* 1 fragment for each page always */
-        LASSERT(ev->mem_desc.niov == desc->bd_page_count);
+        LASSERT (rs->rs_on_net);
+
+        if (ev->unlinked) {
+                /* Last network callback */
+                spin_lock_irqsave (&svc->srv_lock, flags);
+                rs->rs_on_net = 0;
+                ptlrpc_schedule_difficult_reply (rs);
+                spin_unlock_irqrestore (&svc->srv_lock, flags);
+        }
+
+        EXIT;
+}
+
+/*
+ * Server's bulk completion callback
+ */
+void server_bulk_callback (ptl_event_t *ev)
+{
+        struct ptlrpc_cb_id     *cbid = ev->mem_desc.user_ptr;
+        struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
+        unsigned long            flags;
+        ENTRY;
+
+        LASSERT (ev->type == PTL_EVENT_SENT ||
+                 ev->type == PTL_EVENT_UNLINK ||
+                 (desc->bd_type == BULK_PUT_SOURCE &&
+                  ev->type == PTL_EVENT_ACK) ||
+                 (desc->bd_type == BULK_GET_SINK &&
+                  ev->type == PTL_EVENT_REPLY));
+
+        CDEBUG((ev->status == PTL_OK) ? D_NET : D_ERROR,
+               "event type %d, status %d, desc %p\n", 
+               ev->type, ev->status, desc);
 
         spin_lock_irqsave (&desc->bd_lock, flags);
         
-        LASSERT(desc->bd_callback_count > 0 &&
-                desc->bd_callback_count <= 2);
-        
-        if (--desc->bd_callback_count == 0) {
+        if ((ev->type == PTL_EVENT_ACK ||
+             ev->type == PTL_EVENT_REPLY) &&
+            ev->status == PTL_OK) {
+                /* We heard back from the peer, so even if we get this
+                 * before the SENT event (oh yes we can), we know we
+                 * read/wrote the peer buffer and how much... */
+                desc->bd_success = 1;
+                desc->bd_nob_transferred = ev->mlength;
+        }
+
+        if (ev->unlinked) {
+                /* This is the last callback no matter what... */
                 desc->bd_network_rw = 0;
-                desc->bd_complete = 1;
                 wake_up(&desc->bd_waitq);
         }
 
         spin_unlock_irqrestore (&desc->bd_lock, flags);
-        RETURN(0);
+        EXIT;
 }
 
-struct ptlrpc_bulk_desc ptlrpc_bad_desc;
-ptl_event_t ptlrpc_bad_event;
-
-static int bulk_put_sink_callback(ptl_event_t *ev)
+static int ptlrpc_master_callback(ptl_event_t *ev)
 {
-        struct ptlrpc_bulk_desc *desc = ev->mem_desc.user_ptr;
-        unsigned long            flags;
-        ENTRY;
+        struct ptlrpc_cb_id *cbid = ev->mem_desc.user_ptr;
+        void (*callback)(ptl_event_t *ev) = cbid->cbid_fn;
 
-        LASSERT(ev->type == PTL_EVENT_PUT);
-
-        /* used iovs */
-        LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) ==
-                PTL_MD_KIOV);
         /* Honestly, it's best to find out early. */
-        if (desc->bd_page_count == 0x5a5a5a5a ||
-            desc->bd_page_count != ev->mem_desc.niov ||
-            ev->mem_desc.start != &desc->bd_iov) {
-                /* not guaranteed (don't LASSERT) but good for this bug hunt */
-                ptlrpc_bad_event = *ev;
-                ptlrpc_bad_desc = *desc;
-                CERROR ("XXX ev %p type %d portal %d match "LPX64", seq %ld\n",
-                        ev, ev->type, ev->portal, ev->match_bits, ev->sequence);
-                CERROR ("XXX desc %p, export %p import %p gen %d "
-                        " portal %d\n", 
-                        desc, desc->bd_export,
-                        desc->bd_import, desc->bd_import_generation,
-                        desc->bd_portal);
-                RETURN (0);
-        }
+        LASSERT (cbid->cbid_arg != (void *)0x5a5a5a5a5a5a5a5a);
+        LASSERT (callback == request_out_callback ||
+                 callback == reply_in_callback ||
+                 callback == client_bulk_callback ||
+                 callback == request_in_callback ||
+                 callback == reply_out_callback ||
+                 callback == server_bulk_callback);
         
-        LASSERT(desc->bd_page_count != 0x5a5a5a5a);
-        /* 1 fragment for each page always */
-        LASSERT(ev->mem_desc.niov == desc->bd_page_count);
-        LASSERT(ev->match_bits == desc->bd_req->rq_xid);
-        
-        /* peer must put with zero offset */
-        if (ev->offset != 0) {
-                /* Bug 1190: handle this as a protocol failure */
-                CERROR ("Bad offset %d\n", ev->offset);
-                LBUG ();
-        }
-
-        /* No check for total # bytes; this could be a short read */
-
-        spin_lock_irqsave (&desc->bd_lock, flags);
-        desc->bd_network_rw = 0;
-        desc->bd_complete = 1;
-        if (desc->bd_req->rq_set != NULL)
-                wake_up (&desc->bd_req->rq_set->set_waitq);
-        else
-                wake_up (&desc->bd_req->rq_reply_waitq);
-        spin_unlock_irqrestore (&desc->bd_lock, flags);
-
-        RETURN(1);
-}
-
-static int bulk_get_source_callback(ptl_event_t *ev)
-{
-        struct ptlrpc_bulk_desc *desc = ev->mem_desc.user_ptr;
-        struct ptlrpc_bulk_page *bulk;
-        struct list_head        *tmp;
-        unsigned long            flags;
-        ptl_size_t               total = 0;
-        ENTRY;
-
-        LASSERT(ev->type == PTL_EVENT_GET);
-
-        /* used iovs */
-        LASSERT((ev->mem_desc.options & (PTL_MD_IOV | PTL_MD_KIOV)) ==
-                PTL_MD_KIOV);
-        /* 1 fragment for each page always */
-        LASSERT(ev->mem_desc.niov == desc->bd_page_count);
-        LASSERT(ev->match_bits == desc->bd_req->rq_xid);
-
-        /* peer must get with zero offset */
-        if (ev->offset != 0) {
-                /* Bug 1190: handle this as a protocol failure */
-                CERROR ("Bad offset %d\n", ev->offset);
-                LBUG ();
-        }
-        
-        list_for_each (tmp, &desc->bd_page_list) {
-                bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
-
-                total += bulk->bp_buflen;
-        }
-
-        /* peer must get everything */
-        if (ev->mem_desc.length != total) {
-                /* Bug 1190: handle this as a protocol failure */
-                CERROR ("Bad length/total %d/%d\n", ev->mem_desc.length, total);
-                LBUG ();
-        }
-
-        spin_lock_irqsave (&desc->bd_lock, flags);
-        desc->bd_network_rw = 0;
-        desc->bd_complete = 1;
-        if (desc->bd_req->rq_set != NULL)
-                wake_up (&desc->bd_req->rq_set->set_waitq);
-        else
-                wake_up (&desc->bd_req->rq_reply_waitq);
-        spin_unlock_irqrestore (&desc->bd_lock, flags);
-
-        RETURN(1);
-}
-
-static int bulk_get_sink_callback(ptl_event_t *ev)
-{
-        struct ptlrpc_bulk_desc *desc = ev->mem_desc.user_ptr;
-        unsigned long            flags;
-        ENTRY;
-
-        CDEBUG(D_NET, "got %s event %d desc %p\n",
-               (ev->type == PTL_EVENT_SENT) ? "SENT" :
-               (ev->type == PTL_EVENT_REPLY)  ? "REPLY"  : "UNEXPECTED",
-               ev->type, desc);
-
-        LASSERT(ev->type == PTL_EVENT_SENT || ev->type == PTL_EVENT_REPLY);
-
-        /* 1 fragment for each page always */
-        LASSERT(ev->mem_desc.niov == desc->bd_page_count);
-
-        spin_lock_irqsave (&desc->bd_lock, flags);
-        LASSERT(desc->bd_callback_count > 0 &&
-                desc->bd_callback_count <= 2);
-
-        if (--desc->bd_callback_count == 0) {
-                desc->bd_network_rw = 0;
-                desc->bd_complete = 1;
-                wake_up(&desc->bd_waitq);
-        }
-        spin_unlock_irqrestore (&desc->bd_lock, flags);
-
-        RETURN(0);
+        callback (ev);
+        return (0);
 }
 
 int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
@@ -368,14 +365,7 @@ int ptlrpc_uuid_to_peer (struct obd_uuid *uuid, struct ptlrpc_peer *peer)
 
 void ptlrpc_ni_fini(struct ptlrpc_ni *pni)
 {
-        PtlEQFree(pni->pni_request_out_eq_h);
-        PtlEQFree(pni->pni_reply_out_eq_h);
-        PtlEQFree(pni->pni_reply_in_eq_h);
-        PtlEQFree(pni->pni_bulk_put_source_eq_h);
-        PtlEQFree(pni->pni_bulk_put_sink_eq_h);
-        PtlEQFree(pni->pni_bulk_get_source_eq_h);
-        PtlEQFree(pni->pni_bulk_get_sink_eq_h);
-
+        PtlEQFree(pni->pni_eq_h);
         kportal_put_ni (pni->pni_number);
 }
 
@@ -395,51 +385,18 @@ int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
         pni->pni_number = number;
         pni->pni_ni_h = *nip;
 
-        pni->pni_request_out_eq_h = PTL_HANDLE_NONE;
-        pni->pni_reply_out_eq_h = PTL_HANDLE_NONE;
-        pni->pni_reply_in_eq_h = PTL_HANDLE_NONE;
-        pni->pni_bulk_put_source_eq_h = PTL_HANDLE_NONE;
-        pni->pni_bulk_put_sink_eq_h = PTL_HANDLE_NONE;
-        pni->pni_bulk_get_source_eq_h = PTL_HANDLE_NONE;
-        pni->pni_bulk_get_sink_eq_h = PTL_HANDLE_NONE;
+        pni->pni_eq_h = PTL_HANDLE_NONE;
 
-        /* NB We never actually PtlEQGet() out of these events queues since
-         * we're only interested in the event callback, so we can just let
-         * them wrap.  Their sizes aren't a big deal, apart from providing
-         * a little history for debugging... */
-
-        rc = PtlEQAlloc(pni->pni_ni_h, 1024, request_out_callback,
-                        &pni->pni_request_out_eq_h);
-        if (rc != PTL_OK)
-                GOTO (fail, rc = -ENOMEM);
-
-        rc = PtlEQAlloc(pni->pni_ni_h, 1024, reply_out_callback,
-                        &pni->pni_reply_out_eq_h);
-        if (rc != PTL_OK)
-                GOTO (fail, rc = -ENOMEM);
-
-        rc = PtlEQAlloc(pni->pni_ni_h, 1024, reply_in_callback,
-                        &pni->pni_reply_in_eq_h);
-        if (rc != PTL_OK)
-                GOTO (fail, rc = -ENOMEM);
-
-        rc = PtlEQAlloc(pni->pni_ni_h, 1024, bulk_put_source_callback,
-                        &pni->pni_bulk_put_source_eq_h);
-        if (rc != PTL_OK)
-                GOTO (fail, rc = -ENOMEM);
-
-        rc = PtlEQAlloc(pni->pni_ni_h, 1024, bulk_put_sink_callback,
-                        &pni->pni_bulk_put_sink_eq_h);
-        if (rc != PTL_OK)
-                GOTO (fail, rc = -ENOMEM);
-
-        rc = PtlEQAlloc(pni->pni_ni_h, 1024, bulk_get_source_callback,
-                        &pni->pni_bulk_get_source_eq_h);
-        if (rc != PTL_OK)
-                GOTO (fail, rc = -ENOMEM);
-
-        rc = PtlEQAlloc(pni->pni_ni_h, 1024, bulk_get_sink_callback,
-                        &pni->pni_bulk_get_sink_eq_h);
+#ifdef __KERNEL__
+        /* kernel: portals calls the callback when the event is added to the
+         * queue, so we don't care if we lose events */
+        rc = PtlEQAlloc(pni->pni_ni_h, 1024, ptlrpc_master_callback,
+                        &pni->pni_eq_h);
+#else
+        /* liblustre: no asynchronous callback and allocate a nice big event
+         * queue so we don't drop any events... */
+        rc = PtlEQAlloc(pni->pni_ni_h, 10240, NULL, &pni->pni_eq_h);
+#endif
         if (rc != PTL_OK)
                 GOTO (fail, rc = -ENOMEM);
 
@@ -454,18 +411,42 @@ int ptlrpc_ni_init(int number, char *name, struct ptlrpc_ni *pni)
 }
 
 #ifndef __KERNEL__
+LIST_HEAD(liblustre_wait_callbacks);
+void *liblustre_services_callback;
+
+void *
+liblustre_register_wait_callback (int (*fn)(void *arg), void *arg)
+{
+        struct liblustre_wait_callback *llwc;
+        
+        OBD_ALLOC(llwc, sizeof(*llwc));
+        LASSERT (llwc != NULL);
+        
+        llwc->llwc_fn = fn;
+        llwc->llwc_arg = arg;
+        list_add_tail(&llwc->llwc_list, &liblustre_wait_callbacks);
+        
+        return (llwc);
+}
+
+void
+liblustre_deregister_wait_callback (void *opaque)
+{
+        struct liblustre_wait_callback *llwc = opaque;
+        
+        list_del(&llwc->llwc_list);
+        OBD_FREE(llwc, sizeof(*llwc));
+}
+
 int
-liblustre_check_events (int block)
+liblustre_check_events (int timeout)
 {
         ptl_event_t ev;
         int         rc;
         ENTRY;
 
-        if (block) {
-                /* XXX to accelerate recovery tests XXX */
-                if (block > 10)
-                        block = 10;
-                rc = PtlEQWait_timeout(ptlrpc_interfaces[0].pni_eq_h, &ev, block);
+        if (timeout) {
+                rc = PtlEQWait_timeout(ptlrpc_interfaces[0].pni_eq_h, &ev, timeout);
         } else {
                 rc = PtlEQGet (ptlrpc_interfaces[0].pni_eq_h, &ev);
         }
@@ -474,36 +455,58 @@ liblustre_check_events (int block)
         
         LASSERT (rc == PTL_EQ_DROPPED || rc == PTL_OK);
         
-#if PORTALS_DOES_NOT_SUPPORT_CALLBACKS
-        if (rc == PTL_EQ_DROPPED)
+#ifndef __KERNEL__
+        /* liblustre: no asynch callback so we can't affort to miss any
+         * events... */
+        if (rc == PTL_EQ_DROPPED) {
                 CERROR ("Dropped an event!!!\n");
+                abort();
+        }
         
         ptlrpc_master_callback (&ev);
 #endif
         RETURN(1);
 }
 
-int liblustre_wait_event(struct l_wait_info *lwi) 
+int
+liblustre_wait_event (int timeout)
 {
-        ENTRY;
+        struct list_head               *tmp;
+        struct liblustre_wait_callback *llwc;
+        int                             found_something = 0;
 
-        /* non-blocking checks (actually we might block in a service for
-         * bulk but we won't block in a blocked service)
-         */
-        if (liblustre_check_events(0) ||
-            liblustre_check_services()) {
-                /* the condition the caller is waiting for may now hold */
-                RETURN(0);
+        /* First check for any new events */
+        if (liblustre_check_events(0))
+                found_something = 1;
+
+        /* Now give all registered callbacks a bite at the cherry */
+        list_for_each(tmp, &liblustre_wait_callbacks) {
+                llwc = list_entry(tmp, struct liblustre_wait_callback, 
+                                  llwc_list);
+                
+                if (llwc->llwc_fn(llwc->llwc_arg))
+                        found_something = 1;
         }
+
+        /* return to caller if something happened */
+        if (found_something)
+                return 1;
         
-        /* block for an event */
-        liblustre_check_events(lwi->lwi_timeout);
+        /* block for an event, returning immediately on timeout */
+        if (!liblustre_check_events(timeout))
+                return 0;
 
-        /* check it's not for some service */
-        liblustre_check_services ();
+        /* an event occurred; let all registered callbacks progress... */
+        list_for_each(tmp, &liblustre_wait_callbacks) {
+                llwc = list_entry(tmp, struct liblustre_wait_callback, 
+                                  llwc_list);
+                
+                if (llwc->llwc_fn(llwc->llwc_arg))
+                        found_something = 1;
+        }
 
-        /* XXX check this */
-        RETURN(0);
+        /* ...and tell caller something happened */
+        return 1;
 }
 #endif
 
@@ -541,11 +544,18 @@ int ptlrpc_init_portals(void)
                        "loaded?\n");
                 return -EIO;
         }
+#ifndef __KERNEL__
+        liblustre_services_callback = 
+                liblustre_register_wait_callback(&liblustre_check_services, NULL);
+#endif
         return 0;
 }
 
 void ptlrpc_exit_portals(void)
 {
+#ifndef __KERNEL__
+        liblustre_deregister_wait_callback(liblustre_services_callback);
+#endif
         while (ptlrpc_ninterfaces > 0)
                 ptlrpc_ni_fini (&ptlrpc_interfaces[--ptlrpc_ninterfaces]);
 }

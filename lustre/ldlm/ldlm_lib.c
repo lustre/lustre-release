@@ -497,6 +497,10 @@ int target_handle_connect(struct ptlrpc_request *req, svc_handler_t handler)
         export = req->rq_export = class_conn2export(&conn);
         LASSERT(export != NULL);
 
+        /* request from liblustre? */
+        if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT)
+                export->exp_libclient = 1;
+
         if (export->exp_connection != NULL)
                 ptlrpc_put_connection(export->exp_connection);
         export->exp_connection = ptlrpc_get_connection(&req->rq_peer,
@@ -888,6 +892,8 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         int recovery_done = 0;
         int rc2;
 
+        LASSERT ((rc == 0) == (req->rq_reply_state != NULL));
+
         if (rc) {
                 /* Just like ptlrpc_error, but without the sending. */
                 rc = lustre_pack_reply(req, 0, NULL, NULL);
@@ -895,6 +901,7 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                 req->rq_type = PTL_RPC_MSG_ERR;
         }
 
+        LASSERT (!req->rq_reply_state->rs_difficult);
         LASSERT(list_empty(&req->rq_list));
         /* XXX a bit like the request-dup code in queue_recovery_request */
         OBD_ALLOC(saved_req, sizeof *saved_req);
@@ -905,6 +912,8 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
                 LBUG();
         memcpy(saved_req, req, sizeof *saved_req);
         memcpy(reqmsg, req->rq_reqmsg, req->rq_reqlen);
+        /* the copied req takes over the reply state */
+        req->rq_reply_state = NULL;
         req = saved_req;
         req->rq_reqmsg = reqmsg;
         class_export_get(req->rq_export);
@@ -954,180 +963,131 @@ int target_queue_final_reply(struct ptlrpc_request *req, int rc)
         return 1;
 }
 
-static void ptlrpc_abort_reply (struct ptlrpc_request *req)
+int
+target_send_reply_msg (struct ptlrpc_request *req, int rc, int fail_id)
 {
-        /* On return, we must be sure that the ACK callback has either
-         * happened or will not happen.  Note that the SENT callback will
-         * happen come what may since we successfully posted the PUT. */
-        int rc;
-        struct l_wait_info lwi;
-        unsigned long flags;
-
- again:
-        /* serialise with ACK callback */
-        spin_lock_irqsave (&req->rq_lock, flags);
-        if (!req->rq_want_ack) {
-                spin_unlock_irqrestore (&req->rq_lock, flags);
-                /* The ACK callback has happened already.  Although the
-                 * SENT callback might still be outstanding (yes really) we
-                 * don't care; this is just like normal completion. */
-                return;
-        }
-        spin_unlock_irqrestore (&req->rq_lock, flags);
-
-        /* Have a bash at unlinking the MD.  This will fail until the SENT
-         * callback has happened since the MD is busy from the PUT.  If the
-         * ACK still hasn't arrived after then, a successful unlink will
-         * ensure the ACK callback never happens. */
-        rc = PtlMDUnlink (req->rq_reply_md_h);
-        switch (rc) {
-        default:
-                LBUG ();
-        case PTL_OK:
-                /* SENT callback happened; ACK callback preempted */
-                LASSERT (req->rq_want_ack);
-                spin_lock_irqsave (&req->rq_lock, flags);
-                req->rq_want_ack = 0;
-                spin_unlock_irqrestore (&req->rq_lock, flags);
-                return;
-        case PTL_INV_MD:
-                return;
-        case PTL_MD_INUSE:
-                /* Still sending or ACK callback in progress: wait until
-                 * either callback has completed and try again.
-                 * Actually we can't wait for the SENT callback because
-                 * there's no state the SENT callback can touch that will
-                 * allow it to communicate with us!  So we just wait here
-                 * for a short time, effectively polling for the SENT
-                 * callback by calling PtlMDUnlink() again, to see if it
-                 * has finished.  Note that if the ACK does arrive, its
-                 * callback wakes us in short order. --eeb */
-                lwi = LWI_TIMEOUT (HZ/4, NULL, NULL);
-                rc = l_wait_event(req->rq_reply_waitq, !req->rq_want_ack,
-                                  &lwi);
-                CDEBUG (D_HA, "Retrying req %p: %d\n", req, rc);
-                /* NB go back and test rq_want_ack with locking, to ensure
-                 * if ACK callback happened, it has completed stopped
-                 * referencing this req. */
-                goto again;
-        }
-}
-
-void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
-{
-        int i;
-        int netrc;
-        unsigned long flags;
-        struct ptlrpc_req_ack_lock *ack_lock;
-        struct l_wait_info lwi = { 0 };
-        wait_queue_t commit_wait;
-        struct obd_device *obd =
-                req->rq_export ? req->rq_export->exp_obd : NULL;
-        struct obd_export *exp = NULL;
-
-        if (req->rq_export) {
-                for (i = 0; i < REQ_MAX_ACK_LOCKS; i++) {
-                        if (req->rq_ack_locks[i].mode) {
-                                exp = req->rq_export;
-                                break;
-                        }
-                }
-        }
-
-        if (exp) {
-                exp->exp_outstanding_reply = req;
-                spin_lock_irqsave (&req->rq_lock, flags);
-                req->rq_want_ack = 1;
-                spin_unlock_irqrestore (&req->rq_lock, flags);
-        }
-
-        if (!OBD_FAIL_CHECK(fail_id | OBD_FAIL_ONCE)) {
-                if (rc == 0) {
-                        DEBUG_REQ(D_NET, req, "sending reply");
-                        netrc = ptlrpc_reply(req);
-                } else if (rc == -ENOTCONN) {
-                        DEBUG_REQ(D_HA, req, "processing error (%d)", rc);
-                        netrc = ptlrpc_error(req);
-                } else {
-                        DEBUG_REQ(D_ERROR, req, "processing error (%d)", rc);
-                        netrc = ptlrpc_error(req);
-                }
-        } else {
+        if (OBD_FAIL_CHECK(fail_id | OBD_FAIL_ONCE)) {
                 obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED;
                 DEBUG_REQ(D_ERROR, req, "dropping reply");
-                if (req->rq_repmsg) {
-                        OBD_FREE(req->rq_repmsg, req->rq_replen);
-                        req->rq_repmsg = NULL;
+                /* NB this does _not_ send with ACK disabled, to simulate
+                 * sending OK, but timing out for the ACK */
+                if (req->rq_reply_state != NULL) {
+                        if (!req->rq_reply_state->rs_difficult) {
+                                lustre_free_reply_state (req->rq_reply_state);
+                                req->rq_reply_state = NULL;
+                        } else {
+                                struct ptlrpc_service *svc =
+                                        req->rq_rqbd->rqbd_srv_ni->sni_service;
+                                atomic_inc(&svc->srv_outstanding_replies);
+                        }
                 }
-                init_waitqueue_head(&req->rq_reply_waitq);
-                netrc = 0;
+                return (-ECOMM);
         }
 
-        /* a failed send simulates the callbacks */
-        LASSERT(netrc == 0 || req->rq_want_ack == 0);
-        if (exp == NULL) {
-                LASSERT(req->rq_want_ack == 0);
+        if (rc) {
+                DEBUG_REQ(D_ERROR, req, "processing error (%d)", rc);
+                if (req->rq_reply_state == NULL) {
+                        rc = lustre_pack_reply (req, 0, NULL, NULL);
+                        if (rc != 0) {
+                                CERROR ("can't allocate reply\n");
+                                return (rc);
+                        }
+                }
+                req->rq_type = PTL_RPC_MSG_ERR;
+        } else {
+                DEBUG_REQ(D_NET, req, "sending reply");
+        }
+        
+        return (ptlrpc_send_reply(req, 1));
+}
+
+void 
+target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
+{
+        int                        netrc;
+        unsigned long              flags;
+        struct ptlrpc_reply_state *rs;
+        struct obd_device         *obd;
+        struct obd_export         *exp;
+        struct ptlrpc_srv_ni      *sni;
+        struct ptlrpc_service     *svc;
+
+        sni = req->rq_rqbd->rqbd_srv_ni;
+        svc = sni->sni_service;
+        
+        rs = req->rq_reply_state;
+        if (rs == NULL || !rs->rs_difficult) {
+                /* The easy case; no notifiers and reply_out_callback()
+                 * cleans up (i.e. we can't look inside rs after a
+                 * successful send) */
+                netrc = target_send_reply_msg (req, rc, fail_id);
+
+                LASSERT (netrc == 0 || req->rq_reply_state == NULL);
                 return;
         }
-        LASSERT(obd != NULL);
 
-        init_waitqueue_entry(&commit_wait, current);
-        add_wait_queue(&obd->obd_commit_waitq, &commit_wait);
-        rc = l_wait_event(req->rq_reply_waitq,
-                          !req->rq_want_ack || req->rq_resent ||
-                          req->rq_transno <= obd->obd_last_committed, &lwi);
-        remove_wait_queue(&obd->obd_commit_waitq, &commit_wait);
+        /* must be an export if locks saved */
+        LASSERT (req->rq_export != NULL);
+        /* req/reply consistent */
+        LASSERT (rs->rs_srv_ni == sni);
 
-        spin_lock_irqsave (&req->rq_lock, flags);
-        /* If we got here because the ACK callback ran, this acts as a
-         * barrier to ensure the callback completed the wakeup. */
-        spin_unlock_irqrestore (&req->rq_lock, flags);
+        /* "fresh" reply */
+        LASSERT (!rs->rs_scheduled);
+        LASSERT (!rs->rs_scheduled_ever);
+        LASSERT (!rs->rs_handled);
+        LASSERT (!rs->rs_on_net);
+        LASSERT (rs->rs_export == NULL);
+        LASSERT (list_empty(&rs->rs_obd_list));
+        LASSERT (list_empty(&rs->rs_exp_list));
 
-        /* If we committed the transno already, then we might wake up before
-         * the ack arrives.  We need to stop waiting for the ack before we can
-         * reuse this request structure.  We are guaranteed by this point that
-         * this cannot abort the sending of the actual reply.*/
-        ptlrpc_abort_reply(req);
+        exp = class_export_get (req->rq_export);
+        obd = exp->exp_obd;
 
-        if (req->rq_resent) {
-                DEBUG_REQ(D_HA, req, "resent: not cancelling locks");
-                return;
+        /* disable reply scheduling onto srv_reply_queue while I'm setting up */
+        rs->rs_scheduled = 1;
+        rs->rs_on_net    = 1;
+        rs->rs_xid       = req->rq_xid;
+        rs->rs_transno   = req->rq_transno;
+        rs->rs_export    = exp;
+        
+        spin_lock_irqsave (&obd->obd_uncommitted_replies_lock, flags);
+
+        if (rs->rs_transno > obd->obd_last_committed) {
+                /* not committed already */ 
+                list_add_tail (&rs->rs_obd_list, 
+                               &obd->obd_uncommitted_replies);
         }
 
-        LASSERT(rc == 0);
-        DEBUG_REQ(D_HA, req, "cancelling locks for %s",
-                  req->rq_want_ack ? "commit" : "ack");
+        spin_unlock (&obd->obd_uncommitted_replies_lock);
+        spin_lock (&exp->exp_lock);
 
-        exp->exp_outstanding_reply = NULL;
+        list_add_tail (&rs->rs_exp_list, &exp->exp_outstanding_replies);
 
-        for (ack_lock = req->rq_ack_locks, i = 0;
-             i < REQ_MAX_ACK_LOCKS; i++, ack_lock++) {
-                if (!ack_lock->mode)
-                        continue;
-                ldlm_lock_decref(&ack_lock->lock, ack_lock->mode);
+        spin_unlock_irqrestore (&exp->exp_lock, flags);
+
+        netrc = target_send_reply_msg (req, rc, fail_id);
+
+        spin_lock_irqsave (&svc->srv_lock, flags);
+
+        svc->srv_n_difficult_replies++;
+
+        if (netrc != 0) /* error sending: reply is off the net */
+                rs->rs_on_net = 0;
+
+        if (!rs->rs_on_net ||                   /* some notifier */
+            list_empty(&rs->rs_exp_list) ||     /* completed already */
+            list_empty(&rs->rs_obd_list)) {
+                list_add_tail (&rs->rs_list, &svc->srv_reply_queue);
+                wake_up (&svc->srv_waitq);
+        } else {
+                list_add (&rs->rs_list, &sni->sni_active_replies);
+                rs->rs_scheduled = 0;           /* allow notifier to schedule */
         }
+
+        spin_unlock_irqrestore (&svc->srv_lock, flags);
 }
 
 int target_handle_ping(struct ptlrpc_request *req)
 {
         return lustre_pack_reply(req, 0, NULL, NULL);
-}
-
-void *ldlm_put_lock_into_req(struct ptlrpc_request *req,
-                                struct lustre_handle *lock, int mode)
-{
-        int i;
-
-        for (i = 0; i < REQ_MAX_ACK_LOCKS; i++) {
-                if (req->rq_ack_locks[i].mode)
-                        continue;
-                CDEBUG(D_HA, "saving lock "LPX64" in req %p ack_lock[%d]\n",
-                       lock->cookie, req, i);
-                memcpy(&req->rq_ack_locks[i].lock, lock, sizeof(*lock));
-                req->rq_ack_locks[i].mode = mode;
-                return &req->rq_ack_locks[i];
-        }
-        CERROR("no space for lock in struct ptlrpc_request\n");
-        LBUG();
-        return NULL;
 }

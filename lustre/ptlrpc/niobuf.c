@@ -31,15 +31,16 @@
 #include <linux/obd.h>
 #include "ptlrpc_internal.h"
 
-static int ptl_send_buf(struct ptlrpc_request *request,
-                        struct ptlrpc_connection *conn, int portal)
+static int ptl_send_buf (ptl_handle_md_t *mdh, void *base, int len, 
+                         ptl_ack_req_t ack, struct ptlrpc_cb_id *cbid,
+                         struct ptlrpc_connection *conn, int portal, __u64 xid)
 {
-        int rc;
-        int rc2;
         ptl_process_id_t remote_id;
-        ptl_handle_md_t md_h;
-        ptl_ack_req_t ack_req;
+        int              rc;
+        int              rc2;
+        ptl_md_t         md;
         char str[PTL_NALFMT_SIZE];
+        ENTRY;
 
         LASSERT (portal != 0);
         LASSERT (conn != NULL);
@@ -50,156 +51,82 @@ static int ptl_send_buf(struct ptlrpc_request *request,
                                 conn->c_peer.peer_nid, str),
                 conn->c_peer.peer_ni->pni_name);
 
-        request->rq_req_md.user_ptr = request;
+        remote_id.nid = conn->c_peer.peer_nid,
+        remote_id.pid = 0;
 
-        switch (request->rq_type) {
-        case PTL_RPC_MSG_REQUEST:
-                request->rq_reqmsg->type = request->rq_type;
-                request->rq_req_md.start = request->rq_reqmsg;
-                request->rq_req_md.length = request->rq_reqlen;
-                request->rq_req_md.eventq =
-                        conn->c_peer.peer_ni->pni_request_out_eq_h;
-                LASSERT (!request->rq_want_ack);
-                break;
-        case PTL_RPC_MSG_ERR:
-        case PTL_RPC_MSG_REPLY:
-                request->rq_repmsg->type = request->rq_type;
-                request->rq_req_md.start = request->rq_repmsg;
-                request->rq_req_md.length = request->rq_replen;
-                request->rq_req_md.eventq =
-                        conn->c_peer.peer_ni->pni_reply_out_eq_h;
-                break;
-        default:
-                LBUG();
-                return -1; /* notreached */
-        }
-        if (request->rq_want_ack) {
-                request->rq_req_md.threshold = 2; /* SENT and ACK */
-                ack_req = PTL_ACK_REQ;
-        } else {
-                request->rq_req_md.threshold = 1;
-                ack_req = PTL_NOACK_REQ;
-        }
-        request->rq_req_md.options = PTL_MD_OP_PUT;
-        request->rq_req_md.user_ptr = request;
+        md.start     = base;
+        md.length    = len;
+        md.threshold = (ack == PTL_ACK_REQ) ? 2 : 1;
+        md.options   = 0;
+        md.user_ptr  = cbid;
+        md.eventq    = conn->c_peer.peer_ni->pni_eq_h;
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_ACK | OBD_FAIL_ONCE)) {
-                request->rq_req_md.options |= PTL_MD_ACK_DISABLE;
+        if (ack == PTL_ACK_REQ &&
+            OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_ACK | OBD_FAIL_ONCE)) {
+                /* don't ask for the ack to simulate failing client */
+                ack = PTL_NOACK_REQ;
                 obd_fail_loc |= OBD_FAIL_ONCE | OBD_FAILED;
         }
 
-        /* NB if the send fails, we back out of the send and return
-         * failure; it's down to the caller to handle missing callbacks */
-
-        rc = PtlMDBind(conn->c_peer.peer_ni->pni_ni_h, request->rq_req_md,
-                       &md_h);
+        rc = PtlMDBind (conn->c_peer.peer_ni->pni_ni_h, md, mdh);
         if (rc != PTL_OK) {
-                CERROR("PtlMDBind failed: %d\n", rc);
+                CERROR ("PtlMDBind failed: %d\n", rc);
                 LASSERT (rc == PTL_NOSPACE);
                 RETURN (-ENOMEM);
         }
-        if (request->rq_type != PTL_RPC_MSG_REQUEST)
-                memcpy(&request->rq_reply_md_h, &md_h, sizeof(md_h));
-
-        remote_id.nid = conn->c_peer.peer_nid;
-        remote_id.pid = 0;
 
         CDEBUG(D_NET, "Sending %d bytes to portal %d, xid "LPD64"\n",
-               request->rq_req_md.length, portal, request->rq_xid);
+               len, portal, xid);
 
-        rc = PtlPut(md_h, ack_req, remote_id, portal, 0, request->rq_xid, 0, 0);
+        rc2 = PtlPut (*mdh, ack, remote_id, portal, 0, xid, 0, 0);
         if (rc != PTL_OK) {
+                /* We're going to get an UNLINK event when I unlink below,
+                 * which will complete just like any other failed send, so
+                 * I fall through and return success here! */
                 CERROR("PtlPut("LPU64", %d, "LPD64") failed: %d\n",
-                       remote_id.nid, portal, request->rq_xid, rc);
-                rc2 = PtlMDUnlink(md_h);
+                       remote_id.nid, portal, xid, rc);
+                rc2 = PtlMDUnlink(*mdh);
                 LASSERT (rc2 == PTL_OK);
-                RETURN ((rc == PTL_NOSPACE) ? -ENOMEM : -ECOMM);
         }
 
-        return 0;
+        RETURN (0);
 }
 
-static inline ptl_kiov_t *
-ptlrpc_get_bulk_iov (struct ptlrpc_bulk_desc *desc)
+int ptlrpc_start_bulk_transfer (struct ptlrpc_bulk_desc *desc)
 {
-        ptl_kiov_t *iov;
-
-        if (desc->bd_page_count <= sizeof (desc->bd_iov)/sizeof (*iov))
-                return (desc->bd_iov);
-
-        OBD_ALLOC (iov, desc->bd_page_count * sizeof (*iov));
-        if (iov == NULL)
-                LBUG();
-
-        return (iov);
-}
-
-static inline void
-ptlrpc_put_bulk_iov (struct ptlrpc_bulk_desc *desc, ptl_kiov_t *iov)
-{
-        if (desc->bd_page_count <= sizeof (desc->bd_iov)/sizeof (*iov))
-                return;
-
-        OBD_FREE (iov, desc->bd_page_count * sizeof (*iov));
-}
-
-int ptlrpc_bulk_put(struct ptlrpc_bulk_desc *desc)
-{
-        int rc;
-        int rc2;
+        int                 rc;
+        int                 rc2;
         struct ptlrpc_peer *peer;
-        struct list_head *tmp, *next;
-        ptl_process_id_t remote_id;
-        ptl_kiov_t *iov;
-        __u64 xid;
+        ptl_process_id_t    remote_id;
+        ptl_md_t            md;
+        __u64               xid;
         ENTRY;
 
         /* NB no locking required until desc is on the network */
         LASSERT (!desc->bd_network_rw);
-        LASSERT (desc->bd_type == BULK_PUT_SOURCE);
-        desc->bd_complete = 0;
-
-        iov = ptlrpc_get_bulk_iov (desc);
-        if (iov == NULL)
-                RETURN (-ENOMEM);
-
+        LASSERT (desc->bd_type == BULK_PUT_SOURCE ||
+                 desc->bd_type == BULK_GET_SINK);
+        desc->bd_success = 0;
         peer = &desc->bd_export->exp_connection->c_peer;
 
-        desc->bd_md.start = iov;
-        desc->bd_md.niov = 0;
-        desc->bd_md.length = 0;
-        desc->bd_md.eventq = peer->peer_ni->pni_bulk_put_source_eq_h;
-        desc->bd_md.threshold = 2; /* SENT and ACK */
-        desc->bd_md.options = PTL_MD_OP_PUT | PTL_MD_KIOV;
-        desc->bd_md.user_ptr = desc;
-
-        desc->bd_callback_count = 2;
-
-        list_for_each_safe(tmp, next, &desc->bd_page_list) {
-                struct ptlrpc_bulk_page *bulk;
-                bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
-
-                LASSERT(desc->bd_md.niov < desc->bd_page_count);
-
-                iov[desc->bd_md.niov].kiov_page = bulk->bp_page;
-                iov[desc->bd_md.niov].kiov_offset = bulk->bp_pageoffset;
-                iov[desc->bd_md.niov].kiov_len = bulk->bp_buflen;
-
-                LASSERT (iov[desc->bd_md.niov].kiov_offset +
-                         iov[desc->bd_md.niov].kiov_len <= PAGE_SIZE);
-                desc->bd_md.niov++;
-                desc->bd_md.length += bulk->bp_buflen;
-        }
+        md.start = &desc->bd_iov[0];
+        md.niov = desc->bd_page_count;
+        md.length = desc->bd_nob;
+        md.eventq = peer->peer_ni->pni_eq_h;
+        md.threshold = 2; /* SENT and ACK/REPLY */
+#ifdef __KERNEL__
+        md.options = PTL_MD_KIOV;
+#else
+        md.options = PTL_MD_IOV;
+#endif
+        md.user_ptr = &desc->bd_cbid;
+        LASSERT (desc->bd_cbid.cbid_fn == server_bulk_callback);
+        LASSERT (desc->bd_cbid.cbid_arg == desc);
 
         /* NB total length may be 0 for a read past EOF, so we send a 0
          * length bulk, since the client expects a bulk event. */
-        LASSERT(desc->bd_md.niov == desc->bd_page_count);
 
-        rc = PtlMDBind(peer->peer_ni->pni_ni_h, desc->bd_md,
-                       &desc->bd_md_h);
-
-        ptlrpc_put_bulk_iov (desc, iov); /*move down to reduce latency to send*/
-
+        rc = PtlMDBind(peer->peer_ni->pni_ni_h, md, &desc->bd_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDBind failed: %d\n", rc);
                 LASSERT (rc == PTL_NOSPACE);
@@ -211,109 +138,29 @@ int ptlrpc_bulk_put(struct ptlrpc_bulk_desc *desc)
         remote_id.nid = peer->peer_nid;
         remote_id.pid = 0;
 
-        CDEBUG(D_NET, "Sending %u pages %u bytes to portal %d on %s "
-               "nid "LPX64" pid %d xid "LPX64"\n",
-               desc->bd_md.niov, desc->bd_md.length,
-               desc->bd_portal, peer->peer_ni->pni_name,
+        CDEBUG(D_NET, "Transferring %u pages %u bytes via portal %d on %s "
+               "nid "LPX64" pid %d xid "LPX64"\n", 
+               md.niov, md.length, desc->bd_portal, peer->peer_ni->pni_name,
                remote_id.nid, remote_id.pid, xid);
 
+        /* Network is about to get at the memory */
         desc->bd_network_rw = 1;
-        rc = PtlPut(desc->bd_md_h, PTL_ACK_REQ, remote_id,
-                    desc->bd_portal, 0, xid, 0, 0);
+
+        if (desc->bd_type == BULK_PUT_SOURCE)
+                rc = PtlPut (desc->bd_md_h, PTL_ACK_REQ, remote_id,
+                             desc->bd_portal, 0, xid, 0, 0);
+        else
+                rc = PtlGet (desc->bd_md_h, remote_id,
+                             desc->bd_portal, 0, xid, 0);
+        
         if (rc != PTL_OK) {
-                desc->bd_network_rw = 0;
-                CERROR("PtlPut("LPU64", %d, "LPX64") failed: %d\n",
+                /* Can't send, so we unlink the MD bound above.  The UNLINK
+                 * event this creates will signal completion with failure,
+                 * so we return SUCCESS here! */
+                CERROR("Transfer("LPU64", %d, "LPX64") failed: %d\n",
                        remote_id.nid, desc->bd_portal, xid, rc);
                 rc2 = PtlMDUnlink(desc->bd_md_h);
                 LASSERT (rc2 == PTL_OK);
-                RETURN((rc == PTL_NOSPACE) ? -ENOMEM : -ECOMM);
-        }
-
-        RETURN(0);
-}
-
-int ptlrpc_bulk_get(struct ptlrpc_bulk_desc *desc)
-{
-        int rc;
-        int rc2;
-        struct ptlrpc_peer *peer;
-        struct list_head *tmp, *next;
-        ptl_process_id_t remote_id;
-        ptl_kiov_t *iov;
-        __u64 xid;
-        ENTRY;
-
-        /* NB no locking required until desc is on the network */
-        LASSERT (!desc->bd_network_rw);
-        LASSERT (desc->bd_type == BULK_GET_SINK);
-        desc->bd_complete = 0;
-
-        iov = ptlrpc_get_bulk_iov (desc);
-        if (iov == NULL)
-                RETURN(-ENOMEM);
-
-        peer = &desc->bd_export->exp_connection->c_peer;
-
-        desc->bd_md.start = iov;
-        desc->bd_md.niov = 0;
-        desc->bd_md.length = 0;
-        desc->bd_md.eventq = peer->peer_ni->pni_bulk_get_sink_eq_h;
-        desc->bd_md.threshold = 2; /* SENT and REPLY */
-        desc->bd_md.options = PTL_MD_OP_GET | PTL_MD_KIOV;
-        desc->bd_md.user_ptr = desc;
-
-        desc->bd_callback_count = 2;
-
-        list_for_each_safe(tmp, next, &desc->bd_page_list) {
-                struct ptlrpc_bulk_page *bulk;
-                bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
-
-                LASSERT(desc->bd_md.niov < desc->bd_page_count);
-
-                iov[desc->bd_md.niov].kiov_page = bulk->bp_page;
-                iov[desc->bd_md.niov].kiov_len = bulk->bp_buflen;
-                iov[desc->bd_md.niov].kiov_offset = bulk->bp_pageoffset;
-
-                LASSERT (iov[desc->bd_md.niov].kiov_offset +
-                         iov[desc->bd_md.niov].kiov_len <= PAGE_SIZE);
-                desc->bd_md.niov++;
-                desc->bd_md.length += bulk->bp_buflen;
-        }
-
-        LASSERT(desc->bd_md.niov == desc->bd_page_count);
-        LASSERT(desc->bd_md.niov != 0);
-
-        rc = PtlMDBind(peer->peer_ni->pni_ni_h, desc->bd_md, &desc->bd_md_h);
-
-        ptlrpc_put_bulk_iov(desc, iov); /*move down to reduce latency to send*/
-
-        if (rc != PTL_OK) {
-                CERROR("PtlMDBind failed: %d\n", rc);
-                LASSERT (rc == PTL_NOSPACE);
-                RETURN(-ENOMEM);
-        }
-
-        /* Client's bulk and reply matchbits are the same */
-        xid = desc->bd_req->rq_xid;
-        remote_id.nid = desc->bd_export->exp_connection->c_peer.peer_nid;
-        remote_id.pid = 0;
-
-        CDEBUG(D_NET, "Fetching %u pages %u bytes from portal %d on %s "
-               "nid "LPX64" pid %d xid "LPX64"\n",
-               desc->bd_md.niov, desc->bd_md.length, desc->bd_portal,
-               peer->peer_ni->pni_name, remote_id.nid, remote_id.pid,
-               xid);
-
-        desc->bd_network_rw = 1;
-        rc = PtlGet(desc->bd_md_h, remote_id, desc->bd_portal, 0,
-                    xid, 0);
-        if (rc != PTL_OK) {
-                desc->bd_network_rw = 0;
-                CERROR("PtlGet("LPU64", %d, "LPX64") failed: %d\n",
-                       remote_id.nid, desc->bd_portal, xid, rc);
-                rc2 = PtlMDUnlink(desc->bd_md_h);
-                LASSERT (rc2 == PTL_OK);
-                RETURN((rc == PTL_NOSPACE) ? -ENOMEM : -ECOMM);
         }
 
         RETURN(0);
@@ -323,62 +170,37 @@ void ptlrpc_abort_bulk (struct ptlrpc_bulk_desc *desc)
 {
         /* Server side bulk abort. Idempotent. Not thread-safe (i.e. only
          * serialises with completion callback) */
-        unsigned long      flags;
         struct l_wait_info lwi;
-        int                callback_count;
         int                rc;
 
         LASSERT (!in_interrupt ());             /* might sleep */
 
-        /* NB. server-side bulk gets 2 events, so we have to keep trying to
-         * unlink the MD until all callbacks have happened, or
-         * PtlMDUnlink() returns OK or INVALID */
- again:
-        spin_lock_irqsave (&desc->bd_lock, flags);
-        if (!desc->bd_network_rw) {
-                /* completed or never even registered. NB holding bd_lock
-                 * guarantees callback has completed if it ran. */
-                spin_unlock_irqrestore (&desc->bd_lock, flags);
-                return;
-        }
-
-        /* sample callback count while we have the lock */
-        callback_count = desc->bd_callback_count;
-        spin_unlock_irqrestore (&desc->bd_lock, flags);
+        if (!ptlrpc_bulk_active(desc))          /* completed or */
+                return;                         /* never started */
+        
+        /* The unlink ensures the callback happens ASAP and is the last
+         * one.  If it fails, it must be because completion just
+         * happened. */
 
         rc = PtlMDUnlink (desc->bd_md_h);
-        switch (rc) {
-        default:
-                CERROR("PtlMDUnlink returned %d\n", rc);
-                LBUG ();
-        case PTL_OK:                    /* Won the race with the network */
-                LASSERT (!desc->bd_complete); /* Not all callbacks ran */
-                desc->bd_network_rw = 0;
+        if (rc == PTL_INV_MD) {
+                LASSERT(!ptlrpc_bulk_active(desc));
                 return;
+        }
+        
+        LASSERT (rc == PTL_OK);
 
-        case PTL_MD_INUSE:              /* MD is being accessed right now */
-                for (;;) {
-                        /* Network access will complete in finite time but the
-                         * timeout lets us CERROR for visibility */
-                        lwi = LWI_TIMEOUT (10 * HZ, NULL, NULL);
-                        rc = l_wait_event(desc->bd_waitq,
-                                          desc->bd_callback_count !=
-                                          callback_count, &lwi);
-                        if (rc == -ETIMEDOUT) {
-                                CERROR("Unexpectedly long timeout: desc %p\n",
-                                       desc);
-                                continue;
-                        }
-                        LASSERT (rc == 0);
-                        break;
-                }
-                /* go back and try again... */
-                goto again;
+        for (;;) {
+                /* Network access will complete in finite time but the HUGE
+                 * timeout lets us CWARN for visibility of sluggish NALs */
+                lwi = LWI_TIMEOUT (300 * HZ, NULL, NULL);
+                rc = l_wait_event(desc->bd_waitq, 
+                                  !ptlrpc_bulk_active(desc), &lwi);
+                if (rc == 0)
+                        return;
 
-        case PTL_INV_MD:            /* Lost the race with completion */
-                LASSERT (desc->bd_complete);    /* Callbacks all ran */
-                LASSERT (!desc->bd_network_rw);
-                return;
+                LASSERT(rc == -ETIMEDOUT);
+                CWARN("Unexpectedly long timeout: desc %p\n", desc);
         }
 }
 
@@ -386,103 +208,78 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
 {
         struct ptlrpc_bulk_desc *desc = req->rq_bulk;
         struct ptlrpc_peer *peer;
-        struct list_head *tmp, *next;
         int rc;
         int rc2;
-        ptl_kiov_t *iov;
         ptl_process_id_t source_id;
+        ptl_handle_me_t  me_h;
+        ptl_md_t         md;
         ENTRY;
 
         /* NB no locking required until desc is on the network */
+        LASSERT (desc->bd_nob > 0);
         LASSERT (!desc->bd_network_rw);
         LASSERT (desc->bd_page_count <= PTL_MD_MAX_PAGES);
         LASSERT (desc->bd_req != NULL);
         LASSERT (desc->bd_type == BULK_PUT_SINK ||
                  desc->bd_type == BULK_GET_SOURCE);
 
-        desc->bd_complete = 0;
-
-        iov = ptlrpc_get_bulk_iov (desc);
-        if (iov == NULL)
-                return (-ENOMEM);
+        desc->bd_success = 0;
 
         peer = &desc->bd_import->imp_connection->c_peer;
 
-        desc->bd_md.start = iov;
-        desc->bd_md.niov = 0;
-        desc->bd_md.length = 0;
-        desc->bd_md.threshold = 1;
-        desc->bd_md.user_ptr = desc;
-
-        if (desc->bd_type == BULK_GET_SOURCE) {
-                desc->bd_md.options = PTL_MD_OP_GET | PTL_MD_KIOV;
-                desc->bd_md.eventq = peer->peer_ni->pni_bulk_get_source_eq_h;
-        } else {
-                desc->bd_md.options = PTL_MD_OP_PUT | PTL_MD_KIOV;
-                desc->bd_md.eventq = peer->peer_ni->pni_bulk_put_sink_eq_h;
-        }
-
-        list_for_each_safe(tmp, next, &desc->bd_page_list) {
-                struct ptlrpc_bulk_page *bulk;
-                bulk = list_entry(tmp, struct ptlrpc_bulk_page, bp_link);
-
-                LASSERT(desc->bd_md.niov < desc->bd_page_count);
-
-                iov[desc->bd_md.niov].kiov_page = bulk->bp_page;
-                iov[desc->bd_md.niov].kiov_len = bulk->bp_buflen;
-                iov[desc->bd_md.niov].kiov_offset = bulk->bp_pageoffset;
-
-                LASSERT (bulk->bp_pageoffset + bulk->bp_buflen <= PAGE_SIZE);
-                desc->bd_md.niov++;
-                desc->bd_md.length += bulk->bp_buflen;
-        }
-
-        LASSERT(desc->bd_md.niov == desc->bd_page_count);
-        LASSERT(desc->bd_md.niov != 0);
+        md.start = &desc->bd_iov[0];
+        md.niov = desc->bd_page_count;
+        md.length = desc->bd_nob;
+        md.eventq = peer->peer_ni->pni_eq_h;
+        md.threshold = 1;                       /* PUT or GET */
+        md.options = (desc->bd_type == BULK_GET_SOURCE) ? 
+                     PTL_MD_OP_GET : PTL_MD_OP_PUT;
+#ifdef __KERNEL__
+        md.options |= PTL_MD_KIOV;
+#else
+        md.options |= PTL_MD_IOV;
+#endif
+        md.user_ptr = &desc->bd_cbid;
+        LASSERT (desc->bd_cbid.cbid_fn == client_bulk_callback);
+        LASSERT (desc->bd_cbid.cbid_arg == desc);
 
         /* XXX Registering the same xid on retried bulk makes my head
          * explode trying to understand how the original request's bulk
          * might interfere with the retried request -eeb */
         LASSERT (!desc->bd_registered || req->rq_xid != desc->bd_last_xid);
         desc->bd_registered = 1;
-        desc->bd_last_xid = desc->bd_last_xid;
+        desc->bd_last_xid = req->rq_xid;
 
         source_id.nid = desc->bd_import->imp_connection->c_peer.peer_nid;
         source_id.pid = PTL_PID_ANY;
 
         rc = PtlMEAttach(peer->peer_ni->pni_ni_h,
                          desc->bd_portal, source_id, req->rq_xid, 0,
-                         PTL_UNLINK, PTL_INS_AFTER, &desc->bd_me_h);
-
+                         PTL_UNLINK, PTL_INS_AFTER, &me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
                 LASSERT (rc == PTL_NOSPACE);
-                GOTO(out, rc = -ENOMEM);
+                RETURN (-ENOMEM);
         }
 
         /* About to let the network at it... */
         desc->bd_network_rw = 1;
-        rc = PtlMDAttach(desc->bd_me_h, desc->bd_md, PTL_UNLINK,
-                         &desc->bd_md_h);
+        rc = PtlMDAttach(me_h, md, PTL_UNLINK, &desc->bd_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
                 LASSERT (rc == PTL_NOSPACE);
                 desc->bd_network_rw = 0;
-                rc2 = PtlMEUnlink (desc->bd_me_h);
+                rc2 = PtlMEUnlink (me_h);
                 LASSERT (rc2 == PTL_OK);
-                GOTO(out, rc = -ENOMEM);
+                RETURN (-ENOMEM);
         }
-        rc = 0;
 
         CDEBUG(D_NET, "Setup bulk %s buffers: %u pages %u bytes, xid "LPX64", "
                "portal %u on %s\n",
                desc->bd_type == BULK_GET_SOURCE ? "get-source" : "put-sink",
-               desc->bd_md.niov, desc->bd_md.length,
+               md.niov, md.length,
                req->rq_xid, desc->bd_portal, peer->peer_ni->pni_name);
-
- out:
-        ptlrpc_put_bulk_iov (desc, iov);
-        RETURN(rc);
+        RETURN(0);
 }
 
 void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
@@ -491,99 +288,102 @@ void ptlrpc_unregister_bulk (struct ptlrpc_request *req)
          * thread-safe (i.e. only interlocks with completion callback). */
         struct ptlrpc_bulk_desc *desc = req->rq_bulk;
         wait_queue_head_t       *wq;
-        unsigned long            flags;
         struct l_wait_info       lwi;
         int                      rc;
 
         LASSERT (!in_interrupt ());             /* might sleep */
 
-        spin_lock_irqsave (&desc->bd_lock, flags);
-        if (!desc->bd_network_rw) {     /* completed or never even registered */
-                spin_unlock_irqrestore (&desc->bd_lock, flags);
+        if (!ptlrpc_bulk_active(desc))          /* completed or */
+                return;                         /* never registered */
+        
+        LASSERT (desc->bd_req == req);          /* bd_req NULL until registered */
+
+        /* the unlink ensures the callback happens ASAP and is the last
+         * one.  If it fails, it must be because completion just
+         * happened. */
+
+        rc = PtlMDUnlink (desc->bd_md_h);
+        if (rc == PTL_INV_MD) {
+                LASSERT(!ptlrpc_bulk_active(desc));
                 return;
         }
-        spin_unlock_irqrestore (&desc->bd_lock, flags);
+        
+        LASSERT (rc == PTL_OK);
+        
+        if (desc->bd_req->rq_set != NULL)
+                wq = &req->rq_set->set_waitq;
+        else
+                wq = &req->rq_reply_waitq;
 
-        LASSERT (desc->bd_req == req);     /* NB bd_req NULL until registered */
-
-        /* NB...
-         * 1. If the MD unlink is successful, the ME gets unlinked too.
-         * 2. Since client-side bulk only gets a single event and a
-         * .. threshold of 1.  If the MD was inuse at the first link
-         * .. attempt, the callback is due any minute, and the MD/ME will
-         * .. unlink themselves.
-         */
-        rc = PtlMDUnlink (desc->bd_md_h);
-        switch (rc) {
-        default:
-                CERROR("PtlMDUnlink returned %d\n", rc);
-                LBUG ();
-        case PTL_OK:                          /* Won the race with completion */
-                LASSERT (!desc->bd_complete);   /* Callback hasn't happened */
-                desc->bd_network_rw = 0;
-                return;
-        case PTL_MD_INUSE:                  /* MD is being accessed right now */
-                for (;;) {
-                        /* Network access will complete in finite time but the
-                         * timeout lets us CERROR for visibility */
-                        if (desc->bd_req->rq_set != NULL)
-                                wq = &req->rq_set->set_waitq;
-                        else
-                                wq = &req->rq_reply_waitq;
-                        lwi = LWI_TIMEOUT (10 * HZ, NULL, NULL);
-                        rc = l_wait_event(*wq, ptlrpc_bulk_complete(desc), &lwi);
-                        LASSERT (rc == 0 || rc == -ETIMEDOUT);
-                        if (rc == 0)
-                                break;
-                        CERROR ("Unexpectedly long timeout: desc %p\n", desc);
-                        LBUG();
-                }
-                /* Fall through */
-        case PTL_INV_MD:                     /* Lost the race with completion */
-                LASSERT (desc->bd_complete);/* Callback has run to completion */
-                LASSERT (!desc->bd_network_rw);
-                return;
+        for (;;) {
+                /* Network access will complete in finite time but the HUGE
+                 * timeout lets us CWARN for visibility of sluggish NALs */
+                lwi = LWI_TIMEOUT (300 * HZ, NULL, NULL);
+                rc = l_wait_event(*wq, !ptlrpc_bulk_active(desc), &lwi);
+                if (rc == 0)
+                        return;
+                
+                LASSERT (rc == -ETIMEDOUT);
+                CWARN("Unexpectedly long timeout: desc %p\n", desc);
         }
 }
 
-int ptlrpc_reply(struct ptlrpc_request *req)
+int ptlrpc_send_reply (struct ptlrpc_request *req, int may_be_difficult)
 {
-        struct ptlrpc_connection *conn;
-        unsigned long flags;
-        int rc;
+        struct ptlrpc_service     *svc = req->rq_rqbd->rqbd_srv_ni->sni_service;
+        struct ptlrpc_reply_state *rs = req->rq_reply_state;
+        struct ptlrpc_connection  *conn;
+        int                        rc;
 
         /* We must already have a reply buffer (only ptlrpc_error() may be
          * called without one).  We must also have a request buffer which
          * is either the actual (swabbed) incoming request, or a saved copy
          * if this is a req saved in target_queue_final_reply(). */
-        LASSERT (req->rq_repmsg != NULL);
         LASSERT (req->rq_reqmsg != NULL);
+        LASSERT (rs != NULL);
+        LASSERT (req->rq_repmsg != NULL);
+        LASSERT (may_be_difficult || !rs->rs_difficult);
+        LASSERT (req->rq_repmsg == &rs->rs_msg);
+        LASSERT (rs->rs_cb_id.cbid_fn == reply_out_callback);
+        LASSERT (rs->rs_cb_id.cbid_arg == rs);
 
-        /* FIXME: we need to increment the count of handled events */
+        LASSERT (req->rq_repmsg != NULL);
         if (req->rq_type != PTL_RPC_MSG_ERR)
                 req->rq_type = PTL_RPC_MSG_REPLY;
 
+        req->rq_repmsg->type   = req->rq_type;
         req->rq_repmsg->status = req->rq_status;
-        req->rq_repmsg->opc = req->rq_reqmsg->opc;
+        req->rq_repmsg->opc    = req->rq_reqmsg->opc;
 
         if (req->rq_export == NULL) 
                 conn = ptlrpc_get_connection(&req->rq_peer, NULL);
         else
                 conn = ptlrpc_connection_addref(req->rq_export->exp_connection);
 
-        init_waitqueue_head(&req->rq_reply_waitq);
-        rc = ptl_send_buf(req, conn, 
-                          req->rq_svc->srv_rep_portal);
-        if (rc != 0) {
-                /* Do what the callback handler would have done */
-                OBD_FREE (req->rq_repmsg, req->rq_replen);
+        atomic_inc (&svc->srv_outstanding_replies);
 
-                spin_lock_irqsave (&req->rq_lock, flags);
-                req->rq_want_ack = 0;
-                spin_unlock_irqrestore (&req->rq_lock, flags);
+        rc = ptl_send_buf (&rs->rs_md_h, req->rq_repmsg, req->rq_replen,
+                           rs->rs_difficult ? PTL_ACK_REQ : PTL_NOACK_REQ,
+                           &rs->rs_cb_id, conn,
+                           svc->srv_rep_portal, req->rq_xid);
+        if (rc != 0) {
+                atomic_dec (&svc->srv_outstanding_replies);
+
+                if (!rs->rs_difficult) {
+                        /* Callers other than target_send_reply() expect me
+                         * to clean up on a comms error */
+                        lustre_free_reply_state (rs);
+                        req->rq_reply_state = NULL;
+                        req->rq_repmsg = NULL;
+                }
         }
         ptlrpc_put_connection(conn);
         return rc;
+}
+
+int ptlrpc_reply (struct ptlrpc_request *req)
+{
+        return (ptlrpc_send_reply (req, 0));
 }
 
 int ptlrpc_error(struct ptlrpc_request *req)
@@ -597,10 +397,9 @@ int ptlrpc_error(struct ptlrpc_request *req)
                         RETURN(rc);
         }
 
-
         req->rq_type = PTL_RPC_MSG_ERR;
 
-        rc = ptlrpc_reply(req);
+        rc = ptlrpc_send_reply (req, 0);
         RETURN(rc);
 }
 
@@ -612,6 +411,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         unsigned long flags;
         ptl_process_id_t source_id;
         ptl_handle_me_t  reply_me_h;
+        ptl_md_t         reply_md;
         ENTRY;
 
         LASSERT (request->rq_type == PTL_RPC_MSG_REQUEST);
@@ -629,6 +429,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         }
 
         request->rq_reqmsg->handle = request->rq_import->imp_remote_handle;
+        request->rq_reqmsg->type = PTL_RPC_MSG_REQUEST;
         request->rq_reqmsg->conn_cnt = request->rq_import->imp_conn_cnt;
 
         source_id.nid = connection->c_peer.peer_nid;
@@ -639,7 +440,7 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 OBD_ALLOC(request->rq_repmsg, request->rq_replen);
         if (request->rq_repmsg == NULL) {
                 LBUG();
-                RETURN(-ENOMEM);
+                GOTO(cleanup_bulk, rc = -ENOMEM);
         }
 
         rc = PtlMEAttach(connection->c_peer.peer_ni->pni_ni_h,
@@ -650,35 +451,11 @@ int ptl_send_rpc(struct ptlrpc_request *request)
                 CERROR("PtlMEAttach failed: %d\n", rc);
                 LASSERT (rc == PTL_NOSPACE);
                 LBUG();
-                GOTO(cleanup, rc = -ENOMEM);
+                GOTO(cleanup_repmsg, rc = -ENOMEM);
         }
-
-        request->rq_reply_md.start = request->rq_repmsg;
-        request->rq_reply_md.length = request->rq_replen;
-        request->rq_reply_md.threshold = 1;
-        request->rq_reply_md.options = PTL_MD_OP_PUT;
-        request->rq_reply_md.user_ptr = request;
-        request->rq_reply_md.eventq = 
-                connection->c_peer.peer_ni->pni_reply_in_eq_h;
-
-        rc = PtlMDAttach(reply_me_h, request->rq_reply_md,
-                         PTL_UNLINK, &request->rq_reply_md_h);
-        if (rc != PTL_OK) {
-                CERROR("PtlMDAttach failed: %d\n", rc);
-                LASSERT (rc == PTL_NOSPACE);
-                LBUG();
-                GOTO(cleanup2, rc -ENOMEM);
-        }
-
-        CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid "LPU64
-               ", portal %u on %s\n",
-               request->rq_replen, request->rq_xid,
-               request->rq_reply_portal,
-               connection->c_peer.peer_ni->pni_name);
-
-        ptlrpc_request_addref(request);        /* 1 ref for the SENT callback */
 
         spin_lock_irqsave (&request->rq_lock, flags);
+        /* If the MD attach succeeds, there _will_ be a reply_in callback */
         request->rq_receiving_reply = 1;
         /* Clear any flags that may be present from previous sends. */
         request->rq_replied = 0;
@@ -688,75 +465,124 @@ int ptl_send_rpc(struct ptlrpc_request *request)
         request->rq_restart = 0;
         spin_unlock_irqrestore (&request->rq_lock, flags);
 
+        reply_md.start     = request->rq_repmsg;
+        reply_md.length    = request->rq_replen;
+        reply_md.threshold = 1;
+        reply_md.options   = PTL_MD_OP_PUT;
+        reply_md.user_ptr  = &request->rq_reply_cbid;
+        reply_md.eventq    = connection->c_peer.peer_ni->pni_eq_h;
+
+        rc = PtlMDAttach(reply_me_h, reply_md, PTL_UNLINK, 
+                         &request->rq_reply_md_h);
+        if (rc != PTL_OK) {
+                CERROR("PtlMDAttach failed: %d\n", rc);
+                LASSERT (rc == PTL_NOSPACE);
+                LBUG();
+                GOTO(cleanup_me, rc -ENOMEM);
+        }
+
+        CDEBUG(D_NET, "Setup reply buffer: %u bytes, xid "LPU64
+               ", portal %u on %s\n",
+               request->rq_replen, request->rq_xid,
+               request->rq_reply_portal,
+               connection->c_peer.peer_ni->pni_name);
+
+        ptlrpc_request_addref(request);        /* +1 ref for the SENT callback */
+
         request->rq_sent = LTIME_S(CURRENT_TIME);
         ptlrpc_pinger_sending_on_import(request->rq_import);
-        rc = ptl_send_buf(request, connection, request->rq_request_portal);
+        rc = ptl_send_buf(&request->rq_req_md_h, 
+                          request->rq_reqmsg, request->rq_reqlen,
+                          PTL_NOACK_REQ, &request->rq_req_cbid, 
+                          connection,
+                          request->rq_request_portal,
+                          request->rq_xid);
         if (rc == 0) {
                 ptlrpc_lprocfs_rpc_sent(request);
                 RETURN(rc);
         }
 
-        spin_lock_irqsave (&request->rq_lock, flags);
-        request->rq_receiving_reply = 0;
-        spin_unlock_irqrestore (&request->rq_lock, flags);
         ptlrpc_req_finished (request);          /* drop callback ref */
- cleanup2:
+
+ cleanup_me:
         /* MEUnlink is safe; the PUT didn't even get off the ground, and
          * nobody apart from the PUT's target has the right nid+XID to
          * access the reply buffer. */
         rc2 = PtlMEUnlink(reply_me_h);
         LASSERT (rc2 == PTL_OK);
- cleanup:
+        /* UNLINKED callback called synchronously */
+        LASSERT (!request->rq_receiving_reply);
+
+ cleanup_repmsg:
         OBD_FREE(request->rq_repmsg, request->rq_replen);
         request->rq_repmsg = NULL;
+
+ cleanup_bulk:
+        if (request->rq_bulk != NULL)
+                ptlrpc_unregister_bulk(request);
+
         return rc;
 }
 
-void ptlrpc_link_svc_me(struct ptlrpc_request_buffer_desc *rqbd)
+void ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd)
 {
-        struct ptlrpc_srv_ni *srv_ni = rqbd->rqbd_srv_ni;
-        struct ptlrpc_service *service = srv_ni->sni_service;
-        static ptl_process_id_t match_id = {PTL_NID_ANY, PTL_PID_ANY};
-        int rc;
-        ptl_md_t dummy;
-        ptl_handle_md_t md_h;
-
-        LASSERT(atomic_read(&rqbd->rqbd_refcount) == 0);
+        struct ptlrpc_srv_ni    *srv_ni = rqbd->rqbd_srv_ni;
+        struct ptlrpc_service   *service = srv_ni->sni_service;
+        static ptl_process_id_t  match_id = {PTL_NID_ANY, PTL_PID_ANY};
+        int                      rc;
+        ptl_md_t                 md;
+        ptl_handle_me_t          me_h;
+        unsigned long            flags;
 
         CDEBUG(D_NET, "PtlMEAttach: portal %d on %s h %lx."LPX64"\n",
                service->srv_req_portal, srv_ni->sni_ni->pni_name,
                srv_ni->sni_ni->pni_ni_h.nal_idx,
                srv_ni->sni_ni->pni_ni_h.cookie);
 
-        /* Attach the leading ME on which we build the ring */
         rc = PtlMEAttach(srv_ni->sni_ni->pni_ni_h, service->srv_req_portal,
-                         match_id, 0, ~0,
-                         PTL_UNLINK, PTL_INS_AFTER, &rqbd->rqbd_me_h);
+                         match_id, 0, ~0, PTL_UNLINK, PTL_INS_AFTER, &me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
-                /* BUG 1191 */
-                LBUG();
+                GOTO (failed, NULL);
         }
 
-        dummy.start      = rqbd->rqbd_buffer;
-        dummy.length     = service->srv_buf_size;
-        dummy.max_size   = service->srv_max_req_size;
-        dummy.threshold  = PTL_MD_THRESH_INF;
-        dummy.options    = PTL_MD_OP_PUT | PTL_MD_MAX_SIZE | PTL_MD_AUTO_UNLINK;
-        dummy.user_ptr   = rqbd;
-        dummy.eventq     = srv_ni->sni_eq_h;
+        LASSERT(rqbd->rqbd_refcount == 0);
+        rqbd->rqbd_refcount = 1;
 
-        atomic_inc(&srv_ni->sni_nrqbds_receiving);
-        atomic_set(&rqbd->rqbd_refcount, 1);   /* 1 ref for portals */
+        md.start      = rqbd->rqbd_buffer;
+        md.length     = service->srv_buf_size;
+        md.max_size   = service->srv_max_req_size;
+        md.threshold  = PTL_MD_THRESH_INF;
+        md.options    = PTL_MD_OP_PUT | PTL_MD_MAX_SIZE | PTL_MD_AUTO_UNLINK;
+        md.user_ptr   = &rqbd->rqbd_cbid;
+        md.eventq     = srv_ni->sni_ni->pni_eq_h;
+        
+        spin_lock_irqsave (&service->srv_lock, flags);
+        srv_ni->sni_nrqbd_receiving++;
+        spin_unlock_irqrestore (&service->srv_lock, flags);
 
-        rc = PtlMDAttach(rqbd->rqbd_me_h, dummy, PTL_UNLINK, &md_h);
-        if (rc != PTL_OK) {
-                CERROR("PtlMDAttach failed: %d\n", rc);
-                LASSERT (rc == PTL_NOSPACE);
-                LBUG();
-                /* BUG 1191 */
-                PtlMEUnlink (rqbd->rqbd_me_h);
-                atomic_set(&rqbd->rqbd_refcount, 0);
-                atomic_dec(&srv_ni->sni_nrqbds_receiving);
+        rc = PtlMDAttach(me_h, md, PTL_UNLINK, &rqbd->rqbd_md_h);
+        if (rc == PTL_OK)
+                return;
+        
+        CERROR("PtlMDAttach failed: %d\n", rc);
+        LASSERT (rc == PTL_NOSPACE);
+        rc = PtlMEUnlink (me_h);
+        LASSERT (rc == PTL_OK);
+
+        spin_lock_irqsave (&service->srv_lock, flags);
+        srv_ni->sni_nrqbd_receiving--;
+        if (srv_ni->sni_nrqbd_receiving == 0) {
+                /* This service is off-air on this interface because all
+                 * its request buffers are busy.  Portals will have started
+                 * dropping incoming requests until more buffers get
+                 * posted */
+                CERROR("All %s %s request buffers busy\n",
+                       service->srv_name, srv_ni->sni_ni->pni_name);
         }
+        spin_unlock_irqrestore (&service->srv_lock, flags);
+
+ failed:
+        LBUG();                /* BUG 1191 */
+        /* put req on a retry list? */
 }

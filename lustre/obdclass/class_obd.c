@@ -67,6 +67,11 @@
 #include <portals/list.h>
 #include "llog_internal.h"
 
+#ifndef __KERNEL__
+/* liblustre workaround */
+atomic_t portal_kmemory = {0};
+#endif
+
 struct semaphore obd_conf_sem;   /* serialize configuration commands */
 struct obd_device obd_dev[MAX_OBD_DEVICES];
 struct list_head obd_types;
@@ -199,12 +204,6 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
                 char *buf;
                 struct lustre_cfg *lcfg;
 
-                /* FIXME hack to liblustre dump, remove when switch
-                   to zeroconf */
-#ifndef __KERNEL__
-                data->ioc_pbuf1 = data->ioc_inlbuf1;
-                data->ioc_plen1 = data->ioc_inllen1;
-#endif
                 if (!data->ioc_plen1 || !data->ioc_pbuf1) {
                         CERROR("No config buffer passed!\n");
                         GOTO(out, err = -EINVAL);

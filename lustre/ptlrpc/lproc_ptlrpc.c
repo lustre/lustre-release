@@ -107,8 +107,8 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
         struct proc_dir_entry *svc_procroot;
         struct lprocfs_stats *svc_stats;
         int i, rc;
-        unsigned int svc_counter_config = LPROCFS_CNTR_EXTERNALLOCK |
-                LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV;
+        unsigned int svc_counter_config = LPROCFS_CNTR_AVGMINMAX | 
+                                          LPROCFS_CNTR_STDDEV;
 
         LASSERT(*procroot_ret == NULL);
         LASSERT(*stats_ret == NULL);
@@ -123,19 +123,16 @@ void ptlrpc_lprocfs_register(struct proc_dir_entry *root, char *dir,
                         lprocfs_free_stats(svc_stats);
                         return;
                 }
-        } else 
+        } else {
                 svc_procroot = root;
+        }
 
         lprocfs_counter_init(svc_stats, PTLRPC_REQWAIT_CNTR,
                              svc_counter_config, "req_waittime", "usec");
-        /* Wait for b_eq branch
-        lprocfs_counter_init(svc_stats, PTLRPC_SVCEQDEPTH_CNTR,
-                             svc_counter_config, "svc_eqdepth", "reqs");
-         */
-        /* no stddev on idletime */
-        lprocfs_counter_init(svc_stats, PTLRPC_SVCIDLETIME_CNTR,
-                             (LPROCFS_CNTR_EXTERNALLOCK|LPROCFS_CNTR_AVGMINMAX),
-                             "svc_idletime", "usec");
+        lprocfs_counter_init(svc_stats, PTLRPC_REQQDEPTH_CNTR,
+                             svc_counter_config, "req_qdepth", "reqs");
+        lprocfs_counter_init(svc_stats, PTLRPC_REQACTIVE_CNTR,
+                             svc_counter_config, "req_active", "reqs");
         for (i = 0; i < LUSTRE_MAX_OPCODES; i++) {
                 __u32 opcode = ll_rpc_opcode_table[i].opcode;
                 lprocfs_counter_init(svc_stats, PTLRPC_LAST_CNTR + i,
@@ -159,14 +156,14 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                                      struct ptlrpc_service *svc)
 {
         ptlrpc_lprocfs_register(entry, svc->srv_name,
-                                "stats", &svc->srv_procroot, 
+                                "stats", &svc->srv_procroot,
                                 &svc->srv_stats);
 }
 
 void ptlrpc_lprocfs_register_obd(struct obd_device *obddev)
 {
-        ptlrpc_lprocfs_register(obddev->obd_proc_entry, NULL, "stats", 
-                                &obddev->obd_svc_procroot, 
+        ptlrpc_lprocfs_register(obddev->obd_proc_entry, NULL, "stats",
+                                &obddev->obd_svc_procroot,
                                 &obddev->obd_svc_stats);
 }
 

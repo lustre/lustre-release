@@ -1,5 +1,5 @@
 # lustre.spec
-%define version HEAD
+%define version b_eq
 %define kversion @LINUXRELEASE@
 %define linuxdir @LINUX@
 %define enable_doc @ENABLE_DOC@
@@ -143,9 +143,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/lib/lustre/examples/llechocleanup.sh
 
 %attr(-, root, root) /etc/init.d/lustre
-%attr(-, root, root) /lib/libportals.a
 %attr(-, root, root) /lib/libptlctl.a
-%attr(-, root, root) /lib/libtcpnal.a
 %attr(-, root, root) /lib/liblustreapi.a
 %attr(-, root, root) /usr/include/lustre/*.h
 

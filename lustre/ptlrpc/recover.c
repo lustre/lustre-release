@@ -113,6 +113,10 @@ void ptlrpc_run_failed_import_upcall(struct obd_import* imp)
                        argv[0], argv[1], argv[2], argv[3], argv[4]);
         }
 #else
+        if (imp->imp_state == LUSTRE_IMP_CLOSED) {
+                EXIT;
+                return;
+        }
         ptlrpc_recover_import(imp, NULL);
 #endif
 }
@@ -215,13 +219,8 @@ void ptlrpc_wake_delayed(struct obd_import *imp)
         list_for_each_safe(tmp, pos, &imp->imp_delayed_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
 
-                if (req->rq_set) {
-                        DEBUG_REQ(D_HA, req, "waking (set %p):", req->rq_set);
-                        wake_up(&req->rq_set->set_waitq);
-                } else {
-                        DEBUG_REQ(D_HA, req, "waking:");
-                        wake_up(&req->rq_reply_waitq);
-                }
+                DEBUG_REQ(D_HA, req, "waking (set %p):", req->rq_set);
+                ptlrpc_wake_client_req(req);
         }
         spin_unlock_irqrestore(&imp->imp_lock, flags);
 }

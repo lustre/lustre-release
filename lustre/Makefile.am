@@ -12,7 +12,7 @@ DIRS24 = ptlbd
 endif
 
 if LIBLUSTRE
-SUBDIRS = portals obdclass lov ptlrpc obdecho  osc utils mdc lvfs #liblustre
+SUBDIRS = portals obdclass lov ptlrpc obdecho osc utils mdc lvfs liblustre
 else
 SUBDIRS = lvfs portals obdclass include $(DIRS24) mds utils obdfilter mdc osc ost 
 SUBDIRS+= llite obdecho lov cobd tests doc scripts conf ptlrpc

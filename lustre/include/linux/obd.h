@@ -480,7 +480,8 @@ struct obd_device {
         int                              obd_replayed_requests;
         int                              obd_requests_queued_for_recovery;
         wait_queue_head_t                obd_next_transno_waitq;
-        wait_queue_head_t                obd_commit_waitq;
+        struct list_head                 obd_uncommitted_replies;
+        spinlock_t                       obd_uncommitted_replies_lock;
         struct timer_list                obd_recovery_timer;
         struct list_head                 obd_recovery_queue;
         struct list_head                 obd_delayed_reply_queue;
@@ -666,7 +667,7 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
                obd->obd_name, transno);
         if (transno > obd->obd_last_committed) {
                 obd->obd_last_committed = transno;
-                wake_up(&obd->obd_commit_waitq);
+                ptlrpc_commit_replies (obd);
         }
 }
 

@@ -413,6 +413,7 @@ void __class_export_put(struct obd_export *exp)
                 if (exp->exp_connection)
                         ptlrpc_put_connection_superhack(exp->exp_connection);
 
+                LASSERT(list_empty(&exp->exp_outstanding_replies));
                 LASSERT(list_empty(&exp->exp_handle.h_link));
                 obd_destroy_export(exp);
 
@@ -440,6 +441,7 @@ struct obd_export *class_new_export(struct obd_device *obd)
         export->exp_conn_cnt = 0;
         atomic_set(&export->exp_refcount, 2);
         export->exp_obd = obd;
+        INIT_LIST_HEAD(&export->exp_outstanding_replies);
         /* XXX this should be in LDLM init */
         INIT_LIST_HEAD(&export->exp_ldlm_data.led_held_locks);
 

@@ -83,16 +83,15 @@ EXPORT_SYMBOL(ptlrpc_init_connection);
 EXPORT_SYMBOL(ptlrpc_cleanup_connection);
 
 /* niobuf.c */
-EXPORT_SYMBOL(ptlrpc_bulk_put);
-EXPORT_SYMBOL(ptlrpc_bulk_get);
+EXPORT_SYMBOL(ptlrpc_start_bulk_transfer);
 EXPORT_SYMBOL(ptlrpc_abort_bulk);
 EXPORT_SYMBOL(ptlrpc_register_bulk);
 EXPORT_SYMBOL(ptlrpc_unregister_bulk);
+EXPORT_SYMBOL(ptlrpc_send_reply);
 EXPORT_SYMBOL(ptlrpc_reply);
 EXPORT_SYMBOL(ptlrpc_error);
 EXPORT_SYMBOL(ptlrpc_resend_req);
 EXPORT_SYMBOL(ptl_send_rpc);
-EXPORT_SYMBOL(ptlrpc_link_svc_me);
 
 /* client.c */
 EXPORT_SYMBOL(ptlrpc_init_client);
@@ -111,7 +110,6 @@ EXPORT_SYMBOL(ptlrpc_prep_bulk_imp);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
 EXPORT_SYMBOL(ptlrpc_free_bulk);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_page);
-EXPORT_SYMBOL(ptlrpc_free_bulk_page);
 EXPORT_SYMBOL(ptlrpc_abort_inflight);
 EXPORT_SYMBOL(ptlrpc_retain_replayable_request);
 EXPORT_SYMBOL(ptlrpc_next_xid);
@@ -128,6 +126,9 @@ EXPORT_SYMBOL(ptlrpc_interrupted_set);
 EXPORT_SYMBOL(ptlrpc_mark_interrupted);
 
 /* service.c */
+EXPORT_SYMBOL(ptlrpc_save_lock);
+EXPORT_SYMBOL(ptlrpc_schedule_difficult_reply);
+EXPORT_SYMBOL(ptlrpc_commit_replies);
 EXPORT_SYMBOL(ptlrpc_init_svc);
 EXPORT_SYMBOL(ptlrpc_stop_all_threads);
 EXPORT_SYMBOL(ptlrpc_start_n_threads);
@@ -138,6 +139,7 @@ EXPORT_SYMBOL(ptlrpc_unregister_service);
 EXPORT_SYMBOL(lustre_msg_swabbed);
 EXPORT_SYMBOL(lustre_pack_request);
 EXPORT_SYMBOL(lustre_pack_reply);
+EXPORT_SYMBOL(lustre_free_reply_state);
 EXPORT_SYMBOL(lustre_msg_size);
 EXPORT_SYMBOL(lustre_unpack_msg);
 EXPORT_SYMBOL(lustre_msg_buf);

@@ -43,6 +43,8 @@
 #include <inode.h>
 #include <file.h>
 
+#undef LIST_HEAD
+
 #include "llite_lib.h"
 
 static void llu_fsop_gone(struct filesys *fs)
@@ -293,14 +295,6 @@ int llu_inode_getattr(struct inode *inode, struct lov_stripe_md *lsm)
 
         obdo_refresh_inode(inode, &oa, refresh_valid);
 
-/*
-        if (inode->i_blksize < PAGE_CACHE_SIZE)
-                inode->i_blksize = PAGE_CACHE_SIZE;
-
-        CDEBUG(D_INODE, "objid "LPX64" size %Lu, blocks %lu, blksize %lu\n",
-               lsm->lsm_object_id, inode->i_size, inode->i_blocks,
-               inode->i_blksize);
-*/
         RETURN(0);
 }
 
@@ -342,49 +336,6 @@ static struct inode* llu_new_inode(struct filesys *fs,
 
         return inode;
 }
-
-#if 0
-static int ll_intent_to_lock_mode(struct lookup_intent *it)
-{
-        /* CREAT needs to be tested before open (both could be set) */
-        if (it->it_op & IT_CREAT)
-                return LCK_PW;
-        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP))
-                return LCK_PR;
-
-        LBUG();
-        RETURN(-EINVAL);
-}
-#endif
-
-#if 0
-int ll_it_open_error(int phase, struct lookup_intent *it)
-{
-        if (it_disposition(it, DISP_OPEN_OPEN)) {
-                if (phase == DISP_OPEN_OPEN)
-                        return it->d.lustre.it_status;
-                else
-                        return 0;
-        }
-
-        if (it_disposition(it, DISP_OPEN_CREATE)) {
-                if (phase == DISP_OPEN_CREATE)
-                        return it->d.lustre.it_status;
-                else
-                        return 0;
-        }
-
-        if (it_disposition(it, DISP_LOOKUP_EXECD)) {
-                if (phase == DISP_LOOKUP_EXECD)
-                        return it->d.lustre.it_status;
-                else
-                        return 0;
-        }
-        CERROR("it disp: %X, status: %d\n", it->d.lustre.it_disposition, it->d.lustre.it_status);
-        LBUG();
-        return 0;
-}
-#endif
 
 static int llu_have_md_lock(struct inode *inode)
 {
@@ -653,8 +604,6 @@ out:
  * I don't believe it is possible to get e.g. ATTR_MTIME_SET and ATTR_SIZE
  * at the same time.
  */
-#define OST_ATTR (ATTR_MTIME | ATTR_MTIME_SET | ATTR_CTIME | \
-                  ATTR_ATIME | ATTR_ATIME_SET | ATTR_SIZE)
 int llu_setattr_raw(struct inode *inode, struct iattr *attr)
 {
         struct lov_stripe_md *lsm = llu_i2info(inode)->lli_smd;
@@ -702,7 +651,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         /* If only OST attributes being set on objects, don't do MDS RPC.
          * In that case, we need to check permissions and update the local
          * inode ourselves so we can call obdo_from_inode() always. */
-        if (ia_valid & (lsm ? ~(OST_ATTR | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
+        if (ia_valid & (lsm ? ~(ATTR_SIZE | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
                 struct lustre_md md;
                 llu_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
@@ -810,7 +759,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         RETURN(rc);
 }
 
-/* FIXME here we simply act as a thin layer to glue it with
+/* here we simply act as a thin layer to glue it with
  * llu_setattr_raw(), which is copy from kernel
  */
 static int llu_iop_setattr(struct pnode *pno,
@@ -844,7 +793,7 @@ static int llu_iop_setattr(struct pnode *pno,
                 iattr.ia_valid |= ATTR_GID;
         }
         if (mask & SETATTR_LEN) {
-                iattr.ia_size = stbuf->st_size; /* FIXME signed expansion problem */
+                iattr.ia_size = stbuf->st_size; /* XXX signed expansion problem */
                 iattr.ia_valid |= ATTR_SIZE;
         }
 
@@ -950,10 +899,6 @@ static int llu_iop_readlink(struct pnode *pno, char *data, size_t bufsize)
         int rc;
         ENTRY;
 
-        /* on symlinks lli_open_sem protects lli_symlink_name allocation/data */
-/*
-        down(&lli->lli_open_sem);
-*/
         rc = llu_readlink_internal(inode, &request, &symname);
         if (rc)
                 GOTO(out, rc);
@@ -963,9 +908,6 @@ static int llu_iop_readlink(struct pnode *pno, char *data, size_t bufsize)
 
         ptlrpc_req_finished(request);
  out:
-/*
-        up(&lli->lli_open_sem);
-*/
         RETURN(rc);
 }
 
@@ -1012,80 +954,6 @@ static int llu_iop_mknod_raw(struct pnode *pno,
         }
         RETURN(err);
 }
-
-#if 0
-static int llu_mdc_unlink(struct inode *dir, struct inode *child, __u32 mode,
-                         const char *name, int len)
-{
-        struct ptlrpc_request *request = NULL;
-        struct mds_body *body;
-        struct lov_mds_md *eadata;
-        struct lov_stripe_md *lsm = NULL;
-        struct obd_trans_info oti = { 0 };
-        struct mdc_op_data op_data;
-        struct obdo *oa;
-        int rc;
-        ENTRY;
-
-        llu_prepare_mdc_op_data(&op_data, dir, child, name, len, mode);
-        rc = mdc_unlink(&llu_i2sbi(dir)->ll_mdc_conn, &op_data, &request);
-        if (rc)
-                GOTO(out, rc);
-        /* req is swabbed so this is safe */
-        body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
-
-        if (!(body->valid & OBD_MD_FLEASIZE))
-                GOTO(out, rc = 0);
-
-        if (body->eadatasize == 0) {
-                CERROR("OBD_MD_FLEASIZE set but eadatasize zero\n");
-                GOTO(out, rc = -EPROTO);
-        }
-
-        /* The MDS sent back the EA because we unlinked the last reference
-         * to this file. Use this EA to unlink the objects on the OST.
-         * It's opaque so we don't swab here; we leave it to obd_unpackmd() to
-         * check it is complete and sensible. */
-        eadata = lustre_swab_repbuf(request, 1, body->eadatasize, NULL);
-        LASSERT(eadata != NULL);
-        if (eadata == NULL) {
-                CERROR("Can't unpack MDS EA data\n");
-                GOTO(out, rc = -EPROTO);
-        }
-
-        rc = obd_unpackmd(llu_i2obdconn(dir), &lsm, eadata, body->eadatasize);
-        if (rc < 0) {
-                CERROR("obd_unpackmd: %d\n", rc);
-                GOTO(out, rc);
-        }
-        LASSERT(rc >= sizeof(*lsm));
-
-        oa = obdo_alloc();
-        if (oa == NULL)
-                GOTO(out_free_memmd, rc = -ENOMEM);
-
-        oa->o_id = lsm->lsm_object_id;
-        oa->o_mode = body->mode & S_IFMT;
-        oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
-
-        if (body->valid & OBD_MD_FLCOOKIE) {
-                oa->o_valid |= OBD_MD_FLCOOKIE;
-                oti.oti_logcookies = lustre_msg_buf(request->rq_repmsg, 3,
-                                                    body->eadatasize);
-        }
-
-        rc = obd_destroy(llu_i2obdconn(dir), oa, lsm, &oti);
-        obdo_free(oa);
-        if (rc)
-                CERROR("obd destroy objid 0x"LPX64" error %d\n",
-                       lsm->lsm_object_id, rc);
- out_free_memmd:
-        obd_free_memmd(llu_i2obdconn(dir), &lsm);
- out:
-        ptlrpc_req_finished(request);
-        return rc;
-}
-#endif
 
 static int llu_iop_link_raw(struct pnode *old, struct pnode *new)
 {
@@ -1176,7 +1044,7 @@ static int llu_iop_rename_raw(struct pnode *old, struct pnode *new)
         RETURN(rc);
 }
 
-#if 0
+#ifdef _HAVE_STATVFS
 static int llu_statfs_internal(struct llu_sb_info *sbi,
                                struct obd_statfs *osfs,
                                unsigned long max_age)
@@ -1221,7 +1089,7 @@ static int llu_statfs_internal(struct llu_sb_info *sbi,
         RETURN(rc);
 }
 
-static int llu_statfs(struct llu_sb_info *sbi, struct kstatfs *sfs)
+static int llu_statfs(struct llu_sb_info *sbi, struct statfs *sfs)
 {
         struct obd_statfs osfs;
         int rc;
@@ -1284,7 +1152,7 @@ static int llu_iop_statvfs(struct pnode *pno,
 
         RETURN(0);
 }
-#endif
+#endif /* _HAVE_STATVFS */
 
 static int llu_iop_mkdir_raw(struct pnode *pno, mode_t mode)
 {
@@ -1449,7 +1317,6 @@ llu_fsswop_mount(const char *source,
                         GOTO(out_free, err = -EINVAL);
                 }
 
-                /* XXX */
                 /* generate a string unique to this super, let's try
                  the address of the super itself.*/
                 len = (sizeof(sbi) * 2) + 1; 
@@ -1460,7 +1327,7 @@ llu_fsswop_mount(const char *source,
 
                 cfg.cfg_instance = sbi->ll_instance;
                 cfg.cfg_uuid = sbi->ll_sb_uuid;
-                err = liblustre_process_log(&cfg);
+                err = liblustre_process_log(&cfg, 1);
                 if (err < 0) {
                         CERROR("Unable to process log: %s\n", g_zconf_profile);
 
@@ -1622,7 +1489,7 @@ static struct inode_ops llu_inode_ops = {
         inop_lookup:    llu_iop_lookup,
         inop_getattr:   llu_iop_getattr,
         inop_setattr:   llu_iop_setattr,
-        inop_getdirentries:     NULL,
+        inop_getdirentries:     llu_iop_getdirentries,
         inop_mkdir:     llu_iop_mkdir_raw,
         inop_rmdir:     llu_iop_rmdir_raw,
         inop_symlink:   llu_iop_symlink_raw,
@@ -1640,7 +1507,7 @@ static struct inode_ops llu_inode_ops = {
         inop_datasync:  llu_iop_datasync,
         inop_ioctl:     llu_iop_ioctl,
         inop_mknod:     llu_iop_mknod_raw,
-#if 0
+#ifdef _HAVE_STATVFS
         inop_statvfs:   llu_iop_statvfs,
 #endif
         inop_gone:      llu_iop_gone,

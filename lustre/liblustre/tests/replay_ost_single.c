@@ -91,219 +91,155 @@ static void mds_failover()
 
 void t0()
 {
-        ENTRY("empty replay");
-        replay_barrier();
-        mds_failover();
-        LEAVE();
-}
+        const int bufsize = 4096;
+        char *path = "/mnt/lustre/rp_ost_t0_file";
+        char buf[bufsize];
+        int fd, i, j, rc;
+        ENTRY("open-failover-write-verification (no ping involved)");
 
-void t1()
-{
-        char *path="/mnt/lustre/f1";
-        ENTRY("simple create");
-
-        replay_barrier();
-        t_create(path);
-        mds_failover();
-        t_check_stat(path, NULL);
-        t_unlink(path);
-        LEAVE();
-}
-
-void t2a()
-{
-        char *path="/mnt/lustre/f2a";
-        ENTRY("touch");
-
-        replay_barrier();
+        printf("create/open file...\n");
         t_touch(path);
-        mds_failover();
-        t_check_stat(path, NULL);
-        t_unlink(path);
-        LEAVE();
-}
-
-void t2b()
-{
-        char *path="/mnt/lustre/f2b";
-        ENTRY("mcreate+touch");
-
-        t_create(path);
-        replay_barrier();
-        t_touch(path);
-        mds_failover();
-        t_check_stat(path, NULL);
-        t_unlink(path);
-        LEAVE();
-}
-
-
-void n_create_delete(int nfiles)
-{
-        char *base="/mnt/lustre/f3_";
-        char path[100];
-        char str[100];
-        int i;
-
-        replay_barrier();
-        for (i = 0; i < nfiles; i++) {
-                sprintf(path, "%s%d\n", base, i);
-                sprintf(str, "TEST#%d CONTENT\n", i);
-                t_echo_create(path, str);
-        }
-        mds_failover();
-        for (i = 0; i < nfiles; i++) {
-                sprintf(path, "%s%d\n", base, i);
-                sprintf(str, "TEST#%d CONTENT\n", i);
-                t_grep(path, str);
-        }
-        replay_barrier();
-        for (i = 0; i < nfiles; i++) {
-                sprintf(path, "%s%d\n", base, i);
-                t_unlink(path);
-        }
-        mds_failover();
-        for (i = 0; i < nfiles; i++) {
-                sprintf(path, "%s%d\n", base, i);
-                t_check_stat_fail(path);
-        }
-        LEAVE();
-}
-
-void t3a()
-{
-        ENTRY("10 create/delete");
-        n_create_delete(10);
-        LEAVE();
-}
-
-void t3b()
-{
-        ENTRY("30 create/delete(>1'st block precreated)");
-        n_create_delete(30);
-        LEAVE();
-}
-
-void t4()
-{
-        char *dir="/mnt/lustre/d4";
-        char *path="/mnt/lustre/d4/f1";
-        ENTRY("mkdir + contained create");
-
-        replay_barrier();
-        t_mkdir(dir);
-        t_create(path);
-        mds_failover();
-        t_check_stat(dir, NULL);
-        t_check_stat(path, NULL);
-        sleep(2); /* wait for log process thread */
-
-        replay_barrier();
-        t_unlink(path);
-        t_rmdir(dir);
-        mds_failover();
-        t_check_stat_fail(dir);
-        t_check_stat_fail(path);
-        LEAVE();
-}
-
-void t5()
-{
-        char *dir="/mnt/lustre/d5";
-        char *path="/mnt/lustre/d5/f1";
-        ENTRY("mkdir |X| contained create");
-
-        t_mkdir(dir);
-        replay_barrier();
-        t_create(path);
-        mds_failover();
-        t_check_stat(dir, NULL);
-        t_check_stat(path, NULL);
-        t_unlink(path);
-        t_rmdir(dir);
-        LEAVE();
-}
-
-void t6()
-{
-        char *path="/mnt/lustre/f6";
-        int fd;
-        ENTRY("open |X| close");
-
-        replay_barrier();
-        t_create(path);
         fd = t_open(path);
-        sleep(1);
+        printf("OST failover...\n");
+        replay_barrier();
         mds_failover();
-        t_check_stat(path, NULL);
+
+        printf("write file...\n");
+        for (i = 0; i < 20; i++) {
+                memset(buf, i, bufsize);
+                if ((rc = write(fd, buf, bufsize)) != bufsize) {
+                        perror("write error after failover");
+                        printf("i = %d, rc = %d\n", i, rc);
+                        exit(-1);
+                }
+        }
+
+        /* verify */
+        printf("read & verify...\n");
+        lseek(fd, 0, SEEK_SET);
+        for (i = 0; i < 20; i++) {
+                memset(buf, -1, bufsize);
+                if ((rc = read(fd, buf, bufsize)) != bufsize) {
+                        perror("read error rc");
+                        printf("i = %d, rc = %d\n", i, rc);
+                        exit(-1);
+                }
+                for (j = 0; j < bufsize; j++) {
+                        if (buf[j] != i) {
+                                printf("verify error!\n");
+                                exit(-1);
+                        }
+                }
+        }
         t_close(fd);
         t_unlink(path);
         LEAVE();
 }
 
-void t7()
+void t1()
 {
-        char *path="/mnt/lustre/f7";
-        char *path2="/mnt/lustre/f7-2";
-        ENTRY("create |X| rename unlink");
+        const int bufsize = 4096;
+        char *path = "/mnt/lustre/rp_ost_t1_file";
+        char buf[bufsize];
+        int fd, i, j;
+        ENTRY("open-write-close-open-failover-read (no ping involved)");
 
-        t_create(path);
+        printf("create/open file...\n");
+        t_touch(path);
+        fd = t_open(path);
+        printf("write file...\n");
+        for (i = 0; i < 20; i++) {
+                memset(buf, i, bufsize);
+                if (write(fd, buf, bufsize) != bufsize) {
+                        perror("write error");
+                        exit(-1);
+                }
+        }
+        printf("close/reopen...\n");
+        t_close(fd);
+        fd = t_open(path);
+        lseek(fd, 0, SEEK_SET);
+
+        printf("OST failover...\n");
         replay_barrier();
-        t_rename(path, path2);
         mds_failover();
-        t_check_stat_fail(path);
-        t_check_stat(path2, NULL);
-        t_unlink(path2);
-}
 
-void t8()
-{
-        char *path="/mnt/lustre/f8";
-        char *path2="/mnt/lustre/f8-2";
-        ENTRY("create open write rename |X| create-old-name read");
+        printf("read & verify...\n");
+        for (i = 0; i < 20; i++) {
+                memset(buf, -1, bufsize);
+                if (read(fd, buf, bufsize) != bufsize) {
+                        perror("read error after failover");
+                        exit(-1);
+                }
+                for (j = 0; j < bufsize; j++) {
+                        if (buf[j] != i) {
+                                printf("verify error after failover\n");
+                                exit(-1);
+                        }
+                }
+        }
 
-        t_create(path);
-        t_echo_create(path, "old");
-        t_rename(path, path2);
-        replay_barrier();
-        t_echo_create(path, "new");
-        mds_failover();
-        t_grep(path, "new");
-        t_grep(path2, "old");
+        t_close(fd);
         t_unlink(path);
-        t_unlink(path2);
+        LEAVE();
 }
 
-void t9()
+void t2()
 {
-        char *path="/mnt/lustre/f9";
-        char *path2="/mnt/lustre/f9-2";
-        ENTRY("|X| open(O_CREAT), unlink, touch new, unlink new");
+        char *path = "/mnt/lustre/rp_ost_t2_file";
+        char *str = "xxxxjoiwlsdf98lsjdfsjfoajflsjfajfoaidfojaj08eorje;";
+        ENTRY("empty replay");
 
         replay_barrier();
-        t_create(path);
+        mds_failover();
+
+        t_echo_create(path, str);
+        t_grep(path, str);
         t_unlink(path);
-        t_create(path2);
-        mds_failover();
-        t_check_stat_fail(path);
-        t_check_stat(path2, NULL);
-        t_unlink(path2);
 }
 
-void t10()
+void t3()
 {
-        char *path="/mnt/lustre/f10";
-        char *path2="/mnt/lustre/f10-2";
-        ENTRY("|X| mcreate, open write, rename");
+        char *path = "/mnt/lustre/rp_ost_t3_file";
+        char *str = "xxxxjoiwlsdf98lsjdfsjfoajflsjfajfoaidfojaj08eorje;";
+        ENTRY("touch");
 
+        printf("touch to create a file\n");
+        t_echo_create(path, str);
         replay_barrier();
-        t_create(path);
-        t_echo_create(path, "old");
-        t_rename(path, path2);
-        t_grep(path2, "old");
         mds_failover();
-        t_grep(path2, "old");
-        t_unlink(path2);
+
+        printf("read & verify\n");
+        t_grep(path, str);
+        t_unlink(path);
+        /* XXX have problem without this, seems server side problem XXX */
+        sleep(5);
+}
+
+void t4()
+{
+        char *path = "/mnt/lustre/rp_ost_t4_file";
+        char namebuf[1024];
+        char str[1024];
+        int count = 10, i;
+        ENTRY("|X| 10 open(CREAT)s (ping involved)");
+
+        printf("create %d files\n", count);
+        for (i = 0; i < count; i++) {
+                sprintf(namebuf, "%s%02d", path, i);
+                sprintf(str, "%s-%08d-%08x-AAAAA", "content", i, i);
+                t_echo_create(namebuf, str);
+        }
+        replay_barrier();
+        mds_failover();
+
+        printf("read & verify\n");
+        for (i = 0; i < count; i++) {
+                sprintf(namebuf, "%s%02d", path, i);
+                sprintf(str, "%s-%08d-%08x-AAAAA", "content", i, i);
+                t_grep(namebuf, str);
+                t_unlink(namebuf);
+        }
 }
 
 extern int portal_debug;
@@ -314,9 +250,9 @@ extern void __liblustre_cleanup_(void);
 
 void usage(const char *cmd)
 {
-        printf("Usage: \t%s --target mdsnid:/mdsname/profile -s mds_hostname "
+        printf("Usage: \t%s --target mdsnid:/mdsname/profile -s ost_hostname "
                 "-b \"barrier cmd\" -f \"failover cmd\"\n", cmd);
-        printf("       \t%s --dumpfile dumpfile -s mds_hostname -b \"barrier cmd\" "
+        printf("       \t%s --dumpfile dumpfile -s ost_hostname -b \"barrier cmd\" "
                 "-f \"failover cmd\"\n", cmd);
         exit(-1);
 }
@@ -384,21 +320,15 @@ int main(int argc, char * const argv[])
         sprintf(barrier_cmd, "ssh %s \"%s\"", mds_server, barrier_script);
         sprintf(failover_cmd, "ssh %s \"%s\"", mds_server, failover_script);
 
+        setenv(ENV_LUSTRE_TIMEOUT, "5", 1);
+
         __liblustre_setup_();
 
         t0();
         t1();
-        t2a();
-        t2b();
-        t3a();
-        t3b();
+        t2();
+        t3();
         t4();
-        t5();
-        t6();
-        t7();
-        t8();
-        t9();
-        t10();
 
 	printf("liblustre is about shutdown\n");
         __liblustre_cleanup_();

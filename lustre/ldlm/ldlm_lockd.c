@@ -389,23 +389,17 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
         req->rq_timeout = 2; /* 2 second timeout for initial AST reply */
         rc = ptlrpc_queue_wait(req);
         if (rc == -ETIMEDOUT || rc == -EINTR) {
-#ifdef __KERNEL__
-                ldlm_del_waiting_lock(lock);
-                ldlm_failed_ast(lock, rc, "blocking");
-#else
-                /* XXX
-                 * Here we treat all clients as liblustre. When BLOCKING AST
-                 * timeout we don't evicting the client and only cancel
-                 * the lock.
-                 * restore to orignial implementation later!!!
-                 * XXX
-                 */
-                CERROR("BLOCKING AST to client (nid "LPU64") timeout, "
-                       "simply cancel lock 0x%p\n",
-                       req->rq_peer.peer_nid, lock);
-                ldlm_lock_cancel(lock);
-                rc = -ERESTART;
-#endif
+                LASSERT(lock->l_export);
+                if (lock->l_export->exp_libclient) {
+                        CDEBUG(D_HA, "BLOCKING AST to liblustre client (nid "
+                               LPU64") timeout, simply cancel lock 0x%p\n",
+                               req->rq_peer.peer_nid, lock);
+                        ldlm_lock_cancel(lock);
+                        rc = -ERESTART;
+                } else {
+                        ldlm_del_waiting_lock(lock);
+                        ldlm_failed_ast(lock, rc, "blocking");
+                }
         } else if (rc) {
                 if (rc == -EINVAL)
                         CDEBUG(D_DLMTRACE, "client (nid "LPU64") returned %d "
@@ -1145,9 +1139,8 @@ static int ldlm_setup(void)
 #endif
 
         ldlm->ldlm_cb_service =
-                ptlrpc_init_svc(LDLM_NEVENTS, LDLM_NBUFS, LDLM_BUFSIZE,
-                                LDLM_MAXREQSIZE, LDLM_CB_REQUEST_PORTAL,
-                                LDLM_CB_REPLY_PORTAL,
+                ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
+                                LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
                                 ldlm_callback_handler, "ldlm_cbd",
                                 ldlm_svc_proc_dir);
 
@@ -1157,8 +1150,8 @@ static int ldlm_setup(void)
         }
 
         ldlm->ldlm_cancel_service =
-                ptlrpc_init_svc(LDLM_NEVENTS, LDLM_NBUFS, LDLM_BUFSIZE,
-                                LDLM_MAXREQSIZE, LDLM_CANCEL_REQUEST_PORTAL,
+                ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE, 
+                                LDLM_CANCEL_REQUEST_PORTAL,
                                 LDLM_CANCEL_REPLY_PORTAL,
                                 ldlm_cancel_handler, "ldlm_canceld",
                                 ldlm_svc_proc_dir);
@@ -1404,4 +1397,3 @@ EXPORT_SYMBOL(target_queue_recovery_request);
 EXPORT_SYMBOL(target_handle_ping);
 EXPORT_SYMBOL(target_handle_disconnect);
 EXPORT_SYMBOL(target_queue_final_reply);
-EXPORT_SYMBOL(ldlm_put_lock_into_req);

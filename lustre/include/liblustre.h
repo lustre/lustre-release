@@ -111,9 +111,9 @@ static inline void *kmalloc(int size, int prot)
 #define GFP_HIGHUSER 1
 #define GFP_ATOMIC 1
 #define GFP_NOFS 1
-#define IS_ERR(a) (((a) && abs((int)(a)) < 500) ? 1 : 0)
-#define PTR_ERR(a) ((int)(a))
-#define ERR_PTR(a) ((void*)(a))
+#define IS_ERR(a) (((a) && abs((long)(a)) < 500) ? 1 : 0)
+#define PTR_ERR(a) ((long)(a))
+#define ERR_PTR(a) ((void*)((long)(a)))
 
 #define capable(foo) 1
 #define CAP_SYS_ADMIN 1
@@ -415,6 +415,11 @@ static inline int kmem_cache_destroy(kmem_cache_t *a)
 #define PAGE_CACHE_SHIFT 12
 #define PAGE_CACHE_MASK PAGE_MASK
 
+/* XXX
+ * for this moment, liblusre will not rely OST for non-page-aligned write
+ */
+#define LIBLUSTRE_HANDLE_UNALIGNED_PAGE
+
 struct page {
         void   *addr;
         unsigned long index;
@@ -424,6 +429,9 @@ struct page {
         /* internally used by liblustre file i/o */
         int     _offset;
         int     _count;
+#ifdef LIBLUSTRE_HANDLE_UNALIGNED_PAGE
+        int     _managed;
+#endif
 };
 
 #define kmap(page) (page)->addr
@@ -461,6 +469,7 @@ static inline void __free_pages(struct page *pg, int what)
 }
 
 #define __free_page(page) __free_pages((page), 0)
+#define free_page(page) __free_page(page)
 
 static inline struct page* __grab_cache_page(unsigned long index)
 {
@@ -705,6 +714,12 @@ static inline void del_timer(struct timer_list *l)
 {
         free(l);
 }
+
+#define time_after(a, b)                                        \
+({                                                              \
+        printf("Error: inapproiate call time_after()\n");       \
+        1;                                                      \
+})
 
 typedef struct { volatile int counter; } atomic_t;
 

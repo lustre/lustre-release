@@ -6,8 +6,9 @@
 DEFS= 
 
 if LIBLUSTRE
-lib_LIBRARIES = libobdecho.a
+noinst_LIBRARIES = libobdecho.a
 libobdecho_a_SOURCES = echo_client.c 
+libobdecho_a_CFLAGS = -fPIC
 else
 MODULE = obdecho
 modulefs_DATA = obdecho.o

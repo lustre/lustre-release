@@ -16,7 +16,7 @@
 # include <linux/smp_lock.h>
 # include <linux/types.h>
 #else
-# define PTL_USE_DESC_LISTS
+# define PTL_USE_LIB_FREELIST
 # include <sys/types.h>
 #endif
 
@@ -139,16 +139,9 @@ typedef struct {
 
 struct lib_msg_t {
         struct list_head  msg_list;
-        int               send_ack;
         lib_md_t         *md;
-        ptl_nid_t         nid;
-        ptl_pid_t         pid;
-        ptl_event_t       ev;
         ptl_handle_wire_t ack_wmd;
-        union {
-                struct iovec  iov[PTL_MD_MAX_IOV];
-                ptl_kiov_t    kiov[PTL_MD_MAX_IOV];
-        } msg_iov;
+        ptl_event_t       ev;
 };
 
 struct lib_ptl_t {
@@ -212,9 +205,8 @@ struct lib_md_t {
 };
 
 #define PTL_MD_FLAG_UNLINK            (1 << 0)
-#define PTL_MD_FLAG_AUTO_UNLINKED     (1 << 1)
 
-#ifdef PTL_USE_DESC_LISTS
+#ifdef PTL_USE_LIB_FREELIST
 typedef struct
 {
         void	          *fl_objs;             /* single contiguous array of objects */
@@ -262,7 +254,7 @@ typedef struct {
         
         struct list_head ni_test_peers;
         
-#ifdef PTL_USE_DESC_LISTS
+#ifdef PTL_USE_LIB_FREELIST
         lib_freelist_t   ni_free_mes;
         lib_freelist_t   ni_free_msgs;
         lib_freelist_t   ni_free_mds;

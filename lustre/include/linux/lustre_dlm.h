@@ -388,9 +388,6 @@ void ldlm_lock_remove_from_lru(struct ldlm_lock *);
 struct ldlm_lock *ldlm_handle2lock_ns(struct ldlm_namespace *,
                                       struct lustre_handle *);
 
-void *ldlm_put_lock_into_req(struct ptlrpc_request *,
-                                struct lustre_handle *, int);
-
 static inline struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *h)
 {
         return __ldlm_handle2lock(h, 0);

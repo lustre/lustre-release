@@ -59,19 +59,6 @@
 static int mds_postsetup(struct obd_device *obd);
 static int mds_cleanup(struct obd_device *obd, int flags);
 
-static int mds_bulk_timeout(void *data)
-{
-        struct ptlrpc_bulk_desc *desc = data;
-        struct obd_export *exp = desc->bd_export;
-
-        DEBUG_REQ(D_ERROR, desc->bd_req,"bulk send timed out: evicting %s@%s\n",
-                  exp->exp_client_uuid.uuid,
-                  exp->exp_connection->c_remote_uuid.uuid);
-        ptlrpc_fail_export(exp);
-        ptlrpc_abort_bulk (desc);
-        RETURN(1);
-}
-
 /* Assumes caller has already pushed into the kernel filesystem context */
 static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                         loff_t offset, int count)
@@ -89,7 +76,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
         if (!pages)
                 GOTO(out, rc = -ENOMEM);
 
-        desc = ptlrpc_prep_bulk_exp (req, BULK_PUT_SOURCE, MDS_BULK_PORTAL);
+        desc = ptlrpc_prep_bulk_exp (req, 1, BULK_PUT_SOURCE, MDS_BULK_PORTAL);
         if (desc == NULL)
                 GOTO(out_free, rc = -ENOMEM);
 
@@ -100,9 +87,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 if (pages[i] == NULL)
                         GOTO(cleanup_buf, rc = -ENOMEM);
 
-                rc = ptlrpc_prep_bulk_page(desc, pages[i], 0, tmpsize);
-                if (rc != 0)
-                        GOTO(cleanup_buf, rc);
+                ptlrpc_prep_bulk_page(desc, pages[i], 0, tmpsize);
         }
 
         for (i = 0, tmpcount = count; i < npages; i++, tmpcount -= tmpsize) {
@@ -118,25 +103,41 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                         GOTO(cleanup_buf, rc = -EIO);
         }
 
-        rc = ptlrpc_bulk_put(desc);
+        LASSERT(desc->bd_nob == count);
+
+        rc = ptlrpc_start_bulk_transfer(desc);
         if (rc)
                 GOTO(cleanup_buf, rc);
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE)) {
                 CERROR("obd_fail_loc=%x, fail operation rc=%d\n",
                        OBD_FAIL_MDS_SENDPAGE, rc);
-                ptlrpc_abort_bulk(desc);
-                GOTO(cleanup_buf, rc);
+                GOTO(abort_bulk, rc);
         }
 
-        lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, mds_bulk_timeout, desc);
-        rc = l_wait_event(desc->bd_waitq, ptlrpc_bulk_complete (desc), &lwi);
-        if (rc) {
-                LASSERT (rc == -ETIMEDOUT);
-                GOTO(cleanup_buf, rc);
+        lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, NULL, NULL);
+        rc = l_wait_event(desc->bd_waitq, !ptlrpc_bulk_active(desc), &lwi);
+        LASSERT (rc == 0 || rc == -ETIMEDOUT);
+
+        if (rc == 0) {
+                if (desc->bd_success &&
+                    desc->bd_nob_transferred == count)
+                        GOTO(cleanup_buf, rc);
+
+                rc = -ETIMEDOUT; /* XXX should this be a different errno? */
         }
+        
+        DEBUG_REQ(D_ERROR, req, "bulk failed: %s %d(%d), evicting %s@%s\n",
+                  (rc == -ETIMEDOUT) ? "timeout" : "network error",
+                  desc->bd_nob_transferred, count,
+                  req->rq_export->exp_client_uuid.uuid,
+                  req->rq_export->exp_connection->c_remote_uuid.uuid);
+
+        ptlrpc_fail_export(req->rq_export);
 
         EXIT;
+ abort_bulk:
+        ptlrpc_abort_bulk (desc);
  cleanup_buf:
         for (i = 0; i < npages; i++)
                 if (pages[i])
@@ -357,6 +358,21 @@ static int mds_disconnect(struct obd_export *export, int flags)
         ENTRY;
 
         ldlm_cancel_locks_for_export(export);
+
+        /* complete all outstanding replies */
+        spin_lock_irqsave (&export->exp_lock, irqflags);
+        while (!list_empty (&export->exp_outstanding_replies)) {
+                struct ptlrpc_reply_state *rs =
+                        list_entry (export->exp_outstanding_replies.next, 
+                                    struct ptlrpc_reply_state, rs_exp_list);
+                struct ptlrpc_service *svc = rs->rs_srv_ni->sni_service;
+
+                spin_lock (&svc->srv_lock);
+                list_del_init (&rs->rs_exp_list);
+                ptlrpc_schedule_difficult_reply (rs);
+                spin_unlock (&svc->srv_lock);
+        }
+        spin_unlock_irqrestore (&export->exp_lock, irqflags);
 
         spin_lock_irqsave(&export->exp_lock, irqflags);
         export->exp_flags = flags;
@@ -1100,7 +1116,13 @@ int mds_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_READPAGE_NET, 0);
                 rc = mds_readpage(req);
 
-                OBD_FAIL_RETURN(OBD_FAIL_MDS_SENDPAGE, 0);
+                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_SENDPAGE)) {
+                        if (req->rq_reply_state) {
+                                lustre_free_reply_state (req->rq_reply_state);
+                                req->rq_reply_state = NULL;
+                        }
+                        RETURN(0);
+                }
 
                 break;
 
@@ -1789,11 +1811,11 @@ static int mdt_setup(struct obd_device *obddev, obd_count len, void *buf)
         int rc = 0;
         ENTRY;
 
-        mds->mds_service = ptlrpc_init_svc(MDS_NEVENTS, MDS_NBUFS,
-                                           MDS_BUFSIZE, MDS_MAXREQSIZE,
-                                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
-                                           mds_handle, "mds", 
-                                           obddev->obd_proc_entry);
+        mds->mds_service = 
+                ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
+                                MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
+                                mds_handle, "mds",
+                                obddev->obd_proc_entry);
 
         if (!mds->mds_service) {
                 CERROR("failed to start service\n");
@@ -1806,8 +1828,7 @@ static int mdt_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_thread, rc);
 
         mds->mds_setattr_service =
-                ptlrpc_init_svc(MDS_NEVENTS, MDS_NBUFS,
-                                MDS_BUFSIZE, MDS_MAXREQSIZE,
+                ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_SETATTR_PORTAL, MDC_REPLY_PORTAL,
                                 mds_handle, "mds_setattr", 
                                 obddev->obd_proc_entry);
@@ -1822,8 +1843,7 @@ static int mdt_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_thread2, rc);
                         
         mds->mds_readpage_service =
-                ptlrpc_init_svc(MDS_NEVENTS, MDS_NBUFS,
-                                MDS_BUFSIZE, MDS_MAXREQSIZE,
+                ptlrpc_init_svc(MDS_NBUFS, MDS_BUFSIZE, MDS_MAXREQSIZE,
                                 MDS_READPAGE_PORTAL, MDC_REPLY_PORTAL,
                                 mds_handle, "mds_readpage", 
                                 obddev->obd_proc_entry);

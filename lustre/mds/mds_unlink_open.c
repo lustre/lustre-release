@@ -101,28 +101,22 @@ out_lock:
 }
 
 static int mds_osc_destroy_orphan(struct mds_obd *mds,
-                                  struct ptlrpc_request *request)
+                                  struct inode *inode,
+                                  struct lov_mds_md *lmm,
+                                  int lmm_size,
+                                  struct llog_cookie *logcookies,
+                                  int log_unlink)
 {
-        struct mds_body *body;
-        struct lov_mds_md *lmm = NULL;
         struct lov_stripe_md *lsm = NULL;
         struct obd_trans_info oti = { 0 };
         struct obdo *oa;
         int rc;
         ENTRY;
 
-        body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
-        if (!(body->valid & OBD_MD_FLEASIZE))
+        if (lmm_size == 0)
                 RETURN(0);
-        if (body->eadatasize == 0) {
-                CERROR("OBD_MD_FLEASIZE set but eadatasize zero\n");
-                RETURN(rc = -EPROTO);
-        }
 
-        lmm = lustre_msg_buf(request->rq_repmsg, 1, body->eadatasize);
-        LASSERT(lmm != NULL);
-
-        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, body->eadatasize);
+        rc = obd_unpackmd(mds->mds_osc_exp, &lsm, lmm, lmm_size);
         if (rc < 0) {
                 CERROR("Error unpack md %p\n", lmm);
                 RETURN(rc);
@@ -135,18 +129,12 @@ static int mds_osc_destroy_orphan(struct mds_obd *mds,
         if (oa == NULL)
                 GOTO(out_free_memmd, rc = -ENOMEM);
         oa->o_id = lsm->lsm_object_id;
-        oa->o_mode = body->mode & S_IFMT;
+        oa->o_mode = inode->i_mode & S_IFMT;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE;
 
-        if (body->valid & OBD_MD_FLCOOKIE) {
+        if (log_unlink && logcookies) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
-                oti.oti_logcookies =
-                        lustre_msg_buf(request->rq_repmsg, 2,
-                                       sizeof(struct llog_cookie) *
-                                       lsm->lsm_stripe_count);
-                if (oti.oti_logcookies == NULL)
-                        oa->o_valid &= ~OBD_MD_FLCOOKIE;
-                        body->valid &= ~OBD_MD_FLCOOKIE;
+                oti.oti_logcookies = logcookies;
         }
 
         rc = obd_destroy(mds->mds_osc_exp, oa, lsm, &oti);
@@ -163,69 +151,88 @@ static int mds_unlink_orphan(struct obd_device *obd, struct dentry *dchild,
                              struct inode *inode, struct inode *pending_dir)
 {
         struct mds_obd *mds = &obd->u.mds;
-        struct mds_body *body;
+        struct lov_mds_md *lmm = NULL;
+        struct llog_cookie *logcookies = NULL;
+        int lmm_size = 0, log_unlink = 0;
         void *handle = NULL;
-        struct ptlrpc_request *req;
-        int lengths[3] = {sizeof(struct mds_body),
-                          mds->mds_max_mdsize,
-                          mds->mds_max_cookiesize};
-        int rc;
+        int rc, err;
         ENTRY;
 
         LASSERT(mds->mds_osc_obd != NULL);
-        OBD_ALLOC(req, sizeof(*req));
-        if (!req) {
-                CERROR("request allocation out of memory\n");
-                GOTO(err_alloc_req, rc = -ENOMEM);
-        }
-        rc = lustre_pack_reply(req, 3, lengths, NULL);
-        if (rc) {
-                CERROR("cannot pack request %d\n", rc);
-                GOTO(out_free_req, rc);
-        }
-        body = lustre_msg_buf(req->rq_repmsg, 0, sizeof(*body));
-        LASSERT(body != NULL);
 
-        mds_pack_inode2body(body, inode);
-        mds_pack_md(obd, req->rq_repmsg, 1, body, inode, 1);
+        OBD_ALLOC(lmm, mds->mds_max_mdsize);
+        if (lmm == NULL)
+                RETURN(-ENOMEM);
+
+        down(&inode->i_sem);
+        rc = fsfilt_get_md(obd, inode, lmm, mds->mds_max_mdsize);
+        up(&inode->i_sem);
+
+        if (rc < 0) {
+                CERROR("Error %d reading eadata for ino %lu\n",
+                       rc, inode->i_ino);
+                GOTO(out_free_lmm, rc);
+        } else if (rc > 0) {
+                lmm_size = rc;
+                rc = mds_convert_lov_ea(obd, inode, lmm, lmm_size);
+                if (rc > 0)
+                        lmm_size = rc;
+                rc = 0;
+        }
 
         handle = fsfilt_start(obd, pending_dir, FSFILT_OP_UNLINK_LOG, NULL);
         if (IS_ERR(handle)) {
                 rc = PTR_ERR(handle);
                 CERROR("error fsfilt_start: %d\n", rc);
                 handle = NULL;
-                GOTO(out_free_msg, rc);
+                GOTO(out_free_lmm, rc);
         }
 
-        if (S_ISDIR(inode->i_mode)) {
-                rc = vfs_rmdir(pending_dir, dchild);
-        } else {
-                rc = vfs_unlink(pending_dir, dchild);
+        down(&inode->i_sem);
+        rc = fsfilt_get_md(obd, inode, lmm, mds->mds_max_mdsize);
+        up(&inode->i_sem);
+
+        if (rc < 0) {
+                CERROR("Error %d reading eadata for ino %lu\n",
+                       rc, inode->i_ino);
+                GOTO(out_free_lmm, rc);
+        } else if (rc > 0) {
+                lmm_size = rc;
+                rc = 0;
         }
+
+        if (S_ISDIR(inode->i_mode))
+                rc = vfs_rmdir(pending_dir, dchild);
+        else
+                rc = vfs_unlink(pending_dir, dchild);
+
         if (rc)
                 CERROR("error %d unlinking orphan %*s from PENDING directory\n",
                        rc, dchild->d_name.len, dchild->d_name.name);
 
-        if ((body->valid & OBD_MD_FLEASIZE)) {
-                if (mds_log_op_unlink(obd, inode, req->rq_repmsg, 1) > 0)
-                        body->valid |= OBD_MD_FLCOOKIE;
+        if (!rc && lmm_size) {
+                OBD_ALLOC(logcookies, mds->mds_max_cookiesize);
+                if (logcookies == NULL)
+                        rc = -ENOMEM;
+                else if (mds_log_op_unlink(obd, inode, lmm,lmm_size,logcookies,
+                                           mds->mds_max_cookiesize) > 0)
+                        log_unlink = 1;
+        }
+        err = fsfilt_commit(obd, pending_dir, handle, 0);
+        if (err) {
+                CERROR("error committing orphan unlink: %d\n", err);
+                if (!rc)
+                        rc = err;
+        }
+        if (!rc) {
+                rc = mds_osc_destroy_orphan(mds, inode, lmm, lmm_size,
+                                            logcookies, log_unlink);
         }
 
-        if (handle) {
-                int err = fsfilt_commit(obd, pending_dir, handle, 0);
-                if (err) {
-                        CERROR("error committing orphan unlink: %d\n", err);
-                        rc = err;
-                        GOTO(out_free_msg, rc);
-                }
-        }
-        rc = mds_osc_destroy_orphan(mds, req);
-out_free_msg:
-        OBD_FREE(req->rq_repmsg, req->rq_replen);
-        req->rq_repmsg = NULL;
-out_free_req:
-        OBD_FREE(req, sizeof(*req));
-err_alloc_req:
+        if (logcookies != NULL)
+                OBD_FREE(logcookies, mds->mds_max_cookiesize);
+out_free_lmm:
+        OBD_FREE(lmm, mds->mds_max_mdsize);
         RETURN(rc);
 }
 

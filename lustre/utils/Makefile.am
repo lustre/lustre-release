@@ -3,8 +3,19 @@ DEFS=
 SUBDIRS = Lustre
 
 CFLAGS:=-g -O2 -I$(top_srcdir)/utils -I$(top_srcdir)/portals/include  -I$(srcdir)/../include -Wall -L../portals/utils
-KFLAGS:=
 CPPFLAGS = $(HAVE_LIBREADLINE)
+
+if LIBLUSTRE
+
+bin_SCRIPTS = lrun
+
+EXTRA_DIST = $(sbin_SCRIPTS)
+
+include $(top_srcdir)/Rules
+
+else
+
+KFLAGS:=
 lctl_LDADD := $(LIBREADLINE) -lptlctl
 lfs_LDADD := $(LIBREADLINE) parser.o liblustreapi.a -lptlctl obd.o
 lload_LDADD := -lptlctl
@@ -37,3 +48,5 @@ newwiretest: wirehdr.c wirecheck
 
 mount.lustre$(EXEEXT): llmount
 	cp llmount mount.lustre
+
+endif

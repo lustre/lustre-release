@@ -351,14 +351,13 @@ int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
                         struct page *page = r->page;
                         void *addr;
 
-                        if (!page || !(addr = kmap(page)) ||
-                            !kern_addr_valid((unsigned long)addr)) {
-
-                                CERROR("bad page objid "LPU64":%p, buf %d/%d\n",
+                        if (page == NULL) {
+                                CERROR("null page objid "LPU64":%p, buf %d/%d\n",
                                        obj->ioo_id, page, j, obj->ioo_bufcnt);
-                                kunmap(page);
                                 GOTO(commitrw_cleanup, rc = -EFAULT);
                         }
+
+                        addr = kmap(page);
 
                         CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
                                r->page, addr, r->offset);

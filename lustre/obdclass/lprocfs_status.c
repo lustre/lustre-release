@@ -145,6 +145,13 @@ void lprocfs_remove(struct proc_dir_entry *root)
 
                 rm_entry = temp;
                 temp = temp->parent;
+
+                /* Memory corruption once caused this to fail, and
+                   without this LASSERT we would loop here forever. */
+                LASSERTF(strlen(rm_entry->name) == rm_entry->namelen,
+                         "0x%p  %s/%s len %d\n", rm_entry,
+                         temp->name, rm_entry->name, strlen(rm_entry->name));
+
                 remove_proc_entry(rm_entry->name, rm_entry->parent);
                 if (temp == parent)
                         break;

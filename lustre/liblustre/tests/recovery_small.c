@@ -353,6 +353,8 @@ int main(int argc, char * argv[])
                 exit(-1);
         }
 
+        setenv(ENV_LUSTRE_TIMEOUT, "10", 1);
+
         __liblustre_setup_();
 
         while (drop_arr[drop_index].name) {

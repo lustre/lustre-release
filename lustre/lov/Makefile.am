@@ -6,8 +6,9 @@
 DEFS=
 
 if LIBLUSTRE
-lib_LIBRARIES = liblov.a
+noinst_LIBRARIES = liblov.a
 liblov_a_SOURCES = lov_log.c lov_obd.c lov_pack.c lov_internal.h
+liblov_a_CFLAGS = -fPIC
 else
 MODULE = lov
 modulefs_DATA = lov.o

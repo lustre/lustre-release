@@ -6,8 +6,9 @@
 DEFS=
 
 if LIBLUSTRE
-lib_LIBRARIES = libmdc.a
+noinst_LIBRARIES = libmdc.a
 libmdc_a_SOURCES = mdc_request.c mdc_reint.c mdc_lib.c mdc_internal.h mdc_locks.c
+libmdc_a_CFLAGS = -fPIC
 else
 MODULE = mdc
 modulefs_DATA = mdc.o

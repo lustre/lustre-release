@@ -65,7 +65,7 @@ void osc_wake_cache_waiters(struct client_obd *cli);
 #ifdef __KERNEL__
 int lproc_osc_attach_seqstat(struct obd_device *dev);
 #else
-static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {}
+static inline int lproc_osc_attach_seqstat(struct obd_device *dev) {return 0;}
 #endif
 
 #endif /* OSC_INTERNAL_H */

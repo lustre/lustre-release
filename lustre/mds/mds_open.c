@@ -455,7 +455,6 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                              struct ptlrpc_request *req,
                              struct lustre_handle *child_lockh)
 {
-        struct ptlrpc_request *oldreq = req->rq_export->exp_outstanding_reply;
         struct mds_export_data *med = &req->rq_export->exp_mds_data;
         struct mds_client_data *mcd = med->med_mcd;
         struct mds_obd *mds = mds_req2mds(req);
@@ -553,10 +552,11 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
                 mfd = NULL;
         }
 
-        if (oldreq != NULL) {
-                /* if we're not recovering, it had better be found */
-                LASSERT(mfd != NULL);
-        } else if (mfd == NULL) {
+#warning "XXX fixme"
+        /* Here it used to LASSERT(mfd) if exp_outstanding_reply != NULL.
+         * Now that exp_outstanding_reply is a list, it's just using mfd != NULL
+         * to detect a re-open */
+        if (mfd == NULL) {
                 mntget(mds->mds_vfsmnt);
                 CERROR("Re-opened file \n");
                 mfd = mds_dentry_open(child, mds->mds_vfsmnt,
@@ -969,7 +969,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                 if (rc)
                         ldlm_lock_decref(&parent_lockh, parent_mode);
                 else
-                        ldlm_put_lock_into_req(req, &parent_lockh, parent_mode);
+                        ptlrpc_save_lock (req, &parent_lockh, parent_mode);
         }
         if (rc == 0)
                 atomic_inc(&mds->mds_open_count);
@@ -1048,7 +1048,10 @@ int mds_mfd_close(struct ptlrpc_request *req, struct obd_device *obd,
                 if (req != NULL &&
                     (reply_body->valid & OBD_MD_FLEASIZE) &&
                     mds_log_op_unlink(obd, pending_child->d_inode,
-                                      req->rq_repmsg, 1) > 0) {
+                                lustre_msg_buf(req->rq_repmsg, 1, 0),
+                                req->rq_repmsg->buflens[1],
+                                lustre_msg_buf(req->rq_repmsg, 2, 0),
+                                req->rq_repmsg->buflens[2]) > 0) {
                         reply_body->valid |= OBD_MD_FLCOOKIE;
                 }
 

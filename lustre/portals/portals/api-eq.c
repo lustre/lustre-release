@@ -81,12 +81,6 @@ int PtlEQGet(ptl_handle_eq_t eventq, ptl_event_t * ev)
 
         *ev = *new_event;
 
-        /* Set the unlinked_me interface number if there is one to pass
-         * back, since the NAL hasn't a clue what it is and therefore can't
-         * set it. */
-        if (!PtlHandleEqual (ev->unlinked_me, PTL_HANDLE_NONE))
-                ev->unlinked_me.nal_idx = eventq.nal_idx;
-        
         /* ensure event is delivered correctly despite possible 
            races with lib_finalize */
         if (eq->sequence != new_event->sequence) {
@@ -119,6 +113,7 @@ int PtlEQWait(ptl_handle_eq_t eventq_in, ptl_event_t *event_out)
 }
 
 #ifndef __KERNEL__
+#if 0
 static jmp_buf eq_jumpbuf;
 
 static void eq_timeout(int signal)
@@ -162,6 +157,46 @@ int PtlEQWait_timeout(ptl_handle_eq_t eventq_in, ptl_event_t * event_out,
 
         return rc;
 }
+#else
+#include <errno.h>
 
+/* FIXME
+ * Here timeout need a trick with tcpnal, definitely unclean but OK for
+ * this moment.
+ */
+
+/* global variables defined by tcpnal */
+extern int __tcpnal_eqwait_timeout_value;
+extern int __tcpnal_eqwait_timedout;
+
+int PtlEQWait_timeout(ptl_handle_eq_t eventq_in, ptl_event_t * event_out,
+                      int timeout)
+{
+        int rc;
+
+        if (!timeout)
+                return PtlEQWait(eventq_in, event_out);
+
+        __tcpnal_eqwait_timeout_value = timeout;
+
+        while ((rc = PtlEQGet(eventq_in, event_out)) == PTL_EQ_EMPTY) {
+                nal_t *nal = ptl_hndl2nal(&eventq_in);
+                
+                if (nal->yield)
+                        nal->yield(nal);
+
+                if (__tcpnal_eqwait_timedout) {
+                        if (__tcpnal_eqwait_timedout != ETIMEDOUT)
+                                printf("Warning: yield return error %d\n",
+                                        __tcpnal_eqwait_timedout);
+                        rc = PTL_EQ_EMPTY;
+                        break;
+                }
+        }
+
+        __tcpnal_eqwait_timeout_value = 0;
+
+        return rc;
+}
 #endif
-
+#endif /* __KERNEL__ */

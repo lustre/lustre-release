@@ -993,15 +993,11 @@ ksocknal_destroy_conn (ksock_conn_t *conn)
         /* complete current receive if any */
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_BODY:
-#if 0
-                lib_finalize (&ksocknal_lib, NULL, conn->ksnc_cookie);
-#else
-                CERROR ("Refusing to complete a partial receive from "
-                        LPX64", ip %d.%d.%d.%d:%d\n", conn->ksnc_peer->ksnp_nid,
-                        HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
-                CERROR ("This may hang communications and "
-                        "prevent modules from unloading\n");
-#endif
+                CERROR("Completing partial receive from "LPX64
+                       ", ip %d.%d.%d.%d:%d, with error\n",
+                       conn->ksnc_peer->ksnp_nid,
+                       HIPQUAD(conn->ksnc_ipaddr), conn->ksnc_port);
+                lib_finalize (&ksocknal_lib, NULL, conn->ksnc_cookie, PTL_FAIL);
                 break;
         case SOCKNAL_RX_BODY_FWD:
                 ksocknal_fmb_callback (conn->ksnc_cookie, -ECONNABORTED);
