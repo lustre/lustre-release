@@ -33,7 +33,8 @@
 #include <linux/fs.h>
 #include <linux/lprocfs_status.h>
 #include "llite_internal.h"
-#include "llite_lib.h"
+
+kmem_cache_t *ll_file_data_slab;
 
 extern struct address_space_operations ll_aops;
 extern struct address_space_operations ll_dir_aops;
