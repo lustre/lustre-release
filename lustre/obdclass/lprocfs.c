@@ -793,6 +793,8 @@ int lprocfs_get_nm(char* name, lprocfs_obd_nm_t* collection)
 int lprocfs_dereg_dev(struct obd_device* device)
 {
         struct proc_dir_entry* temp;
+        CDEBUG(D_OTHER, "LPROCFS removing device = %s\n", \
+               device->obd_name);
 
         if (!device) {
                 CDEBUG(D_OTHER, "! LProcfs:  Null pointer !\n");
@@ -803,8 +805,6 @@ int lprocfs_dereg_dev(struct obd_device* device)
                 CERROR(" !! Device does not have a name !! \n");
                 return LPROCFS_FAILURE;
         }
-
-        CDEBUG(D_OTHER, "SEARCH: Device = %s\n", device->obd_name);
 
         temp = lprocfs_bfs_srch(proc_lustre_dev_root->subdir, \
                                 device->obd_name);
@@ -821,6 +821,8 @@ int lprocfs_dereg_dev(struct obd_device* device)
         if (device->counters)
                 OBD_FREE(device->counters, device->cntr_mem_size);
 
+        CDEBUG(D_OTHER, "LPROCFS removed device = %s\n", \
+               device->obd_name);
 
         return LPROCFS_SUCCESS;
 }
