@@ -824,12 +824,13 @@ exit 0
 /sbin/*
 /usr/sbin/*
 /usr/bin/*
-/usr/lib/lustre/python
+/usr/lib/lustre
+/usr/share/lustre
 /etc/init.d/lustre
-/usr/include/lustre/*
+/usr/include/lustre
 /usr/include/portals/*
 /usr/include/linux/*
-/lib/lib*.a
+/usr/lib/lib*
 
 #%files -n lustre-doc
 #%defattr(-, root, root)
@@ -837,13 +838,13 @@ exit 0
 #/usr/share/doc/lustre/lustre.pdf
 #/usr/share/doc/lustre/COPYING
 
-/usr/lib/lustre/examples
+/usr/share/lustre/examples
 
 %files -n lustre-ldap
 %defattr(-, root, root)
 /etc/openldap/slapd-lustre.conf
 /etc/openldap/schema/lustre.schema
-/usr/lib/lustre/lustre2ldif.xsl
-/usr/lib/lustre/top.ldif
+/usr/share/lustre/lustre2ldif.xsl
+/usr/share/lustre/top.ldif
 
 %endif # %{buildbase}
