@@ -136,15 +136,11 @@ static int osc_rpcd(void *arg)
         ENTRY;
 
         kportal_daemonize("liod_writeback");
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0)
+
+        SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
-        recalc_sigpending();
-#else
-        spin_lock_irqsave(&current->sigmask_lock, flags);
-        sigfillset(&current->blocked);
-        recalc_sigpending(current);
-        spin_unlock_irqrestore(&current->sigmask_lock, flags);
-#endif
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
 
         complete(&orc->orc_starting);
 
