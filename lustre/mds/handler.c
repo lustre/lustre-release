@@ -606,7 +606,9 @@ static int mds_getattr(int offset, struct ptlrpc_request *req)
                 size[1] = mds->mds_max_mdsize;
         } else if (body->valid & OBD_MD_LINKNAME) {
                 bufcount = 2;
-                size[1] = inode->i_size + 1;
+                size[1] = MIN(inode->i_size + 1, body->size);
+                CDEBUG(D_INODE, "symlink size: %d, reply space: %d\n",
+                       inode->i_size + 1, body->size);
         }
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_GETATTR_PACK)) {
