@@ -33,6 +33,12 @@
 #include <linux/smp_lock.h>
 #include <linux/kmod.h>
 #include <linux/pagemap.h>
+#include <linux/mm.h>
+
+/* PG_lru is shorthand for rmap, we want free_high/low here.. */
+#ifdef PG_lru
+#include <linux/mm_inline.h>
+#endif
 
 #define DEBUG_SUBSYSTEM S_LLITE
 #include <linux/lustre_lite.h>
@@ -226,22 +232,64 @@ static void ll_brw_pages_unlock( struct inode *inode,
         EXIT;
 }
 
+#ifndef PG_lru
+#ifdef CONFIG_DISCONTIGMEM
+#error "sorry, we don't support DISCONTIGMEM yet"
+#endif
 /*
- * this is called by prepare_write when we're low on memory, it wants
- * to write back as much dirty data as it can.  we'd rather just
- * call fsync_dev and let the kernel call writepage on all our dirty
- * pages, but i_sem makes that hard.  prepare_write holds i_sem from
- * generic_file_write, but other writepage callers don't.   so we have
- * this seperate code path that writes back all the inodes it can get
- * i_sem on.
+ * __alloc_pages marks a zone as needing balancing if an allocation is
+ * performed when the zone has fewer free pages than its 'low' water
+ * mark.  its cleared when try_to_free_pages makes progress.
  */
-int ll_sb_sync( struct super_block *sb, struct inode *callers_inode )
+static int zones_need_balancing(void)
+{
+        pg_data_t * pgdat;
+        zone_t *zone;
+        int i;
+
+        for ( pgdat = pgdat_list ; pgdat != NULL ; pgdat = pgdat->node_next ) {
+                for ( i = pgdat->nr_zones-1 ; i >= 0 ; i-- ) {
+                        zone = &pgdat->node_zones[i];
+
+                        if ( zone->need_balance )
+                                return 1;
+                }
+        }
+        return 0;
+}
+#endif
+/* 2.4 doesn't give us a way to find out how many pages we have
+ * cached 'cause we're not using buffer_heads.  we are very
+ * conservative here and flush the superblock of all dirty data
+ * when the vm (rmap or stock) thinks that it is running low
+ * and kswapd would have done work.  kupdated isn't good enough
+ * because writers (dbench) can dirty _very quickly_, and we
+ * allocate under writepage..
+ *
+ * 2.5 gets this right, see the {inc,dec}_page_state(nr_dirty, )
+ */
+static int should_writeback(void) 
+{
+#ifdef PG_lru
+        if (free_high(ALL_ZONES) > 0 || free_low(ANY_ZONE) > 0)
+#else
+        if ( zones_need_balancing() )
+#endif
+                return 1;
+        return 0;
+}
+
+int ll_check_dirty( struct super_block *sb)
 {
         unsigned long old_flags; /* hack? */
         int making_progress;
         struct ll_writeback_pages *llwp;
+        struct inode *inode;
         int rc = 0;
         ENTRY;
+
+        if ( ! should_writeback() )
+                return 0;
 
         old_flags = current->flags;
         current->flags |= PF_MEMALLOC;
@@ -252,11 +300,15 @@ int ll_sb_sync( struct super_block *sb, struct inode *callers_inode )
 
         spin_lock(&inode_lock);
 
+        /*
+         * first we try and write back dirty pages from dirty inodes
+         * until the VM thinkgs we're ok again..
+         */
         do {
                 struct list_head *pos;
-                struct inode *inode = NULL;
-
+                inode = NULL;
                 making_progress = 0;
+
                 list_for_each_prev(pos, &sb->s_dirty) {
                         inode = list_entry(pos, struct inode, i_list);
 
@@ -278,7 +330,7 @@ int ll_sb_sync( struct super_block *sb, struct inode *callers_inode )
 
                 spin_unlock(&inode_lock);
 
-                do {
+                do { 
                         memset(llwp, 0, sizeof(*llwp));
                         ll_get_dirty_pages(inode, llwp);
                         if ( llwp->num_pages ) {
@@ -286,9 +338,12 @@ int ll_sb_sync( struct super_block *sb, struct inode *callers_inode )
                                 rc += llwp->num_pages;
                                 making_progress = 1;
                         }
-                } while (llwp->num_pages);
+                } while (llwp->num_pages && should_writeback() );
 
                 spin_lock(&inode_lock);
+
+                if ( ! list_empty(&inode->i_mapping->dirty_pages) )
+                        inode->i_state |= I_DIRTY_PAGES;
 
                 inode->i_state &= ~I_LOCK;
                 /*
@@ -301,7 +356,25 @@ int ll_sb_sync( struct super_block *sb, struct inode *callers_inode )
                 }
                 wake_up(&inode->i_wait);
 
-        } while ( making_progress );
+        } while ( making_progress && should_writeback() );
+
+        /*
+         * and if that didn't work, we sleep on any data that might
+         * be under writeback..
+         */
+        while ( should_writeback() ) {
+                if ( list_empty(&sb->s_locked_inodes) )  
+                        break;
+
+                inode = list_entry(sb->s_locked_inodes.next, struct inode, 
+                                i_list);
+
+                atomic_inc(&inode->i_count); /* XXX hack? */
+                spin_unlock(&inode_lock);
+                wait_event(inode->i_wait, !(inode->i_state & I_LOCK));
+                iput(inode);
+                spin_lock(&inode_lock);
+        }
 
         spin_unlock(&inode_lock);
 
