@@ -445,17 +445,21 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 RETURN(rc);
         }
 
-        /* This function may be called twice, we only once want to
-           execute the request associated with the intent. If it was
-           done already, we skip past this and use the results. */ 
+        /* lookup_it may be called only after revalidate_it has run, because
+         * revalidate_it cannot return errors, only zero.  Returning zero causes
+         * this call to lookup, which *can* return an error.
+         *
+         * We only want to execute the request associated with the intent one
+         * time, however, so don't send the request again.  Instead, skip past
+         * this and use the request from revalidate.  In this case, revalidate
+         * never dropped its reference, so the refcounts are all OK */
         if (!it_disposition(it, DISP_ENQ_COMPLETE)) {
                 struct mdc_op_data op_data;
                 mdc_fid2mdc_op_data(&op_data, uctxt, pfid, cfid, name, len, 0);
 
                 rc = mdc_enqueue(exp, LDLM_PLAIN, it, it_to_lock_mode(it),
-                                 &op_data, &lockh, lmm, lmmsize, 
-                                 ldlm_completion_ast,
-                                 cb_blocking, NULL);
+                                 &op_data, &lockh, lmm, lmmsize,
+                                 ldlm_completion_ast, cb_blocking, NULL);
                 if (rc < 0)
                         RETURN(rc);
                 memcpy(&it->d.lustre.it_lock_handle, &lockh, sizeof(lockh));
@@ -482,10 +486,8 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         if (cfid != NULL) {
                 it_set_disposition(it, DISP_ENQ_COMPLETE);
                 /* Also: did we find the same inode? */
-                if (memcmp(cfid, &mds_body->fid1, sizeof(*cfid))) {
-                        ptlrpc_request_addref(request);
+                if (memcmp(cfid, &mds_body->fid1, sizeof(*cfid)))
                         RETURN(-ESTALE);
-                }
         }
 
         /* If we're doing an IT_OPEN which did not result in an actual
