@@ -26,8 +26,6 @@
 
 #include <asm/uaccess.h>
 
-#include <asm/uaccess.h>
-
 #include <linux/errno.h>
 #include <linux/fs.h>
 #include <linux/ext2_fs.h>
@@ -41,13 +39,51 @@
 #include <linux/obd_support.h>
 #include <linux/obdfs.h>
 
-#if 0
 static ssize_t obdfs_dir_read (struct file * filp, char * buf,
 			      size_t count, loff_t *ppos)
 {
 	return -EISDIR;
 }
-#endif
+
+static int obdfs_readdir(struct file *, void *, filldir_t);
+
+struct file_operations obdfs_dir_operations = {
+	NULL,			/* lseek - default */
+	obdfs_dir_read,		/* read */
+	NULL,			/* write - bad */
+	obdfs_readdir,		/* readdir */
+	NULL,			/* poll - default */
+	NULL,			/* ioctl */
+	NULL,			/* mmap */
+	NULL,			/* no special open code */
+	NULL,			/* flush */
+	NULL,			/* no special release code */
+	NULL,			/* fsync */
+	NULL,			/* fasync */
+	NULL,			/* check_media_change */
+	NULL			/* revalidate */
+};
+
+struct inode_operations obdfs_dir_inode_operations = {
+	&obdfs_dir_operations,	/* default directory file-ops */
+	obdfs_create,		/* create */
+	obdfs_lookup,		/* lookup */
+	obdfs_link,		/* link */
+	obdfs_unlink,		/* unlink */
+	obdfs_symlink,		/* symlink */
+	obdfs_mkdir,		/* mkdir */
+	obdfs_rmdir,		/* rmdir */
+	obdfs_mknod,		/* mknod */
+	obdfs_rename,		/* rename */
+	NULL,			/* readlink */
+	NULL,			/* follow_link */
+	NULL,			/* get_block */
+	obdfs_readpage,		/* readpage */
+	obdfs_writepage,	/* writepage */
+	NULL,			/* truncate */
+	NULL,			/* permission */
+	NULL			/* revalidate */
+};
 
 int obdfs_check_dir_entry (const char * function, struct inode * dir,
 			  struct ext2_dir_entry_2 * de,
@@ -89,7 +125,7 @@ if (dir && le32_to_cpu(de->inode) > le32_to_cpu(dir->i_sb->u.ext2_sb.s_es->s_ino
 }
 
 
-int obdfs_readdir(struct file * filp, void * dirent, filldir_t filldir)
+static int obdfs_readdir(struct file * filp, void * dirent, filldir_t filldir)
 {
 	int error = 0;
 	unsigned long offset;
@@ -168,7 +204,8 @@ revalidate:
 				 * not the directory has been modified
 				 * during the copy operation.
 				 */
-				/* XXX				unsigned long version = inode->i_version;
+				/* XXX
+				unsigned long version = inode->i_version;
 				 */
 				error = filldir(dirent, de->name,
 						de->name_len,

@@ -30,8 +30,10 @@
 #include <linux/obd_support.h> /* for ENTRY and EXIT only */
 #include <linux/obdfs.h>
 
+/*
 static int obdfs_readlink (struct dentry *, char *, int);
 static struct dentry *obdfs_follow_link(struct dentry *, struct dentry *, unsigned int);
+*/
 
 /*
  * symlinks can't do much...
@@ -57,7 +59,8 @@ struct inode_operations obdfs_symlink_inode_operations = {
 	NULL			/* revalidate */
 };
 
-static struct dentry * obdfs_follow_link(struct dentry * dentry,
+/* static */
+struct dentry * obdfs_follow_link(struct dentry * dentry,
 					 struct dentry *base,
 					 unsigned int follow)
 {
@@ -87,7 +90,8 @@ static struct dentry * obdfs_follow_link(struct dentry * dentry,
 	return base;
 }
 
-static int obdfs_readlink (struct dentry * dentry, char * buffer, int buflen)
+/* static */
+int obdfs_readlink (struct dentry * dentry, char * buffer, int buflen)
 {
 	struct inode *inode = dentry->d_inode;
 	struct page *page = NULL;

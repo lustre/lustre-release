@@ -53,7 +53,8 @@ static inline void remove_suid(struct inode *inode)
 /*
  * Write to a file (through the page cache).
  */
-ssize_t obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
+static ssize_t
+obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos)
 {
 	ssize_t retval;
 	CDEBUG(D_INODE, "Writing inode %ld, %d bytes, offset %ld\n", file->f_dentry->d_inode->i_ino, count, (long)*ppos);
@@ -70,3 +71,42 @@ ssize_t obdfs_file_write(struct file *file, const char *buf, size_t count, loff_
 	EXIT;
 	return retval;
 }
+
+struct file_operations obdfs_file_operations = {
+	NULL,			/* lseek - default */
+	generic_file_read,	/* read */
+	obdfs_file_write,       /* write  */
+	NULL,			/* readdir - bad */
+	NULL,			/* poll - default */
+	NULL,			/* ioctl */
+	NULL,			/* mmap */
+	NULL,			/* no special open code */
+	NULL,			/* flush */
+	NULL,			/* no special release code */
+	NULL,			/* fsync */
+	NULL,			/* fasync */
+	NULL,			/* check_media_change */
+	NULL			/* revalidate */
+};
+
+struct inode_operations obdfs_file_inode_operations = {
+	&obdfs_file_operations,	/* default directory file-ops */
+	obdfs_create,		/* create */
+	obdfs_lookup,		/* lookup */
+	obdfs_link,		/* link */
+	obdfs_unlink,		/* unlink */
+	obdfs_symlink,		/* symlink */
+	obdfs_mkdir,		/* mkdir */
+	obdfs_rmdir,		/* rmdir */
+	obdfs_mknod,		/* mknod */
+	obdfs_rename,		/* rename */
+	NULL,			/* readlink */
+	NULL,			/* follow_link */
+	NULL,			/* get_block */
+	obdfs_readpage,		/* readpage */
+	obdfs_writepage,	/* writepage */
+	NULL,			/* truncate */
+	NULL,			/* permission */
+	NULL			/* revalidate */
+};
+

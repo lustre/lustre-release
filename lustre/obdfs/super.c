@@ -287,8 +287,6 @@ static void obdfs_put_super(struct super_block *sb)
 	EXIT;
 }
 
-extern struct inode_operations obdfs_inode_ops;
-
 /* all filling in of inodes postponed until lookup */
 void obdfs_read_inode(struct inode *inode)
 {
@@ -300,9 +298,17 @@ void obdfs_read_inode(struct inode *inode)
 		printk("obdfs_read_inode: obd_getattr fails (%d)\n", error);
 		return;
 	}
-	CDEBUG(D_INODE, "ino %ld, COWFL %x\n", inode->i_ino, inode->i_flags & 0x0010000);
+	CDEBUG(D_INODE, "ino %ld, mode: %o\n", inode->i_ino, inode->i_mode);
 	IDEBUG(inode);
-	inode->i_op = &obdfs_inode_ops;
+	if (S_ISREG(inode->i_mode))
+		inode->i_op = &obdfs_file_inode_operations;
+	else if (S_ISDIR(inode->i_mode))
+		inode->i_op = &obdfs_dir_inode_operations;
+	else if (S_ISLNK(inode->i_mode))
+		inode->i_op = &obdfs_symlink_inode_operations;
+	else
+		/* XXX what do we pass here??? */
+		init_special_inode(inode, inode->i_mode, 0 /* XXX XXX */ );
 	return;
 }
 

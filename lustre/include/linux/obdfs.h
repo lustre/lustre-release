@@ -17,11 +17,9 @@
 void obdfs_read_inode(struct inode *inode);
 
 
-/* file.c */
-ssize_t obdfs_file_write(struct file *file, const char *buf, size_t count, loff_t *ppos);
-
-
 /* rw.c */
+int obdfs_readpage(struct dentry *dentry, struct page *page);
+int obdfs_writepage(struct dentry *dentry, struct page *page);
 struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create, int locked);
 int obdfs_write_one_page(struct file *file, struct page *page, unsigned long offset, unsigned long bytes, const char * buf);
 
@@ -36,7 +34,6 @@ int obdfs_symlink(struct inode *dir, struct dentry *dentry, const char *symname)
 int obdfs_link(struct dentry *old_dentry, struct inode *dir, struct dentry *dentry);
 int obdfs_rename(struct inode *old_dir, struct dentry *old_dentry, struct inode *new_dir, struct dentry *new_dentry);
 /* dir.c */
-int obdfs_readdir(struct file * filp, void * dirent, filldir_t filldir);
 int obdfs_check_dir_entry (const char * function, struct inode * dir,
 			  struct ext2_dir_entry_2 * de,
 			  struct page * page,
@@ -59,8 +56,9 @@ void obdfs_sysctl_clean(void);
 
 struct obdfs_inode_info;
 
-extern struct file_operations obdfs_file_ops;
-extern struct inode_operations obdfs_inode_ops;
+extern struct file_operations obdfs_file_operations;
+extern struct inode_operations obdfs_file_inode_operations;
+extern struct inode_operations obdfs_dir_inode_operations;
 extern struct inode_operations obdfs_symlink_inode_operations;
 
 static inline struct obd_ops *iops(struct inode *i)

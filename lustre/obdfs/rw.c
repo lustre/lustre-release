@@ -65,7 +65,7 @@ int obdfs_readpage(struct dentry *dentry, struct page *page)
 }
 
 /* returns the page unlocked, but with a reference */
-static int obdfs_writepage(struct dentry *dentry, struct page *page)
+int obdfs_writepage(struct dentry *dentry, struct page *page)
 {
         struct inode *inode = dentry->d_inode;
 	int rc;
@@ -191,40 +191,3 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 }
 
 
-struct file_operations obdfs_file_ops = {
-	NULL,			/* lseek - default */
-	generic_file_read,	/* read */
-	obdfs_file_write,       /* write - bad */
-        obdfs_readdir,	        /* readdir */
-	NULL,			/* poll - default */
-	NULL,	                /* ioctl */
-	NULL,			/* mmap */
-	NULL,			/* no special open code */
-	NULL,			/* flush */
-	NULL,			/* no special release code */
-	NULL,		        /* fsync */
-	NULL,			/* fasync */
-	NULL,			/* check_media_change */
-	NULL			/* revalidate */
-};
-
-struct inode_operations obdfs_inode_ops = {
-	&obdfs_file_ops,	/* default directory file-ops */
-	obdfs_create,	/* create */
-	obdfs_lookup,	/* lookup */
-	obdfs_link,	/* link */
-	obdfs_unlink,	/* unlink */
-	obdfs_symlink,	/* symlink */
-	obdfs_mkdir,	/* mkdir */
-	obdfs_rmdir,	/* rmdir */
-	obdfs_mknod,	/* mknod */
-	obdfs_rename,	/* rename */
-	obdfs_readlink,	/* readlink */
-	NULL,		/* follow_link */
-	NULL,		/* get_block */
-	obdfs_readpage,	/* readpage */
-	obdfs_writepage,/* writepage */
-	NULL,		/* truncate */
-	NULL,		/* permission */
-	NULL		/* revalidate */
-};

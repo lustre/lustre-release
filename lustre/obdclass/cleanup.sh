@@ -3,7 +3,7 @@
 umount /mnt/obd
 rmmod obdfs
 
-./obdcontrol -f << EOF
+../class/obdcontrol -f << EOF
 cleanup
 detach
 quit

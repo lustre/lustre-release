@@ -70,7 +70,7 @@ static inline int ext2_match (int len, const char * const name,
  * itself (as a parameter - res_dir). It does NOT read the inode of the
  * entry - you'll have to do that yourself if you want to.
  */
-struct page * obdfs_find_entry (struct inode * dir,
+static struct page * obdfs_find_entry (struct inode * dir,
 					     const char * const name, int namelen,
 					     struct ext2_dir_entry_2 ** res_dir, int lock)
 {
@@ -108,8 +108,8 @@ struct page * obdfs_find_entry (struct inode * dir,
 			/* do minimal checking `by hand' */
 			int de_len;
 			CDEBUG(D_INODE, "Entry %p len %d, page at %#lx - %#lx , offset %lx\n",
-			       de, le16_to_cpu(de->rec_len), page_address(page), page_address(page) + 
-			       PAGE_SIZE, offset);
+			       de, le16_to_cpu(de->rec_len), page_address(page),
+			       page_address(page) + PAGE_SIZE, offset);
 
 			if ((char *) de + namelen <= dlimit &&
 			    ext2_match (namelen, name, de)) {
@@ -294,10 +294,8 @@ static struct page *obdfs_add_entry (struct inode * dir,
 				return NULL;
 		}
 		CDEBUG(D_INODE, "Testing for enough space at de %p\n", de);
-		if ( (le32_to_cpu(de->inode) == 0 && 
-		      le16_to_cpu(de->rec_len) >= rec_len) ||
-		     (le16_to_cpu(de->rec_len) >= 
-		      EXT2_DIR_REC_LEN(de->name_len) + rec_len)) {
+		if ( (le32_to_cpu(de->inode) == 0 && le16_to_cpu(de->rec_len) >= rec_len) ||
+		     (le16_to_cpu(de->rec_len) >= EXT2_DIR_REC_LEN(de->name_len) + rec_len)) {
 			offset += le16_to_cpu(de->rec_len);
 			CDEBUG(D_INODE, "Found enough space de %p, offset %#lx\n", de, offset);
 			if (le32_to_cpu(de->inode)) {
@@ -409,6 +407,7 @@ static inline void ext2_set_de_type(struct super_block *sb,
 /*
  * Display all dentries holding the specified inode.
  */
+#if 0
 static void show_dentry(struct list_head * dlist, int subdirs)
 {
 	struct list_head *tmp = dlist;
@@ -439,6 +438,7 @@ static void show_dentry(struct list_head * dlist, int subdirs)
 			       unhashed);
 	}
 }
+#endif
 
 
 /*
@@ -473,7 +473,7 @@ int obdfs_create (struct inode * dir, struct dentry * dentry, int mode)
 		return err;
 	}
 
-	inode->i_op = &obdfs_inode_ops;
+	inode->i_op = &obdfs_file_inode_operations;
 	inode->i_mode = mode;
 	mark_inode_dirty(inode);
 	page = obdfs_add_entry (dir, dentry->d_name.name, dentry->d_name.len, &de, &err);
@@ -555,8 +555,8 @@ out_no_entry:
 
 int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 {
-	struct inode * child;
-	struct page *page, *child_page;
+	struct inode * inode;
+	struct page *page, *inode_page;
 	struct ext2_dir_entry_2 * de;
 	int err;
 	ino_t ino;
@@ -571,24 +571,24 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	ino = iops(dir)->o_create(iid(dir), 0, &err);
 	if ( ino == -1 ) 
 		return -1;
-	child =  iget(dir->i_sb, ino);
-	if (!child)
+	inode =  iget(dir->i_sb, ino);
+	if (!inode)
 		return err;
 
 
-	child->i_op = &obdfs_inode_ops;
-	child->i_blocks = 0;	
-	child_page = obdfs_getpage(child, 0, 1, LOCKED);
-	if (!child_page) {
-		child->i_nlink--; /* is this nlink == 0? */
-		mark_inode_dirty(child);
-		iput (child);
+	inode->i_op = &obdfs_dir_inode_operations;
+	inode->i_blocks = 0;	
+	inode_page = obdfs_getpage(inode, 0, 1, LOCKED);
+	if (!inode_page) {
+		inode->i_nlink--; /* is this nlink == 0? */
+		mark_inode_dirty(inode);
+		iput (inode);
 		return err;
 	}
 
 	/* create . and .. */
-	de = (struct ext2_dir_entry_2 *) page_address(child_page);
-	de->inode = cpu_to_le32(child->i_ino);
+	de = (struct ext2_dir_entry_2 *) page_address(inode_page);
+	de->inode = cpu_to_le32(inode->i_ino);
 	de->name_len = 1;
 	de->rec_len = cpu_to_le16(EXT2_DIR_REC_LEN(de->name_len));
 	strcpy (de->name, ".");
@@ -601,17 +601,17 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	strcpy (de->name, "..");
 	ext2_set_de_type(dir->i_sb, de, S_IFDIR);
 	
-	iops(dir)->o_brw(WRITE, iid(dir), child, child_page, 1);
-	child->i_blocks = PAGE_SIZE/child->i_sb->s_blocksize;
-	child->i_size = PAGE_SIZE;
-	UnlockPage(child_page);
-	page_cache_release(child_page);
+	iops(dir)->o_brw(WRITE, iid(dir), inode, inode_page, 1);
+	inode->i_blocks = PAGE_SIZE/inode->i_sb->s_blocksize;
+	inode->i_size = PAGE_SIZE;
+	UnlockPage(inode_page);
+	page_cache_release(inode_page);
 
-	child->i_nlink = 2;
-	child->i_mode = S_IFDIR | mode;
+	inode->i_nlink = 2;
+	inode->i_mode = S_IFDIR | mode;
 	if (dir->i_mode & S_ISGID)
-		child->i_mode |= S_ISGID;
-	mark_inode_dirty(child);
+		inode->i_mode |= S_ISGID;
+	mark_inode_dirty(inode);
 
 	/* now deal with the parent */
 	page = obdfs_add_entry(dir, dentry->d_name.name, dentry->d_name.len, &de, &err);
@@ -619,7 +619,7 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 		goto out_no_entry;
 	}
 
-	de->inode = cpu_to_le32(child->i_ino);
+	de->inode = cpu_to_le32(inode->i_ino);
 	ext2_set_de_type(dir->i_sb, de, S_IFDIR);
 	dir->i_version = ++event;
 
@@ -635,16 +635,16 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	iops(dir)->o_brw(WRITE, iid(dir), dir, page, 1);
 	UnlockPage(page);
 	page_cache_release(page);
-	d_instantiate(dentry, child);
+	d_instantiate(dentry, inode);
 	err = 0;
 out:
 	EXIT;
 	return err;
 
 out_no_entry:
-	child->i_nlink = 0;
-	mark_inode_dirty(child);
-	iput (child);
+	inode->i_nlink = 0;
+	mark_inode_dirty(inode);
+	iput (inode);
 	EXIT;
 	goto out;
 }
@@ -724,7 +724,7 @@ int obdfs_rmdir (struct inode * dir, struct dentry *dentry)
 	struct page *page;
 	struct ext2_dir_entry_2 * de;
 
-        ENTRY;
+	ENTRY;
 
 	retval = -ENOENT;
 	page = obdfs_find_entry (dir, dentry->d_name.name, dentry->d_name.len, &de, LOCKED);
@@ -854,7 +854,6 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 		EXIT;
 		return err;
 	}
-
 	inode->i_mode = S_IFLNK | S_IRWXUGO;
 	inode->i_op = &obdfs_symlink_inode_operations;
 	for (l = 0; l < inode->i_sb->s_blocksize - 1 &&
@@ -884,12 +883,12 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 	while (i < inode->i_sb->s_blocksize - 1 && (c = *(symname++)))
 		link[i++] = c;
 	link[i] = 0;
-	/* if (name_page) { */
+	if (name_page) {
 		iops(inode)->o_brw(WRITE, iid(inode), inode, name_page, 1);
 		PDEBUG(name_page, "symlink");
 		UnlockPage(name_page);
 		page_cache_release(name_page);
-	/* } */
+	}
 	inode->i_size = i;
 	mark_inode_dirty(inode);
 

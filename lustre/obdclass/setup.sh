@@ -1,7 +1,7 @@
 #! /bin/bash
-dd if=/dev/zero of=/tmp/fs bs=1k count=10000
+dd if=/dev/zero of=/tmp/fs bs=1k count=10k
 
-insmod loop
+#insmod loop
 losetup /dev/loop0 /tmp/fs
 
 mke2fs -b 4096 /dev/loop0
