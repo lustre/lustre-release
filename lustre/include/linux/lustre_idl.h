@@ -54,7 +54,7 @@
 # include <linux/types.h>
 # include <linux/list.h>
 # include <linux/string.h> /* for strncpy, below */
-# include <linux/fs.h> /* to check for FMODE_EXEC, lest we redefine */
+# include <linux/fs.h>     /* to check for FMODE_EXEC, dev_t, lest we redefine */
 #else
 #ifdef __CYGWIN__
 # include <sys/types.h>
@@ -487,19 +487,22 @@ typedef enum {
         MDS_DONE_WRITING = 45,
         MDS_LAST_OPC
 } mds_cmd_t;
+
 #define MDS_FIRST_OPC    MDS_GETATTR
 
 /*
  * Do not exceed 63
  */
 
-#define REINT_SETATTR  1
-#define REINT_CREATE   2
-#define REINT_LINK     3
-#define REINT_UNLINK   4
-#define REINT_RENAME   5
-#define REINT_OPEN     6
-#define REINT_MAX      6
+#define REINT_SETATTR    1
+#define REINT_CREATE     2
+#define REINT_LINK       3
+#define REINT_UNLINK     4
+#define REINT_RENAME     5
+#define REINT_OPEN       6
+#define REINT_CLOSE      7
+#define REINT_WRITE      8
+#define REINT_MAX        8
 
 /* the disposition of the intent outlines what was executed */
 #define DISP_IT_EXECD   1
@@ -570,12 +573,6 @@ struct mds_body {
 
 extern void lustre_swab_mds_body (struct mds_body *b);
 
-
-/* MDS update records */
-
-//struct mds_update_record_hdr {
-//        __u32 ur_opcode;
-//};
 
 struct mds_rec_setattr {
         __u32           sa_opcode;
@@ -898,6 +895,8 @@ typedef enum {
         LLOG_GEN_REC     = 0x10640000,
         LLOG_HDR_MAGIC   = 0x10645539,
         LLOG_LOGID_MAGIC = 0x1064553b,
+        SMFS_UPDATE_REC  = 0x10650000,
+        CACHE_LRU_REC    = 0x10660000,
 } llog_op_type;
 
 /* Log record header - stored in little endian order.
@@ -959,13 +958,48 @@ struct llog_size_change_rec {
 struct llog_gen {
         __u64 mnt_cnt;
         __u64 conn_cnt;
-} __attribute__((packed));
+};
 
 struct llog_gen_rec {
         struct llog_rec_hdr     lgr_hdr;
         struct llog_gen         lgr_gen;
         struct llog_rec_tail    lgr_tail;
+} __attribute__((packed));
+
+struct llog_lru_rec {
+        struct llog_rec_hdr     llr_hdr;
+        struct ll_fid           llr_cfid;
+        struct ll_fid           llr_pfid;
+        struct llog_rec_tail    llr_tail;
+} __attribute__((packed));
+
+/* got from mds_update_record. FIXME: maybe some attribute in reint_record and
+   update_record will be changed later. */
+/* XXX BUG 3188 -- must return to one set of structures. */
+
+struct update_record {
+        __u32 ur_opcode;
+        __u32 ur_fsuid;
+        __u32 ur_fsgid;
+        dev_t ur_rdev;
+        struct iattr ur_iattr;
+        struct iattr ur_pattr; 
+        __u32 ur_flags;
+        __u32 ur_len;
 };
+struct reint_record {
+       struct update_record u_rec;
+       char *rec_data1;
+       int rec1_size;
+       char *rec_data2;
+       int rec2_size;
+};
+struct llog_smfs_rec {
+        struct llog_rec_hdr     lsr_hdr;
+        struct update_record    lsr_rec;
+        struct llog_rec_tail    lsr_tail;
+};
+
 /* On-disk header structure of each log object, stored in little endian order */
 #define LLOG_CHUNK_SIZE         8192
 #define LLOG_HEADER_SIZE        (96)
@@ -986,7 +1020,7 @@ struct llog_log_hdr {
         __u32                   llh_size;
         __u32                   llh_flags;
         __u32                   llh_cat_idx;
-        /* for a catlog the first plain slot is next to it */
+        /* for a catalog the first plain slot is next to it */
         struct obd_uuid         llh_tgtuuid;
         __u32                   llh_reserved[LLOG_HEADER_SIZE/sizeof(__u32) - 23];
         __u32                   llh_bitmap[LLOG_BITMAP_BYTES/sizeof(__u32)];
@@ -1010,6 +1044,7 @@ enum llogd_rpc_ops {
         LLOG_ORIGIN_HANDLE_CLOSE        = 505,
         LLOG_ORIGIN_CONNECT             = 506,
         LLOG_CATINFO                    = 507,  /* for lfs catinfo */
+        LLOG_ORIGIN_HANDLE_PREV_BLOCK   = 508,
 };
 
 struct llogd_body {

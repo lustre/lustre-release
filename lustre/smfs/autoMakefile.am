@@ -8,4 +8,4 @@ modulefs_DATA = smfs$(KMODEXT)
 endif
 
 MOSTLYCLEANFILES = *.o *.ko *.mod.c
-DIST_SOURCES = $(smfs-objs:%.o=%.c) kml_idl.h smfs_internal.h smfs_support.h
+DIST_SOURCES = $(smfs-objs:%.o=%.c) smfs_internal.h

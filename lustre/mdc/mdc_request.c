@@ -980,8 +980,8 @@ static int mdc_llog_init(struct obd_device *obd, struct obd_device *tgt,
         int rc;
         ENTRY;
 
-        rc = llog_setup(obd, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
-                        &llog_client_ops);
+        rc = obd_llog_setup(obd, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
+                            &llog_client_ops);
         if (rc == 0) {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
                 ctxt->loc_imp = obd->u.cli.cl_import;
@@ -995,7 +995,7 @@ static int mdc_llog_finish(struct obd_device *obd, int count)
         int rc;
         ENTRY;
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_CONFIG_REPL_CTXT));
+        rc = obd_llog_cleanup(llog_get_context(obd, LLOG_CONFIG_REPL_CTXT));
         RETURN(rc);
 }
 

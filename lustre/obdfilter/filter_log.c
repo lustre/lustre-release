@@ -97,9 +97,11 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
                                      void *cb_data, int error)
 {
         struct llog_cookie *cookie = cb_data;
-        llog_cancel(llog_get_context(obd, cookie->lgc_subsys + 1),
-                             NULL, 1, cookie, 0);
-                             //NULL, 1, cookie, OBD_LLOG_FL_SENDNOW);
+        int rc;
+        rc = llog_cancel(llog_get_context(obd, cookie->lgc_subsys + 1),
+                         1, cookie, 0, NULL);
+        if (rc)
+                CERROR("error cancelling log cookies: rc = %d\n", rc);
         OBD_FREE(cb_data, sizeof(struct llog_cookie));
 }
 
@@ -141,7 +143,7 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
                 else
                         rc = LLOG_PROC_BREAK;
                 CWARN("fetch generation log, send cookie\n");
-                llog_cancel(ctxt, NULL, 1, &cookie, 0);
+                llog_cancel(ctxt, 1, &cookie, 0, NULL);
                 RETURN(rc);
         }
 
@@ -159,7 +161,7 @@ int filter_recov_log_unlink_cb(struct llog_handle *llh,
         obdo_free(oa);
         if (rc == -ENOENT) {
                 CDEBUG(D_HA, "object already removed, send cookie\n");
-                llog_cancel(ctxt, NULL, 1, &cookie, 0);
+                llog_cancel(ctxt, 1, &cookie, 0, NULL);
                 RETURN(0);
         }
 

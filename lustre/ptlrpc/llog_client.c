@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2001-2003 Cluster File Systems, Inc.
+ *  Copyright (C) 2001-2004 Cluster File Systems, Inc.
  *   Author: Andreas Dilger <adilger@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.
@@ -85,12 +85,12 @@ static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
         if (rc)
                 GOTO(err_free, rc);
 
-	body = lustre_swab_repbuf(req, 0, sizeof(*body),
+        body = lustre_swab_repbuf(req, 0, sizeof(*body),
                                  lustre_swab_llogd_body);
-	if (body == NULL) {
+        if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
                 GOTO(err_free, rc =-EFAULT);
-	}
+        }
 
         handle->lgh_id = body->lgd_logid;
         handle->lgh_ctxt = ctxt;
@@ -105,6 +105,55 @@ err_free:
         goto out;
 }
 
+static int llog_client_prev_block(struct llog_handle *loghandle,
+                                  int prev_idx, void *buf, int len)
+{
+        struct obd_import *imp = loghandle->lgh_ctxt->loc_imp;
+        struct ptlrpc_request *req = NULL;
+        struct llogd_body *body;
+        void * ptr;
+        int size = sizeof(*body);
+        int repsize[2] = {sizeof (*body)};
+        int rc;
+        ENTRY;
+                                                                                                                             
+        req = ptlrpc_prep_req(imp, LLOG_ORIGIN_HANDLE_PREV_BLOCK, 1,&size,NULL);
+        if (!req)
+                GOTO(out, rc = -ENOMEM);
+                                                                                                                             
+        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof (*body));
+        body->lgd_logid = loghandle->lgh_id;
+        body->lgd_ctxt_idx = loghandle->lgh_ctxt->loc_idx - 1;
+        body->lgd_llh_flags = loghandle->lgh_hdr->llh_flags;
+        body->lgd_index = prev_idx;
+        body->lgd_len = len;
+        repsize[1] = len;
+                                                                                                                             
+        req->rq_replen = lustre_msg_size(2, repsize);
+        rc = ptlrpc_queue_wait(req);
+        if (rc)
+                GOTO(out, rc);
+                                                                                                                             
+        body = lustre_swab_repbuf(req, 0, sizeof(*body),
+                                 lustre_swab_llogd_body);
+        if (body == NULL) {
+                CERROR ("Can't unpack llogd_body\n");
+                GOTO(out, rc =-EFAULT);
+        }
+                                                                                                                             
+        ptr = lustre_msg_buf(req->rq_repmsg, 1, len);
+        if (ptr == NULL) {
+                CERROR ("Can't unpack bitmap\n");
+                GOTO(out, rc =-EFAULT);
+        }
+                                                                                                                             
+        memcpy(buf, ptr, len);
+                                                                                                                             
+out:
+        if (req)
+                ptlrpc_req_finished(req);
+        RETURN(rc);
+}
 
 static int llog_client_next_block(struct llog_handle *loghandle,
                                   int *cur_idx, int next_idx,
@@ -138,18 +187,18 @@ static int llog_client_next_block(struct llog_handle *loghandle,
         if (rc)
                 GOTO(out, rc);
 
-	body = lustre_swab_repbuf(req, 0, sizeof(*body),
+        body = lustre_swab_repbuf(req, 0, sizeof(*body),
                                  lustre_swab_llogd_body);
-	if (body == NULL) {
+        if (body == NULL) {
                 CERROR ("Can't unpack llogd_body\n");
                 GOTO(out, rc =-EFAULT);
-	}
+        }
 
         ptr = lustre_msg_buf(req->rq_repmsg, 1, len);
-	if (ptr == NULL) {
+        if (ptr == NULL) {
                 CERROR ("Can't unpack bitmap\n");
                 GOTO(out, rc =-EFAULT);
-	}
+        }
 
         *cur_idx = body->lgd_saved_index;
         *cur_offset = body->lgd_cur_offset;
@@ -189,8 +238,8 @@ static int llog_client_read_header(struct llog_handle *handle)
         if (rc)
                 GOTO(out, rc);
 
-	hdr = lustre_swab_repbuf(req, 0, sizeof(*hdr), lustre_swab_llog_hdr);
-	if (hdr == NULL) {
+        hdr = lustre_swab_repbuf(req, 0, sizeof(*hdr), lustre_swab_llog_hdr);
+        if (hdr == NULL) {
                 CERROR ("Can't unpack llog_hdr\n");
                 GOTO(out, rc =-EFAULT);
 	}
@@ -227,6 +276,7 @@ static int llog_client_close(struct llog_handle *handle)
 
 
 struct llog_operations llog_client_ops = {
+        lop_prev_block:  llog_client_prev_block,
         lop_next_block:  llog_client_next_block,
         lop_read_header: llog_client_read_header,
         lop_create:      llog_client_create,

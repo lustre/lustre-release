@@ -170,6 +170,7 @@ int jt_lcfg_setup(int argc, char **argv)
                 lcfg.lcfg_inllen3 = strlen(argv[3]) + 1;
                 lcfg.lcfg_inlbuf3 = argv[3];
         }
+	
         if (argc > 4) {
                 lcfg.lcfg_inllen4 = strlen(argv[4]) + 1;
                 lcfg.lcfg_inlbuf4 = argv[4];

@@ -45,6 +45,10 @@
 #include <linux/lustre_fsfilt.h>
 #include <linux/obd.h>
 #include <linux/obd_class.h>
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#include <linux/module.h>
+#include <linux/iobuf.h>
+#endif
 
 static kmem_cache_t *fcb_cache;
 static atomic_t fcb_cache_count = ATOMIC_INIT(0);
@@ -80,6 +84,19 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 CDEBUG(D_INODE, "increasing refcount on %p\n",
                        current->journal_info);
                 goto journal_start;
+        }
+
+        /* XXX BUG 3188 -- must return to one set of opcodes */
+        /* FIXME - cache hook */
+        if (op & 0x20) {
+                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS+EXT3_DATA_TRANS_BLOCKS;
+                op = op & ~0x20;
+        }
+
+        /* FIXME - kml */
+        if (op & 0x10) {
+                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS+EXT3_DATA_TRANS_BLOCKS;
+                op = op & ~0x10;
         }
 
         switch(op) {
@@ -123,8 +140,11 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 nblocks = (LLOG_CHUNK_SIZE >> inode->i_blkbits) +
                         EXT3_DELETE_TRANS_BLOCKS * logs;
                 break;
+        case FSFILT_OP_NOOP:
+                nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS+EXT3_DATA_TRANS_BLOCKS;
+                break;
         default: CERROR("unknown transaction start op %d\n", op);
-                 LBUG();
+                LBUG();
         }
 
         LASSERT(current->journal_info == desc_private);
@@ -350,7 +370,7 @@ static int fsfilt_ext3_commit_wait(struct inode *inode, void *h)
         tid_t tid = (tid_t)(long)h;
 
         CDEBUG(D_INODE, "commit wait: %lu\n", (unsigned long) tid);
-	if (is_journal_aborted(EXT3_JOURNAL(inode)))
+        if (is_journal_aborted(EXT3_JOURNAL(inode)))
                 return -EIO;
 
         log_wait_commit(EXT3_JOURNAL(inode), tid);
@@ -467,6 +487,57 @@ static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size)
         return rc;
 }
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+static int fsfilt_ext3_send_bio(struct inode *inode, struct bio *bio)
+{
+        submit_bio(WRITE, bio);
+        return 0;
+}
+#else
+static int fsfilt_ext3_send_bio(struct inode *inode, struct kiobuf *bio)
+{
+        int rc, blocks_per_page;
+
+        rc = brw_kiovec(WRITE, 1, &bio, inode->i_dev,
+                        bio->blocks, 1 << inode->i_blkbits);
+
+        blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
+
+        if (rc != (1 << inode->i_blkbits) * bio->nr_pages *
+            blocks_per_page) {
+                CERROR("short write?  expected %d, wrote %d\n",
+                       (1 << inode->i_blkbits) * bio->nr_pages *
+                       blocks_per_page, rc);
+        }
+
+        return rc;
+}
+#endif
+
+/* FIXME-UMKA: This should be used in 2.6.x io code later. */
+static struct page *fsfilt_ext3_getpage(struct inode *inode, long int index)
+{
+        int rc;
+        struct page *page;
+
+        page = grab_cache_page(inode->i_mapping, index);
+        if (page == NULL)
+                return ERR_PTR(-ENOMEM);
+
+        if (PageUptodate(page)) {
+                unlock_page(page);
+                return page;
+        }
+
+        rc = inode->i_mapping->a_ops->readpage(NULL, page);
+        if (rc < 0) {
+                page_cache_release(page);
+                return ERR_PTR(rc);
+        }
+
+        return page;
+}
+
 static ssize_t fsfilt_ext3_readpage(struct file *file, char *buf, size_t count,
                                     loff_t *off)
 {
@@ -533,7 +604,9 @@ static void fsfilt_ext3_cb_func(struct journal_callback *jcb, int error)
         atomic_dec(&fcb_cache_count);
 }
 
-static int fsfilt_ext3_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
+static int fsfilt_ext3_add_journal_cb(struct obd_device *obd,
+                                      struct super_block *sb,
+                                      __u64 last_rcvd,
                                       void *handle, fsfilt_cb_t cb_func,
                                       void *cb_data)
 {
@@ -752,6 +825,44 @@ static int fsfilt_ext3_setup(struct super_block *sb)
         return 0;
 }
 
+static int fsfilt_ext3_set_xattr(struct inode * inode, void *handle, char *name,
+                                 void *buffer, int buffer_size)
+{
+        int rc = 0;
+
+        lock_kernel();
+
+        rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
+                                   name, buffer, buffer_size, 0);
+        unlock_kernel();
+        if (rc)
+                CERROR("set xattr %s from inode %lu: rc %d\n",
+                       name,  inode->i_ino, rc);
+        return rc;
+}
+
+static int fsfilt_ext3_get_xattr(struct inode *inode, char *name,
+                                 void *buffer, int buffer_size)
+{
+        int rc = 0;
+        lock_kernel();
+
+        rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
+                            name, buffer, buffer_size);
+        unlock_kernel();
+
+        if (buffer == NULL)
+                return (rc == -ENODATA) ? 0 : rc;
+        if (rc < 0) {
+                CDEBUG(D_INFO, "error getting EA %s from inode %lu: rc %d\n",
+                       name,  inode->i_ino, rc);
+                memset(buffer, 0, buffer_size);
+                return (rc == -ENODATA) ? 0 : rc;
+        }
+
+        return rc;
+}
+
 /* If fso is NULL, op is FSFILT operation, otherwise op is number of fso
    objects. Logs is number of logfiles to update */
 static int fsfilt_ext3_get_op_len(int op, struct fsfilt_objinfo *fso, int logs)
@@ -804,6 +915,10 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_write_record        = fsfilt_ext3_write_record,
         .fs_read_record         = fsfilt_ext3_read_record,
         .fs_setup               = fsfilt_ext3_setup,
+        .fs_getpage             = fsfilt_ext3_getpage,
+        .fs_send_bio            = fsfilt_ext3_send_bio,
+        .fs_set_xattr           = fsfilt_ext3_set_xattr,
+        .fs_get_xattr           = fsfilt_ext3_get_xattr,
         .fs_get_op_len          = fsfilt_ext3_get_op_len,
 };
 
@@ -811,7 +926,6 @@ static int __init fsfilt_ext3_init(void)
 {
         int rc;
 
-        //rc = ext3_xattr_register();
         fcb_cache = kmem_cache_create("fsfilt_ext3_fcb",
                                       sizeof(struct fsfilt_cb_data), 0,
                                       0, NULL, NULL);
@@ -839,8 +953,6 @@ static void __exit fsfilt_ext3_exit(void)
                 CERROR("can't free fsfilt callback cache: count %d, rc = %d\n",
                        atomic_read(&fcb_cache_count), rc);
         }
-
-        //rc = ext3_xattr_unregister();
 }
 
 module_init(fsfilt_ext3_init);

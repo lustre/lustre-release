@@ -84,18 +84,18 @@ struct mds_update_record {
         int ur_cookielen;
         struct llog_cookie *ur_logcookies;
         struct iattr ur_iattr;
-        struct obd_ucred ur_uc;
+        struct lvfs_ucred ur_uc;
         __u64 ur_rdev;
         __u32 ur_mode;
         __u64 ur_time;
         __u32 ur_flags;
 };
 
-#define ur_fsuid    ur_uc.ouc_fsuid
-#define ur_fsgid    ur_uc.ouc_fsgid
-#define ur_cap      ur_uc.ouc_cap
-#define ur_suppgid1 ur_uc.ouc_suppgid1
-#define ur_suppgid2 ur_uc.ouc_suppgid2
+#define ur_fsuid    ur_uc.luc_fsuid
+#define ur_fsgid    ur_uc.luc_fsgid
+#define ur_cap      ur_uc.luc_cap
+#define ur_suppgid1 ur_uc.luc_suppgid1
+#define ur_suppgid2 ur_uc.luc_suppgid2
 
 /* i_attr_flags holds the open count in the inode in 2.4 */
 //XXX Alex implement on 2.4 with i_attr_flags and find soln for 2.5 please

@@ -79,6 +79,7 @@ extern unsigned int portal_cerror;
 #define S_PTLROUTER   0x00100000
 #define S_COBD        0x00200000
 #define S_IBNAL       0x00400000
+#define S_SM          0x00800000
 
 /* If you change these values, please keep portals/utils/debug.c
  * up to date! */

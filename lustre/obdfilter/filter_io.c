@@ -35,18 +35,20 @@
 #include <linux/lustre_fsfilt.h>
 #include "filter_internal.h"
 
-static int filter_start_page_read(struct inode *inode, struct niobuf_local *lnb)
+static int filter_start_page_read(struct obd_device *obd, struct inode *inode,
+                                  struct niobuf_local *lnb)
 {
-        struct address_space *mapping = inode->i_mapping;
         struct page *page;
         unsigned long index = lnb->offset >> PAGE_SHIFT;
-        int rc;
 
-        page = grab_cache_page(mapping, index); /* locked page */
-        if (page == NULL)
-                return lnb->rc = -ENOMEM;
+        page = fsfilt_getpage(obd, inode, index);
+        if (IS_ERR(page)) {
+                CERROR("page index %lu, rc = %ld\n", index, PTR_ERR(page));
 
-        LASSERT(page->mapping == mapping);
+                lnb->page = NULL;
+                lnb->rc = PTR_ERR(page);
+                return lnb->rc;
+        }
 
         lnb->page = page;
 
@@ -54,19 +56,6 @@ static int filter_start_page_read(struct inode *inode, struct niobuf_local *lnb)
                 lnb->rc = inode->i_size - lnb->offset;
         else
                 lnb->rc = lnb->len;
-
-        if (PageUptodate(page)) {
-                unlock_page(page);
-                return 0;
-        }
-
-        rc = mapping->a_ops->readpage(NULL, page);
-        if (rc < 0) {
-                CERROR("page index %lu, rc = %d\n", index, rc);
-                lnb->page = NULL;
-                page_cache_release(page);
-                return lnb->rc = rc;
-        }
 
         return 0;
 }
@@ -284,7 +273,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                               struct obd_trans_info *oti)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct obd_ioobj *o;
         struct niobuf_remote *rnb;
         struct niobuf_local *lnb = NULL;
@@ -320,7 +309,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
         memset(res, 0, niocount * sizeof(*res));
 
-        push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         for (i = 0, o = obj; i < objcount; i++, o++) {
                 LASSERT(o->ioo_bufcnt);
 
@@ -361,7 +350,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                                  * easy to detect later. */
                                 break;
                         } else {
-                                rc = filter_start_page_read(inode, lnb);
+                                rc = filter_start_page_read(obd, inode, lnb);
                         }
 
                         if (rc) {
@@ -422,7 +411,7 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                         CERROR("NULL dentry in cleanup -- tell CFS\n");
         case 0:
                 OBD_FREE(fso, objcount * sizeof(*fso));
-                pop_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         }
         return rc;
 }
@@ -569,7 +558,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                                struct niobuf_local *res,
                                struct obd_trans_info *oti)
 {
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct niobuf_remote *rnb;
         struct niobuf_local *lnb;
         struct fsfilt_objinfo fso;
@@ -583,7 +572,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
 
         memset(res, 0, niocount * sizeof(*res));
 
-        push_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         dentry = filter_fid2dentry(exp->exp_obd, NULL, obj->ioo_gr,
                                    obj->ioo_id);
         if (IS_ERR(dentry))
@@ -666,7 +655,7 @@ cleanup:
                 spin_unlock(&exp->exp_obd->obd_osfs_lock);
         default: ;
         }
-        pop_ctxt(&saved, &exp->exp_obd->obd_ctxt, NULL);
+        pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
         return rc;
 }
 

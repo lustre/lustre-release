@@ -2817,17 +2817,17 @@ static int osc_llog_init(struct obd_device *obd, struct obd_device *tgt,
 
         osc_unlink_orig_logops = llog_lvfs_ops;
         osc_unlink_orig_logops.lop_setup = llog_obd_origin_setup;
-        osc_unlink_orig_logops.lop_cleanup = llog_obd_origin_cleanup;
-        osc_unlink_orig_logops.lop_add = llog_obd_origin_add;
+        osc_unlink_orig_logops.lop_cleanup = llog_catalog_cleanup;
+        osc_unlink_orig_logops.lop_add = llog_catalog_add;
         osc_unlink_orig_logops.lop_connect = llog_origin_connect;
 
-        rc = llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, count,
-                        &catid->lci_logid, &osc_unlink_orig_logops);
+        rc = obd_llog_setup(obd, LLOG_UNLINK_ORIG_CTXT, tgt, count,
+                            &catid->lci_logid, &osc_unlink_orig_logops);
         if (rc)
                 RETURN(rc);
 
-        rc = llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, count, NULL,
-                        &osc_size_repl_logops);
+        rc = obd_llog_setup(obd, LLOG_SIZE_REPL_CTXT, tgt, count, NULL,
+                            &osc_size_repl_logops);
         RETURN(rc);
 }
 
@@ -2836,11 +2836,11 @@ static int osc_llog_finish(struct obd_device *obd, int count)
         int rc;
         ENTRY;
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT));
+        rc = obd_llog_cleanup(llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT));
         if (rc)
                 RETURN(rc);
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_SIZE_REPL_CTXT));
+        rc = obd_llog_cleanup(llog_get_context(obd, LLOG_SIZE_REPL_CTXT));
         RETURN(rc);
 }
 

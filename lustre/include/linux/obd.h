@@ -32,6 +32,7 @@
 # include <linux/mount.h>
 #endif
 
+#include <linux/lvfs.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_export.h>
@@ -484,8 +485,9 @@ struct obd_device {
         spinlock_t              obd_osfs_lock;
         struct obd_statfs       obd_osfs;
         unsigned long           obd_osfs_age;
-        struct obd_run_ctxt     obd_ctxt;
+        struct lvfs_run_ctxt    obd_lvfs_ctxt;
         struct llog_ctxt        *obd_llog_ctxt[LLOG_MAX_CTXTS];
+
         struct obd_device       *obd_observer;
         struct obd_export       *obd_self_export;
 

@@ -38,6 +38,7 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_dlm.h>
+#include <linux/lustre_log.h>
 #include <linux/lustre_fsfilt.h>
 
 #include "mds_internal.h"
@@ -79,9 +80,9 @@ static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
         } else {
                 ///* XXX 0 normally, SENDNOW for debug */);
                 ctxt = llog_get_context(obd,mlcd->mlcd_cookies[0].lgc_subsys+1);
-                rc = llog_cancel(ctxt, lsm, mlcd->mlcd_cookielen /
-                                                sizeof(*mlcd->mlcd_cookies),
-                                 mlcd->mlcd_cookies, OBD_LLOG_FL_SENDNOW);
+                rc = llog_cancel(ctxt, mlcd->mlcd_cookielen /
+                                 sizeof(*mlcd->mlcd_cookies),
+                                 mlcd->mlcd_cookies, OBD_LLOG_FL_SENDNOW, lsm);
                 if (rc)
                         CERROR("error cancelling %d log cookies: rc %d\n",
                                (int)(mlcd->mlcd_cookielen /
@@ -146,8 +147,8 @@ int mds_finish_transno(struct mds_obd *mds, struct inode *inode, void *handle,
         mcd->mcd_last_result = cpu_to_le32(rc);
         mcd->mcd_last_data = cpu_to_le32(op_data);
 
-        fsfilt_add_journal_cb(req->rq_export->exp_obd, transno, handle,
-                              mds_commit_cb, NULL);
+        fsfilt_add_journal_cb(req->rq_export->exp_obd, mds->mds_sb,
+                              transno, handle, mds_commit_cb, NULL);
         err = fsfilt_write_record(obd, mds->mds_rcvd_filp, mcd, sizeof(*mcd),
                                   &off, 0);
 
@@ -486,8 +487,8 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         EXIT;
  cleanup:
         if (mlcd != NULL)
-                fsfilt_add_journal_cb(req->rq_export->exp_obd, 0, handle,
-                                      mds_cancel_cookies_cb, mlcd);
+                fsfilt_add_journal_cb(req->rq_export->exp_obd, mds->mds_sb, 0,
+                                      handle, mds_cancel_cookies_cb, mlcd);
         err = mds_finish_transno(mds, inode, handle, req, rc, 0);
         switch (cleanup_phase) {
         case 1:
@@ -1883,7 +1884,7 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
                   struct ptlrpc_request *req, struct lustre_handle *lockh)
 {
         struct obd_device *obd = req->rq_export->exp_obd;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         int rc;
         ENTRY;
 
@@ -1891,9 +1892,9 @@ int mds_reint_rec(struct mds_update_record *rec, int offset,
         LASSERT(rec->ur_opcode <= REINT_MAX &&
                 reinters[rec->ur_opcode] != NULL);
 
-        push_ctxt(&saved, &obd->obd_ctxt, &rec->ur_uc);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
         rc = reinters[rec->ur_opcode] (rec, offset, req, lockh);
-        pop_ctxt(&saved, &obd->obd_ctxt, &rec->ur_uc);
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, &rec->ur_uc);
 
         RETURN(rc);
 }

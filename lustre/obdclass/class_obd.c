@@ -67,7 +67,6 @@
 #include <linux/lustre_build_version.h>
 #endif
 #include <portals/list.h>
-#include "llog_internal.h"
 
 #ifndef __KERNEL__
 /* liblustre workaround */

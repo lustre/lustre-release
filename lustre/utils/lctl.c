@@ -253,10 +253,10 @@ command_t cmdlist[] = {
          "       check all records from index 1 by default."},
          {"llog_cancel", jt_llog_cancel, 0,
          "cancel one record in log.\n"
-         "usage: llog_cancel <catlog id|catlog name> <log id> <index>"},
+         "usage: llog_cancel <catalog id|catalog name> <log id> <index>"},
         {"llog_remove", jt_llog_remove, 0,
-         "remove one log from catlog, erase it from disk.\n"
-         "usage: llog_remove <catlog id|catlog name> <log id>"},
+         "remove one log from catalog, erase it from disk.\n"
+         "usage: llog_remove <catalog id|catalog name> <log id>"},
 
         /* Debug commands */
         {"======== debug =========", jt_noop, 0, "debug"},

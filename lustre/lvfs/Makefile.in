@@ -1,6 +1,7 @@
-MODULES := lvfs fsfilt_@BACKINGFS@
+MODULES := lvfs fsfilt_@BACKINGFS@ fsfilt_smfs
 
-lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o
+lvfs-objs := fsfilt.o lvfs_common.o llog_lvfs.o lvfs_linux.o 
+lvfs-objs += llog.o llog_cat.o lvfs_reint.o lvfs_undo.o
 
 ifeq ($(PATCHLEVEL),6)
 fsfilt_@BACKINGFS@-objs := fsfilt-@BACKINGFS@.o
@@ -8,6 +9,8 @@ fsfilt_@BACKINGFS@-objs := fsfilt-@BACKINGFS@.o
 $(obj)/fsfilt-%.c: $(obj)/fsfilt_%.c
 	ln -s $< $@
 endif
+
+fsfilt_smfs-objs := fsfilt-smfs.o
 
 # for <ext3/xattr.h> on 2.6
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LUSTRE@ -I@LUSTRE@/ldiskfs

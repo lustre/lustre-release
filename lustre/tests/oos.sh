@@ -34,6 +34,12 @@ fi
 
 export LANG=C LC_LANG=C # for "No space left on device" message
 
+# make sure, that log file will be removed. Somehow it was possible 
+# to me, that log file had +a and could not be rewritten, what led
+# to test fail.
+chattr -ai $LOG >/dev/null 2>&1
+rm -f $LOG >/dev/null 2>&1
+
 # make sure we stripe over all OSTs to avoid OOS on only a subset of OSTs
 $LFS setstripe $OOS 65536 0 $STRIPECOUNT
 if dd if=/dev/zero of=$OOS count=$(($ORIGFREE + 100)) bs=1k 2> $LOG; then
@@ -54,6 +60,7 @@ for OSC in /proc/fs/lustre/osc/OSC*MNT*; do
 	GRANT=`cat $OSC/cur_grant_bytes`
 	[ $(($AVAIL - $GRANT / 1024)) -lt 400 ] && OSCFULL=full
 done
+
 if [ -z "$OSCFULL" ]; then
 	echo "no OSTs are close to full"
 	grep [0-9] /proc/fs/lustre/osc/OSC*MNT*/{kbytesavail,cur*}

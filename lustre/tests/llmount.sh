@@ -10,11 +10,11 @@ config=$NAME.xml
 mkconfig=$NAME.sh
 
 if [ "$PORTALS" ]; then
-  portals_opt="--portals=$PORTALS"
+    portals_opt="--portals=$PORTALS"
 fi
 
 if [ "$LUSTRE" ]; then
-  lustre_opt="--lustre=$LUSTRE"
+    lustre_opt="--lustre=$LUSTRE"
 fi
 
 if [ "$LDAPURL" ]; then

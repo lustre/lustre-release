@@ -155,14 +155,11 @@ static int filter_direct_io(int rw, struct dentry *dchild, struct kiobuf *iobuf,
         if (rc < 0)
                 GOTO(cleanup, rc);
 
-        rc = brw_kiovec(WRITE, 1, &iobuf, inode->i_dev, iobuf->blocks,
-                        1 << inode->i_blkbits);
+        rc = fsfilt_send_bio(obd, inode, iobuf);
+
         CDEBUG(D_INFO, "tried to write %d pages, rc = %d\n",
                iobuf->nr_pages, rc);
-        if (rc != (1 << inode->i_blkbits) * iobuf->nr_pages * blocks_per_page)
-                CERROR("short write?  expected %d, wrote %d\n",
-                       (1 << inode->i_blkbits) * iobuf->nr_pages *
-                       blocks_per_page, rc);
+
         if (rc > 0)
                 rc = 0;
 
@@ -227,7 +224,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           int rc)
 {
         struct obd_device *obd = exp->exp_obd;
-        struct obd_run_ctxt saved;
+        struct lvfs_run_ctxt saved;
         struct niobuf_local *lnb;
         struct fsfilt_objinfo fso;
         struct iattr iattr = { 0 };
@@ -287,7 +284,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                         iattr.ia_size = this_size;
         }
 
-        push_ctxt(&saved, &obd->obd_ctxt, NULL);
+        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
         down(&inode->i_sem);
@@ -326,7 +323,7 @@ cleanup:
 
         switch (cleanup_phase) {
         case 2:
-                pop_ctxt(&saved, &obd->obd_ctxt, NULL);
+                pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
                 LASSERT(current->journal_info == NULL);
         case 1:
                 free_kiovec(1, &iobuf);

@@ -1,13 +1,25 @@
-/*
- *  snap_current
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+ * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 1998 Peter J. Braam
- *  Copyright (C) 2000 Stelias Computing, Inc.
- *  Copyright (C) 2000 Red Hat, Inc.
- *  Copyright (C) 2000 Mountain View Data, Inc.
+ *  Copyright (C) 2004 Cluster File Systems, Inc.
  *
- *  Author: Peter J. Braam <braam@mountainviewdata.com>
+ *   This file is part of Lustre, http://www.lustre.org.
+ *
+ *   Lustre is free software; you can redistribute it and/or
+ *   modify it under the terms of version 2 of the GNU General Public
+ *   License as published by the Free Software Foundation.
+ *
+ *   Lustre is distributed in the hope that it will be useful,
+ *   but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *   GNU General Public License for more details.
+ *
+ *   You should have received a copy of the GNU General Public License
+ *   along with Lustre; if not, write to the Free Software
+ *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
+ *
  */
+
 #define DEBUG_SUBSYSTEM S_SM
 
 #include <linux/config.h>
@@ -20,316 +32,340 @@
 #include <linux/utime.h>
 #include <linux/file.h>
 #include <linux/slab.h>
+#include <linux/dcache.h>
 #include <linux/loop.h>
 #include <linux/errno.h>
+#include <linux/obd_class.h>
+#include <linux/obd_support.h>
+#include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
-#include "smfs_internal.h" 
+#include <linux/lustre_fsfilt.h>
+#include <linux/lustre_smfs.h>
+#include "smfs_internal.h"
 
-/* Find the options for the clone. These consist of a cache device
-   and an index in the snaptable associated with that device. 
-*/
-static char *smfs_options(char *options, char **devstr, char **namestr, int *kml)
+static char *smfs_options(char *data, char **devstr, char **namestr,
+                          int *kml, int *cache, char **opts, 
+                          int *iopen_nopriv)
 {
-	struct option *opt_value = NULL;
-	char *pos;
-	
-	while (!(get_opt(&opt_value, &pos))) { 			
-		if (!strcmp(opt_value->opt, "dev")) {
-			if (devstr != NULL)
-				*devstr = opt_value->value;
-		} else if (!strcmp(opt_value->opt, "type")) {
-			if (namestr != NULL)
-				*namestr = opt_value->value;
-		} else if (!strcmp(opt_value->opt, "kml")) {
-			*kml = 1;	
-		} else {
-			break;
-		}
-	}
-	return pos;
+        char *pos;
+        struct option *opt_value = NULL;
+
+        while (!(get_opt(&opt_value, &pos))) {
+                if (!strcmp(opt_value->opt, "dev")) {
+                        if (devstr != NULL)
+                                *devstr = opt_value->value;
+                } else if (!strcmp(opt_value->opt, "type")) {
+                        if (namestr != NULL)
+                                *namestr = opt_value->value;
+                } else if (!strcmp(opt_value->opt, "kml")) {
+                        if (kml)
+                                *kml = 1;
+                } else if (!strcmp(opt_value->opt, "cache")) {
+                        if (cache)
+                                *cache = 1;
+                } else if (!strcmp(opt_value->opt, "options")) {
+                        if (opts != NULL)
+                                *opts = opt_value->value;
+                } else if (!strcmp(opt_value->opt, "iopen_nopriv")) {
+                        if (iopen_nopriv != NULL)
+                                *iopen_nopriv = 1;
+                } else {
+                        break;
+                }
+        }
+        return pos;
 }
 
-static int set_loop_fd(char *dev_path, char *loop_dev)
+struct vfsmount *get_vfsmount(struct super_block *sb)
 {
-        struct loop_info loopinfo;
-	struct nameidata nd;
-	struct dentry *dentry;
-	struct block_device_operations *bd_ops;
-	struct file   *filp;
-	int    fd = 0, error = 0;
-	
-	fd = get_unused_fd();
+        struct vfsmount *rootmnt, *mnt, *ret = NULL;
+        struct list_head *end, *list;
 
-	if (!fd) RETURN(-EINVAL);
-	
-	filp = filp_open(dev_path, FMODE_WRITE, 0);
-	if (!filp || !S_ISREG(filp->f_dentry->d_inode->i_mode)) 
-		RETURN(-EINVAL);
-	
-	fd_install(fd, filp);		
-
-	if (path_init(loop_dev, LOOKUP_FOLLOW, &nd)) {
-       		error = path_walk(loop_dev, &nd);
-       		if (error) {
-			path_release(&nd);
-			filp_close(filp, current->files); 
-			RETURN(-EINVAL);
-		}
-       	} else {
-		path_release(&nd);
-		filp_close(filp, current->files); 
-		RETURN(-EINVAL);
-	}                                                                                                                                                                    
-	dentry = nd.dentry;
-	bd_ops = get_blkfops(LOOP_MAJOR); 
-	
-	error = bd_ops->ioctl(dentry->d_inode, filp, LOOP_SET_FD,
-                              (unsigned long)fd);
-	if (error) {
-		path_release(&nd);
-		filp_close(filp, current->files); 
-		RETURN(-EINVAL);
-	}
-	memset(&loopinfo, 0, sizeof(struct loop_info));
-
-	error = bd_ops->ioctl(dentry->d_inode, filp, LOOP_SET_STATUS,
-                              (unsigned long)(&loopinfo));
-	path_release(&nd);
-	RETURN(error);	
+        rootmnt = mntget(current->fs->rootmnt);
+        end = list = &rootmnt->mnt_list;
+        do {
+                mnt = list_entry(list, struct vfsmount, mnt_list);
+                if (mnt->mnt_sb == sb) {
+                        ret = mnt;
+                        break;
+                }
+                list = list->next;
+        } while (end != list);
+        
+        mntput(current->fs->rootmnt);
+        return ret;
 }
 
-#define SIZE(a) (sizeof(a)/sizeof(a[0]))
-static char *find_unused_and_set_loop_device(char *dev_path)
+struct super_block *smfs_get_sb_by_path(char *path, int len)
 {
-        char *loop_formats[] = { "/dev/loop/%d", "/dev/loop%d"};
-        struct loop_info loopinfo;
-	struct nameidata nd;
-	struct dentry *dentry;
-      	char *dev = NULL;
-        int i, j, error;
-                                                                                                                                                                                             
-        for (j = 0; j < SIZE(loop_formats); j++) {
-		SM_ALLOC(dev, strlen(loop_formats[i]) + 1);
-		for(i = 0; i < 256; i++) {
-			struct block_device_operations *bd_ops;
+        struct super_block *sb;
+        struct nameidata nd;
+        int error = 0;
 
-			sprintf(dev, loop_formats[j], i);
-                       	
-			if (path_init(dev, LOOKUP_FOLLOW, &nd)) {
-                		error = path_walk(dev, &nd);
-                		if (error && error != -ENOENT) {
-					path_release(&nd);
-                        		SM_FREE(dev, strlen(loop_formats[i]) + 1); 
-					RETURN(NULL);
-				}
-        		} else {
-                       		SM_FREE(dev, strlen(loop_formats[i]) + 1); 
-                		RETURN(NULL);
-                        }      
-			dentry = nd.dentry;
-			bd_ops = get_blkfops(LOOP_MAJOR); 
-			error = bd_ops->ioctl(dentry->d_inode, NULL, LOOP_GET_STATUS, 
-					      (unsigned long)&loopinfo);
-			path_release(&nd);
-                        
-			if (error == -ENXIO) {
-				/*find unused loop and set dev_path to loopdev*/
-				error = set_loop_fd(dev_path, dev);
-				if (error) {
-					SM_FREE(dev, strlen(loop_formats[i]) + 1);
-					dev = NULL;		
-				}
-				return dev;/* probably free */
-			}
-        	}
-        	SM_FREE(dev, strlen(loop_formats[i]) + 1);
-	}
-	RETURN(NULL);
+        ENTRY;
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        if (path_init(path, LOOKUP_FOLLOW, &nd)) {
+#else
+        if (path_lookup(path, LOOKUP_FOLLOW, &nd)) {
+#endif
+                error = path_walk(path, &nd);
+                if (error) {
+                        path_release(&nd);
+                        RETURN(NULL);
+                }
+        } else {
+                RETURN(NULL);
+        }
+
+        /* FIXME-WANGDI: add some check code here. */
+        sb = nd.dentry->d_sb;
+        path_release(&nd);
+        RETURN(sb);
 }
 
-#define MAX_LOOP_DEVICES	256
-static char *parse_path2dev(struct super_block *sb, char *dev_path)
+static int smfs_init_fsfilt_ops(struct super_block *sb)
 {
-	struct dentry *dentry;
-	struct nameidata nd;
-	char *name = NULL;
-	int  error = 0;
-
-	if (path_init(dev_path, LOOKUP_FOLLOW, &nd)) {
-     		error = path_walk(dev_path, &nd);
-     		if (error) {
-			path_release(&nd);
-			RETURN(NULL);
-		}
-       	} else {
-               	RETURN(NULL);
-	}      
-	dentry = nd.dentry;
-
-	if (!dentry->d_inode || is_bad_inode(dentry->d_inode) || 
-	    (!S_ISBLK(dentry->d_inode->i_mode) && 
-             !S_ISREG(dentry->d_inode->i_mode))){
-		path_release(&nd);
-		RETURN(NULL);
-	}
-		
-	if (S_ISREG(dentry->d_inode->i_mode)) {
-		name = find_unused_and_set_loop_device(dev_path);
-		path_release(&nd);
-		RETURN(name); 			
-	}
-	SM_ALLOC(name, strlen(dev_path) + 1);
-	memcpy(name, dev_path, strlen(dev_path) + 1);
-	RETURN(name);
+        ENTRY;
+        if (!S2SMI(sb)->sm_cache_fsfilt) {
+                S2SMI(sb)->sm_cache_fsfilt =
+                        fsfilt_get_ops(S2SMI(sb)->cache_fs_type);
+                if (!S2SMI(sb)->sm_cache_fsfilt) {
+                        CERROR("Can not get %s fsfilt ops needed by kml\n",
+                               S2SMI(sb)->cache_fs_type);
+                        RETURN(-EINVAL);
+                }
+        }
+        if (!S2SMI(sb)->sm_fsfilt) {
+                S2SMI(sb)->sm_fsfilt =
+                        fsfilt_get_ops(S2SMI(sb)->fs_type);
+                if (!S2SMI(sb)->sm_fsfilt) {
+                        CERROR("Can not get %s fsfilt ops needed by kml\n",
+                               S2SMI(sb)->fs_type);
+                        RETURN(-EINVAL);
+                }
+        }
+        RETURN(0);
 }
-void duplicate_sb(struct super_block *csb, 
-			 struct super_block *sb)
-{
-	sb->s_blocksize = csb->s_blocksize;
-	sb->s_magic = csb->s_magic;
-	sb->s_blocksize_bits = csb->s_blocksize_bits;
-	sb->s_maxbytes = csb->s_maxbytes;
-}
-extern struct super_operations smfs_super_ops;
 
-static int sm_mount_cache(struct super_block *sb, 
-			  char *devstr,
-			  char *typestr)
+void smfs_cleanup_fsfilt_ops(struct super_block *sb)
 {
-	struct vfsmount *mnt;	
-	struct smfs_super_info *smb;
-	char *dev_name = NULL;
-	unsigned long page;
-	int 	err = 0;
-	
-	dev_name = parse_path2dev(sb, devstr);
-	if (!dev_name) {
-        	GOTO(err_out, err = -ENOMEM);
-	}
-	if (!(page = __get_free_page(GFP_KERNEL))) {
-        	GOTO(err_out, err = -ENOMEM);
-	}                                                                                                                                                   
+        if (S2SMI(sb)->sm_cache_fsfilt)
+                fsfilt_put_ops(S2SMI(sb)->sm_cache_fsfilt);
+        if (S2SMI(sb)->sm_fsfilt)
+                fsfilt_put_ops(S2SMI(sb)->sm_fsfilt);
+}
+
+static int sm_mount_cache(struct super_block *sb, char *devstr, 
+                          char *typestr, char *opts, int iopen_nopriv)
+{
+        struct smfs_super_info *smb;
+        int err = 0, typelen;
+        struct vfsmount *mnt;
+        unsigned long page;
+
+        ENTRY;
+
+        typelen = strlen(typestr);
+       
+        page = __get_free_page(GFP_KERNEL);
+        if (!page)
+                GOTO(err_out, err = -ENOMEM);
+
         memset((void *)page, 0, PAGE_SIZE);
-        sprintf((char *)page, "iopen_nopriv");
-                                                                                                                                                                                                     
-        mnt = do_kern_mount(typestr, 0, dev_name, (void *)page);
+        
+        if (iopen_nopriv)
+                sprintf((char *)page, "iopen_nopriv");
+
+        if (opts && strlen(opts)) {
+                int n = strlen((char *)page);
+                sprintf((char *)page + n, ",%s", opts);
+        }
+        
+        printk("smfs: mounting %s at %s\n", typestr, devstr);
+
+        mnt = do_kern_mount(typestr, 0, devstr, (void *)page);
         free_page(page);
-	
-	if (IS_ERR(mnt)) {
+
+        if (IS_ERR(mnt)) {
                 CERROR("do_kern_mount failed: rc = %ld\n", PTR_ERR(mnt));
                 GOTO(err_out, err = PTR_ERR(mnt));
         }
-	smb = S2SMI(sb); 
-	smb->smsi_sb = mnt->mnt_sb;
-	smb->smsi_mnt = mnt;
-	
-	duplicate_sb(mnt->mnt_sb, sb);
-	sm_set_sb_ops(mnt->mnt_sb, sb);	
+        smb = S2SMI(sb);
+        smb->smsi_sb = mnt->mnt_sb;
+        smb->smsi_mnt = mnt;
+
+        smfs_init_sm_ops(smb);
+
+        OBD_ALLOC(smb->cache_fs_type, strlen(typestr) + 1);
+        memcpy(smb->cache_fs_type, typestr, strlen(typestr));
+
+        OBD_ALLOC(smb->fs_type, strlen(SMFS_TYPE) + 1);
+        memcpy(smb->fs_type, SMFS_TYPE, strlen(SMFS_TYPE));
+
+        duplicate_sb(sb, mnt->mnt_sb);
+        sm_set_sb_ops(mnt->mnt_sb, sb);
+        err = smfs_init_fsfilt_ops(sb);
 err_out:
-	if (dev_name) 
-		SM_FREE(dev_name, strlen(dev_name) + 2);
-		
-	return err;	
+        return err;
 }
+
 static int sm_umount_cache(struct super_block *sb)
 {
-	struct smfs_super_info *smb = S2SMI(sb);
-	
-	mntput(smb->smsi_mnt);
-	
-	return 0;
+        struct smfs_super_info *smb = S2SMI(sb);
+
+        mntput(smb->smsi_mnt);
+        smfs_cleanup_sm_ops(smb);
+        smfs_cleanup_fsfilt_ops(sb);
+
+        if (smb->cache_fs_type)
+                OBD_FREE(smb->cache_fs_type, strlen(smb->cache_fs_type) + 1);
+        
+        if (smb->fs_type)
+                OBD_FREE(smb->fs_type, strlen(smb->fs_type) + 1);
+        
+        return 0;
 }
+
 void smfs_put_super(struct super_block *sb)
 {
-	if (sb)
-		sm_umount_cache(sb);
-	return; 
+        if (SMFS_CACHE_HOOK(S2SMI(sb)))
+                cache_space_hook_exit(sb);
+        
+        if (SMFS_DO_REC(S2SMI(sb)))
+                smfs_rec_cleanup(sb);
+        
+        if (sb)
+                sm_umount_cache(sb);
+        return;
 }
 
-struct super_block *
-smfs_read_super(
-        struct super_block *sb,
-        void *data,
-        int silent)
+static int smfs_fill_super(struct super_block *sb,
+                           void *data, int silent)
 {
-	struct inode *root_inode = NULL;
-	char *devstr = NULL, *typestr = NULL;
-	char *cache_data;
-	ino_t root_ino;
-	int err = 0, kml = 0;
+        ino_t root_ino;
+        char *cache_data;
 
-	ENTRY;
+        int iopen_nopriv = 0;
+        struct inode *root_inode = NULL;
+        int err = 0, do_rec = 0, cache_hook = 0;
+        char *devstr = NULL, *typestr = NULL, *opts = NULL;
 
-	CDEBUG(D_SUPER, "mount opts: %s\n", data ? (char *)data : "(none)");
-	
-	init_option(data);
-	/* read and validate options */
-	cache_data = smfs_options(data, &devstr, &typestr, &kml);
-	if (*cache_data) {
-		CERROR("invalid mount option %s\n", (char*)data);
-		GOTO(out_err, err=-EINVAL);
-	}
-	if (!typestr || !devstr) {
-		CERROR("mount options name and dev mandatory\n");
-		GOTO(out_err, err=-EINVAL);
-	}
-	
-	err = sm_mount_cache(sb, devstr, typestr);
-	if (err) {
-		CERROR("Can not mount %s as %s\n", devstr, typestr);
-		GOTO(out_err, 0);
-	}
-	
-	if (kml) smfs_kml_init(sb);	
-	
-	setup_sm_journal_ops(typestr);
-	
-	dget(S2CSB(sb)->s_root);
-	root_ino = S2CSB(sb)->s_root->d_inode->i_ino;
-	root_inode = iget(sb, root_ino);
-		
-	CDEBUG(D_SUPER, "readinode %p, root ino %ld, root inode at %p\n",
-	       sb->s_op->read_inode, root_ino, root_inode);
-	
-	sb->s_root = d_alloc_root(root_inode);
-	
-	if (!sb->s_root) {
-		GOTO(out_err, err=-EINVAL);
-	}
-	
-	CDEBUG(D_SUPER, "sb %lx, &sb->u.generic_sbp: %lx\n",
-                (ulong) sb, (ulong) &sb->u.generic_sbp);
- 	
+        ENTRY;
+
+        CDEBUG(D_SUPER, "mount opts: %s\n", data ?
+               (char *)data : "(none)");
+
+        init_option(data);
+        
+        /* read and validate passed options. */
+        cache_data = smfs_options(data, &devstr, &typestr,
+                                  &do_rec, &cache_hook, &opts,
+                                  &iopen_nopriv);
+        
+        if (*cache_data)
+                CWARN("smfs_fill_super(): options parsing stoped at "
+                      "option %s\n", cache_data);
+        
+        if (!typestr || !devstr) {
+                CERROR("mount options name and dev mandatory\n");
+                GOTO(out_err, err = -EINVAL);
+        }
+
+        err = sm_mount_cache(sb, devstr, typestr, opts, 
+                             iopen_nopriv);
+                             
+        if (err) {
+                CERROR("Can not mount %s as %s, rc = %d\n", devstr, 
+                        typestr, err);
+                GOTO(out_err, err);
+        }
+
+        if (do_rec)
+                smfs_rec_init(sb);
+
+        if (cache_hook)
+                cache_space_hook_init(sb);
+
+        dget(S2CSB(sb)->s_root);
+        root_ino = S2CSB(sb)->s_root->d_inode->i_ino;
+        root_inode = iget(sb, root_ino);
+
+        CDEBUG(D_SUPER, "readinode %p, root ino %ld, root inode at %p\n",
+               sb->s_op->read_inode, root_ino, root_inode);
+
+        sb->s_root = d_alloc_root(root_inode);
+
+        if (!sb->s_root) {
+                sm_umount_cache(sb);
+                GOTO(out_err, err = -EINVAL);
+        }
+
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        CDEBUG(D_SUPER, "sb %lx, &sb->u.generic_sbp: %lx\n",
+               (ulong)sb, (ulong)&sb->u.generic_sbp);
+#else
+        CDEBUG(D_SUPER, "sb %lx, &sb->s_fs_info: %lx\n",
+               (ulong)sb, (ulong)&sb->s_fs_info);
+#endif
+
 out_err:
-	cleanup_option();
-	if (err)
-		return NULL;
-	return sb;
+        cleanup_option();
+        return err;
 }
 
-static DECLARE_FSTYPE(smfs_type, "smfs", smfs_read_super, 0);
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+static struct super_block *smfs_read_super(struct super_block *sb,
+                                           void *data, int silent)
+{
+        int err;
+
+        err = smfs_fill_super(sb, data, silent);
+        if (err)
+                return NULL;
+        
+        return sb;
+}
+#else
+struct super_block *smfs_get_sb(struct file_system_type *fs_type,
+                                int flags, const char *dev_name,
+                                void *data)
+{
+        return get_sb_nodev(fs_type, flags, data, smfs_fill_super);
+}
+#endif
+
+static struct file_system_type smfs_type = {
+        .owner       = THIS_MODULE,
+        .name        = "smfs",
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+        .read_super  = smfs_read_super,
+#else
+        .get_sb      = smfs_get_sb,
+        .kill_sb     = kill_anon_super,
+#endif
+};
 
 int init_smfs(void)
 {
-	int err = 0;
+        int err;
 
-	err = register_filesystem(&smfs_type);
-	if (err) {
-		CERROR("smfs: failed in register Storage Management filesystem!\n");
-	}
-	init_smfs_cache();		
-	return err;
+        err = register_filesystem(&smfs_type);
+        if (err) {
+                CERROR("register_filesystem() failed, "
+                       "rc = %d\n", err);
+        }
+        return err;
 }
 
 int cleanup_smfs(void)
 {
-	int err = 0;
+        int err = 0;
 
-	ENTRY;
-	err = unregister_filesystem(&smfs_type);
-	if (err) {
-		CERROR("smfs: failed to unregister Storage Management filesystem!\n");
-	}
-	cleanup_smfs_cache();		
-	return 0;
+        err = unregister_filesystem(&smfs_type);
+        if (err) {
+                CERROR("unregister_filesystem() failed, "
+                       "rc = %d\n", err);
+        }
+        return 0;
 }

@@ -1989,7 +1989,7 @@ int jt_llog_remove(int argc, char **argv)
                 if (argc == 3)
                         fprintf(stdout, "log %s are removed.\n", argv[2]);
                 else
-                        fprintf(stdout, "the log in catlog %s are removed. \n", argv[1]);
+                        fprintf(stdout, "the log in catalog %s are removed. \n", argv[1]);
         } else
                 fprintf(stderr, "OBD_IOC_LLOG_REMOVE failed: %s\n",
                         strerror(errno));

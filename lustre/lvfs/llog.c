@@ -38,9 +38,7 @@
 #include <liblustre.h>
 #endif
 
-#include <linux/obd_class.h>
 #include <linux/lustre_log.h>
-#include <portals/list.h>
 
 /* Allocate a new log or catalog handle */
 struct llog_handle *llog_alloc_handle(void)
@@ -58,7 +56,6 @@ struct llog_handle *llog_alloc_handle(void)
 }
 EXPORT_SYMBOL(llog_alloc_handle);
 
-
 void llog_free_handle(struct llog_handle *loghandle)
 {
         if (!loghandle)
@@ -66,9 +63,9 @@ void llog_free_handle(struct llog_handle *loghandle)
 
         if (!loghandle->lgh_hdr)
                 goto out;
-        if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)
+        if (le32_to_cpu(loghandle->lgh_hdr->llh_flags) & LLOG_F_IS_PLAIN)
                 list_del_init(&loghandle->u.phd.phd_entry);
-        if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
+        if (le32_to_cpu(loghandle->lgh_hdr->llh_flags) & LLOG_F_IS_CAT)
                 LASSERT(list_empty(&loghandle->u.chd.chd_head));
         OBD_FREE(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
 
@@ -97,10 +94,10 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
                 RETURN(-EINVAL);
         }
 
-        llh->llh_count--;
+        llh->llh_count = cpu_to_le32(le32_to_cpu(llh->llh_count) - 1);
 
-        if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
-            (llh->llh_count == 1) &&
+        if ((le32_to_cpu(llh->llh_flags) & LLOG_F_ZAP_WHEN_EMPTY) &&
+            (le32_to_cpu(llh->llh_count) == 1) &&
             (loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1)) {
                 rc = llog_destroy(loghandle);
                 if (rc)
@@ -131,10 +128,10 @@ int llog_init_handle(struct llog_handle *handle, int flags,
                 RETURN(-ENOMEM);
         handle->lgh_hdr = llh;
         /* first assign flags to use llog_client_ops */
-        llh->llh_flags = flags;
+        llh->llh_flags = cpu_to_le32(flags);
         rc = llog_read_header(handle);
         if (rc == 0) {
-                flags = llh->llh_flags;
+                flags = le32_to_cpu(llh->llh_flags);
                 if (uuid)
                         LASSERT(obd_uuid_equals(uuid, &llh->llh_tgtuuid));
                 GOTO(out, rc);
@@ -146,20 +143,21 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         rc = 0;
 
         handle->lgh_last_idx = 0; /* header is record with index 0 */
-        llh->llh_count = 1;         /* for the header record */
-        llh->llh_hdr.lrh_type = LLOG_HDR_MAGIC;
-        llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = LLOG_CHUNK_SIZE;
+        llh->llh_count = cpu_to_le32(1);         /* for the header record */
+        llh->llh_hdr.lrh_type = cpu_to_le32(LLOG_HDR_MAGIC);
+        llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len =
+                cpu_to_le32(LLOG_CHUNK_SIZE);
         llh->llh_hdr.lrh_index = llh->llh_tail.lrt_index = 0;
-        llh->llh_timestamp = LTIME_S(CURRENT_TIME);
+        llh->llh_timestamp = cpu_to_le64(LTIME_S(CURRENT_TIME));
         if (uuid)
                 memcpy(&llh->llh_tgtuuid, uuid, sizeof(llh->llh_tgtuuid));
-        llh->llh_bitmap_offset = offsetof(typeof(*llh),llh_bitmap);
+        llh->llh_bitmap_offset = cpu_to_le32(offsetof(typeof(*llh),llh_bitmap));
         ext2_set_bit(0, llh->llh_bitmap);
 
 out:
         if (flags & LLOG_F_IS_CAT) {
                 INIT_LIST_HEAD(&handle->u.chd.chd_head);
-                llh->llh_size = sizeof(struct llog_logid_rec);
+                llh->llh_size = cpu_to_le32(sizeof(struct llog_logid_rec));
         }
         else if (flags & LLOG_F_IS_PLAIN)
                 INIT_LIST_HEAD(&handle->u.phd.phd_entry);
@@ -234,12 +232,11 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                         GOTO(out, rc);
 
                 rec = buf;
-                idx = rec->lrh_index;
+                idx = le32_to_cpu(rec->lrh_index);
                 if (idx < index)
                         CDEBUG(D_HA, "index %u : idx %u\n", index, idx);
                 while (idx < index) {
-                        rec = (struct llog_rec_hdr *)
-                                ((char *)rec + rec->lrh_len);
+                        rec = ((void *)rec + le32_to_cpu(rec->lrh_len));
                         idx ++;
                 }
 
@@ -266,8 +263,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
                         ++index;
                         if (index > last_index)
                                 GOTO(out, rc = 0);
-                        rec = (struct llog_rec_hdr *)
-                                ((char *)rec + rec->lrh_len);
+                        rec = ((void *)rec + le32_to_cpu(rec->lrh_len));
                 }
         }
 
@@ -277,3 +273,86 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_process);
+
+int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
+                         void *data, void *catdata)
+{
+        struct llog_log_hdr *llh = loghandle->lgh_hdr;
+        struct llog_process_cat_data *cd = catdata;
+        void *buf;
+        int rc = 0, first_index = 1, index, idx;
+        struct llog_rec_tail *tail;
+        ENTRY;
+
+        OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
+        if (!buf)
+                RETURN(-ENOMEM);
+
+        if (cd != NULL)
+                first_index = cd->first_idx + 1;
+        if (cd != NULL && cd->last_idx)
+                index = cd->last_idx;
+        else
+                index = LLOG_BITMAP_BYTES * 8 - 1;
+
+        while (rc == 0) {
+                struct llog_rec_hdr *rec;
+
+                /* skip records not set in bitmap */
+                while (index >= first_index &&
+                       !ext2_test_bit(index, llh->llh_bitmap))
+                        --index;
+
+                LASSERT(index >= first_index - 1);
+                if (index == first_index - 1)
+                        break;
+
+                /* get the buf with our target record; avoid old garbage */
+                memset(buf, 0, LLOG_CHUNK_SIZE);
+                rc = llog_prev_block(loghandle, index, buf, LLOG_CHUNK_SIZE);
+                if (rc)
+                        GOTO(out, rc);
+
+                rec = buf;
+                idx = le32_to_cpu(rec->lrh_index);
+                if (idx < index)
+                        CDEBUG(D_HA, "index %u : idx %u\n", index, idx);
+                while (idx < index) {
+                        rec = ((void *)rec + le32_to_cpu(rec->lrh_len));
+                        idx ++;
+                }
+
+                /* process records in buffer, starting where we found one */
+                while ((void *)rec >= buf) {
+                        if (rec->lrh_index == 0)
+                                GOTO(out, 0); /* no more records */
+
+                        /* if set, process the callback on this record */
+                        if (ext2_test_bit(index, llh->llh_bitmap)) {
+                                rc = cb(loghandle, rec, data);
+                                if (rc == LLOG_PROC_BREAK) {
+                                        CWARN("recovery from log: "LPX64":%x"
+                                              " stopped\n",
+                                              loghandle->lgh_id.lgl_oid,
+                                              loghandle->lgh_id.lgl_ogen);
+                                        GOTO(out, rc);
+                                }
+                                if (rc)
+                                        GOTO(out, rc);
+                        }
+
+                        /* previous record, still in buffer? */
+                        --index;
+                        if (index < first_index)
+                                GOTO(out, rc = 0);
+                        tail = (void *)rec - sizeof(struct llog_rec_tail);
+                        rec = ((void *)rec - le32_to_cpu(tail->lrt_len));
+                }
+        }
+
+ out:
+        if (buf)
+                OBD_FREE(buf, LLOG_CHUNK_SIZE);
+        RETURN(rc);
+}
+EXPORT_SYMBOL(llog_reverse_process);
