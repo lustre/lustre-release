@@ -29,7 +29,7 @@ Lustre file System, server and network drivers for Linux %{kversion}.
 %package -n lustre-doc
 Summary: Documentation and sample configuration files
 Group: Documentation
-#BuildArch: noarch
+BuildArch: noarch
 
 %description -n lustre-doc
 Documentation and sample configuration files for Lustre

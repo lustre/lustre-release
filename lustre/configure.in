@@ -30,7 +30,6 @@ bindir='${exec_prefix}/usr/bin'
 sbindir='${exec_prefix}/usr/sbin'
 
 linuxdir_def=/usr/src/linux
-AC_ARG_WITH(linux, [  --with-linux[[=PATH]]     set path to Linux source (default=/usr/src/linux)],enable_linuxdir="$with_linux", enable_linuxdir="$linuxdir_def")
 AC_ARG_ENABLE(linuxdir, [  --enable-linuxdir=[path] set path to Linux source (default=/usr/src/linux)],, enable_linuxdir=$linuxdir_def)
 
 LINUX=$enable_linuxdir
@@ -42,8 +41,6 @@ KINCFLAGS='-I. -I$(top_srcdir)/include -I$(PORTALS)/include -I$(LINUX)/include'
 CPPFLAGS="$KINCFLAGS $ARCHCPPFLAGS"
 
 portalsdir_def='$(top_srcdir)/../portals'
-AC_ARG_WITH(portals, [  --with-portals[[=PATH]]   set path to Portals source (default=../portals)], enable_portalsdir="$with_portals", enable_portalsdir=$portalsdir_def)
-PORTALS=$enable_portalsdir
 AC_ARG_ENABLE(portalsdir, [  --enable-portalsdir=[path] set path to Portals source (default=../portals)],, enable_portalsdir=$portalsdir_def)
 PORTALS=$enable_portalsdir
 AC_SUBST(PORTALS)
@@ -67,15 +64,13 @@ AC_MSG_CHECKING(for Linux release)
 
 dnl We need to rid ourselves of the nasty [ ] quotes.
 changequote(, )
-dnl LVERSION="`sed -ne 's/^VERSION[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
-dnl PATCHLEVEL="`sed -ne 's/^PATCHLEVEL[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
-dnl SUBLEVEL="`sed -ne 's/^SUBLEVEL[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
-dnl EXTRAVERSION="`sed -ne 's/^EXTRAVERSION[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
-dnl Get release from version.h
-RELEASE="`sed -ne 's/.*UTS_RELEASE[ "]*\([0-9.a-zA-Z-]*\).*/\1/p' $LINUX/include/linux/version.h`"
+LVERSION="`sed -ne 's/^VERSION[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
+PATCHLEVEL="`sed -ne 's/^PATCHLEVEL[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
+SUBLEVEL="`sed -ne 's/^SUBLEVEL[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
+EXTRAVERSION="`sed -ne 's/^EXTRAVERSION[ 	]*=[ 	]*//gp' $LINUX/Makefile`"
 changequote([, ])
 
-dnl RELEASE="$LVERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
+RELEASE="$LVERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
 moduledir='$(libdir)/modules/'$RELEASE/kernel
 AC_SUBST(moduledir)
 AC_SUBST(EXTRAVERSION)
@@ -93,11 +88,10 @@ AC_SUBST(docdir)
 demodir='$(docdir)/demo'
 AC_SUBST(demodir)
 
-AC_OUTPUT(Makefile lov/Makefile lib/Makefile ldlm/Makefile \
+AC_OUTPUT(Makefile lib/Makefile ldlm/Makefile \
          obdecho/Makefile ptlrpc/Makefile \
-	osc/Makefile mdc/Makefile mds/Makefile ost/Makefile utils/Makefile \
+	lov/Makefile osc/Makefile mdc/Makefile mds/Makefile ost/Makefile utils/Makefile \
 	tests/Makefile obdfilter/Makefile obdclass/Makefile \
-	llite/Makefile demos/Makefile \
+	llite/Makefile obdfs/Makefile demos/Makefile \
 	doc/Makefile scripts/Makefile scripts/lustre.spec \
 	extN/Makefile)
-# obdfs/Makefile 

@@ -14,6 +14,8 @@ rm /tmp/halog
 echo secondary start `date`
 echo "- please supply a new mds"
 
+# invoke ldap client here
+
 
 /usr/src/portals/linux/utils/ptlctl <<EOF3
 setup tcp
