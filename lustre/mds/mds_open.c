@@ -843,7 +843,7 @@ int mds_open(struct mds_update_record *rec, int offset,
         struct mds_body *body = NULL;
         struct dentry *dchild = NULL, *dparent = NULL;
         struct mds_export_data *med;
-        struct lustre_handle parent_lockh[2];
+        struct lustre_handle parent_lockh[2] = {{0}, {0}};
         int rc = 0, cleanup_phase = 0, acc_mode, created = 0;
         int parent_mode = LCK_PR;
         void *handle = NULL;
@@ -855,9 +855,6 @@ int mds_open(struct mds_update_record *rec, int offset,
         DEBUG_REQ(D_INODE, req, "parent "DLID4" name %*s mode %o",
                   OLID4(rec->ur_id1), rec->ur_namelen - 1, rec->ur_name,
                   rec->ur_mode);
-
-        parent_lockh[0].cookie = 0;
-        parent_lockh[1].cookie = 0;
 
         if (offset == 3) { /* intent */
                 rep = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*rep));

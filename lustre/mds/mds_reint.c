@@ -2120,8 +2120,8 @@ cleanup:
                 if (err)
                         CERROR("error on parent setattr: rc = %d\n", err);
         }
-//        rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
-//                                handle, req, rc, 0);
+        rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
+                                handle, req, rc, 0);
         if (!rc)
                 (void)obd_set_info(mds->mds_lov_exp, strlen("unlinked"),
                                    "unlinked", 0, NULL);
@@ -2161,9 +2161,6 @@ cleanup:
                         ptlrpc_save_lock(req, parent_lockh, LCK_PW);
                 l_dput(dchild);
                 l_dput(dchild);
-
-                rc = mds_finish_transno(mds, dparent ? dparent->d_inode : NULL,
-                                        handle, req, rc, 0);
                 l_dput(dparent);
         case 0:
                 break;
@@ -2329,7 +2326,7 @@ cleanup:
                         } else {
                                 ptlrpc_save_lock(req, tgt_dir_lockh, LCK_EX);
 #ifdef S_PDIROPS
-                                ptlrpc_save_lock(req, tgt_dir_lockh+1, update_mode);
+                                ptlrpc_save_lock(req, tgt_dir_lockh + 1, update_mode);
 #endif
                         }
                         l_dput(de_tgt_dir);
@@ -2995,8 +2992,6 @@ static int mds_reint_rename_create_name(struct mds_update_record *rec,
                obd->obd_name, rec->ur_tgt, OLID4(rec->ur_id1));
 
         /* first, lookup the target */
-        child_lockh.cookie = 0;
-        
         rc = mds_get_parent_child_locked(obd, mds, rec->ur_id2, parent_lockh,
                                          &de_tgtdir, LCK_PW, MDS_INODELOCK_UPDATE,
                                          &update_mode, rec->ur_tgt, rec->ur_tgtlen,
@@ -3020,9 +3015,9 @@ cleanup:
         if (cleanup_phase == 1) {
 #ifdef S_PDIROPS
                 if (parent_lockh[1].cookie != 0)
-                        ldlm_lock_decref(&parent_lockh[1], update_mode);
+                        ldlm_lock_decref(parent_lockh + 1, update_mode);
 #endif
-                ldlm_lock_decref(&parent_lockh[0], LCK_PW);
+                ldlm_lock_decref(parent_lockh, LCK_PW);
                 if (child_lockh.cookie != 0)
                         ldlm_lock_decref(&child_lockh, LCK_EX);
                 l_dput(de_new);
@@ -3055,7 +3050,6 @@ static int mds_reint_rename_to_remote(struct mds_update_record *rec, int offset,
                 RETURN(-ENOMEM);
         memset(op_data, 0, sizeof(*op_data));
 
-        child_lockh.cookie = 0;
         rc = mds_get_parent_child_locked(obd, mds, rec->ur_id1, parent_lockh,
                                          &de_srcdir, LCK_PW, MDS_INODELOCK_UPDATE,
                                          &update_mode, rec->ur_name, 
@@ -3121,9 +3115,9 @@ cleanup:
 
 #ifdef S_PDIROPS
         if (parent_lockh[1].cookie != 0)
-                ldlm_lock_decref(&parent_lockh[1], update_mode);
+                ldlm_lock_decref(parent_lockh + 1, update_mode);
 #endif
-        ldlm_lock_decref(&parent_lockh[0], LCK_PW);
+        ldlm_lock_decref(parent_lockh, LCK_PW);
         if (child_lockh.cookie != 0)
                 ldlm_lock_decref(&child_lockh, LCK_EX);
 
