@@ -389,7 +389,7 @@ static ssize_t fsfilt_extN_readpage(struct file *file, char *buf, size_t count,
                                         brelse(bh);
                                 } else if (err) {
                                         /* XXX in theory we should just fake
-                                         * this buffer and continue like ext3,
+                                         * this buffer and continue like extN,
                                          * especially if this is a partial read
                                          */
                                         CERROR("error read dir %lu+%llu: %d\n",
