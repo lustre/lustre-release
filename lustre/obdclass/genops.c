@@ -20,7 +20,6 @@
 #include <linux/slab.h>
 
 extern struct list_head obd_types;
-extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 kmem_cache_t *obdo_cachep = NULL;
 kmem_cache_t *export_cachep = NULL;
 kmem_cache_t *import_cachep = NULL;
