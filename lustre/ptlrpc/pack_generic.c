@@ -406,21 +406,6 @@ void *mdc_create_pack(struct lustre_msg *msg, int offset,
         return ((void*)tmp + size_round(datalen));
 }
 
-static __u32 mds_pack_open_flags(__u32 flags)
-{
-        return
-                (flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC |
-                          MDS_OPEN_DELAY_CREATE | MDS_OPEN_HAS_EA |
-                          MDS_OPEN_HAS_OBJS)) |
-                ((flags & O_CREAT) ? MDS_OPEN_CREAT : 0) |
-                ((flags & O_EXCL) ? MDS_OPEN_EXCL : 0) |
-                ((flags & O_TRUNC) ? MDS_OPEN_TRUNC : 0) |
-                ((flags & O_APPEND) ? MDS_OPEN_APPEND : 0) |
-                ((flags & O_SYNC) ? MDS_OPEN_SYNC : 0) |
-                ((flags & O_DIRECTORY) ? MDS_OPEN_DIRECTORY : 0) |
-                0;
-}
-
 void *mdc_setattr_pack(struct lustre_msg *msg, struct mdc_op_data *data,
                        struct iattr *iattr, void *ea, int ealen,
                        void *ea2, int ea2len)
