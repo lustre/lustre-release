@@ -64,7 +64,7 @@ AC_ARG_ENABLE(portalsdir, [  --enable-portalsdir=[path] (deprecated) set path to
 PORTALS=$enable_portalsdir
 AC_SUBST(PORTALS)
 
-portalslib_def='$(top_srcdir)/../portals'
+portalslib_def=$enable_portalsdir
 AC_ARG_WITH(portalslib, [  --with-portalslib=[path] set path to Portals library (default=../portals/linux/utils)], enable_portalslib=$withval)
 AC_ARG_ENABLE(portalslib, [  --enable-portalslib=[path] (deprecated) set path to Portals lib (default=../portals/linux/utils)],, enable_portalslib=$portalslib_def)
 PORTALSLIB=$enable_portalslib/linux/utils
