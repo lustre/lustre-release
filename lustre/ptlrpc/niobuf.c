@@ -50,7 +50,7 @@ int ptlrpc_check_bulk_sent(struct ptlrpc_bulk_desc *bulk)
                 return 1;
         }
 
-        CERROR("no event yet\n");
+        CDEBUG(D_NET, "no event yet\n");
         return 0;
 }
 
@@ -102,7 +102,7 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
         remote_id.nid = peer->peer_nid;
         remote_id.pid = 0;
 
-        CERROR("Sending %d bytes to portal %d, xid %d\n",
+        CDEBUG(D_NET, "Sending %d bytes to portal %d, xid %d\n",
                request->rq_req_md.length, portal, request->rq_xid);
 
         rc = PtlPut(md_h, ack, remote_id, portal, 0, request->rq_xid, 0, 0);
@@ -140,7 +140,7 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *bulk, int portal)
         remote_id.nid = bulk->b_peer.peer_nid;
         remote_id.pid = 0;
 
-        CERROR("Sending %d bytes to portal %d, xid %d\n",
+        CDEBUG(D_NET, "Sending %d bytes to portal %d, xid %d\n",
                bulk->b_md.length, portal, bulk->b_xid);
 
         rc = PtlPut(md_h, PTL_ACK_REQ, remote_id, portal, 0, bulk->b_xid, 0, 0);
@@ -349,7 +349,7 @@ int ptl_received_rpc(struct ptlrpc_service *service) {
                 rc = PtlMEInsert(service->srv_me_h[service->srv_me_tail],
                                  service->srv_id, 0, ~0, PTL_RETAIN,
                                  PTL_INS_AFTER, &(service->srv_me_h[index]));
-                CERROR("Inserting new ME and MD in ring, rc %d\n", rc);
+                CDEBUG(D_NET, "Inserting new ME and MD in ring, rc %d\n", rc);
                 service->srv_me_tail = index;
                 service->srv_ref_count[index] = 0;
                 

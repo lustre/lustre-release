@@ -217,9 +217,9 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 		return -rc;
 	}
 
-        CDEBUG(0, "-- sleeping\n");
+        CDEBUG(D_OTHER, "-- sleeping\n");
         wait_event_interruptible(req->rq_wait_for_rep, ptlrpc_check_reply(req));
-        CDEBUG(0, "-- done\n");
+        CDEBUG(D_OTHER, "-- done\n");
         
         if (req->rq_flags == PTL_RPC_INTR) { 
                 /* Clean up the dangling reply buffers */
@@ -240,7 +240,7 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 		CERROR("unpack_rep failed: %d\n", rc);
 		return rc;
 	}
-        CERROR("got rep %d\n", req->rq_rephdr->xid);
+        CDEBUG(D_NET, "got rep %d\n", req->rq_rephdr->xid);
 
 	if ( req->rq_rephdr->status == 0 )
                 CDEBUG(0, "--> buf %p len %d status %d\n", req->rq_repbuf,

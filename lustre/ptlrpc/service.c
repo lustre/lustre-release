@@ -63,7 +63,7 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
                         CERROR("dropped event!\n");
                         BUG();
                 }
-                CERROR("PtlEQGet returns %d\n", rc); 
+                CDEBUG(D_NET, "PtlEQGet returns %d\n", rc); 
                 EXIT;
                 return 0;
         }
@@ -168,7 +168,7 @@ static int ptlrpc_main(void *arg)
                         request.rq_reqbuf = svc->srv_ev.mem_desc.start + svc->srv_ev.offset;
                         request.rq_reqlen = svc->srv_ev.mem_desc.length;
                         request.rq_xid = svc->srv_ev.match_bits;
-                        CERROR("got req %d\n", request.rq_xid);
+                        CDEBUG(D_NET, "got req %d\n", request.rq_xid);
 
                         request.rq_peer.peer_nid = svc->srv_ev.initiator.nid;
                         /* FIXME: this NI should be the incoming NI.
@@ -199,7 +199,7 @@ static int ptlrpc_main(void *arg)
         svc->srv_thread = NULL;
         svc->srv_flags = SVC_STOPPED;
         wake_up(&svc->srv_ctl_waitq);
-        CERROR("svc exiting process %d\n", current->pid);
+        CDEBUG(D_NET, "svc exiting process %d\n", current->pid);
         return 0;
 }
 
