@@ -29,8 +29,6 @@
 #include <linux/pagemap.h> // XXX kill me soon
 #include <linux/version.h>
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-
 #define DEBUG_SUBSYSTEM S_FILTER
 
 #include <linux/obd_class.h>
@@ -40,12 +38,14 @@
 int ext3_map_inode_page(struct inode *inode, struct page *page,
                         unsigned long *blocks, int *created, int create);
 
+/* 512byte block min */
+#define MAX_BLOCKS_PER_PAGE (PAGE_SIZE / 512)
 struct dio_request {
         atomic_t numreqs;       /* number of reqs being processed */
         struct bio *bio_list;   /* list of completed bios */
         wait_queue_head_t wait;
-	int created[16]; /* 8KB pages man , 512bytes block min */
-	unsigned long blocks[16]; /* -- */
+	int created[MAX_BLOCKS_PER_PAGE];
+	unsigned long blocks[MAX_BLOCKS_PER_PAGE];
         spinlock_t lock;
 };
 
@@ -97,7 +97,7 @@ int filter_commitrw_write(struct obd_export *exp, int objcount,
         LASSERT(current->journal_info == NULL);
 
         blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
-	LASSERT(blocks_per_page <= 16);
+	LASSERT(blocks_per_page <= MAX_BLOCKS_PER_PAGE);
 
         OBD_ALLOC(dreq, sizeof(*dreq));
         if (dreq == NULL)
@@ -226,7 +226,3 @@ cleanup:
 
         RETURN(rc);
 }
-
-
-#endif
-
