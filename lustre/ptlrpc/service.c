@@ -305,6 +305,7 @@ int rpc_register_service(struct ptlrpc_service *service, char *uuid)
                 service->srv_md[i].options       = PTL_MD_OP_PUT;
                 service->srv_md[i].user_ptr      = service;
                 service->srv_md[i].eventq        = service->srv_eq_h;
+                service->srv_md[i].max_offset    = service->srv_buf_size;
 
                 rc = PtlMDAttach(service->srv_me_h[i], service->srv_md[i],
                                  PTL_RETAIN, &(service->srv_md_h[i]));
