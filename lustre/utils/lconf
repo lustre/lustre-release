@@ -257,9 +257,7 @@ def is_block(path):
 # build fs according to type
 # fixme: dangerous
 def mkfs(fstype, dev):
-    if(fstype == 'ext3'):
-        mkfs = 'mkfs.ext2 -j -b 4096'
-    elif (fstype == 'extN'):
+    if(fstype in ('ext3', 'extN')):
         mkfs = 'mkfs.ext2 -j -b 4096'
     else:
         print 'unsupported fs type: ', fstype
@@ -267,7 +265,9 @@ def mkfs(fstype, dev):
         force = '-F'
     else:
         force = ''
-    run (mkfs, force, dev)
+    (ret, out) = run (mkfs, force, dev)
+    if ret:
+        panic("Unable to build fs:", dev)
 
 # some systems use /dev/loopN, some /dev/loop/N
 def loop_base():
@@ -336,179 +336,225 @@ def block_dev(dev, size, fstype, format):
     return dev
 
 # ============================================================
-# Functions to prepare the various objects
+# Classes to prepare and cleanup the various objects
+#
+class Module:
+    """ Base class for the rest of the modules. The default cleanup method is
+    defined here, as well as some utilitiy funcs.
+    """
+    def __init__(self, tag_name, node):
+        self.dom_node = node
+        self.tag_name = tag_name
+        self.name = node.getAttribute('name')
+        self.uuid = node.getAttribute('uuid')
 
-def prepare_ldlm(node):
-    (name, uuid) = getNodeAttr(node)
-    print 'LDLM:', name, uuid
-    lctl.newdev(attach="ldlm %s %s" % (name, uuid),
-                setup ="")
-    
-def prepare_lov(node):
-    (name, uuid, mdcuuid, stripe_cnt, strip_sz, stripe_off, pattern, devlist, mdsname) = getLOVInfo(node)
-    print 'LOV:', name, uuid, mdcuuid, stripe_cnt, strip_sz, stripe_off, pattern, devlist, mdsname
-    lctl.lovconfig(uuid, mdsname, stripe_cnt, strip_sz, stripe_off, pattern, devlist)
-    lctl.newdev(attach="lov %s %s" % (name, uuid),
-                setup ="%s" % (mdcuuid))
+    def info(self, *args):
+        msg = string.join(map(str,args))
+        print self.tag_name + ":", self.name, self.uuid, msg
 
-def prepare_network(node):
-    (name, uuid, type, nid, port, send_buf, read_buf) = getNetworkInfo(node)
-    print 'NETWORK:', name, uuid, type, nid, port
-    if type == 'tcp':
-        ret = run_daemon(TCP_ACCEPTOR, port)
+    def cleanup(self):
+        """ default cleanup, used for most modules """
+        self.info()
+        try:
+            lctl.cleanup(self.name, self.uuid)
+        except CommandError:
+            print "cleanup failed: ", self.name
+
+class Network(Module):
+    def __init__(self,node):
+        Module.__init__(self, 'NETWORK', node)
+        self.net_type = node.getAttribute('type')
+        self.nid = getText(node, 'server', "")
+        self.port = int(getText(node, 'port', 0))
+        self.send_buf = int(getText(node, 'send_buf', 0))
+        self.read_buf = int(getText(node, 'read_buf', 0))
+
+    def prepare(self):
+        self.info(self.net_type, self.nid, self.port)
+        if type == 'tcp':
+            ret = run_daemon(TCP_ACCEPTOR, port)
+            if ret:
+                print "error:", ret
+                raise CommandError, "cannot run acceptor"
+        lctl.network(self.net_type, self.nid)
+        lctl.newdev(attach = "ptlrpc RPCDEV")
+
+    def cleanup(self):
+        self.info(self.net_type, self.nid, self.port)
+        try:
+            lctl.cleanup("RPCDEV", "")
+        except CommandError:
+            print "cleanup failed: ", self.name
+        if type == 'tcp':
+            # yikes, this ugly! need to save pid in /var/something
+            run("killall acceptor")
+
+class LDLM(Module):
+    def __init__(self,node):
+        Module.__init__(self, 'LDLM', node)
+    def prepare(self):
+        self.info()
+        lctl.newdev(attach="ldlm %s %s" % (self.name, self.uuid),
+                    setup ="")
+
+class LOV(Module):
+    def __init__(self,node):
+        Module.__init__(self, 'LOV', node)
+        devs = node.getElementsByTagName('devices')[0]
+        self.stripe_sz = int(devs.getAttribute('stripesize'))
+        self.stripe_off = int(devs.getAttribute('stripeoffset'))
+        self.pattern = int(devs.getAttribute('pattern'))
+        mdcref =  node.getElementsByTagName('mdc_ref')[0]
+        self.mdcuuid = mdcref.getAttribute('uuidref')
+        mdc= lookup(node.parentNode, mdcuuid)
+        mdsref =  mdc.getElementsByTagName('mds_ref')[0]
+        self.mdsuuid = mdsref.getAttribute('uuidref')
+        mds= lookup(node.parentNode, mdsuuid)
+        self.mdsname = getName(mds)
+        devlist = ""
+        stripe_cnt = 0
+        for child in devs.childNodes:
+            if child.nodeName == 'osc_ref':
+                devlist = devlist +  child.getAttribute('uuidref') + " "
+                strip_cnt = stripe_cnt + 1
+        self.devlist = devlist
+
+    def prepare(self):
+        self.info(self.mdcuuid)
+        self.stripe_cnt, self.strip_sz, self.stripe_off, self.pattern,
+        self.devlist, self.mdsname
+        lctl.lovconfig(self.uuid, self.mdsname, self.stripe_cnt,
+                       self.strip_sz, self.stripe_off, self.pattern,
+                       self.devlist)
+        lctl.newdev(attach="lov %s %s" % (self.name, self.uuid),
+                    setup ="%s" % (self.mdcuuid))
+
+class MDS(Module):
+    def __init__(self,node):
+        Module.__init__(self, 'MDS', node)
+        self.devname, self.size = getDevice(node)
+        self.fstype = getText(node, 'fstype')
+        self.format = getText(node, 'autoformat', "no")
+
+    def prepare(self):
+        self.info(self.devname, self.fstype, self.format)
+        blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
+        lctl.newdev(attach="mds %s %s" % (self.name, self.uuid),
+                    setup ="%s %s" %(blkdev, self.fstype))
+    def cleanup(self):
+        Module.cleanup(self)
+        clean_loop(self.devname)
+
+class MDC(Module):
+    def __init__(self,node):
+        Module.__init__(self, 'MDC', node)
+        ref = node.getElementsByTagName('mds_ref')[0]
+        self.mds_uuid = ref.getAttribute('uuidref')
+        ref = node.getElementsByTagName('network_ref')[0]
+        self.net_uuid = ref.getAttribute('uuidref')
+
+    def prepare(self):
+        self.info(self.mds_uuid, self.net_uuid)
+        mds = lookup(self.dom_node.parentNode, self.mds_uuid)
+        if mds == None:
+            panic(self.mdsuuid, "not found.")
+        net = lookup(self.dom_node.parentNode, self.net_uuid)
+        srv = Network(net)
+        lctl.connect(srv.net_type, srv.nid, srv.port, self.net_uuid, srv.send_buf, srv.read_buf)
+        lctl.newdev(attach="mdc %s %s" % (self.name, self.uuid),
+                        setup ="%s %s" %(self.mds_uuid, self.net_uuid))
+            
+    def cleanup(self):
+        self.info(self.mds_uuid, self.net_uuid)
+        net = lookup(self.dom_node.parentNode, self.net_uuid)
+        srv = Network(net)
+        try:
+            lctl.disconnect(srv.net_type, srv.nid, srv.port, self.net_uuid)
+            lctl.cleanup(self.name, self.uuid)
+        except CommandError:
+            print "cleanup failed: ", self.name
+
+class OBD(Module):
+    def __init__(self, node):
+        Module.__init__(self, 'OBD', node)
+        self.obdtype = node.getAttribute('type')
+        self.devname, self.size = getDevice(node)
+        self.fstype = getText(node, 'fstype')
+        self.format = getText(node, 'autoformat', 'yes')
+
+    # need to check /proc/mounts and /etc/mtab before
+    # formatting anything.
+    # FIXME: check if device is already formatted.
+    def prepare(self):
+        self.info(self.obdtype, self.devname, self.size, self.fstype, self.format)
+        blkdev = block_dev(self.devname, self.size, self.fstype, self.format)
+        lctl.newdev(attach="%s %s %s" % (self.obdtype, self.name, self.uuid),
+                    setup ="%s %s" %(blkdev, self.fstype))
+    def cleanup(self):
+        Module.cleanup(self)
+        clean_loop(self.devname)
+
+class OST(Module):
+    def __init__(self,node):
+        Module.__init__(self, 'OST', node)
+        ref = node.getElementsByTagName('obd_ref')[0]
+        self.obd_uuid = ref.getAttribute('uuidref')
+
+    def prepare(self):
+        self.info(self.obd_uuid)
+        lctl.newdev(attach="ost %s %s" % (self.name, self.uuid),
+                    setup ="%s" % (self.obd_uuid))
+
+class OSC(Module):
+    def __init__(self,node):
+        Module.__init__(self, 'OSC', node)
+        ref = node.getElementsByTagName('obd_ref')[0]
+        self.obd_uuid = ref.getAttribute('uuidref')
+        ref = node.getElementsByTagName('network_ref')[0]
+        self.ost_uuid = ref.getAttribute('uuidref')
+
+    def prepare(self):
+        self.info(self.obd_uuid, self.ost_uuid)
+        net = lookup(self.dom_node.parentNode, self.ost_uuid)
+        srv = Network(net)
+        lctl.connect(srv.net_type, srv.nid, srv.port, self.ost_uuid, srv.send_buf, srv.read_buf)
+        lctl.newdev(attach="osc %s %s" % (self.name, self.uuid),
+                    setup ="%s %s" %(self.obd_uuid, self.ost_uuid))
+
+    def cleanup(self):
+        self.info(self.obd_uuid, self.ost_uuid)
+        net = lookup(self.dom_node.parentNode, self.ost_uuid)
+        srv = Network(net)
+        try:
+            lctl.disconnect(srv.net_type, srv.nid, srv.port, self.ost_uuid)
+            lctl.cleanup(self.name, self.uuid)
+        except CommandError:
+            print "cleanup failed: ", self.name
+
+class Mountpoint(Module):
+    def __init__(self,node):
+        Module.__init__(self, 'MTPT', node)
+        self.path = getText(node, 'path')
+        ref = node.getElementsByTagName('mdc_ref')[0]
+        self.mdc_uuid = ref.getAttribute('uuidref')
+        ref = node.getElementsByTagName('osc_ref')[0]
+        self.lov_uuid = ref.getAttribute('uuidref')
+
+    def prepare(self):
+        self.info(self.path, self.mdc_uuid,self.lov_uuid)
+        cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
+              (self.lov_uuid, self.mdc_uuid, self.path)
+        run("mkdir", self.path)
+        ret, val = run(cmd)
         if ret:
-            print "error:", ret
-            raise CommandError, "cannot run acceptor"
-    lctl.network(type, nid)
-    lctl.newdev(attach = "ptlrpc RPCDEV")
-
-
-# need to check /proc/mounts and /etc/mtab before
-# formatting anything.
-# FIXME: check if device is already formatted.
-def prepare_obd(obd):
-    (name, uuid, obdtype, dev, size, fstype, format) = getOBDInfo(obd)
-    print 'OBD:', name, uuid, obdtype, dev, size, fstype, format
-    dev = block_dev(dev, size, fstype, format)
-    lctl.newdev(attach="%s %s %s" % (obdtype, name, uuid),
-                setup ="%s %s" %(dev, fstype))
-    
-
-def prepare_ost(ost):
-    name, uuid, obd = getOSTInfo(ost)
-    print 'OST:', name, uuid, obd
-    lctl.newdev(attach="ost %s %s" % (name, uuid),
-                setup ="%s" % (obd))
-
-def prepare_mds(node):
-    (name, uuid, dev, size, fstype, format) = getMDSInfo(node)
-    print 'MDS:', name, uuid, dev, size, fstype
-    # setup network for mds, too
-    dev = block_dev(dev, size, fstype, format)
-    lctl.newdev(attach="mds %s %s" % (name, uuid),
-                setup ="%s %s" %(dev, fstype))
-
-def prepare_osc(node):
-    (name, uuid, obduuid, ostuuid) = getOSCInfo(node)
-    print 'OSC:', name, uuid, obduuid, ostuuid
-    net = lookup(node.parentNode, ostuuid)
-    srvname, srvuuid, net, server, port, send_buf, read_buf = getNetworkInfo(net)
-    lctl.connect(net, server, port, ostuuid, send_buf, read_buf)
-    lctl.newdev(attach="osc %s %s" % (name, uuid),
-                setup ="%s %s" %(obduuid, ostuuid))
-
-def prepare_mdc(node):
-    (name, uuid, mdsuuid, netuuid) = getMDCInfo(node)
-    print 'MDC:', name, uuid, mdsuuid, netuuid
-    net = lookup(node.parentNode, netuuid)
-    srvname, srvuuid, net, server, port, send_buf, read_buf = getNetworkInfo(net)
-    mds = lookup(node.parentNode, mdsuuid)
-    if mds == None:
-        panic(mdsuuid, "not found.")
-    lctl.connect(net, server, port, netuuid, send_buf, read_buf)
-    lctl.newdev(attach="mdc %s %s" % (name, uuid),
-                setup ="%s %s" %(mdsuuid, netuuid))
-
-def prepare_mountpoint(node):
-    name, uuid, oscuuid, mdcuuid, mtpt = getMTPTInfo(node)
-    print 'MTPT:', name, uuid, oscuuid, mdcuuid, mtpt
-    cmd = "mount -t lustre_lite -o osc=%s,mdc=%s none %s" % \
-          (oscuuid, mdcuuid, mtpt)
-    run("mkdir", mtpt)
-    ret, val = run(cmd)
-    if ret:
-        print mtpt, "mount failed."
-# ============================================================
-# Functions to cleanup the various objects
-
-def cleanup_ldlm(node):
-    (name, uuid) = getNodeAttr(node)
-    print 'LDLM:', name, uuid
-    try:
-        lctl.cleanup(name, uuid)
-    except CommandError:
-        print "cleanup failed: ", name
-
-def cleanup_lov(node):
-    (name, uuid, mdcuuid, stripe_cnt, strip_sz, stripe_off, pattern, devlist, mdsname) = getLOVInfo(node)
-    print 'LOV:', name, uuid, mdcuuid, stripe_cnt, strip_sz, stripe_off, pattern, devlist, mdsname
-    try:
-        lctl.cleanup(name, uuid)
-    except CommandError:
-        print "cleanup failed: ", name
-
-def cleanup_network(node):
-    (name, uuid, type, nid, port, send_buf, read_buf) = getNetworkInfo(node)
-    print 'NETWORK:', name, uuid, type, nid, port
-    try:
-        lctl.cleanup("RPCDEV", "")
-    except CommandError:
-        print "cleanup failed: ", name
-    if type == 'tcp':
-        # yikes, this ugly! need to save pid in /var/something
-        run("killall acceptor")
-
-
-# need to check /proc/mounts and /etc/mtab before
-# formatting anything.
-# FIXME: check if device is already formatted.
-def cleanup_obd(obd):
-    (name, uuid, obdtype, dev, size, fstype, format) = getOBDInfo(obd)
-    print "OBD: ", name, obdtype, dev, size, fstype, format
-    try:
-        lctl.cleanup(name, uuid)
-    except CommandError:
-        print "cleanup failed: ", name
-    clean_loop(dev)
-
-def cleanup_ost(ost):
-    name, uuid, obd = getOSTInfo(ost)
-    print "OST: ", name, uuid, obd
-    try:
-        lctl.cleanup(name, uuid)
-    except CommandError:
-        print "cleanup failed: ", name
-
-def cleanup_mds(node):
-    (name, uuid, dev, size, fstype, format) = getMDSInfo(node)
-    print "MDS: ", name, dev, size, fstype
-    try:
-        lctl.cleanup(name, uuid)
-    except CommandError:
-        print "cleanup failed: ", name
-    clean_loop(dev)
-        
-
-def cleanup_mdc(node):
-    (name, uuid, mdsuuid, netuuid) = getMDCInfo(node)
-    print 'MDC:', name, uuid, mdsuuid, netuuid
-    net = lookup(node.parentNode, netuuid)
-    srvname, srvuuid, net, server, port, send_buf, read_buf = getNetworkInfo(net)
-    try:
-        lctl.disconnect(net, server, port, netuuid)
-        lctl.cleanup(name, uuid)
-    except CommandError:
-        print "cleanup failed: ", name
-
-
-def cleanup_osc(node):
-    (name, uuid, obduuid, ostuuid) = getOSCInfo(node)
-    print 'OSC:', name, uuid, obduuid, ostuuid
-    net = lookup(node.parentNode, ostuuid)
-    srvname, srvuuid, net, server, port, send_buf, read_buf = getNetworkInfo(net)
-    try:
-        lctl.disconnect(net, server, port, ostuuid)
-        lctl.cleanup(name, uuid)
-    except CommandError:
-        print "cleanup failed: ", name
-
-def cleanup_mountpoint(node):
-    name, uuid, oscuuid, mdcuuid, mtpt = getMTPTInfo(node)
-    print 'MTPT:', name, uuid, oscuuid, mdcuuid, mtpt
-    run("umount", mtpt)
+            panic("mount failed:", self.path)
+    def cleanup(self):
+        self.info(self.path, self.mdc_uuid,self.lov_uuid)
+        run("umount", self.path)
 
 # ============================================================
 # XML processing and query
+# TODO: Change query funcs to use XPath, which is muc cleaner
 
 def getDevice(obd):
     dev = obd.getElementsByTagName('device')[0]
@@ -518,98 +564,7 @@ def getDevice(obd):
     except ValueError:
         size = 0
     return dev.firstChild.data, size
-    
 
-def getNetworkInfo(node):
-    name, uuid = getNodeAttr(node);
-    type = node.getAttribute('type')
-    nid = getText(node, 'server', "")
-    port = int(getText(node, 'port', 0))
-    send_buf = int(getText(node, 'send_buf', 0))
-    read_buf = int(getText(node, 'read_buf', 0))
-    return name, uuid, type, nid, port, send_buf, read_buf
-    
-# extract device attributes for an obd
-def getNodeAttr(node):
-    name = node.getAttribute('name')
-    uuid = node.getAttribute('uuid')
-    return name, uuid
-
-def getOBDInfo(obd):
-    name, uuid = getNodeAttr(obd);
-    obdtype = obd.getAttribute('type')
-    devname, size = getDevice(obd)
-    fstype = getText(obd, 'fstype')
-    format = getText(obd, 'autoformat')
-    return (name, uuid, obdtype, devname, size, fstype, format)
-    
-# extract LOV
-def getLOVInfo(node):
-    name, uuid = getNodeAttr(node)
-    devs = node.getElementsByTagName('devices')[0]
-    stripe_sz = int(devs.getAttribute('stripesize'))
-    stripe_off = int(devs.getAttribute('stripeoffset'))
-    pattern = int(devs.getAttribute('pattern'))
-    mdcref =  node.getElementsByTagName('mdc_ref')[0]
-    mdcuuid = mdcref.getAttribute('uuidref')
-    mdc= lookup(node.parentNode, mdcuuid)
-    mdsref =  mdc.getElementsByTagName('mds_ref')[0]
-    mdsuuid = mdsref.getAttribute('uuidref')
-    mds= lookup(node.parentNode, mdsuuid)
-    mdsname = getName(mds)
-    devlist = ""
-    stripe_cnt = 0
-    for child in devs.childNodes:
-        if child.nodeName == 'osc_ref':
-            devlist = devlist +  child.getAttribute('uuidref') + " "
-            strip_cnt = stripe_cnt + 1
-    return (name, uuid, mdcuuid, stripe_cnt, stripe_sz, stripe_off, pattern, devlist, mdsname)
-    
-# extract device attributes for an obd
-def getMDSInfo(node):
-    name, uuid = getNodeAttr(node)
-    devname, size = getDevice(node)
-    fstype = getText(node, 'fstype')
-    format = getText(node, 'autoformat', "no")
-    return (name, uuid, devname, size, fstype, format)
-
-# extract device attributes for an obd
-def getMDCInfo(node):
-    name, uuid = getNodeAttr(node)
-    ref = node.getElementsByTagName('mds_ref')[0]
-    mdsuuid = ref.getAttribute('uuidref')
-    ref = node.getElementsByTagName('network_ref')[0]
-    netuuid = ref.getAttribute('uuidref')
-    return (name, uuid, mdsuuid, netuuid)
-
-    
-# extract device attributes for an obd
-def getOSTInfo(node):
-    name, uuid = getNodeAttr(node)
-    ref = node.getElementsByTagName('obd_ref')[0]
-    uuid = ref.getAttribute('uuidref')
-    return (name, uuid, uuid)
-
-# extract device attributes for an obd
-def getOSCInfo(node):
-    name, uuid = getNodeAttr(node)
-    ref = node.getElementsByTagName('obd_ref')[0]
-    obduuid = ref.getAttribute('uuidref')
-    ref = node.getElementsByTagName('network_ref')[0]
-    ostuuid = ref.getAttribute('uuidref')
-    return (name, uuid, obduuid, ostuuid)
-
-# extract device attributes for an obd
-def getMTPTInfo(node):
-    name, uuid = getNodeAttr(node)
-    path = getText(node, 'path')
-    ref = node.getElementsByTagName('mdc_ref')[0]
-    mdcuuid = ref.getAttribute('uuidref')
-    ref = node.getElementsByTagName('osc_ref')[0]
-    lovuuid = ref.getAttribute('uuidref')
-    return (name, uuid, lovuuid, mdcuuid, path)
-
-    
 # Get the text content from the first matching child
 def getText(node, tag, default=""):
     list = node.getElementsByTagName(tag)
@@ -695,33 +650,38 @@ def getByName(lustreNode, tag, name):
     
 
 # ============================================================
-# lconf type level logic
-#
-
-#
+# lconf level logic
 # Start a service.
-def startService(node):
+def startService(node, start=1):
     type = getServiceType(node)
     debug('Starting service:', type, getName(node), getUUID(node))
     # there must be a more dynamic way of doing this...
+    n = None
     if type == 'ldlm':
-        prepare_ldlm(node)
+        n = LDLM(node)
     elif type == 'lov':
-        prepare_lov(node)
+        n = LOV(node)
     elif type == 'network':
-        prepare_network(node)
+        n = Network(node)
     elif type == 'obd':
-        prepare_obd(node)
+        n = OBD(node)
     elif type == 'ost':
-        prepare_ost(node)
+        n = OST(node)
     elif type == 'mds':
-        prepare_mds(node)
+        n = MDS(node)
     elif type == 'osc':
-        prepare_osc(node)
+        n = OSC(node)
     elif type == 'mdc':
-        prepare_mdc(node)
+        n = MDC(node)
     elif type == 'mountpoint':
-        prepare_mountpoint(node)
+        n = Mountpoint(node)
+    else:
+        panic ("unknown service type:", type)
+
+    if start:
+        n.prepare()
+    else:
+        n.cleanup()
 
 #
 # Prepare the system to run lustre using a particular profile
@@ -739,30 +699,6 @@ def startProfile(lustreNode, profileNode):
         startService(s[1])
 
 
-# Stop a service.
-def stopService(node):
-    type = getServiceType(node)
-    debug('Stopping service:', type, getName(node), getUUID(node))
-    # there must be a more dynamic way of doing this...
-    if type == 'ldlm':
-        cleanup_ldlm(node)
-    elif type == 'lov':
-        cleanup_lov(node)
-    elif type == 'network':
-        cleanup_network(node)
-    elif type == 'obd':
-        cleanup_obd(node)
-    elif type == 'ost':
-        cleanup_ost(node)
-    elif type == 'mds':
-        cleanup_mds(node)
-    elif type == 'osc':
-        cleanup_osc(node)
-    elif type == 'mdc':
-        cleanup_mdc(node)
-    elif type == 'mountpoint':
-        cleanup_mountpoint(node)
-
 # Shutdown services in reverse order than they were started
 def cleanupProfile(lustreNode, profileNode):
     if not profileNode:
@@ -770,8 +706,7 @@ def cleanupProfile(lustreNode, profileNode):
     services = getServices(lustreNode, profileNode)
     services.reverse()
     for s in services:
-        stopService(s[1])
-
+        startService(s[1], 0)
 
 #
 # Load profile for 
@@ -793,7 +728,6 @@ def doHost(lustreNode, hosts, cleanFlag):
         else:
             startProfile(lustreNode,  lookup(lustreNode, getRef(r)))
 
-#
 # Command line processing
 #
 def parse_cmdline(argv):
@@ -866,9 +800,7 @@ def main():
             options['hostname'].append(host)
         options['hostname'].append('localhost')
     print "configuring for host: ", options['hostname']
-    doHost(dom.childNodes[0], options['hostname'], options.has_key('cleanup') )
+    doHost(dom.documentElement, options['hostname'], options.has_key('cleanup') )
 
 if __name__ == "__main__":
     main()
-
-
