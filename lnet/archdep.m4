@@ -298,4 +298,27 @@ AC_SUBST(MOD_LINK)
 AC_SUBST(LINUX25)
 AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 
+# ---------- Red Hat 2.4.20 backports some 2.5 bits --------
+# This needs to run after we've defined the KCPPFLAGS
 
+SAVE_CPPFLAGS=$CPPFLAGS
+SAVE_CFLAGS=$CFLAGS
+CPPFLAGS=$KCPPFLAGS
+CFLAGS=$KCFLAGS
+AC_MSG_CHECKING(for kernel version)
+AC_TRY_LINK([#define __KERNEL__
+             #include <linux/sched.h>],
+            [struct task_struct p;
+             p.sighand = NULL;],
+            [RH_2_4_20=0],
+            [RH_2_4_20=1])
+
+CPPFLAGS=$SAVE_CPPFLAGS
+CFLAGS=$SAVE_CFLAGS
+
+if test $RH_2_4_20 = 1; then
+	AC_MSG_RESULT(redhat-2.4.20)
+	CPPFLAGS="$CPPFLAGS -DCONFIG_RH_2_4_20"
+else
+	AC_MSG_RESULT($RELEASE)
+fi 
