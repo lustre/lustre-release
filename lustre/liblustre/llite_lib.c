@@ -493,8 +493,6 @@ int ll_parse_mount_target(const char *target, char **mdsnid,
         return -1;
 }
 
-static char *lustre_path = NULL;
-
 /* env variables */
 #define ENV_LUSTRE_MNTPNT               "LIBLUSTRE_MOUNT_POINT"
 #define ENV_LUSTRE_MNTTGT               "LIBLUSTRE_MOUNT_TARGET"
@@ -514,6 +512,7 @@ char   *g_zconf_profile = NULL; /* profile, for zeroconf */
 
 void __liblustre_setup_(void)
 {
+        char *lustre_path = NULL;
         char *target = NULL;
         char *timeout = NULL;
         char *dumpfile = NULL;
@@ -601,7 +600,6 @@ void __liblustre_setup_(void)
 
 void __liblustre_cleanup_(void)
 {
-        umount(lustre_path);
-        _sysio_shutdown();
+	_sysio_shutdown();
         PtlFini();
 }
