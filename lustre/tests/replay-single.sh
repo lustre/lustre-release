@@ -5,7 +5,7 @@ set -e
 # attempt to print a useful error location, but the ERR trap isn't
 # exported to functions, and the $LINENO doesn't work in EXIT.
 
-trap 'echo ERROR $0:$FUNCNAME:$LINENO: rc: $?' ERR EXIT
+trap 'echo ERROR $0:$FUNCNAME:$LINENO: rc: $?' EXIT
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
@@ -16,8 +16,11 @@ RPWD=${RPWD:-$PWD}
 
 . $LTESTDIR/functional/llite/common/common.sh
 
+CHECKSTAT="${CHECKSTAT:-checkstat} -v"
+
 # XXX I wish all this stuff was in some default-config.sh somewhere
-MOUNTPT=${MOUNTPT:-/mnt/lustre}
+MOUNT=${MOUNT:-/mnt/lustre}
+DIR=${DIR:-$MOUNT}
 MDSDEV=${MDSDEV:-/tmp/mds-`hostname`}
 MDSSIZE=${MDSSIZE:-100000}
 OSTDEV=${OSTDEV:-/tmp/ost-`hostname`}
@@ -50,7 +53,7 @@ fail() {
     local facet=$1
     stop $facet --force --failover --nomod
     start $facet --nomod
-    df $MOUNTPT
+    df $MOUNT
 }
 
 do_lmc() {
@@ -71,7 +74,7 @@ gen_config() {
     add_facet client --lustre_upcall $UPCALL
     do_lmc --add mds --node mds_facet --mds mds1 --dev $MDSDEV --size $MDSSIZE
     do_lmc --add ost --node ost_facet --ost ost1 --dev $OSTDEV --size $OSTSIZE
-    do_lmc --add mtpt --node client_facet --path $MOUNTPT --mds mds1 --ost ost1
+    do_lmc --add mtpt --node client_facet --path $MOUNT --mds mds1 --ost ost1
 }
 
 error() {
@@ -146,56 +149,61 @@ build_test_filter
 gen_config
 start mds --reformat $MDSLCONFARGS
 start ost --reformat $OSTLCONFARGS
-start client --gdb $CLIENTLCONFARGS
+start client $CLIENTLCONFARGS
+
+mkdir -p $DIR
 
 test_1() {
     replay_barrier mds
-    mcreate $MOUNTPT/f1
+    mcreate $DIR/f1
     fail mds
-    ls $MOUNTPT/f1
-    rm $MOUNTPT/f1
+    $CHECKSTAT -t file $DIR/f1 || error 
+    rm $DIR/f1
 }
 run_test 1 "simple create"
 
 test_2() {
     replay_barrier mds
-    mkdir $MOUNTPT/d2
-    mcreate $MOUNTPT/d2/f2
+    mkdir $DIR/d2
+    mcreate $DIR/d2/f2
     fail mds
-    ls $MOUNTPT/d2/f2
-    rm -fr $MOUNTPT/d2
+    $CHECKSTAT -t dir $DIR/d2 || error 
+    $CHECKSTAT -t file $DIR/d2/f2 || error 
+    rm -fr $DIR/d2
 }
 run_test 2 "mkdir + contained create"
 
 test_3() {
-    mkdir $MOUNTPT/d3
+    mkdir $DIR/d3
     replay_barrier mds
-    mcreate $MOUNTPT/d3/f3
+    mcreate $DIR/d3/f3
     fail mds
-    ls $MOUNTPT/d3/f3
-    rm -fr $MOUNTPT/d3
+    $CHECKSTAT -t dir $DIR/d3 || error 
+    $CHECKSTAT -t file $DIR/d3/f3 || error 
+    rm -fr $DIR/d3
 }
 run_test 3 "mkdir |X| contained create"
 
 test_4() {
     replay_barrier mds
-    multiop $MOUNTPT/f4 mo_c &
+    multiop $DIR/f4 mo_c &
     MULTIPID=$!
     sleep 1
     fail mds
-    ls $MOUNTPT/f4
+    ls $DIR/f4
+    $CHECKSTAT -t file $DIR/f4 || error 
     kill -USR1 $MULTIPID
     wait
-    rm $MOUNTPT/f4
+    rm $DIR/f4
 }
 run_test 4 "open |X| close"
 
 test_5() {
     replay_barrier mds
-    mcreate $MOUNTPT/f5
-    local old_inum=`ls -i $MOUNTPT/f5 | awk '{print $1}'`
+    mcreate $DIR/f5
+    local old_inum=`ls -i $DIR/f5 | awk '{print $1}'`
     fail mds
-    local new_inum=`ls -i $MOUNTPT/f5 | awk '{print $1}'`
+    local new_inum=`ls -i $DIR/f5 | awk '{print $1}'`
 
     echo " old_inum == $old_inum, new_inum == $new_inum"
     if [ $old_inum -eq $new_inum  ] ;
@@ -205,51 +213,51 @@ test_5() {
         echo "!!!! old_inum and new_inum NOT match"
 
     fi
-    rm -f $MOUNTPT/f5
+    rm -f $DIR/f5
 }
 run_test 5 "|X| create (same inum/gen)"
 
 test_6() {
-    mcreate $MOUNTPT/f6
+    mcreate $DIR/f6
     replay_barrier mds
-    mv $MOUNTPT/f6 $MOUNTPT/F6
-    rm -f $MOUNTPT/F6
+    mv $DIR/f6 $DIR/F6
+    rm -f $DIR/F6
     fail mds
-    checkstat $MOUNTPT/f6 && return 1
-    checkstat $MOUNTPT/F6 && return 2
+    $CHECKSTAT $DIR/f6 && return 1
+    $CHECKSTAT $DIR/F6 && return 2
     return 0
 }
 
 run_test 6 "create |X| rename unlink"
 
 test_7() {
-    mcreate $MOUNTPT/f7
-    echo "old" > $MOUNTPT/f7
-    mv $MOUNTPT/f7 $MOUNTPT/F7
+    mcreate $DIR/f7
+    echo "old" > $DIR/f7
+    mv $DIR/f7 $DIR/F7
     replay_barrier mds
-    mcreate $MOUNTPT/f7
-    echo "new" > $MOUNTPT/f7
-    cat $MOUNTPT/f7 | grep new 
-    cat $MOUNTPT/F7 | grep old
+    mcreate $DIR/f7
+    echo "new" > $DIR/f7
+    cat $DIR/f7 | grep new 
+    cat $DIR/F7 | grep old
     fail mds
-    cat $MOUNTPT/f7 | grep new
-    cat $MOUNTPT/F7 | grep old
+    cat $DIR/f7 | grep new
+    cat $DIR/F7 | grep old
 }
 run_test 7 "create open write rename |X| create-old-name read"
 
 test_8() {
-    mcreate $MOUNTPT/f8 
-    multiop $MOUNTPT/f8 o_tSc &
+    mcreate $DIR/f8 
+    multiop $DIR/f8 o_tSc &
     pid=$!
     # give multiop a chance to open
     sleep 1 
-    rm -f $MOUNTPT/f8
+    rm -f $DIR/f8
     replay_barrier mds
     kill -USR1 $pid
     wait $pid || return 1
 
     fail mds
-    [ -e $MOUNTPT/f8 ] && return 2
+    [ -e $DIR/f8 ] && return 2
     return 0
 }
 run_test 8 "open, unlink |X| close"
@@ -257,19 +265,19 @@ run_test 8 "open, unlink |X| close"
 # 1777 - replay open after committed chmod that would make
 #        a regular open a failure    
 test_9() {
-    mcreate $MOUNTPT/f9 
-    multiop $MOUNTPT/f9 O_wc &
+    mcreate $DIR/f9 
+    multiop $DIR/f9 O_wc &
     pid=$!
     # give multiop a chance to open
     sleep 1 
-    chmod 0 $MOUNTPT/f9
-    checkstat -v -p 0 $MOUNTPT/f9
+    chmod 0 $DIR/f9
+    $CHECKSTAT -p 0 $DIR/f9
     replay_barrier mds
     fail mds
     kill -USR1 $pid
     wait $pid || return 1
 
-    checkstat -v -s 1 $MOUNTPT/f9
+    $CHECKSTAT -s 1 $DIR/f9
     return 0
 }
 run_test 9 "open chmod 0 |x| write close"
