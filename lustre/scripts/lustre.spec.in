@@ -62,7 +62,7 @@ Configures openldap server for LDAP Lustre config database
 %setup -qn lustre-%{version}
 #%setup -c -n lustre-%{version}-lib
 %if %{enable_doc}
-  %define disable_doc
+  %define disable_doc ''
 %else
   %define disable_doc --disable-doc
 %endif

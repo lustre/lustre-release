@@ -22,7 +22,7 @@ if SNAPFS
 SUBDIRS+= snapfs
 endif
 
-DIST_SUBDIRS = $(SUBDIRS) liblustre
+DIST_SUBDIRS = $(SUBDIRS) liblustre snapfs
 EXTRA_DIST = BUGS FDL Rules kernel_patches
 
 # We get the version from the spec file.
