@@ -1583,7 +1583,7 @@ kqswnal_rxhandler(EP_RXD *rxd)
                rxd, krx, nob, status);
 
         LASSERT (krx != NULL);
-        LASSERT (krx->krx_state = KRX_POSTED);
+        LASSERT (krx->krx_state == KRX_POSTED);
         
         krx->krx_state = KRX_PARSE;
         krx->krx_rxd = rxd;
