@@ -57,7 +57,7 @@ setup() {
     insmod $SRCDIR/../../portals/linux/qswnal/kqswnal.o
     insmod $SRCDIR/../../portals/linux/socknal/ksocknal.o || exit -1
 
-    [ "$NETWORK" = "tcp" ] && $ACCEPTOR $PORT &
+    [ "$NETWORK" = "tcp" ] && ($ACCEPTOR $PORT &)
 
     [ -c /dev/obd ] || mknod /dev/obd c 10 241
 
