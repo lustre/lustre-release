@@ -2215,10 +2215,11 @@ test_65e() {
 	mkdir -p $DIR/d65
 
 	$LSTRIPE $DIR/d65 0 -1 0 || error "setstripe"
+        $LFS find -v $DIR/d65 | grep "$DIR/d65/ has no stripe info" || error "no stripe info failed"
 	touch $DIR/d65/f6
 	$LVERIFY $DIR/d65 $DIR/d65/f6 || error "lverify failed"
 }
-run_test 65e "directory setstripe 0 -1 0 (default) ============="
+run_test 65e "directory setstripe 0 -1 0 ============="
 
 test_65f() {
 	mkdir -p $DIR/d65f
@@ -2226,6 +2227,23 @@ test_65f() {
 }
 run_test 65f "dir setstripe permission (should return error) ==="
 
+test_65g() {
+        mkdir -p $DIR/d65
+        $LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+        $LSTRIPE -d $DIR/d65 || error "setstripe"
+        $LFS find -v $DIR/d65 | grep "$DIR/d65/ has no stripe info" || error "no stripe info failed"	
+}
+run_test 65g "directory setstripe -d ========"
+
+test_65h() {
+        mkdir -p $DIR/d65
+        $LSTRIPE $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error "setstripe"
+        mkdir -p $DIR/d65/dd1
+        [ "`$LFS find -v $DIR/d65 | grep "^count"`" == \
+          "`$LFS find -v $DIR/d65/dd1 | grep "^count"`" ] || error "stripe info inherit failed"
+}
+run_test 65h "directory stripe info inherit ======"
+ 
 # bug 2543 - update blocks count on client
 test_66() {
 	COUNT=${COUNT:-8}

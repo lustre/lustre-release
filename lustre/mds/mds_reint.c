@@ -435,22 +435,34 @@ static int mds_reint_setattr(struct mds_update_record *rec, int offset,
         if (rc == 0 && (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode)) &&
             rec->ur_eadata != NULL) {
                 struct lov_stripe_md *lsm = NULL;
+                struct lov_user_md *lum = NULL;
 
                 rc = ll_permission(inode, MAY_WRITE, NULL);
                 if (rc < 0)
                         GOTO(cleanup, rc);
 
-                rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                   mds->mds_osc_exp, 0, &lsm, rec->ur_eadata);
-                if (rc)
-                        GOTO(cleanup, rc);
+                lum = rec->ur_eadata;
+                /* if lmm_stripe_size is -1,  then delete the stripe 
+                        info from the dir */
+                if (S_ISDIR(inode->i_mode) && 
+                    lum->lmm_stripe_size == (typeof(lum->lmm_stripe_size))(-1)){
+                        rc = fsfilt_set_md(obd, inode, handle, NULL, 0);
+                        if (rc)
+                                GOTO(cleanup, rc);
+                } else {
+                        rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
+                                           mds->mds_osc_exp, 0, 
+                                           &lsm, rec->ur_eadata);
+                        if (rc)
+                                GOTO(cleanup, rc);
+                        
+                        obd_free_memmd(mds->mds_osc_exp, &lsm);
 
-                obd_free_memmd(mds->mds_osc_exp, &lsm);
-
-                rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
-                                   rec->ur_eadatalen);
-                if (rc)
-                        GOTO(cleanup, rc);
+                        rc = fsfilt_set_md(obd, inode, handle, rec->ur_eadata,
+                                           rec->ur_eadatalen);
+                        if (rc)
+                                GOTO(cleanup, rc);
+                }
         }
 
         body = lustre_msg_buf(req->rq_repmsg, 0, sizeof (*body));
@@ -711,6 +723,21 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 rc = fsfilt_setattr(obd, dparent, handle, &iattr, 0);
                 if (rc)
                         CERROR("error on parent setattr: rc = %d\n", rc);
+
+                if (S_ISDIR(inode->i_mode)) {
+                        struct lov_mds_md lmm;
+                        int lmm_size = sizeof(lmm);
+                        rc = mds_get_md(obd, dir, &lmm, &lmm_size, 1);
+                        if (rc > 0) {
+                                down(&inode->i_sem);
+                                rc = fsfilt_set_md(obd, inode, handle, 
+                                                   &lmm, lmm_size);
+                                up(&inode->i_sem);
+                        }
+                        if (rc)
+                                CERROR("error on copy stripe info: rc = %d\n", 
+                                        rc);
+                }
 
                 body = lustre_msg_buf(req->rq_repmsg, offset, sizeof (*body));
                 mds_pack_inode2fid(&body->fid1, inode);

@@ -54,8 +54,11 @@ static int lfs_catinfo(int argc, char **argv);
 command_t cmdlist[] = {
         {"setstripe", lfs_setstripe, 0,
          "Create a new file with a specific striping pattern or\n"
-         "Set the default striping pattern on an existing directory\n"
+         "set the default striping pattern on an existing directory or\n"
+         "delete the default striping pattern from an existing directory\n"
          "usage: setstripe <filename|dirname> <stripe size> <stripe start> <stripe count>\n"
+         "       or \n"
+         "       setstripe -d <dirname>\n"
          "\tstripe size:  Number of bytes in each stripe (0 default)\n"
          "\tstripe start: OST index of first stripe (-1 default)\n"
          "\tstripe count: Number of OSTs to stripe over (0 default, -1 all)"},
@@ -85,52 +88,66 @@ command_t cmdlist[] = {
 /* functions */
 static int lfs_setstripe(int argc, char **argv)
 {
+        char *fname;
         int result;
         long st_size;
         int  st_offset, st_count;
         char *end;
         int page_size;
 
-        if (argc != 5)
+        if (argc != 5 && argc != 3)
                 return CMD_HELP;
 
-        // get the stripe size
-        st_size = strtoul(argv[2], &end, 0);
-        if (*end != '\0') {
-                fprintf(stderr, "error: %s: bad stripe size '%s'\n",
+
+        if (argc == 3) {
+                if (strcmp(argv[1], "-d") != 0)
+                        return CMD_HELP;
+                
+                fname = argv[2];
+                st_size = -1;
+                st_count = 0;
+                st_offset = 0;
+        } else {
+                fname = argv[1];
+
+                // get the stripe size
+                st_size = strtoul(argv[2], &end, 0);
+                if (*end != '\0') {
+                        fprintf(stderr, "error: %s: bad stripe size '%s'\n",
                                 argv[0], argv[2]);
-                return CMD_HELP;
-        }
-        /* 64 KB is the largest common page size I'm aware of (on ia64), but
-         * check the local page size just in case. */
-        page_size = 65536;
-        if (getpagesize() > page_size) {
-                fprintf(stderr, "WARNING: your page size (%d) is larger than "
-                        "expected.\n", getpagesize());
-                page_size = getpagesize();
-        }
-        if (st_size % page_size) {
-                fprintf(stderr, "FATAL: stripe_size must be an even multiple "
-                        "of %d bytes.\n", page_size);
-                return CMD_HELP;
-        }
-
-        // get the stripe offset
-        st_offset = strtoul(argv[3], &end, 0);
-        if (*end != '\0') {
-                fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
+                        return CMD_HELP;
+                }
+                /* 64 KB is the largest common page size I'm aware of (on ia64), but
+                 * check the local page size just in case. */
+                page_size = 65536;
+                if (getpagesize() > page_size) {
+                        fprintf(stderr, "WARNING: your page size (%d) is larger than "
+                                "expected.\n", getpagesize());
+                        page_size = getpagesize();
+                }
+                if (st_size % page_size) {
+                        fprintf(stderr, "FATAL: stripe_size must be an even multiple "
+                                "of %d bytes.\n", page_size);
+                        return CMD_HELP;
+                }
+                
+                // get the stripe offset
+                st_offset = strtoul(argv[3], &end, 0);
+                if (*end != '\0') {
+                        fprintf(stderr, "error: %s: bad stripe offset '%s'\n",
                                 argv[0], argv[3]);
-                return CMD_HELP;
-        }
-        // get the stripe count
-        st_count = strtoul(argv[4], &end, 0);
-        if (*end != '\0') {
-                fprintf(stderr, "error: %s: bad stripe count '%s'\n",
+                        return CMD_HELP;
+                }
+                // get the stripe count
+                st_count = strtoul(argv[4], &end, 0);
+                if (*end != '\0') {
+                        fprintf(stderr, "error: %s: bad stripe count '%s'\n",
                                 argv[0], argv[4]);
-                return CMD_HELP;
+                        return CMD_HELP;
+                }
         }
 
-        result = llapi_file_create(argv[1], st_size, st_offset, st_count, 0);
+        result = llapi_file_create(fname, st_size, st_offset, st_count, 0);
         if (result)
                 fprintf(stderr, "error: %s: create stripe file failed\n",
                                 argv[0]);

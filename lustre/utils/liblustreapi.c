@@ -66,6 +66,7 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
 {
         struct lov_user_md lum = { 0 };
         int fd, rc = 0;
+        int isdir = 0;
 
         /*  Initialize IOCTL striping pattern structure  */
         lum.lmm_magic = LOV_USER_MAGIC;
@@ -75,13 +76,28 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
         lum.lmm_stripe_offset = stripe_offset;
 
         fd = open(name, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644);
-        if (errno == EISDIR)
+        if (errno == EISDIR) {
                 fd = open(name, O_DIRECTORY | O_RDONLY);
+                isdir++;
+        }
 
         if (fd < 0) {
                 err_msg("unable to open '%s'",name);
                 rc = -errno;
                 return rc;
+        }
+
+        /* setting stripe pattern 0 -1 0 to a dir means to delete it */
+        if (isdir) {
+                if (stripe_size == 0 && stripe_count == 0 &&
+                    stripe_offset == -1)
+                        lum.lmm_stripe_size = -1;
+        } else {
+                if (stripe_size == -1) {
+                        err_msg("deleting file stripe info is not allowed\n");
+                        rc = -EPERM;
+                        goto out;
+                }
         }
 
         if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, &lum)) {
@@ -93,6 +109,7 @@ int llapi_file_create(char *name, long stripe_size, int stripe_offset,
                         (__u64)LL_IOC_LOV_SETSTRIPE, name, fd, errmsg);
                 rc = -errno;
         }
+out:
         if (close(fd) < 0) {
                 err_msg("error on close for '%s' (%d)", name, fd);
                 if (rc == 0)

@@ -13,6 +13,8 @@
 	- fix rename of one directory over another leaking an inode (5953)
 	- avoid SetPageDirty on 2.6 (5981)
 	- don't re-add just-being-destroyed locks to the waiting list (5653)
+	- when creating new directories, inherit the parent's custom
+	  striping settings if present parent (3048)
        * miscellania
 	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
 	- allow --write-conf on an MDS with different nettype than client (5619)
@@ -21,9 +23,9 @@
 	- init scripts are now turned off by default; run chkconfig --on
 	  lustre and chkconfig --on lustrefs to use them
 	- upcalls are no longer needed for clients to recover to failover 
-	servers	(3262)
+	  servers (3262)
 	- add --abort-recovery option to lconf to abort recovery on device
-	startup (6017)
+	  startup (6017)
 
 2005-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
