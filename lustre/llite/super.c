@@ -63,7 +63,7 @@ static char *ll_read_opt(const char *opt, char *data)
         }
         
         memcpy(retval, value, strlen(value)+1);
-        CDEBUG(D_PSDEV, "Assigned option: %s, value %s\n", opt, retval);
+        CDEBUG(D_SUPER, "Assigned option: %s, value %s\n", opt, retval);
 	EXIT;
         return retval;
 }
@@ -211,8 +211,8 @@ static void ll_delete_inode(struct inode *inode)
 		}
 
 		err = obd_destroy(IID(inode), oa); 
-		printk(__FUNCTION__  ": obd destroy of %Ld error %d\n", 
-		       oa->o_id, err);
+                CDEBUG(D_LLIGHT, "obd destroy of %Ld error %d\n",
+                       oa->o_id, err);
 		obdo_free(oa);
 	}
 

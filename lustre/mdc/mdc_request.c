@@ -77,7 +77,7 @@ struct ptlrpc_request *mds_prep_req(int opcode, int namelen, char *name,
 		printk("llight request: cannot pack request %d\n", rc); 
 		return NULL;
 	}
-	printk("--> mds_prep_req: len %d, req %p, tgtlen %d\n", 
+        CDEBUG(D_MDC, "--> mds_prep_req: len %d, req %p, tgtlen %d\n", 
 	       request->rq_reqlen, request->rq_req.mds, 
 	       request->rq_req.mds->tgtlen);
 	request->rq_reqhdr->opc = opcode;
@@ -93,7 +93,7 @@ static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 	/* XXX fix the race here (wait_for_event?)*/
 	if (peer == NULL) {
 		/* Local delivery */
-		printk("--->> %s %d\n", __FUNCTION__, __LINE__);
+                ENTRY;
 		rc = mds_queue_req(req); 
 	} else {
 		/* Remote delivery via portals. */
@@ -108,9 +108,9 @@ static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 	}
 
 	init_waitqueue_head(&req->rq_wait_for_rep);
-	printk("-- sleeping\n");
+        CDEBUG(D_MDC, "-- sleeping\n");
 	interruptible_sleep_on(&req->rq_wait_for_rep);
-	printk("-- done\n");
+        CDEBUG(D_MDC, "-- done\n");
 
 	rc = mds_unpack_rep(req->rq_repbuf, req->rq_replen, &req->rq_rephdr, 
 			    &req->rq_rep.mds);
@@ -120,7 +120,7 @@ static int mds_queue_wait(struct ptlrpc_request *req, struct lustre_peer *peer)
 	}
 
 	if ( req->rq_rephdr->status == 0 )
-		printk("-->mdc_queue_wait: buf %p len %d status %d\n", 
+                CDEBUG(D_MDC, "--> buf %p len %d status %d\n",
 		       req->rq_repbuf, req->rq_replen, 
 		       req->rq_rephdr->status); 
 
@@ -157,7 +157,7 @@ int mdc_getattr(struct lustre_peer *peer, ino_t ino, int type, int valid,
 		goto out;
 	}
 
-	printk("mds_getattr: mode: %o\n", request->rq_rep.mds->mode); 
+        CDEBUG(D_MDC, "mode: %o\n", request->rq_rep.mds->mode);
 
 	if (rep) { 
 		*rep = request->rq_rep.mds;
@@ -180,7 +180,7 @@ int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
 
 	niobuf.addr = (__u64) (long) addr;
 
-	printk("mdc_readpage: inode: %ld\n", ino); 
+        CDEBUG(D_MDC, "inode: %ld\n", ino);
 
 	request = mds_prep_req(MDS_READPAGE, 0, NULL,
 			       sizeof(struct niobuf), (char *)&niobuf);
@@ -204,7 +204,7 @@ int mdc_readpage(struct lustre_peer *peer, ino_t ino, int type, __u64 offset,
 		goto out;
 	}
 
-	printk("mdc_readpage: mode: %o\n", request->rq_rep.mds->mode); 
+        CDEBUG(D_MDC, "mode: %o\n", request->rq_rep.mds->mode);
 
 	if (rep) { 
 		*rep = request->rq_rep.mds;

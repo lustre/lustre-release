@@ -53,7 +53,7 @@ static int mds_queue_req(struct ptlrpc_request *req)
 		return -ENOMEM;
 	}
 
-	printk("---> MDS at %d %p, incoming req %p, srv_req %p\n", 
+        CDEBUG(D_MDS, "---> MDS at %d %p, incoming req %p, srv_req %p\n",
 	       __LINE__, MDS, req, srv_req);
 
 	memset(srv_req, 0, sizeof(*req)); 
@@ -190,7 +190,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
 	if (inode == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	printk("--> mds_fid2dentry: sb %p\n", inode->i_sb); 
+	CDEBUG(D_MDS, "--> mds_fid2dentry: sb %p\n", inode->i_sb); 
 
 	if (is_bad_inode(inode)
 	    || (generation && inode->i_generation != generation)
@@ -311,7 +311,7 @@ int mds_readpage(struct ptlrpc_request *req)
 		return 0;
 	}
 
-	printk("mds_readpage: ino %ld\n", de->d_inode->i_ino);
+        CDEBUG(D_MDS, "ino %ld\n", de->d_inode->i_ino);
 
 	file = dentry_open(de, mnt, O_RDONLY | O_LARGEFILE); 
 	/* note: in case of an error, dentry_open puts dentry */

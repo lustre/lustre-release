@@ -63,7 +63,7 @@ static char *obdfs_read_opt(const char *opt, char *data)
         }
         
         memcpy(retval, value, strlen(value)+1);
-        CDEBUG(D_PSDEV, "Assigned option: %s, value %s\n", opt, retval);
+        CDEBUG(D_SUPER, "Assigned option: %s, value %s\n", opt, retval);
         return retval;
 }
 

@@ -43,7 +43,7 @@ static int mds_reint_setattr(struct mds_update_record *rec, struct ptlrpc_reques
 		return 0;
 	}
 
-	printk("mds_setattr: ino %ld\n", de->d_inode->i_ino);
+        CDEBUG(D_MDS, "ino %ld\n", de->d_inode->i_ino);
 
 	/* a _really_ horrible hack to avoid removing the data stored
 	   in the block pointers; this data is the object id 
@@ -99,7 +99,7 @@ static int mds_reint_create(struct mds_update_record *rec,
 		EXIT;
 		return 0;
 	}
-	printk("mds_reint_create: ino %ld\n", de->d_inode->i_ino);
+        CDEBUG(D_MDS, "ino %ld\n", de->d_inode->i_ino);
 
 	dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
 	rc = PTR_ERR(dchild);
@@ -180,7 +180,7 @@ static int mds_reint_unlink(struct mds_update_record *rec,
 		EXIT;
 		return 0;
 	}
-	printk("mds_reint_create: ino %ld\n", de->d_inode->i_ino);
+        CDEBUG(D_MDS, "ino %ld\n", de->d_inode->i_ino);
 
 	dchild = lookup_one_len(rec->ur_name, de, rec->ur_namelen - 1);
 	rc = PTR_ERR(dchild);

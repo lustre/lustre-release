@@ -55,7 +55,7 @@ static int ost_queue_req(struct obd_device *obddev, struct ptlrpc_request *req)
 		return -ENOMEM;
 	}
 
-	printk("---> OST at %d %p, incoming req %p, srv_req %p\n", 
+        CDEBUG(D_OST, "---> OST at %d %p, incoming req %p, srv_req %p\n",
 	       __LINE__, ost, req, srv_req);
 
 	memset(srv_req, 0, sizeof(*req)); 
@@ -160,7 +160,6 @@ static int ost_getattr(struct ost_obd *ost, struct ptlrpc_request *req)
 	int rc;
 
 	ENTRY;
-	printk("ost getattr entered\n"); 
 	
 	conn.oc_id = req->rq_req.ost->connid;
 	conn.oc_dev = ost->ost_tgt;
@@ -253,7 +252,7 @@ static int ost_connect(struct ost_obd *ost, struct ptlrpc_request *req)
 
 	req->rq_rep.ost->result =ost->ost_tgt->obd_type->typ_ops->o_connect(&conn);
 
-	printk("ost_connect: rep buffer %p, id %d\n", req->rq_repbuf, 
+        CDEBUG(D_OST, "ost_connect: rep buffer %p, id %d\n", req->rq_repbuf,
 	       conn.oc_id);
 	req->rq_rep.ost->connid = conn.oc_id;
 	EXIT;
@@ -398,7 +397,7 @@ int ost_handle(struct obd_device *obddev, struct ptlrpc_request *req)
 	struct ptlreq_hdr *hdr;
 
 	ENTRY;
-	printk("ost_handle: req at %p\n", req); 
+        CDEBUG(D_OST, "req at %p\n", req);
 
 	hdr = (struct ptlreq_hdr *)req->rq_reqbuf;
 	if (NTOH__u32(hdr->type) != OST_TYPE_REQ) {

@@ -3,7 +3,7 @@ DEFS:=
 bin_SCRIPTS = obdcontrol
 EXTRA_DIST = $(bin_SCRIPTS)
 
-CFLAGS:=-g -I. -I/usr/include/glib-1.2 -I/usr/lib/glib/include -I../include -Wall
+CFLAGS:=-g -I. -I/usr/include/glib-1.2 -I$(PORTALS)/include -I/usr/lib/glib/include -I../include -Wall
 KFLAGS:=
 CPPFLAGS :=
 LDADD := -lreadline -ltermcap # -lefence
