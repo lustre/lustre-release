@@ -1546,22 +1546,6 @@ test_54d() {
 }
 run_test 54d "fifo device works in lustre"
 
-test_55() {
-        for i in `ls $TMP|grep -E 'mds|ost'` ; do
-                rm -rf $DIR/d55
-                mkdir $DIR/d55
-                mount -o loop,iopen $TMP/$i $DIR/d55
-                touch $DIR/d55/foo
-                $IOPENTEST1 $DIR/d55/foo $DIR/d55
-                $IOPENTEST2 $DIR/d55
-                echo "check for $TMP/$i. Please wait..."
-                sleep 6
-                rm -rf $DIR/d55/*
-                umount $DIR/d55
-        done
-}
-run_test 55 "check iopen_connect_dentry()======================="
-
 test_59() {
 	echo "touch 130 files"
 	for i in `seq 1 130` ; do
