@@ -1,3 +1,9 @@
+TBD
+	* version TBD
+	* bug fixes
+	  - fix removal of OSCs from LOV when they fail
+	  - fix NULL deref during bulk timeout (214)
+
 2002-10-28  Andreas Dilger  <adilger@clusterfs.com>
 	* version v0_5_16
 	* bug fixes:
