@@ -134,6 +134,7 @@ void reconstruct_open(struct mds_update_record *rec, struct ptlrpc_request *req)
 
         if ((obd->obd_flags & OBD_RECOVERING) == 0) {
                 struct list_head *t;
+                mfd = NULL;
                 list_for_each(t, &med->med_open_head) {
                         mfd = list_entry(t, struct mds_file_data, mfd_list);
                         if (mfd->mfd_xid == req->rq_xid)
