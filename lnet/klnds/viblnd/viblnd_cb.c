@@ -499,13 +499,12 @@ kibnal_rx_complete (kib_rx_t *rx, vv_comp_status_t vvrc, int nob)
 
 #if IBNAL_WHOLE_MEM
 int
-kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active, struct page *page, 
-                     unsigned long page_offset, unsigned long len)
+kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active,
+                     void *addr, int len)
 {
         kib_rdma_frag_t *frag = &rd->rd_frags[rd->rd_nfrag];
         vv_l_key_t       l_key;
         vv_r_key_t       r_key;
-        void            *addr;
         void            *vaddr;
         vv_mem_reg_h_t   mem_h;
         vv_return_t      vvrc;
@@ -515,13 +514,9 @@ kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active, struct page *page,
                 return -EMSGSIZE;
         }
 
-        addr = (void *)(((unsigned long)kmap(page)) + page_offset);
-
-        vvrc = vv_get_gen_mr_attrib(kibnal_data.kib_hca, addr,
-                                    len, &mem_h, &l_key, &r_key);
+        vvrc = vv_get_gen_mr_attrib(kibnal_data.kib_hca, addr, len, 
+                                    &mem_h, &l_key, &r_key);
         LASSERT (vvrc == vv_return_ok);
-
-        kunmap(page);
 
         if (active) {
                 if (rd->rd_nfrag == 0) {
@@ -551,26 +546,6 @@ kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active, struct page *page,
         return 0;
 }
 
-struct page *
-kibnal_kvaddr_to_page (unsigned long vaddr)
-{
-        struct page *page;
-
-        if (vaddr >= VMALLOC_START &&
-            vaddr < VMALLOC_END)
-                page = vmalloc_to_page ((void *)vaddr);
-#if CONFIG_HIGHMEM
-        else if (vaddr >= PKMAP_BASE &&
-                 vaddr < (PKMAP_BASE + LAST_PKMAP * PAGE_SIZE))
-                page = vmalloc_to_page ((void *)vaddr);
-        /* in 2.4 ^ just walks the page tables */
-#endif
-        else
-                page = virt_to_page (vaddr);
-
-        return VALID_PAGE(page) ? page : NULL;
-}
-
 int
 kibnal_setup_rd_iov(kib_tx_t *tx, kib_rdma_desc_t *rd, 
                     vv_access_con_bit_mask_t access,
@@ -582,7 +557,6 @@ kibnal_setup_rd_iov(kib_tx_t *tx, kib_rdma_desc_t *rd,
         int           fragnob;
         int           rc;
         unsigned long vaddr;
-        struct page  *page;
         int           page_offset;
 
         LASSERT (nob > 0);
@@ -602,17 +576,12 @@ kibnal_setup_rd_iov(kib_tx_t *tx, kib_rdma_desc_t *rd,
 
                 vaddr = ((unsigned long)iov->iov_base) + offset;
                 page_offset = vaddr & (PAGE_SIZE - 1);
-                page = kibnal_kvaddr_to_page(vaddr);
-                if (page == NULL) {
-                        CERROR ("Can't find page\n");
-                        return -EFAULT;
-                }
 
                 fragnob = min((int)(iov->iov_len - offset), nob);
                 fragnob = min(fragnob, (int)PAGE_SIZE - page_offset);
 
-                rc = kibnal_append_rdfrag(rd, active, page, 
-                                          page_offset, fragnob);
+                rc = kibnal_append_rdfrag(rd, active, 
+                                          (void *)vaddr, fragnob);
                 if (rc != 0)
                         return rc;
 
@@ -636,6 +605,7 @@ kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd,
 {
         /* active if I'm sending */
         int            active = ((access & vv_acc_r_mem_write) == 0);
+        unsigned long  vaddr;
         int            fragnob;
         int            rc;
 
@@ -656,10 +626,13 @@ kibnal_setup_rd_kiov (kib_tx_t *tx, kib_rdma_desc_t *rd,
         do {
                 LASSERT (nkiov > 0);
                 fragnob = min((int)(kiov->kiov_len - offset), nob);
-                
-                rc = kibnal_append_rdfrag(rd, active, kiov->kiov_page,
-                                          kiov->kiov_offset + offset,
-                                          fragnob);
+                vaddr = ((unsigned long)kmap(kiov->kiov_page)) + 
+                        kiov->kiov_offset + offset;
+
+                rc = kibnal_append_rdfrag(rd, active,
+                                          (void *)vaddr, fragnob);
+                kunmap(kiov->kiov_page);
+
                 if (rc != 0)
                         return rc;
 
