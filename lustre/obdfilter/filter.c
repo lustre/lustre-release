@@ -2507,6 +2507,7 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
         struct llog_cookie *fcc = NULL;
         int rc, rc2, cleanup_phase = 0, have_prepared = 0;
         void *lock = NULL;
+        struct iattr iattr;
         ENTRY;
 
         LASSERT(oa->o_valid & OBD_MD_FLGROUP);
@@ -2554,18 +2555,44 @@ static int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 goto acquire_locks;
         }
 
-        handle = fsfilt_start_log(obd, dparent->d_inode,FSFILT_OP_UNLINK,oti,1);
-        if (IS_ERR(handle))
-                GOTO(cleanup, rc = PTR_ERR(handle));
-
-        cleanup_phase = 3;
-
         /* Our MDC connection is established by the MDS to us */
         if (oa->o_valid & OBD_MD_FLCOOKIE) {
                 OBD_ALLOC(fcc, sizeof(*fcc));
                 if (fcc != NULL)
                         memcpy(fcc, obdo_logcookie(oa), sizeof(*fcc));
         }
+
+        /* we're gonna truncate it first in order to avoid possible
+         * deadlock:
+         *      P1                      P2
+         * open trasaction      open transaction
+         * down(i_zombie)       down(i_zombie)
+         *                      restart transaction
+         * (see BUG 4180) -bzzz
+         */
+        down(&dchild->d_inode->i_sem);
+        handle = fsfilt_start_log(obd, dparent->d_inode,FSFILT_OP_SETATTR,NULL,1);
+        if (IS_ERR(handle)) {
+                up(&dchild->d_inode->i_sem);
+                GOTO(cleanup, rc = PTR_ERR(handle));
+        }
+
+        iattr.ia_valid = ATTR_SIZE;
+        iattr.ia_size = 0;
+        rc = fsfilt_setattr(obd, dchild, handle, &iattr, 1);
+
+        rc2 = fsfilt_commit(obd, filter->fo_sb, dparent->d_inode, handle, 0);
+        up(&dchild->d_inode->i_sem);
+        if (rc)
+                GOTO(cleanup, rc);
+        if (rc2)
+                GOTO(cleanup, rc = rc2);
+
+        handle = fsfilt_start_log(obd, dparent->d_inode,FSFILT_OP_UNLINK,oti,1);
+        if (IS_ERR(handle))
+                GOTO(cleanup, rc = PTR_ERR(handle));
+
+        cleanup_phase = 3;
 
         rc = filter_destroy_internal(obd, oa->o_id, dparent, dchild);
 
