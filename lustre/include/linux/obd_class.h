@@ -39,6 +39,7 @@
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
+#include <linux/lustre_mds.h>
 #endif
 
 
@@ -74,6 +75,11 @@ struct obd_export {
         struct list_head exp_chain;
         struct obd_device *exp_obd;
         struct ptlrpc_connection *exp_connection;
+        struct mds_export_data exp_mds_data;
+#if NOTYET && 0
+        struct ldlm_export_data exp_ldlm_data;
+        struct ost_export_data exp_ost_data;
+#endif
         void *exp_data; /* device specific data */
         int exp_desclen;
         char *exp_desc;
@@ -701,6 +707,7 @@ int class_unregister_type(char *nm);
 int class_name2dev(char *name);
 int class_uuid2dev(char *name);
 struct obd_device *class_uuid2obd(char *name);
+struct obd_export *class_new_export(struct obd_device *obddev);
 int class_connect (struct lustre_handle *conn, struct obd_device *obd);
 int class_disconnect(struct lustre_handle *conn);
 struct obd_export *class_conn2export(struct lustre_handle *);

@@ -29,61 +29,30 @@
 
 extern inline struct mds_obd *mds_req2mds(struct ptlrpc_request *req);
 
-struct mds_client_info *mds_uuid_to_mci(struct mds_obd *mds, __u8 *uuid)
-{
-        struct list_head *p;
-
-        if (!uuid)
-                return NULL;
-
-        list_for_each(p, &mds->mds_client_info) {
-                struct mds_client_info *mci;
-
-                mci = list_entry(p, struct mds_client_info, mci_list);
-                CDEBUG(D_INFO, "checking client UUID '%s'\n",
-                       mci->mci_mcd->mcd_uuid);
-                if (!strncmp(mci->mci_mcd->mcd_uuid, uuid,
-                             sizeof(mci->mci_mcd->mcd_uuid)))
-                        return mci;
-        }
-        CDEBUG(D_INFO, "no mds client info found for  UUID '%s'\n", uuid);
-        return NULL;
-}
-
 /* Assumes caller has already pushed us into the kernel context. */
 int mds_update_last_rcvd(struct mds_obd *mds, void *handle,
                          struct ptlrpc_request *req)
 {
-        /* get from req->rq_connection-> or req->rq_client */
-        struct mds_client_info *mci;
+        struct mds_export_data *med = &req->rq_export->exp_mds_data;
+        struct mds_client_data *mcd = med->med_mcd;
         loff_t off;
         int rc;
 
-        mci = mds_uuid_to_mci(mds, req->rq_connection->c_remote_uuid);
-        if (!mci) {
-                CERROR("unable to locate MDS client data for UUID '%s'\n",
-                       ptlrpc_req_to_uuid(req));
-                /* This will be a real error once everything is working */
-                //LBUG();
-                RETURN(0);
-        }
-
-        off = MDS_LR_CLIENT + mci->mci_off * MDS_LR_SIZE;
+        off = MDS_LR_CLIENT + med->med_off * MDS_LR_SIZE;
 
         ++mds->mds_last_rcvd;   /* lock this, or make it an LDLM function? */
         req->rq_repmsg->transno = HTON__u64(mds->mds_last_rcvd);
-        mci->mci_mcd->mcd_last_rcvd = cpu_to_le64(mds->mds_last_rcvd);
-        mci->mci_mcd->mcd_mount_count = cpu_to_le64(mds->mds_mount_count);
-        mci->mci_mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
+        mcd->mcd_last_rcvd = cpu_to_le64(mds->mds_last_rcvd);
+        mcd->mcd_mount_count = cpu_to_le64(mds->mds_mount_count);
+        mcd->mcd_last_xid = cpu_to_le64(req->rq_xid);
 
         mds_fs_set_last_rcvd(mds, handle);
-        rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mci->mci_mcd,
-                           sizeof(*mci->mci_mcd), &off);
+        rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mcd, sizeof(*mcd), &off);
         CDEBUG(D_INODE, "wrote trans #%Ld for client '%s' at #%d: rc = %d\n",
-               mds->mds_last_rcvd, mci->mci_mcd->mcd_uuid, mci->mci_off, rc);
+               mds->mds_last_rcvd, mcd->mcd_uuid, med->med_off, rc);
         // store new value and last committed value in req struct
 
-        if (rc == sizeof(*mci->mci_mcd))
+        if (rc == sizeof(*mcd))
                 rc = 0;
         else {
                 CERROR("error writing to last_rcvd file: rc = %d\n", rc);

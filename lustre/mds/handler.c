@@ -225,6 +225,7 @@ static int mds_connect(struct lustre_handle *conn, struct obd_device *obd)
 {
         int rc;
 
+#warning shaver: find existing export if there is one.
         MOD_INC_USE_COUNT;
         rc = class_connect(conn, obd);
 
@@ -250,8 +251,8 @@ static int mds_getstatus(struct ptlrpc_request *req)
 {
         struct mds_obd *mds = mds_req2mds(req);
         struct mds_body *body;
-        struct mds_client_info *mci;
         struct mds_client_data *mcd;
+        struct mds_export_data *med = &req->rq_export->exp_mds_data;
         int rc, size = sizeof(*body);
         ENTRY;
 
@@ -269,14 +270,12 @@ static int mds_getstatus(struct ptlrpc_request *req)
         body = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&body->fid1, &mds->mds_rootfid, sizeof(body->fid1));
 
-        mci = mds_uuid_to_mci(mds, ptlrpc_req_to_uuid(req));
-        if (!mci) {
-                /* We don't have any old connection data for this client */
+        mcd = med->med_mcd;
+        if (!mcd) {
                 int rc;
-
-                CDEBUG(D_INFO, "allocating new client data for UUID '%s'",
-                       ptlrpc_req_to_uuid(req));
-
+                
+                CDEBUG(D_INFO, "allocating new client data for UUID '%s'\n",
+                        ptlrpc_req_to_uuid(req));
                 OBD_ALLOC(mcd, sizeof(*mcd));
                 if (!mcd) {
                         CERROR("mds: out of memory for client data\n");
@@ -285,16 +284,16 @@ static int mds_getstatus(struct ptlrpc_request *req)
                 }
                 memcpy(mcd->mcd_uuid, ptlrpc_req_to_uuid(req),
                        sizeof(mcd->mcd_uuid));
-                rc = mds_client_add(mds, mcd, -1);
+                rc = mds_client_add(mds, med, -1);
                 if (rc) {
                         req->rq_status = rc;
+                        OBD_FREE(mcd, sizeof(*mcd));
                         RETURN(0);
                 }
+                med->med_mcd = mcd;
         } else {
-                /* We have old connection data for this client... */
-                mcd = mci->mci_mcd;
                 CDEBUG(D_INFO, "found existing data for UUID '%s' at #%d\n",
-                       mcd->mcd_uuid, mci->mci_off);
+                       mcd->mcd_uuid, med->med_off);
         }
         /* mcd_last_xid is is stored in little endian on the disk and
            mds_pack_rep_body converts it to network order */
@@ -580,7 +579,7 @@ static int mds_open(struct ptlrpc_request *req)
         struct file *file;
         struct vfsmount *mnt;
         struct mds_obd *mds = mds_req2mds(req);
-        struct mds_client_info *mci;
+        struct mds_export_data *med;
         __u32 flags;
         struct list_head *tmp;
         struct mds_file_data *mfd;
@@ -594,18 +593,12 @@ static int mds_open(struct ptlrpc_request *req)
                 RETURN(0);
         }
 
-        mci = mds_uuid_to_mci(mds, ptlrpc_req_to_uuid(req));
-        if (!mci) {
-                CERROR("mds: no mci!\n");
-                req->rq_status = -ENOTCONN;
-                RETURN(0);
-        }
-
         body = lustre_msg_buf(req->rq_reqmsg, 0);
 
         /* was this animal open already? */
         /* XXX we should only check on re-open, or do a refcount... */
-        list_for_each(tmp, &mci->mci_open_head) {
+        med = &req->rq_export->exp_mds_data;
+        list_for_each(tmp, &med->med_open_head) {
                 struct mds_file_data *fd;
                 fd = list_entry(tmp, struct mds_file_data, mfd_list);
                 if (body->extra == fd->mfd_clientfd &&
@@ -675,7 +668,7 @@ static int mds_open(struct ptlrpc_request *req)
         file->private_data = mfd;
         mfd->mfd_file = file;
         mfd->mfd_clientfd = body->extra;
-        list_add(&mfd->mfd_list, &mci->mci_open_head);
+        list_add(&mfd->mfd_list, &med->med_open_head);
 
         body = lustre_msg_buf(req->rq_repmsg, 0);
         body->extra = (__u64) (unsigned long)file;
@@ -1021,7 +1014,7 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
                 GOTO(err_put, rc = -ENODEV);
 
         mds->mds_max_mdsize = sizeof(struct lov_stripe_md);
-        rc = mds_fs_setup(mds, mnt);
+        rc = mds_fs_setup(obddev, mnt);
         if (rc) {
                 CERROR("MDS filesystem method init failed: rc = %d\n", rc);
                 GOTO(err_put, rc);
@@ -1067,7 +1060,7 @@ err_thread:
 err_svc:
         ptlrpc_unregister_service(mds->mds_service);
 err_fs:
-        mds_fs_cleanup(mds);
+        mds_fs_cleanup(obddev);
 err_put:
         unlock_kernel();
         mntput(mds->mds_vfsmnt);
@@ -1120,7 +1113,7 @@ static int mds_cleanup(struct obd_device * obddev)
 #ifdef CONFIG_DEV_RDONLY
         dev_clear_rdonly(2);
 #endif
-        mds_fs_cleanup(mds);
+        mds_fs_cleanup(obddev);
 
         MOD_DEC_USE_COUNT;
         RETURN(0);

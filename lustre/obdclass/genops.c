@@ -261,12 +261,29 @@ struct obd_device *class_conn2obd(struct lustre_handle *conn)
         return NULL;
 }
 
+struct obd_export *class_new_export(struct obd_device *obddev)
+{
+        struct obd_export * export;
+
+        export = kmem_cache_alloc(export_cachep, GFP_KERNEL);
+        if ( !export ) {
+                CERROR("no memory! (minor %d)\n", obddev->obd_minor);
+                return NULL;
+        }
+
+        memset(export, 0, sizeof(*export));
+        get_random_bytes(&export->exp_cookie, sizeof(__u64));
+        export->exp_obd = obddev;
+        INIT_LIST_HEAD(&export->exp_mds_data.med_open_head);
+        list_add(&(export->exp_chain), export->exp_obd->obd_exports.prev);
+        return export;
+}
+
 /* a connection defines an export context in which preallocation can
    be managed. */
 int class_connect (struct lustre_handle *conn, struct obd_device *obd)
 {
         struct obd_export * export;
-
         if (conn == NULL) {
                 LBUG();
                 return -EINVAL;
@@ -277,19 +294,13 @@ int class_connect (struct lustre_handle *conn, struct obd_device *obd)
                 return -EINVAL;
         }
 
-        export = kmem_cache_alloc(export_cachep, GFP_KERNEL);
-        if ( !export ) {
-                CERROR("no memory! (minor %d)\n", obd->obd_minor);
+        export = class_new_export(obd);
+        if (!export)
                 return -ENOMEM;
-        }
 
-        memset(export, 0, sizeof(*export));
-        get_random_bytes(&export->exp_cookie, sizeof(export->exp_cookie));
-        export->exp_obd = obd;
         export->exp_rconnh.addr = conn->addr;
         export->exp_rconnh.cookie = conn->cookie;
 
-        list_add(&(export->exp_chain), export->exp_obd->obd_exports.prev);
         conn->addr = (__u64) (unsigned long)export;
         conn->cookie = export->exp_cookie;
         CDEBUG(D_IOCTL, "connect: addr %Lx cookie %Lx\n",

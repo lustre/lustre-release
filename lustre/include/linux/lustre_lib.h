@@ -290,6 +290,8 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
 
 #else
 
+#include <linux/obd_support.h>
+
 /* buffer MUST be at least the size of obd_ioctl_hdr */
 static inline int obd_ioctl_getdata(char **buf, int *len, void *arg)
 {

@@ -141,7 +141,7 @@ old_fs () {
 list_mods() {
 	$DBGCTL modules > $R/tmp/ogdb
 	echo "The GDB module script is in $R/tmp/ogdb"
-	[ "$DEBUG_WAIT" = "yes" ] && echo -n "Press ENTER to continue" && read
+	[ "$DEBUG_WAIT" = "yes" ] && echo -n "Press ENTER to continue" && read < /dev/tty
 	return 0
 }
 

@@ -28,11 +28,11 @@
 
 #ifdef __KERNEL__
 
-#include <linux/obd_class.h>
 #include <linux/lustre_idl.h>
 #include <linux/lustre_net.h>
-#include <linux/lustre_dlm.h>
-#include <linux/obd_lov.h> /* for lov_md */
+
+struct ldlm_lock_desc;
+struct lov_stripe_md;
 
 #define LUSTRE_MDS_NAME "mds"
 #define LUSTRE_MDC_NAME "mdc"
@@ -80,11 +80,10 @@ struct mds_client_data {
 };
 
 /* In-memory access to client data from MDS struct */
-struct mds_client_info {
-        struct list_head mci_list;
-        struct list_head mci_open_head;
-        struct mds_client_data *mci_mcd;
-        int mci_off;
+struct mds_export_data {
+        struct list_head        med_open_head;
+        struct mds_client_data *med_mcd;
+        int                     med_off;
 };
 
 /* file data for open files on MDS */
@@ -98,7 +97,6 @@ struct mds_file_data {
 /* mds/mds_reint.c  */
 int mds_reint_rec(struct mds_update_record *r, int offset,
                   struct ptlrpc_request *req);
-struct mds_client_info *mds_uuid_to_mci(struct mds_obd *mds, __u8 *uuid);
 
 /* lib/mds_updates.c */
 void mds_unpack_body(struct mds_body *b);
@@ -184,7 +182,7 @@ int mdc_rename(struct lustre_handle *conn,
                struct ptlrpc_request **);
 int mdc_create_client(char *uuid, struct ptlrpc_client *cl);
 
-extern int mds_client_add(struct mds_obd *mds, struct mds_client_data *mcd,
+extern int mds_client_add(struct mds_obd *mds, struct mds_export_data *med,
                           int cl_off);
 
 /* mds/mds_fs.c */
@@ -209,8 +207,8 @@ struct mds_fs_operations {
 
 extern int mds_register_fs_type(struct mds_fs_operations *op, const char *name);
 extern void mds_unregister_fs_type(const char *name);
-extern int mds_fs_setup(struct mds_obd *mds, struct vfsmount *mnt);
-extern void mds_fs_cleanup(struct mds_obd *mds);
+extern int mds_fs_setup(struct obd_device *obddev, struct vfsmount *mnt);
+extern void mds_fs_cleanup(struct obd_device *obddev);
 
 static inline void *mds_fs_start(struct mds_obd *mds, struct inode *inode,
                                  int op)

@@ -585,6 +585,7 @@ EXPORT_SYMBOL(class_unregister_type);
 EXPORT_SYMBOL(class_name2dev);
 EXPORT_SYMBOL(class_uuid2dev);
 EXPORT_SYMBOL(class_uuid2obd);
+EXPORT_SYMBOL(class_new_export);
 EXPORT_SYMBOL(class_connect);
 EXPORT_SYMBOL(class_conn2export);
 EXPORT_SYMBOL(class_rconn2export);

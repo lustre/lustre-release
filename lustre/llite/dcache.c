@@ -16,6 +16,7 @@
 
 #include <linux/obd_support.h>
 #include <linux/lustre_lite.h>
+#include <linux/lustre_dlm.h>
 
 extern struct address_space_operations ll_aops;
 

@@ -29,6 +29,7 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
+#include <linux/obd_lov.h>
 
 #define REQUEST_MINOR 244
 

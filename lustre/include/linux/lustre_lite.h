@@ -17,6 +17,7 @@
 #include <linux/fs.h>
 #include <linux/ext2_fs.h>
 
+#include <linux/obd_class.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_mds.h>
 #include <linux/lustre_ha.h>
