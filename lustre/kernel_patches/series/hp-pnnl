@@ -1,5 +1,5 @@
 dev_read_only_hp.patch
-exports.patch
+exports_hp.patch
 kmem_cache_validate_hp.patch
 jbd-transno-cb.patch
 lustre_version.patch

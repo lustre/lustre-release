@@ -1,25 +1,9 @@
- arch/i386/mm/init.c  |    6 +++++
  arch/ia64/mm/init.c  |    6 +++++
  include/linux/slab.h |    1 
  kernel/ksyms.c       |    1 
  mm/slab.c            |   53 +++++++++++++++++++++++++++++++++++++++++++++++++++
- 5 files changed, 67 insertions(+)
+ 4 files changed, 61 insertions(+)
 
---- linux-2.4.19-hp2_pnnl2/arch/i386/mm/init.c~kmem_cache_validate_hp	Sun Jan 19 18:59:23 2003
-+++ linux-2.4.19-hp2_pnnl2-root/arch/i386/mm/init.c	Sun Jan 19 18:59:24 2003
-@@ -43,6 +43,12 @@ unsigned long highstart_pfn, highend_pfn
- static unsigned long totalram_pages;
- static unsigned long totalhigh_pages;
- 
-+struct page *check_get_page(unsigned long kaddr)
-+{
-+#warning FIXME: Lustre team, is this solid?
-+	return virt_to_page(kaddr);
-+}
-+
- int do_check_pgt_cache(int low, int high)
- {
- 	int freed = 0;
 --- linux-2.4.19-hp2_pnnl2/arch/ia64/mm/init.c~kmem_cache_validate_hp	Sun Jan 19 18:59:23 2003
 +++ linux-2.4.19-hp2_pnnl2-root/arch/ia64/mm/init.c	Sun Jan 19 18:59:24 2003
 @@ -44,6 +44,12 @@ unsigned long vmalloc_end = VMALLOC_END_
