@@ -837,7 +837,7 @@ test_42() {
     unlinkmany $DIR/$tfile-%d 400 400
     $CHECKSTAT -t file $DIR/$tfile-* && return 1 || true
 }
-run_test 42 "recoery after ost failure"
+run_test 42 "recovery after ost failure"
 
 # b=2530
 # directory orphans can't be unlinked from PENDING directory
