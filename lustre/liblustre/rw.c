@@ -448,21 +448,12 @@ void put_sysio_cookie(struct llu_sysio_cookie *cookie)
         struct lov_stripe_md *lsm = llu_i2info(cookie->lsc_inode)->lli_smd;
         struct obd_export *exp = llu_i2obdexp(cookie->lsc_inode);
         struct ll_async_page *llap = cookie->lsc_llap;
-#ifdef LIBLUSTRE_HANDLE_UNALIGNED_PAGE
-        struct page *pages = cookie->lsc_pages;
-#endif
         int i;
 
         for (i = 0; i< cookie->lsc_maxpages; i++) {
                 if (llap[i].llap_cookie)
                         obd_teardown_async_page(exp, lsm, NULL,
                                                 llap[i].llap_cookie);
-#ifdef LIBLUSTRE_HANDLE_UNALIGNED_PAGE
-                if (pages[i]._managed) {
-                        free(pages[i].addr);
-                        pages[i]._managed = 0;
-                }
-#endif
         }
 
         I_RELE(cookie->lsc_inode);
@@ -470,85 +461,6 @@ void put_sysio_cookie(struct llu_sysio_cookie *cookie)
         oig_release(cookie->lsc_oig);
         OBD_FREE(cookie, LLU_SYSIO_COOKIE_SIZE(cookie->lsc_maxpages));
 }
-
-#ifdef LIBLUSTRE_HANDLE_UNALIGNED_PAGE
-/* Note: these code should be removed finally, don't need
- * more cleanup
- */
-static
-int prepare_unaligned_write(struct llu_sysio_cookie *cookie)
-{
-        struct inode *inode = cookie->lsc_inode;
-        struct llu_inode_info *lli = llu_i2info(inode);
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        struct obdo oa;
-        struct page *pages = cookie->lsc_pages;
-        int i, pgidx[2] = {0, cookie->lsc_npages-1};
-        int rc;
-        ENTRY;
-
-        for (i = 0; i < 2; i++) {
-                struct page *oldpage = &pages[pgidx[i]];
-                struct page newpage;
-                struct brw_page pg;
-                char *newbuf;
-
-                if (i == 0 && pgidx[0] == pgidx[1])
-                        continue;
-
-                LASSERT(oldpage->_offset + oldpage->_count <= PAGE_CACHE_SIZE);
-
-                if (oldpage->_count == PAGE_CACHE_SIZE)
-                        continue;
-
-                if (oldpage->index << PAGE_CACHE_SHIFT >=
-                    lli->lli_st_size)
-                        continue;
-
-                newbuf = malloc(PAGE_CACHE_SIZE);
-                if (!newbuf)
-                        return -ENOMEM;
-
-                newpage.index = oldpage->index;
-                newpage.addr = newbuf;
-
-                pg.pg = &newpage;
-                pg.off = ((obd_off)newpage.index << PAGE_CACHE_SHIFT);
-                if (pg.off + PAGE_CACHE_SIZE > lli->lli_st_size)
-                        pg.count = lli->lli_st_size % PAGE_CACHE_SIZE;
-                else
-                        pg.count = PAGE_CACHE_SIZE;
-                pg.flag = 0;
-
-                oa.o_id = lsm->lsm_object_id;
-                oa.o_mode = lli->lli_st_mode;
-                oa.o_valid = OBD_MD_FLID | OBD_MD_FLMODE | OBD_MD_FLTYPE;
-
-                /* issue read */
-                rc = obd_brw(OBD_BRW_READ, llu_i2obdexp(inode), &oa, lsm, 1, &pg, NULL);
-                if (rc) {
-                        free(newbuf);
-                        RETURN(rc);
-                }
-
-                /* copy page content, and reset page params */
-                memcpy(newbuf + oldpage->_offset,
-                       (char*)oldpage->addr + oldpage->_offset,
-                       oldpage->_count);
-
-                oldpage->addr = newbuf;
-                if ((((obd_off)oldpage->index << PAGE_CACHE_SHIFT) +
-                    oldpage->_offset + oldpage->_count) > lli->lli_st_size)
-                        oldpage->_count += oldpage->_offset;
-                else
-                        oldpage->_count = PAGE_CACHE_SIZE;
-                oldpage->_offset = 0;
-                oldpage->_managed = 1;
-        }
-
-        RETURN(0);
-}
-#endif
 
 static
 int llu_prep_async_io(struct llu_sysio_cookie *cookie, int cmd,
@@ -599,14 +511,6 @@ int llu_prep_async_io(struct llu_sysio_cookie *cookie, int cmd,
         } while (count);
 
         cookie->lsc_npages = npages;
-
-#ifdef LIBLUSTRE_HANDLE_UNALIGNED_PAGE
-        if (cmd == OBD_BRW_WRITE) {
-                rc = prepare_unaligned_write(cookie);
-                if (rc)
-                        RETURN(rc);
-        }
-#endif
 
         for (i = 0; i < npages; i++) {
                 llap[i].llap_magic = LLAP_MAGIC;
@@ -741,7 +645,7 @@ llu_file_write(struct inode *inode, const struct iovec *iovec,
                 if (err != ELDLM_OK)
                         GOTO(err_out, err = -ENOLCK);
 
-                CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %Lu\n",
+                CDEBUG(D_INFO, "Writing inode %lu, "LPSZ" bytes, offset %llu\n",
                        lli->lli_st_ino, count, pos);
 
                 cookie = llu_rw(OBD_BRW_WRITE, inode, buf, count, pos);

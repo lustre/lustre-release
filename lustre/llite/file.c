@@ -39,7 +39,7 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
         struct ptlrpc_request *req = NULL;
         struct obd_client_handle *och = &fd->fd_mds_och;
         struct obdo obdo;
-        int rc, valid;
+        int rc;
         ENTRY;
 
         /* clear group lock, if present */
@@ -50,18 +50,16 @@ int ll_mdc_close(struct obd_export *mdc_exp, struct inode *inode,
                                       &fd->fd_cwlockh);
         }
 
-        valid = OBD_MD_FLID;
-
-        memset(&obdo, 0, sizeof(obdo));
         obdo.o_id = inode->i_ino;
-        obdo.o_mode = inode->i_mode;
-        obdo.o_size = inode->i_size;
-        obdo.o_blocks = inode->i_blocks;
+        obdo.o_valid = OBD_MD_FLID;
+        obdo_from_inode(&obdo, inode, OBD_MD_FLTYPE | OBD_MD_FLMODE |
+                                      OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
+                                      OBD_MD_FLATIME | OBD_MD_FLMTIME |
+                                      OBD_MD_FLCTIME);
         if (0 /* ll_is_inode_dirty(inode) */) {
                 obdo.o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
-                valid |= OBD_MD_FLFLAGS;
+                obdo.o_valid |= OBD_MD_FLFLAGS;
         }
-        obdo.o_valid = valid;
         rc = mdc_close(mdc_exp, &obdo, och, &req);
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
@@ -188,7 +186,8 @@ int ll_local_open(struct file *file, struct lookup_intent *it)
 int ll_file_open(struct inode *inode, struct file *file)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct lookup_intent *it;
+        struct lookup_intent *it, oit = { .it_op = IT_OPEN,
+                                          .it_flags = file->f_flags };
         struct lov_stripe_md *lsm;
         struct ptlrpc_request *req;
         int rc = 0;
@@ -203,9 +202,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         it = file->f_it;
 
-        if (!it->d.lustre.it_disposition) {
-                struct lookup_intent oit = { .it_op = IT_OPEN,
-                                             .it_flags = file->f_flags };
+        if (!it || !it->d.lustre.it_disposition) {
                 it = &oit;
                 rc = ll_intent_file_open(file, NULL, 0, it);
                 if (rc)

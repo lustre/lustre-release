@@ -694,11 +694,15 @@ typedef int (*cfg_record_cb_t)(enum cfg_record_type, int len, void *data);
 # endif
 #endif
 
-/*#ifndef LP_POISON
+#if BITS_PER_LONG > 32
 # define LI_POISON ((int)0x5a5a5a5a5a5a5a5a)
 # define LL_POISON ((long)0x5a5a5a5a5a5a5a5a)
 # define LP_POISON ((void *)(long)0x5a5a5a5a5a5a5a5a)
-#endif*/
+#else
+# define LI_POISON ((int)0x5a5a5a5a)
+# define LL_POISON ((long)0x5a5a5a5a)
+# define LP_POISON ((void *)(long)0x5a5a5a5a)
+#endif
 
 #if defined(__x86_64__)
 # define LPU64 "%Lu"
@@ -706,33 +710,18 @@ typedef int (*cfg_record_cb_t)(enum cfg_record_type, int len, void *data);
 # define LPX64 "%#Lx"
 # define LPSZ  "%lu"
 # define LPSSZ "%ld"
-#ifndef LP_POISON
-# define LI_POISON ((int)0x5a5a5a5a5a5a5a5a)
-# define LL_POISON ((long)0x5a5a5a5a5a5a5a5a)
-# define LP_POISON ((void *)(long)0x5a5a5a5a5a5a5a5a)
-#endif
 #elif (BITS_PER_LONG == 32 || __WORDSIZE == 32)
 # define LPU64 "%Lu"
 # define LPD64 "%Ld"
 # define LPX64 "%#Lx"
 # define LPSZ  "%u"
 # define LPSSZ "%d"
-#ifndef LP_POISON
-# define LI_POISON ((int)0x5a5a5a5a)
-# define LL_POISON ((long)0x5a5a5a5a)
-# define LP_POISON ((void *)(long)0x5a5a5a5a)
-#endif
 #elif (BITS_PER_LONG == 64 || __WORDSIZE == 64)
 # define LPU64 "%lu"
 # define LPD64 "%ld"
 # define LPX64 "%#lx"
 # define LPSZ  "%lu"
 # define LPSSZ "%ld"
-#ifndef LP_POISON
-# define LI_POISON ((int)0x5a5a5a5a5a5a5a5a)
-# define LL_POISON ((long)0x5a5a5a5a5a5a5a5a)
-# define LP_POISON ((void *)(long)0x5a5a5a5a5a5a5a5a)
-#endif
 #endif
 #ifndef LPU64
 # error "No word size defined"

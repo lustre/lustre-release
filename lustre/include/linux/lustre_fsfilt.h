@@ -79,9 +79,10 @@ struct fsfilt_operations {
                                       void *cb_data);
         int     (* fs_statfs)(struct super_block *sb, struct obd_statfs *osfs);
         int     (* fs_sync)(struct super_block *sb);
-        int     (* fs_map_inode_page)(struct inode *inode, struct page *page,
-                                      unsigned long *blocks, int *created,
-                                      int create);
+        int     (* fs_map_inode_pages)(struct inode *inode, struct page **page,
+                                       int pages, unsigned long *blocks,
+                                       int *created, int create,
+                                       struct semaphore *sem);
         int     (* fs_prep_san_write)(struct inode *inode, long *blocks,
                                       int nblocks, loff_t newsize);
         int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
@@ -90,9 +91,9 @@ struct fsfilt_operations {
         int     (* fs_setup)(struct super_block *sb);
 
         int     (* fs_set_xattr)(struct inode *inode, void *handle, char *name,
-                                 void *buffer, int buffer_size); 
+                                 void *buffer, int buffer_size);
         int     (* fs_get_xattr)(struct inode *inode, char *name,
-                                 void *buffer, int buffer_size); 
+                                 void *buffer, int buffer_size);
 
         int     (* fs_get_op_len)(int, struct fsfilt_objinfo *, int);
 };
@@ -209,7 +210,7 @@ fsfilt_commit(struct obd_device *obd, struct inode *inode,
         return fsfilt_commit_ops(obd->obd_fsops, inode, handle, force_sync);
 }
 
-static inline int 
+static inline int
 llog_fsfilt_commit(struct llog_ctxt *ctxt, struct inode *inode,
                    void *handle, int force_sync)
 {
@@ -301,7 +302,7 @@ static inline int fsfilt_setup(struct obd_device *obd,
 {
         if (obd->obd_fsops->fs_setup)
                 return obd->obd_fsops->fs_setup(fs);
-        
+
         return 0;
 }
 
@@ -345,12 +346,12 @@ fsfilt_putpage(struct obd_device *obd, struct inode *inode,
         LASSERT(page != NULL);
 
         filter = &obd->u.filter;
-        
+
         if (!obd->obd_fsops->fs_putpage)
                 return -ENOSYS;
 
         CDEBUG(D_INFO, "putpage %lx\n", page->index);
-        
+
         rc = obd->obd_fsops->fs_putpage(inode, page);
 
         if (time_after(jiffies, now + 15 * HZ))
@@ -373,9 +374,9 @@ fsfilt_getpage(struct obd_device *obd, struct inode *inode,
                 return ERR_PTR(-ENOSYS);
 
         CDEBUG(D_INFO, "getpage %lx\n", index);
-        
+
         page = obd->obd_fsops->fs_getpage(inode, index);
-        
+
         if (time_after(jiffies, now + 15 * HZ))
                 CERROR("long getpage time %lus\n", (jiffies - now) / HZ);
 
@@ -423,13 +424,14 @@ fsfilt_sync(struct obd_device *obd, struct super_block *sb)
         return obd->obd_fsops->fs_sync(sb);
 }
 
-static inline int
-fsfilt_map_inode_page(struct obd_device *obd, struct inode *inode,
-                      struct page *page, unsigned long *blocks,
-                      int *created, int create)
+static inline int fsfilt_map_inode_pages(struct obd_device *obd,
+                                         struct inode *inode,
+                                         struct page **page, int pages,
+                                         unsigned long *blocks, int *created,
+                                         int create, struct semaphore *sem)
 {
-        return obd->obd_fsops->fs_map_inode_page(inode, page, blocks,
-                                                 created, create);
+        return obd->obd_fsops->fs_map_inode_pages(inode, page, pages, blocks,
+                                                  created, create, sem);
 }
 
 static inline int
@@ -451,7 +453,7 @@ static inline int
 fsfilt_write_record(struct obd_device *obd, struct file *file,
                     void *buf, loff_t size, loff_t *offs, int force_sync)
 {
-        return obd->obd_fsops->fs_write_record(file, buf, size, offs, 
+        return obd->obd_fsops->fs_write_record(file, buf, size, offs,
                                                force_sync);
 }
 

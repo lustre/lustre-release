@@ -18,7 +18,7 @@ ALWAYS_EXCEPT="5"
 gen_config() {
     rm -f $XMLCONFIG
     add_mds mds --dev $MDSDEV --size $MDSSIZE
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+    add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
 	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE --failover
     if [ ! -z "$ostfailover_HOST" ]; then

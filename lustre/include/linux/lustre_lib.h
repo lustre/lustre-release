@@ -40,14 +40,14 @@
 #include <linux/lustre_idl.h>
 #include <linux/lustre_cfg.h>
 
-#if BITS_PER_LONG > 32 && !defined(__x86_64__)
 #ifndef LP_POISON
+#if BITS_PER_LONG > 32
 # define LI_POISON ((int)0x5a5a5a5a5a5a5a5a)
+# define LL_POISON ((long)0x5a5a5a5a5a5a5a5a)
 # define LP_POISON ((void *)(long)0x5a5a5a5a5a5a5a5a)
-#endif
 #else
-#ifndef LP_POISON
 # define LI_POISON ((int)0x5a5a5a5a)
+# define LL_POISON ((long)0x5a5a5a5a)
 # define LP_POISON ((void *)(long)0x5a5a5a5a)
 #endif
 #endif

@@ -24,6 +24,17 @@ struct obd_import;
 unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_QSWNAL | S_SOCKNAL |
                                             S_GMNAL | S_IBNAL);
 
+void get_random_bytes(void *ptr, int size)
+{
+        char *p = ptr;
+
+        if (size < 1)
+                return;
+
+        while(size--)
+                *p++ = rand();
+}
+
 void *inter_module_get(char *arg)
 {
         if (!strcmp(arg, "tcpnal_ni"))
@@ -78,6 +89,11 @@ int
 libcfs_nal_cmd(struct portals_cfg *pcfg)
 {
         CERROR("empty function!!!\n");
+        return 0;
+}
+
+int in_group_p(gid_t gid)
+{
         return 0;
 }
 

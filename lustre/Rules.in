@@ -23,17 +23,6 @@ ifeq ($(PATCHLEVEL),)
 
 include autoMakefile
 
-tags:
-	rm -f $(top_srcdir)/TAGS
-	ETAGSF=`etags --version | grep -iq exuberant && \
-		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
-	find $(top_srcdir) -name '*.[hc]' | xargs etags $$ETAGSF -a
-
-	rm -f $(top_srcdir)/tags
-	CTAGSF=`ctags --version | grep -iq exuberant && \
-		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
-	find $(top_srcdir) -name '*.[hc]' | xargs ctags $$CTAGSF -a
-
 else
 
 include @LINUX_CONFIG@

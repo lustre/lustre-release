@@ -68,6 +68,37 @@ struct llog_handle {
         } u;
 };
 
+/* got from mds_update_record.
+ * FIXME: maybe some attribute in reint_record and update_record will be
+ * changed later. */
+/* XXX BUG 3188 -- must return to one set of structures. */
+/* XXX use fixed-sized fields (__u32) instead of dev_t and iattr->gid_t, etc */
+
+struct update_record {
+        __u32 ur_opcode;
+        __u32 ur_fsuid;
+        __u32 ur_fsgid;
+        dev_t ur_rdev;
+        struct iattr ur_iattr;
+        struct iattr ur_pattr;
+        __u32 ur_flags;
+        __u32 ur_len;
+};
+
+struct reint_record {
+       struct update_record u_rec;
+       char *rec_data1;
+       int rec1_size;
+       char *rec_data2;
+       int rec2_size;
+};
+
+struct llog_smfs_rec {
+        struct llog_rec_hdr     lsr_hdr;
+        struct update_record    lsr_rec;
+        struct llog_rec_tail    lsr_tail;
+};
+
 /* llog.c  -  general API */
 typedef int (*llog_cb_t)(struct llog_handle *, struct llog_rec_hdr *, void *);
 struct llog_handle *llog_alloc_handle(void);

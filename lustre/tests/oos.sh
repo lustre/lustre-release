@@ -34,11 +34,8 @@ fi
 
 export LANG=C LC_LANG=C # for "No space left on device" message
 
-# make sure, that log file will be removed. Somehow it was possible 
-# to me, that log file had +a and could not be rewritten, what led
-# to test fail.
-chattr -ai $LOG >/dev/null 2>&1
 rm -f $LOG >/dev/null 2>&1
+[ -f $LOG ] && echo "ERROR: log file wasn't removed?" && exit 1
 
 # make sure we stripe over all OSTs to avoid OOS on only a subset of OSTs
 $LFS setstripe $OOS 65536 0 $STRIPECOUNT

@@ -63,3 +63,4 @@ logs
 ostactive
 ll_dirstripe_verify
 openfilleddirunlink
+copy_attr

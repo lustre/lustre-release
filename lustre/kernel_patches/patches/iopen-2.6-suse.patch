@@ -1,4 +1,3 @@
- Documentation/filesystems/ext2.txt |   16 ++
  fs/ext3/inode.c                    |    3 
  fs/ext3/iopen.c                    |  239 +++++++++++++++++++++++++++++++++++++
  fs/ext3/iopen.h                    |   15 ++
@@ -7,10 +6,23 @@
  include/linux/ext3_fs.h            |    2 
  7 files changed, 304 insertions(+), 1 deletion(-)
 
-Index: linux-2.6.4-51.1/fs/ext3/inode.c
+Index: linux-stage/fs/ext3/Makefile
 ===================================================================
---- linux-2.6.4-51.1.orig/fs/ext3/inode.c	2004-04-06 00:31:14.000000000 -0400
-+++ linux-2.6.4-51.1/fs/ext3/inode.c	2004-04-06 00:31:24.000000000 -0400
+--- linux-stage.orig/fs/ext3/Makefile	2004-05-07 16:00:16.000000000 -0400
++++ linux-stage/fs/ext3/Makefile	2004-05-07 16:00:17.000000000 -0400
+@@ -4,7 +4,7 @@
+ 
+ obj-$(CONFIG_EXT3_FS) += ext3.o
+ 
+-ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
++ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
+ 	   ioctl.o namei.o super.o symlink.o hash.o
+ 
+ ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
+Index: linux-stage/fs/ext3/inode.c
+===================================================================
+--- linux-stage.orig/fs/ext3/inode.c	2004-05-07 16:00:16.000000000 -0400
++++ linux-stage/fs/ext3/inode.c	2004-05-07 17:21:59.000000000 -0400
 @@ -37,6 +37,7 @@
  #include <linux/mpage.h>
  #include <linux/uio.h>
@@ -19,22 +31,21 @@ Index: linux-2.6.4-51.1/fs/ext3/inode.c
  #include "acl.h"
  
  /*
-@@ -2472,6 +2473,8 @@
+@@ -2472,6 +2473,9 @@
  	ei->i_acl = EXT3_ACL_NOT_CACHED;
  	ei->i_default_acl = EXT3_ACL_NOT_CACHED;
  #endif
 +	if (ext3_iopen_get_inode(inode))
 +		return;
++
  	if (ext3_get_inode_loc(inode, &iloc, 0))
  		goto bad_inode;
  	bh = iloc.bh;
-Index: linux-2.6.4-51.1/fs/ext3/iopen.c
+Index: linux-stage/fs/ext3/iopen.c
 ===================================================================
---- linux-2.6.4-51.1.orig/fs/ext3/iopen.c	2004-04-06 00:31:24.000000000 -0400
-+++ linux-2.6.4-51.1/fs/ext3/iopen.c	2004-04-06 00:31:24.000000000 -0400
-@@ -0,0 +1,223 @@
-+
-+
+--- linux-stage.orig/fs/ext3/iopen.c	2004-05-07 16:00:17.000000000 -0400
++++ linux-stage/fs/ext3/iopen.c	2004-05-07 17:22:37.000000000 -0400
+@@ -0,0 +1,272 @@
 +/*
 + * linux/fs/ext3/iopen.c
 + *
@@ -44,6 +55,25 @@ Index: linux-2.6.4-51.1/fs/ext3/iopen.c
 + *
 + * This file may be redistributed under the terms of the GNU General
 + * Public License.
++ *
++ *
++ * Invariants:
++ *   - there is only ever a single DCACHE_NFSD_DISCONNECTED dentry alias
++ *     for an inode at one time.
++ *   - there are never both connected and DCACHE_NFSD_DISCONNECTED dentry
++ *     aliases on an inode at the same time.
++ *
++ * If we have any connected dentry aliases for an inode, use one of those
++ * in iopen_lookup().  Otherwise, we instantiate a single NFSD_DISCONNECTED
++ * dentry for this inode, which thereafter will be found by the dcache
++ * when looking up this inode number in __iopen__, so we don't return here
++ * until it is gone.
++ *
++ * If we get an inode via a regular name lookup, then we "rename" the
++ * NFSD_DISCONNECTED dentry to the proper name and parent.  This ensures
++ * existing users of the disconnected dentry will continue to use the same
++ * dentry as the connected users, and there will never be both kinds of
++ * dentry aliases at one time.
 + */
 +
 +#include <linux/sched.h>
@@ -52,6 +82,8 @@ Index: linux-2.6.4-51.1/fs/ext3/iopen.c
 +#include <linux/jbd.h>
 +#include <linux/ext3_fs.h>
 +#include <linux/smp_lock.h>
++#include <linux/dcache.h>
++#include <linux/security.h>
 +#include "iopen.h"
 +
 +#ifndef assert
@@ -63,14 +95,15 @@ Index: linux-2.6.4-51.1/fs/ext3/iopen.c
 +/*
 + * This implements looking up an inode by number.
 + */
-+static struct dentry *iopen_lookup(struct inode * dir, struct dentry *dentry, struct nameidata *nd)
++static struct dentry *iopen_lookup(struct inode * dir, struct dentry *dentry,
++				   struct nameidata *nd)
 +{
-+	struct inode * inode;
++	struct inode *inode;
 +	unsigned long ino;
 +	struct list_head *lp;
 +	struct dentry *alternate;
 +	char buf[IOPEN_NAME_LEN];
-+	
++
 +	if (dentry->d_name.len >= IOPEN_NAME_LEN)
 +		return ERR_PTR(-ENAMETOOLONG);
 +
@@ -99,6 +132,9 @@ Index: linux-2.6.4-51.1/fs/ext3/iopen.c
 +		return ERR_PTR(-ENOENT);
 +	}
 +
++	assert(list_empty(&dentry->d_alias));		/* d_instantiate */
++	assert(d_unhashed(dentry));		/* d_rehash */
++
 +	/* preferrably return a connected dentry */
 +	spin_lock(&dcache_lock);
 +	list_for_each(lp, &inode->i_dentry) {
@@ -116,9 +152,14 @@ Index: linux-2.6.4-51.1/fs/ext3/iopen.c
 +		return alternate;
 +	}
 +	dentry->d_flags |= DCACHE_DISCONNECTED;
++
++	/* d_add(), but don't drop dcache_lock before adding dentry to inode */
++	list_add(&dentry->d_alias, &inode->i_dentry);	/* d_instantiate */
++	dentry->d_inode = inode;
++
++	__d_rehash(dentry, 0);				/* d_rehash */
 +	spin_unlock(&dcache_lock);
 +
-+	d_add(dentry, inode);
 +	return NULL;
 +}
 +
@@ -126,7 +167,7 @@ Index: linux-2.6.4-51.1/fs/ext3/iopen.c
 +	__typeof__ (x) __tmp = x; \
 +	x = y; y = __tmp; } while (0)
 +
-+static inline void switch_names(struct dentry * dentry, struct dentry * target)
++static inline void switch_names(struct dentry *dentry, struct dentry *target)
 +{
 +	const unsigned char *old_name, *new_name;
 +
@@ -141,20 +182,27 @@ Index: linux-2.6.4-51.1/fs/ext3/iopen.c
 +	dentry->d_name.name = old_name;
 +}
 +
-+
-+struct dentry *iopen_connect_dentry(struct dentry *de, struct inode *inode)
++/* This function is spliced into ext3_lookup and does the move of a
++ * disconnected dentry (if it exists) to a connected dentry.
++ */
++struct dentry *iopen_connect_dentry(struct dentry *dentry, struct inode *inode,
++				    int rehash)
 +{
 +	struct dentry *tmp, *goal = NULL;
 +	struct list_head *lp;
 +
-+	/* preferrably return a connected dentry */
-+	spin_lock(&dcache_lock);
 +	/* verify this dentry is really new */
-+	assert(!de->d_inode);
-+	assert(list_empty(&de->d_subdirs));
-+	assert(list_empty(&de->d_alias));
++	assert(dentry->d_inode == NULL);
++	assert(list_empty(&dentry->d_alias));		/* d_instantiate */
++	if (rehash)
++		assert(d_unhashed(dentry));	/* d_rehash */
++	assert(list_empty(&dentry->d_subdirs));
 +
++	spin_lock(&dcache_lock);
++	if (!inode)
++		goto do_rehash;
 +
++	/* preferrably return a connected dentry */
 +	list_for_each(lp, &inode->i_dentry) {
 +		tmp = list_entry(lp, struct dentry, d_alias);
 +		if (tmp->d_flags & DCACHE_DISCONNECTED) {
@@ -165,16 +213,30 @@ Index: linux-2.6.4-51.1/fs/ext3/iopen.c
 +			break;
 +		}
 +	}
-+	spin_unlock(&dcache_lock);
 +
 +	if (!goal)
-+		return NULL;
++		goto do_instantiate;
 +
-+	goal->d_flags &= ~DCACHE_DISCONNECTED;
-+	d_rehash(de);
-+	d_move(goal, de);
++	/* Move the goal to the de hash queue */
++	goal->d_flags &= ~ DCACHE_DISCONNECTED;
++	security_d_instantiate(goal, inode);
++	__d_rehash(dentry, 0);
++	__d_move(goal, dentry);
++	spin_unlock(&dcache_lock);
++	iput(inode);
 +
 +	return goal;
++
++	/* d_add(), but don't drop dcache_lock before adding dentry to inode */
++do_instantiate:
++	list_add(&dentry->d_alias, &inode->i_dentry);	/* d_instantiate */
++	dentry->d_inode = inode;
++do_rehash:
++	if (rehash)
++		__d_rehash(dentry, 0);			/* d_rehash */
++	spin_unlock(&dcache_lock);
++
++	return NULL;
 +}
 +
 +/*
@@ -205,9 +267,9 @@ Index: linux-2.6.4-51.1/fs/ext3/iopen.c
 + * This function is spliced into ext3_lookup and returns 1 the file
 + * name is __iopen__ and dentry has been filled in appropriately.
 + */
-+int ext3_check_for_iopen(struct inode * dir, struct dentry *dentry)
++int ext3_check_for_iopen(struct inode *dir, struct dentry *dentry)
 +{
-+	struct inode * inode;
++	struct inode *inode;
 +
 +	if (dir->i_ino != EXT3_ROOT_INO ||
 +	    !test_opt(dir->i_sb, IOPEN) ||
@@ -227,7 +289,7 @@ Index: linux-2.6.4-51.1/fs/ext3/iopen.c
 + * number is the one for /__iopen__, in which case the inode is filled
 + * in appropriately.  Otherwise, this fuction returns 0.
 + */
-+int ext3_iopen_get_inode(struct inode * inode)
++int ext3_iopen_get_inode(struct inode *inode)
 +{
 +	if (inode->i_ino != EXT3_BAD_INO)
 +		return 0;
@@ -256,10 +318,10 @@ Index: linux-2.6.4-51.1/fs/ext3/iopen.c
 +
 +	return 1;
 +}
-Index: linux-2.6.4-51.1/fs/ext3/iopen.h
+Index: linux-stage/fs/ext3/iopen.h
 ===================================================================
---- linux-2.6.4-51.1.orig/fs/ext3/iopen.h	2004-04-06 00:31:24.000000000 -0400
-+++ linux-2.6.4-51.1/fs/ext3/iopen.h	2004-04-06 00:31:24.000000000 -0400
+--- linux-stage.orig/fs/ext3/iopen.h	2004-05-07 16:00:17.000000000 -0400
++++ linux-stage/fs/ext3/iopen.h	2004-05-07 16:00:17.000000000 -0400
 @@ -0,0 +1,15 @@
 +/*
 + * iopen.h
@@ -272,14 +334,14 @@ Index: linux-2.6.4-51.1/fs/ext3/iopen.h
 + * Public License.
 + */
 +
-+extern int ext3_check_for_iopen(struct inode * dir, struct dentry *dentry);
-+extern int ext3_iopen_get_inode(struct inode * inode);
-+
-+
-Index: linux-2.6.4-51.1/fs/ext3/namei.c
++extern int ext3_check_for_iopen(struct inode *dir, struct dentry *dentry);
++extern int ext3_iopen_get_inode(struct inode *inode);
++extern struct dentry *iopen_connect_dentry(struct dentry *dentry,
++					   struct inode *inode, int rehash);
+Index: linux-stage/fs/ext3/namei.c
 ===================================================================
---- linux-2.6.4-51.1.orig/fs/ext3/namei.c	2004-04-06 00:31:11.000000000 -0400
-+++ linux-2.6.4-51.1/fs/ext3/namei.c	2004-04-06 00:31:24.000000000 -0400
+--- linux-stage.orig/fs/ext3/namei.c	2004-05-07 16:00:16.000000000 -0400
++++ linux-stage/fs/ext3/namei.c	2004-05-07 16:00:17.000000000 -0400
 @@ -37,6 +37,7 @@
  #include <linux/buffer_head.h>
  #include <linux/smp_lock.h>
@@ -288,47 +350,78 @@ Index: linux-2.6.4-51.1/fs/ext3/namei.c
  #include "acl.h"
  
  /*
-@@ -970,15 +971,21 @@
- }
- #endif
- 
-+struct dentry *iopen_connect_dentry(struct dentry *de, struct inode *inode);
-+
- static struct dentry *ext3_lookup(struct inode * dir, struct dentry *dentry, struct nameidata *nd)
- {
- 	struct inode * inode;
- 	struct ext3_dir_entry_2 * de;
- 	struct buffer_head * bh;
-+  	struct dentry *alternate = NULL;
- 
+@@ -979,6 +980,9 @@
  	if (dentry->d_name.len > EXT3_NAME_LEN)
  		return ERR_PTR(-ENAMETOOLONG);
  
-+ 	if (ext3_check_for_iopen(dir, dentry))
-+ 		return NULL;
++	if (ext3_check_for_iopen(dir, dentry))
++		return NULL;
 +
  	bh = ext3_find_entry(dentry, &de);
  	inode = NULL;
  	if (bh) {
-@@ -989,8 +996,14 @@
+@@ -989,10 +993,8 @@
  		if (!inode)
  			return ERR_PTR(-EACCES);
  	}
-+	if (inode && (alternate = iopen_connect_dentry(dentry, inode))) {
-+		iput(inode);
-+		return alternate;
-+	}
+-	if (inode)
+-		return d_splice_alias(inode, dentry);
+-	d_add(dentry, inode);
+-	return NULL;
 +
- 	if (inode)
- 		return d_splice_alias(inode, dentry);
-+
- 	d_add(dentry, inode);
- 	return NULL;
++	return iopen_connect_dentry(dentry, inode, 1);
  }
-Index: linux-2.6.4-51.1/fs/ext3/super.c
+ 
+ 
+@@ -2019,10 +2021,6 @@
+ 			      inode->i_nlink);
+ 	inode->i_version++;
+ 	inode->i_nlink = 0;
+-	/* There's no need to set i_disksize: the fact that i_nlink is
+-	 * zero will ensure that the right thing happens during any
+-	 * recovery. */
+-	inode->i_size = 0;
+ 	ext3_orphan_add(handle, inode);
+ 	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
+ 	ext3_mark_inode_dirty(handle, inode);
+@@ -2139,6 +2137,23 @@
+ 	return err;
+ }
+ 
++/* Like ext3_add_nondir() except for call to iopen_connect_dentry */
++static int ext3_add_link(handle_t *handle, struct dentry *dentry,
++			 struct inode *inode)
++{
++	int err = ext3_add_entry(handle, dentry, inode);
++	if (!err) {
++		err = ext3_mark_inode_dirty(handle, inode);
++		if (err == 0) {
++			(void)iopen_connect_dentry(dentry, inode, 0);
++			return 0;
++		}
++	}
++	ext3_dec_count(handle, inode);
++	iput(inode);
++	return err;
++}
++
+ static int ext3_link (struct dentry * old_dentry,
+ 		struct inode * dir, struct dentry *dentry)
+ {
+@@ -2161,7 +2176,8 @@
+ 	ext3_inc_count(handle, inode);
+ 	atomic_inc(&inode->i_count);
+ 
+-	err = ext3_add_nondir(handle, dentry, inode);
++	err = ext3_add_link(handle, dentry, inode);
++	ext3_orphan_del(handle,inode);
+ 	ext3_journal_stop(handle);
+ 	return err;
+ }
+Index: linux-stage/fs/ext3/super.c
 ===================================================================
---- linux-2.6.4-51.1.orig/fs/ext3/super.c	2004-04-06 00:31:14.000000000 -0400
-+++ linux-2.6.4-51.1/fs/ext3/super.c	2004-04-06 00:31:24.000000000 -0400
+--- linux-stage.orig/fs/ext3/super.c	2004-05-07 16:00:16.000000000 -0400
++++ linux-stage/fs/ext3/super.c	2004-05-07 17:21:59.000000000 -0400
 @@ -536,7 +536,7 @@
  	Opt_user_xattr, Opt_nouser_xattr, Opt_acl, Opt_noacl, Opt_noload,
  	Opt_commit, Opt_journal_update, Opt_journal_inum,
@@ -353,24 +446,24 @@ Index: linux-2.6.4-51.1/fs/ext3/super.c
  			set_opt(sbi->s_mount_opt, ABORT);
  			break;
 +		case Opt_iopen:
-+ 			set_opt (sbi->s_mount_opt, IOPEN);
-+ 			clear_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
++			set_opt (sbi->s_mount_opt, IOPEN);
++			clear_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
 +			break;
 +		case Opt_noiopen:
 +			clear_opt (sbi->s_mount_opt, IOPEN);
-+ 			clear_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
++			clear_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
 +			break;
 +		case Opt_iopen_nopriv:
-+ 			set_opt (sbi->s_mount_opt, IOPEN);
-+ 			set_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
++			set_opt (sbi->s_mount_opt, IOPEN);
++			set_opt (sbi->s_mount_opt, IOPEN_NOPRIV);
 +			break;
  		case Opt_ignore:
  			break;
  		default:
-Index: linux-2.6.4-51.1/include/linux/ext3_fs.h
+Index: linux-stage/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.6.4-51.1.orig/include/linux/ext3_fs.h	2004-04-06 00:31:11.000000000 -0400
-+++ linux-2.6.4-51.1/include/linux/ext3_fs.h	2004-04-06 00:31:24.000000000 -0400
+--- linux-stage.orig/include/linux/ext3_fs.h	2004-05-07 16:00:16.000000000 -0400
++++ linux-stage/include/linux/ext3_fs.h	2004-05-07 16:00:17.000000000 -0400
 @@ -325,6 +325,8 @@
  #define EXT3_MOUNT_NO_UID32		0x2000  /* Disable 32-bit UIDs */
  #define EXT3_MOUNT_XATTR_USER		0x4000	/* Extended user attributes */
@@ -380,16 +473,3 @@ Index: linux-2.6.4-51.1/include/linux/ext3_fs.h
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
-Index: linux-2.6.4-51.1/fs/ext3/Makefile
-===================================================================
---- linux-2.6.4-51.1.orig/fs/ext3/Makefile	2004-04-06 00:27:21.000000000 -0400
-+++ linux-2.6.4-51.1/fs/ext3/Makefile	2004-04-06 00:31:42.000000000 -0400
-@@ -5,7 +5,7 @@
- obj-$(CONFIG_EXT3_FS) += ext3.o
- 
- ext3-y	:= balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
--	   ioctl.o namei.o super.o symlink.o hash.o
-+	   ioctl.o namei.o super.o symlink.o hash.o iopen.o
- 
- ext3-$(CONFIG_EXT3_FS_XATTR)	 += xattr.o xattr_user.o xattr_trusted.o
- ext3-$(CONFIG_EXT3_FS_POSIX_ACL) += acl.o

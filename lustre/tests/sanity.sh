@@ -7,8 +7,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-""}
+# bug number for skipped test: 2108
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"42a"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
@@ -66,6 +66,25 @@ START=${START:-start}
 log() {
 	echo "$*"
 	lctl mark "$*" 2> /dev/null || true
+}
+
+trace() {
+	log "STARTING: $*"
+	strace -o $TMP/$1.strace -ttt $*
+	RC=$?
+	log "FINISHED: $*: rc $RC"
+	return 1
+}
+TRACE=${TRACE:-""}
+
+check_kernel_version() {
+	VERSION_FILE=/proc/fs/lustre/kernel_version
+	WANT_VER=$1
+	[ ! -f $VERSION_FILE ] && echo "can't find kernel version" && return 1
+	GOT_VER=`cat $VERSION_FILE`
+	[ $GOT_VER -ge $WANT_VER ] && return 0
+	log "test needs at least kernel version $WANT_VER, running $GOT_VER"
+	return 1
 }
 
 run_one() {
@@ -870,9 +889,10 @@ test_31d() {
 run_test 31d "remove of open directory ========================="
 
 test_31e() {
+	check_kernel_version 34 || return 0
 	openfilleddirunlink $DIR/d31e || error
 }
-run_test 31e "remove of open non-removable directory ========================="
+run_test 31e "remove of open non-empty directory ==============="
 
 test_32a() {
 	echo "== more mountpoints and symlinks ================="
@@ -1414,7 +1434,7 @@ run_test 43c "md5sum of copy into lustre========================"
 
 test_44() {
 	[  "$OSTCOUNT" -lt "2" ] && echo "skipping 2-stripe test" && return
-	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=127
+	dd if=/dev/zero of=$DIR/f1 bs=4k count=1 seek=1023
 	dd if=$DIR/f1 bs=4k count=1
 }
 run_test 44 "zero length read from a sparse stripe ============="
@@ -1491,18 +1511,18 @@ page_size() {
 	getconf PAGE_SIZE
 }
 
-# in a 2 stripe file (lov.sh), page 63 maps to page 31 in its object.  this
+# in a 2 stripe file (lov.sh), page 1023 maps to page 511 in its object.  this
 # test tickles a bug where re-dirtying a page was failing to be mapped to the
-# objects offset and an assert hit when an rpc was built with 63's mapped 
-# offset 31 and 31's raw 31 offset. it also found general redirtying bugs.
+# objects offset and an assert hit when an rpc was built with 1023's mapped 
+# offset 511 and 511's raw 511 offset. it also found general redirtying bugs.
 test_46() {
 	f="$DIR/f46"
 	stop_writeback
 	sync
-	dd if=/dev/zero of=$f bs=`page_size` seek=31 count=1
+	dd if=/dev/zero of=$f bs=`page_size` seek=511 count=1
 	sync
-	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=63 count=1
-	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=31 count=1
+	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=1023 count=1
+	dd conv=notrunc if=/dev/zero of=$f bs=`page_size` seek=511 count=1
 	sync
 	start_writeback
 }
@@ -1515,7 +1535,8 @@ test_47() {
 run_test 47 "Device nodes check ================================"
 
 test_48a() { # bug 2399
-	mkdir $DIR/d48a
+	check_kernel_version 34 || return 0
+	mkdir -p $DIR/d48a
 	cd $DIR/d48a
 	mv $DIR/d48a $DIR/d48.new || error "move directory failed"
 	mkdir $DIR/d48a || error "recreate directory failed"
@@ -1527,23 +1548,64 @@ test_48a() { # bug 2399
 	mkdir . && error "'mkdir .' worked after recreating cwd"
 	rmdir . && error "'rmdir .' worked after recreating cwd"
 	ln -s . baz || error "'ln -s .' failed after recreating cwd"
+	cd .. || error "'cd ..' failed after recreating cwd"
 }
 run_test 48a "Access renamed working dir (should return errors)="
 
 test_48b() { # bug 2399
-	mkdir $DIR/d48b
+	check_kernel_version 34 || return 0
+	mkdir -p $DIR/d48b
 	cd $DIR/d48b
 	rmdir $DIR/d48b || error "remove cwd $DIR/d48b failed"
 	touch foo && error "'touch foo' worked after removing cwd"
 	mkdir foo && error "'mkdir foo' worked after removing cwd"
 	ls . && error "'ls .' worked after removing cwd"
 	ls .. || error "'ls ..' failed after removing cwd"
-	cd . && error "'cd .' worked after recreate cwd"
+	cd . && error "'cd .' worked after removing cwd"
 	mkdir . && error "'mkdir .' worked after removing cwd"
 	rmdir . && error "'rmdir .' worked after removing cwd"
 	ln -s . foo && error "'ln -s .' worked after removing cwd" || true
+	#cd .. || error "'cd ..' failed after removing cwd"
 }
 run_test 48b "Access removed working dir (should return errors)="
+
+test_48c() { # bug 2350
+	check_kernel_version 36 || return 0
+	#sysctl -w portals.debug=-1
+	#set -vx
+	mkdir -p $DIR/d48c/dir
+	cd $DIR/d48c/dir
+	rmdir $DIR/d48c/dir || error "remove cwd $DIR/d48c/dir failed"
+	$TRACE touch foo && error "'touch foo' worked after removing cwd"
+	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
+	$TRACE ls . && error "'ls .' worked after removing cwd"
+	$TRACE ls .. || error "'ls ..' failed after removing cwd"
+	$TRACE cd . && error "'cd .' worked after recreate cwd"
+	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
+	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
+	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd" ||true
+	$TRACE cd .. || error "'cd ..' failed after removing cwd"
+}
+run_test 48c "Access removed working subdir (should return errors)"
+
+test_48d() { # bug 2350
+	check_kernel_version 36 || return 0
+	#sysctl -w portals.debug=-1
+	#set -vx
+	mkdir -p $DIR/d48d/dir
+	cd $DIR/d48d/dir
+	rm -r $DIR/d48d || error "remove cwd and parent $DIR/d48d failed"
+	$TRACE touch foo && error "'touch foo' worked after removing cwd"
+	$TRACE mkdir foo && error "'mkdir foo' worked after removing cwd"
+	$TRACE ls . && error "'ls .' worked after removing cwd"
+	$TRACE ls .. && error "'ls ..' worked after removing cwd"
+	$TRACE cd . && error "'cd .' worked after recreate cwd"
+	$TRACE mkdir . && error "'mkdir .' worked after removing cwd"
+	$TRACE rmdir . && error "'rmdir .' worked after removing cwd"
+	$TRACE ln -s . foo && error "'ln -s .' worked after removing cwd" ||true
+	$TRACE cd .. && error "'cd ..' worked after removing cwd" || true
+}
+run_test 48d "Access removed parent subdir (should return errors)"
 
 test_50() {
 	# bug 1485
@@ -1925,6 +1987,7 @@ run_test 66 "update inode blocks count on client ==============="
 
 test_67() { # bug 3285 - supplementary group fails on MDS, passes on client
 	[ "$RUNAS_ID" = "$UID" ] && echo "skipping test 67" && return
+	check_kernel_version 35 || return 0
 	mkdir $DIR/d67
 	chmod 771 $DIR/d67
 	chgrp $RUNAS_ID $DIR/d67

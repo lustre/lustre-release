@@ -239,6 +239,8 @@ void lustre_common_put_super(struct super_block *sb)
         spin_lock(&dcache_lock);
         hlist_for_each_safe(tmp, next, &sbi->ll_orphan_dentry_list) {
                 struct dentry *dentry = hlist_entry(tmp, struct dentry, d_hash);
+                CWARN("orphan dentry %*s (%p) at unmount\n",
+                      dentry->d_name.len, dentry->d_name.name, dentry);
                 shrink_dcache_parent(dentry);
         }
         spin_unlock(&dcache_lock);
@@ -1132,6 +1134,7 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         LTIME_S(inode->i_mtime) = 0;
         LTIME_S(inode->i_atime) = 0;
         LTIME_S(inode->i_ctime) = 0;
+        inode->i_rdev = 0;
         ll_update_inode(inode, md->body, md->lsm);
 
         /* OIDEBUG(inode); */

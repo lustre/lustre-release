@@ -105,7 +105,7 @@ static int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it)
         /* already opened? */
         if (lli->lli_open_count++)
                 RETURN(0);
-                
+
         LASSERT(!lli->lli_file_data);
 
         OBD_ALLOC(fd, sizeof(*fd));
@@ -266,20 +266,19 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
                                        &fd->fd_cwlockh);
         }
 
-        valid = OBD_MD_FLID;
+        obdo.o_id = lli->lli_st_ino;
+        obdo.o_valid = OBD_MD_FLID;
+        valid = OBD_MD_FLTYPE | OBD_MD_FLMODE | OBD_MD_FLSIZE |OBD_MD_FLBLOCKS |
+                OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
         if (test_bit(LLI_F_HAVE_OST_SIZE_LOCK, &lli->lli_flags))
                 valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
 
-        memset(&obdo, 0, sizeof(obdo));
-        obdo.o_id = lli->lli_st_ino;
-        obdo.o_mode = lli->lli_st_mode;
-        obdo.o_size = lli->lli_st_size;
-        obdo.o_blocks = lli->lli_st_blocks;
+        obdo_from_inode(&obdo, inode, valid);
+
         if (0 /* ll_is_inode_dirty(inode) */) {
                 obdo.o_flags = MDS_BFLAG_UNCOMMITTED_WRITES;
-                valid |= OBD_MD_FLFLAGS;
+                obdo.o_valid |= OBD_MD_FLFLAGS;
         }
-        obdo.o_valid = valid;
         rc = mdc_close(mdc_exp, &obdo, och, &req);
         if (rc == EAGAIN) {
                 /* We are the last writer, so the MDS has instructed us to get
@@ -287,7 +286,7 @@ int llu_mdc_close(struct obd_export *mdc_exp, struct inode *inode)
                 //ll_queue_done_writing(inode);
                 rc = 0;
         } else if (rc) {
-                CERROR("inode %lu close failed: rc = %d\n", lli->lli_st_ino, rc);
+                CERROR("inode %lu close failed: rc %d\n", lli->lli_st_ino, rc);
         } else {
                 rc = llu_objects_destroy(req, inode);
                 if (rc)

@@ -292,3 +292,37 @@ void mdc_getattr_pack(struct ptlrpc_request *req, int valid, int offset,
         }
 }
 
+void mdc_close_pack(struct ptlrpc_request *req, int offset, struct obdo *oa,
+                    int valid, struct obd_client_handle *och)
+{
+        struct mds_body *body;
+
+        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
+
+        mdc_pack_fid(&body->fid1, oa->o_id, 0, oa->o_mode);
+        memcpy(&body->handle, &och->och_fh, sizeof(body->handle));
+        if (oa->o_valid & OBD_MD_FLATIME) {
+                body->atime = oa->o_atime;
+                body->valid |= OBD_MD_FLATIME;
+        }
+        if (oa->o_valid & OBD_MD_FLMTIME) {
+                body->mtime = oa->o_mtime;
+                body->valid |= OBD_MD_FLMTIME;
+        }
+        if (oa->o_valid & OBD_MD_FLCTIME) {
+                body->ctime = oa->o_ctime;
+                body->valid |= OBD_MD_FLCTIME;
+        }
+        if (oa->o_valid & OBD_MD_FLSIZE) {
+                body->size = oa->o_size;
+                body->valid |= OBD_MD_FLSIZE;
+        }
+        if (oa->o_valid & OBD_MD_FLBLOCKS) {
+                body->blocks = oa->o_blocks;
+                body->valid |= OBD_MD_FLBLOCKS;
+        }
+        if (oa->o_valid & OBD_MD_FLFLAGS) {
+                body->flags = oa->o_flags;
+                body->valid |= OBD_MD_FLFLAGS;
+        }
+}

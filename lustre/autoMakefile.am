@@ -12,6 +12,27 @@ SUBDIRS = . include portals ldiskfs lvfs obdclass lov ldlm ptlrpc      \
 EXTRA_DIST = BUGS FDL Rules.in kernel_patches kernel-tests/Makefile	\
 	README.kernel-source
 
+# these empty rules are needed so that automake doesn't add its own
+# recursive rules
+etags-recursive:
+
+ctags-recursive:
+
+tags-recursive:
+
+TAGS:
+
+tags:
+	rm -f $(top_srcdir)/TAGS
+	ETAGSF=`etags --version | grep -iq exuberant && \
+		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
+	find $(top_srcdir) -name '*.[hc]' | xargs etags $$ETAGSF -a
+
+	rm -f $(top_srcdir)/tags
+	CTAGSF=`ctags --version | grep -iq exuberant && \
+		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
+	find $(top_srcdir) -name '*.[hc]' | xargs ctags $$CTAGSF -a
+
 if MODULES
 all-am: modules
 

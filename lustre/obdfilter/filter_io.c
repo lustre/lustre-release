@@ -52,11 +52,6 @@ static int filter_start_page_read(struct obd_device *obd, struct inode *inode,
 
         lnb->page = page;
 
-        if (inode->i_size < lnb->offset + lnb->len - 1)
-                lnb->rc = inode->i_size - lnb->offset;
-        else
-                lnb->rc = lnb->len;
-
         return 0;
 }
 
@@ -362,6 +357,11 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
                                 GOTO(cleanup, rc);
                         }
 
+                        if (inode->i_size < lnb->offset + lnb->len - 1)
+                                lnb->rc = inode->i_size - lnb->offset;
+                        else
+                                lnb->rc = lnb->len;
+
                         tot_bytes += lnb->rc;
                         if (lnb->rc < lnb->len) {
                                 /* short read, be sure to wait on it */
@@ -523,23 +523,53 @@ static int filter_grant_check(struct obd_export *exp, int objcount,
         return rc;
 }
 
-static int filter_start_page_write(struct inode *inode,
+static int filter_start_page_write(struct obd_device *obd, struct inode *inode,
                                    struct niobuf_local *lnb)
 {
-        struct page *page = alloc_pages(GFP_HIGHUSER, 0);
+        struct page *page;
+
+        if (lnb->len != PAGE_SIZE)
+                return filter_start_page_read(obd, inode, lnb);
+
+        page = alloc_pages(GFP_HIGHUSER, 0);
         if (page == NULL) {
                 CERROR("no memory for a temp page\n");
                 RETURN(lnb->rc = -ENOMEM);
         }
+#if 0
         POISON_PAGE(page, 0xf1);
         if (lnb->len != PAGE_SIZE) {
                 memset(kmap(page) + lnb->len, 0, PAGE_SIZE - lnb->len);
                 kunmap(page);
         }
+#endif
         page->index = lnb->offset >> PAGE_SHIFT;
         lnb->page = page;
 
         return 0;
+}
+
+static void filter_abort_page_write(struct niobuf_local *lnb)
+{
+        LASSERT(lnb->page != NULL);
+
+        if (lnb->len != PAGE_SIZE)
+                page_cache_release(lnb->page);
+        else
+                __free_pages(lnb->page, 0);
+}
+
+/* a helper for both the 2.4 and 2.6 commitrw paths which are both built
+ * up by our shared filter_preprw_write() */
+void filter_release_write_page(struct filter_obd *filter, struct inode *inode,
+                               struct niobuf_local *lnb, int rc)
+{
+        if (lnb->len != PAGE_SIZE)
+                return filter_release_read_page(filter, inode, lnb->page);
+
+        if (rc == 0)
+                flip_into_page_cache(inode, lnb->page);
+        __free_page(lnb->page);
 }
 
 /* If we ever start to support multi-object BRW RPCs, we will need to get locks
@@ -623,18 +653,29 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
                 lnb->len    = rnb->len;
                 lnb->flags  = rnb->flags;
 
-                rc = filter_start_page_write(dentry->d_inode, lnb);
+                rc = filter_start_page_write(exp->exp_obd, dentry->d_inode,lnb);
                 if (rc) {
                         CERROR("page err %u@"LPU64" %u/%u %p: rc %d\n",
                                lnb->len, lnb->offset,
                                i, obj->ioo_bufcnt, dentry, rc);
                         while (lnb-- > res)
-                                __free_pages(lnb->page, 0);
+                                filter_abort_page_write(lnb);
                         f_dput(dentry);
                         GOTO(cleanup, rc);
                 }
                 if (lnb->rc == 0)
                         tot_bytes += lnb->len;
+        }
+
+        while (lnb-- > res) {
+                if (lnb->len == PAGE_SIZE)
+                        continue;
+                rc = filter_finish_page_read(lnb);
+                if (rc) {
+                        CERROR("error page %u@"LPU64" %u %p: rc %d\n", lnb->len,
+                               lnb->offset, (int)(lnb - res), lnb->dentry, rc);
+                        GOTO(cleanup, rc);
+                }
         }
 
         if (time_after(jiffies, now + 15 * HZ))
@@ -676,6 +717,24 @@ int filter_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         return -EPROTO;
 }
 
+void filter_release_read_page(struct filter_obd *filter, struct inode *inode,
+                              struct page *page)
+{
+        int drop = 0;
+
+        if (inode != NULL &&
+            (inode->i_size > filter->fo_readcache_max_filesize))
+                drop = 1;
+
+        /* drop from cache like truncate_list_pages() */
+        if (drop && !TryLockPage(page)) {
+                if (page->mapping)
+                        ll_truncate_complete_page(page);
+                unlock_page(page);
+        }
+        page_cache_release(page);
+}
+
 static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
                                 int objcount, struct obd_ioobj *obj,
                                 int niocount, struct niobuf_local *res,
@@ -683,24 +742,19 @@ static int filter_commitrw_read(struct obd_export *exp, struct obdo *oa,
 {
         struct obd_ioobj *o;
         struct niobuf_local *lnb;
-        int i, j, drop = 0;
+        int i, j;
+        struct inode *inode = NULL;
         ENTRY;
 
         if (res->dentry != NULL)
-                drop = (res->dentry->d_inode->i_size >
-                        exp->exp_obd->u.filter.fo_readcache_max_filesize);
+                inode = res->dentry->d_inode;
 
         for (i = 0, o = obj, lnb = res; i < objcount; i++, o++) {
                 for (j = 0 ; j < o->ioo_bufcnt ; j++, lnb++) {
                         if (lnb->page == NULL)
                                 continue;
-                        /* drop from cache like truncate_list_pages() */
-                        if (drop && !TryLockPage(lnb->page)) {
-                                if (lnb->page->mapping)
-                                        ll_truncate_complete_page(lnb->page);
-                                unlock_page(lnb->page);
-                        }
-                        page_cache_release(lnb->page);
+                        filter_release_read_page(&exp->exp_obd->u.filter,
+                                                 inode, lnb->page);
                 }
         }
 
@@ -811,7 +865,7 @@ int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
                 GOTO(out, ret = -ENOMEM);
 
         for (i = 0; i < oa_bufs; i++) {
-                rnb[i].offset = pga[i].off;
+                rnb[i].offset = pga[i].disk_offset;
                 rnb[i].len = pga[i].count;
         }
 
@@ -824,7 +878,7 @@ int filter_brw(int cmd, struct obd_export *exp, struct obdo *oa,
 
         for (i = 0; i < oa_bufs; i++) {
                 void *virt = kmap(pga[i].pg);
-                obd_off off = pga[i].off & ~PAGE_MASK;
+                obd_off off = pga[i].disk_offset & ~PAGE_MASK;
                 void *addr = kmap(lnb[i].page);
 
                 /* 2 kmaps == vanishingly small deadlock opportunity */

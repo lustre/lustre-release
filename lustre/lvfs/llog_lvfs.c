@@ -58,7 +58,7 @@ static int llog_lvfs_pad(struct llog_ctxt *ctxt, struct l_file *file,
         tail.lrt_index = rec.lrh_index = cpu_to_le32(index);
         rec.lrh_type = 0;
 
-        rc = llog_fsfilt_write_record(ctxt, file, &rec, sizeof(rec), 
+        rc = llog_fsfilt_write_record(ctxt, file, &rec, sizeof(rec),
                                       &file->f_pos, 0);
         if (rc) {
                 CERROR("error writing padding record: rc %d\n", rc);
@@ -100,14 +100,14 @@ static int llog_lvfs_write_blob(struct llog_ctxt *ctxt, struct l_file *file,
 
         /* the buf case */
         rec->lrh_len = cpu_to_le32(sizeof(*rec) + buflen + sizeof(end));
-        rc = llog_fsfilt_write_record(ctxt, file, rec, sizeof(*rec), 
+        rc = llog_fsfilt_write_record(ctxt, file, rec, sizeof(*rec),
                                       &file->f_pos, 0);
         if (rc) {
                 CERROR("error writing log hdr: rc %d\n", rc);
                 goto out;
         }
 
-        rc = llog_fsfilt_write_record(ctxt, file, buf, buflen, 
+        rc = llog_fsfilt_write_record(ctxt, file, buf, buflen,
                                       &file->f_pos, 0);
         if (rc) {
                 CERROR("error writing log buffer: rc %d\n", rc);
@@ -116,7 +116,7 @@ static int llog_lvfs_write_blob(struct llog_ctxt *ctxt, struct l_file *file,
 
         end.lrt_len = rec->lrh_len;
         end.lrt_index = rec->lrh_index;
-        rc = llog_fsfilt_write_record(ctxt, file, &end, sizeof(end), 
+        rc = llog_fsfilt_write_record(ctxt, file, &end, sizeof(end),
                                       &file->f_pos, 0);
         if (rc) {
                 CERROR("error writing log tail: rc %d\n", rc);
@@ -175,7 +175,7 @@ static int llog_lvfs_read_header(struct llog_handle *handle)
 /* appends if idx == -1, otherwise overwrites record idx. */
 static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                                struct llog_rec_hdr *rec,
-                               struct llog_cookie *reccookie, 
+                               struct llog_cookie *reccookie,
                                int cookiecount,
                                void *buf, int idx)
 {
@@ -387,7 +387,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *curr_idx,
         RETURN(-EIO);
 }
 
-static int llog_lvfs_prev_block(struct llog_handle *loghandle, 
+static int llog_lvfs_prev_block(struct llog_handle *loghandle,
                                 int prev_idx, void *buf, int len)
 {
         struct llog_ctxt *ctxt = loghandle->lgh_ctxt;
@@ -527,14 +527,14 @@ static struct file *llog_object_create(struct llog_ctxt *ctxt)
         handle = llog_fsfilt_start(ctxt, parent->d_inode, FSFILT_OP_RENAME, NULL);
         if (IS_ERR(handle))
                 GOTO(out_dput, rc = PTR_ERR(handle));
-                                                                                                                             
+
         lock_kernel();
         rc = vfs_rename(parent->d_inode, filp->f_dentry,
                         parent->d_inode, new_child);
         unlock_kernel();
         if (rc)
                 CERROR("error renaming new object %lu:%u: rc %d\n",
-                       filp->f_dentry->d_inode->i_ino, 
+                       filp->f_dentry->d_inode->i_ino,
                        filp->f_dentry->d_inode->i_generation, rc);
 
         err = llog_fsfilt_commit(ctxt, parent->d_inode, handle, 0);
@@ -546,10 +546,10 @@ out_close:
         up(&parent->d_inode->i_sem);
         if (rc) {
                 filp_close(filp, 0);
-                filp = (struct file *)rc; 
+                filp = (struct file *)rc;
         }
 
-        RETURN(filp); 
+        RETURN(filp);
 }
 
 static int llog_add_link_object(struct llog_ctxt *ctxt, struct llog_logid logid,
@@ -575,11 +575,11 @@ static int llog_add_link_object(struct llog_ctxt *ctxt, struct llog_logid logid,
                        logid.lgl_oid, logid.lgl_ogen);
                 LBUG();
         }
-        handle = llog_fsfilt_start(ctxt, ctxt->loc_objects_dir->d_inode, 
+        handle = llog_fsfilt_start(ctxt, ctxt->loc_objects_dir->d_inode,
                                    FSFILT_OP_LINK, NULL);
         if (IS_ERR(handle))
                 GOTO(out_dput, rc = PTR_ERR(handle));
-                                                                                                                             
+
         lock_kernel();
         rc = vfs_link(dentry, ctxt->loc_objects_dir->d_inode, new_child);
         unlock_kernel();
@@ -684,7 +684,7 @@ static int llog_lvfs_destroy(struct llog_handle *loghandle)
         void *handle;
         int rc = -EINVAL, err, namelen;
         ENTRY;
-                                                                                                                             
+
         if (ctxt->loc_lvfs_ctxt)
                 push_ctxt(&saved, ctxt->loc_lvfs_ctxt, NULL);
 
@@ -735,7 +735,7 @@ out_err:
 
                 GOTO(out, rc);
         }
-                                                                                                                             
+
         if (!strcmp(fdentry->d_parent->d_name.name, "OBJECTS")) {
                 LASSERT(parent_inode == ctxt->loc_objects_dir->d_inode);
 
@@ -756,7 +756,7 @@ out:
 
 /* reads the catalog list */
 int llog_get_cat_list(struct lvfs_run_ctxt *ctxt,
-                      struct fsfilt_operations *fsops, char *name, 
+                      struct fsfilt_operations *fsops, char *name,
                       int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
@@ -800,8 +800,8 @@ int llog_get_cat_list(struct lvfs_run_ctxt *ctxt,
 EXPORT_SYMBOL(llog_get_cat_list);
 
 /* writes the cat list */
-int llog_put_cat_list(struct lvfs_run_ctxt *ctxt, 
-                      struct fsfilt_operations *fsops, char *name, 
+int llog_put_cat_list(struct lvfs_run_ctxt *ctxt,
+                      struct fsfilt_operations *fsops, char *name,
                       int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
@@ -892,29 +892,29 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 }
 
 int llog_get_cat_list(struct lvfs_run_ctxt *ctxt,
-                      struct fsfilt_operations *fsops, char *name, 
+                      struct fsfilt_operations *fsops, char *name,
                       int count, struct llog_catid *idarray)
 {
         LBUG();
         return 0;
 }
 
-int llog_put_cat_list(struct lvfs_run_ctxt *ctxt, 
-                      struct fsfilt_operations *fsops, char *name, 
+int llog_put_cat_list(struct lvfs_run_ctxt *ctxt,
+                      struct fsfilt_operations *fsops, char *name,
                       int count, struct llog_catid *idarray)
 {
         LBUG();
         return 0;
 }
 
-int llog_lvfs_prev_block(struct llog_handle *loghandle, 
+int llog_lvfs_prev_block(struct llog_handle *loghandle,
                          int prev_idx, void *buf, int len)
 {
         LBUG();
         return 0;
 }
 
-int llog_lvfs_next_block(struct llog_handle *h, int *curr_idx,
+int llog_lvfs_next_block(struct llog_handle *loghandle, int *curr_idx,
                          int next_idx, __u64 *offset, void *buf, int len)
 {
         LBUG();

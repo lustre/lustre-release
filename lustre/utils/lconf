@@ -1315,7 +1315,7 @@ class LOV(Module):
             self.name = "lov_%s" % name_override
         self.add_lustre_module('lov', 'lov')
         self.mds_uuid = self.db.get_first_ref('mds')
-        self.stripe_sz = self.db.get_val_int('stripesize', 65536)
+        self.stripe_sz = self.db.get_val_int('stripesize', 1048576)
         self.stripe_off = self.db.get_val_int('stripeoffset', 0)
         self.pattern = self.db.get_val_int('stripepattern', 0)
         self.devlist = self.db.get_refs('obd')
@@ -1849,9 +1849,9 @@ class OSD(Module):
 def mgmt_uuid_for_fs(mtpt_name):
     if not mtpt_name:
         return ''
-    mtpt_db = toplevel.lookup_name(mtpt_name)
+    mtpt_db = toplustreDB.lookup_name(mtpt_name)
     fs_uuid = mtpt_db.get_first_ref('filesystem')
-    fs = toplevel.lookup(fs_uuid)
+    fs = toplustreDB.lookup(fs_uuid)
     if not fs:
         return ''
     return fs.get_first_ref('mgmt')
@@ -2436,6 +2436,7 @@ def doHost(lustreDB, hosts):
     prof_list = node_db.get_refs('profile')
 
     if config.write_conf:
+        lustreDB.close()
         for_each_profile(node_db, prof_list, doModules)
         sys_make_devices()
         for_each_profile(node_db, prof_list, doWriteconf)
@@ -2464,6 +2465,7 @@ def doHost(lustreDB, hosts):
 
         for_each_profile(node_db, prof_list, doCleanup)
         for_each_profile(node_db, prof_list, doUnloadModules)
+        lustreDB.close()
 
     else:
         # ugly hack, only need to run lctl commands for --dump
@@ -2494,22 +2496,24 @@ def doHost(lustreDB, hosts):
         sys_set_portals_upcall(portals_upcall)
 
         for_each_profile(node_db, prof_list, doSetup)
+        lustreDB.close()
 
-def doRecovery(db, lctl, tgt_uuid, client_uuid, nid_uuid):
-    tgt = db.lookup(tgt_uuid)
+def doRecovery(lustreDB, lctl, tgt_uuid, client_uuid, nid_uuid):
+    tgt = lustreDB.lookup(tgt_uuid)
     if not tgt:
         raise Lustre.LconfError("doRecovery: "+ tgt_uuid +" not found.")
     new_uuid = get_active_target(tgt)
     if not new_uuid:
         raise Lustre.LconfError("doRecovery: no active target found for: " +
                                 tgt_uuid)
-    net = choose_local_server(get_ost_net(db, new_uuid))
+    net = choose_local_server(get_ost_net(lustreDB, new_uuid))
     if not net:
         raise Lustre.LconfError("Unable to find a connection to:" + new_uuid)
 
     log("Reconnecting", tgt_uuid, " to ",  net.nid_uuid);
     try:
-        oldnet = get_server_by_nid_uuid(db, nid_uuid)
+        oldnet = get_server_by_nid_uuid(lustreDB, nid_uuid)
+        lustreDB.close()
         if oldnet:
             lctl.disconnect(oldnet)
     except CommandError, e:
@@ -2757,7 +2761,7 @@ lconf_options = [
     ]      
 
 def main():
-    global lctl, config, toplevel, CONFIG_FILE
+    global lctl, config, toplustreDB, CONFIG_FILE
 
     # in the upcall this is set to SIG_IGN
     signal.signal(signal.SIGCHLD, signal.SIG_DFL)
@@ -2809,8 +2813,9 @@ def main():
         except Exception:
             panic("%s does not appear to be a config file." % (args[0]))
             sys.exit(1) # make sure to die here, even in debug mode.
+        config_file.close()
         CONFIG_FILE = args[0]
-        db = Lustre.LustreDB_XML(dom.documentElement, dom.documentElement)
+        lustreDB = Lustre.LustreDB_XML(dom.documentElement, dom.documentElement)
         if not config.config:
             config.config = os.path.basename(args[0])# use full path?
             if config.config[-4:] == '.xml':
@@ -2819,7 +2824,7 @@ def main():
         if not config.config:
             panic("--ldapurl requires --config name")
         dn = "config=%s,fs=lustre" % (config.config)
-        db = Lustre.LustreDB_LDAP('', {}, base=dn, url = config.ldapurl)
+        lustreDB = Lustre.LustreDB_LDAP('', {}, base=dn, url = config.ldapurl)
     elif config.ptldebug or config.subsystem:
         sys_set_ptldebug(None)
         sys_set_subsystem(None)
@@ -2829,9 +2834,9 @@ def main():
         print 'see lconf --help for command summary'
         sys.exit(1)
 
-    toplevel = db
+    toplustreDB = lustreDB
 
-    ver = db.get_version()
+    ver = lustreDB.get_version()
     if not ver:
         panic("No version found in config data, please recreate.")
     if ver != Lustre.CONFIG_VERSION:
@@ -2863,7 +2868,7 @@ def main():
         lctl.clear_log(config.record_device, config.record_log)
         lctl.record(config.record_device, config.record_log)
 
-    doHost(db, node_list)
+    doHost(lustreDB, node_list)
 
     if config.record:
         lctl.end_record()

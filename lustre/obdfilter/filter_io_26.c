@@ -161,6 +161,7 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
                 loff_t this_size;
                 sector_t sector;
+                struct page *pages[1];
                 int offs;
 
                 /* If overwriting an existing block, we don't need a grant */
@@ -172,8 +173,10 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                         continue;
 
                 /* get block number for next page */
-                rc = fsfilt_map_inode_page(obd, inode, lnb->page, dreq->blocks,
-                                           dreq->created, 1);
+                pages[0] = lnb->page;
+                rc = fsfilt_map_inode_pages(obd, inode, pages, 1, 
+                                            dreq->blocks, dreq->created, 1,
+                                            NULL);
                 if (rc != 0)
                         GOTO(cleanup, rc);
 
@@ -261,12 +264,11 @@ cleanup:
                 OBD_FREE(dreq, sizeof(*dreq));
         case 0:
                 for (i = 0, lnb = res; i < obj->ioo_bufcnt; i++, lnb++) {
-                        /* flip_.. gets a ref, while free_page only frees
-                         * when it decrefs to 0 */
-                        if (rc == 0)
-                                flip_into_page_cache(inode, lnb->page);
-                        __free_page(lnb->page);
+                        filter_release_write_page(&obd->u.filter,
+                                                  res->dentry->d_inode, lnb,
+                                                  rc);
                 }
+
                 f_dput(res->dentry);
         }
 

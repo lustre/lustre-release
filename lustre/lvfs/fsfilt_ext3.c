@@ -50,6 +50,10 @@
 #include <linux/iobuf.h>
 #endif
 
+#ifdef EXT3_MULTIBLOCK_ALLOCATOR
+#include <linux/ext3_extents.h>
+#endif
+
 static kmem_cache_t *fcb_cache;
 static atomic_t fcb_cache_count = ATOMIC_INIT(0);
 
@@ -661,12 +665,231 @@ static int fsfilt_ext3_sync(struct super_block *sb)
         return ext3_force_commit(sb);
 }
 
+#ifdef EXT3_MULTIBLOCK_ALLOCATOR
+struct bpointers {
+        unsigned long *blocks;
+        int *created;
+        unsigned long start;
+        int num;
+        int init_num;
+};
+
+static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
+                                  struct ext3_ext_path *path,
+                                  struct ext3_extent *newex, int exist)
+{
+        struct inode *inode = tree->inode;
+        struct bpointers *bp = tree->private;
+        int count, err, goal;
+        unsigned long pblock;
+        unsigned long tgen;
+        loff_t new_i_size;
+        handle_t *handle;
+        int i;
+
+        i = EXT_DEPTH(tree);
+        EXT_ASSERT(i == path->p_depth);
+        EXT_ASSERT(path[i].p_hdr);
+
+        if (exist) {
+                err = EXT_CONTINUE;
+                goto map;
+        }
+
+        tgen = EXT_GENERATION(tree);
+        count = ext3_ext_calc_credits_for_insert(tree, path);
+        up_write(&EXT3_I(inode)->truncate_sem);
+
+        handle = ext3_journal_start(inode, count + EXT3_ALLOC_NEEDED + 1);
+        if (IS_ERR(handle)) {
+                down_write(&EXT3_I(inode)->truncate_sem);
+                return PTR_ERR(handle);
+        }
+
+        if (tgen != EXT_GENERATION(tree)) {
+                /* the tree has changed. so path can be invalid at moment */
+                ext3_journal_stop(handle, inode);
+                down_write(&EXT3_I(inode)->truncate_sem);
+                return EXT_REPEAT;
+        }
+
+        down_write(&EXT3_I(inode)->truncate_sem);
+        goal = ext3_ext_find_goal(inode, path, newex->e_block);
+        count = newex->e_num;
+        pblock = ext3_new_blocks(handle, inode, &count, goal, &err);
+        if (!pblock)
+                goto out;
+        EXT_ASSERT(count <= newex->e_num);
+
+        /* insert new extent */
+        newex->e_start = pblock;
+        newex->e_num = count;
+        err = ext3_ext_insert_extent(handle, tree, path, newex);
+        if (err)
+                goto out;
+
+        /* correct on-disk inode size */
+        if (newex->e_num > 0) {
+                new_i_size = (loff_t) newex->e_block + newex->e_num;
+                new_i_size = new_i_size << inode->i_blkbits;
+                if (new_i_size > EXT3_I(inode)->i_disksize) {
+                        EXT3_I(inode)->i_disksize = new_i_size;
+                        err = ext3_mark_inode_dirty(handle, inode);
+                }
+        }
+
+out:
+        ext3_journal_stop(handle, inode);
+map:
+        if (err >= 0) {
+                /* map blocks */
+                if (bp->num == 0) {
+                        CERROR("hmm. why do we find this extent?\n");
+                        CERROR("initial space: %lu:%u\n",
+                                bp->start, bp->init_num);
+                        CERROR("current extent: %u/%u/%u %d\n",
+                                newex->e_block, newex->e_num,
+                                newex->e_start, exist);
+                }
+                i = 0;
+                if (newex->e_block < bp->start)
+                        i = bp->start - newex->e_block;
+                if (i >= newex->e_num)
+                        CERROR("nothing to do?! i = %d, e_num = %u\n",
+                                        i, newex->e_num);
+                for (; i < newex->e_num && bp->num; i++) {
+                        *(bp->created) = (exist == 0 ? 1 : 0);
+                        bp->created++;
+                        *(bp->blocks) = newex->e_start + i;
+                        bp->blocks++;
+                        bp->num--;
+                }
+        }
+        return err;
+}
+
+int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
+                       unsigned long num, unsigned long *blocks,
+                       int *created, int create)
+{
+        struct ext3_extents_tree tree;
+        struct bpointers bp;
+        int err;
+
+        CDEBUG(D_OTHER, "blocks %lu-%lu requested for inode %u\n",
+                block, block + num, (unsigned) inode->i_ino);
+
+        ext3_init_tree_desc(&tree, inode);
+        tree.private = &bp;
+        bp.blocks = blocks;
+        bp.created = created;
+        bp.start = block;
+        bp.init_num = bp.num = num;
+
+        down_write(&EXT3_I(inode)->truncate_sem);
+        err = ext3_ext_walk_space(&tree, block, num, ext3_ext_new_extent_cb);
+        ext3_ext_invalidate_cache(&tree);
+        up_write(&EXT3_I(inode)->truncate_sem);
+
+        return err;
+}
+
+int fsfilt_ext3_map_ext_inode_pages(struct inode *inode, struct page **page,
+                                    int pages, unsigned long *blocks,
+                                    int *created, int create)
+{
+        int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
+        int rc = 0, i = 0;
+        struct page *fp = NULL;
+        int clen = 0;
+
+        CDEBUG(D_OTHER, "inode %lu: map %d pages from %lu\n",
+                inode->i_ino, pages, (*page)->index);
+
+        /* pages are sorted already. so, we just have to find
+         * contig. space and process them properly */
+        while (i < pages) {
+                if (fp == NULL) {
+                        /* start new extent */
+                        fp = *page++;
+                        clen = 1;
+                        i++;
+                        continue;
+                } else if (fp->index + clen == (*page)->index) {
+                        /* continue the extent */
+                        page++;
+                        clen++;
+                        i++;
+                        continue;
+                }
+
+                /* process found extent */
+                rc = fsfilt_map_nblocks(inode, fp->index * blocks_per_page,
+                                        clen * blocks_per_page, blocks,
+                                        created, create);
+                if (rc)
+                        GOTO(cleanup, rc);
+
+                /* look for next extent */
+                fp = NULL;
+                blocks += blocks_per_page * clen;
+                created += blocks_per_page * clen;
+        }
+
+        if (fp)
+                rc = fsfilt_map_nblocks(inode, fp->index * blocks_per_page,
+                                        clen * blocks_per_page, blocks,
+                                        created, create);
+cleanup:
+        return rc;
+}
+#endif
+
 extern int ext3_map_inode_page(struct inode *inode, struct page *page,
                                unsigned long *blocks, int *created, int create);
-int fsfilt_ext3_map_inode_page(struct inode *inode, struct page *page,
-                               unsigned long *blocks, int *created, int create)
+int fsfilt_ext3_map_bm_inode_pages(struct inode *inode, struct page **page,
+                                   int pages, unsigned long *blocks,
+                                   int *created, int create)
 {
-        return ext3_map_inode_page(inode, page, blocks, created, create);
+        int blocks_per_page = PAGE_SIZE >> inode->i_blkbits;
+        unsigned long *b;
+        int rc = 0, i, *cr;
+
+        for (i = 0, cr = created, b = blocks; i < pages; i++, page++) {
+                rc = ext3_map_inode_page(inode, *page, b, cr, create);
+                if (rc) {
+                        CERROR("ino %lu, blk %lu cr %u create %d: rc %d\n",
+                               inode->i_ino, *b, *cr, create, rc);
+                        break;
+                }
+
+                b += blocks_per_page;
+                cr += blocks_per_page;
+        }
+        return rc;
+}
+
+int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
+                                int pages, unsigned long *blocks,
+                                int *created, int create,
+                                struct semaphore *optional_sem)
+{
+        int rc;
+#ifdef EXT3_MULTIBLOCK_ALLOCATOR
+        if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL) {
+                rc = fsfilt_ext3_map_ext_inode_pages(inode, page, pages,
+                                                     blocks, created, create);
+                return rc;
+        }
+#endif
+        if (optional_sem != NULL)
+                down(optional_sem);
+        rc = fsfilt_ext3_map_bm_inode_pages(inode, page, pages, blocks,
+                                            created, create);
+        if (optional_sem != NULL)
+                up(optional_sem);
+
+        return rc;
 }
 
 extern int ext3_prep_san_write(struct inode *inode, long *blocks,
@@ -910,7 +1133,7 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_add_journal_cb      = fsfilt_ext3_add_journal_cb,
         .fs_statfs              = fsfilt_ext3_statfs,
         .fs_sync                = fsfilt_ext3_sync,
-        .fs_map_inode_page      = fsfilt_ext3_map_inode_page,
+        .fs_map_inode_pages     = fsfilt_ext3_map_inode_pages,
         .fs_prep_san_write      = fsfilt_ext3_prep_san_write,
         .fs_write_record        = fsfilt_ext3_write_record,
         .fs_read_record         = fsfilt_ext3_read_record,

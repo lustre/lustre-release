@@ -92,7 +92,7 @@ Index: linux-2.6.4-51.0/fs/namei.c
  		}
  	}
  	return result;
-@@ -563,6 +580,31 @@
+@@ -563,6 +580,33 @@
  	return PTR_ERR(dentry);
  }
  
@@ -109,6 +109,8 @@ Index: linux-2.6.4-51.0/fs/namei.c
 +		if ((err = permission(dentry->d_parent->d_inode, MAY_EXEC,nd)))
 +			return err;
 +		new = real_lookup(dentry->d_parent, &dentry->d_name, nd);
++		if (IS_ERR(new))
++			return PTR_ERR(new);
 +		d_invalidate(dentry);
 +		dput(dentry);
 +		nd->dentry = dentry = new;

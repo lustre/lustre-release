@@ -65,21 +65,22 @@ static int ll_brw(int cmd, struct inode *inode, struct obdo *oa,
         ENTRY;
 
         pg.pg = page;
-        pg.off = ((obd_off)page->index) << PAGE_SHIFT;
+        pg.disk_offset = pg.page_offset = ((obd_off)page->index) << PAGE_SHIFT;
 
-        if (cmd == OBD_BRW_WRITE && (pg.off + PAGE_SIZE > inode->i_size))
+        if (cmd == OBD_BRW_WRITE &&
+            (pg.disk_offset + PAGE_SIZE > inode->i_size))
                 pg.count = inode->i_size % PAGE_SIZE;
         else
                 pg.count = PAGE_SIZE;
 
         CDEBUG(D_PAGE, "%s %d bytes ino %lu at "LPU64"/"LPX64"\n",
                cmd & OBD_BRW_WRITE ? "write" : "read", pg.count, inode->i_ino,
-               pg.off, pg.off);
+               pg.disk_offset, pg.disk_offset);
         if (pg.count == 0) {
                 CERROR("ZERO COUNT: ino %lu: size %p:%Lu(%p:%Lu) idx %lu off "
-                       LPU64"\n",
-                       inode->i_ino, inode, inode->i_size, page->mapping->host,
-                       page->mapping->host->i_size, page->index, pg.off);
+                       LPU64"\n", inode->i_ino, inode, inode->i_size,
+                       page->mapping->host, page->mapping->host->i_size,
+                       page->index, pg.disk_offset);
         }
 
         pg.flag = flags;
@@ -159,7 +160,7 @@ int ll_prepare_write(struct file *file, struct page *page, unsigned from,
 
         /* Check to see if we should return -EIO right away */
         pga.pg = page;
-        pga.off = offset;
+        pga.disk_offset = pga.page_offset = offset;
         pga.count = PAGE_SIZE;
         pga.flag = 0;
 

@@ -1565,13 +1565,10 @@ lwt_put_string(char *ustr)
 static int
 lwt_print(FILE *f, cycles_t t0, cycles_t tlast, double mhz, int cpu, lwt_event_t *e)
 {
-        char            whenstr[32];
         char           *where = lwt_get_string(e->lwte_where);
 
         if (where == NULL)
                 return (-1);
-
-        sprintf(whenstr, LPU64, (__u64)(e->lwte_when - t0));
 
         fprintf(f, "%#010lx %#010lx %#010lx %#010lx: %#010lx %1d %10.6f %10.2f %s\n",
                 e->lwte_p1, e->lwte_p2, e->lwte_p3, e->lwte_p4,
@@ -1624,6 +1621,7 @@ jt_ptl_lwt(int argc, char **argv)
         cycles_t        tnow;
         struct timeval  tvnow;
         int             printed_date = 0;
+        int             nlines = 0;
         FILE           *f = stdout;
 
         if (argc < 2 ||
@@ -1773,6 +1771,12 @@ jt_ptl_lwt(int argc, char **argv)
                         rc = lwt_print(f, t0, tlast, mhz, cpu, next_event[cpu]);
                         if (rc != 0)
                                 break;
+
+                        if (++nlines % 10000 == 0 && f != stdout) {
+                                /* show some activity... */
+                                printf(".");
+                                fflush (stdout);
+                        }
                 }
 
                 tlast = next_event[cpu]->lwte_when;
@@ -1786,8 +1790,10 @@ jt_ptl_lwt(int argc, char **argv)
                         next_event[cpu] = NULL;
         }
 
-        if (f != stdout)
+        if (f != stdout) {
+                printf("\n");
                 fclose(f);
+        }
 
         free(events);
         return (0);

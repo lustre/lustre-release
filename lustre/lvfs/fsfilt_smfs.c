@@ -434,8 +434,10 @@ static int fsfilt_smfs_sync(struct super_block *sb)
         RETURN(rc); 
 }
 
-int fsfilt_smfs_map_inode_page(struct inode *inode, struct page *page,
-                               unsigned long *blocks, int *created, int create)
+int fsfilt_smfs_map_inode_pages(struct inode *inode, struct page **page,
+                                int pages, unsigned long *blocks, 
+                                int *created, int create,
+                                struct semaphore *sem)
 {
 	struct  fsfilt_operations *cache_fsfilt = I2FOPS(inode);
         struct  inode *cache_inode = NULL;
@@ -449,12 +451,12 @@ int fsfilt_smfs_map_inode_page(struct inode *inode, struct page *page,
         if (!cache_inode)
                 RETURN(rc);
 
-        if (!cache_fsfilt->fs_map_inode_page) 
+        if (!cache_fsfilt->fs_map_inode_pages) 
 		RETURN(-ENOSYS);
 	
 	down(&cache_inode->i_sem);
-        rc = cache_fsfilt->fs_map_inode_page(cache_inode, page, 
-                                             blocks, created, create);
+        rc = cache_fsfilt->fs_map_inode_pages(cache_inode, page, pages, blocks,
+                                              created, create, NULL);
 	up(&cache_inode->i_sem);
 	
         RETURN(rc);
@@ -664,7 +666,7 @@ static struct fsfilt_operations fsfilt_smfs_ops = {
         .fs_add_journal_cb      = fsfilt_smfs_add_journal_cb,
         .fs_statfs              = fsfilt_smfs_statfs,
         .fs_sync                = fsfilt_smfs_sync,
-        .fs_map_inode_page      = fsfilt_smfs_map_inode_page,
+        .fs_map_inode_pages     = fsfilt_smfs_map_inode_pages,
         .fs_prep_san_write      = fsfilt_smfs_prep_san_write,
         .fs_write_record        = fsfilt_smfs_write_record,
         .fs_read_record         = fsfilt_smfs_read_record,

@@ -77,9 +77,9 @@ static void save_fops(struct file *filp, struct inode *inode,
                 else if (S_ISFIFO(inode->i_mode))
                         filp->f_op = &ll_special_fifo_file_fops;
 
-                CWARN("saved %p, replaced with %p\n", *pfop, filp->f_op);
+                CDEBUG(D_INFO,"saved %p, replaced with %p\n", *pfop,filp->f_op);
                 if ((*pfop)->owner)
-                        CWARN("%p has owner %p\n", *pfop,(*pfop)->owner);
+                        CDEBUG(D_INFO,"%p has owner %p\n",*pfop,(*pfop)->owner);
         }
 }
 
@@ -309,7 +309,7 @@ static int ll_special_open(struct inode *inode, struct file *filp)
 
         err = ll_local_open(filp, it);
         if (rc != 0) {
-                CERROR("error opening special file: rc %d", rc);
+                CERROR("error opening special file: rc %d\n", rc);
                 ll_mdc_close(ll_i2sbi(inode)->ll_mdc_exp, inode, filp);
         } else if (err) {
                 if (pfop && *pfop) {
@@ -348,12 +348,12 @@ struct inode_operations ll_special_inode_operations = {
 };
 
 struct file_operations ll_special_chr_inode_fops = {
-        .owner          = THIS_MODULE,
+        //FIXME .owner          = THIS_MODULE,
         .open           = ll_special_open,
 };
 
 struct file_operations ll_special_blk_inode_fops = {
-        .owner          = THIS_MODULE,
+        //FIXME .owner          = THIS_MODULE,
         .read           = ll_special_read,
         .write          = ll_special_write,
         .ioctl          = ll_special_ioctl,
@@ -365,17 +365,17 @@ struct file_operations ll_special_blk_inode_fops = {
 };
 
 struct file_operations ll_special_fifo_inode_fops = {
-        .owner          = THIS_MODULE,
+        //FIXME .owner          = THIS_MODULE,
         .open           = ll_special_open,
 };
 
 struct file_operations ll_special_sock_inode_fops = {
-        .owner          = THIS_MODULE,
+        //FIXME .owner          = THIS_MODULE,
         .open           = ll_special_open
 };
 
 struct file_operations ll_special_chr_file_fops = {
-        .owner          = THIS_MODULE,
+        //FIXME .owner          = THIS_MODULE,
         .llseek         = ll_special_file_seek,
         .read           = ll_special_file_read,
         .write          = ll_special_file_write,
@@ -387,7 +387,7 @@ struct file_operations ll_special_chr_file_fops = {
 };
 
 struct file_operations ll_special_fifo_file_fops = {
-        .owner          = THIS_MODULE,
+        //FIXME .owner          = THIS_MODULE,
         .llseek         = ll_special_file_seek,
         .read           = ll_special_file_read,
         .write          = ll_special_file_write,

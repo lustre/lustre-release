@@ -405,18 +405,21 @@ static void mdc_commit_close(struct ptlrpc_request *req)
 static int mdc_close_interpret(struct ptlrpc_request *req, void *data, int rc)
 {
         union ptlrpc_async_args *aa = data;
-        struct mdc_rpc_lock *rpc_lock = aa->pointer_arg[0];
+        struct mdc_rpc_lock *rpc_lock;
         struct obd_device *obd = aa->pointer_arg[1];
+        unsigned long flags;
+
+        spin_lock_irqsave(&req->rq_lock, flags);
+        rpc_lock = aa->pointer_arg[0];
+        aa->pointer_arg[0] = NULL;
+        spin_unlock_irqrestore (&req->rq_lock, flags);
 
         if (rpc_lock == NULL) {
                 CERROR("called with NULL rpc_lock\n");
         } else {
                 mdc_put_rpc_lock(rpc_lock, NULL);
-                LASSERTF(req->rq_async_args.pointer_arg[0] ==
-                         obd->u.cli.cl_rpc_lock, "%p != %p\n",
-                         req->rq_async_args.pointer_arg[0],
-                         obd->u.cli.cl_rpc_lock);
-                aa->pointer_arg[0] = NULL;
+                LASSERTF(rpc_lock == obd->u.cli.cl_rpc_lock, "%p != %p\n",
+                         rpc_lock, obd->u.cli.cl_rpc_lock);
         }
         wake_up(&req->rq_reply_waitq);
         RETURN(rc);
@@ -430,9 +433,8 @@ static int mdc_close_check_reply(struct ptlrpc_request *req)
         unsigned long flags;
 
         spin_lock_irqsave(&req->rq_lock, flags);
-        if (PTLRPC_REQUEST_COMPLETE(req)) {
+        if (req->rq_async_args.pointer_arg[0] == NULL)
                 rc = 1;
-        }
         spin_unlock_irqrestore (&req->rq_lock, flags);
         return rc;
 }
@@ -442,13 +444,12 @@ static int go_back_to_sleep(void *unused)
         return 0;
 }
 
-int mdc_close(struct obd_export *exp, struct obdo *obdo,
+int mdc_close(struct obd_export *exp, struct obdo *oa,
               struct obd_client_handle *och, struct ptlrpc_request **request)
 {
-        struct mds_body *body;
         struct obd_device *obd = class_exp2obd(exp);
-        int reqsize = sizeof(*body);
-        int rc, repsize[3] = {sizeof(*body),
+        int reqsize = sizeof(struct mds_body);
+        int rc, repsize[3] = {sizeof(struct mds_body),
                               obd->u.cli.cl_max_mds_easize,
                               obd->u.cli.cl_max_mds_cookiesize};
         struct ptlrpc_request *req;
@@ -473,13 +474,7 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
                 CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
         }
 
-        body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*body));
-        mdc_pack_fid(&body->fid1, obdo->o_id, 0, obdo->o_mode);
-        memcpy(&body->handle, &och->och_fh, sizeof(body->handle));
-        body->size = obdo->o_size;
-        body->blocks = obdo->o_blocks;
-        body->flags = obdo->o_flags;
-        body->valid = obdo->o_valid;
+        mdc_close_pack(req, 0, oa, oa->o_valid, och);
 
         req->rq_replen = lustre_msg_size(3, repsize);
         req->rq_commit_cb = mdc_commit_close;
@@ -501,7 +496,8 @@ int mdc_close(struct obd_export *exp, struct obdo *obdo,
         if (req->rq_repmsg == NULL) {
                 CDEBUG(D_HA, "request failed to send: %p, %d\n", req,
                        req->rq_status);
-                rc = req->rq_status ? req->rq_status : -EIO;
+                if (rc == 0)
+                        rc = req->rq_status ? req->rq_status : -EIO;
         } else if (rc == 0) {
                 rc = req->rq_repmsg->status;
                 if (req->rq_repmsg->type == PTL_RPC_MSG_ERR) {

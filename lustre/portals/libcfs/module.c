@@ -401,14 +401,22 @@ static int libcfs_ioctl(struct inode *inode, struct file *file,
                 err = lwt_control (data->ioc_flags, data->ioc_misc);
                 break;
                 
-        case IOC_PORTAL_LWT_SNAPSHOT:
-                err = lwt_snapshot (&data->ioc_nid,
-                                    &data->ioc_count, &data->ioc_misc,
+        case IOC_PORTAL_LWT_SNAPSHOT: {
+                cycles_t   now;
+                int        ncpu;
+                int        total_size;
+                
+                err = lwt_snapshot (&now, &ncpu, &total_size,
                                     data->ioc_pbuf1, data->ioc_plen1);
+                data->ioc_nid = now;
+                data->ioc_count = ncpu;
+                data->ioc_misc = total_size;
+
                 if (err == 0 &&
                     copy_to_user((char *)arg, data, sizeof (*data)))
                         err = -EFAULT;
                 break;
+        }
                 
         case IOC_PORTAL_LWT_LOOKUP_STRING:
                 err = lwt_lookup_string (&data->ioc_count, data->ioc_pbuf1,
@@ -421,7 +429,13 @@ static int libcfs_ioctl(struct inode *inode, struct file *file,
         case IOC_PORTAL_NAL_CMD: {
                 struct portals_cfg pcfg;
 
-                LASSERT (data->ioc_plen1 == sizeof(pcfg));
+                if (data->ioc_plen1 != sizeof(pcfg)) {
+                        CERROR("Bad ioc_plen1 %d (wanted %d)\n",
+                               data->ioc_plen1, sizeof(pcfg));
+                        err = -EINVAL;
+                        break;
+                }
+
                 if (copy_from_user(&pcfg, (void *)data->ioc_pbuf1, 
                                    sizeof(pcfg))) {
                         err = -EFAULT;

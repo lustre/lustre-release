@@ -535,7 +535,7 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                         goto out;
 
                 pgp->count = PAGE_SIZE;
-                pgp->off = off;
+                pgp->disk_offset = pgp->page_offset = off;
                 pgp->flag = 0;
 
                 if (verify)
@@ -556,7 +556,8 @@ static int echo_client_kbrw(struct obd_device *obd, int rw, struct obdo *oa,
                 if (verify) {
                         int vrc;
                         vrc = echo_client_page_debug_check(lsm, pgp->pg, oa->o_id,
-                                                           pgp->off, pgp->count);
+                                                           pgp->page_offset,
+                                                           pgp->count);
                         if (vrc != 0 && rc == 0)
                                 rc = vrc;
                 }
@@ -615,7 +616,7 @@ static int echo_client_ubrw(struct obd_device *obd, int rw,
         for (i = 0, off = offset, pgp = pga;
              i < npages;
              i++, off += PAGE_SIZE, pgp++) {
-                pgp->off = off;
+                pgp->disk_offset = pgp->page_offset = off;
                 pgp->pg = kiobuf->maplist[i];
                 pgp->count = PAGE_SIZE;
                 pgp->flag = 0;

@@ -101,7 +101,8 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                        file->f_dentry->d_inode->i_size);
 
                 rc = fsfilt_readpage(req->rq_export->exp_obd, file,
-                                     page_address(pages[i]), tmpsize, &offset);
+                                     kmap(pages[i]), tmpsize, &offset);
+                kunmap(pages[i]);
 
                 if (rc != tmpsize)
                         GOTO(cleanup_buf, rc = -EIO);
@@ -342,6 +343,8 @@ static int mds_destroy_export(struct obd_export *export)
                 list_del(&mfd->mfd_list);
                 spin_unlock(&med->med_open_lock);
 
+                /* If you change this message, be sure to update
+                 * replay_single:test_46 */
                 CERROR("force closing client file handle for %*s (%s:%lu)\n",
                        dentry->d_name.len, dentry->d_name.name,
                        ll_bdevname(dentry->d_inode->i_sb, btmp),
@@ -1087,6 +1090,21 @@ int mds_handle(struct ptlrpc_request *req)
                 obd = req->rq_export->exp_obd;
                 mds = &obd->u.mds;
 
+                /* sanity check: if the xid matches, the request must
+                 * be marked as a resent or replayed */
+                if (req->rq_xid == med->med_mcd->mcd_last_xid)
+                        LASSERTF(lustre_msg_get_flags(req->rq_reqmsg) &
+                                 (MSG_RESENT | MSG_REPLAY),
+                                 "rq_xid "LPU64" matches last_xid, "
+                                 "expected RESENT flag\n",
+                                 req->rq_xid);
+                /* else: note the opposite is not always true; a
+                 * RESENT req after a failover will usually not match
+                 * the last_xid, since it was likely never
+                 * committed. A REPLAYed request will almost never
+                 * match the last xid, however it could for a
+                 * committed, but still retained, open. */
+
                 /* Check for aborted recovery. */
                 spin_lock_bh(&obd->obd_processing_task_lock);
                 abort_recovery = obd->obd_abort_recovery;
@@ -1670,6 +1688,12 @@ static void fixup_handle_for_resent_req(struct ptlrpc_request *req,
                 }
         }
         l_unlock(&obd->obd_namespace->ns_lock);
+
+        /* If the xid matches, then we know this is a resent request,
+         * and allow it. (It's probably an OPEN, for which we don't
+         * send a lock */
+        if (req->rq_xid == exp->exp_mds_data.med_mcd->mcd_last_xid)
+                return;
 
         /* This remote handle isn't enqueued, so we never received or
          * processed this request.  Clear MSG_RESENT, because it can

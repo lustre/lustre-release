@@ -396,6 +396,14 @@ static int lov_setup(struct obd_device *obd, obd_count len, void *buf)
                 RETURN(-EINVAL);
         }
 
+        if (desc->ld_default_stripe_size < PTLRPC_MAX_BRW_SIZE) {
+                CWARN("Increasing default_stripe_size "LPU64" to %u\n",
+                      desc->ld_default_stripe_size, PTLRPC_MAX_BRW_SIZE);
+                CWARN("Please update config and run --write-conf on MDS\n");
+
+                desc->ld_default_stripe_size = PTLRPC_MAX_BRW_SIZE;
+        }
+
         /* Because of 64-bit divide/mod operations only work with a 32-bit
          * divisor in a 32-bit kernel, we cannot support a stripe width
          * of 4GB or larger on 32-bit CPUs.
@@ -1460,13 +1468,13 @@ static int lov_brw_check(struct lov_obd *lov, struct obdo *oa,
         /* The caller just wants to know if there's a chance that this
          * I/O can succeed */
         for (i = 0; i < oa_bufs; i++) {
-                int stripe = lov_stripe_number(lsm, pga[i].off);
+                int stripe = lov_stripe_number(lsm, pga[i].disk_offset);
                 int ost = lsm->lsm_oinfo[stripe].loi_ost_idx;
                 obd_off start, end;
 
-                if (!lov_stripe_intersects(lsm, i, pga[i].off, 
-                                           pga[i].off + pga[i].count, &start,
-                                           &end))
+                if (!lov_stripe_intersects(lsm, i, pga[i].disk_offset,
+                                           pga[i].disk_offset + pga[i].count,
+                                           &start, &end))
                         continue;
 
                 if (lov->tgts[ost].active == 0) {
@@ -1532,7 +1540,7 @@ static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
         }
 
         for (i = 0; i < oa_bufs; i++) {
-                where[i] = lov_stripe_number(lsm, pga[i].off);
+                where[i] = lov_stripe_number(lsm, pga[i].disk_offset);
                 stripeinfo[where[i]].bufct++;
         }
 
@@ -1551,7 +1559,8 @@ static int lov_brw(int cmd, struct obd_export *exp, struct obdo *src_oa,
                 shift = stripeinfo[which].index + stripeinfo[which].subcount;
                 LASSERT(shift < oa_bufs);
                 ioarr[shift] = pga[i];
-                lov_stripe_offset(lsm, pga[i].off, which, &ioarr[shift].off);
+                lov_stripe_offset(lsm, pga[i].disk_offset, which,
+                                  &ioarr[shift].disk_offset);
                 stripeinfo[which].subcount++;
         }
 
@@ -1684,7 +1693,7 @@ static int lov_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
                 GOTO(out_obdos, rc = -ENOMEM);
 
         for (i = 0; i < oa_bufs; i++) {
-                where[i] = lov_stripe_number(lsm, pga[i].off);
+                where[i] = lov_stripe_number(lsm, pga[i].disk_offset);
                 stripeinfo[where[i]].bufct++;
         }
 
@@ -1708,7 +1717,8 @@ static int lov_brw_async(int cmd, struct obd_export *exp, struct obdo *oa,
                 shift = stripeinfo[which].index + stripeinfo[which].subcount;
                 LASSERT(shift < oa_bufs);
                 ioarr[shift] = pga[i];
-                lov_stripe_offset(lsm, pga[i].off, which, &ioarr[shift].off);
+                lov_stripe_offset(lsm, pga[i].disk_offset, which,
+                                  &ioarr[shift].disk_offset);
                 stripeinfo[which].subcount++;
         }
 

@@ -31,7 +31,7 @@ JSIZE=${JSIZE:-0}
 MDSISIZE=${MDSISIZE:-0}
 [ "$MDSISIZE" -gt 0 ] && IARG="--inode_size $MDSISIZE"
 
-STRIPE_BYTES=65536
+STRIPE_BYTES=1048576
 STRIPES_PER_OBJ=0	# 0 means stripe over all OSTs
 
 rm -f $config

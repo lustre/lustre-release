@@ -76,6 +76,10 @@ static int ll_test_inode(struct inode *inode, void *opaque)
                        md->body->ino, md->body->generation);
         }
 
+#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
+        if (inode->i_ino != md->body->ino)
+                return 0;
+#endif
         if (inode->i_generation != md->body->generation)
                 return 0;
 
@@ -267,6 +271,9 @@ struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                 atomic_inc(&dentry->d_count);
                 iput(inode);
                 dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
+                CDEBUG(D_DENTRY, "alias dentry %*s (%p) parent %p inode %p "
+                       "refc %d\n", de->d_name.len, de->d_name.name, de,
+                       de->d_parent, de->d_inode, atomic_read(&de->d_count));
                 return dentry;
         }
 

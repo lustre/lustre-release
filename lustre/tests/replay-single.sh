@@ -24,7 +24,7 @@ gen_config() {
 	 add_mdsfailover mds --dev $MDSDEV --size $MDSSIZE
     fi
     
-    add_lov lov1 mds --stripe_sz $STRIPE_BYTES\
+    add_lov lov1 mds --stripe_sz $STRIPE_BYTES \
 	--stripe_cnt $STRIPES_PER_OBJ --stripe_pattern 0
     add_ost ost --lov lov1 --dev $OSTDEV --size $OSTSIZE
     add_ost ost2 --lov lov1 --dev ${OSTDEV}-2 --size $OSTSIZE
@@ -898,6 +898,17 @@ test_45() {
     return 0
 }
 run_test 45 "Handle failed close"
+
+test_46() {
+    dmesg -c >/dev/null
+    drop_reply "touch $DIR/$tfile"
+    fail mds
+    # ironically, the previous test, 45, will cause a real forced close,
+    # so just look for one for this test
+    dmesg | grep -i "force closing client file handle for $tfile" && return 1
+    return 0
+}
+run_test 46 "Don't leak file handle after open resend (3325)"
 
 equals_msg test complete, cleaning up
 $CLEANUP

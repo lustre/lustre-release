@@ -87,8 +87,8 @@ Object creation command summary:
   --failover
   --dev path
   --backdev path
-  --fstype extN|ext3
-  --backfstype ext3|tmpfs
+  --fstype ldiskfs|ext3
+  --backfstype ldiskfs|ext3|tmpfs
   --size size
   --nspath
   --journal_size size
@@ -111,8 +111,8 @@ Object creation command summary:
   --dev path
   --backdev path
   --size size
-  --fstype extN|ext3
-  --backfstype ext3|tmpfs
+  --fstype ldiskfs|ext3
+  --backfstype ldiskfs|ext3|tmpfs
   --journal_size size
   --inode_size size
   --osdtype obdecho|obdfilter
@@ -198,8 +198,8 @@ lmc_options = [
     ('dev', "Path of the device on local system.", PARAM,""),
     ('backdev', "Path of the device for backing storage on local system.", PARAM,""),
     ('size', "Specify the size of the device if needed.", PARAM,"0"),
-    ('journal_size', "Specify new journal size for underlying ext3 file system.", PARAM,"0"),
-    ('inode_size', "Specify new inode size for underlying ext3 file system.", PARAM,"0"),
+    ('journal_size', "Specify new journal size for underlying file system.", PARAM,"0"),
+    ('inode_size', "Specify new inode size for underlying file system.", PARAM,"0"),
     ('fstype', "Optional argument to specify the filesystem type.", PARAM, "ext3"),
     ('backfstype', "Optional argument to specify the backing filesystem type.", PARAM, "ext3"),
     ('mkfsoptions', "Optional argument to mkfs.", PARAM, ""),
@@ -387,17 +387,17 @@ class GenConfig:
         ldlm = self.newService("ldlm", name, uuid)
         return ldlm
 
-    def osd(self, name, uuid, fs, osdtype, devname, format, ost_uuid,
+    def osd(self, name, uuid, fstype, osdtype, devname, format, ost_uuid,
             node_uuid, dev_size=0, journal_size=0, inode_size=0, nspath="", 
-            mkfsoptions="", mountfsoptions="", backfs="", backdevname=""):
+            mkfsoptions="", mountfsoptions="", backfstype="", backdevname=""):
         osd = self.newService("osd", name, uuid)
         osd.setAttribute('osdtype', osdtype)
         osd.appendChild(self.ref("target", ost_uuid))
         osd.appendChild(self.ref("node", node_uuid))
-        if fs:
-            self.addElement(osd, "fstype", fs)
-        if backfs:
-            self.addElement(osd, "backfstype", backfs)
+        if fstype:
+            self.addElement(osd, "fstype", fstype)
+        if backfstype:
+            self.addElement(osd, "backfstype", backfstype)
         if backdevname:
             self.addElement(osd, "backdevpath", backdevname)
         if devname:
@@ -454,14 +454,14 @@ class GenConfig:
             self.addElement(mds, "group", group)
         return mds
 
-    def mdsdev(self, name, uuid, fs, devname, format, node_uuid,
+    def mdsdev(self, name, uuid, fstype, devname, format, node_uuid,
                mds_uuid, dev_size=0, journal_size=0, inode_size=256,
-               nspath="", mkfsoptions="", mountfsoptions="", backfs="", 
+               nspath="", mkfsoptions="", mountfsoptions="", backfstype="", 
                backdevname=""):
         mdd = self.newService("mdsdev", name, uuid)
-        self.addElement(mdd, "fstype", fs)
-        if backfs:
-                self.addElement(mdd, "backfstype", backfs)
+        self.addElement(mdd, "fstype", fstype)
+        if backfstype:
+                self.addElement(mdd, "backfstype", backfstype)
         dev = self.addElement(mdd, "devpath", devname)
         if backdevname:
             self.addElement(mdd, "backdevpath", backdevname)
@@ -797,7 +797,6 @@ def add_ost(gen, lustre, options):
         devname = ''
         backdevname = ''
         size = 0
-        fstype = ''
         journal_size = ''
         inode_size = ''
         mkfsoptions = ''

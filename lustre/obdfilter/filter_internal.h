@@ -126,6 +126,10 @@ int filter_brw(int cmd, struct obd_export *, struct obdo *,
 	       struct lov_stripe_md *, obd_count oa_bufs, struct brw_page *,
 	       struct obd_trans_info *);
 void flip_into_page_cache(struct inode *inode, struct page *new_page);
+void filter_release_read_page(struct filter_obd *filter, struct inode *inode,
+                              struct page *page);
+void filter_release_write_page(struct filter_obd *filter, struct inode *inode,
+                               struct niobuf_local *lnb, int rc);
 
 /* filter_io_*.c */
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,

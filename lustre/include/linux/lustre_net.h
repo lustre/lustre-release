@@ -103,7 +103,7 @@
  */
 
 #define LDLM_NUM_THREADS        min(smp_num_cpus * smp_num_cpus * 8, 64)
-#define LDLM_NBUF_MAX   256UL
+#define LDLM_NBUF_MAX   512UL
 #define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE (5 * 1024)
 #define LDLM_MAXMEM      (num_physpages*(PAGE_SIZE/1024))
@@ -358,8 +358,6 @@ struct ptlrpc_request {
 
 /* Spare the preprocessor, spoil the bugs. */
 #define FLAG(field, str) (field ? str : "")
-
-#define PTLRPC_REQUEST_COMPLETE(req) ((req)->rq_phase > RQ_PHASE_RPC)
 
 #define DEBUG_REQ_FLAGS(req)                                                    \
         ((req->rq_phase == RQ_PHASE_NEW) ? "New" :                              \

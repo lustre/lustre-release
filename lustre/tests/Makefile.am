@@ -15,11 +15,12 @@ noinst_SCRIPTS += runfailure-ost runiozone runregression-net.sh runtests
 noinst_SCRIPTS += sanity.sh rundbench
 noinst_PROGRAMS = openunlink testreq truncate directio openme writeme open_delay
 noinst_PROGRAMS += tchmod toexcl fsx test_brw openclose createdestroy
-noinst_PROGRAMS += stat createmany statmany multifstat createtest mlink utime cmknod
+noinst_PROGRAMS += stat createmany statmany multifstat createtest mlink utime
 noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
 noinst_PROGRAMS += wantedi statone runas openfile getdents mkdirdeep o_directory
-noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify
-noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify openfilleddirunlink
+noinst_PROGRAMS += small_write multiop sleeptest ll_sparseness_verify cmknod
+noinst_PROGRAMS += ll_sparseness_write mrename ll_dirstripe_verify copy_attr
+noinst_PROGRAMS += openfilleddirunlink
 # noinst_PROGRAMS += ldaptest
 bin_PROGRAMS = mcreate munlink mkdirmany iopentest1 iopentest2
 endif # TESTS
@@ -71,6 +72,8 @@ sleeptest_SOURCES = sleeptest.c
 #write_append_truncate_CC=mpicc
 #createmany_mpi_SOURCES=createmany_mpi.c
 #createmany_mpi_CC=mpicc
+copy_attr_SOURCES= copy_attr.c
+copy_attr_LDADD= -lattr
 
 #sanity test 
 ll_sparseness_verify_SOURCES = ll_sparseness_verify.c

@@ -7,6 +7,8 @@
 
 #include <linux/lustre_mds.h>
 
+#define MAX_ATIME_DIFF 60
+
 struct mds_filter_data {
         __u64 io_epoch;
 };

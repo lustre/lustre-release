@@ -647,13 +647,13 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, san_preprw);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, init_export);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, destroy_export);
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_init); 
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_finish); 
-        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pin); 
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_init);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, llog_finish);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, pin);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, unpin);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, import_event);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, notify);
-        
+
         for (i = num_private_stats; i < num_stats; i++) {
                 /* If this LBUGs, it is likely that an obd
                  * operation was added to struct obd_ops in

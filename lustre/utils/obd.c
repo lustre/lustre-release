@@ -779,22 +779,21 @@ int jt_obd_list(int argc, char **argv)
         int rc;
         char buf[MAX_STRING_SIZE];
         FILE *fp = fopen(DEVICES_LIST, "r");
-                                                                                                                                               
+
         if (fp == NULL) {
-                fprintf(stderr, "error: %s: %s could not open file " 
-                        DEVICES_LIST " .\n",
+                fprintf(stderr, "error: %s: %s opening "DEVICES_LIST"\n",
                         jt_cmdname(argv[0]), strerror(rc =  errno));
                 return rc;
         }
-                                                                                                                                               
+
         if (argc != 1)
                 return CMD_HELP;
-                                                                                                                                               
+
         while (fgets(buf, sizeof(buf), fp) != NULL)
                 printf("%s", buf);
-                                                                                                                                               
+
         fclose(fp);
-                                                                                                                                               
+
         return 0;
 }
 

@@ -593,7 +593,7 @@ static void handle_short_read(int nob_read, obd_count page_count,
 
                 if (pga->count > nob_read) {
                         /* EOF inside this page */
-                        ptr = kmap(pga->pg) + (pga->off & ~PAGE_MASK);
+                        ptr = kmap(pga->pg) + (pga->page_offset & ~PAGE_MASK);
                         memset(ptr + nob_read, 0, pga->count - nob_read);
                         kunmap(pga->pg);
                         page_count--;
@@ -608,7 +608,7 @@ static void handle_short_read(int nob_read, obd_count page_count,
 
         /* zero remaining pages */
         while (page_count-- > 0) {
-                ptr = kmap(pga->pg) + (pga->off & ~PAGE_MASK);
+                ptr = kmap(pga->pg) + (pga->page_offset & ~PAGE_MASK);
                 memset(ptr, 0, pga->count);
                 kunmap(pga->pg);
                 pga++;
@@ -665,7 +665,7 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
                 return 0;
         }
 
-        return (p1->off + p1->count == p2->off);
+        return (p1->disk_offset + p1->count == p2->disk_offset);
 }
 
 #if CHECKSUM_BULK
@@ -750,24 +750,24 @@ static int osc_brw_prep_request(int cmd, struct obd_import *imp,struct obdo *oa,
                 struct brw_page *pg_prev = pg - 1;
 
                 LASSERT(pg->count > 0);
-                LASSERT((pg->off & ~PAGE_MASK) + pg->count <= PAGE_SIZE);
-                LASSERTF(i == 0 || pg->off > pg_prev->off,
+                LASSERT((pg->page_offset & ~PAGE_MASK)+ pg->count <= PAGE_SIZE);
+                LASSERTF(i == 0 || pg->disk_offset > pg_prev->disk_offset,
                          "i %d p_c %u pg %p [pri %lu ind %lu] off "LPU64
                          " prev_pg %p [pri %lu ind %lu] off "LPU64"\n",
                          i, page_count,
-                         pg->pg, pg->pg->private, pg->pg->index, pg->off,
+                        pg->pg, pg->pg->private, pg->pg->index, pg->disk_offset,
                          pg_prev->pg, pg_prev->pg->private, pg_prev->pg->index,
-                                 pg_prev->off);
+                                 pg_prev->disk_offset);
 
-                ptlrpc_prep_bulk_page(desc, pg->pg, pg->off & ~PAGE_MASK,
-                                      pg->count);
+                ptlrpc_prep_bulk_page(desc, pg->pg,
+                                      pg->page_offset & ~PAGE_MASK, pg->count);
                 requested_nob += pg->count;
 
                 if (i > 0 && can_merge_pages(pg_prev, pg)) {
                         niobuf--;
                         niobuf->len += pg->count;
                 } else {
-                        niobuf->offset = pg->off;
+                        niobuf->offset = pg->disk_offset;
                         niobuf->len    = pg->count;
                         niobuf->flags  = pg->flag;
                 }
@@ -999,7 +999,8 @@ static void sort_brw_pages(struct brw_page *array, int num)
                 for (i = stride ; i < num ; i++) {
                         tmp = array[i];
                         j = i;
-                        while (j >= stride && array[j - stride].off > tmp.off) {
+                        while (j >= stride && array[j - stride].disk_offset >
+                               tmp.disk_offset) {
                                 array[j] = array[j - stride];
                                 j -= stride;
                         }
@@ -1281,7 +1282,8 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
                         ops = oap->oap_caller_ops;
                         caller_data = oap->oap_caller_data;
                 }
-                pga[i].off = oap->oap_obj_off + oap->oap_page_off;
+                pga[i].disk_offset = oap->oap_obj_off + oap->oap_page_off;
+                pga[i].page_offset = pga[i].disk_offset;
                 pga[i].pg = oap->oap_page;
                 pga[i].count = oap->oap_count;
                 pga[i].flag = oap->oap_brw_flags;
@@ -1399,8 +1401,7 @@ static int osc_send_oap_rpc(struct client_obd *cli, struct lov_oinfo *loi,
                 /* take the page out of our book-keeping */
                 list_del_init(&oap->oap_pending_item);
                 lop_update_pending(cli, lop, cmd, -1);
-                if (!list_empty(&oap->oap_urgent_item))
-                        list_del_init(&oap->oap_urgent_item);
+                list_del_init(&oap->oap_urgent_item);
 
                 /* ask the caller for the size of the io as the rpc leaves. */
                 if (!(oap->oap_async_flags & ASYNC_COUNT_STABLE))
@@ -2096,9 +2097,10 @@ static int sanosc_brw_read(struct obd_export *exp, struct obdo *oa,
 
         for (mapped = 0; mapped < page_count; mapped++, nioptr++) {
                 LASSERT(PageLocked(pga[mapped].pg));
-                LASSERT(mapped == 0 || pga[mapped].off > pga[mapped - 1].off);
+                LASSERT(mapped == 0 ||
+                        pga[mapped].disk_offset > pga[mapped - 1].disk_offset);
 
-                nioptr->offset = pga[mapped].off;
+                nioptr->offset = pga[mapped].disk_offset;
                 nioptr->len    = pga[mapped].count;
                 nioptr->flags  = pga[mapped].flag;
         }
@@ -2225,9 +2227,10 @@ static int sanosc_brw_write(struct obd_export *exp, struct obdo *oa,
         /* pack request */
         for (mapped = 0; mapped < page_count; mapped++, nioptr++) {
                 LASSERT(PageLocked(pga[mapped].pg));
-                LASSERT(mapped == 0 || pga[mapped].off > pga[mapped - 1].off);
+                LASSERT(mapped == 0 ||
+                        pga[mapped].disk_offset > pga[mapped - 1].disk_offset);
 
-                nioptr->offset = pga[mapped].off;
+                nioptr->offset = pga[mapped].disk_offset;
                 nioptr->len    = pga[mapped].count;
                 nioptr->flags  = pga[mapped].flag;
         }

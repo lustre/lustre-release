@@ -1824,7 +1824,7 @@ kqswnal_scheduler (void *arg)
                                                                !list_empty(&kqswnal_data.kqn_delayedtxds) ||
                                                                !list_empty(&kqswnal_data.kqn_delayedfwds));
                                 LASSERT (rc == 0);
-                        } else if (current->need_resched)
+                        } else if (need_resched())
                                 schedule ();
 
                         spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);

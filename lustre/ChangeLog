@@ -2,10 +2,13 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.x
        * bug fixes
 	- clear page cache after eviction (2766)
-	- deal with strange write() on x86-64 (3043)
 	- don't dereference NULL peer_ni in ldlm_handle_ast_error (3258)
-	- clear page->private before handing to FS, better assertion (3119)
-	- tune the read pipeline (3236)
+	- don't allow unlinking open directory if it isn't empty (2904)
+	- handle partial page writes in filter; fix 512b direct IO (3138)
+	- handle page cache pages in cleanup path for 2.6 (3335)
+	- leave liblustre's partial write handling to filter (3274)
+	- chose better nal ids in liblustre (3292)
+	- initialize liblustre with uid/group membership (2862)
        * miscellania
 	- drop scimac NAL (unmaintained)
 
@@ -35,9 +38,20 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- additional checks for oscc recovery before doing precreate (3284)
 	- fix ll_extent_lock() error return code for 64-bit systems (3043)
 	- don't crash in mdc_close for bad permissions on open (3285)
+	- zero i_rdev for non-device files (3147)
+	- clear page->private before handing to FS, better assertion (3119)
+	- fix incorrect decref of invalidated dentry (2350)
+	- don't hold journal transaction open across create RPC (3313)
+	- update atime on MDS at close time (3265)
+	- close LDAP connection when recovering to avoid server load (3315)
+	- update iopen-2.6 patch with fixes from 2399,2517,2904 (3301)
+	- don't leak open file on MDS after open resend (3325)
+	- serialize filter_precreate and filter_destroy_precreated (3329)
        * miscellania
 	- allow default OST striping configuration per directory (1414)
+	- fix compilation for qswnal for 2.6 kernels (3125)
 	- increase maximum number of MDS request buffers for large systems
+	- change liblustreapi to be useful for external progs like lfsck (3098)
 
 2004-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.1

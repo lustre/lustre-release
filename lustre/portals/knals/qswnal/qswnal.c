@@ -108,7 +108,7 @@ kqswnal_yield(nal_t *nal, unsigned long *flags, int milliseconds)
 	CDEBUG (D_NET, "yield\n");
 
 	if (milliseconds == 0) {
-		if (current->need_resched)
+		if (need_resched())
 			schedule();
 		return 0;
 	}
@@ -817,8 +817,7 @@ kqswnal_startup (nal_t *nal, ptl_pid_t requested_pid,
 
 	/**********************************************************************/
 	/* Spawn scheduling threads */
-	for (i = 0; i < smp_num_cpus; i++)
-	{
+	for (i = 0; i < num_online_cpus(); i++) {
 		rc = kqswnal_thread_start (kqswnal_scheduler, NULL);
 		if (rc != 0)
 		{

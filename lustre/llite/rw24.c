@@ -116,11 +116,6 @@ static int ll_direct_IO_24(int rw,
         if (!lsm || !lsm->lsm_object_id)
                 RETURN(-EBADF);
 
-        /* FIXME: io smaller than PAGE_SIZE is broken on ia64 */
-        if ((iobuf->offset & (PAGE_SIZE - 1)) ||
-            (iobuf->length & (PAGE_SIZE - 1)))
-                RETURN(-EINVAL);
-
         set = ptlrpc_prep_set();
         if (set == NULL)
                 RETURN(-ENOMEM);
@@ -132,15 +127,17 @@ static int ll_direct_IO_24(int rw,
         }
 
         flags = 0 /* | OBD_BRW_DIRECTIO */;
-        offset = ((obd_off)blocknr << inode->i_blkbits);
+        offset = ((obd_off)blocknr * blocksize);
         length = iobuf->length;
+        pga[0].page_offset = iobuf->offset;
+        LASSERT(iobuf->offset < PAGE_SIZE);
 
         for (i = 0, length = iobuf->length; length > 0;
              length -= pga[i].count, offset += pga[i].count, i++) { /*i last!*/
                 pga[i].pg = iobuf->maplist[i];
-                pga[i].off = offset;
+                pga[i].disk_offset = offset;
                 /* To the end of the page, or the length, whatever is less */
-                pga[i].count = min_t(int, PAGE_SIZE - (offset & ~PAGE_MASK),
+                pga[i].count = min_t(int, PAGE_SIZE - pga[i].page_offset,
                                      length);
                 pga[i].flag = flags;
                 if (rw == READ)
@@ -167,6 +164,14 @@ static int ll_direct_IO_24(int rw,
                         CERROR("error from callback: rc = %d\n", rc);
         }
         ptlrpc_set_destroy(set);
+        if (rc == 0 && rw == WRITE) {
+                void lov_increase_kms(struct obd_export *,
+                                      struct lov_stripe_md *, obd_off size);
+                obd_off size = offset + length;
+                lov_increase_kms(ll_i2obdexp(inode), lsm, size);
+                if (size > inode->i_size)
+                        inode->i_size = size;
+        }
         if (rc == 0) {
                 rc = iobuf->length;
                 obdo_to_inode(inode, &oa, OBD_MD_FLBLOCKS);

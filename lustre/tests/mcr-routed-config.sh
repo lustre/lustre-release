@@ -46,7 +46,7 @@ gw2node() {
 
 ${LMC} --add net --node $MDS --nid `h2elan $MDS` --nettype elan || exit 1
 ${LMC} --add mds --node $MDS --mds mds1 --dev /tmp/mds1 --size 100000 || exit 1
-${LMC} --add lov --lov lov1 --mds mds1 --stripe_sz 65536 --stripe_cnt 1 --stripe_pattern 0
+${LMC} --add lov --lov lov1 --mds mds1 --stripe_sz 1048576 --stripe_cnt 1 --stripe_pattern 0
 
 # Client node
 #${LMC} --add net --node client --tcpbuf $TCPBUF --nid '*' --nettype tcp || exit 1

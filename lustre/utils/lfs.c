@@ -112,7 +112,7 @@ static int lfs_setstripe(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        result = op_create_file(argv[1], st_size, st_offset, st_count);
+        result = llapi_file_create(argv[1], st_size, st_offset, st_count, 0);
         if (result)
                 fprintf(stderr, "error: %s: create stripe file failed\n",
                                 argv[0]);
@@ -173,7 +173,7 @@ static int lfs_find(int argc, char **argv)
                 return CMD_HELP;
 
         do {
-                rc = op_find(argv[optind], obduuid, recursive, verbose, quiet);
+                rc = llapi_find(argv[optind], obduuid, recursive,verbose,quiet);
         } while (++optind < argc && !rc);
 
         if (rc)
@@ -192,7 +192,7 @@ static int lfs_getstripe(int argc, char **argv)
         optind = 1;
 
         do {
-                rc = op_find(argv[optind], obduuid, 0, 0, 0);
+                rc = llapi_find(argv[optind], obduuid, 0, 0, 0);
         } while (++optind < argc && !rc);
 
         if (rc)
@@ -221,10 +221,11 @@ static int lfs_osts(int argc, char **argv)
                 mnt = getmntent(fp);
                 while (feof(fp) == 0 && ferror(fp) ==0) {
                         if (llapi_is_lustre_mnttype(mnt->mnt_type)) {
-                                rc = op_find(mnt->mnt_dir, obduuid, 0, 0, 0);
+                                rc = llapi_find(mnt->mnt_dir, obduuid, 0, 0, 0);
                                 if (rc)
-                                        fprintf(stderr, "error: lfs osts failed for %s\n",
-                                                mnt->mnt_dir);
+                                        fprintf(stderr,
+                                               "error: lfs osts failed on %s\n",
+                                               mnt->mnt_dir);
                         }
                         mnt = getmntent(fp);
                 }
@@ -239,25 +240,25 @@ static int lfs_check(int argc, char **argv)
         int rc;
         FILE *fp;
         struct mntent *mnt = NULL;
-        int type_num = 1;
-        char *obd_type_p[2];
+        int num_types = 1;
+        char *obd_types[2];
         char obd_type1[4];
         char obd_type2[4];
 
         if (argc != 2)
                 return CMD_HELP;
 
-        obd_type_p[1]=obd_type1;
-        obd_type_p[2]=obd_type2;
+        obd_types[1] = obd_type1;
+        obd_types[2] = obd_type2;
 
-        if (strcmp(argv[1],"osts")==0) {
-                strcpy(obd_type_p[0],"osc");
-        } else if (strcmp(argv[1],"mds")==0) {
-                strcpy(obd_type_p[0],"mdc");
-        } else if (strcmp(argv[1],"servers")==0) {
-                type_num=2;
-                strcpy(obd_type_p[0],"osc");
-                strcpy(obd_type_p[1],"mdc");
+        if (strcmp(argv[1], "osts") == 0) {
+                strcpy(obd_types[0], "osc");
+        } else if (strcmp(argv[1], "mds") == 0) {
+                strcpy(obd_types[0], "mdc");
+        } else if (strcmp(argv[1], "servers") == 0) {
+                num_types = 2;
+                strcpy(obd_types[0], "osc");
+                strcpy(obd_types[1], "mdc");
         } else {
                 fprintf(stderr, "error: %s: option '%s' unrecognized\n",
                                 argv[0], argv[1]);
@@ -278,7 +279,7 @@ static int lfs_check(int argc, char **argv)
                 endmntent(fp);
         }
 
-        rc = op_check(type_num,obd_type_p,mnt->mnt_dir);
+        rc = llapi_target_check(num_types, obd_types, mnt->mnt_dir);
 
         if (rc)
                 fprintf(stderr, "error: %s: %s status failed\n",
@@ -316,9 +317,9 @@ static int lfs_catinfo(int argc, char **argv)
 
         if (mnt) {
                 if (argc == 3)
-                        rc = op_catinfo(mnt->mnt_dir, argv[1], argv[2]);
+                        rc = llapi_catinfo(mnt->mnt_dir, argv[1], argv[2]);
                 else
-                        rc = op_catinfo(mnt->mnt_dir, argv[1], NULL);
+                        rc = llapi_catinfo(mnt->mnt_dir, argv[1], NULL);
         } else {
                 fprintf(stderr, "no lustre_lite mounted.\n");
                 rc = -1;

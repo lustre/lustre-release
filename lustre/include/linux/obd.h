@@ -103,7 +103,8 @@ struct obd_type {
 };
 
 struct brw_page {
-        obd_off  off;
+        obd_off disk_offset; /* modulo PAGE_SIZE */
+        obd_off page_offset; /* modulo PAGE_SIZE (obviously) */
         struct page *pg;
         int count;
         obd_flag flag;
@@ -175,6 +176,9 @@ struct filter_obd {
         struct filter_server_data *fo_fsd;
         unsigned long       *fo_last_rcvd_slots;
         __u64                fo_mount_count;
+
+        unsigned int         fo_destroy_in_progress:1;
+        struct semaphore     fo_create_lock;
 
         struct file_operations *fo_fop;
         struct inode_operations *fo_iop;
