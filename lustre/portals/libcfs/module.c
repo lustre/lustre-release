@@ -155,13 +155,30 @@ kportal_del_route(ptl_nid_t target)
 }
 
 static int
+kportal_set_route(ptl_nid_t target, int alive)
+{
+        int rc;
+        kpr_control_interface_t *ci;
+
+        ci = (kpr_control_interface_t *)PORTAL_SYMBOL_GET(kpr_control_interface);
+        if (ci == NULL)
+                return (-ENODEV);
+
+        rc = ci->kprci_set_route (target, alive);
+
+        PORTAL_SYMBOL_PUT(kpr_control_interface);
+        return (rc);
+}
+
+static int
 kportal_get_route(int index, __u32 *gateway_nalidp, ptl_nid_t *gateway_nidp,
-                  ptl_nid_t *lo_nidp, ptl_nid_t *hi_nidp)
+                  ptl_nid_t *lo_nidp, ptl_nid_t *hi_nidp, int *alivep)
 {
         int       gateway_nalid;
         ptl_nid_t gateway_nid;
         ptl_nid_t lo_nid;
         ptl_nid_t hi_nid;
+        int       alive;
         int       rc;
         kpr_control_interface_t *ci;
 
@@ -169,17 +186,19 @@ kportal_get_route(int index, __u32 *gateway_nalidp, ptl_nid_t *gateway_nidp,
         if (ci == NULL)
                 return (-ENODEV);
 
-        rc = ci->kprci_get_route(index, &gateway_nalid, &gateway_nid, &lo_nid,
-                                 &hi_nid);
+        rc = ci->kprci_get_route(index, &gateway_nalid, &gateway_nid,
+                                 &lo_nid, &hi_nid, &alive);
 
         if (rc == 0) {
-                CDEBUG(D_IOCTL, "got route [%d] %d "LPX64":"LPX64" - "LPX64"\n",
-                       index, gateway_nalid, gateway_nid, lo_nid, hi_nid);
+                CDEBUG(D_IOCTL, "got route [%d] %d "LPX64":"LPX64" - "LPX64", %s\n",
+                       index, gateway_nalid, gateway_nid, lo_nid, hi_nid,
+                       alive ? "up" : "down");
 
                 *gateway_nalidp = (__u32)gateway_nalid;
-                *gateway_nidp   = (__u32)gateway_nid;
-                *lo_nidp        = (__u32)lo_nid;
-                *hi_nidp        = (__u32)hi_nid;
+                *gateway_nidp   = gateway_nid;
+                *lo_nidp        = lo_nid;
+                *hi_nidp        = hi_nid;
+                *alivep         = alive;
         }
 
         PORTAL_SYMBOL_PUT (kpr_control_interface);
@@ -375,15 +394,23 @@ static int kportal_ioctl(struct inode *inode, struct file *file,
                 break;
 
         case IOC_PORTAL_DEL_ROUTE:
-                CDEBUG (D_IOCTL, "Removing route to "LPU64"\n", data->ioc_nid);
+                CDEBUG (D_IOCTL, "Removing routes via "LPU64"\n", data->ioc_nid);
                 err = kportal_del_route (data->ioc_nid);
+                break;
+
+        case IOC_PORTAL_SET_ROUTE:
+                CDEBUG (D_IOCTL, "%s routes via "LPU64"\n",
+                        data->ioc_flags ? "Enabling" : "Disabling",
+                        data->ioc_nid);
+                err = kportal_set_route (data->ioc_nid, data->ioc_flags);
                 break;
 
         case IOC_PORTAL_GET_ROUTE:
                 CDEBUG (D_IOCTL, "Getting route [%d]\n", data->ioc_count);
                 err = kportal_get_route(data->ioc_count, &data->ioc_nal,
-                                        &data->ioc_nid, &data->ioc_nid2,
-                                        &data->ioc_nid3);
+                                        &data->ioc_nid, 
+                                        &data->ioc_nid2, &data->ioc_nid3,
+                                        &data->ioc_flags);
                 if (err == 0)
                         if (copy_to_user((char *)arg, data, sizeof (*data)))
                                 err = -EFAULT;
