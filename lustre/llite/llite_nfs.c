@@ -89,7 +89,7 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb, unsigned long ino,
 
         inode = search_inode_for_lustre(sb, ino, generation, mode);
         if (IS_ERR(inode)) {
-                return ERR_PTR(-ESTALE);
+                return ERR_PTR(PTR_ERR(inode));
         }
         if (is_bad_inode(inode) 
             || (generation && inode->i_generation != generation)
