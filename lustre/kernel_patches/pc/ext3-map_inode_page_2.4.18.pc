@@ -1,0 +1,3 @@
+fs/ext3/inode.c
+fs/ext3/ext3-exports.c
+fs/ext3/Makefile
