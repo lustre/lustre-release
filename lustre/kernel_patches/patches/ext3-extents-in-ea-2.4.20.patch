@@ -1,8 +1,8 @@
-Index: linux-2.4.20/fs/ext3/extents-in-ea.c
+Index: linux-2.4.24/fs/ext3/extents-in-ea.c
 ===================================================================
---- linux-2.4.20.orig/fs/ext3/extents-in-ea.c	2004-05-06 23:03:39.000000000 -0700
-+++ linux-2.4.20/fs/ext3/extents-in-ea.c	2004-05-06 23:03:39.000000000 -0700
-@@ -0,0 +1,202 @@
+--- linux-2.4.24.orig/fs/ext3/extents-in-ea.c	2003-01-30 18:24:37.000000000 +0800
++++ linux-2.4.24/fs/ext3/extents-in-ea.c	2004-06-24 21:53:00.000000000 +0800
+@@ -0,0 +1,219 @@
 +/*
 + * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
 + *
@@ -121,16 +121,31 @@ Index: linux-2.4.20/fs/ext3/extents-in-ea.c
 +			struct ext3_ext_path *path,
 +			struct ext3_extent *newex, int exist)
 +{
++	struct inode *inode = tree->inode;
 +	handle_t *handle;
 +	int needed, err;
++	unsigned long tgen;
 +
 +	if (exist)
 +		return EXT_CONTINUE;
 +
++	tgen = EXT_GENERATION(tree);
 +	needed = ext3_ext_calc_credits_for_insert(tree, path);
++	up_write(&EXT3_I(inode)->truncate_sem);
 +	handle = ext3_journal_start(tree->inode, needed + 10);
-+	if (IS_ERR(handle))
++	if (IS_ERR(handle)) {
++		down_write(&EXT3_I(inode)->truncate_sem);
 +		return PTR_ERR(handle);
++	}
++
++	if (tgen != EXT_GENERATION(tree)) {
++		/* the tree has changed. so path can be invalid at moment */
++		ext3_journal_stop(handle, inode);
++		down_write(&EXT3_I(inode)->truncate_sem);
++		return EXT_REPEAT;
++	}
++
++	down_write(&EXT3_I(inode)->truncate_sem);
 +
 +	/* insert new extent */
 +	newex->e_start = 0;
@@ -150,9 +165,11 @@ Index: linux-2.4.20/fs/ext3/extents-in-ea.c
 +
 +	err = ext3_init_tree_in_ea_desc(&tree, inode, name_index, eaname);
 +	if (err == 0) {
++		down_write(&EXT3_I(inode)->truncate_sem);	
 +		err = ext3_ext_walk_space(&tree, from, num,
 +						ext3_ext_in_ea_new_extent);
 +		ext3_release_tree_in_ea_desc(&tree);
++		up_write(&EXT3_I(inode)->truncate_sem);
 +	}
 +	return err;
 +}
@@ -205,10 +222,10 @@ Index: linux-2.4.20/fs/ext3/extents-in-ea.c
 +	return err;
 +}
 +
-Index: linux-2.4.20/fs/ext3/Makefile
+Index: linux-2.4.24/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.20.orig/fs/ext3/Makefile	2004-05-06 23:02:11.000000000 -0700
-+++ linux-2.4.20/fs/ext3/Makefile	2004-05-06 23:03:39.000000000 -0700
+--- linux-2.4.24.orig/fs/ext3/Makefile	2004-06-09 11:31:06.000000000 +0800
++++ linux-2.4.24/fs/ext3/Makefile	2004-06-24 21:36:29.000000000 +0800
 @@ -19,7 +19,7 @@
  obj-m    := $(O_TARGET)
  
@@ -218,10 +235,10 @@ Index: linux-2.4.20/fs/ext3/Makefile
  obj-$(CONFIG_EXT3_FS_XATTR_USER) += xattr_user.o
  
  include $(TOPDIR)/Rules.make
-Index: linux-2.4.20/fs/ext3/xattr.c
+Index: linux-2.4.24/fs/ext3/xattr.c
 ===================================================================
---- linux-2.4.20.orig/fs/ext3/xattr.c	2004-05-06 23:02:11.000000000 -0700
-+++ linux-2.4.20/fs/ext3/xattr.c	2004-05-06 23:05:20.000000000 -0700
+--- linux-2.4.24.orig/fs/ext3/xattr.c	2004-06-09 11:31:06.000000000 +0800
++++ linux-2.4.24/fs/ext3/xattr.c	2004-06-24 21:36:29.000000000 +0800
 @@ -771,7 +771,8 @@
   */
  int
@@ -329,10 +346,10 @@ Index: linux-2.4.20/fs/ext3/xattr.c
  /*
   * ext3_xattr_block_set()
   *
-Index: linux-2.4.20/include/linux/ext3_xattr.h
+Index: linux-2.4.24/include/linux/ext3_xattr.h
 ===================================================================
---- linux-2.4.20.orig/include/linux/ext3_xattr.h	2004-05-06 23:02:11.000000000 -0700
-+++ linux-2.4.20/include/linux/ext3_xattr.h	2004-05-06 23:03:39.000000000 -0700
+--- linux-2.4.24.orig/include/linux/ext3_xattr.h	2004-06-09 11:31:06.000000000 +0800
++++ linux-2.4.24/include/linux/ext3_xattr.h	2004-06-24 21:36:29.000000000 +0800
 @@ -80,6 +80,7 @@
  extern int ext3_xattr_get(struct inode *, int, const char *, void *, size_t);
  extern int ext3_xattr_list(struct inode *, char *, size_t);
