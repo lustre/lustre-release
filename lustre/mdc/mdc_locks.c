@@ -421,7 +421,6 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
         CDEBUG(D_DLMTRACE, "name: %*s in %ld, intent: %s\n", len, name,
                (unsigned long) pfid->id, ldlm_it2str(it->it_op));
 
-
         if (cfid && (it->it_op == IT_LOOKUP || it->it_op == IT_GETATTR)) {
                 /* We could just return 1 immediately, but since we should only
                  * be called in revalidate2 if we already have a lock, let's
@@ -433,16 +432,14 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 int flags = LDLM_FL_BLOCK_GRANTED;
 
                 mode = LCK_PR;
-                rc = ldlm_lock_match(exp->exp_obd->obd_namespace, flags, 
-                                     &res_id,
-                                     LDLM_PLAIN, NULL, 0, LCK_PR, NULL,
+                rc = ldlm_lock_match(exp->exp_obd->obd_namespace, flags,
+                                     &res_id, LDLM_PLAIN, NULL, 0, LCK_PR, NULL,
                                      &lockh);
                 if (!rc) {
                         mode = LCK_PW;
-                        rc = ldlm_lock_match(exp->exp_obd->obd_namespace, 
-                                             flags, &res_id,
-                                             LDLM_PLAIN, NULL, 0, LCK_PW, NULL,
-                                             &lockh);
+                        rc = ldlm_lock_match(exp->exp_obd->obd_namespace, flags,
+                                             &res_id, LDLM_PLAIN, NULL, 0,
+                                             LCK_PW, NULL, &lockh);
                 }
                 if (rc) {
                         memcpy(&it->d.lustre.it_lock_handle, &lockh, 
@@ -459,9 +456,8 @@ int mdc_intent_lock(struct obd_export *exp, struct ll_uctxt *uctxt,
                 struct mdc_op_data op_data;
                 mdc_fid2mdc_op_data(&op_data, uctxt, pfid, cfid, name, len, 0);
 
-                rc = mdc_enqueue(exp, LDLM_PLAIN, it,
-                                 it_to_lock_mode(it), &op_data,
-                                 &lockh, NULL, 0, ldlm_completion_ast,
+                rc = mdc_enqueue(exp, LDLM_PLAIN, it, it_to_lock_mode(it),
+                                 &op_data, &lockh, NULL, 0, ldlm_completion_ast,
                                  cb_blocking, NULL);
                 if (rc < 0)
                         RETURN(rc);
