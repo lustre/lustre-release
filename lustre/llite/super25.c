@@ -19,6 +19,7 @@
 #include <linux/lustre_dlm.h>
 #include <linux/init.h>
 #include <linux/fs.h>
+#include <linux/lprocfs_status.h>
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
 kmem_cache_t *ll_file_data_slab;
@@ -32,6 +33,8 @@ extern int ll_recover(struct recovd_data *, int);
 extern int ll_commitcbd_setup(struct ll_sb_info *);
 extern int ll_commitcbd_cleanup(struct ll_sb_info *);
 int ll_read_inode2(struct inode *inode, void *opaque);
+
+extern void ll_proc_namespace(struct super_block* sb, char* osc, char* mdc)
 
 static char *ll_read_opt(const char *opt, char *data)
 {
@@ -83,7 +86,7 @@ static void ll_options(char *options, char **ost, char **mds, int *flags)
                 CDEBUG(D_SUPER, "this_char %s\n", this_char);
                 if ( (!*ost && (*ost = ll_read_opt("osc", this_char)))||
                      (!*mds && (*mds = ll_read_opt("mdc", this_char)))||
-                     (!(*flags & LL_SBI_NOLCK) && ((*flags) = (*flags) | 
+                     (!(*flags & LL_SBI_NOLCK) && ((*flags) = (*flags) |
                       ll_set_opt("nolock", this_char, LL_SBI_NOLCK))) )
                         continue;
         }
@@ -218,7 +221,7 @@ static int ll_fill_super(struct super_block *sb, void *data, int silent)
 
         ptlrpc_req_finished(request);
         request = NULL;
-
+        ll_proc_namespace(sb, osc, mdc)
 out_dev:
         if (mdc)
                 OBD_FREE(mdc, strlen(mdc) + 1);
@@ -241,8 +244,8 @@ out_free:
         goto out_dev;
 } /* ll_fill_super */
 
-struct super_block * ll_get_sb(struct file_system_type *fs_type, 
-                                   int flags, char *devname, void * data)
+struct super_block * ll_get_sb(struct file_system_type *fs_type,
+                               int flags, char *devname, void * data)
 {
         return get_sb_nodev(fs_type, flags, data, ll_fill_super);
 }
@@ -264,6 +267,9 @@ static void ll_put_super(struct super_block *sb)
          *     which we can call for other reasons as well.
          */
         mdc_getstatus(&sbi->ll_mdc_conn, &rootfid);
+
+        lprocfs_dereg_mnt(sbi->ll_proc_root);
+        sbi->ll_proc_root = NULL;
 
         obd_disconnect(&sbi->ll_mdc_conn);
         OBD_FREE(sbi, sizeof(*sbi));
@@ -521,7 +527,7 @@ static inline void invalidate_request_list(struct list_head *req_list)
 {
         struct list_head *tmp, *n;
         list_for_each_safe(tmp, n, req_list) {
-                struct ptlrpc_request *req = 
+                struct ptlrpc_request *req =
                         list_entry(tmp, struct ptlrpc_request, rq_list);
                 CERROR("invalidating req xid %d op %d to %s:%d\n",
                        (unsigned long long)req->rq_xid, req->rq_reqmsg->opc,
@@ -538,7 +544,7 @@ void ll_umount_begin(struct super_block *sb)
         struct list_head *ctmp;
 
         ENTRY;
-       
+
         list_for_each(ctmp, &sbi->ll_conn_chain) {
                 struct ptlrpc_connection *conn;
                 conn = list_entry(ctmp, struct ptlrpc_connection, c_sb_chain);
@@ -616,7 +622,7 @@ struct super_operations ll_super_operations =
 
 struct file_system_type lustre_lite_fs_type = {
         .owner  = THIS_MODULE,
-        .name =   "lustre_lite", 
+        .name =   "lustre_lite",
         .get_sb = ll_get_sb,
         .kill_sb = kill_litter_super,
 };
@@ -626,12 +632,12 @@ static int __init init_lustre_lite(void)
         int rc;
         printk(KERN_INFO "Lustre Lite 0.5.14, info@clusterfs.com\n");
         rc = ll_init_inodecache();
-        if (rc) 
+        if (rc)
                 return -ENOMEM;
         ll_file_data_slab = kmem_cache_create("ll_file_data",
                                               sizeof(struct ll_file_data), 0,
                                               SLAB_HWCACHE_ALIGN, NULL, NULL);
-        if (ll_file_data_slab == NULL) { 
+        if (ll_file_data_slab == NULL) {
                 ll_destroy_inodecache();
                 return -ENOMEM;
         }
