@@ -5,7 +5,7 @@ TMP=${TMP:-/tmp}
 MDS=`ls /proc/fs/lustre/mds | grep -v num_refs | head -1`
 [ -z "$MDS" ] && echo "no MDS available, skipping llog test" && exit 0
 
-insmod ../obdclass/llog_test.o || exit 1
+modprobe llog_test || insmod ../obdclass/llog_test.o || insmod ../obdclass/llog_test.ko || exit 1
 lctl modules > $TMP/ogdb-`hostname`
 echo "NOW reload debugging syms.."
 
