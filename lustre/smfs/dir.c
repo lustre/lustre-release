@@ -622,10 +622,11 @@ static int smfs_readdir(struct file *filp, void *dirent, filldir_t filldir)
 
         SMFS_HOOK(dentry->d_inode, filp, dirent, filldir, HOOK_READDIR, NULL, 
                   POST_HOOK, rc, exit);
+        
+        duplicate_file(filp, sfi->c_file);
 exit:
         if (rc > 0)
                 rc = 0;
-        duplicate_file(filp, sfi->c_file);
         RETURN(rc);
 }
 

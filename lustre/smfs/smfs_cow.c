@@ -197,7 +197,8 @@ static int smfs_init_snap_inode_info(struct inode *inode, struct inode *dir, int
                         RETURN(-EIO);
                 }
                 /*init dot_snap inode info*/
-                inode->i_size = (loff_t)smfs_dotsnap_dir_size(inode);
+//              inode->i_size = (loff_t)smfs_dotsnap_dir_size(inode);
+                inode->i_size = snap_info->sni_table->sntbl_count;
                 inode->i_nlink = snap_info->sni_table->sntbl_count + 2;
                 inode->i_uid = 0;
                 inode->i_gid = 0;
@@ -617,7 +618,7 @@ static inline int get_index_of_item(struct snap_table *table, char *name)
                 }	
 	}
 
-	for (i = 0; i < table->sntbl_max_count; i++) {
+	for (i = 1; i <= table->sntbl_max_count; i++) {
 		int found = 0;
 		for (j = 0; j < (count + 1); j++) {
 			if (table->sntbl_items[j].sn_index == i) {
@@ -1127,13 +1128,15 @@ static int smfs_dotsnap_lookup(struct inode *dir, struct dentry *dentry,
                                 break;
                         }
                 }
-                if (index != -1) {
+                if (index == -1) {
                        CERROR("No such %s in this .snap dir \n", 
                                dentry->d_name.name);
                        RETURN(-ENOENT);
                 }
                 cino = sops->fs_get_indirect_ino(S2CSB(dir->i_sb), dir->i_ino,
                                                  index);
+                if (cino == 0)
+                        cino = dir->i_ino;
                 inode = smfs_get_inode(dir->i_sb, cino, dir, index);
                 if (!inode || is_bad_inode(inode)) {
                         CERROR("Can not find cino %lu inode\n", cino);
@@ -1291,12 +1294,12 @@ static int smfs_cow_readdir_pre(struct inode *dir, void *de, void *data1,
                
                 for (i = filp->f_pos - 2; i < table->sntbl_count; i++, 
                      filp->f_pos++) { 
-                        int slot = table->sntbl_count-i;
+                        int slot = table->sntbl_count - i - 1;
                         
                         if (filldir(dirent, table->sntbl_items[slot].sn_name,
                                     strlen(table->sntbl_items[slot].sn_name),
                                     filp->f_pos, dir->i_ino, 0))
-                        break;
+                                break;
                          
                 } 
                 RETURN(1); 
