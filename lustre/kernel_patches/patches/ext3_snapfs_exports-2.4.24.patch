@@ -1,0 +1,75 @@
+Index: linux-2.4.24/include/linux/ext3_fs.h
+===================================================================
+--- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-07-04 20:23:10.000000000 +0800
++++ linux-2.4.24/include/linux/ext3_fs.h	2004-07-04 20:23:15.000000000 +0800
+@@ -446,7 +446,8 @@
+ 	__u8	s_reserved_char_pad;
+ 	__u16	s_reserved_word_pad;
+ 	__u32	s_mdsnum;
+-	__u32	s_reserved[191];	/* Padding to the end of the block */
++	__u32	s_snaptable_ino;	/*snaptable ino*/
++	__u32	s_reserved[190];	/* Padding to the end of the block */
+ };
+ 
+ #ifdef __KERNEL__
+@@ -799,7 +800,8 @@
+ extern void ext3_ext_init(struct super_block *);
+ extern void ext3_ext_release(struct super_block *);
+ extern void ext3_extents_initialize_blockmap(handle_t *, struct inode *);
+-
++extern int ext3_bmap(struct address_space *mapping, long block);
++extern int ext3_load_inode_bitmap (struct super_block * sb, unsigned int block_group);
+ #endif	/* __KERNEL__ */
+ 
+ #define EXT3_IOC_CREATE_INUM			_IOW('f', 5, long)
+Index: linux-2.4.24/fs/ext3/inode.c
+===================================================================
+--- linux-2.4.24.orig/fs/ext3/inode.c	2004-07-04 20:23:09.000000000 +0800
++++ linux-2.4.24/fs/ext3/inode.c	2004-07-04 20:23:15.000000000 +0800
+@@ -1200,7 +1200,7 @@
+  * So, if we see any bmap calls here on a modified, data-journaled file,
+  * take extra steps to flush any blocks which might be in the cache. 
+  */
+-static int ext3_bmap(struct address_space *mapping, long block)
++int ext3_bmap(struct address_space *mapping, long block)
+ {
+ 	struct inode *inode = mapping->host;
+ 	journal_t *journal;
+Index: linux-2.4.24/fs/ext3/ext3-exports.c
+===================================================================
+--- linux-2.4.24.orig/fs/ext3/ext3-exports.c	2004-07-04 20:23:10.000000000 +0800
++++ linux-2.4.24/fs/ext3/ext3-exports.c	2004-07-04 21:11:42.000000000 +0800
+@@ -26,6 +26,15 @@
+ EXPORT_SYMBOL(ext3_decode_error);
+ EXPORT_SYMBOL(__ext3_std_error);
+ 
++EXPORT_SYMBOL(ext3_bmap);
++EXPORT_SYMBOL(ext3_new_inode);
++EXPORT_SYMBOL(ext3_load_inode_bitmap);
++EXPORT_SYMBOL(ext3_orphan_add);
++EXPORT_SYMBOL(ext3_orphan_del);
++EXPORT_SYMBOL(ext3_discard_prealloc);
++EXPORT_SYMBOL(ext3_get_group_desc);
++EXPORT_SYMBOL(ext3_getblk);
++
+ int ext3_add_dir_entry (struct dentry *dentry);
+ EXPORT_SYMBOL(ext3_add_dir_entry);
+ int ext3_del_dir_entry(struct dentry *dentry);
+Index: linux-2.4.24/fs/ext3/ialloc.c
+===================================================================
+--- linux-2.4.24.orig/fs/ext3/ialloc.c	2004-07-04 20:23:09.000000000 +0800
++++ linux-2.4.24/fs/ext3/ialloc.c	2004-07-04 20:23:15.000000000 +0800
+@@ -79,6 +79,13 @@
+ 	return retval;
+ }
+ 
++/* Export load_inode_bitmap*/
++int ext3_load_inode_bitmap (struct super_block * sb,
++                           unsigned int block_group)
++{
++       return load_inode_bitmap(sb, block_group);
++}
++
+ /*
+  * load_inode_bitmap loads the inode bitmap for a blocks group
+  *
