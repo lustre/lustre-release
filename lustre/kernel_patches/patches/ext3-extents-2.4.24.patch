@@ -1,8 +1,8 @@
 Index: linux-2.4.24/fs/ext3/extents.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/extents.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/fs/ext3/extents.c	2004-08-06 03:59:01.000000000 +0400
-@@ -0,0 +1,2257 @@
++++ linux-2.4.24/fs/ext3/extents.c	2004-08-10 03:52:42.000000000 +0400
+@@ -0,0 +1,2262 @@
 +/*
 + * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
 + * Written by Alex Tomas <alex@clusterfs.com>
@@ -158,7 +158,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +{
 +	struct ext3_extent_header *neh;
 +	neh = EXT_ROOT_HDR(tree);
-+	neh->e_generation++;
++	neh->eh_generation++;
 +}
 +
 +static inline int ext3_ext_space_block(struct ext3_extents_tree *tree)
@@ -221,13 +221,13 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	ext_debug(tree, "path:");
 +	for (k = 0; k <= l; k++, path++) {
 +		if (path->p_idx) {
-+			ext_debug(tree, "  %d->%d", path->p_idx->e_block,
-+					path->p_idx->e_leaf);
++			ext_debug(tree, "  %d->%d", path->p_idx->ei_block,
++					path->p_idx->ei_leaf);
 +		} else if (path->p_ext) {
 +			ext_debug(tree, "  %d:%d:%d",
-+					path->p_ext->e_block,
-+					path->p_ext->e_num,
-+					path->p_ext->e_start);
++					path->p_ext->ee_block,
++					path->p_ext->ee_len,
++					path->p_ext->ee_start);
 +		} else
 +			ext_debug(tree, "  []");
 +	}
@@ -250,9 +250,9 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	eh = path[depth].p_hdr;
 +	ex = EXT_FIRST_EXTENT(eh);
 +
-+	for (i = 0; i < eh->e_num; i++, ex++) {
++	for (i = 0; i < eh->eh_entries; i++, ex++) {
 +		ext_debug(tree, "%d:%d:%d ",
-+				ex->e_block, ex->e_num, ex->e_start);
++				ex->ee_block, ex->ee_len, ex->ee_start);
 +	}
 +	ext_debug(tree, "\n");
 +#endif
@@ -281,18 +281,18 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	struct ext3_extent_idx *ix;
 +	int l = 0, k, r;
 +
-+	EXT_ASSERT(eh->e_magic == EXT3_EXT_MAGIC);
-+	EXT_ASSERT(eh->e_num <= eh->e_max);
-+	EXT_ASSERT(eh->e_num > 0);
++	EXT_ASSERT(eh->eh_magic == EXT3_EXT_MAGIC);
++	EXT_ASSERT(eh->eh_entries <= eh->eh_max);
++	EXT_ASSERT(eh->eh_entries > 0);
 +
 +	ext_debug(tree, "binsearch for %d(idx):  ", block);
 +
 +	path->p_idx = ix = EXT_FIRST_INDEX(eh);
 +
-+	r = k = eh->e_num;
++	r = k = eh->eh_entries;
 +	while (k > 1) {
 +		k = (r - l) / 2;
-+		if (block < ix[l + k].e_block)
++		if (block < ix[l + k].ei_block)
 +			r -= k;
 +		else
 +			l += k;
@@ -301,30 +301,30 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +	ix += l;
 +	path->p_idx = ix;
-+	ext_debug(tree, "  -> %d->%d ", path->p_idx->e_block, path->p_idx->e_leaf);
++	ext_debug(tree, "  -> %d->%d ", path->p_idx->ei_block, path->p_idx->ei_leaf);
 +
 +	while (l++ < r) {
-+		if (block < ix->e_block) 
++		if (block < ix->ei_block) 
 +			break;
 +		path->p_idx = ix++;
 +	}
-+	ext_debug(tree, "  -> %d->%d\n", path->p_idx->e_block,
-+			path->p_idx->e_leaf);
++	ext_debug(tree, "  -> %d->%d\n", path->p_idx->ei_block,
++			path->p_idx->ei_leaf);
 +
 +#ifdef CHECK_BINSEARCH 
 +	{
 +		struct ext3_extent_idx *chix;
 +
 +		chix = ix = EXT_FIRST_INDEX(eh);
-+		for (k = 0; k < eh->e_num; k++, ix++) {
-+			if (k != 0 && ix->e_block <= ix[-1].e_block) {
++		for (k = 0; k < eh->eh_entries; k++, ix++) {
++			if (k != 0 && ix->ei_block <= ix[-1].ei_block) {
 +				printk("k=%d, ix=0x%p, first=0x%p\n", k,
 +					ix, EXT_FIRST_INDEX(eh));
 +				printk("%u <= %u\n",
-+					ix->e_block,ix[-1].e_block);
++					ix->ei_block,ix[-1].ei_block);
 +			}
-+			EXT_ASSERT(k == 0 || ix->e_block > ix[-1].e_block);
-+			if (block < ix->e_block) 
++			EXT_ASSERT(k == 0 || ix->ei_block > ix[-1].ei_block);
++			if (block < ix->ei_block) 
 +				break;
 +			chix = ix;
 +		}
@@ -345,10 +345,10 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	struct ext3_extent *ex;
 +	int l = 0, k, r;
 +
-+	EXT_ASSERT(eh->e_magic == EXT3_EXT_MAGIC);
-+	EXT_ASSERT(eh->e_num <= eh->e_max);
++	EXT_ASSERT(eh->eh_magic == EXT3_EXT_MAGIC);
++	EXT_ASSERT(eh->eh_entries <= eh->eh_max);
 +
-+	if (eh->e_num == 0) {
++	if (eh->eh_entries == 0) {
 +		/*
 +		 * this leaf is empty yet:
 +		 *  we get such a leaf in split/add case
@@ -360,10 +360,10 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +	path->p_ext = ex = EXT_FIRST_EXTENT(eh);
 +
-+	r = k = eh->e_num;
++	r = k = eh->eh_entries;
 +	while (k > 1) {
 +		k = (r - l) / 2;
-+		if (block < ex[l + k].e_block)
++		if (block < ex[l + k].ee_block)
 +			r -= k;
 +		else
 +			l += k;
@@ -372,25 +372,25 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +	ex += l;
 +	path->p_ext = ex;
-+	ext_debug(tree, "  -> %d:%d:%d ", path->p_ext->e_block,
-+			path->p_ext->e_start, path->p_ext->e_num);
++	ext_debug(tree, "  -> %d:%d:%d ", path->p_ext->ee_block,
++			path->p_ext->ee_start, path->p_ext->ee_len);
 +
 +	while (l++ < r) {
-+		if (block < ex->e_block) 
++		if (block < ex->ee_block) 
 +			break;
 +		path->p_ext = ex++;
 +	}
-+	ext_debug(tree, "  -> %d:%d:%d\n", path->p_ext->e_block,
-+			path->p_ext->e_start, path->p_ext->e_num);
++	ext_debug(tree, "  -> %d:%d:%d\n", path->p_ext->ee_block,
++			path->p_ext->ee_start, path->p_ext->ee_len);
 +
 +#ifdef CHECK_BINSEARCH 
 +	{
 +		struct ext3_extent *chex;
 +
 +		chex = ex = EXT_FIRST_EXTENT(eh);
-+		for (k = 0; k < eh->e_num; k++, ex++) {
-+			EXT_ASSERT(k == 0 || ex->e_block > ex[-1].e_block);
-+			if (block < ex->e_block) 
++		for (k = 0; k < eh->eh_entries; k++, ex++) {
++			EXT_ASSERT(k == 0 || ex->ee_block > ex[-1].ee_block);
++			if (block < ex->ee_block) 
 +				break;
 +			chex = ex;
 +		}
@@ -407,10 +407,10 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	BUG_ON(tree->buffer_len == 0);
 +	ext3_ext_get_access_for_root(handle, tree);
 +	eh = EXT_ROOT_HDR(tree);
-+	eh->e_depth = 0;
-+	eh->e_num = 0;
-+	eh->e_magic = EXT3_EXT_MAGIC;
-+	eh->e_max = ext3_ext_space_root(tree);
++	eh->eh_depth = 0;
++	eh->eh_entries = 0;
++	eh->eh_magic = EXT3_EXT_MAGIC;
++	eh->eh_max = ext3_ext_space_root(tree);
 +	ext3_ext_mark_root_dirty(handle, tree);
 +	ext3_ext_invalidate_cache(tree);
 +	return 0;
@@ -431,9 +431,9 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	eh = EXT_ROOT_HDR(tree);
 +	EXT_ASSERT(eh);
 +	i = depth = EXT_DEPTH(tree);
-+	EXT_ASSERT(eh->e_max);
-+	EXT_ASSERT(eh->e_magic == EXT3_EXT_MAGIC);
-+	EXT_ASSERT(i == 0 || eh->e_num > 0);
++	EXT_ASSERT(eh->eh_max);
++	EXT_ASSERT(eh->eh_magic == EXT3_EXT_MAGIC);
++	EXT_ASSERT(i == 0 || eh->eh_entries > 0);
 +	
 +	/* account possible depth increase */
 +	if (!path) {
@@ -448,9 +448,9 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	/* walk through the tree */
 +	while (i) {
 +		ext_debug(tree, "depth %d: num %d, max %d\n",
-+				ppos, eh->e_num, eh->e_max);
++				ppos, eh->eh_entries, eh->eh_max);
 +		ext3_ext_binsearch_idx(tree, path + ppos, block);
-+		path[ppos].p_block = path[ppos].p_idx->e_leaf;
++		path[ppos].p_block = path[ppos].p_idx->ei_leaf;
 +		path[ppos].p_depth = i;
 +		path[ppos].p_ext = NULL;
 +
@@ -495,9 +495,9 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	if ((err = ext3_ext_get_access(handle, tree, curp)))
 +		return err;
 +
-+	EXT_ASSERT(logical != curp->p_idx->e_block);
++	EXT_ASSERT(logical != curp->p_idx->ei_block);
 +	len = EXT_MAX_INDEX(curp->p_hdr) - curp->p_idx;
-+	if (logical > curp->p_idx->e_block) {
++	if (logical > curp->p_idx->ei_block) {
 +		/* insert after */
 +		if (curp->p_idx != EXT_LAST_INDEX(curp->p_hdr)) {
 +			len = (len - 1) * sizeof(struct ext3_extent_idx);
@@ -521,11 +521,11 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		ix = curp->p_idx;
 +	}
 +
-+	ix->e_block = logical;
-+	ix->e_leaf = ptr;
-+	curp->p_hdr->e_num++;
++	ix->ei_block = logical;
++	ix->ei_leaf = ptr;
++	curp->p_hdr->eh_entries++;
 +
-+	EXT_ASSERT(curp->p_hdr->e_num <= curp->p_hdr->e_max);
++	EXT_ASSERT(curp->p_hdr->eh_entries <= curp->p_hdr->eh_max);
 +	EXT_ASSERT(ix <= EXT_LAST_INDEX(curp->p_hdr));
 +
 +	err = ext3_ext_dirty(handle, tree, curp);
@@ -564,12 +564,12 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	 * border from split point */
 +	EXT_ASSERT(path[depth].p_ext <= EXT_MAX_EXTENT(path[depth].p_hdr));
 +	if (path[depth].p_ext != EXT_MAX_EXTENT(path[depth].p_hdr)) {
-+		border = path[depth].p_ext[1].e_block;
++		border = path[depth].p_ext[1].ee_block;
 +		ext_debug(tree, "leaf will be splitted."
 +				" next leaf starts at %d\n",
 +				(int)border);
 +	} else {
-+		border = newext->e_block;
++		border = newext->ee_block;
 +		ext_debug(tree, "leaf will be added."
 +				" next leaf starts at %d\n",
 +				(int)border);
@@ -615,14 +615,14 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		goto cleanup;
 +
 +	neh = EXT_BLOCK_HDR(bh);
-+	neh->e_num = 0;
-+	neh->e_max = ext3_ext_space_block(tree);
-+	neh->e_magic = EXT3_EXT_MAGIC;
-+	neh->e_depth = 0;
++	neh->eh_entries = 0;
++	neh->eh_max = ext3_ext_space_block(tree);
++	neh->eh_magic = EXT3_EXT_MAGIC;
++	neh->eh_depth = 0;
 +	ex = EXT_FIRST_EXTENT(neh);
 +
 +	/* move remain of path[depth] to the new leaf */
-+	EXT_ASSERT(path[depth].p_hdr->e_num == path[depth].p_hdr->e_max);
++	EXT_ASSERT(path[depth].p_hdr->eh_entries == path[depth].p_hdr->eh_max);
 +	/* start copy from next extent */
 +	/* TODO: we could do it by single memmove */
 +	m = 0;
@@ -630,13 +630,13 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	while (path[depth].p_ext <=
 +			EXT_MAX_EXTENT(path[depth].p_hdr)) {
 +		ext_debug(tree, "move %d:%d:%d in new leaf %lu\n",
-+				path[depth].p_ext->e_block,
-+				path[depth].p_ext->e_start,
-+				path[depth].p_ext->e_num,
++				path[depth].p_ext->ee_block,
++				path[depth].p_ext->ee_start,
++				path[depth].p_ext->ee_len,
 +				newblock);
 +		memmove(ex++, path[depth].p_ext++,
 +				sizeof(struct ext3_extent));
-+		neh->e_num++;
++		neh->eh_entries++;
 +		m++;
 +	}
 +	mark_buffer_uptodate(bh, 1);
@@ -651,7 +651,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	if (m) {
 +		if ((err = ext3_ext_get_access(handle, tree, path + depth)))
 +			goto cleanup;
-+		path[depth].p_hdr->e_num -= m;
++		path[depth].p_hdr->eh_entries -= m;
 +		if ((err = ext3_ext_dirty(handle, tree, path + depth)))
 +			goto cleanup;
 +		
@@ -679,13 +679,13 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +			goto cleanup;
 +
 +		neh = EXT_BLOCK_HDR(bh);
-+		neh->e_num = 1;
-+		neh->e_magic = EXT3_EXT_MAGIC;
-+		neh->e_max = ext3_ext_space_block_idx(tree);
-+		neh->e_depth = depth - i; 
++		neh->eh_entries = 1;
++		neh->eh_magic = EXT3_EXT_MAGIC;
++		neh->eh_max = ext3_ext_space_block_idx(tree);
++		neh->eh_depth = depth - i; 
 +		fidx = EXT_FIRST_INDEX(neh);
-+		fidx->e_block = border;
-+		fidx->e_leaf = oldblock;
++		fidx->ei_block = border;
++		fidx->ei_leaf = oldblock;
 +
 +		ext_debug(tree,	"int.index at %d (block %lu): %lu -> %lu\n",
 +				i, newblock, border, oldblock);
@@ -699,12 +699,12 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +				EXT_LAST_INDEX(path[i].p_hdr));
 +		while (path[i].p_idx <= EXT_MAX_INDEX(path[i].p_hdr)) {
 +			ext_debug(tree, "%d: move %d:%d in new index %lu\n",
-+					i, path[i].p_idx->e_block,
-+					path[i].p_idx->e_leaf, newblock);
++					i, path[i].p_idx->ei_block,
++					path[i].p_idx->ei_leaf, newblock);
 +			memmove(++fidx, path[i].p_idx++,
 +					sizeof(struct ext3_extent_idx));
-+			neh->e_num++;
-+			EXT_ASSERT(neh->e_num <= neh->e_max);
++			neh->eh_entries++;
++			EXT_ASSERT(neh->eh_entries <= neh->eh_max);
 +			m++;
 +		}
 +		mark_buffer_uptodate(bh, 1);
@@ -720,7 +720,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +			err = ext3_ext_get_access(handle, tree, path + i);
 +			if (err)
 +				goto cleanup;
-+			path[i].p_hdr->e_num -= m;
++			path[i].p_hdr->eh_entries -= m;
 +			err = ext3_ext_dirty(handle, tree, path + i);
 +			if (err)
 +				goto cleanup;
@@ -796,12 +796,12 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	/* set size of new block */
 +	neh = EXT_BLOCK_HDR(bh);
 +	/* old root could have indexes or leaves
-+	 * so calculate e_max right way */
++	 * so calculate eh_max right way */
 +	if (EXT_DEPTH(tree))
-+		neh->e_max = ext3_ext_space_block_idx(tree);
++		neh->eh_max = ext3_ext_space_block_idx(tree);
 +	else
-+		neh->e_max = ext3_ext_space_block(tree);
-+	neh->e_magic = EXT3_EXT_MAGIC;
++		neh->eh_max = ext3_ext_space_block(tree);
++	neh->eh_magic = EXT3_EXT_MAGIC;
 +	mark_buffer_uptodate(bh, 1);
 +	unlock_buffer(bh);
 +
@@ -812,20 +812,20 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	if ((err = ext3_ext_get_access(handle, tree, curp)))
 +		goto out;
 +
-+	curp->p_hdr->e_magic = EXT3_EXT_MAGIC;
-+	curp->p_hdr->e_max = ext3_ext_space_root_idx(tree);
-+	curp->p_hdr->e_num = 1;
++	curp->p_hdr->eh_magic = EXT3_EXT_MAGIC;
++	curp->p_hdr->eh_max = ext3_ext_space_root_idx(tree);
++	curp->p_hdr->eh_entries = 1;
 +	curp->p_idx = EXT_FIRST_INDEX(curp->p_hdr);
 +	/* FIXME: it works, but actually path[0] can be index */
-+	curp->p_idx->e_block = EXT_FIRST_EXTENT(path[0].p_hdr)->e_block;
-+	curp->p_idx->e_leaf = newblock;
++	curp->p_idx->ei_block = EXT_FIRST_EXTENT(path[0].p_hdr)->ee_block;
++	curp->p_idx->ei_leaf = newblock;
 +
 +	neh = EXT_ROOT_HDR(tree);
 +	fidx = EXT_FIRST_INDEX(neh);
 +	ext_debug(tree, "new root: num %d(%d), lblock %d, ptr %d\n",
-+			neh->e_num, neh->e_max, fidx->e_block, fidx->e_leaf); 
++			neh->eh_entries, neh->eh_max, fidx->ei_block, fidx->ei_leaf); 
 +
-+	neh->e_depth = path->p_depth + 1;
++	neh->eh_depth = path->p_depth + 1;
 +	err = ext3_ext_dirty(handle, tree, curp);
 +out:
 +	brelse(bh);
@@ -864,7 +864,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +		/* refill path */
 +		ext3_ext_drop_refs(path);
-+		path = ext3_ext_find_extent(tree, newext->e_block, path);
++		path = ext3_ext_find_extent(tree, newext->ee_block, path);
 +		if (IS_ERR(path))
 +			err = PTR_ERR(path);
 +	} else {
@@ -873,7 +873,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +		/* refill path */
 +		ext3_ext_drop_refs(path);
-+		path = ext3_ext_find_extent(tree, newext->e_block, path);
++		path = ext3_ext_find_extent(tree, newext->ee_block, path);
 +		if (IS_ERR(path))
 +			err = PTR_ERR(path);
 +
@@ -882,7 +882,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		 * in all other cases we have to split growed tree
 +		 */
 +		depth = EXT_DEPTH(tree);
-+		if (path[depth].p_hdr->e_num == path[depth].p_hdr->e_max) {
++		if (path[depth].p_hdr->eh_entries == path[depth].p_hdr->eh_max) {
 +			/* now we need split */
 +			goto repeat;
 +		}
@@ -895,7 +895,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +}
 +
 +/*
-+ * returns allocated block in subsequent extent or 0xffffffff
++ * returns allocated block in subsequent extent or EXT_MAX_BLOCK
 + * NOTE: it consider block number from index entry as
 + * allocated block. thus, index entries have to be consistent
 + * with leafs
@@ -909,7 +909,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	depth = path->p_depth;
 +
 +	if (depth == 0 && path->p_ext == NULL)
-+		return 0xffffffff;
++		return EXT_MAX_BLOCK;
 +
 +	/* FIXME: what if index isn't full ?! */
 +	while (depth >= 0) {
@@ -917,21 +917,21 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +			/* leaf */
 +			if (path[depth].p_ext !=
 +					EXT_LAST_EXTENT(path[depth].p_hdr))
-+				return path[depth].p_ext[1].e_block;
++				return path[depth].p_ext[1].ee_block;
 +		} else {
 +			/* index */
 +			if (path[depth].p_idx !=
 +					EXT_LAST_INDEX(path[depth].p_hdr))
-+				return path[depth].p_idx[1].e_block;
++				return path[depth].p_idx[1].ei_block;
 +		}
 +		depth--;        
 +	}
 +
-+	return 0xffffffff;
++	return EXT_MAX_BLOCK;
 +}
 +
 +/*
-+ * returns first allocated block from next leaf or 0xffffffff
++ * returns first allocated block from next leaf or EXT_MAX_BLOCK
 + */
 +static unsigned ext3_ext_next_leaf_block(struct ext3_extents_tree *tree,
 +                                               struct ext3_ext_path *path)
@@ -943,7 +943,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +	/* zero-tree has no leaf blocks at all */
 +	if (depth == 0)
-+		return 0xffffffff;
++		return EXT_MAX_BLOCK;
 +
 +	/* go to index block */
 +	depth--;
@@ -951,11 +951,11 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	while (depth >= 0) {
 +		if (path[depth].p_idx !=
 +				EXT_LAST_INDEX(path[depth].p_hdr))
-+			return path[depth].p_idx[1].e_block;
++			return path[depth].p_idx[1].ei_block;
 +		depth--;        
 +	}
 +
-+	return 0xffffffff;
++	return EXT_MAX_BLOCK;
 +}
 +
 +/*
@@ -991,10 +991,10 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	 * TODO: we need correction if border is smaller then current one
 +	 */
 +	k = depth - 1;
-+	border = path[depth].p_ext->e_block;
++	border = path[depth].p_ext->ee_block;
 +	if ((err = ext3_ext_get_access(handle, tree, path + k)))
 +		return err;
-+	path[k].p_idx->e_block = border;
++	path[k].p_idx->ei_block = border;
 +	if ((err = ext3_ext_dirty(handle, tree, path + k)))
 +		return err;
 +
@@ -1004,7 +1004,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +			break;
 +		if ((err = ext3_ext_get_access(handle, tree, path + k)))
 +			break;
-+		path[k].p_idx->e_block = border;
++		path[k].p_idx->ei_block = border;
 +		if ((err = ext3_ext_dirty(handle, tree, path + k)))
 +			break;
 +	}
@@ -1017,11 +1017,11 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +				struct ext3_extent *ex1,
 +				struct ext3_extent *ex2)
 +{
-+	if (ex1->e_block + ex1->e_num != ex2->e_block)
++	if (ex1->ee_block + ex1->ee_len != ex2->ee_block)
 +		return 0;
 +
 +#ifdef AGRESSIVE_TEST
-+	if (ex1->e_num >= 4)
++	if (ex1->ee_len >= 4)
 +		return 0;
 +#endif
 +
@@ -1046,6 +1046,8 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	struct ext3_ext_path *npath = NULL;
 +	int depth, len, err, next;
 +
++	EXT_ASSERT(newext->ee_len > 0);
++	EXT_ASSERT(newext->ee_len < EXT_CACHE_MARK);
 +	depth = EXT_DEPTH(tree);
 +	ex = path[depth].p_ext;
 +	EXT_ASSERT(path[depth].p_hdr);
@@ -1053,11 +1055,11 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	/* try to insert block into found extent and return */
 +	if (ex && ext3_can_extents_be_merged(tree, ex, newext)) {
 +		ext_debug(tree, "append %d block to %d:%d (from %d)\n",
-+				newext->e_num, ex->e_block, ex->e_num,
-+				ex->e_start);
++				newext->ee_len, ex->ee_block, ex->ee_len,
++				ex->ee_start);
 +		if ((err = ext3_ext_get_access(handle, tree, path + depth)))
 +			return err;
-+		ex->e_num += newext->e_num;
++		ex->ee_len += newext->ee_len;
 +		eh = path[depth].p_hdr;
 +		nearex = ex;
 +		goto merge;
@@ -1066,13 +1068,13 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +repeat:
 +	depth = EXT_DEPTH(tree);
 +	eh = path[depth].p_hdr;
-+	if (eh->e_num < eh->e_max)
++	if (eh->eh_entries < eh->eh_max)
 +		goto has_space;
 +
 +	/* probably next leaf has space for us? */
 +	fex = EXT_LAST_EXTENT(eh);
 +	next = ext3_ext_next_leaf_block(tree, path);
-+	if (newext->e_block > fex->e_block && next != 0xffffffff) {
++	if (newext->ee_block > fex->ee_block && next != EXT_MAX_BLOCK) {
 +		ext_debug(tree, "next leaf block - %d\n", next);
 +		EXT_ASSERT(!npath);
 +		npath = ext3_ext_find_extent(tree, next, NULL);
@@ -1080,14 +1082,14 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +			return PTR_ERR(npath);
 +		EXT_ASSERT(npath->p_depth == path->p_depth);
 +		eh = npath[depth].p_hdr;
-+		if (eh->e_num < eh->e_max) {
++		if (eh->eh_entries < eh->eh_max) {
 +			ext_debug(tree,	"next leaf isnt full(%d)\n",
-+					eh->e_num);
++					eh->eh_entries);
 +			path = npath;
 +			goto repeat;
 +		}
 +		ext_debug(tree, "next leaf hasno free space(%d,%d)\n",
-+				eh->e_num, eh->e_max);
++				eh->eh_entries, eh->eh_max);
 +	}
 +
 +	/*
@@ -1109,40 +1111,42 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	if (!nearex) {
 +		/* there is no extent in this leaf, create first one */
 +		ext_debug(tree, "first extent in the leaf: %d:%d:%d\n",
-+				newext->e_block, newext->e_start,
-+				newext->e_num);
++				newext->ee_block, newext->ee_start,
++				newext->ee_len);
 +		path[depth].p_ext = EXT_FIRST_EXTENT(eh);
-+	} else if (newext->e_block > nearex->e_block) {
-+		EXT_ASSERT(newext->e_block != nearex->e_block);
++	} else if (newext->ee_block > nearex->ee_block) {
++		EXT_ASSERT(newext->ee_block != nearex->ee_block);
 +		if (nearex != EXT_LAST_EXTENT(eh)) {
 +			len = EXT_MAX_EXTENT(eh) - nearex;
 +			len = (len - 1) * sizeof(struct ext3_extent);
 +			len = len < 0 ? 0 : len;
 +			ext_debug(tree, "insert %d:%d:%d after: nearest 0x%p, "
 +					"move %d from 0x%p to 0x%p\n",
-+					newext->e_block, newext->e_start,
-+					newext->e_num,
++					newext->ee_block, newext->ee_start,
++					newext->ee_len,
 +					nearex, len, nearex + 1, nearex + 2);
 +			memmove(nearex + 2, nearex + 1, len);
 +		}
 +		path[depth].p_ext = nearex + 1;
 +	} else {
-+		EXT_ASSERT(newext->e_block != nearex->e_block);
++		EXT_ASSERT(newext->ee_block != nearex->ee_block);
 +		len = (EXT_MAX_EXTENT(eh) - nearex) * sizeof(struct ext3_extent);
 +		len = len < 0 ? 0 : len;
 +		ext_debug(tree, "insert %d:%d:%d before: nearest 0x%p, "
 +				"move %d from 0x%p to 0x%p\n",
-+				newext->e_block, newext->e_start, newext->e_num,
++				newext->ee_block, newext->ee_start, newext->ee_len,
 +				nearex, len, nearex + 1, nearex + 2);
 +		memmove(nearex + 1, nearex, len);
 +		path[depth].p_ext = nearex;
 +	}
 +
-+	eh->e_num++;
++	eh->eh_entries++;
 +	nearex = path[depth].p_ext;
-+	nearex->e_block = newext->e_block;
-+	nearex->e_start = newext->e_start;
-+	nearex->e_num = newext->e_num;
++	nearex->ee_block = newext->ee_block;
++	nearex->ee_start = newext->ee_start;
++	nearex->ee_len = newext->ee_len;
++	/* FIXME: support for large fs */
++	nearex->ee_start_hi = 0;
 +
 +merge:
 +	/* try to merge extents to the right */
@@ -1150,14 +1154,14 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		if (!ext3_can_extents_be_merged(tree, nearex, nearex + 1))
 +			break;
 +		/* merge with next extent! */
-+		nearex->e_num += nearex[1].e_num;
++		nearex->ee_len += nearex[1].ee_len;
 +		if (nearex + 1 < EXT_LAST_EXTENT(eh)) {
 +			len = (EXT_LAST_EXTENT(eh) - nearex - 1)
 +					* sizeof(struct ext3_extent);
 +			memmove(nearex + 1, nearex + 2, len);
 +		}
-+		eh->e_num--;
-+		EXT_ASSERT(eh->e_num > 0);
++		eh->eh_entries--;
++		EXT_ASSERT(eh->eh_entries > 0);
 +	}
 +
 +	/* try to merge extents to the left */
@@ -1193,7 +1197,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	EXT_ASSERT(tree->inode);
 +	EXT_ASSERT(tree->root);
 +
-+	while (block < last && block != 0xfffffffff) {
++	while (block < last && block != EXT_MAX_BLOCK) {
 +		num = last - block;
 +		/* find extent for this block */
 +		path = ext3_ext_find_extent(tree, block, path);
@@ -1214,25 +1218,25 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +			 * all requested space */
 +			start = block;
 +			end = block + num;
-+		} else if (ex->e_block > block) {
++		} else if (ex->ee_block > block) {
 +			/* need to allocate space before found extent */
 +			start = block;
-+			end = ex->e_block;
++			end = ex->ee_block;
 +			if (block + num < end)
 +				end = block + num;
-+		} else if (block >= ex->e_block + ex->e_num) {
++		} else if (block >= ex->ee_block + ex->ee_len) {
 +			/* need to allocate space after found extent */
 +			start = block;
 +			end = block + num;
 +			if (end >= next)
 +				end = next;
-+		} else if (block >= ex->e_block) {
++		} else if (block >= ex->ee_block) {
 +			/* 
 +			 * some part of requested space is covered
 +			 * by found extent
 +			 */
 +			start = block;
-+			end = ex->e_block + ex->e_num;
++			end = ex->ee_block + ex->ee_len;
 +			if (block + num < end)
 +				end = block + num;
 +			exists = 1;
@@ -1242,9 +1246,9 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		EXT_ASSERT(end > start);
 +
 +		if (!exists) {
-+			cbex.e_block = start;
-+			cbex.e_num = end - start;
-+			cbex.e_start = 0;
++			cbex.ee_block = start;
++			cbex.ee_len = end - start;
++			cbex.ee_start = 0;
 +		} else
 +			cbex = *ex;
 +
@@ -1267,7 +1271,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +			path = NULL;
 +		}
 +
-+		block = cbex.e_block + cbex.e_num;
++		block = cbex.ee_block + cbex.ee_len;
 +	}
 +
 +	if (path) {
@@ -1283,10 +1287,10 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +{
 +	if (tree->cex) {
 +		EXT_ASSERT(ex);
-+		EXT_ASSERT(ex->e_num);
-+		tree->cex->e_block = ex->e_block;
-+		tree->cex->e_start = ex->e_start;
-+		tree->cex->e_num = ex->e_num;
++		EXT_ASSERT(ex->ee_len);
++		tree->cex->ee_block = ex->ee_block;
++		tree->cex->ee_start = ex->ee_start;
++		tree->cex->ee_len = ex->ee_len;
 +	}
 +}
 +
@@ -1308,32 +1312,32 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	ex = path[depth].p_ext;
 +	if (ex == NULL) {
 +		/* there is no extent yet, so gap is [0;-] */
-+		gex.e_block = 0;
-+		gex.e_num = 0xffffffff;
++		gex.ee_block = 0;
++		gex.ee_len = EXT_CACHE_MARK;
 +		ext_debug(tree, "cache gap(whole file):");
-+	} else if (block < ex->e_block) {
-+		gex.e_block = block;
-+		gex.e_num = ex->e_block - block;
++	} else if (block < ex->ee_block) {
++		gex.ee_block = block;
++		gex.ee_len = ex->ee_block - block;
 +		ext_debug(tree, "cache gap(before): %lu [%lu:%lu]",
 +				(unsigned long) block,
-+				(unsigned long) ex->e_block,
-+				(unsigned long) ex->e_num);
-+	} else if (block >= ex->e_block + ex->e_num) {
-+		gex.e_block = ex->e_block + ex->e_num;
-+		gex.e_num = ext3_ext_next_allocated_block(path);
++				(unsigned long) ex->ee_block,
++				(unsigned long) ex->ee_len);
++	} else if (block >= ex->ee_block + ex->ee_len) {
++		gex.ee_block = ex->ee_block + ex->ee_len;
++		gex.ee_len = ext3_ext_next_allocated_block(path);
 +		ext_debug(tree, "cache gap(after): [%lu:%lu] %lu",
-+				(unsigned long) ex->e_block,
-+				(unsigned long) ex->e_num,
++				(unsigned long) ex->ee_block,
++				(unsigned long) ex->ee_len,
 +				(unsigned long) block);
-+		EXT_ASSERT(gex.e_num > gex.e_block);
-+		gex.e_num = gex.e_num - gex.e_block;
++		EXT_ASSERT(gex.ee_len > gex.ee_block);
++		gex.ee_len = gex.ee_len - gex.ee_block;
 +	} else {
 +		BUG();
 +	}
 +
-+	ext_debug(tree, " -> %lu:%lu\n", (unsigned long) gex.e_block,
-+			(unsigned long) gex.e_num);
-+	gex.e_start = 0xffffffff;
++	ext_debug(tree, " -> %lu:%lu\n", (unsigned long) gex.ee_block,
++			(unsigned long) gex.ee_len);
++	gex.ee_start = EXT_CACHE_MARK;
 +	ext3_ext_put_in_cache(tree, &gex);
 +}
 +
@@ -1348,18 +1352,18 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		return 0;
 +
 +	/* has cache valid data? */
-+	if (cex->e_num == 0)
++	if (cex->ee_len == 0)
 +		return 0;
 +
-+	if (block >= cex->e_block && block < cex->e_block + cex->e_num) {
-+		ex->e_block = cex->e_block;
-+		ex->e_start = cex->e_start;
-+		ex->e_num = cex->e_num;
++	if (block >= cex->ee_block && block < cex->ee_block + cex->ee_len) {
++		ex->ee_block = cex->ee_block;
++		ex->ee_start = cex->ee_start;
++		ex->ee_len = cex->ee_len;
 +		ext_debug(tree, "%lu cached by %lu:%lu:%lu\n",
 +				(unsigned long) block,
-+				(unsigned long) ex->e_block,
-+				(unsigned long) ex->e_num,
-+				(unsigned long) ex->e_start);
++				(unsigned long) ex->ee_block,
++				(unsigned long) ex->ee_len,
++				(unsigned long) ex->ee_start);
 +		return 1;
 +	}
 +
@@ -1380,17 +1384,17 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	
 +	/* free index block */
 +	path--;
-+	EXT_ASSERT(path->p_hdr->e_num);
++	EXT_ASSERT(path->p_hdr->eh_entries);
 +	if ((err = ext3_ext_get_access(handle, tree, path)))
 +		return err;
-+	path->p_hdr->e_num--;
++	path->p_hdr->eh_entries--;
 +	if ((err = ext3_ext_dirty(handle, tree, path)))
 +		return err;
 +	ext_debug(tree, "index is empty, remove it, free block %d\n",
-+			path->p_idx->e_leaf);
-+	bh = sb_get_hash_table(tree->inode->i_sb, path->p_idx->e_leaf);
-+	ext3_forget(handle, 1, tree->inode, bh, path->p_idx->e_leaf);
-+	ext3_free_blocks(handle, tree->inode, path->p_idx->e_leaf, 1);
++			path->p_idx->ei_leaf);
++	bh = sb_get_hash_table(tree->inode->i_sb, path->p_idx->ei_leaf);
++	ext3_forget(handle, 1, tree->inode, bh, path->p_idx->ei_leaf);
++	ext3_free_blocks(handle, tree->inode, path->p_idx->ei_leaf, 1);
 +	return err;
 +}
 +
@@ -1402,7 +1406,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +	if (path) {
 +		/* probably there is space in leaf? */
-+		if (path[depth].p_hdr->e_num < path[depth].p_hdr->e_max)
++		if (path[depth].p_hdr->eh_entries < path[depth].p_hdr->eh_max)
 +			return 1;
 +	}
 +	
@@ -1442,13 +1446,13 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	depth = EXT_DEPTH(tree);
 +	ex = path[depth].p_ext;
 +	EXT_ASSERT(ex);
-+	EXT_ASSERT(end < ex->e_block + ex->e_num - 1);
-+	EXT_ASSERT(ex->e_block < start);
++	EXT_ASSERT(end < ex->ee_block + ex->ee_len - 1);
++	EXT_ASSERT(ex->ee_block < start);
 +
 +	/* calculate tail extent */
-+	tex.e_block = end + 1;
-+	EXT_ASSERT(tex.e_block < ex->e_block + ex->e_num);
-+	tex.e_num = ex->e_block + ex->e_num - tex.e_block;
++	tex.ee_block = end + 1;
++	EXT_ASSERT(tex.ee_block < ex->ee_block + ex->ee_len);
++	tex.ee_len = ex->ee_block + ex->ee_len - tex.ee_block;
 +
 +	creds = ext3_ext_calc_credits_for_insert(tree, path);
 +	handle = ext3_ext_journal_restart(handle, creds);
@@ -1459,22 +1463,22 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	err = ext3_ext_get_access(handle, tree, path + depth);
 +	if (err)
 +		return err;
-+	ex->e_num = start - ex->e_block;
++	ex->ee_len = start - ex->ee_block;
 +	err = ext3_ext_dirty(handle, tree, path + depth);
 +	if (err)
 +		return err;
 +
 +	/* FIXME: some callback to free underlying resource
-+	 * and correct e_start? */
++	 * and correct ee_start? */
 +	ext_debug(tree, "split extent: head %u:%u, tail %u:%u\n",
-+			ex->e_block, ex->e_num, tex.e_block, tex.e_num);
++			ex->ee_block, ex->ee_len, tex.ee_block, tex.ee_len);
 +
-+	npath = ext3_ext_find_extent(tree, ex->e_block, NULL);
++	npath = ext3_ext_find_extent(tree, ex->ee_block, NULL);
 +	if (IS_ERR(npath))
 +		return PTR_ERR(npath);
 +	depth = EXT_DEPTH(tree);
-+	EXT_ASSERT(npath[depth].p_ext->e_block == ex->e_block);
-+	EXT_ASSERT(npath[depth].p_ext->e_num == ex->e_num);
++	EXT_ASSERT(npath[depth].p_ext->ee_block == ex->ee_block);
++	EXT_ASSERT(npath[depth].p_ext->ee_len == ex->ee_len);
 +
 +	err = ext3_ext_insert_extent(handle, tree, npath, &tex);
 +	ext3_ext_drop_refs(npath);
@@ -1500,18 +1504,18 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		path[depth].p_hdr = EXT_BLOCK_HDR(path[depth].p_bh);
 +	eh = path[depth].p_hdr;
 +	EXT_ASSERT(eh);
-+	EXT_ASSERT(eh->e_num <= eh->e_max);
-+	EXT_ASSERT(eh->e_magic == EXT3_EXT_MAGIC);
++	EXT_ASSERT(eh->eh_entries <= eh->eh_max);
++	EXT_ASSERT(eh->eh_magic == EXT3_EXT_MAGIC);
 +	
 +	/* find where to start removing */
 +	le = ex = EXT_LAST_EXTENT(eh);
 +	while (ex != EXT_FIRST_EXTENT(eh)) {
-+		if (ex->e_block <= end)
++		if (ex->ee_block <= end)
 +			break;
 +		ex--;
 +	}
 +
-+	if (start > ex->e_block && end < ex->e_block + ex->e_num - 1) {
++	if (start > ex->ee_block && end < ex->ee_block + ex->ee_len - 1) {
 +		/* removal of internal part of the extent requested
 +		 * tail and head must be placed in different extent
 +		 * so, we have to insert one more extent */
@@ -1521,34 +1525,34 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	
 +	lu = ex;
 +	while (ex >= EXT_FIRST_EXTENT(eh) &&
-+			ex->e_block + ex->e_num > start) {
-+		ext_debug(tree, "remove ext %u:%u\n", ex->e_block, ex->e_num);
++			ex->ee_block + ex->ee_len > start) {
++		ext_debug(tree, "remove ext %u:%u\n", ex->ee_block, ex->ee_len);
 +		path[depth].p_ext = ex;
 +	
-+		a = ex->e_block > start ? ex->e_block : start;
-+		b = ex->e_block + ex->e_num - 1 < end ?
-+			ex->e_block + ex->e_num - 1 : end;
++		a = ex->ee_block > start ? ex->ee_block : start;
++		b = ex->ee_block + ex->ee_len - 1 < end ?
++			ex->ee_block + ex->ee_len - 1 : end;
 +		
 +		ext_debug(tree, "  border %u:%u\n", a, b);
 +
-+		if (a != ex->e_block && b != ex->e_block + ex->e_num - 1) {
++		if (a != ex->ee_block && b != ex->ee_block + ex->ee_len - 1) {
 +			block = 0;
 +			num = 0;
 +			BUG();
-+		} else if (a != ex->e_block) {
++		} else if (a != ex->ee_block) {
 +			/* remove tail of the extent */
-+			block = ex->e_block;
++			block = ex->ee_block;
 +			num = a - block;
-+		} else if (b != ex->e_block + ex->e_num - 1) {
++		} else if (b != ex->ee_block + ex->ee_len - 1) {
 +			/* remove head of the extent */
 +			block = a;
 +			num = b - a;
 +		} else {
 +			/* remove whole extent: excelent! */
-+			block = ex->e_block; 
++			block = ex->ee_block; 
 +			num = 0;
-+			EXT_ASSERT(a == ex->e_block &&
-+					b == ex->e_block + ex->e_num - 1);
++			EXT_ASSERT(a == ex->ee_block &&
++					b == ex->ee_block + ex->ee_len - 1);
 +		}
 +
 +		if (ex == EXT_FIRST_EXTENT(eh))
@@ -1577,41 +1581,41 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +		if (num == 0) {
 +			/* this extent is removed entirely mark slot unused */
-+			ex->e_start = 0;
-+			eh->e_num--;
++			ex->ee_start = 0;
++			eh->eh_entries--;
 +			fu = ex;
 +		}
 +
-+		ex->e_block = block;
-+		ex->e_num = num;
++		ex->ee_block = block;
++		ex->ee_len = num;
 +
 +		err = ext3_ext_dirty(handle, tree, path + depth);
 +		if (err)
 +			goto out;
 +
 +		ext_debug(tree, "new extent: %u:%u:%u\n",
-+				ex->e_block, ex->e_num, ex->e_start);
++				ex->ee_block, ex->ee_len, ex->ee_start);
 +		ex--;
 +	}
 +
 +	if (fu) {
 +		/* reuse unused slots */
 +		while (lu < le) {
-+			if (lu->e_start) {
++			if (lu->ee_start) {
 +				*fu = *lu;
-+				lu->e_start = 0;
++				lu->ee_start = 0;
 +				fu++;
 +			}
 +			lu++;
 +		}
 +	}
 +
-+	if (correct_index && eh->e_num)
++	if (correct_index && eh->eh_entries)
 +		err = ext3_ext_correct_indexes(handle, tree, path);
 +
 +	/* if this leaf is free, then we should
 +	 * remove it from index block above */
-+	if (err == 0 && eh->e_num == 0 && path[depth].p_bh != NULL)
++	if (err == 0 && eh->eh_entries == 0 && path[depth].p_bh != NULL)
 +		err = ext3_ext_rm_idx(handle, tree, path + depth);
 +
 +out:
@@ -1626,7 +1630,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	
 +	ix = EXT_LAST_INDEX(hdr);
 +	while (ix != EXT_FIRST_INDEX(hdr)) {
-+		if (ix->e_block <= block)
++		if (ix->ei_block <= block)
 +			break;
 +		ix--;
 +	}
@@ -1648,7 +1652,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	 * if truncate on deeper level happened it it wasn't partial
 +	 * so we have to consider current index for truncation
 +	 */
-+	if (path->p_hdr->e_num == path->p_block)
++	if (path->p_hdr->eh_entries == path->p_block)
 +		return 0;
 +	return 1;
 +}
@@ -1702,16 +1706,16 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +			path[i].p_hdr = EXT_BLOCK_HDR(path[i].p_bh);
 +		}
 +
-+		EXT_ASSERT(path[i].p_hdr->e_num <= path[i].p_hdr->e_max);
-+		EXT_ASSERT(path[i].p_hdr->e_magic == EXT3_EXT_MAGIC);
++		EXT_ASSERT(path[i].p_hdr->eh_entries <= path[i].p_hdr->eh_max);
++		EXT_ASSERT(path[i].p_hdr->eh_magic == EXT3_EXT_MAGIC);
 +		
 +		if (!path[i].p_idx) {
 +			/* this level hasn't touched yet */
 +			path[i].p_idx =
 +				ext3_ext_last_covered(path[i].p_hdr, end);
-+			path[i].p_block = path[i].p_hdr->e_num + 1;
++			path[i].p_block = path[i].p_hdr->eh_entries + 1;
 +			ext_debug(tree, "init index ptr: hdr 0x%p, num %d\n",
-+					path[i].p_hdr, path[i].p_hdr->e_num);
++					path[i].p_hdr, path[i].p_hdr->eh_entries);
 +		} else {
 +			/* we've already was here, see at next index */
 +			path[i].p_idx--;
@@ -1723,9 +1727,9 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		if (ext3_ext_more_to_rm(path + i)) {
 +			/* go to the next level */
 +			ext_debug(tree, "move to level %d (block %d)\n",
-+					i + 1, path[i].p_idx->e_leaf);
++					i + 1, path[i].p_idx->ei_leaf);
 +			memset(path + i + 1, 0, sizeof(*path));
-+			path[i+1].p_bh = sb_bread(sb, path[i].p_idx->e_leaf);
++			path[i+1].p_bh = sb_bread(sb, path[i].p_idx->ei_leaf);
 +			if (!path[i+1].p_bh) {
 +				/* should we reset i_size? */
 +				err = -EIO;
@@ -1733,14 +1737,14 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +			}
 +			/* put actual number of indexes to know is this
 +			 * number got changed at the next iteration */
-+			path[i].p_block = path[i].p_hdr->e_num;
++			path[i].p_block = path[i].p_hdr->eh_entries;
 +			i++;
 +		} else {
 +			/* we finish processing this index, go up */
-+			if (path[i].p_hdr->e_num == 0 && i > 0) {
++			if (path[i].p_hdr->eh_entries == 0 && i > 0) {
 +				/* index is empty, remove it
 +				 * handle must be already prepared by the
-+				 * truncate_leaf() */
++				 * truncatei_leaf() */
 +				err = ext3_ext_rm_idx(handle, tree, path + i);
 +			}
 +			/* root level have p_bh == NULL, brelse() eats this */
@@ -1751,15 +1755,15 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	}
 +
 +	/* TODO: flexible tree reduction should be here */
-+	if (path->p_hdr->e_num == 0) {
++	if (path->p_hdr->eh_entries == 0) {
 +		/*
 +		 * truncate to zero freed all the tree
-+		 * so, we need to correct e_depth
++		 * so, we need to correct eh_depth
 +		 */
 +		err = ext3_ext_get_access(handle, tree, path);
 +		if (err == 0) {
-+			EXT_ROOT_HDR(tree)->e_depth = 0;
-+			EXT_ROOT_HDR(tree)->e_max = ext3_ext_space_root(tree);
++			EXT_ROOT_HDR(tree)->eh_depth = 0;
++			EXT_ROOT_HDR(tree)->eh_max = ext3_ext_space_root(tree);
 +			err = ext3_ext_dirty(handle, tree, path);
 +		}
 +	}
@@ -1818,7 +1822,8 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +static int ext3_ext_mergable(struct ext3_extent *ex1,
 +				struct ext3_extent *ex2)
 +{
-+	if (ex1->e_start + ex1->e_num == ex2->e_start)
++	/* FIXME: support for large fs */
++	if (ex1->ee_start + ex1->ee_len == ex2->ee_start)
 +		return 1;
 +	return 0;
 +}
@@ -1851,11 +1856,11 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +	if (IS_ERR(handle))
 +		return PTR_ERR(handle);
-+	if (from >= ex->e_block && to == ex->e_block + ex->e_num - 1) {
++	if (from >= ex->ee_block && to == ex->ee_block + ex->ee_len - 1) {
 +		/* tail removal */
 +		unsigned long num, start;
-+		num = ex->e_block + ex->e_num - from;
-+		start = ex->e_start + ex->e_num - num;
++		num = ex->ee_block + ex->ee_len - from;
++		start = ex->ee_start + ex->ee_len - num;
 +		ext_debug(tree, "free last %lu blocks starting %lu\n",
 +				num, start);
 +		for (i = 0; i < num; i++) {
@@ -1863,12 +1868,12 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +			ext3_forget(handle, 0, tree->inode, bh, start + i);
 +		}
 +		ext3_free_blocks(handle, tree->inode, start, num);
-+	} else if (from == ex->e_block && to <= ex->e_block + ex->e_num - 1) {
++	} else if (from == ex->ee_block && to <= ex->ee_block + ex->ee_len - 1) {
 +		printk("strange request: removal %lu-%lu from %u:%u\n",
-+			from, to, ex->e_block, ex->e_num);
++			from, to, ex->ee_block, ex->ee_len);
 +	} else {
 +		printk("strange request: removal(2) %lu-%lu from %u:%u\n",
-+			from, to, ex->e_block, ex->e_num);
++			from, to, ex->ee_block, ex->ee_len);
 +	}
 +	ext3_journal_stop(handle, tree->inode);
 +	return 0;
@@ -1888,7 +1893,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		
 +		/* try to predict block placement */
 +		if ((ex = path[depth].p_ext))
-+			return ex->e_start + (block - ex->e_block);
++			return ex->ee_start + (block - ex->ee_block);
 +
 +		/* it looks index is empty
 +		 * try to find starting from index itself */
@@ -1913,20 +1918,20 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +	
 +	EXT_ASSERT(path);
 +	EXT_ASSERT(ex);
-+	EXT_ASSERT(ex->e_start);
-+	EXT_ASSERT(ex->e_num);
++	EXT_ASSERT(ex->ee_start);
++	EXT_ASSERT(ex->ee_len);
 +	
 +	/* reuse block from the extent to order data/metadata */
-+	newblock = ex->e_start++;
-+	ex->e_num--;
-+	if (ex->e_num == 0) {
-+		ex->e_num = 1;
++	newblock = ex->ee_start++;
++	ex->ee_len--;
++	if (ex->ee_len == 0) {
++		ex->ee_len = 1;
 +		/* allocate new block for the extent */
-+		goal = ext3_ext_find_goal(inode, path, ex->e_block);
-+		ex->e_start = ext3_new_block(handle, inode, goal, 0, 0, err);
-+		if (ex->e_start == 0) {
++		goal = ext3_ext_find_goal(inode, path, ex->ee_block);
++		ex->ee_start = ext3_new_block(handle, inode, goal, 0, 0, err);
++		if (ex->ee_start == 0) {
 +			/* error occured: restore old extent */
-+			ex->e_start = newblock;
++			ex->ee_start = newblock;
 +			return 0;
 +		}
 +	}
@@ -1970,7 +1975,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +	/* check in cache */
 +	if (ext3_ext_in_cache(&tree, iblock, &newex)) {
-+		if (newex.e_start == 0xffffffff) {
++		if (newex.ee_start == EXT_CACHE_MARK) {
 +			/* this is cached gap */
 +			if (!create) {
 +				/* block isn't allocated yet and
@@ -1978,9 +1983,9 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +				goto out2;
 +			}
 +			/* we should allocate requested block */
-+		} else if (newex.e_start) {
++		} else if (newex.ee_start) {
 +			/* block is already allocated */
-+			newblock = iblock - newex.e_block + newex.e_start;
++			newblock = iblock - newex.ee_block + newex.ee_start;
 +			goto out;
 +		}
 +	}
@@ -2004,10 +2009,10 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +	if ((ex = path[depth].p_ext)) {
 +		/* if found exent covers block, simple return it */
-+		if (iblock >= ex->e_block && iblock < ex->e_block + ex->e_num) {
-+			newblock = iblock - ex->e_block + ex->e_start;
++		if (iblock >= ex->ee_block && iblock < ex->ee_block + ex->ee_len) {
++			newblock = iblock - ex->ee_block + ex->ee_start;
 +			ext_debug(&tree, "%d fit into %d:%d -> %d\n",
-+					(int) iblock, ex->e_block, ex->e_num,
++					(int) iblock, ex->ee_block, ex->ee_len,
 +					newblock);
 +			ext3_ext_put_in_cache(&tree, ex);
 +			goto out;
@@ -2033,9 +2038,9 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +			goal, newblock);
 +
 +	/* try to insert new extent into found leaf and return */
-+	newex.e_block = iblock;
-+	newex.e_start = newblock;
-+	newex.e_num = 1;
++	newex.ee_block = iblock;
++	newex.ee_start = newblock;
++	newex.ee_len = 1;
 +	err = ext3_ext_insert_extent(handle, &tree, path, &newex);
 +	if (err)
 +		goto out2;
@@ -2044,7 +2049,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		EXT3_I(inode)->i_disksize = inode->i_size;
 +
 +	/* previous routine could use block we allocated */
-+	newblock = newex.e_start;
++	newblock = newex.ee_start;
 +	set_bit(BH_New, &bh_result->b_state);
 +
 +	ext3_ext_put_in_cache(&tree, &newex);
@@ -2101,7 +2106,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 +	last_block = (inode->i_size + sb->s_blocksize - 1)
 +			>> EXT3_BLOCK_SIZE_BITS(sb);
-+	err = ext3_ext_remove_space(&tree, last_block, 0xffffffff);
++	err = ext3_ext_remove_space(&tree, last_block, EXT_MAX_BLOCK);
 +	
 +	/* In a multi-transaction truncate, we only make the final
 +	 * transaction synchronous */
@@ -2221,7 +2226,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		buf.err = 0;
 +		tree.private = &buf;
 +		down_write(&EXT3_I(inode)->truncate_sem);
-+		err = ext3_ext_walk_space(&tree, buf.start, 0xffffffff,
++		err = ext3_ext_walk_space(&tree, buf.start, EXT_MAX_BLOCK,
 +						ext3_ext_store_extent_cb);
 +		up_write(&EXT3_I(inode)->truncate_sem);
 +		if (err == 0)
@@ -2236,7 +2241,7 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +		buf.extents_num = 0;
 +		buf.leaf_num = 0;
 +		tree.private = &buf;
-+		err = ext3_ext_walk_space(&tree, 0, 0xffffffff,
++		err = ext3_ext_walk_space(&tree, 0, EXT_MAX_BLOCK,
 +						ext3_ext_collect_stats_cb);
 +		up_write(&EXT3_I(inode)->truncate_sem);
 +		if (!err)
@@ -2262,8 +2267,8 @@ Index: linux-2.4.24/fs/ext3/extents.c
 +
 Index: linux-2.4.24/fs/ext3/ialloc.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/ialloc.c	2004-08-06 00:47:18.000000000 +0400
-+++ linux-2.4.24/fs/ext3/ialloc.c	2004-08-06 02:43:24.000000000 +0400
+--- linux-2.4.24.orig/fs/ext3/ialloc.c	2004-08-07 16:35:25.000000000 +0400
++++ linux-2.4.24/fs/ext3/ialloc.c	2004-08-10 03:25:26.000000000 +0400
 @@ -593,10 +593,14 @@
  		iloc.bh = NULL;
  		goto fail;
@@ -2283,8 +2288,8 @@ Index: linux-2.4.24/fs/ext3/ialloc.c
  	if(DQUOT_ALLOC_INODE(inode)) {
 Index: linux-2.4.24/fs/ext3/inode.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/inode.c	2004-08-06 00:47:18.000000000 +0400
-+++ linux-2.4.24/fs/ext3/inode.c	2004-08-06 02:43:24.000000000 +0400
+--- linux-2.4.24.orig/fs/ext3/inode.c	2004-08-07 16:35:25.000000000 +0400
++++ linux-2.4.24/fs/ext3/inode.c	2004-08-10 03:25:26.000000000 +0400
 @@ -848,6 +848,15 @@
  	goto reread;
  }
@@ -2368,8 +2373,8 @@ Index: linux-2.4.24/fs/ext3/inode.c
                                 "allocating block %ld\n", rc, iblock);
 Index: linux-2.4.24/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/Makefile	2004-08-06 00:47:18.000000000 +0400
-+++ linux-2.4.24/fs/ext3/Makefile	2004-08-06 02:43:24.000000000 +0400
+--- linux-2.4.24.orig/fs/ext3/Makefile	2004-08-07 16:35:25.000000000 +0400
++++ linux-2.4.24/fs/ext3/Makefile	2004-08-10 03:25:26.000000000 +0400
 @@ -13,7 +13,9 @@
  
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o iopen.o \
@@ -2383,8 +2388,8 @@ Index: linux-2.4.24/fs/ext3/Makefile
  export-objs += xattr.o
 Index: linux-2.4.24/fs/ext3/super.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/super.c	2004-08-06 00:47:18.000000000 +0400
-+++ linux-2.4.24/fs/ext3/super.c	2004-08-06 02:43:24.000000000 +0400
+--- linux-2.4.24.orig/fs/ext3/super.c	2004-08-07 16:35:25.000000000 +0400
++++ linux-2.4.24/fs/ext3/super.c	2004-08-10 03:25:26.000000000 +0400
 @@ -530,6 +530,7 @@
  	int i;
  
@@ -2415,8 +2420,8 @@ Index: linux-2.4.24/fs/ext3/super.c
  failed_mount3:
 Index: linux-2.4.24/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/ioctl.c	2004-08-06 00:47:17.000000000 +0400
-+++ linux-2.4.24/fs/ext3/ioctl.c	2004-08-06 02:43:24.000000000 +0400
+--- linux-2.4.24.orig/fs/ext3/ioctl.c	2004-08-07 16:35:23.000000000 +0400
++++ linux-2.4.24/fs/ext3/ioctl.c	2004-08-10 03:25:26.000000000 +0400
 @@ -174,6 +174,10 @@
  			return ret;
  		}
@@ -2430,8 +2435,8 @@ Index: linux-2.4.24/fs/ext3/ioctl.c
  	}
 Index: linux-2.4.24/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-08-06 00:47:18.000000000 +0400
-+++ linux-2.4.24/include/linux/ext3_fs.h	2004-08-06 02:44:11.000000000 +0400
+--- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-08-07 16:35:25.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_fs.h	2004-08-10 03:25:26.000000000 +0400
 @@ -185,6 +185,7 @@
  #define EXT3_JOURNAL_DATA_FL		0x00004000 /* file data should be journaled */
  #define EXT3_EXTRA_ISIZE		0x00008000 /* inode has initialized i_extra_isize */
@@ -2485,10 +2490,11 @@ Index: linux-2.4.24/include/linux/ext3_fs.h
 Index: linux-2.4.24/include/linux/ext3_extents.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/ext3_extents.h	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/include/linux/ext3_extents.h	2004-08-06 03:52:38.000000000 +0400
-@@ -0,0 +1,236 @@
++++ linux-2.4.24/include/linux/ext3_extents.h	2004-08-10 03:49:41.000000000 +0400
+@@ -0,0 +1,237 @@
 +/*
-+ * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
++ * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
++ * Written by Alex Tomas <alex@clusterfs.com>
 + *
 + * This program is free software; you can redistribute it and/or modify
 + * it under the terms of the GNU General Public License version 2 as
@@ -2557,9 +2563,10 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 + * it's used at the bottom of the tree
 + */
 +struct ext3_extent {
-+	__u32	e_block;	/* first logical block extent covers */
-+	__u32	e_start;	/* first physical block extents lives */
-+	__u32	e_num;		/* number of blocks covered by extent */
++	__u32	ee_block;	/* first logical block extent covers */
++	__u16	ee_len;		/* number of blocks covered by extent */
++	__u16	ee_start_hi;	/* high 16 bits of physical block */
++	__u32	ee_start;	/* low 32 bigs of physical block */
 +};
 +
 +/*
@@ -2567,23 +2574,25 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 + * it's used at all the levels, but the bottom
 + */
 +struct ext3_extent_idx {
-+	__u32	e_block;	/* index covers logical blocks from 'block' */
-+	__u32	e_leaf;		/* pointer to the physical block of the next *
++	__u32	ei_block;	/* index covers logical blocks from 'block' */
++	__u32	ei_leaf;	/* pointer to the physical block of the next *
 +				 * level. leaf or next index could bet here */
++	__u16	ei_leaf_hi;	/* high 16 bits of physical block */
++	__u16	ei_unused;
 +};
 +
 +/*
 + * each block (leaves and indexes), even inode-stored has header
 + */
 +struct ext3_extent_header {	
-+	__u16	e_magic;	/* probably will support different formats */	
-+	__u16	e_num;		/* number of valid entries */
-+	__u16	e_max;		/* capacity of store in entries */
-+	__u16	e_depth;	/* has tree real underlaying blocks? */
-+	__u32	e_generation;	/* generation of the tree */
++	__u16	eh_magic;	/* probably will support different formats */	
++	__u16	eh_entries;	/* number of valid entries */
++	__u16	eh_max;		/* capacity of store in entries */
++	__u16	eh_depth;	/* has tree real underlaying blocks? */
++	__u32	eh_generation;	/* generation of the tree */
 +};
 +
-+#define EXT3_EXT_MAGIC		0xf301
++#define EXT3_EXT_MAGIC		0xf30a
 +
 +/*
 + * array of ext3_ext_path contains path to some extent
@@ -2648,6 +2657,10 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 +#define EXT_REPEAT	2
 +
 +
++#define EXT_MAX_BLOCK	0xffffffff
++#define EXT_CACHE_MARK	0xffff
++
++
 +#define EXT_FIRST_EXTENT(__hdr__) \
 +	((struct ext3_extent *) (((char *) (__hdr__)) +		\
 +				 sizeof(struct ext3_extent_header)))
@@ -2655,24 +2668,24 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 +	((struct ext3_extent_idx *) (((char *) (__hdr__)) +	\
 +				     sizeof(struct ext3_extent_header)))
 +#define EXT_HAS_FREE_INDEX(__path__) \
-+	((__path__)->p_hdr->e_num < (__path__)->p_hdr->e_max)
++	((__path__)->p_hdr->eh_entries < (__path__)->p_hdr->eh_max)
 +#define EXT_LAST_EXTENT(__hdr__) \
-+	(EXT_FIRST_EXTENT((__hdr__)) + (__hdr__)->e_num - 1)
++	(EXT_FIRST_EXTENT((__hdr__)) + (__hdr__)->eh_entries - 1)
 +#define EXT_LAST_INDEX(__hdr__) \
-+	(EXT_FIRST_INDEX((__hdr__)) + (__hdr__)->e_num - 1)
++	(EXT_FIRST_INDEX((__hdr__)) + (__hdr__)->eh_entries - 1)
 +#define EXT_MAX_EXTENT(__hdr__) \
-+	(EXT_FIRST_EXTENT((__hdr__)) + (__hdr__)->e_max - 1)
++	(EXT_FIRST_EXTENT((__hdr__)) + (__hdr__)->eh_max - 1)
 +#define EXT_MAX_INDEX(__hdr__) \
-+	(EXT_FIRST_INDEX((__hdr__)) + (__hdr__)->e_max - 1)
++	(EXT_FIRST_INDEX((__hdr__)) + (__hdr__)->eh_max - 1)
 +
 +#define EXT_ROOT_HDR(tree) \
 +	((struct ext3_extent_header *) (tree)->root)
 +#define EXT_BLOCK_HDR(bh) \
 +	((struct ext3_extent_header *) (bh)->b_data)
 +#define EXT_DEPTH(_t_)	\
-+	(((struct ext3_extent_header *)((_t_)->root))->e_depth)
++	(((struct ext3_extent_header *)((_t_)->root))->eh_depth)
 +#define EXT_GENERATION(_t_)	\
-+	(((struct ext3_extent_header *)((_t_)->root))->e_generation)
++	(((struct ext3_extent_header *)((_t_)->root))->eh_generation)
 +
 +
 +#define EXT_ASSERT(__x__) if (!(__x__)) BUG();
@@ -2705,19 +2718,12 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 +extern int ext3_ext_walk_space(struct ext3_extents_tree *, unsigned long, unsigned long, ext_prepare_callback);
 +extern int ext3_ext_remove_space(struct ext3_extents_tree *, unsigned long, unsigned long);
 +extern struct ext3_ext_path * ext3_ext_find_extent(struct ext3_extents_tree *, int, struct ext3_ext_path *);
-+extern int ext3_ext_in_ea_alloc_space(struct inode *inode, int name_index, const char *eaname, unsigned long from,
-+                                      unsigned long num);
-+extern int ext3_ext_in_ea_remove_space(struct inode *inode, int name_index, const char *eaname, unsigned long from,
-+				       unsigned long num);
-+extern int ext3_ext_in_ea_ioctl(struct inode *inode, struct file *filp, unsigned int cmd, unsigned long arg);
-+extern int ext3_ext_in_ea_get_extents(struct inode *inode, int name_index, const char *eaname, char **buf, int *size);
-+extern int ext3_ext_in_ea_get_extents_num(struct inode *inode, int name_index, const char *eaname, int *size);
 +
 +static inline void
 +ext3_ext_invalidate_cache(struct ext3_extents_tree *tree)
 +{
 +	if (tree->cex)
-+		tree->cex->e_num = 0;
++		tree->cex->ee_len = 0;
 +}
 +
 +
@@ -2725,8 +2731,8 @@ Index: linux-2.4.24/include/linux/ext3_extents.h
 +
 Index: linux-2.4.24/include/linux/ext3_fs_i.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/ext3_fs_i.h	2004-08-06 00:47:18.000000000 +0400
-+++ linux-2.4.24/include/linux/ext3_fs_i.h	2004-08-06 02:43:24.000000000 +0400
+--- linux-2.4.24.orig/include/linux/ext3_fs_i.h	2004-08-07 16:35:25.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_fs_i.h	2004-08-10 03:25:26.000000000 +0400
 @@ -76,6 +76,8 @@
  	 * by other means, so we have truncate_sem.
  	 */

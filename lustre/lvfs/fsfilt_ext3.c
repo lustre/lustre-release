@@ -674,6 +674,36 @@ struct bpointers {
         int create;
 };
 
+static int ext3_ext_find_goal(struct inode *inode, struct ext3_ext_path *path,
+        			unsigned long block)
+{
+	struct ext3_inode_info *ei = EXT3_I(inode);
+	unsigned long bg_start;
+	unsigned long colour;
+	int depth;
+	
+	if (path) {
+		struct ext3_extent *ex;
+		depth = path->p_depth;
+		
+		/* try to predict block placement */
+		if ((ex = path[depth].p_ext))
+			return ex->ee_start + (block - ex->ee_block);
+
+		/* it looks index is empty
+		 * try to find starting from index itself */
+		if (path[depth].p_bh)
+			return path[depth].p_bh->b_blocknr;
+	}
+
+	/* OK. use inode's group */
+	bg_start = (ei->i_block_group * EXT3_BLOCKS_PER_GROUP(inode->i_sb)) +
+		le32_to_cpu(EXT3_SB(inode->i_sb)->s_es->s_first_data_block);
+	colour = (current->pid % 16) *
+			(EXT3_BLOCKS_PER_GROUP(inode->i_sb) / 16);
+	return bg_start + colour + block;
+}
+
 static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
                                   struct ext3_ext_path *path,
                                   struct ext3_extent *newex, int exist)
@@ -698,12 +728,12 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
 
         if (bp->create == 0) {
                 i = 0;
-                if (newex->e_block < bp->start)
-                        i = bp->start - newex->e_block;
-                if (i >= newex->e_num)
+                if (newex->ee_block < bp->start)
+                        i = bp->start - newex->ee_block;
+                if (i >= newex->ee_len)
                         CERROR("nothing to do?! i = %d, e_num = %u\n",
-                                        i, newex->e_num);
-                for (; i < newex->e_num && bp->num; i++) {
+                                        i, newex->ee_len);
+                for (; i < newex->ee_len && bp->num; i++) {
                         *(bp->created) = 0;
                         bp->created++;
                         *(bp->blocks) = 0;
@@ -733,23 +763,23 @@ static int ext3_ext_new_extent_cb(struct ext3_extents_tree *tree,
         }
 
         down_write(&EXT3_I(inode)->truncate_sem);
-        goal = ext3_ext_find_goal(inode, path, newex->e_block);
-        count = newex->e_num;
+        goal = ext3_ext_find_goal(inode, path, newex->ee_block);
+        count = newex->ee_len;
         pblock = ext3_new_blocks(handle, inode, &count, goal, &err);
         if (!pblock)
                 goto out;
-        EXT_ASSERT(count <= newex->e_num);
+        EXT_ASSERT(count <= newex->ee_len);
 
         /* insert new extent */
-        newex->e_start = pblock;
-        newex->e_num = count;
+        newex->ee_start = pblock;
+        newex->ee_len = count;
         err = ext3_ext_insert_extent(handle, tree, path, newex);
         if (err)
                 goto out;
 
         /* correct on-disk inode size */
-        if (newex->e_num > 0) {
-                new_i_size = (loff_t) newex->e_block + newex->e_num;
+        if (newex->ee_len > 0) {
+                new_i_size = (loff_t) newex->ee_block + newex->ee_len;
                 new_i_size = new_i_size << inode->i_blkbits;
                 if (new_i_size > EXT3_I(inode)->i_disksize) {
                         EXT3_I(inode)->i_disksize = new_i_size;
@@ -767,19 +797,19 @@ map:
                         CERROR("initial space: %lu:%u\n",
                                 bp->start, bp->init_num);
                         CERROR("current extent: %u/%u/%u %d\n",
-                                newex->e_block, newex->e_num,
-                                newex->e_start, exist);
+                                newex->ee_block, newex->ee_len,
+                                newex->ee_start, exist);
                 }
                 i = 0;
-                if (newex->e_block < bp->start)
-                        i = bp->start - newex->e_block;
-                if (i >= newex->e_num)
+                if (newex->ee_block < bp->start)
+                        i = bp->start - newex->ee_block;
+                if (i >= newex->ee_len)
                         CERROR("nothing to do?! i = %d, e_num = %u\n",
-                                        i, newex->e_num);
-                for (; i < newex->e_num && bp->num; i++) {
+                                        i, newex->ee_len);
+                for (; i < newex->ee_len && bp->num; i++) {
                         *(bp->created) = (exist == 0 ? 1 : 0);
                         bp->created++;
-                        *(bp->blocks) = newex->e_start + i;
+                        *(bp->blocks) = newex->ee_start + i;
                         bp->blocks++;
                         bp->num--;
                 }
@@ -1245,6 +1275,11 @@ static int fsfilt_ext3_get_op_len(int op, struct fsfilt_objinfo *fso, int logs)
 
 #define EXTENTS_EA "write_extents"
 #define EXTENTS_EA_SIZE 64
+
+int ext3_ext_in_ea_alloc_space(struct inode *, int, const char *, unsigned long, unsigned long);
+int ext3_ext_in_ea_remove_space(struct inode *, int, const char *, unsigned long, unsigned long);
+int ext3_ext_in_ea_get_extents(struct inode *, int, const char *, char **, int *);
+int ext3_ext_in_ea_get_extents_num(struct inode *, int, const char *, int *);
 
 static int fsfilt_ext3_insert_extents_ea(struct inode *inode, 
                                       unsigned long from, 

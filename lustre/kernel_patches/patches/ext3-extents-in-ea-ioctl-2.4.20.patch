@@ -1,8 +1,8 @@
-Index: linux-2.4.20/fs/ext3/extents-in-ea.c
+Index: linux-2.4.24/fs/ext3/extents-in-ea.c
 ===================================================================
---- linux-2.4.20.orig/fs/ext3/extents-in-ea.c	2004-01-24 14:54:37.000000000 +0300
-+++ linux-2.4.20/fs/ext3/extents-in-ea.c	2004-01-24 14:55:10.000000000 +0300
-@@ -200,3 +200,112 @@
+--- linux-2.4.24.orig/fs/ext3/extents-in-ea.c	2004-08-10 16:13:06.000000000 +0400
++++ linux-2.4.24/fs/ext3/extents-in-ea.c	2004-08-10 16:18:18.000000000 +0400
+@@ -222,3 +222,112 @@
  	return err;
  }
  
@@ -82,7 +82,7 @@ Index: linux-2.4.20/fs/ext3/extents-in-ea.c
 +		buf.cur = buf.buffer;
 +		buf.err = 0;
 +		tree.private = &buf;
-+		err = ext3_ext_walk_space(&tree, buf.start, 0xffffffff,
++		err = ext3_ext_walk_space(&tree, buf.start, EXT_MAX_BLOCK,
 +						ext3_ext_store_extent_cb);
 +		if (err == 0)
 +			err = buf.err;
@@ -115,11 +115,11 @@ Index: linux-2.4.20/fs/ext3/extents-in-ea.c
 +	return err;
 +}
 +
-Index: linux-2.4.20/fs/ext3/ioctl.c
+Index: linux-2.4.24/fs/ext3/ioctl.c
 ===================================================================
---- linux-2.4.20.orig/fs/ext3/ioctl.c	2004-01-24 14:54:31.000000000 +0300
-+++ linux-2.4.20/fs/ext3/ioctl.c	2004-01-24 14:55:04.000000000 +0300
-@@ -193,6 +193,13 @@
+--- linux-2.4.24.orig/fs/ext3/ioctl.c	2004-08-10 16:09:22.000000000 +0400
++++ linux-2.4.24/fs/ext3/ioctl.c	2004-08-10 16:14:40.000000000 +0400
+@@ -178,6 +178,13 @@
  	case EXT3_IOC_GET_TREE_STATS:
  	case EXT3_IOC_GET_TREE_DEPTH:
  		return ext3_ext_ioctl(inode, filp, cmd, arg);
@@ -133,11 +133,11 @@ Index: linux-2.4.20/fs/ext3/ioctl.c
  	default:
  		return -ENOTTY;
  	}
-Index: linux-2.4.20/include/linux/ext3_fs.h
+Index: linux-2.4.24/include/linux/ext3_fs.h
 ===================================================================
---- linux-2.4.20.orig/include/linux/ext3_fs.h	2004-01-24 01:28:06.000000000 +0300
-+++ linux-2.4.20/include/linux/ext3_fs.h	2004-01-24 14:55:04.000000000 +0300
-@@ -213,6 +213,14 @@
+--- linux-2.4.24.orig/include/linux/ext3_fs.h	2004-08-10 16:09:22.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_fs.h	2004-08-10 16:14:40.000000000 +0400
+@@ -214,6 +214,14 @@
  #define	EXT3_IOC_GET_TREE_DEPTH		_IOR('f', 6, long)
  #define	EXT3_IOC_GET_TREE_STATS		_IOR('f', 7, long)
  

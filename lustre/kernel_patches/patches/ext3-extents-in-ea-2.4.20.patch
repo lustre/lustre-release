@@ -1,10 +1,11 @@
 Index: linux-2.4.24/fs/ext3/extents-in-ea.c
 ===================================================================
 --- linux-2.4.24.orig/fs/ext3/extents-in-ea.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/fs/ext3/extents-in-ea.c	2004-08-06 03:54:47.000000000 +0400
-@@ -0,0 +1,223 @@
++++ linux-2.4.24/fs/ext3/extents-in-ea.c	2004-08-10 16:13:06.000000000 +0400
+@@ -0,0 +1,224 @@
 +/*
-+ * Copyright (C) 2003 Alex Tomas <alex@clusterfs.com>
++ * Copyright (c) 2003, Cluster File Systems, Inc, info@clusterfs.com
++ * Written by Alex Tomas <alex@clusterfs.com>
 + *
 + * This program is free software; you can redistribute it and/or modify
 + * it under the terms of the GNU General Public License version 2 as
@@ -152,7 +153,7 @@ Index: linux-2.4.24/fs/ext3/extents-in-ea.c
 +	down_write(&EXT3_I(inode)->truncate_sem);
 +
 +	/* insert new extent */
-+	newex->e_start = 0;
++	newex->ee_start = 0;
 +	err = ext3_ext_insert_extent(handle, tree, path, newex);
 +	if (!err)
 +		ext3_journal_stop(handle, tree->inode);
@@ -219,7 +220,7 @@ Index: linux-2.4.24/fs/ext3/extents-in-ea.c
 +		goto out;
 +	}
 +
-+	if (block >= ex->e_block && block < ex->e_block + ex->e_num)
++	if (block >= ex->ee_block && block < ex->ee_block + ex->ee_len)
 +		err = 1;
 +out:
 +	ext3_release_tree_in_ea_desc(&tree);
@@ -228,8 +229,8 @@ Index: linux-2.4.24/fs/ext3/extents-in-ea.c
 +
 Index: linux-2.4.24/fs/ext3/Makefile
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/Makefile	2004-08-06 02:43:24.000000000 +0400
-+++ linux-2.4.24/fs/ext3/Makefile	2004-08-06 03:52:43.000000000 +0400
+--- linux-2.4.24.orig/fs/ext3/Makefile	2004-08-10 16:09:22.000000000 +0400
++++ linux-2.4.24/fs/ext3/Makefile	2004-08-10 16:10:10.000000000 +0400
 @@ -19,7 +19,7 @@
  obj-m    := $(O_TARGET)
  
@@ -241,8 +242,8 @@ Index: linux-2.4.24/fs/ext3/Makefile
  include $(TOPDIR)/Rules.make
 Index: linux-2.4.24/fs/ext3/xattr.c
 ===================================================================
---- linux-2.4.24.orig/fs/ext3/xattr.c	2004-08-06 00:47:18.000000000 +0400
-+++ linux-2.4.24/fs/ext3/xattr.c	2004-08-06 03:52:43.000000000 +0400
+--- linux-2.4.24.orig/fs/ext3/xattr.c	2004-08-07 16:35:25.000000000 +0400
++++ linux-2.4.24/fs/ext3/xattr.c	2004-08-10 16:10:10.000000000 +0400
 @@ -771,7 +771,8 @@
   */
  int
@@ -352,8 +353,8 @@ Index: linux-2.4.24/fs/ext3/xattr.c
   *
 Index: linux-2.4.24/include/linux/ext3_xattr.h
 ===================================================================
---- linux-2.4.24.orig/include/linux/ext3_xattr.h	2004-08-06 00:47:18.000000000 +0400
-+++ linux-2.4.24/include/linux/ext3_xattr.h	2004-08-06 03:52:43.000000000 +0400
+--- linux-2.4.24.orig/include/linux/ext3_xattr.h	2004-08-07 16:35:25.000000000 +0400
++++ linux-2.4.24/include/linux/ext3_xattr.h	2004-08-10 16:10:10.000000000 +0400
 @@ -80,6 +80,7 @@
  extern int ext3_xattr_get(struct inode *, int, const char *, void *, size_t);
  extern int ext3_xattr_list(struct inode *, char *, size_t);
