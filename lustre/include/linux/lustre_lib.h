@@ -31,6 +31,9 @@
 # include <string.h>
 #endif
 
+#include <linux/portals_lib.h>
+#include <linux/lustre_idl.h>
+
 #ifdef __KERNEL__
 /* page.c */
 inline void lustre_put_page(struct page *page);
@@ -69,6 +72,19 @@ static inline void ll_sleep(int t)
         set_current_state(TASK_RUNNING);
 }
 #endif
+
+/* FIXME: This needs to validate pointers and cookies */
+static inline void *lustre_handle2object(struct lustre_handle *handle)
+{
+        if (handle) 
+                return (void *)(unsigned long)(handle->addr);
+        return NULL; 
+}
+
+static inline void ldlm_object2handle(void *object, struct lustre_handle *handle)
+{
+        handle->addr = (__u64)(unsigned long)object;
+}
 
 struct obd_statfs;
 struct statfs;
