@@ -48,7 +48,6 @@ struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
         struct llog_handle *loghandle;
         struct llog_log_hdr *llh;
         struct llog_logid_rec rec;
-        loff_t offset;
         int rc, index, bitmap_size, i;
         ENTRY;
 
@@ -87,13 +86,14 @@ struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle,
         rec.lid_tail.lrt_index = index;
 
         /* update the catalog: header and record */
-        rc = llog_write_rec(cathandle, &rec, loghandle->lgh_my_cat_cookie, 1,
+        rc = llog_write_rec(cathandle, &rec.lid_hdr, 
+                            &loghandle->lgh_log_cat_cookie, 1,
                             NULL, index);
         if (rc < 0) {
                 GOTO(out_destroy, rc);
         }
 
-        cathandle->lgh_current = loghandle;
+        cathandle->lgh_cat_current_log = loghandle;
         list_add_tail(&loghandle->lgh_list, &cathandle->lgh_list);
 
  out_destroy:
@@ -118,7 +118,7 @@ int llog_cat_id2handle(struct llog_handle *cathandle,
                 RETURN(-EBADF);
 
         list_for_each_entry(loghandle, &cathandle->lgh_list, lgh_list) {
-                struct llog_logid *cgl = &loghandle->lgh_cookie.lgc_lgl;
+                struct llog_logid *cgl = &loghandle->lgh_id;
                 if (cgl->lgl_oid == logid->lgl_oid) {
                         if (cgl->lgl_ogen != logid->lgl_ogen) {
                                 CERROR("log "LPX64" generation %x != %x\n",
@@ -159,7 +159,7 @@ int llog_cat_init(struct llog_handle *cathandle, struct obd_uuid *tgtuuid)
         llh = cathandle->lgh_hdr;
 
         if (cathandle->lgh_file->f_dentry->d_inode->i_size == 0) {
-                llog_write_header(cathandle, LLOG_HDR_FL_FIXED_SZ);
+                llog_write_rec(cathandle, &llh->llh_hdr, NULL, 0, NULL, 0);
 
 write_hdr:      llh->llh_hdr.lrh_type = LLOG_CATALOG_MAGIC;
                 llh->llh_hdr.lrh_len = llh->llh_tail.lrt_len = LLOG_CHUNK_SIZE;
