@@ -147,42 +147,37 @@ static void ll_get_dirty_pages(struct inode *inode,
 
 static void ll_writeback(struct inode *inode, struct ll_writeback_pages *llwp)
 {
-        struct obd_brw_set *set;
         int rc, i;
+        struct ptlrpc_request_set *set;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu,bytes=%u\n",
                inode->i_ino, ((llwp->npgs-1) << PAGE_SHIFT) +
                              llwp->pga[llwp->npgs-1].count);
 
-        set = obd_brw_set_new();
+        set = ptlrpc_prep_set();
         if (set == NULL) {
-                EXIT;
-                return;
+                CERROR ("Can't create request set\n");
+                rc = -ENOMEM;
+        } else {
+                rc = obd_brw_async (OBD_BRW_WRITE, ll_i2obdconn(inode),
+                                    ll_i2info(inode)->lli_smd, llwp->npgs, llwp->pga,
+                                    set, NULL);
+                if (rc == 0)
+                        rc = ptlrpc_set_wait (set);
+                ptlrpc_set_destroy (set);
         }
-        set->brw_callback = ll_brw_sync_wait;
-
-        rc = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode),
-                     ll_i2info(inode)->lli_smd, llwp->npgs, llwp->pga,
-                     set, NULL);
         /*
          * b=1038, we need to pass _brw errors up so that writeback
          * doesn't get stuck in recovery leaving processes stuck in
          * D waiting for pages
          */
         if (rc) {
-                CERROR("error from obd_brw: rc = %d\n", rc);
-        } else {
-                rc = ll_brw_sync_wait(set, CB_PHASE_START);
-                if (rc)
-                        CERROR("error from callback: rc = %d\n", rc);
-        }
-        obd_brw_set_decref(set);
-
-        if(rc)
+                CERROR("error from obd_brw_async: rc = %d\n", rc);
                 INODE_IO_STAT_ADD(inode, wb_fail, llwp->npgs);
-        else
+        } else {
                 INODE_IO_STAT_ADD(inode, wb_ok, llwp->npgs);
+        }
 
         for (i = 0 ; i < llwp->npgs ; i++) {
                 struct page *page = llwp->pga[i].pg;
