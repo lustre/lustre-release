@@ -12,6 +12,17 @@ int lov_get_stripecnt(struct lov_obd *lov, int stripe_count);
 int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count);
 void lov_free_memmd(struct lov_stripe_md **lsmp);
 
+/* lov_log.c */
+int lov_get_catalogs(struct lov_obd *lov, struct llog_handle *cathandle);
+#if 0
+int lov_log_add(struct obd_export *exp,
+                struct llog_handle *cathandle,
+                struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+                struct llog_cookie *logcookies, int numcookies);
+int lov_log_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
+                   int count, struct llog_cookie *cookies, int flags);
+#endif
+
 /* lov_pack.c */
 int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmm,
                struct lov_stripe_md *lsm);
