@@ -151,6 +151,7 @@ static void ll_writeback( struct inode *inode,
         int rc, i;
         struct obd_brw_set *set;
         ENTRY;
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu,bytes=%u\n", inode->i_ino, llwp->npgs << PAGE_SHIFT);
 
         set = obd_brw_set_new();
         if (set == NULL) {
