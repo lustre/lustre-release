@@ -1,0 +1,83 @@
+#!/bin/sh
+
+progname="${0##*/}"
+
+warn ()
+{
+    [ "$1" ] && echo >&2
+    [ "$1" ] && echo "$progname: $1" >&2
+    [ "$1" ] && echo >&2
+}
+
+fatal ()
+{
+    warn "$2"
+    exit "$1"
+}
+
+usage ()
+{
+    cat <<EOF
+Usage: $progname command lustretag [other tags]
+  where command is checkout, rtag, tag, or update
+  where lustretag is a logical tag across the modules
+EOF
+}
+
+case "$1" in
+    '')
+	warn "a command is required."
+	usage >&2
+	exit 1
+	;;
+    --help | -h)
+	usage
+	exit 0
+	;;
+    checkout | co | get | rtag | rt | rfreeze | tag | ta | freeze | update | up | upd)
+	cvscommand="$1"
+	;;
+    *)
+	usage >&2
+	exit 1
+	;;
+esac
+
+case "$2" in
+    '')
+        warn "a lustretag is required."
+	usage >&2
+	exit 1
+	;;
+    --help | -h)
+	usage
+	exit 0
+	;;
+
+    # this is the branch table
+    # keep this list sorted alphabetically!
+
+    b1_4)
+	portalstag="HEAD"
+	lustretag="b1_4"
+	;;
+    b1_4_bgl)
+	portalstag="b1_4_bgl"
+	lustretag="b1_4_bgl"
+	;;
+    b_cray)
+	portalstag="HEAD"
+	lustretag="b_cray"
+	;;
+    HEAD)
+	portalstag="HEAD"
+	lustretag="HEAD"
+	;;
+
+    *)
+	fatal 1 "This script does not contain branch information for $2.  Please update the branch table if necessary."
+	;;
+esac
+
+cvs $cvscommand -r $portalstag portals
+cvs $cvscommand -r $lustretag -d lustre lustre-core

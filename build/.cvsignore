@@ -1,0 +1,8 @@
+.*.cmd
+.*.flags
+*.ko
+*.c
+.tmp_versions
+Rules
+autoMakefile.in
+autoMakefile
