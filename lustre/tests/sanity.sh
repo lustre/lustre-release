@@ -1590,6 +1590,7 @@ run_test 62 "verify obd_match failure doesn't LBUG (should -EIO)"
 
 # bug 2319 - osic_wait() interrupted causes crash because of invalid waitq.
 test_63() {
+	MAX_DIRTY_MB=`cat /proc/fs/lustre/osc/*/max_dirty_mb | head -1`
 	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
 	echo 0 > $i
 	done
@@ -1601,7 +1602,7 @@ test_63() {
 	done
 
 	for i in /proc/fs/lustre/osc/*/max_dirty_mb ; do
-		echo $[ 64 ] > $i
+		echo $MAX_DIRTY_MB > $i
 	done
 	true
 }
