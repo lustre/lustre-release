@@ -711,7 +711,8 @@ struct lov_desc {
 };
 
 struct lmv_desc {
-        __u32 ld_count;                    /* how many MDS's */
+        __u32 ld_tgt_count;                /* how many MDS's */
+        __u32 ld_active_tgt_count;         /* how many active */
         struct obd_uuid ld_uuid;
 };
 

@@ -30,6 +30,7 @@
 # include <linux/fs.h>
 # include <linux/dcache.h>
 #endif
+
 #include <linux/lustre_handles.h>
 #include <linux/kp30.h>
 #include <linux/lustre_idl.h>

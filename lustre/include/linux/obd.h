@@ -421,11 +421,13 @@ struct lov_obd {
 
 struct lmv_tgt_desc {
         struct obd_uuid         uuid;
-        struct obd_export       *exp;
+        struct obd_export       *ltd_exp;
+        int                      active; /* is this target up for requests */
 };
 
 struct lmv_obd {
-        int                     count;
+        spinlock_t              lmv_lock;
+        struct lmv_desc         desc;
         int                     bufsize;
         int                     refcount;
         struct lmv_tgt_desc     *tgts;

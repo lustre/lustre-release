@@ -835,7 +835,7 @@ static int mds_getattr_name(int offset, struct ptlrpc_request *req,
         char *name;
         ENTRY;
 
-        LASSERT(!strcmp(obd->obd_type->typ_name, "mds"));
+        LASSERT(!strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME));
 
         /* Swab now, before anyone looks inside the request */
 

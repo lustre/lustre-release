@@ -464,8 +464,8 @@ int jt_lcfg_lmv_setup(int argc, char **argv)
 
         memset(&desc, 0, sizeof(desc));
         obd_str2uuid(&desc.ld_uuid, argv[1]);
-        desc.ld_count = argc - 2;
-        printf("LMV: %d uuids:\n", desc.ld_count);
+        desc.ld_tgt_count = argc - 2;
+        printf("LMV: %d uuids:\n", desc.ld_tgt_count);
 
         /* NOTE: it is possible to overwrite the default striping parameters,
          *       but EXTREME care must be taken when saving the OST UUID list.
@@ -473,10 +473,10 @@ int jt_lcfg_lmv_setup(int argc, char **argv)
          *       end of the list, or only overwrite individual OST entries
          *       that are restored from backups of the previous OST.
          */
-        uuidarray = calloc(desc.ld_count, sizeof(*uuidarray));
+        uuidarray = calloc(desc.ld_tgt_count, sizeof(*uuidarray));
         if (!uuidarray) {
                 fprintf(stderr, "error: %s: no memory for %d UUIDs\n",
-                        jt_cmdname(argv[0]), desc.ld_count);
+                        jt_cmdname(argv[0]), desc.ld_tgt_count);
                 rc = -ENOMEM;
                 goto out;
         }
@@ -493,7 +493,7 @@ int jt_lcfg_lmv_setup(int argc, char **argv)
 
         lcfg.lcfg_inllen1 = sizeof(desc);
         lcfg.lcfg_inlbuf1 = (char *)&desc;
-        lcfg.lcfg_inllen2 = desc.ld_count * sizeof(*uuidarray);
+        lcfg.lcfg_inllen2 = desc.ld_tgt_count * sizeof(*uuidarray);
         lcfg.lcfg_inlbuf2 = (char *)uuidarray;
 
         rc = lcfg_ioctl(argv[0], OBD_DEV_ID, &lcfg);

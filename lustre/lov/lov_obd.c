@@ -302,7 +302,7 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
         CDEBUG(D_INFO, "Found OBD %s=%s device %d (%p) type %s at LOV idx %d\n",
                obd->obd_name, obd->obd_uuid.uuid, obd->obd_minor, obd,
                obd->obd_type->typ_name, i);
-        LASSERT(strcmp(obd->obd_type->typ_name, "osc") == 0);
+        LASSERT(strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0);
 
         if (tgt->active == activate) {
                 CDEBUG(D_INFO, "OBD %p already %sactive!\n", obd,
@@ -325,12 +325,12 @@ static int lov_set_osc_active(struct lov_obd *lov, struct obd_uuid *uuid,
 }
 
 static int lov_notify(struct obd_device *obd, struct obd_device *watched,
-                       int active)
+                      int active)
 {
         int rc;
         struct obd_uuid *uuid;
 
-        if (strcmp(watched->obd_type->typ_name, "osc")) {
+        if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
                 CERROR("unexpected notification of %s %s!\n",
                        watched->obd_type->typ_name,
                        watched->obd_name);
@@ -2703,7 +2703,7 @@ static int lov_set_info(struct obd_export *exp, obd_count keylen,
                         continue;
 
                 er = obd_set_info(lov->tgts[i].ltd_exp, keylen, key, vallen,
-                                   val);
+                                  val);
                 if (!rc)
                         rc = er;
         }

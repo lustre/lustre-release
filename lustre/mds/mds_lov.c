@@ -30,6 +30,7 @@
 
 #include <linux/module.h>
 #include <linux/lustre_mds.h>
+#include <linux/obd_ost.h>
 #include <linux/lustre_idl.h>
 #include <linux/obd_class.h>
 #include <linux/obd_lov.h>
@@ -591,7 +592,7 @@ int mds_notify(struct obd_device *obd, struct obd_device *watched, int active)
         if (!active)
                 RETURN(0);
 
-        if (strcmp(watched->obd_type->typ_name, "osc")) {
+        if (strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME)) {
                 CERROR("unexpected notification of %s %s!\n",
                        watched->obd_type->typ_name, watched->obd_name);
                 RETURN(-EINVAL);

@@ -673,7 +673,7 @@ int mds_choose_mdsnum(struct obd_device *obd, const char *name, int len, int fla
                 i = mds->mds_num;
         } else if (mds->mds_lmv_exp) {
                 lmv = &mds->mds_lmv_exp->exp_obd->u.lmv;
-                i = raw_name2idx(lmv->count, name, len);
+                i = raw_name2idx(lmv->desc.ld_tgt_count, name, len);
         }
         RETURN(i);
 }

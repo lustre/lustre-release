@@ -55,7 +55,7 @@ int obd_llog_setup(struct obd_device *obd, struct obd_llogs *llogs,
         if (op->lop_close == llog_lvfs_ops.lop_close) {
                 ctxt->loc_fsops = disk_obd->obd_fsops;
                 ctxt->loc_lvfs_ctxt = &disk_obd->obd_lvfs_ctxt;
-                if (!strcmp(disk_obd->obd_type->typ_name, "mds")) {
+                if (!strcmp(disk_obd->obd_type->typ_name, LUSTRE_MDS_NAME)) {
                         struct mds_obd *mds = &disk_obd->u.mds;
                         ctxt->loc_objects_dir = mds->mds_objects_dir;
                         ctxt->loc_logs_dir = mds->mds_logs_dir;

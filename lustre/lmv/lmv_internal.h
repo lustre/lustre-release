@@ -3,7 +3,7 @@
 
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 #define MEA_SIZE_LMV(lmv)       \
-        ((lmv)->count * sizeof(struct ll_fid) + sizeof(struct mea))
+        ((lmv)->desc.ld_tgt_count * sizeof(struct ll_fid) + sizeof(struct mea))
         
 struct lmv_inode {
         struct ll_fid   fid;            /* fid of dirobj */
@@ -45,7 +45,7 @@ int lmv_intent_open(struct obd_export *, struct ll_uctxt *,
 		    struct ptlrpc_request **, ldlm_blocking_callback);
 int lmv_create_obj_from_attrs(struct obd_export *, struct ll_fid *,
 				struct mea *);
-int lmv_connect(struct obd_device *);
+int lmv_check_connect(struct obd_device *obd);
 int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
                           struct ll_fid *, struct lookup_intent *, int,
 			  ldlm_blocking_callback cb_blocking);

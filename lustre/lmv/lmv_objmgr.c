@@ -82,12 +82,12 @@ struct lmv_obj *lmv_grab_obj(struct obd_device *obd,
         obj->fid = *fid;
         obj->obd = obd;
 
-        OBD_ALLOC(obj->objs, sizeof(struct lmv_inode) * lmv->count);
+        OBD_ALLOC(obj->objs, sizeof(struct lmv_inode) * lmv->desc.ld_tgt_count);
         if (!obj->objs) {
                 OBD_FREE(obj, sizeof(*obj));
                 RETURN(NULL);
         }
-        memset(obj->objs, 0,  sizeof(struct lmv_inode) * lmv->count);
+        memset(obj->objs, 0,  sizeof(struct lmv_inode) * lmv->desc.ld_tgt_count);
 
         spin_lock(&lmv_obj_list_lock);
         list_for_each(cur, &lmv_obj_list) {
@@ -96,7 +96,7 @@ struct lmv_obj *lmv_grab_obj(struct obd_device *obd,
                                 obj2->fid.generation == fid->generation) {
                         /* someone created it already */
                         OBD_FREE(obj->objs,
-                                  sizeof(struct lmv_inode) * lmv->count);
+                                  sizeof(struct lmv_inode) * lmv->desc.ld_tgt_count);
                         OBD_FREE(obj, sizeof(*obj));
 
                         atomic_inc(&obj2->count);
@@ -140,7 +140,7 @@ void lmv_cleanup_objs(struct obd_device *obd)
 
                 list_del(&obj->list);
                 OBD_FREE(obj->objs,
-                                sizeof(struct lmv_inode) * lmv->count);
+                         sizeof(struct lmv_inode) * lmv->desc.ld_tgt_count);
                 OBD_FREE(obj, sizeof(*obj));
         }
         spin_unlock(&lmv_obj_list_lock);
@@ -172,7 +172,7 @@ int lmv_create_obj_from_attrs(struct obd_export *exp,
                 md.mea = NULL;
                 
                 valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
-                rc = md_getattr(lmv->tgts[fid->mds].exp, fid,
+                rc = md_getattr(lmv->tgts[fid->mds].ltd_exp, fid,
                                 valid, mealen, &req);
                 if (rc) {
                         CERROR("md_getattr() failed, rc = %d\n", rc);

@@ -567,7 +567,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         ENTRY;
 
         LASSERT(offset == 0);
-        LASSERT(!strcmp(req->rq_export->exp_obd->obd_type->typ_name, "mds"));
+        LASSERT(!strcmp(req->rq_export->exp_obd->obd_type->typ_name, LUSTRE_MDS_NAME));
 
         DEBUG_REQ(D_INODE, req, "parent "LPU64"/%u name %s mode %o",
                   rec->ur_fid1->id, rec->ur_fid1->generation,
