@@ -844,7 +844,7 @@ int ll_readpage(struct file *filp, struct page *page)
                 CDEBUG(D_INODE, "ino %lu page %lu (%llu) didn't match a lock\n",
                        inode->i_ino, page->index,
                        (long long)page->index << PAGE_CACHE_SHIFT);
-                if (time_after(jiffies, next_print)) {
+                if (0 && time_after(jiffies, next_print)) {
                         CWARN("ino %lu page %lu (%llu) not covered by "
                                "a lock (mmap?).  check debug logs.\n",
                                inode->i_ino, page->index,
