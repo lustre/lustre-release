@@ -71,7 +71,6 @@ static name2num_t nalnames[] = {
         {"gm",	        GMNAL},
         {"openib",      OPENIBNAL},
         {"iib",         IIBNAL},
-        {"lb",          LBNAL},
         {NULL,		-1}
 };
 
