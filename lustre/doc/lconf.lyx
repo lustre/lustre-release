@@ -32,7 +32,7 @@ lconf
 NAME
 \layout Standard
 
-lctl - low level Lustre file system configuration utility
+lconf- Lustre file system configuration utility
 \layout Subsection
 
 SYNOPSIS
@@ -41,7 +41,8 @@ SYNOPSIS
 
 \series bold 
 lconf\SpecialChar ~
-[--node <node_name>] [--cleanup] [--noexec] [--gdb] <XML-config file>
+[--node <node_name>] [-d,--cleanup] [--noexec] [--gdb] [--nosetup]
+ [--nomod] [-n,--noexec] [-v,--verbose] [-h,--help] <XML-config file>
 \layout Subsection
 
 DESCRIPTION
@@ -73,6 +74,37 @@ node_name Specifiy a specific node to configure.
 --gdb Causes LCONF to print a message and pause for 5 seconds after creating
  a gdb module script and before doing any lustre configuration.
  (The gdb module script is always created, however.)
+\layout Description
+
+--nosetup Only load modules, do not configure devices or services
+\layout Description
+
+--nomod Only setup devices and services, do not load modules
+\layout Description
+
+--noexec,-n Don't do anything, but print what would happen.
+\layout Description
+
+--verbose,-v Be verbose and show actions while going along
+\layout Description
+
+-h,--help Print help.
+\layout Description
+
+--maxlevel\SpecialChar ~
+<level> [NOT IMPLEMENTED] Perform configuration of devices and
+ services up to level given.
+ 
+\emph on 
+level
+\emph default 
+ can take the values 
+\series bold 
+net, dev, svc, fs.
+ 
+\series default 
+When used in conjunction with cleanup services are torn down up to a certain
+ level.
 \layout Subsection
 
 EXAMPLES
