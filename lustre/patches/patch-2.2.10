@@ -30,22 +30,22 @@
  {
  	struct super_block *s;
  
---- linux-2.2.10/kernel/ksyms.c	Tue Aug  3 15:11:56 1999
-+++ linux-2.2.10/kernel/ksyms.c.org	Tue Aug  3 15:10:55 1999
-@@ -78,16 +78,6 @@
+--- linux-2.2.10/kernel/ksyms.c.org	Tue Aug  3 15:10:55 1999
++++ linux-2.2.10/kernel/ksyms.c	Tue Aug  3 15:11:56 1999
+@@ -78,6 +78,16 @@
  #endif
  EXPORT_SYMBOL(get_options);
  
--/* obd stuff */
--
--
--
--EXPORT_SYMBOL(get_empty_super);
--EXPORT_SYMBOL(remove_vfsmnt);
--
--
--
--
++/* obd stuff */
++
++
++
++EXPORT_SYMBOL(get_empty_super);
++EXPORT_SYMBOL(remove_vfsmnt);
++
++
++
++
  /* process memory management */
  EXPORT_SYMBOL(do_mmap);
  EXPORT_SYMBOL(do_munmap);

@@ -884,14 +884,12 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 	while (i < inode->i_sb->s_blocksize - 1 && (c = *(symname++)))
 		link[i++] = c;
 	link[i] = 0;
-
 	/* if (name_page) { */
 		iops(inode)->o_brw(WRITE, iid(inode), inode, name_page, 1);
 		PDEBUG(name_page, "symlink");
 		UnlockPage(name_page);
 		page_cache_release(name_page);
 	/* } */
-
 	inode->i_size = i;
 	mark_inode_dirty(inode);
 

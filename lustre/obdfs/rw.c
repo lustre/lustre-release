@@ -174,9 +174,7 @@ struct page *obdfs_getpage(struct inode *inode, unsigned long offset, int create
 	if (! page) {
 	    printk("get_page_map says no dice ...\n");
 	    return 0;
-	    }
-
-
+	}
 
 	rc = iops(inode)->o_brw(READ, iid(inode), inode, page, create);
 	if ( rc != PAGE_SIZE ) {
