@@ -6,8 +6,7 @@ chaos-2.4.20         linux-chaos-2.4.20        same as rh-2.4.20-8
 rh-2.4.20            linux-rh-2.4.20-8         same as chaos-2.4.20
 rh-2.4.18-18         linux-rh-2.4.18-18        same as chaos but includes uml
 chaos                linux-chaos-2.4.18        same as rh-2.4.18-18 but no uml
+kgdb-2.5.72          linux-2.5.72              vanilla based with kgdb
 
 REVIEW:
-
-vanilla-2.5          linux-2.5.63
 hp-pnnl              linux-2.4.19-hp2_pnnl6

@@ -31,7 +31,7 @@
 #else
 #include <linux/version.h>
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#include <asm/statfs.h>
+#include <linux/statfs.h>
 #endif
 #endif
 
@@ -40,7 +40,7 @@
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 
-void statfs_pack(struct obd_statfs *osfs, struct statfs *sfs)
+void statfs_pack(struct obd_statfs *osfs, struct kstatfs *sfs)
 {
         osfs->os_type = sfs->f_type;
         osfs->os_blocks = sfs->f_blocks;
@@ -52,7 +52,7 @@ void statfs_pack(struct obd_statfs *osfs, struct statfs *sfs)
         osfs->os_namelen = sfs->f_namelen;
 }
 
-void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs)
+void statfs_unpack(struct kstatfs *sfs, struct obd_statfs *osfs)
 {
         sfs->f_type = osfs->os_type;
         sfs->f_blocks = osfs->os_blocks;
@@ -64,7 +64,7 @@ void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs)
         sfs->f_namelen = osfs->os_namelen;
 }
 
-int obd_self_statfs(struct obd_device *obd, struct statfs *sfs)
+int obd_self_statfs(struct obd_device *obd, struct kstatfs *sfs)
 {
         struct obd_export *export, *my_export = NULL;
         struct obd_statfs osfs = { 0 };

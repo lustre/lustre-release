@@ -476,7 +476,7 @@ static int fsfilt_ext3_journal_data(struct file *filp)
  */
 static int fsfilt_ext3_statfs(struct super_block *sb, struct obd_statfs *osfs)
 {
-        struct statfs sfs;
+        struct kstatfs sfs;
         int rc = vfs_statfs(sb, &sfs);
 
         if (!rc && sfs.f_bfree < sfs.f_ffree) {

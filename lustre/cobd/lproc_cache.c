@@ -25,8 +25,8 @@
 #include <linux/lprocfs_status.h>
 
 #ifndef LPROCFS
-struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
-struct lprocfs_vars lprocfs_module_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_obd_vars[] = { {0} };
+static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 #else
 /* Common STATUS namespace */
 static int rd_target(char *page, char **start, off_t off, int count,
@@ -75,17 +75,17 @@ static int rd_cache(char *page, char **start, off_t off, int count,
 	return (rc);
 }
 
-struct lprocfs_vars lprocfs_obd_vars[] = {
+static struct lprocfs_vars lprocfs_obd_vars[] = {
         { "uuid",        lprocfs_rd_uuid,    0, 0 },
         { "target_uuid", rd_target,          0, 0 },
         { "cache_uuid",  rd_cache,           0, 0 },
         { 0 }
 };
 
-struct lprocfs_vars lprocfs_module_vars[] = {
+static struct lprocfs_vars lprocfs_module_vars[] = {
         { "num_refs",    lprocfs_rd_numrefs, 0, 0 },
         { 0 }
 };
 #endif /* LPROCFS */
 
-LPROCFS_INIT_VARS(lprocfs_module_vars, lprocfs_obd_vars)
+LPROCFS_INIT_VARS(cobd, lprocfs_module_vars, lprocfs_obd_vars)
