@@ -12,17 +12,22 @@ char buf[128];
 
 int main(int argc, char **argv)
 {
+	char *fname, *fname2;
         int fd, rc;
 
-        if (argc != 2) {
-                fprintf(stderr, "usage: %s filename\n", argv[0]);
+        if (argc < 2 || argc > 3) {
+                fprintf(stderr, "usage: %s filename [filename2]\n", argv[0]);
                 exit(1);
-        } else {
-                fprintf(stderr, "congratulations - program starting\n");
         }
 
+	fname = argv[1];
+	if (argc == 3)
+		fname2 = argv[2];
+	else
+		fname2 = argv[1];
+
         fprintf(stderr, "opening\n");
-        fd = open(argv[1], O_RDWR | O_TRUNC | O_CREAT, 0644);
+        fd = open(fname, O_RDWR | O_TRUNC | O_CREAT, 0644);
         if (fd == -1) {
                 fprintf(stderr, "open (normal) %s\n", strerror(errno));
                 exit(1);
@@ -35,31 +40,41 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
-        fprintf(stderr, "closing\n");
-        rc = close(fd);
-        if (rc) {
-                fprintf(stderr, "close (normal) %s\n", strerror(errno));
-                exit(1);
-        }
+	if (argc == 3) {
+		fprintf(stderr, "closing %s\n", fname);
+		rc = close(fd);
+		if (rc) {
+			fprintf(stderr, "close (normal) %s\n", strerror(errno));
+			exit(1);
+		}
 
-        fprintf(stderr, "opening again\n");
-        fd = open(argv[1], O_RDWR);
-        if (fd == -1) {
-                fprintf(stderr, "open (unlink) %s\n", strerror(errno));
-                exit(1);
-        }
+		fprintf(stderr, "opening %s\n", fname2);
+		fd = open(fname2, O_RDWR);
+		if (fd == -1) {
+			fprintf(stderr, "open (unlink) %s\n", strerror(errno));
+			exit(1);
+		}
 
-#if 0
-        fprintf(stderr, "unlinking\n");
-        rc = unlink(argv[1]);
-        if (rc) {
-                fprintf(stderr, "unlink %s\n", strerror(errno));
-                exit(1);
-        }
-#else
-        printf("unlink %s and press enter\n", argv[1]);
-        getc(stdin);
-#endif
+		fprintf (stderr, "unlinking %s\n", fname2);
+		rc = unlink(fname2);
+		if (rc) {
+			fprintf(stderr, "unlink %s\n", strerror(errno));
+			exit(1);
+		}
+
+		if (access(fname2, F_OK) == 0) {
+			fprintf(stderr, "%s still exists\n", fname2);
+			exit(1);
+		}
+	} else {
+		printf("unlink %s and press enter\n", fname);
+		getc(stdin);
+	}
+
+	if (access(fname, F_OK) == 0) {
+		fprintf(stderr, "%s still exists\n", fname);
+		exit(1);
+	}
 
         fprintf(stderr, "reading\n");
         rc = read(fd, buf, strlen(T1) + 1);
