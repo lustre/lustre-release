@@ -13,6 +13,9 @@
 #define DEBUG_SUBSYSTEM D_OTHER
 
 #define EXPORT_SYMTAB
+#ifndef __KERNEL__
+#include <liblustre.h>
+#endif
 #include <linux/obd_ost.h>
 #include <linux/lustre_debug.h>
 #include <linux/lustre_net.h>
