@@ -12,8 +12,8 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.30 2002/09/03 20:19:20 adilger Exp $";
-#define OBDECHO_VERSION "$Revision: 1.30 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.31 2002/09/04 16:29:14 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.31 $"
 
 #define EXPORT_SYMTAB
 
@@ -38,29 +38,23 @@ static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.30 2002/09/03 20:1
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 
+static atomic_t echo_page_rws;
+static atomic_t echo_getattrs;
+
 #define ECHO_PROC_STAT "sys/obdecho"
 
 int echo_proc_read(char *page, char **start, off_t off, int count, int *eof,
                    void *data)
 {
         struct obd_device *obd;
-        long long attrs = 0;
-        long long pages = 0;
+        long long attrs = atomic_read(&echo_getattrs);
+        long long pages = atomic_read(&echo_page_rws);
         int len;
         int i;
 
         *eof = 1;
         if (off != 0)
                 return (0);
-
-        for (i = 0, obd = obd_dev; i < MAX_OBD_DEVICES; i++, obd++) {
-                if (strcmp(obd->obd_type->typ_name, OBD_ECHO_DEVICENAME))
-                        continue;
-                attrs += atomic_read(&obd->u.echo.eo_getattr) +
-                         atomic_read(&obd->u.echo.eo_setattr);
-                pages += atomic_read(&obd->u.echo.eo_read) +
-                         atomic_read(&obd->u.echo.eo_write);
-        }
 
         len = sprintf(page, "%Ld %Ld\n", attrs, pages);
 
@@ -71,20 +65,9 @@ int echo_proc_read(char *page, char **start, off_t off, int count, int *eof,
 int echo_proc_write(struct file *file, const char *ubuffer,
                     unsigned long count, void *data)
 {
-        struct obd_device *obd;
-        int i;
-
-        for (i = 0, obd = obd_dev; i < MAX_OBD_DEVICES; i++, obd++) {
-                if (strcmp(obd->obd_type->typ_name, OBD_ECHO_DEVICENAME))
-                        continue;
-
-                atomic_set(&obd->u.echo.eo_getattr, 0);
-                atomic_set(&obd->u.echo.eo_setattr, 0);
-                atomic_set(&obd->u.echo.eo_read, 0);
-                atomic_set(&obd->u.echo.eo_write, 0);
-        }
-
         /* Ignore what we've been asked to write, and just zero the counters */
+        atomic_set (&echo_page_rws, 0);
+        atomic_set (&echo_getattrs, 0);
 
         return (count);
 }
@@ -218,7 +201,7 @@ static int echo_getattr(struct lustre_handle *conn, struct obdo *oa,
         oa->o_id = id;
         oa->o_valid |= OBD_MD_FLID;
 
-        atomic_inc(&obd->u.echo.eo_getattr);
+        atomic_inc(&echo_getattrs);
 
         return 0;
 }
@@ -343,11 +326,9 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
         if ((cmd & OBD_BRW_RWMASK) == OBD_BRW_READ) {
                 CDEBUG(D_PAGE, "reading %d obdos with %d IOs\n",
                        objcount, niocount);
-                atomic_inc(&obd->u.echo.eo_read);
         } else {
                 CDEBUG(D_PAGE, "writing %d obdos with %d IOs\n",
                        objcount, niocount);
-                atomic_inc(&obd->u.echo.eo_write);
         }
 
         if (niocount && !r) {
@@ -373,7 +354,7 @@ int echo_commitrw(int cmd, struct lustre_handle *conn, int objcount,
                                 GOTO(commitrw_cleanup, rc = -EFAULT);
                         }
 
-                        atomic_inc(&obd->u.echo.eo_read);
+                        atomic_inc(&echo_page_rws);
 
                         CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@"LPU64"\n",
                                r->page, addr, r->offset);
@@ -423,17 +404,8 @@ static int echo_cleanup(struct obd_device *obddev)
         ENTRY;
 
         ldlm_namespace_free(obddev->obd_namespace);
-        printk(KERN_INFO "%s: %u getattrs, %u setattrs\n", OBD_ECHO_DEVICENAME,
-               atomic_read(&obddev->u.echo.eo_getattr),
-               atomic_read(&obddev->u.echo.eo_setattr));
-        printk(KERN_INFO "%s: %u reads, %u writes (%d leaked)\n",
-               OBD_ECHO_DEVICENAME,
-               atomic_read(&obddev->u.echo.eo_read),
-               atomic_read(&obddev->u.echo.eo_write),
+        CERROR("%d prep/commitrw pages leaked\n",
                atomic_read(&obddev->u.echo.eo_prep));
-        printk(KERN_INFO "%s: %u creates, %u destroys\n", OBD_ECHO_DEVICENAME,
-               atomic_read(&obddev->u.echo.eo_create),
-               atomic_read(&obddev->u.echo.eo_destroy));
 
         RETURN(0);
 }
