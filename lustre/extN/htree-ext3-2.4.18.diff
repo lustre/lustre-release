@@ -90,7 +90,7 @@
 +}
 +
 +#ifndef assert
-+#define assert(test) do if (!(test)) BUG(); while (0)
++#define assert(test) J_ASSERT(test)
 +#endif
 +
 +#ifndef swap
@@ -546,9 +546,9 @@
 +		block = dx_get_block(frame->at);
 +		if (!(bh = ext3_bread (NULL,dir, block, 0, &err)))
 +			goto dxfail;
-+		de = (struct ext3_dir_entry_2 *) bh->b_data;
-+		top = (struct ext3_dir_entry_2 *) ((char *) de + blocksize
-+				- EXT3_DIR_REC_LEN(0));
++		de = (ext3_dirent *) bh->b_data;
++		top = (ext3_dirent *) ((char *) de + blocksize -
++				EXT3_DIR_REC_LEN(0));
 +		for (; de < top; de = ext3_next_entry(de))
 +			if (ext3_match (namelen, name, de)) {
 +				if (!ext3_check_dir_entry("ext3_find_entry",
@@ -695,14 +695,15 @@
  static int ext3_add_entry (handle_t *handle, struct dentry *dentry,
  	struct inode *inode)
  {
-@@ -258,117 +852,284 @@
+@@ -258,117 +852,282 @@
  	const char *name = dentry->d_name.name;
  	int namelen = dentry->d_name.len;
  	unsigned long offset;
 -	unsigned short rec_len;
  	struct buffer_head * bh;
- 	struct ext3_dir_entry_2 * de, * de1;
+-	struct ext3_dir_entry_2 * de, * de1;
 -	struct super_block * sb;
++	ext3_dirent *de;
 +	struct super_block * sb = dir->i_sb;
  	int	retval;
 +	unsigned short reclen = EXT3_DIR_REC_LEN(namelen);
@@ -710,7 +711,7 @@
 -	sb = dir->i_sb;
 +	unsigned blocksize = sb->s_blocksize;
 +	unsigned nlen, rlen;
-+	u32 block;
++	u32 block, blocks;
 +	char *top;
  
  	if (!namelen)
@@ -771,21 +772,19 @@
 +		{
 +			u32 newblock;
 +			unsigned icount = dx_get_count(entries);
-+			char *idata2;
 +			int levels = frame - frames;
 +			struct dx_entry *entries2;
++			struct dx_node *node2;
 +			struct buffer_head *bh2;
 +			if (levels && dx_get_count(frames->entries) == dx_get_limit(frames->entries))
 +				goto dxfull;
 +			bh2 = ext3_append (handle, dir, &newblock, &retval);
 +			if (!(bh2))
 +				goto dxfail2;
-+			idata2 = bh2->b_data;
-+			entries2 = ((struct dx_node *) idata2)->entries;
-+			((struct dx_node *) idata2)->fake.rec_len = cpu_to_le16(blocksize);
-+			/* fake.inode already 0 */
-+			/* Seems that is not true. We still need to set inode = 0 -Chrisl*/
-+			((struct dx_node *) idata2)->fake.inode = 0;
++			node2 = (struct dx_node *)(bh2->b_data);
++			entries2 = node2->entries;
++			node2->fake.rec_len = cpu_to_le16(blocksize);
++			node2->fake.inode = 0;
 +			BUFFER_TRACE(frame->bh, "get_write_access");
 +			ext3_journal_get_write_access(handle, frame->bh);
 +			if (levels)
@@ -878,19 +877,19 @@
 +		dx_release (frames);
 +		goto fail1;
 +	}
-+	block = offset = 0;
-+	while (offset < dir->i_size) {
-+		bh = ext3_bread (handle, dir, block, 0, &retval);
++
++	blocks = dir->i_size >> sb->s_blocksize_bits;
++	for (block = 0, offset = 0; block < blocks; block++) {
++		bh = ext3_bread(handle, dir, block, 0, &retval);
 +		if(!bh)
-+			return retval;	
-+		de = (struct ext3_dir_entry_2 *) bh->b_data;
-+		top = bh->b_data+blocksize-reclen;
++			return retval;
++		de = (ext3_dirent *)bh->b_data;
++		top = bh->b_data + blocksize - reclen;
 +		while ((char *) de <= top) {
-+			
-+			if (!ext3_check_dir_entry ("ext3_add_entry", dir, de,
-+						   bh,offset)) {
++			if (!ext3_check_dir_entry("ext3_add_entry", dir, de,
++						  bh, offset)) {
 +				brelse (bh);
-+				return -ENOENT;
++				return -EIO;
 +			}
 +			if (ext3_match (namelen, name, de)) {
  				brelse (bh);
@@ -943,17 +942,17 @@
 +			rlen = le16_to_cpu(de->rec_len);
 +			if ((de->inode? rlen - nlen: rlen) >= reclen)
 +				goto add;
-+			de = (struct ext3_dir_entry_2 *) ((char *) de + rlen);
++			de = (ext3_dirent *)((char *)de + rlen);
 +			offset += rlen;
 +		}
-+		if (ext3_dx && dir->i_size==blocksize && test_opt(sb, INDEX))
++		if (ext3_dx && blocks == 1 && test_opt(sb, INDEX))
 +			goto dx_make_index;
 +		brelse(bh);
 +	}
 +	bh = ext3_append(handle, dir, &block, &retval);
 +	if (!bh)
 +		return retval;
-+	de = (struct ext3_dir_entry_2 *) bh->b_data;
++	de = (ext3_dirent *) bh->b_data;
 +	de->inode = 0;
 +	de->rec_len = cpu_to_le16(rlen = blocksize);
 +	nlen = 0;
@@ -964,7 +963,7 @@
 +	ext3_journal_get_write_access(handle, bh);
 +	/* By now the buffer is marked for journaling */
 +	if (de->inode) {
-+		de1 = (struct ext3_dir_entry_2 *) ((char *) de + nlen);
++		ext3_dirent *de1 = (ext3_dirent *)((char *)de + nlen);
 +		de1->rec_len = cpu_to_le16(rlen - nlen);
 +		de->rec_len = cpu_to_le16(nlen);
 +		de = de1;
@@ -1003,7 +1002,7 @@
 +		struct dx_root *root;
 +		struct dx_frame frames[2], *frame;
 +		struct dx_entry *entries;
-+		struct ext3_dir_entry_2 *de2;
++		ext3_dirent *de2;
 +		char *data1;
 +		unsigned len;
 +		u32 hash;
