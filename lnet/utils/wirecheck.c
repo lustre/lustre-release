@@ -5,10 +5,13 @@
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <portals/api-support.h>
-#include <portals/list.h>
 #include <portals/lib-types.h>
 
-extern size_t strnlen(const char *, size_t);
+#include <string.h>
+
+#ifndef HAVE_STRNLEN
+#define strnlen(s, i) strlen(s)
+#endif
 
 #define BLANK_LINE()                            \
 do {                                            \

@@ -36,16 +36,16 @@ int ptl_init;
 static struct nal_t *ptl_nal_table[NAL_MAX_NR + 1];
 
 #ifdef __KERNEL__
-DECLARE_MUTEX(ptl_mutex);
+struct semaphore ptl_mutex;
 
 static void ptl_mutex_enter (void) 
 {
-        down (&ptl_mutex);
+        mutex_down (&ptl_mutex);
 }
 
 static void ptl_mutex_exit (void)
 {
-        up (&ptl_mutex);
+        mutex_up (&ptl_mutex);
 }
 #else
 static void ptl_mutex_enter (void)

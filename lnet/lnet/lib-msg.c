@@ -22,17 +22,18 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#define DEBUG_SUBSYSTEM S_PORTALS
+
 #ifndef __KERNEL__
 # include <stdio.h>
 #else
-# define DEBUG_SUBSYSTEM S_PORTALS
-# include <linux/kp30.h>
+# include <libcfs/kp30.h>
 #endif
 
 #include <portals/lib-p30.h>
 
 void
-lib_enq_event_locked (lib_nal_t *nal, void *private, 
+lib_enq_event_locked (lib_nal_t *nal, void *private,
                       lib_eq_t *eq, ptl_event_t *ev)
 {
         ptl_event_t  *eq_slot;
@@ -46,7 +47,7 @@ lib_enq_event_locked (lib_nal_t *nal, void *private,
         /* We don't support different uid/jids yet */
         ev->uid = 0;
         ev->jid = 0;
-        
+
         /* size must be a power of 2 to handle sequence # overflow */
         LASSERT (eq->eq_size != 0 &&
                  eq->eq_size == LOWEST_BIT_SET (eq->eq_size));
@@ -64,14 +65,14 @@ lib_enq_event_locked (lib_nal_t *nal, void *private,
 
         /* Wake anyone sleeping for an event (see lib-eq.c) */
 #ifdef __KERNEL__
-        if (waitqueue_active(&nal->libnal_ni.ni_waitq))
-                wake_up_all(&nal->libnal_ni.ni_waitq);
+        if (cfs_waitq_active(&nal->libnal_ni.ni_waitq))
+                cfs_waitq_broadcast(&nal->libnal_ni.ni_waitq);
 #else
         pthread_cond_broadcast(&nal->libnal_ni.ni_cond);
 #endif
 }
 
-void 
+void
 lib_finalize (lib_nal_t *nal, void *private, lib_msg_t *msg, ptl_err_t status)
 {
         lib_md_t     *md;
@@ -102,11 +103,11 @@ lib_finalize (lib_nal_t *nal, void *private, lib_msg_t *msg, ptl_err_t status)
                 ack.msg.ack.mlength = cpu_to_le32(msg->ev.mlength);
 
                 rc = lib_send (nal, private, NULL, &ack, PTL_MSG_ACK,
-                               msg->ev.initiator.nid, msg->ev.initiator.pid, 
+                               msg->ev.initiator.nid, msg->ev.initiator.pid,
                                NULL, 0, 0);
                 if (rc != PTL_OK) {
                         /* send failed: there's nothing else to clean up. */
-                        CERROR("Error %d sending ACK to "LPX64"\n", 
+                        CERROR("Error %d sending ACK to "LPX64"\n",
                                rc, msg->ev.initiator.nid);
                 }
         }

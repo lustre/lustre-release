@@ -3,7 +3,7 @@
 
 #include "build_check.h"
 
-#include <linux/libcfs.h>
+#include <libcfs/libcfs.h>
 #include <portals/errno.h>
 
 /* This implementation uses the same type for API function return codes and
@@ -95,7 +95,7 @@ typedef struct {
 typedef struct iovec ptl_md_iovec_t;
 
 typedef struct {
-	struct page     *kiov_page;
+	cfs_page_t      *kiov_page;
 	unsigned int     kiov_len;
 	unsigned int     kiov_offset;
 } ptl_kiov_t;

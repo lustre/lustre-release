@@ -31,7 +31,7 @@
 
 #define DEBUG_SUBSYSTEM S_PINGER
 
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <portals/p30.h>
 #include <linux/module.h>
 #include <linux/proc_fs.h>

@@ -25,6 +25,8 @@
  * mapping of virtual nodes into the port range of an IP socket.
 */
 
+#define DEBUG_SUBSYSTEM S_NAL
+
 #include <stdlib.h>
 #include <netdb.h>
 #include <unistd.h>
@@ -59,7 +61,7 @@ static unsigned int get_node_id(void)
                     x = 0;
             return(ntohl(x));
         }
-    else 
+    else
         {
             if (host_envp[1] != 'x')
                 {
@@ -98,15 +100,15 @@ void set_address(bridge t,ptl_pid_t pidrequest)
 
 void set_address(bridge t,ptl_pid_t pidrequest)
 {
-    int virtnode, in_addr, port; 
+    int virtnode, in_addr, port;
     ptl_pid_t pid;
 
     /* get and remember my node id*/
     if (!getenv("PTL_VIRTNODE"))
         virtnode = 0;
-    else 
+    else
         {
-            int maxvnode = PNAL_VNODE_MASK - (PNAL_BASE_PORT 
+            int maxvnode = PNAL_VNODE_MASK - (PNAL_BASE_PORT
                                               >> PNAL_VNODE_SHIFT);
             virtnode = atoi(getenv("PTL_VIRTNODE"));
             if (virtnode > maxvnode)
@@ -116,11 +118,11 @@ void set_address(bridge t,ptl_pid_t pidrequest)
                     return;
                 }
         }
-    
+
     in_addr = get_node_id();
 
     t->iptop8 = in_addr >> PNAL_HOSTID_SHIFT;/* for making new connections */
-    t->lib_nal->libnal_ni.ni_pid.nid = ((in_addr & PNAL_HOSTID_MASK) 
+    t->lib_nal->libnal_ni.ni_pid.nid = ((in_addr & PNAL_HOSTID_MASK)
                                         << PNAL_VNODE_SHIFT)
                                        + virtnode;
     pid=pidrequest;
@@ -128,7 +130,7 @@ void set_address(bridge t,ptl_pid_t pidrequest)
 #ifdef notyet
     if (pid==(unsigned short)PTL_PID_ANY) port = 0;
 #endif
-    if (pid==(unsigned short)PTL_PID_ANY) 
+    if (pid==(unsigned short)PTL_PID_ANY)
         {
             fprintf(stderr, "portal pid PTL_ID_ANY is not currently supported\n");
             return;

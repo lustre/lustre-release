@@ -22,11 +22,12 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#define DEBUG_SUBSYSTEM S_PORTALS
+
 #ifndef __KERNEL__
 # include <stdio.h>
 #else
-# define DEBUG_SUBSYSTEM S_PORTALS
-# include <linux/kp30.h>
+# include <libcfs/kp30.h>
 #endif
 
 #include <portals/lib-p30.h>
@@ -34,8 +35,8 @@
 int
 lib_api_me_attach(nal_t *apinal,
                   ptl_pt_index_t portal,
-                  ptl_process_id_t match_id, 
-                  ptl_match_bits_t match_bits, 
+                  ptl_process_id_t match_id,
+                  ptl_match_bits_t match_bits,
                   ptl_match_bits_t ignore_bits,
                   ptl_unlink_t unlink, ptl_ins_pos_t pos,
                   ptl_handle_me_t *handle)
@@ -78,8 +79,8 @@ lib_api_me_attach(nal_t *apinal,
 int
 lib_api_me_insert(nal_t *apinal,
                   ptl_handle_me_t *current_meh,
-                  ptl_process_id_t match_id, 
-                  ptl_match_bits_t match_bits, 
+                  ptl_process_id_t match_id,
+                  ptl_match_bits_t match_bits,
                   ptl_match_bits_t ignore_bits,
                   ptl_unlink_t unlink, ptl_ins_pos_t pos,
                   ptl_handle_me_t *handle)
@@ -147,7 +148,7 @@ lib_api_me_unlink (nal_t *apinal, ptl_handle_me_t *meh)
 }
 
 /* call with state_lock please */
-void 
+void
 lib_me_unlink(lib_nal_t *nal, lib_me_t *me)
 {
         list_del (&me->me_list);
@@ -162,10 +163,10 @@ lib_me_unlink(lib_nal_t *nal, lib_me_t *me)
 }
 
 #if 0
-static void 
+static void
 lib_me_dump(lib_nal_t *nal, lib_me_t * me)
 {
-        CWARN("Match Entry %p ("LPX64")\n", me, 
+        CWARN("Match Entry %p ("LPX64")\n", me,
               me->me_lh.lh_cookie);
 
         CWARN("\tMatch/Ignore\t= %016lx / %016lx\n",

@@ -41,7 +41,7 @@
 
 #define DEBUG_SUBSYSTEM S_PORTALS
 
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 
 #if LWT_SUPPORT
 

@@ -23,7 +23,7 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-# define DEBUG_SUBSYSTEM S_PORTALS
+#define DEBUG_SUBSYSTEM S_PORTALS
 #include <portals/api-support.h>
 
 void PtlSnprintHandle(char *str, int len, ptl_handle_any_t h)
@@ -35,10 +35,10 @@ int PtlNIHandle(ptl_handle_any_t handle_in, ptl_handle_ni_t *ni_out)
 {
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         if (ptl_hndl2nal(&handle_in) == NULL)
                 return PTL_HANDLE_INVALID;
-        
+
         *ni_out = handle_in;
         return PTL_OK;
 }
@@ -49,7 +49,7 @@ int PtlGetId(ptl_handle_ni_t ni_handle, ptl_process_id_t *id)
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&ni_handle);
         if (nal == NULL)
                 return PTL_NI_INVALID;
@@ -63,7 +63,7 @@ int PtlGetUid(ptl_handle_ni_t ni_handle, ptl_uid_t *uid)
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&ni_handle);
         if (nal == NULL)
                 return PTL_NI_INVALID;
@@ -73,13 +73,13 @@ int PtlGetUid(ptl_handle_ni_t ni_handle, ptl_uid_t *uid)
         return PTL_OK;
 }
 
-int PtlFailNid (ptl_handle_ni_t interface, ptl_nid_t nid, unsigned int threshold) 
+int PtlFailNid (ptl_handle_ni_t interface, ptl_nid_t nid, unsigned int threshold)
 {
         nal_t     *nal;
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&interface);
         if (nal == NULL)
                 return PTL_NI_INVALID;
@@ -94,7 +94,7 @@ int PtlNIStatus(ptl_handle_ni_t interface_in, ptl_sr_index_t register_in,
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&interface_in);
         if (nal == NULL)
                 return PTL_NI_INVALID;
@@ -109,7 +109,7 @@ int PtlNIDist(ptl_handle_ni_t interface_in, ptl_process_id_t process_in,
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&interface_in);
         if (nal == NULL)
                 return PTL_NI_INVALID;
@@ -126,12 +126,12 @@ int PtlMEAttach(ptl_handle_ni_t interface_in, ptl_pt_index_t index_in,
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&interface_in);
         if (nal == NULL)
                 return PTL_NI_INVALID;
 
-        return nal->nal_me_attach(nal, index_in, match_id_in, 
+        return nal->nal_me_attach(nal, index_in, match_id_in,
                                   match_bits_in, ignore_bits_in,
                                   unlink_in, pos_in, handle_out);
 }
@@ -145,7 +145,7 @@ int PtlMEInsert(ptl_handle_me_t current_in, ptl_process_id_t match_id_in,
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&current_in);
         if (nal == NULL)
                 return PTL_ME_INVALID;
@@ -161,7 +161,7 @@ int PtlMEUnlink(ptl_handle_me_t current_in)
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&current_in);
         if (nal == NULL)
                 return PTL_ME_INVALID;
@@ -176,7 +176,7 @@ int PtlMDAttach(ptl_handle_me_t me_in, ptl_md_t md_in,
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&me_in);
         if (nal == NULL)
                 return PTL_ME_INVALID;
@@ -185,7 +185,7 @@ int PtlMDAttach(ptl_handle_me_t me_in, ptl_md_t md_in,
             ptl_hndl2nal(&md_in.eq_handle) != nal)
                 return PTL_MD_ILLEGAL;
 
-        return (nal->nal_md_attach)(nal, &me_in, &md_in, 
+        return (nal->nal_md_attach)(nal, &me_in, &md_in,
                                     unlink_in, handle_out);
 }
 
@@ -196,7 +196,7 @@ int PtlMDBind(ptl_handle_ni_t ni_in, ptl_md_t md_in,
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&ni_in);
         if (nal == NULL)
                 return PTL_NI_INVALID;
@@ -212,10 +212,10 @@ int PtlMDUpdate(ptl_handle_md_t md_in, ptl_md_t *old_inout,
                 ptl_md_t *new_inout, ptl_handle_eq_t testq_in)
 {
         nal_t    *nal;
-        
+
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&md_in);
         if (nal == NULL)
                 return PTL_MD_INVALID;
@@ -224,21 +224,21 @@ int PtlMDUpdate(ptl_handle_md_t md_in, ptl_md_t *old_inout,
             ptl_hndl2nal(&testq_in) != nal)
                 return PTL_EQ_INVALID;
 
-        return (nal->nal_md_update)(nal, &md_in, 
+        return (nal->nal_md_update)(nal, &md_in,
                                     old_inout, new_inout, &testq_in);
 }
 
 int PtlMDUnlink(ptl_handle_md_t md_in)
 {
         nal_t    *nal;
-        
+
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&md_in);
         if (nal == NULL)
                 return PTL_MD_INVALID;
-        
+
         return (nal->nal_md_unlink)(nal, &md_in);
 }
 
@@ -247,10 +247,10 @@ int PtlEQAlloc(ptl_handle_ni_t interface, ptl_size_t count,
                ptl_handle_eq_t *handle_out)
 {
         nal_t    *nal;
-        
+
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&interface);
         if (nal == NULL)
                 return PTL_NI_INVALID;
@@ -264,7 +264,7 @@ int PtlEQFree(ptl_handle_eq_t eventq)
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&eventq);
         if (nal == NULL)
                 return PTL_EQ_INVALID;
@@ -275,15 +275,15 @@ int PtlEQFree(ptl_handle_eq_t eventq)
 int PtlEQGet(ptl_handle_eq_t eventq, ptl_event_t *ev)
 {
         int which;
-        
+
         return (PtlEQPoll (&eventq, 1, 0, ev, &which));
 }
 
 int PtlEQWait(ptl_handle_eq_t eventq_in, ptl_event_t *event_out)
 {
         int which;
-        
-        return (PtlEQPoll (&eventq_in, 1, PTL_TIME_FOREVER, 
+
+        return (PtlEQPoll (&eventq_in, 1, PTL_TIME_FOREVER,
                            event_out, &which));
 }
 
@@ -319,11 +319,11 @@ int PtlACEntry(ptl_handle_ni_t ni_in, ptl_ac_index_t index_in,
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&ni_in);
         if (nal == NULL)
                 return PTL_NI_INVALID;
-        
+
         return (nal->nal_ace_entry)(nal, index_in, match_id_in, portal_in);
 }
 
@@ -336,7 +336,7 @@ int PtlPut(ptl_handle_md_t md_in, ptl_ack_req_t ack_req_in,
 
         if (!ptl_init)
                 return PTL_NO_INIT;
-        
+
         nal = ptl_hndl2nal(&md_in);
         if (nal == NULL)
                 return PTL_MD_INVALID;
@@ -359,7 +359,7 @@ int PtlGet(ptl_handle_md_t md_in, ptl_process_id_t target_in,
         if (nal == NULL)
                 return PTL_MD_INVALID;
 
-        return (nal->nal_get)(nal, &md_in, 
+        return (nal->nal_get)(nal, &md_in,
                               &target_in, portal_in, ac_in,
                               match_bits_in, offset_in);
 }

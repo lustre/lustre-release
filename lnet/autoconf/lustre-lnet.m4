@@ -428,6 +428,15 @@ LP_FUNC_SHOW_TASK
 ])
 
 #
+# LP_PROG_DARWIN
+#
+# Darwin checks
+#
+AC_DEFUN([LP_PROG_DARWIN],
+[LB_DARWIN_CHECK_FUNCS([get_preemption_level])
+])
+
+#
 # LP_PATH_DEFAULTS
 #
 # default paths for installed files
@@ -443,7 +452,7 @@ AC_DEFUN([LP_PATH_DEFAULTS],
 #
 AC_DEFUN([LP_CONFIGURE],
 [# portals/utils/portals.c
-AC_CHECK_HEADERS([netdb.h netinet/tcp.h asm/types.h])
+AC_CHECK_HEADERS([netdb.h netinet/tcp.h asm/types.h endian.h])
 AC_CHECK_FUNCS([gethostbyname socket connect])
 
 # portals/utils/debug.c
@@ -454,22 +463,20 @@ AC_CHECK_TYPE([spinlock_t],
 	[],
 	[#include <linux/spinlock.h>])
 
+# portals/utils/wirecheck.c
+AC_CHECK_FUNCS([strnlen])
+
 # --------  Check for required packages  --------------
 
-# this doesn't seem to work on older autoconf
-# AC_CHECK_LIB(readline, readline,,)
-AC_MSG_CHECKING([for readline support])
-AC_ARG_ENABLE(readline,
-	AC_HELP_STRING([--disable-readline],
-			[do not use readline library]),
-	[],[enable_readline='yes'])
-AC_MSG_RESULT([$enable_readline]) 
-if test x$enable_readline = xyes ; then
+LIBS_save="$LIBS"
+LIBS="-lncurses $LIBS"
+AC_CHECK_LIB([readline],[readline],[
 	LIBREADLINE="-lreadline -lncurses"
 	AC_DEFINE(HAVE_LIBREADLINE, 1, [readline library is available])
-else 
+],[
 	LIBREADLINE=""
-fi
+])
+LIBS="$LIBS_save"
 AC_SUBST(LIBREADLINE)
 
 AC_MSG_CHECKING([if efence debugging support is requested])
@@ -573,8 +580,12 @@ portals/autoMakefile
 portals/autoconf/Makefile
 portals/doc/Makefile
 portals/include/Makefile
-portals/include/linux/Makefile
+portals/include/libcfs/Makefile
+portals/include/libcfs/darwin/Makefile
+portals/include/libcfs/linux/Makefile
 portals/include/portals/Makefile
+portals/include/portals/darwin/Makefile
+portals/include/portals/linux/Makefile
 portals/knals/Makefile
 portals/knals/autoMakefile
 portals/knals/gmnal/Makefile
@@ -595,6 +606,8 @@ portals/knals/socknal/Makefile
 portals/knals/socknal/autoMakefile
 portals/libcfs/Makefile
 portals/libcfs/autoMakefile
+portals/libcfs/darwin/Makefile
+portals/libcfs/linux/Makefile
 portals/portals/Makefile
 portals/portals/autoMakefile
 portals/router/Makefile

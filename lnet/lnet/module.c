@@ -24,36 +24,15 @@
 #endif
 #define DEBUG_SUBSYSTEM S_PORTALS
 
-#include <linux/config.h>
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/init.h>
-#include <linux/errno.h>
-#include <linux/smp_lock.h>
-#include <linux/unistd.h>
-
-#include <asm/system.h>
-#include <asm/uaccess.h>
-
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <asm/segment.h>
-#include <linux/miscdevice.h>
-
 #include <portals/lib-p30.h>
 #include <portals/p30.h>
 #include <portals/nal.h>
-#include <linux/kp30.h>
-#include <linux/kpr.h>
-#include <linux/portals_compat25.h>
+#include <libcfs/kp30.h>
+#include <portals/kpr.h>
 
 extern void (kping_client)(struct portal_ioctl_data *);
 
-static int kportal_ioctl(struct portal_ioctl_data *data, 
+static int kportal_ioctl(struct portal_ioctl_data *data,
                          unsigned int cmd, unsigned long arg)
 {
         int err;
@@ -130,12 +109,14 @@ static int kportal_ioctl(struct portal_ioctl_data *data,
 }
 
 DECLARE_IOCTL_HANDLER(kportal_ioctl_handler, kportal_ioctl);
+extern struct semaphore ptl_mutex;
 
 static int init_kportals_module(void)
 {
         int rc;
         ENTRY;
 
+        init_mutex(&ptl_mutex);
         rc = PtlInit(NULL);
         if (rc) {
                 CERROR("PtlInit: error %d\n", rc);
@@ -197,5 +178,5 @@ EXPORT_SYMBOL(lib_fini);
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Portals v3.1");
 MODULE_LICENSE("GPL");
-module_init(init_kportals_module);
-module_exit(exit_kportals_module);
+
+cfs_module(portals, "1.0.0", init_kportals_module, exit_kportals_module);

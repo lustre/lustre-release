@@ -1,4 +1,5 @@
-
+#ifndef __API_SUPPORT_H__
+#define __API_SUPPORT_H__
 #include "build_check.h"
 
 #ifndef __KERNEL__
@@ -14,9 +15,10 @@
 #endif
 
 #include <portals/types.h>
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <portals/p30.h>
 
 #include <portals/internal.h>
 #include <portals/nal.h>
 
+#endif

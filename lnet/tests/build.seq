@@ -1,0 +1,5 @@
+../libcfs
+../portals
+../knals/socknal
+./ping_cli
+./ping_srv

@@ -1,5 +1,6 @@
 MODULES := ksocknal
-ksocknal-objs := socknal.o socknal_cb.o
+
+ksocknal-objs := socknal.o socknal_cb.o socknal_lib-linux.o
 
 # If you don't build with -O2, your modules won't insert, becahse htonl is
 # just special that way.

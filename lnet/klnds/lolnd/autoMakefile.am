@@ -5,7 +5,9 @@
 
 if MODULES
 if !CRAY_PORTALS
+if LINUX
 modulenet_DATA = klonal$(KMODEXT)
+endif
 endif
 endif
 

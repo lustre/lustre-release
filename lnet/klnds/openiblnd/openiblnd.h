@@ -53,7 +53,7 @@
 
 #define DEBUG_SUBSYSTEM S_NAL
 
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 #include <portals/nal.h>
@@ -121,7 +121,7 @@
 //#define IBNAL_CALLBACK_CTXT  IB_CQ_CALLBACK_PROCESS
 #define IBNAL_CALLBACK_CTXT  IB_CQ_CALLBACK_INTERRUPT
 
-typedef struct 
+typedef struct
 {
         int               kib_io_timeout;       /* comms timeout (seconds) */
         int               kib_listener_timeout; /* listener's timeout */
@@ -140,8 +140,8 @@ typedef struct
         struct ib_mr     *ibp_handle;           /* mapped region handle */
         struct page      *ibp_pages[0];
 } kib_pages_t;
-        
-typedef struct 
+
+typedef struct
 {
         int               kib_init;             /* initialisation state */
         __u64             kib_incarnation;      /* which one am I */
@@ -180,7 +180,7 @@ typedef struct
         struct list_head  kib_sched_txq;        /* tx requiring attention */
         struct list_head  kib_sched_rxq;        /* rx requiring attention */
         spinlock_t        kib_sched_lock;       /* serialise */
-        
+
         struct kib_tx    *kib_tx_descs;         /* all the tx descriptors */
         kib_pages_t      *kib_tx_pages;         /* premapped tx msg pages */
 
@@ -189,7 +189,7 @@ typedef struct
         wait_queue_head_t kib_idle_tx_waitq;    /* block here for tx descriptor */
         __u64             kib_next_tx_cookie;   /* RDMA completion cookie */
         spinlock_t        kib_tx_lock;          /* serialise */
-        
+
         struct ib_device *kib_device;           /* "the" device */
         struct ib_device_properties kib_device_props; /* its properties */
         int               kib_port;             /* port on the device */
@@ -199,7 +199,7 @@ typedef struct
         struct ib_fmr_pool *kib_fmr_pool;       /* fast memory region pool */
 #endif
         struct ib_cq     *kib_cq;               /* completion queue */
-        
+
 } kib_data_t;
 
 #define IBNAL_INIT_NOTHING         0
@@ -362,7 +362,7 @@ typedef struct kib_connreq
 } kib_connreq_t;
 
 typedef struct kib_conn
-{ 
+{
         struct kib_peer    *ibc_peer;           /* owning peer */
         struct list_head    ibc_list;           /* stash on peer's conn list */
         __u64               ibc_incarnation;    /* which instance of the peer */
@@ -412,10 +412,10 @@ extern kib_data_t      kibnal_data;
 extern kib_tunables_t  kibnal_tunables;
 
 static inline struct list_head *
-kibnal_nid2peerlist (ptl_nid_t nid) 
+kibnal_nid2peerlist (ptl_nid_t nid)
 {
         unsigned int hash = ((unsigned int)nid) % kibnal_data.kib_peer_hash_size;
-        
+
         return (&kibnal_data.kib_peers [hash]);
 }
 
@@ -445,14 +445,14 @@ kibnal_show_rdma_attr (kib_conn_t *conn)
 {
         struct ib_qp_attribute qp_attr;
         int                    rc;
-        
+
         memset (&qp_attr, 0, sizeof(qp_attr));
         rc = ib_qp_query(conn->ibc_qp, &qp_attr);
         if (rc != 0) {
                 CERROR ("Can't get qp attrs: %d\n", rc);
                 return;
         }
-        
+
         CWARN ("RDMA CAPABILITY: write %s read %s\n",
                (qp_attr.valid_fields & TS_IB_QP_ATTRIBUTE_RDMA_ATOMIC_ENABLE) ?
                (qp_attr.enable_rdma_write ? "enabled" : "disabled") : "invalid",
@@ -522,7 +522,7 @@ extern void kibnal_put_peer (kib_peer_t *peer);
 extern int kibnal_del_peer (ptl_nid_t nid, int single_share);
 extern kib_peer_t *kibnal_find_peer_locked (ptl_nid_t nid);
 extern void kibnal_unlink_peer_locked (kib_peer_t *peer);
-extern int  kibnal_close_stale_conns_locked (kib_peer_t *peer, 
+extern int  kibnal_close_stale_conns_locked (kib_peer_t *peer,
                                               __u64 incarnation);
 extern kib_conn_t *kibnal_create_conn (void);
 extern void kibnal_put_conn (kib_conn_t *conn);
@@ -535,7 +535,7 @@ extern void kibnal_check_sends (kib_conn_t *conn);
 extern tTS_IB_CM_CALLBACK_RETURN
 kibnal_conn_callback (tTS_IB_CM_EVENT event, tTS_IB_CM_COMM_ID cid,
                        void *param, void *arg);
-extern tTS_IB_CM_CALLBACK_RETURN 
+extern tTS_IB_CM_CALLBACK_RETURN
 kibnal_passive_conn_callback (tTS_IB_CM_EVENT event, tTS_IB_CM_COMM_ID cid,
                                void *param, void *arg);
 
@@ -548,9 +548,9 @@ extern int  kibnal_reaper (void *arg);
 extern void kibnal_callback (struct ib_cq *cq, struct ib_cq_entry *e, void *arg);
 extern void kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob);
 extern int  kibnal_close_conn (kib_conn_t *conn, int why);
-extern void kibnal_start_active_rdma (int type, int status, 
-                                      kib_rx_t *rx, lib_msg_t *libmsg, 
-                                      unsigned int niov, 
+extern void kibnal_start_active_rdma (int type, int status,
+                                      kib_rx_t *rx, lib_msg_t *libmsg,
+                                      unsigned int niov,
                                       struct iovec *iov, ptl_kiov_t *kiov,
                                       int offset, int nob);
 

@@ -1,8 +1,8 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  */
-#ifndef _P30_H_
-#define _P30_H_
+#ifndef __PORTALS_P30_H__
+#define __PORTALS_P30_H__
 
 #include "build_check.h"
 
@@ -11,13 +11,12 @@
  *
  * User application interface file
  */
-
-#if defined (__KERNEL__)
-#include <linux/uio.h>
-#include <linux/types.h>
+#if defined(__linux__)
+#include <portals/linux/p30.h>
+#elif defined(__APPLE__)
+#include <portals/darwin/p30.h>
 #else
-#include <sys/types.h>
-#include <sys/uio.h>
+#error Unsupported Operating System
 #endif
 
 #include <portals/types.h>

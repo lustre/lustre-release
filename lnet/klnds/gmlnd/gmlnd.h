@@ -52,7 +52,7 @@
 #include "portals/nal.h"
 #include "portals/api.h"
 #include "portals/errno.h"
-#include "linux/kp30.h"
+#include "libcfs/kp30.h"
 #include "portals/p30.h"
 
 #include "portals/nal.h"

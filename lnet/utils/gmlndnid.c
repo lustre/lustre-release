@@ -33,16 +33,9 @@
 #include <errno.h>
 
 #include <portals/api-support.h>
-#include <portals/list.h>
 #include <portals/lib-types.h>
 
 #define GMNAL_IOC_GET_GNID 1
-
-int
-roundup(int len)
-{
-	return((len+7) & (~0x7));
-}
 
 int main(int argc, char **argv)
 {

@@ -53,7 +53,7 @@
 
 #define IBNAL_CHECK_ADVERT
 
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 #include <portals/nal.h>
@@ -159,7 +159,7 @@
 #define GSI_TIMEOUT 5
 #define GSI_RETRY 10
 
-typedef struct 
+typedef struct
 {
         int               kib_io_timeout;       /* comms timeout (seconds) */
         struct ctl_table_header *kib_sysctl;    /* sysctl interface */
@@ -185,8 +185,8 @@ typedef struct
         __u32             md_rkey;
         __u64             md_addr;
 } kib_md_t __attribute__((packed));
-        
-typedef struct 
+
+typedef struct
 {
         /* initialisation state. These values are sorted by their initialization order. */
         enum {
@@ -235,7 +235,7 @@ typedef struct
         struct list_head  kib_sched_txq;        /* tx requiring attention */
         struct list_head  kib_sched_rxq;        /* rx requiring attention */
         spinlock_t        kib_sched_lock;       /* serialise */
-        
+
         struct kib_tx    *kib_tx_descs;         /* all the tx descriptors */
         kib_pages_t      *kib_tx_pages;         /* premapped tx msg pages */
 
@@ -244,7 +244,7 @@ typedef struct
         wait_queue_head_t kib_idle_tx_waitq;    /* block here for tx descriptor */
         __u64             kib_next_tx_cookie;   /* RDMA completion cookie */
         spinlock_t        kib_tx_lock;          /* serialise */
-        
+
         vv_hca_h_t        kib_hca;              /* The HCA */
         vv_hca_attrib_t   kib_hca_attrs;      /* HCA attributes */
 
@@ -257,7 +257,7 @@ typedef struct
         void             *kib_listen_handle;    /* where I listen for connections */
 
         /* These fields are left untouched, so they can be shared. */
-        union { 
+        union {
                 cm_drequest_data_t dreq_data;
                 cm_dreply_data_t   drep_data;
         } cm_data;
@@ -293,7 +293,7 @@ typedef struct
 
 /* these arrays serve two purposes during rdma.  they are built on the passive
  * side and sent to the active side as remote arguments.  On the active side
- * the descs are used as a data structure on the way to local gather items. 
+ * the descs are used as a data structure on the way to local gather items.
  * the different roles result in split local/remote meaning of desc->rd_key */
 typedef struct
 {
@@ -412,7 +412,7 @@ typedef struct kib_connreq
 } kib_connreq_t;
 
 typedef struct kib_conn
-{ 
+{
         struct kib_peer    *ibc_peer;           /* owning peer */
         struct list_head    ibc_list;           /* stash on peer's conn list */
         __u64               ibc_incarnation;    /* which instance of the peer */
@@ -539,10 +539,10 @@ static inline int wrq_signals_completion(vv_wr_t *wrq)
 /******************************************************************************/
 
 static inline struct list_head *
-kibnal_nid2peerlist (ptl_nid_t nid) 
+kibnal_nid2peerlist (ptl_nid_t nid)
 {
         unsigned int hash = ((unsigned int)nid) % kibnal_data.kib_peer_hash_size;
-        
+
         return (&kibnal_data.kib_peers [hash]);
 }
 
@@ -589,7 +589,7 @@ static inline __u64
 kibnal_page2phys (struct page *p)
 {
         __u64 page_number = p - mem_map;
-        
+
         return (page_number << PAGE_SHIFT);
 }
 #else
@@ -649,7 +649,7 @@ static void dump_qp(kib_conn_t *conn)
         void *qp_context;
         vv_return_t retval;
 
-        CERROR("QP dumping %p\n", conn); 
+        CERROR("QP dumping %p\n", conn);
 
         retval = vv_qp_query(kibnal_data.kib_hca, conn->ibc_qp, &qp_context, &conn->ibc_qp_attrs);
         if (retval) {
@@ -691,7 +691,7 @@ static void dump_qp(kib_conn_t *conn)
 static void dump_wqe(vv_wr_t *wr)
 {
         CERROR("Dumping send WR %p\n", wr);
-        
+
         CERROR("  wr_id = %llx\n", wr->wr_id);
         CERROR("  completion_notification = %d\n", wr->completion_notification);
         CERROR("  scatgat_list = %p\n", wr->scatgat_list);
@@ -704,14 +704,14 @@ static void dump_wqe(vv_wr_t *wr)
         }
 
         CERROR("  wr_type = %d\n", wr->wr_type);
-        
+
         switch(wr->wr_type) {
         case vv_wr_send:
                 CERROR("  send\n");
-                
+
                 CERROR("  fance_indicator = %d\n", wr->type.send.send_qp_type.rc_type.fance_indicator);
                 break;
-                
+
         case vv_wr_receive:
                 break;
 
@@ -785,7 +785,7 @@ extern void kibnal_destroy_peer (kib_peer_t *peer);
 extern int kibnal_del_peer (ptl_nid_t nid, int single_share);
 extern kib_peer_t *kibnal_find_peer_locked (ptl_nid_t nid);
 extern void kibnal_unlink_peer_locked (kib_peer_t *peer);
-extern int  kibnal_close_stale_conns_locked (kib_peer_t *peer, 
+extern int  kibnal_close_stale_conns_locked (kib_peer_t *peer,
                                               __u64 incarnation);
 extern kib_conn_t *kibnal_create_conn (void);
 extern void kibnal_put_conn (kib_conn_t *conn);
@@ -803,9 +803,9 @@ extern int  kibnal_scheduler(void *arg);
 extern int  kibnal_connd (void *arg);
 extern void kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob);
 extern void kibnal_close_conn (kib_conn_t *conn, int why);
-extern void kibnal_start_active_rdma (int type, int status, 
-                                      kib_rx_t *rx, lib_msg_t *libmsg, 
-                                      unsigned int niov, 
+extern void kibnal_start_active_rdma (int type, int status,
+                                      kib_rx_t *rx, lib_msg_t *libmsg,
+                                      unsigned int niov,
                                       struct iovec *iov, ptl_kiov_t *kiov,
                                       size_t offset, size_t nob);
 

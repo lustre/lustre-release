@@ -5,7 +5,11 @@
 
 if MODULES
 if !CRAY_PORTALS
+
+if LINUX
 modulenet_DATA = kptlrouter$(KMODEXT)
+endif
+
 endif
 endif
 

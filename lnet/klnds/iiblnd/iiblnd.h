@@ -50,7 +50,7 @@
 
 #define DEBUG_SUBSYSTEM S_NAL
 
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 #include <portals/nal.h>
@@ -137,7 +137,7 @@
 /* XXX I have no idea. */
 #define IBNAL_STARTING_PSN 1
 
-typedef struct 
+typedef struct
 {
         int               kib_io_timeout;       /* comms timeout (seconds) */
         struct ctl_table_header *kib_sysctl;    /* sysctl interface */
@@ -163,8 +163,8 @@ typedef struct
         __u32             md_rkey;
         __u64             md_addr;
 } kib_md_t __attribute__((packed));
-        
-typedef struct 
+
+typedef struct
 {
         int               kib_init;             /* initialisation state */
         __u64             kib_incarnation;      /* which one am I */
@@ -196,7 +196,7 @@ typedef struct
         struct list_head  kib_sched_txq;        /* tx requiring attention */
         struct list_head  kib_sched_rxq;        /* rx requiring attention */
         spinlock_t        kib_sched_lock;       /* serialise */
-        
+
         struct kib_tx    *kib_tx_descs;         /* all the tx descriptors */
         kib_pages_t      *kib_tx_pages;         /* premapped tx msg pages */
 
@@ -205,7 +205,7 @@ typedef struct
         wait_queue_head_t kib_idle_tx_waitq;    /* block here for tx descriptor */
         __u64             kib_next_tx_cookie;   /* RDMA completion cookie */
         spinlock_t        kib_tx_lock;          /* serialise */
-        
+
         IB_HANDLE         kib_hca;              /* The HCA */
         int               kib_port;             /* port on the device */
         IB_HANDLE         kib_pd;               /* protection domain */
@@ -232,9 +232,9 @@ typedef struct
 #define IBNAL_INIT_PD              7
 #define IBNAL_INIT_FMR             8
 #define IBNAL_INIT_MR              9
-#define IBNAL_INIT_TXD             10 
-#define IBNAL_INIT_CQ              11 
-#define IBNAL_INIT_ALL             12 
+#define IBNAL_INIT_TXD             10
+#define IBNAL_INIT_CQ              11
+#define IBNAL_INIT_ALL             12
 
 /************************************************************************
  * Wire message structs.
@@ -259,7 +259,7 @@ typedef struct
 
 /* these arrays serve two purposes during rdma.  they are built on the passive
  * side and sent to the active side as remote arguments.  On the active side
- * the descs are used as a data structure on the way to local gather items. 
+ * the descs are used as a data structure on the way to local gather items.
  * the different roles result in split local/remote meaning of desc->rd_key */
 typedef struct
 {
@@ -373,7 +373,7 @@ typedef struct kib_connreq
 } kib_connreq_t;
 
 typedef struct kib_conn
-{ 
+{
         struct kib_peer    *ibc_peer;           /* owning peer */
         struct list_head    ibc_list;           /* stash on peer's conn list */
         __u64               ibc_incarnation;    /* which instance of the peer */
@@ -445,7 +445,7 @@ iibt_get_hca_guids(uint32 *hca_count, EUI64 *hca_guid_list)
 }
 
 static inline FSTATUS
-iibt_open_hca(EUI64                    hca_guid, 
+iibt_open_hca(EUI64                    hca_guid,
              IB_COMPLETION_CALLBACK   completion_callback,
              IB_ASYNC_EVENT_CALLBACK  async_event_callback,
              void                    *arg,
@@ -480,55 +480,55 @@ iibt_pd_free(IB_HANDLE pd_handle)
 }
 
 static inline FSTATUS
-iibt_register_physical_memory(IB_HANDLE hca_handle, 
+iibt_register_physical_memory(IB_HANDLE hca_handle,
                               IB_VIRT_ADDR requested_io_va,
                               void *phys_buffers, uint64 nphys_buffers,
                               uint32 io_va_offset, IB_HANDLE pd_handle,
                               IB_ACCESS_CONTROL access,
-                              IB_HANDLE *mem_handle, 
+                              IB_HANDLE *mem_handle,
                               IB_VIRT_ADDR *actual_io_va,
                               IB_L_KEY *lkey, IB_R_KEY *rkey)
 {
         return IIBT_IF.Vpi.RegisterPhysMemRegion(hca_handle, requested_io_va,
                                                  phys_buffers, nphys_buffers,
-                                                 io_va_offset, pd_handle, 
+                                                 io_va_offset, pd_handle,
                                                  access,
                                                  mem_handle, actual_io_va,
                                                  lkey, rkey);
 }
 
 static inline FSTATUS
-iibt_register_contig_physical_memory(IB_HANDLE hca_handle, 
+iibt_register_contig_physical_memory(IB_HANDLE hca_handle,
                                      IB_VIRT_ADDR requested_io_va,
-                                     IB_MR_PHYS_BUFFER *phys_buffers, 
+                                     IB_MR_PHYS_BUFFER *phys_buffers,
                                      uint64 nphys_buffers,
                                      uint32 io_va_offset, IB_HANDLE pd_handle,
                                      IB_ACCESS_CONTROL access,
-                                     IB_HANDLE *mem_handle, 
+                                     IB_HANDLE *mem_handle,
                                      IB_VIRT_ADDR *actual_io_va,
                                      IB_L_KEY *lkey, IB_R_KEY *rkey)
 {
-        return IIBT_IF.Vpi.RegisterContigPhysMemRegion(hca_handle, 
+        return IIBT_IF.Vpi.RegisterContigPhysMemRegion(hca_handle,
                                                        requested_io_va,
-                                                       phys_buffers, 
+                                                       phys_buffers,
                                                        nphys_buffers,
-                                                       io_va_offset, pd_handle, 
+                                                       io_va_offset, pd_handle,
                                                        access,
                                                        mem_handle, actual_io_va,
                                                        lkey, rkey);
 }
 
 static inline FSTATUS
-iibt_register_memory(IB_HANDLE hca_handle, 
+iibt_register_memory(IB_HANDLE hca_handle,
                      void *virt_addr, unsigned int length,
                      IB_HANDLE pd_handle,
                      IB_ACCESS_CONTROL access,
-                     IB_HANDLE *mem_handle, 
+                     IB_HANDLE *mem_handle,
                      IB_L_KEY *lkey, IB_R_KEY *rkey)
 {
-        return IIBT_IF.Vpi.RegisterMemRegion(hca_handle, 
+        return IIBT_IF.Vpi.RegisterMemRegion(hca_handle,
                                              virt_addr, length,
-                                             pd_handle, 
+                                             pd_handle,
                                              access,
                                              mem_handle,
                                              lkey, rkey);
@@ -568,10 +568,10 @@ iibt_cq_destroy(IB_HANDLE cq_handle)
 
 static inline FSTATUS
 iibt_qp_create(IB_HANDLE hca_handle, IB_QP_ATTRIBUTES_CREATE *create_attr,
-              void *arg, IB_HANDLE *cq_handle, 
+              void *arg, IB_HANDLE *cq_handle,
               IB_QP_ATTRIBUTES_QUERY *query_attr)
 {
-        return IIBT_IF.Vpi.CreateQP(hca_handle, create_attr, arg, cq_handle, 
+        return IIBT_IF.Vpi.CreateQP(hca_handle, create_attr, arg, cq_handle,
                                     query_attr);
 }
 
@@ -672,7 +672,7 @@ iibt_cm_cancel(IB_HANDLE cep)
 }
 
 static inline FSTATUS
-iibt_cm_accept(IB_HANDLE cep, 
+iibt_cm_accept(IB_HANDLE cep,
                CM_CONN_INFO *send_info, CM_CONN_INFO *recv_info,
                PFN_CM_CALLBACK callback, void *arg,
                IB_HANDLE *new_cep)
@@ -736,10 +736,10 @@ static inline int wrq_signals_completion(IB_WORK_REQ *wrq)
 /******************************************************************************/
 
 static inline struct list_head *
-kibnal_nid2peerlist (ptl_nid_t nid) 
+kibnal_nid2peerlist (ptl_nid_t nid)
 {
         unsigned int hash = ((unsigned int)nid) % kibnal_data.kib_peer_hash_size;
-        
+
         return (&kibnal_data.kib_peers [hash]);
 }
 
@@ -797,14 +797,14 @@ kibnal_show_rdma_attr (kib_conn_t *conn)
 {
         struct ib_qp_attribute qp_attr;
         int                    rc;
-        
+
         memset (&qp_attr, 0, sizeof(qp_attr));
         rc = ib_qp_query(conn->ibc_qp, &qp_attr);
         if (rc != 0) {
                 CERROR ("Can't get qp attrs: %d\n", rc);
                 return;
         }
-        
+
         CWARN ("RDMA CAPABILITY: write %s read %s\n",
                (qp_attr.valid_fields & TS_IB_QP_ATTRIBUTE_RDMA_ATOMIC_ENABLE) ?
                (qp_attr.enable_rdma_write ? "enabled" : "disabled") : "invalid",
@@ -818,7 +818,7 @@ static inline __u64
 kibnal_page2phys (struct page *p)
 {
         __u64 page_number = p - mem_map;
-        
+
         return (page_number << PAGE_SHIFT);
 }
 #else
@@ -863,7 +863,7 @@ extern void kibnal_destroy_peer (kib_peer_t *peer);
 extern int kibnal_del_peer (ptl_nid_t nid, int single_share);
 extern kib_peer_t *kibnal_find_peer_locked (ptl_nid_t nid);
 extern void kibnal_unlink_peer_locked (kib_peer_t *peer);
-extern int  kibnal_close_stale_conns_locked (kib_peer_t *peer, 
+extern int  kibnal_close_stale_conns_locked (kib_peer_t *peer,
                                               __u64 incarnation);
 extern kib_conn_t *kibnal_create_conn (void);
 extern void kibnal_put_conn (kib_conn_t *conn);
@@ -881,9 +881,9 @@ extern int  kibnal_scheduler(void *arg);
 extern int  kibnal_connd (void *arg);
 extern void kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob);
 extern void kibnal_close_conn (kib_conn_t *conn, int why);
-extern void kibnal_start_active_rdma (int type, int status, 
-                                      kib_rx_t *rx, lib_msg_t *libmsg, 
-                                      unsigned int niov, 
+extern void kibnal_start_active_rdma (int type, int status,
+                                      kib_rx_t *rx, lib_msg_t *libmsg,
+                                      unsigned int niov,
                                       struct iovec *iov, ptl_kiov_t *kiov,
                                       size_t offset, size_t nob);
 

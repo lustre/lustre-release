@@ -18,7 +18,7 @@
  *   along with Lustre; if not, write to the Free Software
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  *
- * Basic library routines. 
+ * Basic library routines.
  *
  */
 
@@ -74,8 +74,8 @@
 
 #define DEBUG_SUBSYSTEM S_NAL
 
-#include <linux/kp30.h>
-#include <linux/kpr.h>
+#include <libcfs/kp30.h>
+#include <portals/kpr.h>
 #include <portals/p30.h>
 #include <portals/lib-p30.h>
 #include <portals/nal.h>
@@ -215,7 +215,7 @@ typedef struct
         int                      kqn_optimized_gets;  /* optimized GETs? */
 #if CONFIG_SYSCTL
         struct ctl_table_header *kqn_sysctl;          /* sysctl interface */
-#endif        
+#endif
 } kqswnal_tunables_t;
 
 typedef struct
@@ -234,7 +234,7 @@ typedef struct
         wait_queue_head_t  kqn_idletxd_waitq;   /* sender blocks here waiting for idle txd */
         struct list_head   kqn_idletxd_fwdq;    /* forwarded packets block here waiting for idle txd */
         atomic_t           kqn_pending_txs;     /* # transmits being prepped */
-        
+
         spinlock_t         kqn_sched_lock;      /* serialise packet schedulers */
         wait_queue_head_t  kqn_sched_waitq;     /* scheduler blocks here */
 
@@ -282,24 +282,24 @@ extern void kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd);
 extern void kqswnal_rx_done (kqswnal_rx_t *krx);
 
 static inline ptl_nid_t
-kqswnal_elanid2nid (int elanid) 
+kqswnal_elanid2nid (int elanid)
 {
         return (kqswnal_data.kqn_nid_offset + elanid);
 }
 
 static inline int
-kqswnal_nid2elanid (ptl_nid_t nid) 
+kqswnal_nid2elanid (ptl_nid_t nid)
 {
         /* not in this cluster? */
         if (nid < kqswnal_data.kqn_nid_offset ||
             nid >= kqswnal_data.kqn_nid_offset + kqswnal_data.kqn_nnodes)
                 return (-1);
-        
+
         return (nid - kqswnal_data.kqn_nid_offset);
 }
 
 static inline ptl_nid_t
-kqswnal_rx_nid(kqswnal_rx_t *krx) 
+kqswnal_rx_nid(kqswnal_rx_t *krx)
 {
         return (kqswnal_elanid2nid(ep_rxd_node(krx->krx_rxd)));
 }
@@ -318,10 +318,10 @@ kqswnal_pages_spanned (void *base, int nob)
 static inline kqsw_csum_t kqsw_csum (kqsw_csum_t sum, void *base, int nob)
 {
         unsigned char *ptr = (unsigned char *)base;
-        
+
         while (nob-- > 0)
                 sum += *ptr++;
-        
+
         return (sum);
 }
 #endif
@@ -349,7 +349,7 @@ static inline void kqswnal_rx_decref (kqswnal_rx_t *krx)
 #define EP_ENOMEM	ENOMEM
 
 static inline EP_XMTR *
-ep_alloc_xmtr(EP_DEV *e) 
+ep_alloc_xmtr(EP_DEV *e)
 {
         return (ep_alloc_large_xmtr(e));
 }
@@ -361,7 +361,7 @@ ep_alloc_rcvr(EP_DEV *e, int svc, int nenv)
 }
 
 static inline void
-ep_free_xmtr(EP_XMTR *x) 
+ep_free_xmtr(EP_XMTR *x)
 {
         ep_free_large_xmtr(x);
 }

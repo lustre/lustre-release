@@ -7,21 +7,23 @@
  * exposed to the user application
  */
 
-#ifndef _LIB_TYPES_H_
-#define _LIB_TYPES_H_
+#ifndef __PORTALS_LIB_TYPES_H__
+#define __PORTALS_LIB_TYPES_H__
 
 #include "build_check.h"
 
+#if defined(__linux__)
+#include <portals/linux/lib-types.h>
+#elif defined(__APPLE__)
+#include <portals/darwin/lib-types.h>
+#else
+#error Unsupported Operating System
+#endif
+
+#include <libcfs/libcfs.h>
+#include <libcfs/list.h>
 #include <portals/types.h>
 #include <portals/nal.h>
-#ifdef __KERNEL__
-# include <linux/uio.h>
-# include <linux/smp_lock.h>
-# include <linux/types.h>
-#else
-# define PTL_USE_LIB_FREELIST
-# include <sys/types.h>
-#endif
 
 typedef char *user_ptr;
 typedef struct lib_msg_t lib_msg_t;
@@ -271,7 +273,7 @@ typedef struct lib_ni
 
 #ifdef __KERNEL__
         spinlock_t        ni_lock;
-        wait_queue_head_t ni_waitq;
+        cfs_waitq_t       ni_waitq;
 #else
         pthread_mutex_t   ni_mutex;
         pthread_cond_t    ni_cond;

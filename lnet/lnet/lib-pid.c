@@ -26,7 +26,6 @@
 #define DEBUG_SUBSYSTEM S_PORTALS
 
 #if defined (__KERNEL__)
-#       include <linux/kernel.h>
 extern int getpid(void);
 #else
 #       include <stdio.h>

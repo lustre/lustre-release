@@ -1,6 +1,7 @@
 #ifndef _KPING_INCLUDED
 #define _KPING_INCLUDED
 
+#include <libcfs/portals_utils.h>
 #include <portals/p30.h>
 
 
@@ -34,12 +35,6 @@
 
 #if __KERNEL__
 
-
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-#include <linux/workqueue.h>
-#else
-#include <linux/tqueue.h>
-#endif
 struct pingsrv_data {
         
         ptl_handle_ni_t         ni;
@@ -53,7 +48,7 @@ struct pingsrv_data {
         ptl_handle_md_t         mdin_h;
         ptl_handle_md_t         mdout_h;
         ptl_event_t             evnt;
-        struct task_struct     *tsk;
+        cfs_task_t		*tsk;
 }; /* struct pingsrv_data */
  
 struct pingcli_data {
@@ -71,7 +66,7 @@ struct pingcli_data {
         ptl_handle_md_t   	md_in_head_h;
         ptl_handle_md_t   	md_out_head_h;
         ptl_event_t       	ev;
-        struct task_struct     *tsk;
+        cfs_task_t		*tsk;
 }; /* struct pingcli_data */
 
 

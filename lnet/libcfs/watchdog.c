@@ -22,9 +22,9 @@
 
 #define DEBUG_SUBSYSTEM S_PORTALS
 
-#include <linux/kp30.h>
-#include <linux/libcfs.h>
-#include <linux/portals_compat25.h>
+#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
+#include <libcfs/linux/portals_compat25.h>
 
 
 
@@ -74,7 +74,7 @@ static unsigned long lcw_flags = 0;
 static __u32         lcw_refcount = 0;
 static DECLARE_MUTEX(lcw_refcount_sem);
 
-/* 
+/*
  * List of timers that have fired that need their callbacks run by the
  * dispatcher.
  */
@@ -195,9 +195,9 @@ static int lcw_dispatch_main(void *data)
                         CDEBUG(D_INFO, "found lcw for pid %d\n", lcw->lcw_pid);
 
                         if (lcw->lcw_state != LC_WATCHDOG_DISABLED) {
-                                /* 
+                                /*
                                  * sanity check the task against our
-                                 * watchdog 
+                                 * watchdog
                                  */
                                 tsk = lcw_lookup_task(lcw);
                                 lcw->lcw_callback(lcw, tsk, lcw->lcw_data);
@@ -254,7 +254,7 @@ static void lcw_dispatch_stop(void)
         EXIT;
 }
 
-struct lc_watchdog *lc_watchdog_add(int time, 
+struct lc_watchdog *lc_watchdog_add(int time,
                                     void (*callback)(struct lc_watchdog *,
                                                      struct task_struct *,
                                                      void *),
@@ -269,8 +269,8 @@ struct lc_watchdog *lc_watchdog_add(int time,
                 RETURN(ERR_PTR(-ENOMEM));
         }
 
-        lcw->lcw_task = current;
-        lcw->lcw_pid = current->pid;
+        lcw->lcw_task = cfs_current();
+        lcw->lcw_pid = cfs_curproc_pid();
         lcw->lcw_time = (time * HZ) / 1000;
         lcw->lcw_callback = callback ? callback : lc_watchdog_dumplog;
         lcw->lcw_data = data;

@@ -32,13 +32,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
-#include "ioctl.h"
 #include <sys/ioctl.h>
 #include <errno.h>
 #include <unistd.h>
 #include <time.h>
 #include <stdarg.h>
+#ifdef HAVE_ENDIAN_H
 #include <endian.h>
+#endif
 #if CRAY_PORTALS
 #ifdef REDSTORM
 #define __QK__
@@ -46,15 +47,9 @@
 #include <portals/ipmap.h>
 #endif
 
-#ifdef __CYGWIN__
-
-#include <netinet/in.h>
-
-#endif /* __CYGWIN__ */
- 
+#include <libcfs/portals_utils.h>
 #include <portals/api-support.h>
 #include <portals/ptlctl.h>
-#include <portals/list.h>
 #include <portals/lib-types.h>
 #include <portals/socknal.h>
 #include "parser.h"

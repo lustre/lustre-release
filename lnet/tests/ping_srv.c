@@ -25,26 +25,9 @@
 
 #define DEBUG_SUBSYSTEM S_PINGER
 
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <portals/p30.h>
 #include "ping.h"
-
-#include <linux/module.h>
-#include <linux/proc_fs.h>
-#include <linux/init.h>
-#include <linux/kernel.h>
-#include <linux/sched.h>
-#include <linux/version.h>
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
-#include <linux/workqueue.h>
-#else
-#include <linux/tqueue.h>
-#endif
-#include <linux/wait.h>
-#include <linux/smp_lock.h>
-
-#include <asm/unistd.h>
-#include <asm/semaphore.h>
 
 #define STDSIZE (sizeof(int) + sizeof(int) + sizeof(struct timeval))
 #define MAXSIZE (16*1024)
@@ -104,10 +87,10 @@ int pingsrv_thread(void *arg)
 {
         int rc;
         unsigned long magic;
-        unsigned long ping_bulk_magic = 0xcafebabe;
+        unsigned long ping_bulk_magic = __cpu_to_le32(0xcafebabe);
         
         kportal_daemonize ("pingsrv");
-        server->tsk =  current;
+        server->tsk =  cfs_current();
         
         while (running) {
                 set_current_state (TASK_INTERRUPTIBLE);
@@ -116,12 +99,12 @@ int pingsrv_thread(void *arg)
                         continue;
                 }
                
-                magic =  *((int *)(server->evnt.md.start 
-                                        + server->evnt.offset));
+                magic =  __le32_to_cpu(*((int *)(server->evnt.md.start 
+                                        + server->evnt.offset)));
                 
                 
                 if(magic != 0xdeadbeef) {
-                        CERROR("Unexpected Packet to the server\n");
+                        CERROR("Unexpected Packet to the server, magic: %lx %d\n", magic, server->evnt.offset);
                         
                 } 
                 memcpy (server->in_buf, &ping_bulk_magic, sizeof(ping_bulk_magic));
@@ -185,10 +168,10 @@ static void pingsrv_callback(ptl_event_t *ev)
         CWARN ("received ping from nid "LPX64" "
                "(off=%u rlen=%u mlen=%u head=%x seq=%d size=%d)\n",
                ev->initiator.nid, ev->offset, ev->rlength, ev->mlength,
-               *((int *)(ev->md.start + ev->offset)),
-               *((int *)(ev->md.start + ev->offset + sizeof(unsigned))),
-               *((int *)(ev->md.start + ev->offset + 2 * 
-                               sizeof(unsigned))));
+               __le32_to_cpu(*((int *)(ev->md.start + ev->offset))),
+               __le32_to_cpu(*((int *)(ev->md.start + ev->offset + sizeof(unsigned)))),
+               __le32_to_cpu(*((int *)(ev->md.start + ev->offset + 2 * 
+                               sizeof(unsigned)))));
         
         packets_valid++;
 
@@ -260,37 +243,35 @@ static struct pingsrv_data *pingsrv_setup(void)
         return server; 
 } /* pingsrv_setup() */
 
-static int pingsrv_start(void)
+static int pingsrv_start(void) 
 {
         /* Setup our server */
         if (!pingsrv_setup()) {
                 CDEBUG (D_OTHER, "pingsrv_setup() failed, server stopped\n");
                 return -ENOMEM;
         }
-        kernel_thread (pingsrv_thread,NULL,0);
+        cfs_kernel_thread (pingsrv_thread,NULL,0);
         return 0;
 } /* pingsrv_start() */
 
-
-
 static int __init pingsrv_init(void)
 {
-        ping_head_magic = PING_HEADER_MAGIC;
-        ping_bulk_magic = PING_BULK_MAGIC;
+        ping_head_magic = __cpu_to_le32(PING_HEADER_MAGIC);
+        ping_bulk_magic = __cpu_to_le32(PING_BULK_MAGIC);
         PORTAL_ALLOC (server, sizeof(struct pingsrv_data));  
+        atomic_set(&pkt, 0);
         return pingsrv_start ();
 } /* pingsrv_init() */
 
-
 static void /*__exit*/ pingsrv_cleanup(void)
 {
-        remove_proc_entry ("net/pingsrv", NULL);
+        cfs_remove_proc_entry ("net/pingsrv", NULL);
         
         running = 0;
         wake_up_process (server->tsk);
         while (running != 1) {
                 set_current_state (TASK_UNINTERRUPTIBLE);
-                schedule_timeout (HZ);
+                schedule_timeout (cfs_time_seconds(1));
         }
         
 } /* pingsrv_cleanup() */
@@ -304,5 +285,4 @@ MODULE_AUTHOR("Brian Behlendorf (LLNL)");
 MODULE_DESCRIPTION("A kernel space ping server for portals testing");
 MODULE_LICENSE("GPL");
 
-module_init(pingsrv_init);
-module_exit(pingsrv_cleanup);
+cfs_module(ping_srv, "1.0.0", pingsrv_init, pingsrv_cleanup);

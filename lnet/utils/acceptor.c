@@ -19,8 +19,8 @@
 #include <tcpd.h>
 #endif
 
+#include <libcfs/portals_utils.h>
 #include <portals/api-support.h>
-#include <portals/list.h>
 #include <portals/lib-types.h>
 #include <portals/socknal.h>
 

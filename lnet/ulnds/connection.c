@@ -39,10 +39,9 @@
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <portals/types.h>
-#include <portals/list.h>
 #include <portals/lib-types.h>
 #include <portals/socknal.h>
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <connection.h>
 #include <pthread.h>
 #include <errno.h>

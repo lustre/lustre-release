@@ -186,8 +186,8 @@ lib_api_eq_poll (nal_t *apinal,
         int              i;
         int              rc;
 #ifdef __KERNEL__
-        wait_queue_t     wq;
-        unsigned long    now;
+        cfs_waitlink_t   wl;
+        cfs_time_t       now;
 #else
         struct timeval   then;
         struct timeval   now;
@@ -218,23 +218,27 @@ lib_api_eq_poll (nal_t *apinal,
                  * in the same stack frame, means we can abstract the
                  * locking here */
 #ifdef __KERNEL__
-                init_waitqueue_entry(&wq, current);
+                cfs_waitlink_init(&wl);
                 set_current_state(TASK_INTERRUPTIBLE);
-                add_wait_queue(&ni->ni_waitq, &wq);
+                cfs_waitq_add(&ni->ni_waitq, &wl);
 
                 LIB_UNLOCK(nal, flags);
 
                 if (timeout_ms < 0) {
-                        schedule ();
-                } else {
-                        now = jiffies;
-                        schedule_timeout((timeout_ms * HZ)/1000);
-                        timeout_ms -= ((jiffies - now) * 1000)/HZ;
+                        cfs_waitq_wait (&wl);
+                } else { 
+                        struct timeval tv;
+
+                        now = cfs_time_current();
+                        cfs_waitq_timedwait(&wl, cfs_time_seconds(timeout_ms)/1000);
+                        cfs_duration_usec(cfs_time_sub(cfs_time_current(), now), &tv); 
+                        timeout_ms -= tv.tv_sec * 1000 + tv.tv_usec / 1000;
                         if (timeout_ms < 0)
                                 timeout_ms = 0;
                 }
                 
                 LIB_LOCK(nal, flags);
+                cfs_waitq_del(&ni->ni_waitq, &wl);
 #else
                 if (timeout_ms < 0) {
                         pthread_cond_wait(&ni->ni_cond, &ni->ni_mutex);

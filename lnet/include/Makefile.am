@@ -1,3 +1,3 @@
-SUBDIRS = linux portals
+SUBDIRS = libcfs portals
 
 EXTRA_DIST = cygwin-ioctl.h

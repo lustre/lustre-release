@@ -35,13 +35,7 @@
 
 #include <portals/api-support.h>
 #include <portals/ptlctl.h>
-
-#ifndef __CYGWIN__
- #include <syscall.h>
-#else
- #include <windows.h>
- #include <windef.h>
-#endif
+#include <libcfs/portals_utils.h>
 
 static ioc_handler_t  do_ioctl;                 /* forward ref */
 static ioc_handler_t *current_ioc_handler = &do_ioctl;

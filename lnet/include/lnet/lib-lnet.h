@@ -6,21 +6,21 @@
  * Top level include for library side routines
  */
 
-#ifndef _LIB_P30_H_
-#define _LIB_P30_H_
+#ifndef __PORTALS_LIB_P30_H__
+#define __PORTALS_LIB_P30_H__
 
 #include "build_check.h"
 
-#ifdef __KERNEL__
-# include <asm/page.h>
-# include <linux/string.h>
+#if defined(__linux__)
+#include <portals/linux/lib-p30.h>
+#elif defined(__APPLE__)
+#include <portals/darwin/lib-p30.h>
 #else
-# include <portals/list.h>
-# include <string.h>
-# include <pthread.h>
+#error Unsupported Operating System
 #endif
+
 #include <portals/types.h>
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <portals/p30.h>
 #include <portals/nal.h>
 #include <portals/lib-types.h>

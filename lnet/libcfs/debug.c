@@ -24,40 +24,12 @@
 # define EXPORT_SYMTAB
 #endif
 
-#include <linux/config.h>
-#include <linux/module.h>
-#include <linux/kmod.h>
-#include <linux/notifier.h>
-#include <linux/kernel.h>
-#include <linux/mm.h>
-#include <linux/string.h>
-#include <linux/stat.h>
-#include <linux/errno.h>
-#include <linux/smp_lock.h>
-#include <linux/unistd.h>
-#include <linux/interrupt.h>
-#include <asm/system.h>
-#include <asm/uaccess.h>
-#include <linux/completion.h>
-
-#include <linux/fs.h>
-#include <linux/stat.h>
-#include <asm/uaccess.h>
-#include <asm/segment.h>
-#include <linux/miscdevice.h>
-#include <linux/version.h>
-
 # define DEBUG_SUBSYSTEM S_PORTALS
 
-#include <linux/kp30.h>
-#include <linux/portals_compat25.h>
-#include <linux/libcfs.h>
+#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 
 #include "tracefile.h"
-
-#if (LINUX_VERSION_CODE > KERNEL_VERSION(2,5,0))
-#include <linux/kallsyms.h>
-#endif
 
 unsigned int portal_subsystem_debug = ~0 - (S_PORTALS | S_NAL);
 EXPORT_SYMBOL(portal_subsystem_debug);
@@ -77,23 +49,23 @@ atomic_t portal_kmemory = ATOMIC_INIT(0);
 EXPORT_SYMBOL(portal_kmemory);
 #endif
 
-static DECLARE_WAIT_QUEUE_HEAD(debug_ctlwq);
+static cfs_waitq_t debug_ctlwq;
 
 char debug_file_path[1024] = "/tmp/lustre-log";
 static char debug_file_name[1024];
-char portals_upcall[1024] = "/usr/lib/lustre/portals_upcall";
 
 void portals_debug_dumplog_internal(void *arg)
 {
-        void *journal_info = current->journal_info;
-        current->journal_info = NULL;
+        CFS_DECL_JOURNAL_DATA;
+
+        CFS_PUSH_JOURNAL;
 
         snprintf(debug_file_name, sizeof(debug_file_path) - 1,
-                 "%s.%ld.%ld", debug_file_path, CURRENT_SECONDS, (long)arg);
+                 "%s.%ld.%ld", debug_file_path, cfs_time_current_sec(), (long)arg);
         printk(KERN_ALERT "LustreError: dumping log to %s\n", debug_file_name);
         tracefile_dump_all_pages(debug_file_name);
 
-        current->journal_info = journal_info;
+        CFS_POP_JOURNAL;
 }
 
 int portals_debug_dumplog_thread(void *arg)
@@ -101,25 +73,26 @@ int portals_debug_dumplog_thread(void *arg)
         kportal_daemonize("");
         reparent_to_init();
         portals_debug_dumplog_internal(arg);
-        wake_up(&debug_ctlwq);
+        cfs_waitq_signal(&debug_ctlwq);
         return 0;
 }
 
 void portals_debug_dumplog(void)
 {
-        int rc;
-        DECLARE_WAITQUEUE(wait, current);
+        int            rc;
+        cfs_waitlink_t wait;
         ENTRY;
 
         /* we're being careful to ensure that the kernel thread is
          * able to set our state to running as it exits before we
          * get to schedule() */
+        cfs_waitlink_init(&wait);
         set_current_state(TASK_INTERRUPTIBLE);
-        add_wait_queue(&debug_ctlwq, &wait);
+        cfs_waitq_add(&debug_ctlwq, &wait);
 
-        rc = kernel_thread(portals_debug_dumplog_thread,
-                           (void *)(long)current->pid,
-                           CLONE_VM | CLONE_FS | CLONE_FILES);
+        rc = cfs_kernel_thread(portals_debug_dumplog_thread,
+                               (void *)(long)cfs_curproc_pid(),
+                               CLONE_VM | CLONE_FS | CLONE_FILES);
         if (rc < 0)
                 printk(KERN_ERR "LustreError: cannot start log dump thread: "
                        "%d\n", rc);
@@ -127,7 +100,7 @@ void portals_debug_dumplog(void)
                 schedule();
 
         /* be sure to teardown if kernel_thread() failed */
-        remove_wait_queue(&debug_ctlwq, &wait);
+        cfs_waitq_del(&debug_ctlwq, &wait);
         set_current_state(TASK_RUNNING);
 }
 
@@ -166,6 +139,7 @@ extern void *lus_portals_debug;
 
 int portals_debug_init(unsigned long bufsize)
 {
+        cfs_waitq_init(&debug_ctlwq);
 #ifdef CRAY_PORTALS
         lus_portals_debug = &portals_debug_msg;
 #endif
@@ -217,59 +191,6 @@ void portals_debug_set_level(unsigned int debug_level)
         portal_debug = debug_level;
 }
 
-void portals_run_upcall(char **argv)
-{
-        int   rc;
-        int   argc;
-        char *envp[] = {
-                "HOME=/",
-                "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
-                NULL};
-        ENTRY;
-
-        argv[0] = portals_upcall;
-        argc = 1;
-        while (argv[argc] != NULL)
-                argc++;
-
-        LASSERT(argc >= 2);
-
-        rc = USERMODEHELPER(argv[0], argv, envp);
-        if (rc < 0) {
-                CERROR("Error %d invoking portals upcall %s %s%s%s%s%s%s%s%s; "
-                       "check /proc/sys/portals/upcall\n",
-                       rc, argv[0], argv[1],
-                       argc < 3 ? "" : ",", argc < 3 ? "" : argv[2],
-                       argc < 4 ? "" : ",", argc < 4 ? "" : argv[3],
-                       argc < 5 ? "" : ",", argc < 5 ? "" : argv[4],
-                       argc < 6 ? "" : ",...");
-        } else {
-                CERROR("Invoked portals upcall %s %s%s%s%s%s%s%s%s\n",
-                       argv[0], argv[1],
-                       argc < 3 ? "" : ",", argc < 3 ? "" : argv[2],
-                       argc < 4 ? "" : ",", argc < 4 ? "" : argv[3],
-                       argc < 5 ? "" : ",", argc < 5 ? "" : argv[4],
-                       argc < 6 ? "" : ",...");
-        }
-}
-
-void portals_run_lbug_upcall(char *file, const char *fn, const int line)
-{
-        char *argv[6];
-        char buf[32];
-
-        ENTRY;
-        snprintf (buf, sizeof buf, "%d", line);
-
-        argv[1] = "LBUG";
-        argv[2] = file;
-        argv[3] = (char *)fn;
-        argv[4] = buf;
-        argv[5] = NULL;
-
-        portals_run_upcall (argv);
-}
-
 char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 {
         if (nid == PTL_NID_ANY) {
@@ -280,7 +201,7 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
         switch(nal){
 /* XXX this could be a nal method of some sort, 'cept it's config
  * dependent whether (say) socknal NIDs are actually IP addresses... */
-#if !CRAY_PORTALS 
+#if !CRAY_PORTALS
         case TCPNAL:
                 /* userspace NAL */
         case IIBNAL:
@@ -309,48 +230,14 @@ char *portals_nid2str(int nal, ptl_nid_t nid, char *str)
 char *portals_id2str(int nal, ptl_process_id_t id, char *str)
 {
         int   len;
-        
+
         portals_nid2str(nal, id.nid, str);
         len = strlen(str);
         snprintf(str + len, PTL_NALFMT_SIZE - len, "-%u", id.pid);
         return str;
 }
 
-#ifdef __KERNEL__
-
-void portals_debug_dumpstack(struct task_struct *tsk)
-{
-#if defined(__arch_um__)
-        if (tsk != NULL)
-                CWARN("stack dump for pid %d (%d) requested; wake up gdb.\n",
-                      tsk->pid, UML_PID(tsk));
-        asm("int $3");
-#elif defined(HAVE_SHOW_TASK)
-        /* this is exported by lustre kernel version 42 */
-        extern void show_task(struct task_struct *);
-
-        if (tsk == NULL)
-                tsk = current;
-        CWARN("showing stack for process %d\n", tsk->pid);
-        show_task(tsk);
-#else
-        CWARN("can't show stack: kernel doesn't export show_task\n");
-#endif
-}
-
-struct task_struct *portals_current(void)
-{
-        CWARN("current task struct is %p\n", current);
-        return current;
-}
-
-EXPORT_SYMBOL(portals_debug_dumpstack);
-EXPORT_SYMBOL(portals_current);
-#endif /* __KERNEL__ */
-
 EXPORT_SYMBOL(portals_debug_dumplog);
 EXPORT_SYMBOL(portals_debug_set_level);
-EXPORT_SYMBOL(portals_run_upcall);
-EXPORT_SYMBOL(portals_run_lbug_upcall);
 EXPORT_SYMBOL(portals_nid2str);
 EXPORT_SYMBOL(portals_id2str);

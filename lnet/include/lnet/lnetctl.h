@@ -22,8 +22,8 @@
 #define _PTLCTL_H_
 
 #include <portals/types.h>
-#include <linux/kp30.h>
-#include <linux/libcfs.h>
+#include <libcfs/kp30.h>
+#include <libcfs/libcfs.h>
 
 #define PORTALS_DEV_ID 0
 #define PORTALS_DEV_PATH "/dev/portals"

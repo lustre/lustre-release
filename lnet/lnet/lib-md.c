@@ -22,11 +22,12 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#define DEBUG_SUBSYSTEM S_PORTALS
+
 #ifndef __KERNEL__
 # include <stdio.h>
 #else
-# define DEBUG_SUBSYSTEM S_PORTALS
-# include <linux/kp30.h>
+# include <libcfs/kp30.h>
 #endif
 
 #include <portals/lib-p30.h>
@@ -62,13 +63,13 @@ lib_md_unlink(lib_nal_t *nal, lib_md_t *md)
 
         if ((md->options & PTL_MD_KIOV) != 0) {
                 if (nal->libnal_unmap_pages != NULL)
-                        nal->libnal_unmap_pages (nal, 
-                                                 md->md_niov, 
-                                                 md->md_iov.kiov, 
+                        nal->libnal_unmap_pages (nal,
+                                                 md->md_niov,
+                                                 md->md_iov.kiov,
                                                  &md->md_addrkey);
         } else if (nal->libnal_unmap != NULL) {
-                nal->libnal_unmap (nal, 
-                                   md->md_niov, md->md_iov.iov, 
+                nal->libnal_unmap (nal,
+                                   md->md_niov, md->md_iov.iov,
                                    &md->md_addrkey);
         }
 
@@ -123,7 +124,7 @@ lib_md_build(lib_nal_t *nal, lib_md_t *lmd, ptl_md_t *umd, int unlink)
         if ((umd->options & PTL_MD_IOVEC) != 0) {
 
                 if ((umd->options & PTL_MD_KIOV) != 0) /* Can't specify both */
-                        return PTL_MD_ILLEGAL; 
+                        return PTL_MD_ILLEGAL;
 
                 lmd->md_niov = niov = umd->length;
                 memcpy(lmd->md_iov.iov, umd->start,
@@ -140,12 +141,12 @@ lib_md_build(lib_nal_t *nal, lib_md_t *lmd, ptl_md_t *umd, int unlink)
                 lmd->length = total_length;
 
                 if ((umd->options & PTL_MD_MAX_SIZE) != 0 && /* max size used */
-                    (umd->max_size < 0 || 
+                    (umd->max_size < 0 ||
                      umd->max_size > total_length)) // illegal max_size
                         return PTL_MD_ILLEGAL;
 
                 if (nal->libnal_map != NULL) {
-                        rc = nal->libnal_map (nal, niov, lmd->md_iov.iov, 
+                        rc = nal->libnal_map (nal, niov, lmd->md_iov.iov,
                                               &lmd->md_addrkey);
                         if (rc != PTL_OK)
                                 return (rc);
@@ -153,7 +154,7 @@ lib_md_build(lib_nal_t *nal, lib_md_t *lmd, ptl_md_t *umd, int unlink)
         } else if ((umd->options & PTL_MD_KIOV) != 0) {
 #ifndef __KERNEL__
                 return PTL_MD_ILLEGAL;
-#else                
+#else
                 /* Trap attempt to use paged I/O if unsupported early. */
                 if (nal->libnal_send_pages == NULL ||
                     nal->libnal_recv_pages == NULL)
@@ -165,7 +166,7 @@ lib_md_build(lib_nal_t *nal, lib_md_t *lmd, ptl_md_t *umd, int unlink)
 
                 for (i = 0; i < niov; i++) {
                         /* We take the page pointer on trust */
-                        if (lmd->md_iov.kiov[i].kiov_offset + 
+                        if (lmd->md_iov.kiov[i].kiov_offset +
                             lmd->md_iov.kiov[i].kiov_len > PAGE_SIZE )
                                 return PTL_VAL_FAILED; /* invalid length */
 
@@ -175,12 +176,12 @@ lib_md_build(lib_nal_t *nal, lib_md_t *lmd, ptl_md_t *umd, int unlink)
                 lmd->length = total_length;
 
                 if ((umd->options & PTL_MD_MAX_SIZE) != 0 && /* max size used */
-                    (umd->max_size < 0 || 
+                    (umd->max_size < 0 ||
                      umd->max_size > total_length)) // illegal max_size
                         return PTL_MD_ILLEGAL;
 
                 if (nal->libnal_map_pages != NULL) {
-                        rc = nal->libnal_map_pages (nal, niov, lmd->md_iov.kiov, 
+                        rc = nal->libnal_map_pages (nal, niov, lmd->md_iov.kiov,
                                                     &lmd->md_addrkey);
                         if (rc != PTL_OK)
                                 return (rc);
@@ -193,17 +194,17 @@ lib_md_build(lib_nal_t *nal, lib_md_t *lmd, ptl_md_t *umd, int unlink)
                 lmd->md_iov.iov[0].iov_len = umd->length;
 
                 if ((umd->options & PTL_MD_MAX_SIZE) != 0 && /* max size used */
-                    (umd->max_size < 0 || 
+                    (umd->max_size < 0 ||
                      umd->max_size > umd->length)) // illegal max_size
                         return PTL_MD_ILLEGAL;
 
                 if (nal->libnal_map != NULL) {
-                        rc = nal->libnal_map (nal, niov, lmd->md_iov.iov, 
+                        rc = nal->libnal_map (nal, niov, lmd->md_iov.iov,
                                               &lmd->md_addrkey);
                         if (rc != PTL_OK)
                                 return (rc);
                 }
-        } 
+        }
 
         if (eq != NULL)
                 eq->eq_refcount++;
@@ -234,9 +235,9 @@ lib_md_deconstruct(lib_nal_t *nal, lib_md_t *lmd, ptl_md_t *umd)
         ptl_eq2handle(&umd->eq_handle, nal, lmd->eq);
 }
 
-int 
+int
 lib_api_md_attach(nal_t *apinal, ptl_handle_me_t *meh,
-                  ptl_md_t *umd, ptl_unlink_t unlink, 
+                  ptl_md_t *umd, ptl_unlink_t unlink,
                   ptl_handle_md_t *handle)
 {
         lib_nal_t    *nal = apinal->nal_data;
@@ -280,7 +281,7 @@ lib_api_md_attach(nal_t *apinal, ptl_handle_me_t *meh,
 }
 
 int
-lib_api_md_bind(nal_t *apinal, 
+lib_api_md_bind(nal_t *apinal,
                 ptl_md_t *umd, ptl_unlink_t unlink,
                 ptl_handle_md_t *handle)
 {
@@ -343,7 +344,7 @@ lib_api_md_unlink (nal_t *apinal, ptl_handle_md_t *mdh)
                 ev.unlinked = 1;
                 lib_md_deconstruct(nal, md, &ev.md);
                 ptl_md2handle(&ev.md_handle, nal, md);
-                
+
                 lib_enq_event_locked(nal, NULL, md->eq, &ev);
         }
 
@@ -383,13 +384,13 @@ lib_api_md_update (nal_t *apinal,
 
         /* XXX fttb, the new MD must be the same "shape" wrt fragmentation,
          * since we simply overwrite the old lib-md */
-        if ((((newumd->options ^ md->options) & 
+        if ((((newumd->options ^ md->options) &
               (PTL_MD_IOVEC | PTL_MD_KIOV)) != 0) ||
-            ((newumd->options & (PTL_MD_IOVEC | PTL_MD_KIOV)) != 0 && 
+            ((newumd->options & (PTL_MD_IOVEC | PTL_MD_KIOV)) != 0 &&
              newumd->length != md->md_niov)) {
                 rc = PTL_IOV_INVALID;
                 goto out;
-        } 
+        }
 
         if (!PtlHandleIsEqual (*testqh, PTL_EQ_NONE)) {
                 test_eq = ptl_handle2eq(testqh, nal);
@@ -410,7 +411,7 @@ lib_api_md_update (nal_t *apinal,
                 int       unlink = (md->md_flags & PTL_MD_FLAG_AUTO_UNLINK) ?
                                    PTL_UNLINK : PTL_RETAIN;
 
-                // #warning this does not track eq refcounts properly 
+                // #warning this does not track eq refcounts properly
                 rc = lib_md_build(nal, md, newumd, unlink);
 
                 md->me = me;

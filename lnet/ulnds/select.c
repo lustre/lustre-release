@@ -25,6 +25,8 @@
  *  io events through the select system call.
  */
 
+#define DEBUG_SUBSYSTEM S_NAL
+
 #ifdef sun
 #include <sys/filio.h>
 #else
@@ -55,7 +57,7 @@ static io_handler io_handlers;
 when now()
 {
     struct timeval result;
-  
+
     gettimeofday(&result,0);
     return((((unsigned long long)result.tv_sec)<<32)|
            (((unsigned long long)result.tv_usec)<<32)/1000000);
@@ -91,7 +93,7 @@ io_handler register_io_handler(int fd,
  * Arguments: i: a pointer to the handler to stop servicing
  *
  * remove_io_handler() doesn't actually free the handler, due
- * to reentrancy problems. it just marks the handler for 
+ * to reentrancy problems. it just marks the handler for
  * later cleanup by the blocking function.
  */
 void remove_io_handler (io_handler i)
@@ -282,7 +284,7 @@ static struct timeval *choose_timeout(struct timeval *tv1,
 
 /* Function: select_timer_block
  * Arguments: until: an absolute time when the select should return
- * 
+ *
  *   This function dispatches the various file descriptors' handler
  *   functions, if the kernel indicates there is io available.
  */
@@ -379,7 +381,7 @@ again:
 
 /* Function: select_timer_block
  * Arguments: until: an absolute time when the select should return
- * 
+ *
  *   This function dispatches the various file descriptors' handler
  *   functions, if the kernel indicates there is io available.
  */
@@ -409,7 +411,7 @@ again:
 #endif /* ENABLE_SELECT_DISPATCH */
 
 /* Function: init_unix_timer()
- *   is called to initialize the library 
+ *   is called to initialize the library
  */
 void init_unix_timer()
 {

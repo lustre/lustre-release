@@ -6,8 +6,12 @@
 if MODULES
 if !CRAY_PORTALS
 if TESTS
+
+if LINUX
 noinst_DATA := pingsrv$(KMODEXT) pingcli$(KMODEXT)
 noinst_DATA += spingsrv$(KMODEXT) spingcli$(KMODEXT)
+endif
+
 endif
 endif
 endif

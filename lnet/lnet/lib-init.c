@@ -27,8 +27,7 @@
 #include <portals/lib-p30.h>
 
 #ifdef __KERNEL__
-# include <linux/string.h>      /* for memset() */
-# include <linux/kp30.h>
+# include <libcfs/kp30.h>
 #else
 # include <string.h>
 # include <sys/time.h>
@@ -68,7 +67,7 @@ lib_freelist_init (lib_nal_t *nal, lib_freelist_t *fl, int n, int size)
         if (space == NULL)
                 return (PTL_NO_SPACE);
 
-        INIT_LIST_HEAD (&fl->fl_list);
+        CFS_INIT_LIST_HEAD (&fl->fl_list);
         fl->fl_objs = space;
         fl->fl_nobjs = n;
         fl->fl_objsize = size;
@@ -196,7 +195,7 @@ lib_setup_handle_hash (lib_nal_t *nal)
                 return (PTL_NO_SPACE);
         
         for (i = 0; i < ni->ni_lh_hash_size; i++)
-                INIT_LIST_HEAD (&ni->ni_lh_hash_table[i]);
+                CFS_INIT_LIST_HEAD (&ni->ni_lh_hash_table[i]);
 
         ni->ni_next_object_cookie = PTL_COOKIE_TYPES;
         
@@ -305,14 +304,14 @@ lib_init(lib_nal_t *libnal, nal_t *apinal,
 
         memset(&ni->ni_counters, 0, sizeof(lib_counters_t));
 
-        INIT_LIST_HEAD (&ni->ni_active_msgs);
-        INIT_LIST_HEAD (&ni->ni_active_mds);
-        INIT_LIST_HEAD (&ni->ni_active_eqs);
-        INIT_LIST_HEAD (&ni->ni_test_peers);
+        CFS_INIT_LIST_HEAD (&ni->ni_active_msgs);
+        CFS_INIT_LIST_HEAD (&ni->ni_active_mds);
+        CFS_INIT_LIST_HEAD (&ni->ni_active_eqs);
+        CFS_INIT_LIST_HEAD (&ni->ni_test_peers);
 
 #ifdef __KERNEL__
         spin_lock_init (&ni->ni_lock);
-        init_waitqueue_head (&ni->ni_waitq);
+        cfs_waitq_init (&ni->ni_waitq);
 #else
         pthread_mutex_init(&ni->ni_mutex, NULL);
         pthread_cond_init(&ni->ni_cond, NULL);
@@ -340,7 +339,7 @@ lib_init(lib_nal_t *libnal, nal_t *apinal,
         }
 
         for (i = 0; i < ptl_size; i++)
-                INIT_LIST_HEAD(&(ni->ni_portals.tbl[i]));
+                CFS_INIT_LIST_HEAD(&(ni->ni_portals.tbl[i]));
 
         /* max_{mes,mds,eqs} set in kportal_descriptor_setup */
 

@@ -25,12 +25,8 @@
 
 #define DEBUG_SUBSYSTEM S_PINGER
 
-#include <linux/kp30.h>
+#include <libcfs/kp30.h>
 #include <portals/p30.h>
-#include <linux/module.h>
-#include <linux/proc_fs.h>
-#include <linux/init.h>
-#include <linux/poll.h>
 #include "ping.h"
 /* int portal_debug = D_PING_CLI;  */
 
@@ -48,6 +44,7 @@ static int count = 0;
 static void
 pingcli_shutdown(ptl_handle_ni_t nih, int err)
 {
+        struct portal_ioctl_data *args = client->args;
         int rc;
 
         /* Yes, we are intentionally allowing us to fall through each
@@ -74,6 +71,12 @@ pingcli_shutdown(ptl_handle_ni_t nih, int err)
 
                 case 4:
                         /* Free our buffers */
+                        if (client->outbuf != NULL)
+                                PORTAL_FREE (client->outbuf, STDSIZE + args->ioc_size);
+
+                        if (client->inbuf != NULL)
+                                PORTAL_FREE (client->inbuf,
+                                             (args->ioc_size + STDSIZE) * args->ioc_count);
 
                         if (client != NULL)
                                 PORTAL_FREE (client,
@@ -86,9 +89,10 @@ pingcli_shutdown(ptl_handle_ni_t nih, int err)
 
 static void pingcli_callback(ptl_event_t *ev)
 {
-        int i, magic;
-        i = *(int *)(ev->md.start + ev->offset + sizeof(unsigned));
-        magic = *(int *)(ev->md.start + ev->offset);
+        int i;
+        unsigned magic;
+        i = __le32_to_cpu(*(int *)(ev->md.start + ev->offset + sizeof(unsigned)));
+        magic = __le32_to_cpu(*(int *)(ev->md.start + ev->offset));
 
         if(magic != 0xcafebabe) {
                 CERROR("Unexpected response %x\n", magic);
@@ -105,13 +109,12 @@ static struct pingcli_data *
 pingcli_start(struct portal_ioctl_data *args)
 {
         ptl_handle_ni_t nih = PTL_INVALID_HANDLE;
-        unsigned ping_head_magic = PING_HEADER_MAGIC;
-        unsigned ping_bulk_magic = PING_BULK_MAGIC;
+        unsigned ping_head_magic = __cpu_to_le32(PING_HEADER_MAGIC);
         int rc;
         struct timeval tv1, tv2;
         char str[PTL_NALFMT_SIZE];
         
-        client->tsk = current;
+        client->tsk = cfs_current();
         client->args = args;
         CDEBUG (D_OTHER, "pingcli_setup args: nid "LPX64" (%s),  \
                         nal %x, size %u, count: %u, timeout: %u\n",
@@ -140,7 +143,7 @@ pingcli_start(struct portal_ioctl_data *args)
 
         /* Aquire and initialize the proper nal for portals. */
         rc = PtlNIInit(args->ioc_nal, 0, NULL, NULL, &nih);
-        if (rc != PTL_OK || rc != PTL_IFACE_DUP)
+        if (rc != PTL_OK && rc != PTL_IFACE_DUP)
         {
                 CERROR ("NAL %x not loaded\n", args->ioc_nal);
                 pingcli_shutdown (nih, 4);
@@ -206,7 +209,7 @@ pingcli_start(struct portal_ioctl_data *args)
         client->md_out_head.user_ptr  = NULL;
         client->md_out_head.eq_handle = PTL_EQ_NONE;
 
-        memcpy (client->outbuf, &ping_head_magic, sizeof(ping_bulk_magic));
+        memcpy (client->outbuf, &ping_head_magic, sizeof(ping_head_magic));
 
         count = 0;
 
@@ -218,10 +221,13 @@ pingcli_start(struct portal_ioctl_data *args)
                 return NULL;
         }
         while ((args->ioc_count - count)) {
+                unsigned __count;
+                __count = __cpu_to_le32(count);
+
                 memcpy (client->outbuf + sizeof(unsigned),
-                       &(count), sizeof(unsigned));
+                       &(__count), sizeof(unsigned));
                  /* Put the ping packet */
-                do_gettimeofday (&tv1);
+                cfs_fs_timeval (&tv1);
 
                 memcpy(client->outbuf+sizeof(unsigned)+sizeof(unsigned),&tv1,
                        sizeof(struct timeval));
@@ -232,27 +238,20 @@ pingcli_start(struct portal_ioctl_data *args)
                          pingcli_shutdown (nih, 1);
                          return NULL;
                 }
-                CWARN ("Lustre: sent msg no %d", count);
+                CWARN ("Lustre: sent msg no %d.\n", count);
 
                 set_current_state (TASK_INTERRUPTIBLE);
-                rc = schedule_timeout (20 * args->ioc_timeout);
+                rc = schedule_timeout (cfs_time_seconds(args->ioc_timeout));
                 if (rc == 0) {
                         CERROR ("timeout .....\n");
                 } else {
-                        do_gettimeofday (&tv2);
+                        cfs_fs_timeval (&tv2);
                         CWARN("Reply in %u usec\n",
                               (unsigned)((tv2.tv_sec - tv1.tv_sec)
                                          * 1000000 +  (tv2.tv_usec - tv1.tv_usec)));
                 }
                 count++;
         }
-
-        if (client->outbuf != NULL)
-                PORTAL_FREE (client->outbuf, STDSIZE + args->ioc_size);
-
-        if (client->inbuf != NULL)
-                PORTAL_FREE (client->inbuf,
-                               (args->ioc_size + STDSIZE) * args->ioc_count);
 
         pingcli_shutdown (nih, 2);
 
@@ -295,8 +294,7 @@ MODULE_AUTHOR("Brian Behlendorf (LLNL)");
 MODULE_DESCRIPTION("A simple kernel space ping client for portals testing");
 MODULE_LICENSE("GPL");
 
-module_init(pingcli_init);
-module_exit(pingcli_cleanup);
+cfs_module(ping_cli, "1.0.0", pingcli_init, pingcli_cleanup);
 
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 EXPORT_SYMBOL (kping_client);

@@ -26,21 +26,15 @@
 #define __USE_FILE_OFFSET64
 #define  _GNU_SOURCE
 
-#include <portals/list.h>
-
 #include <stdio.h>
 #ifdef HAVE_NETDB_H
 #include <netdb.h>
 #endif
 #include <stdlib.h>
 #include <string.h>
-#include "ioctl.h"
 #include <fcntl.h>
 #include <errno.h>
 #include <unistd.h>
-#ifndef __CYGWIN__
-# include <syscall.h>
-#endif
 
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -48,19 +42,11 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
-#ifdef HAVE_LINUX_VERSION_H
-#include <linux/version.h>
-
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-#define BUG()                            /* workaround for module.h includes */
-#include <linux/module.h>
-#endif
-#endif /* !HAVE_LINUX_VERSION_H */
-
 #include <sys/utsname.h>
 
 #include <portals/api-support.h>
 #include <portals/ptlctl.h>
+#include <libcfs/portals_utils.h>
 #include "parser.h"
 
 #include <time.h>
@@ -303,7 +289,7 @@ static int parse_buffer(FILE *in, FILE *out)
         unsigned long dropped = 0, kept = 0;
         struct list_head chunk_list;
 
-        INIT_LIST_HEAD(&chunk_list);
+        CFS_INIT_LIST_HEAD(&chunk_list);
 
         while (1) {
                 rc = fread(buf, sizeof(hdr->ph_len), 1, in);
