@@ -223,27 +223,63 @@ static int parse_route(char *opteq, char *opttgts)
         return(0);
 }
 
-static int ignored_option(const char *check)
-{
-        char *ignore[] = { "noatime", "async", "rw", "suid", "dev",
-                           "exec", "nouser", "auto", "noauto", "_netdev", 
-                           NULL };
-        char **which = ignore;
+/*****************************************************************************
+ *
+ * This part was cribbed from util-linux/mount/mount.c.  There was no clear
+ * license information, but many other files in the package are identified as
+ * GNU GPL, so it's a pretty safe bet that was their intent.
+ *
+ ****************************************************************************/
+struct opt_map {
+  const char *opt;              /* option name */
+  int  skip;                    /* skip in mtab option string */
+  int  inv;                     /* true if flag value should be inverted */
+  int  mask;                    /* flag mask value */
+};
 
-        while (*which != NULL) {
-                if (strcmp(check, *which) == 0)
+static const struct opt_map opt_map[] = {
+  { "defaults", 0, 0, 0         },      /* default options */
+  { "rw",       1, 1, MS_RDONLY },      /* read-write */
+  { "exec",     0, 1, MS_NOEXEC },      /* permit execution of binaries */
+  { "noexec",   0, 0, MS_NOEXEC },      /* don't execute binaries */
+  { "suid",     0, 1, MS_NOSUID },      /* honor suid executables */
+  { "nosuid",   0, 0, MS_NOSUID },      /* don't honor suid executables */
+  { "dev",      0, 1, MS_NODEV  },      /* interpret device files  */
+  { "nodev",    0, 0, MS_NODEV  },      /* don't interpret devices */
+  { "async",    0, 1, MS_SYNCHRONOUS},  /* asynchronous I/O */
+  { "auto",     0, 0, 0         },      /* Can be mounted using -a */
+  { "noauto",   0, 0, 0         },      /* Can  only be mounted explicitly */
+  { "nousers",  0, 1, 0         },      /* Forbid ordinary user to mount */
+  { "nouser",   0, 1, 0         },      /* Forbid ordinary user to mount */
+  { "noowner",  0, 1, 0         },      /* Device owner has no special privs */
+  { "_netdev",  0, 0, 0         },      /* Device accessible only via network */
+  { NULL,       0, 0, 0         }
+};
+/****************************************************************************/
+
+static int parse_one_option(const char *check, int *flagp)
+{
+        struct opt_map *opt;
+
+        for (opt = &opt_map[0]; opt->opt != NULL; opt++) {
+                if (strcmp(check, opt->opt) == 0) {
+                        if (opt->inv)
+                                *flagp &= ~(opt->mask);
+                        else
+                                *flagp |= opt->mask;
                         return 1;
-                which++;
+                }
         }
         return 0;
 }
 
-int parse_options(char *options, struct lustre_mount_data *lmd)
+int parse_options(char *options, struct lustre_mount_data *lmd, int *flagp)
 {
         ptl_nid_t nid = 0, cluster_id = 0;
         int val;
         char *opt, *opteq, *opttgts;
 
+        *flagp = 0;
         /* parsing ideas here taken from util-linux/mount/nfsmount.c */
         for (opt = strtok(options, ","); opt; opt = strtok(NULL, ",")) {
                 if ((opteq = strchr(opt, '='))) {
@@ -292,21 +328,12 @@ int parse_options(char *options, struct lustre_mount_data *lmd)
                                 usage(stderr);
                         }
                 } else {
-                        if (ignored_option(opt))
+                        if (parse_one_option(opt, flagp))
                                 continue;
 
-                        val = 1;
-                        if (!strncmp(opt, "no", 2)) {
-                                val = 0;
-                                opt += 2;
-                        }
-                        if (!strcmp(opt, "debug")) { /* deprecated */
-                                fake = val;
-                        } else {
-                                fprintf(stderr, "%s: unknown option '%s'\n",
-                                        progname, opt);
-                                usage(stderr);
-                        }
+                        fprintf(stderr, "%s: unknown option '%s'\n",
+                                progname, opt);
+                        usage(stderr);
                 }
         }
         return 0;
@@ -471,7 +498,8 @@ set_peer(char *hostname, struct lustre_mount_data *lmd)
 }
 
 int
-build_data(char *source, char *options, struct lustre_mount_data *lmd)
+build_data(char *source, char *options, struct lustre_mount_data *lmd,
+           int *flagp)
 {
         char buf[1024];
         char *hostname = NULL, *mds = NULL, *profile = NULL, *s;
@@ -509,7 +537,7 @@ build_data(char *source, char *options, struct lustre_mount_data *lmd)
                 return(1);
         }
 
-        rc = parse_options(options, lmd);
+        rc = parse_options(options, lmd, flagp);
         if (rc)
                 return rc;
 
@@ -605,7 +633,7 @@ static int set_routes(struct lustre_mount_data *lmd) {
 int main(int argc, char *const argv[])
 {
         char *source, *target, *options = "";
-        int i, nargs = 3, opt, rc;
+        int i, nargs = 3, opt, rc, flags;
         struct lustre_mount_data lmd;
         static struct option long_opt[] = {
                 {"fake", 0, 0, 'f'},
@@ -675,7 +703,7 @@ int main(int argc, char *const argv[])
                 exit(32);
 
         init_options(&lmd);
-        rc = build_data(source, options, &lmd);
+        rc = build_data(source, options, &lmd, &flags);
         if (rc) {
                 exit(1);
         }
@@ -695,7 +723,7 @@ int main(int argc, char *const argv[])
         }
 
         if (!fake)
-                rc = mount(source, target, "lustre", 0, (void *)&lmd);
+                rc = mount(source, target, "lustre", flags, (void *)&lmd);
         if (rc) {
                 fprintf(stderr, "%s: mount(%s, %s) failed: %s\n", source,
                         target, progname, strerror(errno));
