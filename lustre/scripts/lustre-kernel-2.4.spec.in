@@ -355,7 +355,10 @@ BuildKernel()
 	--kerneldir $RPM_SOURCE_DIR \
 	-j $RPM_BUILD_NCPUS \
 	--destdir $RPM_BUILD_ROOT \
-	-- @CONFIGURE_FLAGS@
+	-- --enable-modules \
+	--disable-doc --disable-tests \
+	--disable-utils --disable-liblustre \
+	@CONFIGURE_FLAGS@
 }
 
 BuildLustre()
@@ -371,7 +374,10 @@ BuildLustre()
 	--kerneldir $RPM_SOURCE_DIR \
 	-j $RPM_BUILD_NCPUS \
 	--destdir $RPM_BUILD_ROOT \
-	-- @CONFIGURE_FLAGS@
+	-- --enable-utils \
+	--disable-doc --disable-tests \
+	--disable-modules --disable-liblustre \
+	@CONFIGURE_FLAGS@
 }
 
 SaveHeaders()
@@ -401,14 +407,12 @@ BuildKernel jensen
 BuildKernel smp
 %endif
 
-# we want this one last, so that it is the one populating /usr/bin
-%if %{buildup} && %{buildbase}
+%if %{buildup}
 BuildKernel
-%elseif %{buildbase}
-BuildLustre
 %endif
 
 %if %{buildbase}
+BuildLustre
 SaveHeaders
 %endif
 
@@ -520,14 +524,14 @@ if [ -f ../../savedheaders/%{_target_cpu}/up/version.h ] ; then
     HEADER_FILE=../../savedheaders/%{_target_cpu}/up/version.h
 else
     # test build not including uniprocessor, must get info from somewhere
-    HEADER_FILE=$(ls ../../savedheaders/*/*/version.h | head -1)
+    HEADER_FILE=$(ls ../../savedheaders/*/*/version.h | head -n 1)
 fi
 grep -v UTS_RELEASE $HEADER_FILE >> version.h
 rm -rf ../../savedheaders
 } ; popd
 touch $RPM_BUILD_ROOT/boot/kernel.h-%{kversion}
 
-rm -f $RPM_BUILD_ROOT/usr/include/linux
+# rm -f $RPM_BUILD_ROOT/usr/include/linux
 
 rm -rf $RPM_BUILD_ROOT/usr/src/linux-%{KVERREL}/savedheaders
 
@@ -822,7 +826,9 @@ exit 0
 /usr/bin/*
 /usr/lib/lustre/python
 /etc/init.d/lustre
-/usr/include/lustre
+/usr/include/lustre/*
+/usr/include/portals/*
+/usr/include/linux/*
 /lib/lib*.a
 
 #%files -n lustre-doc
