@@ -66,6 +66,17 @@ int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
         return snprintf(page, count, "%s\n", obd->obd_fsops->fs_type);
 }
 
+int lprocfs_mds_rd_mntdev(char *page, char **start, off_t off, int count,
+                    int *eof, void *data)
+{
+        struct obd_device* obd = (struct obd_device *)data;
+
+        LASSERT(obd != NULL);
+        LASSERT(obd->u.mds.mds_vfsmnt->mnt_devname);
+        *eof = 1;
+        return snprintf(page, count, "%s\n", 
+                        obd->u.mds.mds_vfsmnt->mnt_devname);
+}
 
 struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "uuid",       lprocfs_rd_uuid, 0, 0 },
@@ -76,6 +87,7 @@ struct lprocfs_vars lprocfs_mds_obd_vars[] = {
         { "filestotal", rd_filestotal,   0, 0 },
         { "filesfree",  rd_filesfree,    0, 0 },
         { "filegroups", rd_filegroups,   0, 0 },
+        { "mntdev",      lprocfs_mds_rd_mntdev,    0, 0 },
         { 0 }
 };
 
