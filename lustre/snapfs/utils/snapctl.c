@@ -174,10 +174,25 @@ static int open_device(char *name, unsigned int dev)
 	}
 	return 0;
 }
-
-int snap_dev_open(int argc, char **argv)
+static  int open_snap_device(char *name)
 {
 	struct snap_mnt *snaplist;
+	int rc;	
+	get_snaplist();
+	list_for_each_entry(snaplist, &snap_list, snap_mnt_list) {
+		if (!strcmp(&snaplist->device.name[0], name)) {
+			rc = open_device(&snaplist->device.name[0], 
+				    snaplist->device.dev);
+			release_snap_list();	
+			return rc;
+		}
+	}
+	release_snap_list();	
+	fprintf(stderr, "%s are not snapdevice\n", name);
+	return (-EINVAL);
+}
+int snap_dev_open(int argc, char **argv)
+{
 	char *dev_name;
 	int rc;
 
@@ -187,19 +202,10 @@ int snap_dev_open(int argc, char **argv)
 	}
 	
 	dev_name = argv[1];
-
-	get_snaplist();
-	list_for_each_entry(snaplist, &snap_list, snap_mnt_list) {
-		if (!strcmp(&snaplist->device.name[0], dev_name)) {
-			rc = open_device(&snaplist->device.name[0], 
-				    snaplist->device.dev);
-			release_snap_list();	
-			return rc;
-		}
-	}
-	release_snap_list();	
-	fprintf(stderr, "%s are not snapdevice\n", dev_name);
-	return (-EINVAL);
+	rc = open_snap_device(dev_name);
+	if (rc)
+		fprintf(stderr, "%s are not snapdevice\n", dev_name);
+	return (rc);
 }
 int snap_dev_list(int argc, char **argv)
 {
@@ -244,6 +250,7 @@ static inline void print_snap_table(void * buf)
 }
 int snap_snap_list(int argc, char **argv)
 {
+	char *dev_name = NULL;
 	int i, rc = 0;
 
 	if (argc != 1 && argc != 2) {
@@ -251,10 +258,17 @@ int snap_snap_list(int argc, char **argv)
 		return CMD_HELP;
 	}
 	if (open_device_table.count == 0) {
-		fprintf(stderr, "Please open a snapdevice first\n");
-		return (-EINVAL);
+		if (argc == 2) {
+			dev_name = argv[1];		
+		}	
+		if (dev_name) {
+			rc = open_snap_device(dev_name); 
+		}
+		if (!dev_name || rc) {	
+			fprintf(stderr, "Please open a snapdevice first\n");
+			return (-EINVAL);
+		}
 	}
-	
 	for (i = 0; i < open_device_table.count; i++) {
 		struct ioc_snap_tbl_data *snap_ioc_data;
 
@@ -281,16 +295,26 @@ int snap_snap_list(int argc, char **argv)
 }
 int snap_snap_del(int argc, char **argv)
 {
+	char   *dev_name = NULL, *snap_name = NULL;	
 	int    rc = 0, i;
 	
 	if (argc != 3 && argc !=2) {
 		fprintf(stderr, "The argument count is not right \n");
 		return CMD_HELP;
 	}
-
 	if (open_device_table.count == 0) {
-		fprintf(stderr, "Please open a snapdevice first\n");
-		return (-EINVAL);
+		if (argc == 3) {
+			dev_name = argv[1];		
+		} else if (argc == 4) {
+			dev_name = argv[2];
+		}
+		if (dev_name) {
+			rc = open_snap_device(dev_name); 
+		}
+		if (!dev_name || rc) {	
+			fprintf(stderr, "Please open a snapdevice first\n");
+			return (-EINVAL);
+		}
 	}
 	for (i = 0; i < open_device_table.count; i++) {
 		struct ioc_snap_tbl_data *snap_ioc_data;
@@ -302,38 +326,53 @@ int snap_snap_del(int argc, char **argv)
 
 		if (argc == 3) { 
 			snap_ioc_data->no = atoi(argv[1]);
-			memcpy(snap_ioc_data->snaps[0].name, 
-			       argv[2], strlen(argv[2]));
+			if (!snap_name)
+				snap_name = argv[2];
 		} else { 
 			snap_ioc_data->no = 0;
-			memcpy(snap_ioc_data->snaps[0].name, 
-			       argv[1], strlen(argv[1]));
+			if (!snap_name)
+				snap_name = argv[1];
 		}
+		memcpy(snap_ioc_data->snaps[0].name, 
+			       snap_name, strlen(snap_name));
+
 		snap_ioc_data->snaps[0].time = time(NULL);
 		
 		IOC_PACK(sizeof(struct ioc_snap_tbl_data) + sizeof(struct snap));
 
 		if ((rc = ioctl(open_device_table.device[i].fd, 
 					IOC_SNAP_DELETE, buf))) {
-			fprintf(stderr, "del %s failed \n", argv[1]);
+			fprintf(stderr, "del %s failed \n", snap_name);
 		} else {
-			fprintf(stderr, "del %s success\n", argv[1]);
+			fprintf(stderr, "del %s success\n", snap_name);
 		}
 	}
 	return rc;
 }
 int snap_snap_add(int argc, char **argv)
 {
+	char   *dev_name = NULL, *snap_name = NULL;	
 	int    rc = 0, i;
 	
-	if (argc != 3 && argc !=2) {
+	if (argc != 3 && argc !=2 && argc !=4) {
 		fprintf(stderr, "The argument count is not right \n");
 		return CMD_HELP;
 	}
-
 	if (open_device_table.count == 0) {
-		fprintf(stderr, "Please open a snapdevice first\n");
-		return (-EINVAL);
+		if (argc == 3) {
+			dev_name = argv[1];		
+			snap_name = argv[2];
+		} else if (argc == 4) {
+			dev_name = argv[2];
+			snap_name = argv[3];
+		}
+		if (dev_name) {
+			rc = open_snap_device(dev_name); 
+		}
+		if (!dev_name || rc) {	
+			fprintf(stderr, "Please open a snapdevice first\n");
+			return (-EINVAL);
+		}
 	}
 	for (i = 0; i < open_device_table.count; i++) {
 		struct ioc_snap_tbl_data *snap_ioc_data;
@@ -345,22 +384,24 @@ int snap_snap_add(int argc, char **argv)
 
 		if (argc == 3) { 
 			snap_ioc_data->no = atoi(argv[1]);
-			memcpy(snap_ioc_data->snaps[0].name, 
-			       argv[2], strlen(argv[2]));
+			if (!snap_name)
+				snap_name = argv[2];
 		} else { 
 			snap_ioc_data->no = 0;
-			memcpy(snap_ioc_data->snaps[0].name, 
-			       argv[1], strlen(argv[1]));
+			if (!snap_name)
+				snap_name = argv[1];
 		}
+		memcpy(snap_ioc_data->snaps[0].name, 
+			       snap_name, strlen(snap_name));
 		snap_ioc_data->snaps[0].time = time(NULL);
 		
 		IOC_PACK(sizeof(struct ioc_snap_tbl_data) + sizeof(struct snap));
 
 		if ((rc = ioctl(open_device_table.device[i].fd, 
 					IOC_SNAP_ADD, buf))) {
-			fprintf(stderr, "add %s failed \n", argv[1]);
+			fprintf(stderr, "add %s failed \n", snap_name);
 		} else {
-			fprintf(stderr, "add %s success\n", argv[1]);
+			fprintf(stderr, "add %s success\n", snap_name);
 		}
 	}
 	return rc;
