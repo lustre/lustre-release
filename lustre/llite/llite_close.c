@@ -109,6 +109,7 @@ void ll_queue_done_writing(struct inode *inode)
         EXIT;
 }
 
+#if 0
 /* If we know the file size and have the cookies:
  *  - send a DONE_WRITING rpc
  *
@@ -169,8 +170,8 @@ static void ll_close_done_writing(struct inode *inode)
 
         rc = mdc_done_writing(ll_i2sbi(inode)->ll_mdc_exp, &obdo);
  out:
-        iput(inode);
 }
+#endif
 
 static struct ll_inode_info *ll_close_next_lli(struct ll_close_queue *lcq)
 {
@@ -212,7 +213,7 @@ static int ll_close_thread(void *arg)
         while (1) {
                 struct l_wait_info lwi = { 0 };
                 struct ll_inode_info *lli;
-                struct inode *inode;
+                //struct inode *inode;
 
                 l_wait_event_exclusive(lcq->lcq_waitq,
                                        (lli = ll_close_next_lli(lcq)) != NULL,
@@ -220,8 +221,9 @@ static int ll_close_thread(void *arg)
                 if (IS_ERR(lli))
                         break;
 
-                inode = ll_info2i(lli);
-                ll_close_done_writing(inode);
+                //inode = ll_info2i(lli);
+                //ll_close_done_writing(inode);
+                //iput(inode);
         }
 
         complete(&lcq->lcq_comp);
