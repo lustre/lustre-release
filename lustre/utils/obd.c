@@ -552,13 +552,20 @@ int jt_obd_probe(int argc, char **argv)
         struct obd_ioctl_data data;
         int rc;
 
-        if (argc != 2)
+        if (argc > 2)
                 return CMD_HELP;
 
-        IOC_INIT(data);
-        data.ioc_inllen1 = strlen(argv[1]) + 1;
-        data.ioc_inlbuf1 = argv[1];
-        IOC_PACK(argv[0], data);
+        if (argc == 2) {
+                IOC_INIT(data);
+                data.ioc_inllen1 = strlen(argv[1]) + 1;
+                data.ioc_inlbuf1 = argv[1];
+                IOC_PACK(argv[0], data);
+        } else if (argc == 1) {
+                IOC_INIT(data);
+                IOC_PACK(argv[0], data);
+        } else {
+                return CMD_HELP;
+        }
         
         rc = l_ioctl(OBD_DEV_ID, OBD_IOC_PROBE, buf);
         if (rc) 
