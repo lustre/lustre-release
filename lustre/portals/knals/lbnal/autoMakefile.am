@@ -3,4 +3,9 @@
 # This code is issued under the GNU General Public License.
 # See the file COPYING in this distribution
 
-SUBDIRS = gmnal iibnal openibnal qswnal socknal lbnal
+if MODULES
+modulenet_DATA = klbnal$(KMODEXT)
+endif
+
+MOSTLYCLEANFILES = *.o *.ko *.mod.c
+DIST_SOURCES = $(klbnal-objs:%.o=%.c) lbnal.h

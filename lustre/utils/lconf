@@ -114,6 +114,7 @@ subsystem_names = {
     "ptlrouter" :    (1 << 20),
     "cobd" :         (1 << 21),
     "ibnal" :        (1 << 22),
+    "lbnal" :        (1 << 23),
     }
 
 
@@ -990,6 +991,8 @@ def sys_get_local_address(net_type, wildcard, cluster_id):
                 local = elan_id
         except IOError, e:
             log(e)
+    elif net_type == 'lb':
+        fixme("automatic local address for loopback")
     elif net_type == 'gm':
         fixme("automatic local address for GM")
 
@@ -1206,6 +1209,8 @@ class Network(Module):
             self.add_portals_module("knals/openibnal", 'kopenibnal')
         if self.net_type == 'iib':
             self.add_portals_module("knals/iibnal", 'kiibnal')
+        if self.net_type == 'lb':
+            self.add_portals_module("knals/lbnal", 'klbnal')
 
     def nid_to_uuid(self, nid):
         return "NID_%s_UUID" %(nid,)

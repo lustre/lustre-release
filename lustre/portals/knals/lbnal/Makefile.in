@@ -1,0 +1,4 @@
+MODULES := klbnal
+klbnal-objs := lbnal.o lbnal_cb.o
+
+@INCLUDE_RULES@

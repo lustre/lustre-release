@@ -109,6 +109,7 @@ struct ptldebug_header {
 #define S_SM          0x00800000
 #define S_ASOBD       0x01000000
 #define S_CONFOBD     0x02000000
+#define S_LBNAL       0x04000000
 
 /* If you change these values, please keep portals/utils/debug.c
  * up to date! */
