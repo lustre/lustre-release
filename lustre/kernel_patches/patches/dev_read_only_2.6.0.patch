@@ -1,0 +1,81 @@
+ drivers/block/ll_rw_blk.c |   49 ++++++++++++++++++++++++++++++++++++++++++++++
+ include/linux/blkdev.h    |    1 
+ 2 files changed, 50 insertions(+)
+
+--- linux-2.6.0-test6/drivers/block/ll_rw_blk.c~dev_read_only_2.6.0	2003-10-14 19:56:55.000000000 +0400
++++ linux-2.6.0-test6-alexey/drivers/block/ll_rw_blk.c	2003-10-22 01:35:56.000000000 +0400
+@@ -2213,6 +2213,9 @@ end_io:
+ 
+ 		if (test_bit(QUEUE_FLAG_DEAD, &q->queue_flags))
+ 			goto end_io;
++		if (test_bit(QUEUE_FLAG_RDONLY, &q->queue_flags)
++				&& bio->bi_rw == WRITE)
++			goto end_io;
+ 
+ 		/*
+ 		 * If this device has partitions, remap block n
+@@ -2867,6 +2870,52 @@ void blk_unregister_queue(struct gendisk
+ 	}
+ }
+ 
++#define MAX_RDONLY_DEVS		16
++
++static struct block_device *rdonly_devs[MAX_RDONLY_DEVS] = {0, };
++
++/*
++ * Debug code for turning block devices "read-only" (will discard writes
++ * silently).  This is for filesystem crash/recovery testing.
++ */
++void dev_set_rdonly(struct block_device *bdev, int no_write)
++{
++	if (bdev) {
++		request_queue_t *q;
++
++		q = bdev_get_queue(bdev);
++		if (!q) {
++			printk(KERN_ERR
++				"dev_set_rdonly() for non-existing device\n");
++			return;
++		}
++		printk(KERN_WARNING "Turning device %s read-only\n",
++				bdev->bd_disk ? bdev->bd_disk->disk_name : "?");
++		set_bit(QUEUE_FLAG_RDONLY, &q->queue_flags);
++		rdonly_devs[no_write] = bdev;
++	}
++}
++
++void dev_clear_rdonly(int no_write)
++{
++	request_queue_t *q;
++	
++	if (rdonly_devs[no_write] == NULL)
++		return;
++	
++	q = bdev_get_queue(rdonly_devs[no_write]);
++	if (!q) {
++		printk(KERN_ERR
++			"dev_clear_rdonly: no queue for device at slot %d\n",
++			no_write);
++		return;
++	}
++	clear_bit(QUEUE_FLAG_RDONLY, &q->queue_flags);
++	rdonly_devs[no_write] = NULL;
++}
++
++EXPORT_SYMBOL(dev_set_rdonly);
++EXPORT_SYMBOL(dev_clear_rdonly);
+ 
+ EXPORT_SYMBOL(process_that_request_first);
+ EXPORT_SYMBOL(end_that_request_first);
+--- linux-2.6.0-test6/include/linux/blkdev.h~dev_read_only_2.6.0	2003-10-14 19:57:05.000000000 +0400
++++ linux-2.6.0-test6-alexey/include/linux/blkdev.h	2003-10-21 23:31:18.000000000 +0400
+@@ -367,6 +367,7 @@ struct request_queue
+ #define	QUEUE_FLAG_READFULL	3	/* write queue has been filled */
+ #define QUEUE_FLAG_WRITEFULL	4	/* read queue has been filled */
+ #define QUEUE_FLAG_DEAD		5	/* queue being torn down */
++#define QUEUE_FLAG_RDONLY	6	/* queue accepts reads only */
+ 
+ #define blk_queue_plugged(q)	!list_empty(&(q)->plug_list)
+ #define blk_queue_tagged(q)	test_bit(QUEUE_FLAG_QUEUED, &(q)->queue_flags)
+
+_
