@@ -222,12 +222,13 @@ static void ll_update_atime(struct inode *inode)
         ll_inode_setattr(inode, &attr, 0);
 }
 
-static int ll_lock_callback(struct lustre_handle *lockh,
+static int ll_lock_callback(struct ldlm_lock *lock,
                             struct ldlm_lock_desc *new,
-                            void *data, __u32 data_len,
-                            struct ptlrpc_request **reqp)
+                            void *data, __u32 data_len)
 {
         struct inode *inode = data;
+        struct lustre_handle lockh;
+        int rc;
         ENTRY;
 
         if (data_len != sizeof(struct inode))
@@ -241,8 +242,10 @@ static int ll_lock_callback(struct lustre_handle *lockh,
         invalidate_inode_pages(inode);
         up(&inode->i_sem);
 
-        if (ldlm_cli_cancel(lockh) < 0)
-                LBUG();
+        ldlm_lock2handle(lock, &lockh);
+        rc = ldlm_cli_cancel(&lockh);
+        if (rc != ELDLM_OK)
+                CERROR("ldlm_cli_cancel failed: %d\n", rc);
         RETURN(0);
 }
 
