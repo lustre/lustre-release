@@ -265,14 +265,6 @@ int ll_revalidate_it(struct dentry *de, int flags, struct nameidata *nd,
         ll_frob_intent(&it, &lookup_it);
         LASSERT(it != NULL);
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        /*
-         * to show, that client already has inode and it needs to revalidate,
-         * all fields but fid. mdc_intent_lock() will use this flag.
-         */
-        it->d.lustre.it_int_flags |= LL_IT_EXIST;
-#endif
-
         if (it->it_op == IT_GETATTR) { /* We need to check for LOOKUP lock as
                                           well */
                 rc = md_intent_lock(exp, &pid, de->d_name.name,

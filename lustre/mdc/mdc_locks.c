@@ -514,26 +514,14 @@ int mdc_intent_lock(struct obd_export *exp, struct lustre_id *pid,
 
                 mdc_id2mdc_data(op_data, pid, cid, name, len, 0);
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
                 /* 
-                 * This is optimization. Now fid will not be obtained from
-                 * server if client inode already exists. This flag is set in
-                 * ll_revalidate_it() if it finds that passed dentry contains
-                 * inode.
+                 * if we get inode by name (ll_lookup_it() case), we
+                 * always should ask for fid, as we will not be able to
+                 * take locks, revalidate dentry, etc. later with
+                 * invalid fid in inode.
                  */
-                if (!(it->d.lustre.it_int_flags && LL_IT_EXIST)) {
-#endif
-                        /* 
-                         * if we get inode by name (ll_lookup_it() case), we
-                         * always should ask for fid, as we will not be able to
-                         * take locks, revalidate dentry, etc. later with
-                         * invalid fid in inode.
-                         */
-                        if (cid == NULL && name != NULL)
-                                op_data->valid |= OBD_MD_FID;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-                }
-#endif
+                if (cid == NULL && name != NULL)
+                        op_data->valid |= OBD_MD_FID;
 
                 rc = mdc_enqueue(exp, LDLM_IBITS, it, it_to_lock_mode(it),
                                  op_data, &lockh, lmm, lmmsize,
