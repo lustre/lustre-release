@@ -33,6 +33,13 @@ new_fs () {
     LOOPNUM=`expr ${LOOPNUM} + 1`
 }
 
+old_fs () {
+    [ -e $2 ] || exit -1
+    LOOPDEV=${LOOP}${LOOPNUM}
+    losetup ${LOOPDEV} $2 1>&2 || exit -1
+    LOOPNUM=`expr ${LOOPNUM} + 1`
+}
+
 setup() {
     [ -c /dev/portals ] || mknod /dev/portals c 10 240
 
