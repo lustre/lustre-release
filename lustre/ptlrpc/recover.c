@@ -214,7 +214,7 @@ static int resend_type(struct ptlrpc_request *req, __u64 committed)
 
 int ptlrpc_resend(struct obd_import *imp)
 {
-        int rc = 0, type;
+        int rc = 0;
         struct list_head *tmp, *pos;
         struct ptlrpc_request *req;
         __u64 committed = imp->imp_peer_committed_transno;
@@ -229,7 +229,7 @@ int ptlrpc_resend(struct obd_import *imp)
 
         list_for_each_safe(tmp, pos, &imp->imp_sending_list) {
                 req = list_entry(tmp, struct ptlrpc_request, rq_list);
-                
+
                 switch(resend_type(req, committed)) {
                     case NO_RESEND:
                         break;
@@ -253,11 +253,12 @@ int ptlrpc_resend(struct obd_import *imp)
                         DEBUG_REQ(D_HA, req, "RESEND:");
                         ptlrpc_resend_req(req);
                         break;
-                        
+
                     default:
                         LBUG();
                 }
         }
+        RETURN(rc);
 }
 
 void ptlrpc_wake_delayed(struct obd_import *imp)
