@@ -30,7 +30,6 @@ static int ldlm_handle_enqueue(struct obd_device *obddev, struct ptlrpc_service 
         __u32 flags;
         ldlm_error_t err;
         struct ldlm_lock *lock = NULL;
-        struct lustre_handle lockh;
         void *cookie = NULL;
         ENTRY;
 
@@ -110,7 +109,6 @@ static int ldlm_handle_convert(struct ptlrpc_service *svc, struct ptlrpc_request
 {
         struct ldlm_request *dlm_req;
         struct ldlm_reply *dlm_rep;
-        struct ldlm_resource *res;
         struct ldlm_lock *lock;
         int rc, size = sizeof(*dlm_rep);
         ENTRY;
@@ -137,7 +135,7 @@ static int ldlm_handle_convert(struct ptlrpc_service *svc, struct ptlrpc_request
         if (ptlrpc_reply(svc, req) != 0)
                 LBUG();
 
-        ldlm_reprocess_all(lock->res);
+        ldlm_reprocess_all(lock->l_resource);
         ldlm_lock_put(lock); 
         LDLM_DEBUG(lock, "server-side convert handler END");
 
@@ -148,7 +146,6 @@ static int ldlm_handle_cancel(struct ptlrpc_service *svc, struct ptlrpc_request 
 {
         struct ldlm_request *dlm_req;
         struct ldlm_lock *lock;
-        struct ldlm_resource *res;
         int rc;
         ENTRY;
 
@@ -172,7 +169,7 @@ static int ldlm_handle_cancel(struct ptlrpc_service *svc, struct ptlrpc_request 
                 LBUG();
 
         ldlm_reprocess_all(lock->l_resource);
-        ldlm_lock_put(put);
+        ldlm_lock_put(lock);
         LDLM_DEBUG_NOLOCK("server-side cancel handler END");
 
         RETURN(0);
@@ -212,12 +209,12 @@ static int ldlm_handle_callback(struct ptlrpc_service *svc,
 
         if (!lock) { 
                 CERROR("callback on lock %Lx - lock disappeared\n", 
-                       dlm_req->lock_handle.addr);
+                       dlm_req->lock_handle1.addr);
                 RETURN(0);
         }
 
         LDLM_DEBUG(lock, "client %s callback handler START",
-                   new == NULL ? "completion" : "blocked");
+                   is_blocking_ast ? "blocked" : "completion");
 
         if (is_blocking_ast) {
                 int do_ast; 
@@ -299,7 +296,7 @@ static int lustre_handle(struct obd_device *dev, struct ptlrpc_service *svc,
         case LDLM_CANCEL:
                 CDEBUG(D_INODE, "cancel\n");
                 OBD_FAIL_RETURN(OBD_FAIL_LDLM_CANCEL, 0);
-                rc = ldlm_hanel_cancel(svc, req);
+                rc = ldlm_handle_cancel(svc, req);
                 break;
 
         case LDLM_CALLBACK:

@@ -24,7 +24,8 @@ static spinlock_t ctl_lock = SPIN_LOCK_UNLOCKED;
 static struct list_head ctl_threads;
 static int regression_running = 0;
 
-static int ldlm_test_callback(struct ldlm_lock *lock, struct ldlm_lock *new,
+static int ldlm_test_callback(struct ldlm_lock *lock,
+                              struct ldlm_lock_desc *new,
                               void *data, __u32 data_len,
                               struct ptlrpc_request **reqp)
 {
@@ -38,24 +39,26 @@ int ldlm_test_basics(struct obd_device *obddev)
         struct ldlm_resource *res;
         __u64 res_id[RES_NAME_SIZE] = {1, 2, 3};
         ldlm_error_t err;
-        struct lustre_handle lockh_1, lockh_2;
+        struct ldlm_lock *lock1, *lock;
         int flags;
 
         ns = ldlm_namespace_new("test_server", LDLM_NAMESPACE_SERVER);
         if (ns == NULL)
                 LBUG();
 
-        err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_PLAIN, LCK_CR,
-                                     NULL, 0, &lockh_1);
-        err = ldlm_local_lock_enqueue(&lockh_1, NULL, 0, &flags,
-                                      ldlm_test_callback, ldlm_test_callback);
+        lock1 = ldlm_lock_create(ns, NULL, res_id, LDLM_PLAIN, LCK_CR, NULL, 0);
+        if (lock1 == NULL)
+                LBUG();
+        err = ldlm_lock_enqueue(lock1, NULL, 0, &flags,
+                                ldlm_test_callback, ldlm_test_callback);
         if (err != ELDLM_OK)
                 LBUG();
 
-        err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_PLAIN, LCK_EX,
-                                     NULL, 0, &lockh_2);
-        err = ldlm_local_lock_enqueue(&lockh_2, NULL, 0, &flags,
-                                      ldlm_test_callback, ldlm_test_callback);
+        lock = ldlm_lock_create(ns, NULL, res_id, LDLM_PLAIN, LCK_EX, NULL, 0);
+        if (lock == NULL)
+                LBUG();
+        err = ldlm_lock_enqueue(lock, NULL, 0, &flags,
+                                ldlm_test_callback, ldlm_test_callback);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_BLOCK_GRANTED))
@@ -66,7 +69,7 @@ int ldlm_test_basics(struct obd_device *obddev)
                 LBUG();
         ldlm_resource_dump(res);
 
-        res = ldlm_local_lock_convert(&lockh_1, LCK_NL, &flags);
+        res = ldlm_lock_convert(lock1, LCK_NL, &flags);
         if (res != NULL)
                 ldlm_reprocess_all(res);
 
@@ -80,10 +83,9 @@ int ldlm_test_extents(struct obd_device *obddev)
 {
         struct ldlm_namespace *ns;
         struct ldlm_resource *res;
-        struct ldlm_lock *lock;
+        struct ldlm_lock *lock, *lock1, *lock2;
         __u64 res_id[RES_NAME_SIZE] = {0, 0, 0};
         struct ldlm_extent ext1 = {4, 6}, ext2 = {6, 9}, ext3 = {10, 11};
-        struct lustre_handle ext1_h, ext2_h, ext3_h;
         ldlm_error_t err;
         int flags;
 
@@ -92,30 +94,31 @@ int ldlm_test_extents(struct obd_device *obddev)
                 LBUG();
 
         flags = 0;
-        err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR,
-                                     NULL, 0, &ext1_h);
-        err = ldlm_local_lock_enqueue(&ext1_h, &ext1, sizeof(ext1), &flags,
-                                      NULL, NULL);
+        lock1 = ldlm_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR, NULL,
+                                 0);
+        if (lock1 == NULL)
+                LBUG();
+        err = ldlm_lock_enqueue(lock1, &ext1, sizeof(ext1), &flags, NULL, NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_LOCK_CHANGED))
                 LBUG();
 
         flags = 0;
-        err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR,
-                                     NULL, 0, &ext2_h);
-        err = ldlm_local_lock_enqueue(&ext2_h, &ext2, sizeof(ext2), &flags,
-                                      NULL, NULL);
+        lock2 = ldlm_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_PR,
+                                NULL, 0);
+        err = ldlm_lock_enqueue(lock2, &ext2, sizeof(ext2), &flags, NULL, NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_LOCK_CHANGED))
                 LBUG();
 
         flags = 0;
-        err = ldlm_local_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_EX,
-                                     NULL, 0, &ext3_h);
-        err = ldlm_local_lock_enqueue(&ext3_h, &ext3, sizeof(ext3), &flags,
-                                      NULL, NULL);
+        lock = ldlm_lock_create(ns, NULL, res_id, LDLM_EXTENT, LCK_EX, NULL, 0);
+        if (lock == NULL)
+                LBUG();
+        err = ldlm_lock_enqueue(lock, &ext3, sizeof(ext3), &flags,
+                                NULL, NULL);
         if (err != ELDLM_OK)
                 LBUG();
         if (!(flags & LDLM_FL_BLOCK_GRANTED))
@@ -125,13 +128,11 @@ int ldlm_test_extents(struct obd_device *obddev)
 
         /* Convert/cancel blocking locks */
         flags = 0;
-        res = ldlm_local_lock_convert(&ext1_h, LCK_NL, &flags);
+        res = ldlm_convert(lock1, LCK_NL, &flags);
         if (res != NULL)
                 ldlm_reprocess_all(res);
 
-        flags = 0;
-        lock = lustre_handle2object(&ext2_h);
-        res = ldlm_local_lock_cancel(lock);
+        res = ldlm_cancel(lock2);
         if (res != NULL)
                 ldlm_reprocess_all(res);
 
