@@ -22,14 +22,10 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
-#define EXPORT_SYMTAB
-
-/*
- *<phik> go back to your file and define S_MGMT to be S_FILTER
- *<phik> and then thank me for saving you four hours
- */
-
-#define DEBUG_SUBSYSTEM S_FILTER /* S_MGMT */
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
+#define DEBUG_SUBSYSTEM S_MGMT
 #include <linux/module.h>
 #include <linux/init.h>
 
