@@ -1,23 +1,3 @@
---- ./fs/ext3/dir.c	2002/03/05 06:18:59	2.1
-+++ ./fs/ext3/dir.c	2002/03/05 06:26:56
-@@ -26,7 +26,7 @@
- 	DT_UNKNOWN, DT_REG, DT_DIR, DT_CHR, DT_BLK, DT_FIFO, DT_SOCK, DT_LNK
- };
- 
--static int ext3_readdir(struct file *, void *, filldir_t);
-+int ext3_readdir(struct file *, void *, filldir_t);
- 
- struct file_operations ext3_dir_operations = {
- 	read:		generic_read_dir,
-@@ -65,7 +65,7 @@
- 	return error_msg == NULL ? 1 : 0;
- }
- 
--static int ext3_readdir(struct file * filp,
-+int ext3_readdir(struct file * filp,
- 			 void * dirent, filldir_t filldir)
- {
- 	int error = 0;
 --- ./fs/ext3/super.c	2002/03/05 06:18:59	2.1
 +++ ./fs/ext3/super.c	2002/03/05 06:26:56
 @@ -529,6 +529,12 @@
@@ -33,17 +13,19 @@
  		else if (!strcmp (this_char, "debug"))
  			set_opt (*mount_options, DEBUG);
  		else if (!strcmp (this_char, "errors")) {
-@@ -712,6 +718,10 @@
- 			EXT3_BLOCKS_PER_GROUP(sb),
- 			EXT3_INODES_PER_GROUP(sb),
- 			sbi->s_mount_opt);
+@@ -702,6 +708,12 @@ static int ext3_setup_super(struct super
+ 	es->s_mtime = cpu_to_le32(CURRENT_TIME);
+ 	ext3_update_dynamic_rev(sb);
+ 	EXT3_SET_INCOMPAT_FEATURE(sb, EXT3_FEATURE_INCOMPAT_RECOVER);
 +
-+	if (EXT3_HAS_COMPAT_FEATURE(sb, EXT3_FEATURE_COMPAT_DIR_INDEX))
++	if (test_opt(sb, INDEX))
++		EXT3_SET_COMPAT_FEATURE(sb, EXT3_FEATURE_COMPAT_DIR_INDEX);
++	else if (EXT3_HAS_COMPAT_FEATURE(sb, EXT3_FEATURE_COMPAT_DIR_INDEX))
 +		set_opt (EXT3_SB(sb)->s_mount_opt, INDEX);
 +
- 	printk(KERN_INFO "EXT3 FS " EXT3FS_VERSION ", " EXT3FS_DATE " on %s, ",
- 				bdevname(sb->s_dev));
- 	if (EXT3_SB(sb)->s_journal->j_inode == NULL) {
+ 	ext3_commit_super (sb, es, 1);
+ 	if (test_opt (sb, DEBUG))
+ 		printk (KERN_INFO
 --- ./fs/ext3/namei.c	2002/03/05 06:18:59	2.1
 +++ ./fs/ext3/namei.c	2002/03/06 00:13:18
 @@ -16,6 +16,10 @@
@@ -57,22 +39,10 @@
   */
  
  #include <linux/fs.h>
-@@ -38,6 +42,456 @@
+@@ -38,6 +42,432 @@
  #define NAMEI_RA_SIZE        (NAMEI_RA_CHUNKS * NAMEI_RA_BLOCKS)
  #define NAMEI_RA_INDEX(c,b)  (((c) * NAMEI_RA_BLOCKS) + (b))
  
-+void ext3_add_compat_feature (struct super_block *sb, unsigned feature)
-+{
-+	if (!EXT3_HAS_COMPAT_FEATURE(sb, feature))
-+	{
-+		lock_super(sb);
-+		ext3_update_dynamic_rev(sb);
-+		EXT3_SET_COMPAT_FEATURE(sb, feature);
-+		ext3_write_super(sb);
-+		unlock_super(sb);
-+	}
-+}
-+
 +static struct buffer_head *ext3_append(handle_t *handle,
 +					struct inode *inode,
 +					u32 *block, int *err)
@@ -340,24 +310,6 @@
 +	return (struct stats) { names, space, bcount};
 +}
 +
-+static void dx_show_buckets (struct inode *dir)
-+{
-+	struct buffer_head *bh;
-+	struct dx_root *root;
-+	int err;
-+	if (!(bh = ext3_bread (NULL,dir, 0, 0,&err))) return;
-+	root = (struct dx_root *) bh->b_data;
-+	dx_show_entries (dir, root->entries, root->info.indirect_levels);
-+	brelse (bh);
-+}
-+
-+ssize_t hack_show_dir (struct file * filp, void * dirent, filldir_t filldir)
-+{
-+	if (is_dx (filp->f_dentry->d_inode) && !filp->f_pos)
-+		dx_show_buckets (filp->f_dentry->d_inode);
-+	return ext3_readdir(filp,dirent,filldir);
-+}
-+
 +/*
 + * Probe for a directory leaf block to search
 + */
@@ -510,6 +462,12 @@
 +	dx_set_count(entries, count + 1);
 +}
 +#endif
++
++static void ext3_update_dx_flag(struct inode *inode)
++{
++	if (!test_opt(inode->i_sb, INDEX))
++		EXT3_I(inode)->i_flags &= ~EXT3_INDEX_FL;
++}
 +
  /*
   * NOTE! unlike strncmp, ext3_match returns 1 for success, 0 for failure.
@@ -713,7 +671,7 @@
  static int ext3_add_entry (handle_t *handle, struct dentry *dentry,
  	struct inode *inode)
  {
-@@ -258,117 +852,282 @@
+@@ -258,117 +852,281 @@
  	const char *name = dentry->d_name.name;
  	int namelen = dentry->d_name.len;
  	unsigned long offset;
@@ -1006,9 +964,9 @@
 +	 * and/or different from the directory change time.
 +	 */
 +	dir->i_mtime = dir->i_ctime = CURRENT_TIME;
-+	/* EXT3_I(dir)->i_flags &= ~EXT3_INDEX_FL; */
-+	ext3_mark_inode_dirty(handle, dir);
++	ext3_update_dx_flag(dir);
 +	dir->i_version = ++event;
++	ext3_mark_inode_dirty(handle, dir);
 +	BUFFER_TRACE(bh, "call ext3_journal_dirty_metadata");
 +	ext3_journal_dirty_metadata(handle, bh);
 +	brelse(bh);
@@ -1029,7 +987,6 @@
 +		ext3_journal_get_write_access(handle, bh);
 +		root = (struct dx_root *) bh->b_data;
 +		
-+		ext3_add_compat_feature (sb, EXT3_FEATURE_COMPAT_DIR_INDEX);
 +		EXT3_I(dir)->i_flags |= EXT3_INDEX_FL;
 +		bh2 = ext3_append (handle, dir, &block, &retval);
 +		if (!(bh2))
@@ -1119,12 +1076,21 @@
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
  
+@@ -550,7 +1320,7 @@
+ 	if (err)
+ 		goto out_no_entry;
+ 	dir->i_nlink++;
+-	dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
++	ext3_update_dx_flag(dir);
+ 	ext3_mark_inode_dirty(handle, dir);
+ 	d_instantiate(dentry, inode);
+ out_stop:
 @@ -832,7 +1596,7 @@
  	ext3_mark_inode_dirty(handle, inode);
  	dir->i_nlink--;
  	inode->i_ctime = dir->i_ctime = dir->i_mtime = CURRENT_TIME;
 -	dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
-+	//	EXT3_I(dir)->i_flags &= ~EXT3_INDEX_FL;
++	ext3_update_dx_flag(dir);
  	ext3_mark_inode_dirty(handle, dir);
  
  end_rmdir:
@@ -1133,7 +1099,7 @@
  		goto end_unlink;
  	dir->i_ctime = dir->i_mtime = CURRENT_TIME;
 -	dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
-+	//	EXT3_I(dir)->i_flags &= ~EXT3_INDEX_FL;
++	ext3_update_dx_flag(dir);
  	ext3_mark_inode_dirty(handle, dir);
  	inode->i_nlink--;
  	if (!inode->i_nlink)
@@ -1172,7 +1138,7 @@
  	}
  	old_dir->i_ctime = old_dir->i_mtime = CURRENT_TIME;
 -	old_dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
-+	// EXT3_I(old_dir)->i_flags &= ~EXT3_INDEX_FL;
++	ext3_update_dx_flag(old_dir);
  	if (dir_bh) {
  		BUFFER_TRACE(dir_bh, "get_write_access");
  		ext3_journal_get_write_access(handle, dir_bh);
@@ -1181,7 +1147,7 @@
  		} else {
  			new_dir->i_nlink++;
 -			new_dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
-+	//		EXT3_I(new_dir)->i_flags &= ~EXT3_INDEX_FL;
++			ext3_update_dx_flag(new_dir);
  			ext3_mark_inode_dirty(handle, new_dir);
  		}
  	}

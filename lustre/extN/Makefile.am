@@ -13,7 +13,7 @@ EXTNP+= ext3-2.4.18-ino_sb_macro.diff extN-misc-fixup.diff
 EXTNC = balloc.c bitmap.c dir.c file.c fsync.c ialloc.c inode.c ioctl.c
 EXTNC+= namei.c super.c symlink.c
 EXTNI = extN_fs.h extN_fs_i.h extN_fs_sb.h extN_jbd.h
-EXTN_EXTRA = include/linux/xattr.h include/linux/extN_xattr.h fs/extN/xattr.c
+EXTN_EXTRA = include/linux/xattr.h include/linux/extN_xattr.h fs/extN/xattr.c fs/extN/hash.c
 extN_SOURCES = $(EXTNC) $(EXTNI) xattr.c # punch.c
 extN_DEPENDENCIES = patch-stamp
 EXTRA_DIST = $(EXTNP) extN-2.4.18-ino_sb_fixup.diff extN-2.4.18-exports.diff
@@ -62,7 +62,7 @@ patch-stamp: $(EXTNP)
 	fi
 	echo timestamp > $@
 
-$(EXTNC) $(EXTNI) $(EXTN_EXTRA) xattr.c: patch-stamp
+$(extN_SOURCES) $(EXTN_EXTRA): patch-stamp
 
 # Don't distribute any patched files.
 dist-hook:

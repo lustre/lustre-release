@@ -988,9 +988,7 @@
  	struct buffer_head *bh = 0;
  	unsigned long block;
  	unsigned long block_group;
-@@ -1995,25 +2000,21 @@ int ext3_get_inode_loc (struct inode *in
- 		inode->i_ino != EXT3_ACL_IDX_INO &&
- 		inode->i_ino != EXT3_ACL_DATA_INO &&
+@@ -1997,23 +2010,19 @@ int ext3_get_inode_loc (struct inode *in
  		inode->i_ino != EXT3_JOURNAL_INO &&
 -		inode->i_ino < EXT3_FIRST_INO(inode->i_sb)) ||
 -		inode->i_ino > le32_to_cpu(
@@ -1324,7 +1322,7 @@
 +++ ./fs/ext3/namei.c	Tue May  7 16:05:51 2002
 @@ -636,7 +636,7 @@ static struct buffer_head * ext3_find_en
  	}
- 	 
+ 	
  	nblocks = dir->i_size >> EXT3_BLOCK_SIZE_BITS(sb);
 -	start = dir->u.ext3_i.i_dir_start_lookup;
 +	start = EXT3_I(dir)->i_dir_start_lookup;
@@ -1340,15 +1338,6 @@
  			ret = bh;
  			goto cleanup_and_exit;
  		} else {
-@@ -1320,7 +1320,7 @@ static int ext3_mkdir(struct inode * dir
- 	if (err)
- 		goto out_no_entry;
- 	dir->i_nlink++;
--	dir->u.ext3_i.i_flags &= ~EXT3_INDEX_FL;
-+	EXT3_I(dir)->i_flags &= ~EXT3_INDEX_FL;
- 	ext3_mark_inode_dirty(handle, dir);
- 	d_instantiate(dentry, inode);
- out_stop:
 @@ -1419,7 +1419,7 @@ int ext3_orphan_add(handle_t *handle, st
  	int err = 0, rc;
  	
@@ -1466,7 +1455,7 @@
  }
  
 @@ -377,8 +377,6 @@ static int ext3_blkdev_remove(struct ext3
-	 return ret;
+ 	return ret;
  }
  
 -#define orphan_list_entry(l) list_entry((l), struct inode, u.ext3_i.i_orphan)
