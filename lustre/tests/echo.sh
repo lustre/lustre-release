@@ -1,26 +1,28 @@
 #!/bin/bash
 
-config=${1:-$(basename $0 .sh).xml}
-LMC=${LMC:-../utils/lmc -m $config}
+LOV=${LOV:-0}
+while [ "$1" ]; do
+        case $1 in
+        --lov) LOV="1" ;;
+	*) [ -z $config ] && config=$1 || OPTS="$OPTS $1" ;;
+        esac
+        shift
+done
 
-SERVER=localhost
-CLIENT=localhost
+config=${config:-$(basename $0 .sh).xml}
+LMC=${LMC:-../utils/lmc -m $config}
+TMP=${TMP:-/tmp}
+
+SERVER=${SERVER:-localhost}
+CLIENT=${CLIENT:-localhost}
+NET=${NET:-tcp}
 
 # FIXME: make LMC not require MDS for obdecho LOV
-MDSDEV=$TMP/mds1
+MDSDEV=${MDSDEV:-$TMP/mds1}
 MDSSIZE=10000
 
 STRIPE_BYTES=65536
 STRIPES_PER_OBJ=2	# 0 means stripe over all OSTs
-
-LOV=0
-while [ "$1" ]; do
-        case $1 in
-        --lov) LOV="1" ;;
-	*) OPTS="$OPTS $1" ;;
-        esac
-        shift
-done
 
 rm -f $config
 # create nodes
@@ -34,7 +36,7 @@ if (($LOV)); then
     $LMC --add ost --node $SERVER --lov lov1 --obdtype=obdecho || exit 13
     OBD_NAME=lov1
 else
-    $LMC --add ost --obd obd1 --node $SERVER --obdtype=obdecho || exit 2
+    $LMC --add ost --obd obd1 --node $SERVER --obdtype=obdecho || exit 12
     OBD_NAME=obd1
 fi
 
