@@ -19,8 +19,8 @@ fatal ()
 usage ()
 {
     cat <<EOF
-Usage: $progname lustretag
-  where lustretag is a tag of the lustre-core module
+Usage: $progname <lustretag>
+  where <lustretag> is a tag of the lustre-core module
 EOF
 }
 
@@ -33,6 +33,13 @@ fi
 
 buildtag="HEAD"
 lustretag="$1"
+shift
+
+if [ "$*" ] ; then
+    usage >&2
+    exit 1
+fi
+
 
 case "$lustretag" in
     '')
