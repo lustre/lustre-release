@@ -123,7 +123,8 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
         if (cathandle == NULL)
                 RETURN(-EBADF);
 
-        list_for_each_entry(loghandle, &cathandle->u.chd.chd_head, u.phd.phd_entry) {
+        list_for_each_entry(loghandle, &cathandle->u.chd.chd_head, 
+                            u.phd.phd_entry) {
                 struct llog_logid *cgl = &loghandle->lgh_id;
                 if (cgl->lgl_oid == logid->lgl_oid) {
                         if (cgl->lgl_ogen != logid->lgl_ogen) {
@@ -133,6 +134,7 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                                 continue;
                         }
                         loghandle->u.phd.phd_cat_handle = cathandle;
+                        cathandle->u.chd.chd_current_log = loghandle;
                         GOTO(out, rc = 0);
                 }
         }
@@ -143,8 +145,11 @@ int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                        logid->lgl_oid, logid->lgl_ogen, rc);
         } else {
                 rc = llog_init_handle(loghandle, LLOG_F_IS_PLAIN, NULL);
-                if (!rc)
-                        list_add(&loghandle->u.phd.phd_entry, &cathandle->u.chd.chd_head);
+                if (!rc) {
+                        list_add(&loghandle->u.phd.phd_entry, 
+                                 &cathandle->u.chd.chd_head);
+                        cathandle->u.chd.chd_current_log = loghandle;
+                }
         }
         if (!rc) 
                 loghandle->u.phd.phd_cat_handle = cathandle;
@@ -238,7 +243,7 @@ EXPORT_SYMBOL(llog_cat_add_rec);
 int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                         struct llog_cookie *cookies)
 {
-        int i, rc = 0;
+        int i, ret, rc = 0;
         ENTRY;
 
         down(&cathandle->lgh_lock);
@@ -261,12 +266,10 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                 if (!ext2_clear_bit(cookies->lgc_index, llh->llh_bitmap)) {
                         CERROR("log index %u in "LPX64":%x already clear?\n",
                                cookies->lgc_index, lgl->lgl_oid, lgl->lgl_ogen);
-                } else if ((llh->llh_count = cpu_to_le32(le32_to_cpu(llh->llh_count) - 1)) &&
-                           le32_to_cpu(llh->llh_count) == 1 &&
-                           loghandle != llog_cat_current_log(cathandle, 0)) {
-                        rc = llog_close(loghandle);
                 } else {
-                        int ret = llog_write_rec(loghandle, &llh->llh_hdr, 
+                        llh->llh_count = 
+                                cpu_to_le32(le32_to_cpu(llh->llh_count) - 1);
+                        ret = llog_write_rec(loghandle, &llh->llh_hdr, 
                                             NULL, 0, NULL, 0);
                         if (ret != 0) {
                                 CERROR("error cancelling index %u: rc %d\n",
@@ -276,6 +279,11 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                                         rc = ret;
                         }
                 }
+                
+                if (le32_to_cpu(llh->llh_count) == 1 && 
+                    loghandle != llog_cat_current_log(cathandle, 0))
+                        rc = llog_close(loghandle);
+
                 up(&loghandle->lgh_lock);
         }
         up(&cathandle->lgh_lock);

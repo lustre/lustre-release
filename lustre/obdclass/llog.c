@@ -207,9 +207,9 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb, void *data)
                         break;
 
                 /* get the buf with our target record; avoid old garbage */
-                memset(buf, 0, PAGE_SIZE);
+                memset(buf, 0, LLOG_CHUNK_SIZE);
                 rc = llog_next_block(loghandle, &saved_index, index, 
-                                     &cur_offset, buf, PAGE_SIZE);
+                                     &cur_offset, buf, LLOG_CHUNK_SIZE);
                 if (rc)
                         GOTO(out, rc);
 
@@ -217,7 +217,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb, void *data)
                 index = le16_to_cpu(rec->lrh_index);
 
                 /* process records in buffer, starting where we found one */
-                while ((void *)rec < buf+PAGE_SIZE) {
+                while ((void *)rec < buf + LLOG_CHUNK_SIZE) {
                         if (rec->lrh_index == 0)
                                 GOTO(out, 0); /* no more records */
 
@@ -230,7 +230,7 @@ int llog_process(struct llog_handle *loghandle, llog_cb_t cb, void *data)
 
                         /* next record, still in buffer? */
                         ++index;
-                        if (index > LLOG_BITMAP_BYTES * 8)
+                        if (index > LLOG_BITMAP_BYTES * 8 - 1)
                                 GOTO(out, rc = 0);
                         rec = ((void *)rec + le16_to_cpu(rec->lrh_len));
                 }

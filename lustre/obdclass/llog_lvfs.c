@@ -187,6 +187,15 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
 
         llh = loghandle->lgh_hdr;
         file = loghandle->lgh_file;
+        
+        /* record length should not bigger than LLOG_CHUNK_SIZE */
+        if (buf)
+                rc = (reclen > LLOG_CHUNK_SIZE - LLOG_MIN_REC_SIZE) ? 
+                        -E2BIG : 0;
+        else
+                rc = (reclen > LLOG_CHUNK_SIZE) ? -E2BIG : 0;
+        if (rc)
+                RETURN(rc);
 
         if (idx != -1) { 
                 loff_t saved_offset;
@@ -316,8 +325,7 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
 
                 llog_skip_over(cur_offset, *cur_idx, next_idx);
 
-                rc = lustre_fread(loghandle->lgh_file, buf, LLOG_CHUNK_SIZE, 
-                                  cur_offset);
+                rc = lustre_fread(loghandle->lgh_file, buf, len, cur_offset);
 
                 if (rc == 0) /* end of file, nothing to do */
                         RETURN(0);
@@ -339,6 +347,8 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                                *cur_offset);
                         RETURN(-EINVAL);
                 }
+                if (le16_to_cpu(tail->lrt_index) < next_idx)
+                        continue;
 
                 /* sanity check that the start of the new buffer is no farther
                  * than the record that we wanted.  This shouldn't happen. */
