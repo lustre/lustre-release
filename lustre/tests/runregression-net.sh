@@ -4,17 +4,17 @@ export PATH=/sbin:/usr/sbin:$PATH
 SRCDIR="`dirname $0`/"
 . $SRCDIR/common.sh
 
-COUNT=${COUNT:-10000000}
+COUNT=${COUNT:-1000000}
 COUNT_10=`expr $COUNT / 10`
 COUNT_100=`expr $COUNT / 100`
 COUNT_1000=`expr $COUNT / 1000`
 
 ENDRUN=endrun-`hostname`
 
-OSCNAME="`$OBDCTL device_list 2> /dev/null | awk '/ osc | lov / { print $4 }' | tail -1`"
+ECHONAME="`$OBDCTL device_list 2> /dev/null | awk '/ echo_client / { print $4 }' | tail -1`"
 
-if [ -z "$OSCNAME" ]; then
-	echo "$0: needs an OSC set up first" 1>&2
+if [ -z "$ECHONAME" ]; then
+	echo "$0: needs an ECHO_CLIENT set up first" 1>&2
 	exit 1
 fi
 
@@ -29,6 +29,7 @@ runthreads() {
 	test_getattr)
 		RW=
 		;;
+
 	test_brw_write)
 		DO=test_brw
 		RW=w
@@ -40,7 +41,7 @@ runthreads() {
 		;;
 	esac
 
-	$OBDCTL --threads $THR v \$$OSCNAME $DO $CNT $RW $V $PGS $OID || exit 1
+	$OBDCTL --threads $THR v \$$ECHONAME $DO $CNT $RW $V $PGS $OID || exit 1
 
 	if [ -e endrun ]; then
 		rm endrun
@@ -49,7 +50,7 @@ runthreads() {
 	fi
 }
 
-[ -z "$OID" ] && OID=`$OBDCTL --device \\$$OSCNAME create 1 | awk '/is object id/ { print $6 }'`
+[ -z "$OID" ] && OID=`$OBDCTL --device \\$$ECHONAME create 1 | awk '/is object id/ { print $6 }'`
 [ -z "$OID" ] && echo "error creating object" 1>&2 && exit 1
 
 # TODO: obdctl needs to check on the progress of each forked thread
@@ -64,13 +65,9 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 		PG=1
 		PGV=16
 		;;
-
 	test_brw_read)
 		PG=1
-		case $OSTNODE in
-		ba*) PGV= ;; # disabled until the BA OST code is updated
-		*) PGV=16 ;;
-		esac
+		PGV=16
 		;;
 	esac
 
@@ -87,8 +84,6 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 	runthreads 1 $CMD $COUNT -30 $PG
 	[ "$PGV" ] && runthreads 1 $CMD $COUNT_10 -30 $PGV
 
-	runthreads 1 $CMD 100 -10 $PG
-
 	runthreads 2 $CMD $COUNT_100 -30 $PG
 	[ "$PGV" ] && runthreads 2 $CMD $COUNT_1000 -30 $PGV
 
@@ -102,4 +97,4 @@ for CMD in test_getattr test_brw_write test_brw_read; do
 	[ "$PGV" ] && runthreads 100 $CMD $COUNT_1000 -30 $PGV
 done
 
-$OBDCTL --device \$$OSCNAME destroy $OID
+$OBDCTL --device \$$ECHONAME destroy $OID
