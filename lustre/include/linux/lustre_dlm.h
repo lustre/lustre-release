@@ -55,6 +55,8 @@ typedef enum {
 #define LDLM_FL_HAS_INTENT     (1 << 12) /* lock request has intent */
 #define LDLM_FL_CANCELING      (1 << 13) /* lock cancel has already been sent */
 
+#define LDLM_FL_RESENT         (1 << 14) /* lock request was resent */
+
 /* The blocking callback is overloaded to perform two functions.  These flags
  * indicate which operation should be performed. */
 #define LDLM_CB_BLOCKING    1
@@ -362,7 +364,7 @@ ldlm_lock_create(struct ldlm_namespace *ns,
                  struct lustre_handle *parent_lock_handle,
                  __u64 *res_id, __u32 type, ldlm_mode_t mode, void *data,
                  __u32 data_len);
-ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock *lock, void *cookie,
+ldlm_error_t ldlm_lock_enqueue(struct ldlm_lock **lockp, void *cookie,
                                int cookie_len, int *flags,
                                ldlm_completion_callback completion,
                                ldlm_blocking_callback blocking);
