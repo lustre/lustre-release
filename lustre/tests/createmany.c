@@ -10,7 +10,7 @@
 
 int main(int argc, char ** argv)
 {
-        int i, count;
+        int i, rc = 0, count;
         char filename[4096];
         int do_open;
         long int start, last;
@@ -41,26 +41,31 @@ int main(int argc, char ** argv)
         for (i = 0; i < count; i++) {
                 sprintf(filename, "%s-%d", argv[2], i);
                 if (do_open) {
-                        int rc = open(filename, O_CREAT|O_RDWR, 0644);
-                        if (rc < 0) {
+                        int fd = open(filename, O_CREAT|O_RDWR, 0644);
+                        if (fd < 0) {
                                 printf("open(%s) error: %s\n", filename,
                                        strerror(errno));
-                                return errno;
+                                rc = errno;
+                                break;
                         }
-                        close(rc);
+                        close(fd);
                 } else {
-                        int rc = mknod(filename, S_IFREG| 0444, 0);
+                        rc = mknod(filename, S_IFREG| 0444, 0);
                         if (rc) {
                                 printf("mknod(%s) error: %s\n",
                                        filename, strerror(errno));
-                                return errno;
+                                rc = errno;
+                                break;
                         }
                 }
-		if ((i % 10000) == 0) {
+                if ((i % 10000) == 0) {
                         printf(" - created %d (time %ld ; total %ld ; last %ld)\n",
                                i, time(0), time(0) - start, time(0) - last);
                         last = time(0);
                 }
         }
-        return 0;
+        printf("total: %d creates in %ld seconds: %f creates/second\n", i,
+               time(0) - start, ((float)i / (time(0) - start)));
+
+        return rc;
 }
