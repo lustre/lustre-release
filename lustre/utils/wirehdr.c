@@ -4,7 +4,9 @@
 #include <linux/lustre_idl.h>
 
 #undef LASSERT
-#define LASSERT(cond) if (!(cond)) printf("failed " #cond "\n");
+#define LASSERT(cond) if (!(cond)) { printf("failed " #cond "\n"); ret = 1; }
+
+int ret;
 
 void lustre_assert_wire_constants(void);
 
@@ -12,5 +14,5 @@ int main()
 {
 	lustre_assert_wire_constants();
 
-	return 0;
+	return ret;
 }
