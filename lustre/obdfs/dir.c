@@ -142,8 +142,8 @@ static int obdfs_readdir(struct file * filp, void * dirent, filldir_t filldir)
 	stored = 0;
 	offset = filp->f_pos & (PAGE_SIZE - 1);
 
+	OIDEBUG(inode);
 	while (!error && !stored && filp->f_pos < inode->i_size) {
-		OIDEBUG(inode);
 		page = obdfs_getpage(inode, offset, 0, LOCKED);
 		PDEBUG(page, "readdir");
 		if (!page) {

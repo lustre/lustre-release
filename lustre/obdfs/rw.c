@@ -43,19 +43,17 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
 	int err;
 
 	ENTRY;
-	obdo = obdo_alloc();
-	if ( ! obdo ) {
+	obdo = obdo_fromid(IID(inode), inode->i_ino);
+	if ( IS_ERR(obdo) ) {
 		EXIT;
-		return -ENOMEM;
+		return PTR_ERR(obdo);
 	}
-
-	obdo->o_id = inode->i_ino;
 
 	err = IOPS(inode, brw)(rw, IID(inode), obdo, (char *)page_address(page),
 			       &count, (page->index) >> PAGE_SHIFT, create);
 
 	if ( !err )
-		obdo_to_inode(inode, obdo); /* copy o_blocks to i_blocks */
+		obdfs_to_inode(inode, obdo); /* copy o_blocks to i_blocks */
 
 	obdo_free(obdo);
 	
@@ -167,7 +165,7 @@ obdfs_remove_from_page_cache(struct obdfs_pgrq *pgrq)
 	int err;
 
 	ENTRY;
-	CDEBUG(D_INODE, "removing inode %ld page %p, pgrq: %p\n",
+	CDEBUG(D_INODE, "writing inode %ld page %p, pgrq: %p\n",
 	       inode->i_ino, page, pgrq);
 	OIDEBUG(inode);
 	PDEBUG(page, "REM_CACHE");

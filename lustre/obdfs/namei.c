@@ -152,17 +152,18 @@ failure:
 	return NULL;
 } /* obdfs_find_entry */
 
-struct dentry *obdfs_lookup(struct inode * dir, struct dentry *dentry)
+struct dentry *obdfs_lookup(struct inode *dir, struct dentry *dentry)
 {
-	struct inode * inode;
-	struct ext2_dir_entry_2 * de;
-	struct page * page;
+	struct inode *inode;
+	struct ext2_dir_entry_2 *de;
+	struct page *page;
 	ENTRY;
 
 	if (dentry->d_name.len > EXT2_NAME_LEN)
 		return ERR_PTR(-ENAMETOOLONG);
 
-	page = obdfs_find_entry (dir, dentry->d_name.name, dentry->d_name.len, &de, LOCKED);
+	page = obdfs_find_entry(dir, dentry->d_name.name, dentry->d_name.len,
+				&de, LOCKED);
 	inode = NULL;
 	if ( !page ) 
 		CDEBUG(D_INODE, "No page - negative entry.\n");
@@ -336,7 +337,7 @@ static struct page *obdfs_add_entry (struct inode * dir,
 			dir->i_version = ++event;
 			*res_dir = de;
 			*err = 0;
-			PDEBUG(page, "addentry");
+			PDEBUG(page, "add_entry");
 			CDEBUG(D_INODE, "Regular exit from add_entry");
 			EXIT;
 			return page;
@@ -350,7 +351,7 @@ static struct page *obdfs_add_entry (struct inode * dir,
 
 	UnlockPage(page);
 	page_cache_release(page);
-	PDEBUG(page, "addentry");
+	PDEBUG(page, "add_entry");
 	EXIT;
 	return NULL;
 } /* obdfs_add_entry */
@@ -549,7 +550,6 @@ int obdfs_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
 	int err;
 
         ENTRY;
-
 	inode = obdfs_new_inode(dir, mode);
 	if ( IS_ERR(inode) ) {
 		EXIT;
@@ -888,7 +888,6 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry,
 		oinfo->oi_flags |= OBD_FL_INLINEDATA;
 
 		CDEBUG(D_INODE, "l=%d, fast symlink\n", l);
-
 	}
 	i = 0;
 	while (i < inode->i_sb->s_blocksize - 1 && (c = *(symname++)))

@@ -175,12 +175,14 @@ extern void obd_cleanup_obdo_cache(void);
 
 static inline int obdo_has_inline(struct obdo *obdo)
 {
-	return obdo->o_obdflags & OBD_FL_INLINEDATA;
+	return (obdo->o_valid & OBD_MD_FLINLINE &&
+		obdo->o_obdflags & OBD_FL_INLINEDATA);
 };
 
 static inline int obdo_has_obdmd(struct obdo *obdo)
 {
-	return obdo->o_obdflags & OBD_FL_OBDMDEXISTS;
+	return (obdo->o_valid & OBD_MD_FLOBDMD &&
+		obdo->o_obdflags & OBD_FL_OBDMDEXISTS);
 };
 
 /* support routines */
@@ -208,19 +210,20 @@ static __inline__ void obdo_free(struct obdo *oa)
 static __inline__ struct obdo *obdo_fromid(struct obd_conn *conn, obd_id id)
 {
 	struct obdo *res = NULL;
+	int err;
 
 	res = kmem_cache_alloc(obdo_cachep, SLAB_KERNEL);
 	if ( !res ) {
 		EXIT;
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 	}
 	memset(res, 0, sizeof(*res));
 	res->o_id = id;
-	res->o_valid = ~OBD_MD_FLOBDMD;
-	if (OBP(conn->oc_dev, getattr)(conn, res)) {
+	res->o_valid = OBD_MD_FLALL;
+	if ((err = OBP(conn->oc_dev, getattr)(conn, res))) {
 		OBD_FREE(res, sizeof(*res));
 		EXIT;
-		return NULL;
+		return ERR_PTR(err);
 	}
 	EXIT;
 	return res;
@@ -266,7 +269,8 @@ static inline void obdo_from_iattr(struct obdo *oa, struct iattr *attr)
 
 static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 {
-	CDEBUG(D_INODE, "src obdo flags 0x%x\n", src->o_valid);
+	CDEBUG(D_INODE, "src obdo %Ld valid 0x%x, dst obdo %Ld\n",
+	       src->o_id, src->o_valid, dst->o_id);
 	if ( src->o_valid & OBD_MD_FLATIME ) 
 		dst->o_atime = src->o_atime;
 	if ( src->o_valid & OBD_MD_FLMTIME ) 
@@ -303,7 +307,8 @@ static __inline__ void obdo_cpy_md(struct obdo *dst, struct obdo *src)
 
 static __inline__ void obdo_from_inode(struct obdo *dst, struct inode *src)
 {
-	CDEBUG(D_INODE, "dst obdo flags 0x%08x\n", dst->o_valid);
+	CDEBUG(D_INODE, "src inode %ld, dst obdo %Ld valid 0x%08x\n",
+	       src->i_ino, dst->o_id, dst->o_valid);
 	if ( dst->o_valid & OBD_MD_FLID )
 		dst->o_id = src->i_ino;
 	if ( dst->o_valid & OBD_MD_FLATIME )
@@ -335,7 +340,8 @@ static __inline__ void obdo_from_inode(struct obdo *dst, struct inode *src)
 static __inline__ void obdo_to_inode(struct inode *dst, struct obdo *src)
 {
 
-	CDEBUG(D_INODE, "src obdo flags 0x%08x\n", src->o_valid);
+	CDEBUG(D_INODE, "src obdo %Ld valid 0x%08x, dst inode %ld\n",
+	       src->o_id, src->o_valid, dst->i_ino);
 	if ( src->o_valid & OBD_MD_FLID )
 		dst->i_ino = src->o_id;
 	if ( src->o_valid & OBD_MD_FLATIME ) 
@@ -364,6 +370,7 @@ static __inline__ void obdo_to_inode(struct inode *dst, struct obdo *src)
 		dst->i_generation = src->o_generation;
 }
 
+/* returns FALSE if comparison (by flags) is same, TRUE if changed */
 static __inline__ int obdo_cmp_md(struct obdo *dst, struct obdo *src,
 				  obd_flag compare)
 {
@@ -393,7 +400,7 @@ static __inline__ int obdo_cmp_md(struct obdo *dst, struct obdo *src,
 		res = (res || (dst->o_nlink != src->o_nlink));
 	if ( compare & OBD_MD_FLGENER )
 		res = (res || (dst->o_generation != src->o_generation));
-	/* XXX Don't know if thses should be included here
+	/* XXX Don't know if thses should be included here - wasn't previously
 	if ( compare & OBD_MD_FLINLINE )
 		res = (res || memcmp(dst->o_inline, src->o_inline));
 	if ( compare & OBD_MD_FLOBDMD )

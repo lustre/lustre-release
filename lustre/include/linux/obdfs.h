@@ -103,6 +103,11 @@ static inline int obdfs_has_inline(struct inode *inode)
 	return (OBDFS_INFO(inode)->oi_flags & OBD_FL_INLINEDATA);
 }
 
+static inline int obdfs_has_obdmd(struct inode *inode)
+{
+	return (OBDFS_INFO(inode)->oi_flags & OBD_FL_OBDMDEXISTS);
+}
+
 #define NOLOCK 0
 #define LOCKED 1
 

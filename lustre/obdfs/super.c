@@ -284,32 +284,42 @@ static void obdfs_put_super(struct super_block *sb)
 
         MOD_DEC_USE_COUNT;
 	EXIT;
-}
+} /* obdfs_put_super */
 
 void inline obdfs_from_inode(struct obdo *oa, struct inode *inode)
 {
+	struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
+
+	CDEBUG(D_INODE, "inode %ld (%p)\n", inode->i_ino, inode);
 	obdo_from_inode(oa, inode);
-
-	CDEBUG(D_INODE, "oinfo flags 0x%08x\n", OBDFS_INFO(inode)->oi_flags);
 	if (obdfs_has_inline(inode)) {
-		struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
-
-		CDEBUG(D_INODE, "inode %ld has inline data\n", inode->i_ino);
+		CDEBUG(D_INODE, "inode has inline data\n");
 		memcpy(oa->o_inline, oinfo->oi_inline, OBD_INLINESZ);
 		oa->o_obdflags |= OBD_FL_INLINEDATA;
+		oa->o_valid |= OBD_MD_FLINLINE;
 	}
-}
+	if (obdfs_has_obdmd(inode)) {
+		CDEBUG(D_INODE, "inode %ld has obdmd data\n");
+		oa->o_obdflags |= OBD_FL_OBDMDEXISTS;
+	}
+} /* obdfs_from_inode */
 
 void inline obdfs_to_inode(struct inode *inode, struct obdo *oa)
 {
+	struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
+
+	CDEBUG(D_INODE, "inode %ld (%p)\n", inode->i_ino, inode);
 	obdo_to_inode(inode, oa);
 	if (obdo_has_inline(oa)) {
-		struct obdfs_inode_info *oinfo = OBDFS_INFO(inode);
-
+		CDEBUG(D_INODE, "obdo has inline data\n");
 		memcpy(oinfo->oi_inline, oa->o_inline, OBD_INLINESZ);
 		oinfo->oi_flags |= OBD_FL_INLINEDATA;
 	}
-}
+	if (obdo_has_obdmd(oa)) {
+		CDEBUG(D_INODE, "obdo has obdmd data\n");
+		oinfo->oi_flags |= OBD_FL_OBDMDEXISTS;
+	}
+} /* obdfs_to_inode */
 
 /* all filling in of inodes postponed until lookup */
 void obdfs_read_inode(struct inode *inode)
@@ -330,7 +340,7 @@ void obdfs_read_inode(struct inode *inode)
 	INIT_LIST_HEAD(&OBDFS_INFO(inode)->oi_pages);
 	
 	err = IOPS(inode, getattr)(IID(inode), oa);
-	if (err) {
+	if ( err ) {
 		printk("obdfs_read_inode: obd_getattr fails (%d)\n", err);
 		obdo_free(oa);
 		EXIT;
@@ -351,12 +361,12 @@ void obdfs_read_inode(struct inode *inode)
 	else if (S_ISLNK(inode->i_mode))
 		inode->i_op = &obdfs_symlink_inode_operations;
 	else
-		/* XXX what do we pass here??? */
-		init_special_inode(inode, inode->i_mode, 0 /* XXX XXX */ );
+		init_special_inode(inode, inode->i_mode,
+				   ((long *)OBDFS_INFO(inode)->oi_inline)[0]);
 
 	EXIT;
 	return;
-}
+} /* obdfs_read_inode */
 
 static void obdfs_write_inode(struct inode *inode) 
 {
@@ -365,20 +375,30 @@ static void obdfs_write_inode(struct inode *inode)
 	
 	ENTRY;
 	oa = obdo_alloc();
-	oa->o_valid = OBD_MD_FLALL;
+	if ( !oa ) {
+		printk("obdfs_write_inode: obdo_alloc failed\n");
+		return;
+	}
+
+	oa->o_valid = ~OBD_MD_FLOBDMD;
 	obdfs_from_inode(oa, inode);
 	err = IOPS(inode, setattr)(IID(inode), oa);
 
-	obdo_free(oa);
-
-	if (err) {
+	if ( err ) {
 		printk("obdfs_write_inode: obd_setattr fails (%d)\n", err);
 		EXIT;
-		return;
+	} else {
+		/* Copy back attributes from oa, as there may have been
+		 * changes at the target (e.g. obdo becomes a redirector
+		 * in the snapshot layer).
+		 */
+		obdfs_to_inode(inode, oa);
+		EXIT;
 	}
-	
-	EXIT;
-}
+
+	obdo_free(oa);
+} /* obdfs_write_inode */
+
 
 static void obdfs_delete_inode(struct inode *inode)
 {
@@ -387,20 +407,20 @@ static void obdfs_delete_inode(struct inode *inode)
         ENTRY;
 
 	oa = obdo_alloc();
-	/* XXX we currently assume "id" is all that's needed for destroy */
-	oa->o_id = inode->i_ino;
+	oa->o_valid = ~OBD_MD_FLOBDMD;
+	obdfs_from_inode(oa, inode);
+
 	err = IOPS(inode, destroy)(IID(inode), oa);
 	obdo_free(oa);
 
 	if (err) {
 		printk("obdfs_delete_node: obd_destroy fails (%d)\n", err);
+		EXIT;
 		return;
 	}
 
 	EXIT;
-}
-
-
+} /* obdfs_delete_inode */
 
 
 static int obdfs_notify_change(struct dentry *de, struct iattr *attr)
@@ -411,26 +431,30 @@ static int obdfs_notify_change(struct dentry *de, struct iattr *attr)
 
 	ENTRY;
 	oa = obdo_alloc();
-	if (!oa) {
-		printk("obdfs_notify_change: obdo_alloc fails\n");
+	if ( !oa ) {
+		printk("obdfs_notify_change: obdo_alloc failed\n");
 		return -ENOMEM;
 	}
 
 	oa->o_id = inode->i_ino;
 	obdo_from_iattr(oa, attr);
         err = IOPS(inode, setattr)(IID(inode), oa);
-	obdo_free(oa);
 
 	if ( err ) {
 		printk("obdfs_notify_change: obd_setattr fails (%d)\n", err);
-		return err;
+		EXIT;
+	} else {
+		/* Copy back attributes from oa, as there may have been
+		 * changes at the target (e.g. obdo becomes a redirector
+		 * in the snapshot layer).
+		 */
+		obdfs_to_inode(inode, oa);
+		EXIT;
 	}
-	inode_setattr(inode, attr);
 
-	CDEBUG(D_INODE, "inode blocks now %ld\n", inode->i_blocks);
-	EXIT;
+	obdo_free(oa);
         return err;
-}
+} /* obdfs_notify_change */
 
 
 static int obdfs_statfs(struct super_block *sb, struct statfs *buf, 

@@ -27,19 +27,16 @@ SNAPTABLE="/tmp/obdfs.snaptable"
 # A simple routine called by most of the scripts to help debugging.  The
 # kernel code has a lot of debugging statements, so this helps us keep
 # track of what is going on in user-land to generate the kernel messages.
-# We append directly to the messages file instead of using logger so that
-# our checkpoints are not lost when the syslogd is very busy.
 plog () {
     if [ "$1" = "log" ]; then
 	shift
-	echo "******** $* **********" >> /var/log/messages
+	logger -p kern.info "******** $* **********"
 	echo "$*"
     else
-	echo "****start**** $* *****" >> /var/log/messages
+	logger -p kern.info "****start**** $* *****"
 	echo "$*"
 	$*
-	# sleep 3 # to allow messages to be flushed
-	echo "*****end***** $* *****" >> /var/log/messages
+	logger -p kern.info "*****end***** $* *****"
     fi
 }
 

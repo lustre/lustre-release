@@ -25,7 +25,7 @@ if [ "$LOOPDEV" -a "`losetup $LOOPDEV 2> /dev/null`" ]; then
     exit 2
 fi
 
-[ "$LOOPDEV" ] && plog losetup $LOOPDEV $TMPFILE
+[ "$LOOPDEV" ] && losetup $LOOPDEV $TMPFILE
 # Ensure that we have the correct devices for OBD to work
 [ ! -c /dev/obd0 ] && mknod /dev/obd0 c $OBDMAJ 0
 [ ! -c /dev/obd1 ] && mknod /dev/obd1 c $OBDMAJ 1

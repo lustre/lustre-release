@@ -115,15 +115,15 @@ static int pupdate(void *unused)
 
 	tsk->session = 1;
 	tsk->pgrp = 1;
-	sprintf(tsk->comm, "pupd");
+	sprintf(tsk->comm, "pupdated");
 	pupdated = current;
 
-	printk("pupdate() activated...\n");
+	printk("pupdated activated...\n");
 
 	/* sigstop and sigcont will stop and wakeup pupdate */
 	spin_lock_irq(&tsk->sigmask_lock);
 	sigfillset(&tsk->blocked);
-	siginitsetinv(&tsk->blocked, sigmask(SIGCONT) | sigmask(SIGSTOP));
+	siginitsetinv(&tsk->blocked, sigmask(SIGTERM));
 	recalc_sigpending(tsk);
 	spin_unlock_irq(&tsk->sigmask_lock);
 
@@ -138,10 +138,9 @@ static int pupdate(void *unused)
 		else
 		{
 		stop_pupdate:
-			printk("pupdate() stopped...\n");
 			tsk->state = TASK_STOPPED;
 			MOD_DEC_USE_COUNT;
-			printk("RETURN from PUPD\n");
+			printk("pupdated stopped...\n");
 			return 0;
 		}
 		/* check for sigstop */
