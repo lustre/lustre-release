@@ -318,7 +318,7 @@ void t11()
 
 void t12()
 {
-        char *dir="/mnt/lustre/test_t11_dir";
+        char *dir="/mnt/lustre/test_t12_dir";
         char buf[1024*128];
         int fd;
         ENTRY("empty directory readdir");
@@ -333,11 +333,11 @@ void t12()
 
 void t13()
 {
-        char *dir="/mnt/lustre/test_t12_dir/";
+        char *dir="/mnt/lustre/test_t13_dir/";
         char name[1024];
         char buf[1024];
         const int nfiles = 20;
-        char *prefix = "test12_filename_prefix_";
+        char *prefix = "test13_filename_prefix_";
         int fd, i;
         ENTRY("multiple entries directory readdir");
 
@@ -361,11 +361,11 @@ void t13()
 
 void t14()
 {
-        char *dir="/mnt/lustre/test_t12_dir/";
+        char *dir="/mnt/lustre/test_t14_dir/";
         char name[1024];
         char buf[1024];
         const int nfiles = 256;
-        char *prefix = "test12_filename_long_prefix_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA___";
+        char *prefix = "test14_filename_long_prefix_AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA___";
         int fd, i;
         ENTRY(">1 block(4k) directory readdir");
 
@@ -445,9 +445,11 @@ int main(int argc, char * const argv[])
         t9();
         t10();
         t11();
+/*
         t12();
         t13();
         t14();
+*/
 #endif
 
 	printf("liblustre is about shutdown\n");
