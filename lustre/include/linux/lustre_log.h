@@ -50,6 +50,7 @@ struct llog_handle {
         void                   *lgh_hdr;
         struct file            *lgh_file;
         struct obd_uuid        *lgh_tgtuuid;
+        struct llog_handle     *lgh_current;
         struct llog_handle     *(*lgh_log_create)(struct obd_device *obd);
         struct llog_handle     *(*lgh_log_open)(struct obd_device *obd,
                                                 struct llog_cookie *logcookie);
