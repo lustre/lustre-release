@@ -1,13 +1,14 @@
 #!/bin/sh
 SIZE=5g
 COUNT=0
-VERIFY="-+d"
+[ -z "$VERIFY" ] && VERIFY="-+d"
+[ -z "$ODIR" ] && ODIR="-I"
 FILE=/mnt/lustre/test.$$
 [ $1 ] && SIZE=$1
 rm -f endiozone
 while date; do
 	echo "Test #$COUNT"
-	iozone $VERIFY -r 64 -i 0 -i 1 -f $FILE -s $SIZE 2>&1 || exit $?
+	iozone $VERIFY $ODIR -r 64 -i 0 -i 1 -f $FILE -s $SIZE 2>&1 || exit $?
 	COUNT=`expr $COUNT + 1`
 	[ -f endiozone ] && rm endiozone && exit 0
 done | tee /tmp/iozone.log
