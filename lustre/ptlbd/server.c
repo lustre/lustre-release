@@ -74,7 +74,7 @@ out_filp:
         RETURN(rc);
 }
 
-static int ptlbd_sv_cleanup(struct obd_device *obddev, int force, int failover)
+static int ptlbd_sv_cleanup(struct obd_device *obddev, int flags)
 {
         struct ptlbd_obd *ptlbd = &obddev->u.ptlbd;
         ENTRY;
