@@ -42,6 +42,7 @@ extern int op_find(char *path, struct obd_uuid *obduuid, int recursive,
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
 static int lfs_find(int argc, char **argv);
+static int lfs_getstripe(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -54,6 +55,9 @@ command_t cmdlist[] = {
         {"find", lfs_find, 0,
          "blah...\n"
          "usage: find [--obd <uuid>] [--quiet | --verbose] [--recursive] <dir|file> ..."},
+        {"getstripe", lfs_getstripe, 0,
+         "blah...\n"
+         "usage:getstripe <filename>"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -161,6 +165,29 @@ static int lfs_find(int argc, char **argv)
         return rc;
 }
 
+static int lfs_getstripe(int argc, char **argv)
+{
+                                                                
+        if (argc != 2)
+                return CMD_HELP;
+                                                                
+        int quiet, verbose, recursive, rc;
+        struct obd_uuid *obduuid = NULL;
+                                                                
+                                                                
+        optind = 1;
+        quiet = verbose = recursive = 0;
+                                                                
+                                                                
+        do {
+                rc = op_find(argv[optind], obduuid, recursive, verbose, quiet);
+        } while (++optind < argc && !rc);
+                                                                
+                                                                
+        if (rc)
+                fprintf(stderr, "error: %s: getstripe failed\n", argv[0]);
+        return rc;
+}
 
 int main(int argc, char **argv)
 {
