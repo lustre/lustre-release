@@ -99,17 +99,17 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk(struct ptlrpc_connection *conn)
 
 struct ptlrpc_bulk_page *ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc)
 {
-        struct ptlrpc_bulk_page *page;
+        struct ptlrpc_bulk_page *bulk;
 
-        OBD_ALLOC(page, sizeof(*page));
-        if (page != NULL) {
-                page->b_desc = desc;
-                ptl_set_inv_handle(&page->b_md_h);
-                ptl_set_inv_handle(&page->b_me_h);
-                list_add(&page->b_link, &desc->b_page_list);
+        OBD_ALLOC(bulk, sizeof(*bulk));
+        if (bulk != NULL) {
+                bulk->b_desc = desc;
+                ptl_set_inv_handle(&bulk->b_md_h);
+                ptl_set_inv_handle(&bulk->b_me_h);
+                list_add_tail(&bulk->b_link, &desc->b_page_list);
                 desc->b_page_count++;
         }
-        return page;
+        return bulk;
 }
 
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk)
@@ -122,9 +122,9 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk)
         }
 
         list_for_each_safe(tmp, next, &bulk->b_page_list) {
-                struct ptlrpc_bulk_page *page;
-                page = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
-                ptlrpc_free_bulk_page(page);
+                struct ptlrpc_bulk_page *bulk;
+                bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
+                ptlrpc_free_bulk_page(bulk);
         }
 
         ptlrpc_put_connection(bulk->b_connection);
@@ -133,17 +133,17 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk)
         EXIT;
 }
 
-void ptlrpc_free_bulk_page(struct ptlrpc_bulk_page *page)
+void ptlrpc_free_bulk_page(struct ptlrpc_bulk_page *bulk)
 {
         ENTRY;
-        if (page == NULL) {
+        if (bulk == NULL) {
                 EXIT;
                 return;
         }
 
-        list_del(&page->b_link);
-        page->b_desc->b_page_count--;
-        OBD_FREE(page, sizeof(*page));
+        list_del(&bulk->b_link);
+        bulk->b_desc->b_page_count--;
+        OBD_FREE(bulk, sizeof(*bulk));
         EXIT;
 }
 

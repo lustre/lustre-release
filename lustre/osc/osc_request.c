@@ -385,10 +385,10 @@ static int osc_brw_read(struct obd_conn *conn, obd_count num_oa,
         struct ptlrpc_connection *connection;
         struct ptlrpc_request *request;
         struct ost_body *body;
-        struct list_head *tmp, *next;
+        struct list_head *tmp;
         int pages, rc, i, j, size[3] = {sizeof(*body)};
         void *ptr1, *ptr2;
-        struct ptlrpc_bulk_desc *desc;;
+        struct ptlrpc_bulk_desc *desc;
         ENTRY;
 
         size[1] = num_oa * sizeof(struct obd_ioobj);
@@ -400,13 +400,13 @@ static int osc_brw_read(struct obd_conn *conn, obd_count num_oa,
         osc_con2cl(conn, &cl, &connection);
         request = ptlrpc_prep_req(cl, connection, OST_BRW, 3, size, NULL);
         if (!request)
-                GOTO(out3, rc = -ENOMEM);
+                GOTO(out, rc = -ENOMEM);
 
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         body->data = OBD_BRW_READ;
 
         desc = ptlrpc_prep_bulk(connection);
-        if (desc == NULL)
+        if (!desc)
                 GOTO(out2, rc = -ENOMEM);
         desc->b_portal = OST_BULK_PORTAL;
 
@@ -415,46 +415,45 @@ static int osc_brw_read(struct obd_conn *conn, obd_count num_oa,
         for (pages = 0, i = 0; i < num_oa; i++) {
                 ost_pack_ioo(&ptr1, oa[i], oa_bufs[i]);
                 for (j = 0; j < oa_bufs[i]; j++, pages++) {
-                        struct ptlrpc_bulk_page *page;
-                        page = ptlrpc_prep_bulk_page(desc);
-                        if (page == NULL)
-                                GOTO(out, rc = -ENOMEM);
+                        struct ptlrpc_bulk_page *bulk;
+                        bulk = ptlrpc_prep_bulk_page(desc);
+                        if (bulk == NULL)
+                                GOTO(out3, rc = -ENOMEM);
 
                         spin_lock(&connection->c_lock);
-                        page->b_xid = ++connection->c_xid_out;
+                        bulk->b_xid = ++connection->c_xid_out;
                         spin_unlock(&connection->c_lock);
 
-                        page->b_buf = kmap(buf[pages]);
-                        page->b_buflen = PAGE_SIZE;
+                        bulk->b_buf = kmap(buf[pages]);
+                        bulk->b_page = buf[pages];
+                        bulk->b_buflen = PAGE_SIZE;
                         ost_pack_niobuf(&ptr2, offset[pages], count[pages],
-                                        flags[pages], page->b_xid);
+                                        flags[pages], bulk->b_xid);
                 }
         }
 
         rc = ptlrpc_register_bulk(desc);
         if (rc)
-                GOTO(out, rc);
+                GOTO(out3, rc);
 
         request->rq_replen = lustre_msg_size(1, size);
         rc = ptlrpc_queue_wait(request);
         rc = ptlrpc_check_status(request, rc);
         if (rc)
                 ptlrpc_abort_bulk(desc);
-        GOTO(out, rc);
+        GOTO(out3, rc);
 
- out:
-        list_for_each_safe(tmp, next, &desc->b_page_list) {
-                struct ptlrpc_bulk_page *page;
-                page = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
-
-                if (page->b_buf != NULL)
-                        kunmap(page->b_buf);
+ out3:
+        list_for_each(tmp, &desc->b_page_list) {
+                struct ptlrpc_bulk_page *bulk;
+                bulk = list_entry(tmp, struct ptlrpc_bulk_page, b_link);
+                if (bulk->b_buf != NULL)
+                        kunmap(bulk->b_buf);
         }
-
         ptlrpc_free_bulk(desc);
  out2:
         ptlrpc_free_req(request);
- out3:
+ out:
         return rc;
 }
 
