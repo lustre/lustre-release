@@ -10,8 +10,8 @@ SERVER_START=1
 SERVER_CNT=62
 GW_START=1
 GW_CNT=31
-BASE=mcr
-MDS=23
+BASE=`hostname | sed "s/[i0-9]*$//"`
+MDS=${BASE}23
 UUIDLIST=${UUIDLIST:-/usr/local/admin/ba-ost/UUID.txt}
 
 # THis is needed for to create route for elan network
