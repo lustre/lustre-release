@@ -1,7 +1,7 @@
 /* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- *  Copyright (C) 2002 Cluster File Systems, Inc.
+ *  Copyright (C) 2002, 2003 Cluster File Systems, Inc.
  *
  *   This file is part of Lustre, http://www.lustre.org.
  *
@@ -21,125 +21,50 @@
  */
 #define DEBUG_SUBSYSTEM S_CLASS
 
-#include <linux/lustre_lite.h>
 #include <linux/lprocfs_status.h>
+#include <linux/obd.h>
 
+#ifndef LPROCFS
+struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
+struct lprocfs_vars lprocfs_module_vars[] = { {0} };
+#else
 
-int rd_uuid(char* page, char **start, off_t off, int count, int *eof, 
-            void *data)
+static inline int lprocfs_filter_statfs(void *data, struct statfs *sfs)
 {
-        int len = 0;
-        struct obd_device* dev = (struct obd_device*)data;
-        len += snprintf(page, count, "%s\n", dev->obd_uuid);
-        return len;
-}
-int rd_blksize(char* page, char **start, off_t off, int count, int *eof, 
-               void *data)
-{
-        struct obd_device* temp = (struct obd_device*)data;
-        struct statfs mystats;
-        int len = 0;
-
-        vfs_statfs(temp->u.filter.fo_sb, &mystats);
-        len+=snprintf(page, count, "%ld\n", mystats.f_bsize); 
-        return len;
-}
-int rd_kbtotal(char* page, char **start, off_t off, int count, int *eof, 
-               void *data)
-{
-        struct obd_device* temp = (struct obd_device*)data;
-        struct statfs mystats;
-        int len = 0;
-        __u32 blk_size;
-        __u64 result;
-
-        vfs_statfs(temp->u.filter.fo_sb, &mystats);
-        blk_size = mystats.f_bsize;
-        blk_size >>= 10;
-        result = mystats.f_blocks;
-        while(blk_size >>= 1){
-                result <<= 1;
-        }
-        len+=snprintf(page, count, LPU64"\n", result); 
-        return len;   
+        struct obd_device *dev = (struct obd_device *) data;
+        return vfs_statfs(dev->u.filter.fo_sb, sfs);
 }
 
-int rd_kbfree(char* page, char **start, off_t off, int count, int *eof, 
+DEFINE_LPROCFS_STATFS_FCT(rd_blksize,     lprocfs_filter_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_kbytestotal, lprocfs_filter_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_kbytesfree,  lprocfs_filter_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_filestotal,  lprocfs_filter_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_filesfree,   lprocfs_filter_statfs);
+DEFINE_LPROCFS_STATFS_FCT(rd_filegroups,  lprocfs_filter_statfs);
+
+int rd_fstype(char *page, char **start, off_t off, int count, int *eof,
               void *data)
 {
-        struct obd_device* temp = (struct obd_device*)data;
-        struct statfs mystats;
-        int len = 0;
-        __u32 blk_size;
-        __u64 result;
-
-        vfs_statfs(temp->u.filter.fo_sb, &mystats);
-        blk_size = mystats.f_bsize;
-        blk_size >>= 10;
-        result = mystats.f_bfree;
-        while(blk_size >>= 1){
-                result <<= 1;
-        }
-        len += snprintf(page, count, LPU64"\n", result); 
-        return len;     
+        struct obd_device *dev = (struct obd_device *)data;
+        return snprintf(page, count, "%s\n", dev->u.filter.fo_fstype);
 }
 
-int rd_fstype(char* page, char **start, off_t off, int count, int *eof, 
-              void *data)
-{
-        struct obd_device* temp = (struct obd_device*)data;
-        int len = 0;
-        len += snprintf(page, count, "%s\n", temp->u.filter.fo_fstype);
-        return len;
-}
-int rd_filestotal(char* page, char **start, off_t off, int count, int *eof, 
-                  void *data)
-{ 
-        struct obd_device* temp = (struct obd_device*)data;
-        struct statfs mystats;
-        int len = 0;
-        vfs_statfs(temp->u.filter.fo_sb, &mystats);
-        len += snprintf(page, count, "%ld\n", mystats.f_files); 
-        return len;
-}
-
-int rd_filesfree(char* page, char **start, off_t off, int count, int *eof, 
-                 void *data)
-{
-        struct obd_device* temp = (struct obd_device*)data;
-        struct statfs mystats;
-        int len = 0;
-        vfs_statfs(temp->u.filter.fo_sb, &mystats);
-        len += snprintf(page, count, "%ld\n", mystats.f_ffree); 
-        return len;
-}
-
-int rd_filegroups(char* page, char **start, off_t off, int count, int *eof, 
-                  void *data)
-{
-        return 0;
-}
-struct lprocfs_vars status_var_nm_1[] = {
-        {"status/uuid", rd_uuid, 0, 0},
-        {"status/blocksize",rd_blksize, 0, 0},
-        {"status/kbytestotal",rd_kbtotal, 0, 0},
-        {"status/kbytesfree", rd_kbfree, 0, 0},
-        {"status/filestotal", rd_filestotal, 0, 0},
-        {"status/filesfree", rd_filesfree, 0, 0},
-        {"status/filegroups", rd_filegroups, 0, 0},
-        {"status/fstype", rd_fstype, 0, 0},
-        {0}
+struct lprocfs_vars lprocfs_obd_vars[] = {
+        { "uuid",        lprocfs_rd_uuid,    0, 0 },
+        { "blocksize",   rd_blksize,         0, 0 },
+        { "kbytestotal", rd_kbytestotal,     0, 0 },
+        { "kbytesfree",  rd_kbytesfree,      0, 0 },
+        { "filestotal",  rd_filestotal,      0, 0 },
+        { "filesfree",   rd_filesfree,       0, 0 },
+        { "filegroups",  rd_filegroups,      0, 0 },
+        { "fstype",      rd_fstype,          0, 0 },
+        { 0 }
 };
-int rd_numrefs(char* page, char **start, off_t off, int count, int *eof, 
-               void *data)
-{
-        struct obd_type* class = (struct obd_type*)data;
-        int len = 0;
-        len += snprintf(page, count, "%d\n", class->typ_refcnt);
-        return len;
-}
 
-struct lprocfs_vars status_class_var[] = {
-        {"status/num_refs", rd_numrefs, 0, 0},
-        {0}
+struct lprocfs_vars lprocfs_module_vars[] = {
+        { "num_refs",    lprocfs_rd_numrefs, 0, 0 },
+        { 0 }
 };
+
+#endif /* LPROCFS */
+LPROCFS_INIT_VARS(lprocfs_module_vars, lprocfs_obd_vars)
