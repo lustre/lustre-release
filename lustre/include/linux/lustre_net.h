@@ -50,6 +50,9 @@
 #define MDS_REPLY_PORTAL   11
 #define MDS_BULK_PORTAL    12
 
+#define LDLM_REQUEST_PORTAL 13
+#define LDLM_REPLY_PORTAL   14
+
 /* default rpc ring length */
 #define RPC_RING_LENGTH    2
 
@@ -90,7 +93,8 @@ struct ptlrpc_client {
 #define PTL_RPC_BULK    4
 #define PTL_RPC_SENT    5
 #define PTL_BULK_SENT   6
-#define PTL_BULK_RCVD   6
+#define PTL_BULK_RCVD   7
+#define PTL_RPC_ERR     8
 
 struct ptlrpc_request { 
         int rq_type; /* one of PTL_RPC_REQUEST, PTL_RPC_REPLY, PTL_RPC_BULK */
@@ -221,7 +225,7 @@ int ptlrpc_check_status(struct ptlrpc_request *req, int err);
 /* rpc/service.c */
 struct ptlrpc_service *
 ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
-                req_unpack_t unpack, rep_pack_t pack, svc_handler_t);
+                svc_handler_t);
 void ptlrpc_stop_thread(struct ptlrpc_service *svc);
 int ptlrpc_start_thread(struct obd_device *dev, struct ptlrpc_service *svc,
                         char *name);

@@ -85,7 +85,7 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
                 ack = PTL_NOACK_REQ;
                 break;
         default:
-                BUG();
+                LBUG();
                 return -1; /* notreached */
         }
         request->rq_req_md.options = PTL_MD_OP_PUT;
@@ -95,7 +95,7 @@ int ptl_send_buf(struct ptlrpc_request *request, struct lustre_peer *peer,
         //CERROR("MDBind (outgoing req/rep/bulk): %Lu\n", (__u64)md_h);
         if (rc != 0) {
                 CERROR("PtlMDBind failed: %d\n", rc);
-                BUG();
+                LBUG();
                 return rc;
         }
 
@@ -132,7 +132,7 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *bulk, int portal)
         rc = PtlMDBind(bulk->b_peer.peer_ni, bulk->b_md, &md_h);
         if (rc != 0) {
                 CERROR("PtlMDBind failed: %d\n", rc);
-                BUG();
+                LBUG();
                 return rc;
         }
 
@@ -148,7 +148,7 @@ int ptlrpc_send_bulk(struct ptlrpc_bulk_desc *bulk, int portal)
                 CERROR("PtlPut(%d, %d, %d) failed: %d\n", remote_id.nid,
                        portal, bulk->b_xid, rc);
                 PtlMDUnlink(md_h);
-                BUG();
+                LBUG();
         }
 
         return rc;
@@ -164,7 +164,7 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *bulk)
                           bulk->b_xid, 0, PTL_UNLINK, &bulk->b_me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
-                BUG();
+                LBUG();
                 EXIT;
                 goto cleanup1;
         }
@@ -180,7 +180,7 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *bulk)
         //CERROR("MDAttach (bulk sink): %Lu\n", (__u64)bulk->b_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
-                BUG();
+                LBUG();
                 EXIT;
                 goto cleanup2;
         }
@@ -201,82 +201,81 @@ int ptlrpc_register_bulk(struct ptlrpc_bulk_desc *bulk)
 int ptlrpc_reply(struct obd_device *obddev, struct ptlrpc_service *svc,
                  struct ptlrpc_request *req)
 {
-	struct ptlrpc_request *clnt_req = req->rq_reply_handle;
-	ENTRY;
+        struct ptlrpc_request *clnt_req = req->rq_reply_handle;
+        ENTRY;
 
-	if (req->rq_reply_handle == NULL) {
-		/* This is a request that came from the network via portals. */
+        if (req->rq_reply_handle == NULL) {
+                /* This is a request that came from the network via portals. */
 
-		/* FIXME: we need to increment the count of handled events */
+                /* FIXME: we need to increment the count of handled events */
                 req->rq_type = PTL_RPC_REPLY;
                 req->rq_reqhdr->xid = req->rq_reqhdr->xid;
-		ptl_send_buf(req, &req->rq_peer, svc->srv_rep_portal);
-	} else {
-		/* This is a local request that came from another thread. */
+                ptl_send_buf(req, &req->rq_peer, svc->srv_rep_portal);
+        } else {
+                /* This is a local request that came from another thread. */
 
-		/* move the reply to the client */ 
-		clnt_req->rq_replen = req->rq_replen;
-		clnt_req->rq_repbuf = req->rq_repbuf;
-		req->rq_repbuf = NULL;
-		req->rq_replen = 0;
+                /* move the reply to the client */ 
+                clnt_req->rq_replen = req->rq_replen;
+                clnt_req->rq_repbuf = req->rq_repbuf;
+                req->rq_repbuf = NULL;
+                req->rq_replen = 0;
 
-		/* free the request buffer */
-		OBD_FREE(req->rq_reqbuf, req->rq_reqlen);
-		req->rq_reqbuf = NULL;
+                /* free the request buffer */
+                OBD_FREE(req->rq_reqbuf, req->rq_reqlen);
+                req->rq_reqbuf = NULL;
 
-		/* wake up the client */ 
-		wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
-	}
+                /* wake up the client */ 
+                wake_up_interruptible(&clnt_req->rq_wait_for_rep); 
+        }
 
-	EXIT;
-	return 0;
+        EXIT;
+        return 0;
 }
 
 int ptlrpc_error(struct obd_device *obddev, struct ptlrpc_service *svc,
                  struct ptlrpc_request *req)
 {
-	struct ptlrep_hdr *hdr;
+        struct ptlrep_hdr *hdr;
 
-	ENTRY;
+        ENTRY;
 
-	OBD_ALLOC(hdr, sizeof(*hdr));
-	if (!hdr) { 
-		EXIT;
-		return -ENOMEM;
-	}
+        OBD_ALLOC(hdr, sizeof(*hdr));
+        if (!hdr) { 
+                EXIT;
+                return -ENOMEM;
+        }
 
-	memset(hdr, 0, sizeof(*hdr));
+        memset(hdr, 0, sizeof(*hdr));
 
-	hdr->xid = req->rq_reqhdr->xid;
-	hdr->status = req->rq_status; 
-	hdr->type = OST_TYPE_ERR;
+        hdr->xid = req->rq_reqhdr->xid;
+        hdr->status = req->rq_status; 
+        hdr->type = PTL_RPC_ERR;
 
         if (req->rq_repbuf) { 
                 CERROR("req has repbuf\n");
-                BUG();
+                LBUG();
         }
 
-	req->rq_repbuf = (char *)hdr;
-	req->rq_replen = sizeof(*hdr); 
+        req->rq_repbuf = (char *)hdr;
+        req->rq_replen = sizeof(*hdr); 
 
-	EXIT;
-	return ptlrpc_reply(obddev, svc, req);
+        EXIT;
+        return ptlrpc_reply(obddev, svc, req);
 }
 
 int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
 {
         ptl_process_id_t local_id;
-	struct ptlreq_hdr *hdr;
+        struct ptlreq_hdr *hdr;
         int rc;
         char *repbuf;
 
         ENTRY;
 
         hdr = (struct ptlreq_hdr *)request->rq_reqbuf;
-        if (NTOH__u32(hdr->type) != OST_TYPE_REQ) {
-                CERROR("lustre_ost: wrong packet type sent %d\n",
-                       NTOH__u32(hdr->type));
-                BUG();
+        if (NTOH__u32(hdr->type) != PTL_RPC_REQUEST) {
+                CERROR("wrong packet type sent %d\n", NTOH__u32(hdr->type));
+                LBUG();
         }
         if (request->rq_replen == 0) {
                 CERROR("request->rq_replen is 0!\n");
@@ -302,7 +301,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
                           &request->rq_reply_me_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMEAttach failed: %d\n", rc);
-                BUG();
+                LBUG();
                 EXIT;
                 goto cleanup;
         }
@@ -320,7 +319,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, struct lustre_peer *peer)
         //CERROR("MDAttach (send RPC): %Lu\n", (__u64)request->rq_reply_md_h);
         if (rc != PTL_OK) {
                 CERROR("PtlMDAttach failed: %d\n", rc);
-                BUG();
+                LBUG();
                 EXIT;
                 goto cleanup2;
         }
@@ -354,14 +353,14 @@ int ptl_handled_rpc(struct ptlrpc_service *service, void *start)
                 index++;
         }
         if (index == service->srv_ring_length)
-                BUG();
+                LBUG();
 
         CDEBUG(D_INFO, "MD index=%d Ref Count=%d\n", index,
                service->srv_ref_count[index]);
         service->srv_ref_count[index]--;
 
         if (service->srv_ref_count[index] < 0)
-                BUG();
+                LBUG();
         
         if (service->srv_ref_count[index] == 0 &&
             service->srv_me_h[index] == 0) {
@@ -372,7 +371,7 @@ int ptl_handled_rpc(struct ptlrpc_service *service, void *start)
                                  PTL_INS_AFTER, &(service->srv_me_h[index]));
                 if (rc != PTL_OK) {
                         CERROR("PtlMEInsert failed: %d\n", rc);
-                        BUG();
+                        LBUG();
                         spin_unlock(&service->srv_lock);
                         return rc;
                 }
@@ -397,7 +396,7 @@ int ptl_handled_rpc(struct ptlrpc_service *service, void *start)
                 if (rc != PTL_OK) {
                         /* XXX cleanup */
                         CERROR("PtlMDAttach failed: %d\n", rc);
-                        BUG();
+                        LBUG();
                         spin_unlock(&service->srv_lock);
                         return rc;
                 }

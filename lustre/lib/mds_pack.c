@@ -61,8 +61,7 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 
 	OBD_ALLOC(*buf, *len);
 	if (!*buf) {
-		EXIT;
-		return -ENOMEM;
+		RETURN(-ENOMEM);
 	}
 
 	memset(*buf, 0, *len); 
@@ -72,18 +71,15 @@ int mds_pack_req(char *name, int namelen, char *tgt, int tgtlen,
 
 	ptr = *buf + sizeof(**hdr) + sizeof(*req);
 
-	(*hdr)->type =  MDS_TYPE_REQ;
+	(*hdr)->type =  PTL_RPC_REQUEST;
 
 	req->namelen = NTOH__u32(namelen);
-	if (name) { 
-		LOGL(name, namelen, ptr); 
-	} 
+        LOGL(name, namelen, ptr); 
 
 	req->tgtlen = NTOH__u32(tgtlen);
-	if (tgt) {
-		LOGL(tgt, tgtlen, ptr);
-	}
-	return 0;
+        LOGL(tgt, tgtlen, ptr);
+
+	RETURN(0);
 }
 
 
@@ -94,8 +90,7 @@ int mds_unpack_req(char *buf, int len,
         char *name, *tgt;
 
 	if (len < sizeof(**hdr) + sizeof(*req)) { 
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
 	*hdr = (struct ptlreq_hdr *) (buf);
@@ -107,8 +102,7 @@ int mds_unpack_req(char *buf, int len,
 
 	if (len < sizeof(**hdr) + sizeof(*req) +
             size_round(req->namelen) + size_round(req->tgtlen) ) { 
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
 	if (req->namelen) { 
@@ -124,8 +118,7 @@ int mds_unpack_req(char *buf, int len,
 		tgt = NULL;
 	}
 
-	EXIT;
-	return 0;
+	RETURN(0);
 }
 
 void *mds_req_tgt(struct mds_req *req)
@@ -166,7 +159,7 @@ int mds_pack_rep(char *name, int namelen, char *tgt, int tgtlen,
 
 	ptr = *buf + sizeof(**hdr) + sizeof(*rep);
 
-	(*hdr)->type =  MDS_TYPE_REP;
+	(*hdr)->type =  PTL_RPC_REPLY;
 
 	rep->namelen = NTOH__u32(namelen);
 	if (name) { 

@@ -53,75 +53,75 @@
  */
 static void __set_page_clean(struct page *page)
 {
-	struct address_space *mapping = page->mapping;
-	struct inode *inode;
-	
-	if (!mapping)
-		return;
+        struct address_space *mapping = page->mapping;
+        struct inode *inode;
+        
+        if (!mapping)
+                return;
 
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,4,9))
-	spin_lock(&pagecache_lock);
+        spin_lock(&pagecache_lock);
 #endif
 
-	list_del(&page->list);
-	list_add(&page->list, &mapping->clean_pages);
+        list_del(&page->list);
+        list_add(&page->list, &mapping->clean_pages);
 
-	inode = mapping->host;
-	if (list_empty(&mapping->dirty_pages)) { 
-		CDEBUG(D_INODE, "inode clean\n");
-		inode->i_state &= ~I_DIRTY_PAGES;
-	}
+        inode = mapping->host;
+        if (list_empty(&mapping->dirty_pages)) { 
+                CDEBUG(D_INODE, "inode clean\n");
+                inode->i_state &= ~I_DIRTY_PAGES;
+        }
 #if (LINUX_VERSION_CODE > KERNEL_VERSION(2,4,10))
-	spin_unlock(&pagecache_lock);
+        spin_unlock(&pagecache_lock);
 #endif
-	EXIT;
+        EXIT;
 }
 
 inline void set_page_clean(struct page *page)
 {
-	if (PageDirty(page)) { 
-		ClearPageDirty(page);
-		__set_page_clean(page);
-	}
+        if (PageDirty(page)) { 
+                ClearPageDirty(page);
+                __set_page_clean(page);
+        }
 }
 
 inline void lustre_put_page(struct page *page)
 {
-	kunmap(page);
-	page_cache_release(page);
+        kunmap(page);
+        page_cache_release(page);
 }
 
 struct page * lustre_get_page(struct inode *inode, unsigned long n)
 {
-	struct address_space *mapping = inode->i_mapping;
-	struct page *page = read_cache_page(mapping, n,
-				(filler_t*)mapping->a_ops->readpage, NULL);
-	if (!IS_ERR(page)) {
-		wait_on_page(page);
-		kmap(page);
-		if (!Page_Uptodate(page))
-			goto fail;
-		if (PageError(page))
-			goto fail;
-	}
-	return page;
+        struct address_space *mapping = inode->i_mapping;
+        struct page *page = read_cache_page(mapping, n,
+                                (filler_t*)mapping->a_ops->readpage, NULL);
+        if (!IS_ERR(page)) {
+                wait_on_page(page);
+                kmap(page);
+                if (!Page_Uptodate(page))
+                        goto fail;
+                if (PageError(page))
+                        goto fail;
+        }
+        return page;
 
 fail:
-	lustre_put_page(page);
-	return ERR_PTR(-EIO);
+        lustre_put_page(page);
+        return ERR_PTR(-EIO);
 }
 
 int lustre_prepare_page(unsigned from, unsigned to, struct page *page)
 {
-	int err;
+        int err;
 
-	lock_page(page);
-	err = page->mapping->a_ops->prepare_write(NULL, page, from, to);
+        lock_page(page);
+        err = page->mapping->a_ops->prepare_write(NULL, page, from, to);
         if (err) {
                 UnlockPage(page);
                 CERROR("page index %ld from %d to %d err %d\n",
                                 page->index, from, to, err);
-                BUG();
+                LBUG();
         }
         return err;
 }
@@ -129,15 +129,15 @@ int lustre_prepare_page(unsigned from, unsigned to, struct page *page)
 int lustre_commit_page(struct page *page, unsigned from, unsigned to)
 {
         struct inode *inode = page->mapping->host;
-	int err = 0;
+        int err = 0;
 
-	SetPageUptodate(page);
-	set_page_clean(page);
+        SetPageUptodate(page);
+        set_page_clean(page);
 
-	page->mapping->a_ops->commit_write(NULL, page, from, to);
+        page->mapping->a_ops->commit_write(NULL, page, from, to);
         if (IS_SYNC(inode))
-		err = waitfor_one_page(page);
-	UnlockPage(page);
-	lustre_put_page(page);
-	return err;
+                err = waitfor_one_page(page);
+        UnlockPage(page);
+        lustre_put_page(page);
+        return err;
 }

@@ -75,21 +75,21 @@ void __set_page_dirty(struct page *page)
  */
 void __set_page_clean(struct page *page)
 {
-	struct address_space *mapping = page->mapping;
-	struct inode *inode;
-	
-	if (!mapping)
-		return;
+        struct address_space *mapping = page->mapping;
+        struct inode *inode;
+        
+        if (!mapping)
+                return;
 
-	list_del(&page->list);
-	list_add(&page->list, &mapping->clean_pages);
+        list_del(&page->list);
+        list_add(&page->list, &mapping->clean_pages);
 
-	inode = mapping->host;
-	if (list_empty(&mapping->dirty_pages)) { 
-		CDEBUG(D_INODE, "inode clean\n");
-		inode->i_state &= ~I_DIRTY_PAGES;
-	}
-	EXIT;
+        inode = mapping->host;
+        if (list_empty(&mapping->dirty_pages)) { 
+                CDEBUG(D_INODE, "inode clean\n");
+                inode->i_state &= ~I_DIRTY_PAGES;
+        }
+        EXIT;
 }
 
 #else
@@ -98,42 +98,42 @@ void __set_page_clean(struct page *page)
  */
 void set_page_dirty(struct page *page)
 {
-	if (!test_and_set_bit(PG_dirty, &page->flags)) {
-		struct address_space *mapping = page->mapping;
+        if (!test_and_set_bit(PG_dirty, &page->flags)) {
+                struct address_space *mapping = page->mapping;
 
-		if (mapping) {
-			spin_lock(&pagecache_lock);
-			list_del(&page->list);
-			list_add(&page->list, &mapping->dirty_pages);
-			spin_unlock(&pagecache_lock);
+                if (mapping) {
+                        spin_lock(&pagecache_lock);
+                        list_del(&page->list);
+                        list_add(&page->list, &mapping->dirty_pages);
+                        spin_unlock(&pagecache_lock);
 
-			if (mapping->host)
-				mark_inode_dirty_pages(mapping->host);
-		}
-	}
+                        if (mapping->host)
+                                mark_inode_dirty_pages(mapping->host);
+                }
+        }
 }
 /*
  * Remove page from dirty list
  */
 void __set_page_clean(struct page *page)
 {
-	struct address_space *mapping = page->mapping;
-	struct inode *inode;
-	
-	if (!mapping)
-		return;
+        struct address_space *mapping = page->mapping;
+        struct inode *inode;
+        
+        if (!mapping)
+                return;
 
-	spin_lock(&pagecache_lock);
-	list_del(&page->list);
-	list_add(&page->list, &mapping->clean_pages);
+        spin_lock(&pagecache_lock);
+        list_del(&page->list);
+        list_add(&page->list, &mapping->clean_pages);
 
-	inode = mapping->host;
-	if (list_empty(&mapping->dirty_pages)) { 
-		CDEBUG(D_INODE, "inode clean\n");
-		inode->i_state &= ~I_DIRTY_PAGES;
-	}
-	spin_unlock(&pagecache_lock);
-	EXIT;
+        inode = mapping->host;
+        if (list_empty(&mapping->dirty_pages)) { 
+                CDEBUG(D_INODE, "inode clean\n");
+                inode->i_state &= ~I_DIRTY_PAGES;
+        }
+        spin_unlock(&pagecache_lock);
+        EXIT;
 }
 
 #endif
@@ -141,10 +141,10 @@ void __set_page_clean(struct page *page)
 
 inline void set_page_clean(struct page *page)
 {
-	if (PageDirty(page)) { 
-		ClearPageDirty(page);
-		__set_page_clean(page);
-	}
+        if (PageDirty(page)) { 
+                ClearPageDirty(page);
+                __set_page_clean(page);
+        }
 }
 
 /* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
@@ -165,13 +165,13 @@ static int obdfs_brw(int rw, struct inode *inode, struct page *page, int create)
                 EXIT;
                 return -ENOMEM;
         }
-	oa->o_valid = OBD_MD_FLNOTOBD;
+        oa->o_valid = OBD_MD_FLNOTOBD;
         obdfs_from_inode(oa, inode);
 
         err = obd_brw(rw, IID(inode), num_obdo, &oa, &bufs_per_obdo,
-		       &page, &count, &offset, &flags);
+                       &page, &count, &offset, &flags);
         //if ( !err )
-	//      obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
+        //      obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
 
         obdo_free(oa);
         EXIT;
@@ -183,7 +183,7 @@ extern void set_page_clean(struct page *);
 /* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated too */
 static int obdfs_commit_page(struct page *page, int create, int from, int to)
 {
-	struct inode *inode = page->mapping->host;
+        struct inode *inode = page->mapping->host;
         obd_count        num_obdo = 1;
         obd_count        bufs_per_obdo = 1;
         struct obdo     *oa;
@@ -198,21 +198,21 @@ static int obdfs_commit_page(struct page *page, int create, int from, int to)
                 EXIT;
                 return -ENOMEM;
         }
-	oa->o_valid = OBD_MD_FLNOTOBD;
+        oa->o_valid = OBD_MD_FLNOTOBD;
         obdfs_from_inode(oa, inode);
 
-	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
-	       from, to, count);
+        CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
+               from, to, count);
 
         err = obd_brw(WRITE, IID(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);
         if ( !err ) {
                 SetPageUptodate(page);
-		set_page_clean(page);
-	}
+                set_page_clean(page);
+        }
 
         //if ( !err )
-	//      obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
+        //      obdfs_to_inode(inode, oa); /* copy o_blocks to i_blocks */
 
         obdo_free(oa);
         EXIT;
@@ -222,63 +222,63 @@ static int obdfs_commit_page(struct page *page, int create, int from, int to)
 /* returns the page unlocked, but with a reference */
 int obdfs_writepage(struct page *page)
 {
-	int rc;
-	struct inode *inode = page->mapping->host;
+        int rc;
+        struct inode *inode = page->mapping->host;
         ENTRY;
-	CERROR("---> writepage called ino %ld!\n", inode->i_ino);
-	BUG();
-	rc = obdfs_brw(OBD_BRW_WRITE, inode, page, 1);
-	if ( !rc ) {
-		set_page_clean(page);
-	} else {
-		CDEBUG(D_INODE, "--> GRR %d\n", rc);
-	}
+        CERROR("---> writepage called ino %ld!\n", inode->i_ino);
+        LBUG();
+        rc = obdfs_brw(OBD_BRW_WRITE, inode, page, 1);
+        if ( !rc ) {
+                set_page_clean(page);
+        } else {
+                CDEBUG(D_INODE, "--> GRR %d\n", rc);
+        }
         EXIT;
-	return rc;
+        return rc;
 }
 
 
 void write_inode_pages(struct inode *inode)
 {
-	struct list_head *tmp = &inode->i_mapping->dirty_pages;
-	
-	while ( (tmp = tmp->next) != &inode->i_mapping->dirty_pages) { 
-		struct page *page;
-		page = list_entry(tmp, struct page, list);
-		obdfs_writepage(page);
-	}
+        struct list_head *tmp = &inode->i_mapping->dirty_pages;
+        
+        while ( (tmp = tmp->next) != &inode->i_mapping->dirty_pages) { 
+                struct page *page;
+                page = list_entry(tmp, struct page, list);
+                obdfs_writepage(page);
+        }
 }
 
 
 /* returns the page unlocked, but with a reference */
 int obdfs_readpage(struct file *file, struct page *page)
 {
-	struct inode *inode = page->mapping->host;
+        struct inode *inode = page->mapping->host;
         int rc;
 
         ENTRY;
 
-	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT) 
-	     <= page->index) {
-		memset(kmap(page), 0, PAGE_CACHE_SIZE);
-		kunmap(page);
-		goto readpage_out;
-	}
+        if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT) 
+             <= page->index) {
+                memset(kmap(page), 0, PAGE_CACHE_SIZE);
+                kunmap(page);
+                goto readpage_out;
+        }
 
-	if (Page_Uptodate(page)) {
-		EXIT;
-		goto readpage_out;
-	}
+        if (Page_Uptodate(page)) {
+                EXIT;
+                goto readpage_out;
+        }
 
         rc = obdfs_brw(READ, inode, page, 0);
         if ( rc ) {
-		EXIT; 
-		return rc;
+                EXIT; 
+                return rc;
         } 
 
  readpage_out:
-	SetPageUptodate(page);
-	UnlockPage(page);
+        SetPageUptodate(page);
+        UnlockPage(page);
         EXIT;
         return 0;
 } /* obdfs_readpage */
@@ -290,10 +290,10 @@ int obdfs_prepare_write(struct file *file, struct page *page, unsigned from, uns
         int rc = 0;
         ENTRY; 
         
-	kmap(page);
+        kmap(page);
         if (Page_Uptodate(page)) { 
                 EXIT;
-		goto prepare_done;
+                goto prepare_done;
         }
 
         if ( (from <= offset) && (to >= offset + PAGE_SIZE) ) {
@@ -307,8 +307,8 @@ int obdfs_prepare_write(struct file *file, struct page *page, unsigned from, uns
         } 
 
  prepare_done:
-	set_page_dirty(page);
-	//SetPageDirty(page);
+        set_page_dirty(page);
+        //SetPageDirty(page);
         EXIT;
         return rc;
 }
@@ -432,7 +432,7 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
         }
 
         err = obd_brw(OBD_BRW_WRITE, IID(inodes[0]), num_obdos, obdos,
-		      oa_bufs, pages, counts, offsets, flags);
+                      oa_bufs, pages, counts, offsets, flags);
 
         CDEBUG(D_INFO, "BRW done\n");
         /* release the pages from the page cache */
@@ -448,7 +448,7 @@ int obdfs_do_vec_wr(struct inode **inodes, obd_count num_io,
                 --num_obdos;
                 CDEBUG(D_INFO, "free obdo %ld\n",(long)obdos[num_obdos]->o_id);
                 /* copy o_blocks to i_blocks */
-		obdfs_set_size (inodes[num_obdos], obdos[num_obdos]->o_size);
+                obdfs_set_size (inodes[num_obdos], obdos[num_obdos]->o_size);
                 //obdfs_to_inode(inodes[num_obdos], obdos[num_obdos]);
                 obdo_free(obdos[num_obdos]);
         }
@@ -496,7 +496,7 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
                 obd_down(&obdfs_i2sbi(inode)->osi_list_mutex);
                 list_add(&pgrq->rq_plist, obdfs_iplist(inode));
                 obdfs_cache_count++;
-		//CERROR("-- count %d\n", obdfs_cache_count);
+                //CERROR("-- count %d\n", obdfs_cache_count);
 
                 /* If inode isn't already on superblock inodes list, add it.
                  *
@@ -528,11 +528,11 @@ static int obdfs_add_page_to_cache(struct inode *inode, struct page *page)
 
 void rebalance(void)
 {
-	if (obdfs_cache_count > 60000) {
-		CERROR("-- count %ld\n", obdfs_cache_count);
-		//obdfs_flush_dirty_pages(~0UL);
-		CERROR("-- count %ld\n", obdfs_cache_count);
-	}
+        if (obdfs_cache_count > 60000) {
+                CERROR("-- count %ld\n", obdfs_cache_count);
+                //obdfs_flush_dirty_pages(~0UL);
+                CERROR("-- count %ld\n", obdfs_cache_count);
+        }
 }
 
 
@@ -554,8 +554,8 @@ int obdfs_do_writepage(struct page *page, int sync)
                 
         if ( !err ) {
                 SetPageUptodate(page);
-		set_page_clean(page);
-	}
+                set_page_clean(page);
+        }
         EXIT;
         return err;
 } /* obdfs_do_writepage */
@@ -568,23 +568,23 @@ int obdfs_do_writepage(struct page *page, int sync)
 int obdfs_commit_write(struct file *file, struct page *page, unsigned from, unsigned to)
 {
         struct inode *inode = page->mapping->host;
-	int rc = 0;
+        int rc = 0;
         loff_t len = ((loff_t)page->index << PAGE_CACHE_SHIFT) + to;
-	ENTRY;
-	CDEBUG(D_INODE, "commit write ino %ld (end at %Ld) from %d to %d ,ind %ld\n",
-	       inode->i_ino, len, from, to, page->index);
+        ENTRY;
+        CDEBUG(D_INODE, "commit write ino %ld (end at %Ld) from %d to %d ,ind %ld\n",
+               inode->i_ino, len, from, to, page->index);
 
 
-	if (cache_writes == 0) { 
-		rc = obdfs_commit_page(page, 1, from, to);
-	}
+        if (cache_writes == 0) { 
+                rc = obdfs_commit_page(page, 1, from, to);
+        }
 
         if (len > inode->i_size) {
-		obdfs_set_size(inode, len);
+                obdfs_set_size(inode, len);
         }
 
         kunmap(page);
-	EXIT;
+        EXIT;
         return rc;
 }
 
@@ -697,7 +697,7 @@ void obdfs_truncate(struct inode *inode)
         //obdfs_dequeue_pages(inode);
         oa = obdo_alloc();
         if ( !oa ) {
-		err = -ENOMEM;
+                err = -ENOMEM;
                 CERROR("obdo_alloc failed!\n");
         } else {
                 oa->o_valid = OBD_MD_FLNOTOBD;

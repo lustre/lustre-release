@@ -65,31 +65,31 @@ void __set_page_dirty(struct page *page)
  */
 void set_page_dirty(struct page *page)
 {
-	if (!test_and_set_bit(PG_dirty, &page->flags)) {
-		struct address_space *mapping = page->mapping;
+        if (!test_and_set_bit(PG_dirty, &page->flags)) {
+                struct address_space *mapping = page->mapping;
 
-		if (mapping) {
-			spin_lock(&pagecache_lock);
-			list_del(&page->list);
-			list_add(&page->list, &mapping->dirty_pages);
-			spin_unlock(&pagecache_lock);
+                if (mapping) {
+                        spin_lock(&pagecache_lock);
+                        list_del(&page->list);
+                        list_add(&page->list, &mapping->dirty_pages);
+                        spin_unlock(&pagecache_lock);
 
-			if (mapping->host)
-				mark_inode_dirty_pages(mapping->host);
-		}
-	}
+                        if (mapping->host)
+                                mark_inode_dirty_pages(mapping->host);
+                }
+        }
 }
 #endif
 
 inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid)
 {
         struct ll_inode_info *oinfo = ll_i2info(inode);
-	struct obdo *oa = obdo_alloc();
+        struct obdo *oa = obdo_alloc();
         if ( !oa ) {
-		CERROR("no memory to allocate obdo!\n"); 
+                CERROR("no memory to allocate obdo!\n"); 
                 return NULL;
         }
-	oa->o_valid = valid;
+        oa->o_valid = valid;
 
         if ( oa->o_valid & OBD_MD_FLID )
                 oa->o_id = oinfo->lli_objid;
@@ -121,17 +121,17 @@ inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid)
         CDEBUG(D_INFO, "src inode %ld, dst obdo %ld valid 0x%08x\n",
                inode->i_ino, (long)oa->o_id, oa->o_valid);
 #if 0
-	/* this will transfer metadata for the logical object to 
-	   the oa: that metadata could contain the constituent objects
-	*/
-	if (ll_has_inline(inode)) {
+        /* this will transfer metadata for the logical object to 
+           the oa: that metadata could contain the constituent objects
+        */
+        if (ll_has_inline(inode)) {
                 CDEBUG(D_INODE, "copying inline data from inode to obdo\n");
                 memcpy(oa->o_inline, oinfo->lli_inline, OBD_INLINESZ);
                 oa->o_obdflags |= OBD_FL_INLINEDATA;
                 oa->o_valid |= OBD_MD_FLINLINE;
         }
 #endif
-	return oa;
+        return oa;
 } /* ll_oa_from_inode */
 
 
@@ -141,21 +141,21 @@ inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid)
  */
 void __set_page_clean(struct page *page)
 {
-	struct address_space *mapping = page->mapping;
-	struct inode *inode;
-	
-	if (!mapping)
-		return;
+        struct address_space *mapping = page->mapping;
+        struct inode *inode;
+        
+        if (!mapping)
+                return;
 
-	list_del(&page->list);
-	list_add(&page->list, &mapping->clean_pages);
+        list_del(&page->list);
+        list_add(&page->list, &mapping->clean_pages);
 
-	inode = mapping->host;
-	if (list_empty(&mapping->dirty_pages)) { 
-		CDEBUG(D_INODE, "inode clean\n");
-		inode->i_state &= ~I_DIRTY_PAGES;
-	}
-	EXIT;
+        inode = mapping->host;
+        if (list_empty(&mapping->dirty_pages)) { 
+                CDEBUG(D_INODE, "inode clean\n");
+                inode->i_state &= ~I_DIRTY_PAGES;
+        }
+        EXIT;
 }
 
 /* SYNCHRONOUS I/O to object storage for an inode */
@@ -172,9 +172,9 @@ static int ll_brw(int rw, struct inode *inode, struct page *page, int create)
         ENTRY;
 
         oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
-	if (!oa) { 
-		return -ENOMEM;
-	}
+        if (!oa) { 
+                return -ENOMEM;
+        }
         err = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
                                &page, &count, &offset, &flags);
 
@@ -190,27 +190,27 @@ extern void set_page_clean(struct page *);
 /* returns the page unlocked, but with a reference */
 static int ll_readpage(struct file *file, struct page *page)
 {
-	struct inode *inode = page->mapping->host;
+        struct inode *inode = page->mapping->host;
         int rc = 0;
 
         ENTRY;
 
         if (!PageLocked(page))
-                BUG();
+                LBUG();
 
-	if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT)
+        if ( ((inode->i_size + PAGE_CACHE_SIZE -1)>>PAGE_SHIFT)
              <= page->index) {
-		memset(kmap(page), 0, PAGE_CACHE_SIZE);
-		kunmap(page);
+                memset(kmap(page), 0, PAGE_CACHE_SIZE);
+                kunmap(page);
                 EXIT;
-		goto readpage_out;
-	}
+                goto readpage_out;
+        }
 
-	if (Page_Uptodate(page)) {
+        if (Page_Uptodate(page)) {
                 CERROR("Explain this please?\n");
-		EXIT;
-		goto readpage_out;
-	}
+                EXIT;
+                goto readpage_out;
+        }
 
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
         EXIT;
@@ -218,7 +218,7 @@ static int ll_readpage(struct file *file, struct page *page)
  readpage_out:
         if (!rc)
                 SetPageUptodate(page);
-	UnlockPage(page);
+        UnlockPage(page);
         return 0;
 } /* ll_readpage */
 
@@ -229,30 +229,30 @@ static int ll_prepare_write(struct file *file, struct page *page, unsigned from,
         struct inode *inode = page->mapping->host;
         obd_off offset = ((obd_off)page->index) << PAGE_SHIFT;
         int rc = 0;
-	char *addr;
+        char *addr;
         ENTRY; 
         
-	addr = kmap(page);
+        addr = kmap(page);
         if (!PageLocked(page))
-                BUG();
+                LBUG();
 
         if (Page_Uptodate(page)) { 
-                EXIT;
-		goto prepare_done;
-        }
-
-        if (offset + from >= inode->i_size) {
-		memset(addr, 0, PAGE_SIZE);
                 EXIT;
                 goto prepare_done;
         }
 
-	/* We're completely overwriting an existing page, so _don't_ set it up
-	 * to date until commit_write */
-	if (from == 0 && to == PAGE_SIZE) {
-		memset(addr, 0, PAGE_SIZE);
-		RETURN(0);
-	}
+        if (offset + from >= inode->i_size) {
+                memset(addr, 0, PAGE_SIZE);
+                EXIT;
+                goto prepare_done;
+        }
+
+        /* We're completely overwriting an existing page, so _don't_ set it up
+         * to date until commit_write */
+        if (from == 0 && to == PAGE_SIZE) {
+                memset(addr, 0, PAGE_SIZE);
+                RETURN(0);
+        }
 
         rc = ll_brw(OBD_BRW_READ, inode, page, 0);
 
@@ -271,21 +271,21 @@ static int ll_writepage(struct page *page)
         int err;
         ENTRY;
 
-        BUG();
+        LBUG();
 
         if (!PageLocked(page))
-                BUG();
+                LBUG();
 
-	err = ll_brw(OBD_BRW_WRITE, inode, page, 1);
+        err = ll_brw(OBD_BRW_WRITE, inode, page, 1);
         if ( !err ) {
                 //SetPageUptodate(page);
-		set_page_clean(page);
-	} else {
-		CERROR("ll_brw failure %d\n", err);
-	}
+                set_page_clean(page);
+        } else {
+                CERROR("ll_brw failure %d\n", err);
+        }
         UnlockPage(page); 
         EXIT;
-	return err;
+        return err;
 }
 
 /* SYNCHRONOUS I/O to object storage for an inode -- object attr will be updated
@@ -293,8 +293,8 @@ static int ll_writepage(struct page *page)
 static int ll_commit_write(struct file *file, struct page *page,
                            unsigned from, unsigned to)
 {
-	int create = 1;
-	struct inode *inode = page->mapping->host;
+        int create = 1;
+        struct inode *inode = page->mapping->host;
         obd_count        num_obdo = 1;
         obd_count        bufs_per_obdo = 1;
         struct obdo     *oa;
@@ -302,35 +302,35 @@ static int ll_commit_write(struct file *file, struct page *page,
         obd_off          offset = (((obd_off)page->index) << PAGE_SHIFT);
         obd_flag         flags = create ? OBD_BRW_CREATE : 0;
         int              err;
-	struct iattr     iattr;
+        struct iattr     iattr;
 
         ENTRY;
         oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
-	if (! oa )
-		RETURN(-ENOMEM);
+        if (! oa )
+                RETURN(-ENOMEM);
 
-	SetPageUptodate(page);
+        SetPageUptodate(page);
 
         if (!PageLocked(page))
-                BUG();
+                LBUG();
 
-	CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
-	       from, to, count);
+        CDEBUG(D_INODE, "commit_page writing (at %d) to %d, count %Ld\n", 
+               from, to, count);
 
         err = obd_brw(OBD_BRW_WRITE, ll_i2obdconn(inode), num_obdo, &oa,
                       &bufs_per_obdo, &page, &count, &offset, &flags);
         kunmap(page);
 
-	if (offset + to > inode->i_size) {
-		iattr.ia_valid = ATTR_SIZE;
-		iattr.ia_size = offset + to;
-		/* do NOT truncate */
-		err = ll_inode_setattr(inode, &iattr, 0);
-		if (err) {
-			CERROR("failed - %d.\n", err);
+        if (offset + to > inode->i_size) {
+                iattr.ia_valid = ATTR_SIZE;
+                iattr.ia_size = offset + to;
+                /* do NOT truncate */
+                err = ll_inode_setattr(inode, &iattr, 0);
+                if (err) {
+                        CERROR("failed - %d.\n", err);
                         err = -EIO;
-		}
-	}
+                }
+        }
 
         obdo_free(oa);
         EXIT;
@@ -343,22 +343,22 @@ void ll_truncate(struct inode *inode)
         int err;
         ENTRY;
 
-	oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
+        oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
         if ( !oa ) {
                 CERROR("no memory to allocate obdo!\n");
-		return; 
+                return; 
         } 
-	
-	CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
-	       (long)oa->o_id, oa->o_size);
-	err = obd_punch(ll_i2obdconn(inode), oa, oa->o_size, 0);
-	obdo_free(oa);
+        
+        CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
+               (long)oa->o_id, oa->o_size);
+        err = obd_punch(ll_i2obdconn(inode), oa, oa->o_size, 0);
+        obdo_free(oa);
 
         if (err) {
                 CERROR("obd_truncate fails (%d)\n", err);
         }
         EXIT;
-	return; 
+        return; 
 } /* ll_truncate */
 
 struct address_space_operations ll_aops = {

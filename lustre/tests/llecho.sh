@@ -3,18 +3,13 @@
 SRCDIR="`dirname $0`"
 . $SRCDIR/common.sh
 
+NETWORK=tcp
+LOCALHOST=localhost
+SERVER=localhost
+PORT=1234
+
 setup
-
-$PTLCTL <<EOF
-mynid localhost
-setup tcp
-connect localhost 1234
-add_uuid self
-add_uuid ost
-quit
-EOF
-
-echo 0xffffffff > /proc/sys/portals/debug
+setup_portals
 
 $OBDCTL <<EOF
 device 0

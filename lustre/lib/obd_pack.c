@@ -46,11 +46,9 @@
 
 #define DEBUG_SUBSYSTEM S_OST
 
-#include <linux/obd_support.h>
 #include <linux/obd_class.h>
 #include <linux/obd_ost.h>
-#include <linux/lustre_lib.h>
-#include <linux/lustre_idl.h>
+#include <linux/lustre_net.h>
 
 int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2, 
 		 struct ptlreq_hdr **hdr, union ptl_req *r,
@@ -64,29 +62,25 @@ int ost_pack_req(char *buf1, int buflen1, char *buf2, int buflen2,
 
 	OBD_ALLOC(*buf, *len);
 	if (!*buf) {
-		EXIT;
-		return -ENOMEM;
+		RETURN(-ENOMEM);
 	}
 
 	memset(*buf, 0, *len); 
 	*hdr = (struct ptlreq_hdr *)(*buf);
-	req = (struct ost_req *)(*buf + sizeof(**hdr));
+	req = (struct ost_req *)((*buf) + sizeof(**hdr));
         r->ost = req;
 
 	ptr = *buf + sizeof(**hdr) + sizeof(*req);
 
-	(*hdr)->type =  OST_TYPE_REQ;
+	(*hdr)->type =  PTL_RPC_REQUEST;
 
         req->buflen1 = HTON__u32(buflen1);
-	if (buf1) { 
-		LOGL(buf1, buflen1, ptr); 
-	} 
+        LOGL(buf1, buflen1, ptr); 
 
         req->buflen2 = HTON__u32(buflen2);
-	if (buf2) { 
-		LOGL(buf2, buflen2, ptr);
-	}
-	return 0;
+        LOGL(buf2, buflen2, ptr);
+
+	RETURN(0);
 }
 
 int ost_unpack_req(char *buf, int len, 
@@ -95,8 +89,7 @@ int ost_unpack_req(char *buf, int len,
         struct ost_req *req;
 
 	if (len < sizeof(**hdr) + sizeof(*req)) { 
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
 	*hdr = (struct ptlreq_hdr *) (buf);
@@ -108,12 +101,10 @@ int ost_unpack_req(char *buf, int len,
 
 	if (len < sizeof(**hdr) + sizeof(*req) + 
             size_round(req->buflen1) + size_round(req->buflen2) ) { 
-		EXIT;
-		return -EINVAL;
+		RETURN(-EINVAL);
 	}
 
-	EXIT;
-	return 0;
+	RETURN(0);
 }
 
 

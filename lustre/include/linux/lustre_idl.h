@@ -38,9 +38,39 @@
  * this file contains all data structures used in Lustre interfaces:
  * - obdo and obd_request records
  * - mds_request records
+ * - ldlm data
  * - ioctl's
  */ 
 
+struct lustre_msg { 
+	__u32 opc;
+	__u32 xid;
+	__u32 status;
+	__u32 type;
+	__u32   connid;
+	__u32   bufcount;
+        __u32   buflens[0];
+};
+
+struct ptlreq_hdr { 
+	__u32 opc;
+	__u32 xid;
+	__u32 status;
+	__u32 type;
+	__u32   connid;
+	__u32   bufcount;
+        __u32   buflens[0];
+};
+
+struct ptlrep_hdr { 
+	__u32 opc;
+	__u32 xid;
+	__u32 status;
+	__u32 type;
+	__u32   connid;
+	__u32   bufcount;
+        __u32   buflens[0];
+};
 
 /* 
  *   OST requests: OBDO & OBD request records
@@ -59,24 +89,6 @@
 #define OST_OPEN      10
 #define OST_CLOSE     11
 
-/* packet types */
-#define OST_TYPE_REQ 1
-#define OST_TYPE_REP 2
-#define OST_TYPE_ERR 3
-
-struct ptlreq_hdr { 
-	__u32 opc;
-	__u32 xid;
-	__u32 status;
-	__u32 type;
-};
-
-struct ptlrep_hdr { 
-	__u32 opc;
-	__u32 xid;
-	__u32 status;
-	__u32 type;
-};
 
 typedef uint64_t        obd_id;
 typedef uint64_t        obd_gr;
@@ -174,11 +186,6 @@ struct obd_ioobj {
  *   MDS REQ RECORDS
  */
 
-
-#define MDS_TYPE_REQ 1
-#define MDS_TYPE_REP 2
-#define MDS_TYPE_ERR 3
-
 #define MDS_GETATTR   1
 #define MDS_OPEN      2
 #define MDS_CLOSE     3
@@ -217,6 +224,7 @@ struct mds_req {
         __u32 			    mode;
         __u32                       uid;
         __u32                       gid;
+        __u64                       objid;
         __u64                       size;
         __u32                       mtime;
         __u32                       ctime;
@@ -227,7 +235,6 @@ struct mds_req {
         __u32                       ino;
         __u32                       nlink;
         __u32                       generation;
-        __u64                       objid;
 };
 
 struct mds_rep {
@@ -239,6 +246,7 @@ struct mds_rep {
         __u32 			    mode;
         __u32                       uid;
         __u32                       gid;
+        __u64                       objid;
         __u64                       size;
         __u32                       mtime;
         __u32                       ctime;
@@ -249,7 +257,6 @@ struct mds_rep {
         __u32                       ino;
         __u32                       nlink;
         __u32                       generation;
-        __u64                       objid;
 };
 
 /* MDS update records */ 
@@ -325,12 +332,51 @@ static inline void ll_ino2fid(struct ll_fid *fid, ino_t ino, __u32 generation,
 
 static inline void ll_inode2fid(struct ll_fid *fid, struct inode *inode)
 {
-        fid->id = HTON__u64((__u64)inode->i_ino);
-        fid->generation = HTON__u32(inode->i_generation);
-        fid->f_type = HTON__u32(inode->i_mode & S_IFMT);
+        ll_ino2fid(fid, inode->i_ino, inode->i_generation, inode->i_mode &S_IFMT);
 }
 
 #endif 
+
+/* 
+ *   LDLM requests:
+ */
+
+/* opcodes */
+#define LDLM_ENQUEUE   1
+#define LDLM_CONVERT   2
+#define LDLM_CANCEL    3
+#define LDLM_CALLBACK  4
+
+#define RES_NAME_SIZE 3
+#define RES_VERSION_SIZE 4
+
+/* lock types */
+typedef enum {
+        LCK_EX = 1,
+        LCK_PW,
+        LCK_PR,
+        LCK_CW,
+        LCK_CR,
+        LCK_NL
+} ldlm_mode_t;
+
+struct ldlm_handle {
+        __u64 addr;
+        __u64 cookie;
+};
+
+struct ldlm_request {
+        __u32 ns_id;
+        __u64 res_id[RES_NAME_SIZE];
+        __u32 flags;
+        struct ldlm_handle parent_res_handle;
+        struct ldlm_handle parent_lock_handle;
+        ldlm_mode_t mode;
+};
+
+struct ldlm_reply {
+        struct ldlm_handle lock_handle;
+};
 
 /* 
  *   OBD IOCTLS
@@ -567,11 +613,13 @@ static inline int obd_ioctl_getdata(char *buf, char *end, void *arg)
 union ptl_rep { 
         struct mds_rep *mds;
         struct ost_rep *ost;
+        struct lustre_msg *lustre;
 };
 
 union ptl_req { 
         struct mds_req *mds;
         struct ost_req *ost;
+        struct lustre_msg *lustre;
 };
 
 #endif

@@ -57,7 +57,7 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
         }
 
         if (svc->srv_flags & SVC_EVENT)
-                BUG();
+                LBUG();
 
         if ( svc->srv_eq_h ) { 
                 int err;
@@ -72,7 +72,7 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
 
                 if (err != PTL_EQ_EMPTY) {
                         CDEBUG(D_NET, "BUG: PtlEQGet returned %d\n", rc);
-                        BUG();
+                        LBUG();
                 }
 
                 EXIT;
@@ -95,7 +95,7 @@ static int ptlrpc_check_event(struct ptlrpc_service *svc)
 
 struct ptlrpc_service *
 ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
-                req_unpack_t unpack, rep_pack_t pack, svc_handler_t handler)
+                svc_handler_t handler)
 {
         int err;
         struct ptlrpc_service *svc;
@@ -119,8 +119,7 @@ ptlrpc_init_svc(__u32 bufsize, int req_portal, int rep_portal, char *uuid,
         svc->srv_buf_size = bufsize;
         svc->srv_rep_portal = rep_portal;
         svc->srv_req_portal = req_portal;
-        svc->srv_req_unpack = unpack;
-        svc->srv_rep_pack = pack;
+
         svc->srv_handler = handler;
         err = kportal_uuid_to_peer(uuid, &svc->srv_self);
         if (err) { 

@@ -32,6 +32,7 @@
 
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lib.h>
+#include <linux/lustre_net.h>
 
 struct buffer_head *ext3_bread(void *handle, struct inode *inode,
                                int block, int create, int *err);
@@ -175,7 +176,7 @@ struct dentry *mds_fid2dentry(struct mds_obd *mds, struct ll_fid *fid,
                         inode->i_nlink, atomic_read(&inode->i_count),
                         inode->i_generation,
                         generation);
-                BUG();
+                LBUG();
                 iput(inode);
                 return ERR_PTR(-ESTALE);
         }
@@ -405,7 +406,7 @@ int mds_handle(struct obd_device *dev, struct ptlrpc_service *svc,
 
         hdr = (struct ptlreq_hdr *)req->rq_reqbuf;
 
-        if (NTOH__u32(hdr->type) != MDS_TYPE_REQ) {
+        if (NTOH__u32(hdr->type) != PTL_RPC_REQUEST) {
                 CERROR("lustre_mds: wrong packet type sent %d\n",
                        NTOH__u32(hdr->type));
                 rc = -EINVAL;
@@ -502,12 +503,8 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
         mds->mds_ctxt.fs = KERNEL_DS;
 
         mds->mds_service = ptlrpc_init_svc(64 * 1024,
-                                           MDS_REQUEST_PORTAL,
-                                           MDC_REPLY_PORTAL,
-                                           "self",
-                                           mds_unpack_req,
-                                           mds_pack_rep,
-                                           mds_handle);
+                                           MDS_REQUEST_PORTAL, MDC_REPLY_PORTAL,
+                                           "self", mds_handle);
 
         rpc_register_service(mds->mds_service, "self");
 
@@ -525,9 +522,6 @@ static int mds_cleanup(struct obd_device * obddev)
         struct mds_obd *mds = &obddev->u.mds;
 
         ENTRY;
-
-        if (!(obddev->obd_flags & OBD_SET_UP))
-                RETURN(0);
 
         if ( !list_empty(&obddev->obd_gen_clients) ) {
                 CERROR("still has clients!\n");

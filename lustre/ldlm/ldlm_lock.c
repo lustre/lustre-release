@@ -27,6 +27,18 @@
 
 extern kmem_cache_t *ldlm_lock_slab;
 
+ldlm_res_compat ldlm_res_compat_table [] = {
+        [LDLM_PLAIN] NULL,
+        [LDLM_EXTENT] ldlm_extent_compat,
+        [LDLM_MDSINTENT] NULL
+};
+
+ldlm_res_policy ldlm_res_policy_table [] = {
+        [LDLM_PLAIN] NULL,
+        [LDLM_EXTENT] ldlm_extent_policy,
+        [LDLM_MDSINTENT] NULL
+};
+
 static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
                                        struct ldlm_resource *resource,
                                        ldlm_mode_t mode)
@@ -35,7 +47,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_lock *parent,
 
         lock = kmem_cache_alloc(ldlm_lock_slab, SLAB_KERNEL);
         if (lock == NULL)
-                BUG();
+                return NULL;
 
         memset(lock, 0, sizeof(*lock));
         lock->l_resource = resource;
@@ -111,7 +123,8 @@ static int ldlm_reprocess_queue(struct list_head *queue,
                 if (pending->l_granted_mode < res->lr_most_restr)
                         res->lr_most_restr = pending->l_granted_mode;
 
-                /* XXX call completion here */ 
+                if (pending->l_completion_ast)
+                        pending->l_completion_ast(pending, NULL, NULL);
                 
 
         }
@@ -119,50 +132,93 @@ static int ldlm_reprocess_queue(struct list_head *queue,
         return rc;
 }
 
-ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev, __u32 ns_id,
-                                     struct ldlm_resource *parent_res,
-                                     struct ldlm_lock *parent_lock,
-                                     __u32 *res_id, ldlm_mode_t mode, 
+ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev,
+                                     __u32 ns_id,
+                                     struct ldlm_handle *parent_res_handle,
+                                     struct ldlm_handle *parent_lock_handle,
+                                     __u64 *res_id,
+                                     ldlm_mode_t mode,
+                                     int *flags,
+                                     ldlm_lock_callback completion,
+                                     ldlm_lock_callback blocking,
+                                     __u32 data_len,
+                                     void *data,
                                      struct ldlm_handle *lockh)
 {
         struct ldlm_namespace *ns;
-        struct ldlm_resource *res;
-        struct ldlm_lock *lock;
-        int incompat, rc;
+        struct ldlm_resource *res, *parent_res;
+        struct ldlm_lock *lock, *parent_lock;
+        int incompat = 0, rc;
+        __u64 new_id[RES_NAME_SIZE];
+        ldlm_res_compat compat;
+        ldlm_res_policy policy;
 
         ENTRY;
 
-	ns = ldlm_namespace_find(obddev, ns_id);
-	if (ns == NULL || ns->ns_hash == NULL)
-		BUG();
+        parent_res = ldlm_handle2object(parent_res_handle);
+        parent_lock = ldlm_handle2object(parent_lock_handle);
+
+        ns = ldlm_namespace_find(obddev, ns_id);
+        if (ns == NULL || ns->ns_hash == NULL) 
+                RETURN(-ELDLM_BAD_NAMESPACE);
+
+        if (parent_res &&
+            (policy = ldlm_res_policy_table[parent_res->lr_type])) {
+                rc = policy(parent_res, res_id, new_id, mode, NULL);
+                if (rc == ELDLM_RES_CHANGED) {
+                        *flags |= LDLM_FL_RES_CHANGED;
+                        memcpy(res_id, new_id, sizeof(__u64) * RES_NAME_SIZE);
+                }
+        }
 
         res = ldlm_resource_get(ns, parent_res, res_id, 1);
         if (res == NULL)
-                BUG();
+                RETURN(-ENOMEM);
 
         lock = ldlm_lock_new(parent_lock, res, mode);
         if (lock == NULL)
-                BUG();
+                RETURN(-ENOMEM);
 
-        lockh->addr = (__u64)(unsigned long)lock;
+        if ((*flags) & LDLM_FL_COMPLETION_AST)
+                lock->l_completion_ast = completion;
+        if ((*flags) & LDLM_FL_BLOCKING_AST)
+                lock->l_blocking_ast = blocking;
+        ldlm_object2handle(lock, lockh);
         spin_lock(&res->lr_lock);
 
         /* FIXME: We may want to optimize by checking lr_most_restr */
 
         if (!list_empty(&res->lr_converting)) {
                 list_add(&lock->l_res_link, res->lr_waiting.prev);
-                rc = ELDLM_BLOCK_CONV;
+                rc = -ELDLM_BLOCK_CONV;
                 GOTO(out, rc);
         }
         if (!list_empty(&res->lr_waiting)) {
                 list_add(&lock->l_res_link, res->lr_waiting.prev);
-                rc = ELDLM_BLOCK_WAIT;
+                rc = -ELDLM_BLOCK_WAIT;
                 GOTO(out, rc);
         }
-        incompat = ldlm_notify_incompatible(&res->lr_granted, lock);
+
+        if (parent_res &&
+            (compat = ldlm_res_compat_table[parent_res->lr_type])) {
+                struct list_head *tmp;
+                list_for_each(tmp, &parent_res->lr_children) {
+                        struct ldlm_resource *child;
+                        child = list_entry(tmp, struct ldlm_resource,
+                                           lr_childof);
+
+                        if (compat(child, res))
+                                continue;
+
+                        incompat |= ldlm_notify_incompatible(&child->lr_granted,
+                                                             lock);
+                }
+        } else
+                incompat = ldlm_notify_incompatible(&res->lr_granted, lock);
+
         if (incompat) {
                 list_add(&lock->l_res_link, res->lr_waiting.prev);
-                rc = ELDLM_BLOCK_GRANTED;
+                rc = -ELDLM_BLOCK_GRANTED;
                 GOTO(out, rc);
         }
 
@@ -171,7 +227,8 @@ ldlm_error_t ldlm_local_lock_enqueue(struct obd_device *obddev, __u32 ns_id,
         if (mode < res->lr_most_restr)
                 res->lr_most_restr = mode;
 
-        /* XXX call the completion call back function */ 
+        if (lock->l_completion_ast)
+                lock->l_completion_ast(lock, NULL, NULL);
 
         rc = ELDLM_OK;
         GOTO(out, rc);
@@ -204,12 +261,33 @@ ldlm_error_t ldlm_local_lock_cancel(struct obd_device *obddev,
         return 0;
 }
 
+ldlm_error_t ldlm_local_lock_convert(struct obd_device *obddev, 
+                                     struct ldlm_handle *lockh,
+                                    int new_mode, int flags)
+{
+        struct ldlm_lock *lock;
+        struct ldlm_resource *res = lock->l_resource;
+        ENTRY;
+
+        lock = (struct ldlm_lock *)(unsigned long)lockh->addr;
+        list_del(&lock->l_res_link); 
+        lock->l_req_mode = new_mode;
+
+        list_add(&lock->l_res_link, &lock->l_resource->lr_converting); 
+        
+        ldlm_reprocess_queue(&res->lr_converting, &res->lr_granted); 
+        if (list_empty(&res->lr_converting))
+                ldlm_reprocess_queue(&res->lr_waiting, &res->lr_granted); 
+        
+        return 0;
+}
+
 void ldlm_lock_dump(struct ldlm_lock *lock)
 {
         char ver[128];
 
         if (RES_VERSION_SIZE != 4)
-                BUG();
+                LBUG();
 
         snprintf(ver, sizeof(ver), "%x %x %x %x",
                  lock->l_version[0], lock->l_version[1],

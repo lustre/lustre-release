@@ -69,6 +69,13 @@ enum {
         OBD_FAIL_OST_CLOSE_NET,
         OBD_FAIL_OST_BRW_NET,
         OBD_FAIL_OST_PUNCH_NET,
+
+        OBB_FAIL_LDLM = 0x300,
+        OBD_FAIL_LDLM_ENQUEUE,
+        OBD_FAIL_LDLM_CONVERT,
+        OBD_FAIL_LDLM_CANCEL,
+        OBD_FAIL_LDLM_CALLBACK,
+
 };
 
 /* preparation for a more advanced failure testbed (not functional yet) */

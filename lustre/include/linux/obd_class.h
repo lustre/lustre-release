@@ -699,4 +699,9 @@ int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
 extern void obd_sysctl_init (void);
 extern void obd_sysctl_clean (void);
 
+/* pack_generic.c */
+int lustre_pack_msg(int count, int *lens, char **bufs, int *len, char **buf);
+int lustre_unpack_msg(char *buf, int len);
+void *lustre_msg_buf(int n, struct lustre_msg *m);
+
 #endif /* __LINUX_CLASS_OBD_H */

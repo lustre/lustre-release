@@ -319,7 +319,7 @@ static int ost_brw_read(struct ost_obd *obddev, struct ptlrpc_request *req)
         for (i = 0; i < objcount; i++) {
                 ost_unpack_ioo((void *)&tmp1, &ioo);
                 if (tmp2 + ioo->ioo_bufcnt > end2) {
-                        BUG();
+                        LBUG();
                         rc = -EFAULT;
                         break;
                 }
@@ -548,20 +548,20 @@ int ost_brw(struct ost_obd *obddev, struct ptlrpc_request *req)
 static int ost_handle(struct obd_device *obddev, struct ptlrpc_service *svc,
                       struct ptlrpc_request *req)
 {
-	int rc;
-	struct ost_obd *ost = &obddev->u.ost;
-	struct ptlreq_hdr *hdr;
+        int rc;
+        struct ost_obd *ost = &obddev->u.ost;
+        struct ptlreq_hdr *hdr;
 
-	ENTRY;
+        ENTRY;
 
-	hdr = (struct ptlreq_hdr *)req->rq_reqbuf;
-	if (NTOH__u32(hdr->type) != OST_TYPE_REQ) {
-		CERROR("lustre_ost: wrong packet type sent %d\n",
-		       NTOH__u32(hdr->type));
-                BUG();
-		rc = -EINVAL;
+        hdr = (struct ptlreq_hdr *)req->rq_reqbuf;
+        if (NTOH__u32(hdr->type) != PTL_RPC_REQUEST) {
+                CERROR("lustre_ost: wrong packet type sent %d\n",
+                       NTOH__u32(hdr->type));
+                LBUG();
+                rc = -EINVAL;
                 GOTO(out, rc);
-	}
+        }
 
         rc = ost_unpack_req(req->rq_reqbuf, req->rq_reqlen,
                             &req->rq_reqhdr, &req->rq_req);
@@ -678,13 +678,9 @@ static int ost_setup(struct obd_device *obddev, obd_count len,
                 RETURN(-EINVAL);
         }
 
-        ost->ost_service = ptlrpc_init_svc( 2 * 1024, 
-                                            OST_REQUEST_PORTAL,
-                                            OSC_REPLY_PORTAL,
-                                            "self",
-                                            ost_unpack_req,
-                                            ost_pack_rep,
-                                            ost_handle);
+        ost->ost_service = ptlrpc_init_svc(2 * 1024, 
+                                           OST_REQUEST_PORTAL, OSC_REPLY_PORTAL,
+                                           "self", ost_handle);
         if (!ost->ost_service) {
                 obd_disconnect(&ost->ost_conn);
                 RETURN(-EINVAL);

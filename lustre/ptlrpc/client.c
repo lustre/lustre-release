@@ -34,37 +34,37 @@
 
 int ptlrpc_enqueue(struct ptlrpc_client *peer, struct ptlrpc_request *req)
 {
-	struct ptlrpc_request *srv_req;
-	
-	if (!peer->cli_obd) { 
-		EXIT;
-		return -1;
-	}
+        struct ptlrpc_request *srv_req;
+        
+        if (!peer->cli_obd) { 
+                EXIT;
+                return -1;
+        }
 
-	OBD_ALLOC(srv_req, sizeof(*srv_req));
-	if (!srv_req) { 
-		EXIT;
-		return -ENOMEM;
-	}
+        OBD_ALLOC(srv_req, sizeof(*srv_req));
+        if (!srv_req) { 
+                EXIT;
+                return -ENOMEM;
+        }
 
         CDEBUG(0, "peer obd minor %d, incoming req %p, srv_req %p\n",
-	       peer->cli_obd->obd_minor, req, srv_req);
+               peer->cli_obd->obd_minor, req, srv_req);
 
-	memset(srv_req, 0, sizeof(*req)); 
+        memset(srv_req, 0, sizeof(*req)); 
 
-	/* move the request buffer */
-	srv_req->rq_reqbuf = req->rq_reqbuf;
-	srv_req->rq_reqlen = req->rq_reqlen;
-	srv_req->rq_obd = peer->cli_obd;
+        /* move the request buffer */
+        srv_req->rq_reqbuf = req->rq_reqbuf;
+        srv_req->rq_reqlen = req->rq_reqlen;
+        srv_req->rq_obd = peer->cli_obd;
 
-	/* remember where it came from */
-	srv_req->rq_reply_handle = req;
+        /* remember where it came from */
+        srv_req->rq_reply_handle = req;
 
         spin_lock(&peer->cli_lock);
-	list_add(&srv_req->rq_list, &peer->cli_obd->obd_req_list); 
+        list_add(&srv_req->rq_list, &peer->cli_obd->obd_req_list); 
         spin_unlock(&peer->cli_lock);
-	wake_up(&peer->cli_obd->obd_req_waitq);
-	return 0;
+        wake_up(&peer->cli_obd->obd_req_waitq);
+        return 0;
 }
 
 int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal, 
@@ -75,33 +75,33 @@ int ptlrpc_connect_client(int dev, char *uuid, int req_portal, int rep_portal,
 
         memset(cl, 0, sizeof(*cl));
         spin_lock_init(&cl->cli_lock);
-	cl->cli_xid = 1;
-	cl->cli_obd = NULL; 
-	cl->cli_request_portal = req_portal;
-	cl->cli_reply_portal = rep_portal;
-	cl->cli_rep_unpack = rep_unpack;
-	cl->cli_req_pack = req_pack;
+        cl->cli_xid = 1;
+        cl->cli_obd = NULL; 
+        cl->cli_request_portal = req_portal;
+        cl->cli_reply_portal = rep_portal;
+        cl->cli_rep_unpack = rep_unpack;
+        cl->cli_req_pack = req_pack;
 
-	/* non networked client */
-	if (dev >= 0 && dev < MAX_OBD_DEVICES) {
-		struct obd_device *obd = &obd_dev[dev];
-		
-		if ((!obd->obd_flags & OBD_ATTACHED) ||
-		    (!obd->obd_flags & OBD_SET_UP)) { 
-			CERROR("target device %d not att or setup\n", dev);
-			return -EINVAL;
-		}
+        /* non networked client */
+        if (dev >= 0 && dev < MAX_OBD_DEVICES) {
+                struct obd_device *obd = &obd_dev[dev];
+                
+                if ((!obd->obd_flags & OBD_ATTACHED) ||
+                    (!obd->obd_flags & OBD_SET_UP)) { 
+                        CERROR("target device %d not att or setup\n", dev);
+                        return -EINVAL;
+                }
                 if (strcmp(obd->obd_type->typ_name, "ost") && 
                     strcmp(obd->obd_type->typ_name, "mds")) { 
                         return -EINVAL;
                 }
 
-		cl->cli_obd = &obd_dev[dev];
-		return 0;
-	}
+                cl->cli_obd = &obd_dev[dev];
+                return 0;
+        }
 
-	/* networked */
-	err = kportal_uuid_to_peer(uuid, &cl->cli_server);
+        /* networked */
+        err = kportal_uuid_to_peer(uuid, &cl->cli_server);
         if (err != 0)
                 CERROR("cannot find peer %s!\n", uuid);
 
@@ -126,35 +126,35 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
                                        int opcode, int namelen, char *name,
                                        int tgtlen, char *tgt)
 {
-	struct ptlrpc_request *request;
-	int rc;
-	ENTRY; 
+        struct ptlrpc_request *request;
+        int rc;
+        ENTRY; 
 
-	OBD_ALLOC(request, sizeof(*request));
-	if (!request) { 
-		CERROR("request allocation out of memory\n");
-		return NULL;
-	}
+        OBD_ALLOC(request, sizeof(*request));
+        if (!request) { 
+                CERROR("request allocation out of memory\n");
+                return NULL;
+        }
 
-	memset(request, 0, sizeof(*request));
+        memset(request, 0, sizeof(*request));
         //spin_lock_init(&request->rq_lock);
 
         spin_lock(&cl->cli_lock);
-	request->rq_xid = cl->cli_xid++;
+        request->rq_xid = cl->cli_xid++;
         spin_unlock(&cl->cli_lock);
 
-	rc = cl->cli_req_pack(name, namelen, tgt, tgtlen,
-			  &request->rq_reqhdr, &request->rq_req,
-			  &request->rq_reqlen, &request->rq_reqbuf);
-	if (rc) { 
-		CERROR("cannot pack request %d\n", rc); 
-		return NULL;
-	}
-	request->rq_reqhdr->opc = opcode;
-	request->rq_reqhdr->xid = request->rq_xid;
+        rc = cl->cli_req_pack(name, namelen, tgt, tgtlen,
+                          &request->rq_reqhdr, &request->rq_req,
+                          &request->rq_reqlen, &request->rq_reqbuf);
+        if (rc) { 
+                CERROR("cannot pack request %d\n", rc); 
+                return NULL;
+        }
+        request->rq_reqhdr->opc = opcode;
+        request->rq_reqhdr->xid = request->rq_xid;
 
-	EXIT;
-	return request;
+        EXIT;
+        return request;
 }
 
 void ptlrpc_free_req(struct ptlrpc_request *request)
@@ -164,7 +164,7 @@ void ptlrpc_free_req(struct ptlrpc_request *request)
 
         if (request->rq_repbuf != NULL)
                 OBD_FREE(request->rq_repbuf, request->rq_replen);
-	OBD_FREE(request, sizeof(*request));
+        OBD_FREE(request, sizeof(*request));
 }
 
 static int ptlrpc_check_reply(struct ptlrpc_request *req)
@@ -245,27 +245,25 @@ int ptlrpc_abort(struct ptlrpc_request *request)
 
 
 int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
-                             
 {
-	int rc = 0;
+        int rc = 0;
         ENTRY;
 
-	init_waitqueue_head(&req->rq_wait_for_rep);
+        init_waitqueue_head(&req->rq_wait_for_rep);
 
-	if (cl->cli_obd) {
-		/* Local delivery */
-                ENTRY;
-		rc = ptlrpc_enqueue(cl, req); 
-	} else {
-		/* Remote delivery via portals. */
-		req->rq_req_portal = cl->cli_request_portal;
-		req->rq_reply_portal = cl->cli_reply_portal;
-		rc = ptl_send_rpc(req, &cl->cli_server);
-	}
-	if (rc) { 
+        if (cl->cli_obd) {
+                /* Local delivery */
+                rc = ptlrpc_enqueue(cl, req); 
+        } else {
+                /* Remote delivery via portals. */
+                req->rq_req_portal = cl->cli_request_portal;
+                req->rq_reply_portal = cl->cli_reply_portal;
+                rc = ptl_send_rpc(req, &cl->cli_server);
+        }
+        if (rc) { 
                 CERROR("error %d, opcode %d\n", rc, req->rq_reqhdr->opc);
-		return -rc;
-	}
+                return -rc;
+        }
 
         CDEBUG(D_OTHER, "-- sleeping\n");
         wait_event_interruptible(req->rq_wait_for_rep, ptlrpc_check_reply(req));
@@ -283,26 +281,26 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
                 CERROR("Unknown reason for wakeup\n");
                 /* XXX Phil - I end up here when I kill obdctl */
                 ptlrpc_abort(req); 
-                //BUG();
+                //LBUG();
                 EXIT;
                 rc = -EINTR;
                 goto out;
         }
 
-	rc = cl->cli_rep_unpack(req->rq_repbuf, req->rq_replen,
+        rc = cl->cli_rep_unpack(req->rq_repbuf, req->rq_replen,
                                 &req->rq_rephdr, &req->rq_rep);
-	if (rc) {
-		CERROR("unpack_rep failed: %d\n", rc);
+        if (rc) {
+                CERROR("unpack_rep failed: %d\n", rc);
                 goto out;
-	}
+        }
         CDEBUG(D_NET, "got rep %d\n", req->rq_rephdr->xid);
 
-	if ( req->rq_rephdr->status == 0 )
+        if ( req->rq_rephdr->status == 0 )
                 CDEBUG(D_NET, "--> buf %p len %d status %d\n", req->rq_repbuf,
                        req->rq_replen, req->rq_rephdr->status);
 
-	EXIT;
+        EXIT;
  out:
         //spin_unlock(&req->rq_lock);
-	return rc;
+        return rc;
 }

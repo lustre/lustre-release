@@ -75,6 +75,8 @@ struct mds_obd {
 };
 
 struct ldlm_obd {
+        struct ptlrpc_service *ldlm_service;
+
         struct list_head ldlm_namespaces;
         spinlock_t       ldlm_lock;
 };

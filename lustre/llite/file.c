@@ -54,7 +54,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
         ENTRY;
 
         if (file->private_data) 
-                BUG();
+                LBUG();
 
         fd = kmem_cache_alloc(ll_file_data_slab, SLAB_KERNEL); 
         if (!fd) { 
@@ -64,7 +64,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
 
         oa = ll_oa_from_inode(inode, (OBD_MD_FLMODE | OBD_MD_FLID));
         if (oa == NULL)
-                BUG();
+                LBUG();
         rc = obd_open(ll_i2obdconn(inode), oa); 
         obdo_free(oa);
         if (rc) { 
@@ -77,7 +77,7 @@ static int ll_file_open(struct inode *inode, struct file *file)
         rc = mdc_open(&sbi->ll_mds_client, inode->i_ino, S_IFREG,
                       file->f_flags, &fd->fd_mdshandle, &req); 
         if (!fd->fd_mdshandle) 
-                BUG();
+                LBUG();
 
         ptlrpc_free_req(req);
         if (rc) { 
@@ -108,14 +108,14 @@ static int ll_file_release(struct inode *inode, struct file *file)
 
         fd = (struct ll_file_data *)file->private_data;
         if (!fd || !fd->fd_mdshandle) { 
-                BUG();
+                LBUG();
                 rc = -EINVAL;
                 goto out;
         }
 
         oa = ll_oa_from_inode(inode, (OBD_MD_FLMODE | OBD_MD_FLID));
         if (oa == NULL)
-                BUG();
+                LBUG();
         rc = obd_close(ll_i2obdconn(inode), oa); 
         obdo_free(oa);
         if (rc) { 

@@ -40,14 +40,18 @@ static const ptl_handle_ni_t *socknal_nip = NULL, *qswnal_nip = NULL;
  */
 static int sent_packet_callback(ptl_event_t *ev, void *data)
 {
+        ptl_event_t junk_ev;
+
         ENTRY;
+
+        PtlEQGet(sent_pkt_eq, &junk_ev);
 
         if (ev->type == PTL_EVENT_SENT) {
                 OBD_FREE(ev->mem_desc.start, ev->mem_desc.length);
         } else { 
                 // XXX make sure we understand all events, including ACK's
                 CERROR("Unknown event %d\n", ev->type); 
-                BUG();
+                LBUG();
         }
 
         EXIT;
@@ -69,7 +73,7 @@ static int rcvd_reply_callback(ptl_event_t *ev, void *data)
         } else { 
                 // XXX make sure we understand all events, including ACK's
                 CERROR("Unknown event %d\n", ev->type); 
-                BUG();
+                LBUG();
         }
 
         EXIT;
@@ -101,7 +105,7 @@ int server_request_callback(ptl_event_t *ev, void *data)
         spin_lock(&service->srv_lock); 
         if ( ev->mem_desc.start != 
              service->srv_md[service->srv_md_active].start ) {
-                BUG();
+                LBUG();
         }
 
         service->srv_ref_count[service->srv_md_active]++;
@@ -115,7 +119,7 @@ int server_request_callback(ptl_event_t *ev, void *data)
 
                 if (rc != PTL_OK) {
                         CERROR("PtlMEUnlink failed - DROPPING soon: %d\n", rc);
-                        BUG();
+                        LBUG();
                         spin_unlock(&service->srv_lock); 
                         return rc;
                 }
@@ -126,7 +130,7 @@ int server_request_callback(ptl_event_t *ev, void *data)
                 if (service->srv_me_h[service->srv_md_active] == 0) { 
                         CERROR("All %d ring ME's are unlinked!\n",
                                service->srv_ring_length);
-                        BUG();
+                        LBUG();
                 }
         }
 
@@ -154,7 +158,7 @@ static int bulk_source_callback(ptl_event_t *ev, void *data)
                 wake_up_interruptible(&bulk->b_waitq);
         } else {
                 CERROR("Unexpected event type!\n");
-                BUG();
+                LBUG();
         }
 
         EXIT;
@@ -176,7 +180,7 @@ static int bulk_sink_callback(ptl_event_t *ev, void *data)
                 wake_up_interruptible(&bulk->b_waitq);
         } else {
                 CERROR("Unexpected event type!\n");
-                BUG();
+                LBUG();
         }
 
         /* FIXME: This should happen unconditionally */

@@ -11,7 +11,7 @@ PORT=1234
 setup
 setup_portals
 
-new_fs ext2 /tmp/ost 10000
+new_fs ext2 /tmp/ost 250000
 OST=$LOOPDEV
 MDSFS=ext2
 new_fs ${MDSFS} /tmp/mds 10000
@@ -35,4 +35,4 @@ setup -1
 quit
 EOF
 
-mount -t lustre_light -o device=3 none /mnt/obd
+#mount -t lustre_light -o device=3 none /mnt/obd
