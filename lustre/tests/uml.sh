@@ -1,7 +1,7 @@
 #!/bin/bash
 
-config=uml.xml
-LMC=../utils/lmc
+config=${1-uml.xml}
+LMC=${LMC-../utils/lmc}
 TMP=${TMP:-/tmp}
 
 # create nodes
