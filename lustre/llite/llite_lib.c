@@ -140,7 +140,7 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
         struct obd_statfs osfs;
         struct ptlrpc_request *request = NULL;
         struct ptlrpc_connection *mdc_conn;
-        struct ll_read_inode2_cookie lic;
+        struct lustre_md md;
         class_uuid_t uuid;
 
         ENTRY;
@@ -244,18 +244,18 @@ int ll_fill_super(struct super_block *sb, void *data, int silent)
                 GOTO(out_lliod, err);
         }
 
-        lic.lic_body = lustre_msg_buf(request->rq_repmsg, 0,
-                                      sizeof(*lic.lic_body));
-        LASSERT (lic.lic_body != NULL);         /* checked by mdc_getattr() */
-        LASSERT_REPSWABBED (request, 0);        /* swabbed by mdc_getattr() */
-
-        lic.lic_lsm = NULL;
+        err = mdc_req2lustre_md(request, 0, &sbi->ll_osc_conn, &md);
+        if (err) {
+                CERROR("failed to understand root inode md: rc = %d\n",err);
+                ptlrpc_req_finished (request);
+                GOTO(out_lliod, err);
+        }
 
         LASSERT(sbi->ll_rootino != 0);
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        root = iget4(sb, sbi->ll_rootino, NULL, &lic);
+        root = iget4(sb, sbi->ll_rootino, NULL, &md);
 #else
-        root = ll_iget(sb, sbi->ll_rootino, &lic);
+        root = ll_iget(sb, sbi->ll_rootino, &md);
 #endif
 
         ptlrpc_req_finished(request);
@@ -605,24 +605,29 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
          * In that case, we need to check permissions and update the local
          * inode ourselves so we can call obdo_from_inode() always. */
         if (ia_valid & (lsm ? ~(OST_ATTR | ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
-                struct mds_body *body;
-
+                struct lustre_md md;
                 ll_prepare_mdc_op_data(&op_data, inode, NULL, NULL, 0, 0);
 
                 rc = mdc_setattr(&sbi->ll_mdc_conn, &op_data,
                                   attr, NULL, 0, NULL, 0, &request);
 
+                if (rc) { 
+                        ptlrpc_req_finished(request);
+                        if (rc  != -EPERM) 
+                                CERROR("mdc_setattr fails: err = %d\n", rc);
+                        RETURN(rc);
+                }
+
+                rc = mdc_req2lustre_md(request, 0, &sbi->ll_osc_conn, &md);
                 if (rc && rc != -EPERM) {
                         ptlrpc_req_finished(request);
                         CERROR("mdc_setattr fails: err = %d\n", rc);
                         RETURN(rc);
                 }
-
-                body = lustre_msg_buf(request->rq_repmsg, 0, sizeof(*body));
-                ll_update_inode(inode, body, NULL);
+                ll_update_inode(inode, md.body, md.lsm);
                 ptlrpc_req_finished(request);
 
-                if (!lsm || !S_ISREG(inode->i_mode)) {
+                if (!md.lsm || !S_ISREG(inode->i_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
                         RETURN(0);
                 }
@@ -851,8 +856,7 @@ void ll_update_inode(struct inode *inode, struct mds_body *body,
 
 void ll_read_inode2(struct inode *inode, void *opaque)
 {
-        struct ll_read_inode2_cookie *lic = opaque;
-        struct mds_body *body = lic->lic_body;
+        struct lustre_md *md = opaque;
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
 
@@ -864,7 +868,7 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         LASSERT(!lli->lli_smd);
 
         /* core attributes from the MDS first */
-        ll_update_inode(inode, body, lic->lic_lsm);
+        ll_update_inode(inode, md->body, md->lsm);
 
         /* OIDEBUG(inode); */
 
