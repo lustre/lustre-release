@@ -252,9 +252,10 @@ int ldlm_cli_enqueue(struct lustre_handle *connh,
 
         CDEBUG(D_INFO, "remote handle: %p, flags: %d\n",
                (void *)(unsigned long)reply->lock_handle.addr, *flags);
-        CDEBUG(D_INFO, "extent: %Lu -> %Lu\n",
-               (unsigned long long)reply->lock_extent.start,
-               (unsigned long long)reply->lock_extent.end);
+        CDEBUG(D_INFO, "requested extent: "LPU64" -> "LPU64", got extent "
+               LPU64" -> "LPU64"\n",
+               body->lock_desc.l_extent.start, body->lock_desc.l_extent.end,
+               reply->lock_extent.start, reply->lock_extent.end);
 
         /* If enqueue returned a blocked lock but the completion handler has
          * already run, then it fixed up the resource and we don't need to do it

@@ -482,95 +482,95 @@ struct l_wait_info {
         void  *lwi_cb_data;
 };
 
-#define LWI_TIMEOUT(time, cb, data)                                             \
-((struct l_wait_info) {                                                         \
-        lwi_timeout:    time,                                                   \
-        lwi_on_timeout: cb,                                                     \
-        lwi_cb_data:    data                                                    \
+#define LWI_TIMEOUT(time, cb, data)                                            \
+((struct l_wait_info) {                                                        \
+        lwi_timeout:    time,                                                  \
+        lwi_on_timeout: cb,                                                    \
+        lwi_cb_data:    data                                                   \
 })
 
-#define LWI_INTR(cb, data)                                                      \
-((struct l_wait_info) {                                                         \
-        lwi_signals:   1,                                                       \
-        lwi_on_signal: cb,                                                      \
-        lwi_cb_data:   data                                                     \
+#define LWI_INTR(cb, data)                                                     \
+((struct l_wait_info) {                                                        \
+        lwi_signals:   1,                                                      \
+        lwi_on_signal: cb,                                                     \
+        lwi_cb_data:   data                                                    \
 })
 
-#define LWI_TIMEOUT_INTR(time, time_cb, sig_cb, data)                           \
-((struct l_wait_info) {                                                         \
-        lwi_timeout:    time,                                                   \
-        lwi_on_timeout: time_cb,                                                \
-        lwi_signals:    1,                                                      \
-        lwi_on_signal:  sig_cb,                                                 \
-        lwi_cb_data:    data                                                    \
+#define LWI_TIMEOUT_INTR(time, time_cb, sig_cb, data)                          \
+((struct l_wait_info) {                                                        \
+        lwi_timeout:    time,                                                  \
+        lwi_on_timeout: time_cb,                                               \
+        lwi_signals:    1,                                                     \
+        lwi_on_signal:  sig_cb,                                                \
+        lwi_cb_data:    data                                                   \
 })
 
 /* XXX this should be one mask-check */
-#define l_killable_pending(task)                                                \
-(sigismember(&(task->pending.signal), SIGKILL) ||                               \
- sigismember(&(task->pending.signal), SIGINT) ||                                \
+#define l_killable_pending(task)                                               \
+(sigismember(&(task->pending.signal), SIGKILL) ||                              \
+ sigismember(&(task->pending.signal), SIGINT) ||                               \
  sigismember(&(task->pending.signal), SIGTERM))
 
-#define __l_wait_event(wq, condition, info, ret)                                \
-do {                                                                            \
-        wait_queue_t __wait;                                                    \
-        long __state;                                                           \
-        int __timed_out = 0;                                                    \
-        init_waitqueue_entry(&__wait, current);                                 \
-                                                                                \
-        add_wait_queue(&wq, &__wait);                                           \
-        if (info->lwi_signals && !info->lwi_timeout)                            \
-            __state = TASK_INTERRUPTIBLE;                                       \
-        else                                                                    \
-            __state = TASK_UNINTERRUPTIBLE;                                     \
-        for (;;) {                                                              \
-            set_current_state(__state);                                         \
-            if (condition)                                                      \
-                    break;                                                      \
-            if (__state == TASK_INTERRUPTIBLE && l_killable_pending(current)) { \
-                CERROR("lwe: interrupt\n");                                     \
-                if (info->lwi_on_signal)                                        \
-                        info->lwi_on_signal(info->lwi_cb_data);                 \
-                ret = -EINTR;                                                   \
-                break;                                                          \
-            }                                                                   \
-            if (info->lwi_timeout && !__timed_out) {                            \
-                if (schedule_timeout(info->lwi_timeout) == 0) {                 \
-                    CERROR("lwe: timeout\n");                                   \
-                    __timed_out = 1;                                            \
-                    if (!info->lwi_on_timeout ||                                \
-                        info->lwi_on_timeout(info->lwi_cb_data)) {              \
-                        ret = -ETIMEDOUT;                                       \
-                        break;                                                  \
-                    }                                                           \
-                    /* We'll take signals after a timeout. */                   \
-                    if (info->lwi_signals) {                                    \
-                        __state = TASK_INTERRUPTIBLE;                           \
-                        /* Check for a pending interrupt. */                    \
-                        if (info->lwi_signals && l_killable_pending(current)) { \
-                            CERROR("lwe: pending interrupt\n");                 \
-                            if (info->lwi_on_signal)                            \
-                                info->lwi_on_signal(info->lwi_cb_data);         \
-                            ret = -EINTR;                                       \
-                            break;                                              \
-                        }                                                       \
-                    }                                                           \
-                }                                                               \
-            } else {                                                            \
-                schedule();                                                     \
-            }                                                                   \
-        }                                                                       \
-        current->state = TASK_RUNNING;                                          \
-        remove_wait_queue(&wq, &__wait);                                        \
+#define __l_wait_event(wq, condition, info, ret)                               \
+do {                                                                           \
+        wait_queue_t __wait;                                                   \
+        long __state;                                                          \
+        int __timed_out = 0;                                                   \
+        init_waitqueue_entry(&__wait, current);                                \
+                                                                               \
+        add_wait_queue(&wq, &__wait);                                          \
+        if (info->lwi_signals && !info->lwi_timeout)                           \
+            __state = TASK_INTERRUPTIBLE;                                      \
+        else                                                                   \
+            __state = TASK_UNINTERRUPTIBLE;                                    \
+        for (;;) {                                                             \
+            set_current_state(__state);                                        \
+            if (condition)                                                     \
+                    break;                                                     \
+            if (__state == TASK_INTERRUPTIBLE && l_killable_pending(current)) {\
+                CERROR("lwe: interrupt\n");                                    \
+                if (info->lwi_on_signal)                                       \
+                        info->lwi_on_signal(info->lwi_cb_data);                \
+                ret = -EINTR;                                                  \
+                break;                                                         \
+            }                                                                  \
+            if (info->lwi_timeout && !__timed_out) {                           \
+                if (schedule_timeout(info->lwi_timeout) == 0) {                \
+                    CERROR("lwe: timeout\n");                                  \
+                    __timed_out = 1;                                           \
+                    if (!info->lwi_on_timeout ||                               \
+                        info->lwi_on_timeout(info->lwi_cb_data)) {             \
+                        ret = -ETIMEDOUT;                                      \
+                        break;                                                 \
+                    }                                                          \
+                    /* We'll take signals after a timeout. */                  \
+                    if (info->lwi_signals) {                                   \
+                        __state = TASK_INTERRUPTIBLE;                          \
+                        /* Check for a pending interrupt. */                   \
+                        if (info->lwi_signals && l_killable_pending(current)) {\
+                            CERROR("lwe: pending interrupt\n");                \
+                            if (info->lwi_on_signal)                           \
+                                info->lwi_on_signal(info->lwi_cb_data);        \
+                            ret = -EINTR;                                      \
+                            break;                                             \
+                        }                                                      \
+                    }                                                          \
+                }                                                              \
+            } else {                                                           \
+                schedule();                                                    \
+            }                                                                  \
+        }                                                                      \
+        current->state = TASK_RUNNING;                                         \
+        remove_wait_queue(&wq, &__wait);                                       \
 } while(0)
 
-#define l_wait_event(wq, condition, info)                                       \
-({                                                                              \
-        int __ret = 0;                                                          \
-        struct l_wait_info *__info = (info);                                    \
-        if (!(condition))                                                       \
-                __l_wait_event(wq, condition, __info, __ret);                   \
-        __ret;                                                                  \
+#define l_wait_event(wq, condition, info)                                      \
+({                                                                             \
+        int __ret = 0;                                                         \
+        struct l_wait_info *__info = (info);                                   \
+        if (!(condition))                                                      \
+                __l_wait_event(wq, condition, __info, __ret);                  \
+        __ret;                                                                 \
 })
 
 #endif /* _LUSTRE_LIB_H */
