@@ -33,7 +33,7 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_lib.h>
 
-inline struct obdo * ll_oa_from_inode(struct inode *inode, unsigned long valid)
+struct obdo * ll_oa_from_inode(struct inode *inode, unsigned long valid)
 {
         struct ll_inode_info *oinfo = ll_i2info(inode);
         struct obdo *oa = obdo_alloc();
@@ -257,19 +257,25 @@ void ll_truncate(struct inode *inode)
         ENTRY;
 
         oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
-        if ( !oa ) {
+        if (!oa) {
                 CERROR("no memory to allocate obdo!\n");
-                return; 
-        } 
-        
+                return;
+        }
+
         CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
                (long)oa->o_id, (unsigned long long)oa->o_size);
         err = obd_punch(ll_i2obdconn(inode), oa, oa->o_size, 0);
         obdo_free(oa);
 
-        if (err) {
+        if (err)
                 CERROR("obd_truncate fails (%d)\n", err);
-        }
+        else
+                /* This is done for us at the OST and MDS, but the
+                 * updated values are not sent back to us.  Needed
+                 * for POSIX.
+                 */
+                inode->i_mtime = inode->i_ctime = CURRENT_TIME;
+
         EXIT;
         return;
 } /* ll_truncate */
@@ -287,7 +293,6 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         int              rc = 0;
 
         ENTRY;
-
         if (blocksize != PAGE_SIZE) {
                 CERROR("direct_IO blocksize != PAGE_SIZE, what to do?\n");
                 LBUG();
@@ -312,7 +317,8 @@ int ll_direct_IO(int rw, struct inode *inode, struct kiobuf *iobuf,
         if (!oa)
                 GOTO(out, rc = -ENOMEM);
 
-        rc = obd_brw(rw, ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
+        rc = obd_brw(rw == WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
+                     ll_i2obdconn(inode), num_obdo, &oa, &bufs_per_obdo,
                      iobuf->maplist, count, offset, flags);
         if (rc == 0)
                 rc = bufs_per_obdo * PAGE_SIZE;
