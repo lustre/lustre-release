@@ -3,6 +3,9 @@
        * bug fixes:
          - #1600 MDS server data isn't written at setup.  This causes a crash 
            in mds_update_server_data when the MDS is mounted the first time.
+         - #1749 avoids setting DISP_LOOKUP_EXECD until we can set either 
+           LOOKUP_NEG or LOOKUP_POS.	It also backports a fix from b_devel, 
+           to return LOCK_ABORTED if LOOKUP_EXECD isn't set.
 
 2003-08-12  Brian Behlendorf  <behlendorf1@llnl.gov>
        * version llnl_4devel tagged
