@@ -3,10 +3,10 @@
  include/linux/ext3_xattr.h |    6 +++
  3 files changed, 102 insertions(+), 2 deletions(-)
 
-Index: linux-p4smp/fs/ext3/Makefile
+Index: linux-2.4.21/fs/ext3/Makefile
 ===================================================================
---- linux-p4smp.orig/fs/ext3/Makefile	2004-06-14 13:46:11.000000000 -0700
-+++ linux-p4smp/fs/ext3/Makefile	2004-06-14 13:50:46.000000000 -0700
+--- linux-2.4.21.orig/fs/ext3/Makefile	2004-06-16 14:52:07.000000000 -0600
++++ linux-2.4.21/fs/ext3/Makefile	2004-06-16 14:52:08.000000000 -0600
 @@ -12,7 +12,8 @@ O_TARGET := ext3.o
  export-objs := ext3-exports.o
  
@@ -17,10 +17,10 @@ Index: linux-p4smp/fs/ext3/Makefile
  obj-m    := $(O_TARGET)
  
  export-objs += xattr.o
-Index: linux-p4smp/fs/ext3/xattr.c
+Index: linux-2.4.21/fs/ext3/xattr.c
 ===================================================================
---- linux-p4smp.orig/fs/ext3/xattr.c	2004-06-14 13:46:44.000000000 -0700
-+++ linux-p4smp/fs/ext3/xattr.c	2004-06-14 13:50:46.000000000 -0700
+--- linux-2.4.21.orig/fs/ext3/xattr.c	2004-06-16 14:52:08.000000000 -0600
++++ linux-2.4.21/fs/ext3/xattr.c	2004-06-16 15:47:06.000000000 -0600
 @@ -1780,18 +1780,25 @@ static void ext3_xattr_rehash(struct ext
  int __init
  init_ext3_xattr(void)
@@ -63,101 +63,28 @@ Index: linux-p4smp/fs/ext3/xattr.c
  }
  
  #endif  /* CONFIG_EXT3_FS_XATTR_SHARING */
-Index: linux-p4smp/fs/ext3/xattr_trusted.c
+Index: linux-2.4.21/fs/ext3/xattr_trusted.c
 ===================================================================
---- linux-p4smp.orig/fs/ext3/xattr_trusted.c	2004-06-14 13:41:58.000000000 -0700
-+++ linux-p4smp/fs/ext3/xattr_trusted.c	2004-06-14 13:50:46.000000000 -0700
-@@ -0,0 +1,86 @@
-+/*
-+ * linux/fs/ext3/xattr_trusted.c
-+ * Handler for trusted extended attributes.
-+ *
+--- linux-2.4.21.orig/fs/ext3/xattr_trusted.c	2004-06-16 14:52:06.000000000 -0600
++++ linux-2.4.21/fs/ext3/xattr_trusted.c	2004-06-16 15:36:26.000000000 -0600
+@@ -2,10 +2,11 @@
+  * linux/fs/ext3/xattr_trusted.c
+  * Handler for trusted extended attributes.
+  *
+- * Copyright (C) 2001 by Andreas Gruenbacher, <a.gruenbacher@computer.org>
 + * Copyright (C) 2003 by Andreas Gruenbacher, <a.gruenbacher@computer.org>
-+ */
-+
+  */
+ 
+-#include <linux/sched.h>
 +#include <linux/module.h>
 +#include <linux/string.h>
-+#include <linux/fs.h>
-+#include <linux/ext3_jbd.h>
-+#include <linux/ext3_fs.h>
-+#include <linux/ext3_xattr.h>
-+
-+#define XATTR_TRUSTED_PREFIX "trusted."
-+
-+static size_t
-+ext3_xattr_trusted_list(char *list, struct inode *inode,
-+			const char *name, int name_len)
-+{
-+	const int prefix_len = sizeof(XATTR_TRUSTED_PREFIX)-1;
-+
-+	if (!capable(CAP_SYS_ADMIN))
-+		return 0;
-+
-+	if (list) {
-+		memcpy(list, XATTR_TRUSTED_PREFIX, prefix_len);
-+		memcpy(list+prefix_len, name, name_len);
-+		list[prefix_len + name_len] = '\0';
-+	}
-+	return prefix_len + name_len + 1;
-+}
-+
-+static int
-+ext3_xattr_trusted_get(struct inode *inode, const char *name,
-+		       void *buffer, size_t size)
-+{
-+	if (strcmp(name, "") == 0)
-+		return -EINVAL;
-+	if (!capable(CAP_SYS_ADMIN))
-+		return -EPERM;
-+	return ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED, name,
-+			      buffer, size);
-+}
-+
-+static int
-+ext3_xattr_trusted_set(struct inode *inode, const char *name,
-+		       const void *value, size_t size, int flags)
-+{
-+	handle_t *handle;
-+	int error;
-+
-+	if (strcmp(name, "") == 0)
-+		return -EINVAL;
-+	if (!capable(CAP_SYS_ADMIN))
-+		return -EPERM;
-+	handle = ext3_journal_start(inode, EXT3_XATTR_TRANS_BLOCKS);
-+	if (IS_ERR(handle))
-+		return PTR_ERR(handle);
-+	error = ext3_xattr_set(handle, inode, EXT3_XATTR_INDEX_TRUSTED, name,
-+			       value, size, flags);
-+	ext3_journal_stop(handle, inode);
-+
-+	return error;
-+}
-+
-+struct ext3_xattr_handler ext3_xattr_trusted_handler = {
-+	.prefix	= XATTR_TRUSTED_PREFIX,
-+	.list	= ext3_xattr_trusted_list,
-+	.get	= ext3_xattr_trusted_get,
-+	.set	= ext3_xattr_trusted_set,
-+};
-+
-+int __init
-+init_ext3_xattr_trusted(void)
-+{
-+	return ext3_xattr_register(EXT3_XATTR_INDEX_TRUSTED,
-+				   &ext3_xattr_trusted_handler);
-+}
-+
-+void
-+exit_ext3_xattr_trusted(void)
-+{
-+	ext3_xattr_unregister(EXT3_XATTR_INDEX_TRUSTED,
-+			      &ext3_xattr_trusted_handler);
-+}
-Index: linux-p4smp/include/linux/ext3_xattr.h
+ #include <linux/fs.h>
+ #include <linux/ext3_jbd.h>
+ #include <linux/ext3_fs.h>
+Index: linux-2.4.21/include/linux/ext3_xattr.h
 ===================================================================
---- linux-p4smp.orig/include/linux/ext3_xattr.h	2004-06-14 13:41:58.000000000 -0700
-+++ linux-p4smp/include/linux/ext3_xattr.h	2004-06-14 13:50:46.000000000 -0700
+--- linux-2.4.21.orig/include/linux/ext3_xattr.h	2004-06-16 14:52:06.000000000 -0600
++++ linux-2.4.21/include/linux/ext3_xattr.h	2004-06-16 14:52:08.000000000 -0600
 @@ -93,6 +93,9 @@ extern void ext3_xattr_put_super(struct 
  extern int init_ext3_xattr(void) __init;
  extern void exit_ext3_xattr(void);

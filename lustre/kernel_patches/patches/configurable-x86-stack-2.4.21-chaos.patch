@@ -197,9 +197,9 @@ Index: linux-p4smp/arch/i386/config.in
 +  fi
 +fi
 +
- source drivers/perfctr/Config.in
- 
- endmenu
+ if [ "$CONFIG_SMP" = "y" -a "$CONFIG_X86_CMPXCHG" = "y" ]; then
+    define_bool CONFIG_HAVE_DEC_LOCK y
+ fi
 Index: linux-p4smp/include/asm-i386/current.h
 ===================================================================
 --- linux-p4smp.orig/include/asm-i386/current.h	2004-06-14 13:13:07.000000000 -0700
