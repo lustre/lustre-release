@@ -761,16 +761,16 @@ def if2addr(iface):
     ip = string.split(addr, ':')[1]
     return ip
 
-def get_local_nid(net_type, wildcard):
+def sys_get_local_nid(net_type, wildcard, cluster_id):
     """Return the local nid."""
     local = ""
     if os.access('/proc/elan/device0/position', os.R_OK):
-        local = get_local_address('elan', '*')
+        local = sys_get_local_address('elan', '*', cluster_id)
     else:
-        local = get_local_address(net_type, wildcard)
+        local = sys_get_local_address(net_type, wildcard, cluster_id)
     return local
         
-def get_local_address(net_type, wildcard):
+def sys_get_local_address(net_type, wildcard, cluster_id):
     """Return the local address for the network type."""
     local = ""
     if net_type in ('tcp', 'toe'):
@@ -791,8 +791,13 @@ def get_local_address(net_type, wildcard):
             for l in lines:
                 a = string.split(l)
                 if a[0] == 'NodeId':
-                    local = a[1]
+                    elan_id = a[1]
                     break
+            try:
+                nid = my_int(cluster_id) + my_int(elan_id) 
+                local = "%d" % (nid)
+            except ValueError, e:
+                local = elan_id
         except IOError, e:
             log(e)
     elif net_type == 'gm':
@@ -952,18 +957,18 @@ class Network(Module):
 
         if '*' in self.nid:
             if self.nid_exchange:
-                self.nid = get_local_nid(self.net_type, self.nid)
+                self.nid = sys_get_local_nid(self.net_type, self.nid, self.cluster_id)
             else:
-                self.nid = get_local_address(self.net_type, self.nid)
+                self.nid = sys_get_local_address(self.net_type, self.nid, self.cluster_id)
             if not self.nid:
-                panic("unable to set nid for", self.net_type, self.nid)
+                panic("unable to set nid for", self.net_type, self.nid, cluster_id)
             debug("nid:", self.nid)
 
         self.hostaddr = self.db.get_val('hostaddr', self.nid)
         if '*' in self.hostaddr:
-            self.hostaddr = get_local_address(self.net_type, self.hostaddr)
-            if not self.nid:
-                panic("unable to set nid for", self.net_type, self.hostaddr)
+            self.hostaddr = sys_get_local_address(self.net_type, self.hostaddr, self.cluster_id)
+            if not self.hostaddr:
+                panic("unable to set hostaddr for", self.net_type, self.hostaddr, self.cluster_id)
             debug("hostaddr:", self.hostaddr)
 
         self.add_portals_module("libcfs", 'portals')
