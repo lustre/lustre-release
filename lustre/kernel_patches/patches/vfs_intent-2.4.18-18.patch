@@ -1079,7 +1079,7 @@
  	int error;
  	struct iattr newattrs;
  
-@@ -108,7 +111,14 @@ int do_truncate(struct dentry *dentry, l
+@@ -108,7 +111,13 @@ int do_truncate(struct dentry *dentry, l
  	down(&inode->i_sem);
  	newattrs.ia_size = length;
  	newattrs.ia_valid = ATTR_SIZE | ATTR_CTIME;
