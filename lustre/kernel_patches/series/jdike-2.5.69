@@ -1,3 +1,5 @@
 lustre_version.h
 lustre-2.5.69-initial.diff
 ext3-san-jdike-2.5.69.patch
+iopen-jdike-2.5.69.patch
+export-truncate-2.5.63.patch
