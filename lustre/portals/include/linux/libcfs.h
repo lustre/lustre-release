@@ -4,7 +4,11 @@
 #ifndef _LIBCFS_H
 #define _LIBCFS_H
 
+#ifdef HAVE_ASM_TYPES_H
 #include <asm/types.h>
+#else
+#include "types.h"
+#endif
 
 #ifdef __KERNEL__
 # include <linux/time.h>
@@ -62,7 +66,6 @@ extern unsigned int portal_stack;
 extern unsigned int portal_debug;
 extern unsigned int portal_printk;
 
-#include <asm/types.h>
 struct ptldebug_header {
         __u32 ph_len;
         __u32 ph_flags;
@@ -105,6 +108,7 @@ struct ptldebug_header {
 #define S_OPENIBNAL   0x00400000
 #define S_SM          0x00800000
 #define S_ASOBD       0x01000000
+#define S_CONFOBD     0x02000000
 
 /* If you change these values, please keep portals/utils/debug.c
  * up to date! */

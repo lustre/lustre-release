@@ -54,6 +54,10 @@ int obd_llog_setup(struct obd_device *obd, int index,
                         struct mds_obd *mds = &disk_obd->u.mds;
                         ctxt->loc_objects_dir = mds->mds_objects_dir;
                         ctxt->loc_logs_dir = mds->mds_logs_dir;
+                } else if (!strcmp(disk_obd->obd_type->typ_name, "confobd")) {
+                        struct conf_obd *confobd = &disk_obd->u.confobd;
+                        ctxt->loc_objects_dir = confobd->cfobd_objects_dir;
+                        ctxt->loc_logs_dir = confobd->cfobd_logs_dir;
                 }
         }
 
