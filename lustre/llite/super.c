@@ -123,7 +123,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sbi->ll_namespace = ldlm_namespace_new(NULL, 1);
         if (sbi->ll_namespace == NULL) {
                 CERROR("failed to create local lock namespace\n");
-                GOTO(out_free, sb = NULL);
+                GOTO(out_obd, sb = NULL);
         }
 
         ptlrpc_init_client(ptlrpc_connmgr, ll_recover,
@@ -135,14 +135,13 @@ static struct super_block * ll_read_super(struct super_block *sb,
         sbi->ll_mds_conn = ptlrpc_uuid_to_connection("mds");
         if (!sbi->ll_mds_conn) {
                 CERROR("cannot find MDS\n");
-                GOTO(out_disc, sb = NULL);
+                GOTO(out_ldlm, sb = NULL);
         }
 
         err = connmgr_connect(ptlrpc_connmgr, sbi->ll_mds_conn);
         if (err) {
                 CERROR("cannot connect to MDS: rc = %d\n", err);
-                ptlrpc_put_connection(sbi->ll_mds_conn);
-                GOTO(out_disc, sb = NULL);
+                GOTO(out_rpc, sb = NULL);
         }
 
         sbi->ll_mds_conn->c_level = LUSTRE_CONN_FULL;
@@ -155,7 +154,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 CERROR("cannot mds_connect: rc = %d\n", err);
                 GOTO(out_disc, sb = NULL);
         }
-        CERROR("rootfid %ld\n", (unsigned long)rootfid.id);
+        CDEBUG(D_SUPER, "rootfid %ld\n", (unsigned long)rootfid.id);
         sbi->ll_rootino = rootfid.id;
 
         sb->s_maxbytes = 1ULL << 36;
@@ -172,7 +171,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
                           OBD_MD_FLNOTOBD|OBD_MD_FLBLOCKS, 0, &request);
         if (err) {
                 CERROR("mdc_getattr failed for root: rc = %d\n", err);
-                GOTO(out_req, sb = NULL);
+                GOTO(out_mdc, sb = NULL);
         }
 
         /* initialize committed transaction callback daemon */
@@ -183,7 +182,7 @@ static struct super_block * ll_read_super(struct super_block *sb,
         err = ll_commitcbd_setup(sbi);
         if (err) {
                 CERROR("failed to start commit callback daemon: rc = %d\n",err);
-                GOTO(out_req, sb = NULL);
+                GOTO(out_mdc, sb = NULL);
         }
 
         root = iget4(sb, sbi->ll_rootino, NULL,
@@ -192,26 +191,36 @@ static struct super_block * ll_read_super(struct super_block *sb,
                 sb->s_root = d_alloc_root(root);
         } else {
                 CERROR("lustre_lite: bad iget4 for root\n");
-                GOTO(out_req, sb = NULL);
+                GOTO(out_cdb, sb = NULL);
         }
 
-out_req:
         ptlrpc_free_req(request);
-        if (!sb) {
-out_disc:
-                obd_disconnect(&sbi->ll_conn);
-out_free:
-                MOD_DEC_USE_COUNT;
-                if (sbi->ll_namespace)
-                        ldlm_namespace_free(sbi->ll_namespace);
-                OBD_FREE(sbi, sizeof(*sbi));
-        }
+
+out_dev:
         if (device)
                 OBD_FREE(device, strlen(device) + 1);
         if (version)
                 OBD_FREE(version, strlen(version) + 1);
 
         RETURN(sb);
+
+out_cdb:
+        ll_commitcbd_cleanup(sbi);
+out_mdc:
+        ptlrpc_cleanup_client(&sbi->ll_mds_client);
+out_disc:
+        ptlrpc_put_connection(sbi->ll_mds_conn);
+out_rpc:
+        ptlrpc_free_req(request);
+out_ldlm:
+        ldlm_namespace_free(sbi->ll_namespace);
+out_obd:
+        obd_disconnect(&sbi->ll_conn);
+out_free:
+        OBD_FREE(sbi, sizeof(*sbi));
+
+        MOD_DEC_USE_COUNT;
+        goto out_dev;
 } /* ll_read_super */
 
 static void ll_put_super(struct super_block *sb)
@@ -219,10 +228,10 @@ static void ll_put_super(struct super_block *sb)
         struct ll_sb_info *sbi = sb->u.generic_sbp;
         ENTRY;
         ll_commitcbd_cleanup(sbi);
-        obd_disconnect(&sbi->ll_conn);
-        ldlm_namespace_free(sbi->ll_namespace);
-        ptlrpc_put_connection(sbi->ll_mds_conn);
         ptlrpc_cleanup_client(&sbi->ll_mds_client);
+        ptlrpc_put_connection(sbi->ll_mds_conn);
+        ldlm_namespace_free(sbi->ll_namespace);
+        obd_disconnect(&sbi->ll_conn);
         OBD_FREE(sb->u.generic_sbp, sizeof(*sbi));
         MOD_DEC_USE_COUNT;
         EXIT;
@@ -230,23 +239,25 @@ static void ll_put_super(struct super_block *sb)
 
 
 extern inline struct obdo * ll_oa_from_inode(struct inode *inode, int valid);
+
 static void ll_delete_inode(struct inode *inode)
 {
-        if (S_ISREG(inode->i_mode)) { 
-                int err; 
-                struct obdo *oa; 
-                oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
-                if (!oa) { 
-                        CERROR("no memory\n"); 
+        if (S_ISREG(inode->i_mode)) {
+                int err;
+                struct obdo *oa = ll_oa_from_inode(inode, OBD_MD_FLNOTOBD);
+
+                if (!oa) {
+                        CERROR("no memory\n");
+                        GOTO(out, -ENOMEM);
                 }
 
-                err = obd_destroy(ll_i2obdconn(inode), oa); 
+                err = obd_destroy(ll_i2obdconn(inode), oa);
                 CDEBUG(D_INODE, "obd destroy of %Ld error %d\n",
                        (unsigned long long)oa->o_id, err);
                 obdo_free(oa);
         }
-
-        clear_inode(inode); 
+out:
+        clear_inode(inode);
 }
 
 /* like inode_setattr, but doesn't mark the inode dirty */ 
