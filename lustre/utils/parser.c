@@ -308,19 +308,15 @@ int init_input()
 char * readline(char * prompt) 
 {
         char line[2048];
-        int n;
-        char * ret = NULL;
+        int n = 0;
         if (prompt)
                 printf ("%s", prompt);
-        fgets(line, sizeof(line), stdin);
+        if (fgets(line, sizeof(line), stdin) == NULL)
+                return (NULL);
         n = strlen(line);
         if (n && line[n-1] == '\n')
-                line[--n] = '\0';
-        if (n == 0 && feof(stdin)) {
-                ret = NULL;
-        } else
-                ret =  strdup(line);
-        return ret;
+                line[n-1] = '\0';
+        return strdup(line);
 }
 #endif
 
