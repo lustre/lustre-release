@@ -52,6 +52,7 @@ int mds_update_last_rcvd(struct mds_obd *mds, struct ptlrpc_request *req)
         ++mds->mds_last_rcvd;   /* lock this, or make it an LDLM function? */
         mci->mci_mcd->mcd_last_rcvd = cpu_to_le64(mds->mds_last_rcvd);
         mci->mci_mcd->mcd_mount_count = cpu_to_le64(mds->mds_mount_count);
+        mci->mci_mcd->mcd_xid = cpu_to_le32(req->rq_connection->c_xid_in);
         rc = lustre_fwrite(mds->mds_rcvd_filp, (char *)mci->mci_mcd,
                            sizeof(*mci->mci_mcd), &off);
         CDEBUG(D_INODE, "wrote trans #%Ld for client '%s' at %Ld: rc = %d\n",

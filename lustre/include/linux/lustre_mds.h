@@ -65,22 +65,23 @@ struct mds_update_record {
 
 #define MDS_MOUNT_RECOV 2
 
-/* Data stored per server at the head of the last_rcvd file */
+/* Data stored per server at the head of the last_rcvd file.  In le32 order. */
 struct mds_server_data {
         __u8 msd_uuid[37];      /* server UUID */
-        __u8 uuid_padding[3];
+        __u8 uuid_padding[3];   /* unused */
         __u64 msd_last_rcvd;    /* last completed transaction ID */
         __u64 msd_mount_count;  /* MDS incarnation number */
         __u8 padding[512 - 56];
 };
 
-/* Data stored per client in the last_rcvd file */
+/* Data stored per client in the last_rcvd file.  In le32 order. */
 struct mds_client_data {
         __u8 mcd_uuid[37];      /* client UUID */
-        __u8 uuid_padding[3];   /* in case we decide to store UUIDs as ASCII */
+        __u8 uuid_padding[3];   /* unused */
         __u64 mcd_last_rcvd;    /* last completed transaction ID */
         __u64 mcd_mount_count;  /* MDS incarnation number */
-        __u8 padding[MDS_LR_SIZE - 56];
+        __u32 mcd_xid;          /* client RPC xid for the last transaction */
+        __u8 padding[MDS_LR_SIZE - 60];
 };
 
 /* In-memory access to client data from MDS struct */
