@@ -2,6 +2,7 @@
 %define version HEAD 
 %define kversion @LINUXRELEASE@
 %define linuxdir @LINUX@
+%define enable_doc @ENABLE_DOC@
 
 Summary: Lustre Lite File System
 Name: lustre-lite
@@ -60,13 +61,18 @@ Configures openldap server for LDAP Lustre config database
 %prep
 %setup -qn lustre-%{version}
 #%setup -c -n lustre-%{version}-lib
+%if %{enable_doc}
+  %define disable_doc
+%else
+  %define disable_doc --disable-doc
+%endif
 
 %build
 rm -rf $RPM_BUILD_ROOT
 
 # Set an explicit path to our Linux tree, if we can.
 cd $RPM_BUILD_DIR/lustre-%{version}
-./configure --with-linux='%{linuxdir}' 
+./configure --with-linux='%{linuxdir}' %{disable_doc}
 make
 
 %install
@@ -79,7 +85,7 @@ make install prefix=$RPM_BUILD_ROOT
   linuxdir=%{linuxdir}
   test -d $linuxdir && conf_flag=--with-linux=$linuxdir
   make clean
-  ./configure --enable-rtscts-myrinet $conf_flag
+  ./configure --enable-rtscts-myrinet $conf_flag %{disable_doc}
   make
   cp linux/rtscts/rtscts.o $RPM_BUILD_ROOT/lib/modules/%{kversion}/kernel/net/lustre/rtscts_myrinet.o
   cp user/myrinet_utils/mcpload $RPM_BUILD_ROOT/usr/sbin/mcpload
@@ -100,6 +106,8 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/sbin/lmc
 %attr(-, root, root) /usr/sbin/lctl
 %attr(-, root, root) /usr/sbin/lconf
+%attr(-, root, root) /usr/sbin/lrun
+%attr(-, root, root) /usr/sbin/llmount
 %attr(-, root, root) /usr/sbin/lwizard
 %attr(-, root, root) /usr/sbin/wiretest
 %attr(-, root, root) /usr/sbin/lactive
@@ -111,6 +119,8 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/bin/mcreate
 %attr(-, root, root) /usr/bin/munlink
 %attr(-, root, root) /usr/bin/mkdirmany
+%attr(-, root, root) /usr/bin/iopentest1
+%attr(-, root, root) /usr/bin/iopentest2
 %attr(-, root, root) /usr/sbin/llstat.pl
 %attr(-, root, root) /usr/sbin/llobdstat.pl
 %attr(-, root, root) /usr/sbin/load_ldap.sh
@@ -145,7 +155,9 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 
 %files -n lustre-doc
 %attr(-, root, root) %doc COPYING FDL
+%if %{enable_doc}
 %attr(-, root, root) %doc doc/lustre.pdf doc/lustre-HOWTO.txt
+%endif
 #%attr(-, root, root) %doc tests/client-echo.cfg tests/client-mount.cfg
 #%attr(-, root, root) %doc tests/client-mount2.cfg
 #%attr(-, root, root) %doc tests/elan-client.cfg tests/elan-server.cfg

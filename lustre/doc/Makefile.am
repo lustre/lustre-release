@@ -14,8 +14,14 @@ PS2PDF = ps2pdf
 TEXEXPAND = texexpand
 SUFFIXES = .lin .lyx .pdf .ps .sgml .html .txt .tex .fig .eps .dvi
 
-DOCS = lustre.pdf lustre-HOWTO.txt
-HOWTODOC = lustre-HOWTO.txt
+if DOC
+  DOCS = lustre.pdf lustre-HOWTO.txt
+  HOWTODOC = lustre-HOWTO.txt
+else
+  DOCS =
+  HOWTODOC =
+endif
+
 IMAGES := $(patsubst %.fig,%.eps,$(wildcard *.fig))
 LYXFILES= $(filter-out $(patsubst %.lin,%.lyx,$(wildcard *.lin)),\
 	$(wildcard *.lin *.lyx))
