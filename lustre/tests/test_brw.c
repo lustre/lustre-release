@@ -17,8 +17,11 @@
 #define __u64 long long
 #define LASSERT(v) do {} while(0)
 #define HTON__u64(v) (v)
-#define LPU64 "%Ld"
+#define LPU64 "%Lu"
 #define LPX64 "%Lx"
+
+#define READ  1
+#define WRITE 2
 
 #define LPDS sizeof(__u64)
 int page_debug_setup(void *addr, int len, __u64 off, __u64 id)
@@ -73,6 +76,13 @@ int page_debug_check(char *who, void *addr, int end, __u64 off, __u64 id)
 }
 #undef LPDS
 
+void usage(char *prog)
+{
+	fprintf(stderr, "usage: %s file count [[d]{r|w|rw} [pages_per_vec [objid]]]\n",
+		prog);
+	exit(1);
+}
+
 int main(int argc, char **argv)
 {
         int fd;
@@ -80,41 +90,62 @@ int main(int argc, char **argv)
         long pg_vec, count;
 	long len;
 	long long end, offset;
-	long objid = 3;
+	long long objid = 3;
+	int flags = O_RDWR | O_CREAT;
+	int cmd = 0;
         int rc;
 
-        if (argc < 4 || argc > 5) {
-                fprintf(stderr,
-			"usage: %s file pages_per_vec count [objid]\n",
-			argv[0]);
-                return 1;
-        }
+        if (argc < 3 || argc > 6)
+		usage(argv[0]);
 
-        pg_vec = strtoul(argv[2], 0, 0);
-        count = strtoul(argv[3], 0, 0);
+        count = strtoul(argv[2], 0, 0);
+	if (argc >= 4) {
+		if (strchr(argv[3], 'r')) {
+			cmd |= READ;
+			printf("reading\n");
+		}
+		if (strchr(argv[3], 'w')) {
+			cmd |= WRITE;
+			printf("writing\n");
+		}
+		if (strchr(argv[3], 'd')) {
+			flags |= O_DIRECT;
+			printf("directing\n");
+		}
+	}
+	if (!cmd)
+		usage(argv[0]);
+	printf("cmd = %x, flags = %x\n", cmd, flags);
+
+	if (argc >= 5)
+		pg_vec = strtoul(argv[4], 0, 0);
 	len = pg_vec * BLOCKSIZE;
 	end = (long long)count * len;
 
-	if (argc == 5)
-		objid = strtoul(argv[4], 0, 0);
+	if (argc >= 6) {
+		objid = strtoull(argv[5], 0, 0);
+		printf("objid %s = 0x%Lx\n", argv[5], objid);
+	}
 
-        printf("directio on %s(%ld) for %ldx%ld pages \n",
+        printf("%s: %s on %s(objid 0x"LPX64") for %ldx%ld pages \n",
+	       argv[0], flags & O_DIRECT ? "directio" : "i/o",
 	       argv[1], objid, count, pg_vec);
 
         buf = mmap(0, len, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANON, 0, 0);
         if (!buf) {
-                fprintf(stderr, "No memory %s\n", strerror(errno));
+                fprintf(stderr, "%s: no buffer memory %s\n",
+			argv[0], strerror(errno));
                 return 2;
         }
 
-        fd = open(argv[1], O_DIRECT | O_RDWR | O_CREAT);
+        fd = open(argv[1], flags);
         if (fd == -1) {
-                fprintf(stderr, "Cannot open %s:  %s\n", argv[1],
-			strerror(errno));
+                fprintf(stderr, "%s: cannot open %s:  %s\n", argv[1],
+			argv[0], strerror(errno));
                 return 3;
         }
 
-	for (offset = 0; offset < end; offset += len) {
+	for (offset = 0; offset < end && cmd & WRITE; offset += len) {
 		int i;
 
 		for (i = 0; i < len; i += BLOCKSIZE)
@@ -129,24 +160,25 @@ int main(int argc, char **argv)
 		}
 
 		if (rc != len) {
-			fprintf(stderr, "Write error: %s, rc %d\n",
-				strerror(errno), rc);
+			fprintf(stderr, "%s: write error: %s, rc %d\n",
+				argv[0], strerror(errno), rc);
 			return 4;
 		}
 	}
 
-        if ( lseek(fd, 0, SEEK_SET) != 0 ) {
-                fprintf(stderr, "Cannot seek %s\n", strerror(errno));
+        if (lseek(fd, 0, SEEK_SET) != 0) {
+                fprintf(stderr, "%s: cannot seek %s\n",
+			argv[0], strerror(errno));
                 return 5;
         }
 
-	for (offset = 0; offset < end; offset += len) {
+	for (offset = 0; offset < end && cmd && READ; offset += len) {
 		int i;
 
 		rc = read(fd, buf, len);
 		if (rc != len) {
-			fprintf(stderr, "Read error: %s, rc %d\n",
-				strerror(errno), rc);
+			fprintf(stderr, "%s: read error: %s, rc %d\n",
+				argv[0], strerror(errno), rc);
 			return 6;
 		}
 
