@@ -83,7 +83,8 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         RETURN(rc);
 }
 
-static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
+static int ll_follow_link(struct dentry *dentry, struct nameidata *nd,
+                          struct lookup_intent *it)
 {
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -92,12 +93,20 @@ static int ll_follow_link(struct dentry *dentry, struct nameidata *nd)
         int rc;
         ENTRY;
 
+        /* we got here from a lookup up to the symlink that we hit */
+        if (it->it_lock_mode) {
+                struct lustre_handle *handle = (struct lustre_handle *)it->it_lock_handle;
+                ldlm_lock_decref(handle, it->it_lock_mode);
+                it->it_lock_mode = 0;
+                memset(handle, 0, sizeof(*handle));
+        }
+
         down(&lli->lli_open_sem);
         rc = ll_readlink_internal(inode, &request, &symname);
         if (rc)
                 GOTO(out, rc);
 
-	rc = vfs_follow_link(nd, symname);
+	rc = vfs_follow_link_it(nd, symname, it);
  out:
         up(&lli->lli_open_sem);
         ptlrpc_req_finished(request);
@@ -109,5 +118,5 @@ extern int ll_setattr(struct dentry *de, struct iattr *attr);
 struct inode_operations ll_fast_symlink_inode_operations = {
         readlink:       ll_readlink,
         setattr:        ll_setattr,
-        follow_link:    ll_follow_link
+        follow_link2:    ll_follow_link
 };
