@@ -114,7 +114,10 @@ subsystem_names = {
     "ptlrouter" :    (1 << 20),
     "cobd" :         (1 << 21),
     "ibnal" :        (1 << 22),
-    "lonal" :        (1 << 23),
+    "sm" :           (1 << 23),
+    "asobd" :        (1 << 24),
+    "confobd" :      (1 << 25),
+    "lonal" :        (1 << 26),
     }
 
 
