@@ -9,4 +9,3 @@ EXTRA_PROGRAMS = obdfilter
 obdfilter_SOURCES = filter.c lproc_obdfilter.c
 
 include $(top_srcdir)/Rules
-
