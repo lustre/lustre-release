@@ -12,7 +12,7 @@
  	}
 -	panic("No region found for page");
 +//	panic("No region found for page");
-+	printk(KERN_ERR "no region foudn for page %p\n, returning NULL\n", 
++	printk(KERN_ERR "no region found for page %p\n, returning NULL\n", 
 +			page);
  	return(NULL);
  }
