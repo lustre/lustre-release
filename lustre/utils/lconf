@@ -1460,7 +1460,7 @@ def parse_cmdline(argv):
     long_opts = ["ldap", "reformat", "lustre=", "verbose", "gdb",
                  "portals=", "makeldiff", "cleanup", "noexec",
                  "help", "node=", "nomod", "nosetup",
-                 "dump="]
+                 "dump=", "force"]
     opts = []
     args = []
     try:
