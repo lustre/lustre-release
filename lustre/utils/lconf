@@ -288,8 +288,8 @@ class LCTLInterface:
     def del_route(self, net, gw, lo, hi):
         cmds =  """
   network %s
-  del_route %s %s
-  quit  """ % (net, lo, hi)
+  del_route %s
+  quit  """ % (net, lo)
         self.run(cmds)
 
     # add a route to a host
@@ -582,7 +582,7 @@ class Module:
         """ default cleanup, used for most modules """
         self.info()
         srv = self.get_server()
-        if srv:
+        if srv and local_net(srv):
             try:
                 lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
             except CommandError, e:
@@ -677,7 +677,7 @@ class Network(Module):
         ret = self.dom_node.getElementsByTagName('route_tbl')
         for a in ret:
             for r in a.getElementsByTagName('route'):
-                net_type = get_attr(r, 'net_type')
+                net_type = get_attr(r, 'type')
                 gw = get_attr(r, 'gw')
                 lo = get_attr(r, 'lo')
                 hi = get_attr(r,'hi', '')
@@ -705,8 +705,17 @@ class Network(Module):
                     if not srv:
                         panic("no server for nid", lo)
                     else:
-                        lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
-                lctl.del_route(self.net_type, self.nid, lo, hi)
+			try:
+                            lctl.disconnect(srv.net_type, srv.nid, srv.port, srv.uuid)
+        	 	except CommandError, e:
+                    		print "disconnect failed: ", self.name
+                    		e.dump()
+		try:
+                    lctl.del_route(self.net_type, self.nid, lo, hi)
+        	except CommandError, e:
+                    print "del_route failed: ", self.name
+                    e.dump()
+              
         try:
             lctl.cleanup("RPCDEV", "")
         except CommandError, e:
