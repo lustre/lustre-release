@@ -26,6 +26,7 @@
 
 #include <linux/lustre_net.h>
 #include <linux/obd_support.h>
+#include <linux/obd_class.h>
 
 void obd_statfs_pack(struct obd_statfs *tgt, struct obd_statfs *src)
 {
@@ -65,3 +66,20 @@ void statfs_unpack(struct statfs *sfs, struct obd_statfs *osfs)
         sfs->f_namelen = osfs->os_namelen;
 }
 
+int obd_self_statfs(struct obd_device* dev, struct statfs *sfs)
+{
+        struct lustre_handle self_conn;
+        int err, statfserr = 0;
+
+        
+        err = obd_connect(&self_conn, dev, dev->obd_uuid, NULL, NULL);
+        if (!err) {
+                struct obd_statfs osfs;
+                memset(&osfs, 0, sizeof(osfs));
+                statfserr = obd_statfs(&self_conn, &osfs);
+                if (!statfserr)
+                        statfs_unpack(sfs, &osfs);
+                err = obd_disconnect(&self_conn);
+        }
+        return err ? err : statfserr;
+}
