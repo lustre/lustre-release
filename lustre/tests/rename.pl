@@ -60,4 +60,19 @@ while ($i--) {
         print STDERR "[" . $$ . "]" . ($total - $i) . " operations\n";
     }
 }
+
+$k = $dirs;
+if ($create == 0) {
+    $k = 0;
+}
+while ($k--) {
+    $path = "$mtpt$which/$k";
+    $j = $files;
+    while ($j--) {
+        unlink "$path/$j";
+    }
+    my $rc = rmdir $path;
+    print "rmdir $path failed: $!\n" if !$rc;
+}
+
 print "Done.\n";
