@@ -140,9 +140,11 @@ int client_obd_cleanup(struct obd_device *obddev, int force, int failover)
 {
         struct client_obd *client = &obddev->u.cli;
 
+        if (!client->cl_import)
+                RETURN(-EINVAL);
         class_destroy_import(client->cl_import);
         client->cl_import = NULL;
-        return 0;
+        RETURN(0);
 }
 
 #ifdef __KERNEL__
