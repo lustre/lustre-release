@@ -1,4 +1,4 @@
-tbd  Cluster File Systems, Inc. <info@clusterfs.com>
+2004-05-27  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.2
        * bug fixes
 	- don't copy lvb into (possibly NULL) reply on error (2983)
@@ -38,6 +38,7 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
 	- resynchronize MDS->OST in background (2824)
 	- refuse to mount the same filesystem twice on same mountpoint (3394)
 	- allow llmount to create routes for mounting behind routers (3320)
+	- push lock cancellation to blocking thread for glimpse ASTs (3409)
 	- don't call osc_set_data_with_check() for TEST_LOCK matches (3159)
 	- fix rare problem with rename on htree directories (3417)
        * miscellania
