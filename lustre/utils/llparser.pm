@@ -24,8 +24,6 @@ require Exporter;
  $e_next, 
  $e_backref) = (0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15);
 
-$MAX_STACK_SIZE = 8192;
-
 $REGEX=qr/^\s*(\w+)\s*:\s*(\d+)\s*:\s*(\d+)\s*:\s*(\d+\.(?:\d+))\s*\(\s*([^:]+)\s*:\s*(\d+)\s*:\s*([^()]+)\s*\(\)\s*(\d+)\s*\+\s*(\d+)\s*(?:.*)\):(.*)$/;
 
 # Create backlinks between array entries based on the calling sequence
@@ -35,20 +33,19 @@ $REGEX=qr/^\s*(\w+)\s*:\s*(\d+)\s*:\s*(\d+)\s*:\s*(\d+\.(?:\d+))\s*\(\s*([^:]+)\
 sub create_links {
     my $arrayref = shift @_;
     my $pidhashref = shift @_;
-    my $pidparent;
     my %local_hash;
     my $hash_lineref;
     #my $lineref;
-    my $bool = 0;
+    my $firstlineaftermarker = 0;
 
     foreach $lineref (@$arrayref) {
-	$pidparent = $pidhashref->{$lineref->[$e_pid]};
-	if ($pidparent->[$e_next] == 0) {
-	    $pidparent->[$e_next] = $lineref;
-	    if (exists $local_hash{$lineref->[$e_pid]} && $bool) {
+	my $pidprevious = $pidhashref->{$lineref->[$e_pid]};
+	if ($pidprevious->[$e_next] == 0) {
+	    $pidprevious->[$e_next] = $lineref;
+	    if (exists $local_hash{$lineref->[$e_pid]} && $firstlineaftermarker) {
 		$hash_lineref=$local_hash{$lineref->[$e_pid]};
 		$hash_lineref->[$e_next] =$lineref;
-		$bool = 0;
+		$firstlineaftermarker = 0;
 		#print "LINE UPDATED: [@$hash_lineref]\n";
 		#print "NEXT LINE ADDR:$lineref, CONTENT: @$lineref \n";
 	    } 
@@ -56,36 +53,35 @@ sub create_links {
 		# True only for the first line, the marker line.
 	    	$local_hash{$lineref->[$e_pid]}=$lineref;
 		#print "LINE ADDED TO HASH: @$lineref\n";
-		$bool = 1; 
+		$firstlineaftermarker = 1; 
 	}
-
-	if ($lineref->[$e_stack] < $pidparent->[$e_stack]) {
-	    $lineref->[$e_backref] = $pidparent;
-	    $pidparent->[$e_numchildren]++;
-	    $pidhashref->{$lineref->[$e_pid]}=$lineref;
-	
-	} elsif ($lineref->[$e_stack] > $pidparent->[$e_stack]) {
-	    LINE: while($lineref->[$e_stack] > $pidparent->[$e_stack]) {
-	        	last LINE if ($pidparent->[$e_backref] == 0); 
-			$pidparent = $pidparent->[$e_backref];
+	# Stack grows upward (assumes x86 kernel)
+	if ($lineref->[$e_stack] < $pidprevious->[$e_stack]) {
+	    # lineref is not a child of pidprevious, find its parent
+	  LINE: while($lineref->[$e_stack] < $pidprevious->[$e_stack]) {
+	      last LINE if ($pidprevious->[$e_backref] == 0); 
+	      $pidprevious = $pidprevious->[$e_backref];
 	  }
-	    $lineref->[$e_backref] = $pidparent;
-	    $pidparent->[$e_numchildren]++;
-	    $pidhashref->{$lineref->[$e_pid]}=$lineref;
-	
+	}
+	if ($lineref->[$e_stack] > $pidprevious->[$e_stack]) {
+	    # lineref is child of pidprevious
+	    $lineref->[$e_backref] = $pidprevious;
+	    $pidprevious->[$e_numchildren]++;
 	} else {
+	    # lineref is sibling of pidprevious
 	    $lineref->[$e_numchildren] = 0;
-	    $lineref->[$e_backref] = $pidparent->[$e_backref];
-	    $pidhashref->{$lineref->[$e_pid]} = $lineref;	
+	    $lineref->[$e_backref] = $pidprevious->[$e_backref];
 	    ($lineref->[$e_backref])->[$e_numchildren]++;
 	}
+
+	$pidhashref->{$lineref->[$e_pid]}=$lineref;
 	$lineref->[$e_youngestchild] = $lineref;
-	while ($pidparent->[$e_backref] != 0) {
-	    $pidparent->[$e_youngestchild] = $lineref;
-	    $pidparent = $pidparent->[$e_backref];
+	while ($pidprevious->[$e_backref] != 0) {
+	    $pidprevious->[$e_youngestchild] = $lineref;
+	    $pidprevious = $pidprevious->[$e_backref];
 	}
-	$pidparent->[$e_youngestchild] = $lineref;
-	$lineref->[$e_pidhead]=$pidparent;
+	$pidprevious->[$e_youngestchild] = $lineref;
+	$lineref->[$e_pidhead]=$pidprevious;
     }
     return $arrayref;
 }
@@ -115,7 +111,7 @@ sub parse_file {
 		$marker_line[$e_line] = 0;
 		$marker_line[$e_function] = 0;
 		$marker_line[$e_pid] = $parsed_line[$e_pid];
-		$marker_line[$e_stack] = $MAX_STACK_SIZE;
+		$marker_line[$e_stack] = 0; # marker lines are everyone's parent
 		$marker_line[$e_fmtstr] = "";
 		$marker_line[$e_treeparent] = 0;
 		$marker_line[$e_numchildren] = 0;
