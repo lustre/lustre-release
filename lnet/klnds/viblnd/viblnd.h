@@ -339,6 +339,7 @@ typedef struct
         __u64             ibm_srcstamp;         /* sender's incarnation */
         __u64             ibm_dstnid;           /* destination's NID */
         __u64             ibm_dststamp;         /* destination's incarnation */
+        __u64             ibm_seq;              /* sequence number */
 
         union {
                 kib_connparams_t      connparams;
@@ -397,6 +398,7 @@ typedef struct kib_tx                           /* transmit message */
         struct kib_conn          *tx_conn;      /* owning conn */
         int                       tx_mapped;    /* mapped for RDMA? */
         int                       tx_sending;   /* # tx callbacks outstanding */
+        int                       tx_queued;    /* queued for sending */
         int                       tx_waiting;   /* waiting for peer */
         int                       tx_status;    /* completion status */
         unsigned long             tx_deadline;  /* completion deadline */
@@ -456,6 +458,8 @@ typedef struct kib_conn
         struct kib_peer    *ibc_peer;           /* owning peer */
         struct list_head    ibc_list;           /* stash on peer's conn list */
         __u64               ibc_incarnation;    /* which instance of the peer */
+        __u64               ibc_txseq;          /* tx sequence number */
+        __u64               ibc_rxseq;          /* rx sequence number */
         atomic_t            ibc_refcount;       /* # users */
         int                 ibc_state;          /* what's happening */
         atomic_t            ibc_nob;            /* # bytes buffered */
@@ -510,8 +514,8 @@ extern kib_data_t      kibnal_data;
 extern kib_tunables_t  kibnal_tunables;
 
 extern void kibnal_init_msg(kib_msg_t *msg, int type, int body_nob);
-extern void kibnal_pack_msg(kib_msg_t *msg, int credits, 
-                            ptl_nid_t dstnid, __u64 dststamp);
+extern void kibnal_pack_msg(kib_msg_t *msg, int credits, ptl_nid_t dstnid,
+                            __u64 dststamp, __u64 seq);
 extern int kibnal_unpack_msg(kib_msg_t *msg, int nob);
 extern kib_peer_t *kibnal_create_peer(ptl_nid_t nid);
 extern void kibnal_destroy_peer(kib_peer_t *peer);
@@ -613,6 +617,8 @@ kibnal_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
         /* CAVEAT EMPTOR: tx takes caller's ref on conn */
 
         LASSERT (tx->tx_nwrq > 0);              /* work items set up */
+        LASSERT (!tx->tx_queued);               /* not queued for sending already */
+
         if (tx->tx_conn == NULL) {
                 kibnal_conn_addref(conn);
                 tx->tx_conn = conn;
@@ -620,6 +626,7 @@ kibnal_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
                 LASSERT (tx->tx_conn == conn);
                 LASSERT (tx->tx_msg->ibm_type == IBNAL_MSG_PUT_DONE);
         }
+        tx->tx_queued = 1;
         tx->tx_deadline = jiffies + kibnal_tunables.kib_io_timeout * HZ;
         list_add_tail(&tx->tx_list, &conn->ibc_tx_queue);
 }

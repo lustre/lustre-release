@@ -75,7 +75,8 @@ kibnal_init_msg(kib_msg_t *msg, int type, int body_nob)
 }
 
 void
-kibnal_pack_msg(kib_msg_t *msg, int credits, ptl_nid_t dstnid, __u64 dststamp)
+kibnal_pack_msg(kib_msg_t *msg, int credits, ptl_nid_t dstnid, 
+                __u64 dststamp, __u64 seq)
 {
         /* CAVEAT EMPTOR! all message fields not set here should have been
          * initialised previously. */
@@ -89,6 +90,7 @@ kibnal_pack_msg(kib_msg_t *msg, int credits, ptl_nid_t dstnid, __u64 dststamp)
         msg->ibm_srcstamp = kibnal_data.kib_incarnation;
         msg->ibm_dstnid   = dstnid;
         msg->ibm_dststamp = dststamp;
+        msg->ibm_seq      = seq;
 #if IBNAL_CKSUM
         /* NB ibm_cksum zero while computing cksum */
         msg->ibm_cksum    = kibnal_cksum(msg, msg->ibm_nob);
@@ -158,6 +160,7 @@ kibnal_unpack_msg(kib_msg_t *msg, int nob)
                 __swab64s(&msg->ibm_srcstamp);
                 __swab64s(&msg->ibm_dstnid);
                 __swab64s(&msg->ibm_dststamp);
+                __swab64s(&msg->ibm_seq);
         }
         
         if (msg->ibm_srcnid == PTL_NID_ANY) {
