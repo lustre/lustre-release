@@ -29,24 +29,13 @@ static struct lprocfs_vars lprocfs_obd_vars[]  = { {0} };
 static struct lprocfs_vars lprocfs_module_vars[] = { {0} };
 #else
 
-static int rd_fstype(char* page, char **start, off_t off, int count, int *eof,
-              void *data)
-{
-        struct obd_device* dev = (struct obd_device*)data;
-        
-        LASSERT(dev != NULL);
-        *eof = 1;
-        return snprintf(page, count, "%s\n", dev->u.echo.eo_fstype);
-}
-
 static struct lprocfs_vars lprocfs_obd_vars[] = {
-        { "uuid",     lprocfs_rd_uuid,    0, 0 },
-        { "fstype",   rd_fstype,          0, 0 },
+        { "uuid",         lprocfs_rd_uuid,        0, 0 },
         { 0 }
 };
 
 static struct lprocfs_vars lprocfs_module_vars[] = {
-        { "num_refs", lprocfs_rd_numrefs, 0, 0 },
+        { "num_refs",     lprocfs_rd_numrefs,     0, 0 },
         { 0 }
 };
 
