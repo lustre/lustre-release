@@ -1661,7 +1661,7 @@ class MDSDEV(Module):
                         noexec_opt = ('', '-n')
                         ret, out = run (sys.argv[0],
                                         noexec_opt[old_noexec == 1],
-                                        " -v --record --nomod",
+                                        " -v --internal --record --nomod",
                                         "--record_log", client_name,
                                         "--record_device", self.name,
                                         "--node", client_name,
@@ -1676,7 +1676,8 @@ class MDSDEV(Module):
                             for s in out: log("record> ", string.strip(s))
                         ret, out = run (sys.argv[0],
                                         noexec_opt[old_noexec == 1],
-                                        "--cleanup -v --record --nomod",
+                                        "--cleanup",
+                                        "-v --internal --record --nomod",
                                         "--record_log", client_name + "-clean",
                                         "--record_device", self.name,
                                         "--node", client_name,
@@ -2480,15 +2481,17 @@ def doHost(lustreDB, hosts):
     timeout = node_db.get_val_int('timeout', 0)
     ptldebug = node_db.get_val('ptldebug', '')
     subsystem = node_db.get_val('subsystem', '')
-    node_nid_name = node_db.get_val('nid', '')
-    node_nid_ip = socket.gethostbyname(node_nid_name)
+
+    if not config.internal:
+        node_nid_name = node_db.get_val('nid', '')
+        node_nid_ip = socket.gethostbyname(node_nid_name)
     
-    if node_nid_ip == '127.0.0.1':
-        if node_nid_name != 'localhost':
-            print "Fatal error:\n"
-            print "This node is configured with a network ID (nid) of",node_nid_name,", but that hostname resolves to the loopback address (127.0.0.1).  Without the real IP address, Lustre can't tell its peers how to contact it.  If you are trying to run all services on a single node, for testing, then specify a nid of \"localhost\".\n"
-            print "This is probably caused by the wrong entry in /etc/hosts.  To fix this, edit /etc/hosts and either remove the entry for",node_nid_name,", or change it to the correct IP address.\n"
-            panic('Aborting due to invalid node IP.')
+        if node_nid_ip == '127.0.0.1':
+            if node_nid_name != 'localhost':
+                print "Fatal error:\n"
+                print "This node is configured with a network ID (nid) of",node_nid_name,", but that hostname resolves to the loopback address (127.0.0.1).  Without the real IP address, Lustre can't tell its peers how to contact it.  If you are trying to run all services on a single node, for testing, then specify a nid of \"localhost\".\n"
+                print "This is probably caused by the wrong entry in /etc/hosts.  To fix this, edit /etc/hosts and either remove the entry for",node_nid_name,", or change it to the correct IP address.\n"
+                panic('Aborting due to invalid node IP.')
 
     find_local_clusters(node_db)
     if not is_router:
@@ -2773,6 +2776,7 @@ INTPARAM = Lustre.Options.INTPARAM
 PARAMLIST = Lustre.Options.PARAMLIST
 lconf_options = [
     ('verbose,v', "Print system commands as they are run"),
+    ('internal', "Internal use ONLY"),
     ('ldapurl',"LDAP server URL, eg. ldap://localhost", PARAM),
     ('config', "Cluster config name used for LDAP query", PARAM),
     ('select', "service=nodeA,service2=nodeB ", PARAMLIST),
