@@ -6,8 +6,8 @@
 Index: linux-2.4.24/include/linux/dynlocks.h
 ===================================================================
 --- linux-2.4.24.orig/include/linux/dynlocks.h	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/include/linux/dynlocks.h	2004-07-16 14:17:00.000000000 +0400
-@@ -0,0 +1,46 @@
++++ linux-2.4.24/include/linux/dynlocks.h	2004-07-18 11:09:33.000000000 +0400
+@@ -0,0 +1,43 @@
 +#ifndef _LINUX_DYNLOCKS_H
 +#define _LINUX_DYNLOCKS_H
 +
@@ -28,7 +28,6 @@ Index: linux-2.4.24/include/linux/dynlocks.h
 +	int			dl_writers;
 +	int			dl_pid;		/* holder of the lock */
 +	wait_queue_head_t	dl_wait;
-+	struct dynlock		*dl_head;
 +};
 +
 +/*
@@ -43,8 +42,6 @@ Index: linux-2.4.24/include/linux/dynlocks.h
 +	unsigned dl_magic;
 +	struct list_head dl_list;
 +	spinlock_t dl_list_lock;
-+	struct dynlock * dl_back;
-+	int dl_locks;
 +};
 +
 +void dynlock_init(struct dynlock *dl);
@@ -57,8 +54,8 @@ Index: linux-2.4.24/include/linux/dynlocks.h
 Index: linux-2.4.24/lib/dynlocks.c
 ===================================================================
 --- linux-2.4.24.orig/lib/dynlocks.c	2003-01-30 13:24:37.000000000 +0300
-+++ linux-2.4.24/lib/dynlocks.c	2004-07-16 15:31:06.000000000 +0400
-@@ -0,0 +1,247 @@
++++ linux-2.4.24/lib/dynlocks.c	2004-07-18 11:23:01.000000000 +0400
+@@ -0,0 +1,187 @@
 +/*
 + * Dynamic Locks
 + *
@@ -87,35 +84,6 @@ Index: linux-2.4.24/lib/dynlocks.c
 +		panic("Can't create dynlock cache");
 +}
 +
-+static void dynlock_check_consistency(struct dynlock *dl)
-+{
-+	struct dynlock_member *hl; 
-+	struct list_head *cur;
-+	int num = 0;
-+	
-+	spin_lock(&dl->dl_list_lock);
-+	BUG_ON(dl == NULL);
-+	BUG_ON(dl->dl_magic != DYNLOCK_LIST_MAGIC);
-+	BUG_ON(dl->dl_back != dl);
-+	list_for_each(cur, &dl->dl_list) {
-+		BUG_ON(cur->next == NULL);
-+		BUG_ON(cur->prev == NULL);
-+		hl = list_entry(cur, struct dynlock_member, dl_list);
-+		if (hl->dl_magic != DYNLOCK_MAGIC || hl->dl_head != dl) {
-+			printk("corrupted lock 0x%p/%d: magic 0x%x (!=0x%x)\n",
-+				hl, num, hl->dl_magic, DYNLOCK_MAGIC);
-+			printk("  value 0x%lx, %d readers, %d writers, pid %d, %d refs\n",
-+				hl->dl_value, hl->dl_readers, hl->dl_writers,
-+				hl->dl_pid, hl->dl_refcount);
-+			printk("   head 0x%p\n", hl->dl_head);
-+			BUG();
-+		}
-+		num++;
-+	}
-+	BUG_ON(num != dl->dl_locks);
-+	spin_unlock(&dl->dl_list_lock);
-+}
-+
 +/*
 + * dynlock_init
 + *
@@ -127,8 +95,6 @@ Index: linux-2.4.24/lib/dynlocks.c
 +	spin_lock_init(&dl->dl_list_lock);
 +	INIT_LIST_HEAD(&dl->dl_list);
 +	dl->dl_magic = DYNLOCK_LIST_MAGIC;
-+	dl->dl_back = dl;
-+	dl->dl_locks = 0;
 +}
 +
 +/*
@@ -149,12 +115,7 @@ Index: linux-2.4.24/lib/dynlocks.c
 +	int num = 0;
 +
 +	BUG_ON(dl == NULL);
-+	if (dl->dl_magic != DYNLOCK_LIST_MAGIC) {
-+		printk("corrupted dynlock head 0x%p: magic 0x%x (!=0x%x)\n",
-+			dl, dl->dl_magic, DYNLOCK_LIST_MAGIC);
-+		BUG();
-+	}
-+	BUG_ON(dl->dl_back != dl);
++	BUG_ON(dl->dl_magic != DYNLOCK_LIST_MAGIC);
 +repeat:
 +	/* find requested lock in lockspace */
 +	spin_lock(&dl->dl_list_lock);
@@ -164,15 +125,7 @@ Index: linux-2.4.24/lib/dynlocks.c
 +		BUG_ON(cur->next == NULL);
 +		BUG_ON(cur->prev == NULL);
 +		hl = list_entry(cur, struct dynlock_member, dl_list);
-+		if (hl->dl_magic != DYNLOCK_MAGIC || hl->dl_head != dl) {
-+			printk("corrupted lock 0x%p/%d: magic 0x%x (!=0x%x)\n",
-+				hl, num, hl->dl_magic, DYNLOCK_MAGIC);
-+			printk("  value 0x%lx, %d readers, %d writers, pid %d, %d refs\n",
-+				hl->dl_value, hl->dl_readers, hl->dl_writers,
-+				hl->dl_pid, hl->dl_refcount);
-+			printk("   head 0x%p\n", hl->dl_head);
-+			BUG();
-+		}
++		BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
 +		if (hl->dl_value == value) {
 +			/* lock is found */
 +			if (nhl) {
@@ -193,7 +146,6 @@ Index: linux-2.4.24/lib/dynlocks.c
 +		/* we already have allocated lock. use it */
 +		hl = nhl;
 +		nhl = NULL;
-+		dl->dl_locks++;
 +		list_add(&hl->dl_list, &dl->dl_list);
 +		goto found;
 +	}
@@ -208,7 +160,6 @@ Index: linux-2.4.24/lib/dynlocks.c
 +	nhl->dl_readers = 0;
 +	nhl->dl_writers = 0;
 +	nhl->dl_magic = DYNLOCK_MAGIC;
-+	nhl->dl_head = dl;
 +	init_waitqueue_head(&nhl->dl_wait);
 +
 +	/* while lock is being allocated, someone else may allocate it
@@ -241,8 +192,6 @@ Index: linux-2.4.24/lib/dynlocks.c
 +	hl->dl_pid = current->pid;
 +	spin_unlock(&dl->dl_list_lock);
 +
-+	BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
-+	dynlock_check_consistency(dl);
 +	return hl;
 +}
 +
@@ -262,16 +211,7 @@ Index: linux-2.4.24/lib/dynlocks.c
 +	BUG_ON(dl == NULL);
 +	BUG_ON(hl == NULL);
 +	BUG_ON(dl->dl_magic != DYNLOCK_LIST_MAGIC);
-+	BUG_ON(dl->dl_back != dl);
-+	if (hl->dl_magic != DYNLOCK_MAGIC || hl->dl_head != dl) {
-+		printk("corrupted lock 0x%p: magic 0x%x (!=0x%x)\n",
-+				hl, hl->dl_magic, DYNLOCK_MAGIC);
-+		printk("  value 0x%lx, %d readers, %d writers, pid %d, %d refs\n",
-+				hl->dl_value, hl->dl_readers, hl->dl_writers,
-+				hl->dl_pid, hl->dl_refcount);
-+		printk("   head 0x%p\n", hl->dl_head);
-+		BUG();
-+	}
++	BUG_ON(hl->dl_magic != DYNLOCK_MAGIC);
 +	BUG_ON(current->pid != hl->dl_pid);
 +
 +	spin_lock(&dl->dl_list_lock);
@@ -294,12 +234,9 @@ Index: linux-2.4.24/lib/dynlocks.c
 +	if (--(hl->dl_refcount) == 0) {
 +		hl->dl_magic = DYNLOCK_MAGIC2;
 +		list_del(&hl->dl_list);
-+		dl->dl_locks--;
++		kmem_cache_free(dynlock_cachep, hl);
 +	}
 +	spin_unlock(&dl->dl_list_lock);
-+	if (hl->dl_refcount == 0)
-+		kmem_cache_free(dynlock_cachep, hl);
-+	dynlock_check_consistency(dl);
 +}
 +
 +EXPORT_SYMBOL(dynlock_init);
@@ -309,7 +246,7 @@ Index: linux-2.4.24/lib/dynlocks.c
 Index: linux-2.4.24/lib/Makefile
 ===================================================================
 --- linux-2.4.24.orig/lib/Makefile	2004-06-24 09:06:32.000000000 +0400
-+++ linux-2.4.24/lib/Makefile	2004-07-14 18:14:28.000000000 +0400
++++ linux-2.4.24/lib/Makefile	2004-07-16 15:54:06.000000000 +0400
 @@ -9,10 +9,10 @@
  L_TARGET := lib.a
  
@@ -326,7 +263,7 @@ Index: linux-2.4.24/lib/Makefile
 Index: linux-2.4.24/fs/dcache.c
 ===================================================================
 --- linux-2.4.24.orig/fs/dcache.c	2004-07-16 12:35:54.000000000 +0400
-+++ linux-2.4.24/fs/dcache.c	2004-07-16 12:36:14.000000000 +0400
++++ linux-2.4.24/fs/dcache.c	2004-07-16 15:54:06.000000000 +0400
 @@ -1274,6 +1274,7 @@
  extern void bdev_cache_init(void);
  extern void cdev_cache_init(void);

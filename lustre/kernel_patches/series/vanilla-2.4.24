@@ -46,4 +46,3 @@ ext3-mds-num-2.4.24.patch
 export_lookup_create.patch
 ext3-raw-lookup-pdirops.patch
 kksymoops-2.4.24.vanilla.patch
-slab-use-after-free-debug-2.4.24.patch 
