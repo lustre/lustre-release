@@ -12,7 +12,7 @@ parent=$1
 child=$2
 CHILD=`echo $child | sed -e "s/^b_//" | tr "[a-z]" "[A-Z]"`
 dir=${3:-.}
-module=$(<$dir/CVS/Repository)
+module=$(basename $(<$dir/CVS/Repository))
 
 if [ "$module" = "lustre" ] ; then
     echo >&2 "${progname}: You probably want to branch lustre or portals."
