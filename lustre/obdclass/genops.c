@@ -6,22 +6,50 @@
  *
  */
 
-#include <asm/uaccess.h>
-#include <linux/sched.h>
-#include <linux/stat.h>
+#include <linux/config.h>
+#include <linux/kernel.h>
+#include <linux/mm.h>
 #include <linux/string.h>
+#include <linux/stat.h>
+#include <linux/errno.h>
 #include <linux/locks.h>
-#include <linux/quotaops.h>
-#include <linux/list.h>
-#include <linux/file.h>
-#include <linux/iobuf.h>
-#include <asm/bitops.h>
-#include <asm/byteorder.h>
+#include <linux/unistd.h>
+
+#include <asm/system.h>
+#include <asm/uaccess.h>
+
+#include <linux/fs.h>
+#include <linux/stat.h>
+#include <asm/uaccess.h>
+#include <linux/vmalloc.h>
+#include <asm/segment.h>
+#include <linux/mm.h>
+#include <linux/pagemap.h>
+#include <linux/smp_lock.h>
+
 #include <linux/obd_support.h>
 #include <linux/obd_class.h>
 
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
+kmem_cache_t *obdo_cachep;
+
+int obd_init_obdo_cache(void)
+{
+	/* XXX need to free this somewhere? */
+	ENTRY;
+	obdo_cachep = kmem_cache_create("obdo_cache",
+					      sizeof(struct obdo),
+					      0, SLAB_HWCACHE_ALIGN,
+					      NULL, NULL);
+	if (obdo_cachep == NULL) {
+		EXIT;
+		return -ENOMEM;
+	}
+	EXIT;
+	return 0;
+}
+
 
 /* map connection to client */
 struct obd_client *gen_client(struct obd_conn *conn)
@@ -95,7 +123,7 @@ int gen_disconnect(struct obd_conn *conn)
  *   used to make calls to these devices.
  *   data holds nothing
  */ 
-int gen_multi_setup(struct obd_device *obddev, int len, void *data)
+int gen_multi_setup(struct obd_device *obddev, uint32_t len, void *data)
 {
 	int i;
 
@@ -200,15 +228,16 @@ void lck_page(struct page *page)
 }
 
 /* XXX this should return errors correctly, so should migrate!!! */
-int gen_copy_data(struct obd_conn *conn, obdattr *dst, obdattr *src)
+int gen_copy_data(struct obd_conn *dst_conn, struct obdo *dst,
+		  struct obd_conn *src_conn, struct obdo *src)
 {
 	struct page *page;
 	unsigned long index = 0;
 	int rc;
 	ENTRY;
 
-	CDEBUG(D_INODE, "src: ino %ld blocks %ld, size %Ld, dst: ino %ld\n", 
-	       src->i_ino, src->i_blocks, src->i_size, dst->i_ino);
+	CDEBUG(D_INODE, "src: ino %Ld blocks %Ld, size %Ld, dst: ino %Ld\n", 
+	       src->o_id, src->o_blocks, src->o_size, dst->o_id);
 	page = alloc_page(GFP_USER);
 	if ( !page ) {
 		EXIT;
@@ -217,16 +246,20 @@ int gen_copy_data(struct obd_conn *conn, obdattr *dst, obdattr *src)
 	
 	lck_page(page);
 	
-	while (index < ((src->i_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
+	while (index < ((src->o_size + PAGE_SIZE - 1) >> PAGE_SHIFT)) {
 		
 		page->index = index;
-		rc = OBP(conn->oc_dev, brw)(READ, conn, src, page, 0);
+		rc = OBP(src_conn->oc_dev, brw)
+			(READ, src_conn, src, (char *)page_address(page), 
+			 PAGE_SIZE, (page->index) << PAGE_SHIFT, 0);
 
 		if ( rc != PAGE_SIZE ) 
 			break;
 		CDEBUG(D_INODE, "Read page %ld ...\n", page->index);
 
-		rc = OBP(conn->oc_dev, brw)(WRITE, conn, dst, page, 1);
+		rc = OBP(dst_conn->oc_dev, brw)
+			(WRITE, dst_conn, dst,  (char *)page_address(page), 
+			 PAGE_SIZE, (page->index) << PAGE_SHIFT, 1);
 		if ( rc != PAGE_SIZE)
 			break;
 
@@ -234,8 +267,8 @@ int gen_copy_data(struct obd_conn *conn, obdattr *dst, obdattr *src)
 		
 		index ++;
 	}
-	dst->i_size = src->i_size;
-	dst->i_blocks = src->i_blocks;
+	dst->o_size = src->o_size;
+	dst->o_blocks = src->o_blocks;
 	UnlockPage(page);
 	__free_page(page);
 

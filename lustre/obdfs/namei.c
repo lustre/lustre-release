@@ -454,7 +454,7 @@ int obdfs_create (struct inode * dir, struct dentry * dentry, int mode)
 	struct page *page;
 	struct ext2_dir_entry_2 * de;
 	int err = -EIO;
-	objid id;
+	obd_id id;
 
         ENTRY;
 
@@ -506,7 +506,7 @@ int obdfs_mknod (struct inode * dir, struct dentry *dentry, int mode, int rdev)
 	struct ext2_dir_entry_2 * de;
 	int err;
 
-	objid id;
+	obd_id id;
 
         ENTRY;
 
@@ -557,7 +557,7 @@ int obdfs_mkdir(struct inode * dir, struct dentry * dentry, int mode)
 	struct page *page, *inode_page;
 	struct ext2_dir_entry_2 * de;
 	int err;
-	objid id;
+	obd_id id;
 
 	ENTRY;
 
@@ -835,7 +835,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 	char * link;
 	int i, l, err = -EIO;
 	char c;
-	objid id;
+	obd_id id;
 
         ENTRY;
 	/*

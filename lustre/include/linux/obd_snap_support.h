@@ -13,9 +13,9 @@ struct snap_iterdata {
 
 
 inline struct obd_conn *child_conn(struct obd_conn *conn);
-int snap_deleteobj(objid id, void *data);
-int snap_restoreobj(objid id, void *data);
-int snap_printobj(objid id, void *data);
+int snap_deleteobj(obd_id id, void *data);
+int snap_restoreobj(obd_id id, void *data);
+int snap_printobj(obd_id id, void *data);
 int snap_iocontrol(int cmd, struct obd_conn *conn, int len, void *karg, void *uarg);
 
 #endif
