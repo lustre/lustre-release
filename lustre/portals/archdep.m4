@@ -1,6 +1,6 @@
 
 # -------- in kernel compilation? (2.5 only) -------------
-AC_ARG_ENABLE(inkernel, [ --enable-inkernel set up 2.5 kernel makefiles])
+AC_ARG_ENABLE(inkernel, [  --enable-inkernel set up 2.5 kernel makefiles])
 AM_CONDITIONAL(INKERNEL, test x$enable_inkernel = xyes)
 echo "Makefile for in kernel build: $INKERNEL"
 
@@ -293,7 +293,7 @@ AC_SUBST(GMNAL)
 default_ib_include_dir=/usr/local/ib/include
 an_ib_include_file=vapi.h
 
-AC_ARG_WITH(ib, [ --with-ib=[yes/no/path] Path to IB includes], with_ib=$withval, with_ib=$default_ib)
+AC_ARG_WITH(ib, [  --with-ib=[yes/no/path] Path to IB includes], with_ib=$withval, with_ib=$default_ib)
 AC_MSG_CHECKING(if IB headers are present)
 if test "$with_ib" = yes; then
     with_ib=$default_ib_include_dir
@@ -333,6 +333,7 @@ AC_SUBST(SCIMACNAL)
 CFLAGS="$KCFLAGS"
 CPPFLAGS="$KINCFLAGS $KCPPFLAGS $MFLAGS $enable_zerocopy $enable_affinity $with_quadrics $with_gm $with_scamac $with_ib"
 
+AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 AC_SUBST(MOD_LINK)
 AC_SUBST(LINUX25)
 AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
