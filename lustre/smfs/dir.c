@@ -9,8 +9,11 @@
 #include <linux/slab.h>
 #include <linux/stat.h>
 #include <linux/unistd.h>
+#include <linux/lustre_idl.h> 
+#include <linux/smp_lock.h>
 
 #include "smfs_internal.h" 
+#include "kml_idl.h" 
 
 #define NAME_ALLOC_LEN(len)     ((len+16) & ~15)
                                                                                                                                                                                         
@@ -254,14 +257,22 @@ static int smfs_mkdir(struct inode * dir,
 	struct inode *inode = NULL;
 	struct dentry *cache_dentry;
 	struct dentry parent;
+	void   *handle;
 	int    rc = 0;
 
 	if (!cache_dir) 
 		RETURN(-ENOENT);
+
+	handle = smfs_trans_start(cache_dir, KML_OPCODE_MKDIR);
+	if (IS_ERR(handle) ) {
+                CERROR("smfs_do_mkdir: no space for transaction\n");
+        	RETURN(-ENOSPC);
+	}
 	
 	prepare_parent_dentry(&parent, cache_dir);
 	cache_dentry = d_alloc(&parent, &dentry->d_name);
-	
+
+	lock_kernel();	
 	if (cache_dir->i_op->mkdir)
 		rc = cache_dir->i_op->mkdir(cache_dir, cache_dentry, mode);
 
@@ -273,8 +284,15 @@ static int smfs_mkdir(struct inode * dir,
 		GOTO(exit, rc = -ENOENT);
  
 	d_instantiate(dentry, inode);	
+	/*Do KML post hook*/
+	if (smfs_do_kml(dir)) {
+		rc = post_kml_mkdir(dir, dentry);
+		GOTO(exit, rc);
+	}
 	duplicate_inode(cache_dir, dir);
 exit:
+	unlock_kernel();	
+	smfs_trans_commit(handle);
 	d_unalloc(cache_dentry);
 	RETURN(rc);		
 }
