@@ -533,7 +533,7 @@ struct seq_operations llite_dump_pgcache_seq_sops = {
  */
 static int llite_dump_pgcache_seq_open(struct inode *inode, struct file *file)
 {
-        struct proc_dir_entry *dp = inode->u.generic_ip;
+        struct proc_dir_entry *dp = PDE(inode);
         struct ll_async_page *llap;
         struct seq_file *seq;
         struct ll_sb_info *sbi = dp->data;
