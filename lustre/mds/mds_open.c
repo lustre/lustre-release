@@ -594,9 +594,17 @@ static void reconstruct_open(struct mds_update_record *rec, int offset,
 }
 
 /* do NOT or the MAY_*'s, you'll get the weakest */
-static int accmode(int flags)
+static int accmode(struct inode *inode, int flags)
 {
         int res = 0;
+
+        /* Sadly, NFSD reopens a file repeatedly during operation, so the
+         * "acc_mode = 0" allowance for newly-created files isn't honoured.
+         * NFSD uses the MDS_OPEN_OWNEROVERRIDE flag to say that a file
+         * owner can write to a file even if it is marked readonly to hide
+         * its brokenness. (bug 5781) */
+        if (flags & MDS_OPEN_OWNEROVERRIDE && inode->i_uid == current->fsuid)
+                return 0;
 
         if (flags & FMODE_READ)
                 res = MAY_READ;
@@ -813,9 +821,8 @@ int mds_open(struct mds_update_record *rec, int offset,
                                 LDLM_LOCK_PUT(lock);
                         }
                         DEBUG_REQ(D_ERROR, req, "fid2 not set on open replay");
+                        RETURN(-EFAULT);
                 }
-                /* this LASSERT needs to go; handle more gracefully. */
-                LASSERT(rec->ur_fid2->id);
 
                 rc = mds_open_by_fid(req, rec->ur_fid2, body, rec->ur_flags,
                                      rec, rep);
@@ -835,8 +842,6 @@ int mds_open(struct mds_update_record *rec, int offset,
                 CERROR("test case OBD_FAIL_MDS_OPEN_PACK\n");
                 RETURN(-ENOMEM);
         }
-
-        acc_mode = accmode(rec->ur_flags);
 
         /* Step 1: Find and lock the parent */
         if (rec->ur_flags & MDS_OPEN_CREAT)
@@ -937,7 +942,10 @@ int mds_open(struct mds_update_record *rec, int offset,
                 rc = fsfilt_commit(obd, dchild->d_inode, handle, 0);
                 handle = NULL;
                 acc_mode = 0;           /* Don't check for permissions */
+        } else {
+                acc_mode = accmode(dchild->d_inode, rec->ur_flags);
         }
+
 
         LASSERTF(!mds_inode_is_orphan(dchild->d_inode),
                  "dchild %.*s (%p) inode %p\n", dchild->d_name.len,

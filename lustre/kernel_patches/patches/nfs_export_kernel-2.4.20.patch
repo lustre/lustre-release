@@ -20,7 +20,7 @@ diff -uprN linux/fs/file_table.c linux-2.4.20/fs/file_table.c
   */
 -int init_private_file(struct file *filp, struct dentry *dentry, int mode)
 +int init_private_file_it(struct file *filp, struct dentry *dentry, int mode,
-+                         struct lookup_intent *it)
++			 struct lookup_intent *it)
  {
  	memset(filp, 0, sizeof(*filp));
  	filp->f_mode   = mode;
@@ -54,8 +54,8 @@ diff -uprN linux/fs/inode.c linux-2.4.20/fs/inode.c
  
 -struct inode *iget4(struct super_block *sb, unsigned long ino, find_inode_t find_actor, void *opaque)
 +static inline struct inode *ifind(struct super_block *sb, unsigned long ino,
-+                                  struct list_head *head,
-+                                  find_inode_t find_actor, void *opaque)
++				  struct list_head *head,
++				  find_inode_t find_actor, void *opaque)
  {
 -	struct list_head * head = inode_hashtable + hash(sb,ino);
  	struct inode * inode;
@@ -69,14 +69,14 @@ diff -uprN linux/fs/inode.c linux-2.4.20/fs/inode.c
 +}
 +
 +struct inode *ilookup4(struct super_block *sb, unsigned long ino,
-+                       find_inode_t find_actor, void *opaque)
++		       find_inode_t find_actor, void *opaque)
 +{
 +	struct list_head * head = inode_hashtable + hash(sb,ino);
 +	return ifind(sb, ino, head, find_actor, opaque);
 +}
 +
 +struct inode *iget4(struct super_block *sb, unsigned long ino,
-+                    find_inode_t find_actor, void *opaque)
++		    find_inode_t find_actor, void *opaque)
 +{
 +	struct list_head * head = inode_hashtable + hash(sb,ino);
 +	struct inode *inode = ifind(sb, ino, head, find_actor, opaque);
@@ -111,7 +111,7 @@ diff -uprN linux/fs/namei.c linux-2.4.20/fs/namei.c
  /* SMP-safe */
 -struct dentry * lookup_one_len(const char * name, struct dentry * base, int len)
 +struct dentry * lookup_one_len_it(const char * name, struct dentry * base,
-+                                  int len, struct lookup_intent *it)
++				  int len, struct lookup_intent *it)
  {
  	unsigned long hash;
  	struct qstr this;
@@ -142,8 +142,8 @@ diff -uprN linux/fs/nfsd/export.c linux-2.4.20/fs/nfsd/export.c
  	ino = inode->i_ino;
 +	if ((inode->i_sb->s_type->fs_flags & FS_NFSEXP_FSID) &&
 +	    !(nxp->ex_flags & NFSEXP_FSID)) {
-+	    nxp->ex_dev = inode->i_sb->s_dev;
-+	    nxp->ex_flags |= NFSEXP_FSID;
++		nxp->ex_dev = inode->i_sb->s_dev;
++		nxp->ex_flags |= NFSEXP_FSID;
 +	}
  	err = -EINVAL;
  
@@ -151,17 +151,15 @@ diff -uprN linux/fs/nfsd/export.c linux-2.4.20/fs/nfsd/export.c
 diff -uprN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
 --- linux/fs/nfsd/nfsfh.c	Fri Nov 29 05:23:15 2002
 +++ linux-2.4.20/fs/nfsd/nfsfh.c	Sun Oct  5 21:47:45 2003
-@@ -36,6 +36,15 @@ struct nfsd_getdents_callback {
+@@ -36,6 +36,13 @@ struct nfsd_getdents_callback {
  	int sequence;		/* sequence counter */
  };
  
 +static struct dentry *lookup_it(struct inode *inode, struct dentry * dentry)
 +{
 +	if (inode->i_op->lookup_it)
-+	    return inode->i_op->lookup_it(inode, dentry, NULL, 0);
-+	else
-+	    return inode->i_op->lookup(inode, dentry);
-+		
++		return inode->i_op->lookup_it(inode, dentry, NULL, 0);
++	return inode->i_op->lookup(inode, dentry);
 +}
 +
  /*
@@ -186,10 +184,10 @@ diff -uprN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
 +		if ((dentry->d_flags & DCACHE_NFSD_DISCONNECTED) &&
 +		    (dentry->d_parent == dentry) ) {
 +			it.it_op_release = NULL;
-+			/* 
-+			 * XXX Temporary Hack: Simulating init_private_file without
-+			 * f_op->open for disconnected dentry Since we don't have actual
-+			 * dentry->d_name to revalidate in revalidate_it()
++			/*
++			 * XXX Temporary Hack: Simulate init_private_file without
++			 * f_op->open for disconnected dentry as we don't have
++			 * actual dentry->d_name to revalidate in revalidate_it()
 +			 */
 +			filp = &file;
 +			memset(filp, 0, sizeof(*filp));
@@ -210,13 +208,13 @@ diff -uprN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
 +	} else {
 +		error = init_private_file_it(&file, dentry, FMODE_READ, NULL);
 +	}
-+	if (error) 
++	if (error)
  		goto out;
 +
  	error = -EINVAL;
  	if (!file.f_op->readdir)
  		goto out_close;
-@@ -113,9 +152,13 @@ static int nfsd_get_name(struct dentry *
+@@ -113,9 +152,12 @@ static int nfsd_get_name(struct dentry *
  	}
  
  out_close:
@@ -224,8 +222,7 @@ diff -uprN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
 +	if (file.f_op->release && !filp)
  		file.f_op->release(dir, &file);
  out:
-+	if (dentry->d_op &&
-+	    dentry->d_op->d_revalidate_it &&
++	if (dentry->d_op && dentry->d_op->d_revalidate_it &&
 +	    it.it_op_release && !filp)
 +		intent_release(&it);
  	return error;
@@ -258,14 +255,13 @@ diff -uprN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
  		pdentry = nfsd_findparent(dentry);
  		err = PTR_ERR(pdentry);
  		if (IS_ERR(pdentry))
-@@ -662,6 +709,11 @@ fh_verify(struct svc_rqst *rqstp, struct
+@@ -662,6 +709,10 @@ fh_verify(struct svc_rqst *rqstp, struct
  
  	inode = dentry->d_inode;
  
 +	/* cache coherency for non-device filesystems */
-+	if (inode->i_op && inode->i_op->revalidate_it) {
-+	    inode->i_op->revalidate_it(dentry, NULL);
-+	}
++	if (inode->i_op && inode->i_op->revalidate_it)
++		inode->i_op->revalidate_it(dentry, NULL);
 +
  	/* Type check. The correct error return for type mismatches
  	 * does not seem to be generally agreed upon. SunOS seems to
@@ -276,9 +272,9 @@ diff -uprN linux/fs/nfsd/nfsfh.c linux-2.4.20/fs/nfsd/nfsfh.c
  out_uptodate:
 -	printk(KERN_ERR "fh_update: %s/%s already up-to-date!\n",
 -		dentry->d_parent->d_name.name, dentry->d_name.name);
-+	if(!dentry->d_parent->d_inode->i_op->mkdir_raw)
++	if (!dentry->d_parent->d_inode->i_op->mkdir_raw)
 +		printk(KERN_ERR "fh_update: %s/%s already up-to-date!\n",
-+			dentry->d_parent->d_name.name, dentry->d_name.name);
++		      dentry->d_parent->d_name.name, dentry->d_name.name);
  	goto out;
  }
  
@@ -290,7 +286,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  static struct raparms *		raparm_cache;
  
 +static int link_raw(struct dentry *dold, struct dentry *ddir,
-+                    struct dentry *dnew)
++		    struct dentry *dnew)
 +{
 +	int err;
 +
@@ -299,17 +295,17 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->link_raw(&old_nd, &nd);
 +	d_instantiate(dnew, dold->d_inode);
-+	if(dold->d_inode->i_op && dold->d_inode->i_op->revalidate_it)
++	if (dold->d_inode->i_op && dold->d_inode->i_op->revalidate_it)
 +		dold->d_inode->i_op->revalidate_it(dnew, NULL);
 +
 +	return err;
 +}
 +
 +static int unlink_raw(struct dentry *dentry, char *fname, int flen,
-+                      struct dentry *rdentry)
++		      struct dentry *rdentry)
 +{
 +	int err;
-+        struct qstr last = { .name = fname, .len = flen };
++	struct qstr last = { .name = fname, .len = flen };
 +	struct nameidata nd = { .dentry = dentry, .last = last };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->unlink_raw(&nd);
@@ -320,14 +316,14 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 +}
 +
 +static int rmdir_raw(struct dentry *dentry, char *fname, int flen,
-+                     struct dentry *rdentry)
++		     struct dentry *rdentry)
 +{
 +	int err;
-+        struct qstr last = { .name = fname, .len = flen };
++	struct qstr last = { .name = fname, .len = flen };
 +	struct nameidata nd = { .dentry = dentry, .last = last };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->rmdir_raw(&nd);
-+	if(!err) {
++	if (!err) {
 +		rdentry->d_inode->i_flags |= S_DEAD;
 +		d_delete(rdentry);
 +	}
@@ -335,11 +331,11 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 +	return err;
 +}
 +
-+static int symlink_raw(struct dentry *dentry,  char *fname, int flen,
-+                       char *path)
++static int symlink_raw(struct dentry *dentry, char *fname, int flen,
++		       char *path)
 +{
 +	int err;
-+        struct qstr last = { .name = fname, .len = flen };
++	struct qstr last = { .name = fname, .len = flen };
 +	struct nameidata nd = { .dentry = dentry, .last = last };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->symlink_raw(&nd, path);
@@ -350,7 +346,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 +static int mkdir_raw(struct dentry *dentry, char *fname, int flen, int mode)
 +{
 +	int err;
-+        struct qstr last = { .name = fname, .len = flen };
++	struct qstr last = { .name = fname, .len = flen };
 +	struct nameidata nd = { .dentry = dentry, .last = last };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->mkdir_raw(&nd, mode);
@@ -359,19 +355,19 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 +}
 +
 +static int mknod_raw(struct dentry *dentry, char *fname, int flen, int mode,
-+                     dev_t dev)
++		     dev_t dev)
 +{
 +	int err;
-+        struct qstr last = { .name = fname, .len = flen };
++	struct qstr last = { .name = fname, .len = flen };
 +	struct nameidata nd = { .dentry = dentry, .last = last };
 +	struct inode_operations *op = nd.dentry->d_inode->i_op;
 +	err = op->mknod_raw(&nd, mode, dev);
 +
 +	return err;
-+}	
++}
 +
 +static int rename_raw(struct dentry *fdentry, struct dentry *tdentry,
-+                      struct dentry *odentry, struct dentry *ndentry)
++		      struct dentry *odentry, struct dentry *ndentry)
 +{
 +	int err;
 +
@@ -417,7 +413,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	err = nfserr_notsync;
  	if (!check_guard || guardtime == inode->i_ctime) {
 -		err = notify_change(dentry, iap);
-+		if ( dentry->d_inode->i_op && dentry->d_inode->i_op->setattr_raw)
++		if (dentry->d_inode->i_op && dentry->d_inode->i_op->setattr_raw)
 +			err = setattr_raw(dentry->d_inode, iap);
 +		else
 +			err = notify_change(dentry, iap);
@@ -432,26 +428,28 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	int		err;
  
  	/* If we get here, then the client has already done an "open", and (hopefully)
-@@ -473,6 +599,14 @@ nfsd_open(struct svc_rqst *rqstp, struct
+@@ -473,6 +599,18 @@ nfsd_open(struct svc_rqst *rqstp, struct
  		filp->f_mode  = FMODE_READ;
  	}
  
-+	intent_init(&it, IT_OPEN, (filp->f_flags & ~O_ACCMODE) | filp->f_mode);
++#ifndef O_OWNER_OVERRIDE
++#define O_OWNER_OVERRIDE 0200000000
++#endif
++	intent_init(&it, IT_OPEN, (filp->f_flags & ~O_ACCMODE) | filp->f_mode |
++		    O_OWNER_OVERRIDE);
 +
 +	err = revalidate_it(dentry, &it);
 +	if (err)
 +		goto out_nfserr;
-+	
++
 +	filp->f_it = &it;
-+	
++
  	err = 0;
  	if (filp->f_op && filp->f_op->open) {
  		err = filp->f_op->open(inode, filp);
-@@ -487,7 +621,11 @@ nfsd_open(struct svc_rqst *rqstp, struct
- 			atomic_dec(&filp->f_count);
+@@ -487,6 +621,9 @@ nfsd_open(struct svc_rqst *rqstp, struct
  		}
  	}
-+
  out_nfserr:
 +	if (it.it_op_release)
 +		intent_release(&it);
@@ -468,33 +466,37 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  
  	err = nfserr_perm;
  	if (!flen)
-@@ -834,20 +972,44 @@ nfsd_create(struct svc_rqst *rqstp, stru
+@@ -834,20 +972,47 @@ nfsd_create(struct svc_rqst *rqstp, stru
  	dentry = fhp->fh_dentry;
  	dirp = dentry->d_inode;
  
 +	switch (type) {
-+			case S_IFDIR:
-+				if (dirp->i_op->mkdir_raw)
-+		            error = mkdir_raw(dentry, fname, flen, iap->ia_mode);
-+				break;
-+			case S_IFCHR:
-+			case S_IFBLK:
-+			case S_IFIFO:
-+			case S_IFSOCK:
-+			case S_IFREG:
-+			    if (dirp->i_op->mknod_raw) {
-+					if (type == S_IFREG)
-+						rdev = 0;
-+					error = mknod_raw(dentry, fname, flen, iap->ia_mode, rdev);
-+				}
-+				break;
-+				default:
-+	                printk("nfsd: bad file type %o in nfsd_create\n", type);
++	case S_IFDIR:
++		if (dirp->i_op->mkdir_raw)
++			error = mkdir_raw(dentry, fname, flen, iap->ia_mode);
++		break;
++	case S_IFCHR:
++	case S_IFBLK:
++	case S_IFIFO:
++	case S_IFSOCK:
++	case S_IFREG:
++		if (dirp->i_op->mknod_raw) {
++			if (type == S_IFREG)
++				rdev = 0;
++			error = mknod_raw(dentry, fname,flen,iap->ia_mode,rdev);
++		}
++		break;
++	default:
++		printk("nfsd: bad file type %o in nfsd_create\n", type);
++	}
++	if (error && error != -EOPNOTSUPP) {
++		err = error;
++		goto out_nfserr;
 +	}
 +
  	err = nfserr_notdir;
 -	if(!dirp->i_op || !dirp->i_op->lookup)
-+	if(!dirp->i_op || !(dirp->i_op->lookup || dirp->i_op->lookup_it))
++	if (!dirp->i_op || !(dirp->i_op->lookup || dirp->i_op->lookup_it))
  		goto out;
  	/*
  	 * Check whether the response file handle has been verified yet.
@@ -505,8 +507,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 -		fh_lock(fhp);
 +	if (!resfhp->fh_dentry || dirp->i_op->lookup_it) {
 +		/* called from nfsd_proc_mkdir, or possibly nfsd3_proc_create
-+		   and nfsd_proc_create in case of lustre
-+		*/
++		 * and nfsd_proc_create in case of lustre */
 +		if (!resfhp->fh_dentry)
 +			fh_lock(fhp);
  		dchild = lookup_one_len(fname, dentry, flen);
@@ -525,11 +526,11 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 -		dprintk("nfsd_create: dentry %s/%s not negative!\n",
 -			dentry->d_name.name, dchild->d_name.name);
 -		goto out; 
-+	if ( error == -EOPNOTSUPP) {
++	if (error == -EOPNOTSUPP) {
 +		if (dchild->d_inode) {
 +			dprintk("nfsd_create: dentry %s/%s not negative!\n",
 +				dentry->d_name.name, dchild->d_name.name);
-+			goto out; 
++			goto out;
 +		}
  	}
  
@@ -552,7 +553,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	case S_IFIFO:
  	case S_IFSOCK:
 -		err = vfs_mknod(dirp, dchild, iap->ia_mode, rdev);
-+		if (error == -EOPNOTSUPP)	
++		if (error == -EOPNOTSUPP)
 +			err = vfs_mknod(dirp, dchild, iap->ia_mode, rdev);
  		break;
  	default:
@@ -565,10 +566,10 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 +	if (dirp->i_op->mknod_raw) {
 +		err = mknod_raw(dentry, fname, flen, iap->ia_mode, 0);
 +		if (err && err != -EOPNOTSUPP)
-+			goto out;
++			goto out_nfserr;
 +	}
 +
-+	if(!dirp->i_op ||  !(dirp->i_op->lookup || dirp->i_op->lookup_it))
++	if (!dirp->i_op || !(dirp->i_op->lookup || dirp->i_op->lookup_it))
  		goto out;
  	fh_lock(fhp);
  
@@ -576,7 +577,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  		case NFS3_CREATE_GUARDED:
  			err = nfserr_exist;
  		}
-+		if(dirp->i_op->mknod_raw)
++		if (dirp->i_op->mknod_raw)
 +			err = 0;
  		goto out;
  	}
@@ -594,7 +595,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  		goto out;
  	fh_lock(fhp);
  	dentry = fhp->fh_dentry;
-+	
++
 +	if (dentry->d_inode->i_op->symlink_raw)
 +		error = symlink_raw(dentry, fname, flen, path);
 +
@@ -639,7 +640,7 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
  	} else
  #endif
 -	err = vfs_rename(fdir, odentry, tdir, ndentry);
-+	if(fdir->i_op->rename_raw)
++	if (fdir->i_op->rename_raw)
 +		err = rename_raw(fdentry, tdentry, odentry, ndentry);
 +	else
 +		err = vfs_rename(fdir, odentry, tdir, ndentry);
@@ -676,13 +677,12 @@ diff -uprN linux/fs/nfsd/vfs.c linux-2.4.20/fs/nfsd/vfs.c
 diff -uprN linux/include/linux/fs.h linux-2.4.20/include/linux/fs.h
 --- linux/include/linux/fs.h	Sun Oct  5 21:52:56 2003
 +++ linux-2.4.20/include/linux/fs.h	Sun Oct  5 22:25:20 2003
-@@ -93,6 +93,9 @@ extern int leases_enable, dir_notify_ena
+@@ -93,6 +93,8 @@ extern int leases_enable, dir_notify_ena
  #define FS_SINGLE	8 /* Filesystem that can have only one superblock */
  #define FS_NOMOUNT	16 /* Never mount from userland */
  #define FS_LITTER	32 /* Keeps the tree in dcache */
-+#define FS_NFSEXP_FSID 64 /* Use file system specific fsid for
-+			   * exporting non device filesystems.
-+			   */
++#define FS_NFSEXP_FSID	64 /* Use file system specific fsid for
++			    * exporting non device filesystems. */
  #define FS_ODD_RENAME	32768	/* Temporary stuff; will go away as soon
  				  * as nfs_rename() will be cleaned up
  				  */
@@ -692,7 +692,7 @@ diff -uprN linux/include/linux/fs.h linux-2.4.20/include/linux/fs.h
  			    int flags, struct lookup_intent *it);
 +extern int revalidate_it(struct dentry *dentry, struct lookup_intent *it);
 +extern int init_private_file_it(struct file *, struct dentry *dentry, int mode,
-+                                struct lookup_intent *it);
++				struct lookup_intent *it);
  extern int filp_close(struct file *, fl_owner_t id);
  extern char * getname(const char *);
  
@@ -701,7 +701,7 @@ diff -uprN linux/include/linux/fs.h linux-2.4.20/include/linux/fs.h
  extern int follow_up(struct vfsmount **, struct dentry **);
  extern struct dentry * lookup_one_len(const char *, struct dentry *, int);
 +extern struct dentry * lookup_one_len_it(const char *, struct dentry *, int,
-+                                         struct lookup_intent *);
++					 struct lookup_intent *);
  extern struct dentry * lookup_hash(struct qstr *, struct dentry *);
  #define user_path_walk(name,nd)	 __user_walk(name, LOOKUP_FOLLOW|LOOKUP_POSITIVE, nd)
  #define user_path_walk_link(name,nd) __user_walk(name, LOOKUP_POSITIVE, nd)
@@ -710,7 +710,7 @@ diff -uprN linux/include/linux/fs.h linux-2.4.20/include/linux/fs.h
  typedef int (*find_inode_t)(struct inode *, unsigned long, void *);
  extern struct inode * iget4(struct super_block *, unsigned long, find_inode_t, void *);
 +extern struct inode * ilookup4(struct super_block *, unsigned long,
-+                               find_inode_t, void *);
++			       find_inode_t, void *);
  static inline struct inode *iget(struct super_block *sb, unsigned long ino)
  {
  	return iget4(sb, ino, NULL, NULL);

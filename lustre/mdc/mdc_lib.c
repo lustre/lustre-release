@@ -100,7 +100,7 @@ static __u32 mds_pack_open_flags(__u32 flags)
         return
                 (flags & (FMODE_READ | FMODE_WRITE | FMODE_EXEC |
                           MDS_OPEN_DELAY_CREATE | MDS_OPEN_HAS_EA |
-                          MDS_OPEN_HAS_OBJS)) |
+                          MDS_OPEN_HAS_OBJS | MDS_OPEN_OWNEROVERRIDE)) |
                 ((flags & O_CREAT) ? MDS_OPEN_CREAT : 0) |
                 ((flags & O_EXCL) ? MDS_OPEN_EXCL : 0) |
                 ((flags & O_TRUNC) ? MDS_OPEN_TRUNC : 0) |

@@ -1,4 +1,12 @@
-tbd         Cluster File Systems, Inc. <info@clusterfs.com>
+2005-03-31  Cluster File Systems, Inc. <info@clusterfs.com>
+       * version 1.4.2
+       * bug fixes
+	- fix deadlock in obdfilter statistics vs. object create (5811)
+	- fix for HPUX NFS client breakage when NFS exporting Lustre (5781)
+       * miscellania
+	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
+
+2005-03-18  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.1
        * bug fixes
 	- don't LASSERT in ll_release on NULL lld with NFS export (4655, 5760)
@@ -14,13 +22,11 @@ tbd         Cluster File Systems, Inc. <info@clusterfs.com>
 	- fix several locking issues related to i_size (5492,5624,5654,5672)
 	- don't move pending lock onto export if it is already evicted (5683)
 	- fix kernel oops when creating .foo in unlinked directory (5548)
-	- fix deadlock in obdfilter statistics vs. object create (5811)
        * miscellania
 	- fix lustre/lustrefs init scripts for SuSE (patch from Scali, 5702)
 	- don't hold the pinger_sem in ptlrpc_pinger_sending_on_import
 	- change obd_increase_kms to obd_adjust_kms (up or down) (5654)
 	- lconf, lmc search both /usr/lib and /usr/lib64 for Python libs (5800)
-	- by default create 1 inode per 4kB space on MDS, per 16kB on OSTs
 
 2005-02-18  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.4.0.10 (1.4.1 release candidate 1)

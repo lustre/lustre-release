@@ -553,6 +553,7 @@ extern void lustre_swab_mds_rec_setattr (struct mds_rec_setattr *sa);
 #define MDS_OPEN_DIRECTORY       00200000
 
 #define MDS_OPEN_DELAY_CREATE  0100000000 /* delay initial object create */
+#define MDS_OPEN_OWNEROVERRIDE 0200000000 /* NFSD rw-reopen ro file for owner */
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
 #define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */
 
