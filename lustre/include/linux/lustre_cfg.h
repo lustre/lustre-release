@@ -46,6 +46,8 @@ enum lcfg_command_type {
         LCFG_SET_UPCALL     = 0x00cf00a,
         LCFG_ADD_CONN       = 0x00cf00b,
         LCFG_DEL_CONN       = 0x00cf00c,
+        LCFG_LOV_ADD_OBD    = 0x00cf00d,
+        LCFG_LOV_DEL_OBD    = 0x00cf00e
 };
 
 struct lustre_cfg_bufs {

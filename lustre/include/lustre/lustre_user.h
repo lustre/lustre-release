@@ -56,7 +56,7 @@
 
 #define lov_user_ost_data lov_user_ost_data_v1
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
-        __u64 l_object_id;	  /* OST object ID */
+        __u64 l_object_id;        /* OST object ID */
         __u64 l_object_gr;        /* OST object group (creating MDS number) */
         __u32 l_ost_gen;          /* generation of this OST index */
         __u32 l_ost_idx;          /* OST index in LOV */
@@ -105,6 +105,11 @@ struct obd_uuid {
 static inline int obd_uuid_equals(struct obd_uuid *u1, struct obd_uuid *u2)
 {
         return strcmp((char *)u1->uuid, (char *)u2->uuid) == 0;
+}
+
+static inline int obd_uuid_empty(struct obd_uuid *uuid)
+{
+        return uuid->uuid[0] == '\0';
 }
 
 static inline void obd_str2uuid(struct obd_uuid *uuid, char *tmp)

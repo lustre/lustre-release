@@ -302,6 +302,19 @@ static inline int obd_cleanup(struct obd_device *obd)
         RETURN(rc);
 }
 
+static inline int
+obd_process_config(struct obd_device *obd, int datalen, void *data)
+{
+        int rc;
+        ENTRY;
+ 
+        OBD_CHECK_OP(obd, process_config, -EOPNOTSUPP);
+        OBD_COUNTER_INCREMENT(obd, process_config);
+ 
+        rc = OBP(obd, process_config)(obd, datalen, data);
+        RETURN(rc);
+}
+
 /* Pack an in-memory MD struct for storage on disk.
  * Returns +ve size of packed MD (0 for free), or -ve error.
  *

@@ -621,6 +621,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, setup);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, precleanup);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, cleanup);
+        LPROCFS_OBD_OP_INIT(num_private_stats, stats, process_config);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, postrecov);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, add_conn);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, del_conn);

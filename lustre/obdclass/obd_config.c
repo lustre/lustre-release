@@ -305,10 +305,10 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                 obd->obd_force = 1;
                                 break;
                         case 'A':
-                                obd->obd_fail = 1;
-                                obd->obd_no_transno = 1;
                                 LCONSOLE_WARN("Failing %s by user command\n",
                                        obd->obd_name);
+                                obd->obd_fail = 1;
+                                obd->obd_no_transno = 1;
                                 /* Set the obd readonly if we can */
                                 if (OBP(obd, iocontrol))
                                         obd_iocontrol(OBD_IOC_SET_READONLY,
@@ -613,8 +613,8 @@ int class_process_config(struct lustre_cfg *lcfg)
                 GOTO(out, err = 0);
         }
         default: {
-                CERROR("Unknown command: %d\n", lcfg->lcfg_command);
-                GOTO(out, err = -EINVAL);
+                err = obd_process_config(obd, sizeof(*lcfg), lcfg);
+                GOTO(out, err);
 
         }
         }

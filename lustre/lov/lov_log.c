@@ -97,14 +97,19 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt, int count,
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
+        struct lov_tgt_desc *tgt;
         int i, rc = 0;
         ENTRY;
 
         LASSERT(lov->desc.ld_tgt_count  == count);
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
-                struct llog_ctxt *cctxt = llog_get_context(child, ctxt->loc_idx);
-
+        for (i = 0, tgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, tgt++) {
+                struct obd_device *child;
+                struct llog_ctxt *cctxt;
+                
+                if (!tgt->active)
+                        continue;
+                child = tgt->ltd_exp->exp_obd;
+                cctxt = llog_get_context(child, ctxt->loc_idx);
                 if (uuid && !obd_uuid_equals(uuid, &lov->tgts[i].uuid))
                         continue;
 
@@ -163,6 +168,7 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
                   int count, struct llog_catid *logid)
 {
         struct lov_obd *lov = &obd->u.lov;
+        struct lov_tgt_desc *ctgt;
         int i, rc = 0;
         ENTRY;
 
@@ -176,9 +182,12 @@ int lov_llog_init(struct obd_device *obd, struct obd_device *tgt,
         if (rc)
                 RETURN(rc);
 
-        LASSERT(lov->desc.ld_tgt_count  == count);
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                struct obd_device *child = lov->tgts[i].ltd_exp->exp_obd;
+        LASSERT(lov->desc.ld_tgt_count == count);
+        for (i = 0, ctgt = lov->tgts; i < lov->desc.ld_tgt_count; i++, ctgt++) {
+                struct obd_device *child;
+                if (!ctgt->active)
+                        continue;
+                child = ctgt->ltd_exp->exp_obd;
                 rc = obd_llog_init(child, tgt, 1, logid + i);
                 if (rc) {
                         CERROR("error osc_llog_init %d\n", i);
@@ -195,7 +204,7 @@ int lov_llog_finish(struct obd_device *obd, int count)
         ENTRY;
 
         /* cleanup our llogs only if the ctxts have been setup
-         * (lov1 doesn't setup, lov_mds1 does). */
+         * (client lov doesn't setup, mds lov does). */
         ctxt = llog_get_context(obd, LLOG_UNLINK_ORIG_CTXT);
         if (ctxt)
                 rc = llog_cleanup(ctxt);
@@ -206,5 +215,6 @@ int lov_llog_finish(struct obd_device *obd, int count)
         if (!rc)
                 rc = rc2;
 
+        /* lov->tgt llogs are cleaned during osc_cleanup. */
         RETURN(rc);
 }

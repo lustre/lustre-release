@@ -201,7 +201,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 }
 
-static void ptlrpc_activate_import(struct obd_import *imp)
+void ptlrpc_activate_import(struct obd_import *imp)
 {
         struct obd_device *obd = imp->imp_obd;
         unsigned long flags;
@@ -698,7 +698,7 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 
 static int back_to_sleep(void *unused)
 {
-	return 0;
+        return 0;
 }
 
 int ptlrpc_disconnect_import(struct obd_import *imp)

@@ -1590,6 +1590,7 @@ int jt_obd_lov_getconfig(int argc, char **argv)
         struct obd_ioctl_data data;
         struct lov_desc desc;
         struct obd_uuid *uuidarray;
+        __u32 *obdgens;
         char *path;
         int rc, fd;
 
@@ -1603,13 +1604,14 @@ int jt_obd_lov_getconfig(int argc, char **argv)
         if (fd < 0) {
                 fprintf(stderr, "open \"%s\" failed: %s\n", path,
                         strerror(errno));
-                return -1;
+                return -errno;
         }
 
         memset(&desc, 0, sizeof(desc));
         obd_str2uuid(&desc.ld_uuid, argv[1]);
         desc.ld_tgt_count = ((OBD_MAX_IOCTL_BUFFER-sizeof(data)-sizeof(desc)) /
-                             sizeof(*uuidarray));
+                             (sizeof(*uuidarray) + sizeof(*obdgens)));
+
 
 repeat:
         uuidarray = calloc(desc.ld_tgt_count, sizeof(*uuidarray));
@@ -1619,27 +1621,38 @@ repeat:
                 rc = -ENOMEM;
                 goto out;
         }
+        obdgens = calloc(desc.ld_tgt_count, sizeof(*obdgens));
+        if (!obdgens) {
+                fprintf(stderr, "error: %s: no memory for %d generation #'s\n",
+                        jt_cmdname(argv[0]), desc.ld_tgt_count);
+                rc = -ENOMEM;
+                goto out_uuidarray;
+        }
 
         data.ioc_inllen1 = sizeof(desc);
         data.ioc_inlbuf1 = (char *)&desc;
         data.ioc_inllen2 = desc.ld_tgt_count * sizeof(*uuidarray);
         data.ioc_inlbuf2 = (char *)uuidarray;
+        data.ioc_inllen3 = desc.ld_tgt_count * sizeof(*obdgens);
+        data.ioc_inlbuf3 = (char *)obdgens;
 
         if (obd_ioctl_pack(&data, &buf, max)) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(argv[0]));
                 rc = -EINVAL;
-                goto out;
+                goto out_obdgens;
         }
         rc = ioctl(fd, OBD_IOC_LOV_GET_CONFIG, buf);
         if (rc == -ENOSPC) {
                 free(uuidarray);
+                free(obdgens);
                 goto repeat;
         } else if (rc) {
                 fprintf(stderr, "error: %s: ioctl error: %s\n",
                         jt_cmdname(argv[0]), strerror(rc = errno));
         } else {
-                struct obd_uuid *ptr;
+                struct obd_uuid *uuidp;
+                __u32 *genp;
                 int i;
 
                 if (obd_ioctl_unpack(&data, buf, max)) {
@@ -1656,11 +1669,17 @@ repeat:
                        desc.ld_default_stripe_offset);
                 printf("default_stripe_pattern: %u\n", desc.ld_pattern);
                 printf("obd_count: %u\n", desc.ld_tgt_count);
-                for (i = 0, ptr = uuidarray; i < desc.ld_tgt_count; i++, ptr++)
-                        printf("%u: %s\n", i, (char *)ptr);
+                printf("OBDS:\tobdidx\t\tobdgen\t\t obduuid\n");
+                uuidp = uuidarray;
+                genp = obdgens;
+                for (i = 0; i < desc.ld_tgt_count; i++, uuidp++, genp++)
+                        printf("\t%6u\t%14u\t\t %s\n", i, *genp, (char *)uuidp);
         }
-out:
+out_obdgens:
+        free(obdgens);
+out_uuidarray:
         free(uuidarray);
+out:
         close(fd);
         return rc;
 }

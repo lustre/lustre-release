@@ -647,22 +647,35 @@ class LCTLInterface:
 
     # create an lov
     def lov_setup(self, name, uuid, desc_uuid, mdsuuid, stripe_cnt,
-                  stripe_sz, stripe_off,
-                      pattern, devlist):
+                  stripe_sz, stripe_off, pattern):
         cmds = """
   attach lov %s %s
-  lov_setup %s %d %d %d %s %s
-  quit""" % (name, uuid, desc_uuid, stripe_cnt, stripe_sz, stripe_off,
-             pattern, devlist)
+  lov_setup %s %d %d %d %s
+  quit""" % (name, uuid, desc_uuid, stripe_cnt, stripe_sz, stripe_off, pattern)
         self.run(cmds)
 
-    # create an lov
-    def lov_setconfig(self, uuid, mdsuuid, stripe_cnt, stripe_sz, stripe_off,
-                      pattern, devlist):
+    # add an OBD to a LOV
+    def lov_add_obd(self, name, uuid, obd_uuid, index, gen):
         cmds = """
-  cfg_device $%s
-  lov_setconfig %s %d %d %d %s %s
-  quit""" % (mdsuuid, uuid, stripe_cnt, stripe_sz, stripe_off, pattern, devlist)
+  cfg_device %s
+  lov_modify_tgts add %s %s %s %s
+  quit""" % (name, name, obd_uuid, index, gen)
+        self.run(cmds)
+
+    # delete an OBD from a LOV
+    def lov_del_obd(self, name, uuid, obd_uuid, index, gen):
+        cmds = """
+  cfg_device %s
+  lov_modify_tgts del %s %s %s %s
+  quit""" % (name, name, obd_uuid, index, gen)
+        self.run(cmds)
+
+    # deactivate an OBD
+    def deactivate(self, name):
+        cmds = """
+  cfg_device %s
+  deactivate
+  quit""" % (name)
         self.run(cmds)
 
     # dump the log file
@@ -1458,8 +1471,8 @@ class LOV(Module):
         self.stripe_sz = self.db.get_val_int('stripesize', 1048576)
         self.stripe_off = self.db.get_val_int('stripeoffset', 0)
         self.pattern = self.db.get_val_int('stripepattern', 0)
-        self.devlist = self.db.get_refs('obd')
-        self.stripe_cnt = self.db.get_val_int('stripecount', len(self.devlist))
+        self.devlist = []
+        self.stripe_cnt = 0
         self.osclist = []
         self.desc_uuid = self.uuid
         self.uuid = generate_client_uuid(self.name)
@@ -1468,49 +1481,74 @@ class LOV(Module):
             self.config_only = 1
             return
         self.config_only = None
-        mds= self.db.lookup(self.mds_uuid)
+        mds = self.db.lookup(self.mds_uuid)
         self.mds_name = mds.getName()
-        for obd_uuid in self.devlist:
+        self.devlist = self.db.get_lov_tgts('lov_tgt')
+        for (obd_uuid, index, gen, active) in self.devlist:
+            if obd_uuid == '':
+                continue
             obd = self.db.lookup(obd_uuid)
             osc = get_osc(obd, self.uuid, fs_name)
             if osc:
-                self.osclist.append(osc)
+                 self.osclist.append((osc, index, gen, active))
             else:
                 panic('osc not found:', obd_uuid)
+        if self.osclist == []:
+            debug("get_lov_tgts failed, using get_refs");
+            index = 0
+            self.devlist = self.db.get_refs('obd')
+            for obd_uuid in self.devlist:
+                obd = self.db.lookup(obd_uuid)
+                osc = get_osc(obd, self.uuid, fs_name)
+                if osc:
+                    self.osclist.append((osc, index, 1, 1))
+                else:
+                    panic('osc not found:', obd_uuid)
+                index = index + 1
+        if self.osclist == []:
+            panic('No OSCs configured for LOV')
+        self.stripe_cnt = self.db.get_val_int('stripecount', len(self.devlist))
 
     def prepare(self):
+        debug('dbg LOV prepare')
         if is_prepared(self.name):
             return
-        if self.config_only:
-            panic("Can't prepare config_only LOV ", self.name)
-
-        for osc in self.osclist:
+        debug('dbg LOV prepare:', self.osclist, self.devlist)
+        self.info(self.mds_uuid, self.stripe_cnt, self.stripe_sz,
+                  self.stripe_off, self.pattern, self.devlist,
+                  self.mds_name)
+        lctl.lov_setup(self.name, self.uuid,
+                       self.desc_uuid, self.mds_name, self.stripe_cnt,
+                       self.stripe_sz, self.stripe_off, self.pattern)
+        if self.osclist == []:
+            panic('No OSCs configured for LOV?')
+        for (osc, index, gen, active) in self.osclist:
+            target_uuid = osc.target_uuid
             try:
                 # Only ignore connect failures with --force, which
                 # isn't implemented here yet.
+                osc.active = active
                 osc.prepare(ignore_connect_failure=0)
             except CommandError, e:
                 print "Error preparing OSC %s\n" % osc.uuid
                 raise e
-        self.info(self.mds_uuid, self.stripe_cnt, self.stripe_sz,
-                  self.stripe_off, self.pattern, self.devlist, self.mds_name)
-        lctl.lov_setup(self.name, self.uuid,
-                       self.desc_uuid, self.mds_name, self.stripe_cnt,
-                       self.stripe_sz, self.stripe_off, self.pattern,
-                       string.join(self.devlist))
+            lctl.lov_add_obd(self.name, self.uuid, target_uuid, index, gen)
 
     def cleanup(self):
+        for (osc, index, gen, active) in self.osclist:
+            target_uuid = osc.target_uuid
+            if is_prepared(osc.name):
+                lctl.lov_del_obd(self.name, self.uuid, target_uuid, index, gen)
+            osc.cleanup()
         if is_prepared(self.name):
             Module.cleanup(self)
         if self.config_only:
             panic("Can't clean up config_only LOV ", self.name)
-        for osc in self.osclist:
-            osc.cleanup()
 
     def load_module(self):
         if self.config_only:
             panic("Can't load modules for config_only LOV ", self.name)
-        for osc in self.osclist:
+        for (osc, index, gen, active) in self.osclist:
             osc.load_module()
             break
         Module.load_module(self)
@@ -1519,8 +1557,9 @@ class LOV(Module):
         if self.config_only:
             panic("Can't cleanup modules for config_only LOV ", self.name)
         Module.cleanup_module(self)
-        for osc in self.osclist:
-            osc.cleanup_module()
+        for (osc, index, gen, active) in self.osclist:
+            if active:
+                osc.cleanup_module()
             break
 
 class MDSDEV(Module):

@@ -388,6 +388,7 @@ struct cache_obd {
 
 struct lov_tgt_desc {
         struct obd_uuid          uuid;
+        __u32                    ltd_gen;
         struct obd_export       *ltd_exp;
         int                      active; /* is this target up for requests */
 };
@@ -564,6 +565,8 @@ struct obd_ops {
         int (*o_setup) (struct obd_device *dev, obd_count len, void *data);
         int (*o_precleanup)(struct obd_device *dev);
         int (*o_cleanup)(struct obd_device *dev);
+        int (*o_process_config)(struct obd_device *dev, obd_count len,
+                                void *data);
         int (*o_postrecov)(struct obd_device *dev);
         int (*o_add_conn)(struct obd_import *imp, struct obd_uuid *uuid,
                           int priority);
