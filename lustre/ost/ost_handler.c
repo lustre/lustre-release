@@ -37,6 +37,7 @@
 #include <linux/obd_ost.h>
 #include <linux/lustre_net.h>
 #include <linux/lustre_dlm.h>
+#include <linux/init.h>
 
 static int ost_destroy(struct ptlrpc_request *req)
 {

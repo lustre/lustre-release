@@ -28,6 +28,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/lustre_lite.h>
 #include <linux/lustre_dlm.h>
+#include <linux/init.h>
 
 #define REQUEST_MINOR 244
 

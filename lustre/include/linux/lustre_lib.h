@@ -25,8 +25,6 @@
 #ifndef _LUSTRE_LIB_H
 #define _LUSTRE_LIB_H
 
-#include <asm/types.h>
-
 #ifndef __KERNEL__
 # include <string.h>
 #else

@@ -11,8 +11,8 @@
  * by Peter Braam <braam@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.17 2002/07/05 20:05:27 rread Exp $";
-#define OBDECHO_VERSION "$Revision: 1.17 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.18 2002/07/26 16:54:55 rread Exp $";
+#define OBDECHO_VERSION "$Revision: 1.18 $"
 
 #define EXPORT_SYMTAB
 
@@ -23,6 +23,7 @@ static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.17 2002/07/05 20:0
 #include <linux/locks.h>
 #include <linux/ext2_fs.h>
 #include <linux/quotaops.h>
+#include <linux/init.h>
 #include <asm/unistd.h>
 
 #define DEBUG_SUBSYSTEM S_ECHO

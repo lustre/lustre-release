@@ -19,6 +19,7 @@
 #include <linux/obd_filter.h>
 #include <linux/ext3_jbd.h>
 #include <linux/quotaops.h>
+#include <linux/init.h>
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 long filter_memory;

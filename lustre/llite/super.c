@@ -15,6 +15,7 @@
 #include <linux/lustre_lite.h>
 #include <linux/lustre_ha.h>
 #include <linux/lustre_dlm.h>
+#include <linux/init.h>
 
 kmem_cache_t *ll_file_data_slab;
 extern struct address_space_operations ll_aops;

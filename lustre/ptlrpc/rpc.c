@@ -28,6 +28,7 @@
 #include <linux/obd_class.h>
 #include <linux/lustre_lib.h>
 #include <linux/lustre_ha.h>
+#include <linux/init.h>
 
 extern int ptlrpc_init_portals(void);
 extern void ptlrpc_exit_portals(void);

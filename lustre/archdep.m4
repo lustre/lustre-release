@@ -48,6 +48,13 @@ case ${host_cpu} in
 
 ;;
 
+	powerpc )
+	AC_MSG_RESULT($host_cpu)
+        KCFLAGS='-Wall -Wstrict-prototypes -Wno-trigraphs -O2 -fomit-frame-pointer -fno-strict-aliasing -fno-common -D__powerpc__ -fsigned-char -msoft-float -pipe -ffixed-r2 -Wno-uninitialized -mmultiple -mstring'
+        KCPPFLAGS='-D__KERNEL__'
+        MOD_LINK=elf32ppclinux
+;;
+
         *)
 	AC_ERROR("Unknown Linux Platform: $host_cpu")
 esac

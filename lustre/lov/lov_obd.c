@@ -22,6 +22,7 @@
 #include <linux/lustre_mds.h>
 #include <linux/obd_class.h>
 #include <linux/obd_lov.h>
+#include <linux/init.h>
 
 extern struct obd_device obd_dev[MAX_OBD_DEVICES];
 

@@ -24,6 +24,7 @@
 #include <linux/lustre_mds.h> /* for mds_objid */
 #include <linux/obd_ost.h>
 #include <linux/obd_lov.h>
+#include <linux/init.h>
 
 static void osc_con2cl(struct lustre_handle *conn, struct ptlrpc_client **cl,
                        struct ptlrpc_connection **connection,

@@ -31,6 +31,7 @@
 # include <linux/list.h>
 #else
 # define __KERNEL__
+# include <asm/types.h>
 # include <linux/list.h>
 # undef __KERNEL__
 # include <stdint.h>
