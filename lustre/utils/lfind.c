@@ -222,7 +222,7 @@ processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
 
 	if (verbose) {
 		printf("lmm_magic:          0x%x\n", lmm->lmm_magic);
-		printf("lmm_object_id:      0x%llx\n", lmm->lmm_object_id);
+		printf("lmm_object_id:      "LPX64"\n", lmm->lmm_object_id);
 		printf("lmm_stripe_offset:  %d\n", lmm->lmm_stripe_offset);
 		printf("lmm_stripe_count:   %d\n", lmm->lmm_stripe_count);
 		printf("lmm_ost_count:      %d\n", lmm->lmm_ost_count);
@@ -241,7 +241,7 @@ processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
 
 		for (i = 0; i < count; i++, loi++)
 			if ((oid = loi->l_object_id))
-				printf("%6d\t%5lld\n", i, oid);
+				printf("%6d\t%5lld\n", i, (long long)oid);
 
 		if (query)
 			return(0);
