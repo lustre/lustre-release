@@ -619,19 +619,15 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         struct dentry *de_old = NULL;
         struct dentry *de_new = NULL;
         struct mds_obd *mds = mds_req2mds(req);
-        __u64 res_id[3] = {0};
         struct lustre_handle tgtlockh, srclockh, oldhandle;
-        int lock_mode;
+        int flags, lock_mode, rc = 0, err;
         void *handle;
-        int flags;
-        int rc = 0;
-        int err;
+        __u64 res_id[3] = {0};
         ENTRY;
 
         de_srcdir = mds_fid2dentry(mds, rec->ur_fid1, NULL);
-        if (IS_ERR(de_srcdir)) {
+        if (IS_ERR(de_srcdir))
                 GOTO(out_rename, rc = -ESTALE);
-        }
 
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
         res_id[0] = de_srcdir->d_inode->i_ino;
@@ -653,11 +649,9 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         } else
                 ldlm_lock_dump((void *)(unsigned long)srclockh.addr);
 
-
         de_tgtdir = mds_fid2dentry(mds, rec->ur_fid2, NULL);
-        if (IS_ERR(de_tgtdir)) {
+        if (IS_ERR(de_tgtdir))
                 GOTO(out_rename_srcdir, rc = -ESTALE);
-        }
 
         lock_mode = (req->rq_reqmsg->opc == MDS_REINT) ? LCK_CW : LCK_PW;
         res_id[0] = de_tgtdir->d_inode->i_ino;
@@ -683,14 +677,16 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
 
         de_old = lookup_one_len(rec->ur_name, de_srcdir, rec->ur_namelen - 1);
         if (IS_ERR(de_old)) {
-                CERROR("old child lookup error %ld\n", PTR_ERR(de_old));
-                GOTO(out_rename_tgtdir, rc = -ESTALE);
+                CERROR("old child lookup error (%*s): %ld\n",
+                       rec->ur_namelen - 1, rec->ur_name, PTR_ERR(de_old));
+                GOTO(out_rename_tgtdir, rc = -ENOENT);
         }
 
         de_new = lookup_one_len(rec->ur_tgt, de_tgtdir, rec->ur_tgtlen - 1);
         if (IS_ERR(de_new)) {
-                CERROR("new child lookup error %ld\n", PTR_ERR(de_new));
-                GOTO(out_rename_deold, rc = -ESTALE);
+                CERROR("new child lookup error (%*s): %ld\n",
+                       rec->ur_tgtlen - 1, rec->ur_tgt, PTR_ERR(de_new));
+                GOTO(out_rename_deold, rc = -ENOENT);
         }
 
         OBD_FAIL_WRITE(OBD_FAIL_MDS_REINT_RENAME_WRITE,

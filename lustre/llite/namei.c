@@ -105,8 +105,8 @@ int ll_lock(struct inode *dir, struct dentry *dentry,
                 err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT,
                                   it, LCK_PW, dir, dentry, lockh, 0, NULL, 0,
                                   dir, sizeof(*dir));
-        else if (it->it_op & (IT_RENAME| IT_READDIR | IT_GETATTR | IT_OPEN | IT_UNLINK |
-                              IT_RMDIR | IT_RENAME2))
+        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_UNLINK |
+                              IT_RMDIR | IT_RENAME | IT_RENAME2))
                 err = mdc_enqueue(&sbi->ll_mdc_conn, LDLM_MDSINTENT,
                                   it, LCK_PR, dir, dentry, lockh, 0, NULL, 0,
                                   dir, sizeof(*dir));
@@ -152,14 +152,19 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 RETURN(ERR_PTR(-ENAMETOOLONG));
 
         err = ll_lock(dir, dentry, it, &lockh);
+        if (err < 0) {
+                /* FIXME: Mike handle EINTR here */
+                LBUG();
+                RETURN(ERR_PTR(err));
+        }
         memcpy(it->it_lock_handle, &lockh, sizeof(lockh));
 
-        if ( (it->it_op & (IT_RENAME |IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) &&
-             it->it_disposition && !it->it_status)
+        if ((it->it_op & (IT_CREAT | IT_MKDIR | IT_SYMLINK | IT_MKNOD)) &&
+            it->it_disposition && !it->it_status)
                 GOTO(negative, NULL);
 
-        if ( (it->it_op & (IT_GETATTR | IT_UNLINK | IT_RMDIR)) &&
-             it->it_disposition && it->it_status)
+        if ((it->it_op & (IT_RENAME | IT_GETATTR | IT_UNLINK | IT_RMDIR)) &&
+            it->it_disposition && it->it_status)
                 GOTO(negative, NULL);
 
         request = (struct ptlrpc_request *)it->it_data;
@@ -188,7 +193,7 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
 
                 if (!inode)
                         GOTO(out_req, -ENOMEM);
-                inode->i_mode= S_IFREG;
+                inode->i_mode = S_IFREG;
                 inode->i_nlink = 1;
                 GOTO(out_req, 0);
         } else if (it->it_op == IT_RMDIR) {
@@ -196,10 +201,10 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
                 if (!inode)
                         GOTO(out_req, -ENOMEM);
                 ll_i2info(inode)->lli_obdo = NULL;
-                inode->i_mode= S_IFDIR;
+                inode->i_mode = S_IFDIR;
                 inode->i_nlink = 1;
                 GOTO(out_req, 0);
-        } else {
+        } else if (it->it_op != IT_RENAME2) {
                 struct mds_body *body;
 
                 offset = 1;
@@ -218,7 +223,8 @@ static struct dentry *ll_lookup2(struct inode * dir, struct dentry *dentry,
         } else
                 md.obdo = NULL;
 
-        md.body = lustre_msg_buf(request->rq_repmsg, offset);
+        if (!(it->it_op & IT_RENAME2))
+                md.body = lustre_msg_buf(request->rq_repmsg, offset);
 
         inode = iget4(dir->i_sb, ino, ll_find_inode, &md);
 
@@ -438,9 +444,6 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
         struct inode * inode;
         struct ll_inode_info *oinfo;
 
-        if (l > LL_INLINESZ)
-                return err;
-
         inode = ll_create_node(dir, dentry->d_name.name,
                                dentry->d_name.len, symname, l,
                                S_IFLNK | S_IRWXUGO, 0, dentry->d_it, NULL);
@@ -450,8 +453,9 @@ static int ll_symlink(struct inode *dir, struct dentry *dentry,
 
         oinfo = ll_i2info(inode);
 
-        memcpy(oinfo->lli_inline, symname, l);
-        inode->i_size = l-1;
+        OBD_ALLOC(oinfo->lli_symlink_name, l + 1);
+        memcpy(oinfo->lli_symlink_name, symname, l + 1);
+        inode->i_size = l;
 
         err = ext2_add_nondir(dentry, inode);
 
@@ -599,7 +603,7 @@ static int ll_rename(struct inode * old_dir, struct dentry * old_dentry,
         struct ext2_dir_entry_2 * old_de;
         int err = -ENOENT;
 
-        if (new_dentry->d_it)
+        if (new_dentry->d_it && new_dentry->d_it->it_disposition)
                 GOTO(out, err = new_dentry->d_it->it_status);
 
         err = ll_mdc_rename(old_dir, new_dir, old_dentry, new_dentry);

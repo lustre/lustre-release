@@ -77,10 +77,12 @@ static int ll_dir_readpage(struct file *file, struct page *page)
         rc = ll_lock(inode, NULL, &it, &lockh);
         request = (struct ptlrpc_request *)it.it_data;
         ptlrpc_free_req(request);
-        if (rc != ELDLM_OK)
+        if (rc != ELDLM_OK) {
                 CERROR("lock enqueue: err: %d\n", rc);
+                UnlockPage(page);
+                RETURN(rc);
+        }
         ldlm_lock_dump((void *)(unsigned long)lockh.addr);
-
 
         if (Page_Uptodate(page)) {
                 CERROR("Explain this please?\n");

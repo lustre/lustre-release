@@ -288,14 +288,12 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                 case IT_RENAME:
                         bufcount = 3;
                         break;
-                case IT_RENAME2:
-                        bufcount = 5;
-                        break;
                 case IT_UNLINK:
                         bufcount = 2;
                         size[1] = sizeof(struct obdo);
                         break;
                 case IT_RMDIR:
+                case IT_RENAME2:
                         bufcount = 1;
                         break;
                 default:
@@ -335,8 +333,10 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                                 RETURN(-EINVAL);
                         }
                         rc = mds_reint_p(2, req);
-                        if (rc)
-                                LBUG();
+                        if (rc || req->rq_status != 0) {
+                                rep->lock_policy_res2 = req->rq_status;
+                                RETURN(ELDLM_LOCK_ABORTED);
+                        }
                         break;
                 case IT_GETATTR:
                 case IT_READDIR:
@@ -357,7 +357,6 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                          * set req->rq_status, who should return negative and
                          * positive return values, and what they all mean. */
                         if (rc || req->rq_status != 0) {
-                                mds_rep = lustre_msg_buf(req->rq_repmsg, 1);
                                 rep->lock_policy_res2 = req->rq_status;
                                 RETURN(ELDLM_LOCK_ABORTED);
                         }
@@ -374,8 +373,8 @@ static int ldlm_intent_policy(struct ldlm_lock *lock, void *req_cookie,
                     it->opc == IT_RENAME || it->opc == IT_RENAME2)
                         RETURN(ELDLM_LOCK_ABORTED);
 
-                mds_rep = lustre_msg_buf(req->rq_repmsg, 1);
                 rep->lock_policy_res2 = req->rq_status;
+                mds_rep = lustre_msg_buf(req->rq_repmsg, 1);
                 new_resid[0] = NTOH__u32(mds_rep->ino);
                 if (new_resid[0] == 0)
                         LBUG();

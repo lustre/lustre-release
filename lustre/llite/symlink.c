@@ -35,8 +35,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         int rc, size;
         ENTRY;
 
-        rc = mdc_getattr(&sbi->ll_mdc_conn,
-                         dentry->d_inode->i_ino, S_IFLNK,
+        rc = mdc_getattr(&sbi->ll_mdc_conn, dentry->d_inode->i_ino, S_IFLNK,
                          OBD_MD_LINKNAME, dentry->d_inode->i_size, &request);
         if (rc) {
                 CERROR("failure %d inode %ld\n", rc,
