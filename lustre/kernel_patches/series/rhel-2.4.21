@@ -46,3 +46,4 @@ llnl-frame-pointer-walk-fix-2.4.21-rhel.patch
 export-show_task-2.4-rhel.patch 
 compile-fixes-2.4.21-rhel.patch 
 grab_cache_page_nowait_gfp-rh-2.4.patch 
+remove-suid-2.4-rhel.patch

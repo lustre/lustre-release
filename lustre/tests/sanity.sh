@@ -2333,6 +2333,23 @@ test_71() {
 }
 run_test 71 "Running dbench on lustre (don't segment fault) ===="
 
+test_72() { # bug 5695 - Test that on 2.6 remove_suid works properly
+        check_kernel_version 40 || return 0
+	[ "$RUNAS_ID" = "$UID" ] && echo "skipping test 72" && return
+	touch $DIR/f72
+	chmod 777 $DIR/f72
+	chmod ug+s $DIR/f72
+	$RUNAS -u $(($RUNAS_ID + 1)) dd if=/dev/zero of=$DIR/f72 bs=512 count=1 || error
+	# See if we are still setuid/sgid
+	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on write"
+	# Now test that MDS is updated too
+	cancel_lru_locks MDC
+	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on MDS"
+	true
+}
+run_test 72 "Test that remove suid works properly (bug5695) ===="
+
+
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
 # error message with a corrupt path string (CVS bug) and panic.

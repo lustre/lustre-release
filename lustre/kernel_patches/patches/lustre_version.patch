@@ -1,3 +1,4 @@
+Version 43: fix remove_suid to not crash 2.6, and do anything on 2.4 (b=5695)
 Version 42: export show_task()
 Version 41: revalidate should check working dir is a directory (b=4134)
 Version 40: >32000 subdirectories support for ext3 (b=3244)
