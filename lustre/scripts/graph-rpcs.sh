@@ -221,6 +221,8 @@ awk -F"[$IFS:]" '
 
 . $awk_vars
 
+[ ! -e $tmpdir/data ] && die "no RPCS found in $log"
+
 to_pl 	'#proc getdata
 	data:'
 
