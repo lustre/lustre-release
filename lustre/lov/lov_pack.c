@@ -41,13 +41,14 @@ void lov_dump_lmm_v0(int level, struct lov_mds_md_v0 *lmm)
 {
         int i, num_ost, stripe, idx;
 
+        num_ost = le32_to_cpu(lmm->lmm_ost_count);
+        idx = le32_to_cpu(lmm->lmm_stripe_offset);
         CDEBUG(level, "objid "LPX64", magic 0x%08X, ost_count %u\n",
                le64_to_cpu(lmm->lmm_object_id), le32_to_cpu(lmm->lmm_magic),
-               (num_ost = le32_to_cpu(lmm->lmm_ost_count)));
+               num_ost);
         CDEBUG(level,"stripe_size %u, stripe_count %u, stripe_offset %u\n",
                le32_to_cpu(lmm->lmm_stripe_size),
-               le32_to_cpu(lmm->lmm_stripe_count),
-               (idx = le32_to_cpu(lmm->lmm_stripe_offset)));
+               le32_to_cpu(lmm->lmm_stripe_count), idx);
         for (i = stripe = 0; i < le32_to_cpu(lmm->lmm_ost_count); i++, idx++) {
                 idx %= num_ost;
                 if (lmm->lmm_objects[idx].l_object_id == 0)
@@ -382,7 +383,7 @@ int lov_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
 {
         struct obd_device *obd = class_exp2obd(exp);
         struct lov_obd *lov = &obd->u.lov;
-        int rc, stripe_count, lsm_size;
+        int rc = 0, stripe_count, lsm_size;
         ENTRY;
 
         /* If passed an MDS struct use values from there, otherwise defaults */
