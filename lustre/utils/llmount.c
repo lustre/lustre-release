@@ -179,31 +179,25 @@ set_local(struct lustre_mount_data *lmd)
                         return rc;
                 }
         } else if (lmd->lmd_nal == QSWNAL) {
-#if MULTIRAIL_EKC
                 char *pfiles[] = {"/proc/qsnet/elan3/device0/position",
                                   "/proc/qsnet/elan4/device0/position",
+                                  "/proc/elan/device0/position",
                                   NULL};
-#else
-                char *pfiles[] = {"/proc/elan/device0/position",
-                                  NULL};
-#endif
                 int   i = 0;
 
                 do {
                         rc = get_local_elan_id(pfiles[i], buf);
-                } while (rc != 0 &&
-                         pfiles[++i] != NULL);
+                } while (rc != 0 && pfiles[++i] != NULL);
 
                 if (rc != 0) {
-                        fprintf(stderr, "mount: can't read elan ID"
-                                " from /proc\n");
+                        fprintf(stderr,
+                                "mount: can't read Elan ID from /proc\n");
                         return -1;
                 }
         }
 
         if (ptl_parse_nid (&nid, buf) != 0) {
-                fprintf (stderr, "mount: can't parse NID %s\n",
-                         buf);
+                fprintf (stderr, "mount: can't parse NID %s\n", buf);
                 return (-1);
         }
 
