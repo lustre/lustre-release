@@ -138,12 +138,15 @@ static void lcw_cb(unsigned long data)
 static int is_watchdog_fired(void)
 {
         unsigned long flags;
+        int rc;
 
         if (test_bit(LCW_FLAG_STOP, &lcw_flags))
                 return 1;
 
         spin_lock_irqsave(&lcw_pending_timers_lock, flags);
-        return !list_empty(&lcw_pending_timers);
+        rc = !list_empty(&lcw_pending_timers);
+        spin_unlock_irqrestore(&lcw_pending_timers_lock, flags);
+        return rc;
 }
 
 static int lcw_dispatch_main(void *data)
