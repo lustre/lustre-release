@@ -8,8 +8,8 @@ LFS=${LFS:-lfs}
 MOUNT=${MOUNT:-$1}
 MOUNT=${MOUNT:-/mnt/lustre}
 OOS=$MOUNT/oosfile
-LOG=$TMP/oosfile
 TMP=${TMP:-/tmp}
+LOG=$TMP/ooslog
 
 SUCCESS=1
 
@@ -68,7 +68,7 @@ fi
 
 #lctl debug_daemon stop
 
-rm -f $OOS $LOG
+rm -f $OOS
 
 if [ $SUCCESS -eq 1 ]; then
 	echo "Success!"
