@@ -786,7 +786,7 @@ static ssize_t ll_file_write(struct file *file, const char *buf, size_t count,
 
         rc = ll_extent_lock(fd, inode, lsm, LCK_PW, &policy, &lockh, 0);
         if (rc != 0)
-                RETURN(0);
+                RETURN(rc);
 
         /* this is ok, g_f_w will overwrite this under i_sem if it races
          * with a local truncate, it just makes our maxbyte checking easier */
