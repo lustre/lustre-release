@@ -451,6 +451,18 @@ cancel_lru_locks() {
     done
 }
 
+
+pgcache_empty() {
+    for a in /proc/fs/lustre/llite/*/dump_page_cache; do
+        if [ `wc -l $a | awk '{print $1}'` -gt 1 ]; then
+                echo there is still data in page cache $a ?
+                cat $a;
+                return 1;
+        fi
+    done
+    return 0
+}
+
 ##################################
 # Test interface 
 error() {

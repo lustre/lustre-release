@@ -45,7 +45,7 @@
 #include <liblustre.h>
 #include <linux/obd.h>
 #include <linux/lustre_lib.h>
-#include <linux/lustre_user.h>
+#include <lustre/lustre_user.h>
 #include <linux/obd_lov.h>
 
 #include <portals/ptlctl.h>
@@ -74,11 +74,15 @@ int op_create_file(char *name, long stripe_size, int stripe_offset,
         lum.lmm_stripe_count = stripe_count;
 
         fd = open(name, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644);
+        if (errno == EISDIR) 
+                fd = open(name, O_DIRECTORY | O_RDONLY);
+
         if (fd < 0) {
                 err_msg("unable to open '%s'",name);
                 rc = -errno;
                 return rc;
         }
+
         if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, &lum)) {
                 char *errmsg = "stripe already set";
                 if (errno != EEXIST && errno != EALREADY)
@@ -95,7 +99,6 @@ int op_create_file(char *name, long stripe_size, int stripe_offset,
         }
         return rc;
 }
-
 
 struct find_param {
         int     recursive;
@@ -250,6 +253,16 @@ void lov_dump_user_lmm_v1(struct lov_user_md_v1 *lum, char *dname, char *fname,
                 obdstripe = 1;
         }
 
+        /* if it's a directory */
+        if (*fname == '\0') {
+                if (header && (obdstripe == 1)) {
+                        printf("count: %d, size: %d, offset: %d\n\n",
+                               lum->lmm_stripe_count, lum->lmm_stripe_size,
+                               (short int)lum->lmm_stripe_offset);
+                }                
+                return;
+        }        
+
         if (header && (obdstripe == 1)) {
                 printf("lmm_magic:          0x%08X\n",  lum->lmm_magic);
                 printf("lmm_object_gr:      "LPX64"\n", lum->lmm_object_gr);
@@ -367,6 +380,26 @@ static int process_file(DIR *dir, char *dname, char *fname,
         return 0;
 }
 
+/* some 64bit libcs implement readdir64() by calling sys_getdents().  the
+ * kernel's sys_getdents() doesn't return d_type.  */
+unsigned char handle_dt_unknown(char *parent, char *entry)
+{
+        char path[PATH_MAX + 1];
+        int fd, ret;
+
+        ret = snprintf(path, PATH_MAX, "%s/%s", parent, entry);
+        if (ret >= PATH_MAX)
+                return DT_UNKNOWN;
+
+        fd = open(path, O_DIRECTORY|O_RDONLY);
+        if (fd < 0) {
+                if (errno == ENOTDIR)
+                        return DT_REG; /* kind of a lie */
+                return DT_UNKNOWN;
+        }
+        close(fd);
+        return DT_DIR;
+}
 
 static int process_dir(DIR *dir, char *dname, struct find_param *param)
 {
@@ -381,10 +414,30 @@ static int process_dir(DIR *dir, char *dname, struct find_param *param)
                         return rc;
         }
 
+        /* retrieve dir's stripe info */
+        strncpy((char *)param->lum, dname, param->buflen);
+        rc = ioctl(dirfd(dir), LL_IOC_LOV_GETSTRIPE, (void *)param->lum);
+        if (rc) {
+                if (errno == ENODATA) {
+                        if (!param->obduuid && !param->quiet)
+                                printf("%s/%s has no stripe info\n", 
+                                       dname, "");
+                        rc = 0;
+                } else {
+                        err_msg("IOC_MDC_GETSTRIPE ioctl failed");
+                        return errno;
+                }
+        } else {
+               lov_dump_user_lmm(param, dname, "");
+        }
+
         /* Handle the contents of the directory */
         while ((dirp = readdir64(dir)) != NULL) {
                 if (!strcmp(dirp->d_name, ".") || !strcmp(dirp->d_name, ".."))
                         continue;
+
+                if (dirp->d_type == DT_UNKNOWN)
+                        dirp->d_type = handle_dt_unknown(dname, dirp->d_name);
 
                 switch (dirp->d_type) {
                 case DT_UNKNOWN:

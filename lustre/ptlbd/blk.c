@@ -284,7 +284,7 @@ int ptlbd_blk_init(void)
                 /* avoid integer overflow */
                 ptlbd_size[i] = (16*1024*((1024*1024) >> BLOCK_SIZE_BITS));
                 ptlbd_hardsect_size[i] = 4096;
-                ptlbd_max_sectors[i] = PTL_MD_MAX_IOV * (4096/512);
+                ptlbd_max_sectors[i] = PTLRPC_MAX_BRW_PAGES * (4096/512);
         }
 
         return 0;

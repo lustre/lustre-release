@@ -9,8 +9,6 @@
  * using the generic single-entry routines.
  */
 
-#define prefetch(a) ((void)a)
-
 struct list_head {
 	struct list_head *next, *prev;
 };
@@ -194,8 +192,7 @@ static inline void list_splice_init(struct list_head *list,
  * @head:	the head for your list.
  */
 #define list_for_each(pos, head) \
-	for (pos = (head)->next, prefetch(pos->next); pos != (head); \
-		pos = pos->next, prefetch(pos->next))
+	for (pos = (head)->next ; pos != (head); pos = pos->next )
 
 /**
  * list_for_each_prev	-	iterate over a list in reverse order
@@ -203,8 +200,7 @@ static inline void list_splice_init(struct list_head *list,
  * @head:	the head for your list.
  */
 #define list_for_each_prev(pos, head) \
-	for (pos = (head)->prev, prefetch(pos->prev); pos != (head); \
-		pos = pos->prev, prefetch(pos->prev))
+	for (pos = (head)->prev ; pos != (head); pos = pos->prev)
 
 /**
  * list_for_each_safe	-	iterate over a list safe against removal of list entry
@@ -226,11 +222,9 @@ static inline void list_splice_init(struct list_head *list,
  * @member:     the name of the list_struct within the struct.
  */
 #define list_for_each_entry(pos, head, member)				\
-        for (pos = list_entry((head)->next, typeof(*pos), member),	\
-		     prefetch(pos->member.next);			\
+        for (pos = list_entry((head)->next, typeof(*pos), member);	\
 	     &pos->member != (head);					\
-	     pos = list_entry(pos->member.next, typeof(*pos), member),	\
-	     prefetch(pos->member.next))
+	     pos = list_entry(pos->member.next, typeof(*pos), member))
 #endif
 
 #ifndef list_for_each_entry_safe

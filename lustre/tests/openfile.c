@@ -17,6 +17,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <lustre/lustre_user.h>
 
 typedef struct flag_mapping {
        const char *string;
@@ -39,6 +40,7 @@ FLAG_MAPPING flag_table[] = {
        {"O_LARGEFILE", O_LARGEFILE},
        {"O_DIRECTORY", O_DIRECTORY},
        {"O_NOFOLLOW", O_NOFOLLOW},
+       {"O_LOV_DELAY_CREATE", O_LOV_DELAY_CREATE},
        {"", -1}
 };
 

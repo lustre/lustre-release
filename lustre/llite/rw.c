@@ -615,7 +615,7 @@ static int ll_issue_page_read(struct obd_export *exp,
         RETURN(rc);
 }
 
-#define LL_RA_MIN(inode) ((unsigned long)PTL_MD_MAX_PAGES / 2)
+#define LL_RA_MIN(inode) ((unsigned long)PTLRPC_MAX_BRW_PAGES / 2)
 #define LL_RA_MAX(inode) ((ll_i2info(inode)->lli_smd->lsm_xfersize * 3) >> \
                           PAGE_CACHE_SHIFT)
 

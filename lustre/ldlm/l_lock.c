@@ -133,6 +133,8 @@ void l_check_no_ns_lock(struct ldlm_namespace *ns)
 #else
 void l_check_no_ns_lock(struct ldlm_namespace *ns)
 {
-#warning "FIXME: check lock in user space??"
+        if (l_has_lock(&ns->ns_lock)) {
+                CERROR("namespace %s lock held illegally; tell phil\n",
+                       ns->ns_name);
 }
 #endif /* __KERNEL__ */

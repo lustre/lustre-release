@@ -138,7 +138,8 @@ EXPORT_SYMBOL(llog_initiator_connect);
 #else /* !__KERNEL__ */
 
 int llog_origin_connect(struct llog_ctxt *ctxt, int count,
-                        struct llog_logid *logid, struct llog_gen *gen)
+                        struct llog_logid *logid, struct llog_gen *gen,
+                        struct obd_uuid *uuid)
 {
         return 0;
 }

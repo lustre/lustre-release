@@ -1482,7 +1482,7 @@ test_47() {
 }
 run_test 47 "Device nodes check ================================"
 
-test_48a() {
+test_48a() { # bug 2399
 	mkdir $DIR/d48a
 	cd $DIR/d48a
 	mv $DIR/d48a $DIR/d48.new || error "move directory failed"
@@ -1498,7 +1498,7 @@ test_48a() {
 }
 run_test 48a "Access renamed working dir (should return errors)="
 
-test_48b() {
+test_48b() { # bug 2399
 	mkdir $DIR/d48b
 	cd $DIR/d48b
 	rmdir $DIR/d48b || error "remove cwd $DIR/d48b failed"
@@ -1830,6 +1830,53 @@ test_64b () {
 }
 run_test 64b "check out-of-space detection on client ============"
 
+# bug 1414 - set/get directories' stripe info
+test_65() {
+	LFS=${LFS:-lfs}
+	LVERIFY=${LVERIFY:-ll_dirstripe_verify}
+
+        echo "dir has no stripe info"
+        mkdir $DIR/d65
+        touch $DIR/d65/f1
+        $LVERIFY $DIR/d65 $DIR/d65/f1 || error
+
+	echo "setstripe $(($STRIPESIZE * 2)) 0 1"
+       	$LFS setstripe $DIR/d65 $(($STRIPESIZE * 2)) 0 1 || error
+        touch $DIR/d65/f2
+        $LVERIFY $DIR/d65 $DIR/d65/f2 || error
+
+        if [ $ostcount -gt 1 ]; then
+		echo "setstripe $(($STRIPESIZE * 4)) 1 $(($OSTCOUNT - 1))"
+    		$LFS setstripe $DIR/d65 $(($STRIPESIZE * 4)) 1 \
+			$(($OSTCOUNT - 1)) || error
+                touch $DIR/d65/f3
+                $LVERIFY $DIR/d65 $DIR/d65/f3 || error
+        fi
+
+        [ $STRIPECOUNT -eq 0 ] && sc=1 || sc=$(($STRIPECOUNT - 1))
+
+        echo "setstripe  $STRIPESIZE -1 $sc"
+        $LFS setstripe $DIR/d65 $STRIPESIZE -1 $sc || error
+        touch $DIR/d65/f4 $DIR/d65/f5
+        $LVERIFY $DIR/d65 $DIR/d65/f4 $DIR/d65/f5 || error
+
+	echo "setstripe 0 -1 0 (default)"
+        $LFS setstripe $DIR/d65 0 -1 0 || error
+        touch $DIR/d65/f6
+        $LVERIFY $DIR/d65 $DIR/d65/f6 || error
+}
+run_test 65 "Verify that the files are created using parent dir's stripe info"
+
+# bug 2543 - update blocks count on client
+test_66() {
+	COUNT=${COUNT:-8}
+	dd if=/dev/zero of=$DIR/f66 bs=1k count=$COUNT
+	sync
+	BLOCKS=`ls -s $DIR/f66 | awk '{ print $1 }'`
+	[ $BLOCKS -ge $COUNT ] || error "$DIR/f66 blocks $BLOCKS < $COUNT"
+}
+run_test 66 "update inode blocks count on client ==============="
+
 # on the LLNL clusters, runas will still pick up root's $TMP settings,
 # which will not be writable for the runas user, and then you get a CVS
 # error message with a corrupt path string (CVS bug) and panic.
@@ -1851,7 +1898,12 @@ run_test 99a "cvs init ========================================="
 test_99b() {
 	[ ! -d $DIR/d99cvsroot ] && test_99a
 	cd /etc/init.d
-	$RUNAS cvs -d $DIR/d99cvsroot import -m "nomesg" d99reposname vtag rtag
+	# some versions of cvs import exit(1) when asked to import links or
+	# files they can't read.  ignore those files.
+	TOIGNORE=$(find . -type l -printf '-I %f\n' -o \
+			! -perm +4 -printf '-I %f\n')
+	$RUNAS cvs -d $DIR/d99cvsroot import -m "nomesg" $TOIGNORE \
+		d99reposname vtag rtag
 }
 run_test 99b "cvs import ======================================="
 

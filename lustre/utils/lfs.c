@@ -34,15 +34,11 @@
 
 #include <liblustre.h>
 #include <linux/lustre_idl.h>
-#include <linux/lustre_user.h>
+#include <lustre/liblustreapi.h>
+#include <lustre/lustre_user.h>
 
 #include "parser.h"
 #include "obdctl.h"
-
-extern int op_find(char *path, struct obd_uuid *obduuid, int recursive,
-                int verbose, int quiet);
-extern int op_check(int type_num, char **obd_type_p, char *dir);
-extern int op_catinfo(char *dir, char *keyword, char *node_name);
 
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
@@ -55,8 +51,8 @@ static int lfs_catinfo(int argc, char **argv);
 /* all avaialable commands */
 command_t cmdlist[] = {
         {"setstripe", lfs_setstripe, 0,
-         "To create a new file with a specific striping pattern.\n"
-         "usage: setstripe <filename> <stripe size> <stripe start> <stripe count>\n"
+         "To create a new file with a specific striping pattern, or to set default striping pattern on an existing directory\n"
+         "usage: setstripe <filename|dirname> <stripe size> <stripe start> <stripe count>\n"
          "\tstripe size:  Number of bytes in each stripe (0 default)\n"
          "\tstripe start: OST index of first stripe (-1 default)\n"
          "\tstripe count: Number of OSTs to stripe over (0 default)"},

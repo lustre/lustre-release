@@ -218,7 +218,7 @@ int ptlrpc_register_bulk (struct ptlrpc_request *req)
         /* NB no locking required until desc is on the network */
         LASSERT (desc->bd_nob > 0);
         LASSERT (!desc->bd_network_rw);
-        LASSERT (desc->bd_page_count <= PTL_MD_MAX_PAGES);
+        LASSERT (desc->bd_page_count <= PTLRPC_MAX_BRW_PAGES);
         LASSERT (desc->bd_req != NULL);
         LASSERT (desc->bd_type == BULK_PUT_SINK ||
                  desc->bd_type == BULK_GET_SOURCE);

@@ -2,10 +2,14 @@ tbd  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.2
        * bug fixes
 	- don't copy lvb into (possibly NULL) reply on error (2983)
+	- don't deref dentry after dput, don't free lvb on error (2922)
 	- use the kms to determine writeback rpc length (2947)
+	- increment oti_logcookies when osc is inactive (2948)
 	- update client's i_blocks count via lvb messages (2543)
 	- handle intent open/close of special files properly (1557)
 	- mount MDS with errors=remount-ro, like obdfilter (2009)
+       * miscellania
+	- allow default OST striping configuration per directory (1414)
 
 2004-03-22  Cluster File Systems, Inc. <info@clusterfs.com>
        * version 1.2.1

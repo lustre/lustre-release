@@ -331,6 +331,9 @@ AC_SUBST(SCIMACNAL)
 
 CFLAGS="$KCFLAGS"
 CPPFLAGS="$KINCFLAGS $KCPPFLAGS $MFLAGS $enable_zerocopy $enable_affinity $with_quadrics $with_gm $with_scamac $with_ib"
+if test $host_cpu == "lib" ; then 
+CPPFLAGS="$CPPFLAGS -fPIC -D_LARGEFILE64_SOURCE=1 -g"
+fi
 
 AM_CONDITIONAL(LIBLUSTRE, test x$host_cpu = xlib)
 AC_SUBST(MOD_LINK)
@@ -385,4 +388,39 @@ if test "$HAVE_DIO_FILE" != 0 ; then
   AC_MSG_RESULT(yes)
 else
   AC_MSG_RESULT(no)
+fi
+
+# --- Check that ext3 and ext3 xattr are enabled in the kernel
+if test "$host_cpu" != "lib" ; then 
+	AC_MSG_CHECKING([that ext3 is enabled in the kernel])
+	AC_TRY_COMPILE([
+#define __KERNEL__
+#include <linux/config.h>
+		],
+		[
+#ifdef CONFIG_EXT3_FS
+	return 0;
+#else
+#error CONFIG_EXT3_FS not #defined
+#endif
+		],[AC_MSG_RESULT([yes])],
+		[AC_MSG_RESULT([no])
+		AC_MSG_ERROR([Lustre requires that ext3 is enabled in the kernel (CONFIG_EXT3_FS)])
+		])
+# disable this check until our xattr patches define it!
+#	AC_MSG_CHECKING([that extended attributes for ext3 are enabled in the kernel])
+#	AC_TRY_COMPILE([
+##define __KERNEL__
+##include <linux/config.h>
+#		],
+#		[
+##ifdef CONFIG_EXT3_FS_XATTR
+#	return 0;
+##else
+##error CONFIG_EXT3_FS_XATTR not #defined
+##endif
+#		],[AC_MSG_RESULT([yes])],
+#		[AC_MSG_RESULT([no])
+#		AC_MSG_ERROR([Lustre requires that extended attributes for ext3 are enabled in the kernel (CONFIG_EXT3_FS_XATTR)])
+#		])
 fi

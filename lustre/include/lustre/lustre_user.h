@@ -25,9 +25,6 @@
 #define _LUSTRE_USER_H
 #include <asm/types.h>
 
-#define IOC_MDC_TYPE         'i'
-#define IOC_MDC_GETSTRIPE    _IOWR(IOC_MDC_TYPE, 21, struct lov_mds_md *)
-
 #define LL_IOC_GETFLAGS                 _IOR ('f', 151, long)
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
@@ -35,10 +32,13 @@
 #define LL_IOC_LOV_GETSTRIPE            _IOW ('f', 155, long)
 #define LL_IOC_LOV_SETEA                _IOW ('f', 156, long)
 #define LL_IOC_RECREATE_OBJ             _IOW ('f', 157, long)
+#define LL_IOC_GROUP_LOCK               _IOW ('f', 158, long)
+#define LL_IOC_GROUP_UNLOCK             _IOW ('f', 159, long)
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 
 #define LL_FILE_IGNORE_LOCK             0x00000001
+#define LL_FILE_GROUP_LOCKED            0x00000002
 
 #define LOV_USER_MAGIC_V1 0x0BD10BD0
 #define LOV_USER_MAGIC    LOV_USER_MAGIC_V1
@@ -67,9 +67,5 @@ struct lov_user_md_v1 {           /* LOV EA user data (host-endian) */
         __u16 lmm_stripe_offset;  /* starting stripe offset in lmm_objects */
         struct lov_user_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 } __attribute__((packed));
-
-extern int op_create_file(char *name, long stripe_size, int stripe_offset,
-                          int stripe_count);
-extern int get_file_stripe(char *path, struct lov_user_md *lum);
 
 #endif /* _LUSTRE_USER_H */

@@ -461,6 +461,37 @@ int mds_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         RETURN(0);
 }
 
+int mds_get_md(struct obd_device *obd, struct inode *inode, void *md,
+               int *size, int lock)
+{
+        int rc = 0;
+        int lmm_size;
+
+        if (lock)
+                down(&inode->i_sem);
+        rc = fsfilt_get_md(obd, inode, md, *size);
+        if (lock)
+                up(&inode->i_sem);
+
+        if (rc < 0) {
+                CERROR("Error %d reading eadata for ino %lu\n",
+                       rc, inode->i_ino);
+        } else if (rc > 0) {
+                lmm_size = rc;
+                rc = mds_convert_lov_ea(obd, inode, md, lmm_size);
+
+                if (rc == 0) {
+                        *size = lmm_size;
+                        rc = lmm_size;
+                } else if (rc > 0) {
+                        *size = rc;
+                }
+        }
+
+        RETURN (rc);
+}
+
+
 /* Call with lock=1 if you want mds_pack_md to take the i_sem.
  * Call with lock=0 if the caller has already taken the i_sem. */
 int mds_pack_md(struct obd_device *obd, struct lustre_msg *msg, int offset,
@@ -491,22 +522,13 @@ int mds_pack_md(struct obd_device *obd, struct lustre_msg *msg, int offset,
                        inode->i_ino, lmm_size, mds->mds_max_mdsize);
                 // RETURN(-EINVAL);
         }
-
-        if (lock)
-                down(&inode->i_sem);
-        rc = fsfilt_get_md(obd, inode, lmm, lmm_size);
-        if (lock)
-                up(&inode->i_sem);
-        if (rc < 0) {
-                CERROR("Error %d reading eadata for ino %lu\n",
-                       rc, inode->i_ino);
-        } else if (rc > 0) {
-                lmm_size = rc;
-                rc = mds_convert_lov_ea(obd, inode, lmm, lmm_size);
-
-                if (rc > 0)
-                        lmm_size = rc;
-                body->valid |= OBD_MD_FLEASIZE;
+        
+        rc = mds_get_md(obd, inode, lmm, &lmm_size, lock);
+        if (rc > 0) {
+                if (S_ISDIR(inode->i_mode))
+                        body->valid |= OBD_MD_FLDIREA;
+                else
+                        body->valid |= OBD_MD_FLEASIZE;
                 body->eadatasize = lmm_size;
                 rc = 0;
         }
@@ -532,12 +554,14 @@ static int mds_getattr_internal(struct obd_device *obd, struct dentry *dentry,
         mds_pack_inode2fid(&body->fid1, inode);
         mds_pack_inode2body(body, inode);
 
-        if (S_ISREG(inode->i_mode) && (reqbody->valid & OBD_MD_FLEASIZE) != 0) {
+        if ((S_ISREG(inode->i_mode) && (reqbody->valid & OBD_MD_FLEASIZE)) ||
+            (S_ISDIR(inode->i_mode) && (reqbody->valid & OBD_MD_FLDIREA))) {
                 rc = mds_pack_md(obd, req->rq_repmsg, reply_off + 1, body,
                                  inode, 1);
 
                 /* If we have LOV EA data, the OST holds size, atime, mtime */
-                if (!(body->valid & OBD_MD_FLEASIZE))
+                if (!(body->valid & OBD_MD_FLEASIZE) && 
+                    !(body->valid & OBD_MD_FLDIREA))
                         body->valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS |
                                         OBD_MD_FLATIME | OBD_MD_FLMTIME);
         } else if (S_ISLNK(inode->i_mode) &&
@@ -579,7 +603,8 @@ static int mds_getattr_pack_msg(struct ptlrpc_request *req, struct inode *inode,
         LASSERT(body != NULL);                 /* checked by caller */
         LASSERT_REQSWABBED(req, offset);       /* swabbed by caller */
 
-        if (S_ISREG(inode->i_mode) && (body->valid & OBD_MD_FLEASIZE)) {
+        if ((S_ISREG(inode->i_mode) && (body->valid & OBD_MD_FLEASIZE)) ||
+            (S_ISDIR(inode->i_mode) && (body->valid & OBD_MD_FLDIREA))) {
                 int rc;
                 down(&inode->i_sem);
                 rc = fsfilt_get_md(req->rq_export->exp_obd, inode, NULL, 0);

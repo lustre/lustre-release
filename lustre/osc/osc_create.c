@@ -36,7 +36,8 @@
 # include <linux/module.h>
 # include <linux/mm.h>
 # include <linux/highmem.h>
-# include <linux/lustre_dlm.h>
+# include <linux/ctype.h>
+# include <linux/init.h>
 # if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,5,0))
 #  include <linux/workqueue.h>
 #  include <linux/smp_lock.h>
@@ -47,13 +48,11 @@
 # include <liblustre.h>
 #endif
 
-#ifndef  __CYGWIN__
-# include <linux/ctype.h>
-# include <linux/init.h>
-#else
+#ifdef  __CYGWIN__
 # include <ctype.h>
 #endif
 
+# include <linux/lustre_dlm.h>
 #include <linux/obd_class.h>
 #include "osc_internal.h"
 

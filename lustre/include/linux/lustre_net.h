@@ -41,6 +41,28 @@
 #include <linux/lustre_import.h>
 #include <linux/lprocfs_status.h>
 
+/* Define some large-ish defaults for MTU and MAX_IOV if portals ones
+ * aren't defined (i.e. no limits) or too large */
+#if (defined(PTL_MTU) && (PTL_MTU <= (1 << 20)))
+# define PTLRPC_MTU  PTL_MTU
+#else
+# define PTLRPC_MTU  (1 << 20)
+#endif
+#if (defined(PTL_MAX_IOV) && (PTL_MAX_IOV <= 512))
+# define PTLRPC_MAX_IOV PTL_MAX_IOV
+#else
+# define PTLRPC_MAX_IOV 512
+#endif
+
+/* Define consistent max bulk size/pages */
+#if (PTLRPC_MTU > PTLRPC_MAX_IOV * PAGE_SIZE)
+# define PTLRPC_MAX_BRW_PAGES   PTLRPC_MAX_IOV
+# define PTLRPC_MAX_BRW_SIZE   (PTLRPC_MAX_IOV * PAGE_SIZE)
+#else
+# define PTLRPC_MAX_BRW_PAGES  (PTLRPC_MTU / PAGE_SIZE)
+# define PTLRPC_MAX_BRW_SIZE    PTLRPC_MTU
+#endif
+
 /* Size over which to OBD_VMALLOC() rather than OBD_ALLOC() service request
  * buffers */
 #define SVC_BUF_VMALLOC_THRESHOLD (2*PAGE_SIZE)

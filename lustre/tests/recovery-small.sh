@@ -3,7 +3,7 @@
 set -e
 
 # 17 = bug 2732   2986
-ALWAYS_EXCEPT="17 19b"
+ALWAYS_EXCEPT="17 20b"
 
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 UPCALL=${UPCALL:-$PWD/recovery-small-upcall.sh}
@@ -117,7 +117,6 @@ test_8() {
 }
 run_test 8 "touch: drop rep (bug 1423)"
 
-
 #bug 1420
 test_9() {
     pause_bulk "cp /etc/profile $MOUNT"       || return 1
@@ -201,6 +200,81 @@ test_15() {
     return 0
 }
 run_test 15 "failed open (-ENOMEM)"
+
+test_16() {
+    do_facet client cp /etc/termcap $MOUNT
+    sync
+
+#define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | OBD_FAIL_ONCE
+    sysctl -w lustre.fail_loc=0x80000504
+    cancel_lru_locks OSC
+    # will get evicted here
+    do_facet client "diff /etc/termcap $MOUNT/termcap"  && return 1
+    sysctl -w lustre.fail_loc=0
+    do_facet client "diff /etc/termcap $MOUNT/termcap"  || return 2
+}
+run_test 16 "timeout bulk put, evict client (2732)"
+  
+test_17() {
+#define OBD_FAIL_PTLRPC_BULK_GET_NET 0x504 | OBD_FAIL_ONCE
+    # will get evicted here
+    sysctl -w lustre.fail_loc=0x80000503
+    do_facet client cp /etc/termcap $MOUNT && return 1
+
+    do_facet client "diff /etc/termcap $MOUNT/termcap"  && return 2
+    sysctl -w lustre.fail_loc=0
+    do_facet client "diff /etc/termcap $MOUNT/termcap"  || return 3
+}
+run_test 17 "timeout bulk get, evict client (2732)"
+  
+test_18a() {
+    do_facet client mkdir -p $MOUNT/$tdir
+    f=$MOUNT/$tdir/$tfile
+
+    cancel_lru_locks OSC
+    pgcache_empty || return 1
+
+    # 1 stripe on ost2
+    lfs setstripe $f $((128 * 1024)) 1 1
+
+    do_facet client cp /etc/termcap $f
+    sync
+    local osc2_dev=`$LCTL device_list | \
+	awk '(/ost2.*client_facet/){print $4}' `
+    $LCTL --device %$osc2_dev deactivate
+    # my understanding is that there should be nothing in the page
+    # cache after the client reconnects?     
+    rc=0
+    pgcache_empty || rc=2
+    $LCTL --device %$osc2_dev activate
+    rm -f $f
+    return $rc
+}
+run_test 18a "manual ost invalidate clears page cache immediately"
+
+test_18b() {
+# OBD_FAIL_PTLRPC_BULK_PUT_NET|OBD_FAIL_ONCE
+    do_facet client mkdir -p $MOUNT/$tdir
+    f=$MOUNT/$tdir/$tfile
+    f2=$MOUNT/$tdir/${tfile}-2
+
+    cancel_lru_locks OSC
+    pgcache_empty || return 1
+ 
+    # shouldn't have to set stripe size of count==1
+    lfs setstripe $f $((128 * 1024)) 0 1
+    sync
+    sysctl -w lustre.fail_loc=0
+    # allow recovery to complete
+    sleep $((TIMEOUT + 2))
+    # my understanding is that there should be nothing in the page
+    # cache after the client reconnects?     
+    rc=0
+    pgcache_empty || rc=2
+    rm -f $f $f2
+    return $rc
+}
+run_test 18b "eviction and reconnect clears page cache (2766)"
 
 test_19a() {
     f=$MOUNT/$tfile

@@ -186,6 +186,7 @@ void ldlm_lock_destroy(struct ldlm_lock *lock)
         }
 
         if (!list_empty(&lock->l_res_link)) {
+                LDLM_ERROR(lock, "lock still on resource");
                 ldlm_lock_dump(D_ERROR, lock, 0);
                 LBUG();
         }
@@ -477,8 +478,13 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
 
                 LDLM_LOCK_GET(lock); /* dropped by bl thread */
                 ldlm_lock_remove_from_lru(lock);
+#ifdef __KERNEL__
                 ldlm_bl_to_thread(ns, NULL, lock);
                 l_unlock(&ns->ns_lock);
+#else
+                l_unlock(&ns->ns_lock);
+                ldlm_handle_bl_callback(ns, NULL, lock);
+#endif
         } else if (ns->ns_client == LDLM_NAMESPACE_CLIENT &&
                    !lock->l_readers && !lock->l_writers) {
                 /* If this is a client-side namespace and this was the last
@@ -488,7 +494,7 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
                 list_add_tail(&lock->l_lru, &ns->ns_unused_list);
                 ns->ns_nr_unused++;
                 l_unlock(&ns->ns_lock);
-                ldlm_cancel_lru(ns);
+                ldlm_cancel_lru(ns, LDLM_ASYNC);
         } else {
                 l_unlock(&ns->ns_lock);
         }

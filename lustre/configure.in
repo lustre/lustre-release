@@ -67,7 +67,7 @@ if test x$enable_inkernel = xyes ; then
 		sh -e -x -c '(cp -f $0.mk $0.in)'
 fi
 
-AM_CONFIG_HEADER(portals/include/config.h)
+AM_CONFIG_HEADER(include/config.h)
 
 AC_OUTPUT([Makefile lvfs/Makefile portals/Makefile portals/Kernelenv \
           portals/libcfs/Makefile portals/portals/Makefile \
@@ -82,5 +82,6 @@ AC_OUTPUT([Makefile lvfs/Makefile portals/Makefile portals/Kernelenv \
 	  cobd/Makefile ptlbd/Makefile conf/Makefile  tests/Makefile \
 	  utils/Makefile utils/Lustre/Makefile obdfilter/Makefile \
           obdclass/Makefile smfs/Makefile snapfs/Makefile snapfs/utils/Makefile \
-	  include/Makefile include/linux/Makefile llite/Makefile doc/Makefile scripts/Makefile \
+	  include/Makefile include/linux/Makefile include/lustre/Makefile \
+          llite/Makefile doc/Makefile scripts/Makefile \
 	  scripts/lustre.spec])
