@@ -29,7 +29,7 @@ case "$lustretag" in
 	portalstag="b1_4_bgl"
 	;;
 
-    b_cray)
+    b_cray*)
 	libsysiotag="LIBSYSIO_HEAD_20041101"
 	;;
 
