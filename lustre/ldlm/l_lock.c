@@ -144,7 +144,7 @@ void l_check_no_ns_lock(struct ldlm_namespace *ns)
 #else
 void l_check_ns_lock(struct ldlm_namespace *ns)
 {
-        if (l_has_lock(&ns->ns_lock)) {
+        if (!l_has_lock(&ns->ns_lock)) {
                 CERROR("namespace %s lock not held when it should be; tell "
                        "phil\n", ns->ns_name);
         }
