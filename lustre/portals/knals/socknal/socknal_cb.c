@@ -2029,6 +2029,10 @@ ksocknal_connect_peer (ksock_route_t *route)
                 CERROR ("sock_map_fd error %d\n", fd);
                 return (fd);
         }
+
+        /* NB the fd now owns the ref on sock->file */
+        LASSERT (sock->file != NULL);
+        LASSERT (file_count(sock->file) == 1);
         
         /* Set the socket timeouts, so our connection attempt completes in
          * finite time */
@@ -2045,7 +2049,7 @@ ksocknal_connect_peer (ksock_route_t *route)
         if (rc != 0) {
                 CERROR ("Can't set send timeout %d (in HZ): %d\n", 
                         ksocknal_io_timeout, rc);
-                goto failed;
+                goto out;
         }
         
         set_fs (KERNEL_DS);
@@ -2055,7 +2059,7 @@ ksocknal_connect_peer (ksock_route_t *route)
         if (rc != 0) {
                 CERROR ("Can't set receive timeout %d (in HZ): %d\n",
                         ksocknal_io_timeout, rc);
-                goto failed;
+                goto out;
         }
 
         if (route->ksnr_nonagel) {
@@ -2067,7 +2071,7 @@ ksocknal_connect_peer (ksock_route_t *route)
                 set_fs (oldmm);
                 if (rc != 0) {
                         CERROR ("Can't disable nagel: %d\n", rc);
-                        goto failed;
+                        goto out;
                 }
         }
         
@@ -2081,7 +2085,7 @@ ksocknal_connect_peer (ksock_route_t *route)
                 if (rc != 0) {
                         CERROR ("Can't set send buffer %d: %d\n",
                                 route->ksnr_buffer_size, rc);
-                        goto failed;
+                        goto out;
                 }
 
                 set_fs (KERNEL_DS);
@@ -2091,7 +2095,7 @@ ksocknal_connect_peer (ksock_route_t *route)
                 if (rc != 0) {
                         CERROR ("Can't set receive buffer %d: %d\n",
                                 route->ksnr_buffer_size, rc);
-                        goto failed;
+                        goto out;
                 }
         }
         
@@ -2105,22 +2109,25 @@ ksocknal_connect_peer (ksock_route_t *route)
         if (rc != 0) {
                 CERROR ("Error %d connecting to "LPX64"\n", rc,
                         route->ksnr_peer->ksnp_nid);
-                goto failed;
+                goto out;
         }
         
         if (route->ksnr_xchange_nids) {
                 rc = ksocknal_exchange_nids (sock, route->ksnr_peer->ksnp_nid);
                 if (rc != 0)
-                        goto failed;
+                        goto out;
         }
 
         rc = ksocknal_create_conn (route->ksnr_peer->ksnp_nid,
                                    route, sock, route->ksnr_irq_affinity);
-        if (rc == 0)
-                return (0);
+        if (rc == 0) {
+                /* Take an extra ref on sock->file to compensate for the
+                 * upcoming close which will lose fd's ref on it. */
+                get_file (sock->file);
+        }
 
- failed:
-        fput (sock->file);
+ out:
+        sys_close (fd);
         return (rc);
 }
 
