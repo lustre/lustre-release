@@ -559,6 +559,8 @@ static void ll_start_readahead(struct obd_export *exp, struct inode *inode,
                                     &flags, inode, &match_lockh);
                 if (matched < 0) {
                         LL_CDEBUG_PAGE(page, "lock match failed\n");
+                        unlock_page(page);
+                        page_cache_release(page);
                         break;
                 }
                 if (matched == 0) {

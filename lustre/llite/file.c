@@ -490,10 +490,8 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
                 RETURN(0);
 
         rc = ll_lsm_getattr(exp, lsm, &oa);
-        if (rc) {
-                ll_extent_unlock(fd, inode, lsm, mode, lockh);
-                RETURN(rc);
-        }
+        if (rc) 
+                GOTO(out, rc);
 
         /* We set this flag in commit write as we extend the file size.  When
          * the bit is set and the lock is canceled that covers the file size,
@@ -528,7 +526,7 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
                             sizeof(size_lock), LCK_PR, &flags, inode,
                             &match_lockh);
         if (matched < 0)
-                RETURN(matched);
+                GOTO(out, rc = matched);
 
         /* hey, alright, we hold a size lock that covers the size we
          * just found, its not going to change for a while.. */
@@ -537,7 +535,11 @@ int ll_extent_lock(struct ll_file_data *fd, struct inode *inode,
                 obd_cancel(exp, lsm, LCK_PR, &match_lockh);
         }
 
-        RETURN(0);
+        rc = 0;
+out:
+        if (rc)
+                ll_extent_unlock(fd, inode, lsm, mode, lockh);
+        RETURN(rc);
 }
 
 int ll_extent_unlock(struct ll_file_data *fd, struct inode *inode,
