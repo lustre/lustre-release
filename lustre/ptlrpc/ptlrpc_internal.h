@@ -108,6 +108,7 @@ int ptlrpc_stop_pinger(void);
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp);
 
 /* ptlrpc_local.c */
+int local_svc_available(struct ptlrpc_request *req);
 int local_send_rpc(struct ptlrpc_request *req);
 int local_reply(struct ptlrpc_request *req);
 int local_error(struct ptlrpc_request *req);
