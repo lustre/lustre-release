@@ -106,13 +106,6 @@ nal2name (int nal)
         return ((e == NULL) ? "???" : e->name);
 }
 
-static int
-nid2nal (ptl_nid_t nid)
-{
-        /* BIG pragmatic assumption */
-        return ((((__u32)nid) & 0xffff0000) != 0 ? SOCKNAL : QSWNAL);
-}
-
 int
 ptl_parse_nid (ptl_nid_t *nidp, char *str)
 {
@@ -160,35 +153,15 @@ ptl_parse_nid (ptl_nid_t *nidp, char *str)
 char *
 ptl_nid2str (char *buffer, ptl_nid_t nid)
 {
-        switch (nid2nal(nid))
-        {
-        case QSWNAL:
-                sprintf (buffer, LPD64, nid);
-                return (buffer);
+        __u32           addr = htonl((__u32)nid); /* back to NETWORK byte order */
+        struct hostent *he = gethostbyaddr ((const char *)&addr, sizeof (addr), AF_INET);
 
-        case SCIMACNAL:
-                sprintf (buffer, LPX64, nid);
-                return (buffer);
-                
-        case SOCKNAL: {
-                __u32           addr = htonl((__u32)nid); /* back to NETWORK byte order */
-                struct hostent *he = gethostbyaddr ((const char *)&addr, sizeof (addr), AF_INET);
-                
-                if (he != NULL)
-                        strcpy (buffer, he->h_name);
-                else
-                {
-                        addr = (__u32)nid;
-                        sprintf (buffer, "%d.%d.%d.%d", 
-                                 (addr>>24)&0xff, (addr>>16)&0xff, (addr>>8)&0xff, addr&0xff);
-                }
-                return (buffer);
-        }
+        if (he != NULL)
+                strcpy (buffer, he->h_name);
+        else
+                sprintf (buffer, "0x"LPX64, nid);
         
-        default:
-                sprintf (buffer, "nid2nal broken");
-                return (buffer);
-        }
+        return (buffer);
 }
 
 int
@@ -892,7 +865,6 @@ jt_ptl_add_route (int argc, char **argv)
         ptl_nid_t                nid1;
         ptl_nid_t                nid2;
         ptl_nid_t                gateway_nid;
-        int                      gateway_nal;
         int                      rc;
         
         if (argc < 3)
@@ -901,13 +873,17 @@ jt_ptl_add_route (int argc, char **argv)
                 return (0);
         }
 
+        if (g_nal == 0) {
+                fprintf(stderr, "Error: you must run the 'network' command "
+                        "first.\n");
+                return (-1);
+        }
+
         if (ptl_parse_nid (&gateway_nid, argv[1]) != 0)
         {
                 fprintf (stderr, "Can't parse gateway NID \"%s\"\n", argv[1]);
                 return (-1);
         }
-
-        gateway_nal = nid2nal (gateway_nid);
 
         if (ptl_parse_nid (&nid1, argv[2]) != 0)
         {
@@ -925,7 +901,7 @@ jt_ptl_add_route (int argc, char **argv)
 
         PORTAL_IOC_INIT(data);
         data.ioc_nid = gateway_nid;
-        data.ioc_nal = gateway_nal;
+        data.ioc_nal = g_nal;
         data.ioc_nid2 = MIN (nid1, nid2);
         data.ioc_nid3 = MAX (nid1, nid2);
 
