@@ -326,7 +326,6 @@ AC_DEFINE_UNQUOTED(OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE, [IOCTL Buffer Size])
 AC_DEFUN([LC_PROG_LINUX],
 [LC_CONFIG_BACKINGFS
 LC_CONFIG_PINGER
-LC_CONFIG_OBD_BUFFER_SIZE
 
 LC_STRUCT_KIOBUF
 LC_FUNC_COND_RESCHED
@@ -366,6 +365,8 @@ AC_MSG_RESULT([$enable_mpitests])
 AC_DEFUN([LC_CONFIGURE],
 [# include/liblustre.h
 AC_CHECK_HEADERS([asm/page.h sys/user.h stdint.h])
+
+LC_CONFIG_OBD_BUFFER_SIZE
 
 # liblustre/llite_lib.h
 AC_CHECK_HEADERS([xtio.h file.h])
@@ -408,6 +409,12 @@ lustre/doc/Makefile
 lustre/include/Makefile
 lustre/include/linux/Makefile
 lustre/include/lustre/Makefile
+lustre/kernel_patches/targets/2.6-suse.target
+lustre/kernel_patches/targets/2.6-vanilla.target
+lustre/kernel_patches/targets/hp_pnnl-2.4.target
+lustre/kernel_patches/targets/rh-2.4.target
+lustre/kernel_patches/targets/rhel-2.4.target
+lustre/kernel_patches/targets/suse-2.4.21-2.target
 lustre/ldiskfs/Makefile
 lustre/ldiskfs/autoMakefile
 lustre/ldlm/Makefile
