@@ -144,7 +144,7 @@ _ACEOF
 AC_DEFUN([LUSTRE_MODULE_COMPILE_IFELSE],
 [m4_ifvaln([$1], [LUSTRE_MODULE_CONFTEST([$1])])dnl
 rm -f kernel-tests/conftest.o kernel-tests/conftest.mod.c kernel-tests/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c kernel-tests && make [$2] -f $PWD/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX EXTRA_CFLAGS="$EXTRA_KCFLAGS" $ARCH_UM SUBDIRS=$PWD/kernel-tests) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c kernel-tests && make [$2] -f $PWD/kernel-tests/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM SUBDIRS=$PWD/kernel-tests) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])dnl
@@ -440,6 +440,20 @@ LUSTRE_MODULE_TRY_COMPILE(
 		AC_MSG_RESULT([$LINUXRELEASE])
 	])
 
+# ---------- 2.4.20 introduced cond_resched --------------
+
+AC_MSG_CHECKING([if kernel offers cond_resched])
+LUSTRE_MODULE_TRY_COMPILE(
+	[
+		#include <linux/sched.h>
+	],[
+		cond_resched();
+	],[
+	AC_MSG_RESULT([yes])
+		AC_DEFINE(HAVE_COND_RESCHED, 1, [cond_resched found])
+	],[
+		AC_MSG_RESULT([no])
+	])
 # ---------- Red Hat 2.4.21 backports some more 2.5 bits --------
 
 AC_MSG_CHECKING([if kernel defines PDE])

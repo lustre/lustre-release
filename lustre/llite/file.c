@@ -413,7 +413,7 @@ void ll_pgcache_remove_extent(struct inode *inode, struct lov_stripe_md *lsm,
                         break;
                 }
 
-                conditional_schedule();
+                cond_resched();
 
                 page = find_get_page(inode->i_mapping, i);
                 if (page == NULL)
