@@ -471,7 +471,7 @@ static inline void obd_handle2oa(struct obdo *oa, struct lustre_handle *handle)
 extern kmem_cache_t *obdo_cachep;
 static inline struct obdo *obdo_alloc(void)
 {
-        struct obdo *oa = NULL;
+        struct obdo *oa;
 
         oa = kmem_cache_alloc(obdo_cachep, SLAB_KERNEL);
         if (oa == NULL)
@@ -480,11 +480,30 @@ static inline struct obdo *obdo_alloc(void)
 
         return oa;
 }
+
 static inline void obdo_free(struct obdo *oa)
 {
         if (!oa)
                 return;
         kmem_cache_free(obdo_cachep, oa);
+}
+
+extern kmem_cache_t *handle_cachep;
+static inline struct lustre_handle *handle_alloc(void)
+{
+        struct lustre_handle *handle;
+
+        handle = kmem_cache_alloc(handle_cachep, SLAB_KERNEL);
+        memset(handle, 0, sizeof (*handle));
+
+        return handle;
+}
+
+static inline void handle_free(struct lustre_handle *handle)
+{
+        if (!handle)
+                return;
+        kmem_cache_free(handle_cachep, handle);
 }
 
 

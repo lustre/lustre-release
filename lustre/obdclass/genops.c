@@ -21,8 +21,9 @@
 
 extern struct list_head obd_types;
 kmem_cache_t *obdo_cachep = NULL;
-kmem_cache_t *export_cachep = NULL;
 kmem_cache_t *import_cachep = NULL;
+kmem_cache_t *export_cachep = NULL;
+kmem_cache_t *handle_cachep = NULL;
 
 /* I would prefer if these next four functions were in ptlrpc, to be honest,
  * but obdclass uses them for the netregression ioctls. -phil */
@@ -250,20 +251,26 @@ void obd_cleanup_caches(void)
         if (obdo_cachep) {
                 rc = kmem_cache_destroy(obdo_cachep);
                 if (rc)
-                        CERROR("Cannot destory obdo_cachep\n");
+                        CERROR("Cannot destory ll_obdo_cache\n");
                 obdo_cachep = NULL;
         }
         if (import_cachep) {
                 rc = kmem_cache_destroy(import_cachep);
                 if (rc)
-                        CERROR("Cannot destory import_cachep\n");
+                        CERROR("Cannot destory ll_import_cache\n");
                 import_cachep = NULL;
         }
         if (export_cachep) {
                 rc = kmem_cache_destroy(export_cachep);
                 if (rc)
-                        CERROR("Cannot destory import_cachep\n");
+                        CERROR("Cannot destory ll_export_cache\n");
                 export_cachep = NULL;
+        }
+        if (handle_cachep) {
+                rc = kmem_cache_destroy(handle_cachep);
+                if (rc)
+                        CERROR("Cannot destory ll_handle_cache\n");
+                handle_cachep = NULL;
         }
         EXIT;
 }
@@ -271,32 +278,33 @@ void obd_cleanup_caches(void)
 int obd_init_caches(void)
 {
         ENTRY;
-        if (obdo_cachep == NULL) {
-                obdo_cachep = kmem_cache_create("obdo_cache",
-                                                sizeof(struct obdo),
-                                                0, SLAB_HWCACHE_ALIGN,
-                                                NULL, NULL);
-                if (obdo_cachep == NULL)
-                        GOTO(out, -ENOMEM);
-        }
+        LASSERT(obdo_cachep == NULL);
+        obdo_cachep = kmem_cache_create("ll_obdo_cache", sizeof(struct obdo),
+                                        0, 0, NULL, NULL);
+        if (!obdo_cachep)
+                GOTO(out, -ENOMEM);
 
-        if (export_cachep == NULL) {
-                export_cachep = kmem_cache_create("export_cache",
-                                                sizeof(struct obd_export),
-                                                0, SLAB_HWCACHE_ALIGN,
-                                                NULL, NULL);
-                if (export_cachep == NULL)
-                        GOTO(out, -ENOMEM);
-        }
+        LASSERT(export_cachep == NULL);
+        export_cachep = kmem_cache_create("ll_export_cache",
+                                          sizeof(struct obd_export),
+                                          0, 0, NULL, NULL);
+        if (!export_cachep)
+                GOTO(out, -ENOMEM);
 
-        if (import_cachep == NULL) {
-                import_cachep = kmem_cache_create("import_cache",
-                                                sizeof(struct obd_import),
-                                                0, SLAB_HWCACHE_ALIGN,
-                                                NULL, NULL);
-                if (import_cachep == NULL)
-                        GOTO(out, -ENOMEM);
-        }
+        LASSERT(import_cachep == NULL);
+        import_cachep = kmem_cache_create("ll_import_cache",
+                                          sizeof(struct obd_import),
+                                          0, 0, NULL, NULL);
+        if (!import_cachep)
+                GOTO(out, -ENOMEM);
+
+        LASSERT(handle_cachep == NULL);
+        handle_cachep = kmem_cache_create("ll_handle_cache",
+                                          sizeof(struct lustre_handle),
+                                          0, 0, NULL, NULL);
+        if (!handle_cachep)
+                RETURN(-ENOMEM);
+
         RETURN(0);
  out:
         obd_cleanup_caches();
