@@ -5,8 +5,11 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/sched.h>
+#include <linux/jbd.h>
 
 #include <linux/lvfs.h>
+/* we have made EXT3_IOC_SETFLAGS a Lustre constant */
+#include <linux/ext3_fs.h>
 
 #define l_file file
 #define l_dentry dentry
