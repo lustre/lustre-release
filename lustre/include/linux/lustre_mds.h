@@ -230,6 +230,7 @@ static inline ssize_t mds_fs_journal_data(struct mds_obd *mds,
 
 extern struct mds_fs_operations mds_ext2_fs_ops;
 extern struct mds_fs_operations mds_ext3_fs_ops;
+extern struct mds_fs_operations mds_extN_fs_ops;
 
 #endif /* __KERNEL__ */
 

@@ -187,15 +187,9 @@ int mds_client_add(struct mds_obd *mds, struct mds_client_data *mcd, int cl_off)
                 }
                 cl_off = word - last_rcvd_slots + bit;
         } else {
-                unsigned long *word;
-                int bit;
-
-                word = last_rcvd_slots + cl_off / sizeof(unsigned long);
-                bit = cl_off % sizeof(unsigned long);
-
-                if (test_and_set_bit(bit, word)) {
-                        CERROR("bit %d already set in word %d - bad bad\n",
-                               bit, word - last_rcvd_slots);
+                if (test_and_set_bit(cl_off, last_rcvd_slots)) {
+                        CERROR("bit %d already set in bitmap - bad bad\n",
+                               cl_off);
                         LBUG();
                 }
         }
@@ -863,7 +857,9 @@ static int mds_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         mds->mds_fstype = strdup(data->ioc_inlbuf2);
 
-        if (!strcmp(mds->mds_fstype, "ext3"))
+        if (!strcmp(mds->mds_fstype, "extN"))
+                mds->mds_fsops = &mds_extN_fs_ops;
+        else if (!strcmp(mds->mds_fstype, "ext3"))
                 mds->mds_fsops = &mds_ext3_fs_ops;
         else if (!strcmp(mds->mds_fstype, "ext2"))
                 mds->mds_fsops = &mds_ext2_fs_ops;

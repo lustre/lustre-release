@@ -231,3 +231,16 @@ struct mds_fs_operations mds_ext3_fs_ops = {
         fs_journal_data:mds_ext3_journal_data,
         fs_set_last_rcvd:mds_ext3_set_last_rcvd,
 };
+
+struct mds_fs_operations mds_extN_fs_ops = {
+        fs_start:       mds_ext3_start,
+        fs_commit:      mds_ext3_commit,
+        fs_setattr:     mds_ext3_setattr,
+        fs_set_objid:   mds_ext3_set_objid,
+        fs_get_objid:   mds_ext3_get_objid,
+        fs_readpage:    mds_ext3_readpage,
+        fs_delete_inode:mds_ext3_delete_inode,
+        cl_delete_inode:clear_inode,
+        fs_journal_data:mds_ext3_journal_data,
+        fs_set_last_rcvd:mds_ext3_set_last_rcvd,
+};
