@@ -138,7 +138,7 @@ struct ptlrpc_request *ptlrpc_prep_req(struct ptlrpc_client *cl,
 	}
 
 	memset(request, 0, sizeof(*request));
-        spin_lock_init(&request->rq_lock);
+        //spin_lock_init(&request->rq_lock);
 
         spin_lock(&cl->cli_lock);
 	request->rq_xid = cl->cli_xid++;
@@ -172,7 +172,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
 {
         int rc = 0;
 
-        spin_lock(&req->rq_lock);
+        //spin_lock(&req->rq_lock);
         if (req->rq_repbuf != NULL) {
                 req->rq_flags = PTL_RPC_REPLY;
                 EXIT;
@@ -190,7 +190,7 @@ static int ptlrpc_check_reply(struct ptlrpc_request *req)
         }
 
  out:
-        spin_unlock(&req->rq_lock);
+        //spin_unlock(&req->rq_lock);
         return rc;
 }
 
@@ -233,13 +233,13 @@ int ptlrpc_abort(struct ptlrpc_request *request)
 {
         /* First remove the MD for the reply; in theory, this means
          * that we can tear down the buffer safely. */
-        spin_lock(&request->rq_lock);
+        //spin_lock(&request->rq_lock);
         PtlMEUnlink(request->rq_reply_me_h);
         PtlMDUnlink(request->rq_reply_md_h);
         OBD_FREE(request->rq_repbuf, request->rq_replen);
         request->rq_repbuf = NULL;
         request->rq_replen = 0;
-        spin_unlock(&request->rq_lock);
+        //spin_unlock(&request->rq_lock);
 
         return 0;
 }
@@ -271,7 +271,7 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
         CDEBUG(D_OTHER, "-- sleeping\n");
         wait_event_interruptible(req->rq_wait_for_rep, ptlrpc_check_reply(req));
         CDEBUG(D_OTHER, "-- done\n");
-        spin_lock(&req->rq_lock);
+        //spin_lock(&req->rq_lock);
         if (req->rq_flags == PTL_RPC_INTR) { 
                 /* Clean up the dangling reply buffers */
                 ptlrpc_abort(req);
@@ -304,6 +304,6 @@ int ptlrpc_queue_wait(struct ptlrpc_client *cl, struct ptlrpc_request *req)
 
 	EXIT;
  out:
-        spin_unlock(&req->rq_lock);
+        //spin_unlock(&req->rq_lock);
 	return rc;
 }
