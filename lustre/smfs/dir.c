@@ -17,7 +17,7 @@
 struct  dentry parent; 
 struct  dentry cache_dentry;
 
-static void smfs_clear_dentry(struct dentry *dentry)
+void smfs_clear_dentry(struct dentry *dentry)
 {
 	struct qstr *name = NULL; 
 
@@ -197,6 +197,7 @@ static int smfs_link(struct dentry * old_dentry,
 	struct	inode *cache_dir = I2CI(dir); 
 	struct	inode *inode = NULL; 
 	struct  dentry cache_dentry;
+	struct  dentry cache_old_dentry;
 	struct  dentry tmp; 
 	struct  dentry tmp_old; 
 	int	rc = 0;
@@ -205,21 +206,25 @@ static int smfs_link(struct dentry * old_dentry,
 	
 	cache_old_inode = I2CI(inode);
 	
-	if (!cache_old_inode || !dir) 
+	if (!cache_old_inode || !cache_dir) 
                 RETURN(-ENOENT);
-
-	prepare_parent_dentry(&tmp_old, cache_old_inode);
-	smfs_prepare_dentry(&cache_dentry, &tmp, &dentry->d_name);
+	
 	prepare_parent_dentry(&tmp, cache_dir);
- 	
+	smfs_prepare_dentry(&cache_dentry, &tmp, &dentry->d_name);
+	
+	prepare_parent_dentry(&tmp_old, cache_dir);
+	smfs_prepare_dentry(&cache_old_dentry, &tmp_old, &dentry->d_name);
+	d_add(&cache_old_dentry, cache_old_inode); 
+	
 	if (cache_dir->i_op->link)
-		rc = cache_dir->i_op->link(&tmp, cache_dir, &cache_dentry);		
+		rc = cache_dir->i_op->link(&cache_old_dentry, cache_dir, &cache_dentry);		
 	
 	if (rc == 0) {
 		d_instantiate(dentry, inode);
 	} 	
 	
 	smfs_clear_dentry(&cache_dentry);
+	smfs_clear_dentry(&cache_old_dentry);
 	RETURN(rc);
 }
 
@@ -266,7 +271,7 @@ static int smfs_symlink (struct inode * dir,
 	prepare_parent_dentry(&tmp, cache_dir);
 	smfs_prepare_dentry(&cache_dentry, &tmp, &dentry->d_name);
 
-	if (cache_inode->i_op->symlink)
+	if (cache_dir->i_op->symlink)
 		rc = cache_dir->i_op->symlink(cache_dir, &cache_dentry, symname);
 	
 	cache_inode = cache_dentry.d_inode;
@@ -281,6 +286,7 @@ static int smfs_symlink (struct inode * dir,
 	smfs_clear_dentry(&cache_dentry);
 	RETURN(rc);			
 }
+
 static int smfs_mkdir(struct inode * dir, 
 		      struct dentry * dentry, 
 		      int mode)
@@ -345,6 +351,8 @@ static int smfs_mknod(struct inode * dir, struct dentry *dentry,
                       int mode, int rdev)
 {
 	struct inode *cache_dir = I2CI(dir);
+	struct inode *inode = NULL;
+	struct inode *cache_inode = NULL;
 	struct dentry cache_dentry;
 	struct dentry tmp;
 	int    rc = 0;
@@ -357,10 +365,14 @@ static int smfs_mknod(struct inode * dir, struct dentry *dentry,
 		
 	if (cache_dir->i_op->mknod)
 		rc = cache_dir->i_op->mknod(cache_dir, &cache_dentry, mode, rdev);
-
-	duplicate_inode(cache_dir, dir);
-	duplicate_inode(cache_dentry.d_inode, dentry->d_inode);
-
+	
+	if (!rc) {
+		cache_inode = cache_dentry.d_inode;
+		inode = iget(dir->i_sb, cache_inode->i_ino);
+		d_instantiate(dentry, inode);
+		duplicate_inode(cache_dir, dir);
+		duplicate_inode(cache_dentry.d_inode, dentry->d_inode);
+	}
 	smfs_clear_dentry(&cache_dentry);
 	RETURN(rc);		
 }
@@ -391,15 +403,16 @@ static int smfs_rename(struct inode * old_dir, struct dentry *old_dentry,
 	if (cache_old_dir->i_op->rename)
 		rc = cache_old_dir->i_op->rename(cache_old_dir, &cache_old_dentry,
 					         cache_new_dir, &cache_new_dentry);
-	
+
+#if 0	
 	cache_new_inode = cache_new_dentry.d_inode; 
 	new_inode = iget(new_dir->i_sb, cache_new_inode->i_ino);
 	
 	d_instantiate(new_dentry, new_inode);
 		
+#endif
 	duplicate_inode(cache_old_dir, old_dir);
 	duplicate_inode(cache_new_dir, new_dir);
-
 	smfs_clear_dentry(&cache_old_dentry);
 	smfs_clear_dentry(&cache_new_dentry);
 
