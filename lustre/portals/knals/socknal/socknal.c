@@ -95,10 +95,8 @@ nal_t *
 ksocknal_init(int interface, ptl_pt_index_t ptl_size,
               ptl_ac_index_t ac_size, ptl_pid_t requested_pid)
 {
-        CDEBUG(D_NET, "calling lib_init with nid "LPX64"\n",
-               ksocknal_data.ksnd_mynid);
-        lib_init(&ksocknal_lib, ksocknal_data.ksnd_mynid, 0, 10, ptl_size,
-                 ac_size);
+        CDEBUG(D_NET, "calling lib_init with nid "LPX64"\n", (ptl_nid_t)0);
+        lib_init(&ksocknal_lib, (ptl_nid_t)0, 0, 10, ptl_size, ac_size);
         return (&ksocknal_api);
 }
 
@@ -129,7 +127,6 @@ ksocknal_set_mynid(ptl_nid_t nid)
         CDEBUG(D_IOCTL, "setting mynid to "LPX64" (old nid="LPX64")\n",
                nid, ni->nid);
 
-        ksocknal_data.ksnd_mynid = nid;
         ni->nid = nid;
         return (0);
 }

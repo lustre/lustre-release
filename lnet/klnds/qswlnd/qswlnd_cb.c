@@ -109,19 +109,13 @@ kqswnal_sti(nal_cb_t *nal, unsigned long *flags)
 static int
 kqswnal_dist(nal_cb_t *nal, ptl_nid_t nid, unsigned long *dist)
 {
-        /* network distance doesn't mean much for this nal */
-        *dist = (nid == nal->ni.nid) ? 0 : 1;
+        if (nid == nal->ni.nid)
+                *dist = 0;                      /* it's me */
+        else if (kqswnal_nid2elanid (nid) >= 0)
+                *dist = 1;                      /* it's my peer */
+        else
+                *dist = 2;                      /* via router */
         return (0);
-}
-
-int
-kqswnal_ispeer (ptl_nid_t nid)
-{
-        unsigned int elanid = (unsigned int)nid;
-
-        /* didn't lose high bits on conversion and it's in this machine? */
-        return ((ptl_nid_t)elanid == nid &&
-                elanid < ep_numnodes (kqswnal_data.kqn_epdev));
 }
 
 void
@@ -453,11 +447,14 @@ kqswnal_launch (kqswnal_tx_t *ktx)
 {
         /* Don't block for transmit descriptor if we're in interrupt context */
         int   attr = in_interrupt() ? (EP_NO_SLEEP | EP_NO_ALLOC) : 0;
-        int   rc   = ep_transmit_large(kqswnal_data.kqn_eptx, ktx->ktx_nid,
-                                       ktx->ktx_port, attr, kqswnal_txhandler,
-                                       ktx, ktx->ktx_iov, ktx->ktx_niov);
+        int   dest = kqswnal_nid2elanid (ktx->ktx_nid);
         long  flags;
-
+        int   rc;
+        
+        LASSERT (dest >= 0);                    /* must be a peer */
+        rc = ep_transmit_large(kqswnal_data.kqn_eptx, dest,
+                               ktx->ktx_port, attr, kqswnal_txhandler,
+                               ktx, ktx->ktx_iov, ktx->ktx_niov);
         if (rc == 0)
                 atomic_inc (&kqswnal_packets_launched);
 
@@ -595,7 +592,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                 return (-1);
         }
 
-        if (!kqswnal_ispeer (nid)) {     /* Can't send direct: find gateway? */
+        if (kqswnal_nid2elanid (nid) < 0) {     /* Can't send direct: find gateway? */
                 rc = kpr_lookup (&kqswnal_data.kqn_router, nid, &gatewaynid);
                 if (rc != 0) {
                         CERROR("Can't route to "LPX64": router error %d\n",
@@ -603,7 +600,7 @@ kqswnal_sendmsg (nal_cb_t     *nal,
                         lib_finalize (&kqswnal_lib, private, cookie);
                         return (-1);
                 }
-                if (!kqswnal_ispeer (gatewaynid)) {
+                if (kqswnal_nid2elanid (gatewaynid) < 0) {
                         CERROR("Bad gateway "LPX64" for "LPX64"\n",
                                gatewaynid, nid);
                         lib_finalize (&kqswnal_lib, private, cookie);
@@ -757,7 +754,7 @@ kqswnal_fwd_packet (void *arg, kpr_fwd_desc_t *fwd)
         if (nid == kqswnal_lib.ni.nid)          /* gateway is me */
                 nid = fwd->kprfd_target_nid;    /* target is final dest */
 
-        if (!kqswnal_ispeer (nid)) {
+        if (kqswnal_nid2elanid (nid) < 0) {
                 CERROR("Can't forward [%p] to "LPX64": not a peer\n", fwd, nid);
                 rc = -EHOSTUNREACH;
                 goto failed;
@@ -844,7 +841,7 @@ kqswnal_rx (kqswnal_rx_t *krx)
         CERROR ("checksums for forwarded packets not implemented\n");
         LBUG ();
 #endif
-        if (kqswnal_ispeer (dest_nid))  /* should have gone direct to peer */
+        if (kqswnal_nid2elanid (dest_nid) >= 0)  /* should have gone direct to peer */
         {
                 CERROR("dropping packet from "LPX64" for "LPX64
                        ": target is peer\n", NTOH__u64(hdr->src_nid), dest_nid);

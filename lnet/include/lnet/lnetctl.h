@@ -38,6 +38,7 @@ int jt_ptl_connect(int argc, char **argv);
 int jt_ptl_disconnect(int argc, char **argv);
 int jt_ptl_push_connection(int argc, char **argv);
 int jt_ptl_ping(int argc, char **argv);
+int jt_ptl_shownid(int argc, char **argv);
 int jt_ptl_mynid(int argc, char **argv);
 int jt_ptl_add_uuid(int argc, char **argv);
 int jt_ptl_add_uuid_old(int argc, char **argv); /* backwards compatibility  */

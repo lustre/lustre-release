@@ -704,18 +704,43 @@ int jt_ptl_ping(int argc, char **argv)
         return 0;
 }
 
+int jt_ptl_shownid(int argc, char **argv)
+{
+        struct portal_ioctl_data data;
+        int                      rc;
+        
+        if (argc > 1) {
+                fprintf(stderr, "usage: %s\n", argv[0]);
+                return 0;
+        }
+        
+        if (g_nal == 0) {
+                fprintf(stderr, "Error: you must run the 'network' command first\n");
+                return -1;
+        }
+        
+        PORTAL_IOC_INIT (data);
+        data.ioc_nal = g_nal;
+        rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_GET_NID, &data);
+        if (rc < 0)
+                fprintf(stderr, "getting my NID failed: %s\n",
+                        strerror (errno));
+        else
+                printf(LPX64"\n", data.ioc_nid);
+        return 0;
+}
+
 int jt_ptl_mynid(int argc, char **argv)
 {
         int rc;
-        struct hostent *h;
-        char buf[1024], *hostname;
+        char hostname[1024];
+        char *nidstr;
         struct portal_ioctl_data data;
         ptl_nid_t mynid;
         
         if (argc > 2) {
-                fprintf(stderr, "usage: %s [hostname]\n", argv[0]);
-                fprintf(stderr, "hostname defaults to the hostname of the "
-                        "machine.\n");
+                fprintf(stderr, "usage: %s [NID]\n", argv[0]);
+                fprintf(stderr, "NID defaults to the primary IP address of the machine.\n");
                 return 0;
         }
 
@@ -725,42 +750,21 @@ int jt_ptl_mynid(int argc, char **argv)
                 return -1;
         }
 
-        if (g_nal == QSWNAL) {
-                fprintf(stderr, "'mynid' doesn't make any sense for elan.\n");
-                return -1;
-        } else  if (g_nal == GMNAL) {
-                fprintf(stderr, "'mynid' doesn't make any sense for GM.\n");
-                return -1;
-        } else  if (g_nal == SCIMACNAL) {
-                fprintf(stderr, "'mynid' doesn't make any sense for SCI.\n");
-                return -1;
-        } 
-        
-        if (g_nal != SOCKNAL && g_nal != TOENAL) {
-                fprintf(stderr, "This should never happen.  Also it is very "
-                        "bad.\n");
+        if (argc >= 2)
+                nidstr = argv[1];
+        else if (gethostname(hostname, sizeof(hostname)) != 0) {
+                fprintf(stderr, "gethostname failed: %s\n",
+                        strerror(errno));
                 return -1;
         }
+        else
+                nidstr = hostname;
 
-        if (argc == 1) {
-                if (gethostname(buf, sizeof(buf)) != 0) {
-                        fprintf(stderr, "gethostname failed: %s\n",
-                                strerror(errno));
-                        return -1;
-                }
-                hostname = buf;
-        } else {
-                hostname = argv[1];
-        }
-
-        h = gethostbyname(hostname);
-
-        if (!h) {
-                fprintf(stderr, "cannot get address for host '%s': %d\n",
-                        hostname, h_errno);
+        rc = ptl_parse_nid (&mynid, nidstr);
+        if (rc != 0) {
+                fprintf (stderr, "Can't convert '%s' into a NID\n", nidstr);
                 return -1;
         }
-        mynid = (ptl_nid_t)ntohl (*(__u32 *)h->h_addr);      /* HOST byte order */
         
         PORTAL_IOC_INIT(data);
         data.ioc_nid = mynid;
@@ -769,7 +773,7 @@ int jt_ptl_mynid(int argc, char **argv)
 
         rc = l_ioctl(PORTALS_DEV_ID, IOC_PORTAL_NAL_CMD, &data);
         if (rc < 0)
-                fprintf(stderr, "IOC_PORTAL_REGISTER_MYNID failed: %s\n",
+                fprintf(stderr, "setting my NID failed: %s\n",
                        strerror(errno));
         else
                 printf("registered my nid "LPX64" (%s)\n", mynid, hostname);
