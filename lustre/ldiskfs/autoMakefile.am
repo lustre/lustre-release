@@ -1,5 +1,7 @@
+if MODULES
 if LDISKFS
 modulefs_DATA = ldiskfs$(KMODEXT)
+endif
 endif
 
 ldiskfs_linux_headers := $(addprefix linux/,$(subst ext3,ldiskfs,$(notdir $(linux_headers))))
