@@ -21,6 +21,8 @@ else
   fi
 fi
 
+# Return the next unused loop device on stdout and in the $LOOPDEV
+# environment variable.
 next_loop_dev() {
 	NEXT=
 	while [ -b ${LOOP}${LOOPNUM} ]; do
@@ -31,23 +33,58 @@ next_loop_dev() {
 	done
 }
 
-list_mods() {
-    $DEBCTL modules > $R/tmp/ogdb
-    echo "The GDB module script is in /tmp/ogdb.  Press enter to continue"
-    read
-}
-
+# Create a new filesystem.  If we are using a loopback device, we check
+# for existing "template" filesystems instead of creating a new one,
+# because it is _much_ faster to gunzip the empty filesystem instead of
+# creating a new one from scratch.  Conversely, if we are creating a
+# filesystem on a device we use mkfs, because that only writes sparsely
+# to the device.  The empty filesystems are also highly compressed (1000:1)
+# so they don't take too much space.
 new_fs () {
-    dd if=/dev/zero of=$2 bs=1k count=$3 1>&2 || exit -1
-    mkfs.$1 -b 4096 -F $2 1>&2 || exit -1
-    LOOPDEV=`next_loop_dev`
-    losetup ${LOOPDEV} $2 1>&2 || exit -1
+ 	EFILE="$1_$3.gz"
+	MKFS="mkfs.$1"
+	MKFSOPT="-b 4096"
+
+	[ $# -ne 3 ] && echo "usage: $0 <fstype> <file> <size>" 1>&2 && exit -1
+
+	[ "$1" = "ext3" ] && MKFS="mkfs.ext2 -j"
+
+	if [ -b "$2" ]; then
+		$MKFS $MKFSOPT $2 || exit -1
+		LOOPDEV=$2	# Not really a loop device
+	else
+		if [ -f "$EFILE" ]; then
+			echo "using existing filesystem $EFILE for $2"
+			zcat "$EFILE" > $2 || exit -1
+			sync
+		else
+			echo "creating new filesystem on $2"
+			dd if=/dev/zero of=$2 bs=1k count=$3 1>&2 || exit -1
+			$MKFS $MKFSOPT -F $2 1>&2 || exit -1
+		fi
+		LOOPDEV=`next_loop_dev`
+		losetup ${LOOPDEV} $2 1>&2 || exit -1
+	fi
 }
 
+# Set up to use an existing filesystem.  We take the same parameters as
+# new_fs, even though we only use the <file> parameter, to make it easy
+# to convert between new_fs and old_fs in testing scripts.
 old_fs () {
-    [ -e $2 ] || exit -1
-    LOOPDEV=`next_loop_dev`
-    losetup ${LOOPDEV} $2 1>&2 || exit -1
+	[ -e $2 ] || exit -1
+
+	if [ -b "$2" ]; then
+		LOOPDEV=$2	# Not really a loop device
+	else
+		LOOPDEV=`next_loop_dev`
+		losetup ${LOOPDEV} $2 1>&2 || exit -1
+	fi
+}
+
+list_mods() {
+	$DEBCTL modules > $R/tmp/ogdb
+	echo "The GDB module script is in /tmp/ogdb.  Press enter to continue"
+	read
 }
 
 setup() {
