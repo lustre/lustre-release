@@ -1724,6 +1724,14 @@
  	int (*getattr) (struct dentry *, struct iattr *);
  	int (*setxattr) (struct dentry *, const char *, void *, size_t, int);
  	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
+@@ -938,6 +957,7 @@
+ 	int (*remount_fs) (struct super_block *, int *, char *);
+ 	void (*clear_inode) (struct inode *);
+ 	void (*umount_begin) (struct super_block *);
++	void (*umount_lustre) (struct super_block *);
+ 
+ 	/* Following are for knfsd to interact with "interesting" filesystems
+ 	 * Currently just reiserfs, but possibly FAT and others later
 @@ -1094,10 +1113,14 @@ static inline int get_lease(struct inode
  
  asmlinkage long sys_open(const char *, int, int);
