@@ -2,6 +2,11 @@
 
 set -e
 
+# attempt to print a useful error location, but the ERR trap isn't
+# exported to functions, and the $LINENO doesn't work in EXIT.
+
+trap 'echo ERROR $0:$FUNCNAME:$LINENO: rc: $?' ERR EXIT
+
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 LTESTDIR=${LTESTDIR:-$LUSTRE/../ltest}
 PATH=$PATH:$LUSTRE/utils:$LUSTRE/tests
@@ -30,7 +35,7 @@ start() {
 stop() {
     facet=$1
     shift
-    lconf --node ${facet}_facet $@ -d replay-single.xml
+    lconf --node ${facet}_facet $@ --cleanup replay-single.xml
 }
 
 replay_barrier() {
@@ -38,11 +43,12 @@ replay_barrier() {
     sync
     lctl --device %${dev}1 readonly
     lctl --device %${dev}1 notransno
+    lctl mark "REPLAY BARRIER"
 }
 
 fail() {
     local facet=$1
-    stop $facet -f --failover --nomod
+    stop $facet --force --failover --nomod
     start $facet --nomod
     df $MOUNTPT
 }
@@ -91,21 +97,21 @@ basetest() {
 }
 
 run_test() {
-         base=`basetest $1`
-         if [ ! -z $ONLY ]; then
+        base=`basetest $1`
+        if [ ! -z "$ONLY" ]; then
                  testname=ONLY_$1
                  if [ ${!testname}x != x ]; then
- 			run_one $1 "$2"
- 			return $?
+                     run_one $1 "$2"
+                     return $?
                  fi
                  testname=ONLY_$base
                  if [ ${!testname}x != x ]; then
-                         run_one $1 "$2"
-                         return $?
+                     run_one $1 "$2"
+                     return $?
                  fi
                  echo -n "."
                  return 0
- 	fi
+        fi
         testname=EXCEPT_$1
         if [ ${!testname}x != x ]; then
                  echo "skipping excluded test $1"
@@ -117,7 +123,8 @@ run_test() {
                  return 0
         fi
         run_one $1 "$2"
- 	return $?
+
+        return $?
 }
 
 EQUALS="======================================================================"
@@ -125,10 +132,10 @@ EQUALS="======================================================================"
 run_one() {
     testnum=$1
     message=$2
-    
+
     # Pretty tests run faster.
     echo -n '=====' $testnum: $message
-    local suffixlen=$((65 - `echo -n $2 | wc -c | awk '{print $1}'`))
+    local suffixlen=`echo -n $2 | awk '{print 65 - length($0)}'`
     printf ' %.*s\n' $suffixlen $EQUALS
 
     test_${testnum} || error "test_$testnum failed with $?"
@@ -184,16 +191,72 @@ test_4() {
 run_test 4 "open |X| close"
 
 test_5() {
+    replay_barrier mds
+    mcreate $MOUNTPT/f5
+    local old_inum=`ls -i $MOUNTPT/f5 | awk '{print $1}'`
+    fail mds
+    local new_inum=`ls -i $MOUNTPT/f5 | awk '{print $1}'`
+
+    echo " old_inum == $old_inum, new_inum == $new_inum"
+    if [ $old_inum -eq $new_inum  ] ;
+    then
+        echo " old_inum and new_inum match"
+    else
+        echo "!!!! old_inum and new_inum NOT match"
+
+    fi
+    rm -f $MOUNTPT/f5
 }
 run_test 5 "|X| create (same inum/gen)"
 
 test_6() {
+    mcreate $MOUNTPT/f6
+    replay_barrier mds
+    mv $MOUNTPT/f6 $MOUNTPT/F6
+    rm -f $MOUNTPT/F6
+    fail mds
+    checkstat $MOUNTPT/f6 && return 1
+    checkstat $MOUNTPT/F6 && return 2
+    return 0
 }
+
 run_test 6 "create |X| rename unlink"
 
 test_7() {
+    mcreate $MOUNTPT/f7
+    echo "old" > $MOUNTPT/f7
+    mv $MOUNTPT/f7 $MOUNTPT/F7
+    replay_barrier mds
+    mcreate $MOUNTPT/f7
+    echo "new" > $MOUNTPT/f7
+    cat $MOUNTPT/f7 | grep new 
+    cat $MOUNTPT/F7 | grep old
+    fail mds
+    cat $MOUNTPT/f7 | grep new
+    cat $MOUNTPT/F7 | grep old
+}
 run_test 7 "create open write rename |X| create-old-name read"
+
+test_8() {
+    mcreate $MOUNTPT/f8 
+    multiop $MOUNTPT/f8 o_tSc &
+    pid=$!
+    # give multiop a chance to open
+    sleep 1 
+    rm -f $MOUNTPT/f8
+    replay_barrier mds
+    kill -USR1 $pid
+    wait $pid || return 1
+
+    fail mds
+    [ -e $MOUNTPT/f8 ] && return 2
+    return 0
+}
+run_test 8 "open, unlink |X| close"
+
 
 stop client $CLIENTLCONFARGS
 stop ost
-stop mds $MDSLCONFARGS
+stop mds $MDSLCONFARGS --dump cleanup.log
+
+trap - EXIT
