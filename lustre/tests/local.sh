@@ -25,20 +25,6 @@ OST_BACKFSTYPE=${OST_BACKFSTYPE:-ext3}
 MDS_BACKDEV=${MDS_BACKDEV:-$TMP/mds1-`hostname`}
 OST_BACKDEV=${OST_BACKDEV:-$TMP/ost1-`hostname`}
 
-MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"errors=remount-ro"}
-OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"errors=remount-ro"}
-
-# adding some options needed for ext3 on 2.4.x kernels
-if test "x$(uname -r | sed -e 's/-.*//' -e 's/\.[[:digit:]]*$//')" = "x2.4"; then
-    if test "x$FSTYPE" = "xext3" || test "x$FSTYPE" = "xldiskfs"; then
-	if test "x$OST_MOUNT_OPTS" = "x"; then
-	    OST_MOUNT_OPTS="asyncdel"
-	else
-	    OST_MOUNT_OPTS="$OST_MOUNT_OPTS,asyncdel"
-	fi
-    fi
-fi
-
 # specific journal size for the ost, in MB
 JSIZE=${JSIZE:-0}
 [ "$JSIZE" -gt 0 ] && JARG="--journal_size $JSIZE"
@@ -55,15 +41,16 @@ ${LMC} --add node --node localhost || exit 10
 ${LMC} --add net --node  localhost --nid `hostname` --nettype $NETWORKTYPE || exit 11
 ${LMC} --add net --node client --nid '*' --nettype $NETWORKTYPE || exit 12
 
-echo "MDS mount options are: $MDS_MOUNT_OPTS"
+[ "x$MDS_MOUNT_OPTS" != "x" ] &&
+    MDS_MOUNT_OPTS="--mountfsoptions $MDS_MOUNT_OPTS"
 
 # configure mds server
 ${LMC} --add mds --nspath /mnt/mds_ns --node localhost --mds mds1 \
 --fstype $FSTYPE --backfstype $MDS_BACKFSTYPE --dev $MDSDEV \
---backdev $MDS_BACKDEV --mountfsoptions $MDS_MOUNT_OPTS \
---size $MDSSIZE $JARG $IARG || exit 20
+--backdev $MDS_BACKDEV $MDS_MOUNT_OPTS --size $MDSSIZE $JARG $IARG || exit 20
 
-echo "OST mount options are: $OST_MOUNT_OPTS"
+[ "x$OST_MOUNT_OPTS" != "x" ] &&
+    OST_MOUNT_OPTS="--mountfsoptions $OST_MOUNT_OPTS"
 
 # configure ost
 ${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \
@@ -71,8 +58,7 @@ ${LMC} -m $config --add lov --lov lov1 --mds mds1 --stripe_sz $STRIPE_BYTES \
 
 ${LMC} --add ost --nspath /mnt/ost_ns --node localhost --lov lov1 \
 --fstype $FSTYPE --backfstype $OST_BACKFSTYPE --dev $OSTDEV \
---backdev $OST_BACKDEV --mountfsoptions $OST_MOUNT_OPTS \
---size $OSTSIZE $JARG || exit 30
+--backdev $OST_BACKDEV $OST_MOUNT_OPTS --size $OSTSIZE $JARG || exit 30
 
 # create client config
 ${LMC} --add mtpt --node localhost --path $MOUNT --mds mds1 --lov lov1 || exit 40

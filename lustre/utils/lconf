@@ -719,7 +719,7 @@ def is_block(path):
     except OSError:
         return 0
     return stat.S_ISBLK(s[stat.ST_MODE])
-
+    
 # build fs according to type
 # fixme: dangerous
 def mkfs(dev, devsize, fstype, jsize, isize, mkfsoptions, isblock=1):
@@ -880,6 +880,15 @@ def if2addr(iface):
     ip = string.split(addr, ':')[1]
     return ip
 
+def def_mount_options(fstype, target):
+    """returns deafult mount options for passed fstype and target (mds, ost)"""
+    if fstype == 'ext3' or fstype == 'ldiskfs':
+        mountfsoptions = "errors=remount-ro"
+        if target == 'ost' and sys_get_branch() == '2.4':
+            mountfsoptions = "%s,asyncdel" % (mountfsoptions)
+        return mountfsoptions
+    return ""
+        
 def sys_get_elan_position_file():
     procfiles = ["/proc/elan/device0/position",
                  "/proc/qsnet/elan4/device0/position",
@@ -935,6 +944,22 @@ def sys_get_local_address(net_type, wildcard, cluster_id):
         fixme("automatic local address for GM")
 
     return local
+
+def sys_get_branch():
+    """Returns kernel release"""
+    try:
+        fp = open('/proc/sys/kernel/osrelease')
+        lines = fp.readlines()
+        fp.close()
+        
+        for l in lines:
+            version = string.split(l)
+            a = string.split(version[0], '.')
+            return a[0] + '.' + a[1]
+    except IOError, e:
+        log(e)
+    return ""
+
 
 def mod_loaded(modname):
     """Check if a module is already loaded. Look in /proc/modules for it."""
@@ -1458,33 +1483,44 @@ class MDSDEV(Module):
         blkdev = block_dev(self.devpath, self.size, self.fstype, 0,
                            self.format, self.journal_size, self.inode_size,
                            self.mkfsoptions, self.backfstype, self.backdevpath)
+        
         if not is_prepared('MDT'):
             lctl.newdev("mdt", 'MDT', 'MDT_UUID', setup ="")
         try: 
-            if config.mountfsoptions != None:
-                mountfsoptions = config.mountfsoptions
-                if self.mountfsoptions != None:
-                    mountfsoptions = mountfsoptions + ' ' + self.mountfsoptions
-            else:
-                mountfsoptions = self.mountfsoptions
+            mountfsoptions = def_mount_options(self.fstype, 'mds')
             
-            # we count, that mountfsoptions is always not None for smfs    
+            if config.mountfsoptions:
+                if mountfsoptions:
+                    mountfsoptions = mountfsoptions + ',' + config.mountfsoptions
+                else:
+                    mountfsoptions = config.mountfsoptions
+                if self.mountfsoptions:
+                    mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
+            else:
+                if self.mountfsoptions:
+                    if mountfsoptions:
+                        mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
+                    else:
+                        mountfsoptions = self.mountfsoptions
+            
             if self.fstype == 'smfs':
                 realdev = self.fstype
-                mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions, 
-                                                        self.backfstype, 
-                                                        blkdev)
+                
+                if mountfsoptions:
+                    mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions, 
+                                                            self.backfstype, 
+                                                            blkdev)
+                else:
+                    mountfsoptions = "type=%s,dev=%s" % (self.backfstype, 
+                                                         blkdev)
             else:
                 realdev = blkdev
                 
-            if mountfsoptions != None:
-                lctl.newdev("mds", self.name, self.uuid,
-                            setup ="%s %s %s %s" %(realdev, self.fstype, 
-                                                   self.name, mountfsoptions))
-            else:
-                lctl.newdev("mds", self.name, self.uuid,
-                            setup ="%s %s %s" %(realdev, self.fstype, 
-                                                self.name))
+            print 'MDS mount options: ' + mountfsoptions
+                
+            lctl.newdev("mds", self.name, self.uuid,
+                        setup ="%s %s %s %s" %(realdev, self.fstype, 
+                                               self.name, mountfsoptions))
         except CommandError, e:
             if e.rc == 2:
                 panic("MDS is missing the config log. Need to run " +
@@ -1501,39 +1537,51 @@ class MDSDEV(Module):
                            config.reformat, self.format, self.journal_size,
                            self.inode_size, self.mkfsoptions, self.backfstype,
                            self.backdevpath)
-			   
-        if config.mountfsoptions != None:
-            mountfsoptions = config.mountfsoptions
-            if self.mountfsoptions != None:
-                mountfsoptions = mountfsoptions + ' ' + self.mountfsoptions
-        else:
-            mountfsoptions = self.mountfsoptions
 
 	# Even for writing logs we mount mds with supplied mount options
 	# because it will not mount smfs (if used) otherwise.
 	
-        # we count, that mountfsoptions is always not None for smfs    
+        mountfsoptions = def_mount_options(self.fstype, 'mds')
+            
+        if config.mountfsoptions:
+            if mountfsoptions:
+                mountfsoptions = mountfsoptions + ',' + config.mountfsoptions
+            else:
+                mountfsoptions = config.mountfsoptions
+            if self.mountfsoptions:
+                mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
+        else:
+            if self.mountfsoptions:
+                if mountfsoptions:
+                    mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
+                else:
+                    mountfsoptions = self.mountfsoptions
+            
         if self.fstype == 'smfs':
             realdev = self.fstype
-            mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions, 
-                                                    self.backfstype, 
-                                                    blkdev)
+                
+            if mountfsoptions:
+                mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions, 
+                                                        self.backfstype, 
+                                                        blkdev)
+            else:
+                mountfsoptions = "type=%s,dev=%s" % (self.backfstype, 
+                                                     blkdev)
         else:
             realdev = blkdev
-            
+	
+        print 'MDS mount options: ' + mountfsoptions
+        
 	# As mount options are passed by 4th param to config tool, we need 
 	# to pass something in 3rd param. But we do not want this 3rd param
 	# be counted as a profile name for reading log on MDS setup, thus,
-	# we pass there some predefined sign @dumb, which will be checked
-	# in MDS code and skipped.
-        if mountfsoptions != None:
-            lctl.newdev("mds", self.name, self.uuid,
-                        setup ="%s %s %s %s" %(realdev, self.fstype, 'dumb', 
-                                               mountfsoptions))
-        else:
-            lctl.newdev("mds", self.name, self.uuid,
-                        setup ="%s %s %s" %(realdev, self.fstype, 'dumb'))
-
+	# we pass there some predefined sign like 'dumb', which will be 
+        # checked in MDS code and skipped. Probably there is more nice way
+        # like pass empty string and check it in config tool and pass null
+        # as 4th param.
+        lctl.newdev("mds", self.name, self.uuid,
+                    setup ="%s %s %s %s" %(realdev, self.fstype, 
+                                           'dumb', mountfsoptions))
         # record logs for the MDS lov
         for uuid in self.filesystem_uuids:
             log("recording clients for filesystem:", uuid)
@@ -1720,31 +1768,42 @@ class OSD(Module):
                                config.reformat, self.format, self.journal_size,
                                self.inode_size, self.mkfsoptions, self.backfstype,
                                self.backdevpath)
-        if config.mountfsoptions != None:
-            mountfsoptions = config.mountfsoptions
-            if self.mountfsoptions != None:
-                mountfsoptions = mountfsoptions + ' ' + self.mountfsoptions
-        else:
-            mountfsoptions = self.mountfsoptions
 
-        # we count, that mountfsoptions is always not None for smfs    
+        mountfsoptions = def_mount_options(self.fstype, 'ost')
+            
+        if config.mountfsoptions:
+            if mountfsoptions:
+                mountfsoptions = mountfsoptions + ',' + config.mountfsoptions
+            else:
+                mountfsoptions = config.mountfsoptions
+            if self.mountfsoptions:
+                mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
+        else:
+            if self.mountfsoptions:
+                if mountfsoptions:
+                    mountfsoptions = mountfsoptions + ',' + self.mountfsoptions
+                else:
+                    mountfsoptions = self.mountfsoptions
+            
         if self.fstype == 'smfs':
             realdev = self.fstype
-            mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions, 
-                                                    self.backfstype,
-                                                    blkdev)
+                
+            if mountfsoptions:
+                mountfsoptions = "%s,type=%s,dev=%s" % (mountfsoptions, 
+                                                        self.backfstype, 
+                                                        blkdev)
+            else:
+                mountfsoptions = "type=%s,dev=%s" % (self.backfstype, 
+                                                     blkdev)
         else:
             realdev = blkdev
-            
-        if mountfsoptions != None:
-            lctl.newdev(self.osdtype, self.name, self.uuid,
-                        setup ="%s %s %s %s" %(realdev, self.fstype,
-                                               self.failover_ost, 
-                                               mountfsoptions))
-        else:
-            lctl.newdev(self.osdtype, self.name, self.uuid,
-                        setup ="%s %s %s" %(realdev, self.fstype,
-                                            self.failover_ost))
+                
+        print 'OSD mount options: ' + mountfsoptions
+        
+        lctl.newdev(self.osdtype, self.name, self.uuid,
+                    setup ="%s %s %s %s" %(realdev, self.fstype,
+                                           self.failover_ost, 
+                                           mountfsoptions))
         if not is_prepared('OSS'):
             lctl.newdev("ost", 'OSS', 'OSS_UUID', setup ="")
 

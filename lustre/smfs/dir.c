@@ -179,7 +179,7 @@ exit:
         RETURN(rc);
 }
 
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
+#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0) && !defined(CONFIG_RH_2_4_20))
 static int smfs_lookup_raw(struct inode *dir, const char *name,
                            int len, ino_t *data)
 {
