@@ -45,7 +45,7 @@ eval 'sub OBD_IOC_DISCONNECT () { &_IOC(1, ord(\'f\'), 14, 4);}' unless
   defined(&OBD_IOC_DISCONNECT);
 eval 'sub OBD_IOC_STATFS () { &_IOC(3, ord(\'f\'), 15, 4);}' unless
   defined(&OBD_IOC_STATFS);
-eval 'sub OBD_IOC_SYNC () { &_IOC(2, ord(\'f\'), 5, 4);}' unless
+eval 'sub OBD_IOC_SYNC () { &_IOC(2, ord(\'f\'), 16, 4);}' unless
   defined(&OBD_IOC_SYNC);
 
 eval 'sub ATTR_MODE () {1;}' unless defined(&ATTR_MODE);
@@ -612,8 +612,9 @@ sub Statfs {
     if (!defined $rc) {
 	print STDERR "ioctl failed: $!\n";
     } elsif ($rc eq "0 but true") {
+	# skip both the conn_id and the fs_type in the buffer
 	my ($bsize, $blocks, $bfree, $bavail, $files, $ffree) =
-	    unpack("x4LLLLLL", $packed);
+	    unpack("x4x4LLLLLL", $packed);
 	print("$bsize byte blocks: $blocks, " . ($blocks - $bfree) . " used, " .
 	      "$bfree free ($bavail available).\n");
 	print "$files files, " . ($files - $ffree) . " used, $ffree free.\n";
