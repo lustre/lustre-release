@@ -114,7 +114,7 @@ static int mds_sendpage(struct ptlrpc_request *req, struct file *file,
                 GOTO(cleanup_buf, rc);
         }
 
-        lwi = LWI_TIMEOUT(obd_timeout * HZ, mds_bulk_timeout, desc);
+        lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, mds_bulk_timeout, desc);
         rc = l_wait_event(desc->bd_waitq, ptlrpc_bulk_complete (desc), &lwi);
         if (rc) {
                 LASSERT (rc == -ETIMEDOUT);

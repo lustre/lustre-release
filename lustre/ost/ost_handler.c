@@ -412,6 +412,9 @@ static int ost_brw_read(struct ptlrpc_request *req)
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK))
                 GOTO(out, rc = -EIO);
 
+        OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK | OBD_FAIL_ONCE,
+                         (obd_timeout + 1) / 4);
+
         body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_ost_body);
         if (body == NULL) {
                 CERROR("Missing/short ost_body\n");
@@ -494,17 +497,17 @@ static int ost_brw_read(struct ptlrpc_request *req)
         if (rc == 0) {
                 rc = ptlrpc_bulk_put(desc);
                 if (rc == 0) {
-                        lwi = LWI_TIMEOUT(obd_timeout * HZ, ost_bulk_timeout,
-                                          desc);
+                        lwi = LWI_TIMEOUT(obd_timeout * HZ / 4,
+                                          ost_bulk_timeout, desc);
                         rc = l_wait_event(desc->bd_waitq,
                                           ptlrpc_bulk_complete(desc), &lwi);
                         if (rc) {
                                 LASSERT(rc == -ETIMEDOUT);
-                                CERROR ("timeout waiting for bulk PUT\n");
+                                DEBUG_REQ(D_ERROR, req, "timeout on bulk PUT");
                                 ptlrpc_abort_bulk(desc);
                         }
                 } else {
-                        CERROR("ptlrpc_bulk_put failed RC: %d\n", rc);
+                        DEBUG_REQ(D_ERROR, req, "bulk PUT failed: rc %d\n", rc);
 		}
 		comms_error = rc != 0;
         }
@@ -574,7 +577,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         /* pause before transaction has been started */
         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK | OBD_FAIL_ONCE,
-                         obd_timeout +1);
+                         (obd_timeout + 1) / 4);
 
         swab = lustre_msg_swabbed(req->rq_reqmsg);
         body = lustre_swab_reqbuf(req, 0, sizeof(*body), lustre_swab_ost_body);
@@ -654,17 +657,17 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc == 0) {
                 rc = ptlrpc_bulk_get(desc);
                 if (rc == 0) {
-                        lwi = LWI_TIMEOUT(obd_timeout * HZ, ost_bulk_timeout,
-                                          desc);
+                        lwi = LWI_TIMEOUT(obd_timeout * HZ / 4,
+                                          ost_bulk_timeout, desc);
                         rc = l_wait_event(desc->bd_waitq,
                                           ptlrpc_bulk_complete(desc), &lwi);
                         if (rc) {
                                 LASSERT(rc == -ETIMEDOUT);
-                                CERROR("timeout waiting for bulk GET\n");
+                                DEBUG_REQ(D_ERROR, req, "timeout on bulk GET");
                                 ptlrpc_abort_bulk(desc);
                         }
                 } else {
-			CERROR("ptlrpc_bulk_get failed RC: %d\n", rc);
+			DEBUG_REQ(D_ERROR, req, "bulk GET failed: rc %d\n", rc);
 		}
 		comms_error = rc != 0;
         }

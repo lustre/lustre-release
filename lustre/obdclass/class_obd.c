@@ -77,11 +77,10 @@ struct lprocfs_vars lprocfs_version[] = {{"version", obd_proc_read_version, NULL
 int proc_version;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
-unsigned long obd_fail_loc;
-unsigned long obd_timeout = 100;
-unsigned long obd_bulk_timeout = 1;
+unsigned int obd_fail_loc;
+unsigned int obd_timeout = 100;
 char obd_lustre_upcall[128] = "/usr/lib/lustre/lustre_upcall";
-unsigned long obd_sync_filter; /* = 0, don't sync by default */
+unsigned int obd_sync_filter; /* = 0, don't sync by default */
 
 #ifdef __KERNEL__
 /*  opening /dev/obd */

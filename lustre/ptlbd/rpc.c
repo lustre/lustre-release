@@ -275,7 +275,7 @@ int ptlbd_srv_rw_req(ptlbd_cmd_t cmd, __u16 index,
                 GOTO(out_reply, rc);
         }
 
-        lwi = LWI_TIMEOUT(obd_timeout * HZ, NULL, desc);
+        lwi = LWI_TIMEOUT(obd_timeout * HZ / 4, NULL, desc);
         rc = l_wait_event(desc->bd_waitq, ptlrpc_bulk_complete(desc), &lwi);
         if (rc != 0) {
                 LASSERT(rc == -ETIMEDOUT);

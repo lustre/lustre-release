@@ -36,11 +36,11 @@
 /* global variables */
 extern atomic_t obd_memory;
 extern int obd_memmax;
-extern unsigned long obd_fail_loc;
-extern unsigned long obd_timeout;
+extern unsigned int obd_fail_loc;
+extern unsigned int obd_timeout;
 extern unsigned long obd_max_dirty_pages;
 extern char obd_lustre_upcall[128];
-extern unsigned long obd_sync_filter;
+extern unsigned int obd_sync_filter;
 
 #define OBD_FAIL_MDS                     0x100
 #define OBD_FAIL_MDS_HANDLE_UNPACK       0x101
