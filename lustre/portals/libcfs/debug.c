@@ -799,34 +799,32 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         do_gettimeofday(&tv);
 
         prefix_nob = snprintf(debug_buf + debug_off, max_nob,
-                              "%06x:%06x:%d:%lu.%06lu :",
+                              "%06x:%06x:%d:%lu.%06lu:%lu:%d:",
                               subsys, mask, smp_processor_id(),
-                              tv.tv_sec, tv.tv_usec);
+                              tv.tv_sec, tv.tv_usec, stack, current->pid);
         max_nob -= prefix_nob;
-        if(*(format + strlen(format) - 1) == '\n')
-                *(format + strlen(format) - 1) = ':';
-           
-        va_start(ap, format);
-        msg_nob = vsnprintf(debug_buf + debug_off + prefix_nob ,
-                            max_nob, format, ap);
-        max_nob -= msg_nob;
-        va_end(ap);
+        if(*(format + strlen(format) - 1) != '\n')
+                *(format + strlen(format)) = '\n';
 
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
-        msg_nob += snprintf(debug_buf + debug_off + prefix_nob + msg_nob, max_nob,
-                           "(%s:%d:%s() %d | %d+%lu)\n",
-                           file, line, fn, current->pid,
-                           current->thread.extern_pid, stack);
+        msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
+                           "%d:(%s:%d:%s()) ",
+                           current->thread.extern_pid, file, line, fn);
 #elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        msg_nob += snprintf(debug_buf + debug_off + prefix_nob + msg_nob, max_nob,
-                           "(%s:%d:%s() %d | %d+%lu)\n",
-                           file, line, fn, current->pid,
-                           current->thread.mode.tt.extern_pid, stack);
+        msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
+                           "%d:(%s:%d:%s()) ",
+                           current->thread.mode.tt.extern_pid, file, line, fn);
 #else
-        msg_nob += snprintf(debug_buf + debug_off + prefix_nob + msg_nob, max_nob,
-                           "(%s:%d:%s() %d+%lu)\n",
-                           file, line, fn, current->pid, stack);
+        msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
+                           ":(%s:%d:%s()) ",
+                           file, line, fn);
 #endif
+
+        va_start(ap, format);
+        msg_nob += vsnprintf(debug_buf + debug_off + prefix_nob + msg_nob,
+                             max_nob, format, ap);
+        max_nob -= msg_nob;
+        va_end(ap);
 
         /* Print to console, while msg is contiguous in debug_buf */
         /* NB safely terminated see above */
