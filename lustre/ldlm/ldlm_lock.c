@@ -319,11 +319,8 @@ struct ldlm_lock *ldlm_handle2lock(struct lustre_handle *handle)
         struct ldlm_lock *lock = NULL, *retval = NULL;
         ENTRY;
 
-        if (!handle || !handle->addr) {
-                CERROR("bogus handle %p->"LPX64"\n", handle,
-                       handle ? handle->addr : -1);
+        if (!handle || !handle->addr)
                 RETURN(NULL);
-        }
 
         //spin_lock(&ldlm_handle_lock);
         lock = (struct ldlm_lock *)(unsigned long)(handle->addr);

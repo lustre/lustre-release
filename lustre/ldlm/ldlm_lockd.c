@@ -341,20 +341,17 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
         int rc;
         ENTRY;
 
-        CERROR("pt 1\n");
         rc = lustre_pack_msg(0, NULL, NULL, &req->rq_replen, &req->rq_repmsg);
         if (rc) {
                 CERROR("out of memory\n");
                 RETURN(-ENOMEM);
         }
-        CERROR("pt 2\n");
         dlm_req = lustre_msg_buf(req->rq_reqmsg, 0);
         if (!dlm_req) {
                 CERROR("bad request buffer for cancel\n");
                 RETURN(-EINVAL);
         }
 
-        CERROR("pt 3\n");
         lock = ldlm_handle2lock(&dlm_req->lock_handle1);
         if (!lock) {
                 CERROR("bad lock handle\n");
@@ -363,7 +360,6 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                                   dlm_req->lock_handle1.addr);
                 req->rq_status = ESTALE;
         } else {
-                CERROR("pt 4\n");
                 LDLM_DEBUG(lock, "server-side cancel handler START");
                 ldlm_lock_cancel(lock);
                 if (ldlm_del_waiting_lock(lock))
@@ -375,7 +371,6 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
                 LBUG();
 
         if (lock) {
-                CERROR("pt 5\n");
                 ldlm_reprocess_all(lock->l_resource);
                 LDLM_DEBUG(lock, "server-side cancel handler END");
                 LDLM_LOCK_PUT(lock);
