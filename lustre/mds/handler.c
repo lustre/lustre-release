@@ -1474,7 +1474,6 @@ repeat:
                           (unsigned long) body->oa.o_id,
                           (unsigned long) body->oa.o_generation);
                 dp.p_inum = body->oa.o_id;
-                dp.p_generation = body->oa.o_generation;
         }
         rc = vfs_mkdir(parent_inode, new, body->oa.o_mode);
         if (rc == 0) {
@@ -1490,6 +1489,10 @@ repeat:
                                  body->oa.o_id, body->oa.o_generation,
                                  new->d_inode->i_ino, 
                                  new->d_inode->i_generation);
+                }
+                if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
+                        new->d_inode->i_generation = body->oa.o_generation;
+                        mark_inode_dirty(new->d_inode);
                 }
 
                 obdo_from_inode(&repbody->oa, new->d_inode, FILTER_VALID_FLAGS);
