@@ -28,6 +28,21 @@
  echo 'cp System.map $RPM_BUILD_ROOT'"/boot/System.map-$VERSION.$PATCHLEVEL.$SUBLEVEL$EXTRAVERSION"
  echo ""
  echo "%clean"
+--- kernel-rh-2.4.18-pristine/arch/ia64/mm/init.c	Thu Jun 13 12:26:28 2002
++++ kernel-rh-2.4.18/arch/ia64/mm/init.c	Thu Jun 20 14:49:08 2002
+@@ -37,6 +37,12 @@
+ 
+ static unsigned long totalram_pages;
+ 
++struct page *check_get_page(unsigned long kaddr)
++{
++#warning FIXME: Lustre team, is this solid?
++        return virt_to_page(kaddr);
++}
++
+ int
+ do_check_pgt_cache (int low, int high)
+ {
 --- kernel-rh-2.4.18-pristine/arch/i386/mm/init.c	Thu Jun 13 12:26:28 2002
 +++ kernel-rh-2.4.18/arch/i386/mm/init.c	Thu Jun 20 11:24:56 2002
 @@ -43,6 +43,14 @@
@@ -590,7 +605,7 @@
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
 --- kernel-rh-2.4.18-pristine/fs/namei.c	Thu Jun 13 12:27:05 2002
-+++ kernel-rh-2.4.18/fs/namei.c	Thu Jun 20 11:31:14 2002
++++ kernel-rh-2.4.18/fs/namei.c	Thu Jun 20 14:27:27 2002
 @@ -94,6 +94,14 @@
   * XEmacs seems to be relying on it...
   */
@@ -944,14 +959,14 @@
  		switch (mode & S_IFMT) {
  		case 0: case S_IFREG:
  			error = vfs_create(nd.dentry->d_inode,dentry,mode);
-@@ -1286,6 +1370,7 @@
+@@ -1284,6 +1368,7 @@
+ 		default:
+ 			error = -EINVAL;
  		}
++                intent_release(dentry); 
  		dput(dentry);
  	}
-+	intent_release(dentry); 
  	up(&nd.dentry->d_inode->i_sem);
- 	path_release(&nd);
- out:
 @@ -1324,6 +1409,7 @@
  {
  	int error = 0;
@@ -960,7 +975,7 @@
  
  	tmp = getname(pathname);
  	error = PTR_ERR(tmp);
-@@ -1335,13 +1421,15 @@
+@@ -1335,11 +1421,13 @@
  			error = path_walk(tmp, &nd);
  		if (error)
  			goto out;
@@ -971,12 +986,10 @@
 +			dentry->d_it = &it;
  			error = vfs_mkdir(nd.dentry->d_inode, dentry,
  					  mode & ~current->fs->umask);
++                        intent_release(dentry); 
  			dput(dentry);
  		}
-+		intent_release(dentry); 
  		up(&nd.dentry->d_inode->i_sem);
- 		path_release(&nd);
- out:
 @@ -1421,6 +1509,7 @@
  	char * name;
  	struct dentry *dentry;
@@ -1033,7 +1046,7 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1571,12 +1666,14 @@
+@@ -1571,11 +1666,13 @@
  			error = path_walk(to, &nd);
  		if (error)
  			goto out;
@@ -1043,12 +1056,12 @@
  		if (!IS_ERR(dentry)) {
 +			dentry->d_it = &it;
  			error = vfs_symlink(nd.dentry->d_inode, dentry, from);
- 			dput(dentry);
+-			dput(dentry);
++                        intent_release(dentry); 
++                        dput(dentry);
  		}
-+		intent_release(dentry); 
  		up(&nd.dentry->d_inode->i_sem);
  		path_release(&nd);
- out:
 @@ -1640,6 +1737,7 @@
  	int error;
  	char * from;
@@ -1057,7 +1070,7 @@
  
  	from = getname(oldname);
  	if(IS_ERR(from))
-@@ -1662,12 +1760,14 @@
+@@ -1662,10 +1760,12 @@
  		error = -EXDEV;
  		if (old_nd.mnt != nd.mnt)
  			goto out_release;
@@ -1067,12 +1080,10 @@
  		if (!IS_ERR(new_dentry)) {
 +			new_dentry->d_it = &it;
  			error = vfs_link(old_nd.dentry, nd.dentry->d_inode, new_dentry);
++                        intent_release(new_dentry); 
  			dput(new_dentry);
  		}
-+		intent_release(new_dentry); 
  		up(&nd.dentry->d_inode->i_sem);
- out_release:
- 		path_release(&nd);
 @@ -1708,7 +1808,8 @@
   *	   locking].
   */
