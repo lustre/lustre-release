@@ -249,7 +249,12 @@ static int ptlrpc_main(void *arg)
         spin_unlock_irq(&current->sigmask_lock);
 #endif
 
+#ifdef __arch_um__
+        sprintf(current->comm, "%s|%d", 
+                data->name, current->thread.extern_pid);
+#else
         strcpy(current->comm, data->name);
+#endif
         unlock_kernel();
 
         OBD_ALLOC(event, sizeof(*event));

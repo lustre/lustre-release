@@ -1489,7 +1489,7 @@ static int mdt_setup(struct obd_device *obddev, obd_count len, void *buf)
 
         for (i = 0; i < MDT_NUM_THREADS; i++) {
                 char name[32];
-                sprintf(name, "lustre_MDT_%02d", i);
+                sprintf(name, "ll_mdt_%02d", i);
                 rc = ptlrpc_start_thread(obddev, mds->mds_service, name);
                 if (rc) {
                         CERROR("cannot start MDT thread #%d: rc %d\n", i, rc);
