@@ -1,8 +1,11 @@
- 0 files changed
+ fs/ext3/super.c            |  229 +++++++++++++++++++++++++++++++++++++++++++++
+ include/linux/ext3_fs.h    |    2 
+ include/linux/ext3_fs_sb.h |   10 +
+ 3 files changed, 241 insertions(+)
 
---- linux-2.4.18-chaos52/fs/ext3/super.c~ext3-delete_thread-2.4.18	2003-06-01 03:24:13.000000000 +0800
-+++ linux-2.4.18-chaos52-root/fs/ext3/super.c	2003-06-03 17:01:49.000000000 +0800
-@@ -398,6 +398,210 @@ static void dump_orphan_list(struct supe
+--- linux-2.4.18-18.8.0-l15/fs/ext3/super.c~ext3-delete_thread-2.4.18	Tue Jun  3 17:26:21 2003
++++ linux-2.4.18-18.8.0-l15-adilger/fs/ext3/super.c	Tue Jun 17 17:13:04 2003
+@@ -396,6 +396,218 @@ static void dump_orphan_list(struct supe
  	}
  }
  
@@ -36,22 +39,24 @@
 +
 +	INIT_LIST_HEAD(&sbi->s_delete_list);
 +	wake_up(&sbi->s_delete_waiter_queue);
-+	ext3_debug("EXT3-fs: delete thread on %s started\n",
-+	       kdevname(sb->s_dev));
++	ext3_debug("delete thread on %s started\n", kdevname(sb->s_dev));
 +
 +	/* main loop */
 +	for (;;) {
-+		sleep_on(&sbi->s_delete_thread_queue);
++		wait_event_interruptible(&sbi->s_delete_thread_queue,
++					 !list_empty(&sbi->s_delete_list) ||
++					 !test_opt(sb, ASYNCDEL));
 +		ext3_debug("%s woken up: %lu inodes, %lu blocks\n",
 +			   tsk->comm,sbi->s_delete_inodes,sbi->s_delete_blocks);
 +
 +		spin_lock(&sbi->s_delete_lock);
 +		if (list_empty(&sbi->s_delete_list)) {
++			clear_opt(sbi->s_mount_opt, ASYNCDEL);
 +			memset(&sbi->s_delete_list, 0,
 +			       sizeof(sbi->s_delete_list));
 +			spin_unlock(&sbi->s_delete_lock);
-+			ext3_debug("ext3 delete thread on %s exiting\n",
-+			       kdevname(sb->s_dev));
++			ext3_debug("delete thread on %s exiting\n",
++				   kdevname(sb->s_dev));
 +			wake_up(&sbi->s_delete_waiter_queue);
 +			break;
 +		}
@@ -73,12 +78,13 @@
 +			sbi->s_delete_blocks -= blocks;
 +			sbi->s_delete_inodes--;
 +		}
-+		if (sbi->s_delete_blocks != 0 || sbi->s_delete_inodes != 0)
++		if (sbi->s_delete_blocks != 0 || sbi->s_delete_inodes != 0) {
 +			ext3_warning(sb, __FUNCTION__,
 +				     "%lu blocks, %lu inodes on list?\n",
 +				     sbi->s_delete_blocks,sbi->s_delete_inodes);
-+		sbi->s_delete_blocks = 0;
-+		sbi->s_delete_inodes = 0;
++			sbi->s_delete_blocks = 0;
++			sbi->s_delete_inodes = 0;
++		}
 +		spin_unlock(&sbi->s_delete_lock);
 +		wake_up(&sbi->s_delete_waiter_queue);
 +	}
@@ -92,11 +98,11 @@
 +	int rc;
 +
 +	spin_lock_init(&sbi->s_delete_lock);
-+	memset(&sbi->s_delete_list, 0, sizeof(sbi->s_delete_list));
 +	init_waitqueue_head(&sbi->s_delete_thread_queue);
 +	init_waitqueue_head(&sbi->s_delete_waiter_queue);
-+	sbi->s_delete_blocks = 0;
-+	sbi->s_delete_inodes = 0;
++
++	if (!test_opt(sb, ASYNCDEL))
++		return;
 +
 +	rc = kernel_thread(ext3_delete_thread, sb, CLONE_VM | CLONE_FILES);
 +	if (rc < 0)
@@ -108,6 +114,10 @@
 +
 +static void ext3_stop_delete_thread(struct ext3_sb_info *sbi)
 +{
++	if (sbi->s_delete_list.next == 0)	/* thread never started */
++		return;
++
++	clear_opt(sbi->s_mount_flags, ASYNCDEL);
 +	wake_up(&sbi->s_delete_thread_queue);
 +	wait_event(sbi->s_delete_waiter_queue, list_empty(&sbi->s_delete_list));
 +}
@@ -135,8 +145,8 @@
 +		clear_inode(old_inode);
 +		return;
 +	}
-+	
-+	if (!test_opt (old_inode->i_sb, ASYNCDEL)) {
++
++	if (!test_opt(old_inode->i_sb, ASYNCDEL)) {
 +		ext3_delete_inode(old_inode);
 +		return;
 +	}
@@ -174,7 +184,7 @@
 +	}
 +	if (!new_inode) {
 +		up(&sbi->s_orphan_lock);
-+		ext3_debug(KERN_DEBUG "delete inode %lu directly (bad read)\n",
++		ext3_debug("delete inode %lu directly (bad read)\n",
 +			   old_inode->i_ino);
 +		ext3_delete_inode(old_inode);
 +		return;
@@ -194,14 +204,15 @@
 +
 +	clear_inode(old_inode);
 +
-+	ext3_debug("delete inode %lu (%lu blocks) by thread\n",
-+		   new_inode->i_ino, blocks);
 +	spin_lock(&sbi->s_delete_lock);
 +	J_ASSERT(list_empty(&new_inode->i_dentry));
 +	list_add_tail(&new_inode->i_dentry, &sbi->s_delete_list);
 +	sbi->s_delete_blocks += blocks;
 +	sbi->s_delete_inodes++;
 +	spin_unlock(&sbi->s_delete_lock);
++
++	ext3_debug("delete inode %lu (%lu blocks) by thread\n",
++		   new_inode->i_ino, blocks);
 +
 +	wake_up(&sbi->s_delete_thread_queue);
 +}
@@ -213,7 +224,7 @@
  void ext3_put_super (struct super_block * sb)
  {
  	struct ext3_sb_info *sbi = EXT3_SB(sb);
-@@ -405,6 +609,7 @@ void ext3_put_super (struct super_block 
+@@ -403,6 +615,7 @@ void ext3_put_super (struct super_block 
  	kdev_t j_dev = sbi->s_journal->j_dev;
  	int i;
  
@@ -221,7 +232,7 @@
  	ext3_xattr_put_super(sb);
  	journal_destroy(sbi->s_journal);
  	if (!(sb->s_flags & MS_RDONLY)) {
-@@ -453,7 +658,11 @@ static struct super_operations ext3_sops
+@@ -451,7 +664,11 @@ static struct super_operations ext3_sops
  	write_inode:	ext3_write_inode,	/* BKL not held.  Don't need */
  	dirty_inode:	ext3_dirty_inode,	/* BKL not held.  We take it */
  	put_inode:	ext3_put_inode,		/* BKL not held.  Don't need */
@@ -232,21 +243,26 @@
 +#endif
  	put_super:	ext3_put_super,		/* BKL held */
  	write_super:	ext3_write_super,	/* BKL held */
- 	sync_fs:	ext3_sync_fs,
-@@ -514,6 +723,12 @@ static int parse_options (char * options
+ 	write_super_lockfs: ext3_write_super_lockfs, /* BKL not held. Take it */
+@@ -511,6 +728,17 @@ static int parse_options (char * options
  	     this_char = strtok (NULL, ",")) {
  		if ((value = strchr (this_char, '=')) != NULL)
  			*value++ = 0;
 +#ifdef EXT3_DELETE_THREAD
 +		if (!strcmp(this_char, "asyncdel"))
 +			set_opt(*mount_options, ASYNCDEL);
++		else if (!strcmp(this_char, "noasyncdel"))
++			if (is_remount)
++				ext3_stop_delete_thread(sbi);
++			else
++				clear_opt(*mount_options, ASYNCDEL);
 +		else
 +#endif
 +
  		if (!strcmp (this_char, "bsddf"))
  			clear_opt (*mount_options, MINIX_DF);
  		else if (!strcmp (this_char, "nouid32")) {
-@@ -1209,6 +1424,7 @@ struct super_block * ext3_read_super (st
+@@ -1206,6 +1434,7 @@ struct super_block * ext3_read_super (st
  	}
  
  	ext3_setup_super (sb, es, sb->s_flags & MS_RDONLY);
@@ -254,8 +270,8 @@
  	/*
  	 * akpm: core read_super() calls in here with the superblock locked.
  	 * That deadlocks, because orphan cleanup needs to lock the superblock
---- linux-2.4.18-chaos52/include/linux/ext3_fs.h~ext3-delete_thread-2.4.18	2003-06-01 03:24:11.000000000 +0800
-+++ linux-2.4.18-chaos52-root/include/linux/ext3_fs.h	2003-06-03 17:03:28.000000000 +0800
+--- linux-2.4.18-18.8.0-l15/include/linux/ext3_fs.h~ext3-delete_thread-2.4.18	Tue Jun  3 17:26:20 2003
++++ linux-2.4.18-18.8.0-l15-adilger/include/linux/ext3_fs.h	Tue Jun 17 12:36:56 2003
 @@ -190,6 +190,7 @@ struct ext3_group_desc
   */
  #define EXT3_STATE_JDATA		0x00000001 /* journaled data exists */
@@ -272,8 +288,8 @@
  
  /* Compatibility, for having both ext2_fs.h and ext3_fs.h included at once */
  #ifndef _LINUX_EXT2_FS_H
---- linux-2.4.18-chaos52/include/linux/ext3_fs_sb.h~ext3-delete_thread-2.4.18	2003-06-01 03:24:13.000000000 +0800
-+++ linux-2.4.18-chaos52-root/include/linux/ext3_fs_sb.h	2003-06-03 16:59:24.000000000 +0800
+--- linux-2.4.18-18.8.0-l15/include/linux/ext3_fs_sb.h~ext3-delete_thread-2.4.18	Tue Jun  3 17:26:21 2003
++++ linux-2.4.18-18.8.0-l15-adilger/include/linux/ext3_fs_sb.h	Tue Jun 17 12:36:56 2003
 @@ -29,6 +29,8 @@
  
  #define EXT3_MAX_GROUP_LOADED	32
