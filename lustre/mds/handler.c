@@ -2379,15 +2379,11 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
                         RETURN(ELDLM_LOCK_ABORTED);
                 if (intent_disposition(rep, DISP_LOOKUP_NEG) &&
                     !intent_disposition(rep, DISP_OPEN_OPEN))
-#endif 
-                        if (rep->lock_policy_res2) {
-                                /* mds_open returns ENOLCK where it
-                                 * should return zero, but it has no
-                                 * lock to return */
-                                if (rep->lock_policy_res2 == ENOLCK)
-                                        rep->lock_policy_res2 = 0;
-                                RETURN(ELDLM_LOCK_ABORTED);
-                        }
+#endif
+                /* IT_OPEN may return lock on cross-node dentry
+                 * that we want to hold during attr retrival -bzzz */
+                if (rc != 0 || lockh.cookie == 0)
+                        RETURN(ELDLM_LOCK_ABORTED);
                 break;
         case IT_LOOKUP:
                 getattr_part = MDS_INODELOCK_LOOKUP;

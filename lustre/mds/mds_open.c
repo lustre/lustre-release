@@ -1096,24 +1096,6 @@ got_child:
                 }
         }
 
-        if (rc == 0) {
-                struct ldlm_res_id res_id = { . name = {0} };
-                ldlm_policy_data_t policy;
-                int flags = 0;
-                res_id.name[0] = dchild->d_inode->i_ino;
-                res_id.name[1] = dchild->d_inode->i_generation;
-                policy.l_inodebits.bits = MDS_INODELOCK_LOOKUP |
-                                                MDS_INODELOCK_UPDATE;
-                rc = ldlm_cli_enqueue(NULL, NULL, obd->obd_namespace,
-                                      res_id, LDLM_IBITS, &policy,
-                                      LCK_PR, &flags,
-                                      mds_blocking_ast,
-                                      ldlm_completion_ast, NULL, NULL,
-                                      NULL, 0, NULL, child_lockh);
-                if (rc == 0)
-                        cleanup_phase = 3;
-        }
-
         /* Step 5: mds_open it */
         rc = mds_finish_open(req, dchild, body, rec->ur_flags, &handle, rec,
                              rep);
@@ -1124,9 +1106,6 @@ got_child:
                                 req, rc, rep ? rep->lock_policy_res1 : 0);
 
         switch (cleanup_phase) {
-        case 3:
-                if (rc)
-                        ldlm_lock_decref(child_lockh, LCK_PR);
         case 2:
                 if (rc && created) {
                         int err = vfs_unlink(dparent->d_inode, dchild);
@@ -1157,8 +1136,6 @@ got_child:
                 atomic_inc(&mds->mds_open_count);
         if (mea)
                 OBD_FREE(mea, mea_size);
-        if ((cleanup_phase != 3) && !rc)
-                rc = ENOLCK;
         RETURN(rc);
 }
 

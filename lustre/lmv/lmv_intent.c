@@ -49,6 +49,13 @@
 #include "lmv_internal.h"
 
 
+static inline void lmv_drop_intent_lock(struct lookup_intent *it)
+{
+        if (it->d.lustre.it_lock_mode != 0)
+                ldlm_lock_decref((void *)&it->d.lustre.it_lock_handle,
+                                 it->d.lustre.it_lock_mode);
+}
+
 int lmv_handle_remote_inode(struct obd_export *exp, struct ll_uctxt *uctxt,
                             void *lmm, int lmmsize, 
                             struct lookup_intent *it, int flags,
@@ -96,9 +103,7 @@ int lmv_handle_remote_inode(struct obd_export *exp, struct ll_uctxt *uctxt,
                  * order to maintain dcache consistency. thus drop UPDATE
                  * lock here and put LOOKUP in request */
                 if (rc == 0) {
-                        LASSERT(it->d.lustre.it_lock_mode != 0);
-                        ldlm_lock_decref((void *)&it->d.lustre.it_lock_handle,
-                                         it->d.lustre.it_lock_mode);
+                        lmv_drop_intent_lock(it);
                         memcpy(&it->d.lustre.it_lock_handle, &plock,
                                         sizeof(plock));
                         it->d.lustre.it_lock_mode = pmode;

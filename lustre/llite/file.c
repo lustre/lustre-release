@@ -229,8 +229,6 @@ int ll_file_open(struct inode *inode, struct file *file)
         if (rc)
                 LBUG();
 
-        ll_intent_drop_lock(it);
-
         if (!S_ISREG(inode->i_mode))
                 GOTO(out, rc);
 
