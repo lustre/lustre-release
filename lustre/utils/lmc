@@ -138,7 +138,6 @@ def new_lustre(dom):
     # adding ldlm here is a bit of a hack, but one is enough.
     str = """<lustre>
     <ldlm name="%s" uuid="%s"/>
-    <ptlrouter name="PTLROUTER" uuid="PTLROUTER_UUID"/>
     </lustre>""" % (ldlm_name, ldlm_uuid)
     return dom.parseString(str)
 
@@ -389,7 +388,6 @@ def do_add_node(gen, lustre,  options, node_name):
     node_add_profile(gen, node, 'ldlm', ldlm_uuid)
     if options.has_key('router'):
         node.setAttribute('router', '1')
-        node_add_profile(gen, node, "ptlrouter", 'PTLROUTER_UUID')
     lustre.appendChild(node)
     return node
 

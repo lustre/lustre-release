@@ -657,6 +657,8 @@ class Network(Module):
                 panic("unable to set nid for", self.net_type)
 
         self.add_module('portals')
+	if node_needs_router():
+	    self.add_module('kptlrouter')
         if self.net_type == 'tcp':
             self.add_module('ksocknal')
         if self.net_type == 'elan':
@@ -737,8 +739,6 @@ class LOV(Module):
         self.mdsname = getName(mds)
         self.devlist = get_all_refs(dom_node, 'osc')
         self.stripe_cnt = len(self.devlist)
-        self.add_module('osc')
-        self.add_module('lov')
 
     def prepare(self):
         self.info(self.mdsuuid, self.stripe_cnt, self.stripe_sz, self.stripe_off, self.pattern,
@@ -851,6 +851,8 @@ class Mountpoint(Module):
         self.mdc_uuid = get_first_ref(dom_node, 'mdc')
         self.lov_uuid = get_first_ref(dom_node, 'osc')
         self.add_module('osc')
+	# should add lov only if needed
+        self.add_module('lov')
         self.add_module('llite')
 
     def prepare(self):
@@ -896,14 +898,6 @@ class Mountpoint(Module):
             osc = OSC(l)
             osc.cleanup()
             
-class Router(Module):
-    def __init__(self,dom_node):
-        Module.__init__(self, 'ROUTER', dom_node)
-        self.add_module('kptlrouter')
-
-    def prepare(self):
-        self.info()
-
 
 # ============================================================
 # XML processing and query
@@ -1028,8 +1022,6 @@ def getServiceType(dom_node):
 # the order of iniitailization is based on level. 
 def getServiceLevel(dom_node):
     type = getServiceType(dom_node)
-    if type in ('ptlrouter',):
-        return 1
     if type in ('network',):
         return 10
     elif type in ('device', 'ldlm'):
@@ -1077,15 +1069,18 @@ def getByName(lustreNode, name, tag):
 #
 routes = []
 local_node = []
+router_flag = 0
 
 def init_node(dom_node):
-    global local_node
+    global local_node, router_flag
     netlist = dom_node.getElementsByTagName('network')
     for dom_net in netlist:
         type = get_attr(dom_net, 'type')
         gw = get_text(dom_net, 'server')
         local_node.append((type, gw))
 
+def node_needs_router():
+    return router_flag
 
 def get_routes(type, gw, dom_net):
     """ Return the routes as a list of tuples of the form:
@@ -1103,11 +1098,12 @@ def get_routes(type, gw, dom_net):
 def init_route_config(lustre):
     """ Scan the lustre config looking for routers.  Build list of
     routes. """
-    global routes
+    global routes, router_flag
     routes = []
     list = lustre.getElementsByTagName('node')
     for node in list:
         if get_attr(node, 'router'):
+	    router_flag = 1
             for (local_type, local_nid) in local_node:
                 gw = None
                 netlist = node.getElementsByTagName('network')
@@ -1170,8 +1166,6 @@ def startService(dom_node, module_flag):
         n = MDC(dom_node)
     elif type == 'mountpoint':
         n = Mountpoint(dom_node)
-    elif type == 'ptlrouter':
-        n = Router(dom_node)
     else:
         panic ("unknown service type:", type)
 
@@ -1225,6 +1219,9 @@ def doHost(lustreNode, hosts):
     if not get_attr(dom_node, 'router'):
         init_node(dom_node)
         init_route_config(lustreNode)
+    else:
+  	global router_flag 
+ 	router_flag = 1
 
     # Two step process: (1) load modules, (2) setup lustre
     # if not cleaning, load modules first.
