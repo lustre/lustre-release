@@ -636,7 +636,7 @@ int portals_debug_mark_buffer(char *text)
                 return -EINVAL;
 
         CDEBUG(0, "********************************************************\n");
-        CDEBUG(0, "DEBUG MARKER: %s\n", text);
+        CERROR("DEBUG MARKER: %s\n", text);
         CDEBUG(0, "********************************************************\n");
 
         return 0;
@@ -644,39 +644,104 @@ int portals_debug_mark_buffer(char *text)
 #undef DEBUG_SUBSYSTEM
 #define DEBUG_SUBSYSTEM S_PORTALS
 
+/* this copies a snapshot of the debug buffer into an array of pages
+ * before doing the potentially blocking copy into userspace. it could
+ * be warning userspace if things wrap heavily while its off copying. */
 __s32 portals_debug_copy_to_user(char *buf, unsigned long len)
 {
         int rc;
-        unsigned long debug_off;
+        unsigned long debug_off, i, off, copied;
         unsigned long flags;
+        struct page *page;
+        LIST_HEAD(my_pages);
+        struct list_head *pos, *n;
 
         if (len < debug_size)
                 return -ENOSPC;
 
-        debug_off = atomic_read(&debug_off_a);
-        spin_lock_irqsave(&portals_debug_lock, flags);
-        if (debug_wrapped) {
-                /* All of this juggling with the 1s is to keep the trailing nul
-                 * (which falls at debug_buf + debug_off) at the end of what we
-                 * copy into user space */
-                copy_to_user(buf, debug_buf + debug_off + 1,
-                             debug_size - debug_off - 1);
-                copy_to_user(buf + debug_size - debug_off - 1,
-                             debug_buf, debug_off + 1);
-                rc = debug_size;
-        } else {
-                copy_to_user(buf, debug_buf, debug_off);
-                rc = debug_off;
+        for (i = 0 ; i < debug_size; i += PAGE_SIZE) {
+                page = alloc_page(GFP_NOFS);
+                if (page == NULL) {
+                        rc = -ENOMEM;
+                        goto cleanup;
+                }
+                list_add(&page->list, &my_pages);
         }
+        
+        spin_lock_irqsave(&portals_debug_lock, flags);
+        debug_off = atomic_read(&debug_off_a);
+        
+        /* Sigh. If the buffer is empty, then skip to the end. */
+        if (debug_off == 0 && !debug_wrapped) {
+                spin_unlock_irqrestore(&portals_debug_lock, flags);
+                rc = 0;
+                goto cleanup;
+        }
+
+        if (debug_wrapped)
+                off = debug_off + 1;
+        else 
+                off = 0;
+        copied = 0;
+        list_for_each(pos, &my_pages) {
+                unsigned long to_copy;
+                page = list_entry(pos, struct page, list);
+
+                to_copy = min(debug_size - off, PAGE_SIZE);
+                if (to_copy == 0) {
+                        off = 0;
+                        to_copy = min(debug_size - off, PAGE_SIZE);
+                }
+finish_partial:
+                memcpy(kmap(page), debug_buf + off, to_copy);
+                kunmap(page);
+                copied += to_copy;
+                if (copied >= (debug_wrapped ? debug_size : debug_off))
+                        break;
+                        
+                off += to_copy;
+                if (off >= debug_size) {
+                        off = 0;
+                        if (to_copy != PAGE_SIZE) {
+                                to_copy = PAGE_SIZE - to_copy;
+                                goto finish_partial;
+                        }
+                }
+        }
+
         spin_unlock_irqrestore(&portals_debug_lock, flags);
 
+        off = 0;
+        list_for_each(pos, &my_pages) {
+                unsigned long to_copy;
+                page = list_entry(pos, struct page, list);
+
+                to_copy = min(copied - off, PAGE_SIZE);
+                rc = copy_to_user(buf + off, kmap(page), to_copy);
+                kunmap(page);
+                if (rc) {
+                        rc = -EFAULT;
+                        goto cleanup;
+                }
+                off += to_copy;
+                if (off >= copied)
+                        break;
+        }
+        rc = copied;
+        
+cleanup:
+        list_for_each_safe(pos, n, &my_pages) {
+                page = list_entry(pos, struct page, list);
+                list_del(&page->list);
+                __free_page(page);
+        }
         return rc;
 }
 
 /* FIXME: I'm not very smart; someone smarter should make this better. */
 void
 portals_debug_msg(int subsys, int mask, char *file, const char *fn,
-                  const int line, unsigned long stack, const char *format, ...)
+                  const int line, unsigned long stack, char *format, ...)
 {
         va_list       ap;
         unsigned long flags;
@@ -731,33 +796,34 @@ portals_debug_msg(int subsys, int mask, char *file, const char *fn,
         do_gettimeofday(&tv);
 
         prefix_nob = snprintf(debug_buf + debug_off, max_nob,
-                              "%06x:%06x:%d:%lu.%06lu ",
+                              "%06x:%06x:%d:%lu.%06lu :",
                               subsys, mask, smp_processor_id(),
                               tv.tv_sec, tv.tv_usec);
         max_nob -= prefix_nob;
+        if(*(format + strlen(format) - 1) == '\n')
+                *(format + strlen(format) - 1) = ':';
+           
+        va_start(ap, format);
+        msg_nob = vsnprintf(debug_buf + debug_off + prefix_nob ,
+                            max_nob, format, ap);
+        max_nob -= msg_nob;
+        va_end(ap);
 
 #if defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,4,20))
-        msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
-                           "(%s:%d:%s() %d | %d+%lu): ",
+        msg_nob += snprintf(debug_buf + debug_off + prefix_nob + msg_nob, max_nob,
+                           "(%s:%d:%s() %d | %d+%lu)\n",
                            file, line, fn, current->pid,
                            current->thread.extern_pid, stack);
 #elif defined(__arch_um__) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,5,0))
-        msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
-                           "(%s:%d:%s() %d | %d+%lu): ",
+        msg_nob += snprintf(debug_buf + debug_off + prefix_nob + msg_nob, max_nob,
+                           "(%s:%d:%s() %d | %d+%lu)\n",
                            file, line, fn, current->pid,
                            current->thread.mode.tt.extern_pid, stack);
 #else
-        msg_nob = snprintf(debug_buf + debug_off + prefix_nob, max_nob,
-                           "(%s:%d:%s() %d+%lu): ",
+        msg_nob += snprintf(debug_buf + debug_off + prefix_nob + msg_nob, max_nob,
+                           "(%s:%d:%s() %d+%lu)\n",
                            file, line, fn, current->pid, stack);
 #endif
-        max_nob -= msg_nob;
-
-        va_start(ap, format);
-        msg_nob += vsnprintf(debug_buf + debug_off + prefix_nob + msg_nob,
-                             max_nob, format, ap);
-        max_nob -= msg_nob;
-        va_end(ap);
 
         /* Print to console, while msg is contiguous in debug_buf */
         /* NB safely terminated see above */
