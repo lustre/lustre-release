@@ -149,10 +149,9 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
  *    waiting for requests to complete. Ugly, yes, but I don't see an
  *    cleaner way right now.
  */
-void ptlrpc_invalidate_import(struct obd_import *imp, int in_rpc)
+void ptlrpc_invalidate_import(struct obd_import *imp)
 {
         struct l_wait_info lwi;
-        int inflight = 0;
         int rc;
 
         if (!imp->imp_invalid)
@@ -160,19 +159,17 @@ void ptlrpc_invalidate_import(struct obd_import *imp, int in_rpc)
 
         LASSERT(imp->imp_invalid);
 
-        if (in_rpc)
-                inflight = 1;
         /* wait for all requests to error out and call completion callbacks */
         lwi = LWI_TIMEOUT_INTR(MAX(obd_timeout * HZ, 1), NULL,
                                NULL, NULL);
         rc = l_wait_event(imp->imp_recovery_waitq,
-                          (atomic_read(&imp->imp_inflight) == inflight),
+                          (atomic_read(&imp->imp_inflight) == 0),
                           &lwi);
 
         if (rc)
-                CERROR("%s: rc = %d waiting for callback (%d != %d)\n",
+                CERROR("%s: rc = %d waiting for callback (%d != 0)\n",
                        imp->imp_target_uuid.uuid, rc,
-                       atomic_read(&imp->imp_inflight), inflight);
+                       atomic_read(&imp->imp_inflight));
 
         obd_import_event(imp->imp_obd, imp, IMP_EVENT_INVALIDATE);
 }
@@ -493,6 +490,35 @@ static int signal_completed_replay(struct obd_import *imp)
         RETURN(0);
 }
 
+static int ptlrpc_invalidate_import_thread(void *data)
+{
+        struct obd_import *imp = data;
+        unsigned long flags;
+
+        ENTRY;
+
+        lock_kernel();
+        ptlrpc_daemonize();
+
+        SIGNAL_MASK_LOCK(current, flags);
+        sigfillset(&current->blocked);
+        RECALC_SIGPENDING;
+        SIGNAL_MASK_UNLOCK(current, flags);
+        THREAD_NAME(current->comm, sizeof(current->comm), "ll_imp_inval");
+        unlock_kernel();
+
+        CDEBUG(D_HA, "thread invalidate import %s to %s@%s\n",
+               imp->imp_obd->obd_name, imp->imp_target_uuid.uuid,
+               imp->imp_connection->c_remote_uuid.uuid);
+
+        ptlrpc_invalidate_import(imp);
+
+        IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+        ptlrpc_import_recovery_state_machine(imp);
+
+        RETURN(0);
+}
+
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 {
         int rc = 0;
@@ -503,9 +529,11 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
                        imp->imp_target_uuid.uuid,
                        imp->imp_connection->c_remote_uuid.uuid);
 
-                ptlrpc_invalidate_import(imp, 1);
-
-                IMPORT_SET_STATE(imp, LUSTRE_IMP_RECOVER);
+                rc = kernel_thread(ptlrpc_invalidate_import_thread, imp,
+                                   CLONE_VM | CLONE_FILES);
+                if (rc < 0)
+                        CERROR("error starting invalidate thread: %d\n", rc);
+                RETURN(rc);
         }
 
         if (imp->imp_state == LUSTRE_IMP_REPLAY) {

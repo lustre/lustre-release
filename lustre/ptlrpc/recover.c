@@ -316,7 +316,7 @@ int  ptlrpc_set_import_active(struct obd_import *imp, int active)
         /* When deactivating, mark import invalid, and abort in-flight
          * requests. */
         if (!active) {
-                ptlrpc_invalidate_import(imp, 0);
+                ptlrpc_invalidate_import(imp);
                 imp->imp_deactive = 1;
         } 
 

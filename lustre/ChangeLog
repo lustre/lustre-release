@@ -34,6 +34,7 @@
 	- don't match INVALID dentries from d_lookup and spin (3784)
 	- hold dcache_lock while marking dentries INVALID and hashing (4255)
 	- fix invalid assertion in ptlrpc_set_wait (3880)
+	- create a new thread to do import eviction to avoid deadlock (3969)
        * miscellania
 	- add libwrap support for the TCP acceptor (3996)
 	- add /proc/sys/portals/routes for non-root route listing (3994)

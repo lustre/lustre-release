@@ -318,7 +318,7 @@ int client_disconnect_export(struct obd_export *exp, int failover)
 
         /* Yeah, obd_no_recov also (mainly) means "forced shutdown". */
         if (obd->obd_no_recov)
-                ptlrpc_invalidate_import(imp, 0);
+                ptlrpc_invalidate_import(imp);
         else
                 rc = ptlrpc_disconnect_import(imp);
 
