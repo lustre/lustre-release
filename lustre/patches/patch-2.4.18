@@ -1,5 +1,5 @@
---- /usr/src/lum-pristine/arch/i386/mm/init.c	Fri Dec 21 10:41:53 2001
-+++ /usr/src/lum/arch/i386/mm/init.c	Sat Jun 15 00:31:15 2002
+--- lum-pristine/arch/i386/mm/init.c	Fri Dec 21 10:41:53 2001
++++ lum/arch/i386/mm/init.c	Sat Jun 15 00:31:15 2002
 @@ -43,6 +43,12 @@
  static unsigned long totalram_pages;
  static unsigned long totalhigh_pages;
@@ -13,8 +13,8 @@
  int do_check_pgt_cache(int low, int high)
  {
  	int freed = 0;
---- /usr/src/lum-pristine/arch/um/kernel/mem.c	Thu Jun 13 14:07:26 2002
-+++ /usr/src/lum/arch/um/kernel/mem.c	Fri Jun 14 17:00:21 2002
+--- lum-pristine/arch/um/kernel/mem.c	Thu Jun 13 14:07:26 2002
++++ lum/arch/um/kernel/mem.c	Fri Jun 14 17:00:21 2002
 @@ -489,6 +489,22 @@
  	return(phys_mem_map(pte_val(pte)));
  }
@@ -54,8 +54,8 @@
  	return((struct page *) page_region(page, NULL)->mem_map);
  }
  
---- /usr/src/lum-pristine/mm/slab.c	Fri Dec 21 10:42:05 2001
-+++ /usr/src/lum/mm/slab.c	Fri Jun 14 23:57:09 2002
+--- lum-pristine/mm/slab.c	Fri Dec 21 10:42:05 2001
++++ lum/mm/slab.c	Fri Jun 14 23:57:09 2002
 @@ -1187,6 +1187,59 @@
   * Called with the cache-lock held.
   */
@@ -116,8 +116,8 @@
  #if DEBUG
  static int kmem_extra_free_checks (kmem_cache_t * cachep,
  			slab_t *slabp, void * objp)
---- /usr/src/lum-pristine/drivers/block/blkpg.c	Mon Feb 25 12:37:57 2002
-+++ /usr/src/lum/drivers/block/blkpg.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/drivers/block/blkpg.c	Mon Feb 25 12:37:57 2002
++++ lum/drivers/block/blkpg.c	Fri Jun  7 12:49:14 2002
 @@ -294,3 +294,38 @@
  }
  
@@ -157,8 +157,8 @@
 +EXPORT_SYMBOL(dev_set_rdonly);
 +EXPORT_SYMBOL(dev_check_rdonly);
 +EXPORT_SYMBOL(dev_clear_rdonly);
---- /usr/src/lum-pristine/drivers/block/loop.c	Fri Dec 21 10:41:53 2001
-+++ /usr/src/lum/drivers/block/loop.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/drivers/block/loop.c	Fri Dec 21 10:41:53 2001
++++ lum/drivers/block/loop.c	Fri Jun  7 12:49:14 2002
 @@ -471,6 +471,11 @@
  	spin_unlock_irq(&lo->lo_lock);
  
@@ -171,8 +171,8 @@
  		if (lo->lo_flags & LO_FLAGS_READ_ONLY)
  			goto err;
  	} else if (rw == READA) {
---- /usr/src/lum-pristine/drivers/ide/ide-disk.c	Fri Dec 21 10:41:54 2001
-+++ /usr/src/lum/drivers/ide/ide-disk.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/drivers/ide/ide-disk.c	Fri Dec 21 10:41:54 2001
++++ lum/drivers/ide/ide-disk.c	Fri Jun  7 12:49:14 2002
 @@ -367,6 +367,12 @@
   */
  static ide_startstop_t do_rw_disk (ide_drive_t *drive, struct request *rq, unsigned long block)
@@ -186,8 +186,8 @@
  	if (IDE_CONTROL_REG)
  		OUT_BYTE(drive->ctl,IDE_CONTROL_REG);
  	OUT_BYTE(0x00, IDE_FEATURE_REG);
---- /usr/src/lum-pristine/fs/ext3/Makefile	Fri Dec 21 10:41:55 2001
-+++ /usr/src/lum/fs/ext3/Makefile	Fri Jun  7 12:49:13 2002
+--- lum-pristine/fs/ext3/Makefile	Fri Dec 21 10:41:55 2001
++++ lum/fs/ext3/Makefile	Fri Jun  7 12:49:13 2002
 @@ -9,6 +9,8 @@
  
  O_TARGET := ext3.o
@@ -197,8 +197,8 @@
  obj-y    := balloc.o bitmap.o dir.o file.o fsync.o ialloc.o inode.o \
  		ioctl.o namei.o super.o symlink.o
  obj-m    := $(O_TARGET)
---- /usr/src/lum-pristine/fs/ext3/super.c	Mon Feb 25 12:38:08 2002
-+++ /usr/src/lum/fs/ext3/super.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/fs/ext3/super.c	Mon Feb 25 12:38:08 2002
++++ lum/fs/ext3/super.c	Fri Jun  7 12:49:14 2002
 @@ -1744,7 +1744,7 @@
  	unregister_filesystem(&ext3_fs_type);
  }
@@ -208,8 +208,8 @@
  
  MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
  MODULE_DESCRIPTION("Second Extended Filesystem with journaling extensions");
---- /usr/src/lum-pristine/fs/jbd/commit.c	Mon Feb 25 12:38:08 2002
-+++ /usr/src/lum/fs/jbd/commit.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/fs/jbd/commit.c	Mon Feb 25 12:38:08 2002
++++ lum/fs/jbd/commit.c	Fri Jun  7 12:49:14 2002
 @@ -475,7 +475,7 @@
             transaction's t_log_list queue, and metadata buffers are on
             the t_iobuf_list queue.
@@ -273,8 +273,8 @@
  	jbd_debug(3, "JBD: commit phase 7\n");
  
  	J_ASSERT(commit_transaction->t_sync_datalist == NULL);
---- /usr/src/lum-pristine/fs/jbd/journal.c	Mon Feb 25 12:38:08 2002
-+++ /usr/src/lum/fs/jbd/journal.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/fs/jbd/journal.c	Mon Feb 25 12:38:08 2002
++++ lum/fs/jbd/journal.c	Fri Jun  7 12:49:14 2002
 @@ -58,6 +58,7 @@
  #endif
  EXPORT_SYMBOL(journal_flush);
@@ -283,8 +283,8 @@
  
  EXPORT_SYMBOL(journal_init_dev);
  EXPORT_SYMBOL(journal_init_inode);
---- /usr/src/lum-pristine/fs/jbd/transaction.c	Mon Feb 25 12:38:08 2002
-+++ /usr/src/lum/fs/jbd/transaction.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/fs/jbd/transaction.c	Mon Feb 25 12:38:08 2002
++++ lum/fs/jbd/transaction.c	Fri Jun  7 12:49:14 2002
 @@ -57,6 +57,7 @@
  	transaction->t_state = T_RUNNING;
  	transaction->t_tid = journal->j_transaction_sequence++;
@@ -384,8 +384,8 @@
  	/* 
  	 * If the handle is marked SYNC, we need to set another commit
  	 * going!  We also want to force a commit if the current
---- /usr/src/lum-pristine/include/asm-i386/page.h	Mon Feb 25 12:38:12 2002
-+++ /usr/src/lum/include/asm-i386/page.h	Sat Jun 15 00:29:05 2002
+--- lum-pristine/include/asm-i386/page.h	Mon Feb 25 12:38:12 2002
++++ lum/include/asm-i386/page.h	Sat Jun 15 00:29:05 2002
 @@ -132,6 +132,8 @@
  #define virt_to_page(kaddr)	(mem_map + (__pa(kaddr) >> PAGE_SHIFT))
  #define VALID_PAGE(page)	((page - mem_map) < max_mapnr)
@@ -395,8 +395,8 @@
  #endif /* __KERNEL__ */
  
  #endif /* _I386_PAGE_H */
---- /usr/src/lum-pristine/include/linux/blkdev.h	Mon Nov 26 06:29:17 2001
-+++ /usr/src/lum/include/linux/blkdev.h	Sat Jun 15 00:34:24 2002
+--- lum-pristine/include/linux/blkdev.h	Mon Nov 26 06:29:17 2001
++++ lum/include/linux/blkdev.h	Sat Jun 15 00:34:24 2002
 @@ -228,4 +228,8 @@
  	return retval;
  }
@@ -406,8 +406,8 @@
 +int dev_check_rdonly(kdev_t);
 +void dev_clear_rdonly(int);
  #endif
---- /usr/src/lum-pristine/include/linux/slab.h	Fri Dec 21 10:42:04 2001
-+++ /usr/src/lum/include/linux/slab.h	Sat Jun 15 00:34:24 2002
+--- lum-pristine/include/linux/slab.h	Fri Dec 21 10:42:04 2001
++++ lum/include/linux/slab.h	Sat Jun 15 00:34:24 2002
 @@ -57,6 +57,7 @@
  extern int kmem_cache_shrink(kmem_cache_t *);
  extern void *kmem_cache_alloc(kmem_cache_t *, int);
@@ -416,8 +416,8 @@
  
  extern void *kmalloc(size_t, int);
  extern void kfree(const void *);
---- /usr/src/lum-pristine/include/linux/jbd.h	Mon Feb 25 12:38:13 2002
-+++ /usr/src/lum/include/linux/jbd.h	Sat Jun 15 00:36:15 2002
+--- lum-pristine/include/linux/jbd.h	Mon Feb 25 12:38:13 2002
++++ lum/include/linux/jbd.h	Sat Jun 15 00:36:15 2002
 @@ -249,6 +249,13 @@
  	return bh->b_private;
  }
@@ -465,8 +465,8 @@
  
  extern void	 journal_lock_updates (journal_t *);
  extern void	 journal_unlock_updates (journal_t *);
---- /usr/src/lum-pristine/kernel/ksyms.c	Mon Feb 25 12:38:13 2002
-+++ /usr/src/lum/kernel/ksyms.c	Fri Jun 14 16:47:50 2002
+--- lum-pristine/kernel/ksyms.c	Mon Feb 25 12:38:13 2002
++++ lum/kernel/ksyms.c	Fri Jun 14 16:47:50 2002
 @@ -271,6 +271,11 @@
  EXPORT_SYMBOL(lock_may_write);
  EXPORT_SYMBOL(dcache_readdir);
@@ -479,8 +479,8 @@
  /* for stackable file systems (lofs, wrapfs, cryptfs, etc.) */
  EXPORT_SYMBOL(default_llseek);
  EXPORT_SYMBOL(dentry_open);
---- /usr/src/lum-pristine/include/linux/dcache.h	Thu Nov 22 12:46:18 2001
-+++ /usr/src/lum/include/linux/dcache.h	Fri Jun 14 16:50:42 2002
+--- lum-pristine/include/linux/dcache.h	Thu Nov 22 12:46:18 2001
++++ lum/include/linux/dcache.h	Fri Jun 14 16:50:42 2002
 @@ -6,6 +6,31 @@
  #include <asm/atomic.h>
  #include <linux/mount.h>
@@ -534,8 +534,8 @@
  };
  
  /* the dentry parameter passed to d_hash and d_compare is the parent
---- /usr/src/lum-pristine/include/linux/fs.h	Thu Jun 13 14:07:26 2002
-+++ /usr/src/lum/include/linux/fs.h	Sat Jun 15 00:34:24 2002
+--- lum-pristine/include/linux/fs.h	Thu Jun 13 14:07:26 2002
++++ lum/include/linux/fs.h	Sat Jun 15 00:34:24 2002
 @@ -536,6 +536,7 @@
  
  	/* needed for tty driver, and maybe others */
@@ -589,8 +589,8 @@
  
  extern void iput(struct inode *);
  extern void force_delete(struct inode *);
---- /usr/src/lum-pristine/fs/namei.c	Mon Feb 25 12:38:09 2002
-+++ /usr/src/lum/fs/namei.c	Wed Jun 12 19:18:36 2002
+--- lum-pristine/fs/namei.c	Mon Feb 25 12:38:09 2002
++++ lum/fs/namei.c	Wed Jun 12 19:18:36 2002
 @@ -94,6 +94,14 @@
   * XEmacs seems to be relying on it...
   */
@@ -1142,8 +1142,8 @@
  	unlock_kernel();
  
  	dput(new_dentry);
---- /usr/src/lum-pristine/fs/open.c	Fri Oct 12 14:48:42 2001
-+++ /usr/src/lum/fs/open.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/fs/open.c	Fri Oct 12 14:48:42 2001
++++ lum/fs/open.c	Fri Jun  7 12:49:14 2002
 @@ -19,6 +19,8 @@
  #include <asm/uaccess.h>
  
@@ -1429,8 +1429,8 @@
  /*
   * Find an empty file descriptor entry, and mark it busy.
   */
---- /usr/src/lum-pristine/fs/stat.c	Thu Sep 13 17:04:43 2001
-+++ /usr/src/lum/fs/stat.c	Fri Jun  7 12:49:14 2002
+--- lum-pristine/fs/stat.c	Thu Sep 13 17:04:43 2001
++++ lum/fs/stat.c	Fri Jun  7 12:49:14 2002
 @@ -247,14 +247,16 @@
  {
  	struct nameidata nd;

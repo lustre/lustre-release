@@ -362,3 +362,131 @@
  	if (!err && EX_ISSYNC(tfhp->fh_export)) {
  		nfsd_sync_dir(tdentry);
  		nfsd_sync_dir(fdentry);
+--- lum-pristine/mm/slab.c	Fri Dec 21 10:42:05 2001
++++ lum/mm/slab.c	Fri Jun 14 23:57:09 2002
+@@ -1187,6 +1187,59 @@
+  * Called with the cache-lock held.
+  */
+ 
++extern struct page *check_get_page(unsigned long kaddr);
++struct page *page_mem_map(struct page *page);
++static int kmem_check_cache_obj (kmem_cache_t * cachep,
++                                 slab_t *slabp, void * objp)
++{
++	int i;
++	unsigned int objnr;
++
++	if (cachep->flags & SLAB_RED_ZONE) {
++		objp -= BYTES_PER_WORD;
++		if ( *(unsigned long *)objp != RED_MAGIC2)
++			/* Either write before start, or a double free. */
++                        return 0;
++		if (*(unsigned long *)(objp+cachep->objsize -
++				BYTES_PER_WORD) != RED_MAGIC2)
++			/* Either write past end, or a double free. */
++                        return 0;
++	}
++
++        objnr = (objp-slabp->s_mem)/cachep->objsize;
++	if (objnr >= cachep->num)
++                return 0;
++	if (objp != slabp->s_mem + objnr*cachep->objsize)
++                return 0;
++
++	/* Check slab's freelist to see if this obj is there. */
++	for (i = slabp->free; i != BUFCTL_END; i = slab_bufctl(slabp)[i]) {
++		if (i == objnr)
++                        return 0;
++	}
++	return 1;
++}
++
++
++int kmem_cache_validate(kmem_cache_t *cachep, void *objp)
++{
++        struct page *page = check_get_page((unsigned long)objp); 
++
++        if (!VALID_PAGE(page)) {
++                return 0;
++        }
++
++        if (!PageSlab(page)) {
++                return 0;
++        }
++
++        /* XXX check for freed slab objects ? */ 
++        if (!kmem_check_cache_obj(cachep, GET_PAGE_SLAB(page), objp)) 
++                return 0;
++
++        return (cachep == GET_PAGE_CACHE(page));
++}
++
+ #if DEBUG
+ static int kmem_extra_free_checks (kmem_cache_t * cachep,
+ 			slab_t *slabp, void * objp)
+--- lum-pristine/arch/i386/mm/init.c	Fri Dec 21 10:41:53 2001
++++ lum/arch/i386/mm/init.c	Sat Jun 15 00:31:15 2002
+@@ -43,6 +43,12 @@
+ static unsigned long totalram_pages;
+ static unsigned long totalhigh_pages;
+ 
++struct page *check_get_page(unsigned long kaddr)
++{
++#warning FIXME: Lustre team, is this solid?
++        return virt_to_page(kaddr);
++}
++
+ int do_check_pgt_cache(int low, int high)
+ {
+ 	int freed = 0;
+--- lum-pristine/arch/um/kernel/mem.c	Thu Jun 13 14:07:26 2002
++++ lum/arch/um/kernel/mem.c	Fri Jun 14 17:00:21 2002
+@@ -489,6 +489,22 @@
+ 	return(phys_mem_map(pte_val(pte)));
+ }
+ 
++struct page *check_get_page(unsigned long kaddr)
++{
++        struct page *page;
++        struct mem_region *mr;
++        unsigned long phys = __pa(kaddr);
++	unsigned int n = phys_region_index(phys);
++
++	if(regions[n] == NULL) 
++                return NULL; 
++
++        mr = regions[n];
++        page = (struct page *) mr->mem_map;
++	return page + ((phys_addr(phys)) >> PAGE_SHIFT);
++}
++
++
+ struct mem_region *page_region(struct page *page, int *index_out)
+ {
+ 	int i;
+@@ -504,12 +520,14 @@
+ 			return(region);
+ 		}
+ 	}
+-	panic("No region found for page");
++//panic("No region found for page");
+ 	return(NULL);
+ }
+ 
+ struct page *page_mem_map(struct page *page)
+ {
++        if (!page_region(page, NULL))
++            return NULL; 
+ 	return((struct page *) page_region(page, NULL)->mem_map);
+ }
+ 
+--- lum-pristine/include/linux/slab.h	Fri Dec 21 10:42:04 2001
++++ lum/include/linux/slab.h	Sat Jun 15 00:34:24 2002
+@@ -57,6 +57,7 @@
+ extern int kmem_cache_shrink(kmem_cache_t *);
+ extern void *kmem_cache_alloc(kmem_cache_t *, int);
+ extern void kmem_cache_free(kmem_cache_t *, void *);
++extern int kmem_cache_validate(kmem_cache_t *cachep, void *objp);
+ 
+ extern void *kmalloc(size_t, int);
+ extern void kfree(const void *);
