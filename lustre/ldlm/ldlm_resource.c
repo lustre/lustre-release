@@ -40,8 +40,8 @@ void ldlm_proc_cleanup(struct obd_device *obd)
         proc_lustre_remove_obd_entry("namespaces", obd);
 }
 
+#if 0
 /* FIXME: This can go away when we start to really use lprocfs */
-#ifndef LPROC_SNMP
 static int lprocfs_ll_rd(char *page, char **start, off_t off,
                          int count, int *eof, void *data)
 {
