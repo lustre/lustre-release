@@ -8,10 +8,10 @@
  l-mpm/net/core/dev.c                      |    4 
  8 files changed, 129 insertions(+), 562 deletions(-)
 
-Index: linux-2.6.0-test5/drivers/net/kgdb_eth.c
+Index: linux-2.6.0-test6/drivers/net/kgdb_eth.c
 ===================================================================
---- linux-2.6.0-test5.orig/drivers/net/kgdb_eth.c	2003-09-26 14:33:41.000000000 +0800
-+++ linux-2.6.0-test5/drivers/net/kgdb_eth.c	2003-09-26 14:34:04.000000000 +0800
+--- linux-2.6.0-test6.orig/drivers/net/kgdb_eth.c	2003-10-07 16:08:39.000000000 +0800
++++ linux-2.6.0-test6/drivers/net/kgdb_eth.c	2003-10-09 19:57:12.000000000 +0800
 @@ -7,36 +7,26 @@
   *
   * Twiddled for 2.6 by Robert Walsh <rjwalsh@durables.org>
@@ -99,7 +99,7 @@ Index: linux-2.6.0-test5/drivers/net/kgdb_eth.c
  {
  	/* intr routine has queued chars */
  	if (atomic_read(&kgdb_buf_in_cnt) != 0)
-@@ -79,287 +71,33 @@
+@@ -79,287 +71,32 @@
  	return -1; /* no data */
  }
  
@@ -172,7 +172,7 @@ Index: linux-2.6.0-test5/drivers/net/kgdb_eth.c
 -	if (netif_queue_stopped(kgdb_netdevice)) {
 -		kgdb_netdevice->xmit_lock_owner = -1;
 -		spin_unlock(&kgdb_netdevice->xmit_lock);
- 
+-
 -		kgdb_netdevice->poll_controller(kgdb_netdevice);
 -		goto repeat;
 -	}
@@ -400,7 +400,7 @@ Index: linux-2.6.0-test5/drivers/net/kgdb_eth.c
  		if (atomic_read(&kgdb_buf_in_cnt) >= GDB_BUF_SIZE) {
  			/* buffer overflow, clear it */
  			kgdb_buf_in_inx = 0;
-@@ -371,112 +109,55 @@
+@@ -371,112 +108,54 @@
  		kgdb_buf_in_inx &= (GDB_BUF_SIZE - 1);
  		atomic_inc(&kgdb_buf_in_cnt);
  	}
@@ -494,9 +494,6 @@ Index: linux-2.6.0-test5/drivers/net/kgdb_eth.c
  {
 -	volatile int	chr;
 +	int chr;
-+
-+	while ((chr = read_char()) < 0)
-+		netpoll_poll(&np);
  
 -	while ((chr = read_char()) < 0) {
 -		if (send_skb) {
@@ -509,6 +506,8 @@ Index: linux-2.6.0-test5/drivers/net/kgdb_eth.c
 -			panic("Please add support for kgdb net to this driver");
 -		}
 -	}
++	while ((chr = read_char()) < 0)
++		netpoll_poll(&np);
  	return chr;
  }
  
@@ -533,7 +532,7 @@ Index: linux-2.6.0-test5/drivers/net/kgdb_eth.c
  {
  	eth_queue[outgoing_queue++] = chr;
  	if(outgoing_queue == ETH_QUEUE_SIZE)
-@@ -485,33 +166,26 @@
+@@ -485,33 +164,26 @@
  	}
  }
  
@@ -580,10 +579,10 @@ Index: linux-2.6.0-test5/drivers/net/kgdb_eth.c
 -EXPORT_SYMBOL(kgdb_eth_is_trapped);
 +
 +module_init(init_kgdboe);
-Index: linux-2.6.0-test5/arch/i386/kernel/kgdb_stub.c
+Index: linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c
 ===================================================================
---- linux-2.6.0-test5.orig/arch/i386/kernel/kgdb_stub.c	2003-09-26 14:33:40.000000000 +0800
-+++ linux-2.6.0-test5/arch/i386/kernel/kgdb_stub.c	2003-09-26 14:34:04.000000000 +0800
+--- linux-2.6.0-test6.orig/arch/i386/kernel/kgdb_stub.c	2003-10-07 16:08:34.000000000 +0800
++++ linux-2.6.0-test6/arch/i386/kernel/kgdb_stub.c	2003-10-09 20:26:15.220623832 +0800
 @@ -120,6 +120,7 @@
  #include <asm/desc.h>
  #include <linux/inet.h>
@@ -603,6 +602,15 @@ Index: linux-2.6.0-test5/arch/i386/kernel/kgdb_stub.c
  
  /************************************************************************/
  /* BUFMAX defines the maximum number of characters in inbound/outbound buffers*/
+@@ -192,7 +189,7 @@
+  * The called_from is the return address so he can tell how we entered kgdb.
+  * This will allow him to seperate out the various possible entries.
+  */
+-#define REMOTE_DEBUG 0		/* set != to turn on printing (also available in info) */
++#define REMOTE_DEBUG 1		/* set != to turn on printing (also available in info) */
+ 
+ #define PID_MAX PID_MAX_DEFAULT
+ 
 @@ -281,13 +278,13 @@
  
  /*
@@ -805,10 +813,10 @@ Index: linux-2.6.0-test5/arch/i386/kernel/kgdb_stub.c
 -__setup("gdbeth_remotemac=", kgdb_opt_kgdbeth_remotemac);
 -__setup("gdbeth_localmac=", kgdb_opt_kgdbeth_localmac);
 -
-Index: linux-2.6.0-test5/arch/i386/lib/kgdb_serial.c
+Index: linux-2.6.0-test6/arch/i386/lib/kgdb_serial.c
 ===================================================================
---- linux-2.6.0-test5.orig/arch/i386/lib/kgdb_serial.c	2003-09-26 14:33:40.000000000 +0800
-+++ linux-2.6.0-test5/arch/i386/lib/kgdb_serial.c	2003-09-26 14:34:04.000000000 +0800
+--- linux-2.6.0-test6.orig/arch/i386/lib/kgdb_serial.c	2003-10-07 16:08:34.000000000 +0800
++++ linux-2.6.0-test6/arch/i386/lib/kgdb_serial.c	2003-10-07 16:08:52.000000000 +0800
 @@ -386,7 +386,7 @@
  static int __init
  kgdb_enable_ints(void)
@@ -818,10 +826,10 @@ Index: linux-2.6.0-test5/arch/i386/lib/kgdb_serial.c
  		return 0;
  	}
  	if (gdb_async_info == NULL) {
-Index: linux-2.6.0-test5/drivers/net/Makefile
+Index: linux-2.6.0-test6/drivers/net/Makefile
 ===================================================================
---- linux-2.6.0-test5.orig/drivers/net/Makefile	2003-09-26 14:33:41.000000000 +0800
-+++ linux-2.6.0-test5/drivers/net/Makefile	2003-09-26 15:07:15.000000000 +0800
+--- linux-2.6.0-test6.orig/drivers/net/Makefile	2003-10-07 16:08:39.000000000 +0800
++++ linux-2.6.0-test6/drivers/net/Makefile	2003-10-07 16:08:52.000000000 +0800
 @@ -32,8 +32,6 @@
  
  obj-$(CONFIG_OAKNET) += oaknet.o 8390.o
@@ -831,17 +839,19 @@ Index: linux-2.6.0-test5/drivers/net/Makefile
  obj-$(CONFIG_DGRS) += dgrs.o
  obj-$(CONFIG_RCPCI) += rcpci.o
  obj-$(CONFIG_VORTEX) += 3c59x.o
-@@ -196,3 +194,6 @@
- 
- 
- include $(TOPDIR)/drivers/usb/net/Makefile.mii
-+
+@@ -109,6 +107,8 @@
+ ifeq ($(CONFIG_SLIP_COMPRESSED),y)
+   obj-$(CONFIG_SLIP) += slhc.o
+ endif
 +# Must come after all NICs it might use
 +obj-$(CONFIG_KGDB) += kgdb_eth.o
-Index: linux-2.6.0-test5/include/asm-i386/kgdb.h
+ 
+ obj-$(CONFIG_DUMMY) += dummy.o
+ obj-$(CONFIG_DE600) += de600.o
+Index: linux-2.6.0-test6/include/asm-i386/kgdb.h
 ===================================================================
---- linux-2.6.0-test5.orig/include/asm-i386/kgdb.h	2003-09-26 14:33:41.000000000 +0800
-+++ linux-2.6.0-test5/include/asm-i386/kgdb.h	2003-09-26 15:07:02.000000000 +0800
+--- linux-2.6.0-test6.orig/include/asm-i386/kgdb.h	2003-10-07 16:08:41.000000000 +0800
++++ linux-2.6.0-test6/include/asm-i386/kgdb.h	2003-10-07 16:08:52.000000000 +0800
 @@ -21,17 +21,13 @@
  
  struct sk_buff;
@@ -863,3 +873,134 @@ Index: linux-2.6.0-test5/include/asm-i386/kgdb.h
  
  /*
   * GDB debug stub (or any debug stub) can point the 'linux_debug_hook'
+Index: linux-2.6.0-test6/Documentation/i386/kgdb/kgdbeth.txt
+===================================================================
+--- linux-2.6.0-test6.orig/Documentation/i386/kgdb/kgdbeth.txt	2003-10-07 16:08:34.000000000 +0800
++++ linux-2.6.0-test6/Documentation/i386/kgdb/kgdbeth.txt	2003-10-09 20:32:46.453147448 +0800
+@@ -6,16 +6,20 @@
+ 
+ Robert Walsh <rjwalsh@durables.org>  (2.6 port)
+ wangdi <wangdi@clusterfs.com>        (2.6 port)
++Matt Mackall <mpm@selenic.com>       (netpoll api)
+ San Mehat                            (original 2.4 code)
+ 
+ 
+ Introduction
+ ------------
+ 
+-KGDB supports debugging over ethernet.  Only a limited set of ethernet
+-devices are supported right now, but adding support for new devices
+-should not be too complicated.  See "New Devices" below for details.
+-
++KGDB supports debugging over ethernet (kgdboe) via polling of a given
++network interface. Most cards should be supported automatically.
++Debugging facilities are available as soon as the network driver and
++kgdboe have initialized. Unfortunately, this is too late in the boot
++process for debugging some issues, but works quite well for many
++others. This should not interfere with normal network usage and
++doesn't require a dedicated NIC.
+ 
+ Terminology
+ -----------
+@@ -29,33 +33,25 @@
+ Usage
+ -----
+ 
+-You need to use the following command-line options on the TARGET kernel:
+-
+-  gdbeth=DEVICENUM
+-  gdbeth_remoteip=HOSTIPADDR
+-  gdbeth_remotemac=REMOTEMAC
+-  gdbeth_localmac=LOCALMAC
+-
+-kgdbeth=DEVICENUM sets the ethernet device number to listen on for
+-debugging packets.  e.g. kgdbeth=0 listens on eth0.
+-
+-kgdbeth_remoteip=HOSTIPADDR sets the IP address of the HOST machine.
+-Only packets originating from this IP address will be accepted by the
+-debugger.  e.g. kgdbeth_remoteip=192.168.2.2
++You need to use the following command-line option on the TARGET kernel:
+ 
+-kgdbeth_remotemac=REMOTEMAC sets the ethernet address of the HOST machine.
+-e.g. kgdbeth_remotemac=00:07:70:12:4E:F5
++  kgdboe=[tgt-port]@<tgt-ip>/[dev],[host-port]@<host-ip>/[host-macaddr]
+ 
+-kgdbeth_localmac=LOCALMAC sets the ethernet address of the TARGET machine.
+-e.g. kgdbeth_localmac=00:10:9F:18:21:3C
++    where
++        tgt-port      source for UDP packets (defaults to 6443)
++        tgt-ip        source IP to use (interface address)
++        dev           network interface (eth0)
++        host-port     HOST UDP port (6442) (not really used)
++        host-ip       IP address for HOST machine
++        host-macaddr  ethernet MAC address for HOST (ff:ff:ff:ff:ff:ff)
+ 
+-You can also set the following command-line option on the TARGET kernel:
++  examples:
+ 
+-  kgdbeth_listenport=PORT
++    kgdboe=7000@192.168.0.1/wlan0,7001@192.168.0.2/00:05:3C:04:47:5D
++    kgdboe=@192.168.0.1/,@192.168.0.2/
+ 
+-kgdbeth_listenport sets the UDP port to listen on for gdb debugging
+-packets.  The default value is "6443".  e.g. kgdbeth_listenport=7654
+-causes the kernel to listen on UDP port 7654 for debugging packets.
++Only packets originating from the configured HOST IP address will be
++accepted by the debugger.
+ 
+ On the HOST side, run gdb as normal and use a remote UDP host as the
+ target:
+@@ -72,47 +68,16 @@
+ 
+ You can now continue as if you were debugging over a serial line.
+ 
+-Observations
+-------------
+-
+-I've used this with NFS and various other network applications (ssh,
+-etc.) and it's doesn't appear to interfere with their operation in
+-any way.  It doesn't seem to effect the NIC it uses - i.e. you don't
+-need a dedicated NIC for this.
+-
+ Limitations
+ -----------
+ 
+-In the inital release of this code you _must_ break into the system with the
+-debugger by hand, early after boot, as described above.
+-
+-Otherwise, the first time the kernel tries to enter the debugger (say, via an
+-oops or a BUG), the kgdb stub will doublefault and die because things aren't
+-fully set up yet.
+-
+-Supported devices
+------------------
+-
+-Right now, the following drivers are supported:
+-
+-  e100 driver (drivers/net/e100/*)
+-  3c59x driver (drivers/net/3c59x.c)
+-
+-
+-New devices
+------------
+-
+-Supporting a new device is straightforward.  Just add a "poll" routine to
+-the driver and hook it into the poll_controller field in the netdevice
+-structure.  For an example, look in drivers/net/3c59x.c and search
+-for CONFIG_KGDB (two places.)
+-
+-The poll routine is usually quite simple - it's usually enough to just
+-disable interrupts, call the device's interrupt routine and re-enable
+-interrupts again.
+-
++The current release of this code is exclusive of using kgdb on a
++serial interface, so you must boot without the kgdboe option to use
++serial debugging. Trying to debug the network driver while using it
++will prove interesting.
+ 
+ Bug reports
+ -----------
+ 
+-Send bug reports to Robert Walsh <rjwalsh@durables.org>.
++Send bug reports to Robert Walsh <rjwalsh@durables.org> Matt
++Mackall <mpm@selenic.com> and wangdi <wangdi@clusterfs.com>.
