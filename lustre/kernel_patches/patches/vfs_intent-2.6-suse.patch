@@ -285,6 +285,23 @@ Index: linux-2.6.4-51.0/fs/namespace.c
  	old_nd->dentry = mnt->mnt_mountpoint;
  	old_nd->mnt = mnt->mnt_parent;
  	mnt->mnt_parent = mnt;
+@@ -291,7 +291,7 @@
+ 	}
+ }
+ 
+-static int do_umount(struct vfsmount *mnt, int flags)
++int do_umount(struct vfsmount *mnt, int flags)
+ {
+ 	struct super_block * sb = mnt->mnt_sb;
+ 	int retval;
+@@ -364,6 +364,7 @@
+ 	up_write(&current->namespace->sem);
+ 	return retval;
+ }
++EXPORT_SYMBOL(do_umount);
+ 
+ /*
+  * Now umount can handle mount points as well as block devices.
 @@ -748,6 +749,7 @@
  	int retval = 0;
  	int mnt_flags = 0;
@@ -638,7 +655,7 @@ Index: linux-2.6.4-51.0/include/linux/namei.h
 ===================================================================
 --- linux-2.6.4-51.0.orig/include/linux/namei.h	2004-04-05 12:42:07.000000000 -0400
 +++ linux-2.6.4-51.0/include/linux/namei.h	2004-04-05 17:36:43.000000000 -0400
-@@ -2,25 +2,55 @@
+@@ -2,25 +2,56 @@
  #define _LINUX_NAMEI_H
  
  #include <linux/linkage.h>
@@ -659,6 +676,7 @@ Index: linux-2.6.4-51.0/include/linux/namei.h
 +#define IT_UNLINK   (1<<5)
 +#define IT_TRUNC    (1<<6)
 +#define IT_GETXATTR (1<<7)
++#define IT_CHDIR    (1<<9)
 +
 +struct lustre_intent_data {
 +	int       it_disposition;
@@ -755,3 +773,14 @@ Index: linux-2.6.4-51.0/kernel/exit.c
  static inline void __put_fs_struct(struct fs_struct *fs)
  {
  	/* No need to hold fs->lock if we are killing it */
+===== include/linux/mount.h 1.10 vs edited =====
+--- linux-2.6.4-51.0.orig/include/linux/mount.h	Fri Jul 11 08:23:45 2003
++++ linux-2.6.4-51.0/include/linux/mount.h	Tue May  4 20:10:27 2004
+@@ -41,6 +41,7 @@
+ }
+ 
+ extern void __mntput(struct vfsmount *mnt);
++int do_umount(struct vfsmount *mnt, int flags);
+ 
+ static inline void mntput(struct vfsmount *mnt)
+ {
