@@ -532,9 +532,23 @@ static int llog_lvfs_close(struct llog_handle *handle)
 
 static int llog_lvfs_destroy(struct llog_handle *handle)
 {
+        struct dentry *fdentry;
         struct obdo *oa;
         int rc;
         ENTRY;
+
+        fdentry = handle->lgh_file->f_dentry; 
+        if (!strcmp(fdentry->d_parent->d_name.name, "LOGS")) {
+                struct inode *inode = fdentry->d_parent->d_inode;
+                rc = llog_lvfs_close(handle);
+                if (rc)
+                        RETURN(rc);
+
+                down(&inode->i_sem);
+                rc = vfs_unlink(inode, fdentry);
+                up(&inode->i_sem);
+                RETURN(rc); 
+        }
 
         oa = obdo_alloc();
         if (oa == NULL)
