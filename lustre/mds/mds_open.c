@@ -126,8 +126,11 @@ int mds_open(struct mds_update_record *rec, int offset,
         /* Negative dentry, just create the file */
         if (dchild->d_inode) { 
                 up(&dir->i_sem);
-		if ((rec->ur_flags & (O_CREAT|O_EXCL)) == (O_CREAT|O_EXCL))
+		if ((rec->ur_flags & (O_CREAT|O_EXCL)) == (O_CREAT|O_EXCL)) { 
+                        mds_pack_inode2fid(&body->fid1, dchild->d_inode);
+                        mds_pack_inode2body(body, dchild->d_inode);
  			GOTO(out_ldput, rc = -EEXIST);
+                }
         } else if ((rec->ur_flags & O_CREAT) && !dchild->d_inode) {
                 int err;
                 void *handle;
