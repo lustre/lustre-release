@@ -50,20 +50,20 @@ if (!ptlrpc_##name) {                                                          \
         }                                                                      \
 }
 
+static int ldlm_hooks_referenced;
+
 /* This is called from ptlrpc_get_connection, which runs after all the modules
  * are loaded, but before anything else interesting happens.
  */
 int ptlrpc_get_ldlm_hooks(void)
 {
-        static int ensured = 0;
-
-        if (ensured)
+        if (ldlm_hooks_referenced)
                 return 1;
 
         GET_HOOK(ldlm_namespace_cleanup);
         GET_HOOK(ldlm_replay_locks);
 
-        ensured = 1;
+        ldlm_hooks_referenced = 1;
         RETURN(1);
 }
 
@@ -80,6 +80,7 @@ void ptlrpc_put_ldlm_hooks(void)
         ENTRY;
         PUT_HOOK(ldlm_namespace_cleanup);
         PUT_HOOK(ldlm_replay_locks);
+        ldlm_hooks_referenced = 0;
         EXIT;
 }
 
