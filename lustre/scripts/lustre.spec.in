@@ -205,7 +205,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 #%dir /var/lib/ldap/lustre
 %attr(700, ldap, ldap) /var/lib/ldap/lustre
 
-%post
+%post -n lustre-modules
 if [ ! -e /dev/obd ]; then
    mknod /dev/obd c 10 241
 fi
@@ -214,37 +214,8 @@ if [ ! -e /dev/portals ]; then
 fi
 depmod -ae || exit 0
 
-#grep -q obdclass /etc/modules.conf || \
-#	echo 'alias char-major-10-241 obdclass' >> /etc/modules.conf
-
-#grep -q '/dev/obd' /etc/modules.conf || \
-#	echo 'alias /dev/obd obdclass' >> /etc/modules.conf
-
-#grep -q '/dev/lustre' /etc/modules.conf || \
-#	echo 'alias /dev/lustre obdclass' >> /etc/modules.conf
-
-#grep -q portals /etc/modules.conf || \
-#        echo 'alias char-major-10-240 portals' >> /etc/modules.conf
-
-#grep -q '/dev/portals' /etc/modules.conf || \
-#        echo 'alias /dev/portals portals' >> /etc/modules.conf
-
-%postun
+%postun -n lustre-modules
 depmod -ae || exit 0
-
-%post -n lustre-ldap
-if ! grep -q slapd-lustre /etc/openldap/slapd.conf; then 
-  echo "include /etc/openldap/slapd-lustre.conf" >> /etc/openldap/slapd.conf
-fi
-
-%postun -n lustre-ldap
-slapd=/etc/openldap/slapd.conf
-if grep -q slapd-lustre $slapd; then 
-   tmp=/tmp/lustre-ldap.$$
-   sed "/slapd-lustre/d" $slapd >> $tmp
-   cp $tmp $slapd
-   rm $tmp
-fi
 
 %clean
 #rm -rf $RPM_BUILD_ROOT
