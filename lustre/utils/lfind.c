@@ -194,7 +194,7 @@ processFile(const char *path, const struct stat *sp, int flag, struct FTW *ftwp)
 	if (flag != FTW_F)
 		return 0;
 
-	if ((obdcount == 0) && (getobdindex(path) == OBD_NOT_FOUND)) {
+	if (getobdindex(path) == OBD_NOT_FOUND && obdcount == 0) {
 		/* terminate nftw walking this tree */
 		return(1);
 	}
