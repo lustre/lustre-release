@@ -43,10 +43,6 @@
 # define kernel_text_address(addr) is_kernel_text_address(addr)
 extern int is_kernel_text_address(unsigned long addr);
 
-#define cpu_online(cpu) (test_bit(cpu_online_map, &(cpu)))
-#define cpu_set(cpu, map) (set_bit(cpu, &(map)))
-typedef unsigned long cpumask_t;
-
 #else /* 2.4.x */
 
 # define SIGNAL_MASK_LOCK(task, flags)                                  \
@@ -60,10 +56,6 @@ typedef unsigned long cpumask_t;
 
 # define kernel_text_address(addr) is_kernel_text_address(addr)
 extern int is_kernel_text_address(unsigned long addr);
-
-#define cpu_online(cpu) (test_bit(cpu_online_map, &(cpu)))
-#define cpu_set(cpu, map) (set_bit(cpu, &(map)))
-typedef unsigned long cpumask_t;
 
 #endif
 
@@ -86,6 +78,12 @@ typedef unsigned long cpumask_t;
 /* 2.6 alloc_page users can use page->lru */
 #define PAGE_LIST_ENTRY lru
 #define PAGE_LIST(page) ((page)->lru)
+#endif
+
+#ifndef HAVE_CPU_ONLINE
+#define cpu_online(cpu) (test_bit(cpu_online_map, &(cpu)))
+#define cpu_set(cpu, map) (set_bit(cpu, &(map)))
+typedef unsigned long cpumask_t;
 #endif
 
 #endif /* _PORTALS_COMPAT_H */
