@@ -28,7 +28,6 @@
 #ifdef __KERNEL__
 
 #include <linux/obd.h>
-#include <linux/fs.h>
 
 typedef void (*fsfilt_cb_t)(struct obd_device *obd, __u64 last_rcvd,
                             void *data, int error);
@@ -219,10 +218,22 @@ static inline int fsfilt_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
                                                  cb_func, cb_data);
 }
 
+/* very similar to obd_statfs(), but caller already holds obd_osfs_lock */
 static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
-                                struct obd_statfs *osfs)
+                                unsigned long max_age)
 {
-        return obd->obd_fsops->fs_statfs(sb, osfs);
+        int rc = 0;
+
+        CDEBUG(D_SUPER, "osfs %lu, max_age %lu\n", obd->obd_osfs_age, max_age);
+        if (time_before(obd->obd_osfs_age, max_age)) {
+                rc = obd->obd_fsops->fs_statfs(sb, &obd->obd_osfs);
+                if (rc == 0) /* N.B. statfs can't really fail */
+                        obd->obd_osfs_age = jiffies;
+        } else {
+                CDEBUG(D_SUPER, "using cached obd_statfs data\n");
+        }
+
+        return rc;
 }
 
 static inline int fsfilt_sync(struct obd_device *obd, struct super_block *sb)
