@@ -23,7 +23,7 @@
 #include <linux/module.h>
 #include <linux/fs.h>
 #include <linux/stat.h>
-#include <linux/locks.h>
+#include <linux/smp_lock.h>
 #include <linux/kmod.h>
 #include <linux/quotaops.h>
 #include <asm/unistd.h>

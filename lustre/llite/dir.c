@@ -30,7 +30,7 @@
 #include <linux/ext2_fs.h>
 #include <linux/pagemap.h>
 #include <linux/mm.h>
-#include <linux/locks.h>
+#include <linux/smp_lock.h>
 #include <asm/uaccess.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE

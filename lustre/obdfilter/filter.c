@@ -17,6 +17,8 @@
 
 #include <linux/module.h>
 #include <linux/pagemap.h>
+#include <linux/fs.h>
+#include <linux/dcache.h>
 #include <linux/obd_class.h>
 #include <linux/lustre_dlm.h>
 #include <linux/obd_filter.h>
@@ -996,6 +998,10 @@ static inline void lustre_put_page(struct page *page)
         page_cache_release(page);
 }
 
+#ifndef PageUptodate
+#define PageUptodate(page) Page_Uptodate(page)
+#endif
+
 static struct page *
 lustre_get_page_read(struct inode *inode, unsigned long index)
 {
@@ -1008,7 +1014,7 @@ lustre_get_page_read(struct inode *inode, unsigned long index)
         if (!IS_ERR(page)) {
                 wait_on_page(page);
                 kmap(page);
-                if (!Page_Uptodate(page)) {
+                if (!PageUptodate(page)) {
                         CERROR("page index %lu not uptodate\n", index);
                         GOTO(err_page, rc = -EIO);
                 }

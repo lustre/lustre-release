@@ -31,6 +31,7 @@
 #include <linux/init.h>
 #include <linux/list.h>
 #include <asm/io.h>
+#include <asm/ioctls.h>
 #include <asm/system.h>
 #include <asm/poll.h>
 #include <asm/uaccess.h>

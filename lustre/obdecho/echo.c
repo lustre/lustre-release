@@ -12,16 +12,17 @@
  * and Andreas Dilger <adilger@clusterfs.com>
  */
 
-static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.39 2002/10/15 23:25:10 shaver Exp $";
-#define OBDECHO_VERSION "$Revision: 1.39 $"
+static char rcsid[] __attribute ((unused)) = "$Id: echo.c,v 1.40 2002/10/18 21:19:57 adilger Exp $";
+#define OBDECHO_VERSION "$Revision: 1.40 $"
 
 #define EXPORT_SYMTAB
 
 #include <linux/version.h>
 #include <linux/module.h>
+#include <linux/highmem.h>
 #include <linux/fs.h>
 #include <linux/stat.h>
-#include <linux/locks.h>
+#include <linux/smp_lock.h>
 #include <linux/ext2_fs.h>
 #include <linux/quotaops.h>
 #include <linux/proc_fs.h>

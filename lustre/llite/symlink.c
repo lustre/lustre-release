@@ -19,6 +19,10 @@
  *   Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
  */
 
+#include <linux/fs.h>
+#include <linux/mm.h>
+#include <linux/stat.h>
+
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/lustre_lite.h>

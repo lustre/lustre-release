@@ -13,7 +13,7 @@
 #include <linux/stat.h>
 #include <linux/iobuf.h>
 #include <linux/errno.h>
-#include <linux/locks.h>
+#include <linux/smp_lock.h>
 #include <linux/unistd.h>
 #include <linux/version.h>
 #include <asm/system.h>

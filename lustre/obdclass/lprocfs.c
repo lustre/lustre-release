@@ -43,6 +43,7 @@
 #include <linux/proc_fs.h>
 #include <linux/slab.h>
 #include <linux/types.h>
+#include <linux/string.h>
 
 #define DEBUG_SUBSYSTEM S_CLASS
 #define MAX_STRING_SIZE 100
