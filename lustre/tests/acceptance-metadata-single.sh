@@ -49,72 +49,48 @@ wait
 
 debug_client_on
 echo "create.pl, 1 mount, 4 threads, 100 ops, debug on"
-perl create.pl --silent -- $MNT -1 100 &
-perl create.pl --silent -- $MNT -1 100 &
-perl create.pl --silent -- $MNT -1 100 &
-perl create.pl --silent -- $MNT -1 100 &
+for i in `seq 1 4`; do
+  perl create.pl --silent -- $MNT -1 100 &
+done
 wait
 echo "rename.pl, 1 mount, 4 threads, 2000 ops, debug on"
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
+for i in `seq 1 4`; do
+  perl rename.pl --silent $MNT 2000 &
+done
 wait
 
 debug_client_off
 echo "create.pl, 1 mount, 4 threads, 2000 ops, debug off"
-perl create.pl --silent -- $MNT -1 2000 &
-perl create.pl --silent -- $MNT -1 2000 &
-perl create.pl --silent -- $MNT -1 2000 &
-perl create.pl --silent -- $MNT -1 2000 &
+for i in `seq 1 4`; do
+  perl create.pl --silent -- $MNT -1 2000 &
+done
 wait
 echo "rename.pl, 1 mount, 4 threads, 2000 ops, debug off"
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
+for i in `seq 1 4`; do
+  perl rename.pl --silent $MNT 2000 &
+done
 wait
 
 debug_client_on
 echo "create.pl, 1 mount, 8 threads, 100 ops, debug on"
-perl create.pl --silent -- $MNT -1 100 &
-perl create.pl --silent -- $MNT -1 100 &
-perl create.pl --silent -- $MNT -1 100 &
-perl create.pl --silent -- $MNT -1 100 &
-perl create.pl --silent -- $MNT -1 100 &
-perl create.pl --silent -- $MNT -1 100 &
-perl create.pl --silent -- $MNT -1 100 &
-perl create.pl --silent -- $MNT -1 100 &
+for i in `seq 1 8`; do
+  perl create.pl --silent -- $MNT -1 100 &
+done
 wait
-echo "rename.pl, 1 mount, 4 threads, 2000 ops, debug on"
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
+echo "rename.pl, 1 mount, 8 threads, 2000 ops, debug on"
+for i in `seq 1 8`; do
+  perl rename.pl --silent $MNT 2000 &
+done
 wait
 
 debug_client_off
 echo "create.pl, 1 mount, 8 threads, 2000 ops, debug off"
-perl create.pl --silent -- $MNT -1 2000 &
-perl create.pl --silent -- $MNT -1 2000 &
-perl create.pl --silent -- $MNT -1 2000 &
-perl create.pl --silent -- $MNT -1 2000 &
-perl create.pl --silent -- $MNT -1 2000 &
-perl create.pl --silent -- $MNT -1 2000 &
-perl create.pl --silent -- $MNT -1 2000 &
-perl create.pl --silent -- $MNT -1 2000 &
+for i in `seq 1 8`; do
+  perl create.pl --silent -- $MNT -1 2000 &
+done
 wait
-echo "rename.pl, 1 mount, 4 threads, 2000 ops, debug off"
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
-perl rename.pl --silent $MNT 2000 &
+echo "rename.pl, 1 mount, 8 threads, 2000 ops, debug off"
+for i in `seq 1 8`; do
+  perl rename.pl --silent $MNT 2000 &
+done
 wait
