@@ -3,7 +3,11 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"8"} # bug 1557
+# bug number for skipped test: 1557 2366
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"8   10   "}
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+[ "$ALWAYS_EXCEPT$EXCEPT" ] && echo "Skipping tests: $ALWAYS_EXCEPT $EXCEPT"
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
@@ -54,7 +58,9 @@ run_one() {
 		$START
 	fi
 	log "== test $1: $2"
-	test_$1 || error "test_$1: $?"
+	export TESTNAME=test_$1
+	test_$1 || error "test_$1: exit with rc=$?"
+	unset TESTNAME
 	pass
 	cd $SAVE_PWD
 	$CLEAN
@@ -83,7 +89,7 @@ run_test() {
 }
 
 error () {
-	log "FAIL: $@"
+	log "FAIL: $TESTNAME $@"
 	exit 1
 }
 
@@ -91,15 +97,15 @@ pass() {
 	echo PASS
 }
 
-MOUNT1=`mount| awk '/ lustre/ { print $3 }'| head -1`
-MOUNT2=`mount| awk '/ lustre/ { print $3 }'| tail -1`
+export MOUNT1=`mount| awk '/ lustre/ { print $3 }'| head -1`
+export MOUNT2=`mount| awk '/ lustre/ { print $3 }'| tail -1`
 [ -z "$MOUNT1" ] && error "NAME=$NAME not mounted once"
 [ "$MOUNT1" = "$MOUNT2" ] && error "NAME=$NAME not mounted twice"
 [ `mount| awk '/ lustre/ { print $3 }'| wc -l` -ne 2 ] && \
 	error "NAME=$NAME mounted more than twice"
 
-DIR1=${DIR1:-$MOUNT1}
-DIR2=${DIR2:-$MOUNT2}
+export DIR1=${DIR1:-$MOUNT1}
+export DIR2=${DIR2:-$MOUNT2}
 [ -z "`echo $DIR1 | grep $MOUNT1`" ] && echo "$DIR1 not in $MOUNT1" && exit 96
 [ -z "`echo $DIR2 | grep $MOUNT2`" ] && echo "$DIR2 not in $MOUNT2" && exit 95
 
@@ -238,6 +244,23 @@ test_12() {
        sh lockorder.sh
 }
 run_test 12 "test lock ordering (link, stat, unlink) ==========="
+
+test_13() {	# bug 2451 - directory coherency
+       rm -rf $DIR1/d13
+       mkdir $DIR1/d13 || error
+       cd $DIR1/d13 || error
+       ls
+       ( touch $DIR1/d13/f13 ) # needs to be a separate shell
+       ls
+       rm -f $DIR2/d13/f13 || error
+       ls 2>&1 | grep f13 && error "f13 shouldn't return an error (1)" || true
+       # need to run it twice
+       ( touch $DIR1/d13/f13 ) # needs to be a separate shell
+       ls
+       rm -f $DIR2/d13/f13 || error
+       ls 2>&1 | grep f13 && error "f13 shouldn't return an error (2)" || true
+}
+run_test 13 "test directory page revocation ===================="
 
 log "cleanup: ======================================================"
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk || true
