@@ -45,7 +45,7 @@ do { if (offset > ASSERT_MAX_SIZE_MB << 20) {                           \
 #define LL_CDEBUG_PAGE(mask, page, fmt, arg...)                         \
         CDEBUG(mask, "page %p map %p index %lu flags %lx count %u priv %0lx: " \
                fmt, page, page->mapping, page->index, page->flags,      \
-               atomic_read(&page->count), page->private, ## arg)
+               page_count(page), page->private, ## arg)
 
 /* lib/debug.c */
 int dump_lniobuf(struct niobuf_local *lnb);

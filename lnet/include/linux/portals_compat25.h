@@ -28,6 +28,7 @@
   call_usermodehelper(path, argv, envp, 1)
 # define RECALC_SIGPENDING         recalc_sigpending()
 # define CURRENT_SECONDS           get_seconds()
+# define smp_num_cpus              NR_CPUS
 
 #elif defined(CONFIG_RH_2_4_20) /* RH 2.4.x */
 

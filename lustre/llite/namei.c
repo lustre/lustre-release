@@ -240,9 +240,9 @@ static void ll_d_add(struct dentry *de, struct inode *inode)
         /* d_rehash */
         if (!d_unhashed(de)) {
                 spin_unlock(&dcache_lock);
-                CERROR("dentry %.*s %p hash next %p, prev %p\n",
+                CERROR("dentry %.*s %p hash next %p\n",
                        de->d_name.len, de->d_name.name, de,
-                       de->d_hash.next, de->d_hash.prev);
+                       de->d_hash.next);
                 LBUG();
         }
         __d_rehash(de, 0);
