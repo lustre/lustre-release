@@ -44,51 +44,6 @@
 #include <linux/lvfs.h>
 
 #ifdef __KERNEL__
-
-#ifdef ENABLE_ORPHANS
-int llog_origin_handle_cancel(struct ptlrpc_request *req)
-{
-        struct obd_device *obd = req->rq_export->exp_obd;
-        struct obd_device *disk_obd;
-        struct llog_cookie *logcookies;
-        struct llog_ctxt *ctxt;
-        int num_cookies, rc = 0;
-        struct obd_run_ctxt saved;
-        struct llog_handle *cathandle;
-        ENTRY;
-
-        logcookies = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*logcookies));
-        num_cookies = req->rq_reqmsg->buflens[0]/sizeof(*logcookies);
-        if (logcookies == NULL || num_cookies == 0) {
-                DEBUG_REQ(D_HA, req, "no cookies sent");
-                RETURN(-EFAULT);
-        }
-
-        ctxt = llog_get_context(obd, logcookies->lgc_subsys);
-        if (ctxt == NULL) {
-                CERROR("llog subsys not setup or already cleanup\n");
-                RETURN(-ENOENT);
-        }
-        down(&ctxt->loc_sem);
-        disk_obd = ctxt->loc_exp->exp_obd;
-        cathandle = ctxt->loc_handle;
-        LASSERT(cathandle);
-
-        push_ctxt(&saved, &disk_obd->obd_ctxt, NULL); 
-        rc = llog_cat_cancel_records(cathandle, num_cookies, logcookies);
-        if (rc)
-                CERROR("cancel %d llog-records failed: %d\n", num_cookies, rc);
-        else
-                CERROR("cancel %d llog-records successful\n", num_cookies);
-
-        pop_ctxt(&saved, &disk_obd->obd_ctxt, NULL);
-        up(&ctxt->loc_sem);
-
-        RETURN(rc);
-}
-EXPORT_SYMBOL(llog_origin_handle_cancel);
-#endif
-                                                                                                                             
 int llog_origin_connect(struct llog_ctxt *ctxt, int count,
                         struct llog_logid *logid,
                         struct llog_ctxt_gen *gen)
@@ -128,9 +83,9 @@ int llog_handle_connect(struct ptlrpc_request *req)
         struct llog_ctxt *ctxt;
         int rc;
         ENTRY;
-                                                                                                                             
+
         req_body = lustre_msg_buf(req->rq_reqmsg, 0, sizeof(*req_body));
-                                                                                                                             
+
         ctxt = llog_get_context(obd, req_body->lgdc_ctxt_idx);
         rc = llog_connect(ctxt, 1, &req_body->lgdc_logid, 
                           &req_body->lgdc_gen);
@@ -158,7 +113,9 @@ int llog_initiator_connect(struct llog_ctxt *ctxt)
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_initiator_connect);
+
 #else /* !__KERNEL__ */
+
 int llog_origin_connect(struct llog_ctxt *ctxt, int count,
                         struct llog_logid *logid,
                         struct llog_ctxt_gen *gen)
