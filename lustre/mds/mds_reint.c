@@ -256,7 +256,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         if (dchild->d_inode) {
                 struct mds_body *body;
                 struct inode *inode = dchild->d_inode;
-                struct lov_mds_md *lmm;
 
                 CDEBUG(D_INODE, "child exists (dir %ld, name %s, ino %ld)\n",
                        dir->i_ino, rec->ur_name, dchild->d_inode->i_ino);
@@ -265,6 +264,8 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 mds_pack_inode2fid(&body->fid1, inode);
                 mds_pack_inode2body(body, inode);
                 if (S_ISREG(inode->i_mode)) {
+                        struct lov_mds_md *lmm;
+
                         lmm = lustre_msg_buf(req->rq_repmsg, offset + 1);
                         lmm->lmm_easize = mds->mds_max_mdsize;
 
@@ -338,17 +339,6 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 struct mds_body *body;
 
                 CDEBUG(D_INODE, "created ino %ld\n", dchild->d_inode->i_ino);
-                if (!offset && type == S_IFREG) {
-                        struct lov_mds_md *lmm;
-
-                        lmm = lustre_msg_buf(req->rq_reqmsg, 2);
-                        rc = mds_fs_set_md(mds, inode, handle, lmm);
-                        if (rc) {
-                                CERROR("error %d setting LOV MD for %ld\n",
-                                       rc, inode->i_ino);
-                                GOTO(out_create_unlink, rc);
-                        }
-                }
 
                 iattr.ia_atime = rec->ur_time;
                 iattr.ia_ctime = rec->ur_time;
@@ -367,7 +357,7 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
                 rc = mds_update_last_rcvd(mds, handle, req);
                 if (rc) {
                         CERROR("error on mds_update_last_rcvd: rc = %d\n", rc);
-                        /* XXX should we abort here in case of error? */
+                        GOTO(out_create_unlink, rc);
                 }
 
                 body = lustre_msg_buf(req->rq_repmsg, offset);
