@@ -867,7 +867,7 @@
 +		goto add;
 +
 +dxfull:
-+		ext3_warning(sb, __FUNCTION__, "Directory index full!\n"));
++		ext3_warning(sb, __FUNCTION__, "Directory index full!\n");
 +		retval = -ENOSPC;
 +dxfail2:
 +		brelse(bh);
