@@ -46,30 +46,26 @@
 +EXPORT_SYMBOL(dev_clear_rdonly);
 --- linux-2.4.18-17.8.0/drivers/block/loop.c~dev_read_only	2002-12-06 14:52:29.000000000 -0800
 +++ linux-2.4.18-17.8.0-zab/drivers/block/loop.c	2002-12-06 14:52:29.000000000 -0800
-@@ -491,6 +491,11 @@ static int loop_make_request(request_que
+@@ -491,6 +491,9 @@ static int loop_make_request(request_que
  	spin_unlock_irq(&lo->lo_lock);
  
  	if (rw == WRITE) {
-+#ifdef CONFIG_DEV_RDONLY
 +		if (dev_check_rdonly(rbh->b_rdev))
 +			goto err;
-+#endif
 +
  		if (lo->lo_flags & LO_FLAGS_READ_ONLY)
  			goto err;
  	} else if (rw == READA) {
 --- linux-2.4.18-17.8.0/drivers/ide/ide-disk.c~dev_read_only	2002-12-06 14:52:29.000000000 -0800
 +++ linux-2.4.18-17.8.0-zab/drivers/ide/ide-disk.c	2002-12-06 14:52:29.000000000 -0800
-@@ -557,6 +557,12 @@ static ide_startstop_t lba_48_rw_disk (i
+@@ -557,6 +557,10 @@ static ide_startstop_t lba_48_rw_disk (i
   */
  static ide_startstop_t do_rw_disk (ide_drive_t *drive, struct request *rq, unsigned long block)
  {
-+#ifdef CONFIG_DEV_RDONLY
 +	if (rq->cmd == WRITE && dev_check_rdonly(rq->rq_dev)) {
 +		ide_end_request(1, HWGROUP(drive));
 +		return ide_stopped;
 +	}
-+#endif
  	if (IDE_CONTROL_REG)
  		OUT_BYTE(drive->ctl,IDE_CONTROL_REG);
  
