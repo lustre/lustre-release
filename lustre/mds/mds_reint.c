@@ -785,9 +785,9 @@ static int mds_reint_rename(struct mds_update_record *rec, int offset,
         }
         EXIT;
 
-      out_rename_denew:
+out_rename_denew:
         l_dput(de_new);
-      out_rename_deold:
+out_rename_deold:
         if (!rc) {
                 res_id[0] = de_old->d_inode->i_ino;
                 /* Take an exclusive lock on the resource that we're
