@@ -20,7 +20,7 @@ noinst_PROGRAMS += opendirunlink opendevunlink unlinkmany fchdir_test checkstat
 noinst_PROGRAMS += wantedi statone runas openfile getdents mkdirdeep o_directory
 noinst_PROGRAMS += small_write
 # noinst_PROGRAMS += ldaptest
-sbin_PROGRAMS = mcreate munlink mkdirmany
+bin_PROGRAMS = mcreate munlink mkdirmany
 
 # ldaptest_SOURCES = ldaptest.c
 tchmod_SOURCES = tchmod.c

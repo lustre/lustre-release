@@ -1,5 +1,5 @@
 # lustre.spec
-%define version b_devel
+%define version HEAD
 %define kversion @LINUXRELEASE@
 %define linuxdir @LINUX@
 
@@ -101,10 +101,11 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /usr/sbin/lconf
 %attr(-, root, root) /usr/sbin/lactive
 %attr(-, root, root) /usr/sbin/llanalyze
-%attr(-, root, root) /usr/sbin/lfind
-%attr(-, root, root) /usr/sbin/lstripe
-%attr(-, root, root) /usr/sbin/mcreate
-%attr(-, root, root) /usr/sbin/mkdirmany
+%attr(-, root, root) /usr/bin/lfind
+%attr(-, root, root) /usr/bin/lstripe
+%attr(-, root, root) /usr/bin/mcreate
+%attr(-, root, root) /usr/bin/munlink
+%attr(-, root, root) /usr/bin/mkdirmany
 %attr(-, root, root) /usr/sbin/llstat.pl
 %attr(-, root, root) /usr/sbin/llobdstat.pl
 %attr(-, root, root) /usr/sbin/load_ldap.sh
