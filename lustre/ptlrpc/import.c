@@ -233,6 +233,7 @@ int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid)
 
         if (aa->pcaa_initial_connect)
                 imp->imp_replayable = 1;
+
         ptlrpcd_add_req(request);
         rc = 0;
 out:
@@ -353,8 +354,10 @@ finish:
  out:
         if (rc != 0) {
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_DISCON);
-                if (aa->pcaa_initial_connect && !imp->imp_initial_recov)
+                if (aa->pcaa_initial_connect && !imp->imp_initial_recov) {
+                        ptlrpc_set_import_active(imp, 0);
                         GOTO(norecov, rc);
+                }
                 CDEBUG(D_ERROR, 
                        "recovery of %s on %s failed (%d); restarting\n",
                        imp->imp_target_uuid.uuid,

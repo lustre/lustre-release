@@ -206,14 +206,9 @@ test_5b() {
 	start_mds
 	stop_mds
 
+	[ -d $MOUNT ] || mkdir -p $MOUNT
 	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null 
-	llmount $mds_HOST://mds_svc/client_facet $MOUNT &
-	MOUNT_PID=$!
-	sleep 2
-	echo "killing mount"
-	kill -TERM $MOUNT_PID
-	echo "waiting for mount to finish"
-	wait $MOUNT_PID
+	llmount $mds_HOST://mds_svc/client_facet $MOUNT  && exit 1
 
 	# cleanup client modules
 	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null 
@@ -226,7 +221,27 @@ test_5b() {
 	return 0
 
 }
-run_test 5b "cleanup after failed mount (bug 2712)"
+run_test 5b "mds down, cleanup after failed mount (bug 2712)"
+
+test_5c() {
+	start_ost
+	start_mds
+
+	[ -d $MOUNT ] || mkdir -p $MOUNT
+	$LCONF --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	llmount $mds_HOST://wrong_mds_svc/client_facet $MOUNT  && exit 1
+
+	# cleanup client modules
+	$LCONF --cleanup --nosetup --node client_facet $XMLCONFIG > /dev/null 
+	
+	stop_mds || return 2
+	stop_ost || return 3
+
+	lsmod | grep -q portals && return 3
+	return 0
+
+}
+run_test 5c "cleanup after failed mount (bug 2712)"
 
 test_6() {
 	setup

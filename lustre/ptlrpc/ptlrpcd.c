@@ -162,7 +162,9 @@ static int ptlrpcd(void *arg)
                 if (test_bit(LIOD_STOP, &pc->pc_flags))
                         break;
         }
-        /* XXX should be making sure we don't have anything in flight */
+        /* wait for inflight requests to drain */
+        if (!list_empty(&pc->pc_set->set_requests))
+                ptlrpc_set_wait(pc->pc_set);
         complete(&pc->pc_finishing);
         return 0;
 }
