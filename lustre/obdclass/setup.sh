@@ -12,7 +12,7 @@ insmod ../obdfs/obdfs.o
 
 echo "NEW OBDFS setup..." >> /var/log/messages
 
-./obdcontrol -f << EOF
+../class/obdcontrol -f << EOF
 attach ext2_obd
 setup
 quit

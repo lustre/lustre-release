@@ -1,5 +1,5 @@
 /*
- *  linux/fs/ext2/namei.c
+ *  linux/fs/obdfs/namei.c
  *
  * Copyright (C) 1992, 1993, 1994, 1995
  * Remy Card (card@masi.ibp.fr)
@@ -8,7 +8,7 @@
  *
  *  from
  *
- *  linux/fs/minix/namei.c
+ *  linux/fs/ext2/namei.c
  *
  *  Copyright (C) 1991, 1992  Linus Torvalds
  *
@@ -418,9 +418,9 @@ static void show_dentry(struct list_head * dlist, int subdirs)
 		const char * unhashed = "";
 
 		if ( subdirs ) 
-				dentry  = list_entry(tmp, struct dentry, d_child);
-			else 
-				dentry  = list_entry(tmp, struct dentry, d_alias);
+			dentry  = list_entry(tmp, struct dentry, d_child);
+		else 
+			dentry  = list_entry(tmp, struct dentry, d_alias);
 
 		if (list_empty(&dentry->d_hash))
 			unhashed = "(unhashed)";
@@ -841,24 +841,28 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 	ino_t ino;
 
         ENTRY;
-
 	/*
 	 * N.B. Several error exits in ext2_new_inode don't set err.
 	 */
 	ino = iops(dir)->o_create(iid(dir), 0, &err);
-	if ( ino == -1 ) 
+	if ( ino == -1 )  {
+		EXIT;
 		return -1;
+	}
 	inode =  iget(dir->i_sb, ino);
-	if (!inode)
+	if (!inode) {
+		EXIT;
 		return err;
+	}
 
 	inode->i_mode = S_IFLNK | S_IRWXUGO;
-	inode->i_op = &obdfs_inode_ops;
+	inode->i_op = &obdfs_symlink_inode_operations;
 	for (l = 0; l < inode->i_sb->s_blocksize - 1 &&
 	     symname [l]; l++)
 		;
-	if (l >= sizeof (inode->u.ext2_i.i_data)) {
 
+	/* For obdfs we always use normal (not fast) symlinks
+	if (l >= sizeof (inode->u.ext2_i.i_data)) { */
 		CDEBUG(D_INODE, "l=%d, normal symlink\n", l);
 
 		name_page = obdfs_getpage(inode, 0, 1, LOCKED);
@@ -866,25 +870,28 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 			inode->i_nlink--;
 			mark_inode_dirty(inode);
 			iput (inode);
+			EXIT;
 			return err;
 		}
 		link = (char *)page_address(name_page);
-	} else {
+	/* } else {
 		link = (char *) inode->u.ext2_i.i_data;
 
 		CDEBUG(D_INODE, "l=%d, fast symlink\n", l);
 
-	}
+	} */
 	i = 0;
 	while (i < inode->i_sb->s_blocksize - 1 && (c = *(symname++)))
 		link[i++] = c;
 	link[i] = 0;
-	if (name_page) {
+
+	/* if (name_page) { */
 		iops(inode)->o_brw(WRITE, iid(inode), inode, name_page, 1);
 		PDEBUG(name_page, "symlink");
 		UnlockPage(name_page);
 		page_cache_release(name_page);
-	}
+	/* } */
+
 	inode->i_size = i;
 	mark_inode_dirty(inode);
 
@@ -905,6 +912,7 @@ int obdfs_symlink (struct inode * dir, struct dentry *dentry, const char * symna
 	d_instantiate(dentry, inode);
 	err = 0;
 out:
+	EXIT;
 	return err;
 
 out_no_entry:

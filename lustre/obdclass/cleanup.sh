@@ -11,4 +11,4 @@ EOF
 
 rmmod obdext2
 rmmod obdclass
-
+[ "`lsmod | grep loop`" ] && rmmod loop

@@ -214,7 +214,7 @@ struct file_operations obdfs_file_ops = {
 struct inode_operations obdfs_inode_ops = {
 	&obdfs_file_ops,	/* default directory file-ops */
 	obdfs_create,	/* create */
-	obdfs_lookup,   /* lookup */
+	obdfs_lookup,	/* lookup */
 	obdfs_link,	/* link */
 	obdfs_unlink,	/* unlink */
 	obdfs_symlink,	/* symlink */
@@ -222,12 +222,12 @@ struct inode_operations obdfs_inode_ops = {
 	obdfs_rmdir,	/* rmdir */
 	obdfs_mknod,	/* mknod */
 	obdfs_rename,	/* rename */
-	NULL,		/* readlink */
+	obdfs_readlink,	/* readlink */
 	NULL,		/* follow_link */
-	NULL,           /* get_block */
+	NULL,		/* get_block */
 	obdfs_readpage,	/* readpage */
-	obdfs_writepage, /* writepage */
+	obdfs_writepage,/* writepage */
 	NULL,		/* truncate */
 	NULL,		/* permission */
-	NULL            /* revalidate */
+	NULL		/* revalidate */
 };

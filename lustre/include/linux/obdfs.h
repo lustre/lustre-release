@@ -41,6 +41,9 @@ int obdfs_check_dir_entry (const char * function, struct inode * dir,
 			  struct ext2_dir_entry_2 * de,
 			  struct page * page,
 			   unsigned long offset);
+/* symlink.c */
+int obdfs_readlink (struct dentry *, char *, int);
+struct dentry *obdfs_follow_link(struct dentry *, struct dentry *, unsigned int); 
 
 struct obdfs_sb_info {
 	struct obd_conn osi_conn;
@@ -58,6 +61,7 @@ struct obdfs_inode_info;
 
 extern struct file_operations obdfs_file_ops;
 extern struct inode_operations obdfs_inode_ops;
+extern struct inode_operations obdfs_symlink_inode_operations;
 
 static inline struct obd_ops *iops(struct inode *i)
 {
