@@ -14,6 +14,7 @@
 #include <linux/smp_lock.h>
 #include <linux/proc_fs.h>
 
+#include <linux/lustre_lib.h>
 #include <linux/lustre_idl.h>
 
 struct obd_type {
@@ -23,8 +24,6 @@ struct obd_type {
         int  typ_refcnt;
 };
 
-struct io_cb_data;
-typedef int (*brw_callback_t)(struct io_cb_data *, int err, int phase);
 struct brw_page { 
         struct page *pg;
         obd_size count;
@@ -49,6 +48,12 @@ struct obd_run_ctxt {
         __u32            magic;
 #endif
 };
+
+#ifdef OBD_CTXT_DEBUG
+#define OBD_SET_CTXT_MAGIC(ctxt) (ctxt)->magic = OBD_RUN_CTXT_MAGIC
+#else
+#define OBD_SET_CTXT_MAGIC(ctxt) do {} while(0)
+#endif
 
 struct filter_obd {
         char *fo_fstype;

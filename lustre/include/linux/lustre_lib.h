@@ -62,13 +62,23 @@ void l_unlock(struct lustre_lock *);
 /* page.c */
 #define CB_PHASE_START   12
 #define CB_PHASE_FINISH  13
+
+/*
+ * io_cb_data: io callback data merged into one struct to simplify
+ *   memory managment. This may be turn out to be too simple.
+ */
+struct io_cb_data;
+typedef int (*brw_callback_t)(struct io_cb_data *, int err, int phase);
+
 struct io_cb_data {
         wait_queue_head_t waitq;
         atomic_t refcount;
         int complete;
         int err;
         struct ptlrpc_bulk_desc *desc;
+        brw_callback_t    cb;
 };
+
 int ll_sync_io_cb(struct io_cb_data *data, int err, int phase);
 struct  io_cb_data *ll_init_cb(void);
 inline void lustre_put_page(struct page *page);
@@ -82,11 +92,6 @@ void set_page_dirty(struct page *page);
 struct obd_run_ctxt;
 void push_ctxt(struct obd_run_ctxt *save, struct obd_run_ctxt *new);
 void pop_ctxt(struct obd_run_ctxt *saved);
-#ifdef OBD_CTXT_DEBUG
-#define OBD_SET_CTXT_MAGIC(ctxt) (ctxt)->magic = OBD_RUN_CTXT_MAGIC
-#else
-#define OBD_SET_CTXT_MAGIC(ctxt) do {} while(0)
-#endif
 struct dentry *simple_mkdir(struct dentry *dir, char *name, int mode);
 int lustre_fread(struct file *file, char *str, int len, loff_t *off);
 int lustre_fwrite(struct file *file, const char *str, int len, loff_t *off);
