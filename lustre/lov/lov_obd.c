@@ -90,10 +90,8 @@ static int lov_connect(struct lustre_handle *conn, struct obd_device *obd,
                 GOTO(out, rc = -EINVAL);
         }
 
-        if (desc->ld_default_stripe_count == 0) {
-                CERROR("LOV desc: default stripe count is zero\n");
-                GOTO(out, rc = -EINVAL);
-        }
+        if (desc->ld_default_stripe_count == 0)
+                desc->ld_default_stripe_count = desc->ld_tgt_count;
 
         /* Because of 64-bit divide/mod operations only work with a 32-bit
          * divisor in a 32-bit kernel, we cannot support a stripe width
@@ -253,8 +251,8 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                          ost_count);
         lsm->lsm_stripe_offset = stripe_offset + sub_offset;
 
-        CDEBUG(D_INODE, "allocating objects starting at OST idx %d\n",
-               lsm->lsm_stripe_offset);
+        CDEBUG(D_INODE, "allocating %d subobjs for objid "LPX64" at idx %d\n",
+               lsm->lsm_stripe_count,lsm->lsm_object_id,lsm->lsm_stripe_offset);
 
         for (i = 0,loi = lsm->lsm_oinfo; i < lsm->lsm_stripe_count; i++,loi++) {
                 struct lov_stripe_md obj_md;
@@ -275,6 +273,8 @@ static int lov_create(struct lustre_handle *conn, struct obdo *oa,
                 loi->loi_id = tmp.o_id;
                 loi->loi_size = tmp.o_size;
                 loi->loi_ost_idx = ost_idx;
+                CDEBUG(D_INODE, "objid "LPX64" has subobj "LPX64" at idx %d\n",
+                       lsm->lsm_object_id, loi->loi_id, ost_idx);
         }
 
  out_cleanup:
