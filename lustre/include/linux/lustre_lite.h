@@ -255,12 +255,20 @@ void ll_sysctl_clean(void);
 #define LL_IOC_SETFLAGS                 _IOW ('f', 152, long)
 #define LL_IOC_CLRFLAGS                 _IOW ('f', 153, long)
 #define LL_IOC_LOV_SETSTRIPE            _IOW ('f', 154, long)
+#define LL_IOC_LOV_GETSTRIPE            _IOW ('f', 155, long)
+
+struct lov_user_oinfo {
+        __u64 luo_id;   /* object ID on the target OBD */
+        __u32 luo_idx;  /* OBD stripe index in lmd_objects array */
+        __u32 luo_pad;
+};
 
 struct lov_user_md {
         __u64 lum_stripe_size;
         __u32 lum_stripe_pattern;
         __u32 lum_stripe_offset;
         __u32 lum_stripe_count;
+        struct lov_user_oinfo lum_luoinfo[0];
 };
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */

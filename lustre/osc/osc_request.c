@@ -811,7 +811,44 @@ static int osc_iocontrol(long cmd, struct lustre_handle *conn, int len,
                 obddev->u.cli.cl_containing_lov = (struct obd_device *)karg;
                 GOTO(out, err);
         }
+        case OBD_IOC_LOV_GET_CONFIG: {
+                char *buf;
+                struct lov_desc *desc;
+                obd_uuid_t *uuidp;
 
+                buf = NULL;
+                len = 0;
+                if (obd_ioctl_getdata(&buf, &len, (void *)uarg))
+                        GOTO(out, err = -EINVAL);
+
+                data = (struct obd_ioctl_data *)buf;
+
+                if (sizeof(*desc) > data->ioc_inllen1) {
+                        OBD_FREE(buf, len);
+                        GOTO(out, err = -EINVAL);
+                }
+
+                if (data->ioc_inllen2 < sizeof(*uuidp)) {
+                        OBD_FREE(buf, len);
+                        GOTO(out, err = -EINVAL);
+                }
+
+                desc = (struct lov_desc *)data->ioc_inlbuf1;
+                desc->ld_tgt_count = 1;
+                desc->ld_active_tgt_count = 1;
+                desc->ld_default_stripe_count = 1;
+                desc->ld_default_stripe_size = 0;
+                desc->ld_default_stripe_offset = 0;
+                desc->ld_pattern = 0;
+                memcpy(desc->ld_uuid,  obddev->obd_uuid, sizeof(*uuidp));
+
+                uuidp = (obd_uuid_t *)data->ioc_inlbuf2;
+                memcpy(uuidp,  obddev->obd_uuid, sizeof(*uuidp));
+
+                err = copy_to_user((void *)uarg, buf, len);
+                OBD_FREE(buf, len);
+                GOTO(out, err);
+        }
         default:
                 GOTO(out, err = -ENOTTY);
         }

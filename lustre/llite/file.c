@@ -605,10 +605,62 @@ out_lov_up:
         return rc;
 }
 
+static int ll_lov_getstripe(struct inode *inode, unsigned long arg)
+{
+        struct lov_user_md lum;
+        struct lov_user_md *lump;
+        struct ll_inode_info *lli = ll_i2info(inode);
+        struct lov_stripe_md *lsm = lli->lli_smd;
+        struct lov_user_oinfo *luoip;
+        struct lov_oinfo *loip;
+        int count, len, i, rc;
+
+        rc = copy_from_user(&lum, (void *)arg, sizeof(lum));
+        if (rc)
+                RETURN(rc);
+
+        if ((count = lsm->lsm_stripe_count) == 0)
+                count = 1;
+
+        if (lum.lum_stripe_count < count)
+                RETURN(-EINVAL);
+
+        len = sizeof(*lump) + count * sizeof(*luoip);
+
+        rc = verify_area(VERIFY_WRITE, (void *)arg, len);
+        if (rc)
+                RETURN(rc);
+
+        lump = (struct lov_user_md *)arg;
+        lump->lum_stripe_count = count;
+        luoip = lump->lum_luoinfo;
+
+        if (lsm->lsm_stripe_count == 0) {
+                lump->lum_stripe_size = 0;
+                lump->lum_stripe_pattern = 0;
+                lump->lum_stripe_offset = 0;
+                luoip->luo_idx = 0;
+                luoip->luo_id = lsm->lsm_object_id;
+        } else {
+                lump->lum_stripe_size = lsm->lsm_stripe_size;
+                lump->lum_stripe_pattern = lsm->lsm_stripe_pattern;
+                lump->lum_stripe_offset = lsm->lsm_stripe_offset;
+
+                loip = lsm->lsm_oinfo;
+                for (i = 0; i < count; i++, luoip++, loip++) {
+                        luoip->luo_idx = loip->loi_ost_idx;
+                        luoip->luo_id = loip->loi_id;
+                }
+        }
+
+        RETURN(0);
+}
+
 int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                   unsigned long arg)
 {
         struct ll_file_data *fd = (struct ll_file_data *)file->private_data;
+        struct lustre_handle *conn;
         int flags;
 
         switch(cmd) {
@@ -631,6 +683,8 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 return 0;
         case LL_IOC_LOV_SETSTRIPE:
                 return ll_lov_setstripe(inode, file, (struct lov_user_md *)arg);
+        case LL_IOC_LOV_GETSTRIPE:
+                return ll_lov_getstripe(inode, arg);
 
         /* We need to special case any other ioctls we want to handle,
          * to send them to the MDS/OST as appropriate and to properly
@@ -643,7 +697,8 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         case EXT2_IOC_SETVERSION_NEW:
         */
         default:
-                return -ENOTTY;
+                conn = ll_i2obdconn(inode);
+                return obd_iocontrol(cmd, conn, 0, NULL, (void *)arg);
         }
 }
 

@@ -1298,12 +1298,47 @@ static int lov_iocontrol(long cmd, struct lustre_handle *conn, int len,
         struct obd_device *obddev = class_conn2obd(conn);
         struct obd_ioctl_data *data = karg;
         struct lov_obd *lov = &obddev->u.lov;
-        int rc, i;
+        struct lov_desc *desc;
+        struct lov_tgt_desc *tgtdesc;
+        obd_uuid_t *uuidp;
+        char *buf;
+        int rc, i, count;
         ENTRY;
 
         switch (cmd) {
         case IOC_LOV_SET_OSC_ACTIVE:
                 rc = lov_set_osc_active(lov,data->ioc_inlbuf1,data->ioc_offset);
+                break;
+        case OBD_IOC_LOV_GET_CONFIG:
+                buf = NULL;
+                len = 0;
+                if (obd_ioctl_getdata(&buf, &len, (void *)uarg))
+                        RETURN(-EINVAL);
+
+                data = (struct obd_ioctl_data *)buf;
+
+                if (sizeof(*desc) > data->ioc_inllen1) {
+                        OBD_FREE(buf, len);
+                        RETURN(-EINVAL);
+                }
+
+                count = lov->desc.ld_tgt_count;
+
+                if (sizeof(*uuidp) * count > data->ioc_inllen2) {
+                        OBD_FREE(buf, len);
+                        RETURN(-EINVAL);
+                }
+
+                desc = (struct lov_desc *)data->ioc_inlbuf1;
+                uuidp = (obd_uuid_t *)data->ioc_inlbuf2;
+                memcpy(desc, &(lov->desc), sizeof(*desc));
+
+                tgtdesc = lov->tgts;
+                for (i = 0; i < count; i++, uuidp++, tgtdesc++)
+                        memcpy(uuidp, tgtdesc->uuid, sizeof(*uuidp));
+
+                rc = copy_to_user((void *)uarg, buf, len);
+                OBD_FREE(buf, len);
                 break;
         default:
                 if (lov->desc.ld_tgt_count == 0)
