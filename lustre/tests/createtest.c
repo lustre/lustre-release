@@ -38,6 +38,8 @@ int main(int argc, char *argv[])
 			mode |= S_IFREG;
 		case S_IFREG:
 		case S_IFCHR: case S_IFBLK:
+			if (rc < 0 && getuid() != 0)
+				continue;
 		case S_IFSOCK: case S_IFIFO:
 			if (rc < 0) {
 				fprintf(stderr, "%s: ERROR mknod %s: %s\n",
