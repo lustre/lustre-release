@@ -761,7 +761,7 @@ out:
 
 /* reads the catalog list */
 int llog_get_cat_list(struct lvfs_run_ctxt *ctxt,
-                      struct fsfilt_operations *fsops, char *name,
+                      struct fsfilt_operations *fsops, const char *name,
                       int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
@@ -806,7 +806,7 @@ EXPORT_SYMBOL(llog_get_cat_list);
 
 /* writes the cat list */
 int llog_put_cat_list(struct lvfs_run_ctxt *ctxt,
-                      struct fsfilt_operations *fsops, char *name,
+                      struct fsfilt_operations *fsops, const char *name,
                       int count, struct llog_catid *idarray)
 {
         struct lvfs_run_ctxt saved;
@@ -897,7 +897,7 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
 }
 
 int llog_get_cat_list(struct lvfs_run_ctxt *ctxt,
-                      struct fsfilt_operations *fsops, char *name,
+                      struct fsfilt_operations *fsops, const char *name,
                       int count, struct llog_catid *idarray)
 {
         LBUG();
@@ -905,7 +905,7 @@ int llog_get_cat_list(struct lvfs_run_ctxt *ctxt,
 }
 
 int llog_put_cat_list(struct lvfs_run_ctxt *ctxt,
-                      struct fsfilt_operations *fsops, char *name,
+                      struct fsfilt_operations *fsops, const char *name,
                       int count, struct llog_catid *idarray)
 {
         LBUG();
