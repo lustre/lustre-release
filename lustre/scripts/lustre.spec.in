@@ -157,6 +157,7 @@ mkdir -p $RPM_BUILD_ROOT/var/lib/ldap/lustre
 %attr(-, root, root) /lib/libptlctl.a
 %attr(-, root, root) /lib/liblustreapi.a
 %attr(-, root, root) /usr/include/lustre/*.h
+%attr(-, root, root) /usr/include/linux/lustre_idl.h
 
 %ifarch alpha
 %attr(-, root, root) /usr/sbin/mcpload
