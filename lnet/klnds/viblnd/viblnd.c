@@ -1297,7 +1297,7 @@ kibnal_alloc_pages (kib_pages_t **pp, int npages, int allow_write)
 
         for (i = 0; i < npages; i++) {
                 phys_pages[i].size = PAGE_SIZE;
-                phys_pages[i].start = page_to_phys(p->ibp_pages[i]);
+                phys_pages[i].start = kibnal_page2phys(p->ibp_pages[i]);
         }
 
         VV_ACCESS_CONTROL_MASK_SET_ALL(access);

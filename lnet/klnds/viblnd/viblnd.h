@@ -528,6 +528,41 @@ kibnal_queue_tx_locked (kib_tx_t *tx, kib_conn_t *conn)
         list_add_tail(&tx->tx_list, &conn->ibc_tx_queue);
 }
 
+static inline __u64
+kibnal_page2phys (struct page *p)
+{
+        return ((__u64)(p - mem_map)) << PAGE_SHIFT;
+}
+
+#if IBNAL_VOIDSTAR_SGADDR
+# if CONFIG_HIGHMEM
+#  error "Can't support HIGHMEM when vv_scatgat_t::v_address is void *"
+# endif
+# define KIBNAL_ADDR2SG(a)       ((void *)((unsigned long)(a)))
+# define KIBNAL_SG2ADDR(a)       ((__u64)((unsigned long)(a)))
+static inline __u64 kibnal_addr2net (__u64 addr)
+{
+        void        *netaddr;
+        vv_return_t  vvrc = vv_va2advertise_addr(kibnal_data.kib_hca, 
+                                                 KIBNAL_ADDR2SG(addr),
+                                                 &netaddr);
+        LASSERT (vvrc == vv_return_ok);
+        return KIBNAL_SG2ADDR(netaddr);
+}
+#else
+# define KIBNAL_ADDR2SG(a)       a
+# define KIBNAL_SG2ADDR(a)       a
+static inline __u64 kibnal_addr2net (__u64 addr)
+{
+        __u64        netaddr;
+        vv_return_t  vvrc = vv_va2advertise_addr(kibnal_data.kib_hca, 
+                                                 addr,
+                                                 &netaddr);
+        LASSERT (vvrc == vv_return_ok);
+        return netaddr;
+}
+#endif
+
 /* CAVEAT EMPTOR: We rely on tx/rx descriptor alignment to allow us to use the
  * lowest 2 bits of the work request id to stash the work item type (the op
  * field is not valid when the wc completes in error). */

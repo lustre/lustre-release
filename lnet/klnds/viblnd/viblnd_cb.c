@@ -154,7 +154,7 @@ kibnal_post_rx (kib_rx_t *rx, int credit)
         LASSERT (!in_interrupt());
         
         rx->rx_gl = (vv_scatgat_t) {
-                .v_address = (void *)((unsigned long)KIBNAL_RX_VADDR(rx)),
+                .v_address = KIBNAL_ADDR2SG(KIBNAL_RX_VADDR(rx)),
                 .l_key     = KIBNAL_RX_LKEY(rx),
                 .length    = IBNAL_MSG_SIZE,
         };
@@ -170,10 +170,10 @@ kibnal_post_rx (kib_rx_t *rx, int credit)
         LASSERT (conn->ibc_state >= IBNAL_CONN_INIT);
         LASSERT (!rx->rx_posted);
 
-        CDEBUG(D_NET, "posting rx [%d %x %p]\n", 
+        CDEBUG(D_NET, "posting rx [%d %x "LPX64"]\n", 
                rx->rx_wrq.scatgat_list->length,
                rx->rx_wrq.scatgat_list->l_key,
-               rx->rx_wrq.scatgat_list->v_address);
+               KIBNAL_SG2ADDR(rx->rx_wrq.scatgat_list->v_address));
 
         if (conn->ibc_state > IBNAL_CONN_ESTABLISHED) {
                 /* No more posts for this rx; so lose its ref */
@@ -525,12 +525,9 @@ kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active, struct page *page,
                 return -EMSGSIZE;
         }
 
-#if CONFIG_HIGHMEM
-# error "This probably doesn't work because of over/underflow when casting between __u64 and void *..."
-#endif
         /* Try to create an address that adapter-tavor will munge into a valid
          * network address, given how it maps all phys mem into 1 region */
-        addr = page_to_phys(page) + page_offset + PAGE_OFFSET;
+        addr = kibnal_page2phys(page) + page_offset + PAGE_OFFSET;
 
         vvrc = vv_get_gen_mr_attrib(kibnal_data.kib_hca, 
                                     (void *)((unsigned long)addr),
@@ -552,9 +549,8 @@ kibnal_append_rdfrag(kib_rdma_desc_t *rd, int active, struct page *page,
                         CERROR ("> 1 key for single RDMA desc\n");
                         return -EINVAL;
                 }
-                vv_va2advertise_addr(kibnal_data.kib_hca, 
-                                     (void *)((unsigned long)addr), &ptr);
-                frag_addr = (unsigned long)ptr;
+
+                frag_addr = kibnal_addr2net(addr);
         }
 
         kibnal_rf_set(frag, frag_addr, len);
@@ -1091,7 +1087,7 @@ kibnal_init_tx_msg (kib_tx_t *tx, int type, int body_nob)
         kibnal_init_msg(tx->tx_msg, type, body_nob);
 
         *gl = (vv_scatgat_t) {
-                .v_address = (void *)((unsigned long)KIBNAL_TX_VADDR(tx)),
+                .v_address = KIBNAL_ADDR2SG(KIBNAL_TX_VADDR(tx)),
                 .l_key     = KIBNAL_TX_LKEY(tx),
                 .length    = nob,
         };
@@ -1162,7 +1158,7 @@ kibnal_init_rdma (kib_tx_t *tx, int type, int nob,
                 wrknob = MIN(MIN(srcfrag->rf_nob, dstfrag->rf_nob), resid);
 
                 gl = &tx->tx_gl[tx->tx_nwrq];
-                gl->v_address = (void *)((unsigned long)kibnal_rf_addr(srcfrag));
+                gl->v_address = KIBNAL_ADDR2SG(kibnal_rf_addr(srcfrag));
                 gl->length    = wrknob;
                 gl->l_key     = srcrd->rd_key;
 

@@ -367,6 +367,36 @@ else
 	])
 	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
 fi
+if test -n "$VIBNAL"; then
+	AC_MSG_CHECKING([if Voltaire still uses void * sg addresses])
+	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $VIBCPPFLAGS"
+	LB_LINUX_TRY_COMPILE([
+        	#include <linux/list.h>
+		#include <asm/byteorder.h>
+		#ifdef __BIG_ENDIAN
+		# define CPU_BE 1
+                # define CPU_LE 0
+		#endif
+		#ifdef __LITTLE_ENDIAN
+		# define CPU_BE 0
+		# define CPU_LE 1
+		#endif
+	 	#include <vverbs.h>
+	        #include <ib-cm.h>
+	        #include <ibat.h>
+	],[
+	        vv_scatgat_t  sg;
+
+	        return &sg.v_address[3] == NULL;
+	],[
+	        AC_MSG_RESULT([yes])
+	        VIBCPPFLAGS="$VIBCPPFLAGS -DIBNAL_VOIDSTAR_SGADDR=1"
+	],[
+	        AC_MSG_RESULT([no])
+	])
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+fi
 AC_SUBST(VIBCPPFLAGS)
 AC_SUBST(VIBNAL)
 ])
