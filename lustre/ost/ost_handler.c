@@ -159,7 +159,7 @@ static int ost_punch(struct ost_obd *ost, struct ptlrpc_request *req)
         repbody = lustre_msg_buf(req->rq_repmsg, 0);
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
         req->rq_status = obd_punch(&conn, &repbody->oa,
-                                   repbody->oa.o_size, repbody->oa.o_blocks);
+                                   repbody->oa.o_blocks, repbody->oa.o_size);
         RETURN(0);
 }
 

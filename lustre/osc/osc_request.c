@@ -319,9 +319,8 @@ static int osc_punch(struct obd_conn *conn, struct obdo *oa, obd_size count,
         body = lustre_msg_buf(request->rq_reqmsg, 0);
         memcpy(&body->oa, oa, sizeof(*oa));
         body->connid = conn->oc_id;
-        body->oa.o_valid = ~0;
-        body->oa.o_size = offset;
         body->oa.o_blocks = count;
+        body->oa.o_valid |= OBD_MD_FLBLOCKS;
 
         request->rq_replen = lustre_msg_size(1, &size);
 

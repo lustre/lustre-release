@@ -131,7 +131,7 @@ struct obdo {
         struct obd_ops          *o_op;
 };
 
-#define OBD_MD_FLALL    0xffffffff
+#define OBD_MD_FLALL    (0xffffffff)
 #define OBD_MD_FLID     (0x00000001)
 #define OBD_MD_FLATIME  (0x00000002)
 #define OBD_MD_FLMTIME  (0x00000004)

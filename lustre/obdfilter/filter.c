@@ -560,8 +560,11 @@ static int filter_setattr(struct obd_conn *conn, struct obdo *oa)
         else
                 rc = inode_setattr(inode, &iattr);
         pop_ctxt(&saved);
-        if (iattr.ia_mode & ATTR_SIZE)
+        if (iattr.ia_mode & ATTR_SIZE) {
                 up(&inode->i_sem);
+                oa->o_valid = OBD_MD_FLBLOCKS | OBD_MD_FLCTIME | OBD_MD_FLMTIME;
+                obdo_from_inode(oa, inode);
+        }
         unlock_kernel();
 
         CDEBUG(D_INODE, "put dentry %p, count = %d\n", inode,
@@ -713,9 +716,7 @@ static int filter_truncate(struct obd_conn *conn, struct obdo *oa,
 
         CDEBUG(D_INODE, "calling truncate for object #%Ld, valid = %x, "
                "o_size = %Ld\n", oa->o_id, oa->o_valid, oa->o_size);
-        oa->o_valid = OBD_MD_FLSIZE;
         error = filter_setattr(conn, oa);
-        oa->o_valid = OBD_MD_FLBLOCKS | OBD_MD_FLCTIME | OBD_MD_FLMTIME;
 
         RETURN(error);
 }

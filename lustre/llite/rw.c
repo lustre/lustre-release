@@ -197,11 +197,12 @@ void ll_truncate(struct inode *inode)
                 inode->i_mtime = inode->i_ctime = CURRENT_TIME;
                 return;
         }
-        CDEBUG(D_INFO, "calling punch for %ld (%Lu bytes at 0)\n",
+        CDEBUG(D_INFO, "calling punch for %ld (all bytes after %Ld)\n",
                (long)oa->o_id, (unsigned long long)oa->o_size);
         oa->o_size = inode->i_size;
-        oa->o_valid = OBD_MD_FLSIZE;
-        err = obd_punch(ll_i2obdconn(inode), oa, 0, oa->o_size);
+        oa->o_valid = OBD_MD_FLSIZE | OBD_MD_FLID;
+        /* truncate == punch from i_size onwards */
+        err = obd_punch(ll_i2obdconn(inode), oa, -1 - oa->o_size, oa->o_size);
         if (err)
                 CERROR("obd_truncate fails (%d)\n", err);
         else
